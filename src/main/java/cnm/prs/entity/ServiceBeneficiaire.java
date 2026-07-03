@@ -34,8 +34,12 @@ public class ServiceBeneficiaire {
     @Column(name = "NOUV_MONT_BENEF")
     private BigDecimal nouvMontBenef;
 
-    @Column(name = "SOA_CODE", length = 15)
+    @Column(name = "SOA_CODE", length = 25)
     private String soaCode;
+
+    /** Compte budgétaire du bénéficiaire (FK {@code tr_compte}) — compte et montant sont par bénéficiaire. */
+    @Column(name = "NUM_COMPTE", length = 20)
+    private String numCompte;
 
     @Column(name = "ID_DETAIL", nullable = false)
     private Integer idDetail;
@@ -49,4 +53,9 @@ public class ServiceBeneficiaire {
     @JoinColumn(name = "SOA_CODE", insertable = false, updatable = false)
     @JsonIgnore
     private SoaBeneficiaire soa;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "NUM_COMPTE", insertable = false, updatable = false)
+    @JsonIgnore
+    private Compte compte;
 }

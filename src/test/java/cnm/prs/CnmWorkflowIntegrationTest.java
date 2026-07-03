@@ -162,6 +162,8 @@ class CnmWorkflowIntegrationTest {
     @Autowired private cnm.prs.repository.PvExamenRepository pvExamenRepository;
     @Autowired private cnm.prs.repository.LettreRenvoiLueRepository lueRepository;
     @Autowired private cnm.prs.repository.DemandeRetraitVueRepository demandeRetraitVueRepository;
+    @Autowired private cnm.prs.repository.CompteRepository compteRepository;
+    @Autowired private cnm.prs.repository.SoaBeneficiaireRepository soaBeneficiaireRepository;
 
     private String tokenPresident;
     private String tokenCc;
@@ -4784,6 +4786,32 @@ class CnmWorkflowIntegrationTest {
         mvc.perform(get("/api/dossiers/700").header("Authorization", tokenAdmin))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.statut").value("EXAMINE"));
+    }
+
+    @Test
+    @DisplayName("ServiceBeneficiaire : numCompte (FK tr_compte) exposé + SOA_CODE de 17 car. accepté (round-trip API)")
+    void serviceBeneficiaire_numCompteEtSoaCodeLong_ok() throws Exception {
+        // Chaîne marché (FK ID_DETAIL) + référentiels (FK NUM_COMPTE / SOA_CODE).
+        dossierRepository.save(dossier(800, "BROUILLON"));
+        ppmRepository.save(ppm(800, 800, "PRMP001"));
+        marcheRepository.save(marche(9700, 800, 800));
+        compteRepository.save(new cnm.prs.entity.Compte("CPT-BENEF-01", "Compte bénéficiaire", null, null));
+        // SOA_CODE de 17 caractères (> ancien maximum 15) — prouve l'allongement à 25.
+        soaBeneficiaireRepository.save(new cnm.prs.entity.SoaBeneficiaire("00-21-0-J00-00000", "SOA test"));
+
+        String body = "{\"idBenef\":9700,\"idDetail\":9700,\"soaCode\":\"00-21-0-J00-00000\","
+                + "\"numCompte\":\"CPT-BENEF-01\",\"ancMontBenef\":1000000,\"nouvMontBenef\":1200000}";
+        mvc.perform(post("/api/service-beneficiaires").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.numCompte").value("CPT-BENEF-01"))
+                .andExpect(jsonPath("$.soaCode").value("00-21-0-J00-00000"));
+
+        // Relecture : compte + code SOA long persistés et exposés.
+        mvc.perform(get("/api/service-beneficiaires/9700").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.numCompte").value("CPT-BENEF-01"))
+                .andExpect(jsonPath("$.soaCode").value("00-21-0-J00-00000"));
     }
 
     /** Rend l'examen 1 (dossier 1, ppm 1) éligible (1 ligne de marché en AOO) puis crée + signe un PV FAVR. */

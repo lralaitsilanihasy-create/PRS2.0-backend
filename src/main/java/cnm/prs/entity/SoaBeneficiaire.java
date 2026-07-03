@@ -20,7 +20,7 @@ import lombok.NoArgsConstructor;
 public class SoaBeneficiaire {
 
     @Id
-    @Column(name = "SOA_CODE", nullable = false, length = 15)
+    @Column(name = "SOA_CODE", nullable = false, length = 25)
     private String soaCode;
 
     @Column(name = "LIBELLE", length = 100)

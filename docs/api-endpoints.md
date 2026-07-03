@@ -2832,10 +2832,11 @@ GET /api/rapports/dossiers/excel                   (Chef de commission : forcé 
 | Champ (JSON) | Type | Obligatoire | Contraintes |
 |---|---|---|---|
 | idBenef | number | Oui (PK, au POST) | clé primaire |
-| ancMontBenef | number | Non | |
-| nouvMontBenef | number | Non | |
-| soaCode | string | Non | max 15 |
-| idDetail | number | Oui | @NotNull |
+| ancMontBenef | number | Non | montant **par bénéficiaire** (ancien / initial) |
+| nouvMontBenef | number | Non | montant **par bénéficiaire** (nouveau) |
+| soaCode | string | Non | **max 25** — FK `tr_soa_beneficiaire` (ex. `00-21-0-J00-00000`) |
+| numCompte | string | Non | **max 20** — FK `tr_compte` : **compte budgétaire du bénéficiaire** (compte et montant sont par bénéficiaire) |
+| idDetail | number | Oui | @NotNull — FK `t_marche` |
 
 **Endpoints**
 
@@ -2851,7 +2852,7 @@ GET /api/rapports/dossiers/excel                   (Chef de commission : forcé 
 
 **Exemple — requête**
 ```json
-{ "idBenef": 4501, "ancMontBenef": 120000.0, "nouvMontBenef": 135000.0, "soaCode": "SOA-014", "idDetail": 88 }
+{ "idBenef": 4501, "ancMontBenef": 120000.0, "nouvMontBenef": 135000.0, "soaCode": "00-21-0-J00-00000", "numCompte": "CPT-BENEF-01", "idDetail": 88 }
 ```
 
 ---
@@ -2927,7 +2928,7 @@ GET /api/rapports/dossiers/excel                   (Chef de commission : forcé 
 
 | Champ (JSON) | Type | Obligatoire | Contraintes |
 |---|---|---|---|
-| soaCode | string | Oui (PK, au POST) | clé primaire |
+| soaCode | string | Oui (PK, au POST) | clé primaire — **max 25** (ex. `00-21-0-J00-00000`) |
 | libelle | string | Non | max 100 |
 
 **Endpoints**

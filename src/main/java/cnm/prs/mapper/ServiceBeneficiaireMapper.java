@@ -20,6 +20,7 @@ public final class ServiceBeneficiaireMapper {
         dto.setAncMontBenef(entity.getAncMontBenef());
         dto.setNouvMontBenef(entity.getNouvMontBenef());
         dto.setSoaCode(entity.getSoaCode());
+        dto.setNumCompte(entity.getNumCompte());
         dto.setIdDetail(entity.getIdDetail());
         return dto;
     }
@@ -33,6 +34,7 @@ public final class ServiceBeneficiaireMapper {
         entity.setAncMontBenef(dto.getAncMontBenef());
         entity.setNouvMontBenef(dto.getNouvMontBenef());
         entity.setSoaCode(dto.getSoaCode());
+        entity.setNumCompte(dto.getNumCompte());
         entity.setIdDetail(dto.getIdDetail());
         return entity;
     }

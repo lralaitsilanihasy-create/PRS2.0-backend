@@ -21,8 +21,12 @@ public class ServiceBeneficiaireDto {
 
     private BigDecimal nouvMontBenef;
 
-    @Size(max = 15)
+    @Size(max = 25)
     private String soaCode;
+
+    /** Compte budgétaire du bénéficiaire (FK {@code tr_compte}) — compte et montant sont par bénéficiaire. */
+    @Size(max = 20)
+    private String numCompte;
 
     @NotNull
     private Integer idDetail;
