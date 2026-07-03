@@ -17,24 +17,29 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import cnm.prs.dto.SaisiePpmImportResult;
+import cnm.prs.dto.SaisiePpmImportResult.BeneficiaireImport;
 import cnm.prs.dto.SaisiePpmImportResult.MarcheImport;
+import cnm.prs.dto.SaisiePpmImportResult.PrevisionImport;
 import cnm.prs.entity.EntiteContract;
 import cnm.prs.entity.ModePassation;
 import cnm.prs.entity.Nature;
 import cnm.prs.exception.BadRequestException;
+import cnm.prs.repository.CompteRepository;
 import cnm.prs.repository.EntiteContractRepository;
 import cnm.prs.repository.ModePassationRepository;
 import cnm.prs.repository.NatureRepository;
+import cnm.prs.repository.SoaBeneficiaireRepository;
 
 /**
  * Parsing <strong>read-only</strong> d'un PPM PDF pour pré-remplir le formulaire de saisie
- * ({@code POST /api/saisies/ppm/import}). N'écrit rien en base : extrait le texte via PDFBox, résout au
- * mieux l'en-tête et les référentiels (sinon libellé + avertissement), et renvoie un
- * {@link SaisiePpmImportResult}. Un PDF illisible → {@link BadRequestException} (400).
+ * ({@code POST /api/saisies/ppm/import}). N'écrit rien : extrait le texte (PDFBox), résout au mieux l'en-tête,
+ * les <strong>lignes de données du tableau</strong> et les référentiels (sinon libellé + avertissement), et
+ * renvoie un {@link SaisiePpmImportResult}. Un PDF illisible → {@link BadRequestException} (400).
  *
- * <p>⚠️ Le parsing du <strong>tableau des marchés</strong> est un premier jet <em>best-effort</em> : il doit
- * être calibré sur un exemplaire officiel (positions de colonnes / cellules multi-lignes). Tant qu'il ne l'est
- * pas, les lignes extraites sont signalées dans {@code avertissements} et restent à valider par la PRMP.
+ * <p>Calibré sur le format officiel (ex. {@code PPM_26-…}) : le tableau est délimité par la ligne d'en-tête des
+ * colonnes ({@code NATURE OBJET MONTANT …}) et se termine avant « {@code Fait à … le …} ». Chaque ligne de
+ * données regroupe : {@code NATURE} + {@code OBJET} (multi-lignes, recomposé), puis une <em>ligne montants</em>
+ * {@code montEstim [nouvMontEstim] | mode | financement | soaCode | compte | montBenef [nouvMontBenef] | 3 dates}.
  */
 @Service
 public class SaisiePpmImportService {
@@ -43,8 +48,25 @@ public class SaisiePpmImportService {
     private static final Pattern ANNEE = Pattern.compile("(20\\d{2})");
     private static final Pattern FAIT_LE = Pattern.compile(
             "(?i)fait\\s+[aàâä]\\s+[^,\\n]+?\\s+le\\s+(\\d{1,2})\\s+([a-zàâäéèêëîïôöùûüç]+)\\s+(20\\d{2})");
+    private static final Pattern ETABLISSEMENT = Pattern.compile(
+            "(?i)date\\s+d.?[eé]tablissement[^:]*:?\\s*(\\d{2})/(\\d{2})/(20\\d{2})");
     private static final Pattern AUTORITE = Pattern.compile("(?i)autorit[eé]\\s+contractante\\s*:?\\s*(.+)");
-    private static final Pattern MONTANT = Pattern.compile("(\\d[\\d\\s\\u00a0]{2,}(?:[.,]\\d+)?)");
+
+    /** Ligne d'en-tête des colonnes : marque le début du tableau (les données suivent). */
+    private static final Pattern ENTETE_COLONNES = Pattern.compile("(?i)nature\\s+objet\\s+montant");
+    /** Fin du tableau. */
+    private static final Pattern FIN_TABLEAU = Pattern.compile("(?i)^\\s*(fait\\s+[aàâä]\\b|la\\s+personne\\s+responsable|powered\\s+by)");
+
+    /** Nature en tête d'une ligne de données (vocabulaire PPM, ordonné du plus long au plus court). */
+    private static final Pattern NATURE_TETE = Pattern.compile(
+            "(?i)^\\s*(Fournitures et services|Prestations intellectuelles|Travaux|Fournitures|Services)\\s+(.+)$");
+
+    private static final String M = "([\\d][\\d\\s\\u00a0]*[.,]\\d{2})";   // un montant « 1 005 000.00 »
+    private static final String D = "(\\d{2}/\\d{2}/\\d{4})";              // une date « 27/04/2026 »
+    /** Ligne montants : montEstim [nouvMontEstim] mode financement soaCode compte montBenef [nouvMontBenef] d1 d2 d3. */
+    private static final Pattern LIGNE_DONNEES = Pattern.compile(
+            "^\\s*" + M + "(?:\\s+" + M + ")?\\s+(.+?)\\s+([A-Za-zÀ-ÿ]{2,})\\s+(\\d{2}-\\d{2}-\\d\\S*)\\s+(\\S+)\\s+"
+                    + M + "(?:\\s+" + M + ")?\\s+" + D + "\\s+" + D + "\\s+" + D + "\\s*$");
 
     private static final Map<String, Integer> MOIS = Map.ofEntries(
             Map.entry("janvier", 1), Map.entry("fevrier", 2), Map.entry("mars", 3), Map.entry("avril", 4),
@@ -54,12 +76,17 @@ public class SaisiePpmImportService {
     private final EntiteContractRepository entiteRepository;
     private final NatureRepository natureRepository;
     private final ModePassationRepository modePassationRepository;
+    private final CompteRepository compteRepository;
+    private final SoaBeneficiaireRepository soaBeneficiaireRepository;
 
     public SaisiePpmImportService(EntiteContractRepository entiteRepository, NatureRepository natureRepository,
-            ModePassationRepository modePassationRepository) {
+            ModePassationRepository modePassationRepository, CompteRepository compteRepository,
+            SoaBeneficiaireRepository soaBeneficiaireRepository) {
         this.entiteRepository = entiteRepository;
         this.natureRepository = natureRepository;
         this.modePassationRepository = modePassationRepository;
+        this.compteRepository = compteRepository;
+        this.soaBeneficiaireRepository = soaBeneficiaireRepository;
     }
 
     public SaisiePpmImportResult importer(MultipartFile fichier) {
@@ -75,7 +102,7 @@ public class SaisiePpmImportService {
         }
         String dateSignature = extraireDateSignature(texte);
         if (dateSignature == null) {
-            avert.add("Date de signature non détectée (« Fait à… le… ») — à confirmer.");
+            avert.add("Date de signature / d'établissement non détectée — à confirmer.");
         }
         String autorite = extraireAutorite(texte);
         Integer idEntite = resoudreEntite(autorite, avert);
@@ -84,7 +111,6 @@ public class SaisiePpmImportService {
         return new SaisiePpmImportResult(exercice, dateSignature, autorite, idEntite, marches, avert);
     }
 
-    /** Extraction texte via PDFBox. Fichier non-PDF / illisible → 400 (pas de données partielles silencieuses). */
     private String extraireTexte(MultipartFile fichier) {
         byte[] bytes;
         try {
@@ -115,19 +141,17 @@ public class SaisiePpmImportService {
         return a.find() ? Integer.valueOf(a.group(1)) : null;
     }
 
-    /** « Fait à … le 14 avril 2026 » → {@code 2026-04-14} (best-effort, {@code null} si absent/illisible). */
+    /** « Fait à … le 14 avril 2026 » ; à défaut « Date d'établissement … : 14/04/2026 » → {@code 2026-04-14}. */
     private String extraireDateSignature(String texte) {
         Matcher m = FAIT_LE.matcher(texte);
-        if (!m.find()) {
-            return null;
+        if (m.find()) {
+            Integer mois = MOIS.get(sansAccents(m.group(2)).toLowerCase(Locale.FRENCH));
+            if (mois != null) {
+                return String.format("%04d-%02d-%02d", Integer.parseInt(m.group(3)), mois, Integer.parseInt(m.group(1)));
+            }
         }
-        Integer mois = MOIS.get(sansAccents(m.group(2)).toLowerCase(Locale.FRENCH));
-        if (mois == null) {
-            return null;
-        }
-        int jour = Integer.parseInt(m.group(1));
-        int annee = Integer.parseInt(m.group(3));
-        return String.format("%04d-%02d-%02d", annee, mois, jour);
+        Matcher e = ETABLISSEMENT.matcher(texte);
+        return e.find() ? e.group(3) + "-" + e.group(2) + "-" + e.group(1) : null;
     }
 
     private String extraireAutorite(String texte) {
@@ -140,7 +164,6 @@ public class SaisiePpmImportService {
         return coupe > 0 ? v.substring(0, coupe).trim() : v;
     }
 
-    /** Résout l'entité depuis l'autorité contractante (comparaison normalisée « contient »), sinon {@code null} + avertissement. */
     private Integer resoudreEntite(String autorite, List<String> avert) {
         if (autorite == null || autorite.isBlank()) {
             avert.add("Autorité contractante non détectée — la PRMP choisit son entité.");
@@ -162,56 +185,113 @@ public class SaisiePpmImportService {
     }
 
     /**
-     * Parsing best-effort des lignes de marché à partir du texte extrait. Non calibré sur le format
-     * officiel : détecte les lignes portant un montant et en dérive une désignation. Toujours signalé.
+     * Extrait les lignes de <strong>données</strong> du tableau, entre l'en-tête des colonnes et « Fait à… ».
+     * Chaque ligne = {@code NATURE} + {@code OBJET} (recomposé sur plusieurs lignes) closes par la ligne montants.
      */
     private List<MarcheImport> parserMarches(String texte, List<String> avert) {
-        List<MarcheImport> lignes = new ArrayList<>();
-        for (String brute : texte.split("\\r?\\n")) {
-            String ligne = brute.trim();
-            if (ligne.length() < 8) {
+        String[] lignes = texte.split("\\r?\\n");
+        int debut = -1;
+        for (int i = 0; i < lignes.length; i++) {
+            if (ENTETE_COLONNES.matcher(lignes[i]).find()) {
+                debut = i + 1;
+                break;
+            }
+        }
+        if (debut < 0) {
+            avert.add("En-tête du tableau (NATURE | OBJET | …) introuvable — aucune ligne extraite.");
+            return List.of();
+        }
+
+        List<MarcheImport> marches = new ArrayList<>();
+        List<String> objet = new ArrayList<>();
+        String natureLibelle = null;
+        for (int i = debut; i < lignes.length; i++) {
+            String l = lignes[i].trim();
+            if (l.isEmpty()) {
                 continue;
             }
-            Matcher mm = MONTANT.matcher(ligne);
-            if (!mm.find()) {
+            if (FIN_TABLEAU.matcher(l).find()) {
+                break;
+            }
+            Matcher donnees = LIGNE_DONNEES.matcher(l);
+            if (donnees.matches() && !objet.isEmpty()) {
+                marches.add(construireMarche(natureLibelle, String.join(" ", objet).trim(), donnees, avert));
+                objet.clear();
+                natureLibelle = null;
                 continue;
             }
-            String designation = ligne.substring(0, mm.start()).trim();
-            if (designation.length() < 4 || !designation.matches(".*[A-Za-zÀ-ÿ]{3,}.*")) {
-                continue;   // pas une vraie désignation → on évite d'inventer une ligne
+            Matcher nat = NATURE_TETE.matcher(l);
+            if (objet.isEmpty()) {
+                if (nat.matches()) {                // début d'une ligne de données : NATURE + OBJET(1)
+                    natureLibelle = nat.group(1).trim();
+                    objet.add(nat.group(2).trim());
+                }                                    // sinon : ligne d'en-tête de sous-colonne → ignorée
+            } else {
+                objet.add(l);                        // continuation de l'OBJET (cellule multi-lignes)
             }
-            BigDecimal montant = parseMontant(mm.group(1));
-            Nature nature = resoudreNature(ligne).orElse(null);
-            ModePassation mode = resoudreMode(ligne).orElse(null);
-            lignes.add(new MarcheImport(designation, montant, null,
-                    nature == null ? null : nature.getIdNature(), nature == null ? null : nature.getLibelle(),
-                    mode == null ? null : mode.getIdMode(), mode == null ? null : mode.getLibelle(),
-                    null, List.of(), List.of()));
         }
-        if (lignes.isEmpty()) {
-            avert.add("Aucune ligne de marché détectée automatiquement — parser à calibrer sur le format officiel.");
-        } else {
-            avert.add(lignes.size() + " ligne(s) de marché extraite(s) en mode best-effort — à valider "
-                    + "(parser non encore calibré sur le format officiel du tableau ; bénéficiaires et prévisions non extraits).");
+        if (marches.isEmpty()) {
+            avert.add("Aucune ligne de données détectée dans le tableau — format à vérifier.");
         }
-        return lignes;
+        return marches;
     }
 
-    private java.util.Optional<Nature> resoudreNature(String ligne) {
-        String n = normaliser(ligne);
-        return natureRepository.findAll().stream()
-                .filter(x -> x.getLibelle() != null && !x.getLibelle().isBlank() && n.contains(normaliser(x.getLibelle())))
-                .findFirst();
+    private MarcheImport construireMarche(String natureLibelle, String designation, Matcher m, List<String> avert) {
+        BigDecimal montEstim = parseMontant(m.group(1));
+        BigDecimal nouvMontEstim = m.group(2) == null ? null : parseMontant(m.group(2));
+        String modeLibelle = m.group(3).trim();
+        String financement = m.group(4).trim();
+        String soaCode = m.group(5).trim();
+        String compte = m.group(6).trim();
+        BigDecimal ancMontBenef = parseMontant(m.group(7));
+        BigDecimal nouvMontBenef = m.group(8) == null ? null : parseMontant(m.group(8));
+
+        Integer idNature = resoudreIdParLibelle(natureRepository.findAll(), Nature::getLibelle, Nature::getIdNature, natureLibelle);
+        if (natureLibelle != null && idNature == null) {
+            avert.add("Nature « " + natureLibelle + " » non trouvée au référentiel — à confirmer.");
+        }
+        Integer idMode = resoudreIdParLibelle(modePassationRepository.findAll(), ModePassation::getLibelle,
+                ModePassation::getIdMode, modeLibelle);
+        if (modeLibelle != null && idMode == null) {
+            avert.add("Mode de passation « " + modeLibelle + " » non trouvé au référentiel — à confirmer.");
+        }
+        if (!soaCode.isBlank() && !soaBeneficiaireRepository.existsById(soaCode)) {
+            avert.add("Service bénéficiaire (SOA) « " + soaCode + " » inconnu — à confirmer.");
+        }
+        if (!compte.isBlank() && !compteRepository.existsById(compte)) {
+            avert.add("Compte « " + compte + " » inconnu — à confirmer.");
+        }
+
+        List<BeneficiaireImport> benef = List.of(new BeneficiaireImport(soaCode, compte, ancMontBenef, nouvMontBenef));
+        List<PrevisionImport> prev = List.of(
+                new PrevisionImport("LANCEMENT", isoDate(m.group(9))),
+                new PrevisionImport("OUVERTURE", isoDate(m.group(10))),
+                new PrevisionImport("ATTRIBUTION", isoDate(m.group(11))));
+        return new MarcheImport(designation, montEstim, nouvMontEstim, idNature, natureLibelle,
+                idMode, modeLibelle, financement, benef, prev);
     }
 
-    private java.util.Optional<ModePassation> resoudreMode(String ligne) {
-        String n = normaliser(ligne);
-        return modePassationRepository.findAll().stream()
-                .filter(x -> x.getLibelle() != null && !x.getLibelle().isBlank() && n.contains(normaliser(x.getLibelle())))
-                .findFirst();
+    private <T> Integer resoudreIdParLibelle(List<T> refs, java.util.function.Function<T, String> libelle,
+            java.util.function.Function<T, Integer> id, String cible) {
+        if (cible == null || cible.isBlank()) {
+            return null;
+        }
+        String c = normaliser(cible);
+        return refs.stream()
+                .filter(x -> libelle.apply(x) != null && normaliser(libelle.apply(x)).equals(c))
+                .map(id).findFirst().orElse(null);
+    }
+
+    /** « 27/04/2026 » → « 2026-04-27 ». */
+    private static String isoDate(String jjmmaaaa) {
+        String[] p = jjmmaaaa.split("/");
+        return p[2] + "-" + p[1] + "-" + p[0];
     }
 
     private static BigDecimal parseMontant(String brut) {
+        if (brut == null) {
+            return null;
+        }
         String net = brut.replaceAll("[\\s\\u00a0]", "").replace(',', '.');
         try {
             return new BigDecimal(net);

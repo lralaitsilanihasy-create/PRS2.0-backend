@@ -1035,16 +1035,23 @@ dossier/PPM (désormais réservée Admin).
 > ⚠️ **Import PPM PDF — pré-remplissage read-only (règle ajoutée).** `POST /api/saisies/ppm/import`
 > (part `fichier` = PDF ; **PRMP**) **ne crée rien** : il parse le PDF (PDFBox) et renvoie
 > **`SaisiePpmImportResult`** pour pré-remplir le formulaire — la création reste `POST /api/saisies/ppm`.
-> Forme : `{ exercice, dateSignature` (best-effort « Fait à… le… », `null` sinon)`, autoriteContractante,
+> Forme : `{ exercice, dateSignature` (« Fait à… le… » sinon **date d'établissement**, `null` sinon)`, autoriteContractante,
 > idEntiteContract` (résolu depuis l'autorité si trouvé, sinon `null` → la PRMP choisit)`, marches[]`
 > `{ designationMarche, montEstim, nouvMontEstim, idNature+natureLibelle, idMode+modeLibelle, financement,`
 > `beneficiaires[]` `{ soaCode, numCompte, ancMontBenef, nouvMontBenef }, previsions[]` `{ processus, dateDebut } },`
 > `avertissements[] }`. **Read-only** : les référentiels manquants (`idNature`/`idMode`/`numCompte`/`soaCode`,
 > entité) **ne sont pas créés** — renvoyés en libellé seul + listés dans `avertissements` ; la
 > création-à-la-volée se fait au `POST /api/saisies/ppm`. PDF illisible / non-PDF / sans texte → **400** (message
-> clair, pas de données partielles silencieuses). ⚠️ *Le parsing du **tableau des marchés** est un premier jet
-> **best-effort** à **calibrer sur un exemplaire officiel** — les lignes extraites sont signalées dans
-> `avertissements` (bénéficiaires/prévisions non encore extraits). L'en-tête et la résolution d'entité sont fiables.*
+> clair, pas de données partielles silencieuses).
+>
+> **Parsing du tableau (calibré sur le format officiel `PPM_26-…`).** Le tableau est délimité par la ligne
+> d'en-tête des colonnes (`NATURE OBJET MONTANT …`) et se termine avant « **Fait à … le …** » ; le bloc d'en-tête
+> du document (titre, `PPM_…`, `Autorité Contractante`, `Nom de la PRMP`, `Adresse`, `Date d'établissement`, mises
+> à jour) est ignoré. Chaque ligne de données donne : **`OBJET` recomposé** (cellule multi-lignes), `montEstim`
+> (`nouvMontEstim` si présent), `mode`/`financement`, **1 bénéficiaire** (`soaCode`, `numCompte`, `ancMontBenef`),
+> et **3 prévisions** `LANCEMENT`/`OUVERTURE`/`ATTRIBUTION` (dates `dd/MM/yyyy` → ISO). La `NATURE` en tête de
+> ligne est reconnue via un vocabulaire (`Fournitures et services`, `Travaux`, …) ; nature/mode hors référentiel
+> (ex. « Achat Direct ») → `id*` `null` + libellé conservé + avertissement.
 
 **`SaisiePpmRequest`** — crée dossier (type PPM) + PPM + lignes de marché (mode **auto**) :
 

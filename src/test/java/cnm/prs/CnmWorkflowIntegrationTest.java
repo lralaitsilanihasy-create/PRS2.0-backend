@@ -4845,6 +4845,47 @@ class CnmWorkflowIntegrationTest {
                 .andExpect(status().isBadRequest());
     }
 
+    @Test
+    @DisplayName("Import PPM PDF — parsing calibré du tableau : OBJET multi-lignes recomposé, montants, bénéficiaire, 3 prévisions")
+    void importPpm_tableauCalibre_ok() throws Exception {
+        natureRepository.save(new Nature(1, "Travaux", null));
+
+        // Structure du PPM officiel : en-tête doc, en-tête colonnes (+ sous-colonnes ignorées), 1 ligne de données
+        // (NATURE + OBJET sur 3 lignes, puis ligne montants), puis « Fait à … ». Sans accents (police Helvetica).
+        byte[] pdf = pdfAvecTexte(
+                "PLAN DE PASSATION DES MARCHES POUR L'ANNEE 2026",
+                "Autorite Contractante: MINISTERE TEST",
+                "Date d'etablissement du Document initial: 14/04/2026",
+                "NATURE OBJET MONTANT ESTIMATIF INITIAL",
+                "SERVICE BENEFICIAIRE COMPTE MONTANT ESTIMATIF PAR BENEFICIAIRE",
+                "Travaux Travaux de fabrication et",
+                "installation des etageres",
+                "metalliques fixes",
+                "5 550 000.00 Achat Direct RPI 00-21-0-J00-00000 6211 5 550 000.00 01/06/2026 02/06/2026 12/06/2026",
+                "Fait a Antananarivo le _ _ /_ _ /_ _ _ _");
+
+        mvc.perform(multipart("/api/saisies/ppm/import")
+                .file(new MockMultipartFile("fichier", "ppm.pdf", "application/pdf", pdf))
+                .header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.exercice").value(2026))
+                .andExpect(jsonPath("$.dateSignature").value("2026-04-14"))
+                .andExpect(jsonPath("$.marches", hasSize(1)))
+                .andExpect(jsonPath("$.marches[0].designationMarche").value("Travaux de fabrication et installation des etageres metalliques fixes"))
+                .andExpect(jsonPath("$.marches[0].natureLibelle").value("Travaux"))
+                .andExpect(jsonPath("$.marches[0].idNature").value(1))
+                .andExpect(jsonPath("$.marches[0].modeLibelle").value("Achat Direct"))
+                .andExpect(jsonPath("$.marches[0].idMode").value(nullValue()))
+                .andExpect(jsonPath("$.marches[0].financement").value("RPI"))
+                .andExpect(jsonPath("$.marches[0].beneficiaires[0].soaCode").value("00-21-0-J00-00000"))
+                .andExpect(jsonPath("$.marches[0].beneficiaires[0].numCompte").value("6211"))
+                .andExpect(jsonPath("$.marches[0].previsions[0].processus").value("LANCEMENT"))
+                .andExpect(jsonPath("$.marches[0].previsions[0].dateDebut").value("2026-06-01"))
+                .andExpect(jsonPath("$.marches[0].previsions[1].dateDebut").value("2026-06-02"))
+                .andExpect(jsonPath("$.marches[0].previsions[2].dateDebut").value("2026-06-12"))
+                .andExpect(jsonPath("$.avertissements[?(@ =~ /.*Achat Direct.*/)]", hasSize(1)));
+    }
+
     /** Génère en mémoire un PDF (PDFBox) contenant les lignes de texte fournies — pour tester le parsing d'import. */
     private byte[] pdfAvecTexte(String... lignes) throws Exception {
         try (org.apache.pdfbox.pdmodel.PDDocument doc = new org.apache.pdfbox.pdmodel.PDDocument()) {
