@@ -1023,6 +1023,7 @@ dossier/PPM (désormais réservée Admin).
 | POST | /api/saisies/ppm | `SaisiePpmRequest` (JSON) | `DossierDto` (le dossier créé) | 201, 400, 403 | **PRMP** |
 | POST | /api/saisies/ppm | `multipart/form-data` (PPM **+ pièces jointes**) | `DossierDto` | 201, 400, 403 | **PRMP** |
 | POST | /api/saisies/dossier | `SaisieDossierRequest` | `DossierDto` | 201, 400, 403, 409 | **PRMP** |
+| POST | /api/saisies/ppm/import | `multipart/form-data` (part `fichier` = PPM **PDF**) | `SaisiePpmImportResult` | 200, 400, 403 | **PRMP** |
 | PUT | /api/saisies/ppm/{idDossier} | `EditionPpmRequest` | `DossierDto` | 200, 400, 403, 404, 409 | **PRMP** |
 
 > **Saisie avec pièces jointes (multipart).** La variante `multipart/form-data` de `POST /api/saisies/ppm`
@@ -1030,6 +1031,20 @@ dossier/PPM (désormais réservée Admin).
 > (PDF/JPEG/PNG, magic-bytes). Chaque pièce est persistée avec `apresLettreRenvoi=false` (pièce initiale),
 > dans la **même transaction** que la saisie (un format invalide annule toute la saisie). Voir
 > *Pièces jointes d'un dossier*.
+
+> ⚠️ **Import PPM PDF — pré-remplissage read-only (règle ajoutée).** `POST /api/saisies/ppm/import`
+> (part `fichier` = PDF ; **PRMP**) **ne crée rien** : il parse le PDF (PDFBox) et renvoie
+> **`SaisiePpmImportResult`** pour pré-remplir le formulaire — la création reste `POST /api/saisies/ppm`.
+> Forme : `{ exercice, dateSignature` (best-effort « Fait à… le… », `null` sinon)`, autoriteContractante,
+> idEntiteContract` (résolu depuis l'autorité si trouvé, sinon `null` → la PRMP choisit)`, marches[]`
+> `{ designationMarche, montEstim, nouvMontEstim, idNature+natureLibelle, idMode+modeLibelle, financement,`
+> `beneficiaires[]` `{ soaCode, numCompte, ancMontBenef, nouvMontBenef }, previsions[]` `{ processus, dateDebut } },`
+> `avertissements[] }`. **Read-only** : les référentiels manquants (`idNature`/`idMode`/`numCompte`/`soaCode`,
+> entité) **ne sont pas créés** — renvoyés en libellé seul + listés dans `avertissements` ; la
+> création-à-la-volée se fait au `POST /api/saisies/ppm`. PDF illisible / non-PDF / sans texte → **400** (message
+> clair, pas de données partielles silencieuses). ⚠️ *Le parsing du **tableau des marchés** est un premier jet
+> **best-effort** à **calibrer sur un exemplaire officiel** — les lignes extraites sont signalées dans
+> `avertissements` (bénéficiaires/prévisions non encore extraits). L'en-tête et la résolution d'entité sont fiables.*
 
 **`SaisiePpmRequest`** — crée dossier (type PPM) + PPM + lignes de marché (mode **auto**) :
 

@@ -25,7 +25,9 @@ import jakarta.validation.Valid;
 import cnm.prs.dto.DossierDto;
 import cnm.prs.dto.EditionPpmRequest;
 import cnm.prs.dto.SaisieDossierRequest;
+import cnm.prs.dto.SaisiePpmImportResult;
 import cnm.prs.dto.SaisiePpmRequest;
+import cnm.prs.service.SaisiePpmImportService;
 import cnm.prs.service.SaisieService;
 
 /**
@@ -37,9 +39,22 @@ import cnm.prs.service.SaisieService;
 public class SaisieController {
 
     private final SaisieService service;
+    private final SaisiePpmImportService importService;
 
-    public SaisieController(SaisieService service) {
+    public SaisieController(SaisieService service, SaisiePpmImportService importService) {
         this.service = service;
+        this.importService = importService;
+    }
+
+    /**
+     * Import <strong>read-only</strong> d'un PPM PDF pour pré-remplir le formulaire de saisie : parse le
+     * PDF (part {@code fichier}) et renvoie les données extraites — <strong>ne crée rien</strong>. La
+     * création reste {@code POST /api/saisies/ppm}. PDF illisible/non conforme → 400.
+     */
+    @PreAuthorize("hasRole('PRMP')")
+    @PostMapping(value = "/ppm/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public SaisiePpmImportResult importerPpm(@RequestPart("fichier") MultipartFile fichier) {
+        return importService.importer(fichier);
     }
 
     /** Saisie d'un PPM (dossier PPM + PPM + lignes de marché). */

@@ -68,12 +68,11 @@
 			<artifactId>documents4j-transformer-msoffice-word</artifactId>
 			<version>1.1.13</version>
 		</dependency>
-		<!-- Extraction texte/images du PDF pour les tests de generation. -->
+		<!-- Extraction texte du PDF : import PPM (parsing read-only) + tests de generation. -->
 		<dependency>
 			<groupId>org.apache.pdfbox</groupId>
 			<artifactId>pdfbox</artifactId>
 			<version>3.0.3</version>
-			<scope>test</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>

@@ -4814,6 +4814,61 @@ class CnmWorkflowIntegrationTest {
                 .andExpect(jsonPath("$.soaCode").value("00-21-0-J00-00000"));
     }
 
+    @Test
+    @DisplayName("Import PPM PDF (read-only) : parse l'en-tête + résout l'entité + avertissements ; non-PDF → 400")
+    void importPpm_pdf_prefill_ok() throws Exception {
+        EntiteContract e = entite(900, 1, "ANT"); e.setLibelleEntite("MINISTERE ECONOMIE");
+        entiteContractRepository.save(e);
+        natureRepository.save(new Nature(1, "Fournitures et services", null));
+
+        byte[] pdf = pdfAvecTexte(
+                "PLAN DE PASSATION DES MARCHES - Exercice 2026",
+                "Autorite Contractante : MINISTERE ECONOMIE",
+                "Documentation et abonnement Fournitures et services 1 005 000",
+                "Fait a Antananarivo le 14 avril 2026");
+
+        mvc.perform(multipart("/api/saisies/ppm/import")
+                .file(new MockMultipartFile("fichier", "ppm.pdf", "application/pdf", pdf))
+                .header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.exercice").value(2026))
+                .andExpect(jsonPath("$.idEntiteContract").value(900))
+                .andExpect(jsonPath("$.autoriteContractante").value("MINISTERE ECONOMIE"))
+                .andExpect(jsonPath("$.dateSignature").value("2026-04-14"))
+                .andExpect(jsonPath("$.avertissements").isArray())
+                .andExpect(jsonPath("$.marches").isArray());
+
+        // Robustesse : fichier non-PDF → 400 (pas de données partielles silencieuses).
+        mvc.perform(multipart("/api/saisies/ppm/import")
+                .file(new MockMultipartFile("fichier", "x.txt", "text/plain", "ceci n'est pas un pdf".getBytes(StandardCharsets.UTF_8)))
+                .header("Authorization", tokenPrmp))
+                .andExpect(status().isBadRequest());
+    }
+
+    /** Génère en mémoire un PDF (PDFBox) contenant les lignes de texte fournies — pour tester le parsing d'import. */
+    private byte[] pdfAvecTexte(String... lignes) throws Exception {
+        try (org.apache.pdfbox.pdmodel.PDDocument doc = new org.apache.pdfbox.pdmodel.PDDocument()) {
+            org.apache.pdfbox.pdmodel.PDPage page = new org.apache.pdfbox.pdmodel.PDPage();
+            doc.addPage(page);
+            try (org.apache.pdfbox.pdmodel.PDPageContentStream cs =
+                    new org.apache.pdfbox.pdmodel.PDPageContentStream(doc, page)) {
+                cs.beginText();
+                cs.setFont(new org.apache.pdfbox.pdmodel.font.PDType1Font(
+                        org.apache.pdfbox.pdmodel.font.Standard14Fonts.FontName.HELVETICA), 11);
+                cs.setLeading(16f);
+                cs.newLineAtOffset(50, 750);
+                for (String l : lignes) {
+                    cs.showText(l);
+                    cs.newLine();
+                }
+                cs.endText();
+            }
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            doc.save(out);
+            return out.toByteArray();
+        }
+    }
+
     /** Rend l'examen 1 (dossier 1, ppm 1) éligible (1 ligne de marché en AOO) puis crée + signe un PV FAVR. */
     private void signerPvEligible(int idPv) throws Exception {
         modePassationRepository.save(new ModePassation(1, "AOO", null, null, null, null));
