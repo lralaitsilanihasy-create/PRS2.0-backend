@@ -254,9 +254,8 @@ public class SaisieService {
         m.setMontEstim(ligne.montEstim());
         m.setFinancement(ligne.financement());
         m.setStatut(ligne.statut());
-        m.setIdSituation(ligne.idSituation());
         m.setIdNature(ligne.idNature());
-        m.setIdMode(ligne.idMode());   // mode choisi (validé en service)
+        m.setIdMode(ligne.idMode());   // mode choisi (saisie manuelle, plus de détermination auto)
         return m;
     }
 

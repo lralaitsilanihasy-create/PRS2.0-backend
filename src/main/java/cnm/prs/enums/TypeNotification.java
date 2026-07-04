@@ -38,8 +38,6 @@ public enum TypeNotification {
     /** Nouvelle inscription (auto-inscription PRMP) en attente de validation — vers l'Administrateur. */
     NOUVELLE_INSCRIPTION,
 
-    /** Mode de passation non déterminé automatiquement (aucune règle correspondante) — vers la PRMP (§3.1, Module 02). */
-    MODE_NON_DETERMINE,
 
     /** Dossier officiellement soumis par la PRMP, en attente de réception — vers le Secrétaire/CC de la localité (§3.1, Module 03). */
     DOSSIER_SOUMIS,

@@ -1073,7 +1073,7 @@ dossier/PPM (désormais réservée Admin).
 >
 > Modifiables ensuite via la **rectification** (en attente de décision PRMP), pas à la création.
 
-**`SaisieMarcheLigne`** : `designationMarche`, `numCompte`, `montEstim`, `financement`, `statut`, `idSituation`, `idNature`. `idDetail` est **facultatif** — **null à la création** (PK serveur), renseigné seulement pour **identifier une ligne existante** lors de l'édition (réconciliation). `idDossier`/`idPpm` sont renseignés par le service. ⚠️ **`idMode`** = mode **choisi** par la PRMP (facultatif), validé contre l'ensemble autorisé (hors ensemble → **409**) ; absent → mode **recommandé** (§3.1 M02).
+**`SaisieMarcheLigne`** : `designationMarche`, `numCompte`, `montEstim`, `financement`, `statut`, `idNature`. `idDetail` est **facultatif** — **null à la création** (PK serveur), renseigné seulement pour **identifier une ligne existante** lors de l'édition (réconciliation). `idDossier`/`idPpm` sont renseignés par le service. **`idMode`** = mode **saisi** par la PRMP/import (facultatif) ; **conservé tel quel** (plus de détermination automatique — `t_situation`/`t_regle_passation`/`t_seuil` retirés). L'intégrité vers `tr_mode` reste assurée par la FK.
 
 ⚠️ **`processus`** : `ProcessusMarche[]` — **chaque marché doit comporter au moins un processus à la création** (`POST /api/saisies/ppm`), sinon **400** `{ "erreurs": [ { "champ": "marches[0].processus", "message": "Au moins un processus est obligatoire." } ] }`. Chaque **`ProcessusMarche`** = `idCapm` (FK `t_capm`, `@NotNull`), `dateDebut` et `dateFin` (`yyyy-MM-dd`, `@NotNull`) — un champ manquant → **400** au chemin `marches[i].processus[j].<champ>` (« Le processus est obligatoire. » / « La date de début est obligatoire. » / « La date de fin est obligatoire. ») ; `idCapm` **inconnu** → **400**. Le service crée **une ligne `t_marche_prevision` par processus**. *(À l'édition d'un brouillon, `processus` n'est pas exigé.)*
 
@@ -1113,7 +1113,7 @@ dossier/PPM (désormais réservée Admin).
 ```json
 {
   "idEntiteContract": 1, "exercice": 2026, "dateSignature": "2026-01-10",
-  "marches": [ { "designationMarche": "Travaux X", "montEstim": 500000000, "idNature": 1, "idSituation": 1, "statut": "PREVU" } ]
+  "marches": [ { "designationMarche": "Travaux X", "montEstim": 500000000, "idNature": 1, "idMode": 4, "statut": "PREVU" } ]
 }
 ```
 
@@ -1780,7 +1780,7 @@ profil/localité. Cycle : `BROUILLON → SOUMIS → SIGNE` (signature CC ou Pré
 ---
 
 ## Marchés
-**Ressource** `/api/marches` — Lecture **scopée au périmètre de l'appelant** (⚠️ changement de portée, voir note). **Écriture (POST/PUT/DELETE) réservée `PRMP`** : édition des lignes d'un dossier **PPM en BROUILLON** dont elle est propriétaire (sinon 403/409). Le **mode** est déterminé automatiquement (cf. note ci-dessous). ⚠️ **Règle ajoutée** : à la **suppression** (`DELETE`), les **dates prévisionnelles** du marché (`t_marche_prevision`) sont supprimées **en cascade applicative** (même transaction).
+**Ressource** `/api/marches` — Lecture **scopée au périmètre de l'appelant** (⚠️ changement de portée, voir note). **Écriture (POST/PUT/DELETE) réservée `PRMP`** : édition des lignes d'un dossier **PPM en BROUILLON** dont elle est propriétaire (sinon 403/409). Le **mode** est **saisi** (plus de détermination auto, cf. note). ⚠️ **Règle ajoutée** : à la **suppression** (`DELETE`), les **dates prévisionnelles** du marché (`t_marche_prevision`) sont supprimées **en cascade applicative** (même transaction).
 
 > **⚠️ Scoping serveur (changement de portée, §1/§3.1).** `GET /api/marches` ne renvoie **plus toute
 > la table** : Président/Administrateur → tout ; **PRMP → ses marchés** (ceux de ses PPM) ; contrôleur
@@ -1801,9 +1801,8 @@ profil/localité. Cycle : `BROUILLON → SOUMIS → SIGNE` (signature CC ou Pré
 | nouvMontEstim | number | Non | |
 | financement | string | Non | max 20 |
 | statut | string | Non | max 20 |
-| idSituation | number | Non | critère de détermination du mode |
-| idNature | number | Non | critère de détermination du mode |
-| idMode | number | **Déterminé automatiquement** | **lecture seule** : ignoré en entrée, calculé par le backend |
+| idNature | number | Non | nature du marché |
+| idMode | number | Non | mode de passation **saisi** (PRMP/import), conservé tel quel — FK `tr_mode` |
 
 **Endpoints**
 
@@ -1823,8 +1822,8 @@ profil/localité. Cycle : `BROUILLON → SOUMIS → SIGNE` (signature CC ou Pré
 > repasser par le brouillon**. Statut du dossier **inchangé** (reste `EN_ATTENTE_DECISION_PRMP` jusqu'à
 > `POST /api/dossiers/{id}/resoumettre`). Hors `EN_ATTENTE_DECISION_PRMP` → **409** ; non-propriétaire → **403** ;
 > profil **PRMP strict** (Admin/vérificateur → **403**). Identité **figée** (idDossier, idPpm — **non requis** dans
-> le corps, ignorés s'ils sont envoyés ; le PATCH ne valide pas ces champs) ; mode de passation **revalidé**.
-> Tracé `t_audit_log` (`MODIFICATION_RECTIFICATION`, `NOM_TABLE=t_marche`).
+> le corps, ignorés s'ils sont envoyés ; le PATCH ne valide pas ces champs). Le `idMode` fourni est conservé
+> tel quel. Tracé `t_audit_log` (`MODIFICATION_RECTIFICATION`, `NOM_TABLE=t_marche`).
 
 > Les **dates prévisionnelles** ne sont pas des colonnes du marché : elles sont en relation **1,N**
 > dans **Marchés — dates prévisionnelles** (`/api/marche-previsions`), **une ligne par processus**
@@ -1833,28 +1832,18 @@ profil/localité. Cycle : `BROUILLON → SOUMIS → SIGNE` (signature CC ou Pré
 > serveur crée d'office les lignes `t_marche_prevision`. La ressource `/api/marche-previsions` reste
 > utilisée pour **consulter/éditer** ces dates ensuite (triées par `t_capm.ordre`).
 >
-> **Mode de passation (§3.1, Module 02) — ⚠️ règle ajoutée : la PRMP choisit, le serveur valide.**
-> Pour (`idSituation`, `idNature`, `montEstim`, **localité du dossier**), `t_regle_passation`/`t_seuil`
-> calcule l'**ensemble des modes autorisés** + un **recommandé** (cf. `suggestion-mode`). À la **création
-> et à la mise à jour** : `idMode` **fourni** et dans l'ensemble → conservé ; **hors ensemble** → **409**
-> (« choisir parmi … ») ; fourni mais **aucune règle** → accepté s'il existe dans `tr_mode` (saisie
-> manuelle) ; **absent** → mode **recommandé**. Aucune règle et aucun mode → `idMode = null` + notification
-> `MODE_NON_DETERMINE`. Localité du dossier introuvable → **400**.
+> ⚠️ **Mode de passation — purement saisi (règle modifiée).** La **détermination automatique** du mode
+> (référentiels `t_situation` / `t_regle_passation` / `t_seuil` + endpoint `suggestion-mode`) a été **retirée**.
+> Le `idMode` fourni (PRMP ou import PPM) est **conservé tel quel** à la création/mise à jour/rectification ;
+> aucune validation par situation/seuil, plus de notification `MODE_NON_DETERMINE`. Seule la **FK `tr_mode`**
+> garantit l'existence du mode. Le PPM officiel porte le mode directement (« Achat Direct », « Gré à gré »…).
 
-**Exemple — requête** (`idMode` facultatif : mode choisi ; absent → recommandé)
+**Exemple — requête / réponse** (`idMode` = mode saisi, conservé)
 ```json
 {
   "idDetail": 1205, "idDossier": 320, "idPpm": 45,
   "designationMarche": "Acquisition de matériel informatique", "numCompte": "6011001", "montEstim": 620000000.0,
-  "financement": "RPI", "statut": "PREVU", "idSituation": 1, "idNature": 2
-}
-```
-**Exemple — réponse** (`idMode` renseigné par le calcul)
-```json
-{
-  "idDetail": 1205, "idDossier": 320, "idPpm": 45,
-  "designationMarche": "Acquisition de matériel informatique", "numCompte": "6011001", "montEstim": 620000000.0,
-  "financement": "RPI", "statut": "PREVU", "idSituation": 1, "idNature": 2, "idMode": 3
+  "financement": "RPI", "statut": "PREVU", "idNature": 2, "idMode": 3
 }
 ```
 
@@ -2215,7 +2204,7 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` et une `dateFi
 | `CLOTURE_ELIGIBLE` | dossier clôturé éligible | Chargé de publication | DOSSIER |
 | `NOUVEAU_MESSAGE` | message reçu (messagerie) | destinataire | MESSAGE |
 
-*(Autres types existants : `NOUVELLE_INSCRIPTION`, `INSCRIPTION_VALIDEE/REFUSEE`, `DEMANDE_RETRAIT_A_VALIDER`, `RETRAIT_ACCEPTE/REFUSE`, `MODE_NON_DETERMINE`, `FIN_MANDAT`, `ALERTE_DELAI`, `DISPATCH_CC`.)*
+*(Autres types existants : `NOUVELLE_INSCRIPTION`, `INSCRIPTION_VALIDEE/REFUSEE`, `DEMANDE_RETRAIT_A_VALIDER`, `RETRAIT_ACCEPTE/REFUSE`, `FIN_MANDAT`, `ALERTE_DELAI`, `DISPATCH_CC`.)*
 
 **Exemple — réponse `/mes`**
 ```json
@@ -2753,99 +2742,6 @@ GET /api/rapports/dossiers/excel                   (Chef de commission : forcé 
 
 ---
 
-## Règles de passation
-**Ressource** `/api/regle-passations` — Référentiel : lecture ouverte ; écriture `ADMINISTRATEUR`. L'endpoint `suggestion-mode` est réservé à `PRMP` (non soumis au verrou Admin). ⚠️ **Règle ajoutée** : la PRMP **choisit** le mode parmi l'**ensemble autorisé** que ce calcul renvoie ; le serveur **valide** ce choix à la création/édition d'un marché (mode hors ensemble → **409**).
-
-**Champs `ReglePassationDto`**
-
-| Champ (JSON) | Type | Obligatoire | Contraintes |
-|---|---|---|---|
-| idRegle | number | Oui (PK, au POST) | clé primaire |
-| idSituation | number | Oui | @NotNull — **id** (écriture) |
-| idSeuil | number | Oui | @NotNull — **id** (écriture) |
-| idMode | number | Oui | @NotNull — **id** (écriture) |
-| priorite | number | Non | |
-| libelleSituation | string | — (réponse) | **lecture seule** — libellé de la situation (ex. « Situation normale ») |
-| libelleSeuil | string | — (réponse) | **lecture seule** — « montantMin à montantMax », ou « ≥ montantMin » si max nul |
-| libelleMode | string | — (réponse) | **lecture seule** — libellé du mode (ex. « Appel d'offres ouvert ») |
-
-> ⚠️ **Libellés en lecture (règle ajoutée).** `GET /api/regle-passations` (et `/{id}`) renseigne `libelleSituation`, `libelleSeuil` et `libelleMode` (résolus depuis `tr_situation` / `t_seuil` / `tr_mode_passation`) pour l'affichage. Les `id*` restent présents (nécessaires à la création/édition — les retirer casserait POST/PUT) mais n'ont pas à être affichés.
-
-**Champs `SuggestionModeRequest`** (corps de `suggestion-mode`)
-
-| Champ (JSON) | Type | Obligatoire | Contraintes |
-|---|---|---|---|
-| idSituation | number | Oui | @NotNull |
-| montant | number | Oui | @NotNull |
-| idNature | number | Oui | @NotNull |
-| idLocalite | string | Oui | @NotBlank, max 5 |
-
-**Champs `SuggestionModeResponse`** (réponse) — ⚠️ règle ajoutée : **ensemble autorisé** + recommandé.
-
-| Champ (JSON) | Type | Description |
-|---|---|---|
-| modeRecommande | number | mode recommandé (règle de plus haute priorité) ; `null` si aucune règle |
-| modesAutorises | array | modes autorisés `[{ idMode, libelle }]`, **recommandé en tête** |
-| modeNonDetermine | boolean | `true` si aucune règle ne correspond (ensemble vide → saisie manuelle) |
-
-**Endpoints**
-
-| Méthode | URL | Corps | Réponse | Statuts | Rôle |
-|---|---|---|---|---|---|
-| GET | /api/regle-passations | — | `ReglePassationDto[]` | 200 | Authentifié |
-| GET | /api/regle-passations/{id} | — | `ReglePassationDto` | 200, 404 | Authentifié |
-| POST | /api/regle-passations | `ReglePassationDto` | `ReglePassationDto` | 201, 400, 403 | ADMINISTRATEUR |
-| PUT | /api/regle-passations/{id} | `ReglePassationDto` | `ReglePassationDto` | 200, 400, 404 | ADMINISTRATEUR |
-| DELETE | /api/regle-passations/{id} | — | — | 204, 404 | ADMINISTRATEUR |
-| POST | /api/regle-passations/suggestion-mode | `SuggestionModeRequest` | `SuggestionModeResponse` | 200, 400 | PRMP |
-
-`{id}` = idRegle (number). `suggestion-mode` → **200 même sans règle** (`modesAutorises:[]`, `modeNonDetermine:true`) — plus de 404 ; non contraignant : la PRMP choisit, le serveur valide.
-
-**Exemple — requête (création) / suggestion-mode / réponse**
-```json
-{ "idRegle": 18, "idSituation": 2, "idSeuil": 9, "idMode": 4, "priorite": 1 }
-```
-```json
-{ "idSituation": 2, "montant": 120000000.0, "idNature": 5, "idLocalite": "ANT" }
-```
-```json
-{ "modeRecommande": 4, "modesAutorises": [ { "idMode": 4, "libelle": "Cotation" }, { "idMode": 2, "libelle": "AOR" } ], "modeNonDetermine": false }
-```
-
----
-
-## Seuils
-**Ressource** `/api/seuils` — Référentiel : lecture ouverte ; écriture `ADMINISTRATEUR`.
-
-**Champs `SeuilDto`**
-
-| Champ (JSON) | Type | Obligatoire | Contraintes |
-|---|---|---|---|
-| idSeuil | number | Oui (PK, au POST) | clé primaire |
-| montantMin | number | Non | |
-| montantMax | number | Non | |
-| idNature | number | Oui | @NotNull |
-| idLocalite | string | Oui | @NotBlank, max 5 |
-
-**Endpoints**
-
-| Méthode | URL | Corps | Réponse | Statuts | Rôle |
-|---|---|---|---|---|---|
-| GET | /api/seuils | — | `SeuilDto[]` | 200 | Authentifié |
-| GET | /api/seuils/{id} | — | `SeuilDto` | 200, 404 | Authentifié |
-| POST | /api/seuils | `SeuilDto` | `SeuilDto` | 201, 400, 403 | ADMINISTRATEUR |
-| PUT | /api/seuils/{id} | `SeuilDto` | `SeuilDto` | 200, 400, 404 | ADMINISTRATEUR |
-| DELETE | /api/seuils/{id} | — | — | 204, 404 | ADMINISTRATEUR |
-
-`{id}` = idSeuil (number).
-
-**Exemple — requête**
-```json
-{ "idSeuil": 12, "montantMin": 0.0, "montantMax": 5000000.0, "idNature": 3, "idLocalite": "ANT" }
-```
-
----
-
 ## Services bénéficiaires
 **Ressource** `/api/service-beneficiaires` — Lecture / écriture : tout utilisateur authentifié.
 
@@ -2909,36 +2805,6 @@ GET /api/rapports/dossiers/excel                   (Chef de commission : forcé 
 **Exemple — requête**
 ```json
 { "idSession": "SESS-2026-0007", "imControleur": "CTRMEM", "dateConnexion": "2026-06-11T08:32:17", "ipAdresse": "192.168.1.42", "userAgent": "Mozilla/5.0", "succes": true }
-```
-
----
-
-## Situations
-**Ressource** `/api/situations` — Référentiel : lecture ouverte ; écriture `ADMINISTRATEUR`.
-
-**Champs `SituationDto`**
-
-| Champ (JSON) | Type | Obligatoire | Contraintes |
-|---|---|---|---|
-| idSituation | number | Oui (PK, au POST) | clé primaire |
-| libelle | string | Non | max 100 |
-| description | string | Non | max 500 |
-
-**Endpoints**
-
-| Méthode | URL | Corps | Réponse | Statuts | Rôle |
-|---|---|---|---|---|---|
-| GET | /api/situations | — | `SituationDto[]` | 200 | Authentifié |
-| GET | /api/situations/{id} | — | `SituationDto` | 200, 404 | Authentifié |
-| POST | /api/situations | `SituationDto` | `SituationDto` | 201, 400, 403 | ADMINISTRATEUR |
-| PUT | /api/situations/{id} | `SituationDto` | `SituationDto` | 200, 400, 404 | ADMINISTRATEUR |
-| DELETE | /api/situations/{id} | — | — | 204, 404 | ADMINISTRATEUR |
-
-`{id}` = idSituation (number).
-
-**Exemple — requête**
-```json
-{ "idSituation": 7, "libelle": "En attente de pièces", "description": "Dossier suspendu jusqu'à réception des justificatifs." }
 ```
 
 ---

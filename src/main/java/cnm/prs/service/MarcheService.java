@@ -2,85 +2,42 @@ package cnm.prs.service;
 
 import java.util.List;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import cnm.prs.dto.MarcheDto;
-import cnm.prs.entity.Dossier;
 import cnm.prs.entity.Marche;
-import cnm.prs.entity.Ppm;
-import cnm.prs.entity.Prmp;
-import cnm.prs.entity.ReglePassation;
 import cnm.prs.enums.ProfilUtilisateur;
-import cnm.prs.enums.TypeNotification;
-import cnm.prs.exception.BadRequestException;
-import cnm.prs.exception.BusinessRuleException;
 import cnm.prs.exception.ResourceNotFoundException;
 import cnm.prs.mapper.MarcheMapper;
-import cnm.prs.repository.DossierRepository;
 import cnm.prs.repository.MarchePrevisionRepository;
-import cnm.prs.repository.ModePassationRepository;
 import cnm.prs.repository.MarcheRepository;
-import cnm.prs.repository.PpmRepository;
-import cnm.prs.repository.PrmpRepository;
 import cnm.prs.security.CurrentUser;
 import cnm.prs.security.Visibilite;
 
 /**
  * Logique métier pour {@link Marche}.
  *
- * <p>Le <strong>mode de passation</strong> n'est jamais fourni par le client : il est
- * <strong>déterminé automatiquement</strong> (§3.1, Module 02) à partir de quatre critères —
- * situation, nature, montant estimé et localité — via {@code t_regle_passation}/{@code t_seuil}.
- * La localité provient de la <strong>PRMP</strong> du PPM du marché
- * ({@code marché → PPM → PRMP.ID_LOCALITE}).</p>
- *
- * <ul>
- *   <li>À la <strong>création</strong> : le mode calculé est toujours imposé (option A).</li>
- *   <li>À la <strong>mise à jour</strong> : recalcul uniquement si la nature, le montant, la
- *       situation ou le PPM change.</li>
- *   <li>Si <strong>aucune règle</strong> ne correspond : le marché est créé avec {@code idMode = null}
- *       et une alerte (notification {@code MODE_NON_DETERMINE} + log) est émise (option B).</li>
- *   <li>Si la <strong>localité de la PRMP est absente</strong> : la création/mise à jour est refusée
- *       (HTTP 400) avec un message clair.</li>
- * </ul>
+ * <p>Le <strong>mode de passation</strong> est désormais <strong>purement saisi</strong> (PRMP / import PPM) :
+ * il n'y a <strong>plus de détermination automatique</strong> — les référentiels {@code t_situation},
+ * {@code t_regle_passation} et {@code t_seuil} ont été retirés. Le champ {@code idMode} fourni est conservé
+ * tel quel (l'intégrité vers {@code tr_mode} reste assurée par la FK).</p>
  */
 @Service
 @Transactional
 public class MarcheService {
 
-    private static final Logger log = LoggerFactory.getLogger(MarcheService.class);
-
     private final MarcheRepository repository;
-    private final PpmRepository ppmRepository;
-    private final PrmpRepository prmpRepository;
-    private final DossierRepository dossierRepository;
-    private final ReglePassationService reglePassationService;
-    private final NotificationService notificationService;
     private final DossierIntegriteService dossierIntegrite;
     private final MarchePrevisionRepository marchePrevisionRepository;
-    private final ModePassationRepository modePassationRepository;
     private final AuditLogService auditLogService;
 
-    public MarcheService(MarcheRepository repository, PpmRepository ppmRepository,
-            PrmpRepository prmpRepository, DossierRepository dossierRepository,
-            ReglePassationService reglePassationService,
-            NotificationService notificationService, DossierIntegriteService dossierIntegrite,
-            MarchePrevisionRepository marchePrevisionRepository,
-            ModePassationRepository modePassationRepository,
-            AuditLogService auditLogService) {
+    public MarcheService(MarcheRepository repository, DossierIntegriteService dossierIntegrite,
+            MarchePrevisionRepository marchePrevisionRepository, AuditLogService auditLogService) {
         this.repository = repository;
-        this.ppmRepository = ppmRepository;
-        this.prmpRepository = prmpRepository;
-        this.dossierRepository = dossierRepository;
-        this.reglePassationService = reglePassationService;
-        this.notificationService = notificationService;
         this.dossierIntegrite = dossierIntegrite;
         this.marchePrevisionRepository = marchePrevisionRepository;
-        this.modePassationRepository = modePassationRepository;
         this.auditLogService = auditLogService;
     }
 
@@ -137,9 +94,8 @@ public class MarcheService {
         dossierIntegrite.exigerBrouillonModifiable(dto.getIdDossier());
         dossierIntegrite.exigerTypePpm(dto.getIdDossier());
         Marche entity = MarcheMapper.toEntity(dto);
-        entity.setIdDetail(repository.nextIdMarche().intValue());   // ⚠️ PK serveur (séquence) ; id client ignoré
-        // ⚠️ Règle ajoutée — mode CHOISI par la PRMP, validé contre l'ensemble autorisé (sinon recommandé).
-        validerOuAppliquerMode(entity);
+        entity.setIdDetail(repository.nextIdMarche().intValue());   // PK serveur (séquence) ; id client ignoré
+        // Mode = celui saisi (PRMP/import) ; plus de détermination automatique (t_situation/t_regle/t_seuil retirés).
         return MarcheMapper.toDto(repository.save(entity));
     }
 
@@ -157,11 +113,8 @@ public class MarcheService {
         existing.setNouvMontEstim(dto.getNouvMontEstim());
         existing.setFinancement(dto.getFinancement());
         existing.setStatut(dto.getStatut());
-        existing.setIdSituation(dto.getIdSituation());
         existing.setIdNature(dto.getIdNature());
-        existing.setIdMode(dto.getIdMode());   // mode choisi (validé ci-dessous ; recommandé si null)
-        // ⚠️ Règle ajoutée — valide le mode choisi contre l'ensemble autorisé, ou applique le recommandé.
-        validerOuAppliquerMode(existing);
+        existing.setIdMode(dto.getIdMode());   // mode choisi (saisie manuelle)
         return MarcheMapper.toDto(repository.save(existing));
     }
 
@@ -183,10 +136,8 @@ public class MarcheService {
         existing.setNouvMontEstim(dto.getNouvMontEstim());
         existing.setFinancement(dto.getFinancement());
         existing.setStatut(dto.getStatut());
-        existing.setIdSituation(dto.getIdSituation());
         existing.setIdNature(dto.getIdNature());
-        existing.setIdMode(dto.getIdMode());
-        validerOuAppliquerMode(existing);   // mode revalidé contre l'ensemble autorisé (recommandé si null)
+        existing.setIdMode(dto.getIdMode());   // mode choisi (saisie manuelle)
         Marche saved = repository.save(existing);
         auditLogService.enregistrer(CurrentUser.ref().orElse(null), "t_marche",
                 String.valueOf(id), "MODIFICATION_RECTIFICATION", null);
@@ -202,79 +153,4 @@ public class MarcheService {
         marchePrevisionRepository.deleteByIdDetail(id);
         repository.deleteById(id);
     }
-
-    /**
-     * ⚠️ Règle ajoutée — la PRMP <strong>choisit</strong> le mode parmi l'ensemble autorisé ; le serveur
-     * <strong>valide</strong> :
-     * <ul>
-     *   <li>mode fourni &amp; dans l'ensemble autorisé → conservé ;</li>
-     *   <li>mode fourni, ensemble non vide &amp; mode absent → <strong>409</strong> ;</li>
-     *   <li>mode fourni &amp; aucune règle → accepté s'il existe dans {@code tr_mode} (saisie manuelle), sinon 409 ;</li>
-     *   <li>aucun mode → mode recommandé (1ʳᵉ règle) ; si aucune règle → {@code null} + alerte MODE_NON_DETERMINE.</li>
-     * </ul>
-     *
-     * @throws BadRequestException   si la localité du dossier ne peut être résolue (refus, §point 3)
-     * @throws BusinessRuleException si le mode choisi n'est pas autorisé / inconnu
-     */
-    private void validerOuAppliquerMode(Marche marche) {
-        String localite = resoudreLocaliteDossier(marche);
-        List<Integer> autorises = reglePassationService
-                .determinerRegles(marche.getIdSituation(), marche.getMontEstim(), marche.getIdNature(), localite)
-                .stream().map(ReglePassation::getIdMode).distinct().toList();
-        Integer choisi = marche.getIdMode();
-
-        if (choisi != null) {
-            if (autorises.contains(choisi)) {
-                return;                                       // choix valide
-            }
-            if (autorises.isEmpty()) {                        // aucune règle → saisie manuelle (D-d)
-                if (!modePassationRepository.existsById(choisi)) {
-                    throw new BusinessRuleException("Mode de passation inconnu : " + choisi + ".");
-                }
-                return;
-            }
-            throw new BusinessRuleException(
-                    "Mode de passation non autorisé pour ces paramètres ; choisir parmi " + autorises + ".");
-        }
-        // Aucun mode choisi → recommandé, ou null + alerte si aucune règle.
-        if (!autorises.isEmpty()) {
-            marche.setIdMode(autorises.get(0));
-        } else {
-            marche.setIdMode(null);
-            alerterModeNonDetermine(marche, localite);
-        }
-    }
-
-    /** Résout la localité du marché = celle de son <strong>dossier</strong> (dérivée de l'entité). */
-    private String resoudreLocaliteDossier(Marche marche) {
-        Dossier dossier = dossierRepository.findById(marche.getIdDossier())
-                .orElseThrow(() -> new BadRequestException(
-                        "Dossier introuvable (id " + marche.getIdDossier() + ") — mode de passation indéterminable."));
-        String localite = dossier.getIdLocalite();
-        if (localite == null || localite.isBlank()) {
-            throw new BadRequestException(
-                    "Le dossier " + marche.getIdDossier() + " n'a pas de localité — mode de passation non déterminable.");
-        }
-        return localite;
-    }
-
-    /** Émet l'alerte (log + notification à la PRMP) quand aucune règle ne donne de mode. */
-    private void alerterModeNonDetermine(Marche marche, String localite) {
-        log.warn("Mode de passation non déterminé pour le marché {} (PPM {}, nature {}, situation {}, "
-                + "montant {}, localité {}) : aucune règle correspondante.",
-                marche.getIdDetail(), marche.getIdPpm(), marche.getIdNature(),
-                marche.getIdSituation(), marche.getMontEstim(), localite);
-
-        String email = ppmRepository.findById(marche.getIdPpm())
-                .map(Ppm::getIdPrmp).flatMap(prmpRepository::findById)
-                .map(Prmp::getEmailPrmp).orElse(null);
-        notificationService.emettre(marche.getIdDossier(), TypeNotification.MODE_NON_DETERMINE,
-                null, email,
-                "Mode de passation non déterminé",
-                "Aucune règle de passation ne correspond au marché « " + marche.getDesignationMarche()
-                        + " » (nature " + marche.getIdNature() + ", situation " + marche.getIdSituation()
-                        + ", montant " + marche.getMontEstim() + ", localité " + localite
-                        + "). Le mode doit être renseigné manuellement.");
-    }
-
 }

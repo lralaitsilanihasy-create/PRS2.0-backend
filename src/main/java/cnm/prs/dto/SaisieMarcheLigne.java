@@ -30,8 +30,6 @@ public record SaisieMarcheLigne(
         @Size(max = 20)
         String statut,
 
-        Integer idSituation,
-
         Integer idNature,
 
         // Processus de marché + dates prévisionnelles (idCapm, dateDebut, dateFin). @Valid cascade la

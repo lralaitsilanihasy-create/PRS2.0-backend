@@ -59,14 +59,11 @@ import cnm.prs.entity.Ppm;
 import cnm.prs.entity.Prmp;
 import cnm.prs.entity.Profile;
 import cnm.prs.entity.Reception;
-import cnm.prs.entity.ReglePassation;
-import cnm.prs.entity.Seuil;
 import cnm.prs.entity.EntiteContract;
 import cnm.prs.entity.Ministere;
 import cnm.prs.entity.Organigramme;
 import cnm.prs.entity.PrmpEntite;
 import cnm.prs.entity.PrmpEntiteDemande;
-import cnm.prs.entity.Situation;
 import cnm.prs.entity.TypeDossier;
 import cnm.prs.enums.ProfilUtilisateur;
 import cnm.prs.enums.TypeActeur;
@@ -92,13 +89,10 @@ import cnm.prs.repository.PpmRepository;
 import cnm.prs.repository.PrmpRepository;
 import cnm.prs.repository.ProfileRepository;
 import cnm.prs.repository.ReceptionRepository;
-import cnm.prs.repository.ReglePassationRepository;
-import cnm.prs.repository.SeuilRepository;
 import cnm.prs.repository.EntiteContractRepository;
 import cnm.prs.repository.MinistereRepository;
 import cnm.prs.repository.OrganigrammeRepository;
 import cnm.prs.repository.PrmpEntiteRepository;
-import cnm.prs.repository.SituationRepository;
 import cnm.prs.repository.TypeDossierRepository;
 import cnm.prs.repository.PieceJointeRepository;
 import cnm.prs.repository.PrmpEntiteDemandeRepository;
@@ -145,13 +139,10 @@ class CnmWorkflowIntegrationTest {
     @Autowired private DemandeRetraitRepository demandeRetraitRepository;
     @Autowired private DelegationProfilRepository delegationProfilRepository;
     @Autowired private NatureRepository natureRepository;
-    @Autowired private SituationRepository situationRepository;
     @Autowired private ModePassationRepository modePassationRepository;
     @Autowired private cnm.prs.service.PvDocumentGenerator pvDocumentGenerator;
     @Autowired private cnm.prs.service.ReferenceService referenceService;
     @Autowired private jakarta.persistence.EntityManager entityManager;
-    @Autowired private SeuilRepository seuilRepository;
-    @Autowired private ReglePassationRepository reglePassationRepository;
     @Autowired private TypeDossierRepository typeDossierRepository;
     @Autowired private MinistereRepository ministereRepository;
     @Autowired private OrganigrammeRepository organigrammeRepository;
@@ -256,101 +247,13 @@ class CnmWorkflowIntegrationTest {
     // Détermination automatique du mode de passation (§3.1, Module 02)
     // ------------------------------------------------------------------
 
-    @Test
-    @DisplayName("Mode de passation : sans choix → recommandé, mode valide accepté, hors ensemble → 409, sans règle → null + alerte, localité absente → 400")
-    void determinationAutomatiqueModePassation() throws Exception {
-        // Référentiels : natures, situations, modes.
-        natureRepository.save(new Nature(1, "Travaux", null));
-        situationRepository.save(new Situation(1, "Normale", null));
-        situationRepository.save(new Situation(2, "Urgence", null));
-        modePassationRepository.save(new ModePassation(1, "AOO", null, null, null, null));
-        modePassationRepository.save(new ModePassation(2, "AOR", null, null, null, null));
-        modePassationRepository.save(new ModePassation(3, "Gré à gré", null, null, null, null));
-        // Seuils ANT / Travaux (tranches de montant) et règles (situation, seuil) → mode.
-        seuilRepository.save(seuil(902, "ANT", 1, "200000001", "1000000000"));
-        seuilRepository.save(seuil(903, "ANT", 1, "1000000001", null));
-        reglePassationRepository.save(regle(902, 1, 902, 2)); // normale, 200M–1Md → AOR
-        reglePassationRepository.save(regle(908, 2, 902, 3)); // urgence, 200M–1Md → Gré à gré
-        reglePassationRepository.save(regle(903, 1, 903, 1)); // normale, >1Md → AOO
-
-        // Brouillon PPM propriété de PRMP001 + son PPM (les lignes de marché sont saisies par la PRMP).
-        Dossier dPpm = dossier(50, "BROUILLON");
-        dPpm.setIdTypeDossier("PPM");
-        dPpm.setIdPrmp("PRMP001");
-        dPpm.setIdLocalite("ANT");
-        dossierRepository.save(dPpm);
-        ppmRepository.save(ppm(50, 50, "PRMP001"));   // idPrmp PRMP001 → localité ANT pour le mode
-
-        String tok = tokenPrmp;
-
-        // 1) Création SANS mode choisi → mode RECOMMANDÉ appliqué = 2 (AOR). idDetail=7001 envoyé est ignoré (PK serveur).
-        String r1 = mvc.perform(post("/api/marches").header("Authorization", tok).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idDetail\":7001,\"idDossier\":50,\"idPpm\":50,\"montEstim\":500000000,"
-                        + "\"idNature\":1,\"idSituation\":1,\"statut\":\"PREVU\"}"))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.idMode").value(2))
-                .andReturn().getResponse().getContentAsString();
-        int idMarche1 = com.jayway.jsonpath.JsonPath.read(r1, "$.idDetail");
-        org.junit.jupiter.api.Assertions.assertNotEquals(7001, idMarche1);  // id client ignoré
-        org.junit.jupiter.api.Assertions.assertTrue(idMarche1 >= 300001);   // PK serveur (séquence)
-
-        // 1b) Mode CHOISI valide (2 dans l'ensemble autorise {2}) -> accepte.
-        mvc.perform(post("/api/marches").header("Authorization", tok).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idDossier\":50,\"idPpm\":50,\"montEstim\":500000000,"
-                        + "\"idNature\":1,\"idSituation\":1,\"idMode\":2,\"statut\":\"PREVU\"}"))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.idMode").value(2));
-        // 1c) Mode CHOISI hors ensemble autorise ({2}) -> 409.
-        mvc.perform(post("/api/marches").header("Authorization", tok).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idDossier\":50,\"idPpm\":50,\"montEstim\":500000000,"
-                        + "\"idNature\":1,\"idSituation\":1,\"idMode\":99,\"statut\":\"PREVU\"}"))
-                .andExpect(status().isConflict());
-
-        // 2) Situation = urgence → mode 3 (Gré à gré), même nature/montant/localité.
-        mvc.perform(post("/api/marches").header("Authorization", tok).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idDetail\":7002,\"idDossier\":50,\"idPpm\":50,\"montEstim\":500000000,"
-                        + "\"idNature\":1,\"idSituation\":2,\"statut\":\"PREVU\"}"))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.idMode").value(3));
-
-        // 3) Montant hors de toute tranche → aucune règle → idMode null + alerte MODE_NON_DETERMINE.
-        mvc.perform(post("/api/marches").header("Authorization", tok).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idDetail\":7003,\"idDossier\":50,\"idPpm\":50,\"montEstim\":100000000,"
-                        + "\"idNature\":1,\"idSituation\":1,\"statut\":\"PREVU\"}"))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.idMode").value(nullValue()));
-        mvc.perform(get("/api/notifications").header("Authorization", tokenAdmin))
-                .andExpect(jsonPath("$[?(@.typeNotif=='MODE_NON_DETERMINE')]", hasSize(1)));
-
-        // 4) Mise à jour : le montant passe à 1,5 Md → recalcul → mode 1 (AOO).
-        mvc.perform(put("/api/marches/" + idMarche1).header("Authorization", tok).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idDossier\":50,\"idPpm\":50,\"montEstim\":1500000000,"
-                        + "\"idNature\":1,\"idSituation\":1,\"statut\":\"PREVU\"}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.idMode").value(1));
-
-        // 5) Dossier sans localité → mode indéterminable → refus 400.
-        Dossier sansLoc = dossier(51, "BROUILLON");
-        sansLoc.setIdTypeDossier("PPM");
-        sansLoc.setIdPrmp("PRMP001");
-        sansLoc.setIdLocalite(null);
-        dossierRepository.save(sansLoc);
-        ppmRepository.save(ppm(51, 51, "PRMP001"));
-        mvc.perform(post("/api/marches").header("Authorization", tok).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idDetail\":7004,\"idDossier\":51,\"idPpm\":51,\"montEstim\":500000000,"
-                        + "\"idNature\":1,\"idSituation\":1,\"statut\":\"PREVU\"}"))
-                .andExpect(status().isBadRequest());
-    }
 
     @Test
     @DisplayName("POST /api/marches : PK idDetail générée serveur (seq_marche) — id client ignoré, deux PRMP → PK distinctes, aucune collision")
     void marche_pkServeur_ignoreClient_pasDeCollisionEntreDeuxPrmp() throws Exception {
         // Référentiels + règle : montEstim 500M / Travaux / ANT → mode 2 (AOR), pour garantir un 201.
         natureRepository.save(new Nature(1, "Travaux", null));
-        situationRepository.save(new Situation(1, "Normale", null));
         modePassationRepository.save(new ModePassation(2, "AOR", null, null, null, null));
-        seuilRepository.save(seuil(902, "ANT", 1, "200000001", "1000000000"));
-        reglePassationRepository.save(regle(902, 1, 902, 2));
 
         // Deux brouillons PPM, un par PRMP (même localité ANT).
         Dossier d1 = dossier(60, "BROUILLON");
@@ -368,12 +271,12 @@ class CnmWorkflowIntegrationTest {
         // Les deux PRMP envoient le MÊME idDetail client (99001) — il doit être ignoré des deux côtés.
         String r1 = mvc.perform(post("/api/marches").header("Authorization", tokenPrmp).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDetail\":99001,\"idDossier\":60,\"idPpm\":60,\"montEstim\":500000000,"
-                        + "\"idNature\":1,\"idSituation\":1,\"statut\":\"PREVU\"}"))
+                        + "\"idNature\":1,\"statut\":\"PREVU\"}"))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         String r2 = mvc.perform(post("/api/marches").header("Authorization", tokenPrmp2).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDetail\":99001,\"idDossier\":61,\"idPpm\":61,\"montEstim\":500000000,"
-                        + "\"idNature\":1,\"idSituation\":1,\"statut\":\"PREVU\"}"))
+                        + "\"idNature\":1,\"statut\":\"PREVU\"}"))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
 
@@ -385,69 +288,6 @@ class CnmWorkflowIntegrationTest {
         org.junit.jupiter.api.Assertions.assertTrue(id1 >= 300001 && id2 >= 300001);
         org.junit.jupiter.api.Assertions.assertNotEquals(id1, id2);
     }
-
-    @Test
-    @DisplayName("Mode de passation : suggestion-mode renvoie l'ensemble autorisé + recommandé + indicateur ; choix dans l'ensemble accepté")
-    void mode_ensembleAutoriseEtSuggestion() throws Exception {
-        natureRepository.save(new Nature(1, "Travaux", null));
-        situationRepository.save(new Situation(1, "Normale", null));
-        modePassationRepository.save(new ModePassation(2, "AOR", null, null, null, null));
-        modePassationRepository.save(new ModePassation(4, "Cotation", null, null, null, null));
-        seuilRepository.save(seuil(902, "ANT", 1, "200000001", "1000000000"));
-        reglePassationRepository.save(regle(902, 1, 902, 2)); // priorité 1 → recommandé (mode 2)
-        reglePassationRepository.save(regle(904, 1, 902, 4)); // priorité 2 → mode 4 également autorisé
-
-        // suggestion-mode : ensemble {2 (recommandé), 4}, modeNonDetermine=false, libellés depuis tr_mode.
-        mvc.perform(post("/api/regle-passations/suggestion-mode").header("Authorization", tokenPrmp)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idSituation\":1,\"montant\":500000000,\"idNature\":1,\"idLocalite\":\"ANT\"}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.modeRecommande").value(2))
-                .andExpect(jsonPath("$.modeNonDetermine").value(false))
-                .andExpect(jsonPath("$.modesAutorises[?(@.idMode==2)].libelle", hasItem("AOR")))
-                .andExpect(jsonPath("$.modesAutorises[?(@.idMode==4)].libelle", hasItem("Cotation")));
-
-        // suggestion-mode : aucun seuil (montant 50M) → ensemble vide + modeNonDetermine=true (200, pas 404).
-        mvc.perform(post("/api/regle-passations/suggestion-mode").header("Authorization", tokenPrmp)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idSituation\":1,\"montant\":50000000,\"idNature\":1,\"idLocalite\":\"ANT\"}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.modeNonDetermine").value(true))
-                .andExpect(jsonPath("$.modesAutorises.length()").value(0));
-
-        // Création : mode CHOISI 4 (dans l'ensemble {2,4}) → accepté.
-        Dossier d = dossier(52, "BROUILLON"); d.setIdTypeDossier("PPM"); d.setIdPrmp("PRMP001"); d.setIdLocalite("ANT");
-        dossierRepository.save(d);
-        ppmRepository.save(ppm(52, 52, "PRMP001"));
-        mvc.perform(post("/api/marches").header("Authorization", tokenPrmp).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idDossier\":52,\"idPpm\":52,\"montEstim\":500000000,\"idNature\":1,\"idSituation\":1,\"idMode\":4,\"statut\":\"PREVU\"}"))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.idMode").value(4));
-    }
-
-    private static Seuil seuil(Integer id, String localite, Integer nature, String min, String max) {
-        Seuil s = new Seuil();
-        s.setIdSeuil(id);
-        s.setIdLocalite(localite);
-        s.setIdNature(nature);
-        s.setMontantMin(min == null ? null : new BigDecimal(min));
-        s.setMontantMax(max == null ? null : new BigDecimal(max));
-        return s;
-    }
-
-    private static ReglePassation regle(Integer id, Integer situation, Integer seuil, Integer mode) {
-        ReglePassation r = new ReglePassation();
-        r.setIdRegle(id);
-        r.setIdSituation(situation);
-        r.setIdSeuil(seuil);
-        r.setIdMode(mode);
-        r.setPriorite(1);
-        return r;
-    }
-
-    // ------------------------------------------------------------------
-    // Authentification
-    // ------------------------------------------------------------------
 
     @Test
     @DisplayName("Réinitialisation Admin : l'Admin force un nouveau mot de passe")
@@ -1628,25 +1468,6 @@ class CnmWorkflowIntegrationTest {
         }
     }
 
-    @Test
-    @DisplayName("Règles de passation — GET renvoie les libellés (situation/mode/seuil), pas les ids seuls")
-    void regles_passation_libelles_ok() throws Exception {
-        natureRepository.save(new Nature(1, "Travaux", null));
-        situationRepository.save(new Situation(1, "Situation normale", null));
-        modePassationRepository.save(new ModePassation(1, "Appel d'offres ouvert", null, null, null, null));
-        seuilRepository.save(seuil(950, "ANT", 1, "200000001", "1000000000"));
-        seuilRepository.save(seuil(951, "ANT", 1, "1000000001", null));   // max nul → « ≥ … »
-        reglePassationRepository.save(regle(950, 1, 950, 1));
-        reglePassationRepository.save(regle(951, 1, 951, 1));
-        entityManager.flush();
-        entityManager.clear();   // recharge des entités fraîches → relations lazy résolues (comme en prod)
-        mvc.perform(get("/api/regle-passations").header("Authorization", tokenAdmin))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.idRegle==950)].libelleSituation", hasItem("Situation normale")))
-                .andExpect(jsonPath("$[?(@.idRegle==950)].libelleMode", hasItem("Appel d'offres ouvert")))
-                .andExpect(jsonPath("$[?(@.idRegle==950)].libelleSeuil", hasItem("200000001 à 1000000000")))
-                .andExpect(jsonPath("$[?(@.idRegle==951)].libelleSeuil", hasItem("≥ 1000000001")));
-    }
 
     @Test
     @DisplayName("Tableau de bord Président : compteurs de contenu présents (6 sections, valeurs ≥ 0)")
@@ -2409,7 +2230,6 @@ class CnmWorkflowIntegrationTest {
     @DisplayName("Retrait accepté — le dossier BROUILLON reste entièrement modifiable (édition PPM acceptée)")
     void retrait_accepte_dossier_modifiable() throws Exception {
         natureRepository.save(new Nature(1, "Travaux", null));
-        situationRepository.save(new Situation(1, "Situation normale", null));
         Dossier d = dossier(135, "SOUMIS");
         d.setIdTypeDossier("PPM");
         d.setIdPrmp("PRMP001");
@@ -2426,7 +2246,7 @@ class CnmWorkflowIntegrationTest {
         // Dossier BROUILLON issu du retrait → édition PPM (en-tête + ligne de marché) acceptée (200).
         String edition = "{\"exercice\":2027,\"signataire\":\"Maj retrait\",\"dateSignature\":\"2026-02-01\","
                 + "\"reference\":\"PPM-135-v2\",\"marches\":[{\"montEstim\":500000000,\"idNature\":1,"
-                + "\"idSituation\":1,\"statut\":\"PREVU\"}]}";
+                + "\"statut\":\"PREVU\"}]}";
         mvc.perform(put("/api/saisies/ppm/135").header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON).content(edition))
                 .andExpect(status().isOk())
@@ -3464,17 +3284,14 @@ class CnmWorkflowIntegrationTest {
     @DisplayName("Façade saisie PPM : dossier BROUILLON + PPM + marché (mode auto), invisible des contrôleurs puis visible après soumission")
     void saisiePpm_facade() throws Exception {
         natureRepository.save(new Nature(1, "Travaux", null));
-        situationRepository.save(new Situation(1, "Normale", null));
         modePassationRepository.save(new ModePassation(2, "AOR", null, null, null, null));
-        seuilRepository.save(seuil(902, "ANT", 1, "200000001", "1000000000"));
-        reglePassationRepository.save(regle(902, 1, 902, 2));
         String tokenSec = bearer("CTRSEC", ProfilUtilisateur.SECRETAIRE, TypeActeur.CONTROLEUR, "CTRSEC", "ANT");
 
         capmRepository.save(new Capm(1, "LANCEMENT", 1));
         // Localité dérivée de l'entité 1 (= ANT) ; AUCUN id (dossier/PPM/marché) dans le corps → alloués serveur.
         String body = "{\"idEntiteContract\":1,\"exercice\":2026,"
                 + "\"signataire\":\"RABE\",\"dateSignature\":\"2026-01-10\",\"reference\":\"PPM-60\","
-                + "\"marches\":[{\"montEstim\":500000000,\"idNature\":1,\"idSituation\":1,\"statut\":\"PREVU\","
+                + "\"marches\":[{\"montEstim\":500000000,\"idNature\":1,\"idMode\":2,\"statut\":\"PREVU\","
                 + "\"processus\":[{\"idCapm\":1,\"dateDebut\":\"2026-02-01\",\"dateFin\":\"2026-06-30\"}]}]}";
         String resp = mvc.perform(post("/api/saisies/ppm").header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON).content(body))
@@ -3486,7 +3303,7 @@ class CnmWorkflowIntegrationTest {
                 .andReturn().getResponse().getContentAsString();
         int idDoss = com.jayway.jsonpath.JsonPath.read(resp, "$.idDossier");
         org.junit.jupiter.api.Assertions.assertTrue(idDoss >= 100001);   // PK serveur (séquence), pas de collision avec les seeds
-        // La ligne de marché a son mode déterminé automatiquement (AOR = 2).
+        // La ligne de marché conserve le mode SAISI (2) — plus de détermination automatique.
         mvc.perform(get("/api/marches").header("Authorization", tokenPrmp))
                 .andExpect(jsonPath("$[?(@.idDossier==" + idDoss + ")].idMode", hasItem(2)));
         // Le brouillon est invisible du Secrétaire.
@@ -3654,24 +3471,17 @@ class CnmWorkflowIntegrationTest {
     @DisplayName("Édition d'un brouillon PPM : en-tête mis à jour + lignes réconciliées (maj/ajout/retrait), mode recalculé")
     void editionPpm_facade() throws Exception {
         natureRepository.save(new Nature(1, "Travaux", null));
-        situationRepository.save(new Situation(1, "Normale", null));
         modePassationRepository.save(new ModePassation(1, "AOO", null, null, null, null));
         modePassationRepository.save(new ModePassation(2, "AOR", null, null, null, null));
         modePassationRepository.save(new ModePassation(4, "Cotation", null, null, null, null));
-        seuilRepository.save(seuil(901, "ANT", 1, "0", "200000000"));
-        seuilRepository.save(seuil(902, "ANT", 1, "200000001", "1000000000"));
-        seuilRepository.save(seuil(903, "ANT", 1, "1000000001", null));
-        reglePassationRepository.save(regle(901, 1, 901, 4));
-        reglePassationRepository.save(regle(902, 1, 902, 2));
-        reglePassationRepository.save(regle(903, 1, 903, 1));
 
-        // Saisie initiale (sans id) : marché 150M (→ mode 4) et 500M (→ mode 2), entité 1 (ANT).
+        // Saisie initiale (sans id) : marché 150M (mode SAISI 4) et 500M (mode SAISI 2), entité 1 (ANT).
         capmRepository.save(new Capm(1, "LANCEMENT", 1));
         String creation = "{\"idEntiteContract\":1,\"exercice\":2026,"
                 + "\"signataire\":\"RABE\",\"dateSignature\":\"2026-01-10\",\"reference\":\"PPM-120-v1\","
-                + "\"marches\":[{\"montEstim\":150000000,\"idNature\":1,\"idSituation\":1,\"statut\":\"PREVU\","
+                + "\"marches\":[{\"montEstim\":150000000,\"idNature\":1,\"idMode\":4,\"statut\":\"PREVU\","
                 + "\"processus\":[{\"idCapm\":1,\"dateDebut\":\"2026-02-01\",\"dateFin\":\"2026-06-30\"}]},"
-                + "{\"montEstim\":500000000,\"idNature\":1,\"idSituation\":1,\"statut\":\"PREVU\","
+                + "{\"montEstim\":500000000,\"idNature\":1,\"idMode\":2,\"statut\":\"PREVU\","
                 + "\"processus\":[{\"idCapm\":1,\"dateDebut\":\"2026-02-01\",\"dateFin\":\"2026-06-30\"}]}]}";
         String cresp = mvc.perform(post("/api/saisies/ppm").header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON).content(creation))
@@ -3687,10 +3497,10 @@ class CnmWorkflowIntegrationTest {
         mvc.perform(get("/api/marches/" + idM150).header("Authorization", tokenPrmp)).andExpect(jsonPath("$.idMode").value(4));
         mvc.perform(get("/api/marches/" + idM500).header("Authorization", tokenPrmp)).andExpect(jsonPath("$.idMode").value(2));
 
-        // Édition : en-tête + idM150 → 1,5 Md (mode 1), idM500 retiré, nouvelle ligne 500M ajoutée (sans id → mode 2).
+        // Édition : en-tête + idM150 → 1,5 Md (mode SAISI 1), idM500 retiré, nouvelle ligne 500M ajoutée (mode SAISI 2).
         String edition = "{\"exercice\":2027,\"signataire\":\"RABE Maj\",\"dateSignature\":\"2026-02-01\",\"reference\":\"PPM-120-v2\","
-                + "\"marches\":[{\"idDetail\":" + idM150 + ",\"montEstim\":1500000000,\"idNature\":1,\"idSituation\":1,\"statut\":\"PREVU\"},"
-                + "{\"montEstim\":500000000,\"idNature\":1,\"idSituation\":1,\"statut\":\"PREVU\"}]}";
+                + "\"marches\":[{\"idDetail\":" + idM150 + ",\"montEstim\":1500000000,\"idNature\":1,\"idMode\":1,\"statut\":\"PREVU\"},"
+                + "{\"montEstim\":500000000,\"idNature\":1,\"idMode\":2,\"statut\":\"PREVU\"}]}";
         mvc.perform(put("/api/saisies/ppm/" + idDoss).header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON).content(edition))
                 .andExpect(status().isOk())
@@ -3700,7 +3510,7 @@ class CnmWorkflowIntegrationTest {
         mvc.perform(get("/api/ppms/" + idPpm120).header("Authorization", tokenPrmp))
                 .andExpect(jsonPath("$.reference").value("PPM-120-v2"))
                 .andExpect(jsonPath("$.exercice").value(2027));
-        // idM150 recalculé → 1 ; idM500 supprimé → 404 ; la nouvelle ligne 500M (PK ≠ idM500) a le mode 2.
+        // idM150 : mode saisi 1 conservé ; idM500 supprimé → 404 ; la nouvelle ligne 500M (PK ≠ idM500) a le mode saisi 2.
         mvc.perform(get("/api/marches/" + idM150).header("Authorization", tokenPrmp)).andExpect(jsonPath("$.idMode").value(1));
         mvc.perform(get("/api/marches/" + idM500).header("Authorization", tokenPrmp)).andExpect(status().isNotFound());
         String m2 = mvc.perform(get("/api/marches").header("Authorization", tokenPrmp))
@@ -4338,7 +4148,7 @@ class CnmWorkflowIntegrationTest {
     @DisplayName("Saisie PPM — marché sans processus → 400 (marches[0].processus)")
     void marche_sans_processus_400() throws Exception {
         String body = "{\"idEntiteContract\":1,\"exercice\":2026,\"dateSignature\":\"2026-01-10\","
-                + "\"marches\":[{\"montEstim\":500000000,\"idNature\":1,\"idSituation\":1,\"statut\":\"PREVU\"}]}";
+                + "\"marches\":[{\"montEstim\":500000000,\"idNature\":1,\"statut\":\"PREVU\"}]}";
         mvc.perform(post("/api/saisies/ppm").header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isBadRequest())
@@ -4350,7 +4160,7 @@ class CnmWorkflowIntegrationTest {
     @DisplayName("Saisie PPM — processus avec idCapm inexistant → 400 (marches[0].processus[0].idCapm)")
     void processus_idCapm_invalide_400() throws Exception {
         String body = "{\"idEntiteContract\":1,\"exercice\":2026,\"dateSignature\":\"2026-01-10\","
-                + "\"marches\":[{\"montEstim\":500000000,\"idNature\":1,\"idSituation\":1,\"statut\":\"PREVU\","
+                + "\"marches\":[{\"montEstim\":500000000,\"idNature\":1,\"statut\":\"PREVU\","
                 + "\"processus\":[{\"idCapm\":999,\"dateDebut\":\"2026-02-01\",\"dateFin\":\"2026-06-30\"}]}]}";
         mvc.perform(post("/api/saisies/ppm").header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON).content(body))
@@ -4362,7 +4172,7 @@ class CnmWorkflowIntegrationTest {
     @DisplayName("Saisie PPM — processus sans dateDebut → 400 (marches[0].processus[0].dateDebut)")
     void processus_sans_dateDebut_400() throws Exception {
         String body = "{\"idEntiteContract\":1,\"exercice\":2026,\"dateSignature\":\"2026-01-10\","
-                + "\"marches\":[{\"montEstim\":500000000,\"idNature\":1,\"idSituation\":1,\"statut\":\"PREVU\","
+                + "\"marches\":[{\"montEstim\":500000000,\"idNature\":1,\"statut\":\"PREVU\","
                 + "\"processus\":[{\"idCapm\":1,\"dateFin\":\"2026-06-30\"}]}]}";
         mvc.perform(post("/api/saisies/ppm").header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON).content(body))
@@ -4375,7 +4185,7 @@ class CnmWorkflowIntegrationTest {
     @DisplayName("Saisie PPM — processus sans dateFin → 400 (marches[0].processus[0].dateFin)")
     void processus_sans_dateFin_400() throws Exception {
         String body = "{\"idEntiteContract\":1,\"exercice\":2026,\"dateSignature\":\"2026-01-10\","
-                + "\"marches\":[{\"montEstim\":500000000,\"idNature\":1,\"idSituation\":1,\"statut\":\"PREVU\","
+                + "\"marches\":[{\"montEstim\":500000000,\"idNature\":1,\"statut\":\"PREVU\","
                 + "\"processus\":[{\"idCapm\":1,\"dateDebut\":\"2026-02-01\"}]}]}";
         mvc.perform(post("/api/saisies/ppm").header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON).content(body))
@@ -4389,15 +4199,12 @@ class CnmWorkflowIntegrationTest {
     void brouillon_avec_processus_ok() throws Exception {
         // Mode déterminable (évite la notif MODE_NON_DETERMINE, hors sujet) : 500M → AOR (mode 2).
         natureRepository.save(new Nature(1, "Travaux", null));
-        situationRepository.save(new Situation(1, "Normale", null));
         modePassationRepository.save(new ModePassation(2, "AOR", null, null, null, null));
-        seuilRepository.save(seuil(902, "ANT", 1, "200000001", "1000000000"));
-        reglePassationRepository.save(regle(902, 1, 902, 2));
         capmRepository.save(new Capm(1, "LANCEMENT", 1));
         capmRepository.save(new Capm(3, "OUVERTURE", 3));
         // Processus envoyés dans le désordre (3 puis 1) → la lecture doit les trier par ordre (1 avant 3).
         String body = "{\"idEntiteContract\":1,\"exercice\":2026,\"dateSignature\":\"2026-01-10\","
-                + "\"marches\":[{\"montEstim\":500000000,\"idNature\":1,\"idSituation\":1,\"statut\":\"PREVU\","
+                + "\"marches\":[{\"montEstim\":500000000,\"idNature\":1,\"statut\":\"PREVU\","
                 + "\"processus\":[{\"idCapm\":3,\"dateDebut\":\"2026-03-01\",\"dateFin\":\"2026-03-31\"},"
                 + "{\"idCapm\":1,\"dateDebut\":\"2026-02-01\",\"dateFin\":\"2026-02-28\"}]}]}";
         String resp = mvc.perform(post("/api/saisies/ppm").header("Authorization", tokenPrmp)
@@ -4423,7 +4230,7 @@ class CnmWorkflowIntegrationTest {
     void processus_datefin_avant_datedebut_400() throws Exception {
         capmRepository.save(new Capm(1, "LANCEMENT", 1));
         String body = "{\"idEntiteContract\":1,\"exercice\":2026,\"dateSignature\":\"2026-01-10\","
-                + "\"marches\":[{\"montEstim\":500000000,\"idNature\":1,\"idSituation\":1,\"statut\":\"PREVU\","
+                + "\"marches\":[{\"montEstim\":500000000,\"idNature\":1,\"statut\":\"PREVU\","
                 + "\"processus\":[{\"idCapm\":1,\"dateDebut\":\"2026-06-30\",\"dateFin\":\"2026-06-01\"}]}]}";
         mvc.perform(post("/api/saisies/ppm").header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON).content(body))
@@ -4439,7 +4246,7 @@ class CnmWorkflowIntegrationTest {
         capmRepository.save(new Capm(2, "DAO", 2));
         // processus[1] (DAO) commence 02-15, avant la fin de processus[0] (LANCEMENT) le 03-01 → chevauchement.
         String body = "{\"idEntiteContract\":1,\"exercice\":2026,\"dateSignature\":\"2026-01-10\","
-                + "\"marches\":[{\"montEstim\":500000000,\"idNature\":1,\"idSituation\":1,\"statut\":\"PREVU\","
+                + "\"marches\":[{\"montEstim\":500000000,\"idNature\":1,\"statut\":\"PREVU\","
                 + "\"processus\":[{\"idCapm\":1,\"dateDebut\":\"2026-02-01\",\"dateFin\":\"2026-03-01\"},"
                 + "{\"idCapm\":2,\"dateDebut\":\"2026-02-15\",\"dateFin\":\"2026-04-01\"}]}]}";
         mvc.perform(post("/api/saisies/ppm").header("Authorization", tokenPrmp)
@@ -4452,15 +4259,12 @@ class CnmWorkflowIntegrationTest {
     @DisplayName("Saisie PPM — dates cohérentes et ordonnées → 201")
     void processus_sequence_ok() throws Exception {
         natureRepository.save(new Nature(1, "Travaux", null));
-        situationRepository.save(new Situation(1, "Normale", null));
         modePassationRepository.save(new ModePassation(2, "AOR", null, null, null, null));
-        seuilRepository.save(seuil(902, "ANT", 1, "200000001", "1000000000"));
-        reglePassationRepository.save(regle(902, 1, 902, 2));
         capmRepository.save(new Capm(1, "LANCEMENT", 1));
         capmRepository.save(new Capm(2, "DAO", 2));
         // dateDebut[2] = dateFin[1] (03-01) → contiguïté autorisée (>=).
         String body = "{\"idEntiteContract\":1,\"exercice\":2026,\"dateSignature\":\"2026-01-10\","
-                + "\"marches\":[{\"montEstim\":500000000,\"idNature\":1,\"idSituation\":1,\"statut\":\"PREVU\","
+                + "\"marches\":[{\"montEstim\":500000000,\"idNature\":1,\"statut\":\"PREVU\","
                 + "\"processus\":[{\"idCapm\":1,\"dateDebut\":\"2026-02-01\",\"dateFin\":\"2026-03-01\"},"
                 + "{\"idCapm\":2,\"dateDebut\":\"2026-03-01\",\"dateFin\":\"2026-04-01\"}]}]}";
         mvc.perform(post("/api/saisies/ppm").header("Authorization", tokenPrmp)
@@ -4473,7 +4277,7 @@ class CnmWorkflowIntegrationTest {
     void saisie_corps_illisible_400() throws Exception {
         // dateSignature non-ISO → 400 + champ dateSignature
         String dateKo = "{\"idEntiteContract\":1,\"exercice\":2026,\"dateSignature\":\"23/06/2026\","
-                + "\"marches\":[{\"montEstim\":1000000,\"idNature\":1,\"idSituation\":1,\"statut\":\"PREVU\","
+                + "\"marches\":[{\"montEstim\":1000000,\"idNature\":1,\"statut\":\"PREVU\","
                 + "\"dateDebut\":\"2026-02-01\",\"dateFin\":\"2026-06-30\"}]}";
         mvc.perform(post("/api/saisies/ppm").header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON).content(dateKo))
@@ -4482,7 +4286,7 @@ class CnmWorkflowIntegrationTest {
 
         // idEntiteContract = libellé (string) → 400 + champ idEntiteContract
         String idKo = "{\"idEntiteContract\":\"Direction Générale du Budget\",\"exercice\":2026,\"dateSignature\":\"2026-06-23\","
-                + "\"marches\":[{\"montEstim\":1000000,\"idNature\":1,\"idSituation\":1,\"statut\":\"PREVU\","
+                + "\"marches\":[{\"montEstim\":1000000,\"idNature\":1,\"statut\":\"PREVU\","
                 + "\"dateDebut\":\"2026-02-01\",\"dateFin\":\"2026-06-30\"}]}";
         mvc.perform(post("/api/saisies/ppm").header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON).content(idKo))

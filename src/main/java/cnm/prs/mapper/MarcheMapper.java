@@ -26,7 +26,6 @@ public final class MarcheMapper {
         dto.setNouvMontEstim(entity.getNouvMontEstim());
         dto.setFinancement(entity.getFinancement());
         dto.setStatut(entity.getStatut());
-        dto.setIdSituation(entity.getIdSituation());
         dto.setIdNature(entity.getIdNature());
         dto.setIdMode(entity.getIdMode());
         return dto;
@@ -47,7 +46,6 @@ public final class MarcheMapper {
         entity.setNouvMontEstim(dto.getNouvMontEstim());
         entity.setFinancement(dto.getFinancement());
         entity.setStatut(dto.getStatut());
-        entity.setIdSituation(dto.getIdSituation());
         entity.setIdNature(dto.getIdNature());
         entity.setIdMode(dto.getIdMode());
         return entity;

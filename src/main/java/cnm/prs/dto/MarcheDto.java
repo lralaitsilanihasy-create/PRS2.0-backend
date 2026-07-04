@@ -41,8 +41,6 @@ public class MarcheDto {
     @Size(max = 20)
     private String statut;
 
-    private Integer idSituation;
-
     private Integer idNature;
 
     private Integer idMode;

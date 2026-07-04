@@ -59,9 +59,6 @@ public class Marche {
     @Column(name = "STATUT", length = 20)
     private String statut;
 
-    @Column(name = "ID_SITUATION")
-    private Integer idSituation;
-
     @Column(name = "ID_NATURE")
     private Integer idNature;
 
@@ -92,9 +89,4 @@ public class Marche {
     @JoinColumn(name = "ID_NATURE", insertable = false, updatable = false)
     @JsonIgnore
     private Nature nature;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "ID_SITUATION", insertable = false, updatable = false)
-    @JsonIgnore
-    private Situation situation;
 }
