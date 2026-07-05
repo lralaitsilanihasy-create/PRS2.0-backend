@@ -3317,6 +3317,39 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("Saisie PPM — nature/mode par libellé : résolus (dédup normalisée) ou créés à la volée (tr_nature/tr_mode)")
+    void saisiePpm_natureModeALaVolee() throws Exception {
+        natureRepository.save(new Nature(1, "Travaux", null));   // référentiel existant
+        capmRepository.save(new Capm(1, "LANCEMENT", 1));
+        long naturesAvant = natureRepository.count();
+        long modesAvant = modePassationRepository.count();
+
+        // Marché A : natureLibelle « TRAVAUX » (≈ existant → résolu, aucun doublon) + modeLibelle « Achat Direct » (créé).
+        // Marché B : natureLibelle « Fournitures et services » (créé). Aucun idNature/idMode fourni.
+        String body = "{\"idEntiteContract\":1,\"exercice\":2026,\"signataire\":\"RABE\",\"dateSignature\":\"2026-01-10\",\"reference\":\"PPM-AV\","
+                + "\"marches\":[{\"designationMarche\":\"A\",\"montEstim\":1000000,\"natureLibelle\":\"TRAVAUX\",\"modeLibelle\":\"Achat Direct\",\"statut\":\"PREVU\","
+                + "\"processus\":[{\"idCapm\":1,\"dateDebut\":\"2026-02-01\",\"dateFin\":\"2026-06-30\"}]},"
+                + "{\"designationMarche\":\"B\",\"montEstim\":2000000,\"natureLibelle\":\"Fournitures et services\",\"statut\":\"PREVU\","
+                + "\"processus\":[{\"idCapm\":1,\"dateDebut\":\"2026-02-01\",\"dateFin\":\"2026-06-30\"}]}]}";
+        String resp = mvc.perform(post("/api/saisies/ppm").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        int idDoss = com.jayway.jsonpath.JsonPath.read(resp, "$.idDossier");
+
+        // Dédup : « TRAVAUX » ne crée PAS de doublon → +1 nature seulement (Fournitures et services) ; +1 mode (Achat Direct).
+        org.junit.jupiter.api.Assertions.assertEquals(naturesAvant + 1, natureRepository.count());
+        org.junit.jupiter.api.Assertions.assertEquals(modesAvant + 1, modePassationRepository.count());
+
+        // Les marchés portent des ids résolus (A.idNature = Travaux existant = 1 ; A.idMode et B.idNature non nuls).
+        mvc.perform(get("/api/marches").header("Authorization", tokenPrmp))
+                .andExpect(jsonPath("$[?(@.idDossier==" + idDoss + " && @.designationMarche=='A')].idNature", hasItem(1)))
+                .andExpect(jsonPath("$[?(@.idDossier==" + idDoss + " && @.designationMarche=='A')].idMode",
+                        org.hamcrest.Matchers.everyItem(org.hamcrest.Matchers.notNullValue())))
+                .andExpect(jsonPath("$[?(@.idDossier==" + idDoss + " && @.designationMarche=='B')].idNature",
+                        org.hamcrest.Matchers.everyItem(org.hamcrest.Matchers.notNullValue())));
+    }
+
+    @Test
     @DisplayName("Façade saisie DAO : dossier DAO BROUILLON ; type PPM refusé")
     void saisieDossier_dao() throws Exception {
         mvc.perform(post("/api/saisies/dossier").header("Authorization", tokenPrmp)

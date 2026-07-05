@@ -22,6 +22,8 @@ import cnm.prs.dto.SaisiePpmRequest;
 import cnm.prs.entity.Capm;
 import cnm.prs.entity.Dossier;
 import cnm.prs.entity.Marche;
+import cnm.prs.entity.ModePassation;
+import cnm.prs.entity.Nature;
 import cnm.prs.entity.Ppm;
 import cnm.prs.enums.StatutDossier;
 import cnm.prs.exception.BusinessRuleException;
@@ -34,6 +36,8 @@ import cnm.prs.repository.DossierRepository;
 import cnm.prs.repository.EntiteContractRepository;
 import cnm.prs.repository.MarchePrevisionRepository;
 import cnm.prs.repository.MarcheRepository;
+import cnm.prs.repository.ModePassationRepository;
+import cnm.prs.repository.NatureRepository;
 import cnm.prs.repository.PpmRepository;
 import cnm.prs.repository.PrmpRepository;
 import cnm.prs.repository.TypePieceJointeRepository;
@@ -67,6 +71,9 @@ public class SaisieService {
     private final CapmRepository capmRepository;
     private final PieceJointeDossierService pieceJointeDossierService;
     private final TypePieceJointeRepository typePieceJointeRepository;
+    private final NatureRepository natureRepository;
+    private final ModePassationRepository modePassationRepository;
+    private final AuditLogService auditLogService;
 
     public SaisieService(DossierRepository dossierRepository, PpmRepository ppmRepository,
             MarcheRepository marcheRepository, PpmService ppmService,
@@ -75,7 +82,9 @@ public class SaisieService {
             ReferenceService referenceService, MarchePrevisionRepository marchePrevisionRepository,
             MarchePrevisionService marchePrevisionService, CapmRepository capmRepository,
             PieceJointeDossierService pieceJointeDossierService,
-            TypePieceJointeRepository typePieceJointeRepository) {
+            TypePieceJointeRepository typePieceJointeRepository,
+            NatureRepository natureRepository, ModePassationRepository modePassationRepository,
+            AuditLogService auditLogService) {
         this.dossierRepository = dossierRepository;
         this.ppmRepository = ppmRepository;
         this.marcheRepository = marcheRepository;
@@ -90,6 +99,9 @@ public class SaisieService {
         this.capmRepository = capmRepository;
         this.pieceJointeDossierService = pieceJointeDossierService;
         this.typePieceJointeRepository = typePieceJointeRepository;
+        this.natureRepository = natureRepository;
+        this.modePassationRepository = modePassationRepository;
+        this.auditLogService = auditLogService;
     }
 
     /** Saisie d'un PPM = dossier (BROUILLON) + PPM + lignes de marché (mode auto), en une transaction. */
@@ -244,7 +256,7 @@ public class SaisieService {
         return DossierMapper.toDto(dossierRepository.findById(idDossier).orElseThrow());
     }
 
-    private static MarcheDto toMarcheDto(SaisieMarcheLigne ligne, Integer idDossier, Integer idPpm) {
+    private MarcheDto toMarcheDto(SaisieMarcheLigne ligne, Integer idDossier, Integer idPpm) {
         MarcheDto m = new MarcheDto();
         m.setIdDetail(ligne.idDetail());
         m.setIdDossier(idDossier);
@@ -254,9 +266,71 @@ public class SaisieService {
         m.setMontEstim(ligne.montEstim());
         m.setFinancement(ligne.financement());
         m.setStatut(ligne.statut());
-        m.setIdNature(ligne.idNature());
-        m.setIdMode(ligne.idMode());   // mode choisi (saisie manuelle, plus de détermination auto)
+        // Nature / mode : id si fourni ; sinon résolus-ou-créés depuis le libellé (import PPM).
+        m.setIdNature(resoudreOuCreerNature(ligne.idNature(), ligne.natureLibelle()));
+        m.setIdMode(resoudreOuCreerMode(ligne.idMode(), ligne.modeLibelle()));
         return m;
+    }
+
+    /**
+     * (Règle ajoutée) Résout la nature par id ; à défaut, par <strong>libellé normalisé</strong> (trim + casse +
+     * accents) dans {@code tr_nature} ; à défaut, la <strong>crée à la volée</strong> (PK = max+1) et la trace.
+     * {@code null} si ni id ni libellé.
+     */
+    private Integer resoudreOuCreerNature(Integer id, String libelle) {
+        if (id != null) {
+            return id;
+        }
+        if (libelle == null || libelle.isBlank()) {
+            return null;
+        }
+        String cible = normaliser(libelle);
+        List<Nature> refs = natureRepository.findAll();
+        Integer existant = refs.stream()
+                .filter(n -> n.getLibelle() != null && normaliser(n.getLibelle()).equals(cible))
+                .map(Nature::getIdNature).findFirst().orElse(null);
+        if (existant != null) {
+            return existant;
+        }
+        int nouvelId = refs.stream().map(Nature::getIdNature).filter(java.util.Objects::nonNull)
+                .max(Integer::compareTo).orElse(0) + 1;
+        natureRepository.save(new Nature(nouvelId, libelle.trim(), null));
+        auditLogService.enregistrer(CurrentUser.ref().orElse(null), "tr_nature",
+                String.valueOf(nouvelId), "CREATION_A_LA_VOLEE", null);
+        return nouvelId;
+    }
+
+    /** Idem {@link #resoudreOuCreerNature} pour le mode de passation ({@code tr_mode}). */
+    private Integer resoudreOuCreerMode(Integer id, String libelle) {
+        if (id != null) {
+            return id;
+        }
+        if (libelle == null || libelle.isBlank()) {
+            return null;
+        }
+        String cible = normaliser(libelle);
+        List<ModePassation> refs = modePassationRepository.findAll();
+        Integer existant = refs.stream()
+                .filter(md -> md.getLibelle() != null && normaliser(md.getLibelle()).equals(cible))
+                .map(ModePassation::getIdMode).findFirst().orElse(null);
+        if (existant != null) {
+            return existant;
+        }
+        int nouvelId = refs.stream().map(ModePassation::getIdMode).filter(java.util.Objects::nonNull)
+                .max(Integer::compareTo).orElse(0) + 1;
+        ModePassation md = new ModePassation();
+        md.setIdMode(nouvelId);
+        md.setLibelle(libelle.trim());
+        modePassationRepository.save(md);
+        auditLogService.enregistrer(CurrentUser.ref().orElse(null), "tr_mode_passation",
+                String.valueOf(nouvelId), "CREATION_A_LA_VOLEE", null);
+        return nouvelId;
+    }
+
+    /** Normalisation pour dé-duplication : sans accents, majuscules, sans caractères non alphanumériques. */
+    private static String normaliser(String s) {
+        String sansAccents = java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFD).replaceAll("\\p{M}", "");
+        return sansAccents.toUpperCase(java.util.Locale.FRENCH).replaceAll("[^A-Z0-9]", "");
     }
 
     /** Saisie d'un dossier sans contenu (DAO/MAOO) = un {@code t_dossier} (type + localité), BROUILLON. */

@@ -7,8 +7,10 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Size;
 
 /**
- * Ligne de marché saisie via la façade PPM. {@code idDossier}, {@code idPpm} et {@code idMode}
- * sont renseignés par le service (le mode est déterminé automatiquement, §3.1 M02).
+ * Ligne de marché saisie via la façade PPM. {@code idDossier} et {@code idPpm} sont renseignés par le
+ * service ; le mode est <strong>saisi</strong> (plus de détermination automatique). Pour l'import PPM, la
+ * nature / le mode peuvent être fournis par <strong>libellé</strong> ({@code natureLibelle}/{@code modeLibelle})
+ * quand l'id est absent — le service les <strong>résout ou les crée à la volée</strong>.
  */
 public record SaisieMarcheLigne(
 
@@ -32,6 +34,10 @@ public record SaisieMarcheLigne(
 
         Integer idNature,
 
+        // Libellé de nature (import PPM) : utilisé UNIQUEMENT si idNature est absent → résolu-ou-créé (tr_nature).
+        @Size(max = 100)
+        String natureLibelle,
+
         // Processus de marché + dates prévisionnelles (idCapm, dateDebut, dateFin). @Valid cascade la
         // validation par processus (chemins marches[i].processus[j].champ). « Au moins un processus »
         // est exigé à la CRÉATION (SaisieService) — pas via @NotEmpty ici, pour ne pas casser l'édition
@@ -39,7 +45,10 @@ public record SaisieMarcheLigne(
         @Valid
         List<ProcessusMarche> processus,
 
-        // idMode : mode de passation CHOISI par la PRMP (facultatif) ; null → mode recommandé.
-        // Le serveur valide qu'il appartient à l'ensemble autorisé (sinon 409).
-        Integer idMode) {
+        // idMode : mode de passation saisi (facultatif). Conservé tel quel (plus de détermination auto).
+        Integer idMode,
+
+        // Libellé de mode (import PPM) : utilisé UNIQUEMENT si idMode est absent → résolu-ou-créé (tr_mode).
+        @Size(max = 100)
+        String modeLibelle) {
 }
