@@ -1102,7 +1102,7 @@ dossier/PPM (désormais réservée Admin).
 > | En-tête (+ remplacement des lignes en une transaction) | `PUT /api/saisies/ppm/{idDossier}` | `EditionPpmRequest` (`exercice`, `signataire`, `dateSignature`, `reference`, `marches[]`) | 200 `DossierDto` |
 > | Ajouter une ligne de marché | `POST /api/marches` | `MarcheDto` (`idDossier`, `designationMarche`, `montEstim`, `idNature`…) — **mode calculé auto** | 201 `MarcheDto` |
 > | Modifier une ligne de marché | `PUT /api/marches/{idMarche}` | `MarcheDto` — **mode recalculé** si montant/nature change | 200 `MarcheDto` |
-> | Supprimer une ligne de marché | `DELETE /api/marches/{idMarche}` | — (⚠️ cascade des prévisions) | 204 |
+> | Supprimer une ligne de marché | `DELETE /api/marches/{idMarche}` | — (⚠️ cascade prévisions + bénéficiaires + lots/tranches) | 204 |
 > | Ajouter une pièce jointe | `POST /api/piece-jointe-dossiers` (`multipart`) | part `data` = `PieceJointeDossierDto` (`idDossier`, `idTypePiece`, `apresLettreRenvoi`) + part `fichier` | 201 `PieceJointeDossierDto` |
 > | Supprimer une pièce jointe | `DELETE /api/piece-jointe-dossiers/{idPj}` | — (fichier + entrée supprimés) | 204 |
 >
@@ -1787,7 +1787,7 @@ profil/localité. Cycle : `BROUILLON → SOUMIS → SIGNE` (signature CC ou Pré
 ---
 
 ## Marchés
-**Ressource** `/api/marches` — Lecture **scopée au périmètre de l'appelant** (⚠️ changement de portée, voir note). **Écriture (POST/PUT/DELETE) réservée `PRMP`** : édition des lignes d'un dossier **PPM en BROUILLON** dont elle est propriétaire (sinon 403/409). Le **mode** est **saisi** (plus de détermination auto, cf. note). ⚠️ **Règle ajoutée** : à la **suppression** (`DELETE`), les **dates prévisionnelles** du marché (`t_marche_prevision`) sont supprimées **en cascade applicative** (même transaction).
+**Ressource** `/api/marches` — Lecture **scopée au périmètre de l'appelant** (⚠️ changement de portée, voir note). **Écriture (POST/PUT/DELETE) réservée `PRMP`** : édition des lignes d'un dossier **PPM en BROUILLON** dont elle est propriétaire (sinon 403/409). Le **mode** est **saisi** (plus de détermination auto, cf. note). ⚠️ **Règle ajoutée** : à la **suppression** (`DELETE`), **tous les enregistrements liés** au marché sont supprimés **en cascade applicative** (même transaction, ordre FK-safe) : **tranches** de ses lots → **lots** (`t_lot`), **bénéficiaires** (`t_service_beneficiaire`) et **dates prévisionnelles** (`t_marche_prevision`). *(Un marché supprimable est BROUILLON → jamais dispatché : ni anomalie ni échéance possibles.)* Même cascade réutilisée par `DELETE /api/ppms/{id}` pour chacun de ses marchés.
 
 > **⚠️ Scoping serveur (changement de portée, §1/§3.1).** `GET /api/marches` ne renvoie **plus toute
 > la table** : Président/Administrateur → tout ; **PRMP → ses marchés** (ceux de ses PPM) ; contrôleur
@@ -1820,7 +1820,7 @@ profil/localité. Cycle : `BROUILLON → SOUMIS → SIGNE` (signature CC ou Pré
 | POST | /api/marches | `MarcheDto` | `MarcheDto` | 201, 400 | Authentifié |
 | PUT | /api/marches/{id} | `MarcheDto` | `MarcheDto` | 200, 400, 404 | Authentifié |
 | PATCH | /api/marches/{id}/rectifier | `MarcheDto` | `MarcheDto` | 200, 403, 404, 409 | PRMP (propriétaire) |
-| DELETE | /api/marches/{id} | — | — | 204, 403, 404, 409 | PRMP (propriétaire, brouillon) — ⚠️ cascade prévisions |
+| DELETE | /api/marches/{id} | — | — | 204, 403, 404, 409 | PRMP (propriétaire, brouillon) — ⚠️ cascade prévisions + bénéficiaires + lots/tranches |
 
 `{id}` = idDetail (number).
 

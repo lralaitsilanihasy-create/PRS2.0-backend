@@ -7,12 +7,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import cnm.prs.dto.MarcheDto;
+import cnm.prs.entity.Lot;
 import cnm.prs.entity.Marche;
 import cnm.prs.enums.ProfilUtilisateur;
 import cnm.prs.exception.ResourceNotFoundException;
 import cnm.prs.mapper.MarcheMapper;
+import cnm.prs.repository.LotRepository;
 import cnm.prs.repository.MarchePrevisionRepository;
 import cnm.prs.repository.MarcheRepository;
+import cnm.prs.repository.ServiceBeneficiaireRepository;
+import cnm.prs.repository.TrancheRepository;
 import cnm.prs.security.CurrentUser;
 import cnm.prs.security.Visibilite;
 
@@ -31,13 +35,21 @@ public class MarcheService {
     private final MarcheRepository repository;
     private final DossierIntegriteService dossierIntegrite;
     private final MarchePrevisionRepository marchePrevisionRepository;
+    private final ServiceBeneficiaireRepository serviceBeneficiaireRepository;
+    private final LotRepository lotRepository;
+    private final TrancheRepository trancheRepository;
     private final AuditLogService auditLogService;
 
     public MarcheService(MarcheRepository repository, DossierIntegriteService dossierIntegrite,
-            MarchePrevisionRepository marchePrevisionRepository, AuditLogService auditLogService) {
+            MarchePrevisionRepository marchePrevisionRepository,
+            ServiceBeneficiaireRepository serviceBeneficiaireRepository, LotRepository lotRepository,
+            TrancheRepository trancheRepository, AuditLogService auditLogService) {
         this.repository = repository;
         this.dossierIntegrite = dossierIntegrite;
         this.marchePrevisionRepository = marchePrevisionRepository;
+        this.serviceBeneficiaireRepository = serviceBeneficiaireRepository;
+        this.lotRepository = lotRepository;
+        this.trancheRepository = trancheRepository;
         this.auditLogService = auditLogService;
     }
 
@@ -149,8 +161,24 @@ public class MarcheService {
                 .orElseThrow(() -> new ResourceNotFoundException("Marche introuvable : " + id));
         // Une ligne ne se retire que d'un dossier en brouillon, propriété de la PRMP courante.
         dossierIntegrite.exigerBrouillonModifiable(existing.getIdDossier());
-        // Cascade applicative : supprimer d'abord les dates prévisionnelles de CE marché (sous-lignes intrinsèques).
-        marchePrevisionRepository.deleteByIdDetail(id);
+        supprimerSousLignes(id);
         repository.deleteById(id);
+    }
+
+    /**
+     * ⚠️ Cascade applicative (règle ajoutée) — supprime, en <strong>ordre FK-safe</strong>, tous les
+     * enregistrements liés à un marché avant sa suppression : <strong>tranches</strong> de ses lots, puis
+     * <strong>lots</strong> (`t_lot`), <strong>bénéficiaires</strong> (`t_service_beneficiaire`) et
+     * <strong>dates prévisionnelles</strong> (`t_marche_prevision`). Réutilisée par la suppression d'un PPM.
+     * <em>(Un marché supprimable est BROUILLON — jamais dispatché : ni anomalie ni échéance possibles.)</em>
+     */
+    public void supprimerSousLignes(Integer idDetail) {
+        List<Integer> idLots = lotRepository.findByIdDetail(idDetail).stream().map(Lot::getIdLot).toList();
+        if (!idLots.isEmpty()) {
+            trancheRepository.deleteByIdLotIn(idLots);
+        }
+        lotRepository.deleteByIdDetail(idDetail);
+        serviceBeneficiaireRepository.deleteByIdDetail(idDetail);
+        marchePrevisionRepository.deleteByIdDetail(idDetail);
     }
 }

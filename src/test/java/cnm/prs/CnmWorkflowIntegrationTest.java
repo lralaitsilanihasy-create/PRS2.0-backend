@@ -4652,6 +4652,32 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("DELETE /api/marches/{id} : cascade les bénéficiaires (t_service_beneficiaire) — plus de 409 FK")
+    void suppressionMarche_cascadeBeneficiaires() throws Exception {
+        Dossier d = dossierLoc(810, "BROUILLON", "ANT", "PRMP001"); d.setIdTypeDossier("PPM");
+        dossierRepository.save(d);
+        ppmRepository.save(ppm(810, 810, "PRMP001"));
+        marcheRepository.save(marche(9810, 810, 810));
+        compteRepository.save(new cnm.prs.entity.Compte("CPT-810", "Compte", null, null));
+        soaBeneficiaireRepository.save(new cnm.prs.entity.SoaBeneficiaire("00-21-0-J00-00000", "SOA"));
+        // Bénéficiaire rattaché au marché 9810 → sans cascade, DELETE renverrait 409 (FK).
+        mvc.perform(post("/api/service-beneficiaires").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idBenef\":9810,\"idDetail\":9810,\"soaCode\":\"00-21-0-J00-00000\","
+                        + "\"numCompte\":\"CPT-810\",\"ancMontBenef\":1000000}"))
+                .andExpect(status().isCreated());
+
+        // Suppression du marché → 204 (cascade en transaction), pas de 409.
+        mvc.perform(delete("/api/marches/9810").header("Authorization", tokenPrmp))
+                .andExpect(status().isNoContent());
+        // Le bénéficiaire a été supprimé en cascade ; le marché a disparu.
+        mvc.perform(get("/api/service-beneficiaires/9810").header("Authorization", tokenPrmp))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/marches/9810").header("Authorization", tokenPrmp))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
     @DisplayName("Import PPM PDF (read-only) : parse l'en-tête + résout l'entité + avertissements ; non-PDF → 400")
     void importPpm_pdf_prefill_ok() throws Exception {
         EntiteContract e = entite(900, 1, "ANT"); e.setLibelleEntite("MINISTERE ECONOMIE");

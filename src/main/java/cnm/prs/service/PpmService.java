@@ -36,11 +36,13 @@ public class PpmService {
     private final DossierRepository dossierRepository;
     private final ReceptionRepository receptionRepository;
     private final DemandeRetraitRepository demandeRetraitRepository;
+    private final MarcheService marcheService;
 
     public PpmService(PpmRepository repository, DossierIntegriteService dossierIntegrite,
             MarcheRepository marcheRepository, MarchePrevisionRepository marchePrevisionRepository,
             AuditLogService auditLogService, DossierRepository dossierRepository,
-            ReceptionRepository receptionRepository, DemandeRetraitRepository demandeRetraitRepository) {
+            ReceptionRepository receptionRepository, DemandeRetraitRepository demandeRetraitRepository,
+            MarcheService marcheService) {
         this.repository = repository;
         this.dossierIntegrite = dossierIntegrite;
         this.marcheRepository = marcheRepository;
@@ -49,6 +51,7 @@ public class PpmService {
         this.dossierRepository = dossierRepository;
         this.receptionRepository = receptionRepository;
         this.demandeRetraitRepository = demandeRetraitRepository;
+        this.marcheService = marcheService;
     }
 
     /**
@@ -182,10 +185,11 @@ public class PpmService {
         // Un PPM ne se supprime que sur un dossier en brouillon, propriété de la PRMP courante.
         dossierIntegrite.exigerBrouillonModifiable(existing.getIdDossier());
         Integer idDossier = existing.getIdDossier();
-        // Cascade applicative : SES marchés et LEURS prévisions, puis le PPM — en une transaction.
+        // Cascade applicative : SES marchés et TOUTES leurs sous-lignes (prévisions, bénéficiaires,
+        // lots/tranches), puis le PPM — en une transaction (réutilise la cascade de MarcheService).
         List<Marche> marches = marcheRepository.findByIdPpm(id);
         for (Marche m : marches) {
-            marchePrevisionRepository.deleteByIdDetail(m.getIdDetail());
+            marcheService.supprimerSousLignes(m.getIdDetail());
         }
         marcheRepository.deleteAll(marches);
         repository.deleteById(id);
