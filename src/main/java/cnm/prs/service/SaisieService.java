@@ -2,6 +2,7 @@ package cnm.prs.service;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Set;
 
@@ -17,6 +18,7 @@ import cnm.prs.dto.MarchePrevisionDto;
 import cnm.prs.dto.PpmDto;
 import cnm.prs.dto.ProcessusMarche;
 import cnm.prs.dto.SaisieDossierRequest;
+import cnm.prs.dto.SaisieBeneficiaireLigne;
 import cnm.prs.dto.SaisieMarcheLigne;
 import cnm.prs.dto.SaisiePpmRequest;
 import cnm.prs.entity.Capm;
@@ -26,6 +28,8 @@ import cnm.prs.entity.Marche;
 import cnm.prs.entity.ModePassation;
 import cnm.prs.entity.Nature;
 import cnm.prs.entity.Ppm;
+import cnm.prs.entity.ServiceBeneficiaire;
+import cnm.prs.entity.SoaBeneficiaire;
 import cnm.prs.enums.StatutDossier;
 import cnm.prs.exception.BusinessRuleException;
 import cnm.prs.exception.ChampsInvalidesException;
@@ -41,6 +45,8 @@ import cnm.prs.repository.MarcheRepository;
 import cnm.prs.repository.ModePassationRepository;
 import cnm.prs.repository.NatureRepository;
 import cnm.prs.repository.PpmRepository;
+import cnm.prs.repository.ServiceBeneficiaireRepository;
+import cnm.prs.repository.SoaBeneficiaireRepository;
 import cnm.prs.repository.PrmpRepository;
 import cnm.prs.repository.TypePieceJointeRepository;
 import cnm.prs.security.CurrentUser;
@@ -76,6 +82,8 @@ public class SaisieService {
     private final NatureRepository natureRepository;
     private final ModePassationRepository modePassationRepository;
     private final CompteRepository compteRepository;
+    private final ServiceBeneficiaireRepository serviceBeneficiaireRepository;
+    private final SoaBeneficiaireRepository soaBeneficiaireRepository;
     private final AuditLogService auditLogService;
 
     public SaisieService(DossierRepository dossierRepository, PpmRepository ppmRepository,
@@ -87,7 +95,8 @@ public class SaisieService {
             PieceJointeDossierService pieceJointeDossierService,
             TypePieceJointeRepository typePieceJointeRepository,
             NatureRepository natureRepository, ModePassationRepository modePassationRepository,
-            CompteRepository compteRepository, AuditLogService auditLogService) {
+            CompteRepository compteRepository, ServiceBeneficiaireRepository serviceBeneficiaireRepository,
+            SoaBeneficiaireRepository soaBeneficiaireRepository, AuditLogService auditLogService) {
         this.dossierRepository = dossierRepository;
         this.ppmRepository = ppmRepository;
         this.marcheRepository = marcheRepository;
@@ -105,6 +114,8 @@ public class SaisieService {
         this.natureRepository = natureRepository;
         this.modePassationRepository = modePassationRepository;
         this.compteRepository = compteRepository;
+        this.serviceBeneficiaireRepository = serviceBeneficiaireRepository;
+        this.soaBeneficiaireRepository = soaBeneficiaireRepository;
         this.auditLogService = auditLogService;
     }
 
@@ -145,11 +156,13 @@ public class SaisieService {
                 if (violation != null) {
                     throw new ChampsInvalidesException(List.of(violation));
                 }
+                validerCoherenceMontants(ligne, i);   // Σ bénéficiaires = montant(s) du marché (si beneficiaires[] non vide)
                 Integer idDetail = marcheService.create(toMarcheDto(ligne, idDossier, idPpm)).getIdDetail();
                 for (ProcessusMarche p : ligne.processus()) {
                     marchePrevisionService.create(new MarchePrevisionDto(
                             ++prevSeq, idDetail, p.idCapm(), p.dateDebut(), p.dateFin(), null));
                 }
+                creerBeneficiaires(idDetail, ligne);   // une ligne t_service_beneficiaire par bénéficiaire
             }
         }
         return DossierMapper.toDto(dossierRepository.findById(idDossier).orElseThrow());
@@ -268,6 +281,7 @@ public class SaisieService {
         m.setDesignationMarche(ligne.designationMarche());
         m.setNumCompte(resoudreOuCreerCompte(ligne.numCompte()));
         m.setMontEstim(ligne.montEstim());
+        m.setNouvMontEstim(ligne.nouvMontEstim());
         m.setFinancement(ligne.financement());
         m.setStatut(ligne.statut());
         // Nature / mode : id si fourni ; sinon résolus-ou-créés depuis le libellé (import PPM).
@@ -346,6 +360,79 @@ public class SaisieService {
             auditLogService.enregistrer(CurrentUser.ref().orElse(null), "tr_compte", num, "CREATION_A_LA_VOLEE", null);
         }
         return num;
+    }
+
+    /**
+     * (Règle ajoutée) Cohérence des montants — <strong>uniquement si</strong> {@code beneficiaires[]} est non vide,
+     * <strong>égalité exacte</strong> (montants entiers Ariary) : {@code Σ ancMontBenef = montEstim} ; et si
+     * {@code nouvMontEstim} est fourni, chaque bénéficiaire doit porter {@code nouvMontBenef} et
+     * {@code Σ nouvMontBenef = nouvMontEstim}. Écart → 400 ciblé sur {@code marches[i].beneficiaires}.
+     */
+    private void validerCoherenceMontants(SaisieMarcheLigne ligne, int i) {
+        List<SaisieBeneficiaireLigne> benefs = ligne.beneficiaires();
+        if (benefs == null || benefs.isEmpty()) {
+            return;
+        }
+        String champ = "marches[" + i + "].beneficiaires";
+        BigDecimal montEstim = ligne.montEstim() == null ? BigDecimal.ZERO : ligne.montEstim();
+        BigDecimal sommeAnc = benefs.stream()
+                .map(b -> b.ancMontBenef() == null ? BigDecimal.ZERO : b.ancMontBenef())
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (sommeAnc.compareTo(montEstim) != 0) {
+            throw new ChampsInvalidesException(List.of(new ErrorResponse.FieldError(champ,
+                    "La somme des montants par bénéficiaire (" + sommeAnc.toPlainString()
+                            + ") doit égaler le montant estimatif du marché (" + montEstim.toPlainString() + ").")));
+        }
+        if (ligne.nouvMontEstim() != null) {
+            if (benefs.stream().anyMatch(b -> b.nouvMontBenef() == null)) {
+                throw new ChampsInvalidesException(List.of(new ErrorResponse.FieldError(champ,
+                        "Le nouveau montant estimatif est fourni : chaque bénéficiaire doit porter nouvMontBenef.")));
+            }
+            BigDecimal sommeNouv = benefs.stream().map(SaisieBeneficiaireLigne::nouvMontBenef)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            if (sommeNouv.compareTo(ligne.nouvMontEstim()) != 0) {
+                throw new ChampsInvalidesException(List.of(new ErrorResponse.FieldError(champ,
+                        "La somme des nouveaux montants par bénéficiaire (" + sommeNouv.toPlainString()
+                                + ") doit égaler le nouveau montant estimatif du marché ("
+                                + ligne.nouvMontEstim().toPlainString() + ").")));
+            }
+        }
+    }
+
+    /** (Règle ajoutée) Crée une ligne {@code t_service_beneficiaire} par bénéficiaire (PK allouée max+1). */
+    private void creerBeneficiaires(Integer idDetail, SaisieMarcheLigne ligne) {
+        List<SaisieBeneficiaireLigne> benefs = ligne.beneficiaires();
+        if (benefs == null || benefs.isEmpty()) {
+            return;
+        }
+        int nextId = serviceBeneficiaireRepository.findMaxIdBenef() + 1;
+        for (SaisieBeneficiaireLigne b : benefs) {
+            ServiceBeneficiaire sb = new ServiceBeneficiaire();
+            sb.setIdBenef(nextId++);
+            sb.setIdDetail(idDetail);
+            sb.setSoaCode(resoudreOuCreerSoa(b.soaCode()));
+            sb.setNumCompte(resoudreOuCreerCompte(b.numCompte()));
+            sb.setAncMontBenef(b.ancMontBenef());
+            sb.setNouvMontBenef(b.nouvMontBenef());
+            serviceBeneficiaireRepository.save(sb);
+        }
+    }
+
+    /**
+     * (Règle ajoutée) Service bénéficiaire (SOA) : réutilise l'existant si présent dans {@code tr_soa_beneficiaire}
+     * (PK = {@code soaCode}), sinon le <strong>crée à la volée</strong> — jamais de suppression. {@code null}/vide → {@code null}.
+     */
+    private String resoudreOuCreerSoa(String soaCode) {
+        if (soaCode == null || soaCode.isBlank()) {
+            return null;
+        }
+        String code = soaCode.trim();
+        if (!soaBeneficiaireRepository.existsById(code)) {
+            soaBeneficiaireRepository.save(new SoaBeneficiaire(code, code));   // libellé par défaut = code
+            auditLogService.enregistrer(CurrentUser.ref().orElse(null), "tr_soa_beneficiaire", code,
+                    "CREATION_A_LA_VOLEE", null);
+        }
+        return code;
     }
 
     /** Normalisation pour dé-duplication : sans accents, majuscules, sans caractères non alphanumériques. */

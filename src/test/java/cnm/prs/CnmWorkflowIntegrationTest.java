@@ -155,6 +155,7 @@ class CnmWorkflowIntegrationTest {
     @Autowired private cnm.prs.repository.DemandeRetraitVueRepository demandeRetraitVueRepository;
     @Autowired private cnm.prs.repository.CompteRepository compteRepository;
     @Autowired private cnm.prs.repository.SoaBeneficiaireRepository soaBeneficiaireRepository;
+    @Autowired private cnm.prs.repository.ServiceBeneficiaireRepository serviceBeneficiaireRepository;
 
     private String tokenPresident;
     private String tokenCc;
@@ -3366,6 +3367,48 @@ class CnmWorkflowIntegrationTest {
 
         // Le compte a été créé à la volée dans tr_compte (résolution, jamais suppression).
         org.junit.jupiter.api.Assertions.assertTrue(compteRepository.existsById("9999-NEW"));
+    }
+
+    @Test
+    @DisplayName("Saisie PPM — bénéficiaires cohérents : 1 ligne t_service_beneficiaire par élément + soa/compte à la volée")
+    void saisiePpm_beneficiaires_ok() throws Exception {
+        natureRepository.save(new Nature(1, "Travaux", null));
+        modePassationRepository.save(new ModePassation(2, "AOR", null, null, null, null));
+        capmRepository.save(new Capm(1, "LANCEMENT", 1));
+        long benefAvant = serviceBeneficiaireRepository.count();
+
+        // montEstim 3 000 000 = 1 000 000 + 2 000 000 ; soaCode/numCompte inexistants → créés à la volée.
+        String body = "{\"idEntiteContract\":1,\"exercice\":2026,\"signataire\":\"RABE\",\"dateSignature\":\"2026-01-10\",\"reference\":\"PPM-BEN\","
+                + "\"marches\":[{\"designationMarche\":\"A\",\"montEstim\":3000000,\"idNature\":1,\"idMode\":2,\"statut\":\"PREVU\","
+                + "\"beneficiaires\":[{\"soaCode\":\"00-21-0-J00-00000\",\"numCompte\":\"C-A\",\"ancMontBenef\":1000000},"
+                + "{\"soaCode\":\"00-21-0-J00-11111\",\"numCompte\":\"C-B\",\"ancMontBenef\":2000000}],"
+                + "\"processus\":[{\"idCapm\":1,\"dateDebut\":\"2026-02-01\",\"dateFin\":\"2026-06-30\"}]}]}";
+        mvc.perform(post("/api/saisies/ppm").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated());
+
+        org.junit.jupiter.api.Assertions.assertEquals(benefAvant + 2, serviceBeneficiaireRepository.count());
+        org.junit.jupiter.api.Assertions.assertTrue(soaBeneficiaireRepository.existsById("00-21-0-J00-00000"));
+        org.junit.jupiter.api.Assertions.assertTrue(soaBeneficiaireRepository.existsById("00-21-0-J00-11111"));
+        org.junit.jupiter.api.Assertions.assertTrue(compteRepository.existsById("C-A"));
+        org.junit.jupiter.api.Assertions.assertTrue(compteRepository.existsById("C-B"));
+    }
+
+    @Test
+    @DisplayName("Saisie PPM — bénéficiaires incohérents : Σ ancMontBenef ≠ montEstim → 400 ciblé marches[0].beneficiaires")
+    void saisiePpm_beneficiaires_incoherent_400() throws Exception {
+        natureRepository.save(new Nature(1, "Travaux", null));
+        capmRepository.save(new Capm(1, "LANCEMENT", 1));
+        // montEstim 3 000 000 mais Σ = 1 000 000 + 1 500 000 = 2 500 000 → 400.
+        String body = "{\"idEntiteContract\":1,\"exercice\":2026,\"signataire\":\"RABE\",\"dateSignature\":\"2026-01-10\",\"reference\":\"PPM-KO\","
+                + "\"marches\":[{\"designationMarche\":\"A\",\"montEstim\":3000000,\"idNature\":1,\"statut\":\"PREVU\","
+                + "\"beneficiaires\":[{\"soaCode\":\"S1\",\"numCompte\":\"C1\",\"ancMontBenef\":1000000},"
+                + "{\"soaCode\":\"S2\",\"numCompte\":\"C2\",\"ancMontBenef\":1500000}],"
+                + "\"processus\":[{\"idCapm\":1,\"dateDebut\":\"2026-02-01\",\"dateFin\":\"2026-06-30\"}]}]}";
+        mvc.perform(post("/api/saisies/ppm").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[0].champ").value("marches[0].beneficiaires"));
     }
 
     @Test

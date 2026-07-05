@@ -26,6 +26,9 @@ public record SaisieMarcheLigne(
 
         BigDecimal montEstim,
 
+        // Nouveau montant estimatif du marché (optionnel, rétro-compatible) → t_marche.NOUV_MONT_ESTIM.
+        BigDecimal nouvMontEstim,
+
         @Size(max = 20)
         String financement,
 
@@ -37,6 +40,11 @@ public record SaisieMarcheLigne(
         // Libellé de nature (import PPM) : utilisé UNIQUEMENT si idNature est absent → résolu-ou-créé (tr_nature).
         @Size(max = 100)
         String natureLibelle,
+
+        // Bénéficiaires du marché (optionnel) : une ligne t_service_beneficiaire par élément. Si non vide, la
+        // cohérence des montants est validée (Σ ancMontBenef = montEstim ; Σ nouvMontBenef = nouvMontEstim si fourni).
+        @Valid
+        List<SaisieBeneficiaireLigne> beneficiaires,
 
         // Processus de marché + dates prévisionnelles (idCapm, dateDebut, dateFin). @Valid cascade la
         // validation par processus (chemins marches[i].processus[j].champ). « Au moins un processus »
