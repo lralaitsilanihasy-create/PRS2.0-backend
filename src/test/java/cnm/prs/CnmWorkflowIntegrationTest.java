@@ -3350,6 +3350,25 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("Saisie PPM — numCompte absent de tr_compte : créé à la volée (pas de 409 FK sur t_marche.NUM_COMPTE)")
+    void saisiePpm_compteALaVolee() throws Exception {
+        natureRepository.save(new Nature(1, "Travaux", null));
+        modePassationRepository.save(new ModePassation(2, "AOR", null, null, null, null));
+        capmRepository.save(new Capm(1, "LANCEMENT", 1));
+
+        // numCompte « 9999-NEW » absent de tr_compte → sans résolution-ou-création, l'INSERT du marché viole la FK (409).
+        String body = "{\"idEntiteContract\":1,\"exercice\":2026,\"signataire\":\"RABE\",\"dateSignature\":\"2026-01-10\",\"reference\":\"PPM-CPT\","
+                + "\"marches\":[{\"designationMarche\":\"A\",\"montEstim\":1000000,\"idNature\":1,\"idMode\":2,\"numCompte\":\"9999-NEW\",\"statut\":\"PREVU\","
+                + "\"processus\":[{\"idCapm\":1,\"dateDebut\":\"2026-02-01\",\"dateFin\":\"2026-06-30\"}]}]}";
+        mvc.perform(post("/api/saisies/ppm").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated());
+
+        // Le compte a été créé à la volée dans tr_compte (résolution, jamais suppression).
+        org.junit.jupiter.api.Assertions.assertTrue(compteRepository.existsById("9999-NEW"));
+    }
+
+    @Test
     @DisplayName("Façade saisie DAO : dossier DAO BROUILLON ; type PPM refusé")
     void saisieDossier_dao() throws Exception {
         mvc.perform(post("/api/saisies/dossier").header("Authorization", tokenPrmp)

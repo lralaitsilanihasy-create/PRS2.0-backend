@@ -1075,12 +1075,14 @@ dossier/PPM (désormais réservée Admin).
 
 **`SaisieMarcheLigne`** : `designationMarche`, `numCompte`, `montEstim`, `financement`, `statut`, `idNature`, `natureLibelle`, `idMode`, `modeLibelle`. `idDetail` est **facultatif** — **null à la création** (PK serveur), renseigné seulement pour **identifier une ligne existante** lors de l'édition (réconciliation). `idDossier`/`idPpm` sont renseignés par le service. **`idMode`** = mode **saisi** (facultatif) ; **conservé tel quel** (plus de détermination automatique — `t_situation`/`t_regle_passation`/`t_seuil` retirés).
 
-> ⚠️ **Nature / mode par libellé — résolution-ou-création à la volée (règle ajoutée).** Pour l'**import PPM** :
+> ⚠️ **Nature / mode / compte — résolution-ou-création à la volée (règle ajoutée).** Pour l'**import PPM** :
 > si `idNature` (resp. `idMode`) est **absent** mais `natureLibelle` (resp. `modeLibelle`) est fourni, le service
 > **résout** le référentiel par **libellé normalisé** (trim + casse + accents) dans `tr_nature` (resp. `tr_mode_passation`),
-> ou le **crée à la volée** (PK = `max+1`) s'il n'existe pas — dé-doublonnage sur le libellé normalisé. Création
-> **tracée** dans `t_audit_log` (`TYPE_ACTION=CREATION_A_LA_VOLEE`). Si `id*` est **présent**, le libellé associé est **ignoré**.
-> *(Hors périmètre : `compte`/`soaCode` du bénéficiaire — les `beneficiaires[]` ne sont pas encore consommés à la création ; ils se peuplent via l'Admin.)*
+> ou le **crée à la volée** (PK = `max+1`) s'il n'existe pas — dé-doublonnage sur le libellé normalisé. De même, **`numCompte`**
+> (compte du marché) est **résolu-ou-créé** dans `tr_compte` (PK = le numéro lui-même) pour éviter la violation FK
+> `t_marche.NUM_COMPTE`. **Résolution = réutilisation de l'existant, jamais suppression/recréation.** Créations
+> **tracées** dans `t_audit_log` (`TYPE_ACTION=CREATION_A_LA_VOLEE`). Si l'`id*` est **présent**, le libellé associé est **ignoré**.
+> *(Hors périmètre : `soaCode`/compte du **bénéficiaire** — les `beneficiaires[]` ne sont pas encore consommés à la création.)*
 
 ⚠️ **`processus`** : `ProcessusMarche[]` — **chaque marché doit comporter au moins un processus à la création** (`POST /api/saisies/ppm`), sinon **400** `{ "erreurs": [ { "champ": "marches[0].processus", "message": "Au moins un processus est obligatoire." } ] }`. Chaque **`ProcessusMarche`** = `idCapm` (FK `t_capm`, `@NotNull`), `dateDebut` et `dateFin` (`yyyy-MM-dd`, `@NotNull`) — un champ manquant → **400** au chemin `marches[i].processus[j].<champ>` (« Le processus est obligatoire. » / « La date de début est obligatoire. » / « La date de fin est obligatoire. ») ; `idCapm` **inconnu** → **400**. Le service crée **une ligne `t_marche_prevision` par processus**. *(À l'édition d'un brouillon, `processus` n'est pas exigé.)*
 

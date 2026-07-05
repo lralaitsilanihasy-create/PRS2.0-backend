@@ -147,8 +147,8 @@ public class GlobalExceptionHandler {
         // Distingue la cause racine (SQLSTATE PostgreSQL) au lieu d'un message fourre-tout.
         String sqlState = sqlState(ex);
         return switch (sqlState == null ? "" : sqlState) {
-            case "23503" -> build(HttpStatus.CONFLICT,          // foreign_key_violation
-                    "Suppression impossible : cette donnée est référencée par des enregistrements liés.", request, null);
+            case "23503" -> build(HttpStatus.CONFLICT,          // foreign_key_violation (insert : parent absent ; ou delete : enfant présent)
+                    "Violation de clé étrangère : une donnée référencée est absente, ou cet enregistrement est encore référencé par d'autres.", request, null);
             case "23505" -> build(HttpStatus.CONFLICT,          // unique_violation
                     "Doublon : un enregistrement avec cette clé existe déjà.", request, null);
             case "23502" -> build(HttpStatus.BAD_REQUEST,       // not_null_violation

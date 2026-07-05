@@ -20,6 +20,7 @@ import cnm.prs.dto.SaisieDossierRequest;
 import cnm.prs.dto.SaisieMarcheLigne;
 import cnm.prs.dto.SaisiePpmRequest;
 import cnm.prs.entity.Capm;
+import cnm.prs.entity.Compte;
 import cnm.prs.entity.Dossier;
 import cnm.prs.entity.Marche;
 import cnm.prs.entity.ModePassation;
@@ -34,6 +35,7 @@ import cnm.prs.mapper.PpmMapper;
 import cnm.prs.repository.CapmRepository;
 import cnm.prs.repository.DossierRepository;
 import cnm.prs.repository.EntiteContractRepository;
+import cnm.prs.repository.CompteRepository;
 import cnm.prs.repository.MarchePrevisionRepository;
 import cnm.prs.repository.MarcheRepository;
 import cnm.prs.repository.ModePassationRepository;
@@ -73,6 +75,7 @@ public class SaisieService {
     private final TypePieceJointeRepository typePieceJointeRepository;
     private final NatureRepository natureRepository;
     private final ModePassationRepository modePassationRepository;
+    private final CompteRepository compteRepository;
     private final AuditLogService auditLogService;
 
     public SaisieService(DossierRepository dossierRepository, PpmRepository ppmRepository,
@@ -84,7 +87,7 @@ public class SaisieService {
             PieceJointeDossierService pieceJointeDossierService,
             TypePieceJointeRepository typePieceJointeRepository,
             NatureRepository natureRepository, ModePassationRepository modePassationRepository,
-            AuditLogService auditLogService) {
+            CompteRepository compteRepository, AuditLogService auditLogService) {
         this.dossierRepository = dossierRepository;
         this.ppmRepository = ppmRepository;
         this.marcheRepository = marcheRepository;
@@ -101,6 +104,7 @@ public class SaisieService {
         this.typePieceJointeRepository = typePieceJointeRepository;
         this.natureRepository = natureRepository;
         this.modePassationRepository = modePassationRepository;
+        this.compteRepository = compteRepository;
         this.auditLogService = auditLogService;
     }
 
@@ -262,7 +266,7 @@ public class SaisieService {
         m.setIdDossier(idDossier);
         m.setIdPpm(idPpm);
         m.setDesignationMarche(ligne.designationMarche());
-        m.setNumCompte(ligne.numCompte());
+        m.setNumCompte(resoudreOuCreerCompte(ligne.numCompte()));
         m.setMontEstim(ligne.montEstim());
         m.setFinancement(ligne.financement());
         m.setStatut(ligne.statut());
@@ -325,6 +329,23 @@ public class SaisieService {
         auditLogService.enregistrer(CurrentUser.ref().orElse(null), "tr_mode_passation",
                 String.valueOf(nouvelId), "CREATION_A_LA_VOLEE", null);
         return nouvelId;
+    }
+
+    /**
+     * (Règle ajoutée) Compte budgétaire du marché : réutilise l'existant si présent dans {@code tr_compte}
+     * (PK = {@code NUM_COMPTE}), sinon le <strong>crée à la volée</strong> (import PPM). Ne supprime jamais.
+     * {@code null}/vide → {@code null}. Évite la violation FK {@code t_marche.NUM_COMPTE → tr_compte}.
+     */
+    private String resoudreOuCreerCompte(String numCompte) {
+        if (numCompte == null || numCompte.isBlank()) {
+            return null;
+        }
+        String num = numCompte.trim();
+        if (!compteRepository.existsById(num)) {
+            compteRepository.save(new Compte(num, num, null, null));   // libellé par défaut = numéro
+            auditLogService.enregistrer(CurrentUser.ref().orElse(null), "tr_compte", num, "CREATION_A_LA_VOLEE", null);
+        }
+        return num;
     }
 
     /** Normalisation pour dé-duplication : sans accents, majuscules, sans caractères non alphanumériques. */
