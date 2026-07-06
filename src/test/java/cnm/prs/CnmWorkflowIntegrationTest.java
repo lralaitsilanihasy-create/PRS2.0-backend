@@ -3475,6 +3475,46 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("UGPM : création sans PRMP de tutelle → 400 (validation)")
+    void creation_ugpm_sans_prmp_tutelle_400() throws Exception {
+        mvc.perform(post("/api/ugpms").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idUgpm\":\"UGPMZ\",\"libelle\":\"X\",\"login\":\"ugpmz\",\"motDePasse\":\"Ugpm@1234\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("PRMP : ne peut pas soumettre un dossier d'une autre PRMP → 403 (hors périmètre)")
+    void prmp_ne_soumet_pas_dossier_autre_prmp_403() throws Exception {
+        // Dossier BROUILLON appartenant à une autre PRMP : le contrôle propriétaire (403) précède statut/contenu.
+        Dossier autre = dossier(64, "BROUILLON");
+        autre.setIdTypeDossier("PPM");
+        autre.setIdPrmp("PRMP999");
+        autre.setIdLocalite("ANT");
+        dossierRepository.save(autre);
+        mvc.perform(post("/api/dossiers/64/soumettre").header("Authorization", tokenPrmp))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("PRMP : sa liste de dossiers inclut les BROUILLON créés par ses UGPM")
+    void prmp_voit_brouillons_de_ses_ugpm() throws Exception {
+        // UGPM (ref = PRMP001) crée un dossier BROUILLON → stampé PRMP001.
+        String tokenUgpm = bearer("UGPM1", ProfilUtilisateur.UGPM, TypeActeur.UGPM, "PRMP001", null);
+        String resp = mvc.perform(post("/api/saisies/dossier").header("Authorization", tokenUgpm)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idTypeDossier\":\"DAO\",\"idEntiteContract\":1}"))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        int idDoss = com.jayway.jsonpath.JsonPath.read(resp, "$.idDossier");
+        org.junit.jupiter.api.Assertions.assertEquals("UGPM1",
+                dossierRepository.findById(idDoss).orElseThrow().getCreePar());
+
+        // La PRMP de tutelle voit ce BROUILLON dans sa liste (scoping par périmètre ID_PRMP).
+        mvc.perform(get("/api/dossiers").header("Authorization", tokenPrmp))
+                .andExpect(jsonPath("$[?(@.idDossier==" + idDoss + " && @.statut=='BROUILLON')]", hasSize(1)));
+    }
+
+    @Test
     @DisplayName("Façade saisie DAO : dossier DAO BROUILLON ; type PPM refusé")
     void saisieDossier_dao() throws Exception {
         mvc.perform(post("/api/saisies/dossier").header("Authorization", tokenPrmp)
