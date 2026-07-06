@@ -67,7 +67,7 @@ public class PieceJointeDossierController {
     }
 
     /** Upload d'une pièce (PRMP propriétaire). */
-    @PreAuthorize("hasRole('PRMP')")
+    @PreAuthorize("hasAnyRole('PRMP','UGPM')")
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<PieceJointeDossierDto> upload(
             @Valid @RequestPart("data") PieceJointeDossierDto data,
@@ -76,7 +76,7 @@ public class PieceJointeDossierController {
     }
 
     /** Suppression (PRMP propriétaire sur dossier BROUILLON, ou Administrateur). */
-    @PreAuthorize("hasAnyRole('PRMP', 'ADMINISTRATEUR')")
+    @PreAuthorize("hasAnyRole('PRMP', 'UGPM', 'ADMINISTRATEUR')")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable Integer id) {
         service.delete(id);

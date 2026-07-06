@@ -1004,10 +1004,31 @@ est enregistrée `apresLettreRenvoi=true` (avec `idLettre`) ; sinon c'est une **
 ---
 
 ## Saisies (façade de création)
-**Ressource** `/api/saisies` — Réservée au profil **`PRMP`**. « Saisir un PPM/DAO/MAOO » **EST** créer le
-dossier à soumettre : la façade crée le `t_dossier` (statut **`BROUILLON`**, propriété de la PRMP courante)
+**Ressource** `/api/saisies` — Ouverte aux profils **`PRMP`** et **`UGPM`**. « Saisir un PPM/DAO/MAOO » **EST**
+créer le dossier à soumettre : la façade crée le `t_dossier` (statut **`BROUILLON`**, propriété de la PRMP)
 et son contenu **en une transaction** (rollback si une étape échoue). Remplace la création brute de
 dossier/PPM (désormais réservée Admin).
+
+> ⚠️ **Profil UGPM (Unité de Gestion de la Passation des Marchés) — règle ajoutée.** Une **UGPM** est rattachée
+> à **exactement une PRMP de tutelle** (`t_ugpm.ID_PRMP_TUTELLE → t_prmp` ; une PRMP chapeaute plusieurs UGPM).
+> Compte : `t_compte_auth` `TYPE_ACTEUR='UGPM'`, `REF_ACTEUR=ID_UGPM`. **Au login**, le rôle est `UGPM` mais le
+> **claim `ref` porte l'ID_PRMP de tutelle** → l'UGPM voit / crée / édite **sous le périmètre de sa PRMP** (le
+> scoping `ID_PRMP` fonctionne à l'identique). L'UGPM **crée, corrige et met à jour** les dossiers (`BROUILLON`),
+> les marchés, les pièces (`@PreAuthorize hasAnyRole('PRMP','UGPM')`), **mais ne peut PAS soumettre** :
+> `POST /api/dossiers/{id}/soumettre` reste **`hasRole('PRMP')`** (UGPM → **403**). La **PRMP voit et soumet** les
+> dossiers créés par ses UGPM (ils portent son `ID_PRMP`). Traçabilité : `t_dossier.CREE_PAR` (login créateur —
+> PRMP ou UGPM) et `SOUMIS_PAR` (login PRMP soumissionnaire). Création d'une UGPM : `POST /api/ugpms` (Admin).
+
+**Administration des UGPM** `/api/ugpms` — Réservé au profil **`ADMINISTRATEUR`**. La création alloue à la fois la
+`t_ugpm` (rattachée à sa PRMP de tutelle) et son **compte d'authentification actif** (`TYPE_ACTEUR=UGPM`).
+
+| Méthode | URL | Corps | Réponse | Statuts | Rôle |
+|---|---|---|---|---|---|
+| POST | /api/ugpms | `CreerUgpmRequest` `{idUgpm, libelle?, idPrmpTutelle, login, motDePasse}` | `UgpmDto` | 201, 400, 403, 409 | **ADMINISTRATEUR** |
+| GET | /api/ugpms | — | `UgpmDto[]` | 200, 403 | **ADMINISTRATEUR** |
+
+`UgpmDto` = `{idUgpm, libelle, idPrmpTutelle}`. **409** si `idPrmpTutelle` inconnue, `idUgpm` déjà pris, ou `login`
+déjà utilisé.
 
 > ⚠️ **Règle ajoutée — PK attribuées par le serveur.** Les identifiants `dossier`/`PPM`/`marché` sont
 > **alloués par une séquence serveur** (`seq_dossier`/`seq_ppm`/`seq_marche`) ; tout id envoyé par le

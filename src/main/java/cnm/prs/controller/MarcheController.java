@@ -44,13 +44,13 @@ public class MarcheController {
     }
 
     // Édition des lignes d'un brouillon : réservée à la PRMP (propriétaire) ; validé en service.
-    @PreAuthorize("hasRole('PRMP')")
+    @PreAuthorize("hasAnyRole('PRMP','UGPM')")
     @PostMapping
     public ResponseEntity<MarcheDto> create(@Valid @RequestBody MarcheDto dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.create(dto));
     }
 
-    @PreAuthorize("hasRole('PRMP')")
+    @PreAuthorize("hasAnyRole('PRMP','UGPM')")
     @PutMapping("/{id}")
     public MarcheDto update(@PathVariable Integer id, @Valid @RequestBody MarcheDto dto) {
         return service.update(id, dto);
@@ -59,13 +59,13 @@ public class MarcheController {
     // Édition restreinte (rectification) : PRMP propriétaire, uniquement si dossier EN_ATTENTE_DECISION_PRMP.
     // Corps SANS validation des champs d'identité figés (idDossier/idPpm), que le front n'envoie pas en
     // rectification ; le contenu est appliqué, l'identité conservée serveur.
-    @PreAuthorize("hasRole('PRMP')")
+    @PreAuthorize("hasAnyRole('PRMP','UGPM')")
     @PatchMapping("/{id}/rectifier")
     public MarcheDto rectifier(@PathVariable Integer id, @RequestBody MarcheDto dto) {
         return service.modifierEnAttenteRectification(id, dto);
     }
 
-    @PreAuthorize("hasRole('PRMP')")
+    @PreAuthorize("hasAnyRole('PRMP','UGPM')")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable Integer id) {
         service.delete(id);

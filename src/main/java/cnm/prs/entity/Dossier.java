@@ -58,9 +58,17 @@ public class Dossier {
     @Column(name = "ID_LOCALITE", length = 5)
     private String idLocalite;
 
-    /** PRMP propriétaire du dossier (§3.1). Posée à la saisie ; seule elle peut éditer/soumettre. */
+    /** PRMP propriétaire du dossier (§3.1). Posée à la saisie ; le périmètre de propriété. */
     @Column(name = "ID_PRMP", length = 10)
     private String idPrmp;
+
+    /** Traçabilité (règle ajoutée) — login de l'acteur ayant <strong>créé</strong> le dossier (PRMP ou UGPM). */
+    @Column(name = "CREE_PAR", length = 100)
+    private String creePar;
+
+    /** Traçabilité (règle ajoutée) — login de l'acteur ayant <strong>soumis</strong> le dossier (PRMP uniquement). */
+    @Column(name = "SOUMIS_PAR", length = 100)
+    private String soumisPar;
 
     /** Entité contractante concernée par le dossier (§1) — choisie à la saisie parmi les entités de la
      *  PRMP ; c'est elle qui détermine la localité ({@code idLocalite} en est dérivé). */

@@ -22,7 +22,9 @@ public enum ProfilUtilisateur {
     VERIFICATEUR,
     ASSISTANT_CONTROLEUR,
     CHARGE_PUBLICATION,
-    ADMINISTRATEUR;
+    ADMINISTRATEUR,
+    /** Unité de Gestion de la Passation des Marchés — rattachée à une PRMP de tutelle (crée/édite, ne soumet pas). */
+    UGPM;
 
     /** Autorité Spring Security correspondante (préfixe {@code ROLE_}). */
     public String authority() {
@@ -61,6 +63,9 @@ public enum ProfilUtilisateur {
         }
         if (n.contains("admin")) {
             return ADMINISTRATEUR;
+        }
+        if (n.contains("ugpm")) {
+            return UGPM;
         }
         if (n.contains("prmp")) {
             return PRMP;

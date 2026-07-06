@@ -51,7 +51,7 @@ public class PpmController {
     }
 
     // Édition de l'en-tête PPM d'un brouillon : PRMP (propriétaire) ou Admin ; validé en service.
-    @PreAuthorize("hasAnyRole('PRMP','ADMINISTRATEUR')")
+    @PreAuthorize("hasAnyRole('PRMP','UGPM','ADMINISTRATEUR')")
     @PutMapping("/{id}")
     public PpmDto update(@PathVariable Integer id, @Valid @RequestBody PpmDto dto) {
         return service.update(id, dto);
@@ -60,14 +60,14 @@ public class PpmController {
     // Édition restreinte (rectification) : PRMP propriétaire, uniquement si dossier EN_ATTENTE_DECISION_PRMP.
     // Corps SANS validation des champs d'identité figés (idDossier/idPrmp/idLocalite), que le front n'envoie
     // pas en rectification ; le contenu est appliqué, l'identité conservée serveur.
-    @PreAuthorize("hasRole('PRMP')")
+    @PreAuthorize("hasAnyRole('PRMP','UGPM')")
     @PatchMapping("/{id}/rectifier")
     public PpmDto rectifier(@PathVariable Integer id, @RequestBody PpmDto dto) {
         return service.modifierEnAttenteRectification(id, dto);
     }
 
     // Suppression d'un PPM de brouillon : PRMP propriétaire (miroir du marché) ; garde BROUILLON+propriété en service.
-    @PreAuthorize("hasRole('PRMP')")
+    @PreAuthorize("hasAnyRole('PRMP','UGPM')")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable Integer id) {
         service.delete(id);

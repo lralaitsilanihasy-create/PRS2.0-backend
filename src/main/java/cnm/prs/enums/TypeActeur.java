@@ -9,5 +9,8 @@ public enum TypeActeur {
     CONTROLEUR,
 
     /** Personne Responsable des Marchés Publics, acteur externe ({@code t_prmp}). */
-    PRMP
+    PRMP,
+
+    /** Unité de Gestion de la Passation des Marchés, rattachée à une PRMP de tutelle ({@code t_ugpm}). */
+    UGPM
 }

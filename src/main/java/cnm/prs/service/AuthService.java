@@ -19,6 +19,7 @@ import cnm.prs.dto.RegisterPrmpV2Request;
 import cnm.prs.dto.RegisterResponse;
 import cnm.prs.entity.CompteAuth;
 import cnm.prs.entity.Controleur;
+import cnm.prs.entity.Ugpm;
 import cnm.prs.entity.Prmp;
 import cnm.prs.entity.PrmpEntiteDemande;
 import cnm.prs.enums.ProfilUtilisateur;
@@ -32,6 +33,7 @@ import cnm.prs.exception.BusinessRuleException;
 import cnm.prs.exception.ResourceNotFoundException;
 import cnm.prs.repository.CompteAuthRepository;
 import cnm.prs.repository.ControleurRepository;
+import cnm.prs.repository.UgpmRepository;
 import cnm.prs.repository.EntiteContractRepository;
 import cnm.prs.repository.PrmpEntiteDemandeRepository;
 import cnm.prs.repository.PrmpRepository;
@@ -58,13 +60,14 @@ public class AuthService {
     private final PrmpEntiteDemandeRepository demandeRepository;
     private final EntiteContractRepository entiteContractRepository;
     private final PieceJointeService pieceJointeService;
+    private final UgpmRepository ugpmRepository;
 
     public AuthService(CompteAuthRepository compteRepository, ControleurRepository controleurRepository,
             ProfileRepository profileRepository, PrmpRepository prmpRepository,
             PasswordEncoder passwordEncoder, TokenService tokenService,
             ControleurDirectory controleurDirectory, NotificationService notificationService,
             PrmpEntiteDemandeRepository demandeRepository, EntiteContractRepository entiteContractRepository,
-            PieceJointeService pieceJointeService) {
+            PieceJointeService pieceJointeService, UgpmRepository ugpmRepository) {
         this.compteRepository = compteRepository;
         this.controleurRepository = controleurRepository;
         this.profileRepository = profileRepository;
@@ -76,6 +79,7 @@ public class AuthService {
         this.demandeRepository = demandeRepository;
         this.entiteContractRepository = entiteContractRepository;
         this.pieceJointeService = pieceJointeService;
+        this.ugpmRepository = ugpmRepository;
     }
 
     public LoginResponse login(LoginRequest request) {
@@ -91,11 +95,20 @@ public class AuthService {
         TypeActeur type = parseType(compte.getTypeActeur());
         String role;
         String localite;
+        String ref = compte.getRefActeur();
         if (type == TypeActeur.CONTROLEUR) {
             Controleur controleur = controleurRepository.findById(compte.getRefActeur())
                     .orElseThrow(() -> new BadCredentialsException("Contrôleur introuvable pour ce compte."));
             role = resoudreRoleControleur(controleur);
             localite = controleur.getIdLocalite(); // NULL pour le Président → toutes localités (§1.1)
+        } else if (type == TypeActeur.UGPM) {
+            // UGPM : profil UGPM, mais périmètre = la PRMP de tutelle (le claim « ref » porte l'ID_PRMP de
+            // tutelle → le scoping/idPrmp fonctionne comme pour la PRMP). Le login identifie l'UGPM (cree_par).
+            Ugpm ugpm = ugpmRepository.findById(compte.getRefActeur())
+                    .orElseThrow(() -> new BadCredentialsException("UGPM introuvable pour ce compte."));
+            role = ProfilUtilisateur.UGPM.name();
+            ref = ugpm.getIdPrmpTutelle();
+            localite = null;
         } else {
             prmpRepository.findById(compte.getRefActeur())
                     .orElseThrow(() -> new BadCredentialsException("PRMP introuvable pour ce compte."));
@@ -105,9 +118,9 @@ public class AuthService {
             localite = null;
         }
 
-        String token = tokenService.generer(compte.getLogin(), role, type, compte.getRefActeur(), localite);
+        String token = tokenService.generer(compte.getLogin(), role, type, ref, localite);
         return new LoginResponse(token, compte.getLogin(), role, type.name(),
-                compte.getRefActeur(), localite, tokenService.getExpirationSeconds());
+                ref, localite, tokenService.getExpirationSeconds());
     }
 
     /**

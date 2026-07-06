@@ -458,10 +458,11 @@ public class SaisieService {
         d.setIdDossier(dossierRepository.nextIdDossier().intValue());   // PK serveur (séquence)
         d.setIdTypeDossier(type);
         d.setIdLocalite(idLocalite);
-        d.setIdPrmp(idPrmp);
+        d.setIdPrmp(idPrmp);   // périmètre = PRMP (pour une UGPM, sa PRMP de tutelle via CurrentUser.ref())
         d.setIdEntiteContract(idEntiteContract);
         d.setStatut(StatutDossier.BROUILLON.name());
         d.setDateSoumission(java.time.LocalDateTime.now());   // date/heure de saisie du dossier (§ secrétariat)
+        d.setCreePar(CurrentUser.login().orElse(idPrmp));   // traçabilité : login créateur (PRMP ou UGPM)
         return dossierRepository.save(d);
     }
 

@@ -28,8 +28,14 @@ public final class Visibilite {
         return p == ProfilUtilisateur.PRESIDENT || p == ProfilUtilisateur.ADMINISTRATEUR;
     }
 
+    /**
+     * Acteur dont le périmètre est une <strong>propriété PRMP</strong> (claim {@code ref} = ID_PRMP) : la PRMP
+     * <strong>ou</strong> une UGPM (dont le {@code ref} porte l'ID_PRMP de tutelle). Les deux voient et scopent
+     * sur le même périmètre ; seule la <strong>soumission</strong> reste réservée à la PRMP (contrôlée à part).
+     */
     public static boolean estPrmp() {
-        return CurrentUser.profil().orElse(null) == ProfilUtilisateur.PRMP;
+        ProfilUtilisateur p = CurrentUser.profil().orElse(null);
+        return p == ProfilUtilisateur.PRMP || p == ProfilUtilisateur.UGPM;
     }
 
     public static Optional<String> localite() {

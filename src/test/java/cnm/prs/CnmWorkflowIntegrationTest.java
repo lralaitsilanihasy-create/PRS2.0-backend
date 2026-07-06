@@ -156,6 +156,7 @@ class CnmWorkflowIntegrationTest {
     @Autowired private cnm.prs.repository.CompteRepository compteRepository;
     @Autowired private cnm.prs.repository.SoaBeneficiaireRepository soaBeneficiaireRepository;
     @Autowired private cnm.prs.repository.ServiceBeneficiaireRepository serviceBeneficiaireRepository;
+    @Autowired private cnm.prs.repository.UgpmRepository ugpmRepository;
 
     private String tokenPresident;
     private String tokenCc;
@@ -3409,6 +3410,68 @@ class CnmWorkflowIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.erreurs[0].champ").value("marches[0].beneficiaires"));
+    }
+
+    @Test
+    @DisplayName("UGPM : crée un dossier sous sa PRMP de tutelle (cree_par=UGPM), ne peut PAS soumettre (403) ; la PRMP le voit et le soumet")
+    void ugpm_creation_scoping_soumissionReserveePrmp() throws Exception {
+        // Token UGPM : ref = PRMP001 (tutelle) → périmètre de la PRMP ; login « UGPM1 » = créateur.
+        String tokenUgpm = bearer("UGPM1", ProfilUtilisateur.UGPM, TypeActeur.UGPM, "PRMP001", null);
+        natureRepository.save(new Nature(1, "Travaux", null));
+        modePassationRepository.save(new ModePassation(2, "AOR", null, null, null, null));
+        capmRepository.save(new Capm(1, "LANCEMENT", 1));
+
+        String body = "{\"idEntiteContract\":1,\"exercice\":2026,\"signataire\":\"X\",\"dateSignature\":\"2026-01-10\",\"reference\":\"PPM-UGPM\","
+                + "\"marches\":[{\"designationMarche\":\"A\",\"montEstim\":1000000,\"idNature\":1,\"idMode\":2,\"statut\":\"PREVU\","
+                + "\"processus\":[{\"idCapm\":1,\"dateDebut\":\"2026-02-01\",\"dateFin\":\"2026-06-30\"}]}]}";
+        String resp = mvc.perform(post("/api/saisies/ppm").header("Authorization", tokenUgpm)
+                .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        int idDoss = com.jayway.jsonpath.JsonPath.read(resp, "$.idDossier");
+
+        // Dossier stampé PRMP de tutelle (PRMP001) + cree_par = login UGPM.
+        Dossier d = dossierRepository.findById(idDoss).orElseThrow();
+        org.junit.jupiter.api.Assertions.assertEquals("PRMP001", d.getIdPrmp());
+        org.junit.jupiter.api.Assertions.assertEquals("UGPM1", d.getCreePar());
+
+        // L'UGPM ne peut PAS soumettre → 403 (réservé PRMP).
+        mvc.perform(post("/api/dossiers/" + idDoss + "/soumettre").header("Authorization", tokenUgpm))
+                .andExpect(status().isForbidden());
+
+        // La PRMP de tutelle voit le dossier (scoping périmètre) et le soumet → soumis_par = login PRMP.
+        mvc.perform(get("/api/dossiers").header("Authorization", tokenPrmp))
+                .andExpect(jsonPath("$[?(@.idDossier==" + idDoss + ")]", hasSize(1)));
+        mvc.perform(post("/api/dossiers/" + idDoss + "/soumettre").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk());
+        org.junit.jupiter.api.Assertions.assertEquals("PRMP001",
+                dossierRepository.findById(idDoss).orElseThrow().getSoumisPar());
+    }
+
+    @Test
+    @DisplayName("Admin crée une UGPM + compte actif ; login UGPM → rôle UGPM, périmètre = PRMP de tutelle ; tutelle inconnue → 409")
+    void ugpm_admin_creation_et_login() throws Exception {
+        mvc.perform(post("/api/ugpms").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idUgpm\":\"UGPMX\",\"libelle\":\"UGPM Test\",\"idPrmpTutelle\":\"PRMP001\","
+                        + "\"login\":\"ugpmx\",\"motDePasse\":\"Ugpm@1234\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.idPrmpTutelle").value("PRMP001"));
+        org.junit.jupiter.api.Assertions.assertTrue(ugpmRepository.existsById("UGPMX"));
+        org.junit.jupiter.api.Assertions.assertTrue(compteAuthRepository.findByLogin("ugpmx").isPresent());
+
+        // Login réel → rôle UGPM, ref = PRMP de tutelle (le scoping fonctionne comme une PRMP).
+        mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"login\":\"ugpmx\",\"motDePasse\":\"Ugpm@1234\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.role").value("UGPM"))
+                .andExpect(jsonPath("$.ref").value("PRMP001"));
+
+        // PRMP de tutelle inconnue → 409.
+        mvc.perform(post("/api/ugpms").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idUgpm\":\"UGPMY\",\"libelle\":\"X\",\"idPrmpTutelle\":\"NOPE\","
+                        + "\"login\":\"ugpmy\",\"motDePasse\":\"Ugpm@1234\"}"))
+                .andExpect(status().isConflict());
     }
 
     @Test

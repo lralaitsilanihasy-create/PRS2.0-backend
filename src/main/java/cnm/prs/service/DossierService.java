@@ -352,6 +352,7 @@ public class DossierService {
         // structurée (xxxxx/type/localité/année).
         dossier.setIdLocalite(localite);             // propage la localité (§C) → visible par le Secrétaire
         dossier.setStatut(StatutDossier.SOUMIS.name());
+        dossier.setSoumisPar(CurrentUser.login().orElse(null));   // traçabilité : soumission réservée à la PRMP
         if (dossier.getDateRef() == null) {
             dossier.setDateRef(LocalDate.now());
         }

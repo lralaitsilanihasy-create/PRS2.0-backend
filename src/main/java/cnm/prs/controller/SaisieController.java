@@ -51,14 +51,14 @@ public class SaisieController {
      * PDF (part {@code fichier}) et renvoie les données extraites — <strong>ne crée rien</strong>. La
      * création reste {@code POST /api/saisies/ppm}. PDF illisible/non conforme → 400.
      */
-    @PreAuthorize("hasRole('PRMP')")
+    @PreAuthorize("hasAnyRole('PRMP','UGPM')")
     @PostMapping(value = "/ppm/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public SaisiePpmImportResult importerPpm(@RequestPart("fichier") MultipartFile fichier) {
         return importService.importer(fichier);
     }
 
     /** Saisie d'un PPM (dossier PPM + PPM + lignes de marché). */
-    @PreAuthorize("hasRole('PRMP')")
+    @PreAuthorize("hasAnyRole('PRMP','UGPM')")
     @PostMapping(value = "/ppm", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<DossierDto> saisirPpm(@Valid @RequestBody SaisiePpmRequest req) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.saisirPpm(req));
@@ -69,7 +69,7 @@ public class SaisieController {
      * {@link SaisiePpmRequest} ; parts fichiers nommés {@code piece_<idTypePiece>}. Chaque pièce est
      * persistée avec {@code apresLettreRenvoi=false}.
      */
-    @PreAuthorize("hasRole('PRMP')")
+    @PreAuthorize("hasAnyRole('PRMP','UGPM')")
     @PostMapping(value = "/ppm", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<DossierDto> saisirPpmAvecPieces(
             @Valid @RequestPart("data") SaisiePpmRequest req, HttpServletRequest request) {
@@ -95,14 +95,14 @@ public class SaisieController {
     }
 
     /** Saisie d'un dossier sans contenu (DAO, MAOO, …). */
-    @PreAuthorize("hasRole('PRMP')")
+    @PreAuthorize("hasAnyRole('PRMP','UGPM')")
     @PostMapping("/dossier")
     public ResponseEntity<DossierDto> saisirDossier(@Valid @RequestBody SaisieDossierRequest req) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.saisirDossier(req));
     }
 
     /** Édition d'un brouillon PPM : en-tête + réconciliation des lignes de marché, en une transaction. */
-    @PreAuthorize("hasRole('PRMP')")
+    @PreAuthorize("hasAnyRole('PRMP','UGPM')")
     @PutMapping("/ppm/{idDossier}")
     public DossierDto editerPpm(@PathVariable Integer idDossier, @Valid @RequestBody EditionPpmRequest req) {
         return service.editerPpm(idDossier, req);
