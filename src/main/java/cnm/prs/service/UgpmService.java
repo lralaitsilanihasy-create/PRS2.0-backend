@@ -47,7 +47,18 @@ public class UgpmService {
         if (compteRepository.findByLogin(req.login()).isPresent()) {
             throw new BusinessRuleException("Ce login est déjà utilisé.");
         }
-        Ugpm ugpm = new Ugpm(req.idUgpm(), req.libelle(), req.idPrmpTutelle(), null);
+        Ugpm ugpm = new Ugpm();
+        ugpm.setIdUgpm(req.idUgpm());
+        ugpm.setLibelle(req.libelle());
+        ugpm.setIdPrmpTutelle(req.idPrmpTutelle());
+        ugpm.setNomUgpm(req.nomUgpm());
+        ugpm.setPrenomsUgpm(req.prenomsUgpm());
+        ugpm.setImUgpm(req.imUgpm());
+        ugpm.setCin(req.cin());
+        ugpm.setDateCin(req.dateCin());
+        ugpm.setLieuCin(req.lieuCin());
+        ugpm.setEmailUgpm(req.emailUgpm());
+        ugpm.setTelUgpm(req.telUgpm());
         ugpmRepository.save(ugpm);
         // Compte actif immédiatement (créé par l'Administrateur), pas de workflow de validation.
         compteRepository.save(new CompteAuth(req.login(), passwordEncoder.encode(req.motDePasse()),
@@ -61,6 +72,8 @@ public class UgpmService {
     }
 
     private UgpmDto toDto(Ugpm u) {
-        return new UgpmDto(u.getIdUgpm(), u.getLibelle(), u.getIdPrmpTutelle());
+        return new UgpmDto(u.getIdUgpm(), u.getLibelle(), u.getIdPrmpTutelle(), u.getNomUgpm(),
+                u.getPrenomsUgpm(), u.getImUgpm(), u.getCin(), u.getDateCin(), u.getLieuCin(),
+                u.getEmailUgpm(), u.getTelUgpm());
     }
 }

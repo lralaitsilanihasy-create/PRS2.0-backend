@@ -7,6 +7,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import java.time.LocalDate;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -32,6 +33,31 @@ public class Ugpm {
 
     @Column(name = "ID_PRMP_TUTELLE", nullable = false, length = 10)
     private String idPrmpTutelle;
+
+    // Identité (mêmes champs que la PRMP, sauf arreteNomin/dateNomin).
+    @Column(name = "NOM_UGPM", nullable = false, length = 50)
+    private String nomUgpm;
+
+    @Column(name = "PRENOMS_UGPM", nullable = false, length = 100)
+    private String prenomsUgpm;
+
+    @Column(name = "IM_UGPM", nullable = false, length = 6)
+    private String imUgpm;
+
+    @Column(name = "CIN", nullable = false, length = 12)
+    private String cin;
+
+    @Column(name = "DATE_CIN", nullable = false)
+    private LocalDate dateCin;
+
+    @Column(name = "LIEU_CIN", nullable = false, length = 50)
+    private String lieuCin;
+
+    @Column(name = "EMAIL_UGPM", nullable = false, length = 100)
+    private String emailUgpm;
+
+    @Column(name = "TEL_UGPM", nullable = false, length = 20)
+    private String telUgpm;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ID_PRMP_TUTELLE", insertable = false, updatable = false)

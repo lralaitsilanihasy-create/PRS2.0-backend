@@ -1024,11 +1024,17 @@ dossier/PPM (désormais réservée Admin).
 
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
-| POST | /api/ugpms | `CreerUgpmRequest` `{idUgpm, libelle?, idPrmpTutelle, login, motDePasse}` | `UgpmDto` | 201, 400, 403, 409 | **ADMINISTRATEUR** |
+| POST | /api/ugpms | `CreerUgpmRequest` (identité + compte) | `UgpmDto` | 201, 400, 403, 409 | **ADMINISTRATEUR** |
 | GET | /api/ugpms | — | `UgpmDto[]` | 200, 403 | **ADMINISTRATEUR** |
 
-`UgpmDto` = `{idUgpm, libelle, idPrmpTutelle}`. **409** si `idPrmpTutelle` inconnue, `idUgpm` déjà pris, ou `login`
-déjà utilisé.
+`CreerUgpmRequest` = `{idUgpm, libelle?, idPrmpTutelle, nomUgpm, prenomsUgpm, imUgpm, cin, dateCin (yyyy-MM-dd),
+lieuCin, emailUgpm, telUgpm, login, motDePasse}`. L'UGPM porte les **mêmes champs d'identité que la PRMP, sauf
+`arreteNomin`/`dateNomin`** ; tous les champs d'identité sont **obligatoires** (`libelle` reste optionnel). Pas
+d'`idLocalite` : l'UGPM hérite du périmètre de sa PRMP de tutelle.
+
+`UgpmDto` = `{idUgpm, libelle, idPrmpTutelle, nomUgpm, prenomsUgpm, imUgpm, cin, dateCin, lieuCin, emailUgpm,
+telUgpm}`. **400** si un champ obligatoire manque/est trop long ; **409** si `idPrmpTutelle` inconnue, `idUgpm`
+déjà pris, ou `login` déjà utilisé.
 
 > ⚠️ **Règle ajoutée — PK attribuées par le serveur.** Les identifiants `dossier`/`PPM`/`marché` sont
 > **alloués par une séquence serveur** (`seq_dossier`/`seq_ppm`/`seq_marche`) ; tout id envoyé par le

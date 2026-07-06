@@ -3450,12 +3450,20 @@ class CnmWorkflowIntegrationTest {
     @Test
     @DisplayName("Admin crée une UGPM + compte actif ; login UGPM → rôle UGPM, périmètre = PRMP de tutelle ; tutelle inconnue → 409")
     void ugpm_admin_creation_et_login() throws Exception {
+        // Identité obligatoire (mêmes champs que la PRMP, sauf arrêté/date de nomination).
+        String identite = "\"nomUgpm\":\"Rakoto\",\"prenomsUgpm\":\"Jean Paul\",\"imUgpm\":\"123456\","
+                + "\"cin\":\"101234567890\",\"dateCin\":\"2010-05-20\",\"lieuCin\":\"Antananarivo\","
+                + "\"emailUgpm\":\"ugpm@ex.mg\",\"telUgpm\":\"0340000000\",";
         mvc.perform(post("/api/ugpms").header("Authorization", tokenAdmin)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idUgpm\":\"UGPMX\",\"libelle\":\"UGPM Test\",\"idPrmpTutelle\":\"PRMP001\","
+                .content("{\"idUgpm\":\"UGPMX\",\"libelle\":\"UGPM Test\",\"idPrmpTutelle\":\"PRMP001\"," + identite
                         + "\"login\":\"ugpmx\",\"motDePasse\":\"Ugpm@1234\"}"))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.idPrmpTutelle").value("PRMP001"));
+                .andExpect(jsonPath("$.idPrmpTutelle").value("PRMP001"))
+                .andExpect(jsonPath("$.nomUgpm").value("Rakoto"))
+                .andExpect(jsonPath("$.imUgpm").value("123456"))
+                .andExpect(jsonPath("$.dateCin").value("2010-05-20"))
+                .andExpect(jsonPath("$.emailUgpm").value("ugpm@ex.mg"));
         org.junit.jupiter.api.Assertions.assertTrue(ugpmRepository.existsById("UGPMX"));
         org.junit.jupiter.api.Assertions.assertTrue(compteAuthRepository.findByLogin("ugpmx").isPresent());
 
@@ -3469,9 +3477,21 @@ class CnmWorkflowIntegrationTest {
         // PRMP de tutelle inconnue → 409.
         mvc.perform(post("/api/ugpms").header("Authorization", tokenAdmin)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idUgpm\":\"UGPMY\",\"libelle\":\"X\",\"idPrmpTutelle\":\"NOPE\","
+                .content("{\"idUgpm\":\"UGPMY\",\"libelle\":\"X\",\"idPrmpTutelle\":\"NOPE\"," + identite
                         + "\"login\":\"ugpmy\",\"motDePasse\":\"Ugpm@1234\"}"))
                 .andExpect(status().isConflict());
+    }
+
+    @Test
+    @DisplayName("UGPM : création sans champ d'identité obligatoire (nomUgpm) → 400")
+    void creation_ugpm_sans_identite_400() throws Exception {
+        mvc.perform(post("/api/ugpms").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idUgpm\":\"UGPMI\",\"idPrmpTutelle\":\"PRMP001\",\"prenomsUgpm\":\"Jean\","
+                        + "\"imUgpm\":\"123456\",\"cin\":\"101234567890\",\"dateCin\":\"2010-05-20\","
+                        + "\"lieuCin\":\"Antananarivo\",\"emailUgpm\":\"ugpm@ex.mg\",\"telUgpm\":\"0340000000\","
+                        + "\"login\":\"ugpmi\",\"motDePasse\":\"Ugpm@1234\"}"))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
