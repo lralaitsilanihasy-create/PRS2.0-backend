@@ -13,6 +13,7 @@ import jakarta.validation.constraints.Size;
  */
 public record CreerUgpmRequest(
 
+        // idUgpm = matricule de l'UGPM (identifiant unifié).
         @NotBlank @Size(max = 10)
         String idUgpm,
 
@@ -27,9 +28,6 @@ public record CreerUgpmRequest(
 
         @NotBlank @Size(max = 100)
         String prenomsUgpm,
-
-        @NotBlank @Size(max = 6)
-        String imUgpm,
 
         @NotBlank @Size(max = 12)
         String cin,

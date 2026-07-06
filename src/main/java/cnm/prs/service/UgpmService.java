@@ -54,7 +54,6 @@ public class UgpmService {
         ugpm.setIdPrmpTutelle(req.idPrmpTutelle());
         ugpm.setNomUgpm(req.nomUgpm());
         ugpm.setPrenomsUgpm(req.prenomsUgpm());
-        ugpm.setImUgpm(req.imUgpm());
         ugpm.setCin(req.cin());
         ugpm.setDateCin(req.dateCin());
         ugpm.setLieuCin(req.lieuCin());
@@ -80,7 +79,7 @@ public class UgpmService {
 
     private UgpmDto toDto(Ugpm u) {
         return new UgpmDto(u.getIdUgpm(), u.getLibelle(), u.getIdPrmpTutelle(), u.getNomUgpm(),
-                u.getPrenomsUgpm(), u.getImUgpm(), u.getCin(), u.getDateCin(), u.getLieuCin(),
+                u.getPrenomsUgpm(), u.getCin(), u.getDateCin(), u.getLieuCin(),
                 u.getEmailUgpm(), u.getTelUgpm());
     }
 }

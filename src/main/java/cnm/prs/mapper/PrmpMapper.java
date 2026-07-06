@@ -19,7 +19,6 @@ public final class PrmpMapper {
         dto.setIdPrmp(entity.getIdPrmp());
         dto.setNomPrmp(entity.getNomPrmp());
         dto.setPrenomsPrmp(entity.getPrenomsPrmp());
-        dto.setImPrmp(entity.getImPrmp());
         dto.setArreteNomin(entity.getArreteNomin());
         dto.setDateNomin(entity.getDateNomin());
         dto.setCin(entity.getCin());
@@ -38,7 +37,6 @@ public final class PrmpMapper {
         entity.setIdPrmp(dto.getIdPrmp());
         entity.setNomPrmp(dto.getNomPrmp());
         entity.setPrenomsPrmp(dto.getPrenomsPrmp());
-        entity.setImPrmp(dto.getImPrmp());
         entity.setArreteNomin(dto.getArreteNomin());
         entity.setDateNomin(dto.getDateNomin());
         entity.setCin(dto.getCin());

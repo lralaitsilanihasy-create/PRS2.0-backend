@@ -349,7 +349,7 @@ class CnmWorkflowIntegrationTest {
     void autoInscriptionPrmp_validationAdmin() throws Exception {
         String inscription = "{"
                 + "\"login\":\"prmp.new\",\"motDePasse\":\"Passw0rd!\",\"idPrmp\":\"PRMP777\","
-                + "\"nomPrmp\":\"Rakoto\",\"prenomsPrmp\":\"Nouvelle\",\"imPrmp\":\"IM7777\","
+                + "\"nomPrmp\":\"Rakoto\",\"prenomsPrmp\":\"Nouvelle\","
                 + "\"arreteNomin\":\"ARR-2026-777\",\"dateNomin\":\"2026-01-01\",\"cin\":\"101010101010\","
                 + "\"dateCin\":\"2010-01-01\",\"lieuCin\":\"Antananarivo\",\"emailPrmp\":\"new@prmp.mg\","
                 + "\"telPrmp\":\"0340000000\"}";
@@ -462,7 +462,7 @@ class CnmWorkflowIntegrationTest {
     @DisplayName("Inscription PRMP v2 (multipart) : compte EN_ATTENTE + déclarations + pièces ; ≥1 entité requise")
     void inscriptionV2_multipart() throws Exception {
         String data = "{\"login\":\"prmp.v2\",\"motDePasse\":\"Passw0rd!\",\"idPrmp\":\"PRMP900\","
-                + "\"nomPrmp\":\"Rakoto\",\"prenomsPrmp\":\"V2\",\"imPrmp\":\"IM9000\","
+                + "\"nomPrmp\":\"Rakoto\",\"prenomsPrmp\":\"V2\","
                 + "\"arreteNomin\":\"ARR-2026-900\",\"dateNomin\":\"2026-01-01\",\"cin\":\"909090909090\","
                 + "\"dateCin\":\"2010-01-01\",\"lieuCin\":\"Antananarivo\",\"emailPrmp\":\"v2@prmp.mg\","
                 + "\"telPrmp\":\"0340000900\",\"idEntites\":[1],"
@@ -495,7 +495,7 @@ class CnmWorkflowIntegrationTest {
 
         // Aucune entité déclarée (ni existante ni proposée) → 400.
         String sansEntite = "{\"login\":\"prmp.v3\",\"motDePasse\":\"Passw0rd!\",\"idPrmp\":\"PRMP901\","
-                + "\"nomPrmp\":\"Rakoto\",\"prenomsPrmp\":\"V3\",\"imPrmp\":\"IM9001\","
+                + "\"nomPrmp\":\"Rakoto\",\"prenomsPrmp\":\"V3\","
                 + "\"arreteNomin\":\"ARR-2026-901\",\"dateNomin\":\"2026-01-01\",\"cin\":\"901901901901\","
                 + "\"dateCin\":\"2010-01-01\",\"lieuCin\":\"Antananarivo\",\"emailPrmp\":\"v3@prmp.mg\","
                 + "\"telPrmp\":\"0340000901\",\"idEntites\":[],\"entitesNonListees\":[]}";
@@ -3451,7 +3451,7 @@ class CnmWorkflowIntegrationTest {
     @DisplayName("Admin crée une UGPM + compte actif ; login UGPM → rôle UGPM, périmètre = PRMP de tutelle ; tutelle inconnue → 409")
     void ugpm_admin_creation_et_login() throws Exception {
         // Identité obligatoire (mêmes champs que la PRMP, sauf arrêté/date de nomination).
-        String identite = "\"nomUgpm\":\"Rakoto\",\"prenomsUgpm\":\"Jean Paul\",\"imUgpm\":\"123456\","
+        String identite = "\"nomUgpm\":\"Rakoto\",\"prenomsUgpm\":\"Jean Paul\","
                 + "\"cin\":\"101234567890\",\"dateCin\":\"2010-05-20\",\"lieuCin\":\"Antananarivo\","
                 + "\"emailUgpm\":\"ugpm@ex.mg\",\"telUgpm\":\"0340000000\",";
         mvc.perform(post("/api/ugpms").header("Authorization", tokenAdmin)
@@ -3461,7 +3461,6 @@ class CnmWorkflowIntegrationTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.idPrmpTutelle").value("PRMP001"))
                 .andExpect(jsonPath("$.nomUgpm").value("Rakoto"))
-                .andExpect(jsonPath("$.imUgpm").value("123456"))
                 .andExpect(jsonPath("$.dateCin").value("2010-05-20"))
                 .andExpect(jsonPath("$.emailUgpm").value("ugpm@ex.mg"));
         org.junit.jupiter.api.Assertions.assertTrue(ugpmRepository.existsById("UGPMX"));
@@ -3485,7 +3484,7 @@ class CnmWorkflowIntegrationTest {
     @Test
     @DisplayName("GET /api/ugpms/{id} : lit une UGPM (identité) ; id inconnu → 404")
     void ugpm_findById() throws Exception {
-        String identite = "\"nomUgpm\":\"Rakoto\",\"prenomsUgpm\":\"Jean\",\"imUgpm\":\"123456\","
+        String identite = "\"nomUgpm\":\"Rakoto\",\"prenomsUgpm\":\"Jean\","
                 + "\"cin\":\"101234567890\",\"dateCin\":\"2010-05-20\",\"lieuCin\":\"Antananarivo\","
                 + "\"emailUgpm\":\"ugpm@ex.mg\",\"telUgpm\":\"0340000000\",";
         mvc.perform(post("/api/ugpms").header("Authorization", tokenAdmin)
@@ -3512,7 +3511,7 @@ class CnmWorkflowIntegrationTest {
         mvc.perform(post("/api/ugpms").header("Authorization", tokenAdmin)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idUgpm\":\"UGPMI\",\"idPrmpTutelle\":\"PRMP001\",\"prenomsUgpm\":\"Jean\","
-                        + "\"imUgpm\":\"123456\",\"cin\":\"101234567890\",\"dateCin\":\"2010-05-20\","
+                        + "\"cin\":\"101234567890\",\"dateCin\":\"2010-05-20\","
                         + "\"lieuCin\":\"Antananarivo\",\"emailUgpm\":\"ugpm@ex.mg\",\"telUgpm\":\"0340000000\","
                         + "\"login\":\"ugpmi\",\"motDePasse\":\"Ugpm@1234\"}"))
                 .andExpect(status().isBadRequest());
@@ -5784,7 +5783,6 @@ class CnmWorkflowIntegrationTest {
         p.setIdPrmp(id);
         p.setNomPrmp("Nom");
         p.setPrenomsPrmp("Prenoms");
-        p.setImPrmp("IMP001");
         p.setArreteNomin("ARR-001");
         p.setDateNomin(LocalDate.of(2024, 1, 15));
         p.setCin("101011112222");

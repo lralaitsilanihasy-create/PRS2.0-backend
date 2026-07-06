@@ -24,6 +24,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class Ugpm {
 
+    /** Identifiant = matricule de l'UGPM (unifié sur le matricule, comme les contrôleurs). */
     @Id
     @Column(name = "ID_UGPM", nullable = false, length = 10)
     private String idUgpm;
@@ -40,9 +41,6 @@ public class Ugpm {
 
     @Column(name = "PRENOMS_UGPM", nullable = false, length = 100)
     private String prenomsUgpm;
-
-    @Column(name = "IM_UGPM", nullable = false, length = 6)
-    private String imUgpm;
 
     @Column(name = "CIN", nullable = false, length = 12)
     private String cin;

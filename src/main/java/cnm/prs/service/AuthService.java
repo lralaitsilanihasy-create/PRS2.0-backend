@@ -142,7 +142,6 @@ public class AuthService {
         prmp.setIdPrmp(req.idPrmp());
         prmp.setNomPrmp(req.nomPrmp());
         prmp.setPrenomsPrmp(req.prenomsPrmp());
-        prmp.setImPrmp(req.imPrmp());
         prmp.setArreteNomin(req.arreteNomin());
         prmp.setDateNomin(req.dateNomin());
         prmp.setCin(req.cin());
@@ -194,7 +193,6 @@ public class AuthService {
         prmp.setIdPrmp(req.idPrmp());
         prmp.setNomPrmp(req.nomPrmp());
         prmp.setPrenomsPrmp(req.prenomsPrmp());
-        prmp.setImPrmp(req.imPrmp());
         prmp.setArreteNomin(req.arreteNomin());
         prmp.setDateNomin(req.dateNomin());
         prmp.setCin(req.cin());

@@ -21,7 +21,6 @@ public record RegisterPrmpRequest(
         @NotBlank @Size(max = 10) String idPrmp,
         @NotBlank @Size(max = 50) String nomPrmp,
         @NotBlank @Size(max = 100) String prenomsPrmp,
-        @NotBlank @Size(max = 6) String imPrmp,
         @NotBlank @Size(max = 100) String arreteNomin,
         @NotNull LocalDate dateNomin,
         @NotBlank @Size(max = 12) String cin,

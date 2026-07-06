@@ -20,6 +20,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class Prmp {
 
+    /** Identifiant = matricule de la PRMP (unifié sur le matricule, comme les contrôleurs). */
     @Id
     @Column(name = "ID_PRMP", nullable = false, length = 10)
     private String idPrmp;
@@ -29,9 +30,6 @@ public class Prmp {
 
     @Column(name = "PRENOMS_PRMP", nullable = false, length = 100)
     private String prenomsPrmp;
-
-    @Column(name = "IM_PRMP", nullable = false, length = 6)
-    private String imPrmp;
 
     @Column(name = "ARRETE_NOMIN", nullable = false, length = 100)
     private String arreteNomin;

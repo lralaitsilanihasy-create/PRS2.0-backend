@@ -16,6 +16,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class PrmpDto {
 
+    /** Identifiant = matricule de la PRMP. */
     private String idPrmp;
 
     @NotBlank
@@ -25,10 +26,6 @@ public class PrmpDto {
     @NotBlank
     @Size(max = 100)
     private String prenomsPrmp;
-
-    @NotBlank
-    @Size(max = 6)
-    private String imPrmp;
 
     @NotBlank
     @Size(max = 100)

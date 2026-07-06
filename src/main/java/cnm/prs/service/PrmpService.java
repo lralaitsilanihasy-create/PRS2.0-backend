@@ -46,7 +46,6 @@ public class PrmpService {
                 .orElseThrow(() -> new ResourceNotFoundException("Prmp introuvable : " + id));
         existing.setNomPrmp(dto.getNomPrmp());
         existing.setPrenomsPrmp(dto.getPrenomsPrmp());
-        existing.setImPrmp(dto.getImPrmp());
         existing.setArreteNomin(dto.getArreteNomin());
         existing.setDateNomin(dto.getDateNomin());
         existing.setCin(dto.getCin());
