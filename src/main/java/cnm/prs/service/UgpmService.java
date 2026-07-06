@@ -77,6 +77,20 @@ public class UgpmService {
                 .orElseThrow(() -> new ResourceNotFoundException("UGPM introuvable : " + idUgpm + "."));
     }
 
+    /**
+     * Supprime une UGPM et son compte d'authentification (créés ensemble à {@link #creer}). Les dossiers
+     * qu'elle a créés restent la propriété de la PRMP de tutelle (leur {@code CREE_PAR} est une simple trace,
+     * pas une FK vers t_ugpm).
+     */
+    public void delete(String idUgpm) {
+        if (!ugpmRepository.existsById(idUgpm)) {
+            throw new ResourceNotFoundException("UGPM introuvable : " + idUgpm + ".");
+        }
+        compteRepository.deleteAll(
+                compteRepository.findByRefActeurAndTypeActeur(idUgpm, TypeActeur.UGPM.name()));
+        ugpmRepository.deleteById(idUgpm);
+    }
+
     private UgpmDto toDto(Ugpm u) {
         return new UgpmDto(u.getIdUgpm(), u.getLibelle(), u.getIdPrmpTutelle(), u.getNomUgpm(),
                 u.getPrenomsUgpm(), u.getCin(), u.getDateCin(), u.getLieuCin(),

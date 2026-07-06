@@ -3506,6 +3506,31 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("DELETE /api/ugpms/{id} : supprime l'UGPM et son compte ; id inconnu → 404")
+    void ugpm_delete() throws Exception {
+        String identite = "\"nomUgpm\":\"Rakoto\",\"prenomsUgpm\":\"Jean\","
+                + "\"cin\":\"101234567890\",\"dateCin\":\"2010-05-20\",\"lieuCin\":\"Antananarivo\","
+                + "\"emailUgpm\":\"ugpm@ex.mg\",\"telUgpm\":\"0340000000\",";
+        mvc.perform(post("/api/ugpms").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idUgpm\":\"UGPMD\",\"idPrmpTutelle\":\"PRMP001\"," + identite
+                        + "\"login\":\"ugpmd\",\"motDePasse\":\"Ugpm@1234\"}"))
+                .andExpect(status().isCreated());
+        org.junit.jupiter.api.Assertions.assertTrue(ugpmRepository.existsById("UGPMD"));
+        org.junit.jupiter.api.Assertions.assertTrue(compteAuthRepository.findByLogin("ugpmd").isPresent());
+
+        mvc.perform(delete("/api/ugpms/UGPMD").header("Authorization", tokenAdmin))
+                .andExpect(status().isNoContent());
+        // UGPM et compte associé supprimés.
+        org.junit.jupiter.api.Assertions.assertFalse(ugpmRepository.existsById("UGPMD"));
+        org.junit.jupiter.api.Assertions.assertTrue(compteAuthRepository.findByLogin("ugpmd").isEmpty());
+
+        // Id inconnu → 404.
+        mvc.perform(delete("/api/ugpms/INCONNU").header("Authorization", tokenAdmin))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
     @DisplayName("UGPM : création sans champ d'identité obligatoire (nomUgpm) → 400")
     void creation_ugpm_sans_identite_400() throws Exception {
         mvc.perform(post("/api/ugpms").header("Authorization", tokenAdmin)

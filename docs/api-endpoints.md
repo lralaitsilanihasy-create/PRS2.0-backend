@@ -1026,6 +1026,7 @@ dossier/PPM (désormais réservée Admin).
 | POST | /api/ugpms | `CreerUgpmRequest` (identité + compte) | `UgpmDto` | 201, 400, 403, 409 | **ADMINISTRATEUR** |
 | GET | /api/ugpms | — | `UgpmDto[]` | 200, 403 | **ADMINISTRATEUR** |
 | GET | /api/ugpms/{id} | — | `UgpmDto` | 200, 403, 404 | **ADMINISTRATEUR** |
+| DELETE | /api/ugpms/{id} | — | — | 204, 403, 404 | **ADMINISTRATEUR** |
 
 `CreerUgpmRequest` = `{idUgpm, libelle?, idPrmpTutelle, nomUgpm, prenomsUgpm, cin, dateCin (yyyy-MM-dd),
 lieuCin, emailUgpm, telUgpm, login, motDePasse}`. **`idUgpm` = matricule** de l'UGPM (identifiant unifié, comme
@@ -1036,6 +1037,9 @@ d'`idLocalite` : l'UGPM hérite du périmètre de sa PRMP de tutelle.
 `UgpmDto` = `{idUgpm, libelle, idPrmpTutelle, nomUgpm, prenomsUgpm, cin, dateCin, lieuCin, emailUgpm,
 telUgpm}`. **400** si un champ obligatoire manque/est trop long ; **409** si `idPrmpTutelle` inconnue, `idUgpm`
 déjà pris, ou `login` déjà utilisé.
+
+**DELETE** supprime l'UGPM **et son compte d'authentification** (créés ensemble) ; **404** si `idUgpm` inconnu.
+Les dossiers créés par l'UGPM **restent** la propriété de sa PRMP de tutelle (`CREE_PAR` est une trace, pas une FK).
 
 > ⚠️ **Règle ajoutée — PK attribuées par le serveur.** Les identifiants `dossier`/`PPM`/`marché` sont
 > **alloués par une séquence serveur** (`seq_dossier`/`seq_ppm`/`seq_marche`) ; tout id envoyé par le
