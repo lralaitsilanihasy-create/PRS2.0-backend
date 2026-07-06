@@ -12,6 +12,7 @@ import cnm.prs.entity.CompteAuth;
 import cnm.prs.entity.Ugpm;
 import cnm.prs.enums.TypeActeur;
 import cnm.prs.exception.BusinessRuleException;
+import cnm.prs.exception.ResourceNotFoundException;
 import cnm.prs.repository.CompteAuthRepository;
 import cnm.prs.repository.PrmpRepository;
 import cnm.prs.repository.UgpmRepository;
@@ -69,6 +70,12 @@ public class UgpmService {
     @Transactional(readOnly = true)
     public List<UgpmDto> findAll() {
         return ugpmRepository.findAll().stream().map(this::toDto).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public UgpmDto findById(String idUgpm) {
+        return ugpmRepository.findById(idUgpm).map(this::toDto)
+                .orElseThrow(() -> new ResourceNotFoundException("UGPM introuvable : " + idUgpm + "."));
     }
 
     private UgpmDto toDto(Ugpm u) {

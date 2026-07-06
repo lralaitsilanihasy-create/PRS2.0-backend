@@ -6,6 +6,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -39,5 +40,11 @@ public class UgpmController {
     @GetMapping
     public List<UgpmDto> findAll() {
         return service.findAll();
+    }
+
+    @PreAuthorize("hasRole('ADMINISTRATEUR')")
+    @GetMapping("/{id}")
+    public UgpmDto findById(@PathVariable String id) {
+        return service.findById(id);
     }
 }

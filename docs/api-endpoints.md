@@ -1026,6 +1026,7 @@ dossier/PPM (désormais réservée Admin).
 |---|---|---|---|---|---|
 | POST | /api/ugpms | `CreerUgpmRequest` (identité + compte) | `UgpmDto` | 201, 400, 403, 409 | **ADMINISTRATEUR** |
 | GET | /api/ugpms | — | `UgpmDto[]` | 200, 403 | **ADMINISTRATEUR** |
+| GET | /api/ugpms/{id} | — | `UgpmDto` | 200, 403, 404 | **ADMINISTRATEUR** |
 
 `CreerUgpmRequest` = `{idUgpm, libelle?, idPrmpTutelle, nomUgpm, prenomsUgpm, imUgpm, cin, dateCin (yyyy-MM-dd),
 lieuCin, emailUgpm, telUgpm, login, motDePasse}`. L'UGPM porte les **mêmes champs d'identité que la PRMP, sauf

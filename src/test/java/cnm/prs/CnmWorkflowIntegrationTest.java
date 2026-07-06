@@ -3483,6 +3483,30 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("GET /api/ugpms/{id} : lit une UGPM (identité) ; id inconnu → 404")
+    void ugpm_findById() throws Exception {
+        String identite = "\"nomUgpm\":\"Rakoto\",\"prenomsUgpm\":\"Jean\",\"imUgpm\":\"123456\","
+                + "\"cin\":\"101234567890\",\"dateCin\":\"2010-05-20\",\"lieuCin\":\"Antananarivo\","
+                + "\"emailUgpm\":\"ugpm@ex.mg\",\"telUgpm\":\"0340000000\",";
+        mvc.perform(post("/api/ugpms").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idUgpm\":\"UGPMG\",\"idPrmpTutelle\":\"PRMP001\"," + identite
+                        + "\"login\":\"ugpmg\",\"motDePasse\":\"Ugpm@1234\"}"))
+                .andExpect(status().isCreated());
+
+        mvc.perform(get("/api/ugpms/UGPMG").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.idUgpm").value("UGPMG"))
+                .andExpect(jsonPath("$.idPrmpTutelle").value("PRMP001"))
+                .andExpect(jsonPath("$.nomUgpm").value("Rakoto"))
+                .andExpect(jsonPath("$.emailUgpm").value("ugpm@ex.mg"));
+
+        // Id inconnu → 404.
+        mvc.perform(get("/api/ugpms/INCONNU").header("Authorization", tokenAdmin))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
     @DisplayName("UGPM : création sans champ d'identité obligatoire (nomUgpm) → 400")
     void creation_ugpm_sans_identite_400() throws Exception {
         mvc.perform(post("/api/ugpms").header("Authorization", tokenAdmin)
