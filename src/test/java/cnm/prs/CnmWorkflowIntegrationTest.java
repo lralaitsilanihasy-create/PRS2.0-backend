@@ -5065,6 +5065,92 @@ class CnmWorkflowIntegrationTest {
                 .andExpect(jsonPath("$.marches[1].previsions[0].dateDebut").value("2026-07-03"));
     }
 
+    @Test
+    @DisplayName("Import PPM — format MIDSP : en-tête multi-lignes ignoré, NATURE MAJ (dont 2 lignes), mode multi-lignes, multi-bénéficiaires, nouvMontEstim, PIP")
+    void importPpm_formatMidsp_ok() throws Exception {
+        natureRepository.save(new Nature(1, "FOURNITURES", null));
+        natureRepository.save(new Nature(2, "TRAVAUX", null));
+        natureRepository.save(new Nature(3, "PRESTATIONS DE SERVICE", null));
+
+        // Page 1 : en-tête doc + en-tête de colonnes ÉCLATÉ sur plusieurs lignes + 2 marchés.
+        String[] page1 = {
+                "PPM_26-488-0078 page 1/2 18/06/2026 05:55",
+                "PLAN DE PASSATION DES MARCHES POUR L'ANNEE 2026",
+                "Autorite Contractante: MINISTERE DE L'INDUSTRIALISATION ET DU DEVELOPPEMENT DU",
+                "SECTEUR PRIVE",
+                "Nom de la PRMP: RAHERIVELO Fanja - MIDSP",
+                "Date d'etablissement du Document initial: 03/02/2026",
+                "NATURE OBJET", "MONTANT", "ESTIMATIF", "INITIAL", "NOUVEAU", "MONTANT", "ESTIMATIF",
+                "MODE DE PASSATION FINAN-", "CEMENT", "Informations sur le Beneficiaire DATE",
+                "SERVICE", "BENEFICIAIRE COMPTE",
+                // Marché 1 : NATURE MAJ seule, OBJET multi-lignes, 2 bénéficiaires (anc + nouv), nouvMontEstim.
+                "FOURNITURES",
+                "Fourniture de cartes recharges",
+                "telephoniques pour le Ministere",
+                "645 442 000.00 645 442 000.00 ACHAT DIRECT RPI",
+                "00-34-0-A00-00000",
+                "00-34-0-B00-00000",
+                "6263",
+                "35 000 000.00",
+                "25 000 000.00",
+                "35 000 000.00",
+                "25 000 000.00",
+                "22/06/2026 29/06/2026 30/06/2026",
+                // Marché 2 : mode sur 2 lignes (CONSULTATION DE / PRIX OUVERTE), 1 bénéficiaire (anc + nouv).
+                "TRAVAUX",
+                "Travaux d'entretien de batiments",
+                "53 200 000.00 107 000 000.00 CONSULTATION DE",
+                "PRIX OUVERTE",
+                "RPI 00-34-0-B10-00000 6211 53 200 000.00 107 000 000.00 29/06/2026 10/07/2026 22/07/2026",
+                "Fait a Antananarivo le _ _/_ _/_ _ _ _" };
+        // Page 2 : NATURE sur 2 lignes, financement PIP, 1 bénéficiaire SANS nouveau montant, pas de nouvMontEstim.
+        String[] page2 = {
+                "PPM_26-488-0078 page 2/2 18/06/2026 05:55",
+                "PRESTATIONS DE",
+                "SERVICE",
+                "Frais de colloque pour le Ministere",
+                "20 000 000.00 CONSULTATION DE PRIX OUVERTE PIP 00-34-0-D00-00000 6225 20 000 000.00 22/06/2026 02/07/2026 13/07/2026",
+                "Fait a Antananarivo le 03 fevrier 2026",
+                "LA PERSONNE RESPONSABLE DES MARCHES PUBLICS" };
+
+        byte[] pdf = pdfMultiPages(page1, page2);
+        mvc.perform(multipart("/api/saisies/ppm/import")
+                .file(new MockMultipartFile("fichier", "ppm.pdf", "application/pdf", pdf))
+                .header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                // Autorité contractante recomposée sur 2 lignes.
+                .andExpect(jsonPath("$.autoriteContractante").value("MINISTERE DE L'INDUSTRIALISATION ET DU DEVELOPPEMENT DU SECTEUR PRIVE"))
+                .andExpect(jsonPath("$.marches", hasSize(3)))
+                // Marché 1 : nature MAJ, nouvMontEstim capté, 2 bénéficiaires alignés (anc + nouv), compte partagé.
+                .andExpect(jsonPath("$.marches[0].natureLibelle").value("FOURNITURES"))
+                .andExpect(jsonPath("$.marches[0].idNature").value(1))
+                .andExpect(jsonPath("$.marches[0].modeLibelle").value("ACHAT DIRECT"))
+                .andExpect(jsonPath("$.marches[0].financement").value("RPI"))
+                .andExpect(jsonPath("$.marches[0].montEstim").value(645442000.00))
+                .andExpect(jsonPath("$.marches[0].nouvMontEstim").value(645442000.00))
+                .andExpect(jsonPath("$.marches[0].designationMarche").value("Fourniture de cartes recharges telephoniques pour le Ministere"))
+                .andExpect(jsonPath("$.marches[0].beneficiaires", hasSize(2)))
+                .andExpect(jsonPath("$.marches[0].beneficiaires[0].soaCode").value("00-34-0-A00-00000"))
+                .andExpect(jsonPath("$.marches[0].beneficiaires[0].numCompte").value("6263"))
+                .andExpect(jsonPath("$.marches[0].beneficiaires[0].ancMontBenef").value(35000000.00))
+                .andExpect(jsonPath("$.marches[0].beneficiaires[0].nouvMontBenef").value(35000000.00))
+                .andExpect(jsonPath("$.marches[0].beneficiaires[1].soaCode").value("00-34-0-B00-00000"))
+                .andExpect(jsonPath("$.marches[0].beneficiaires[1].ancMontBenef").value(25000000.00))
+                // Marché 2 : mode recomposé sur 2 lignes + nouvMontEstim.
+                .andExpect(jsonPath("$.marches[1].natureLibelle").value("TRAVAUX"))
+                .andExpect(jsonPath("$.marches[1].modeLibelle").value("CONSULTATION DE PRIX OUVERTE"))
+                .andExpect(jsonPath("$.marches[1].nouvMontEstim").value(107000000.00))
+                .andExpect(jsonPath("$.marches[1].beneficiaires", hasSize(1)))
+                // Marché 3 : NATURE sur 2 lignes, financement PIP, 1 bénéficiaire SANS nouveau montant.
+                .andExpect(jsonPath("$.marches[2].natureLibelle").value("PRESTATIONS DE SERVICE"))
+                .andExpect(jsonPath("$.marches[2].idNature").value(3))
+                .andExpect(jsonPath("$.marches[2].financement").value("PIP"))
+                .andExpect(jsonPath("$.marches[2].nouvMontEstim").value(nullValue()))
+                .andExpect(jsonPath("$.marches[2].beneficiaires", hasSize(1)))
+                .andExpect(jsonPath("$.marches[2].beneficiaires[0].ancMontBenef").value(20000000.00))
+                .andExpect(jsonPath("$.marches[2].beneficiaires[0].nouvMontBenef").value(nullValue()));
+    }
+
     /** PDF multi-pages (PDFBox) : une page physique par tableau de lignes — pour tester le parsing multi-pages. */
     private byte[] pdfMultiPages(String[]... pages) throws Exception {
         try (org.apache.pdfbox.pdmodel.PDDocument doc = new org.apache.pdfbox.pdmodel.PDDocument()) {

@@ -1082,21 +1082,27 @@ Les dossiers créés par l'UGPM **restent** la propriété de sa PRMP de tutelle
 > création-à-la-volée se fait au `POST /api/saisies/ppm`. PDF illisible / non-PDF / sans texte → **400** (message
 > clair, pas de données partielles silencieuses).
 >
-> **Parsing du tableau (calibré sur le format officiel `PPM_26-…`).** Le tableau commence à la ligne
-> d'en-tête des colonnes (`NATURE OBJET MONTANT …`) et se termine à la **dernière** occurrence de « **Fait à … le …** »
-> (ou « La personne responsable ») ; le bloc d'en-tête du document (titre, `PPM_…`, `Autorité Contractante`,
-> `Nom de la PRMP`, `Adresse`, `Date d'établissement`, mises à jour) est ignoré. Chaque ligne de données donne :
-> **`OBJET` recomposé** (cellule multi-lignes), `montEstim` (`nouvMontEstim` si présent), `mode`/`financement`,
-> **1 bénéficiaire** (`soaCode`, `numCompte`, `ancMontBenef`), et **3 prévisions**
-> `LANCEMENT`/`OUVERTURE`/`ATTRIBUTION` (dates `dd/MM/yyyy` → ISO). La `NATURE` en tête de ligne est reconnue via
-> un vocabulaire (`Fournitures et services`, `Travaux`, …) ; nature/mode hors référentiel (ex. « Achat Direct »)
-> → `id*` `null` + libellé conservé + avertissement.
+> **Parsing du tableau — sémantique par enregistrement** (calibré sur `PPM_26-…` **et** `PPM_26-488-…` MIDSP).
+> L'extraction **démarre à la 1ʳᵉ `NATURE` connue** (l'en-tête des colonnes, **même éclaté sur 30+ lignes** —
+> `MONTANT`/`ESTIMATIF`/`INITIAL` etc. sur des lignes séparées — est ainsi ignoré) et se termine à la **dernière**
+> « **Fait à … le …** » (ou « La personne responsable »). Chaque **enregistrement** (délimité par une `NATURE`) est
+> **recomposé** (lignes jointes) puis lu **par position** : `NATURE` → `OBJET` (avant le 1ᵉʳ montant) →
+> `montEstim [nouvMontEstim]` → `mode` (**multi-mots/multi-lignes**, ex. « Consultation de prix ouverte ») +
+> `financement` (dernier mot avant le 1ᵉʳ SOA, ex. `RPI`/`PIP`) → **codes SOA** → `compte` → **montants
+> bénéficiaires** → **3 prévisions** `LANCEMENT`/`OUVERTURE`/`ATTRIBUTION` (`dd/MM/yyyy` → ISO).
 >
-> **Multi-pages.** Toutes les pages du PDF sont lues. Le bornage sur la **dernière** « Fait à … » (et non la
-> première) évite qu'un pied de page répété tronque le tableau dès la page 1. Les éléments **rejoués à chaque
-> page** — en-tête et sous-en-tête des colonnes (`NATURE OBJET MONTANT …`, `SERVICE BÉNÉFICIAIRE …`), filigrane
-> (`powered by …`), numéro de page (`Page n [sur m]`, `n / m`), et « Fait à … » intermédiaire — sont **ignorés**.
-> Un `OBJET` qui se poursuit après un saut de page est **recomposé** correctement.
+> **Multi-bénéficiaires.** Un marché peut porter **plusieurs bénéficiaires** (colonnes SOA/compte/montants aplaties
+> verticalement par l'extraction) : `n` codes SOA et `K` montants ⇒ `K = 2n` (ancien **et** nouveau montant par
+> bénéficiaire) ou `K = n` (ancien seul) ; le `compte` est partagé. `beneficiaires[]` est renvoyé complet.
+>
+> **`NATURE`** reconnue en **MAJUSCULES** (`FOURNITURES`, `TRAVAUX`, `PRESTATIONS DE SERVICE` — y compris **sur 2
+> lignes**) comme en casse « titre » (`Fournitures et services`, `Travaux`, …). **Autorité contractante** sur
+> plusieurs lignes **recomposée** (lignes en majuscules jusqu'à la prochaine étiquette). Nature/mode hors
+> référentiel → `id*` `null` + libellé conservé + avertissement.
+>
+> **Multi-pages.** Toutes les pages sont lues ; le bornage sur la **dernière** « Fait à … » évite qu'un pied de
+> page répété tronque le tableau. En-têtes/sous-en-têtes de colonnes rejoués, filigrane (`powered by …`), numéro
+> de page (`Page n [sur m]`, `n / m`, en-tête courant `PPM_… page n/m`) et « Fait à … » intermédiaire sont **ignorés**.
 
 **`SaisiePpmRequest`** — crée dossier (type PPM) + PPM + lignes de marché (mode **auto**) :
 
