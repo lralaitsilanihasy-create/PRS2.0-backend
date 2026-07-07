@@ -20,7 +20,7 @@ public class PrmpDto {
     private String idPrmp;
 
     @NotBlank
-    @Size(max = 50)
+    @Size(max = 100)
     private String nomPrmp;
 
     @NotBlank

@@ -16,7 +16,7 @@ public class ControleurDto {
 
     private String imControleur;
 
-    @Size(max = 50)
+    @Size(max = 100)
     private String nomCont;
 
     @Size(max = 100)

@@ -5152,6 +5152,26 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("nomPrmp élargi : 60 car. accepté à la création PRMP (était 400 à 50) ; >100 → 400")
+    void prmp_nomLong_accepte() throws Exception {
+        String nom60 = "R".repeat(60);
+        String reste = "\"prenomsPrmp\":\"Jean\",\"arreteNomin\":\"ARR-1\",\"dateNomin\":\"2024-01-15\","
+                + "\"cin\":\"101011112222\",\"dateCin\":\"2010-05-05\",\"lieuCin\":\"Antananarivo\","
+                + "\"emailPrmp\":\"a@b.mg\",\"telPrmp\":\"0330000001\"}";
+        mvc.perform(post("/api/prmps").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idPrmp\":\"IMNOM1\",\"nomPrmp\":\"" + nom60 + "\"," + reste))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.nomPrmp").value(nom60));
+
+        // Au-delà de 100 → 400 (borne).
+        mvc.perform(post("/api/prmps").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idPrmp\":\"IMNOM2\",\"nomPrmp\":\"" + "R".repeat(101) + "\"," + reste))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     @DisplayName("Champs élargis : libelleEntite jusqu'à 150 accepté (intitulé de ministère long, 69 car.) ; >150 → 400")
     void entite_libelleLong_accepte() throws Exception {
         String ministere = "MINISTERE DE L'INDUSTRIALISATION ET DU DEVELOPPEMENT DU SECTEUR PRIVE"; // 68 car.

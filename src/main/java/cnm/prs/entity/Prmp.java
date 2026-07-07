@@ -25,7 +25,7 @@ public class Prmp {
     @Column(name = "ID_PRMP", nullable = false, length = 10)
     private String idPrmp;
 
-    @Column(name = "NOM_PRMP", nullable = false, length = 50)
+    @Column(name = "NOM_PRMP", nullable = false, length = 100)
     private String nomPrmp;
 
     @Column(name = "PRENOMS_PRMP", nullable = false, length = 100)

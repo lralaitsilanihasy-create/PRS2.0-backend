@@ -27,7 +27,7 @@ public class Controleur {
     @Column(name = "IM_CONTROLEUR", nullable = false, length = 7)
     private String imControleur;
 
-    @Column(name = "NOM_CONT", length = 50)
+    @Column(name = "NOM_CONT", length = 100)
     private String nomCont;
 
     @Column(name = "PRENOMS_CONT", length = 100)
