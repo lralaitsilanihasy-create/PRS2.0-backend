@@ -1026,6 +1026,7 @@ dossier/PPM (désormais réservée Admin).
 | POST | /api/ugpms | `CreerUgpmRequest` (identité + compte) | `UgpmDto` | 201, 400, 403, 409 | **ADMINISTRATEUR** |
 | GET | /api/ugpms | — | `UgpmDto[]` | 200, 403 | **ADMINISTRATEUR** |
 | GET | /api/ugpms/{id} | — | `UgpmDto` | 200, 403, 404 | **ADMINISTRATEUR** |
+| PUT | /api/ugpms/{id} | `ModifierUgpmRequest` | `UgpmDto` | 200, 400, 403, 404, 409 | **ADMINISTRATEUR** |
 | DELETE | /api/ugpms/{id} | — | — | 204, 403, 404 | **ADMINISTRATEUR** |
 
 `CreerUgpmRequest` = `{idUgpm, libelle?, idPrmpTutelle, nomUgpm, prenomsUgpm, cin, dateCin (yyyy-MM-dd),
@@ -1037,6 +1038,11 @@ d'`idLocalite` : l'UGPM hérite du périmètre de sa PRMP de tutelle.
 `UgpmDto` = `{idUgpm, libelle, idPrmpTutelle, nomUgpm, prenomsUgpm, cin, dateCin, lieuCin, emailUgpm,
 telUgpm}`. **400** si un champ obligatoire manque/est trop long ; **409** si `idPrmpTutelle` inconnue, `idUgpm`
 déjà pris, ou `login` déjà utilisé.
+
+`ModifierUgpmRequest` = `{libelle?, idPrmpTutelle, nomUgpm, prenomsUgpm, cin, dateCin, lieuCin, emailUgpm,
+telUgpm}` — **champs métier éditables uniquement** : ni `idUgpm` (matricule, porté par l'URL, non modifiable),
+ni `login`/`motDePasse` (gestion du compte, hors contrat). **PUT** met à jour ces champs et renvoie le `UgpmDto`
+à jour ; **404** si `idUgpm` inconnu, **409** si la nouvelle `idPrmpTutelle` est inconnue (réaffectation possible).
 
 **DELETE** supprime l'UGPM **et son compte d'authentification** (créés ensemble) ; **404** si `idUgpm` inconnu.
 Les dossiers créés par l'UGPM **restent** la propriété de sa PRMP de tutelle (`CREE_PAR` est une trace, pas une FK).

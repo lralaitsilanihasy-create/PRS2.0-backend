@@ -3506,6 +3506,46 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("PUT /api/ugpms/{id} : modifie les champs métier ; id inconnu → 404 ; tutelle inconnue → 409")
+    void ugpm_modifier() throws Exception {
+        String identite = "\"nomUgpm\":\"Rakoto\",\"prenomsUgpm\":\"Jean\","
+                + "\"cin\":\"101234567890\",\"dateCin\":\"2010-05-20\",\"lieuCin\":\"Antananarivo\","
+                + "\"emailUgpm\":\"ugpm@ex.mg\",\"telUgpm\":\"0340000000\",";
+        mvc.perform(post("/api/ugpms").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idUgpm\":\"UGPMM\",\"libelle\":\"Avant\",\"idPrmpTutelle\":\"PRMP001\"," + identite
+                        + "\"login\":\"ugpmm\",\"motDePasse\":\"Ugpm@1234\"}"))
+                .andExpect(status().isCreated());
+
+        // Modification des champs métier (libellé + identité).
+        String modif = "{\"libelle\":\"Apres\",\"idPrmpTutelle\":\"PRMP001\",\"nomUgpm\":\"Randria\","
+                + "\"prenomsUgpm\":\"Paul\",\"cin\":\"101234567890\",\"dateCin\":\"2011-06-21\","
+                + "\"lieuCin\":\"Toamasina\",\"emailUgpm\":\"ugpm.new@ex.mg\",\"telUgpm\":\"0341112222\"}";
+        mvc.perform(put("/api/ugpms/UGPMM").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content(modif))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.idUgpm").value("UGPMM"))       // PK inchangée
+                .andExpect(jsonPath("$.libelle").value("Apres"))
+                .andExpect(jsonPath("$.nomUgpm").value("Randria"))
+                .andExpect(jsonPath("$.emailUgpm").value("ugpm.new@ex.mg"))
+                .andExpect(jsonPath("$.lieuCin").value("Toamasina"));
+
+        // Le compte n'est pas touché par la modification.
+        org.junit.jupiter.api.Assertions.assertTrue(compteAuthRepository.findByLogin("ugpmm").isPresent());
+
+        // Id inconnu → 404.
+        mvc.perform(put("/api/ugpms/INCONNU").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content(modif))
+                .andExpect(status().isNotFound());
+
+        // Tutelle inconnue → 409.
+        String modifNope = modif.replace("\"idPrmpTutelle\":\"PRMP001\"", "\"idPrmpTutelle\":\"NOPE\"");
+        mvc.perform(put("/api/ugpms/UGPMM").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content(modifNope))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
     @DisplayName("DELETE /api/ugpms/{id} : supprime l'UGPM et son compte ; id inconnu → 404")
     void ugpm_delete() throws Exception {
         String identite = "\"nomUgpm\":\"Rakoto\",\"prenomsUgpm\":\"Jean\","

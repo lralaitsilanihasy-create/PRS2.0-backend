@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import cnm.prs.dto.CreerUgpmRequest;
+import cnm.prs.dto.ModifierUgpmRequest;
 import cnm.prs.dto.UgpmDto;
 import cnm.prs.entity.CompteAuth;
 import cnm.prs.entity.Ugpm;
@@ -75,6 +76,28 @@ public class UgpmService {
     public UgpmDto findById(String idUgpm) {
         return ugpmRepository.findById(idUgpm).map(this::toDto)
                 .orElseThrow(() -> new ResourceNotFoundException("UGPM introuvable : " + idUgpm + "."));
+    }
+
+    /**
+     * Modifie les champs métier d'une UGPM (identité, libellé, PRMP de tutelle). L'identifiant (matricule)
+     * et le compte d'authentification ne sont pas touchés. La nouvelle PRMP de tutelle doit exister.
+     */
+    public UgpmDto modifier(String idUgpm, ModifierUgpmRequest req) {
+        Ugpm ugpm = ugpmRepository.findById(idUgpm)
+                .orElseThrow(() -> new ResourceNotFoundException("UGPM introuvable : " + idUgpm + "."));
+        if (!prmpRepository.existsById(req.idPrmpTutelle())) {
+            throw new BusinessRuleException("PRMP de tutelle inconnue : " + req.idPrmpTutelle() + ".");
+        }
+        ugpm.setLibelle(req.libelle());
+        ugpm.setIdPrmpTutelle(req.idPrmpTutelle());
+        ugpm.setNomUgpm(req.nomUgpm());
+        ugpm.setPrenomsUgpm(req.prenomsUgpm());
+        ugpm.setCin(req.cin());
+        ugpm.setDateCin(req.dateCin());
+        ugpm.setLieuCin(req.lieuCin());
+        ugpm.setEmailUgpm(req.emailUgpm());
+        ugpm.setTelUgpm(req.telUgpm());
+        return toDto(ugpmRepository.save(ugpm));
     }
 
     /**
