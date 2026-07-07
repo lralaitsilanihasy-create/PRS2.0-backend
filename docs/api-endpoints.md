@@ -2374,7 +2374,7 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` et une `dateFi
 | idPpm | number | Oui (PK, au POST) | clé primaire |
 | idDossier | number | Oui | @NotNull |
 | exercice | number | Oui | @NotNull |
-| signataire | string | Oui | @NotBlank, max 150 (auto-rempli « prénoms + nom » PRMP ; idem `EditionPpmRequest`) |
+| signataire | string | Oui | @NotBlank, max 210 (auto-rempli « prénoms + nom » PRMP, couvre prénoms 100 + nom 100 + marge ; idem `EditionPpmRequest`) |
 | dateSignature | string (date) | Oui | @NotNull |
 | datePpmInit | string (date) | Non | |
 | numMajPrec | number | Non | |

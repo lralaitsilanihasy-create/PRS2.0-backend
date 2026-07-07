@@ -39,7 +39,7 @@ public class Ppm {
     @Column(name = "EXERCICE", nullable = false)
     private Integer exercice;
 
-    @Column(name = "SIGNATAIRE", nullable = false, length = 150)
+    @Column(name = "SIGNATAIRE", nullable = false, length = 210)
     private String signataire;
 
     @Column(name = "DATE_SIGNATURE", nullable = false)

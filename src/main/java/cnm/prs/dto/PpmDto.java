@@ -25,7 +25,7 @@ public class PpmDto {
     private Integer exercice;
 
     @NotBlank
-    @Size(max = 150)
+    @Size(max = 210)
     private String signataire;
 
     @NotNull
