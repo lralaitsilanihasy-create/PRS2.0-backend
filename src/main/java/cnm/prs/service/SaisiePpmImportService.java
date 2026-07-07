@@ -54,8 +54,24 @@ public class SaisiePpmImportService {
 
     /** Ligne d'en-tête des colonnes : marque le début du tableau (les données suivent). */
     private static final Pattern ENTETE_COLONNES = Pattern.compile("(?i)nature\\s+objet\\s+montant");
-    /** Fin du tableau. */
-    private static final Pattern FIN_TABLEAU = Pattern.compile("(?i)^\\s*(fait\\s+[aàâä]\\b|la\\s+personne\\s+responsable|powered\\s+by)");
+    /**
+     * Fin <strong>structurelle</strong> du tableau : bloc signature. Multi-pages : on borne à la
+     * <strong>dernière</strong> occurrence (un « Fait à … » répété en pied de chaque page ne doit pas tronquer).
+     */
+    private static final Pattern FIN_TABLEAU = Pattern.compile("(?i)^\\s*(fait\\s+[aàâä]\\b|la\\s+personne\\s+responsable)");
+    /**
+     * Bruit de page <strong>répété</strong> à ignorer dans le tableau (multi-pages) : en-tête et sous-en-tête
+     * des colonnes rejoués, filigrane, numéro de page, et pied « Fait à … » intermédiaire (seul le dernier borne).
+     */
+    private static final Pattern BRUIT_PAGE = Pattern.compile(
+            "(?i)^\\s*(nature\\s+objet\\s+montant"
+                    + "|service\\s+b[eé]n[eé]ficiaire"
+                    + "|powered\\s+by"
+                    + "|page\\s+\\d"
+                    + "|fait\\s+[aàâä]\\b"
+                    + "|la\\s+personne\\s+responsable"
+                    + "|\\d{1,3}\\s*/\\s*\\d{1,3}\\s*$"
+                    + "|\\d{1,3}\\s*$)");
 
     /** Nature en tête d'une ligne de données (vocabulaire PPM, ordonné du plus long au plus court). */
     private static final Pattern NATURE_TETE = Pattern.compile(
@@ -192,7 +208,7 @@ public class SaisiePpmImportService {
         String[] lignes = texte.split("\\r?\\n");
         int debut = -1;
         for (int i = 0; i < lignes.length; i++) {
-            if (ENTETE_COLONNES.matcher(lignes[i]).find()) {
+            if (ENTETE_COLONNES.matcher(lignes[i]).find()) {   // premier en-tête de colonnes = début du tableau
                 debut = i + 1;
                 break;
             }
@@ -201,17 +217,23 @@ public class SaisiePpmImportService {
             avert.add("En-tête du tableau (NATURE | OBJET | …) introuvable — aucune ligne extraite.");
             return List.of();
         }
+        // Multi-pages : le tableau se termine à la DERNIÈRE fin structurelle (« Fait à … » / « La personne
+        // responsable »), pas à la première — sinon un pied de page répété tronquerait le tableau dès la page 1.
+        int fin = lignes.length;
+        for (int i = lignes.length - 1; i >= debut; i--) {
+            if (FIN_TABLEAU.matcher(lignes[i].trim()).find()) {
+                fin = i;
+                break;
+            }
+        }
 
         List<MarcheImport> marches = new ArrayList<>();
         List<String> objet = new ArrayList<>();
         String natureLibelle = null;
-        for (int i = debut; i < lignes.length; i++) {
+        for (int i = debut; i < fin; i++) {
             String l = lignes[i].trim();
-            if (l.isEmpty()) {
+            if (l.isEmpty() || BRUIT_PAGE.matcher(l).find()) {   // en-tête/sous-en-tête/n° page/filigrane/pied répétés
                 continue;
-            }
-            if (FIN_TABLEAU.matcher(l).find()) {
-                break;
             }
             Matcher donnees = LIGNE_DONNEES.matcher(l);
             if (donnees.matches() && !objet.isEmpty()) {

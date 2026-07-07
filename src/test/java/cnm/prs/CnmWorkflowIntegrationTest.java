@@ -5022,6 +5022,75 @@ class CnmWorkflowIntegrationTest {
                 .andExpect(jsonPath("$.avertissements[?(@ =~ /.*Achat Direct.*/)]", hasSize(1)));
     }
 
+    @Test
+    @DisplayName("Import PPM PDF multi-pages : les 2 pages sont lues (en-tête/pied répétés ignorés, borne sur le dernier « Fait à … »)")
+    void importPpm_multiPages_ok() throws Exception {
+        natureRepository.save(new Nature(1, "Travaux", null));
+        natureRepository.save(new Nature(2, "Fournitures", null));
+
+        // Page 1 : en-tête doc + tableau (1 marché), puis pied de page RÉPÉTÉ (« Fait à … » + n° de page).
+        String[] page1 = {
+                "PLAN DE PASSATION DES MARCHES POUR L'ANNEE 2026",
+                "Autorite Contractante: MINISTERE TEST",
+                "Date d'etablissement du Document initial: 14/04/2026",
+                "NATURE OBJET MONTANT ESTIMATIF INITIAL",
+                "SERVICE BENEFICIAIRE COMPTE MONTANT ESTIMATIF PAR BENEFICIAIRE",
+                "Travaux Travaux de fabrication et",
+                "installation des etageres",
+                "5 550 000.00 Achat Direct RPI 00-21-0-J00-00000 6211 5 550 000.00 01/06/2026 02/06/2026 12/06/2026",
+                "Fait a Antananarivo le 14 avril 2026",   // pied répété : NE doit PAS clore le tableau
+                "Page 1 sur 2" };
+        // Page 2 : en-tête de colonnes REJOUÉ, 2e marché, puis pied final (dernier « Fait à … » = vraie fin).
+        String[] page2 = {
+                "NATURE OBJET MONTANT ESTIMATIF INITIAL",
+                "SERVICE BENEFICIAIRE COMPTE MONTANT ESTIMATIF PAR BENEFICIAIRE",
+                "Fournitures Fournitures de bureau",
+                "diverses",
+                "1 200 000.00 Appel d'Offres RPI 00-21-0-J00-00001 6212 1 200 000.00 03/07/2026 04/07/2026 14/07/2026",
+                "Fait a Antananarivo le 14 avril 2026",
+                "Page 2 sur 2" };
+
+        byte[] pdf = pdfMultiPages(page1, page2);
+        mvc.perform(multipart("/api/saisies/ppm/import")
+                .file(new MockMultipartFile("fichier", "ppm.pdf", "application/pdf", pdf))
+                .header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                // Les DEUX marchés (page 1 et page 2) sont lus.
+                .andExpect(jsonPath("$.marches", hasSize(2)))
+                .andExpect(jsonPath("$.marches[0].designationMarche").value("Travaux de fabrication et installation des etageres"))
+                .andExpect(jsonPath("$.marches[0].natureLibelle").value("Travaux"))
+                .andExpect(jsonPath("$.marches[1].designationMarche").value("Fournitures de bureau diverses"))
+                .andExpect(jsonPath("$.marches[1].natureLibelle").value("Fournitures"))
+                .andExpect(jsonPath("$.marches[1].modeLibelle").value("Appel d'Offres"))
+                .andExpect(jsonPath("$.marches[1].previsions[0].dateDebut").value("2026-07-03"));
+    }
+
+    /** PDF multi-pages (PDFBox) : une page physique par tableau de lignes — pour tester le parsing multi-pages. */
+    private byte[] pdfMultiPages(String[]... pages) throws Exception {
+        try (org.apache.pdfbox.pdmodel.PDDocument doc = new org.apache.pdfbox.pdmodel.PDDocument()) {
+            for (String[] lignes : pages) {
+                org.apache.pdfbox.pdmodel.PDPage page = new org.apache.pdfbox.pdmodel.PDPage();
+                doc.addPage(page);
+                try (org.apache.pdfbox.pdmodel.PDPageContentStream cs =
+                        new org.apache.pdfbox.pdmodel.PDPageContentStream(doc, page)) {
+                    cs.beginText();
+                    cs.setFont(new org.apache.pdfbox.pdmodel.font.PDType1Font(
+                            org.apache.pdfbox.pdmodel.font.Standard14Fonts.FontName.HELVETICA), 11);
+                    cs.setLeading(16f);
+                    cs.newLineAtOffset(50, 750);
+                    for (String l : lignes) {
+                        cs.showText(l);
+                        cs.newLine();
+                    }
+                    cs.endText();
+                }
+            }
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            doc.save(out);
+            return out.toByteArray();
+        }
+    }
+
     /** Génère en mémoire un PDF (PDFBox) contenant les lignes de texte fournies — pour tester le parsing d'import. */
     private byte[] pdfAvecTexte(String... lignes) throws Exception {
         try (org.apache.pdfbox.pdmodel.PDDocument doc = new org.apache.pdfbox.pdmodel.PDDocument()) {

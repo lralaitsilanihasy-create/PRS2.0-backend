@@ -1082,14 +1082,21 @@ Les dossiers créés par l'UGPM **restent** la propriété de sa PRMP de tutelle
 > création-à-la-volée se fait au `POST /api/saisies/ppm`. PDF illisible / non-PDF / sans texte → **400** (message
 > clair, pas de données partielles silencieuses).
 >
-> **Parsing du tableau (calibré sur le format officiel `PPM_26-…`).** Le tableau est délimité par la ligne
-> d'en-tête des colonnes (`NATURE OBJET MONTANT …`) et se termine avant « **Fait à … le …** » ; le bloc d'en-tête
-> du document (titre, `PPM_…`, `Autorité Contractante`, `Nom de la PRMP`, `Adresse`, `Date d'établissement`, mises
-> à jour) est ignoré. Chaque ligne de données donne : **`OBJET` recomposé** (cellule multi-lignes), `montEstim`
-> (`nouvMontEstim` si présent), `mode`/`financement`, **1 bénéficiaire** (`soaCode`, `numCompte`, `ancMontBenef`),
-> et **3 prévisions** `LANCEMENT`/`OUVERTURE`/`ATTRIBUTION` (dates `dd/MM/yyyy` → ISO). La `NATURE` en tête de
-> ligne est reconnue via un vocabulaire (`Fournitures et services`, `Travaux`, …) ; nature/mode hors référentiel
-> (ex. « Achat Direct ») → `id*` `null` + libellé conservé + avertissement.
+> **Parsing du tableau (calibré sur le format officiel `PPM_26-…`).** Le tableau commence à la ligne
+> d'en-tête des colonnes (`NATURE OBJET MONTANT …`) et se termine à la **dernière** occurrence de « **Fait à … le …** »
+> (ou « La personne responsable ») ; le bloc d'en-tête du document (titre, `PPM_…`, `Autorité Contractante`,
+> `Nom de la PRMP`, `Adresse`, `Date d'établissement`, mises à jour) est ignoré. Chaque ligne de données donne :
+> **`OBJET` recomposé** (cellule multi-lignes), `montEstim` (`nouvMontEstim` si présent), `mode`/`financement`,
+> **1 bénéficiaire** (`soaCode`, `numCompte`, `ancMontBenef`), et **3 prévisions**
+> `LANCEMENT`/`OUVERTURE`/`ATTRIBUTION` (dates `dd/MM/yyyy` → ISO). La `NATURE` en tête de ligne est reconnue via
+> un vocabulaire (`Fournitures et services`, `Travaux`, …) ; nature/mode hors référentiel (ex. « Achat Direct »)
+> → `id*` `null` + libellé conservé + avertissement.
+>
+> **Multi-pages.** Toutes les pages du PDF sont lues. Le bornage sur la **dernière** « Fait à … » (et non la
+> première) évite qu'un pied de page répété tronque le tableau dès la page 1. Les éléments **rejoués à chaque
+> page** — en-tête et sous-en-tête des colonnes (`NATURE OBJET MONTANT …`, `SERVICE BÉNÉFICIAIRE …`), filigrane
+> (`powered by …`), numéro de page (`Page n [sur m]`, `n / m`), et « Fait à … » intermédiaire — sont **ignorés**.
+> Un `OBJET` qui se poursuit après un saut de page est **recomposé** correctement.
 
 **`SaisiePpmRequest`** — crée dossier (type PPM) + PPM + lignes de marché (mode **auto**) :
 
