@@ -2484,9 +2484,13 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` et une `dateFi
 | GET | /api/prmps/{id} | — | `PrmpDto` | 200, 404 | Authentifié |
 | POST | /api/prmps | `PrmpDto` | `PrmpDto` | 201, 400, 403 | ADMINISTRATEUR |
 | PUT | /api/prmps/{id} | `PrmpDto` | `PrmpDto` | 200, 400, 404 | ADMINISTRATEUR |
-| DELETE | /api/prmps/{id} | — | — | 204, 404 | ADMINISTRATEUR |
+| DELETE | /api/prmps/{id} | — | — | 204, 404, 409 | ADMINISTRATEUR |
 
-`{id}` = idPrmp (string).
+`{id}` = idPrmp (= matricule ; string).
+
+> **DELETE** supprime la PRMP **et son compte d'authentification**. **Garde** : **409** tant que la PRMP porte des
+> données liées (dossiers, PPM, entités rattachées, demandes de retrait, indicateurs, ou UGPM de tutelle) — retirer
+> d'abord ces éléments ; **404** si l'`idPrmp` est inconnu.
 
 **Exemple — requête**
 ```json

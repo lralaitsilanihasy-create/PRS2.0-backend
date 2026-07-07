@@ -5172,6 +5172,33 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("DELETE /api/prmps/{id} : PRMP sans données → 204 (+ compte supprimé) ; avec dossier → 409 ; inconnue → 404")
+    void prmp_delete_gardeEtCompte() throws Exception {
+        // PRMP « propre » (aucune donnée liée) + son compte d'authentification.
+        prmpRepository.save(prmp("PRMPDEL", "ANT"));
+        compteAuthRepository.save(new cnm.prs.entity.CompteAuth("prmpdel", "x",
+                cnm.prs.enums.TypeActeur.PRMP.name(), "PRMPDEL", true));
+
+        mvc.perform(delete("/api/prmps/PRMPDEL").header("Authorization", tokenAdmin))
+                .andExpect(status().isNoContent());
+        org.junit.jupiter.api.Assertions.assertFalse(prmpRepository.existsById("PRMPDEL"));
+        org.junit.jupiter.api.Assertions.assertTrue(compteAuthRepository.findByLogin("prmpdel").isEmpty());
+
+        // PRMP avec un dossier lié → 409 (garde), la PRMP subsiste.
+        prmpRepository.save(prmp("PRMPDEL2", "ANT"));
+        Dossier d = dossier(970, "BROUILLON");
+        d.setIdPrmp("PRMPDEL2");
+        dossierRepository.save(d);
+        mvc.perform(delete("/api/prmps/PRMPDEL2").header("Authorization", tokenAdmin))
+                .andExpect(status().isConflict());
+        org.junit.jupiter.api.Assertions.assertTrue(prmpRepository.existsById("PRMPDEL2"));
+
+        // Inconnue → 404.
+        mvc.perform(delete("/api/prmps/INCONNU").header("Authorization", tokenAdmin))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
     @DisplayName("Champs élargis : libelleEntite jusqu'à 150 accepté (intitulé de ministère long, 69 car.) ; >150 → 400")
     void entite_libelleLong_accepte() throws Exception {
         String ministere = "MINISTERE DE L'INDUSTRIALISATION ET DU DEVELOPPEMENT DU SECTEUR PRIVE"; // 68 car.

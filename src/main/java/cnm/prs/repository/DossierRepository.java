@@ -25,6 +25,9 @@ public interface DossierRepository extends JpaRepository<Dossier, Integer> {
     /** Nombre de dossiers d'une PRMP à un statut donné (compteurs du menu PRMP). */
     long countByStatutAndIdPrmp(String statut, String idPrmp);
 
+    /** Existe-t-il au moins un dossier appartenant à cette PRMP ? (garde de suppression PRMP) */
+    boolean existsByIdPrmp(String idPrmp);
+
     /** Nombre de dossiers d'une PRMP dans un ensemble de statuts (ex. vérifiés : PV_SIGNE/CLOTURE). */
     long countByStatutInAndIdPrmp(java.util.Collection<String> statuts, String idPrmp);
 
