@@ -27,7 +27,7 @@ public class EntiteContract {
     @Column(name = "ID_ENTITE_CONTRACT", nullable = false)
     private Integer idEntiteContract;
 
-    @Column(name = "LIBELLE_ENTITE", nullable = false, length = 50)
+    @Column(name = "LIBELLE_ENTITE", nullable = false, length = 150)
     private String libelleEntite;
 
     @Column(name = "ADRESSE", nullable = false, length = 200)

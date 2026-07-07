@@ -10,7 +10,7 @@ import jakarta.validation.constraints.Size;
  */
 public record EntiteNonListeeRequest(
 
-        @NotBlank @Size(max = 50) String libelle,
+        @NotBlank @Size(max = 150) String libelle,
 
         @NotBlank @Size(max = 200) String adresse,
 

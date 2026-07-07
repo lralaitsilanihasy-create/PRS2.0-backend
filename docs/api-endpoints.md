@@ -1229,7 +1229,7 @@ Les dossiers créés par l'UGPM **restent** la propriété de sa PRMP de tutelle
 | Champ (JSON) | Type | Obligatoire | Contraintes |
 |---|---|---|---|
 | idEntiteContract | number | Oui (PK, au POST) | clé primaire |
-| libelleEntite | string | Oui | @NotBlank, max 50 |
+| libelleEntite | string | Oui | @NotBlank, max 150 (aligné sur `libelleMinistere`) |
 | adresse | string | Oui | @NotBlank, max 200 |
 | categorieEntite | string | Non | max 20 |
 | idOrganigramme | number | Oui | @NotNull |
@@ -2374,7 +2374,7 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` et une `dateFi
 | idPpm | number | Oui (PK, au POST) | clé primaire |
 | idDossier | number | Oui | @NotNull |
 | exercice | number | Oui | @NotNull |
-| signataire | string | Oui | @NotBlank, max 50 |
+| signataire | string | Oui | @NotBlank, max 150 (auto-rempli « prénoms + nom » PRMP ; idem `EditionPpmRequest`) |
 | dateSignature | string (date) | Oui | @NotNull |
 | datePpmInit | string (date) | Non | |
 | numMajPrec | number | Non | |

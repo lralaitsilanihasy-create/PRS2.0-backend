@@ -18,7 +18,7 @@ public class EntiteContractDto {
     private Integer idEntiteContract;
 
     @NotBlank
-    @Size(max = 50)
+    @Size(max = 150)
     private String libelleEntite;
 
     @NotBlank

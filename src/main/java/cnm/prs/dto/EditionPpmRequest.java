@@ -20,7 +20,7 @@ public record EditionPpmRequest(
         Integer exercice,
 
         @NotBlank
-        @Size(max = 50)
+        @Size(max = 150)
         String signataire,
 
         @NotNull

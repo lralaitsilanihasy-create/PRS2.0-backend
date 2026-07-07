@@ -5151,6 +5151,25 @@ class CnmWorkflowIntegrationTest {
                 .andExpect(jsonPath("$.marches[2].beneficiaires[0].nouvMontBenef").value(nullValue()));
     }
 
+    @Test
+    @DisplayName("Champs élargis : libelleEntite jusqu'à 150 accepté (intitulé de ministère long, 69 car.) ; >150 → 400")
+    void entite_libelleLong_accepte() throws Exception {
+        String ministere = "MINISTERE DE L'INDUSTRIALISATION ET DU DEVELOPPEMENT DU SECTEUR PRIVE"; // 68 car.
+        mvc.perform(post("/api/entite-contracts").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idEntiteContract\":950,\"libelleEntite\":\"" + ministere
+                        + "\",\"adresse\":\"Anosy\",\"idOrganigramme\":1}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.libelleEntite").value(ministere));
+
+        // Au-delà de 150 → 400 (borne).
+        mvc.perform(post("/api/entite-contracts").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idEntiteContract\":951,\"libelleEntite\":\"" + "X".repeat(151)
+                        + "\",\"adresse\":\"Anosy\",\"idOrganigramme\":1}"))
+                .andExpect(status().isBadRequest());
+    }
+
     /** PDF multi-pages (PDFBox) : une page physique par tableau de lignes — pour tester le parsing multi-pages. */
     private byte[] pdfMultiPages(String[]... pages) throws Exception {
         try (org.apache.pdfbox.pdmodel.PDDocument doc = new org.apache.pdfbox.pdmodel.PDDocument()) {
