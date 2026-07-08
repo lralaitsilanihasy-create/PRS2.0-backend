@@ -6,14 +6,19 @@ import java.util.List;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import cnm.prs.dto.CreerUgpmRequest;
 import cnm.prs.dto.ModifierUgpmRequest;
+import cnm.prs.dto.PieceJointeMetaDto;
 import cnm.prs.dto.SuppressionLotResult;
 import cnm.prs.dto.UgpmDto;
 import cnm.prs.entity.CompteAuth;
+import cnm.prs.entity.PieceJointe;
 import cnm.prs.entity.Ugpm;
 import cnm.prs.enums.TypeActeur;
+import cnm.prs.enums.TypePieceJointe;
+import cnm.prs.exception.BadRequestException;
 import cnm.prs.exception.BusinessRuleException;
 import cnm.prs.exception.ResourceNotFoundException;
 import cnm.prs.repository.CompteAuthRepository;
@@ -32,13 +37,16 @@ public class UgpmService {
     private final PrmpRepository prmpRepository;
     private final CompteAuthRepository compteRepository;
     private final PasswordEncoder passwordEncoder;
+    private final PieceJointeService pieceJointeService;
 
     public UgpmService(UgpmRepository ugpmRepository, PrmpRepository prmpRepository,
-            CompteAuthRepository compteRepository, PasswordEncoder passwordEncoder) {
+            CompteAuthRepository compteRepository, PasswordEncoder passwordEncoder,
+            PieceJointeService pieceJointeService) {
         this.ugpmRepository = ugpmRepository;
         this.prmpRepository = prmpRepository;
         this.compteRepository = compteRepository;
         this.passwordEncoder = passwordEncoder;
+        this.pieceJointeService = pieceJointeService;
     }
 
     public UgpmDto creer(CreerUgpmRequest req) {
@@ -67,6 +75,60 @@ public class UgpmService {
         compteRepository.save(new CompteAuth(req.login(), passwordEncoder.encode(req.motDePasse()),
                 TypeActeur.UGPM.name(), req.idUgpm(), true));
         return toDto(ugpm);
+    }
+
+    /**
+     * Création avec pièces <strong>optionnelles</strong> (miroir PRMP, sans arrêté) : crée l'UGPM + son compte,
+     * puis stocke la {@code CIN} et/ou la {@code PHOTO} sous la clé {@code idUgpm}. Transactionnel : un fichier
+     * invalide (type/taille) annule la création (400).
+     */
+    public UgpmDto creerAvecPieces(CreerUgpmRequest req, MultipartFile cin, MultipartFile photo) {
+        UgpmDto cree = creer(req);
+        stockerSiPresente(req.idUgpm(), TypePieceJointe.CIN, cin);
+        stockerSiPresente(req.idUgpm(), TypePieceJointe.PHOTO, photo);
+        return cree;
+    }
+
+    /**
+     * Dépose (ou remplace) une pièce d'une UGPM. {@code type} limité à {@code CIN}/{@code PHOTO}
+     * ({@code ARRETE_NOMIN} → 400, l'UGPM n'a pas d'arrêté). <strong>404</strong> si l'UGPM est inconnue.
+     */
+    public PieceJointeMetaDto deposerPiece(String idUgpm, TypePieceJointe type, MultipartFile fichier) {
+        exigerTypeUgpm(type);
+        if (!ugpmRepository.existsById(idUgpm)) {
+            throw new ResourceNotFoundException("UGPM introuvable : " + idUgpm + ".");
+        }
+        return stockerPiece(idUgpm, type, fichier);
+    }
+
+    /** Récupère une pièce d'une UGPM pour téléchargement. {@code ARRETE_NOMIN} → 400 ; pièce absente → 404. */
+    @Transactional(readOnly = true)
+    public PieceJointe telechargerPiece(String idUgpm, TypePieceJointe type) {
+        exigerTypeUgpm(type);
+        return pieceJointeService.telecharger(idUgpm, type);
+    }
+
+    private void stockerSiPresente(String idUgpm, TypePieceJointe type, MultipartFile fichier) {
+        if (fichier != null && !fichier.isEmpty()) {
+            stockerPiece(idUgpm, type, fichier);
+        }
+    }
+
+    /** Stocke la pièce puis refuse une PHOTO qui n'est pas une image (JPEG/PNG) → 400 (rollback). */
+    private PieceJointeMetaDto stockerPiece(String idUgpm, TypePieceJointe type, MultipartFile fichier) {
+        PieceJointeMetaDto meta = pieceJointeService.stocker(idUgpm, type, fichier);
+        if (type == TypePieceJointe.PHOTO && "application/pdf".equals(meta.format())) {
+            throw new BadRequestException("La photo doit être une image (JPEG ou PNG), pas un PDF.");
+        }
+        return meta;
+    }
+
+    /** L'UGPM n'a pas d'arrêté de nomination : seules les pièces CIN et PHOTO sont autorisées. */
+    private void exigerTypeUgpm(TypePieceJointe type) {
+        if (type == TypePieceJointe.ARRETE_NOMIN) {
+            throw new BadRequestException(
+                    "L'UGPM n'a pas d'arrêté de nomination ; pièces autorisées : CIN, PHOTO.");
+        }
     }
 
     @Transactional(readOnly = true)

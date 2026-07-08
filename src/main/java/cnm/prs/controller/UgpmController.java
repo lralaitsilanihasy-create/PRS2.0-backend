@@ -2,7 +2,9 @@ package cnm.prs.controller;
 
 import java.util.List;
 
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -12,13 +14,18 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import cnm.prs.dto.CreerUgpmRequest;
 import cnm.prs.dto.ModifierUgpmRequest;
+import cnm.prs.dto.PieceJointeMetaDto;
 import cnm.prs.dto.SuppressionLotResult;
 import cnm.prs.dto.SuppressionLotUgpmRequest;
 import cnm.prs.dto.UgpmDto;
+import cnm.prs.entity.PieceJointe;
+import cnm.prs.enums.TypePieceJointe;
 import cnm.prs.service.UgpmService;
 import jakarta.validation.Valid;
 
@@ -36,9 +43,47 @@ public class UgpmController {
     }
 
     @PreAuthorize("hasRole('ADMINISTRATEUR')")
-    @PostMapping
+    @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<UgpmDto> creer(@Valid @RequestBody CreerUgpmRequest req) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.creer(req));
+    }
+
+    /**
+     * Création <strong>multipart</strong> avec pièces <strong>optionnelles</strong> (miroir PRMP, sans arrêté) :
+     * part {@code data} (JSON = {@code CreerUgpmRequest}) + parts {@code cin}/{@code photo}. Contraintes fichiers :
+     * PDF/JPEG/PNG (magic-bytes), ≤ 5 Mo ; la photo doit être une image (JPEG/PNG). Sinon 400.
+     */
+    @PreAuthorize("hasRole('ADMINISTRATEUR')")
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<UgpmDto> creerAvecPieces(
+            @Valid @RequestPart("data") CreerUgpmRequest req,
+            @RequestPart(value = "cin", required = false) MultipartFile cin,
+            @RequestPart(value = "photo", required = false) MultipartFile photo) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(service.creerAvecPieces(req, cin, photo));
+    }
+
+    /**
+     * Dépose (ou remplace) une pièce d'une UGPM. {@code type} ∈ {@code CIN}/{@code PHOTO}
+     * ({@code ARRETE_NOMIN} → 400). <strong>404</strong> si l'UGPM est inconnue.
+     */
+    @PreAuthorize("hasRole('ADMINISTRATEUR')")
+    @PostMapping(value = "/{id}/pieces/{type}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public PieceJointeMetaDto deposerPiece(@PathVariable String id, @PathVariable TypePieceJointe type,
+            @RequestPart("fichier") MultipartFile fichier) {
+        return service.deposerPiece(id, type, fichier);
+    }
+
+    /** Téléchargement d'une pièce d'une UGPM. {@code ARRETE_NOMIN} → 400 ; pièce absente → 404. */
+    @PreAuthorize("hasRole('ADMINISTRATEUR')")
+    @GetMapping("/{id}/pieces/{type}")
+    public ResponseEntity<byte[]> telechargerPiece(@PathVariable String id, @PathVariable TypePieceJointe type) {
+        PieceJointe piece = service.telechargerPiece(id, type);
+        String format = piece.getFormat() != null ? piece.getFormat() : MediaType.APPLICATION_OCTET_STREAM_VALUE;
+        String nom = piece.getLibelle() != null ? piece.getLibelle() : id + "_" + type;
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(format))
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + nom + "\"")
+                .body(piece.getContenu());
     }
 
     @PreAuthorize("hasRole('ADMINISTRATEUR')")

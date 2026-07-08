@@ -1049,13 +1049,16 @@ dossier/PPM (désormais réservée Admin).
 
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
-| POST | /api/ugpms | `CreerUgpmRequest` (identité + compte) | `UgpmDto` | 201, 400, 403, 409 | **ADMINISTRATEUR** |
+| POST | /api/ugpms | `CreerUgpmRequest` (**JSON**, identité + compte) | `UgpmDto` | 201, 400, 403, 409 | **ADMINISTRATEUR** |
+| POST | /api/ugpms | **`multipart/form-data`** : part `data` (JSON `CreerUgpmRequest`) + `cin`/`photo` (opt.) | `UgpmDto` | 201, 400, 403, 409 | **ADMINISTRATEUR** |
 | GET | /api/ugpms | — | `UgpmDto[]` | 200, 403 | **ADMINISTRATEUR** |
 | GET | /api/ugpms/{id} | — | `UgpmDto` | 200, 403, 404 | **ADMINISTRATEUR** |
 | GET | /api/ugpms/par-tutelle/{idPrmp} | — | `UgpmDto[]` | 200, 403 | **ADMINISTRATEUR** |
 | PUT | /api/ugpms/{id} | `ModifierUgpmRequest` | `UgpmDto` | 200, 400, 403, 404, 409 | **ADMINISTRATEUR** |
 | DELETE | /api/ugpms/{id} | — | — | 204, 403, 404 | **ADMINISTRATEUR** |
 | POST | /api/ugpms/suppression-lot | `SuppressionLotUgpmRequest` `{matricules[]}` | `SuppressionLotResult` | 200, 400, 403 | **ADMINISTRATEUR** |
+| POST | /api/ugpms/{id}/pieces/{type} | `multipart/form-data` (part `fichier`) ; `type` ∈ `CIN`/`PHOTO` | `PieceJointeMetaDto` | 200, 400, 403, 404 | **ADMINISTRATEUR** |
+| GET | /api/ugpms/{id}/pieces/{type} | — ; `type` ∈ `CIN`/`PHOTO` | fichier (binaire) | 200, 400, 403, 404 | **ADMINISTRATEUR** |
 
 `CreerUgpmRequest` = `{idUgpm, libelle?, idPrmpTutelle, nomUgpm, prenomsUgpm, cin, dateCin (yyyy-MM-dd),
 lieuCin, emailUgpm, telUgpm, login, motDePasse}`. **`idUgpm` = matricule** de l'UGPM (identifiant unifié, comme
@@ -1081,6 +1084,15 @@ Les dossiers créés par l'UGPM **restent** la propriété de sa PRMP de tutelle
 `{matricules: string[]}` (au moins un, sinon **400**) → **200** `SuppressionLotResult` = `{supprimes: string[],
 introuvables: string[]}`. Chaque UGPM existante est supprimée (avec son compte) ; les matricules absents sont
 listés dans `introuvables` — **jamais d'échec global**. Doublons ignorés.
+
+**Pièces jointes (CIN + photo, pas d'arrêté).** En plus de la variante **JSON pure** (rétro-compatible), `POST
+/api/ugpms` accepte une variante **`multipart/form-data`** : part `data` (JSON = `CreerUgpmRequest`) + parts
+`cin`/`photo` **optionnelles**. On peut aussi **déposer/remplacer** une pièce ultérieurement via `POST
+/api/ugpms/{id}/pieces/{type}` (part `fichier`) et la **télécharger** via `GET /api/ugpms/{id}/pieces/{type}`. Les
+pièces sont stockées sous la clé `idUgpm`. Miroir de la PRMP, **sans arrêté** : l'UGPM n'a pas d'arrêté de nomination
+→ `type` limité à **`CIN`/`PHOTO`** ; `ARRETE_NOMIN` → **400**. Contraintes fichiers : **PDF/JPEG/PNG** (magic-bytes),
+**≤ 5 Mo** chacune ; la **photo doit être une image** (JPEG/PNG, un PDF → **400**). Fichier absent/invalide/trop
+volumineux → **400** (annule la création si multipart) ; **404** si l'UGPM ou la pièce est inconnue.
 
 > ⚠️ **Règle ajoutée — PK attribuées par le serveur.** Les identifiants `dossier`/`PPM`/`marché` sont
 > **alloués par une séquence serveur** (`seq_dossier`/`seq_ppm`/`seq_marche`) ; tout id envoyé par le

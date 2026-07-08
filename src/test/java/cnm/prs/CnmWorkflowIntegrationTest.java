@@ -3486,6 +3486,74 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("POST /api/ugpms multipart : fiche + pièces CIN/PHOTO (pas d'arrêté) ; GET pièce ; CIN>5Mo/ARRETE/photo-PDF → 400 ; non-admin → 403")
+    void ugpm_creationAvecPieces() throws Exception {
+        String identite = "\"nomUgpm\":\"Rakoto\",\"prenomsUgpm\":\"Jean\","
+                + "\"cin\":\"101234567890\",\"dateCin\":\"2010-05-20\",\"lieuCin\":\"Antananarivo\","
+                + "\"emailUgpm\":\"ugpm@ex.mg\",\"telUgpm\":\"0340000000\",";
+        byte[] dataJson = ("{\"idUgpm\":\"UGPJ\",\"libelle\":\"UGPM Pieces\",\"idPrmpTutelle\":\"PRMP001\"," + identite
+                + "\"login\":\"ugpj\",\"motDePasse\":\"Ugpm@1234\"}").getBytes(StandardCharsets.UTF_8);
+        byte[] jpeg = { (byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0, 0, 0, 0 };
+        byte[] png = { (byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0 };
+        byte[] pdf = "%PDF-1.4 pas une image".getBytes(StandardCharsets.US_ASCII);
+
+        // --- Écritures/lectures réussies d'abord (une exception métier marque la tx rollback-only). ---
+        // Création multipart : data JSON + CIN (JPEG) + photo (PNG). Pas d'arrêté.
+        mvc.perform(multipart("/api/ugpms").header("Authorization", tokenAdmin)
+                .file(new MockMultipartFile("data", "", "application/json", dataJson))
+                .file(new MockMultipartFile("cin", "cin.jpg", "image/jpeg", jpeg))
+                .file(new MockMultipartFile("photo", "photo.png", "image/png", png)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.idUgpm").value("UGPJ"));
+
+        // JSON pur (sans pièces) → 201 (rétro-compat).
+        mvc.perform(post("/api/ugpms").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idUgpm\":\"UGPJ2\",\"libelle\":\"X\",\"idPrmpTutelle\":\"PRMP001\"," + identite
+                        + "\"login\":\"ugpj2\",\"motDePasse\":\"Ugpm@1234\"}"))
+                .andExpect(status().isCreated());
+
+        // Téléchargement des pièces stockées (CIN + PHOTO).
+        mvc.perform(get("/api/ugpms/UGPJ/pieces/CIN").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.IMAGE_JPEG));
+        mvc.perform(get("/api/ugpms/UGPJ/pieces/PHOTO").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.IMAGE_PNG));
+
+        // --- Cas d'erreur ensuite. ---
+        // Non-admin → 403 (sous-chemin sécurisé par @PreAuthorize).
+        mvc.perform(get("/api/ugpms/UGPJ/pieces/CIN").header("Authorization", tokenPrmp))
+                .andExpect(status().isForbidden());
+
+        // Pièce absente → 404.
+        mvc.perform(get("/api/ugpms/INCONNU/pieces/CIN").header("Authorization", tokenAdmin))
+                .andExpect(status().isNotFound());
+
+        // type = ARRETE_NOMIN → 400 (l'UGPM n'a pas d'arrêté), au dépôt comme au téléchargement.
+        mvc.perform(multipart("/api/ugpms/UGPJ/pieces/ARRETE_NOMIN").header("Authorization", tokenAdmin)
+                .file(new MockMultipartFile("fichier", "a.pdf", "application/pdf", pdf)))
+                .andExpect(status().isBadRequest());
+        mvc.perform(get("/api/ugpms/UGPJ/pieces/ARRETE_NOMIN").header("Authorization", tokenAdmin))
+                .andExpect(status().isBadRequest());
+
+        // Photo = image seulement : un PDF en PHOTO → 400.
+        mvc.perform(multipart("/api/ugpms/UGPJ/pieces/PHOTO").header("Authorization", tokenAdmin)
+                .file(new MockMultipartFile("fichier", "p.pdf", "application/pdf", pdf)))
+                .andExpect(status().isBadRequest());
+
+        // CIN > 5 Mo → 400 (contrôle de taille au niveau service).
+        byte[] gros = new byte[6 * 1024 * 1024];
+        gros[0] = (byte) 0xFF; gros[1] = (byte) 0xD8; gros[2] = (byte) 0xFF;   // JPEG magic
+        byte[] data3 = ("{\"idUgpm\":\"UGPJ3\",\"libelle\":\"X\",\"idPrmpTutelle\":\"PRMP001\"," + identite
+                + "\"login\":\"ugpj3\",\"motDePasse\":\"Ugpm@1234\"}").getBytes(StandardCharsets.UTF_8);
+        mvc.perform(multipart("/api/ugpms").header("Authorization", tokenAdmin)
+                .file(new MockMultipartFile("data", "", "application/json", data3))
+                .file(new MockMultipartFile("cin", "cin.jpg", "image/jpeg", gros)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     @DisplayName("GET /api/ugpms/{id} : lit une UGPM (identité) ; id inconnu → 404")
     void ugpm_findById() throws Exception {
         String identite = "\"nomUgpm\":\"Rakoto\",\"prenomsUgpm\":\"Jean\","
