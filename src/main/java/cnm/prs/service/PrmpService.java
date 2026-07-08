@@ -64,6 +64,15 @@ public class PrmpService {
         return PrmpMapper.toDto(entity);
     }
 
+    /**
+     * PRMP rattachées à une localité <strong>via leurs entités contractantes actives</strong> (la PRMP n'a pas
+     * de localité propre). Liste distincte, éventuellement vide.
+     */
+    @Transactional(readOnly = true)
+    public List<PrmpDto> findByLocalite(String idLocalite) {
+        return repository.findByLocaliteViaEntitesActives(idLocalite).stream().map(PrmpMapper::toDto).toList();
+    }
+
     public PrmpDto create(PrmpDto dto) {
         Prmp entity = PrmpMapper.toEntity(dto);
         return PrmpMapper.toDto(repository.save(entity));

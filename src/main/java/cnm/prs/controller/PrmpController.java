@@ -44,6 +44,12 @@ public class PrmpController {
         return service.findById(id);
     }
 
+    /** PRMP rattachées à une localité via leurs entités contractantes actives (liste, vide si aucune). */
+    @GetMapping("/par-localite/{idLocalite}")
+    public List<PrmpDto> findByLocalite(@PathVariable String idLocalite) {
+        return service.findByLocalite(idLocalite);
+    }
+
     @PostMapping
     public ResponseEntity<PrmpDto> create(@Valid @RequestBody PrmpDto dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.create(dto));

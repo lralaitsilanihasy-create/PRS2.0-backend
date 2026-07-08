@@ -5302,6 +5302,25 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("GET /api/prmps/par-localite/{idLocalite} : PRMP via entités contractantes ACTIVES ; inactif exclu ; localité sans PRMP → vide")
+    void prmp_parLocalite() throws Exception {
+        // Seed : PRMP001 rattachée (ACTIVE) à l'entité 1 (ANT). On ajoute PRMPINA rattachée à ANT mais INACTIVE.
+        prmpRepository.save(prmp("PRMPINA", "ANT"));
+        entiteContractRepository.save(entite(951, 1, "ANT"));
+        prmpEntiteRepository.save(prmpEntite(9510, "PRMPINA", 951, false));
+
+        mvc.perform(get("/api/prmps/par-localite/ANT").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].idPrmp", hasItem("PRMP001")))          // rattachement actif → présent
+                .andExpect(jsonPath("$[?(@.idPrmp=='PRMPINA')]", hasSize(0)));    // rattachement inactif → exclu
+
+        // Localité sans aucune entité rattachée → liste vide (filtre, pas de 404).
+        mvc.perform(get("/api/prmps/par-localite/ZZ").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+    }
+
+    @Test
     @DisplayName("DELETE /api/prmps/{id} : PRMP sans données → 204 (+ compte supprimé) ; avec dossier → 409 ; inconnue → 404")
     void prmp_delete_gardeEtCompte() throws Exception {
         // PRMP « propre » (aucune donnée liée) + son compte d'authentification.
