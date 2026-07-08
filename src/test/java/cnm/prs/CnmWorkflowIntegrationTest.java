@@ -5301,6 +5301,24 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("GET /api/controleurs/par-superieur/{imSuperieur} : subordonnés directs ; supérieur sans subordonné → vide")
+    void controleur_parSuperieur() throws Exception {
+        // Un subordonné dont le supérieur hiérarchique est CTRCC1.
+        Controleur sub = controleur("CTRSUB", 5, "ANT");
+        sub.setIdSuperieur("CTRCC1");
+        controleurRepository.save(sub);
+
+        mvc.perform(get("/api/controleurs/par-superieur/CTRCC1").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].imControleur", hasItem("CTRSUB")));
+
+        // Contrôleur sans subordonné → liste vide (filtre, pas de 404).
+        mvc.perform(get("/api/controleurs/par-superieur/CTRSUB").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+    }
+
+    @Test
     @DisplayName("POST /api/controleurs/suppression-lot : tolérant → bilan supprimes/introuvables/bloques ; vide → 400 ; non-admin → 403")
     void controleur_suppressionLot() throws Exception {
         // Contrôleur « propre » (aucune activité) + compte. CTRMEM (seed) est membre de l'examen 1 → bloqué.

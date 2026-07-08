@@ -87,6 +87,12 @@ public class ControleurService {
         return repository.findByIdProfile(idProfile).stream().map(ControleurMapper::toDto).toList();
     }
 
+    /** Subordonnés directs d'un contrôleur ({@code idSuperieur} = imSuperieur). Liste, vide si aucun. */
+    @Transactional(readOnly = true)
+    public List<ControleurDto> findBySuperieur(String imSuperieur) {
+        return repository.findByIdSuperieur(imSuperieur).stream().map(ControleurMapper::toDto).toList();
+    }
+
     public ControleurDto create(ControleurDto dto) {
         Controleur entity = ControleurMapper.toEntity(dto);
         return ControleurMapper.toDto(repository.save(entity));

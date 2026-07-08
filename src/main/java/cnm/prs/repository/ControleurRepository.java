@@ -23,4 +23,7 @@ public interface ControleurRepository extends JpaRepository<Controleur, String> 
 
     /** Ce contrôleur est-il le supérieur hiérarchique d'un autre ? (garde de suppression) */
     boolean existsByIdSuperieur(String idSuperieur);
+
+    /** Contrôleurs dont le supérieur hiérarchique est {@code imSuperieur} (ses subordonnés directs). */
+    List<Controleur> findByIdSuperieur(String idSuperieur);
 }

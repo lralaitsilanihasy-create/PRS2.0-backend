@@ -448,6 +448,8 @@ utilisateur (ex. mot de passe oublié) ; l'utilisateur pourra ensuite le changer
 si aucun (pas de 404) ; les **transversaux** (contrôleur à localité nulle, ex. Président/Publication) sont **exclus**.
 `GET /par-profil/{idProfile}` liste les contrôleurs d'un **profil** (rôle, `tr_profile` : 1 PRMP… 8 Administrateur,
 9 Assistant contrôleur) — liste **vide** si aucun (pas de 404).
+`GET /par-superieur/{imSuperieur}` liste les **subordonnés directs** d'un contrôleur (ceux dont `ID_SUPERIEUR = imSuperieur`)
+— liste **vide** si aucun (pas de 404).
 
 **Champs `ControleurDto`**
 
@@ -471,6 +473,7 @@ si aucun (pas de 404) ; les **transversaux** (contrôleur à localité nulle, ex
 | GET | /api/controleurs/{id} | — | `ControleurDto` | 200, 404 | Authentifié |
 | GET | /api/controleurs/par-localite/{idLocalite} | — | `ControleurDto[]` | 200 | Authentifié |
 | GET | /api/controleurs/par-profil/{idProfile} | — | `ControleurDto[]` | 200 | Authentifié |
+| GET | /api/controleurs/par-superieur/{imSuperieur} | — | `ControleurDto[]` | 200 | Authentifié |
 | POST | /api/controleurs | `ControleurDto` | `ControleurDto` | 201, 400, 403 | ADMINISTRATEUR |
 | PUT | /api/controleurs/{id} | `ControleurDto` | `ControleurDto` | 200, 400, 403, 404 | ADMINISTRATEUR |
 | DELETE | /api/controleurs/{id} | — | — | 204, 403, 404, 409 | ADMINISTRATEUR |

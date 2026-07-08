@@ -56,6 +56,12 @@ public class ControleurController {
         return service.findByProfil(idProfile);
     }
 
+    /** Subordonnés directs d'un contrôleur (ceux dont le supérieur = imSuperieur ; liste, vide si aucun). */
+    @GetMapping("/par-superieur/{imSuperieur}")
+    public List<ControleurDto> findBySuperieur(@PathVariable String imSuperieur) {
+        return service.findBySuperieur(imSuperieur);
+    }
+
     @PostMapping
     public ResponseEntity<ControleurDto> create(@Valid @RequestBody ControleurDto dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.create(dto));
