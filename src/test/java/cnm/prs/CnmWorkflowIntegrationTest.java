@@ -3462,7 +3462,8 @@ class CnmWorkflowIntegrationTest {
                 .andExpect(jsonPath("$.idPrmpTutelle").value("PRMP001"))
                 .andExpect(jsonPath("$.nomUgpm").value("Rakoto"))
                 .andExpect(jsonPath("$.dateCin").value("2010-05-20"))
-                .andExpect(jsonPath("$.emailUgpm").value("ugpm@ex.mg"));
+                .andExpect(jsonPath("$.emailUgpm").value("ugpm@ex.mg"))
+                .andExpect(jsonPath("$.login").value("ugpmx"));   // login exposé (lecture seule)
         org.junit.jupiter.api.Assertions.assertTrue(ugpmRepository.existsById("UGPMX"));
         org.junit.jupiter.api.Assertions.assertTrue(compteAuthRepository.findByLogin("ugpmx").isPresent());
 
@@ -3498,7 +3499,8 @@ class CnmWorkflowIntegrationTest {
                 .andExpect(jsonPath("$.idUgpm").value("UGPMG"))
                 .andExpect(jsonPath("$.idPrmpTutelle").value("PRMP001"))
                 .andExpect(jsonPath("$.nomUgpm").value("Rakoto"))
-                .andExpect(jsonPath("$.emailUgpm").value("ugpm@ex.mg"));
+                .andExpect(jsonPath("$.emailUgpm").value("ugpm@ex.mg"))
+                .andExpect(jsonPath("$.login").value("ugpmg"));   // login exposé (lecture seule)
 
         // Id inconnu → 404.
         mvc.perform(get("/api/ugpms/INCONNU").header("Authorization", tokenAdmin))
@@ -3528,7 +3530,8 @@ class CnmWorkflowIntegrationTest {
                 .andExpect(jsonPath("$.libelle").value("Apres"))
                 .andExpect(jsonPath("$.nomUgpm").value("Randria"))
                 .andExpect(jsonPath("$.emailUgpm").value("ugpm.new@ex.mg"))
-                .andExpect(jsonPath("$.lieuCin").value("Toamasina"));
+                .andExpect(jsonPath("$.lieuCin").value("Toamasina"))
+                .andExpect(jsonPath("$.login").value("ugpmm"));      // login inchangé, exposé (lecture seule)
 
         // Le compte n'est pas touché par la modification.
         org.junit.jupiter.api.Assertions.assertTrue(compteAuthRepository.findByLogin("ugpmm").isPresent());

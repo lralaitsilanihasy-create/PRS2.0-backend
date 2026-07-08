@@ -115,8 +115,11 @@ public class UgpmService {
     }
 
     private UgpmDto toDto(Ugpm u) {
+        // Login du compte associé (REF_ACTEUR = idUgpm) — lecture seule, pour la réinitialisation du mot de passe.
+        String login = compteRepository.findByRefActeurAndTypeActeur(u.getIdUgpm(), TypeActeur.UGPM.name())
+                .stream().map(CompteAuth::getLogin).findFirst().orElse(null);
         return new UgpmDto(u.getIdUgpm(), u.getLibelle(), u.getIdPrmpTutelle(), u.getNomUgpm(),
                 u.getPrenomsUgpm(), u.getCin(), u.getDateCin(), u.getLieuCin(),
-                u.getEmailUgpm(), u.getTelUgpm());
+                u.getEmailUgpm(), u.getTelUgpm(), login);
     }
 }

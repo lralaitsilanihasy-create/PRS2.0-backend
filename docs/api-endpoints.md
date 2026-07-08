@@ -1036,8 +1036,10 @@ d'identité que la PRMP, sauf `arreteNomin`/`dateNomin`** ; tous obligatoires (`
 d'`idLocalite` : l'UGPM hérite du périmètre de sa PRMP de tutelle.
 
 `UgpmDto` = `{idUgpm, libelle, idPrmpTutelle, nomUgpm, prenomsUgpm, cin, dateCin, lieuCin, emailUgpm,
-telUgpm}`. **400** si un champ obligatoire manque/est trop long ; **409** si `idPrmpTutelle` inconnue, `idUgpm`
-déjà pris, ou `login` déjà utilisé.
+telUgpm, login}`. **`login`** est le login du compte associé, **exposé en lecture seule** (GET/POST/PUT) — pour
+pré-remplir la réinitialisation du mot de passe côté admin (`POST /api/comptes-auth/{login}/reinitialiser-mot-de-passe`) ;
+le **mot de passe n'est jamais exposé**. **400** si un champ obligatoire manque/est trop long ; **409** si
+`idPrmpTutelle` inconnue, `idUgpm` déjà pris, ou `login` déjà utilisé.
 
 `ModifierUgpmRequest` = `{libelle?, idPrmpTutelle, nomUgpm, prenomsUgpm, cin, dateCin, lieuCin, emailUgpm,
 telUgpm}` — **champs métier éditables uniquement** : ni `idUgpm` (matricule, porté par l'URL, non modifiable),
