@@ -2531,8 +2531,8 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` et une `dateFi
 | GET | /api/prmps/par-localite/{idLocalite} | — | `PrmpDto[]` | 200 | Authentifié |
 | GET | /api/prmps/par-entite/{idEntiteContract} | — | `PrmpDto[]` | 200 | Authentifié |
 | GET | /api/prmps/par-nom/{nom} | — | `PrmpDto[]` | 200 | Authentifié |
-| POST | /api/prmps | `PrmpDto` (**JSON**) | `PrmpDto` | 201, 400, 403 | ADMINISTRATEUR |
-| POST | /api/prmps | **`multipart/form-data`** : part `data` (JSON `PrmpDto`) + `arrete`/`cin`/`photo` (opt.) | `PrmpDto` | 201, 400, 403 | ADMINISTRATEUR |
+| POST | /api/prmps | `CreerPrmpRequest` (**JSON**) | `PrmpDto` | 201, 400, 403, 409 | ADMINISTRATEUR |
+| POST | /api/prmps | **`multipart/form-data`** : part `data` (JSON `CreerPrmpRequest`) + `arrete`/`cin`/`photo` (opt.) | `PrmpDto` | 201, 400, 403, 409 | ADMINISTRATEUR |
 | PUT | /api/prmps/{id} | `PrmpDto` | `PrmpDto` | 200, 400, 404 | ADMINISTRATEUR |
 | DELETE | /api/prmps/{id} | — | — | 204, 404, 409 | ADMINISTRATEUR |
 | POST | /api/prmps/suppression-lot | `SuppressionLotPrmpRequest` `{matricules[]}` | `SuppressionLotPrmpResult` | 200, 400, 403 | ADMINISTRATEUR |
@@ -2541,8 +2541,14 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` et une `dateFi
 
 `{id}` = idPrmp (= matricule ; string).
 
+> **Création avec compte (credentials optionnels).** `CreerPrmpRequest` = champs de `PrmpDto` **+ `login`/`motDePasse`
+> optionnels** (`login` ≤ 100, `motDePasse` 8–72). **Fournis (ensemble)** → crée aussi le **compte PRMP actif**
+> (`TYPE_ACTEUR=PRMP`, `refActeur=idPrmp`), connectable immédiatement (parité `POST /api/ugpms`, pas de workflow
+> `EN_ATTENTE`). **Absents** → fiche seule (rétro-compat). **400** si un seul des deux credentials est fourni ou si
+> `motDePasse` < 8 ; **409** si `idPrmp` ou `login` déjà pris. Valable pour les deux variantes (JSON et multipart).
+>
 > **Création avec pièces (multipart).** En plus de la variante **JSON pure** (rétro-compatible), `POST /api/prmps`
-> accepte une variante **`multipart/form-data`** — miroir de l'inscription : part `data` (JSON `PrmpDto`) + parts
+> accepte une variante **`multipart/form-data`** — miroir de l'inscription : part `data` (JSON `CreerPrmpRequest`) + parts
 > fichiers **`arrete`/`cin`/`photo`**, toutes **optionnelles** (l'Admin crée la fiche et complète les pièces
 > ensuite). Contraintes fichiers : **PDF/JPEG/PNG** (magic-bytes), **arrêté ≤ 10 Mo**, **CIN/photo ≤ 5 Mo** → sinon
 > **400**. Pièces stockées sous la clé `idPrmp` (types `ARRETE_NOMIN`/`CIN`/`PHOTO`). Dépôt/remplacement ultérieur

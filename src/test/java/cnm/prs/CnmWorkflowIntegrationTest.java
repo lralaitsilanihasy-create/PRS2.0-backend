@@ -5476,6 +5476,50 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("POST /api/prmps + credentials : compte PRMP actif + login immédiat ; sans → fiche seule ; login/idPrmp pris → 409 ; mdp manquant/<8 → 400")
+    void prmp_creationAvecCompte() throws Exception {
+        String base = "\"nomPrmp\":\"Testy\",\"prenomsPrmp\":\"Cpt\",\"arreteNomin\":\"ARR-1\",\"dateNomin\":\"2024-01-10\","
+                + "\"cin\":\"301234567890\",\"dateCin\":\"2012-02-02\",\"lieuCin\":\"Antananarivo\","
+                + "\"emailPrmp\":\"c@cnm.mg\",\"telPrmp\":\"0331112233\"";
+
+        // Avec login + motDePasse → 201, fiche + compte PRMP actif.
+        mvc.perform(post("/api/prmps").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idPrmp\":\"IMPCPT\"," + base + ",\"login\":\"imp.cpt\",\"motDePasse\":\"Passw0rd!\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.idPrmp").value("IMPCPT"));
+        org.junit.jupiter.api.Assertions.assertTrue(compteAuthRepository.findByLogin("imp.cpt").isPresent());
+        // Connexion immédiate → rôle PRMP, ref = idPrmp.
+        mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"login\":\"imp.cpt\",\"motDePasse\":\"Passw0rd!\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.role").value("PRMP"))
+                .andExpect(jsonPath("$.ref").value("IMPCPT"));
+
+        // Sans credentials → 201, fiche seule (aucun compte).
+        mvc.perform(post("/api/prmps").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idPrmp\":\"IMPNC\"," + base + "}"))
+                .andExpect(status().isCreated());
+        org.junit.jupiter.api.Assertions.assertTrue(
+                compteAuthRepository.findByRefActeurAndTypeActeur("IMPNC", "PRMP").isEmpty());
+
+        // login déjà pris → 409 ; idPrmp déjà pris → 409.
+        mvc.perform(post("/api/prmps").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idPrmp\":\"IMPX\"," + base + ",\"login\":\"imp.cpt\",\"motDePasse\":\"Passw0rd!\"}"))
+                .andExpect(status().isConflict());
+        mvc.perform(post("/api/prmps").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idPrmp\":\"IMPCPT\"," + base + "}"))
+                .andExpect(status().isConflict());
+
+        // login sans motDePasse → 400 ; motDePasse < 8 → 400.
+        mvc.perform(post("/api/prmps").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idPrmp\":\"IMPY\"," + base + ",\"login\":\"imp.y\"}"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(post("/api/prmps").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idPrmp\":\"IMPZ\"," + base + ",\"login\":\"imp.z\",\"motDePasse\":\"short\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     @DisplayName("DELETE /api/prmps/{id} : PRMP sans données → 204 (+ compte supprimé) ; avec dossier → 409 ; inconnue → 404")
     void prmp_delete_gardeEtCompte() throws Exception {
         // PRMP « propre » (aucune donnée liée) + son compte d'authentification.

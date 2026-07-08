@@ -20,6 +20,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import jakarta.validation.Valid;
 
+import cnm.prs.dto.CreerPrmpRequest;
 import cnm.prs.dto.PieceJointeMetaDto;
 import cnm.prs.dto.PrmpDto;
 import cnm.prs.dto.SuppressionLotPrmpRequest;
@@ -69,24 +70,27 @@ public class PrmpController {
         return service.findByNom(nom);
     }
 
-    /** Création JSON pure (rétro-compatible, sans pièces). */
+    /**
+     * Création JSON (rétro-compatible, sans pièces). {@code CreerPrmpRequest} = identité + {@code login}/{@code
+     * motDePasse} <strong>optionnels</strong> : fournis → crée aussi le compte PRMP actif ; absents → fiche seule.
+     */
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<PrmpDto> create(@Valid @RequestBody PrmpDto dto) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(service.create(dto));
+    public ResponseEntity<PrmpDto> create(@Valid @RequestBody CreerPrmpRequest req) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(service.create(req));
     }
 
     /**
      * Création <strong>multipart</strong> avec pièces <strong>optionnelles</strong> (miroir de l'inscription) :
-     * part {@code data} (JSON = {@code PrmpDto}) + parts {@code arrete}/{@code cin}/{@code photo}. Contraintes des
-     * fichiers : PDF/JPEG/PNG (magic-bytes), arrêté ≤ 10 Mo, CIN/photo ≤ 5 Mo (sinon 400).
+     * part {@code data} (JSON = {@code CreerPrmpRequest}, credentials inclus) + parts {@code arrete}/{@code cin}/
+     * {@code photo}. Contraintes fichiers : PDF/JPEG/PNG (magic-bytes), arrêté ≤ 10 Mo, CIN/photo ≤ 5 Mo (sinon 400).
      */
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<PrmpDto> createAvecPieces(
-            @Valid @RequestPart("data") PrmpDto dto,
+            @Valid @RequestPart("data") CreerPrmpRequest req,
             @RequestPart(value = "arrete", required = false) MultipartFile arrete,
             @RequestPart(value = "cin", required = false) MultipartFile cin,
             @RequestPart(value = "photo", required = false) MultipartFile photo) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(service.createAvecPieces(dto, arrete, cin, photo));
+        return ResponseEntity.status(HttpStatus.CREATED).body(service.createAvecPieces(req, arrete, cin, photo));
     }
 
     @PutMapping("/{id}")

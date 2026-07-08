@@ -7,13 +7,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import cnm.prs.dto.CreerPrmpRequest;
 import cnm.prs.dto.PieceJointeMetaDto;
 import cnm.prs.dto.PrmpDto;
 import cnm.prs.dto.SuppressionLotPrmpResult;
+import cnm.prs.entity.CompteAuth;
 import cnm.prs.entity.PieceJointe;
 import cnm.prs.entity.Prmp;
 import cnm.prs.enums.TypeActeur;
 import cnm.prs.enums.TypePieceJointe;
+import cnm.prs.exception.BadRequestException;
 import cnm.prs.exception.BusinessRuleException;
 import cnm.prs.exception.ResourceNotFoundException;
 import cnm.prs.mapper.PrmpMapper;
@@ -42,12 +45,14 @@ public class PrmpService {
     private final IndicateurPrmpRepository indicateurPrmpRepository;
     private final UgpmRepository ugpmRepository;
     private final PieceJointeService pieceJointeService;
+    private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
 
     public PrmpService(PrmpRepository repository, CompteAuthRepository compteRepository,
             DossierRepository dossierRepository, PpmRepository ppmRepository,
             PrmpEntiteRepository prmpEntiteRepository, DemandeRetraitRepository demandeRetraitRepository,
             IndicateurPrmpRepository indicateurPrmpRepository, UgpmRepository ugpmRepository,
-            PieceJointeService pieceJointeService) {
+            PieceJointeService pieceJointeService,
+            org.springframework.security.crypto.password.PasswordEncoder passwordEncoder) {
         this.repository = repository;
         this.compteRepository = compteRepository;
         this.dossierRepository = dossierRepository;
@@ -57,6 +62,7 @@ public class PrmpService {
         this.demandeRetraitRepository = demandeRetraitRepository;
         this.indicateurPrmpRepository = indicateurPrmpRepository;
         this.ugpmRepository = ugpmRepository;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Transactional(readOnly = true)
@@ -95,18 +101,51 @@ public class PrmpService {
         return repository.findByNomPrmpContainingIgnoreCase(nom).stream().map(PrmpMapper::toDto).toList();
     }
 
-    public PrmpDto create(PrmpDto dto) {
-        Prmp entity = PrmpMapper.toEntity(dto);
-        return PrmpMapper.toDto(repository.save(entity));
+    /**
+     * Création admin de la fiche PRMP, avec <strong>compte optionnel</strong> : si {@code login}/{@code motDePasse}
+     * sont fournis (ensemble), un compte PRMP <strong>actif</strong> ({@code TYPE_ACTEUR=PRMP}, {@code refActeur=idPrmp})
+     * est créé et utilisable immédiatement (parité avec {@code POST /api/ugpms}) ; sinon fiche seule (rétro-compat).
+     * <strong>400</strong> si l'un des deux credentials manque ; <strong>409</strong> si l'idPrmp ou le login est déjà pris.
+     */
+    public PrmpDto create(CreerPrmpRequest req) {
+        boolean hasLogin = req.login() != null && !req.login().isBlank();
+        boolean hasMdp = req.motDePasse() != null && !req.motDePasse().isBlank();
+        if (hasLogin != hasMdp) {
+            throw new BadRequestException("login et motDePasse doivent être fournis ensemble (ou tous deux absents).");
+        }
+        if (repository.existsById(req.idPrmp())) {
+            throw new BusinessRuleException("Cette PRMP (id " + req.idPrmp() + ") existe déjà.");
+        }
+        if (hasLogin && compteRepository.findByLogin(req.login()).isPresent()) {
+            throw new BusinessRuleException("Ce login est déjà utilisé.");
+        }
+        Prmp entity = new Prmp();
+        entity.setIdPrmp(req.idPrmp());
+        entity.setNomPrmp(req.nomPrmp());
+        entity.setPrenomsPrmp(req.prenomsPrmp());
+        entity.setArreteNomin(req.arreteNomin());
+        entity.setDateNomin(req.dateNomin());
+        entity.setCin(req.cin());
+        entity.setDateCin(req.dateCin());
+        entity.setLieuCin(req.lieuCin());
+        entity.setEmailPrmp(req.emailPrmp());
+        entity.setTelPrmp(req.telPrmp());
+        repository.save(entity);
+        if (hasLogin) {
+            // Compte actif immédiatement (créé par l'Administrateur), pas de workflow de validation.
+            compteRepository.save(new CompteAuth(req.login(), passwordEncoder.encode(req.motDePasse()),
+                    TypeActeur.PRMP.name(), req.idPrmp(), true));
+        }
+        return PrmpMapper.toDto(entity);
     }
 
     /**
      * Création admin <strong>avec pièces optionnelles</strong> (arrêté, CIN, photo) — miroir de l'inscription.
      * Les pièces présentes sont validées (type réel PDF/JPEG/PNG + taille) et stockées sous la clé {@code idPrmp} ;
-     * un fichier invalide → 400 et la création est annulée (transaction).
+     * un fichier invalide → 400 et la création est annulée (transaction). Le compte est créé si credentials fournis.
      */
-    public PrmpDto createAvecPieces(PrmpDto dto, MultipartFile arrete, MultipartFile cin, MultipartFile photo) {
-        PrmpDto cree = create(dto);
+    public PrmpDto createAvecPieces(CreerPrmpRequest req, MultipartFile arrete, MultipartFile cin, MultipartFile photo) {
+        PrmpDto cree = create(req);
         String id = cree.getIdPrmp();
         stockerSiPresente(id, TypePieceJointe.ARRETE_NOMIN, arrete);
         stockerSiPresente(id, TypePieceJointe.CIN, cin);
