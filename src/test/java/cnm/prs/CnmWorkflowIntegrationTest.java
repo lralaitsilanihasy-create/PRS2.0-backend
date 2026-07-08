@@ -5246,6 +5246,36 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("POST /api/controleurs/suppression-lot : tolérant → bilan supprimes/introuvables/bloques ; vide → 400 ; non-admin → 403")
+    void controleur_suppressionLot() throws Exception {
+        // Contrôleur « propre » (aucune activité) + compte. CTRMEM (seed) est membre de l'examen 1 → bloqué.
+        controleurRepository.save(controleur("CTRLOT", 6, "ANT"));
+        compteAuthRepository.save(new cnm.prs.entity.CompteAuth("ctrlot", "x",
+                cnm.prs.enums.TypeActeur.CONTROLEUR.name(), "CTRLOT", true));
+
+        mvc.perform(post("/api/controleurs/suppression-lot").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"matricules\":[\"CTRLOT\",\"CTRMEM\",\"INCONNU\"]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.supprimes", containsInAnyOrder("CTRLOT")))
+                .andExpect(jsonPath("$.bloques", containsInAnyOrder("CTRMEM")))
+                .andExpect(jsonPath("$.introuvables", containsInAnyOrder("INCONNU")));
+        org.junit.jupiter.api.Assertions.assertFalse(controleurRepository.existsById("CTRLOT"));
+        org.junit.jupiter.api.Assertions.assertTrue(compteAuthRepository.findByLogin("ctrlot").isEmpty());
+        org.junit.jupiter.api.Assertions.assertTrue(controleurRepository.existsById("CTRMEM"));   // bloqué, subsiste
+
+        // Liste vide → 400.
+        mvc.perform(post("/api/controleurs/suppression-lot").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"matricules\":[]}"))
+                .andExpect(status().isBadRequest());
+
+        // Non-admin → 403 (sous-chemin sécurisé par @PreAuthorize).
+        mvc.perform(post("/api/controleurs/suppression-lot").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"matricules\":[\"CTRMEM\"]}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     @DisplayName("DELETE /api/prmps/{id} : PRMP sans données → 204 (+ compte supprimé) ; avec dossier → 409 ; inconnue → 404")
     void prmp_delete_gardeEtCompte() throws Exception {
         // PRMP « propre » (aucune donnée liée) + son compte d'authentification.

@@ -1,11 +1,13 @@
 package cnm.prs.service;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import cnm.prs.dto.ControleurDto;
+import cnm.prs.dto.SuppressionLotControleurResult;
 import cnm.prs.entity.Controleur;
 import cnm.prs.enums.TypeActeur;
 import cnm.prs.exception.BusinessRuleException;
@@ -102,19 +104,50 @@ public class ControleurService {
         if (!repository.existsById(id)) {
             throw new ResourceNotFoundException("Controleur introuvable : " + id);
         }
-        if (repository.existsByIdSuperieur(id)
+        if (aUneActiviteMetier(id)) {
+            throw new BusinessRuleException("Suppression impossible : le contrôleur « " + id + " » a une activité "
+                    + "métier (subordonnés, examens, PV, vérifications, dispatchs, réceptions, demandes de retrait "
+                    + "ou lettres signées). Retirez d'abord ces éléments.");
+        }
+        supprimerUn(id);
+    }
+
+    /**
+     * Suppression <strong>en lot</strong> par matricule, <strong>tolérante</strong> : supprime chaque contrôleur
+     * existant <em>sans activité métier</em> (données dérivées + compte) ; absents → {@code introuvables},
+     * contrôleurs avec activité → {@code bloques} (comme le 409 unitaire). Jamais d'échec global. Doublons ignorés.
+     */
+    public SuppressionLotControleurResult supprimerLot(List<String> matricules) {
+        List<String> supprimes = new ArrayList<>();
+        List<String> introuvables = new ArrayList<>();
+        List<String> bloques = new ArrayList<>();
+        for (String id : matricules.stream().distinct().toList()) {
+            if (!repository.existsById(id)) {
+                introuvables.add(id);
+            } else if (aUneActiviteMetier(id)) {
+                bloques.add(id);
+            } else {
+                supprimerUn(id);
+                supprimes.add(id);
+            }
+        }
+        return new SuppressionLotControleurResult(supprimes, introuvables, bloques);
+    }
+
+    /** Vrai si le contrôleur a une participation métier (garde de suppression). */
+    private boolean aUneActiviteMetier(String id) {
+        return repository.existsByIdSuperieur(id)
                 || examenRepository.existsByImCtrlMembre(id)
                 || pvExamenRepository.existsAvecControleur(id)
                 || verificationRepository.existsByImCtrlVerif(id)
                 || dispatchRepository.existsAvecControleur(id)
                 || receptionRepository.existsByImCtrlRecept(id)
                 || demandeRetraitRepository.existsByImCtrlCc(id)
-                || lettreRenvoiRepository.existsByImSignataire(id)) {
-            throw new BusinessRuleException("Suppression impossible : le contrôleur « " + id + " » a une activité "
-                    + "métier (subordonnés, examens, PV, vérifications, dispatchs, réceptions, demandes de retrait "
-                    + "ou lettres signées). Retirez d'abord ces éléments.");
-        }
-        // Données dérivées (nettoyées) + compte d'authentification (REF_ACTEUR = matricule).
+                || lettreRenvoiRepository.existsByImSignataire(id);
+    }
+
+    /** Supprime un contrôleur : données dérivées (sessions, indicateurs) + compte + le contrôleur. */
+    private void supprimerUn(String id) {
         sessionRepository.deleteByImControleur(id);
         indicateurCtrlRepository.deleteByImControleur(id);
         compteRepository.deleteAll(compteRepository.findByRefActeurAndTypeActeur(id, TypeActeur.CONTROLEUR.name()));

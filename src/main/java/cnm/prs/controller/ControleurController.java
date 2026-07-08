@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -16,6 +17,8 @@ import org.springframework.web.bind.annotation.RestController;
 import jakarta.validation.Valid;
 
 import cnm.prs.dto.ControleurDto;
+import cnm.prs.dto.SuppressionLotControleurRequest;
+import cnm.prs.dto.SuppressionLotControleurResult;
 import cnm.prs.service.ControleurService;
 
 /**
@@ -55,5 +58,15 @@ public class ControleurController {
     public ResponseEntity<Void> delete(@PathVariable String id) {
         service.delete(id);
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Suppression en lot (tolérante) : bilan {@code {supprimes[], introuvables[], bloques[]}}. Réservé
+     * {@code ADMINISTRATEUR} (ce sous-chemin n'est pas couvert par les règles URL de SecurityConfig).
+     */
+    @PreAuthorize("hasRole('ADMINISTRATEUR')")
+    @PostMapping("/suppression-lot")
+    public SuppressionLotControleurResult supprimerLot(@Valid @RequestBody SuppressionLotControleurRequest req) {
+        return service.supprimerLot(req.matricules());
     }
 }

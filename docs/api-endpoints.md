@@ -468,11 +468,18 @@ utilisateur (ex. mot de passe oublié) ; l'utilisateur pourra ensuite le changer
 | POST | /api/controleurs | `ControleurDto` | `ControleurDto` | 201, 400, 403 | ADMINISTRATEUR |
 | PUT | /api/controleurs/{id} | `ControleurDto` | `ControleurDto` | 200, 400, 403, 404 | ADMINISTRATEUR |
 | DELETE | /api/controleurs/{id} | — | — | 204, 403, 404, 409 | ADMINISTRATEUR |
+| POST | /api/controleurs/suppression-lot | `SuppressionLotControleurRequest` `{matricules[]}` | `SuppressionLotControleurResult` | 200, 400, 403 | ADMINISTRATEUR |
 
 > **DELETE** supprime le contrôleur **et son compte d'authentification**, en nettoyant ses données **dérivées**
 > (sessions, indicateurs). **Garde métier → 409** tant qu'il a une **activité** : supérieur hiérarchique d'un autre
 > contrôleur, ou présent sur un examen / PV / vérification / dispatch / réception / demande de retrait / lettre
 > signée — retirer d'abord ces éléments ; **404** si l'`imControleur` est inconnu.
+>
+> **POST `/suppression-lot`** — suppression **en lot par matricule**, **tolérante** : `SuppressionLotControleurRequest`
+> = `{matricules: string[]}` (au moins un, sinon **400**) → **200** `SuppressionLotControleurResult` = `{supprimes:
+> string[], introuvables: string[], bloques: string[]}`. Chaque contrôleur **sans activité métier** est supprimé
+> (données dérivées + compte) → `supprimes` ; les absents → `introuvables` ; ceux **avec activité** (même garde que
+> le 409 unitaire) → `bloques` (non supprimés). **Jamais d'échec global** ; doublons ignorés.
 
 `{id}` = imControleur (string).
 
