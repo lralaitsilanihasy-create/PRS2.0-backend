@@ -2,7 +2,9 @@ package cnm.prs.controller;
 
 import java.util.List;
 
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -12,13 +14,18 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import jakarta.validation.Valid;
 
+import cnm.prs.dto.PieceJointeMetaDto;
 import cnm.prs.dto.PrmpDto;
 import cnm.prs.dto.SuppressionLotPrmpRequest;
 import cnm.prs.dto.SuppressionLotPrmpResult;
+import cnm.prs.entity.PieceJointe;
+import cnm.prs.enums.TypePieceJointe;
 import cnm.prs.service.PrmpService;
 
 /**
@@ -62,9 +69,24 @@ public class PrmpController {
         return service.findByNom(nom);
     }
 
-    @PostMapping
+    /** Création JSON pure (rétro-compatible, sans pièces). */
+    @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<PrmpDto> create(@Valid @RequestBody PrmpDto dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.create(dto));
+    }
+
+    /**
+     * Création <strong>multipart</strong> avec pièces <strong>optionnelles</strong> (miroir de l'inscription) :
+     * part {@code data} (JSON = {@code PrmpDto}) + parts {@code arrete}/{@code cin}/{@code photo}. Contraintes des
+     * fichiers : PDF/JPEG/PNG (magic-bytes), arrêté ≤ 10 Mo, CIN/photo ≤ 5 Mo (sinon 400).
+     */
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<PrmpDto> createAvecPieces(
+            @Valid @RequestPart("data") PrmpDto dto,
+            @RequestPart(value = "arrete", required = false) MultipartFile arrete,
+            @RequestPart(value = "cin", required = false) MultipartFile cin,
+            @RequestPart(value = "photo", required = false) MultipartFile photo) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(service.createAvecPieces(dto, arrete, cin, photo));
     }
 
     @PutMapping("/{id}")
@@ -86,5 +108,29 @@ public class PrmpController {
     @PostMapping("/suppression-lot")
     public SuppressionLotPrmpResult supprimerLot(@Valid @RequestBody SuppressionLotPrmpRequest req) {
         return service.supprimerLot(req.matricules());
+    }
+
+    /**
+     * Dépose (ou remplace) une pièce d'une PRMP. Réservé {@code ADMINISTRATEUR} (sous-chemin non couvert par
+     * SecurityConfig). Mêmes contraintes que la création. {@code type} ∈ {@code ARRETE_NOMIN}/{@code CIN}/{@code PHOTO}.
+     */
+    @PreAuthorize("hasRole('ADMINISTRATEUR')")
+    @PostMapping(value = "/{id}/pieces/{type}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public PieceJointeMetaDto deposerPiece(@PathVariable String id, @PathVariable TypePieceJointe type,
+            @RequestPart("fichier") MultipartFile fichier) {
+        return service.deposerPiece(id, type, fichier);
+    }
+
+    /** Téléchargement d'une pièce d'une PRMP. Réservé {@code ADMINISTRATEUR}. **404** si la pièce est absente. */
+    @PreAuthorize("hasRole('ADMINISTRATEUR')")
+    @GetMapping("/{id}/pieces/{type}")
+    public ResponseEntity<byte[]> telechargerPiece(@PathVariable String id, @PathVariable TypePieceJointe type) {
+        PieceJointe piece = service.telechargerPiece(id, type);
+        String format = piece.getFormat() != null ? piece.getFormat() : MediaType.APPLICATION_OCTET_STREAM_VALUE;
+        String nom = piece.getLibelle() != null ? piece.getLibelle() : id + "_" + type;
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(format))
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + nom + "\"")
+                .body(piece.getContenu());
     }
 }

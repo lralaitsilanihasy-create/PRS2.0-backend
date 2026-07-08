@@ -5319,6 +5319,27 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("GET /api/controleurs/par-nom/{nom} : recherche partielle insensible à la casse ; aucun résultat → vide")
+    void controleur_parNom() throws Exception {
+        Controleur c = controleur("CTRNOM", 5, "ANT");
+        c.setNomCont("RASOANAIVO");
+        controleurRepository.save(c);
+
+        // Partiel interne « soana ».
+        mvc.perform(get("/api/controleurs/par-nom/soana").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].imControleur", hasItem("CTRNOM")));
+        // Insensible à la casse : « RASOA ».
+        mvc.perform(get("/api/controleurs/par-nom/RASOA").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].imControleur", hasItem("CTRNOM")));
+        // Aucun résultat → liste vide (pas de 404).
+        mvc.perform(get("/api/controleurs/par-nom/ZZQQ").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+    }
+
+    @Test
     @DisplayName("POST /api/controleurs/suppression-lot : tolérant → bilan supprimes/introuvables/bloques ; vide → 400 ; non-admin → 403")
     void controleur_suppressionLot() throws Exception {
         // Contrôleur « propre » (aucune activité) + compte. CTRMEM (seed) est membre de l'examen 1 → bloqué.
@@ -5407,6 +5428,51 @@ class CnmWorkflowIntegrationTest {
         mvc.perform(get("/api/prmps/par-nom/ZZQQ").header("Authorization", tokenAdmin))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(0)));
+    }
+
+    @Test
+    @DisplayName("POST /api/prmps multipart : fiche + pièces (optionnelles), GET pièce ; CIN > 5 Mo → 400 ; dépôt ultérieur ; non-admin → 403")
+    void prmp_creationAvecPieces() throws Exception {
+        byte[] dataJson = ("{\"idPrmp\":\"IMPCS\",\"nomPrmp\":\"Testy\",\"prenomsPrmp\":\"Piece\","
+                + "\"arreteNomin\":\"ARR-1\",\"dateNomin\":\"2024-01-10\",\"cin\":\"301234567890\","
+                + "\"dateCin\":\"2012-02-02\",\"lieuCin\":\"Antananarivo\",\"emailPrmp\":\"pc@cnm.mg\","
+                + "\"telPrmp\":\"0331112233\"}").getBytes(StandardCharsets.UTF_8);
+        byte[] pdf = "%PDF-1.4 arrete de nomination".getBytes(StandardCharsets.US_ASCII);   // %PDF (magic)
+        byte[] jpeg = { (byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0, 0, 0, 0 };
+        byte[] png = { (byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0 };
+
+        // Création multipart : data JSON + arrêté (PDF) + CIN (JPEG) ; photo omise (optionnelle).
+        mvc.perform(multipart("/api/prmps").header("Authorization", tokenAdmin)
+                .file(new MockMultipartFile("data", "", "application/json", dataJson))
+                .file(new MockMultipartFile("arrete", "arrete.pdf", "application/pdf", pdf))
+                .file(new MockMultipartFile("cin", "cin.jpg", "image/jpeg", jpeg)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.idPrmp").value("IMPCS"));
+
+        // Téléchargement de l'arrêté stocké.
+        mvc.perform(get("/api/prmps/IMPCS/pieces/ARRETE_NOMIN").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.APPLICATION_PDF));
+
+        // Non-admin → 403 (sous-chemin sécurisé par @PreAuthorize).
+        mvc.perform(get("/api/prmps/IMPCS/pieces/ARRETE_NOMIN").header("Authorization", tokenPrmp))
+                .andExpect(status().isForbidden());
+
+        // Dépôt ultérieur d'une pièce (photo) sur une PRMP existante → puis téléchargeable.
+        mvc.perform(multipart("/api/prmps/IMPCS/pieces/PHOTO").header("Authorization", tokenAdmin)
+                .file(new MockMultipartFile("fichier", "photo.png", "image/png", png)))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/prmps/IMPCS/pieces/PHOTO").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk());
+
+        // CIN > 5 Mo → 400 (contrôle de taille au niveau service).
+        byte[] gros = new byte[6 * 1024 * 1024];
+        gros[0] = (byte) 0xFF; gros[1] = (byte) 0xD8; gros[2] = (byte) 0xFF;   // JPEG magic
+        byte[] data2 = new String(dataJson, StandardCharsets.UTF_8).replace("IMPCS", "IMPCS2").getBytes(StandardCharsets.UTF_8);
+        mvc.perform(multipart("/api/prmps").header("Authorization", tokenAdmin)
+                .file(new MockMultipartFile("data", "", "application/json", data2))
+                .file(new MockMultipartFile("cin", "cin.jpg", "image/jpeg", gros)))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

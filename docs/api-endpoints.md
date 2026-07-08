@@ -450,6 +450,8 @@ si aucun (pas de 404) ; les **transversaux** (contrôleur à localité nulle, ex
 9 Assistant contrôleur) — liste **vide** si aucun (pas de 404).
 `GET /par-superieur/{imSuperieur}` liste les **subordonnés directs** d'un contrôleur (ceux dont `ID_SUPERIEUR = imSuperieur`)
 — liste **vide** si aucun (pas de 404).
+`GET /par-nom/{nom}` — recherche **partielle** sur `nomCont` (**contient**, **insensible à la casse**) ; liste **vide**
+si aucun résultat (pas de 404). `{nom}` est un fragment (URL-encoder si espaces/accents).
 
 **Champs `ControleurDto`**
 
@@ -474,6 +476,7 @@ si aucun (pas de 404) ; les **transversaux** (contrôleur à localité nulle, ex
 | GET | /api/controleurs/par-localite/{idLocalite} | — | `ControleurDto[]` | 200 | Authentifié |
 | GET | /api/controleurs/par-profil/{idProfile} | — | `ControleurDto[]` | 200 | Authentifié |
 | GET | /api/controleurs/par-superieur/{imSuperieur} | — | `ControleurDto[]` | 200 | Authentifié |
+| GET | /api/controleurs/par-nom/{nom} | — | `ControleurDto[]` | 200 | Authentifié |
 | POST | /api/controleurs | `ControleurDto` | `ControleurDto` | 201, 400, 403 | ADMINISTRATEUR |
 | PUT | /api/controleurs/{id} | `ControleurDto` | `ControleurDto` | 200, 400, 403, 404 | ADMINISTRATEUR |
 | DELETE | /api/controleurs/{id} | — | — | 204, 403, 404, 409 | ADMINISTRATEUR |
@@ -2528,13 +2531,24 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` et une `dateFi
 | GET | /api/prmps/par-localite/{idLocalite} | — | `PrmpDto[]` | 200 | Authentifié |
 | GET | /api/prmps/par-entite/{idEntiteContract} | — | `PrmpDto[]` | 200 | Authentifié |
 | GET | /api/prmps/par-nom/{nom} | — | `PrmpDto[]` | 200 | Authentifié |
-| POST | /api/prmps | `PrmpDto` | `PrmpDto` | 201, 400, 403 | ADMINISTRATEUR |
+| POST | /api/prmps | `PrmpDto` (**JSON**) | `PrmpDto` | 201, 400, 403 | ADMINISTRATEUR |
+| POST | /api/prmps | **`multipart/form-data`** : part `data` (JSON `PrmpDto`) + `arrete`/`cin`/`photo` (opt.) | `PrmpDto` | 201, 400, 403 | ADMINISTRATEUR |
 | PUT | /api/prmps/{id} | `PrmpDto` | `PrmpDto` | 200, 400, 404 | ADMINISTRATEUR |
 | DELETE | /api/prmps/{id} | — | — | 204, 404, 409 | ADMINISTRATEUR |
 | POST | /api/prmps/suppression-lot | `SuppressionLotPrmpRequest` `{matricules[]}` | `SuppressionLotPrmpResult` | 200, 400, 403 | ADMINISTRATEUR |
+| POST | /api/prmps/{id}/pieces/{type} | `multipart/form-data` (part `fichier`) | `PieceJointeMetaDto` | 200, 400, 403, 404 | ADMINISTRATEUR |
+| GET | /api/prmps/{id}/pieces/{type} | — | fichier (binaire) | 200, 403, 404 | ADMINISTRATEUR |
 
 `{id}` = idPrmp (= matricule ; string).
 
+> **Création avec pièces (multipart).** En plus de la variante **JSON pure** (rétro-compatible), `POST /api/prmps`
+> accepte une variante **`multipart/form-data`** — miroir de l'inscription : part `data` (JSON `PrmpDto`) + parts
+> fichiers **`arrete`/`cin`/`photo`**, toutes **optionnelles** (l'Admin crée la fiche et complète les pièces
+> ensuite). Contraintes fichiers : **PDF/JPEG/PNG** (magic-bytes), **arrêté ≤ 10 Mo**, **CIN/photo ≤ 5 Mo** → sinon
+> **400**. Pièces stockées sous la clé `idPrmp` (types `ARRETE_NOMIN`/`CIN`/`PHOTO`). Dépôt/remplacement ultérieur
+> via `POST /{id}/pieces/{type}` (**404** si PRMP inconnue) ; téléchargement via `GET /{id}/pieces/{type}` (**404**
+> si la pièce est absente). Ces sous-chemins pièces sont réservés **ADMINISTRATEUR**.
+>
 > **DELETE** supprime la PRMP **et son compte d'authentification**. **Garde** : **409** tant que la PRMP porte des
 > données liées (dossiers, PPM, entités rattachées, demandes de retrait, indicateurs, ou UGPM de tutelle) — retirer
 > d'abord ces éléments ; **404** si l'`idPrmp` est inconnu.

@@ -38,6 +38,14 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.BAD_REQUEST, ex.getMessage(), request, null);
     }
 
+    /** Fichier téléversé dépassant la limite multipart du serveur → 400 (pas de 500). */
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    public ResponseEntity<ErrorResponse> handleMaxUpload(
+            org.springframework.web.multipart.MaxUploadSizeExceededException ex, WebRequest request) {
+        return build(HttpStatus.BAD_REQUEST,
+                "Fichier trop volumineux : la taille maximale autorisée est dépassée.", request, null);
+    }
+
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<ErrorResponse> handleBadCredentials(BadCredentialsException ex, WebRequest request) {
         return build(HttpStatus.UNAUTHORIZED, ex.getMessage(), request, null);

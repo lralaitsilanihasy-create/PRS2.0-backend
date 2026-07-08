@@ -5,11 +5,15 @@ import java.util.List;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import cnm.prs.dto.PieceJointeMetaDto;
 import cnm.prs.dto.PrmpDto;
 import cnm.prs.dto.SuppressionLotPrmpResult;
+import cnm.prs.entity.PieceJointe;
 import cnm.prs.entity.Prmp;
 import cnm.prs.enums.TypeActeur;
+import cnm.prs.enums.TypePieceJointe;
 import cnm.prs.exception.BusinessRuleException;
 import cnm.prs.exception.ResourceNotFoundException;
 import cnm.prs.mapper.PrmpMapper;
@@ -37,16 +41,19 @@ public class PrmpService {
     private final DemandeRetraitRepository demandeRetraitRepository;
     private final IndicateurPrmpRepository indicateurPrmpRepository;
     private final UgpmRepository ugpmRepository;
+    private final PieceJointeService pieceJointeService;
 
     public PrmpService(PrmpRepository repository, CompteAuthRepository compteRepository,
             DossierRepository dossierRepository, PpmRepository ppmRepository,
             PrmpEntiteRepository prmpEntiteRepository, DemandeRetraitRepository demandeRetraitRepository,
-            IndicateurPrmpRepository indicateurPrmpRepository, UgpmRepository ugpmRepository) {
+            IndicateurPrmpRepository indicateurPrmpRepository, UgpmRepository ugpmRepository,
+            PieceJointeService pieceJointeService) {
         this.repository = repository;
         this.compteRepository = compteRepository;
         this.dossierRepository = dossierRepository;
         this.ppmRepository = ppmRepository;
         this.prmpEntiteRepository = prmpEntiteRepository;
+        this.pieceJointeService = pieceJointeService;
         this.demandeRetraitRepository = demandeRetraitRepository;
         this.indicateurPrmpRepository = indicateurPrmpRepository;
         this.ugpmRepository = ugpmRepository;
@@ -91,6 +98,40 @@ public class PrmpService {
     public PrmpDto create(PrmpDto dto) {
         Prmp entity = PrmpMapper.toEntity(dto);
         return PrmpMapper.toDto(repository.save(entity));
+    }
+
+    /**
+     * Création admin <strong>avec pièces optionnelles</strong> (arrêté, CIN, photo) — miroir de l'inscription.
+     * Les pièces présentes sont validées (type réel PDF/JPEG/PNG + taille) et stockées sous la clé {@code idPrmp} ;
+     * un fichier invalide → 400 et la création est annulée (transaction).
+     */
+    public PrmpDto createAvecPieces(PrmpDto dto, MultipartFile arrete, MultipartFile cin, MultipartFile photo) {
+        PrmpDto cree = create(dto);
+        String id = cree.getIdPrmp();
+        stockerSiPresente(id, TypePieceJointe.ARRETE_NOMIN, arrete);
+        stockerSiPresente(id, TypePieceJointe.CIN, cin);
+        stockerSiPresente(id, TypePieceJointe.PHOTO, photo);
+        return cree;
+    }
+
+    private void stockerSiPresente(String idPrmp, TypePieceJointe type, MultipartFile fichier) {
+        if (fichier != null && !fichier.isEmpty()) {
+            pieceJointeService.stocker(idPrmp, type, fichier);
+        }
+    }
+
+    /** Dépose (ou remplace) une pièce d'une PRMP existante (clé = idPrmp). <strong>404</strong> si PRMP inconnue. */
+    public PieceJointeMetaDto deposerPiece(String idPrmp, TypePieceJointe type, MultipartFile fichier) {
+        if (!repository.existsById(idPrmp)) {
+            throw new ResourceNotFoundException("Prmp introuvable : " + idPrmp);
+        }
+        return pieceJointeService.stocker(idPrmp, type, fichier);
+    }
+
+    /** Télécharge une pièce d'une PRMP (clé = idPrmp). <strong>404</strong> si la pièce est absente. */
+    @Transactional(readOnly = true)
+    public PieceJointe telechargerPiece(String idPrmp, TypePieceJointe type) {
+        return pieceJointeService.telecharger(idPrmp, type);
     }
 
     public PrmpDto update(String id, PrmpDto dto) {
