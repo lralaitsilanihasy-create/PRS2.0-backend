@@ -16,6 +16,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import cnm.prs.dto.CreerUgpmRequest;
 import cnm.prs.dto.ModifierUgpmRequest;
+import cnm.prs.dto.SuppressionLotResult;
+import cnm.prs.dto.SuppressionLotUgpmRequest;
 import cnm.prs.dto.UgpmDto;
 import cnm.prs.service.UgpmService;
 import jakarta.validation.Valid;
@@ -62,5 +64,12 @@ public class UgpmController {
     public ResponseEntity<Void> delete(@PathVariable String id) {
         service.delete(id);
         return ResponseEntity.noContent().build();
+    }
+
+    /** Suppression en lot (tolérante) : bilan {@code {supprimes[], introuvables[]}}. */
+    @PreAuthorize("hasRole('ADMINISTRATEUR')")
+    @PostMapping("/suppression-lot")
+    public SuppressionLotResult supprimerLot(@Valid @RequestBody SuppressionLotUgpmRequest req) {
+        return service.supprimerLot(req.matricules());
     }
 }

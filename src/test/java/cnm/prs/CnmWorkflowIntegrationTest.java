@@ -1,5 +1,6 @@
 package cnm.prs;
 
+import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasSize;
@@ -3507,6 +3508,39 @@ class CnmWorkflowIntegrationTest {
         // Id inconnu → 404.
         mvc.perform(get("/api/ugpms/INCONNU").header("Authorization", tokenAdmin))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("POST /api/ugpms/suppression-lot : tolérant → bilan supprimes/introuvables (+ comptes nettoyés) ; liste vide → 400")
+    void ugpm_suppressionLot() throws Exception {
+        String identite = "\"nomUgpm\":\"Rakoto\",\"prenomsUgpm\":\"Jean\","
+                + "\"cin\":\"101234567890\",\"dateCin\":\"2010-05-20\",\"lieuCin\":\"Antananarivo\","
+                + "\"emailUgpm\":\"ugpm@ex.mg\",\"telUgpm\":\"0340000000\",";
+        for (String im : new String[] { "UGPML1", "UGPML2" }) {
+            mvc.perform(post("/api/ugpms").header("Authorization", tokenAdmin)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"idUgpm\":\"" + im + "\",\"idPrmpTutelle\":\"PRMP001\"," + identite
+                            + "\"login\":\"" + im.toLowerCase() + "\",\"motDePasse\":\"Ugpm@1234\"}"))
+                    .andExpect(status().isCreated());
+        }
+
+        // Lot tolérant : 2 existantes + 1 absente → 200, bilan, pas d'échec global.
+        mvc.perform(post("/api/ugpms/suppression-lot").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"matricules\":[\"UGPML1\",\"UGPML2\",\"INCONNU\"]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.supprimes", containsInAnyOrder("UGPML1", "UGPML2")))
+                .andExpect(jsonPath("$.introuvables", containsInAnyOrder("INCONNU")));
+        // UGPM + comptes supprimés.
+        org.junit.jupiter.api.Assertions.assertFalse(ugpmRepository.existsById("UGPML1"));
+        org.junit.jupiter.api.Assertions.assertFalse(ugpmRepository.existsById("UGPML2"));
+        org.junit.jupiter.api.Assertions.assertTrue(compteAuthRepository.findByLogin("ugpml1").isEmpty());
+        org.junit.jupiter.api.Assertions.assertTrue(compteAuthRepository.findByLogin("ugpml2").isEmpty());
+
+        // Liste vide → 400 (validation @NotEmpty).
+        mvc.perform(post("/api/ugpms/suppression-lot").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"matricules\":[]}"))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

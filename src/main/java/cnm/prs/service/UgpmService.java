@@ -1,5 +1,6 @@
 package cnm.prs.service;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -8,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import cnm.prs.dto.CreerUgpmRequest;
 import cnm.prs.dto.ModifierUgpmRequest;
+import cnm.prs.dto.SuppressionLotResult;
 import cnm.prs.dto.UgpmDto;
 import cnm.prs.entity.CompteAuth;
 import cnm.prs.entity.Ugpm;
@@ -109,6 +111,29 @@ public class UgpmService {
         if (!ugpmRepository.existsById(idUgpm)) {
             throw new ResourceNotFoundException("UGPM introuvable : " + idUgpm + ".");
         }
+        supprimerUn(idUgpm);
+    }
+
+    /**
+     * Suppression <strong>en lot</strong> par matricule, <strong>tolérante</strong> : supprime chaque UGPM
+     * existante (et son compte), liste les matricules absents ; jamais d'échec global. Doublons ignorés.
+     */
+    public SuppressionLotResult supprimerLot(List<String> matricules) {
+        List<String> supprimes = new ArrayList<>();
+        List<String> introuvables = new ArrayList<>();
+        for (String id : matricules.stream().distinct().toList()) {
+            if (ugpmRepository.existsById(id)) {
+                supprimerUn(id);
+                supprimes.add(id);
+            } else {
+                introuvables.add(id);
+            }
+        }
+        return new SuppressionLotResult(supprimes, introuvables);
+    }
+
+    /** Supprime une UGPM et son compte associé (sans contrôle d'existence — appelé après vérification). */
+    private void supprimerUn(String idUgpm) {
         compteRepository.deleteAll(
                 compteRepository.findByRefActeurAndTypeActeur(idUgpm, TypeActeur.UGPM.name()));
         ugpmRepository.deleteById(idUgpm);

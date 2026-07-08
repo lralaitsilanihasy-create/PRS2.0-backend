@@ -1033,6 +1033,7 @@ dossier/PPM (désormais réservée Admin).
 | GET | /api/ugpms/{id} | — | `UgpmDto` | 200, 403, 404 | **ADMINISTRATEUR** |
 | PUT | /api/ugpms/{id} | `ModifierUgpmRequest` | `UgpmDto` | 200, 400, 403, 404, 409 | **ADMINISTRATEUR** |
 | DELETE | /api/ugpms/{id} | — | — | 204, 403, 404 | **ADMINISTRATEUR** |
+| POST | /api/ugpms/suppression-lot | `SuppressionLotUgpmRequest` `{matricules[]}` | `SuppressionLotResult` | 200, 400, 403 | **ADMINISTRATEUR** |
 
 `CreerUgpmRequest` = `{idUgpm, libelle?, idPrmpTutelle, nomUgpm, prenomsUgpm, cin, dateCin (yyyy-MM-dd),
 lieuCin, emailUgpm, telUgpm, login, motDePasse}`. **`idUgpm` = matricule** de l'UGPM (identifiant unifié, comme
@@ -1053,6 +1054,11 @@ ni `login`/`motDePasse` (gestion du compte, hors contrat). **PUT** met à jour c
 
 **DELETE** supprime l'UGPM **et son compte d'authentification** (créés ensemble) ; **404** si `idUgpm` inconnu.
 Les dossiers créés par l'UGPM **restent** la propriété de sa PRMP de tutelle (`CREE_PAR` est une trace, pas une FK).
+
+**POST `/suppression-lot`** — suppression **en lot par matricule**, **tolérante** : `SuppressionLotUgpmRequest` =
+`{matricules: string[]}` (au moins un, sinon **400**) → **200** `SuppressionLotResult` = `{supprimes: string[],
+introuvables: string[]}`. Chaque UGPM existante est supprimée (avec son compte) ; les matricules absents sont
+listés dans `introuvables` — **jamais d'échec global**. Doublons ignorés.
 
 > ⚠️ **Règle ajoutée — PK attribuées par le serveur.** Les identifiants `dossier`/`PPM`/`marché` sont
 > **alloués par une séquence serveur** (`seq_dossier`/`seq_ppm`/`seq_marche`) ; tout id envoyé par le
