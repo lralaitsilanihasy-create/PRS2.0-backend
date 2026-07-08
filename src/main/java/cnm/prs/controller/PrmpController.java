@@ -56,6 +56,12 @@ public class PrmpController {
         return service.findByEntite(idEntiteContract);
     }
 
+    /** Recherche partielle par nom (contient, insensible à la casse ; liste, vide si aucun résultat). */
+    @GetMapping("/par-nom/{nom}")
+    public List<PrmpDto> findByNom(@PathVariable String nom) {
+        return service.findByNom(nom);
+    }
+
     @PostMapping
     public ResponseEntity<PrmpDto> create(@Valid @RequestBody PrmpDto dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.create(dto));

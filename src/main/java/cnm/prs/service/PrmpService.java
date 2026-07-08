@@ -82,6 +82,12 @@ public class PrmpService {
         return repository.findByEntiteViaAffectationActive(idEntiteContract).stream().map(PrmpMapper::toDto).toList();
     }
 
+    /** Recherche partielle par nom (contient, insensible à la casse). Liste, vide si aucun résultat. */
+    @Transactional(readOnly = true)
+    public List<PrmpDto> findByNom(String nom) {
+        return repository.findByNomPrmpContainingIgnoreCase(nom).stream().map(PrmpMapper::toDto).toList();
+    }
+
     public PrmpDto create(PrmpDto dto) {
         Prmp entity = PrmpMapper.toEntity(dto);
         return PrmpMapper.toDto(repository.save(entity));

@@ -28,4 +28,7 @@ public interface PrmpRepository extends JpaRepository<Prmp, String> {
     @Query("select distinct p from Prmp p, PrmpEntite pe "
             + "where pe.idPrmp = p.idPrmp and pe.actif = true and pe.idEntiteContract = :idEntite")
     List<Prmp> findByEntiteViaAffectationActive(@Param("idEntite") Integer idEntite);
+
+    /** Recherche partielle par nom (contient, insensible à la casse). */
+    List<Prmp> findByNomPrmpContainingIgnoreCase(String nom);
 }

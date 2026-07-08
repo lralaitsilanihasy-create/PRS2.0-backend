@@ -5389,6 +5389,27 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("GET /api/prmps/par-nom/{nom} : recherche partielle insensible à la casse ; aucun résultat → vide")
+    void prmp_parNom() throws Exception {
+        Prmp p = prmp("PRMPNOM", "ANT");
+        p.setNomPrmp("RAKOTOARISOA");
+        prmpRepository.save(p);
+
+        // Partiel « AKOT » → trouve RAKOTOARISOA.
+        mvc.perform(get("/api/prmps/par-nom/AKOT").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].idPrmp", hasItem("PRMPNOM")));
+        // Insensible à la casse : « rakoto ».
+        mvc.perform(get("/api/prmps/par-nom/rakoto").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].idPrmp", hasItem("PRMPNOM")));
+        // Aucun résultat → liste vide (pas de 404).
+        mvc.perform(get("/api/prmps/par-nom/ZZQQ").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+    }
+
+    @Test
     @DisplayName("DELETE /api/prmps/{id} : PRMP sans données → 204 (+ compte supprimé) ; avec dossier → 409 ; inconnue → 404")
     void prmp_delete_gardeEtCompte() throws Exception {
         // PRMP « propre » (aucune donnée liée) + son compte d'authentification.
