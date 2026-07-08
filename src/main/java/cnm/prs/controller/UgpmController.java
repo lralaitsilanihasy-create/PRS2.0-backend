@@ -53,6 +53,13 @@ public class UgpmController {
         return service.findById(id);
     }
 
+    /** UGPM rattachées à une PRMP de tutelle (liste, vide si aucune). */
+    @PreAuthorize("hasRole('ADMINISTRATEUR')")
+    @GetMapping("/par-tutelle/{idPrmp}")
+    public List<UgpmDto> findByTutelle(@PathVariable String idPrmp) {
+        return service.findByTutelle(idPrmp);
+    }
+
     @PreAuthorize("hasRole('ADMINISTRATEUR')")
     @PutMapping("/{id}")
     public UgpmDto modifier(@PathVariable String id, @Valid @RequestBody ModifierUgpmRequest req) {

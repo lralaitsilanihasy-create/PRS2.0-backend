@@ -74,6 +74,12 @@ public class UgpmService {
         return ugpmRepository.findAll().stream().map(this::toDto).toList();
     }
 
+    /** UGPM rattachées à une PRMP de tutelle (liste, éventuellement vide si aucune ou PRMP inconnue). */
+    @Transactional(readOnly = true)
+    public List<UgpmDto> findByTutelle(String idPrmp) {
+        return ugpmRepository.findByIdPrmpTutelle(idPrmp).stream().map(this::toDto).toList();
+    }
+
     @Transactional(readOnly = true)
     public UgpmDto findById(String idUgpm) {
         return ugpmRepository.findById(idUgpm).map(this::toDto)

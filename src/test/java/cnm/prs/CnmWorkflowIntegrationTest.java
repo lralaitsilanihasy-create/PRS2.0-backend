@@ -3511,6 +3511,32 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("GET /api/ugpms/par-tutelle/{idPrmp} : liste les UGPM d'une PRMP ; tutelle inconnue → liste vide")
+    void ugpm_parTutelle() throws Exception {
+        String identite = "\"nomUgpm\":\"Rakoto\",\"prenomsUgpm\":\"Jean\","
+                + "\"cin\":\"101234567890\",\"dateCin\":\"2010-05-20\",\"lieuCin\":\"Antananarivo\","
+                + "\"emailUgpm\":\"ugpm@ex.mg\",\"telUgpm\":\"0340000000\",";
+        for (String im : new String[] { "UGPMT1", "UGPMT2" }) {
+            mvc.perform(post("/api/ugpms").header("Authorization", tokenAdmin)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"idUgpm\":\"" + im + "\",\"idPrmpTutelle\":\"PRMP001\"," + identite
+                            + "\"login\":\"" + im.toLowerCase() + "\",\"motDePasse\":\"Ugpm@1234\"}"))
+                    .andExpect(status().isCreated());
+        }
+
+        // Les 2 UGPM de PRMP001 (matricules attendus, login exposé).
+        mvc.perform(get("/api/ugpms/par-tutelle/PRMP001").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].idUgpm", containsInAnyOrder("UGPMT1", "UGPMT2")))
+                .andExpect(jsonPath("$[?(@.idUgpm=='UGPMT1')].idPrmpTutelle", containsInAnyOrder("PRMP001")));
+
+        // PRMP de tutelle inconnue → liste vide (filtre, pas de 404).
+        mvc.perform(get("/api/ugpms/par-tutelle/NOPE").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+    }
+
+    @Test
     @DisplayName("POST /api/ugpms/suppression-lot : tolérant → bilan supprimes/introuvables (+ comptes nettoyés) ; liste vide → 400")
     void ugpm_suppressionLot() throws Exception {
         String identite = "\"nomUgpm\":\"Rakoto\",\"prenomsUgpm\":\"Jean\","
