@@ -18,6 +18,9 @@ public interface ControleurRepository extends JpaRepository<Controleur, String> 
     /** Contrôleurs affectés à une localité (idLocalite = X ; exclut les transversaux à localité nulle). */
     List<Controleur> findByIdLocalite(String idLocalite);
 
+    /** Contrôleurs d'un profil (rôle) donné — idProfile = X (tr_profile). */
+    List<Controleur> findByIdProfile(Integer idProfile);
+
     /** Ce contrôleur est-il le supérieur hiérarchique d'un autre ? (garde de suppression) */
     boolean existsByIdSuperieur(String idSuperieur);
 }

@@ -446,6 +446,8 @@ utilisateur (ex. mot de passe oublié) ; l'utilisateur pourra ensuite le changer
 **Ressource** `/api/controleurs` — Gestion des comptes (§3.8) : lecture ouverte ; écriture réservée à `ADMINISTRATEUR`.
 `GET /par-localite/{idLocalite}` liste les contrôleurs **affectés** à une localité (`idLocalite = X`) — liste **vide**
 si aucun (pas de 404) ; les **transversaux** (contrôleur à localité nulle, ex. Président/Publication) sont **exclus**.
+`GET /par-profil/{idProfile}` liste les contrôleurs d'un **profil** (rôle, `tr_profile` : 1 PRMP… 8 Administrateur,
+9 Assistant contrôleur) — liste **vide** si aucun (pas de 404).
 
 **Champs `ControleurDto`**
 
@@ -468,6 +470,7 @@ si aucun (pas de 404) ; les **transversaux** (contrôleur à localité nulle, ex
 | GET | /api/controleurs | — | `ControleurDto[]` | 200 | Authentifié |
 | GET | /api/controleurs/{id} | — | `ControleurDto` | 200, 404 | Authentifié |
 | GET | /api/controleurs/par-localite/{idLocalite} | — | `ControleurDto[]` | 200 | Authentifié |
+| GET | /api/controleurs/par-profil/{idProfile} | — | `ControleurDto[]` | 200 | Authentifié |
 | POST | /api/controleurs | `ControleurDto` | `ControleurDto` | 201, 400, 403 | ADMINISTRATEUR |
 | PUT | /api/controleurs/{id} | `ControleurDto` | `ControleurDto` | 200, 400, 403, 404 | ADMINISTRATEUR |
 | DELETE | /api/controleurs/{id} | — | — | 204, 403, 404, 409 | ADMINISTRATEUR |

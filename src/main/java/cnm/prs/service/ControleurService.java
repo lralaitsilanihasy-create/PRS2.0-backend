@@ -81,6 +81,12 @@ public class ControleurService {
         return repository.findByIdLocalite(idLocalite).stream().map(ControleurMapper::toDto).toList();
     }
 
+    /** Contrôleurs d'un profil (rôle) donné ({@code idProfile} = X). Liste, vide si aucun. */
+    @Transactional(readOnly = true)
+    public List<ControleurDto> findByProfil(Integer idProfile) {
+        return repository.findByIdProfile(idProfile).stream().map(ControleurMapper::toDto).toList();
+    }
+
     public ControleurDto create(ControleurDto dto) {
         Controleur entity = ControleurMapper.toEntity(dto);
         return ControleurMapper.toDto(repository.save(entity));

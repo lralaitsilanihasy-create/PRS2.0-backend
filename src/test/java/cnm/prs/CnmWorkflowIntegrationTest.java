@@ -5287,6 +5287,20 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("GET /api/controleurs/par-profil/{idProfile} : contrôleurs d'un profil ; profil inconnu → vide")
+    void controleur_parProfil() throws Exception {
+        // Seed : profil 3 (Chef de commission) = CTRCC1 (ANT) + CTRCC2 (TMS).
+        mvc.perform(get("/api/controleurs/par-profil/3").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].imControleur", containsInAnyOrder("CTRCC1", "CTRCC2")));
+
+        // Profil inexistant → liste vide (filtre, pas de 404).
+        mvc.perform(get("/api/controleurs/par-profil/99").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+    }
+
+    @Test
     @DisplayName("POST /api/controleurs/suppression-lot : tolérant → bilan supprimes/introuvables/bloques ; vide → 400 ; non-admin → 403")
     void controleur_suppressionLot() throws Exception {
         // Contrôleur « propre » (aucune activité) + compte. CTRMEM (seed) est membre de l'examen 1 → bloqué.

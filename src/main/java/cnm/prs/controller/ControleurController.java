@@ -50,6 +50,12 @@ public class ControleurController {
         return service.findByLocalite(idLocalite);
     }
 
+    /** Contrôleurs d'un profil (rôle, tr_profile) donné (liste, vide si aucun). */
+    @GetMapping("/par-profil/{idProfile}")
+    public List<ControleurDto> findByProfil(@PathVariable Integer idProfile) {
+        return service.findByProfil(idProfile);
+    }
+
     @PostMapping
     public ResponseEntity<ControleurDto> create(@Valid @RequestBody ControleurDto dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.create(dto));
