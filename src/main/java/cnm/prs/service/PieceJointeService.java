@@ -82,6 +82,11 @@ public class PieceJointeService {
                         "Pièce « " + type + " » introuvable pour " + login + "."));
     }
 
+    /** Purge toutes les pièces d'une clé acteur (appelé à la suppression de l'acteur, évite les orphelins). */
+    public void purger(String cle) {
+        repository.deleteByLogin(cle);
+    }
+
     private byte[] lire(MultipartFile fichier) {
         try {
             return fichier.getBytes();

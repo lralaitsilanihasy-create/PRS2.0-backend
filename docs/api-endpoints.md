@@ -477,10 +477,13 @@ si aucun résultat (pas de 404). `{nom}` est un fragment (URL-encoder si espaces
 | GET | /api/controleurs/par-profil/{idProfile} | — | `ControleurDto[]` | 200 | Authentifié |
 | GET | /api/controleurs/par-superieur/{imSuperieur} | — | `ControleurDto[]` | 200 | Authentifié |
 | GET | /api/controleurs/par-nom/{nom} | — | `ControleurDto[]` | 200 | Authentifié |
-| POST | /api/controleurs | `ControleurDto` | `ControleurDto` | 201, 400, 403 | ADMINISTRATEUR |
+| POST | /api/controleurs | `ControleurDto` (**JSON**) | `ControleurDto` | 201, 400, 403 | ADMINISTRATEUR |
+| POST | /api/controleurs | **`multipart/form-data`** : part `data` (JSON `ControleurDto`) + `photo` (opt.) | `ControleurDto` | 201, 400, 403 | ADMINISTRATEUR |
 | PUT | /api/controleurs/{id} | `ControleurDto` | `ControleurDto` | 200, 400, 403, 404 | ADMINISTRATEUR |
 | DELETE | /api/controleurs/{id} | — | — | 204, 403, 404, 409 | ADMINISTRATEUR |
 | POST | /api/controleurs/suppression-lot | `SuppressionLotControleurRequest` `{matricules[]}` | `SuppressionLotControleurResult` | 200, 400, 403 | ADMINISTRATEUR |
+| POST | /api/controleurs/{id}/pieces/{type} | `multipart/form-data` (part `fichier`) ; `type` = `PHOTO` | `PieceJointeMetaDto` | 200, 400, 403, 404 | ADMINISTRATEUR |
+| GET | /api/controleurs/{id}/pieces/{type} | — ; `type` = `PHOTO` | fichier (binaire) | 200, 400, 403, 404 | ADMINISTRATEUR |
 
 > **DELETE** supprime le contrôleur **et son compte d'authentification**, en nettoyant ses données **dérivées**
 > (sessions, indicateurs). **Garde métier → 409** tant qu'il a une **activité** : supérieur hiérarchique d'un autre
@@ -492,6 +495,14 @@ si aucun résultat (pas de 404). `{nom}` est un fragment (URL-encoder si espaces
 > string[], introuvables: string[], bloques: string[]}`. Chaque contrôleur **sans activité métier** est supprimé
 > (données dérivées + compte) → `supprimes` ; les absents → `introuvables` ; ceux **avec activité** (même garde que
 > le 409 unitaire) → `bloques` (non supprimés). **Jamais d'échec global** ; doublons ignorés.
+>
+> **Photo (pièce jointe).** En plus de la variante **JSON pure** (rétro-compatible), `POST /api/controleurs`
+> accepte une variante **`multipart/form-data`** : part `data` (JSON = `ControleurDto`) + part `photo`
+> **optionnelle**. On peut aussi **déposer/remplacer** la photo via `POST /api/controleurs/{id}/pieces/{type}`
+> (part `fichier`) et la **télécharger** via `GET /api/controleurs/{id}/pieces/{type}`. Le contrôleur n'a **ni CIN
+> ni arrêté** → `type` limité à **`PHOTO`** (tout autre → **400**). La photo doit être une **image (JPEG/PNG**,
+> magic-bytes), **≤ 5 Mo** (sinon **400**). Stockée sous la clé `imControleur` ; **404** si le contrôleur ou la
+> photo est inconnu(e). Le **DELETE** d'un contrôleur **purge sa photo** (`t_piece_jointe`) — pas d'orphelin.
 
 `{id}` = imControleur (string).
 

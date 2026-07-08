@@ -2,7 +2,9 @@ package cnm.prs.controller;
 
 import java.util.List;
 
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -12,13 +14,18 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import jakarta.validation.Valid;
 
 import cnm.prs.dto.ControleurDto;
+import cnm.prs.dto.PieceJointeMetaDto;
 import cnm.prs.dto.SuppressionLotControleurRequest;
 import cnm.prs.dto.SuppressionLotControleurResult;
+import cnm.prs.entity.PieceJointe;
+import cnm.prs.enums.TypePieceJointe;
 import cnm.prs.service.ControleurService;
 
 /**
@@ -68,9 +75,21 @@ public class ControleurController {
         return service.findByNom(nom);
     }
 
-    @PostMapping
+    @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<ControleurDto> create(@Valid @RequestBody ControleurDto dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.create(dto));
+    }
+
+    /**
+     * Création <strong>multipart</strong> avec photo <strong>optionnelle</strong> (miroir PRMP/UGPM, photo seule) :
+     * part {@code data} (JSON = {@code ControleurDto}) + part {@code photo}. La photo doit être une image
+     * (JPEG/PNG, magic-bytes), ≤ 5 Mo (sinon 400).
+     */
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ControleurDto> createAvecPhoto(
+            @Valid @RequestPart("data") ControleurDto dto,
+            @RequestPart(value = "photo", required = false) MultipartFile photo) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(service.createAvecPhoto(dto, photo));
     }
 
     @PutMapping("/{id}")
@@ -82,6 +101,30 @@ public class ControleurController {
     public ResponseEntity<Void> delete(@PathVariable String id) {
         service.delete(id);
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Dépose (ou remplace) la photo d'un contrôleur ({@code id} = imControleur). Réservé {@code ADMINISTRATEUR}
+     * (sous-chemin non couvert par SecurityConfig). {@code type} ∈ {@code PHOTO} uniquement (autre → 400).
+     */
+    @PreAuthorize("hasRole('ADMINISTRATEUR')")
+    @PostMapping(value = "/{id}/pieces/{type}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public PieceJointeMetaDto deposerPhoto(@PathVariable String id, @PathVariable TypePieceJointe type,
+            @RequestPart("fichier") MultipartFile fichier) {
+        return service.deposerPhoto(id, type, fichier);
+    }
+
+    /** Téléchargement de la photo d'un contrôleur. Réservé {@code ADMINISTRATEUR}. **404** si la photo est absente. */
+    @PreAuthorize("hasRole('ADMINISTRATEUR')")
+    @GetMapping("/{id}/pieces/{type}")
+    public ResponseEntity<byte[]> telechargerPhoto(@PathVariable String id, @PathVariable TypePieceJointe type) {
+        PieceJointe piece = service.telechargerPhoto(id, type);
+        String format = piece.getFormat() != null ? piece.getFormat() : MediaType.APPLICATION_OCTET_STREAM_VALUE;
+        String nom = piece.getLibelle() != null ? piece.getLibelle() : id + "_" + type;
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(format))
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + nom + "\"")
+                .body(piece.getContenu());
     }
 
     /**

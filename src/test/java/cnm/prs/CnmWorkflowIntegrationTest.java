@@ -5463,6 +5463,68 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("POST /api/controleurs multipart : fiche + photo (opt.), GET ; type≠PHOTO/PDF/>5Mo → 400 ; JSON conservé ; DELETE purge la photo ; non-admin → 403")
+    void controleur_photo() throws Exception {
+        byte[] jpeg = { (byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0, 0, 0, 0 };
+        byte[] png = { (byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0 };
+        byte[] pdf = "%PDF-1.4 pas une image".getBytes(StandardCharsets.US_ASCII);
+        byte[] data = "{\"imControleur\":\"CTRPHO\",\"idProfile\":6,\"transversal\":false,\"nomCont\":\"Photo\"}"
+                .getBytes(StandardCharsets.UTF_8);
+
+        // --- Écritures réussies d'abord. ---
+        // Création multipart : data + photo (JPEG).
+        mvc.perform(multipart("/api/controleurs").header("Authorization", tokenAdmin)
+                .file(new MockMultipartFile("data", "", "application/json", data))
+                .file(new MockMultipartFile("photo", "photo.jpg", "image/jpeg", jpeg)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.imControleur").value("CTRPHO"));
+        // Téléchargement de la photo stockée.
+        mvc.perform(get("/api/controleurs/CTRPHO/pieces/PHOTO").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk()).andExpect(content().contentType(MediaType.IMAGE_JPEG));
+        // Dépôt ultérieur (remplace la photo par un PNG).
+        mvc.perform(multipart("/api/controleurs/CTRPHO/pieces/PHOTO").header("Authorization", tokenAdmin)
+                .file(new MockMultipartFile("fichier", "p.png", "image/png", png)))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/controleurs/CTRPHO/pieces/PHOTO").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk()).andExpect(content().contentType(MediaType.IMAGE_PNG));
+        // JSON pur (sans photo) → 201 (rétro-compat).
+        mvc.perform(post("/api/controleurs").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"imControleur\":\"CTRPHO2\",\"idProfile\":6,\"transversal\":false}"))
+                .andExpect(status().isCreated());
+        // DELETE purge la photo (t_piece_jointe, clé imControleur) — pas d'orphelin.
+        mvc.perform(delete("/api/controleurs/CTRPHO").header("Authorization", tokenAdmin))
+                .andExpect(status().isNoContent());
+        org.junit.jupiter.api.Assertions.assertTrue(pieceJointeRepository.findByLogin("CTRPHO").isEmpty());
+
+        // --- Cas d'erreur ensuite (CTRPHO2 existe, sans photo). ---
+        // type ≠ PHOTO → 400 (le contrôleur n'a pas d'autre pièce).
+        mvc.perform(multipart("/api/controleurs/CTRPHO2/pieces/CIN").header("Authorization", tokenAdmin)
+                .file(new MockMultipartFile("fichier", "c.jpg", "image/jpeg", jpeg)))
+                .andExpect(status().isBadRequest());
+        // Photo = image seulement : un PDF → 400.
+        mvc.perform(multipart("/api/controleurs/CTRPHO2/pieces/PHOTO").header("Authorization", tokenAdmin)
+                .file(new MockMultipartFile("fichier", "p.pdf", "application/pdf", pdf)))
+                .andExpect(status().isBadRequest());
+        // Contrôleur inconnu → 404.
+        mvc.perform(multipart("/api/controleurs/INCONNU/pieces/PHOTO").header("Authorization", tokenAdmin)
+                .file(new MockMultipartFile("fichier", "p.png", "image/png", png)))
+                .andExpect(status().isNotFound());
+        // Photo > 5 Mo → 400 (contrôle de taille).
+        byte[] gros = new byte[6 * 1024 * 1024];
+        gros[0] = (byte) 0xFF; gros[1] = (byte) 0xD8; gros[2] = (byte) 0xFF;   // JPEG magic
+        byte[] data3 = "{\"imControleur\":\"CTRPHO3\",\"idProfile\":6,\"transversal\":false}"
+                .getBytes(StandardCharsets.UTF_8);
+        mvc.perform(multipart("/api/controleurs").header("Authorization", tokenAdmin)
+                .file(new MockMultipartFile("data", "", "application/json", data3))
+                .file(new MockMultipartFile("photo", "big.jpg", "image/jpeg", gros)))
+                .andExpect(status().isBadRequest());
+        // Non-admin → 403 (sous-chemin sécurisé par @PreAuthorize).
+        mvc.perform(get("/api/controleurs/CTRPHO2/pieces/PHOTO").header("Authorization", tokenMembre))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     @DisplayName("GET /api/controleurs/par-localite/{idLocalite} : contrôleurs affectés ; transversal (localité nulle) exclu ; inconnue → vide")
     void controleur_parLocalite() throws Exception {
         // Seed : CTRCC2 en TMS ; CTRPRE a une localité NULLE (transversal).

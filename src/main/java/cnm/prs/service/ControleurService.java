@@ -5,11 +5,16 @@ import java.util.List;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import cnm.prs.dto.ControleurDto;
+import cnm.prs.dto.PieceJointeMetaDto;
 import cnm.prs.dto.SuppressionLotControleurResult;
 import cnm.prs.entity.Controleur;
+import cnm.prs.entity.PieceJointe;
 import cnm.prs.enums.TypeActeur;
+import cnm.prs.enums.TypePieceJointe;
+import cnm.prs.exception.BadRequestException;
 import cnm.prs.exception.BusinessRuleException;
 import cnm.prs.exception.ResourceNotFoundException;
 import cnm.prs.mapper.ControleurMapper;
@@ -43,13 +48,14 @@ public class ControleurService {
     private final LettreRenvoiRepository lettreRenvoiRepository;
     private final SessionUtilisateurRepository sessionRepository;
     private final IndicateurCtrlRepository indicateurCtrlRepository;
+    private final PieceJointeService pieceJointeService;
 
     public ControleurService(ControleurRepository repository, CompteAuthRepository compteRepository,
             ExamenRepository examenRepository, PvExamenRepository pvExamenRepository,
             VerificationRepository verificationRepository, DispatchRepository dispatchRepository,
             ReceptionRepository receptionRepository, DemandeRetraitRepository demandeRetraitRepository,
             LettreRenvoiRepository lettreRenvoiRepository, SessionUtilisateurRepository sessionRepository,
-            IndicateurCtrlRepository indicateurCtrlRepository) {
+            IndicateurCtrlRepository indicateurCtrlRepository, PieceJointeService pieceJointeService) {
         this.repository = repository;
         this.compteRepository = compteRepository;
         this.examenRepository = examenRepository;
@@ -61,6 +67,7 @@ public class ControleurService {
         this.lettreRenvoiRepository = lettreRenvoiRepository;
         this.sessionRepository = sessionRepository;
         this.indicateurCtrlRepository = indicateurCtrlRepository;
+        this.pieceJointeService = pieceJointeService;
     }
 
     @Transactional(readOnly = true)
@@ -102,6 +109,54 @@ public class ControleurService {
     public ControleurDto create(ControleurDto dto) {
         Controleur entity = ControleurMapper.toEntity(dto);
         return ControleurMapper.toDto(repository.save(entity));
+    }
+
+    /**
+     * Création avec photo <strong>optionnelle</strong> (miroir PRMP/UGPM, photo seule) : crée le contrôleur puis
+     * stocke la {@code PHOTO} sous la clé {@code imControleur}. Transactionnel : un fichier invalide annule la
+     * création (400).
+     */
+    public ControleurDto createAvecPhoto(ControleurDto dto, MultipartFile photo) {
+        ControleurDto cree = create(dto);
+        if (photo != null && !photo.isEmpty()) {
+            stockerPhoto(cree.getImControleur(), TypePieceJointe.PHOTO, photo);
+        }
+        return cree;
+    }
+
+    /**
+     * Dépose (ou remplace) la photo d'un contrôleur. {@code type} limité à {@code PHOTO} (tout autre → 400,
+     * le contrôleur n'a pas d'autre pièce). <strong>404</strong> si le contrôleur est inconnu.
+     */
+    public PieceJointeMetaDto deposerPhoto(String imControleur, TypePieceJointe type, MultipartFile fichier) {
+        exigerPhoto(type);
+        if (!repository.existsById(imControleur)) {
+            throw new ResourceNotFoundException("Controleur introuvable : " + imControleur);
+        }
+        return stockerPhoto(imControleur, type, fichier);
+    }
+
+    /** Récupère la photo d'un contrôleur. {@code type} ≠ {@code PHOTO} → 400 ; photo absente → 404. */
+    @Transactional(readOnly = true)
+    public PieceJointe telechargerPhoto(String imControleur, TypePieceJointe type) {
+        exigerPhoto(type);
+        return pieceJointeService.telecharger(imControleur, type);
+    }
+
+    /** Stocke la photo puis refuse un fichier qui n'est pas une image (JPEG/PNG) → 400 (rollback). */
+    private PieceJointeMetaDto stockerPhoto(String imControleur, TypePieceJointe type, MultipartFile fichier) {
+        PieceJointeMetaDto meta = pieceJointeService.stocker(imControleur, type, fichier);
+        if ("application/pdf".equals(meta.format())) {
+            throw new BadRequestException("La photo doit être une image (JPEG ou PNG), pas un PDF.");
+        }
+        return meta;
+    }
+
+    /** Le contrôleur n'a ni CIN ni arrêté : seule la pièce PHOTO est autorisée. */
+    private void exigerPhoto(TypePieceJointe type) {
+        if (type != TypePieceJointe.PHOTO) {
+            throw new BadRequestException("Seule la pièce PHOTO est autorisée pour un contrôleur.");
+        }
     }
 
     public ControleurDto update(String id, ControleurDto dto) {
@@ -174,6 +229,7 @@ public class ControleurService {
     private void supprimerUn(String id) {
         sessionRepository.deleteByImControleur(id);
         indicateurCtrlRepository.deleteByImControleur(id);
+        pieceJointeService.purger(id);   // purge la photo (t_piece_jointe, clé imControleur) — pas d'orphelin
         compteRepository.deleteAll(compteRepository.findByRefActeurAndTypeActeur(id, TypeActeur.CONTROLEUR.name()));
         repository.deleteById(id);
     }
