@@ -193,6 +193,19 @@ public class UgpmService {
     }
 
     /**
+     * Modifie une UGPM <strong>et remplace ses pièces</strong> (miroir de {@link #creerAvecPieces}) : met à jour
+     * l'identité via {@link #modifier} (404 si inconnue), puis remplace la {@code CIN} et/ou la {@code PHOTO}
+     * fournies. Une pièce <strong>absente est laissée inchangée</strong>. Transactionnel : un fichier invalide
+     * (type/taille) annule la modification (400).
+     */
+    public UgpmDto modifierAvecPieces(String idUgpm, ModifierUgpmRequest req, MultipartFile cin, MultipartFile photo) {
+        UgpmDto maj = modifier(idUgpm, req);
+        stockerSiPresente(idUgpm, TypePieceJointe.CIN, cin);
+        stockerSiPresente(idUgpm, TypePieceJointe.PHOTO, photo);
+        return maj;
+    }
+
+    /**
      * Supprime une UGPM et son compte d'authentification (créés ensemble à {@link #creer}). Les dossiers
      * qu'elle a créés restent la propriété de la PRMP de tutelle (leur {@code CREE_PAR} est une simple trace,
      * pas une FK vers t_ugpm).

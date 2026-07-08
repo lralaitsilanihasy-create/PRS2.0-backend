@@ -1061,7 +1061,8 @@ pas de 404 (filtre).
 | GET | /api/ugpms/par-tutelle/{idPrmp} | — | `UgpmDto[]` | 200, 403 | **ADMINISTRATEUR** |
 | GET | /api/ugpms/par-localite/{idLocalite} | — | `UgpmDto[]` | 200, 403 | **ADMINISTRATEUR** |
 | GET | /api/ugpms/par-nom/{nom} | — | `UgpmDto[]` | 200, 403 | **ADMINISTRATEUR** |
-| PUT | /api/ugpms/{id} | `ModifierUgpmRequest` | `UgpmDto` | 200, 400, 403, 404, 409 | **ADMINISTRATEUR** |
+| PUT | /api/ugpms/{id} | `ModifierUgpmRequest` (**JSON**) | `UgpmDto` | 200, 400, 403, 404, 409 | **ADMINISTRATEUR** |
+| PUT | /api/ugpms/{id} | **`multipart/form-data`** : part `data` (JSON `ModifierUgpmRequest`) + `cin`/`photo` (opt.) | `UgpmDto` | 200, 400, 403, 404, 409 | **ADMINISTRATEUR** |
 | DELETE | /api/ugpms/{id} | — | — | 204, 403, 404 | **ADMINISTRATEUR** |
 | POST | /api/ugpms/suppression-lot | `SuppressionLotUgpmRequest` `{matricules[]}` | `SuppressionLotResult` | 200, 400, 403 | **ADMINISTRATEUR** |
 | POST | /api/ugpms/{id}/pieces/{type} | `multipart/form-data` (part `fichier`) ; `type` ∈ `CIN`/`PHOTO` | `PieceJointeMetaDto` | 200, 400, 403, 404 | **ADMINISTRATEUR** |
@@ -1095,7 +1096,10 @@ listés dans `introuvables` — **jamais d'échec global**. Doublons ignorés.
 **Pièces jointes (CIN + photo, pas d'arrêté).** En plus de la variante **JSON pure** (rétro-compatible), `POST
 /api/ugpms` accepte une variante **`multipart/form-data`** : part `data` (JSON = `CreerUgpmRequest`) + parts
 `cin`/`photo` **optionnelles**. On peut aussi **déposer/remplacer** une pièce ultérieurement via `POST
-/api/ugpms/{id}/pieces/{type}` (part `fichier`) et la **télécharger** via `GET /api/ugpms/{id}/pieces/{type}`. Les
+/api/ugpms/{id}/pieces/{type}` (part `fichier`) et la **télécharger** via `GET /api/ugpms/{id}/pieces/{type}`. La
+**modification** `PUT /api/ugpms/{id}` accepte elle aussi une variante **`multipart/form-data`** (part `data` = JSON
+`ModifierUgpmRequest` + `cin`/`photo` optionnelles) qui met à jour l'identité **et remplace** les pièces fournies —
+une **pièce absente est laissée inchangée** ; la variante **JSON pure** du PUT reste disponible (rétro-compat). Les
 pièces sont stockées sous la clé `idUgpm`. Miroir de la PRMP, **sans arrêté** : l'UGPM n'a pas d'arrêté de nomination
 → `type` limité à **`CIN`/`PHOTO`** ; `ARRETE_NOMIN` → **400**. Contraintes fichiers : **PDF/JPEG/PNG** (magic-bytes),
 **≤ 5 Mo** chacune ; la **photo doit être une image** (JPEG/PNG, un PDF → **400**). Fichier absent/invalide/trop

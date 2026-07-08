@@ -120,9 +120,24 @@ public class UgpmController {
     }
 
     @PreAuthorize("hasRole('ADMINISTRATEUR')")
-    @PutMapping("/{id}")
+    @PutMapping(value = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE)
     public UgpmDto modifier(@PathVariable String id, @Valid @RequestBody ModifierUgpmRequest req) {
         return service.modifier(id, req);
+    }
+
+    /**
+     * Modification <strong>multipart</strong> avec pièces (miroir du POST multipart) : part {@code data} (JSON
+     * {@code ModifierUgpmRequest}) + parts {@code cin}/{@code photo} <strong>optionnelles</strong> (fournie →
+     * remplace ; absente → inchangée). Mêmes contraintes fichiers : {@code CIN}/{@code PHOTO}, photo = image,
+     * ≤ 5 Mo (sinon 400). <strong>404</strong> si l'UGPM est inconnue.
+     */
+    @PreAuthorize("hasRole('ADMINISTRATEUR')")
+    @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public UgpmDto modifierAvecPieces(@PathVariable String id,
+            @Valid @RequestPart("data") ModifierUgpmRequest req,
+            @RequestPart(value = "cin", required = false) MultipartFile cin,
+            @RequestPart(value = "photo", required = false) MultipartFile photo) {
+        return service.modifierAvecPieces(id, req, cin, photo);
     }
 
     @PreAuthorize("hasRole('ADMINISTRATEUR')")

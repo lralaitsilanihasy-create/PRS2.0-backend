@@ -3736,6 +3736,72 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("PUT /api/ugpms/{id} multipart : maj identité + remplace pièces ; pièce absente inchangée ; JSON conservé ; inconnu → 404 ; photo PDF → 400")
+    void ugpm_modificationAvecPieces() throws Exception {
+        mvc.perform(post("/api/ugpms").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idUgpm\":\"UGPPUT\",\"libelle\":\"Avant\",\"idPrmpTutelle\":\"PRMP001\","
+                        + "\"nomUgpm\":\"Rakoto\",\"prenomsUgpm\":\"Jean\",\"cin\":\"101234567890\","
+                        + "\"dateCin\":\"2010-05-20\",\"lieuCin\":\"Antananarivo\",\"emailUgpm\":\"ugpm@ex.mg\","
+                        + "\"telUgpm\":\"0340000000\",\"login\":\"ugpput\",\"motDePasse\":\"Ugpm@1234\"}"))
+                .andExpect(status().isCreated());
+
+        byte[] jpeg = { (byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0, 0, 0, 0 };
+        byte[] png = { (byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0 };
+        byte[] pdf = "%PDF-1.4 pas une image".getBytes(StandardCharsets.US_ASCII);
+        byte[] data = ("{\"libelle\":\"Apres\",\"idPrmpTutelle\":\"PRMP001\",\"nomUgpm\":\"Randria\","
+                + "\"prenomsUgpm\":\"Paul\",\"cin\":\"101234567890\",\"dateCin\":\"2011-06-21\","
+                + "\"lieuCin\":\"Toamasina\",\"emailUgpm\":\"ugpm.new@ex.mg\",\"telUgpm\":\"0341112222\"}")
+                .getBytes(StandardCharsets.UTF_8);
+
+        // --- Écritures réussies d'abord. ---
+        // PUT multipart : maj identité + dépose CIN (JPEG) + PHOTO (PNG). MockMvc : builder POST forcé en PUT.
+        mvc.perform(multipart("/api/ugpms/UGPPUT").header("Authorization", tokenAdmin)
+                .file(new MockMultipartFile("data", "", "application/json", data))
+                .file(new MockMultipartFile("cin", "cin.jpg", "image/jpeg", jpeg))
+                .file(new MockMultipartFile("photo", "photo.png", "image/png", png))
+                .with(r -> { r.setMethod("PUT"); return r; }))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.libelle").value("Apres"))
+                .andExpect(jsonPath("$.nomUgpm").value("Randria"))
+                .andExpect(jsonPath("$.emailUgpm").value("ugpm.new@ex.mg"));
+        mvc.perform(get("/api/ugpms/UGPPUT/pieces/CIN").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk()).andExpect(content().contentType(MediaType.IMAGE_JPEG));
+        mvc.perform(get("/api/ugpms/UGPPUT/pieces/PHOTO").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk()).andExpect(content().contentType(MediaType.IMAGE_PNG));
+
+        // PUT multipart avec SEULEMENT la CIN (PNG) : CIN remplacée, PHOTO laissée inchangée.
+        mvc.perform(multipart("/api/ugpms/UGPPUT").header("Authorization", tokenAdmin)
+                .file(new MockMultipartFile("data", "", "application/json", data))
+                .file(new MockMultipartFile("cin", "cin.png", "image/png", png))
+                .with(r -> { r.setMethod("PUT"); return r; }))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/ugpms/UGPPUT/pieces/CIN").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk()).andExpect(content().contentType(MediaType.IMAGE_PNG));   // remplacée
+        mvc.perform(get("/api/ugpms/UGPPUT/pieces/PHOTO").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk()).andExpect(content().contentType(MediaType.IMAGE_PNG));   // inchangée
+
+        // PUT JSON pur (sans pièces) → 200 (rétro-compat).
+        mvc.perform(put("/api/ugpms/UGPPUT").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content(new String(data, StandardCharsets.UTF_8)))
+                .andExpect(status().isOk());
+
+        // --- Cas d'erreur ensuite. ---
+        // UGPM inconnue → 404.
+        mvc.perform(multipart("/api/ugpms/INCONNU").header("Authorization", tokenAdmin)
+                .file(new MockMultipartFile("data", "", "application/json", data))
+                .with(r -> { r.setMethod("PUT"); return r; }))
+                .andExpect(status().isNotFound());
+
+        // Photo = image seulement : un PDF en PHOTO → 400.
+        mvc.perform(multipart("/api/ugpms/UGPPUT").header("Authorization", tokenAdmin)
+                .file(new MockMultipartFile("data", "", "application/json", data))
+                .file(new MockMultipartFile("photo", "p.pdf", "application/pdf", pdf))
+                .with(r -> { r.setMethod("PUT"); return r; }))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     @DisplayName("DELETE /api/ugpms/{id} : supprime l'UGPM et son compte ; id inconnu → 404")
     void ugpm_delete() throws Exception {
         String identite = "\"nomUgpm\":\"Rakoto\",\"prenomsUgpm\":\"Jean\","
