@@ -26,4 +26,7 @@ public interface ControleurRepository extends JpaRepository<Controleur, String> 
 
     /** Contrôleurs dont le supérieur hiérarchique est {@code imSuperieur} (ses subordonnés directs). */
     List<Controleur> findByIdSuperieur(String idSuperieur);
+
+    /** Recherche partielle par nom (contient, insensible à la casse). */
+    List<Controleur> findByNomContContainingIgnoreCase(String nom);
 }

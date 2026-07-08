@@ -93,6 +93,12 @@ public class ControleurService {
         return repository.findByIdSuperieur(imSuperieur).stream().map(ControleurMapper::toDto).toList();
     }
 
+    /** Recherche partielle par nom (contient, insensible à la casse). Liste, vide si aucun résultat. */
+    @Transactional(readOnly = true)
+    public List<ControleurDto> findByNom(String nom) {
+        return repository.findByNomContContainingIgnoreCase(nom).stream().map(ControleurMapper::toDto).toList();
+    }
+
     public ControleurDto create(ControleurDto dto) {
         Controleur entity = ControleurMapper.toEntity(dto);
         return ControleurMapper.toDto(repository.save(entity));

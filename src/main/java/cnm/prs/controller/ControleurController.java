@@ -62,6 +62,12 @@ public class ControleurController {
         return service.findBySuperieur(imSuperieur);
     }
 
+    /** Recherche partielle par nom (contient, insensible à la casse ; liste, vide si aucun résultat). */
+    @GetMapping("/par-nom/{nom}")
+    public List<ControleurDto> findByNom(@PathVariable String nom) {
+        return service.findByNom(nom);
+    }
+
     @PostMapping
     public ResponseEntity<ControleurDto> create(@Valid @RequestBody ControleurDto dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.create(dto));
