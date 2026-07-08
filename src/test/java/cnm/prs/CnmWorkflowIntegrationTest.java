@@ -5350,6 +5350,27 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("GET /api/prmps/par-entite/{idEntiteContract} : PRMP via affectation ACTIVE (0 ou 1) ; inactive exclue ; entité sans PRMP → vide")
+    void prmp_parEntite() throws Exception {
+        // Seed : PRMP001 rattachée (ACTIVE) à l'entité 1. Affectation INACTIVE de PRMPINE à l'entité 952.
+        mvc.perform(get("/api/prmps/par-entite/1").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].idPrmp", containsInAnyOrder("PRMP001")));
+
+        prmpRepository.save(prmp("PRMPINE", "ANT"));
+        entiteContractRepository.save(entite(952, 1, "ANT"));
+        prmpEntiteRepository.save(prmpEntite(9520, "PRMPINE", 952, false));   // inactive
+        mvc.perform(get("/api/prmps/par-entite/952").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));   // affectation inactive → exclue
+
+        // Entité sans affectation → vide.
+        mvc.perform(get("/api/prmps/par-entite/888888").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+    }
+
+    @Test
     @DisplayName("DELETE /api/prmps/{id} : PRMP sans données → 204 (+ compte supprimé) ; avec dossier → 409 ; inconnue → 404")
     void prmp_delete_gardeEtCompte() throws Exception {
         // PRMP « propre » (aucune donnée liée) + son compte d'authentification.

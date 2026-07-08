@@ -73,6 +73,15 @@ public class PrmpService {
         return repository.findByLocaliteViaEntitesActives(idLocalite).stream().map(PrmpMapper::toDto).toList();
     }
 
+    /**
+     * PRMP rattachée à une entité contractante via son affectation active (0 ou 1, invariant une seule PRMP
+     * active par entité). Liste, vide si aucune.
+     */
+    @Transactional(readOnly = true)
+    public List<PrmpDto> findByEntite(Integer idEntiteContract) {
+        return repository.findByEntiteViaAffectationActive(idEntiteContract).stream().map(PrmpMapper::toDto).toList();
+    }
+
     public PrmpDto create(PrmpDto dto) {
         Prmp entity = PrmpMapper.toEntity(dto);
         return PrmpMapper.toDto(repository.save(entity));

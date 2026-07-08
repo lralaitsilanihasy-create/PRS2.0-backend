@@ -20,4 +20,12 @@ public interface PrmpRepository extends JpaRepository<Prmp, String> {
             + "where pe.idPrmp = p.idPrmp and pe.actif = true "
             + "and e.idEntiteContract = pe.idEntiteContract and e.idLocalite = :loc")
     List<Prmp> findByLocaliteViaEntitesActives(@Param("loc") String loc);
+
+    /**
+     * PRMP rattachée à une entité contractante via une affectation <strong>active</strong> ({@code t_prmp_entite}).
+     * 0 ou 1 (invariant : une seule PRMP active par entité), renvoyée en liste pour cohérence avec les autres filtres.
+     */
+    @Query("select distinct p from Prmp p, PrmpEntite pe "
+            + "where pe.idPrmp = p.idPrmp and pe.actif = true and pe.idEntiteContract = :idEntite")
+    List<Prmp> findByEntiteViaAffectationActive(@Param("idEntite") Integer idEntite);
 }

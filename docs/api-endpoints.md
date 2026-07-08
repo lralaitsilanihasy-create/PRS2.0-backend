@@ -2508,6 +2508,10 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` et une `dateFi
 > **`GET /par-localite/{idLocalite}`** liste les PRMP rattachées à une localité **via leurs entités contractantes
 > actives** (`t_prmp_entite` actif → `tr_entite_contract.ID_LOCALITE`) — puisque la PRMP n'a pas de localité propre.
 > Liste **distincte**, **vide** si aucune (rattachement inactif exclu ; pas de 404).
+>
+> **`GET /par-entite/{idEntiteContract}`** renvoie la PRMP rattachée à une entité contractante **via son affectation
+> active** (`t_prmp_entite`) — **0 ou 1** (invariant : une seule PRMP active par entité), en **liste** (vide si aucune,
+> affectation inactive exclue ; pas de 404).
 
 **Endpoints**
 
@@ -2516,6 +2520,7 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` et une `dateFi
 | GET | /api/prmps | — | `PrmpDto[]` | 200 | Authentifié |
 | GET | /api/prmps/{id} | — | `PrmpDto` | 200, 404 | Authentifié |
 | GET | /api/prmps/par-localite/{idLocalite} | — | `PrmpDto[]` | 200 | Authentifié |
+| GET | /api/prmps/par-entite/{idEntiteContract} | — | `PrmpDto[]` | 200 | Authentifié |
 | POST | /api/prmps | `PrmpDto` | `PrmpDto` | 201, 400, 403 | ADMINISTRATEUR |
 | PUT | /api/prmps/{id} | `PrmpDto` | `PrmpDto` | 200, 400, 404 | ADMINISTRATEUR |
 | DELETE | /api/prmps/{id} | — | — | 204, 404, 409 | ADMINISTRATEUR |

@@ -50,6 +50,12 @@ public class PrmpController {
         return service.findByLocalite(idLocalite);
     }
 
+    /** PRMP rattachée à une entité contractante (affectation active) : 0 ou 1, en liste (vide si aucune). */
+    @GetMapping("/par-entite/{idEntiteContract}")
+    public List<PrmpDto> findByEntite(@PathVariable Integer idEntiteContract) {
+        return service.findByEntite(idEntiteContract);
+    }
+
     @PostMapping
     public ResponseEntity<PrmpDto> create(@Valid @RequestBody PrmpDto dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.create(dto));
