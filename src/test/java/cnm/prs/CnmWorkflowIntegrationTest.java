@@ -5272,6 +5272,21 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("GET /api/controleurs/par-localite/{idLocalite} : contrôleurs affectés ; transversal (localité nulle) exclu ; inconnue → vide")
+    void controleur_parLocalite() throws Exception {
+        // Seed : CTRCC2 en TMS ; CTRPRE a une localité NULLE (transversal).
+        mvc.perform(get("/api/controleurs/par-localite/TMS").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].imControleur", hasItem("CTRCC2")))
+                .andExpect(jsonPath("$[?(@.imControleur=='CTRPRE')]", hasSize(0)));   // localité nulle → exclu
+
+        // Localité sans contrôleur → liste vide (filtre, pas de 404).
+        mvc.perform(get("/api/controleurs/par-localite/ZZ").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+    }
+
+    @Test
     @DisplayName("POST /api/controleurs/suppression-lot : tolérant → bilan supprimes/introuvables/bloques ; vide → 400 ; non-admin → 403")
     void controleur_suppressionLot() throws Exception {
         // Contrôleur « propre » (aucune activité) + compte. CTRMEM (seed) est membre de l'examen 1 → bloqué.

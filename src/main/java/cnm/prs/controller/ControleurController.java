@@ -44,6 +44,12 @@ public class ControleurController {
         return service.findById(id);
     }
 
+    /** Contrôleurs affectés à une localité (liste, vide si aucun ; transversaux à localité nulle exclus). */
+    @GetMapping("/par-localite/{idLocalite}")
+    public List<ControleurDto> findByLocalite(@PathVariable String idLocalite) {
+        return service.findByLocalite(idLocalite);
+    }
+
     @PostMapping
     public ResponseEntity<ControleurDto> create(@Valid @RequestBody ControleurDto dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.create(dto));

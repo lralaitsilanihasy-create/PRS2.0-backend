@@ -75,6 +75,12 @@ public class ControleurService {
         return ControleurMapper.toDto(entity);
     }
 
+    /** Contrôleurs affectés à une localité ({@code idLocalite} = X). Liste, vide si aucun ; transversaux exclus. */
+    @Transactional(readOnly = true)
+    public List<ControleurDto> findByLocalite(String idLocalite) {
+        return repository.findByIdLocalite(idLocalite).stream().map(ControleurMapper::toDto).toList();
+    }
+
     public ControleurDto create(ControleurDto dto) {
         Controleur entity = ControleurMapper.toEntity(dto);
         return ControleurMapper.toDto(repository.save(entity));
