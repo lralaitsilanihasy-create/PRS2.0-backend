@@ -129,6 +129,8 @@ class CnmWorkflowIntegrationTest {
     @Autowired private ReceptionRepository receptionRepository;
     @Autowired private DispatchRepository dispatchRepository;
     @Autowired private ExamenRepository examenRepository;
+    @Autowired private cnm.prs.repository.SessionUtilisateurRepository sessionUtilisateurRepository;
+    @Autowired private cnm.prs.repository.IndicateurCtrlRepository indicateurCtrlRepository;
     @Autowired private PpmRepository ppmRepository;
     @Autowired private MarcheRepository marcheRepository;
     @Autowired private MarchePrevisionRepository marchePrevisionRepository;
@@ -5172,6 +5174,41 @@ class CnmWorkflowIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idPrmp\":\"IMNOM2\",\"nomPrmp\":\"" + "R".repeat(101) + "\"," + reste))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("DELETE /api/controleurs/{id} : contrôleur sans activité → 204 (+ compte/sessions/indicateurs nettoyés) ; avec activité → 409 ; inconnu → 404")
+    void controleur_delete_gardeEtNettoyage() throws Exception {
+        // Contrôleur « propre » (aucune participation métier) + compte + une session + un indicateur.
+        controleurRepository.save(controleur("CTRDEL", 6, "ANT"));
+        compteAuthRepository.save(new cnm.prs.entity.CompteAuth("ctrdel", "x",
+                cnm.prs.enums.TypeActeur.CONTROLEUR.name(), "CTRDEL", true));
+        cnm.prs.entity.SessionUtilisateur s = new cnm.prs.entity.SessionUtilisateur();
+        s.setIdSession("SESS-CTRDEL");
+        s.setImControleur("CTRDEL");
+        sessionUtilisateurRepository.save(s);
+        cnm.prs.entity.IndicateurCtrl ic = new cnm.prs.entity.IndicateurCtrl();
+        ic.setIdIndicateur(990001);
+        ic.setImControleur("CTRDEL");
+        ic.setPeriode("2026-06");
+        indicateurCtrlRepository.save(ic);
+
+        mvc.perform(delete("/api/controleurs/CTRDEL").header("Authorization", tokenAdmin))
+                .andExpect(status().isNoContent());
+        // Contrôleur + compte + données dérivées supprimés.
+        org.junit.jupiter.api.Assertions.assertFalse(controleurRepository.existsById("CTRDEL"));
+        org.junit.jupiter.api.Assertions.assertTrue(compteAuthRepository.findByLogin("ctrdel").isEmpty());
+        org.junit.jupiter.api.Assertions.assertFalse(sessionUtilisateurRepository.existsById("SESS-CTRDEL"));
+        org.junit.jupiter.api.Assertions.assertFalse(indicateurCtrlRepository.existsById(990001));
+
+        // CTRMEM est membre de l'examen 1 (seed) → activité métier → 409, le contrôleur subsiste.
+        mvc.perform(delete("/api/controleurs/CTRMEM").header("Authorization", tokenAdmin))
+                .andExpect(status().isConflict());
+        org.junit.jupiter.api.Assertions.assertTrue(controleurRepository.existsById("CTRMEM"));
+
+        // Inconnu → 404.
+        mvc.perform(delete("/api/controleurs/INCONNU").header("Authorization", tokenAdmin))
+                .andExpect(status().isNotFound());
     }
 
     @Test

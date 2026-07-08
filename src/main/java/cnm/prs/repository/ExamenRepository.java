@@ -16,6 +16,9 @@ public interface ExamenRepository extends JpaRepository<Examen, Integer> {
     @Query("select e from Examen e where e.dispatch.reception.ctrlRecept.idLocalite = :loc")
     List<Examen> findVisiblesParLocalite(@Param("loc") String loc);
 
+    /** Ce contrôleur est-il membre attributaire d'un examen ? (garde de suppression) */
+    boolean existsByImCtrlMembre(String imCtrlMembre);
+
     @Query("select (count(e) > 0) from Examen e where e.idExamen = :id and e.dispatch.reception.ctrlRecept.idLocalite = :loc")
     boolean existsDansLocalite(@Param("id") Integer id, @Param("loc") String loc);
 

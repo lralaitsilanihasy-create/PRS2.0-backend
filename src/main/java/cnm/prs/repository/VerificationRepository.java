@@ -15,6 +15,9 @@ public interface VerificationRepository extends JpaRepository<Verification, Inte
     @Query("select v from Verification v where v.reception.ctrlRecept.idLocalite = :loc")
     List<Verification> findVisiblesParLocalite(@Param("loc") String loc);
 
+    /** Ce contrôleur a-t-il réalisé au moins une vérification ? (garde de suppression) */
+    boolean existsByImCtrlVerif(String imCtrlVerif);
+
     @Query("select (count(v) > 0) from Verification v where v.idVerification = :id and v.reception.ctrlRecept.idLocalite = :loc")
     boolean existsDansLocalite(@Param("id") Integer id, @Param("loc") String loc);
 

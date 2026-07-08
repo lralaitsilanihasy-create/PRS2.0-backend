@@ -38,6 +38,9 @@ public interface DemandeRetraitRepository extends JpaRepository<DemandeRetrait, 
     /** Demandes d'une PRMP (suivi de ses propres demandes, §3.1). */
     List<DemandeRetrait> findByIdPrmp(String idPrmp);
 
+    /** Ce contrôleur (CC) a-t-il décidé au moins une demande de retrait ? (garde de suppression) */
+    boolean existsByImCtrlCc(String imCtrlCc);
+
     /** Vrai s'il existe déjà une demande à ce statut pour ce dossier (anti-doublon EN_ATTENTE). */
     boolean existsByIdDossierAndStatut(Integer idDossier, String statut);
 

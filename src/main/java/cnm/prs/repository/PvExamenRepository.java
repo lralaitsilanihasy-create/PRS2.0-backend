@@ -99,4 +99,9 @@ public interface PvExamenRepository extends JpaRepository<PvExamen, Integer> {
 
     /** Vrai si un PV porte déjà cette référence (unicité applicative). */
     boolean existsByRefePv(String refePv);
+
+    /** Ce contrôleur figure-t-il sur un PV (président / CC / membre) ? (garde de suppression) */
+    @Query("select (count(pv) > 0) from PvExamen pv "
+            + "where pv.imCtrlPresident = :im or pv.imCtrlCc = :im or pv.imCtrlMembre = :im")
+    boolean existsAvecControleur(@Param("im") String im);
 }

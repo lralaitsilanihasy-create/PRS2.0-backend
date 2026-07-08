@@ -45,4 +45,9 @@ public interface DispatchRepository extends JpaRepository<Dispatch, Integer> {
 
     /** Vrai si un dispatch existe déjà pour cette réception (anti-doublon, §3.2). */
     boolean existsByIdReception(Integer idReception);
+
+    /** Ce contrôleur figure-t-il sur un dispatch (dispatcheur / CC / membre) ? (garde de suppression) */
+    @Query("select (count(d) > 0) from Dispatch d "
+            + "where d.imCtrlDispatch = :im or d.imCtrlCc = :im or d.imCtrlMembre = :im")
+    boolean existsAvecControleur(@Param("im") String im);
 }

@@ -15,6 +15,9 @@ public interface LettreRenvoiRepository extends JpaRepository<LettreRenvoi, Inte
     /** Nombre de lettres de renvoi à un statut donné (compteur du tableau de bord — vue globale). */
     long countByStatut(String statut);
 
+    /** Ce contrôleur a-t-il signé au moins une lettre de renvoi ? (garde de suppression) */
+    boolean existsByImSignataire(String imSignataire);
+
     /** Nombre de lettres à un statut donné dans une localité (via examen→dispatch→réception) — CC. */
     @Query("""
             select count(l) from LettreRenvoi l

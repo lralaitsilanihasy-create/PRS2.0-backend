@@ -467,7 +467,12 @@ utilisateur (ex. mot de passe oublié) ; l'utilisateur pourra ensuite le changer
 | GET | /api/controleurs/{id} | — | `ControleurDto` | 200, 404 | Authentifié |
 | POST | /api/controleurs | `ControleurDto` | `ControleurDto` | 201, 400, 403 | ADMINISTRATEUR |
 | PUT | /api/controleurs/{id} | `ControleurDto` | `ControleurDto` | 200, 400, 403, 404 | ADMINISTRATEUR |
-| DELETE | /api/controleurs/{id} | — | — | 204, 403, 404 | ADMINISTRATEUR |
+| DELETE | /api/controleurs/{id} | — | — | 204, 403, 404, 409 | ADMINISTRATEUR |
+
+> **DELETE** supprime le contrôleur **et son compte d'authentification**, en nettoyant ses données **dérivées**
+> (sessions, indicateurs). **Garde métier → 409** tant qu'il a une **activité** : supérieur hiérarchique d'un autre
+> contrôleur, ou présent sur un examen / PV / vérification / dispatch / réception / demande de retrait / lettre
+> signée — retirer d'abord ces éléments ; **404** si l'`imControleur` est inconnu.
 
 `{id}` = imControleur (string).
 
