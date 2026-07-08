@@ -5273,6 +5273,41 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("POST /api/prmps/suppression-lot : tolérant → bilan supprimes/introuvables/bloques ; vide → 400 ; non-admin → 403")
+    void prmp_suppressionLot() throws Exception {
+        // PRMP propre + compte ; PRMP avec un dossier lié (bloquée).
+        prmpRepository.save(prmp("PRMPLOT1", "ANT"));
+        compteAuthRepository.save(new cnm.prs.entity.CompteAuth("prmplot1", "x",
+                cnm.prs.enums.TypeActeur.PRMP.name(), "PRMPLOT1", true));
+        prmpRepository.save(prmp("PRMPLOT2", "ANT"));
+        Dossier d = dossier(971, "BROUILLON");
+        d.setIdPrmp("PRMPLOT2");
+        dossierRepository.save(d);
+
+        // Lot tolérant : 1 propre → supprimée, 1 à données liées → bloquée, 1 absente → introuvable.
+        mvc.perform(post("/api/prmps/suppression-lot").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"matricules\":[\"PRMPLOT1\",\"PRMPLOT2\",\"INCONNU\"]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.supprimes", containsInAnyOrder("PRMPLOT1")))
+                .andExpect(jsonPath("$.bloques", containsInAnyOrder("PRMPLOT2")))
+                .andExpect(jsonPath("$.introuvables", containsInAnyOrder("INCONNU")));
+        org.junit.jupiter.api.Assertions.assertFalse(prmpRepository.existsById("PRMPLOT1"));
+        org.junit.jupiter.api.Assertions.assertTrue(compteAuthRepository.findByLogin("prmplot1").isEmpty());
+        org.junit.jupiter.api.Assertions.assertTrue(prmpRepository.existsById("PRMPLOT2"));   // bloquée, subsiste
+
+        // Liste vide → 400.
+        mvc.perform(post("/api/prmps/suppression-lot").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"matricules\":[]}"))
+                .andExpect(status().isBadRequest());
+
+        // Non-admin → 403 (le sous-chemin est sécurisé par @PreAuthorize).
+        mvc.perform(post("/api/prmps/suppression-lot").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"matricules\":[\"PRMPLOT2\"]}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     @DisplayName("Champs élargis : libelleEntite jusqu'à 150 accepté (intitulé de ministère long, 69 car.) ; >150 → 400")
     void entite_libelleLong_accepte() throws Exception {
         String ministere = "MINISTERE DE L'INDUSTRIALISATION ET DU DEVELOPPEMENT DU SECTEUR PRIVE"; // 68 car.

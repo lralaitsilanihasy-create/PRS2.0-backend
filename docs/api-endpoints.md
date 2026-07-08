@@ -2498,12 +2498,19 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` et une `dateFi
 | POST | /api/prmps | `PrmpDto` | `PrmpDto` | 201, 400, 403 | ADMINISTRATEUR |
 | PUT | /api/prmps/{id} | `PrmpDto` | `PrmpDto` | 200, 400, 404 | ADMINISTRATEUR |
 | DELETE | /api/prmps/{id} | — | — | 204, 404, 409 | ADMINISTRATEUR |
+| POST | /api/prmps/suppression-lot | `SuppressionLotPrmpRequest` `{matricules[]}` | `SuppressionLotPrmpResult` | 200, 400, 403 | ADMINISTRATEUR |
 
 `{id}` = idPrmp (= matricule ; string).
 
 > **DELETE** supprime la PRMP **et son compte d'authentification**. **Garde** : **409** tant que la PRMP porte des
 > données liées (dossiers, PPM, entités rattachées, demandes de retrait, indicateurs, ou UGPM de tutelle) — retirer
 > d'abord ces éléments ; **404** si l'`idPrmp` est inconnu.
+>
+> **POST `/suppression-lot`** — suppression **en lot par matricule**, **tolérante** : `SuppressionLotPrmpRequest`
+> = `{matricules: string[]}` (au moins un, sinon **400**) → **200** `SuppressionLotPrmpResult` = `{supprimes:
+> string[], introuvables: string[], bloques: string[]}`. Chaque PRMP existante **sans données liées** est supprimée
+> (avec son compte) → `supprimes` ; les absents → `introuvables` ; les PRMP **à données liées** (même garde que le
+> 409 unitaire) → `bloques` (non supprimées). **Jamais d'échec global** ; doublons ignorés.
 
 **Exemple — requête**
 ```json
