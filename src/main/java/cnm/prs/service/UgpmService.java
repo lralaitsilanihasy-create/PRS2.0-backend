@@ -158,6 +158,12 @@ public class UgpmService {
         return ugpmRepository.findByIdPrmpTutelleIn(idsPrmp).stream().map(this::toDto).toList();
     }
 
+    /** Recherche partielle par nom (contient, insensible à la casse ; liste, vide si aucun résultat). */
+    @Transactional(readOnly = true)
+    public List<UgpmDto> findByNom(String nom) {
+        return ugpmRepository.findByNomUgpmContainingIgnoreCase(nom).stream().map(this::toDto).toList();
+    }
+
     @Transactional(readOnly = true)
     public UgpmDto findById(String idUgpm) {
         return ugpmRepository.findById(idUgpm).map(this::toDto)

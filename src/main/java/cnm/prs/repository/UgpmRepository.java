@@ -16,4 +16,7 @@ public interface UgpmRepository extends JpaRepository<Ugpm, String> {
 
     /** UGPM rattachées à l'une des PRMP de tutelle fournies (utilisé pour le filtre par localité). */
     List<Ugpm> findByIdPrmpTutelleIn(Collection<String> idsPrmpTutelle);
+
+    /** Recherche partielle par nom (contient, insensible à la casse). */
+    List<Ugpm> findByNomUgpmContainingIgnoreCase(String nom);
 }

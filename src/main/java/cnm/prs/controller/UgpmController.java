@@ -112,6 +112,13 @@ public class UgpmController {
         return service.findByLocalite(idLocalite);
     }
 
+    /** Recherche partielle par nom (contient, insensible à la casse ; liste, vide si aucun résultat). */
+    @PreAuthorize("hasRole('ADMINISTRATEUR')")
+    @GetMapping("/par-nom/{nom}")
+    public List<UgpmDto> findByNom(@PathVariable String nom) {
+        return service.findByNom(nom);
+    }
+
     @PreAuthorize("hasRole('ADMINISTRATEUR')")
     @PutMapping("/{id}")
     public UgpmDto modifier(@PathVariable String id, @Valid @RequestBody ModifierUgpmRequest req) {

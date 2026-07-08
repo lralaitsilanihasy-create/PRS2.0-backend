@@ -3633,6 +3633,35 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("GET /api/ugpms/par-nom/{nom} : recherche partielle insensible à la casse ; aucun résultat → vide ; non-admin → 403")
+    void ugpm_parNom() throws Exception {
+        mvc.perform(post("/api/ugpms").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idUgpm\":\"UGPNOM\",\"idPrmpTutelle\":\"PRMP001\","
+                        + "\"nomUgpm\":\"RANDRIANARISOA\",\"prenomsUgpm\":\"Jean\","
+                        + "\"cin\":\"101234567890\",\"dateCin\":\"2010-05-20\",\"lieuCin\":\"Antananarivo\","
+                        + "\"emailUgpm\":\"ugpm@ex.mg\",\"telUgpm\":\"0340000000\","
+                        + "\"login\":\"ugpnom\",\"motDePasse\":\"Ugpm@1234\"}"))
+                .andExpect(status().isCreated());
+
+        // Partiel « NDRIA » → trouve RANDRIANARISOA.
+        mvc.perform(get("/api/ugpms/par-nom/NDRIA").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].idUgpm", hasItem("UGPNOM")));
+        // Insensible à la casse : « randria ».
+        mvc.perform(get("/api/ugpms/par-nom/randria").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].idUgpm", hasItem("UGPNOM")));
+        // Aucun résultat → liste vide (pas de 404).
+        mvc.perform(get("/api/ugpms/par-nom/ZZQQ").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+        // Non-admin → 403.
+        mvc.perform(get("/api/ugpms/par-nom/RANDRIA").header("Authorization", tokenPrmp))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     @DisplayName("POST /api/ugpms/suppression-lot : tolérant → bilan supprimes/introuvables (+ comptes nettoyés) ; liste vide → 400")
     void ugpm_suppressionLot() throws Exception {
         String identite = "\"nomUgpm\":\"Rakoto\",\"prenomsUgpm\":\"Jean\","
