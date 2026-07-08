@@ -15,6 +15,7 @@ import cnm.prs.dto.SuppressionLotResult;
 import cnm.prs.dto.UgpmDto;
 import cnm.prs.entity.CompteAuth;
 import cnm.prs.entity.PieceJointe;
+import cnm.prs.entity.Prmp;
 import cnm.prs.entity.Ugpm;
 import cnm.prs.enums.TypeActeur;
 import cnm.prs.enums.TypePieceJointe;
@@ -140,6 +141,21 @@ public class UgpmService {
     @Transactional(readOnly = true)
     public List<UgpmDto> findByTutelle(String idPrmp) {
         return ugpmRepository.findByIdPrmpTutelle(idPrmp).stream().map(this::toDto).toList();
+    }
+
+    /**
+     * UGPM rattachées à une localité <strong>via leur PRMP de tutelle</strong> : l'UGPM n'a pas de localité
+     * propre, elle hérite du périmètre de sa PRMP (rattachée à la localité par ses entités contractantes
+     * actives). Liste, éventuellement vide (aucune PRMP dans la localité, ou aucune UGPM) — pas de 404.
+     */
+    @Transactional(readOnly = true)
+    public List<UgpmDto> findByLocalite(String idLocalite) {
+        List<String> idsPrmp = prmpRepository.findByLocaliteViaEntitesActives(idLocalite).stream()
+                .map(Prmp::getIdPrmp).toList();
+        if (idsPrmp.isEmpty()) {
+            return List.of();
+        }
+        return ugpmRepository.findByIdPrmpTutelleIn(idsPrmp).stream().map(this::toDto).toList();
     }
 
     @Transactional(readOnly = true)

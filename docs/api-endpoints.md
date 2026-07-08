@@ -1045,7 +1045,10 @@ dossier/PPM (désormais réservée Admin).
 **Administration des UGPM** `/api/ugpms` — Réservé au profil **`ADMINISTRATEUR`**. La création alloue à la fois la
 `t_ugpm` (rattachée à sa PRMP de tutelle) et son **compte d'authentification actif** (`TYPE_ACTEUR=UGPM`).
 `GET /par-tutelle/{idPrmp}` liste les UGPM d'une PRMP de tutelle (`idPrmp` = matricule) — **liste vide** si aucune
-(ou PRMP inconnue), pas de 404 (filtre).
+(ou PRMP inconnue), pas de 404 (filtre). `GET /par-localite/{idLocalite}` liste les UGPM d'une localité **via la
+localité de leur PRMP de tutelle** : l'UGPM n'a pas de localité propre, elle hérite du périmètre de sa PRMP
+(rattachée à la localité par ses **entités contractantes actives**, même logique que `GET /api/prmps/par-localite`) —
+**liste vide** si aucune PRMP dans la localité (ou aucune UGPM), pas de 404 (filtre).
 
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
@@ -1054,6 +1057,7 @@ dossier/PPM (désormais réservée Admin).
 | GET | /api/ugpms | — | `UgpmDto[]` | 200, 403 | **ADMINISTRATEUR** |
 | GET | /api/ugpms/{id} | — | `UgpmDto` | 200, 403, 404 | **ADMINISTRATEUR** |
 | GET | /api/ugpms/par-tutelle/{idPrmp} | — | `UgpmDto[]` | 200, 403 | **ADMINISTRATEUR** |
+| GET | /api/ugpms/par-localite/{idLocalite} | — | `UgpmDto[]` | 200, 403 | **ADMINISTRATEUR** |
 | PUT | /api/ugpms/{id} | `ModifierUgpmRequest` | `UgpmDto` | 200, 400, 403, 404, 409 | **ADMINISTRATEUR** |
 | DELETE | /api/ugpms/{id} | — | — | 204, 403, 404 | **ADMINISTRATEUR** |
 | POST | /api/ugpms/suppression-lot | `SuppressionLotUgpmRequest` `{matricules[]}` | `SuppressionLotResult` | 200, 400, 403 | **ADMINISTRATEUR** |

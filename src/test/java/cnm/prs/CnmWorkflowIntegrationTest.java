@@ -3605,6 +3605,34 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("GET /api/ugpms/par-localite/{idLocalite} : UGPM via la localité de leur PRMP de tutelle ; localité sans PRMP → vide ; non-admin → 403")
+    void ugpm_parLocalite() throws Exception {
+        // PRMP001 est rattachée (ACTIVE) à ANT via le seed. Une UGPM sous PRMP001 hérite donc de ANT.
+        String identite = "\"nomUgpm\":\"Rakoto\",\"prenomsUgpm\":\"Jean\","
+                + "\"cin\":\"101234567890\",\"dateCin\":\"2010-05-20\",\"lieuCin\":\"Antananarivo\","
+                + "\"emailUgpm\":\"ugpm@ex.mg\",\"telUgpm\":\"0340000000\",";
+        mvc.perform(post("/api/ugpms").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idUgpm\":\"UGPLOCA\",\"idPrmpTutelle\":\"PRMP001\"," + identite
+                        + "\"login\":\"ugploca\",\"motDePasse\":\"Ugpm@1234\"}"))
+                .andExpect(status().isCreated());
+
+        // par-localite ANT → contient l'UGPM (via la localité de sa PRMP de tutelle).
+        mvc.perform(get("/api/ugpms/par-localite/ANT").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].idUgpm", hasItem("UGPLOCA")));
+
+        // Localité sans PRMP rattachée → liste vide (filtre) : l'UGPM existante n'y fuit pas.
+        mvc.perform(get("/api/ugpms/par-localite/ZZ").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+
+        // Non-admin → 403.
+        mvc.perform(get("/api/ugpms/par-localite/ANT").header("Authorization", tokenPrmp))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     @DisplayName("POST /api/ugpms/suppression-lot : tolérant → bilan supprimes/introuvables (+ comptes nettoyés) ; liste vide → 400")
     void ugpm_suppressionLot() throws Exception {
         String identite = "\"nomUgpm\":\"Rakoto\",\"prenomsUgpm\":\"Jean\","

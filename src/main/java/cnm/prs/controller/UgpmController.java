@@ -105,6 +105,13 @@ public class UgpmController {
         return service.findByTutelle(idPrmp);
     }
 
+    /** UGPM d'une localité, via leur PRMP de tutelle (entités actives). Liste, vide si aucune ; pas de 404. */
+    @PreAuthorize("hasRole('ADMINISTRATEUR')")
+    @GetMapping("/par-localite/{idLocalite}")
+    public List<UgpmDto> findByLocalite(@PathVariable String idLocalite) {
+        return service.findByLocalite(idLocalite);
+    }
+
     @PreAuthorize("hasRole('ADMINISTRATEUR')")
     @PutMapping("/{id}")
     public UgpmDto modifier(@PathVariable String id, @Valid @RequestBody ModifierUgpmRequest req) {
