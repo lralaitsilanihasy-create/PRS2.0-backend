@@ -140,6 +140,18 @@ public class ControleurController {
     }
 
     /**
+     * Supprime la photo d'un contrôleur (sans supprimer le contrôleur). Réservé {@code ADMINISTRATEUR}
+     * (sous-chemin non couvert par SecurityConfig). {@code type} ∈ {@code PHOTO} (autre → 400) ; **404** si le
+     * contrôleur ou la photo est inconnu(e).
+     */
+    @PreAuthorize("hasRole('ADMINISTRATEUR')")
+    @DeleteMapping("/{id}/pieces/{type}")
+    public ResponseEntity<Void> supprimerPhoto(@PathVariable String id, @PathVariable TypePieceJointe type) {
+        service.supprimerPhoto(id, type);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
      * Suppression en lot (tolérante) : bilan {@code {supprimes[], introuvables[], bloques[]}}. Réservé
      * {@code ADMINISTRATEUR} (ce sous-chemin n'est pas couvert par les règles URL de SecurityConfig).
      */

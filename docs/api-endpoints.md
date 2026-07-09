@@ -485,6 +485,7 @@ si aucun résultat (pas de 404). `{nom}` est un fragment (URL-encoder si espaces
 | POST | /api/controleurs/suppression-lot | `SuppressionLotControleurRequest` `{matricules[]}` | `SuppressionLotControleurResult` | 200, 400, 403 | ADMINISTRATEUR |
 | POST | /api/controleurs/{id}/pieces/{type} | `multipart/form-data` (part `fichier`) ; `type` = `PHOTO` | `PieceJointeMetaDto` | 200, 400, 403, 404 | ADMINISTRATEUR |
 | GET | /api/controleurs/{id}/pieces/{type} | — ; `type` = `PHOTO` | fichier (binaire) | 200, 400, 403, 404 | ADMINISTRATEUR |
+| DELETE | /api/controleurs/{id}/pieces/{type} | — ; `type` = `PHOTO` | — | 204, 400, 403, 404 | ADMINISTRATEUR |
 
 > **DELETE** supprime le contrôleur **et son compte d'authentification**, en nettoyant ses données **dérivées**
 > (sessions, indicateurs). **Garde métier → 409** tant qu'il a une **activité** : supérieur hiérarchique d'un autre
@@ -506,6 +507,8 @@ si aucun résultat (pas de 404). `{nom}` est un fragment (URL-encoder si espaces
 > = inchangée** ; la variante **JSON pure** du PUT reste disponible (rétro-compat). Le contrôleur n'a **ni CIN
 > ni arrêté** → `type` limité à **`PHOTO`** (tout autre → **400**). La photo doit être une **image (JPEG/PNG**,
 > magic-bytes), **≤ 5 Mo** (sinon **400**). Stockée sous la clé `imControleur` ; **404** si le contrôleur ou la
+> photo est inconnu(e). On peut aussi **supprimer la photo seule** (sans supprimer le contrôleur) via `DELETE
+> /api/controleurs/{id}/pieces/{type}` → **204** ; **400** si `type` ≠ `PHOTO`, **404** si le contrôleur ou la
 > photo est inconnu(e). Le **DELETE** d'un contrôleur **purge sa photo** (`t_piece_jointe`) — pas d'orphelin.
 
 `{id}` = imControleur (string).

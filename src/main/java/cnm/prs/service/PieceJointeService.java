@@ -87,6 +87,14 @@ public class PieceJointeService {
         repository.deleteByLogin(cle);
     }
 
+    /** Supprime la pièce {@code type} d'une clé acteur. <strong>404</strong> si elle est absente. */
+    public void supprimer(String cle, TypePieceJointe type) {
+        PieceJointe piece = repository.findByLoginAndTypePiece(cle, type.name())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Pièce « " + type + " » introuvable pour " + cle + "."));
+        repository.delete(piece);
+    }
+
     private byte[] lire(MultipartFile fichier) {
         try {
             return fichier.getBytes();

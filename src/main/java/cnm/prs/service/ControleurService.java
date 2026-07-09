@@ -143,6 +143,18 @@ public class ControleurService {
         return pieceJointeService.telecharger(imControleur, type);
     }
 
+    /**
+     * Supprime la photo d'un contrôleur (sans supprimer le contrôleur). {@code type} ≠ {@code PHOTO} → 400 ;
+     * <strong>404</strong> si le contrôleur est inconnu ou si la photo est absente.
+     */
+    public void supprimerPhoto(String imControleur, TypePieceJointe type) {
+        exigerPhoto(type);
+        if (!repository.existsById(imControleur)) {
+            throw new ResourceNotFoundException("Controleur introuvable : " + imControleur);
+        }
+        pieceJointeService.supprimer(imControleur, type);
+    }
+
     /** Stocke la photo puis refuse un fichier qui n'est pas une image (JPEG/PNG) → 400 (rollback). */
     private PieceJointeMetaDto stockerPhoto(String imControleur, TypePieceJointe type, MultipartFile fichier) {
         PieceJointeMetaDto meta = pieceJointeService.stocker(imControleur, type, fichier);

@@ -5574,6 +5574,42 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("DELETE /api/controleurs/{id}/pieces/PHOTO : supprime la photo (contrôleur conservé) ; absente/inconnu → 404 ; type≠PHOTO → 400 ; non-admin → 403")
+    void controleur_suppressionPhoto() throws Exception {
+        byte[] jpeg = { (byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0, 0, 0, 0 };
+        byte[] data = "{\"imControleur\":\"CTRDPH\",\"idProfile\":6,\"transversal\":false}"
+                .getBytes(StandardCharsets.UTF_8);
+
+        // --- Écritures / lectures 200 d'abord. ---
+        // Création avec photo.
+        mvc.perform(multipart("/api/controleurs").header("Authorization", tokenAdmin)
+                .file(new MockMultipartFile("data", "", "application/json", data))
+                .file(new MockMultipartFile("photo", "photo.jpg", "image/jpeg", jpeg)))
+                .andExpect(status().isCreated());
+        // Suppression de la photo → 204.
+        mvc.perform(delete("/api/controleurs/CTRDPH/pieces/PHOTO").header("Authorization", tokenAdmin))
+                .andExpect(status().isNoContent());
+        // La photo est partie de la base ; le contrôleur, lui, subsiste.
+        org.junit.jupiter.api.Assertions.assertTrue(pieceJointeRepository.findByLogin("CTRDPH").isEmpty());
+        mvc.perform(get("/api/controleurs/CTRDPH").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk());
+
+        // --- Cas d'erreur ensuite. ---
+        // Photo déjà absente → 404.
+        mvc.perform(delete("/api/controleurs/CTRDPH/pieces/PHOTO").header("Authorization", tokenAdmin))
+                .andExpect(status().isNotFound());
+        // type ≠ PHOTO → 400.
+        mvc.perform(delete("/api/controleurs/CTRDPH/pieces/CIN").header("Authorization", tokenAdmin))
+                .andExpect(status().isBadRequest());
+        // Contrôleur inconnu → 404.
+        mvc.perform(delete("/api/controleurs/INCONNU/pieces/PHOTO").header("Authorization", tokenAdmin))
+                .andExpect(status().isNotFound());
+        // Non-admin → 403 (sous-chemin sécurisé par @PreAuthorize).
+        mvc.perform(delete("/api/controleurs/CTRDPH/pieces/PHOTO").header("Authorization", tokenMembre))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     @DisplayName("GET /api/controleurs/par-localite/{idLocalite} : contrôleurs affectés ; transversal (localité nulle) exclu ; inconnue → vide")
     void controleur_parLocalite() throws Exception {
         // Seed : CTRCC2 en TMS ; CTRPRE a une localité NULLE (transversal).
