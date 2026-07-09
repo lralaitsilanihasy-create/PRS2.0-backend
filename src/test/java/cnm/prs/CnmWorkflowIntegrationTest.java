@@ -3600,6 +3600,27 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("DELETE /api/ugpms/{id} : purge aussi les pièces (t_piece_jointe) — pas d'orphelin")
+    void ugpm_deleteFiche_purgePieces() throws Exception {
+        String identite = "\"nomUgpm\":\"Rakoto\",\"prenomsUgpm\":\"Purge\","
+                + "\"cin\":\"101234567890\",\"dateCin\":\"2010-05-20\",\"lieuCin\":\"Antananarivo\","
+                + "\"emailUgpm\":\"ugpm@ex.mg\",\"telUgpm\":\"0340000000\",";
+        byte[] data = ("{\"idUgpm\":\"UGPPG\",\"idPrmpTutelle\":\"PRMP001\"," + identite
+                + "\"login\":\"ugppg\",\"motDePasse\":\"Ugpm@1234\"}").getBytes(StandardCharsets.UTF_8);
+        byte[] jpeg = { (byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0, 0, 0, 0 };
+        mvc.perform(multipart("/api/ugpms").header("Authorization", tokenAdmin)
+                .file(new MockMultipartFile("data", "", "application/json", data))
+                .file(new MockMultipartFile("cin", "cin.jpg", "image/jpeg", jpeg)))
+                .andExpect(status().isCreated());
+        org.junit.jupiter.api.Assertions.assertEquals(1, pieceJointeRepository.findByLogin("UGPPG").size());
+
+        // DELETE de la fiche → 204 + pièces purgées (et compte retiré, déjà couvert ailleurs).
+        mvc.perform(delete("/api/ugpms/UGPPG").header("Authorization", tokenAdmin))
+                .andExpect(status().isNoContent());
+        org.junit.jupiter.api.Assertions.assertTrue(pieceJointeRepository.findByLogin("UGPPG").isEmpty());
+    }
+
+    @Test
     @DisplayName("POST /api/auth/register/ugpm : auto-inscription publique EN_ATTENTE ; login refusé avant validation ; validée par l'Admin → login OK (UGPM) ; GET /api/auth/prmps public ; tutelle inconnue / déjà pris → 409")
     void ugpm_autoInscription() throws Exception {
         // GET /api/auth/prmps (public, sans token) → contient la PRMP001 du seed.
@@ -5959,6 +5980,26 @@ class CnmWorkflowIntegrationTest {
         // Non-admin → 403 (sous-chemin sécurisé par @PreAuthorize).
         mvc.perform(delete("/api/prmps/IMPDP/pieces/CIN").header("Authorization", tokenPrmp))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("DELETE /api/prmps/{id} : purge aussi les pièces (t_piece_jointe) — pas d'orphelin")
+    void prmp_deleteFiche_purgePieces() throws Exception {
+        byte[] data = ("{\"idPrmp\":\"IMPPG\",\"nomPrmp\":\"Testy\",\"prenomsPrmp\":\"Purge\",\"arreteNomin\":\"ARR-1\","
+                + "\"dateNomin\":\"2024-01-10\",\"cin\":\"301234567890\",\"dateCin\":\"2012-02-02\","
+                + "\"lieuCin\":\"Antananarivo\",\"emailPrmp\":\"pg@cnm.mg\",\"telPrmp\":\"0331112233\"}")
+                .getBytes(StandardCharsets.UTF_8);
+        byte[] jpeg = { (byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0, 0, 0, 0 };
+        mvc.perform(multipart("/api/prmps").header("Authorization", tokenAdmin)
+                .file(new MockMultipartFile("data", "", "application/json", data))
+                .file(new MockMultipartFile("cin", "cin.jpg", "image/jpeg", jpeg)))
+                .andExpect(status().isCreated());
+        org.junit.jupiter.api.Assertions.assertEquals(1, pieceJointeRepository.findByLogin("IMPPG").size());
+
+        // DELETE de la fiche (aucune donnée liée) → 204 + pièces purgées.
+        mvc.perform(delete("/api/prmps/IMPPG").header("Authorization", tokenAdmin))
+                .andExpect(status().isNoContent());
+        org.junit.jupiter.api.Assertions.assertTrue(pieceJointeRepository.findByLogin("IMPPG").isEmpty());
     }
 
     @Test

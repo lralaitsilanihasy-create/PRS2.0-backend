@@ -1117,8 +1117,9 @@ telUgpm}` — **champs métier éditables uniquement** : ni `idUgpm` (matricule,
 ni `login`/`motDePasse` (gestion du compte, hors contrat). **PUT** met à jour ces champs et renvoie le `UgpmDto`
 à jour ; **404** si `idUgpm` inconnu, **409** si la nouvelle `idPrmpTutelle` est inconnue (réaffectation possible).
 
-**DELETE** supprime l'UGPM **et son compte d'authentification** (créés ensemble) ; **404** si `idUgpm` inconnu.
-Les dossiers créés par l'UGPM **restent** la propriété de sa PRMP de tutelle (`CREE_PAR` est une trace, pas une FK).
+**DELETE** supprime l'UGPM, **ses pièces** (`t_piece_jointe`) **et son compte d'authentification** (créés ensemble) ;
+**404** si `idUgpm` inconnu. Les dossiers créés par l'UGPM **restent** la propriété de sa PRMP de tutelle
+(`CREE_PAR` est une trace, pas une FK).
 
 **POST `/suppression-lot`** — suppression **en lot par matricule**, **tolérante** : `SuppressionLotUgpmRequest` =
 `{matricules: string[]}` (au moins un, sinon **400**) → **200** `SuppressionLotResult` = `{supprimes: string[],
@@ -2614,9 +2615,9 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` et une `dateFi
 > si la pièce est absente) ; **suppression** d'une pièce (sans supprimer la PRMP) via `DELETE /{id}/pieces/{type}`
 > → **204**, **404** si la PRMP ou la pièce est inconnue. Ces sous-chemins pièces sont réservés **ADMINISTRATEUR**.
 >
-> **DELETE** supprime la PRMP **et son compte d'authentification**. **Garde** : **409** tant que la PRMP porte des
-> données liées (dossiers, PPM, entités rattachées, demandes de retrait, indicateurs, ou UGPM de tutelle) — retirer
-> d'abord ces éléments ; **404** si l'`idPrmp` est inconnu.
+> **DELETE** supprime la PRMP, **ses pièces** (`t_piece_jointe`) **et son compte d'authentification**. **Garde** :
+> **409** tant que la PRMP porte des données liées (dossiers, PPM, entités rattachées, demandes de retrait,
+> indicateurs, ou UGPM de tutelle) — retirer d'abord ces éléments ; **404** si l'`idPrmp` est inconnu.
 >
 > **POST `/suppression-lot`** — suppression **en lot par matricule**, **tolérante** : `SuppressionLotPrmpRequest`
 > = `{matricules: string[]}` (au moins un, sinon **400**) → **200** `SuppressionLotPrmpResult` = `{supprimes:

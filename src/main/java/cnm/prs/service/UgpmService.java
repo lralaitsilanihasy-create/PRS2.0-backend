@@ -249,6 +249,7 @@ public class UgpmService {
 
     /** Supprime une UGPM et son compte associé (sans contrôle d'existence — appelé après vérification). */
     private void supprimerUn(String idUgpm) {
+        pieceJointeService.purger(idUgpm);   // purge les pièces (t_piece_jointe, clé idUgpm) — pas d'orphelin
         compteRepository.deleteAll(
                 compteRepository.findByRefActeurAndTypeActeur(idUgpm, TypeActeur.UGPM.name()));
         ugpmRepository.deleteById(idUgpm);

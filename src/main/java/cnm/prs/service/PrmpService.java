@@ -248,8 +248,9 @@ public class PrmpService {
                 || !ugpmRepository.findByIdPrmpTutelle(id).isEmpty();
     }
 
-    /** Supprime une PRMP et son compte associé (sans contrôle — appelé après vérification existence + garde). */
+    /** Supprime une PRMP, ses pièces et son compte associé (appelé après vérification existence + garde). */
     private void supprimerUne(String id) {
+        pieceJointeService.purger(id);   // purge les pièces (t_piece_jointe, clé idPrmp) — pas d'orphelin
         compteRepository.deleteAll(compteRepository.findByRefActeurAndTypeActeur(id, TypeActeur.PRMP.name()));
         repository.deleteById(id);
     }
