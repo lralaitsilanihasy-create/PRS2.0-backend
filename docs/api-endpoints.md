@@ -479,7 +479,8 @@ si aucun résultat (pas de 404). `{nom}` est un fragment (URL-encoder si espaces
 | GET | /api/controleurs/par-nom/{nom} | — | `ControleurDto[]` | 200 | Authentifié |
 | POST | /api/controleurs | `ControleurDto` (**JSON**) | `ControleurDto` | 201, 400, 403 | ADMINISTRATEUR |
 | POST | /api/controleurs | **`multipart/form-data`** : part `data` (JSON `ControleurDto`) + `photo` (opt.) | `ControleurDto` | 201, 400, 403 | ADMINISTRATEUR |
-| PUT | /api/controleurs/{id} | `ControleurDto` | `ControleurDto` | 200, 400, 403, 404 | ADMINISTRATEUR |
+| PUT | /api/controleurs/{id} | `ControleurDto` (**JSON**) | `ControleurDto` | 200, 400, 403, 404 | ADMINISTRATEUR |
+| PUT | /api/controleurs/{id} | **`multipart/form-data`** : part `data` (JSON `ControleurDto`) + `photo` (opt.) | `ControleurDto` | 200, 400, 403, 404 | ADMINISTRATEUR |
 | DELETE | /api/controleurs/{id} | — | — | 204, 403, 404, 409 | ADMINISTRATEUR |
 | POST | /api/controleurs/suppression-lot | `SuppressionLotControleurRequest` `{matricules[]}` | `SuppressionLotControleurResult` | 200, 400, 403 | ADMINISTRATEUR |
 | POST | /api/controleurs/{id}/pieces/{type} | `multipart/form-data` (part `fichier`) ; `type` = `PHOTO` | `PieceJointeMetaDto` | 200, 400, 403, 404 | ADMINISTRATEUR |
@@ -499,7 +500,10 @@ si aucun résultat (pas de 404). `{nom}` est un fragment (URL-encoder si espaces
 > **Photo (pièce jointe).** En plus de la variante **JSON pure** (rétro-compatible), `POST /api/controleurs`
 > accepte une variante **`multipart/form-data`** : part `data` (JSON = `ControleurDto`) + part `photo`
 > **optionnelle**. On peut aussi **déposer/remplacer** la photo via `POST /api/controleurs/{id}/pieces/{type}`
-> (part `fichier`) et la **télécharger** via `GET /api/controleurs/{id}/pieces/{type}`. Le contrôleur n'a **ni CIN
+> (part `fichier`) et la **télécharger** via `GET /api/controleurs/{id}/pieces/{type}`. La **modification** `PUT
+> /api/controleurs/{id}` accepte elle aussi une variante **`multipart/form-data`** (part `data` = JSON
+> `ControleurDto` + `photo` optionnelle) qui met à jour la fiche **et remplace** la photo fournie — **photo absente
+> = inchangée** ; la variante **JSON pure** du PUT reste disponible (rétro-compat). Le contrôleur n'a **ni CIN
 > ni arrêté** → `type` limité à **`PHOTO`** (tout autre → **400**). La photo doit être une **image (JPEG/PNG**,
 > magic-bytes), **≤ 5 Mo** (sinon **400**). Stockée sous la clé `imControleur` ; **404** si le contrôleur ou la
 > photo est inconnu(e). Le **DELETE** d'un contrôleur **purge sa photo** (`t_piece_jointe`) — pas d'orphelin.

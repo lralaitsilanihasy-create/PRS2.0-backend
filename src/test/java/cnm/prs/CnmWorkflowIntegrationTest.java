@@ -5525,6 +5525,55 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("PUT /api/controleurs/{id} multipart : maj fiche + remplace photo ; photo absente inchangée ; JSON conservé ; inconnu → 404 ; PDF → 400")
+    void controleur_modificationAvecPhoto() throws Exception {
+        controleurRepository.save(controleur("CTRPUT", 6, "ANT"));
+        byte[] jpeg = { (byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0, 0, 0, 0 };
+        byte[] pdf = "%PDF-1.4 pas une image".getBytes(StandardCharsets.US_ASCII);
+        byte[] data = "{\"imControleur\":\"CTRPUT\",\"idProfile\":6,\"transversal\":false,\"nomCont\":\"Apres\"}"
+                .getBytes(StandardCharsets.UTF_8);
+
+        // --- Écritures réussies d'abord. ---
+        // PUT multipart : maj fiche + dépose la photo (JPEG). MockMvc : builder POST forcé en PUT.
+        mvc.perform(multipart("/api/controleurs/CTRPUT").header("Authorization", tokenAdmin)
+                .file(new MockMultipartFile("data", "", "application/json", data))
+                .file(new MockMultipartFile("photo", "photo.jpg", "image/jpeg", jpeg))
+                .with(r -> { r.setMethod("PUT"); return r; }))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nomCont").value("Apres"));
+        mvc.perform(get("/api/controleurs/CTRPUT/pieces/PHOTO").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk()).andExpect(content().contentType(MediaType.IMAGE_JPEG));
+
+        // PUT multipart SANS photo : fiche mise à jour, photo laissée inchangée.
+        mvc.perform(multipart("/api/controleurs/CTRPUT").header("Authorization", tokenAdmin)
+                .file(new MockMultipartFile("data", "", "application/json", data))
+                .with(r -> { r.setMethod("PUT"); return r; }))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/controleurs/CTRPUT/pieces/PHOTO").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk()).andExpect(content().contentType(MediaType.IMAGE_JPEG));   // inchangée
+
+        // PUT JSON pur (sans photo) → 200 (rétro-compat).
+        mvc.perform(put("/api/controleurs/CTRPUT").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content(new String(data, StandardCharsets.UTF_8)))
+                .andExpect(status().isOk());
+
+        // --- Cas d'erreur ensuite. ---
+        // Contrôleur inconnu → 404.
+        mvc.perform(multipart("/api/controleurs/INCONNU").header("Authorization", tokenAdmin)
+                .file(new MockMultipartFile("data", "", "application/json",
+                        "{\"imControleur\":\"INCONNU\",\"transversal\":false}".getBytes(StandardCharsets.UTF_8)))
+                .with(r -> { r.setMethod("PUT"); return r; }))
+                .andExpect(status().isNotFound());
+
+        // Photo = image seulement : un PDF → 400.
+        mvc.perform(multipart("/api/controleurs/CTRPUT").header("Authorization", tokenAdmin)
+                .file(new MockMultipartFile("data", "", "application/json", data))
+                .file(new MockMultipartFile("photo", "p.pdf", "application/pdf", pdf))
+                .with(r -> { r.setMethod("PUT"); return r; }))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     @DisplayName("GET /api/controleurs/par-localite/{idLocalite} : contrôleurs affectés ; transversal (localité nulle) exclu ; inconnue → vide")
     void controleur_parLocalite() throws Exception {
         // Seed : CTRCC2 en TMS ; CTRPRE a une localité NULLE (transversal).

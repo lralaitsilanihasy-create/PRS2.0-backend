@@ -174,6 +174,19 @@ public class ControleurService {
     }
 
     /**
+     * Modifie un contrôleur <strong>et remplace sa photo</strong> (miroir de {@link #createAvecPhoto}) : met à
+     * jour la fiche via {@link #update} (404 si inconnu), puis remplace la {@code PHOTO} si elle est fournie.
+     * Photo <strong>absente = inchangée</strong>. Transactionnel : un fichier invalide annule la modification (400).
+     */
+    public ControleurDto updateAvecPhoto(String id, ControleurDto dto, MultipartFile photo) {
+        ControleurDto maj = update(id, dto);
+        if (photo != null && !photo.isEmpty()) {
+            stockerPhoto(id, TypePieceJointe.PHOTO, photo);
+        }
+        return maj;
+    }
+
+    /**
      * Supprime un contrôleur et son compte d'authentification. <strong>Garde métier</strong> : refuse (409) tant
      * qu'il a une participation métier (supérieur d'un autre contrôleur, ou présent sur un examen / PV /
      * vérification / dispatch / réception / demande de retrait / lettre signée). Sinon, nettoie ses données

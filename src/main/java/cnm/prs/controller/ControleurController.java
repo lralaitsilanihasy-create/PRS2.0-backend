@@ -92,9 +92,21 @@ public class ControleurController {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.createAvecPhoto(dto, photo));
     }
 
-    @PutMapping("/{id}")
+    @PutMapping(value = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ControleurDto update(@PathVariable String id, @Valid @RequestBody ControleurDto dto) {
         return service.update(id, dto);
+    }
+
+    /**
+     * Modification <strong>multipart</strong> avec photo (miroir du POST multipart) : part {@code data} (JSON
+     * {@code ControleurDto}) + part {@code photo} <strong>optionnelle</strong> (fournie → remplace ; absente →
+     * inchangée). La photo doit être une image (JPEG/PNG), ≤ 5 Mo (sinon 400). <strong>404</strong> si inconnu.
+     */
+    @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ControleurDto updateAvecPhoto(@PathVariable String id,
+            @Valid @RequestPart("data") ControleurDto dto,
+            @RequestPart(value = "photo", required = false) MultipartFile photo) {
+        return service.updateAvecPhoto(id, dto, photo);
     }
 
     @DeleteMapping("/{id}")
