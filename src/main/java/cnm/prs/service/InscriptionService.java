@@ -147,6 +147,8 @@ public class InscriptionService {
             compte.setDateDecision(LocalDateTime.now());
             compte.setImValidateur(CurrentUser.ref().orElse(null));
             compteRepository.save(compte);
+            // Unifie les pièces d'inscription (clé login) sur la clé id acteur (comme les pièces Admin).
+            pieceJointeService.reAffecter(login, compte.getRefActeur());
             notifierUgpm(compte.getRefActeur(), TypeNotification.INSCRIPTION_VALIDEE, "Inscription validée",
                     "Votre compte UGPM a été activé. Vous pouvez désormais vous connecter.");
             return new ValidationInscriptionResponse(List.of("compte UGPM activé"), List.of(),
@@ -210,6 +212,8 @@ public class InscriptionService {
             compte.setDateDecision(LocalDateTime.now());
             compte.setImValidateur(CurrentUser.ref().orElse(null));
             compteRepository.save(compte);
+            // Unifie les pièces d'inscription (clé login) sur la clé idPrmp (comme les pièces Admin).
+            pieceJointeService.reAffecter(login, idPrmp);
             notifierPrmp(idPrmp, TypeNotification.INSCRIPTION_VALIDEE, "Inscription validée",
                     "Votre compte a été activé. Entités rattachées : " + validees
                             + (conflits.isEmpty() ? "." : " ; non retenues : " + conflits.size() + "."));

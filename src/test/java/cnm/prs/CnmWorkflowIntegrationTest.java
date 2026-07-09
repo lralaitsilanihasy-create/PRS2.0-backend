@@ -3667,6 +3667,12 @@ class CnmWorkflowIntegrationTest {
                 .andExpect(jsonPath("$.role").value("UGPM"))
                 .andExpect(jsonPath("$.ref").value("PRMP001"));
 
+        // Pièces ré-affectées à la validation : accessibles par l'id (UGPREG), plus par le login.
+        mvc.perform(get("/api/ugpms/UGPREG/pieces/CIN").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk()).andExpect(content().contentType(MediaType.IMAGE_JPEG));
+        org.junit.jupiter.api.Assertions.assertTrue(pieceJointeRepository.findByLogin("ugpm.reg").isEmpty());
+        org.junit.jupiter.api.Assertions.assertEquals(1, pieceJointeRepository.findByLogin("UGPREG").size());
+
         // --- Cas d'erreur ensuite. ---
         // Tutelle inconnue → 409.
         String dataNope = data.replace("UGPREG", "UGPRG2").replace("ugpm.reg", "ugpm.rg2")

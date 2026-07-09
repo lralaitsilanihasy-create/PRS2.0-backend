@@ -87,6 +87,20 @@ public class PieceJointeService {
         repository.deleteByLogin(cle);
     }
 
+    /**
+     * Ré-affecte les pièces d'une clé vers une autre (ex. de la clé <em>login</em> d'inscription vers la clé
+     * <em>id acteur</em> à la validation) — unifie le stockage avec les pièces créées côté Admin.
+     */
+    public void reAffecter(String ancienneCle, String nouvelleCle) {
+        if (ancienneCle == null || ancienneCle.equals(nouvelleCle)) {
+            return;
+        }
+        for (PieceJointe p : repository.findByLogin(ancienneCle)) {
+            p.setLogin(nouvelleCle);
+            repository.save(p);
+        }
+    }
+
     /** Supprime la pièce {@code type} d'une clé acteur. <strong>404</strong> si elle est absente. */
     public void supprimer(String cle, TypePieceJointe type) {
         PieceJointe piece = repository.findByLoginAndTypePiece(cle, type.name())
