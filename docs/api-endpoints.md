@@ -1085,6 +1085,7 @@ pas de 404 (filtre).
 | POST | /api/ugpms/suppression-lot | `SuppressionLotUgpmRequest` `{matricules[]}` | `SuppressionLotResult` | 200, 400, 403 | **ADMINISTRATEUR** |
 | POST | /api/ugpms/{id}/pieces/{type} | `multipart/form-data` (part `fichier`) ; `type` ∈ `CIN`/`PHOTO` | `PieceJointeMetaDto` | 200, 400, 403, 404 | **ADMINISTRATEUR** |
 | GET | /api/ugpms/{id}/pieces/{type} | — ; `type` ∈ `CIN`/`PHOTO` | fichier (binaire) | 200, 400, 403, 404 | **ADMINISTRATEUR** |
+| DELETE | /api/ugpms/{id}/pieces/{type} | — ; `type` ∈ `CIN`/`PHOTO` | — | 204, 400, 403, 404 | **ADMINISTRATEUR** |
 
 `CreerUgpmRequest` = `{idUgpm, libelle?, idPrmpTutelle, nomUgpm, prenomsUgpm, cin, dateCin (yyyy-MM-dd),
 lieuCin, emailUgpm, telUgpm, login, motDePasse}`. **`idUgpm` = matricule** de l'UGPM (identifiant unifié, comme
@@ -1121,7 +1122,9 @@ une **pièce absente est laissée inchangée** ; la variante **JSON pure** du PU
 pièces sont stockées sous la clé `idUgpm`. Miroir de la PRMP, **sans arrêté** : l'UGPM n'a pas d'arrêté de nomination
 → `type` limité à **`CIN`/`PHOTO`** ; `ARRETE_NOMIN` → **400**. Contraintes fichiers : **PDF/JPEG/PNG** (magic-bytes),
 **≤ 5 Mo** chacune ; la **photo doit être une image** (JPEG/PNG, un PDF → **400**). Fichier absent/invalide/trop
-volumineux → **400** (annule la création si multipart) ; **404** si l'UGPM ou la pièce est inconnue.
+volumineux → **400** (annule la création si multipart) ; **404** si l'UGPM ou la pièce est inconnue. On peut
+**supprimer une pièce** (sans supprimer l'UGPM) via `DELETE /api/ugpms/{id}/pieces/{type}` → **204** ; **400** si
+`type` = `ARRETE_NOMIN`, **404** si l'UGPM ou la pièce est inconnue.
 
 > ⚠️ **Règle ajoutée — PK attribuées par le serveur.** Les identifiants `dossier`/`PPM`/`marché` sont
 > **alloués par une séquence serveur** (`seq_dossier`/`seq_ppm`/`seq_marche`) ; tout id envoyé par le

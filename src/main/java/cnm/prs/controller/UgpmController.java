@@ -86,6 +86,18 @@ public class UgpmController {
                 .body(piece.getContenu());
     }
 
+    /**
+     * Supprime une pièce d'une UGPM (sans supprimer l'UGPM). Réservé {@code ADMINISTRATEUR} (sous-chemin non
+     * couvert par SecurityConfig). {@code type} ∈ {@code CIN}/{@code PHOTO} ({@code ARRETE_NOMIN} → 400) ;
+     * **404** si l'UGPM ou la pièce est inconnue.
+     */
+    @PreAuthorize("hasRole('ADMINISTRATEUR')")
+    @DeleteMapping("/{id}/pieces/{type}")
+    public ResponseEntity<Void> supprimerPiece(@PathVariable String id, @PathVariable TypePieceJointe type) {
+        service.supprimerPiece(id, type);
+        return ResponseEntity.noContent().build();
+    }
+
     @PreAuthorize("hasRole('ADMINISTRATEUR')")
     @GetMapping
     public List<UgpmDto> findAll() {

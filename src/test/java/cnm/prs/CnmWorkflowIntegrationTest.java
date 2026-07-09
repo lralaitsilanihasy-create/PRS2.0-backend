@@ -3554,6 +3554,52 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("DELETE /api/ugpms/{id}/pieces/{type} : supprime une pièce (UGPM conservée) ; PHOTO intacte ; absente/inconnu → 404 ; ARRETE_NOMIN → 400 ; non-admin → 403")
+    void ugpm_suppressionPiece() throws Exception {
+        String identite = "\"nomUgpm\":\"Rakoto\",\"prenomsUgpm\":\"Jean\","
+                + "\"cin\":\"101234567890\",\"dateCin\":\"2010-05-20\",\"lieuCin\":\"Antananarivo\","
+                + "\"emailUgpm\":\"ugpm@ex.mg\",\"telUgpm\":\"0340000000\",";
+        byte[] data = ("{\"idUgpm\":\"UGPDP\",\"idPrmpTutelle\":\"PRMP001\"," + identite
+                + "\"login\":\"ugpdp\",\"motDePasse\":\"Ugpm@1234\"}").getBytes(StandardCharsets.UTF_8);
+        byte[] jpeg = { (byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0, 0, 0, 0 };
+        byte[] png = { (byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0 };
+
+        // --- Écritures / lectures 200 d'abord. ---
+        // Création avec CIN + PHOTO.
+        mvc.perform(multipart("/api/ugpms").header("Authorization", tokenAdmin)
+                .file(new MockMultipartFile("data", "", "application/json", data))
+                .file(new MockMultipartFile("cin", "cin.jpg", "image/jpeg", jpeg))
+                .file(new MockMultipartFile("photo", "photo.png", "image/png", png)))
+                .andExpect(status().isCreated());
+        // Suppression de la CIN → 204.
+        mvc.perform(delete("/api/ugpms/UGPDP/pieces/CIN").header("Authorization", tokenAdmin))
+                .andExpect(status().isNoContent());
+        // La PHOTO subsiste, l'UGPM aussi.
+        mvc.perform(get("/api/ugpms/UGPDP/pieces/PHOTO").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk()).andExpect(content().contentType(MediaType.IMAGE_PNG));
+        mvc.perform(get("/api/ugpms/UGPDP").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk());
+        // En base : il ne reste que la PHOTO sous la clé UGPDP.
+        org.junit.jupiter.api.Assertions.assertEquals(1, pieceJointeRepository.findByLogin("UGPDP").size());
+
+        // --- Cas d'erreur ensuite. ---
+        // CIN désormais absente → 404 (téléchargement et re-suppression).
+        mvc.perform(get("/api/ugpms/UGPDP/pieces/CIN").header("Authorization", tokenAdmin))
+                .andExpect(status().isNotFound());
+        mvc.perform(delete("/api/ugpms/UGPDP/pieces/CIN").header("Authorization", tokenAdmin))
+                .andExpect(status().isNotFound());
+        // type = ARRETE_NOMIN → 400 (l'UGPM n'a pas d'arrêté).
+        mvc.perform(delete("/api/ugpms/UGPDP/pieces/ARRETE_NOMIN").header("Authorization", tokenAdmin))
+                .andExpect(status().isBadRequest());
+        // UGPM inconnue → 404.
+        mvc.perform(delete("/api/ugpms/INCONNU/pieces/PHOTO").header("Authorization", tokenAdmin))
+                .andExpect(status().isNotFound());
+        // Non-admin → 403 (sous-chemin sécurisé par @PreAuthorize).
+        mvc.perform(delete("/api/ugpms/UGPDP/pieces/PHOTO").header("Authorization", tokenPrmp))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     @DisplayName("GET /api/ugpms/{id} : lit une UGPM (identité) ; id inconnu → 404")
     void ugpm_findById() throws Exception {
         String identite = "\"nomUgpm\":\"Rakoto\",\"prenomsUgpm\":\"Jean\","

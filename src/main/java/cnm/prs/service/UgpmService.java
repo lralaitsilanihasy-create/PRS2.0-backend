@@ -109,6 +109,18 @@ public class UgpmService {
         return pieceJointeService.telecharger(idUgpm, type);
     }
 
+    /**
+     * Supprime une pièce d'une UGPM (sans supprimer l'UGPM). {@code type} ∈ {@code CIN}/{@code PHOTO}
+     * ({@code ARRETE_NOMIN} → 400) ; <strong>404</strong> si l'UGPM est inconnue ou si la pièce est absente.
+     */
+    public void supprimerPiece(String idUgpm, TypePieceJointe type) {
+        exigerTypeUgpm(type);
+        if (!ugpmRepository.existsById(idUgpm)) {
+            throw new ResourceNotFoundException("UGPM introuvable : " + idUgpm + ".");
+        }
+        pieceJointeService.supprimer(idUgpm, type);
+    }
+
     private void stockerSiPresente(String idUgpm, TypePieceJointe type, MultipartFile fichier) {
         if (fichier != null && !fichier.isEmpty()) {
             stockerPiece(idUgpm, type, fichier);
