@@ -173,6 +173,17 @@ public class PrmpService {
         return pieceJointeService.telecharger(idPrmp, type);
     }
 
+    /**
+     * Supprime une pièce d'une PRMP (sans supprimer la PRMP). {@code type} ∈ {@code ARRETE_NOMIN}/{@code CIN}/
+     * {@code PHOTO} (tous valides pour une PRMP). <strong>404</strong> si la PRMP ou la pièce est inconnue.
+     */
+    public void supprimerPiece(String idPrmp, TypePieceJointe type) {
+        if (!repository.existsById(idPrmp)) {
+            throw new ResourceNotFoundException("Prmp introuvable : " + idPrmp);
+        }
+        pieceJointeService.supprimer(idPrmp, type);
+    }
+
     public PrmpDto update(String id, PrmpDto dto) {
         Prmp existing = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Prmp introuvable : " + id));

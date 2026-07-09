@@ -137,4 +137,16 @@ public class PrmpController {
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + nom + "\"")
                 .body(piece.getContenu());
     }
+
+    /**
+     * Supprime une pièce d'une PRMP (sans supprimer la PRMP). Réservé {@code ADMINISTRATEUR} (sous-chemin non
+     * couvert par SecurityConfig). {@code type} ∈ {@code ARRETE_NOMIN}/{@code CIN}/{@code PHOTO} ; **404** si la
+     * PRMP ou la pièce est inconnue.
+     */
+    @PreAuthorize("hasRole('ADMINISTRATEUR')")
+    @DeleteMapping("/{id}/pieces/{type}")
+    public ResponseEntity<Void> supprimerPiece(@PathVariable String id, @PathVariable TypePieceJointe type) {
+        service.supprimerPiece(id, type);
+        return ResponseEntity.noContent().build();
+    }
 }
