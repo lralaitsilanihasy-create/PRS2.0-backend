@@ -3600,6 +3600,66 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("POST /api/auth/register/ugpm : auto-inscription publique EN_ATTENTE ; login refusé avant validation ; validée par l'Admin → login OK (UGPM) ; GET /api/auth/prmps public ; tutelle inconnue / déjà pris → 409")
+    void ugpm_autoInscription() throws Exception {
+        // GET /api/auth/prmps (public, sans token) → contient la PRMP001 du seed.
+        mvc.perform(get("/api/auth/prmps"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idPrmp=='PRMP001')]", hasSize(1)));
+
+        byte[] jpeg = { (byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0, 0, 0, 0 };
+        String data = "{\"login\":\"ugpm.reg\",\"motDePasse\":\"Ugpm@1234\",\"idUgpm\":\"UGPREG\","
+                + "\"nomUgpm\":\"Rakoto\",\"prenomsUgpm\":\"Jean\",\"cin\":\"101234567890\","
+                + "\"dateCin\":\"2010-05-20\",\"lieuCin\":\"Antananarivo\",\"emailUgpm\":\"ugpm.reg@ex.mg\","
+                + "\"telUgpm\":\"0340000000\",\"idPrmpTutelle\":\"PRMP001\"}";
+        MockMultipartFile dataPart = new MockMultipartFile("data", "", "application/json",
+                data.getBytes(StandardCharsets.UTF_8));
+        MockMultipartFile cin = new MockMultipartFile("cin", "cin.jpg", "image/jpeg", jpeg);
+
+        // Auto-inscription publique (sans token) → 201, compte EN_ATTENTE.
+        mvc.perform(multipart("/api/auth/register/ugpm").file(dataPart).file(cin))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.typeActeur").value("UGPM"))
+                .andExpect(jsonPath("$.statut").value("EN_ATTENTE"))
+                .andExpect(jsonPath("$.actif").value(false));
+
+        // Connexion refusée avant validation → 401.
+        mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"login\":\"ugpm.reg\",\"motDePasse\":\"Ugpm@1234\"}"))
+                .andExpect(status().isUnauthorized());
+
+        // Visible par l'Admin dans les inscriptions en attente (type UGPM + tutelle).
+        mvc.perform(get("/api/inscriptions/en-attente").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.login=='ugpm.reg')].type", hasItem("UGPM")))
+                .andExpect(jsonPath("$[?(@.login=='ugpm.reg')].idPrmpTutelle", hasItem("PRMP001")));
+
+        // Validation par l'Admin (pas d'entités à instruire) → compte activé.
+        mvc.perform(post("/api/inscriptions/ugpm.reg/valider").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statutCompte").value("ACTIF"));
+
+        // Login OK maintenant → rôle UGPM, ref = PRMP de tutelle.
+        mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"login\":\"ugpm.reg\",\"motDePasse\":\"Ugpm@1234\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.role").value("UGPM"))
+                .andExpect(jsonPath("$.ref").value("PRMP001"));
+
+        // --- Cas d'erreur ensuite. ---
+        // Tutelle inconnue → 409.
+        String dataNope = data.replace("UGPREG", "UGPRG2").replace("ugpm.reg", "ugpm.rg2")
+                .replace("\"idPrmpTutelle\":\"PRMP001\"", "\"idPrmpTutelle\":\"NOPE\"");
+        mvc.perform(multipart("/api/auth/register/ugpm")
+                .file(new MockMultipartFile("data", "", "application/json", dataNope.getBytes(StandardCharsets.UTF_8)))
+                .file(new MockMultipartFile("cin", "cin.jpg", "image/jpeg", jpeg)))
+                .andExpect(status().isConflict());
+        // login déjà pris → 409 (réutilise ugpm.reg).
+        mvc.perform(multipart("/api/auth/register/ugpm").file(dataPart).file(cin))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
     @DisplayName("GET /api/ugpms/{id} : lit une UGPM (identité) ; id inconnu → 404")
     void ugpm_findById() throws Exception {
         String identite = "\"nomUgpm\":\"Rakoto\",\"prenomsUgpm\":\"Jean\","
@@ -5857,6 +5917,48 @@ class CnmWorkflowIntegrationTest {
                 .file(new MockMultipartFile("data", "", "application/json", data2))
                 .file(new MockMultipartFile("cin", "cin.jpg", "image/jpeg", gros)))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("DELETE /api/prmps/{id}/pieces/{type} : supprime une pièce (PRMP conservée) ; autres pièces intactes ; absente/inconnu → 404 ; non-admin → 403")
+    void prmp_suppressionPiece() throws Exception {
+        byte[] data = ("{\"idPrmp\":\"IMPDP\",\"nomPrmp\":\"Testy\",\"prenomsPrmp\":\"Del\",\"arreteNomin\":\"ARR-1\","
+                + "\"dateNomin\":\"2024-01-10\",\"cin\":\"301234567890\",\"dateCin\":\"2012-02-02\","
+                + "\"lieuCin\":\"Antananarivo\",\"emailPrmp\":\"dp@cnm.mg\",\"telPrmp\":\"0331112233\"}")
+                .getBytes(StandardCharsets.UTF_8);
+        byte[] pdf = "%PDF-1.4 arrete".getBytes(StandardCharsets.US_ASCII);
+        byte[] jpeg = { (byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0, 0, 0, 0 };
+
+        // --- Écritures / lectures 200 d'abord. ---
+        // Création avec ARRETE_NOMIN (PDF) + CIN (JPEG).
+        mvc.perform(multipart("/api/prmps").header("Authorization", tokenAdmin)
+                .file(new MockMultipartFile("data", "", "application/json", data))
+                .file(new MockMultipartFile("arrete", "arrete.pdf", "application/pdf", pdf))
+                .file(new MockMultipartFile("cin", "cin.jpg", "image/jpeg", jpeg)))
+                .andExpect(status().isCreated());
+        // Suppression de l'arrêté → 204.
+        mvc.perform(delete("/api/prmps/IMPDP/pieces/ARRETE_NOMIN").header("Authorization", tokenAdmin))
+                .andExpect(status().isNoContent());
+        // La CIN subsiste, la PRMP aussi.
+        mvc.perform(get("/api/prmps/IMPDP/pieces/CIN").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk()).andExpect(content().contentType(MediaType.IMAGE_JPEG));
+        mvc.perform(get("/api/prmps/IMPDP").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk());
+        // En base : il ne reste que la CIN sous la clé IMPDP.
+        org.junit.jupiter.api.Assertions.assertEquals(1, pieceJointeRepository.findByLogin("IMPDP").size());
+
+        // --- Cas d'erreur ensuite. ---
+        // Arrêté désormais absent → 404 (téléchargement et re-suppression).
+        mvc.perform(get("/api/prmps/IMPDP/pieces/ARRETE_NOMIN").header("Authorization", tokenAdmin))
+                .andExpect(status().isNotFound());
+        mvc.perform(delete("/api/prmps/IMPDP/pieces/ARRETE_NOMIN").header("Authorization", tokenAdmin))
+                .andExpect(status().isNotFound());
+        // PRMP inconnue → 404.
+        mvc.perform(delete("/api/prmps/INCONNU/pieces/CIN").header("Authorization", tokenAdmin))
+                .andExpect(status().isNotFound());
+        // Non-admin → 403 (sous-chemin sécurisé par @PreAuthorize).
+        mvc.perform(delete("/api/prmps/IMPDP/pieces/CIN").header("Authorization", tokenPrmp))
+                .andExpect(status().isForbidden());
     }
 
     @Test

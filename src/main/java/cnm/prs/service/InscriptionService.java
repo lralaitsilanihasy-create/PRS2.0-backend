@@ -24,6 +24,7 @@ import cnm.prs.entity.PieceJointe;
 import cnm.prs.entity.Prmp;
 import cnm.prs.entity.PrmpEntite;
 import cnm.prs.entity.PrmpEntiteDemande;
+import cnm.prs.entity.Ugpm;
 import cnm.prs.enums.StatutCompte;
 import cnm.prs.enums.StatutDemandeEntite;
 import cnm.prs.enums.TypeActeur;
@@ -38,6 +39,7 @@ import cnm.prs.repository.PieceJointeRepository;
 import cnm.prs.repository.PrmpEntiteDemandeRepository;
 import cnm.prs.repository.PrmpEntiteRepository;
 import cnm.prs.repository.PrmpRepository;
+import cnm.prs.repository.UgpmRepository;
 import cnm.prs.security.CurrentUser;
 
 /**
@@ -63,11 +65,13 @@ public class InscriptionService {
     private final PieceJointeRepository pieceJointeRepository;
     private final PieceJointeService pieceJointeService;
     private final NotificationService notificationService;
+    private final UgpmRepository ugpmRepository;
 
     public InscriptionService(CompteAuthRepository compteRepository, PrmpRepository prmpRepository,
             PrmpEntiteDemandeRepository demandeRepository, PrmpEntiteRepository prmpEntiteRepository,
             EntiteContractRepository entiteContractRepository, PieceJointeRepository pieceJointeRepository,
-            PieceJointeService pieceJointeService, NotificationService notificationService) {
+            PieceJointeService pieceJointeService, NotificationService notificationService,
+            UgpmRepository ugpmRepository) {
         this.compteRepository = compteRepository;
         this.prmpRepository = prmpRepository;
         this.demandeRepository = demandeRepository;
@@ -76,13 +80,22 @@ public class InscriptionService {
         this.pieceJointeRepository = pieceJointeRepository;
         this.pieceJointeService = pieceJointeService;
         this.notificationService = notificationService;
+        this.ugpmRepository = ugpmRepository;
     }
 
-    /** Inscriptions PRMP en attente de validation, enrichies (entités déclarées + pièces). */
+    /**
+     * Inscriptions <strong>PRMP et UGPM</strong> en attente de validation, enrichies (entités
+     * déclarées + pièces pour la PRMP ; identité + tutelle + pièces pour l'UGPM). Union des deux types.
+     */
     @Transactional(readOnly = true)
     public List<InscriptionEnAttenteDto> enAttente() {
-        return compteRepository.findByStatutAndTypeActeur(StatutCompte.EN_ATTENTE.name(), TypeActeur.PRMP.name())
-                .stream().map(this::toInscriptionDto).toList();
+        List<InscriptionEnAttenteDto> resultat = new ArrayList<>(
+                compteRepository.findByStatutAndTypeActeur(StatutCompte.EN_ATTENTE.name(), TypeActeur.PRMP.name())
+                        .stream().map(this::toInscriptionDto).toList());
+        resultat.addAll(
+                compteRepository.findByStatutAndTypeActeur(StatutCompte.EN_ATTENTE.name(), TypeActeur.UGPM.name())
+                        .stream().map(this::toInscriptionUgpmDto).toList());
+        return resultat;
     }
 
     private InscriptionEnAttenteDto toInscriptionDto(CompteAuth compte) {
@@ -91,11 +104,23 @@ public class InscriptionService {
                 .stream().map(this::toDeclarationDto).toList();
         List<PieceJointeMetaDto> pieces = pieceJointeRepository.findByLogin(compte.getLogin())
                 .stream().map(PieceJointeMapper::toDto).toList();
-        return new InscriptionEnAttenteDto(compte.getLogin(), compte.getRefActeur(),
+        return new InscriptionEnAttenteDto(TypeActeur.PRMP.name(), compte.getLogin(), compte.getRefActeur(),
                 prmp != null ? prmp.getNomPrmp() : null,
                 prmp != null ? prmp.getPrenomsPrmp() : null,
                 prmp != null ? prmp.getEmailPrmp() : null,
-                declarations, pieces);
+                null, declarations, pieces);
+    }
+
+    private InscriptionEnAttenteDto toInscriptionUgpmDto(CompteAuth compte) {
+        Ugpm ugpm = ugpmRepository.findById(compte.getRefActeur()).orElse(null);
+        List<PieceJointeMetaDto> pieces = pieceJointeRepository.findByLogin(compte.getLogin())
+                .stream().map(PieceJointeMapper::toDto).toList();
+        return new InscriptionEnAttenteDto(TypeActeur.UGPM.name(), compte.getLogin(), compte.getRefActeur(),
+                ugpm != null ? ugpm.getNomUgpm() : null,
+                ugpm != null ? ugpm.getPrenomsUgpm() : null,
+                ugpm != null ? ugpm.getEmailUgpm() : null,
+                ugpm != null ? ugpm.getIdPrmpTutelle() : null,
+                List.of(), pieces);
     }
 
     private DeclarationEntiteDto toDeclarationDto(PrmpEntiteDemande d) {
@@ -114,6 +139,20 @@ public class InscriptionService {
      */
     public ValidationInscriptionResponse valider(String login, ValidationInscriptionRequest req) {
         CompteAuth compte = chargerEnAttente(login);
+
+        // UGPM : pas d'entités à instruire → activation directe du compte.
+        if (TypeActeur.UGPM.name().equals(compte.getTypeActeur())) {
+            compte.setStatut(StatutCompte.ACTIF.name());
+            compte.setActif(true);
+            compte.setDateDecision(LocalDateTime.now());
+            compte.setImValidateur(CurrentUser.ref().orElse(null));
+            compteRepository.save(compte);
+            notifierUgpm(compte.getRefActeur(), TypeNotification.INSCRIPTION_VALIDEE, "Inscription validée",
+                    "Votre compte UGPM a été activé. Vous pouvez désormais vous connecter.");
+            return new ValidationInscriptionResponse(List.of("compte UGPM activé"), List.of(),
+                    StatutCompte.ACTIF.name());
+        }
+
         String idPrmp = compte.getRefActeur();
         Map<Integer, DecisionEntiteProposee> decisions = indexerDecisions(req);
 
@@ -192,14 +231,19 @@ public class InscriptionService {
         compte.setImValidateur(CurrentUser.ref().orElse(null));
         compteRepository.save(compte);
 
+        // Demandes d'entités (PRMP uniquement ; l'UGPM n'en a pas → boucle vide).
         for (PrmpEntiteDemande d : demandeRepository.findByLoginAndStatutDemande(login,
                 StatutDemandeEntite.EN_ATTENTE.name())) {
             d.setStatutDemande(StatutDemandeEntite.REFUSEE.name());
             d.setMotif("Inscription refusée.");
             demandeRepository.save(d);
         }
-        notifierPrmp(compte.getRefActeur(), TypeNotification.INSCRIPTION_REFUSEE, "Inscription refusée",
-                "Votre inscription a été refusée. Motif : " + motif);
+        String corps = "Votre inscription a été refusée. Motif : " + motif;
+        if (TypeActeur.UGPM.name().equals(compte.getTypeActeur())) {
+            notifierUgpm(compte.getRefActeur(), TypeNotification.INSCRIPTION_REFUSEE, "Inscription refusée", corps);
+        } else {
+            notifierPrmp(compte.getRefActeur(), TypeNotification.INSCRIPTION_REFUSEE, "Inscription refusée", corps);
+        }
     }
 
     /** Récupère une pièce d'une inscription pour téléchargement (contenu + format). */
@@ -233,8 +277,9 @@ public class InscriptionService {
     private CompteAuth chargerEnAttente(String login) {
         CompteAuth compte = compteRepository.findByLogin(login)
                 .orElseThrow(() -> new ResourceNotFoundException("Compte introuvable : " + login));
-        if (!TypeActeur.PRMP.name().equals(compte.getTypeActeur())) {
-            throw new BusinessRuleException("Ce compte n'est pas une inscription PRMP.");
+        if (!TypeActeur.PRMP.name().equals(compte.getTypeActeur())
+                && !TypeActeur.UGPM.name().equals(compte.getTypeActeur())) {
+            throw new BusinessRuleException("Ce compte n'est pas une inscription PRMP ou UGPM.");
         }
         if (!StatutCompte.EN_ATTENTE.name().equals(compte.getStatut())) {
             throw new BusinessRuleException("L'inscription n'est pas en attente (statut « "
@@ -245,6 +290,11 @@ public class InscriptionService {
 
     private void notifierPrmp(String idPrmp, TypeNotification type, String titre, String corps) {
         String email = prmpRepository.findById(idPrmp).map(Prmp::getEmailPrmp).orElse(null);
+        notificationService.emettre(null, type, null, email, titre, corps);
+    }
+
+    private void notifierUgpm(String idUgpm, TypeNotification type, String titre, String corps) {
+        String email = ugpmRepository.findById(idUgpm).map(Ugpm::getEmailUgpm).orElse(null);
         notificationService.emettre(null, type, null, email, titre, corps);
     }
 }

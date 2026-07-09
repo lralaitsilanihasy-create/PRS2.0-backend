@@ -18,9 +18,11 @@ import jakarta.validation.Valid;
 import cnm.prs.dto.EntitePubliqueDto;
 import cnm.prs.dto.LoginRequest;
 import cnm.prs.dto.LoginResponse;
+import cnm.prs.dto.PrmpPubliqueDto;
 import cnm.prs.dto.RegisterPrmpRequest;
 import cnm.prs.dto.RegisterPrmpV2Request;
 import cnm.prs.dto.RegisterResponse;
+import cnm.prs.dto.RegisterUgpmRequest;
 import cnm.prs.service.AuthService;
 import cnm.prs.service.EntiteContractService;
 
@@ -54,6 +56,15 @@ public class AuthController {
     }
 
     /**
+     * Référentiel public réduit des PRMP (id + nom), pour le menu « PRMP de tutelle » du
+     * formulaire d'inscription UGPM. Route publique (miroir de {@code GET /api/auth/entites}).
+     */
+    @GetMapping("/prmps")
+    public List<PrmpPubliqueDto> prmps() {
+        return service.prmpsPubliques();
+    }
+
+    /**
      * Auto-inscription d'une PRMP (variante JSON historique, route publique). Conservée le temps
      * de la bascule du frontend vers la v2 multipart ; sera retirée ensuite.
      */
@@ -76,5 +87,20 @@ public class AuthController {
             @RequestPart(value = "photo", required = false) MultipartFile photo) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(service.registerPrmpV2(data, arrete, cin, photo));
+    }
+
+    /**
+     * Auto-inscription d'une UGPM (route publique, {@code multipart/form-data}) : part JSON
+     * {@code data} ({@code RegisterUgpmRequest}) + fichiers {@code cin} (obligatoire) et
+     * {@code photo} (optionnel). Miroir de l'inscription PRMP sans arrêté ni entités : crée un
+     * compte <strong>EN_ATTENTE</strong> ; connexion possible après validation par l'Administrateur.
+     */
+    @PostMapping(value = "/register/ugpm", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<RegisterResponse> registerUgpm(
+            @Valid @RequestPart("data") RegisterUgpmRequest data,
+            @RequestPart("cin") MultipartFile cin,
+            @RequestPart(value = "photo", required = false) MultipartFile photo) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(service.registerUgpm(data, cin, photo));
     }
 }

@@ -14,9 +14,11 @@ import cnm.prs.dto.ChangePasswordRequest;
 import cnm.prs.dto.EntiteNonListeeRequest;
 import cnm.prs.dto.LoginRequest;
 import cnm.prs.dto.LoginResponse;
+import cnm.prs.dto.PrmpPubliqueDto;
 import cnm.prs.dto.RegisterPrmpRequest;
 import cnm.prs.dto.RegisterPrmpV2Request;
 import cnm.prs.dto.RegisterResponse;
+import cnm.prs.dto.RegisterUgpmRequest;
 import cnm.prs.entity.CompteAuth;
 import cnm.prs.entity.Controleur;
 import cnm.prs.entity.Ugpm;
@@ -155,7 +157,9 @@ public class AuthService {
                 TypeActeur.PRMP.name(), req.idPrmp(), false);
         compteRepository.save(compte);
 
-        notifierAdministrateurs(prmp);
+        notifierAdministrateurs("Nouvelle inscription PRMP à valider",
+                "La PRMP " + prmp.getNomPrmp() + " " + prmp.getPrenomsPrmp() + " (id " + prmp.getIdPrmp()
+                        + ") s'est inscrite et attend la validation de son compte.");
 
         return new RegisterResponse(req.login(), req.idPrmp(), TypeActeur.PRMP.name(), false,
                 StatutCompte.EN_ATTENTE.name(),
@@ -238,19 +242,78 @@ public class AuthService {
             pieceJointeService.stocker(req.login(), TypePieceJointe.PHOTO, photo);
         }
 
-        notifierAdministrateurs(prmp);
+        notifierAdministrateurs("Nouvelle inscription PRMP à valider",
+                "La PRMP " + prmp.getNomPrmp() + " " + prmp.getPrenomsPrmp() + " (id " + prmp.getIdPrmp()
+                        + ") s'est inscrite et attend la validation de son compte.");
 
         return new RegisterResponse(req.login(), req.idPrmp(), TypeActeur.PRMP.name(), false,
                 StatutCompte.EN_ATTENTE.name(),
                 "Inscription enregistrée. Votre compte est en attente de validation par l'administrateur.");
     }
 
-    /** Notifie chaque Administrateur d'une nouvelle inscription PRMP à valider. */
-    private void notifierAdministrateurs(Prmp prmp) {
-        String titre = "Nouvelle inscription PRMP à valider";
-        String corps = "La PRMP " + prmp.getNomPrmp() + " " + prmp.getPrenomsPrmp()
-                + " (id " + prmp.getIdPrmp()
-                + ") s'est inscrite et attend la validation de son compte.";
+    /**
+     * Auto-inscription d'une UGPM (route publique, {@code multipart/form-data}) : part JSON
+     * {@code data} + fichiers {@code cin} (obligatoire) et {@code photo} (optionnel). Miroir de
+     * l'inscription PRMP <strong>sans arrêté ni entités</strong> : l'UGPM déclare une PRMP de
+     * tutelle obligatoire (qui doit exister). Crée un compte <strong>EN_ATTENTE</strong> ; la
+     * connexion n'est possible qu'après validation par l'Administrateur.
+     */
+    @Transactional
+    public RegisterResponse registerUgpm(RegisterUgpmRequest req, MultipartFile cin, MultipartFile photo) {
+        if (compteRepository.findByLogin(req.login()).isPresent()) {
+            throw new BusinessRuleException("Ce login est déjà utilisé.");
+        }
+        if (ugpmRepository.existsById(req.idUgpm())) {
+            throw new BusinessRuleException("Cette UGPM (id " + req.idUgpm() + ") est déjà enregistrée.");
+        }
+        if (!prmpRepository.existsById(req.idPrmpTutelle())) {
+            throw new BusinessRuleException("PRMP de tutelle inconnue : " + req.idPrmpTutelle() + ".");
+        }
+
+        Ugpm ugpm = new Ugpm();
+        ugpm.setIdUgpm(req.idUgpm());
+        ugpm.setLibelle(req.libelle());
+        ugpm.setIdPrmpTutelle(req.idPrmpTutelle());
+        ugpm.setNomUgpm(req.nomUgpm());
+        ugpm.setPrenomsUgpm(req.prenomsUgpm());
+        ugpm.setCin(req.cin());
+        ugpm.setDateCin(req.dateCin());
+        ugpm.setLieuCin(req.lieuCin());
+        ugpm.setEmailUgpm(req.emailUgpm());
+        ugpm.setTelUgpm(req.telUgpm());
+        ugpmRepository.save(ugpm);
+
+        compteRepository.save(new CompteAuth(req.login(), passwordEncoder.encode(req.motDePasse()),
+                TypeActeur.UGPM.name(), req.idUgpm(), false));
+
+        // Pièces jointes (CIN obligatoire ; photo optionnelle = image seulement). Type/taille/SHA-256 contrôlés.
+        pieceJointeService.stocker(req.login(), TypePieceJointe.CIN, cin);
+        if (photo != null && !photo.isEmpty()) {
+            var meta = pieceJointeService.stocker(req.login(), TypePieceJointe.PHOTO, photo);
+            if ("application/pdf".equals(meta.format())) {
+                throw new BadRequestException("La photo doit être une image (JPEG ou PNG), pas un PDF.");
+            }
+        }
+
+        notifierAdministrateurs("Nouvelle inscription UGPM à valider",
+                "L'UGPM " + req.nomUgpm() + " " + req.prenomsUgpm() + " (id " + req.idUgpm()
+                        + ", tutelle " + req.idPrmpTutelle() + ") s'est inscrite et attend la validation de son compte.");
+
+        return new RegisterResponse(req.login(), req.idUgpm(), TypeActeur.UGPM.name(), false,
+                StatutCompte.EN_ATTENTE.name(),
+                "Inscription enregistrée. Votre compte est en attente de validation par l'administrateur.");
+    }
+
+    /** Référentiel public réduit des PRMP (pour le menu « PRMP de tutelle » de l'inscription UGPM). */
+    @Transactional(readOnly = true)
+    public List<PrmpPubliqueDto> prmpsPubliques() {
+        return prmpRepository.findAll().stream()
+                .map(p -> new PrmpPubliqueDto(p.getIdPrmp(), p.getNomPrmp(), p.getPrenomsPrmp()))
+                .toList();
+    }
+
+    /** Notifie chaque Administrateur d'une nouvelle inscription à valider. */
+    private void notifierAdministrateurs(String titre, String corps) {
         for (Controleur admin : controleurDirectory.administrateurs()) {
             notificationService.emettre(null, TypeNotification.NOUVELLE_INSCRIPTION,
                     admin.getImControleur(), admin.getEmailCont(), titre, corps);
