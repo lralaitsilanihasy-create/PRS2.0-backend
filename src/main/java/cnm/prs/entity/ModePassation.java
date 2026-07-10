@@ -2,7 +2,10 @@ package cnm.prs.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -37,4 +40,23 @@ public class ModePassation {
 
     @Column(name = "BASE_LEGALE", length = 200)
     private String baseLegale;
+
+    /** Mapping (administrable) vers le type de DMC dérivé pour les marchés de ce mode. */
+    @Column(name = "ID_TYPE_DMC")
+    private Long idTypeDmc;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "ID_TYPE_DMC", insertable = false, updatable = false)
+    private TypeDmc typeDmc;
+
+    /** Constructeur de compatibilité (champs métier historiques, sans le mapping DMC). */
+    public ModePassation(Integer idMode, String libelle, String description, Boolean publiciteRequise,
+            Integer delaiMinJours, String baseLegale) {
+        this.idMode = idMode;
+        this.libelle = libelle;
+        this.description = description;
+        this.publiciteRequise = publiciteRequise;
+        this.delaiMinJours = delaiMinJours;
+        this.baseLegale = baseLegale;
+    }
 }

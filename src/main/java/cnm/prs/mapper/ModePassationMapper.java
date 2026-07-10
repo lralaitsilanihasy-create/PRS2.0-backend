@@ -22,6 +22,7 @@ public final class ModePassationMapper {
         dto.setPubliciteRequise(entity.getPubliciteRequise());
         dto.setDelaiMinJours(entity.getDelaiMinJours());
         dto.setBaseLegale(entity.getBaseLegale());
+        dto.setIdTypeDmc(entity.getIdTypeDmc());
         return dto;
     }
 
@@ -36,6 +37,7 @@ public final class ModePassationMapper {
         entity.setPubliciteRequise(dto.getPubliciteRequise());
         entity.setDelaiMinJours(dto.getDelaiMinJours());
         entity.setBaseLegale(dto.getBaseLegale());
+        entity.setIdTypeDmc(dto.getIdTypeDmc());
         return entity;
     }
 }

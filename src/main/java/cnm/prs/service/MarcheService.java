@@ -39,11 +39,12 @@ public class MarcheService {
     private final LotRepository lotRepository;
     private final TrancheRepository trancheRepository;
     private final AuditLogService auditLogService;
+    private final DmcService dmcService;
 
     public MarcheService(MarcheRepository repository, DossierIntegriteService dossierIntegrite,
             MarchePrevisionRepository marchePrevisionRepository,
             ServiceBeneficiaireRepository serviceBeneficiaireRepository, LotRepository lotRepository,
-            TrancheRepository trancheRepository, AuditLogService auditLogService) {
+            TrancheRepository trancheRepository, AuditLogService auditLogService, DmcService dmcService) {
         this.repository = repository;
         this.dossierIntegrite = dossierIntegrite;
         this.marchePrevisionRepository = marchePrevisionRepository;
@@ -51,6 +52,7 @@ public class MarcheService {
         this.lotRepository = lotRepository;
         this.trancheRepository = trancheRepository;
         this.auditLogService = auditLogService;
+        this.dmcService = dmcService;
     }
 
     /**
@@ -127,7 +129,10 @@ public class MarcheService {
         existing.setStatut(dto.getStatut());
         existing.setIdNature(dto.getIdNature());
         existing.setIdMode(dto.getIdMode());   // mode choisi (saisie manuelle)
-        return MarcheMapper.toDto(repository.save(existing));
+        MarcheDto resultat = MarcheMapper.toDto(repository.save(existing));
+        // Si le mode a changé et qu'un DMC A_PREPARER existe, re-dériver son type.
+        dmcService.reAffecterTypeSiApreparer(id);
+        return resultat;
     }
 
     /**
@@ -173,6 +178,7 @@ public class MarcheService {
      * <em>(Un marché supprimable est BROUILLON — jamais dispatché : ni anomalie ni échéance possibles.)</em>
      */
     public void supprimerSousLignes(Integer idDetail) {
+        dmcService.supprimerPourMarche(idDetail);   // DMC (1-1) de la ligne — cascade applicative
         List<Integer> idLots = lotRepository.findByIdDetail(idDetail).stream().map(Lot::getIdLot).toList();
         if (!idLots.isEmpty()) {
             trancheRepository.deleteByIdLotIn(idLots);

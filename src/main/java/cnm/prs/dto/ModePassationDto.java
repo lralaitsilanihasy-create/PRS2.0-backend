@@ -27,4 +27,7 @@ public class ModePassationDto {
 
     @Size(max = 200)
     private String baseLegale;
+
+    /** Mapping vers le type de DMC (écran admin des modes de passation). */
+    private Long idTypeDmc;
 }

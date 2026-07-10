@@ -49,7 +49,7 @@ Pour les ressources du circuit (`dossiers`, `receptions`, `dispatchs`, `examens`
 - **Référentiels** (lecture ouverte, écriture POST/PUT/DELETE réservée à `ADMINISTRATEUR`) :
   `aviss`, `cat-comptes`, `comptes`, `delegation-profils`, `entite-contracts`, `localites`,
   `ministeres`, `mode-passations`, `natures`, `points-ctrls`, `profiles`, `regle-alertes`,
-  `regle-anomalies`, `regle-passations`, `seuils`, `situations`, `type-dossiers`.
+  `regle-anomalies`, `regle-passations`, `seuils`, `situations`, `type-dossiers`, `type-dmc`.
 - **Gestion des comptes / hiérarchie** (écriture `ADMINISTRATEUR`, lecture ouverte) :
   `controleurs`, `prmps`, `organigrammes`.
 - **Réservé `ADMINISTRATEUR`** (lecture comprise) : `audit-logs`, `session-utilisateurs`, `comptes-auth`.
@@ -2038,6 +2038,55 @@ prévisionnelles (`t_marche_prevision.ID_CAPM`). L'`ordre` fixe l'affichage des 
 
 ---
 
+## Types de DMC (dossier de mise en concurrence)
+**Ressource** `/api/type-dmc` (table référentielle `t_type_dmc`) — **Lecture** : tout utilisateur authentifié ;
+**écriture** (POST/PUT/DELETE) : **`ADMINISTRATEUR`**. Référentiel **administrable** des types de dossier de mise
+en concurrence : `DAO` (Dossier d'Appel d'Offres), `DC` (Dossier de Consultation), `BC` (Bon de Commande)… **Liste
+ouverte**, complétable sans livraison. Le mapping **mode de passation → type de DMC** est porté par
+`tr_mode_passation.ID_TYPE_DMC` (champ **`idTypeDmc`** de `ModePassationDto`, réglé via `PUT /api/mode-passations/{id}`).
+
+**Champs `TypeDmcDto`**
+
+| Champ (JSON) | Type | Obligatoire | Contraintes |
+|---|---|---|---|
+| idTypeDmc | number | Non (PK, IDENTITY) | assignée par la base |
+| code | string | Oui | max 10, **unique** (409 si déjà pris) |
+| libelle | string | Oui | max 120 |
+| actif | boolean | Non | défaut `true` |
+
+**Endpoints**
+
+| Méthode | URL | Corps | Réponse | Statuts | Rôle |
+|---|---|---|---|---|---|
+| GET | /api/type-dmc | — | `TypeDmcDto[]` | 200 | Authentifié |
+| GET | /api/type-dmc/{id} | — | `TypeDmcDto` | 200, 404 | Authentifié |
+| POST | /api/type-dmc | `TypeDmcDto` | `TypeDmcDto` | 201, 400, 403, 409 | **ADMINISTRATEUR** |
+| PUT | /api/type-dmc/{id} | `TypeDmcDto` | `TypeDmcDto` | 200, 400, 403, 404, 409 | **ADMINISTRATEUR** |
+| DELETE | /api/type-dmc/{id} | — | — | 204, 403, 404 | **ADMINISTRATEUR** |
+
+---
+
+## Dossiers de mise en concurrence (DMC)
+**Ressource** `/api/dmcs` (table `t_dossier_mec`) — Authentifié. **Un DMC par ligne de marché** (relation 1-1 sur
+`idDetail`). Son **type est dérivé du mode de passation** du marché (`tr_mode_passation.ID_TYPE_DMC`, pas d'enum codé
+en dur). Création par un **service dédié** (non câblé automatiquement sur la saisie/soumission). Si le mode n'est pas
+mappé à un type **actif** → **400** avec message de configuration (aucun DMC créé). Une 2ᵉ création pour le même
+marché → **409** (unicité). Au **changement de mode** d'un marché, si son DMC est encore `A_PREPARER`, son type est
+**re-dérivé** ; la **suppression du marché supprime son DMC** (cascade applicative).
+
+**Champs `DmcDto`** : `idDmc`, `idDetail`, `idTypeDmc`, `typeDmcCode`/`typeDmcLibelle` (dérivés, lecture seule),
+`reference` (nullable), `statut` (`A_PREPARER`/`ENGAGE`), `dateCreation`.
+
+**Endpoints**
+
+| Méthode | URL | Corps | Réponse | Statuts | Rôle |
+|---|---|---|---|---|---|
+| POST | /api/dmcs/par-marche/{idDetail} | — | `DmcDto` | 201, 400, 404, 409 | Authentifié |
+| GET | /api/dmcs/par-marche/{idDetail} | — | `DmcDto` | 200, 404 | Authentifié |
+| GET | /api/dmcs/{id} | — | `DmcDto` | 200, 404 | Authentifié |
+
+---
+
 ## Marchés — dates prévisionnelles
 **Ressource** `/api/marche-previsions` — Lecture / écriture : tout utilisateur authentifié.
 
@@ -2181,6 +2230,7 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` et une `dateFi
 | publiciteRequise | boolean | Non | |
 | delaiMinJours | number | Non | |
 | baseLegale | string | Non | max 200 |
+| idTypeDmc | number | Non | **mapping vers le type de DMC** (`t_type_dmc`) dérivé pour les marchés de ce mode |
 
 **Endpoints**
 

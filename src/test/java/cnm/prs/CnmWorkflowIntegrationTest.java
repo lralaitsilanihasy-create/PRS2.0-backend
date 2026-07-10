@@ -143,6 +143,8 @@ class CnmWorkflowIntegrationTest {
     @Autowired private DelegationProfilRepository delegationProfilRepository;
     @Autowired private NatureRepository natureRepository;
     @Autowired private ModePassationRepository modePassationRepository;
+    @Autowired private cnm.prs.repository.TypeDmcRepository typeDmcRepository;
+    @Autowired private cnm.prs.repository.DossierMecRepository dossierMecRepository;
     @Autowired private cnm.prs.service.PvDocumentGenerator pvDocumentGenerator;
     @Autowired private cnm.prs.service.ReferenceService referenceService;
     @Autowired private jakarta.persistence.EntityManager entityManager;
@@ -7037,6 +7039,101 @@ class CnmWorkflowIntegrationTest {
         p.setReference("PPM-REF-" + id);
         p.setIdLocalite(localite);
         return p;
+    }
+
+    @Test
+    @DisplayName("DMC : le type est dérivé du mode de passation (Achat Direct → BC)")
+    void dmc_type_derive_du_mode() throws Exception {
+        Long idBc = typeDmcRepository.save(new cnm.prs.entity.TypeDmc(null, "BC", "Bon de Commande", true))
+                .getIdTypeDmc();
+        ModePassation mode = new ModePassation(90, "Achat Direct", null, null, null, null);
+        mode.setIdTypeDmc(idBc);
+        modePassationRepository.save(mode);
+        Marche m = marche(9700, 1, 1); m.setIdMode(90); marcheRepository.save(m);
+
+        mvc.perform(post("/api/dmcs/par-marche/9700").header("Authorization", tokenAdmin))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.idDetail").value(9700))
+                .andExpect(jsonPath("$.typeDmcCode").value("BC"))
+                .andExpect(jsonPath("$.statut").value("A_PREPARER"));
+    }
+
+    @Test
+    @DisplayName("DMC : mode non mappé → erreur explicite de configuration, aucun DMC créé")
+    void dmc_mode_non_mappe_erreur_explicite() throws Exception {
+        modePassationRepository.save(new ModePassation(91, "Gré à gré", null, null, null, null)); // ID_TYPE_DMC null
+        Marche m = marche(9701, 1, 1); m.setIdMode(91); marcheRepository.save(m);
+
+        mvc.perform(post("/api/dmcs/par-marche/9701").header("Authorization", tokenAdmin))
+                .andExpect(status().isBadRequest());
+        org.junit.jupiter.api.Assertions.assertTrue(dossierMecRepository.findByIdDetail(9701).isEmpty());
+    }
+
+    @Test
+    @DisplayName("DMC : unicité 1-1 par marché (2e création → 409)")
+    void dmc_unique_par_marche() throws Exception {
+        Long idBc = typeDmcRepository.save(new cnm.prs.entity.TypeDmc(null, "BC", "Bon de Commande", true))
+                .getIdTypeDmc();
+        ModePassation mode = new ModePassation(90, "Achat Direct", null, null, null, null);
+        mode.setIdTypeDmc(idBc);
+        modePassationRepository.save(mode);
+        Marche m = marche(9702, 1, 1); m.setIdMode(90); marcheRepository.save(m);
+
+        mvc.perform(post("/api/dmcs/par-marche/9702").header("Authorization", tokenAdmin))
+                .andExpect(status().isCreated());
+        mvc.perform(post("/api/dmcs/par-marche/9702").header("Authorization", tokenAdmin))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    @DisplayName("DMC : changement de mode re-dérive le type si le DMC est A_PREPARER")
+    void changement_mode_redérive_type_si_a_preparer() throws Exception {
+        Long idBc = typeDmcRepository.save(new cnm.prs.entity.TypeDmc(null, "BC", "Bon de Commande", true))
+                .getIdTypeDmc();
+        Long idDao = typeDmcRepository.save(new cnm.prs.entity.TypeDmc(null, "DAO", "Dossier d'Appel d'Offres", true))
+                .getIdTypeDmc();
+        ModePassation m90 = new ModePassation(90, "Achat Direct", null, null, null, null);
+        m90.setIdTypeDmc(idBc); modePassationRepository.save(m90);
+        ModePassation m92 = new ModePassation(92, "Appel d'offres ouvert", null, null, null, null);
+        m92.setIdTypeDmc(idDao); modePassationRepository.save(m92);
+        // Dossier BROUILLON de PRMP001 (autorise la modification du marché).
+        Dossier d = dossier(9710, "BROUILLON");
+        d.setIdPrmp("PRMP001"); d.setIdLocalite("ANT"); d.setIdTypeDossier("PPM");
+        dossierRepository.save(d);
+        Marche m = marche(9703, 9710, 1); m.setIdMode(90); marcheRepository.save(m);
+
+        // DMC créé → BC.
+        mvc.perform(post("/api/dmcs/par-marche/9703").header("Authorization", tokenAdmin))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.typeDmcCode").value("BC"));
+        // Changement de mode du marché → 92 (Appel d'offres ouvert = DAO).
+        mvc.perform(put("/api/marches/9703").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDossier\":9710,\"idPpm\":1,\"designationMarche\":\"M\",\"statut\":\"PREVU\",\"idMode\":92}"))
+                .andExpect(status().isOk());
+        // DMC re-dérivé → DAO.
+        mvc.perform(get("/api/dmcs/par-marche/9703").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.typeDmcCode").value("DAO"));
+    }
+
+    @Test
+    @DisplayName("DMC : la suppression du marché supprime son DMC (cascade)")
+    void suppression_marche_cascade_dmc() throws Exception {
+        Long idBc = typeDmcRepository.save(new cnm.prs.entity.TypeDmc(null, "BC", "Bon de Commande", true))
+                .getIdTypeDmc();
+        ModePassation mode = new ModePassation(90, "Achat Direct", null, null, null, null);
+        mode.setIdTypeDmc(idBc); modePassationRepository.save(mode);
+        Dossier d = dossier(9711, "BROUILLON");
+        d.setIdPrmp("PRMP001"); d.setIdLocalite("ANT"); d.setIdTypeDossier("PPM");
+        dossierRepository.save(d);
+        Marche m = marche(9705, 9711, 1); m.setIdMode(90); marcheRepository.save(m);
+
+        mvc.perform(post("/api/dmcs/par-marche/9705").header("Authorization", tokenAdmin))
+                .andExpect(status().isCreated());
+        org.junit.jupiter.api.Assertions.assertTrue(dossierMecRepository.existsByIdDetail(9705));
+        // Suppression du marché (brouillon, propriétaire PRMP001) → DMC supprimé.
+        mvc.perform(delete("/api/marches/9705").header("Authorization", tokenPrmp))
+                .andExpect(status().isNoContent());
+        org.junit.jupiter.api.Assertions.assertFalse(dossierMecRepository.existsByIdDetail(9705));
     }
 
     private Marche marche(int idDetail, int dossier, int ppm) {

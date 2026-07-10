@@ -49,6 +49,7 @@ public class ModePassationService {
         existing.setPubliciteRequise(dto.getPubliciteRequise());
         existing.setDelaiMinJours(dto.getDelaiMinJours());
         existing.setBaseLegale(dto.getBaseLegale());
+        existing.setIdTypeDmc(dto.getIdTypeDmc());   // mapping mode → type de DMC
         return ModePassationMapper.toDto(repository.save(existing));
     }
 
