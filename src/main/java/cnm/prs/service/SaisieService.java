@@ -85,6 +85,7 @@ public class SaisieService {
     private final ServiceBeneficiaireRepository serviceBeneficiaireRepository;
     private final SoaBeneficiaireRepository soaBeneficiaireRepository;
     private final AuditLogService auditLogService;
+    private final TypeDmcService typeDmcService;
 
     public SaisieService(DossierRepository dossierRepository, PpmRepository ppmRepository,
             MarcheRepository marcheRepository, PpmService ppmService,
@@ -96,7 +97,8 @@ public class SaisieService {
             TypePieceJointeRepository typePieceJointeRepository,
             NatureRepository natureRepository, ModePassationRepository modePassationRepository,
             CompteRepository compteRepository, ServiceBeneficiaireRepository serviceBeneficiaireRepository,
-            SoaBeneficiaireRepository soaBeneficiaireRepository, AuditLogService auditLogService) {
+            SoaBeneficiaireRepository soaBeneficiaireRepository, AuditLogService auditLogService,
+            TypeDmcService typeDmcService) {
         this.dossierRepository = dossierRepository;
         this.ppmRepository = ppmRepository;
         this.marcheRepository = marcheRepository;
@@ -117,6 +119,7 @@ public class SaisieService {
         this.serviceBeneficiaireRepository = serviceBeneficiaireRepository;
         this.soaBeneficiaireRepository = soaBeneficiaireRepository;
         this.auditLogService = auditLogService;
+        this.typeDmcService = typeDmcService;
     }
 
     /** Saisie d'un PPM = dossier (BROUILLON) + PPM + lignes de marché (mode auto), en une transaction. */
@@ -339,6 +342,7 @@ public class SaisieService {
         ModePassation md = new ModePassation();
         md.setIdMode(nouvelId);
         md.setLibelle(libelle.trim());
+        md.setIdTypeDmc(typeDmcService.deriverIdPourLibelle(md.getLibelle()));   // auto-mapping type de DMC
         modePassationRepository.save(md);
         auditLogService.enregistrer(CurrentUser.ref().orElse(null), "tr_mode_passation",
                 String.valueOf(nouvelId), "CREATION_A_LA_VOLEE", null);

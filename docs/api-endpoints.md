@@ -2244,6 +2244,12 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` et une `dateFi
 
 `{id}` = idMode (number).
 
+> **Auto-mapping du type de DMC à la création.** À la **création** d'un mode (POST, **et** création à la volée
+> pendant la saisie/import PPM), si **`idTypeDmc` n'est pas fourni**, il est **dérivé du libellé** (heuristique par
+> mots-clés, insensible casse/accents) : « appel d'offres » → **DAO** ; « consultation »/« cotation » → **DC** ;
+> « gré à gré »/« achat direct » → **BC** ; sinon **`null`** (à mapper ensuite via `PUT`). Un `idTypeDmc` **fourni
+> explicitement est conservé** (pas d'écrasement). Le `PUT` ne dérive pas (mapping explicite de l'admin).
+
 **Exemple — requête**
 ```json
 { "idMode": 3, "libelle": "Appel d'offres ouvert", "description": "Procédure ouverte avec publicité.", "publiciteRequise": true, "delaiMinJours": 30, "baseLegale": "Code des marchés publics, art. 25" }

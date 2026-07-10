@@ -1,5 +1,6 @@
 package cnm.prs.service;
 
+import java.text.Normalizer;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
@@ -62,5 +63,37 @@ public class TypeDmcService {
             throw new ResourceNotFoundException("Type de DMC introuvable : " + id);
         }
         repository.deleteById(id);
+    }
+
+    /**
+     * Dérive automatiquement l'{@code idTypeDmc} d'un mode de passation à partir de son <strong>libellé</strong>
+     * (heuristique par mots-clés, mêmes règles que le seed) : « appel d'offres » → {@code DAO} ;
+     * « consultation »/« cotation » → {@code DC} ; « gré à gré »/« achat direct » → {@code BC}. Renvoie
+     * {@code null} si aucun mot-clé ne correspond ou si le type cible n'existe pas / est inactif (→ à mapper
+     * ensuite en administration).
+     */
+    @Transactional(readOnly = true)
+    public Long deriverIdPourLibelle(String libelle) {
+        if (libelle == null) {
+            return null;
+        }
+        String l = normaliser(libelle);
+        String code;
+        if (l.contains("appel d'offres")) {
+            code = "DAO";
+        } else if (l.contains("consultation") || l.contains("cotation")) {
+            code = "DC";
+        } else if (l.contains("gre a gre") || l.contains("achat direct")) {
+            code = "BC";
+        } else {
+            return null;
+        }
+        return repository.findByCode(code).filter(TypeDmc::isActif).map(TypeDmc::getIdTypeDmc).orElse(null);
+    }
+
+    /** Minuscule + suppression des accents (comparaison de libellé robuste). */
+    private static String normaliser(String s) {
+        String sansAccent = Normalizer.normalize(s, Normalizer.Form.NFD).replaceAll("\\p{M}", "");
+        return sansAccent.toLowerCase().trim();
     }
 }

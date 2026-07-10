@@ -7136,6 +7136,61 @@ class CnmWorkflowIntegrationTest {
         org.junit.jupiter.api.Assertions.assertFalse(dossierMecRepository.existsByIdDetail(9705));
     }
 
+    @Test
+    @DisplayName("DMC : POST /api/mode-passations dérive automatiquement le type de DMC du libellé (sinon fourni conservé / sinon null)")
+    void mode_create_autoMap_typeDmc() throws Exception {
+        Long dao = typeDmcRepository.save(new cnm.prs.entity.TypeDmc(null, "DAO", "Dossier d'Appel d'Offres", true))
+                .getIdTypeDmc();
+        Long dc = typeDmcRepository.save(new cnm.prs.entity.TypeDmc(null, "DC", "Dossier de Consultation", true))
+                .getIdTypeDmc();
+
+        // (a) « Appel d'offres ouvert » sans idTypeDmc → DAO (dérivé).
+        mvc.perform(post("/api/mode-passations").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idMode\":95,\"libelle\":\"Appel d'offres ouvert\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.idTypeDmc").value(dao.intValue()));
+        // (b) « Demande de cotation » → DC (mot-clé « cotation »).
+        mvc.perform(post("/api/mode-passations").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idMode\":96,\"libelle\":\"Demande de cotation\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.idTypeDmc").value(dc.intValue()));
+        // (c) libellé sans mot-clé → null (à mapper en admin).
+        mvc.perform(post("/api/mode-passations").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idMode\":97,\"libelle\":\"Régie\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.idTypeDmc").value(org.hamcrest.Matchers.nullValue()));
+        // (d) idTypeDmc explicite fourni → conservé (pas écrasé par l'heuristique).
+        mvc.perform(post("/api/mode-passations").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idMode\":98,\"libelle\":\"Appel d'offres ouvert\",\"idTypeDmc\":" + dc + "}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.idTypeDmc").value(dc.intValue()));
+    }
+
+    @Test
+    @DisplayName("DMC : un mode créé À LA VOLÉE (saisie PPM) reçoit aussi le type de DMC dérivé du libellé")
+    void mode_alaVolee_autoMap_typeDmc() throws Exception {
+        Long bc = typeDmcRepository.save(new cnm.prs.entity.TypeDmc(null, "BC", "Bon de Commande", true))
+                .getIdTypeDmc();
+        natureRepository.save(new Nature(1, "Travaux", null));
+        capmRepository.save(new Capm(1, "LANCEMENT", 1));
+
+        String body = "{\"idEntiteContract\":1,\"exercice\":2026,\"signataire\":\"RABE\",\"dateSignature\":\"2026-01-10\",\"reference\":\"PPM-DMC\","
+                + "\"marches\":[{\"designationMarche\":\"A\",\"montEstim\":1000000,\"natureLibelle\":\"Travaux\",\"modeLibelle\":\"Achat Direct\",\"statut\":\"PREVU\","
+                + "\"processus\":[{\"idCapm\":1,\"dateDebut\":\"2026-02-01\",\"dateFin\":\"2026-06-30\"}]}]}";
+        mvc.perform(post("/api/saisies/ppm").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated());
+
+        // Le mode « Achat Direct » créé à la volée porte idTypeDmc = BC (dérivé).
+        ModePassation cree = modePassationRepository.findAll().stream()
+                .filter(m -> "Achat Direct".equals(m.getLibelle())).findFirst().orElseThrow();
+        org.junit.jupiter.api.Assertions.assertEquals(bc, cree.getIdTypeDmc());
+    }
+
     private Marche marche(int idDetail, int dossier, int ppm) {
         Marche m = new Marche();
         m.setIdDetail(idDetail);

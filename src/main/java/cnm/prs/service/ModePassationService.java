@@ -19,9 +19,11 @@ import cnm.prs.repository.ModePassationRepository;
 public class ModePassationService {
 
     private final ModePassationRepository repository;
+    private final TypeDmcService typeDmcService;
 
-    public ModePassationService(ModePassationRepository repository) {
+    public ModePassationService(ModePassationRepository repository, TypeDmcService typeDmcService) {
         this.repository = repository;
+        this.typeDmcService = typeDmcService;
     }
 
     @Transactional(readOnly = true)
@@ -38,6 +40,10 @@ public class ModePassationService {
 
     public ModePassationDto create(ModePassationDto dto) {
         ModePassation entity = ModePassationMapper.toEntity(dto);
+        // Auto-mapping : si aucun type de DMC fourni, le dériver du libellé.
+        if (entity.getIdTypeDmc() == null) {
+            entity.setIdTypeDmc(typeDmcService.deriverIdPourLibelle(entity.getLibelle()));
+        }
         return ModePassationMapper.toDto(repository.save(entity));
     }
 
