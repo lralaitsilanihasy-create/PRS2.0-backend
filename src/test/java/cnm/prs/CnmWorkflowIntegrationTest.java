@@ -7233,6 +7233,32 @@ class CnmWorkflowIntegrationTest {
         org.junit.jupiter.api.Assertions.assertFalse(marcheRepository.existsById(a.getIdDetail()));
     }
 
+    @Test
+    @DisplayName("GET /api/lots/par-marche/{idDetail} : lots d'une ligne de marché ; aucun/inconnu → liste vide")
+    void lot_parMarche() throws Exception {
+        marcheRepository.save(marche(9800, 1, 1));
+        for (int k = 1; k <= 2; k++) {
+            cnm.prs.entity.Lot l = new cnm.prs.entity.Lot();
+            l.setIdLot(8000 + k);
+            l.setIdDossier(1);
+            l.setIdDetail(9800);
+            l.setDesignationLot("Lot " + k);
+            l.setMontLot(new java.math.BigDecimal(k + "000000"));
+            lotRepository.save(l);
+        }
+
+        mvc.perform(get("/api/lots/par-marche/9800").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(2)))
+                .andExpect(jsonPath("$[*].designationLot", containsInAnyOrder("Lot 1", "Lot 2")))
+                .andExpect(jsonPath("$[?(@.idDetail==9800)]", hasSize(2)));
+
+        // Marché sans lot / inconnu → liste vide (filtre, pas de 404).
+        mvc.perform(get("/api/lots/par-marche/99999").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+    }
+
     private Marche marche(int idDetail, int dossier, int ppm) {
         Marche m = new Marche();
         m.setIdDetail(idDetail);

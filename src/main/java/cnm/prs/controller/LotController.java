@@ -41,6 +41,12 @@ public class LotController {
         return service.findById(id);
     }
 
+    /** Lots d'une ligne de marché (liste, vide si aucun ; pas de 404). */
+    @GetMapping("/par-marche/{idDetail}")
+    public List<LotDto> findByMarche(@PathVariable Integer idDetail) {
+        return service.findByMarche(idDetail);
+    }
+
     @PostMapping
     public ResponseEntity<LotDto> create(@Valid @RequestBody LotDto dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.create(dto));

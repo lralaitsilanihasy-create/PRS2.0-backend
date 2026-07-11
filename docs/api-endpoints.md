@@ -1915,7 +1915,8 @@ profil/localité. Cycle : `BROUILLON → SOUMIS → SIGNE` (signature CC ou Pré
 ---
 
 ## Lots
-**Ressource** `/api/lots` — Lecture / écriture : tout utilisateur authentifié.
+**Ressource** `/api/lots` — Lecture / écriture : tout utilisateur authentifié. `GET /par-marche/{idDetail}` liste
+les lots d'une **ligne de marché** (`t_lot.ID_DETAIL`) — **liste vide** si aucun (ou marché inconnu), pas de 404 (filtre).
 
 **Champs `LotDto`**
 
@@ -1935,6 +1936,7 @@ profil/localité. Cycle : `BROUILLON → SOUMIS → SIGNE` (signature CC ou Pré
 |---|---|---|---|---|---|
 | GET | /api/lots | — | `LotDto[]` | 200 | Authentifié |
 | GET | /api/lots/{id} | — | `LotDto` | 200, 404 | Authentifié |
+| GET | /api/lots/par-marche/{idDetail} | — | `LotDto[]` | 200 | Authentifié |
 | POST | /api/lots | `LotDto` | `LotDto` | 201, 400 | Authentifié |
 | PUT | /api/lots/{id} | `LotDto` | `LotDto` | 200, 400, 404 | Authentifié |
 | DELETE | /api/lots/{id} | — | — | 204, 404 | Authentifié |
