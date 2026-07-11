@@ -33,7 +33,9 @@ public record SaisiePpmImportResult(
             String modeLibelle,
             String financement,
             List<BeneficiaireImport> beneficiaires,
-            List<PrevisionImport> previsions) {
+            List<PrevisionImport> previsions,
+            /** Lots du marché (allotissement). Non extrait des PPM actuels → toujours vide côté parser. */
+            List<LotImport> lots) {
     }
 
     /** Bénéficiaire d'une ligne : compte + montant sont par bénéficiaire. */
@@ -42,6 +44,14 @@ public record SaisiePpmImportResult(
             String numCompte,
             BigDecimal ancMontBenef,
             BigDecimal nouvMontBenef) {
+    }
+
+    /** Lot d'une ligne de marché (allotissement) : désignation + montant/quantité/unité optionnels. */
+    public record LotImport(
+            String designationLot,
+            BigDecimal montLot,
+            Integer qteLot,
+            String uniteLot) {
     }
 
     /** Prévision (jalon CAPM) : libellé du processus + date de début du jalon ({@code yyyy-MM-dd}). */

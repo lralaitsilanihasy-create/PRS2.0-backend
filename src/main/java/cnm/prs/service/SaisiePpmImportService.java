@@ -391,7 +391,7 @@ public class SaisiePpmImportService {
             avert.add("Mode de passation « " + modeLibelle + " » non trouvé au référentiel — à confirmer.");
         }
         return new MarcheImport(designation, montEstim, nouvMontEstim, idNature, natureLibelle,
-                idMode, modeLibelle, financement, benef, prev);
+                idMode, modeLibelle, financement, benef, prev, List.of());   // lots non extraits du PPM
     }
 
     /**

@@ -1169,8 +1169,11 @@ volumineux → **400** (annule la création si multipart) ; **404** si l'UGPM ou
 > Forme : `{ exercice, dateSignature` (« Fait à… le… » sinon **date d'établissement**, `null` sinon)`, autoriteContractante,
 > idEntiteContract` (résolu depuis l'autorité si trouvé, sinon `null` → la PRMP choisit)`, marches[]`
 > `{ designationMarche, montEstim, nouvMontEstim, idNature+natureLibelle, idMode+modeLibelle, financement,`
-> `beneficiaires[]` `{ soaCode, numCompte, ancMontBenef, nouvMontBenef }, previsions[]` `{ processus, dateDebut } },`
-> `avertissements[] }`. **Read-only** : les référentiels manquants (`idNature`/`idMode`/`numCompte`/`soaCode`,
+> `beneficiaires[]` `{ soaCode, numCompte, ancMontBenef, nouvMontBenef }, previsions[]` `{ processus, dateDebut },`
+> `lots[]` `{ designationLot, montLot?, qteLot?, uniteLot? } },`
+> `avertissements[] }`. ⚠️ **`lots[]` n'est PAS extrait des PPM actuels** (pas de structure de lot fiable dans ces
+> PDF) → le parser le renvoie **toujours vide** ; l'allotissement se fait à la saisie (`POST /api/saisies/ppm`).
+> **Read-only** : les référentiels manquants (`idNature`/`idMode`/`numCompte`/`soaCode`,
 > entité) **ne sont pas créés** — renvoyés en libellé seul + listés dans `avertissements` ; la
 > création-à-la-volée se fait au `POST /api/saisies/ppm`. PDF illisible / non-PDF / sans texte → **400** (message
 > clair, pas de données partielles silencieuses).
@@ -1217,7 +1220,7 @@ volumineux → **400** (annule la création si multipart) ; **404** si l'UGPM ou
 >
 > Modifiables ensuite via la **rectification** (en attente de décision PRMP), pas à la création.
 
-**`SaisieMarcheLigne`** : `designationMarche`, `numCompte`, `montEstim`, **`nouvMontEstim`** (→ `t_marche.NOUV_MONT_ESTIM`), `financement`, `statut`, `idNature`, `natureLibelle`, `idMode`, `modeLibelle`, **`beneficiaires[]`**. `idDetail` est **facultatif** — **null à la création** (PK serveur), renseigné seulement pour **identifier une ligne existante** lors de l'édition (réconciliation). `idDossier`/`idPpm` sont renseignés par le service. **`idMode`** = mode **saisi** (facultatif) ; **conservé tel quel** (plus de détermination automatique — `t_situation`/`t_regle_passation`/`t_seuil` retirés). **`nouvMontEstim`** et **`beneficiaires[]`** sont **optionnels** (rétro-compatible).
+**`SaisieMarcheLigne`** : `designationMarche`, `numCompte`, `montEstim`, **`nouvMontEstim`** (→ `t_marche.NOUV_MONT_ESTIM`), `financement`, `statut`, `idNature`, `natureLibelle`, `idMode`, `modeLibelle`, **`beneficiaires[]`**, **`lots[]`**. `idDetail` est **facultatif** — **null à la création** (PK serveur), renseigné seulement pour **identifier une ligne existante** lors de l'édition (réconciliation). `idDossier`/`idPpm` sont renseignés par le service. **`idMode`** = mode **saisi** (facultatif) ; **conservé tel quel** (plus de détermination automatique — `t_situation`/`t_regle_passation`/`t_seuil` retirés). **`nouvMontEstim`**, **`beneficiaires[]`** et **`lots[]`** sont **optionnels** (rétro-compatible).
 
 > ⚠️ **Nature / mode / compte — résolution-ou-création à la volée (règle ajoutée).** Pour l'**import PPM** :
 > si `idNature` (resp. `idMode`) est **absent** mais `natureLibelle` (resp. `modeLibelle`) est fourni, le service
@@ -1234,6 +1237,12 @@ volumineux → **400** (annule la création si multipart) ; **404** si l'UGPM ou
 > **fourni**, chaque bénéficiaire doit porter `nouvMontBenef` et `Σ nouvMontBenef = nouvMontEstim`. Écart → **400**
 > ciblé : `{ "erreurs": [ { "champ": "marches[i].beneficiaires", "message": "La somme des montants par bénéficiaire
 > (…) doit égaler le montant estimatif du marché (…)." } ] }`. `beneficiaires[]` absent/vide → **aucune vérification**.
+>
+> **Lots par marché (allotissement, règle ajoutée).** `lots[]` (optionnel) = une ligne **`t_lot`** par élément
+> `{ designationLot, montLot?, qteLot?, uniteLot? }` (= `LotDto` **sans** `idLot`/`idDossier`/`idDetail`, renseignés
+> par le serveur — PK allouée, dossier et marché du contexte). `designationLot` est **obligatoire** (`@NotBlank`,
+> max 200) ; `montLot`/`qteLot`/`uniteLot` sont **descriptifs** → **aucun contrôle de somme** (contrairement aux
+> bénéficiaires). `lots[]` absent/vide → **aucun lot** (rétro-compatible).
 
 ⚠️ **`processus`** : `ProcessusMarche[]` — **chaque marché doit comporter au moins un processus à la création** (`POST /api/saisies/ppm`), sinon **400** `{ "erreurs": [ { "champ": "marches[0].processus", "message": "Au moins un processus est obligatoire." } ] }`. Chaque **`ProcessusMarche`** = `idCapm` (FK `t_capm`, `@NotNull`), `dateDebut` et `dateFin` (`yyyy-MM-dd`, `@NotNull`) — un champ manquant → **400** au chemin `marches[i].processus[j].<champ>` (« Le processus est obligatoire. » / « La date de début est obligatoire. » / « La date de fin est obligatoire. ») ; `idCapm` **inconnu** → **400**. Le service crée **une ligne `t_marche_prevision` par processus**. *(À l'édition d'un brouillon, `processus` n'est pas exigé.)*
 

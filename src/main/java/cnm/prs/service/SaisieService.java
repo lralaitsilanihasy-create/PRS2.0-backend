@@ -19,6 +19,7 @@ import cnm.prs.dto.PpmDto;
 import cnm.prs.dto.ProcessusMarche;
 import cnm.prs.dto.SaisieDossierRequest;
 import cnm.prs.dto.SaisieBeneficiaireLigne;
+import cnm.prs.dto.SaisieLotLigne;
 import cnm.prs.dto.SaisieMarcheLigne;
 import cnm.prs.dto.SaisiePpmRequest;
 import cnm.prs.entity.Capm;
@@ -28,6 +29,7 @@ import cnm.prs.entity.Marche;
 import cnm.prs.entity.ModePassation;
 import cnm.prs.entity.Nature;
 import cnm.prs.entity.Ppm;
+import cnm.prs.entity.Lot;
 import cnm.prs.entity.ServiceBeneficiaire;
 import cnm.prs.entity.SoaBeneficiaire;
 import cnm.prs.enums.StatutDossier;
@@ -45,6 +47,7 @@ import cnm.prs.repository.MarcheRepository;
 import cnm.prs.repository.ModePassationRepository;
 import cnm.prs.repository.NatureRepository;
 import cnm.prs.repository.PpmRepository;
+import cnm.prs.repository.LotRepository;
 import cnm.prs.repository.ServiceBeneficiaireRepository;
 import cnm.prs.repository.SoaBeneficiaireRepository;
 import cnm.prs.repository.PrmpRepository;
@@ -86,6 +89,7 @@ public class SaisieService {
     private final SoaBeneficiaireRepository soaBeneficiaireRepository;
     private final AuditLogService auditLogService;
     private final TypeDmcService typeDmcService;
+    private final LotRepository lotRepository;
 
     public SaisieService(DossierRepository dossierRepository, PpmRepository ppmRepository,
             MarcheRepository marcheRepository, PpmService ppmService,
@@ -98,7 +102,7 @@ public class SaisieService {
             NatureRepository natureRepository, ModePassationRepository modePassationRepository,
             CompteRepository compteRepository, ServiceBeneficiaireRepository serviceBeneficiaireRepository,
             SoaBeneficiaireRepository soaBeneficiaireRepository, AuditLogService auditLogService,
-            TypeDmcService typeDmcService) {
+            TypeDmcService typeDmcService, LotRepository lotRepository) {
         this.dossierRepository = dossierRepository;
         this.ppmRepository = ppmRepository;
         this.marcheRepository = marcheRepository;
@@ -120,6 +124,7 @@ public class SaisieService {
         this.soaBeneficiaireRepository = soaBeneficiaireRepository;
         this.auditLogService = auditLogService;
         this.typeDmcService = typeDmcService;
+        this.lotRepository = lotRepository;
     }
 
     /** Saisie d'un PPM = dossier (BROUILLON) + PPM + lignes de marché (mode auto), en une transaction. */
@@ -166,6 +171,7 @@ public class SaisieService {
                             ++prevSeq, idDetail, p.idCapm(), p.dateDebut(), p.dateFin(), null));
                 }
                 creerBeneficiaires(idDetail, ligne);   // une ligne t_service_beneficiaire par bénéficiaire
+                creerLots(idDetail, idDossier, ligne);   // une ligne t_lot par lot (aucun contrôle de somme)
             }
         }
         return DossierMapper.toDto(dossierRepository.findById(idDossier).orElseThrow());
@@ -419,6 +425,29 @@ public class SaisieService {
             sb.setAncMontBenef(b.ancMontBenef());
             sb.setNouvMontBenef(b.nouvMontBenef());
             serviceBeneficiaireRepository.save(sb);
+        }
+    }
+
+    /**
+     * (Règle ajoutée) Crée une ligne {@code t_lot} par lot (PK allouée max+1), rattachée au marché
+     * ({@code idDetail}) et à son dossier ({@code idDossier}). Descriptif — aucun contrôle de somme.
+     */
+    private void creerLots(Integer idDetail, Integer idDossier, SaisieMarcheLigne ligne) {
+        List<SaisieLotLigne> lots = ligne.lots();
+        if (lots == null || lots.isEmpty()) {
+            return;
+        }
+        int nextId = lotRepository.findMaxIdLot() + 1;
+        for (SaisieLotLigne l : lots) {
+            Lot lot = new Lot();
+            lot.setIdLot(nextId++);
+            lot.setIdDossier(idDossier);
+            lot.setIdDetail(idDetail);
+            lot.setDesignationLot(l.designationLot());
+            lot.setMontLot(l.montLot());
+            lot.setQteLot(l.qteLot());
+            lot.setUniteLot(l.uniteLot());
+            lotRepository.save(lot);
         }
     }
 

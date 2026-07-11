@@ -46,6 +46,11 @@ public record SaisieMarcheLigne(
         @Valid
         List<SaisieBeneficiaireLigne> beneficiaires,
 
+        // Lots du marché (optionnel, rétro-compatible) : une ligne t_lot par élément (comme les bénéficiaires).
+        // Descriptif : aucun contrôle de somme des montants. Absent/vide → aucun lot.
+        @Valid
+        List<SaisieLotLigne> lots,
+
         // Processus de marché + dates prévisionnelles (idCapm, dateDebut, dateFin). @Valid cascade la
         // validation par processus (chemins marches[i].processus[j].champ). « Au moins un processus »
         // est exigé à la CRÉATION (SaisieService) — pas via @NotEmpty ici, pour ne pas casser l'édition

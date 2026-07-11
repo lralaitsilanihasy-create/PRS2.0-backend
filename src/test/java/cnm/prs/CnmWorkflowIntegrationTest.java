@@ -145,6 +145,7 @@ class CnmWorkflowIntegrationTest {
     @Autowired private ModePassationRepository modePassationRepository;
     @Autowired private cnm.prs.repository.TypeDmcRepository typeDmcRepository;
     @Autowired private cnm.prs.repository.DossierMecRepository dossierMecRepository;
+    @Autowired private cnm.prs.repository.LotRepository lotRepository;
     @Autowired private cnm.prs.service.PvDocumentGenerator pvDocumentGenerator;
     @Autowired private cnm.prs.service.ReferenceService referenceService;
     @Autowired private jakarta.persistence.EntityManager entityManager;
@@ -7189,6 +7190,41 @@ class CnmWorkflowIntegrationTest {
         ModePassation cree = modePassationRepository.findAll().stream()
                 .filter(m -> "Achat Direct".equals(m.getLibelle())).findFirst().orElseThrow();
         org.junit.jupiter.api.Assertions.assertEquals(bc, cree.getIdTypeDmc());
+    }
+
+    @Test
+    @DisplayName("Saisie PPM — lots[] : une ligne t_lot par lot, rattachée au marché ; sans lots[] → aucun lot (rétro-compat)")
+    void saisiePpm_lots() throws Exception {
+        natureRepository.save(new Nature(1, "Travaux", null));
+        capmRepository.save(new Capm(1, "LANCEMENT", 1));
+
+        // Marché A : 2 lots ; marché B : aucun lot (rétro-compat).
+        String body = "{\"idEntiteContract\":1,\"exercice\":2026,\"signataire\":\"RABE\",\"dateSignature\":\"2026-01-10\",\"reference\":\"PPM-LOTS\","
+                + "\"marches\":[{\"designationMarche\":\"A\",\"montEstim\":3000000,\"natureLibelle\":\"Travaux\",\"modeLibelle\":\"Appel d'offres ouvert\",\"statut\":\"PREVU\","
+                + "\"lots\":[{\"designationLot\":\"Lot 1 - Gros oeuvre\",\"montLot\":2000000,\"qteLot\":1,\"uniteLot\":\"U\"},"
+                + "{\"designationLot\":\"Lot 2 - Finitions\",\"montLot\":1000000}],"
+                + "\"processus\":[{\"idCapm\":1,\"dateDebut\":\"2026-02-01\",\"dateFin\":\"2026-06-30\"}]},"
+                + "{\"designationMarche\":\"B\",\"montEstim\":500000,\"natureLibelle\":\"Travaux\",\"modeLibelle\":\"Appel d'offres ouvert\",\"statut\":\"PREVU\","
+                + "\"processus\":[{\"idCapm\":1,\"dateDebut\":\"2026-02-01\",\"dateFin\":\"2026-06-30\"}]}]}";
+        String resp = mvc.perform(post("/api/saisies/ppm").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        int idDoss = com.jayway.jsonpath.JsonPath.read(resp, "$.idDossier");
+
+        List<cnm.prs.entity.Marche> marches = marcheRepository.findByIdDossier(idDoss);
+        cnm.prs.entity.Marche a = marches.stream().filter(m -> "A".equals(m.getDesignationMarche())).findFirst().orElseThrow();
+        cnm.prs.entity.Marche b = marches.stream().filter(m -> "B".equals(m.getDesignationMarche())).findFirst().orElseThrow();
+
+        // Marché A : 2 lots t_lot, rattachés au marché + dossier.
+        List<cnm.prs.entity.Lot> lotsA = lotRepository.findByIdDetail(a.getIdDetail());
+        org.junit.jupiter.api.Assertions.assertEquals(2, lotsA.size());
+        org.junit.jupiter.api.Assertions.assertTrue(lotsA.stream().allMatch(l -> idDoss == l.getIdDossier()));
+        org.junit.jupiter.api.Assertions.assertTrue(lotsA.stream()
+                .anyMatch(l -> "Lot 1 - Gros oeuvre".equals(l.getDesignationLot())
+                        && new java.math.BigDecimal("2000000").compareTo(l.getMontLot()) == 0
+                        && Integer.valueOf(1).equals(l.getQteLot()) && "U".equals(l.getUniteLot())));
+        // Marché B : aucun lot (rétro-compat).
+        org.junit.jupiter.api.Assertions.assertTrue(lotRepository.findByIdDetail(b.getIdDetail()).isEmpty());
     }
 
     private Marche marche(int idDetail, int dossier, int ppm) {
