@@ -7225,6 +7225,12 @@ class CnmWorkflowIntegrationTest {
                         && Integer.valueOf(1).equals(l.getQteLot()) && "U".equals(l.getUniteLot())));
         // Marché B : aucun lot (rétro-compat).
         org.junit.jupiter.api.Assertions.assertTrue(lotRepository.findByIdDetail(b.getIdDetail()).isEmpty());
+
+        // Suppression du dossier BROUILLON (avec lots) → cascade partagée retire aussi les t_lot (pas d'orphelin FK).
+        mvc.perform(delete("/api/dossiers/" + idDoss).header("Authorization", tokenPrmp))
+                .andExpect(status().isNoContent());
+        org.junit.jupiter.api.Assertions.assertTrue(lotRepository.findByIdDetail(a.getIdDetail()).isEmpty());
+        org.junit.jupiter.api.Assertions.assertFalse(marcheRepository.existsById(a.getIdDetail()));
     }
 
     private Marche marche(int idDetail, int dossier, int ppm) {

@@ -63,6 +63,7 @@ public class DossierService {
     private final PrmpRepository prmpRepository;
     private final MarcheRepository marcheRepository;
     private final MarchePrevisionRepository marchePrevisionRepository;
+    private final MarcheService marcheService;
     private final ReceptionRepository receptionRepository;
     private final DemandeRetraitRepository demandeRetraitRepository;
     private final NotificationRepository notificationRepository;
@@ -77,7 +78,7 @@ public class DossierService {
             ReceptionRepository receptionRepository, DemandeRetraitRepository demandeRetraitRepository,
             NotificationRepository notificationRepository,
             TypePieceJointeRepository typePieceJointeRepository,
-            PieceJointeDossierRepository pieceJointeDossierRepository) {
+            PieceJointeDossierRepository pieceJointeDossierRepository, MarcheService marcheService) {
         this.repository = repository;
         this.ppmRepository = ppmRepository;
         this.controleurDirectory = controleurDirectory;
@@ -93,6 +94,7 @@ public class DossierService {
         this.notificationRepository = notificationRepository;
         this.typePieceJointeRepository = typePieceJointeRepository;
         this.pieceJointeDossierRepository = pieceJointeDossierRepository;
+        this.marcheService = marcheService;
     }
 
     /**
@@ -287,10 +289,10 @@ public class DossierService {
         if (!StatutDossier.BROUILLON.name().equals(dossier.getStatut())) {
             throw new BusinessRuleException("Ce dossier ne peut pas être supprimé.");              // 409
         }
-        // Contenu : prévisions → marchés → PPM(s).
+        // Contenu : sous-lignes de chaque marché (tranches, lots, bénéficiaires, prévisions, DMC) → marchés → PPM(s).
         List<Marche> marches = marcheRepository.findByIdDossier(id);
         for (Marche m : marches) {
-            marchePrevisionRepository.deleteByIdDetail(m.getIdDetail());
+            marcheService.supprimerSousLignes(m.getIdDetail());   // cascade partagée (inclut t_lot) — pas d'orphelin FK
         }
         marcheRepository.deleteAll(marches);
         ppmRepository.deleteAll(ppmRepository.findByIdDossier(id));
