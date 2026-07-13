@@ -47,6 +47,12 @@ public class LotController {
         return service.findByMarche(idDetail);
     }
 
+    /** Tous les lots d'un dossier (liste, vide si aucun ; pas de 404). */
+    @GetMapping("/par-dossier/{idDossier}")
+    public List<LotDto> findByDossier(@PathVariable Integer idDossier) {
+        return service.findByDossier(idDossier);
+    }
+
     @PostMapping
     public ResponseEntity<LotDto> create(@Valid @RequestBody LotDto dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.create(dto));

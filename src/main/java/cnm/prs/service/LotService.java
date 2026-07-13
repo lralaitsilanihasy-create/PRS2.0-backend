@@ -42,6 +42,12 @@ public class LotService {
         return repository.findByIdDetail(idDetail).stream().map(LotMapper::toDto).toList();
     }
 
+    /** Lots d'un dossier — tous les lots de ses lignes de marché (liste, vide si aucun ou dossier inconnu). */
+    @Transactional(readOnly = true)
+    public List<LotDto> findByDossier(Integer idDossier) {
+        return repository.findByIdDossier(idDossier).stream().map(LotMapper::toDto).toList();
+    }
+
     public LotDto create(LotDto dto) {
         Lot entity = LotMapper.toEntity(dto);
         return LotMapper.toDto(repository.save(entity));

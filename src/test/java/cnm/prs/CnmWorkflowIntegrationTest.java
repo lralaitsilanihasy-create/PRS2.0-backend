@@ -7259,6 +7259,35 @@ class CnmWorkflowIntegrationTest {
                 .andExpect(jsonPath("$", hasSize(0)));
     }
 
+    @Test
+    @DisplayName("GET /api/lots/par-dossier/{idDossier} : agrège les lots de toutes les lignes de marché ; aucun/inconnu → liste vide")
+    void lot_parDossier() throws Exception {
+        // Dossier 7777 : marché 9810 (2 lots) + marché 9811 (1 lot).
+        dossierRepository.save(dossier(7777, "BROUILLON"));   // FK t_lot.ID_DOSSIER → t_dossier
+        marcheRepository.save(marche(9810, 7777, 1));
+        marcheRepository.save(marche(9811, 7777, 1));
+        int[][] seed = { {8101, 9810}, {8102, 9810}, {8103, 9811} };
+        for (int[] s : seed) {
+            cnm.prs.entity.Lot l = new cnm.prs.entity.Lot();
+            l.setIdLot(s[0]);
+            l.setIdDossier(7777);
+            l.setIdDetail(s[1]);
+            l.setDesignationLot("Lot " + s[0]);
+            lotRepository.save(l);
+        }
+
+        mvc.perform(get("/api/lots/par-dossier/7777").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(3)))
+                .andExpect(jsonPath("$[?(@.idDetail==9810)]", hasSize(2)))
+                .andExpect(jsonPath("$[?(@.idDetail==9811)]", hasSize(1)));
+
+        // Dossier sans lot / inconnu → liste vide (filtre, pas de 404).
+        mvc.perform(get("/api/lots/par-dossier/88888").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+    }
+
     private Marche marche(int idDetail, int dossier, int ppm) {
         Marche m = new Marche();
         m.setIdDetail(idDetail);
