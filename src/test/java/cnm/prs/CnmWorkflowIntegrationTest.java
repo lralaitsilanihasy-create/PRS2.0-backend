@@ -4880,19 +4880,6 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
-    @DisplayName("Saisie PPM — processus sans dateFin → 400 (marches[0].processus[0].dateFin)")
-    void processus_sans_dateFin_400() throws Exception {
-        String body = "{\"idEntiteContract\":1,\"exercice\":2026,\"dateSignature\":\"2026-01-10\","
-                + "\"marches\":[{\"montEstim\":500000000,\"idNature\":1,\"statut\":\"PREVU\","
-                + "\"processus\":[{\"idCapm\":1,\"dateDebut\":\"2026-02-01\"}]}]}";
-        mvc.perform(post("/api/saisies/ppm").header("Authorization", tokenPrmp)
-                .contentType(MediaType.APPLICATION_JSON).content(body))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.erreurs[?(@.champ=='marches[0].processus[0].dateFin')].message",
-                        hasItem("La date de fin est obligatoire.")));
-    }
-
-    @Test
     @DisplayName("Saisie PPM — marché + processus complets → 201 + prévisions triées par ordre CAPM")
     void brouillon_avec_processus_ok() throws Exception {
         // Mode déterminable (évite la notif MODE_NON_DETERMINE, hors sujet) : 500M → AOR (mode 2).
@@ -7286,6 +7273,44 @@ class CnmWorkflowIntegrationTest {
         mvc.perform(get("/api/lots/par-dossier/88888").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(0)));
+    }
+
+    @Test
+    @DisplayName("Processus prévisionnels : dateFin optionnelle — saisie/prevision sans dateFin → 201 ; séquence non contrainte si dateFin précédente absente ; dateFin présente toujours contrôlée")
+    void processus_dateFin_optionnelle() throws Exception {
+        natureRepository.save(new Nature(1, "Travaux", null));
+        capmRepository.save(new Capm(1, "LANCEMENT", 1));
+        capmRepository.save(new Capm(2, "DAO", 2));
+
+        // Saisie : p0 (capm1) SANS dateFin ; p1 (capm2) démarre AVANT p0 → séquence non contrainte (skip) → 201.
+        String body = "{\"idEntiteContract\":1,\"exercice\":2026,\"signataire\":\"RABE\",\"dateSignature\":\"2026-01-10\",\"reference\":\"PPM-DFOPT\","
+                + "\"marches\":[{\"designationMarche\":\"A\",\"montEstim\":1000000,\"natureLibelle\":\"Travaux\",\"modeLibelle\":\"Appel d'offres ouvert\",\"statut\":\"PREVU\","
+                + "\"processus\":[{\"idCapm\":1,\"dateDebut\":\"2026-02-01\"},"
+                + "{\"idCapm\":2,\"dateDebut\":\"2026-01-01\",\"dateFin\":\"2026-06-30\"}]}]}";
+        String resp = mvc.perform(post("/api/saisies/ppm").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        int idDoss = com.jayway.jsonpath.JsonPath.read(resp, "$.idDossier");
+        cnm.prs.entity.Marche a = marcheRepository.findByIdDossier(idDoss).get(0);
+        // La prévision du processus capm1 a bien DATE_FIN null.
+        cnm.prs.entity.MarchePrevision p0 = marchePrevisionRepository.findByIdDetail(a.getIdDetail()).stream()
+                .filter(p -> Integer.valueOf(1).equals(p.getIdCapm())).findFirst().orElseThrow();
+        org.junit.jupiter.api.Assertions.assertNull(p0.getDateFin());
+
+        // POST /api/marche-previsions sans dateFin → 201.
+        dossierRepository.save(dossier(7778, "BROUILLON"));
+        marcheRepository.save(marche(9830, 7778, 1));
+        mvc.perform(post("/api/marche-previsions").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idPrevision\":990020,\"idDetail\":9830,\"idCapm\":1,\"dateDebut\":\"2026-03-01\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.dateFin").value(org.hamcrest.Matchers.nullValue()));
+
+        // Régression : dateFin PRÉSENTE reste contrôlée (dateDebut ≥ dateFin → 400).
+        mvc.perform(post("/api/marche-previsions").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idPrevision\":990021,\"idDetail\":9830,\"idCapm\":2,\"dateDebut\":\"2026-05-01\",\"dateFin\":\"2026-04-01\"}"))
+                .andExpect(status().isBadRequest());
     }
 
     private Marche marche(int idDetail, int dossier, int ppm) {

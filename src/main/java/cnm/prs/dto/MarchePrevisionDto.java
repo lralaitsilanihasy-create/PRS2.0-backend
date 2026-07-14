@@ -27,7 +27,7 @@ public class MarchePrevisionDto {
     @NotNull
     private LocalDate dateDebut;
 
-    @NotNull
+    /** dateFin OPTIONNELLE (fin non connue / ouverte) ; chronologie vérifiée seulement si présente. */
     private LocalDate dateFin;
 
     /** Ordre d'affichage du processus, porté par {@code t_capm.ORDRE} (lecture seule). */

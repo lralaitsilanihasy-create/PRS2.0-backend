@@ -1244,11 +1244,11 @@ volumineux → **400** (annule la création si multipart) ; **404** si l'UGPM ou
 > max 200) ; `montLot`/`qteLot`/`uniteLot` sont **descriptifs** → **aucun contrôle de somme** (contrairement aux
 > bénéficiaires). `lots[]` absent/vide → **aucun lot** (rétro-compatible).
 
-⚠️ **`processus`** : `ProcessusMarche[]` — **chaque marché doit comporter au moins un processus à la création** (`POST /api/saisies/ppm`), sinon **400** `{ "erreurs": [ { "champ": "marches[0].processus", "message": "Au moins un processus est obligatoire." } ] }`. Chaque **`ProcessusMarche`** = `idCapm` (FK `t_capm`, `@NotNull`), `dateDebut` et `dateFin` (`yyyy-MM-dd`, `@NotNull`) — un champ manquant → **400** au chemin `marches[i].processus[j].<champ>` (« Le processus est obligatoire. » / « La date de début est obligatoire. » / « La date de fin est obligatoire. ») ; `idCapm` **inconnu** → **400**. Le service crée **une ligne `t_marche_prevision` par processus**. *(À l'édition d'un brouillon, `processus` n'est pas exigé.)*
+⚠️ **`processus`** : `ProcessusMarche[]` — **chaque marché doit comporter au moins un processus à la création** (`POST /api/saisies/ppm`), sinon **400** `{ "erreurs": [ { "champ": "marches[0].processus", "message": "Au moins un processus est obligatoire." } ] }`. Chaque **`ProcessusMarche`** = `idCapm` (FK `t_capm`, **obligatoire**), `dateDebut` (`yyyy-MM-dd`, **obligatoire**) et **`dateFin` (`yyyy-MM-dd`, OPTIONNELLE** — fin non connue / ouverte) — `idCapm`/`dateDebut` manquant → **400** au chemin `marches[i].processus[j].<champ>` (« Le processus est obligatoire. » / « La date de début est obligatoire. ») ; `idCapm` **inconnu** → **400**. `dateFin` **absente = accepté** (pas de 400). Le service crée **une ligne `t_marche_prevision` par processus**. *(À l'édition d'un brouillon, `processus` n'est pas exigé.)*
 
-⚠️ **Cohérence chronologique des processus** (par marché, processus triés par `t_capm.ordre` ASC) — validée à la **création** (`POST /api/saisies/ppm`) et à l'**édition** (`POST`/`PUT /api/marche-previsions`) :
-> 1. **Interne** : `dateDebut < dateFin` pour chaque processus, sinon **400** (champ `…dateFin` — « La date de fin doit être postérieure à la date de début. »).
-> 2. **Séquence** : `dateDebut[n] >= dateFin[n-1]` entre processus consécutifs, sinon **400** (champ `…dateDebut` — « La date de début du processus *[libellé n]* doit être postérieure ou égale à la date de fin du processus précédent *[libellé n-1]*. »).
+⚠️ **Cohérence chronologique des processus** (par marché, processus triés par `t_capm.ordre` ASC) — validée à la **création** (`POST /api/saisies/ppm`) et à l'**édition** (`POST`/`PUT /api/marche-previsions`). Chaque règle n'est appliquée **que si la/les `dateFin` concernée(s) sont présentes** (une `dateFin` absente = ouverte, non contraignante) :
+> 1. **Interne** : `dateDebut < dateFin` pour chaque processus **dont la `dateFin` est fournie**, sinon **400** (champ `…dateFin` — « La date de fin doit être postérieure à la date de début. »).
+> 2. **Séquence** : `dateDebut[n] >= dateFin[n-1]` entre processus consécutifs — **uniquement si `dateFin[n-1]` est présente** (sinon la contrainte est ignorée pour ce couple) ; violation → **400** (champ `…dateDebut` — « La date de début du processus *[libellé n]* doit être postérieure ou égale à la date de fin du processus précédent *[libellé n-1]*. »).
 >
 > À la saisie, le champ porte le chemin `marches[i].processus[j].<champ>` ; à l'édition d'une prévision, le nom du champ seul (`dateDebut`/`dateFin`).
 
@@ -2104,8 +2104,9 @@ marché → **409** (unicité). Au **changement de mode** d'un marché, si son D
 **Ressource** `/api/marche-previsions` — Lecture / écriture : tout utilisateur authentifié.
 
 Dates prévisionnelles d'un marché, en relation **1,N** avec `/api/marches` : **une ligne par
-processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` et une `dateFin`. Le filtre
-`?marche={idDetail}` renvoie les lignes **triées par `t_capm.ordre` ASC**.
+processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) et une `dateFin`
+**optionnelle** (fin non connue / ouverte). Le filtre `?marche={idDetail}` renvoie les lignes
+**triées par `t_capm.ordre` ASC**.
 
 **Champs `MarchePrevisionDto`**
 
@@ -2115,7 +2116,7 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` et une `dateFi
 | idDetail | number | Oui | @NotNull — FK vers le marché |
 | idCapm | number | Oui | @NotNull — FK vers `t_capm` (processus) |
 | dateDebut | string (date) | Oui | @NotNull — `yyyy-MM-dd` |
-| dateFin | string (date) | Oui | @NotNull — `yyyy-MM-dd` |
+| dateFin | string (date) | **Non** | `yyyy-MM-dd` — **optionnelle** ; chronologie vérifiée seulement si présente |
 | ordre | number | — (réponse) | **lecture seule**, porté par `t_capm.ordre` |
 
 **Endpoints**

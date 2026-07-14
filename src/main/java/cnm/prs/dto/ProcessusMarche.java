@@ -17,6 +17,7 @@ public record ProcessusMarche(
         @NotNull(message = "La date de début est obligatoire.")
         LocalDate dateDebut,
 
-        @NotNull(message = "La date de fin est obligatoire.")
+        // dateFin OPTIONNELLE : une prévision peut n'avoir qu'un début (fin non connue / ouverte).
+        // La cohérence chronologique (dateDebut<dateFin, séquence) n'est vérifiée que si dateFin est présente.
         LocalDate dateFin) {
 }
