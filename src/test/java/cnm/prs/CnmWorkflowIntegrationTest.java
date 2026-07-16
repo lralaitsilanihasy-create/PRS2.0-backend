@@ -157,6 +157,9 @@ class CnmWorkflowIntegrationTest {
     @Autowired private cnm.prs.repository.TypePieceJointeRepository typePieceJointeRepository;
     @Autowired private cnm.prs.repository.PublicationRepository publicationRepository;
     @Autowired private cnm.prs.repository.PvExamenRepository pvExamenRepository;
+    @Autowired private cnm.prs.repository.PvNavetteRepository pvNavetteRepository;
+    @Autowired private cnm.prs.repository.ObservationControleRepository observationControleRepository;
+    @Autowired private cnm.prs.repository.CopieDossierRepository copieDossierRepository;
     @Autowired private cnm.prs.repository.LettreRenvoiLueRepository lueRepository;
     @Autowired private cnm.prs.repository.DemandeRetraitVueRepository demandeRetraitVueRepository;
     @Autowired private cnm.prs.repository.CompteRepository compteRepository;
@@ -2191,12 +2194,107 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
-    @DisplayName("Demande de retrait — dossier non éligible (EXAMINE) → 409")
-    void retrait_creation_dossierNonEligible_409() throws Exception {
-        // dossier 1 = EXAMINE (seed), possédé par PRMP001 (via PPM 1).
+    @DisplayName("Demande de retrait — dossier à PV signé (PV_SIGNE) → 409 (au-delà de « avant PV signé », §3.3)")
+    void retrait_creation_pvSigne_409() throws Exception {
+        // §3.3 — le retrait est refusé dès que le PV est signé. Dossier PV_SIGNE de PRMP001, sans demande préalable.
+        Dossier d = dossier(124, "PV_SIGNE"); d.setIdLocalite("ANT"); d.setIdPrmp("PRMP001");
+        dossierRepository.save(d);
         mvc.perform(post("/api/demande-retraits").header("Authorization", tokenPrmp)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"idDossier\":1,\"motifRetrait\":\"x\"}"))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"idDossier\":124,\"motifRetrait\":\"x\"}"))
                 .andExpect(status().isConflict());
+    }
+
+    @Test
+    @DisplayName("Retrait §3.3 — un dossier EXAMINE est retirable (listé + POST 201) ; un PV_SIGNE ni listé ni acceptable (409)")
+    void retrait_avantPvSigne_examineRetirable_pvSigneRefuse() throws Exception {
+        // Deux dossiers de PRMP001 : l'un examiné (avant PV signé → éligible), l'autre PV signé (au-delà → refusé).
+        Dossier ex = dossier(700, "EXAMINE"); ex.setIdLocalite("ANT"); ex.setIdPrmp("PRMP001");
+        dossierRepository.save(ex);
+        Dossier pv = dossier(701, "PV_SIGNE"); pv.setIdLocalite("ANT"); pv.setIdPrmp("PRMP001");
+        dossierRepository.save(pv);
+
+        // La liste déroulante des retirables inclut l'EXAMINE, exclut le PV_SIGNE (même ensemble que la garde).
+        mvc.perform(get("/api/dossiers/retirables").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idDossier==700)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idDossier==701)]", hasSize(0)));
+
+        // POST retrait sur l'EXAMINE → 201 (créé, EN_ATTENTE).
+        mvc.perform(post("/api/demande-retraits").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"idDossier\":700,\"motifRetrait\":\"corriger avant PV\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.statut").value("EN_ATTENTE"));
+
+        // POST retrait sur le PV_SIGNE → 409 (au-delà de la limite).
+        mvc.perform(post("/api/demande-retraits").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"idDossier\":701,\"motifRetrait\":\"x\"}"))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    @DisplayName("Retrait §3.3 — acceptation sur un EXAMINE avec circuit complet : dossier→BROUILLON + purge FK-safe de tout l'historique")
+    void retrait_accepte_purgeCircuitComplet() throws Exception {
+        // Dossier EXAMINE de PRMP001 portant tout l'enchaînement de circuit (avant PV signé → le PV est un projet).
+        Dossier d = dossier(710, "EXAMINE"); d.setIdLocalite("ANT"); d.setIdPrmp("PRMP001");
+        d.setRefeDossier("00009/PPM/CRM-ANT/2026");                      // réf de réception (à invalider)
+        dossierRepository.save(d);
+        Ppm p = ppm(710, 710, "PRMP001"); p.setReference("00010/DGB/PPM/2026"); ppmRepository.save(p);   // réf initiale
+        receptionRepository.save(reception(710, 710, "CTRCC1", true));
+        dispatchRepository.save(dispatch(710, 710, "CTRCC1", "CTRMEM"));
+        examenRepository.save(examen(710, 710, "CTRMEM"));
+        // Détail d'examen (7100) + observation (petit-enfant). Le point de contrôle référencé doit exister (FK).
+        PointsCtrl pc = new PointsCtrl();
+        pc.setIdPointCtrl(1); pc.setLibelPointCtrl("Montant"); pc.setObligatoire(true); pc.setIdTypeDossier("PPM");
+        pointsCtrlRepository.save(pc);
+        ExamenDetail ed = new ExamenDetail();
+        ed.setIdDetailExamen(7100); ed.setIdExamen(710); ed.setIdPtControle(1); ed.setConforme(false);
+        examenDetailRepository.save(ed);
+        cnm.prs.entity.ObservationControle obs = new cnm.prs.entity.ObservationControle();
+        obs.setIdDetail(7100); obs.setAuLieuDe("500000"); obs.setLire("5000000"); obs.setOrdre(1);
+        observationControleRepository.save(obs);
+        // Projet de PV (710) + navette (enfant).
+        cnm.prs.entity.PvExamen pv = new cnm.prs.entity.PvExamen();
+        pv.setIdPv(710); pv.setIdExamen(710); pv.setIdAvis("FAV"); pv.setImCtrlMembre("CTRMEM");
+        pv.setStatutPv("BROUILLON"); pv.setNbNavettes(1);
+        pvExamenRepository.save(pv);
+        cnm.prs.entity.PvNavette nav = new cnm.prs.entity.PvNavette();
+        nav.setIdNavette(7101); nav.setIdPv(710); nav.setNumNavette(1); nav.setSens("ALLER");
+        nav.setImActeur("CTRMEM"); nav.setDateAction(LocalDateTime.of(2026, 6, 5, 9, 0));
+        pvNavetteRepository.save(nav);
+        // Copie de dossier (enfant du dispatch) + lettre de renvoi + accusé de lecture (petit-enfant).
+        cnm.prs.entity.CopieDossier cop = new cnm.prs.entity.CopieDossier();
+        cop.setIdCopie(7102); cop.setIdDispatch(710); cop.setIdDossier(710); cop.setImDestinataire("CTRMEM");
+        cop.setTypeCopie("MEMBRE"); cop.setDateTransmission(LocalDateTime.of(2026, 6, 5, 9, 0)); cop.setAccuseReception(false);
+        copieDossierRepository.save(cop);
+        cnm.prs.entity.LettreRenvoi lr = new cnm.prs.entity.LettreRenvoi();
+        lr.setIdExamen(710); lr.setIdDossier(710); lr.setObjetLettre("Renvoi"); lr.setStatut("SIGNE");
+        int idLettre = lettreRenvoiRepository.save(lr).getIdLettre();
+        cnm.prs.entity.LettreRenvoiLue lue = new cnm.prs.entity.LettreRenvoiLue();
+        lue.setIdLettre(idLettre); lue.setIdPrmp("PRMP001"); lue.setDateLecture(LocalDateTime.of(2026, 6, 6, 9, 0));
+        lueRepository.save(lue);
+
+        int drId = demandeRetraitRepository.save(demandeRetrait(0, 710, "PRMP001")).getIdDemandeRetrait();
+
+        // Acceptation → 200 : aucune violation de FK malgré le circuit complet.
+        mvc.perform(post("/api/demande-retraits/" + drId + "/accepter").header("Authorization", tokenCc))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statut").value("ACCEPTEE"));
+
+        // Dossier → BROUILLON avec sa référence initiale (PPM) restaurée.
+        Dossier apres = dossierRepository.findById(710).orElseThrow();
+        org.junit.jupiter.api.Assertions.assertEquals("BROUILLON", apres.getStatut());
+        org.junit.jupiter.api.Assertions.assertEquals("00010/DGB/PPM/2026", apres.getRefeDossier());
+        // Tout le circuit est purgé (feuilles → racine).
+        org.junit.jupiter.api.Assertions.assertFalse(receptionRepository.existsById(710), "réception purgée");
+        org.junit.jupiter.api.Assertions.assertFalse(dispatchRepository.existsById(710), "dispatch purgé");
+        org.junit.jupiter.api.Assertions.assertFalse(examenRepository.existsById(710), "examen purgé");
+        org.junit.jupiter.api.Assertions.assertFalse(examenDetailRepository.existsById(7100), "détail d'examen purgé");
+        org.junit.jupiter.api.Assertions.assertTrue(observationControleRepository.findByIdDetailOrderByOrdreAsc(7100).isEmpty(), "observations purgées");
+        org.junit.jupiter.api.Assertions.assertFalse(pvExamenRepository.existsById(710), "PV purgé");
+        org.junit.jupiter.api.Assertions.assertFalse(pvNavetteRepository.existsById(7101), "navette purgée");
+        org.junit.jupiter.api.Assertions.assertFalse(copieDossierRepository.existsById(7102), "copie purgée");
+        org.junit.jupiter.api.Assertions.assertFalse(lettreRenvoiRepository.existsById(idLettre), "lettre de renvoi purgée");
+        org.junit.jupiter.api.Assertions.assertFalse(lueRepository.existsByIdLettreAndIdPrmp(idLettre, "PRMP001"), "accusé de lecture purgé");
     }
 
     @Test
@@ -2365,18 +2463,22 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
-    @DisplayName("Dropdown retirables : SOUMIS + PRET_DISPATCH de la PRMP ; exclut EXAMINE et les dossiers d'autrui")
+    @DisplayName("Dropdown retirables §3.3 : SOUMIS/PRET_DISPATCH/DISPATCHE/EXAMINE de la PRMP ; exclut PV_SIGNE et les dossiers d'autrui")
     void retrait_dropdown_retirables() throws Exception {
         Dossier a = dossier(150, "SOUMIS"); a.setIdLocalite("ANT"); a.setIdPrmp("PRMP001"); dossierRepository.save(a);
         Dossier b = dossier(151, "PRET_DISPATCH"); b.setIdLocalite("ANT"); b.setIdPrmp("PRMP001"); dossierRepository.save(b);
         Dossier c = dossier(152, "EXAMINE"); c.setIdLocalite("ANT"); c.setIdPrmp("PRMP001"); dossierRepository.save(c);
+        Dossier di = dossier(148, "DISPATCHE"); di.setIdLocalite("ANT"); di.setIdPrmp("PRMP001"); dossierRepository.save(di);
+        Dossier pv = dossier(149, "PV_SIGNE"); pv.setIdLocalite("ANT"); pv.setIdPrmp("PRMP001"); dossierRepository.save(pv);
         Dossier e = dossier(153, "SOUMIS"); e.setIdLocalite("ANT"); dossierRepository.save(e); // sans propriétaire
         mvc.perform(get("/api/dossiers/retirables").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.idDossier==150)]", hasSize(1)))
                 .andExpect(jsonPath("$[?(@.idDossier==151)]", hasSize(1)))
-                .andExpect(jsonPath("$[?(@.idDossier==152)]", hasSize(0)))
-                .andExpect(jsonPath("$[?(@.idDossier==153)]", hasSize(0)));
+                .andExpect(jsonPath("$[?(@.idDossier==152)]", hasSize(1)))   // EXAMINE désormais retirable (§3.3)
+                .andExpect(jsonPath("$[?(@.idDossier==148)]", hasSize(1)))   // DISPATCHE retirable
+                .andExpect(jsonPath("$[?(@.idDossier==149)]", hasSize(0)))   // PV_SIGNE exclu (au-delà de la limite)
+                .andExpect(jsonPath("$[?(@.idDossier==153)]", hasSize(0)));  // dossier d'autrui
     }
 
     @Test

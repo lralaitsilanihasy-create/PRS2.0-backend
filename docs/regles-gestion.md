@@ -188,11 +188,13 @@ Acteur externe qui soumet ses PPM et marchés à la CNM. Suit l'avancement jusqu
 
 - Demande de retrait motivée [Action]
   - Demande de retrait d'un dossier déjà enregistré. Motif obligatoire (MOTIF_RETRAIT NOT NULL dans t_demande_retrait).
-  - ⚠️ **Règle ajoutée** : la PRMP demandeuse est **l'utilisateur authentifié** (JWT), jamais le corps ; l'`ID_DEMANDE_RETRAIT` est **auto-généré**. Gardes (sinon 403/409) : **être propriétaire** du dossier, dossier **`SOUMIS` ou `PRET_DISPATCH`**, et **pas de demande déjà `EN_ATTENTE`** pour ce dossier. Liste déroulante des dossiers retirables : `GET /api/dossiers/retirables`.
+  - ⚠️ **Règle ajoutée** : la PRMP demandeuse est **l'utilisateur authentifié** (JWT), jamais le corps ; l'`ID_DEMANDE_RETRAIT` est **auto-généré**. Gardes (sinon 403/409) : **être propriétaire** du dossier, dossier **« avant PV signé »**, et **pas de demande déjà `EN_ATTENTE`** pour ce dossier. Liste déroulante des dossiers retirables : `GET /api/dossiers/retirables`.
+  - ⚠️ **Règle ajoutée (§3.3) — retrait possible jusqu'au PV signé** : la demande est recevable **à toute étape du circuit tant que le PV n'est pas signé** (plus seulement « avant dispatch »). Statuts retirables **exacts** : **`SOUMIS`, `PRET_DISPATCH`, `DISPATCHE`, `EXAMINE`** ; refus (409) à partir de **`PV_SIGNE`** et au-delà (`EN_VERIFICATION`, `EN_ATTENTE_DECISION_PRMP`, `RETIRE`, `CLOTURE`). `BROUILLON` exclu (pré-circuit). La liste `GET /api/dossiers/retirables` et la garde du POST partagent **le même ensemble** (source unique serveur), donc ne divergent jamais.
 - Suivi de la demande [Lecture]
   - Consultation du statut : **EN_ATTENTE / ACCEPTEE / REFUSEE** (⚠️ règle ajoutée). Ses demandes : `GET /api/demande-retraits`.
 - Notification décision [Lecture]
   - Reçoit **RETRAIT_ACCEPTE** ou **RETRAIT_REFUSE**. ⚠️ **Règle ajoutée** : si **accepté**, le dossier **repasse en `BROUILLON`** (et non `RETIRE`) ; si refusé, dossier inchangé (motif de refus optionnel).
+  - ⚠️ **Règle ajoutée (§3.3) — purge du circuit à l'acceptation** : un dossier retiré à un stade avancé (`DISPATCHE`/`EXAMINE`) porte un enchaînement réception → dispatch → examen → projet de PV → navettes (+ copies, lettres de renvoi, observations). L'acceptation **supprime tout cet historique** en une transaction, dans l'ordre FK-safe, pour que le dossier redevienne un `BROUILLON` propre (re-soumissible → re-réception `INITIAL`). Le journal d'audit (`t_audit_log`, sans FK) est conservé.
 
 **Module 04 — Calendrier & notifications**
 

@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -12,6 +13,17 @@ import cnm.prs.entity.Examen;
 
 @Repository
 public interface ExamenRepository extends JpaRepository<Examen, Integer> {
+
+    /**
+     * Purge (⚠️ règle ajoutée §3.3) — supprime les examens du circuit d'un dossier retiré
+     * (via dispatch → réception → dossier). À appeler <strong>après</strong> ses enfants
+     * (détails, PV, lettres de renvoi) et <strong>avant</strong> les dispatchs (ordre FK-safe).
+     */
+    @Modifying
+    @Query("delete from Examen e where e.idDispatch in "
+            + "(select di.idDispatch from Dispatch di where di.idReception in "
+            + "(select r.idReception from Reception r where r.idDossier = :idDossier))")
+    int deleteParDossier(@Param("idDossier") Integer idDossier);
 
     @Query("select e from Examen e where e.dispatch.reception.ctrlRecept.idLocalite = :loc")
     List<Examen> findVisiblesParLocalite(@Param("loc") String loc);

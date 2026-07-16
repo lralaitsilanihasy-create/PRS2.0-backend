@@ -3,6 +3,7 @@ package cnm.prs.repository;
 import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -14,6 +15,17 @@ public interface ExamenDetailRepository extends JpaRepository<ExamenDetail, Inte
 
     /** Lignes de grille de contrôle d'un examen (pour l'ANNEXE du PV : observations des points non conformes). */
     List<ExamenDetail> findByIdExamen(Integer idExamen);
+
+    /**
+     * Purge (⚠️ règle ajoutée §3.3) — supprime les lignes de grille des examens du circuit d'un dossier
+     * retiré (via examen → dispatch → réception → dossier). À appeler <strong>avant</strong> les examens.
+     */
+    @Modifying
+    @Query("delete from ExamenDetail ed where ed.idExamen in "
+            + "(select e.idExamen from Examen e where e.idDispatch in "
+            + "(select di.idDispatch from Dispatch di where di.idReception in "
+            + "(select r.idReception from Reception r where r.idDossier = :idDossier)))")
+    int deleteParDossier(@Param("idDossier") Integer idDossier);
 
     /**
      * Statistiques de non-conformité par point de contrôle (§3.2 / §3.7).

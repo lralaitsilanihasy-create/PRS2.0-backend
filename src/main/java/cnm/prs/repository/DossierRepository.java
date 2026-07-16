@@ -276,16 +276,20 @@ public interface DossierRepository extends JpaRepository<Dossier, Integer> {
             """)
     long countVerifiesParLocalite(@Param("loc") String loc);
 
-    /** Dossiers retirables de la PRMP (SOUMIS/PRET_DISPATCH dont elle est propriétaire) — liste déroulante (⚠️ règle ajoutée). */
+    /**
+     * Dossiers retirables de la PRMP dont elle est propriétaire — liste déroulante (⚠️ règle ajoutée §3.3).
+     * Éligibles = statuts « avant PV signé » ({@code :statuts} = {@link cnm.prs.enums.StatutDossier#NOMS_AVANT_PV_SIGNE},
+     * source unique partagée avec la garde du POST), et sans demande déjà {@code EN_ATTENTE}/{@code REFUSEE}.
+     */
     @Query("""
             select d from Dossier d
             where d.idPrmp = :idPrmp
-              and d.statut in ('SOUMIS','PRET_DISPATCH')
+              and d.statut in :statuts
               and not exists (select 1 from DemandeRetrait dr
                               where dr.idDossier = d.idDossier
                                 and dr.statut in ('EN_ATTENTE', 'REFUSEE'))
             """)
-    List<Dossier> findRetirablesPourPrmp(@Param("idPrmp") String idPrmp);
+    List<Dossier> findRetirablesPourPrmp(@Param("idPrmp") String idPrmp, @Param("statuts") List<String> statuts);
 
     /** Prochaine PK dossier, allouée par la séquence serveur (Voie B — l'id client est ignoré). */
     @Query(value = "select nextval('seq_dossier')", nativeQuery = true)

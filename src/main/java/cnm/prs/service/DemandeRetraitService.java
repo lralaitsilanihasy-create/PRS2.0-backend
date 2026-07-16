@@ -27,7 +27,6 @@ import cnm.prs.repository.DemandeRetraitVueRepository;
 import cnm.prs.repository.DossierRepository;
 import cnm.prs.repository.PpmRepository;
 import cnm.prs.repository.PrmpRepository;
-import cnm.prs.repository.ReceptionRepository;
 import cnm.prs.security.CurrentUser;
 import cnm.prs.security.Visibilite;
 
@@ -42,20 +41,20 @@ public class DemandeRetraitService {
     private final DossierRepository dossierRepository;
     private final PrmpRepository prmpRepository;
     private final PpmRepository ppmRepository;
-    private final ReceptionRepository receptionRepository;
+    private final CircuitCascadeService circuitCascade;
     private final NotificationService notificationService;
     private final ControleurDirectory controleurDirectory;
     private final DemandeRetraitVueRepository vueRepository;
 
     public DemandeRetraitService(DemandeRetraitRepository repository, DossierRepository dossierRepository,
-            PrmpRepository prmpRepository, PpmRepository ppmRepository, ReceptionRepository receptionRepository,
+            PrmpRepository prmpRepository, PpmRepository ppmRepository, CircuitCascadeService circuitCascade,
             NotificationService notificationService,
             ControleurDirectory controleurDirectory, DemandeRetraitVueRepository vueRepository) {
         this.repository = repository;
         this.dossierRepository = dossierRepository;
         this.prmpRepository = prmpRepository;
         this.ppmRepository = ppmRepository;
-        this.receptionRepository = receptionRepository;
+        this.circuitCascade = circuitCascade;
         this.notificationService = notificationService;
         this.controleurDirectory = controleurDirectory;
         this.vueRepository = vueRepository;
@@ -125,12 +124,13 @@ public class DemandeRetraitService {
         if (idDossier == null || !dossierRepository.existsVisiblePourPrmp(idDossier, idPrmp)) {
             throw new AccessDeniedException("Retrait possible uniquement sur l'un de vos dossiers (§3.1).");
         }
-        // Garde 2 — dossier éligible : SOUMIS ou PRET_DISPATCH (soumis, pas encore dispatché).
+        // Garde 2 — dossier éligible : statut « avant PV signé » (§3.3). Le retrait est possible à toute
+        // étape du circuit tant que le PV n'est pas signé ; refusé à partir de PV_SIGNE (et au-delà).
+        // Même ensemble que GET /api/dossiers/retirables (source unique StatutDossier.NOMS_AVANT_PV_SIGNE).
         String statutDossier = dossierRepository.findById(idDossier).map(Dossier::getStatut).orElse(null);
-        if (!StatutDossier.SOUMIS.name().equals(statutDossier)
-                && !StatutDossier.PRET_DISPATCH.name().equals(statutDossier)) {
+        if (!StatutDossier.NOMS_AVANT_PV_SIGNE.contains(statutDossier)) {
             throw new BusinessRuleException(
-                    "Retrait possible uniquement sur un dossier SOUMIS ou PRET_DISPATCH (statut « " + statutDossier + " »).");
+                    "Retrait possible uniquement tant que le PV n'est pas signé (statut « " + statutDossier + " »).");
         }
         // Garde 3 — pas de demande déjà EN_ATTENTE pour ce dossier.
         if (repository.existsByIdDossierAndStatut(idDossier, StatutRetrait.EN_ATTENTE.name())) {
@@ -187,11 +187,14 @@ public class DemandeRetraitService {
                         .findFirst().map(Ppm::getReference).orElse(null);
                 d.setRefeDossier(refInitiale);
                 dossierRepository.save(d);
-                // ⚠️ Règle ajoutée — la référence de réception étant invalidée, on supprime la/les réception(s)
-                // résiduelle(s) du dossier : après resoumission il redevient « SOUMIS sans réception » et réapparaît
-                // dans a-receptionner (re-réception INITIAL, passage 1). Un dossier retirable (SOUMIS/PRET_DISPATCH)
-                // n'est jamais dispatché → aucune dépendance (dispatch/examen) sur ces réceptions.
-                receptionRepository.deleteByIdDossier(d.getIdDossier());
+                // ⚠️ Règle ajoutée (§3.3) — le retrait est désormais possible jusqu'à EXAMINE : le dossier peut
+                // porter tout un enchaînement de circuit (réception → dispatch → examen → projet de PV → navettes,
+                // + copies / lettres de renvoi / observations). On purge cet historique en une transaction, dans
+                // l'ordre FK-safe (cf. CircuitCascadeService) — réceptions comprises. Après resoumission le dossier
+                // redevient « SOUMIS sans réception » et réapparaît dans a-receptionner (re-réception INITIAL,
+                // passage 1). Cas SOUMIS/PRET_DISPATCH (jamais dispatché) : seules les réceptions feuilles existent,
+                // les autres suppressions portent sur 0 ligne. Le journal d'audit (sans FK) est conservé.
+                circuitCascade.purgerCircuit(d.getIdDossier());
             });
         }
         notifierDecision(saved, StatutRetrait.ACCEPTEE);

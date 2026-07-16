@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -15,6 +16,19 @@ public interface PvExamenRepository extends JpaRepository<PvExamen, Integer> {
 
     /** Nombre de PV à un statut donné (ex. {@code SIGNE} = définitifs). */
     long countByStatutPv(String statutPv);
+
+    /**
+     * Purge (⚠️ règle ajoutée §3.3) — supprime les PV (projets, non signés) des examens du circuit d'un
+     * dossier retiré (via examen → dispatch → réception → dossier). À appeler <strong>après</strong> ses
+     * enfants (navettes, vérifications) et <strong>avant</strong> les examens. Un dossier retirable est
+     * « avant PV signé » : les PV concernés sont donc des projets.
+     */
+    @Modifying
+    @Query("delete from PvExamen pv where pv.idExamen in "
+            + "(select e.idExamen from Examen e where e.idDispatch in "
+            + "(select di.idDispatch from Dispatch di where di.idReception in "
+            + "(select r.idReception from Reception r where r.idDossier = :idDossier)))")
+    int deleteParDossier(@Param("idDossier") Integer idDossier);
 
     /** Nombre de PV dont le statut diffère de la valeur donnée (ex. {@code <> SIGNE} = projets). */
     long countByStatutPvNot(String statutPv);

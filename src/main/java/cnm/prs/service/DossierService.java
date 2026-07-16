@@ -229,14 +229,19 @@ public class DossierService {
                 : repository.findEnAttentePrmpParLocalite(localite).stream().map(DossierMapper::toDto).toList();
     }
 
-    /** Liste déroulante « dossiers retirables » de la PRMP connectée (SOUMIS/PRET_DISPATCH dont elle est propriétaire). */
+    /**
+     * Liste déroulante « dossiers retirables » de la PRMP connectée : ses dossiers dont le statut est
+     * « avant PV signé » (§3.3). Utilise exactement le même ensemble de statuts que la garde de
+     * {@code POST /api/demande-retraits} ({@link StatutDossier#NOMS_AVANT_PV_SIGNE}).
+     */
     @Transactional(readOnly = true)
     public List<DossierDto> retirables() {
         String idPrmp = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
         if (idPrmp == null) {
             return List.of();
         }
-        return repository.findRetirablesPourPrmp(idPrmp).stream().map(DossierMapper::toDto).toList();
+        return repository.findRetirablesPourPrmp(idPrmp, StatutDossier.NOMS_AVANT_PV_SIGNE)
+                .stream().map(DossierMapper::toDto).toList();
     }
 
     /** Vérifie que le dossier est dans le périmètre de visibilité de l'utilisateur (§1). */

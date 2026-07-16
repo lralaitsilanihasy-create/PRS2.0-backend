@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -12,6 +13,16 @@ import cnm.prs.entity.Dispatch;
 
 @Repository
 public interface DispatchRepository extends JpaRepository<Dispatch, Integer> {
+
+    /**
+     * Purge (⚠️ règle ajoutée §3.3) — supprime les dispatchs du circuit d'un dossier retiré
+     * (via ses réceptions). À appeler <strong>après</strong> les examens/copies rattachés et
+     * <strong>avant</strong> les réceptions (ordre FK-safe).
+     */
+    @Modifying
+    @Query("delete from Dispatch di where di.idReception in "
+            + "(select r.idReception from Reception r where r.idDossier = :idDossier)")
+    int deleteParDossier(@Param("idDossier") Integer idDossier);
 
     /** Matricule du Membre attributaire d'un dispatch — pour réserver l'examen à l'attributaire (§2.4). */
     @Query("select d.imCtrlMembre from Dispatch d where d.idDispatch = :id")

@@ -3,6 +3,7 @@ package cnm.prs.repository;
 import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -14,6 +15,15 @@ public interface LettreRenvoiRepository extends JpaRepository<LettreRenvoi, Inte
 
     /** Nombre de lettres de renvoi à un statut donné (compteur du tableau de bord — vue globale). */
     long countByStatut(String statut);
+
+    /**
+     * Purge (⚠️ règle ajoutée §3.3) — supprime les lettres de renvoi d'un dossier retiré (FK directe
+     * {@code ID_DOSSIER}). À appeler <strong>après</strong> leurs accusés de lecture et
+     * <strong>avant</strong> les examens (FK {@code ID_EXAMEN}).
+     */
+    @Modifying
+    @Query("delete from LettreRenvoi l where l.idDossier = :idDossier")
+    int deleteParDossier(@Param("idDossier") Integer idDossier);
 
     /** Ce contrôleur a-t-il signé au moins une lettre de renvoi ? (garde de suppression) */
     boolean existsByImSignataire(String imSignataire);

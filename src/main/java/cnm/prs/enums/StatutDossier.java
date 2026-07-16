@@ -1,5 +1,7 @@
 package cnm.prs.enums;
 
+import java.util.List;
+
 /**
  * Statuts d'un dossier (colonne {@code t_dossier.STATUT}).
  *
@@ -60,5 +62,21 @@ public enum StatutDossier {
     RETIRE,
 
     /** §2.8 / §3.6 — clôture automatique après levée des observations. */
-    CLOTURE
+    CLOTURE;
+
+    /**
+     * ⚠️ Règle ajoutée (§3.3) — statuts « <strong>avant PV signé</strong> » : un dossier de la PRMP y est
+     * <strong>retirable</strong> (une demande de retrait est possible tant que le PV n'est pas signé, à
+     * toute étape antérieure du circuit Réception → Dispatch → Examen → projet de PV). À partir de
+     * {@link #PV_SIGNE} (puis {@link #EN_VERIFICATION}, {@link #EN_ATTENTE_DECISION_PRMP}, {@link #RETIRE},
+     * {@link #CLOTURE}) le retrait est refusé. {@link #BROUILLON} en est exclu : pré-circuit, il est
+     * supprimable (« Mes brouillons »), pas « retirable ».
+     *
+     * <p><strong>Source unique</strong> : la liste déroulante des dossiers retirables
+     * ({@code GET /api/dossiers/retirables}) et la garde de {@code POST /api/demande-retraits} s'appuient
+     * toutes deux sur cet ensemble — elles ne peuvent donc pas diverger (sinon le front listerait des
+     * dossiers que le POST rejetterait en 409).</p>
+     */
+    public static final List<String> NOMS_AVANT_PV_SIGNE =
+            List.of(SOUMIS.name(), PRET_DISPATCH.name(), DISPATCHE.name(), EXAMINE.name());
 }
