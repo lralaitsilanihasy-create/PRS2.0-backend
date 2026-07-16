@@ -6880,10 +6880,109 @@ class CnmWorkflowIntegrationTest {
                 .andExpect(jsonPath("$.idTypeDossier").value("PPM"));
     }
 
+    // ------------------------------------------------------------------
+    // PPM avec AGPM (cas « appel d'offres ouvert », §3.1 Module 03)
+    // ------------------------------------------------------------------
+
+    @Test
+    @DisplayName("PPM-AGPM : declencheAgpm exposé/persisté sur le mode ; agpmRequis dérivé sur le PPM (true si ≥1 marché en appel d'offres ouvert, sinon false)")
+    void ppmAgpm_marqueurMode_etAgpmRequisDerive() throws Exception {
+        // Le marqueur « appel d'offres ouvert » est administrable et persisté sur le mode (write + read).
+        mvc.perform(post("/api/mode-passations").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idMode\":1,\"libelle\":\"Appel d'offres ouvert\",\"declencheAgpm\":true}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.declencheAgpm").value(true));
+        // Mode ordinaire (non déclencheur) : declencheAgpm null = false.
+        modePassationRepository.save(new ModePassation(4, "Cotation", null, null, null, null));
+
+        // PPM 9500 : un marché en appel d'offres ouvert (mode 1) → agpmRequis = true.
+        // Dossiers SOUMIS (non brouillon) pour figurer dans « Mes PPM » (findVisiblesParPrmp exclut les BROUILLON).
+        Dossier d1 = dossier(9500, "SOUMIS");
+        d1.setIdTypeDossier("PPM"); d1.setIdPrmp("PRMP001"); d1.setIdLocalite("ANT");
+        dossierRepository.save(d1);
+        ppmRepository.save(ppm(9500, 9500, "PRMP001"));
+        Marche m1 = marche(95001, 9500, 9500); m1.setIdMode(1); marcheRepository.save(m1);
+
+        // PPM 9501 : uniquement un marché ordinaire (mode 4) → agpmRequis = false.
+        Dossier d2 = dossier(9501, "SOUMIS");
+        d2.setIdTypeDossier("PPM"); d2.setIdPrmp("PRMP001"); d2.setIdLocalite("ANT");
+        dossierRepository.save(d2);
+        ppmRepository.save(ppm(9501, 9501, "PRMP001"));
+        Marche m2 = marche(95011, 9501, 9501); m2.setIdMode(4); marcheRepository.save(m2);
+
+        // Le front lit agpmRequis sur le PPM (dérivé serveur, non recalculé côté front).
+        mvc.perform(get("/api/ppms").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idPpm==9500 && @.agpmRequis==true)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idPpm==9501 && @.agpmRequis==false)]", hasSize(1)));
+    }
+
+    @Test
+    @DisplayName("PPM-AGPM : soumission d'un PPM en appel d'offres ouvert SANS pièce AGPM → 400 {piecesJointes} ; avec AGPM → SOUMIS ; PPM ordinaire non concerné")
+    void ppmAgpm_soumission_exigeAgpmConditionnel() throws Exception {
+        // Pièce AGPM au référentiel : repérée par son code stable, OBLIGATOIRE statique = false (conditionnelle).
+        int idAgpm = seedTypePieceCode("Avis Général de Passation de Marché", "AGPM", false, "PPM", 6);
+        // Mode déclencheur (appel d'offres ouvert) + mode ordinaire.
+        ModePassation aoo = new ModePassation(1, "Appel d'offres ouvert", null, null, null, null);
+        aoo.setDeclencheAgpm(true);
+        modePassationRepository.save(aoo);
+        modePassationRepository.save(new ModePassation(4, "Cotation", null, null, null, null));
+
+        // (1) PPM avec un marché en appel d'offres ouvert, AGPM non fournie → soumission refusée (400).
+        Dossier d = dossier(9502, "BROUILLON");
+        d.setRefeDossier(null); d.setIdTypeDossier("PPM"); d.setIdPrmp("PRMP001"); d.setIdLocalite("ANT");
+        dossierRepository.save(d);
+        ppmRepository.save(ppm(9502, 9502, "PRMP001"));
+        Marche m = marche(95021, 9502, 9502); m.setIdMode(1); marcheRepository.save(m);
+
+        mvc.perform(post("/api/dossiers/9502/soumettre").header("Authorization", tokenPrmp))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[?(@.champ=='piecesJointes')]", hasSize(1)))
+                .andExpect(jsonPath("$.erreurs[?(@.champ=='piecesJointes')].message",
+                        org.hamcrest.Matchers.hasItem(org.hamcrest.Matchers.containsString("AGPM"))));
+
+        // Dépôt de la pièce AGPM (PRMP propriétaire) via le mécanisme existant, puis soumission → 200 SOUMIS.
+        byte[] pdf = "%PDF-1.4 AGPM".getBytes(StandardCharsets.US_ASCII);
+        mvc.perform(multipart("/api/piece-jointe-dossiers")
+                .file(new MockMultipartFile("data", "", "application/json",
+                        ("{\"idDossier\":9502,\"idTypePiece\":" + idAgpm + "}").getBytes(StandardCharsets.UTF_8)))
+                .file(new MockMultipartFile("fichier", "agpm.pdf", "application/pdf", pdf))
+                .header("Authorization", tokenPrmp))
+                .andExpect(status().isCreated());
+        mvc.perform(post("/api/dossiers/9502/soumettre").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statut").value("SOUMIS"));
+
+        // (2) PPM ordinaire (aucun marché en appel d'offres ouvert) → AGPM non requise, soumission OK sans AGPM.
+        Dossier d2 = dossier(9503, "BROUILLON");
+        d2.setRefeDossier(null); d2.setIdTypeDossier("PPM"); d2.setIdPrmp("PRMP001"); d2.setIdLocalite("ANT");
+        dossierRepository.save(d2);
+        ppmRepository.save(ppm(9503, 9503, "PRMP001"));
+        Marche m2 = marche(95031, 9503, 9503); m2.setIdMode(4); marcheRepository.save(m2);
+        mvc.perform(post("/api/dossiers/9503/soumettre").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statut").value("SOUMIS"));
+    }
+
     /** Crée un type de pièce dans le référentiel H2 et renvoie sa PK générée. */
     private int seedTypePiece(String libelle, boolean obligatoire, String typeDossier, int ordre) {
         cnm.prs.entity.TypePieceJointe t = new cnm.prs.entity.TypePieceJointe();
         t.setLibellePiece(libelle);
+        t.setObligatoire(obligatoire);
+        t.setIdTypeDossier(typeDossier);
+        t.setOrdre(ordre);
+        return typePieceJointeRepository.save(t).getIdTypePiece();
+    }
+
+    /**
+     * Comme {@link #seedTypePiece} mais avec un {@code code} stable (ex. {@code AGPM}) — support de
+     * l'obligation conditionnelle. Renvoie la PK générée.
+     */
+    private int seedTypePieceCode(String libelle, String code, boolean obligatoire, String typeDossier, int ordre) {
+        cnm.prs.entity.TypePieceJointe t = new cnm.prs.entity.TypePieceJointe();
+        t.setLibellePiece(libelle);
+        t.setCode(code);
         t.setObligatoire(obligatoire);
         t.setIdTypeDossier(typeDossier);
         t.setOrdre(ordre);

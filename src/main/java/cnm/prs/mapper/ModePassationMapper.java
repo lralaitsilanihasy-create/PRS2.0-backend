@@ -23,6 +23,7 @@ public final class ModePassationMapper {
         dto.setDelaiMinJours(entity.getDelaiMinJours());
         dto.setBaseLegale(entity.getBaseLegale());
         dto.setIdTypeDmc(entity.getIdTypeDmc());
+        dto.setDeclencheAgpm(entity.getDeclencheAgpm());
         return dto;
     }
 
@@ -38,6 +39,7 @@ public final class ModePassationMapper {
         entity.setDelaiMinJours(dto.getDelaiMinJours());
         entity.setBaseLegale(dto.getBaseLegale());
         entity.setIdTypeDmc(dto.getIdTypeDmc());
+        entity.setDeclencheAgpm(dto.getDeclencheAgpm());
         return entity;
     }
 }

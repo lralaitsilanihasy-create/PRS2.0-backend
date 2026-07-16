@@ -53,6 +53,10 @@ import cnm.prs.security.CurrentUser;
 @Transactional
 public class DossierService {
 
+    private static final String TYPE_PPM = "PPM";
+    /** Code du type de pièce AGPM dans le référentiel {@code t_type_piece_jointe} (obligation conditionnelle). */
+    private static final String CODE_PIECE_AGPM = "AGPM";
+
     private final DossierRepository repository;
     private final PpmRepository ppmRepository;
     private final ControleurDirectory controleurDirectory;
@@ -370,16 +374,39 @@ public class DossierService {
      * ({@code t_piece_jointe_dossier}). Sinon → 400 {@code erreurs:[{champ:"piecesJointes", message}]}.
      */
     private void validerPiecesObligatoires(Dossier dossier) {
-        List<ErrorResponse.FieldError> manquantes = typePieceJointeRepository
+        List<ErrorResponse.FieldError> manquantes = new ArrayList<>(typePieceJointeRepository
                 .findByIdTypeDossierAndObligatoireTrue(dossier.getIdTypeDossier()).stream()
                 .filter(t -> !pieceJointeDossierRepository
                         .existsByIdDossierAndIdTypePiece(dossier.getIdDossier(), t.getIdTypePiece()))
                 .map(t -> new ErrorResponse.FieldError("piecesJointes",
                         "La pièce '" + t.getLibellePiece() + "' est obligatoire."))
-                .toList();
+                .toList());
+        // Obligation CONDITIONNELLE de l'AGPM (cas « PPM-AGPM ») : ajoutée au même contrôle de complétude.
+        ajouterAgpmManquantSiRequis(dossier, manquantes);
         if (!manquantes.isEmpty()) {
             throw new ChampsInvalidesException(manquantes);
         }
+    }
+
+    /**
+     * ⚠️ Règle ajoutée — obligation <strong>conditionnelle</strong> de l'AGPM : un dossier {@code PPM}
+     * comportant au moins un marché en « appel d'offres ouvert » ({@code ModePassation.declencheAgpm})
+     * doit être accompagné de la pièce AGPM (Avis Général de Passation de Marché). Cette obligation ne
+     * peut être portée par le drapeau statique {@code OBLIGATOIRE} du référentiel : elle est évaluée ici.
+     * La pièce est repérée par son <strong>code</strong> stable {@code AGPM} (type de dossier PPM). Sans
+     * effet si l'AGPM n'est pas requis, ou si le référentiel ne définit pas encore la pièce (config admin).
+     */
+    private void ajouterAgpmManquantSiRequis(Dossier dossier, List<ErrorResponse.FieldError> manquantes) {
+        if (!TYPE_PPM.equals(dossier.getIdTypeDossier())
+                || !marcheRepository.existsMarcheDeclencheurAgpmByDossier(dossier.getIdDossier())) {
+            return;
+        }
+        typePieceJointeRepository.findFirstByIdTypeDossierAndCode(TYPE_PPM, CODE_PIECE_AGPM)
+                .filter(t -> !pieceJointeDossierRepository
+                        .existsByIdDossierAndIdTypePiece(dossier.getIdDossier(), t.getIdTypePiece()))
+                .ifPresent(t -> manquantes.add(new ErrorResponse.FieldError("piecesJointes",
+                        "La pièce « AGPM » (Avis Général de Passation de Marché) est obligatoire lorsque le "
+                                + "PPM comporte au moins un marché en appel d'offres ouvert.")));
     }
 
     /** Notifie le Secrétaire et le CC de la localité qu'un dossier est soumis et attend réception. */

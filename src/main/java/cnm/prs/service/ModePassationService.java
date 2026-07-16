@@ -56,6 +56,7 @@ public class ModePassationService {
         existing.setDelaiMinJours(dto.getDelaiMinJours());
         existing.setBaseLegale(dto.getBaseLegale());
         existing.setIdTypeDmc(dto.getIdTypeDmc());   // mapping mode → type de DMC
+        existing.setDeclencheAgpm(dto.getDeclencheAgpm());   // marqueur « appel d'offres ouvert » → AGPM
         return ModePassationMapper.toDto(repository.save(existing));
     }
 

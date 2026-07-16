@@ -34,6 +34,15 @@ public class TypePieceJointe {
     @Column(name = "LIBELLE_PIECE", length = 200, nullable = false)
     private String libellePiece;
 
+    /**
+     * Code stable (administrable, facultatif) identifiant le type de pièce indépendamment du libellé —
+     * ex. {@code AGPM}. Permet au serveur de repérer une pièce à obligation <strong>conditionnelle</strong>
+     * (AGPM requis ssi le PPM comporte un marché en appel d'offres ouvert) et au front de retrouver son
+     * {@code idTypePiece} sans dépendre du libellé.
+     */
+    @Column(name = "CODE", length = 20)
+    private String code;
+
     @Column(name = "OBLIGATOIRE", nullable = false)
     private Boolean obligatoire;
 

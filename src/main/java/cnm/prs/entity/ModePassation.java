@@ -45,6 +45,15 @@ public class ModePassation {
     @Column(name = "ID_TYPE_DMC")
     private Long idTypeDmc;
 
+    /**
+     * Marqueur <strong>administrable</strong> « appel d'offres ouvert » : si vrai, tout marché de ce mode
+     * déclenche l'exigence d'un AGPM (Avis Général de Passation de Marché) sur le PPM. Détection
+     * déterministe et data-driven (l'admin coche le(s) mode(s) concerné(s)), jamais par mot-clé de libellé.
+     * {@code null} = false.
+     */
+    @Column(name = "DECLENCHE_AGPM")
+    private Boolean declencheAgpm;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ID_TYPE_DMC", insertable = false, updatable = false)
     private TypeDmc typeDmc;

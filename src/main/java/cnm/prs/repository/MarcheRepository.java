@@ -25,6 +25,21 @@ public interface MarcheRepository extends JpaRepository<Marche, Integer> {
     /** Vrai si le dossier porte au moins une ligne de marché (précondition de soumission d'un PPM). */
     boolean existsByIdDossier(Integer idDossier);
 
+    /**
+     * Vrai si le <strong>PPM</strong> comporte ≥1 marché dont le mode est « appel d'offres ouvert »
+     * ({@code tr_mode_passation.DECLENCHE_AGPM = true}) → dérivé {@code agpmRequis} exposé sur le PPM.
+     * Les marchés sans mode ou dont le mode ne déclenche pas l'AGPM sont exclus.
+     */
+    @Query("select (count(m) > 0) from Marche m where m.idPpm = :idPpm and m.mode.declencheAgpm = true")
+    boolean existsMarcheDeclencheurAgpmByPpm(@Param("idPpm") Integer idPpm);
+
+    /**
+     * Vrai si le <strong>dossier</strong> comporte ≥1 marché « appel d'offres ouvert » — base du contrôle
+     * conditionnel de la pièce AGPM à la soumission (couvre le cas multi-PPM d'un même dossier).
+     */
+    @Query("select (count(m) > 0) from Marche m where m.idDossier = :idDossier and m.mode.declencheAgpm = true")
+    boolean existsMarcheDeclencheurAgpmByDossier(@Param("idDossier") Integer idDossier);
+
     /** Marchés d'une PRMP (§3.1) : ceux dont le PPM lui appartient — son périmètre propre. */
     @Query("select m from Marche m where exists "
             + "(select 1 from Ppm p where p.idPpm = m.idPpm and p.idPrmp = :idPrmp)")

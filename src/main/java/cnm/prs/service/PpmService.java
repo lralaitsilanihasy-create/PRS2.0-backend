@@ -63,15 +63,16 @@ public class PpmService {
     @Transactional(readOnly = true)
     public List<PpmDto> findAll() {
         if (Visibilite.voitTout()) {
-            return repository.findAll().stream().map(PpmMapper::toDto).toList();
+            return repository.findAll().stream().map(PpmMapper::toDto).map(this::enrichir).toList();
         }
         if (Visibilite.estPrmp()) {
             String idPrmp = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
             return idPrmp == null ? List.of()
-                    : repository.findVisiblesParPrmp(idPrmp).stream().map(PpmMapper::toDto).toList();
+                    : repository.findVisiblesParPrmp(idPrmp).stream().map(PpmMapper::toDto).map(this::enrichir).toList();
         }
         return Visibilite.localite()
-                .map(loc -> repository.findVisiblesParLocalite(loc).stream().map(PpmMapper::toDto).toList())
+                .map(loc -> repository.findVisiblesParLocalite(loc).stream()
+                        .map(PpmMapper::toDto).map(this::enrichir).toList())
                 .orElseGet(List::of);
     }
 
@@ -80,7 +81,19 @@ public class PpmService {
         Ppm entity = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Ppm introuvable : " + id));
         controlerVisibilite(entity);
-        return PpmMapper.toDto(entity);
+        return enrichir(PpmMapper.toDto(entity));
+    }
+
+    /**
+     * Renseigne le dérivé serveur {@code agpmRequis} sur un PPM lu : {@code true} ssi ≥1 marché du PPM
+     * est en « appel d'offres ouvert » ({@code ModePassation.declencheAgpm}). Appelé sur toutes les
+     * lectures PPM ({@link #findAll}, {@link #findById}, {@link #findByDossier}).
+     */
+    private PpmDto enrichir(PpmDto dto) {
+        if (dto != null && dto.getIdPpm() != null) {
+            dto.setAgpmRequis(marcheRepository.existsMarcheDeclencheurAgpmByPpm(dto.getIdPpm()));
+        }
+        return dto;
     }
 
     /**
@@ -95,7 +108,7 @@ public class PpmService {
         Ppm entity = repository.findByIdDossier(idDossier).stream().findFirst()
                 .orElseThrow(() -> new ResourceNotFoundException("Aucun PPM rattaché au dossier : " + idDossier));
         controlerVisibilite(entity);
-        return PpmMapper.toDto(entity);
+        return enrichir(PpmMapper.toDto(entity));
     }
 
     /** Vérifie que le PPM est dans le périmètre de l'appelant (§1, §3.1) — sinon 403. */

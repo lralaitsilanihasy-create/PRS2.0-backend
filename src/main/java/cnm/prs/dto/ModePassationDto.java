@@ -30,4 +30,10 @@ public class ModePassationDto {
 
     /** Mapping vers le type de DMC (écran admin des modes de passation). */
     private Long idTypeDmc;
+
+    /**
+     * Marqueur « appel d'offres ouvert » : si vrai, un marché de ce mode rend l'AGPM obligatoire sur le
+     * PPM. Administrable (écran admin des modes) ; le front le lit sur chaque mode. {@code null} = false.
+     */
+    private Boolean declencheAgpm;
 }

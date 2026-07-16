@@ -1054,6 +1054,14 @@ est enregistrée `apresLettreRenvoi=true` (avec `idLettre`) ; sinon c'est une **
 > **Pièces obligatoires à la soumission.** `POST /api/dossiers/{id}/soumettre` vérifie que toutes les pièces
 > `obligatoire` du type de dossier (référentiel ci-dessus) sont présentes. Sinon **400** :
 > `{ "erreurs": [ { "champ": "piecesJointes", "message": "La pièce '<libellé>' est obligatoire." } ] }`.
+>
+> ⚠️ **AGPM conditionnel (règle ajoutée).** En plus des pièces `obligatoire` statiques, un dossier **PPM**
+> comportant **≥1 marché en « appel d'offres ouvert »** exige la pièce **AGPM** (Avis Général de Passation de
+> Marché). Absente → même **400** `{ "champ": "piecesJointes", ... }` (message citant « AGPM »). Déclenchement
+> **data-driven** : le mode de passation porte le drapeau `declencheAgpm` (`tr_mode_passation.DECLENCHE_AGPM`,
+> administrable via `mode-passations`) ; la pièce AGPM est repérée par son **code stable `AGPM`**
+> (`t_type_piece_jointe.CODE`, `obligatoire` statique = false). Le PPM lu (`GET /api/ppms`, `/api/ppms/{id}`)
+> expose le dérivé **`agpmRequis`** (`true` ssi ≥1 marché déclencheur ; lecture seule, ignoré en écriture).
 
 ---
 

@@ -49,6 +49,7 @@ public class TypePieceJointeService {
         TypePieceJointe existing = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Type de pièce introuvable : " + id));
         existing.setLibellePiece(dto.getLibellePiece());
+        existing.setCode(dto.getCode());
         existing.setObligatoire(dto.getObligatoire());
         existing.setIdTypeDossier(dto.getIdTypeDossier());
         existing.setOrdre(dto.getOrdre());

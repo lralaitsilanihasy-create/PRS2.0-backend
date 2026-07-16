@@ -166,6 +166,17 @@ Acteur externe qui soumet ses PPM et marchés à la CNM. Suit l'avancement jusqu
     marché est **refusée (HTTP 409)**. Ne s'applique **qu'au type PPM** — les **DAO/MAOO** ne sont
     pas concernés. Justification : un PPM est un plan de passation de marchés ; un PPM vide n'a rien
     à soumettre au contrôle. Le frontend doit s'aligner sur cette précondition.
+  - ⚠️ **Règle ajoutée (non issue de la brochure d'origine) — AGPM conditionnel** : un PPM comportant
+    **au moins un marché en « appel d'offres ouvert »** doit être accompagné de la pièce **AGPM**
+    (Avis Général de Passation de Marché). À la soumission, si l'AGPM manque → **refus (HTTP 400,
+    champ `piecesJointes`)**, au même titre que les pièces obligatoires statiques. Le déclenchement est
+    **data-driven, jamais par mot-clé de libellé** : l'administrateur coche le drapeau `DECLENCHE_AGPM`
+    sur le(s) mode(s) de passation concerné(s) (`tr_mode_passation`), et la pièce AGPM est repérée dans
+    le référentiel `t_type_piece_jointe` par son **code stable `AGPM`** (son drapeau `OBLIGATOIRE`
+    statique reste **false** — l'obligation est conditionnelle). Le PPM lu expose un dérivé serveur
+    **`agpmRequis`** (true ssi ≥1 marché déclencheur) que le front **affiche** sans le recalculer.
+    Prérequis de paramétrage (admin) : cocher `DECLENCHE_AGPM` sur le mode « appel d'offres ouvert » et
+    créer la pièce de code `AGPM` sur le type de dossier PPM.
 - Suivi de l'état de réception [Lecture]
   - Accès à réception, date, secrétaire — en temps réel.
 - Consultation du PV d'examen [Lecture]

@@ -61,4 +61,12 @@ public class PpmDto {
 
     @Size(max = 500)
     private String motifMaj;
+
+    /**
+     * <strong>Dérivé serveur (lecture seule)</strong> : {@code true} ssi ≥1 marché de ce PPM est en
+     * « appel d'offres ouvert » ({@code ModePassation.declencheAgpm}). Indique au front qu'un AGPM
+     * (Avis Général de Passation de Marché) doit accompagner le PPM. Le front l'<em>affiche</em>, ne le
+     * recalcule pas ; toute valeur envoyée en écriture est ignorée.
+     */
+    private Boolean agpmRequis;
 }

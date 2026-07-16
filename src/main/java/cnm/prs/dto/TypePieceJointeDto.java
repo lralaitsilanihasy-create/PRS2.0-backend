@@ -20,6 +20,10 @@ public class TypePieceJointeDto {
     @Size(max = 200)
     private String libellePiece;
 
+    /** Code stable facultatif (ex. {@code AGPM}) — repère la pièce à obligation conditionnelle. */
+    @Size(max = 20)
+    private String code;
+
     @NotNull
     private Boolean obligatoire;
 
