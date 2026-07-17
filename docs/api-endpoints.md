@@ -49,7 +49,7 @@ Pour les ressources du circuit (`dossiers`, `receptions`, `dispatchs`, `examens`
 - **Référentiels** (lecture ouverte, écriture POST/PUT/DELETE réservée à `ADMINISTRATEUR`) :
   `aviss`, `cat-comptes`, `comptes`, `delegation-profils`, `entite-contracts`, `localites`,
   `ministeres`, `mode-passations`, `natures`, `points-ctrls`, `profiles`, `regle-alertes`,
-  `regle-anomalies`, `regle-passations`, `seuils`, `situations`, `type-dossiers`, `type-dmc`.
+  `regle-anomalies`, `regle-passations`, `seuils`, `situations`, `sous-type-dossiers`, `type-dossiers`, `type-dmc`.
 - **Gestion des comptes / hiérarchie** (écriture `ADMINISTRATEUR`, lecture ouverte) :
   `controleurs`, `prmps`, `organigrammes`.
 - **Réservé `ADMINISTRATEUR`** (lecture comprise) : `audit-logs`, `session-utilisateurs`, `comptes-auth`.
@@ -849,7 +849,8 @@ relation **1,N** : un point de contrôle a **0..N** lignes. Remplace l'ancien ch
 | Champ (JSON) | Type | Obligatoire | Contraintes |
 |---|---|---|---|
 | idDossier | number | Oui (PK, au POST) | clé primaire |
-| idTypeDossier | string | Non | max 10 |
+| idTypeDossier | string | Non | max 10 — **famille** (`DDP` / `DMC` / `DDM`, ⚠️ codes renommés 2026-07-17) ; déduite du sous-type |
+| idSousType | string | Non | max 20 — **sous-type** (référentiel `/api/sous-type-dossiers`) ; famille **DDP : dérivé serveur** (`PPM` / `PPM-AGPM` selon les marchés, valeur envoyée ignorée) ; **DMC/DDM : choisi à la saisie** |
 | idDossierParent | number | Non | |
 | refeDossier | string | Non | max 100 — **référence officielle, générée à la `…/réception`** ; **`null` avant** (BROUILLON/SOUMIS) ; laisser vide à la création |
 | dateRef | string (date) | Non | renseignée à la soumission si vide |
@@ -867,7 +868,7 @@ relation **1,N** : un point de contrôle a **0..N** lignes. Remplace l'ancien ch
 
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
-| GET | /api/dossiers | — | `DossierDto[]` | 200, 400 | Authentifié (filtré, hors BROUILLON) |
+| GET | /api/dossiers | — | `DossierDto[]` | 200, 400 | Authentifié (filtré, hors BROUILLON) — filtres `?statut=` `&type=` `&sousType=` |
 | GET | /api/dossiers/a-receptionner | — | `DossierDto[]` | 200, 403 | `SECRETAIRE` (titulaire/délégué) ou `ADMINISTRATEUR` |
 | GET | /api/dossiers/a-examiner | — | `DossierDto[]` | 200, 403 | `MEMBRE` (titulaire/délégué) ou `ADMINISTRATEUR` |
 | GET | /api/dossiers/examines | — | `Page<DossierDto>` | 200, 403 | `MEMBRE` (titulaire/délégué) ou `ADMINISTRATEUR` |
@@ -891,6 +892,11 @@ relation **1,N** : un point de contrôle a **0..N** lignes. Remplace l'ancien ch
 > depuis « Mes brouillons » — dont le cas d'un **brouillon PPM sans aucun marché** (où `GET /api/marches` ne
 > peut fournir aucun `idPpm`). Aucun PPM rattaché → **404** ; hors périmètre → **403**. *(Depuis le retrait des
 > BROUILLON de `GET /api/ppms`, cf. §1/§3.1, c'est la voie recommandée pour obtenir le PPM d'un brouillon.)*
+
+> 📌 **Filtres famille / sous-type (règle ajoutée 2026-07-17).** `GET /api/dossiers` accepte, en plus de
+> `?statut=`, les filtres serveur **`?type=`** (famille : `DDP`/`DMC`/`DDM`) et **`?sousType=`** (ex.
+> `PPM-AGPM`), combinables entre eux ; valeur inconnue du référentiel → **400**. Le scoping de visibilité
+> (localité / PRMP) s'applique toujours d'abord.
 
 > 📌 **Écran « Dossiers à rectifier » (PRMP).** Il n'existe **pas** d'endpoint dédié : la liste est alimentée
 > par le **filtre serveur** existant `GET /api/dossiers?statut=EN_ATTENTE_DECISION_PRMP` (scopé à la PRMP),
@@ -1054,16 +1060,18 @@ est enregistrée `apresLettreRenvoi=true` (avec `idLettre`) ; sinon c'est une **
 > naturel).
 
 > **Pièces obligatoires à la soumission.** `POST /api/dossiers/{id}/soumettre` vérifie que toutes les pièces
-> `obligatoire` du type de dossier (référentiel ci-dessus) sont présentes. Sinon **400** :
-> `{ "erreurs": [ { "champ": "piecesJointes", "message": "La pièce '<libellé>' est obligatoire." } ] }`.
+> `obligatoire` de la **famille** de dossier (référentiel ci-dessus, clé `DDP`/`DMC`/`DDM`) sont présentes.
+> Sinon **400** : `{ "erreurs": [ { "champ": "piecesJointes", "message": "La pièce '<libellé>' est obligatoire." } ] }`.
 >
-> ⚠️ **AGPM conditionnel (règle ajoutée).** En plus des pièces `obligatoire` statiques, un dossier **PPM**
-> comportant **≥1 marché en « appel d'offres ouvert »** exige la pièce **AGPM** (Avis Général de Passation de
-> Marché). Absente → même **400** `{ "champ": "piecesJointes", ... }` (message citant « AGPM »). Déclenchement
-> **data-driven** : le mode de passation porte le drapeau `declencheAgpm` (`tr_mode_passation.DECLENCHE_AGPM`,
-> administrable via `mode-passations`) ; la pièce AGPM est repérée par son **code stable `AGPM`**
-> (`t_type_piece_jointe.CODE`, `obligatoire` statique = false). Le PPM lu (`GET /api/ppms`, `/api/ppms/{id}`)
-> expose le dérivé **`agpmRequis`** (`true` ssi ≥1 marché déclencheur ; lecture seule, ignoré en écriture).
+> ⚠️ **AGPM conditionnel (règle ajoutée).** En plus des pièces `obligatoire` statiques, un dossier de la
+> famille **DDP** comportant **≥1 marché en « appel d'offres ouvert »** — soit un sous-type dérivé
+> **`PPM-AGPM`** — exige la pièce **AGPM** (Avis Général de Passation de Marché). Absente → même **400**
+> `{ "champ": "piecesJointes", ... }` (message citant « AGPM »). Déclenchement **data-driven** : le mode de
+> passation porte le drapeau `declencheAgpm` (`tr_mode_passation.DECLENCHE_AGPM`, administrable via
+> `mode-passations`) ; la pièce AGPM est repérée par son **code stable `AGPM`**
+> (`t_type_piece_jointe.CODE`, famille `DDP`, `obligatoire` statique = false). Le PPM lu (`GET /api/ppms`,
+> `/api/ppms/{id}`) expose le dérivé **`agpmRequis`** (`true` ssi ≥1 marché déclencheur ; lecture seule,
+> ignoré en écriture) — même source de vérité que le sous-type `PPM-AGPM` du dossier.
 
 ---
 
@@ -1262,7 +1270,11 @@ volumineux → **400** (annule la création si multipart) ; **404** si l'UGPM ou
 >
 > À la saisie, le champ porte le chemin `marches[i].processus[j].<champ>` ; à l'édition d'une prévision, le nom du champ seul (`dateDebut`/`dateFin`).
 
-**`SaisieDossierRequest`** (DAO/MAOO, sans contenu) : `idTypeDossier` (oui, ≠ `PPM` sinon **409**), **`idEntiteContract` (oui)**. *(plus de `idDossier` : attribué par le serveur.)*
+**`SaisieDossierRequest`** (familles DMC/DDM, sans contenu) : **`idSousType`** (sous-type choisi, ex. `DAO`,
+`DAOR`, `MAOO`, `MAOR` — la **famille s'en déduit** ; inconnu → **400** `{champ:"idSousType"}` ; sous-type de la
+famille **DDP** → **409** « utilisez /api/saisies/ppm »), **`idEntiteContract` (oui)**. *(plus de `idDossier` :
+attribué par le serveur.)* ⚠️ `idTypeDossier` est **déprécié** : accepté en repli quand `idSousType` est absent
+et interprété comme un code de **sous-type** (les anciens payloads `{"idTypeDossier":"DAO"}` restent valides).
 
 **`EditionPpmRequest`** (`PUT /api/saisies/ppm/{idDossier}`) — édite un **brouillon** PPM en une transaction :
 `exercice`, `signataire`, `dateSignature`, `reference` (en-tête, tous obligatoires) + `marches` (liste désirée). Les lignes sont **réconciliées par `idDetail`** : ajout des nouvelles, mise à jour des existantes (mode **recalculé**), **retrait** des absentes. La localité/le type/le propriétaire/l'entité ne changent pas. Dossier non BROUILLON → **409** ; non-propriétaire → **403**.
@@ -3152,8 +3164,19 @@ GET /api/rapports/dossiers/excel                   (Chef de commission : forcé 
 
 ---
 
-## Types de dossier
+## Types de dossier (FAMILLES)
 **Ressource** `/api/type-dossiers` — Référentiel : lecture ouverte ; écriture `ADMINISTRATEUR`.
+
+> ⚠️ **Restructuration famille → sous-type (règle ajoutée, 2026-07-17).** `tr_type_dossier` porte désormais
+> les **familles** de dossier — codes **renommés** : `PPM`→**`DDP`** « Dossier de Planification »,
+> `DAO`→**`DMC`** « Dossier de Mise en Concurrence », `MAOO`→**`DDM`** « Dossier de Marché » (migration
+> `2026-07-17_familles_sous_types.sql`, FK re-pointées sur `t_dossier`, `t_type_piece_jointe`,
+> `tr_points_ctrl`). Les anciens codes deviennent des **sous-types** (référentiel ci-dessous). Les
+> **pièces attendues** et **points de contrôle** restent rattachés à la **famille**. Les **nouvelles
+> références** portent le segment famille (ex. `00012/DDP/CRM-ANT/2026`, numérotation continue) ; les
+> références déjà générées sont conservées telles quelles ; la référence initiale PPM
+> (`xxxxx/<acronyme>/PPM/<année>`) garde son segment `PPM` (elle nomme le document, pas la famille).
+> NB : la famille `DMC` est distincte du référentiel `type-dmc` (types de **documents** DMC d'un marché : BC…).
 
 **Champs `TypeDossierDto`**
 
@@ -3176,7 +3199,50 @@ GET /api/rapports/dossiers/excel                   (Chef de commission : forcé 
 
 **Exemple — requête**
 ```json
-{ "idTypeDossier": "DAO", "libelleType": "Dossier d'appel d'offres" }
+{ "idTypeDossier": "DMC", "libelleType": "Dossier de Mise en Concurrence" }
+```
+
+---
+
+## Sous-types de dossier
+**Ressource** `/api/sous-type-dossiers` (table `tr_sous_type_dossier`, ⚠️ règle ajoutée) — Référentiel
+**administrable** (liste OUVERTE) : lecture ouverte, écritures `ADMINISTRATEUR`. Chaque sous-type est
+rattaché à une **famille** (`idTypeDossier` = `DDP` / `DMC` / `DDM`). Jeu initial :
+**DDP** ⊃ `PPM` « Plan de Passation de Marché », `PPM-AGPM` « Plan de Passation de Marché et Avis Général
+de Passation de Marché » ; **DMC** ⊃ `DAO` « Dossier d'Appel d'Offres », `DAOR` « Dossier d'Appel d'Offres
+Restreint » ; **DDM** ⊃ `MAOO` « Marché sur Appel d'Offres Ouvert », `MAOR` « Marché sur Appel d'Offres
+Ouvert Restreint ».
+
+> Le **dossier porte son sous-type** (`DossierDto.idSousType`), la famille s'en déduit. **Famille DDP** :
+> sous-type **dérivé serveur** (`PPM-AGPM` ssi ≥1 marché en appel d'offres ouvert — même source de vérité
+> que `agpmRequis` : `tr_mode_passation.DECLENCHE_AGPM`), recalculé à chaque écriture de marché et à la
+> soumission ; toute valeur envoyée est ignorée. **Familles DMC/DDM** : sous-type **choisi à la saisie**
+> (`POST /api/saisies/dossier`, dropdown rempli via `GET /par-famille/{famille}`).
+
+**Champs `SousTypeDossierDto`**
+
+| Champ (JSON) | Type | Obligatoire | Contraintes |
+|---|---|---|---|
+| idSousType | string | Oui (PK, au POST) | clé primaire, max 20 (ex. `PPM-AGPM`) |
+| libelleSousType | string | Non | max 150 |
+| idTypeDossier | string | Oui | FK famille (`tr_type_dossier`) ; famille inconnue → 404 |
+
+**Endpoints**
+
+| Méthode | URL | Corps | Réponse | Statuts | Rôle |
+|---|---|---|---|---|---|
+| GET | /api/sous-type-dossiers | — | `SousTypeDossierDto[]` | 200 | Authentifié |
+| GET | /api/sous-type-dossiers/par-famille/{idTypeDossier} | — | `SousTypeDossierDto[]` | 200, 404 | Authentifié |
+| GET | /api/sous-type-dossiers/{id} | — | `SousTypeDossierDto` | 200, 404 | Authentifié |
+| POST | /api/sous-type-dossiers | `SousTypeDossierDto` | `SousTypeDossierDto` | 201, 400, 403, 404 | ADMINISTRATEUR |
+| PUT | /api/sous-type-dossiers/{id} | `SousTypeDossierDto` | `SousTypeDossierDto` | 200, 400, 404 | ADMINISTRATEUR |
+| DELETE | /api/sous-type-dossiers/{id} | — | — | 204, 404, 409 | ADMINISTRATEUR |
+
+`{id}` = idSousType (string). DELETE d'un sous-type référencé par un dossier → **409**.
+
+**Exemple — requête**
+```json
+{ "idSousType": "DAOR", "libelleSousType": "Dossier d'Appel d'Offres Restreint", "idTypeDossier": "DMC" }
 ```
 
 ---

@@ -19,6 +19,14 @@ public class DossierDto {
     @Size(max = 10)
     private String idTypeDossier;
 
+    /**
+     * ⚠️ Règle ajoutée — sous-type du dossier (référentiel {@code /api/sous-type-dossiers}), la famille
+     * ({@code idTypeDossier}) s'en déduit. Famille DDP : dérivé serveur ({@code PPM} / {@code PPM-AGPM}),
+     * toute valeur envoyée est ignorée ; familles DMC/DDM : choisi à la saisie.
+     */
+    @Size(max = 20)
+    private String idSousType;
+
     private Integer idDossierParent;
 
     @Size(max = 100)

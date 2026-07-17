@@ -47,7 +47,7 @@ public class SecurityConfig {
             "/api/localites", "/api/points-ctrls",
             "/api/regle-anomalies", "/api/regle-alertes", "/api/comptes", "/api/cat-comptes",
             "/api/entite-contracts", "/api/delegation-profils", "/api/aviss", "/api/natures",
-            "/api/mode-passations", "/api/type-dossiers", "/api/ministeres",
+            "/api/mode-passations", "/api/type-dossiers", "/api/sous-type-dossiers", "/api/ministeres",
             "/api/profiles", "/api/capm", "/api/type-piece-jointes", "/api/type-dmc"
     };
 
@@ -56,7 +56,7 @@ public class SecurityConfig {
             "/api/localites/*", "/api/points-ctrls/*",
             "/api/regle-anomalies/*", "/api/regle-alertes/*", "/api/comptes/*", "/api/cat-comptes/*",
             "/api/entite-contracts/*", "/api/delegation-profils/*", "/api/aviss/*", "/api/natures/*",
-            "/api/mode-passations/*", "/api/type-dossiers/*", "/api/ministeres/*",
+            "/api/mode-passations/*", "/api/type-dossiers/*", "/api/sous-type-dossiers/*", "/api/ministeres/*",
             "/api/profiles/*", "/api/capm/*", "/api/type-piece-jointes/*", "/api/type-dmc/*"
     };
 

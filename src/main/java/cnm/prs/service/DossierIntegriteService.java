@@ -25,15 +25,27 @@ import cnm.prs.security.CurrentUser;
  *   <li><strong>Propriété</strong> : seule la PRMP propriétaire ({@code t_dossier.ID_PRMP}) édite/soumet
  *       son dossier ;</li>
  *   <li><strong>Éditabilité</strong> : on ne modifie que les dossiers au statut {@code BROUILLON} ;</li>
- *   <li><strong>Cohérence type↔contenu</strong> : un dossier {@code PPM} doit porter un {@code t_ppm} ;
- *       un {@code DAO}/{@code MAOO} ne doit pas en porter.</li>
+ *   <li><strong>Cohérence type↔contenu</strong> : un dossier de la famille {@code DDP} (planification)
+ *       doit porter un {@code t_ppm} ; un dossier {@code DMC}/{@code DDM} ne doit pas en porter.</li>
  * </ul>
  */
 @Service
 @Transactional(readOnly = true)
 public class DossierIntegriteService {
 
-    private static final String TYPE_PPM = "PPM";
+    /**
+     * ⚠️ Règle ajoutée — codes des <strong>familles</strong> de dossier ({@code tr_type_dossier}) après la
+     * restructuration famille → sous-type : {@code DDP} « Dossier de Planification » (ex-PPM),
+     * {@code DMC} « Dossier de Mise en Concurrence » (ex-DAO), {@code DDM} « Dossier de Marché » (ex-MAOO).
+     * Source unique des littéraux — ne pas dupliquer ces codes ailleurs.
+     */
+    public static final String FAMILLE_DDP = "DDP";
+    public static final String FAMILLE_DMC = "DMC";
+    public static final String FAMILLE_DDM = "DDM";
+
+    /** Sous-types ({@code tr_sous_type_dossier}) de la famille DDP — gérés par le serveur (dérivés). */
+    public static final String SOUS_TYPE_PPM = "PPM";
+    public static final String SOUS_TYPE_PPM_AGPM = "PPM-AGPM";
 
     private final DossierRepository dossierRepository;
     private final PpmRepository ppmRepository;
@@ -119,13 +131,34 @@ public class DossierIntegriteService {
         }
     }
 
-    /** Un PPM (et ses lignes de marché) ne peut être rattaché qu'à un dossier de type {@code PPM}. */
-    public void exigerTypePpm(Integer idDossier) {
+    /** Un PPM (et ses lignes de marché) ne peut être rattaché qu'à un dossier de la famille {@code DDP}. */
+    public void exigerFamilleDdp(Integer idDossier) {
         Dossier dossier = charger(idDossier);
-        if (!TYPE_PPM.equals(dossier.getIdTypeDossier())) {
+        if (!FAMILLE_DDP.equals(dossier.getIdTypeDossier())) {
             throw new BusinessRuleException(
-                    "PPM/marché interdit : le dossier " + idDossier + " n'est pas de type PPM (type « "
+                    "PPM/marché interdit : le dossier " + idDossier + " n'est pas de la famille DDP (type « "
                             + dossier.getIdTypeDossier() + " »).");
+        }
+    }
+
+    /**
+     * ⚠️ Règle ajoutée — <strong>recalcule le sous-type d'un dossier DDP</strong> (source de vérité unique :
+     * les marchés) : {@link #SOUS_TYPE_PPM_AGPM} ssi ≥1 marché en « appel d'offres ouvert »
+     * ({@code ModePassation.declencheAgpm}), sinon {@link #SOUS_TYPE_PPM}. Sans effet sur les autres
+     * familles (DMC/DDM : sous-type choisi à la saisie). À appeler après toute écriture de marché
+     * (création / mise à jour / suppression / rectification) et en filet de sécurité à la soumission.
+     */
+    @Transactional
+    public void recalculerSousTypeDdp(Integer idDossier) {
+        Dossier dossier = dossierRepository.findById(idDossier).orElse(null);
+        if (dossier == null || !FAMILLE_DDP.equals(dossier.getIdTypeDossier())) {
+            return;
+        }
+        String sousType = marcheRepository.existsMarcheDeclencheurAgpmByDossier(idDossier)
+                ? SOUS_TYPE_PPM_AGPM : SOUS_TYPE_PPM;
+        if (!sousType.equals(dossier.getIdSousType())) {
+            dossier.setIdSousType(sousType);
+            dossierRepository.save(dossier);
         }
     }
 
@@ -142,17 +175,17 @@ public class DossierIntegriteService {
      */
     public void validerCoherenceAvantSoumission(Dossier dossier) {
         boolean aPpm = ppmRepository.existsByIdDossier(dossier.getIdDossier());
-        boolean estPpm = TYPE_PPM.equals(dossier.getIdTypeDossier());
-        if (estPpm && !aPpm) {
+        boolean estDdp = FAMILLE_DDP.equals(dossier.getIdTypeDossier());
+        if (estDdp && !aPpm) {
             throw new BusinessRuleException(
-                    "Dossier de type PPM sans PPM rattaché : soumission impossible (§3.1).");
+                    "Dossier de la famille DDP sans PPM rattaché : soumission impossible (§3.1).");
         }
-        if (!estPpm && aPpm) {
+        if (!estDdp && aPpm) {
             throw new BusinessRuleException(
                     "Dossier de type « " + dossier.getIdTypeDossier() + " » ne doit pas porter de PPM.");
         }
         // ⚠️ Règle ajoutée : un PPM doit comporter au moins un marché avant soumission.
-        if (estPpm && !marcheRepository.existsByIdDossier(dossier.getIdDossier())) {
+        if (estDdp && !marcheRepository.existsByIdDossier(dossier.getIdDossier())) {
             throw new BusinessRuleException(
                     "Un PPM doit comporter au moins un marché avant soumission.");
         }

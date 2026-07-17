@@ -37,6 +37,14 @@ public class Dossier {
     @Column(name = "ID_TYPE_DOSSIER", length = 10)
     private String idTypeDossier;
 
+    /**
+     * ⚠️ Règle ajoutée — <strong>sous-type</strong> du dossier (FK {@code tr_sous_type_dossier}), la famille
+     * ({@code idTypeDossier}) s'en déduisant. Famille DDP : <strong>recalculé serveur</strong> ({@code PPM-AGPM}
+     * ssi ≥1 marché en appel d'offres ouvert, sinon {@code PPM}) ; familles DMC/DDM : choisi à la saisie.
+     */
+    @Column(name = "ID_SOUS_TYPE", length = 20)
+    private String idSousType;
+
     @Column(name = "ID_DOSSIER_PARENT")
     private Integer idDossierParent;
 
@@ -79,6 +87,11 @@ public class Dossier {
     @JoinColumn(name = "ID_TYPE_DOSSIER", insertable = false, updatable = false)
     @JsonIgnore
     private TypeDossier typeDossier;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "ID_SOUS_TYPE", insertable = false, updatable = false)
+    @JsonIgnore
+    private SousTypeDossier sousTypeDossier;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ID_LOCALITE", insertable = false, updatable = false)

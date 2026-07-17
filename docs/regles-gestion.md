@@ -159,13 +159,27 @@ Acteur externe qui soumet ses PPM et marchés à la CNM. Suit l'avancement jusqu
 
 **Module 03 — Soumission & retours**
 
+- ⚠️ **Règle ajoutée (2026-07-17) — FAMILLES et SOUS-TYPES de dossier.** Le référentiel `tr_type_dossier`
+  porte désormais les **familles** — codes **renommés** : `PPM`→**`DDP`** « Dossier de Planification »,
+  `DAO`→**`DMC`** « Dossier de Mise en Concurrence », `MAOO`→**`DDM`** « Dossier de Marché ». Chaque
+  dossier porte un **sous-type** (`t_dossier.ID_SOUS_TYPE`, référentiel **ouvert et administrable**
+  `tr_sous_type_dossier`, rattaché à une famille) : **DDP** ⊃ `PPM`, `PPM-AGPM` ; **DMC** ⊃ `DAO`,
+  `DAOR`, … ; **DDM** ⊃ `MAOO`, `MAOR`, … La famille se **déduit** du sous-type. Famille **DDP** :
+  sous-type **dérivé serveur** (`PPM-AGPM` ssi ≥1 marché en appel d'offres ouvert — même source de
+  vérité que la règle AGPM ci-dessous), jamais choisi. Familles **DMC/DDM** : sous-type **choisi à la
+  saisie** (liste par famille). Les **pièces attendues** (`t_type_piece_jointe`) et **points de
+  contrôle** (`tr_points_ctrl`) restent rattachés à la **famille**. Les **nouvelles références**
+  portent le segment **famille** (ex. `00012/DDP/CRM-ANT/2026`, numérotation continue) ; les
+  références déjà émises sont conservées ; la référence initiale PPM (`xxxxx/<acronyme>/PPM/<année>`)
+  garde son segment `PPM` (nom du document). Migration : `2026-07-17_familles_sous_types.sql`.
+
 - Soumission du dossier [Action]
   - Envoi officiel avec génération de la référence unique.
   - ⚠️ **Règle ajoutée (non issue de la brochure d'origine)** : **un PPM doit comporter au moins
-    un marché avant soumission**. La soumission d'un dossier de type **PPM** sans aucune ligne de
-    marché est **refusée (HTTP 409)**. Ne s'applique **qu'au type PPM** — les **DAO/MAOO** ne sont
-    pas concernés. Justification : un PPM est un plan de passation de marchés ; un PPM vide n'a rien
-    à soumettre au contrôle. Le frontend doit s'aligner sur cette précondition.
+    un marché avant soumission**. La soumission d'un dossier de la famille **DDP** (planification) sans
+    aucune ligne de marché est **refusée (HTTP 409)**. Ne s'applique **qu'à la famille DDP** — les
+    dossiers **DMC/DDM** ne sont pas concernés. Justification : un PPM est un plan de passation de
+    marchés ; un PPM vide n'a rien à soumettre au contrôle. Le frontend doit s'aligner sur cette précondition.
   - ⚠️ **Règle ajoutée (non issue de la brochure d'origine) — AGPM conditionnel** : un PPM comportant
     **au moins un marché en « appel d'offres ouvert »** doit être accompagné de la pièce **AGPM**
     (Avis Général de Passation de Marché). À la soumission, si l'AGPM manque → **refus (HTTP 400,
@@ -176,7 +190,8 @@ Acteur externe qui soumet ses PPM et marchés à la CNM. Suit l'avancement jusqu
     statique reste **false** — l'obligation est conditionnelle). Le PPM lu expose un dérivé serveur
     **`agpmRequis`** (true ssi ≥1 marché déclencheur) que le front **affiche** sans le recalculer.
     Prérequis de paramétrage (admin) : cocher `DECLENCHE_AGPM` sur le mode « appel d'offres ouvert » et
-    créer la pièce de code `AGPM` sur le type de dossier PPM.
+    créer la pièce de code `AGPM` sur la famille de dossier **DDP**. Un dossier DDP dans ce cas porte le
+    sous-type dérivé **`PPM-AGPM`** (cf. règle familles/sous-types ci-dessus).
 - Suivi de l'état de réception [Lecture]
   - Accès à réception, date, secrétaire — en temps réel.
 - Consultation du PV d'examen [Lecture]

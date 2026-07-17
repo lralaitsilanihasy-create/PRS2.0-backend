@@ -49,6 +49,7 @@ import java.util.List;
 import cnm.prs.entity.Capm;
 import cnm.prs.entity.Examen;
 import cnm.prs.entity.ExamenDetail;
+import cnm.prs.entity.SousTypeDossier;
 import cnm.prs.entity.LettreRenvoi;
 import cnm.prs.entity.PointsCtrl;
 import cnm.prs.entity.Localite;
@@ -156,6 +157,7 @@ class CnmWorkflowIntegrationTest {
     @Autowired private PrmpEntiteRepository prmpEntiteRepository;
     @Autowired private cnm.prs.repository.TypePieceJointeRepository typePieceJointeRepository;
     @Autowired private cnm.prs.repository.PublicationRepository publicationRepository;
+    @Autowired private cnm.prs.repository.SousTypeDossierRepository sousTypeDossierRepository;
     @Autowired private cnm.prs.repository.PvExamenRepository pvExamenRepository;
     @Autowired private cnm.prs.repository.PvNavetteRepository pvNavetteRepository;
     @Autowired private cnm.prs.repository.ObservationControleRepository observationControleRepository;
@@ -177,8 +179,14 @@ class CnmWorkflowIntegrationTest {
     @BeforeEach
     void seed() {
         localiteRepository.save(localite("ANT", "Antananarivo"));
-        typeDossierRepository.save(new TypeDossier("PPM", "Plan de passation des marchés"));
-        typeDossierRepository.save(new TypeDossier("DAO", "Dossier d'appel d'offres"));
+        // Familles (tr_type_dossier) + sous-types initiaux (tr_sous_type_dossier), hiérarchie §familles.
+        typeDossierRepository.save(new TypeDossier("DDP", "Dossier de Planification"));
+        typeDossierRepository.save(new TypeDossier("DMC", "Dossier de Mise en Concurrence"));
+        sousTypeDossierRepository.save(new SousTypeDossier("PPM", "Plan de Passation de Marché", "DDP"));
+        sousTypeDossierRepository.save(new SousTypeDossier("PPM-AGPM",
+                "Plan de Passation de Marché et Avis Général de Passation de Marché", "DDP"));
+        sousTypeDossierRepository.save(new SousTypeDossier("DAO", "Dossier d'Appel d'Offres", "DMC"));
+        sousTypeDossierRepository.save(new SousTypeDossier("DAOR", "Dossier d'Appel d'Offres Restreint", "DMC"));
 
         profileRepository.save(profile(1, "PRMP"));
         profileRepository.save(profile(2, "Président"));
@@ -268,14 +276,14 @@ class CnmWorkflowIntegrationTest {
 
         // Deux brouillons PPM, un par PRMP (même localité ANT).
         Dossier d1 = dossier(60, "BROUILLON");
-        d1.setIdTypeDossier("PPM"); d1.setIdPrmp("PRMP001"); d1.setIdLocalite("ANT");
+        d1.setIdTypeDossier("DDP"); d1.setIdPrmp("PRMP001"); d1.setIdLocalite("ANT");
         dossierRepository.save(d1);
         ppmRepository.save(ppm(60, 60, "PRMP001"));
 
         prmpRepository.save(prmp("PRMP002", "ANT"));
         String tokenPrmp2 = bearer("PRMP002", ProfilUtilisateur.PRMP, TypeActeur.PRMP, "PRMP002", "ANT");
         Dossier d2 = dossier(61, "BROUILLON");
-        d2.setIdTypeDossier("PPM"); d2.setIdPrmp("PRMP002"); d2.setIdLocalite("ANT");
+        d2.setIdTypeDossier("DDP"); d2.setIdPrmp("PRMP002"); d2.setIdLocalite("ANT");
         dossierRepository.save(d2);
         ppmRepository.save(ppm(61, 61, "PRMP002"));
 
@@ -1318,7 +1326,7 @@ class CnmWorkflowIntegrationTest {
         String tokenSec = bearer("CTRSEC", ProfilUtilisateur.SECRETAIRE, TypeActeur.CONTROLEUR, "CTRSEC", "ANT");
         Dossier d = dossier(300, "SOUMIS");
         d.setIdLocalite("ANT");
-        d.setIdTypeDossier("PPM");
+        d.setIdTypeDossier("DDP");
         dossierRepository.save(d);
         mvc.perform(post("/api/receptions").header("Authorization", tokenSec)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -1334,16 +1342,16 @@ class CnmWorkflowIntegrationTest {
         String tokenSec = bearer("CTRSEC", ProfilUtilisateur.SECRETAIRE, TypeActeur.CONTROLEUR, "CTRSEC", "ANT");
         Dossier d = dossier(330, "SOUMIS");
         d.setIdLocalite("ANT");
-        d.setIdTypeDossier("PPM");
+        d.setIdTypeDossier("DDP");
         dossierRepository.save(d);
 
-        // POST : la réponse porte la référence structurée <seq>/PPM/CRM-ANT/<annee>.
+        // POST : la réponse porte la référence structurée <seq>/DDP/CRM-ANT/<annee>.
         String resp = mvc.perform(post("/api/receptions").header("Authorization", tokenSec)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDossier\":330,\"numPassage\":1,\"typePassage\":\"INITIAL\",\"complet\":true,"
                         + "\"dateReception\":\"2026-06-30\"}"))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.reference", org.hamcrest.Matchers.matchesPattern("\\d{5}/PPM/CRM-ANT/\\d{4}")))
+                .andExpect(jsonPath("$.reference", org.hamcrest.Matchers.matchesPattern("\\d{5}/DDP/CRM-ANT/\\d{4}")))
                 .andReturn().getResponse().getContentAsString();
         int idRec = com.jayway.jsonpath.JsonPath.read(resp, "$.idReception");
         String refRecept = com.jayway.jsonpath.JsonPath.read(resp, "$.reference");
@@ -1414,19 +1422,19 @@ class CnmWorkflowIntegrationTest {
     @Test
     @DisplayName("Référence dossier — séquence globale unique (2 localités, même année → numéros distincts/consécutifs)")
     void reference_sequence_unique_globale() {
-        String rAnt = referenceService.generer("PPM", "ANT", false, 2099);
-        String rTms = referenceService.generer("PPM", "TMS", false, 2099);
+        String rAnt = referenceService.generer("DDP", "ANT", false, 2099);
+        String rTms = referenceService.generer("DDP", "TMS", false, 2099);
         // Numéros distincts ET consécutifs malgré des localités différentes (plus de « 00001 » partagé).
-        org.junit.jupiter.api.Assertions.assertEquals("00001/PPM/CRM-ANT/2099", rAnt);
-        org.junit.jupiter.api.Assertions.assertEquals("00002/PPM/CRM-TMS/2099", rTms);
+        org.junit.jupiter.api.Assertions.assertEquals("00001/DDP/CRM-ANT/2099", rAnt);
+        org.junit.jupiter.api.Assertions.assertEquals("00002/DDP/CRM-TMS/2099", rTms);
     }
 
     @Test
     @DisplayName("Référence dossier — incrément strictement croissant sans saut ni doublon (5 dossiers)")
     void reference_sequence_increment_correct() {
         for (int i = 1; i <= 5; i++) {
-            org.junit.jupiter.api.Assertions.assertEquals(String.format("%05d/PPM/CRM-ANT/2098", i),
-                    referenceService.generer("PPM", "ANT", false, 2098));
+            org.junit.jupiter.api.Assertions.assertEquals(String.format("%05d/DDP/CRM-ANT/2098", i),
+                    referenceService.generer("DDP", "ANT", false, 2098));
         }
     }
 
@@ -1445,37 +1453,37 @@ class CnmWorkflowIntegrationTest {
     @Test
     @DisplayName("Réf. lettre — 2 lettres du MÊME dossier → numéros distincts (plus de répétition)")
     void lettre_reference_sequence_meme_dossier() throws Exception {
-        seedExamenAvecRefe(340, "00007/PPM/CRM-ANT/2096");
+        seedExamenAvecRefe(340, "00007/DDP/CRM-ANT/2096");
         mvc.perform(post("/api/lettre-renvois").header("Authorization", tokenMembre)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"idExamen\":340}"))
-                .andExpect(jsonPath("$.refLettre").value("00001/PPM/CRM-ANT/LR/2096"));
+                .andExpect(jsonPath("$.refLettre").value("00001/DDP/CRM-ANT/LR/2096"));
         mvc.perform(post("/api/lettre-renvois").header("Authorization", tokenMembre)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"idExamen\":340}"))
-                .andExpect(jsonPath("$.refLettre").value("00002/PPM/CRM-ANT/LR/2096"));
+                .andExpect(jsonPath("$.refLettre").value("00002/DDP/CRM-ANT/LR/2096"));
     }
 
     @Test
     @DisplayName("Réf. lettre — séquence globale (2 dossiers/localités différents → numéros distincts/consécutifs)")
     void lettre_reference_sequence_unique_globale() throws Exception {
-        seedExamenAvecRefe(341, "00001/PPM/CRM-ANT/2097");
-        seedExamenAvecRefe(342, "00009/PPM/CRM-TMS/2097");   // dossier différent, localité TMS dans la réf
+        seedExamenAvecRefe(341, "00001/DDP/CRM-ANT/2097");
+        seedExamenAvecRefe(342, "00009/DDP/CRM-TMS/2097");   // dossier différent, localité TMS dans la réf
         mvc.perform(post("/api/lettre-renvois").header("Authorization", tokenMembre)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"idExamen\":341}"))
-                .andExpect(jsonPath("$.refLettre").value("00001/PPM/CRM-ANT/LR/2097"));
+                .andExpect(jsonPath("$.refLettre").value("00001/DDP/CRM-ANT/LR/2097"));
         // Numéro de séquence GLOBAL (00002) malgré une localité différente — pas un « 00001 » partagé.
         mvc.perform(post("/api/lettre-renvois").header("Authorization", tokenMembre)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"idExamen\":342}"))
-                .andExpect(jsonPath("$.refLettre").value("00002/PPM/CRM-TMS/LR/2097"));
+                .andExpect(jsonPath("$.refLettre").value("00002/DDP/CRM-TMS/LR/2097"));
     }
 
     @Test
     @DisplayName("Réf. lettre — incrément continu sans saut ni doublon (5 lettres)")
     void lettre_reference_increment_continu() throws Exception {
-        seedExamenAvecRefe(343, "00001/PPM/CRM-ANT/2098");
+        seedExamenAvecRefe(343, "00001/DDP/CRM-ANT/2098");
         for (int i = 1; i <= 5; i++) {
             mvc.perform(post("/api/lettre-renvois").header("Authorization", tokenMembre)
                     .contentType(MediaType.APPLICATION_JSON).content("{\"idExamen\":343}"))
-                    .andExpect(jsonPath("$.refLettre").value(String.format("%05d/PPM/CRM-ANT/LR/2098", i)));
+                    .andExpect(jsonPath("$.refLettre").value(String.format("%05d/DDP/CRM-ANT/LR/2098", i)));
         }
     }
 
@@ -2046,8 +2054,8 @@ class CnmWorkflowIntegrationTest {
     void completionApresRenvoi_notifieMembreEtRouvreExamen() throws Exception {
         // Dossier déjà examiné puis remis PRET_DISPATCH par la signature de la lettre (signer() testé ailleurs — dépend de Word).
         Dossier d = dossierLoc(400, "PRET_DISPATCH", "ANT", "PRMP001");
-        d.setIdTypeDossier("PPM");
-        d.setRefeDossier("00004/PPM/CRM-ANT/2026");
+        d.setIdTypeDossier("DDP");
+        d.setRefeDossier("00004/DDP/CRM-ANT/2026");
         dossierRepository.save(d);
         receptionRepository.save(reception(400, 400, "CTRCC1", true));
         dispatchRepository.save(dispatch(400, 400, "CTRCC1", "CTRMEM"));   // Membre attributaire = CTRMEM
@@ -2055,7 +2063,7 @@ class CnmWorkflowIntegrationTest {
         LettreRenvoi l = new LettreRenvoi();
         l.setIdExamen(400); l.setIdDossier(400); l.setObjetLettre("Renvoi"); l.setStatut("SIGNE");
         int idLettre = lettreRenvoiRepository.save(l).getIdLettre();
-        int idType = seedTypePiece("Pièce complémentaire", false, "PPM", 1);
+        int idType = seedTypePiece("Pièce complémentaire", false, "DDP",1);
 
         byte[] pdf = "%PDF-1.4 piece complementaire".getBytes(StandardCharsets.US_ASCII);
         MockMultipartFile data = new MockMultipartFile("data", "", "application/json",
@@ -2236,7 +2244,7 @@ class CnmWorkflowIntegrationTest {
     void retrait_accepte_purgeCircuitComplet() throws Exception {
         // Dossier EXAMINE de PRMP001 portant tout l'enchaînement de circuit (avant PV signé → le PV est un projet).
         Dossier d = dossier(710, "EXAMINE"); d.setIdLocalite("ANT"); d.setIdPrmp("PRMP001");
-        d.setRefeDossier("00009/PPM/CRM-ANT/2026");                      // réf de réception (à invalider)
+        d.setRefeDossier("00009/DDP/CRM-ANT/2026");                      // réf de réception (à invalider)
         dossierRepository.save(d);
         Ppm p = ppm(710, 710, "PRMP001"); p.setReference("00010/DGB/PPM/2026"); ppmRepository.save(p);   // réf initiale
         receptionRepository.save(reception(710, 710, "CTRCC1", true));
@@ -2244,7 +2252,7 @@ class CnmWorkflowIntegrationTest {
         examenRepository.save(examen(710, 710, "CTRMEM"));
         // Détail d'examen (7100) + observation (petit-enfant). Le point de contrôle référencé doit exister (FK).
         PointsCtrl pc = new PointsCtrl();
-        pc.setIdPointCtrl(1); pc.setLibelPointCtrl("Montant"); pc.setObligatoire(true); pc.setIdTypeDossier("PPM");
+        pc.setIdPointCtrl(1); pc.setLibelPointCtrl("Montant"); pc.setObligatoire(true); pc.setIdTypeDossier("DDP");
         pointsCtrlRepository.save(pc);
         ExamenDetail ed = new ExamenDetail();
         ed.setIdDetailExamen(7100); ed.setIdExamen(710); ed.setIdPtControle(1); ed.setConforme(false);
@@ -2314,7 +2322,7 @@ class CnmWorkflowIntegrationTest {
     @DisplayName("Décision retrait — CC de la localité accepte → ACCEPTEE, dossier BROUILLON, notif RETRAIT_ACCEPTE")
     void decision_accepter_parCc_dossierBrouillon() throws Exception {
         Dossier d = dossier(130, "SOUMIS"); d.setIdLocalite("ANT"); d.setIdPrmp("PRMP001");
-        d.setRefeDossier("00002/PPM/CRM-ANT/2026");   // réf. posée à la réception, à invalider au retrait
+        d.setRefeDossier("00002/DDP/CRM-ANT/2026");   // réf. posée à la réception, à invalider au retrait
         dossierRepository.save(d);
         Ppm p = ppm(130, 130, "PRMP001"); p.setReference("00003/DGB/PPM/2026"); ppmRepository.save(p);  // réf initiale
         int drId = demandeRetraitRepository.save(demandeRetrait(0, 130, "PRMP001")).getIdDemandeRetrait();
@@ -2337,10 +2345,10 @@ class CnmWorkflowIntegrationTest {
     void retrait_accepte_dossier_modifiable() throws Exception {
         natureRepository.save(new Nature(1, "Travaux", null));
         Dossier d = dossier(135, "SOUMIS");
-        d.setIdTypeDossier("PPM");
+        d.setIdTypeDossier("DDP");
         d.setIdPrmp("PRMP001");
         d.setIdLocalite("ANT");
-        d.setRefeDossier("00006/PPM/CRM-ANT/2026");   // réf de réception (à invalider)
+        d.setRefeDossier("00006/DDP/CRM-ANT/2026");   // réf de réception (à invalider)
         dossierRepository.save(d);
         Ppm p135 = ppm(135, 135, "PRMP001"); p135.setReference("00005/DGB/PPM/2026"); ppmRepository.save(p135);
         int drId = demandeRetraitRepository.save(demandeRetrait(0, 135, "PRMP001")).getIdDemandeRetrait();
@@ -2363,7 +2371,7 @@ class CnmWorkflowIntegrationTest {
     @DisplayName("Retrait accepté — l'API renvoie la référence initiale (PPM) du dossier BROUILLON")
     void brouillon_retrait_api_retourne_ref_initiale() throws Exception {
         Dossier d = dossier(140, "SOUMIS"); d.setIdLocalite("ANT"); d.setIdPrmp("PRMP001");
-        d.setRefeDossier("00002/PPM/CRM-ANT/2026");   // réf de réception (à remplacer)
+        d.setRefeDossier("00002/DDP/CRM-ANT/2026");   // réf de réception (à remplacer)
         dossierRepository.save(d);
         Ppm p = ppm(140, 140, "PRMP001"); p.setReference("00004/DGB/PPM/2026"); ppmRepository.save(p);
         int drId = demandeRetraitRepository.save(demandeRetrait(0, 140, "PRMP001")).getIdDemandeRetrait();
@@ -2379,8 +2387,8 @@ class CnmWorkflowIntegrationTest {
     @DisplayName("Retrait accepté — la réception résiduelle est supprimée → dossier resoumis réapparaît dans a-receptionner")
     void retrait_accepte_supprime_reception_et_reReceptionnable() throws Exception {
         Dossier d = dossier(145, "SOUMIS"); d.setIdLocalite("ANT"); d.setIdPrmp("PRMP001");
-        d.setIdTypeDossier("PPM");
-        d.setRefeDossier("00003/PPM/CRM-ANT/2026");   // réf de réception résiduelle
+        d.setIdTypeDossier("DDP");
+        d.setRefeDossier("00003/DDP/CRM-ANT/2026");   // réf de réception résiduelle
         dossierRepository.save(d);
         Ppm p = ppm(145, 145, "PRMP001"); p.setReference("00009/DGB/PPM/2026"); ppmRepository.save(p);
         marcheRepository.save(marche(1450, 145, 145));                  // un PPM doit comporter un marché pour être soumis
@@ -3201,7 +3209,7 @@ class CnmWorkflowIntegrationTest {
         // Brouillon PPM de la PRMP courante (PRMP001), localisé ANT, avec son PPM.
         Dossier d = dossier(3, "BROUILLON");
         d.setRefeDossier(null);
-        d.setIdTypeDossier("PPM");
+        d.setIdTypeDossier("DDP");
         d.setIdPrmp("PRMP001");
         d.setIdLocalite("ANT");
         dossierRepository.save(d);
@@ -3235,13 +3243,13 @@ class CnmWorkflowIntegrationTest {
         prmpRepository.save(prmp("PRMPXX", "ANT"));
         // (4) Brouillon DAO appartenant à une AUTRE PRMP.
         Dossier d4 = dossier(4, "BROUILLON");
-        d4.setIdTypeDossier("DAO");
+        d4.setIdTypeDossier("DMC");
         d4.setIdPrmp("PRMPXX");
         dossierRepository.save(d4);
         // (5) Brouillon DAO de PRMP001, sans localité ni PPM.
         Dossier d5 = dossier(5, "BROUILLON");
         d5.setRefeDossier(null);
-        d5.setIdTypeDossier("DAO");
+        d5.setIdTypeDossier("DMC");
         d5.setIdPrmp("PRMP001");
         dossierRepository.save(d5);
 
@@ -3263,7 +3271,7 @@ class CnmWorkflowIntegrationTest {
         // Brouillon DAO sans PPM, de PRMP001, dont la localité (ANT) a été dérivée de l'entité à la saisie.
         Dossier d = dossier(6, "BROUILLON");
         d.setRefeDossier(null);
-        d.setIdTypeDossier("DAO");
+        d.setIdTypeDossier("DMC");
         d.setIdPrmp("PRMP001");
         d.setIdLocalite("ANT");
         dossierRepository.save(d);
@@ -3407,7 +3415,7 @@ class CnmWorkflowIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.statut").value("BROUILLON"))
-                .andExpect(jsonPath("$.idTypeDossier").value("PPM"))
+                .andExpect(jsonPath("$.idTypeDossier").value("DDP"))
                 .andExpect(jsonPath("$.idLocalite").value("ANT"))
                 .andExpect(jsonPath("$.idPrmp").value("PRMP001"))
                 .andReturn().getResponse().getContentAsString();
@@ -4090,7 +4098,7 @@ class CnmWorkflowIntegrationTest {
     void prmp_ne_soumet_pas_dossier_autre_prmp_403() throws Exception {
         // Dossier BROUILLON appartenant à une autre PRMP : le contrôle propriétaire (403) précède statut/contenu.
         Dossier autre = dossier(64, "BROUILLON");
-        autre.setIdTypeDossier("PPM");
+        autre.setIdTypeDossier("DDP");
         autre.setIdPrmp("PRMP999");
         autre.setIdLocalite("ANT");
         dossierRepository.save(autre);
@@ -4124,7 +4132,8 @@ class CnmWorkflowIntegrationTest {
                 .content("{\"idTypeDossier\":\"DAO\",\"idEntiteContract\":1}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.statut").value("BROUILLON"))
-                .andExpect(jsonPath("$.idTypeDossier").value("DAO"))
+                .andExpect(jsonPath("$.idTypeDossier").value("DMC"))       // famille déduite du sous-type
+                .andExpect(jsonPath("$.idSousType").value("DAO"))          // sous-type choisi (legacy idTypeDossier)
                 .andExpect(jsonPath("$.idLocalite").value("ANT"))      // dérivée de l'entité 1
                 .andExpect(jsonPath("$.idEntiteContract").value(1))
                 .andExpect(jsonPath("$.idDossier").isNumber());        // PK attribuée par le serveur (séquence)
@@ -4152,7 +4161,7 @@ class CnmWorkflowIntegrationTest {
     void integrite_typeContenu() throws Exception {
         // Brouillon PPM sans aucun t_ppm rattaché → soumission refusée.
         Dossier dPpmVide = dossier(63, "BROUILLON");
-        dPpmVide.setIdTypeDossier("PPM");
+        dPpmVide.setIdTypeDossier("DDP");
         dPpmVide.setIdPrmp("PRMP001");
         dPpmVide.setIdLocalite("ANT");
         dossierRepository.save(dPpmVide);
@@ -4161,7 +4170,7 @@ class CnmWorkflowIntegrationTest {
 
         // Brouillon DAO (sans propriétaire) ; y attacher un PPM via l'endpoint Admin → 409.
         Dossier dDao = dossier(64, "BROUILLON");
-        dDao.setIdTypeDossier("DAO");
+        dDao.setIdTypeDossier("DMC");
         dossierRepository.save(dDao);
         mvc.perform(post("/api/ppms").header("Authorization", tokenAdmin)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -4175,7 +4184,7 @@ class CnmWorkflowIntegrationTest {
     void soumission_ppmSansMarche() throws Exception {
         // Brouillon PPM de PRMP001 avec son t_ppm mais AUCUN marché → soumission refusée (409).
         Dossier d = dossier(90, "BROUILLON");
-        d.setIdTypeDossier("PPM");
+        d.setIdTypeDossier("DDP");
         d.setIdPrmp("PRMP001");
         d.setIdLocalite("ANT");
         dossierRepository.save(d);
@@ -4220,7 +4229,7 @@ class CnmWorkflowIntegrationTest {
         String tokenAutrePrmp = bearer("PRMPYY", ProfilUtilisateur.PRMP, TypeActeur.PRMP, "PRMPYY", "ANT");
         // Brouillon DAO de PRMP001 (aucun PPM).
         Dossier d = dossier(80, "BROUILLON");
-        d.setIdTypeDossier("DAO");
+        d.setIdTypeDossier("DMC");
         d.setIdPrmp("PRMP001");
         dossierRepository.save(d);
 
@@ -4470,9 +4479,9 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
-    @DisplayName("Référence réception : localité centrale (utilisateur transversal) -> 00001/PPM/CNM/2026")
+    @DisplayName("Référence réception : localité centrale (utilisateur transversal) -> 00001/DDP/CNM/2026")
     void reference_localite_centrale() throws Exception {
-        Dossier d = dossier(300, "SOUMIS"); d.setIdTypeDossier("PPM"); d.setIdLocalite("ANT");
+        Dossier d = dossier(300, "SOUMIS"); d.setIdTypeDossier("DDP"); d.setIdLocalite("ANT");
         dossierRepository.save(d);
         ppmRepository.save(ppm(300, 300, "PRMP001"));
 
@@ -4481,17 +4490,17 @@ class CnmWorkflowIntegrationTest {
                 .content("{\"idDossier\":300,\"numPassage\":1,\"typePassage\":\"INITIAL\","
                         + "\"imCtrlRecept\":\"CTRPRE\",\"complet\":true}"))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.reference").value("00001/PPM/CNM/2026"));
+                .andExpect(jsonPath("$.reference").value("00001/DDP/CNM/2026"));
         // Persistée sur le dossier (REFE_DOSSIER écrasée).
         mvc.perform(get("/api/dossiers/300").header("Authorization", tokenPresident))
-                .andExpect(jsonPath("$.refeDossier").value("00001/PPM/CNM/2026"));
+                .andExpect(jsonPath("$.refeDossier").value("00001/DDP/CNM/2026"));
     }
 
     @Test
-    @DisplayName("Référence réception : localité régionale ANT -> 00001/PPM/CRM-ANT/2026")
+    @DisplayName("Référence réception : localité régionale ANT -> 00001/DDP/CRM-ANT/2026")
     void reference_localite_crm() throws Exception {
         String tokenSec = bearer("CTRSEC", ProfilUtilisateur.SECRETAIRE, TypeActeur.CONTROLEUR, "CTRSEC", "ANT");
-        Dossier d = dossier(301, "SOUMIS"); d.setIdTypeDossier("PPM"); d.setIdLocalite("ANT");
+        Dossier d = dossier(301, "SOUMIS"); d.setIdTypeDossier("DDP"); d.setIdLocalite("ANT");
         dossierRepository.save(d);
         ppmRepository.save(ppm(301, 301, "PRMP001"));
 
@@ -4500,15 +4509,15 @@ class CnmWorkflowIntegrationTest {
                 .content("{\"idDossier\":301,\"numPassage\":1,\"typePassage\":\"INITIAL\","
                         + "\"imCtrlRecept\":\"CTRSEC\",\"complet\":true}"))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.reference").value("00001/PPM/CRM-ANT/2026"));
+                .andExpect(jsonPath("$.reference").value("00001/DDP/CRM-ANT/2026"));
     }
 
     @Test
     @DisplayName("Référence réception : compteur auto-incrémenté par la BDD (00001 puis 00002, même contexte)")
     void reference_incrementee_automatiquement() throws Exception {
         String tokenSec = bearer("CTRSEC", ProfilUtilisateur.SECRETAIRE, TypeActeur.CONTROLEUR, "CTRSEC", "ANT");
-        Dossier d1 = dossier(302, "SOUMIS"); d1.setIdTypeDossier("PPM"); d1.setIdLocalite("ANT"); dossierRepository.save(d1);
-        Dossier d2 = dossier(303, "SOUMIS"); d2.setIdTypeDossier("PPM"); d2.setIdLocalite("ANT"); dossierRepository.save(d2);
+        Dossier d1 = dossier(302, "SOUMIS"); d1.setIdTypeDossier("DDP"); d1.setIdLocalite("ANT"); dossierRepository.save(d1);
+        Dossier d2 = dossier(303, "SOUMIS"); d2.setIdTypeDossier("DDP"); d2.setIdLocalite("ANT"); dossierRepository.save(d2);
         ppmRepository.save(ppm(302, 302, "PRMP001"));
         ppmRepository.save(ppm(303, 303, "PRMP001"));
 
@@ -4516,12 +4525,12 @@ class CnmWorkflowIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDossier\":302,\"numPassage\":1,\"typePassage\":\"INITIAL\","
                         + "\"imCtrlRecept\":\"CTRSEC\",\"complet\":true}"))
-                .andExpect(jsonPath("$.reference").value("00001/PPM/CRM-ANT/2026"));
+                .andExpect(jsonPath("$.reference").value("00001/DDP/CRM-ANT/2026"));
         mvc.perform(post("/api/receptions").header("Authorization", tokenSec)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDossier\":303,\"numPassage\":1,\"typePassage\":\"INITIAL\","
                         + "\"imCtrlRecept\":\"CTRSEC\",\"complet\":true}"))
-                .andExpect(jsonPath("$.reference").value("00002/PPM/CRM-ANT/2026"));
+                .andExpect(jsonPath("$.reference").value("00002/DDP/CRM-ANT/2026"));
     }
 
     @Test
@@ -4529,9 +4538,9 @@ class CnmWorkflowIntegrationTest {
     void reference_isolee_par_contexte() throws Exception {
         String tokenSec = bearer("CTRSEC", ProfilUtilisateur.SECRETAIRE, TypeActeur.CONTROLEUR, "CTRSEC", "ANT");
         String tokenSecTms = bearer("CTRCC2", ProfilUtilisateur.CHEF_COMMISSION, TypeActeur.CONTROLEUR, "CTRCC2", "TMS");
-        Dossier ant = dossier(304, "SOUMIS"); ant.setIdTypeDossier("PPM"); ant.setIdLocalite("ANT"); dossierRepository.save(ant);
-        Dossier tms = dossier(305, "SOUMIS"); tms.setIdTypeDossier("PPM"); tms.setIdLocalite("TMS"); dossierRepository.save(tms);
-        Dossier cnm = dossier(306, "SOUMIS"); cnm.setIdTypeDossier("PPM"); cnm.setIdLocalite("ANT"); dossierRepository.save(cnm);
+        Dossier ant = dossier(304, "SOUMIS"); ant.setIdTypeDossier("DDP"); ant.setIdLocalite("ANT"); dossierRepository.save(ant);
+        Dossier tms = dossier(305, "SOUMIS"); tms.setIdTypeDossier("DDP"); tms.setIdLocalite("TMS"); dossierRepository.save(tms);
+        Dossier cnm = dossier(306, "SOUMIS"); cnm.setIdTypeDossier("DDP"); cnm.setIdLocalite("ANT"); dossierRepository.save(cnm);
         ppmRepository.save(ppm(304, 304, "PRMP001"));
         ppmRepository.save(ppm(305, 305, "PRMP001"));
         ppmRepository.save(ppm(306, 306, "PRMP001"));
@@ -4540,25 +4549,25 @@ class CnmWorkflowIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDossier\":304,\"numPassage\":1,\"typePassage\":\"INITIAL\","
                         + "\"imCtrlRecept\":\"CTRSEC\",\"complet\":true}"))
-                .andExpect(jsonPath("$.reference").value("00001/PPM/CRM-ANT/2026"));
+                .andExpect(jsonPath("$.reference").value("00001/DDP/CRM-ANT/2026"));
         mvc.perform(post("/api/receptions").header("Authorization", tokenSecTms)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDossier\":305,\"numPassage\":1,\"typePassage\":\"INITIAL\","
                         + "\"imCtrlRecept\":\"CTRCC2\",\"complet\":true}"))
-                .andExpect(jsonPath("$.reference").value("00002/PPM/CRM-TMS/2026"));
+                .andExpect(jsonPath("$.reference").value("00002/DDP/CRM-TMS/2026"));
         mvc.perform(post("/api/receptions").header("Authorization", tokenPresident)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDossier\":306,\"numPassage\":1,\"typePassage\":\"INITIAL\","
                         + "\"imCtrlRecept\":\"CTRPRE\",\"complet\":true}"))
-                .andExpect(jsonPath("$.reference").value("00003/PPM/CNM/2026"));
+                .andExpect(jsonPath("$.reference").value("00003/DDP/CNM/2026"));
     }
 
     @Test
     @DisplayName("Référence réception : pas de doublon sur 2 réceptions (unicité garantie par l'UPSERT BDD)")
     void reference_concurrence() throws Exception {
         String tokenSec = bearer("CTRSEC", ProfilUtilisateur.SECRETAIRE, TypeActeur.CONTROLEUR, "CTRSEC", "ANT");
-        Dossier d1 = dossier(307, "SOUMIS"); d1.setIdTypeDossier("PPM"); d1.setIdLocalite("ANT"); dossierRepository.save(d1);
-        Dossier d2 = dossier(308, "SOUMIS"); d2.setIdTypeDossier("PPM"); d2.setIdLocalite("ANT"); dossierRepository.save(d2);
+        Dossier d1 = dossier(307, "SOUMIS"); d1.setIdTypeDossier("DDP"); d1.setIdLocalite("ANT"); dossierRepository.save(d1);
+        Dossier d2 = dossier(308, "SOUMIS"); d2.setIdTypeDossier("DDP"); d2.setIdLocalite("ANT"); dossierRepository.save(d2);
         ppmRepository.save(ppm(307, 307, "PRMP001"));
         ppmRepository.save(ppm(308, 308, "PRMP001"));
 
@@ -4568,18 +4577,18 @@ class CnmWorkflowIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDossier\":307,\"numPassage\":1,\"typePassage\":\"INITIAL\","
                         + "\"imCtrlRecept\":\"CTRSEC\",\"complet\":true}"))
-                .andExpect(jsonPath("$.reference").value("00001/PPM/CRM-ANT/2026"));
+                .andExpect(jsonPath("$.reference").value("00001/DDP/CRM-ANT/2026"));
         mvc.perform(post("/api/receptions").header("Authorization", tokenSec)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDossier\":308,\"numPassage\":1,\"typePassage\":\"INITIAL\","
                         + "\"imCtrlRecept\":\"CTRSEC\",\"complet\":true}"))
-                .andExpect(jsonPath("$.reference").value("00002/PPM/CRM-ANT/2026"));
+                .andExpect(jsonPath("$.reference").value("00002/DDP/CRM-ANT/2026"));
     }
 
     @Test
     @DisplayName("Rectification PPM : PATCH sur dossier EN_ATTENTE_DECISION_PRMP -> 200, champ mis a jour, statut inchange")
     void rectifier_ppm_ok() throws Exception {
-        Dossier d = dossier(400, "EN_ATTENTE_DECISION_PRMP"); d.setIdTypeDossier("PPM"); d.setIdLocalite("ANT"); d.setIdPrmp("PRMP001");
+        Dossier d = dossier(400, "EN_ATTENTE_DECISION_PRMP"); d.setIdTypeDossier("DDP"); d.setIdLocalite("ANT"); d.setIdPrmp("PRMP001");
         dossierRepository.save(d);
         ppmRepository.save(ppm(400, 400, "PRMP001"));
 
@@ -4596,7 +4605,7 @@ class CnmWorkflowIntegrationTest {
     @Test
     @DisplayName("Rectification PPM hors attente : dossier EN_VERIFICATION -> 409")
     void rectifier_ppm_horsAttente_409() throws Exception {
-        Dossier d = dossier(402, "EN_VERIFICATION"); d.setIdTypeDossier("PPM"); d.setIdLocalite("ANT"); d.setIdPrmp("PRMP001");
+        Dossier d = dossier(402, "EN_VERIFICATION"); d.setIdTypeDossier("DDP"); d.setIdLocalite("ANT"); d.setIdPrmp("PRMP001");
         dossierRepository.save(d);
         ppmRepository.save(ppm(420, 402, "PRMP001"));
 
@@ -4610,7 +4619,7 @@ class CnmWorkflowIntegrationTest {
     @DisplayName("Rectification PPM par verificateur -> 403")
     void rectifier_ppm_verificateur_403() throws Exception {
         String tokenVer = bearer("CTRVER", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER", "ANT");
-        Dossier d = dossier(403, "EN_ATTENTE_DECISION_PRMP"); d.setIdTypeDossier("PPM"); d.setIdLocalite("ANT"); d.setIdPrmp("PRMP001");
+        Dossier d = dossier(403, "EN_ATTENTE_DECISION_PRMP"); d.setIdTypeDossier("DDP"); d.setIdLocalite("ANT"); d.setIdPrmp("PRMP001");
         dossierRepository.save(d);
         ppmRepository.save(ppm(430, 403, "PRMP001"));
 
@@ -4623,7 +4632,7 @@ class CnmWorkflowIntegrationTest {
     @Test
     @DisplayName("Rectification marche : PATCH sur dossier EN_ATTENTE_DECISION_PRMP -> 200, objet mis a jour, statut inchange")
     void rectifier_marche_ok() throws Exception {
-        Dossier d = dossier(401, "EN_ATTENTE_DECISION_PRMP"); d.setIdTypeDossier("PPM"); d.setIdLocalite("ANT"); d.setIdPrmp("PRMP001");
+        Dossier d = dossier(401, "EN_ATTENTE_DECISION_PRMP"); d.setIdTypeDossier("DDP"); d.setIdLocalite("ANT"); d.setIdPrmp("PRMP001");
         dossierRepository.save(d);
         ppmRepository.save(ppm(410, 401, "PRMP001"));
         marcheRepository.save(marche(411, 401, 410));
@@ -4642,7 +4651,7 @@ class CnmWorkflowIntegrationTest {
     @Test
     @DisplayName("Rectification marche hors attente : dossier EN_VERIFICATION -> 409")
     void rectifier_marche_horsAttente_409() throws Exception {
-        Dossier d = dossier(404, "EN_VERIFICATION"); d.setIdTypeDossier("PPM"); d.setIdLocalite("ANT"); d.setIdPrmp("PRMP001");
+        Dossier d = dossier(404, "EN_VERIFICATION"); d.setIdTypeDossier("DDP"); d.setIdLocalite("ANT"); d.setIdPrmp("PRMP001");
         dossierRepository.save(d);
         ppmRepository.save(ppm(440, 404, "PRMP001"));
         marcheRepository.save(marche(441, 404, 440));
@@ -4657,7 +4666,7 @@ class CnmWorkflowIntegrationTest {
     @DisplayName("Rectification marche par verificateur -> 403")
     void rectifier_marche_verificateur_403() throws Exception {
         String tokenVer = bearer("CTRVER", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER", "ANT");
-        Dossier d = dossier(405, "EN_ATTENTE_DECISION_PRMP"); d.setIdTypeDossier("PPM"); d.setIdLocalite("ANT"); d.setIdPrmp("PRMP001");
+        Dossier d = dossier(405, "EN_ATTENTE_DECISION_PRMP"); d.setIdTypeDossier("DDP"); d.setIdLocalite("ANT"); d.setIdPrmp("PRMP001");
         dossierRepository.save(d);
         ppmRepository.save(ppm(450, 405, "PRMP001"));
         marcheRepository.save(marche(451, 405, 450));
@@ -4671,7 +4680,7 @@ class CnmWorkflowIntegrationTest {
     @Test
     @DisplayName("Rectification PPM sans idDossier (identite figee) -> 200")
     void rectifier_ppm_sansIdentite_ok() throws Exception {
-        Dossier d = dossier(406, "EN_ATTENTE_DECISION_PRMP"); d.setIdTypeDossier("PPM"); d.setIdLocalite("ANT"); d.setIdPrmp("PRMP001");
+        Dossier d = dossier(406, "EN_ATTENTE_DECISION_PRMP"); d.setIdTypeDossier("DDP"); d.setIdLocalite("ANT"); d.setIdPrmp("PRMP001");
         dossierRepository.save(d);
         ppmRepository.save(ppm(460, 406, "PRMP001"));
         mvc.perform(patch("/api/ppms/460/rectifier").header("Authorization", tokenPrmp)
@@ -4684,7 +4693,7 @@ class CnmWorkflowIntegrationTest {
     @Test
     @DisplayName("Rectification marche sans idDossier/idPpm (identite figee) -> 200")
     void rectifier_marche_sansIdentite_ok() throws Exception {
-        Dossier d = dossier(407, "EN_ATTENTE_DECISION_PRMP"); d.setIdTypeDossier("PPM"); d.setIdLocalite("ANT"); d.setIdPrmp("PRMP001");
+        Dossier d = dossier(407, "EN_ATTENTE_DECISION_PRMP"); d.setIdTypeDossier("DDP"); d.setIdLocalite("ANT"); d.setIdPrmp("PRMP001");
         dossierRepository.save(d);
         ppmRepository.save(ppm(470, 407, "PRMP001"));
         marcheRepository.save(marche(471, 407, 470));
@@ -4734,7 +4743,7 @@ class CnmWorkflowIntegrationTest {
     @Test
     @DisplayName("PV refePv : derivee de refeDossier (.../YYYY -> .../PV/YYYY)")
     void pv_refePv_generee() throws Exception {
-        Dossier d = dossier(500, "EXAMINE"); d.setRefeDossier("00003/PPM/CRM-ANT/2026"); dossierRepository.save(d);
+        Dossier d = dossier(500, "EXAMINE"); d.setRefeDossier("00003/DDP/CRM-ANT/2026"); dossierRepository.save(d);
         receptionRepository.save(reception(500, 500, "CTRSEC", true));
         dispatchRepository.save(dispatch(500, 500, "CTRCC1", "CTRMEM"));
         examenRepository.save(examen(500, 500, "CTRMEM"));
@@ -4744,13 +4753,13 @@ class CnmWorkflowIntegrationTest {
                 .content("{\"idPv\":201,\"idExamen\":500,\"idAvis\":\"FAV\",\"imCtrlMembre\":\"CTRMEM\","
                         + "\"statutPv\":\"BROUILLON\",\"nbNavettes\":0}"))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.refePv").value("00003/PPM/CRM-ANT/PV/2026"));
+                .andExpect(jsonPath("$.refePv").value("00003/DDP/CRM-ANT/PV/2026"));
     }
 
     @Test
     @DisplayName("PV refePv unique : deux PV sur le meme dossier -> 409")
     void pv_refePv_unique() throws Exception {
-        Dossier d = dossier(501, "EXAMINE"); d.setRefeDossier("00007/PPM/CRM-ANT/2026"); dossierRepository.save(d);
+        Dossier d = dossier(501, "EXAMINE"); d.setRefeDossier("00007/DDP/CRM-ANT/2026"); dossierRepository.save(d);
         receptionRepository.save(reception(501, 501, "CTRSEC", true));
         dispatchRepository.save(dispatch(501, 501, "CTRCC1", "CTRMEM"));
         examenRepository.save(examen(501, 501, "CTRMEM"));
@@ -4770,7 +4779,7 @@ class CnmWorkflowIntegrationTest {
     @Test
     @DisplayName("Suppression cohérente : supprimer le dernier PPM d'un brouillon supprime aussi le dossier")
     void suppression_coherente() throws Exception {
-        Dossier d = dossier(190, "BROUILLON"); d.setIdTypeDossier("PPM"); d.setIdLocalite("ANT"); d.setIdPrmp("PRMP001");
+        Dossier d = dossier(190, "BROUILLON"); d.setIdTypeDossier("DDP"); d.setIdLocalite("ANT"); d.setIdPrmp("PRMP001");
         dossierRepository.save(d);
         ppmRepository.save(ppm(290, 190, "PRMP001"));
         marcheRepository.save(marche(390, 190, 290));
@@ -4787,7 +4796,7 @@ class CnmWorkflowIntegrationTest {
     @Test
     @DisplayName("Suppression PPM d'un brouillon AVEC historique (réception) → PPM supprimé (204), dossier conservé (traces FK)")
     void suppression_brouillonAvecHistorique_conserveDossier() throws Exception {
-        Dossier d = dossier(191, "BROUILLON"); d.setIdTypeDossier("PPM"); d.setIdLocalite("ANT"); d.setIdPrmp("PRMP001");
+        Dossier d = dossier(191, "BROUILLON"); d.setIdTypeDossier("DDP"); d.setIdLocalite("ANT"); d.setIdPrmp("PRMP001");
         dossierRepository.save(d);
         ppmRepository.save(ppm(291, 191, "PRMP001"));
         receptionRepository.save(reception(591, 191, "CTRSEC", true)); // trace de circuit → pas de hard delete
@@ -4800,7 +4809,7 @@ class CnmWorkflowIntegrationTest {
     @Test
     @DisplayName("Suppression dossier — BROUILLON propriétaire → 204, cascade PPM/marché, absent de Mes brouillons")
     void suppression_brouillon_ok() throws Exception {
-        Dossier d = dossier(600, "BROUILLON"); d.setIdTypeDossier("PPM"); d.setIdLocalite("ANT"); d.setIdPrmp("PRMP001");
+        Dossier d = dossier(600, "BROUILLON"); d.setIdTypeDossier("DDP"); d.setIdLocalite("ANT"); d.setIdPrmp("PRMP001");
         dossierRepository.save(d);
         ppmRepository.save(ppm(600, 600, "PRMP001"));
         marcheRepository.save(marche(600, 600, 600));
@@ -5085,7 +5094,7 @@ class CnmWorkflowIntegrationTest {
     @DisplayName("Observation-controle — création d'une ligne (Membre) → 201")
     void observation_creation_ok() throws Exception {
         PointsCtrl pc = new PointsCtrl();
-        pc.setIdPointCtrl(1); pc.setLibelPointCtrl("Montant"); pc.setObligatoire(true); pc.setIdTypeDossier("PPM");
+        pc.setIdPointCtrl(1); pc.setLibelPointCtrl("Montant"); pc.setObligatoire(true); pc.setIdTypeDossier("DDP");
         pointsCtrlRepository.save(pc);
         ExamenDetail d = new ExamenDetail();
         d.setIdDetailExamen(520); d.setIdExamen(1); d.setIdPtControle(1); d.setConforme(false);
@@ -5114,7 +5123,7 @@ class CnmWorkflowIntegrationTest {
     @DisplayName("Examen-détail — conforme sans lignes d'observation → 200")
     void observation_conforme_sans_lignes_ok() throws Exception {
         PointsCtrl pc = new PointsCtrl();
-        pc.setIdPointCtrl(1); pc.setLibelPointCtrl("Montant"); pc.setObligatoire(true); pc.setIdTypeDossier("PPM");
+        pc.setIdPointCtrl(1); pc.setLibelPointCtrl("Montant"); pc.setObligatoire(true); pc.setIdTypeDossier("DDP");
         pointsCtrlRepository.save(pc);
         ExamenDetail d = new ExamenDetail();
         d.setIdDetailExamen(511); d.setIdExamen(1); d.setIdPtControle(1); d.setConforme(true);
@@ -5180,7 +5189,7 @@ class CnmWorkflowIntegrationTest {
             java.util.List<PvDocumentContexte.Observation> observations) {
         return new PvDocumentContexte(
                 dateExamen,                                 // date d'examen
-                "00007/PPM/CRM-ANT/PV/2026",               // refPv
+                "00007/DDP/CRM-ANT/PV/2026",               // refPv
                 java.time.LocalDate.of(2026, 6, 15),       // date de réception
                 "Ministère de l'Économie et des Finances", // entité contractante
                 2026,                                       // exercice
@@ -5346,7 +5355,7 @@ class CnmWorkflowIntegrationTest {
         pvDef.setStatutPv("SIGNE"); pvDef.setNbNavettes(0);
         pvExamenRepository.save(pvDef);
 
-        // FAVR + ANT + PPM + cotation → documentDisponible = true (cas signalé 00008/PPM/CRM-ANT/PV/2026).
+        // FAVR + ANT + PPM + cotation → documentDisponible = true (cas signalé 00008/DDP/CRM-ANT/PV/2026).
         mvc.perform(get("/api/pv-examens/600").header("Authorization", tokenAdmin))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.documentDisponible").value(true));
@@ -5408,7 +5417,7 @@ class CnmWorkflowIntegrationTest {
     @Test
     @DisplayName("DELETE /api/marches/{id} : cascade les bénéficiaires (t_service_beneficiaire) — plus de 409 FK")
     void suppressionMarche_cascadeBeneficiaires() throws Exception {
-        Dossier d = dossierLoc(810, "BROUILLON", "ANT", "PRMP001"); d.setIdTypeDossier("PPM");
+        Dossier d = dossierLoc(810, "BROUILLON", "ANT", "PRMP001"); d.setIdTypeDossier("DDP");
         dossierRepository.save(d);
         ppmRepository.save(ppm(810, 810, "PRMP001"));
         marcheRepository.save(marche(9810, 810, 810));
@@ -6326,7 +6335,7 @@ class CnmWorkflowIntegrationTest {
         pc.setIdPointCtrl(1);
         pc.setLibelPointCtrl("Conformité au budget");
         pc.setObligatoire(true);
-        pc.setIdTypeDossier("PPM");
+        pc.setIdTypeDossier("DDP");
         pointsCtrlRepository.save(pc);
         mvc.perform(post("/api/examen-details").header("Authorization", tokenMembre)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -6398,13 +6407,13 @@ class CnmWorkflowIntegrationTest {
         // refeDossier structuré → refLettre reprend type/localité/année mais avec le compteur GLOBAL des
         // lettres (00001 pour la 1ère), pas le numéro du dossier (00007).
         Dossier d = dossierRepository.findById(1).orElseThrow();
-        d.setRefeDossier("00007/PPM/CRM-ANT/2026");
+        d.setRefeDossier("00007/DDP/CRM-ANT/2026");
         dossierRepository.save(d);
         mvc.perform(post("/api/lettre-renvois").header("Authorization", tokenMembre)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idExamen\":1,\"objetLettre\":\"Renvoi\"}"))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.refLettre").value("00001/PPM/CRM-ANT/LR/2026"));
+                .andExpect(jsonPath("$.refLettre").value("00001/DDP/CRM-ANT/LR/2026"));
     }
 
     @Test
@@ -6658,7 +6667,7 @@ class CnmWorkflowIntegrationTest {
         String chemin = lettreRenvoiRepository.findById(id).orElseThrow().getCheminDocument();
         assertTrue(chemin != null && java.nio.file.Files.exists(java.nio.file.Path.of(chemin)),
                 "fichier PDF présent sur le FSX : " + chemin);
-        assertTrue(chemin.endsWith("00007_PPM_CRM-ANT_LR_2026.pdf"),
+        assertTrue(chemin.endsWith("00007_DDP_CRM-ANT_LR_2026.pdf"),
                 "nom de fichier dérivé de refLettre avec '/' remplacés par '_'");
     }
 
@@ -6730,7 +6739,7 @@ class CnmWorkflowIntegrationTest {
         LettreRenvoi l = new LettreRenvoi();
         l.setIdExamen(1);
         l.setIdDossier(idDossier);
-        l.setRefLettre("00007/PPM/CRM-" + localite + "/LR/2026");   // contient des '/' (à nettoyer dans le nom de fichier)
+        l.setRefLettre("00007/DDP/CRM-" + localite + "/LR/2026");   // contient des '/' (à nettoyer dans le nom de fichier)
         l.setObjetLettre("Renvoi");
         l.setCorpsLettre("Corps de la lettre de renvoi.");
         l.setDateLettre(LocalDate.of(2026, 6, 20));
@@ -6755,7 +6764,7 @@ class CnmWorkflowIntegrationTest {
     void type_piece_crud_admin_ok() throws Exception {
         // Création.
         String body = "{\"libellePiece\":\"Plan de passation\",\"obligatoire\":true,"
-                + "\"idTypeDossier\":\"PPM\",\"ordre\":1}";
+                + "\"idTypeDossier\":\"DDP\",\"ordre\":1}";
         String json = mvc.perform(post("/api/type-piece-jointes").header("Authorization", tokenAdmin)
                 .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isCreated())
@@ -6766,7 +6775,7 @@ class CnmWorkflowIntegrationTest {
 
         // Mise à jour.
         String maj = "{\"libellePiece\":\"Plan de passation des marchés\",\"obligatoire\":false,"
-                + "\"idTypeDossier\":\"PPM\",\"ordre\":2}";
+                + "\"idTypeDossier\":\"DDP\",\"ordre\":2}";
         mvc.perform(put("/api/type-piece-jointes/" + id).header("Authorization", tokenAdmin)
                 .contentType(MediaType.APPLICATION_JSON).content(maj))
                 .andExpect(status().isOk())
@@ -6774,7 +6783,7 @@ class CnmWorkflowIntegrationTest {
                 .andExpect(jsonPath("$.obligatoire").value(false));
 
         // Filtre par type de dossier (authentifié).
-        mvc.perform(get("/api/type-piece-jointes?typeDossier=PPM").header("Authorization", tokenPrmp))
+        mvc.perform(get("/api/type-piece-jointes?typeDossier=DDP").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.idTypePiece==" + id + ")]", hasSize(1)));
 
@@ -6795,9 +6804,9 @@ class CnmWorkflowIntegrationTest {
     @Test
     @DisplayName("Upload pièce à la création : PRMP propriétaire, magic-bytes PDF → 201, apresLettreRenvoi=false")
     void piece_upload_creation_ok() throws Exception {
-        Dossier d = dossier(140, "BROUILLON"); d.setIdTypeDossier("PPM"); d.setIdPrmp("PRMP001");
+        Dossier d = dossier(140, "BROUILLON"); d.setIdTypeDossier("DDP"); d.setIdPrmp("PRMP001");
         d.setIdLocalite("ANT"); dossierRepository.save(d);
-        int type = seedTypePiece("Plan de passation", true, "PPM", 1);
+        int type = seedTypePiece("Plan de passation", true, "DDP",1);
 
         byte[] pdf = "%PDF-1.4 contenu plan".getBytes(StandardCharsets.US_ASCII);
         mvc.perform(multipart("/api/piece-jointe-dossiers")
@@ -6818,9 +6827,9 @@ class CnmWorkflowIntegrationTest {
     @Test
     @DisplayName("Upload pièce : format non autorisé (.docx) → 400")
     void piece_upload_format_invalide_400() throws Exception {
-        Dossier d = dossier(141, "BROUILLON"); d.setIdTypeDossier("PPM"); d.setIdPrmp("PRMP001");
+        Dossier d = dossier(141, "BROUILLON"); d.setIdTypeDossier("DDP"); d.setIdPrmp("PRMP001");
         d.setIdLocalite("ANT"); dossierRepository.save(d);
-        int type = seedTypePiece("Plan de passation", true, "PPM", 1);
+        int type = seedTypePiece("Plan de passation", true, "DDP",1);
 
         byte[] docx = "PK ceci est un .docx".getBytes(StandardCharsets.US_ASCII);
         mvc.perform(multipart("/api/piece-jointe-dossiers")
@@ -6835,9 +6844,9 @@ class CnmWorkflowIntegrationTest {
     @Test
     @DisplayName("Upload pièce après lettre de renvoi (dossier SOUMIS + idLettre) → 201, apresLettreRenvoi=true")
     void piece_upload_apres_lettre_ok() throws Exception {
-        Dossier d = dossier(142, "SOUMIS"); d.setIdTypeDossier("PPM"); d.setIdPrmp("PRMP001");
+        Dossier d = dossier(142, "SOUMIS"); d.setIdTypeDossier("DDP"); d.setIdPrmp("PRMP001");
         d.setIdLocalite("ANT"); dossierRepository.save(d);
-        int type = seedTypePiece("Avis de non-objection", false, "PPM", 1);
+        int type = seedTypePiece("Avis de non-objection", false, "DDP",1);
         LettreRenvoi l = new LettreRenvoi();
         l.setIdExamen(1); l.setIdDossier(142); l.setObjetLettre("Renvoi"); l.setStatut("SIGNE");
         int idLettre = lettreRenvoiRepository.save(l).getIdLettre();
@@ -6857,11 +6866,11 @@ class CnmWorkflowIntegrationTest {
     @Test
     @DisplayName("Soumission : pièce obligatoire manquante → 400 {champ:piecesJointes}")
     void piece_obligatoire_manquante_400() throws Exception {
-        Dossier d = dossier(143, "BROUILLON"); d.setRefeDossier(null); d.setIdTypeDossier("PPM");
+        Dossier d = dossier(143, "BROUILLON"); d.setRefeDossier(null); d.setIdTypeDossier("DDP");
         d.setIdPrmp("PRMP001"); d.setIdLocalite("ANT"); dossierRepository.save(d);
         Ppm ppm = ppmLocalise(43, 143, "ANT"); ppm.setIdPrmp("PRMP001"); ppmRepository.save(ppm);
         marcheRepository.save(marche(431, 143, 43));
-        seedTypePiece("Plan de passation des marchés", true, "PPM", 1); // obligatoire, non fournie
+        seedTypePiece("Plan de passation des marchés", true, "DDP",1); // obligatoire, non fournie
 
         mvc.perform(post("/api/dossiers/143/soumettre").header("Authorization", tokenPrmp))
                 .andExpect(status().isBadRequest())
@@ -6873,9 +6882,9 @@ class CnmWorkflowIntegrationTest {
     @Test
     @DisplayName("Téléchargement du contenu d'une pièce → 200 + octets identiques")
     void piece_download_ok() throws Exception {
-        Dossier d = dossier(144, "BROUILLON"); d.setIdTypeDossier("PPM"); d.setIdPrmp("PRMP001");
+        Dossier d = dossier(144, "BROUILLON"); d.setIdTypeDossier("DDP"); d.setIdPrmp("PRMP001");
         d.setIdLocalite("ANT"); dossierRepository.save(d);
-        int type = seedTypePiece("Plan de passation", true, "PPM", 1);
+        int type = seedTypePiece("Plan de passation", true, "DDP",1);
 
         byte[] pdf = "%PDF-1.6 contenu a telecharger".getBytes(StandardCharsets.US_ASCII);
         String created = mvc.perform(multipart("/api/piece-jointe-dossiers")
@@ -6898,7 +6907,7 @@ class CnmWorkflowIntegrationTest {
     @DisplayName("Référentiel pièces jointes : 5 pièces pour le type PPM (filtre ?typeDossier=PPM)")
     void type_piece_ppm_liste_ok() throws Exception {
         seedReferentielPieces();
-        mvc.perform(get("/api/type-piece-jointes?typeDossier=PPM").header("Authorization", tokenPrmp))
+        mvc.perform(get("/api/type-piece-jointes?typeDossier=DDP").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(5)));
     }
@@ -6907,7 +6916,7 @@ class CnmWorkflowIntegrationTest {
     @DisplayName("Référentiel pièces jointes : 8 pièces pour le type DAO (filtre ?typeDossier=DAO)")
     void type_piece_dao_liste_ok() throws Exception {
         seedReferentielPieces();
-        mvc.perform(get("/api/type-piece-jointes?typeDossier=DAO").header("Authorization", tokenPrmp))
+        mvc.perform(get("/api/type-piece-jointes?typeDossier=DMC").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(8)));
     }
@@ -6916,7 +6925,7 @@ class CnmWorkflowIntegrationTest {
     @DisplayName("Référentiel pièces jointes : 7 pièces pour le type MAOO (filtre ?typeDossier=MAOO)")
     void type_piece_maoo_liste_ok() throws Exception {
         seedReferentielPieces();
-        mvc.perform(get("/api/type-piece-jointes?typeDossier=MAOO").header("Authorization", tokenPrmp))
+        mvc.perform(get("/api/type-piece-jointes?typeDossier=DDM").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(7)));
     }
@@ -6924,8 +6933,8 @@ class CnmWorkflowIntegrationTest {
     @Test
     @DisplayName("Saisie PPM (multipart) : pièce obligatoire absente → 400 {champ:piecesJointes}")
     void creation_sans_piece_obligatoire_400() throws Exception {
-        seedTypePiece("Plan de passation des marchés signé", true, "PPM", 1); // obligatoire
-        int opt = seedTypePiece("Avis de non-objection (si requis)", false, "PPM", 2); // optionnelle
+        seedTypePiece("Plan de passation des marchés signé", true, "DDP",1); // obligatoire
+        int opt = seedTypePiece("Avis de non-objection (si requis)", false, "DDP",2); // optionnelle
 
         // On fournit uniquement la pièce optionnelle : l'obligatoire manque → 400.
         byte[] pdf = "%PDF-1.4 avis".getBytes(StandardCharsets.US_ASCII);
@@ -6948,8 +6957,8 @@ class CnmWorkflowIntegrationTest {
     @Test
     @DisplayName("Saisie PPM (multipart) : toutes les pièces obligatoires fournies → 201")
     void creation_avec_toutes_pieces_ok() throws Exception {
-        int oblig = seedTypePiece("Plan de passation des marchés signé", true, "PPM", 1);
-        int opt = seedTypePiece("Avis de non-objection (si requis)", false, "PPM", 2);
+        int oblig = seedTypePiece("Plan de passation des marchés signé", true, "DDP",1);
+        int opt = seedTypePiece("Avis de non-objection (si requis)", false, "DDP",2);
 
         byte[] pdf = "%PDF-1.4 piece".getBytes(StandardCharsets.US_ASCII);
         mvc.perform(multipart("/api/saisies/ppm")
@@ -6961,14 +6970,14 @@ class CnmWorkflowIntegrationTest {
                 .header("Authorization", tokenPrmp))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.statut").value("BROUILLON"))
-                .andExpect(jsonPath("$.idTypeDossier").value("PPM"));
+                .andExpect(jsonPath("$.idTypeDossier").value("DDP"));
     }
 
     @Test
     @DisplayName("Saisie PPM (multipart) : pièce optionnelle omise mais obligatoire fournie → 201")
     void creation_sans_piece_optionnelle_ok() throws Exception {
-        int oblig = seedTypePiece("Plan de passation des marchés signé", true, "PPM", 1);
-        seedTypePiece("Avis de non-objection (si requis)", false, "PPM", 2); // optionnelle, non fournie
+        int oblig = seedTypePiece("Plan de passation des marchés signé", true, "DDP",1);
+        seedTypePiece("Avis de non-objection (si requis)", false, "DDP",2); // optionnelle, non fournie
 
         byte[] pdf = "%PDF-1.4 piece".getBytes(StandardCharsets.US_ASCII);
         mvc.perform(multipart("/api/saisies/ppm")
@@ -6979,7 +6988,7 @@ class CnmWorkflowIntegrationTest {
                 .header("Authorization", tokenPrmp))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.statut").value("BROUILLON"))
-                .andExpect(jsonPath("$.idTypeDossier").value("PPM"));
+                .andExpect(jsonPath("$.idTypeDossier").value("DDP"));
     }
 
     // ------------------------------------------------------------------
@@ -7001,14 +7010,14 @@ class CnmWorkflowIntegrationTest {
         // PPM 9500 : un marché en appel d'offres ouvert (mode 1) → agpmRequis = true.
         // Dossiers SOUMIS (non brouillon) pour figurer dans « Mes PPM » (findVisiblesParPrmp exclut les BROUILLON).
         Dossier d1 = dossier(9500, "SOUMIS");
-        d1.setIdTypeDossier("PPM"); d1.setIdPrmp("PRMP001"); d1.setIdLocalite("ANT");
+        d1.setIdTypeDossier("DDP"); d1.setIdPrmp("PRMP001"); d1.setIdLocalite("ANT");
         dossierRepository.save(d1);
         ppmRepository.save(ppm(9500, 9500, "PRMP001"));
         Marche m1 = marche(95001, 9500, 9500); m1.setIdMode(1); marcheRepository.save(m1);
 
         // PPM 9501 : uniquement un marché ordinaire (mode 4) → agpmRequis = false.
         Dossier d2 = dossier(9501, "SOUMIS");
-        d2.setIdTypeDossier("PPM"); d2.setIdPrmp("PRMP001"); d2.setIdLocalite("ANT");
+        d2.setIdTypeDossier("DDP"); d2.setIdPrmp("PRMP001"); d2.setIdLocalite("ANT");
         dossierRepository.save(d2);
         ppmRepository.save(ppm(9501, 9501, "PRMP001"));
         Marche m2 = marche(95011, 9501, 9501); m2.setIdMode(4); marcheRepository.save(m2);
@@ -7024,7 +7033,7 @@ class CnmWorkflowIntegrationTest {
     @DisplayName("PPM-AGPM : soumission d'un PPM en appel d'offres ouvert SANS pièce AGPM → 400 {piecesJointes} ; avec AGPM → SOUMIS ; PPM ordinaire non concerné")
     void ppmAgpm_soumission_exigeAgpmConditionnel() throws Exception {
         // Pièce AGPM au référentiel : repérée par son code stable, OBLIGATOIRE statique = false (conditionnelle).
-        int idAgpm = seedTypePieceCode("Avis Général de Passation de Marché", "AGPM", false, "PPM", 6);
+        int idAgpm = seedTypePieceCode("Avis Général de Passation de Marché", "AGPM", false, "DDP",6);
         // Mode déclencheur (appel d'offres ouvert) + mode ordinaire.
         ModePassation aoo = new ModePassation(1, "Appel d'offres ouvert", null, null, null, null);
         aoo.setDeclencheAgpm(true);
@@ -7033,7 +7042,7 @@ class CnmWorkflowIntegrationTest {
 
         // (1) PPM avec un marché en appel d'offres ouvert, AGPM non fournie → soumission refusée (400).
         Dossier d = dossier(9502, "BROUILLON");
-        d.setRefeDossier(null); d.setIdTypeDossier("PPM"); d.setIdPrmp("PRMP001"); d.setIdLocalite("ANT");
+        d.setRefeDossier(null); d.setIdTypeDossier("DDP"); d.setIdPrmp("PRMP001"); d.setIdLocalite("ANT");
         dossierRepository.save(d);
         ppmRepository.save(ppm(9502, 9502, "PRMP001"));
         Marche m = marche(95021, 9502, 9502); m.setIdMode(1); marcheRepository.save(m);
@@ -7058,13 +7067,137 @@ class CnmWorkflowIntegrationTest {
 
         // (2) PPM ordinaire (aucun marché en appel d'offres ouvert) → AGPM non requise, soumission OK sans AGPM.
         Dossier d2 = dossier(9503, "BROUILLON");
-        d2.setRefeDossier(null); d2.setIdTypeDossier("PPM"); d2.setIdPrmp("PRMP001"); d2.setIdLocalite("ANT");
+        d2.setRefeDossier(null); d2.setIdTypeDossier("DDP"); d2.setIdPrmp("PRMP001"); d2.setIdLocalite("ANT");
         dossierRepository.save(d2);
         ppmRepository.save(ppm(9503, 9503, "PRMP001"));
         Marche m2 = marche(95031, 9503, 9503); m2.setIdMode(4); marcheRepository.save(m2);
         mvc.perform(post("/api/dossiers/9503/soumettre").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.statut").value("SOUMIS"));
+    }
+
+    // ------------------------------------------------------------------
+    // Familles + sous-types de dossier (⚠️ règle ajoutée — hiérarchie tr_type_dossier → tr_sous_type_dossier)
+    // ------------------------------------------------------------------
+
+    @Test
+    @DisplayName("Sous-types : lecture par famille ouverte ; écritures réservées ADMINISTRATEUR ; famille inconnue → 404")
+    void sousTypes_referentiel() throws Exception {
+        // Lecture par famille (remplit le dropdown de saisie) — ouverte à tout authentifié.
+        mvc.perform(get("/api/sous-type-dossiers/par-famille/DDP").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idSousType=='PPM')]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idSousType=='PPM-AGPM')]", hasSize(1)));
+        // Famille inconnue → 404 explicite.
+        mvc.perform(get("/api/sous-type-dossiers/par-famille/ZZZ").header("Authorization", tokenPrmp))
+                .andExpect(status().isNotFound());
+        // Liste ouverte : l'Admin ajoute un sous-type (ex. DAOX sous DMC) → 201 ; un Membre → 403.
+        mvc.perform(post("/api/sous-type-dossiers").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idSousType\":\"DAOX\",\"libelleSousType\":\"Variante DAO\",\"idTypeDossier\":\"DMC\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.idTypeDossier").value("DMC"));
+        mvc.perform(post("/api/sous-type-dossiers").header("Authorization", tokenMembre)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idSousType\":\"DAOY\",\"libelleSousType\":\"x\",\"idTypeDossier\":\"DMC\"}"))
+                .andExpect(status().isForbidden());
+        // Création sur une famille inconnue → 404.
+        mvc.perform(post("/api/sous-type-dossiers").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idSousType\":\"XYZ\",\"libelleSousType\":\"x\",\"idTypeDossier\":\"ZZZ\"}"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("Sous-type DDP recalculé serveur : saisie mode ordinaire → PPM ; édition vers appel d'offres ouvert → PPM-AGPM ; retour → PPM")
+    void sousType_ddp_recalcule() throws Exception {
+        natureRepository.save(new Nature(1, "Travaux", null));
+        capmRepository.save(new Capm(1, "LANCEMENT", 1));
+        ModePassation aoo = new ModePassation(1, "Appel d'offres ouvert", null, null, null, null);
+        aoo.setDeclencheAgpm(true);
+        modePassationRepository.save(aoo);
+        modePassationRepository.save(new ModePassation(4, "Cotation", null, null, null, null));
+
+        // Saisie façade avec un marché en mode ordinaire → famille DDP, sous-type PPM.
+        String body = "{\"idEntiteContract\":1,\"exercice\":2026,\"dateSignature\":\"2026-01-10\","
+                + "\"marches\":[{\"designationMarche\":\"M1\",\"montEstim\":1000000,\"idNature\":1,\"idMode\":4,"
+                + "\"processus\":[{\"idCapm\":1,\"dateDebut\":\"2026-02-01\"}]}]}";
+        String resp = mvc.perform(post("/api/saisies/ppm").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.idTypeDossier").value("DDP"))
+                .andExpect(jsonPath("$.idSousType").value("PPM"))
+                .andReturn().getResponse().getContentAsString();
+        int idDoss = com.jayway.jsonpath.JsonPath.read(resp, "$.idDossier");
+        int idDetail = marcheRepository.findByIdDossier(idDoss).get(0).getIdDetail();
+
+        // Édition : la ligne passe en appel d'offres ouvert → le sous-type dérive vers PPM-AGPM.
+        String v2 = "{\"exercice\":2026,\"signataire\":\"S\",\"dateSignature\":\"2026-01-10\",\"reference\":\"R\","
+                + "\"marches\":[{\"idDetail\":" + idDetail + ",\"designationMarche\":\"M1\",\"montEstim\":1000000,"
+                + "\"idNature\":1,\"idMode\":1}]}";
+        mvc.perform(put("/api/saisies/ppm/" + idDoss).header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content(v2))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.idSousType").value("PPM-AGPM"));
+
+        // Retour au mode ordinaire → le sous-type redescend à PPM (source de vérité = les marchés).
+        String v3 = v2.replace("\"idMode\":1}", "\"idMode\":4}");
+        mvc.perform(put("/api/saisies/ppm/" + idDoss).header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content(v3))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.idSousType").value("PPM"));
+    }
+
+    @Test
+    @DisplayName("GET /api/dossiers : filtres serveur ?type= (famille) et ?sousType= ; valeur inconnue → 400")
+    void dossiers_filtres_typeEtSousType() throws Exception {
+        Dossier a = dossier(9600, "SOUMIS"); a.setIdTypeDossier("DDP"); a.setIdSousType("PPM-AGPM");
+        a.setIdPrmp("PRMP001"); a.setIdLocalite("ANT"); dossierRepository.save(a);
+        Dossier b = dossier(9601, "SOUMIS"); b.setIdTypeDossier("DDP"); b.setIdSousType("PPM");
+        b.setIdPrmp("PRMP001"); b.setIdLocalite("ANT"); dossierRepository.save(b);
+        Dossier c = dossier(9602, "SOUMIS"); c.setIdTypeDossier("DMC"); c.setIdSousType("DAO");
+        c.setIdPrmp("PRMP001"); c.setIdLocalite("ANT"); dossierRepository.save(c);
+
+        mvc.perform(get("/api/dossiers?type=DDP").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idDossier==9600)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idDossier==9601)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idDossier==9602)]", hasSize(0)));
+        mvc.perform(get("/api/dossiers?sousType=PPM-AGPM").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idDossier==9600)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idDossier==9601)]", hasSize(0)));
+        // Filtres combinables avec le statut, et valeur inconnue → 400.
+        mvc.perform(get("/api/dossiers?statut=SOUMIS&type=DMC&sousType=DAO").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idDossier==9602)]", hasSize(1)));
+        mvc.perform(get("/api/dossiers?type=XXX").header("Authorization", tokenAdmin))
+                .andExpect(status().isBadRequest());
+        mvc.perform(get("/api/dossiers?sousType=XXX").header("Authorization", tokenAdmin))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("Saisie dossier DMC/DDM : idSousType choisi (DAOR) → famille déduite ; sous-type DDP refusé ; sous-type inconnu → 400")
+    void saisieDossier_sousTypeChoisi() throws Exception {
+        // Nouveau contrat : idSousType → famille déduite du référentiel.
+        mvc.perform(post("/api/saisies/dossier").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idSousType\":\"DAOR\",\"idEntiteContract\":1}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.idTypeDossier").value("DMC"))
+                .andExpect(jsonPath("$.idSousType").value("DAOR"));
+        // Un sous-type de la famille DDP (planification) est refusé sur cette façade.
+        mvc.perform(post("/api/saisies/dossier").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idSousType\":\"PPM-AGPM\",\"idEntiteContract\":1}"))
+                .andExpect(status().isConflict());
+        // Sous-type inconnu → 400 ciblé.
+        mvc.perform(post("/api/saisies/dossier").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idSousType\":\"NIMPORTE\",\"idEntiteContract\":1}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[?(@.champ=='idSousType')]", hasSize(1)));
     }
 
     /** Crée un type de pièce dans le référentiel H2 et renvoie sa PK générée. */
@@ -7097,30 +7230,32 @@ class CnmWorkflowIntegrationTest {
      * (absent du seed de base) est ajouté pour satisfaire la FK {@code tr_type_dossier}.
      */
     private void seedReferentielPieces() {
-        typeDossierRepository.save(new TypeDossier("MAOO", "Marché par appel d'offres ouvert"));
+        typeDossierRepository.save(new TypeDossier("DDM", "Dossier de Marché"));
+        sousTypeDossierRepository.save(new SousTypeDossier("MAOO", "Marché sur Appel d'Offres Ouvert", "DDM"));
+        sousTypeDossierRepository.save(new SousTypeDossier("MAOR", "Marché sur Appel d'Offres Ouvert Restreint", "DDM"));
         // PPM (5)
-        seedTypePiece("Plan de passation des marchés signé", true, "PPM", 1);
-        seedTypePiece("Budget prévisionnel de l'exercice", true, "PPM", 2);
-        seedTypePiece("Arrêté ou décision portant nomination de la PRMP", true, "PPM", 3);
-        seedTypePiece("Tableau récapitulatif des marchés", true, "PPM", 4);
-        seedTypePiece("Avis de non-objection (si requis)", false, "PPM", 5);
+        seedTypePiece("Plan de passation des marchés signé", true, "DDP",1);
+        seedTypePiece("Budget prévisionnel de l'exercice", true, "DDP",2);
+        seedTypePiece("Arrêté ou décision portant nomination de la PRMP", true, "DDP",3);
+        seedTypePiece("Tableau récapitulatif des marchés", true, "DDP",4);
+        seedTypePiece("Avis de non-objection (si requis)", false, "DDP",5);
         // DAO (8)
-        seedTypePiece("Dossier d'appel d'offres complet", true, "DAO", 1);
-        seedTypePiece("Cahier des clauses administratives générales", true, "DAO", 2);
-        seedTypePiece("Cahier des clauses techniques particulières", true, "DAO", 3);
-        seedTypePiece("Avis d'appel d'offres", true, "DAO", 4);
-        seedTypePiece("Estimation du coût des travaux/fournitures", true, "DAO", 5);
-        seedTypePiece("Garantie de soumission", true, "DAO", 6);
-        seedTypePiece("Avis de non-objection (si requis)", false, "DAO", 7);
-        seedTypePiece("Rapport d'évaluation des offres", false, "DAO", 8);
+        seedTypePiece("Dossier d'appel d'offres complet", true, "DMC",1);
+        seedTypePiece("Cahier des clauses administratives générales", true, "DMC",2);
+        seedTypePiece("Cahier des clauses techniques particulières", true, "DMC",3);
+        seedTypePiece("Avis d'appel d'offres", true, "DMC",4);
+        seedTypePiece("Estimation du coût des travaux/fournitures", true, "DMC",5);
+        seedTypePiece("Garantie de soumission", true, "DMC",6);
+        seedTypePiece("Avis de non-objection (si requis)", false, "DMC",7);
+        seedTypePiece("Rapport d'évaluation des offres", false, "DMC",8);
         // MAOO (7)
-        seedTypePiece("Projet de marché signé", true, "MAOO", 1);
-        seedTypePiece("Cahier des charges", true, "MAOO", 2);
-        seedTypePiece("Devis estimatif détaillé", true, "MAOO", 3);
-        seedTypePiece("Procès-verbal d'ouverture des offres", true, "MAOO", 4);
-        seedTypePiece("Rapport d'analyse des offres", true, "MAOO", 5);
-        seedTypePiece("Attestation de capacité financière", false, "MAOO", 6);
-        seedTypePiece("Avis de non-objection (si requis)", false, "MAOO", 7);
+        seedTypePiece("Projet de marché signé", true, "DDM",1);
+        seedTypePiece("Cahier des charges", true, "DDM",2);
+        seedTypePiece("Devis estimatif détaillé", true, "DDM",3);
+        seedTypePiece("Procès-verbal d'ouverture des offres", true, "DDM",4);
+        seedTypePiece("Rapport d'analyse des offres", true, "DDM",5);
+        seedTypePiece("Attestation de capacité financière", false, "DDM",6);
+        seedTypePiece("Avis de non-objection (si requis)", false, "DDM",7);
     }
 
     // ------------------------------------------------------------------
@@ -7287,7 +7422,7 @@ class CnmWorkflowIntegrationTest {
         m92.setIdTypeDmc(idDao); modePassationRepository.save(m92);
         // Dossier BROUILLON de PRMP001 (autorise la modification du marché).
         Dossier d = dossier(9710, "BROUILLON");
-        d.setIdPrmp("PRMP001"); d.setIdLocalite("ANT"); d.setIdTypeDossier("PPM");
+        d.setIdPrmp("PRMP001"); d.setIdLocalite("ANT"); d.setIdTypeDossier("DDP");
         dossierRepository.save(d);
         Marche m = marche(9703, 9710, 1); m.setIdMode(90); marcheRepository.save(m);
 
@@ -7312,7 +7447,7 @@ class CnmWorkflowIntegrationTest {
         ModePassation mode = new ModePassation(90, "Achat Direct", null, null, null, null);
         mode.setIdTypeDmc(idBc); modePassationRepository.save(mode);
         Dossier d = dossier(9711, "BROUILLON");
-        d.setIdPrmp("PRMP001"); d.setIdLocalite("ANT"); d.setIdTypeDossier("PPM");
+        d.setIdPrmp("PRMP001"); d.setIdLocalite("ANT"); d.setIdTypeDossier("DDP");
         dossierRepository.save(d);
         Marche m = marche(9705, 9711, 1); m.setIdMode(90); marcheRepository.save(m);
 

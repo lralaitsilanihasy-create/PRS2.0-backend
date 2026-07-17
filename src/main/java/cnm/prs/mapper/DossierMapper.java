@@ -18,6 +18,7 @@ public final class DossierMapper {
         DossierDto dto = new DossierDto();
         dto.setIdDossier(entity.getIdDossier());
         dto.setIdTypeDossier(entity.getIdTypeDossier());
+        dto.setIdSousType(entity.getIdSousType());
         dto.setIdDossierParent(entity.getIdDossierParent());
         dto.setRefeDossier(entity.getRefeDossier());
         dto.setDateRef(entity.getDateRef());
@@ -35,6 +36,7 @@ public final class DossierMapper {
         Dossier entity = new Dossier();
         entity.setIdDossier(dto.getIdDossier());
         entity.setIdTypeDossier(dto.getIdTypeDossier());
+        entity.setIdSousType(dto.getIdSousType());
         entity.setIdDossierParent(dto.getIdDossierParent());
         entity.setRefeDossier(dto.getRefeDossier());
         entity.setDateRef(dto.getDateRef());

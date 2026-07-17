@@ -42,6 +42,8 @@ import cnm.prs.repository.PieceJointeDossierRepository;
 import cnm.prs.repository.PpmRepository;
 import cnm.prs.repository.PrmpRepository;
 import cnm.prs.repository.ReceptionRepository;
+import cnm.prs.repository.SousTypeDossierRepository;
+import cnm.prs.repository.TypeDossierRepository;
 import cnm.prs.repository.TypePieceJointeRepository;
 import cnm.prs.repository.VerificationRepository;
 import cnm.prs.security.CurrentUser;
@@ -53,7 +55,8 @@ import cnm.prs.security.CurrentUser;
 @Transactional
 public class DossierService {
 
-    private static final String TYPE_PPM = "PPM";
+    /** Famille « Dossier de Planification » (codes centralisés dans {@link DossierIntegriteService}). */
+    private static final String FAMILLE_DDP = DossierIntegriteService.FAMILLE_DDP;
     /** Code du type de pièce AGPM dans le référentiel {@code t_type_piece_jointe} (obligation conditionnelle). */
     private static final String CODE_PIECE_AGPM = "AGPM";
 
@@ -73,6 +76,8 @@ public class DossierService {
     private final NotificationRepository notificationRepository;
     private final TypePieceJointeRepository typePieceJointeRepository;
     private final PieceJointeDossierRepository pieceJointeDossierRepository;
+    private final TypeDossierRepository typeDossierRepository;
+    private final SousTypeDossierRepository sousTypeDossierRepository;
 
     public DossierService(DossierRepository repository, PpmRepository ppmRepository,
             ControleurDirectory controleurDirectory, NotificationService notificationService,
@@ -82,7 +87,8 @@ public class DossierService {
             ReceptionRepository receptionRepository, DemandeRetraitRepository demandeRetraitRepository,
             NotificationRepository notificationRepository,
             TypePieceJointeRepository typePieceJointeRepository,
-            PieceJointeDossierRepository pieceJointeDossierRepository, MarcheService marcheService) {
+            PieceJointeDossierRepository pieceJointeDossierRepository, MarcheService marcheService,
+            TypeDossierRepository typeDossierRepository, SousTypeDossierRepository sousTypeDossierRepository) {
         this.repository = repository;
         this.ppmRepository = ppmRepository;
         this.controleurDirectory = controleurDirectory;
@@ -99,36 +105,77 @@ public class DossierService {
         this.typePieceJointeRepository = typePieceJointeRepository;
         this.pieceJointeDossierRepository = pieceJointeDossierRepository;
         this.marcheService = marcheService;
+        this.typeDossierRepository = typeDossierRepository;
+        this.sousTypeDossierRepository = sousTypeDossierRepository;
     }
 
     /**
      * Liste des dossiers filtrée par le périmètre de visibilité de l'utilisateur (§1), et
-     * <strong>optionnellement par statut</strong> ({@code ?statut=SOUMIS}, filtré côté serveur) :
-     * Président / Administrateur voient tout ; les autres profils ne voient que les dossiers
-     * de leur localité. La PRMP voit ses propres dossiers ({@code t_dossier.ID_PRMP} / PPM / marché).
+     * <strong>optionnellement par statut</strong> ({@code ?statut=SOUMIS}), par <strong>famille</strong>
+     * ({@code ?type=DDP}) et par <strong>sous-type</strong> ({@code ?sousType=PPM-AGPM}) — tous filtrés
+     * côté serveur : Président / Administrateur voient tout ; les autres profils ne voient que les
+     * dossiers de leur localité. La PRMP voit ses propres dossiers ({@code t_dossier.ID_PRMP} / PPM / marché).
      *
-     * @param statut filtre serveur sur {@code t_dossier.STATUT} ; {@code null}/vide = tous statuts
-     * @throws BadRequestException si {@code statut} est fourni mais n'est pas un statut connu (→ 400)
+     * @param statut   filtre serveur sur {@code t_dossier.STATUT} ; {@code null}/vide = tous statuts
+     * @param type     filtre sur la famille ({@code tr_type_dossier}) ; {@code null}/vide = toutes
+     * @param sousType filtre sur le sous-type ({@code tr_sous_type_dossier}) ; {@code null}/vide = tous
+     * @throws BadRequestException si un filtre fourni n'est pas une valeur connue (→ 400)
      */
     @Transactional(readOnly = true)
-    public List<DossierDto> findAll(String statut) {
+    public List<DossierDto> findAll(String statut, String type, String sousType) {
         String filtre = normaliserStatut(statut);
+        String filtreType = normaliserType(type);
+        String filtreSousType = normaliserSousType(sousType);
+        return chargerScopees(filtre).stream()
+                // Filtres famille / sous-type appliqués côté serveur, après le scoping (volumes déjà réduits).
+                .filter(d -> filtreType == null || filtreType.equals(d.getIdTypeDossier()))
+                .filter(d -> filtreSousType == null || filtreSousType.equals(d.getIdSousType()))
+                .map(DossierMapper::toDto).toList();
+    }
+
+    /** Dossiers du périmètre de l'appelant (scoping §1), optionnellement restreints à un statut. */
+    private List<Dossier> chargerScopees(String filtre) {
         ProfilUtilisateur profil = CurrentUser.profil().orElse(null);
         if (profil == ProfilUtilisateur.PRESIDENT || profil == ProfilUtilisateur.ADMINISTRATEUR) {
-            return repository.findParStatut(filtre).stream().map(DossierMapper::toDto).toList();
+            return repository.findParStatut(filtre);
         }
         if (profil == ProfilUtilisateur.PRMP) {
             String idPrmp = CurrentUser.ref().orElse(null);
             if (idPrmp == null || idPrmp.isBlank()) {
                 return List.of();
             }
-            return repository.findVisiblesPourPrmpEtStatut(idPrmp, filtre).stream().map(DossierMapper::toDto).toList();
+            return repository.findVisiblesPourPrmpEtStatut(idPrmp, filtre);
         }
         String localite = CurrentUser.localite().orElse(null);
         if (localite == null || localite.isBlank()) {
             return List.of();
         }
-        return repository.findVisiblesParLocaliteEtStatut(localite, filtre).stream().map(DossierMapper::toDto).toList();
+        return repository.findVisiblesParLocaliteEtStatut(localite, filtre);
+    }
+
+    /** Valide le filtre famille : {@code null}/vide accepté, sinon doit exister dans {@code tr_type_dossier}. */
+    private String normaliserType(String type) {
+        if (type == null || type.isBlank()) {
+            return null;
+        }
+        String code = type.trim();
+        if (!typeDossierRepository.existsById(code)) {
+            throw new BadRequestException("Famille de dossier inconnue : « " + code + " » (tr_type_dossier).");
+        }
+        return code;
+    }
+
+    /** Valide le filtre sous-type : {@code null}/vide accepté, sinon doit exister dans {@code tr_sous_type_dossier}. */
+    private String normaliserSousType(String sousType) {
+        if (sousType == null || sousType.isBlank()) {
+            return null;
+        }
+        String code = sousType.trim();
+        if (!sousTypeDossierRepository.existsById(code)) {
+            throw new BadRequestException(
+                    "Sous-type de dossier inconnu : « " + code + " » (référentiel /api/sous-type-dossiers).");
+        }
+        return code;
     }
 
     /** Valide le filtre statut : {@code null}/vide accepté (= tous), sinon doit être un {@link StatutDossier}. */
@@ -342,9 +389,11 @@ public class DossierService {
             throw new BusinessRuleException(
                     "Dossier non soumissible : statut « " + dossier.getStatut() + " » (attendu BROUILLON).");
         }
-        // Cohérence type↔contenu (PPM ⇒ a un PPM ; DAO/MAOO ⇒ pas de PPM).
+        // Cohérence type↔contenu (DDP ⇒ a un PPM ; DMC/DDM ⇒ pas de PPM).
         dossierIntegrite.validerCoherenceAvantSoumission(dossier);
-        // Pièces jointes obligatoires du type de dossier (référentiel) : toutes doivent être présentes.
+        // Filet de sécurité : le sous-type d'un dossier DDP colle aux marchés au moment de la soumission.
+        dossierIntegrite.recalculerSousTypeDdp(idDossier);
+        // Pièces jointes obligatoires de la famille de dossier (référentiel) : toutes doivent être présentes.
         validerPiecesObligatoires(dossier);
 
         // Localité : celle du dossier (dérivée de l'entité à la saisie), sinon celle du PPM. Plus de repli PRMP.
@@ -394,19 +443,20 @@ public class DossierService {
     }
 
     /**
-     * ⚠️ Règle ajoutée — obligation <strong>conditionnelle</strong> de l'AGPM : un dossier {@code PPM}
-     * comportant au moins un marché en « appel d'offres ouvert » ({@code ModePassation.declencheAgpm})
-     * doit être accompagné de la pièce AGPM (Avis Général de Passation de Marché). Cette obligation ne
-     * peut être portée par le drapeau statique {@code OBLIGATOIRE} du référentiel : elle est évaluée ici.
-     * La pièce est repérée par son <strong>code</strong> stable {@code AGPM} (type de dossier PPM). Sans
-     * effet si l'AGPM n'est pas requis, ou si le référentiel ne définit pas encore la pièce (config admin).
+     * ⚠️ Règle ajoutée — obligation <strong>conditionnelle</strong> de l'AGPM : un dossier de la famille
+     * {@code DDP} comportant au moins un marché en « appel d'offres ouvert » ({@code ModePassation.declencheAgpm},
+     * soit un sous-type dérivé {@code PPM-AGPM}) doit être accompagné de la pièce AGPM (Avis Général de
+     * Passation de Marché). Cette obligation ne peut être portée par le drapeau statique {@code OBLIGATOIRE}
+     * du référentiel : elle est évaluée ici. La pièce est repérée par son <strong>code</strong> stable
+     * {@code AGPM} (famille DDP). Sans effet si l'AGPM n'est pas requis, ou si le référentiel ne définit
+     * pas encore la pièce (config admin).
      */
     private void ajouterAgpmManquantSiRequis(Dossier dossier, List<ErrorResponse.FieldError> manquantes) {
-        if (!TYPE_PPM.equals(dossier.getIdTypeDossier())
+        if (!FAMILLE_DDP.equals(dossier.getIdTypeDossier())
                 || !marcheRepository.existsMarcheDeclencheurAgpmByDossier(dossier.getIdDossier())) {
             return;
         }
-        typePieceJointeRepository.findFirstByIdTypeDossierAndCode(TYPE_PPM, CODE_PIECE_AGPM)
+        typePieceJointeRepository.findFirstByIdTypeDossierAndCode(FAMILLE_DDP, CODE_PIECE_AGPM)
                 .filter(t -> !pieceJointeDossierRepository
                         .existsByIdDossierAndIdTypePiece(dossier.getIdDossier(), t.getIdTypePiece()))
                 .ifPresent(t -> manquantes.add(new ErrorResponse.FieldError("piecesJointes",

@@ -27,7 +27,7 @@ public class ReferenceService {
     }
 
     /**
-     * @param typeDossier   type du dossier (PPM, DAO, MAOO…)
+     * @param typeDossier   famille du dossier (DDP, DMC, DDM…) — segment type de la référence
      * @param localite      localité du dossier (utilisée seulement si non centrale)
      * @param estCentrale   true -> segment = "CNM" ; false -> "CRM-" + localite
      * @param anneeExercice exercice budgétaire

@@ -47,8 +47,10 @@ public class DossierController {
      * Secrétaire, préférer {@code /api/dossiers/a-receptionner} (SOUMIS + sans réception, sans N+1).
      */
     @GetMapping
-    public List<DossierDto> findAll(@RequestParam(required = false) String statut) {
-        return service.findAll(statut);
+    public List<DossierDto> findAll(@RequestParam(required = false) String statut,
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) String sousType) {
+        return service.findAll(statut, type, sousType);
     }
 
     /** File « à réceptionner » du Secrétaire (§3.4) : dossiers SOUMIS de sa localité sans réception. */

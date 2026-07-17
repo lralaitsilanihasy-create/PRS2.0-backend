@@ -32,6 +32,7 @@ import cnm.prs.entity.Ppm;
 import cnm.prs.entity.Lot;
 import cnm.prs.entity.ServiceBeneficiaire;
 import cnm.prs.entity.SoaBeneficiaire;
+import cnm.prs.entity.SousTypeDossier;
 import cnm.prs.enums.StatutDossier;
 import cnm.prs.exception.BusinessRuleException;
 import cnm.prs.exception.ChampsInvalidesException;
@@ -50,12 +51,14 @@ import cnm.prs.repository.PpmRepository;
 import cnm.prs.repository.LotRepository;
 import cnm.prs.repository.ServiceBeneficiaireRepository;
 import cnm.prs.repository.SoaBeneficiaireRepository;
+import cnm.prs.repository.SousTypeDossierRepository;
 import cnm.prs.repository.PrmpRepository;
 import cnm.prs.repository.TypePieceJointeRepository;
 import cnm.prs.security.CurrentUser;
 
 /**
- * Façade de saisie (§3.1, Module 02) : « saisir un PPM/DAO/MAOO » EST créer le dossier à soumettre.
+ * Façade de saisie (§3.1, Module 02) : « saisir un PPM (famille DDP) ou un dossier DMC/DDM » EST créer
+ * le dossier à soumettre.
  *
  * <p>En un seul appel transactionnel, crée le {@code t_dossier} (statut <strong>BROUILLON</strong>,
  * propriété de la PRMP courante) et son contenu. Le PPM et les lignes de marché passent par
@@ -66,7 +69,8 @@ import cnm.prs.security.CurrentUser;
 @Transactional
 public class SaisieService {
 
-    private static final String TYPE_PPM = "PPM";
+    /** Famille « Dossier de Planification » (codes centralisés dans {@link DossierIntegriteService}). */
+    private static final String FAMILLE_DDP = DossierIntegriteService.FAMILLE_DDP;
 
     private final DossierRepository dossierRepository;
     private final PpmRepository ppmRepository;
@@ -90,6 +94,7 @@ public class SaisieService {
     private final AuditLogService auditLogService;
     private final TypeDmcService typeDmcService;
     private final LotRepository lotRepository;
+    private final SousTypeDossierRepository sousTypeDossierRepository;
 
     public SaisieService(DossierRepository dossierRepository, PpmRepository ppmRepository,
             MarcheRepository marcheRepository, PpmService ppmService,
@@ -102,7 +107,8 @@ public class SaisieService {
             NatureRepository natureRepository, ModePassationRepository modePassationRepository,
             CompteRepository compteRepository, ServiceBeneficiaireRepository serviceBeneficiaireRepository,
             SoaBeneficiaireRepository soaBeneficiaireRepository, AuditLogService auditLogService,
-            TypeDmcService typeDmcService, LotRepository lotRepository) {
+            TypeDmcService typeDmcService, LotRepository lotRepository,
+            SousTypeDossierRepository sousTypeDossierRepository) {
         this.dossierRepository = dossierRepository;
         this.ppmRepository = ppmRepository;
         this.marcheRepository = marcheRepository;
@@ -125,6 +131,7 @@ public class SaisieService {
         this.auditLogService = auditLogService;
         this.typeDmcService = typeDmcService;
         this.lotRepository = lotRepository;
+        this.sousTypeDossierRepository = sousTypeDossierRepository;
     }
 
     /** Saisie d'un PPM = dossier (BROUILLON) + PPM + lignes de marché (mode auto), en une transaction. */
@@ -132,7 +139,9 @@ public class SaisieService {
         String idPrmp = prmpCourante();
         // Localité dérivée de l'entité contractante choisie (parmi les entités de la PRMP).
         String localite = dossierIntegrite.localiteDeLEntiteDeLaPrmp(req.idEntiteContract(), idPrmp);
-        Dossier dossier = creerDossier(TYPE_PPM, localite, idPrmp, req.idEntiteContract());  // PK séquence
+        // Sous-type initial PPM ; recalculé (PPM-AGPM) par MarcheService à la création des lignes.
+        Dossier dossier = creerDossier(FAMILLE_DDP, DossierIntegriteService.SOUS_TYPE_PPM,
+                localite, idPrmp, req.idEntiteContract());  // PK séquence
         Integer idDossier = dossier.getIdDossier();
 
         PpmDto ppm = new PpmDto();
@@ -185,7 +194,7 @@ public class SaisieService {
      * @param pieces fichiers indexés par {@code idTypePiece} (parts {@code piece_<idTypePiece>})
      */
     public DossierDto saisirPpm(SaisiePpmRequest req, java.util.Map<Integer, MultipartFile> pieces) {
-        exigerPiecesObligatoires(TYPE_PPM, pieces);   // contrôle AVANT toute persistance (400 si manquante)
+        exigerPiecesObligatoires(FAMILLE_DDP, pieces);   // contrôle AVANT toute persistance (400 si manquante)
         DossierDto dossier = saisirPpm(req);
         if (pieces != null) {
             for (java.util.Map.Entry<Integer, MultipartFile> e : pieces.entrySet()) {
@@ -244,7 +253,7 @@ public class SaisieService {
      */
     public DossierDto editerPpm(Integer idDossier, EditionPpmRequest req) {
         dossierIntegrite.exigerBrouillonModifiable(idDossier);
-        dossierIntegrite.exigerTypePpm(idDossier);
+        dossierIntegrite.exigerFamilleDdp(idDossier);
         Ppm ppm = ppmRepository.findByIdDossier(idDossier).stream().findFirst()
                 .orElseThrow(() -> new BusinessRuleException("Aucun PPM rattaché au dossier " + idDossier + "."));
 
@@ -474,22 +483,41 @@ public class SaisieService {
         return sansAccents.toUpperCase(java.util.Locale.FRENCH).replaceAll("[^A-Z0-9]", "");
     }
 
-    /** Saisie d'un dossier sans contenu (DAO/MAOO) = un {@code t_dossier} (type + localité), BROUILLON. */
+    /**
+     * Saisie d'un dossier sans contenu (familles DMC / DDM) = un {@code t_dossier} (famille + sous-type
+     * + localité), BROUILLON. ⚠️ Règle ajoutée — la PRMP choisit un <strong>sous-type</strong>
+     * ({@code idSousType}, référentiel administrable) ; la famille s'en déduit. Un sous-type de la
+     * famille DDP est refusé (utiliser la façade PPM). {@code idTypeDossier} (déprécié) reste accepté
+     * en repli et est interprété comme un code de sous-type.
+     */
     public DossierDto saisirDossier(SaisieDossierRequest req) {
-        if (TYPE_PPM.equalsIgnoreCase(req.idTypeDossier())) {
-            throw new BusinessRuleException("Pour un PPM, utilisez POST /api/saisies/ppm.");
+        String code = req.idSousType() != null && !req.idSousType().isBlank()
+                ? req.idSousType().trim() : req.idTypeDossier();
+        if (code == null || code.isBlank()) {
+            throw new ChampsInvalidesException(List.of(new ErrorResponse.FieldError(
+                    "idSousType", "Le sous-type de dossier est obligatoire.")));
+        }
+        SousTypeDossier sousType = sousTypeDossierRepository.findById(code.trim())
+                .orElseThrow(() -> new ChampsInvalidesException(List.of(new ErrorResponse.FieldError(
+                        "idSousType", "Sous-type de dossier inconnu : « " + code.trim()
+                                + " » (référentiel /api/sous-type-dossiers)."))));
+        if (FAMILLE_DDP.equals(sousType.getIdTypeDossier())) {
+            throw new BusinessRuleException(
+                    "Pour un dossier de planification (PPM), utilisez POST /api/saisies/ppm.");
         }
         String idPrmp = prmpCourante();
         String localite = dossierIntegrite.localiteDeLEntiteDeLaPrmp(req.idEntiteContract(), idPrmp);
-        Dossier d = creerDossier(req.idTypeDossier(), localite, idPrmp, req.idEntiteContract());
+        Dossier d = creerDossier(sousType.getIdTypeDossier(), sousType.getIdSousType(),
+                localite, idPrmp, req.idEntiteContract());
         return DossierMapper.toDto(d);
     }
 
-    private Dossier creerDossier(String type, String idLocalite, String idPrmp,
+    private Dossier creerDossier(String famille, String sousType, String idLocalite, String idPrmp,
             Integer idEntiteContract) {
         Dossier d = new Dossier();
         d.setIdDossier(dossierRepository.nextIdDossier().intValue());   // PK serveur (séquence)
-        d.setIdTypeDossier(type);
+        d.setIdTypeDossier(famille);
+        d.setIdSousType(sousType);   // famille DDP : dérivé serveur ; DMC/DDM : choisi à la saisie
         d.setIdLocalite(idLocalite);
         d.setIdPrmp(idPrmp);   // périmètre = PRMP (pour une UGPM, sa PRMP de tutelle via CurrentUser.ref())
         d.setIdEntiteContract(idEntiteContract);

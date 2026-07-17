@@ -131,9 +131,9 @@ public class PpmService {
     }
 
     public PpmDto create(PpmDto dto) {
-        // Le PPM ne se rattache qu'à un dossier de type PPM, en brouillon, et propriété de la PRMP courante.
+        // Le PPM ne se rattache qu'à un dossier de la famille DDP, en brouillon, propriété de la PRMP courante.
         dossierIntegrite.exigerBrouillonModifiable(dto.getIdDossier());
-        dossierIntegrite.exigerTypePpm(dto.getIdDossier());
+        dossierIntegrite.exigerFamilleDdp(dto.getIdDossier());
         Ppm entity = PpmMapper.toEntity(dto);
         entity.setIdPpm(repository.nextIdPpm().intValue());         // ⚠️ PK serveur (séquence) ; id client ignoré
         return PpmMapper.toDto(repository.save(entity));
@@ -217,5 +217,7 @@ public class PpmService {
                 && !demandeRetraitRepository.existsByIdDossier(idDossier)) {
             dossierRepository.deleteById(idDossier);
         }
+        // Dossier conservé (historique) : plus de marchés → le sous-type DDP redescend à PPM.
+        dossierIntegrite.recalculerSousTypeDdp(idDossier);
     }
 }

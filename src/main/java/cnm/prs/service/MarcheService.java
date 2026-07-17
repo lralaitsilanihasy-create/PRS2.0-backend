@@ -104,13 +104,15 @@ public class MarcheService {
     }
 
     public MarcheDto create(MarcheDto dto) {
-        // Une ligne de marché s'ajoute uniquement à un dossier PPM, en brouillon, propriété de la PRMP courante.
+        // Une ligne de marché s'ajoute uniquement à un dossier DDP (planification), en brouillon, propriété de la PRMP.
         dossierIntegrite.exigerBrouillonModifiable(dto.getIdDossier());
-        dossierIntegrite.exigerTypePpm(dto.getIdDossier());
+        dossierIntegrite.exigerFamilleDdp(dto.getIdDossier());
         Marche entity = MarcheMapper.toEntity(dto);
         entity.setIdDetail(repository.nextIdMarche().intValue());   // PK serveur (séquence) ; id client ignoré
         // Mode = celui saisi (PRMP/import) ; plus de détermination automatique (t_situation/t_regle/t_seuil retirés).
-        return MarcheMapper.toDto(repository.save(entity));
+        MarcheDto resultat = MarcheMapper.toDto(repository.save(entity));
+        dossierIntegrite.recalculerSousTypeDdp(dto.getIdDossier());   // sous-type PPM / PPM-AGPM (dérivé des marchés)
+        return resultat;
     }
 
     public MarcheDto update(Integer id, MarcheDto dto) {
@@ -132,6 +134,7 @@ public class MarcheService {
         MarcheDto resultat = MarcheMapper.toDto(repository.save(existing));
         // Si le mode a changé et qu'un DMC A_PREPARER existe, re-dériver son type.
         dmcService.reAffecterTypeSiApreparer(id);
+        dossierIntegrite.recalculerSousTypeDdp(existing.getIdDossier());   // le mode a pu (dé)clencher l'AGPM
         return resultat;
     }
 
@@ -158,6 +161,7 @@ public class MarcheService {
         Marche saved = repository.save(existing);
         auditLogService.enregistrer(CurrentUser.ref().orElse(null), "t_marche",
                 String.valueOf(id), "MODIFICATION_RECTIFICATION", null);
+        dossierIntegrite.recalculerSousTypeDdp(saved.getIdDossier());   // le mode a pu (dé)clencher l'AGPM
         return MarcheMapper.toDto(saved);
     }
 
@@ -168,6 +172,7 @@ public class MarcheService {
         dossierIntegrite.exigerBrouillonModifiable(existing.getIdDossier());
         supprimerSousLignes(id);
         repository.deleteById(id);
+        dossierIntegrite.recalculerSousTypeDdp(existing.getIdDossier());   // le dernier marché AOO a pu disparaître
     }
 
     /**
