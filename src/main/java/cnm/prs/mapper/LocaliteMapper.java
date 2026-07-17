@@ -18,7 +18,6 @@ public final class LocaliteMapper {
         LocaliteDto dto = new LocaliteDto();
         dto.setIdLocalite(entity.getIdLocalite());
         dto.setLibelleLocalite(entity.getLibelleLocalite());
-        dto.setReferencement(entity.getReferencement());
         dto.setLocalite(entity.getLocalite());
         return dto;
     }
@@ -30,7 +29,6 @@ public final class LocaliteMapper {
         Localite entity = new Localite();
         entity.setIdLocalite(dto.getIdLocalite());
         entity.setLibelleLocalite(dto.getLibelleLocalite());
-        entity.setReferencement(dto.getReferencement());
         entity.setLocalite(dto.getLocalite());
         return entity;
     }

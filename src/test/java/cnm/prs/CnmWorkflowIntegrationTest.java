@@ -1006,8 +1006,7 @@ class CnmWorkflowIntegrationTest {
     @Test
     @DisplayName("Référentiel : écriture interdite au Membre (403), permise à l'Admin (201)")
     void referentiel_ecritureAdminSeulement() throws Exception {
-        String body = "{\"idLocalite\":\"TMS\",\"libelleLocalite\":\"Toamasina\","
-                + "\"referencement\":\"REF-TMS\",\"localite\":\"TMS\"}";
+        String body = "{\"idLocalite\":\"TMS\",\"libelleLocalite\":\"Toamasina\",\"localite\":\"TMS\"}";
 
         mvc.perform(post("/api/localites").header("Authorization", tokenMembre)
                 .contentType(MediaType.APPLICATION_JSON).content(body))
@@ -1177,8 +1176,7 @@ class CnmWorkflowIntegrationTest {
     void audit_traceLesEcritures() throws Exception {
         mvc.perform(post("/api/localites").header("Authorization", tokenAdmin)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idLocalite\":\"TMS\",\"libelleLocalite\":\"Toamasina\","
-                        + "\"referencement\":\"REF-TMS\",\"localite\":\"TMS\"}"))
+                .content("{\"idLocalite\":\"TMS\",\"libelleLocalite\":\"Toamasina\",\"localite\":\"TMS\"}"))
                 .andExpect(status().isCreated());
 
         mvc.perform(get("/api/audit-logs").header("Authorization", tokenAdmin))
@@ -1230,7 +1228,7 @@ class CnmWorkflowIntegrationTest {
     void pk_idManquant_renvoie400() throws Exception {
         mvc.perform(post("/api/localites").header("Authorization", tokenAdmin)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"libelleLocalite\":\"X\",\"referencement\":\"R\",\"localite\":\"X\"}"))
+                .content("{\"libelleLocalite\":\"X\",\"localite\":\"X\"}"))
                 .andExpect(status().isBadRequest());
     }
 
@@ -7330,10 +7328,10 @@ class CnmWorkflowIntegrationTest {
     }
 
     private Localite localite(String id, String libelle) {
+        // referencement retiré du contrat/entité (2026-07-17) — colonne BD dépréciée (nullable).
         Localite l = new Localite();
         l.setIdLocalite(id);
         l.setLibelleLocalite(libelle);
-        l.setReferencement("REF-" + id);
         l.setLocalite(id);
         return l;
     }

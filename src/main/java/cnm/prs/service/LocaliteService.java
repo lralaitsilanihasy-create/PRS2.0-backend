@@ -45,7 +45,6 @@ public class LocaliteService {
         Localite existing = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Localite introuvable : " + id));
         existing.setLibelleLocalite(dto.getLibelleLocalite());
-        existing.setReferencement(dto.getReferencement());
         existing.setLocalite(dto.getLocalite());
         return LocaliteMapper.toDto(repository.save(existing));
     }
