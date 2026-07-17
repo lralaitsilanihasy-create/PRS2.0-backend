@@ -19,6 +19,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import cnm.prs.dto.SaisiePpmImportResult;
 import cnm.prs.dto.SaisiePpmImportResult.BeneficiaireImport;
+import cnm.prs.dto.SaisiePpmImportResult.LotImport;
 import cnm.prs.dto.SaisiePpmImportResult.MarcheImport;
 import cnm.prs.dto.SaisiePpmImportResult.PrevisionImport;
 import cnm.prs.entity.EntiteContract;
@@ -96,6 +97,17 @@ public class SaisiePpmImportService {
     private static final Pattern NATURE_LABEL = Pattern.compile(
             "(?i)^(Fournitures et services|Prestations intellectuelles|Prestations de service"
                     + "|Fournitures|Travaux|Services)\\b");
+
+    /**
+     * ⚠️ Règle ajoutée — marqueur d'<strong>allotissement</strong> dans la désignation du marché :
+     * « répartis en 04 Lots : … » (variantes réparti/repartis, casse/accents libres, deux-points optionnel).
+     * Le compte annoncé (04) sert de contrôle de cohérence de l'extraction.
+     */
+    private static final Pattern MARQUEUR_LOTS = Pattern.compile(
+            "(?i)r[ée]partis?\\s+en\\s+(\\d{1,3})\\s+lots?\\s*:?");
+    /** Tête d'un segment de lot : « Lot 01 : », « Lot 1: », « Lot n°01 : »… (casse libre). */
+    private static final Pattern SEGMENT_LOT = Pattern.compile(
+            "(?i)\\blot\\s*(?:n[°ºo]\\s*)?(\\d{1,3})\\s*:");
 
     /** Montant « 1 005 000.00 » (groupes de milliers séparés par espace, ou nombre simple) — jamais un compte nu. */
     private static final String MONTANT = "(?:\\d{1,3}(?:[\\s\\u00a0]\\d{3})*|\\d+)[.,]\\d{2}";
@@ -339,6 +351,13 @@ public class SaisiePpmImportService {
             return null;
         }
         String designation = core.substring(0, fm.start()).trim();
+        // ⚠️ Règle ajoutée — allotissement décrit dans la désignation : extraction best-effort des lots.
+        List<LotImport> lots = List.of();
+        LotsExtraits extraction = extraireLots(designation, avert);
+        if (extraction != null) {
+            designation = extraction.designationCourte();
+            lots = extraction.lots();
+        }
         List<String[]> toks = tokeniser(core.substring(fm.start()));
 
         int i = 0;
@@ -391,7 +410,56 @@ public class SaisiePpmImportService {
             avert.add("Mode de passation « " + modeLibelle + " » non trouvé au référentiel — à confirmer.");
         }
         return new MarcheImport(designation, montEstim, nouvMontEstim, idNature, natureLibelle,
-                idMode, modeLibelle, financement, benef, prev, List.of());   // lots non extraits du PPM
+                idMode, modeLibelle, financement, benef, prev, lots);
+    }
+
+    /** Résultat d'une extraction d'allotissement réussie : désignation raccourcie + lots. */
+    private record LotsExtraits(String designationCourte, List<LotImport> lots) {
+    }
+
+    /**
+     * ⚠️ Règle ajoutée — extraction <strong>best-effort</strong> des lots décrits en texte libre dans la
+     * désignation du marché, motif : « … répartis en NN Lots : Lot 01 : &lt;texte&gt; ; Lot 02 : &lt;texte&gt; … ».
+     *
+     * <p><strong>Contrôle de cohérence</strong> : l'extraction n'aboutit que si le nombre de segments
+     * « Lot NN : » trouvés égale exactement le compte annoncé (« 04 Lots ») et qu'aucun segment n'est vide —
+     * sinon <strong>avertissement</strong> et comportement antérieur (désignation intégrale, lots vides).
+     * En cas de succès, la désignation est <strong>raccourcie</strong> à sa partie avant le marqueur
+     * (l'information vit alors dans les lots ; le texte source reste dans le PDF) et chaque lot ne porte que
+     * {@code designationLot} (le texte ne donne ni montant ni quantité par lot — champs descriptifs, aucun
+     * contrôle de somme, règle actée). Renvoie {@code null} si aucun motif d'allotissement n'est présent.</p>
+     */
+    private LotsExtraits extraireLots(String designation, List<String> avert) {
+        Matcher marqueur = MARQUEUR_LOTS.matcher(designation);
+        if (!marqueur.find()) {
+            return null;   // pas d'allotissement décrit → comportement inchangé
+        }
+        int annonce = Integer.parseInt(marqueur.group(1));
+        String reste = designation.substring(marqueur.end());
+        List<Integer> debuts = new ArrayList<>();
+        List<Integer> finsEntete = new ArrayList<>();
+        Matcher seg = SEGMENT_LOT.matcher(reste);
+        while (seg.find()) {
+            debuts.add(seg.start());
+            finsEntete.add(seg.end());
+        }
+        List<LotImport> lots = new ArrayList<>();
+        for (int k = 0; k < debuts.size(); k++) {
+            int finTexte = k + 1 < debuts.size() ? debuts.get(k + 1) : reste.length();
+            String texte = reste.substring(finsEntete.get(k), finTexte)
+                    .replaceAll("[\\s;.,]+$", "").trim();
+            if (!texte.isEmpty()) {
+                lots.add(new LotImport(texte, null, null, null));
+            }
+        }
+        String courte = designation.substring(0, marqueur.start())
+                .replaceAll("[\\s,;:.\\u2013\\u2014-]+$", "").trim();
+        if (annonce < 1 || lots.size() != annonce || courte.isEmpty()) {
+            avert.add("Allotissement détecté (« " + annonce + " lot(s) » annoncé(s)) mais " + lots.size()
+                    + " segment(s) « Lot NN : » exploitable(s) — lots non extraits, désignation laissée intégrale.");
+            return null;
+        }
+        return new LotsExtraits(courte, List.copyOf(lots));
     }
 
     /**

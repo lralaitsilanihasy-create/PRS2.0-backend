@@ -5511,6 +5511,68 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("Import PPM — lots extraits de la désignation (« repartis en 04 Lots : Lot 01 : … ») : 4 lots + désignation raccourcie")
+    void importPpm_lotsExtraitsDeLaDesignation() throws Exception {
+        natureRepository.save(new Nature(1, "Travaux", null));
+        // Cas réel observé (sans accents — police Helvetica du fixture) : allotissement décrit dans l'OBJET.
+        byte[] pdf = pdfAvecTexte(
+                "PLAN DE PASSATION DES MARCHES POUR L'ANNEE 2026",
+                "Autorite Contractante: MINISTERE TEST",
+                "Date d'etablissement du Document initial: 14/04/2026",
+                "NATURE OBJET MONTANT ESTIMATIF INITIAL",
+                "Travaux Travaux de traitement des points noirs sur la route reliant Fenomanana et",
+                "Analamarina dans le district de Faratsiho - Vakinakaratra repartis en 04 Lots :",
+                "Lot 01 : traitement de breche et chaussee a Ampakandrano; Lot 02 : traitement de",
+                "breche et de la chaussee a Ambatofotsikely; Lot 03 : traitement de la chaussee a",
+                "Ambohiborona ; Lot 04 : traitement de la digue vers Analamarina.",
+                "1 150 000 000.00 Appel d'offres ouvert RPI 00-21-0-J00-00000 6211 1 150 000 000.00 01/06/2026 02/06/2026 12/06/2026",
+                "Fait a Antananarivo le 14 avril 2026");
+
+        mvc.perform(multipart("/api/saisies/ppm/import")
+                .file(new MockMultipartFile("fichier", "ppm.pdf", "application/pdf", pdf))
+                .header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.marches", hasSize(1)))
+                // Désignation RACCOURCIE à sa partie avant « repartis en 04 Lots » (l'info vit dans les lots).
+                .andExpect(jsonPath("$.marches[0].designationMarche").value(
+                        "Travaux de traitement des points noirs sur la route reliant Fenomanana et "
+                                + "Analamarina dans le district de Faratsiho - Vakinakaratra"))
+                .andExpect(jsonPath("$.marches[0].lots", hasSize(4)))
+                .andExpect(jsonPath("$.marches[0].lots[0].designationLot").value("traitement de breche et chaussee a Ampakandrano"))
+                .andExpect(jsonPath("$.marches[0].lots[1].designationLot").value("traitement de breche et de la chaussee a Ambatofotsikely"))
+                .andExpect(jsonPath("$.marches[0].lots[2].designationLot").value("traitement de la chaussee a Ambohiborona"))
+                .andExpect(jsonPath("$.marches[0].lots[3].designationLot").value("traitement de la digue vers Analamarina"))
+                // Champs descriptifs non portés par le texte → null (aucun contrôle de somme, règle actée).
+                .andExpect(jsonPath("$.marches[0].lots[0].montLot").value(nullValue()))
+                // Pas d'avertissement d'allotissement quand l'extraction réussit.
+                .andExpect(jsonPath("$.avertissements[?(@ =~ /.*Allotissement.*/)]", hasSize(0)));
+    }
+
+    @Test
+    @DisplayName("Import PPM — allotissement incohérent (« 03 Lots » annoncés, 2 segments) : lots vides, désignation intégrale + avertissement")
+    void importPpm_lotsCompteIncoherent() throws Exception {
+        natureRepository.save(new Nature(1, "Travaux", null));
+        byte[] pdf = pdfAvecTexte(
+                "PLAN DE PASSATION DES MARCHES POUR L'ANNEE 2026",
+                "Autorite Contractante: MINISTERE TEST",
+                "NATURE OBJET MONTANT ESTIMATIF INITIAL",
+                "Travaux Rehabilitation de pistes repartis en 03 Lots : Lot 01 : piste A; Lot 02 : piste B",
+                "5 550 000.00 Achat Direct RPI 00-21-0-J00-00000 6211 5 550 000.00 01/06/2026 02/06/2026 12/06/2026",
+                "Fait a Antananarivo le 14 avril 2026");
+
+        mvc.perform(multipart("/api/saisies/ppm/import")
+                .file(new MockMultipartFile("fichier", "ppm.pdf", "application/pdf", pdf))
+                .header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.marches", hasSize(1)))
+                // Dans le doute : rien d'extrait, désignation INTÉGRALE (comportement antérieur conservé).
+                .andExpect(jsonPath("$.marches[0].lots", hasSize(0)))
+                .andExpect(jsonPath("$.marches[0].designationMarche").value(
+                        "Rehabilitation de pistes repartis en 03 Lots : Lot 01 : piste A; Lot 02 : piste B"))
+                .andExpect(jsonPath("$.avertissements[?(@ =~ /.*Allotissement.*3 lot.*2 segment.*/)]", hasSize(1)));
+    }
+
+    @Test
     @DisplayName("Import PPM PDF multi-pages : les 2 pages sont lues (en-tête/pied répétés ignorés, borne sur le dernier « Fait à … »)")
     void importPpm_multiPages_ok() throws Exception {
         natureRepository.save(new Nature(1, "Travaux", null));

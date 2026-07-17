@@ -34,7 +34,13 @@ public record SaisiePpmImportResult(
             String financement,
             List<BeneficiaireImport> beneficiaires,
             List<PrevisionImport> previsions,
-            /** Lots du marché (allotissement). Non extrait des PPM actuels → toujours vide côté parser. */
+            /**
+             * Lots du marché (⚠️ règle ajoutée) : extraits <strong>best-effort</strong> du motif d'allotissement
+             * décrit dans la désignation (« répartis en NN Lots : Lot 01 : … ; Lot 02 : … »). Renseignés
+             * ({@code designationLot} seul) uniquement si le compte annoncé égale le nombre de segments trouvés —
+             * la désignation est alors raccourcie à sa partie avant le motif ; sinon vides + avertissement
+             * (désignation intégrale).
+             */
             List<LotImport> lots) {
     }
 
