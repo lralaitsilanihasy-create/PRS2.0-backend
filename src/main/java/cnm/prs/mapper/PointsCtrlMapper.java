@@ -22,6 +22,7 @@ public final class PointsCtrlMapper {
         dto.setOrdrePointCtrl(entity.getOrdrePointCtrl());
         dto.setObligatoire(entity.getObligatoire());
         dto.setIdTypeDossier(entity.getIdTypeDossier());
+        dto.setIdSousType(entity.getIdSousType());
         return dto;
     }
 
@@ -36,6 +37,7 @@ public final class PointsCtrlMapper {
         entity.setOrdrePointCtrl(dto.getOrdrePointCtrl());
         entity.setObligatoire(dto.getObligatoire());
         entity.setIdTypeDossier(dto.getIdTypeDossier());
+        entity.setIdSousType(dto.getIdSousType());
         return entity;
     }
 }

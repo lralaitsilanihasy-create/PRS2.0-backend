@@ -2507,6 +2507,18 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 ## Points de contrôle
 **Ressource** `/api/points-ctrls` — Référentiel (grille de contrôle) : lecture ouverte ; écriture `ADMINISTRATEUR`.
 
+> ⚠️ **Grille affinée par sous-type (règle ajoutée, 2026-07-17).** Un point porte sa **famille**
+> (`idTypeDossier` = `DDP`/`DMC`/`DDM`) et, **facultativement**, un **sous-type ciblé** (`idSousType`) :
+> `null` = point **commun** à toute la famille ; renseigné = point **spécifique** à ce sous-type (ex. le
+> contrôle « AGPM joint et conforme » du seul `PPM-AGPM` — migration `2026-07-17_points_ctrl_sous_type.sql`).
+> La **grille effective** d'un dossier = points communs de sa famille **+** points spécifiques de son
+> sous-type : c'est ce que renvoie **`GET /api/points-ctrls?sousType=X`** (la famille est déduite), la
+> requête de l'**écran d'examen** — la grille d'un `PPM` (7 points) ≠ celle d'un `PPM-AGPM` (8 points).
+> `?typeDossier=` seul liste **tous** les points de la famille (écran admin). Gardes → **400** : sous-type
+> inconnu ; sous-type hors de la famille (`?typeDossier=` + `?sousType=` incohérents, ou POST/PUT dont
+> `idSousType` n'appartient pas à `idTypeDossier`). **Écran admin** : le dropdown sous-type se remplit via
+> `GET /api/sous-type-dossiers/par-famille/{famille}` selon la famille choisie.
+
 **Champs `PointsCtrlDto`**
 
 | Champ (JSON) | Type | Obligatoire | Contraintes |
@@ -2516,13 +2528,14 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 | decriptPointCtrl | string | Non | |
 | ordrePointCtrl | number | Non | |
 | obligatoire | boolean | Oui | @NotNull |
-| idTypeDossier | string | Oui | @NotBlank |
+| idTypeDossier | string | Oui | @NotBlank — **famille** (`DDP`/`DMC`/`DDM`) |
+| idSousType | string | Non | max 20 — sous-type ciblé (doit appartenir à la famille, sinon 400) ; `null` = commun |
 
 **Endpoints**
 
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
-| GET | /api/points-ctrls | — | `PointsCtrlDto[]` | 200 | Authentifié |
+| GET | /api/points-ctrls | — | `PointsCtrlDto[]` | 200, 400 | Authentifié — filtres `?typeDossier=` `&sousType=` (grille effective) |
 | GET | /api/points-ctrls/{id} | — | `PointsCtrlDto` | 200, 404 | Authentifié |
 | POST | /api/points-ctrls | `PointsCtrlDto` | `PointsCtrlDto` | 201, 400, 403 | ADMINISTRATEUR |
 | PUT | /api/points-ctrls/{id} | `PointsCtrlDto` | `PointsCtrlDto` | 200, 400, 404 | ADMINISTRATEUR |
@@ -2530,9 +2543,9 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 
 `{id}` = idPointCtrl (number).
 
-**Exemple — requête**
+**Exemple — requête** (point spécifique au sous-type PPM-AGPM)
 ```json
-{ "idPointCtrl": 12, "libelPointCtrl": "Présence de l'avis d'appel d'offres", "decriptPointCtrl": "Vérifier que l'avis est joint et signé.", "ordrePointCtrl": 3, "obligatoire": true, "idTypeDossier": "AO" }
+{ "idPointCtrl": 12, "libelPointCtrl": "Avis Général de Passation de Marché joint et conforme", "decriptPointCtrl": "L'AGPM accompagne le PPM et couvre les marchés en appel d'offres ouvert.", "ordrePointCtrl": 8, "obligatoire": true, "idTypeDossier": "DDP", "idSousType": "PPM-AGPM" }
 ```
 
 ---

@@ -7178,6 +7178,57 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("Grille d'examen par sous-type : PPM = points communs seuls ; PPM-AGPM = communs + spécifique ; gardes 400")
+    void grilleExamen_parSousType() throws Exception {
+        // 2 points COMMUNS famille DDP (idSousType null) + 1 point SPÉCIFIQUE au sous-type PPM-AGPM.
+        PointsCtrl c1 = new PointsCtrl();
+        c1.setIdPointCtrl(801); c1.setLibelPointCtrl("Montants cohérents"); c1.setObligatoire(true);
+        c1.setIdTypeDossier("DDP"); c1.setOrdrePointCtrl(1);
+        pointsCtrlRepository.save(c1);
+        PointsCtrl c2 = new PointsCtrl();
+        c2.setIdPointCtrl(802); c2.setLibelPointCtrl("Signataire habilité"); c2.setObligatoire(true);
+        c2.setIdTypeDossier("DDP"); c2.setOrdrePointCtrl(2);
+        pointsCtrlRepository.save(c2);
+        PointsCtrl s1 = new PointsCtrl();
+        s1.setIdPointCtrl(803); s1.setLibelPointCtrl("AGPM joint et conforme"); s1.setObligatoire(true);
+        s1.setIdTypeDossier("DDP"); s1.setIdSousType("PPM-AGPM"); s1.setOrdrePointCtrl(3);
+        pointsCtrlRepository.save(s1);
+
+        // Grille effective d'un PPM : les 2 communs, PAS le point AGPM.
+        mvc.perform(get("/api/points-ctrls?sousType=PPM").header("Authorization", tokenMembre))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(2)))
+                .andExpect(jsonPath("$[?(@.idPointCtrl==803)]", hasSize(0)));
+        // Grille effective d'un PPM-AGPM : communs + spécifique (3 points) — grille PPM ≠ PPM-AGPM.
+        mvc.perform(get("/api/points-ctrls?sousType=PPM-AGPM").header("Authorization", tokenMembre))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(3)))
+                .andExpect(jsonPath("$[?(@.idPointCtrl==803)]", hasSize(1)));
+        // Filtre famille (écran admin) : tous les points DDP, spécifiques compris.
+        mvc.perform(get("/api/points-ctrls?typeDossier=DDP").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(3)));
+        // Gardes : sous-type inconnu → 400 ; sous-type hors famille → 400.
+        mvc.perform(get("/api/points-ctrls?sousType=XXX").header("Authorization", tokenMembre))
+                .andExpect(status().isBadRequest());
+        mvc.perform(get("/api/points-ctrls?typeDossier=DMC&sousType=PPM-AGPM").header("Authorization", tokenMembre))
+                .andExpect(status().isBadRequest());
+        // Admin : création d'un point ciblant un sous-type d'une AUTRE famille → 400 (cohérence dropdown).
+        mvc.perform(post("/api/points-ctrls").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idPointCtrl\":804,\"libelPointCtrl\":\"x\",\"obligatoire\":true,"
+                        + "\"idTypeDossier\":\"DDP\",\"idSousType\":\"DAO\"}"))
+                .andExpect(status().isBadRequest());
+        // Admin : création cohérente (sous-type de la même famille) → 201 avec idSousType exposé.
+        mvc.perform(post("/api/points-ctrls").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idPointCtrl\":805,\"libelPointCtrl\":\"Controle DAOR\",\"obligatoire\":false,"
+                        + "\"idTypeDossier\":\"DMC\",\"idSousType\":\"DAOR\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.idSousType").value("DAOR"));
+    }
+
+    @Test
     @DisplayName("Saisie dossier DMC/DDM : idSousType choisi (DAOR) → famille déduite ; sous-type DDP refusé ; sous-type inconnu → 400")
     void saisieDossier_sousTypeChoisi() throws Exception {
         // Nouveau contrat : idSousType → famille déduite du référentiel.

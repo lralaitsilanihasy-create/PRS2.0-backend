@@ -42,8 +42,22 @@ public class PointsCtrl {
     @Column(name = "ID_TYPE_DOSSIER", nullable = false)
     private String idTypeDossier;
 
+    /**
+     * ⚠️ Règle ajoutée — <strong>sous-type ciblé</strong> (FK {@code tr_sous_type_dossier}, facultatif) :
+     * {@code null} = point <strong>commun</strong> à toute la famille ({@code idTypeDossier}) ; renseigné =
+     * point <strong>spécifique</strong> à ce sous-type (ex. contrôle AGPM du seul {@code PPM-AGPM}). La
+     * grille effective d'un dossier = points communs de sa famille + points spécifiques de son sous-type.
+     */
+    @Column(name = "ID_SOUS_TYPE", length = 20)
+    private String idSousType;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ID_TYPE_DOSSIER", insertable = false, updatable = false)
     @JsonIgnore
     private TypeDossier typeDossier;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "ID_SOUS_TYPE", insertable = false, updatable = false)
+    @JsonIgnore
+    private SousTypeDossier sousTypeDossier;
 }

@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import jakarta.validation.Valid;
@@ -31,9 +32,15 @@ public class PointsCtrlController {
         this.service = service;
     }
 
+    /**
+     * Liste filtrable : {@code ?typeDossier=} (famille, écran admin) ; {@code ?sousType=} (grille
+     * <strong>effective</strong> du sous-type = points communs de la famille + spécifiques — requête de
+     * l'écran d'examen). Valeur inconnue ou sous-type hors famille → 400.
+     */
     @GetMapping
-    public List<PointsCtrlDto> findAll() {
-        return service.findAll();
+    public List<PointsCtrlDto> findAll(@RequestParam(required = false) String typeDossier,
+            @RequestParam(required = false) String sousType) {
+        return service.findAll(typeDossier, sousType);
     }
 
     @GetMapping("/{id}")

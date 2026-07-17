@@ -167,8 +167,13 @@ Acteur externe qui soumet ses PPM et marchés à la CNM. Suit l'avancement jusqu
   `DAOR`, … ; **DDM** ⊃ `MAOO`, `MAOR`, … La famille se **déduit** du sous-type. Famille **DDP** :
   sous-type **dérivé serveur** (`PPM-AGPM` ssi ≥1 marché en appel d'offres ouvert — même source de
   vérité que la règle AGPM ci-dessous), jamais choisi. Familles **DMC/DDM** : sous-type **choisi à la
-  saisie** (liste par famille). Les **pièces attendues** (`t_type_piece_jointe`) et **points de
-  contrôle** (`tr_points_ctrl`) restent rattachés à la **famille**. Les **nouvelles références**
+  saisie** (liste par famille). Les **pièces attendues** (`t_type_piece_jointe`) restent rattachées à la
+  **famille**. Les **points de contrôle** (`tr_points_ctrl`) sont rattachés à la famille et
+  **affinables par sous-type** (⚠️ règle ajoutée 2026-07-17) : `ID_SOUS_TYPE` facultatif — null = point
+  commun à la famille, renseigné = point spécifique au sous-type. **Grille effective d'un dossier =
+  communs de sa famille + spécifiques de son sous-type** (`GET /api/points-ctrls?sousType=X`) : la
+  grille d'un `PPM` (7 points) ≠ celle d'un `PPM-AGPM` (8 points, dont « AGPM joint et conforme » —
+  seed `2026-07-17_points_ctrl_sous_type.sql`). Les **nouvelles références**
   portent le segment **famille** (ex. `00012/DDP/CRM-ANT/2026`, numérotation continue) ; les
   références déjà émises sont conservées ; la référence initiale PPM (`xxxxx/<acronyme>/PPM/<année>`)
   garde son segment `PPM` (nom du document). Migration : `2026-07-17_familles_sous_types.sql`.
