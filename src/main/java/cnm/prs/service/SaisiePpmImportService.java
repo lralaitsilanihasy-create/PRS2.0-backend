@@ -109,6 +109,12 @@ public class SaisiePpmImportService {
     private static final Pattern SEGMENT_LOT = Pattern.compile(
             "(?i)\\blot\\s*(?:n[°ºo]\\s*)?(\\d{1,3})\\s*:");
 
+    /**
+     * ⚠️ Règle ajoutée — seuil (décision documentée) de la suggestion « vouliez-vous dire … ? » : distance
+     * de Levenshtein maximale (1..3) entre formes normalisées d'un mode non résolu et d'un mode du référentiel.
+     */
+    static final int SEUIL_SUGGESTION = 3;
+
     /** Montant « 1 005 000.00 » (groupes de milliers séparés par espace, ou nombre simple) — jamais un compte nu. */
     private static final String MONTANT = "(?:\\d{1,3}(?:[\\s\\u00a0]\\d{3})*|\\d+)[.,]\\d{2}";
     private static final Pattern MONEY = Pattern.compile(MONTANT);
@@ -400,17 +406,52 @@ public class SaisiePpmImportService {
                 new PrevisionImport("OUVERTURE", prev3.size() > 1 ? isoDate(prev3.get(1)) : null),
                 new PrevisionImport("ATTRIBUTION", prev3.size() > 2 ? isoDate(prev3.get(2)) : null));
 
-        Integer idNature = resoudreIdParLibelle(natureRepository.findAll(), Nature::getLibelle, Nature::getIdNature, natureLibelle);
-        if (natureLibelle != null && idNature == null) {
+        // ⚠️ Règle ajoutée — résolution par libellé avec normalisation ÉTENDUE (source unique
+        // LibelleNormalisation : pluriels simples, apostrophes/espaces typographiques). En cas de
+        // résolution, le libellé renvoyé est le CANONIQUE du référentiel (pas le texte brut du PDF) —
+        // les aides front (badge AGPM, datalist) comparent au libellé exact.
+        Nature natureRef = resoudreParLibelle(natureRepository.findAll(), Nature::getLibelle, natureLibelle);
+        Integer idNature = natureRef == null ? null : natureRef.getIdNature();
+        if (natureLibelle != null && natureRef == null) {
             avert.add("Nature « " + natureLibelle + " » non trouvée au référentiel — à confirmer.");
+        } else if (natureRef != null) {
+            natureLibelle = natureRef.getLibelle();
         }
-        Integer idMode = resoudreIdParLibelle(modePassationRepository.findAll(), ModePassation::getLibelle,
-                ModePassation::getIdMode, modeLibelle);
-        if (modeLibelle != null && idMode == null) {
-            avert.add("Mode de passation « " + modeLibelle + " » non trouvé au référentiel — à confirmer.");
+        ModePassation modeRef = resoudreParLibelle(modePassationRepository.findAll(),
+                ModePassation::getLibelle, modeLibelle);
+        Integer idMode = modeRef == null ? null : modeRef.getIdMode();
+        if (modeLibelle != null && modeRef == null) {
+            avert.add(avertissementModeNonResolu(modeLibelle));
+        } else if (modeRef != null) {
+            modeLibelle = modeRef.getLibelle();
         }
         return new MarcheImport(designation, montEstim, nouvMontEstim, idNature, natureLibelle,
                 idMode, modeLibelle, financement, benef, prev, lots);
+    }
+
+    /**
+     * ⚠️ Règle ajoutée — avertissement de mode non résolu, enrichi d'une <strong>suggestion</strong> quand un
+     * libellé du référentiel est proche (Levenshtein 1..{@value #SEUIL_SUGGESTION} sur formes normalisées).
+     * La suggestion n'auto-résout jamais (pas de fuzzy silencieux) : elle guide la PRMP.
+     */
+    private String avertissementModeNonResolu(String modeLibelle) {
+        String cible = LibelleNormalisation.normaliser(modeLibelle);
+        String suggestion = null;
+        int meilleure = Integer.MAX_VALUE;
+        for (ModePassation m : modePassationRepository.findAll()) {
+            if (m.getLibelle() == null) {
+                continue;
+            }
+            int d = LibelleNormalisation.distance(cible, LibelleNormalisation.normaliser(m.getLibelle()));
+            if (d > 0 && d <= SEUIL_SUGGESTION && d < meilleure) {
+                meilleure = d;
+                suggestion = m.getLibelle();
+            }
+        }
+        return suggestion != null
+                ? "Mode de passation « " + modeLibelle + " » non trouvé au référentiel — vouliez-vous dire « "
+                        + suggestion + " » ?"
+                : "Mode de passation « " + modeLibelle + " » non trouvé au référentiel — à confirmer.";
     }
 
     /** Résultat d'une extraction d'allotissement réussie : désignation raccourcie + lots. */
@@ -524,15 +565,16 @@ public class SaisiePpmImportService {
         return out;
     }
 
-    private <T> Integer resoudreIdParLibelle(List<T> refs, java.util.function.Function<T, String> libelle,
-            java.util.function.Function<T, Integer> id, String cible) {
+    /** Résout un élément de référentiel par libellé normalisé (source unique {@link LibelleNormalisation}). */
+    private <T> T resoudreParLibelle(List<T> refs, java.util.function.Function<T, String> libelle, String cible) {
         if (cible == null || cible.isBlank()) {
             return null;
         }
-        String c = normaliser(cible);
+        String c = LibelleNormalisation.normaliser(cible);
         return refs.stream()
-                .filter(x -> libelle.apply(x) != null && normaliser(libelle.apply(x)).equals(c))
-                .map(id).findFirst().orElse(null);
+                .filter(x -> libelle.apply(x) != null
+                        && LibelleNormalisation.normaliser(libelle.apply(x)).equals(c))
+                .findFirst().orElse(null);
     }
 
     /** « 27/04/2026 » → « 2026-04-27 ». */
@@ -554,7 +596,7 @@ public class SaisiePpmImportService {
     }
 
     private static String normaliser(String s) {
-        return sansAccents(s).toUpperCase(Locale.FRENCH).replaceAll("[^A-Z0-9]", "");
+        return LibelleNormalisation.normaliser(s);
     }
 
     private static String sansAccents(String s) {

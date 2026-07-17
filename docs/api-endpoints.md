@@ -1202,7 +1202,15 @@ volumineux → **400** (annule la création si multipart) ; **404** si l'UGPM ou
 > motif d'allotissement → inchangé (lots vides, pas d'avertissement).
 > **Read-only** : les référentiels manquants (`idNature`/`idMode`/`numCompte`/`soaCode`,
 > entité) **ne sont pas créés** — renvoyés en libellé seul + listés dans `avertissements` ; la
-> création-à-la-volée se fait au `POST /api/saisies/ppm`. PDF illisible / non-PDF / sans texte → **400** (message
+> création-à-la-volée se fait au `POST /api/saisies/ppm`.
+> ⚠️ **Résolution des modes/natures (règle révisée 2026-07-18)** : normalisation **étendue** (trim + casse +
+> accents + apostrophes/espaces typographiques + **pluriels simples** — un « s » final par token), **même
+> fonction** que la création-à-la-volée du POST (source unique). En cas de résolution, `modeLibelle` /
+> `natureLibelle` renvoient le **libellé canonique du référentiel** (pas le texte brut du PDF) — les aides
+> front (badge/bandeau AGPM, datalist) comparent au libellé exact. Mode **non résolu** malgré la
+> normalisation : si un mode du référentiel est **proche** (Levenshtein 1..3 sur formes normalisées),
+> l'avertissement est enrichi — « Mode « X » non trouvé au référentiel — **vouliez-vous dire « Y » ?** » ;
+> jamais d'auto-résolution fuzzy. PDF illisible / non-PDF / sans texte → **400** (message
 > clair, pas de données partielles silencieuses).
 >
 > **Parsing du tableau — sémantique par enregistrement** (calibré sur `PPM_26-…` **et** `PPM_26-488-…` MIDSP).
@@ -1251,11 +1259,23 @@ volumineux → **400** (annule la création si multipart) ; **404** si l'UGPM ou
 
 > ⚠️ **Nature / mode / compte — résolution-ou-création à la volée (règle ajoutée).** Pour l'**import PPM** :
 > si `idNature` (resp. `idMode`) est **absent** mais `natureLibelle` (resp. `modeLibelle`) est fourni, le service
-> **résout** le référentiel par **libellé normalisé** (trim + casse + accents) dans `tr_nature` (resp. `tr_mode_passation`),
+> **résout** le référentiel par **libellé normalisé** dans `tr_nature` (resp. `tr_mode_passation`),
 > ou le **crée à la volée** (PK = `max+1`) s'il n'existe pas — dé-doublonnage sur le libellé normalisé. De même, **`numCompte`**
 > (compte du marché) est **résolu-ou-créé** dans `tr_compte` (PK = le numéro lui-même) pour éviter la violation FK
 > `t_marche.NUM_COMPTE`. **Résolution = réutilisation de l'existant, jamais suppression/recréation.** Créations
 > **tracées** dans `t_audit_log` (`TYPE_ACTION=CREATION_A_LA_VOLEE`). Si l'`id*` est **présent**, le libellé associé est **ignoré**.
+>
+> ⚠️ **Normalisation ÉTENDUE des libellés (règle révisée 2026-07-18 — ferme le contournement AGPM).** La
+> normalisation de résolution (source unique serveur `LibelleNormalisation`, partagée import + création-à-la-volée)
+> = trim + casse + accents **+ apostrophes/espaces typographiques neutralisés + pluriels simples** (suppression
+> d'un « s » **final par token** ; pas de « x »). Ainsi « APPEL D'OFFRE OUVERT » (coquille PDF, singulier)
+> **résout** vers « Appel d'offres ouvert » (`idMode=1`, `declencheAgpm`) au lieu de créer un quasi-doublon sans
+> drapeau — la pièce AGPM reste exigée et le sous-type dérive bien en `PPM-AGPM`. **Portée** : libellés **modes
+> et natures** (même mécanique) ; **pas** les codes SOA/comptes (identifiants exacts). **Signal de proximité** :
+> si un mode est malgré tout créé à la volée avec un libellé **proche** (Levenshtein ≤ 3 sur formes normalisées)
+> d'un mode `declencheAgpm=true`, la création est **permise** mais **signalée** — log WARN + audit
+> `TYPE_ACTION=CREATION_MODE_PROCHE_AGPM` (pas d'avertissement de réponse : `DossierDto` n'a pas de champ
+> avertissements) — pour arbitrage Admin (fusion / coche du drapeau).
 > **Bénéficiaires par marché (règle ajoutée).** `beneficiaires[]` (optionnel) = une ligne **`t_service_beneficiaire`**
 > par élément `{ soaCode, numCompte, ancMontBenef, nouvMontBenef }`. `soaCode` est **résolu-ou-créé** dans
 > `tr_soa_beneficiaire` (PK = `soaCode`, audit `CREATION_A_LA_VOLEE`), `numCompte` dans `tr_compte` — même logique

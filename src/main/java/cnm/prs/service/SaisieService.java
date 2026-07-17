@@ -69,6 +69,8 @@ import cnm.prs.security.CurrentUser;
 @Transactional
 public class SaisieService {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(SaisieService.class);
+
     /** Famille « Dossier de Planification » (codes centralisés dans {@link DossierIntegriteService}). */
     private static final String FAMILLE_DDP = DossierIntegriteService.FAMILLE_DDP;
 
@@ -336,7 +338,18 @@ public class SaisieService {
         return nouvelId;
     }
 
-    /** Idem {@link #resoudreOuCreerNature} pour le mode de passation ({@code tr_mode}). */
+    /**
+     * Idem {@link #resoudreOuCreerNature} pour le mode de passation ({@code tr_mode}).
+     *
+     * <p>⚠️ Règle ajoutée — résolution avec la normalisation <strong>étendue</strong> partagée
+     * ({@link LibelleNormalisation} : pluriels simples, apostrophes/espaces typographiques) : une coquille
+     * du PDF (« APPEL D'OFFRE OUVERT » singulier) résout vers le mode canonique au lieu de créer un
+     * quasi-doublon sans {@code declencheAgpm} — fermant le contournement silencieux de la règle AGPM.
+     * Si un mode est néanmoins <strong>créé</strong> alors que son libellé est proche (Levenshtein ≤
+     * {@value SaisiePpmImportService#SEUIL_SUGGESTION}) d'un mode <strong>déclencheur d'AGPM</strong>, le
+     * cas est signalé : log WARN + trace d'audit {@code CREATION_MODE_PROCHE_AGPM} (pas d'avertissement de
+     * réponse — le contrat {@code DossierDto} n'a pas de champ avertissements).</p>
+     */
     private Integer resoudreOuCreerMode(Integer id, String libelle) {
         if (id != null) {
             return id;
@@ -344,10 +357,11 @@ public class SaisieService {
         if (libelle == null || libelle.isBlank()) {
             return null;
         }
-        String cible = normaliser(libelle);
+        String cible = LibelleNormalisation.normaliser(libelle);
         List<ModePassation> refs = modePassationRepository.findAll();
         Integer existant = refs.stream()
-                .filter(md -> md.getLibelle() != null && normaliser(md.getLibelle()).equals(cible))
+                .filter(md -> md.getLibelle() != null
+                        && LibelleNormalisation.normaliser(md.getLibelle()).equals(cible))
                 .map(ModePassation::getIdMode).findFirst().orElse(null);
         if (existant != null) {
             return existant;
@@ -361,7 +375,31 @@ public class SaisieService {
         modePassationRepository.save(md);
         auditLogService.enregistrer(CurrentUser.ref().orElse(null), "tr_mode_passation",
                 String.valueOf(nouvelId), "CREATION_A_LA_VOLEE", null);
+        signalerSiProcheModeAgpm(nouvelId, libelle.trim(), cible, refs);
         return nouvelId;
+    }
+
+    /**
+     * ⚠️ Règle ajoutée — filet AGPM : si le mode créé à la volée est proche d'un mode existant
+     * {@code declencheAgpm=true}, le signaler (WARN + audit) pour qu'un Admin arbitre (fusion / coche du
+     * drapeau). Sans blocage : la création reste permise (un libellé réellement nouveau reste créé).
+     */
+    private void signalerSiProcheModeAgpm(int nouvelId, String libelle, String cibleNormalisee,
+            List<ModePassation> refs) {
+        for (ModePassation m : refs) {
+            if (!Boolean.TRUE.equals(m.getDeclencheAgpm()) || m.getLibelle() == null) {
+                continue;
+            }
+            int d = LibelleNormalisation.distance(cibleNormalisee, LibelleNormalisation.normaliser(m.getLibelle()));
+            if (d > 0 && d <= SaisiePpmImportService.SEUIL_SUGGESTION) {
+                log.warn("Mode créé à la volée « {} » (id {}) proche du mode déclencheur d'AGPM « {} » (id {}, "
+                        + "distance {}) — vérifier s'il s'agit d'une coquille (fusion / DECLENCHE_AGPM à arbitrer).",
+                        libelle, nouvelId, m.getLibelle(), m.getIdMode(), d);
+                auditLogService.enregistrer(CurrentUser.ref().orElse(null), "tr_mode_passation",
+                        String.valueOf(nouvelId), "CREATION_MODE_PROCHE_AGPM", null);
+                return;
+            }
+        }
     }
 
     /**
@@ -477,10 +515,9 @@ public class SaisieService {
         return code;
     }
 
-    /** Normalisation pour dé-duplication : sans accents, majuscules, sans caractères non alphanumériques. */
+    /** Normalisation pour dé-duplication — déléguée à la source unique {@link LibelleNormalisation} (étendue). */
     private static String normaliser(String s) {
-        String sansAccents = java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFD).replaceAll("\\p{M}", "");
-        return sansAccents.toUpperCase(java.util.Locale.FRENCH).replaceAll("[^A-Z0-9]", "");
+        return LibelleNormalisation.normaliser(s);
     }
 
     /**

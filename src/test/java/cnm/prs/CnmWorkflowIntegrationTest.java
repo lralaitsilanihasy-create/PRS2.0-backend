@@ -5573,6 +5573,121 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("Import PPM — normalisation étendue : « APPEL D'OFFRE OUVERT » (singulier) résout idMode=1, modeLibelle CANONIQUE, sans avertissement")
+    void importPpm_modeSingulierResolu() throws Exception {
+        natureRepository.save(new Nature(1, "Travaux", null));
+        ModePassation aoo = new ModePassation(1, "Appel d'offres ouvert", null, null, null, null);
+        aoo.setDeclencheAgpm(true);
+        modePassationRepository.save(aoo);
+
+        byte[] pdf = pdfAvecTexte(
+                "PLAN DE PASSATION DES MARCHES POUR L'ANNEE 2026",
+                "Autorite Contractante: MINISTERE TEST",
+                "NATURE OBJET MONTANT ESTIMATIF INITIAL",
+                "Travaux Rehabilitation de la route reliant Tsiatosika",
+                "23 100 000 000.00 APPEL D'OFFRE OUVERT RPI 00-21-0-J00-00000 6211 23 100 000 000.00 01/06/2026 02/06/2026 12/06/2026",
+                "Fait a Antananarivo le 14 avril 2026");
+
+        mvc.perform(multipart("/api/saisies/ppm/import")
+                .file(new MockMultipartFile("fichier", "ppm.pdf", "application/pdf", pdf))
+                .header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.marches", hasSize(1)))
+                .andExpect(jsonPath("$.marches[0].idMode").value(1))
+                // Libellé CANONIQUE du référentiel (pas le texte brut du PDF) — le badge AGPM du front s'aligne.
+                .andExpect(jsonPath("$.marches[0].modeLibelle").value("Appel d'offres ouvert"))
+                .andExpect(jsonPath("$.avertissements[?(@ =~ /.*Mode de passation.*/)]", hasSize(0)));
+    }
+
+    @Test
+    @DisplayName("Import PPM — mode non résolu mais proche : avertissement « vouliez-vous dire … ? » (pas d'auto-résolution fuzzy)")
+    void importPpm_modeSuggestion() throws Exception {
+        natureRepository.save(new Nature(1, "Travaux", null));
+        modePassationRepository.save(new ModePassation(1, "Appel d'offres ouvert", null, null, null, null));
+
+        byte[] pdf = pdfAvecTexte(
+                "PLAN DE PASSATION DES MARCHES POUR L'ANNEE 2026",
+                "Autorite Contractante: MINISTERE TEST",
+                "NATURE OBJET MONTANT ESTIMATIF INITIAL",
+                "Travaux Rehabilitation de piste",
+                "5 550 000.00 Apel d'offres ouvert RPI 00-21-0-J00-00000 6211 5 550 000.00 01/06/2026 02/06/2026 12/06/2026",
+                "Fait a Antananarivo le 14 avril 2026");
+
+        mvc.perform(multipart("/api/saisies/ppm/import")
+                .file(new MockMultipartFile("fichier", "ppm.pdf", "application/pdf", pdf))
+                .header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.marches[0].idMode").value(nullValue()))
+                .andExpect(jsonPath("$.marches[0].modeLibelle").value("Apel d'offres ouvert"))
+                .andExpect(jsonPath(
+                        "$.avertissements[?(@ =~ /.*Apel d'offres ouvert.*vouliez-vous dire.*Appel d'offres ouvert.*/)]",
+                        hasSize(1)));
+    }
+
+    @Test
+    @DisplayName("Saisie à la volée — « APPEL D'OFFRE OUVERT » résout le mode canonique (pas de doublon) → sous-type PPM-AGPM (contournement AGPM fermé)")
+    void saisie_modeSingulier_fermeContournementAgpm() throws Exception {
+        natureRepository.save(new Nature(1, "Travaux", null));
+        capmRepository.save(new Capm(1, "LANCEMENT", 1));
+        ModePassation aoo = new ModePassation(1, "Appel d'offres ouvert", null, null, null, null);
+        aoo.setDeclencheAgpm(true);
+        modePassationRepository.save(aoo);
+        long modesAvant = modePassationRepository.count();
+
+        // La coquille du PDF (singulier) part telle quelle à la création — avant : quasi-doublon sans declencheAgpm.
+        String body = "{\"idEntiteContract\":1,\"exercice\":2026,\"dateSignature\":\"2026-01-10\","
+                + "\"marches\":[{\"designationMarche\":\"Route Tsiatosika\",\"montEstim\":23100000000,\"idNature\":1,"
+                + "\"modeLibelle\":\"APPEL D'OFFRE OUVERT\","
+                + "\"processus\":[{\"idCapm\":1,\"dateDebut\":\"2026-02-01\"}]}]}";
+        String resp = mvc.perform(post("/api/saisies/ppm").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated())
+                // Sous-type dérivé PPM-AGPM : la règle AGPM s'applique malgré la coquille.
+                .andExpect(jsonPath("$.idSousType").value("PPM-AGPM"))
+                .andReturn().getResponse().getContentAsString();
+        int idDoss = com.jayway.jsonpath.JsonPath.read(resp, "$.idDossier");
+
+        // Résolu sur le mode canonique 1 — AUCUN doublon créé.
+        org.junit.jupiter.api.Assertions.assertEquals(1,
+                marcheRepository.findByIdDossier(idDoss).get(0).getIdMode());
+        org.junit.jupiter.api.Assertions.assertEquals(modesAvant, modePassationRepository.count());
+    }
+
+    @Test
+    @DisplayName("Saisie à la volée — libellé réellement nouveau toujours créé ; libellé proche d'un mode AGPM créé MAIS signalé (audit)")
+    void saisie_modeNouveau_creeEtSignaleSiProcheAgpm() throws Exception {
+        natureRepository.save(new Nature(1, "Travaux", null));
+        capmRepository.save(new Capm(1, "LANCEMENT", 1));
+        ModePassation aoo = new ModePassation(1, "Appel d'offres ouvert", null, null, null, null);
+        aoo.setDeclencheAgpm(true);
+        modePassationRepository.save(aoo);
+
+        // (1) Libellé réellement nouveau → créé à la volée (garde inchangée).
+        String b1 = "{\"idEntiteContract\":1,\"exercice\":2026,\"dateSignature\":\"2026-01-10\","
+                + "\"marches\":[{\"designationMarche\":\"M1\",\"montEstim\":1000,\"idNature\":1,"
+                + "\"modeLibelle\":\"Concours d'architecture\","
+                + "\"processus\":[{\"idCapm\":1,\"dateDebut\":\"2026-02-01\"}]}]}";
+        mvc.perform(post("/api/saisies/ppm").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content(b1))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.idSousType").value("PPM"));   // pas déclencheur
+        org.junit.jupiter.api.Assertions.assertTrue(modePassationRepository.findAll().stream()
+                .anyMatch(m -> "Concours d'architecture".equals(m.getLibelle())), "mode nouveau créé");
+
+        // (2) Libellé non résolu mais PROCHE du mode AGPM (« ouver » tronqué, distance 1) → créé + signal audit.
+        String b2 = "{\"idEntiteContract\":1,\"exercice\":2026,\"dateSignature\":\"2026-01-10\","
+                + "\"marches\":[{\"designationMarche\":\"M2\",\"montEstim\":1000,\"idNature\":1,"
+                + "\"modeLibelle\":\"Appel d'offre ouver\","
+                + "\"processus\":[{\"idCapm\":1,\"dateDebut\":\"2026-02-01\"}]}]}";
+        mvc.perform(post("/api/saisies/ppm").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content(b2))
+                .andExpect(status().isCreated());
+        mvc.perform(get("/api/audit-logs").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.typeAction=='CREATION_MODE_PROCHE_AGPM')]", hasSize(1)));
+    }
+
+    @Test
     @DisplayName("Import PPM PDF multi-pages : les 2 pages sont lues (en-tête/pied répétés ignorés, borne sur le dernier « Fait à … »)")
     void importPpm_multiPages_ok() throws Exception {
         natureRepository.save(new Nature(1, "Travaux", null));
