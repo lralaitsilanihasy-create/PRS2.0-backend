@@ -12,10 +12,11 @@ import lombok.NoArgsConstructor;
  * Entité JPA mappée sur la table {@code tr_localite}.
  * Générée à partir du MLD (db_ppm110626.pgerd).
  *
- * <p>⚠️ La colonne {@code REFERENCEMENT} (héritée du MLD, sans sémantique — jamais lue par la génération
- * de références ni les documents) est <strong>dépréciée</strong> : retirée de l'entité et du contrat API
- * (2026-07-17), conservée en base et rendue nullable (migration
- * {@code 2026-07-17_localite_referencement_deprecie.sql}).</p>
+ * <p>⚠️ Les colonnes {@code REFERENCEMENT} puis {@code LOCALITE} (code max 3) — héritées du MLD, sans
+ * sémantique : jamais lues par la génération de références (segment = PK {@code ID_LOCALITE}) ni par les
+ * documents ({@code LIBELLE_LOCALITE}) — sont <strong>dépréciées</strong> : retirées de l'entité et du
+ * contrat API (2026-07-17), conservées en base et rendues nullables (migrations
+ * {@code 2026-07-17_localite_referencement_deprecie.sql} et {@code 2026-07-17_localite_code_deprecie.sql}).</p>
  */
 @Entity
 @Table(name = "tr_localite")
@@ -30,7 +31,4 @@ public class Localite {
 
     @Column(name = "LIBELLE_LOCALITE", nullable = false, length = 50)
     private String libelleLocalite;
-
-    @Column(name = "LOCALITE", nullable = false, length = 3)
-    private String localite;
 }

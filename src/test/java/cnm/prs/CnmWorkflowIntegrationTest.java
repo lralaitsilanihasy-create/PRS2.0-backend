@@ -1006,7 +1006,7 @@ class CnmWorkflowIntegrationTest {
     @Test
     @DisplayName("Référentiel : écriture interdite au Membre (403), permise à l'Admin (201)")
     void referentiel_ecritureAdminSeulement() throws Exception {
-        String body = "{\"idLocalite\":\"TMS\",\"libelleLocalite\":\"Toamasina\",\"localite\":\"TMS\"}";
+        String body = "{\"idLocalite\":\"TMS\",\"libelleLocalite\":\"Toamasina\"}";
 
         mvc.perform(post("/api/localites").header("Authorization", tokenMembre)
                 .contentType(MediaType.APPLICATION_JSON).content(body))
@@ -1176,7 +1176,7 @@ class CnmWorkflowIntegrationTest {
     void audit_traceLesEcritures() throws Exception {
         mvc.perform(post("/api/localites").header("Authorization", tokenAdmin)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idLocalite\":\"TMS\",\"libelleLocalite\":\"Toamasina\",\"localite\":\"TMS\"}"))
+                .content("{\"idLocalite\":\"TMS\",\"libelleLocalite\":\"Toamasina\"}"))
                 .andExpect(status().isCreated());
 
         mvc.perform(get("/api/audit-logs").header("Authorization", tokenAdmin))
@@ -1228,7 +1228,7 @@ class CnmWorkflowIntegrationTest {
     void pk_idManquant_renvoie400() throws Exception {
         mvc.perform(post("/api/localites").header("Authorization", tokenAdmin)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"libelleLocalite\":\"X\",\"localite\":\"X\"}"))
+                .content("{\"libelleLocalite\":\"X\"}"))
                 .andExpect(status().isBadRequest());
     }
 
@@ -7328,11 +7328,10 @@ class CnmWorkflowIntegrationTest {
     }
 
     private Localite localite(String id, String libelle) {
-        // referencement retiré du contrat/entité (2026-07-17) — colonne BD dépréciée (nullable).
+        // referencement + code localite retirés du contrat/entité (2026-07-17) — colonnes BD dépréciées.
         Localite l = new Localite();
         l.setIdLocalite(id);
         l.setLibelleLocalite(libelle);
-        l.setLocalite(id);
         return l;
     }
 
