@@ -59,8 +59,9 @@ public record SaisieMarcheLigne(
 
         // Processus de marché + dates prévisionnelles (idCapm, dateDebut, dateFin). @Valid cascade la
         // validation par processus (chemins marches[i].processus[j].champ). « Au moins un processus »
-        // est exigé à la CRÉATION (SaisieService) — pas via @NotEmpty ici, pour ne pas casser l'édition
-        // qui partage ce DTO (EditionPpmRequest).
+        // est exigé à la CRÉATION et pour toute ligne NOUVELLE à l'édition (SaisieService) — pas via
+        // @NotEmpty ici : une ligne mise à jour (idDetail fourni) peut omettre la liste (= conservée) ;
+        // fournie, elle REMPLACE les processus existants (vide → 400, invariant ≥1 par marché).
         @Valid
         List<ProcessusMarche> processus,
 

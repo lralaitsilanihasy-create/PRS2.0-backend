@@ -13,6 +13,12 @@ import jakarta.validation.constraints.Size;
  * <strong>remplace</strong> l'ensemble de ses lignes de marché par la liste fournie (ajout des
  * nouvelles, mise à jour des existantes par {@code idDetail}, retrait des absentes). La localité,
  * le type, le propriétaire et l'entité du dossier ne changent pas (fixés à la saisie).
+ *
+ * <p>⚠️ Règle corrigée (2026-07-18) — les <strong>sous-objets</strong> des lignes
+ * ({@code beneficiaires[]}, {@code lots[]}, {@code processus[]}) sont traités comme au POST, avec les
+ * mêmes validations (Σ bénéficiaires, chronologie, ≥1 processus par ligne nouvelle). Pour une ligne
+ * <em>mise à jour</em> ({@code idDetail} fourni) : liste <strong>fournie</strong> = remplacement
+ * complet des enfants de ce type ; liste <strong>absente</strong> ({@code null}) = enfants conservés.</p>
  */
 public record EditionPpmRequest(
 

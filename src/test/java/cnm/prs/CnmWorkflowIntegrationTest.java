@@ -2358,9 +2358,11 @@ class CnmWorkflowIntegrationTest {
         org.junit.jupiter.api.Assertions.assertEquals("00005/DGB/PPM/2026",
                 dossierRepository.findById(135).orElseThrow().getRefeDossier());
         // Dossier BROUILLON issu du retrait → édition PPM (en-tête + ligne de marché) acceptée (200).
+        // Ligne NOUVELLE à l'édition → ≥1 processus obligatoire (règle corrigée, comme au POST).
+        capmRepository.save(new Capm(1, "LANCEMENT", 1));
         String edition = "{\"exercice\":2027,\"signataire\":\"Maj retrait\",\"dateSignature\":\"2026-02-01\","
                 + "\"reference\":\"PPM-135-v2\",\"marches\":[{\"montEstim\":500000000,\"idNature\":1,"
-                + "\"statut\":\"PREVU\"}]}";
+                + "\"statut\":\"PREVU\",\"processus\":[{\"idCapm\":1,\"dateDebut\":\"2026-02-01\",\"dateFin\":\"2026-06-30\"}]}]}";
         mvc.perform(put("/api/saisies/ppm/135").header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON).content(edition))
                 .andExpect(status().isOk())
@@ -4307,9 +4309,12 @@ class CnmWorkflowIntegrationTest {
         mvc.perform(get("/api/marches/" + idM500).header("Authorization", tokenPrmp)).andExpect(jsonPath("$.idMode").value(2));
 
         // Édition : en-tête + idM150 → 1,5 Md (mode SAISI 1), idM500 retiré, nouvelle ligne 500M ajoutée (mode SAISI 2).
+        // Règle corrigée : une ligne NOUVELLE à l'édition exige ≥1 processus (comme au POST) ; la ligne
+        // mise à jour idM150 omet la liste → ses processus existants sont conservés.
         String edition = "{\"exercice\":2027,\"signataire\":\"RABE Maj\",\"dateSignature\":\"2026-02-01\",\"reference\":\"PPM-120-v2\","
                 + "\"marches\":[{\"idDetail\":" + idM150 + ",\"montEstim\":1500000000,\"idNature\":1,\"idMode\":1,\"statut\":\"PREVU\"},"
-                + "{\"montEstim\":500000000,\"idNature\":1,\"idMode\":2,\"statut\":\"PREVU\"}]}";
+                + "{\"montEstim\":500000000,\"idNature\":1,\"idMode\":2,\"statut\":\"PREVU\","
+                + "\"processus\":[{\"idCapm\":1,\"dateDebut\":\"2026-02-01\",\"dateFin\":\"2026-06-30\"}]}]}";
         mvc.perform(put("/api/saisies/ppm/" + idDoss).header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON).content(edition))
                 .andExpect(status().isOk())
@@ -4356,6 +4361,123 @@ class CnmWorkflowIntegrationTest {
         mvc.perform(put("/api/saisies/ppm/" + idDoss121).header("Authorization", tokenAutrePrmp)
                 .contentType(MediaType.APPLICATION_JSON).content(edition))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Édition PPM — ré-import complet (régression) : les sous-objets des lignes (bénéficiaires, lots, processus) sont créés comme au POST")
+    void editionPpm_reImportComplet_sousObjetsCrees() throws Exception {
+        natureRepository.save(new Nature(1, "Travaux", null));
+        capmRepository.save(new Capm(1, "LANCEMENT", 1));
+        capmRepository.save(new Capm(2, "OUVERTURE", 2));
+        // Brouillon initial (import v1) : 1 ligne complète (bénéficiaire + lot + processus).
+        String creation = "{\"idEntiteContract\":1,\"exercice\":2026,\"signataire\":\"RABE\",\"dateSignature\":\"2026-01-10\",\"reference\":\"PPM-RI\","
+                + "\"marches\":[{\"designationMarche\":\"Ancienne ligne\",\"montEstim\":1000000,\"idNature\":1,\"statut\":\"PREVU\","
+                + "\"beneficiaires\":[{\"soaCode\":\"00-61-0-D10-00000\",\"numCompte\":\"2441\",\"ancMontBenef\":1000000}],"
+                + "\"lots\":[{\"designationLot\":\"Lot ancien\"}],"
+                + "\"processus\":[{\"idCapm\":1,\"dateDebut\":\"2026-02-01\",\"dateFin\":\"2026-03-01\"}]}]}";
+        String resp = mvc.perform(post("/api/saisies/ppm").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content(creation))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        int idDoss = com.jayway.jsonpath.JsonPath.read(resp, "$.idDossier");
+        int ancienId = marcheRepository.findByIdDossier(idDoss).get(0).getIdDetail();
+
+        // Ré-import front : PUT avec lignes SANS idDetail et sous-objets complets (payload front inchangé).
+        String edition = "{\"exercice\":2026,\"signataire\":\"RABE\",\"dateSignature\":\"2026-01-10\",\"reference\":\"PPM-RI\","
+                + "\"marches\":[{\"designationMarche\":\"Ligne reimportee (contrat cadre)\",\"formeMarche\":\"CONTRAT_CADRE\","
+                + "\"montEstim\":3000000,\"idNature\":1,\"statut\":\"PREVU\","
+                + "\"beneficiaires\":[{\"soaCode\":\"00-61-0-D10-00000\",\"numCompte\":\"2441\",\"ancMontBenef\":1000000},"
+                + "{\"soaCode\":\"00-62-0-D10-00000\",\"numCompte\":\"2441\",\"ancMontBenef\":2000000}],"
+                + "\"lots\":[{\"designationLot\":\"Lot 1\"},{\"designationLot\":\"Lot 2\"}],"
+                + "\"processus\":[{\"idCapm\":1,\"dateDebut\":\"2026-02-01\",\"dateFin\":\"2026-03-01\"},"
+                + "{\"idCapm\":2,\"dateDebut\":\"2026-03-02\",\"dateFin\":\"2026-04-01\"}]}]}";
+        mvc.perform(put("/api/saisies/ppm/" + idDoss).header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content(edition))
+                .andExpect(status().isOk());
+
+        List<Marche> marches = marcheRepository.findByIdDossier(idDoss);
+        org.junit.jupiter.api.Assertions.assertEquals(1, marches.size());
+        int nouvelId = marches.get(0).getIdDetail();
+        org.junit.jupiter.api.Assertions.assertNotEquals(ancienId, nouvelId);
+        org.junit.jupiter.api.Assertions.assertEquals(cnm.prs.enums.FormeMarche.CONTRAT_CADRE,
+                marches.get(0).getFormeMarche());
+        // Les sous-objets de la nouvelle ligne existent (le bug les laissait tous à zéro).
+        org.junit.jupiter.api.Assertions.assertEquals(2, marchePrevisionRepository.findByIdDetail(nouvelId).size());
+        org.junit.jupiter.api.Assertions.assertEquals(2, lotRepository.findByIdDetail(nouvelId).size());
+        org.junit.jupiter.api.Assertions.assertEquals(2, serviceBeneficiaireRepository.findAll().stream()
+                .filter(b -> b.getIdDetail() != null && b.getIdDetail().intValue() == nouvelId).count());
+        // Ceux de l'ancienne ligne retirée ont bien disparu (cascade).
+        org.junit.jupiter.api.Assertions.assertTrue(marchePrevisionRepository.findByIdDetail(ancienId).isEmpty());
+        org.junit.jupiter.api.Assertions.assertTrue(lotRepository.findByIdDetail(ancienId).isEmpty());
+    }
+
+    @Test
+    @DisplayName("Édition PPM — ligne mise à jour : listes absentes → enfants conservés ; fournies → remplacement ; validations actives (Σ, processus)")
+    void editionPpm_majPartielle_semantiqueEnfants() throws Exception {
+        natureRepository.save(new Nature(1, "Travaux", null));
+        capmRepository.save(new Capm(1, "LANCEMENT", 1));
+        String creation = "{\"idEntiteContract\":1,\"exercice\":2026,\"signataire\":\"RABE\",\"dateSignature\":\"2026-01-10\",\"reference\":\"PPM-MP\","
+                + "\"marches\":[{\"designationMarche\":\"Ligne\",\"montEstim\":1000000,\"idNature\":1,\"statut\":\"PREVU\","
+                + "\"beneficiaires\":[{\"soaCode\":\"00-61-0-D10-00000\",\"numCompte\":\"2441\",\"ancMontBenef\":1000000}],"
+                + "\"lots\":[{\"designationLot\":\"Lot unique\"}],"
+                + "\"processus\":[{\"idCapm\":1,\"dateDebut\":\"2026-02-01\",\"dateFin\":\"2026-03-01\"}]}]}";
+        String resp = mvc.perform(post("/api/saisies/ppm").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content(creation))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        int idDoss = com.jayway.jsonpath.JsonPath.read(resp, "$.idDossier");
+        int idDetail = marcheRepository.findByIdDossier(idDoss).get(0).getIdDetail();
+
+        // 1) MAJ sans aucune liste (undefined) → enfants CONSERVÉS.
+        String enTete = "{\"exercice\":2026,\"signataire\":\"RABE\",\"dateSignature\":\"2026-01-10\",\"reference\":\"PPM-MP\",";
+        mvc.perform(put("/api/saisies/ppm/" + idDoss).header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(enTete + "\"marches\":[{\"idDetail\":" + idDetail
+                        + ",\"designationMarche\":\"Ligne MAJ\",\"montEstim\":1000000,\"idNature\":1,\"statut\":\"PREVU\"}]}"))
+                .andExpect(status().isOk());
+        org.junit.jupiter.api.Assertions.assertEquals(1, marchePrevisionRepository.findByIdDetail(idDetail).size());
+        org.junit.jupiter.api.Assertions.assertEquals(1, lotRepository.findByIdDetail(idDetail).size());
+        org.junit.jupiter.api.Assertions.assertEquals(1, serviceBeneficiaireRepository.findAll().stream()
+                .filter(b -> b.getIdDetail() != null && b.getIdDetail().intValue() == idDetail).count());
+
+        // 2) Bénéficiaires fournis (2, Σ ok) + lots fournis VIDES → bénéficiaires REMPLACÉS (pas dupliqués),
+        //    lots tous retirés, processus (absents) conservés.
+        mvc.perform(put("/api/saisies/ppm/" + idDoss).header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(enTete + "\"marches\":[{\"idDetail\":" + idDetail
+                        + ",\"designationMarche\":\"Ligne MAJ\",\"montEstim\":1000000,\"idNature\":1,\"statut\":\"PREVU\","
+                        + "\"beneficiaires\":[{\"soaCode\":\"00-61-0-D10-00000\",\"numCompte\":\"2441\",\"ancMontBenef\":400000},"
+                        + "{\"soaCode\":\"00-62-0-D10-00000\",\"numCompte\":\"2441\",\"ancMontBenef\":600000}],"
+                        + "\"lots\":[]}]}"))
+                .andExpect(status().isOk());
+        org.junit.jupiter.api.Assertions.assertEquals(2, serviceBeneficiaireRepository.findAll().stream()
+                .filter(b -> b.getIdDetail() != null && b.getIdDetail().intValue() == idDetail).count());
+        org.junit.jupiter.api.Assertions.assertEquals(0, lotRepository.findByIdDetail(idDetail).size());
+        org.junit.jupiter.api.Assertions.assertEquals(1, marchePrevisionRepository.findByIdDetail(idDetail).size());
+
+        // 3) Validations actives (le PUT ne les saute plus) : Σ bénéficiaires ≠ montant → 400 ciblé.
+        mvc.perform(put("/api/saisies/ppm/" + idDoss).header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(enTete + "\"marches\":[{\"idDetail\":" + idDetail
+                        + ",\"designationMarche\":\"Ligne MAJ\",\"montEstim\":1000000,\"idNature\":1,\"statut\":\"PREVU\","
+                        + "\"beneficiaires\":[{\"soaCode\":\"00-61-0-D10-00000\",\"numCompte\":\"2441\",\"ancMontBenef\":999}]}]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[0].champ").value("marches[0].beneficiaires"));
+
+        // 4) Remplacement des processus par une liste VIDE → 400 (invariant ≥1 processus par marché).
+        mvc.perform(put("/api/saisies/ppm/" + idDoss).header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(enTete + "\"marches\":[{\"idDetail\":" + idDetail
+                        + ",\"designationMarche\":\"Ligne MAJ\",\"montEstim\":1000000,\"idNature\":1,\"statut\":\"PREVU\","
+                        + "\"processus\":[]}]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[0].champ").value("marches[0].processus"));
+
+        // 5) Ligne NOUVELLE sans processus → 400 (même règle qu'au POST).
+        mvc.perform(put("/api/saisies/ppm/" + idDoss).header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(enTete + "\"marches\":[{\"designationMarche\":\"Nouvelle sans processus\","
+                        + "\"montEstim\":500000,\"idNature\":1,\"statut\":\"PREVU\"}]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[0].champ").value("marches[0].processus"));
     }
 
     @Test

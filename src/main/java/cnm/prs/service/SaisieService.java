@@ -53,6 +53,7 @@ import cnm.prs.repository.ServiceBeneficiaireRepository;
 import cnm.prs.repository.SoaBeneficiaireRepository;
 import cnm.prs.repository.SousTypeDossierRepository;
 import cnm.prs.repository.PrmpRepository;
+import cnm.prs.repository.TrancheRepository;
 import cnm.prs.repository.TypePieceJointeRepository;
 import cnm.prs.security.CurrentUser;
 
@@ -96,6 +97,7 @@ public class SaisieService {
     private final AuditLogService auditLogService;
     private final TypeDmcService typeDmcService;
     private final LotRepository lotRepository;
+    private final TrancheRepository trancheRepository;
     private final SousTypeDossierRepository sousTypeDossierRepository;
 
     public SaisieService(DossierRepository dossierRepository, PpmRepository ppmRepository,
@@ -110,7 +112,7 @@ public class SaisieService {
             CompteRepository compteRepository, ServiceBeneficiaireRepository serviceBeneficiaireRepository,
             SoaBeneficiaireRepository soaBeneficiaireRepository, AuditLogService auditLogService,
             TypeDmcService typeDmcService, LotRepository lotRepository,
-            SousTypeDossierRepository sousTypeDossierRepository) {
+            TrancheRepository trancheRepository, SousTypeDossierRepository sousTypeDossierRepository) {
         this.dossierRepository = dossierRepository;
         this.ppmRepository = ppmRepository;
         this.marcheRepository = marcheRepository;
@@ -133,6 +135,7 @@ public class SaisieService {
         this.auditLogService = auditLogService;
         this.typeDmcService = typeDmcService;
         this.lotRepository = lotRepository;
+        this.trancheRepository = trancheRepository;
         this.sousTypeDossierRepository = sousTypeDossierRepository;
     }
 
@@ -162,19 +165,7 @@ public class SaisieService {
             for (int i = 0; i < req.marches().size(); i++) {
                 SaisieMarcheLigne ligne = req.marches().get(i);
                 exigerAuMoinsUnProcessus(ligne, i);   // « au moins un processus » (NotEmpty, à la création)
-                // Charge les CAPM (idCapm existant, sinon 400) et valide la chronologie des processus.
-                List<ProcessusChronologie.Proc> procs = new ArrayList<>();
-                for (int j = 0; j < ligne.processus().size(); j++) {
-                    ProcessusMarche p = ligne.processus().get(j);
-                    Capm capm = capmConnu(p, i, j);
-                    procs.add(new ProcessusChronologie.Proc("marches[" + i + "].processus[" + j + "]",
-                            capm.getOrdre() == null ? 0 : capm.getOrdre(), capm.getLibelleProcessus(),
-                            p.dateDebut(), p.dateFin()));
-                }
-                ErrorResponse.FieldError violation = ProcessusChronologie.premiereViolation(procs);
-                if (violation != null) {
-                    throw new ChampsInvalidesException(List.of(violation));
-                }
+                validerChronologieProcessus(ligne, i);   // CAPM connus + cohérence chronologique
                 validerCoherenceMontants(ligne, i);   // Σ bénéficiaires = montant(s) du marché (si beneficiaires[] non vide)
                 Integer idDetail = marcheService.create(toMarcheDto(ligne, idDossier, idPpm)).getIdDetail();
                 for (ProcessusMarche p : ligne.processus()) {
@@ -249,9 +240,37 @@ public class SaisieService {
     }
 
     /**
+     * Charge les CAPM des processus d'une ligne ({@code idCapm} existant, sinon 400) et valide leur
+     * cohérence chronologique ({@link ProcessusChronologie}). Partagée création / édition — mêmes
+     * validations sur les deux chemins.
+     */
+    private void validerChronologieProcessus(SaisieMarcheLigne ligne, int i) {
+        List<ProcessusChronologie.Proc> procs = new ArrayList<>();
+        for (int j = 0; j < ligne.processus().size(); j++) {
+            ProcessusMarche p = ligne.processus().get(j);
+            Capm capm = capmConnu(p, i, j);
+            procs.add(new ProcessusChronologie.Proc("marches[" + i + "].processus[" + j + "]",
+                    capm.getOrdre() == null ? 0 : capm.getOrdre(), capm.getLibelleProcessus(),
+                    p.dateDebut(), p.dateFin()));
+        }
+        ErrorResponse.FieldError violation = ProcessusChronologie.premiereViolation(procs);
+        if (violation != null) {
+            throw new ChampsInvalidesException(List.of(violation));
+        }
+    }
+
+    /**
      * Édition d'un brouillon PPM (§3.1 M02) : met à jour l'en-tête du PPM et <strong>réconcilie</strong>
      * ses lignes de marché avec la liste fournie (ajout / mise à jour par {@code idDetail} / retrait des
      * absentes), en une transaction. Garde-fous (propriété, statut BROUILLON, type PPM) + mode recalculé.
+     *
+     * <p>⚠️ Règle corrigée (2026-07-18) — les <strong>sous-objets</strong> des lignes (bénéficiaires,
+     * lots, processus) sont traités comme au POST au lieu d'être silencieusement ignorés, avec les
+     * <strong>mêmes validations</strong> (Σ bénéficiaires, chronologie des processus, ≥1 processus par
+     * ligne <em>nouvelle</em>). Sémantique par ligne <em>mise à jour</em> ({@code idDetail} fourni) :
+     * liste <strong>fournie</strong> = <strong>remplacement complet</strong> des enfants de ce type ;
+     * liste <strong>absente</strong> ({@code null}) = enfants <strong>conservés</strong>. Un remplacement
+     * des processus par une liste vide est refusé (invariant « ≥1 processus par marché »).</p>
      */
     public DossierDto editerPpm(Integer idDossier, EditionPpmRequest req) {
         dossierIntegrite.exigerBrouillonModifiable(idDossier);
@@ -267,21 +286,62 @@ public class SaisieService {
         entete.setReference(req.reference());
         ppmService.update(ppm.getIdPpm(), entete);
 
-        // 2) Réconciliation des lignes par idDetail.
+        // 2) Réconciliation des lignes par idDetail — sous-objets compris (règle corrigée 2026-07-18).
         Set<Integer> existants = new HashSet<>();
         for (Marche m : marcheRepository.findByIdDossier(idDossier)) {
             existants.add(m.getIdDetail());
         }
         Set<Integer> demandes = new HashSet<>();
         if (req.marches() != null) {
-            for (SaisieMarcheLigne ligne : req.marches()) {
+            int prevSeq = marchePrevisionRepository.findMaxId();   // PK prévision allouée serveur (max+1)
+            for (int i = 0; i < req.marches().size(); i++) {
+                SaisieMarcheLigne ligne = req.marches().get(i);
+                boolean nouvelle = !existants.contains(ligne.idDetail());
                 demandes.add(ligne.idDetail());
-                MarcheDto m = toMarcheDto(ligne, idDossier, ppm.getIdPpm());
-                if (existants.contains(ligne.idDetail())) {
-                    marcheService.update(ligne.idDetail(), m);
-                } else {
-                    marcheService.create(m);
+                // Validations identiques au POST. Ligne nouvelle → ≥1 processus obligatoire ; ligne mise
+                // à jour → un remplacement explicite par une liste vide viderait le marché (refusé).
+                if (nouvelle) {
+                    exigerAuMoinsUnProcessus(ligne, i);
+                } else if (ligne.processus() != null && ligne.processus().isEmpty()) {
+                    throw new ChampsInvalidesException(List.of(new ErrorResponse.FieldError(
+                            "marches[" + i + "].processus", "Au moins un processus est obligatoire.")));
                 }
+                if (ligne.processus() != null) {
+                    validerChronologieProcessus(ligne, i);
+                }
+                validerCoherenceMontants(ligne, i);   // Σ bénéficiaires (si beneficiaires[] non vide)
+
+                MarcheDto m = toMarcheDto(ligne, idDossier, ppm.getIdPpm());
+                Integer idDetail;
+                if (!nouvelle) {
+                    marcheService.update(ligne.idDetail(), m);
+                    idDetail = ligne.idDetail();
+                    // Liste fournie = remplacement complet des enfants de ce type ; absente = conservés.
+                    if (ligne.processus() != null) {
+                        marchePrevisionRepository.deleteByIdDetail(idDetail);
+                    }
+                    if (ligne.beneficiaires() != null) {
+                        serviceBeneficiaireRepository.deleteByIdDetail(idDetail);
+                    }
+                    if (ligne.lots() != null) {
+                        List<Integer> idLots = lotRepository.findByIdDetail(idDetail).stream()
+                                .map(Lot::getIdLot).toList();
+                        if (!idLots.isEmpty()) {
+                            trancheRepository.deleteByIdLotIn(idLots);   // FK-safe avant retrait des lots
+                        }
+                        lotRepository.deleteByIdDetail(idDetail);
+                    }
+                } else {
+                    idDetail = marcheService.create(m).getIdDetail();
+                }
+                if (ligne.processus() != null) {
+                    for (ProcessusMarche p : ligne.processus()) {
+                        marchePrevisionService.create(new MarchePrevisionDto(
+                                ++prevSeq, idDetail, p.idCapm(), p.dateDebut(), p.dateFin(), null));
+                    }
+                }
+                creerBeneficiaires(idDetail, ligne);     // sans effet si beneficiaires null/vide
+                creerLots(idDetail, idDossier, ligne);   // sans effet si lots null/vide
             }
         }
         // 3) Retrait des lignes absentes de la demande.

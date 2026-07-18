@@ -1321,7 +1321,16 @@ attribué par le serveur.)* ⚠️ `idTypeDossier` est **déprécié** : accept�
 et interprété comme un code de **sous-type** (les anciens payloads `{"idTypeDossier":"DAO"}` restent valides).
 
 **`EditionPpmRequest`** (`PUT /api/saisies/ppm/{idDossier}`) — édite un **brouillon** PPM en une transaction :
-`exercice`, `signataire`, `dateSignature`, `reference` (en-tête, tous obligatoires) + `marches` (liste désirée). Les lignes sont **réconciliées par `idDetail`** : ajout des nouvelles, mise à jour des existantes (mode **recalculé**), **retrait** des absentes. La localité/le type/le propriétaire/l'entité ne changent pas. Dossier non BROUILLON → **409** ; non-propriétaire → **403**.
+`exercice`, `signataire`, `dateSignature`, `reference` (en-tête, tous obligatoires) + `marches` (liste désirée). Les lignes sont **réconciliées par `idDetail`** : ajout des nouvelles, mise à jour des existantes (mode **conservé tel quel** — saisi), **retrait** des absentes. La localité/le type/le propriétaire/l'entité ne changent pas. Dossier non BROUILLON → **409** ; non-propriétaire → **403**.
+
+> ⚠️ **Sous-objets des lignes à l'édition (règle corrigée 2026-07-18).** Le PUT traitait l'en-tête et les
+> colonnes du marché mais **ignorait silencieusement** `beneficiaires[]`, `lots[]` et `processus[]` (enfants des
+> anciennes lignes supprimés par cascade, ceux des nouvelles jamais créés). Désormais, **mêmes traitements et
+> validations qu'au POST** : bénéficiaires (+ contrôle **Σ**), lots, processus (+ **cohérence chronologique**,
+> **≥1 processus obligatoire par ligne _nouvelle_**). **Sémantique par ligne _mise à jour_** (`idDetail`
+> fourni) : liste **fournie** = **remplacement complet** des enfants de ce type ; liste **absente**
+> (`undefined`/`null`) = enfants **conservés**. Remplacer les `processus[]` par une liste **vide** est refusé
+> (**400**, invariant « ≥1 processus par marché ») ; `beneficiaires[]`/`lots[]` vides = retrait de tous.
 
 > 📌 **Modification d'un dossier BROUILLON par la PRMP — parcours réel (endpoints existants).** Il n'existe **pas** de façade `/api/dossiers/{id}/...` pour l'édition partielle : chaque partie se modifie via sa ressource propre, **toutes gardées par la même règle** — *dossier en `BROUILLON`* **et** *`idPrmp` == PRMP connectée* (sinon **403**/**409**). L'**entité** et la **localité** ne sont **jamais** modifiables (elles déterminent la référence du dossier).
 >
