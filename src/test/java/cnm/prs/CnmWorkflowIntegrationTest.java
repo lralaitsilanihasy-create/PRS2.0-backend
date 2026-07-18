@@ -5688,6 +5688,45 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("Import PPM — régression 161-PPM MTP : « 11,700 Km » dans la désignation ne casse plus le découpage des colonnes")
+    void importPpm_nombreDansDesignation_regression() throws Exception {
+        natureRepository.save(new Nature(1, "Travaux", null));
+        ModePassation aoo = new ModePassation(1, "Appel d'offres ouvert", null, null, null, null);
+        aoo.setDeclencheAgpm(true);
+        modePassationRepository.save(aoo);
+
+        // Ligne réelle de 161-PPM MTP.pdf : kilométrage « 11,700 Km (contrat cadre) » DANS la désignation.
+        byte[] pdf = pdfAvecTexte(
+                "PLAN DE PASSATION DES MARCHES POUR L'ANNEE 2026",
+                "Autorite Contractante: MINISTERE TEST",
+                "NATURE OBJET MONTANT ESTIMATIF INITIAL",
+                "Travaux Travaux d'amenagement de la voie rapide dans la Commune Urbaine de Sambava,",
+                "croisement Menagisy vers Ambodisatrana de longueur 11,700 Km (contrat cadre)",
+                "15 000 000 000.00 APPEL D'OFFRE OUVERT RPI 00-61-0-D10-00000 2441 15 000 000 000.00 06/03/2026 20/03/2026 31/03/2026",
+                "Fait a Antananarivo le 14 avril 2026");
+
+        mvc.perform(multipart("/api/saisies/ppm/import")
+                .file(new MockMultipartFile("fichier", "ppm.pdf", "application/pdf", pdf))
+                .header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.marches", hasSize(1)))
+                // Désignation INTÉGRALE, kilométrage compris — plus de troncature sur « 11,70 ».
+                .andExpect(jsonPath("$.marches[0].designationMarche").value(
+                        "Travaux d'amenagement de la voie rapide dans la Commune Urbaine de Sambava, "
+                                + "croisement Menagisy vers Ambodisatrana de longueur 11,700 Km (contrat cadre)"))
+                .andExpect(jsonPath("$.marches[0].montEstim").value(15000000000.00))
+                // Mode résolu canonique (règle pluriel) — plus d'avertissement « Km contrat ».
+                .andExpect(jsonPath("$.marches[0].idMode").value(1))
+                .andExpect(jsonPath("$.marches[0].modeLibelle").value("Appel d'offres ouvert"))
+                .andExpect(jsonPath("$.marches[0].financement").value("RPI"))
+                .andExpect(jsonPath("$.marches[0].beneficiaires[0].soaCode").value("00-61-0-D10-00000"))
+                .andExpect(jsonPath("$.marches[0].beneficiaires[0].numCompte").value("2441"))
+                .andExpect(jsonPath("$.marches[0].beneficiaires[0].ancMontBenef").value(15000000000.00))
+                .andExpect(jsonPath("$.marches[0].previsions[0].dateDebut").value("2026-03-06"))
+                .andExpect(jsonPath("$.avertissements[?(@ =~ /.*Km.*/)]", hasSize(0)));
+    }
+
+    @Test
     @DisplayName("Import PPM PDF multi-pages : les 2 pages sont lues (en-tête/pied répétés ignorés, borne sur le dernier « Fait à … »)")
     void importPpm_multiPages_ok() throws Exception {
         natureRepository.save(new Nature(1, "Travaux", null));

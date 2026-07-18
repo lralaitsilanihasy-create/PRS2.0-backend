@@ -115,8 +115,15 @@ public class SaisiePpmImportService {
      */
     static final int SEUIL_SUGGESTION = 3;
 
-    /** Montant « 1 005 000.00 » (groupes de milliers séparés par espace, ou nombre simple) — jamais un compte nu. */
-    private static final String MONTANT = "(?:\\d{1,3}(?:[\\s\\u00a0]\\d{3})*|\\d+)[.,]\\d{2}";
+    /**
+     * Montant « 1 005 000.00 » (groupes de milliers séparés par espace, ou nombre simple) — jamais un compte nu.
+     * ⚠️ Règle durcie (2026-07-18) — ancrage STRICT de la colonne montant : exactement 2 décimales
+     * <strong>non suivies d'un chiffre</strong> ({@code (?!\d)} : « 11,700 » — kilométrage dans la désignation —
+     * ne matche plus via « 11,70 »), et <strong>non suivies d'une unité de mesure</strong>
+     * ({@code Km/ml/m²/m³/m2/m3/ha}) : un nombre à 2 décimales suivi d'une unité appartient à la désignation.
+     */
+    private static final String MONTANT =
+            "(?:\\d{1,3}(?:[\\s\\u00a0]\\d{3})*|\\d+)[.,]\\d{2}(?!\\d)(?![\\s\\u00a0]*(?i:km|ml|m[²³23]|ha)\\b)";
     private static final Pattern MONEY = Pattern.compile(MONTANT);
     private static final Pattern DATE = Pattern.compile("\\d{2}/\\d{2}/\\d{4}");
     /** Jeton typé du bloc structurel : montant | code SOA | date | compte (3-4 chiffres nus) | mot. */
@@ -351,12 +358,33 @@ public class SaisiePpmImportService {
         }
         String core = rt.substring(0, coreEnd);
 
+        // ⚠️ Règle durcie (2026-07-18) — ANCRAGE PAR VRAISEMBLANCE : chaque montant du core est une ancre
+        // candidate (dans l'ordre) ; on retient la PREMIÈRE dont la structure aval est plausible (≥1 code
+        // SOA ou un compte). Un nombre resté dans la désignation malgré le format strict (ex. montant-like
+        // dans le texte) fait ainsi replier le découpage sur l'ancre suivante au lieu de produire des
+        // colonnes fausses. Aucune ancre plausible → repli sur la première (comportement antérieur, les
+        // avertissements existants — mode non résolu, alignement bénéficiaires — signalent la ligne).
+        List<Integer> ancres = new ArrayList<>();
         Matcher fm = MONEY.matcher(core);
-        if (!fm.find()) {
+        while (fm.find()) {
+            ancres.add(fm.start());
+        }
+        if (ancres.isEmpty()) {
             avert.add("Ligne « " + (natureLibelle == null ? "?" : natureLibelle) + " » sans montant — ignorée.");
             return null;
         }
-        String designation = core.substring(0, fm.start()).trim();
+        Structure s = null;
+        for (int ancre : ancres) {
+            Structure t = lireStructure(core, ancre);
+            if (t.plausible()) {
+                s = t;
+                break;
+            }
+        }
+        if (s == null) {
+            s = lireStructure(core, ancres.get(0));
+        }
+        String designation = core.substring(0, s.ancre()).trim();
         // ⚠️ Règle ajoutée — allotissement décrit dans la désignation : extraction best-effort des lots.
         List<LotImport> lots = List.of();
         LotsExtraits extraction = extraireLots(designation, avert);
@@ -364,43 +392,12 @@ public class SaisiePpmImportService {
             designation = extraction.designationCourte();
             lots = extraction.lots();
         }
-        List<String[]> toks = tokeniser(core.substring(fm.start()));
+        BigDecimal montEstim = s.mtsTete().isEmpty() ? null : s.mtsTete().get(0);
+        BigDecimal nouvMontEstim = s.mtsTete().size() >= 2 ? s.mtsTete().get(1) : null;
+        String financement = s.financement();
+        String modeLibelle = s.modeLibelle();
 
-        int i = 0;
-        List<BigDecimal> mtsTete = new ArrayList<>();
-        while (i < toks.size() && "money".equals(toks.get(i)[0])) {
-            mtsTete.add(parseMontant(toks.get(i)[1]));
-            i++;
-        }
-        BigDecimal montEstim = mtsTete.isEmpty() ? null : mtsTete.get(0);
-        BigDecimal nouvMontEstim = mtsTete.size() >= 2 ? mtsTete.get(1) : null;
-
-        List<String> mots = new ArrayList<>();
-        while (i < toks.size() && "word".equals(toks.get(i)[0])) {
-            mots.add(toks.get(i)[1]);
-            i++;
-        }
-        String financement = mots.isEmpty() ? null : mots.get(mots.size() - 1);
-        String modeLibelle = mots.size() <= 1 ? null : String.join(" ", mots.subList(0, mots.size() - 1));
-
-        List<String> soas = new ArrayList<>();
-        while (i < toks.size() && "soa".equals(toks.get(i)[0])) {
-            soas.add(toks.get(i)[1]);
-            i++;
-        }
-        String compte = null;
-        if (i < toks.size() && "compte".equals(toks.get(i)[0])) {
-            compte = toks.get(i)[1];
-            i++;
-        }
-        List<BigDecimal> mtsBenef = new ArrayList<>();
-        for (; i < toks.size(); i++) {
-            if ("money".equals(toks.get(i)[0])) {
-                mtsBenef.add(parseMontant(toks.get(i)[1]));
-            }
-        }
-
-        List<BeneficiaireImport> benef = construireBeneficiaires(soas, compte, mtsBenef, natureLibelle, avert);
+        List<BeneficiaireImport> benef = construireBeneficiaires(s.soas(), s.compte(), s.mtsBenef(), natureLibelle, avert);
         List<PrevisionImport> prev = List.of(
                 new PrevisionImport("LANCEMENT", prev3.size() > 0 ? isoDate(prev3.get(0)) : null),
                 new PrevisionImport("OUVERTURE", prev3.size() > 1 ? isoDate(prev3.get(1)) : null),
@@ -427,6 +424,54 @@ public class SaisiePpmImportService {
         }
         return new MarcheImport(designation, montEstim, nouvMontEstim, idNature, natureLibelle,
                 idMode, modeLibelle, financement, benef, prev, lots);
+    }
+
+    /**
+     * Bloc structurel lu depuis une ancre montant : montants de tête, mode + financement, SOA, compte,
+     * montants bénéficiaires. {@link #plausible()} = la ligne « ressemble » à une vraie ligne de tableau
+     * (au moins un code SOA ou un compte) — critère du repli d'ancre.
+     */
+    private record Structure(int ancre, List<BigDecimal> mtsTete, String modeLibelle, String financement,
+            List<String> soas, String compte, List<BigDecimal> mtsBenef) {
+
+        boolean plausible() {
+            return !soas.isEmpty() || compte != null;
+        }
+    }
+
+    /** Lit le bloc structurel du core à partir d'une ancre montant (walk positionnel des jetons typés). */
+    private Structure lireStructure(String core, int ancre) {
+        List<String[]> toks = tokeniser(core.substring(ancre));
+        int i = 0;
+        List<BigDecimal> mtsTete = new ArrayList<>();
+        while (i < toks.size() && "money".equals(toks.get(i)[0])) {
+            mtsTete.add(parseMontant(toks.get(i)[1]));
+            i++;
+        }
+        List<String> mots = new ArrayList<>();
+        while (i < toks.size() && "word".equals(toks.get(i)[0])) {
+            mots.add(toks.get(i)[1]);
+            i++;
+        }
+        String financement = mots.isEmpty() ? null : mots.get(mots.size() - 1);
+        String modeLibelle = mots.size() <= 1 ? null : String.join(" ", mots.subList(0, mots.size() - 1));
+        List<String> soas = new ArrayList<>();
+        while (i < toks.size() && "soa".equals(toks.get(i)[0])) {
+            soas.add(toks.get(i)[1]);
+            i++;
+        }
+        String compte = null;
+        if (i < toks.size() && "compte".equals(toks.get(i)[0])) {
+            compte = toks.get(i)[1];
+            i++;
+        }
+        List<BigDecimal> mtsBenef = new ArrayList<>();
+        for (; i < toks.size(); i++) {
+            if ("money".equals(toks.get(i)[0])) {
+                mtsBenef.add(parseMontant(toks.get(i)[1]));
+            }
+        }
+        return new Structure(ancre, mtsTete, modeLibelle, financement, soas, compte, mtsBenef);
     }
 
     /**
