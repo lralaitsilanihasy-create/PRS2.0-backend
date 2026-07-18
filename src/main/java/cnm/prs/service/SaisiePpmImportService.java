@@ -119,11 +119,15 @@ public class SaisiePpmImportService {
      * Montant « 1 005 000.00 » (groupes de milliers séparés par espace, ou nombre simple) — jamais un compte nu.
      * ⚠️ Règle durcie (2026-07-18) — ancrage STRICT de la colonne montant : exactement 2 décimales
      * <strong>non suivies d'un chiffre</strong> ({@code (?!\d)} : « 11,700 » — kilométrage dans la désignation —
-     * ne matche plus via « 11,70 »), et <strong>non suivies d'une unité de mesure</strong>
-     * ({@code Km/ml/m²/m³/m2/m3/ha}) : un nombre à 2 décimales suivi d'une unité appartient à la désignation.
+     * ne matche plus via « 11,70 »), et <strong>non suivies d'une unité de mesure ou d'un séparateur de
+     * dimension</strong> ({@code Km/ml/m/m²/m³/m2/m3/metres/ha/x/×} : « 2,00 x 2,00 m » — dimensions d'un
+     * dalot, « 6,00 metres » — largeur) : un tel nombre appartient à la désignation. La fin d'unité est testée
+     * par {@code (?![\p{L}\p{N}])} et non {@code \b} — ² et ³ ne sont pas des caractères de mot, un {@code \b}
+     * après eux ne matche jamais devant une espace.
      */
     private static final String MONTANT =
-            "(?:\\d{1,3}(?:[\\s\\u00a0]\\d{3})*|\\d+)[.,]\\d{2}(?!\\d)(?![\\s\\u00a0]*(?i:km|ml|m[²³23]|ha)\\b)";
+            "(?:\\d{1,3}(?:[\\s\\u00a0]\\d{3})*|\\d+)[.,]\\d{2}(?!\\d)"
+                    + "(?![\\s\\u00a0]*(?i:km|ml|m[²³23]?|ha|metres?|x|×)(?![\\p{L}\\p{N}]))";
     private static final Pattern MONEY = Pattern.compile(MONTANT);
     private static final Pattern DATE = Pattern.compile("\\d{2}/\\d{2}/\\d{4}");
     /** Jeton typé du bloc structurel : montant | code SOA | date | compte (3-4 chiffres nus) | mot. */
