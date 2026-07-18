@@ -299,6 +299,7 @@ public class SaisieService {
         m.setIdDossier(idDossier);
         m.setIdPpm(idPpm);
         m.setDesignationMarche(ligne.designationMarche());
+        m.setFormeMarche(ligne.formeMarche());   // validé/défauté en aval (MarcheMapper/MarcheService)
         m.setNumCompte(resoudreOuCreerCompte(ligne.numCompte()));
         m.setMontEstim(ligne.montEstim());
         m.setNouvMontEstim(ligne.nouvMontEstim());

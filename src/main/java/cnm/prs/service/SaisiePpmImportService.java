@@ -25,6 +25,7 @@ import cnm.prs.dto.SaisiePpmImportResult.PrevisionImport;
 import cnm.prs.entity.EntiteContract;
 import cnm.prs.entity.ModePassation;
 import cnm.prs.entity.Nature;
+import cnm.prs.enums.FormeMarche;
 import cnm.prs.exception.BadRequestException;
 import cnm.prs.repository.CompteRepository;
 import cnm.prs.repository.EntiteContractRepository;
@@ -423,7 +424,10 @@ public class SaisiePpmImportService {
         } else if (modeRef != null) {
             modeLibelle = modeRef.getLibelle();
         }
-        return new MarcheImport(designation, montEstim, nouvMontEstim, idNature, natureLibelle,
+        // ⚠️ Règle ajoutée (2026-07-18) — forme du marché relevée dans l'objet (désignation intégrale
+        // conservée) : « contrat cadre » / « à commande », défaut QUANTITE_FIXE.
+        String formeMarche = FormeMarche.detecterDansDesignation(designation).name();
+        return new MarcheImport(designation, formeMarche, montEstim, nouvMontEstim, idNature, natureLibelle,
                 idMode, modeLibelle, financement, benef, prev, lots);
     }
 

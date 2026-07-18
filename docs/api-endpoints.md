@@ -1186,7 +1186,7 @@ volumineux → **400** (annule la création si multipart) ; **404** si l'UGPM ou
 > **`SaisiePpmImportResult`** pour pré-remplir le formulaire — la création reste `POST /api/saisies/ppm`.
 > Forme : `{ exercice, dateSignature` (« Fait à… le… » sinon **date d'établissement**, `null` sinon)`, autoriteContractante,
 > idEntiteContract` (résolu depuis l'autorité si trouvé, sinon `null` → la PRMP choisit)`, marches[]`
-> `{ designationMarche, montEstim, nouvMontEstim, idNature+natureLibelle, idMode+modeLibelle, financement,`
+> `{ designationMarche, formeMarche, montEstim, nouvMontEstim, idNature+natureLibelle, idMode+modeLibelle, financement,`
 > `beneficiaires[]` `{ soaCode, numCompte, ancMontBenef, nouvMontBenef }, previsions[]` `{ processus, dateDebut },`
 > `lots[]` `{ designationLot, montLot?, qteLot?, uniteLot? } },`
 > `avertissements[] }`. ⚠️ **`lots[]` — extraction best-effort depuis la désignation (règle révisée 2026-07-17,
@@ -1200,6 +1200,11 @@ volumineux → **400** (annule la création si multipart) ; **404** si l'UGPM ou
 > extraction réussie ou non, `designationMarche` est **conservée intégrale** — l'énumération des lots
 > (« répartis en NN Lots : Lot 01 : … ») y reste, **en plus** de `lots[]` ; le doublon texte/structure est
 > accepté et voulu. Sans motif d'allotissement → inchangé (lots vides, pas d'avertissement).
+> ⚠️ **`formeMarche` — relevée dans l'objet (règle ajoutée 2026-07-18)** : le parser détecte dans
+> `designationMarche` les motifs « **contrat cadre** » (avec/sans parenthèses, casse/accents/pluriels libres)
+> → `CONTRAT_CADRE` et « **à commande** » / « marché à commande » → `A_COMMANDE` ; sinon **défaut
+> `QUANTITE_FIXE`**. Détection à frontières de mots (« la commande » ne matche pas). **Désignation conservée
+> intégrale** (même décision que pour les lots : on relève, on ne retire pas) ; jamais null.
 > **Read-only** : les référentiels manquants (`idNature`/`idMode`/`numCompte`/`soaCode`,
 > entité) **ne sont pas créés** — renvoyés en libellé seul + listés dans `avertissements` ; la
 > création-à-la-volée se fait au `POST /api/saisies/ppm`.
@@ -1255,7 +1260,17 @@ volumineux → **400** (annule la création si multipart) ; **404** si l'UGPM ou
 >
 > Modifiables ensuite via la **rectification** (en attente de décision PRMP), pas à la création.
 
-**`SaisieMarcheLigne`** : `designationMarche`, `numCompte`, `montEstim`, **`nouvMontEstim`** (→ `t_marche.NOUV_MONT_ESTIM`), `financement`, `statut`, `idNature`, `natureLibelle`, `idMode`, `modeLibelle`, **`beneficiaires[]`**, **`lots[]`**. `idDetail` est **facultatif** — **null à la création** (PK serveur), renseigné seulement pour **identifier une ligne existante** lors de l'édition (réconciliation). `idDossier`/`idPpm` sont renseignés par le service. **`idMode`** = mode **saisi** (facultatif) ; **conservé tel quel** (plus de détermination automatique — `t_situation`/`t_regle_passation`/`t_seuil` retirés). **`nouvMontEstim`**, **`beneficiaires[]`** et **`lots[]`** sont **optionnels** (rétro-compatible).
+**`SaisieMarcheLigne`** : `designationMarche`, **`formeMarche`**, `numCompte`, `montEstim`, **`nouvMontEstim`** (→ `t_marche.NOUV_MONT_ESTIM`), `financement`, `statut`, `idNature`, `natureLibelle`, `idMode`, `modeLibelle`, **`beneficiaires[]`**, **`lots[]`**. `idDetail` est **facultatif** — **null à la création** (PK serveur), renseigné seulement pour **identifier une ligne existante** lors de l'édition (réconciliation). `idDossier`/`idPpm` sont renseignés par le service. **`idMode`** = mode **saisi** (facultatif) ; **conservé tel quel** (plus de détermination automatique — `t_situation`/`t_regle_passation`/`t_seuil` retirés). **`nouvMontEstim`**, **`beneficiaires[]`** et **`lots[]`** sont **optionnels** (rétro-compatible).
+
+> ⚠️ **`formeMarche` — forme du marché (règle ajoutée 2026-07-18).** Notion réglementaire à **liste fermée**
+> (enum contrôlé serveur, pas de référentiel en table) : **`A_COMMANDE`** (« Marché à commande »),
+> **`CONTRAT_CADRE`** (« Contrat cadre »), **`QUANTITE_FIXE`** (« À quantité fixe »). **Optionnel** partout
+> (rétro-compatible) : absent/vide → **défaut serveur `QUANTITE_FIXE`** — le champ n'est **jamais null** en base
+> ni en sortie ; code inconnu → **400 ciblé** (« Forme de marché inconnue : … »). Accepté à `POST /api/saisies/ppm`
+> et à l'édition (`PUT /api/saisies/ppm/{idDossier}`), comme à `POST`/`PUT /api/marches` (colonne
+> `t_marche.FORME_MARCHE`). **Reprise des données** : les lignes historiques sont migrées au démarrage
+> (`FormeMarcheMigration`, idempotente — ne touche que les colonnes `NULL`) en **dérivant la forme de la
+> désignation** avec les mêmes motifs que l'import, sinon `QUANTITE_FIXE`.
 
 > ⚠️ **Nature / mode / compte — résolution-ou-création à la volée (règle ajoutée).** Pour l'**import PPM** :
 > si `idNature` (resp. `idMode`) est **absent** mais `natureLibelle` (resp. `modeLibelle`) est fourni, le service
@@ -2057,6 +2072,15 @@ les lots d'une **ligne de marché** (`t_lot.ID_DETAIL`) — **liste vide** si au
 > profil **PRMP strict** (Admin/vérificateur → **403**). Identité **figée** (idDossier, idPpm — **non requis** dans
 > le corps, ignorés s'ils sont envoyés ; le PATCH ne valide pas ces champs). Le `idMode` fourni est conservé
 > tel quel. Tracé `t_audit_log` (`MODIFICATION_RECTIFICATION`, `NOM_TABLE=t_marche`).
+
+> ⚠️ **`formeMarche` — forme du marché (règle ajoutée 2026-07-18).** Champ de `MarcheDto` (colonne
+> `t_marche.FORME_MARCHE`), liste fermée : **`A_COMMANDE`** (« Marché à commande »), **`CONTRAT_CADRE`**
+> (« Contrat cadre »), **`QUANTITE_FIXE`** (« À quantité fixe »). **Optionnel en entrée** (`POST`/`PUT`/`PATCH
+> rectifier` — absent/vide → défaut **`QUANTITE_FIXE`** ; code inconnu → **400 ciblé**), **toujours renseigné
+> en sortie** (jamais null — les lignes historiques sont reprises au démarrage par `FormeMarcheMigration`,
+> forme dérivée de la désignation : motifs « contrat cadre » / « à commande », sinon `QUANTITE_FIXE`).
+> Pré-remplie par l'**import PPM** (`SaisiePpmImportResult.marches[].formeMarche`, relevée dans l'objet —
+> désignation conservée intégrale).
 
 > Les **dates prévisionnelles** ne sont pas des colonnes du marché : elles sont en relation **1,N**
 > dans **Marchés — dates prévisionnelles** (`/api/marche-previsions`), **une ligne par processus**

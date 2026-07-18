@@ -1,6 +1,7 @@
 package cnm.prs;
 
 import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasSize;
@@ -135,6 +136,7 @@ class CnmWorkflowIntegrationTest {
     @Autowired private cnm.prs.repository.IndicateurCtrlRepository indicateurCtrlRepository;
     @Autowired private PpmRepository ppmRepository;
     @Autowired private MarcheRepository marcheRepository;
+    @Autowired private cnm.prs.seed.FormeMarcheMigration formeMarcheMigration;
     @Autowired private MarchePrevisionRepository marchePrevisionRepository;
     @Autowired private cnm.prs.repository.CapmRepository capmRepository;
     @Autowired private cnm.prs.repository.ExamenDetailRepository examenDetailRepository;
@@ -5718,6 +5720,8 @@ class CnmWorkflowIntegrationTest {
                 .andExpect(jsonPath("$.marches[0].designationMarche").value(
                         "Travaux d'amenagement de la voie rapide dans la Commune Urbaine de Sambava, "
                                 + "croisement Menagisy vers Ambodisatrana de longueur 11,700 Km (contrat cadre)"))
+                // Forme du marché relevée dans l'objet : « (contrat cadre) » → CONTRAT_CADRE.
+                .andExpect(jsonPath("$.marches[0].formeMarche").value("CONTRAT_CADRE"))
                 .andExpect(jsonPath("$.marches[0].montEstim").value(15000000000.00))
                 // Mode résolu canonique (règle pluriel) — plus d'avertissement « Km contrat ».
                 .andExpect(jsonPath("$.marches[0].idMode").value(1))
@@ -5757,6 +5761,8 @@ class CnmWorkflowIntegrationTest {
                 .andExpect(jsonPath("$.marches[0].designationMarche").value(
                         "Travaux d'urgence sur la construction d'un dalot 2,00 x 2,00 m et reparation "
                                 + "du chaussee sur la RNS 5A PK 208+000 Fokontany Angalovanga District Vohemar"))
+                // Aucune forme mentionnée dans l'objet → défaut QUANTITE_FIXE.
+                .andExpect(jsonPath("$.marches[0].formeMarche").value("QUANTITE_FIXE"))
                 .andExpect(jsonPath("$.marches[0].montEstim").value(200000000.00))
                 .andExpect(jsonPath("$.marches[0].idMode").value(1))
                 .andExpect(jsonPath("$.marches[0].modeLibelle").value("Consultation de prix ouverte"))
@@ -5767,6 +5773,100 @@ class CnmWorkflowIntegrationTest {
                 .andExpect(jsonPath("$.marches[0].beneficiaires[0].ancMontBenef").value(200000000.00))
                 .andExpect(jsonPath("$.marches[0].previsions[0].dateDebut").value("2026-03-06"))
                 .andExpect(jsonPath("$.avertissements[?(@ =~ /.*reparation.*/)]", hasSize(0)));
+    }
+
+    @Test
+    @DisplayName("Import PPM — forme du marché relevée dans l'objet : « (Contrat Cadre) » → CONTRAT_CADRE, « marches a commandes » → A_COMMANDE, désignations intégrales")
+    void importPpm_formeMarcheDetectee() throws Exception {
+        natureRepository.save(new Nature(1, "Travaux", null));
+
+        byte[] pdf = pdfAvecTexte(
+                "PLAN DE PASSATION DES MARCHES POUR L'ANNEE 2026",
+                "Autorite Contractante: MINISTERE TEST",
+                "NATURE OBJET MONTANT ESTIMATIF INITIAL",
+                "Travaux Travaux d'entretien periodique de la RN 13 (Contrat Cadre)",
+                "15 000 000.00 APPEL D'OFFRE OUVERT RPI 00-61-0-D10-00000 2441 15 000 000.00 06/03/2026 20/03/2026 31/03/2026",
+                "Travaux Fourniture de carburants, marches a commandes, pour le parc automobile",
+                "5 000 000.00 ACHAT DIRECT RPI 00-61-0-D10-00000 2441 5 000 000.00 06/03/2026 20/03/2026 31/03/2026",
+                "Fait a Antananarivo le 14 avril 2026");
+
+        mvc.perform(multipart("/api/saisies/ppm/import")
+                .file(new MockMultipartFile("fichier", "ppm.pdf", "application/pdf", pdf))
+                .header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.marches", hasSize(2)))
+                // On relève, on ne retire pas : la mention reste dans la désignation.
+                .andExpect(jsonPath("$.marches[0].designationMarche").value(
+                        "Travaux d'entretien periodique de la RN 13 (Contrat Cadre)"))
+                .andExpect(jsonPath("$.marches[0].formeMarche").value("CONTRAT_CADRE"))
+                // Pluriels tolérés (« marches a commandes ») ; frontières de mots respectées.
+                .andExpect(jsonPath("$.marches[1].designationMarche").value(
+                        "Fourniture de carburants, marches a commandes, pour le parc automobile"))
+                .andExpect(jsonPath("$.marches[1].formeMarche").value("A_COMMANDE"));
+    }
+
+    @Test
+    @DisplayName("Saisie PPM — formeMarche : explicite conservée, absente → défaut QUANTITE_FIXE, code inconnu → 400 ciblé")
+    void saisiePpm_formeMarche() throws Exception {
+        natureRepository.save(new Nature(1, "Travaux", null));
+        capmRepository.save(new Capm(1, "LANCEMENT", 1));
+
+        String body = "{\"idEntiteContract\":1,\"exercice\":2026,\"signataire\":\"RABE\",\"dateSignature\":\"2026-01-10\",\"reference\":\"PPM-FM\","
+                + "\"marches\":[{\"designationMarche\":\"Fourniture de carburant\",\"formeMarche\":\"A_COMMANDE\",\"montEstim\":1000000,\"idNature\":1,\"statut\":\"PREVU\","
+                + "\"processus\":[{\"idCapm\":1,\"dateDebut\":\"2026-02-01\",\"dateFin\":\"2026-06-30\"}]},"
+                + "{\"designationMarche\":\"Construction batiment\",\"montEstim\":2000000,\"idNature\":1,\"statut\":\"PREVU\","
+                + "\"processus\":[{\"idCapm\":1,\"dateDebut\":\"2026-02-01\",\"dateFin\":\"2026-06-30\"}]}]}";
+        String resp = mvc.perform(post("/api/saisies/ppm").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        int idDoss = com.jayway.jsonpath.JsonPath.read(resp, "$.idDossier");
+
+        mvc.perform(get("/api/marches").header("Authorization", tokenPrmp))
+                .andExpect(jsonPath("$[?(@.idDossier==" + idDoss
+                        + " && @.designationMarche=='Fourniture de carburant')].formeMarche", hasItem("A_COMMANDE")))
+                // Absente à la saisie → défaut serveur QUANTITE_FIXE (jamais null).
+                .andExpect(jsonPath("$[?(@.idDossier==" + idDoss
+                        + " && @.designationMarche=='Construction batiment')].formeMarche", hasItem("QUANTITE_FIXE")));
+
+        // Code inconnu → 400 ciblé.
+        mvc.perform(post("/api/saisies/ppm").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body.replace("\"A_COMMANDE\"", "\"FORFAIT\"")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", containsString("Forme de marché inconnue")));
+    }
+
+    @Test
+    @DisplayName("Migration forme du marché — lignes historiques (colonne NULL) reprises depuis la désignation, idempotente")
+    void formeMarcheMigration_repriseHistorique() throws Exception {
+        Dossier d = dossier(9601, "SOUMIS");
+        d.setIdLocalite("ANT");
+        d.setIdPrmp("PRMP001");
+        dossierRepository.save(d);
+        ppmRepository.save(ppm(9601, 9601, "PRMP001"));
+        // Lignes « historiques » : colonne FORME_MARCHE à NULL (état d'avant l'ajout du champ).
+        Marche cadre = marche(96010, 9601, 9601);
+        cadre.setDesignationMarche("Travaux d'amenagement de la voie rapide (Contrat cadre)");
+        cadre.setFormeMarche(null);
+        Marche commande = marche(96011, 9601, 9601);
+        commande.setDesignationMarche("Fourniture de carburant, marche a commande, pour le parc");
+        commande.setFormeMarche(null);
+        Marche fixe = marche(96012, 9601, 9601);
+        fixe.setDesignationMarche("Construction d'un batiment administratif");
+        fixe.setFormeMarche(null);
+        marcheRepository.saveAll(java.util.List.of(cadre, commande, fixe));
+        org.junit.jupiter.api.Assertions.assertEquals(3, marcheRepository.findByFormeMarcheIsNull().size());
+
+        formeMarcheMigration.run();
+
+        // Formes dérivées des désignations (mêmes motifs que l'import) ; plus aucune ligne à reprendre.
+        org.junit.jupiter.api.Assertions.assertEquals(cnm.prs.enums.FormeMarche.CONTRAT_CADRE,
+                marcheRepository.findById(96010).orElseThrow().getFormeMarche());
+        org.junit.jupiter.api.Assertions.assertEquals(cnm.prs.enums.FormeMarche.A_COMMANDE,
+                marcheRepository.findById(96011).orElseThrow().getFormeMarche());
+        org.junit.jupiter.api.Assertions.assertEquals(cnm.prs.enums.FormeMarche.QUANTITE_FIXE,
+                marcheRepository.findById(96012).orElseThrow().getFormeMarche());
+        org.junit.jupiter.api.Assertions.assertTrue(marcheRepository.findByFormeMarcheIsNull().isEmpty());
     }
 
     @Test

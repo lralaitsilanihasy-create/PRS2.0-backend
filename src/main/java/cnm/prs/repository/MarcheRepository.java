@@ -25,6 +25,9 @@ public interface MarcheRepository extends JpaRepository<Marche, Integer> {
     /** Vrai si le dossier porte au moins une ligne de marché (précondition de soumission d'un PPM). */
     boolean existsByIdDossier(Integer idDossier);
 
+    /** Lignes historiques sans forme de marché (reprise idempotente {@code FormeMarcheMigration}). */
+    List<Marche> findByFormeMarcheIsNull();
+
     /**
      * Vrai si le <strong>PPM</strong> comporte ≥1 marché dont le mode est « appel d'offres ouvert »
      * ({@code tr_mode_passation.DECLENCHE_AGPM = true}) → dérivé {@code agpmRequis} exposé sur le PPM.

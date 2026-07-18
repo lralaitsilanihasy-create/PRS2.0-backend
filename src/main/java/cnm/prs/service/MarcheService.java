@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 import cnm.prs.dto.MarcheDto;
 import cnm.prs.entity.Lot;
 import cnm.prs.entity.Marche;
+import cnm.prs.enums.FormeMarche;
 import cnm.prs.enums.ProfilUtilisateur;
 import cnm.prs.exception.ResourceNotFoundException;
 import cnm.prs.mapper.MarcheMapper;
@@ -131,6 +132,7 @@ public class MarcheService {
         existing.setStatut(dto.getStatut());
         existing.setIdNature(dto.getIdNature());
         existing.setIdMode(dto.getIdMode());   // mode choisi (saisie manuelle)
+        existing.setFormeMarche(FormeMarche.depuisCodeOuDefaut(dto.getFormeMarche()));
         MarcheDto resultat = MarcheMapper.toDto(repository.save(existing));
         // Si le mode a changé et qu'un DMC A_PREPARER existe, re-dériver son type.
         dmcService.reAffecterTypeSiApreparer(id);
@@ -158,6 +160,7 @@ public class MarcheService {
         existing.setStatut(dto.getStatut());
         existing.setIdNature(dto.getIdNature());
         existing.setIdMode(dto.getIdMode());   // mode choisi (saisie manuelle)
+        existing.setFormeMarche(FormeMarche.depuisCodeOuDefaut(dto.getFormeMarche()));
         Marche saved = repository.save(existing);
         auditLogService.enregistrer(CurrentUser.ref().orElse(null), "t_marche",
                 String.valueOf(id), "MODIFICATION_RECTIFICATION", null);

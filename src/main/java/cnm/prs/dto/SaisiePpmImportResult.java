@@ -25,6 +25,12 @@ public record SaisiePpmImportResult(
     /** Une ligne du tableau des marchés. {@code id*} résolu si trouvé au référentiel, sinon {@code null} + libellé. */
     public record MarcheImport(
             String designationMarche,
+            /**
+             * ⚠️ Règle ajoutée (2026-07-18) — forme du marché RELEVÉE dans l'objet (désignation conservée
+             * intégrale, même décision que pour les lots) : « contrat cadre » → {@code CONTRAT_CADRE},
+             * « à commande » → {@code A_COMMANDE}, sinon défaut {@code QUANTITE_FIXE}. Jamais null.
+             */
+            String formeMarche,
             BigDecimal montEstim,
             BigDecimal nouvMontEstim,
             Integer idNature,

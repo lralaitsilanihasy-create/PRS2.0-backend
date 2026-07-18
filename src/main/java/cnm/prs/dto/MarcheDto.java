@@ -44,4 +44,13 @@ public class MarcheDto {
     private Integer idNature;
 
     private Integer idMode;
+
+    /**
+     * ⚠️ Règle ajoutée (2026-07-18) — forme du marché : {@code A_COMMANDE} (« Marché à commande »),
+     * {@code CONTRAT_CADRE} (« Contrat cadre »), {@code QUANTITE_FIXE} (« À quantité fixe »).
+     * Optionnel en entrée (absent/vide → défaut QUANTITE_FIXE, code inconnu → 400 ciblé) ;
+     * toujours renseigné en sortie (jamais null).
+     */
+    @Size(max = 20)
+    private String formeMarche;
 }

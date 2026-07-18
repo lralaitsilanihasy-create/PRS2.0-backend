@@ -1,8 +1,11 @@
 package cnm.prs.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import cnm.prs.enums.FormeMarche;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
@@ -65,6 +68,16 @@ public class Marche {
     @Column(name = "ID_MODE")
     private Integer idMode;
 
+    /**
+     * ⚠️ Règle ajoutée (2026-07-18) — forme du marché (à commande / contrat cadre / à quantité fixe).
+     * Colonne nullable en base (ajout `ddl-auto=update` sur table existante) mais jamais {@code null}
+     * côté Java : défaut {@link FormeMarche#QUANTITE_FIXE} à la création, getter coalescent, et reprise
+     * des lignes historiques par {@code FormeMarcheMigration} (dérivée de la désignation).
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "FORME_MARCHE", length = 20)
+    private FormeMarche formeMarche = FormeMarche.QUANTITE_FIXE;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ID_DOSSIER", insertable = false, updatable = false)
     @JsonIgnore
@@ -89,4 +102,9 @@ public class Marche {
     @JoinColumn(name = "ID_NATURE", insertable = false, updatable = false)
     @JsonIgnore
     private Nature nature;
+
+    /** Jamais {@code null} : les lignes historiques pas encore reprises lisent le défaut QUANTITE_FIXE. */
+    public FormeMarche getFormeMarche() {
+        return formeMarche == null ? FormeMarche.QUANTITE_FIXE : formeMarche;
+    }
 }

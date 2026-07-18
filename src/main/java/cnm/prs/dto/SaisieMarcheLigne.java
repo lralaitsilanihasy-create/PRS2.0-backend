@@ -21,6 +21,12 @@ public record SaisieMarcheLigne(
         @Size(max = 500)
         String designationMarche,
 
+        // ⚠️ Règle ajoutée (2026-07-18) — forme du marché : A_COMMANDE / CONTRAT_CADRE / QUANTITE_FIXE.
+        // Optionnel (absent/vide → défaut QUANTITE_FIXE, code inconnu → 400 ciblé) ; pré-rempli par
+        // l'import PPM (détecté dans l'objet, désignation conservée intégrale).
+        @Size(max = 20)
+        String formeMarche,
+
         @Size(max = 20)
         String numCompte,
 

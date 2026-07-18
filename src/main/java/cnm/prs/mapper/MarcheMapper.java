@@ -2,6 +2,7 @@ package cnm.prs.mapper;
 
 import cnm.prs.dto.MarcheDto;
 import cnm.prs.entity.Marche;
+import cnm.prs.enums.FormeMarche;
 
 /**
  * Convertisseur entité &lt;-&gt; DTO pour {@link Marche}.
@@ -28,6 +29,7 @@ public final class MarcheMapper {
         dto.setStatut(entity.getStatut());
         dto.setIdNature(entity.getIdNature());
         dto.setIdMode(entity.getIdMode());
+        dto.setFormeMarche(entity.getFormeMarche().name());   // getter coalescent → jamais null
         return dto;
     }
 
@@ -48,6 +50,8 @@ public final class MarcheMapper {
         entity.setStatut(dto.getStatut());
         entity.setIdNature(dto.getIdNature());
         entity.setIdMode(dto.getIdMode());
+        // Forme du marché : optionnelle (absent → QUANTITE_FIXE), code inconnu → 400 ciblé.
+        entity.setFormeMarche(FormeMarche.depuisCodeOuDefaut(dto.getFormeMarche()));
         return entity;
     }
 }
