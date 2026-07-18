@@ -390,12 +390,9 @@ public class SaisiePpmImportService {
         }
         String designation = core.substring(0, s.ancre()).trim();
         // ⚠️ Règle ajoutée — allotissement décrit dans la désignation : extraction best-effort des lots.
-        List<LotImport> lots = List.of();
-        LotsExtraits extraction = extraireLots(designation, avert);
-        if (extraction != null) {
-            designation = extraction.designationCourte();
-            lots = extraction.lots();
-        }
+        // ⚠️ Décision revisitée (2026-07-18) : la désignation reste INTÉGRALE, énumération des lots
+        // comprise (« répartis en NN Lots : Lot 01 : … ») — le doublon texte/lots[] est accepté et voulu.
+        List<LotImport> lots = extraireLots(designation, avert);
         BigDecimal montEstim = s.mtsTete().isEmpty() ? null : s.mtsTete().get(0);
         BigDecimal nouvMontEstim = s.mtsTete().size() >= 2 ? s.mtsTete().get(1) : null;
         String financement = s.financement();
@@ -503,26 +500,24 @@ public class SaisiePpmImportService {
                 : "Mode de passation « " + modeLibelle + " » non trouvé au référentiel — à confirmer.";
     }
 
-    /** Résultat d'une extraction d'allotissement réussie : désignation raccourcie + lots. */
-    private record LotsExtraits(String designationCourte, List<LotImport> lots) {
-    }
-
     /**
      * ⚠️ Règle ajoutée — extraction <strong>best-effort</strong> des lots décrits en texte libre dans la
      * désignation du marché, motif : « … répartis en NN Lots : Lot 01 : &lt;texte&gt; ; Lot 02 : &lt;texte&gt; … ».
      *
      * <p><strong>Contrôle de cohérence</strong> : l'extraction n'aboutit que si le nombre de segments
-     * « Lot NN : » trouvés égale exactement le compte annoncé (« 04 Lots ») et qu'aucun segment n'est vide —
-     * sinon <strong>avertissement</strong> et comportement antérieur (désignation intégrale, lots vides).
-     * En cas de succès, la désignation est <strong>raccourcie</strong> à sa partie avant le marqueur
-     * (l'information vit alors dans les lots ; le texte source reste dans le PDF) et chaque lot ne porte que
-     * {@code designationLot} (le texte ne donne ni montant ni quantité par lot — champs descriptifs, aucun
-     * contrôle de somme, règle actée). Renvoie {@code null} si aucun motif d'allotissement n'est présent.</p>
+     * « Lot NN : » trouvés égale exactement le compte annoncé (« 04 Lots »), qu'aucun segment n'est vide et
+     * que le motif n'ouvre pas la désignation (partie avant le marqueur vide = motif ambigu) — sinon
+     * <strong>avertissement</strong> et lots vides. Chaque lot ne porte que {@code designationLot} (le texte
+     * ne donne ni montant ni quantité par lot — champs descriptifs, aucun contrôle de somme, règle actée).</p>
+     *
+     * <p>⚠️ Décision revisitée (2026-07-18) : extraction réussie ou non, la désignation du marché reste
+     * <strong>intégrale</strong> — l'énumération des lots y demeure, en plus de {@code lots[]} (l'ancienne
+     * désignation raccourcie est abandonnée). Renvoie une liste vide si rien n'est extrait.</p>
      */
-    private LotsExtraits extraireLots(String designation, List<String> avert) {
+    private List<LotImport> extraireLots(String designation, List<String> avert) {
         Matcher marqueur = MARQUEUR_LOTS.matcher(designation);
         if (!marqueur.find()) {
-            return null;   // pas d'allotissement décrit → comportement inchangé
+            return List.of();   // pas d'allotissement décrit → comportement inchangé
         }
         int annonce = Integer.parseInt(marqueur.group(1));
         String reste = designation.substring(marqueur.end());
@@ -542,14 +537,14 @@ public class SaisiePpmImportService {
                 lots.add(new LotImport(texte, null, null, null));
             }
         }
-        String courte = designation.substring(0, marqueur.start())
+        String avantMotif = designation.substring(0, marqueur.start())
                 .replaceAll("[\\s,;:.\\u2013\\u2014-]+$", "").trim();
-        if (annonce < 1 || lots.size() != annonce || courte.isEmpty()) {
+        if (annonce < 1 || lots.size() != annonce || avantMotif.isEmpty()) {
             avert.add("Allotissement détecté (« " + annonce + " lot(s) » annoncé(s)) mais " + lots.size()
-                    + " segment(s) « Lot NN : » exploitable(s) — lots non extraits, désignation laissée intégrale.");
-            return null;
+                    + " segment(s) « Lot NN : » exploitable(s) — lots non extraits.");
+            return List.of();
         }
-        return new LotsExtraits(courte, List.copyOf(lots));
+        return List.copyOf(lots);
     }
 
     /**

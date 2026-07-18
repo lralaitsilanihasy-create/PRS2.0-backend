@@ -5511,7 +5511,7 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
-    @DisplayName("Import PPM — lots extraits de la désignation (« repartis en 04 Lots : Lot 01 : … ») : 4 lots + désignation raccourcie")
+    @DisplayName("Import PPM — lots extraits de la désignation (« repartis en 04 Lots : Lot 01 : … ») : 4 lots + désignation INTÉGRALE conservée")
     void importPpm_lotsExtraitsDeLaDesignation() throws Exception {
         natureRepository.save(new Nature(1, "Travaux", null));
         // Cas réel observé (sans accents — police Helvetica du fixture) : allotissement décrit dans l'OBJET.
@@ -5533,10 +5533,14 @@ class CnmWorkflowIntegrationTest {
                 .header("Authorization", tokenPrmp))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.marches", hasSize(1)))
-                // Désignation RACCOURCIE à sa partie avant « repartis en 04 Lots » (l'info vit dans les lots).
+                // Désignation INTÉGRALE conservée, énumération des lots comprise (décision revisitée
+                // 2026-07-18 : le doublon texte/lots[] est accepté et voulu).
                 .andExpect(jsonPath("$.marches[0].designationMarche").value(
                         "Travaux de traitement des points noirs sur la route reliant Fenomanana et "
-                                + "Analamarina dans le district de Faratsiho - Vakinakaratra"))
+                                + "Analamarina dans le district de Faratsiho - Vakinakaratra repartis en 04 Lots : "
+                                + "Lot 01 : traitement de breche et chaussee a Ampakandrano; Lot 02 : traitement de "
+                                + "breche et de la chaussee a Ambatofotsikely; Lot 03 : traitement de la chaussee a "
+                                + "Ambohiborona ; Lot 04 : traitement de la digue vers Analamarina."))
                 .andExpect(jsonPath("$.marches[0].lots", hasSize(4)))
                 .andExpect(jsonPath("$.marches[0].lots[0].designationLot").value("traitement de breche et chaussee a Ampakandrano"))
                 .andExpect(jsonPath("$.marches[0].lots[1].designationLot").value("traitement de breche et de la chaussee a Ambatofotsikely"))

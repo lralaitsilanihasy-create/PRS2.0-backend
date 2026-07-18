@@ -38,8 +38,8 @@ public record SaisiePpmImportResult(
              * Lots du marché (⚠️ règle ajoutée) : extraits <strong>best-effort</strong> du motif d'allotissement
              * décrit dans la désignation (« répartis en NN Lots : Lot 01 : … ; Lot 02 : … »). Renseignés
              * ({@code designationLot} seul) uniquement si le compte annoncé égale le nombre de segments trouvés —
-             * la désignation est alors raccourcie à sa partie avant le motif ; sinon vides + avertissement
-             * (désignation intégrale).
+             * sinon vides + avertissement. ⚠️ Décision revisitée (2026-07-18) : {@code designationMarche} reste
+             * <strong>intégrale</strong> dans tous les cas — l'énumération des lots y demeure, en plus d'ici.
              */
             List<LotImport> lots) {
     }

@@ -1196,10 +1196,10 @@ volumineux → **400** (annule la création si multipart) ; **404** si l'UGPM ou
 > lot **seule** (le texte ne porte ni montant ni quantité ; champs descriptifs, **aucun contrôle de somme**, règle
 > actée). **Contrôle de cohérence** : extraction uniquement si le compte annoncé (« 04 Lots ») **égale** le nombre
 > de segments « Lot NN : » trouvés ; sinon (compte différent, motif ambigu) → **avertissement** dans
-> `avertissements[]` et comportement antérieur (lots vides, désignation intégrale). **Décision documentée** : en
-> cas d'extraction réussie, `designationMarche` est **raccourcie à sa partie avant le motif** — l'information
-> d'allotissement vit alors dans `lots[]` (le texte source reste dans le PDF) ; pas de doublon pavé/lots. Sans
-> motif d'allotissement → inchangé (lots vides, pas d'avertissement).
+> `avertissements[]` et lots vides. **Décision revisitée (2026-07-18, remplace « désignation raccourcie »)** :
+> extraction réussie ou non, `designationMarche` est **conservée intégrale** — l'énumération des lots
+> (« répartis en NN Lots : Lot 01 : … ») y reste, **en plus** de `lots[]` ; le doublon texte/structure est
+> accepté et voulu. Sans motif d'allotissement → inchangé (lots vides, pas d'avertissement).
 > **Read-only** : les référentiels manquants (`idNature`/`idMode`/`numCompte`/`soaCode`,
 > entité) **ne sont pas créés** — renvoyés en libellé seul + listés dans `avertissements` ; la
 > création-à-la-volée se fait au `POST /api/saisies/ppm`.
