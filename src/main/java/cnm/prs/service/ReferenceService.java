@@ -10,9 +10,11 @@ import cnm.prs.repository.SequenceReferenceRepository;
 
 /**
  * Génère la référence officielle d'un dossier au format
- * {@code xxxxx/type_dossier/code_localite/annee_exercice}. Le compteur xxxxx est <strong>global</strong>
- * par {@code (type, exercice)} — strictement unique tous dossiers confondus, indépendamment de l'entité ou
- * de la localité ; il redémarre à 1 chaque année (l'année figure dans la référence).
+ * {@code xxxxx/sous_type/code_localite/annee_exercice} (ex. {@code 00013/PPM/CRM-ANT/2026}). Le segment
+ * central est le <strong>sous-type</strong> du dossier (PPM, PPM-AGPM, DAO, DAOR…) ; le compteur xxxxx
+ * reste <strong>global par (famille, exercice)</strong> — strictement unique tous dossiers d'une même
+ * famille confondus, indépendamment de l'entité ou de la localité ; il redémarre à 1 chaque année
+ * (l'année figure dans la référence).
  */
 @Service
 public class ReferenceService {
@@ -27,21 +29,30 @@ public class ReferenceService {
     }
 
     /**
-     * @param typeDossier   famille du dossier (DDP, DMC, DDM…) — segment type de la référence
+     * ⚠️ Règle modifiée (2026-07-20) — le <strong>segment affiché</strong> ({@code segmentType}) est
+     * désormais le <strong>sous-type</strong> du dossier (PPM, PPM-AGPM, DAO, DAOR…), tandis que la
+     * <strong>clé du compteur</strong> ({@code cleCompteur}) reste la <strong>famille</strong> (DDP, DMC,
+     * DDM…) : la numérotation continue est <strong>inchangée</strong> (une seule séquence par famille et
+     * par année), seul le libellé du segment change. Découpler les deux évite qu'un PPM et un PPM-AGPM
+     * repartent chacun à 1.
+     *
+     * @param segmentType   segment « type » affiché dans la référence — le sous-type du dossier
+     * @param cleCompteur   clé du compteur (famille du dossier) — porte la continuité de la numérotation
      * @param localite      localité du dossier (utilisée seulement si non centrale)
-     * @param estCentrale   true -> segment = "CNM" ; false -> "CRM-" + localite
+     * @param estCentrale   true -> segment localité = "CNM" ; false -> "CRM-" + localite
      * @param anneeExercice exercice budgétaire
      */
     @Transactional
-    public String generer(String typeDossier, String localite, boolean estCentrale, int anneeExercice) {
+    public String generer(String segmentType, String cleCompteur, String localite, boolean estCentrale,
+            int anneeExercice) {
         String codeLocalite = estCentrale ? "CNM" : "CRM-" + localite;   // segment affiché dans la référence
-        // ⚠️ Règle ajoutée — compteur GLOBAL par (type, année) : clé localité fixe « DOSSIER » (jamais la vraie
+        // ⚠️ Règle ajoutée — compteur GLOBAL par (famille, année) : clé localité fixe « DOSSIER » (jamais la vraie
         // localité), pour que deux dossiers d'entités/localités différentes la même année aient des numéros distincts.
-        if (repository.incrementerExistant(typeDossier, COMPTEUR_GLOBAL, anneeExercice) == 0) {
-            repository.creer(typeDossier, COMPTEUR_GLOBAL, anneeExercice);
+        if (repository.incrementerExistant(cleCompteur, COMPTEUR_GLOBAL, anneeExercice) == 0) {
+            repository.creer(cleCompteur, COMPTEUR_GLOBAL, anneeExercice);
         }
-        long valeur = repository.valeurCourante(typeDossier, COMPTEUR_GLOBAL, anneeExercice);
-        return String.format("%05d/%s/%s/%d", valeur, typeDossier, codeLocalite, anneeExercice);
+        long valeur = repository.valeurCourante(cleCompteur, COMPTEUR_GLOBAL, anneeExercice);
+        return String.format("%05d/%s/%s/%d", valeur, segmentType, codeLocalite, anneeExercice);
     }
 
     /** Clés du compteur GLOBAL dédié aux lettres de renvoi (par année), indépendant du dossier/localité. */

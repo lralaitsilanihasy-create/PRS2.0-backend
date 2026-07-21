@@ -1343,15 +1343,16 @@ class CnmWorkflowIntegrationTest {
         Dossier d = dossier(330, "SOUMIS");
         d.setIdLocalite("ANT");
         d.setIdTypeDossier("DDP");
+        d.setIdSousType("PPM");
         dossierRepository.save(d);
 
-        // POST : la réponse porte la référence structurée <seq>/DDP/CRM-ANT/<annee>.
+        // POST : la réponse porte la référence structurée <seq>/PPM/CRM-ANT/<annee> (segment = sous-type).
         String resp = mvc.perform(post("/api/receptions").header("Authorization", tokenSec)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDossier\":330,\"numPassage\":1,\"typePassage\":\"INITIAL\",\"complet\":true,"
                         + "\"dateReception\":\"2026-06-30\"}"))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.reference", org.hamcrest.Matchers.matchesPattern("\\d{5}/DDP/CRM-ANT/\\d{4}")))
+                .andExpect(jsonPath("$.reference", org.hamcrest.Matchers.matchesPattern("\\d{5}/PPM/CRM-ANT/\\d{4}")))
                 .andReturn().getResponse().getContentAsString();
         int idRec = com.jayway.jsonpath.JsonPath.read(resp, "$.idReception");
         String refRecept = com.jayway.jsonpath.JsonPath.read(resp, "$.reference");
@@ -1422,19 +1423,33 @@ class CnmWorkflowIntegrationTest {
     @Test
     @DisplayName("Référence dossier — séquence globale unique (2 localités, même année → numéros distincts/consécutifs)")
     void reference_sequence_unique_globale() {
-        String rAnt = referenceService.generer("DDP", "ANT", false, 2099);
-        String rTms = referenceService.generer("DDP", "TMS", false, 2099);
+        // Segment affiché = sous-type (PPM) ; clé de compteur = famille (DDP).
+        String rAnt = referenceService.generer("PPM", "DDP", "ANT", false, 2099);
+        String rTms = referenceService.generer("PPM", "DDP", "TMS", false, 2099);
         // Numéros distincts ET consécutifs malgré des localités différentes (plus de « 00001 » partagé).
-        org.junit.jupiter.api.Assertions.assertEquals("00001/DDP/CRM-ANT/2099", rAnt);
-        org.junit.jupiter.api.Assertions.assertEquals("00002/DDP/CRM-TMS/2099", rTms);
+        org.junit.jupiter.api.Assertions.assertEquals("00001/PPM/CRM-ANT/2099", rAnt);
+        org.junit.jupiter.api.Assertions.assertEquals("00002/PPM/CRM-TMS/2099", rTms);
+    }
+
+    @Test
+    @DisplayName("Référence dossier — compteur indexé sur la FAMILLE : PPM et PPM-AGPM (même famille DDP) se suivent")
+    void reference_compteurFamille_sousTypesMeleés() {
+        // Deux sous-types de la même famille DDP → segment distinct mais numérotation CONTINUE (clé = DDP).
+        org.junit.jupiter.api.Assertions.assertEquals("00001/PPM/CRM-ANT/2097",
+                referenceService.generer("PPM", "DDP", "ANT", false, 2097));
+        org.junit.jupiter.api.Assertions.assertEquals("00002/PPM-AGPM/CRM-ANT/2097",
+                referenceService.generer("PPM-AGPM", "DDP", "ANT", false, 2097));
+        // Une autre famille (DMC) a sa propre séquence, repartant à 1.
+        org.junit.jupiter.api.Assertions.assertEquals("00001/DAO/CRM-ANT/2097",
+                referenceService.generer("DAO", "DMC", "ANT", false, 2097));
     }
 
     @Test
     @DisplayName("Référence dossier — incrément strictement croissant sans saut ni doublon (5 dossiers)")
     void reference_sequence_increment_correct() {
         for (int i = 1; i <= 5; i++) {
-            org.junit.jupiter.api.Assertions.assertEquals(String.format("%05d/DDP/CRM-ANT/2098", i),
-                    referenceService.generer("DDP", "ANT", false, 2098));
+            org.junit.jupiter.api.Assertions.assertEquals(String.format("%05d/PPM/CRM-ANT/2098", i),
+                    referenceService.generer("PPM", "DDP", "ANT", false, 2098));
         }
     }
 
@@ -1485,6 +1500,16 @@ class CnmWorkflowIntegrationTest {
                     .contentType(MediaType.APPLICATION_JSON).content("{\"idExamen\":343}"))
                     .andExpect(jsonPath("$.refLettre").value(String.format("%05d/DDP/CRM-ANT/LR/2098", i)));
         }
+    }
+
+    @Test
+    @DisplayName("Réf. lettre — hérite du segment SOUS-TYPE du refeDossier, tiret compris (PPM-AGPM)")
+    void lettre_refLettre_heriteSegmentSousType() throws Exception {
+        // refeDossier au nouveau format sous-type (segment PPM-AGPM avec tiret) → la lettre le reprend tel quel.
+        seedExamenAvecRefe(344, "00013/PPM-AGPM/CRM-ANT/2095");
+        mvc.perform(post("/api/lettre-renvois").header("Authorization", tokenMembre)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"idExamen\":344}"))
+                .andExpect(jsonPath("$.refLettre").value("00001/PPM-AGPM/CRM-ANT/LR/2095"));
     }
 
 
@@ -4601,9 +4626,9 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
-    @DisplayName("Référence réception : localité centrale (utilisateur transversal) -> 00001/DDP/CNM/2026")
+    @DisplayName("Référence réception : localité centrale (utilisateur transversal) -> 00001/PPM/CNM/2026")
     void reference_localite_centrale() throws Exception {
-        Dossier d = dossier(300, "SOUMIS"); d.setIdTypeDossier("DDP"); d.setIdLocalite("ANT");
+        Dossier d = dossier(300, "SOUMIS"); d.setIdTypeDossier("DDP"); d.setIdSousType("PPM"); d.setIdLocalite("ANT");
         dossierRepository.save(d);
         ppmRepository.save(ppm(300, 300, "PRMP001"));
 
@@ -4612,17 +4637,17 @@ class CnmWorkflowIntegrationTest {
                 .content("{\"idDossier\":300,\"numPassage\":1,\"typePassage\":\"INITIAL\","
                         + "\"imCtrlRecept\":\"CTRPRE\",\"complet\":true}"))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.reference").value("00001/DDP/CNM/2026"));
+                .andExpect(jsonPath("$.reference").value("00001/PPM/CNM/2026"));
         // Persistée sur le dossier (REFE_DOSSIER écrasée).
         mvc.perform(get("/api/dossiers/300").header("Authorization", tokenPresident))
-                .andExpect(jsonPath("$.refeDossier").value("00001/DDP/CNM/2026"));
+                .andExpect(jsonPath("$.refeDossier").value("00001/PPM/CNM/2026"));
     }
 
     @Test
-    @DisplayName("Référence réception : localité régionale ANT -> 00001/DDP/CRM-ANT/2026")
+    @DisplayName("Référence réception : localité régionale ANT -> 00001/PPM/CRM-ANT/2026")
     void reference_localite_crm() throws Exception {
         String tokenSec = bearer("CTRSEC", ProfilUtilisateur.SECRETAIRE, TypeActeur.CONTROLEUR, "CTRSEC", "ANT");
-        Dossier d = dossier(301, "SOUMIS"); d.setIdTypeDossier("DDP"); d.setIdLocalite("ANT");
+        Dossier d = dossier(301, "SOUMIS"); d.setIdTypeDossier("DDP"); d.setIdSousType("PPM"); d.setIdLocalite("ANT");
         dossierRepository.save(d);
         ppmRepository.save(ppm(301, 301, "PRMP001"));
 
@@ -4631,15 +4656,15 @@ class CnmWorkflowIntegrationTest {
                 .content("{\"idDossier\":301,\"numPassage\":1,\"typePassage\":\"INITIAL\","
                         + "\"imCtrlRecept\":\"CTRSEC\",\"complet\":true}"))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.reference").value("00001/DDP/CRM-ANT/2026"));
+                .andExpect(jsonPath("$.reference").value("00001/PPM/CRM-ANT/2026"));
     }
 
     @Test
     @DisplayName("Référence réception : compteur auto-incrémenté par la BDD (00001 puis 00002, même contexte)")
     void reference_incrementee_automatiquement() throws Exception {
         String tokenSec = bearer("CTRSEC", ProfilUtilisateur.SECRETAIRE, TypeActeur.CONTROLEUR, "CTRSEC", "ANT");
-        Dossier d1 = dossier(302, "SOUMIS"); d1.setIdTypeDossier("DDP"); d1.setIdLocalite("ANT"); dossierRepository.save(d1);
-        Dossier d2 = dossier(303, "SOUMIS"); d2.setIdTypeDossier("DDP"); d2.setIdLocalite("ANT"); dossierRepository.save(d2);
+        Dossier d1 = dossier(302, "SOUMIS"); d1.setIdTypeDossier("DDP"); d1.setIdSousType("PPM"); d1.setIdLocalite("ANT"); dossierRepository.save(d1);
+        Dossier d2 = dossier(303, "SOUMIS"); d2.setIdTypeDossier("DDP"); d2.setIdSousType("PPM"); d2.setIdLocalite("ANT"); dossierRepository.save(d2);
         ppmRepository.save(ppm(302, 302, "PRMP001"));
         ppmRepository.save(ppm(303, 303, "PRMP001"));
 
@@ -4647,12 +4672,12 @@ class CnmWorkflowIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDossier\":302,\"numPassage\":1,\"typePassage\":\"INITIAL\","
                         + "\"imCtrlRecept\":\"CTRSEC\",\"complet\":true}"))
-                .andExpect(jsonPath("$.reference").value("00001/DDP/CRM-ANT/2026"));
+                .andExpect(jsonPath("$.reference").value("00001/PPM/CRM-ANT/2026"));
         mvc.perform(post("/api/receptions").header("Authorization", tokenSec)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDossier\":303,\"numPassage\":1,\"typePassage\":\"INITIAL\","
                         + "\"imCtrlRecept\":\"CTRSEC\",\"complet\":true}"))
-                .andExpect(jsonPath("$.reference").value("00002/DDP/CRM-ANT/2026"));
+                .andExpect(jsonPath("$.reference").value("00002/PPM/CRM-ANT/2026"));
     }
 
     @Test
@@ -4660,9 +4685,9 @@ class CnmWorkflowIntegrationTest {
     void reference_isolee_par_contexte() throws Exception {
         String tokenSec = bearer("CTRSEC", ProfilUtilisateur.SECRETAIRE, TypeActeur.CONTROLEUR, "CTRSEC", "ANT");
         String tokenSecTms = bearer("CTRCC2", ProfilUtilisateur.CHEF_COMMISSION, TypeActeur.CONTROLEUR, "CTRCC2", "TMS");
-        Dossier ant = dossier(304, "SOUMIS"); ant.setIdTypeDossier("DDP"); ant.setIdLocalite("ANT"); dossierRepository.save(ant);
-        Dossier tms = dossier(305, "SOUMIS"); tms.setIdTypeDossier("DDP"); tms.setIdLocalite("TMS"); dossierRepository.save(tms);
-        Dossier cnm = dossier(306, "SOUMIS"); cnm.setIdTypeDossier("DDP"); cnm.setIdLocalite("ANT"); dossierRepository.save(cnm);
+        Dossier ant = dossier(304, "SOUMIS"); ant.setIdTypeDossier("DDP"); ant.setIdSousType("PPM"); ant.setIdLocalite("ANT"); dossierRepository.save(ant);
+        Dossier tms = dossier(305, "SOUMIS"); tms.setIdTypeDossier("DDP"); tms.setIdSousType("PPM"); tms.setIdLocalite("TMS"); dossierRepository.save(tms);
+        Dossier cnm = dossier(306, "SOUMIS"); cnm.setIdTypeDossier("DDP"); cnm.setIdSousType("PPM"); cnm.setIdLocalite("ANT"); dossierRepository.save(cnm);
         ppmRepository.save(ppm(304, 304, "PRMP001"));
         ppmRepository.save(ppm(305, 305, "PRMP001"));
         ppmRepository.save(ppm(306, 306, "PRMP001"));
@@ -4671,17 +4696,58 @@ class CnmWorkflowIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDossier\":304,\"numPassage\":1,\"typePassage\":\"INITIAL\","
                         + "\"imCtrlRecept\":\"CTRSEC\",\"complet\":true}"))
-                .andExpect(jsonPath("$.reference").value("00001/DDP/CRM-ANT/2026"));
+                .andExpect(jsonPath("$.reference").value("00001/PPM/CRM-ANT/2026"));
         mvc.perform(post("/api/receptions").header("Authorization", tokenSecTms)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDossier\":305,\"numPassage\":1,\"typePassage\":\"INITIAL\","
                         + "\"imCtrlRecept\":\"CTRCC2\",\"complet\":true}"))
-                .andExpect(jsonPath("$.reference").value("00002/DDP/CRM-TMS/2026"));
+                .andExpect(jsonPath("$.reference").value("00002/PPM/CRM-TMS/2026"));
         mvc.perform(post("/api/receptions").header("Authorization", tokenPresident)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDossier\":306,\"numPassage\":1,\"typePassage\":\"INITIAL\","
                         + "\"imCtrlRecept\":\"CTRPRE\",\"complet\":true}"))
-                .andExpect(jsonPath("$.reference").value("00003/DDP/CNM/2026"));
+                .andExpect(jsonPath("$.reference").value("00003/PPM/CNM/2026"));
+    }
+
+    @Test
+    @DisplayName("Référence réception : segment = SOUS-TYPE verbatim (PPM-AGPM avec tiret) ; compteur continu indexé sur la famille DDP")
+    void reference_segmentSousType_verbatim() throws Exception {
+        String tokenSec = bearer("CTRSEC", ProfilUtilisateur.SECRETAIRE, TypeActeur.CONTROLEUR, "CTRSEC", "ANT");
+        // Deux dossiers de la MÊME famille DDP mais de sous-types différents (PPM et PPM-AGPM).
+        Dossier ppm = dossier(307, "SOUMIS"); ppm.setIdTypeDossier("DDP"); ppm.setIdSousType("PPM"); ppm.setIdLocalite("ANT"); dossierRepository.save(ppm);
+        Dossier agpm = dossier(308, "SOUMIS"); agpm.setIdTypeDossier("DDP"); agpm.setIdSousType("PPM-AGPM"); agpm.setIdLocalite("ANT"); dossierRepository.save(agpm);
+        ppmRepository.save(ppm(307, 307, "PRMP001"));
+        ppmRepository.save(ppm(308, 308, "PRMP001"));
+
+        // 1re réception : segment = sous-type PPM, compteur famille DDP = 00001.
+        mvc.perform(post("/api/receptions").header("Authorization", tokenSec)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDossier\":307,\"numPassage\":1,\"typePassage\":\"INITIAL\","
+                        + "\"imCtrlRecept\":\"CTRSEC\",\"complet\":true}"))
+                .andExpect(jsonPath("$.reference").value("00001/PPM/CRM-ANT/2026"));
+        // 2e : segment PPM-AGPM VERBATIM (tiret conservé) ; le compteur DDP CONTINUE → 00002 (pas 00001).
+        mvc.perform(post("/api/receptions").header("Authorization", tokenSec)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDossier\":308,\"numPassage\":1,\"typePassage\":\"INITIAL\","
+                        + "\"imCtrlRecept\":\"CTRSEC\",\"complet\":true}"))
+                .andExpect(jsonPath("$.reference").value("00002/PPM-AGPM/CRM-ANT/2026"));
+    }
+
+    @Test
+    @DisplayName("Référence réception : dossier historique sans sous-type → repli sur la famille (DDP) dans le segment")
+    void reference_sansSousType_repliFamille() throws Exception {
+        String tokenSec = bearer("CTRSEC", ProfilUtilisateur.SECRETAIRE, TypeActeur.CONTROLEUR, "CTRSEC", "ANT");
+        // Dossier « historique » : famille présente, sous-type absent → segment = famille (repli défensif).
+        Dossier d = dossier(309, "SOUMIS"); d.setIdTypeDossier("DDP"); d.setIdSousType(null); d.setIdLocalite("ANT");
+        dossierRepository.save(d);
+        ppmRepository.save(ppm(309, 309, "PRMP001"));
+
+        mvc.perform(post("/api/receptions").header("Authorization", tokenSec)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDossier\":309,\"numPassage\":1,\"typePassage\":\"INITIAL\","
+                        + "\"imCtrlRecept\":\"CTRSEC\",\"complet\":true}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.reference", org.hamcrest.Matchers.matchesPattern("\\d{5}/DDP/CRM-ANT/\\d{4}")));
     }
 
     @Test
@@ -4876,6 +4942,23 @@ class CnmWorkflowIntegrationTest {
                         + "\"statutPv\":\"BROUILLON\",\"nbNavettes\":0}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.refePv").value("00003/DDP/CRM-ANT/PV/2026"));
+    }
+
+    @Test
+    @DisplayName("PV refePv : hérite du segment SOUS-TYPE du refeDossier, tiret compris (PPM-AGPM)")
+    void pv_refePv_heriteSegmentSousType() throws Exception {
+        // refeDossier au nouveau format sous-type (PPM-AGPM) → refePv insère /PV/ en gardant le segment.
+        Dossier d = dossier(502, "EXAMINE"); d.setRefeDossier("00013/PPM-AGPM/CRM-ANT/2026"); dossierRepository.save(d);
+        receptionRepository.save(reception(502, 502, "CTRSEC", true));
+        dispatchRepository.save(dispatch(502, 502, "CTRCC1", "CTRMEM"));
+        examenRepository.save(examen(502, 502, "CTRMEM"));
+
+        mvc.perform(post("/api/pv-examens").header("Authorization", tokenMembre)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idPv\":204,\"idExamen\":502,\"idAvis\":\"FAV\",\"imCtrlMembre\":\"CTRMEM\","
+                        + "\"statutPv\":\"BROUILLON\",\"nbNavettes\":0}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.refePv").value("00013/PPM-AGPM/CRM-ANT/PV/2026"));
     }
 
     @Test

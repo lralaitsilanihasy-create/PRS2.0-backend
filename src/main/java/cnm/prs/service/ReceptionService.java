@@ -143,25 +143,33 @@ public class ReceptionService {
 
     /**
      * (Règle ajoutée) À la réception, génère la référence officielle
-     * {@code xxxxx/type/code_localite/annee} et la persiste sur le dossier ({@code REFE_DOSSIER},
-     * REFE_DOSSIER restant vide depuis la soumission). Segment localité : réception
-     * <strong>centrale</strong> (utilisateur transversal, sans localité — ex. Président) -> "CNM" ;
-     * sinon "CRM-" + localité du dossier.
+     * {@code xxxxx/sous_type/code_localite/annee} et la persiste sur le dossier ({@code REFE_DOSSIER},
+     * REFE_DOSSIER restant vide depuis la soumission). ⚠️ Règle modifiée (2026-07-20) — le segment
+     * central est le <strong>sous-type</strong> du dossier ({@code ID_SOUS_TYPE} : PPM, PPM-AGPM, DAO,
+     * DAOR…), avec repli sur la <strong>famille</strong> ({@code ID_TYPE_DOSSIER}) si le sous-type est
+     * absent (dossier historique non repris) ; la <strong>numérotation reste indexée sur la famille</strong>
+     * (continuité inchangée). Segment localité : réception <strong>centrale</strong> (utilisateur
+     * transversal, sans localité — ex. Président) -> "CNM" ; sinon "CRM-" + localité du dossier.
      */
     private String genererReference(Reception reception) {
         Dossier dossier = dossierRepository.findById(reception.getIdDossier()).orElse(null);
         if (dossier == null) {
             return null;
         }
-        String typeDossier = dossier.getIdTypeDossier();
-        if (typeDossier == null || typeDossier.isBlank()) {
+        String famille = dossier.getIdTypeDossier();
+        if (famille == null || famille.isBlank()) {
             // Dossier sans type : pas de référence structurée, mais la réception reste valide.
             return null;
+        }
+        // Segment affiché = sous-type ; repli sur la famille si le dossier n'a pas de sous-type.
+        String segment = dossier.getIdSousType();
+        if (segment == null || segment.isBlank()) {
+            segment = famille;
         }
         String localite = localiteDuDossier(reception.getIdDossier());
         boolean estCentrale = Visibilite.localite().filter(l -> !l.isBlank()).isEmpty();
         int annee = exerciceDuDossier(reception.getIdDossier());
-        String reference = referenceService.generer(typeDossier, localite, estCentrale, annee);
+        String reference = referenceService.generer(segment, famille, localite, estCentrale, annee);
         dossier.setRefeDossier(reference);
         dossierRepository.save(dossier);
         return reference;

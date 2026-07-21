@@ -1548,7 +1548,7 @@ profil/localité. Cycle : `BROUILLON → SOUMIS → SIGNE` (signature CC ou Pré
 | idLettre | number | — (réponse) | PK **auto-générée** (IDENTITY) |
 | idExamen | number | Oui | @NotNull (« L'examen est obligatoire. ») — FK `t_examen` (**non unique** : N lettres/examen) |
 | idDossier | number | — (réponse) | **lecture seule** (dérivé de l'examen) |
-| refLettre | string | — (réponse) | **générée serveur** : `<seqLettreGlobal>/<type>/<code_localite>/LR/<année>` (ex. `00001/PPM/CRM-ANT/LR/2026`). Le **type/localité/année** proviennent du `refeDossier` du dossier, mais le **numéro de séquence est un compteur GLOBAL dédié aux lettres** (par année, **strictement unique et continu** tous dossiers/entités/localités confondus — ≠ le numéro du dossier). `null` si `refeDossier` non structuré |
+| refLettre | string | — (réponse) | **générée serveur** : `<seqLettreGlobal>/<sous_type>/<code_localite>/LR/<année>` (ex. `00001/PPM/CRM-ANT/LR/2026`, `00001/PPM-AGPM/CRM-ANT/LR/2026`). Le **segment sous-type / localité / année** est **repris tel quel** du `refeDossier` du dossier (donc suit automatiquement le segment sous-type, tiret compris), mais le **numéro de séquence est un compteur GLOBAL dédié aux lettres** (par année, **strictement unique et continu** tous dossiers/entités/localités confondus — ≠ le numéro du dossier). `null` si `refeDossier` non structuré |
 | corpsLettre | string | Non | corps libre de la lettre (TEXT, sans limite de taille) |
 | dateExamen | string (date) | — (réponse) | **lecture seule** (date d'examen) |
 | dateLettre | string (date) | — (réponse) | **posée serveur** (jour) |
@@ -1969,7 +1969,7 @@ profil/localité. Cycle : `BROUILLON → SOUMIS → SIGNE` (signature CC ou Pré
 > `2026-07-17_localite_referencement_deprecie.sql` et `2026-07-17_localite_code_deprecie.sql`). Des valeurs
 > encore envoyées par un ancien front sont **ignorées**. → L'écran admin se réduit à **id / libellé**.
 >
-> 📌 **Étiquetage front.** Le segment localité des références officielles (`00012/DDP/CRM-ANT/2026`)
+> 📌 **Étiquetage front.** Le segment localité des références officielles (`00013/PPM/CRM-ANT/2026`)
 > est bâti sur la **PK `idLocalite`** (préfixée `CRM-`, ou `CNM` en central).
 
 **Champs `LocaliteDto`**
@@ -2987,10 +2987,16 @@ GET /api/rapports/dossiers/excel                   (Chef de commission : forcé 
 > **Règles (sinon 409)** : `numPassage` ≥ 1 ; `numPassage = 1` ⟺ `typePassage = "INITIAL"`.
 > **Effet `[Auto]`** : si `complet = true`, le dossier passe au statut `PRET_DISPATCH`.
 >
-> **Référence officielle générée à la réception (⚠️ règle ajoutée).** Au POST, le serveur génère et
-> renvoie `reference` au format **`xxxxx/type_dossier/code_localite/annee_exercice`** :
-> `xxxxx` = compteur 5 chiffres incrémenté par la base, **par combinaison** (`type_dossier`, `code_localite`,
-> `annee_exercice`) — table `t_sequence_reference`, sans compteur applicatif ;
+> **Référence officielle générée à la réception (⚠️ règle ajoutée ; segment révisé 2026-07-20).** Au POST, le
+> serveur génère et renvoie `reference` au format **`xxxxx/sous_type/code_localite/annee_exercice`**
+> (ex. `00013/PPM/CRM-ANT/2026`, `00014/PPM-AGPM/CRM-ANT/2026`, `00015/DAO/CRM-ANT/2026`) :
+> le segment central est le **sous-type** du dossier (`t_dossier.ID_SOUS_TYPE` : PPM, PPM-AGPM, DAO, DAOR…),
+> **verbatim** (un sous-type dérivé comme PPM-AGPM apparaît tel quel — le `-` ne crée pas d'ambiguïté vis-à-vis
+> des `/`) ; **repli** sur la **famille** (`ID_TYPE_DOSSIER`) si le sous-type est absent (dossier historique).
+> `xxxxx` = compteur 5 chiffres incrémenté par la base, **indexé sur la FAMILLE** (`type_dossier`, `code_localite`
+> fixe `DOSSIER`, `annee_exercice`) — table `t_sequence_reference`, sans compteur applicatif : **la numérotation
+> reste continue au sein d'une famille** (un PPM puis un PPM-AGPM se suivent : `00013`, `00014`), seul le libellé
+> du segment change ;
 > `code_localite` = **`CNM`** si réception centrale (utilisateur transversal, sans localité, ex. Président),
 > sinon **`CRM-<localité>`** ; `annee_exercice` = exercice du PPM, sinon année courante.
 > La référence est **persistée** sur le dossier (`REFE_DOSSIER`, vide depuis la soumission)
@@ -3257,8 +3263,10 @@ GET /api/rapports/dossiers/excel                   (Chef de commission : forcé 
 > `2026-07-17_familles_sous_types.sql`, FK re-pointées sur `t_dossier`, `t_type_piece_jointe`,
 > `tr_points_ctrl`). Les anciens codes deviennent des **sous-types** (référentiel ci-dessous). Les
 > **pièces attendues** et **points de contrôle** restent rattachés à la **famille**. Les **nouvelles
-> références** portent le segment famille (ex. `00012/DDP/CRM-ANT/2026`, numérotation continue) ; les
-> références déjà générées sont conservées telles quelles ; la référence initiale PPM
+> références** portent le segment **sous-type** (⚠️ révisé 2026-07-20 — ex. `00013/PPM/CRM-ANT/2026`,
+> `00014/PPM-AGPM/CRM-ANT/2026`), mais la **numérotation reste indexée sur la famille** (continue : un PPM
+> puis un PPM-AGPM se suivent `00013`/`00014`) ; les références déjà générées (dont l'ancien segment famille
+> `…/DDP/…`) sont **conservées telles quelles** (identifiants immuables) ; la référence initiale PPM
 > (`xxxxx/<acronyme>/PPM/<année>`) garde son segment `PPM` (elle nomme le document, pas la famille).
 > NB : la famille `DMC` est distincte du référentiel `type-dmc` (types de **documents** DMC d'un marché : BC…).
 
