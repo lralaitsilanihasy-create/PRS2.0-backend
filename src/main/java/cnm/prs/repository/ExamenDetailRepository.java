@@ -17,6 +17,28 @@ public interface ExamenDetailRepository extends JpaRepository<ExamenDetail, Inte
     List<ExamenDetail> findByIdExamen(Integer idExamen);
 
     /**
+     * ⚠️ Règle ajoutée (2026-07-21) — unicité applicative du triplet ({@code idExamen}, {@code idDetail},
+     * {@code idPtControle}). Traite explicitement {@code idDetail} NULL (points DOSSIER) — une contrainte
+     * d'unicité SQL ne le ferait pas sous PostgreSQL (NULL ≠ NULL). {@code selfId} exclut la ligne
+     * elle-même à la mise à jour (null à la création).
+     */
+    @Query("""
+            select count(ed) from ExamenDetail ed
+            where ed.idExamen = :idExamen and ed.idPtControle = :idPt
+              and ((:idDetail is null and ed.idDetail is null) or ed.idDetail = :idDetail)
+              and (:selfId is null or ed.idDetailExamen <> :selfId)
+            """)
+    long compterDoublon(@Param("idExamen") Integer idExamen, @Param("idPt") Integer idPt,
+            @Param("idDetail") Integer idDetail, @Param("selfId") Integer selfId);
+
+    /**
+     * ⚠️ Règle ajoutée (2026-07-21) — couples ({@code idDetail}, {@code idPtControle}) déjà évalués d'un
+     * examen (contrôle de complétude à la soumission). {@code idDetail} peut être NULL (points DOSSIER).
+     */
+    @Query("select ed.idDetail, ed.idPtControle from ExamenDetail ed where ed.idExamen = :idExamen")
+    List<Object[]> couplesEvalues(@Param("idExamen") Integer idExamen);
+
+    /**
      * Purge (⚠️ règle ajoutée §3.3) — supprime les lignes de grille des examens du circuit d'un dossier
      * retiré (via examen → dispatch → réception → dossier). À appeler <strong>avant</strong> les examens.
      */

@@ -1,6 +1,10 @@
 package cnm.prs.service;
 
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -9,7 +13,11 @@ import org.springframework.transaction.annotation.Transactional;
 import cnm.prs.dto.ExamenDto;
 import cnm.prs.dto.ExamenSoumissionRequest;
 import cnm.prs.dto.PvExamenDto;
+import cnm.prs.entity.Dossier;
 import cnm.prs.entity.Examen;
+import cnm.prs.entity.Marche;
+import cnm.prs.entity.PointsCtrl;
+import cnm.prs.enums.PorteePointCtrl;
 import cnm.prs.enums.ProfilUtilisateur;
 import cnm.prs.enums.StatutDossier;
 import cnm.prs.exception.BusinessRuleException;
@@ -19,7 +27,10 @@ import cnm.prs.exception.ResourceNotFoundException;
 import cnm.prs.mapper.ExamenMapper;
 import cnm.prs.repository.DispatchRepository;
 import cnm.prs.repository.DossierRepository;
+import cnm.prs.repository.ExamenDetailRepository;
 import cnm.prs.repository.ExamenRepository;
+import cnm.prs.repository.MarcheRepository;
+import cnm.prs.repository.PointsCtrlRepository;
 import cnm.prs.security.CurrentUser;
 import cnm.prs.security.Visibilite;
 
@@ -35,15 +46,22 @@ public class ExamenService {
     private final DossierRepository dossierRepository;
     private final PvExamenService pvExamenService;
     private final ControleurDirectory controleurDirectory;
+    private final PointsCtrlRepository pointsCtrlRepository;
+    private final MarcheRepository marcheRepository;
+    private final ExamenDetailRepository examenDetailRepository;
 
     public ExamenService(ExamenRepository repository, DispatchRepository dispatchRepository,
             DossierRepository dossierRepository, PvExamenService pvExamenService,
-            ControleurDirectory controleurDirectory) {
+            ControleurDirectory controleurDirectory, PointsCtrlRepository pointsCtrlRepository,
+            MarcheRepository marcheRepository, ExamenDetailRepository examenDetailRepository) {
         this.repository = repository;
         this.dispatchRepository = dispatchRepository;
         this.dossierRepository = dossierRepository;
         this.pvExamenService = pvExamenService;
         this.controleurDirectory = controleurDirectory;
+        this.pointsCtrlRepository = pointsCtrlRepository;
+        this.marcheRepository = marcheRepository;
+        this.examenDetailRepository = examenDetailRepository;
     }
 
     /**
@@ -57,8 +75,65 @@ public class ExamenService {
         if (!repository.existsById(idExamen)) {
             throw new ResourceNotFoundException("Examen introuvable : " + idExamen);
         }
+        validerCompletude(idExamen);
         String idSecretaire = validerSecretaireSeance(idExamen, req.idSecretaireSeance());
         return pvExamenService.creerProjet(idExamen, req.idAvis(), idSecretaire);
+    }
+
+    /**
+     * ⚠️ Règle ajoutée (2026-07-21) — <strong>complétude</strong> de l'examen avant soumission (garantit
+     * « toutes les lignes traitées ») : chaque point de <strong>portée LIGNE</strong> de la grille effective
+     * du dossier doit être évalué <strong>pour chaque marché</strong>, et chaque point de <strong>portée
+     * DOSSIER</strong> évalué <strong>une fois</strong> ({@code idDetail} nul). Sinon 400 ciblé {@code grille}.
+     *
+     * <p>Vacant (aucune exigence) si le dossier n'a pas de grille (famille/sous-type sans points) : les
+     * examens historiques et non-PPM ne sont pas contraints.</p>
+     */
+    private void validerCompletude(Integer idExamen) {
+        Integer idDossier = repository.findIdDossierByExamen(idExamen).orElse(null);
+        Dossier dossier = idDossier == null ? null : dossierRepository.findById(idDossier).orElse(null);
+        if (dossier == null) {
+            return;
+        }
+        List<PointsCtrl> grille = pointsCtrlRepository.findGrilleEffective(
+                dossier.getIdTypeDossier(), dossier.getIdSousType());
+        if (grille.isEmpty()) {
+            return;   // pas de grille pour ce (famille, sous-type) → rien à exiger
+        }
+        List<Marche> marches = marcheRepository.findByIdDossier(idDossier);
+        Set<String> evalues = new HashSet<>();
+        for (Object[] couple : examenDetailRepository.couplesEvalues(idExamen)) {
+            evalues.add(cleCouple((Integer) couple[0], (Integer) couple[1]));
+        }
+        List<String> manquants = new ArrayList<>();
+        for (PointsCtrl p : grille) {
+            if (p.getPortee() == PorteePointCtrl.DOSSIER) {
+                if (!evalues.contains(cleCouple(null, p.getIdPointCtrl()))) {
+                    manquants.add("« " + p.getLibelPointCtrl() + " » (niveau dossier)");
+                }
+            } else {
+                for (Marche m : marches) {
+                    if (!evalues.contains(cleCouple(m.getIdDetail(), p.getIdPointCtrl()))) {
+                        String marche = m.getDesignationMarche() == null || m.getDesignationMarche().isBlank()
+                                ? "n°" + m.getIdDetail() : m.getDesignationMarche();
+                        manquants.add("« " + p.getLibelPointCtrl() + " » — marché « " + marche + " »");
+                    }
+                }
+            }
+        }
+        if (!manquants.isEmpty()) {
+            String apercu = manquants.stream().limit(5).collect(Collectors.joining(" ; "));
+            String reste = manquants.size() > 5 ? " … (+" + (manquants.size() - 5) + ")" : "";
+            throw new ChampsInvalidesException(List.of(new ErrorResponse.FieldError("grille",
+                    "Examen incomplet : " + manquants.size() + " évaluation(s) manquante(s) — chaque point LIGNE "
+                            + "doit être évalué pour chaque marché et chaque point DOSSIER une fois. À évaluer : "
+                            + apercu + reste + ".")));
+        }
+    }
+
+    /** Clé d'un couple évalué ({@code idDetail} nul → « null ») pour la comparaison de complétude. */
+    private static String cleCouple(Integer idDetail, Integer idPtControle) {
+        return (idDetail == null ? "null" : idDetail) + "|" + idPtControle;
     }
 
     /**
@@ -90,12 +165,31 @@ public class ExamenService {
                 .stream().map(ExamenMapper::toDto).toList();
     }
 
+    /** Code d'avis suggéré (référentiel tr_avis) : défavorable dès une non-conformité, sinon favorable. */
+    private static final String AVIS_DEFAVORABLE = "DEF";
+    private static final String AVIS_FAVORABLE = "FAV";
+
     @Transactional(readOnly = true)
     public ExamenDto findById(Integer id) {
         Examen entity = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Examen introuvable : " + id));
         Visibilite.controler(loc -> repository.existsDansLocalite(id, loc));
-        return ExamenMapper.toDto(entity);
+        ExamenDto dto = ExamenMapper.toDto(entity);
+        dto.setAvisSuggere(avisSuggere(id));
+        return dto;
+    }
+
+    /**
+     * ⚠️ Règle ajoutée (2026-07-21) — avis suggéré, non contraignant : {@code DEF} si ≥1 point non conforme,
+     * sinon {@code FAV} ; {@code null} tant qu'aucun point n'est évalué (rien à suggérer).
+     */
+    private String avisSuggere(Integer idExamen) {
+        List<cnm.prs.entity.ExamenDetail> details = examenDetailRepository.findByIdExamen(idExamen);
+        if (details.isEmpty()) {
+            return null;
+        }
+        boolean auMoinsUneNonConformite = details.stream().anyMatch(d -> Boolean.FALSE.equals(d.getConforme()));
+        return auMoinsUneNonConformite ? AVIS_DEFAVORABLE : AVIS_FAVORABLE;
     }
 
     public ExamenDto create(ExamenDto dto) {

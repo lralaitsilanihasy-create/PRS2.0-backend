@@ -9,6 +9,8 @@ import cnm.prs.dto.ExamenDetailDto;
 import cnm.prs.dto.ObservationControleDto;
 import cnm.prs.entity.ExamenDetail;
 import cnm.prs.entity.ObservationControle;
+import cnm.prs.entity.PointsCtrl;
+import cnm.prs.enums.PorteePointCtrl;
 import cnm.prs.enums.StatutDossier;
 import cnm.prs.exception.BusinessRuleException;
 import cnm.prs.exception.ChampsInvalidesException;
@@ -18,7 +20,9 @@ import cnm.prs.mapper.ExamenDetailMapper;
 import cnm.prs.mapper.ObservationControleMapper;
 import cnm.prs.repository.ExamenDetailRepository;
 import cnm.prs.repository.ExamenRepository;
+import cnm.prs.repository.MarcheRepository;
 import cnm.prs.repository.ObservationControleRepository;
+import cnm.prs.repository.PointsCtrlRepository;
 
 /**
  * Logique métier pour {@link ExamenDetail}.
@@ -34,12 +38,17 @@ public class ExamenDetailService {
     private final ExamenDetailRepository repository;
     private final ExamenRepository examenRepository;
     private final ObservationControleRepository observationRepository;
+    private final PointsCtrlRepository pointsCtrlRepository;
+    private final MarcheRepository marcheRepository;
 
     public ExamenDetailService(ExamenDetailRepository repository, ExamenRepository examenRepository,
-            ObservationControleRepository observationRepository) {
+            ObservationControleRepository observationRepository, PointsCtrlRepository pointsCtrlRepository,
+            MarcheRepository marcheRepository) {
         this.repository = repository;
         this.examenRepository = examenRepository;
         this.observationRepository = observationRepository;
+        this.pointsCtrlRepository = pointsCtrlRepository;
+        this.marcheRepository = marcheRepository;
     }
 
     @Transactional(readOnly = true)
@@ -57,6 +66,7 @@ public class ExamenDetailService {
     public ExamenDetailDto create(ExamenDetailDto dto) {
         exigerExamenModifiable(dto.getIdExamen());
         validerObservations(dto);
+        validerLigneEtUnicite(dto, null);
         ExamenDetail saved = repository.save(ExamenDetailMapper.toEntity(dto));
         remplacerObservations(saved.getIdDetailExamen(), dto.getObservations());
         return toDtoAvecObservations(saved);
@@ -67,7 +77,9 @@ public class ExamenDetailService {
                 .orElseThrow(() -> new ResourceNotFoundException("ExamenDetail introuvable : " + id));
         exigerExamenModifiable(existing.getIdExamen());
         validerObservations(dto);
+        validerLigneEtUnicite(dto, id);
         existing.setIdExamen(dto.getIdExamen());
+        existing.setIdDetail(dto.getIdDetail());
         existing.setIdPtControle(dto.getIdPtControle());
         existing.setConforme(dto.getConforme());
         existing.setObsSiNonConforme(dto.getObsSiNonConforme());
@@ -95,6 +107,46 @@ public class ExamenDetailService {
                     "observations",
                     "Au moins une ligne d'observation est obligatoire si le point est non conforme.")));
         }
+    }
+
+    /**
+     * ⚠️ Règle ajoutée (2026-07-21) — cohérence portée/ligne + unicité du triplet.
+     * <ul>
+     *   <li>Si {@code idDetail} est renseigné : le point doit être de portée {@code LIGNE} (un point
+     *       {@code DOSSIER} s'évalue une seule fois, {@code idDetail} nul), et {@code idDetail} doit être une
+     *       ligne de marché du dossier de l'examen — sinon 400 ciblé {@code idDetail}.</li>
+     *   <li>Unicité applicative de ({@code idExamen}, {@code idDetail}, {@code idPtControle}) — 400
+     *       {@code idPtControle} en cas de doublon (couvre {@code idDetail} nul, non géré par une contrainte
+     *       SQL sous PostgreSQL).</li>
+     * </ul>
+     * <p><strong>Lénient</strong> : {@code idDetail} nul reste accepté (examen historique / point DOSSIER) —
+     * l'exigence « une ligne par point LIGNE » est vérifiée à la <em>soumission</em> (complétude).</p>
+     */
+    private void validerLigneEtUnicite(ExamenDetailDto dto, Integer selfId) {
+        Integer idDetail = dto.getIdDetail();
+        if (idDetail != null) {
+            PointsCtrl point = pointsCtrlRepository.findById(dto.getIdPtControle()).orElse(null);
+            if (point != null && point.getPortee() == PorteePointCtrl.DOSSIER) {
+                throw champInvalide("idDetail", "Le point « " + point.getLibelPointCtrl()
+                        + " » est de portée DOSSIER : il s'évalue une seule fois, sans ligne de marché (idDetail nul).");
+            }
+            Integer idDossier = examenRepository.findIdDossierByExamen(dto.getIdExamen()).orElse(null);
+            boolean estLigneDuDossier = idDossier != null && marcheRepository.findByIdDossier(idDossier).stream()
+                    .anyMatch(m -> idDetail.equals(m.getIdDetail()));
+            if (!estLigneDuDossier) {
+                throw champInvalide("idDetail",
+                        "La ligne de marché " + idDetail + " n'appartient pas au dossier de l'examen.");
+            }
+        }
+        if (repository.compterDoublon(dto.getIdExamen(), dto.getIdPtControle(), idDetail, selfId) > 0) {
+            throw champInvalide("idPtControle", "Un résultat existe déjà pour ce point de contrôle"
+                    + (idDetail == null ? " au niveau dossier" : " sur cette ligne de marché")
+                    + " (unicité idExamen + idDetail + idPtControle).");
+        }
+    }
+
+    private ChampsInvalidesException champInvalide(String champ, String message) {
+        return new ChampsInvalidesException(List.of(new ErrorResponse.FieldError(champ, message)));
     }
 
     /** Remplace les lignes d'observation du point de contrôle par celles fournies (replace-on-save). */

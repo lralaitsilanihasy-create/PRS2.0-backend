@@ -175,12 +175,21 @@ public class PvDocumentService {
                 .filter(s -> !s.isBlank()).orElse(im);
     }
 
-    /** Toutes les observations des points de contrôle non conformes de l'examen, à plat (ordre stable). */
+    /**
+     * Toutes les observations des points de contrôle non conformes de l'examen, à plat (ordre stable).
+     * ⚠️ Règle ajoutée (2026-07-21) — chaque observation est préfixée par la <strong>ligne de marché</strong>
+     * concernée : « [Marché « désignation »] libellé du point » pour un résultat par ligne
+     * ({@code idDetail} renseigné), « [Dossier] libellé du point » pour un point inter-lignes ou un examen
+     * historique ({@code idDetail} nul). Aucune modification du gabarit Word : le préfixe entre dans la
+     * colonne « point de contrôle » existante.
+     */
     private List<PvDocumentContexte.Observation> construireObservations(Integer idExamen) {
         List<PvDocumentContexte.Observation> out = new ArrayList<>();
+        java.util.Map<Integer, String> designationsParLigne = new java.util.HashMap<>();
         for (ExamenDetail ed : examenDetailRepository.findByIdExamen(idExamen)) {
             if (Boolean.FALSE.equals(ed.getConforme())) {
-                String point = ed.getPtControle() == null ? null : ed.getPtControle().getLibelPointCtrl();
+                String libelle = ed.getPtControle() == null ? null : ed.getPtControle().getLibelPointCtrl();
+                String point = prefixerParLigne(ed.getIdDetail(), libelle, designationsParLigne);
                 for (ObservationControle o : observationControleRepository
                         .findByIdDetailOrderByOrdreAsc(ed.getIdDetailExamen())) {
                     out.add(new PvDocumentContexte.Observation(point, o.getAuLieuDe(), o.getLire()));
@@ -188,6 +197,28 @@ public class PvDocumentService {
             }
         }
         return out;
+    }
+
+    /** Préfixe le libellé du point par la ligne de marché (désignation mise en cache) ou « [Dossier] ». */
+    private String prefixerParLigne(Integer idDetail, String libelle, java.util.Map<Integer, String> cache) {
+        String designation = idDetail == null ? null : cache.computeIfAbsent(idDetail, id ->
+                marcheRepository.findById(id).map(m -> m.getDesignationMarche()).orElse(null));
+        return prefixerLibelle(idDetail, libelle, designation);
+    }
+
+    /**
+     * ⚠️ Règle ajoutée (2026-07-21) — formatage pur du libellé de l'ANNEXE (testable sans Word/BD) :
+     * « [Marché « désignation »] point » si {@code idDetail} renseigné (repli « n°&lt;id&gt; » sans désignation),
+     * « [Dossier] point » sinon.
+     */
+    public static String prefixerLibelle(Integer idDetail, String libelle, String designationMarche) {
+        String base = libelle == null ? "" : libelle;
+        if (idDetail == null) {
+            return "[Dossier] " + base;
+        }
+        String marche = designationMarche == null || designationMarche.isBlank()
+                ? "n°" + idDetail : designationMarche;
+        return "[Marché « " + marche + " »] " + base;
     }
 
     /** Écrit le PDF dans le répertoire FSX PV/ sous {@code {refePv nettoyée}.pdf} ; renvoie le chemin. */

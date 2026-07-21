@@ -7791,6 +7791,175 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("Grille — la portée (LIGNE/DOSSIER) est exposée dans le DTO ; défaut LIGNE ; création avec portée")
+    void grille_exposePortee() throws Exception {
+        PointsCtrl ligne = new PointsCtrl();
+        ligne.setIdPointCtrl(810); ligne.setLibelPointCtrl("Objet"); ligne.setObligatoire(true);
+        ligne.setIdTypeDossier("DDP"); ligne.setOrdrePointCtrl(1);   // portee non fixée → défaut LIGNE
+        pointsCtrlRepository.save(ligne);
+        PointsCtrl dossier = new PointsCtrl();
+        dossier.setIdPointCtrl(811); dossier.setLibelPointCtrl("fractionnement illicite"); dossier.setObligatoire(true);
+        dossier.setIdTypeDossier("DDP"); dossier.setOrdrePointCtrl(2);
+        dossier.setPortee(cnm.prs.enums.PorteePointCtrl.DOSSIER);
+        pointsCtrlRepository.save(dossier);
+
+        mvc.perform(get("/api/points-ctrls?sousType=PPM").header("Authorization", tokenMembre))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idPointCtrl==810)].portee", hasItem("LIGNE")))
+                .andExpect(jsonPath("$[?(@.idPointCtrl==811)].portee", hasItem("DOSSIER")));
+
+        // Création admin avec portée DOSSIER → exposée ; code inconnu → 400.
+        mvc.perform(post("/api/points-ctrls").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idPointCtrl\":812,\"libelPointCtrl\":\"Coherence globale\",\"obligatoire\":true,"
+                        + "\"idTypeDossier\":\"DDP\",\"portee\":\"DOSSIER\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.portee").value("DOSSIER"));
+        mvc.perform(post("/api/points-ctrls").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idPointCtrl\":813,\"libelPointCtrl\":\"x\",\"obligatoire\":true,"
+                        + "\"idTypeDossier\":\"DDP\",\"portee\":\"MARCHE\"}"))
+                .andExpect(status().isBadRequest());
+        // Création sans portée → défaut LIGNE en sortie.
+        mvc.perform(post("/api/points-ctrls").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idPointCtrl\":814,\"libelPointCtrl\":\"Nature\",\"obligatoire\":true,"
+                        + "\"idTypeDossier\":\"DDP\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.portee").value("LIGNE"));
+    }
+
+    /** Circuit DDP/PPM EXAMINE (dossier + 2 marchés + PPM + réception/dispatch/examen ANT) pour l'examen par ligne. */
+    private void seedCircuitExamenParLigne() {
+        Dossier d = dossier(6000, "EXAMINE");
+        d.setIdTypeDossier("DDP"); d.setIdSousType("PPM"); d.setIdLocalite("ANT");
+        dossierRepository.save(d);
+        ppmRepository.save(ppm(6000, 6000, "PRMP001"));
+        marcheRepository.save(marche(60001, 6000, 6000));
+        marcheRepository.save(marche(60002, 6000, 6000));
+        receptionRepository.save(reception(6000, 6000, "CTRSEC", true));   // localité ANT
+        dispatchRepository.save(dispatch(6000, 6000, "CTRCC1", "CTRMEM"));
+        examenRepository.save(examen(6000, 6000, "CTRMEM"));
+        // Grille DDP : 2 points LIGNE (901, 902) + 1 point DOSSIER (903 = fractionnement).
+        pointLigne(901, "Forme", 1);
+        pointLigne(902, "Mode de passation", 2);
+        PointsCtrl frac = new PointsCtrl();
+        frac.setIdPointCtrl(903); frac.setLibelPointCtrl("fractionnement illicite"); frac.setObligatoire(true);
+        frac.setIdTypeDossier("DDP"); frac.setOrdrePointCtrl(3);
+        frac.setPortee(cnm.prs.enums.PorteePointCtrl.DOSSIER);
+        pointsCtrlRepository.save(frac);
+    }
+
+    private void pointLigne(int id, String libelle, int ordre) {
+        PointsCtrl p = new PointsCtrl();
+        p.setIdPointCtrl(id); p.setLibelPointCtrl(libelle); p.setObligatoire(true);
+        p.setIdTypeDossier("DDP"); p.setOrdrePointCtrl(ordre);   // portee défaut LIGNE
+        pointsCtrlRepository.save(p);
+    }
+
+    @Test
+    @DisplayName("Examen par ligne — résultat porté par marché + unicité (idExamen,idDetail,idPtControle) + cohérence portée/idDetail")
+    void examen_resultatParLigne_etUnicite() throws Exception {
+        seedCircuitExamenParLigne();
+
+        // Point LIGNE (901) évalué sur le marché 60001 → 201, idDetail renvoyé.
+        mvc.perform(post("/api/examen-details").header("Authorization", tokenMembre).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDetailExamen\":70001,\"idExamen\":6000,\"idDetail\":60001,\"idPtControle\":901,\"conforme\":true}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.idDetail").value(60001));
+        // Doublon exact du triplet → 400 idPtControle.
+        mvc.perform(post("/api/examen-details").header("Authorization", tokenMembre).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDetailExamen\":70002,\"idExamen\":6000,\"idDetail\":60001,\"idPtControle\":901,\"conforme\":true}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[0].champ").value("idPtControle"));
+        // Même point, AUTRE marché (60002) → 201 (triplet distinct).
+        mvc.perform(post("/api/examen-details").header("Authorization", tokenMembre).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDetailExamen\":70003,\"idExamen\":6000,\"idDetail\":60002,\"idPtControle\":901,\"conforme\":true}"))
+                .andExpect(status().isCreated());
+        // Point DOSSIER (903) AVEC idDetail → 400 idDetail (s'évalue une seule fois, sans ligne).
+        mvc.perform(post("/api/examen-details").header("Authorization", tokenMembre).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDetailExamen\":70004,\"idExamen\":6000,\"idDetail\":60001,\"idPtControle\":903,\"conforme\":true}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[0].champ").value("idDetail"));
+        // idDetail hors du dossier → 400 idDetail.
+        mvc.perform(post("/api/examen-details").header("Authorization", tokenMembre).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDetailExamen\":70005,\"idExamen\":6000,\"idDetail\":99999,\"idPtControle\":901,\"conforme\":true}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[0].champ").value("idDetail"));
+        // Point DOSSIER (903) sans idDetail → 201, idDetail null.
+        mvc.perform(post("/api/examen-details").header("Authorization", tokenMembre).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDetailExamen\":70006,\"idExamen\":6000,\"idPtControle\":903,\"conforme\":true}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.idDetail").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("Examen par ligne — complétude à la soumission (400 tant que toutes les lignes ne sont pas traitées) + avis suggéré")
+    void examen_completude_soumission_etAvisSuggere() throws Exception {
+        seedCircuitExamenParLigne();
+
+        // Aucun détail → avisSuggere null.
+        mvc.perform(get("/api/examens/6000").header("Authorization", tokenMembre))
+                .andExpect(jsonPath("$.avisSuggere").doesNotExist());
+        // Soumission alors que la grille n'est pas remplie → 400 ciblé « grille ».
+        mvc.perform(post("/api/examens/6000/soumettre").header("Authorization", tokenMembre)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idAvis\":\"FAV\",\"idSecretaireSeance\":\"CTRVER\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[0].champ").value("grille"));
+
+        // Remplir : 2 points LIGNE × 2 marchés (4) + 1 point DOSSIER (1) = 5 évaluations.
+        detailLigne(70101, 901, 60001, true, null);
+        detailLigne(70102, 901, 60002, true, null);
+        detailLigne(70103, 902, 60001, true, null);
+        detailLigne(70104, 902, 60002, true, null);
+        // Point DOSSIER non conforme (avec observation) → avis suggéré DEFAVORABLE.
+        mvc.perform(post("/api/examen-details").header("Authorization", tokenMembre).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDetailExamen\":70105,\"idExamen\":6000,\"idPtControle\":903,\"conforme\":false,"
+                        + "\"observations\":[{\"auLieuDe\":\"3 marchés\",\"lire\":\"1 marché\",\"ordre\":1}]}"))
+                .andExpect(status().isCreated());
+
+        mvc.perform(get("/api/examens/6000").header("Authorization", tokenMembre))
+                .andExpect(jsonPath("$.avisSuggere").value("DEF"));
+
+        // Grille complète → soumission 201 (Projet de PV créé).
+        mvc.perform(post("/api/examens/6000/soumettre").header("Authorization", tokenMembre)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idAvis\":\"DEF\",\"idSecretaireSeance\":\"CTRVER\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.idExamen").value(6000));
+    }
+
+    @Test
+    @DisplayName("Examen par ligne — avis suggéré FAVORABLE quand tous les points sont conformes")
+    void examen_avisSuggere_favorable() throws Exception {
+        seedCircuitExamenParLigne();
+        detailLigne(70201, 901, 60001, true, null);
+        mvc.perform(get("/api/examens/6000").header("Authorization", tokenMembre))
+                .andExpect(jsonPath("$.avisSuggere").value("FAV"));
+    }
+
+    private void detailLigne(int idDetailExamen, int idPt, int idMarche, boolean conforme, String obs) throws Exception {
+        mvc.perform(post("/api/examen-details").header("Authorization", tokenMembre).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDetailExamen\":" + idDetailExamen + ",\"idExamen\":6000,\"idDetail\":" + idMarche
+                        + ",\"idPtControle\":" + idPt + ",\"conforme\":" + conforme + "}"))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    @DisplayName("ANNEXE PV — préfixe du libellé par ligne de marché (unitaire, sans Word) : [Marché « … »] / [Dossier]")
+    void pvAnnexe_prefixeLibelle() {
+        org.junit.jupiter.api.Assertions.assertEquals("[Marché « Travaux RN13 »] Cohérence",
+                cnm.prs.service.PvDocumentService.prefixerLibelle(42, "Cohérence", "Travaux RN13"));
+        // Point dossier (idDetail null) → [Dossier].
+        org.junit.jupiter.api.Assertions.assertEquals("[Dossier] fractionnement illicite",
+                cnm.prs.service.PvDocumentService.prefixerLibelle(null, "fractionnement illicite", null));
+        // Ligne sans désignation → repli « n°<id> ».
+        org.junit.jupiter.api.Assertions.assertEquals("[Marché « n°7 »] Objet",
+                cnm.prs.service.PvDocumentService.prefixerLibelle(7, "Objet", null));
+    }
+
+    @Test
     @DisplayName("Saisie dossier DMC/DDM : idSousType choisi (DAOR) → famille déduite ; sous-type DDP refusé ; sous-type inconnu → 400")
     void saisieDossier_sousTypeChoisi() throws Exception {
         // Nouveau contrat : idSousType → famille déduite du référentiel.

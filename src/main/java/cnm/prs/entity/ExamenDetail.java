@@ -30,6 +30,16 @@ public class ExamenDetail {
     @Column(name = "ID_EXAMEN", nullable = false)
     private Integer idExamen;
 
+    /**
+     * ⚠️ Règle ajoutée (2026-07-21) — <strong>ligne de marché</strong> examinée (FK {@code t_marche}, colonne
+     * additive ddl-auto, <strong>nullable</strong>) : résultat porté <strong>par ligne</strong> pour un point
+     * de portée {@code LIGNE} (un {@code ExamenDetail} par marché × point) ; {@code null} pour un point de
+     * portée {@code DOSSIER} (inter-lignes) et pour les examens <strong>historiques</strong> (résultat au
+     * niveau dossier). Unicité applicative du triplet ({@code idExamen}, {@code idDetail}, {@code idPtControle}).
+     */
+    @Column(name = "ID_DETAIL")
+    private Integer idDetail;
+
     @Column(name = "ID_PT_CONTROLE", nullable = false)
     private Integer idPtControle;
 

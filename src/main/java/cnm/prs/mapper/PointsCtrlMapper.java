@@ -2,6 +2,7 @@ package cnm.prs.mapper;
 
 import cnm.prs.dto.PointsCtrlDto;
 import cnm.prs.entity.PointsCtrl;
+import cnm.prs.enums.PorteePointCtrl;
 
 /**
  * Convertisseur entité &lt;-&gt; DTO pour {@link PointsCtrl}.
@@ -23,6 +24,7 @@ public final class PointsCtrlMapper {
         dto.setObligatoire(entity.getObligatoire());
         dto.setIdTypeDossier(entity.getIdTypeDossier());
         dto.setIdSousType(entity.getIdSousType());
+        dto.setPortee(entity.getPortee().name());   // getter coalescent → jamais null
         return dto;
     }
 
@@ -38,6 +40,7 @@ public final class PointsCtrlMapper {
         entity.setObligatoire(dto.getObligatoire());
         entity.setIdTypeDossier(dto.getIdTypeDossier());
         entity.setIdSousType(dto.getIdSousType());
+        entity.setPortee(PorteePointCtrl.depuisCodeOuDefaut(dto.getPortee()));   // absent → LIGNE, inconnu → 400
         return entity;
     }
 }

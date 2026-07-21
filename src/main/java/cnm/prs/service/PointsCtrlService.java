@@ -8,6 +8,7 @@ import org.springframework.transaction.annotation.Transactional;
 import cnm.prs.dto.PointsCtrlDto;
 import cnm.prs.entity.PointsCtrl;
 import cnm.prs.entity.SousTypeDossier;
+import cnm.prs.enums.PorteePointCtrl;
 import cnm.prs.exception.BadRequestException;
 import cnm.prs.exception.ResourceNotFoundException;
 import cnm.prs.mapper.PointsCtrlMapper;
@@ -88,6 +89,7 @@ public class PointsCtrlService {
         existing.setObligatoire(dto.getObligatoire());
         existing.setIdTypeDossier(dto.getIdTypeDossier());
         existing.setIdSousType(dto.getIdSousType());
+        existing.setPortee(PorteePointCtrl.depuisCodeOuDefaut(dto.getPortee()));   // absent → LIGNE, inconnu → 400
         return PointsCtrlMapper.toDto(repository.save(existing));
     }
 

@@ -21,6 +21,14 @@ public class ExamenDetailDto {
     @NotNull
     private Integer idExamen;
 
+    /**
+     * ⚠️ Règle ajoutée (2026-07-21) — ligne de marché examinée (FK {@code t_marche}, facultatif) : renseignée
+     * pour un point de portée {@code LIGNE} (résultat par marché), {@code null} pour un point {@code DOSSIER}
+     * (inter-lignes) ou un examen historique. Doit appartenir au dossier de l'examen (sinon 400) ; un point
+     * {@code DOSSIER} avec {@code idDetail} renseigné → 400.
+     */
+    private Integer idDetail;
+
     @NotNull
     private Integer idPtControle;
 

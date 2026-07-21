@@ -673,10 +673,21 @@ si aucun résultat (pas de 404). `{nom}` est un fragment (URL-encoder si espaces
 |---|---|---|---|
 | idDetailExamen | number | Oui (PK, au POST) | clé primaire |
 | idExamen | number | Oui | @NotNull |
+| idDetail | number | Non | ⚠️ **règle ajoutée 2026-07-21** — **ligne de marché** examinée (FK `t_marche`) : renseignée pour un point de **portée LIGNE** (résultat par marché), **`null`** pour un point **DOSSIER** (inter-lignes) ou un examen **historique** (résultat niveau dossier). Doit appartenir au dossier de l'examen (sinon **400** `idDetail`) ; un point **DOSSIER** avec `idDetail` renseigné → **400** `idDetail` |
 | idPtControle | number | Oui | @NotNull |
 | conforme | boolean | Oui | @NotNull |
 | observations | `ObservationControleDto[]` | Non | lignes « AU LIEU DE / LIRE » (cf. *Observations de contrôle*) ; **`[]` si conforme**, **N lignes si non conforme** (sinon **400**, champ `observations`) ; persistées par le service (remplacement à l'enregistrement) |
 | obsSiNonConforme | string | Non | max 500 |
+
+> ⚠️ **Examen séquentiel par ligne de marché (règle ajoutée 2026-07-21).** Un dossier de planification (PPM)
+> s'examine **ligne de marché par ligne de marché** : la grille s'applique à chaque marché. Le résultat est donc
+> porté **par ligne** via `idDetail` — un `ExamenDetail` par **(idExamen × idDetail × idPtControle)**, triplet dont
+> l'**unicité** est garantie côté serveur (400 `idPtControle` en cas de doublon — y compris pour un point DOSSIER
+> `idDetail=null`, cas qu'une contrainte SQL ne couvre pas sous PostgreSQL). La **portée** du point (cf. *Points de
+> contrôle* : `LIGNE`/`DOSSIER`) détermine l'attendu : point **LIGNE** → un résultat par marché (`idDetail`
+> renseigné) ; point **DOSSIER** → un seul résultat (`idDetail=null`). **Rétro-compatible** : les examens
+> historiques (résultats au niveau dossier, `idDetail=null`) restent lisibles. La complétude « toutes les lignes
+> traitées » est vérifiée à la **soumission** de l'examen (cf. *Examens*), pas à chaque écriture de détail.
 
 **Endpoints**
 
@@ -1491,6 +1502,7 @@ et interprété comme un code de **sous-type** (les anciens payloads `{"idTypeDo
 | idDispatch | number | Oui | @NotNull |
 | imCtrlMembre | string | Non | max 7 |
 | dateExamen | string (date) | Non | |
+| avisSuggere | string | — (réponse, `GET /{id}`) | ⚠️ **règle ajoutée 2026-07-21** — avis **suggéré** non contraignant : **`DEF`** (défavorable) si ≥1 point non conforme, sinon **`FAV`** ; **`null`** tant qu'aucun point n'est évalué. Le membre reste **maître de l'avis final** (`idAvis` à la soumission) ; sert au pré-remplissage front |
 
 **Endpoints**
 
@@ -1513,13 +1525,23 @@ et interprété comme un code de **sous-type** (les anciens payloads `{"idTypeDo
 > `{ erreurs:[{ champ:"idSecretaireSeance", message }] }`. *(La lettre de renvoi est une action séparée
 > pendant l'examen — ressource `/api/lettre-renvois` ; `ExamenDto` n'a pas de champ `typeResultat`.)*
 >
+> ⚠️ **Complétude de l'examen à la soumission (règle ajoutée 2026-07-21).** Avant de produire le Projet de PV,
+> le serveur vérifie que **toutes les lignes ont été traitées** : chaque point de **portée LIGNE** de la
+> **grille effective** du dossier doit être évalué **pour chaque marché**, et chaque point de **portée DOSSIER**
+> évalué **une fois**. Sinon → **400** `{ erreurs:[{ champ:"grille", message }] }` (le message liste les
+> évaluations manquantes : point × marché). C'est ce contrôle **données** qui garantit « toutes les lignes
+> traitées » — le workflow séquentiel/couleurs est géré côté front. **Vacant** (aucune exigence) si le dossier
+> n'a **pas de grille** (famille/sous-type sans points) → examens historiques et non-PPM non contraints.
+>
 > ⚠️ **PV — document généré (règle ajoutée).** À la **signature finale** du PV (passage à `SIGNE`), si le PV
 > est éligible — avis **favorable sous réserve** (`FAVR`), dossier de **localité centrale** (`ANT`) et **PPM**
 > comportant au moins une ligne de marché, **quel que soit le mode de passation** (le gabarit AFSR/PPM/central
 > ne dépend pas du mode) — le **PDF du PV** est généré à partir du
 > modèle Word `PV_AFSR_PPMAGPM_CENTRALE.docx` (copie du modèle + remplacement des placeholders ; date d'examen
 > formatée et **en toutes lettres** dans « L'an … » ; bloc « Étaient présents » filtré sur les signataires
-> effectifs ; ANNEXE = une ligne par observation des points non conformes) puis converti via Microsoft Word
+> effectifs ; ANNEXE = une ligne par observation des points non conformes, **préfixée par la ligne de marché**
+concernée — « [Marché « désignation »] point » pour un résultat par ligne, « [Dossier] point » pour un point
+inter-lignes ou historique (⚠️ 2026-07-21, sans modification du gabarit Word)) puis converti via Microsoft Word
 > (documents4j) et **stocké sur le FSX** (`storage.pv-examen.path`, sous-répertoire `PV/`), chemin conservé dans
 > `t_pv_examen.CHEMIN_DOCUMENT`. Hors de ces conditions, le PV reste **sans document**. Le téléchargement
 > **régénère le document à la demande** si le chemin est absent ou le fichier introuvable (migration des PV
@@ -2585,6 +2607,8 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 > La **grille effective** d'un dossier = points communs de sa famille **+** points spécifiques de son
 > sous-type : c'est ce que renvoie **`GET /api/points-ctrls?sousType=X`** (la famille est déduite), la
 > requête de l'**écran d'examen** — la grille d'un `PPM` (7 points) ≠ celle d'un `PPM-AGPM` (8 points).
+> Chaque point renvoyé porte sa **`portee`** (`LIGNE`/`DOSSIER`, cf. table) : le front sait ainsi lesquels
+> s'évaluent **par ligne de marché** et lesquels **une fois pour le dossier**.
 > `?typeDossier=` seul liste **tous** les points de la famille (écran admin). Gardes → **400** : sous-type
 > inconnu ; sous-type hors de la famille (`?typeDossier=` + `?sousType=` incohérents, ou POST/PUT dont
 > `idSousType` n'appartient pas à `idTypeDossier`). **Écran admin** : le dropdown sous-type se remplit via
@@ -2601,6 +2625,7 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 | obligatoire | boolean | Oui | @NotNull |
 | idTypeDossier | string | Oui | @NotBlank — **famille** (`DDP`/`DMC`/`DDM`) |
 | idSousType | string | Non | max 20 — sous-type ciblé (doit appartenir à la famille, sinon 400) ; `null` = commun |
+| portee | string | Non | ⚠️ **règle ajoutée 2026-07-21** — **`LIGNE`** (point évalué par ligne de marché) ou **`DOSSIER`** (inter-lignes, ex. « fractionnement illicite »). Absent/vide en entrée → défaut **`LIGNE`** ; code inconnu → **400**. **Toujours renseigné en sortie** — le front lit ce champ pour placer chaque point (par ligne / au niveau dossier). Migration `2026-07-21_points_ctrl_portee.sql` (fractionnement → DOSSIER, autres → LIGNE) |
 
 **Endpoints**
 

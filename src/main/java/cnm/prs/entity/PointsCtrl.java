@@ -1,8 +1,11 @@
 package cnm.prs.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import cnm.prs.enums.PorteePointCtrl;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
@@ -51,6 +54,16 @@ public class PointsCtrl {
     @Column(name = "ID_SOUS_TYPE", length = 20)
     private String idSousType;
 
+    /**
+     * ⚠️ Règle ajoutée (2026-07-21) — <strong>portée</strong> du point : {@link PorteePointCtrl#LIGNE}
+     * (évalué par ligne de marché) ou {@link PorteePointCtrl#DOSSIER} (inter-lignes, ex. fractionnement
+     * illicite). Colonne nullable en base (ajout ddl-auto sur table existante) mais jamais {@code null}
+     * côté Java : défaut LIGNE, getter coalescent — les points historiques sans portée comptent comme LIGNE.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "PORTEE", length = 10)
+    private PorteePointCtrl portee = PorteePointCtrl.LIGNE;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ID_TYPE_DOSSIER", insertable = false, updatable = false)
     @JsonIgnore
@@ -60,4 +73,9 @@ public class PointsCtrl {
     @JoinColumn(name = "ID_SOUS_TYPE", insertable = false, updatable = false)
     @JsonIgnore
     private SousTypeDossier sousTypeDossier;
+
+    /** Jamais {@code null} : un point historique sans portée est traité comme {@link PorteePointCtrl#LIGNE}. */
+    public PorteePointCtrl getPortee() {
+        return portee == null ? PorteePointCtrl.LIGNE : portee;
+    }
 }

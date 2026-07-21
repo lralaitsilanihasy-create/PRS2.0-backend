@@ -36,4 +36,13 @@ public class PointsCtrlDto {
      */
     @Size(max = 20)
     private String idSousType;
+
+    /**
+     * ⚠️ Règle ajoutée (2026-07-21) — portée du point : {@code LIGNE} (évalué par ligne de marché) ou
+     * {@code DOSSIER} (inter-lignes, ex. fractionnement illicite). Le front lit ce champ pour placer chaque
+     * point (par ligne / au niveau dossier). Optionnel en entrée (absent → défaut {@code LIGNE},
+     * code inconnu → 400 ciblé) ; toujours renseigné en sortie.
+     */
+    @Size(max = 10)
+    private String portee;
 }

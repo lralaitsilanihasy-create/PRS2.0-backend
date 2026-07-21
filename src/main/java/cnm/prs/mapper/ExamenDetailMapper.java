@@ -18,6 +18,7 @@ public final class ExamenDetailMapper {
         ExamenDetailDto dto = new ExamenDetailDto();
         dto.setIdDetailExamen(entity.getIdDetailExamen());
         dto.setIdExamen(entity.getIdExamen());
+        dto.setIdDetail(entity.getIdDetail());
         dto.setIdPtControle(entity.getIdPtControle());
         dto.setConforme(entity.getConforme());
         // observations (1,N) : peuplées par le service depuis t_observation_controle.
@@ -32,6 +33,7 @@ public final class ExamenDetailMapper {
         ExamenDetail entity = new ExamenDetail();
         entity.setIdDetailExamen(dto.getIdDetailExamen());
         entity.setIdExamen(dto.getIdExamen());
+        entity.setIdDetail(dto.getIdDetail());
         entity.setIdPtControle(dto.getIdPtControle());
         entity.setConforme(dto.getConforme());
         entity.setObsSiNonConforme(dto.getObsSiNonConforme());
