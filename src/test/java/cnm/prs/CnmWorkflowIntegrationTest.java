@@ -5784,6 +5784,118 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("Import PPM xlsx — colonnes explicites : 2 marchés (dont multi-bénéficiaire + lots), référentiels résolus, 0 anomalie")
+    void importXlsx_ok() throws Exception {
+        natureRepository.save(new Nature(1, "Travaux", null));
+        modePassationRepository.save(new ModePassation(1, "Consultation de prix ouverte", null, null, null, null));
+        soaBeneficiaireRepository.save(new cnm.prs.entity.SoaBeneficiaire("00-61-0-D10-00000", "SOA"));
+        compteRepository.save(new cnm.prs.entity.Compte("2441", "Compte", null, null));
+
+        String[] entetes = { "objet", "forme", "nature", "montant estimatif", "mode", "financement",
+                "soa", "compte", "montant beneficiaire", "date lancement", "date ouverture", "date attribution",
+                "lots", "exercice" };
+        Object[][] lignes = {
+                { "Travaux de rehabilitation de la RN 13", "CONTRAT_CADRE", "Travaux", 500000000L,
+                        "Consultation de prix ouverte", "RPI", "00-61-0-D10-00000", "2441", 500000000L,
+                        "06/03/2026", "16/03/2026", "27/03/2026", "Lot A | Lot B", 2026L },
+                // Marché à 2 bénéficiaires : 2e ligne = objet vide (continuation).
+                { "Fourniture de materiel", "", "Travaux", 3000000L, "Consultation de prix ouverte", "RPI",
+                        "00-61-0-D10-00000", "2441", 1000000L, "06/03/2026", "16/03/2026", "27/03/2026", "", "" },
+                { "", "", "", "", "", "", "00-61-0-D10-00000", "2441", 2000000L, "", "", "", "", "" } };
+        byte[] xlsx = xlsxAvecLignes(entetes, lignes);
+
+        mvc.perform(multipart("/api/saisies/ppm/import-xlsx")
+                .file(new MockMultipartFile("fichier", "ppm.xlsx", "application/vnd.ms-excel", xlsx))
+                .header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.marches", hasSize(2)))
+                .andExpect(jsonPath("$.exercice").value(2026))
+                .andExpect(jsonPath("$.nbAVerifier").value(0))
+                // Marché 0 : transcription exacte + référentiels résolus + lots + forme.
+                .andExpect(jsonPath("$.marches[0].designationMarche").value("Travaux de rehabilitation de la RN 13"))
+                .andExpect(jsonPath("$.marches[0].montEstim").value(500000000.0))
+                .andExpect(jsonPath("$.marches[0].formeMarche").value("CONTRAT_CADRE"))
+                .andExpect(jsonPath("$.marches[0].idNature").value(1))
+                .andExpect(jsonPath("$.marches[0].idMode").value(1))
+                .andExpect(jsonPath("$.marches[0].beneficiaires", hasSize(1)))
+                .andExpect(jsonPath("$.marches[0].beneficiaires[0].soaCode").value("00-61-0-D10-00000"))
+                .andExpect(jsonPath("$.marches[0].beneficiaires[0].ancMontBenef").value(500000000.0))
+                .andExpect(jsonPath("$.marches[0].lots", hasSize(2)))
+                .andExpect(jsonPath("$.marches[0].lots[0].designationLot").value("Lot A"))
+                .andExpect(jsonPath("$.marches[0].previsions[0].dateDebut").value("2026-03-06"))
+                .andExpect(jsonPath("$.marches[0].anomalies", hasSize(0)))
+                // Marché 1 : 2 bénéficiaires (Σ = montant), 0 anomalie.
+                .andExpect(jsonPath("$.marches[1].beneficiaires", hasSize(2)))
+                .andExpect(jsonPath("$.marches[1].montEstim").value(3000000.0))
+                .andExpect(jsonPath("$.marches[1].anomalies", hasSize(0)));
+    }
+
+    @Test
+    @DisplayName("Import PPM xlsx — montant ≠ Σ bénéficiaires → anomalie MONTANT_INCOHERENT BLOQUANT (pas d'auto-correction en tableur)")
+    void importXlsx_montantIncoherent() throws Exception {
+        natureRepository.save(new Nature(1, "Travaux", null));
+        modePassationRepository.save(new ModePassation(1, "Consultation de prix ouverte", null, null, null, null));
+        soaBeneficiaireRepository.save(new cnm.prs.entity.SoaBeneficiaire("00-61-0-D10-00000", "SOA"));
+        compteRepository.save(new cnm.prs.entity.Compte("2441", "Compte", null, null));
+
+        String[] entetes = { "objet", "nature", "montant estimatif", "mode", "financement", "soa", "compte",
+                "montant beneficiaire", "date lancement", "date ouverture", "date attribution" };
+        Object[][] lignes = { { "Travaux divers", "Travaux", 500000000L, "Consultation de prix ouverte", "RPI",
+                "00-61-0-D10-00000", "2441", 400000000L, "06/03/2026", "16/03/2026", "27/03/2026" } };
+
+        mvc.perform(multipart("/api/saisies/ppm/import-xlsx")
+                .file(new MockMultipartFile("fichier", "ppm.xlsx", "application/vnd.ms-excel",
+                        xlsxAvecLignes(entetes, lignes)))
+                .header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nbAVerifier").value(1))
+                .andExpect(jsonPath("$.marches[0].anomalies[?(@.champ=='montEstim' && @.type=='MONTANT_INCOHERENT' && @.gravite=='BLOQUANT' && @.corrige==false)]", hasSize(1)));
+    }
+
+    @Test
+    @DisplayName("Import PPM xlsx — gabarit téléchargeable (.xlsx, en-têtes + notice)")
+    void importXlsx_gabarit() throws Exception {
+        byte[] gabarit = mvc.perform(get("/api/saisies/ppm/import-xlsx/gabarit").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray();
+        // Magic bytes d'un .xlsx (archive ZIP « PK »).
+        org.junit.jupiter.api.Assertions.assertTrue(gabarit.length > 100
+                && gabarit[0] == 'P' && gabarit[1] == 'K');
+        // Le gabarit se ré-importe (les lignes d'exemple sont exploitables) → ≥1 marché.
+        mvc.perform(multipart("/api/saisies/ppm/import-xlsx")
+                .file(new MockMultipartFile("fichier", "gabarit.xlsx", "application/vnd.ms-excel", gabarit))
+                .header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.marches", hasSize(2)));
+    }
+
+    /** Génère en mémoire un .xlsx (POI) : ligne 0 = en-têtes, puis les lignes de données — pour tester l'import tableur. */
+    private byte[] xlsxAvecLignes(String[] entetes, Object[][] lignes) throws Exception {
+        try (org.apache.poi.xssf.usermodel.XSSFWorkbook wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook();
+                java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream()) {
+            org.apache.poi.ss.usermodel.Sheet sheet = wb.createSheet("Marchés");
+            org.apache.poi.ss.usermodel.Row h = sheet.createRow(0);
+            for (int i = 0; i < entetes.length; i++) {
+                h.createCell(i).setCellValue(entetes[i]);
+            }
+            for (int r = 0; r < lignes.length; r++) {
+                org.apache.poi.ss.usermodel.Row row = sheet.createRow(r + 1);
+                for (int c = 0; c < lignes[r].length; c++) {
+                    Object v = lignes[r][c];
+                    org.apache.poi.ss.usermodel.Cell cell = row.createCell(c);
+                    if (v instanceof Number n) {
+                        cell.setCellValue(n.doubleValue());
+                    } else {
+                        cell.setCellValue(String.valueOf(v));
+                    }
+                }
+            }
+            wb.write(out);
+            return out.toByteArray();
+        }
+    }
+
+    @Test
     @DisplayName("Import PPM — normalisation étendue : « APPEL D'OFFRE OUVERT » (singulier) résout idMode=1, modeLibelle CANONIQUE, sans avertissement")
     void importPpm_modeSingulierResolu() throws Exception {
         natureRepository.save(new Nature(1, "Travaux", null));

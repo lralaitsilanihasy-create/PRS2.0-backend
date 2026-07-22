@@ -4,9 +4,11 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -28,6 +30,7 @@ import cnm.prs.dto.SaisieDossierRequest;
 import cnm.prs.dto.SaisiePpmImportResult;
 import cnm.prs.dto.SaisiePpmRequest;
 import cnm.prs.service.SaisiePpmImportService;
+import cnm.prs.service.SaisiePpmXlsxImportService;
 import cnm.prs.service.SaisieService;
 
 /**
@@ -40,10 +43,13 @@ public class SaisieController {
 
     private final SaisieService service;
     private final SaisiePpmImportService importService;
+    private final SaisiePpmXlsxImportService xlsxImportService;
 
-    public SaisieController(SaisieService service, SaisiePpmImportService importService) {
+    public SaisieController(SaisieService service, SaisiePpmImportService importService,
+            SaisiePpmXlsxImportService xlsxImportService) {
         this.service = service;
         this.importService = importService;
+        this.xlsxImportService = xlsxImportService;
     }
 
     /**
@@ -55,6 +61,29 @@ public class SaisieController {
     @PostMapping(value = "/ppm/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public SaisiePpmImportResult importerPpm(@RequestPart("fichier") MultipartFile fichier) {
         return importService.importer(fichier);
+    }
+
+    /**
+     * ⚠️ Règle ajoutée (2026-07-22) — import <strong>read-only</strong> d'un PPM depuis un <strong>tableur</strong>
+     * ({@code .xlsx} à colonnes explicites, part {@code fichier}) : transcription exacte par construction, mêmes
+     * anomalies structurées. Ne crée rien ; la création reste {@code POST /api/saisies/ppm}. Format invalide → 400.
+     */
+    @PreAuthorize("hasAnyRole('PRMP','UGPM')")
+    @PostMapping(value = "/ppm/import-xlsx", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public SaisiePpmImportResult importerPpmXlsx(@RequestPart("fichier") MultipartFile fichier) {
+        return xlsxImportService.importer(fichier);
+    }
+
+    /** Télécharge le gabarit {@code .xlsx} (en-têtes + exemples + notice) à remplir pour l'import tableur. */
+    @PreAuthorize("hasAnyRole('PRMP','UGPM')")
+    @GetMapping("/ppm/import-xlsx/gabarit")
+    public ResponseEntity<byte[]> gabaritXlsx() {
+        byte[] contenu = xlsxImportService.genererGabarit();
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"gabarit-import-ppm.xlsx\"")
+                .contentType(MediaType.parseMediaType(
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(contenu);
     }
 
     /** Saisie d'un PPM (dossier PPM + PPM + lignes de marché). */

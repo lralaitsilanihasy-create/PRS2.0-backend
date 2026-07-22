@@ -462,36 +462,47 @@ public class SaisiePpmImportService {
                 new PrevisionImport("LANCEMENT", prev3.size() > 0 ? isoDate(prev3.get(0)) : null),
                 new PrevisionImport("OUVERTURE", prev3.size() > 1 ? isoDate(prev3.get(1)) : null),
                 new PrevisionImport("ATTRIBUTION", prev3.size() > 2 ? isoDate(prev3.get(2)) : null));
+        return assemblerMarche(natureLibelle, designation, montEstim, nouvMontEstim, financement,
+                modeLibelle, benef, prev, lots, null, montantCorrige, avert);   // PDF : forme relevée dans l'objet
+    }
 
-        // ⚠️ Règle ajoutée — résolution par libellé avec normalisation ÉTENDUE (source unique
-        // LibelleNormalisation : pluriels simples, apostrophes/espaces typographiques). En cas de
-        // résolution, le libellé renvoyé est le CANONIQUE du référentiel (pas le texte brut du PDF) —
-        // les aides front (badge AGPM, datalist) comparent au libellé exact.
+    /**
+     * ⚠️ Règle ajoutée (2026-07-22) — <strong>assemblage final</strong> d'un marché à partir de ses champs :
+     * résolution des référentiels par libellé (normalisation ÉTENDUE {@link LibelleNormalisation} ; libellé
+     * renvoyé = CANONIQUE du référentiel), forme du marché relevée dans l'objet, et anomalies structurées de
+     * revue. <strong>PARTAGÉ</strong> par l'import PDF ({@link #parserRecord}) et l'import tableur
+     * ({@code SaisiePpmXlsxImportService}) : seule l'<em>extraction amont</em> diffère (géométrie PDF vs
+     * colonnes explicites du tableur), l'assemblage/résolution/anomalies est le même.
+     */
+    MarcheImport assemblerMarche(String natureLibelle, String designation, BigDecimal montEstim,
+            BigDecimal nouvMontEstim, String financement, String modeLibelle, List<BeneficiaireImport> benef,
+            List<PrevisionImport> prev, List<LotImport> lots, String formeExplicite, boolean montantCorrige,
+            List<String> avert) {
         Nature natureRef = resoudreParLibelle(natureRepository.findAll(), Nature::getLibelle, natureLibelle);
         Integer idNature = natureRef == null ? null : natureRef.getIdNature();
+        String natureCanon = natureLibelle;
         if (natureLibelle != null && natureRef == null) {
             avert.add("Nature « " + natureLibelle + " » non trouvée au référentiel — à confirmer.");
         } else if (natureRef != null) {
-            natureLibelle = natureRef.getLibelle();
+            natureCanon = natureRef.getLibelle();
         }
         ModePassation modeRef = resoudreParLibelle(modePassationRepository.findAll(),
                 ModePassation::getLibelle, modeLibelle);
         Integer idMode = modeRef == null ? null : modeRef.getIdMode();
+        String modeCanon = modeLibelle;
         if (modeLibelle != null && modeRef == null) {
             avert.add(avertissementModeNonResolu(modeLibelle));
         } else if (modeRef != null) {
-            modeLibelle = modeRef.getLibelle();
+            modeCanon = modeRef.getLibelle();
         }
-        // ⚠️ Règle ajoutée (2026-07-18) — forme du marché relevée dans l'objet (désignation intégrale
-        // conservée) : « contrat cadre » / « à commande », défaut QUANTITE_FIXE.
-        String formeMarche = FormeMarche.detecterDansDesignation(designation).name();
-
-        // ⚠️ Règle ajoutée (2026-07-22) — anomalies structurées de transcription (contrat de revue front).
-        List<AnomalieTranscription> anomalies = detecterAnomalies(designation, montEstim, sommeAnc,
-                montantCorrige, natureLibelle, idNature, modeLibelle, idMode, benef);
-
-        return new MarcheImport(designation, formeMarche, montEstim, nouvMontEstim, idNature, natureLibelle,
-                idMode, modeLibelle, financement, benef, prev, lots, anomalies);
+        // Forme : explicite si fournie (tableur — validée, 400 si code inconnu), sinon relevée dans l'objet (PDF).
+        String formeMarche = formeExplicite != null && !formeExplicite.isBlank()
+                ? FormeMarche.depuisCodeOuDefaut(formeExplicite).name()
+                : FormeMarche.detecterDansDesignation(designation).name();
+        List<AnomalieTranscription> anomalies = detecterAnomalies(designation, montEstim, sommeAnc(benef),
+                montantCorrige, natureCanon, idNature, modeCanon, idMode, benef);
+        return new MarcheImport(designation, formeMarche, montEstim, nouvMontEstim, idNature, natureCanon,
+                idMode, modeCanon, financement, benef, prev, lots, anomalies);
     }
 
     /**

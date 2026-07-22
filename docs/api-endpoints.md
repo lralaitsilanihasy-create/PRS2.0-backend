@@ -1184,6 +1184,8 @@ volumineux → **400** (annule la création si multipart) ; **404** si l'UGPM ou
 | POST | /api/saisies/ppm | `multipart/form-data` (PPM **+ pièces jointes**) | `DossierDto` | 201, 400, 403 | **PRMP** |
 | POST | /api/saisies/dossier | `SaisieDossierRequest` | `DossierDto` | 201, 400, 403, 409 | **PRMP** |
 | POST | /api/saisies/ppm/import | `multipart/form-data` (part `fichier` = PPM **PDF**) | `SaisiePpmImportResult` | 200, 400, 403 | **PRMP** |
+| POST | /api/saisies/ppm/import-xlsx | `multipart/form-data` (part `fichier` = **tableur .xlsx**) | `SaisiePpmImportResult` | 200, 400, 403 | **PRMP** |
+| GET | /api/saisies/ppm/import-xlsx/gabarit | — | **`.xlsx`** (gabarit à remplir) | 200, 403 | **PRMP** |
 | PUT | /api/saisies/ppm/{idDossier} | `EditionPpmRequest` | `DossierDto` | 200, 400, 403, 404, 409 | **PRMP** |
 
 > **Saisie avec pièces jointes (multipart).** La variante `multipart/form-data` de `POST /api/saisies/ppm`
@@ -1248,6 +1250,21 @@ volumineux → **400** (annule la création si multipart) ; **404** si l'UGPM ou
 > **Read-only** : les référentiels manquants (`idNature`/`idMode`/`numCompte`/`soaCode`,
 > entité) **ne sont pas créés** — renvoyés en libellé seul + listés dans `avertissements` **et** `anomalies` ; la
 > création-à-la-volée se fait au `POST /api/saisies/ppm`.
+>
+> ⚠️ **Import tableur `.xlsx` — transcription exacte (règle ajoutée 2026-07-22).** `POST /api/saisies/ppm/import-xlsx`
+> (part `fichier` = `.xlsx`) importe un PPM à **colonnes explicites** : la transcription est **exacte par
+> construction** (chaque champ dans sa cellule), sans les pièges de mise en page du PDF (le PDF ne reste qu'un
+> justificatif) — c'est la voie vers ~100 %. Renvoie le **même `SaisiePpmImportResult`** (mêmes `anomalies[]` +
+> `nbAVerifier`) et reste **read-only** (la création reste `POST /api/saisies/ppm`). L'**assemblage** (résolution
+> des référentiels par libellé, forme, anomalies) est **partagé** avec l'import PDF. `GET
+> /api/saisies/ppm/import-xlsx/gabarit` télécharge le **gabarit** (`.xlsx` : en-têtes + exemples + notice).
+> **Colonnes** (onglet « Marchés », 1 ligne par marché) : `objet` (obl.), `montant estimatif` (obl.), `forme`
+> (`A_COMMANDE|CONTRAT_CADRE|QUANTITE_FIXE`, défaut `QUANTITE_FIXE`), `nature`, `nouveau montant`, `mode`,
+> `financement`, `soa`, `compte`, `montant beneficiaire` (vide pour 1 seul bénéficiaire = montant estimatif),
+> `nouveau montant beneficiaire`, `date lancement/ouverture/attribution` (jj/mm/aaaa ou date Excel),
+> `lots` (désignations séparées par « | »), `exercice`, `date signature` (sur la 1re ligne). **Multi-bénéficiaire** :
+> une ligne SOUS le marché avec l'`objet` **vide** (continuation : seuls `soa`/`compte`/`montant beneficiaire`).
+> Colonnes obligatoires manquantes ou fichier non `.xlsx` → **400**.
 > ⚠️ **Résolution des modes/natures (règle révisée 2026-07-18)** : normalisation **étendue** (trim + casse +
 > accents + apostrophes/espaces typographiques + **pluriels simples** — un « s » final par token), **même
 > fonction** que la création-à-la-volée du POST (source unique). En cas de résolution, `modeLibelle` /
