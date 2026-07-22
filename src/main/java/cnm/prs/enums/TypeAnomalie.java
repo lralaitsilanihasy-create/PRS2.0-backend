@@ -19,5 +19,11 @@ public enum TypeAnomalie {
     REFERENTIEL_INCONNU,
 
     /** Champ obligatoire absent (objet, montant, mode). */
-    CHAMP_MANQUANT
+    CHAMP_MANQUANT,
+
+    /**
+     * ⚠️ Règle ajoutée (2026-07-22) — allotissement décrit dans l'objet (annonce « répartis en … lots » ou ≥2
+     * marqueurs « LOT N°NN : ») mais lots non extraits (motif ambigu / compte discordant). Champ {@code lot}.
+     */
+    LOT_INCOHERENT
 }

@@ -5760,6 +5760,75 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("Import PPM — lots (variantes SIGMP) : « repartie en trois 3 lots: lot n1: … - lot n2: … », « deux 2 lots », et « LOT N°01: … LOT N°02: … » sans annonce")
+    void importPpm_lotsVariantes() throws Exception {
+        natureRepository.save(new Nature(1, "Travaux", null));
+        modePassationRepository.save(new ModePassation(1, "Consultation de prix ouverte", null, null, null, null));
+        soaBeneficiaireRepository.save(new cnm.prs.entity.SoaBeneficiaire("00-61-0-D10-00000", "SOA"));
+        compteRepository.save(new cnm.prs.entity.Compte("2441", "Compte", null, null));
+
+        byte[] pdf = pdfAvecTexte(
+                "PLAN DE PASSATION DES MARCHES POUR L'ANNEE 2026",
+                "Autorite Contractante: MINISTERE TEST",
+                "NATURE OBJET MONTANT ESTIMATIF INITIAL",
+                // L14 : annonce lettres + chiffres, séparateur « - », 3 lots.
+                "Travaux Rehabilitation de routes repartie en trois 3 lots: lot n1: piste Est - lot n2: piste Ouest - lot n3: piste Nord",
+                "500 000 000.00 Consultation de prix ouverte RPI 00-61-0-D10-00000 2441 500 000 000.00 06/03/2026 16/03/2026 27/03/2026",
+                // L15 : annonce « deux 2 lots », 2 lots.
+                "Travaux Entretien de pistes repartie en deux 2 lots: lot n1: piste A - lot n2: piste B",
+                "400 000 000.00 Consultation de prix ouverte RPI 00-61-0-D10-00000 2441 400 000 000.00 06/03/2026 16/03/2026 27/03/2026",
+                // L18 : SANS annonce, marqueurs « LOT N°01: » / « LOT N°02: ».
+                "Travaux Construction de batiments LOT N°01: batiment A LOT N°02: batiment B",
+                "300 000 000.00 Consultation de prix ouverte RPI 00-61-0-D10-00000 2441 300 000 000.00 06/03/2026 16/03/2026 27/03/2026",
+                "Fait a Antananarivo le 14 avril 2026");
+
+        mvc.perform(multipart("/api/saisies/ppm/import")
+                .file(new MockMultipartFile("fichier", "ppm.pdf", "application/pdf", pdf))
+                .header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.marches", hasSize(3)))
+                // L14 : 3 lots (séparateur « - » retiré du texte de lot).
+                .andExpect(jsonPath("$.marches[0].lots", hasSize(3)))
+                .andExpect(jsonPath("$.marches[0].lots[0].designationLot").value("piste Est"))
+                .andExpect(jsonPath("$.marches[0].lots[1].designationLot").value("piste Ouest"))
+                .andExpect(jsonPath("$.marches[0].lots[2].designationLot").value("piste Nord"))
+                .andExpect(jsonPath("$.marches[0].anomalies[?(@.champ=='lot')]", hasSize(0)))
+                // L15 : 2 lots.
+                .andExpect(jsonPath("$.marches[1].lots", hasSize(2)))
+                .andExpect(jsonPath("$.marches[1].lots[0].designationLot").value("piste A"))
+                .andExpect(jsonPath("$.marches[1].lots[1].designationLot").value("piste B"))
+                // L18 : 2 lots SANS annonce (≥2 marqueurs suffisent).
+                .andExpect(jsonPath("$.marches[2].lots", hasSize(2)))
+                .andExpect(jsonPath("$.marches[2].lots[0].designationLot").value("batiment A"))
+                .andExpect(jsonPath("$.marches[2].lots[1].designationLot").value("batiment B"));
+    }
+
+    @Test
+    @DisplayName("Import PPM — lots incohérents (« trois 3 lots » annoncés, 2 marqueurs) : lots vides + anomalie champ:lot LOT_INCOHERENT")
+    void importPpm_lotsIncoherent_anomalie() throws Exception {
+        natureRepository.save(new Nature(1, "Travaux", null));
+        modePassationRepository.save(new ModePassation(1, "Consultation de prix ouverte", null, null, null, null));
+        soaBeneficiaireRepository.save(new cnm.prs.entity.SoaBeneficiaire("00-61-0-D10-00000", "SOA"));
+        compteRepository.save(new cnm.prs.entity.Compte("2441", "Compte", null, null));
+
+        byte[] pdf = pdfAvecTexte(
+                "PLAN DE PASSATION DES MARCHES POUR L'ANNEE 2026",
+                "Autorite Contractante: MINISTERE TEST",
+                "NATURE OBJET MONTANT ESTIMATIF INITIAL",
+                "Travaux Rehabilitation repartie en trois 3 lots: lot n1: piste A - lot n2: piste B",
+                "500 000 000.00 Consultation de prix ouverte RPI 00-61-0-D10-00000 2441 500 000 000.00 06/03/2026 16/03/2026 27/03/2026",
+                "Fait a Antananarivo le 14 avril 2026");
+
+        mvc.perform(multipart("/api/saisies/ppm/import")
+                .file(new MockMultipartFile("fichier", "ppm.pdf", "application/pdf", pdf))
+                .header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                // 3 annoncés mais 2 marqueurs → rien d'extrait + anomalie « lot » pour la revue front.
+                .andExpect(jsonPath("$.marches[0].lots", hasSize(0)))
+                .andExpect(jsonPath("$.marches[0].anomalies[?(@.champ=='lot' && @.type=='LOT_INCOHERENT' && @.gravite=='A_VERIFIER')]", hasSize(1)));
+    }
+
+    @Test
     @DisplayName("Import PPM — allotissement incohérent (« 03 Lots » annoncés, 2 segments) : lots vides, désignation intégrale + avertissement")
     void importPpm_lotsCompteIncoherent() throws Exception {
         natureRepository.save(new Nature(1, "Travaux", null));

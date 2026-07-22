@@ -1203,13 +1203,16 @@ volumineux → **400** (annule la création si multipart) ; **404** si l'UGPM ou
 > `beneficiaires[]` `{ soaCode, numCompte, ancMontBenef, nouvMontBenef }, previsions[]` `{ processus, dateDebut },`
 > `lots[]` `{ designationLot, montLot?, qteLot?, uniteLot? } },`
 > `avertissements[] }`. ⚠️ **`lots[]` — extraction best-effort depuis la désignation (règle révisée 2026-07-17,
-> remplace « toujours vide »)** : quand la désignation du marché décrit l'allotissement selon le motif
-> « … **répartis en NN Lots :** Lot 01 : &lt;texte&gt; ; Lot 02 : &lt;texte&gt; … » (casse/accents libres, variantes
-> `Lot 1`, `Lot n°01`, séparateurs `;` ou `.`), le parser produit `lots[] = [{ designationLot }]` — désignation de
-> lot **seule** (le texte ne porte ni montant ni quantité ; champs descriptifs, **aucun contrôle de somme**, règle
-> actée). **Contrôle de cohérence** : extraction uniquement si le compte annoncé (« 04 Lots ») **égale** le nombre
-> de segments « Lot NN : » trouvés ; sinon (compte différent, motif ambigu) → **avertissement** dans
-> `avertissements[]` et lots vides. **Décision revisitée (2026-07-18, remplace « désignation raccourcie »)** :
+> **généralisée 2026-07-22** — remplace « toujours vide »)** : quand la désignation décrit l'allotissement, le
+> parser produit `lots[] = [{ designationLot }]` — désignation de lot **seule** (le texte ne porte ni montant ni
+> quantité ; **aucun contrôle de somme**, règle actée). **Marqueurs reconnus** (généralisés) : `Lot 01 :`,
+> `Lot 1`, `lot n1:`, `LOT N°02 :`, `Lot 1 -` (`n`/`°`/zéros de tête optionnels, terminateur `:` ou `-`),
+> séparateur `-` ou accolé. **Annonce** : « répartis/répartie(s) en NN lots » avec le compte en **chiffres**
+> et/ou en **lettres** (« deux 2 lots », « trois lots »). **Cas sans annonce** : au moins **2** marqueurs
+> « LOT N°NN : » suffisent à extraire. **Contrôle de cohérence** : extraction uniquement si un objet précède
+> le 1ᵉʳ marqueur, aucun segment n'est vide, et le nombre de marqueurs **égale** le compte annoncé (ou ≥2 sans
+> annonce) ; sinon → **avertissement** dans `avertissements[]`, lots vides, **et anomalie `champ:lot`
+> (`LOT_INCOHERENT`)** pour la revue front. **Décision revisitée (2026-07-18, remplace « désignation raccourcie »)** :
 > extraction réussie ou non, `designationMarche` est **conservée intégrale** — l'énumération des lots
 > (« répartis en NN Lots : Lot 01 : … ») y reste, **en plus** de `lots[]` ; le doublon texte/structure est
 > accepté et voulu. Sans motif d'allotissement → inchangé (lots vides, pas d'avertissement).
@@ -1240,13 +1243,14 @@ volumineux → **400** (annule la création si multipart) ; **404** si l'UGPM ou
 > rétro-compatibilité) : le front pointe la **ligne + le champ exacts**. Forme d'une anomalie :
 > `{ champ, type, gravite, corrige?, message }` —
 > **`champ`** ∈ `objet|montEstim|nouvMontEstim|mode|nature|beneficiaire|date|lot` ;
-> **`type`** ∈ `MONTANT_INCOHERENT|OBJET_TRONQUE_PROBABLE|ENCODAGE_SUSPECT|REFERENTIEL_INCONNU|CHAMP_MANQUANT` ;
+> **`type`** ∈ `MONTANT_INCOHERENT|OBJET_TRONQUE_PROBABLE|ENCODAGE_SUSPECT|REFERENTIEL_INCONNU|CHAMP_MANQUANT|LOT_INCOHERENT` ;
 > **`gravite`** ∈ `BLOQUANT|A_VERIFIER` ; **`corrige`** = `true` si le backend a **auto-corrigé** (à confirmer
 > par l'humain) ; **`message`** prêt à afficher. Règles émises : `MONTANT_INCOHERENT` (montEstim ≠ Σ
 > bénéficiaires — `A_VERIFIER` + `corrige:true` si auto-réaligné via l'invariant, sinon `BLOQUANT`) ;
 > `OBJET_TRONQUE_PROBABLE` (objet finissant par un préfixe de route `RN|RNT|RNS|RNP|RNC|RIP|RR` sans numéro) ;
 > `REFERENTIEL_INCONNU` (nature/mode/SOA/compte non résolus) ; `CHAMP_MANQUANT` (objet/montant/mode absent) ;
-> `ENCODAGE_SUSPECT` (« ¿ » résiduel dans l'objet).
+> `ENCODAGE_SUSPECT` (« ¿ » résiduel dans l'objet) ; **`LOT_INCOHERENT`** (allotissement décrit mais lots non
+> extraits — `champ:lot`, `A_VERIFIER` ; le front la consomme au lieu de sa propre heuristique).
 > **Read-only** : les référentiels manquants (`idNature`/`idMode`/`numCompte`/`soaCode`,
 > entité) **ne sont pas créés** — renvoyés en libellé seul + listés dans `avertissements` **et** `anomalies` ; la
 > création-à-la-volée se fait au `POST /api/saisies/ppm`.

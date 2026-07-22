@@ -110,15 +110,27 @@ public class SaisiePpmImportService {
                     + "|Fournitures|Travaux|Services)\\b");
 
     /**
-     * ⚠️ Règle ajoutée — marqueur d'<strong>allotissement</strong> dans la désignation du marché :
-     * « répartis en 04 Lots : … » (variantes réparti/repartis, casse/accents libres, deux-points optionnel).
-     * Le compte annoncé (04) sert de contrôle de cohérence de l'extraction.
+     * ⚠️ Règle ajoutée — <strong>annonce</strong> d'allotissement dans la désignation : « répartis en 04 Lots »,
+     * « répartie en trois 3 lots », « réparti en deux 2 lots »… Variantes réparti(e)(s)/repartie(s), compte en
+     * <strong>lettres</strong> (deux, trois…) et/ou en <strong>chiffres</strong>. Généralisé 2026-07-22 (SIGMP).
+     * Groupes : (1) mot-nombre optionnel, (2) chiffre optionnel — au moins un des deux sert de compte annoncé.
      */
     private static final Pattern MARQUEUR_LOTS = Pattern.compile(
-            "(?i)r[ée]partis?\\s+en\\s+(\\d{1,3})\\s+lots?\\s*:?");
-    /** Tête d'un segment de lot : « Lot 01 : », « Lot 1: », « Lot n°01 : »… (casse libre). */
+            "(?i)r[ée]parti(?:es?|s)?\\s+en\\s+"
+                    + "(?:(un|une|deux|trois|quatre|cinq|six|sept|huit|neuf|dix)\\s+)?"
+                    + "(\\d{1,3})?\\s*lots?\\b");
+    /**
+     * Tête d'un segment de lot, généralisée (2026-07-22, SIGMP) : « Lot 01 : », « lot n1: », « LOT N°02 : »,
+     * « Lot 1 - »… — {@code n} / {@code °} / zéros de tête optionnels, terminateur {@code :} ou {@code -}.
+     */
     private static final Pattern SEGMENT_LOT = Pattern.compile(
-            "(?i)\\blot\\s*(?:n[°ºo]\\s*)?(\\d{1,3})\\s*:");
+            "(?i)\\blot\\s*n?\\s*[°ºo]?\\s*0*(\\d{1,3})\\s*[:\\-]");
+
+    /** Nombres en lettres (annonce d'allotissement « trois lots »). */
+    private static final Map<String, Integer> MOTS_NOMBRE = Map.ofEntries(
+            Map.entry("un", 1), Map.entry("une", 1), Map.entry("deux", 2), Map.entry("trois", 3),
+            Map.entry("quatre", 4), Map.entry("cinq", 5), Map.entry("six", 6), Map.entry("sept", 7),
+            Map.entry("huit", 8), Map.entry("neuf", 9), Map.entry("dix", 10));
 
     /**
      * ⚠️ Règle ajoutée — seuil (décision documentée) de la suggestion « vouliez-vous dire … ? » : distance
@@ -500,7 +512,7 @@ public class SaisiePpmImportService {
                 ? FormeMarche.depuisCodeOuDefaut(formeExplicite).name()
                 : FormeMarche.detecterDansDesignation(designation).name();
         List<AnomalieTranscription> anomalies = detecterAnomalies(designation, montEstim, sommeAnc(benef),
-                montantCorrige, natureCanon, idNature, modeCanon, idMode, benef);
+                montantCorrige, natureCanon, idNature, modeCanon, idMode, benef, lots);
         return new MarcheImport(designation, formeMarche, montEstim, nouvMontEstim, idNature, natureCanon,
                 idMode, modeCanon, financement, benef, prev, lots, anomalies);
     }
@@ -519,7 +531,7 @@ public class SaisiePpmImportService {
      */
     private List<AnomalieTranscription> detecterAnomalies(String designation, BigDecimal montEstim,
             BigDecimal sommeAnc, boolean montantCorrige, String natureLibelle, Integer idNature,
-            String modeLibelle, Integer idMode, List<BeneficiaireImport> benef) {
+            String modeLibelle, Integer idMode, List<BeneficiaireImport> benef, List<LotImport> lots) {
         List<AnomalieTranscription> a = new ArrayList<>();
 
         // Objet.
@@ -578,7 +590,30 @@ public class SaisiePpmImportService {
                 .filter(cpt -> !compteRepository.existsById(cpt))
                 .forEach(cpt -> a.add(anomalie(ChampAnomalie.BENEFICIAIRE, TypeAnomalie.REFERENTIEL_INCONNU,
                         GraviteAnomalie.A_VERIFIER, null, "Compte « " + cpt + " » inconnu.")));
+
+        // Lots : signal d'allotissement présent (annonce ou ≥2 marqueurs « Lot NN : ») mais rien d'extrait
+        // → à réviser (le front consomme cette anomalie au lieu de sa propre heuristique).
+        if ((lots == null || lots.isEmpty()) && signalLot(designation)) {
+            a.add(anomalie(ChampAnomalie.LOT, TypeAnomalie.LOT_INCOHERENT, GraviteAnomalie.A_VERIFIER, null,
+                    "Allotissement décrit dans l'objet mais lots non extraits (motif ambigu) — à saisir manuellement."));
+        }
         return a;
+    }
+
+    /** Vrai si la désignation porte un signal d'allotissement : annonce « répartis en … lots » ou ≥2 « Lot NN : ». */
+    private static boolean signalLot(String designation) {
+        if (designation == null) {
+            return false;
+        }
+        if (MARQUEUR_LOTS.matcher(designation).find()) {
+            return true;
+        }
+        Matcher m = SEGMENT_LOT.matcher(designation);
+        int n = 0;
+        while (m.find()) {
+            n++;
+        }
+        return n >= 2;
     }
 
     private static AnomalieTranscription anomalie(ChampAnomalie champ, TypeAnomalie type, GraviteAnomalie gravite,
@@ -661,46 +696,64 @@ public class SaisiePpmImportService {
 
     /**
      * ⚠️ Règle ajoutée — extraction <strong>best-effort</strong> des lots décrits en texte libre dans la
-     * désignation du marché, motif : « … répartis en NN Lots : Lot 01 : &lt;texte&gt; ; Lot 02 : &lt;texte&gt; … ».
+     * désignation du marché. <strong>Généralisée 2026-07-22 (SIGMP)</strong> pour couvrir :
+     * <ul>
+     *   <li>marqueurs variés — « Lot 01 : », « lot n1: », « LOT N°02 : », « Lot 1 - » ({@link #SEGMENT_LOT}) ;</li>
+     *   <li>annonce en lettres et/ou chiffres — « répartie en trois 3 lots », « en deux 2 lots » ;</li>
+     *   <li><strong>cas sans annonce</strong> — au moins <strong>2</strong> marqueurs « LOT N°NN : » suffisent.</li>
+     * </ul>
      *
-     * <p><strong>Contrôle de cohérence</strong> : l'extraction n'aboutit que si le nombre de segments
-     * « Lot NN : » trouvés égale exactement le compte annoncé (« 04 Lots »), qu'aucun segment n'est vide et
-     * que le motif n'ouvre pas la désignation (partie avant le marqueur vide = motif ambigu) — sinon
-     * <strong>avertissement</strong> et lots vides. Chaque lot ne porte que {@code designationLot} (le texte
-     * ne donne ni montant ni quantité par lot — champs descriptifs, aucun contrôle de somme, règle actée).</p>
+     * <p><strong>Contrôle de cohérence</strong> : l'extraction n'aboutit que si (a) un objet précède le 1ᵉʳ
+     * marqueur (sinon motif ambigu), (b) aucun segment n'est vide, et (c) — s'il y a une annonce — le nombre de
+     * marqueurs égale le compte annoncé ; sans annonce, il faut ≥2 marqueurs. Sinon <strong>avertissement</strong>
+     * + lots vides, et une <strong>anomalie {@code champ:lot}</strong> ({@code LOT_INCOHERENT}) est émise par
+     * {@link #detecterAnomalies}. Chaque lot ne porte que {@code designationLot} (aucun montant/quantité).</p>
      *
-     * <p>⚠️ Décision revisitée (2026-07-18) : extraction réussie ou non, la désignation du marché reste
-     * <strong>intégrale</strong> — l'énumération des lots y demeure, en plus de {@code lots[]} (l'ancienne
-     * désignation raccourcie est abandonnée). Renvoie une liste vide si rien n'est extrait.</p>
+     * <p>⚠️ Décision (2026-07-18) : la désignation reste <strong>intégrale</strong> (l'énumération des lots y
+     * demeure, en plus de {@code lots[]}). Renvoie une liste vide si rien n'est extrait.</p>
      */
     private List<LotImport> extraireLots(String designation, List<String> avert) {
-        Matcher marqueur = MARQUEUR_LOTS.matcher(designation);
-        if (!marqueur.find()) {
-            return List.of();   // pas d'allotissement décrit → comportement inchangé
-        }
-        int annonce = Integer.parseInt(marqueur.group(1));
-        String reste = designation.substring(marqueur.end());
+        // 1) Marqueurs de lot sur toute la désignation (le cas sans annonce n'a pas de préambule à retirer).
         List<Integer> debuts = new ArrayList<>();
         List<Integer> finsEntete = new ArrayList<>();
-        Matcher seg = SEGMENT_LOT.matcher(reste);
+        Matcher seg = SEGMENT_LOT.matcher(designation);
         while (seg.find()) {
             debuts.add(seg.start());
             finsEntete.add(seg.end());
         }
+        if (debuts.isEmpty()) {
+            return List.of();   // aucun marqueur → pas d'allotissement décrit
+        }
+        // 2) Annonce éventuelle AVANT le 1er marqueur (compte en chiffres sinon en lettres).
+        Integer annonce = null;
+        Matcher ann = MARQUEUR_LOTS.matcher(designation.substring(0, debuts.get(0)));
+        if (ann.find()) {
+            annonce = ann.group(2) != null ? Integer.valueOf(ann.group(2))
+                    : (ann.group(1) == null ? null : MOTS_NOMBRE.get(ann.group(1).toLowerCase(Locale.FRENCH)));
+        }
+        // 3) Segments (texte entre marqueurs), séparateurs de fin « ; . , - – — » retirés.
         List<LotImport> lots = new ArrayList<>();
         for (int k = 0; k < debuts.size(); k++) {
-            int finTexte = k + 1 < debuts.size() ? debuts.get(k + 1) : reste.length();
-            String texte = reste.substring(finsEntete.get(k), finTexte)
-                    .replaceAll("[\\s;.,]+$", "").trim();
+            int finTexte = k + 1 < debuts.size() ? debuts.get(k + 1) : designation.length();
+            String texte = designation.substring(finsEntete.get(k), finTexte)
+                    .replaceAll("[\\s;.,\\-\\u2013\\u2014]+$", "").trim();
             if (!texte.isEmpty()) {
                 lots.add(new LotImport(texte, null, null, null));
             }
         }
-        String avantMotif = designation.substring(0, marqueur.start())
+        // 4) Garde de cohérence : objet présent, aucun segment vide, compte concordant (ou ≥2 marqueurs si nu).
+        String avantMarqueur = designation.substring(0, debuts.get(0))
                 .replaceAll("[\\s,;:.\\u2013\\u2014-]+$", "").trim();
-        if (annonce < 1 || lots.size() != annonce || avantMotif.isEmpty()) {
-            avert.add("Allotissement détecté (« " + annonce + " lot(s) » annoncé(s)) mais " + lots.size()
-                    + " segment(s) « Lot NN : » exploitable(s) — lots non extraits.");
+        int attendu = annonce != null ? annonce : debuts.size();
+        boolean coherent = !avantMarqueur.isEmpty()
+                && lots.size() == debuts.size()               // aucun segment vide
+                && lots.size() == attendu
+                && (annonce != null || debuts.size() >= 2);   // sans annonce : ≥2 marqueurs
+        if (!coherent) {
+            avert.add(annonce != null
+                    ? "Allotissement détecté (« " + annonce + " lot(s) » annoncé(s)) mais " + lots.size()
+                            + " segment(s) « Lot NN : » exploitable(s) — lots non extraits."
+                    : "Marqueurs de lot détectés mais extraction ambiguë — lots non extraits, à vérifier.");
             return List.of();
         }
         return List.copyOf(lots);
