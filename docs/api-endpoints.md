@@ -1216,6 +1216,16 @@ volumineux → **400** (annule la création si multipart) ; **404** si l'UGPM ou
 > → `CONTRAT_CADRE` et « **à commande** » / « marché à commande » → `A_COMMANDE` ; sinon **défaut
 > `QUANTITE_FIXE`**. Détection à frontières de mots (« la commande » ne matche pas). **Désignation conservée
 > intégrale** (même décision que pour les lots : on relève, on ne retire pas) ; jamais null.
+> ⚠️ **Fragment d'objet collé au montant — garde d'invariant (règle ajoutée 2026-07-22).** Quand l'objet
+> d'un marché s'enroule sur plusieurs lignes et que son fragment final (typiquement un n° de route « RNT 33 »,
+> « RNS 44 ») est isolé par PDFBox, deux défaillances survenaient : (a) le fragment collé au montant était
+> **absorbé** par la regex de milliers (`33 590 000 000.00` au lieu de `590 000 000.00`) ; (b) le fragment
+> seul sur sa ligne physique était pris pour un **n° de page** et **supprimé** (objet tronqué). Corrigé :
+> les lignes réduites à un court nombre nu ne sont **plus** filtrées (ce sont des fragments d'objet, pas des
+> n° de page — ceux-ci sont en « page X/Y »), et une **garde d'invariant `montEstim == Σ ancMontBenef`**
+> (invariant du document) **détecte** les chiffres de tête excédentaires (1-3) contaminant le montant, les
+> **recolle à l'objet** et réaligne `montEstim` sur la somme des bénéficiaires. La correction est **tracée**
+> dans `avertissements` (non silencieuse). La désignation reste **intégrale** (n° de route compris).
 > **Read-only** : les référentiels manquants (`idNature`/`idMode`/`numCompte`/`soaCode`,
 > entité) **ne sont pas créés** — renvoyés en libellé seul + listés dans `avertissements` ; la
 > création-à-la-volée se fait au `POST /api/saisies/ppm`.

@@ -69,7 +69,14 @@ public class SaisiePpmImportService {
     private static final Pattern FIN_TABLEAU = Pattern.compile("(?i)^\\s*(fait\\s+[aàâä]\\b|la\\s+personne\\s+responsable)");
     /**
      * Bruit de page <strong>répété</strong> à ignorer dans le tableau (multi-pages) : en-tête et sous-en-tête
-     * des colonnes rejoués, filigrane, numéro de page, et pied « Fait à … » intermédiaire (seul le dernier borne).
+     * des colonnes rejoués, filigrane, numéro de page (« page X/Y » ou fraction « X/Y »), et pied « Fait à … »
+     * intermédiaire (seul le dernier borne).
+     *
+     * <p>⚠️ Règle corrigée (2026-07-22) — on ne filtre <strong>plus</strong> une ligne réduite à un court nombre
+     * nu ({@code \d{1,3}} seul) : c'est presque toujours un <strong>fragment d'objet</strong> isolé par PDFBox
+     * (n° de route « RNS 44 » enroulé sur sa propre ligne physique), pas un numéro de page — ceux-ci sont au
+     * format « page X/Y ». Le supprimer tronquait l'objet ; on le conserve, et la garde d'invariant
+     * {@code montEstim == Σ bénéficiaires} corrige le montant s'il se colle au montant.</p>
      */
     private static final Pattern BRUIT_PAGE = Pattern.compile(
             "(?i)^\\s*(nature\\s+objet"
@@ -83,8 +90,7 @@ public class SaisiePpmImportService {
                     + "|page\\s+\\d"
                     + "|fait\\s+[aàâä]\\b"
                     + "|la\\s+personne\\s+responsable"
-                    + "|\\d{1,3}\\s*/\\s*\\d{1,3}\\s*$"
-                    + "|\\d{1,3}\\s*$)");
+                    + "|\\d{1,3}\\s*/\\s*\\d{1,3}\\s*$)");
     /** En-tête de page courant du PPM (ex. « PPM_26-488-0078 page 2/2 18/06/2026 05:55 »). */
     private static final Pattern PAGE_COURANTE = Pattern.compile("(?i)\\bpage\\s+\\d+\\s*/\\s*\\d+");
 
@@ -400,6 +406,20 @@ public class SaisiePpmImportService {
         String modeLibelle = s.modeLibelle();
 
         List<BeneficiaireImport> benef = construireBeneficiaires(s.soas(), s.compte(), s.mtsBenef(), natureLibelle, avert);
+
+        // ⚠️ Règle ajoutée (2026-07-22) — GARDE D'INVARIANT « montEstim == Σ ancMontBenef ». Quand PDFBox colle
+        // un fragment d'objet (n° de route « RNT 33 ») en tête du montant, la regex de milliers l'absorbe
+        // (« 33 590 000 000.00 ») → montEstim porte des chiffres de tête excédentaires. On le détecte par l'écart
+        // à Σ bénéficiaires (invariant du document) et on RECOLLE le fragment (1-3 chiffres) à la désignation,
+        // montEstim reprenant la valeur cohérente. Réalisé AVANT extraction forme/lots pour un objet complet.
+        String fragment = fragmentDeTeteContaminant(montEstim, benef);
+        if (fragment != null) {
+            designation = (designation + " " + fragment).trim();
+            montEstim = sommeAnc(benef);
+            avert.add("Objet « " + designation + " » : « " + fragment + " » recollé à l'objet et montant réaligné "
+                    + "sur la somme des bénéficiaires (le fragment avait contaminé le montant estimatif).");
+        }
+
         List<PrevisionImport> prev = List.of(
                 new PrevisionImport("LANCEMENT", prev3.size() > 0 ? isoDate(prev3.get(0)) : null),
                 new PrevisionImport("OUVERTURE", prev3.size() > 1 ? isoDate(prev3.get(1)) : null),
@@ -592,6 +612,36 @@ public class SaisiePpmImportService {
             avert.add("Compte « " + compte + " » inconnu — à confirmer.");
         }
         return benef;
+    }
+
+    /** Σ des montants « ancien » par bénéficiaire (invariant document : {@code montEstim == Σ ancMontBenef}). */
+    private static BigDecimal sommeAnc(List<BeneficiaireImport> benef) {
+        return benef.stream().map(BeneficiaireImport::ancMontBenef).filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    /**
+     * ⚠️ Règle ajoutée (2026-07-22) — détecte un <strong>fragment d'objet</strong> (1-3 chiffres, ex. n° de
+     * route) collé en tête du montant estimatif par PDFBox. Renvoie ce fragment si
+     * {@code montEstim == <fragment> ++ Σ(ancMontBenef)} (mêmes décimales) — c'est-à-dire si retirer 1 à 3
+     * chiffres de tête à {@code montEstim} redonne exactement la somme des bénéficiaires. Sinon {@code null}
+     * (pas de correction : un écart d'une autre nature reste signalé par les avertissements existants).
+     *
+     * <p>Comparaison sur les représentations entières à 2 décimales ({@code ×100}) : « 33 590 000 000.00 »
+     * → {@code 3359000000000}, « 590 000 000.00 » → {@code 59000000000} ; suffixe commun, préfixe « 33 ».</p>
+     */
+    private static String fragmentDeTeteContaminant(BigDecimal montEstim, List<BeneficiaireImport> benef) {
+        BigDecimal somme = sommeAnc(benef);
+        if (montEstim == null || somme.signum() == 0 || montEstim.compareTo(somme) == 0) {
+            return null;
+        }
+        String me = montEstim.movePointRight(2).toBigInteger().toString();
+        String sm = somme.movePointRight(2).toBigInteger().toString();
+        if (me.length() <= sm.length() || !me.endsWith(sm)) {
+            return null;
+        }
+        String fragment = me.substring(0, me.length() - sm.length());
+        return fragment.length() >= 1 && fragment.length() <= 3 ? fragment : null;
     }
 
     private static List<String[]> tokeniser(String s) {

@@ -5811,6 +5811,46 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("Import PPM — régression 161-PPM MTP : fragment d'objet (n° de route) collé au montant ou isolé sur sa ligne → recollé à l'objet, montant réaligné")
+    void importPpm_fragmentObjetCollageMontant_regression() throws Exception {
+        natureRepository.save(new Nature(1, "Travaux", null));
+        modePassationRepository.save(new ModePassation(1, "Consultation de prix ouverte", null, null, null, null));
+
+        // Deux formes réelles du bug (161-PPM MTP.pdf) :
+        //  A) le n° de route « 33 » est collé au montant sur la même ligne physique (contamination) ;
+        //  B) le n° de route « 44 » est SEUL sur sa propre ligne physique (fragment autrefois filtré).
+        byte[] pdf = pdfAvecTexte(
+                "PLAN DE PASSATION DES MARCHES POUR L'ANNEE 2026",
+                "Autorite Contractante: MINISTERE TEST",
+                "NATURE OBJET MONTANT ESTIMATIF INITIAL",
+                "Travaux Travaux de reparation de la breche au",
+                "PK 38+800 de la RNT 33 590 000 000.00 CONSULTATION DE PRIX OUVERTE RPI 00-61-0-D10-00000 2441 590 000 000.00 06/03/2026 16/03/2026 27/03/2026",
+                "Travaux Travaux d'urgence pour la construction",
+                "d'un dalot au PK 194+450 sur la RNS",
+                "44",
+                "140 000 000.00 CONSULTATION DE PRIX OUVERTE RPI 00-61-0-D10-00000 2441 140 000 000.00 06/03/2026 16/03/2026 27/03/2026",
+                "Fait a Antananarivo le 14 avril 2026");
+
+        mvc.perform(multipart("/api/saisies/ppm/import")
+                .file(new MockMultipartFile("fichier", "ppm.pdf", "application/pdf", pdf))
+                .header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.marches", hasSize(2)))
+                // A) « 33 » recollé, montant réaligné sur 590 000 000 (plus de 33 590 000 000).
+                .andExpect(jsonPath("$.marches[0].designationMarche").value(
+                        "Travaux de reparation de la breche au PK 38+800 de la RNT 33"))
+                .andExpect(jsonPath("$.marches[0].montEstim").value(590000000.00))
+                .andExpect(jsonPath("$.marches[0].beneficiaires[0].ancMontBenef").value(590000000.00))
+                // B) « 44 » (fragment isolé) conservé et recollé, montant correct 140 000 000.
+                .andExpect(jsonPath("$.marches[1].designationMarche").value(
+                        "Travaux d'urgence pour la construction d'un dalot au PK 194+450 sur la RNS 44"))
+                .andExpect(jsonPath("$.marches[1].montEstim").value(140000000.00))
+                .andExpect(jsonPath("$.marches[1].beneficiaires[0].ancMontBenef").value(140000000.00))
+                // La correction est tracée (non silencieuse) — une par marché.
+                .andExpect(jsonPath("$.avertissements[?(@ =~ /.*recoll.*objet.*/)]", hasSize(2)));
+    }
+
+    @Test
     @DisplayName("Import PPM — mode non résolu mais proche : avertissement « vouliez-vous dire … ? » (pas d'auto-résolution fuzzy)")
     void importPpm_modeSuggestion() throws Exception {
         natureRepository.save(new Nature(1, "Travaux", null));
