@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import cnm.prs.dto.SaisiePpmImportResult;
+import cnm.prs.dto.SaisiePpmImportResult.AnomalieTranscription;
 import cnm.prs.dto.SaisiePpmImportResult.BeneficiaireImport;
 import cnm.prs.dto.SaisiePpmImportResult.LotImport;
 import cnm.prs.dto.SaisiePpmImportResult.MarcheImport;
@@ -25,7 +26,10 @@ import cnm.prs.dto.SaisiePpmImportResult.PrevisionImport;
 import cnm.prs.entity.EntiteContract;
 import cnm.prs.entity.ModePassation;
 import cnm.prs.entity.Nature;
+import cnm.prs.enums.ChampAnomalie;
 import cnm.prs.enums.FormeMarche;
+import cnm.prs.enums.GraviteAnomalie;
+import cnm.prs.enums.TypeAnomalie;
 import cnm.prs.exception.BadRequestException;
 import cnm.prs.repository.CompteRepository;
 import cnm.prs.repository.EntiteContractRepository;
@@ -185,7 +189,10 @@ public class SaisiePpmImportService {
         Integer idEntite = resoudreEntite(autorite, avert);
 
         List<MarcheImport> marches = parserMarches(texte, avert);
-        return new SaisiePpmImportResult(exercice, dateSignature, autorite, idEntite, marches, avert);
+        // ⚠️ Règle ajoutée (2026-07-22) — compteur de revue : marchés portant ≥1 anomalie de transcription.
+        int nbAVerifier = (int) marches.stream()
+                .filter(m -> m.anomalies() != null && !m.anomalies().isEmpty()).count();
+        return new SaisiePpmImportResult(exercice, dateSignature, autorite, idEntite, marches, avert, nbAVerifier);
     }
 
     private String extraireTexte(MultipartFile fichier) {
@@ -203,11 +210,39 @@ public class SaisiePpmImportService {
             if (t == null || t.isBlank()) {
                 throw new BadRequestException("PDF sans texte extractible (document scanné/image ?).");
             }
-            return t;
+            return nettoyerEncodage(t);
         } catch (IOException e) {
             throw new BadRequestException("PDF illisible ou invalide.");
         }
     }
+
+    /**
+     * ⚠️ Règle ajoutée (2026-07-22) — nettoyage d'encodage <strong>best-effort</strong>. Certains PPM ont une
+     * {@code ToUnicode} défaillante : le caractère de remplacement « ¿ » ({@code U+00BF}) code selon le contexte
+     * soit la ligature <strong>œ</strong> (« ¿uvre » = « œuvre »), soit une <strong>apostrophe</strong> d'élision
+     * (« jusqu¿à » = « jusqu'à »). Un remplacement global aveugle serait faux ; on applique donc uniquement des
+     * règles <strong>ancrées et non ambiguës</strong>. Tout « ¿ » résiduel est ensuite signalé
+     * ({@link TypeAnomalie#ENCODAGE_SUSPECT}) par ligne — jamais deviné en silence.
+     */
+    private static String nettoyerEncodage(String t) {
+        return t
+                // Ligature œ (contextes non ambigus : ¿ suivi de uvre/il/ur/ud/uf).
+                .replaceAll("\\u00bf(?=uvre|il|urs?\\b|ud\\b|ufs?\\b)", "œ")
+                // Apostrophe d'élision (mots toujours élidés devant voyelle/h).
+                .replaceAll("(?i)(jusqu|aujourd|lorsqu|puisqu|quelqu)\\u00bf", "$1'");
+    }
+
+    /** Vrai si un champ porte encore un caractère de remplacement (¿ / U+FFFD) après nettoyage. */
+    private static boolean encodageSuspect(String s) {
+        return s != null && (s.indexOf('¿') >= 0 || s.indexOf('�') >= 0);
+    }
+
+    /**
+     * Objet se terminant par un <strong>préfixe de route sans numéro</strong> (RN/RNT/RNS/RNP/RNC/RIP/RR) →
+     * objet probablement tronqué (le n° a été perdu). Après la garde d'invariant, un objet sain finit par le
+     * n° (« … de la RNT 33 ») ; un « … de la RNT » nu reste donc suspect.
+     */
+    private static final Pattern FIN_ROUTE_SANS_NUM = Pattern.compile("(?i)\\b(RN|RNT|RNS|RNP|RNC|RIP|RR)\\s*$");
 
     private Integer extraireExercice(String texte) {
         Matcher m = EXERCICE.matcher(texte);
@@ -412,10 +447,13 @@ public class SaisiePpmImportService {
         // (« 33 590 000 000.00 ») → montEstim porte des chiffres de tête excédentaires. On le détecte par l'écart
         // à Σ bénéficiaires (invariant du document) et on RECOLLE le fragment (1-3 chiffres) à la désignation,
         // montEstim reprenant la valeur cohérente. Réalisé AVANT extraction forme/lots pour un objet complet.
+        BigDecimal sommeAnc = sommeAnc(benef);
+        boolean montantCorrige = false;
         String fragment = fragmentDeTeteContaminant(montEstim, benef);
         if (fragment != null) {
             designation = (designation + " " + fragment).trim();
-            montEstim = sommeAnc(benef);
+            montEstim = sommeAnc;
+            montantCorrige = true;
             avert.add("Objet « " + designation + " » : « " + fragment + " » recollé à l'objet et montant réaligné "
                     + "sur la somme des bénéficiaires (le fragment avait contaminé le montant estimatif).");
         }
@@ -447,8 +485,94 @@ public class SaisiePpmImportService {
         // ⚠️ Règle ajoutée (2026-07-18) — forme du marché relevée dans l'objet (désignation intégrale
         // conservée) : « contrat cadre » / « à commande », défaut QUANTITE_FIXE.
         String formeMarche = FormeMarche.detecterDansDesignation(designation).name();
+
+        // ⚠️ Règle ajoutée (2026-07-22) — anomalies structurées de transcription (contrat de revue front).
+        List<AnomalieTranscription> anomalies = detecterAnomalies(designation, montEstim, sommeAnc,
+                montantCorrige, natureLibelle, idNature, modeLibelle, idMode, benef);
+
         return new MarcheImport(designation, formeMarche, montEstim, nouvMontEstim, idNature, natureLibelle,
-                idMode, modeLibelle, financement, benef, prev, lots);
+                idMode, modeLibelle, financement, benef, prev, lots, anomalies);
+    }
+
+    /**
+     * ⚠️ Règle ajoutée (2026-07-22) — construit les {@link AnomalieTranscription} d'un marché à partir de ses
+     * valeurs finales (contrat de revue front, pointant champ + gravité). Types émis :
+     * <ul>
+     *   <li>{@code CHAMP_MANQUANT} — objet, montant ou mode absent ;</li>
+     *   <li>{@code OBJET_TRONQUE_PROBABLE} — objet finissant par un préfixe de route sans numéro ;</li>
+     *   <li>{@code ENCODAGE_SUSPECT} — caractère de remplacement subsistant dans l'objet ;</li>
+     *   <li>{@code MONTANT_INCOHERENT} — {@code montEstim} ≠ Σ bénéficiaires (BLOQUANT si non auto-corrigé,
+     *       sinon {@code corrige=true} A_VERIFIER) ;</li>
+     *   <li>{@code REFERENTIEL_INCONNU} — nature / mode / SOA / compte non résolus.</li>
+     * </ul>
+     */
+    private List<AnomalieTranscription> detecterAnomalies(String designation, BigDecimal montEstim,
+            BigDecimal sommeAnc, boolean montantCorrige, String natureLibelle, Integer idNature,
+            String modeLibelle, Integer idMode, List<BeneficiaireImport> benef) {
+        List<AnomalieTranscription> a = new ArrayList<>();
+
+        // Objet.
+        if (designation == null || designation.isBlank()) {
+            a.add(anomalie(ChampAnomalie.OBJET, TypeAnomalie.CHAMP_MANQUANT, GraviteAnomalie.BLOQUANT, null,
+                    "Objet du marché manquant."));
+        } else {
+            Matcher route = FIN_ROUTE_SANS_NUM.matcher(designation);
+            if (route.find()) {
+                a.add(anomalie(ChampAnomalie.OBJET, TypeAnomalie.OBJET_TRONQUE_PROBABLE, GraviteAnomalie.A_VERIFIER,
+                        null, "L'objet se termine par « " + route.group(1)
+                                + " » sans numéro de route — objet probablement tronqué, à compléter."));
+            }
+            if (encodageSuspect(designation)) {
+                a.add(anomalie(ChampAnomalie.OBJET, TypeAnomalie.ENCODAGE_SUSPECT, GraviteAnomalie.A_VERIFIER, null,
+                        "Caractère de remplacement (« ¿ ») dans l'objet — transcription à vérifier."));
+            }
+        }
+
+        // Montant estimatif + invariant montEstim == Σ bénéficiaires.
+        if (montEstim == null) {
+            a.add(anomalie(ChampAnomalie.MONT_ESTIM, TypeAnomalie.CHAMP_MANQUANT, GraviteAnomalie.BLOQUANT, null,
+                    "Montant estimatif absent."));
+        } else if (montantCorrige) {
+            a.add(anomalie(ChampAnomalie.MONT_ESTIM, TypeAnomalie.MONTANT_INCOHERENT, GraviteAnomalie.A_VERIFIER,
+                    Boolean.TRUE, "Montant réaligné sur la somme des bénéficiaires ("
+                            + sommeAnc.toPlainString() + ") après recollage d'un fragment d'objet — à confirmer."));
+        } else if (sommeAnc.signum() > 0 && montEstim.compareTo(sommeAnc) != 0) {
+            a.add(anomalie(ChampAnomalie.MONT_ESTIM, TypeAnomalie.MONTANT_INCOHERENT, GraviteAnomalie.BLOQUANT,
+                    Boolean.FALSE, "Montant estimatif (" + montEstim.toPlainString()
+                            + ") ≠ somme des bénéficiaires (" + sommeAnc.toPlainString()
+                            + ") — incohérence non auto-corrigeable, à reprendre."));
+        }
+
+        // Mode.
+        if (modeLibelle == null || modeLibelle.isBlank()) {
+            a.add(anomalie(ChampAnomalie.MODE, TypeAnomalie.CHAMP_MANQUANT, GraviteAnomalie.A_VERIFIER, null,
+                    "Mode de passation absent."));
+        } else if (idMode == null) {
+            a.add(anomalie(ChampAnomalie.MODE, TypeAnomalie.REFERENTIEL_INCONNU, GraviteAnomalie.A_VERIFIER, null,
+                    "Mode de passation « " + modeLibelle + " » non trouvé au référentiel."));
+        }
+
+        // Nature.
+        if (natureLibelle != null && idNature == null) {
+            a.add(anomalie(ChampAnomalie.NATURE, TypeAnomalie.REFERENTIEL_INCONNU, GraviteAnomalie.A_VERIFIER, null,
+                    "Nature « " + natureLibelle + " » non trouvée au référentiel."));
+        }
+
+        // Bénéficiaires : SOA / compte non résolus.
+        benef.stream().map(BeneficiaireImport::soaCode).filter(Objects::nonNull).distinct()
+                .filter(soa -> !soaBeneficiaireRepository.existsById(soa))
+                .forEach(soa -> a.add(anomalie(ChampAnomalie.BENEFICIAIRE, TypeAnomalie.REFERENTIEL_INCONNU,
+                        GraviteAnomalie.A_VERIFIER, null, "Service bénéficiaire (SOA) « " + soa + " » inconnu.")));
+        benef.stream().map(BeneficiaireImport::numCompte).filter(Objects::nonNull).distinct()
+                .filter(cpt -> !compteRepository.existsById(cpt))
+                .forEach(cpt -> a.add(anomalie(ChampAnomalie.BENEFICIAIRE, TypeAnomalie.REFERENTIEL_INCONNU,
+                        GraviteAnomalie.A_VERIFIER, null, "Compte « " + cpt + " » inconnu.")));
+        return a;
+    }
+
+    private static AnomalieTranscription anomalie(ChampAnomalie champ, TypeAnomalie type, GraviteAnomalie gravite,
+            Boolean corrige, String message) {
+        return new AnomalieTranscription(champ, type, gravite, corrige, message);
     }
 
     /**

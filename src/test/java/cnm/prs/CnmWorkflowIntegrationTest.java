@@ -5851,6 +5851,50 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("Import PPM — anomalies structurées : ligne propre (0), montant auto-corrigé, objet tronqué, référentiel inconnu ; nbAVerifier")
+    void importPpm_anomaliesStructurees() throws Exception {
+        natureRepository.save(new Nature(1, "Travaux", null));
+        modePassationRepository.save(new ModePassation(1, "Consultation de prix ouverte", null, null, null, null));
+        soaBeneficiaireRepository.save(new cnm.prs.entity.SoaBeneficiaire("00-61-0-D10-00000", "SOA test"));
+        compteRepository.save(new cnm.prs.entity.Compte("2441", "Compte test", null, null));
+
+        byte[] pdf = pdfAvecTexte(
+                "PLAN DE PASSATION DES MARCHES POUR L'ANNEE 2026",
+                "Autorite Contractante: MINISTERE TEST",
+                "NATURE OBJET MONTANT ESTIMATIF INITIAL",
+                // [0] PROPRE : tout résout, montant == Σ, objet fini par un mot → 0 anomalie.
+                "Travaux Rehabilitation de la route principale du secteur",
+                "500 000 000.00 Consultation de prix ouverte RPI 00-61-0-D10-00000 2441 500 000 000.00 06/03/2026 16/03/2026 27/03/2026",
+                // [1] fragment « 33 » collé au montant → MONTANT_INCOHERENT auto-corrigé.
+                "Travaux Reparation de la breche au PK 38+800 de la RNT",
+                "33 590 000 000.00 Consultation de prix ouverte RPI 00-61-0-D10-00000 2441 590 000 000.00 06/03/2026 16/03/2026 27/03/2026",
+                // [2] objet tronqué (finit par RNS sans numéro), montant cohérent → OBJET_TRONQUE_PROBABLE.
+                "Travaux Travaux de reparation du pont sur la RNS",
+                "400 000 000.00 Consultation de prix ouverte RPI 00-61-0-D10-00000 2441 400 000 000.00 06/03/2026 16/03/2026 27/03/2026",
+                // [3] mode absent du référentiel → REFERENTIEL_INCONNU / mode (objet fini par un mot).
+                "Travaux Rehabilitation de la route secondaire du district",
+                "300 000 000.00 Achat Direct RPI 00-61-0-D10-00000 2441 300 000 000.00 06/03/2026 16/03/2026 27/03/2026",
+                "Fait a Antananarivo le 14 avril 2026");
+
+        mvc.perform(multipart("/api/saisies/ppm/import")
+                .file(new MockMultipartFile("fichier", "ppm.pdf", "application/pdf", pdf))
+                .header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.marches", hasSize(4)))
+                // 3 marchés sur 4 portent ≥1 anomalie ([0] est propre).
+                .andExpect(jsonPath("$.nbAVerifier").value(3))
+                .andExpect(jsonPath("$.marches[0].anomalies", hasSize(0)))
+                // [1] montant auto-corrigé (champ + type + corrige exacts) ; objet et montant réalignés.
+                .andExpect(jsonPath("$.marches[1].anomalies[?(@.champ=='montEstim' && @.type=='MONTANT_INCOHERENT' && @.gravite=='A_VERIFIER' && @.corrige==true)]", hasSize(1)))
+                .andExpect(jsonPath("$.marches[1].montEstim").value(590000000.00))
+                .andExpect(jsonPath("$.marches[1].designationMarche").value("Reparation de la breche au PK 38+800 de la RNT 33"))
+                // [2] objet tronqué probable.
+                .andExpect(jsonPath("$.marches[2].anomalies[?(@.champ=='objet' && @.type=='OBJET_TRONQUE_PROBABLE' && @.gravite=='A_VERIFIER')]", hasSize(1)))
+                // [3] mode inconnu au référentiel.
+                .andExpect(jsonPath("$.marches[3].anomalies[?(@.champ=='mode' && @.type=='REFERENTIEL_INCONNU')]", hasSize(1)));
+    }
+
+    @Test
     @DisplayName("Import PPM — mode non résolu mais proche : avertissement « vouliez-vous dire … ? » (pas d'auto-résolution fuzzy)")
     void importPpm_modeSuggestion() throws Exception {
         natureRepository.save(new Nature(1, "Travaux", null));

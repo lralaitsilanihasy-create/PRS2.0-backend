@@ -1226,8 +1226,27 @@ volumineux → **400** (annule la création si multipart) ; **404** si l'UGPM ou
 > (invariant du document) **détecte** les chiffres de tête excédentaires (1-3) contaminant le montant, les
 > **recolle à l'objet** et réaligne `montEstim` sur la somme des bénéficiaires. La correction est **tracée**
 > dans `avertissements` (non silencieuse). La désignation reste **intégrale** (n° de route compris).
+> ⚠️ **Encodage (règle ajoutée 2026-07-22).** Certains PPM ont une `ToUnicode` défaillante : le caractère
+> de remplacement « ¿ » (`U+00BF`) code selon le contexte soit la ligature **œ** (« ¿uvre » = « œuvre »),
+> soit une **apostrophe** d'élision (« jusqu¿à » = « jusqu'à »). Le serveur applique des **règles ancrées non
+> ambiguës** (jamais un remplacement global aveugle) ; tout « ¿ » **résiduel** est signalé par l'anomalie
+> `ENCODAGE_SUSPECT` (ci-dessous), jamais deviné en silence.
+>
+> ⚠️ **Anomalies de transcription structurées (règle ajoutée 2026-07-22) — clé de la revue front.** Chaque
+> `marches[i]` porte **`anomalies[]`** (vide si RAS) et le résultat porte **`nbAVerifier`** (nombre de marchés
+> avec ≥1 anomalie). Cela **remplace avantageusement** le balayage de `avertissements[]` à plat (conservé pour
+> rétro-compatibilité) : le front pointe la **ligne + le champ exacts**. Forme d'une anomalie :
+> `{ champ, type, gravite, corrige?, message }` —
+> **`champ`** ∈ `objet|montEstim|nouvMontEstim|mode|nature|beneficiaire|date|lot` ;
+> **`type`** ∈ `MONTANT_INCOHERENT|OBJET_TRONQUE_PROBABLE|ENCODAGE_SUSPECT|REFERENTIEL_INCONNU|CHAMP_MANQUANT` ;
+> **`gravite`** ∈ `BLOQUANT|A_VERIFIER` ; **`corrige`** = `true` si le backend a **auto-corrigé** (à confirmer
+> par l'humain) ; **`message`** prêt à afficher. Règles émises : `MONTANT_INCOHERENT` (montEstim ≠ Σ
+> bénéficiaires — `A_VERIFIER` + `corrige:true` si auto-réaligné via l'invariant, sinon `BLOQUANT`) ;
+> `OBJET_TRONQUE_PROBABLE` (objet finissant par un préfixe de route `RN|RNT|RNS|RNP|RNC|RIP|RR` sans numéro) ;
+> `REFERENTIEL_INCONNU` (nature/mode/SOA/compte non résolus) ; `CHAMP_MANQUANT` (objet/montant/mode absent) ;
+> `ENCODAGE_SUSPECT` (« ¿ » résiduel dans l'objet).
 > **Read-only** : les référentiels manquants (`idNature`/`idMode`/`numCompte`/`soaCode`,
-> entité) **ne sont pas créés** — renvoyés en libellé seul + listés dans `avertissements` ; la
+> entité) **ne sont pas créés** — renvoyés en libellé seul + listés dans `avertissements` **et** `anomalies` ; la
 > création-à-la-volée se fait au `POST /api/saisies/ppm`.
 > ⚠️ **Résolution des modes/natures (règle révisée 2026-07-18)** : normalisation **étendue** (trim + casse +
 > accents + apostrophes/espaces typographiques + **pluriels simples** — un « s » final par token), **même
