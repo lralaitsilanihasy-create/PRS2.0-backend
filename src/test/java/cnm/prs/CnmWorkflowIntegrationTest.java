@@ -5804,6 +5804,39 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("Import PPM — lots : objet COMMENÇANT par le marqueur (« LOT N°01:… LOT N°02:… » en position 0, séparés par un espace) → 2 lots")
+    void importPpm_lotsObjetCommenceParMarqueur() throws Exception {
+        natureRepository.save(new Nature(1, "Travaux", null));
+        modePassationRepository.save(new ModePassation(1, "Consultation de prix ouverte", null, null, null, null));
+        soaBeneficiaireRepository.save(new cnm.prs.entity.SoaBeneficiaire("00-61-0-D10-00000", "SOA"));
+        compteRepository.save(new cnm.prs.entity.Compte("2441", "Compte", null, null));
+
+        // Cas réel 188-SIGMP L18 : la désignation COMMENCE par « LOT N°01: » (aucun préambule), lots séparés
+        // par un simple espace avant « LOT N°02: ». (Sans accents — police du fixture.)
+        byte[] pdf = pdfAvecTexte(
+                "PLAN DE PASSATION DES MARCHES POUR L'ANNEE 2026",
+                "Autorite Contractante: MINISTERE TEST",
+                "NATURE OBJET MONTANT ESTIMATIF INITIAL",
+                "Travaux LOT N°01:Travaux de rehabilitation du batiment A au siege de la direction generale LOT N°02:Travaux de rehabilitation du logement de fonction du DG a Fort-Duchesne.",
+                "300 000 000.00 Consultation de prix ouverte RPI 00-61-0-D10-00000 2441 300 000 000.00 06/03/2026 16/03/2026 27/03/2026",
+                "Fait a Antananarivo le 14 avril 2026");
+
+        mvc.perform(multipart("/api/saisies/ppm/import")
+                .file(new MockMultipartFile("fichier", "ppm.pdf", "application/pdf", pdf))
+                .header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.marches", hasSize(1)))
+                .andExpect(jsonPath("$.marches[0].lots", hasSize(2)))
+                .andExpect(jsonPath("$.marches[0].lots[0].designationLot").value(
+                        "Travaux de rehabilitation du batiment A au siege de la direction generale"))
+                .andExpect(jsonPath("$.marches[0].lots[1].designationLot").value(
+                        "Travaux de rehabilitation du logement de fonction du DG a Fort-Duchesne"))
+                // Extraction réussie → pas d'anomalie « lot ». Désignation intégrale (le marqueur y reste).
+                .andExpect(jsonPath("$.marches[0].anomalies[?(@.champ=='lot')]", hasSize(0)))
+                .andExpect(jsonPath("$.marches[0].designationMarche", org.hamcrest.Matchers.startsWith("LOT N°01:")));
+    }
+
+    @Test
     @DisplayName("Import PPM — lots incohérents (« trois 3 lots » annoncés, 2 marqueurs) : lots vides + anomalie champ:lot LOT_INCOHERENT")
     void importPpm_lotsIncoherent_anomalie() throws Exception {
         natureRepository.save(new Nature(1, "Travaux", null));
@@ -6029,6 +6062,70 @@ class CnmWorkflowIntegrationTest {
                 .andExpect(jsonPath("$.marches[1].beneficiaires[0].ancMontBenef").value(140000000.00))
                 // La correction est tracée (non silencieuse) — une par marché.
                 .andExpect(jsonPath("$.avertissements[?(@ =~ /.*recoll.*objet.*/)]", hasSize(2)));
+    }
+
+    @Test
+    @DisplayName("Import PPM — invariant SYMÉTRIQUE : fragment collé au MONTANT BÉNÉFICIAIRE (« 3 125 000 000 » pour un estimatif 125M) → recollé à l'objet, bénéficiaire réaligné")
+    void importPpm_fragmentMontantBeneficiaire_regression() throws Exception {
+        natureRepository.save(new Nature(1, "Travaux", null));
+        modePassationRepository.save(new ModePassation(1, "Consultation de prix ouverte", null, null, null, null));
+        soaBeneficiaireRepository.save(new cnm.prs.entity.SoaBeneficiaire("00-61-0-D10-00000", "SOA"));
+        compteRepository.save(new cnm.prs.entity.Compte("2441", "Compte", null, null));
+
+        // Cas réel 379.PPM : montEstim correct (125M) mais le montant bénéficiaire est contaminé par un « 3 ».
+        byte[] pdf = pdfAvecTexte(
+                "PLAN DE PASSATION DES MARCHES POUR L'ANNEE 2026",
+                "Autorite Contractante: MINISTERE TEST",
+                "NATURE OBJET MONTANT ESTIMATIF INITIAL",
+                "Travaux Fourniture d'habillement pour le personnel",
+                "125 000 000.00 Consultation de prix ouverte RPI 00-61-0-D10-00000 2441 3 125 000 000.00 06/03/2026 16/03/2026 27/03/2026",
+                "Fait a Antananarivo le 14 avril 2026");
+
+        mvc.perform(multipart("/api/saisies/ppm/import")
+                .file(new MockMultipartFile("fichier", "ppm.pdf", "application/pdf", pdf))
+                .header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.marches", hasSize(1)))
+                // « 3 » recollé à l'objet ; montant bénéficiaire ramené à 125M (== estimatif).
+                .andExpect(jsonPath("$.marches[0].designationMarche").value(
+                        "Fourniture d'habillement pour le personnel 3"))
+                .andExpect(jsonPath("$.marches[0].montEstim").value(125000000.00))
+                .andExpect(jsonPath("$.marches[0].beneficiaires[0].ancMontBenef").value(125000000.00))
+                // Correction tracée + anomalie montant auto-corrigée (à confirmer).
+                .andExpect(jsonPath("$.marches[0].anomalies[?(@.champ=='montEstim' && @.type=='MONTANT_INCOHERENT' && @.corrige==true)]", hasSize(1)))
+                .andExpect(jsonPath("$.avertissements[?(@ =~ /.*recoll.*objet.*/)]", hasSize(1)));
+    }
+
+    @Test
+    @DisplayName("Import PPM — invariant symétrique sur la colonne NOUVEAU : fragment collé au nouveau montant bénéficiaire → recollé, réaligné")
+    void importPpm_fragmentNouveauMontantBeneficiaire_regression() throws Exception {
+        natureRepository.save(new Nature(1, "Travaux", null));
+        modePassationRepository.save(new ModePassation(1, "Appel d'offres ouvert", null, null, null, null));
+        soaBeneficiaireRepository.save(new cnm.prs.entity.SoaBeneficiaire("00-61-0-D10-00000", "SOA"));
+        compteRepository.save(new cnm.prs.entity.Compte("2441", "Compte", null, null));
+
+        // montEstim 500M + nouvMontEstim 600M ; colonne « ancien » cohérente, mais le NOUVEAU montant
+        // bénéficiaire est contaminé par un « 4 » (« 4 600 000 000 » au lieu de 600 000 000).
+        byte[] pdf = pdfAvecTexte(
+                "PLAN DE PASSATION DES MARCHES POUR L'ANNEE 2026",
+                "Autorite Contractante: MINISTERE TEST",
+                "NATURE OBJET MONTANT ESTIMATIF INITIAL",
+                "Travaux Rehabilitation de la route nationale",
+                "500 000 000.00 600 000 000.00 Appel d'offres ouvert RPI 00-61-0-D10-00000 2441 500 000 000.00 4 600 000 000.00 06/03/2026 16/03/2026 27/03/2026",
+                "Fait a Antananarivo le 14 avril 2026");
+
+        mvc.perform(multipart("/api/saisies/ppm/import")
+                .file(new MockMultipartFile("fichier", "ppm.pdf", "application/pdf", pdf))
+                .header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.marches", hasSize(1)))
+                .andExpect(jsonPath("$.marches[0].designationMarche").value(
+                        "Rehabilitation de la route nationale 4"))
+                .andExpect(jsonPath("$.marches[0].montEstim").value(500000000.00))
+                .andExpect(jsonPath("$.marches[0].nouvMontEstim").value(600000000.00))
+                .andExpect(jsonPath("$.marches[0].beneficiaires[0].ancMontBenef").value(500000000.00))
+                .andExpect(jsonPath("$.marches[0].beneficiaires[0].nouvMontBenef").value(600000000.00))
+                .andExpect(jsonPath("$.avertissements[?(@ =~ /.*nouveau montant.*/)]", hasSize(1)));
     }
 
     @Test

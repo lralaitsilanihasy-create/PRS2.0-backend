@@ -1209,10 +1209,11 @@ volumineux → **400** (annule la création si multipart) ; **404** si l'UGPM ou
 > `Lot 1`, `lot n1:`, `LOT N°02 :`, `Lot 1 -` (`n`/`°`/zéros de tête optionnels, terminateur `:` ou `-`),
 > séparateur `-` ou accolé. **Annonce** : « répartis/répartie(s) en NN lots » avec le compte en **chiffres**
 > et/ou en **lettres** (« deux 2 lots », « trois lots »). **Cas sans annonce** : au moins **2** marqueurs
-> « LOT N°NN : » suffisent à extraire. **Contrôle de cohérence** : extraction uniquement si un objet précède
-> le 1ᵉʳ marqueur, aucun segment n'est vide, et le nombre de marqueurs **égale** le compte annoncé (ou ≥2 sans
-> annonce) ; sinon → **avertissement** dans `avertissements[]`, lots vides, **et anomalie `champ:lot`
-> (`LOT_INCOHERENT`)** pour la revue front. **Décision revisitée (2026-07-18, remplace « désignation raccourcie »)** :
+> « LOT N°NN : » suffisent à extraire — y compris quand la désignation **commence** par le marqueur
+> (`LOT N°01:…` en position 0, **aucun objet préalable requis**) et que les lots sont séparés par un simple
+> espace. **Contrôle de cohérence** : extraction uniquement si aucun segment n'est vide et le nombre de
+> marqueurs **égale** le compte annoncé (ou ≥2 sans annonce) ; sinon → **avertissement** dans
+> `avertissements[]`, lots vides, **et anomalie `champ:lot` (`LOT_INCOHERENT`)** pour la revue front. **Décision revisitée (2026-07-18, remplace « désignation raccourcie »)** :
 > extraction réussie ou non, `designationMarche` est **conservée intégrale** — l'énumération des lots
 > (« répartis en NN Lots : Lot 01 : … ») y reste, **en plus** de `lots[]` ; le doublon texte/structure est
 > accepté et voulu. Sans motif d'allotissement → inchangé (lots vides, pas d'avertissement).
@@ -1227,10 +1228,15 @@ volumineux → **400** (annule la création si multipart) ; **404** si l'UGPM ou
 > **absorbé** par la regex de milliers (`33 590 000 000.00` au lieu de `590 000 000.00`) ; (b) le fragment
 > seul sur sa ligne physique était pris pour un **n° de page** et **supprimé** (objet tronqué). Corrigé :
 > les lignes réduites à un court nombre nu ne sont **plus** filtrées (ce sont des fragments d'objet, pas des
-> n° de page — ceux-ci sont en « page X/Y »), et une **garde d'invariant `montEstim == Σ ancMontBenef`**
-> (invariant du document) **détecte** les chiffres de tête excédentaires (1-3) contaminant le montant, les
-> **recolle à l'objet** et réaligne `montEstim` sur la somme des bénéficiaires. La correction est **tracée**
-> dans `avertissements` (non silencieuse). La désignation reste **intégrale** (n° de route compris).
+> n° de page — ceux-ci sont en « page X/Y »), et une **garde d'invariant `tête == Σ bénéficiaires`**
+> (invariant du document) **détecte** les chiffres de tête excédentaires (1-3) contaminant un montant, les
+> **recolle à l'objet** et réaligne. La correction est **tracée** dans `avertissements` (non silencieuse). La
+> désignation reste **intégrale** (n° de route compris). ⚠️ **Symétrique (généralisé 2026-07-22)** : la garde
+> s'applique à **toutes les colonnes numériques** — le fragment peut contaminer le **montant de tête**
+> (`montEstim`/`nouvMontEstim` — « 33 590 000 000 ») **ou** un **montant bénéficiaire** (« 3 125 000 000 » pour
+> un estimatif de 125 000 000). Colonne par colonne (ancien puis nouveau), si retirer 1-3 chiffres de tête du
+> montant fautif rétablit l'égalité `tête == Σ`, ils sont recollés à l'objet et le montant réaligné. Un écart
+> qui **n'est pas** un pur fragment de tête reste `MONTANT_INCOHERENT` (non auto-corrigé).
 > ⚠️ **Encodage (règle ajoutée 2026-07-22).** Certains PPM ont une `ToUnicode` défaillante : le caractère
 > de remplacement « ¿ » (`U+00BF`) code selon le contexte soit la ligature **œ** (« ¿uvre » = « œuvre »),
 > soit une **apostrophe** d'élision (« jusqu¿à » = « jusqu'à »). Le serveur applique des **règles ancrées non

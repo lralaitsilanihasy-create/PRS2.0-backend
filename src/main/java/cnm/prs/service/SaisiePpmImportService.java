@@ -454,20 +454,29 @@ public class SaisiePpmImportService {
 
         List<BeneficiaireImport> benef = construireBeneficiaires(s.soas(), s.compte(), s.mtsBenef(), natureLibelle, avert);
 
-        // ⚠️ Règle ajoutée (2026-07-22) — GARDE D'INVARIANT « montEstim == Σ ancMontBenef ». Quand PDFBox colle
-        // un fragment d'objet (n° de route « RNT 33 ») en tête du montant, la regex de milliers l'absorbe
-        // (« 33 590 000 000.00 ») → montEstim porte des chiffres de tête excédentaires. On le détecte par l'écart
-        // à Σ bénéficiaires (invariant du document) et on RECOLLE le fragment (1-3 chiffres) à la désignation,
-        // montEstim reprenant la valeur cohérente. Réalisé AVANT extraction forme/lots pour un objet complet.
-        BigDecimal sommeAnc = sommeAnc(benef);
+        // ⚠️ Règle ajoutée (2026-07-22, généralisée) — GARDE D'INVARIANT SYMÉTRIQUE « tête == Σ bénéficiaires »,
+        // par colonne numérique (ancien PUIS nouveau). Un fragment d'objet collé par PDFBox contamine soit le
+        // montant de TÊTE (montEstim/nouvMontEstim — « 33 590 000 000 »), soit un montant BÉNÉFICIAIRE
+        // (« 3 125 000 000 » pour un estimatif de 125 000 000). Dans les deux sens, retirer 1-3 chiffres de tête
+        // du montant fautif rétablit l'égalité → on les RECOLLE à l'objet et on réaligne. Avant forme/lots.
         boolean montantCorrige = false;
-        String fragment = fragmentDeTeteContaminant(montEstim, benef);
-        if (fragment != null) {
-            designation = (designation + " " + fragment).trim();
-            montEstim = sommeAnc;
+        Reconciliation ra = reconcilier(montEstim, montantsBenef(benef, true));   // colonne « ancien »
+        if (ra != null) {
+            montEstim = ra.tete();
+            benef = avecMontantsBenef(benef, ra.benefs(), true);
+            designation = (designation + " " + ra.fragment()).trim();
             montantCorrige = true;
-            avert.add("Objet « " + designation + " » : « " + fragment + " » recollé à l'objet et montant réaligné "
-                    + "sur la somme des bénéficiaires (le fragment avait contaminé le montant estimatif).");
+            avert.add("Objet « " + designation + " » : « " + ra.fragment()
+                    + " » recollé à l'objet, colonne « montant estimatif » réalignée sur la somme des bénéficiaires.");
+        }
+        Reconciliation rn = reconcilier(nouvMontEstim, montantsBenef(benef, false));   // colonne « nouveau »
+        if (rn != null) {
+            nouvMontEstim = rn.tete();
+            benef = avecMontantsBenef(benef, rn.benefs(), false);
+            designation = (designation + " " + rn.fragment()).trim();
+            montantCorrige = true;
+            avert.add("Objet « " + designation + " » : « " + rn.fragment()
+                    + " » recollé à l'objet, colonne « nouveau montant » réalignée sur la somme des bénéficiaires.");
         }
 
         List<PrevisionImport> prev = List.of(
@@ -703,11 +712,12 @@ public class SaisiePpmImportService {
      *   <li><strong>cas sans annonce</strong> — au moins <strong>2</strong> marqueurs « LOT N°NN : » suffisent.</li>
      * </ul>
      *
-     * <p><strong>Contrôle de cohérence</strong> : l'extraction n'aboutit que si (a) un objet précède le 1ᵉʳ
-     * marqueur (sinon motif ambigu), (b) aucun segment n'est vide, et (c) — s'il y a une annonce — le nombre de
-     * marqueurs égale le compte annoncé ; sans annonce, il faut ≥2 marqueurs. Sinon <strong>avertissement</strong>
-     * + lots vides, et une <strong>anomalie {@code champ:lot}</strong> ({@code LOT_INCOHERENT}) est émise par
-     * {@link #detecterAnomalies}. Chaque lot ne porte que {@code designationLot} (aucun montant/quantité).</p>
+     * <p><strong>Contrôle de cohérence</strong> : l'extraction n'aboutit que si (a) aucun segment n'est vide et
+     * (b) — s'il y a une annonce — le nombre de marqueurs égale le compte annoncé ; sans annonce, il faut ≥2
+     * marqueurs. <strong>Aucune exigence d'objet avant le 1ᵉʳ marqueur</strong> (une désignation qui commence par
+     * « LOT N°01: » est valide). Sinon <strong>avertissement</strong> + lots vides, et une <strong>anomalie
+     * {@code champ:lot}</strong> ({@code LOT_INCOHERENT}) est émise par {@link #detecterAnomalies}. Chaque lot ne
+     * porte que {@code designationLot} (aucun montant/quantité).</p>
      *
      * <p>⚠️ Décision (2026-07-18) : la désignation reste <strong>intégrale</strong> (l'énumération des lots y
      * demeure, en plus de {@code lots[]}). Renvoie une liste vide si rien n'est extrait.</p>
@@ -741,14 +751,14 @@ public class SaisiePpmImportService {
                 lots.add(new LotImport(texte, null, null, null));
             }
         }
-        // 4) Garde de cohérence : objet présent, aucun segment vide, compte concordant (ou ≥2 marqueurs si nu).
-        String avantMarqueur = designation.substring(0, debuts.get(0))
-                .replaceAll("[\\s,;:.\\u2013\\u2014-]+$", "").trim();
+        // 4) Garde de cohérence : aucun segment vide, compte concordant (ou ≥2 marqueurs si sans annonce).
+        // ⚠️ 2026-07-22 (L18 SIGMP) — PLUS d'exigence d'objet AVANT le 1ᵉʳ marqueur : une désignation qui
+        // COMMENCE par « LOT N°01: » (aucun préambule, marqueur en position 0) reste un allotissement valide
+        // — la désignation demeure intégrale (décision 2026-07-18), chaque marqueur ouvre un segment.
         int attendu = annonce != null ? annonce : debuts.size();
-        boolean coherent = !avantMarqueur.isEmpty()
-                && lots.size() == debuts.size()               // aucun segment vide
+        boolean coherent = lots.size() == debuts.size()          // aucun segment vide
                 && lots.size() == attendu
-                && (annonce != null || debuts.size() >= 2);   // sans annonce : ≥2 marqueurs
+                && (annonce != null || debuts.size() >= 2);      // sans annonce : ≥2 marqueurs
         if (!coherent) {
             avert.add(annonce != null
                     ? "Allotissement détecté (« " + annonce + " lot(s) » annoncé(s)) mais " + lots.size()
@@ -808,28 +818,87 @@ public class SaisiePpmImportService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
+    /** Résultat d'une réconciliation de colonne : tête + montants bénéficiaires corrigés, fragment recollé. */
+    private record Reconciliation(BigDecimal tete, List<BigDecimal> benefs, String fragment) {
+    }
+
     /**
-     * ⚠️ Règle ajoutée (2026-07-22) — détecte un <strong>fragment d'objet</strong> (1-3 chiffres, ex. n° de
-     * route) collé en tête du montant estimatif par PDFBox. Renvoie ce fragment si
-     * {@code montEstim == <fragment> ++ Σ(ancMontBenef)} (mêmes décimales) — c'est-à-dire si retirer 1 à 3
-     * chiffres de tête à {@code montEstim} redonne exactement la somme des bénéficiaires. Sinon {@code null}
-     * (pas de correction : un écart d'une autre nature reste signalé par les avertissements existants).
-     *
-     * <p>Comparaison sur les représentations entières à 2 décimales ({@code ×100}) : « 33 590 000 000.00 »
-     * → {@code 3359000000000}, « 590 000 000.00 » → {@code 59000000000} ; suffixe commun, préfixe « 33 ».</p>
+     * ⚠️ Règle ajoutée (2026-07-22, symétrique) — rétablit l'invariant <strong>tête == Σ bénéficiaires</strong>
+     * d'une colonne numérique (ancien ou nouveau) quand un <strong>fragment d'objet</strong> (1-3 chiffres) a
+     * été collé en tête d'un montant par PDFBox. Deux sens :
+     * <ul>
+     *   <li><strong>tête contaminée</strong> — {@code tête == <fragment> ++ Σ} (« 33 590 000 000 » pour Σ
+     *       590 000 000) → on ramène la tête à Σ ;</li>
+     *   <li><strong>bénéficiaire contaminé</strong> — un {@code b_i == <fragment> ++ cible} où
+     *       {@code cible = tête − Σ + b_i} (« 3 125 000 000 » pour un estimatif de 125 000 000) → on ramène
+     *       {@code b_i} à sa cible.</li>
+     * </ul>
+     * Renvoie {@code null} si l'écart n'est pas un pur fragment de tête (autre incohérence → reste signalée).
+     * Comparaison sur les entiers à 2 décimales ({@code ×100}), suffixe commun + préfixe 1-3 chiffres.
      */
-    private static String fragmentDeTeteContaminant(BigDecimal montEstim, List<BeneficiaireImport> benef) {
-        BigDecimal somme = sommeAnc(benef);
-        if (montEstim == null || somme.signum() == 0 || montEstim.compareTo(somme) == 0) {
+    private static Reconciliation reconcilier(BigDecimal tete, List<BigDecimal> benefs) {
+        if (tete == null) {
             return null;
         }
-        String me = montEstim.movePointRight(2).toBigInteger().toString();
-        String sm = somme.movePointRight(2).toBigInteger().toString();
-        if (me.length() <= sm.length() || !me.endsWith(sm)) {
+        BigDecimal somme = benefs.stream().filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (somme.signum() == 0 || tete.compareTo(somme) == 0) {
             return null;
         }
-        String fragment = me.substring(0, me.length() - sm.length());
-        return fragment.length() >= 1 && fragment.length() <= 3 ? fragment : null;
+        // Cas A — tête contaminée : tête = <fragment> ++ Σ.
+        String fa = fragmentPrefixe(tete, somme);
+        if (fa != null) {
+            return new Reconciliation(somme, benefs, fa);
+        }
+        // Cas B — un montant bénéficiaire contaminé : b_i = <fragment> ++ (tête − Σ + b_i).
+        for (int i = 0; i < benefs.size(); i++) {
+            BigDecimal bi = benefs.get(i);
+            if (bi == null) {
+                continue;
+            }
+            BigDecimal cible = tete.subtract(somme).add(bi);   // valeur de b_i pour que Σ == tête
+            if (cible.signum() <= 0) {
+                continue;
+            }
+            String fb = fragmentPrefixe(bi, cible);
+            if (fb != null) {
+                List<BigDecimal> corr = new ArrayList<>(benefs);
+                corr.set(i, cible);
+                return new Reconciliation(tete, corr, fb);
+            }
+        }
+        return null;
+    }
+
+    /** Préfixe de tête (1-3 chiffres) si {@code gros == <fragment> ++ petit} (mêmes décimales) ; sinon {@code null}. */
+    private static String fragmentPrefixe(BigDecimal gros, BigDecimal petit) {
+        String g = gros.movePointRight(2).toBigInteger().toString();
+        String p = petit.movePointRight(2).toBigInteger().toString();
+        if (g.length() <= p.length() || !g.endsWith(p)) {
+            return null;
+        }
+        String frag = g.substring(0, g.length() - p.length());
+        return frag.length() >= 1 && frag.length() <= 3 ? frag : null;
+    }
+
+    /** Montants d'une colonne des bénéficiaires (ancien si {@code anc}, sinon nouveau). */
+    private static List<BigDecimal> montantsBenef(List<BeneficiaireImport> benef, boolean anc) {
+        List<BigDecimal> out = new ArrayList<>();
+        for (BeneficiaireImport b : benef) {
+            out.add(anc ? b.ancMontBenef() : b.nouvMontBenef());
+        }
+        return out;
+    }
+
+    /** Reconstruit les bénéficiaires en remplaçant la colonne (ancien si {@code anc}, sinon nouveau). */
+    private static List<BeneficiaireImport> avecMontantsBenef(List<BeneficiaireImport> benef,
+            List<BigDecimal> montants, boolean anc) {
+        List<BeneficiaireImport> out = new ArrayList<>();
+        for (int i = 0; i < benef.size(); i++) {
+            BeneficiaireImport b = benef.get(i);
+            out.add(anc ? new BeneficiaireImport(b.soaCode(), b.numCompte(), montants.get(i), b.nouvMontBenef())
+                    : new BeneficiaireImport(b.soaCode(), b.numCompte(), b.ancMontBenef(), montants.get(i)));
+        }
+        return out;
     }
 
     private static List<String[]> tokeniser(String s) {
