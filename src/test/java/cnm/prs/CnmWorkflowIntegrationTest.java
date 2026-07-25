@@ -3495,6 +3495,44 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("Saisie PPM — mode + suffixe de source (RPI/PIP) collé au libellé : résolu au noyau, jamais RPI→PIP, aucun doublon")
+    void saisiePpm_modeSuffixeSource() throws Exception {
+        natureRepository.save(new Nature(1, "Travaux", null));
+        capmRepository.save(new Capm(1, "LANCEMENT", 1));
+        ModePassation aoo = new ModePassation(1, "Appel d'offres ouvert", null, null, null, null);
+        aoo.setDeclencheAgpm(true);
+        modePassationRepository.save(aoo);
+        modePassationRepository.save(new ModePassation(4, "Consultation des Prix Ouverte", null, null, null, null));
+        modePassationRepository.save(new ModePassation(8, "CONSULTATION DE PRIX OUVERTE PIP", null, null, null, null));
+        long modesAvant = modePassationRepository.count();   // 3 : aucun ne doit être créé à la volée
+
+        // Trois marchés dont le modeLibelle porte un suffixe de source collé (cas réel PDF/ré-import).
+        // CPO-RPI : suffixe RPI (aucune variante RPI) → mode BASE idMode=4 (JAMAIS idMode=8 « … PIP »).
+        // CPO-PIP : suffixe PIP (source exacte) → variante distincte idMode=8.
+        // AOO-RPI : coquille singulier + RPI → idMode=1 déclencheur d'AGPM, résolu (pas de création sans le drapeau).
+        String body = "{\"idEntiteContract\":1,\"exercice\":2026,\"signataire\":\"RABE\",\"dateSignature\":\"2026-01-10\",\"reference\":\"PPM-SRC\","
+                + "\"marches\":["
+                + "{\"designationMarche\":\"CPO-RPI\",\"montEstim\":500000000,\"idNature\":1,\"modeLibelle\":\"CONSULTATION DE PRIX OUVERTE RPI\",\"statut\":\"PREVU\","
+                + "\"processus\":[{\"idCapm\":1,\"dateDebut\":\"2026-02-01\",\"dateFin\":\"2026-06-30\"}]},"
+                + "{\"designationMarche\":\"CPO-PIP\",\"montEstim\":400000000,\"idNature\":1,\"modeLibelle\":\"CONSULTATION DE PRIX OUVERTE PIP\",\"statut\":\"PREVU\","
+                + "\"processus\":[{\"idCapm\":1,\"dateDebut\":\"2026-02-01\",\"dateFin\":\"2026-06-30\"}]},"
+                + "{\"designationMarche\":\"AOO-RPI\",\"montEstim\":600000000,\"idNature\":1,\"modeLibelle\":\"APPEL D'OFFRE OUVERT RPI\",\"statut\":\"PREVU\","
+                + "\"processus\":[{\"idCapm\":1,\"dateDebut\":\"2026-02-01\",\"dateFin\":\"2026-06-30\"}]}]}";
+        String resp = mvc.perform(post("/api/saisies/ppm").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        int idDoss = com.jayway.jsonpath.JsonPath.read(resp, "$.idDossier");
+
+        // Aucun mode créé à la volée : les trois libellés se résolvent au référentiel existant.
+        org.junit.jupiter.api.Assertions.assertEquals(modesAvant, modePassationRepository.count());
+
+        mvc.perform(get("/api/marches").header("Authorization", tokenPrmp))
+                .andExpect(jsonPath("$[?(@.idDossier==" + idDoss + " && @.designationMarche=='CPO-RPI')].idMode", hasItem(4)))
+                .andExpect(jsonPath("$[?(@.idDossier==" + idDoss + " && @.designationMarche=='CPO-PIP')].idMode", hasItem(8)))
+                .andExpect(jsonPath("$[?(@.idDossier==" + idDoss + " && @.designationMarche=='AOO-RPI')].idMode", hasItem(1)));
+    }
+
+    @Test
     @DisplayName("Saisie PPM — numCompte absent de tr_compte : créé à la volée (pas de 409 FK sur t_marche.NUM_COMPTE)")
     void saisiePpm_compteALaVolee() throws Exception {
         natureRepository.save(new Nature(1, "Travaux", null));

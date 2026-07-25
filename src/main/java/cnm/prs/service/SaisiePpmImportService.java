@@ -507,7 +507,8 @@ public class SaisiePpmImportService {
         } else if (natureRef != null) {
             natureCanon = natureRef.getLibelle();
         }
-        ModePassation modeRef = resoudreParLibelle(modePassationRepository.findAll(),
+        // Mode : résolution tolérante au suffixe de source de financement (RPI/PIP) — cf. LibelleNormalisation.
+        ModePassation modeRef = LibelleNormalisation.resoudreMode(modePassationRepository.findAll(),
                 ModePassation::getLibelle, modeLibelle);
         Integer idMode = modeRef == null ? null : modeRef.getIdMode();
         String modeCanon = modeLibelle;
@@ -684,14 +685,15 @@ public class SaisiePpmImportService {
      * La suggestion n'auto-résout jamais (pas de fuzzy silencieux) : elle guide la PRMP.
      */
     private String avertissementModeNonResolu(String modeLibelle) {
-        String cible = LibelleNormalisation.normaliser(modeLibelle);
+        // Suggestion calculée sur le NOYAU (suffixe de source retiré) pour ne pas biaiser la distance.
+        String cible = LibelleNormalisation.separerSource(modeLibelle)[0];
         String suggestion = null;
         int meilleure = Integer.MAX_VALUE;
         for (ModePassation m : modePassationRepository.findAll()) {
             if (m.getLibelle() == null) {
                 continue;
             }
-            int d = LibelleNormalisation.distance(cible, LibelleNormalisation.normaliser(m.getLibelle()));
+            int d = LibelleNormalisation.distance(cible, LibelleNormalisation.separerSource(m.getLibelle())[0]);
             if (d > 0 && d <= SEUIL_SUGGESTION && d < meilleure) {
                 meilleure = d;
                 suggestion = m.getLibelle();

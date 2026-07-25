@@ -1279,8 +1279,17 @@ volumineux → **400** (annule la création si multipart) ; **404** si l'UGPM ou
 > accents + apostrophes/espaces typographiques + **pluriels simples** — un « s » final par token), **même
 > fonction** que la création-à-la-volée du POST (source unique). En cas de résolution, `modeLibelle` /
 > `natureLibelle` renvoient le **libellé canonique du référentiel** (pas le texte brut du PDF) — les aides
-> front (badge/bandeau AGPM, datalist) comparent au libellé exact. Mode **non résolu** malgré la
-> normalisation : si un mode du référentiel est **proche** (Levenshtein 1..3 sur formes normalisées),
+> front (badge/bandeau AGPM, datalist) comparent au libellé exact.
+> **Suffixe de source de financement (règle ajoutée 2026-07-25)** : la résolution du **mode** (import **et**
+> création-à-la-volée, source unique `LibelleNormalisation`) **ignore un token de source de financement en
+> suffixe** — `RPI`, `PIP`. « ACHAT DIRECT **RPI** » → « Achat Direct » (idMode=5) ; « APPEL D'OFFRE OUVERT
+> **RPI** » → « Appel d'offres ouvert » (idMode=1, **déclencheur AGPM** — résolu, **jamais recréé** sans le
+> drapeau). Désambiguïsation : **source exacte d'abord** (« … **PIP** » → la variante PIP `idMode=8`), sinon
+> **repli sur le mode base** sans suffixe (« … **RPI** » → `idMode=4`, **jamais** `idMode=8` « … PIP » :
+> `RPI ≠ PIP`). `PPP` **n'est pas** une source (mode à part entière « MARCHE DE GRE A GRE PPP », `idMode=6`).
+> Mode **non résolu** malgré la
+> normalisation : si un mode du référentiel est **proche** (Levenshtein 1..3 sur formes normalisées, **noyau
+> sans suffixe de source**),
 > l'avertissement est enrichi — « Mode « X » non trouvé au référentiel — **vouliez-vous dire « Y » ?** » ;
 > jamais d'auto-résolution fuzzy. PDF illisible / non-PDF / sans texte → **400** (message
 > clair, pas de données partielles silencieuses).

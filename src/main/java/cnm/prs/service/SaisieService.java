@@ -418,15 +418,13 @@ public class SaisieService {
         if (libelle == null || libelle.isBlank()) {
             return null;
         }
-        String cible = LibelleNormalisation.normaliser(libelle);
         List<ModePassation> refs = modePassationRepository.findAll();
-        Integer existant = refs.stream()
-                .filter(md -> md.getLibelle() != null
-                        && LibelleNormalisation.normaliser(md.getLibelle()).equals(cible))
-                .map(ModePassation::getIdMode).findFirst().orElse(null);
+        // Résolution tolérante au suffixe de source de financement (RPI/PIP) — source unique LibelleNormalisation.
+        ModePassation existant = LibelleNormalisation.resoudreMode(refs, ModePassation::getLibelle, libelle);
         if (existant != null) {
-            return existant;
+            return existant.getIdMode();
         }
+        String cible = LibelleNormalisation.separerSource(libelle)[0];
         int nouvelId = refs.stream().map(ModePassation::getIdMode).filter(java.util.Objects::nonNull)
                 .max(Integer::compareTo).orElse(0) + 1;
         ModePassation md = new ModePassation();
@@ -451,7 +449,7 @@ public class SaisieService {
             if (!Boolean.TRUE.equals(m.getDeclencheAgpm()) || m.getLibelle() == null) {
                 continue;
             }
-            int d = LibelleNormalisation.distance(cibleNormalisee, LibelleNormalisation.normaliser(m.getLibelle()));
+            int d = LibelleNormalisation.distance(cibleNormalisee, LibelleNormalisation.separerSource(m.getLibelle())[0]);
             if (d > 0 && d <= SaisiePpmImportService.SEUIL_SUGGESTION) {
                 log.warn("Mode créé à la volée « {} » (id {}) proche du mode déclencheur d'AGPM « {} » (id {}, "
                         + "distance {}) — vérifier s'il s'agit d'une coquille (fusion / DECLENCHE_AGPM à arbitrer).",
