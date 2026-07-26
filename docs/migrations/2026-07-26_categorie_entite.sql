@@ -19,6 +19,12 @@ INSERT INTO "tr_categorie_entite" ("LIBELLE", "NIVEAU_HIERARCHIQUE") VALUES
     ('DIVISION',             6)
 ON CONFLICT ("LIBELLE") DO NOTHING;
 
--- NB : les 3 entités actuelles (MINISTERE x2, DIRECTION) référencent déjà des catégories du seed.
--- Leur NIVEAU_HIERARCHIQUE n'est PAS rétro-corrigé ici (ex. entité 4 = DIRECTION mais niveau 1) :
--- il sera aligné au prochain PUT /api/entite-contracts (dérivation), ou via un UPDATE manuel si souhaité.
+-- Alignement des entités existantes : NIVEAU_HIERARCHIQUE dérivé de la catégorie (même règle que
+-- EntiteContractService.deriverNiveau, appliquée aux données déjà en base). Idempotent : ne touche QUE les
+-- lignes réellement désalignées ; une entité sans catégorie ou dont la catégorie est hors référentiel est
+-- laissée intacte (jointure interne).
+UPDATE "tr_entite_contract" e
+   SET "NIVEAU_HIERARCHIQUE" = c."NIVEAU_HIERARCHIQUE"
+  FROM "tr_categorie_entite" c
+ WHERE e."CATEGORIE_ENTITE" = c."LIBELLE"
+   AND e."NIVEAU_HIERARCHIQUE" IS DISTINCT FROM c."NIVEAU_HIERARCHIQUE";
