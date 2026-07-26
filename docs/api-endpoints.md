@@ -401,7 +401,7 @@ de `categorieEntite`).
 | DELETE | /api/categorie-entites/{id} | — | — | 204, 403, 404 | ADMINISTRATEUR |
 
 `{id}` = libelle (string). **Seed** (`docs/migrations/2026-07-26_categorie_entite.sql`) : MINISTERE→1,
-SECRETARIAT GENERAL→2, DIRECTION GENERALE→3, DIRECTION→4, SERVICE→5, DIVISION→6.
+CABINET→2, SECRETARIAT GENERAL→2, DIRECTION GENERALE→3, DIRECTION→4, SERVICE→5, DIVISION→6.
 
 **Exemple — requête**
 ```json

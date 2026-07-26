@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS "tr_categorie_entite" (
 
 INSERT INTO "tr_categorie_entite" ("LIBELLE", "NIVEAU_HIERARCHIQUE") VALUES
     ('MINISTERE',            1),
+    ('CABINET',              2),   -- directement sous le Ministre, même niveau que le Secrétariat Général
     ('SECRETARIAT GENERAL',  2),
     ('DIRECTION GENERALE',   3),
     ('DIRECTION',            4),
