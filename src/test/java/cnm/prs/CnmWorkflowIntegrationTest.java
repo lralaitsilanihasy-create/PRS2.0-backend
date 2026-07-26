@@ -3653,6 +3653,26 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("Entité contractante — PUT persiste idLocalite (régression : le PUT l'ignorait, désormais aligné sur le POST)")
+    void entiteContract_putPersisteIdLocalite() throws Exception {
+        // POST avec idLocalite=ANT (persiste déjà), puis PUT vers TMS → doit persister aussi.
+        String post = "{\"idEntiteContract\":250,\"libelleEntite\":\"E\",\"adresse\":\"A\",\"idOrganigramme\":1,\"idLocalite\":\"ANT\"}";
+        mvc.perform(post("/api/entite-contracts").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content(post))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.idLocalite").value("ANT"));
+        String put = "{\"idEntiteContract\":250,\"libelleEntite\":\"E\",\"adresse\":\"A\",\"idOrganigramme\":1,\"idLocalite\":\"TMS\"}";
+        mvc.perform(put("/api/entite-contracts/250").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content(put))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.idLocalite").value("TMS"));      // réponse du PUT
+        // Relecture (GET) : idLocalite bien persisté.
+        mvc.perform(get("/api/entite-contracts/250").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.idLocalite").value("TMS"));
+    }
+
+    @Test
     @DisplayName("Saisie PPM — numCompte absent de tr_compte : créé à la volée (pas de 409 FK sur t_marche.NUM_COMPTE)")
     void saisiePpm_compteALaVolee() throws Exception {
         natureRepository.save(new Nature(1, "Travaux", null));

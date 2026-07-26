@@ -70,6 +70,7 @@ public class EntiteContractService {
         existing.setCategorieEntite(dto.getCategorieEntite());
         existing.setIdOrganigramme(dto.getIdOrganigramme());
         existing.setIdEntiteParent(dto.getIdEntiteParent());
+        existing.setIdLocalite(dto.getIdLocalite());   // ⚠️ correctif 2026-07-26 : le PUT ignorait idLocalite (aligné sur le POST/mapper)
         deriverNiveau(existing);   // niveauHierarchique DÉRIVÉ de la catégorie (source unique) — valeur client ignorée
         return EntiteContractMapper.toDto(repository.save(existing));
     }
