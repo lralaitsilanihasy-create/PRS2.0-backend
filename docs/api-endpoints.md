@@ -1200,7 +1200,7 @@ volumineux → **400** (annule la création si multipart) ; **404** si l'UGPM ou
 > Forme : `{ exercice, dateSignature` (« Fait à… le… » sinon **date d'établissement**, `null` sinon)`, autoriteContractante,
 > idEntiteContract` (résolu depuis l'autorité si trouvé, sinon `null` → la PRMP choisit)`, marches[]`
 > `{ designationMarche, formeMarche, montEstim, nouvMontEstim, idNature+natureLibelle, idMode+modeLibelle, financement,`
-> `beneficiaires[]` `{ soaCode, numCompte, ancMontBenef, nouvMontBenef }, previsions[]` `{ processus, dateDebut },`
+> `beneficiaires[]` `{ soaCode, soaLibelle, numCompte, ancMontBenef, nouvMontBenef }, previsions[]` `{ processus, dateDebut },`
 > `lots[]` `{ designationLot, montLot?, qteLot?, uniteLot? } },`
 > `avertissements[] }`. ⚠️ **`lots[]` — extraction best-effort depuis la désignation (règle révisée 2026-07-17,
 > **généralisée 2026-07-22** — remplace « toujours vide »)** : quand la désignation décrit l'allotissement, le
@@ -1299,9 +1299,27 @@ volumineux → **400** (annule la création si multipart) ; **404** si l'UGPM ou
 > `MONTANT`/`ESTIMATIF`/`INITIAL` etc. sur des lignes séparées — est ainsi ignoré) et se termine à la **dernière**
 > « **Fait à … le …** » (ou « La personne responsable »). Chaque **enregistrement** (délimité par une `NATURE`) est
 > **recomposé** (lignes jointes) puis lu **par position** : `NATURE` → `OBJET` (avant le 1ᵉʳ montant) →
-> `montEstim [nouvMontEstim]` → `mode` (**multi-mots/multi-lignes**, ex. « Consultation de prix ouverte ») +
-> `financement` (dernier mot avant le 1ᵉʳ SOA, ex. `RPI`/`PIP`) → **codes SOA** → `compte` → **montants
-> bénéficiaires** → **3 prévisions** `LANCEMENT`/`OUVERTURE`/`ATTRIBUTION` (`dd/MM/yyyy` → ISO).
+> `montEstim [nouvMontEstim]` → **`mode` | `financement` | `service bénéficiaire`** (voir ci-dessous) → **codes
+> SOA** → `compte` → **montants bénéficiaires** → **3 prévisions** `LANCEMENT`/`OUVERTURE`/`ATTRIBUTION`
+> (`dd/MM/yyyy` → ISO).
+>
+> **⚠️ Découpage MODE | FINANCEMENT | SERVICE (règle révisée 2026-07-26 — SIGMP).** Ces trois colonnes sont
+> **aplaties dans un même flux de mots** (cellules **multi-lignes** : mode et service enroulés sur plusieurs
+> lignes physiques, financement court entre les deux). Un **libellé de FINANCEMENT** (`RPI`/`PIP`/`FR` —
+> constante extensible, distincte du suffixe de mode `{RPI,PIP}`) délimite : **mode AVANT**, **financement = ce
+> token**, **service APRÈS** (→ `beneficiaires[].soaLibelle`). On coupe sur la **dernière** source de la 1ʳᵉ plage
+> contiguë : un mode à variante suffixée (« … **PIP** » = idMode 8) collé au vrai financement (« … PIP **RPI** »)
+> **conserve son PIP**, financement = RPI ; un `FR` plus loin dans un service n'est pas capté. Sans financement
+> reconnu → repli sur l'ancienne heuristique (dernier mot avant le 1ᵉʳ SOA, ex. `FCE` suivi d'un SOA codé). Un
+> fragment d'en-tête enroulé (`FINAN-`, `NOUVEAU`, …) n'est plus filtré comme préfixe (« **Finan**cier »,
+> « **Nouveau**x » restaient perdus) : filtrage **ancré en fin de ligne** uniquement.
+>
+> **`soaLibelle` (règle ajoutée 2026-07-26).** Quand la colonne « SERVICE BÉNÉFICIAIRE » est en **texte libre**
+> (sans code SOA, ex. « Service Administratif et Financier », « TOUT SERVICE »), le nom alimente
+> `beneficiaires[].soaLibelle` (`soaCode` reste `null`). À la **persistance** (`POST /api/saisies/ppm`), le
+> service est **résolu-ou-créé par libellé** dans `tr_soa_beneficiaire` (dé-doublonnage sur libellé normalisé ;
+> à la création, code SOA **dérivé du libellé**, slug ≤ 25). Un `soaCode` explicite (ancien format) reste résolu
+> par PK.
 >
 > **Multi-bénéficiaires.** Un marché peut porter **plusieurs bénéficiaires** (colonnes SOA/compte/montants aplaties
 > verticalement par l'extraction) : `n` codes SOA et `K` montants ⇒ `K = 2n` (ancien **et** nouveau montant par
@@ -1368,9 +1386,11 @@ volumineux → **400** (annule la création si multipart) ; **404** si l'UGPM ou
 > `TYPE_ACTION=CREATION_MODE_PROCHE_AGPM` (pas d'avertissement de réponse : `DossierDto` n'a pas de champ
 > avertissements) — pour arbitrage Admin (fusion / coche du drapeau).
 > **Bénéficiaires par marché (règle ajoutée).** `beneficiaires[]` (optionnel) = une ligne **`t_service_beneficiaire`**
-> par élément `{ soaCode, numCompte, ancMontBenef, nouvMontBenef }`. `soaCode` est **résolu-ou-créé** dans
-> `tr_soa_beneficiaire` (PK = `soaCode`, audit `CREATION_A_LA_VOLEE`), `numCompte` dans `tr_compte` — même logique
-> (réutilisation, jamais suppression). **Cohérence des montants** (⚠️ **uniquement si `beneficiaires[]` non vide**,
+> par élément `{ soaCode, soaLibelle, numCompte, ancMontBenef, nouvMontBenef }`. Le service (SOA) est
+> **résolu-ou-créé** dans `tr_soa_beneficiaire` (audit `CREATION_A_LA_VOLEE`) : par **PK** si `soaCode` fourni
+> (ancien format), sinon par **libellé normalisé** si seul `soaLibelle` est fourni (⚠️ règle ajoutée 2026-07-26,
+> texte libre SIGMP « TOUT SERVICE » — code SOA **dérivé du libellé**, slug ≤ 25) ; `numCompte` dans `tr_compte` —
+> même logique (réutilisation, jamais suppression). **Cohérence des montants** (⚠️ **uniquement si `beneficiaires[]` non vide**,
 > **égalité exacte** — Ariary entiers, pas de tolérance) : `Σ ancMontBenef = montEstim` ; et si `nouvMontEstim` est
 > **fourni**, chaque bénéficiaire doit porter `nouvMontBenef` et `Σ nouvMontBenef = nouvMontEstim`. Écart → **400**
 > ciblé : `{ "erreurs": [ { "champ": "marches[i].beneficiaires", "message": "La somme des montants par bénéficiaire

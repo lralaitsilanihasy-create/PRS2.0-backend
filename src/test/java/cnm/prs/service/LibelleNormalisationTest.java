@@ -1,6 +1,7 @@
 package cnm.prs.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -86,6 +87,19 @@ class LibelleNormalisationTest {
         assertNull(resoudre("RPI"));        // seulement une source → pas un mode
         assertNull(resoudre(""));
         assertNull(resoudre(null));
+    }
+
+    @Test
+    @DisplayName("estSourceFinancement (découpage) : RPI/PIP/FR reconnus (casse/accents ignorés) ; FCE/DG/mot non")
+    void estSourceFinancement() {
+        assertTrue(LibelleNormalisation.estSourceFinancement("RPI"));
+        assertTrue(LibelleNormalisation.estSourceFinancement("pip"));
+        assertTrue(LibelleNormalisation.estSourceFinancement("FR"));      // ajouté pour le corpus SIGMP (163)
+        assertFalse(LibelleNormalisation.estSourceFinancement("FCE"));    // repli dernier-mot (SOA codé ensuite)
+        assertFalse(LibelleNormalisation.estSourceFinancement("DG"));     // service, pas financement
+        assertFalse(LibelleNormalisation.estSourceFinancement("Financier"));
+        assertFalse(LibelleNormalisation.estSourceFinancement(null));
+        assertFalse(LibelleNormalisation.estSourceFinancement(""));
     }
 
     @Test

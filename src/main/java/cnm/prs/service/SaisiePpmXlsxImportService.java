@@ -62,6 +62,9 @@ public class SaisiePpmXlsxImportService {
         COLONNES.put("mode", new String[] { "mode", "modepassation", "modelibelle" });
         COLONNES.put("financement", new String[] { "financement" });
         COLONNES.put("soa", new String[] { "soa", "soacode", "servicebeneficiaire" });
+        // Nom du service bénéficiaire en texte libre (sans code) — colonne facultative, distincte du code SOA.
+        COLONNES.put("serviceLibelle", new String[] { "servicebeneficiairelibelle", "soalibelle", "libelleservice",
+                "nomservice" });
         COLONNES.put("compte", new String[] { "compte", "numcompte" });
         COLONNES.put("montantBenef", new String[] { "montantbeneficiaire", "montantparbeneficiaire", "ancmontbenef" });
         COLONNES.put("nouvMontantBenef", new String[] { "nouveaumontantbeneficiaire", "nouvmontbenef" });
@@ -171,7 +174,7 @@ public class SaisiePpmXlsxImportService {
         // Bénéficiaire unique sans montant explicite → défaut = montant estimatif (invariant satisfait).
         if (benef.size() == 1 && benef.get(0).ancMontBenef() == null && montEstim != null) {
             BeneficiaireImport b = benef.get(0);
-            benef = List.of(new BeneficiaireImport(b.soaCode(), b.numCompte(), montEstim, b.nouvMontBenef()));
+            benef = List.of(new BeneficiaireImport(b.soaCode(), b.soaLibelle(), b.numCompte(), montEstim, b.nouvMontBenef()));
         }
         List<PrevisionImport> prev = List.of(
                 new PrevisionImport("LANCEMENT", dates.size() > 0 ? dates.get(0) : null),
@@ -181,16 +184,18 @@ public class SaisiePpmXlsxImportService {
                 List.copyOf(benef), prev, lots, forme, false, avert);
     }
 
-    /** Bénéficiaire d'une ligne (null si ni SOA, ni compte, ni montant bénéficiaire). */
+    /** Bénéficiaire d'une ligne (null si ni SOA, ni service, ni compte, ni montant bénéficiaire). */
     private BeneficiaireImport beneficiaire(Row row, Map<String, Integer> col) {
         String soa = texte(row, col.get("soa"));
+        String service = texte(row, col.get("serviceLibelle"));
         String compte = texte(row, col.get("compte"));
         BigDecimal anc = montant(row, col.get("montantBenef"));
         BigDecimal nouv = montant(row, col.get("nouvMontantBenef"));
-        if ((soa == null || soa.isBlank()) && (compte == null || compte.isBlank()) && anc == null && nouv == null) {
+        if (vide(soa) && vide(service) && (compte == null || compte.isBlank()) && anc == null && nouv == null) {
             return null;
         }
-        return new BeneficiaireImport(vide(soa) ? null : soa.trim(), vide(compte) ? null : compte.trim(), anc, nouv);
+        return new BeneficiaireImport(vide(soa) ? null : soa.trim(), vide(service) ? null : service.trim(),
+                vide(compte) ? null : compte.trim(), anc, nouv);
     }
 
     private static List<LotImport> parserLots(String cellule) {

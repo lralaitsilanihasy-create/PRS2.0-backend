@@ -38,6 +38,15 @@ public final class LibelleNormalisation {
      */
     private static final Set<String> SOURCES_FINANCEMENT = Set.of("RPI", "PIP");
 
+    /**
+     * ⚠️ Règle ajoutée (2026-07-26) — libellés de <strong>colonne FINANCEMENT</strong> reconnus par l'extraction
+     * PDF pour délimiter MODE | FINANCEMENT | SERVICE (cellules multi-lignes SIGMP). <strong>Distinct</strong> et
+     * plus large que {@link #SOURCES_FINANCEMENT} (suffixe de <em>mode</em>) : ajoute {@code FR} (« ACHAT DIRECT
+     * FR TOUT SERVICE » → financement {@code FR}, service « TOUT SERVICE »). Décision utilisateur : constante
+     * extensible (une ligne) ; une liste administrable en base reste possible ultérieurement.
+     */
+    private static final Set<String> LIBELLES_FINANCEMENT = Set.of("RPI", "PIP", "FR");
+
     /** Forme canonique de comparaison : accents/casse/séparateurs neutralisés + « s » finaux par token. */
     public static String normaliser(String s) {
         if (s == null) {
@@ -70,6 +79,18 @@ public final class LibelleNormalisation {
             sb.append(token);
         }
         return sb.toString();
+    }
+
+    /**
+     * ⚠️ Règle ajoutée — vrai si {@code token} est un {@link #LIBELLES_FINANCEMENT libellé de colonne
+     * FINANCEMENT} reconnu (RPI/PIP/FR), accents/casse/séparateurs neutralisés. Sert à l'extraction PDF pour
+     * délimiter les colonnes MODE | FINANCEMENT | SERVICE aplaties dans un même flux de mots.
+     */
+    public static boolean estSourceFinancement(String token) {
+        if (token == null || token.isBlank()) {
+            return false;
+        }
+        return LIBELLES_FINANCEMENT.contains(concatSansPluriel(jetons(deaccentueMajuscule(token))));
     }
 
     /**

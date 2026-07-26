@@ -83,18 +83,25 @@ public class SaisiePpmImportService {
      * {@code montEstim == Σ bénéficiaires} corrige le montant s'il se colle au montant.</p>
      */
     private static final Pattern BRUIT_PAGE = Pattern.compile(
-            "(?i)^\\s*(nature\\s+objet"
+            // Étiquettes d'en-tête MULTI-MOTS (préfixe de ligne — aucune ligne de données ne débute ainsi).
+            "(?i)^\\s*(?:nature\\s+objet"
                     + "|montant\\s+estimatif"
                     + "|nouveau\\s+montant"
                     + "|mode\\s+de\\s+passation"
                     + "|informations\\s+sur\\s+le\\s+b[eé]n[eé]ficiaire"
                     + "|service\\s+b[eé]n[eé]ficiaire"
-                    + "|montant|estimatif|initial|nouveau|cement|finan|nelle|ment|des\\s+plis|d.attri|bution|ouveture|prevision"
+                    + "|estimatif\\s+par"
                     + "|powered\\s+by"
                     + "|page\\s+\\d"
                     + "|fait\\s+[aàâä]\\b"
-                    + "|la\\s+personne\\s+responsable"
-                    + "|\\d{1,3}\\s*/\\s*\\d{1,3}\\s*$)");
+                    + "|la\\s+personne\\s+responsable)"
+                    // ⚠️ Fragments d'en-tête ENROULÉS (multi-pages), ancrés en FIN DE LIGNE : la ligne doit se
+                    // RÉDUIRE au fragment. Sinon un mot de donnée qui les contient en préfixe serait supprimé à
+                    // tort — « Financier » ⊃ « finan », « Nouveauté » ⊃ « nouveau » (bug 460 SIGMP : le dernier
+                    // mot du service, isolé sur sa ligne physique, disparaissait).
+                    + "|^\\s*(?:montant|estimatif|initial|nouveau|cement|finan-?|nelle(?:\\s+de)?|ment"
+                    + "|des\\s+plis|d.attri-?|bution|ouveture|pr[eé]vision-?)\\s*$"
+                    + "|^\\s*\\d{1,3}\\s*/\\s*\\d{1,3}\\s*$");
     /** En-tête de page courant du PPM (ex. « PPM_26-488-0078 page 2/2 18/06/2026 05:55 »). */
     private static final Pattern PAGE_COURANTE = Pattern.compile("(?i)\\bpage\\s+\\d+\\s*/\\s*\\d+");
 
@@ -452,7 +459,8 @@ public class SaisiePpmImportService {
         String financement = s.financement();
         String modeLibelle = s.modeLibelle();
 
-        List<BeneficiaireImport> benef = construireBeneficiaires(s.soas(), s.compte(), s.mtsBenef(), natureLibelle, avert);
+        List<BeneficiaireImport> benef = construireBeneficiaires(s.soas(), s.serviceLibelle(), s.compte(),
+                s.mtsBenef(), natureLibelle, avert);
 
         // ⚠️ Règle ajoutée (2026-07-22, généralisée) — GARDE D'INVARIANT SYMÉTRIQUE « tête == Σ bénéficiaires »,
         // par colonne numérique (ancien PUIS nouveau). Un fragment d'objet collé par PDFBox contamine soit le
@@ -637,7 +645,7 @@ public class SaisiePpmImportService {
      * (au moins un code SOA ou un compte) — critère du repli d'ancre.
      */
     private record Structure(int ancre, List<BigDecimal> mtsTete, String modeLibelle, String financement,
-            List<String> soas, String compte, List<BigDecimal> mtsBenef) {
+            String serviceLibelle, List<String> soas, String compte, List<BigDecimal> mtsBenef) {
 
         boolean plausible() {
             return !soas.isEmpty() || compte != null;
@@ -658,8 +666,36 @@ public class SaisiePpmImportService {
             mots.add(toks.get(i)[1]);
             i++;
         }
-        String financement = mots.isEmpty() ? null : mots.get(mots.size() - 1);
-        String modeLibelle = mots.size() <= 1 ? null : String.join(" ", mots.subList(0, mots.size() - 1));
+        // ⚠️ Règle ajoutée (2026-07-25, généralisée 2026-07-26) — colonnes MODE | FINANCEMENT | SERVICE
+        // BÉNÉFICIAIRE aplaties dans un même flux de mots (cellules multi-lignes, SIGMP « 460 »/« 163 »). Un
+        // libellé de FINANCEMENT (RPI/PIP/FR) délimite : mode AVANT, financement = ce token, service (→ soaLibelle)
+        // APRÈS. On repère la 1ʳᵉ PLAGE CONTIGUË de tokens-financement et on coupe sur son DERNIER : quand le mode
+        // porte lui-même un suffixe de source (variante « … PIP » = idMode 8) collé au vrai financement
+        // (« … PIP RPI »), le mode garde son PIP et financement = RPI ; et un « FR » plus loin dans un service
+        // n'est pas capté (hors de la plage contiguë). Ancien format (SOA codé) : la source est le dernier mot →
+        // service vide, comme avant. Sans financement reconnu : repli sur l'ancienne heuristique (dernier mot).
+        int s0 = -1;
+        for (int k = 0; k < mots.size(); k++) {
+            if (LibelleNormalisation.estSourceFinancement(mots.get(k))) {
+                s0 = k;
+                break;
+            }
+        }
+        String modeLibelle;
+        String financement;
+        String serviceLibelle = null;
+        if (s0 >= 0) {
+            int sk = s0;
+            while (sk + 1 < mots.size() && LibelleNormalisation.estSourceFinancement(mots.get(sk + 1))) {
+                sk++;
+            }
+            modeLibelle = sk == 0 ? null : String.join(" ", mots.subList(0, sk));
+            financement = mots.get(sk);
+            serviceLibelle = sk + 1 < mots.size() ? String.join(" ", mots.subList(sk + 1, mots.size())) : null;
+        } else {
+            financement = mots.isEmpty() ? null : mots.get(mots.size() - 1);
+            modeLibelle = mots.size() <= 1 ? null : String.join(" ", mots.subList(0, mots.size() - 1));
+        }
         List<String> soas = new ArrayList<>();
         while (i < toks.size() && "soa".equals(toks.get(i)[0])) {
             soas.add(toks.get(i)[1]);
@@ -676,7 +712,7 @@ public class SaisiePpmImportService {
                 mtsBenef.add(parseMontant(toks.get(i)[1]));
             }
         }
-        return new Structure(ancre, mtsTete, modeLibelle, financement, soas, compte, mtsBenef);
+        return new Structure(ancre, mtsTete, modeLibelle, financement, serviceLibelle, soas, compte, mtsBenef);
     }
 
     /**
@@ -775,13 +811,15 @@ public class SaisiePpmImportService {
      * Reconstruit les bénéficiaires : un par code SOA, compte partagé, avec l'alignement des montants
      * ({@code 2n} montants ⇒ ancien + nouveau par bénéficiaire ; {@code n} montants ⇒ ancien seul).
      */
-    private List<BeneficiaireImport> construireBeneficiaires(List<String> soas, String compte,
+    private List<BeneficiaireImport> construireBeneficiaires(List<String> soas, String serviceLibelle, String compte,
             List<BigDecimal> montants, String nat, List<String> avert) {
+        String service = serviceLibelle == null || serviceLibelle.isBlank() ? null : serviceLibelle.trim();
         List<BeneficiaireImport> benef = new ArrayList<>();
         int n = soas.size();
         if (n == 0) {
-            if (compte != null || !montants.isEmpty()) {
-                benef.add(new BeneficiaireImport(null, compte,
+            // Aucun SOA codé : un bénéficiaire unique porté par le service textuel (→ soaLibelle) et/ou le compte.
+            if (compte != null || !montants.isEmpty() || service != null) {
+                benef.add(new BeneficiaireImport(null, service, compte,
                         montants.size() > 0 ? montants.get(0) : null,
                         montants.size() > 1 ? montants.get(1) : null));
             }
@@ -800,7 +838,9 @@ public class SaisiePpmImportService {
             anc = montants;
         }
         for (int k = 0; k < n; k++) {
-            benef.add(new BeneficiaireImport(soas.get(k), compte,
+            // Un service textuel unique s'attache au seul SOA codé (n==1) ; ambigu si plusieurs → non attaché.
+            String lib = n == 1 ? service : null;
+            benef.add(new BeneficiaireImport(soas.get(k), lib, compte,
                     k < anc.size() ? anc.get(k) : null,
                     nouv != null && k < nouv.size() ? nouv.get(k) : null));
         }
@@ -897,8 +937,9 @@ public class SaisiePpmImportService {
         List<BeneficiaireImport> out = new ArrayList<>();
         for (int i = 0; i < benef.size(); i++) {
             BeneficiaireImport b = benef.get(i);
-            out.add(anc ? new BeneficiaireImport(b.soaCode(), b.numCompte(), montants.get(i), b.nouvMontBenef())
-                    : new BeneficiaireImport(b.soaCode(), b.numCompte(), b.ancMontBenef(), montants.get(i)));
+            out.add(anc
+                    ? new BeneficiaireImport(b.soaCode(), b.soaLibelle(), b.numCompte(), montants.get(i), b.nouvMontBenef())
+                    : new BeneficiaireImport(b.soaCode(), b.soaLibelle(), b.numCompte(), b.ancMontBenef(), montants.get(i)));
         }
         return out;
     }

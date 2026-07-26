@@ -85,6 +85,13 @@ public record SaisiePpmImportResult(
     /** Bénéficiaire d'une ligne : compte + montant sont par bénéficiaire. */
     public record BeneficiaireImport(
             String soaCode,
+            /**
+             * ⚠️ Règle ajoutée (2026-07-25) — <strong>nom</strong> du service bénéficiaire quand la colonne
+             * « SERVICE BÉNÉFICIAIRE » est en <strong>texte libre</strong> (sans code SOA) : format SIGMP
+             * « Service Administratif et Financier ». Résolu-ou-créé par libellé au référentiel
+             * {@code tr_soa_beneficiaire} à la persistance ({@code POST /api/saisies/ppm}). {@code null} si absent.
+             */
+            String soaLibelle,
             String numCompte,
             BigDecimal ancMontBenef,
             BigDecimal nouvMontBenef) {

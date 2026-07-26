@@ -5924,6 +5924,120 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("Import PPM — MODE|FINANCEMENT|SERVICE aplatis (cellules multi-lignes SIGMP, RPI) : mode net, financement=RPI, service→soaLibelle (dernier mot isolé conservé)")
+    void importPpm_modeFinancementServiceMultiligne() throws Exception {
+        // 460 SIGMP : mode + RPI + « Service Administratif et Financier », « Financier » seul sur sa ligne
+        // physique (piège BRUIT_PAGE : « Financier » ⊃ « finan » ne doit PAS être filtré).
+        byte[] pdf = pdfAvecTexte(
+                "PLAN DE PASSATION DES MARCHES POUR L'ANNEE 2026",
+                "Autorite Contractante: MINISTERE TEST",
+                "NATURE OBJET MONTANT ESTIMATIF INITIAL",
+                "FOURNITURES Fourniture de test 6 000 000.00 CONSULTATION DE PRIX OUVERTE RPI Service Administratif et",
+                "Financier",
+                "6111 6 000 000.00 21/05/2026 01/06/2026 08/06/2026",
+                "Fait a Antananarivo le 14 avril 2026");
+
+        mvc.perform(multipart("/api/saisies/ppm/import")
+                .file(new MockMultipartFile("fichier", "ppm.pdf", "application/pdf", pdf))
+                .header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.marches", hasSize(1)))
+                .andExpect(jsonPath("$.marches[0].designationMarche").value("Fourniture de test"))
+                .andExpect(jsonPath("$.marches[0].modeLibelle").value("CONSULTATION DE PRIX OUVERTE"))
+                .andExpect(jsonPath("$.marches[0].financement").value("RPI"))
+                .andExpect(jsonPath("$.marches[0].beneficiaires", hasSize(1)))
+                .andExpect(jsonPath("$.marches[0].beneficiaires[0].soaCode").value(nullValue()))
+                // « Financier » conservé (BRUIT_PAGE) + service capté après le financement (découpage).
+                .andExpect(jsonPath("$.marches[0].beneficiaires[0].soaLibelle").value("Service Administratif et Financier"))
+                .andExpect(jsonPath("$.marches[0].beneficiaires[0].numCompte").value("6111"));
+    }
+
+    @Test
+    @DisplayName("Import PPM — financement « FR » + service textuel « TOUT SERVICE » (163 SIGMP) : mode net, financement=FR, service→soaLibelle")
+    void importPpm_financementFrServiceTextuel() throws Exception {
+        byte[] pdf = pdfAvecTexte(
+                "PLAN DE PASSATION DES MARCHES POUR L'ANNEE 2026",
+                "Autorite Contractante: MINISTERE TEST",
+                "NATURE OBJET MONTANT ESTIMATIF INITIAL",
+                "FOURNITURES Fourniture eau 2 480 000.00 ACHAT DIRECT FR TOUT SERVICE 6471 2 480 000.00 23/03/2026 24/03/2026 25/03/2026",
+                "Fait a Antananarivo le 14 avril 2026");
+
+        mvc.perform(multipart("/api/saisies/ppm/import")
+                .file(new MockMultipartFile("fichier", "ppm.pdf", "application/pdf", pdf))
+                .header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.marches[0].modeLibelle").value("ACHAT DIRECT"))
+                .andExpect(jsonPath("$.marches[0].financement").value("FR"))
+                .andExpect(jsonPath("$.marches[0].beneficiaires[0].soaLibelle").value("TOUT SERVICE"))
+                .andExpect(jsonPath("$.marches[0].beneficiaires[0].soaCode").value(nullValue()))
+                .andExpect(jsonPath("$.marches[0].beneficiaires[0].numCompte").value("6471"));
+    }
+
+    @Test
+    @DisplayName("Import PPM — mode variante « … PIP » collé au financement RPI (379) : le mode CONSERVE son PIP (idMode=8), financement=RPI, SOA codé")
+    void importPpm_modeVariantePipFinancementRpi() throws Exception {
+        modePassationRepository.save(new ModePassation(8, "CONSULTATION DE PRIX OUVERTE PIP", null, null, null, null));
+        soaBeneficiaireRepository.save(new cnm.prs.entity.SoaBeneficiaire("00-61-0-D10-00000", "SOA"));
+        byte[] pdf = pdfAvecTexte(
+                "PLAN DE PASSATION DES MARCHES POUR L'ANNEE 2026",
+                "Autorite Contractante: MINISTERE TEST",
+                "NATURE OBJET MONTANT ESTIMATIF INITIAL",
+                "FOURNITURES Fourniture test 75 000 000.00 CONSULTATION DE PRIX OUVERTE PIP RPI 00-61-0-D10-00000 2317 75 000 000.00 06/03/2026 16/03/2026 27/03/2026",
+                "Fait a Antananarivo le 14 avril 2026");
+
+        mvc.perform(multipart("/api/saisies/ppm/import")
+                .file(new MockMultipartFile("fichier", "ppm.pdf", "application/pdf", pdf))
+                .header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.marches[0].idMode").value(8))
+                .andExpect(jsonPath("$.marches[0].modeLibelle").value("CONSULTATION DE PRIX OUVERTE PIP"))
+                .andExpect(jsonPath("$.marches[0].financement").value("RPI"))
+                .andExpect(jsonPath("$.marches[0].beneficiaires[0].soaCode").value("00-61-0-D10-00000"))
+                .andExpect(jsonPath("$.marches[0].beneficiaires[0].soaLibelle").value(nullValue()));
+    }
+
+    @Test
+    @DisplayName("Saisie PPM — bénéficiaire par soaLibelle (sans code) : SOA résolu-ou-créé par libellé, dédupliqué, code SOA dérivé")
+    void saisiePpm_soaBeneficiaireParLibelle() throws Exception {
+        natureRepository.save(new Nature(1, "Travaux", null));
+        capmRepository.save(new Capm(1, "LANCEMENT", 1));
+        long soaAvant = soaBeneficiaireRepository.count();
+
+        // 3 marchés : A et B portent le MÊME service textuel (dédup) ; C un autre → 2 SOA créés.
+        String body = "{\"idEntiteContract\":1,\"exercice\":2026,\"signataire\":\"RABE\",\"dateSignature\":\"2026-01-10\",\"reference\":\"PPM-SOA\","
+                + "\"marches\":["
+                + "{\"designationMarche\":\"A\",\"montEstim\":2480000,\"idNature\":1,\"statut\":\"PREVU\","
+                + "\"beneficiaires\":[{\"soaLibelle\":\"Tout Service\",\"numCompte\":\"6471\",\"ancMontBenef\":2480000}],"
+                + "\"processus\":[{\"idCapm\":1,\"dateDebut\":\"2026-02-01\",\"dateFin\":\"2026-06-30\"}]},"
+                + "{\"designationMarche\":\"B\",\"montEstim\":1000000,\"idNature\":1,\"statut\":\"PREVU\","
+                + "\"beneficiaires\":[{\"soaLibelle\":\"TOUT SERVICE\",\"numCompte\":\"6472\",\"ancMontBenef\":1000000}],"
+                + "\"processus\":[{\"idCapm\":1,\"dateDebut\":\"2026-02-01\",\"dateFin\":\"2026-06-30\"}]},"
+                + "{\"designationMarche\":\"C\",\"montEstim\":500000,\"idNature\":1,\"statut\":\"PREVU\","
+                + "\"beneficiaires\":[{\"soaLibelle\":\"Autre Service\",\"numCompte\":\"6473\",\"ancMontBenef\":500000}],"
+                + "\"processus\":[{\"idCapm\":1,\"dateDebut\":\"2026-02-01\",\"dateFin\":\"2026-06-30\"}]}]}";
+        mvc.perform(post("/api/saisies/ppm").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated());
+
+        // 2 SOA créés (« Tout Service » dédupliqué malgré la casse, + « Autre Service »).
+        org.junit.jupiter.api.Assertions.assertEquals(soaAvant + 2, soaBeneficiaireRepository.count());
+        List<cnm.prs.entity.SoaBeneficiaire> soas = soaBeneficiaireRepository.findAll();
+        cnm.prs.entity.SoaBeneficiaire tout = soas.stream()
+                .filter(s -> "Tout Service".equals(s.getLibelle())).findFirst().orElseThrow();
+        org.junit.jupiter.api.Assertions.assertNotNull(tout.getSoaCode());   // code dérivé du libellé
+        org.junit.jupiter.api.Assertions.assertTrue(tout.getSoaCode().length() <= 25);
+        org.junit.jupiter.api.Assertions.assertEquals(1, soas.stream()
+                .filter(s -> "Tout Service".equals(s.getLibelle())).count());
+        org.junit.jupiter.api.Assertions.assertEquals(1, soas.stream()
+                .filter(s -> "Autre Service".equals(s.getLibelle())).count());
+        // Les lignes bénéficiaires de A et B référencent le MÊME code SOA (dédup par libellé).
+        List<cnm.prs.entity.ServiceBeneficiaire> benefs = serviceBeneficiaireRepository.findAll();
+        long distinctsToutService = benefs.stream()
+                .filter(b -> tout.getSoaCode().equals(b.getSoaCode())).count();
+        org.junit.jupiter.api.Assertions.assertEquals(2, distinctsToutService);
+    }
+
+    @Test
     @DisplayName("Import PPM xlsx — colonnes explicites : 2 marchés (dont multi-bénéficiaire + lots), référentiels résolus, 0 anomalie")
     void importXlsx_ok() throws Exception {
         natureRepository.save(new Nature(1, "Travaux", null));

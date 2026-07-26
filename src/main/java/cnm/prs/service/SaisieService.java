@@ -526,7 +526,7 @@ public class SaisieService {
             ServiceBeneficiaire sb = new ServiceBeneficiaire();
             sb.setIdBenef(nextId++);
             sb.setIdDetail(idDetail);
-            sb.setSoaCode(resoudreOuCreerSoa(b.soaCode()));
+            sb.setSoaCode(resoudreOuCreerSoa(b.soaCode(), b.soaLibelle()));
             sb.setNumCompte(resoudreOuCreerCompte(b.numCompte()));
             sb.setAncMontBenef(b.ancMontBenef());
             sb.setNouvMontBenef(b.nouvMontBenef());
@@ -558,18 +558,67 @@ public class SaisieService {
     }
 
     /**
-     * (Règle ajoutée) Service bénéficiaire (SOA) : réutilise l'existant si présent dans {@code tr_soa_beneficiaire}
-     * (PK = {@code soaCode}), sinon le <strong>crée à la volée</strong> — jamais de suppression. {@code null}/vide → {@code null}.
+     * (Règle ajoutée, étendue 2026-07-25) Service bénéficiaire (SOA), résolu-ou-créé — jamais de suppression :
+     * <ol>
+     *   <li><strong>Code SOA présent</strong> (ancien format, ex. {@code 00-61-0-D10-00000}) : réutilise
+     *       l'existant (PK = {@code soaCode}), sinon crée (libellé = celui fourni, sinon le code).</li>
+     *   <li><strong>Service en texte libre</strong> (format SIGMP « Service Administratif et Financier », sans
+     *       code) : résout par <strong>libellé normalisé</strong> ({@link LibelleNormalisation}) dans
+     *       {@code tr_soa_beneficiaire} ; sinon crée avec un code <strong>dérivé du libellé</strong> (slug ≤ 25,
+     *       suffixé en cas de collision).</li>
+     * </ol>
+     * Ni code ni libellé → {@code null}.
      */
-    private String resoudreOuCreerSoa(String soaCode) {
-        if (soaCode == null || soaCode.isBlank()) {
+    private String resoudreOuCreerSoa(String soaCode, String soaLibelle) {
+        boolean codePresent = soaCode != null && !soaCode.isBlank();
+        boolean libPresent = soaLibelle != null && !soaLibelle.isBlank();
+        if (codePresent) {
+            String code = soaCode.trim();
+            if (!soaBeneficiaireRepository.existsById(code)) {
+                soaBeneficiaireRepository.save(new SoaBeneficiaire(code, libPresent ? soaLibelle.trim() : code));
+                auditLogService.enregistrer(CurrentUser.ref().orElse(null), "tr_soa_beneficiaire", code,
+                        "CREATION_A_LA_VOLEE", null);
+            }
+            return code;
+        }
+        if (!libPresent) {
             return null;
         }
-        String code = soaCode.trim();
-        if (!soaBeneficiaireRepository.existsById(code)) {
-            soaBeneficiaireRepository.save(new SoaBeneficiaire(code, code));   // libellé par défaut = code
-            auditLogService.enregistrer(CurrentUser.ref().orElse(null), "tr_soa_beneficiaire", code,
-                    "CREATION_A_LA_VOLEE", null);
+        String cible = normaliser(soaLibelle);
+        List<SoaBeneficiaire> refs = soaBeneficiaireRepository.findAll();
+        String existant = refs.stream()
+                .filter(s -> s.getLibelle() != null && normaliser(s.getLibelle()).equals(cible))
+                .map(SoaBeneficiaire::getSoaCode).findFirst().orElse(null);
+        if (existant != null) {
+            return existant;
+        }
+        String code = genererCodeSoa(soaLibelle, refs);
+        soaBeneficiaireRepository.save(new SoaBeneficiaire(code, soaLibelle.trim()));
+        auditLogService.enregistrer(CurrentUser.ref().orElse(null), "tr_soa_beneficiaire", code,
+                "CREATION_A_LA_VOLEE", null);
+        return code;
+    }
+
+    /** Code SOA à la volée dérivé d'un libellé : slug normalisé (MAJUSCULES, ≤ 25), suffixé « -n » si déjà pris. */
+    private String genererCodeSoa(String libelle, List<SoaBeneficiaire> refs) {
+        String base = normaliser(libelle);
+        if (base.isEmpty()) {
+            base = "SOA";
+        }
+        if (base.length() > 25) {
+            base = base.substring(0, 25);
+        }
+        java.util.Set<String> pris = new java.util.HashSet<>();
+        for (SoaBeneficiaire s : refs) {
+            if (s.getSoaCode() != null) {
+                pris.add(s.getSoaCode());
+            }
+        }
+        String code = base;
+        int n = 1;
+        while (pris.contains(code) || soaBeneficiaireRepository.existsById(code)) {
+            String suffixe = "-" + (++n);
+            code = (base.length() + suffixe.length() > 25 ? base.substring(0, 25 - suffixe.length()) : base) + suffixe;
         }
         return code;
     }
