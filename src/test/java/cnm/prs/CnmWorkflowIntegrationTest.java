@@ -3595,6 +3595,64 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("Entité contractante — création par la PRMP (import PPM) : 201 + niveau dérivé + rattachement EN ATTENTE (actif=false), idEntiteParent null accepté")
+    void entiteContract_creationParPrmp_autoRattachementEnAttente() throws Exception {
+        categorieEntiteRepository.save(new cnm.prs.entity.CategorieEntite("DIRECTION", 4));
+        // PRMP001 crée une entité (autorité hors périmètre) : PK assignée client, idEntiteParent absent.
+        String post = "{\"idEntiteContract\":200,\"libelleEntite\":\"Nouvelle Direction\",\"adresse\":\"Rue Z\","
+                + "\"categorieEntite\":\"DIRECTION\",\"idOrganigramme\":1}";
+        mvc.perform(post("/api/entite-contracts").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content(post))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.idEntiteContract").value(200))
+                .andExpect(jsonPath("$.niveauHierarchique").value(4))          // dérivé de DIRECTION
+                .andExpect(jsonPath("$.idEntiteParent").value(nullValue()));   // null accepté
+        // Rattachement auto EN ATTENTE créé pour la PRMP courante.
+        List<cnm.prs.entity.PrmpEntite> liens = prmpEntiteRepository.findByIdPrmp("PRMP001").stream()
+                .filter(l -> l.getIdEntiteContract() != null && l.getIdEntiteContract().intValue() == 200).toList();
+        org.junit.jupiter.api.Assertions.assertEquals(1, liens.size());
+        org.junit.jupiter.api.Assertions.assertEquals(Boolean.FALSE, liens.get(0).getActif());
+        // Visible dans le GET scopé PRMP (le front filtrera actif=true pour la sélection).
+        mvc.perform(get("/api/prmp-entites").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idEntiteContract==200)].actif", hasItem(false)));
+    }
+
+    @Test
+    @DisplayName("Entité contractante — création par l'ADMIN : aucun rattachement prmp-entites auto (l'Admin n'est pas une PRMP enregistrée)")
+    void entiteContract_creationParAdmin_sansRattachement() throws Exception {
+        long liensAvant = prmpEntiteRepository.count();
+        String post = "{\"idEntiteContract\":201,\"libelleEntite\":\"Entite Admin\",\"adresse\":\"Rue A\",\"idOrganigramme\":1}";
+        mvc.perform(post("/api/entite-contracts").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content(post))
+                .andExpect(status().isCreated());
+        org.junit.jupiter.api.Assertions.assertEquals(liensAvant, prmpEntiteRepository.count());
+    }
+
+    @Test
+    @DisplayName("Rattachement prmp-entites — approbation ADMIN d'un lien EN ATTENTE : PUT {actif:true} l'active (visible scopé PRMP) ; unicité 409 à l'activation si conflit")
+    void prmpEntite_approbationAdmin_activeEtUnicite() throws Exception {
+        entiteContractRepository.save(entite(300, 1, "ANT"));                 // entité cible
+        prmpEntiteRepository.save(prmpEntite(50, "PRMP001", 300, false));     // lien EN ATTENTE (comme auto-créé)
+        // ADMIN approuve → actif=true.
+        String put = "{\"idPrmpEntite\":50,\"idPrmp\":\"PRMP001\",\"idEntiteContract\":300,\"actif\":true}";
+        mvc.perform(put("/api/prmp-entites/50").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content(put))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.actif").value(true));
+        // Devient sélectionnable par la PRMP (GET scopé, actif=true).
+        mvc.perform(get("/api/prmp-entites").header("Authorization", tokenPrmp))
+                .andExpect(jsonPath("$[?(@.idEntiteContract==300)].actif", hasItem(true)));
+        // Unicité à l'activation : un 2e lien EN ATTENTE (PRMP002 ↔ même entité) ne peut PAS être activé → 409.
+        prmpRepository.save(prmp("PRMP002", "ANT"));
+        prmpEntiteRepository.save(prmpEntite(51, "PRMP002", 300, false));
+        String put2 = "{\"idPrmpEntite\":51,\"idPrmp\":\"PRMP002\",\"idEntiteContract\":300,\"actif\":true}";
+        mvc.perform(put("/api/prmp-entites/51").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content(put2))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
     @DisplayName("Saisie PPM — numCompte absent de tr_compte : créé à la volée (pas de 409 FK sur t_marche.NUM_COMPTE)")
     void saisiePpm_compteALaVolee() throws Exception {
         natureRepository.save(new Nature(1, "Travaux", null));

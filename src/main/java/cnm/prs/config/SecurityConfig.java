@@ -82,6 +82,11 @@ public class SecurityConfig {
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()
+                        // ⚠️ Règle ajoutée (2026-07-26) — création d'entité contractante ouverte à la PRMP
+                        // (import PPM : autorité hors périmètre → nouvelle entité + rattachement EN ATTENTE),
+                        // EN PLUS de l'Admin. Doit précéder la règle REFERENTIELS (1er match gagne).
+                        // PUT/DELETE /api/entite-contracts/* restent Administrateur (via REFERENTIELS_ID).
+                        .requestMatchers(HttpMethod.POST, "/api/entite-contracts").hasAnyRole("PRMP", "ADMINISTRATEUR")
                         // Référentiels & paramétrage : écriture réservée à l'Administrateur.
                         .requestMatchers(HttpMethod.POST, REFERENTIELS).hasRole("ADMINISTRATEUR")
                         .requestMatchers(HttpMethod.PUT, REFERENTIELS_ID).hasRole("ADMINISTRATEUR")

@@ -108,6 +108,32 @@ public class PrmpEntiteService {
     }
 
     /**
+     * ⚠️ Règle ajoutée (2026-07-26) — AUTO-RATTACHEMENT <strong>EN ATTENTE</strong> ({@code actif=false}) créé
+     * lorsqu'une <strong>PRMP</strong> crée une entité contractante à l'import PPM (autorité hors périmètre).
+     * Ne s'exécute que si l'appelant est une PRMP <strong>enregistrée</strong> ({@code CurrentUser.ref()} présent
+     * dans {@code t_prmp}) — un Administrateur/contrôleur ne déclenche aucun rattachement. N'applique
+     * <strong>pas</strong> l'invariant d'unicité des liens <em>actifs</em> (le lien est en attente) ; celui-ci
+     * s'applique à l'<strong>activation</strong> ({@link #update} avec {@code actif=true} → 409 si conflit).
+     * Idempotent : ne recrée pas un lien PRMP↔entité déjà présent.
+     */
+    public void autoRattacherEnAttenteSiPrmp(Integer idEntiteContract) {
+        String idPrmp = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
+        if (idPrmp == null || !prmpRepository.existsById(idPrmp)) {
+            return;   // pas une PRMP enregistrée (Admin/contrôleur) → aucun auto-rattachement
+        }
+        if (repository.existsByIdPrmpAndIdEntiteContract(idPrmp, idEntiteContract)) {
+            return;   // lien déjà présent (idempotent en cas de re-création)
+        }
+        PrmpEntite lien = new PrmpEntite();
+        lien.setIdPrmpEntite(repository.findMaxId() + 1);
+        lien.setIdPrmp(idPrmp);
+        lien.setIdEntiteContract(idEntiteContract);
+        lien.setDateAffectation(LocalDate.now());
+        lien.setActif(Boolean.FALSE);   // EN ATTENTE d'approbation Administrateur
+        repository.save(lien);
+    }
+
+    /**
      * Met à jour une affectation (écriture Administrateur). Toute (ré)activation respecte l'invariant
      * d'unicité : si une autre affectation active existe déjà pour la même entité → 409.
      */

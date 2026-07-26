@@ -21,6 +21,9 @@ public interface PrmpEntiteRepository extends JpaRepository<PrmpEntite, Integer>
     /** Toutes les affectations d'une PRMP (actives ou non) — pour la lecture scopée (§3.1). */
     List<PrmpEntite> findByIdPrmp(String idPrmp);
 
+    /** Vrai si un lien PRMP↔entité existe déjà (actif OU en attente) — dédup de l'auto-rattachement. */
+    boolean existsByIdPrmpAndIdEntiteContract(String idPrmp, Integer idEntiteContract);
+
     /**
      * L'affectation active d'une entité, s'il y en a une. Sert à garantir l'invariant
      * « une seule PRMP active par entité » (§3.1).

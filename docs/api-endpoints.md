@@ -50,6 +50,8 @@ Pour les ressources du circuit (`dossiers`, `receptions`, `dispatchs`, `examens`
   `aviss`, `cat-comptes`, `categorie-entites`, `comptes`, `delegation-profils`, `entite-contracts`, `localites`,
   `ministeres`, `mode-passations`, `natures`, `points-ctrls`, `profiles`, `regle-alertes`,
   `regle-anomalies`, `regle-passations`, `seuils`, `situations`, `sous-type-dossiers`, `type-dossiers`, `type-dmc`.
+  ⚠️ **Exception (2026-07-26)** : `POST /api/entite-contracts` est ouvert à la **PRMP** (en plus de l'Admin) —
+  création d'entité à l'import PPM + auto-rattachement en attente ; PUT/DELETE restent Administrateur.
 - **Gestion des comptes / hiérarchie** (écriture `ADMINISTRATEUR`, lecture ouverte) :
   `controleurs`, `prmps`, `organigrammes`.
 - **Réservé `ADMINISTRATEUR`** (lecture comprise) : `audit-logs`, `session-utilisateurs`, `comptes-auth`.
@@ -1541,11 +1543,19 @@ et interprété comme un code de **sous-type** (les anciens payloads `{"idTypeDo
 |---|---|---|---|---|---|
 | GET | /api/entite-contracts | — | `EntiteContractDto[]` | 200 | Authentifié |
 | GET | /api/entite-contracts/{id} | — | `EntiteContractDto` | 200, 404 | Authentifié |
-| POST | /api/entite-contracts | `EntiteContractDto` | `EntiteContractDto` | 201, 400, 403 | ADMINISTRATEUR |
+| POST | /api/entite-contracts | `EntiteContractDto` | `EntiteContractDto` | 201, 400, 403 | **PRMP ou ADMINISTRATEUR** |
 | PUT | /api/entite-contracts/{id} | `EntiteContractDto` | `EntiteContractDto` | 200, 400, 404 | ADMINISTRATEUR |
 | DELETE | /api/entite-contracts/{id} | — | — | 204, 404 | ADMINISTRATEUR |
 
-`{id}` = idEntiteContract (number).
+`{id}` = idEntiteContract (number). **PK assignée client** : `idEntiteContract = max(ids)+1` (aussi bien PRMP qu'Admin).
+`idEntiteParent` **facultatif** (null accepté — rattachement par organigramme seul, ex. ministère sans entité racine).
+
+> ⚠️ **Création par la PRMP + auto-rattachement (règle ajoutée 2026-07-26).** Le **POST** est ouvert à la
+> **PRMP** (en plus de l'Admin) — cas import PPM : autorité contractante hors périmètre → la PRMP enregistre une
+> nouvelle entité. Quand l'appelant est une **PRMP**, le backend crée en même temps un lien
+> [`/api/prmp-entites`](#ressource-apiprmp-entites--affectations-prmpentité-contractante-31) **`actif=false`
+> (EN ATTENTE)** PRMP↔entité, qu'un **Administrateur approuve** (`PUT {actif:true}`) ou **rejette** (`DELETE`).
+> PUT/DELETE de l'entité elle-même restent **Administrateur**.
 
 > ⚠️ **Dérivation du niveau hiérarchique (règle ajoutée 2026-07-26).** À **POST** et **PUT**, `niveauHierarchique`
 > est **dérivé** de `categorieEntite` via le référentiel [`/api/categorie-entites`](#catégories-dentité--référentiel-ajouté-2026-07-26)
@@ -1567,8 +1577,15 @@ et interprété comme un code de **sous-type** (les anciens payloads `{"idTypeDo
   (accès direct hors périmètre → **403**).
 - **Écriture** (POST/PUT/DELETE) : réservée à l'**Administrateur**, qui gère les affectations.
 - **Invariant d'unicité** : une entité ne peut être rattachée qu'à **une seule PRMP active** ;
-  toute tentative d'affecter une entité déjà rattachée → **409**. Une PRMP peut gérer **plusieurs**
-  entités. Les affectations sont **stables** (pas de transfert d'une PRMP à une autre).
+  toute tentative d'**activer** une entité déjà rattachée activement → **409**. Une PRMP peut gérer
+  **plusieurs** entités. Les affectations sont **stables** (pas de transfert d'une PRMP à une autre).
+- ⚠️ **Auto-rattachement EN ATTENTE (règle ajoutée 2026-07-26).** Quand une **PRMP** crée une entité
+  contractante (`POST /api/entite-contracts`, cf. Entités contractantes), le backend crée
+  **automatiquement** un lien PRMP↔entité **`actif=false`** (en attente d'approbation). L'invariant
+  d'unicité **ne bloque pas** cette création (le lien est en attente) ; il s'applique à l'**activation**.
+  **Approuver** = `PUT /api/prmp-entites/{id}` `{actif:true}` (Administrateur → **409** si une autre PRMP
+  est déjà active sur l'entité). **Rejeter** = `DELETE /api/prmp-entites/{id}`. Une fois **actif=true**,
+  l'entité apparaît dans le `GET /api/prmp-entites` scopé de la PRMP (le front filtre `actif=true`).
 
 **Champs `PrmpEntiteDto`**
 
@@ -1578,7 +1595,7 @@ et interprété comme un code de **sous-type** (les anciens payloads `{"idTypeDo
 | idPrmp | string | Oui | @NotBlank, max 10 ; la PRMP doit exister (sinon 400) |
 | idEntiteContract | number | Oui | @NotNull ; l'entité doit exister (sinon 400) |
 | dateAffectation | string (date) | Non | défaut = date du jour |
-| actif | boolean | Oui | @NotNull ; une création est toujours active |
+| actif | boolean | Oui | @NotNull ; **création directe (POST) toujours active** ; l'**auto-rattachement** à la création d'entité par une PRMP est **EN ATTENTE** (`actif=false`) |
 
 **Endpoints**
 

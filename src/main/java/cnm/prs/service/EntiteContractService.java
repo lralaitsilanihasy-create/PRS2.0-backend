@@ -25,11 +25,13 @@ public class EntiteContractService {
 
     private final EntiteContractRepository repository;
     private final CategorieEntiteRepository categorieEntiteRepository;
+    private final PrmpEntiteService prmpEntiteService;
 
     public EntiteContractService(EntiteContractRepository repository,
-            CategorieEntiteRepository categorieEntiteRepository) {
+            CategorieEntiteRepository categorieEntiteRepository, PrmpEntiteService prmpEntiteService) {
         this.repository = repository;
         this.categorieEntiteRepository = categorieEntiteRepository;
+        this.prmpEntiteService = prmpEntiteService;
     }
 
     @Transactional(readOnly = true)
@@ -53,7 +55,11 @@ public class EntiteContractService {
     public EntiteContractDto create(EntiteContractDto dto) {
         EntiteContract entity = EntiteContractMapper.toEntity(dto);
         deriverNiveau(entity);
-        return EntiteContractMapper.toDto(repository.save(entity));
+        EntiteContract saved = repository.save(entity);
+        // ⚠️ Règle ajoutée (2026-07-26) — si l'appelant est une PRMP (import PPM : autorité hors périmètre),
+        // auto-rattachement EN ATTENTE (actif=false) PRMP↔entité, à approuver par l'Administrateur.
+        prmpEntiteService.autoRattacherEnAttenteSiPrmp(saved.getIdEntiteContract());
+        return EntiteContractMapper.toDto(saved);
     }
 
     public EntiteContractDto update(Integer id, EntiteContractDto dto) {
