@@ -46,7 +46,7 @@ public class SecurityConfig {
     private static final String[] REFERENTIELS = {
             "/api/localites", "/api/points-ctrls",
             "/api/regle-anomalies", "/api/regle-alertes", "/api/comptes", "/api/cat-comptes",
-            "/api/entite-contracts", "/api/delegation-profils", "/api/aviss", "/api/natures",
+            "/api/entite-contracts", "/api/categorie-entites", "/api/delegation-profils", "/api/aviss", "/api/natures",
             "/api/mode-passations", "/api/type-dossiers", "/api/sous-type-dossiers", "/api/ministeres",
             "/api/profiles", "/api/capm", "/api/type-piece-jointes", "/api/type-dmc"
     };
@@ -55,7 +55,7 @@ public class SecurityConfig {
     private static final String[] REFERENTIELS_ID = {
             "/api/localites/*", "/api/points-ctrls/*",
             "/api/regle-anomalies/*", "/api/regle-alertes/*", "/api/comptes/*", "/api/cat-comptes/*",
-            "/api/entite-contracts/*", "/api/delegation-profils/*", "/api/aviss/*", "/api/natures/*",
+            "/api/entite-contracts/*", "/api/categorie-entites/*", "/api/delegation-profils/*", "/api/aviss/*", "/api/natures/*",
             "/api/mode-passations/*", "/api/type-dossiers/*", "/api/sous-type-dossiers/*", "/api/ministeres/*",
             "/api/profiles/*", "/api/capm/*", "/api/type-piece-jointes/*", "/api/type-dmc/*"
     };

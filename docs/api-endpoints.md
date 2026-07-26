@@ -47,7 +47,7 @@ Pour les ressources du circuit (`dossiers`, `receptions`, `dispatchs`, `examens`
 
 ### Référentiels & administration
 - **Référentiels** (lecture ouverte, écriture POST/PUT/DELETE réservée à `ADMINISTRATEUR`) :
-  `aviss`, `cat-comptes`, `comptes`, `delegation-profils`, `entite-contracts`, `localites`,
+  `aviss`, `cat-comptes`, `categorie-entites`, `comptes`, `delegation-profils`, `entite-contracts`, `localites`,
   `ministeres`, `mode-passations`, `natures`, `points-ctrls`, `profiles`, `regle-alertes`,
   `regle-anomalies`, `regle-passations`, `seuils`, `situations`, `sous-type-dossiers`, `type-dossiers`, `type-dmc`.
 - **Gestion des comptes / hiérarchie** (écriture `ADMINISTRATEUR`, lecture ouverte) :
@@ -377,6 +377,31 @@ quand ils surviennent (mapping centralisé dans `GlobalExceptionHandler`). Côt�
 | DELETE | /api/cat-comptes/{id} | — | — | 204, 403, 404 | ADMINISTRATEUR |
 
 `{id}` = idCatCompte (string).
+
+## Catégories d'entité (⚠️ référentiel ajouté 2026-07-26)
+**Ressource** `/api/categorie-entites` — Référentiel : lecture ouverte ; écriture `ADMINISTRATEUR`. Source unique
+du **niveau hiérarchique** d'une entité contractante (voir Entités contractantes : `niveauHierarchique` **dérivé**
+de `categorieEntite`).
+
+**Champs `CategorieEntiteDto`**
+
+| Champ (JSON) | Type | Obligatoire | Contraintes |
+|---|---|---|---|
+| libelle | string | Oui (PK) | max 20, non vide (ex. « MINISTERE ») |
+| niveauHierarchique | number | Oui | entier > 0 |
+
+**Endpoints**
+
+| Méthode | URL | Corps | Réponse | Statuts | Rôle |
+|---|---|---|---|---|---|
+| GET | /api/categorie-entites | — | `CategorieEntiteDto[]` | 200 | Authentifié |
+| GET | /api/categorie-entites/{id} | — | `CategorieEntiteDto` | 200, 404 | Authentifié |
+| POST | /api/categorie-entites | `CategorieEntiteDto` | `CategorieEntiteDto` | 201, 400, 403 | ADMINISTRATEUR |
+| PUT | /api/categorie-entites/{id} | `CategorieEntiteDto` | `CategorieEntiteDto` | 200, 400, 403, 404 | ADMINISTRATEUR |
+| DELETE | /api/categorie-entites/{id} | — | — | 204, 403, 404 | ADMINISTRATEUR |
+
+`{id}` = libelle (string). **Seed** (`docs/migrations/2026-07-26_categorie_entite.sql`) : MINISTERE→1,
+SECRETARIAT GENERAL→2, DIRECTION GENERALE→3, DIRECTION→4, SERVICE→5, DIVISION→6.
 
 **Exemple — requête**
 ```json
@@ -1504,10 +1529,10 @@ et interprété comme un code de **sous-type** (les anciens payloads `{"idTypeDo
 | idEntiteContract | number | Oui (PK, au POST) | clé primaire |
 | libelleEntite | string | Oui | @NotBlank, max 150 (aligné sur `libelleMinistere`) |
 | adresse | string | Oui | @NotBlank, max 200 |
-| categorieEntite | string | Non | max 20 |
+| categorieEntite | string | Non | max 20 — **validé** au référentiel `tr_categorie_entite` (400 si inconnu) |
 | idOrganigramme | number | Oui | @NotNull |
 | idEntiteParent | number | Non | |
-| niveauHierarchique | number | Non | |
+| niveauHierarchique | number | **Dérivé (lecture seule)** | ⚠️ **DÉRIVÉ** de `categorieEntite` au POST/PUT (source unique) — la valeur envoyée par le client est **ignorée** |
 | idLocalite | string | Non | max 5 — **localité de l'entité** (FK `tr_localite`) ; détermine la localité des dossiers la concernant |
 
 **Endpoints**
@@ -1521,6 +1546,12 @@ et interprété comme un code de **sous-type** (les anciens payloads `{"idTypeDo
 | DELETE | /api/entite-contracts/{id} | — | — | 204, 404 | ADMINISTRATEUR |
 
 `{id}` = idEntiteContract (number).
+
+> ⚠️ **Dérivation du niveau hiérarchique (règle ajoutée 2026-07-26).** À **POST** et **PUT**, `niveauHierarchique`
+> est **dérivé** de `categorieEntite` via le référentiel [`/api/categorie-entites`](#catégories-dentité--référentiel-ajouté-2026-07-26)
+> (`tr_categorie_entite`) — **source unique**, l'entité et sa catégorie ne peuvent plus diverger. Catégorie
+> **inconnue** du référentiel → **400** ; catégorie absente/vide → `categorieEntite`=`null` et `niveauHierarchique`=`null`.
+> La valeur `niveauHierarchique` du corps est **ignorée** en écriture (elle reste renseignée en lecture).
 
 **Exemple — requête**
 ```json

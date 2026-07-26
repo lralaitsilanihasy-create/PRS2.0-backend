@@ -7,10 +7,13 @@ import org.springframework.transaction.annotation.Transactional;
 
 import cnm.prs.dto.EntiteContractDto;
 import cnm.prs.dto.EntitePubliqueDto;
+import cnm.prs.entity.CategorieEntite;
 import cnm.prs.entity.EntiteContract;
+import cnm.prs.exception.BadRequestException;
 import cnm.prs.exception.ResourceNotFoundException;
 import cnm.prs.mapper.EntiteContractMapper;
 import cnm.prs.mapper.EntitePubliqueMapper;
+import cnm.prs.repository.CategorieEntiteRepository;
 import cnm.prs.repository.EntiteContractRepository;
 
 /**
@@ -21,9 +24,12 @@ import cnm.prs.repository.EntiteContractRepository;
 public class EntiteContractService {
 
     private final EntiteContractRepository repository;
+    private final CategorieEntiteRepository categorieEntiteRepository;
 
-    public EntiteContractService(EntiteContractRepository repository) {
+    public EntiteContractService(EntiteContractRepository repository,
+            CategorieEntiteRepository categorieEntiteRepository) {
         this.repository = repository;
+        this.categorieEntiteRepository = categorieEntiteRepository;
     }
 
     @Transactional(readOnly = true)
@@ -46,6 +52,7 @@ public class EntiteContractService {
 
     public EntiteContractDto create(EntiteContractDto dto) {
         EntiteContract entity = EntiteContractMapper.toEntity(dto);
+        deriverNiveau(entity);
         return EntiteContractMapper.toDto(repository.save(entity));
     }
 
@@ -57,8 +64,28 @@ public class EntiteContractService {
         existing.setCategorieEntite(dto.getCategorieEntite());
         existing.setIdOrganigramme(dto.getIdOrganigramme());
         existing.setIdEntiteParent(dto.getIdEntiteParent());
-        existing.setNiveauHierarchique(dto.getNiveauHierarchique());
+        deriverNiveau(existing);   // niveauHierarchique DÉRIVÉ de la catégorie (source unique) — valeur client ignorée
         return EntiteContractMapper.toDto(repository.save(existing));
+    }
+
+    /**
+     * ⚠️ Règle ajoutée (2026-07-26) — <strong>dérive</strong> {@code niveauHierarchique} depuis
+     * {@code categorieEntite} via le référentiel {@link CategorieEntite} ({@code tr_categorie_entite}) :
+     * <strong>source unique</strong>, l'entité et sa catégorie ne peuvent plus diverger. Catégorie absente/vide
+     * → niveau {@code null}. Catégorie <strong>inconnue</strong> du référentiel → {@code 400}.
+     */
+    private void deriverNiveau(EntiteContract entity) {
+        String cat = entity.getCategorieEntite();
+        if (cat == null || cat.isBlank()) {
+            entity.setCategorieEntite(null);
+            entity.setNiveauHierarchique(null);
+            return;
+        }
+        CategorieEntite ref = categorieEntiteRepository.findById(cat.trim())
+                .orElseThrow(() -> new BadRequestException(
+                        "Catégorie d'entité « " + cat + " » inconnue au référentiel (tr_categorie_entite)."));
+        entity.setCategorieEntite(ref.getLibelle());
+        entity.setNiveauHierarchique(ref.getNiveauHierarchique());
     }
 
     public void delete(Integer id) {

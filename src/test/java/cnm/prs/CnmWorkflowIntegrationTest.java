@@ -156,6 +156,7 @@ class CnmWorkflowIntegrationTest {
     @Autowired private MinistereRepository ministereRepository;
     @Autowired private OrganigrammeRepository organigrammeRepository;
     @Autowired private EntiteContractRepository entiteContractRepository;
+    @Autowired private cnm.prs.repository.CategorieEntiteRepository categorieEntiteRepository;
     @Autowired private PrmpEntiteRepository prmpEntiteRepository;
     @Autowired private cnm.prs.repository.TypePieceJointeRepository typePieceJointeRepository;
     @Autowired private cnm.prs.repository.PublicationRepository publicationRepository;
@@ -3530,6 +3531,67 @@ class CnmWorkflowIntegrationTest {
                 .andExpect(jsonPath("$[?(@.idDossier==" + idDoss + " && @.designationMarche=='CPO-RPI')].idMode", hasItem(4)))
                 .andExpect(jsonPath("$[?(@.idDossier==" + idDoss + " && @.designationMarche=='CPO-PIP')].idMode", hasItem(8)))
                 .andExpect(jsonPath("$[?(@.idDossier==" + idDoss + " && @.designationMarche=='AOO-RPI')].idMode", hasItem(1)));
+    }
+
+    @Test
+    @DisplayName("Référentiel catégorie-entites — CRUD : lecture ouverte, écriture ADMINISTRATEUR (403 sinon), {id}=libellé")
+    void categorieEntites_crud() throws Exception {
+        // Lecture ouverte à tout authentifié.
+        mvc.perform(get("/api/categorie-entites").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk());
+        String body = "{\"libelle\":\"SERVICE\",\"niveauHierarchique\":5}";
+        // POST réservé ADMINISTRATEUR (Membre → 403).
+        mvc.perform(post("/api/categorie-entites").header("Authorization", tokenMembre)
+                .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/api/categorie-entites").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.libelle").value("SERVICE"))
+                .andExpect(jsonPath("$.niveauHierarchique").value(5));
+        // GET {id} = libellé.
+        mvc.perform(get("/api/categorie-entites/SERVICE").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.niveauHierarchique").value(5));
+        // PUT (niveau modifié) — ADMINISTRATEUR.
+        mvc.perform(put("/api/categorie-entites/SERVICE").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"libelle\":\"SERVICE\",\"niveauHierarchique\":7}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.niveauHierarchique").value(7));
+        // DELETE — ADMINISTRATEUR.
+        mvc.perform(delete("/api/categorie-entites/SERVICE").header("Authorization", tokenAdmin))
+                .andExpect(status().isNoContent());
+        mvc.perform(get("/api/categorie-entites/SERVICE").header("Authorization", tokenPrmp))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("Entité contractante — niveauHierarchique DÉRIVÉ de categorieEntite (source unique, valeur client ignorée) ; catégorie inconnue → 400")
+    void entiteContract_niveauDeriveDeLaCategorie() throws Exception {
+        categorieEntiteRepository.save(new cnm.prs.entity.CategorieEntite("MINISTERE", 1));
+        categorieEntiteRepository.save(new cnm.prs.entity.CategorieEntite("DIRECTION", 4));
+
+        // POST : catégorie DIRECTION ; le client tente niveau=99 → ignoré, dérivé à 4 (organigramme 1 seedé au setup).
+        String post = "{\"idEntiteContract\":100,\"libelleEntite\":\"Direction X\",\"adresse\":\"Rue Y\","
+                + "\"categorieEntite\":\"DIRECTION\",\"idOrganigramme\":1,\"niveauHierarchique\":99}";
+        mvc.perform(post("/api/entite-contracts").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content(post))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.categorieEntite").value("DIRECTION"))
+                .andExpect(jsonPath("$.niveauHierarchique").value(4));
+
+        // PUT : catégorie → MINISTERE, niveau re-dérivé à 1 (le 99 fourni est ignoré).
+        String put = "{\"idEntiteContract\":100,\"libelleEntite\":\"Direction X\",\"adresse\":\"Rue Y\","
+                + "\"categorieEntite\":\"MINISTERE\",\"idOrganigramme\":1,\"niveauHierarchique\":99}";
+        mvc.perform(put("/api/entite-contracts/100").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content(put))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.niveauHierarchique").value(1));
+
+        // Catégorie hors référentiel → 400.
+        String bad = "{\"idEntiteContract\":101,\"libelleEntite\":\"Z\",\"adresse\":\"W\","
+                + "\"categorieEntite\":\"INCONNU\",\"idOrganigramme\":1}";
+        mvc.perform(post("/api/entite-contracts").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content(bad))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
