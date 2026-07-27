@@ -126,8 +126,12 @@ public class ControleurController {
         return service.deposerPhoto(id, type, fichier);
     }
 
-    /** Téléchargement de la photo d'un contrôleur. Réservé {@code ADMINISTRATEUR}. **404** si la photo est absente. */
-    @PreAuthorize("hasRole('ADMINISTRATEUR')")
+    /**
+     * Téléchargement de la photo d'un contrôleur. Lecture ouverte à tout AUTHENTIFIÉ (comme la fiche
+     * contrôleur — affichage des trombinoscopes/statistiques, ex. « Dispatchs par contrôleur ») ;
+     * le dépôt et la suppression restent réservés {@code ADMINISTRATEUR}. **404** si la photo est absente.
+     */
+    @PreAuthorize("isAuthenticated()")
     @GetMapping("/{id}/pieces/{type}")
     public ResponseEntity<byte[]> telechargerPhoto(@PathVariable String id, @PathVariable TypePieceJointe type) {
         PieceJointe piece = service.telechargerPhoto(id, type);

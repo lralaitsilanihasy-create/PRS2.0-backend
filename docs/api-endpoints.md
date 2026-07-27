@@ -524,7 +524,7 @@ si aucun résultat (pas de 404). `{nom}` est un fragment (URL-encoder si espaces
 | DELETE | /api/controleurs/{id} | — | — | 204, 403, 404, 409 | ADMINISTRATEUR |
 | POST | /api/controleurs/suppression-lot | `SuppressionLotControleurRequest` `{matricules[]}` | `SuppressionLotControleurResult` | 200, 400, 403 | ADMINISTRATEUR |
 | POST | /api/controleurs/{id}/pieces/{type} | `multipart/form-data` (part `fichier`) ; `type` = `PHOTO` | `PieceJointeMetaDto` | 200, 400, 403, 404 | ADMINISTRATEUR |
-| GET | /api/controleurs/{id}/pieces/{type} | — ; `type` = `PHOTO` | fichier (binaire) | 200, 400, 403, 404 | ADMINISTRATEUR |
+| GET | /api/controleurs/{id}/pieces/{type} | — ; `type` = `PHOTO` | fichier (binaire) | 200, 400, 403, 404 | Authentifié (⚠️ ouvert 2026-07-27 — affichage des photos hors admin ; dépôt/suppression restent ADMINISTRATEUR) |
 | DELETE | /api/controleurs/{id}/pieces/{type} | — ; `type` = `PHOTO` | — | 204, 400, 403, 404 | ADMINISTRATEUR |
 
 > **DELETE** supprime le contrôleur **et son compte d'authentification**, en nettoyant ses données **dérivées**
