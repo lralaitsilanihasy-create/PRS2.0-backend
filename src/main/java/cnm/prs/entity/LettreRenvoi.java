@@ -74,6 +74,14 @@ public class LettreRenvoi {
     @Column(name = "CHEMIN_DOCUMENT", length = 500)
     private String cheminDocument;
 
+    /** ⚠️ Spec navette (2026-08-01) — date d'ARCHIVAGE de la lettre par l'Assistant contrôleur (même circuit que les PV). */
+    @Column(name = "DATE_ARCHIVAGE")
+    private LocalDate dateArchivage;
+
+    /** Assistant contrôleur archiveur (matricule, identité JWT). */
+    @Column(name = "IM_ARCHIVEUR", length = 7)
+    private String imArchiveur;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ID_EXAMEN", insertable = false, updatable = false)
     @JsonIgnore

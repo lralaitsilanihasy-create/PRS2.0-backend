@@ -15,4 +15,10 @@ public interface PieceJointeDossierRepository extends JpaRepository<PieceJointeD
 
     /** Vrai si une pièce du type donné est déjà attachée au dossier (contrôle des obligatoires). */
     boolean existsByIdDossierAndIdTypePiece(Integer idDossier, Integer idTypePiece);
+
+    /**
+     * Vrai si ≥1 pièce complémentaire a été déposée pour CETTE lettre de renvoi (⚠️ règle ajoutée
+     * 2026-08-02 — garde de {@code …/transmettre-complements} : pas de réexamen sans les pièces).
+     */
+    boolean existsByIdDossierAndIdLettreAndApresLettreRenvoiTrue(Integer idDossier, Integer idLettre);
 }

@@ -46,4 +46,10 @@ public class LettreRenvoiDto {
 
     /** Vrai si la lettre a déjà été lue par la PRMP courante (lecture seule). */
     private Boolean lue;
+
+    /** ⚠️ Spec navette (2026-08-01) — date d'archivage par l'Assistant contrôleur (lecture seule). */
+    private LocalDate dateArchivage;
+
+    /** Assistant contrôleur archiveur (matricule, lecture seule). */
+    private String imArchiveur;
 }

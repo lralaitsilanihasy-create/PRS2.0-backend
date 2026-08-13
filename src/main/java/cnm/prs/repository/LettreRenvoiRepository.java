@@ -68,6 +68,13 @@ public interface LettreRenvoiRepository extends JpaRepository<LettreRenvoi, Inte
             """)
     long countSigneesNonLuesPourPrmp(@Param("idPrmp") String idPrmp);
 
+    /**
+     * Dernière lettre de renvoi SIGNÉE d'un dossier (⚠️ règle ajoutée 2026-08-02) — la garde de
+     * {@code …/transmettre-complements} exige des pièces rattachées à CETTE lettre (le cycle courant,
+     * pas celles d'un renvoi antérieur).
+     */
+    java.util.Optional<LettreRenvoi> findFirstByIdDossierAndStatutOrderByIdLettreDesc(Integer idDossier, String statut);
+
     /** Localité de la lettre via la réception (repli quand {@code dossier.idLocalite} est absent). */
     @Query("select l.examen.dispatch.reception.ctrlRecept.idLocalite from LettreRenvoi l where l.idLettre = :id")
     java.util.Optional<String> findLocaliteByLettre(@Param("id") Integer id);

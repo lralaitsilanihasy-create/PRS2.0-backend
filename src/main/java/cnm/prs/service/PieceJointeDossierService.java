@@ -43,11 +43,14 @@ public class PieceJointeDossierService {
     private final DispatchRepository dispatchRepository;
     private final ControleurRepository controleurRepository;
     private final NotificationService notificationService;
+    /** ⚠️ Spec « Mandats PRMP » — garde de propriété partagée (attribution OU PRMP en fonction) + vacance. */
+    private final DossierIntegriteService dossierIntegrite;
 
     public PieceJointeDossierService(PieceJointeDossierRepository repository,
             TypePieceJointeRepository typePieceRepository, DossierRepository dossierRepository,
             DispatchRepository dispatchRepository, ControleurRepository controleurRepository,
-            NotificationService notificationService) {
+            NotificationService notificationService, DossierIntegriteService dossierIntegrite) {
+        this.dossierIntegrite = dossierIntegrite;
         this.repository = repository;
         this.typePieceRepository = typePieceRepository;
         this.dossierRepository = dossierRepository;
@@ -74,7 +77,10 @@ public class PieceJointeDossierService {
 
     /**
      * Upload d'une pièce par la PRMP propriétaire. {@code apresLettreRenvoi=true} si {@code idLettre}
-     * est fourni et le dossier est SOUMIS/PRET_DISPATCH ; sinon pièce initiale (false).
+     * est fourni et le dossier est SOUMIS/PRET_DISPATCH (flux historique) ou
+     * {@code EN_ATTENTE_PIECES} (⚠️ spec navette 2026-08-02 — dossier suspendu par la lettre signée ;
+     * la reprise reste une action EXPLICITE de la PRMP : {@code …/transmettre-complements}) ;
+     * sinon pièce initiale (false).
      */
     public PieceJointeDossierDto store(PieceJointeDossierDto meta, MultipartFile fichier) {
         Dossier dossier = dossierRepository.findById(meta.getIdDossier())
@@ -84,12 +90,21 @@ public class PieceJointeDossierService {
         Integer idLettre = null;
         if (meta.getIdLettre() != null
                 && (StatutDossier.SOUMIS.name().equals(dossier.getStatut())
-                        || StatutDossier.PRET_DISPATCH.name().equals(dossier.getStatut()))) {
+                        || StatutDossier.PRET_DISPATCH.name().equals(dossier.getStatut())
+                        || StatutDossier.EN_ATTENTE_PIECES.name().equals(dossier.getStatut()))) {
             apres = true;
             idLettre = meta.getIdLettre();
         }
         PieceJointeDossier saved = enregistrer(meta.getIdDossier(), meta.getIdTypePiece(), fichier, apres, idLettre);
+        // ⚠️ 2026-08-03 (demande user) — un dépôt pendant la RECTIFICATION (EN_ATTENTE_DECISION_PRMP)
+        // est une VERSION CORRIGÉE : marquée pour être distinguée de l'originale dans toutes les listes.
+        if (StatutDossier.EN_ATTENTE_DECISION_PRMP.name().equals(dossier.getStatut())) {
+            saved.setVersionCorrigee(true);
+            saved = repository.save(saved);
+        }
         if (apres) {
+            // No-op pour EN_ATTENTE_PIECES (garde PRET_DISPATCH interne) : la reprise passe par
+            // POST /api/dossiers/{id}/transmettre-complements, pas par le dépôt.
             rouvrirExamenApresRenvoi(meta.getIdDossier());
         }
         return toDtoAvecLibelle(saved);
@@ -171,12 +186,18 @@ public class PieceJointeDossierService {
                 .orElseThrow(() -> new ResourceNotFoundException("Pièce jointe introuvable : " + id));
     }
 
-    /** Propriété : seule la PRMP propriétaire du dossier peut déposer/supprimer ses pièces. */
+    /**
+     * Propriété : seule la PRMP propriétaire du dossier peut déposer/supprimer ses pièces.
+     *
+     * <p>⚠️ Spec « Mandats PRMP » — délégué à la garde partagée, qui accepte aussi la PRMP <em>en fonction</em>
+     * (reprise du traitement après changement de titulaire) et refuse toute action pendant la vacance.
+     * Un dossier sans PRMP propriétaire reste refusé ici : déposer une pièce suppose un périmètre connu.</p>
+     */
     private void exigerProprietaire(Dossier dossier) {
-        String moi = CurrentUser.ref().orElse(null);
-        if (dossier.getIdPrmp() == null || !dossier.getIdPrmp().equals(moi)) {
+        if (dossier.getIdPrmp() == null) {
             throw new AccessDeniedException("Pièce réservée à la PRMP propriétaire du dossier.");
         }
+        dossierIntegrite.exigerOperateurHabilite(dossier);
     }
 
     private PieceJointeDossierDto toDtoAvecLibelle(PieceJointeDossier entity) {

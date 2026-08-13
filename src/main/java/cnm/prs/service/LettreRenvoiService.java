@@ -20,11 +20,13 @@ import cnm.prs.entity.Dossier;
 import cnm.prs.entity.Examen;
 import cnm.prs.entity.LettreRenvoi;
 import cnm.prs.entity.LettreRenvoiLue;
+import cnm.prs.entity.Localite;
 import cnm.prs.entity.Ppm;
 import cnm.prs.entity.Prmp;
 import cnm.prs.enums.ProfilUtilisateur;
 import cnm.prs.enums.StatutDossier;
 import cnm.prs.enums.StatutLettreRenvoi;
+import cnm.prs.enums.StatutPv;
 import cnm.prs.enums.TypeNotification;
 import cnm.prs.exception.BusinessRuleException;
 import cnm.prs.exception.ResourceNotFoundException;
@@ -39,6 +41,7 @@ import cnm.prs.repository.LettreRenvoiLueRepository;
 import cnm.prs.repository.LettreRenvoiRepository;
 import cnm.prs.repository.PpmRepository;
 import cnm.prs.repository.PrmpRepository;
+import cnm.prs.repository.PvExamenRepository;
 import cnm.prs.security.CurrentUser;
 import cnm.prs.security.Visibilite;
 
@@ -64,6 +67,7 @@ public class LettreRenvoiService {
     private final LocaliteRepository localiteRepository;
     private final LettreRenvoiDocumentGenerator documentGenerator;
     private final ReferenceService referenceService;
+    private final PvExamenRepository pvExamenRepository;
 
     @Value("${storage.lettre-renvoi.path:${java.io.tmpdir}/prs-fsx/LR}")
     private String cheminStockageLr;
@@ -73,7 +77,9 @@ public class LettreRenvoiService {
             ControleurDirectory controleurDirectory, ControleurRepository controleurRepository,
             NotificationService notificationService, LettreRenvoiLueRepository lueRepository,
             EntiteContractRepository entiteContractRepository, LocaliteRepository localiteRepository,
-            LettreRenvoiDocumentGenerator documentGenerator, ReferenceService referenceService) {
+            LettreRenvoiDocumentGenerator documentGenerator, ReferenceService referenceService,
+            PvExamenRepository pvExamenRepository) {
+        this.pvExamenRepository = pvExamenRepository;
         this.documentGenerator = documentGenerator;
         this.localiteRepository = localiteRepository;
         this.entiteContractRepository = entiteContractRepository;
@@ -255,7 +261,7 @@ public class LettreRenvoiService {
         if (localite == null || localite.isBlank()) {
             localite = repository.findLocaliteByLettre(id).orElse(null);   // repli : localité de réception
         }
-        boolean centrale = "ANT".equals(localite);
+        boolean centrale = Localite.estCentrale(localite);   // source unique (cf. références « CNM »)
         if (!centrale && CurrentUser.profil().orElse(null) != ProfilUtilisateur.CHEF_COMMISSION) {
             throw new AccessDeniedException(
                     "Seul le Chef de Commission peut signer une lettre de renvoi pour une localité régionale.");
@@ -269,16 +275,53 @@ public class LettreRenvoiService {
         byte[] pdf = documentGenerator.genererPdf(centrale,
                 construireRemplacements(lettre, dossier, nomComplet(im), centrale, localiteLibelle));
         lettre.setCheminDocument(stockerSurFsx(lettre, pdf));   // PDF écrit sur le FSX (répertoire LR/)
-        // ⚠️ Règle ajoutée — rouvre le circuit : le dossier examiné repasse EXAMINE → PRET_DISPATCH pour que la
-        // PRMP puisse déposer les pièces manquantes (apresLettreRenvoi=true), avant ré-examen. On conserve la
-        // réception/le dispatch/l'examen/la lettre (pas de suppression) ; le dispatch existant désigne déjà le Membre.
-        if (dossier != null && StatutDossier.EXAMINE.name().equals(dossier.getStatut())) {
-            dossier.setStatut(StatutDossier.PRET_DISPATCH.name());
+        // ⚠️ Règle MODIFIÉE (2026-08-01, spec navette cas 3) — la lettre signée SUSPEND l'examen : le dossier
+        // passe EN_ATTENTE_PIECES (plus modifiable par les Membres, verrous d'examen exclus de ce statut).
+        // La PRMP dépose les pièces demandées (apresLettreRenvoi=true) puis déclenche la reprise via
+        // POST /api/dossiers/{id}/transmettre-complements → ⚠️ 2026-08-02 : le dossier passe A_REEXAMINER
+        // (retour dans la file « à examiner » du Membre pour RÉEXAMEN avec les pièces reçues) ; la navette
+        // repart à la re-soumission du projet de PV (→ EXAMINE).
+        // (A_REEXAMINER accepté : nouvelle lettre signée pendant un réexamen → re-suspension.)
+        if (dossier != null && (StatutDossier.EXAMINE.name().equals(dossier.getStatut())
+                || StatutDossier.A_REEXAMINER.name().equals(dossier.getStatut()))) {
+            dossier.setStatut(StatutDossier.EN_ATTENTE_PIECES.name());
             dossierRepository.save(dossier);
         }
+        // ⚠️ Règle ajoutée (2026-08-02, réexamen) — un projet de PV resté PROJET_SOUMIS repasse
+        // EN_RECTIFICATION : la lettre de renvoi vaut retour de navette ; sans cela le Membre ne
+        // pourrait pas re-soumettre le projet après le réexamen (soumission exige BROUILLON/EN_RECTIFICATION).
+        pvExamenRepository.findFirstByIdExamenOrderByIdPvDesc(lettre.getIdExamen()).ifPresent(pv -> {
+            if (StatutPv.PROJET_SOUMIS.name().equals(pv.getStatutPv())) {
+                pv.setStatutPv(StatutPv.EN_RECTIFICATION.name());
+                pvExamenRepository.save(pv);
+            }
+        });
         LettreRenvoi saved = repository.save(lettre);
         notifierSignature(saved);
         return peuplerNomSignataire(LettreRenvoiMapper.toDto(saved));
+    }
+
+    /**
+     * ⚠️ Spec navette (2026-08-01) — ARCHIVAGE de la lettre signée par l'Assistant contrôleur (même
+     * circuit que les PV) : pose la date/l'auteur d'archivage ; la lettre reste rattachée au dossier.
+     */
+    public LettreRenvoiDto archiver(Integer id) {
+        LettreRenvoi lettre = exigerExistante(id);
+        if (!StatutLettreRenvoi.SIGNE.name().equals(lettre.getStatut())) {
+            throw new BusinessRuleException("Archivage impossible : la lettre n'est pas signée (statut « "
+                    + lettre.getStatut() + " »).");
+        }
+        if (lettre.getDateArchivage() != null) {
+            throw new BusinessRuleException("Cette lettre est déjà archivée (le " + lettre.getDateArchivage() + ").");
+        }
+        String localite = repository.findLocaliteByLettre(id).orElse(null);
+        String maLocalite = CurrentUser.localite().filter(s -> !s.isBlank()).orElse(null);
+        if (localite != null && !localite.equals(maLocalite)) {
+            throw new AccessDeniedException("Archivage réservé à l'Assistant contrôleur de la localité du dossier.");
+        }
+        lettre.setDateArchivage(LocalDate.now());
+        lettre.setImArchiveur(CurrentUser.ref().orElse(null));
+        return peuplerNomSignataire(LettreRenvoiMapper.toDto(repository.save(lettre)));
     }
 
     /** Écrit le PDF dans le répertoire FSX LR/ sous {@code {refLettre nettoyée}.pdf} ; renvoie le chemin. */
@@ -410,11 +453,18 @@ public class LettreRenvoiService {
 
     /** Propriété (§2.4) : seul le Membre attributaire de l'examen (Examen.imCtrlMembre) peut soumettre. */
     private void exigerProprietaire(LettreRenvoi lettre) {
+        // ⚠️ Règle élargie (2026-08-01) — la lettre de renvoi est une action du PRÉSIDENT / CC
+        // (clôture de navette du projet de PV) ; l'attributaire historique reste toléré en lecture
+        // du flux (données existantes).
+        ProfilUtilisateur profil = CurrentUser.profil().orElse(null);
+        if (profil == ProfilUtilisateur.PRESIDENT || profil == ProfilUtilisateur.CHEF_COMMISSION) {
+            return;
+        }
         String attributaire = examenRepository.findById(lettre.getIdExamen())
                 .map(Examen::getImCtrlMembre).orElse(null);
         String moi = CurrentUser.ref().orElse(null);
         if (attributaire == null || !attributaire.equals(moi)) {
-            throw new AccessDeniedException("Lettre réservée au Membre attributaire de l'examen.");
+            throw new AccessDeniedException("Lettre réservée au Président / Chef de Commission (clôture de navette).");
         }
     }
 }

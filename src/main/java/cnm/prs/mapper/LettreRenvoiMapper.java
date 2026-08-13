@@ -25,6 +25,8 @@ public final class LettreRenvoiMapper {
         dto.setDateLettre(entity.getDateLettre());
         dto.setStatut(entity.getStatut());
         dto.setImSignataire(entity.getImSignataire());
+        dto.setDateArchivage(entity.getDateArchivage());
+        dto.setImArchiveur(entity.getImArchiveur());
         return dto;
     }
 }

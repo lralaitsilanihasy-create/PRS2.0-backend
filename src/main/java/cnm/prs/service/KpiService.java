@@ -163,8 +163,10 @@ public class KpiService {
         }
         List<String> examines = List.of(StatutDossier.EXAMINE.name(), StatutDossier.PV_SIGNE.name(),
                 StatutDossier.EN_VERIFICATION.name(), StatutDossier.CLOTURE.name());
+        // ⚠️ 2026-08-02 — A_REEXAMINER (réexamen après lettre de renvoi) compte dans « à examiner ».
         return new CompteursMembreDto(
-                dossierRepository.countAExaminerParMembre(StatutDossier.DISPATCHE.name(), im),
+                dossierRepository.countAExaminerParMembre(
+                        List.of(StatutDossier.DISPATCHE.name(), StatutDossier.A_REEXAMINER.name()), im),
                 dossierRepository.countExaminesParMembre(examines, im));
     }
 

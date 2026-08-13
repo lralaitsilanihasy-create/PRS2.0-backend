@@ -1047,7 +1047,8 @@ relation **1,N** : un point de contrôle a **0..N** lignes. Remplace l'ancien ch
 > localités). C'est la file de travail du Secrétaire ; un dossier en sort dès qu'une réception est créée.
 
 > **Files du Membre attributaire (§2.4).** `GET /api/dossiers/a-examiner` = ses dossiers **`DISPATCHE`**
-> (pas encore examinés) ; `GET /api/dossiers/examines` = **historique** de ce qu'il a examiné
+> (pas encore examinés) **+ `A_REEXAMINER`** (⚠️ 2026-08-02 — réexamen après lettre de renvoi, pièces
+> complémentaires transmises) ; `GET /api/dossiers/examines` = **historique** de ce qu'il a examiné
 > (**`EXAMINE` + `PV_SIGNE` + `CLOTURE`**), **paginé** (`?page=&size=&sort=`, réponse `Page` :
 > `content[]`, `totalElements`, …). Les deux sont **scopées au Membre courant** (`Dispatch.imCtrlMembre`)
 > et **exclusives** : à la création de l'examen, un dossier quitte « à examiner » pour « examinés ». Un
@@ -1171,17 +1172,16 @@ ajoutées après réception d'une lettre de renvoi** (`true`).
 - `data` : JSON `{ "idDossier": …, "idTypePiece": … }` (et `idLettre` pour un dépôt après lettre de renvoi) ;
 - `fichier` : le fichier **PDF/JPEG/PNG** (magic-bytes ; sinon **400**).
 
-**Règle `apresLettreRenvoi`** : si `idLettre` est fourni **et** le dossier est `SOUMIS`/`PRET_DISPATCH`, la pièce
+**Règle `apresLettreRenvoi`** : si `idLettre` est fourni **et** le dossier est `SOUMIS`/`PRET_DISPATCH`
+**ou `EN_ATTENTE_PIECES`** (⚠️ spec navette 2026-08-02 — dossier suspendu par la lettre signée), la pièce
 est enregistrée `apresLettreRenvoi=true` (avec `idLettre`) ; sinon c'est une **pièce initiale** (`false`).
 
-> ⚠️ **Ré-ouverture de l'examen après lettre de renvoi (règle ajoutée).** Au **premier** dépôt
-> `apresLettreRenvoi=true` (dossier `PRET_DISPATCH`, cf. signature de la lettre ci-dessous), le serveur **réutilise
-> le dispatch existant** (le Membre y est déjà désigné) et fait avancer le dossier **`PRET_DISPATCH → DISPATCHE`**
-> — **pas de nouveau dispatch** (aucun doublon). Le dossier **réapparaît alors dans `GET /api/dossiers/a-examiner`**
-> du Membre attributaire, qui peut ré-examiner. Une **unique** notification **`PIECE_AJOUTEE_APRES_RENVOI`**
-> (`typeObjet=DOSSIER`, `idObjet=idDossier`) est émise vers ce Membre. Les **dépôts suivants** trouvent le dossier
-> déjà `DISPATCHE` (donc `apresLettreRenvoi=false`) : **ni ré-avance, ni notification en double** (regroupement
-> naturel).
+> ⚠️ **Reprise après lettre de renvoi (règle MODIFIÉE 2026-08-02, spec navette + réexamen).** Le dépôt
+> d'une pièce pendant `EN_ATTENTE_PIECES` **ne réactive PAS l'examen** : la reprise est une action
+> **EXPLICITE** de la PRMP (`POST /api/dossiers/{id}/transmettre-complements` → dossier **`A_REEXAMINER`**,
+> même dispatch/Membre, notification `COMPLEMENTS_TRANSMIS` — cf. « Cas 3 » de la section Vérifications).
+> L'ancienne ré-ouverture automatique au premier dépôt (`PRET_DISPATCH → DISPATCHE` +
+> `PIECE_AJOUTEE_APRES_RENVOI`) ne subsiste que pour le flux historique `PRET_DISPATCH`.
 
 > **Pièces obligatoires à la soumission.** `POST /api/dossiers/{id}/soumettre` vérifie que toutes les pièces
 > `obligatoire` de la **famille** de dossier (référentiel ci-dessus, clé `DDP`/`DMC`/`DDM`) sont présentes.
@@ -1831,9 +1831,10 @@ Lire : » de la ligne modèle étant retirés) puis converti via Microsoft Word
 ---
 
 ## Lettres de renvoi
-**Ressource** `/api/lettre-renvois` (table `t_lettre_renvoi`) — **action séparée pendant l'examen** : le
-Membre peut créer **N lettres de renvoi** par examen (indépendamment du Projet de PV). Lecture filtrée par
-profil/localité. Cycle : `BROUILLON → SOUMIS → SIGNE` (signature CC ou Président).
+**Ressource** `/api/lettre-renvois` (table `t_lettre_renvoi`) — ⚠️ **règle MODIFIÉE 2026-08-01** : la lettre
+de renvoi est une action de la **clôture de la navette du projet de PV**, réservée au **Président / Chef de
+Commission** (auparavant : Membre pendant l'examen). N lettres possibles par examen (indépendamment du Projet
+de PV). Lecture filtrée par profil/localité. Cycle : `BROUILLON → SOUMIS → SIGNE` (signature CC ou Président).
 
 **Champs `LettreRenvoiDto`**
 
@@ -1842,7 +1843,7 @@ profil/localité. Cycle : `BROUILLON → SOUMIS → SIGNE` (signature CC ou Pré
 | idLettre | number | — (réponse) | PK **auto-générée** (IDENTITY) |
 | idExamen | number | Oui | @NotNull (« L'examen est obligatoire. ») — FK `t_examen` (**non unique** : N lettres/examen) |
 | idDossier | number | — (réponse) | **lecture seule** (dérivé de l'examen) |
-| refLettre | string | — (réponse) | **générée serveur** : `<seqLettreGlobal>/<sous_type>/<code_localite>/LR/<année>` (ex. `00001/PPM/CRM-ANT/LR/2026`, `00001/PPM-AGPM/CRM-ANT/LR/2026`). Le **segment sous-type / localité / année** est **repris tel quel** du `refeDossier` du dossier (donc suit automatiquement le segment sous-type, tiret compris), mais le **numéro de séquence est un compteur GLOBAL dédié aux lettres** (par année, **strictement unique et continu** tous dossiers/entités/localités confondus — ≠ le numéro du dossier). `null` si `refeDossier` non structuré |
+| refLettre | string | — (réponse) | **générée serveur** : `<seqLettreGlobal>/<sous_type>/<code_localite>/LR/<année>` (ex. `00001/PPM/CNM/LR/2026` en central, `00001/PPM-AGPM/CRM-TMS/LR/2026` en région). Le **segment sous-type / localité / année** est **repris tel quel** du `refeDossier` du dossier (donc suit automatiquement le segment sous-type, tiret compris), mais le **numéro de séquence est un compteur GLOBAL dédié aux lettres** (par année, **strictement unique et continu** tous dossiers/entités/localités confondus — ≠ le numéro du dossier). `null` si `refeDossier` non structuré |
 | corpsLettre | string | Non | corps libre de la lettre (TEXT, sans limite de taille) |
 | dateExamen | string (date) | — (réponse) | **lecture seule** (date d'examen) |
 | dateLettre | string (date) | — (réponse) | **posée serveur** (jour) |
@@ -1861,9 +1862,9 @@ profil/localité. Cycle : `BROUILLON → SOUMIS → SIGNE` (signature CC ou Pré
 | GET | /api/lettre-renvois/mes-lettres | — | `LettreRenvoiDto[]` | 200 | **PRMP** — lettres `SIGNE` de ses dossiers (lecture seule) |
 | GET | /api/lettre-renvois/{id} | — | `LettreRenvoiDto` | 200, 403, 404 | Authentifié (dans le périmètre) **ou PRMP propriétaire** (lettre `SIGNE`) — voir marquage « lu » |
 | GET | /api/lettre-renvois/{id}/document | — | fichier **PDF** | 200, 403, 404 | Authentifié (périmètre) — document de la lettre signée |
-| POST | /api/lettre-renvois | `LettreRenvoiDto` | `LettreRenvoiDto` | 201, 400, 403 | **MEMBRE** — création pendant l'examen (BROUILLON) |
-| PUT | /api/lettre-renvois/{id} | `LettreRenvoiDto` | `LettreRenvoiDto` | 200, 400, 404, 409 | **MEMBRE** (brouillon : objet/corps) |
-| POST | /api/lettre-renvois/{id}/soumettre | — | `LettreRenvoiDto` | 200, 403, 404, 409 | **MEMBRE propriétaire** (BROUILLON→SOUMIS) |
+| POST | /api/lettre-renvois | `LettreRenvoiDto` | `LettreRenvoiDto` | 201, 400, 403 | **CHEF_COMMISSION / PRESIDENT** (⚠️ 2026-08-01) — création à la clôture de navette (BROUILLON) |
+| PUT | /api/lettre-renvois/{id} | `LettreRenvoiDto` | `LettreRenvoiDto` | 200, 400, 404, 409 | **CHEF_COMMISSION / PRESIDENT** (brouillon : corps) |
+| POST | /api/lettre-renvois/{id}/soumettre | — | `LettreRenvoiDto` | 200, 403, 404, 409 | **CHEF_COMMISSION / PRESIDENT** (BROUILLON→SOUMIS) |
 | POST | /api/lettre-renvois/{id}/signer | — | `LettreRenvoiDto` | 200, 403, 404, 409 | **CHEF_COMMISSION** (toutes localités) ou **PRESIDENT** (localité **centrale ANT** uniquement) — voir règle |
 | DELETE | /api/lettre-renvois/{id} | — | — | 204, 404 | ADMINISTRATEUR |
 
@@ -1894,7 +1895,7 @@ profil/localité. Cycle : `BROUILLON → SOUMIS → SIGNE` (signature CC ou Pré
 >
 > **Document PDF (⚠️ règle ajoutée).** À la signature, le **PDF** de la lettre est **généré** puis **stocké
 > sur le système de fichiers (FSX)** dans le répertoire **`LR/`** (`storage.lettre-renvoi.path`), sous le nom
-> **`{refLettre}.pdf`** (les `/` remplacés par `_`, ex. `00007_PPM_CRM-ANT_LR_2026.pdf`) ; le chemin est
+> **`{refLettre}.pdf`** (les `/` remplacés par `_`, ex. `00007_PPM_CNM_LR_2026.pdf`) ; le chemin est
 > conservé dans `t_lettre_renvoi.CHEMIN_DOCUMENT`. Téléchargeable via `GET /api/lettre-renvois/{id}/document`
 > (PDF), dans le périmètre de la lettre (lecture du fichier FSX, repli sur `DOCUMENT_PDF` pour les anciennes
 > lettres). Le PDF est produit **à partir du modèle Word fourni** (`resources/templates/LR_CENTRALE.docx`
@@ -2218,8 +2219,8 @@ profil/localité. Cycle : `BROUILLON → SOUMIS → SIGNE` (signature CC ou Pré
 
 > **Compteurs Membre (⚠️ règle ajoutée).** `GET /api/kpis/mes-compteurs-membre` (réservé **MEMBRE** ou
 > délégué) renvoie, **filtrés sur le Membre attributaire** (son IM via `Dispatch.imCtrlMembre`) :
-> `aExaminer` (ses dossiers `DISPATCHE`, miroir de `/api/dossiers/a-examiner`) et `examines` (son
-> historique : `EXAMINE`/`PV_SIGNE`/`EN_VERIFICATION`/`CLOTURE`).
+> `aExaminer` (ses dossiers `DISPATCHE` + `A_REEXAMINER`, miroir de `/api/dossiers/a-examiner`) et
+> `examines` (son historique : `EXAMINE`/`PV_SIGNE`/`EN_VERIFICATION`/`CLOTURE`).
 
 **Exemple — réponse `GET /api/kpis/mes-compteurs-publication`** (Chargé de publication)
 ```json

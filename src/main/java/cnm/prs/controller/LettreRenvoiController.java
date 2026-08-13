@@ -23,7 +23,8 @@ import cnm.prs.service.LettreRenvoiService;
 
 /**
  * Contrôleur REST pour la ressource {@code lettre-renvois} (table {@code t_lettre_renvoi}).
- * Lecture : authentifié (filtré localité). Édition/soumission : Membre. Signature : CC ou Président.
+ * Lecture : authentifié (filtré localité). Édition/soumission/signature : Président ou CC
+ * (⚠️ règle modifiée 2026-08-01 — la lettre appartient à la clôture de navette, plus au Membre).
  */
 @RestController
 @RequestMapping("/api/lettre-renvois")
@@ -62,20 +63,20 @@ public class LettreRenvoiController {
                 .body(pdf);
     }
 
-    /** Création d'une lettre de renvoi pendant l'examen (statut BROUILLON). */
-    @PreAuthorize("@perm.peutExercer('MEMBRE')")
+    /** Création d'une lettre de renvoi (statut BROUILLON) — clôture de navette, Président/CC. */
+    @PreAuthorize("hasAnyRole('CHEF_COMMISSION','PRESIDENT')")
     @PostMapping
     public ResponseEntity<LettreRenvoiDto> create(@Valid @RequestBody LettreRenvoiDto dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.create(dto));
     }
 
-    @PreAuthorize("@perm.peutExercer('MEMBRE')")
+    @PreAuthorize("hasAnyRole('CHEF_COMMISSION','PRESIDENT')")
     @PutMapping("/{id}")
     public LettreRenvoiDto update(@PathVariable Integer id, @Valid @RequestBody LettreRenvoiDto dto) {
         return service.update(id, dto);
     }
 
-    @PreAuthorize("@perm.peutExercer('MEMBRE')")
+    @PreAuthorize("hasAnyRole('CHEF_COMMISSION','PRESIDENT')")
     @PostMapping("/{id}/soumettre")
     public LettreRenvoiDto soumettre(@PathVariable Integer id) {
         return service.soumettre(id);
@@ -85,6 +86,13 @@ public class LettreRenvoiController {
     @PostMapping("/{id}/signer")
     public LettreRenvoiDto signer(@PathVariable Integer id) {
         return service.signer(id);
+    }
+
+    /** ⚠️ Spec navette (2026-08-01) — archivage de la lettre signée par l'Assistant contrôleur. */
+    @PreAuthorize("hasRole('ASSISTANT_CONTROLEUR')")
+    @PostMapping("/{id}/archiver")
+    public LettreRenvoiDto archiver(@PathVariable Integer id) {
+        return service.archiver(id);
     }
 
     @PreAuthorize("hasRole('ADMINISTRATEUR')")
