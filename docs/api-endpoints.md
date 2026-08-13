@@ -1523,7 +1523,32 @@ attribué par le serveur.)* ⚠️ `idTypeDossier` est **déprécié** : accept�
 et interprété comme un code de **sous-type** (les anciens payloads `{"idTypeDossier":"DAO"}` restent valides).
 
 **`EditionPpmRequest`** (`PUT /api/saisies/ppm/{idDossier}`) — édite un **brouillon** PPM en une transaction :
-`exercice`, `signataire`, `dateSignature`, `reference` (en-tête, tous obligatoires) + `marches` (liste désirée). Les lignes sont **réconciliées par `idDetail`** : ajout des nouvelles, mise à jour des existantes (mode **conservé tel quel** — saisi), **retrait** des absentes. La localité/le type/le propriétaire/l'entité ne changent pas. Dossier non BROUILLON → **409** ; non-propriétaire → **403**.
+`exercice`, `signataire`, `dateSignature`, `reference` (en-tête, tous obligatoires) + `marches` (liste désirée). Les lignes sont **réconciliées par `idDetail`** : ajout des nouvelles, mise à jour des existantes (mode **conservé tel quel** — saisi), **retrait** des absentes. La localité/le type/le propriétaire/l'entité ne changent pas. Dossier ni BROUILLON ni EN_ATTENTE_DECISION_PRMP → **409** ; non-propriétaire → **403**.
+
+> ⚠️ **Rectification PAR IMPORT du PPM (règle 2026-08-02, demande user).** La rectification d'un dossier
+> **`EN_ATTENTE_DECISION_PRMP`** se fait par l'**importation du PPM rectifié (PDF)** — plus de formulaire
+> manuel : le front parse le PDF (`POST /api/saisies/ppm/import`, read-only), prévisualise dans la grille
+> partagée, puis enregistre via **le même `PUT /api/saisies/ppm/{idDossier}`** (accepté à ce statut,
+> propriétaire). En rectification la **STRUCTURE est FIGÉE** : chaque ligne fournie doit porter l'`idDetail`
+> d'une ligne existante (mise à jour **en place** — l'examen et le périmètre des observations référencent
+> les lignes) ; **ajout → 409**, **retrait → 409**. L'entité du PDF doit être celle du dossier (garde front
+> au parse) ; signataire/référence actuels conservés. `PUT /api/ppms/{id}` et `PUT /api/marches/{id}`
+> (appelés par la façade) acceptent aussi ce statut pour le propriétaire ; **create/delete restent
+> BROUILLON uniquement**. Le statut reste `EN_ATTENTE_DECISION_PRMP` jusqu'à la resoumission
+> (`POST /api/dossiers/{id}/resoumettre`). Les PATCH `…/rectifier` (édition manuelle champ à champ)
+> subsistent côté API mais ne sont plus le parcours UI. ⚠️ La rectification couvre AUSSI les **pièces
+> jointes** (observations « pièce » du PV) : la PRMP joint la **version corrigée** — nouvel upload du
+> même type (`POST /api/piece-jointe-dossiers`, autorisé au statut, propriétaire), l'**original est
+> conservé** (traçabilité, DELETE réservé brouillon). ⚠️ 2026-08-03 : un dépôt pendant la rectification
+> est **marqué `versionCorrigee=true`** (colonne `VERSION_CORRIGEE`, posée serveur au statut
+> `EN_ATTENTE_DECISION_PRMP`) — les listes de pièces la distinguent de l'originale : section
+> « **Versions corrigées (rectification)** » + étiquette « Corrigée » (verte, comme « LR » pour les
+> pièces après lettre de renvoi) dans la consultation du dossier et le détail PPM.
+> L'écran « Rectifier » ne liste QUE les pièces
+> **citées dans les observations du PV** (et les versions du même type, dont celles jointes en
+> rectification) — badge « Observation du PV — version corrigée attendue » sur celles visées par une
+> observation non levée (pont `ObservationPvDto.idExamenPiece` → `t_examen_piece.ID_PIECE`) ; aucune
+> observation de pièce → section absente.
 
 > ⚠️ **Sous-objets des lignes à l'édition (règle corrigée 2026-07-18).** Le PUT traitait l'en-tête et les
 > colonnes du marché mais **ignorait silencieusement** `beneficiaires[]`, `lots[]` et `processus[]` (enfants des
@@ -3734,6 +3759,30 @@ Ouvert Restreint ».
 > ⚠️ **Identité & ID (règle ajoutée).** L'identité du vérificateur (`imCtrlVerif`) et la `dateVerif` sont **prises du JWT / serveur**, jamais du corps. L'`idVerification` est **auto-généré** (colonne IDENTITY) ; ne pas le fournir.
 
 > **Préconditions de circuit (création/MAJ) → 403/409** : profil non `VERIFICATEUR` → **403** ; sinon le PV référencé (`idPv`) doit être **`SIGNE`** **et** d'avis **`FAVR`** (favorable avec réserves) **et** le dossier **non clos** → sinon **409**. La vérification est **itérative** sur le même dossier.
+
+> ⚠️ **Circuit des observations FAVR — PÉRIMÈTRE FIGÉ (spec 2026-08-02).** Les observations transmises à
+> la PRMP sont **exclusivement celles arrêtées dans le PV** (snapshot à la **signature** du PV FAVR :
+> une observation trackée par ligne « Au lieu de / Lire » de point non conforme + une par pièce non
+> conforme, libellés **figés** — `t_observation_pv` ; rattrapage paresseux au premier accès pour les
+> dossiers FAVR signés avant la règle). **Aucun acteur ne peut élargir ce périmètre** à aucun stade :
+> - `GET /api/observations-pv?dossier=` (vérificateur localité / PRMP propriétaire / tout-voyant) :
+>   observations + **statut courant** (`EMISE` / `LEVEE` / `MAINTENUE`) + **historique par itération**
+>   (`t_suivi_observation` : décision, précision, auteur, horodatage).
+> - `POST /api/observations-pv/passage` (**VERIFICATEUR**, dossier `EN_VERIFICATION`) :
+>   `{ idDossier, decisions:[{ idObservationPv, decision: LEVEE|MAINTENUE, precision? }] }` — **chaque
+>   observation restante doit être statuée** (400 sinon) ; **hors périmètre → 409** (aucune création) ;
+>   **re-décision sur une LEVÉE → 409** (« levée = acquise », décision user 02/08) ; la précision
+>   (facultative, MAINTENUE seulement) est un rappel de **ce qui manque**, jamais une exigence nouvelle.
+>   Le passage `t_verification` est **créé par le serveur** (observation = rappel auto-généré des
+>   maintenues, `obsLevees` dérivé) puis la transition [Auto] s'applique : toutes levées →
+>   `OBSERVATIONS_LEVEES` (cap SIGMP) ; sinon → `EN_ATTENTE_DECISION_PRMP` + notification PRMP
+>   (`OBSERVATION_VERIFICATION`) au contenu **auto-généré** (les maintenues + précisions, rien d'autre).
+> - **Saisie libre interdite** : dès que le périmètre existe, `POST`/`PUT /api/verifications` avec un
+>   texte d'observation client → **409** (rejet backend, pas seulement masquage UI). Le premier envoi à
+>   la PRMP (PV signé) reprend automatiquement les observations du PV — aucun champ de rédaction.
+> - Front : écran Vérificateur = liste des observations (radio Levée / Maintenue + précision), plus
+>   aucun champ libre ; écran « Rectifier » PRMP = panneau lecture seule (statuts + précisions).
+> - Purge retrait : `t_suivi_observation` puis `t_observation_pv` en tête de cascade.
 
 > **Effet `[Auto]`** (sur un dossier `EN_VERIFICATION`) : `obsLevees = true` → dossier **`CLOTURE`** + notification `CLOTURE_ELIGIBLE`. ⚠️ **Règle ajoutée** — `obsLevees = false` → dossier **`EN_ATTENTE_DECISION_PRMP`** : l'observation est **transmise à la PRMP** du dossier (notification `OBSERVATION_VERIFICATION` : référence dossier, vérificateur, texte de l'observation, date) et l'événement est **tracé** dans `t_audit_log`. Le vérificateur ne peut plus modifier ni soumettre de vérification tant que la PRMP n'a pas statué (nouvelle tentative → **409**) ; il voit le dossier en lecture seule dans `GET /api/dossiers/en-attente-prmp`. La PRMP le retrouve via `GET /api/dossiers?statut=EN_ATTENTE_DECISION_PRMP` et lit l'observation complète dans sa notification.
 

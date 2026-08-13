@@ -33,6 +33,45 @@ public interface PvExamenRepository extends JpaRepository<PvExamen, Integer> {
     /** Nombre de PV dont le statut diffère de la valeur donnée (ex. {@code <> SIGNE} = projets). */
     long countByStatutPvNot(String statutPv);
 
+    /**
+     * PV (projet) d'un examen — dernier créé (⚠️ 2026-08-02, réexamen après lettre de renvoi : à la
+     * signature de la lettre, un projet {@code PROJET_SOUMIS} repasse {@code EN_RECTIFICATION} pour
+     * que le Membre puisse le re-soumettre une fois le réexamen effectué).
+     */
+    Optional<PvExamen> findFirstByIdExamenOrderByIdPvDesc(Integer idExamen);
+
+    /**
+     * PV SIGNÉS des dossiers d'une PRMP (via PPM du dossier — même périmètre que
+     * {@code LettreRenvoiRepository.findSigneesPourPrmp}). ⚠️ 2026-08-02 : la PRMP consulte le PV
+     * définitif de ses dossiers (elle en a besoin pour rectifier selon les observations du PV).
+     */
+    @Query("""
+            select pv from PvExamen pv
+            where pv.statutPv = 'SIGNE'
+              and exists (select 1 from Ppm p
+                          where p.idDossier = pv.examen.dispatch.reception.idDossier and p.idPrmp = :idPrmp)
+            """)
+    List<PvExamen> findDefinitifsPourPrmp(@Param("idPrmp") String idPrmp);
+
+    /** Vrai si le PV est SIGNÉ et relève d'un dossier de la PRMP (accès détail / document PRMP). */
+    @Query("""
+            select (count(pv) > 0) from PvExamen pv
+            where pv.idPv = :idPv and pv.statutPv = 'SIGNE'
+              and exists (select 1 from Ppm p
+                          where p.idDossier = pv.examen.dispatch.reception.idDossier and p.idPrmp = :idPrmp)
+            """)
+    boolean estSignePourPrmp(@Param("idPv") Integer idPv, @Param("idPrmp") String idPrmp);
+
+
+    /**
+     * Chargement VERROUILLÉ (⚠️ 2026-08-02, anti-doublon) — {@code signer} sérialise les requêtes
+     * concurrentes sur le même PV : sans verrou, plusieurs clics pendant la génération du PDF (lente)
+     * lisaient tous {@code PROJET_ACCEPTE} et notifiaient la signature plusieurs fois.
+     */
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select pv from PvExamen pv where pv.idPv = :idPv")
+    Optional<PvExamen> findByIdVerrouille(@Param("idPv") Integer idPv);
+
     /** Nombre de projets de PV (≠ SIGNE) d'une localité (via réception → contrôleur) — compteur CC. */
     @Query("select count(pv) from PvExamen pv where pv.statutPv <> 'SIGNE' "
             + "and pv.examen.dispatch.reception.ctrlRecept.idLocalite = :loc")
@@ -73,6 +112,17 @@ public interface PvExamenRepository extends JpaRepository<PvExamen, Integer> {
     /** Nombre de PV <strong>SIGNÉS</strong> rattachés à un dossier (via examen→dispatch→réception) — garde-fou de cohérence dossier↔PV. */
     @Query("select count(pv) from PvExamen pv where pv.statutPv = 'SIGNE' and pv.examen.dispatch.reception.idDossier = :idDossier")
     long countSignesParDossier(@Param("idDossier") Integer idDossier);
+
+    /** PV SIGNÉS d'un dossier (le plus récent d'abord) — support du circuit des observations FAVR. */
+    @Query("""
+            select pv from PvExamen pv where pv.statutPv = 'SIGNE'
+              and pv.examen.dispatch.reception.idDossier = :idDossier order by pv.idPv desc
+            """)
+    List<PvExamen> findSignesParDossierRows(@Param("idDossier") Integer idDossier);
+
+    /** PV <strong>SIGNÉS</strong> d'un dossier (⚠️ spec navette 2026-08-01 — transmission SIGMP / archivage). */
+    @Query("select pv from PvExamen pv where pv.statutPv = 'SIGNE' and pv.examen.dispatch.reception.idDossier = :idDossier")
+    List<PvExamen> findSignesParDossier(@Param("idDossier") Integer idDossier);
 
     /** Code d'avis (tr_avis) d'un PV — sert au branchement du circuit à la signature (⚠️ règle ajoutée). */
     @Query("select pv.idAvis from PvExamen pv where pv.idPv = :idPv")

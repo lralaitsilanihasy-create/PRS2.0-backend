@@ -38,4 +38,7 @@ public class PieceJointeDossierDto {
     private Boolean apresLettreRenvoi;
 
     private Integer idLettre;
+
+    /** ⚠️ 2026-08-03 — version CORRIGÉE déposée pendant la rectification (observations du PV). */
+    private Boolean versionCorrigee;
 }

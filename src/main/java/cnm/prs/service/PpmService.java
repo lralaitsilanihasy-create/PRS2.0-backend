@@ -142,7 +142,8 @@ public class PpmService {
     public PpmDto update(Integer id, PpmDto dto) {
         Ppm existing = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Ppm introuvable : " + id));
-        dossierIntegrite.exigerBrouillonModifiable(existing.getIdDossier());
+        // ⚠️ 2026-08-02 — accepté aussi EN_ATTENTE_DECISION_PRMP (rectification par import du PPM).
+        dossierIntegrite.exigerModifiablePourEditionPpm(existing.getIdDossier());
         existing.setIdDossier(dto.getIdDossier());
         existing.setExercice(dto.getExercice());
         existing.setSignataire(dto.getSignataire());

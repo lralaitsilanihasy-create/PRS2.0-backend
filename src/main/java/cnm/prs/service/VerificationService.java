@@ -25,6 +25,7 @@ import cnm.prs.exception.ResourceNotFoundException;
 import cnm.prs.mapper.VerificationMapper;
 import cnm.prs.repository.AuditLogRepository;
 import cnm.prs.repository.DossierRepository;
+import cnm.prs.repository.ObservationPvRepository;
 import cnm.prs.repository.PrmpRepository;
 import cnm.prs.repository.PvExamenRepository;
 import cnm.prs.repository.ReceptionRepository;
@@ -47,11 +48,14 @@ public class VerificationService {
     private final NotificationService notificationService;
     private final AuditLogRepository auditLogRepository;
     private final PrmpRepository prmpRepository;
+    private final ObservationPvRepository observationPvRepository;
 
     public VerificationService(VerificationRepository repository, ReceptionRepository receptionRepository,
             DossierRepository dossierRepository, PvExamenRepository pvExamenRepository,
             ControleurDirectory controleurDirectory, NotificationService notificationService,
-            AuditLogRepository auditLogRepository, PrmpRepository prmpRepository) {
+            AuditLogRepository auditLogRepository, PrmpRepository prmpRepository,
+            ObservationPvRepository observationPvRepository) {
+        this.observationPvRepository = observationPvRepository;
         this.repository = repository;
         this.receptionRepository = receptionRepository;
         this.dossierRepository = dossierRepository;
@@ -81,6 +85,7 @@ public class VerificationService {
         exigerVerificateur();                  // strict profil VERIFICATEUR (⚠️ règle ajoutée)
         exigerPvSigne(dto.getIdPv());
         exigerCibleVerifiable(dto.getIdPv());  // avis FAVR + dossier non clos (⚠️ règle ajoutée)
+        exigerHorsCircuitObservations(dto.getIdPv()); // ⚠️ spec observations FAVR : saisie libre refusée
         Verification entity = VerificationMapper.toEntity(dto);
         entity.setIdVerification(null);                    // ID auto-généré (D6)
         entity.setImCtrlVerif(verificateurAuthentifie());  // identité = JWT, jamais le corps
@@ -137,11 +142,41 @@ public class VerificationService {
         }
     }
 
+    /**
+     * ⚠️ Spec « circuit des observations FAVR » (2026-08-02) — dès que le PÉRIMÈTRE FIGÉ des
+     * observations du PV existe pour le dossier, la saisie LIBRE d'un passage (texte d'observation
+     * rédigé par le client) est REFUSÉE : les observations transmises à la PRMP sont exclusivement
+     * celles du PV, statuées une à une via {@code POST /api/observations-pv/passage} (qui crée le
+     * passage automatiquement). Rejet côté backend, pas seulement masquage UI.
+     */
+    private void exigerHorsCircuitObservations(Integer idPv) {
+        Integer idDossier = idPv == null ? null : pvExamenRepository.findIdDossierByPv(idPv).orElse(null);
+        if (idDossier != null && observationPvRepository.existsByIdDossier(idDossier)) {
+            throw new BusinessRuleException(
+                    "Saisie libre refusée : le périmètre des observations est figé sur celui du PV — statuez "
+                            + "chaque observation (levée / maintenue) via le circuit des observations.");
+        }
+    }
+
+    /**
+     * ⚠️ Spec « circuit des observations FAVR » (2026-08-02) — passage créé PAR LE SYSTÈME depuis les
+     * décisions individuelles ({@code ObservationPvService.enregistrerPassage}) : l'observation du
+     * passage est le RAPPEL auto-généré des observations maintenues (aucun texte client), puis la
+     * transition [Auto] habituelle s'applique (levées → OBSERVATIONS_LEVEES ; sinon →
+     * EN_ATTENTE_DECISION_PRMP + notification PRMP + trace d'audit).
+     */
+    public Verification enregistrerPassageAutomatique(Verification entity) {
+        Verification saved = repository.save(entity);
+        traiterApresPassage(saved);
+        return saved;
+    }
+
     public VerificationDto update(Integer id, VerificationDto dto) {
         Visibilite.exigerLocalite(receptionRepository.findLocaliteById(dto.getIdReception()));
         exigerVerificateur();
         exigerPvSigne(dto.getIdPv());
         exigerCibleVerifiable(dto.getIdPv());
+        exigerHorsCircuitObservations(dto.getIdPv()); // ⚠️ spec observations FAVR : saisie libre refusée
         Verification existing = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Verification introuvable : " + id));
         existing.setIdReception(dto.getIdReception());
@@ -166,7 +201,9 @@ public class VerificationService {
      * Comportement {@code [Auto]} (§3.6) après un passage de vérification, sur un dossier
      * {@code EN_VERIFICATION} (idempotent : les autres statuts ne sont pas réécrits) :
      * <ul>
-     *   <li>{@code OBS_LEVEES = true} → dossier {@code CLOTURE} + alerte clôture éligible ;</li>
+     *   <li>{@code OBS_LEVEES = true} → ⚠️ règle MODIFIÉE (2026-08-01, spec navette) : dossier
+     *       {@code OBSERVATIONS_LEVEES} — le vérificateur doit encore transmettre l'approbation
+     *       (+ levée) à SIGMP ; la clôture est posée à l'ARCHIVAGE du PV par l'assistant ;</li>
      *   <li>⚠️ règle ajoutée — {@code OBS_LEVEES = false} → dossier {@code EN_ATTENTE_DECISION_PRMP} :
      *       l'observation est transmise à la PRMP ({@code OBSERVATION_VERIFICATION}) et l'événement est
      *       tracé dans {@code t_audit_log}. Le vérificateur ne peut plus agir tant que la PRMP n'a pas statué.</li>
@@ -186,10 +223,8 @@ public class VerificationService {
                 return;
             }
             if (Boolean.TRUE.equals(verification.getObsLevees())) {
-                dossier.setStatut(StatutDossier.CLOTURE.name());
+                dossier.setStatut(StatutDossier.OBSERVATIONS_LEVEES.name());
                 dossierRepository.save(dossier);
-                notifierClotureEligible(dossier.getIdDossier());
-                notifierClotureAssistant(dossier, verification);
             } else {
                 dossier.setStatut(StatutDossier.EN_ATTENTE_DECISION_PRMP.name());
                 dossierRepository.save(dossier);
@@ -217,23 +252,8 @@ public class VerificationService {
         }
     }
 
-    /**
-     * ⚠️ Règle ajoutée — à la clôture d'un dossier après vérification (PV FAVR, observations levées),
-     * copie aux Assistants contrôleurs de la localité ({@code CLOTURE_COPIE_ASSISTANT}).
-     */
-    private void notifierClotureAssistant(Dossier dossier, Verification verification) {
-        String localite = receptionRepository.findLocaliteById(verification.getIdReception());
-        if (localite == null) {
-            return;
-        }
-        String ref = dossier.getRefeDossier() != null ? dossier.getRefeDossier() : ("n° " + dossier.getIdDossier());
-        String titre = "Dossier clôturé (copie)";
-        String corps = "Dossier " + ref + " clôturé après vérification (PV favorable avec réserves).";
-        for (Controleur a : controleurDirectory.assistantsControleurs(localite)) {
-            notificationService.emettre(dossier.getIdDossier(), TypeNotification.CLOTURE_COPIE_ASSISTANT,
-                    a.getImControleur(), a.getEmailCont(), titre, corps);
-        }
-    }
+    // (⚠️ 2026-08-01, spec navette) notifierClotureAssistant / notifierClotureEligible : déplacés à
+    // l'ARCHIVAGE du PV (PvExamenService.archiver) — la clôture n'est plus posée par la vérification.
 
     /** ⚠️ Règle ajoutée — trace l'observation non levée dans {@code t_audit_log} (D1, option a). */
     private void tracerObservationNonLevee(Dossier dossier, Verification v) {
@@ -249,16 +269,4 @@ public class VerificationService {
         auditLogRepository.save(log);
     }
 
-    /**
-     * Alerte de clôture éligible (§3.7) : un dossier conforme clôturé est notifié au(x)
-     * Chargé(s) de publication pour mise en ligne sur le portail.
-     */
-    private void notifierClotureEligible(Integer idDossier) {
-        String titre = "Dossier clôturé éligible à publication";
-        String corps = "Le dossier " + idDossier + " est clôturé conforme et éligible à publication.";
-        for (Controleur charge : controleurDirectory.chargesPublication()) {
-            notificationService.emettre(idDossier, TypeNotification.CLOTURE_ELIGIBLE,
-                    charge.getImControleur(), charge.getEmailCont(), titre, corps);
-        }
-    }
 }

@@ -119,7 +119,8 @@ public class MarcheService {
     public MarcheDto update(Integer id, MarcheDto dto) {
         Marche existing = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Marche introuvable : " + id));
-        dossierIntegrite.exigerBrouillonModifiable(existing.getIdDossier());
+        // ⚠️ 2026-08-02 — accepté aussi EN_ATTENTE_DECISION_PRMP (rectification par import du PPM).
+        dossierIntegrite.exigerModifiablePourEditionPpm(existing.getIdDossier());
 
         existing.setIdDossier(dto.getIdDossier());
         existing.setIdPpm(dto.getIdPpm());

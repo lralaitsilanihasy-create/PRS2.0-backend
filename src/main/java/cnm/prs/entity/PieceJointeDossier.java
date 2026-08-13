@@ -59,4 +59,12 @@ public class PieceJointeDossier {
     /** Lettre de renvoi concernée (FK {@code t_lettre_renvoi}), si {@code apresLettreRenvoi}. */
     @Column(name = "ID_LETTRE")
     private Integer idLettre;
+
+    /**
+     * ⚠️ 2026-08-03 (demande user) — VERSION CORRIGÉE d'une pièce, déposée pendant la RECTIFICATION
+     * (dossier {@code EN_ATTENTE_DECISION_PRMP}, observations du PV) : distinguée de l'originale dans
+     * toutes les listes (l'originale est conservée). {@code null} = pièce ordinaire (lignes antérieures).
+     */
+    @Column(name = "VERSION_CORRIGEE")
+    private Boolean versionCorrigee;
 }
