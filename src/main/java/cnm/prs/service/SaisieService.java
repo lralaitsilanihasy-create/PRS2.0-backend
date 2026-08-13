@@ -99,6 +99,9 @@ public class SaisieService {
     private final LotRepository lotRepository;
     private final TrancheRepository trancheRepository;
     private final SousTypeDossierRepository sousTypeDossierRepository;
+    /** ⚠️ Spec « Mandats PRMP » — habilitation à créer, et mandat d'attribution figé sur le dossier. */
+    private final MandatService mandatService;
+    private final JournalDossierService journalDossier;
 
     public SaisieService(DossierRepository dossierRepository, PpmRepository ppmRepository,
             MarcheRepository marcheRepository, PpmService ppmService,
@@ -112,7 +115,10 @@ public class SaisieService {
             CompteRepository compteRepository, ServiceBeneficiaireRepository serviceBeneficiaireRepository,
             SoaBeneficiaireRepository soaBeneficiaireRepository, AuditLogService auditLogService,
             TypeDmcService typeDmcService, LotRepository lotRepository,
-            TrancheRepository trancheRepository, SousTypeDossierRepository sousTypeDossierRepository) {
+            TrancheRepository trancheRepository, SousTypeDossierRepository sousTypeDossierRepository,
+            MandatService mandatService, JournalDossierService journalDossier) {
+        this.mandatService = mandatService;
+        this.journalDossier = journalDossier;
         this.dossierRepository = dossierRepository;
         this.ppmRepository = ppmRepository;
         this.marcheRepository = marcheRepository;
@@ -273,7 +279,24 @@ public class SaisieService {
      * des processus par une liste vide est refusé (invariant « ≥1 processus par marché »).</p>
      */
     public DossierDto editerPpm(Integer idDossier, EditionPpmRequest req) {
-        dossierIntegrite.exigerBrouillonModifiable(idDossier);
+        // ⚠️ Règle étendue (2026-08-02, demande user) — la RECTIFICATION après vérification passe par
+        // l'IMPORTATION du PPM rectifié (même façade que l'édition de brouillon) : la façade accepte
+        // aussi un dossier EN_ATTENTE_DECISION_PRMP (propriétaire). En rectification, la STRUCTURE est
+        // FIGÉE : mêmes lignes (mise à jour par idDetail), NI AJOUT NI RETRAIT — l'examen référence les
+        // lignes de marché (t_examen_detail.ID_DETAIL) et le périmètre des observations est figé.
+        boolean rectification = dossierRepository.findById(idDossier)
+                .map(d -> StatutDossier.EN_ATTENTE_DECISION_PRMP.name().equals(d.getStatut())).orElse(false);
+        // ⚠️ 2026-08-05 (versionnement des PPM) — sur une VERSION (dossier rattaché à un prédécesseur),
+        // une ligne absente de la demande est marquée SUPPRIMÉE, jamais effacée : son identité
+        // inter-versions et son historique doivent survivre, et elle reste restaurable. La garantie est
+        // posée ici, côté serveur, pour ne pas dépendre de ce que le client pense à renvoyer.
+        boolean version = dossierRepository.findById(idDossier)
+                .map(d -> d.getIdDossierParent() != null).orElse(false);
+        if (rectification) {
+            dossierIntegrite.exigerEnAttenteDecisionPrmpModifiable(idDossier);
+        } else {
+            dossierIntegrite.exigerBrouillonModifiable(idDossier);
+        }
         dossierIntegrite.exigerFamilleDdp(idDossier);
         Ppm ppm = ppmRepository.findByIdDossier(idDossier).stream().findFirst()
                 .orElseThrow(() -> new BusinessRuleException("Aucun PPM rattaché au dossier " + idDossier + "."));
@@ -284,6 +307,11 @@ public class SaisieService {
         entete.setSignataire(req.signataire());
         entete.setDateSignature(req.dateSignature());
         entete.setReference(req.reference());
+        // Motif : corrigeable tant que la version n'est pas soumise ; ignoré hors version, et une valeur
+        // absente conserve le motif posé à la création (jamais effacé par omission).
+        if (version && req.motifMaj() != null && !req.motifMaj().isBlank()) {
+            entete.setMotifMaj(req.motifMaj().trim());
+        }
         ppmService.update(ppm.getIdPpm(), entete);
 
         // 2) Réconciliation des lignes par idDetail — sous-objets compris (règle corrigée 2026-07-18).
@@ -297,6 +325,11 @@ public class SaisieService {
             for (int i = 0; i < req.marches().size(); i++) {
                 SaisieMarcheLigne ligne = req.marches().get(i);
                 boolean nouvelle = !existants.contains(ligne.idDetail());
+                if (rectification && nouvelle) {
+                    throw new BusinessRuleException("Rectification : la structure du dossier examiné est figée "
+                            + "— aucune ligne de marché ne peut être ajoutée (ligne " + (i + 1)
+                            + " sans correspondance). Le PPM rectifié doit comporter les mêmes lignes.");
+                }
                 demandes.add(ligne.idDetail());
                 // Validations identiques au POST. Ligne nouvelle → ≥1 processus obligatoire ; ligne mise
                 // à jour → un remplacement explicite par une liste vide viderait le marché (refusé).
@@ -344,10 +377,23 @@ public class SaisieService {
                 creerLots(idDetail, idDossier, ligne);   // sans effet si lots null/vide
             }
         }
-        // 3) Retrait des lignes absentes de la demande.
+        // 3) Retrait des lignes absentes de la demande — INTERDIT en rectification (structure figée),
+        //    SUPPRESSION LOGIQUE sur une version (jamais d'effacement), suppression franche ailleurs.
         for (Integer id : existants) {
             if (!demandes.contains(id)) {
-                marcheService.delete(id);
+                if (rectification) {
+                    throw new BusinessRuleException("Rectification : la structure du dossier examiné est figée "
+                            + "— aucune ligne de marché ne peut être retirée. Le PPM rectifié doit comporter "
+                            + "les mêmes lignes que le dossier examiné.");
+                }
+                if (version) {
+                    marcheRepository.findById(id).ifPresent(m -> {
+                        m.setSupprimee(Boolean.TRUE);
+                        marcheRepository.save(m);
+                    });
+                } else {
+                    marcheService.delete(id);
+                }
             }
         }
         return DossierMapper.toDto(dossierRepository.findById(idDossier).orElseThrow());
@@ -657,19 +703,31 @@ public class SaisieService {
         return DossierMapper.toDto(d);
     }
 
+    /**
+     * ⚠️ Spec « Mandats PRMP » — c'est ici que l'<strong>attribution se fige</strong> : le dossier retient le
+     * mandat en cours au moment de sa création ({@code ID_MANDAT_ATTRIB}) et ne le recalculera jamais. Un
+     * changement de PRMP ne réattribue donc rien rétroactivement ; le successeur agira comme
+     * <em>opérateur</em> (cf. {@code t_action_dossier}). Créer suppose d'être en fonction : sans mandat
+     * actif, la saisie est bloquée (409 {@code VACANCE_PRMP}).
+     */
     private Dossier creerDossier(String famille, String sousType, String idLocalite, String idPrmp,
             Integer idEntiteContract) {
+        dossierIntegrite.exigerMandatActif();   // même garde (et même filtre de profil) que les éditions
         Dossier d = new Dossier();
         d.setIdDossier(dossierRepository.nextIdDossier().intValue());   // PK serveur (séquence)
         d.setIdTypeDossier(famille);
         d.setIdSousType(sousType);   // famille DDP : dérivé serveur ; DMC/DDM : choisi à la saisie
         d.setIdLocalite(idLocalite);
         d.setIdPrmp(idPrmp);   // périmètre = PRMP (pour une UGPM, sa PRMP de tutelle via CurrentUser.ref())
+        d.setIdMandatAttrib(mandatService.idMandatCourant(idPrmp));   // figé une fois pour toutes
         d.setIdEntiteContract(idEntiteContract);
         d.setStatut(StatutDossier.BROUILLON.name());
         d.setDateSoumission(java.time.LocalDateTime.now());   // date/heure de saisie du dossier (§ secrétariat)
         d.setCreePar(CurrentUser.login().orElse(idPrmp));   // traçabilité : login créateur (PRMP ou UGPM)
-        return dossierRepository.save(d);
+        Dossier cree = dossierRepository.save(d);
+        journalDossier.tracer(cree, JournalDossierService.CREATION,
+                "Création du dossier (" + famille + " / " + sousType + ")");
+        return cree;
     }
 
     private String prmpCourante() {

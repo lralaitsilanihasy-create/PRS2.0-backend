@@ -14,18 +14,22 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.dto.ActionDossierDto;
 import cnm.prs.dto.DossierDto;
 import cnm.prs.dto.EchangeDto;
 import cnm.prs.entity.AuditLog;
 import cnm.prs.entity.Controleur;
 import cnm.prs.entity.Dossier;
+import cnm.prs.entity.LettreRenvoi;
 import cnm.prs.entity.Marche;
 import cnm.prs.entity.Ppm;
 import cnm.prs.entity.Prmp;
 import cnm.prs.entity.Verification;
 import cnm.prs.enums.ProfilUtilisateur;
 import cnm.prs.enums.StatutDossier;
+import cnm.prs.enums.StatutLettreRenvoi;
 import cnm.prs.enums.TypeNotification;
+import cnm.prs.enums.TypeObjet;
 import cnm.prs.exception.BadRequestException;
 import cnm.prs.exception.ChampsInvalidesException;
 import cnm.prs.exception.ErrorResponse;
@@ -35,6 +39,7 @@ import cnm.prs.mapper.DossierMapper;
 import cnm.prs.repository.AuditLogRepository;
 import cnm.prs.repository.DemandeRetraitRepository;
 import cnm.prs.repository.DossierRepository;
+import cnm.prs.repository.LettreRenvoiRepository;
 import cnm.prs.repository.MarchePrevisionRepository;
 import cnm.prs.repository.MarcheRepository;
 import cnm.prs.repository.NotificationRepository;
@@ -78,6 +83,13 @@ public class DossierService {
     private final PieceJointeDossierRepository pieceJointeDossierRepository;
     private final TypeDossierRepository typeDossierRepository;
     private final SousTypeDossierRepository sousTypeDossierRepository;
+    private final LettreRenvoiRepository lettreRenvoiRepository;
+
+    private final VerificationPieceDepotService verificationPieceDepotService;
+    /** ⚠️ 2026-08-05 — figeage du diff et bascule du prédécesseur, à la soumission d'une mise à jour. */
+    private final MiseAJourPpmService miseAJourPpmService;
+    /** ⚠️ Spec « Mandats PRMP » — journal des actions, horodaté par opérateur courant. */
+    private final JournalDossierService journalDossier;
 
     public DossierService(DossierRepository repository, PpmRepository ppmRepository,
             ControleurDirectory controleurDirectory, NotificationService notificationService,
@@ -88,7 +100,14 @@ public class DossierService {
             NotificationRepository notificationRepository,
             TypePieceJointeRepository typePieceJointeRepository,
             PieceJointeDossierRepository pieceJointeDossierRepository, MarcheService marcheService,
-            TypeDossierRepository typeDossierRepository, SousTypeDossierRepository sousTypeDossierRepository) {
+            TypeDossierRepository typeDossierRepository, SousTypeDossierRepository sousTypeDossierRepository,
+            LettreRenvoiRepository lettreRenvoiRepository,
+            VerificationPieceDepotService verificationPieceDepotService,
+            MiseAJourPpmService miseAJourPpmService, JournalDossierService journalDossier) {
+        this.verificationPieceDepotService = verificationPieceDepotService;
+        this.miseAJourPpmService = miseAJourPpmService;
+        this.journalDossier = journalDossier;
+        this.lettreRenvoiRepository = lettreRenvoiRepository;
         this.repository = repository;
         this.ppmRepository = ppmRepository;
         this.controleurDirectory = controleurDirectory;
@@ -217,8 +236,9 @@ public class DossierService {
     }
 
     /**
-     * File « à examiner » du Membre attributaire (§2.4) : ses dossiers au statut
-     * {@link StatutDossier#DISPATCHE} (dispatchés vers lui, pas encore examinés). Scopée à
+     * File « à examiner » du Membre attributaire (§2.4) : ses dossiers {@link StatutDossier#DISPATCHE}
+     * (dispatchés vers lui, pas encore examinés) et {@link StatutDossier#A_REEXAMINER} (⚠️ 2026-08-02 —
+     * réexamen après lettre de renvoi, pièces complémentaires transmises par la PRMP). Scopée à
      * l'utilisateur courant ({@code Dispatch.imCtrlMembre}).
      */
     @Transactional(readOnly = true)
@@ -227,7 +247,9 @@ public class DossierService {
         if (im == null) {
             return List.of();
         }
-        return repository.findAExaminerParMembre(StatutDossier.DISPATCHE.name(), im)
+        return repository
+                .findAExaminerParMembre(
+                        List.of(StatutDossier.DISPATCHE.name(), StatutDossier.A_REEXAMINER.name()), im)
                 .stream().map(DossierMapper::toDto).toList();
     }
 
@@ -341,7 +363,7 @@ public class DossierService {
     public void delete(Integer id) {
         Dossier dossier = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable : " + id)); // 404
-        dossierIntegrite.exigerProprietaire(dossier);                                              // 403
+        dossierIntegrite.exigerOperateurHabilite(dossier);                                         // 403 / 409 vacance
         if (!StatutDossier.BROUILLON.name().equals(dossier.getStatut())) {
             throw new BusinessRuleException("Ce dossier ne peut pas être supprimé.");              // 409
         }
@@ -356,6 +378,7 @@ public class DossierService {
         notificationRepository.deleteByIdDossier(id);
         demandeRetraitRepository.deleteByIdDossier(id);
         receptionRepository.deleteByIdDossier(id);
+        journalDossier.purger(id);   // le dossier disparaît : son journal d'actions n'a plus d'objet
         repository.deleteById(id);
     }
 
@@ -382,8 +405,9 @@ public class DossierService {
 
         CurrentUser.ref().filter(s -> !s.isBlank())
                 .orElseThrow(() -> new AccessDeniedException("Utilisateur PRMP non identifié."));
-        // Propriété : seule la PRMP propriétaire (t_dossier.ID_PRMP) peut soumettre.
-        dossierIntegrite.exigerProprietaire(dossier);
+        // Propriété (PRMP d'attribution OU PRMP en fonction) + habilitation : la soumission est l'acte de
+        // signature de la PRMP — sans mandat actif, elle attend la nomination (409 VACANCE_PRMP).
+        dossierIntegrite.exigerOperateurHabilite(dossier);
         // Cycle de vie : seul un BROUILLON est soumissible → SOUMIS (pas de re-soumission).
         if (!StatutDossier.BROUILLON.name().equals(dossier.getStatut())) {
             throw new BusinessRuleException(
@@ -395,6 +419,9 @@ public class DossierService {
         dossierIntegrite.recalculerSousTypeDdp(idDossier);
         // Pièces jointes obligatoires de la famille de dossier (référentiel) : toutes doivent être présentes.
         validerPiecesObligatoires(dossier);
+        // ⚠️ 2026-08-05 — une MISE À JOUR exige en plus le PV du prédécesseur et le PPM daté et signé des
+        // versions antérieures. Sans effet sur un dossier initial.
+        miseAJourPpmService.exigerDossierHistorique(dossier);
 
         // Localité : celle du dossier (dérivée de l'entité à la saisie), sinon celle du PPM. Plus de repli PRMP.
         List<Ppm> ppms = ppmRepository.findByIdDossier(idDossier);
@@ -418,7 +445,13 @@ public class DossierService {
         }
         repository.save(dossier);
 
+        // ⚠️ 2026-08-05 — mise à jour de PPM : c'est ICI, et pas à la création du brouillon, que la
+        // nouvelle version devient opposable. On fige la trace du diff et on bascule le prédécesseur en
+        // REMPLACE. Sans effet si le dossier n'est pas une mise à jour (pas de dossier parent).
+        miseAJourPpmService.figerDiffEtRemplacerParent(idDossier);
+
         notifierSoumission(dossier, localite);
+        journalDossier.tracer(dossier, JournalDossierService.SOUMISSION, "BROUILLON -> SOUMIS");
         return DossierMapper.toDto(dossier);
     }
 
@@ -493,7 +526,7 @@ public class DossierService {
                 .orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable : " + idDossier));
         String idPrmp = CurrentUser.ref().filter(s -> !s.isBlank())
                 .orElseThrow(() -> new AccessDeniedException("Utilisateur PRMP non identifié."));
-        dossierIntegrite.exigerProprietaire(dossier);
+        dossierIntegrite.exigerOperateurHabilite(dossier);
         if (!StatutDossier.EN_ATTENTE_DECISION_PRMP.name().equals(dossier.getStatut())) {
             throw new BusinessRuleException(
                     "Resoumission impossible : le dossier n'est pas en attente de décision PRMP (statut « "
@@ -511,6 +544,138 @@ public class DossierService {
         }
         notifierRectification(dossier, derniere, idPrmp, motifRectification);
         tracerRectification(dossier, idPrmp, motifRectification);
+        journalDossier.tracer(dossier, JournalDossierService.RESOUMISSION, motifRectification);
+        return DossierMapper.toDto(dossier);
+    }
+
+    /**
+     * ⚠️ Spec recevabilité au dépôt (2026-08-02) — le SECRÉTAIRE signale à la PRMP les pièces manquantes /
+     * non conformes relevées par son contrôle de complétude ({@code t_verification_piece_depot}) :
+     * dossier {@code SOUMIS} → {@code EN_ATTENTE_COMPLEMENTS_DEPOT} (non enregistrable), notification
+     * {@code PIECES_MANQUANTES_DEPOT} à la PRMP reprenant la liste des défauts + observations, événement
+     * tracé dans {@code t_audit_log}. AUCUN circuit d'archivage (objet distinct de la lettre de renvoi).
+     */
+    public DossierDto signalerPiecesManquantes(Integer idDossier) {
+        Dossier dossier = repository.findById(idDossier)
+                .orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable : " + idDossier));
+        if (!StatutDossier.SOUMIS.name().equals(dossier.getStatut())) {
+            throw new BusinessRuleException("Signalement impossible : le dossier n'est pas au dépôt (statut « "
+                    + dossier.getStatut() + " »).");
+        }
+        List<String> defauts = verificationPieceDepotService.defautsCourants(idDossier);
+        if (defauts.isEmpty()) {
+            throw new BusinessRuleException("Aucune pièce manquante ou non conforme relevée : rien à signaler.");
+        }
+        dossier.setStatut(StatutDossier.EN_ATTENTE_COMPLEMENTS_DEPOT.name());
+        repository.save(dossier);
+
+        String ref = dossier.getRefeDossier() != null ? dossier.getRefeDossier() : ("n° " + dossier.getIdDossier());
+        String titre = "Pièces manquantes ou non conformes au dépôt";
+        String corps = "Dossier " + ref + " — le contrôle de complétude du Secrétaire a relevé : "
+                + String.join(" ; ", defauts)
+                + ". Déposez les pièces demandées puis transmettez les compléments.";
+        for (Ppm ppm : ppmRepository.findByIdDossier(idDossier)) {
+            if (ppm.getIdPrmp() != null) {
+                String email = prmpRepository.findById(ppm.getIdPrmp()).map(Prmp::getEmailPrmp).orElse(null);
+                notificationService.emettrePrmp(TypeNotification.PIECES_MANQUANTES_DEPOT, ppm.getIdPrmp(), email,
+                        idDossier, TypeObjet.DOSSIER, idDossier, titre, corps);
+            }
+        }
+        tracerEvenementDossier(dossier, "PIECES_MANQ_DEP", String.join(" ; ", defauts));
+        return DossierMapper.toDto(dossier);
+    }
+
+    /**
+     * ⚠️ Spec recevabilité au dépôt (2026-08-02) — la PRMP transmet les compléments du DÉPÔT :
+     * {@code EN_ATTENTE_COMPLEMENTS_DEPOT} → {@code SOUMIS} ; le Secrétaire reprend le contrôle sur les
+     * seules pièces en défaut (les décisions CONFORME restent acquises). Notifie les Secrétaires de la
+     * localité ({@code COMPLEMENTS_DEPOT_TRANSMIS}).
+     */
+    public DossierDto transmettreComplementsDepot(Integer idDossier) {
+        Dossier dossier = repository.findById(idDossier)
+                .orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable : " + idDossier));
+        dossierIntegrite.exigerOperateurHabilite(dossier);
+        if (!StatutDossier.EN_ATTENTE_COMPLEMENTS_DEPOT.name().equals(dossier.getStatut())) {
+            throw new BusinessRuleException(
+                    "Transmission impossible : le dossier n'est pas en attente de compléments au dépôt (statut « "
+                            + dossier.getStatut() + " »).");
+        }
+        dossier.setStatut(StatutDossier.SOUMIS.name());
+        repository.save(dossier);
+        String ref = dossier.getRefeDossier() != null ? dossier.getRefeDossier() : ("n° " + dossier.getIdDossier());
+        String titre = "Compléments de dépôt transmis";
+        String corps = "Dossier " + ref + " — la PRMP a transmis les pièces demandées : reprenez le contrôle de "
+                + "complétude (les pièces déjà conformes restent acquises).";
+        if (dossier.getIdLocalite() != null) {
+            for (Controleur s : controleurDirectory.secretaires(dossier.getIdLocalite())) {
+                notificationService.emettre(idDossier, TypeNotification.COMPLEMENTS_DEPOT_TRANSMIS,
+                        s.getImControleur(), s.getEmailCont(), titre, corps);
+            }
+        }
+        tracerEvenementDossier(dossier, "COMPL_DEPOT", "Compléments transmis par la PRMP");
+        journalDossier.tracer(dossier, JournalDossierService.TRANSMISSION_COMPLEMENTS_DEPOT,
+                "EN_ATTENTE_COMPLEMENTS_DEPOT -> SOUMIS");
+        return DossierMapper.toDto(dossier);
+    }
+
+    /** Trace un événement du dossier dans {@code t_audit_log} (TYPE_ACTION court, détail en NOUVELLE_VALEUR). */
+    private void tracerEvenementDossier(Dossier dossier, String typeAction, String detail) {
+        AuditLog log = new AuditLog();
+        log.setIdLog(auditLogRepository.findMaxId() + 1);
+        log.setDateAction(LocalDateTime.now());
+        log.setImActeur(CurrentUser.ref().orElse(null));
+        log.setNomTable("t_dossier");
+        log.setIdEnregistrement(String.valueOf(dossier.getIdDossier()));
+        log.setTypeAction(typeAction);
+        log.setChampModifie("STATUT");
+        log.setNouvelleValeur(detail);
+        auditLogRepository.save(log);
+    }
+
+    /**
+     * ⚠️ Spec navette (2026-08-01, cas 3) — la PRMP transmet les COMPLÉMENTS demandés par la lettre de
+     * renvoi (pièces déposées avec {@code apresLettreRenvoi=true} au préalable).
+     *
+     * <p>⚠️ Règle MODIFIÉE (2026-08-02, réexamen après lettre de renvoi) : le dossier suspendu
+     * ({@code EN_ATTENTE_PIECES}) passe {@code A_REEXAMINER} (plus {@code EXAMINE}) — il revient dans
+     * la file « à examiner » du Membre attributaire pour <strong>réexamen</strong> à la lumière des
+     * pièces reçues (mêmes dispatch/examen/PV, brouillon serveur conservé). La transmission est
+     * refusée (409) tant qu'aucune pièce n'a été déposée pour la lettre de renvoi du cycle courant :
+     * le réexamen n'a lieu qu'une fois les pièces nécessaires présentes. Notifie le(s) Membre(s)
+     * attributaire(s) ({@code COMPLEMENTS_TRANSMIS}).</p>
+     */
+    public DossierDto transmettreComplements(Integer idDossier) {
+        Dossier dossier = repository.findById(idDossier)
+                .orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable : " + idDossier));
+        dossierIntegrite.exigerOperateurHabilite(dossier);
+        if (!StatutDossier.EN_ATTENTE_PIECES.name().equals(dossier.getStatut())) {
+            throw new BusinessRuleException(
+                    "Transmission des compléments impossible : le dossier n'est pas en attente de pièces (statut « "
+                            + dossier.getStatut() + " »).");
+        }
+        Integer idLettre = lettreRenvoiRepository
+                .findFirstByIdDossierAndStatutOrderByIdLettreDesc(idDossier, StatutLettreRenvoi.SIGNE.name())
+                .map(LettreRenvoi::getIdLettre).orElse(null);
+        if (idLettre == null || !pieceJointeDossierRepository
+                .existsByIdDossierAndIdLettreAndApresLettreRenvoiTrue(idDossier, idLettre)) {
+            throw new BusinessRuleException(
+                    "Transmission impossible : aucune pièce complémentaire n'a été déposée pour la lettre de "
+                            + "renvoi. Déposez d'abord les pièces demandées — le réexamen du dossier ne peut avoir "
+                            + "lieu qu'une fois les pièces nécessaires présentes.");
+        }
+        dossier.setStatut(StatutDossier.A_REEXAMINER.name());
+        repository.save(dossier);
+        String ref = dossier.getRefeDossier() != null ? dossier.getRefeDossier() : ("n° " + dossier.getIdDossier());
+        String titre = "Compléments transmis — dossier à réexaminer";
+        String corps = "La PRMP a transmis les pièces / informations demandées par la lettre de renvoi pour le dossier "
+                + ref + ". Le dossier est de retour dans votre file « à examiner » : réexaminez-le à la lumière des "
+                + "pièces reçues puis soumettez de nouveau le projet de PV.";
+        for (String im : repository.findMembresAttributaires(idDossier)) {
+            notificationService.emettre(idDossier, TypeNotification.COMPLEMENTS_TRANSMIS, im, null, titre, corps);
+        }
+        tracerEvenementDossier(dossier, "COMPL_TRANSMIS", "EN_ATTENTE_PIECES -> A_REEXAMINER (lettre " + idLettre + ")");
+        journalDossier.tracer(dossier, JournalDossierService.TRANSMISSION_COMPLEMENTS,
+                "EN_ATTENTE_PIECES -> A_REEXAMINER (lettre " + idLettre + ")");
         return DossierMapper.toDto(dossier);
     }
 
@@ -593,5 +758,24 @@ public class DossierService {
         return new EchangeDto("RECTIFICATION",
                 a.getDateAction() == null ? null : a.getDateAction().toString(),
                 a.getImActeur(), a.getNouvelleValeur(), null);
+    }
+
+    /**
+     * ⚠️ Règle ajoutée (spec « Mandats PRMP ») — journal des actions d'un dossier, chronologique : qui a
+     * agi, quand, et <strong>sous quel mandat</strong>. Distinct du journal d'audit technique
+     * ({@code t_audit_log}, réservé à l'Administrateur) : celui-ci est lisible par les profils concernés,
+     * sous le même périmètre de visibilité que le dossier lui-même (§1).
+     *
+     * <p>Après un changement de PRMP, l'opérateur des lignes récentes diffère de la PRMP d'attribution du
+     * dossier ({@code idPrmp} / {@code idMandatAttrib}, inchangés) : c'est là que la reprise de traitement
+     * se lit.</p>
+     */
+    @Transactional(readOnly = true)
+    public List<ActionDossierDto> journal(Integer idDossier) {
+        if (!repository.existsById(idDossier)) {
+            throw new ResourceNotFoundException("Dossier introuvable : " + idDossier);
+        }
+        controlerVisibilite(idDossier);
+        return journalDossier.journal(idDossier);
     }
 }

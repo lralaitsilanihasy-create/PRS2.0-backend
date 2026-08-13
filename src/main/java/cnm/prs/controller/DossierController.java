@@ -19,6 +19,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 
 import jakarta.validation.Valid;
 
+import cnm.prs.dto.ActionDossierDto;
 import cnm.prs.dto.DossierDto;
 import cnm.prs.dto.DossierResoumissionRequest;
 import cnm.prs.dto.EchangeDto;
@@ -155,10 +156,42 @@ public class DossierController {
         return service.resoumettre(id, req.motifRectification());
     }
 
+    /** ⚠️ Spec navette (2026-08-01, cas 3) — compléments de lettre de renvoi transmis (EN_ATTENTE_PIECES → EXAMINE). */
+    @PreAuthorize("hasRole('PRMP')")
+    @PostMapping("/{id}/transmettre-complements")
+    public DossierDto transmettreComplements(@PathVariable Integer id) {
+        return service.transmettreComplements(id);
+    }
+
+    /** ⚠️ Spec recevabilité (2026-08-02) — signalement des pièces manquantes au DÉPÔT (SOUMIS → EN_ATTENTE_COMPLEMENTS_DEPOT). */
+    @PreAuthorize("hasRole('SECRETAIRE')")
+    @PostMapping("/{id}/signaler-pieces-manquantes")
+    public DossierDto signalerPiecesManquantes(@PathVariable Integer id) {
+        return service.signalerPiecesManquantes(id);
+    }
+
+    /** ⚠️ Spec recevabilité (2026-08-02) — compléments de DÉPÔT transmis par la PRMP (EN_ATTENTE_COMPLEMENTS_DEPOT → SOUMIS). */
+    @PreAuthorize("hasRole('PRMP')")
+    @PostMapping("/{id}/transmettre-complements-depot")
+    public DossierDto transmettreComplementsDepot(@PathVariable Integer id) {
+        return service.transmettreComplementsDepot(id);
+    }
+
     /** Historique d'échanges d'un dossier clôturé (observations + rectifications PRMP), trié date ASC. */
     @PreAuthorize("hasRole('PRMP') or @perm.peutExercer('VERIFICATEUR') or hasRole('ADMINISTRATEUR')")
     @GetMapping("/{id}/historique-echanges")
     public List<EchangeDto> historiqueEchanges(@PathVariable Integer id) {
         return service.historiqueEchanges(id);
+    }
+
+    /**
+     * ⚠️ Règle ajoutée (spec « Mandats PRMP ») — journal des actions du dossier : opérateur courant, mandat
+     * sous lequel il a agi, horodatage. Ouvert aux profils concernés (PRMP / UGPM propriétaires du
+     * périmètre, contrôleurs de la localité, Président, Administrateur) — le périmètre de visibilité du
+     * dossier (§1) s'applique, un accès hors périmètre reste refusé (403).
+     */
+    @GetMapping("/{id}/journal")
+    public List<ActionDossierDto> journal(@PathVariable Integer id) {
+        return service.journal(id);
     }
 }
