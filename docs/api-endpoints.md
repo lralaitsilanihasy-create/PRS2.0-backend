@@ -1300,6 +1300,96 @@ volumineux → **400** (annule la création si multipart) ; **404** si l'UGPM ou
 | POST | /api/saisies/ppm/import-xlsx | `multipart/form-data` (part `fichier` = **tableur .xlsx**) | `SaisiePpmImportResult` | 200, 400, 403 | **PRMP** |
 | GET | /api/saisies/ppm/import-xlsx/gabarit | — | **`.xlsx`** (gabarit à remplir) | 200, 403 | **PRMP** |
 | PUT | /api/saisies/ppm/{idDossier} | `EditionPpmRequest` | `DossierDto` | 200, 400, 403, 404, 409 | **PRMP** |
+| POST | /api/saisies/ppm/{idDossier}/mise-a-jour | `MiseAJourRequest` (`{motif}`) | `DossierDto` (la nouvelle version) | 201, 400, 403, 404, 409 | **PRMP propriétaire** |
+| POST | /api/saisies/ppm/{idDossier}/mise-a-jour/import | `multipart/form-data` (part `fichier` = PPM **PDF**) | `DiffDossierDto` | 200, 400, 403, 404, 409 | **PRMP propriétaire** |
+| GET | /api/dossiers/{idDossier}/diff | — | `DiffDossierDto` | 200, 403, 404, 409 | **PRMP propriétaire** |
+| GET | /api/dossiers/{idDossier}/versions | — | `DossierDto[]` (plus récente d'abord) | 200, 404 | PRMP / PRESIDENT / CHEF_COMMISSION / MEMBRE / VERIFICATEUR / ADMINISTRATEUR |
+| PATCH | /api/marches/{idDetail}/supprimer | — | — | 204, 403, 404, 409 | **PRMP propriétaire** |
+| PATCH | /api/marches/{idDetail}/restaurer | — | — | 204, 403, 404, 409 | **PRMP propriétaire** |
+
+> ⚠️ **Mise à jour d'un PPM — versionnement (règle ajoutée 2026-08-05).** Une mise à jour **ne modifie
+> jamais** le dossier en place : `POST /api/saisies/ppm/{id}/mise-a-jour` crée un **nouveau dossier**
+> `BROUILLON`, copie profonde du précédent (PPM, lignes de marché avec leurs lots, bénéficiaires et dates
+> prévisionnelles, pièces jointes dupliquées), rattaché par `t_dossier.ID_DOSSIER_PARENT`. Le compteur
+> métier `t_ppm.NUM_MAJ` s'incrémente (`NUM_MAJ_PREC`/`DATE_MAJ_PREC` rappellent la version précédente,
+> `DATE_PPM_INIT` se propage inchangée) et **`MOTIF_MAJ` est obligatoire** (400 s'il est vide).
+>
+> ⚠️ **Ne pas confondre avec la rectification** (`PUT /api/saisies/ppm/{id}` sur un dossier
+> `EN_ATTENTE_DECISION_PRMP`), qui corrige la version courante en réponse aux observations du PV : même
+> dossier, même identité. Le versionnement, lui, s'applique à un PPM déjà instruit.
+>
+> **Gardes** — 409 si le dossier source n'est pas `DECISION_TRANSMISE_SIGMP`/`CLOTURE` (on ne versionne
+> pas un dossier encore dans le circuit), s'il est déjà `REMPLACE` (versionner la version en vigueur), ou
+> si une mise à jour est **déjà en cours** (un seul brouillon de mise à jour par dossier).
+>
+> **Bascule.** Le prédécesseur passe à **`REMPLACE`** — nouveau statut, jamais supprimé, toujours
+> consultable — **à la SOUMISSION** de la nouvelle version, pas à la création du brouillon : une mise à
+> jour abandonnée se supprime sans neutraliser le dossier en vigueur. Au même instant le diff est **figé**
+> dans `t_changement_ligne` (append-only).
+>
+> **Identité de ligne.** `t_marche.ID_LIGNE_ORIGINE` porte l'identité d'une ligne **à travers les
+> versions** (l'`ID_DETAIL` d'origine, hérité à chaque copie) ; `SUPPRIMEE` marque une suppression
+> **logique** (ligne conservée, restaurable, jamais effacée — à exclure des documents officiels).
+> Le rapprochement du diff ne dépend **jamais de la position** : des lignes réordonnées à contenu
+> identique ressortent `INCHANGEE`. Repli d'appariement pour une ligne sans ancêtre (réimport PDF) :
+> libellé normalisé + services bénéficiaires (`apparieePar = LIBELLE_SOA`).
+>
+> **`DiffDossierDto`** = `recap` (`inchangees`, `modifiees`, `nouvelles`, `supprimees`, `restaurees`,
+> `total`) + `lignes[]` (`type` ∈ INCHANGEE | MODIFIEE | NOUVELLE | SUPPRIMEE | RESTAUREE, avec `champs[]`
+> `{champ, avant, apres}` pour les modifiées). `fige = false` tant que la version est un brouillon (diff
+> recalculé à chaque appel, il doit suivre la saisie) ; `true` une fois soumise (trace figée, qui fait foi).
+>
+> ⚠️ `GET /api/ppms` **exclut les brouillons** : l'en-tête d'une version en cours (n° de mise à jour,
+> motif, référence) se lit à l'unité par `GET /api/ppms/{idPpm}` — l'`idPpm` est porté par ses lignes.
+
+> ⚠️ **Pièces exigées d'une mise à jour (règle ajoutée 2026-08-05).** En plus des pièces obligatoires d'un
+> dossier neuf, une version doit porter le **PV du dossier prédécesseur** (type `22`, code `PV_PRECEDENT`)
+> et le **PPM daté et signé de CHAQUE version antérieure** (type `23`, `PPM_ANTERIEUR`, une pièce par
+> ancêtre). Ces deux types restent `OBLIGATOIRE = false` au **référentiel** — ils n'ont aucun sens sur un
+> dossier initial : l'exigence est portée par le code pour les seuls dossiers rattachés à un prédécesseur,
+> comme l'obligation conditionnelle de l'AGPM.
+>
+> Les pièces du dossier d'origine sont **reprises** dans la version (contenu dupliqué) : la PRMP ne
+> remplace que celles qui changent. Les deux pièces d'historique, elles, sont **constituées
+> automatiquement** à `POST …/mise-a-jour` — l'application détient déjà ces documents (le PV est
+> lu/régénéré depuis le FSX), il serait absurde de les faire redéposer. Elles ne sont
+> donc jamais recopiées telles quelles du prédécesseur — sinon elles s'empileraient à chaque version — mais
+> **reconstituées** depuis la chaîne. À la soumission, si elles manquent (version ouverte avant la règle,
+> pièce supprimée par erreur), elles sont **reconstituées puis contrôlées** : un brouillon ne peut pas se
+> retrouver dans l'impasse d'un document qu'il n'a aucun moyen de produire.
+>
+> ⚠️ **Corollaire** : `POST …/mise-a-jour` **409** si le dossier source n'a pas de PV signé — on ne
+> versionne pas un plan dont la Commission n'a jamais rendu d'avis. En circuit normal, un dossier clôturé
+> porte toujours son PV.
+
+> ⚠️ **Mise à jour PAR IMPORT du PPM PDF (règle ajoutée 2026-08-05, voie NORMALE).** Une mise à jour
+> arrive comme un **document**, exactement comme la création : la PRMP importe le plan modifié plutôt que
+> de le ressaisir (même principe que la rectification après observations).
+> `POST /api/saisies/ppm/{idDossier}/mise-a-jour/import` parse le PDF (même façade read-only que
+> `/saisies/ppm/import`), **rapproche** chaque ligne importée d'une ligne de la version — empreinte métier
+> (libellé normalisé + services bénéficiaires), puis libellé seul — et lui transmet son `idDetail`. Les
+> lignes absentes du document passent en **supprimées** (logiques, restaurables) ; celles qui réapparaissent
+> sont **restaurées** ; les inconnues sont créées. La persistance est déléguée à `PUT /api/saisies/ppm/{id}`
+> (résolution des référentiels à la volée, validations de montants et de chronologie).
+> Les **étapes** du PDF (`LANCEMENT`, `OUVERTURE`…) sont résolues en `idCapm` sur la grille effective du
+> mode, avec la MÊME règle qu'à la saisie (égalité de libellé, sinon premier libellé qui le contient) —
+> une ligne nouvelle exige au moins un processus. Retourne le **diff recalculé**, à vérifier avant de
+> créer la mise à jour. 409 si le dossier n'est pas une version ou n'est plus un brouillon.
+>
+> ⚠️ **Une mise à jour ne change pas d'entité contractante (règle ajoutée 2026-08-06).** L'entité est
+> **héritée** du prédécesseur (champ verrouillé à l'écran) : importer le plan d'un autre organisme
+> produirait un dossier incohérent — mêmes identités de lignes, tout autre entité. `POST …/mise-a-jour/import`
+> répond donc **409** lorsque le document relève d'une entité différente, **sans rien écrire**. Deux cas :
+> l'autorité contractante lue est **résolue** au référentiel et diffère de celle du dossier (comparaison
+> d'`idEntiteContract`) ; ou elle n'est **pas résolue** — le libellé lu est alors comparé à celui de
+> l'entité du dossier, à la casse, aux accents et à la ponctuation près (inclusion admise), et le refus
+> n'est prononcé que s'ils ne se recouvrent manifestement pas. Le message nomme les deux entités. La
+> lecture préparatoire `POST /api/saisies/ppm/import` (création d'un dossier neuf) n'est **pas** concernée :
+> elle ne vise aucun dossier existant.
+>
+> Sans ce rapprochement, réimporter le plan ferait apparaître l'intégralité des lignes comme « supprimées
+> puis recréées » et l'identité inter-versions serait perdue. Vérifié sur un PPM réel de 32 lignes :
+> réimport du même document dans une version suivante → **35 inchangées, 0 modifiée, 0 nouvelle**.
 
 > **Saisie avec pièces jointes (multipart).** La variante `multipart/form-data` de `POST /api/saisies/ppm`
 > accepte une part `data` = JSON `SaisiePpmRequest` et des parts fichiers nommées **`piece_<idTypePiece>`**
