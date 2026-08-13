@@ -8930,6 +8930,55 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("Modes : catégorie NORMAL/DEROGATOIRE — GET l'expose (null = non classé), PUT la persiste, valeur inconnue → 400 (champ categorie)")
+    void mode_categorie_declaratif() throws Exception {
+        modePassationRepository.save(new ModePassation(70, "Gré à gré", null, null, null, null));
+
+        // GET : le champ est servi, null tant que l'admin n'a pas classé.
+        mvc.perform(get("/api/mode-passations/70").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.categorie").value(nullValue()));
+
+        // PUT (admin) : categorie DEROGATOIRE persiste et se relit.
+        mvc.perform(put("/api/mode-passations/70").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idMode\":70,\"libelle\":\"Gré à gré\",\"categorie\":\"DEROGATOIRE\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.categorie").value("DEROGATOIRE"));
+        mvc.perform(get("/api/mode-passations/70").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.categorie").value("DEROGATOIRE"));
+
+        // PUT : valeur hors enum → 400 ciblant le champ categorie (handler Jackson global).
+        mvc.perform(put("/api/mode-passations/70").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idMode\":70,\"libelle\":\"Gré à gré\",\"categorie\":\"EXCEPTIONNEL\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[0].champ").value("categorie"));
+    }
+
+    @Test
+    @DisplayName("Modes : reprise CATEGORIE au démarrage — NORMAL sur les modes DECLENCHE_AGPM non classés, sans écraser un classement admin")
+    void mode_categorie_migration() throws Exception {
+        ModePassation aoo = new ModePassation(71, "Appel d'offres ouvert", null, null, null, null);
+        aoo.setDeclencheAgpm(true);
+        modePassationRepository.save(aoo);
+        modePassationRepository.save(new ModePassation(72, "Gré à gré", null, null, null, null));   // non marqué → reste non classé
+        ModePassation dejaClasse = new ModePassation(73, "Consultation des Prix Ouverte", null, null, null, null);
+        dejaClasse.setDeclencheAgpm(true);
+        dejaClasse.setCategorie(cnm.prs.enums.CategorieModePassation.DEROGATOIRE);   // classement admin : intouchable
+        modePassationRepository.save(dejaClasse);
+
+        new cnm.prs.seed.CategorieModePassationMigration(modePassationRepository).run();
+
+        org.junit.jupiter.api.Assertions.assertEquals(cnm.prs.enums.CategorieModePassation.NORMAL,
+                modePassationRepository.findById(71).orElseThrow().getCategorie());
+        org.junit.jupiter.api.Assertions.assertNull(modePassationRepository.findById(72).orElseThrow().getCategorie());
+        org.junit.jupiter.api.Assertions.assertEquals(cnm.prs.enums.CategorieModePassation.DEROGATOIRE,
+                modePassationRepository.findById(73).orElseThrow().getCategorie());
+    }
+
+    @Test
     @DisplayName("DMC : un mode créé À LA VOLÉE (saisie PPM) reçoit aussi le type de DMC dérivé du libellé")
     void mode_alaVolee_autoMap_typeDmc() throws Exception {
         Long bc = typeDmcRepository.save(new cnm.prs.entity.TypeDmc(null, "BC", "Bon de Commande", true))

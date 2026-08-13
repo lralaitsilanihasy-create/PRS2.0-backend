@@ -1,7 +1,10 @@
 package cnm.prs.entity;
 
+import cnm.prs.enums.CategorieModePassation;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
@@ -53,6 +56,15 @@ public class ModePassation {
      */
     @Column(name = "DECLENCHE_AGPM")
     private Boolean declencheAgpm;
+
+    /**
+     * ⚠️ Règle ajoutée (2026-08-13) — <strong>catégorie</strong> du mode : {@code NORMAL} (droit commun)
+     * ou {@code DEROGATOIRE}. Purement déclaratif (comme {@code publiciteRequise}), administrable via
+     * l'écran référentiel. {@code null} = non classé (les modes créés à l'import naissent non classés).
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "CATEGORIE", length = 20)
+    private CategorieModePassation categorie;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ID_TYPE_DMC", insertable = false, updatable = false)

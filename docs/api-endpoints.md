@@ -2493,6 +2493,7 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 | delaiMinJours | number | Non | |
 | baseLegale | string | Non | max 200 |
 | idTypeDmc | number | Non | **mapping vers le type de DMC** (`t_type_dmc`) dérivé pour les marchés de ce mode |
+| categorie | string enum | Non | `NORMAL` \| `DEROGATOIRE` \| `null` (= non classé) ; valeur hors enum → **400** `{ "champ": "categorie", ... }` |
 
 **Endpoints**
 
@@ -2511,6 +2512,15 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 > mots-clés, insensible casse/accents) : « appel d'offres » → **DAO** ; « consultation »/« cotation » → **DC** ;
 > « gré à gré »/« achat direct » → **BC** ; sinon **`null`** (à mapper ensuite via `PUT`). Un `idTypeDmc` **fourni
 > explicitement est conservé** (pas d'écrasement). Le `PUT` ne dérive pas (mapping explicite de l'admin).
+
+> **Catégorie `NORMAL` / `DEROGATOIRE` (règle ajoutée 2026-08-13).** Classification **purement déclarative**
+> (aucun comportement dérivé pour l'instant, au même titre que `publiciteRequise`) : le Code des marchés
+> publics fait de l'appel d'offres ouvert le mode de **droit commun** (`NORMAL`), les autres modes étant
+> **dérogatoires** (`DEROGATOIRE`). `null` = **non classé** — les modes créés à la volée (import PPM)
+> naissent non classés et l'Administrateur les classe via l'écran référentiel. **Reprise au démarrage**
+> (`CategorieModePassationMigration`, désactivable par `app.migration.categorie-mode.enabled=false`) :
+> `NORMAL` est posé sur les modes marqués `declencheAgpm` (marqueur AOO administré — jamais de mot-clé
+> de libellé) **dont la catégorie est `null`** ; aucun classement admin n'est écrasé.
 
 **Exemple — requête**
 ```json

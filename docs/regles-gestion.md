@@ -598,6 +598,16 @@ Accès complet aux référentiels, comptes utilisateurs, journal d'audit, hiéra
   - Plan comptable tr_compte et répertoire tr_entite_contract.
 - Délégations de profil [Écriture]
   - Gestion des entrées t_delegation_profil — quels profils peuvent exercer les tâches d'autres profils.
+- ⚠️ **Règle ajoutée (2026-08-13) — catégorie des modes de passation** [Écriture]
+  - Chaque mode (`tr_mode_passation`) porte une **catégorie déclarative** `CATEGORIE` :
+    **`NORMAL`** (mode de droit commun — l'appel d'offres ouvert au sens du Code des marchés publics)
+    ou **`DEROGATOIRE`** (modes d'exception soumis à conditions) ; **null = non classé**.
+    Champ `categorie` de `ModePassationDto` (lecture partout, écriture Administrateur via l'écran
+    référentiel) ; valeur hors enum → **400 (champ `categorie`)**. **Aucun comportement dérivé pour
+    l'instant** (purement data-driven, comme `publiciteRequise`). Les modes créés à la volée à l'import
+    PPM naissent **non classés**. Reprise au démarrage : `NORMAL` posé sur les modes marqués
+    `DECLENCHE_AGPM` (marqueur AOO administré, jamais de mot-clé de libellé) dont la catégorie est null
+    — sans écraser un classement admin (`app.migration.categorie-mode.enabled=false` pour désactiver).
 
 **Module 10 — Administration & sécurité**
 

@@ -1,5 +1,6 @@
 package cnm.prs.dto;
 
+import cnm.prs.enums.CategorieModePassation;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -36,4 +37,11 @@ public class ModePassationDto {
      * PPM. Administrable (écran admin des modes) ; le front le lit sur chaque mode. {@code null} = false.
      */
     private Boolean declencheAgpm;
+
+    /**
+     * Catégorie du mode : {@code NORMAL} (droit commun) ou {@code DEROGATOIRE} ; {@code null} = non
+     * classé. Déclaratif (aucune règle dérivée pour l'instant), administrable ; valeur hors enum → 400
+     * ciblant le champ {@code categorie} (handler Jackson global).
+     */
+    private CategorieModePassation categorie;
 }
