@@ -61,4 +61,12 @@ public class DispatchController {
         service.delete(id);
         return ResponseEntity.noContent().build();
     }
+
+    // ⚠️ Règle ajoutée — retrait du dossier au Membre : annule le dispatch (dossier → PRET_DISPATCH).
+    @PreAuthorize("hasAnyRole('PRESIDENT','CHEF_COMMISSION')")
+    @PostMapping("/{id}/annuler")
+    public ResponseEntity<Void> annuler(@PathVariable Integer id) {
+        service.annuler(id);
+        return ResponseEntity.noContent().build();
+    }
 }

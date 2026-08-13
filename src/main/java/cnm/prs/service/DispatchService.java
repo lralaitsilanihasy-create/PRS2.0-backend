@@ -35,15 +35,20 @@ public class DispatchService {
     private final ControleurRepository controleurRepository;
     private final DossierRepository dossierRepository;
     private final NotificationService notificationService;
+    private final CircuitCascadeService circuitCascadeService;
+    private final ControleurDirectory controleurDirectory;
 
     public DispatchService(DispatchRepository repository, ReceptionRepository receptionRepository,
             ControleurRepository controleurRepository, DossierRepository dossierRepository,
-            NotificationService notificationService) {
+            NotificationService notificationService, CircuitCascadeService circuitCascadeService,
+            ControleurDirectory controleurDirectory) {
         this.repository = repository;
         this.receptionRepository = receptionRepository;
         this.controleurRepository = controleurRepository;
         this.dossierRepository = dossierRepository;
         this.notificationService = notificationService;
+        this.circuitCascadeService = circuitCascadeService;
+        this.controleurDirectory = controleurDirectory;
     }
 
     @Transactional(readOnly = true)
@@ -83,12 +88,50 @@ public class DispatchService {
         interdireDoublonDispatch(dto.getIdReception());
         validerInterimDispatch(dto);
         Dispatch entity = DispatchMapper.toEntity(dto);
+        // ⚠️ Règle ajoutée (§3.3) — le CC de la localité du dossier est TOUJOURS associé au dispatch :
+        // s'il n'est pas fourni, il est résolu automatiquement, afin qu'il soit informé et suive tout
+        // le circuit des dossiers dispatchés aux Membres de sa commission.
+        associerCcParDefaut(entity);
         Dispatch saved = repository.save(entity);
         // [Auto] Le dossier avance PRET_DISPATCH → DISPATCHE, dans la même transaction que le dispatch.
         avancerDossierVersDispatche(dto.getIdReception());
         // [Auto] Le Membre assigné est notifié qu'un dossier lui est transmis pour examen.
         notifierMembreAssigne(saved);
+        // [Auto] Copie du dispatch au CC associé (sauf s'il est lui-même le dispatcheur).
+        notifierCcCopie(saved);
         return toDtoComplet(saved);
+    }
+
+    /** [Auto] Si {@code imCtrlCc} est absent, associe le Chef de commission de la localité du dossier. */
+    private void associerCcParDefaut(Dispatch entity) {
+        if (entity.getImCtrlCc() != null && !entity.getImCtrlCc().isBlank()) {
+            return;
+        }
+        String localite = resoudreLocaliteDossier(entity.getIdReception());
+        controleurDirectory.chefsCommission(localite).stream().findFirst()
+                .ifPresent(cc -> entity.setImCtrlCc(cc.getImControleur()));
+    }
+
+    /** [Auto] Copie de dispatch ({@code DISPATCH_CC}) au CC associé — informé du circuit du dossier (§3.3). */
+    private void notifierCcCopie(Dispatch dispatch) {
+        String imCc = dispatch.getImCtrlCc();
+        if (imCc == null || imCc.isBlank() || imCc.equals(dispatch.getImCtrlDispatch())) {
+            return;
+        }
+        Integer idDossier = dispatch.getIdReception() == null ? null
+                : receptionRepository.findById(dispatch.getIdReception())
+                        .map(Reception::getIdDossier).orElse(null);
+        String membre = dispatch.getImCtrlMembre() == null ? null
+                : controleurRepository.findById(dispatch.getImCtrlMembre())
+                        .map(c -> (c.getNomCont() == null ? "" : c.getNomCont() + " ")
+                                + (c.getPrenomsCont() == null ? "" : c.getPrenomsCont()))
+                        .map(String::trim).orElse(dispatch.getImCtrlMembre());
+        String email = controleurRepository.findById(imCc).map(Controleur::getEmailCont).orElse(null);
+        notificationService.emettreControleur(TypeNotification.DISPATCH_CC, imCc, email,
+                idDossier, TypeObjet.DOSSIER, idDossier,
+                "Copie de dispatch",
+                "Le dossier " + idDossier + " a été dispatché"
+                        + (membre == null || membre.isBlank() ? "" : " à " + membre) + " pour examen.");
     }
 
     /** [Auto] Notifie le Membre assigné ({@code EXAMEN_A_FAIRE}) du dossier dispatché. */
@@ -172,6 +215,67 @@ public class DispatchService {
             throw new ResourceNotFoundException("Dispatch introuvable : " + id);
         }
         repository.deleteById(id);
+    }
+
+    /**
+     * ⚠️ Règle ajoutée — annulation d'un dispatch par le Président ou un CC (retrait du dossier au
+     * Membre assigné), possible tant que le PV n'est pas signé : dossier {@link StatutDossier#DISPATCHE}
+     * <em>ou</em> {@link StatutDossier#EXAMINE} (409 au-delà). Purge tout l'aval du dispatch (examen,
+     * détails, observations, projet de PV, navettes, lettres, copies) puis le dispatch — la réception
+     * est conservée — et fait revenir le dossier en PRET_DISPATCH (même transaction, re-dispatchable).
+     * Périmètre de localité contrôlé (un CC n'annule que dans sa localité) ; le Membre est notifié.
+     */
+    public void annuler(Integer id) {
+        Dispatch entity = repository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Dispatch introuvable : " + id));
+        Visibilite.controler(loc -> repository.existsDansLocalite(id, loc));
+        Integer idDossier = entity.getIdReception() == null ? null
+                : receptionRepository.findById(entity.getIdReception())
+                        .map(Reception::getIdDossier).orElse(null);
+        String statut = idDossier == null ? null
+                : dossierRepository.findById(idDossier).map(d -> d.getStatut()).orElse(null);
+        boolean annulable = StatutDossier.DISPATCHE.name().equals(statut)
+                || StatutDossier.EXAMINE.name().equals(statut);
+        if (!annulable) {
+            throw new BusinessRuleException(
+                    "Annulation impossible : le dossier doit être au statut DISPATCHE ou EXAMINE "
+                            + "(avant PV signé), statut actuel « " + statut + " ».");
+        }
+        // Purge de l'aval du dispatch (examen/PV/…) + dispatchs ; la réception est conservée.
+        circuitCascadeService.purgerApresDispatch(idDossier);
+        dossierRepository.findById(idDossier).ifPresent(d -> {
+            d.setStatut(StatutDossier.PRET_DISPATCH.name());
+            dossierRepository.save(d);
+        });
+        notifierMembreRetrait(entity, idDossier);
+        notifierCcRetrait(entity, idDossier);
+    }
+
+    /** [Auto] Copie de l'annulation au CC associé (sauf s'il est lui-même l'auteur du retrait). */
+    private void notifierCcRetrait(Dispatch dispatch, Integer idDossier) {
+        String imCc = dispatch.getImCtrlCc();
+        String imCourant = CurrentUser.ref().orElse(null);
+        if (imCc == null || imCc.isBlank() || imCc.equals(imCourant)) {
+            return;
+        }
+        String email = controleurRepository.findById(imCc).map(Controleur::getEmailCont).orElse(null);
+        notificationService.emettreControleur(TypeNotification.DISPATCH_ANNULE, imCc, email,
+                idDossier, TypeObjet.DOSSIER, idDossier,
+                "Dispatch annulé",
+                "Le dispatch du dossier " + idDossier + " a été annulé : le dossier est de retour en pré-dispatch.");
+    }
+
+    /** [Auto] Notifie le Membre anciennement assigné que le dossier lui est retiré (dispatch annulé). */
+    private void notifierMembreRetrait(Dispatch dispatch, Integer idDossier) {
+        String imMembre = dispatch.getImCtrlMembre();
+        if (imMembre == null || imMembre.isBlank()) {
+            return;
+        }
+        String email = controleurRepository.findById(imMembre).map(Controleur::getEmailCont).orElse(null);
+        notificationService.emettreControleur(TypeNotification.DISPATCH_ANNULE, imMembre, email,
+                idDossier, TypeObjet.DOSSIER, idDossier,
+                "Dossier retiré",
+                "Le dispatch du dossier " + idDossier + " a été annulé : il ne vous est plus attribué.");
     }
 
     /**

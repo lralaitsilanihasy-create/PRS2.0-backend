@@ -836,7 +836,11 @@ relation **1,N** : un point de contrôle a **0..N** lignes. Remplace l'ancien ch
 
 > ⚠️ **Transition de statut (règle ajoutée).** À la **création** d'un dispatch, le dossier passe **`PRET_DISPATCH` → `DISPATCHE`** dans la **même transaction** que le dispatch. C'est ce statut `DISPATCHE` qui conditionne l'étape suivante (l'examen l'exige).
 
+> ⚠️ **Annulation (règle ajoutée).** `POST /{id}/annuler` (Président / CC de la localité) **retire le dossier au Membre**, possible tant que le PV n'est pas signé (dossier **`DISPATCHE` ou `EXAMINE`**, **409** au-delà) : purge tout l'**aval du dispatch** (examen, détails, observations, projet de PV, navettes, lettres, copies — la **réception est conservée**) puis le dispatch, et fait revenir le dossier en **`PRET_DISPATCH`** (même transaction, re-dispatchable). Le Membre anciennement assigné est notifié (`DISPATCH_ANNULE`).
+
 > **Règle `interimDispatch`** (sinon **409**) : Président → `false` ; CC dans sa localité → `false` ; CC hors de sa localité → `true` obligatoire.
+
+> ⚠️ **CC toujours associé + informé (règle ajoutée, §3.3).** À la création, si `imCtrlCc` est **absent**, le **Chef de commission de la localité du dossier est associé automatiquement** au dispatch. Le CC associé reçoit une **copie de dispatch** (`DISPATCH_CC`, sauf s'il est lui-même le dispatcheur) et une **copie d'annulation** (`DISPATCH_ANNULE`, sauf s'il est l'auteur du retrait) — il suit ainsi tout le circuit des dossiers dispatchés aux Membres de sa commission (PV à valider, retraits… le notifient déjà).
 
 **Champs `DispatchDto`**
 
@@ -862,6 +866,7 @@ relation **1,N** : un point de contrôle a **0..N** lignes. Remplace l'ancien ch
 | POST | /api/dispatchs | `DispatchDto` | `DispatchDto` | 201, 400, 403, 409 | PRESIDENT / CHEF_COMMISSION |
 | PUT | /api/dispatchs/{id} | `DispatchDto` | `DispatchDto` | 200, 400, 404, 409 | PRESIDENT / CHEF_COMMISSION |
 | DELETE | /api/dispatchs/{id} | — | — | 204, 404 | ADMINISTRATEUR |
+| POST | /api/dispatchs/{id}/annuler | — | — | 204, 403, 404, 409 | PRESIDENT / CHEF_COMMISSION |
 
 `{id}` = idDispatch (number).
 
