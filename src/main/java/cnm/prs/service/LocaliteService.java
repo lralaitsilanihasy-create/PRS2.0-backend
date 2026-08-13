@@ -45,6 +45,7 @@ public class LocaliteService {
         Localite existing = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Localite introuvable : " + id));
         existing.setLibelleLocalite(dto.getLibelleLocalite());
+        existing.setChefLieu(dto.getChefLieu());   // ⚠️ 2026-08-03 — chef-lieu (documents officiels)
         return LocaliteMapper.toDto(repository.save(existing));
     }
 

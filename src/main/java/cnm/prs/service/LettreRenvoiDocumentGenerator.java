@@ -59,13 +59,7 @@ public class LettreRenvoiDocumentGenerator {
             doc.write(docxOut);
             doc.close();
 
-            ByteArrayOutputStream pdfOut = new ByteArrayOutputStream();
-            convertisseur().convert(new ByteArrayInputStream(docxOut.toByteArray()))
-                    .as(DocumentType.DOCX)
-                    .to(pdfOut)
-                    .as(DocumentType.PDF)
-                    .execute();
-            return pdfOut.toByteArray();
+            return convertirEnPdf(docxOut.toByteArray());
         } catch (BusinessRuleException e) {
             throw e;
         } catch (Exception e) {
@@ -73,19 +67,58 @@ public class LettreRenvoiDocumentGenerator {
         }
     }
 
-    /** Convertisseur Word partagé, créé à la première demande (initialisation paresseuse, thread-safe). */
+    /**
+     * ⚠️ Robustesse (2026-08-04, même correctif que le générateur de PV) — Word peut s'arrêter entre
+     * deux conversions : sans cela le convertisseur en cache reste « shut down » et toutes les
+     * générations suivantes échouent jusqu'au redémarrage. On retente UNE fois avec un convertisseur neuf.
+     */
+    private byte[] convertirEnPdf(byte[] docx) {
+        try {
+            return convertir(docx);
+        } catch (RuntimeException premiereTentative) {
+            invaliderConvertisseur();
+            return convertir(docx);
+        }
+    }
+
+    private byte[] convertir(byte[] docx) {
+        ByteArrayOutputStream pdfOut = new ByteArrayOutputStream();
+        convertisseur().convert(new ByteArrayInputStream(docx))
+                .as(DocumentType.DOCX)
+                .to(pdfOut)
+                .as(DocumentType.PDF)
+                .execute();
+        return pdfOut.toByteArray();
+    }
+
+    /** Convertisseur Word partagé, (re)créé s'il est absent ou arrêté (initialisation paresseuse, thread-safe). */
     private IConverter convertisseur() {
         IConverter c = convertisseur;
-        if (c == null) {
+        if (c == null || !c.isOperational()) {
             synchronized (this) {
                 c = convertisseur;
-                if (c == null) {
+                if (c == null || !c.isOperational()) {
                     c = LocalConverter.builder().build();
                     convertisseur = c;
                 }
             }
         }
         return c;
+    }
+
+    /** Oublie (et tente de fermer) le convertisseur courant : le suivant sera recréé. */
+    private void invaliderConvertisseur() {
+        synchronized (this) {
+            IConverter c = convertisseur;
+            convertisseur = null;
+            if (c != null) {
+                try {
+                    c.shutDown();
+                } catch (RuntimeException dejaArrete) {
+                    // convertisseur déjà mort : rien à fermer
+                }
+            }
+        }
     }
 
     @PreDestroy

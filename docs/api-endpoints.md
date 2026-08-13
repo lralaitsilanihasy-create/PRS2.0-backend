@@ -1779,11 +1779,34 @@ et interprété comme un code de **sous-type** (les anciens payloads `{"idTypeDo
 > traitées » — le workflow séquentiel/couleurs est géré côté front. **Vacant** (aucune exigence) si le dossier
 > n'a **pas de grille** (famille/sous-type sans points) → examens historiques et non-PPM non contraints.
 >
-> ⚠️ **PV — document généré (règle ajoutée).** À la **signature finale** du PV (passage à `SIGNE`), si le PV
-> est éligible — avis **favorable sous réserve** (`FAVR`), dossier de **localité centrale** (`ANT`) et **PPM**
-> comportant au moins une ligne de marché, **quel que soit le mode de passation** (le gabarit AFSR/PPM/central
-> ne dépend pas du mode) — le **PDF du PV** est généré à partir du
-> modèle Word `PV_AFSR_PPMAGPM_CENTRALE.docx` (copie du modèle + remplacement des placeholders ; date d'examen
+> ⚠️ **PV — document généré (règle ajoutée ; modèles étendus 2026-08-03).** À la **signature finale** du PV
+> (passage à `SIGNE`), le **PDF officiel** est généré **s'il existe un modèle Word pour le cas** — conditions
+> communes : dossier de **localité centrale** (`ANT`, seuls modèles fournis) et **PPM** comportant au moins une
+> ligne de marché, **quel que soit le mode de passation**. Choix du modèle (`PvDocumentService.modelePour`) :
+>
+> **12 modèles** `PV_{AFSR|AF|ANF}_{PPMAGPM|PPM}_{CENTRALE|REGIONALE}.docx`, choisis sur **trois axes** :
+>
+> | axe | valeurs | effet sur le document |
+> |---|---|---|
+> | **avis** | `FAVR` → `AFSR` / `FAV` → `AF` / `DEF` → `ANF` | `AFSR` : clause « sous réserve … » + **ANNEXE** des observations ; `AF` : « émet un **AVIS FAVORABLE** … », ni clause ni annexe (1 page) ; `ANF` : « émet un **AVIS NON FAVORABLE** … », ni clause ni annexe |
+> | **sous-type** (dérivé serveur des marchés déclencheurs) | `PPM-AGPM` / `PPM` | mention « … et d'Avis Général de Passation des Marchés INITIAL » (intitulé) et « … et à la publication de l'AGPM » (avis) |
+> | **localité** du circuit (réception) | `ANT` → `CENTRALE` / autre → `REGIONALE` | en-tête « COMMISSION **REGIONALE** DES MARCHES » + ligne **localité**, titre et mentions « Commission **Régionale** » |
+>
+> Seul l'avis `NSP` (« ne se prononce pas ») n'a **aucun modèle** → aucun document produit.
+> ⚠️ La variante `FAVR` **sans AGPM** (centrale et régionale) est **dérivée** de la règle AGPM des modèles
+> fournis — **à valider par le métier** : « … émet un AVIS FAVORABLE à l'affichage du PPM sous réserve
+> qu'il soit tenu compte des observations portées en annexe. ».
+>
+> 📌 **Lieu d'établissement.** La ligne de signature (« A …, le … ») porte le **chef-lieu**
+> (`tr_localite.CHEF_LIEU`, repli sur le libellé) — marqueur dédié `<CHEF LIEU>` (la graphie
+> `<CHEF-LIEU>` est également acceptée) — tandis que l'en-tête régional porte la **localité** (région)
+> via `<LOCALITE>`.
+>
+> 📌 **Résilience de la conversion (2026-08-04).** Word (documents4j) peut s'arrêter entre deux
+> conversions : le convertisseur en cache est désormais **recréé** s'il n'est plus opérationnel et la
+> conversion est **retentée une fois**. Auparavant, un seul arrêt de Word faisait échouer (409) toutes
+> les générations de PV **et** de lettres jusqu'au redémarrage du serveur. Le PDF est produit à partir du
+> modèle Word retenu (copie du modèle + remplacement des placeholders ; date d'examen
 > formatée et **en toutes lettres** dans « L'an … » ; bloc « Étaient présents » filtré sur les signataires
 > effectifs ; ANNEXE = une ligne par observation des points non conformes, **préfixée par la ligne de marché**
 concernée — « [Marché « désignation »] point » pour un résultat par ligne, « [Dossier] point » pour un point
@@ -2240,8 +2263,9 @@ profil/localité. Cycle : `BROUILLON → SOUMIS → SIGNE` (signature CC ou Pré
 > `2026-07-17_localite_referencement_deprecie.sql` et `2026-07-17_localite_code_deprecie.sql`). Des valeurs
 > encore envoyées par un ancien front sont **ignorées**. → L'écran admin se réduit à **id / libellé**.
 >
-> 📌 **Étiquetage front.** Le segment localité des références officielles (`00013/PPM/CRM-ANT/2026`)
-> est bâti sur la **PK `idLocalite`** (préfixée `CRM-`, ou `CNM` en central).
+> 📌 **Étiquetage front.** Le segment localité des références officielles est bâti sur la **PK
+> `idLocalite`** : **`CNM`** pour la localité **centrale** (`ANT`, cf. `Localite.ID_CENTRALE` — ex.
+> `00013/PPM/CNM/2026`), **`CRM-<idLocalite>`** pour les régions (ex. `00014/PPM/CRM-TMS/2026`).
 
 **Champs `LocaliteDto`**
 
@@ -2249,6 +2273,7 @@ profil/localité. Cycle : `BROUILLON → SOUMIS → SIGNE` (signature CC ou Pré
 |---|---|---|---|
 | idLocalite | string | Oui (PK, au POST) | clé primaire, max 5 — sert de segment localité des références (`CRM-<id>`) |
 | libelleLocalite | string | Oui | @NotBlank, max 50 — libellé affiché (aussi dans les documents PV/lettres) |
+| chefLieu | string | Non | max 50 — ⚠️ **ajouté 2026-08-03** : **chef-lieu** de la localité (ville de siège de la Commission régionale, lieu porté par les documents officiels « A &lt;chef-lieu&gt;, le … »). **Facultatif** : à défaut, les documents retombent sur `libelleLocalite`. Colonne `CHEF_LIEU` (nullable), éditable dans l'écran admin **Référentiels → Localités** |
 
 **Endpoints**
 

@@ -26,4 +26,12 @@ public class LocaliteDto {
     @NotBlank
     @Size(max = 50)
     private String libelleLocalite;
+
+    /**
+     * ⚠️ Ajouté (2026-08-03) — <strong>chef-lieu</strong> de la localité (ville de siège de la
+     * Commission régionale, lieu porté par les documents officiels). Facultatif : à défaut, les
+     * documents retombent sur {@code libelleLocalite}.
+     */
+    @Size(max = 50)
+    private String chefLieu;
 }

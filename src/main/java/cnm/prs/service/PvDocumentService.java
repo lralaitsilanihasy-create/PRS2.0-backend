@@ -20,6 +20,8 @@ import cnm.prs.entity.Dossier;
 import cnm.prs.entity.EntiteContract;
 import cnm.prs.entity.Examen;
 import cnm.prs.entity.ExamenDetail;
+import cnm.prs.entity.ExamenPiece;
+import cnm.prs.entity.Marche;
 import cnm.prs.entity.Localite;
 import cnm.prs.entity.ObservationControle;
 import cnm.prs.entity.Ppm;
@@ -30,26 +32,35 @@ import cnm.prs.repository.ControleurRepository;
 import cnm.prs.repository.DossierRepository;
 import cnm.prs.repository.EntiteContractRepository;
 import cnm.prs.repository.ExamenDetailRepository;
+import cnm.prs.repository.ExamenPieceRepository;
 import cnm.prs.repository.ExamenRepository;
 import cnm.prs.repository.LocaliteRepository;
 import cnm.prs.repository.MarcheRepository;
 import cnm.prs.repository.ObservationControleRepository;
+import cnm.prs.repository.PieceJointeDossierRepository;
 import cnm.prs.repository.PpmRepository;
 import cnm.prs.repository.ReceptionRepository;
+import cnm.prs.repository.TypePieceJointeRepository;
 
 /**
- * Génère et stocke le PDF du Projet de PV <strong>uniquement quand il est éligible</strong> :
- * avis favorable sous réserve ({@code FAVR}), dossier de localité centrale ({@code ANT} — seul modèle
- * disponible) et {@code PPM} comportant au moins une ligne de marché. <strong>Indépendant du mode de
- * passation</strong> (le gabarit AFSR/PPM/central est identique quel que soit le mode). Hors de ces
- * conditions, aucun document n'est produit (le PV est créé normalement, sans {@code cheminDocument}).
+ * Génère et stocke le PDF du Projet de PV <strong>uniquement quand un modèle officiel existe</strong>
+ * pour le cas (cf. {@link #modelePour(PvExamen)}) : avis <strong>FAVR</strong> (avec annexe des
+ * observations), <strong>FAV</strong> ou <strong>DEF</strong> (sans annexe) — décliné PPM / PPM-AGPM et
+ * centrale / régionale — et {@code PPM} comportant au moins une ligne de marché.
+ * <strong>Indépendant du mode de passation</strong>. Hors de ces conditions, aucun document
+ * n'est produit (le PV est créé normalement, sans {@code cheminDocument}) — rien n'est inventé.
  */
 @Component
 @Transactional(readOnly = true)
 public class PvDocumentService {
 
     private static final String AVIS_FAVORABLE_RESERVE = "FAVR";
-    private static final String LOCALITE_CENTRALE = "ANT";
+    /** ⚠️ 2026-08-03 — avis favorable SANS réserve : modèles officiels fournis (PPM / PPM-AGPM). */
+    private static final String AVIS_FAVORABLE = "FAV";
+    /** ⚠️ 2026-08-04 — avis défavorable : modèles « AVIS NON FAVORABLE » (ANF) fournis. */
+    private static final String AVIS_DEFAVORABLE = "DEF";
+    /** Localité centrale : source unique {@link Localite#ID_CENTRALE} (partagée avec les références). */
+    private static final String LOCALITE_CENTRALE = Localite.ID_CENTRALE;
 
     private final PvDocumentGenerator generator;
     private final ExamenRepository examenRepository;
@@ -62,6 +73,9 @@ public class PvDocumentService {
     private final ControleurRepository controleurRepository;
     private final ExamenDetailRepository examenDetailRepository;
     private final ObservationControleRepository observationControleRepository;
+    private final ExamenPieceRepository examenPieceRepository;
+    private final PieceJointeDossierRepository pieceJointeDossierRepository;
+    private final TypePieceJointeRepository typePieceJointeRepository;
 
     @Value("${storage.pv-examen.path:${java.io.tmpdir}/prs-fsx/PV}")
     private String cheminStockagePv;
@@ -71,7 +85,10 @@ public class PvDocumentService {
             ReceptionRepository receptionRepository,
             EntiteContractRepository entiteContractRepository, LocaliteRepository localiteRepository,
             ControleurRepository controleurRepository, ExamenDetailRepository examenDetailRepository,
-            ObservationControleRepository observationControleRepository) {
+            ObservationControleRepository observationControleRepository,
+            ExamenPieceRepository examenPieceRepository,
+            PieceJointeDossierRepository pieceJointeDossierRepository,
+            TypePieceJointeRepository typePieceJointeRepository) {
         this.generator = generator;
         this.examenRepository = examenRepository;
         this.dossierRepository = dossierRepository;
@@ -83,6 +100,9 @@ public class PvDocumentService {
         this.controleurRepository = controleurRepository;
         this.examenDetailRepository = examenDetailRepository;
         this.observationControleRepository = observationControleRepository;
+        this.examenPieceRepository = examenPieceRepository;
+        this.pieceJointeDossierRepository = pieceJointeDossierRepository;
+        this.typePieceJointeRepository = typePieceJointeRepository;
     }
 
     /**
@@ -91,7 +111,8 @@ public class PvDocumentService {
      * marché hors appel d'offres ouvert).
      */
     public Optional<String> genererSiEligible(PvExamen pv) {
-        if (!estEligible(pv)) {
+        String modele = modelePour(pv).orElse(null);
+        if (modele == null) {
             return Optional.empty();
         }
         Integer idExamen = pv.getIdExamen();
@@ -100,7 +121,7 @@ public class PvDocumentService {
         String localite = examenRepository.findLocaliteByExamen(idExamen).orElse(null);
         Ppm ppm = ppmRepository.findByIdDossier(idDossier).stream().findFirst().orElse(null);
         PvDocumentContexte ctx = construireContexte(pv, dossier, ppm, idExamen, localite);
-        byte[] pdf = generator.genererPdf(ctx);
+        byte[] pdf = generator.genererPdf(ctx, modele);
         return Optional.of(stockerSurFsx(pv, pdf));
     }
 
@@ -112,25 +133,73 @@ public class PvDocumentService {
      */
     @Transactional(readOnly = true)
     public boolean estEligible(PvExamen pv) {
-        if (pv == null || !AVIS_FAVORABLE_RESERVE.equals(pv.getIdAvis())) {
-            return false;
+        return modelePour(pv).isPresent();
+    }
+
+    /**
+     * Modèle Word officiel correspondant au PV, ou {@link Optional#empty()} si <strong>aucun modèle
+     * n'existe</strong> pour ce cas (aucun document n'est alors produit — rien n'est inventé).
+     *
+     * <p>Condition commune : <strong>PPM comportant au moins une ligne de marché</strong> — indépendant
+     * du mode de passation. Le modèle est choisi sur <strong>trois axes</strong> — avis, sous-type
+     * (AGPM), localité <strong>centrale / régionale</strong> — cf. {@link PvDocumentGenerator#modele}
+     * (⚠️ modèles fournis par le métier les 2026-08-03 et 2026-08-04) :</p>
+     * <ul>
+     *   <li>avis <strong>FAVR</strong> (favorable avec réserves) → modèle {@code AFSR},
+     *       <strong>avec ANNEXE</strong> des observations ;</li>
+     *   <li>avis <strong>FAV</strong> (favorable sans réserve) → modèle {@code AF}, sans annexe ;</li>
+     *   <li>avis <strong>DEF</strong> (défavorable) → modèle {@code ANF} (« émet un AVIS NON
+     *       FAVORABLE … »), sans annexe ;</li>
+     * </ul>
+     * <p>chacun décliné selon le <strong>sous-type</strong> du dossier (dérivé serveur des marchés) :
+     * {@code PPM-AGPM} (« … à l'affichage du PPM <em>et à la publication de l'AGPM</em> ») ou
+     * {@code PPM} (« … à l'affichage du PPM »), et selon la <strong>localité</strong>.</p>
+     * <p>L'avis {@code NSP} (« ne se prononce pas ») n'a pas de modèle : aucun document.</p>
+     */
+    @Transactional(readOnly = true)
+    public Optional<String> modelePour(PvExamen pv) {
+        PvDocumentGenerator.SensAvis sens = sensDuModele(pv == null ? null : pv.getIdAvis()).orElse(null);
+        if (sens == null) {
+            return Optional.empty();
         }
         Integer idExamen = pv.getIdExamen();
         Integer idDossier = examenRepository.findIdDossierByExamen(idExamen).orElse(null);
-        if (idDossier == null || dossierRepository.findById(idDossier).isEmpty()) {
-            return false;
-        }
-        // Localité du circuit (réception), comme les lettres de renvoi ; seul le modèle central (ANT) existe.
-        if (!LOCALITE_CENTRALE.equals(examenRepository.findLocaliteByExamen(idExamen).orElse(null))) {
-            return false;   // pas de variante régionale inventée
+        Dossier dossier = idDossier == null ? null : dossierRepository.findById(idDossier).orElse(null);
+        // Localité du circuit (réception), comme les lettres de renvoi : commande la variante
+        // centrale / régionale (⚠️ 2026-08-04 — les 4 modèles régionaux sont désormais fournis).
+        String localite = examenRepository.findLocaliteByExamen(idExamen).orElse(null);
+        if (dossier == null || localite == null) {
+            return Optional.empty();
         }
         Ppm ppm = ppmRepository.findByIdDossier(idDossier).stream().findFirst().orElse(null);
-        if (ppm == null) {
-            return false;
+        // L'éligibilité ne dépend PAS du mode de passation : on exige seulement que le PPM comporte au
+        // moins une ligne de marché (PPM réel), quel que soit le mode (AOO, cotation, etc.).
+        // ⚠️ 2026-08-05 — les lignes SUPPRIMÉES d'une version ne comptent pas : un plan dont toutes les
+        // lignes ont été retirées n'est pas un PPM.
+        if (ppm == null || marcheRepository.findByIdPpm(ppm.getIdPpm()).stream().allMatch(Marche::getSupprimee)) {
+            return Optional.empty();
         }
-        // (règle ajustée) l'éligibilité AFSR ne dépend PAS du mode de passation : on exige seulement que le
-        // PPM comporte au moins une ligne de marché (PPM réel), quel que soit le mode (AOO, cotation, etc.).
-        return !marcheRepository.findByIdPpm(ppm.getIdPpm()).isEmpty();
+        // Le sous-type (dérivé serveur des marchés déclencheurs) commande la mention AGPM du modèle.
+        return Optional.of(PvDocumentGenerator.modele(sens,
+                DossierIntegriteService.SOUS_TYPE_PPM_AGPM.equals(dossier.getIdSousType()),
+                LOCALITE_CENTRALE.equals(localite)));
+    }
+
+    /**
+     * Sens de modèle correspondant à l'avis du PV, ou {@link Optional#empty()} si <strong>aucun modèle
+     * officiel n'existe</strong> pour cet avis (aujourd'hui : {@code NSP} « ne se prononce pas »).
+     */
+    private Optional<PvDocumentGenerator.SensAvis> sensDuModele(String idAvis) {
+        if (AVIS_FAVORABLE_RESERVE.equals(idAvis)) {
+            return Optional.of(PvDocumentGenerator.SensAvis.AFSR);
+        }
+        if (AVIS_FAVORABLE.equals(idAvis)) {
+            return Optional.of(PvDocumentGenerator.SensAvis.AF);
+        }
+        if (AVIS_DEFAVORABLE.equals(idAvis)) {
+            return Optional.of(PvDocumentGenerator.SensAvis.ANF);   // « AVIS NON FAVORABLE » au document
+        }
+        return Optional.empty();
     }
 
     /**
@@ -156,11 +225,17 @@ public class PvDocumentService {
                 .max(Comparator.naturalOrder()).map(LocalDateTime::toLocalDate).orElse(null);
         String entite = dossier.getIdEntiteContract() == null ? "" : entiteContractRepository
                 .findById(dossier.getIdEntiteContract()).map(EntiteContract::getLibelleEntite).orElse("");
-        String localite = localiteRepository.findById(idLocalite)
-                .map(Localite::getLibelleLocalite).orElse(idLocalite);
-        return new PvDocumentContexte(dateExamen, refPv, dateReception, entite, ppm.getExercice(), localite,
+        Localite loc = localiteRepository.findById(idLocalite).orElse(null);
+        String localite = loc == null ? idLocalite : loc.getLibelleLocalite();
+        // ⚠️ 2026-08-04 — lieu d'établissement = chef-lieu (ville de siège) ; repli sur le libellé.
+        String chefLieu = loc == null || loc.getChefLieu() == null || loc.getChefLieu().isBlank()
+                ? localite : loc.getChefLieu();
+        return new PvDocumentContexte(dateExamen, refPv, dateReception, entite, ppm.getExercice(), localite, chefLieu,
                 nomControleur(pv.getImCtrlPresident()), nomControleur(pv.getImCtrlCc()),
                 nomControleur(pv.getImCtrlMembre()), nomControleur(pv.getIdSecretaireSeance()),
+                // ⚠️ 2026-08-05 — nature du plan : INITIAL (null/0) ou MODIFICATIF N°n si le dossier est
+                // une version. L'information est portée par le PPM lui-même (t_ppm.NUM_MAJ).
+                ppm.getNumMaj(),
                 construireObservations(idExamen));
     }
 
@@ -182,6 +257,9 @@ public class PvDocumentService {
      * ({@code idDetail} renseigné), « [Dossier] libellé du point » pour un point inter-lignes ou un examen
      * historique ({@code idDetail} nul). Aucune modification du gabarit Word : le préfixe entre dans la
      * colonne « point de contrôle » existante.
+     * ⚠️ Règle ajoutée (2026-08-01) — les <strong>pièces jointes non conformes</strong> ({@code t_examen_piece})
+     * sont ajoutées à la suite : RÉFÉRENCES = libellé de la pièce SEUL (sans préfixe « [Pièce « … »] » —
+     * demande user), OBSERVATIONS = texte libre (les libellés « Au lieu de : / Lire : » sont retirés).
      */
     private List<PvDocumentContexte.Observation> construireObservations(Integer idExamen) {
         List<PvDocumentContexte.Observation> out = new ArrayList<>();
@@ -196,7 +274,29 @@ public class PvDocumentService {
                 }
             }
         }
+        for (ExamenPiece ep : examenPieceRepository.findByIdExamen(idExamen)) {
+            if (Boolean.FALSE.equals(ep.getConforme())) {
+                out.add(new PvDocumentContexte.Observation(
+                        libellePiece(ep.getIdPiece()), ep.getObservation(), null, true));
+            }
+        }
         return out;
+    }
+
+    /** Libellé d'une pièce jointe (type de pièce, repli nom de fichier puis « n°<id> »). */
+    private String libellePiece(Integer idPiece) {
+        if (idPiece == null) {
+            return "n°?";
+        }
+        return pieceJointeDossierRepository.findById(idPiece)
+                .map(p -> {
+                    String type = p.getIdTypePiece() == null ? null : typePieceJointeRepository
+                            .findById(p.getIdTypePiece()).map(t -> t.getLibellePiece()).orElse(null);
+                    return type != null && !type.isBlank() ? type
+                            : p.getNomFichier() != null && !p.getNomFichier().isBlank() ? p.getNomFichier()
+                            : "n°" + idPiece;
+                })
+                .orElse("n°" + idPiece);
     }
 
     /** Préfixe le libellé du point par la ligne de marché (désignation mise en cache) ou « [Dossier] ». */

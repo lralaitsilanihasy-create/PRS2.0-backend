@@ -18,6 +18,7 @@ public final class LocaliteMapper {
         LocaliteDto dto = new LocaliteDto();
         dto.setIdLocalite(entity.getIdLocalite());
         dto.setLibelleLocalite(entity.getLibelleLocalite());
+        dto.setChefLieu(entity.getChefLieu());
         return dto;
     }
 
@@ -28,6 +29,7 @@ public final class LocaliteMapper {
         Localite entity = new Localite();
         entity.setIdLocalite(dto.getIdLocalite());
         entity.setLibelleLocalite(dto.getLibelleLocalite());
+        entity.setChefLieu(dto.getChefLieu());
         return entity;
     }
 }

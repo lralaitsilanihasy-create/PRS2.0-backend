@@ -5632,8 +5632,11 @@ class CnmWorkflowIntegrationTest {
                 "Ministère de l'Économie et des Finances", // entité contractante
                 2026,                                       // exercice
                 "ANTANANARIVO",                             // localité (libellé)
+                "ANTANANARIVO",                             // chef-lieu (⚠️ 2026-08-04, lieu « A …, le »)
                 nomPresident, nomChefCommission,
-                "Paul MEMBRE", "Vero VERIFICATEUR", observations);
+                "Paul MEMBRE", "Vero VERIFICATEUR",
+                null,                                       // numMaj (⚠️ 2026-08-05) : null = plan INITIAL
+                observations);
     }
 
     private java.util.List<PvDocumentContexte.Observation> troisObservations() {
