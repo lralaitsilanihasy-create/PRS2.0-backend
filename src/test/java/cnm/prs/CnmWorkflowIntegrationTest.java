@@ -767,7 +767,8 @@ class CnmWorkflowIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRMEM\",\"commentaire\":\"v2\"}"))
                 .andExpect(status().isOk());
         mvc.perform(post("/api/pv-examens/71/accepter").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRCC1\"}"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"imActeur\":\"CTRCC1\",\"idAvis\":\"FAV\",\"idSecretaireSeance\":\"CTRVER\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.statutPv").value("PROJET_ACCEPTE"));
         mvc.perform(get("/api/notifications/mes").header("Authorization", tokenMembre))
                 .andExpect(jsonPath("$[?(@.typeNotif=='PV_ACCEPTE')]", hasSize(1)))
@@ -775,7 +776,8 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
-    @DisplayName("Statut examen : créer un examen fait passer le dossier DISPATCHE → EXAMINE (listes exclusives)")
+    @DisplayName("Statut examen (⚠️ règle déplacée 2026-08-01) : la création laisse le dossier DISPATCHE (brouillon), "
+            + "c'est la SOUMISSION de l'examen qui le passe EXAMINE")
     void statut_examenAvanceVersExamine() throws Exception {
         dossierRepository.save(dossier(30, "PRET_DISPATCH"));
         receptionRepository.save(reception(60, 30, "CTRSEC", true)); // ANT
@@ -786,9 +788,16 @@ class CnmWorkflowIntegrationTest {
         mvc.perform(get("/api/dossiers/30").header("Authorization", tokenCc))
                 .andExpect(jsonPath("$.statut").value("DISPATCHE"));
 
-        // Le Membre crée l'examen → le dossier passe EXAMINE.
+        // Le Membre crée l'examen (brouillon de progression) → le dossier RESTE DISPATCHE.
         mvc.perform(post("/api/examens").header("Authorization", tokenMembre).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idExamen\":80,\"idDispatch\":80,\"imCtrlMembre\":\"CTRMEM\"}"))
+                .andExpect(status().isCreated());
+        mvc.perform(get("/api/dossiers/30").header("Authorization", tokenCc))
+                .andExpect(jsonPath("$.statut").value("DISPATCHE"));
+
+        // La soumission de l'examen (projet de PV) fait passer le dossier EXAMINE.
+        mvc.perform(post("/api/examens/80/soumettre").header("Authorization", tokenMembre)
+                .contentType(MediaType.APPLICATION_JSON).content("{}"))
                 .andExpect(status().isCreated());
         mvc.perform(get("/api/dossiers/30").header("Authorization", tokenCc))
                 .andExpect(jsonPath("$.statut").value("EXAMINE"));
@@ -803,16 +812,18 @@ class CnmWorkflowIntegrationTest {
     @Test
     @DisplayName("Statut examen : signer le PV (favorable avec réserves) fait passer le dossier EXAMINE → EN_VERIFICATION")
     void statut_signaturePvAvanceVersPvSigne() throws Exception {
-        // Dossier 1 = EXAMINE (seed). PV FAVR sur l'examen 1, soumis, accepté, puis co-signé.
+        // Dossier 1 = EXAMINE (seed). PV FAVR (≥ 1 observation requise) sur l'examen 1, soumis, accepté, co-signé.
+        ajouterObservationExamen1();
         mvc.perform(post("/api/pv-examens").header("Authorization", tokenMembre).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idPv\":90,\"idExamen\":1,\"idAvis\":\"FAVR\",\"imCtrlMembre\":\"CTRMEM\","
+                .content("{\"idPv\":90,\"idExamen\":1,\"imCtrlMembre\":\"CTRMEM\","
                         + "\"statutPv\":\"BROUILLON\",\"nbNavettes\":0}"))
                 .andExpect(status().isCreated());
         mvc.perform(post("/api/pv-examens/90/soumettre").header("Authorization", tokenMembre)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRMEM\",\"commentaire\":\"go\"}"))
                 .andExpect(status().isOk());
         mvc.perform(post("/api/pv-examens/90/accepter").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRCC1\"}"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"imActeur\":\"CTRCC1\",\"idAvis\":\"FAVR\",\"idSecretaireSeance\":\"CTRVER\"}"))
                 .andExpect(status().isOk());
         mvc.perform(post("/api/pv-examens/90/signer").header("Authorization", tokenMembre)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRMEM\",\"role\":\"MEMBRE\"}"))
@@ -828,15 +839,21 @@ class CnmWorkflowIntegrationTest {
 
     /** Crée un PV avec l'avis donné sur l'examen 1 (dossier 1) et le porte à SIGNE (Membre + Président). */
     private void signerPvAvecAvis(int idPv, String avis) throws Exception {
+        // ⚠️ Cohérence avis ↔ observations (2026-08-01) : FAVR exige ≥ 1 observation à l'examen.
+        if ("FAVR".equals(avis)) {
+            ajouterObservationExamen1();
+        }
         mvc.perform(post("/api/pv-examens").header("Authorization", tokenMembre).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idPv\":" + idPv + ",\"idExamen\":1,\"idAvis\":\"" + avis + "\",\"imCtrlMembre\":\"CTRMEM\","
+                .content("{\"idPv\":" + idPv + ",\"idExamen\":1,\"imCtrlMembre\":\"CTRMEM\","
                         + "\"statutPv\":\"BROUILLON\",\"nbNavettes\":0}"))
                 .andExpect(status().isCreated());
         mvc.perform(post("/api/pv-examens/" + idPv + "/soumettre").header("Authorization", tokenMembre)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRMEM\",\"commentaire\":\"go\"}"))
                 .andExpect(status().isOk());
+        // ⚠️ Clôture de navette (2026-08-01) : l'acceptation pose l'avis global + le secrétaire de séance.
         mvc.perform(post("/api/pv-examens/" + idPv + "/accepter").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRCC1\"}"))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRCC1\",\"idAvis\":\"" + avis
+                        + "\",\"idSecretaireSeance\":\"CTRVER\"}"))
                 .andExpect(status().isOk());
         mvc.perform(post("/api/pv-examens/" + idPv + "/signer").header("Authorization", tokenMembre)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRMEM\",\"role\":\"MEMBRE\"}"))
@@ -846,37 +863,50 @@ class CnmWorkflowIntegrationTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.statutPv").value("SIGNE"));
     }
 
+    /** Pose une observation (point non conforme) sur l'examen 1 — pré-requis d'un avis FAVR (cohérence 2026-08-01). */
+    private void ajouterObservationExamen1() {
+        if (!pointsCtrlRepository.existsById(990)) {
+            PointsCtrl pc = new PointsCtrl();
+            pc.setIdPointCtrl(990); pc.setLibelPointCtrl("Contrôle test"); pc.setObligatoire(true);
+            pc.setIdTypeDossier("DDP");
+            pointsCtrlRepository.save(pc);
+        }
+        ExamenDetail d = new ExamenDetail();
+        d.setIdDetailExamen(990); d.setIdExamen(1); d.setIdPtControle(990); d.setConforme(false);
+        examenDetailRepository.save(d);
+    }
+
     @Test
-    @DisplayName("Branchement signature — avis FAVORABLE (FAV) → dossier CLOTURE auto + PRMP PV_SIGNE + vérificateur PV_POUR_INFO")
+    @DisplayName("Branchement signature (⚠️ 2026-08-02) — avis FAVORABLE (FAV) → dossier EN_VERIFICATION + PRMP PV_SIGNE + vérificateur DECISION_A_TRANSMETTRE")
     void signature_avisFavorable_clotureAuto() throws Exception {
         signerPvAvecAvis(94, "FAV");
         mvc.perform(get("/api/dossiers/1").header("Authorization", tokenPresident))
-                .andExpect(jsonPath("$.statut").value("CLOTURE"));
+                .andExpect(jsonPath("$.statut").value("EN_VERIFICATION"));
         mvc.perform(get("/api/notifications").header("Authorization", tokenAdmin))
                 .andExpect(jsonPath("$[?(@.typeNotif=='PV_SIGNE')]", hasSize(1)))
-                .andExpect(jsonPath("$[?(@.typeNotif=='PV_POUR_INFO')].destinataireIm", hasItem("CTRVER")));
+                .andExpect(jsonPath("$[?(@.typeNotif=='DECISION_A_TRANSMETTRE')].destinataireIm", hasItem("CTRVER")));
     }
 
     @Test
-    @DisplayName("Branchement signature — avis DÉFAVORABLE (DEF) → dossier CLOTURE + PRMP PV_SIGNE + vérificateur PV_POUR_INFO")
+    @DisplayName("Branchement signature (⚠️ 2026-08-02) — avis DÉFAVORABLE (DEF) → dossier EN_VERIFICATION + PRMP PV_SIGNE + vérificateur DECISION_A_TRANSMETTRE")
     void signature_avisDefavorable_clotureAuto() throws Exception {
         signerPvAvecAvis(95, "DEF");
         mvc.perform(get("/api/dossiers/1").header("Authorization", tokenPresident))
-                .andExpect(jsonPath("$.statut").value("CLOTURE"));
+                .andExpect(jsonPath("$.statut").value("EN_VERIFICATION"));
         mvc.perform(get("/api/notifications").header("Authorization", tokenAdmin))
                 .andExpect(jsonPath("$[?(@.typeNotif=='PV_SIGNE')]", hasSize(1)))
-                .andExpect(jsonPath("$[?(@.typeNotif=='PV_POUR_INFO')].destinataireIm", hasItem("CTRVER")));
+                .andExpect(jsonPath("$[?(@.typeNotif=='DECISION_A_TRANSMETTRE')].destinataireIm", hasItem("CTRVER")));
     }
 
     @Test
-    @DisplayName("Branchement signature — avis NE SE PRONONCE PAS (NSP) → dossier CLOTURE (idem DEF) + notifs PRMP + vérificateur")
+    @DisplayName("Branchement signature (⚠️ 2026-08-02) — avis NE SE PRONONCE PAS (NSP) → dossier EN_VERIFICATION (idem DEF) + notifs PRMP + vérificateur")
     void signature_avisNeSePrononce_clotureAuto() throws Exception {
         signerPvAvecAvis(96, "NSP");
         mvc.perform(get("/api/dossiers/1").header("Authorization", tokenPresident))
-                .andExpect(jsonPath("$.statut").value("CLOTURE"));
+                .andExpect(jsonPath("$.statut").value("EN_VERIFICATION"));
         mvc.perform(get("/api/notifications").header("Authorization", tokenAdmin))
                 .andExpect(jsonPath("$[?(@.typeNotif=='PV_SIGNE')]", hasSize(1)))
-                .andExpect(jsonPath("$[?(@.typeNotif=='PV_POUR_INFO')].destinataireIm", hasItem("CTRVER")));
+                .andExpect(jsonPath("$[?(@.typeNotif=='DECISION_A_TRANSMETTRE')].destinataireIm", hasItem("CTRVER")));
     }
 
     @Test
@@ -907,7 +937,8 @@ class CnmWorkflowIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRMEM\",\"commentaire\":\"go\"}"))
                 .andExpect(status().isOk());
         mvc.perform(post("/api/pv-examens/91/accepter").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRCC1\"}"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"imActeur\":\"CTRCC1\",\"idAvis\":\"FAV\",\"idSecretaireSeance\":\"CTRVER\"}"))
                 .andExpect(status().isOk());
         mvc.perform(post("/api/pv-examens/91/signer").header("Authorization", tokenMembre)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRMEM\",\"role\":\"MEMBRE\"}"))
@@ -975,9 +1006,13 @@ class CnmWorkflowIntegrationTest {
                 .andExpect(jsonPath("$[?(@.idDossier==50)]", hasSize(1)))
                 .andExpect(jsonPath("$[?(@.idDossier==51)]", hasSize(0)));
 
-        // CTRMEM examine son dossier 50 → il passe EXAMINE.
+        // CTRMEM examine son dossier 50 puis SOUMET l'examen (⚠️ 2026-08-01 : la transition
+        // DISPATCHE → EXAMINE se fait à la soumission, plus à la création).
         mvc.perform(post("/api/examens").header("Authorization", tokenMembre).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idExamen\":95,\"idDispatch\":95,\"imCtrlMembre\":\"CTRMEM\"}"))
+                .andExpect(status().isCreated());
+        mvc.perform(post("/api/examens/95/soumettre").header("Authorization", tokenMembre)
+                .contentType(MediaType.APPLICATION_JSON).content("{}"))
                 .andExpect(status().isCreated());
 
         // Exclusivité : 50 quitte à-examiner et entre dans examinés (paginé → $.content).
@@ -1001,7 +1036,8 @@ class CnmWorkflowIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRMEM\",\"commentaire\":\"go\"}"))
                 .andExpect(status().isOk());
         mvc.perform(post("/api/pv-examens/92/accepter").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRCC1\"}"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"imActeur\":\"CTRCC1\",\"idAvis\":\"FAV\",\"idSecretaireSeance\":\"CTRVER\"}"))
                 .andExpect(status().isOk());
 
         // Un Membre ne peut PAS falsifier la signature Président → 403.
@@ -1038,7 +1074,8 @@ class CnmWorkflowIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRMEM\",\"commentaire\":\"go\"}"))
                 .andExpect(status().isOk());
         mvc.perform(post("/api/pv-examens/93/accepter").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRCC1\"}"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"imActeur\":\"CTRCC1\",\"idAvis\":\"FAV\",\"idSecretaireSeance\":\"CTRVER\"}"))
                 .andExpect(status().isOk());
         mvc.perform(post("/api/pv-examens/93/signer").header("Authorization", tokenMembre)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRMEM\",\"role\":\"MEMBRE\"}"))
@@ -1402,13 +1439,14 @@ class CnmWorkflowIntegrationTest {
         d.setIdSousType("PPM");
         dossierRepository.save(d);
 
-        // POST : la réponse porte la référence structurée <seq>/PPM/CRM-ANT/<annee> (segment = sous-type).
+        // POST : la réponse porte la référence structurée <seq>/PPM/CNM/<annee> (segment = sous-type ;
+        // dossier de la localité centrale ANT → CNM, ⚠️ règle corrigée 2026-08-04).
         String resp = mvc.perform(post("/api/receptions").header("Authorization", tokenSec)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDossier\":330,\"numPassage\":1,\"typePassage\":\"INITIAL\",\"complet\":true,"
                         + "\"dateReception\":\"2026-06-30\"}"))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.reference", org.hamcrest.Matchers.matchesPattern("\\d{5}/PPM/CRM-ANT/\\d{4}")))
+                .andExpect(jsonPath("$.reference", org.hamcrest.Matchers.matchesPattern("\\d{5}/PPM/CNM/\\d{4}")))
                 .andReturn().getResponse().getContentAsString();
         int idRec = com.jayway.jsonpath.JsonPath.read(resp, "$.idReception");
         String refRecept = com.jayway.jsonpath.JsonPath.read(resp, "$.reference");
@@ -1525,10 +1563,10 @@ class CnmWorkflowIntegrationTest {
     @DisplayName("Réf. lettre — 2 lettres du MÊME dossier → numéros distincts (plus de répétition)")
     void lettre_reference_sequence_meme_dossier() throws Exception {
         seedExamenAvecRefe(340, "00007/DDP/CRM-ANT/2096");
-        mvc.perform(post("/api/lettre-renvois").header("Authorization", tokenMembre)
+        mvc.perform(post("/api/lettre-renvois").header("Authorization", tokenCc)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"idExamen\":340}"))
                 .andExpect(jsonPath("$.refLettre").value("00001/DDP/CRM-ANT/LR/2096"));
-        mvc.perform(post("/api/lettre-renvois").header("Authorization", tokenMembre)
+        mvc.perform(post("/api/lettre-renvois").header("Authorization", tokenCc)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"idExamen\":340}"))
                 .andExpect(jsonPath("$.refLettre").value("00002/DDP/CRM-ANT/LR/2096"));
     }
@@ -1538,11 +1576,11 @@ class CnmWorkflowIntegrationTest {
     void lettre_reference_sequence_unique_globale() throws Exception {
         seedExamenAvecRefe(341, "00001/DDP/CRM-ANT/2097");
         seedExamenAvecRefe(342, "00009/DDP/CRM-TMS/2097");   // dossier différent, localité TMS dans la réf
-        mvc.perform(post("/api/lettre-renvois").header("Authorization", tokenMembre)
+        mvc.perform(post("/api/lettre-renvois").header("Authorization", tokenCc)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"idExamen\":341}"))
                 .andExpect(jsonPath("$.refLettre").value("00001/DDP/CRM-ANT/LR/2097"));
         // Numéro de séquence GLOBAL (00002) malgré une localité différente — pas un « 00001 » partagé.
-        mvc.perform(post("/api/lettre-renvois").header("Authorization", tokenMembre)
+        mvc.perform(post("/api/lettre-renvois").header("Authorization", tokenCc)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"idExamen\":342}"))
                 .andExpect(jsonPath("$.refLettre").value("00002/DDP/CRM-TMS/LR/2097"));
     }
@@ -1552,7 +1590,7 @@ class CnmWorkflowIntegrationTest {
     void lettre_reference_increment_continu() throws Exception {
         seedExamenAvecRefe(343, "00001/DDP/CRM-ANT/2098");
         for (int i = 1; i <= 5; i++) {
-            mvc.perform(post("/api/lettre-renvois").header("Authorization", tokenMembre)
+            mvc.perform(post("/api/lettre-renvois").header("Authorization", tokenCc)
                     .contentType(MediaType.APPLICATION_JSON).content("{\"idExamen\":343}"))
                     .andExpect(jsonPath("$.refLettre").value(String.format("%05d/DDP/CRM-ANT/LR/2098", i)));
         }
@@ -1563,7 +1601,7 @@ class CnmWorkflowIntegrationTest {
     void lettre_refLettre_heriteSegmentSousType() throws Exception {
         // refeDossier au nouveau format sous-type (segment PPM-AGPM avec tiret) → la lettre le reprend tel quel.
         seedExamenAvecRefe(344, "00013/PPM-AGPM/CRM-ANT/2095");
-        mvc.perform(post("/api/lettre-renvois").header("Authorization", tokenMembre)
+        mvc.perform(post("/api/lettre-renvois").header("Authorization", tokenCc)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"idExamen\":344}"))
                 .andExpect(jsonPath("$.refLettre").value("00001/PPM-AGPM/CRM-ANT/LR/2095"));
     }
@@ -2787,8 +2825,10 @@ class CnmWorkflowIntegrationTest {
         soumettre(tokenMembre).andExpect(status().isOk())
                 .andExpect(jsonPath("$.statutPv").value("PROJET_SOUMIS"));
 
+        // ⚠️ Clôture de navette (2026-08-01) : l'acceptation pose l'avis global + le secrétaire de séance.
         mvc.perform(post("/api/pv-examens/1/accepter").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRCC1\"}"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"imActeur\":\"CTRCC1\",\"idAvis\":\"FAV\",\"idSecretaireSeance\":\"CTRVER\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.statutPv").value("PROJET_ACCEPTE"));
 
         // Une seule signature ne suffit pas.
@@ -2847,28 +2887,35 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
-    @DisplayName("[Auto] Vérification (FAVR) obs. levées → dossier CLOTURE")
+    @DisplayName("[Auto] Circuit FAVR (⚠️ 2026-08-02) : obs. levées → OBSERVATIONS_LEVEES, transmission SIGMP → "
+            + "DECISION_TRANSMISE_SIGMP, archivage Assistant → CLOTURE + CLOTURE_ELIGIBLE")
     void auto_cloture() throws Exception {
         String tokenVer = bearer("CTRVER", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER", "ANT");
-        // PV FAVR amené à SIGNE → dossier EN_VERIFICATION ; le vérificateur lève les observations → CLOTURE.
-        mvc.perform(post("/api/pv-examens").header("Authorization", tokenMembre)
+        String tokenAss = bearer("CTRASS", ProfilUtilisateur.ASSISTANT_CONTROLEUR, TypeActeur.CONTROLEUR, "CTRASS", "ANT");
+        // PV FAVR amené à SIGNE → dossier EN_VERIFICATION, périmètre d'observations figé.
+        signerPvAvecAvis(1, "FAVR");
+
+        // Le vérificateur LÈVE l'observation du périmètre (passage) → OBSERVATIONS_LEVEES.
+        String obs = mvc.perform(get("/api/observations-pv").header("Authorization", tokenVer).param("dossier", "1"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        int idObs = com.jayway.jsonpath.JsonPath.read(obs, "$[0].idObservationPv");
+        mvc.perform(post("/api/observations-pv/passage").header("Authorization", tokenVer)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idPv\":1,\"idExamen\":1,\"idAvis\":\"FAVR\",\"imCtrlMembre\":\"CTRMEM\","
-                        + "\"statutPv\":\"BROUILLON\",\"nbNavettes\":0}"))
-                .andExpect(status().isCreated());
-        soumettre(tokenMembre).andExpect(status().isOk());
-        mvc.perform(post("/api/pv-examens/1/accepter").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRCC1\"}"))
+                .content("{\"idDossier\":1,\"decisions\":[{\"idObservationPv\":" + idObs + ",\"decision\":\"LEVEE\"}]}"))
                 .andExpect(status().isOk());
-        signer(tokenMembre, "CTRMEM", "MEMBRE").andExpect(status().isOk());
-        signer(tokenPresident, "CTRPRE", "PRESIDENT").andExpect(status().isOk())
-                .andExpect(jsonPath("$.statutPv").value("SIGNE"));
+        mvc.perform(get("/api/dossiers/1").header("Authorization", tokenCc))
+                .andExpect(jsonPath("$.statut").value("OBSERVATIONS_LEVEES"));
 
-        mvc.perform(post("/api/verifications").header("Authorization", tokenVer)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idReception\":1,\"idPv\":1,\"obsLevees\":true}"))
+        // Le vérificateur transmet la décision à SIGMP → DECISION_TRANSMISE_SIGMP.
+        mvc.perform(post("/api/sigmp-transmissions").header("Authorization", tokenVer)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"idDossier\":1}"))
                 .andExpect(status().isCreated());
+        mvc.perform(get("/api/dossiers/1").header("Authorization", tokenCc))
+                .andExpect(jsonPath("$.statut").value("DECISION_TRANSMISE_SIGMP"));
 
+        // L'Assistant archive le PV → dossier CLOTURE.
+        mvc.perform(post("/api/pv-examens/1/archiver").header("Authorization", tokenAss))
+                .andExpect(status().isOk());
         mvc.perform(get("/api/dossiers/1").header("Authorization", tokenCc))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.statut").value("CLOTURE"));
 
@@ -2888,31 +2935,41 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
-    @DisplayName("Vérification réservée aux PV FAVR : avis FAV (auto-clôturé) → 409")
+    @DisplayName("Vérification réservée aux PV FAVR : avis FAV → 409")
     void verif_surAvisNonReserve_409() throws Exception {
         String tokenVer = bearer("CTRVER", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER", "ANT");
-        signerPvAvecAvis(81, "FAV"); // dossier 1 → CLOTURE, PV 81 SIGNE avis FAV
+        signerPvAvecAvis(81, "FAV"); // dossier 1 → EN_VERIFICATION, PV 81 SIGNE avis FAV
         mvc.perform(post("/api/verifications").header("Authorization", tokenVer).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idReception\":1,\"idPv\":81,\"obsLevees\":true}"))
                 .andExpect(status().isConflict());
     }
 
+    /** Statue l'unique observation du périmètre du dossier 1 via le circuit des observations (⚠️ 2026-08-02). */
+    private void passageObservationDossier1(String tokenVer, String decision, String precision) throws Exception {
+        String obs = mvc.perform(get("/api/observations-pv").header("Authorization", tokenVer).param("dossier", "1"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        int idObs = com.jayway.jsonpath.JsonPath.read(obs, "$[0].idObservationPv");
+        mvc.perform(post("/api/observations-pv/passage").header("Authorization", tokenVer)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDossier\":1,\"decisions\":[{\"idObservationPv\":" + idObs + ",\"decision\":\"" + decision
+                        + "\"" + (precision == null ? "" : ",\"precision\":\"" + precision + "\"") + "}]}"))
+                .andExpect(status().isOk());
+    }
+
     @Test
-    @DisplayName("Vérification obs. non levées → EN_ATTENTE_DECISION_PRMP + notif OBSERVATION_VERIFICATION (PRMP) ; 2e vérification refusée 409")
+    @DisplayName("Passage obs. MAINTENUE (⚠️ 2026-08-02) → EN_ATTENTE_DECISION_PRMP + notif OBSERVATION_VERIFICATION (PRMP) ; saisie libre refusée 409")
     void verif_obsNonLevees_attenteDecisionPrmp() throws Exception {
         String tokenVer = bearer("CTRVER", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER", "ANT");
-        signerPvAvecAvis(82, "FAVR"); // dossier 1 → EN_VERIFICATION
-        // 1er passage : observations NON levées → dossier EN_ATTENTE_DECISION_PRMP + notif PRMP.
-        mvc.perform(post("/api/verifications").header("Authorization", tokenVer).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idReception\":1,\"idPv\":82,\"observation\":\"reserve a lever\",\"obsLevees\":false}"))
-                .andExpect(status().isCreated());
+        signerPvAvecAvis(82, "FAVR"); // dossier 1 → EN_VERIFICATION, périmètre figé
+        // 1er passage : observation MAINTENUE → dossier EN_ATTENTE_DECISION_PRMP + notif PRMP.
+        passageObservationDossier1(tokenVer, "MAINTENUE", "reserve a lever");
         mvc.perform(get("/api/dossiers/1").header("Authorization", tokenVer))
                 .andExpect(jsonPath("$.statut").value("EN_ATTENTE_DECISION_PRMP"));
-        // La PRMP du dossier reçoit l'observation (refeDossier + texte) via OBSERVATION_VERIFICATION.
+        // La PRMP du dossier reçoit l'observation (refeDossier + rappel auto-généré) via OBSERVATION_VERIFICATION.
         mvc.perform(get("/api/notifications").header("Authorization", tokenAdmin))
                 .andExpect(jsonPath("$[?(@.typeNotif=='OBSERVATION_VERIFICATION')]", hasSize(1)))
                 .andExpect(jsonPath("$[?(@.typeNotif=='OBSERVATION_VERIFICATION')].destinataireRef", hasItem("PRMP001")));
-        // 2e vérification refusée : le dossier n'est plus EN_VERIFICATION (en attente PRMP) → 409.
+        // Saisie libre (texte client) refusée : le périmètre est figé → 409.
         mvc.perform(post("/api/verifications").header("Authorization", tokenVer).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idReception\":1,\"idPv\":82,\"observation\":\"ok\",\"obsLevees\":true}"))
                 .andExpect(status().isConflict());
@@ -2923,9 +2980,7 @@ class CnmWorkflowIntegrationTest {
     void verif_obsNonLevees_attentePrmp_worklist() throws Exception {
         String tokenVer = bearer("CTRVER", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER", "ANT");
         signerPvAvecAvis(84, "FAVR"); // dossier 1 → EN_VERIFICATION
-        mvc.perform(post("/api/verifications").header("Authorization", tokenVer).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idReception\":1,\"idPv\":84,\"observation\":\"averina\",\"obsLevees\":false}"))
-                .andExpect(status().isCreated());
+        passageObservationDossier1(tokenVer, "MAINTENUE", "averina");
         // Vérificateur : le dossier est dans « En attente PRMP » ET reste dans « à vérifier » (lecture seule).
         mvc.perform(get("/api/dossiers/en-attente-prmp").header("Authorization", tokenVer))
                 .andExpect(status().isOk())
@@ -2943,9 +2998,7 @@ class CnmWorkflowIntegrationTest {
     void verif_attentePrmp_lectureSeule_409() throws Exception {
         String tokenVer = bearer("CTRVER", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER", "ANT");
         signerPvAvecAvis(88, "FAVR"); // dossier 1 → EN_VERIFICATION
-        mvc.perform(post("/api/verifications").header("Authorization", tokenVer).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idReception\":1,\"idPv\":88,\"observation\":\"averina\",\"obsLevees\":false}"))
-                .andExpect(status().isCreated()); // → dossier 1 EN_ATTENTE_DECISION_PRMP
+        passageObservationDossier1(tokenVer, "MAINTENUE", "averina"); // → dossier 1 EN_ATTENTE_DECISION_PRMP
         // Le dossier reste dans « à vérifier » mais toute nouvelle vérification est refusée (lecture seule).
         mvc.perform(get("/api/dossiers/a-verifier").header("Authorization", tokenVer))
                 .andExpect(jsonPath("$[?(@.idDossier==1)]", hasSize(1)));
@@ -2954,12 +3007,10 @@ class CnmWorkflowIntegrationTest {
                 .andExpect(status().isConflict());
     }
 
-    /** Amène le dossier 1 à EN_ATTENTE_DECISION_PRMP (PV FAVR signé + vérif obsLevees=false par CTRVER). */
+    /** Amène le dossier 1 à EN_ATTENTE_DECISION_PRMP (PV FAVR signé + observation MAINTENUE par CTRVER). */
     private void dossier1EnAttenteDecisionPrmp(int idPv, String tokenVer) throws Exception {
         signerPvAvecAvis(idPv, "FAVR");
-        mvc.perform(post("/api/verifications").header("Authorization", tokenVer).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idReception\":1,\"idPv\":" + idPv + ",\"observation\":\"averina\",\"obsLevees\":false}"))
-                .andExpect(status().isCreated());
+        passageObservationDossier1(tokenVer, "MAINTENUE", "averina");
     }
 
     @Test
@@ -2978,12 +3029,10 @@ class CnmWorkflowIntegrationTest {
         // Motif visible sur le passage côté vérificateur.
         mvc.perform(get("/api/verifications").header("Authorization", tokenVer))
                 .andExpect(jsonPath("$[?(@.idPv==85)].motifRectif", hasItem("corrige")));
-        // Le vérificateur peut de nouveau vérifier (dossier de retour en EN_VERIFICATION).
-        mvc.perform(post("/api/verifications").header("Authorization", tokenVer).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idReception\":1,\"idPv\":85,\"observation\":\"ok\",\"obsLevees\":true}"))
-                .andExpect(status().isCreated());
+        // Le vérificateur statue de nouveau (dossier de retour en EN_VERIFICATION) : LEVÉE → OBSERVATIONS_LEVEES.
+        passageObservationDossier1(tokenVer, "LEVEE", null);
         mvc.perform(get("/api/dossiers/1").header("Authorization", tokenVer))
-                .andExpect(jsonPath("$.statut").value("CLOTURE"));
+                .andExpect(jsonPath("$.statut").value("OBSERVATIONS_LEVEES"));
     }
 
     @Test
@@ -3009,39 +3058,39 @@ class CnmWorkflowIntegrationTest {
     @DisplayName("Historique d'échanges (dossier clôturé) : observations + rectifications PRMP ; accessible PRMP et vérificateur")
     void historique_echanges_dossierCloture() throws Exception {
         String tokenVer = bearer("CTRVER", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER", "ANT");
-        signerPvAvecAvis(90, "FAVR"); // dossier 1 → EN_VERIFICATION
-        // Passage 1 : obs non levées → resoumission (rect1).
-        mvc.perform(post("/api/verifications").header("Authorization", tokenVer).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idReception\":1,\"idPv\":90,\"observation\":\"obs1\",\"obsLevees\":false}"))
-                .andExpect(status().isCreated());
+        String tokenAss = bearer("CTRASS", ProfilUtilisateur.ASSISTANT_CONTROLEUR, TypeActeur.CONTROLEUR, "CTRASS", "ANT");
+        signerPvAvecAvis(90, "FAVR"); // dossier 1 → EN_VERIFICATION, périmètre figé
+        // Passage 1 : observation MAINTENUE → resoumission (rect1).
+        passageObservationDossier1(tokenVer, "MAINTENUE", "obs1");
         mvc.perform(post("/api/dossiers/1/resoumettre").header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"motifRectification\":\"rect1\"}"))
                 .andExpect(status().isOk());
-        // Passage 2 : obs non levées → resoumission (rect2).
-        mvc.perform(post("/api/verifications").header("Authorization", tokenVer).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idReception\":1,\"idPv\":90,\"observation\":\"obs2\",\"obsLevees\":false}"))
-                .andExpect(status().isCreated());
+        // Passage 2 : observation MAINTENUE → resoumission (rect2).
+        passageObservationDossier1(tokenVer, "MAINTENUE", "obs2");
         mvc.perform(post("/api/dossiers/1/resoumettre").header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"motifRectification\":\"rect2\"}"))
                 .andExpect(status().isOk());
-        // Passage final : obs levées → CLOTURE.
-        mvc.perform(post("/api/verifications").header("Authorization", tokenVer).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idReception\":1,\"idPv\":90,\"observation\":\"final\",\"obsLevees\":true}"))
+        // Passage final : observation LEVÉE → OBSERVATIONS_LEVEES, puis SIGMP + archivage → CLOTURE.
+        passageObservationDossier1(tokenVer, "LEVEE", null);
+        mvc.perform(post("/api/sigmp-transmissions").header("Authorization", tokenVer)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"idDossier\":1}"))
                 .andExpect(status().isCreated());
+        mvc.perform(post("/api/pv-examens/90/archiver").header("Authorization", tokenAss))
+                .andExpect(status().isOk());
         mvc.perform(get("/api/dossiers/1").header("Authorization", tokenVer))
                 .andExpect(jsonPath("$.statut").value("CLOTURE"));
 
-        // Historique : 3 observations (dont la clôture obsLevees=true) + 2 rectifications.
+        // Historique : 3 observations (passages auto-générés, dont la levée finale) + 2 rectifications.
         mvc.perform(get("/api/dossiers/1/historique-echanges").header("Authorization", tokenVer))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(5))
-                // Fil entrelacé (chaîne de réponse) : obs1, rect1, obs2, rect2, final.
-                .andExpect(jsonPath("$[0].type").value("OBSERVATION")).andExpect(jsonPath("$[0].texte").value("obs1"))
+                // Fil entrelacé (chaîne de réponse) : passage, rect1, passage, rect2, passage final.
+                .andExpect(jsonPath("$[0].type").value("OBSERVATION"))
                 .andExpect(jsonPath("$[1].type").value("RECTIFICATION")).andExpect(jsonPath("$[1].texte").value("rect1"))
                 .andExpect(jsonPath("$[1].acteur").value("PRMP001"))
-                .andExpect(jsonPath("$[2].type").value("OBSERVATION")).andExpect(jsonPath("$[2].texte").value("obs2"))
+                .andExpect(jsonPath("$[2].type").value("OBSERVATION"))
                 .andExpect(jsonPath("$[3].type").value("RECTIFICATION")).andExpect(jsonPath("$[3].texte").value("rect2"))
-                .andExpect(jsonPath("$[4].type").value("OBSERVATION")).andExpect(jsonPath("$[4].texte").value("final"))
+                .andExpect(jsonPath("$[4].type").value("OBSERVATION"))
                 .andExpect(jsonPath("$[4].obsLevees").value(true));
         // Accessible aussi par la PRMP.
         mvc.perform(get("/api/dossiers/1/historique-echanges").header("Authorization", tokenPrmp))
@@ -3062,12 +3111,13 @@ class CnmWorkflowIntegrationTest {
     void verif_identiteDepuisJwt() throws Exception {
         String tokenVer = bearer("CTRVER", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER", "ANT");
         signerPvAvecAvis(83, "FAVR");
-        mvc.perform(post("/api/verifications").header("Authorization", tokenVer).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idReception\":1,\"idPv\":83,\"imCtrlVerif\":\"FAKE\",\"obsLevees\":false}"))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.imCtrlVerif").value("CTRVER"))
-                .andExpect(jsonPath("$.idVerification").isNumber())
-                .andExpect(jsonPath("$.dateVerif").isNotEmpty());
+        // ⚠️ 2026-08-02 : le passage est créé PAR LE SERVEUR depuis les décisions — l'identité vient du JWT.
+        passageObservationDossier1(tokenVer, "MAINTENUE", null);
+        mvc.perform(get("/api/verifications").header("Authorization", tokenVer))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idPv==83)].imCtrlVerif", hasItem("CTRVER")))
+                .andExpect(jsonPath("$[?(@.idPv==83)].idVerification").exists())
+                .andExpect(jsonPath("$[?(@.idPv==83)].dateVerif").exists());
     }
 
     @Test
@@ -3091,11 +3141,19 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
-    @DisplayName("Worklist vérificateur « vérifiés » : inclut les dossiers AUTO-CLÔTURÉS (FAV) en lecture seule")
+    @DisplayName("Worklist vérificateur « vérifiés » (⚠️ bascule 2026-08-04) : le dossier y entre à la transmission SIGMP")
     void worklist_verifies_inclutAutoClotures() throws Exception {
         String tokenVer = bearer("CTRVER", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER", "ANT");
-        signerPvAvecAvis(71, "FAV"); // dossier 1 (ANT) → CLOTURE auto, PV 71 SIGNE
+        signerPvAvecAvis(71, "FAV"); // dossier 1 (ANT) → EN_VERIFICATION, PV 71 SIGNE
 
+        // Avant transmission : encore une action à faire → dans « à vérifier », pas dans « vérifiés ».
+        mvc.perform(get("/api/dossiers/a-verifier").header("Authorization", tokenVer))
+                .andExpect(jsonPath("$[?(@.idDossier==1)]", hasSize(1)));
+
+        // Transmission de la décision à SIGMP → bascule instantanée vers « vérifiés ».
+        mvc.perform(post("/api/sigmp-transmissions").header("Authorization", tokenVer)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"idDossier\":1}"))
+                .andExpect(status().isCreated());
         mvc.perform(get("/api/dossiers/verifies").header("Authorization", tokenVer))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[?(@.idDossier==1)]", hasSize(1)));
@@ -3130,7 +3188,7 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
-    @DisplayName("Circuit complet : Réception → PRET_DISPATCH → Dispatch → Examen → PV(navette → SIGNE) → Vérification → CLOTURE")
+    @DisplayName("Circuit complet : Réception → PRET_DISPATCH → Dispatch → Examen soumis → PV(navette → SIGNE) → SIGMP → Archivage → CLOTURE")
     void circuitComplet_boutEnBout() throws Exception {
         String tokenSec = bearer("CTRSEC", ProfilUtilisateur.SECRETAIRE, TypeActeur.CONTROLEUR, "CTRSEC", "ANT");
         // Dossier de test neuf (id 3), distinct des dossiers seedés.
@@ -3158,41 +3216,46 @@ class CnmWorkflowIntegrationTest {
         mvc.perform(get("/api/dossiers/3").header("Authorization", tokenPresident))
                 .andExpect(jsonPath("$.statut").value("DISPATCHE"));
 
-        // 3) Examen par le Membre.
+        // 3) Examen par le Membre (brouillon) puis SOUMISSION → dossier EXAMINE + Projet de PV créé.
         mvc.perform(post("/api/examens").header("Authorization", tokenMembre)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idExamen\":3,\"idDispatch\":3,\"imCtrlMembre\":\"CTRMEM\"}"))
                 .andExpect(status().isCreated());
-
-        // 4) Projet de PV par le Membre → toujours créé en BROUILLON.
-        mvc.perform(post("/api/pv-examens").header("Authorization", tokenMembre)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idPv\":3,\"idExamen\":3,\"idAvis\":\"FAVR\",\"imCtrlMembre\":\"CTRMEM\","
-                        + "\"statutPv\":\"BROUILLON\",\"nbNavettes\":0}"))
+        String pvBody = mvc.perform(post("/api/examens/3/soumettre").header("Authorization", tokenMembre)
+                .contentType(MediaType.APPLICATION_JSON).content("{}"))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.statutPv").value("BROUILLON"));
+                .andExpect(jsonPath("$.statutPv").value("BROUILLON"))
+                .andReturn().getResponse().getContentAsString();
+        int idPv = com.jayway.jsonpath.JsonPath.read(pvBody, "$.idPv");
+        mvc.perform(get("/api/dossiers/3").header("Authorization", tokenPresident))
+                .andExpect(jsonPath("$.statut").value("EXAMINE"));
 
-        // 5) Navette : soumettre → accepter, puis co-signature Membre + Président → SIGNE.
-        mvc.perform(post("/api/pv-examens/3/soumettre").header("Authorization", tokenMembre)
+        // 4) Navette : soumettre → accepter (clôture de navette : avis FAV + secrétaire), co-signature → SIGNE.
+        mvc.perform(post("/api/pv-examens/" + idPv + "/soumettre").header("Authorization", tokenMembre)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRMEM\"}"))
                 .andExpect(jsonPath("$.statutPv").value("PROJET_SOUMIS"));
-        mvc.perform(post("/api/pv-examens/3/accepter").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRCC1\"}"))
+        mvc.perform(post("/api/pv-examens/" + idPv + "/accepter").header("Authorization", tokenCc)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"imActeur\":\"CTRCC1\",\"idAvis\":\"FAV\",\"idSecretaireSeance\":\"CTRVER\"}"))
                 .andExpect(jsonPath("$.statutPv").value("PROJET_ACCEPTE"));
         // Un seul signataire ne suffit pas : le PV reste PROJET_ACCEPTE.
-        mvc.perform(post("/api/pv-examens/3/signer").header("Authorization", tokenMembre)
+        mvc.perform(post("/api/pv-examens/" + idPv + "/signer").header("Authorization", tokenMembre)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRMEM\",\"role\":\"MEMBRE\"}"))
                 .andExpect(jsonPath("$.statutPv").value("PROJET_ACCEPTE"));
-        mvc.perform(post("/api/pv-examens/3/signer").header("Authorization", tokenPresident)
+        mvc.perform(post("/api/pv-examens/" + idPv + "/signer").header("Authorization", tokenPresident)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRPRE\",\"role\":\"PRESIDENT\"}"))
                 .andExpect(jsonPath("$.statutPv").value("SIGNE"));
 
-        // 6) Vérification (FAVR → EN_VERIFICATION) avec observations levées → [Auto] dossier CLOTURE.
+        // 5) Signature (FAV) → EN_VERIFICATION ; transmission SIGMP puis archivage Assistant → CLOTURE.
         String tokenVer = bearer("CTRVER", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER", "ANT");
-        mvc.perform(post("/api/verifications").header("Authorization", tokenVer)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idReception\":" + idRec + ",\"idPv\":3,\"obsLevees\":true}"))
+        String tokenAss = bearer("CTRASS", ProfilUtilisateur.ASSISTANT_CONTROLEUR, TypeActeur.CONTROLEUR, "CTRASS", "ANT");
+        mvc.perform(get("/api/dossiers/3").header("Authorization", tokenPresident))
+                .andExpect(jsonPath("$.statut").value("EN_VERIFICATION"));
+        mvc.perform(post("/api/sigmp-transmissions").header("Authorization", tokenVer)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"idDossier\":3}"))
                 .andExpect(status().isCreated());
+        mvc.perform(post("/api/pv-examens/" + idPv + "/archiver").header("Authorization", tokenAss))
+                .andExpect(status().isOk());
         mvc.perform(get("/api/dossiers/3").header("Authorization", tokenPresident))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.statut").value("CLOTURE"));
     }
@@ -4877,19 +4940,19 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
-    @DisplayName("Référence réception : localité régionale ANT -> 00001/PPM/CRM-ANT/2026")
+    @DisplayName("Référence réception (⚠️ règle corrigée 2026-08-04) : dossier régional TMS -> 00001/PPM/CRM-TMS/2026")
     void reference_localite_crm() throws Exception {
-        String tokenSec = bearer("CTRSEC", ProfilUtilisateur.SECRETAIRE, TypeActeur.CONTROLEUR, "CTRSEC", "ANT");
-        Dossier d = dossier(301, "SOUMIS"); d.setIdTypeDossier("DDP"); d.setIdSousType("PPM"); d.setIdLocalite("ANT");
+        String tokenCcTms = bearer("CTRCC2", ProfilUtilisateur.CHEF_COMMISSION, TypeActeur.CONTROLEUR, "CTRCC2", "TMS");
+        Dossier d = dossier(301, "SOUMIS"); d.setIdTypeDossier("DDP"); d.setIdSousType("PPM"); d.setIdLocalite("TMS");
         dossierRepository.save(d);
         ppmRepository.save(ppm(301, 301, "PRMP001"));
 
-        mvc.perform(post("/api/receptions").header("Authorization", tokenSec)
+        mvc.perform(post("/api/receptions").header("Authorization", tokenCcTms)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDossier\":301,\"numPassage\":1,\"typePassage\":\"INITIAL\","
-                        + "\"imCtrlRecept\":\"CTRSEC\",\"complet\":true}"))
+                        + "\"imCtrlRecept\":\"CTRCC2\",\"complet\":true}"))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.reference").value("00001/PPM/CRM-ANT/2026"));
+                .andExpect(jsonPath("$.reference").value("00001/PPM/CRM-TMS/2026"));
     }
 
     @Test
@@ -4905,16 +4968,16 @@ class CnmWorkflowIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDossier\":302,\"numPassage\":1,\"typePassage\":\"INITIAL\","
                         + "\"imCtrlRecept\":\"CTRSEC\",\"complet\":true}"))
-                .andExpect(jsonPath("$.reference").value("00001/PPM/CRM-ANT/2026"));
+                .andExpect(jsonPath("$.reference").value("00001/PPM/CNM/2026"));
         mvc.perform(post("/api/receptions").header("Authorization", tokenSec)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDossier\":303,\"numPassage\":1,\"typePassage\":\"INITIAL\","
                         + "\"imCtrlRecept\":\"CTRSEC\",\"complet\":true}"))
-                .andExpect(jsonPath("$.reference").value("00002/PPM/CRM-ANT/2026"));
+                .andExpect(jsonPath("$.reference").value("00002/PPM/CNM/2026"));
     }
 
     @Test
-    @DisplayName("Référence réception : compteur GLOBAL par année (CRM-ANT, CRM-TMS, CNM → 00001, 00002, 00003)")
+    @DisplayName("Référence réception : compteur GLOBAL par année (CNM, CRM-TMS, CNM → 00001, 00002, 00003)")
     void reference_isolee_par_contexte() throws Exception {
         String tokenSec = bearer("CTRSEC", ProfilUtilisateur.SECRETAIRE, TypeActeur.CONTROLEUR, "CTRSEC", "ANT");
         String tokenSecTms = bearer("CTRCC2", ProfilUtilisateur.CHEF_COMMISSION, TypeActeur.CONTROLEUR, "CTRCC2", "TMS");
@@ -4929,7 +4992,7 @@ class CnmWorkflowIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDossier\":304,\"numPassage\":1,\"typePassage\":\"INITIAL\","
                         + "\"imCtrlRecept\":\"CTRSEC\",\"complet\":true}"))
-                .andExpect(jsonPath("$.reference").value("00001/PPM/CRM-ANT/2026"));
+                .andExpect(jsonPath("$.reference").value("00001/PPM/CNM/2026"));
         mvc.perform(post("/api/receptions").header("Authorization", tokenSecTms)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDossier\":305,\"numPassage\":1,\"typePassage\":\"INITIAL\","
@@ -4957,13 +5020,13 @@ class CnmWorkflowIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDossier\":307,\"numPassage\":1,\"typePassage\":\"INITIAL\","
                         + "\"imCtrlRecept\":\"CTRSEC\",\"complet\":true}"))
-                .andExpect(jsonPath("$.reference").value("00001/PPM/CRM-ANT/2026"));
+                .andExpect(jsonPath("$.reference").value("00001/PPM/CNM/2026"));
         // 2e : segment PPM-AGPM VERBATIM (tiret conservé) ; le compteur DDP CONTINUE → 00002 (pas 00001).
         mvc.perform(post("/api/receptions").header("Authorization", tokenSec)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDossier\":308,\"numPassage\":1,\"typePassage\":\"INITIAL\","
                         + "\"imCtrlRecept\":\"CTRSEC\",\"complet\":true}"))
-                .andExpect(jsonPath("$.reference").value("00002/PPM-AGPM/CRM-ANT/2026"));
+                .andExpect(jsonPath("$.reference").value("00002/PPM-AGPM/CNM/2026"));
     }
 
     @Test
@@ -4980,7 +5043,7 @@ class CnmWorkflowIntegrationTest {
                 .content("{\"idDossier\":309,\"numPassage\":1,\"typePassage\":\"INITIAL\","
                         + "\"imCtrlRecept\":\"CTRSEC\",\"complet\":true}"))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.reference", org.hamcrest.Matchers.matchesPattern("\\d{5}/DDP/CRM-ANT/\\d{4}")));
+                .andExpect(jsonPath("$.reference", org.hamcrest.Matchers.matchesPattern("\\d{5}/DDP/CNM/\\d{4}")));
     }
 
     @Test
@@ -4998,12 +5061,12 @@ class CnmWorkflowIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDossier\":307,\"numPassage\":1,\"typePassage\":\"INITIAL\","
                         + "\"imCtrlRecept\":\"CTRSEC\",\"complet\":true}"))
-                .andExpect(jsonPath("$.reference").value("00001/DDP/CRM-ANT/2026"));
+                .andExpect(jsonPath("$.reference").value("00001/DDP/CNM/2026"));
         mvc.perform(post("/api/receptions").header("Authorization", tokenSec)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDossier\":308,\"numPassage\":1,\"typePassage\":\"INITIAL\","
                         + "\"imCtrlRecept\":\"CTRSEC\",\"complet\":true}"))
-                .andExpect(jsonPath("$.reference").value("00002/DDP/CRM-ANT/2026"));
+                .andExpect(jsonPath("$.reference").value("00002/DDP/CNM/2026"));
     }
 
     @Test
@@ -5585,12 +5648,12 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
-    @DisplayName("Soumission examen sans secrétaire de séance → 400")
+    @DisplayName("Soumission examen sans secrétaire de séance → 201 (⚠️ 2026-08-01 : optionnel, posé à la clôture de navette)")
     void soumission_examen_sans_secretaire_400() throws Exception {
         mvc.perform(post("/api/examens/1/soumettre").header("Authorization", tokenMembre)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"idAvis\":\"FAV\"}"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.erreurs[0].champ").value("idSecretaireSeance"));
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.statutPv").value("BROUILLON"));
     }
 
     @Test
@@ -5784,7 +5847,8 @@ class CnmWorkflowIntegrationTest {
         pvFavr.setStatutPv("SIGNE"); pvFavr.setNbNavettes(0);
         pvExamenRepository.save(pvFavr);
 
-        // NON ÉLIGIBLE pour un vrai motif : avis DEF (≠ FAVR) — nouvelle chaîne centrale/PPM.
+        // NON ÉLIGIBLE pour un vrai motif : avis NSP (⚠️ 2026-08-03 : seul avis SANS modèle Word —
+        // FAV → AF et DEF → ANF ont désormais leur gabarit).
         dossierRepository.save(dossierLoc(502, "EXAMINE", "ANT", "PRMP001"));
         receptionRepository.save(reception(502, 502, "CTRCC1", true));   // CTRCC1 = localité ANT
         dispatchRepository.save(dispatch(502, 502, "CTRCC1", "CTRMEM"));
@@ -5792,7 +5856,7 @@ class CnmWorkflowIntegrationTest {
         ppmRepository.save(ppm(502, 502, "PRMP001"));
         marcheRepository.save(marche(9601, 502, 502));
         cnm.prs.entity.PvExamen pvDef = new cnm.prs.entity.PvExamen();
-        pvDef.setIdPv(601); pvDef.setIdExamen(502); pvDef.setIdAvis("DEF"); pvDef.setImCtrlMembre("CTRMEM");
+        pvDef.setIdPv(601); pvDef.setIdExamen(502); pvDef.setIdAvis("NSP"); pvDef.setImCtrlMembre("CTRMEM");
         pvDef.setStatutPv("SIGNE"); pvDef.setNbNavettes(0);
         pvExamenRepository.save(pvDef);
 
@@ -5800,7 +5864,7 @@ class CnmWorkflowIntegrationTest {
         mvc.perform(get("/api/pv-examens/600").header("Authorization", tokenAdmin))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.documentDisponible").value(true));
-        // Avis DEF → non éligible (le modèle AFSR ne couvre que le FAVR).
+        // Avis NSP → non éligible (aucun modèle Word pour « ne se prononce pas »).
         mvc.perform(get("/api/pv-examens/601").header("Authorization", tokenAdmin))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.documentDisponible").value(false));
@@ -7027,9 +7091,15 @@ class CnmWorkflowIntegrationTest {
                 .file(new MockMultipartFile("data", "", "application/json", data3))
                 .file(new MockMultipartFile("photo", "big.jpg", "image/jpeg", gros)))
                 .andExpect(status().isBadRequest());
-        // Non-admin → 403 (sous-chemin sécurisé par @PreAuthorize).
+        // ⚠️ Lecture ouverte aux authentifiés (photo affichée dans l'UI) — dépôt/suppression restent Admin.
+        mvc.perform(multipart("/api/controleurs/CTRPHO2/pieces/PHOTO").header("Authorization", tokenAdmin)
+                .file(new MockMultipartFile("fichier", "p.png", "image/png", png)))
+                .andExpect(status().isOk());
         mvc.perform(get("/api/controleurs/CTRPHO2/pieces/PHOTO").header("Authorization", tokenMembre))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isOk());   // lecture autorisée à tout authentifié
+        mvc.perform(multipart("/api/controleurs/CTRPHO2/pieces/PHOTO").header("Authorization", tokenMembre)
+                .file(new MockMultipartFile("fichier", "p.png", "image/png", png)))
+                .andExpect(status().isForbidden());   // dépôt : Admin uniquement
     }
 
     @Test
@@ -7640,10 +7710,10 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
-    @DisplayName("Lettre de renvoi — création pendant l'examen (Membre, objetLettre ignoré) → 201 BROUILLON")
+    @DisplayName("Lettre de renvoi — création à la clôture de navette (CC/Président, objetLettre ignoré) → 201 BROUILLON")
     void lettre_creation_pendant_examen_ok() throws Exception {
         // objetLettre encore envoyé par un ancien frontend : ignoré (compat rétroactive), pas d'erreur.
-        mvc.perform(post("/api/lettre-renvois").header("Authorization", tokenMembre)
+        mvc.perform(post("/api/lettre-renvois").header("Authorization", tokenCc)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idExamen\":1,\"objetLettre\":\"Renvoi du dossier\"}"))
                 .andExpect(status().isCreated())
@@ -7656,7 +7726,7 @@ class CnmWorkflowIntegrationTest {
     @Test
     @DisplayName("Lettre de renvoi — création sans objetLettre → 201 (objet désormais fixe)")
     void lettre_creation_sans_objet_ok() throws Exception {
-        mvc.perform(post("/api/lettre-renvois").header("Authorization", tokenMembre)
+        mvc.perform(post("/api/lettre-renvois").header("Authorization", tokenCc)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idExamen\":1}"))
                 .andExpect(status().isCreated())
@@ -7683,7 +7753,7 @@ class CnmWorkflowIntegrationTest {
         Dossier d = dossierRepository.findById(1).orElseThrow();
         d.setRefeDossier("00007/DDP/CRM-ANT/2026");
         dossierRepository.save(d);
-        mvc.perform(post("/api/lettre-renvois").header("Authorization", tokenMembre)
+        mvc.perform(post("/api/lettre-renvois").header("Authorization", tokenCc)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idExamen\":1,\"objetLettre\":\"Renvoi\"}"))
                 .andExpect(status().isCreated())
@@ -7733,10 +7803,10 @@ class CnmWorkflowIntegrationTest {
     @Test
     @DisplayName("Lettre de renvoi — N lettres sur le même examen → 201 chacune")
     void lettre_multiple_meme_examen_ok() throws Exception {
-        mvc.perform(post("/api/lettre-renvois").header("Authorization", tokenMembre)
+        mvc.perform(post("/api/lettre-renvois").header("Authorization", tokenCc)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"idExamen\":1,\"objetLettre\":\"Lettre 1\"}"))
                 .andExpect(status().isCreated());
-        mvc.perform(post("/api/lettre-renvois").header("Authorization", tokenMembre)
+        mvc.perform(post("/api/lettre-renvois").header("Authorization", tokenCc)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"idExamen\":1,\"objetLettre\":\"Lettre 2\"}"))
                 .andExpect(status().isCreated());
     }
@@ -7762,32 +7832,44 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
-    @DisplayName("PV signé avis DÉFAVORABLE → Assistant contrôleur notifié (PV_DEFINITIF_COPIE)")
+    @DisplayName("PV signé avis DÉFAVORABLE (⚠️ 2026-08-02) → l'Assistant est notifié PV_A_ARCHIVER à la transmission SIGMP")
     void pv_signe_avis_defav_assistant_notifie() throws Exception {
-        signerPvAvecAvis(120, "DEF");
+        String tokenVer = bearer("CTRVER", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER", "ANT");
+        signerPvAvecAvis(120, "DEF");   // dossier 1 → EN_VERIFICATION
+        mvc.perform(post("/api/sigmp-transmissions").header("Authorization", tokenVer)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"idDossier\":1}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.sens").value("NON_APPROUVE"));
         mvc.perform(get("/api/notifications").header("Authorization", tokenAdmin))
-                .andExpect(jsonPath("$[?(@.typeNotif=='PV_DEFINITIF_COPIE')].destinataireIm", hasItem("CTRASS")));
+                .andExpect(jsonPath("$[?(@.typeNotif=='PV_A_ARCHIVER')].destinataireIm", hasItem("CTRASS")));
     }
 
     @Test
-    @DisplayName("PV signé avis FAVR → Assistant contrôleur NON notifié (pas de PV_DEFINITIF_COPIE)")
+    @DisplayName("PV signé avis FAVR → Assistant NON notifié à la signature (PV_A_ARCHIVER n'arrive qu'après SIGMP)")
     void pv_signe_avis_favr_assistant_non_notifie() throws Exception {
         signerPvAvecAvis(121, "FAVR");
         mvc.perform(get("/api/notifications").header("Authorization", tokenAdmin))
-                .andExpect(jsonPath("$[?(@.typeNotif=='PV_DEFINITIF_COPIE')]", hasSize(0)));
+                .andExpect(jsonPath("$[?(@.typeNotif=='PV_A_ARCHIVER')]", hasSize(0)));
     }
 
     @Test
-    @DisplayName("Dossier clôturé après vérification (FAVR) → Assistant contrôleur notifié (CLOTURE_COPIE_ASSISTANT)")
+    @DisplayName("Clôture (FAVR, ⚠️ 2026-08-02) : levée + SIGMP + archivage Assistant → dossier CLOTURE")
     void dossier_cloture_assistant_notifie() throws Exception {
         String tokenVer = bearer("CTRVER", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER", "ANT");
+        String tokenAss = bearer("CTRASS", ProfilUtilisateur.ASSISTANT_CONTROLEUR, TypeActeur.CONTROLEUR, "CTRASS", "ANT");
         signerPvAvecAvis(122, "FAVR");   // dossier 1 → EN_VERIFICATION
-        mvc.perform(post("/api/verifications").header("Authorization", tokenVer)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idReception\":1,\"idPv\":122,\"observation\":\"ok\",\"obsLevees\":true}"))
-                .andExpect(status().isCreated());
+        passageObservationDossier1(tokenVer, "LEVEE", null);   // → OBSERVATIONS_LEVEES
+        mvc.perform(post("/api/sigmp-transmissions").header("Authorization", tokenVer)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"idDossier\":1}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.sens").value("APPROUVE"))
+                .andExpect(jsonPath("$.leveeObservations").value(true));
         mvc.perform(get("/api/notifications").header("Authorization", tokenAdmin))
-                .andExpect(jsonPath("$[?(@.typeNotif=='CLOTURE_COPIE_ASSISTANT')].destinataireIm", hasItem("CTRASS")));
+                .andExpect(jsonPath("$[?(@.typeNotif=='PV_A_ARCHIVER')].destinataireIm", hasItem("CTRASS")));
+        mvc.perform(post("/api/pv-examens/122/archiver").header("Authorization", tokenAss))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/dossiers/1").header("Authorization", tokenVer))
+                .andExpect(jsonPath("$.statut").value("CLOTURE"));
     }
 
     @Test
