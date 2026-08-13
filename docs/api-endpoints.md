@@ -2277,21 +2277,35 @@ les lots d'une **ligne de marché** (`t_lot.ID_DETAIL`) — **liste vide** si au
 Processus de marché (LANCEMENT, DAO, OUVERTURE, ATTRIBUTION…), référencés par les dates
 prévisionnelles (`t_marche_prevision.ID_CAPM`). L'`ordre` fixe l'affichage des processus.
 
+> ⚠️ **Modèle mixte par mode de passation (règle ajoutée)** — comme les points de contrôle par sous-type :
+> `idMode` **null** = processus **commun** (modèle par défaut) ; sinon processus **spécifique** au mode
+> (`t_mode_passation.ID_MODE`). `GET /api/capm?mode={idMode}` renvoie la **grille effective** du mode :
+> ses spécifiques s'ils existent, sinon ceux de son **mode modèle partagé**
+> (`tr_mode_passation.ID_MODE_MODELE_CAPM`, administrable — ex. « Consultation des Prix Ouverte »,
+> « CPO PIP » et « Appel à manifestation d'intérêt » → modèle AOO), sinon les communs — triée par
+> `ordre` ASC. Le champ `groupe` porte la **phase** du modèle (regroupement à l'affichage, ex. « 2 — Lancement »).
+> **Modèle détaillé « Appel d'offres ouvert »** (`idMode=1`) : 30 tâches en 6 phases (ids/ordre 101-130),
+> reprises du modèle officiel CAPM AOO (étape préalable, lancement, ouverture des plis, attribution,
+> circuit administratif de validation, notification et exécution).
+
 **Champs `CapmDto`**
 
 | Champ (JSON) | Type | Obligatoire | Contraintes |
 |---|---|---|---|
 | idCapm | number | Oui (PK, au POST) | clé primaire (assignée par le client) |
-| libelleProcessus | string | Non | max 100 |
+| libelleProcessus | string | Non | max 300 |
 | ordre | number | Oui | @NotNull |
+| idMode | number | Non | null = commun ; sinon spécifique au mode de passation |
+| groupe | string | Non | max 150 — phase du modèle (regroupement) |
 
-**Données initiales** : `(1,'LANCEMENT',1)`, `(2,'DAO',2)`, `(3,'OUVERTURE',3)`, `(4,'ATTRIBUTION',4)`.
+**Données initiales** : `(1,'LANCEMENT',1)`, `(2,'DAO',2)`, `(3,'OUVERTURE',3)`, `(4,'ATTRIBUTION',4)`
+(communes, `idMode` null) + le modèle AOO (ids 101-130, `idMode=1`).
 
 **Endpoints**
 
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
-| GET | /api/capm | — | `CapmDto[]` | 200 | Authentifié |
+| GET | /api/capm[?mode={idMode}] | — | `CapmDto[]` (grille effective si `mode`) | 200 | Authentifié |
 | GET | /api/capm/{id} | — | `CapmDto` | 200, 404 | Authentifié |
 | POST | /api/capm | `CapmDto` | `CapmDto` | 201, 400, 403 | **ADMINISTRATEUR** |
 | PUT | /api/capm/{id} | `CapmDto` | `CapmDto` | 200, 400, 403, 404 | **ADMINISTRATEUR** |

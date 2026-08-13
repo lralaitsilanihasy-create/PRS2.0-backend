@@ -23,10 +23,22 @@ public class Capm {
     @Column(name = "ID_CAPM", nullable = false)
     private Integer idCapm;
 
-    @Column(name = "LIBELLE_PROCESSUS", length = 100)
+    @Column(name = "LIBELLE_PROCESSUS", length = 300)
     private String libelleProcessus;
 
     /** Ordre d'affichage des processus (ASC). */
     @Column(name = "ORDRE")
     private Integer ordre;
+
+    /**
+     * ⚠️ Règle ajoutée — modèle mixte (comme les points de contrôle par sous-type) :
+     * {@code null} = processus commun (modèle par défaut) ; sinon = processus SPÉCIFIQUE au mode de
+     * passation ({@code t_mode_passation.ID_MODE}, ex. modèle détaillé « Appel d'offres ouvert »).
+     */
+    @Column(name = "ID_MODE")
+    private Integer idMode;
+
+    /** Phase du modèle (ex. « 2 - LANCEMENT ») — regroupe les tâches à l'affichage ; null = sans phase. */
+    @Column(name = "GROUPE", length = 150)
+    private String groupe;
 }

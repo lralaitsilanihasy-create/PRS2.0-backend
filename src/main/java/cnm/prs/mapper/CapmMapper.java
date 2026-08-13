@@ -19,6 +19,8 @@ public final class CapmMapper {
         dto.setIdCapm(entity.getIdCapm());
         dto.setLibelleProcessus(entity.getLibelleProcessus());
         dto.setOrdre(entity.getOrdre());
+        dto.setIdMode(entity.getIdMode());
+        dto.setGroupe(entity.getGroupe());
         return dto;
     }
 
@@ -30,6 +32,8 @@ public final class CapmMapper {
         entity.setIdCapm(dto.getIdCapm());
         entity.setLibelleProcessus(dto.getLibelleProcessus());
         entity.setOrdre(dto.getOrdre());
+        entity.setIdMode(dto.getIdMode());
+        entity.setGroupe(dto.getGroupe());
         return entity;
     }
 }

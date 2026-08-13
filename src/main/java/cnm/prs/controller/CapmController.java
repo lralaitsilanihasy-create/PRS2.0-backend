@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import jakarta.validation.Valid;
@@ -33,9 +34,10 @@ public class CapmController {
         this.service = service;
     }
 
+    // `?mode={idMode}` : grille EFFECTIVE du mode (spécifiques si présents, sinon communs) — ⚠️ règle ajoutée.
     @GetMapping
-    public List<CapmDto> findAll() {
-        return service.findAll();
+    public List<CapmDto> findAll(@RequestParam(name = "mode", required = false) Integer mode) {
+        return service.findAll(mode);
     }
 
     @GetMapping("/{id}")

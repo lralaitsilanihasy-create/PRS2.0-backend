@@ -2385,7 +2385,7 @@ class CnmWorkflowIntegrationTest {
                 dossierRepository.findById(135).orElseThrow().getRefeDossier());
         // Dossier BROUILLON issu du retrait → édition PPM (en-tête + ligne de marché) acceptée (200).
         // Ligne NOUVELLE à l'édition → ≥1 processus obligatoire (règle corrigée, comme au POST).
-        capmRepository.save(new Capm(1, "LANCEMENT", 1));
+        capmRepository.save(new Capm(1, "LANCEMENT", 1, null, null));
         String edition = "{\"exercice\":2027,\"signataire\":\"Maj retrait\",\"dateSignature\":\"2026-02-01\","
                 + "\"reference\":\"PPM-135-v2\",\"marches\":[{\"montEstim\":500000000,\"idNature\":1,"
                 + "\"statut\":\"PREVU\",\"processus\":[{\"idCapm\":1,\"dateDebut\":\"2026-02-01\",\"dateFin\":\"2026-06-30\"}]}]}";
@@ -2613,7 +2613,7 @@ class CnmWorkflowIntegrationTest {
         Dossier d = dossier(180, "BROUILLON"); d.setIdLocalite("ANT"); d.setIdPrmp("PRMP001"); dossierRepository.save(d);
         ppmRepository.save(ppm(280, 180, "PRMP001"));
         marcheRepository.save(marche(380, 180, 280));
-        capmRepository.save(new Capm(1, "LANCEMENT", 1));
+        capmRepository.save(new Capm(1, "LANCEMENT", 1, null, null));
         marchePrevisionRepository.save(new MarchePrevision(480, 380, 1, LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 30), null, null));
         marchePrevisionRepository.save(new MarchePrevision(481, 380, 1, LocalDate.of(2026, 6, 2), LocalDate.of(2026, 6, 30), null, null));
 
@@ -2637,7 +2637,7 @@ class CnmWorkflowIntegrationTest {
         Dossier d = dossier(182, "BROUILLON"); d.setIdLocalite("ANT"); d.setIdPrmp("PRMP001"); dossierRepository.save(d);
         ppmRepository.save(ppm(282, 182, "PRMP001"));
         marcheRepository.save(marche(382, 182, 282));
-        capmRepository.save(new Capm(1, "LANCEMENT", 1));
+        capmRepository.save(new Capm(1, "LANCEMENT", 1, null, null));
         marchePrevisionRepository.save(new MarchePrevision(482, 382, 1, LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 30), null, null));
 
         mvc.perform(delete("/api/ppms/282").header("Authorization", tokenPrmp)).andExpect(status().isNoContent());
@@ -2672,7 +2672,7 @@ class CnmWorkflowIntegrationTest {
         marcheRepository.save(marche(300, 170, 200));
         marcheRepository.save(marche(301, 170, 200));               // marché voisin (même PPM)
         marcheRepository.save(marche(302, 170, 201));               // marché du PPM voisin
-        capmRepository.save(new Capm(1, "LANCEMENT", 1));
+        capmRepository.save(new Capm(1, "LANCEMENT", 1, null, null));
         marchePrevisionRepository.save(new MarchePrevision(400, 300, 1, LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 30), null, null));
         marchePrevisionRepository.save(new MarchePrevision(401, 301, 1, LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 30), null, null));
         marchePrevisionRepository.save(new MarchePrevision(402, 302, 1, LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 30), null, null));
@@ -3433,7 +3433,7 @@ class CnmWorkflowIntegrationTest {
         modePassationRepository.save(new ModePassation(2, "AOR", null, null, null, null));
         String tokenSec = bearer("CTRSEC", ProfilUtilisateur.SECRETAIRE, TypeActeur.CONTROLEUR, "CTRSEC", "ANT");
 
-        capmRepository.save(new Capm(1, "LANCEMENT", 1));
+        capmRepository.save(new Capm(1, "LANCEMENT", 1, null, null));
         // Localité dérivée de l'entité 1 (= ANT) ; AUCUN id (dossier/PPM/marché) dans le corps → alloués serveur.
         String body = "{\"idEntiteContract\":1,\"exercice\":2026,"
                 + "\"signataire\":\"RABE\",\"dateSignature\":\"2026-01-10\",\"reference\":\"PPM-60\","
@@ -3466,7 +3466,7 @@ class CnmWorkflowIntegrationTest {
     @DisplayName("Saisie PPM — nature/mode par libellé : résolus (dédup normalisée) ou créés à la volée (tr_nature/tr_mode)")
     void saisiePpm_natureModeALaVolee() throws Exception {
         natureRepository.save(new Nature(1, "Travaux", null));   // référentiel existant
-        capmRepository.save(new Capm(1, "LANCEMENT", 1));
+        capmRepository.save(new Capm(1, "LANCEMENT", 1, null, null));
         long naturesAvant = natureRepository.count();
         long modesAvant = modePassationRepository.count();
 
@@ -3499,7 +3499,7 @@ class CnmWorkflowIntegrationTest {
     @DisplayName("Saisie PPM — mode + suffixe de source (RPI/PIP) collé au libellé : résolu au noyau, jamais RPI→PIP, aucun doublon")
     void saisiePpm_modeSuffixeSource() throws Exception {
         natureRepository.save(new Nature(1, "Travaux", null));
-        capmRepository.save(new Capm(1, "LANCEMENT", 1));
+        capmRepository.save(new Capm(1, "LANCEMENT", 1, null, null));
         ModePassation aoo = new ModePassation(1, "Appel d'offres ouvert", null, null, null, null);
         aoo.setDeclencheAgpm(true);
         modePassationRepository.save(aoo);
@@ -3677,7 +3677,7 @@ class CnmWorkflowIntegrationTest {
     void saisiePpm_compteALaVolee() throws Exception {
         natureRepository.save(new Nature(1, "Travaux", null));
         modePassationRepository.save(new ModePassation(2, "AOR", null, null, null, null));
-        capmRepository.save(new Capm(1, "LANCEMENT", 1));
+        capmRepository.save(new Capm(1, "LANCEMENT", 1, null, null));
 
         // numCompte « 9999-NEW » absent de tr_compte → sans résolution-ou-création, l'INSERT du marché viole la FK (409).
         String body = "{\"idEntiteContract\":1,\"exercice\":2026,\"signataire\":\"RABE\",\"dateSignature\":\"2026-01-10\",\"reference\":\"PPM-CPT\","
@@ -3696,7 +3696,7 @@ class CnmWorkflowIntegrationTest {
     void saisiePpm_beneficiaires_ok() throws Exception {
         natureRepository.save(new Nature(1, "Travaux", null));
         modePassationRepository.save(new ModePassation(2, "AOR", null, null, null, null));
-        capmRepository.save(new Capm(1, "LANCEMENT", 1));
+        capmRepository.save(new Capm(1, "LANCEMENT", 1, null, null));
         long benefAvant = serviceBeneficiaireRepository.count();
 
         // montEstim 3 000 000 = 1 000 000 + 2 000 000 ; soaCode/numCompte inexistants → créés à la volée.
@@ -3720,7 +3720,7 @@ class CnmWorkflowIntegrationTest {
     @DisplayName("Saisie PPM — bénéficiaires incohérents : Σ ancMontBenef ≠ montEstim → 400 ciblé marches[0].beneficiaires")
     void saisiePpm_beneficiaires_incoherent_400() throws Exception {
         natureRepository.save(new Nature(1, "Travaux", null));
-        capmRepository.save(new Capm(1, "LANCEMENT", 1));
+        capmRepository.save(new Capm(1, "LANCEMENT", 1, null, null));
         // montEstim 3 000 000 mais Σ = 1 000 000 + 1 500 000 = 2 500 000 → 400.
         String body = "{\"idEntiteContract\":1,\"exercice\":2026,\"signataire\":\"RABE\",\"dateSignature\":\"2026-01-10\",\"reference\":\"PPM-KO\","
                 + "\"marches\":[{\"designationMarche\":\"A\",\"montEstim\":3000000,\"idNature\":1,\"statut\":\"PREVU\","
@@ -3740,7 +3740,7 @@ class CnmWorkflowIntegrationTest {
         String tokenUgpm = bearer("UGPM1", ProfilUtilisateur.UGPM, TypeActeur.UGPM, "PRMP001", null);
         natureRepository.save(new Nature(1, "Travaux", null));
         modePassationRepository.save(new ModePassation(2, "AOR", null, null, null, null));
-        capmRepository.save(new Capm(1, "LANCEMENT", 1));
+        capmRepository.save(new Capm(1, "LANCEMENT", 1, null, null));
 
         String body = "{\"idEntiteContract\":1,\"exercice\":2026,\"signataire\":\"X\",\"dateSignature\":\"2026-01-10\",\"reference\":\"PPM-UGPM\","
                 + "\"marches\":[{\"designationMarche\":\"A\",\"montEstim\":1000000,\"idNature\":1,\"idMode\":2,\"statut\":\"PREVU\","
@@ -4490,7 +4490,7 @@ class CnmWorkflowIntegrationTest {
         modePassationRepository.save(new ModePassation(4, "Cotation", null, null, null, null));
 
         // Saisie initiale (sans id) : marché 150M (mode SAISI 4) et 500M (mode SAISI 2), entité 1 (ANT).
-        capmRepository.save(new Capm(1, "LANCEMENT", 1));
+        capmRepository.save(new Capm(1, "LANCEMENT", 1, null, null));
         String creation = "{\"idEntiteContract\":1,\"exercice\":2026,"
                 + "\"signataire\":\"RABE\",\"dateSignature\":\"2026-01-10\",\"reference\":\"PPM-120-v1\","
                 + "\"marches\":[{\"montEstim\":150000000,\"idNature\":1,\"idMode\":4,\"statut\":\"PREVU\","
@@ -4570,8 +4570,8 @@ class CnmWorkflowIntegrationTest {
     @DisplayName("Édition PPM — ré-import complet (régression) : les sous-objets des lignes (bénéficiaires, lots, processus) sont créés comme au POST")
     void editionPpm_reImportComplet_sousObjetsCrees() throws Exception {
         natureRepository.save(new Nature(1, "Travaux", null));
-        capmRepository.save(new Capm(1, "LANCEMENT", 1));
-        capmRepository.save(new Capm(2, "OUVERTURE", 2));
+        capmRepository.save(new Capm(1, "LANCEMENT", 1, null, null));
+        capmRepository.save(new Capm(2, "OUVERTURE", 2, null, null));
         // Brouillon initial (import v1) : 1 ligne complète (bénéficiaire + lot + processus).
         String creation = "{\"idEntiteContract\":1,\"exercice\":2026,\"signataire\":\"RABE\",\"dateSignature\":\"2026-01-10\",\"reference\":\"PPM-RI\","
                 + "\"marches\":[{\"designationMarche\":\"Ancienne ligne\",\"montEstim\":1000000,\"idNature\":1,\"statut\":\"PREVU\","
@@ -4617,7 +4617,7 @@ class CnmWorkflowIntegrationTest {
     @DisplayName("Édition PPM — ligne mise à jour : listes absentes → enfants conservés ; fournies → remplacement ; validations actives (Σ, processus)")
     void editionPpm_majPartielle_semantiqueEnfants() throws Exception {
         natureRepository.save(new Nature(1, "Travaux", null));
-        capmRepository.save(new Capm(1, "LANCEMENT", 1));
+        capmRepository.save(new Capm(1, "LANCEMENT", 1, null, null));
         String creation = "{\"idEntiteContract\":1,\"exercice\":2026,\"signataire\":\"RABE\",\"dateSignature\":\"2026-01-10\",\"reference\":\"PPM-MP\","
                 + "\"marches\":[{\"designationMarche\":\"Ligne\",\"montEstim\":1000000,\"idNature\":1,\"statut\":\"PREVU\","
                 + "\"beneficiaires\":[{\"soaCode\":\"00-61-0-D10-00000\",\"numCompte\":\"2441\",\"ancMontBenef\":1000000}],"
@@ -5379,8 +5379,8 @@ class CnmWorkflowIntegrationTest {
         // Mode déterminable (évite la notif MODE_NON_DETERMINE, hors sujet) : 500M → AOR (mode 2).
         natureRepository.save(new Nature(1, "Travaux", null));
         modePassationRepository.save(new ModePassation(2, "AOR", null, null, null, null));
-        capmRepository.save(new Capm(1, "LANCEMENT", 1));
-        capmRepository.save(new Capm(3, "OUVERTURE", 3));
+        capmRepository.save(new Capm(1, "LANCEMENT", 1, null, null));
+        capmRepository.save(new Capm(3, "OUVERTURE", 3, null, null));
         // Processus envoyés dans le désordre (3 puis 1) → la lecture doit les trier par ordre (1 avant 3).
         String body = "{\"idEntiteContract\":1,\"exercice\":2026,\"dateSignature\":\"2026-01-10\","
                 + "\"marches\":[{\"montEstim\":500000000,\"idNature\":1,\"statut\":\"PREVU\","
@@ -5407,7 +5407,7 @@ class CnmWorkflowIntegrationTest {
     @Test
     @DisplayName("Saisie PPM — processus dateDebut >= dateFin → 400 (cohérence interne)")
     void processus_datefin_avant_datedebut_400() throws Exception {
-        capmRepository.save(new Capm(1, "LANCEMENT", 1));
+        capmRepository.save(new Capm(1, "LANCEMENT", 1, null, null));
         String body = "{\"idEntiteContract\":1,\"exercice\":2026,\"dateSignature\":\"2026-01-10\","
                 + "\"marches\":[{\"montEstim\":500000000,\"idNature\":1,\"statut\":\"PREVU\","
                 + "\"processus\":[{\"idCapm\":1,\"dateDebut\":\"2026-06-30\",\"dateFin\":\"2026-06-01\"}]}]}";
@@ -5421,8 +5421,8 @@ class CnmWorkflowIntegrationTest {
     @Test
     @DisplayName("Saisie PPM — chevauchement entre processus consécutifs → 400 (séquence)")
     void processus_sequence_chevauchement_400() throws Exception {
-        capmRepository.save(new Capm(1, "LANCEMENT", 1));
-        capmRepository.save(new Capm(2, "DAO", 2));
+        capmRepository.save(new Capm(1, "LANCEMENT", 1, null, null));
+        capmRepository.save(new Capm(2, "DAO", 2, null, null));
         // processus[1] (DAO) commence 02-15, avant la fin de processus[0] (LANCEMENT) le 03-01 → chevauchement.
         String body = "{\"idEntiteContract\":1,\"exercice\":2026,\"dateSignature\":\"2026-01-10\","
                 + "\"marches\":[{\"montEstim\":500000000,\"idNature\":1,\"statut\":\"PREVU\","
@@ -5439,8 +5439,8 @@ class CnmWorkflowIntegrationTest {
     void processus_sequence_ok() throws Exception {
         natureRepository.save(new Nature(1, "Travaux", null));
         modePassationRepository.save(new ModePassation(2, "AOR", null, null, null, null));
-        capmRepository.save(new Capm(1, "LANCEMENT", 1));
-        capmRepository.save(new Capm(2, "DAO", 2));
+        capmRepository.save(new Capm(1, "LANCEMENT", 1, null, null));
+        capmRepository.save(new Capm(2, "DAO", 2, null, null));
         // dateDebut[2] = dateFin[1] (03-01) → contiguïté autorisée (>=).
         String body = "{\"idEntiteContract\":1,\"exercice\":2026,\"dateSignature\":\"2026-01-10\","
                 + "\"marches\":[{\"montEstim\":500000000,\"idNature\":1,\"statut\":\"PREVU\","
@@ -6140,7 +6140,7 @@ class CnmWorkflowIntegrationTest {
     @DisplayName("Saisie PPM — bénéficiaire par soaLibelle (sans code) : SOA résolu-ou-créé par libellé, dédupliqué, code SOA dérivé")
     void saisiePpm_soaBeneficiaireParLibelle() throws Exception {
         natureRepository.save(new Nature(1, "Travaux", null));
-        capmRepository.save(new Capm(1, "LANCEMENT", 1));
+        capmRepository.save(new Capm(1, "LANCEMENT", 1, null, null));
         long soaAvant = soaBeneficiaireRepository.count();
 
         // 3 marchés : A et B portent le MÊME service textuel (dédup) ; C un autre → 2 SOA créés.
@@ -6493,7 +6493,7 @@ class CnmWorkflowIntegrationTest {
     @DisplayName("Saisie à la volée — « APPEL D'OFFRE OUVERT » résout le mode canonique (pas de doublon) → sous-type PPM-AGPM (contournement AGPM fermé)")
     void saisie_modeSingulier_fermeContournementAgpm() throws Exception {
         natureRepository.save(new Nature(1, "Travaux", null));
-        capmRepository.save(new Capm(1, "LANCEMENT", 1));
+        capmRepository.save(new Capm(1, "LANCEMENT", 1, null, null));
         ModePassation aoo = new ModePassation(1, "Appel d'offres ouvert", null, null, null, null);
         aoo.setDeclencheAgpm(true);
         modePassationRepository.save(aoo);
@@ -6522,7 +6522,7 @@ class CnmWorkflowIntegrationTest {
     @DisplayName("Saisie à la volée — libellé réellement nouveau toujours créé ; libellé proche d'un mode AGPM créé MAIS signalé (audit)")
     void saisie_modeNouveau_creeEtSignaleSiProcheAgpm() throws Exception {
         natureRepository.save(new Nature(1, "Travaux", null));
-        capmRepository.save(new Capm(1, "LANCEMENT", 1));
+        capmRepository.save(new Capm(1, "LANCEMENT", 1, null, null));
         ModePassation aoo = new ModePassation(1, "Appel d'offres ouvert", null, null, null, null);
         aoo.setDeclencheAgpm(true);
         modePassationRepository.save(aoo);
@@ -6668,7 +6668,7 @@ class CnmWorkflowIntegrationTest {
     @DisplayName("Saisie PPM — formeMarche : explicite conservée, absente → défaut QUANTITE_FIXE, code inconnu → 400 ciblé")
     void saisiePpm_formeMarche() throws Exception {
         natureRepository.save(new Nature(1, "Travaux", null));
-        capmRepository.save(new Capm(1, "LANCEMENT", 1));
+        capmRepository.save(new Capm(1, "LANCEMENT", 1, null, null));
 
         String body = "{\"idEntiteContract\":1,\"exercice\":2026,\"signataire\":\"RABE\",\"dateSignature\":\"2026-01-10\",\"reference\":\"PPM-FM\","
                 + "\"marches\":[{\"designationMarche\":\"Fourniture de carburant\",\"formeMarche\":\"A_COMMANDE\",\"montEstim\":1000000,\"idNature\":1,\"statut\":\"PREVU\","
@@ -8328,7 +8328,7 @@ class CnmWorkflowIntegrationTest {
     @DisplayName("Sous-type DDP recalculé serveur : saisie mode ordinaire → PPM ; édition vers appel d'offres ouvert → PPM-AGPM ; retour → PPM")
     void sousType_ddp_recalcule() throws Exception {
         natureRepository.save(new Nature(1, "Travaux", null));
-        capmRepository.save(new Capm(1, "LANCEMENT", 1));
+        capmRepository.save(new Capm(1, "LANCEMENT", 1, null, null));
         ModePassation aoo = new ModePassation(1, "Appel d'offres ouvert", null, null, null, null);
         aoo.setDeclencheAgpm(true);
         modePassationRepository.save(aoo);
@@ -8984,7 +8984,7 @@ class CnmWorkflowIntegrationTest {
         Long bc = typeDmcRepository.save(new cnm.prs.entity.TypeDmc(null, "BC", "Bon de Commande", true))
                 .getIdTypeDmc();
         natureRepository.save(new Nature(1, "Travaux", null));
-        capmRepository.save(new Capm(1, "LANCEMENT", 1));
+        capmRepository.save(new Capm(1, "LANCEMENT", 1, null, null));
 
         String body = "{\"idEntiteContract\":1,\"exercice\":2026,\"signataire\":\"RABE\",\"dateSignature\":\"2026-01-10\",\"reference\":\"PPM-DMC\","
                 + "\"marches\":[{\"designationMarche\":\"A\",\"montEstim\":1000000,\"natureLibelle\":\"Travaux\",\"modeLibelle\":\"Achat Direct\",\"statut\":\"PREVU\","
@@ -9003,7 +9003,7 @@ class CnmWorkflowIntegrationTest {
     @DisplayName("Saisie PPM — lots[] : une ligne t_lot par lot, rattachée au marché ; sans lots[] → aucun lot (rétro-compat)")
     void saisiePpm_lots() throws Exception {
         natureRepository.save(new Nature(1, "Travaux", null));
-        capmRepository.save(new Capm(1, "LANCEMENT", 1));
+        capmRepository.save(new Capm(1, "LANCEMENT", 1, null, null));
 
         // Marché A : 2 lots ; marché B : aucun lot (rétro-compat).
         String body = "{\"idEntiteContract\":1,\"exercice\":2026,\"signataire\":\"RABE\",\"dateSignature\":\"2026-01-10\",\"reference\":\"PPM-LOTS\","
@@ -9099,8 +9099,8 @@ class CnmWorkflowIntegrationTest {
     @DisplayName("Processus prévisionnels : dateFin optionnelle — saisie/prevision sans dateFin → 201 ; séquence non contrainte si dateFin précédente absente ; dateFin présente toujours contrôlée")
     void processus_dateFin_optionnelle() throws Exception {
         natureRepository.save(new Nature(1, "Travaux", null));
-        capmRepository.save(new Capm(1, "LANCEMENT", 1));
-        capmRepository.save(new Capm(2, "DAO", 2));
+        capmRepository.save(new Capm(1, "LANCEMENT", 1, null, null));
+        capmRepository.save(new Capm(2, "DAO", 2, null, null));
 
         // Saisie : p0 (capm1) SANS dateFin ; p1 (capm2) démarre AVANT p0 → séquence non contrainte (skip) → 201.
         String body = "{\"idEntiteContract\":1,\"exercice\":2026,\"signataire\":\"RABE\",\"dateSignature\":\"2026-01-10\",\"reference\":\"PPM-DFOPT\","

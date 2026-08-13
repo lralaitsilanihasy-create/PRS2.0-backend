@@ -16,9 +16,16 @@ public class CapmDto {
 
     private Integer idCapm;
 
-    @Size(max = 100)
+    @Size(max = 300)
     private String libelleProcessus;
 
     @NotNull
     private Integer ordre;
+
+    /** null = processus commun ; sinon spécifique au mode de passation (modèle mixte). */
+    private Integer idMode;
+
+    /** Phase du modèle (regroupement à l'affichage), null = sans phase. */
+    @Size(max = 150)
+    private String groupe;
 }
