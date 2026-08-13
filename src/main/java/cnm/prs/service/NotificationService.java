@@ -31,12 +31,14 @@ public class NotificationService {
     private final NotificationRepository repository;
     private final PrmpRepository prmpRepository;
     private final EmailService emailService;
+    private final NotificationStreamRegistry streamRegistry;
 
     public NotificationService(NotificationRepository repository, PrmpRepository prmpRepository,
-            EmailService emailService) {
+            EmailService emailService, NotificationStreamRegistry streamRegistry) {
         this.repository = repository;
         this.prmpRepository = prmpRepository;
         this.emailService = emailService;
+        this.streamRegistry = streamRegistry;
     }
 
     /** Liste globale (supervision) — réservée à l'Administrateur via le contrôleur. */
@@ -136,6 +138,9 @@ public class NotificationService {
         Notification saved = repository.save(n);
         // Diffusion e-mail (asynchrone, sans effet si désactivée ou destinataire absent).
         emailService.envoyer(email, titre, corps);
+        // ⚠️ Temps réel (2026-08-02) — pousse « maj » aux flux SSE du destinataire (badge incrémenté
+        // sans action de l'utilisateur ; les onglets sans flux se rattrapent au polling).
+        streamRegistry.push(ref);
         return saved;
     }
 
@@ -168,7 +173,26 @@ public class NotificationService {
         }
         n.setLu(true);
         n.setDateLecture(LocalDateTime.now());
-        return NotificationMapper.toDto(repository.save(n));
+        NotificationDto dto = NotificationMapper.toDto(repository.save(n));
+        pousserMajPourMoi(); // synchronisation entre onglets (badge recalculé partout)
+        return dto;
+    }
+
+    /**
+     * ⚠️ Spec notifications (2026-08-02) — marque une de mes notifications comme NON LUE
+     * (marquage manuel unitaire, inverse de {@link #marquerLu}).
+     */
+    public NotificationDto marquerNonLu(Integer id) {
+        Notification n = repository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Notification introuvable : " + id));
+        if (!estPourMoi(n)) {
+            throw new AccessDeniedException("Cette notification ne vous appartient pas.");
+        }
+        n.setLu(false);
+        n.setDateLecture(null);
+        NotificationDto dto = NotificationMapper.toDto(repository.save(n));
+        pousserMajPourMoi();
+        return dto;
     }
 
     /** Marque toutes mes notifications non lues comme lues ; renvoie le nombre traité. */
@@ -181,7 +205,13 @@ public class NotificationService {
             n.setDateLecture(maintenant);
             repository.save(n);
         }
+        pousserMajPourMoi();
         return nonLues.size();
+    }
+
+    /** Pousse « maj » aux flux SSE de l'utilisateur courant (badge synchronisé entre ses onglets). */
+    private void pousserMajPourMoi() {
+        CurrentUser.ref().filter(s -> !s.isBlank()).ifPresent(streamRegistry::push);
     }
 
     private List<Notification> mesNotifications() {

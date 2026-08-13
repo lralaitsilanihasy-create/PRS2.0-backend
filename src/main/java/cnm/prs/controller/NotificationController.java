@@ -33,9 +33,12 @@ import cnm.prs.service.NotificationService;
 public class NotificationController {
 
     private final NotificationService service;
+    private final cnm.prs.service.NotificationStreamRegistry streamRegistry;
 
-    public NotificationController(NotificationService service) {
+    public NotificationController(NotificationService service,
+            cnm.prs.service.NotificationStreamRegistry streamRegistry) {
         this.service = service;
+        this.streamRegistry = streamRegistry;
     }
 
     // --- Mes notifications (scopées à l'utilisateur courant) ---
@@ -55,9 +58,27 @@ public class NotificationController {
         return service.marquerLu(id);
     }
 
+    /** ⚠️ Spec notifications (2026-08-02) — marquage manuel NON LU (unitaire). */
+    @PostMapping("/{id}/non-lu")
+    public NotificationDto marquerNonLu(@PathVariable Integer id) {
+        return service.marquerNonLu(id);
+    }
+
     @PostMapping("/lire-tout")
     public Map<String, Integer> lireTout() {
         return Map.of("traitees", service.marquerToutLu());
+    }
+
+    /**
+     * ⚠️ Spec notifications (2026-08-02) — flux SSE « mes notifications » : un événement {@code maj}
+     * est poussé à chaque émission/lecture concernant l'utilisateur courant ; le front recharge alors
+     * le compteur serveur. Repli automatique côté front : polling périodique.
+     */
+    @GetMapping(value = "/stream", produces = org.springframework.http.MediaType.TEXT_EVENT_STREAM_VALUE)
+    public org.springframework.web.servlet.mvc.method.annotation.SseEmitter stream() {
+        String ref = cnm.prs.security.CurrentUser.ref().filter(s -> !s.isBlank())
+                .orElseThrow(() -> new org.springframework.security.access.AccessDeniedException("Utilisateur non identifié."));
+        return streamRegistry.subscribe(ref);
     }
 
     // --- Supervision (Administrateur) ---

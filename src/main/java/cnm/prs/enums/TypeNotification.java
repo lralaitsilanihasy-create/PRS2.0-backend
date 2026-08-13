@@ -88,5 +88,23 @@ public enum TypeNotification {
     CLOTURE_COPIE_ASSISTANT,
 
     /** Dossier complété par la PRMP après lettre de renvoi, à ré-examiner — vers le Membre attributaire (⚠️ règle ajoutée). */
-    PIECE_AJOUTEE_APRES_RENVOI
+    PIECE_AJOUTEE_APRES_RENVOI,
+
+    /** Dispatch annulé par le Président/CC : le dossier n'est plus attribué — vers le Membre anciennement assigné (⚠️ règle ajoutée). */
+    DISPATCH_ANNULE,
+
+    /** PV signé (avis ≠ FAVR) : le sens de la décision est à transmettre à SIGMP — vers le Vérificateur (⚠️ spec navette 2026-08-01). */
+    DECISION_A_TRANSMETTRE,
+
+    /** Décision transmise à SIGMP : le PV est à archiver — vers l'Assistant contrôleur de la localité (⚠️ spec navette 2026-08-01). */
+    PV_A_ARCHIVER,
+
+    /** Compléments transmis par la PRMP après lettre de renvoi : l'examen reprend — vers le Membre attributaire (⚠️ spec navette 2026-08-01, cas 3). */
+    COMPLEMENTS_TRANSMIS,
+
+    /** Pièces manquantes / non conformes au DÉPÔT (contrôle de complétude du Secrétaire) — vers la PRMP (⚠️ spec recevabilité 2026-08-02, sans archivage). */
+    PIECES_MANQUANTES_DEPOT,
+
+    /** Compléments de dépôt transmis par la PRMP : contrôle de complétude à reprendre — vers le(s) Secrétaire(s) de la localité (⚠️ spec recevabilité 2026-08-02). */
+    COMPLEMENTS_DEPOT_TRANSMIS
 }

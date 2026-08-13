@@ -2794,8 +2794,21 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 
 ## Notifications
 **Ressource** `/api/notifications` (table `t_notification`) — Notifications système, émises **automatiquement à chaque transmission** (dossier, PV, navette, message).
-- **Mes notifications** (`/mes`, `/mes/non-lues/count`, `/{id}/lu`, `/lire-tout`) : **scopées** à l'utilisateur courant — chacun ne voit/agit que sur **les siennes** (clé `DESTINATAIRE_REF` + `DESTINATAIRE_TYPE` ; repli e-mail pour les PRMP).
+- **Mes notifications** (`/mes`, `/mes/non-lues/count`, `/{id}/lu`, `/{id}/non-lu`, `/lire-tout`) : **scopées** à l'utilisateur courant — chacun ne voit/agit que sur **les siennes** (clé `DESTINATAIRE_REF` + `DESTINATAIRE_TYPE` ; repli e-mail pour les PRMP).
 - **Liste globale** et **CRUD** : réservés à l'**Administrateur** (supervision).
+
+> ⚠️ **Temps réel & écran dédié (spec notifications 2026-08-02).**
+> - `POST /{id}/non-lu` : marquage manuel **NON LU** unitaire (inverse de `/{id}/lu`).
+> - `GET /api/notifications/stream` (`text/event-stream`) : flux **SSE** par utilisateur — un événement
+>   `maj` est poussé à **tous les flux du destinataire** à chaque émission de notification et à chaque
+>   marquage lu / non-lu / lire-tout (synchronisation **entre onglets et sessions**). Le front s'y
+>   connecte en fetch-stream (Bearer — EventSource ne porte pas d'en-tête) et recharge alors le compteur
+>   `GET /mes/non-lues/count` — **le compteur est toujours calculé côté serveur**. Repli : polling 60 s.
+>   Flux expirant (~30 min) avec reconnexion automatique côté client.
+> - Front : écran transverse `/notifications` (tous profils, entrée de menu + lien « Voir toutes les
+>   notifications » de la cloche) — regroupement Aujourd'hui / Hier / dates, filtres toutes / non-lues et
+>   par type, « Charger plus » (défilement progressif), clic = lu + ouverture de l'objet, badge cloche
+>   plafonné « 99+ » (`NotificationsStore` : SSE + BroadcastChannel + polling).
 
 **Champs `NotificationDto`**
 
