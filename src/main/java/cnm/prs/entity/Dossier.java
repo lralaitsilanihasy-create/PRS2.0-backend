@@ -70,6 +70,16 @@ public class Dossier {
     @Column(name = "ID_PRMP", length = 10)
     private String idPrmp;
 
+    /**
+     * ⚠️ Règle ajoutée (spec « Mandats PRMP ») — <strong>mandat d'attribution figé</strong> : le mandat
+     * ({@code t_mandat}) sous lequel le dossier a été créé. Posé <strong>une seule fois</strong>, à la
+     * création, et <strong>jamais recalculé</strong> : un changement de PRMP ne réattribue rien
+     * rétroactivement. Les actions ultérieures portent, elles, l'<em>opérateur courant</em>
+     * ({@code t_action_dossier}). {@code null} si la PRMP n'avait pas de mandat déclaré.
+     */
+    @Column(name = "ID_MANDAT_ATTRIB")
+    private Integer idMandatAttrib;
+
     /** Traçabilité (règle ajoutée) — login de l'acteur ayant <strong>créé</strong> le dossier (PRMP ou UGPM). */
     @Column(name = "CREE_PAR", length = 100)
     private String creePar;

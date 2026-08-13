@@ -6,6 +6,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import cnm.prs.entity.Dossier;
 import cnm.prs.entity.EntiteContract;
+import cnm.prs.enums.ProfilUtilisateur;
 import cnm.prs.enums.StatutDossier;
 import cnm.prs.exception.BadRequestException;
 import cnm.prs.exception.BusinessRuleException;
@@ -52,15 +53,17 @@ public class DossierIntegriteService {
     private final MarcheRepository marcheRepository;
     private final EntiteContractRepository entiteContractRepository;
     private final PrmpEntiteRepository prmpEntiteRepository;
+    private final MandatService mandatService;
 
     public DossierIntegriteService(DossierRepository dossierRepository, PpmRepository ppmRepository,
             MarcheRepository marcheRepository, EntiteContractRepository entiteContractRepository,
-            PrmpEntiteRepository prmpEntiteRepository) {
+            PrmpEntiteRepository prmpEntiteRepository, MandatService mandatService) {
         this.dossierRepository = dossierRepository;
         this.ppmRepository = ppmRepository;
         this.marcheRepository = marcheRepository;
         this.entiteContractRepository = entiteContractRepository;
         this.prmpEntiteRepository = prmpEntiteRepository;
+        this.mandatService = mandatService;
     }
 
     /**
@@ -95,10 +98,30 @@ public class DossierIntegriteService {
      */
     public Dossier exigerBrouillonModifiable(Integer idDossier) {
         Dossier dossier = charger(idDossier);
-        exigerProprietaire(dossier);
+        exigerOperateurHabilite(dossier);
         if (!StatutDossier.BROUILLON.name().equals(dossier.getStatut())) {
             throw new BusinessRuleException(
                     "Opération impossible : le dossier n'est pas un brouillon (statut « " + dossier.getStatut() + " »).");
+        }
+        return dossier;
+    }
+
+    /**
+     * ⚠️ Règle ajoutée (2026-08-02, rectification par import) — MISE À JOUR d'un PPM / d'une ligne de
+     * marché acceptée au statut {@code BROUILLON} (flux brouillon) <strong>ou</strong>
+     * {@code EN_ATTENTE_DECISION_PRMP} (rectification : la PRMP importe le PPM rectifié, la façade
+     * d'édition met les lignes à jour EN PLACE — création/suppression restent réservées au brouillon,
+     * la structure d'un dossier examiné est figée).
+     */
+    public Dossier exigerModifiablePourEditionPpm(Integer idDossier) {
+        Dossier dossier = charger(idDossier);
+        exigerOperateurHabilite(dossier);
+        String statut = dossier.getStatut();
+        if (!StatutDossier.BROUILLON.name().equals(statut)
+                && !StatutDossier.EN_ATTENTE_DECISION_PRMP.name().equals(statut)) {
+            throw new BusinessRuleException(
+                    "Opération impossible : le dossier n'est ni un brouillon ni en attente de décision PRMP "
+                            + "(statut « " + statut + " »).");
         }
         return dossier;
     }
@@ -114,7 +137,7 @@ public class DossierIntegriteService {
      */
     public Dossier exigerEnAttenteDecisionPrmpModifiable(Integer idDossier) {
         Dossier dossier = charger(idDossier);
-        exigerProprietaire(dossier);
+        exigerOperateurHabilite(dossier);
         if (!StatutDossier.EN_ATTENTE_DECISION_PRMP.name().equals(dossier.getStatut())) {
             throw new BusinessRuleException(
                     "Rectification impossible : le dossier n'est pas en attente de décision PRMP (statut « "
@@ -123,12 +146,72 @@ public class DossierIntegriteService {
         return dossier;
     }
 
-    /** Exige que le dossier appartienne à la PRMP courante (si une PRMP propriétaire est connue). */
+    /**
+     * Exige que le dossier appartienne à la PRMP courante (si une PRMP propriétaire est connue).
+     *
+     * <p>⚠️ Règle ajoutée (spec « Mandats PRMP ») — la garde accepte <strong>deux</strong> titres :
+     * la PRMP <em>d'attribution</em> ({@code t_dossier.ID_PRMP}, figée à la création) et la PRMP
+     * <em>en fonction</em> sur le périmètre du dossier. C'est ce second titre qui permet la
+     * <strong>reprise du traitement</strong> après un changement de PRMP : le successeur agit sur les
+     * dossiers de l'UGPM sans qu'aucune réattribution rétroactive n'ait lieu — {@code ID_PRMP} et
+     * {@code ID_MANDAT_ATTRIB} restent ceux du prédécesseur.</p>
+     */
     public void exigerProprietaire(Dossier dossier) {
         String courant = CurrentUser.ref().orElse(null);
-        if (dossier.getIdPrmp() != null && !dossier.getIdPrmp().equals(courant)) {
-            throw new AccessDeniedException("Vous n'êtes pas le propriétaire de ce dossier (§3.1).");
+        if (dossier.getIdPrmp() == null || dossier.getIdPrmp().equals(courant)) {
+            return;
         }
+        if (estPrmpEnFonctionSurLeDossier(dossier, courant)) {
+            return;
+        }
+        throw new AccessDeniedException("Vous n'êtes pas le propriétaire de ce dossier (§3.1).");
+    }
+
+    /**
+     * Vrai si {@code idPrmp} est la PRMP <strong>en fonction</strong> sur le périmètre du dossier :
+     * mandat actif aujourd'hui <em>et</em> affectation active sur l'entité contractante du dossier
+     * ({@code t_prmp_entite}), qui matérialise le rattachement du poste après la passation de témoin.
+     *
+     * <p>Volontairement <strong>strict</strong> : c'est un titre à part entière, pas un repli permissif.
+     * Un dossier sans entité contractante, ou une PRMP sans mandat actif, ne l'obtiennent pas. Les
+     * appelants qui ont leur propre garde de propriété s'en servent comme extension, sans en hériter la
+     * tolérance de {@link #exigerProprietaire} envers les dossiers sans propriétaire connu.</p>
+     */
+    public boolean estPrmpEnFonctionSurLeDossier(Dossier dossier, String idPrmp) {
+        if (idPrmp == null || idPrmp.isBlank() || dossier.getIdEntiteContract() == null) {
+            return false;
+        }
+        return prmpEntiteRepository.existsByIdPrmpAndIdEntiteContractAndActifTrue(idPrmp,
+                        dossier.getIdEntiteContract())
+                && mandatService.estEnFonction(idPrmp);
+    }
+
+    /**
+     * ⚠️ Règle ajoutée (spec « Mandats PRMP ») — <strong>standby de transition</strong> : aucune action de
+     * traitement n'est possible tant qu'aucune PRMP n'est en fonction. Il n'y a pas d'intérim : l'action
+     * attend la nomination, puis sera faite par le nouveau titulaire <em>en tant qu'opérateur</em>, sans
+     * toucher à l'attribution du dossier. Le déblocage est automatique — rien à rejouer.
+     *
+     * <p>Ne concerne que les acteurs côté PRMP (PRMP et agents UGPM sous sa tutelle) : le circuit interne
+     * CNM n'est pas suspendu par la vacance d'une PRMP.</p>
+     *
+     * @throws cnm.prs.exception.VacancePrmpException 409 {@code VACANCE_PRMP}
+     */
+    public void exigerMandatActif() {
+        ProfilUtilisateur profil = CurrentUser.profil().orElse(null);
+        if (profil != ProfilUtilisateur.PRMP && profil != ProfilUtilisateur.UGPM) {
+            return;
+        }
+        mandatService.exigerMandatActif(CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null));
+    }
+
+    /**
+     * Garde complète d'une <strong>action de traitement</strong> sur un dossier : propriété (attribution ou
+     * PRMP en fonction) <em>et</em> habilitation (un mandat actif à la date de l'action).
+     */
+    public void exigerOperateurHabilite(Dossier dossier) {
+        exigerProprietaire(dossier);
+        exigerMandatActif();
     }
 
     /** Un PPM (et ses lignes de marché) ne peut être rattaché qu'à un dossier de la famille {@code DDP}. */

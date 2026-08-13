@@ -102,6 +102,10 @@ BROUILLON** pour l'édition, **cohérence type↔contenu** (PPM ⇒ a un PPM ; D
 `erreurs` est un **tableau** d'objets `{ champ, message }`, renseigné uniquement pour les erreurs de
 validation (400) ; **omis** (absent du corps) pour les autres erreurs.
 
+Un champ **`code`** (string) s'ajoute au corps pour les erreurs métier que le front doit traiter
+**spécifiquement** plutôt qu'en affichant le message brut ; il est **omis** partout ailleurs. Seule valeur
+actuelle : **`VACANCE_PRMP`** (409, cf. *Mandats PRMP*).
+
 ### Détail des erreurs 400 / 403 / 409
 Récapitulatif des trois codes d'erreur « métier » les plus fréquents, leur signification et
 quand ils surviennent (mapping centralisé dans `GlobalExceptionHandler`). Côté Angular : afficher
@@ -128,6 +132,8 @@ quand ils surviennent (mapping centralisé dans `GlobalExceptionHandler`). Côt�
 | **Précondition de circuit non remplie** | l'étape précédente n'est pas atteinte | `dispatch` d'un dossier non `PRET_DISPATCH` ou **doublon** de dispatch ; `examen` d'un dossier non `DISPATCHE` ; **édition d'un examen verrouillé** (dossier `PV_SIGNE`) ; `vérification` hors PV `SIGNE` / avis ≠ `FAVR` / dossier clos |
 | **Autre règle de gestion** | contrainte métier violée | `NUM_PASSAGE = 1` ⟺ `TYPE_PASSAGE = INITIAL` ; `INTERIM_DISPATCH` incohérent avec la localité ; décision de retrait sans observation ; `sens` de navette invalide |
 | **Suppression interdite (immuabilité)** | `DELETE` d'une ressource à traçabilité immuable | `pv-navettes`, `audit-logs` |
+| **Vacance de PRMP** (`code: "VACANCE_PRMP"`) | aucune PRMP en fonction à la date de l'action : toute action de traitement côté PRMP/UGPM attend la nomination (pas d'intérim) | `POST /api/dossiers/{id}/soumettre` pendant une transition — message « En attente de nomination de la nouvelle PRMP » |
+| **Mandat : règle de nomination** | 3ᵉ mandat pour la même personne, arrêté réutilisé, reconduction recouvrant le précédent (prolongation déguisée), durée > 3 ans | `POST /api/mandats` (cf. *Mandats PRMP*) |
 | **Violation de contrainte BD** (`DataIntegrityViolationException`) | identifiant en **doublon**, valeur obligatoire manquante (NOT NULL) ou **clé étrangère** inexistante | POST avec un id déjà utilisé, ou référençant une entité inexistante |
 
 > Rappel : **401** (non authentifié : JWT absent/invalide ou compte désactivé) et **404** (ressource introuvable) restent distincts des trois ci-dessus.
@@ -919,7 +925,8 @@ relation **1,N** : un point de contrôle a **0..N** lignes. Remplace l'ancien ch
 | dateRef | string (date) | Non | renseignée à la soumission si vide |
 | statut | string | Non | max 30 — cycle : `BROUILLON` → `SOUMIS` → `PRET_DISPATCH` → `DISPATCHE` → `EXAMINE` → `PV_SIGNE` → (`EN_VERIFICATION` si avis FAVR) → `CLOTURE` ; vérif. obs. non levées → `EN_ATTENTE_DECISION_PRMP` (ou `RETIRE`) ; posé par le système, **lecture seule** côté PRMP |
 | idLocalite | string | Non | max 5 — localité (FK `tr_localite`) ; **dérivée de l'entité** du dossier (lecture seule à la saisie) |
-| idPrmp | string | Non | max 10 — PRMP **propriétaire** (FK `t_prmp`) ; posée à la saisie ; seule elle édite/soumet |
+| idPrmp | string | Non | max 10 — PRMP **d'attribution** (FK `t_prmp`) ; posée à la saisie, **jamais recalculée** ; la PRMP **en fonction** peut aussi agir (cf. *Mandats PRMP*) |
+| idMandatAttrib | number | Non | **lecture seule** — mandat d'attribution (FK `t_mandat`), figé à la création et jamais recalculé ; `null` si la PRMP n'a pas de mandat déclaré (cf. *Mandats PRMP*) |
 | idEntiteContract | number | Non | entité contractante (FK `tr_entite_contract`) ; **choisie à la saisie**, fixe la localité |
 
 > **Cycle de vie & saisie.** On **ne crée pas** un dossier brut : la **façade `/api/saisies`** (réservée PRMP)
@@ -946,8 +953,22 @@ relation **1,N** : un point de contrôle a **0..N** lignes. Remplace l'ancien ch
 | POST | /api/dossiers/{id}/soumettre | — | `DossierDto` | 200, 400, 403, 404, 409 | **PRMP** |
 | POST | /api/dossiers/{id}/resoumettre | `DossierResoumissionRequest` | `DossierDto` | 200, 400, 403, 404, 409 | **PRMP** propriétaire |
 | GET | /api/dossiers/{id}/historique-echanges | — | `EchangeDto[]` | 200, 403, 404 | **PRMP** / **VERIFICATEUR** (titulaire/délégué) / **ADMINISTRATEUR** |
+| GET | /api/dossiers/{id}/journal | — | `ActionDossierDto[]` | 200, 403, 404 | Authentifié (périmètre de visibilité du dossier) |
 
 `{id}` = idDossier (number). **`DossierResoumissionRequest`** = `{ motifRectification }` (String, **@NotBlank**, max 255).
+
+> 📌 **Journal des actions (⚠️ spec « Mandats PRMP »).** `GET /api/dossiers/{id}/journal` renvoie, dans
+> l'ordre chronologique, **qui a agi, quand et sous quel mandat**. À ne pas confondre avec
+> `/api/audit-logs` (trace technique de toutes les écritures HTTP, réservée à l'Administrateur) : ce
+> journal-ci est **métier** et suit le périmètre de visibilité du dossier (§1).
+>
+> **`ActionDossierDto`** = `{ idAction (number), idDossier (number), dateAction (date-time),
+> typeAction (string), idPrmpOperateur (string), nomOperateur (string), auteur (string),
+> idMandatOperateur (number|null), detail (string) }`.
+> `typeAction` ∈ `CREATION`, `SOUMISSION`, `RESOUMISSION`, `TRANSMISSION_COMPLEMENTS`,
+> `TRANSMISSION_COMPLEMENTS_DEPOT`, `SUPPRESSION`, `MISE_A_JOUR`.
+> **`idPrmpOperateur` est la PRMP en fonction à la date de l'action** — après un changement de titulaire
+> elle diffère de `idPrmp` / `idMandatAttrib` du dossier, qui eux ne bougent pas.
 
 > 📌 **Résolution `idDossier → PPM` (règle ajoutée).** `GET /api/dossiers/{id}/ppm` renvoie le **`PpmDto`
 > complet** du dossier, **y compris pour un `BROUILLON`** lu par son **propriétaire** (même critère de
@@ -2213,6 +2234,107 @@ les lots d'une **ligne de marché** (`t_lot.ID_DETAIL`) — **liste vide** si au
 ```json
 { "idLot": 88, "idDossier": 320, "idDetail": 1205, "designationLot": "Fourniture de mobilier - Lot 1", "montLot": 85000000.0, "qteLot": 150, "uniteLot": "unite" }
 ```
+
+---
+
+## Mandats PRMP
+**Ressource** `/api/mandats` (table `t_mandat`) — ⚠️ **règle ajoutée (spec « Mandats PRMP »)**.
+**Écriture réservée `ADMINISTRATEUR`** (un mandat matérialise un arrêté de nomination : personne ne
+déclare le sien). **Lecture ouverte aux authentifiés**, mais une `PRMP` / `UGPM` reste cantonnée à son
+propre périmètre (§3.1) — un filtre pointant ailleurs → **403**.
+
+> **Le mandat est l'habilitation, pas l'attribution.** Un mandat dure **3 ans**. Une **reconduction est un
+> mandat distinct** — nouvel arrêté, nouvelles dates, `numeroMandat = 2` — **jamais une prolongation** : il
+> n'existe volontairement **ni `PUT` ni `DELETE`** sur cette ressource. Le **renouvellement est unique** :
+> un **3ᵉ mandat** pour la même personne → **409**.
+
+> **Reprise de l'existant.** Une PRMP sans aucun mandat déclaré se voit reconstituer un mandat **implicite**
+> depuis `t_prmp` (`DATE_NOMIN` → `DATE_NOMIN + 3 ans`, arrêté = `ARRETE_NOMIN`), signalé par
+> `implicite: true` et sans `idMandat`. Dès qu'un mandat est déclaré pour cette PRMP, `t_mandat` fait seul
+> autorité. Aucune reprise de données n'est donc nécessaire — mais la règle « expiration = `DATE_NOMIN` + 3 ans »
+> (§3.1) devient **opposable** aux PRMP dont la nomination remonte à plus de 3 ans.
+>
+> ⚠️ Le mandat implicite **ne compte pas** dans le plafond de 2 : pour une PRMP déjà en poste, déclarer son
+> **mandat initial** (et pas seulement la reconduction) est ce qui rend la garde de renouvellement exacte.
+
+**Champs `MandatDto`** *(lecture)*
+
+| Champ (JSON) | Type | Contraintes |
+|---|---|---|
+| idMandat | number | PK serveur (IDENTITY) ; **`null`** pour un mandat implicite |
+| idPrmp | string | max 10 — titulaire (FK `t_prmp`) |
+| titulaire | string | max 200 — nom **figé** à la nomination |
+| dateDebut | string (date) | prise de fonction |
+| dateFin | string (date) | par défaut `dateDebut + 3 ans − 1 jour` |
+| refArrete | string | max 100 — arrêté de nomination, **jamais réutilisé** |
+| statut | string | `ACTIF` / `EN_TRANSITION` / `ACHEVE` / `ABROGE` — **dérivé à la date du jour** (voir ci-dessous) |
+| numeroMandat | number | `1` (initial) ou `2` (reconduction) — **calculé serveur**, jamais reçu du client |
+| dateAbrogation | string (date) | renseignée en cas de fin avant terme |
+| motifAbrogation | string | max 255 |
+| implicite | boolean | `true` = mandat reconstitué depuis `t_prmp` |
+
+**Statuts** — `ABROGE` prime (acte explicite) ; sinon la période décide : avant `dateDebut` →
+`EN_TRANSITION` (nomination prise, pas encore effective — **n'autorise pas** le traitement), pendant →
+`ACTIF`, après `dateFin` → `ACHEVE`.
+
+**Endpoints**
+
+| Méthode | URL | Corps | Réponse | Statuts | Rôle |
+|---|---|---|---|---|---|
+| GET | /api/mandats | — | `MandatDto[]` | 200, 403, 404 | Authentifié — filtres `?ugpm=` / `?prmp=` |
+| GET | /api/mandats/actif | — | `MandatDto` | **200 / 404**, 400, 403 | Authentifié — `?ugpm=` / `?prmp=` **requis** pour un profil CNM |
+| GET | /api/mandats/{id} | — | `MandatDto` | 200, 404 | Authentifié |
+| POST | /api/mandats | `CreerMandatRequest` | `MandatDto` | 201, 400, 403, 404, **409** | **ADMINISTRATEUR** |
+| POST | /api/mandats/{id}/abroger | `AbrogerMandatRequest` | `MandatDto` | 200, 400, 403, 404, 409 | **ADMINISTRATEUR** |
+
+`{id}` = idMandat (number).
+**`CreerMandatRequest`** = `{ idPrmp (@NotBlank, max 10), refArrete (@NotBlank, max 100), dateDebut (@NotNull),
+dateFin (optionnel), titulaire (optionnel, max 200) }`.
+**`AbrogerMandatRequest`** = `{ motif (@NotBlank, max 255), dateAbrogation (optionnel, défaut = aujourd'hui) }`.
+
+> 📌 **`GET /api/mandats?ugpm=`** renvoie l'historique **chronologique** (du plus ancien au plus récent) de la
+> PRMP de **tutelle** de cette UGPM (`t_ugpm.ID_PRMP_TUTELLE`), statut inclus. `?prmp=` l'emporte sur
+> `?ugpm=`. Sans filtre : une PRMP / UGPM obtient son propre historique, un profil CNM obtient tout.
+
+> 📌 **`GET /api/mandats/actif` est le signal de vacance du front** : **200** = quelqu'un est en fonction,
+> **404** = personne ne l'est (« en attente de nomination de la nouvelle PRMP »). À interroger pour griser
+> les actions de traitement avant même de les tenter.
+
+**409 refusés à la création** — `Renouvellement unique` (3ᵉ mandat) · `Arrêté déjà utilisé` ·
+`pas une prolongation` (reconduction recouvrant le mandat précédent) · `ne peut excéder 3 ans` ·
+chevauchement de périodes.
+
+### Standby de transition (`409 VACANCE_PRMP`)
+Sans mandat actif à la date de l'action, **toute action de traitement côté PRMP / UGPM est bloquée** —
+il n'y a **aucune obligation d'intérim**, le dossier attend. Réponse :
+
+```json
+{ "timestamp": "...", "status": 409, "error": "Conflict",
+  "code": "VACANCE_PRMP",
+  "message": "En attente de nomination de la nouvelle PRMP",
+  "path": "/api/dossiers/12/soumettre" }
+```
+
+Le **déblocage est automatique** dès qu'un mandat redevient actif : rien à rejouer, rien à débloquer à la
+main. L'action en attente est alors faite par le **nouveau titulaire en tant qu'opérateur** — l'attribution
+des dossiers, elle, ne change pas.
+
+**Endpoints concernés** (côté PRMP / UGPM uniquement — le circuit interne CNM n'est jamais suspendu par la
+vacance d'une PRMP) : `POST /api/saisies/**` (création), toute édition de PPM / marché / pièce jointe,
+`POST /api/dossiers/{id}/soumettre` · `…/resoumettre` · `…/transmettre-complements` ·
+`…/transmettre-complements-depot`, `DELETE /api/dossiers/{id}`, `POST /api/demande-retraits`, et les
+mises à jour de PPM.
+
+### Attribution figée vs opérateur courant
+| | Porté par | Recalculé ? |
+|---|---|---|
+| **Attribution** | `t_dossier.ID_PRMP` + `ID_MANDAT_ATTRIB` | **Jamais.** Figée à la création ; un changement de PRMP ne réattribue **rien** rétroactivement |
+| **Opérateur courant** | `t_action_dossier` (cf. `GET /api/dossiers/{id}/journal`) | À **chaque action** : la PRMP en fonction à cette date |
+
+La **garde de propriété** accepte donc **deux titres** : la PRMP d'attribution, **et** la PRMP en fonction
+sur le périmètre du dossier — c'est-à-dire celle qui a *à la fois* un mandat actif *et* une affectation
+active (`t_prmp_entite.ACTIF`) sur l'entité contractante du dossier. C'est ce second titre qui permet la
+**reprise du traitement** par le successeur. Une PRMP en fonction **ailleurs** reste refusée (**403**).
 
 ---
 

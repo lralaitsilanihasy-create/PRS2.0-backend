@@ -45,11 +45,15 @@ public class DemandeRetraitService {
     private final NotificationService notificationService;
     private final ControleurDirectory controleurDirectory;
     private final DemandeRetraitVueRepository vueRepository;
+    /** ⚠️ Spec « Mandats PRMP » — garde de propriété partagée (attribution OU PRMP en fonction) + vacance. */
+    private final DossierIntegriteService dossierIntegrite;
 
     public DemandeRetraitService(DemandeRetraitRepository repository, DossierRepository dossierRepository,
             PrmpRepository prmpRepository, PpmRepository ppmRepository, CircuitCascadeService circuitCascade,
             NotificationService notificationService,
-            ControleurDirectory controleurDirectory, DemandeRetraitVueRepository vueRepository) {
+            ControleurDirectory controleurDirectory, DemandeRetraitVueRepository vueRepository,
+            DossierIntegriteService dossierIntegrite) {
+        this.dossierIntegrite = dossierIntegrite;
         this.repository = repository;
         this.dossierRepository = dossierRepository;
         this.prmpRepository = prmpRepository;
@@ -121,9 +125,19 @@ public class DemandeRetraitService {
                 .orElseThrow(() -> new AccessDeniedException("PRMP non identifiée."));
         Integer idDossier = dto.getIdDossier();
         // Garde 1 — la PRMP doit être PROPRIÉTAIRE du dossier (§3.1).
-        if (idDossier == null || !dossierRepository.existsVisiblePourPrmp(idDossier, idPrmp)) {
+        Dossier cible = idDossier == null ? null : dossierRepository.findById(idDossier).orElse(null);
+        if (cible == null) {
             throw new AccessDeniedException("Retrait possible uniquement sur l'un de vos dossiers (§3.1).");
         }
+        // ⚠️ Spec « Mandats PRMP » — second titre accepté : la PRMP EN FONCTION sur le périmètre du dossier
+        // (reprise du traitement après changement de titulaire). Un dossier sans propriétaire ni entité
+        // reste hors de portée : ce titre ne relâche pas la garde, il l'élargit à un cas précis.
+        if (!dossierRepository.existsVisiblePourPrmp(idDossier, idPrmp)
+                && !dossierIntegrite.estPrmpEnFonctionSurLeDossier(cible, idPrmp)) {
+            throw new AccessDeniedException("Retrait possible uniquement sur l'un de vos dossiers (§3.1).");
+        }
+        // Garde 1 bis — sans mandat actif, aucune action de traitement (409 VACANCE_PRMP).
+        dossierIntegrite.exigerMandatActif();
         // Garde 2 — dossier éligible : statut « avant PV signé » (§3.3). Le retrait est possible à toute
         // étape du circuit tant que le PV n'est pas signé ; refusé à partir de PV_SIGNE (et au-delà).
         // Même ensemble que GET /api/dossiers/retirables (source unique StatutDossier.NOMS_AVANT_PV_SIGNE).

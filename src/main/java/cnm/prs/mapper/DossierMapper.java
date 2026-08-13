@@ -25,6 +25,7 @@ public final class DossierMapper {
         dto.setStatut(entity.getStatut());
         dto.setIdLocalite(entity.getIdLocalite());
         dto.setIdPrmp(entity.getIdPrmp());
+        dto.setIdMandatAttrib(entity.getIdMandatAttrib());
         dto.setIdEntiteContract(entity.getIdEntiteContract());
         return dto;
     }

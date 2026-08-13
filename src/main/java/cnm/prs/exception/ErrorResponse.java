@@ -15,7 +15,14 @@ public record ErrorResponse(
         String error,
         String message,
         String path,
-        List<FieldError> erreurs) {
+        List<FieldError> erreurs,
+        String code) {
+
+    /** Erreur sans code métier (cas général) — le champ {@code code} reste absent du JSON. */
+    public ErrorResponse(LocalDateTime timestamp, int status, String error, String message, String path,
+            List<FieldError> erreurs) {
+        this(timestamp, status, error, message, path, erreurs, null);
+    }
 
     /** Détail d'un champ en cause lors d'une erreur de validation. */
     public record FieldError(String champ, String message) {

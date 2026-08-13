@@ -113,6 +113,55 @@ Acteur externe qui soumet ses PPM et marchés à la CNM. Suit l'avancement jusqu
 - Le périmètre de visibilité de la PRMP est donc la **propriété** de ses dossiers
   (`t_dossier.ID_PRMP`), pas une localité.
 
+**Mandats de la PRMP (⚠️ règle ajoutée — spec « Mandats PRMP »)**
+
+Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandats`) :
+`{idMandat, idPrmp, titulaire, dateDebut, dateFin, refArrete, statut, numeroMandat}`. Il est
+**déclaré par l'Administrateur** — un arrêté de nomination ne se déclare pas soi-même.
+
+- **Durée 3 ans.** `dateFin` vaut par défaut `dateDebut + 3 ans − 1 jour` et ne peut jamais excéder cette
+  borne.
+- **Une reconduction est un mandat distinct, jamais une prolongation.** Elle exige un **nouvel arrêté**
+  (`refArrete` inédit) et des **dates nouvelles** qui **succèdent** au mandat précédent ; elle porte
+  `numeroMandat = 2`. Il n'existe volontairement aucun moyen d'allonger un mandat existant : ni `PUT`, ni
+  endpoint de prolongation.
+- **Renouvellement unique.** Une même personne ne peut porter plus de **2** mandats : un 3ᵉ est refusé
+  (**409**, message explicite). Une reconduction ne peut partir que d'un **1ᵉʳ** mandat.
+- **Statuts** : `ACTIF` (en cours), `EN_TRANSITION` (nommé, pas encore en fonction), `ACHEVE` (terme
+  atteint), `ABROGE` (fin avant terme, acte explicite qui prime sur les dates). Le statut est **dérivé des
+  dates** à chaque lecture — un mandat périme dans le temps, pas au gré d'une écriture en base.
+- **Reprise de l'existant** : une PRMP sans mandat déclaré se voit reconstituer un mandat **implicite**
+  depuis `t_prmp` (`DATE_NOMIN` → `+ 3 ans`, arrêté = `ARRETE_NOMIN`). Aucune reprise de données n'est
+  requise, et la règle d'expiration ci-dessus (§ « Mandat de 3 ans ») devient opposable telle quelle.
+
+**Standby de transition — vacance de PRMP (⚠️ règle ajoutée)**
+
+- **Aucune obligation d'intérim.** S'il n'existe **aucun mandat actif à la date de l'action**, **toute
+  action de traitement** côté PRMP / UGPM — création, édition, transmission de compléments, demande de
+  retrait, et la **soumission** (acte de signature de la PRMP) — est **bloquée** : **409** avec le code
+  dédié **`VACANCE_PRMP`** et le message « En attente de nomination de la nouvelle PRMP ». Le dossier
+  attend, il ne bascule sur personne.
+- **Déblocage automatique** dès qu'un mandat redevient actif : rien à rejouer, rien à débloquer à la main.
+  L'action en attente est alors faite par le **nouveau titulaire en tant qu'opérateur** — l'attribution des
+  dossiers reste **inchangée**.
+- Le circuit interne CNM (réception, dispatch, examen, navette, signature du PV) n'est **jamais** suspendu
+  par la vacance d'une PRMP.
+
+**Attribution figée vs opérateur courant (⚠️ règle ajoutée)**
+
+- Le dossier **fige son mandat d'attribution à la création** (`t_dossier.ID_MANDAT_ATTRIB`, aux côtés de
+  `ID_PRMP`) et ne le **recalcule jamais**. Un changement de PRMP **ne réattribue rien** rétroactivement ;
+  une mise à jour de PPM hérite de l'attribution de sa lignée.
+- Chaque action porte au contraire l'**opérateur courant** — la PRMP **en fonction à la date de l'action** —
+  consigné horodaté et par auteur dans **`t_action_dossier`**, lisible via
+  `GET /api/dossiers/{id}/journal` par les profils concernés (périmètre de visibilité du dossier, §1). Ce
+  journal métier est distinct de `t_audit_log` (trace technique, réservée à l'Administrateur).
+- La **garde de propriété** accepte donc **deux titres** : la PRMP d'attribution **et** la PRMP en fonction
+  sur le périmètre du dossier — celle qui a *à la fois* un mandat actif *et* une affectation active
+  (`t_prmp_entite.ACTIF`) sur l'entité contractante du dossier. C'est ce second titre qui autorise la
+  **reprise du traitement** des dossiers de l'UGPM par le successeur, sans changer l'attribution. Une PRMP
+  en fonction **ailleurs** reste refusée (**403**).
+
 **Rectification en attente de décision PRMP (⚠️ règle ajoutée)**
 
 - Sur un dossier au statut **`EN_ATTENTE_DECISION_PRMP`** (observations de vérification non levées), la PRMP
@@ -241,7 +290,9 @@ Acteur externe qui soumet ses PPM et marchés à la CNM. Suit l'avancement jusqu
 - Ne voit que la synthèse et l'avis du PV — pas le détail des points de contrôle internes
 - Retrait soumis à validation obligatoire du Chef de commission
 - Ne peut pas modifier un dossier après soumission, sauf retour officiel ou retrait approuvé
-- Mandat de 3 ans non renouvelable automatiquement — expiration = DATE_NOMIN + 3 ans (t_prmp)
+- Mandat de 3 ans non renouvelable automatiquement — expiration = DATE_NOMIN + 3 ans (t_prmp), ou la
+  `dateFin` du mandat déclaré (`t_mandat`) qui prime dès qu'il en existe un. **Reconductible une seule
+  fois**, par un mandat distinct ; sans mandat actif, tout traitement est suspendu (409 `VACANCE_PRMP`).
 - Aucun accès au journal d'audit, aux anomalies ni aux statistiques CNM globales
 
 ---

@@ -43,5 +43,11 @@ public class DossierDto {
     @Size(max = 10)
     private String idPrmp;
 
+    /**
+     * ⚠️ Règle ajoutée (spec « Mandats PRMP ») — mandat d'attribution, figé à la création et jamais
+     * recalculé. Lecture seule : toute valeur envoyée par le client est ignorée.
+     */
+    private Integer idMandatAttrib;
+
     private Integer idEntiteContract;
 }

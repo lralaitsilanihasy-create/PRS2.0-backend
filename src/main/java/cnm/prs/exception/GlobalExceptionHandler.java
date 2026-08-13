@@ -38,6 +38,16 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.BAD_REQUEST, ex.getMessage(), request, null);
     }
 
+    /**
+     * ⚠️ Règle ajoutée (spec « Mandats PRMP ») — standby de transition : 409 portant le code
+     * {@link VacancePrmpException#CODE}, que le front reconnaît pour afficher l'attente de nomination
+     * plutôt qu'une erreur générique.
+     */
+    @ExceptionHandler(VacancePrmpException.class)
+    public ResponseEntity<ErrorResponse> handleVacancePrmp(VacancePrmpException ex, WebRequest request) {
+        return build(HttpStatus.CONFLICT, ex.getMessage(), request, null, VacancePrmpException.CODE);
+    }
+
     /** Fichier téléversé dépassant la limite multipart du serveur → 400 (pas de 500). */
     @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
     public ResponseEntity<ErrorResponse> handleMaxUpload(
@@ -182,13 +192,19 @@ public class GlobalExceptionHandler {
 
     private ResponseEntity<ErrorResponse> build(HttpStatus status, String message, WebRequest request,
             List<ErrorResponse.FieldError> erreurs) {
+        return build(status, message, request, erreurs, null);
+    }
+
+    private ResponseEntity<ErrorResponse> build(HttpStatus status, String message, WebRequest request,
+            List<ErrorResponse.FieldError> erreurs, String code) {
         ErrorResponse body = new ErrorResponse(
                 LocalDateTime.now(),
                 status.value(),
                 status.getReasonPhrase(),
                 message,
                 request.getDescription(false).replace("uri=", ""),
-                erreurs);
+                erreurs,
+                code);
         return ResponseEntity.status(status).body(body);
     }
 }

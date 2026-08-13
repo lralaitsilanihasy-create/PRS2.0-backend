@@ -35,7 +35,7 @@ import cnm.prs.service.NotificationService;
 @Component
 public class AlerteScheduler {
 
-    /** Durée du mandat PRMP (§3.1 : DATE_NOMIN + 3 ans). */
+    /** Durée du mandat PRMP (§3.1 : DATE_NOMIN + 3 ans) — repli quand aucun mandat n'est déclaré. */
     private static final int MANDAT_ANNEES = 3;
     /** Paliers d'alerte avant expiration, en jours. */
     private static final Set<Long> PALIERS_MANDAT = Set.of(90L, 30L, 7L);
@@ -48,10 +48,14 @@ public class AlerteScheduler {
     private final MarcheRepository marcheRepository;
     private final PpmRepository ppmRepository;
     private final NotificationService notificationService;
+    /** ⚠️ Spec « Mandats PRMP » — source d'autorité de la date de fin de mandat. */
+    private final cnm.prs.service.MandatService mandatService;
 
     public AlerteScheduler(PrmpRepository prmpRepository, CompteAuthRepository compteAuthRepository,
             EcheanceRepository echeanceRepository, MarcheRepository marcheRepository,
-            PpmRepository ppmRepository, NotificationService notificationService) {
+            PpmRepository ppmRepository, NotificationService notificationService,
+            cnm.prs.service.MandatService mandatService) {
+        this.mandatService = mandatService;
         this.prmpRepository = prmpRepository;
         this.compteAuthRepository = compteAuthRepository;
         this.echeanceRepository = echeanceRepository;
@@ -71,7 +75,11 @@ public class AlerteScheduler {
             if (prmp.getDateNomin() == null) {
                 continue;
             }
-            LocalDate expiration = prmp.getDateNomin().plusYears(MANDAT_ANNEES);
+            // ⚠️ Spec « Mandats PRMP » — le mandat DÉCLARÉ (t_mandat) fait autorité dès qu'il en existe un :
+            // sans cela une PRMP valablement reconduite serait alertée — puis expirée — sur sa première
+            // nomination. Repli sur DATE_NOMIN + 3 ans pour les PRMP sans mandat déclaré.
+            LocalDate expiration = mandatService.finDeMandatDeclare(prmp.getIdPrmp())
+                    .orElseGet(() -> prmp.getDateNomin().plusYears(MANDAT_ANNEES));
             long joursRestants = ChronoUnit.DAYS.between(today, expiration);
 
             if (PALIERS_MANDAT.contains(joursRestants)) {
