@@ -35,6 +35,28 @@ public class Marche {
     @Column(name = "ID_DETAIL", nullable = false)
     private Integer idDetail;
 
+    /**
+     * ⚠️ Règle ajoutée (2026-08-05, mise à jour des PPM) — <strong>identité de la ligne à travers les
+     * versions</strong>. {@link #idDetail} n'identifie la ligne que DANS un dossier : une copie en v2
+     * reçoit une nouvelle PK. {@code idLigneOrigine} vaut l'{@code idDetail} de la PREMIÈRE apparition de
+     * la ligne et est hérité tel quel à chaque nouvelle version.
+     *
+     * <p>C'est la clé de rapprochement du diff entre deux versions. Elle ne dépend jamais de la position :
+     * des lignes <strong>réordonnées sans changement de contenu</strong> ressortent donc « inchangées ».
+     * Repli pour une ligne sans ancêtre (réimport PDF) : libellé normalisé + service bénéficiaire.</p>
+     */
+    @Column(name = "ID_LIGNE_ORIGINE")
+    private Integer idLigneOrigine;
+
+    /**
+     * ⚠️ Règle ajoutée (2026-08-05) — <strong>suppression logique</strong> d'une ligne dans une version.
+     * La ligne est bien recopiée dans la nouvelle version, marquée supprimée : elle reste visible,
+     * <strong>restaurable</strong>, et n'est jamais effacée. Les documents officiels (PPM, annexe du PV)
+     * doivent l'exclure.
+     */
+    @Column(name = "SUPPRIMEE")
+    private Boolean supprimee = Boolean.FALSE;
+
     @Column(name = "ID_DOSSIER", nullable = false)
     private Integer idDossier;
 
@@ -106,5 +128,19 @@ public class Marche {
     /** Jamais {@code null} : les lignes historiques pas encore reprises lisent le défaut QUANTITE_FIXE. */
     public FormeMarche getFormeMarche() {
         return formeMarche == null ? FormeMarche.QUANTITE_FIXE : formeMarche;
+    }
+
+    /**
+     * Jamais {@code null} : une ligne jamais versionnée est <strong>sa propre origine</strong>. Ce repli
+     * dispense de reprendre les lignes historiques — colonne ajoutée par {@code ddl-auto=update} donc
+     * {@code null} sur l'existant — tout en gardant la clé stable dès la première mise à jour.
+     */
+    public Integer getIdLigneOrigine() {
+        return idLigneOrigine == null ? idDetail : idLigneOrigine;
+    }
+
+    /** Jamais {@code null} : colonne ajoutée sur table existante, {@code null} y vaut « non supprimée ». */
+    public Boolean getSupprimee() {
+        return supprimee != null && supprimee;
     }
 }

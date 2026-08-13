@@ -18,6 +18,8 @@ public final class MarcheMapper {
         }
         MarcheDto dto = new MarcheDto();
         dto.setIdDetail(entity.getIdDetail());
+        dto.setIdLigneOrigine(entity.getIdLigneOrigine());   // getters coalescents → jamais null
+        dto.setSupprimee(entity.getSupprimee());
         dto.setIdDossier(entity.getIdDossier());
         dto.setIdPpm(entity.getIdPpm());
         dto.setDesignationMarche(entity.getDesignationMarche());

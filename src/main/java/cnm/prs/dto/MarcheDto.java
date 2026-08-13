@@ -17,6 +17,15 @@ public class MarcheDto {
 
     private Integer idDetail;
 
+    /**
+     * ⚠️ 2026-08-05 — identité de la ligne à travers les versions du PPM. Posée par le serveur à la copie
+     * de version ; permet au client d'apparier une ligne à son entrée de diff.
+     */
+    private Integer idLigneOrigine;
+
+    /** ⚠️ 2026-08-05 — ligne supprimée logiquement dans cette version (restaurable, jamais effacée). */
+    private Boolean supprimee;
+
     @NotNull
     private Integer idDossier;
 

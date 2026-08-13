@@ -45,6 +45,16 @@ public class Ppm {
     @Column(name = "DATE_SIGNATURE", nullable = false)
     private LocalDate dateSignature;
 
+    /**
+     * ⚠️ Champs de <strong>versionnement du PPM</strong> (colonnes historiques, alimentées depuis le
+     * 2026-08-05 par {@code MiseAJourPpmService} — auparavant déclarées mais jamais écrites).
+     *
+     * <p>{@code datePpmInit} = date du PPM INITIAL, propagée inchangée de version en version (repère
+     * stable de la chaîne) ; {@code numMaj} = numéro de la mise à jour ({@code null}/0 = initial, puis
+     * 1, 2, …) et {@code dateMaj} sa date ; {@code numMajPrec}/{@code dateMajPrec} rappellent celles de
+     * la version précédente. La filiation structurelle, elle, passe par
+     * {@code t_dossier.ID_DOSSIER_PARENT}.</p>
+     */
     @Column(name = "DATE_PPM_INIT")
     private LocalDate datePpmInit;
 
@@ -78,6 +88,11 @@ public class Ppm {
     @Column(name = "ID_PRMP", length = 10)
     private String idPrmp;
 
+    /**
+     * ⚠️ Alimenté depuis le 2026-08-05 par {@code MiseAJourPpmService} (colonne historique jamais écrite
+     * auparavant) — <strong>motif de la mise à jour</strong>, exigé à la création d'une nouvelle version.
+     * {@code null} sur un PPM initial.
+     */
     @Column(name = "MOTIF_MAJ", length = 500)
     private String motifMaj;
 

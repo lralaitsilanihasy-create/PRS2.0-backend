@@ -36,6 +36,14 @@ public record EditionPpmRequest(
         @Size(max = 100)
         String reference,
 
+        /**
+         * ⚠️ 2026-08-05 (versionnement des PPM) — motif de la mise à jour, corrigeable tant que la
+         * version n'est pas soumise. Sans effet sur un dossier qui n'est pas une version ; {@code null}
+         * laisse le motif inchangé (il reste obligatoire à la création de la version).
+         */
+        @Size(max = 500)
+        String motifMaj,
+
         @Valid
         List<SaisieMarcheLigne> marches) {
 }
