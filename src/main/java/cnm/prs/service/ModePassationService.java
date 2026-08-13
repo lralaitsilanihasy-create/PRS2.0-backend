@@ -57,6 +57,7 @@ public class ModePassationService {
         existing.setBaseLegale(dto.getBaseLegale());
         existing.setIdTypeDmc(dto.getIdTypeDmc());   // mapping mode → type de DMC
         existing.setDeclencheAgpm(dto.getDeclencheAgpm());   // marqueur « appel d'offres ouvert » → AGPM
+        existing.setIdModeModeleCapm(dto.getIdModeModeleCapm());   // modèle CAPM partagé (⚠️ règle ajoutée)
         existing.setCategorie(dto.getCategorie());   // catégorie NORMAL / DEROGATOIRE (⚠️ règle ajoutée)
         return ModePassationMapper.toDto(repository.save(existing));
     }

@@ -24,6 +24,7 @@ public final class ModePassationMapper {
         dto.setBaseLegale(entity.getBaseLegale());
         dto.setIdTypeDmc(entity.getIdTypeDmc());
         dto.setDeclencheAgpm(entity.getDeclencheAgpm());
+        dto.setIdModeModeleCapm(entity.getIdModeModeleCapm());
         dto.setCategorie(entity.getCategorie());
         return dto;
     }
@@ -41,6 +42,7 @@ public final class ModePassationMapper {
         entity.setBaseLegale(dto.getBaseLegale());
         entity.setIdTypeDmc(dto.getIdTypeDmc());
         entity.setDeclencheAgpm(dto.getDeclencheAgpm());
+        entity.setIdModeModeleCapm(dto.getIdModeModeleCapm());
         entity.setCategorie(dto.getCategorie());
         return entity;
     }

@@ -38,6 +38,9 @@ public class ModePassationDto {
      */
     private Boolean declencheAgpm;
 
+    /** Mode dont ce mode réutilise le modèle CAPM (null = aucun partage) — administrable. */
+    private Integer idModeModeleCapm;
+
     /**
      * Catégorie du mode : {@code NORMAL} (droit commun) ou {@code DEROGATOIRE} ; {@code null} = non
      * classé. Déclaratif (aucune règle dérivée pour l'instant), administrable ; valeur hors enum → 400

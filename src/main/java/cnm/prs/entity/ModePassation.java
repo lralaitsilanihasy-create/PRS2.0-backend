@@ -66,6 +66,15 @@ public class ModePassation {
     @Column(name = "CATEGORIE", length = 20)
     private CategorieModePassation categorie;
 
+    /**
+     * ⚠️ Règle ajoutée — <strong>modèle CAPM partagé</strong> : mode dont ce mode réutilise le modèle
+     * détaillé de processus CAPM (ex. « Consultation des prix ouverte » et « Appel à manifestation
+     * d'intérêt » → modèle « Appel d'offres ouvert »). {@code null} = pas de partage (ses propres
+     * processus spécifiques, sinon les communs). Administrable (écran admin des modes).
+     */
+    @Column(name = "ID_MODE_MODELE_CAPM")
+    private Integer idModeModeleCapm;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ID_TYPE_DMC", insertable = false, updatable = false)
     private TypeDmc typeDmc;
