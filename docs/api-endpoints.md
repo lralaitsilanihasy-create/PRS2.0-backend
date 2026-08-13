@@ -3442,8 +3442,39 @@ GET /api/rapports/dossiers/excel                   (Chef de commission : forcé 
 
 ---
 
+## Contrôle de complétude des pièces au dépôt (spec recevabilité 2026-08-02)
+**Ressource** `/api/verification-pieces-depot` (table `t_verification_piece_depot`, **append-only** —
+chaque décision est une nouvelle ligne, l'état courant d'une pièce attendue = sa DERNIÈRE décision) :
+AVANT tout enregistrement de la réception, le **SECRÉTAIRE** vérifie **pièce par pièce** la liste de
+référence du type (référentiel `type-piece-jointes` : libellé + obligatoire/facultatif, paramétrable en
+admin) confrontée aux pièces déposées. Objet **distinct de la lettre de renvoi** (recevabilité formelle
+au dépôt, **aucun archivage** — simple événement tracé).
+
+| Méthode | URL | Corps | Réponse | Statuts | Rôle |
+|---|---|---|---|---|---|
+| GET | /api/verification-pieces-depot?dossier= | — | `VerificationPieceDepotDto[]` (historique ASC) | 200 | Authentifié |
+| POST | /api/verification-pieces-depot | `{ idDossier, idTypePiece, idPiece?, decision, observation? }` | `VerificationPieceDepotDto` | 201, 400, 403, 404, 409 | **SECRETAIRE** |
+
+> `decision` ∈ `CONFORME` / `NON_CONFORME` / `MANQUANTE` ; dossier requis `SOUMIS` ou
+> `EN_ATTENTE_COMPLEMENTS_DEPOT` (409 sinon). Auteur (`imSecretaire`) et horodatage posés serveur (JWT) —
+> traçabilité §6 : pièce, décision, observation, auteur, horodatage, historisés à chaque passage.
+
+> ⚠️ **Signalement PRMP** : `POST /api/dossiers/{id}/signaler-pieces-manquantes` (**SECRETAIRE**, dossier
+> `SOUMIS`, ≥ 1 défaut sinon 409) → notification `PIECES_MANQUANTES_DEPOT` à la PRMP (liste des pièces en
+> défaut + observations), dossier → **`EN_ATTENTE_COMPLEMENTS_DEPOT`** (non enregistrable), événement
+> `t_audit_log`. La PRMP dépose ses pièces (upload pièce initiale autorisé à ce statut) puis
+> `POST /api/dossiers/{id}/transmettre-complements-depot` (**PRMP propriétaire**) → retour `SOUMIS` +
+> notification `COMPLEMENTS_DEPOT_TRANSMIS` aux Secrétaires de la localité. À la reprise, les décisions
+> `CONFORME` restent acquises (état courant par type) : seules les pièces en défaut sont à re-vérifier.
+
 ## Réceptions
 **Ressource** `/api/receptions` — POST/PUT : profil `SECRETAIRE` (titulaire ou délégué) ; DELETE : `ADMINISTRATEUR`. Écriture limitée à sa localité (dossier hors localité → 403, sauf Président). Lecture filtrée par localité.
+
+> ⚠️ **Garde de complétude (spec recevabilité 2026-08-02).** `POST /api/receptions` (réception initiale)
+> est **refusé (409)** tant que toutes les pièces **obligatoires** du type n'ont pas une dernière décision
+> `CONFORME` dans `t_verification_pieces_depot` — le message liste les pièces en cause. Le front reflète la
+> règle (bouton « Enregistrer » désactivé + message explicite + progression x/y) ; la case « Dossier
+> complet » manuelle est remplacée par cet état dérivé.
 
 > **Garde de localité dès la 1ʳᵉ réception.** La localité du dossier est résolue par ordre :
 > `t_dossier.idLocalite` → PPM (`Ppm.idLocalite`) → réception existante. Si elle est connue, un
@@ -3467,14 +3498,20 @@ GET /api/rapports/dossiers/excel                   (Chef de commission : forcé 
 > fixe `DOSSIER`, `annee_exercice`) — table `t_sequence_reference`, sans compteur applicatif : **la numérotation
 > reste continue au sein d'une famille** (un PPM puis un PPM-AGPM se suivent : `00013`, `00014`), seul le libellé
 > du segment change ;
-> `code_localite` = **`CNM`** si réception centrale (utilisateur transversal, sans localité, ex. Président),
-> sinon **`CRM-<localité>`** ; `annee_exercice` = exercice du PPM, sinon année courante.
+> `code_localite` = ⚠️ **règle CORRIGÉE (2026-08-04)** — dépend de la **localité DU DOSSIER**, jamais de
+> celle de l'agent qui enregistre : dossier de la localité **centrale** (`Localite.ID_CENTRALE` = `ANT`)
+> → **`CNM`** (ex. `00023/PPM/CNM/2026`) ; dossier **régional** → **`CRM-<localité>`** (ex.
+> `00023/PPM/CRM-TMS/2026`). *(Auparavant le test portait sur la localité de l'utilisateur courant : un
+> Secrétaire d'Antananarivo produisait `CRM-ANT` alors qu'un Président — sans localité — aurait produit
+> `CNM` pour le même dossier.)* `annee_exercice` = exercice du PPM, sinon année courante.
 > La référence est **persistée** sur le dossier (`REFE_DOSSIER`, vide depuis la soumission)
 > **et sur la réception elle-même** (`t_reception.REFERENCE`) comme **snapshot immuable** : `GET /api/receptions`
 > la renvoie telle qu'à la réception, **même après** une mutation ultérieure de `refeDossier` (ex. restauration
 > de la référence PPM après un **retrait accepté**, cf. `POST /api/demande-retraits/{id}/accepter`). L'historique
 > des réceptions reste ainsi correct indépendamment du dossier.
-> Exemples : `00001/PPM/CNM/2026`, `00001/PPM/CRM-ANT/2026`, `00002/PPM/CRM-ANT/2026`, `00001/PPM/CRM-TMS/2026`.
+> Exemples : `00001/PPM/CNM/2026` et `00002/PPM-AGPM/CNM/2026` (dossiers centraux), `00003/PPM/CRM-TMS/2026`
+> (dossier régional). La référence du **PV** et celle de la **lettre de renvoi** en dérivent, donc portent
+> le même segment (`00001/PPM/CNM/PV/2026`, `00001/PPM/CNM/LR/2026`).
 > *(Dossier sans `type_dossier` → `reference` non générée, la réception reste valide.)*
 >
 > **PK technique auto (⚠️ règle ajoutée).** Le secrétaire ne saisit plus de « N° de réception » : `idReception`

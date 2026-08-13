@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import cnm.prs.dto.ReceptionDto;
 import cnm.prs.entity.Controleur;
 import cnm.prs.entity.Dossier;
+import cnm.prs.entity.Localite;
 import cnm.prs.entity.Ppm;
 import cnm.prs.entity.Reception;
 import cnm.prs.enums.StatutDossier;
@@ -37,11 +38,12 @@ public class ReceptionService {
     private final ControleurDirectory controleurDirectory;
     private final NotificationService notificationService;
     private final ReferenceService referenceService;
+    private final VerificationPieceDepotService verificationPieceDepotService;
 
     public ReceptionService(ReceptionRepository repository, DossierRepository dossierRepository,
             PpmRepository ppmRepository, ControleurRepository controleurRepository,
             ControleurDirectory controleurDirectory, NotificationService notificationService,
-            ReferenceService referenceService) {
+            ReferenceService referenceService, VerificationPieceDepotService verificationPieceDepotService) {
         this.repository = repository;
         this.dossierRepository = dossierRepository;
         this.ppmRepository = ppmRepository;
@@ -49,6 +51,7 @@ public class ReceptionService {
         this.controleurDirectory = controleurDirectory;
         this.notificationService = notificationService;
         this.referenceService = referenceService;
+        this.verificationPieceDepotService = verificationPieceDepotService;
     }
 
     @Transactional(readOnly = true)
@@ -131,6 +134,7 @@ public class ReceptionService {
         exigerDossierSoumis(dto.getIdDossier());
         exigerLocaliteDossier(dto.getIdDossier());
         validatePassage(dto);
+        exigerControleCompletude(dto);
         Reception entity = ReceptionMapper.toEntity(dto);
         entity.setIdReception(repository.nextIdReception().intValue());   // PK serveur (sequence), id client ignore (Voie B)
         Reception saved = repository.save(entity);
@@ -148,8 +152,14 @@ public class ReceptionService {
      * central est le <strong>sous-type</strong> du dossier ({@code ID_SOUS_TYPE} : PPM, PPM-AGPM, DAO,
      * DAOR…), avec repli sur la <strong>famille</strong> ({@code ID_TYPE_DOSSIER}) si le sous-type est
      * absent (dossier historique non repris) ; la <strong>numérotation reste indexée sur la famille</strong>
-     * (continuité inchangée). Segment localité : réception <strong>centrale</strong> (utilisateur
-     * transversal, sans localité — ex. Président) -> "CNM" ; sinon "CRM-" + localité du dossier.
+     * (continuité inchangée).
+     *
+     * <p>⚠️ Règle CORRIGÉE (2026-08-04, demande user) — le segment localité dépend de la
+     * <strong>localité DU DOSSIER</strong>, jamais de celle de l'agent qui enregistre : dossier de la
+     * localité <strong>centrale</strong> ({@link Localite#ID_CENTRALE}) → {@code CNM} (ex.
+     * {@code 00023/PPM/CNM/2026}) ; dossier régional → {@code CRM-<localité>} (ex.
+     * {@code 00023/PPM/CRM-TMS/2026}). Auparavant le test portait sur la localité de l'utilisateur
+     * courant : un Secrétaire d'Antananarivo (donc « avec localité ») produisait « CRM-ANT ».</p>
      */
     private String genererReference(Reception reception) {
         Dossier dossier = dossierRepository.findById(reception.getIdDossier()).orElse(null);
@@ -167,7 +177,7 @@ public class ReceptionService {
             segment = famille;
         }
         String localite = localiteDuDossier(reception.getIdDossier());
-        boolean estCentrale = Visibilite.localite().filter(l -> !l.isBlank()).isEmpty();
+        boolean estCentrale = Localite.estCentrale(localite);
         int annee = exerciceDuDossier(reception.getIdDossier());
         String reference = referenceService.generer(segment, famille, localite, estCentrale, annee);
         dossier.setRefeDossier(reference);
@@ -302,6 +312,24 @@ public class ReceptionService {
 
     /** Valeur de TYPE_PASSAGE pour la réception initiale (§3.4). */
     private static final String TYPE_PASSAGE_INITIAL = "INITIAL";
+
+    /**
+     * ⚠️ Spec recevabilité au dépôt (2026-08-02) — l'ENREGISTREMENT de la réception initiale est BLOQUÉ
+     * tant que toutes les pièces OBLIGATOIRES du type n'ont pas été vérifiées et déclarées CONFORMES par
+     * le Secrétaire ({@code t_verification_piece_depot}) → 409 listant les pièces en cause.
+     */
+    private void exigerControleCompletude(ReceptionDto dto) {
+        boolean initiale = dto.getNumPassage() == null || dto.getNumPassage() == 1
+                || TYPE_PASSAGE_INITIAL.equalsIgnoreCase(dto.getTypePassage());
+        if (!initiale) {
+            return;
+        }
+        List<String> bloquantes = verificationPieceDepotService.obligatoiresNonConformes(dto.getIdDossier());
+        if (!bloquantes.isEmpty()) {
+            throw new BusinessRuleException("Enregistrement impossible — pièces obligatoires non vérifiées "
+                    + "conformes : " + String.join(" ; ", bloquantes) + ".");
+        }
+    }
 
     /**
      * Cohérence NUM_PASSAGE / TYPE_PASSAGE (§3.4) : la réception initiale porte
