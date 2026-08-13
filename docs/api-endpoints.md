@@ -52,6 +52,9 @@ Pour les ressources du circuit (`dossiers`, `receptions`, `dispatchs`, `examens`
   `regle-anomalies`, `regle-passations`, `seuils`, `situations`, `sous-type-dossiers`, `type-dossiers`, `type-dmc`.
   ⚠️ **Exception (2026-07-26)** : `POST /api/entite-contracts` est ouvert à la **PRMP** (en plus de l'Admin) —
   création d'entité à l'import PPM + auto-rattachement en attente ; PUT/DELETE restent Administrateur.
+  ⚠️ **Exception (2026-07-29)** : `POST /api/ministeres` et `POST /api/organigrammes` sont ouverts à la
+  **PRMP** (en plus de l'Admin) — ministère d'appartenance absent du référentiel lors de l'enregistrement
+  d'une nouvelle entité (le front crée le ministère puis son organigramme actif) ; PUT/DELETE restent Administrateur.
 - **Gestion des comptes / hiérarchie** (écriture `ADMINISTRATEUR`, lecture ouverte) :
   `controleurs`, `prmps`, `organigrammes`.
 - **Réservé `ADMINISTRATEUR`** (lecture comprise) : `audit-logs`, `session-utilisateurs`, `comptes-auth`.
