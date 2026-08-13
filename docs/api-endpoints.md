@@ -768,6 +768,39 @@ si aucun résultat (pas de 404). `{nom}` est un fragment (URL-encoder si espaces
 
 ---
 
+## Examen des pièces jointes
+**Ressource** `/api/examen-pieces` (table `t_examen_piece`, ⚠️ règle ajoutée) — **Lecture** : authentifié ;
+POST/PUT : profil **`MEMBRE`** (titulaire ou délégué) ; DELETE : `ADMINISTRATEUR`.
+
+Résultat d'examen d'une **pièce jointe** du dossier, une par une (miroir des `examen-details` pour les
+lignes de marché) : `conforme` = RAS, sinon `observation` (texte libre) porte le constat. **Unicité** du
+couple (`idExamen`, `idPiece`) → **409** en cas de doublon (corriger via `PUT`). Purgés avec le circuit
+(retrait accepté / annulation de dispatch).
+
+**Champs `ExamenPieceDto`**
+
+| Champ (JSON) | Type | Obligatoire | Contraintes |
+|---|---|---|---|
+| idExamenPiece | number | Oui (PK, au POST) | clé primaire (assignée par le client) |
+| idExamen | number | Oui | @NotNull — FK `t_examen` |
+| idPiece | number | Oui | @NotNull — FK `t_piece_jointe_dossier` |
+| conforme | boolean | Oui | @NotNull (true = RAS) |
+| observation | string | Non | max 500 — constat si non conforme |
+
+**Endpoints**
+
+| Méthode | URL | Corps | Réponse | Statuts | Rôle |
+|---|---|---|---|---|---|
+| GET | /api/examen-pieces[?examen={idExamen}] | — | `ExamenPieceDto[]` | 200 | Authentifié |
+| GET | /api/examen-pieces/{id} | — | `ExamenPieceDto` | 200, 404 | Authentifié |
+| POST | /api/examen-pieces | `ExamenPieceDto` | `ExamenPieceDto` | 201, 400, 403, 409 | MEMBRE (titulaire/délégué) |
+| PUT | /api/examen-pieces/{id} | `ExamenPieceDto` | `ExamenPieceDto` | 200, 400, 404, 409 | MEMBRE (titulaire/délégué) |
+| DELETE | /api/examen-pieces/{id} | — | — | 204, 403, 404 | ADMINISTRATEUR |
+
+`{id}` = idExamenPiece (number).
+
+---
+
 ## Observations de contrôle
 **Ressource** `/api/observation-controles` (table `t_observation_controle`) — **Lecture** : authentifié ;
 **écriture** (POST/PUT/DELETE) : profil **`MEMBRE`** (titulaire ou délégué).
@@ -1722,7 +1755,10 @@ et interprété comme un code de **sous-type** (les anciens payloads `{"idTypeDo
 > formatée et **en toutes lettres** dans « L'an … » ; bloc « Étaient présents » filtré sur les signataires
 > effectifs ; ANNEXE = une ligne par observation des points non conformes, **préfixée par la ligne de marché**
 concernée — « [Marché « désignation »] point » pour un résultat par ligne, « [Dossier] point » pour un point
-inter-lignes ou historique (⚠️ 2026-07-21, sans modification du gabarit Word)) puis converti via Microsoft Word
+inter-lignes ou historique (⚠️ 2026-07-21, sans modification du gabarit Word) ; ⚠️ 2026-08-01 : les **pièces
+jointes non conformes** (`t_examen_piece`) sont ajoutées à la suite de l'ANNEXE — RÉFÉRENCES = **libellé de
+la pièce seul** (sans préfixe), OBSERVATIONS = texte libre de l'observation, les libellés « Au lieu de : /
+Lire : » de la ligne modèle étant retirés) puis converti via Microsoft Word
 > (documents4j) et **stocké sur le FSX** (`storage.pv-examen.path`, sous-répertoire `PV/`), chemin conservé dans
 > `t_pv_examen.CHEMIN_DOCUMENT`. Hors de ces conditions, le PV reste **sans document**. Le téléchargement
 > **régénère le document à la demande** si le chemin est absent ou le fichier introuvable (migration des PV
