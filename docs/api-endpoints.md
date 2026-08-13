@@ -198,10 +198,23 @@ quand ils surviennent (mapping centralisé dans `GlobalExceptionHandler`). Côt�
 | token | string | JWT à placer dans `Authorization: Bearer ...` |
 | login | string | login authentifié |
 | role | string | profil métier (ou `null` si non reconnu) |
-| typeActeur | string | `CONTROLEUR` ou `PRMP` |
-| ref | string | matricule contrôleur ou identifiant PRMP |
+| typeActeur | string | `CONTROLEUR`, `PRMP` ou `UGPM` |
+| ref | string | **périmètre** de l'acteur : matricule contrôleur, identifiant PRMP — et pour une **UGPM**, l'identifiant de sa **PRMP de tutelle** (⚠️ pas son propre matricule) |
+| nomAffichage | string | ⚠️ **ajouté** — « Nom Prénoms » de la personne connectée, résolu serveur (voir note) |
 | localite | string | localité de rattachement (`null` = toutes, cas Président) |
 | expiresIn | number | durée de validité du jeton (secondes) |
+
+> 📌 **`nomAffichage` (⚠️ champ ajouté).** Résolu côté serveur selon le type d'acteur —
+> contrôleur (tous rôles CNM, Administrateur compris) → `NOM_CONT` + `PRENOMS_CONT` ; PRMP → `NOM_PRMP` +
+> `PRENOMS_PRMP` ; UGPM → `NOM_UGPM` + `PRENOMS_UGPM`. Toujours renseigné : une fiche sans nom exploitable
+> retombe sur le **login**, jamais `null` ni chaîne vide. Le front peut donc afficher
+> « {nomAffichage} · {role} » **sans aucun appel de référentiel** à l'ouverture de session (avant :
+> un `GET /prmps/{ref}` ou `/controleurs/{ref}` par connexion).
+>
+> C'est la **seule** voie pour une **UGPM** : son `ref` désigne sa PRMP de tutelle (c'est ce qui fait
+> fonctionner son périmètre, et cela ne change pas), et `/api/ugpms/**` reste réservé à l'`ADMINISTRATEUR`
+> — elle ne peut pas lire sa propre fiche. La réponse ne porte pas son matricule ; si le front en a besoin
+> un jour, il faudra l'ajouter explicitement.
 
 **Champs `RegisterPrmpRequest`** (corps de `/register/prmp` — **variante JSON historique**, sans entités ni pièces ; conservée le temps de la bascule du frontend puis retirée)
 
@@ -273,7 +286,16 @@ quand ils surviennent (mapping centralisé dans `GlobalExceptionHandler`). Côt�
 ```json
 {
   "token": "eyJhbGciOiJIUzI1NiJ9...", "login": "CTRMEM", "role": "MEMBRE",
-  "typeActeur": "CONTROLEUR", "ref": "CTRMEM", "localite": "ANT", "expiresIn": 28800
+  "typeActeur": "CONTROLEUR", "ref": "CTRMEM", "nomAffichage": "Rakoto Jean Claude",
+  "localite": "ANT", "expiresIn": 28800
+}
+```
+**Exemple — connexion d'une UGPM** (`ref` = tutelle, `nomAffichage` = l'UGPM elle-même)
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiJ9...", "login": "UGPM002", "role": "UGPM",
+  "typeActeur": "UGPM", "ref": "PRMP001", "nomAffichage": "Rakoto Jean Claude",
+  "expiresIn": 28800
 }
 ```
 **Exemple — inscription PRMP (requête / réponse)**

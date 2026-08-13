@@ -98,11 +98,13 @@ public class AuthService {
         String role;
         String localite;
         String ref = compte.getRefActeur();
+        String nomAffichage;
         if (type == TypeActeur.CONTROLEUR) {
             Controleur controleur = controleurRepository.findById(compte.getRefActeur())
                     .orElseThrow(() -> new BadCredentialsException("Contrôleur introuvable pour ce compte."));
             role = resoudreRoleControleur(controleur);
             localite = controleur.getIdLocalite(); // NULL pour le Président → toutes localités (§1.1)
+            nomAffichage = nomAffichage(controleur.getNomCont(), controleur.getPrenomsCont(), compte.getLogin());
         } else if (type == TypeActeur.UGPM) {
             // UGPM : profil UGPM, mais périmètre = la PRMP de tutelle (le claim « ref » porte l'ID_PRMP de
             // tutelle → le scoping/idPrmp fonctionne comme pour la PRMP). Le login identifie l'UGPM (cree_par).
@@ -111,18 +113,32 @@ public class AuthService {
             role = ProfilUtilisateur.UGPM.name();
             ref = ugpm.getIdPrmpTutelle();
             localite = null;
+            // ⚠️ Le nom vient d'ici et de nulle part ailleurs : « ref » pointe désormais sur la tutelle, et
+            // /api/ugpms/** est réservé à l'Administrateur — une UGPM n'a aucun moyen de lire sa fiche.
+            nomAffichage = nomAffichage(ugpm.getNomUgpm(), ugpm.getPrenomsUgpm(), compte.getLogin());
         } else {
-            prmpRepository.findById(compte.getRefActeur())
+            Prmp prmp = prmpRepository.findById(compte.getRefActeur())
                     .orElseThrow(() -> new BadCredentialsException("PRMP introuvable pour ce compte."));
             role = ProfilUtilisateur.PRMP.name();
             // La PRMP n'a pas de localité propre : son périmètre est la propriété (ID_PRMP), pas la
             // localité (§1, §3.1). Le jeton ne porte donc pas de claim « localite » pour une PRMP.
             localite = null;
+            nomAffichage = nomAffichage(prmp.getNomPrmp(), prmp.getPrenomsPrmp(), compte.getLogin());
         }
 
         String token = tokenService.generer(compte.getLogin(), role, type, ref, localite);
         return new LoginResponse(token, compte.getLogin(), role, type.name(),
-                ref, localite, tokenService.getExpirationSeconds());
+                ref, nomAffichage, localite, tokenService.getExpirationSeconds());
+    }
+
+    /**
+     * « Nom Prénoms » à afficher pour la personne connectée, quel que soit le type d'acteur.
+     * Une fiche sans nom exploitable retombe sur le {@code repli} (le login) : le front reçoit toujours
+     * quelque chose d'affichable, jamais {@code null} ni chaîne vide.
+     */
+    private static String nomAffichage(String nom, String prenoms, String repli) {
+        String complet = ((nom == null ? "" : nom.trim()) + " " + (prenoms == null ? "" : prenoms.trim())).trim();
+        return complet.isEmpty() ? repli : complet;
     }
 
     /**

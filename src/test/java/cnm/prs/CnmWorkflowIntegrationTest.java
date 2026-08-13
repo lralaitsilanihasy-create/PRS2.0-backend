@@ -60,6 +60,7 @@ import cnm.prs.entity.ModePassation;
 import cnm.prs.entity.Nature;
 import cnm.prs.entity.Ppm;
 import cnm.prs.entity.Prmp;
+import cnm.prs.entity.Ugpm;
 import cnm.prs.entity.Profile;
 import cnm.prs.entity.Reception;
 import cnm.prs.entity.EntiteContract;
@@ -430,6 +431,60 @@ class CnmWorkflowIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.role").value("PRMP"))
                 .andExpect(jsonPath("$.localite").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("Login : nomAffichage « Nom Prénoms » résolu serveur pour les 3 types d'acteur — dont l'UGPM, "
+            + "dont le « ref » désigne la tutelle et la fiche est fermée en lecture")
+    void login_nomAffichage_tousTypesActeur() throws Exception {
+        // Contrôleur (vaut pour tous les rôles CNM, Administrateur compris).
+        mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"login\":\"CTRCC1\",\"motDePasse\":\"pw\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nomAffichage").value("NomCTRCC1 Prenoms"));
+
+        // PRMP.
+        mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"login\":\"PRMP001\",\"motDePasse\":\"pw\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nomAffichage").value("Nom Prenoms"));
+
+        // UGPM : « ref » porte la PRMP de tutelle (périmètre), le nom vient de nomAffichage.
+        Ugpm u = new Ugpm();
+        u.setIdUgpm("UGPM002");
+        u.setLibelle("UGPM du ministère");
+        u.setIdPrmpTutelle("PRMP001");
+        u.setNomUgpm("Rakoto");
+        u.setPrenomsUgpm("Jean Claude");
+        u.setCin("202022223333");
+        u.setDateCin(LocalDate.of(2011, 6, 6));
+        u.setLieuCin("Antananarivo");
+        u.setEmailUgpm("ugpm002@min.mg");
+        u.setTelUgpm("0330000002");
+        ugpmRepository.save(u);
+        compteAuthRepository.save(new CompteAuth("UGPM002", passwordEncoder.encode("pw"), "UGPM", "UGPM002", true));
+
+        mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"login\":\"UGPM002\",\"motDePasse\":\"pw\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.role").value("UGPM"))
+                .andExpect(jsonPath("$.nomAffichage").value("Rakoto Jean Claude"))
+                .andExpect(jsonPath("$.ref").value("PRMP001"));   // périmètre = tutelle, inchangé
+    }
+
+    @Test
+    @DisplayName("Login : fiche sans nom → nomAffichage retombe sur le login (jamais vide côté front)")
+    void login_nomAffichage_repliSurLogin() throws Exception {
+        Prmp sansNom = prmp("PRMP950", "ANT");
+        sansNom.setNomPrmp("");
+        sansNom.setPrenomsPrmp("");
+        prmpRepository.save(sansNom);
+        compteAuthRepository.save(new CompteAuth("prmp.anon", passwordEncoder.encode("pw"), "PRMP", "PRMP950", true));
+
+        mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"login\":\"prmp.anon\",\"motDePasse\":\"pw\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nomAffichage").value("prmp.anon"));
     }
 
     @Test
