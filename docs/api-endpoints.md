@@ -1669,7 +1669,7 @@ et interprété comme un code de **sous-type** (les anciens payloads `{"idTypeDo
 >
 > **Autorisation (création) → 403** : un **Membre titulaire** n'examine que les dossiers **qui lui sont attribués** (`Dispatch.imCtrlMembre`) ; un CC/Président **par délégation** (§3.5) reste autorisé.
 >
-> **Transition** : à la création de l'examen, le dossier passe **`DISPATCHE` → `EXAMINE`** (même transaction) — il **quitte « à examiner »**.
+> **Transition (⚠️ règle déplacée 2026-08-01)** : le dossier ne passe **`DISPATCHE` → `EXAMINE`** qu'à la **SOUMISSION** de l'examen (`POST /{id}/soumettre`, même transaction que le projet de PV) — il quitte alors « à examiner ». La **création** d'un examen est désormais un **brouillon de progression** (le front sauvegarde les résultats à chaque étape ; le dossier reste `DISPATCHE`, reprise possible). Le verrou d'écriture des examens/détails accepte donc `DISPATCHE` (brouillon) **ou** `EXAMINE` — refus 409 dès `PV_SIGNE`, inchangé.
 >
 > **Verrou (édition) → 409** : `PUT /api/examens/{id}` **et** les écritures sur `/api/examen-details` (création/MAJ/suppression) sont **refusées dès `PV_SIGNE`** : l'examen est modifiable tant que le dossier est `EXAMINE` (navette ouverte), **définitif** après signature du PV.
 
@@ -1696,13 +1696,15 @@ et interprété comme un code de **sous-type** (les anciens payloads `{"idTypeDo
 
 `{id}` = idExamen (number).
 
-> ⚠️ **Soumission de l'examen (règle ajoutée).** `POST /api/examens/{id}/soumettre` produit **toujours un
-> Projet de PV** (`PvExamenService`, `idPv` alloué serveur). Corps `ExamenSoumissionRequest`
-> `{ idAvis, idSecretaireSeance }` : `idAvis` = avis du PV (FAV/FAVR/DEF/NSP), obligatoire ;
-> `idSecretaireSeance` = matricule du **Vérificateur désigné Secrétaire de séance**, **obligatoire** et qui
-> doit être un VERIFICATEUR de la **localité du dossier** (circuit/réception). Absent ou invalide → **400**
-> `{ erreurs:[{ champ:"idSecretaireSeance", message }] }`. *(La lettre de renvoi est une action séparée
-> pendant l'examen — ressource `/api/lettre-renvois` ; `ExamenDto` n'a pas de champ `typeResultat`.)*
+> ⚠️ **Soumission de l'examen (règle MODIFIÉE 2026-08-01).** `POST /api/examens/{id}/soumettre` produit
+> **toujours un Projet de PV** (`PvExamenService`, `idPv` alloué serveur). Corps `ExamenSoumissionRequest`
+> `{ idAvis?, idSecretaireSeance? }` : les deux champs sont désormais **OPTIONNELS** — le Membre ne renseigne
+> que la **synthèse des observations** (PUT du PV) ; l'avis global et le Secrétaire de séance sont posés à la
+> **clôture de la navette** (`POST /api/pv-examens/{id}/accepter`, Président/CC — voir section PV). S'ils sont
+> fournis, `idSecretaireSeance` doit rester un VERIFICATEUR de la **localité du dossier** (sinon **400**
+> `{ erreurs:[{ champ:"idSecretaireSeance", message }] }`). Le projet de PV = **résultats des points de
+> contrôle + synthèse du Membre** (avis `null` à ce stade). *(La lettre de renvoi appartient aussi à la
+> clôture de navette — ressource `/api/lettre-renvois`, Président/CC.)*
 >
 > ⚠️ **Complétude de l'examen à la soumission (règle ajoutée 2026-07-21).** Avant de produire le Projet de PV,
 > le serveur vérifie que **toutes les lignes ont été traitées** : chaque point de **portée LIGNE** de la
@@ -1730,9 +1732,9 @@ inter-lignes ou historique (⚠️ 2026-07-21, sans modification du gabarit Word
 ```json
 { "idExamen": 201, "idDispatch": 88, "imCtrlMembre": "MEMANT1", "dateExamen": "2026-05-08" }
 ```
-**Exemple — corps `…/soumettre`**
+**Exemple — corps `…/soumettre`** *(⚠️ 2026-08-01 : corps vide accepté — avis/secrétaire posés à la clôture de navette)*
 ```json
-{ "idAvis": "FAVR", "idSecretaireSeance": "VERANT1" }
+{}
 ```
 
 ---
@@ -3199,7 +3201,7 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 |---|---|---|---|
 | idPv | number | Oui (PK, au POST) | clé primaire |
 | idExamen | number | Oui | @NotNull |
-| idAvis | string | Oui | @NotBlank, max 10 |
+| idAvis | string | Non (⚠️ 2026-08-01) | max 10 — **nullable** : `null` jusqu'à la **clôture de navette** (`…/accepter`, Président/CC) ; requis pour `signer` (409 sinon) |
 | imCtrlPresident | string | Non | max 7 |
 | imCtrlCc | string | Non | max 7 |
 | imCtrlMembre | string | Oui (validation) | @NotBlank, max 7 — **valeur ignorée** : dérivée de l'attribution (`Examen → Dispatch.imCtrlMembre`) ; examen sans attributaire → 409 |
@@ -3214,7 +3216,7 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 | datePv | string (date) | Non | |
 | referencePv | string | Non | max 100 — référence libre (saisie ; reprise dans les notifications) |
 | refePv | string | — (réponse) | max 120 — **référence officielle dérivée du dossier**, générée serveur, **unique** (lecture seule) |
-| idSecretaireSeance | string | — (posé à la soumission) | max 7 — Vérificateur désigné **Secrétaire de séance** (validé à `…/examens/{id}/soumettre`) |
+| idSecretaireSeance | string | — (⚠️ posé à la **clôture de navette**, 2026-08-01) | max 7 — Vérificateur désigné **Secrétaire de séance** (validé à `…/pv-examens/{id}/accepter` ; encore accepté à `…/examens/{id}/soumettre` si fourni) |
 | nomSecretaireSeance | string | — (réponse) | nom complet du secrétaire de séance (« prénoms nom »), peuplé serveur — lecture seule |
 | documentDisponible | boolean | — (réponse) | **`true`** si un PDF officiel est réellement disponible : `CHEMIN_DOCUMENT` non nul **ou** PV **éligible** (avis `FAVR` + localité centrale `ANT` + PPM avec ≥ 1 ligne de marché, **quel que soit le mode de passation**, donc régénérable à la demande) ; **`false`** sinon. Lecture seule, peuplé serveur → le front masque « Télécharger le PDF » et évite un 404 |
 
@@ -3232,6 +3234,8 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 | imActeur | string | Oui | @NotBlank, max 7. **Non utilisé pour l'identité** : `signer` enregistre l'utilisateur authentifié (JWT), pas ce champ |
 | commentaire | string | Conditionnel | obligatoire pour `retourner` (sinon 409) |
 | role | string | Conditionnel | max 20 — obligatoire pour `signer` : `MEMBRE` / `PRESIDENT` / `CC` |
+| idAvis | string | Conditionnel (⚠️ 2026-08-01) | max 10 — **obligatoire pour `accepter`** (clôture de navette : pose l'avis global du PV, 400 sinon) ; ignoré ailleurs |
+| idSecretaireSeance | string | Conditionnel (⚠️ 2026-08-01) | max 7 — **obligatoire pour `accepter`** : Vérificateur de la **localité du dossier** désigné Secrétaire de séance (400 sinon) ; ignoré ailleurs |
 
 **Endpoints**
 
@@ -3249,7 +3253,14 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 | POST | /api/pv-examens/{id}/accepter | `PvActionRequest` | `PvExamenDto` | 200, 403, 404, 409 | CC / PRESIDENT |
 | POST | /api/pv-examens/{id}/signer | `PvActionRequest` | `PvExamenDto` | 200, 400, 403, 404, 409 | MEMBRE / CC / PRESIDENT |
 
-`{id}` = idPv (number). `soumettre` : BROUILLON|EN_RECTIFICATION→PROJET_SOUMIS ; `retourner` : PROJET_SOUMIS→EN_RECTIFICATION (`commentaire` obligatoire) ; `accepter` : PROJET_SOUMIS→PROJET_ACCEPTE ; `signer` : passe à SIGNE quand le Membre **et** (le Président **ou** le CC) ont signé.
+`{id}` = idPv (number). `soumettre` : BROUILLON|EN_RECTIFICATION→PROJET_SOUMIS ; `retourner` : PROJET_SOUMIS→EN_RECTIFICATION (`commentaire` obligatoire) ; `accepter` : PROJET_SOUMIS→PROJET_ACCEPTE — ⚠️ **clôture de la navette (2026-08-01)** : `idAvis` + `idSecretaireSeance` **obligatoires** (400 sinon ; le serveur pose l'avis global et le secrétaire sur le PV) ; `signer` : passe à SIGNE quand le Membre **et** (le Président **ou** le CC) ont signé — **409 si l'avis global n'est pas posé** (navette non close).
+
+> ⚠️ **Cohérence avis ↔ observations (règle ajoutée 2026-08-01).** À `accepter`, le serveur vérifie la cohérence
+> de l'avis avec les **observations de l'examen** (points de contrôle non conformes **+ pièces jointes non
+> conformes**, `t_examen_detail` + `t_examen_piece`) : **≥ 1 observation → `FAV` (« Favorable » sans réserve)
+> refusé** (400 — choisir `FAVR` ou `DEF`) ; **0 observation → `FAVR` (« Favorable avec réserves ») refusé**
+> (400 — choisir `FAV`). `DEF`/`NSP` restent libres (appréciation souveraine). Le front (panneau de clôture)
+> pré-sélectionne l'avis suggéré et affiche le nombre d'observations.
 
 > ⚠️ **Garde-fou de cohérence dossier↔PV (règle ajoutée).** `DELETE /api/pv-examens/{id}` réaligne le dossier : si, après suppression, le dossier n'a **plus aucun PV `SIGNE`** et se trouve encore **`EN_VERIFICATION`**, il est ramené à **`EXAMINE`** (état « examiné, en attente de PV »). Un dossier ne peut donc plus rester bloqué `EN_VERIFICATION` (« PV signé introuvable » côté vérification) alors que son PV signé n'existe plus. Les autres statuts sont laissés inchangés.
 

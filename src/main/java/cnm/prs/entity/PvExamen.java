@@ -33,7 +33,8 @@ public class PvExamen {
     @Column(name = "ID_EXAMEN", nullable = false)
     private Integer idExamen;
 
-    @Column(name = "ID_AVIS", nullable = false, length = 10)
+    /** ⚠️ Règle ajoutée (2026-08-01) — nullable : l'avis n'est posé qu'à la clôture de navette (accepter). */
+    @Column(name = "ID_AVIS", length = 10)
     private String idAvis;
 
     @Column(name = "IM_CTRL_PRESIDENT", length = 7)
@@ -86,6 +87,14 @@ public class PvExamen {
     /** Chemin du PDF du Projet de PV sur le FSX (renseigné si le PV est éligible à la génération). */
     @Column(name = "CHEMIN_DOCUMENT", length = 500)
     private String cheminDocument;
+
+    /** ⚠️ Spec navette (2026-08-01) — date d'ARCHIVAGE du PV par l'Assistant contrôleur (l'archivage clôt le dossier). */
+    @Column(name = "DATE_ARCHIVAGE")
+    private LocalDate dateArchivage;
+
+    /** Assistant contrôleur archiveur (matricule, identité JWT). */
+    @Column(name = "IM_ARCHIVEUR", length = 7)
+    private String imArchiveur;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ID_AVIS", insertable = false, updatable = false)

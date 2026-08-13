@@ -58,11 +58,59 @@ public enum StatutDossier {
      */
     EN_ATTENTE_DECISION_PRMP,
 
+    /**
+     * ⚠️ Règle ajoutée (2026-08-01, spec navette) — observations de vérification LEVÉES (cas 2, fin de
+     * boucle) : le vérificateur doit encore transmettre l'approbation (+ levée) à SIGMP.
+     */
+    OBSERVATIONS_LEVEES,
+
+    /**
+     * ⚠️ Règle ajoutée (2026-08-01, spec navette) — le sens de la décision de la Commission a été
+     * transmis à SIGMP par le vérificateur ({@code t_transmission_sigmp}) ; le PV est chez
+     * l'Assistant contrôleur pour archivage (l'archivage clôt le dossier).
+     */
+    DECISION_TRANSMISE_SIGMP,
+
+    /**
+     * ⚠️ Règle ajoutée (2026-08-01, spec navette, cas 3) — lettre de renvoi SIGNÉE : l'examen est
+     * suspendu, le dossier attend les pièces / informations complémentaires de la PRMP
+     * (non modifiable par les Membres ; reprise via {@code …/transmettre-complements}).
+     */
+    EN_ATTENTE_PIECES,
+
+    /**
+     * ⚠️ Règle ajoutée (2026-08-02, réexamen après lettre de renvoi) — pièces complémentaires TRANSMISES
+     * par la PRMP ({@code …/transmettre-complements}) : le dossier revient dans la file « à examiner »
+     * du Membre attributaire pour <strong>réexamen</strong> (examen rouvert, mêmes dispatch/examen/PV).
+     * La navette repart quand le Membre re-soumet le projet de PV (→ {@link #EXAMINE}).
+     */
+    A_REEXAMINER,
+
+    /**
+     * ⚠️ Règle ajoutée (2026-08-02, spec recevabilité au dépôt) — contrôle de complétude du SECRÉTAIRE :
+     * pièces manquantes / non conformes signalées à la PRMP AVANT enregistrement de la réception.
+     * Distinct de {@link #EN_ATTENTE_PIECES} (lettre de renvoi, après examen). Reprise via
+     * {@code …/transmettre-complements-depot} (action explicite PRMP → retour {@link #SOUMIS}).
+     */
+    EN_ATTENTE_COMPLEMENTS_DEPOT,
+
     /** §3.3 — retrait approuvé par le Chef de commission. */
     RETIRE,
 
     /** §2.8 / §3.6 — clôture automatique après levée des observations. */
-    CLOTURE;
+    CLOTURE,
+
+    /**
+     * ⚠️ Règle ajoutée (2026-08-05, mise à jour des PPM) — dossier <strong>remplacé par une version
+     * postérieure</strong> : il reste intégralement consultable (historique, PV, pièces) mais n'est plus
+     * le PPM en vigueur. <strong>Jamais supprimé.</strong>
+     *
+     * <p>Posé sur le PRÉDÉCESSEUR au moment où la nouvelle version est <strong>soumise</strong> — pas à la
+     * création de son brouillon : une mise à jour abandonnée ne doit pas neutraliser le dossier en vigueur.
+     * Le successeur le référence par {@code t_dossier.ID_DOSSIER_PARENT} ; la chaîne des versions se
+     * remonte de proche en proche.</p>
+     */
+    REMPLACE;
 
     /**
      * ⚠️ Règle ajoutée (§3.3) — statuts « <strong>avant PV signé</strong> » : un dossier de la PRMP y est

@@ -72,12 +72,21 @@ public class ExamenService {
      * (sinon 400 {@code erreurs:[{champ:idSecretaireSeance}]}). La lettre de renvoi est une action séparée.
      */
     public PvExamenDto soumettre(Integer idExamen, ExamenSoumissionRequest req) {
-        if (!repository.existsById(idExamen)) {
-            throw new ResourceNotFoundException("Examen introuvable : " + idExamen);
-        }
+        Examen examen = repository.findById(idExamen)
+                .orElseThrow(() -> new ResourceNotFoundException("Examen introuvable : " + idExamen));
         validerCompletude(idExamen);
-        String idSecretaire = validerSecretaireSeance(idExamen, req.idSecretaireSeance());
-        return pvExamenService.creerProjet(idExamen, req.idAvis(), idSecretaire);
+        // ⚠️ Règle déplacée (2026-08-01) — avis global et Secrétaire de séance ne sont PLUS exigés à la
+        // soumission (le Membre ne fournit que la synthèse) : ils sont posés à la CLÔTURE DE NAVETTE
+        // (« accepter » du projet de PV, Président/CC). S'ils sont fournis (compatibilité), on les valide.
+        String idSecretaire = req.idSecretaireSeance() == null || req.idSecretaireSeance().isBlank()
+                ? null
+                : validerSecretaireSeance(idExamen, req.idSecretaireSeance());
+        PvExamenDto pv = pvExamenService.creerProjet(idExamen, req.idAvis(), idSecretaire);
+        // ⚠️ Règle DÉPLACÉE (2026-08-01) — le dossier n'avance DISPATCHE → EXAMINE qu'à la SOUMISSION :
+        // la création d'un examen est désormais un BROUILLON de progression (le dossier reste « à
+        // examiner » et le Membre peut reprendre plus tard). Même transaction que le projet de PV.
+        avancerDossierVersExamine(examen.getIdDispatch());
+        return pv;
     }
 
     /**
@@ -100,7 +109,12 @@ public class ExamenService {
         if (grille.isEmpty()) {
             return;   // pas de grille pour ce (famille, sous-type) → rien à exiger
         }
-        List<Marche> marches = marcheRepository.findByIdDossier(idDossier);
+        // ⚠️ 2026-08-05 (versionnement des PPM) — les lignes SUPPRIMÉES d'une version sont conservées en
+        // base (restaurables, jamais effacées) mais ne font plus partie du plan : exiger leur évaluation
+        // rendrait l'examen impossible à terminer.
+        List<Marche> marches = marcheRepository.findByIdDossier(idDossier).stream()
+                .filter(m -> !m.getSupprimee())
+                .toList();
         Set<String> evalues = new HashSet<>();
         for (Object[] couple : examenDetailRepository.couplesEvalues(idExamen)) {
             evalues.add(cleCouple((Integer) couple[0], (Integer) couple[1]));
@@ -198,13 +212,14 @@ public class ExamenService {
         exigerDossierDispatche(dto.getIdDispatch());
         Examen entity = ExamenMapper.toEntity(dto);
         Examen saved = repository.save(entity);
-        // [Auto] Le dossier avance DISPATCHE → EXAMINE (il quitte « à examiner »), même transaction.
-        avancerDossierVersExamine(dto.getIdDispatch());
+        // ⚠️ Règle DÉPLACÉE (2026-08-01) — la création N'AVANCE PLUS le statut du dossier : l'examen
+        // créé est un BROUILLON de progression (sauvegarde à chaque étape côté front) ; le dossier ne
+        // passe DISPATCHE → EXAMINE qu'à la soumission ({@link #soumettre}).
         return ExamenMapper.toDto(saved);
     }
 
     /**
-     * [Auto] À la création d'un examen, le dossier passe de {@link StatutDossier#DISPATCHE} à
+     * [Auto] À la SOUMISSION de l'examen, le dossier passe de {@link StatutDossier#DISPATCHE} à
      * {@link StatutDossier#EXAMINE} (même transaction). Idempotent : on ne réécrit que si le dossier
      * est bien {@code DISPATCHE} (jamais un dossier déjà examiné/signé/clôturé).
      */
@@ -283,10 +298,18 @@ public class ExamenService {
     private void exigerExamenModifiable(Integer idExamen) {
         String statut = idExamen == null ? null
                 : repository.findStatutDossierByExamen(idExamen).orElse(null);
-        if (!StatutDossier.EXAMINE.name().equals(statut)) {
+        // ⚠️ Règle élargie (2026-08-01) — DISPATCHE accepté : l'examen est un BROUILLON tant que le
+        // dossier n'est pas soumis (la transition EXAMINE se fait à la soumission).
+        // ⚠️ Règle élargie (2026-08-02) — A_REEXAMINER accepté : réexamen après lettre de renvoi
+        // (pièces complémentaires transmises), l'examen est rouvert au Membre attributaire.
+        boolean modifiable = StatutDossier.DISPATCHE.name().equals(statut)
+                || StatutDossier.EXAMINE.name().equals(statut)
+                || StatutDossier.A_REEXAMINER.name().equals(statut);
+        if (!modifiable) {
             throw new BusinessRuleException(
-                    "Examen verrouillé : modification possible uniquement tant que le dossier est EXAMINE "
-                            + "(statut actuel « " + statut + " », examen définitif après signature du PV, §2.6).");
+                    "Examen verrouillé : modification possible uniquement tant que le dossier est DISPATCHE "
+                            + "(brouillon), EXAMINE ou A_REEXAMINER (statut actuel « " + statut
+                            + " », examen définitif après signature du PV, §2.6).");
         }
     }
 }

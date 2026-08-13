@@ -21,7 +21,7 @@ public class PvExamenDto {
     @NotNull
     private Integer idExamen;
 
-    @NotBlank
+    /** ⚠️ Règle ajoutée (2026-08-01) — OPTIONNEL : l'avis est posé à la clôture de navette (accepter, Président/CC). */
     @Size(max = 10)
     private String idAvis;
 
@@ -77,4 +77,11 @@ public class PvExamenDto {
      * front masque « Télécharger le PDF » et évite un 404.
      */
     private Boolean documentDisponible;
+
+    /** ⚠️ Spec navette (2026-08-01) — date d'archivage du PV par l'Assistant contrôleur (lecture seule). */
+    private LocalDate dateArchivage;
+
+    /** Assistant contrôleur archiveur (matricule, lecture seule). */
+    @Size(max = 7)
+    private String imArchiveur;
 }

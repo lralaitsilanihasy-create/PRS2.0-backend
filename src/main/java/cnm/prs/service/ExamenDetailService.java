@@ -178,10 +178,18 @@ public class ExamenDetailService {
     private void exigerExamenModifiable(Integer idExamen) {
         String statut = idExamen == null ? null
                 : examenRepository.findStatutDossierByExamen(idExamen).orElse(null);
-        if (!StatutDossier.EXAMINE.name().equals(statut)) {
+        // ⚠️ Règle élargie (2026-08-01) — DISPATCHE accepté : l'examen est un BROUILLON tant qu'il
+        // n'est pas soumis (la transition EXAMINE se fait à la soumission de l'examen).
+        // ⚠️ Règle élargie (2026-08-02) — A_REEXAMINER accepté : réexamen après lettre de renvoi
+        // (pièces complémentaires transmises), l'examen est rouvert au Membre attributaire.
+        boolean modifiable = StatutDossier.DISPATCHE.name().equals(statut)
+                || StatutDossier.EXAMINE.name().equals(statut)
+                || StatutDossier.A_REEXAMINER.name().equals(statut);
+        if (!modifiable) {
             throw new BusinessRuleException(
-                    "Examen verrouillé : modification possible uniquement tant que le dossier est EXAMINE "
-                            + "(statut actuel « " + statut + " », examen définitif après signature du PV, §2.6).");
+                    "Examen verrouillé : modification possible uniquement tant que le dossier est DISPATCHE "
+                            + "(brouillon), EXAMINE ou A_REEXAMINER (statut actuel « " + statut
+                            + " », examen définitif après signature du PV, §2.6).");
         }
     }
 }
