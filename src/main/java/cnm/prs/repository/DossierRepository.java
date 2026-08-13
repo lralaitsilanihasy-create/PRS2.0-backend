@@ -16,6 +16,13 @@ import cnm.prs.entity.Dossier;
 @Repository
 public interface DossierRepository extends JpaRepository<Dossier, Integer> {
 
+    /**
+     * ⚠️ Règle ajoutée (2026-08-05, mise à jour des PPM) — versions issues d'un dossier donné. En régime
+     * normal la liste contient au plus un élément soumis (la version suivante), plus éventuellement un
+     * brouillon de mise à jour en cours. Sert la garde d'unicité et la descente de la chaîne des versions.
+     */
+    List<Dossier> findByIdDossierParent(Integer idDossierParent);
+
     /** Nombre de dossiers à un statut donné (compteurs du tableau de bord — vue globale). */
     long countByStatut(String statut);
 
@@ -189,25 +196,26 @@ public interface DossierRepository extends JpaRepository<Dossier, Integer> {
     boolean existsVisiblePourPrmp(@Param("idDossier") Integer idDossier, @Param("idPrmp") String idPrmp);
 
     /**
-     * Dossiers d'un statut <strong>attribués à un Membre</strong> (via réception → dispatch
-     * {@code imCtrlMembre}). Sert à la file « à examiner » (DISPATCHE) du Membre attributaire (§2.4).
+     * Dossiers d'un ensemble de statuts <strong>attribués à un Membre</strong> (via réception → dispatch
+     * {@code imCtrlMembre}). Sert à la file « à examiner » du Membre attributaire (§2.4) : DISPATCHE
+     * (premier examen) + A_REEXAMINER (⚠️ 2026-08-02 — réexamen après lettre de renvoi, pièces reçues).
      */
     @Query("""
-            select d from Dossier d where d.statut = :statut
+            select d from Dossier d where d.statut in :statuts
               and exists (select 1 from Reception r, Dispatch di
                           where r.idDossier = d.idDossier and di.idReception = r.idReception
                             and di.imCtrlMembre = :im)
             """)
-    List<Dossier> findAExaminerParMembre(@Param("statut") String statut, @Param("im") String im);
+    List<Dossier> findAExaminerParMembre(@Param("statuts") List<String> statuts, @Param("im") String im);
 
     /** Compteur « à examiner » du Membre (miroir de {@link #findAExaminerParMembre}). */
     @Query("""
-            select count(d) from Dossier d where d.statut = :statut
+            select count(d) from Dossier d where d.statut in :statuts
               and exists (select 1 from Reception r, Dispatch di
                           where r.idDossier = d.idDossier and di.idReception = r.idReception
                             and di.imCtrlMembre = :im)
             """)
-    long countAExaminerParMembre(@Param("statut") String statut, @Param("im") String im);
+    long countAExaminerParMembre(@Param("statuts") List<String> statuts, @Param("im") String im);
 
     /**
      * Dossiers d'un ensemble de statuts attribués à un Membre, <strong>paginés</strong> — historique
@@ -232,21 +240,36 @@ public interface DossierRepository extends JpaRepository<Dossier, Integer> {
     long countExaminesParMembre(@Param("statuts") List<String> statuts, @Param("im") String im);
 
     /**
-     * File « à vérifier » du Vérificateur (§3.6, ⚠️ règle ajoutée) : dossiers de la localité encore
-     * actifs côté vérification — {@code EN_VERIFICATION} (à vérifier) <strong>ou</strong>
-     * {@code EN_ATTENTE_DECISION_PRMP} (lecture seule, vérification refusée 409 tant que la PRMP n'a pas
-     * statué). Le dossier ne quitte la liste qu'une fois {@code CLOTURE} (→ {@code /verifies}).
+     * File « à vérifier » du Vérificateur (§3.6, ⚠️ règle ajoutée) : dossiers de la localité sur
+     * lesquels le vérificateur a encore une ACTION à mener — {@code EN_VERIFICATION} (vérifier OU
+     * transmettre la décision selon l'avis), {@code EN_ATTENTE_DECISION_PRMP} (lecture seule, en
+     * attente de la PRMP) et {@code OBSERVATIONS_LEVEES} (approbation + levée à transmettre à SIGMP).
+     *
+     * ⚠️ <strong>Règle MODIFIÉE (demande user 2026-08-04)</strong> : {@code DECISION_TRANSMISE_SIGMP}
+     * ne figure PLUS ici. Le dossier quitte « à vérifier » dès la <strong>transmission de la décision à
+     * SIGMP</strong> — le travail du vérificateur est terminé, l'archivage revient à l'Assistant — et
+     * bascule aussitôt dans « vérifiés / clôturés » ({@link #findVerifiesParLocalite}).
+     * Auparavant il y restait jusqu'au {@code CLOTURE}.
      */
     @Query("""
-            select d from Dossier d where d.statut in ('EN_VERIFICATION', 'EN_ATTENTE_DECISION_PRMP')
+            select d from Dossier d where d.statut in
+              ('EN_VERIFICATION', 'EN_ATTENTE_DECISION_PRMP', 'OBSERVATIONS_LEVEES')
               and exists (select 1 from Reception r
                           where r.idDossier = d.idDossier and r.ctrlRecept.idLocalite = :loc)
             """)
     List<Dossier> findAVerifierParLocalite(@Param("loc") String loc);
 
-    /** Compteur « à vérifier » du Vérificateur (miroir de {@link #findAVerifierParLocalite}). */
+    /** Membres attributaires d'un dossier (dispatchs de ses réceptions) — reprise après lettre de renvoi. */
     @Query("""
-            select count(d) from Dossier d where d.statut in ('EN_VERIFICATION', 'EN_ATTENTE_DECISION_PRMP')
+            select distinct di.imCtrlMembre from Dispatch di where di.imCtrlMembre is not null
+              and di.idReception in (select r.idReception from Reception r where r.idDossier = :idDossier)
+            """)
+    List<String> findMembresAttributaires(@Param("idDossier") Integer idDossier);
+
+    /** Compteur « à vérifier » du Vérificateur (miroir EXACT de {@link #findAVerifierParLocalite} — badge du menu). */
+    @Query("""
+            select count(d) from Dossier d where d.statut in
+              ('EN_VERIFICATION', 'EN_ATTENTE_DECISION_PRMP', 'OBSERVATIONS_LEVEES')
               and exists (select 1 from Reception r
                           where r.idDossier = d.idDossier and r.ctrlRecept.idLocalite = :loc)
             """)
@@ -254,11 +277,18 @@ public interface DossierRepository extends JpaRepository<Dossier, Integer> {
 
     /**
      * Historique « vérifiés / clôturés » du Vérificateur (§3.6, ⚠️ règle ajoutée), paginé, lecture seule :
-     * dossiers CLOTURE de la localité ayant un PV SIGNE — qu'ils aient été <strong>auto-clôturés</strong>
+     * dossiers de la localité ayant un PV SIGNE — qu'ils aient été <strong>auto-clôturés</strong>
      * à la signature (FAV/DEF/NSP) ou clôturés après levée des observations (FAVR).
+     *
+     * ⚠️ <strong>Règle MODIFIÉE (demande user 2026-08-04)</strong> : la liste couvre désormais
+     * {@code DECISION_TRANSMISE_SIGMP} <em>en plus</em> de {@code CLOTURE}. Un dossier dont la décision
+     * est transmise à SIGMP est <strong>vérifié</strong> (le vérificateur n'a plus rien à y faire) même
+     * si l'archivage par l'Assistant, qui le clôturera, n'a pas encore eu lieu : il apparaît ici dès la
+     * transmission et y reste après la clôture. Complémentaire de {@link #findAVerifierParLocalite},
+     * qui l'exclut au même instant — aucun dossier ne peut être dans les deux files ni dans aucune.
      */
     @Query("""
-            select d from Dossier d where d.statut = 'CLOTURE'
+            select d from Dossier d where d.statut in ('DECISION_TRANSMISE_SIGMP', 'CLOTURE')
               and exists (select 1 from Reception r, Dispatch di, Examen e, PvExamen pv
                           where r.idDossier = d.idDossier and di.idReception = r.idReception
                             and e.idDispatch = di.idDispatch and pv.idExamen = e.idExamen
@@ -266,9 +296,9 @@ public interface DossierRepository extends JpaRepository<Dossier, Integer> {
             """)
     Page<Dossier> findVerifiesParLocalite(@Param("loc") String loc, Pageable pageable);
 
-    /** Compteur « vérifiés / clôturés » du Vérificateur (miroir de {@link #findVerifiesParLocalite}). */
+    /** Compteur « vérifiés / clôturés » du Vérificateur (miroir EXACT de {@link #findVerifiesParLocalite}). */
     @Query("""
-            select count(d) from Dossier d where d.statut = 'CLOTURE'
+            select count(d) from Dossier d where d.statut in ('DECISION_TRANSMISE_SIGMP', 'CLOTURE')
               and exists (select 1 from Reception r, Dispatch di, Examen e, PvExamen pv
                           where r.idDossier = d.idDossier and di.idReception = r.idReception
                             and e.idDispatch = di.idDispatch and pv.idExamen = e.idExamen

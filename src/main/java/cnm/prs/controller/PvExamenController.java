@@ -53,12 +53,19 @@ public class PvExamenController {
         return service.findById(id);
     }
 
-    /** Document PDF du Projet de PV (généré à la soumission si éligible). Authentifié, dans le périmètre. */
+    /**
+     * Document PDF du Projet de PV (généré à la soumission si éligible). Authentifié, dans le périmètre.
+     * ⚠️ Règle ajoutée (2026-08-01) — le fichier porte la RÉFÉRENCE du PV (`refePv`, repli `referencePv`),
+     * caractères interdits remplacés par « - » (ex. {@code 00020-PPM-CRM-ANT-PV-2026.pdf}).
+     */
     @GetMapping("/{id}/document")
     public ResponseEntity<byte[]> document(@PathVariable Integer id) {
         byte[] pdf = service.telechargerDocument(id);
+        PvExamenDto pv = service.findById(id);
+        String ref = pv.getRefePv() != null && !pv.getRefePv().isBlank() ? pv.getRefePv() : pv.getReferencePv();
+        String nom = (ref == null || ref.isBlank() ? "pv-" + id : ref.replaceAll("[\\\\/:*?\"<>|]", "-")) + ".pdf";
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"pv-" + id + ".pdf\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + nom + "\"")
                 .contentType(MediaType.APPLICATION_PDF)
                 .body(pdf);
     }
@@ -113,5 +120,15 @@ public class PvExamenController {
     @PostMapping("/{id}/signer")
     public PvExamenDto signer(@PathVariable Integer id, @Valid @RequestBody PvActionRequest req) {
         return service.signer(id, req);
+    }
+
+    /**
+     * ⚠️ Spec navette (2026-08-01) — ARCHIVAGE du PV par l'Assistant contrôleur (après transmission
+     * SIGMP) : pose la date d'archivage et CLÔT le dossier.
+     */
+    @PreAuthorize("hasRole('ASSISTANT_CONTROLEUR')")
+    @PostMapping("/{id}/archiver")
+    public PvExamenDto archiver(@PathVariable Integer id) {
+        return service.archiver(id);
     }
 }

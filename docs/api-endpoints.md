@@ -975,8 +975,8 @@ relation **1,N** : un point de contrôle a **0..N** lignes. Remplace l'ancien ch
 | GET | /api/dossiers/a-receptionner | — | `DossierDto[]` | 200, 403 | `SECRETAIRE` (titulaire/délégué) ou `ADMINISTRATEUR` |
 | GET | /api/dossiers/a-examiner | — | `DossierDto[]` | 200, 403 | `MEMBRE` (titulaire/délégué) ou `ADMINISTRATEUR` |
 | GET | /api/dossiers/examines | — | `Page<DossierDto>` | 200, 403 | `MEMBRE` (titulaire/délégué) ou `ADMINISTRATEUR` |
-| GET | /api/dossiers/a-verifier | — | `DossierDto[]` | 200, 403 | `VERIFICATEUR` (titulaire/délégué) ou `ADMINISTRATEUR` — EN_VERIFICATION + EN_ATTENTE_DECISION_PRMP |
-| GET | /api/dossiers/verifies | — | `Page<DossierDto>` | 200, 403 | `VERIFICATEUR` (titulaire/délégué) ou `ADMINISTRATEUR` |
+| GET | /api/dossiers/a-verifier | — | `DossierDto[]` | 200, 403 | `VERIFICATEUR` (titulaire/délégué) ou `ADMINISTRATEUR` — EN_VERIFICATION + EN_ATTENTE_DECISION_PRMP + OBSERVATIONS_LEVEES |
+| GET | /api/dossiers/verifies | — | `Page<DossierDto>` | 200, 403 | `VERIFICATEUR` (titulaire/délégué) ou `ADMINISTRATEUR` — DECISION_TRANSMISE_SIGMP + CLOTURE (PV signé) |
 | GET | /api/dossiers/en-attente-prmp | — | `DossierDto[]` | 200, 403 | `VERIFICATEUR` (titulaire/délégué) ou `ADMINISTRATEUR` — lecture seule |
 | GET | /api/dossiers/{id} | — | `DossierDto` | 200, 403, 404 | Authentifié (filtré) |
 | GET | /api/dossiers/{id}/ppm | — | `PpmDto` | 200, 403, 404 | Authentifié (propriétaire pour un BROUILLON) |
@@ -1053,13 +1053,20 @@ relation **1,N** : un point de contrôle a **0..N** lignes. Remplace l'ancien ch
 > et **exclusives** : à la création de l'examen, un dossier quitte « à examiner » pour « examinés ». Un
 > Membre ne voit que **ses** dossiers (ceux d'un autre Membre n'y figurent pas).
 
-> ⚠️ **Files du Vérificateur (§3.6, règle ajoutée).** `GET /api/dossiers/a-verifier` = dossiers **encore
-> actifs** côté vérification : **`EN_VERIFICATION`** (à vérifier) **OU** **`EN_ATTENTE_DECISION_PRMP`** (en
-> lecture seule — le dossier **ne disparaît pas** de la liste tant qu'il n'est pas clôturé ; toute
-> vérification est refusée **409** tant que la PRMP n'a pas statué, cf. badge « En attente PRMP » côté UI).
-> `GET /api/dossiers/verifies` = **historique** paginé, **lecture seule**, des dossiers **`CLOTURE` ayant un
-> PV `SIGNE`** — **y compris les auto-clôturés** à la signature (`FAV`/`DEF`/`NSP`). Les deux sont **scopées
-> à la localité** du vérificateur (contrôleur réceptionnaire). Seul **`CLOTURE`** quitte « à vérifier » (→ `/verifies`).
+> ⚠️ **Files du Vérificateur (§3.6, règle ajoutée ; ⚠️ RÈGLE DE BASCULE MODIFIÉE 2026-08-04).**
+> `GET /api/dossiers/a-verifier` = dossiers sur lesquels le vérificateur a encore une **action** :
+> **`EN_VERIFICATION`** (à vérifier), **`EN_ATTENTE_DECISION_PRMP`** (lecture seule — toute vérification est
+> refusée **409** tant que la PRMP n'a pas statué, cf. badge « En attente PRMP » côté UI) et
+> **`OBSERVATIONS_LEVEES`** (approbation + levée à transmettre à SIGMP).
+> `GET /api/dossiers/verifies` = **historique** paginé, **lecture seule**, des dossiers
+> **`DECISION_TRANSMISE_SIGMP` ou `CLOTURE` ayant un PV `SIGNE`** — **y compris les auto-clôturés**
+> à la signature (`FAV`/`DEF`/`NSP`). Les deux sont **scopées à la localité** du vérificateur (contrôleur
+> réceptionnaire).
+> ⚠️ **La bascule se fait à la transmission de la décision à SIGMP** (`POST /api/sigmp-transmissions`) :
+> le dossier quitte `/a-verifier` et apparaît dans `/verifies` **au même instant** — le travail du
+> vérificateur est terminé, l'archivage revient à l'Assistant. *(Avant le 2026-08-04, `DECISION_TRANSMISE_SIGMP`
+> restait dans `/a-verifier` jusqu'au `CLOTURE`.)* Les deux files sont **complémentaires et disjointes**.
+> Le compteur `aVerifier` de `GET /api/kpis/mes-compteurs-verificateur` en est le **miroir exact** (badge du menu).
 
 > ⚠️ **File « En attente PRMP » du Vérificateur (règle ajoutée), lecture seule.** `GET /api/dossiers/en-attente-prmp`
 > = dossiers **`EN_ATTENTE_DECISION_PRMP`** de sa localité (sous-vue dédiée ; ces dossiers figurent aussi dans
@@ -3297,7 +3304,9 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 > ⚠️ **Disponibilité du document (`documentDisponible`) — règle ajoutée.** Le flag reflète la règle « PV — document généré » **et** l'existence effective du fichier : `true` si `t_pv_examen.CHEMIN_DOCUMENT` est renseigné, ou si le PV est éligible à la génération à la demande (`GET /api/pv-examens/{id}/document` régénère alors le PDF). Il reste donc juste après une (re)génération. Un PV non éligible (ex. avis **≠ FAVR**, ou localité **non centrale**, ou dossier **sans PPM**) → `false`, et `…/document` renvoie **404**. *(Le **mode de passation** n'entre plus dans l'éligibilité : un PV FAVR/ANT/PPM en « Demande de cotation » est désormais éligible.)*
 
 > ⚠️ **Référence du PV (`refePv`) — règle ajoutée.** À la création, le serveur dérive `refePv` du `refeDossier`
-> du dossier rattaché en insérant **`/PV` avant l'année** : `00003/PPM/CRM-ANT/2026` → `00003/PPM/CRM-ANT/PV/2026`.
+> du dossier rattaché en insérant **`/PV` avant l'année** : `00003/PPM/CNM/2026` → `00003/PPM/CNM/PV/2026`
+> (dossier central), `00004/PPM/CRM-TMS/2026` → `00004/PPM/CRM-TMS/PV/2026` (régional) — le **segment
+> localité est donc hérité du dossier**, jamais recalculé.
 > Dérivée **uniquement** si `refeDossier` est au format `…/YYYY` (sinon `null`). **Unique** : créer un 2ᵉ PV sur le
 > même dossier (même `refePv`) → **409**. Distincte du champ libre `referencePv`.
 
@@ -3340,14 +3349,35 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 
 > ⚠️ **Liste scindée projets / définitifs (règle ajoutée).** `GET /api/pv-examens` ne retourne que les **projets de PV** (statut ≠ `SIGNE`) ; dès qu'un PV est **signé** (`SIGNE`) il **quitte** cette liste et apparaît dans **`GET /api/pv-examens/definitifs`** (PV signés uniquement). Les deux listes restent **scopées par localité**. L'accès direct `GET /api/pv-examens/{id}` reste valable pour **tout** PV, signé ou non.
 
-> ⚠️ **Téléchargement du PDF du PV (règle ajoutée).** `GET /api/pv-examens/{id}/document` renvoie le **PDF du PV** (`application/pdf`, en pièce jointe) **lu sur le FSX** (`t_pv_examen.CHEMIN_DOCUMENT`). Accès dans le **périmètre de localité** (même contrôle que `GET /api/pv-examens/{id}`). Si le chemin est absent (PV signé avant le correctif) ou le fichier introuvable, le document est **régénéré à la demande** (si le PV est éligible). **404** seulement si le PV n'est **pas éligible** à la génération (cf. règle « PV — document généré »).
+> ⚠️ **PV définitifs consultables par la PRMP (2026-08-02).** La PRMP (hors périmètre localité) voit les
+> **PV `SIGNE` de SES dossiers** (via PPM, même périmètre que `/lettre-renvois/mes-lettres`) — elle en a
+> besoin pour **rectifier selon les observations du PV** : `GET /definitifs` (liste scopée),
+> `GET /{id}` et `GET /{id}/document` (PDF) autorisés **si le PV est SIGNÉ et relève d'un de ses
+> dossiers** (403 sinon). Les **projets** restent invisibles (liste vide). La notification `PV_SIGNE`
+> est désormais **actionnable** (ref = idPrmp, objet `PV` + `idDossier` — avant : e-mail seul, sans
+> objet) ; front : menu PRMP « PV définitifs » (`/prmp/pv-definitifs`, écran partagé lecture seule),
+> clic notification PV → cet écran. ⚠️ La PRMP ne reçoit que la **VERSION PDF** du PV (document officiel
+> signé), **affichée directement** au clic (« Afficher le PV » → visionneuse iframe blob, URL révoquée à
+> la fermeture ; le lecteur du navigateur offre impression/enregistrement) — pas de modal de détail
+> (reconstruction interne réservée aux contrôleurs).
+
+> ⚠️ **Téléchargement du PDF du PV (règle ajoutée).** `GET /api/pv-examens/{id}/document` renvoie le **PDF du PV** (`application/pdf`, en pièce jointe) **lu sur le FSX** (`t_pv_examen.CHEMIN_DOCUMENT`). ⚠️ 2026-08-01 : le fichier porte la **référence du PV** (`refePv`, repli `referencePv`, « / » → « - » — ex. `00020-PPM-CRM-ANT-PV-2026.pdf`) ; le front télécharge via une ancre `download` du même nom (plus de blob anonyme). Accès dans le **périmètre de localité** (même contrôle que `GET /api/pv-examens/{id}`). Si le chemin est absent (PV signé avant le correctif) ou le fichier introuvable, le document est **régénéré à la demande** (si le PV est éligible). **404** seulement si le PV n'est **pas éligible** à la génération (cf. règle « PV — document généré »).
 
 **`signer` — authentification de la signature (dans le service).** L'endpoint autorise largement (`MEMBRE`/`CHEF_COMMISSION`/`PRESIDENT`) mais le service vérifie que le **signataire authentifié** correspond au `role` signé et enregistre son identité (`IM_CTRL_MEMBRE`/`IM_CTRL_PRESIDENT`/`IM_CTRL_CC` = matricule du signataire) :
 - `role=MEMBRE` → l'appelant doit être le **Membre attributaire** du PV (`IM_CTRL_MEMBRE`), non déléguable → **403** sinon ;
 - `role=PRESIDENT` → profil **PRESIDENT** réel → **403** sinon ;
 - `role=CC` → profil **CHEF_COMMISSION** **et localité du dossier** → **403** sinon ;
 - co-signataire (Président/CC) **≠ Membre signataire** : auto-co-signature interdite → **409** ;
-- `signer` hors `PROJET_ACCEPTE` → **409**.
+- `signer` hors `PROJET_ACCEPTE` → **409** ;
+- ⚠️ **une signature par rôle (2026-08-02)** : si la date de signature du rôle est **déjà posée**
+  (`dateSignatureMembre`/`dateSignaturePresident`/`dateSignatureCc`), re-signer → **409** (« Le PV est
+  déjà signé pour le rôle … »). Le front désactive le bouton « Signer » (libellé « Signé ✓ » + rappel
+  « en attente des autres signataires ») dès que le signataire courant a signé ;
+- ⚠️ **anti-doublon concurrent (2026-08-02)** : `signer` charge le PV avec un **verrou pessimiste**
+  (la génération du PDF rend la signature longue ; des clics répétés lisaient tous `PROJET_ACCEPTE`
+  et notifiaient la signature plusieurs fois). Les requêtes concurrentes sont sérialisées : la 2ᵉ
+  voit l'état commité et reçoit 409. Le front désactive aussi le bouton **pendant** la requête
+  (« Signature… »).
 
 **Exemple — requête (création) / signature**
 ```json
@@ -3784,7 +3814,48 @@ Ouvert Restreint ».
 >   aucun champ libre ; écran « Rectifier » PRMP = panneau lecture seule (statuts + précisions).
 > - Purge retrait : `t_suivi_observation` puis `t_observation_pv` en tête de cascade.
 
-> **Effet `[Auto]`** (sur un dossier `EN_VERIFICATION`) : `obsLevees = true` → dossier **`CLOTURE`** + notification `CLOTURE_ELIGIBLE`. ⚠️ **Règle ajoutée** — `obsLevees = false` → dossier **`EN_ATTENTE_DECISION_PRMP`** : l'observation est **transmise à la PRMP** du dossier (notification `OBSERVATION_VERIFICATION` : référence dossier, vérificateur, texte de l'observation, date) et l'événement est **tracé** dans `t_audit_log`. Le vérificateur ne peut plus modifier ni soumettre de vérification tant que la PRMP n'a pas statué (nouvelle tentative → **409**) ; il voit le dossier en lecture seule dans `GET /api/dossiers/en-attente-prmp`. La PRMP le retrouve via `GET /api/dossiers?statut=EN_ATTENTE_DECISION_PRMP` et lit l'observation complète dans sa notification.
+> **Effet `[Auto]`** (sur un dossier `EN_VERIFICATION`) : ⚠️ **règle MODIFIÉE (2026-08-02, spec navette)** — `obsLevees = true` → dossier **`OBSERVATIONS_LEVEES`** (la clôture n'est PLUS posée ici : le vérificateur doit transmettre l'approbation + la levée à SIGMP via `POST /api/sigmp-transmissions`, puis l'Assistant archive le PV, ce qui clôt). `obsLevees = false` → dossier **`EN_ATTENTE_DECISION_PRMP`** : l'observation est **transmise à la PRMP** du dossier (notification `OBSERVATION_VERIFICATION` : référence dossier, vérificateur, texte de l'observation, date) et l'événement est **tracé** dans `t_audit_log`. Le vérificateur ne peut plus modifier ni soumettre de vérification tant que la PRMP n'a pas statué (nouvelle tentative → **409**) ; il voit le dossier en lecture seule dans `GET /api/dossiers/en-attente-prmp`. La PRMP le retrouve via `GET /api/dossiers?statut=EN_ATTENTE_DECISION_PRMP` et lit l'observation complète dans sa notification.
+
+## Transmissions SIGMP (spec navette 2026-08-02)
+**Ressource** `/api/sigmp-transmissions` (table `t_transmission_sigmp`) — ⚠️ le **VÉRIFICATEUR** transmet le
+**sens de la décision de la Commission** vers **SIGMP** (interop PRS 2.0 ↔ SIGMP). En l'absence de contrat
+d'API SIGMP réel, la transmission est **enregistrée côté PRS** (`STATUT_ENVOI = ENREGISTREE`) — aucun endpoint
+tiers inventé ; l'envoi réel sera branché plus tard.
+
+| Méthode | URL | Corps | Réponse | Statuts | Rôle |
+|---|---|---|---|---|---|
+| GET | /api/sigmp-transmissions[?dossier=] | — | `TransmissionSigmpDto[]` | 200 | Authentifié |
+| POST | /api/sigmp-transmissions | `{ idDossier }` | `TransmissionSigmpDto` | 201, 400, 403, 404, 409 | **VERIFICATEUR** (localité du dossier) |
+
+> Le **sens est dérivé serveur** de l'avis du PV **signé** du dossier : **cas 1** (dossier `EN_VERIFICATION`,
+> avis ≠ FAVR) — `FAV` → `APPROUVE`, `DEF`/`NSP` → `NON_APPROUVE` ; **cas 2** (dossier `OBSERVATIONS_LEVEES`,
+> fin de boucle FAVR) — `APPROUVE` + `leveeObservations = true`. Autre statut/avis → **409**. Effets : dossier →
+> **`DECISION_TRANSMISE_SIGMP`** + notification **`PV_A_ARCHIVER`** aux Assistants contrôleurs de la localité.
+
+> ⚠️ **Branchement post-signature MODIFIÉ (2026-08-02).** À la signature du PV, **TOUS les avis** passent par le
+> vérificateur : dossier → `EN_VERIFICATION` (plus de clôture directe pour FAV/DEF/NSP). Notifications : PRMP
+> (`PV_SIGNE`), vérificateurs (`PV_A_VERIFIER` si FAVR, sinon `DECISION_A_TRANSMETTRE`). La copie assistant
+> (`PV_DEFINITIF_COPIE`) est remplacée par `PV_A_ARCHIVER` (à la transmission SIGMP).
+
+> ⚠️ **Archivage (2026-08-02).** `POST /api/pv-examens/{id}/archiver` (**ASSISTANT_CONTROLEUR**, localité) :
+> PV `SIGNE` + dossier `DECISION_TRANSMISE_SIGMP` → pose `DATE_ARCHIVAGE`/`IM_ARCHIVEUR`, **clôt** le dossier
+> (`CLOTURE`) et émet `CLOTURE_ELIGIBLE`. `POST /api/lettre-renvois/{id}/archiver` (idem) archive une lettre
+> **SIGNE** (le dossier n'est pas modifié). Statuts dossier ajoutés : `OBSERVATIONS_LEVEES`,
+> `DECISION_TRANSMISE_SIGMP`, `EN_ATTENTE_PIECES`, `A_REEXAMINER` (réexamen après lettre de renvoi).
+
+> ⚠️ **Cas 3 — lettre de renvoi (2026-08-02, RÉEXAMEN ajouté).** À la **signature** de la lettre, le dossier
+> `EXAMINE` (ou `A_REEXAMINER`, nouvelle lettre pendant un réexamen) passe **`EN_ATTENTE_PIECES`** (examen
+> suspendu, non modifiable par les Membres — remplace l'ancien retour PRET_DISPATCH), et un projet de PV
+> resté `PROJET_SOUMIS` repasse **`EN_RECTIFICATION`** (la lettre vaut retour de navette : le Membre pourra
+> re-soumettre après réexamen). La PRMP dépose les pièces demandées (`apresLettreRenvoi=true`) puis appelle
+> `POST /api/dossiers/{id}/transmettre-complements` (**PRMP propriétaire**, 409 hors `EN_ATTENTE_PIECES` ;
+> **409 aussi tant qu'aucune pièce n'est rattachée à la lettre du cycle courant** — le réexamen n'a lieu
+> qu'une fois les pièces nécessaires présentes) : dossier → **`A_REEXAMINER`** — retour dans la **file
+> « à examiner » du Membre attributaire** (`GET /api/dossiers/a-examiner` = `DISPATCHE` + `A_REEXAMINER`,
+> compteurs idem ; verrous d'examen rouverts à ce statut) ; notification `COMPLEMENTS_TRANSMIS`. Le Membre
+> **réexamine** à la lumière des pièces reçues (reprise sur les pièces non statuées, examen/PV conservés)
+> puis **re-soumet le projet de PV** (`POST /api/pv-examens/{id}/soumettre`) : le dossier repasse
+> **`EXAMINE`** (même transaction) et la navette reprend son circuit normal (acceptation P/CC → signature).
 
 **Champs `VerificationDto`**
 

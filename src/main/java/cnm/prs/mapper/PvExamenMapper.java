@@ -34,6 +34,8 @@ public final class PvExamenMapper {
         dto.setReferencePv(entity.getReferencePv());
         dto.setRefePv(entity.getRefePv());
         dto.setIdSecretaireSeance(entity.getIdSecretaireSeance());
+        dto.setDateArchivage(entity.getDateArchivage());
+        dto.setImArchiveur(entity.getImArchiveur());
         return dto;
     }
 

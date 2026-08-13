@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import cnm.prs.dto.PvActionRequest;
 import cnm.prs.dto.PvExamenDto;
 import cnm.prs.entity.Controleur;
+import cnm.prs.entity.Dossier;
 import cnm.prs.entity.Prmp;
 import cnm.prs.entity.PvExamen;
 import cnm.prs.entity.PvNavette;
@@ -30,6 +31,8 @@ import cnm.prs.exception.ResourceNotFoundException;
 import cnm.prs.mapper.PvExamenMapper;
 import cnm.prs.repository.ControleurRepository;
 import cnm.prs.repository.DossierRepository;
+import cnm.prs.repository.ExamenDetailRepository;
+import cnm.prs.repository.ExamenPieceRepository;
 import cnm.prs.repository.PrmpRepository;
 import cnm.prs.repository.PvExamenRepository;
 import cnm.prs.repository.PvNavetteRepository;
@@ -57,11 +60,17 @@ public class PvExamenService {
     private final DossierRepository dossierRepository;
     private final ControleurRepository controleurRepository;
     private final PvDocumentService pvDocumentService;
+    private final ExamenDetailRepository examenDetailRepository;
+    private final ExamenPieceRepository examenPieceRepository;
+    private final ObservationPvService observationPvService;
 
     public PvExamenService(PvExamenRepository repository, PvNavetteRepository navetteRepository,
             PrmpRepository prmpRepository, NotificationService notificationService,
             ControleurDirectory controleurDirectory, DossierRepository dossierRepository,
-            ControleurRepository controleurRepository, PvDocumentService pvDocumentService) {
+            ControleurRepository controleurRepository, PvDocumentService pvDocumentService,
+            ExamenDetailRepository examenDetailRepository, ExamenPieceRepository examenPieceRepository,
+            ObservationPvService observationPvService) {
+        this.observationPvService = observationPvService;
         this.repository = repository;
         this.navetteRepository = navetteRepository;
         this.prmpRepository = prmpRepository;
@@ -70,6 +79,8 @@ public class PvExamenService {
         this.dossierRepository = dossierRepository;
         this.controleurRepository = controleurRepository;
         this.pvDocumentService = pvDocumentService;
+        this.examenDetailRepository = examenDetailRepository;
+        this.examenPieceRepository = examenPieceRepository;
     }
 
     /** Projets de PV : tous les PV NON signés (les signés sont exposés par {@link #definitifs()}). */
@@ -79,9 +90,20 @@ public class PvExamenService {
                 .stream().map(this::toDtoLecture).toList();
     }
 
-    /** PV définitifs : uniquement les PV signés ({@code statutPv = SIGNE}). */
+    /**
+     * PV définitifs : uniquement les PV signés ({@code statutPv = SIGNE}).
+     *
+     * <p>⚠️ 2026-08-02 — la <strong>PRMP</strong> (exclue du périmètre localité) voit les PV signés de
+     * <strong>ses dossiers</strong> (via PPM, même périmètre que « Mes lettres de renvoi ») : elle en a
+     * besoin pour rectifier selon les observations du PV. Les projets restent internes (invisibles).</p>
+     */
     @Transactional(readOnly = true)
     public List<PvExamenDto> definitifs() {
+        if (Visibilite.estPrmp()) {
+            String idPrmp = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
+            return idPrmp == null ? List.of()
+                    : repository.findDefinitifsPourPrmp(idPrmp).stream().map(this::toDtoLecture).toList();
+        }
         return Visibilite.filtrer(repository::findDefinitifs, repository::findDefinitifsParLocalite)
                 .stream().map(this::toDtoLecture).toList();
     }
@@ -89,8 +111,26 @@ public class PvExamenService {
     @Transactional(readOnly = true)
     public PvExamenDto findById(Integer id) {
         PvExamen entity = load(id);
-        Visibilite.controler(loc -> repository.existsDansLocalite(id, loc));
+        controlerAcces(id);
         return toDtoLecture(entity);
+    }
+
+    /**
+     * Accès de lecture à un PV : périmètre de localité habituel, <strong>ou</strong> PRMP propriétaire
+     * du dossier pour un PV <strong>SIGNÉ</strong> (⚠️ 2026-08-02 — sinon la PRMP serait hors périmètre
+     * → 403, alors qu'elle doit consulter le PV définitif pour rectifier).
+     */
+    private void controlerAcces(Integer idPv) {
+        if (Visibilite.estPrmp()) {
+            boolean autorise = CurrentUser.ref().filter(s -> !s.isBlank())
+                    .map(idPrmp -> repository.estSignePourPrmp(idPv, idPrmp)).orElse(false);
+            if (!autorise) {
+                throw new org.springframework.security.access.AccessDeniedException(
+                        "PV hors de votre périmètre (seuls les PV signés de vos dossiers sont consultables).");
+            }
+            return;
+        }
+        Visibilite.controler(loc -> repository.existsDansLocalite(idPv, loc));
     }
 
     /** Mappe un PV en DTO de lecture : nom du secrétaire + {@code documentDisponible} (chemin stocké ou PV éligible). */
@@ -110,7 +150,7 @@ public class PvExamenService {
     @Transactional
     public byte[] telechargerDocument(Integer id) {
         PvExamen pv = load(id);
-        Visibilite.controler(loc -> repository.existsDansLocalite(id, loc));
+        controlerAcces(id); // périmètre localité, OU PRMP propriétaire d'un PV SIGNÉ (2026-08-02)
         byte[] pdf = lireFsx(pv.getCheminDocument());
         if (pdf == null) {
             String chemin = pvDocumentService.genererSiEligible(pv).orElse(null);
@@ -122,6 +162,31 @@ public class PvExamenService {
         }
         if (pdf == null) {
             throw new ResourceNotFoundException("Aucun document pour le PV : " + id);
+        }
+        return pdf;
+    }
+
+    /**
+     * ⚠️ 2026-08-05 (versionnement des PPM) — PDF d'un PV pour <strong>composition serveur</strong> :
+     * même lecture, et même régénération paresseuse, que {@link #telechargerDocument}, mais SANS contrôle
+     * d'accès — l'appelant agit pour le compte de la PRMP propriétaire, à qui l'accès à son PV signé est
+     * ouvert — et sans 404 : renvoie {@code null} si le PV n'a pas de document. Sert à joindre le PV du
+     * dossier prédécesseur au dossier de mise à jour.
+     */
+    @Transactional
+    public byte[] documentPourHistorique(Integer idPv) {
+        PvExamen pv = repository.findById(idPv).orElse(null);
+        if (pv == null) {
+            return null;
+        }
+        byte[] pdf = lireFsx(pv.getCheminDocument());
+        if (pdf == null) {
+            String chemin = pvDocumentService.genererSiEligible(pv).orElse(null);
+            if (chemin != null) {
+                pv.setCheminDocument(chemin);
+                repository.save(pv);
+                pdf = lireFsx(chemin);
+            }
         }
         return pdf;
     }
@@ -280,9 +345,57 @@ public class PvExamenService {
         pv.setStatutPv(StatutPv.PROJET_SOUMIS.name());
         ajouterNavette(pv, SensNavette.SOUMISSION, req.imActeur(), req.commentaire());
         PvExamen saved = repository.save(pv);
+        // ⚠️ Règle ajoutée (2026-08-02, réexamen après lettre de renvoi) — la re-soumission du projet
+        // de PV CLÔT LE RÉEXAMEN : le dossier A_REEXAMINER redevient EXAMINE (même transaction), la
+        // navette reprend son circuit normal (acceptation P/CC → signature).
+        Integer idDossier = repository.findIdDossierByPv(saved.getIdPv()).orElse(null);
+        if (idDossier != null) {
+            dossierRepository.findById(idDossier).ifPresent(d -> {
+                if (StatutDossier.A_REEXAMINER.name().equals(d.getStatut())) {
+                    d.setStatut(StatutDossier.EXAMINE.name());
+                    dossierRepository.save(d);
+                }
+            });
+        }
         // [Auto] Le CC et le Président de la localité sont notifiés qu'un projet de PV attend validation.
         notifierPvAValider(saved);
         return PvExamenMapper.toDto(saved);
+    }
+
+    /** ⚠️ Règle ajoutée (2026-08-01) — le Secrétaire de séance doit être un Vérificateur de la localité du dossier. */
+    /**
+     * ⚠️ Règle ajoutée (2026-08-01) — COHÉRENCE AVIS ↔ OBSERVATIONS de l'examen (points de contrôle
+     * ET pièces jointes) à la clôture de navette : s'il existe au moins une observation, l'avis
+     * « Favorable » (sans réserve, {@code FAV}) est refusé ; s'il n'en existe aucune, l'avis
+     * « Favorable avec réserves » ({@code FAVR}) est refusé. {@code DEF}/{@code NSP} restent libres
+     * (appréciation souveraine de la Commission).
+     */
+    private void validerCoherenceAvis(Integer idExamen, String idAvis) {
+        long observations = examenDetailRepository.findByIdExamen(idExamen).stream()
+                .filter(d -> Boolean.FALSE.equals(d.getConforme())).count()
+                + examenPieceRepository.findByIdExamen(idExamen).stream()
+                .filter(p -> Boolean.FALSE.equals(p.getConforme())).count();
+        if (observations > 0 && "FAV".equals(idAvis)) {
+            throw new BusinessRuleException("L'examen comporte " + observations
+                    + " observation(s) (points de contrôle ou pièces jointes) : l'avis « Favorable » (sans réserve)"
+                    + " est incohérent — choisissez « Favorable avec réserves » ou « Défavorable ».");
+        }
+        if (observations == 0 && "FAVR".equals(idAvis)) {
+            throw new BusinessRuleException(
+                    "Aucune observation relevée à l'examen : l'avis « Favorable avec réserves » est incohérent"
+                            + " — choisissez « Favorable ».");
+        }
+    }
+
+    private String validerSecretaireSeance(Integer idPv, String idSecretaire) {
+        String localite = repository.findLocaliteByPv(idPv).orElse(null);
+        boolean valide = localite != null && controleurDirectory.verificateurs(localite).stream()
+                .anyMatch(c -> idSecretaire.trim().equals(c.getImControleur()));
+        if (!valide) {
+            throw new BusinessRuleException(
+                    "Le Secrétaire de séance doit être un Vérificateur de la localité du dossier.");
+        }
+        return idSecretaire.trim();
     }
 
     /** [Auto] Notifie le CC et le Président de la localité du dossier ({@code PV_A_VALIDER}). */
@@ -332,49 +445,37 @@ public class PvExamenService {
      * Idempotent : on ne réécrit le statut que si le dossier est bien {@code EXAMINE}. Dans tous les
      * cas, le PV est transmis à la PRMP ({@link #notifierPvSigne}).
      */
+    /**
+     * ⚠️ Règle MODIFIÉE (2026-08-01, spec navette) — à la signature, TOUS les avis passent par le
+     * VÉRIFICATEUR (dossier {@code EN_VERIFICATION}) : FAVR → boucle de rectification (cas 2) ;
+     * FAV/DEF/NSP → transmission du sens de la décision à SIGMP puis archivage (cas 1). La clôture
+     * n'intervient plus ici : elle est posée à l'ARCHIVAGE du PV par l'Assistant contrôleur.
+     */
     private void brancherSelonAvis(PvExamen pv) {
         boolean reserve = AVIS_FAVORABLE_RESERVE.equals(repository.findIdAvisByPv(pv.getIdPv()).orElse(null));
         Integer idDossier = repository.findIdDossierByPv(pv.getIdPv()).orElse(null);
         if (idDossier != null) {
             dossierRepository.findById(idDossier).ifPresent(d -> {
                 if (StatutDossier.EXAMINE.name().equals(d.getStatut())) {
-                    d.setStatut(reserve ? StatutDossier.EN_VERIFICATION.name() : StatutDossier.CLOTURE.name());
+                    d.setStatut(StatutDossier.EN_VERIFICATION.name());
                     dossierRepository.save(d);
                 }
             });
         }
+        if (reserve) {
+            // ⚠️ Spec « circuit des observations FAVR » (2026-08-02) — le PÉRIMÈTRE des observations
+            // transmises à la PRMP est FIGÉ dès l'émission du PV : snapshot des observations de
+            // l'examen arrêtées au PV (première transmission = ces observations, rien d'autre).
+            observationPvService.genererPourPv(pv);
+        }
         notifierPvSigne(pv);                            // PRMP (transmission systématique)
         notifierVerificateur(pv, reserve, idDossier);
-        notifierAssistantPvDefinitif(pv, reserve, idDossier);
-    }
-
-    /**
-     * ⚠️ Règle ajoutée — copie du PV définitif aux Assistants contrôleurs de la localité, uniquement
-     * si l'avis n'est PAS favorable avec réserves ({@code ≠ FAVR}) — le dossier est alors clôturé
-     * immédiatement ({@code PV_DEFINITIF_COPIE}). Pour un PV FAVR, l'assistant est notifié plus tard,
-     * à la clôture du dossier après vérification (cf. {@code VerificationService}).
-     */
-    private void notifierAssistantPvDefinitif(PvExamen pv, boolean reserve, Integer idDossier) {
-        if (reserve) {
-            return;
-        }
-        String localite = repository.findLocaliteByPv(pv.getIdPv()).orElse(null);
-        if (localite == null) {
-            return;
-        }
-        String avis = repository.findIdAvisByPv(pv.getIdPv()).orElse(null);
-        String titre = "PV définitif (copie)";
-        String corps = "PV définitif " + referencePv(pv) + " (avis " + avis + "), dossier "
-                + (idDossier == null ? "?" : idDossier) + ".";
-        for (Controleur a : controleurDirectory.assistantsControleurs(localite)) {
-            notificationService.emettre(idDossier, TypeNotification.PV_DEFINITIF_COPIE,
-                    a.getImControleur(), a.getEmailCont(), titre, corps);
-        }
     }
 
     /**
      * Notifie le(s) vérificateur(s) de la localité du dossier : {@code PV_A_VERIFIER} si l'avis est
-     * favorable avec réserves (action attendue), sinon {@code PV_POUR_INFO} (lecture seule).
+     * favorable avec réserves (boucle de rectification), sinon {@code DECISION_A_TRANSMETTRE}
+     * (⚠️ spec navette 2026-08-01 : le vérificateur transmet le sens de la décision à SIGMP).
      */
     private void notifierVerificateur(PvExamen pv, boolean reserve, Integer idDossier) {
         String localite = repository.findLocaliteByPv(pv.getIdPv()).orElse(null);
@@ -382,11 +483,11 @@ public class PvExamenService {
             return;
         }
         String reference = referencePv(pv);
-        TypeNotification type = reserve ? TypeNotification.PV_A_VERIFIER : TypeNotification.PV_POUR_INFO;
-        String titre = reserve ? "PV à vérifier" : "PV signé (pour information)";
+        TypeNotification type = reserve ? TypeNotification.PV_A_VERIFIER : TypeNotification.DECISION_A_TRANSMETTRE;
+        String titre = reserve ? "PV à vérifier" : "Décision à transmettre à SIGMP";
         String corps = reserve
                 ? "Le PV " + reference + " (favorable avec réserves) est à vérifier."
-                : "Le PV " + reference + " est signé, dossier clôturé (lecture seule).";
+                : "Le PV " + reference + " est signé : transmettez le sens de la décision à SIGMP, puis le PV à l'assistant pour archivage.";
         for (Controleur v : controleurDirectory.verificateurs(localite)) {
             notificationService.emettre(idDossier, type, v.getImControleur(), v.getEmailCont(), titre, corps);
         }
@@ -421,6 +522,22 @@ public class PvExamenService {
         PvExamen pv = load(id);
         requireStatut(pv, StatutPv.PROJET_SOUMIS);
 
+        // ⚠️ Règle ajoutée (2026-08-01) — la CLÔTURE DE NAVETTE (acceptation, Président/CC) pose
+        // l'AVIS GLOBAL et le SECRÉTAIRE DE SÉANCE : l'examen soumis par le Membre ne porte que les
+        // résultats des points de contrôle et la synthèse des observations.
+        if (req.idAvis() == null || req.idAvis().isBlank()) {
+            throw new BusinessRuleException(
+                    "L'avis global est obligatoire pour clore la navette (acceptation du projet de PV).");
+        }
+        validerCoherenceAvis(pv.getIdExamen(), req.idAvis().trim());
+        pv.setIdAvis(req.idAvis().trim());
+        if (req.idSecretaireSeance() != null && !req.idSecretaireSeance().isBlank()) {
+            pv.setIdSecretaireSeance(validerSecretaireSeance(id, req.idSecretaireSeance()));
+        } else if (pv.getIdSecretaireSeance() == null || pv.getIdSecretaireSeance().isBlank()) {
+            throw new BusinessRuleException(
+                    "Le Secrétaire de séance (Vérificateur de la localité du dossier) est obligatoire pour clore la navette.");
+        }
+
         pv.setStatutPv(StatutPv.PROJET_ACCEPTE.name());
         pv.setDateAcceptation(LocalDate.now());
         ajouterNavette(pv, SensNavette.ACCEPTATION, req.imActeur(), req.commentaire());
@@ -437,8 +554,17 @@ public class PvExamenService {
      * SIGNE dès que le Membre <em>et</em> (le Président <em>ou</em> le CC) ont signé.
      */
     public PvExamenDto signer(Integer id, PvActionRequest req) {
-        PvExamen pv = load(id);
+        // ⚠️ Anti-doublon (2026-08-02) — chargement VERROUILLÉ : la génération du PDF rend la signature
+        // longue ; des clics répétés lisaient tous PROJET_ACCEPTE et notifiaient plusieurs fois. Le
+        // verrou sérialise : la 2ᵉ requête attend, voit SIGNE (ou la date posée) et reçoit 409.
+        PvExamen pv = repository.findByIdVerrouille(id)
+                .orElseThrow(() -> new ResourceNotFoundException("PvExamen introuvable : " + id));
         requireStatut(pv, StatutPv.PROJET_ACCEPTE);
+        // Garde-fou (⚠️ règle ajoutée 2026-08-01) : pas de signature sans avis global (posé à l'acceptation).
+        if (pv.getIdAvis() == null || pv.getIdAvis().isBlank()) {
+            throw new BusinessRuleException(
+                    "Avis global manquant : clôturez la navette (acceptation avec avis) avant la signature.");
+        }
 
         RoleSignataire role = parseRole(req.role());
         // Le signataire est l'utilisateur authentifié (jamais req.imActeur(), falsifiable).
@@ -453,6 +579,7 @@ public class PvExamenService {
                     throw new AccessDeniedException(
                             "La signature Membre est réservée au Membre attributaire du PV (§3.5).");
                 }
+                exigerPasEncoreSigne(pv.getDateSignatureMembre(), "Membre");
                 pv.setDateSignatureMembre(today);
                 pv.setImCtrlMembre(signataire);
             }
@@ -461,6 +588,7 @@ public class PvExamenService {
                     throw new AccessDeniedException("La signature Président est réservée à un Président (§3.2).");
                 }
                 exigerCoSignataireDistinct(signataire, pv);
+                exigerPasEncoreSigne(pv.getDateSignaturePresident(), "Président");
                 pv.setDateSignaturePresident(today);
                 pv.setImCtrlPresident(signataire);
             }
@@ -470,6 +598,7 @@ public class PvExamenService {
                 }
                 exigerCcDeLaLocalite(pv);
                 exigerCoSignataireDistinct(signataire, pv);
+                exigerPasEncoreSigne(pv.getDateSignatureCc(), "Chef de commission");
                 pv.setDateSignatureCc(today);
                 pv.setImCtrlCc(signataire);
             }
@@ -489,6 +618,52 @@ public class PvExamenService {
             return dto;
         }
         return PvExamenMapper.toDto(repository.save(pv));
+    }
+
+    /**
+     * ⚠️ Spec navette (2026-08-01) — ARCHIVAGE du PV par l'Assistant contrôleur (circuit unique PV/lettres) :
+     * PV {@code SIGNE} + dossier {@code DECISION_TRANSMISE_SIGMP} (la décision doit avoir été transmise à
+     * SIGMP par le vérificateur). Pose la date/l'auteur d'archivage, CLÔT le dossier et émet l'alerte
+     * {@code CLOTURE_ELIGIBLE} (chargés de publication) — déplacée ici depuis la vérification.
+     */
+    public PvExamenDto archiver(Integer id) {
+        PvExamen pv = load(id);
+        if (!StatutPv.SIGNE.name().equals(pv.getStatutPv())) {
+            throw new BusinessRuleException("Archivage impossible : le PV n'est pas signé (statut « "
+                    + pv.getStatutPv() + " »).");
+        }
+        if (pv.getDateArchivage() != null) {
+            throw new BusinessRuleException("Ce PV est déjà archivé (le " + pv.getDateArchivage() + ").");
+        }
+        String localite = repository.findLocaliteByPv(id).orElse(null);
+        String maLocalite = CurrentUser.localite().filter(s -> !s.isBlank()).orElse(null);
+        if (localite != null && !localite.equals(maLocalite)) {
+            throw new AccessDeniedException("Archivage réservé à l'Assistant contrôleur de la localité du dossier.");
+        }
+        Integer idDossier = repository.findIdDossierByPv(id).orElse(null);
+        Dossier dossier = idDossier == null ? null : dossierRepository.findById(idDossier).orElse(null);
+        if (dossier == null || !StatutDossier.DECISION_TRANSMISE_SIGMP.name().equals(dossier.getStatut())) {
+            throw new BusinessRuleException("Archivage impossible : la décision du dossier n'a pas encore été "
+                    + "transmise à SIGMP par le vérificateur (statut « "
+                    + (dossier == null ? "?" : dossier.getStatut()) + " »).");
+        }
+        pv.setDateArchivage(LocalDate.now());
+        pv.setImArchiveur(CurrentUser.ref().orElse(null));
+        PvExamen saved = repository.save(pv);
+        dossier.setStatut(StatutDossier.CLOTURE.name());
+        dossierRepository.save(dossier);
+        notifierClotureEligible(idDossier);
+        return toDtoLecture(saved);
+    }
+
+    /** Alerte de clôture éligible (§3.7) — émise à l'ARCHIVAGE du PV (clôture du dossier). */
+    private void notifierClotureEligible(Integer idDossier) {
+        String titre = "Dossier clôturé éligible à publication";
+        String corps = "Le dossier " + idDossier + " est clôturé conforme et éligible à publication.";
+        for (Controleur charge : controleurDirectory.chargesPublication()) {
+            notificationService.emettre(idDossier, TypeNotification.CLOTURE_ELIGIBLE,
+                    charge.getImControleur(), charge.getEmailCont(), titre, corps);
+        }
     }
 
     /** Le co-signataire (Président/CC) doit être une personne différente du Membre (§2.6). */
@@ -514,11 +689,17 @@ public class PvExamenService {
      */
     private void notifierPvSigne(PvExamen pv) {
         String titre = "PV signé";
-        String reference = pv.getReferencePv() != null ? pv.getReferencePv() : ("n° " + pv.getIdPv());
-        String corps = "Le PV " + reference + " a été signé.";
+        String reference = pv.getRefePv() != null ? pv.getRefePv()
+                : pv.getReferencePv() != null ? pv.getReferencePv() : ("n° " + pv.getIdPv());
+        String corps = "Le PV " + reference + " a été signé. Il est consultable dans « PV définitifs » "
+                + "(base de la rectification selon les observations).";
+        // ⚠️ 2026-08-02 — notification ACTIONNABLE : portée par la PRMP (ref=idPrmp) avec objet PV +
+        // dossier (avant : émission par e-mail seul, sans objet — clic inerte côté front).
+        Integer idDossier = repository.findIdDossierByPv(pv.getIdPv()).orElse(null);
         for (String idPrmp : repository.findIdPrmpByPv(pv.getIdPv())) {
             String email = prmpRepository.findById(idPrmp).map(Prmp::getEmailPrmp).orElse(null);
-            notificationService.emettre(null, TypeNotification.PV_SIGNE, null, email, titre, corps);
+            notificationService.emettrePrmp(TypeNotification.PV_SIGNE, idPrmp, email,
+                    pv.getIdPv(), TypeObjet.PV, idDossier, titre, corps);
         }
     }
 
@@ -529,6 +710,17 @@ public class PvExamenService {
     private PvExamen load(Integer id) {
         return repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("PvExamen introuvable : " + id));
+    }
+
+    /**
+     * ⚠️ Règle ajoutée (2026-08-02) — chaque rôle ne signe qu'UNE fois : re-signer écraserait la date
+     * de signature déjà posée (409 ; le front désactive le bouton, le backend reste l'autorité).
+     */
+    private void exigerPasEncoreSigne(LocalDate dateSignature, String roleLibelle) {
+        if (dateSignature != null) {
+            throw new BusinessRuleException("Le PV est déjà signé pour le rôle " + roleLibelle
+                    + " (le " + dateSignature + ") : une signature ne se pose qu'une fois.");
+        }
     }
 
     /** Vérifie que le PV est dans l'un des statuts attendus, sinon HTTP 409. */
