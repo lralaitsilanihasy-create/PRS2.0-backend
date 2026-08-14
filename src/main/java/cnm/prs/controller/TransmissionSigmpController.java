@@ -38,7 +38,7 @@ public class TransmissionSigmpController {
     }
 
     /** Transmet le sens de la décision du dossier (corps : {@code { idDossier }}) — VÉRIFICATEUR. */
-    @PreAuthorize("hasRole('VERIFICATEUR')")
+    @PreAuthorize("@perm.peutExercer('VERIFICATEUR')")
     @PostMapping
     public ResponseEntity<TransmissionSigmpDto> transmettre(@Valid @RequestBody TransmissionSigmpDto dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.transmettre(dto.getIdDossier()));

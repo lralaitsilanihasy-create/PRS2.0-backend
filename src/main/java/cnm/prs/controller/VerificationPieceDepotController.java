@@ -39,7 +39,7 @@ public class VerificationPieceDepotController {
     }
 
     /** Enregistre une décision (CONFORME / NON_CONFORME / MANQUANTE) — SECRÉTAIRE. */
-    @PreAuthorize("hasRole('SECRETAIRE')")
+    @PreAuthorize("@perm.peutExercer('SECRETAIRE')")
     @PostMapping
     public ResponseEntity<VerificationPieceDepotDto> enregistrer(@Valid @RequestBody VerificationPieceDepotDto dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.enregistrer(dto));

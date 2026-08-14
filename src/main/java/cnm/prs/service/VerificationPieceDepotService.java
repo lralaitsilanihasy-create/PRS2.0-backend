@@ -43,14 +43,17 @@ public class VerificationPieceDepotService {
     private final DossierRepository dossierRepository;
     private final TypePieceJointeRepository typePieceJointeRepository;
     private final PieceJointeDossierRepository pieceJointeDossierRepository;
+    private final cnm.prs.security.PermissionService permissionService;
 
     public VerificationPieceDepotService(VerificationPieceDepotRepository repository,
             DossierRepository dossierRepository, TypePieceJointeRepository typePieceJointeRepository,
-            PieceJointeDossierRepository pieceJointeDossierRepository) {
+            PieceJointeDossierRepository pieceJointeDossierRepository,
+            cnm.prs.security.PermissionService permissionService) {
         this.repository = repository;
         this.dossierRepository = dossierRepository;
         this.typePieceJointeRepository = typePieceJointeRepository;
         this.pieceJointeDossierRepository = pieceJointeDossierRepository;
+        this.permissionService = permissionService;
     }
 
     /** Historique complet des vérifications du dossier (ASC — traçabilité §6). */
@@ -62,8 +65,11 @@ public class VerificationPieceDepotService {
 
     /** Enregistre une décision (append-only) — SECRÉTAIRE, dossier SOUMIS ou EN_ATTENTE_COMPLEMENTS_DEPOT. */
     public VerificationPieceDepotDto enregistrer(VerificationPieceDepotDto dto) {
-        if (CurrentUser.profil().orElse(null) != ProfilUtilisateur.SECRETAIRE) {
-            throw new AccessDeniedException("Le contrôle de complétude des pièces est réservé au Secrétaire.");
+        // ⚠️ Règle MODIFIÉE (2026-08-14, délégation ascendante) : tâche du Secrétaire, exerçable par
+        // le titulaire OU via une paire ACTIVE de t_delegation_profil (garde centrale).
+        if (!permissionService.peutExercer(ProfilUtilisateur.SECRETAIRE)) {
+            throw new AccessDeniedException(
+                    "Contrôle de complétude réservé au Secrétaire (titulaire ou délégation active).");
         }
         if (!DECISIONS.contains(dto.getDecision())) {
             throw new BusinessRuleException("Décision invalide : « " + dto.getDecision()

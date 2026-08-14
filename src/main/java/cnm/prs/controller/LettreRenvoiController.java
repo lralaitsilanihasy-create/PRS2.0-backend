@@ -64,32 +64,32 @@ public class LettreRenvoiController {
     }
 
     /** Création d'une lettre de renvoi (statut BROUILLON) — clôture de navette, Président/CC. */
-    @PreAuthorize("hasAnyRole('CHEF_COMMISSION','PRESIDENT')")
+    @PreAuthorize("@perm.peutExercer('CHEF_COMMISSION')")
     @PostMapping
     public ResponseEntity<LettreRenvoiDto> create(@Valid @RequestBody LettreRenvoiDto dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.create(dto));
     }
 
-    @PreAuthorize("hasAnyRole('CHEF_COMMISSION','PRESIDENT')")
+    @PreAuthorize("@perm.peutExercer('CHEF_COMMISSION')")
     @PutMapping("/{id}")
     public LettreRenvoiDto update(@PathVariable Integer id, @Valid @RequestBody LettreRenvoiDto dto) {
         return service.update(id, dto);
     }
 
-    @PreAuthorize("hasAnyRole('CHEF_COMMISSION','PRESIDENT')")
+    @PreAuthorize("@perm.peutExercer('CHEF_COMMISSION')")
     @PostMapping("/{id}/soumettre")
     public LettreRenvoiDto soumettre(@PathVariable Integer id) {
         return service.soumettre(id);
     }
 
-    @PreAuthorize("hasAnyRole('CHEF_COMMISSION','PRESIDENT')")
+    @PreAuthorize("@perm.peutExercer('CHEF_COMMISSION')")
     @PostMapping("/{id}/signer")
     public LettreRenvoiDto signer(@PathVariable Integer id) {
         return service.signer(id);
     }
 
     /** ⚠️ Spec navette (2026-08-01) — archivage de la lettre signée par l'Assistant contrôleur. */
-    @PreAuthorize("hasRole('ASSISTANT_CONTROLEUR')")
+    @PreAuthorize("@perm.peutExercer('ASSISTANT_CONTROLEUR')")
     @PostMapping("/{id}/archiver")
     public LettreRenvoiDto archiver(@PathVariable Integer id) {
         return service.archiver(id);

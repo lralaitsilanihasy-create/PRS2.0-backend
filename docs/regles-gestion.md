@@ -649,6 +649,27 @@ Accès complet aux référentiels, comptes utilisateurs, journal d'audit, hiéra
   - Plan comptable tr_compte et répertoire tr_entite_contract.
 - Délégations de profil [Écriture]
   - Gestion des entrées t_delegation_profil — quels profils peuvent exercer les tâches d'autres profils.
+- ⚠️ **Règle ajoutée (2026-08-14) — délégation ascendante de profils, pilotée par les données** [Auto]
+  - `t_delegation_profil` est la **source unique** de la règle permanente : la garde centrale
+    `PermissionService.peutExercer(profilRequis)` autorise si **profil courant == requis** OU si la
+    paire **(courant → requis)** est **active** en base. Aucune liste de profils en dur dans les
+    contrôleurs/services pour les tâches hiérarchiques.
+  - **Hiérarchie** (rang décroissant) : Président > Secrétaire > Chef de commission > Membre >
+    Contrôleur vérificateur > Assistant contrôleur. **Hors hiérarchie** : PRMP, Administrateur,
+    Chargé de publication (aucune paire ne les concerne).
+  - **Les 9 paires autorisées** (seed idempotent `DelegationHierarchieSeeder`, `actif=true` à la
+    création, paires existantes jamais modifiées) : **Président →** Secrétaire, Chef de commission,
+    Membre, Vérificateur, Assistant (5) ; **Chef de commission →** Secrétaire, Membre, Vérificateur,
+    Assistant (4).
+  - ⚠️ **Pourquoi une table explicite et PAS un rang** : le Chef de commission est **sous** le
+    Secrétaire dans la hiérarchie mais **hérite quand même de ses droits** parce que la paire
+    CC → Secrétaire est **listée**. Un modèle « rang ≥ rang requis » casserait ce cas. La relation est
+    **non transitive** : Président → Secrétaire vaut parce que la paire est listée, pas via le CC.
+  - **Unicité** : une ligne par paire (contrainte `UQ_DELEGATION_PAIRE`) ; l'habilitation se pilote
+    par `ACTIF` — désactiver une paire retire l'habilitation **sans changement de code**, la
+    réactiver la rend (critère de recette).
+  - **Invariants** : accès Administrateur inchangé (`hasRole`), périmètre par localité inchangé,
+    actes d'identité non délégables (signatures du PV, signature régionale des lettres de renvoi).
 - ⚠️ **Règle ajoutée (2026-08-13) — catégorie des modes de passation** [Écriture]
   - Chaque mode (`tr_mode_passation`) porte une **catégorie déclarative** `CATEGORIE` :
     **`NORMAL`** (mode de droit commun — l'appel d'offres ouvert au sens du Code des marchés publics)

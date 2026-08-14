@@ -117,6 +117,7 @@ class CnmWorkflowIntegrationTest {
 
     @Autowired private MockMvc mvc;
     @Autowired private TokenService tokenService;
+    @Autowired private cnm.prs.security.PermissionService permissionService;
     @Autowired private PasswordEncoder passwordEncoder;
     @Autowired private PieceJointeService pieceJointeService;
     @Autowired private NotificationService notificationService;
@@ -212,15 +213,21 @@ class CnmWorkflowIntegrationTest {
         controleurRepository.save(controleur("CTRASS", 9, "ANT"));  // Assistant contrôleur (ANT)
         prmpRepository.save(prmp("PRMP001", "ANT"));
 
-        // Délégations actives (orientation MLD : délégant = profil qui exerce,
-        // délégué = profil dont la tâche est exercée). Président (2) et CC (3) exercent
-        // les tâches de Secrétaire (4), Membre (5) et Vérificateur (6).
+        // Délégation ascendante (⚠️ 2026-08-14) — les 9 PAIRES OFFICIELLES (orientation MLD :
+        // délégant = profil qui exerce, délégué = profil dont la tâche est exercée) :
+        // Président (2) → Secrétaire (4), CC (3), Membre (5), Vérificateur (6), Assistant (9) ;
+        // CC (3) → Secrétaire (4), Membre (5), Vérificateur (6), Assistant (9).
+        // Table EXPLICITE, pas de rang : la paire CC → Secrétaire est listée alors que le CC est
+        // SOUS le Secrétaire dans la hiérarchie.
         delegationProfilRepository.save(delegation(1, 2, 4));
         delegationProfilRepository.save(delegation(2, 2, 5));
         delegationProfilRepository.save(delegation(3, 2, 6));
         delegationProfilRepository.save(delegation(4, 3, 4));
         delegationProfilRepository.save(delegation(5, 3, 5));
         delegationProfilRepository.save(delegation(6, 3, 6));
+        delegationProfilRepository.save(delegation(7, 2, 3));
+        delegationProfilRepository.save(delegation(8, 2, 9));
+        delegationProfilRepository.save(delegation(9, 3, 9));
 
         String hash = passwordEncoder.encode("pw");
         compteAuthRepository.save(new CompteAuth("CTRPRE", hash, "CONTROLEUR", "CTRPRE", true));
@@ -1022,6 +1029,97 @@ class CnmWorkflowIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[?(@.idDossier==50)]", hasSize(1)))
                 .andExpect(jsonPath("$.content[?(@.idDossier==51)]", hasSize(0)));
+    }
+
+    /** Positionne le contexte de sécurité sur un JWT du profil donné (test direct de la garde centrale). */
+    private void authentifierProfil(ProfilUtilisateur profil) {
+        org.springframework.security.oauth2.jwt.Jwt jwt = org.springframework.security.oauth2.jwt.Jwt
+                .withTokenValue("test").header("alg", "HS256").subject("test")
+                .claim("role", profil.name()).build();
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                new org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken(jwt));
+    }
+
+    @Test
+    @DisplayName("Délégation ascendante — matrice complète : titulaire + les 9 paires de la table, rien d'autre")
+    void delegation_matricePaires() {
+        java.util.List<ProfilUtilisateur> hierarchie = java.util.List.of(
+                ProfilUtilisateur.PRESIDENT, ProfilUtilisateur.SECRETAIRE, ProfilUtilisateur.CHEF_COMMISSION,
+                ProfilUtilisateur.MEMBRE, ProfilUtilisateur.VERIFICATEUR, ProfilUtilisateur.ASSISTANT_CONTROLEUR);
+        java.util.Map<ProfilUtilisateur, java.util.Set<ProfilUtilisateur>> paires = java.util.Map.of(
+                ProfilUtilisateur.PRESIDENT, java.util.Set.of(
+                        ProfilUtilisateur.SECRETAIRE, ProfilUtilisateur.CHEF_COMMISSION, ProfilUtilisateur.MEMBRE,
+                        ProfilUtilisateur.VERIFICATEUR, ProfilUtilisateur.ASSISTANT_CONTROLEUR),
+                ProfilUtilisateur.CHEF_COMMISSION, java.util.Set.of(
+                        ProfilUtilisateur.SECRETAIRE, ProfilUtilisateur.MEMBRE,
+                        ProfilUtilisateur.VERIFICATEUR, ProfilUtilisateur.ASSISTANT_CONTROLEUR));
+        java.util.List<ProfilUtilisateur> tousProfils = java.util.List.of(
+                ProfilUtilisateur.PRESIDENT, ProfilUtilisateur.SECRETAIRE, ProfilUtilisateur.CHEF_COMMISSION,
+                ProfilUtilisateur.MEMBRE, ProfilUtilisateur.VERIFICATEUR, ProfilUtilisateur.ASSISTANT_CONTROLEUR,
+                ProfilUtilisateur.PRMP, ProfilUtilisateur.CHARGE_PUBLICATION, ProfilUtilisateur.ADMINISTRATEUR);
+        try {
+            // Chaque profil exerce SES tâches ; Président les 5 subordonnés ; CC les 4 ; PERSONNE d'autre
+            // (négatifs : Secrétaire, Membre, Vérificateur, Assistant, PRMP, Chargé de publication,
+            // Administrateur n'exercent la tâche d'aucun autre) — aucune paire hors table.
+            for (ProfilUtilisateur courant : tousProfils) {
+                authentifierProfil(courant);
+                for (ProfilUtilisateur cible : hierarchie) {
+                    boolean attendu = courant == cible
+                            || paires.getOrDefault(courant, java.util.Set.of()).contains(cible);
+                    org.junit.jupiter.api.Assertions.assertEquals(attendu,
+                            permissionService.peutExercer(cible.name()), courant + " -> " + cible);
+                }
+            }
+            // ⚠️ Anti-régression : LE cas qu'un modèle de rang casserait — le CC est SOUS le Secrétaire
+            // dans la hiérarchie (Président > Secrétaire > CC > ...) mais hérite de ses droits parce que
+            // la paire CC → Secrétaire est LISTÉE dans la table. Jamais de comparaison de rangs.
+            authentifierProfil(ProfilUtilisateur.CHEF_COMMISSION);
+            assertTrue(permissionService.peutExercer("SECRETAIRE"));
+            // Non transitif et pas de réciprocité de rang : le Secrétaire (au-dessus du CC) n'exerce rien d'autre.
+            authentifierProfil(ProfilUtilisateur.SECRETAIRE);
+            assertFalse(permissionService.peutExercer("CHEF_COMMISSION"));
+            assertFalse(permissionService.peutExercer("MEMBRE"));
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+    }
+
+    @Test
+    @DisplayName("Délégation — recette : désactiver une paire (actif=false) retire l'habilitation sans changement "
+            + "de code ; la réactiver la rend")
+    void delegation_recette_toggleActif() throws Exception {
+        // Président crée une lettre de renvoi — tâche du CC, exercée via la paire 7 (Président → CC).
+        mvc.perform(post("/api/lettre-renvois").header("Authorization", tokenPresident)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"idExamen\":1}"))
+                .andExpect(status().isCreated());
+        // L'Admin DÉSACTIVE la paire → l'habilitation disparaît (403), sans aucun changement de code.
+        mvc.perform(put("/api/delegation-profils/7").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDelegation\":7,\"idProfileDelegant\":2,\"idProfileDelegue\":3,\"actif\":false}"))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/lettre-renvois").header("Authorization", tokenPresident)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"idExamen\":1}"))
+                .andExpect(status().isForbidden());
+        // Le CC titulaire reste habilité (la désactivation ne touche que la paire Président → CC).
+        mvc.perform(post("/api/lettre-renvois").header("Authorization", tokenCc)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"idExamen\":1}"))
+                .andExpect(status().isCreated());
+        // RÉACTIVATION → l'habilitation revient.
+        mvc.perform(put("/api/delegation-profils/7").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDelegation\":7,\"idProfileDelegant\":2,\"idProfileDelegue\":3,\"actif\":true}"))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/lettre-renvois").header("Authorization", tokenPresident)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"idExamen\":1}"))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    @DisplayName("Délégation — unicité : une seule ligne par paire (délégant, délégué), doublon rejeté")
+    void delegation_unicitePaire() {
+        // La paire Président (2) → Secrétaire (4) existe déjà (id 1) : un doublon viole UQ_DELEGATION_PAIRE.
+        assertThrows(org.springframework.dao.DataIntegrityViolationException.class,
+                () -> delegationProfilRepository.saveAndFlush(delegation(90, 2, 4)));
     }
 
     @Test
@@ -2926,12 +3024,22 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
-    @DisplayName("Vérification réservée au profil VÉRIFICATEUR : un CC (profil délégable) → 403")
+    @DisplayName("Tâche du Vérificateur (⚠️ délégation ascendante 2026-08-14) : le CC statue un passage via la "
+            + "paire CC→Vérificateur ; un Secrétaire (aucune paire) → 403")
     void verif_parNonVerificateur_403() throws Exception {
-        signerPvAvecAvis(80, "FAVR"); // dossier 1 → EN_VERIFICATION
-        mvc.perform(post("/api/verifications").header("Authorization", tokenCc).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idReception\":1,\"idPv\":80,\"obsLevees\":false}"))
+        String tokenSec = bearer("CTRSEC", ProfilUtilisateur.SECRETAIRE, TypeActeur.CONTROLEUR, "CTRSEC", "ANT");
+        signerPvAvecAvis(80, "FAVR"); // dossier 1 → EN_VERIFICATION, périmètre d'observations figé
+
+        // Négatif : un Secrétaire (aucune paire Secrétaire → Vérificateur en table) → 403.
+        mvc.perform(post("/api/observations-pv/passage").header("Authorization", tokenSec)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDossier\":1,\"decisions\":[{\"idObservationPv\":1,\"decision\":\"LEVEE\"}]}"))
                 .andExpect(status().isForbidden());
+
+        // Le CC exerce la tâche du Vérificateur (paire active CC → Vérificateur, même localité).
+        passageObservationDossier1(tokenCc, "LEVEE", null);
+        mvc.perform(get("/api/dossiers/1").header("Authorization", tokenCc))
+                .andExpect(jsonPath("$.statut").value("OBSERVATIONS_LEVEES"));
     }
 
     @Test

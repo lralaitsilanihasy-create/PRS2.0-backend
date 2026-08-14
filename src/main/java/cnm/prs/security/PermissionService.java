@@ -48,8 +48,21 @@ public class PermissionService {
         } catch (IllegalArgumentException ex) {
             return false;
         }
+        return peutExercer(cible);
+    }
+
+    /**
+     * ⚠️ Règle « délégation ascendante » (2026-08-14) — GARDE CENTRALE unique : titulaire
+     * ({@code profil courant == cible}) OU paire (courant → cible) <strong>active</strong> dans
+     * {@code t_delegation_profil}. Les paires autorisées sont une <strong>table explicite</strong>
+     * (seed {@code DelegationHierarchieSeeder}), jamais une comparaison de rangs : le Chef de
+     * commission est SOUS le Secrétaire dans la hiérarchie mais la paire CC → Secrétaire est
+     * listée — un modèle « rang ≥ rang requis » casserait ce cas. Non transitive.
+     * Surcharge utilisée par les services (les {@code @PreAuthorize} passent par la variante String).
+     */
+    public boolean peutExercer(ProfilUtilisateur cible) {
         ProfilUtilisateur courant = CurrentUser.profil().orElse(null);
-        if (courant == null) {
+        if (courant == null || cible == null) {
             return false;
         }
         if (courant == cible) {

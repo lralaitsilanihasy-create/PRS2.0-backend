@@ -641,6 +641,22 @@ si aucun résultat (pas de 404). `{nom}` est un fragment (URL-encoder si espaces
 > **Convention** : `idProfileDelegant` = profil qui **exerce** la tâche (ex. Président) ;
 > `idProfileDelegue` = profil **dont la tâche est exercée** (ex. Secrétaire) ; `actif` active/désactive.
 
+> ⚠️ **Délégation ascendante — SOURCE UNIQUE de la règle (2026-08-14).** Cette table pilote la garde
+> centrale **`PermissionService.peutExercer(profilRequis)`** (`@perm.peutExercer('X')` dans les
+> `@PreAuthorize`, même garde dans les services) : un utilisateur exerce la tâche d'un profil s'il en
+> est **titulaire** OU si la paire (profil courant → profil requis) est **active** en base. Hiérarchie
+> (rang décroissant) : Président > Secrétaire > Chef de commission > Membre > Contrôleur vérificateur >
+> Assistant contrôleur ; PRMP, Administrateur et Chargé de publication **hors hiérarchie**. Les
+> **9 paires autorisées** (seed `DelegationHierarchieSeeder`, idempotent — ne réactive jamais une paire
+> désactivée par l'Admin) : **Président →** Secrétaire, Chef de commission, Membre, Vérificateur,
+> Assistant (5) ; **Chef de commission →** Secrétaire, Membre, Vérificateur, Assistant (4).
+> **Table explicite, PAS de comparaison de rangs** : le CC est SOUS le Secrétaire dans la hiérarchie mais
+> hérite de ses droits parce que la paire CC → Secrétaire est LISTÉE — un modèle « rang ≥ rang requis »
+> casserait ce cas. **Non transitive.** Désactiver une paire (`actif=false`) retire l'habilitation
+> **sans changement de code** ; la réactiver la rend. L'accès `ADMINISTRATEUR` (via `hasRole`) et le
+> **périmètre par localité** restent inchangés ; les actes d'**identité** (signatures du PV, signature
+> régionale des lettres) restent non délégables.
+
 **Champs `DelegationProfilDto`**
 
 | Champ (JSON) | Type | Obligatoire | Contraintes |
@@ -649,6 +665,10 @@ si aucun résultat (pas de 404). `{nom}` est un fragment (URL-encoder si espaces
 | idProfileDelegant | number | Oui | @NotNull — profil qui exerce |
 | idProfileDelegue | number | Oui | @NotNull — profil dont la tâche est exercée |
 | actif | boolean | Oui | @NotNull |
+
+> **Unicité** : une seule ligne par paire (`idProfileDelegant`, `idProfileDelegue`) — contrainte
+> `UQ_DELEGATION_PAIRE` (migration `docs/migrations/2026-08-14_delegation_unicite_paires.sql`) ;
+> doublon au POST → **409**. L'habilitation se pilote par `actif`, jamais par des doublons.
 
 **Endpoints**
 

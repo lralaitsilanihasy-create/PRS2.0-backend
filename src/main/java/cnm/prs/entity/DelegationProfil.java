@@ -8,6 +8,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -15,9 +16,15 @@ import lombok.NoArgsConstructor;
 /**
  * Entité JPA mappée sur la table {@code t_delegation_profil}.
  * Générée à partir du MLD (db_ppm110626.pgerd).
+ *
+ * <p>⚠️ Règle ajoutée (2026-08-14) — <strong>une ligne par paire</strong> : la paire
+ * (délégant, délégué) est unique (contrainte {@code UQ_DELEGATION_PAIRE}, migration
+ * {@code docs/migrations/2026-08-14_delegation_unicite_paires.sql}). L'habilitation se
+ * pilote par {@code ACTIF}, jamais par des doublons.</p>
  */
 @Entity
-@Table(name = "t_delegation_profil")
+@Table(name = "t_delegation_profil", uniqueConstraints = @UniqueConstraint(
+        name = "UQ_DELEGATION_PAIRE", columnNames = { "ID_PROFILE_DELEGANT", "ID_PROFILE_DELEGUE" }))
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

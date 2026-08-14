@@ -49,15 +49,17 @@ public class TransmissionSigmpService {
     private final PvExamenRepository pvExamenRepository;
     private final NotificationService notificationService;
     private final ControleurDirectory controleurDirectory;
+    private final cnm.prs.security.PermissionService permissionService;
 
     public TransmissionSigmpService(TransmissionSigmpRepository repository, DossierRepository dossierRepository,
             PvExamenRepository pvExamenRepository, NotificationService notificationService,
-            ControleurDirectory controleurDirectory) {
+            ControleurDirectory controleurDirectory, cnm.prs.security.PermissionService permissionService) {
         this.repository = repository;
         this.dossierRepository = dossierRepository;
         this.pvExamenRepository = pvExamenRepository;
         this.notificationService = notificationService;
         this.controleurDirectory = controleurDirectory;
+        this.permissionService = permissionService;
     }
 
     @Transactional(readOnly = true)
@@ -72,8 +74,11 @@ public class TransmissionSigmpService {
 
     /** Transmet le sens de la décision du dossier (dérivé de l'avis du PV signé) — Vérificateur de la localité. */
     public TransmissionSigmpDto transmettre(Integer idDossier) {
-        if (CurrentUser.profil().orElse(null) != ProfilUtilisateur.VERIFICATEUR) {
-            throw new AccessDeniedException("Seul un Contrôleur vérificateur transmet la décision à SIGMP.");
+        // ⚠️ Règle MODIFIÉE (2026-08-14, délégation ascendante) : tâche du Vérificateur, exerçable par
+        // le titulaire OU via une paire ACTIVE de t_delegation_profil (garde centrale). Localité inchangée.
+        if (!permissionService.peutExercer(ProfilUtilisateur.VERIFICATEUR)) {
+            throw new AccessDeniedException(
+                    "Transmission SIGMP réservée au Contrôleur vérificateur (titulaire ou délégation active).");
         }
         Dossier dossier = dossierRepository.findById(idDossier)
                 .orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable : " + idDossier));

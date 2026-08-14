@@ -164,7 +164,7 @@ public class DossierController {
     }
 
     /** ⚠️ Spec recevabilité (2026-08-02) — signalement des pièces manquantes au DÉPÔT (SOUMIS → EN_ATTENTE_COMPLEMENTS_DEPOT). */
-    @PreAuthorize("hasRole('SECRETAIRE')")
+    @PreAuthorize("@perm.peutExercer('SECRETAIRE')")
     @PostMapping("/{id}/signaler-pieces-manquantes")
     public DossierDto signalerPiecesManquantes(@PathVariable Integer id) {
         return service.signalerPiecesManquantes(id);

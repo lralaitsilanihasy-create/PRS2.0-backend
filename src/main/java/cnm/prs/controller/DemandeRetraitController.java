@@ -53,14 +53,14 @@ public class DemandeRetraitController {
     }
 
     /** File « à valider » du CC (sa localité) / Président (toutes localités) : demandes EN_ATTENTE. */
-    @PreAuthorize("hasRole('CHEF_COMMISSION') or hasRole('PRESIDENT')")
+    @PreAuthorize("@perm.peutExercer('CHEF_COMMISSION')")
     @GetMapping("/a-valider")
     public List<DemandeRetraitDto> aValider() {
         return service.aValider();
     }
 
     /** Historique des demandes décidées (ACCEPTEE / REFUSEE), même scope. */
-    @PreAuthorize("hasRole('CHEF_COMMISSION') or hasRole('PRESIDENT')")
+    @PreAuthorize("@perm.peutExercer('CHEF_COMMISSION')")
     @GetMapping("/historique")
     public List<DemandeRetraitDto> historique() {
         return service.historique();
@@ -74,14 +74,14 @@ public class DemandeRetraitController {
     }
 
     // Décision : acceptation. Le service vérifie rôle↔localité (CC de la localité du dossier ou Président).
-    @PreAuthorize("hasRole('CHEF_COMMISSION') or hasRole('PRESIDENT')")
+    @PreAuthorize("@perm.peutExercer('CHEF_COMMISSION')")
     @PostMapping("/{id}/accepter")
     public DemandeRetraitDto accepter(@PathVariable Integer id) {
         return service.accepter(id);
     }
 
     // Décision : refus (motif optionnel). Le service vérifie rôle↔localité.
-    @PreAuthorize("hasRole('CHEF_COMMISSION') or hasRole('PRESIDENT')")
+    @PreAuthorize("@perm.peutExercer('CHEF_COMMISSION')")
     @PostMapping("/{id}/refuser")
     public DemandeRetraitDto refuser(@PathVariable Integer id,
             @RequestBody(required = false) @Valid DemandeRetraitDecisionRequest req) {

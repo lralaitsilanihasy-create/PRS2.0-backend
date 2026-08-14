@@ -71,7 +71,7 @@ public class KpiController {
     }
 
     /** Compteurs de contenu du menu Assistant contrôleur — filtrés sur sa localité (§3.7). */
-    @PreAuthorize("hasAnyRole('ASSISTANT_CONTROLEUR','ADMINISTRATEUR')")
+    @PreAuthorize("@perm.peutExercer('ASSISTANT_CONTROLEUR') or hasRole('ADMINISTRATEUR')")
     @GetMapping("/mes-compteurs-assistant")
     public CompteursAssistantDto mesCompteursAssistant() {
         return kpiService.mesCompteursAssistant();

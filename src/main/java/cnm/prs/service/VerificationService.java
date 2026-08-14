@@ -49,12 +49,15 @@ public class VerificationService {
     private final AuditLogRepository auditLogRepository;
     private final PrmpRepository prmpRepository;
     private final ObservationPvRepository observationPvRepository;
+    private final cnm.prs.security.PermissionService permissionService;
 
     public VerificationService(VerificationRepository repository, ReceptionRepository receptionRepository,
             DossierRepository dossierRepository, PvExamenRepository pvExamenRepository,
             ControleurDirectory controleurDirectory, NotificationService notificationService,
             AuditLogRepository auditLogRepository, PrmpRepository prmpRepository,
-            ObservationPvRepository observationPvRepository) {
+            ObservationPvRepository observationPvRepository,
+            cnm.prs.security.PermissionService permissionService) {
+        this.permissionService = permissionService;
         this.observationPvRepository = observationPvRepository;
         this.repository = repository;
         this.receptionRepository = receptionRepository;
@@ -108,10 +111,15 @@ public class VerificationService {
         }
     }
 
-    /** Seul le profil Contrôleur vérificateur peut vérifier (§3.6, ⚠️ règle ajoutée — pas de délégation). */
+    /**
+     * Tâche du Contrôleur vérificateur (§3.6) — ⚠️ règle MODIFIÉE (2026-08-14, délégation ascendante) :
+     * exercée par le titulaire OU via une paire ACTIVE de {@code t_delegation_profil} (garde centrale
+     * {@code PermissionService} — Président et CC via les paires seedées). Périmètre localité inchangé.
+     */
     private void exigerVerificateur() {
-        if (CurrentUser.profil().orElse(null) != ProfilUtilisateur.VERIFICATEUR) {
-            throw new AccessDeniedException("Seul un Contrôleur vérificateur peut vérifier (§3.6).");
+        if (!permissionService.peutExercer(ProfilUtilisateur.VERIFICATEUR)) {
+            throw new AccessDeniedException(
+                    "Tâche réservée au Contrôleur vérificateur (titulaire ou délégation active, §3.6).");
         }
     }
 

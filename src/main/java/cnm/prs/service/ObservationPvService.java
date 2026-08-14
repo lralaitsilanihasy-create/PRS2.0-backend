@@ -79,6 +79,7 @@ public class ObservationPvService {
     private final ReceptionRepository receptionRepository;
     private final VerificationService verificationService;
     private final DossierIntegriteService dossierIntegrite;
+    private final cnm.prs.security.PermissionService permissionService;
 
     public ObservationPvService(ObservationPvRepository repository, SuiviObservationRepository suiviRepository,
             DossierRepository dossierRepository, ExamenDetailRepository examenDetailRepository,
@@ -87,7 +88,9 @@ public class ObservationPvService {
             PieceJointeDossierRepository pieceJointeDossierRepository,
             TypePieceJointeRepository typePieceJointeRepository, PvExamenRepository pvExamenRepository,
             ReceptionRepository receptionRepository, VerificationService verificationService,
-            DossierIntegriteService dossierIntegrite) {
+            DossierIntegriteService dossierIntegrite,
+            cnm.prs.security.PermissionService permissionService) {
+        this.permissionService = permissionService;
         this.repository = repository;
         this.suiviRepository = suiviRepository;
         this.dossierRepository = dossierRepository;
@@ -210,8 +213,11 @@ public class ObservationPvService {
      * levées → {@code OBSERVATIONS_LEVEES} ; sinon → {@code EN_ATTENTE_DECISION_PRMP} + notification.
      */
     public List<ObservationPvDto> enregistrerPassage(PassageObservationsRequest req) {
-        if (CurrentUser.profil().orElse(null) != ProfilUtilisateur.VERIFICATEUR) {
-            throw new AccessDeniedException("Seul un Contrôleur vérificateur peut statuer les observations (§3.6).");
+        // ⚠️ Règle MODIFIÉE (2026-08-14, délégation ascendante) : tâche du Vérificateur, exerçable par
+        // le titulaire OU via une paire ACTIVE de t_delegation_profil (garde centrale). Localité inchangée.
+        if (!permissionService.peutExercer(ProfilUtilisateur.VERIFICATEUR)) {
+            throw new AccessDeniedException(
+                    "Tâche réservée au Contrôleur vérificateur (titulaire ou délégation active, §3.6).");
         }
         String im = CurrentUser.ref().filter(s -> !s.isBlank())
                 .orElseThrow(() -> new AccessDeniedException("Vérificateur non identifié."));

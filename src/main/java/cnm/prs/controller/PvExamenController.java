@@ -71,13 +71,13 @@ public class PvExamenController {
     }
 
     // Rédaction / édition du projet de PV : Membre (rédacteur), CC ou Président (§3.5).
-    @PreAuthorize("hasAnyRole('MEMBRE','CHEF_COMMISSION','PRESIDENT')")
+    @PreAuthorize("@perm.peutExercer('MEMBRE')")
     @PostMapping
     public ResponseEntity<PvExamenDto> create(@Valid @RequestBody PvExamenDto dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.create(dto));
     }
 
-    @PreAuthorize("hasAnyRole('MEMBRE','CHEF_COMMISSION','PRESIDENT')")
+    @PreAuthorize("@perm.peutExercer('MEMBRE')")
     @PutMapping("/{id}")
     public PvExamenDto update(@PathVariable Integer id, @Valid @RequestBody PvExamenDto dto) {
         return service.update(id, dto);
@@ -95,28 +95,28 @@ public class PvExamenController {
     // ----------------------------------------------------------------------
 
     /** Soumission du projet par le Membre : → PROJET_SOUMIS. */
-    @PreAuthorize("hasAnyRole('MEMBRE','CHEF_COMMISSION','PRESIDENT')")
+    @PreAuthorize("@perm.peutExercer('MEMBRE')")
     @PostMapping("/{id}/soumettre")
     public PvExamenDto soumettre(@PathVariable Integer id, @Valid @RequestBody PvActionRequest req) {
         return service.soumettre(id, req);
     }
 
     /** Retour pour rectification par le Président / CC : → EN_RECTIFICATION (commentaire obligatoire). */
-    @PreAuthorize("hasAnyRole('CHEF_COMMISSION','PRESIDENT')")
+    @PreAuthorize("@perm.peutExercer('CHEF_COMMISSION')")
     @PostMapping("/{id}/retourner")
     public PvExamenDto retourner(@PathVariable Integer id, @Valid @RequestBody PvActionRequest req) {
         return service.retourner(id, req);
     }
 
     /** Acceptation du projet par le Président / CC : → PROJET_ACCEPTE. */
-    @PreAuthorize("hasAnyRole('CHEF_COMMISSION','PRESIDENT')")
+    @PreAuthorize("@perm.peutExercer('CHEF_COMMISSION')")
     @PostMapping("/{id}/accepter")
     public PvExamenDto accepter(@PathVariable Integer id, @Valid @RequestBody PvActionRequest req) {
         return service.accepter(id, req);
     }
 
     /** Co-signature du PV (rôle MEMBRE / PRESIDENT / CC) : → SIGNE quand les deux camps ont signé. */
-    @PreAuthorize("hasAnyRole('MEMBRE','CHEF_COMMISSION','PRESIDENT')")
+    @PreAuthorize("@perm.peutExercer('MEMBRE')")
     @PostMapping("/{id}/signer")
     public PvExamenDto signer(@PathVariable Integer id, @Valid @RequestBody PvActionRequest req) {
         return service.signer(id, req);
@@ -126,7 +126,7 @@ public class PvExamenController {
      * ⚠️ Spec navette (2026-08-01) — ARCHIVAGE du PV par l'Assistant contrôleur (après transmission
      * SIGMP) : pose la date d'archivage et CLÔT le dossier.
      */
-    @PreAuthorize("hasRole('ASSISTANT_CONTROLEUR')")
+    @PreAuthorize("@perm.peutExercer('ASSISTANT_CONTROLEUR')")
     @PostMapping("/{id}/archiver")
     public PvExamenDto archiver(@PathVariable Integer id) {
         return service.archiver(id);

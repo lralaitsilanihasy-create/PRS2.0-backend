@@ -43,13 +43,13 @@ public class DispatchController {
     }
 
     // Dispatch : Président (titulaire toutes localités) ou CC (§2.3, §3.3).
-    @PreAuthorize("hasAnyRole('PRESIDENT','CHEF_COMMISSION')")
+    @PreAuthorize("@perm.peutExercer('CHEF_COMMISSION')")
     @PostMapping
     public ResponseEntity<DispatchDto> create(@Valid @RequestBody DispatchDto dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.create(dto));
     }
 
-    @PreAuthorize("hasAnyRole('PRESIDENT','CHEF_COMMISSION')")
+    @PreAuthorize("@perm.peutExercer('CHEF_COMMISSION')")
     @PutMapping("/{id}")
     public DispatchDto update(@PathVariable Integer id, @Valid @RequestBody DispatchDto dto) {
         return service.update(id, dto);
@@ -63,7 +63,7 @@ public class DispatchController {
     }
 
     // ⚠️ Règle ajoutée — retrait du dossier au Membre : annule le dispatch (dossier → PRET_DISPATCH).
-    @PreAuthorize("hasAnyRole('PRESIDENT','CHEF_COMMISSION')")
+    @PreAuthorize("@perm.peutExercer('CHEF_COMMISSION')")
     @PostMapping("/{id}/annuler")
     public ResponseEntity<Void> annuler(@PathVariable Integer id) {
         service.annuler(id);

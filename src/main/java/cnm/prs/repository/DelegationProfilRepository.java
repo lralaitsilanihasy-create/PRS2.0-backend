@@ -16,4 +16,7 @@ public interface DelegationProfilRepository extends JpaRepository<DelegationProf
      */
     boolean existsByActifTrueAndIdProfileDelegantInAndIdProfileDelegueIn(
             Collection<Integer> delegants, Collection<Integer> delegues);
+
+    /** Vrai si la paire (délégant, délégué) existe déjà — active ou non (unicité, seed idempotent). */
+    boolean existsByIdProfileDelegantAndIdProfileDelegue(Integer delegant, Integer delegue);
 }
