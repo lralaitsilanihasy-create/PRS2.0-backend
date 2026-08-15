@@ -67,9 +67,10 @@ public class ExamenService {
     /**
      * ⚠️ Règle ajoutée — soumission de l'examen : produit le <strong>Projet de PV</strong>
      * (via {@link PvExamenService}, {@code idPv} alloué serveur) avec l'avis fourni
-     * ({@code idAvis}, obligatoire sur le PV). Le <strong>Vérificateur désigné Secrétaire de séance</strong>
-     * ({@code idSecretaireSeance}) est obligatoire et doit être un VERIFICATEUR de la localité du dossier
-     * (sinon 400 {@code erreurs:[{champ:idSecretaireSeance}]}). La lettre de renvoi est une action séparée.
+     * ({@code idAvis}, obligatoire sur le PV). Le <strong>Secrétaire de séance</strong>
+     * ({@code idSecretaireSeance}) doit être un VERIFICATEUR de la localité du dossier ou un contrôleur
+     * couvert par une paire « → Vérificateur » active (⚠️ règle élargie 2026-08-15 ; sinon 400
+     * {@code erreurs:[{champ:idSecretaireSeance}]}). La lettre de renvoi est une action séparée.
      */
     public PvExamenDto soumettre(Integer idExamen, ExamenSoumissionRequest req) {
         Examen examen = repository.findById(idExamen)
@@ -151,9 +152,11 @@ public class ExamenService {
     }
 
     /**
-     * Valide le Secrétaire de séance : présent et VERIFICATEUR de la localité du dossier de l'examen.
+     * Valide le Secrétaire de séance : Vérificateur TITULAIRE de la localité du dossier, OU
+     * (⚠️ règle élargie 2026-08-15) contrôleur couvert par une paire « → Vérificateur » ACTIVE
+     * de t_delegation_profil — même garde qu'à l'acceptation du PV.
      * @return le matricule validé (trimé)
-     * @throws ChampsInvalidesException (→ 400) si absent ou non vérificateur de la localité
+     * @throws ChampsInvalidesException (→ 400) si absent ou non couvert
      */
     private String validerSecretaireSeance(Integer idExamen, String idSecretaire) {
         if (idSecretaire == null || idSecretaire.isBlank()) {
@@ -161,10 +164,9 @@ public class ExamenService {
         }
         // Localité du circuit (réception : examen→dispatch→réception→contrôleur récepteur), cf. lettres de renvoi.
         String localite = repository.findLocaliteByExamen(idExamen).orElse(null);
-        boolean valide = localite != null && controleurDirectory.verificateurs(localite).stream()
-                .anyMatch(c -> idSecretaire.trim().equals(c.getImControleur()));
-        if (!valide) {
-            throw champInvalide("Le secrétaire de séance doit être un vérificateur de la localité du dossier.");
+        if (!controleurDirectory.peutEtreSecretaireSeance(idSecretaire, localite)) {
+            throw champInvalide("Le secrétaire de séance doit être un vérificateur de la localité du dossier, "
+                    + "ou un contrôleur couvert par une délégation active vers Vérificateur.");
         }
         return idSecretaire.trim();
     }

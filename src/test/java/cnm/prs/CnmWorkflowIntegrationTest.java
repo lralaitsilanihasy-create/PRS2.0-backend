@@ -3222,10 +3222,10 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
-    @DisplayName("Circuit court CC (⚠️ décisions 2026-08-15) : dispatcheur + attributaire + accepteur — le CC statue "
-            + "le passage vérificateur sur SES PROPRES observations (délégation, pas de garde de séparation) ; la "
-            + "désignation Secrétaire de séance reste réservée aux Vérificateurs titulaires (auto-désignation → 409)")
-    void circuitCourtCc_verificationParAttributaire_secretaireSeanceTitulaire() throws Exception {
+    @DisplayName("Circuit court CC (⚠️ décision produit 2026-08-15) : le CC s'auto-désigne Secrétaire de séance "
+            + "(paire CC → Vérificateur ACTIVE ; désactivée → 409, data-driven) ; hors couverture ou hors localité "
+            + "→ 409 ; puis il statue le passage sur SES PROPRES observations (pas de garde de séparation)")
+    void circuitCourtCc_secretaireSeanceParDelegation_etPassageParAttributaire() throws Exception {
         // Dossier ANT auto-attribué par le CC (garde attributaire : paire CC → Membre active).
         dossierRepository.save(dossier(4610, "PRET_DISPATCH"));
         receptionRepository.save(reception(5610, 4610, "CTRSEC", true));
@@ -3254,18 +3254,36 @@ class CnmWorkflowIntegrationTest {
         mvc.perform(post("/api/pv-examens/" + idPv + "/soumettre").header("Authorization", tokenCc)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRCC1\",\"commentaire\":\"go\"}"))
                 .andExpect(status().isOk());
-        // Q2 (statu quo) : se DÉSIGNER Secrétaire de séance est refusé — la désignation reste aux Vérificateurs
-        // titulaires, même avec la paire CC → Vérificateur active (la délégation couvre l'EXERCICE, pas la désignation).
+        // Garde élargie, négatifs : un Secrétaire (aucune paire → Vérificateur) reste refusé…
+        mvc.perform(post("/api/pv-examens/" + idPv + "/accepter").header("Authorization", tokenCc)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"imActeur\":\"CTRCC1\",\"idAvis\":\"FAVR\",\"idSecretaireSeance\":\"CTRSEC\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message", containsString("délégation active vers Vérificateur")));
+        // … tout comme un CC d'une AUTRE localité (paire active mais hors périmètre : CTRCC2 = TMS, dossier ANT).
+        mvc.perform(post("/api/pv-examens/" + idPv + "/accepter").header("Authorization", tokenCc)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"imActeur\":\"CTRCC1\",\"idAvis\":\"FAVR\",\"idSecretaireSeance\":\"CTRCC2\"}"))
+                .andExpect(status().isConflict());
+        // Data-driven : paire 6 (CC → Vérificateur) DÉSACTIVÉE → l'auto-désignation du CC est refusée.
+        mvc.perform(put("/api/delegation-profils/6").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDelegation\":6,\"idProfileDelegant\":3,\"idProfileDelegue\":6,\"actif\":false}"))
+                .andExpect(status().isOk());
         mvc.perform(post("/api/pv-examens/" + idPv + "/accepter").header("Authorization", tokenCc)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"imActeur\":\"CTRCC1\",\"idAvis\":\"FAVR\",\"idSecretaireSeance\":\"CTRCC1\"}"))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.message", containsString("Vérificateur de la localité")));
+                .andExpect(status().isConflict());
+        // RÉACTIVÉE → le CC SE DÉSIGNE LUI-MÊME Secrétaire de séance (décision produit : « moi-même ⤴ »).
+        mvc.perform(put("/api/delegation-profils/6").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDelegation\":6,\"idProfileDelegant\":3,\"idProfileDelegue\":6,\"actif\":true}"))
+                .andExpect(status().isOk());
         mvc.perform(post("/api/pv-examens/" + idPv + "/accepter").header("Authorization", tokenCc)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"imActeur\":\"CTRCC1\",\"idAvis\":\"FAVR\",\"idSecretaireSeance\":\"CTRVER\"}"))
+                .content("{\"imActeur\":\"CTRCC1\",\"idAvis\":\"FAVR\",\"idSecretaireSeance\":\"CTRCC1\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.idSecretaireSeance").value("CTRVER"));
+                .andExpect(jsonPath("$.idSecretaireSeance").value("CTRCC1"));
         // Signatures : part Membre par le CC attributaire ; co-signature par le Président (séparation des personnes).
         mvc.perform(post("/api/pv-examens/" + idPv + "/signer").header("Authorization", tokenCc)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRCC1\",\"role\":\"MEMBRE\"}"))
@@ -3286,6 +3304,27 @@ class CnmWorkflowIntegrationTest {
                 .andExpect(status().isOk());
         mvc.perform(get("/api/dossiers/4610").header("Authorization", tokenCc))
                 .andExpect(jsonPath("$.statut").value("OBSERVATIONS_LEVEES"));
+    }
+
+    @Test
+    @DisplayName("Secrétaire de séance par délégation : le Président (sans localité, paire Président → Vérificateur "
+            + "active) est désignable sur un dossier de n'importe quelle localité")
+    void secretaireSeance_presidentParDelegation() throws Exception {
+        // PV sur l'examen 1 (dossier 1, ANT, attributaire CTRMEM), soumis par le Membre.
+        mvc.perform(post("/api/pv-examens").header("Authorization", tokenMembre).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idPv\":5611,\"idExamen\":1,\"idAvis\":\"FAV\",\"imCtrlMembre\":\"CTRMEM\","
+                        + "\"statutPv\":\"BROUILLON\",\"nbNavettes\":0}"))
+                .andExpect(status().isCreated());
+        mvc.perform(post("/api/pv-examens/5611/soumettre").header("Authorization", tokenMembre)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRMEM\",\"commentaire\":\"go\"}"))
+                .andExpect(status().isOk());
+        // Le CC accepte en désignant le PRÉSIDENT Secrétaire de séance : couvert par la paire
+        // Président → Vérificateur active, et sans localité → accepté partout.
+        mvc.perform(post("/api/pv-examens/5611/accepter").header("Authorization", tokenCc)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"imActeur\":\"CTRCC1\",\"idAvis\":\"FAV\",\"idSecretaireSeance\":\"CTRPRE\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.idSecretaireSeance").value("CTRPRE"));
     }
 
     @Test

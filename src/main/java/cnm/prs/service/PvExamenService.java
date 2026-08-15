@@ -389,11 +389,12 @@ public class PvExamenService {
 
     private String validerSecretaireSeance(Integer idPv, String idSecretaire) {
         String localite = repository.findLocaliteByPv(idPv).orElse(null);
-        boolean valide = localite != null && controleurDirectory.verificateurs(localite).stream()
-                .anyMatch(c -> idSecretaire.trim().equals(c.getImControleur()));
-        if (!valide) {
+        // ⚠️ Règle ÉLARGIE (2026-08-15, décision produit) : Vérificateur TITULAIRE de la localité OU
+        // contrôleur couvert par une paire « → Vérificateur » ACTIVE (auto-désignation du Président/CC).
+        if (!controleurDirectory.peutEtreSecretaireSeance(idSecretaire, localite)) {
             throw new BusinessRuleException(
-                    "Le Secrétaire de séance doit être un Vérificateur de la localité du dossier.");
+                    "Le Secrétaire de séance doit être un Vérificateur de la localité du dossier, "
+                            + "ou un contrôleur couvert par une délégation active vers Vérificateur.");
         }
         return idSecretaire.trim();
     }

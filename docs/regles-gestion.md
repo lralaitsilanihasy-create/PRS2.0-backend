@@ -683,9 +683,15 @@ Accès complet aux référentiels, comptes utilisateurs, journal d'audit, hiéra
     paire « → Vérificateur » active), **non** restreinte au Secrétaire de séance désigné ; dans le
     circuit court, le décideur peut donc être l'**attributaire du même dossier** (auteur des
     observations) — **assumé, sans garde de séparation** : la vérification juge la levée par la PRMP,
-    le PV a déjà été co-signé par une seconde personne, chaque décision est tracée. À l'inverse, la
-    **désignation du Secrétaire de séance** (`idSecretaireSeance`, bloc Signataires du PV) reste
-    **réservée aux Vérificateurs titulaires** de la localité — non élargie à la délégation.
+    le PV a déjà été co-signé par une seconde personne, chaque décision est tracée. La **désignation
+    du Secrétaire de séance** (`idSecretaireSeance`) est **élargie à la même règle** (décision produit
+    2026-08-15, annulant le statu quo du même jour) : Vérificateur **titulaire** de la localité du
+    dossier OU contrôleur couvert par une paire « → Vérificateur » **active**, dans le périmètre de sa
+    localité (contrôleur sans localité — Président — accepté partout) ; le Président/CC peut donc
+    **se désigner lui-même** à l'acceptation. Conséquence assumée : au bloc Signataires du PV du
+    circuit court, la même personne peut figurer comme Membre attributaire ET Secrétaire de séance —
+    la **co-signature reste une seconde personne**, et le document PV suffixe le nom du Secrétaire de
+    séance de « **(par délégation)** » quand le désigné n'est pas un Vérificateur titulaire.
 - ⚠️ **Règle ajoutée (2026-08-13) — catégorie des modes de passation** [Écriture]
   - Chaque mode (`tr_mode_passation`) porte une **catégorie déclarative** `CATEGORIE` :
     **`NORMAL`** (mode de droit commun — l'appel d'offres ouvert au sens du Code des marchés publics)

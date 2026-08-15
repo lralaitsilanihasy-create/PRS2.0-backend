@@ -76,6 +76,7 @@ public class PvDocumentService {
     private final ExamenPieceRepository examenPieceRepository;
     private final PieceJointeDossierRepository pieceJointeDossierRepository;
     private final TypePieceJointeRepository typePieceJointeRepository;
+    private final ControleurDirectory controleurDirectory;
 
     @Value("${storage.pv-examen.path:${java.io.tmpdir}/prs-fsx/PV}")
     private String cheminStockagePv;
@@ -88,7 +89,8 @@ public class PvDocumentService {
             ObservationControleRepository observationControleRepository,
             ExamenPieceRepository examenPieceRepository,
             PieceJointeDossierRepository pieceJointeDossierRepository,
-            TypePieceJointeRepository typePieceJointeRepository) {
+            TypePieceJointeRepository typePieceJointeRepository,
+            ControleurDirectory controleurDirectory) {
         this.generator = generator;
         this.examenRepository = examenRepository;
         this.dossierRepository = dossierRepository;
@@ -103,6 +105,7 @@ public class PvDocumentService {
         this.examenPieceRepository = examenPieceRepository;
         this.pieceJointeDossierRepository = pieceJointeDossierRepository;
         this.typePieceJointeRepository = typePieceJointeRepository;
+        this.controleurDirectory = controleurDirectory;
     }
 
     /**
@@ -232,11 +235,27 @@ public class PvDocumentService {
                 ? localite : loc.getChefLieu();
         return new PvDocumentContexte(dateExamen, refPv, dateReception, entite, ppm.getExercice(), localite, chefLieu,
                 nomControleur(pv.getImCtrlPresident()), nomControleur(pv.getImCtrlCc()),
-                nomControleur(pv.getImCtrlMembre()), nomControleur(pv.getIdSecretaireSeance()),
+                nomControleur(pv.getImCtrlMembre()), nomSecretaireSeance(pv.getIdSecretaireSeance()),
                 // ⚠️ 2026-08-05 — nature du plan : INITIAL (null/0) ou MODIFICATIF N°n si le dossier est
                 // une version. L'information est portée par le PPM lui-même (t_ppm.NUM_MAJ).
                 ppm.getNumMaj(),
                 construireObservations(idExamen));
+    }
+
+    /**
+     * ⚠️ Règle élargie (2026-08-15) — nom du Secrétaire de séance au bloc Signataires : suffixé
+     * « (par délégation) » quand le désigné n'est pas un Vérificateur titulaire (auto-désignation
+     * du Président/CC via une paire « → Vérificateur » active), pour que le cumul des mentions
+     * du circuit court reste lisible sur le document.
+     */
+    private String nomSecretaireSeance(String im) {
+        String nom = nomControleur(im);
+        if (nom == null) {
+            return null;
+        }
+        boolean titulaire = controleurDirectory.profilDe(im)
+                .map(p -> p == cnm.prs.enums.ProfilUtilisateur.VERIFICATEUR).orElse(false);
+        return titulaire ? nom : nom + " (par délégation)";
     }
 
     /** « Prénoms Nom » d'un contrôleur, ou {@code null} si matricule absent (→ ligne « présents » retirée). */

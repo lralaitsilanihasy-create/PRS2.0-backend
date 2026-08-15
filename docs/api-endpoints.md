@@ -1889,7 +1889,8 @@ et interprété comme un code de **sous-type** (les anciens payloads `{"idTypeDo
 > `{ idAvis?, idSecretaireSeance? }` : les deux champs sont désormais **OPTIONNELS** — le Membre ne renseigne
 > que la **synthèse des observations** (PUT du PV) ; l'avis global et le Secrétaire de séance sont posés à la
 > **clôture de la navette** (`POST /api/pv-examens/{id}/accepter`, Président/CC — voir section PV). S'ils sont
-> fournis, `idSecretaireSeance` doit rester un VERIFICATEUR de la **localité du dossier** (sinon **400**
+> fournis, `idSecretaireSeance` doit être un VERIFICATEUR **titulaire** de la **localité du dossier** ou un
+> contrôleur couvert par une paire « → Vérificateur » **active** (⚠️ élargi 2026-08-15 ; sinon **400**
 > `{ erreurs:[{ champ:"idSecretaireSeance", message }] }`). Le projet de PV = **résultats des points de
 > contrôle + synthèse du Membre** (avis `null` à ce stade). *(La lettre de renvoi appartient aussi à la
 > clôture de navette — ressource `/api/lettre-renvois`, Président/CC.)*
@@ -3446,7 +3447,7 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 | datePv | string (date) | Non | |
 | referencePv | string | Non | max 100 — référence libre (saisie ; reprise dans les notifications) |
 | refePv | string | — (réponse) | max 120 — **référence officielle dérivée du dossier**, générée serveur, **unique** (lecture seule) |
-| idSecretaireSeance | string | — (⚠️ posé à la **clôture de navette**, 2026-08-01) | max 7 — Vérificateur désigné **Secrétaire de séance** (validé à `…/pv-examens/{id}/accepter` ; encore accepté à `…/examens/{id}/soumettre` si fourni) |
+| idSecretaireSeance | string | — (⚠️ posé à la **clôture de navette**, 2026-08-01) | max 7 — **Secrétaire de séance** : Vérificateur titulaire de la localité **ou** contrôleur couvert par une paire « → Vérificateur » active (⚠️ élargi 2026-08-15 ; validé à `…/pv-examens/{id}/accepter` ; encore accepté à `…/examens/{id}/soumettre` si fourni) |
 | nomSecretaireSeance | string | — (réponse) | nom complet du secrétaire de séance (« prénoms nom »), peuplé serveur — lecture seule |
 | documentDisponible | boolean | — (réponse) | **`true`** si un PDF officiel est réellement disponible : `CHEMIN_DOCUMENT` non nul **ou** PV **éligible** — un **modèle Word existe pour le cas** (avis `FAVR` ou `FAV` + PPM avec ≥ 1 ligne de marché, **quel que soit le mode de passation** et **quelle que soit la localité** — centrale ou régionale —, donc régénérable à la demande ; cf. tableau des modèles §PV) ; **`false`** sinon. Lecture seule, peuplé serveur → le front masque « Télécharger le PDF » et évite un 404 |
 
@@ -3467,11 +3468,12 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 | commentaire | string | Conditionnel | obligatoire pour `retourner` (sinon 409) |
 | role | string | Conditionnel | max 20 — obligatoire pour `signer` : `MEMBRE` / `PRESIDENT` / `CC` |
 | idAvis | string | Conditionnel (⚠️ 2026-08-01) | max 10 — **obligatoire pour `accepter`** (clôture de navette : pose l'avis global du PV, 400 sinon) ; ignoré ailleurs |
-| idSecretaireSeance | string | Conditionnel (⚠️ 2026-08-01) | max 7 — **obligatoire pour `accepter`** : Vérificateur de la **localité du dossier** désigné Secrétaire de séance (400 sinon) ; ignoré ailleurs |
+| idSecretaireSeance | string | Conditionnel (⚠️ 2026-08-01) | max 7 — **obligatoire pour `accepter`** : Vérificateur **titulaire** de la localité du dossier **OU** contrôleur couvert par une paire « → Vérificateur » **active** (⚠️ élargi 2026-08-15 ; **409** sinon) ; ignoré ailleurs |
 
 > ⚠️ **Décisions (2026-08-15, circuit court) — vérification par délégation et Secrétaire de séance.**
 > - Le **passage vérificateur** (décisions levée/maintenue sur les observations, `POST /api/observations-pv/passage`, et la suite de la navette) est une **tâche de profil** : Vérificateur **titulaire OU** contrôleur couvert par une paire « → Vérificateur » **active** (garde centrale) — il n'est **pas** restreint au contrôleur désigné `idSecretaireSeance`. Dans le circuit court, le décideur (CC/Président par délégation) **peut être l'attributaire du même dossier** (auteur des observations) : **assumé, sans garde de séparation** — la vérification juge la levée par la **PRMP**, le PV a déjà été co-signé par une **seconde personne** avant cette phase, et chaque décision est tracée avec l'identité du décideur.
-> - La **désignation** `idSecretaireSeance` reste en revanche **réservée aux Vérificateurs TITULAIRES** de la localité — **non élargie** à la délégation : c'est une mention nominative du **bloc Signataires du PV** (même famille que les actes d'identité), et la délégation couvrant déjà l'exercice de la vérification, le circuit court n'en a pas besoin. Se désigner soi-même → refus (message « Le Secrétaire de séance doit être un Vérificateur de la localité du dossier. »).
+> - **Désignation `idSecretaireSeance` ÉLARGIE (décision produit 2026-08-15 — annule le statu quo du même jour)** : Vérificateur **titulaire** de la localité du dossier, **OU** contrôleur couvert par une paire « → Vérificateur » **active** de `t_delegation_profil` — même modèle data-driven que la garde attributaire du dispatch (paire désactivée en base → retour au refus **409** sans changement de code). Le délégué reste dans **son périmètre** : sa localité doit être celle du dossier ; un contrôleur **sans localité** (Président) est accepté partout. Le Président/CC peut donc **se désigner lui-même** au panneau d'acceptation (« moi-même ⤴ »). Message de refus : « Le Secrétaire de séance doit être un Vérificateur de la localité du dossier, ou un contrôleur couvert par une délégation active vers Vérificateur. » Même garde à `POST /api/examens/{id}/soumettre` quand le champ y est fourni (400 `champ:idSecretaireSeance`).
+> - **Conséquence assumée (circuit court)** : au **bloc Signataires du PV**, le CC auto-attributaire et auto-désigné apparaît **deux fois** (Membre attributaire ET Secrétaire de séance) — la **co-signature** (Président) reste l'acte d'une **seconde personne** (auto-co-signature interdite, inchangée). Sur le **document PV** généré, le nom du Secrétaire de séance est suffixé **« (par délégation) »** quand le désigné n'est pas un Vérificateur titulaire.
 
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
