@@ -678,6 +678,14 @@ Accès complet aux référentiels, comptes utilisateurs, journal d'audit, hiéra
   - **Garde dérivée (2026-08-15)** : l'**attributaire** d'un dispatch (`IM_CTRL_MEMBRE`) est validé par
     la même règle data-driven — Membre titulaire **ou** paire (profil → Membre) **active** — ce qui
     autorise l'**auto-attribution** du Président/CC (voir §3.2, « Dispatch vers un membre »).
+  - **Décisions (2026-08-15) — passage vérificateur et Secrétaire de séance** : le passage vérificateur
+    (levée/maintenue des observations, suite de la navette) est une **tâche de profil** (titulaire OU
+    paire « → Vérificateur » active), **non** restreinte au Secrétaire de séance désigné ; dans le
+    circuit court, le décideur peut donc être l'**attributaire du même dossier** (auteur des
+    observations) — **assumé, sans garde de séparation** : la vérification juge la levée par la PRMP,
+    le PV a déjà été co-signé par une seconde personne, chaque décision est tracée. À l'inverse, la
+    **désignation du Secrétaire de séance** (`idSecretaireSeance`, bloc Signataires du PV) reste
+    **réservée aux Vérificateurs titulaires** de la localité — non élargie à la délégation.
 - ⚠️ **Règle ajoutée (2026-08-13) — catégorie des modes de passation** [Écriture]
   - Chaque mode (`tr_mode_passation`) porte une **catégorie déclarative** `CATEGORIE` :
     **`NORMAL`** (mode de droit commun — l'appel d'offres ouvert au sens du Code des marchés publics)

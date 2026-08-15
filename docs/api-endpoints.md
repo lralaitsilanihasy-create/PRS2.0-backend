@@ -3469,7 +3469,9 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 | idAvis | string | Conditionnel (⚠️ 2026-08-01) | max 10 — **obligatoire pour `accepter`** (clôture de navette : pose l'avis global du PV, 400 sinon) ; ignoré ailleurs |
 | idSecretaireSeance | string | Conditionnel (⚠️ 2026-08-01) | max 7 — **obligatoire pour `accepter`** : Vérificateur de la **localité du dossier** désigné Secrétaire de séance (400 sinon) ; ignoré ailleurs |
 
-**Endpoints**
+> ⚠️ **Décisions (2026-08-15, circuit court) — vérification par délégation et Secrétaire de séance.**
+> - Le **passage vérificateur** (décisions levée/maintenue sur les observations, `POST /api/observations-pv/passage`, et la suite de la navette) est une **tâche de profil** : Vérificateur **titulaire OU** contrôleur couvert par une paire « → Vérificateur » **active** (garde centrale) — il n'est **pas** restreint au contrôleur désigné `idSecretaireSeance`. Dans le circuit court, le décideur (CC/Président par délégation) **peut être l'attributaire du même dossier** (auteur des observations) : **assumé, sans garde de séparation** — la vérification juge la levée par la **PRMP**, le PV a déjà été co-signé par une **seconde personne** avant cette phase, et chaque décision est tracée avec l'identité du décideur.
+> - La **désignation** `idSecretaireSeance` reste en revanche **réservée aux Vérificateurs TITULAIRES** de la localité — **non élargie** à la délégation : c'est une mention nominative du **bloc Signataires du PV** (même famille que les actes d'identité), et la délégation couvrant déjà l'exercice de la vérification, le circuit court n'en a pas besoin. Se désigner soi-même → refus (message « Le Secrétaire de séance doit être un Vérificateur de la localité du dossier. »).
 
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|

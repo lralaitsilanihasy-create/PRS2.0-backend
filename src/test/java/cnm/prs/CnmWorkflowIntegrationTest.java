@@ -3222,6 +3222,73 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("Circuit court CC (⚠️ décisions 2026-08-15) : dispatcheur + attributaire + accepteur — le CC statue "
+            + "le passage vérificateur sur SES PROPRES observations (délégation, pas de garde de séparation) ; la "
+            + "désignation Secrétaire de séance reste réservée aux Vérificateurs titulaires (auto-désignation → 409)")
+    void circuitCourtCc_verificationParAttributaire_secretaireSeanceTitulaire() throws Exception {
+        // Dossier ANT auto-attribué par le CC (garde attributaire : paire CC → Membre active).
+        dossierRepository.save(dossier(4610, "PRET_DISPATCH"));
+        receptionRepository.save(reception(5610, 4610, "CTRSEC", true));
+        mvc.perform(post("/api/dispatchs").header("Authorization", tokenCc).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDispatch\":5610,\"idReception\":5610,\"imCtrlMembre\":\"CTRCC1\",\"interimDispatch\":false}"))
+                .andExpect(status().isCreated());
+        // Examen par le CC attributaire, avec un point NON CONFORME (source des observations du PV FAVR).
+        mvc.perform(post("/api/examens").header("Authorization", tokenCc).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idExamen\":5610,\"idDispatch\":5610,\"imCtrlMembre\":\"CTRCC1\"}"))
+                .andExpect(status().isCreated());
+        if (!pointsCtrlRepository.existsById(990)) {
+            PointsCtrl pc = new PointsCtrl();
+            pc.setIdPointCtrl(990); pc.setLibelPointCtrl("Contrôle test"); pc.setObligatoire(true);
+            pc.setIdTypeDossier("DDP");
+            pointsCtrlRepository.save(pc);
+        }
+        ExamenDetail nonConforme = new ExamenDetail();
+        nonConforme.setIdDetailExamen(991); nonConforme.setIdExamen(5610); nonConforme.setIdPtControle(990);
+        nonConforme.setConforme(false);
+        examenDetailRepository.save(nonConforme);
+        String pvBody = mvc.perform(post("/api/examens/5610/soumettre").header("Authorization", tokenCc)
+                .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        int idPv = com.jayway.jsonpath.JsonPath.read(pvBody, "$.idPv");
+        // Navette : le CC soumet SON projet puis l'accepte lui-même (accepteur = auteur — circuit court réel).
+        mvc.perform(post("/api/pv-examens/" + idPv + "/soumettre").header("Authorization", tokenCc)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRCC1\",\"commentaire\":\"go\"}"))
+                .andExpect(status().isOk());
+        // Q2 (statu quo) : se DÉSIGNER Secrétaire de séance est refusé — la désignation reste aux Vérificateurs
+        // titulaires, même avec la paire CC → Vérificateur active (la délégation couvre l'EXERCICE, pas la désignation).
+        mvc.perform(post("/api/pv-examens/" + idPv + "/accepter").header("Authorization", tokenCc)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"imActeur\":\"CTRCC1\",\"idAvis\":\"FAVR\",\"idSecretaireSeance\":\"CTRCC1\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message", containsString("Vérificateur de la localité")));
+        mvc.perform(post("/api/pv-examens/" + idPv + "/accepter").header("Authorization", tokenCc)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"imActeur\":\"CTRCC1\",\"idAvis\":\"FAVR\",\"idSecretaireSeance\":\"CTRVER\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.idSecretaireSeance").value("CTRVER"));
+        // Signatures : part Membre par le CC attributaire ; co-signature par le Président (séparation des personnes).
+        mvc.perform(post("/api/pv-examens/" + idPv + "/signer").header("Authorization", tokenCc)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRCC1\",\"role\":\"MEMBRE\"}"))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/pv-examens/" + idPv + "/signer").header("Authorization", tokenPresident)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRPRE\",\"role\":\"PRESIDENT\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.statutPv").value("SIGNE"));
+        mvc.perform(get("/api/dossiers/4610").header("Authorization", tokenCc))
+                .andExpect(jsonPath("$.statut").value("EN_VERIFICATION"));
+        // Q1a : le MÊME CC (attributaire, auteur des observations) statue le passage via la paire CC → Vérificateur
+        // — tâche de PROFIL, aucune restriction au Secrétaire de séance ni garde de séparation.
+        String obs = mvc.perform(get("/api/observations-pv").header("Authorization", tokenCc).param("dossier", "4610"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        int idObs = com.jayway.jsonpath.JsonPath.read(obs, "$[0].idObservationPv");
+        mvc.perform(post("/api/observations-pv/passage").header("Authorization", tokenCc)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDossier\":4610,\"decisions\":[{\"idObservationPv\":" + idObs + ",\"decision\":\"LEVEE\"}]}"))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/dossiers/4610").header("Authorization", tokenCc))
+                .andExpect(jsonPath("$.statut").value("OBSERVATIONS_LEVEES"));
+    }
+
+    @Test
     @DisplayName("Vérification réservée aux PV FAVR : avis FAV → 409")
     void verif_surAvisNonReserve_409() throws Exception {
         String tokenVer = bearer("CTRVER", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER", "ANT");
