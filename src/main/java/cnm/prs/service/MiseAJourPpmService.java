@@ -753,7 +753,10 @@ public class MiseAJourPpmService {
     public DiffDossierDto diff(Integer idDossier) {
         Dossier dossier = dossierRepository.findById(idDossier)
                 .orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable : " + idDossier));
-        exigerProprietaire(dossier);
+        // ⚠️ Lecture ÉLARGIE (2026-08-15) — plus seulement la PRMP propriétaire : les profils du circuit
+        // qui consultent le dossier lisent le diff (périmètre de localité habituel), le tableau partagé
+        // du front (surlignage MODIFIEE) étant privé de donnée par l'ancien 403.
+        controlerAccesLectureDiff(dossier);
         if (dossier.getIdDossierParent() == null) {
             throw new BusinessRuleException("Ce dossier n'est pas une mise à jour : il n'a pas de version précédente.");
         }
@@ -765,6 +768,18 @@ public class MiseAJourPpmService {
             return depuisTrace(dossier, numMaj, motif);
         }
         return calculer(dossier, numMaj, motif);
+    }
+
+    /** Lecture du diff : tout-voyant, PRMP propriétaire, ou contrôleur de la localité du dossier. */
+    private void controlerAccesLectureDiff(Dossier dossier) {
+        if (cnm.prs.security.Visibilite.voitTout()) {
+            return;
+        }
+        if (cnm.prs.security.Visibilite.estPrmp()) {
+            dossierIntegrite.exigerProprietaire(dossier);
+            return;
+        }
+        cnm.prs.security.Visibilite.exigerLocalite(dossier.getIdLocalite());
     }
 
     /** Diff calculé à la volée entre le dossier et son parent. */

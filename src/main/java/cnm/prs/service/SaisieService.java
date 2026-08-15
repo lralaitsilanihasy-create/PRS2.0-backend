@@ -102,6 +102,8 @@ public class SaisieService {
     /** ⚠️ Spec « Mandats PRMP » — habilitation à créer, et mandat d'attribution figé sur le dossier. */
     private final MandatService mandatService;
     private final JournalDossierService journalDossier;
+    /** ⚠️ Visibilité des rectifications (2026-08-15) — gel de l'état pré-correction au 1er PUT du cycle. */
+    private final RectificationDiffService rectificationDiffService;
 
     public SaisieService(DossierRepository dossierRepository, PpmRepository ppmRepository,
             MarcheRepository marcheRepository, PpmService ppmService,
@@ -116,9 +118,11 @@ public class SaisieService {
             SoaBeneficiaireRepository soaBeneficiaireRepository, AuditLogService auditLogService,
             TypeDmcService typeDmcService, LotRepository lotRepository,
             TrancheRepository trancheRepository, SousTypeDossierRepository sousTypeDossierRepository,
-            MandatService mandatService, JournalDossierService journalDossier) {
+            MandatService mandatService, JournalDossierService journalDossier,
+            RectificationDiffService rectificationDiffService) {
         this.mandatService = mandatService;
         this.journalDossier = journalDossier;
+        this.rectificationDiffService = rectificationDiffService;
         this.dossierRepository = dossierRepository;
         this.ppmRepository = ppmRepository;
         this.marcheRepository = marcheRepository;
@@ -294,6 +298,10 @@ public class SaisieService {
                 .map(d -> d.getIdDossierParent() != null).orElse(false);
         if (rectification) {
             dossierIntegrite.exigerEnAttenteDecisionPrmpModifiable(idDossier);
+            // ⚠️ Règle ajoutée (2026-08-15, visibilité des rectifications) — au PREMIER PUT du cycle,
+            // l'état des lignes AVANT correction est figé (la rectification modifie la version courante
+            // en place : sans instantané, rien à comparer pour le diff servi au vérificateur).
+            rectificationDiffService.figerAvantPremiereCorrection(idDossier);
         } else {
             dossierIntegrite.exigerBrouillonModifiable(idDossier);
         }

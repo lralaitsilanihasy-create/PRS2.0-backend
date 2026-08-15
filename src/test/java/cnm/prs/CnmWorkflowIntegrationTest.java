@@ -3236,7 +3236,18 @@ class CnmWorkflowIntegrationTest {
             + "(paire → Membre désactivée → 403, réactivée → SIGNE) ; passage statué sur SES PROPRES observations")
     void circuitCourtCc_secretaireSeanceParDelegation_etPassageParAttributaire() throws Exception {
         // Dossier ANT auto-attribué par le CC (garde attributaire : paire CC → Membre active).
-        dossierRepository.save(dossier(4610, "PRET_DISPATCH"));
+        // Enrichi PPM + ligne de marché : support du diff de rectification (2026-08-15).
+        Dossier d4610 = dossierLoc(4610, "PRET_DISPATCH", "ANT", "PRMP001");
+        d4610.setIdTypeDossier("DDP");
+        dossierRepository.save(d4610);
+        ppmRepository.save(ppm(4610, 4610, "PRMP001"));
+        natureRepository.save(new Nature(1, "Travaux", null));
+        Marche m4610 = marche(46100, 4610, 4610);
+        m4610.setIdLigneOrigine(46100);
+        m4610.setMontEstim(new java.math.BigDecimal("500000000"));
+        m4610.setIdNature(1);
+        m4610.setFormeMarche(cnm.prs.enums.FormeMarche.QUANTITE_FIXE);
+        marcheRepository.save(m4610);
         receptionRepository.save(reception(5610, 4610, "CTRSEC", true));
         mvc.perform(post("/api/dispatchs").header("Authorization", tokenCc).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDispatch\":5610,\"idReception\":5610,\"imCtrlMembre\":\"CTRCC1\",\"interimDispatch\":false}"))
@@ -3253,6 +3264,7 @@ class CnmWorkflowIntegrationTest {
         }
         ExamenDetail nonConforme = new ExamenDetail();
         nonConforme.setIdDetailExamen(991); nonConforme.setIdExamen(5610); nonConforme.setIdPtControle(990);
+        nonConforme.setIdDetail(46100);   // point évalué SUR la ligne de marché (complétude par marché)
         nonConforme.setConforme(false);
         examenDetailRepository.save(nonConforme);
         String pvBody = mvc.perform(post("/api/examens/5610/soumettre").header("Authorization", tokenCc)
@@ -3338,10 +3350,41 @@ class CnmWorkflowIntegrationTest {
                 .andExpect(status().isOk());
         mvc.perform(get("/api/dossiers/4610").header("Authorization", tokenCc))
                 .andExpect(jsonPath("$.statut").value("EN_ATTENTE_DECISION_PRMP"));
+        // Diff de rectification (2026-08-15) — avant toute correction : aucun instantané → 409.
+        mvc.perform(get("/api/dossiers/4610/diff-rectification").header("Authorization", tokenCc))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message", containsString("Aucune rectification")));
+        // La PRMP corrige EN PLACE (structure figée, mise à jour par idDetail). Le PREMIER PUT du cycle
+        // fige l'état pré-correction ; le second ne re-fige pas (le diff compare toujours à l'AVANT).
+        String entete = "{\"exercice\":2026,\"signataire\":\"PRMP Test\",\"dateSignature\":\"2026-06-01\","
+                + "\"reference\":\"PPM-4610\",\"marches\":[{\"idDetail\":46100,\"formeMarche\":\"QUANTITE_FIXE\","
+                + "\"montEstim\":500000000,\"idNature\":1,\"statut\":\"PREVU\",\"designationMarche\":\"";
+        mvc.perform(put("/api/saisies/ppm/4610").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content(entete + "Marche 46100 rectifie\"}]}"))
+                .andExpect(status().isOk());
+        mvc.perform(put("/api/saisies/ppm/4610").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content(entete + "Marche 46100 rectifie v2\"}]}"))
+                .andExpect(status().isOk());
+        // Le CC (vérificateur par délégation) voit CE QUE LA PRMP A CHANGÉ : ligne MODIFIEE,
+        // designation avant → après (comparée à l'état d'AVANT la première correction), cycle non clos.
+        mvc.perform(get("/api/dossiers/4610/diff-rectification").header("Authorization", tokenCc))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.fige").value(false))
+                .andExpect(jsonPath("$.recap.modifiees").value(1))
+                .andExpect(jsonPath("$.lignes[0].type").value("MODIFIEE"))
+                .andExpect(jsonPath("$.lignes[0].champs[?(@.champ=='designationMarche')].avant",
+                        hasItem("Marche 46100")))
+                .andExpect(jsonPath("$.lignes[0].champs[?(@.champ=='designationMarche')].apres",
+                        hasItem("Marche 46100 rectifie v2")));
         // La PRMP rectifie et resoumet → la levée devient possible (leveePossible=true au front).
         mvc.perform(post("/api/dossiers/4610/resoumettre").header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"motifRectification\":\"corrige\"}"))
                 .andExpect(status().isOk());
+        // Après resoumission, le diff du cycle CLOS reste servi (fige=true, motif de la rectification).
+        mvc.perform(get("/api/dossiers/4610/diff-rectification").header("Authorization", tokenCc))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.fige").value(true))
+                .andExpect(jsonPath("$.motifMaj").value("corrige"));
         mvc.perform(get("/api/observations-pv").header("Authorization", tokenCc).param("dossier", "4610"))
                 .andExpect(jsonPath("$[0].leveePossible").value(true));
         mvc.perform(post("/api/observations-pv/passage").header("Authorization", tokenCc)
@@ -3350,6 +3393,50 @@ class CnmWorkflowIntegrationTest {
                 .andExpect(status().isOk());
         mvc.perform(get("/api/dossiers/4610").header("Authorization", tokenCc))
                 .andExpect(jsonPath("$.statut").value("OBSERVATIONS_LEVEES"));
+    }
+
+    @Test
+    @DisplayName("Diff de mise à jour — lecture ÉLARGIE (2026-08-15) : les contrôleurs du circuit lisent le diff "
+            + "d'une version dans leur localité (plus de 403) ; la PRMP propriétaire inchangée")
+    void diffMaj_lectureElargieAuCircuit() throws Exception {
+        // Version v1 (parent) et v2 (successeur) seedées directement : même ligne (idLigneOrigine),
+        // montant modifié — le diff à la volée doit la classer MODIFIEE.
+        Dossier parent = dossierLoc(4620, "REMPLACE", "ANT", "PRMP001");
+        parent.setIdTypeDossier("DDP");
+        dossierRepository.save(parent);
+        ppmRepository.save(ppm(4620, 4620, "PRMP001"));
+        Marche v1 = marche(46200, 4620, 4620);
+        v1.setIdLigneOrigine(46200);
+        v1.setMontEstim(new java.math.BigDecimal("500000000"));
+        v1.setFormeMarche(cnm.prs.enums.FormeMarche.QUANTITE_FIXE);
+        v1.setDesignationMarche("Marche version");
+        marcheRepository.save(v1);
+        Dossier version = dossierLoc(4621, "SOUMIS", "ANT", "PRMP001");
+        version.setIdTypeDossier("DDP");
+        version.setIdDossierParent(4620);
+        dossierRepository.save(version);
+        Ppm p2 = ppm(4621, 4621, "PRMP001");
+        p2.setNumMaj(1);
+        p2.setMotifMaj("maj test");
+        ppmRepository.save(p2);
+        Marche v2 = marche(46210, 4621, 4621);
+        v2.setIdLigneOrigine(46200);
+        v2.setMontEstim(new java.math.BigDecimal("600000000"));
+        v2.setFormeMarche(cnm.prs.enums.FormeMarche.QUANTITE_FIXE);
+        v2.setDesignationMarche("Marche version");
+        marcheRepository.save(v2);
+
+        // Contrôleurs de la localité : 200 (hier 403 — le tableau partagé retrouve son surlignage).
+        mvc.perform(get("/api/dossiers/4621/diff").header("Authorization", tokenCc))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.lignes[0].type").value("MODIFIEE"))
+                .andExpect(jsonPath("$.lignes[0].champs[?(@.champ=='montEstim')].avant", hasItem("500000000")));
+        String tokenVer = bearer("CTRVER", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER", "ANT");
+        mvc.perform(get("/api/dossiers/4621/diff").header("Authorization", tokenVer))
+                .andExpect(status().isOk());
+        // La PRMP propriétaire lit toujours son diff.
+        mvc.perform(get("/api/dossiers/4621/diff").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk());
     }
 
     @Test

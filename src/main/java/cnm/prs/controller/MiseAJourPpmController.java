@@ -20,6 +20,7 @@ import cnm.prs.dto.DiffDossierDto;
 import cnm.prs.dto.DossierDto;
 import cnm.prs.dto.MiseAJourRequest;
 import cnm.prs.service.MiseAJourPpmService;
+import cnm.prs.service.RectificationDiffService;
 import cnm.prs.service.SaisiePpmImportService;
 
 import jakarta.validation.Valid;
@@ -40,10 +41,14 @@ public class MiseAJourPpmController {
     private final MiseAJourPpmService service;
     /** Parsing read-only du PPM PDF — la même façade que l'import de la saisie initiale. */
     private final SaisiePpmImportService importService;
+    /** ⚠️ Visibilité des rectifications (2026-08-15) — diff du dernier cycle de rectification. */
+    private final RectificationDiffService rectificationDiffService;
 
-    public MiseAJourPpmController(MiseAJourPpmService service, SaisiePpmImportService importService) {
+    public MiseAJourPpmController(MiseAJourPpmService service, SaisiePpmImportService importService,
+            RectificationDiffService rectificationDiffService) {
         this.service = service;
         this.importService = importService;
+        this.rectificationDiffService = rectificationDiffService;
     }
 
     /**
@@ -80,11 +85,32 @@ public class MiseAJourPpmController {
      * Comparaison d'une version avec son prédécesseur : récapitulatif chiffré + détail ligne à ligne
      * (« Aperçu du diff complet »). Recalculé tant que la version est un brouillon, relu depuis la trace
      * figée une fois soumise. 409 si le dossier n'est pas une mise à jour.
+     *
+     * <p>⚠️ Lecture ÉLARGIE (2026-08-15, demande en attente depuis le 05/08) : plus réservé à la PRMP —
+     * ouvert aux profils du circuit qui consultent le dossier (le surlignage MODIFIEE du tableau partagé
+     * était privé de donnée par le 403). Contrôle serveur : PRMP propriétaire, sinon périmètre de
+     * localité habituel.</p>
      */
-    @PreAuthorize("hasRole('PRMP')")
+    @PreAuthorize("hasAnyRole('PRMP','PRESIDENT','CHEF_COMMISSION','SECRETAIRE','MEMBRE','VERIFICATEUR',"
+            + "'ASSISTANT_CONTROLEUR','ADMINISTRATEUR')")
     @GetMapping("/dossiers/{idDossier}/diff")
     public DiffDossierDto diff(@PathVariable Integer idDossier) {
         return service.diff(idDossier);
+    }
+
+    /**
+     * ⚠️ Règle ajoutée (2026-08-15, visibilité des rectifications) — diff du <strong>dernier cycle de
+     * rectification</strong> (instantané pré-correction vs lignes courantes), même DTO que le diff des
+     * versions pour que le front réutilise son tableau tel quel. 409 si aucune rectification enregistrée.
+     * Endpoint DÉDIÉ (décision backend) : {@code /diff} garde son contrat « mise à jour » (409 si pas de
+     * version précédente) — un dossier peut être à la fois une version ET porter une rectification, les
+     * deux diffs coexistent et le front choisit selon le contexte.
+     */
+    @PreAuthorize("hasAnyRole('PRMP','PRESIDENT','CHEF_COMMISSION','SECRETAIRE','MEMBRE','VERIFICATEUR',"
+            + "'ASSISTANT_CONTROLEUR','ADMINISTRATEUR')")
+    @GetMapping("/dossiers/{idDossier}/diff-rectification")
+    public DiffDossierDto diffRectification(@PathVariable Integer idDossier) {
+        return rectificationDiffService.diffRectification(idDossier);
     }
 
     /**

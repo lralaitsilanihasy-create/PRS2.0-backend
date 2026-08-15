@@ -15,6 +15,7 @@ import cnm.prs.repository.ObservationPvRepository;
 import cnm.prs.repository.PvExamenRepository;
 import cnm.prs.repository.PvNavetteRepository;
 import cnm.prs.repository.ReceptionRepository;
+import cnm.prs.repository.SnapshotRectifLigneRepository;
 import cnm.prs.repository.SuiviObservationRepository;
 import cnm.prs.repository.VerificationRepository;
 
@@ -52,6 +53,7 @@ public class CircuitCascadeService {
     private final ReceptionRepository receptionRepository;
     private final SuiviObservationRepository suiviObservationRepository;
     private final ObservationPvRepository observationPvRepository;
+    private final SnapshotRectifLigneRepository snapshotRectifLigneRepository;
 
     public CircuitCascadeService(ObservationControleRepository observationControleRepository,
             ExamenDetailRepository examenDetailRepository, ExamenPieceRepository examenPieceRepository,
@@ -60,9 +62,11 @@ public class CircuitCascadeService {
             LettreRenvoiLueRepository lettreRenvoiLueRepository, LettreRenvoiRepository lettreRenvoiRepository,
             CopieDossierRepository copieDossierRepository, ExamenRepository examenRepository,
             DispatchRepository dispatchRepository, ReceptionRepository receptionRepository,
-            SuiviObservationRepository suiviObservationRepository, ObservationPvRepository observationPvRepository) {
+            SuiviObservationRepository suiviObservationRepository, ObservationPvRepository observationPvRepository,
+            SnapshotRectifLigneRepository snapshotRectifLigneRepository) {
         this.suiviObservationRepository = suiviObservationRepository;
         this.observationPvRepository = observationPvRepository;
+        this.snapshotRectifLigneRepository = snapshotRectifLigneRepository;
         this.observationControleRepository = observationControleRepository;
         this.examenDetailRepository = examenDetailRepository;
         this.examenPieceRepository = examenPieceRepository;
@@ -101,6 +105,7 @@ public class CircuitCascadeService {
         // ⚠️ Spec observations FAVR (2026-08-02) — suivi des observations du PV (historique puis périmètre).
         suiviObservationRepository.deleteParDossier(idDossier);      // 0a — enfant de t_observation_pv
         observationPvRepository.deleteParDossier(idDossier);         // 0b — enfant de t_dossier / t_pv_examen
+        snapshotRectifLigneRepository.deleteParDossier(idDossier);   // 0c — instantanés de rectification (sans FK)
         observationControleRepository.deleteParDossier(idDossier);   // 1 — enfant de t_examen_detail
         examenDetailRepository.deleteParDossier(idDossier);          // 2 — enfant de t_examen
         examenPieceRepository.deleteParDossier(idDossier);           // 2b — enfant de t_examen (pièces examinées)

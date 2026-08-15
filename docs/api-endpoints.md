@@ -1335,7 +1335,8 @@ volumineux → **400** (annule la création si multipart) ; **404** si l'UGPM ou
 | PUT | /api/saisies/ppm/{idDossier} | `EditionPpmRequest` | `DossierDto` | 200, 400, 403, 404, 409 | **PRMP** |
 | POST | /api/saisies/ppm/{idDossier}/mise-a-jour | `MiseAJourRequest` (`{motif}`) | `DossierDto` (la nouvelle version) | 201, 400, 403, 404, 409 | **PRMP propriétaire** |
 | POST | /api/saisies/ppm/{idDossier}/mise-a-jour/import | `multipart/form-data` (part `fichier` = PPM **PDF**) | `DiffDossierDto` | 200, 400, 403, 404, 409 | **PRMP propriétaire** |
-| GET | /api/dossiers/{idDossier}/diff | — | `DiffDossierDto` | 200, 403, 404, 409 | **PRMP propriétaire** |
+| GET | /api/dossiers/{idDossier}/diff | — | `DiffDossierDto` | 200, 403, 404, 409 | **PRMP propriétaire OU contrôleur de la localité** (⚠️ lecture élargie 2026-08-15) |
+| GET | /api/dossiers/{idDossier}/diff-rectification | — | `DiffDossierDto` | 200, 403, 404, 409 | **PRMP propriétaire OU contrôleur de la localité** (⚠️ nouveau 2026-08-15) |
 | GET | /api/dossiers/{idDossier}/versions | — | `DossierDto[]` (plus récente d'abord) | 200, 404 | PRMP / PRESIDENT / CHEF_COMMISSION / MEMBRE / VERIFICATEUR / ADMINISTRATEUR |
 | PATCH | /api/marches/{idDetail}/supprimer | — | — | 204, 403, 404, 409 | **PRMP propriétaire** |
 | PATCH | /api/marches/{idDetail}/restaurer | — | — | 204, 403, 404, 409 | **PRMP propriétaire** |
@@ -1350,6 +1351,26 @@ volumineux → **400** (annule la création si multipart) ; **404** si l'UGPM ou
 > ⚠️ **Ne pas confondre avec la rectification** (`PUT /api/saisies/ppm/{id}` sur un dossier
 > `EN_ATTENTE_DECISION_PRMP`), qui corrige la version courante en réponse aux observations du PV : même
 > dossier, même identité. Le versionnement, lui, s'applique à un PPM déjà instruit.
+>
+> ⚠️ **Visibilité des rectifications (règle ajoutée 2026-08-15).** La rectification modifiant la version
+> courante **en place**, l'état des lignes **AVANT correction** est figé (`t_snapshot_rectif_ligne`) au
+> **premier** `PUT /api/saisies/ppm/{id}` de chaque **cycle** (un cycle = de la transmission des
+> observations à la resoumission ; les PUT suivants du même cycle ne re-figent pas). Le **diff du dernier
+> cycle** est servi par **`GET /api/dossiers/{id}/diff-rectification`** — **même `DiffDossierDto`** que le
+> diff des versions (le front réutilise tel quel son tableau partagé, surlignage `MODIFIEE` + légende) :
+> `idDossierPrecedent`/`numMaj` **nuls** (ce n'est pas une comparaison de versions), `motifMaj` = motif de
+> la **resoumission** qui a clos le cycle (`null` tant qu'il est ouvert), `fige` = cycle clos. Structure
+> figée en rectification ⇒ uniquement des lignes `INCHANGEE`/`MODIFIEE` (appariement direct par
+> `idDetail`). **409** si aucune rectification n'est enregistrée (aucun instantané). Après une nouvelle
+> transmission d'observations puis une nouvelle rectification, c'est le **nouveau** cycle qui est servi
+> (le vérificateur juge toujours le dernier). **Endpoint dédié** (décision backend) : `/diff` garde son
+> contrat « mise à jour » (409 si pas de version précédente) — un dossier peut être à la fois une version
+> ET porter une rectification, les deux diffs coexistent.
+>
+> **Lecture des deux diffs — élargie (2026-08-15, demande en attente depuis le 05/08)** : plus réservés à
+> la PRMP — **tout-voyant** (Président/Admin), **PRMP propriétaire**, ou **contrôleur de la localité du
+> dossier** (vérificateur **titulaire ou délégué** compris — même périmètre que la consultation du
+> dossier). Le 403 antérieur privait le circuit du surlignage déjà livré côté front.
 >
 > **Gardes** — 409 si le dossier source n'est pas `DECISION_TRANSMISE_SIGMP`/`CLOTURE` (on ne versionne
 > pas un dossier encore dans le circuit), s'il est déjà `REMPLACE` (versionner la version en vigueur), ou
