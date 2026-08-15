@@ -235,7 +235,7 @@ public class PvDocumentService {
                 ? localite : loc.getChefLieu();
         return new PvDocumentContexte(dateExamen, refPv, dateReception, entite, ppm.getExercice(), localite, chefLieu,
                 nomControleur(pv.getImCtrlPresident()), nomControleur(pv.getImCtrlCc()),
-                nomControleur(pv.getImCtrlMembre()), nomSecretaireSeance(pv.getIdSecretaireSeance()),
+                nomMembreAttributaire(pv.getImCtrlMembre()), nomSecretaireSeance(pv.getIdSecretaireSeance()),
                 // ⚠️ 2026-08-05 — nature du plan : INITIAL (null/0) ou MODIFICATIF N°n si le dossier est
                 // une version. L'information est portée par le PPM lui-même (t_ppm.NUM_MAJ).
                 ppm.getNumMaj(),
@@ -249,12 +249,27 @@ public class PvDocumentService {
      * du circuit court reste lisible sur le document.
      */
     private String nomSecretaireSeance(String im) {
+        return nomAvecMentionDelegation(im, cnm.prs.enums.ProfilUtilisateur.VERIFICATEUR);
+    }
+
+    /**
+     * ⚠️ Décision produit (2026-08-15, circuit court) — ligne « Membre » du bloc Signataires :
+     * suffixée « (par délégation) » quand l'attributaire n'est pas un Membre titulaire (Président/CC
+     * auto-attributaire) — les deux lignes de signature pouvant alors porter le même nom, la mention
+     * rend le cumul lisible sur le document ; la ligne de son propre rôle reste sans mention.
+     */
+    private String nomMembreAttributaire(String im) {
+        return nomAvecMentionDelegation(im, cnm.prs.enums.ProfilUtilisateur.MEMBRE);
+    }
+
+    /** Nom du contrôleur, suffixé « (par délégation) » si son profil n'est pas le profil titulaire du rôle. */
+    private String nomAvecMentionDelegation(String im, cnm.prs.enums.ProfilUtilisateur profilTitulaire) {
         String nom = nomControleur(im);
         if (nom == null) {
             return null;
         }
         boolean titulaire = controleurDirectory.profilDe(im)
-                .map(p -> p == cnm.prs.enums.ProfilUtilisateur.VERIFICATEUR).orElse(false);
+                .map(p -> p == profilTitulaire).orElse(false);
         return titulaire ? nom : nom + " (par délégation)";
     }
 

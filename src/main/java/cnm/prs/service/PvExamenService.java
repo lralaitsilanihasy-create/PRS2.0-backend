@@ -63,14 +63,17 @@ public class PvExamenService {
     private final ExamenDetailRepository examenDetailRepository;
     private final ExamenPieceRepository examenPieceRepository;
     private final ObservationPvService observationPvService;
+    private final cnm.prs.security.PermissionService permissionService;
 
     public PvExamenService(PvExamenRepository repository, PvNavetteRepository navetteRepository,
             PrmpRepository prmpRepository, NotificationService notificationService,
             ControleurDirectory controleurDirectory, DossierRepository dossierRepository,
             ControleurRepository controleurRepository, PvDocumentService pvDocumentService,
             ExamenDetailRepository examenDetailRepository, ExamenPieceRepository examenPieceRepository,
-            ObservationPvService observationPvService) {
+            ObservationPvService observationPvService,
+            cnm.prs.security.PermissionService permissionService) {
         this.observationPvService = observationPvService;
+        this.permissionService = permissionService;
         this.repository = repository;
         this.navetteRepository = navetteRepository;
         this.prmpRepository = prmpRepository;
@@ -667,12 +670,25 @@ public class PvExamenService {
         }
     }
 
-    /** Le co-signataire (Président/CC) doit être une personne différente du Membre (§2.6). */
+    /**
+     * Le co-signataire (Président/CC) doit être une personne différente du Membre (§2.6) — SAUF
+     * (⚠️ décision produit 2026-08-15, circuit court) quand le signataire est couvert par une paire
+     * (profil → Membre) <strong>active</strong> de t_delegation_profil : le Président seul ou le CC
+     * seul porte alors les DEUX parts (part Membre en tant qu'attributaire, puis sa part de rôle —
+     * deux actions successives). Data-driven : paire désactivée en base → le verrou « une signature
+     * par personne » se referme sans changement de code. Le Membre titulaire reste structurellement
+     * exclu de la co-signature (contrôles de profil des rôles PRESIDENT/CC, en amont).
+     */
     private void exigerCoSignataireDistinct(String coSignataire, PvExamen pv) {
-        if (coSignataire.equals(pv.getImCtrlMembre())) {
-            throw new BusinessRuleException(
-                    "Le co-signataire doit être différent du Membre signataire (auto-co-signature interdite, §2.6).");
+        if (!coSignataire.equals(pv.getImCtrlMembre())) {
+            return;
         }
+        ProfilUtilisateur profil = CurrentUser.profil().orElse(null);
+        if (permissionService.peutExercer(profil, ProfilUtilisateur.MEMBRE)) {
+            return; // auto-co-signature du circuit court : couvert par la paire (profil → Membre) active
+        }
+        throw new BusinessRuleException(
+                "Le co-signataire doit être différent du Membre signataire (auto-co-signature interdite, §2.6).");
     }
 
     /** Un Chef de commission ne co-signe que les PV de sa localité (§3.3). */

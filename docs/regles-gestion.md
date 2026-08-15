@@ -315,7 +315,7 @@ Sommet de la hiérarchie CNM. Supervise tous les Chefs de commission. Voit tous 
 - Dispatch vers un membre [Action]
   - Affectation avec instructions et date limite. INTERIM_DISPATCH = false en fonctionnement normal.
   - ⚠️ **Règle ajoutée (2026-08-15) — cohérence de l'attributaire (garde au POST/PUT `/api/dispatchs`)** : `IM_CTRL_MEMBRE` doit désigner un contrôleur **capable d'exercer la tâche du Membre** — titulaire (profil MEMBRE) **ou** couvert par une paire (profil → Membre) **active** de `t_delegation_profil`. Sinon le dossier serait inexaminable (l'examen est réservé à l'attributaire, §2.4) : **409**, message explicite ; matricule inconnu → **409** aussi. Data-driven : désactiver/réactiver la paire en base change la réponse **sans changement de code**.
-  - ⚠️ **Règle ajoutée (2026-08-15) — auto-attribution (circuit court)** : la garde ci-dessus autorise le dispatcheur à **s'attribuer le dossier à lui-même** (Président via la paire Président → Membre ; CC via CC → Membre lorsqu'elle est active) : il dispatche, examine et **signe la part Membre** (acte d'identité de l'attributaire). La **co-signature reste une autre personne** (auto-co-signature interdite, §2.6) : Président auto-attributaire → co-signature par le **CC de la localité** ; CC auto-attributaire → co-signature par le **Président**. Le verrou de signature est donc **une signature par personne**, pas seulement par rôle.
+  - ⚠️ **Règle ajoutée (2026-08-15) — auto-attribution (circuit court)** : la garde ci-dessus autorise le dispatcheur à **s'attribuer le dossier à lui-même** (Président via la paire Président → Membre ; CC via CC → Membre lorsqu'elle est active) : il dispatche, examine et **signe la part Membre** (acte d'identité de l'attributaire). ⚠️ **Décision produit (2026-08-15, annule la séparation des signataires du même jour)** : le signataire couvert par une paire « → Membre » **active** peut **aussi porter sa part de rôle** (Président ou CC) — **toute la signature du PV par une seule personne**, en **deux actions successives** ; la complétude « Membre + (Président OU CC) » est inchangée. Data-driven : paire désactivée → le verrou « une signature par personne » se referme (403 à l'endpoint, 409 sinon) sans changement de code.
   - ⚠️ **Règle MODIFIÉE (2026-08-15) — association CC du dispatch** : l'association/copie CC ne vaut que **quand le Président dispatche à un Membre** (le CC suit alors les dossiers de sa commission). Dispatcheur **CC** → aucune association (un `imCtrlCc` envoyé par le client est **ignoré**, forcé à null) ; Président **auto-attributaire** → pas d'association non plus ; l'association ne désigne **jamais l'attributaire lui-même** — plus de doublon « Rôle Membre + Rôle CC » dans les attributions. **Reprise au démarrage** (`AssociationCcDispatchMigration`) : `IM_CTRL_CC` effacé sur l'existant quand il désigne l'attributaire ou le dispatcheur.
 - Réception d'un dossier (délégation) [Action]
   - Peut enregistrer et valider la complétude d'un dossier à la place du Secrétaire (t_delegation_profil).
@@ -328,7 +328,7 @@ Sommet de la hiérarchie CNM. Supervise tous les Chefs de commission. Voit tous 
 - Acceptation du projet de PV [Action]
   - Valide le projet corrigé : passage en PROJET_ACCEPTE + insertion dans t_pv_navette (SENS = ACCEPTATION) + notification PROJET_PV_ACCEPTE vers le Membre. Le PV devient signable.
 - Co-signature définitive du PV [Écriture]
-  - Une fois le projet accepté, un Président réel co-signe en renseignant DATE_SIGNATURE_PRESIDENT **et IM_CTRL_PRESIDENT (= son matricule)** dans t_pv_examen. Le service authentifie le signataire : profil PRESIDENT requis (403 sinon), et le co-signataire doit être **différent du Membre signataire** (auto-co-signature interdite). Facultatif si c'est le CC qui co-signe — contrainte t_pv_examen_cosignataire_check garantit qu'au moins l'un des deux signe.
+  - Une fois le projet accepté, un Président réel co-signe en renseignant DATE_SIGNATURE_PRESIDENT **et IM_CTRL_PRESIDENT (= son matricule)** dans t_pv_examen. Le service authentifie le signataire : profil PRESIDENT requis (403 sinon), et le co-signataire doit être **différent du Membre signataire** (auto-co-signature interdite) — **sauf** (⚠️ décision produit 2026-08-15, circuit court) s'il est couvert par une paire « → Membre » **active** : le Président attributaire signe alors **les deux parts** lui-même. Facultatif si c'est le CC qui co-signe — contrainte t_pv_examen_cosignataire_check garantit qu'au moins l'un des deux signe.
 - Suivi de tous les dossiers [Lecture]
   - Vue d'ensemble de tous les dossiers, toutes localités et toutes commissions.
 
@@ -416,7 +416,7 @@ Subordonné du Président. Rattaché à une localité définie — ne voit que l
 - Acceptation du projet de PV [Action]
   - Valide le projet : passage en PROJET_ACCEPTE + insertion dans t_pv_navette (SENS = ACCEPTATION) + notification PROJET_PV_ACCEPTE vers le Membre. Le PV devient signable.
 - Co-signature définitive du PV [Écriture]
-  - Une fois le projet accepté, le CC **de la localité du dossier** co-signe en renseignant DATE_SIGNATURE_CC **et IM_CTRL_CC (= son matricule)**. Le service authentifie le signataire : profil CHEF_COMMISSION **et localité du dossier** requis (403 sinon), co-signataire **différent du Membre** (auto-co-signature interdite). Facultatif si c'est le Président qui co-signe — contrainte cosignataire garantit qu'au moins l'un des deux signe.
+  - Une fois le projet accepté, le CC **de la localité du dossier** co-signe en renseignant DATE_SIGNATURE_CC **et IM_CTRL_CC (= son matricule)**. Le service authentifie le signataire : profil CHEF_COMMISSION **et localité du dossier** requis (403 sinon), co-signataire **différent du Membre** (auto-co-signature interdite) — **sauf** (⚠️ décision produit 2026-08-15, circuit court) s'il est couvert par la paire CC → Membre **active** : le CC attributaire signe alors **les deux parts** lui-même. Facultatif si c'est le Président qui co-signe — contrainte cosignataire garantit qu'au moins l'un des deux signe.
 
 **Module 11 — Gestion des retraits PRMP**
 
@@ -535,7 +535,7 @@ Subordonné direct du Chef de commission. Voit tous les dossiers de sa localité
 - Rectification sur retour [Écriture]
   - Si le Président/CC retourne le projet (EN_RECTIFICATION, SENS = RETOUR_RECTIF dans t_pv_navette), le Membre corrige la synthèse et/ou l'avis puis resoumet. Le cycle peut se répéter — NB_NAVETTES incrémenté à chaque retour.
 - Signature définitive du PV [Écriture]
-  - Quand le projet est accepté (PROJET_ACCEPTE), **le Membre attributaire du PV** (IM_CTRL_MEMBRE) signe en renseignant DATE_SIGNATURE_MEMBRE dans t_pv_examen. Cette signature **n'est pas déléguable** : le service refuse (403) tout autre signataire que le Membre attributaire. Le PV passe à SIGNE quand DATE_SIGNATURE_MEMBRE ET (DATE_SIGNATURE_PRESIDENT ou DATE_SIGNATURE_CC) sont renseignées — le co-signataire devant être **une personne différente** du Membre (auto-co-signature interdite).
+  - Quand le projet est accepté (PROJET_ACCEPTE), **le Membre attributaire du PV** (IM_CTRL_MEMBRE) signe en renseignant DATE_SIGNATURE_MEMBRE dans t_pv_examen. Cette signature **n'est pas déléguable** : le service refuse (403) tout autre signataire que le Membre attributaire. Le PV passe à SIGNE quand DATE_SIGNATURE_MEMBRE ET (DATE_SIGNATURE_PRESIDENT ou DATE_SIGNATURE_CC) sont renseignées — le co-signataire devant être **une personne différente** du Membre (auto-co-signature interdite), **sauf** (⚠️ décision produit 2026-08-15, circuit court) un Président/CC attributaire couvert par une paire « → Membre » **active**, qui porte alors les deux parts lui-même (le **Membre titulaire** reste exclu de la co-signature : les rôles PRESIDENT/CC exigent leur profil). Sur le **document PV**, la ligne Membre est suffixée « **(par délégation)** » quand l'attributaire n'est pas un Membre titulaire.
   - **Identité du signataire** : pour chaque signature, le service enregistre l'identité de l'**utilisateur authentifié** (CurrentUser, principal JWT) dans IM_CTRL_MEMBRE / IM_CTRL_PRESIDENT / IM_CTRL_CC ; le champ `imActeur` du corps de requête n'est **pas** utilisé pour l'identité (non falsifiable).
 
 **Module 04 — Messagerie**
@@ -683,15 +683,16 @@ Accès complet aux référentiels, comptes utilisateurs, journal d'audit, hiéra
     paire « → Vérificateur » active), **non** restreinte au Secrétaire de séance désigné ; dans le
     circuit court, le décideur peut donc être l'**attributaire du même dossier** (auteur des
     observations) — **assumé, sans garde de séparation** : la vérification juge la levée par la PRMP,
-    le PV a déjà été co-signé par une seconde personne, chaque décision est tracée. La **désignation
+    et chaque décision est tracée avec l'identité du décideur. La **désignation
     du Secrétaire de séance** (`idSecretaireSeance`) est **élargie à la même règle** (décision produit
     2026-08-15, annulant le statu quo du même jour) : Vérificateur **titulaire** de la localité du
     dossier OU contrôleur couvert par une paire « → Vérificateur » **active**, dans le périmètre de sa
     localité (contrôleur sans localité — Président — accepté partout) ; le Président/CC peut donc
     **se désigner lui-même** à l'acceptation. Conséquence assumée : au bloc Signataires du PV du
     circuit court, la même personne peut figurer comme Membre attributaire ET Secrétaire de séance —
-    la **co-signature reste une seconde personne**, et le document PV suffixe le nom du Secrétaire de
-    séance de « **(par délégation)** » quand le désigné n'est pas un Vérificateur titulaire.
+    et, depuis la levée du verrou d'auto-co-signature (décision produit 2026-08-15), porter aussi les
+    **deux parts de signature**. Le document PV suffixe de « **(par délégation)** » le nom du Secrétaire
+    de séance et la ligne Membre quand le titulaire du rôle n'est pas le profil attendu.
 - ⚠️ **Règle ajoutée (2026-08-13) — catégorie des modes de passation** [Écriture]
   - Chaque mode (`tr_mode_passation`) porte une **catégorie déclarative** `CATEGORIE` :
     **`NORMAL`** (mode de droit commun — l'appel d'offres ouvert au sens du Code des marchés publics)

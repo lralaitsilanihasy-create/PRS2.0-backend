@@ -1124,8 +1124,8 @@ class CnmWorkflowIntegrationTest {
 
     @Test
     @DisplayName("Délégation ascendante — auto-attribution du Président (circuit court) : dispatch à soi-même (201), "
-            + "examen et signature de la part Membre par lui-même OK ; signer AUSSI la part Président → 409 "
-            + "(auto-co-signature interdite, une signature par personne) ; le CC co-signe → SIGNE")
+            + "examen par lui-même, puis signature COMPLÈTE par lui seul — part Membre (attributaire) ET part "
+            + "Président (⚠️ décision produit 2026-08-15 : verrou d'auto-co-signature levé, paire → Membre active)")
     void delegation_autoAttributionPresident_circuitCourt() throws Exception {
         dossierRepository.save(dossier(4601, "PRET_DISPATCH"));
         receptionRepository.save(reception(5601, 4601, "CTRSEC", true)); // ANT
@@ -1163,16 +1163,14 @@ class CnmWorkflowIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRPRE\",\"role\":\"MEMBRE\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.imCtrlMembre").value("CTRPRE"));
-        // La part PRESIDENT par la MÊME personne → 409 : une signature par PERSONNE, pas seulement par rôle.
+        // La part PRESIDENT par la MÊME personne (⚠️ décision produit 2026-08-15) : le verrou
+        // d'auto-co-signature est levé pour un signataire couvert par la paire → Membre active —
+        // le Président clôt SEUL la signature du PV (deux actions successives).
         mvc.perform(post("/api/pv-examens/5601/signer").header("Authorization", tokenPresident)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRPRE\",\"role\":\"PRESIDENT\"}"))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.message", containsString("auto-co-signature interdite")));
-        // Le CC (personne différente) co-signe la part CC → SIGNE : le circuit court reste clôturable.
-        mvc.perform(post("/api/pv-examens/5601/signer").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRCC1\",\"role\":\"CC\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.statutPv").value("SIGNE"));
+                .andExpect(jsonPath("$.statutPv").value("SIGNE"))
+                .andExpect(jsonPath("$.imCtrlPresident").value("CTRPRE"));
     }
 
     @Test
@@ -3222,9 +3220,9 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
-    @DisplayName("Circuit court CC (⚠️ décision produit 2026-08-15) : le CC s'auto-désigne Secrétaire de séance "
-            + "(paire CC → Vérificateur ACTIVE ; désactivée → 409, data-driven) ; hors couverture ou hors localité "
-            + "→ 409 ; puis il statue le passage sur SES PROPRES observations (pas de garde de séparation)")
+    @DisplayName("Circuit court CC (⚠️ décisions produit 2026-08-15) : auto-désignation Secrétaire de séance "
+            + "(paire active ; désactivée → 409) ; signature COMPLÈTE par le CC seul — part Membre + part CC "
+            + "(paire → Membre désactivée → 403, réactivée → SIGNE) ; passage statué sur SES PROPRES observations")
     void circuitCourtCc_secretaireSeanceParDelegation_etPassageParAttributaire() throws Exception {
         // Dossier ANT auto-attribué par le CC (garde attributaire : paire CC → Membre active).
         dossierRepository.save(dossier(4610, "PRET_DISPATCH"));
@@ -3284,13 +3282,28 @@ class CnmWorkflowIntegrationTest {
                 .content("{\"imActeur\":\"CTRCC1\",\"idAvis\":\"FAVR\",\"idSecretaireSeance\":\"CTRCC1\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.idSecretaireSeance").value("CTRCC1"));
-        // Signatures : part Membre par le CC attributaire ; co-signature par le Président (séparation des personnes).
+        // Signature COMPLÈTE par le CC seul (⚠️ décision produit 2026-08-15) : part Membre (attributaire)…
         mvc.perform(post("/api/pv-examens/" + idPv + "/signer").header("Authorization", tokenCc)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRCC1\",\"role\":\"MEMBRE\"}"))
                 .andExpect(status().isOk());
-        mvc.perform(post("/api/pv-examens/" + idPv + "/signer").header("Authorization", tokenPresident)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRPRE\",\"role\":\"PRESIDENT\"}"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.statutPv").value("SIGNE"));
+        // … puis sa part CC. Data-driven : paire 5 (CC → Membre) DÉSACTIVÉE → signature bloquée (403,
+        // l'endpoint exige « exercer la tâche du Membre ») ; RÉACTIVÉE → le CC clôt seul → SIGNE.
+        mvc.perform(put("/api/delegation-profils/5").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDelegation\":5,\"idProfileDelegant\":3,\"idProfileDelegue\":5,\"actif\":false}"))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/pv-examens/" + idPv + "/signer").header("Authorization", tokenCc)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRCC1\",\"role\":\"CC\"}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(put("/api/delegation-profils/5").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDelegation\":5,\"idProfileDelegant\":3,\"idProfileDelegue\":5,\"actif\":true}"))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/pv-examens/" + idPv + "/signer").header("Authorization", tokenCc)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRCC1\",\"role\":\"CC\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statutPv").value("SIGNE"))
+                .andExpect(jsonPath("$.imCtrlCc").value("CTRCC1"));
         mvc.perform(get("/api/dossiers/4610").header("Authorization", tokenCc))
                 .andExpect(jsonPath("$.statut").value("EN_VERIFICATION"));
         // Q1a : le MÊME CC (attributaire, auteur des observations) statue le passage via la paire CC → Vérificateur
