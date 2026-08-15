@@ -61,7 +61,14 @@ public class PermissionService {
      * Surcharge utilisée par les services (les {@code @PreAuthorize} passent par la variante String).
      */
     public boolean peutExercer(ProfilUtilisateur cible) {
-        ProfilUtilisateur courant = CurrentUser.profil().orElse(null);
+        return peutExercer(CurrentUser.profil().orElse(null), cible);
+    }
+
+    /**
+     * Même garde pour un profil <strong>arbitraire</strong> (pas seulement l'utilisateur courant) —
+     * utilisée pour valider l'attributaire d'un dispatch (auto-attribution du Président/CC).
+     */
+    public boolean peutExercer(ProfilUtilisateur courant, ProfilUtilisateur cible) {
         if (courant == null || cible == null) {
             return false;
         }

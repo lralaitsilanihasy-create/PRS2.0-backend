@@ -1123,6 +1123,185 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("Délégation ascendante — auto-attribution du Président (circuit court) : dispatch à soi-même (201), "
+            + "examen et signature de la part Membre par lui-même OK ; signer AUSSI la part Président → 409 "
+            + "(auto-co-signature interdite, une signature par personne) ; le CC co-signe → SIGNE")
+    void delegation_autoAttributionPresident_circuitCourt() throws Exception {
+        dossierRepository.save(dossier(4601, "PRET_DISPATCH"));
+        receptionRepository.save(reception(5601, 4601, "CTRSEC", true)); // ANT
+        // Le Président se dispatche le dossier à LUI-MÊME : attributaire couvert par la paire
+        // Président → Membre (active) → 201. Le CC d'ANT est associé automatiquement.
+        mvc.perform(post("/api/dispatchs").header("Authorization", tokenPresident)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDispatch\":5601,\"idReception\":5601,\"imCtrlMembre\":\"CTRPRE\",\"interimDispatch\":false}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.imCtrlMembre").value("CTRPRE"));
+        // Il examine lui-même (examen réservé à l'attributaire — c'est lui, §2.4) puis soumet.
+        mvc.perform(post("/api/examens").header("Authorization", tokenPresident)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idExamen\":5601,\"idDispatch\":5601,\"imCtrlMembre\":\"CTRPRE\"}"))
+                .andExpect(status().isCreated());
+        mvc.perform(post("/api/examens/5601/soumettre").header("Authorization", tokenPresident)
+                .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isCreated());
+        // Projet de PV : l'attributaire est DÉRIVÉ du dispatch (= CTRPRE), navette classique via le CC.
+        mvc.perform(post("/api/pv-examens").header("Authorization", tokenPresident)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idPv\":5601,\"idExamen\":5601,\"idAvis\":\"FAV\",\"imCtrlMembre\":\"CTRPRE\","
+                        + "\"statutPv\":\"BROUILLON\",\"nbNavettes\":0}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.imCtrlMembre").value("CTRPRE"));
+        mvc.perform(post("/api/pv-examens/5601/soumettre").header("Authorization", tokenPresident)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRPRE\",\"commentaire\":\"go\"}"))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/pv-examens/5601/accepter").header("Authorization", tokenCc)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"imActeur\":\"CTRCC1\",\"idAvis\":\"FAV\",\"idSecretaireSeance\":\"CTRVER\"}"))
+                .andExpect(status().isOk());
+        // Signature de la part MEMBRE par le Président attributaire : OK (acte d'identité — il est l'attributaire).
+        mvc.perform(post("/api/pv-examens/5601/signer").header("Authorization", tokenPresident)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRPRE\",\"role\":\"MEMBRE\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.imCtrlMembre").value("CTRPRE"));
+        // La part PRESIDENT par la MÊME personne → 409 : une signature par PERSONNE, pas seulement par rôle.
+        mvc.perform(post("/api/pv-examens/5601/signer").header("Authorization", tokenPresident)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRPRE\",\"role\":\"PRESIDENT\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message", containsString("auto-co-signature interdite")));
+        // Le CC (personne différente) co-signe la part CC → SIGNE : le circuit court reste clôturable.
+        mvc.perform(post("/api/pv-examens/5601/signer").header("Authorization", tokenCc)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRCC1\",\"role\":\"CC\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statutPv").value("SIGNE"));
+    }
+
+    @Test
+    @DisplayName("Dispatch — garde de l'attributaire : Secrétaire (aucune paire → Membre) → 409 ; matricule inconnu "
+            + "→ 409 ; CC refusé quand la paire CC → Membre est désactivée, accepté quand elle est réactivée "
+            + "(data-driven) ; même garde au PUT")
+    void dispatch_gardeAttributaireMembre() throws Exception {
+        dossierRepository.save(dossier(4602, "PRET_DISPATCH"));
+        receptionRepository.save(reception(5602, 4602, "CTRSEC", true)); // ANT
+        // Secrétaire attributaire : aucune paire Secrétaire → Membre dans la table → dossier inexaminable → 409.
+        mvc.perform(post("/api/dispatchs").header("Authorization", tokenCc).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDispatch\":5602,\"idReception\":5602,\"imCtrlMembre\":\"CTRSEC\",\"interimDispatch\":false}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message", containsString("inexaminable")));
+        // Matricule inconnu → refus explicite.
+        mvc.perform(post("/api/dispatchs").header("Authorization", tokenCc).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDispatch\":5602,\"idReception\":5602,\"imCtrlMembre\":\"ZZZ999\",\"interimDispatch\":false}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message", containsString("aucun contrôleur")));
+        // L'Admin DÉSACTIVE la paire 5 (CC → Membre) → le CC ne peut plus être attributaire → 409.
+        mvc.perform(put("/api/delegation-profils/5").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDelegation\":5,\"idProfileDelegant\":3,\"idProfileDelegue\":5,\"actif\":false}"))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/dispatchs").header("Authorization", tokenCc).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDispatch\":5602,\"idReception\":5602,\"imCtrlMembre\":\"CTRCC1\",\"interimDispatch\":false}"))
+                .andExpect(status().isConflict());
+        // RÉACTIVÉE → le même dispatch (auto-attribution du CC) passe, SANS changement de code.
+        mvc.perform(put("/api/delegation-profils/5").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDelegation\":5,\"idProfileDelegant\":3,\"idProfileDelegue\":5,\"actif\":true}"))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/dispatchs").header("Authorization", tokenCc).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDispatch\":5602,\"idReception\":5602,\"imCtrlMembre\":\"CTRCC1\",\"interimDispatch\":false}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.imCtrlMembre").value("CTRCC1"));
+        // Même garde à la correction (PUT) : re-cibler un Secrétaire est refusé.
+        mvc.perform(put("/api/dispatchs/5602").header("Authorization", tokenCc)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDispatch\":5602,\"idReception\":5602,\"imCtrlMembre\":\"CTRSEC\",\"interimDispatch\":false}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message", containsString("inexaminable")));
+    }
+
+    @Test
+    @DisplayName("Dispatch — association CC seulement quand le Président dispatche à un Membre : CC auto-attribué → "
+            + "sans imCtrlCc ; CC → Membre → imCtrlCc client ignoré ; Président → Membre → association + copie "
+            + "DISPATCH_CC conservées ; Président → lui-même → pas d'association")
+    void dispatch_associationCcSelonDispatcheur() throws Exception {
+        // 1) Le CC s'auto-dispatche → aucune association CC (une seule apparition : Rôle Membre).
+        dossierRepository.save(dossier(4603, "PRET_DISPATCH"));
+        receptionRepository.save(reception(5603, 4603, "CTRSEC", true)); // ANT
+        mvc.perform(post("/api/dispatchs").header("Authorization", tokenCc).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDispatch\":5603,\"idReception\":5603,\"imCtrlMembre\":\"CTRCC1\",\"interimDispatch\":false}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.imCtrlCc").value(nullValue()));
+        // 2) Le CC dispatche à un Membre, imCtrlCc = lui-même envoyé par le client → IGNORÉ (forcé à null).
+        dossierRepository.save(dossier(4604, "PRET_DISPATCH"));
+        receptionRepository.save(reception(5604, 4604, "CTRSEC", true));
+        mvc.perform(post("/api/dispatchs").header("Authorization", tokenCc).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDispatch\":5604,\"idReception\":5604,\"imCtrlCc\":\"CTRCC1\","
+                        + "\"imCtrlMembre\":\"CTRMEM\",\"interimDispatch\":false}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.imCtrlCc").value(nullValue()));
+        // Aucune copie DISPATCH_CC émise pour ces deux dispatchs (le CC est l'acteur du dispatch).
+        mvc.perform(get("/api/notifications/mes").header("Authorization", tokenCc))
+                .andExpect(jsonPath("$[?(@.typeNotif=='DISPATCH_CC')]", hasSize(0)));
+        // 3) Président → Membre → comportement conservé : CC de la localité auto-associé + copie DISPATCH_CC.
+        dossierRepository.save(dossier(4605, "PRET_DISPATCH"));
+        receptionRepository.save(reception(5605, 4605, "CTRSEC", true));
+        mvc.perform(post("/api/dispatchs").header("Authorization", tokenPresident).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDispatch\":5605,\"idReception\":5605,\"imCtrlMembre\":\"CTRMEM\",\"interimDispatch\":false}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.imCtrlCc").value("CTRCC1"));
+        mvc.perform(get("/api/notifications/mes").header("Authorization", tokenCc))
+                .andExpect(jsonPath("$[?(@.typeNotif=='DISPATCH_CC')]", hasSize(1)));
+        // 4) Président → LUI-MÊME (auto-attribution) → pas d'association (copie sans objet).
+        dossierRepository.save(dossier(4606, "PRET_DISPATCH"));
+        receptionRepository.save(reception(5606, 4606, "CTRSEC", true));
+        mvc.perform(post("/api/dispatchs").header("Authorization", tokenPresident).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDispatch\":5606,\"idReception\":5606,\"imCtrlMembre\":\"CTRPRE\",\"interimDispatch\":false}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.imCtrlCc").value(nullValue()));
+        mvc.perform(get("/api/notifications/mes").header("Authorization", tokenCc))
+                .andExpect(jsonPath("$[?(@.typeNotif=='DISPATCH_CC')]", hasSize(1))); // toujours une seule
+        // Même règle au PUT : le CC corrige son dispatch en renvoyant imCtrlCc = lui-même → ignoré.
+        mvc.perform(put("/api/dispatchs/5604").header("Authorization", tokenCc)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDispatch\":5604,\"idReception\":5604,\"imCtrlCc\":\"CTRCC1\","
+                        + "\"imCtrlMembre\":\"CTRMEM\",\"interimDispatch\":false}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.imCtrlCc").value(nullValue()));
+    }
+
+    @Test
+    @DisplayName("Reprise — association CC : IM_CTRL_CC effacé quand il désigne l'attributaire (doublon "
+            + "auto-attribution) ou le dispatcheur lui-même ; les associations légitimes sont conservées")
+    void migration_associationCcInvalide() {
+        dossierRepository.save(dossier(4607, "DISPATCHE"));
+        receptionRepository.save(reception(5607, 4607, "CTRSEC", true));
+        dossierRepository.save(dossier(4608, "DISPATCHE"));
+        receptionRepository.save(reception(5608, 4608, "CTRSEC", true));
+        dossierRepository.save(dossier(4609, "DISPATCHE"));
+        receptionRepository.save(reception(5609, 4609, "CTRSEC", true));
+        // Doublon historique : CC auto-attribué ET associé à son propre dispatch (cas 00002/PPM/CNM/2026).
+        dispatchRepository.save(dispatch(5607, 5607, "CTRCC1", "CTRCC1"));
+        // CC dispatcheur associé à lui-même (copie de son propre dispatch).
+        Dispatch avecDispatcheur = dispatch(5608, 5608, "CTRCC1", "CTRMEM");
+        avecDispatcheur.setImCtrlDispatch("CTRCC1");
+        dispatchRepository.save(avecDispatcheur);
+        // Association légitime (Président → Membre, CC tiers) : conservée.
+        Dispatch legitime = dispatch(5609, 5609, "CTRCC1", "CTRMEM");
+        legitime.setImCtrlDispatch("CTRPRE");
+        dispatchRepository.save(legitime);
+
+        new cnm.prs.seed.AssociationCcDispatchMigration(dispatchRepository).run();
+
+        org.junit.jupiter.api.Assertions.assertNull(
+                dispatchRepository.findById(5607).orElseThrow().getImCtrlCc(),
+                "auto-attribution : l'association CC (doublon Membre+CC) doit être effacée");
+        org.junit.jupiter.api.Assertions.assertNull(
+                dispatchRepository.findById(5608).orElseThrow().getImCtrlCc(),
+                "dispatcheur CC : la copie de son propre dispatch doit être effacée");
+        org.junit.jupiter.api.Assertions.assertEquals("CTRCC1",
+                dispatchRepository.findById(5609).orElseThrow().getImCtrlCc(),
+                "Président → Membre : l'association légitime est conservée");
+    }
+
+    @Test
     @DisplayName("Co-signature PV : rôle↔acteur authentifié, identité enregistrée (Membre attributaire + Président réel)")
     void cosignature_authentificationEtIdentite() throws Exception {
         // PV sur examen 1 (Membre CTRMEM), porté à PROJET_ACCEPTE.

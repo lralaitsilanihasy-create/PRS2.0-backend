@@ -19,8 +19,10 @@ import cnm.prs.mapper.DispatchMapper;
 import cnm.prs.repository.ControleurRepository;
 import cnm.prs.repository.DispatchRepository;
 import cnm.prs.repository.DossierRepository;
+import cnm.prs.repository.ProfileRepository;
 import cnm.prs.repository.ReceptionRepository;
 import cnm.prs.security.CurrentUser;
+import cnm.prs.security.PermissionService;
 import cnm.prs.security.Visibilite;
 
 /**
@@ -37,11 +39,14 @@ public class DispatchService {
     private final NotificationService notificationService;
     private final CircuitCascadeService circuitCascadeService;
     private final ControleurDirectory controleurDirectory;
+    private final PermissionService permissionService;
+    private final ProfileRepository profileRepository;
 
     public DispatchService(DispatchRepository repository, ReceptionRepository receptionRepository,
             ControleurRepository controleurRepository, DossierRepository dossierRepository,
             NotificationService notificationService, CircuitCascadeService circuitCascadeService,
-            ControleurDirectory controleurDirectory) {
+            ControleurDirectory controleurDirectory, PermissionService permissionService,
+            ProfileRepository profileRepository) {
         this.repository = repository;
         this.receptionRepository = receptionRepository;
         this.controleurRepository = controleurRepository;
@@ -49,6 +54,8 @@ public class DispatchService {
         this.notificationService = notificationService;
         this.circuitCascadeService = circuitCascadeService;
         this.controleurDirectory = controleurDirectory;
+        this.permissionService = permissionService;
+        this.profileRepository = profileRepository;
     }
 
     @Transactional(readOnly = true)
@@ -87,11 +94,11 @@ public class DispatchService {
         exigerDossierPretDispatch(dto.getIdReception());
         interdireDoublonDispatch(dto.getIdReception());
         validerInterimDispatch(dto);
+        validerAttributaireMembre(dto);
         Dispatch entity = DispatchMapper.toEntity(dto);
-        // ⚠️ Règle ajoutée (§3.3) — le CC de la localité du dossier est TOUJOURS associé au dispatch :
-        // s'il n'est pas fourni, il est résolu automatiquement, afin qu'il soit informé et suive tout
-        // le circuit des dossiers dispatchés aux Membres de sa commission.
-        associerCcParDefaut(entity);
+        // ⚠️ Règle MODIFIÉE (2026-08-15) — l'association CC ne vaut que quand le Président dispatche
+        // à un Membre (le CC suit alors les dossiers de sa commission) : voir normaliserAssociationCc.
+        normaliserAssociationCc(entity, true);
         Dispatch saved = repository.save(entity);
         // [Auto] Le dossier avance PRET_DISPATCH → DISPATCHE, dans la même transaction que le dispatch.
         avancerDossierVersDispatche(dto.getIdReception());
@@ -102,14 +109,40 @@ public class DispatchService {
         return toDtoComplet(saved);
     }
 
-    /** [Auto] Si {@code imCtrlCc} est absent, associe le Chef de commission de la localité du dossier. */
-    private void associerCcParDefaut(Dispatch entity) {
-        if (entity.getImCtrlCc() != null && !entity.getImCtrlCc().isBlank()) {
+    /**
+     * ⚠️ Règle MODIFIÉE (2026-08-15, spec dispatch) — l'association/copie CC ne vaut que quand le
+     * <strong>Président dispatche à un Membre</strong> (le CC de la localité suit alors les dossiers
+     * de sa commission) :
+     * <ul>
+     *   <li><strong>dispatcheur CC</strong> → aucune association (il est l'acteur du dispatch, quelle
+     *       que soit l'attribution — Membre ou lui-même) : un {@code imCtrlCc} envoyé par le client
+     *       est <strong>ignoré</strong> (forcé à null, documenté) — jamais de copie de son propre
+     *       dispatch ;</li>
+     *   <li><strong>Président auto-attributaire</strong> ({@code imCtrlMembre} = lui-même) → pas
+     *       d'association non plus (la copie n'a de sens que pour un dispatch « à un Membre ») ;</li>
+     *   <li>l'association ne désigne <strong>jamais l'attributaire lui-même</strong> (ex. Président →
+     *       CC-par-délégation) — plus de doublon « Rôle Membre + Rôle CC » dans les attributions ;</li>
+     *   <li>sinon (Président → Membre) : comportement conservé — {@code imCtrlCc} fourni respecté, à
+     *       défaut le CC de la localité du dossier est associé automatiquement (au POST) et reçoit la
+     *       copie {@code DISPATCH_CC}.</li>
+     * </ul>
+     */
+    private void normaliserAssociationCc(Dispatch entity, boolean associerParDefaut) {
+        ProfilUtilisateur profil = CurrentUser.profil().orElse(null);
+        String moi = CurrentUser.ref().orElse(null);
+        boolean autoAttribution = moi != null && moi.equals(entity.getImCtrlMembre());
+        if (profil == ProfilUtilisateur.CHEF_COMMISSION || autoAttribution) {
+            entity.setImCtrlCc(null);
             return;
         }
-        String localite = resoudreLocaliteDossier(entity.getIdReception());
-        controleurDirectory.chefsCommission(localite).stream().findFirst()
-                .ifPresent(cc -> entity.setImCtrlCc(cc.getImControleur()));
+        if (associerParDefaut && (entity.getImCtrlCc() == null || entity.getImCtrlCc().isBlank())) {
+            String localite = resoudreLocaliteDossier(entity.getIdReception());
+            controleurDirectory.chefsCommission(localite).stream().findFirst()
+                    .ifPresent(cc -> entity.setImCtrlCc(cc.getImControleur()));
+        }
+        if (entity.getImCtrlCc() != null && entity.getImCtrlCc().equals(entity.getImCtrlMembre())) {
+            entity.setImCtrlCc(null); // jamais la même personne que l'attributaire
+        }
     }
 
     /** [Auto] Copie de dispatch ({@code DISPATCH_CC}) au CC associé — informé du circuit du dossier (§3.3). */
@@ -197,6 +230,7 @@ public class DispatchService {
 
     public DispatchDto update(Integer id, DispatchDto dto) {
         validerInterimDispatch(dto);
+        validerAttributaireMembre(dto);
         Dispatch existing = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Dispatch introuvable : " + id));
         existing.setIdReception(dto.getIdReception());
@@ -207,6 +241,8 @@ public class DispatchService {
         existing.setDateCtrlAssigne(dto.getDateCtrlAssigne());
         existing.setInstructions(dto.getInstructions());
         existing.setInterimDispatch(dto.getInterimDispatch());
+        // Même règle d'association CC qu'au POST (sans auto-association : le PUT respecte le corps).
+        normaliserAssociationCc(existing, false);
         return toDtoComplet(repository.save(existing));
     }
 
@@ -313,6 +349,34 @@ public class DispatchService {
                 throw new BusinessRuleException(
                         "Dispatch hors de votre localité : INTERIM_DISPATCH doit être true (§3.3).");
             }
+        }
+    }
+
+    /**
+     * ⚠️ Règle ajoutée (délégation ascendante, spec §3.5) — cohérence de l'attributaire :
+     * {@code IM_CTRL_MEMBRE} doit désigner un contrôleur capable d'exercer la tâche du Membre —
+     * titulaire (profil MEMBRE) ou couvert par une paire (profil → Membre) <strong>active</strong>
+     * de {@code t_delegation_profil} (auto-attribution du Président/CC au dispatch). Sinon le
+     * dossier serait inexaminable — l'examen est réservé à l'attributaire (§2.4) — d'où 409.
+     * Data-driven : désactiver/réactiver la paire en base change la réponse sans changement de code.
+     */
+    private void validerAttributaireMembre(DispatchDto dto) {
+        String im = dto.getImCtrlMembre();
+        if (im == null || im.isBlank()) {
+            return; // dispatch sans attributaire : toléré (l'examen/PV le bloquent en aval)
+        }
+        Controleur attributaire = controleurRepository.findById(im)
+                .orElseThrow(() -> new BusinessRuleException(
+                        "Attributaire invalide : aucun contrôleur avec le matricule « " + im + " »."));
+        // Résolution par la FK scalaire ID_PROFILE (l'association lazy n'est pas fiable sur une
+        // entité déjà en cache de session — elle peut être null alors que la FK est posée).
+        ProfilUtilisateur profil = attributaire.getIdProfile() == null ? null
+                : profileRepository.findById(attributaire.getIdProfile())
+                        .map(p -> ProfilUtilisateur.resolve(p.getProfile())).orElse(null);
+        if (!permissionService.peutExercer(profil, ProfilUtilisateur.MEMBRE)) {
+            throw new BusinessRuleException(
+                    "Attributaire invalide : « " + im + " » n'est ni Membre ni couvert par une délégation "
+                            + "active vers Membre (t_delegation_profil) — le dossier serait inexaminable (§2.4).");
         }
     }
 

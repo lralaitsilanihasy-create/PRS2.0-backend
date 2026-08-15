@@ -314,6 +314,9 @@ Sommet de la hiérarchie CNM. Supervise tous les Chefs de commission. Voit tous 
   - Vue v_file_attente_dispatch : tous les dossiers complets sans dispatch existant, toutes localités.
 - Dispatch vers un membre [Action]
   - Affectation avec instructions et date limite. INTERIM_DISPATCH = false en fonctionnement normal.
+  - ⚠️ **Règle ajoutée (2026-08-15) — cohérence de l'attributaire (garde au POST/PUT `/api/dispatchs`)** : `IM_CTRL_MEMBRE` doit désigner un contrôleur **capable d'exercer la tâche du Membre** — titulaire (profil MEMBRE) **ou** couvert par une paire (profil → Membre) **active** de `t_delegation_profil`. Sinon le dossier serait inexaminable (l'examen est réservé à l'attributaire, §2.4) : **409**, message explicite ; matricule inconnu → **409** aussi. Data-driven : désactiver/réactiver la paire en base change la réponse **sans changement de code**.
+  - ⚠️ **Règle ajoutée (2026-08-15) — auto-attribution (circuit court)** : la garde ci-dessus autorise le dispatcheur à **s'attribuer le dossier à lui-même** (Président via la paire Président → Membre ; CC via CC → Membre lorsqu'elle est active) : il dispatche, examine et **signe la part Membre** (acte d'identité de l'attributaire). La **co-signature reste une autre personne** (auto-co-signature interdite, §2.6) : Président auto-attributaire → co-signature par le **CC de la localité** ; CC auto-attributaire → co-signature par le **Président**. Le verrou de signature est donc **une signature par personne**, pas seulement par rôle.
+  - ⚠️ **Règle MODIFIÉE (2026-08-15) — association CC du dispatch** : l'association/copie CC ne vaut que **quand le Président dispatche à un Membre** (le CC suit alors les dossiers de sa commission). Dispatcheur **CC** → aucune association (un `imCtrlCc` envoyé par le client est **ignoré**, forcé à null) ; Président **auto-attributaire** → pas d'association non plus ; l'association ne désigne **jamais l'attributaire lui-même** — plus de doublon « Rôle Membre + Rôle CC » dans les attributions. **Reprise au démarrage** (`AssociationCcDispatchMigration`) : `IM_CTRL_CC` effacé sur l'existant quand il désigne l'attributaire ou le dispatcheur.
 - Réception d'un dossier (délégation) [Action]
   - Peut enregistrer et valider la complétude d'un dossier à la place du Secrétaire (t_delegation_profil).
 - Examen point par point (délégation) [Action]
@@ -396,8 +399,10 @@ Subordonné du Président. Rattaché à une localité définie — ne voit que l
   - Pour la localité CRM, le CC dispatche en tant que titulaire — INTERIM_DISPATCH = false.
 - Dispatch en intérim (autres localités) [Action]
   - En l'absence du Président — INTERIM_DISPATCH = true tracé dans t_dispatch.
+  - ⚠️ La **garde de cohérence de l'attributaire** et l'**auto-attribution** (§3.2, Dispatch vers un membre) s'appliquent à l'identique au dispatch du CC — l'auto-attribution du CC n'est possible que si la paire CC → Membre est **active**.
 - Réception copie du dossier [Lecture]
   - Copie formelle via t_copie_dossier (TYPE_COPIE = DISPATCH_CC) + notification DISPATCH_CC.
+  - ⚠️ **Règle MODIFIÉE (2026-08-15)** : la copie/association CC ne vaut que pour les dispatchs du **Président vers un Membre**. Quand le CC dispatche lui-même (titulaire ou intérim, Membre ou auto-attribution), **aucune association CC** n'est posée — il est l'acteur du dispatch (voir §3.2, « Dispatch vers un membre »).
 - Réception d'un dossier (délégation) [Action]
   - Peut enregistrer et valider la complétude d'un dossier à la place de son Secrétaire.
 - Examen point par point (délégation) [Action]
@@ -670,6 +675,9 @@ Accès complet aux référentiels, comptes utilisateurs, journal d'audit, hiéra
     réactiver la rend (critère de recette).
   - **Invariants** : accès Administrateur inchangé (`hasRole`), périmètre par localité inchangé,
     actes d'identité non délégables (signatures du PV, signature régionale des lettres de renvoi).
+  - **Garde dérivée (2026-08-15)** : l'**attributaire** d'un dispatch (`IM_CTRL_MEMBRE`) est validé par
+    la même règle data-driven — Membre titulaire **ou** paire (profil → Membre) **active** — ce qui
+    autorise l'**auto-attribution** du Président/CC (voir §3.2, « Dispatch vers un membre »).
 - ⚠️ **Règle ajoutée (2026-08-13) — catégorie des modes de passation** [Écriture]
   - Chaque mode (`tr_mode_passation`) porte une **catégorie déclarative** `CATEGORIE` :
     **`NORMAL`** (mode de droit commun — l'appel d'offres ouvert au sens du Code des marchés publics)

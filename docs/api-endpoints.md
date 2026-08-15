@@ -860,7 +860,15 @@ relation **1,N** : un point de contrôle a **0..N** lignes. Remplace l'ancien ch
 
 > **Règle `interimDispatch`** (sinon **409**) : Président → `false` ; CC dans sa localité → `false` ; CC hors de sa localité → `true` obligatoire.
 
-> ⚠️ **CC toujours associé + informé (règle ajoutée, §3.3).** À la création, si `imCtrlCc` est **absent**, le **Chef de commission de la localité du dossier est associé automatiquement** au dispatch. Le CC associé reçoit une **copie de dispatch** (`DISPATCH_CC`, sauf s'il est lui-même le dispatcheur) et une **copie d'annulation** (`DISPATCH_ANNULE`, sauf s'il est l'auteur du retrait) — il suit ainsi tout le circuit des dossiers dispatchés aux Membres de sa commission (PV à valider, retraits… le notifient déjà).
+> ⚠️ **Cohérence de l'attributaire (règle ajoutée 2026-08-15, POST et PUT) → 409** : `imCtrlMembre`, s'il est renseigné, doit désigner un contrôleur **capable d'exercer la tâche du Membre** — profil MEMBRE, **ou** paire (profil → Membre) **active** dans `t_delegation_profil`. Refus explicite sinon (« …n'est ni Membre ni couvert par une délégation active vers Membre… le dossier serait inexaminable (§2.4) ») ; matricule inconnu → **409** (« aucun contrôleur avec le matricule… »). Cette garde **autorise l'auto-attribution** du dispatcheur (Président via Président → Membre ; CC via CC → Membre active) : il examine et signe ensuite la part Membre lui-même. La part Président/CC du même PV doit alors être signée par **une autre personne** — `POST /api/pv-examens/{id}/signer` répond **409** « Le co-signataire doit être différent du Membre signataire (auto-co-signature interdite, §2.6). » (le front peut avertir avant la tentative).
+
+> ⚠️ **Association CC (règle MODIFIÉE 2026-08-15, §3.3).** L'association/copie CC d'un dispatch **ne vaut que lorsque le Président dispatche à un Membre** (le CC de la localité suit alors les dossiers de sa commission) :
+> - **dispatcheur = CC** → **aucune association** (ni auto-association, ni copie `DISPATCH_CC`), quelle que soit l'attribution (Membre ou lui-même) : un `imCtrlCc` envoyé par le client est **ignoré** (forcé à `null` par le serveur — pas d'erreur) ;
+> - **dispatcheur = Président, attributaire = Membre** → comportement conservé : `imCtrlCc` fourni respecté, à défaut le **CC de la localité du dossier est associé automatiquement** (POST) ; le CC associé reçoit la **copie de dispatch** (`DISPATCH_CC`) et la **copie d'annulation** (`DISPATCH_ANNULE`) ;
+> - **dispatcheur = Président, attributaire = lui-même** (auto-attribution) → **pas d'association** (la copie n'a de sens que pour un dispatch « à un Membre ») ;
+> - l'association ne désigne **jamais l'attributaire lui-même** (ex. Président → CC-par-délégation) — plus de **doublon « Rôle Membre + Rôle CC »** dans les attributions/statistiques dérivées.
+>
+> La même normalisation s'applique au **PUT** (sans auto-association : le corps est respecté puis épuré). **Reprise des données au démarrage** (`AssociationCcDispatchMigration`, désactivable via `app.migration.association-cc-dispatch.enabled=false`) : `IM_CTRL_CC` est effacé sur les dispatchs existants où il désigne l'attributaire ou le dispatcheur lui-même — le dispatch en double (ex. 00002/PPM/CNM/2026) est corrigé **sans retrait ni re-dispatch**.
 
 **Champs `DispatchDto`**
 
