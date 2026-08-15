@@ -34,6 +34,13 @@ public class ObservationPvDto {
     private String precision;
     /** Dernière itération où l'observation a été statuée ({@code null} si jamais). */
     private Integer iteration;
+    /**
+     * ⚠️ Décision produit (2026-08-15) — {@code true} dès qu'une <strong>resoumission de la PRMP</strong>
+     * est intervenue depuis la signature du PV : la décision LEVÉE serait acceptée au prochain passage.
+     * {@code false} avant la première rectification (le front grise « Levée » en miroir — le premier
+     * passage est un rappel, tout est MAINTENUE). Même valeur pour toutes les observations du dossier.
+     */
+    private Boolean leveePossible;
     /** Historique complet des décisions (ordre chronologique). */
     private List<SuiviObservationDto> historique;
 

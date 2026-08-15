@@ -3170,10 +3170,19 @@ class CnmWorkflowIntegrationTest {
         // PV FAVR amené à SIGNE → dossier EN_VERIFICATION, périmètre d'observations figé.
         signerPvAvecAvis(1, "FAVR");
 
-        // Le vérificateur LÈVE l'observation du périmètre (passage) → OBSERVATIONS_LEVEES.
+        // ⚠️ Décision produit 2026-08-15 : premier passage = rappel (MAINTENUE), la PRMP rectifie et
+        // resoumet, puis le vérificateur LÈVE l'observation → OBSERVATIONS_LEVEES.
         String obs = mvc.perform(get("/api/observations-pv").header("Authorization", tokenVer).param("dossier", "1"))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         int idObs = com.jayway.jsonpath.JsonPath.read(obs, "$[0].idObservationPv");
+        mvc.perform(post("/api/observations-pv/passage").header("Authorization", tokenVer)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDossier\":1,\"decisions\":[{\"idObservationPv\":" + idObs
+                        + ",\"decision\":\"MAINTENUE\",\"precision\":\"a rectifier\"}]}"))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/dossiers/1/resoumettre").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"motifRectification\":\"corrige\"}"))
+                .andExpect(status().isOk());
         mvc.perform(post("/api/observations-pv/passage").header("Authorization", tokenVer)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDossier\":1,\"decisions\":[{\"idObservationPv\":" + idObs + ",\"decision\":\"LEVEE\"}]}"))
@@ -3214,9 +3223,11 @@ class CnmWorkflowIntegrationTest {
                 .andExpect(status().isForbidden());
 
         // Le CC exerce la tâche du Vérificateur (paire active CC → Vérificateur, même localité).
-        passageObservationDossier1(tokenCc, "LEVEE", null);
+        // ⚠️ Décision produit 2026-08-15 : premier passage = rappel (MAINTENUE) — la levée n'est
+        // possible qu'après une resoumission de la PRMP.
+        passageObservationDossier1(tokenCc, "MAINTENUE", "a rectifier");
         mvc.perform(get("/api/dossiers/1").header("Authorization", tokenCc))
-                .andExpect(jsonPath("$.statut").value("OBSERVATIONS_LEVEES"));
+                .andExpect(jsonPath("$.statut").value("EN_ATTENTE_DECISION_PRMP"));
     }
 
     @Test
@@ -3308,9 +3319,31 @@ class CnmWorkflowIntegrationTest {
                 .andExpect(jsonPath("$.statut").value("EN_VERIFICATION"));
         // Q1a : le MÊME CC (attributaire, auteur des observations) statue le passage via la paire CC → Vérificateur
         // — tâche de PROFIL, aucune restriction au Secrétaire de séance ni garde de séparation.
+        // ⚠️ Décision produit 2026-08-15 : au PREMIER passage la levée est impossible (les observations
+        // du PV sont réputées avec objet) — leveePossible=false au front, LEVEE → 409, tout MAINTENUE.
         String obs = mvc.perform(get("/api/observations-pv").header("Authorization", tokenCc).param("dossier", "4610"))
-                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].leveePossible").value(false))
+                .andReturn().getResponse().getContentAsString();
         int idObs = com.jayway.jsonpath.JsonPath.read(obs, "$[0].idObservationPv");
+        mvc.perform(post("/api/observations-pv/passage").header("Authorization", tokenCc)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDossier\":4610,\"decisions\":[{\"idObservationPv\":" + idObs + ",\"decision\":\"LEVEE\"}]}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message", containsString("première rectification")));
+        mvc.perform(post("/api/observations-pv/passage").header("Authorization", tokenCc)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDossier\":4610,\"decisions\":[{\"idObservationPv\":" + idObs
+                        + ",\"decision\":\"MAINTENUE\",\"precision\":\"a rectifier\"}]}"))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/dossiers/4610").header("Authorization", tokenCc))
+                .andExpect(jsonPath("$.statut").value("EN_ATTENTE_DECISION_PRMP"));
+        // La PRMP rectifie et resoumet → la levée devient possible (leveePossible=true au front).
+        mvc.perform(post("/api/dossiers/4610/resoumettre").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"motifRectification\":\"corrige\"}"))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/observations-pv").header("Authorization", tokenCc).param("dossier", "4610"))
+                .andExpect(jsonPath("$[0].leveePossible").value(true));
         mvc.perform(post("/api/observations-pv/passage").header("Authorization", tokenCc)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDossier\":4610,\"decisions\":[{\"idObservationPv\":" + idObs + ",\"decision\":\"LEVEE\"}]}"))
@@ -8264,6 +8297,12 @@ class CnmWorkflowIntegrationTest {
         String tokenVer = bearer("CTRVER", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER", "ANT");
         String tokenAss = bearer("CTRASS", ProfilUtilisateur.ASSISTANT_CONTROLEUR, TypeActeur.CONTROLEUR, "CTRASS", "ANT");
         signerPvAvecAvis(122, "FAVR");   // dossier 1 → EN_VERIFICATION
+        // ⚠️ Décision produit 2026-08-15 : premier passage = rappel (MAINTENUE), puis la PRMP rectifie
+        // et resoumet — la levée n'est possible qu'ensuite.
+        passageObservationDossier1(tokenVer, "MAINTENUE", "a rectifier"); // → EN_ATTENTE_DECISION_PRMP
+        mvc.perform(post("/api/dossiers/1/resoumettre").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"motifRectification\":\"corrige\"}"))
+                .andExpect(status().isOk());                              // → EN_VERIFICATION
         passageObservationDossier1(tokenVer, "LEVEE", null);   // → OBSERVATIONS_LEVEES
         mvc.perform(post("/api/sigmp-transmissions").header("Authorization", tokenVer)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"idDossier\":1}"))

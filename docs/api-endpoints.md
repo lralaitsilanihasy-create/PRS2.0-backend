@@ -3987,12 +3987,22 @@ Ouvert Restreint ».
 > dossiers FAVR signés avant la règle). **Aucun acteur ne peut élargir ce périmètre** à aucun stade :
 > - `GET /api/observations-pv?dossier=` (vérificateur localité / PRMP propriétaire / tout-voyant) :
 >   observations + **statut courant** (`EMISE` / `LEVEE` / `MAINTENUE`) + **historique par itération**
->   (`t_suivi_observation` : décision, précision, auteur, horodatage).
+>   (`t_suivi_observation` : décision, précision, auteur, horodatage) + **`leveePossible`** (⚠️ décision
+>   produit 2026-08-15 : `true` dès qu'une **resoumission** de la PRMP est intervenue depuis la
+>   **signature du PV** — même valeur pour toutes les observations du dossier ; le front grise le
+>   bouton « Levée » en miroir, sans heuristique sur l'historique).
 > - `POST /api/observations-pv/passage` (**VERIFICATEUR**, dossier `EN_VERIFICATION`) :
 >   `{ idDossier, decisions:[{ idObservationPv, decision: LEVEE|MAINTENUE, precision? }] }` — **chaque
 >   observation restante doit être statuée** (400 sinon) ; **hors périmètre → 409** (aucune création) ;
 >   **re-décision sur une LEVÉE → 409** (« levée = acquise », décision user 02/08) ; la précision
 >   (facultative, MAINTENUE seulement) est un rappel de **ce qui manque**, jamais une exigence nouvelle.
+>   ⚠️ **PAS de levée avant la première rectification de la PRMP (décision produit 2026-08-15)** : les
+>   observations arrêtées au PV sont **réputées avec objet** (validées par toute la chaîne — examen,
+>   acceptation, co-signature) ; tant qu'aucune **resoumission** (`POST /api/dossiers/{id}/resoumettre`,
+>   action `RESOUMISSION` de `t_action_dossier`) n'est **postérieure à la signature du PV**, la décision
+>   `LEVEE` → **409** « Levée impossible avant la première rectification de la PRMP… ». Le **premier
+>   passage = émission du rappel** (tout `MAINTENUE`) ; après la première resoumission, levée/maintenue
+>   libres à chaque passage (boucle inchangée jusqu'à tout levé).
 >   Le passage `t_verification` est **créé par le serveur** (observation = rappel auto-généré des
 >   maintenues, `obsLevees` dérivé) puis la transition [Auto] s'applique : toutes levées →
 >   `OBSERVATIONS_LEVEES` (cap SIGMP) ; sinon → `EN_ATTENTE_DECISION_PRMP` + notification PRMP

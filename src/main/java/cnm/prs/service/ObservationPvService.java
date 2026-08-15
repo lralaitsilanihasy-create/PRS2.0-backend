@@ -32,6 +32,7 @@ import cnm.prs.enums.StatutDossier;
 import cnm.prs.exception.BadRequestException;
 import cnm.prs.exception.BusinessRuleException;
 import cnm.prs.exception.ResourceNotFoundException;
+import cnm.prs.repository.ActionDossierRepository;
 import cnm.prs.repository.DossierRepository;
 import cnm.prs.repository.ExamenDetailRepository;
 import cnm.prs.repository.ExamenPieceRepository;
@@ -80,6 +81,7 @@ public class ObservationPvService {
     private final VerificationService verificationService;
     private final DossierIntegriteService dossierIntegrite;
     private final cnm.prs.security.PermissionService permissionService;
+    private final ActionDossierRepository actionDossierRepository;
 
     public ObservationPvService(ObservationPvRepository repository, SuiviObservationRepository suiviRepository,
             DossierRepository dossierRepository, ExamenDetailRepository examenDetailRepository,
@@ -89,8 +91,10 @@ public class ObservationPvService {
             TypePieceJointeRepository typePieceJointeRepository, PvExamenRepository pvExamenRepository,
             ReceptionRepository receptionRepository, VerificationService verificationService,
             DossierIntegriteService dossierIntegrite,
-            cnm.prs.security.PermissionService permissionService) {
+            cnm.prs.security.PermissionService permissionService,
+            ActionDossierRepository actionDossierRepository) {
         this.permissionService = permissionService;
+        this.actionDossierRepository = actionDossierRepository;
         this.repository = repository;
         this.suiviRepository = suiviRepository;
         this.dossierRepository = dossierRepository;
@@ -242,6 +246,7 @@ public class ObservationPvService {
         Map<Integer, ObservationPv> parId = new HashMap<>();
         perimetre.forEach(o -> parId.put(o.getIdObservationPv(), o));
 
+        boolean leveeAutorisee = leveePossible(req.idDossier(), pv);
         Set<Integer> statuees = new HashSet<>();
         for (PassageObservationsRequest.ObservationDecision dec : req.decisions()) {
             ObservationPv cible = parId.get(dec.idObservationPv());
@@ -260,6 +265,16 @@ public class ObservationPvService {
             if (LEVEE.equals(etats.get(dec.idObservationPv()))) {
                 throw new BusinessRuleException("L'observation " + dec.idObservationPv()
                         + " est déjà levée : une levée est définitive (acquise).");
+            }
+            // ⚠️ Décision produit (2026-08-15) — PAS de levée avant la première rectification de la
+            // PRMP : les observations arrêtées au PV sont réputées AVEC OBJET (validées par toute la
+            // chaîne — examen, acceptation, co-signature). Le premier passage = émission du rappel
+            // (tout MAINTENUE) ; la levée n'est possible qu'après une RESOUMISSION de la PRMP
+            // postérieure à la signature du PV.
+            if (LEVEE.equals(dec.decision()) && !leveeAutorisee) {
+                throw new BusinessRuleException("Levée impossible avant la première rectification de la "
+                        + "PRMP : aucune resoumission n'est intervenue depuis la signature du PV — au "
+                        + "premier passage, toutes les observations sont maintenues (rappel).");
             }
         }
         // Complétude : chaque observation restante (non levée) doit être statuée à cette itération.
@@ -335,6 +350,23 @@ public class ObservationPvService {
                 .filter(pv -> "FAVR".equals(pv.getIdAvis())).findFirst().orElse(null);
     }
 
+    /**
+     * ⚠️ Décision produit (2026-08-15) — la LEVÉE n'est possible qu'après une <strong>resoumission de
+     * la PRMP</strong> ({@code POST /api/dossiers/{id}/resoumettre}, action {@code RESOUMISSION} du
+     * journal {@code t_action_dossier}) <strong>postérieure à la signature du PV</strong>. Sert la
+     * garde du passage ET le champ {@code leveePossible} exposé au front (miroir du bouton « Levée »).
+     */
+    private boolean leveePossible(Integer idDossier, PvExamen pv) {
+        if (pv == null) {
+            return false;
+        }
+        java.time.LocalDate depuis = pv.getDatePv();
+        return actionDossierRepository.findByIdDossierOrderByDateActionAscIdActionAsc(idDossier).stream()
+                .filter(a -> JournalDossierService.RESOUMISSION.equals(a.getTypeAction()))
+                .anyMatch(a -> a.getDateAction() != null
+                        && (depuis == null || !a.getDateAction().toLocalDate().isBefore(depuis)));
+    }
+
     /** Statut courant par observation : dernière décision (LEVEE définitive) ; absente = EMISE. */
     private Map<Integer, String> etatsCourants(Integer idDossier) {
         Map<Integer, String> etats = new HashMap<>();
@@ -357,6 +389,7 @@ public class ObservationPvService {
         for (SuiviObservation s : suiviRepository.findParDossier(idDossier)) {
             historiques.computeIfAbsent(s.getIdObservationPv(), k -> new ArrayList<>()).add(s);
         }
+        boolean leveePossible = leveePossible(idDossier, pvSigneFavr(idDossier));
         List<ObservationPvDto> dtos = new ArrayList<>();
         for (ObservationPv o : obs) {
             List<SuiviObservation> h = historiques.getOrDefault(o.getIdObservationPv(), List.of());
@@ -372,6 +405,7 @@ public class ObservationPvService {
             dto.setStatut(dernier == null ? "EMISE" : dernier.getDecision());
             dto.setPrecision(dernier == null ? null : dernier.getPrecision());
             dto.setIteration(dernier == null ? null : dernier.getIteration());
+            dto.setLeveePossible(leveePossible);
             dto.setHistorique(h.stream().map(s -> new ObservationPvDto.SuiviObservationDto(
                     s.getIteration(), s.getDecision(), s.getPrecision(), s.getImVerificateur(),
                     s.getDateDecision())).toList());
