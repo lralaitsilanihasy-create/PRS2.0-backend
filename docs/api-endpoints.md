@@ -21,6 +21,25 @@
 - Dans les tableaux ci-dessous, **« Authentifié »** (ou « Ouvert ») = tout utilisateur connecté
   (un JWT valide suffit) ; ce n'est **pas** public.
 
+### Pagination des grandes listes (⚠️ audit front 2026-08-16)
+- `GET /api/dossiers`, `GET /api/ppms` et `GET /api/marches` acceptent `?page=&size=` (0-indexé) :
+  la réponse devient l'**enveloppe `Page`** de Spring (`content[]`, `totalElements`, `totalPages`,
+  `number`, `size`…) — même forme que `/api/dossiers/examines`. **Sans `page`, la liste plate est
+  conservée** (rétro-compatible). Pagination **applicative** : la liste est d'abord constituée avec les
+  filtres de périmètre habituels puis découpée — l'ordre est celui de la liste non paginée (le `sort`
+  du paramètre n'est pas appliqué).
+
+### Sécurité des réponses (⚠️ audit front 2026-08-16)
+- **En-têtes** posés sur toutes les réponses : `Content-Security-Policy: default-src 'self';
+  object-src 'none'; frame-ancestors 'self'`, `X-Content-Type-Options: nosniff`, `X-Frame-Options:
+  SAMEORIGIN` ; **HSTS** (`max-age=31536000; includeSubDomains`) émis sur les requêtes HTTPS — en prod
+  derrière un proxy TLS, transmettre `X-Forwarded-Proto` (honoré via `server.forward-headers-strategy`)
+  ou poser HSTS au proxy.
+- **Sortie des pièces téléversées** (pièces de dossier, pièces d'inscription PRMP/UGPM/contrôleur) :
+  `Content-Type` forcé sur **liste blanche** (`application/pdf`, `image/jpeg`, `image/png` — tout autre
+  format stocké sort en `application/octet-stream`, un HTML téléversé n'est **jamais** servi comme tel)
+  et `Content-Disposition: attachment` avec **nom de fichier assaini** (pas d'injection d'en-tête).
+
 ### Profils (rôles)
 Le rôle de l'utilisateur est porté par le jeton (claim `role`). Valeurs possibles :
 `PRMP`, `PRESIDENT`, `CHEF_COMMISSION`, `SECRETAIRE`, `MEMBRE`, `VERIFICATEUR`,
@@ -1004,7 +1023,7 @@ relation **1,N** : un point de contrôle a **0..N** lignes. Remplace l'ancien ch
 
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
-| GET | /api/dossiers | — | `DossierDto[]` | 200, 400 | Authentifié (filtré, hors BROUILLON) — filtres `?statut=` `&type=` `&sousType=` |
+| GET | /api/dossiers | — | `DossierDto[]` | 200, 400 | Authentifié (filtré, hors BROUILLON) — filtres `?statut=` `&type=` `&sousType=` ; ⚠️ **paginable** (`?page=&size=` → enveloppe `Page`, cf. Conventions) |
 | GET | /api/dossiers/a-receptionner | — | `DossierDto[]` | 200, 403 | `SECRETAIRE` (titulaire/délégué) ou `ADMINISTRATEUR` |
 | GET | /api/dossiers/a-examiner | — | `DossierDto[]` | 200, 403 | `MEMBRE` (titulaire/délégué) ou `ADMINISTRATEUR` |
 | GET | /api/dossiers/examines | — | `Page<DossierDto>` | 200, 403 | `MEMBRE` (titulaire/délégué) ou `ADMINISTRATEUR` |
@@ -2299,6 +2318,7 @@ de PV). Lecture filtrée par profil/localité. Cycle : `BROUILLON → SOUMIS →
 
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
+| GET | /api/kpis/badges | — | `BadgesDto` | 200 | **Tout authentifié** — ⚠️ audit front 2026-08-16, voir note ci-dessous |
 | GET | /api/kpis/tableau-bord | — | `TableauBordDto` | 200, 403 | PRESIDENT / ADMINISTRATEUR / CHEF_COMMISSION |
 | GET | /api/kpis/mes-compteurs | — | `CompteursPrmpDto` | 200, 403 | **PRMP** (compteurs de son propre périmètre) |
 | GET | /api/kpis/mes-compteurs-verificateur | — | `CompteursVerificateurDto` | 200, 403 | **VERIFICATEUR** (ou délégué) / ADMINISTRATEUR — compteurs de sa localité |
@@ -2307,6 +2327,8 @@ de PV). Lecture filtrée par profil/localité. Cycle : `BROUILLON → SOUMIS →
 | GET | /api/kpis/mes-compteurs-publication | — | `CompteursPublicationDto` | 200, 403 | **CHARGE_PUBLICATION** / ADMINISTRATEUR — workflow de publication (global) |
 | GET | /api/kpis/mes-compteurs-assistant | — | `CompteursAssistantDto` | 200, 403 | **ASSISTANT_CONTROLEUR** / ADMINISTRATEUR — documents signés de sa localité |
 | GET | /api/kpis/mes-compteurs-admin | — | `CompteursAdminDto` | 200, 403 | **ADMINISTRATEUR** — inscriptions, comptes, audit (global) |
+
+> ⚠️ **Badges de menu agrégés (audit front 2026-08-16).** `GET /api/kpis/badges` renvoie en **un appel** les compteurs du **rôle du connecté** (routage serveur sur le profil du JWT) : `{ "profil": "<PROFIL>", "compteurs": { … } }`. Le champ `compteurs` porte **le même DTO** que l'endpoint `mes-compteurs*` du rôle (`CompteursPrmpDto` pour la PRMP ; **`CompteursDto` du tableau de bord** pour Président — global — et Chef de commission — sa localité, dont `predispatch` ; `CompteursSecretaireDto` avec `aReceptionner` ; etc.) — le front réutilise ses lecteurs existants et **cesse de rejouer les endpoints de liste pour lire des `.length`**. Profil sans compteurs → `compteurs` vide.
 
 **Exemple — réponse**
 ```json
@@ -2608,7 +2630,7 @@ active (`t_prmp_entite.ACTIF`) sur l'entité contractante du dossier. C'est ce s
 
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
-| GET | /api/marches | — | `MarcheDto[]` (scopé) | 200 | Authentifié |
+| GET | /api/marches | — | `MarcheDto[]` (scopé) | 200 | Authentifié — ⚠️ **paginable** (`?page=&size=`, cf. Conventions) |
 | GET | /api/marches/{id} | — | `MarcheDto` | 200, 403, 404 | Authentifié (dans son périmètre) |
 | POST | /api/marches | `MarcheDto` | `MarcheDto` | 201, 400 | Authentifié |
 | PUT | /api/marches/{id} | `MarcheDto` | `MarcheDto` | 200, 400, 404 | Authentifié |
@@ -3245,7 +3267,7 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
-| GET | /api/ppms | — | `PpmDto[]` (scopé) | 200 | Authentifié |
+| GET | /api/ppms | — | `PpmDto[]` (scopé) | 200 | Authentifié — ⚠️ **paginable** (`?page=&size=`, cf. Conventions) |
 | GET | /api/ppms/{id} | — | `PpmDto` | 200, 403, 404 | Authentifié (dans son périmètre) |
 | POST | /api/ppms | `PpmDto` | `PpmDto` | 201, 400 | Authentifié |
 | PUT | /api/ppms/{id} | `PpmDto` | `PpmDto` | 200, 400, 404 | Authentifié |

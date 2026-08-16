@@ -16,6 +16,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -3393,6 +3394,59 @@ class CnmWorkflowIntegrationTest {
                 .andExpect(status().isOk());
         mvc.perform(get("/api/dossiers/4610").header("Authorization", tokenCc))
                 .andExpect(jsonPath("$.statut").value("OBSERVATIONS_LEVEES"));
+    }
+
+    @Test
+    @DisplayName("Badges de menu agrégés (audit front 2026-08-16) : GET /api/kpis/badges route sur le profil du "
+            + "connecté et renvoie ses compteurs en un appel (mêmes DTOs que les mes-compteurs*)")
+    void kpis_badgesAgreges_parProfil() throws Exception {
+        mvc.perform(get("/api/kpis/badges").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.profil").value("PRMP"))
+                .andExpect(jsonPath("$.compteurs.brouillons").isNumber())
+                .andExpect(jsonPath("$.compteurs.demandesRetraitNouvelles").isNumber());
+        mvc.perform(get("/api/kpis/badges").header("Authorization", tokenCc))
+                .andExpect(jsonPath("$.profil").value("CHEF_COMMISSION"))
+                .andExpect(jsonPath("$.compteurs.predispatch").isNumber());
+        mvc.perform(get("/api/kpis/badges").header("Authorization", tokenPresident))
+                .andExpect(jsonPath("$.profil").value("PRESIDENT"))
+                .andExpect(jsonPath("$.compteurs.predispatch").isNumber());
+        String tokenSec = bearer("CTRSEC", ProfilUtilisateur.SECRETAIRE, TypeActeur.CONTROLEUR, "CTRSEC", "ANT");
+        mvc.perform(get("/api/kpis/badges").header("Authorization", tokenSec))
+                .andExpect(jsonPath("$.profil").value("SECRETAIRE"))
+                .andExpect(jsonPath("$.compteurs.aReceptionner").isNumber());
+    }
+
+    @Test
+    @DisplayName("Pagination serveur (audit front 2026-08-16) : ?page=&size= sur dossiers/ppms/marches → enveloppe "
+            + "Page ; sans page → liste plate (rétro-compatible)")
+    void listes_paginationServeur() throws Exception {
+        mvc.perform(get("/api/dossiers").header("Authorization", tokenPresident)
+                .param("page", "0").param("size", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content", hasSize(1)))
+                .andExpect(jsonPath("$.totalElements", greaterThanOrEqualTo(2)));
+        mvc.perform(get("/api/dossiers").header("Authorization", tokenPresident))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray());
+        mvc.perform(get("/api/ppms").header("Authorization", tokenPresident)
+                .param("page", "0").param("size", "5"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").isArray());
+        mvc.perform(get("/api/marches").header("Authorization", tokenPresident)
+                .param("page", "0").param("size", "5"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").isArray());
+    }
+
+    @Test
+    @DisplayName("En-têtes de sécurité (audit front 2026-08-16) : nosniff + CSP posés sur les réponses de l'API")
+    void securite_headers() throws Exception {
+        mvc.perform(get("/api/dossiers/1").header("Authorization", tokenPresident))
+                .andExpect(status().isOk())
+                .andExpect(header().string("X-Content-Type-Options", "nosniff"))
+                .andExpect(header().string("Content-Security-Policy",
+                        "default-src 'self'; object-src 'none'; frame-ancestors 'self'"));
     }
 
     @Test

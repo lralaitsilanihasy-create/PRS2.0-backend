@@ -33,6 +33,13 @@ public class PpmController {
         this.service = service;
     }
 
+    /** ⚠️ Audit front (2026-08-16) — même liste, paginée ({@code ?page=&size=}) ; sans {@code page}, liste plate. */
+    @GetMapping(params = "page")
+    public org.springframework.data.domain.Page<PpmDto> findAllPagine(
+            org.springframework.data.domain.Pageable pageable) {
+        return service.findAllPagine(pageable);
+    }
+
     @GetMapping
     public List<PpmDto> findAll() {
         return service.findAll();

@@ -78,11 +78,11 @@ public class UgpmController {
     @GetMapping("/{id}/pieces/{type}")
     public ResponseEntity<byte[]> telechargerPiece(@PathVariable String id, @PathVariable TypePieceJointe type) {
         PieceJointe piece = service.telechargerPiece(id, type);
-        String format = piece.getFormat() != null ? piece.getFormat() : MediaType.APPLICATION_OCTET_STREAM_VALUE;
+        // ⚠️ Audit front (2026-08-16) — type de sortie sur LISTE BLANCHE + nom d'en-tête assaini.
         String nom = piece.getLibelle() != null ? piece.getLibelle() : id + "_" + type;
         return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType(format))
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + nom + "\"")
+                .contentType(Telechargements.typeAutorise(piece.getFormat()))
+                .header(HttpHeaders.CONTENT_DISPOSITION, Telechargements.disposition(nom))
                 .body(piece.getContenu());
     }
 

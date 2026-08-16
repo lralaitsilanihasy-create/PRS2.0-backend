@@ -79,6 +79,18 @@ public class SecurityConfig {
         http
                 .csrf(csrf -> csrf.disable())
                 .cors(cors -> {})
+                // ⚠️ Audit front (2026-08-16) — en-têtes de sécurité sur TOUTES les réponses :
+                // CSP (API JSON : rien à charger, frame-ancestors 'self'), HSTS (émis sur les requêtes
+                // HTTPS — derrière un proxy TLS, transmettre X-Forwarded-Proto, cf. application.properties),
+                // X-Content-Type-Options: nosniff et X-Frame-Options conservés des DÉFAUTS Spring Security
+                // (frameOptions aligné sameOrigin sur frame-ancestors 'self').
+                .headers(headers -> headers
+                        .contentSecurityPolicy(csp -> csp.policyDirectives(
+                                "default-src 'self'; object-src 'none'; frame-ancestors 'self'"))
+                        .httpStrictTransportSecurity(hsts -> hsts
+                                .includeSubDomains(true)
+                                .maxAgeInSeconds(31536000))
+                        .frameOptions(fo -> fo.sameOrigin()))
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()

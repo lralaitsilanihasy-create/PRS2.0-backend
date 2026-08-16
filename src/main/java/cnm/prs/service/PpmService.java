@@ -60,6 +60,13 @@ public class PpmService {
      * ({@code t_ppm.ID_PRMP}) ; les contrôleurs ne voient que ceux de <strong>leur localité</strong>
      * (dossier non brouillon) ; tout autre profil (ou sans localité) → liste vide.
      */
+    /** ⚠️ Audit front (2026-08-16) — variante paginée ({@code ?page=&size=}), mêmes filtres de périmètre. */
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<PpmDto> findAllPagine(
+            org.springframework.data.domain.Pageable pageable) {
+        return Pagination.depuisListe(findAll(), pageable);
+    }
+
     @Transactional(readOnly = true)
     public List<PpmDto> findAll() {
         if (Visibilite.voitTout()) {

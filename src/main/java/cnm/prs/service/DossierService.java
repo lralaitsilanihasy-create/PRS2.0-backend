@@ -140,6 +140,15 @@ public class DossierService {
      * @param sousType filtre sur le sous-type ({@code tr_sous_type_dossier}) ; {@code null}/vide = tous
      * @throws BadRequestException si un filtre fourni n'est pas une valeur connue (→ 400)
      */
+    /**
+     * ⚠️ Audit front (2026-08-16) — variante PAGINÉE de la liste des dossiers ({@code ?page=&size=}) :
+     * mêmes filtres (périmètre + statut/type/sousType), enveloppe {@code Page} (voir {@link Pagination}).
+     */
+    @Transactional(readOnly = true)
+    public Page<DossierDto> findAllPagine(String statut, String type, String sousType, Pageable pageable) {
+        return Pagination.depuisListe(findAll(statut, type, sousType), pageable);
+    }
+
     @Transactional(readOnly = true)
     public List<DossierDto> findAll(String statut, String type, String sousType) {
         String filtre = normaliserStatut(statut);

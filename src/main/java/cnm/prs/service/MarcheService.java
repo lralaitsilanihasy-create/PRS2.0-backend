@@ -62,6 +62,13 @@ public class MarcheService {
      * siens</strong> (marchés de ses PPM) ; les contrôleurs ne voient que ceux de <strong>leur
      * localité</strong> (dossier non brouillon) ; tout autre profil (ou sans localité) → liste vide.
      */
+    /** ⚠️ Audit front (2026-08-16) — variante paginée ({@code ?page=&size=}), mêmes filtres de périmètre. */
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<MarcheDto> findAllPagine(
+            org.springframework.data.domain.Pageable pageable) {
+        return Pagination.depuisListe(findAll(), pageable);
+    }
+
     @Transactional(readOnly = true)
     public List<MarcheDto> findAll() {
         if (Visibilite.voitTout()) {

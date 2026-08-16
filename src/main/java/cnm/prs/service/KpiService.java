@@ -99,6 +99,35 @@ public class KpiService {
     }
 
     /**
+     * ⚠️ Audit front (2026-08-16) — badges de menu agrégés : route sur le profil du connecté et renvoie
+     * ses compteurs en UN appel (mêmes DTOs que les endpoints {@code mes-compteurs*} existants — le
+     * front réutilise ses lecteurs). Président / Chef de commission : les compteurs du tableau de bord
+     * (dont « prêts à dispatcher »), globaux pour le Président, filtrés localité pour le CC.
+     */
+    public cnm.prs.dto.BadgesDto badges() {
+        ProfilUtilisateur profil = CurrentUser.profil().orElse(null);
+        if (profil == null) {
+            return new cnm.prs.dto.BadgesDto(null, Map.of());
+        }
+        Object compteurs = switch (profil) {
+            case PRMP -> mesCompteursPrmp();
+            case PRESIDENT -> compteurs(null);
+            case CHEF_COMMISSION -> {
+                String localite = CurrentUser.localite().filter(s -> !s.isBlank()).orElse(null);
+                yield localite == null ? new CompteursDto(0, 0, 0, 0, 0, 0) : compteurs(localite);
+            }
+            case SECRETAIRE -> mesCompteursSecretaire();
+            case MEMBRE -> mesCompteursMembre();
+            case VERIFICATEUR -> mesCompteursVerificateur();
+            case ASSISTANT_CONTROLEUR -> mesCompteursAssistant();
+            case CHARGE_PUBLICATION -> mesCompteursPublication();
+            case ADMINISTRATEUR -> mesCompteursAdmin();
+            default -> Map.of();
+        };
+        return new cnm.prs.dto.BadgesDto(profil.name(), compteurs);
+    }
+
+    /**
      * Compteurs de contenu du menu PRMP — tous filtrés sur la PRMP authentifiée (JWT) : brouillons,
      * PPM &amp; marchés, dossiers à rectifier non traités ({@code EN_ATTENTE_DECISION_PRMP}), dossiers
      * vérifiés ({@code PV_SIGNE}/{@code CLOTURE}), lettres de renvoi signées. PRMP non identifiée → zéros.

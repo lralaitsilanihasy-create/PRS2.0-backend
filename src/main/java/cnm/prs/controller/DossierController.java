@@ -47,6 +47,20 @@ public class DossierController {
      * via {@code ?statut=SOUMIS} (statut inconnu → 400). Pour la file « à réceptionner » du
      * Secrétaire, préférer {@code /api/dossiers/a-receptionner} (SOUMIS + sans réception, sans N+1).
      */
+    /**
+     * ⚠️ Audit front (2026-08-16) — même liste, PAGINÉE : {@code ?page=&size=} (routage Spring sur la
+     * présence du paramètre {@code page}) → enveloppe {@code Page} (content, totalElements, …), même
+     * forme que {@code /examines}. Sans {@code page}, la liste plate ci-dessous reste servie
+     * (rétro-compatible).
+     */
+    @GetMapping(params = "page")
+    public Page<DossierDto> findAllPagine(@RequestParam(required = false) String statut,
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) String sousType,
+            Pageable pageable) {
+        return service.findAllPagine(statut, type, sousType, pageable);
+    }
+
     @GetMapping
     public List<DossierDto> findAll(@RequestParam(required = false) String statut,
             @RequestParam(required = false) String type,

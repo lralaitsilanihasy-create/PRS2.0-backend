@@ -53,16 +53,11 @@ public class PieceJointeDossierController {
     @GetMapping("/{id}/contenu")
     public ResponseEntity<byte[]> contenu(@PathVariable Integer id) {
         PieceJointeDossier piece = service.telecharger(id);
-        MediaType type = switch (piece.getFormat() == null ? "" : piece.getFormat()) {
-            case "PDF" -> MediaType.APPLICATION_PDF;
-            case "JPEG" -> MediaType.IMAGE_JPEG;
-            case "PNG" -> MediaType.IMAGE_PNG;
-            default -> MediaType.APPLICATION_OCTET_STREAM;
-        };
+        // ⚠️ Audit front (2026-08-16) — liste blanche de sortie + nom d'en-tête assaini (Telechargements).
         String nom = piece.getNomFichier() == null ? ("piece-" + id) : piece.getNomFichier();
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + nom + "\"")
-                .contentType(type)
+                .header(HttpHeaders.CONTENT_DISPOSITION, Telechargements.disposition(nom))
+                .contentType(Telechargements.typeAutorise(piece.getFormat()))
                 .body(piece.getContenu());
     }
 

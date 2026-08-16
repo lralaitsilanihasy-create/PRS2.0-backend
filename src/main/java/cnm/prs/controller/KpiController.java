@@ -35,6 +35,17 @@ public class KpiController {
         return kpiService.tableauBord();
     }
 
+    /**
+     * ⚠️ Audit front (2026-08-16) — badges de menu agrégés : les compteurs du rôle du connecté en UN
+     * appel (routage serveur sur le profil du JWT), à la place du rejeu des endpoints de liste pour
+     * lire des {@code .length}. Ouvert à tout utilisateur authentifié — la réponse ne contient que
+     * les compteurs de SON rôle (mêmes DTOs que les {@code mes-compteurs*} ci-dessous).
+     */
+    @GetMapping("/badges")
+    public cnm.prs.dto.BadgesDto badges() {
+        return kpiService.badges();
+    }
+
     /** Compteurs de contenu du menu PRMP — filtrés sur la PRMP authentifiée (§3.1). */
     @PreAuthorize("hasRole('PRMP')")
     @GetMapping("/mes-compteurs")

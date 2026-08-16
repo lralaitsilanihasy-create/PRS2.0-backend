@@ -68,11 +68,12 @@ public class InscriptionController {
     @PreAuthorize("hasRole('ADMINISTRATEUR') or #login == authentication.name")
     public ResponseEntity<byte[]> telecharger(@PathVariable String login, @PathVariable TypePieceJointe type) {
         PieceJointe piece = service.telecharger(login, type);
-        String format = piece.getFormat() != null ? piece.getFormat() : MediaType.APPLICATION_OCTET_STREAM_VALUE;
+        // ⚠️ Audit front (2026-08-16) — type de sortie sur LISTE BLANCHE (jamais le format stocké tel
+        // quel : un HTML téléversé ne doit pas sortir en text/html) + nom d'en-tête assaini.
         String nom = piece.getLibelle() != null ? piece.getLibelle() : login + "_" + type;
         return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType(format))
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + nom + "\"")
+                .contentType(Telechargements.typeAutorise(piece.getFormat()))
+                .header(HttpHeaders.CONTENT_DISPOSITION, Telechargements.disposition(nom))
                 .body(piece.getContenu());
     }
 }
