@@ -228,8 +228,9 @@ quand ils surviennent (mapping centralisé dans `GlobalExceptionHandler`). Côt�
 >   Mise en œuvre : le `CsrfFilter` de Spring **émet** le jeton, la garde dédiée `CookieCsrfGarde`
 >   l'**applique** (le resource server OAuth2 exempte d'office de l'enforcement standard toute requête
 >   où le résolveur trouve un jeton — cookie compris — d'où l'exécuteur séparé).
-> - Toggles : `app.auth.cookie.secure` (défaut `true`), `app.auth.cookie.exclusif` (défaut `false` —
->   phase 3 : `true` retire le jeton du corps de la réponse de login).
+> - Toggles : `app.auth.cookie.secure` (défaut `true`) ; `app.auth.cookie.exclusif` — **`true` depuis
+>   la phase 3 (2026-08-17)** : le jeton ne sort plus dans le corps de la réponse de login
+>   (`token: null`), le cookie fait tout côté navigateur ; rollback en repassant à `false`.
 
 **Champs `LoginRequest`** (corps de `/login`)
 
@@ -242,7 +243,7 @@ quand ils surviennent (mapping centralisé dans `GlobalExceptionHandler`). Côt�
 
 | Champ (JSON) | Type | Description |
 |---|---|---|
-| token | string | JWT à placer dans `Authorization: Bearer ...` — ⚠️ phase 1 du plan cookie : encore présent tant que `app.auth.cookie.exclusif=false` ; `null` en phase 3 (le cookie fait tout) |
+| token | string \| null | ⚠️ **`null` depuis la phase 3 du plan cookie (2026-08-17)** — la session est portée par le cookie `PRS_SESSION`, le corps ne transporte plus de jeton (rollback : `app.auth.cookie.exclusif=false`). Le canal `Authorization: Bearer` reste accepté pour les clients API |
 | login | string | login authentifié |
 | role | string | profil métier (ou `null` si non reconnu) |
 | typeActeur | string | `CONTROLEUR`, `PRMP` ou `UGPM` |

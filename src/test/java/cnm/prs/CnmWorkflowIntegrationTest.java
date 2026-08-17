@@ -425,7 +425,8 @@ class CnmWorkflowIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.role").value("CHEF_COMMISSION"))
                 .andExpect(jsonPath("$.localite").value("ANT"))
-                .andExpect(jsonPath("$.token").isNotEmpty());
+                // ⚠️ Phase 3 du plan cookie : le jeton ne sort plus dans le corps — cookie seul.
+                .andExpect(jsonPath("$.token").value(nullValue()));
 
         mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"login\":\"CTRPRE\",\"motDePasse\":\"pw\"}"))
@@ -3440,23 +3441,28 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
-    @DisplayName("Cookie de session HttpOnly (plan phase 1, 2026-08-17) : login pose PRS_SESSION + jeton encore "
-            + "dans le corps ; l'API accepte le cookie seul ; mutation cookie-seul sans XSRF → 403, avec XSRF → "
-            + "garde CSRF passée (409 métier) ; Bearer inchangé ; logout vide le cookie")
-    void cookieSession_phase1() throws Exception {
-        // 1) Login PRMP : cookie de session posé (HttpOnly, SameSite=Strict) ET jeton dans le corps (phase 1).
+    @DisplayName("Cookie de session HttpOnly (plan phases 1-3, 2026-08-17) : login pose PRS_SESSION SANS jeton "
+            + "dans le corps (phase 3) ; l'API accepte le cookie seul ; mutation cookie-seul sans XSRF → 403, "
+            + "avec XSRF → garde CSRF passée (409 métier) ; Bearer inchangé ; logout vide le cookie")
+    void cookieSession_phase3() throws Exception {
+        // 1) Login PRMP : cookie de session posé (HttpOnly, SameSite=Strict) ; ⚠️ phase 3 — le corps
+        // ne porte PLUS le jeton (token: null), le profil d'affichage reste servi.
         org.springframework.mock.web.MockHttpServletResponse login = mvc.perform(post("/api/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"login\":\"PRMP001\",\"motDePasse\":\"pw\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.token").isNotEmpty())
+                .andExpect(jsonPath("$.token").value(nullValue()))
+                .andExpect(jsonPath("$.role").value("PRMP"))
+                .andExpect(jsonPath("$.expiresIn").isNumber())
                 .andReturn().getResponse();
         String poseCookie = login.getHeaders("Set-Cookie").stream()
                 .filter(h -> h.startsWith("PRS_SESSION=")).findFirst().orElse(null);
         org.junit.jupiter.api.Assertions.assertNotNull(poseCookie, "le login doit poser PRS_SESSION");
         assertTrue(poseCookie.contains("HttpOnly"), "cookie HttpOnly attendu");
         assertTrue(poseCookie.contains("SameSite=Strict"), "SameSite=Strict attendu");
-        String jeton = com.jayway.jsonpath.JsonPath.read(login.getContentAsString(), "$.token");
+        // Le JWT ne circule plus que dans le cookie : on l'extrait du Set-Cookie.
+        String jeton = poseCookie.substring("PRS_SESSION=".length(), poseCookie.indexOf(';'));
+        assertTrue(!jeton.isBlank(), "le cookie doit porter le JWT");
         jakarta.servlet.http.Cookie session = new jakarta.servlet.http.Cookie("PRS_SESSION", jeton);
 
         // 2) Lecture authentifiée par COOKIE SEUL (aucun en-tête Authorization) + XSRF-TOKEN posé.

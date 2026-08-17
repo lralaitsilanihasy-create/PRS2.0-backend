@@ -7,8 +7,13 @@
 > des **401**, pas des 403) ; (2) l'enforcement passe par une garde dédiée `CookieCsrfGarde`
 > (double-submit stateless `X-XSRF-TOKEN` == `XSRF-TOKEN`) car le resource server OAuth2 exempte
 > d'office du `CsrfFilter` standard toute requête où le résolveur trouve un jeton — cookie compris ;
-> le `CsrfFilter` reste l'émetteur du cookie `XSRF-TOKEN`. Phases 0 (même origine, côté
-> front/infra), 2, 3 et 4 : à venir.
+> le `CsrfFilter` reste l'émetteur du cookie `XSRF-TOKEN`.
+> **Phases 0 et 2 LIVRÉES côté front** (`frontendprs2` : `7a252af` proxy même origine ;
+> `7cbaf14` fin du stockage du jeton, interceptor supprimé, SSE par cookie, logout serveur,
+> purge des sessions héritées). **Phase 3 LIVRÉE (2026-08-17)** : `app.auth.cookie.exclusif=true`
+> (main + properties de test) — `LoginResponse.token` est `null`, le cookie fait tout côté
+> navigateur ; `Authorization: Bearer` reste accepté (clients API, tests). **Reste : phase 4**
+> (durcissement optionnel — `__Host-`, refresh glissant, révocation).
 > Objectif : le jeton de session n'est **plus jamais accessible au JavaScript** du front
 > (fin du `localStorage`), sans big-bang : chaque phase est rétro-compatible et réversible.
 
