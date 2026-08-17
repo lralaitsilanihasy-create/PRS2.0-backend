@@ -2,6 +2,8 @@ package cnm.prs.controller;
 
 import java.util.List;
 
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -23,6 +25,7 @@ import cnm.prs.dto.RegisterPrmpRequest;
 import cnm.prs.dto.RegisterPrmpV2Request;
 import cnm.prs.dto.RegisterResponse;
 import cnm.prs.dto.RegisterUgpmRequest;
+import cnm.prs.security.SessionCookies;
 import cnm.prs.service.AuthService;
 import cnm.prs.service.EntiteContractService;
 
@@ -35,15 +38,47 @@ public class AuthController {
 
     private final AuthService service;
     private final EntiteContractService entiteContractService;
+    private final SessionCookies sessionCookies;
+    /** Phase 3 du plan cookie : à {@code true}, le jeton ne sort plus dans le corps du login. */
+    private final boolean cookieExclusif;
 
-    public AuthController(AuthService service, EntiteContractService entiteContractService) {
+    public AuthController(AuthService service, EntiteContractService entiteContractService,
+            SessionCookies sessionCookies,
+            @Value("${app.auth.cookie.exclusif:false}") boolean cookieExclusif) {
         this.service = service;
         this.entiteContractService = entiteContractService;
+        this.sessionCookies = sessionCookies;
+        this.cookieExclusif = cookieExclusif;
     }
 
+    /**
+     * Connexion. ⚠️ Plan cookie HttpOnly, phase 1 (2026-08-17) : le JWT est AUSSI posé en cookie de
+     * session {@code PRS_SESSION} (HttpOnly, SameSite=Strict — voir {@link SessionCookies}). Tant que
+     * {@code app.auth.cookie.exclusif} est {@code false}, le jeton reste dans le corps (transition
+     * Bearer, rétro-compatible) ; à {@code true} (phase 3), le corps n'en porte plus.
+     */
     @PostMapping("/login")
-    public LoginResponse login(@Valid @RequestBody LoginRequest request) {
-        return service.login(request);
+    public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
+        LoginResponse reponse = service.login(request);
+        LoginResponse corps = cookieExclusif
+                ? new LoginResponse(null, reponse.login(), reponse.role(), reponse.typeActeur(),
+                        reponse.ref(), reponse.nomAffichage(), reponse.localite(), reponse.expiresIn())
+                : reponse;
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, sessionCookies.creer(reponse.token()).toString())
+                .body(corps);
+    }
+
+    /**
+     * ⚠️ Plan cookie HttpOnly, phase 1 — déconnexion : vide le cookie de session (un cookie HttpOnly
+     * n'est pas supprimable par le JS du front). Route publique ({@code /api/auth/**}) : appelable
+     * même avec une session expirée.
+     */
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout() {
+        return ResponseEntity.noContent()
+                .header(HttpHeaders.SET_COOKIE, sessionCookies.suppression().toString())
+                .build();
     }
 
     /**

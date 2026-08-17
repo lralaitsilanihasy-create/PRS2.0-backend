@@ -1,6 +1,14 @@
 # Plan — session en cookie `HttpOnly` (audit front, point 5)
 
-> Statut : **plan validé à implémenter par phases** (aucun code livré à ce stade).
+> Statut : **phase 1 LIVRÉE (2026-08-17)** — cookie posé au login, résolveur double
+> (Bearer d'abord, cookie sinon), `POST /api/auth/logout`, CSRF ciblé. Deux précisions apportées à
+> la livraison : (1) l'exemption CSRF couvre aussi les requêtes **sans cookie de session** (rien que
+> le navigateur attacherait automatiquement → pas de risque CSRF, et les mutations anonymes restent
+> des **401**, pas des 403) ; (2) l'enforcement passe par une garde dédiée `CookieCsrfGarde`
+> (double-submit stateless `X-XSRF-TOKEN` == `XSRF-TOKEN`) car le resource server OAuth2 exempte
+> d'office du `CsrfFilter` standard toute requête où le résolveur trouve un jeton — cookie compris ;
+> le `CsrfFilter` reste l'émetteur du cookie `XSRF-TOKEN`. Phases 0 (même origine, côté
+> front/infra), 2, 3 et 4 : à venir.
 > Objectif : le jeton de session n'est **plus jamais accessible au JavaScript** du front
 > (fin du `localStorage`), sans big-bang : chaque phase est rétro-compatible et réversible.
 

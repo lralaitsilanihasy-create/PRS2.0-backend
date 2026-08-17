@@ -3440,6 +3440,59 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("Cookie de session HttpOnly (plan phase 1, 2026-08-17) : login pose PRS_SESSION + jeton encore "
+            + "dans le corps ; l'API accepte le cookie seul ; mutation cookie-seul sans XSRF → 403, avec XSRF → "
+            + "garde CSRF passée (409 métier) ; Bearer inchangé ; logout vide le cookie")
+    void cookieSession_phase1() throws Exception {
+        // 1) Login PRMP : cookie de session posé (HttpOnly, SameSite=Strict) ET jeton dans le corps (phase 1).
+        org.springframework.mock.web.MockHttpServletResponse login = mvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"login\":\"PRMP001\",\"motDePasse\":\"pw\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.token").isNotEmpty())
+                .andReturn().getResponse();
+        String poseCookie = login.getHeaders("Set-Cookie").stream()
+                .filter(h -> h.startsWith("PRS_SESSION=")).findFirst().orElse(null);
+        org.junit.jupiter.api.Assertions.assertNotNull(poseCookie, "le login doit poser PRS_SESSION");
+        assertTrue(poseCookie.contains("HttpOnly"), "cookie HttpOnly attendu");
+        assertTrue(poseCookie.contains("SameSite=Strict"), "SameSite=Strict attendu");
+        String jeton = com.jayway.jsonpath.JsonPath.read(login.getContentAsString(), "$.token");
+        jakarta.servlet.http.Cookie session = new jakarta.servlet.http.Cookie("PRS_SESSION", jeton);
+
+        // 2) Lecture authentifiée par COOKIE SEUL (aucun en-tête Authorization) + XSRF-TOKEN posé.
+        org.springframework.mock.web.MockHttpServletResponse lecture =
+                mvc.perform(get("/api/kpis/badges").cookie(session))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.profil").value("PRMP"))
+                .andReturn().getResponse();
+        jakarta.servlet.http.Cookie xsrf = lecture.getCookie("XSRF-TOKEN");
+        org.junit.jupiter.api.Assertions.assertNotNull(xsrf,
+                "le cookie XSRF-TOKEN doit être posé dès la première réponse (chargement immédiat)");
+
+        // 3) Mutation cookie-seul SANS X-XSRF-TOKEN → 403 (garde CSRF, ciblée sur le canal cookie).
+        mvc.perform(post("/api/dossiers/1/resoumettre").cookie(session)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"motifRectification\":\"x\"}"))
+                .andExpect(status().isForbidden());
+        // 4) La même avec le jeton XSRF → la garde CSRF passe : échec MÉTIER (409, dossier non EN_ATTENTE).
+        mvc.perform(post("/api/dossiers/1/resoumettre")
+                .cookie(session, new jakarta.servlet.http.Cookie("XSRF-TOKEN", xsrf.getValue()))
+                .header("X-XSRF-TOKEN", xsrf.getValue())
+                .contentType(MediaType.APPLICATION_JSON).content("{\"motifRectification\":\"x\"}"))
+                .andExpect(status().isConflict());
+        // 5) Bearer : exempté de CSRF, comportement inchangé (même 409 métier, sans jeton XSRF).
+        mvc.perform(post("/api/dossiers/1/resoumettre").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"motifRectification\":\"x\"}"))
+                .andExpect(status().isConflict());
+        // 6) Logout (route publique) : le cookie de session est vidé (Max-Age=0).
+        org.springframework.mock.web.MockHttpServletResponse logout = mvc.perform(post("/api/auth/logout"))
+                .andExpect(status().isNoContent()).andReturn().getResponse();
+        String suppression = logout.getHeaders("Set-Cookie").stream()
+                .filter(h -> h.startsWith("PRS_SESSION=")).findFirst().orElse(null);
+        org.junit.jupiter.api.Assertions.assertNotNull(suppression, "le logout doit vider PRS_SESSION");
+        assertTrue(suppression.contains("Max-Age=0"), "suppression du cookie (Max-Age=0) attendue");
+    }
+
+    @Test
     @DisplayName("En-têtes de sécurité (audit front 2026-08-16) : nosniff + CSP posés sur les réponses de l'API")
     void securite_headers() throws Exception {
         mvc.perform(get("/api/dossiers/1").header("Authorization", tokenPresident))

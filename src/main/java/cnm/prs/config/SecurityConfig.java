@@ -9,6 +9,7 @@ import javax.crypto.spec.SecretKeySpec;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -22,9 +23,18 @@ import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
+import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
+import org.springframework.web.util.WebUtils;
 
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
+
+import cnm.prs.security.CookieCsrfGarde;
+import cnm.prs.security.SessionCookies;
+import jakarta.servlet.http.Cookie;
 
 /**
  * Sécurité de l'API : authentification JWT (HMAC HS256) en mode stateless.
@@ -75,9 +85,32 @@ public class SecurityConfig {
     };
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http, JwtAuthenticationConverter converter) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http, JwtAuthenticationConverter converter,
+            BearerTokenResolver bearerTokenResolver) throws Exception {
         http
-                .csrf(csrf -> csrf.disable())
+                // ⚠️ Plan cookie HttpOnly, phase 1 (2026-08-17) — CSRF en deux pièces :
+                // 1) le CsrfFilter de Spring est l'ÉMETTEUR du jeton — CookieCsrfTokenRepository pose
+                //    le cookie XSRF-TOKEN (lisible par le front) dès la première réponse (chargement
+                //    immédiat via csrfRequestAttributeName null). Il n'APPLIQUE rien : le resource
+                //    server OAuth2 exempte d'office de son enforcement toute requête où le
+                //    BearerTokenResolver trouve un jeton — cookie de session compris (voir la garde) ;
+                // 2) CookieCsrfGarde (ci-dessous, addFilterAfter) est l'EXÉCUTEUR : double-submit
+                //    stateless X-XSRF-TOKEN == XSRF-TOKEN sur les mutations authentifiées PAR COOKIE
+                //    uniquement (Authorization: Bearer exempt — en-tête non forgeable cross-site, la
+                //    suite de tests reste inchangée ; requêtes sans cookie de session exemptes — les
+                //    mutations anonymes restent des 401 ; /api/auth/** exempt). Angular pose l'en-tête
+                //    automatiquement (mêmes noms par défaut).
+                .csrf(csrf -> {
+                    CsrfTokenRequestAttributeHandler handler = new CsrfTokenRequestAttributeHandler();
+                    handler.setCsrfRequestAttributeName(null);
+                    csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+                            .csrfTokenRequestHandler(handler)
+                            .ignoringRequestMatchers("/api/auth/**")
+                            .ignoringRequestMatchers(request ->
+                                    request.getHeader(HttpHeaders.AUTHORIZATION) != null
+                                            || WebUtils.getCookie(request, SessionCookies.NOM) == null);
+                })
+                .addFilterAfter(new CookieCsrfGarde(), org.springframework.security.web.csrf.CsrfFilter.class)
                 .cors(cors -> {})
                 // ⚠️ Audit front (2026-08-16) — en-têtes de sécurité sur TOUTES les réponses :
                 // CSP (API JSON : rien à charger, frame-ancestors 'self'), HSTS (émis sur les requêtes
@@ -113,8 +146,30 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PUT, GESTION_COMPTES_ID).hasRole("ADMINISTRATEUR")
                         .requestMatchers(HttpMethod.DELETE, GESTION_COMPTES_ID).hasRole("ADMINISTRATEUR")
                         .anyRequest().authenticated())
-                .oauth2ResourceServer(oauth -> oauth.jwt(jwt -> jwt.jwtAuthenticationConverter(converter)));
+                .oauth2ResourceServer(oauth -> oauth
+                        .bearerTokenResolver(bearerTokenResolver)
+                        .jwt(jwt -> jwt.jwtAuthenticationConverter(converter)));
         return http.build();
+    }
+
+    /**
+     * ⚠️ Plan cookie HttpOnly, phase 1 (2026-08-17) — résolution du jeton : l'en-tête
+     * {@code Authorization: Bearer} d'abord (clients API, tests d'intégration — canal conservé
+     * définitivement), sinon le cookie de session {@code PRS_SESSION}. Le JWT transporté est LE MÊME
+     * dans les deux canaux (mêmes claims, même décodeur) : seul le transport diffère.
+     */
+    @Bean
+    public BearerTokenResolver bearerTokenResolver() {
+        DefaultBearerTokenResolver enTete = new DefaultBearerTokenResolver();
+        return request -> {
+            String jeton = enTete.resolve(request);
+            if (jeton != null) {
+                return jeton;
+            }
+            Cookie cookie = WebUtils.getCookie(request, SessionCookies.NOM);
+            return cookie == null || cookie.getValue() == null || cookie.getValue().isBlank()
+                    ? null : cookie.getValue();
+        };
     }
 
     @Bean

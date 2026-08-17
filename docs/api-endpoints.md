@@ -212,6 +212,25 @@ quand ils surviennent (mapping centralisé dans `GlobalExceptionHandler`). Côt�
 ## Authentification
 **Ressource** `/api/auth` — Routes **publiques** (aucun token requis). Pas de CRUD.
 
+> ⚠️ **Cookie de session HttpOnly — phase 1 livrée (2026-08-17, plan `docs/plan-cookie-httponly.md`).**
+> - `POST /api/auth/login` pose désormais **aussi** le cookie **`PRS_SESSION`** (`HttpOnly; Secure;
+>   SameSite=Strict; Path=/`, durée = expiration du JWT). Il transporte **le même JWT** que le corps —
+>   l'API authentifie **l'en-tête `Authorization: Bearer` d'abord, sinon le cookie** (double support,
+>   le Bearer reste accepté définitivement). Rappel : `SameSite=Strict` ⇒ le cookie ne sert qu'en
+>   **même origine** (phase 0 : proxy front → `/api`).
+> - **`POST /api/auth/logout`** (public, 204) : vide le cookie (`Max-Age=0`) — un cookie HttpOnly
+>   n'est pas supprimable par le JS du front.
+> - **CSRF** : réactivé, ciblé sur le **seul canal cookie** — double-submit `XSRF-TOKEN` (cookie
+>   lisible, posé dès la première réponse) → en-tête `X-XSRF-TOKEN` (automatique avec Angular
+>   `HttpClient`). Une **mutation authentifiée par cookie sans `X-XSRF-TOKEN` → 403**. Exemptés :
+>   `/api/auth/**`, les requêtes en `Authorization: Bearer` (en-tête non forgeable cross-site) et les
+>   requêtes **sans cookie de session** (les mutations anonymes restent des **401**, pas des 403 CSRF).
+>   Mise en œuvre : le `CsrfFilter` de Spring **émet** le jeton, la garde dédiée `CookieCsrfGarde`
+>   l'**applique** (le resource server OAuth2 exempte d'office de l'enforcement standard toute requête
+>   où le résolveur trouve un jeton — cookie compris — d'où l'exécuteur séparé).
+> - Toggles : `app.auth.cookie.secure` (défaut `true`), `app.auth.cookie.exclusif` (défaut `false` —
+>   phase 3 : `true` retire le jeton du corps de la réponse de login).
+
 **Champs `LoginRequest`** (corps de `/login`)
 
 | Champ (JSON) | Type | Obligatoire |
@@ -223,7 +242,7 @@ quand ils surviennent (mapping centralisé dans `GlobalExceptionHandler`). Côt�
 
 | Champ (JSON) | Type | Description |
 |---|---|---|
-| token | string | JWT à placer dans `Authorization: Bearer ...` |
+| token | string | JWT à placer dans `Authorization: Bearer ...` — ⚠️ phase 1 du plan cookie : encore présent tant que `app.auth.cookie.exclusif=false` ; `null` en phase 3 (le cookie fait tout) |
 | login | string | login authentifié |
 | role | string | profil métier (ou `null` si non reconnu) |
 | typeActeur | string | `CONTROLEUR`, `PRMP` ou `UGPM` |
