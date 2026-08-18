@@ -2563,8 +2563,7 @@ class CnmWorkflowIntegrationTest {
     void retrait_creation_ok() throws Exception {
         Dossier d = dossier(120, "SOUMIS"); d.setIdLocalite("ANT"); d.setIdPrmp("PRMP001");
         dossierRepository.save(d);
-        mvc.perform(post("/api/demande-retraits").header("Authorization", tokenPrmp)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"idDossier\":120,\"motifRetrait\":\"Erreur de saisie\"}"))
+        mvc.perform(posterRetrait("{\"idDossier\":120,\"motifRetrait\":\"Erreur de saisie\"}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.idDemandeRetrait").isNumber())
                 .andExpect(jsonPath("$.statut").value("EN_ATTENTE"))
@@ -2579,9 +2578,7 @@ class CnmWorkflowIntegrationTest {
     void retrait_creation_identiteJWT() throws Exception {
         Dossier d = dossier(121, "SOUMIS"); d.setIdLocalite("ANT"); d.setIdPrmp("PRMP001");
         dossierRepository.save(d);
-        mvc.perform(post("/api/demande-retraits").header("Authorization", tokenPrmp)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idDossier\":121,\"idPrmp\":\"USURP\",\"motifRetrait\":\"x\"}"))
+        mvc.perform(posterRetrait("{\"idDossier\":121,\"idPrmp\":\"USURP\",\"motifRetrait\":\"x\"}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.idPrmp").value("PRMP001"));
     }
@@ -2592,8 +2589,7 @@ class CnmWorkflowIntegrationTest {
         // Dossier non possédé par PRMP001 (idPrmp null) → la PRMP connectée n'est pas propriétaire.
         Dossier d = dossier(122, "SOUMIS"); d.setIdLocalite("ANT");
         dossierRepository.save(d);
-        mvc.perform(post("/api/demande-retraits").header("Authorization", tokenPrmp)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"idDossier\":122,\"motifRetrait\":\"x\"}"))
+        mvc.perform(posterRetrait("{\"idDossier\":122,\"motifRetrait\":\"x\"}"))
                 .andExpect(status().isForbidden());
     }
 
@@ -2603,8 +2599,7 @@ class CnmWorkflowIntegrationTest {
         // §3.3 — le retrait est refusé dès que le PV est signé. Dossier PV_SIGNE de PRMP001, sans demande préalable.
         Dossier d = dossier(124, "PV_SIGNE"); d.setIdLocalite("ANT"); d.setIdPrmp("PRMP001");
         dossierRepository.save(d);
-        mvc.perform(post("/api/demande-retraits").header("Authorization", tokenPrmp)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"idDossier\":124,\"motifRetrait\":\"x\"}"))
+        mvc.perform(posterRetrait("{\"idDossier\":124,\"motifRetrait\":\"x\"}"))
                 .andExpect(status().isConflict());
     }
 
@@ -2624,14 +2619,12 @@ class CnmWorkflowIntegrationTest {
                 .andExpect(jsonPath("$[?(@.idDossier==701)]", hasSize(0)));
 
         // POST retrait sur l'EXAMINE → 201 (créé, EN_ATTENTE).
-        mvc.perform(post("/api/demande-retraits").header("Authorization", tokenPrmp)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"idDossier\":700,\"motifRetrait\":\"corriger avant PV\"}"))
+        mvc.perform(posterRetrait("{\"idDossier\":700,\"motifRetrait\":\"corriger avant PV\"}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.statut").value("EN_ATTENTE"));
 
         // POST retrait sur le PV_SIGNE → 409 (au-delà de la limite).
-        mvc.perform(post("/api/demande-retraits").header("Authorization", tokenPrmp)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"idDossier\":701,\"motifRetrait\":\"x\"}"))
+        mvc.perform(posterRetrait("{\"idDossier\":701,\"motifRetrait\":\"x\"}"))
                 .andExpect(status().isConflict());
     }
 
@@ -2706,12 +2699,109 @@ class CnmWorkflowIntegrationTest {
     void retrait_creation_doublonEnAttente_409() throws Exception {
         Dossier d = dossier(123, "PRET_DISPATCH"); d.setIdLocalite("ANT"); d.setIdPrmp("PRMP001");
         dossierRepository.save(d);
-        mvc.perform(post("/api/demande-retraits").header("Authorization", tokenPrmp)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"idDossier\":123,\"motifRetrait\":\"x\"}"))
+        mvc.perform(posterRetrait("{\"idDossier\":123,\"motifRetrait\":\"x\"}"))
                 .andExpect(status().isCreated());
-        mvc.perform(post("/api/demande-retraits").header("Authorization", tokenPrmp)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"idDossier\":123,\"motifRetrait\":\"y\"}"))
+        mvc.perform(posterRetrait("{\"idDossier\":123,\"motifRetrait\":\"y\"}"))
                 .andExpect(status().isConflict());
+    }
+
+    @Test
+    @DisplayName("Retrait — lettre obligatoire : absente, non-PDF ou trop volumineuse → 400 (magic-bytes, pas le Content-Type déclaré)")
+    void retrait_lettre_validations400() throws Exception {
+        Dossier d = dossier(125, "SOUMIS"); d.setIdLocalite("ANT"); d.setIdPrmp("PRMP001");
+        dossierRepository.save(d);
+        MockMultipartFile data = new MockMultipartFile("data", "", "application/json",
+                "{\"idDossier\":125,\"motifRetrait\":\"x\"}".getBytes(StandardCharsets.UTF_8));
+        // Partie « fichier » absente → 400.
+        mvc.perform(multipart("/api/demande-retraits").file(data).header("Authorization", tokenPrmp))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", containsString("obligatoire")));
+        // Contenu non-PDF (PNG déguisé en Content-Type application/pdf) → 400 : la validation lit les magic-bytes.
+        mvc.perform(multipart("/api/demande-retraits").file(data)
+                .file(new MockMultipartFile("fichier", "lettre.pdf", "application/pdf",
+                        new byte[] { (byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A }))
+                .header("Authorization", tokenPrmp))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", containsString("PDF")));
+        // PDF trop volumineux (> 10 Mo) → 400.
+        byte[] gros = new byte[10 * 1024 * 1024 + 1];
+        gros[0] = '%'; gros[1] = 'P'; gros[2] = 'D'; gros[3] = 'F'; gros[4] = '-';
+        mvc.perform(multipart("/api/demande-retraits").file(data)
+                .file(new MockMultipartFile("fichier", "lettre.pdf", "application/pdf", gros))
+                .header("Authorization", tokenPrmp))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", containsString("volumineuse")));
+        // Aucune demande créée par ces tentatives.
+        org.junit.jupiter.api.Assertions.assertTrue(
+                demandeRetraitRepository.findAll().stream().noneMatch(dr -> Integer.valueOf(125).equals(dr.getIdDossier())));
+    }
+
+    @Test
+    @DisplayName("Retrait — lettre jointe : DTO expose nomFichier/tailleFichier ; GET document pour PRMP demanderesse + décideur, 403 hors périmètre")
+    void retrait_lettre_creationEtLecture() throws Exception {
+        Dossier d = dossier(126, "SOUMIS"); d.setIdLocalite("ANT"); d.setIdPrmp("PRMP001");
+        dossierRepository.save(d);
+        byte[] pdf = lettreRetraitPdf().getBytes();
+        String rep = mvc.perform(posterRetrait("{\"idDossier\":126,\"motifRetrait\":\"avec lettre\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.nomFichier").value("lettre-retrait.pdf"))
+                .andExpect(jsonPath("$.tailleFichier").value(pdf.length))
+                .andReturn().getResponse().getContentAsString();
+        int id = Integer.parseInt(rep.replaceAll(".*\"idDemandeRetrait\":(\\d+).*", "$1"));
+
+        // Lecture de la lettre : PRMP demanderesse, CC de la localité (décideur), Président — 200, PDF sain.
+        mvc.perform(get("/api/demande-retraits/" + id + "/document").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Type", "application/pdf"))
+                .andExpect(header().string("Content-Disposition", containsString("lettre-retrait.pdf")))
+                .andExpect(content().bytes(pdf));
+        mvc.perform(get("/api/demande-retraits/" + id + "/document").header("Authorization", tokenCc))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/demande-retraits/" + id + "/document").header("Authorization", tokenPresident))
+                .andExpect(status().isOk());
+
+        // Hors périmètre : CC d'une autre localité, Membre (non décideur), autre PRMP → 403.
+        mvc.perform(get("/api/demande-retraits/" + id + "/document")
+                .header("Authorization", bearer("CTRCC2", ProfilUtilisateur.CHEF_COMMISSION, TypeActeur.CONTROLEUR, "CTRCC2", "TMS")))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/demande-retraits/" + id + "/document").header("Authorization", tokenMembre))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/demande-retraits/" + id + "/document")
+                .header("Authorization", bearer("PRMP999", ProfilUtilisateur.PRMP, TypeActeur.PRMP, "PRMP999", "ANT")))
+                .andExpect(status().isForbidden());
+
+        // Les listes exposent les métadonnées de la lettre (jamais le contenu).
+        mvc.perform(get("/api/demande-retraits/mes-demandes").header("Authorization", tokenPrmp))
+                .andExpect(jsonPath("$[?(@.idDemandeRetrait==" + id + ")].nomFichier", hasItem("lettre-retrait.pdf")));
+    }
+
+    @Test
+    @DisplayName("Retrait — la lettre SURVIT à l'acceptation (purge du circuit) : elle justifie la décision ; rétro-compat : demande sans pièce → nomFichier null + document 404")
+    void retrait_lettre_survitAcceptation_etRetroCompat() throws Exception {
+        Dossier d = dossier(127, "SOUMIS"); d.setIdLocalite("ANT"); d.setIdPrmp("PRMP001");
+        dossierRepository.save(d);
+        String rep = mvc.perform(posterRetrait("{\"idDossier\":127,\"motifRetrait\":\"lettre à conserver\"}"))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        int id = Integer.parseInt(rep.replaceAll(".*\"idDemandeRetrait\":(\\d+).*", "$1"));
+        // Acceptation par le CC → purge du circuit + dossier BROUILLON… mais la lettre reste lisible
+        // (stockage dédié t_piece_demande_retrait, hors t_piece_jointe_dossier purgée avec le circuit).
+        mvc.perform(post("/api/demande-retraits/" + id + "/accepter").header("Authorization", tokenCc))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statut").value("ACCEPTEE"))
+                .andExpect(jsonPath("$.nomFichier").value("lettre-retrait.pdf"));
+        mvc.perform(get("/api/demande-retraits/" + id + "/document").header("Authorization", tokenCc))
+                .andExpect(status().isOk())
+                .andExpect(content().bytes(lettreRetraitPdf().getBytes()));
+
+        // Rétro-compat — demande créée avant l'obligation (sans pièce) : valide, nomFichier null, document 404 explicite.
+        Dossier ancien = dossier(128, "SOUMIS"); ancien.setIdLocalite("ANT"); ancien.setIdPrmp("PRMP001");
+        dossierRepository.save(ancien);
+        int idAncien = demandeRetraitRepository.save(demandeRetrait(0, 128, "PRMP001")).getIdDemandeRetrait();
+        mvc.perform(get("/api/demande-retraits/" + idAncien).header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nomFichier").value(nullValue()));
+        mvc.perform(get("/api/demande-retraits/" + idAncien + "/document").header("Authorization", tokenPrmp))
+                .andExpect(status().isNotFound());
     }
 
     @Test
@@ -9493,6 +9583,19 @@ class CnmWorkflowIntegrationTest {
         return mvc.perform(post("/api/pv-examens/1/signer").header("Authorization", token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"imActeur\":\"" + acteur + "\",\"role\":\"" + role + "\"}"));
+    }
+
+    /** POST multipart d'une demande de retrait pour la PRMP connectée : partie {@code data} (DTO JSON) + lettre PDF valide. */
+    private org.springframework.test.web.servlet.request.MockMultipartHttpServletRequestBuilder posterRetrait(String dataJson) {
+        return multipart("/api/demande-retraits")
+                .file(new MockMultipartFile("data", "", "application/json", dataJson.getBytes(StandardCharsets.UTF_8)))
+                .file(lettreRetraitPdf())
+                .header("Authorization", tokenPrmp);
+    }
+
+    private static MockMultipartFile lettreRetraitPdf() {
+        return new MockMultipartFile("fichier", "lettre-retrait.pdf", "application/pdf",
+                "%PDF-1.4 lettre de demande de retrait datee et signee".getBytes(StandardCharsets.US_ASCII));
     }
 
     private String bearer(String login, ProfilUtilisateur role, TypeActeur type, String ref, String loc) {

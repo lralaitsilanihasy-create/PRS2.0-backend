@@ -39,4 +39,10 @@ public class DemandeRetraitDto {
 
     @Size(max = 500)
     private String obsDecision;
+
+    /** Nom de la lettre de demande de retrait jointe — sortie seule ; {@code null} pour les demandes antérieures à l'obligation (le front affiche « — »). */
+    private String nomFichier;
+
+    /** Taille de la lettre en octets — sortie seule ; {@code null} si aucune pièce. */
+    private Long tailleFichier;
 }

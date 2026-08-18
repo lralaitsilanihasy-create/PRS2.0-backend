@@ -1,30 +1,41 @@
 package cnm.prs.service;
 
+import java.io.IOException;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import cnm.prs.dto.DemandeRetraitDto;
 import cnm.prs.entity.Controleur;
 import cnm.prs.entity.DemandeRetrait;
 import cnm.prs.entity.DemandeRetraitVue;
 import cnm.prs.entity.Dossier;
+import cnm.prs.entity.PieceDemandeRetrait;
 import cnm.prs.entity.Ppm;
 import cnm.prs.entity.Prmp;
 import cnm.prs.enums.ProfilUtilisateur;
 import cnm.prs.enums.StatutDossier;
 import cnm.prs.enums.StatutRetrait;
 import cnm.prs.enums.TypeNotification;
+import cnm.prs.exception.BadRequestException;
 import cnm.prs.exception.BusinessRuleException;
 import cnm.prs.exception.ResourceNotFoundException;
 import cnm.prs.mapper.DemandeRetraitMapper;
 import cnm.prs.repository.DemandeRetraitRepository;
 import cnm.prs.repository.DemandeRetraitVueRepository;
 import cnm.prs.repository.DossierRepository;
+import cnm.prs.repository.PieceDemandeRetraitRepository;
 import cnm.prs.repository.PpmRepository;
 import cnm.prs.repository.PrmpRepository;
 import cnm.prs.security.CurrentUser;
@@ -47,13 +58,16 @@ public class DemandeRetraitService {
     private final DemandeRetraitVueRepository vueRepository;
     /** ⚠️ Spec « Mandats PRMP » — garde de propriété partagée (attribution OU PRMP en fonction) + vacance. */
     private final DossierIntegriteService dossierIntegrite;
+    /** Lettre de demande de retrait (PDF obligatoire à la création — stockage dédié, survit à la purge du circuit). */
+    private final PieceDemandeRetraitRepository pieceRepository;
 
     public DemandeRetraitService(DemandeRetraitRepository repository, DossierRepository dossierRepository,
             PrmpRepository prmpRepository, PpmRepository ppmRepository, CircuitCascadeService circuitCascade,
             NotificationService notificationService,
             ControleurDirectory controleurDirectory, DemandeRetraitVueRepository vueRepository,
-            DossierIntegriteService dossierIntegrite) {
+            DossierIntegriteService dossierIntegrite, PieceDemandeRetraitRepository pieceRepository) {
         this.dossierIntegrite = dossierIntegrite;
+        this.pieceRepository = pieceRepository;
         this.repository = repository;
         this.dossierRepository = dossierRepository;
         this.prmpRepository = prmpRepository;
@@ -74,8 +88,8 @@ public class DemandeRetraitService {
         if (idPrmp == null) {
             return List.of();
         }
-        List<DemandeRetraitDto> demandes = repository.findByIdPrmp(idPrmp).stream()
-                .map(DemandeRetraitMapper::toDto).toList();
+        List<DemandeRetraitDto> demandes = enrichir(repository.findByIdPrmp(idPrmp).stream()
+                .map(DemandeRetraitMapper::toDto).toList());
         DemandeRetraitVue vue = vueRepository.findByIdPrmp(idPrmp)
                 .orElseGet(() -> new DemandeRetraitVue(null, idPrmp, null));
         vue.setDateDerniereVue(LocalDateTime.now());
@@ -94,10 +108,10 @@ public class DemandeRetraitService {
             if (idPrmp == null || idPrmp.isBlank()) {
                 return List.of();
             }
-            return repository.findByIdPrmp(idPrmp).stream().map(DemandeRetraitMapper::toDto).toList();
+            return enrichir(repository.findByIdPrmp(idPrmp).stream().map(DemandeRetraitMapper::toDto).toList());
         }
-        return Visibilite.filtrer(repository::findAll, repository::findVisiblesParLocalite)
-                .stream().map(DemandeRetraitMapper::toDto).toList();
+        return enrichir(Visibilite.filtrer(repository::findAll, repository::findVisiblesParLocalite)
+                .stream().map(DemandeRetraitMapper::toDto).toList());
     }
 
     @Transactional(readOnly = true)
@@ -112,15 +126,21 @@ public class DemandeRetraitService {
         } else {
             Visibilite.controler(loc -> repository.existsDansLocalite(id, loc));
         }
-        return DemandeRetraitMapper.toDto(entity);
+        return enrichir(DemandeRetraitMapper.toDto(entity));
     }
 
     /**
      * Création d'une demande de retrait par la PRMP. Une nouvelle demande est toujours
      * {@link StatutRetrait#EN_ATTENTE}, sans décision (§3.1). Le motif est obligatoire
      * (déjà imposé par {@code @NotBlank} sur le DTO, MOTIF_RETRAIT NOT NULL).
+     *
+     * <p>⚠️ Règle ajoutée (2026-08-17) — la PRMP doit joindre sa <strong>lettre de demande de
+     * retrait</strong> datée et signée (PDF) : pièce absente, non-PDF ou trop volumineuse → 400.
+     * La validation porte sur le contenu réel (magic-bytes), pas sur le Content-Type déclaré.
+     * Les demandes créées avant l'obligation restent valides (pièce simplement absente).</p>
      */
-    public DemandeRetraitDto create(DemandeRetraitDto dto) {
+    public DemandeRetraitDto create(DemandeRetraitDto dto, MultipartFile fichier) {
+        byte[] lettre = validerLettre(fichier);
         String idPrmp = CurrentUser.ref().filter(s -> !s.isBlank())
                 .orElseThrow(() -> new AccessDeniedException("PRMP non identifiée."));
         Integer idDossier = dto.getIdDossier();
@@ -158,8 +178,96 @@ public class DemandeRetraitService {
         entity.setStatut(StatutRetrait.EN_ATTENTE.name());
         entity.setDateDemande(LocalDateTime.now());        // date serveur
         DemandeRetrait saved = repository.save(entity);    // ID auto-généré (IDENTITY)
+
+        PieceDemandeRetrait piece = new PieceDemandeRetrait();
+        piece.setIdDemandeRetrait(saved.getIdDemandeRetrait());
+        piece.setNomFichier(fichier.getOriginalFilename());
+        piece.setFormat("application/pdf");
+        piece.setTailleOctets((long) lettre.length);
+        piece.setDateDepot(LocalDateTime.now());
+        piece.setHashSha256(sha256Hex(lettre));
+        piece.setContenu(lettre);
+        pieceRepository.save(piece);
+
         notifierDemandeAValider(saved);
-        return DemandeRetraitMapper.toDto(saved);
+        return enrichir(DemandeRetraitMapper.toDto(saved));
+    }
+
+    /** Taille maximale de la lettre (alignée sur {@code spring.servlet.multipart.max-file-size}). */
+    private static final int LETTRE_MAX_OCTETS = 10 * 1024 * 1024;
+
+    /**
+     * Valide la lettre de demande de retrait : présence, type réel PDF (magic-bytes {@code %PDF-}),
+     * taille ≤ {@value #LETTRE_MAX_OCTETS} octets. Sinon <strong>400</strong>.
+     */
+    private byte[] validerLettre(MultipartFile fichier) {
+        if (fichier == null || fichier.isEmpty()) {
+            throw new BadRequestException(
+                    "La lettre de demande de retrait (PDF, datée et signée) est obligatoire : joignez-la dans la partie « fichier ».");
+        }
+        byte[] contenu;
+        try {
+            contenu = fichier.getBytes();
+        } catch (IOException e) {
+            throw new BadRequestException("Lecture du fichier impossible : " + e.getMessage());
+        }
+        boolean pdf = contenu.length >= 5 && contenu[0] == '%' && contenu[1] == 'P'
+                && contenu[2] == 'D' && contenu[3] == 'F' && contenu[4] == '-';
+        if (!pdf) {
+            throw new BadRequestException(
+                    "La lettre de demande de retrait doit être un PDF (type de fichier non autorisé).");
+        }
+        if (contenu.length > LETTRE_MAX_OCTETS) {
+            throw new BadRequestException("Lettre trop volumineuse (" + contenu.length
+                    + " octets ; max " + LETTRE_MAX_OCTETS + ").");
+        }
+        return contenu;
+    }
+
+    private static String sha256Hex(byte[] contenu) {
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(contenu));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 indisponible", e);
+        }
+    }
+
+    /**
+     * Lecture de la lettre jointe à la demande {@code id} — réservée à la <strong>PRMP
+     * demanderesse</strong> (périmètre {@code ref} partagé avec son UGPM) et au
+     * <strong>décideur</strong> (CC de la localité du dossier ou Président ; Admin voit tout).
+     * Demande sans pièce (antérieure à l'obligation) → <strong>404</strong> explicite.
+     */
+    @Transactional(readOnly = true)
+    public PieceDemandeRetrait document(Integer id) {
+        DemandeRetrait demande = repository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("DemandeRetrait introuvable : " + id));
+        exigerAccesDocument(demande);
+        return pieceRepository.findByIdDemandeRetrait(id)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Aucune lettre jointe à cette demande (demande antérieure à l'obligation de pièce)."));
+    }
+
+    /** Accès à la lettre : PRMP demanderesse, CC de la localité du dossier, Président/Admin. */
+    private void exigerAccesDocument(DemandeRetrait demande) {
+        if (Visibilite.voitTout()) {
+            return;
+        }
+        if (Visibilite.estPrmp()) {
+            String idPrmp = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
+            if (idPrmp != null && idPrmp.equals(demande.getIdPrmp())) {
+                return;
+            }
+        } else if (CurrentUser.profil().orElse(null) == ProfilUtilisateur.CHEF_COMMISSION) {
+            String localiteDossier = dossierRepository.findById(demande.getIdDossier())
+                    .map(Dossier::getIdLocalite).orElse(null);
+            String localiteCc = CurrentUser.localite().filter(s -> !s.isBlank()).orElse(null);
+            if (localiteDossier != null && localiteDossier.equals(localiteCc)) {
+                return;
+            }
+        }
+        throw new AccessDeniedException(
+                "Lettre accessible uniquement à la PRMP demanderesse et au décideur (CC de la localité du dossier ou Président).");
     }
 
     /** [Auto] Notifie le CC de la localité du dossier + le(s) Président(s) qu'une demande attend validation. */
@@ -212,7 +320,7 @@ public class DemandeRetraitService {
             });
         }
         notifierDecision(saved, StatutRetrait.ACCEPTEE);
-        return DemandeRetraitMapper.toDto(saved);
+        return enrichir(DemandeRetraitMapper.toDto(saved));
     }
 
     /**
@@ -228,7 +336,7 @@ public class DemandeRetraitService {
         demande.setObsDecision(motif);
         DemandeRetrait saved = repository.save(demande);
         notifierDecision(saved, StatutRetrait.REFUSEE);
-        return DemandeRetraitMapper.toDto(saved);
+        return enrichir(DemandeRetraitMapper.toDto(saved));
     }
 
     /** Charge une demande qui doit être {@code EN_ATTENTE} (sinon 409 : déjà traitée). */
@@ -299,13 +407,37 @@ public class DemandeRetraitService {
             String loc = CurrentUser.localite().filter(s -> !s.isBlank()).orElse(null);
             list = loc == null ? List.of() : repository.findByStatutsEtLocaliteDossier(statuts, loc);
         }
-        return list.stream().map(DemandeRetraitMapper::toDto).toList();
+        return enrichir(list.stream().map(DemandeRetraitMapper::toDto).toList());
     }
 
     public void delete(Integer id) {
         if (!repository.existsById(id)) {
             throw new ResourceNotFoundException("DemandeRetrait introuvable : " + id);
         }
+        pieceRepository.deleteByIdDemandeRetrait(id);   // la lettre suit la demande (pas d'orphelin)
         repository.deleteById(id);
+    }
+
+    /** Reporte {@code nomFichier}/{@code tailleFichier} de la lettre jointe sur les DTO (métadonnées seules, jamais le contenu). */
+    private List<DemandeRetraitDto> enrichir(List<DemandeRetraitDto> dtos) {
+        List<Integer> ids = dtos.stream().map(DemandeRetraitDto::getIdDemandeRetrait).filter(java.util.Objects::nonNull).toList();
+        if (ids.isEmpty()) {
+            return dtos;
+        }
+        Map<Integer, PieceDemandeRetraitRepository.Meta> metas = pieceRepository.findMetaByIdDemandeRetraitIn(ids)
+                .stream().collect(Collectors.toMap(PieceDemandeRetraitRepository.Meta::getIdDemandeRetrait, Function.identity()));
+        for (DemandeRetraitDto dto : dtos) {
+            PieceDemandeRetraitRepository.Meta meta = metas.get(dto.getIdDemandeRetrait());
+            if (meta != null) {
+                dto.setNomFichier(meta.getNomFichier());
+                dto.setTailleFichier(meta.getTailleOctets());
+            }
+        }
+        return dtos;
+    }
+
+    private DemandeRetraitDto enrichir(DemandeRetraitDto dto) {
+        enrichir(List.of(dto));
+        return dto;
     }
 }
