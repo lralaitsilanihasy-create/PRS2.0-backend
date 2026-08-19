@@ -190,6 +190,13 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
   (`t_prmp_entite.ACTIF`) sur l'entité contractante du dossier. C'est ce second titre qui autorise la
   **reprise du traitement** des dossiers de l'UGPM par le successeur, sans changer l'attribution. Une PRMP
   en fonction **ailleurs** reste refusée (**403**).
+- ⚠️ **Règle ajoutée (2026-08-19) — auteur de la saisie visible.** `t_dossier.CREE_PAR` (login de l'acteur
+  ayant créé le dossier : PRMP **ou** UGPM de tutelle) et `SOUMIS_PAR` (PRMP seule) sont désormais **exposés**
+  dans `DossierDto`, accompagnés de leur **nom lisible** résolu serveur (`creeParNom` / `soumisParNom`,
+  « Nom Prénoms ») — le login n'étant pas l'identifiant de l'acteur, seul le serveur peut faire la jointure.
+  Champs en **lecture seule** : posés à la création/soumission, toute valeur envoyée par le client est ignorée.
+  Corollaire d'accès : `GET /api/ugpms/par-tutelle/{idPrmp}` est ouvert à la **PRMP concernée** (ses propres
+  unités rattachées) ; une autre tutelle reste refusée (**403**).
 
 **Rectification en attente de décision PRMP (⚠️ règle ajoutée)**
 

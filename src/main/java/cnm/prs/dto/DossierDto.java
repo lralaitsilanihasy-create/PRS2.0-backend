@@ -50,4 +50,26 @@ public class DossierDto {
     private Integer idMandatAttrib;
 
     private Integer idEntiteContract;
+
+    /**
+     * ⚠️ Demande front (2026-08-19) — traçabilité de la saisie : <strong>login</strong> de l'acteur
+     * ayant créé le dossier (PRMP ou UGPM de tutelle). Lecture seule : posé serveur à la création,
+     * toute valeur envoyée par le client est ignorée.
+     */
+    @Size(max = 100)
+    private String creePar;
+
+    /** Login de l'acteur ayant soumis le dossier (PRMP seule). Lecture seule, posé serveur. */
+    @Size(max = 100)
+    private String soumisPar;
+
+    /**
+     * Nom lisible « Prénoms Nom » correspondant à {@link #creePar}, résolu serveur (le login n'est
+     * pas l'identifiant de l'acteur, et le répertoire des UGPM n'est pas ouvert à tous les profils).
+     * {@code null} si le compte ou l'acteur est introuvable — le front garde alors le login brut.
+     */
+    private String creeParNom;
+
+    /** Nom lisible « Prénoms Nom » correspondant à {@link #soumisPar}, résolu serveur ; {@code null} si non résolvable. */
+    private String soumisParNom;
 }

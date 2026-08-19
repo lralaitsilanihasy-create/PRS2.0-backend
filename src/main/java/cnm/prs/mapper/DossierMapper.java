@@ -27,6 +27,11 @@ public final class DossierMapper {
         dto.setIdPrmp(entity.getIdPrmp());
         dto.setIdMandatAttrib(entity.getIdMandatAttrib());
         dto.setIdEntiteContract(entity.getIdEntiteContract());
+        // ⚠️ Demande front (2026-08-19) — traçabilité de la saisie. Les logins bruts viennent de
+        // l'entité ; les noms lisibles (creeParNom / soumisParNom) sont résolus par le service
+        // (annuaire des acteurs), en lot pour les listes.
+        dto.setCreePar(entity.getCreePar());
+        dto.setSoumisPar(entity.getSoumisPar());
         return dto;
     }
 

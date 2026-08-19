@@ -3,6 +3,7 @@ package cnm.prs.service;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +26,8 @@ import cnm.prs.exception.ResourceNotFoundException;
 import cnm.prs.repository.CompteAuthRepository;
 import cnm.prs.repository.PrmpRepository;
 import cnm.prs.repository.UgpmRepository;
+import cnm.prs.security.CurrentUser;
+import cnm.prs.security.Visibilite;
 
 /**
  * Gestion des UGPM (Administrateur) : création d'une UGPM rattachée à une PRMP de tutelle, avec son compte
@@ -149,9 +152,22 @@ public class UgpmService {
         return ugpmRepository.findAll().stream().map(this::toDto).toList();
     }
 
-    /** UGPM rattachées à une PRMP de tutelle (liste, éventuellement vide si aucune ou PRMP inconnue). */
+    /**
+     * UGPM rattachées à une PRMP de tutelle (liste, éventuellement vide si aucune ou PRMP inconnue).
+     *
+     * <p>⚠️ 2026-08-19 — ouvert à la <strong>PRMP concernée</strong> (et à ses UGPM, qui partagent
+     * son périmètre {@code ref}) : consulter ses propres unités rattachées est légitime. Toute autre
+     * tutelle que la sienne reste refusée (<strong>403</strong>) ; Président/Administrateur voient tout.</p>
+     */
     @Transactional(readOnly = true)
     public List<UgpmDto> findByTutelle(String idPrmp) {
+        if (!Visibilite.voitTout() && Visibilite.estPrmp()) {
+            String sien = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
+            if (sien == null || !sien.equals(idPrmp)) {
+                throw new AccessDeniedException(
+                        "Consultation limitée aux unités rattachées à votre propre tutelle (§1).");
+            }
+        }
         return ugpmRepository.findByIdPrmpTutelle(idPrmp).stream().map(this::toDto).toList();
     }
 

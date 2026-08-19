@@ -2805,6 +2805,74 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("DossierDto — auteur de la saisie : creePar/soumisPar exposés + noms lisibles résolus serveur (UGPM et PRMP) ; login inconnu → nom null")
+    void dossier_auteurSaisie_creeParEtNomsResolus() throws Exception {
+        // UGPM rattachée à PRMP001, avec son compte : c'est elle qui a saisi le dossier.
+        ugpmRepository.save(ugpm("UGPM010", "PRMP001", "Rasoa", "Hanta Miora"));
+        compteAuthRepository.save(new CompteAuth("ugpm.hanta", passwordEncoder.encode("pw"), "UGPM", "UGPM010", true));
+
+        Dossier d = dossierLoc(940, "SOUMIS", "ANT", "PRMP001");
+        d.setCreePar("ugpm.hanta");     // login de l'agent UGPM (pas l'idUgpm : c'est tout l'objet de la résolution)
+        d.setSoumisPar("PRMP001");      // soumission réservée à la PRMP
+        dossierRepository.save(d);
+
+        // Détail : logins bruts + noms lisibles, convention « Nom Prénoms » (celle du nomAffichage du login).
+        mvc.perform(get("/api/dossiers/940").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.creePar").value("ugpm.hanta"))
+                .andExpect(jsonPath("$.creeParNom").value("Rasoa Hanta Miora"))
+                .andExpect(jsonPath("$.soumisPar").value("PRMP001"))
+                .andExpect(jsonPath("$.soumisParNom").value("Nom Prenoms"));
+
+        // Les listes portent la même information (résolution en lot, pas de N+1).
+        mvc.perform(get("/api/dossiers").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idDossier==940)].creeParNom", hasItem("Rasoa Hanta Miora")));
+
+        // Login sans compte (agent supprimé) → nom non résolu : le front garde le login brut.
+        Dossier orphelin = dossierLoc(941, "SOUMIS", "ANT", "PRMP001");
+        orphelin.setCreePar("compte.disparu");
+        dossierRepository.save(orphelin);
+        mvc.perform(get("/api/dossiers/941").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.creePar").value("compte.disparu"))
+                .andExpect(jsonPath("$.creeParNom").value(nullValue()))
+                .andExpect(jsonPath("$.soumisParNom").value(nullValue()));
+
+        // Champs en LECTURE SEULE : une valeur envoyée par le client est ignorée (traçabilité serveur).
+        mvc.perform(put("/api/dossiers/940").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDossier\":940,\"statut\":\"SOUMIS\",\"idLocalite\":\"ANT\",\"idPrmp\":\"PRMP001\","
+                        + "\"creePar\":\"usurpateur\",\"soumisPar\":\"usurpateur\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.creePar").value("ugpm.hanta"))
+                .andExpect(jsonPath("$.soumisPar").value("PRMP001"));
+    }
+
+    @Test
+    @DisplayName("UGPM par tutelle — ouvert à la PRMP concernée (ses propres unités) ; autre tutelle → 403 ; profil hors périmètre → 403")
+    void ugpms_parTutelle_ouvertALaPrmpConcernee() throws Exception {
+        ugpmRepository.save(ugpm("UGPM011", "PRMP001", "Rabe", "Tiana"));
+        prmpRepository.save(prmp("PRMP003", "ANT"));
+        ugpmRepository.save(ugpm("UGPM012", "PRMP003", "Autre", "Unite"));
+
+        // La PRMP consulte ses propres unités rattachées (plus de 403 silencieux à l'ouverture du modal).
+        mvc.perform(get("/api/ugpms/par-tutelle/PRMP001").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idUgpm=='UGPM011')]", hasSize(1)));
+        // Mais pas celles d'une autre tutelle.
+        mvc.perform(get("/api/ugpms/par-tutelle/PRMP003").header("Authorization", tokenPrmp))
+                .andExpect(status().isForbidden());
+        // Administrateur : accès inchangé, toutes tutelles.
+        mvc.perform(get("/api/ugpms/par-tutelle/PRMP003").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idUgpm=='UGPM012')]", hasSize(1)));
+        // Contrôleur (Membre) : le répertoire des UGPM ne lui est pas ouvert.
+        mvc.perform(get("/api/ugpms/par-tutelle/PRMP001").header("Authorization", tokenMembre))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     @DisplayName("Actualités — CRUD admin : INACTIF forcé à la création, validations 400 (profils/HTML/dates), visibilité par profil ciblé")
     void actualites_cycleAdmin_visibiliteParProfil() throws Exception {
         // Réservé à l'Administrateur.
@@ -10347,6 +10415,22 @@ class CnmWorkflowIntegrationTest {
         d.setDateRef(LocalDate.of(2026, 6, 1));
         d.setStatut(statut);
         return d;
+    }
+
+    /** Fiche UGPM minimale rattachée à une PRMP de tutelle (champs NOT NULL renseignés). */
+    private Ugpm ugpm(String idUgpm, String idPrmpTutelle, String nom, String prenoms) {
+        Ugpm u = new Ugpm();
+        u.setIdUgpm(idUgpm);
+        u.setLibelle("Unite " + idUgpm);
+        u.setIdPrmpTutelle(idPrmpTutelle);
+        u.setNomUgpm(nom);
+        u.setPrenomsUgpm(prenoms);
+        u.setCin("303033334444");
+        u.setDateCin(LocalDate.of(2012, 3, 3));
+        u.setLieuCin("Antananarivo");
+        u.setEmailUgpm(idUgpm.toLowerCase() + "@min.mg");
+        u.setTelUgpm("0330000010");
+        return u;
     }
 
     private Dossier dossierLoc(int id, String statut, String localite, String idPrmp) {

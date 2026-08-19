@@ -1,5 +1,6 @@
 package cnm.prs.repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -12,6 +13,9 @@ import cnm.prs.entity.CompteAuth;
 public interface CompteAuthRepository extends JpaRepository<CompteAuth, String> {
 
     Optional<CompteAuth> findByLogin(String login);
+
+    /** Résolution en lot des comptes d'un ensemble de logins (annuaire des acteurs, sans N+1). */
+    List<CompteAuth> findByLoginIn(Collection<String> logins);
 
     List<CompteAuth> findByRefActeurAndTypeActeur(String refActeur, String typeActeur);
 

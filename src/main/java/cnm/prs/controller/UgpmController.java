@@ -110,8 +110,14 @@ public class UgpmController {
         return service.findById(id);
     }
 
-    /** UGPM rattachées à une PRMP de tutelle (liste, vide si aucune). */
-    @PreAuthorize("hasRole('ADMINISTRATEUR')")
+    /**
+     * UGPM rattachées à une PRMP de tutelle (liste, vide si aucune).
+     *
+     * <p>⚠️ Ouvert à la <strong>PRMP concernée</strong> (2026-08-19) : elle consulte ses propres
+     * unités rattachées — l'onglet « Entité contractante » du front les affiche. Le service vérifie
+     * que le {@code idPrmp} demandé est bien le sien (sinon 403) ; l'Administrateur voit tout.</p>
+     */
+    @PreAuthorize("hasAnyRole('ADMINISTRATEUR','PRMP','UGPM')")
     @GetMapping("/par-tutelle/{idPrmp}")
     public List<UgpmDto> findByTutelle(@PathVariable String idPrmp) {
         return service.findByTutelle(idPrmp);

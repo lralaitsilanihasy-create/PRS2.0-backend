@@ -6,7 +6,10 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Deque;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -88,6 +91,8 @@ public class DossierService {
     private final VerificationPieceDepotService verificationPieceDepotService;
     /** ⚠️ 2026-08-05 — figeage du diff et bascule du prédécesseur, à la soumission d'une mise à jour. */
     private final MiseAJourPpmService miseAJourPpmService;
+    /** ⚠️ Demande front (2026-08-19) — résolution login → nom lisible pour creePar / soumisPar. */
+    private final ActeurDirectory acteurDirectory;
     /** ⚠️ Spec « Mandats PRMP » — journal des actions, horodaté par opérateur courant. */
     private final JournalDossierService journalDossier;
 
@@ -103,10 +108,12 @@ public class DossierService {
             TypeDossierRepository typeDossierRepository, SousTypeDossierRepository sousTypeDossierRepository,
             LettreRenvoiRepository lettreRenvoiRepository,
             VerificationPieceDepotService verificationPieceDepotService,
-            MiseAJourPpmService miseAJourPpmService, JournalDossierService journalDossier) {
+            MiseAJourPpmService miseAJourPpmService, JournalDossierService journalDossier,
+            ActeurDirectory acteurDirectory) {
         this.verificationPieceDepotService = verificationPieceDepotService;
         this.miseAJourPpmService = miseAJourPpmService;
         this.journalDossier = journalDossier;
+        this.acteurDirectory = acteurDirectory;
         this.lettreRenvoiRepository = lettreRenvoiRepository;
         this.repository = repository;
         this.ppmRepository = ppmRepository;
@@ -154,11 +161,11 @@ public class DossierService {
         String filtre = normaliserStatut(statut);
         String filtreType = normaliserType(type);
         String filtreSousType = normaliserSousType(sousType);
-        return chargerScopees(filtre).stream()
+        return enrichir(chargerScopees(filtre).stream()
                 // Filtres famille / sous-type appliqués côté serveur, après le scoping (volumes déjà réduits).
                 .filter(d -> filtreType == null || filtreType.equals(d.getIdTypeDossier()))
                 .filter(d -> filtreSousType == null || filtreSousType.equals(d.getIdSousType()))
-                .map(DossierMapper::toDto).toList();
+                .map(DossierMapper::toDto).toList());
     }
 
     /** Dossiers du périmètre de l'appelant (scoping §1), optionnellement restreints à un statut. */
@@ -224,7 +231,7 @@ public class DossierService {
         Dossier entity = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable : " + id));
         controlerVisibilite(id);
-        return DossierMapper.toDto(entity);
+        return dto(entity);
     }
 
     /**
@@ -235,13 +242,13 @@ public class DossierService {
     public List<DossierDto> aReceptionner() {
         ProfilUtilisateur profil = CurrentUser.profil().orElse(null);
         if (profil == ProfilUtilisateur.PRESIDENT || profil == ProfilUtilisateur.ADMINISTRATEUR) {
-            return repository.findAReceptionner().stream().map(DossierMapper::toDto).toList();
+            return enrichir(repository.findAReceptionner().stream().map(DossierMapper::toDto).toList());
         }
         String localite = CurrentUser.localite().filter(s -> !s.isBlank()).orElse(null);
         if (localite == null) {
             return List.of();
         }
-        return repository.findAReceptionnerParLocalite(localite).stream().map(DossierMapper::toDto).toList();
+        return enrichir(repository.findAReceptionnerParLocalite(localite).stream().map(DossierMapper::toDto).toList());
     }
 
     /**
@@ -256,10 +263,10 @@ public class DossierService {
         if (im == null) {
             return List.of();
         }
-        return repository
+        return enrichir(repository
                 .findAExaminerParMembre(
                         List.of(StatutDossier.DISPATCHE.name(), StatutDossier.A_REEXAMINER.name()), im)
-                .stream().map(DossierMapper::toDto).toList();
+                .stream().map(DossierMapper::toDto).toList());
     }
 
     /**
@@ -276,7 +283,7 @@ public class DossierService {
         }
         List<String> statuts = List.of(StatutDossier.EXAMINE.name(), StatutDossier.PV_SIGNE.name(),
                 StatutDossier.EN_VERIFICATION.name(), StatutDossier.CLOTURE.name());
-        return repository.findExaminesParMembre(statuts, im, pageable).map(DossierMapper::toDto);
+        return enrichir(repository.findExaminesParMembre(statuts, im, pageable).map(DossierMapper::toDto));
     }
 
     /** File « à vérifier » du Vérificateur (§3.6) : dossiers EN_VERIFICATION de sa localité. */
@@ -286,7 +293,7 @@ public class DossierService {
         if (localite == null) {
             return List.of();
         }
-        return repository.findAVerifierParLocalite(localite).stream().map(DossierMapper::toDto).toList();
+        return enrichir(repository.findAVerifierParLocalite(localite).stream().map(DossierMapper::toDto).toList());
     }
 
     /** Historique « vérifiés / clôturés » du Vérificateur (PV signés clôturés), paginé, lecture seule. */
@@ -296,7 +303,7 @@ public class DossierService {
         if (localite == null) {
             return Page.empty(pageable);
         }
-        return repository.findVerifiesParLocalite(localite, pageable).map(DossierMapper::toDto);
+        return enrichir(repository.findVerifiesParLocalite(localite, pageable).map(DossierMapper::toDto));
     }
 
     /** File « En attente PRMP » du Vérificateur (lecture seule) : dossiers EN_ATTENTE_DECISION_PRMP de sa localité. */
@@ -304,7 +311,8 @@ public class DossierService {
     public List<DossierDto> enAttentePrmp() {
         String localite = CurrentUser.localite().filter(s -> !s.isBlank()).orElse(null);
         return localite == null ? List.of()
-                : repository.findEnAttentePrmpParLocalite(localite).stream().map(DossierMapper::toDto).toList();
+                : enrichir(repository.findEnAttentePrmpParLocalite(localite).stream()
+                        .map(DossierMapper::toDto).toList());
     }
 
     /**
@@ -318,8 +326,50 @@ public class DossierService {
         if (idPrmp == null) {
             return List.of();
         }
-        return repository.findRetirablesPourPrmp(idPrmp, StatutDossier.NOMS_AVANT_PV_SIGNE)
-                .stream().map(DossierMapper::toDto).toList();
+        return enrichir(repository.findRetirablesPourPrmp(idPrmp, StatutDossier.NOMS_AVANT_PV_SIGNE)
+                .stream().map(DossierMapper::toDto).toList());
+    }
+
+    /**
+     * Conversion d'un dossier + résolution des <strong>noms d'auteur</strong> (⚠️ demande front
+     * 2026-08-19) : {@code creeParNom} / {@code soumisParNom} depuis les logins {@code CREE_PAR} /
+     * {@code SOUMIS_PAR}. Sans login à résoudre, aucune requête n'est émise.
+     */
+    private DossierDto dto(Dossier entity) {
+        DossierDto dto = DossierMapper.toDto(entity);
+        return dto == null ? null : enrichir(List.of(dto)).get(0);
+    }
+
+    /**
+     * Résolution des noms d'auteur <strong>en lot</strong> : trois requêtes au plus quelle que soit
+     * la taille de la liste (l'annuaire regroupe les logins avant d'interroger PRMP / UGPM /
+     * contrôleurs). Les DTO sont enrichis sur place ; la liste elle-même n'est pas recréée.
+     */
+    private List<DossierDto> enrichir(List<DossierDto> dtos) {
+        Set<String> logins = new HashSet<>();
+        for (DossierDto dto : dtos) {
+            if (dto.getCreePar() != null) {
+                logins.add(dto.getCreePar());
+            }
+            if (dto.getSoumisPar() != null) {
+                logins.add(dto.getSoumisPar());
+            }
+        }
+        if (logins.isEmpty()) {
+            return dtos;
+        }
+        Map<String, String> noms = acteurDirectory.nomsParLogin(logins);
+        for (DossierDto dto : dtos) {
+            dto.setCreeParNom(noms.get(dto.getCreePar()));
+            dto.setSoumisParNom(noms.get(dto.getSoumisPar()));
+        }
+        return dtos;
+    }
+
+    /** Même enrichissement sur une page (le contenu est enrichi sur place, la page est renvoyée telle quelle). */
+    private Page<DossierDto> enrichir(Page<DossierDto> page) {
+        enrichir(page.getContent());
+        return page;
     }
 
     /** Vérifie que le dossier est dans le périmètre de visibilité de l'utilisateur (§1). */
@@ -344,7 +394,7 @@ public class DossierService {
     public DossierDto create(DossierDto dto) {
         Dossier entity = DossierMapper.toEntity(dto);
         entity.setIdDossier(repository.nextIdDossier().intValue()); // ⚠️ PK serveur (séquence) ; id client ignoré
-        return DossierMapper.toDto(repository.save(entity));
+        return dto(repository.save(entity));
     }
 
     public DossierDto update(Integer id, DossierDto dto) {
@@ -357,7 +407,7 @@ public class DossierService {
         existing.setStatut(dto.getStatut());
         existing.setIdLocalite(dto.getIdLocalite());
         existing.setIdEntiteContract(dto.getIdEntiteContract());
-        return DossierMapper.toDto(repository.save(existing));
+        return dto(repository.save(existing));
     }
 
     /**
@@ -461,7 +511,7 @@ public class DossierService {
 
         notifierSoumission(dossier, localite);
         journalDossier.tracer(dossier, JournalDossierService.SOUMISSION, "BROUILLON -> SOUMIS");
-        return DossierMapper.toDto(dossier);
+        return dto(dossier);
     }
 
     /**
@@ -554,7 +604,7 @@ public class DossierService {
         notifierRectification(dossier, derniere, idPrmp, motifRectification);
         tracerRectification(dossier, idPrmp, motifRectification);
         journalDossier.tracer(dossier, JournalDossierService.RESOUMISSION, motifRectification);
-        return DossierMapper.toDto(dossier);
+        return dto(dossier);
     }
 
     /**
@@ -591,7 +641,7 @@ public class DossierService {
             }
         }
         tracerEvenementDossier(dossier, "PIECES_MANQ_DEP", String.join(" ; ", defauts));
-        return DossierMapper.toDto(dossier);
+        return dto(dossier);
     }
 
     /**
@@ -624,7 +674,7 @@ public class DossierService {
         tracerEvenementDossier(dossier, "COMPL_DEPOT", "Compléments transmis par la PRMP");
         journalDossier.tracer(dossier, JournalDossierService.TRANSMISSION_COMPLEMENTS_DEPOT,
                 "EN_ATTENTE_COMPLEMENTS_DEPOT -> SOUMIS");
-        return DossierMapper.toDto(dossier);
+        return dto(dossier);
     }
 
     /** Trace un événement du dossier dans {@code t_audit_log} (TYPE_ACTION court, détail en NOUVELLE_VALEUR). */
@@ -685,7 +735,7 @@ public class DossierService {
         tracerEvenementDossier(dossier, "COMPL_TRANSMIS", "EN_ATTENTE_PIECES -> A_REEXAMINER (lettre " + idLettre + ")");
         journalDossier.tracer(dossier, JournalDossierService.TRANSMISSION_COMPLEMENTS,
                 "EN_ATTENTE_PIECES -> A_REEXAMINER (lettre " + idLettre + ")");
-        return DossierMapper.toDto(dossier);
+        return dto(dossier);
     }
 
     /** Notifie le vérificateur du dossier (dernier vérificateur ; sinon les vérificateurs de la localité). */
