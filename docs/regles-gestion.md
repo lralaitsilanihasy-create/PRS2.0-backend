@@ -90,6 +90,26 @@ Le destinataire est déterminé par **rôle + localité** du dossier (ou par **a
 Membre du dispatch). Chaque utilisateur ne consulte que **ses** notifications (`/api/notifications/mes`,
 comptage des non-lues, marquer lu) ; la **liste globale** est réservée à l'**Administrateur** (supervision).
 
+### Actualités à l'ouverture de session (transversal)
+
+⚠️ **Règle ajoutée (2026-08-19, spec du 2026-08-18)** — un **modal d'actualités** (mini-page markdown +
+images) s'affiche à **chaque** ouverture de session des utilisateurs **ciblés par leur profil**, éditable
+par l'Administrateur **sans redéploiement** (`t_actualite`, `t_actualite_profil`, `t_actualite_image`).
+Une actualité est servie par `GET /api/actualites/mes-actualites` si **toutes** les conditions tiennent
+(filtrage **entièrement serveur**, profil issu du JWT/cookie) : interrupteur global `ACTUALITES_ACTIVES`
+à `true` (`t_parametre` — ligne absente = actif, coupe-circuit) ; statut `ACTIF` ; profil de l'utilisateur
+parmi les **profils cibles** (au moins un, jamais « tous » implicitement) ; `datePublication` nulle ou
+passée **et** `dateExpiration` nulle ou non atteinte (jour J compris = atteinte). Tri : **date de
+publication effective décroissante** (publication, sinon création). Contenu **markdown brut** — toute
+balise HTML est **refusée (400)** dès la saisie (la surface XSS soldée par l'audit du 16-17/08 ne se
+rouvre pas). Images : **JPEG uniquement** (magic-bytes), **≤ 10 Mo (413 au-delà)**,
+**redimensionnées au serveur** (largeur max 1600 px). Cycle de vie : création **INACTIF** forcé
+(l'activation est un second acte délibéré) → `ACTIF`/`INACTIF` par le PUT → **archivage logique** par le
+DELETE (jamais de suppression physique, onglet « Historique ») ; l'**expiration bascule automatiquement
+en `ARCHIVE`** au fil des lectures (archiveur système = null) ; une actualité archivée n'est **plus
+modifiable (409)**. Créations, activations, archivages et bascules de l'interrupteur sont **journalisés**
+dans `t_audit_log` par l'intercepteur d'audit (comme toute écriture API).
+
 ---
 
 ## 3. Fonctionnalités et règles par profil
@@ -657,6 +677,12 @@ Accès complet aux référentiels, comptes utilisateurs, journal d'audit, hiéra
   - Plan comptable tr_compte et répertoire tr_entite_contract.
 - Délégations de profil [Écriture]
   - Gestion des entrées t_delegation_profil — quels profils peuvent exercer les tâches d'autres profils.
+- Actualités d'ouverture de session [Écriture] ⚠️ **Règle ajoutée (2026-08-19)**
+  - CRUD des actualités (`/api/actualites`) : titre + contenu **markdown brut** (HTML refusé, 400), profils
+    cibles (au moins un), fenêtre de dates, images JPEG redimensionnées serveur. Création **INACTIF** forcé ;
+    DELETE = **archivage logique** (historique conservé) ; interrupteur global
+    `PUT /api/parametres/actualites-actives` (coupe le modal pour tous, d'un coup). Détail : section
+    « Actualités à l'ouverture de session (transversal) » en §2.
 - ⚠️ **Règle ajoutée (2026-08-14) — délégation ascendante de profils, pilotée par les données** [Auto]
   - `t_delegation_profil` est la **source unique** de la règle permanente : la garde centrale
     `PermissionService.peutExercer(profilRequis)` autorise si **profil courant == requis** OU si la

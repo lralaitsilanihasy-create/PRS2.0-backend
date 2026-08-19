@@ -2805,6 +2805,237 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("Actualités — CRUD admin : INACTIF forcé à la création, validations 400 (profils/HTML/dates), visibilité par profil ciblé")
+    void actualites_cycleAdmin_visibiliteParProfil() throws Exception {
+        // Réservé à l'Administrateur.
+        mvc.perform(post("/api/actualites").header("Authorization", tokenMembre)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"titre\":\"x\",\"contenuMd\":\"x\",\"profilsCibles\":[\"MEMBRE\"]}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/actualites").header("Authorization", tokenMembre))
+                .andExpect(status().isForbidden());
+
+        // Validations 400 : profils vides / inconnu, HTML dans le markdown, expiration avant publication.
+        mvc.perform(post("/api/actualites").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"titre\":\"x\",\"contenuMd\":\"x\",\"profilsCibles\":[]}"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(post("/api/actualites").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"titre\":\"x\",\"contenuMd\":\"x\",\"profilsCibles\":[\"PILOTE\"]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", containsString("PILOTE")));
+        mvc.perform(post("/api/actualites").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"titre\":\"x\",\"contenuMd\":\"<script>alert(1)</script>\",\"profilsCibles\":[\"MEMBRE\"]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", containsString("Markdown")));
+        mvc.perform(post("/api/actualites").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"titre\":\"x\",\"contenuMd\":\"x\",\"profilsCibles\":[\"MEMBRE\"],"
+                        + "\"datePublication\":\"2026-09-01\",\"dateExpiration\":\"2026-08-01\"}"))
+                .andExpect(status().isBadRequest());
+
+        // Création OK — markdown avec autolien et « a < b » (le garde HTML ne bloque pas le markdown légitime).
+        int id = creerActualite("Nouvelle procedure", "## Bonjour\\n\\nVoir <https://cnm.mg> - seuil : a < b.",
+                "\"MEMBRE\",\"PRMP\"");
+        mvc.perform(get("/api/actualites/" + id).header("Authorization", tokenAdmin))
+                .andExpect(jsonPath("$.statut").value("INACTIF"))
+                .andExpect(jsonPath("$.imAuteur").value("CTRADM"))
+                .andExpect(jsonPath("$.profilsCibles", containsInAnyOrder("MEMBRE", "PRMP")));
+
+        // INACTIF : personne ne la voit, même ciblé.
+        mvc.perform(get("/api/actualites/mes-actualites").header("Authorization", tokenMembre))
+                .andExpect(jsonPath("$[?(@.idActualite==" + id + ")]", hasSize(0)));
+
+        // Activation (PUT) → visible pour les profils ciblés uniquement, filtrage serveur.
+        activerActualite(id, "Nouvelle procedure", "## Bonjour", "\"MEMBRE\",\"PRMP\"");
+        mvc.perform(get("/api/actualites/mes-actualites").header("Authorization", tokenMembre))
+                .andExpect(jsonPath("$[?(@.idActualite==" + id + ")].titre", hasItem("Nouvelle procedure")));
+        mvc.perform(get("/api/actualites/mes-actualites").header("Authorization", tokenPrmp))
+                .andExpect(jsonPath("$[?(@.idActualite==" + id + ")]", hasSize(1)));
+        mvc.perform(get("/api/actualites/mes-actualites").header("Authorization", tokenCc))
+                .andExpect(jsonPath("$[?(@.idActualite==" + id + ")]", hasSize(0)));
+    }
+
+    @Test
+    @DisplayName("Actualités — interrupteur global, fenêtre de dates, expiration→ARCHIVE automatique, DELETE=archivage, tri")
+    void actualites_interrupteur_datesEtArchivage() throws Exception {
+        int id1 = creerActualite("Annonce recente", "corps", "\"MEMBRE\"");
+        activerActualite(id1, "Annonce recente", "corps", "\"MEMBRE\"");
+
+        // Interrupteur global : coupe le modal pour tous, d'un coup ; bascule réservée à l'Admin.
+        mvc.perform(get("/api/parametres/actualites-actives").header("Authorization", tokenMembre))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.actif").value(true));
+        mvc.perform(put("/api/parametres/actualites-actives").header("Authorization", tokenMembre)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"actif\":false}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(put("/api/parametres/actualites-actives").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"actif\":false}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.actif").value(false));
+        mvc.perform(get("/api/actualites/mes-actualites").header("Authorization", tokenMembre))
+                .andExpect(jsonPath("$", hasSize(0)));
+        mvc.perform(put("/api/parametres/actualites-actives").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"actif\":true}"))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/actualites/mes-actualites").header("Authorization", tokenMembre))
+                .andExpect(jsonPath("$[?(@.idActualite==" + id1 + ")]", hasSize(1)));
+
+        // Publication future → pas encore visible.
+        LocalDate demain = LocalDate.now().plusDays(1);
+        mvc.perform(put("/api/actualites/" + id1).header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"titre\":\"Annonce recente\",\"contenuMd\":\"corps\",\"profilsCibles\":[\"MEMBRE\"],"
+                        + "\"statut\":\"ACTIF\",\"datePublication\":\"" + demain + "\"}"))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/actualites/mes-actualites").header("Authorization", tokenMembre))
+                .andExpect(jsonPath("$[?(@.idActualite==" + id1 + ")]", hasSize(0)));
+
+        // Expiration atteinte → bascule automatique en ARCHIVE à la lecture (archiveur système = null).
+        LocalDate avantHier = LocalDate.now().minusDays(2);
+        LocalDate hier = LocalDate.now().minusDays(1);
+        mvc.perform(put("/api/actualites/" + id1).header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"titre\":\"Annonce recente\",\"contenuMd\":\"corps\",\"profilsCibles\":[\"MEMBRE\"],"
+                        + "\"statut\":\"ACTIF\",\"datePublication\":\"" + avantHier + "\",\"dateExpiration\":\"" + hier + "\"}"))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/actualites/mes-actualites").header("Authorization", tokenMembre))
+                .andExpect(jsonPath("$[?(@.idActualite==" + id1 + ")]", hasSize(0)));
+        mvc.perform(get("/api/actualites/" + id1).header("Authorization", tokenAdmin))
+                .andExpect(jsonPath("$.statut").value("ARCHIVE"))
+                .andExpect(jsonPath("$.dateArchivage").isNotEmpty())
+                .andExpect(jsonPath("$.imArchiveur").value(nullValue()));
+        // Archivée = historique : plus modifiable (409), re-DELETE refusé (409).
+        mvc.perform(put("/api/actualites/" + id1).header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"titre\":\"x\",\"contenuMd\":\"x\",\"profilsCibles\":[\"MEMBRE\"]}"))
+                .andExpect(status().isConflict());
+        mvc.perform(delete("/api/actualites/" + id1).header("Authorization", tokenAdmin))
+                .andExpect(status().isConflict());
+
+        // DELETE = archivage manuel (traçé) — jamais de suppression physique : reste listée côté admin.
+        int id2 = creerActualite("A archiver", "corps", "\"MEMBRE\"");
+        mvc.perform(delete("/api/actualites/" + id2).header("Authorization", tokenAdmin))
+                .andExpect(status().isNoContent());
+        mvc.perform(get("/api/actualites/" + id2).header("Authorization", tokenAdmin))
+                .andExpect(jsonPath("$.statut").value("ARCHIVE"))
+                .andExpect(jsonPath("$.imArchiveur").value("CTRADM"));
+
+        // Tri : publication effective décroissante (la plus récente d'abord).
+        int idAncienne = creerActualite("Ancienne", "corps", "\"MEMBRE\"");
+        activerActualite(idAncienne, "Ancienne", "corps", "\"MEMBRE\"", LocalDate.now().minusDays(5));
+        int idRecente = creerActualite("Recente", "corps", "\"MEMBRE\"");
+        activerActualite(idRecente, "Recente", "corps", "\"MEMBRE\"", LocalDate.now().minusDays(1));
+        mvc.perform(get("/api/actualites/mes-actualites").header("Authorization", tokenMembre))
+                .andExpect(jsonPath("$[0].idActualite").value(idRecente))
+                .andExpect(jsonPath("$[1].idActualite").value(idAncienne));
+    }
+
+    @Test
+    @DisplayName("Actualités — images : JPEG seul (magic-bytes) → 400, > 10 Mo → 413, redimensionnement 1600 px, lecture authentifiée, ordre")
+    void actualites_images_jpegRedimensionne() throws Exception {
+        int id = creerActualite("Avec images", "corps", "\"MEMBRE\"");
+
+        // Non-JPEG (PNG déguisé) → 400 ; JPEG > 10 Mo → 413 ; réservé à l'Admin.
+        mvc.perform(multipart("/api/actualites/" + id + "/images")
+                .file(new MockMultipartFile("fichier", "logo.jpg", "image/jpeg",
+                        new byte[] { (byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A }))
+                .header("Authorization", tokenAdmin))
+                .andExpect(status().isBadRequest());
+        byte[] trosGros = new byte[10 * 1024 * 1024 + 1];
+        trosGros[0] = (byte) 0xFF; trosGros[1] = (byte) 0xD8; trosGros[2] = (byte) 0xFF;
+        mvc.perform(multipart("/api/actualites/" + id + "/images")
+                .file(new MockMultipartFile("fichier", "photo.jpg", "image/jpeg", trosGros))
+                .header("Authorization", tokenAdmin))
+                .andExpect(status().isPayloadTooLarge());
+        mvc.perform(multipart("/api/actualites/" + id + "/images")
+                .file(new MockMultipartFile("fichier", "p.jpg", "image/jpeg", jpegDeTest(40, 20)))
+                .header("Authorization", tokenMembre))
+                .andExpect(status().isForbidden());
+
+        // JPEG petit : stocké tel quel, ordre 1 ; le suivant prend l'ordre 2.
+        mvc.perform(multipart("/api/actualites/" + id + "/images")
+                .file(new MockMultipartFile("fichier", "banniere.jpg", "image/jpeg", jpegDeTest(40, 20)))
+                .header("Authorization", tokenAdmin))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.ordre").value(1))
+                .andExpect(jsonPath("$.nomFichier").value("banniere.jpg"));
+        // JPEG trop large (3200 px) : redimensionné au serveur à 1600 px (proportionnel).
+        String repImage = mvc.perform(multipart("/api/actualites/" + id + "/images")
+                .file(new MockMultipartFile("fichier", "panorama.jpg", "image/jpeg", jpegDeTest(3200, 100)))
+                .header("Authorization", tokenAdmin))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.ordre").value(2))
+                .andReturn().getResponse().getContentAsString();
+        int idImage = Integer.parseInt(repImage.replaceAll(".*\"idImage\":(\\d+).*", "$1"));
+
+        // Lecture par un utilisateur authentifié (le modal du Membre) : image/jpeg, largeur réduite à 1600.
+        byte[] servie = mvc.perform(get("/api/actualites/" + id + "/images/" + idImage)
+                .header("Authorization", tokenMembre))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Type", "image/jpeg"))
+                .andReturn().getResponse().getContentAsByteArray();
+        java.awt.image.BufferedImage relue = javax.imageio.ImageIO
+                .read(new java.io.ByteArrayInputStream(servie));
+        org.junit.jupiter.api.Assertions.assertEquals(1600, relue.getWidth(), "largeur plafonnée");
+        org.junit.jupiter.api.Assertions.assertEquals(50, relue.getHeight(), "hauteur proportionnelle");
+
+        // Métadonnées dans le DTO (jamais le binaire) ; mauvaise actualité → 404 ; suppression → 204 puis 404.
+        mvc.perform(get("/api/actualites/" + id).header("Authorization", tokenAdmin))
+                .andExpect(jsonPath("$.images", hasSize(2)))
+                .andExpect(jsonPath("$.images[1].idImage").value(idImage));
+        mvc.perform(get("/api/actualites/999999/images/" + idImage).header("Authorization", tokenMembre))
+                .andExpect(status().isNotFound());
+        mvc.perform(delete("/api/actualites/" + id + "/images/" + idImage).header("Authorization", tokenMembre))
+                .andExpect(status().isForbidden());
+        mvc.perform(delete("/api/actualites/" + id + "/images/" + idImage).header("Authorization", tokenAdmin))
+                .andExpect(status().isNoContent());
+        mvc.perform(get("/api/actualites/" + id + "/images/" + idImage).header("Authorization", tokenMembre))
+                .andExpect(status().isNotFound());
+    }
+
+    /** POST admin d'une actualité (statut forcé INACTIF) — {@code profilsJson} : liste JSON sans crochets. */
+    private int creerActualite(String titre, String contenuMd, String profilsJson) throws Exception {
+        String rep = mvc.perform(post("/api/actualites").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"titre\":\"" + titre + "\",\"contenuMd\":\"" + contenuMd
+                        + "\",\"profilsCibles\":[" + profilsJson + "]}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.statut").value("INACTIF"))
+                .andReturn().getResponse().getContentAsString();
+        return Integer.parseInt(rep.replaceAll(".*\"idActualite\":(\\d+).*", "$1"));
+    }
+
+    private void activerActualite(int id, String titre, String contenuMd, String profilsJson) throws Exception {
+        activerActualite(id, titre, contenuMd, profilsJson, null);
+    }
+
+    /** PUT admin : passe l'actualité ACTIF (avec date de publication optionnelle). */
+    private void activerActualite(int id, String titre, String contenuMd, String profilsJson,
+            LocalDate datePublication) throws Exception {
+        String dates = datePublication == null ? "" : ",\"datePublication\":\"" + datePublication + "\"";
+        mvc.perform(put("/api/actualites/" + id).header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"titre\":\"" + titre + "\",\"contenuMd\":\"" + contenuMd
+                        + "\",\"profilsCibles\":[" + profilsJson + "],\"statut\":\"ACTIF\"" + dates + "}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statut").value("ACTIF"));
+    }
+
+    /** JPEG réel généré en mémoire (aplat), aux dimensions demandées. */
+    private static byte[] jpegDeTest(int largeur, int hauteur) throws Exception {
+        java.awt.image.BufferedImage img = new java.awt.image.BufferedImage(largeur, hauteur,
+                java.awt.image.BufferedImage.TYPE_INT_RGB);
+        java.awt.Graphics2D g = img.createGraphics();
+        g.setColor(java.awt.Color.ORANGE);
+        g.fillRect(0, 0, largeur, hauteur);
+        g.dispose();
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        javax.imageio.ImageIO.write(img, "jpg", out);
+        return out.toByteArray();
+    }
+
+    @Test
     @DisplayName("Décision retrait — CC de la localité accepte → ACCEPTEE, dossier BROUILLON, notif RETRAIT_ACCEPTE")
     void decision_accepter_parCc_dossierBrouillon() throws Exception {
         Dossier d = dossier(130, "SOUMIS"); d.setIdLocalite("ANT"); d.setIdPrmp("PRMP001");

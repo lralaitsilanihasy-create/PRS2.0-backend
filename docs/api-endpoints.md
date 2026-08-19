@@ -163,6 +163,93 @@ quand ils surviennent (mapping centralisé dans `GlobalExceptionHandler`). Côt�
 
 ---
 
+## Actualités (⚠️ ressource ajoutée 2026-08-19, spec du 2026-08-18)
+**Ressource** `/api/actualites` — modal d'actualités affiché à chaque ouverture de session des
+utilisateurs **ciblés par leur profil**, édité par l'`ADMINISTRATEUR` sans redéploiement.
+Tables : `t_actualite`, `t_actualite_profil` (ciblage), `t_actualite_image` (binaire dédié).
+
+> ⚠️ **Visibilité (`/mes-actualites`) — filtrage entièrement serveur.** Une actualité est renvoyée si
+> **toutes** les conditions tiennent : (1) interrupteur global `ACTUALITES_ACTIVES` à `true` (sinon liste
+> **vide**) ; (2) `statut = ACTIF` ; (3) le **profil de l'utilisateur authentifié** (JWT/cookie, jamais un
+> paramètre client) figure dans les profils cibles ; (4) `datePublication` nulle ou passée **et**
+> `dateExpiration` nulle ou **non atteinte** (le jour J, elle est atteinte : l'actualité disparaît).
+> Tri : **date de publication effective décroissante** (`datePublication`, sinon date de création).
+> Le front ne reçoit jamais une actualité qu'il devrait masquer lui-même.
+
+> ⚠️ **Cycle de vie.** Création → `statut` **forcé `INACTIF`** (l'activation est un second acte délibéré) ;
+> `ACTIF`/`INACTIF` par le **PUT** (statut `ARCHIVE` au PUT → 400) ; **DELETE = archivage logique**
+> (`ARCHIVE` + `dateArchivage` + `imArchiveur`), jamais de suppression physique — onglet « Historique ».
+> **Expiration = archivage automatique** : la bascule `ACTIF`→`ARCHIVE` se fait **au fil des lectures**
+> (pas de tâche planifiée), avec `imArchiveur` **null** (système). Une actualité `ARCHIVE` n'est **plus
+> modifiable** (PUT/DELETE/ajout d'image → **409**). Toutes les écritures (création, activation,
+> archivage, images, interrupteur) sont **journalisées** dans `t_audit_log` par l'intercepteur d'audit.
+
+> ⚠️ **Contenu markdown brut — HTML refusé (400).** `contenuMd` est stocké tel quel et rendu sans
+> injection HTML côté front ; toute **balise HTML** (ouvrante, fermante ou commentaire) est rejetée dès la
+> saisie. Les usages markdown légitimes de « < » passent (autolien `<https://…>`, comparaison `a < b`).
+> Les **profils cibles** sont les noms d'enum (`PRMP`, `UGPM`, `PRESIDENT`, `CHEF_COMMISSION`,
+> `SECRETAIRE`, `MEMBRE`, `VERIFICATEUR`, `ASSISTANT_CONTROLEUR`, `CHARGE_PUBLICATION`,
+> `ADMINISTRATEUR`) — au moins un (400 si vide ou inconnu) ; `t_actualite_profil` stocke le **nom**
+> (colonne `PROFIL`), pas l'`ID_PROFILE` numérique dont la correspondance n'est pas spécifiée.
+
+> ⚠️ **Images — mêmes garanties que la lettre de retrait (2026-08-17).** `POST /{id}/images` en
+> multipart (partie `fichier`) : **JPEG obligatoire validé par magic-bytes** (`FF D8 FF`, jamais le
+> Content-Type déclaré) → 400 sinon ; **> 10 Mo → 413** ; **redimensionnée au serveur** (largeur max
+> **1600 px**, proportionnel) avant stockage (`bytea` + SHA-256) ; `ordre` = fin de la mini-page.
+> Lecture `GET /{id}/images/{idImage}` : tout authentifié, sortie durcie (liste blanche MIME +
+> `Content-Disposition` assaini + `nosniff` global). Le DTO ne porte que les **métadonnées** des images.
+
+**Champs `ActualiteDto`**
+
+| Champ (JSON) | Type | Obligatoire | Contraintes |
+|---|---|---|---|
+| idActualite | number | Non (auto) | IDENTITY ; ignoré en entrée |
+| titre | string | Oui | @NotBlank, max 200 |
+| contenuMd | string | Oui | Markdown brut — **aucun HTML accepté ni renvoyé** (400) |
+| profilsCibles | string[] | Oui | Au moins un nom d'enum profil (400 si vide/inconnu) ; dédoublonnés |
+| statut | string | Non | `INACTIF` forcé à la création ; `ACTIF`/`INACTIF` par le PUT (null = inchangé) ; `ARCHIVE` par le DELETE seul |
+| datePublication | string (date) | Non | null = visible dès activation |
+| dateExpiration | string (date) | Non | null = sans terme ; antérieure à datePublication → 400 ; atteinte → ARCHIVE auto |
+| images | `ActualiteImageDto[]` | — | **Lecture seule** (serveur) : idImage, nomFichier, taille, ordre — jamais le binaire |
+| dateCreation / imAuteur | — | — | Serveur (JWT) |
+| dateArchivage / imArchiveur | — | — | Serveur ; imArchiveur null = archivage automatique à l'expiration |
+
+**Endpoints**
+
+| Méthode | URL | Corps | Réponse | Statuts | Rôle |
+|---|---|---|---|---|---|
+| GET | /api/actualites/mes-actualites | — | `ActualiteDto[]` | 200 | Authentifié — modal d'ouverture de session |
+| GET | /api/actualites | — | `ActualiteDto[]` | 200, 403 | ADMINISTRATEUR (Historique compris) ; `?page=&size=` → enveloppe `Page` |
+| GET | /api/actualites/{id} | — | `ActualiteDto` | 200, 403, 404 | ADMINISTRATEUR |
+| POST | /api/actualites | `ActualiteDto` | `ActualiteDto` | 201, 400, 403 | ADMINISTRATEUR — statut forcé INACTIF |
+| PUT | /api/actualites/{id} | `ActualiteDto` | `ActualiteDto` | 200, 400, 403, 404, 409 | ADMINISTRATEUR — 409 si ARCHIVE |
+| DELETE | /api/actualites/{id} | — | — | 204, 403, 404, 409 | ADMINISTRATEUR — **archive**, ne supprime pas |
+| POST | /api/actualites/{id}/images | multipart (`fichier` JPEG) | `ActualiteImageDto` | 201, 400, 403, 404, 409, 413 | ADMINISTRATEUR |
+| GET | /api/actualites/{id}/images/{idImage} | — | binaire `image/jpeg` | 200, 404 | Authentifié |
+| DELETE | /api/actualites/{id}/images/{idImage} | — | — | 204, 403, 404 | ADMINISTRATEUR |
+
+**Exemple — création (Administrateur)**
+```json
+{ "titre": "Nouvelle procédure de dispatch", "contenuMd": "## Ce qui change\n\n- délai ramené à 5 jours…",
+  "profilsCibles": ["PRMP", "MEMBRE"], "datePublication": "2026-09-01", "dateExpiration": "2026-09-30" }
+```
+
+---
+
+## Paramètres système (⚠️ ressource ajoutée 2026-08-19)
+**Ressource** `/api/parametres` — paramètres généraux clé/valeur (`t_parametre` : `CLE`, `VALEUR`,
+`DATE_MAJ`, `IM_ACTEUR`), éditables sans redéploiement. Première clé : **`ACTUALITES_ACTIVES`**,
+l'interrupteur global du modal d'actualités (coupe/rétablit pour tous, d'un coup). **Ligne absente =
+actif** : c'est un coupe-circuit, pas une seconde activation (chaque actualité naît de toute façon
+`INACTIF`).
+
+| Méthode | URL | Corps | Réponse | Statuts | Rôle |
+|---|---|---|---|---|---|
+| GET | /api/parametres/actualites-actives | — | `{ "actif": boolean }` | 200 | Authentifié |
+| PUT | /api/parametres/actualites-actives | `{ "actif": boolean }` | `{ "actif": boolean }` | 200, 400, 403 | ADMINISTRATEUR |
+
+---
+
 ## Anomalies
 **Ressource** `/api/anomalies` — Lecture et écriture : tout utilisateur authentifié (CRUD standard, aucun rôle particulier).
 

@@ -56,6 +56,13 @@ public class GlobalExceptionHandler {
                 "Fichier trop volumineux : la taille maximale autorisée est dépassée.", request, null);
     }
 
+    /** Limite applicative de taille de fichier dépassée → 413 (spec « Actualités », image > 10 Mo). */
+    @ExceptionHandler(PayloadTropVolumineuxException.class)
+    public ResponseEntity<ErrorResponse> handlePayloadTropVolumineux(
+            PayloadTropVolumineuxException ex, WebRequest request) {
+        return build(HttpStatus.PAYLOAD_TOO_LARGE, ex.getMessage(), request, null);
+    }
+
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<ErrorResponse> handleBadCredentials(BadCredentialsException ex, WebRequest request) {
         return build(HttpStatus.UNAUTHORIZED, ex.getMessage(), request, null);
