@@ -6796,7 +6796,7 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
-    @DisplayName("PvExamenDto.documentDisponible : true dès FAVR+ANT+PPM quel que soit le mode (cotation incluse) ; false si avis ≠ FAVR")
+    @DisplayName("PvExamenDto.documentDisponible : projet éligible → true (cotation incluse) ; PV SIGNE → true seulement quand CHEMIN_DOCUMENT est posé (fenêtre de génération post-commit → false)")
     void pv_documentDisponible_refleteEligibilite() throws Exception {
         modePassationRepository.save(new ModePassation(5, "Demande de cotation", null, null, null, null));
 
@@ -6804,7 +6804,7 @@ class CnmWorkflowIntegrationTest {
         cnm.prs.entity.Marche mCot = marche(9600, 1, 1); mCot.setIdMode(5); marcheRepository.save(mCot);
         cnm.prs.entity.PvExamen pvFavr = new cnm.prs.entity.PvExamen();
         pvFavr.setIdPv(600); pvFavr.setIdExamen(1); pvFavr.setIdAvis("FAVR"); pvFavr.setImCtrlMembre("CTRMEM");
-        pvFavr.setStatutPv("SIGNE"); pvFavr.setNbNavettes(0);
+        pvFavr.setStatutPv("PROJET_ACCEPTE"); pvFavr.setNbNavettes(0);
         pvExamenRepository.save(pvFavr);
 
         // NON ÉLIGIBLE pour un vrai motif : avis NSP (⚠️ 2026-08-03 : seul avis SANS modèle Word —
@@ -6820,7 +6820,20 @@ class CnmWorkflowIntegrationTest {
         pvDef.setStatutPv("SIGNE"); pvDef.setNbNavettes(0);
         pvExamenRepository.save(pvDef);
 
-        // FAVR + ANT + PPM + cotation → documentDisponible = true (cas signalé 00008/DDP/CRM-ANT/PV/2026).
+        // PROJET FAVR + ANT + PPM + cotation → true : « un document sera produit à la signature »
+        // (cas signalé 00008/DDP/CRM-ANT/PV/2026 — le mode ne bloque plus).
+        mvc.perform(get("/api/pv-examens/600").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.documentDisponible").value(true));
+        // ⚠️ 2026-08-19 (génération post-commit) — PV SIGNE : le flag dit « fichier prêt MAINTENANT ».
+        // Signé sans CHEMIN_DOCUMENT (fenêtre de génération) → false ; chemin posé → true.
+        pvFavr.setStatutPv("SIGNE");
+        pvExamenRepository.save(pvFavr);
+        mvc.perform(get("/api/pv-examens/600").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.documentDisponible").value(false));
+        pvFavr.setCheminDocument("PV/pv-600.pdf");
+        pvExamenRepository.save(pvFavr);
         mvc.perform(get("/api/pv-examens/600").header("Authorization", tokenAdmin))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.documentDisponible").value(true));
@@ -8598,14 +8611,21 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
-    @DisplayName("Signature PV éligible → document généré et stocké (chemin_document non NULL + fichier présent)")
+    @DisplayName("Signature PV éligible → réponse immédiate (SIGNE) ; le document est produit APRÈS COMMIT : chemin NULL + documentDisponible=false dans la fenêtre")
     void signature_pv_genere_document_ok() throws Exception {
         signerPvEligible(110);
         cnm.prs.entity.PvExamen pv = pvExamenRepository.findById(110).orElseThrow();
-        org.junit.jupiter.api.Assertions.assertNotNull(pv.getCheminDocument(),
-                "chemin_document renseigné après la signature finale");
-        assertTrue(java.nio.file.Files.exists(java.nio.file.Path.of(pv.getCheminDocument())),
-                "le fichier PDF est présent sur le FSX");
+        org.junit.jupiter.api.Assertions.assertEquals("SIGNE", pv.getStatutPv());
+        // ⚠️ 2026-08-19 — la génération (Word, plusieurs secondes) est sortie du chemin de la signature :
+        // elle part APRÈS COMMIT (PvDocumentTache). Dans la transaction de test (jamais commitée),
+        // l'événement ne part pas — le chemin reste NULL, exactement comme pendant la fenêtre de
+        // génération en prod, et documentDisponible est false (contrat front : « fichier prêt maintenant »).
+        org.junit.jupiter.api.Assertions.assertNull(pv.getCheminDocument(),
+                "la signature ne produit plus le document dans sa transaction");
+        mvc.perform(get("/api/pv-examens/110").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statutPv").value("SIGNE"))
+                .andExpect(jsonPath("$.documentDisponible").value(false));
     }
 
     @Test

@@ -2060,8 +2060,10 @@ et interprété comme un code de **sous-type** (les anciens payloads `{"idTypeDo
 > traitées » — le workflow séquentiel/couleurs est géré côté front. **Vacant** (aucune exigence) si le dossier
 > n'a **pas de grille** (famille/sous-type sans points) → examens historiques et non-PPM non contraints.
 >
-> ⚠️ **PV — document généré (règle ajoutée ; modèles étendus 2026-08-03).** À la **signature finale** du PV
-> (passage à `SIGNE`), le **PDF officiel** est généré **s'il existe un modèle Word pour le cas** — conditions
+> ⚠️ **PV — document généré (règle ajoutée ; modèles étendus 2026-08-03 ; génération post-commit 2026-08-19).**
+> À la **signature finale** du PV (passage à `SIGNE`), le **PDF officiel** est généré **en tâche de fond
+> après commit** (la signature répond immédiatement ; `CHEMIN_DOCUMENT` est renseigné quand le document est
+> prêt — cf. le contrat `documentDisponible` §PvExamenDto), **s'il existe un modèle Word pour le cas** — conditions
 > communes : dossier de **localité centrale** (`ANT`, seuls modèles fournis) et **PPM** comportant au moins une
 > ligne de marché, **quel que soit le mode de passation**. Choix du modèle (`PvDocumentService.modelePour`) :
 >
@@ -3609,9 +3611,21 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 | refePv | string | — (réponse) | max 120 — **référence officielle dérivée du dossier**, générée serveur, **unique** (lecture seule) |
 | idSecretaireSeance | string | — (⚠️ posé à la **clôture de navette**, 2026-08-01) | max 7 — **Secrétaire de séance** : Vérificateur titulaire de la localité **ou** contrôleur couvert par une paire « → Vérificateur » active (⚠️ élargi 2026-08-15 ; validé à `…/pv-examens/{id}/accepter` ; encore accepté à `…/examens/{id}/soumettre` si fourni) |
 | nomSecretaireSeance | string | — (réponse) | nom complet du secrétaire de séance (« prénoms nom »), peuplé serveur — lecture seule |
-| documentDisponible | boolean | — (réponse) | **`true`** si un PDF officiel est réellement disponible : `CHEMIN_DOCUMENT` non nul **ou** PV **éligible** — un **modèle Word existe pour le cas** (avis `FAVR` ou `FAV` + PPM avec ≥ 1 ligne de marché, **quel que soit le mode de passation** et **quelle que soit la localité** — centrale ou régionale —, donc régénérable à la demande ; cf. tableau des modèles §PV) ; **`false`** sinon. Lecture seule, peuplé serveur → le front masque « Télécharger le PDF » et évite un 404 |
+| documentDisponible | boolean | — (réponse) | ⚠️ **Contrat révisé 2026-08-19** — PV **`SIGNE`** : `true` seulement quand le **fichier est prêt maintenant** (`CHEMIN_DOCUMENT` non nul) ; **`false` pendant la fenêtre de génération post-commit** qui suit la signature. PV **non signé** (projet) : sens historique conservé — `true` si le PV est **éligible** (un **modèle Word existe pour le cas** : avis `FAVR`/`FAV`/`DEF` + PPM avec ≥ 1 ligne de marché, **quel que soit le mode de passation** et la localité ; cf. tableau des modèles §PV). Lecture seule, peuplé serveur → le front masque « Télécharger le PDF » tant que c'est `false` |
 
-> ⚠️ **Disponibilité du document (`documentDisponible`) — règle ajoutée.** Le flag reflète la règle « PV — document généré » **et** l'existence effective du fichier : `true` si `t_pv_examen.CHEMIN_DOCUMENT` est renseigné, ou si le PV est éligible à la génération à la demande (`GET /api/pv-examens/{id}/document` régénère alors le PDF). Il reste donc juste après une (re)génération. Un PV non éligible (ex. avis **≠ FAVR**, ou localité **non centrale**, ou dossier **sans PPM**) → `false`, et `…/document` renvoie **404**. *(Le **mode de passation** n'entre plus dans l'éligibilité : un PV FAVR/ANT/PPM en « Demande de cotation » est désormais éligible.)*
+> ⚠️ **Disponibilité du document (`documentDisponible`) — contrat révisé (2026-08-19, génération post-commit).**
+> La génération du PDF (conversion Word, plusieurs secondes) est **sortie du chemin de la signature** : la
+> signature finale marque le PV `SIGNE` et **répond immédiatement** ; le document est produit **après commit**
+> en tâche de fond (`PvDocumentTache`), qui renseigne `CHEMIN_DOCUMENT` quand il est prêt. Dans cet
+> intervalle, `documentDisponible` est **`false`** (option retenue avec le front — `pv-definitifs` et
+> `detail-pv-modal` savent afficher un PV signé sans document) ; il passe à `true` au rafraîchissement
+> suivant. Un **échec de génération ne peut plus faire échouer la signature** (journalisé ; le
+> téléchargement conserve sa **régénération paresseuse** en filet). **Rattrapage des PV signés sans
+> fichier** (antérieurs au correctif ou génération échouée) : leur consultation déclenche la production en
+> arrière-plan — disponible au rafraîchissement suivant, sans requête lente. Un PV non éligible (ex. avis
+> **`NSP`**, ou dossier **sans PPM**) → `false` définitif, et `…/document` renvoie **404**. Le
+> convertisseur Word est **préchauffé au démarrage** (`app.pv.document.prechauffage=true`) pour que la
+> première génération ne paie pas le lancement de Word.
 
 > ⚠️ **Référence du PV (`refePv`) — règle ajoutée.** À la création, le serveur dérive `refePv` du `refeDossier`
 > du dossier rattaché en insérant **`/PV` avant l'année** : `00003/PPM/CNM/2026` → `00003/PPM/CNM/PV/2026`

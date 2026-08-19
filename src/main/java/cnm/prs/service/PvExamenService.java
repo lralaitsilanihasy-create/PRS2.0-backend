@@ -64,6 +64,9 @@ public class PvExamenService {
     private final ExamenPieceRepository examenPieceRepository;
     private final ObservationPvService observationPvService;
     private final cnm.prs.security.PermissionService permissionService;
+    /** ⚠️ 2026-08-19 — génération du PDF hors transaction : publication d'événement + tâche de fond. */
+    private final org.springframework.context.ApplicationEventPublisher evenements;
+    private final PvDocumentTache documentTache;
 
     public PvExamenService(PvExamenRepository repository, PvNavetteRepository navetteRepository,
             PrmpRepository prmpRepository, NotificationService notificationService,
@@ -71,9 +74,13 @@ public class PvExamenService {
             ControleurRepository controleurRepository, PvDocumentService pvDocumentService,
             ExamenDetailRepository examenDetailRepository, ExamenPieceRepository examenPieceRepository,
             ObservationPvService observationPvService,
-            cnm.prs.security.PermissionService permissionService) {
+            cnm.prs.security.PermissionService permissionService,
+            org.springframework.context.ApplicationEventPublisher evenements,
+            PvDocumentTache documentTache) {
         this.observationPvService = observationPvService;
         this.permissionService = permissionService;
+        this.evenements = evenements;
+        this.documentTache = documentTache;
         this.repository = repository;
         this.navetteRepository = navetteRepository;
         this.prmpRepository = prmpRepository;
@@ -140,6 +147,15 @@ public class PvExamenService {
     private PvExamenDto toDtoLecture(PvExamen entity) {
         PvExamenDto dto = peuplerNomSecretaire(PvExamenMapper.toDto(entity));
         dto.setDocumentDisponible(pvDocumentService.documentDisponible(entity));
+        // ⚠️ 2026-08-19 — rattrapage des PV signés SANS fichier (antérieurs à la génération post-commit,
+        // ou dont la génération a échoué) : s'ils sont éligibles, la production part en arrière-plan à la
+        // consultation — documentDisponible passera à true au prochain rafraîchissement, sans requête lente.
+        if (Boolean.FALSE.equals(dto.getDocumentDisponible())
+                && StatutPv.SIGNE.name().equals(entity.getStatutPv())
+                && !documentTache.estEnCours(entity.getIdPv())
+                && pvDocumentService.estEligible(entity)) {
+            documentTache.genererEnArrierePlan(entity.getIdPv());
+        }
         return dto;
     }
 
@@ -155,6 +171,10 @@ public class PvExamenService {
         PvExamen pv = load(id);
         controlerAcces(id); // périmètre localité, OU PRMP propriétaire d'un PV SIGNÉ (2026-08-02)
         byte[] pdf = lireFsx(pv.getCheminDocument());
+        // ⚠️ 2026-08-19 — fenêtre post-signature : documentDisponible est false tant que la génération de
+        // fond n'a pas posé CHEMIN_DOCUMENT, le front n'appelle donc pas ici pendant l'intervalle. Si un
+        // client appelle quand même, la régénération paresseuse ci-dessous sert le PDF (lentement mais
+        // correctement) — les conversions concurrentes éventuelles sont sérialisées par documents4j.
         if (pdf == null) {
             String chemin = pvDocumentService.genererSiEligible(pv).orElse(null);
             if (chemin != null) {
@@ -613,9 +633,12 @@ public class PvExamenService {
         if (membreSigne && coSigne) {
             pv.setStatutPv(StatutPv.SIGNE.name());
             pv.setDatePv(today);
-            // ⚠️ Règle ajoutée — à la signature finale, génère et stocke le PDF du PV (présents complets)
-            // si éligible (avis FAVR + localité centrale + lignes de marché en appel d'offres ouvert).
-            pvDocumentService.genererSiEligible(pv).ifPresent(pv::setCheminDocument);
+            // ⚠️ 2026-08-19 — la génération du PDF (Word piloté localement, plusieurs secondes) est SORTIE
+            // du chemin de la signature : le PV est marqué SIGNE et la réponse part immédiatement ; le
+            // document est produit APRÈS COMMIT par PvDocumentTache, qui renseigne CHEMIN_DOCUMENT quand
+            // il est prêt (documentDisponible=false entre-temps — le front sait l'afficher). Un échec de
+            // génération ne peut plus faire échouer la signature.
+            evenements.publishEvent(new PvSigneEvent(pv.getIdPv()));
             PvExamenDto dto = PvExamenMapper.toDto(repository.save(pv));
             // [Auto] ⚠️ Règle ajoutée — branchement du circuit selon l'avis du PV.
             brancherSelonAvis(pv);

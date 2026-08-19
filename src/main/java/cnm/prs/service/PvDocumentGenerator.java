@@ -383,6 +383,14 @@ public class PvDocumentGenerator {
         return pdfOut.toByteArray();
     }
 
+    /**
+     * ⚠️ 2026-08-19 — préchauffage au démarrage ({@link PvDocumentPrechauffage}) : démarre le pont
+     * Word pour que la première génération ne paie pas le lancement de Word.
+     */
+    public void prechauffer() {
+        convertisseur();
+    }
+
     /** Convertisseur partagé, (re)créé s'il est absent ou arrêté. */
     private IConverter convertisseur() {
         IConverter c = convertisseur;

@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import cnm.prs.entity.Controleur;
 import cnm.prs.entity.Dossier;
+import cnm.prs.enums.StatutPv;
 import cnm.prs.entity.EntiteContract;
 import cnm.prs.entity.Examen;
 import cnm.prs.entity.ExamenDetail;
@@ -206,14 +207,22 @@ public class PvDocumentService {
     }
 
     /**
-     * Vrai si un PDF officiel est <strong>réellement disponible</strong> pour ce PV : fichier déjà stocké
-     * ({@code CHEMIN_DOCUMENT} non nul) <strong>ou</strong> PV {@link #estEligible(PvExamen) éligible} (donc
-     * régénérable à la demande). Reste juste après une (re)génération.
+     * Vrai si un PDF officiel est <strong>réellement disponible</strong> pour ce PV.
+     *
+     * <p>⚠️ Contrat révisé (2026-08-19, génération post-commit) : pour un PV <strong>SIGNE</strong>,
+     * le flag dit « le fichier est prêt à télécharger <em>maintenant</em> » — donc
+     * {@code CHEMIN_DOCUMENT} non nul, et <strong>false pendant la fenêtre de génération</strong>
+     * qui suit la signature (le front sait afficher un PV signé sans document). Pour un PV non
+     * signé (projet), le sens historique est conservé : {@link #estEligible(PvExamen) éligibilité}
+     * — « un document officiel sera produit à la signature » (matrice des 12 modèles).</p>
      */
     @Transactional(readOnly = true)
     public boolean documentDisponible(PvExamen pv) {
         if (pv != null && pv.getCheminDocument() != null && !pv.getCheminDocument().isBlank()) {
             return true;
+        }
+        if (pv != null && StatutPv.SIGNE.name().equals(pv.getStatutPv())) {
+            return false;   // signé sans fichier : génération en cours (ou non éligible) — pas prêt
         }
         return estEligible(pv);
     }

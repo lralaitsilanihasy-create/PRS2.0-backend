@@ -52,6 +52,15 @@ Flux complet d'un dossier, avec navette du projet de PV :
 > localité est notifié : `PV_A_VERIFIER` (FAVR, à vérifier) ou `PV_POUR_INFO` (FAV/DEF/NSP, lecture seule).
 > Le statut `PV_SIGNE` n'est donc **plus un état de repos** du dossier.
 
+> ⚠️ **Règle ajoutée (2026-08-19) — le PDF du PV est produit HORS du chemin de la signature.** La conversion
+> .docx → PDF pilote Word localement (plusieurs secondes, incompressibles) : la signature finale marque le
+> PV `SIGNE` et **répond immédiatement** ; le document officiel est généré **après commit, en tâche de
+> fond**, qui renseigne `CHEMIN_DOCUMENT` quand il est prêt. Entre-temps `documentDisponible` est
+> **false** (le front sait afficher un PV signé sans document) ; un échec de génération est journalisé et
+> **ne fait jamais échouer la signature** — le téléchargement garde sa régénération paresseuse en filet, et
+> la consultation d'un PV signé sans fichier (antérieur au correctif) relance la production en arrière-plan.
+> Le convertisseur Word est **préchauffé au démarrage** (première génération sans coût de lancement de Word).
+
 > ⚠️ **Règle ajoutée (non issue de la brochure d'origine) — statut `DISPATCHE`.** La brochure ne nomme
 > aucun statut de dossier entre `PRET_DISPATCH` et `CLOTURE`. Pour matérialiser l'étape **Dispatch (3)**
 > dans le pipeline, le backend ajoute le statut **`DISPATCHE`** (« dispatché, en attente d'examen ») :
