@@ -18,6 +18,7 @@ import cnm.prs.entity.CompteAuth;
 import cnm.prs.entity.PieceJointe;
 import cnm.prs.entity.Prmp;
 import cnm.prs.entity.Ugpm;
+import cnm.prs.enums.ProfilUtilisateur;
 import cnm.prs.enums.TypeActeur;
 import cnm.prs.enums.TypePieceJointe;
 import cnm.prs.exception.BadRequestException;
@@ -157,18 +158,45 @@ public class UgpmService {
      *
      * <p>⚠️ 2026-08-19 — ouvert à la <strong>PRMP concernée</strong> (et à ses UGPM, qui partagent
      * son périmètre {@code ref}) : consulter ses propres unités rattachées est légitime. Toute autre
-     * tutelle que la sienne reste refusée (<strong>403</strong>) ; Président/Administrateur voient tout.</p>
+     * tutelle que la sienne reste refusée (<strong>403</strong>).</p>
+     *
+     * <p>⚠️ 2026-08-20 — ouvert aussi aux <strong>profils contrôleurs</strong>, pour <em>toute</em>
+     * tutelle et <strong>sans filtre de localité</strong>. Ce n'est pas un relâchement isolé mais un
+     * alignement : le répertoire des <strong>PRMP</strong> ({@code GET /api/prmps}) est déjà lisible
+     * par tout utilisateur authentifié, sans filtre. Filtrer l'UGPM par localité serait de surcroît
+     * <strong>mal défini</strong> — elle n'a pas de localité propre, elle hérite de celle(s) des
+     * entités contractantes actives de sa tutelle, et une PRMP peut en porter dans plusieurs
+     * localités : le filtre masquerait précisément l'unité que le contrôleur d'une autre localité
+     * doit identifier sur le dossier qu'il instruit.</p>
+     *
+     * <p><strong>Étendue des données</strong> : hors Administrateur, la réponse est une <strong>vue
+     * restreinte</strong> — identité, matricule, libellé, courriel, téléphone. La pièce d'identité
+     * ({@code cin}, {@code dateCin}, {@code lieuCin}) et le {@code login} du compte restent réservés
+     * à l'Administrateur : le premier est une donnée d'état civil sans usage pour l'instruction, le
+     * second un identifiant d'authentification qu'il n'y a aucune raison de diffuser.</p>
      */
     @Transactional(readOnly = true)
     public List<UgpmDto> findByTutelle(String idPrmp) {
-        if (!Visibilite.voitTout() && Visibilite.estPrmp()) {
+        if (Visibilite.estPrmp()) {
             String sien = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
             if (sien == null || !sien.equals(idPrmp)) {
                 throw new AccessDeniedException(
                         "Consultation limitée aux unités rattachées à votre propre tutelle (§1).");
             }
         }
-        return ugpmRepository.findByIdPrmpTutelle(idPrmp).stream().map(this::toDto).toList();
+        boolean complet = CurrentUser.profil().orElse(null) == ProfilUtilisateur.ADMINISTRATEUR;
+        return ugpmRepository.findByIdPrmpTutelle(idPrmp).stream()
+                .map(u -> complet ? toDto(u) : toDtoRestreint(u)).toList();
+    }
+
+    /**
+     * Vue <strong>restreinte</strong> d'une UGPM : ce que le front affiche (identité, matricule,
+     * libellé, courriel, téléphone) et rien de plus. Ne fait par ailleurs <strong>aucune</strong>
+     * requête de compte, contrairement à {@link #toDto} qui en émet une par ligne pour le login.
+     */
+    private UgpmDto toDtoRestreint(Ugpm u) {
+        return new UgpmDto(u.getIdUgpm(), u.getLibelle(), u.getIdPrmpTutelle(), u.getNomUgpm(),
+                u.getPrenomsUgpm(), null, null, null, u.getEmailUgpm(), u.getTelUgpm(), null);
     }
 
     /**

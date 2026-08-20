@@ -2850,9 +2850,10 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
-    @DisplayName("UGPM par tutelle — ouvert à la PRMP concernée (ses propres unités) ; autre tutelle → 403 ; profil hors périmètre → 403")
-    void ugpms_parTutelle_ouvertALaPrmpConcernee() throws Exception {
+    @DisplayName("UGPM par tutelle — PRMP : ses propres unités (autre tutelle → 403) ; contrôleurs : toute tutelle, sans filtre de localité ; vue restreinte hors Administrateur")
+    void ugpms_parTutelle_ouvertALaPrmpEtAuxControleurs() throws Exception {
         ugpmRepository.save(ugpm("UGPM011", "PRMP001", "Rabe", "Tiana"));
+        compteAuthRepository.save(new CompteAuth("ugpm.tiana", passwordEncoder.encode("pw"), "UGPM", "UGPM011", true));
         prmpRepository.save(prmp("PRMP003", "ANT"));
         ugpmRepository.save(ugpm("UGPM012", "PRMP003", "Autre", "Unite"));
 
@@ -2863,12 +2864,54 @@ class CnmWorkflowIntegrationTest {
         // Mais pas celles d'une autre tutelle.
         mvc.perform(get("/api/ugpms/par-tutelle/PRMP003").header("Authorization", tokenPrmp))
                 .andExpect(status().isForbidden());
-        // Administrateur : accès inchangé, toutes tutelles.
+
+        // ⚠️ 2026-08-20 — les contrôleurs qui instruisent les dossiers lisent TOUTE tutelle : ils
+        // doivent savoir quelle unité a saisi le dossier examiné. Pas de filtre de localité (le
+        // répertoire des PRMP est déjà national, et l'UGPM n'a pas de localité propre).
+        String tokenVerif = bearer("CTRVER", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER", "ANT");
+        String tokenSecretaire = bearer("CTRSEC", ProfilUtilisateur.SECRETAIRE, TypeActeur.CONTROLEUR, "CTRSEC", "ANT");
+        String tokenAssistant = bearer("CTRASS", ProfilUtilisateur.ASSISTANT_CONTROLEUR, TypeActeur.CONTROLEUR, "CTRASS", "ANT");
+        // Un CC d'une AUTRE localité (TMS) lit malgré tout la tutelle : c'est le cas qu'un filtre par
+        // localité casserait (PRMP à cheval sur plusieurs localités via ses entités contractantes).
+        String tokenCcTms = bearer("CTRCC2", ProfilUtilisateur.CHEF_COMMISSION, TypeActeur.CONTROLEUR, "CTRCC2", "TMS");
+        for (String jeton : List.of(tokenMembre, tokenVerif, tokenSecretaire, tokenAssistant, tokenCc, tokenCcTms, tokenPresident)) {
+            mvc.perform(get("/api/ugpms/par-tutelle/PRMP001").header("Authorization", jeton))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$[?(@.idUgpm=='UGPM011')]", hasSize(1)));
+        }
+
+        // Étendue des données — le contrôleur reçoit ce que l'écran affiche, et rien de plus :
+        // ni pièce d'identité (état civil, sans usage pour l'instruction) ni login (identifiant
+        // d'authentification). L'Administrateur, lui, garde la fiche complète.
+        mvc.perform(get("/api/ugpms/par-tutelle/PRMP001").header("Authorization", tokenMembre))
+                .andExpect(jsonPath("$[0].nomUgpm").value("Rabe"))
+                .andExpect(jsonPath("$[0].prenomsUgpm").value("Tiana"))
+                .andExpect(jsonPath("$[0].idUgpm").value("UGPM011"))
+                .andExpect(jsonPath("$[0].libelle").isNotEmpty())
+                .andExpect(jsonPath("$[0].emailUgpm").isNotEmpty())
+                .andExpect(jsonPath("$[0].telUgpm").isNotEmpty())
+                .andExpect(jsonPath("$[0].cin").value(nullValue()))
+                .andExpect(jsonPath("$[0].dateCin").value(nullValue()))
+                .andExpect(jsonPath("$[0].lieuCin").value(nullValue()))
+                .andExpect(jsonPath("$[0].login").value(nullValue()));
+        // La PRMP elle-même passe par la même vue restreinte (l'écran n'affiche pas davantage).
+        mvc.perform(get("/api/ugpms/par-tutelle/PRMP001").header("Authorization", tokenPrmp))
+                .andExpect(jsonPath("$[0].cin").value(nullValue()))
+                .andExpect(jsonPath("$[0].login").value(nullValue()));
+        // Administrateur : accès inchangé, toutes tutelles, fiche complète (CIN + login).
         mvc.perform(get("/api/ugpms/par-tutelle/PRMP003").header("Authorization", tokenAdmin))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.idUgpm=='UGPM012')]", hasSize(1)));
-        // Contrôleur (Membre) : le répertoire des UGPM ne lui est pas ouvert.
-        mvc.perform(get("/api/ugpms/par-tutelle/PRMP001").header("Authorization", tokenMembre))
+        mvc.perform(get("/api/ugpms/par-tutelle/PRMP001").header("Authorization", tokenAdmin))
+                .andExpect(jsonPath("$[0].cin").value("303033334444"))
+                .andExpect(jsonPath("$[0].login").value("ugpm.tiana"));
+
+        // Le reste de la ressource demeure réservé à l'Administrateur : la liste complète notamment.
+        mvc.perform(get("/api/ugpms").header("Authorization", tokenMembre))
+                .andExpect(status().isForbidden());
+        // Chargé de publication : hors du périmètre d'instruction, pas d'ouverture.
+        mvc.perform(get("/api/ugpms/par-tutelle/PRMP001")
+                .header("Authorization", bearer("CTRPUB", ProfilUtilisateur.CHARGE_PUBLICATION, TypeActeur.CONTROLEUR, "CTRPUB", "ANT")))
                 .andExpect(status().isForbidden());
     }
 

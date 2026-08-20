@@ -197,6 +197,18 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
   Champs en **lecture seule** : posés à la création/soumission, toute valeur envoyée par le client est ignorée.
   Corollaire d'accès : `GET /api/ugpms/par-tutelle/{idPrmp}` est ouvert à la **PRMP concernée** (ses propres
   unités rattachées) ; une autre tutelle reste refusée (**403**).
+- ⚠️ **Règle ajoutée (2026-08-20) — les contrôleurs voient l'unité de gestion qui a saisi le dossier.**
+  `GET /api/ugpms/par-tutelle/{idPrmp}` est aussi ouvert aux profils **Président, Chef de commission,
+  Secrétaire, Membre, Vérificateur, Assistant contrôleur**, pour **toute** tutelle et **sans filtre de
+  localité** : ce sont eux qui instruisent le dossier et doivent savoir quelle unité l'a établi. Le filtre
+  par localité est volontairement écarté — le répertoire des **PRMP** est déjà national pour tout
+  authentifié, et l'UGPM **n'a pas de localité propre** (elle hérite de celles des entités contractantes
+  actives de sa tutelle, éventuellement réparties sur plusieurs localités) : filtrer masquerait justement
+  l'unité qu'un contrôleur d'une autre localité doit identifier. **Étendue** : hors Administrateur, la
+  réponse est une **vue restreinte** (identité, matricule, libellé, courriel, téléphone) — **ni pièce
+  d'identité (`cin`, `dateCin`, `lieuCin`) ni `login`**, réservés à l'Administrateur. Le Chargé de
+  publication, hors instruction, n'est pas concerné (403), et le reste de la ressource UGPM demeure
+  réservé à l'Administrateur.
 
 **Rectification en attente de décision PRMP (⚠️ règle ajoutée)**
 

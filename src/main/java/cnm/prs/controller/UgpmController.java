@@ -113,11 +113,20 @@ public class UgpmController {
     /**
      * UGPM rattachées à une PRMP de tutelle (liste, vide si aucune).
      *
-     * <p>⚠️ Ouvert à la <strong>PRMP concernée</strong> (2026-08-19) : elle consulte ses propres
-     * unités rattachées — l'onglet « Entité contractante » du front les affiche. Le service vérifie
-     * que le {@code idPrmp} demandé est bien le sien (sinon 403) ; l'Administrateur voit tout.</p>
+     * <p>⚠️ <strong>Seule route de la ressource ouverte hors Administrateur</strong> :</p>
+     * <ul>
+     *   <li>la <strong>PRMP concernée</strong> (et ses UGPM) — ses propres unités, 403 sur une autre
+     *       tutelle (2026-08-19) ;</li>
+     *   <li>les <strong>profils contrôleurs</strong> qui instruisent les dossiers, pour <em>toute</em>
+     *       tutelle (2026-08-20) : ils doivent savoir quelle unité a saisi le dossier qu'ils examinent.
+     *       Aucun filtre de localité — le répertoire des PRMP ({@code GET /api/prmps}) est déjà
+     *       national pour eux, et l'UGPM n'a pas de localité propre.</li>
+     * </ul>
+     * <p>Hors Administrateur, la réponse est une <strong>vue restreinte</strong> (cf.
+     * {@code UgpmService#findByTutelle}) : ni pièce d'identité ni login.</p>
      */
-    @PreAuthorize("hasAnyRole('ADMINISTRATEUR','PRMP','UGPM')")
+    @PreAuthorize("hasAnyRole('ADMINISTRATEUR','PRMP','UGPM','PRESIDENT','CHEF_COMMISSION',"
+            + "'SECRETAIRE','MEMBRE','VERIFICATEUR','ASSISTANT_CONTROLEUR')")
     @GetMapping("/par-tutelle/{idPrmp}")
     public List<UgpmDto> findByTutelle(@PathVariable String idPrmp) {
         return service.findByTutelle(idPrmp);

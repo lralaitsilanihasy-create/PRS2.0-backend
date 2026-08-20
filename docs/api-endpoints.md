@@ -1400,10 +1400,30 @@ dossier/PPM (désormais réservée Admin).
 **Administration des UGPM** `/api/ugpms` — Réservé au profil **`ADMINISTRATEUR`**. La création alloue à la fois la
 `t_ugpm` (rattachée à sa PRMP de tutelle) et son **compte d'authentification actif** (`TYPE_ACTEUR=UGPM`).
 `GET /par-tutelle/{idPrmp}` liste les UGPM d'une PRMP de tutelle (`idPrmp` = matricule) — **liste vide** si aucune
-(ou PRMP inconnue), pas de 404 (filtre). ⚠️ **Exception d'accès (2026-08-19)** : cette route est aussi ouverte à
-la **PRMP concernée** (et à ses UGPM, qui partagent son périmètre `ref`) — consulter ses **propres** unités
-rattachées est légitime, et l'onglet « Entité contractante » du front en a besoin ; toute **autre** tutelle
-que la sienne reste refusée (**403**). Le reste de la ressource demeure réservé à l'Administrateur. `GET /par-localite/{idLocalite}` liste les UGPM d'une localité **via la
+(ou PRMP inconnue), pas de 404 (filtre). ⚠️ **Exception d'accès — seule route de la ressource ouverte hors
+Administrateur** :
+
+- la **PRMP concernée** (et ses UGPM, qui partagent son périmètre `ref`) — ses **propres** unités
+  rattachées ; toute **autre** tutelle que la sienne reste refusée (**403**) *(2026-08-19)* ;
+- les **profils contrôleurs** — `PRESIDENT`, `CHEF_COMMISSION`, `SECRETAIRE`, `MEMBRE`, `VERIFICATEUR`,
+  `ASSISTANT_CONTROLEUR` — pour **toute** tutelle et **sans filtre de localité** *(2026-08-20)* : ce sont eux
+  qui instruisent les dossiers et doivent identifier l'unité qui a saisi celui qu'ils examinent. Deux raisons
+  d'écarter le filtre par localité : le répertoire des **PRMP** (`GET /api/prmps`) est déjà lisible **sans
+  filtre** par tout utilisateur authentifié — filtrer l'enfant serait incohérent ; et l'UGPM **n'a pas de
+  localité propre** (elle hérite de celles des entités contractantes actives de sa tutelle, qui peuvent
+  couvrir **plusieurs** localités) — le filtre masquerait précisément l'unité qu'un contrôleur d'une autre
+  localité doit identifier. `CHARGE_PUBLICATION` n'est pas concerné (hors instruction) → **403**.
+
+> ⚠️ **Étendue des données (2026-08-20).** Hors **Administrateur**, `par-tutelle` renvoie une **vue
+> restreinte** : `idUgpm`, `libelle`, `idPrmpTutelle`, `nomUgpm`, `prenomsUgpm`, `emailUgpm`, `telUgpm` —
+> exactement ce qu'affiche l'écran. **`cin`, `dateCin`, `lieuCin` et `login` sont `null`** : la pièce
+> d'identité est une donnée d'état civil sans usage pour l'instruction, et le `login` un identifiant
+> d'authentification qu'il n'y a aucune raison de diffuser (il n'existe que pour la réinitialisation de mot
+> de passe côté Admin). L'Administrateur continue de recevoir la fiche complète. Effet de bord utile : la
+> vue restreinte n'émet **aucune** requête de compte, là où la fiche complète en fait une par ligne.
+
+Le reste de la ressource (liste complète, fiche unitaire, `par-localite`, `par-nom`, écritures, pièces)
+demeure réservé à l'**Administrateur**. `GET /par-localite/{idLocalite}` liste les UGPM d'une localité **via la
 localité de leur PRMP de tutelle** : l'UGPM n'a pas de localité propre, elle hérite du périmètre de sa PRMP
 (rattachée à la localité par ses **entités contractantes actives**, même logique que `GET /api/prmps/par-localite`) —
 **liste vide** si aucune PRMP dans la localité (ou aucune UGPM), pas de 404 (filtre). `GET /par-nom/{nom}`
@@ -1416,7 +1436,7 @@ pas de 404 (filtre).
 | POST | /api/ugpms | **`multipart/form-data`** : part `data` (JSON `CreerUgpmRequest`) + `cin`/`photo` (opt.) | `UgpmDto` | 201, 400, 403, 409 | **ADMINISTRATEUR** |
 | GET | /api/ugpms | — | `UgpmDto[]` | 200, 403 | **ADMINISTRATEUR** |
 | GET | /api/ugpms/{id} | — | `UgpmDto` | 200, 403, 404 | **ADMINISTRATEUR** |
-| GET | /api/ugpms/par-tutelle/{idPrmp} | — | `UgpmDto[]` | 200, 403 | **ADMINISTRATEUR** ; ⚠️ **+ la PRMP concernée** (et ses UGPM) depuis 2026-08-19 |
+| GET | /api/ugpms/par-tutelle/{idPrmp} | — | `UgpmDto[]` (vue **restreinte** hors Admin) | 200, 403 | **ADMINISTRATEUR** ; ⚠️ **+ la PRMP concernée** (2026-08-19) ; ⚠️ **+ les profils contrôleurs**, toute tutelle (2026-08-20) |
 | GET | /api/ugpms/par-localite/{idLocalite} | — | `UgpmDto[]` | 200, 403 | **ADMINISTRATEUR** |
 | GET | /api/ugpms/par-nom/{nom} | — | `UgpmDto[]` | 200, 403 | **ADMINISTRATEUR** |
 | PUT | /api/ugpms/{id} | `ModifierUgpmRequest` (**JSON**) | `UgpmDto` | 200, 400, 403, 404, 409 | **ADMINISTRATEUR** |
