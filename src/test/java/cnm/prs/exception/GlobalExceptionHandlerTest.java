@@ -1,6 +1,7 @@
 package cnm.prs.exception;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
@@ -11,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.orm.jpa.JpaSystemException;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.context.request.WebRequest;
@@ -82,4 +84,44 @@ class GlobalExceptionHandlerTest {
         assertEquals(HttpStatus.CONFLICT,
                 handler.handleDataIntegrity(violation("40001", "serialization failure"), requete()).getStatusCode());
     }
+    @Test
+    @DisplayName("500 : le corps ne contient aucun detail d'implementation (SQL, chemin serveur, nom de classe)")
+    void erreurInterne_neFuitAucunDetail() {
+        // Le corps renvoyait ex.getMessage() brut. Une exception porteuse d'un fragment SQL ou d'un chemin de
+        // fichier publiait donc la structure du serveur a qui savait provoquer l'erreur — sur une API dont
+        // certaines routes sont publiques. Ce test verifie l'absence de fuite plutot que la presence d'un
+        // texte : c'est la fuite qui est le defaut, et elle doit rester impossible quelle que soit la phrase.
+        String interne = "insert into t_marche (MONT_ESTIM) values (?) [/srv/prs/app.war] "
+                + "cnm.prs.repository.MarcheRepositoryImpl";
+
+        ResponseEntity<ErrorResponse> reponse =
+                handler.handleGeneric(new IllegalStateException(interne), requete());
+
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, reponse.getStatusCode());
+        assertNotNull(reponse.getBody());
+        String corps = reponse.getBody().message();
+        assertFalse(corps.contains("t_marche"), "le corps expose un nom de table");
+        assertFalse(corps.contains("insert into"), "le corps expose un fragment SQL");
+        assertFalse(corps.contains("/srv/prs"), "le corps expose un chemin du serveur");
+        assertFalse(corps.contains("cnm.prs."), "le corps expose un nom de classe interne");
+        assertEquals(GlobalExceptionHandler.MESSAGE_ERREUR_INTERNE, corps);
+        assertNull(reponse.getBody().erreurs());
+    }
+
+    @Test
+    @DisplayName("JpaSystemException hors « PK manquante » : 500 generique lui aussi, pas le message Hibernate")
+    void jpaSystemException_repliGenerique() {
+        // Le repli de handleJpaSystem renvoyait lui aussi ex.getMessage() : meme fuite, autre porte. Le cas
+        // metier reconnu (PK assignee manquante) doit rester un 400 explicite — c'est la seule exception.
+        ResponseEntity<ErrorResponse> fuite = handler.handleJpaSystem(
+                new JpaSystemException(new RuntimeException("could not extract ResultSet from t_dossier")), requete());
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, fuite.getStatusCode());
+        assertNotNull(fuite.getBody());
+        assertFalse(fuite.getBody().message().contains("t_dossier"), "le repli expose un nom de table");
+
+        ResponseEntity<ErrorResponse> pkManquante = handler.handleJpaSystem(
+                new JpaSystemException(new RuntimeException("ids for this class must be manually assigned")), requete());
+        assertEquals(HttpStatus.BAD_REQUEST, pkManquante.getStatusCode());
+    }
+
 }

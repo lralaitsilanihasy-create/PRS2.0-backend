@@ -110,6 +110,7 @@ BROUILLON** pour l'édition, **cohérence type↔contenu** (PPM ⇒ a un PPM ; D
 | 403 | Interdit (rôle ou périmètre de localité insuffisant) |
 | 404 | Ressource introuvable |
 | 409 | Conflit métier (transition d'état interdite, contrainte violée, doublon, suppression interdite) |
+| 500 | Erreur interne — ⚠️ **message générique** : le corps ne porte **aucun** détail d'implémentation ; l'exception complète part au journal serveur |
 
 ### Format d'erreur (`ErrorResponse`)
 ```json
@@ -124,6 +125,13 @@ BROUILLON** pour l'édition, **cohérence type↔contenu** (PPM ⇒ a un PPM ; D
 ```
 `erreurs` est un **tableau** d'objets `{ champ, message }`, renseigné uniquement pour les erreurs de
 validation (400) ; **omis** (absent du corps) pour les autres erreurs.
+
+> ⚠️ **500 — corps générique (règle ajoutée 2026-08-24).** Le `message` d'un 500 vaut invariablement
+> « Une erreur interne est survenue. L'incident a été enregistré ; réessayez plus tard. » Auparavant le corps
+> reprenait le texte brut de l'exception : fragment SQL avec ses noms de tables et de colonnes, chemin de
+> fichier du serveur, nom de classe interne — exposés à qui savait provoquer une erreur, y compris depuis les
+> routes publiques. Le détail n'est pas perdu : il est journalisé côté serveur en `ERROR`, avec la trace
+> complète. Le front ne doit donc **jamais** chercher à interpréter le `message` d'un 500.
 
 Un champ **`code`** (string) s'ajoute au corps pour les erreurs métier que le front doit traiter
 **spécifiquement** plutôt qu'en affichant le message brut ; il est **omis** partout ailleurs. Seule valeur

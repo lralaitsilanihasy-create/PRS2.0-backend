@@ -3,6 +3,8 @@ package cnm.prs.exception;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -22,6 +24,8 @@ import jakarta.persistence.EntityNotFoundException;
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler({ ResourceNotFoundException.class, EntityNotFoundException.class })
     public ResponseEntity<ErrorResponse> handleNotFound(RuntimeException ex, WebRequest request) {
@@ -160,7 +164,9 @@ public class GlobalExceptionHandler {
                     "L'identifiant (clé primaire) est obligatoire à la création de cette ressource.",
                     request, null);
         }
-        return build(HttpStatus.INTERNAL_SERVER_ERROR, ex.getMessage(), request, null);
+        // Toute autre erreur JPA est un défaut serveur : même traitement générique que handleGeneric,
+        // le message d'origine (souvent porteur de SQL et de noms de tables) ne sort pas dans le corps.
+        return erreurInterne(ex, request);
     }
 
     /**
@@ -246,9 +252,29 @@ public class GlobalExceptionHandler {
         return null;
     }
 
+    /**
+     * Filet de sécurité : toute exception non traitée ci-dessus → 500 <strong>générique</strong>.
+     *
+     * <p>⚠️ Correction (2026-08-24) — le corps renvoyait {@code ex.getMessage()} brut. Selon l'exception, cela
+     * publiait au client un fragment de requête SQL avec ses noms de tables et de colonnes, un chemin de
+     * fichier du serveur ou un nom de classe interne : une carte du système offerte à qui sait provoquer une
+     * erreur, sur une API dont certaines routes sont publiques. Le client reçoit désormais une phrase fixe ;
+     * le détail n'est pas perdu pour autant — il part au journal ({@code ERROR} + trace complète), seul
+     * endroit où il est exploitable sans être exposé.</p>
+     */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneric(Exception ex, WebRequest request) {
-        return build(HttpStatus.INTERNAL_SERVER_ERROR, ex.getMessage(), request, null);
+        return erreurInterne(ex, request);
+    }
+
+    /** Message unique des 500 : aucun détail d'implémentation ne transite par le corps de réponse. */
+    static final String MESSAGE_ERREUR_INTERNE =
+            "Une erreur interne est survenue. L'incident a été enregistré ; réessayez plus tard.";
+
+    /** Journalise l'exception complète (seule trace du détail) puis rend le 500 générique. */
+    private ResponseEntity<ErrorResponse> erreurInterne(Exception ex, WebRequest request) {
+        log.error("Erreur non traitée sur {}", request.getDescription(false).replace("uri=", ""), ex);
+        return build(HttpStatus.INTERNAL_SERVER_ERROR, MESSAGE_ERREUR_INTERNE, request, null);
     }
 
     private ResponseEntity<ErrorResponse> build(HttpStatus status, String message, WebRequest request,
