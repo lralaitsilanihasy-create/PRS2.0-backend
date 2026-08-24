@@ -77,6 +77,34 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.FORBIDDEN, ex.getMessage(), request, null);
     }
 
+    /**
+     * Verbe HTTP non supporté par la route → <strong>405</strong> avec l'en-tête {@code Allow}.
+     *
+     * <p>⚠️ Correction (2026-08-24) — sans ce gestionnaire, {@link HttpRequestMethodNotSupportedException}
+     * était captée par le {@code @ExceptionHandler(Exception.class)} de cette classe <em>avant</em> que le
+     * résolveur par défaut de Spring ne la voie : <strong>un mauvais verbe sur n'importe quelle route de
+     * l'API répondait 500</strong>, message d'exception à l'appui. Un client ne pouvait donc pas distinguer
+     * une route mal appelée d'une panne serveur, et l'API annonçait une défaillance là où elle avait
+     * simplement un contrat. Le gestionnaire spécifique l'emporte sur celui d'{@code Exception} quel que
+     * soit l'ordre de déclaration ; il est placé ici pour la lecture, entre les autres cas de protocole.</p>
+     *
+     * <p>{@code Allow} est peuplé depuis {@code getSupportedHttpMethods()}, qui peut être {@code null} ou
+     * vide (route inexistante côté mapping) : dans ce cas l'en-tête est omis plutôt que rendu vide.</p>
+     */
+    @ExceptionHandler(org.springframework.web.HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleMethodNotSupported(
+            org.springframework.web.HttpRequestMethodNotSupportedException ex, WebRequest request) {
+        ResponseEntity<ErrorResponse> reponse = build(HttpStatus.METHOD_NOT_ALLOWED,
+                "Méthode " + ex.getMethod() + " non autorisée sur cette ressource.", request, null);
+        java.util.Set<org.springframework.http.HttpMethod> autorisees = ex.getSupportedHttpMethods();
+        if (autorisees == null || autorisees.isEmpty()) {
+            return reponse;
+        }
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
+                .allow(autorisees.toArray(new org.springframework.http.HttpMethod[0]))
+                .body(reponse.getBody());
+    }
+
     @ExceptionHandler(ChampsInvalidesException.class)
     public ResponseEntity<ErrorResponse> handleChampsInvalides(ChampsInvalidesException ex, WebRequest request) {
         return build(HttpStatus.BAD_REQUEST, ex.getMessage(), request, ex.getErreurs());

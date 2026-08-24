@@ -109,6 +109,7 @@ BROUILLON** pour l'édition, **cohérence type↔contenu** (PPM ⇒ a un PPM ; D
 | 401 | Non authentifié (JWT absent/invalide, ou compte désactivé) |
 | 403 | Interdit (rôle ou périmètre de localité insuffisant) |
 | 404 | Ressource introuvable |
+| 405 | ⚠️ **Verbe non autorisé sur la route** (2026-08-24) — réponse accompagnée de l'en-tête **`Allow`** listant les méthodes acceptées |
 | 409 | Conflit métier (transition d'état interdite, contrainte violée, doublon, suppression interdite) |
 | 500 | Erreur interne — ⚠️ **message générique** : le corps ne porte **aucun** détail d'implémentation ; l'exception complète part au journal serveur |
 
@@ -169,7 +170,17 @@ quand ils surviennent (mapping centralisé dans `GlobalExceptionHandler`). Côt�
 | **Mandat : règle de nomination** | 3ᵉ mandat pour la même personne, arrêté réutilisé, reconduction recouvrant le précédent (prolongation déguisée), durée > 3 ans | `POST /api/mandats` (cf. *Mandats PRMP*) |
 | **Violation de contrainte BD** (`DataIntegrityViolationException`) | identifiant en **doublon** (`23505`) ou **clé étrangère** inexistante (`23503`) | POST avec un id déjà utilisé, ou référençant une entité inexistante — *(NOT NULL `23502` et longueur `22001` donnent un **400**, pas un 409)* |
 
-> Rappel : **401** (non authentifié : JWT absent/invalide ou compte désactivé) et **404** (ressource introuvable) restent distincts des trois ci-dessus.
+> ⚠️ **405 — mauvais verbe (règle ajoutée 2026-08-24).** Un verbe non supporté sur une route existante
+> (ex. `DELETE /api/marches`) renvoie **405** avec l'en-tête **`Allow`** peuplé des méthodes acceptées, et le
+> corps `ErrorResponse` habituel. Auparavant **toute l'API** répondait **500** dans ce cas : le
+> `@ExceptionHandler(Exception.class)` du `GlobalExceptionHandler` interceptait
+> `HttpRequestMethodNotSupportedException` avant le résolveur par défaut de Spring, et publiait en prime le
+> message d'exception. Un client ne pouvait pas distinguer un appel mal formé d'une panne serveur. *(Si le
+> mapping ne fournit aucune méthode supportée, `Allow` est omis plutôt que rendu vide ; le 405 est rendu
+> quand même.)*
+
+> Rappel : **401** (non authentifié : JWT absent/invalide ou compte désactivé), **404** (ressource introuvable)
+> et **405** (verbe non autorisé sur la route, avec `Allow`) restent distincts des trois ci-dessus.
 
 ### Types
 `Integer`/`Long` → `number` ; `String` → `string` ; `Boolean` → `boolean` ; `BigDecimal` → `number` ;

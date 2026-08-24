@@ -6,14 +6,17 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.sql.SQLException;
+import java.util.List;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.orm.jpa.JpaSystemException;
 import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.context.request.WebRequest;
 
@@ -84,6 +87,7 @@ class GlobalExceptionHandlerTest {
         assertEquals(HttpStatus.CONFLICT,
                 handler.handleDataIntegrity(violation("40001", "serialization failure"), requete()).getStatusCode());
     }
+
     @Test
     @DisplayName("500 : le corps ne contient aucun detail d'implementation (SQL, chemin serveur, nom de classe)")
     void erreurInterne_neFuitAucunDetail() {
@@ -122,6 +126,21 @@ class GlobalExceptionHandlerTest {
         ResponseEntity<ErrorResponse> pkManquante = handler.handleJpaSystem(
                 new JpaSystemException(new RuntimeException("ids for this class must be manually assigned")), requete());
         assertEquals(HttpStatus.BAD_REQUEST, pkManquante.getStatusCode());
+    }
+    @Test
+    @DisplayName("405 : Allow peuple depuis les verbes supportes, omis quand le mapping n'en fournit aucun")
+    void methodeNonSupportee_allowFacultatif() {
+        // getSupportedHttpMethods() peut etre null ou vide : un Allow vide serait un en-tete mensonger.
+        // Le 405 doit rester rendu dans tous les cas — c'est le statut qui porte l'information utile.
+        ResponseEntity<ErrorResponse> avecVerbes = handler.handleMethodNotSupported(
+                new HttpRequestMethodNotSupportedException("DELETE", List.of("GET", "POST")), requete());
+        assertEquals(HttpStatus.METHOD_NOT_ALLOWED, avecVerbes.getStatusCode());
+        assertEquals(List.of(HttpMethod.GET, HttpMethod.POST), avecVerbes.getHeaders().getAllow().stream().toList());
+
+        ResponseEntity<ErrorResponse> sansVerbe =
+                handler.handleMethodNotSupported(new HttpRequestMethodNotSupportedException("TRACE"), requete());
+        assertEquals(HttpStatus.METHOD_NOT_ALLOWED, sansVerbe.getStatusCode());
+        assertFalse(sansVerbe.getHeaders().containsHeader("Allow"), "Allow ne doit pas etre rendu vide");
     }
 
 }

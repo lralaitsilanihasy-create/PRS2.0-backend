@@ -6493,6 +6493,31 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("Mauvais verbe sur une route existante -> 405 avec l'en-tete Allow, jamais 500")
+    void mauvaisVerbe_405AvecAllow() throws Exception {
+        // Le @ExceptionHandler(Exception.class) du GlobalExceptionHandler interceptait
+        // HttpRequestMethodNotSupportedException avant le resolveur par defaut de Spring : un mauvais verbe
+        // sur N'IMPORTE QUELLE route de l'API repondait 500, message d'exception dans le corps. Un client ne
+        // pouvait pas distinguer une route mal appelee d'une panne serveur, et un moniteur de disponibilite
+        // comptait une erreur 5xx a chaque sonde maladroite. Le defaut touchait toute l'API, pas une route.
+        mvc.perform(delete("/api/marches").header("Authorization", tokenPrmp))
+                .andExpect(status().isMethodNotAllowed())
+                .andExpect(header().string("Allow", containsString("GET")))
+                .andExpect(header().string("Allow", containsString("POST")));
+    }
+
+    @Test
+    @DisplayName("Mauvais verbe : le corps reste un ErrorResponse standard (statut 405, chemin appele)")
+    void mauvaisVerbe_corpsStandard() throws Exception {
+        // Le 405 doit rester exploitable comme les autres erreurs : meme enveloppe, meme champ path.
+        mvc.perform(put("/api/dossiers").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isMethodNotAllowed())
+                .andExpect(jsonPath("$.status").value(405))
+                .andExpect(jsonPath("$.path").value("/api/dossiers"));
+    }
+
+    @Test
     @DisplayName("PV projets vs definitifs : un PV signe quitte /pv-examens et apparait dans /pv-examens/definitifs")
     void pv_projets_et_definitifs() throws Exception {
         // PV non signé (BROUILLON) sur examen 1.
