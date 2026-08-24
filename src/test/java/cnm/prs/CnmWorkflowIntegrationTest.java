@@ -6405,6 +6405,83 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("Marche : montEstim negatif -> 400 nommant le champ (un montant negatif fausse l'invariant beneficiaires)")
+    void marche_montEstimNegatif_400() throws Exception {
+        // montEstim n'avait aucune contrainte numerique : -1 etait accepte, ecrit en base, puis compare a la
+        // somme des montants par beneficiaire (SaisieService) et au montant precedent dans le diff de
+        // rectification. La ligne restait qualifiee comme si de rien n'etait. Refuse a l'entree, avec le champ.
+        seedBrouillonMarche(62);
+
+        mvc.perform(post("/api/marches").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDossier\":62,\"idPpm\":62,\"designationMarche\":\"Objet\",\"montEstim\":-1}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[?(@.champ=='montEstim')]", hasSize(1)));
+    }
+
+    @Test
+    @DisplayName("Marche : montEstim a plus de 2 decimales -> 400 (la colonne numeric(38,2) arrondissait en silence)")
+    void marche_montEstimTropDeDecimales_400() throws Exception {
+        // t_marche.MONT_ESTIM est numeric(38,2) : une 3e decimale etait tronquee par la base sans le dire,
+        // le montant relu differait de celui envoye. Mieux vaut un refus explicite qu'une valeur alteree.
+        seedBrouillonMarche(63);
+
+        mvc.perform(post("/api/marches").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDossier\":63,\"idPpm\":63,\"designationMarche\":\"Objet\",\"montEstim\":1000.123}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[?(@.champ=='montEstim')]", hasSize(1)));
+    }
+
+    @Test
+    @DisplayName("Marche : montEstim zero, absent ou a 2 decimales reste accepte (la contrainte ne tranche pas le metier)")
+    void marche_montEstimLegitimes_201() throws Exception {
+        // Non-regression, c'est le point de la correction : le zero (ligne saisie non chiffree) et l'absence de
+        // montant (null — anomalie CHAMP_MANQUANT a l'import, pas un refus HTTP) restent valides. D'ou
+        // @PositiveOrZero et non @Positive : la contrainte ferme le cas absurde sans arbitrer le metier.
+        seedBrouillonMarche(64);
+
+        mvc.perform(post("/api/marches").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDossier\":64,\"idPpm\":64,\"designationMarche\":\"Zero\",\"montEstim\":0}"))
+                .andExpect(status().isCreated());
+        mvc.perform(post("/api/marches").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDossier\":64,\"idPpm\":64,\"designationMarche\":\"Sans montant\"}"))
+                .andExpect(status().isCreated());
+        mvc.perform(post("/api/marches").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDossier\":64,\"idPpm\":64,\"designationMarche\":\"Decimales\",\"montEstim\":1000.25}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.montEstim").value(1000.25));
+    }
+
+    @Test
+    @DisplayName("Rectification marche : montEstim negatif -> 400 (la contrainte de contenu vaut aussi sur le PATCH)")
+    void rectifier_marche_montEstimNegatif_400() throws Exception {
+        // Le chemin de rectification est celui ou l'absence de validation coutait le plus cher : le dossier est
+        // deja passe en examen, un montant negatif y reecrirait la ligne examinee sans aucun controle.
+        Dossier d = dossier(410, "EN_ATTENTE_DECISION_PRMP"); d.setIdTypeDossier("DDP"); d.setIdLocalite("ANT"); d.setIdPrmp("PRMP001");
+        dossierRepository.save(d);
+        ppmRepository.save(ppm(495, 410, "PRMP001"));
+        marcheRepository.save(marche(496, 410, 495));
+
+        mvc.perform(patch("/api/marches/496/rectifier").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"designationMarche\":\"Objet\",\"montEstim\":-500000}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[?(@.champ=='montEstim')]", hasSize(1)));
+    }
+
+    /** Brouillon PPM de PRMP001 (ANT) prêt à recevoir des lignes de marché — dossier et PPM portent le même id. */
+    private void seedBrouillonMarche(int id) {
+        Dossier d = dossier(id, "BROUILLON");
+        d.setIdTypeDossier("DDP"); d.setIdPrmp("PRMP001"); d.setIdLocalite("ANT");
+        dossierRepository.save(d);
+        ppmRepository.save(ppm(id, id, "PRMP001"));
+    }
+
+    @Test
     @DisplayName("Erreur de validation : corps expose erreurs[].champ/message")
     void validation_erreurs_format() throws Exception {
         mvc.perform(post("/api/marches").header("Authorization", tokenPrmp)

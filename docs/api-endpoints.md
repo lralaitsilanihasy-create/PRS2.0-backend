@@ -2813,11 +2813,11 @@ active (`t_prmp_entite.ACTIF`) sur l'entité contractante du dossier. C'est ce s
 | Champ (JSON) | Type | Obligatoire | Contraintes |
 |---|---|---|---|
 | idDetail | number | Oui (PK, au POST) | clé primaire |
-| idDossier | number | Oui | @NotNull |
-| idPpm | number | Oui | @NotNull |
+| idDossier | number | Oui | `@NotNull` (groupe `Identite` : **non exigé** en `PATCH .../rectifier`) |
+| idPpm | number | Oui | `@NotNull` (groupe `Identite` : **non exigé** en `PATCH .../rectifier`) |
 | designationMarche | string | Non | max 500 |
 | numCompte | string | Non | max 20 |
-| montEstim | number | Non | |
+| montEstim | number | Non | ⚠️ **≥ 0** (`@PositiveOrZero`) et **≤ 2 décimales** (`numeric(38,2)`, cf. note) |
 | ancienMontEstim | number | Non | |
 | nouvMontEstim | number | Non | |
 | financement | string | Non | max 20 |
@@ -2848,6 +2848,18 @@ active (`t_prmp_entite.ACTIF`) sur l'entité contractante du dossier. C'est ce s
 > **validées** : un corps trop long donne un **400 nommant le champ**, comme en `PUT`. *(Auparavant le corps n'était pas validé du tout :
 > la valeur partait jusqu'à la base et revenait en **409** opaque.)* Le `idMode` fourni est conservé
 > tel quel. Tracé `t_audit_log` (`MODIFICATION_RECTIFICATION`, `NOM_TABLE=t_marche`).
+
+> ⚠️ **`montEstim` — contraintes numériques (règle ajoutée 2026-08-24).** Le montant estimatif reste
+> **facultatif** (`null` = ligne non chiffrée ; l'import PPM émet l'anomalie `CHAMP_MANQUANT`, pas un refus
+> HTTP) et **zéro reste accepté** — mais un montant **négatif** est refusé (**400** nommant `montEstim`), de
+> même qu'un montant à **plus de deux décimales**. Motif : `montEstim` est comparé à la **somme des montants
+> par bénéficiaire** (invariant `Σ ancMontBenef = montEstim`) et sert de base aux écarts du diff de
+> rectification ; un négatif y passait sans bruit. Une **moins-value** ne se saisit jamais comme un montant
+> négatif : elle s'exprime par un `nouvMontEstim` inférieur à `montEstim` — d'où `@PositiveOrZero` et non
+> `@Positive`. La limite décimale reflète la colonne `t_marche.MONT_ESTIM numeric(38,2)`, qui arrondissait
+> jusqu'ici la 3ᵉ décimale **en silence**. S'applique à `POST`, `PUT` **et** `PATCH .../rectifier`.
+> *(`ancienMontEstim`/`nouvMontEstim` restent sans contrainte à ce stade — même colonne, mais aucun invariant
+> serveur ne s'y appuie aujourd'hui.)*
 
 > ⚠️ **`formeMarche` — forme du marché (règle ajoutée 2026-07-18).** Champ de `MarcheDto` (colonne
 > `t_marche.FORME_MARCHE`), liste fermée : **`A_COMMANDE`** (« Marché à commande »), **`CONTRAT_CADRE`**
