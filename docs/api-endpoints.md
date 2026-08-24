@@ -3175,7 +3175,7 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 ---
 
 ## Navettes de PV
-**Ressource** `/api/pv-navettes` — Lecture / écriture (POST/PUT) : tout utilisateur authentifié. **DELETE interdit → 409** (traçabilité immuable, §3.5). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **409**).
+**Ressource** `/api/pv-navettes` — **Ressource en lecture seule, scopée à la localité du PV** (§1) : Président/Administrateur voient tout, les contrôleurs les navettes de leur localité, la PRMP/UGPM une liste vide (**403** sur le détail). **Historique immuable (§3.5)** : les trois verbes d'écriture restent routés et refusent en **409** — POST (une navette ne se forge pas), PUT (elle ne se réécrit pas : `IM_ACTEUR`, `DATE_ACTION`, `SENS`, `COMMENTAIRE` sont figés) et DELETE (« aucune navette ne peut être supprimée »). Voie d'écriture unique : le serveur lui-même, à la soumission / au retour en rectification / à l'acceptation d'un projet de PV.
 
 **Champs `PvNavetteDto`**
 
@@ -3193,10 +3193,10 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
-| GET | /api/pv-navettes | — | `PvNavetteDto[]` | 200 | Authentifié |
-| GET | /api/pv-navettes/{id} | — | `PvNavetteDto` | 200, 404 | Authentifié |
-| POST | /api/pv-navettes | `PvNavetteDto` | `PvNavetteDto` | 201, 400, 409 | Authentifié |
-| PUT | /api/pv-navettes/{id} | `PvNavetteDto` | `PvNavetteDto` | 200, 400, 404, 409 | Authentifié |
+| GET | /api/pv-navettes | — | `PvNavetteDto[]` | 200 | Authentifié — **liste scopée** |
+| GET | /api/pv-navettes/{id} | — | `PvNavetteDto` | 200, **403**, 404 | Authentifié — **403 hors localité** |
+| POST | /api/pv-navettes | `PvNavetteDto` | — | **409 (interdit)** | — |
+| PUT | /api/pv-navettes/{id} | `PvNavetteDto` | — | **409 (interdit)** | — |
 | DELETE | /api/pv-navettes/{id} | — | — | **409 (interdit)** | — |
 
 `{id}` = idNavette (number). *En pratique, les navettes sont créées automatiquement par les actions du PV.*

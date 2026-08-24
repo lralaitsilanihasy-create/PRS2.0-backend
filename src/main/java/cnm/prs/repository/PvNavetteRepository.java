@@ -1,5 +1,7 @@
 package cnm.prs.repository;
 
+import java.util.List;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -30,4 +32,17 @@ public interface PvNavetteRepository extends JpaRepository<PvNavette, Integer> {
     /** Plus grand NUM_NAVETTE pour un PV donné (0 si aucune navette) — pour incrémenter. */
     @Query("select coalesce(max(n.numNavette), 0) from PvNavette n where n.idPv = :idPv")
     Integer findMaxNumNavetteByPv(@Param("idPv") Integer idPv);
+
+    /**
+     * Navettes d'une localité — la navette n'a pas de périmètre propre : elle hérite de celui de son
+     * PV, lui-même rattaché à la localité du contrôleur réceptionnaire
+     * (PV → examen → dispatch → réception → contrôleur), exactement comme {@code PvExamenRepository}.
+     */
+    @Query("select n from PvNavette n where n.pv.examen.dispatch.reception.ctrlRecept.idLocalite = :loc")
+    List<PvNavette> findVisiblesParLocalite(@Param("loc") String loc);
+
+    /** Cette navette relève-t-elle de cette localité ? (garde du détail — 403 sinon). */
+    @Query("select (count(n) > 0) from PvNavette n where n.idNavette = :id "
+            + "and n.pv.examen.dispatch.reception.ctrlRecept.idLocalite = :loc")
+    boolean existsDansLocalite(@Param("id") Integer id, @Param("loc") String loc);
 }

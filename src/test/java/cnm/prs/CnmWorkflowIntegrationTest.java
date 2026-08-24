@@ -10869,6 +10869,78 @@ class CnmWorkflowIntegrationTest {
                 .andExpect(status().isOk());
     }
 
+    @Test
+    @DisplayName("Navettes de PV — périmètre par localité du PV : un Membre voit la sienne (403 sur une autre "
+            + "localité), la PRMP n'en voit aucune")
+    void gardes_pvNavettes_perimetreParLocalite() throws Exception {
+        seedCircuitDeuxLocalites();
+        seedPvSigne(830, 330);   // PV du circuit ANT
+        seedPvSigne(831, 331);   // PV du circuit TMS
+        pvNavetteRepository.save(navette(8200, 830, "RETOUR_RECTIF", "CTRCC1", "A corriger : montant"));
+        pvNavetteRepository.save(navette(8201, 831, "RETOUR_RECTIF", "CTRCC2", "A corriger : piece"));
+
+        // Le commentaire d'une navette est l'échange interne de la commission sur un dossier : la PRMP,
+        // dont le dossier est examiné, n'a pas à lire les demandes de rectification adressées au Membre.
+        mvc.perform(get("/api/pv-navettes").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+        mvc.perform(get("/api/pv-navettes/8200").header("Authorization", tokenPrmp))
+                .andExpect(status().isForbidden());
+
+        // Le circuit d'ANT garde SA navette — c'est l'appel réel de l'écran PV (Membre/Président/CC).
+        mvc.perform(get("/api/pv-navettes").header("Authorization", tokenMembre))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idNavette==8200)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idNavette==8201)]", hasSize(0)));
+        mvc.perform(get("/api/pv-navettes/8201").header("Authorization", tokenMembre))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/pv-navettes/8200").header("Authorization", tokenMembre))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/pv-navettes").header("Authorization", tokenPresident))
+                .andExpect(jsonPath("$[?(@.idNavette==8200)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idNavette==8201)]", hasSize(1)));
+    }
+
+    @Test
+    @DisplayName("Navettes de PV — historique immuable (§3.5) : création et modification refusées en 409 comme "
+            + "l'était déjà la suppression ; IM_ACTEUR et DATE_ACTION ne peuvent plus être réattribués")
+    void gardes_pvNavettes_historiqueImmuable() throws Exception {
+        seedCircuitDeuxLocalites();
+        seedPvSigne(830, 330);
+        pvNavetteRepository.save(navette(8200, 830, "RETOUR_RECTIF", "CTRCC1", "A corriger : montant"));
+
+        // Le défaut réel : delete() refusait déjà, mais update() réécrivait TOUS les champs. Un acteur
+        // pouvait donc attribuer sa propre demande de rectification à un collègue — sans que la
+        // substitution laisse elle-même de trace. Ici CTRMEM tente de faire porter la sienne à CTRCC1.
+        String reecriture = "{\"idNavette\":8200,\"idPv\":830,\"numNavette\":1,\"sens\":\"ACCEPTATION\","
+                + "\"imActeur\":\"CTRMEM\",\"dateAction\":\"2026-01-01T08:00:00\",\"commentaire\":\"Reecrit\"}";
+        mvc.perform(put("/api/pv-navettes/8200").header("Authorization", tokenMembre)
+                .contentType(MediaType.APPLICATION_JSON).content(reecriture))
+                .andExpect(status().isConflict());
+        // Même l'Administrateur ne réécrit pas la pièce probante : l'immuabilité ne connaît pas de rôle.
+        mvc.perform(put("/api/pv-navettes/8200").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content(reecriture))
+                .andExpect(status().isConflict());
+
+        // Création : une navette est constatée par le serveur (PvExamenService#ajouterNavette), jamais
+        // déclarée par un client — sinon un mouvement se forge au nom d'un tiers.
+        String forgee = "{\"idNavette\":8299,\"idPv\":830,\"numNavette\":9,\"sens\":\"ACCEPTATION\","
+                + "\"imActeur\":\"CTRPRE\",\"dateAction\":\"2026-01-01T08:00:00\"}";
+        mvc.perform(post("/api/pv-navettes").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content(forgee))
+                .andExpect(status().isConflict());
+        // Suppression : refus déjà en place (§3.5), conservé — les trois verbes disent la même chose.
+        mvc.perform(delete("/api/pv-navettes/8200").header("Authorization", tokenAdmin))
+                .andExpect(status().isConflict());
+
+        // Contrôle d'effet : la navette d'origine est intacte, et aucune navette forgée n'existe.
+        cnm.prs.entity.PvNavette apres = pvNavetteRepository.findById(8200).orElseThrow();
+        org.junit.jupiter.api.Assertions.assertEquals("CTRCC1", apres.getImActeur());
+        org.junit.jupiter.api.Assertions.assertEquals("RETOUR_RECTIF", apres.getSens());
+        org.junit.jupiter.api.Assertions.assertEquals("A corriger : montant", apres.getCommentaire());
+        assertFalse(pvNavetteRepository.existsById(8299));
+    }
+
 
     private cnm.prs.entity.IndicateurPrmp indicateurPrmp(int id, String idPrmp) {
         cnm.prs.entity.IndicateurPrmp i = new cnm.prs.entity.IndicateurPrmp();
@@ -10905,5 +10977,17 @@ class CnmWorkflowIntegrationTest {
         c.setDateTransmission(LocalDateTime.of(2026, 6, 10, 9, 0));
         c.setAccuseReception(false);
         return c;
+    }
+
+    private cnm.prs.entity.PvNavette navette(int id, int idPv, String sens, String acteur, String commentaire) {
+        cnm.prs.entity.PvNavette n = new cnm.prs.entity.PvNavette();
+        n.setIdNavette(id);
+        n.setIdPv(idPv);
+        n.setNumNavette(1);
+        n.setSens(sens);
+        n.setImActeur(acteur);
+        n.setDateAction(LocalDateTime.of(2026, 6, 12, 11, 0));
+        n.setCommentaire(commentaire);
+        return n;
     }
 }
