@@ -3218,7 +3218,11 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 > - `GET /api/notifications/stream` (`text/event-stream`) : flux **SSE** par utilisateur — un événement
 >   `maj` est poussé à **tous les flux du destinataire** à chaque émission de notification et à chaque
 >   marquage lu / non-lu / lire-tout (synchronisation **entre onglets et sessions**). Le front s'y
->   connecte en fetch-stream (Bearer — EventSource ne porte pas d'en-tête) et recharge alors le compteur
+>   connecte en fetch-stream, pas en `EventSource` (qui ne porte pas d'en-tête et n'aurait pas pu envoyer
+>   `Accept: text/event-stream`) — mais **depuis la phase 3 du plan cookie (2026-08-17), l'authentification
+>   ne passe plus par un en-tête `Authorization`** : elle repose sur le cookie HttpOnly `PRS_SESSION`, que
+>   `fetch` envoie automatiquement en même origine (`credentials: 'same-origin'` est le défaut). GET étant
+>   une méthode sûre, aucun jeton XSRF n'est à porter. Le front recharge ensuite le compteur
 >   `GET /mes/non-lues/count` — **le compteur est toujours calculé côté serveur**. Repli : polling 60 s.
 >   Flux expirant (~30 min) avec reconnexion automatique côté client.
 > - Front : écran transverse `/notifications` (tous profils, entrée de menu + lien « Voir toutes les
