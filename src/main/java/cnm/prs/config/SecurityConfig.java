@@ -6,9 +6,12 @@ import java.util.List;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -47,6 +50,17 @@ import jakarta.servlet.http.Cookie;
 @Configuration
 @EnableMethodSecurity
 public class SecurityConfig {
+
+    private static final Logger log = LoggerFactory.getLogger(SecurityConfig.class);
+
+    /**
+     * Valeur de repli d'{@code app.jwt.secret} dans {@code application.properties} : elle est
+     * versionnée, donc publiquement lisible. Tolérée en local, refusée sous le profil {@code prod}.
+     */
+    private static final String JWT_SECRET_DEV = "dev-secret-please-change-0123456789-abcdefghij";
+
+    /** Taille minimale de la clé HMAC pour HS256 : 256 bits (RFC 7518 § 3.2). */
+    private static final int JWT_SECRET_MIN_OCTETS = 32;
 
     /**
      * Ressources de référence / paramétrage (§3.8 Module 03 ; §3.2 « pas d'accès aux
@@ -177,9 +191,39 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
+    /**
+     * Construit la clé de signature des jetons, en refusant les configurations dangereuses.
+     *
+     * <p>Deux garde-fous, parce qu'un secret de signature faible ou connu permet de <b>forger un
+     * jeton pour n'importe quel profil</b> :</p>
+     * <ul>
+     *   <li><b>Longueur</b> : HS256 exige une clé de 256 bits au minimum (RFC 7518 § 3.2). Un
+     *       secret trop court échouait jusqu'ici dans les entrailles de Nimbus, à la première
+     *       signature ; il échoue désormais au démarrage, avec le motif exact.</li>
+     *   <li><b>Secret de développement</b> : la valeur de repli d'{@code application.properties}
+     *       est publiquement lisible dans le dépôt. Sous le profil {@code prod} elle interdit le
+     *       démarrage ; ailleurs elle est tolérée (poste de développement) mais signalée.</li>
+     * </ul>
+     */
     @Bean
-    public SecretKey jwtSecretKey(@Value("${app.jwt.secret}") String secret) {
-        return new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
+    public SecretKey jwtSecretKey(@Value("${app.jwt.secret}") String secret, Environment env) {
+        byte[] octets = secret == null ? new byte[0] : secret.getBytes(StandardCharsets.UTF_8);
+        if (octets.length < JWT_SECRET_MIN_OCTETS) {
+            throw new IllegalStateException("app.jwt.secret fait " + octets.length
+                    + " octet(s) : HS256 en exige au moins " + JWT_SECRET_MIN_OCTETS
+                    + ". Définir la variable d'environnement APP_JWT_SECRET.");
+        }
+        if (JWT_SECRET_DEV.equals(secret)) {
+            if (List.of(env.getActiveProfiles()).contains("prod")) {
+                throw new IllegalStateException("app.jwt.secret est le secret de développement,"
+                        + " publiquement lisible dans le dépôt : n'importe qui pourrait forger un"
+                        + " jeton. Définir la variable d'environnement APP_JWT_SECRET.");
+            }
+            log.error("app.jwt.secret est le secret de developpement, publiquement lisible dans le"
+                    + " depot. Acceptable en local uniquement : tout deploiement doit definir"
+                    + " APP_JWT_SECRET (profil prod : demarrage refuse).");
+        }
+        return new SecretKeySpec(octets, "HmacSHA256");
     }
 
     @Bean
