@@ -1,5 +1,6 @@
 package cnm.prs.repository;
 
+import java.util.Collection;
 import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -13,6 +14,12 @@ public interface ServiceBeneficiaireRepository extends JpaRepository<ServiceBene
 
     /** Bénéficiaires d'un marché — copie d'une version à l'autre et comparaison de diff. */
     List<ServiceBeneficiaire> findByIdDetail(Integer idDetail);
+
+    /**
+     * Bénéficiaires des lignes de marché données — support du scoping de
+     * {@code GET /api/service-beneficiaires} sur le périmètre des marchés visibles (§1, §3.1).
+     */
+    List<ServiceBeneficiaire> findByIdDetailIn(Collection<Integer> idDetails);
 
     /** Supprime les bénéficiaires d'un marché (cascade applicative à la suppression du marché). */
     long deleteByIdDetail(Integer idDetail);

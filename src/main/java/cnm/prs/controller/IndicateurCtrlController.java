@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 import jakarta.validation.Valid;
 
@@ -20,6 +21,11 @@ import cnm.prs.service.IndicateurCtrlService;
 
 /**
  * Contrôleur REST pour la ressource {@code indicateur-ctrls} (table {@code t_indicateur_ctrl}).
+ *
+ * <p>Périmètre <strong>nominatif</strong> (dans {@link cnm.prs.service.IndicateurCtrlService}) :
+ * Président/Administrateur voient tout, un contrôleur ne voit que ses propres indicateurs, la PRMP ne
+ * voit rien. L'écriture est réservée à l'{@code ADMINISTRATEUR} : un indicateur de performance que le
+ * contrôleur évalué pourrait éditer ne mesurerait plus rien.</p>
  */
 @RestController
 @RequestMapping("/api/indicateur-ctrls")
@@ -41,16 +47,19 @@ public class IndicateurCtrlController {
         return service.findById(id);
     }
 
+    @PreAuthorize("hasRole('ADMINISTRATEUR')")
     @PostMapping
     public ResponseEntity<IndicateurCtrlDto> create(@Valid @RequestBody IndicateurCtrlDto dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.create(dto));
     }
 
+    @PreAuthorize("hasRole('ADMINISTRATEUR')")
     @PutMapping("/{id}")
     public IndicateurCtrlDto update(@PathVariable Integer id, @Valid @RequestBody IndicateurCtrlDto dto) {
         return service.update(id, dto);
     }
 
+    @PreAuthorize("hasRole('ADMINISTRATEUR')")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable Integer id) {
         service.delete(id);

@@ -256,7 +256,7 @@ actif** : c'est un coupe-circuit, pas une seconde activation (chaque actualité 
 ---
 
 ## Anomalies
-**Ressource** `/api/anomalies` — Lecture et écriture : tout utilisateur authentifié (CRUD standard, aucun rôle particulier).
+**Ressource** `/api/anomalies` — **Lecture scopée au périmètre de la ligne de marché signalée** (`ID_DETAIL`, §1/§3.1) : Président/Administrateur voient tout, la PRMP/UGPM les anomalies de ses marchés, les contrôleurs celles de leur localité, tout autre profil une liste vide. Anomalie de **niveau PPM** (`ID_DETAIL` nul) : Président/Administrateur seuls (**403** sinon). **Écriture réservée à l'`ADMINISTRATEUR`** (**403** sinon) — une anomalie est constatée par le serveur (règles `tr_regle_anomalie`), jamais déclarée par un client.
 
 **Champs `AnomalieDto`**
 
@@ -280,11 +280,11 @@ actif** : c'est un coupe-circuit, pas une seconde activation (chaque actualité 
 
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
-| GET | /api/anomalies | — | `AnomalieDto[]` | 200 | Authentifié |
-| GET | /api/anomalies/{id} | — | `AnomalieDto` | 200, 404 | Authentifié |
-| POST | /api/anomalies | `AnomalieDto` | `AnomalieDto` | 201, 400, 401 | Authentifié |
-| PUT | /api/anomalies/{id} | `AnomalieDto` | `AnomalieDto` | 200, 400, 404 | Authentifié |
-| DELETE | /api/anomalies/{id} | — | — | 204, 404 | Authentifié |
+| GET | /api/anomalies | — | `AnomalieDto[]` | 200 | Authentifié — **liste scopée** |
+| GET | /api/anomalies/{id} | — | `AnomalieDto` | 200, **403**, 404 | Authentifié — **403 hors périmètre** |
+| POST | /api/anomalies | `AnomalieDto` | `AnomalieDto` | 201, 400, 401, **403** | **ADMINISTRATEUR** |
+| PUT | /api/anomalies/{id} | `AnomalieDto` | `AnomalieDto` | 200, 400, **403**, 404 | **ADMINISTRATEUR** |
+| DELETE | /api/anomalies/{id} | — | — | 204, **403**, 404 | **ADMINISTRATEUR** |
 
 `{id}` = idAnomalie (number).
 
@@ -730,7 +730,7 @@ si aucun résultat (pas de 404). `{nom}` est un fragment (URL-encoder si espaces
 ---
 
 ## Copies de dossier
-**Ressource** `/api/copie-dossiers` — Lecture / écriture : tout utilisateur authentifié.
+**Ressource** `/api/copie-dossiers` — **Lecture scopée à la localité du dossier** (§1) : Président/Administrateur voient tout, les contrôleurs les copies de leur localité, la PRMP/UGPM une liste vide (**403** sur le détail). **Écriture réservée à l'`ADMINISTRATEUR`** (**403** sinon) — aucun écran ne la consomme ; un accusé de réception posable par tout porteur de jeton attesterait une transmission qui n'a pas eu lieu.
 
 **Champs `CopieDossierDto`**
 
@@ -750,11 +750,11 @@ si aucun résultat (pas de 404). `{nom}` est un fragment (URL-encoder si espaces
 
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
-| GET | /api/copie-dossiers | — | `CopieDossierDto[]` | 200 | Authentifié |
-| GET | /api/copie-dossiers/{id} | — | `CopieDossierDto` | 200, 404 | Authentifié |
-| POST | /api/copie-dossiers | `CopieDossierDto` | `CopieDossierDto` | 201, 400 | Authentifié |
-| PUT | /api/copie-dossiers/{id} | `CopieDossierDto` | `CopieDossierDto` | 200, 400, 404 | Authentifié |
-| DELETE | /api/copie-dossiers/{id} | — | — | 204, 404 | Authentifié |
+| GET | /api/copie-dossiers | — | `CopieDossierDto[]` | 200 | Authentifié — **liste scopée** |
+| GET | /api/copie-dossiers/{id} | — | `CopieDossierDto` | 200, **403**, 404 | Authentifié — **403 hors localité** |
+| POST | /api/copie-dossiers | `CopieDossierDto` | `CopieDossierDto` | 201, 400, **403** | **ADMINISTRATEUR** |
+| PUT | /api/copie-dossiers/{id} | `CopieDossierDto` | `CopieDossierDto` | 200, 400, **403**, 404 | **ADMINISTRATEUR** |
+| DELETE | /api/copie-dossiers/{id} | — | — | 204, **403**, 404 | **ADMINISTRATEUR** |
 
 `{id}` = idCopie (number).
 
@@ -1922,7 +1922,7 @@ et interprété comme un code de **sous-type** (les anciens payloads `{"idTypeDo
 ---
 
 ## Échéances
-**Ressource** `/api/echeances` — Lecture / écriture : tout utilisateur authentifié.
+**Ressource** `/api/echeances` — **Lecture scopée au périmètre de la ligne de marché parente** (`ID_DETAIL`, §1/§3.1) : Président/Administrateur voient tout, la PRMP/UGPM les jalons de ses marchés, les contrôleurs ceux de leur localité, tout autre profil une liste vide. **Écriture réservée à l'`ADMINISTRATEUR`** (**403** sinon) — le calendrier est alimenté par le suivi automatique (§3.1, Module 04) et le seul écran consommateur (calendrier PRMP) est en lecture seule.
 
 **Champs `EcheanceDto`**
 
@@ -1941,11 +1941,11 @@ et interprété comme un code de **sous-type** (les anciens payloads `{"idTypeDo
 
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
-| GET | /api/echeances | — | `EcheanceDto[]` | 200 | Authentifié |
-| GET | /api/echeances/{id} | — | `EcheanceDto` | 200, 404 | Authentifié |
-| POST | /api/echeances | `EcheanceDto` | `EcheanceDto` | 201, 400 | Authentifié |
-| PUT | /api/echeances/{id} | `EcheanceDto` | `EcheanceDto` | 200, 400, 404 | Authentifié |
-| DELETE | /api/echeances/{id} | — | — | 204, 404 | Authentifié |
+| GET | /api/echeances | — | `EcheanceDto[]` | 200 | Authentifié — **liste scopée** |
+| GET | /api/echeances/{id} | — | `EcheanceDto` | 200, **403**, 404 | Authentifié — **403 hors périmètre** |
+| POST | /api/echeances | `EcheanceDto` | `EcheanceDto` | 201, 400, **403** | **ADMINISTRATEUR** |
+| PUT | /api/echeances/{id} | `EcheanceDto` | `EcheanceDto` | 200, 400, **403**, 404 | **ADMINISTRATEUR** |
+| DELETE | /api/echeances/{id} | — | — | 204, **403**, 404 | **ADMINISTRATEUR** |
 
 `{id}` = idEcheance (number).
 
@@ -2237,7 +2237,7 @@ de PV). Lecture filtrée par profil/localité. Cycle : `BROUILLON → SOUMIS →
 ---
 
 ## Indicateurs contrôleur
-**Ressource** `/api/indicateur-ctrls` — Lecture / écriture : tout utilisateur authentifié.
+**Ressource** `/api/indicateur-ctrls` — **Lecture au périmètre nominatif** (§1, §3.8 Module 09) : Président/Administrateur voient tous les contrôleurs, un contrôleur ne voit que **ses propres** indicateurs (**403** sur ceux d'un collègue), la PRMP/UGPM une liste vide. **Écriture réservée à l'`ADMINISTRATEUR`** (**403** sinon) — un indicateur de performance éditable par l'agent évalué ne mesure plus rien.
 
 **Champs `IndicateurCtrlDto`**
 
@@ -2255,11 +2255,11 @@ de PV). Lecture filtrée par profil/localité. Cycle : `BROUILLON → SOUMIS →
 
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
-| GET | /api/indicateur-ctrls | — | `IndicateurCtrlDto[]` | 200 | Authentifié |
-| GET | /api/indicateur-ctrls/{id} | — | `IndicateurCtrlDto` | 200, 404 | Authentifié |
-| POST | /api/indicateur-ctrls | `IndicateurCtrlDto` | `IndicateurCtrlDto` | 201, 400 | Authentifié |
-| PUT | /api/indicateur-ctrls/{id} | `IndicateurCtrlDto` | `IndicateurCtrlDto` | 200, 400, 404 | Authentifié |
-| DELETE | /api/indicateur-ctrls/{id} | — | — | 204, 404 | Authentifié |
+| GET | /api/indicateur-ctrls | — | `IndicateurCtrlDto[]` | 200 | Authentifié — **liste scopée** |
+| GET | /api/indicateur-ctrls/{id} | — | `IndicateurCtrlDto` | 200, **403**, 404 | Authentifié — **403 hors périmètre** |
+| POST | /api/indicateur-ctrls | `IndicateurCtrlDto` | `IndicateurCtrlDto` | 201, 400, **403** | **ADMINISTRATEUR** |
+| PUT | /api/indicateur-ctrls/{id} | `IndicateurCtrlDto` | `IndicateurCtrlDto` | 200, 400, **403**, 404 | **ADMINISTRATEUR** |
+| DELETE | /api/indicateur-ctrls/{id} | — | — | 204, **403**, 404 | **ADMINISTRATEUR** |
 
 `{id}` = idIndicateur (number).
 
@@ -2271,7 +2271,7 @@ de PV). Lecture filtrée par profil/localité. Cycle : `BROUILLON → SOUMIS →
 ---
 
 ## Indicateurs PRMP
-**Ressource** `/api/indicateur-prmps` — Lecture / écriture : tout utilisateur authentifié.
+**Ressource** `/api/indicateur-prmps` — **Lecture au périmètre de propriété** (§1) : Président/Administrateur voient tout, la PRMP (et l'UGPM de sa tutelle) ne voit que **son** bilan (**403** sur celui d'une homologue), tout autre profil une liste vide. **Écriture réservée à l'`ADMINISTRATEUR`** (**403** sinon) — le bilan annuel d'une PRMP ne se corrige pas par la PRMP qu'il évalue.
 
 **Champs `IndicateurPrmpDto`**
 
@@ -2295,11 +2295,11 @@ de PV). Lecture filtrée par profil/localité. Cycle : `BROUILLON → SOUMIS →
 
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
-| GET | /api/indicateur-prmps | — | `IndicateurPrmpDto[]` | 200 | Authentifié |
-| GET | /api/indicateur-prmps/{id} | — | `IndicateurPrmpDto` | 200, 404 | Authentifié |
-| POST | /api/indicateur-prmps | `IndicateurPrmpDto` | `IndicateurPrmpDto` | 201, 400 | Authentifié |
-| PUT | /api/indicateur-prmps/{id} | `IndicateurPrmpDto` | `IndicateurPrmpDto` | 200, 400, 404 | Authentifié |
-| DELETE | /api/indicateur-prmps/{id} | — | — | 204, 404 | Authentifié |
+| GET | /api/indicateur-prmps | — | `IndicateurPrmpDto[]` | 200 | Authentifié — **liste scopée** |
+| GET | /api/indicateur-prmps/{id} | — | `IndicateurPrmpDto` | 200, **403**, 404 | Authentifié — **403 hors périmètre** |
+| POST | /api/indicateur-prmps | `IndicateurPrmpDto` | `IndicateurPrmpDto` | 201, 400, **403** | **ADMINISTRATEUR** |
+| PUT | /api/indicateur-prmps/{id} | `IndicateurPrmpDto` | `IndicateurPrmpDto` | 200, 400, **403**, 404 | **ADMINISTRATEUR** |
+| DELETE | /api/indicateur-prmps/{id} | — | — | 204, **403**, 404 | **ADMINISTRATEUR** |
 
 `{id}` = idIndicateurPrmp (number).
 
@@ -2316,7 +2316,7 @@ de PV). Lecture filtrée par profil/localité. Cycle : `BROUILLON → SOUMIS →
 ---
 
 ## Instantanés de statistiques
-**Ressource** `/api/snapshot-statss` *(double « s » final)* — Lecture / écriture : tout utilisateur authentifié.
+**Ressource** `/api/snapshot-statss` *(double « s » final)* — **Lecture scopée par localité** (`ID_LOCALITE`, §1) : Président/Administrateur voient tout, les contrôleurs leur localité, la PRMP/UGPM une liste vide. **Agrégat national** (`ID_LOCALITE` nul) : Président/Administrateur seuls (**403** sinon). **Écriture réservée à l'`ADMINISTRATEUR`** (**403** sinon) — l'instantané est un agrégat calculé, pas une donnée déclarative.
 
 **Champs `SnapshotStatsDto`**
 
@@ -2338,11 +2338,11 @@ de PV). Lecture filtrée par profil/localité. Cycle : `BROUILLON → SOUMIS →
 
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
-| GET | /api/snapshot-statss | — | `SnapshotStatsDto[]` | 200 | Authentifié |
-| GET | /api/snapshot-statss/{id} | — | `SnapshotStatsDto` | 200, 404 | Authentifié |
-| POST | /api/snapshot-statss | `SnapshotStatsDto` | `SnapshotStatsDto` | 201, 400 | Authentifié |
-| PUT | /api/snapshot-statss/{id} | `SnapshotStatsDto` | `SnapshotStatsDto` | 200, 400, 404 | Authentifié |
-| DELETE | /api/snapshot-statss/{id} | — | — | 204, 404 | Authentifié |
+| GET | /api/snapshot-statss | — | `SnapshotStatsDto[]` | 200 | Authentifié — **liste scopée** |
+| GET | /api/snapshot-statss/{id} | — | `SnapshotStatsDto` | 200, **403**, 404 | Authentifié — **403 hors localité** |
+| POST | /api/snapshot-statss | `SnapshotStatsDto` | `SnapshotStatsDto` | 201, 400, **403** | **ADMINISTRATEUR** |
+| PUT | /api/snapshot-statss/{id} | `SnapshotStatsDto` | `SnapshotStatsDto` | 200, 400, **403**, 404 | **ADMINISTRATEUR** |
+| DELETE | /api/snapshot-statss/{id} | — | — | 204, **403**, 404 | **ADMINISTRATEUR** |
 
 `{id}` = idSnapshot (number).
 
@@ -3228,7 +3228,7 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 ---
 
 ## Navettes de PV
-**Ressource** `/api/pv-navettes` — Lecture / écriture (POST/PUT) : tout utilisateur authentifié. **DELETE interdit → 409** (traçabilité immuable, §3.5). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **409**).
+**Ressource** `/api/pv-navettes` — **Ressource en lecture seule, scopée à la localité du PV** (§1) : Président/Administrateur voient tout, les contrôleurs les navettes de leur localité, la PRMP/UGPM une liste vide (**403** sur le détail). **Historique immuable (§3.5)** : les trois verbes d'écriture restent routés et refusent en **409** — POST (une navette ne se forge pas), PUT (elle ne se réécrit pas : `IM_ACTEUR`, `DATE_ACTION`, `SENS`, `COMMENTAIRE` sont figés) et DELETE (« aucune navette ne peut être supprimée »). Voie d'écriture unique : le serveur lui-même, à la soumission / au retour en rectification / à l'acceptation d'un projet de PV.
 
 **Champs `PvNavetteDto`**
 
@@ -3246,10 +3246,10 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
-| GET | /api/pv-navettes | — | `PvNavetteDto[]` | 200 | Authentifié |
-| GET | /api/pv-navettes/{id} | — | `PvNavetteDto` | 200, 404 | Authentifié |
-| POST | /api/pv-navettes | `PvNavetteDto` | `PvNavetteDto` | 201, 400, 409 | Authentifié |
-| PUT | /api/pv-navettes/{id} | `PvNavetteDto` | `PvNavetteDto` | 200, 400, 404, 409 | Authentifié |
+| GET | /api/pv-navettes | — | `PvNavetteDto[]` | 200 | Authentifié — **liste scopée** |
+| GET | /api/pv-navettes/{id} | — | `PvNavetteDto` | 200, **403**, 404 | Authentifié — **403 hors localité** |
+| POST | /api/pv-navettes | `PvNavetteDto` | — | **409 (interdit)** | — |
+| PUT | /api/pv-navettes/{id} | `PvNavetteDto` | — | **409 (interdit)** | — |
 | DELETE | /api/pv-navettes/{id} | — | — | **409 (interdit)** | — |
 
 `{id}` = idNavette (number). *En pratique, les navettes sont créées automatiquement par les actions du PV.*
@@ -4029,7 +4029,7 @@ au dépôt, **aucun archivage** — simple événement tracé).
 ---
 
 ## Services bénéficiaires
-**Ressource** `/api/service-beneficiaires` — Lecture / écriture : tout utilisateur authentifié.
+**Ressource** `/api/service-beneficiaires` — **Lecture scopée au périmètre de la ligne de marché parente** (`ID_DETAIL`, §1/§3.1) : Président/Administrateur voient tout, la PRMP/UGPM les bénéficiaires de ses marchés, les contrôleurs ceux de leur localité, tout autre profil une liste vide. **Écriture réservée à `PRMP` / `UGPM`** (**403** sinon, circuit interne compris — la ventilation d'un PPM appartient à son propriétaire), et le **marché visé est contrôlé** (**403** sur celui d'une autre entité). ⚠️ **PK allouée serveur** : `idBenef` envoyé par le client est ignoré au POST — la liste étant scopée, deux PRMP calculeraient le même `max()+1` et la seconde écraserait la ligne de la première.
 
 **Champs `ServiceBeneficiaireDto`**
 
@@ -4046,11 +4046,11 @@ au dépôt, **aucun archivage** — simple événement tracé).
 
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
-| GET | /api/service-beneficiaires | — | `ServiceBeneficiaireDto[]` | 200 | Authentifié |
-| GET | /api/service-beneficiaires/{id} | — | `ServiceBeneficiaireDto` | 200, 404 | Authentifié |
-| POST | /api/service-beneficiaires | `ServiceBeneficiaireDto` | `ServiceBeneficiaireDto` | 201, 400 | Authentifié |
-| PUT | /api/service-beneficiaires/{id} | `ServiceBeneficiaireDto` | `ServiceBeneficiaireDto` | 200, 400, 404 | Authentifié |
-| DELETE | /api/service-beneficiaires/{id} | — | — | 204, 404 | Authentifié |
+| GET | /api/service-beneficiaires | — | `ServiceBeneficiaireDto[]` | 200 | Authentifié — **liste scopée** |
+| GET | /api/service-beneficiaires/{id} | — | `ServiceBeneficiaireDto` | 200, **403**, 404 | Authentifié — **403 hors périmètre** |
+| POST | /api/service-beneficiaires | `ServiceBeneficiaireDto` | `ServiceBeneficiaireDto` (PK serveur) | 201, 400, **403** | **PRMP / UGPM** — périmètre du marché |
+| PUT | /api/service-beneficiaires/{id} | `ServiceBeneficiaireDto` | `ServiceBeneficiaireDto` | 200, 400, **403**, 404 | **PRMP / UGPM** — périmètre du marché |
+| DELETE | /api/service-beneficiaires/{id} | — | — | 204, **403**, 404 | **PRMP / UGPM** — périmètre du marché |
 
 `{id}` = idBenef (number).
 
@@ -4096,7 +4096,7 @@ au dépôt, **aucun archivage** — simple événement tracé).
 ---
 
 ## SOA bénéficiaires
-**Ressource** `/api/soa-beneficiaires` — Lecture / écriture : tout utilisateur authentifié.
+**Ressource** `/api/soa-beneficiaires` — **Référentiel** (code SOA + libellé, aucune donnée de périmètre) : **lecture ouverte à tout utilisateur authentifié**. **Création ouverte à `PRMP` / `UGPM` en plus de l'`ADMINISTRATEUR`** — même motif que `POST /api/entite-contracts` et `POST /api/ministeres` : à l'import d'un PPM, la ventilation cite des codes SOA absents du référentiel, que la PRMP enregistre avant de pouvoir soumettre. **`PUT` et `DELETE` restent `ADMINISTRATEUR`** (**403** sinon) : une PRMP n'a pas à renommer ni retirer un code que d'autres entités utilisent.
 
 **Champs `SoaBeneficiaireDto`**
 
@@ -4111,9 +4111,9 @@ au dépôt, **aucun archivage** — simple événement tracé).
 |---|---|---|---|---|---|
 | GET | /api/soa-beneficiaires | — | `SoaBeneficiaireDto[]` | 200 | Authentifié |
 | GET | /api/soa-beneficiaires/{id} | — | `SoaBeneficiaireDto` | 200, 404 | Authentifié |
-| POST | /api/soa-beneficiaires | `SoaBeneficiaireDto` | `SoaBeneficiaireDto` | 201, 400 | Authentifié |
-| PUT | /api/soa-beneficiaires/{id} | `SoaBeneficiaireDto` | `SoaBeneficiaireDto` | 200, 400, 404 | Authentifié |
-| DELETE | /api/soa-beneficiaires/{id} | — | — | 204, 404 | Authentifié |
+| POST | /api/soa-beneficiaires | `SoaBeneficiaireDto` | `SoaBeneficiaireDto` | 201, 400, **403** | **PRMP / UGPM / ADMINISTRATEUR** |
+| PUT | /api/soa-beneficiaires/{id} | `SoaBeneficiaireDto` | `SoaBeneficiaireDto` | 200, 400, **403**, 404 | **ADMINISTRATEUR** |
+| DELETE | /api/soa-beneficiaires/{id} | — | — | 204, **403**, 404 | **ADMINISTRATEUR** |
 
 `{id}` = soaCode (string).
 
