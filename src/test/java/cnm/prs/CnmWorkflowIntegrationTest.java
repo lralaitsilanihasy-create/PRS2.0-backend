@@ -2,6 +2,7 @@ package cnm.prs;
 
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.everyItem;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasSize;
@@ -8529,6 +8530,151 @@ class CnmWorkflowIntegrationTest {
         mvc.perform(get("/api/prmps/par-nom/ZZQQ").header("Authorization", tokenAdmin))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(0)));
+    }
+
+    /** Les quatre lectures de LISTE de la ressource — celles qui exposaient le répertoire entier. */
+    private static final List<String> PRMP_LECTURES_LISTE = List.of(
+            "/api/prmps", "/api/prmps/par-localite/ANT", "/api/prmps/par-entite/1", "/api/prmps/par-nom/Nom");
+
+    /**
+     * ⚠️ Durcissement (2026-08-24) — les cinq lectures de {@code /api/prmps} ne portaient
+     * <strong>aucune</strong> garde et servaient la fiche <strong>complète</strong> : numéro de carte
+     * d'identité, date et lieu de délivrance, à <em>tout</em> utilisateur authentifié, quel que soit
+     * son profil et sa localité. C'est de la donnée personnelle, sans usage métier hors gestion des
+     * comptes.
+     *
+     * <p>Ce test verrouille la vue réduite : il échouera dès qu'une des cinq routes se remettra à
+     * servir le triptyque CIN à un contrôleur. Il vérifie dans le même mouvement que les champs dont
+     * les écrans dépendent réellement continuent d'être servis — identité, matricule, arrêté de
+     * nomination et sa date, courriel, téléphone : exactement ce qu'affiche l'onglet « Entité
+     * contractante » du détail d'un plan de passation, seul écran de contrôleur à lire ce
+     * répertoire. Sans cette seconde moitié, une fermeture trop large viderait l'écran au lieu de le
+     * protéger, et rien ne le signalerait.</p>
+     */
+    @Test
+    @DisplayName("GET /api/prmps (5 lectures) : un contrôleur reçoit la vue RÉDUITE — ni cin, ni dateCin, ni lieuCin")
+    void prmpLectures_vueReduiteHorsAdministrateur() throws Exception {
+        // Fiche unitaire : absence explicite des trois champs sensibles…
+        mvc.perform(get("/api/prmps/PRMP001").header("Authorization", tokenCc))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.cin").doesNotExist())
+                .andExpect(jsonPath("$.dateCin").doesNotExist())
+                .andExpect(jsonPath("$.lieuCin").doesNotExist())
+                // … et présence de tout ce que l'écran consomme réellement.
+                .andExpect(jsonPath("$.idPrmp").value("PRMP001"))
+                .andExpect(jsonPath("$.nomPrmp").value("Nom"))
+                .andExpect(jsonPath("$.prenomsPrmp").value("Prenoms"))
+                .andExpect(jsonPath("$.arreteNomin").value("ARR-001"))
+                .andExpect(jsonPath("$.dateNomin").value("2024-01-15"))
+                .andExpect(jsonPath("$.emailPrmp").value("prmp@min.mg"))
+                .andExpect(jsonPath("$.telPrmp").value("0330000001"));
+
+        // Les quatre lectures de liste : la ligne est bien servie, mais aucune ne porte de CIN.
+        for (String url : PRMP_LECTURES_LISTE) {
+            mvc.perform(get(url).header("Authorization", tokenCc))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$[*].idPrmp", hasItem("PRMP001")))
+                    .andExpect(jsonPath("$[*].nomPrmp", hasItem("Nom")))
+                    .andExpect(jsonPath("$[*].cin", everyItem(nullValue())))
+                    .andExpect(jsonPath("$[*].dateCin", everyItem(nullValue())))
+                    .andExpect(jsonPath("$[*].lieuCin", everyItem(nullValue())));
+        }
+    }
+
+    /**
+     * Revers du test précédent : la vue réduite ne doit pas devenir la <em>seule</em> vue.
+     * L'Administrateur gère les comptes — état civil, rapprochement avec la pièce d'identité déposée
+     * — et l'écran d'administration des PRMP édite les dix champs de {@code PrmpDto} puis les renvoie
+     * en bloc par {@code PUT}. S'il lisait la vue réduite, le premier enregistrement écraserait
+     * {@code cin}/{@code dateCin}/{@code lieuCin} avec des {@code null} : une fermeture de sécurité
+     * qui détruit des données. Ce test l'interdit sur les cinq lectures.
+     */
+    @Test
+    @DisplayName("GET /api/prmps (5 lectures) : l'Administrateur reçoit la fiche COMPLÈTE — cin, dateCin, lieuCin servis")
+    void prmpLectures_ficheCompletePourAdministrateur() throws Exception {
+        mvc.perform(get("/api/prmps/PRMP001").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.cin").value("101011112222"))
+                .andExpect(jsonPath("$.dateCin").value("2010-05-05"))
+                .andExpect(jsonPath("$.lieuCin").value("Antananarivo"));
+
+        for (String url : PRMP_LECTURES_LISTE) {
+            mvc.perform(get(url).header("Authorization", tokenAdmin))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$[?(@.idPrmp=='PRMP001')].cin", hasItem("101011112222")))
+                    .andExpect(jsonPath("$[?(@.idPrmp=='PRMP001')].dateCin", hasItem("2010-05-05")))
+                    .andExpect(jsonPath("$[?(@.idPrmp=='PRMP001')].lieuCin", hasItem("Antananarivo")));
+        }
+    }
+
+    /**
+     * Garde-fou de la séparation : réduire la vue « pour tout le monde sauf l'Administrateur » aurait
+     * privé la PRMP de sa <strong>propre</strong> fiche — elle est la première concernée par les
+     * données qu'elle a elle-même déclarées à l'inscription, et c'est un droit d'accès, pas une
+     * faveur. L'arbitrage se fait donc <strong>ligne à ligne</strong> et non par route : la PRMP
+     * retrouve sa fiche complète y compris au milieu d'une liste, et reste en vue réduite sur celle
+     * d'une consœur. Ce test échouera si quelqu'un remonte l'arbitrage au niveau de la route (la
+     * PRMP perdrait sa fiche, ou les verrait toutes en entier).
+     *
+     * <p>Il ferme aussi le contournement le plus tentant : l'<strong>UGPM</strong>, dont le claim
+     * {@code ref} porte l'identifiant de sa PRMP de <em>tutelle</em> ({@code Visibilite#estPrmp} les
+     * traite comme un même périmètre). Partager un périmètre d'instruction n'est pas partager une
+     * pièce d'identité — l'UGPM reste en vue réduite sur la fiche de sa tutelle.</p>
+     */
+    @Test
+    @DisplayName("GET /api/prmps : une PRMP lit sa PROPRE fiche complète ; celle d'une autre, et l'UGPM de tutelle, restent réduites")
+    void prmpLectures_prmpLitSaPropreFicheComplete() throws Exception {
+        prmpRepository.save(prmp("PRMPAUT", "ANT"));
+        // Claim ref = PRMP001 : l'UGPM porte l'identifiant de sa PRMP de tutelle, pas le sien.
+        String tokenUgpm = bearer("UGPM1", ProfilUtilisateur.UGPM, TypeActeur.UGPM, "PRMP001", null);
+
+        // Sa propre fiche (claim ref = PRMP001) : complète.
+        mvc.perform(get("/api/prmps/PRMP001").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.cin").value("101011112222"))
+                .andExpect(jsonPath("$.dateCin").value("2010-05-05"))
+                .andExpect(jsonPath("$.lieuCin").value("Antananarivo"));
+
+        // Celle d'une autre PRMP : réduite, malgré le profil PRMP.
+        mvc.perform(get("/api/prmps/PRMPAUT").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nomPrmp").value("Nom"))
+                .andExpect(jsonPath("$.cin").doesNotExist())
+                .andExpect(jsonPath("$.dateCin").doesNotExist())
+                .andExpect(jsonPath("$.lieuCin").doesNotExist());
+
+        // L'UGPM sur la fiche de sa tutelle : réduite — le périmètre est partagé, pas la CIN.
+        mvc.perform(get("/api/prmps/PRMP001").header("Authorization", tokenUgpm))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nomPrmp").value("Nom"))
+                .andExpect(jsonPath("$.cin").doesNotExist())
+                .andExpect(jsonPath("$.dateCin").doesNotExist())
+                .andExpect(jsonPath("$.lieuCin").doesNotExist());
+
+        // Dans la liste : sa ligne complète, celle de l'autre réduite — l'arbitrage est bien par ligne.
+        mvc.perform(get("/api/prmps").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idPrmp=='PRMP001')].cin", hasItem("101011112222")))
+                .andExpect(jsonPath("$[?(@.idPrmp=='PRMPAUT')].cin", everyItem(nullValue())));
+    }
+
+    /**
+     * Les cinq lectures retombaient sur {@code anyRequest().authenticated()} : n'importe quel profil
+     * y avait droit. Elles portent désormais la même liste de profils que
+     * {@code GET /api/ugpms/par-tutelle/{idPrmp}} — les instructeurs du circuit, plus l'Administrateur
+     * et les acteurs PRMP/UGPM. Le {@code CHARGE_PUBLICATION} n'instruit aucun dossier et son espace
+     * (publications, documents publics, notifications) ne lit pas ce répertoire : il en est exclu.
+     * Ce test échouera si la garde disparaît des routes — l'oubli exact qui a créé la faille.
+     */
+    @Test
+    @DisplayName("GET /api/prmps (5 lectures) : profil hors circuit (chargé de publication) → 403")
+    void prmpLectures_profilHorsCircuitRefuse() throws Exception {
+        mvc.perform(get("/api/prmps/PRMP001").header("Authorization", tokenPublication))
+                .andExpect(status().isForbidden());
+        for (String url : PRMP_LECTURES_LISTE) {
+            mvc.perform(get(url).header("Authorization", tokenPublication))
+                    .andExpect(status().isForbidden());
+        }
     }
 
     @Test

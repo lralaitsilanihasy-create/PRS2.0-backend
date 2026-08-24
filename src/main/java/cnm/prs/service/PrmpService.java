@@ -14,6 +14,7 @@ import cnm.prs.dto.SuppressionLotPrmpResult;
 import cnm.prs.entity.CompteAuth;
 import cnm.prs.entity.PieceJointe;
 import cnm.prs.entity.Prmp;
+import cnm.prs.enums.ProfilUtilisateur;
 import cnm.prs.enums.TypeActeur;
 import cnm.prs.enums.TypePieceJointe;
 import cnm.prs.exception.BadRequestException;
@@ -28,6 +29,7 @@ import cnm.prs.repository.PpmRepository;
 import cnm.prs.repository.PrmpEntiteRepository;
 import cnm.prs.repository.PrmpRepository;
 import cnm.prs.repository.UgpmRepository;
+import cnm.prs.security.CurrentUser;
 
 /**
  * Logique métier pour {@link Prmp}.
@@ -65,16 +67,48 @@ public class PrmpService {
         this.passwordEncoder = passwordEncoder;
     }
 
+    /**
+     * Vrai si l'appelant a droit à la <strong>fiche complète</strong> de cette PRMP, CIN comprise :
+     * l'<strong>Administrateur</strong> (gestion des comptes) et la <strong>PRMP elle-même</strong>
+     * (claim {@code ref} = son propre matricule).
+     *
+     * <p>L'UGPM en est exclue, bien que son claim {@code ref} porte l'ID de sa PRMP de tutelle
+     * (cf. {@code Visibilite#estPrmp}) : elle partage le <em>périmètre</em> de sa tutelle, pas sa
+     * pièce d'identité.</p>
+     */
+    private static boolean ficheComplete(String idPrmp) {
+        ProfilUtilisateur profil = CurrentUser.profil().orElse(null);
+        if (profil == ProfilUtilisateur.ADMINISTRATEUR) {
+            return true;
+        }
+        return profil == ProfilUtilisateur.PRMP
+                && CurrentUser.ref().filter(ref -> !ref.isBlank()).map(ref -> ref.equals(idPrmp)).orElse(false);
+    }
+
+    /**
+     * Projection d'une PRMP selon l'appelant : fiche complète pour l'Administrateur et pour la PRMP
+     * concernée, <strong>vue réduite sans CIN</strong> ({@link PrmpMapper#toDtoRestreint}) pour tous
+     * les autres profils.
+     *
+     * <p>⚠️ Durcissement (2026-08-24) — les cinq lectures de la ressource retombaient sur
+     * {@code anyRequest().authenticated()} et servaient {@code cin}/{@code dateCin}/{@code lieuCin}
+     * à <em>n'importe quel</em> utilisateur connecté. L'arbitrage se fait ici, ligne à ligne, et non
+     * par route : une PRMP retrouve sa propre fiche complète y compris au milieu d'une liste.</p>
+     */
+    private static PrmpDto vue(Prmp entity) {
+        return ficheComplete(entity.getIdPrmp()) ? PrmpMapper.toDto(entity) : PrmpMapper.toDtoRestreint(entity);
+    }
+
     @Transactional(readOnly = true)
     public List<PrmpDto> findAll() {
-        return repository.findAll().stream().map(PrmpMapper::toDto).toList();
+        return repository.findAll().stream().map(PrmpService::vue).toList();
     }
 
     @Transactional(readOnly = true)
     public PrmpDto findById(String id) {
         Prmp entity = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Prmp introuvable : " + id));
-        return PrmpMapper.toDto(entity);
+        return vue(entity);
     }
 
     /**
@@ -83,7 +117,7 @@ public class PrmpService {
      */
     @Transactional(readOnly = true)
     public List<PrmpDto> findByLocalite(String idLocalite) {
-        return repository.findByLocaliteViaEntitesActives(idLocalite).stream().map(PrmpMapper::toDto).toList();
+        return repository.findByLocaliteViaEntitesActives(idLocalite).stream().map(PrmpService::vue).toList();
     }
 
     /**
@@ -92,13 +126,13 @@ public class PrmpService {
      */
     @Transactional(readOnly = true)
     public List<PrmpDto> findByEntite(Integer idEntiteContract) {
-        return repository.findByEntiteViaAffectationActive(idEntiteContract).stream().map(PrmpMapper::toDto).toList();
+        return repository.findByEntiteViaAffectationActive(idEntiteContract).stream().map(PrmpService::vue).toList();
     }
 
     /** Recherche partielle par nom (contient, insensible à la casse). Liste, vide si aucun résultat. */
     @Transactional(readOnly = true)
     public List<PrmpDto> findByNom(String nom) {
-        return repository.findByNomPrmpContainingIgnoreCase(nom).stream().map(PrmpMapper::toDto).toList();
+        return repository.findByNomPrmpContainingIgnoreCase(nom).stream().map(PrmpService::vue).toList();
     }
 
     /**

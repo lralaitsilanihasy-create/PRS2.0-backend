@@ -201,14 +201,29 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
   `GET /api/ugpms/par-tutelle/{idPrmp}` est aussi ouvert aux profils **Président, Chef de commission,
   Secrétaire, Membre, Vérificateur, Assistant contrôleur**, pour **toute** tutelle et **sans filtre de
   localité** : ce sont eux qui instruisent le dossier et doivent savoir quelle unité l'a établi. Le filtre
-  par localité est volontairement écarté — le répertoire des **PRMP** est déjà national pour tout
-  authentifié, et l'UGPM **n'a pas de localité propre** (elle hérite de celles des entités contractantes
+  par localité est volontairement écarté — le répertoire des **PRMP** est national pour ces mêmes profils,
+  et l'UGPM **n'a pas de localité propre** (elle hérite de celles des entités contractantes
   actives de sa tutelle, éventuellement réparties sur plusieurs localités) : filtrer masquerait justement
   l'unité qu'un contrôleur d'une autre localité doit identifier. **Étendue** : hors Administrateur, la
   réponse est une **vue restreinte** (identité, matricule, libellé, courriel, téléphone) — **ni pièce
   d'identité (`cin`, `dateCin`, `lieuCin`) ni `login`**, réservés à l'Administrateur. Le Chargé de
   publication, hors instruction, n'est pas concerné (403), et le reste de la ressource UGPM demeure
   réservé à l'Administrateur.
+- ⚠️ **Règle ajoutée (2026-08-24) — le répertoire des PRMP suit le même découpage que celui des UGPM.**
+  Les cinq lectures de `/api/prmps` (`GET /`, `/{id}`, `/par-localite/{idLocalite}`,
+  `/par-entite/{idEntiteContract}`, `/par-nom/{nom}`) servaient la fiche **complète** — **`cin`,
+  `dateCin`, `lieuCin` compris** — à **tout** utilisateur authentifié, quels que soient son profil et sa
+  localité. Donnée personnelle, sans usage métier hors gestion des comptes. **Étendue** : la réponse est
+  désormais une **vue réduite** (identité, matricule, arrêté de nomination et sa date, courriel,
+  téléphone) où le triptyque de la pièce d'identité est à **`null`** — les champs conservés étant les
+  mentions d'un **acte administratif** et des coordonnées **de fonction**, nécessaires à l'instruction.
+  Deux exceptions à la vue réduite : l'**Administrateur** (gestion des comptes) et la **PRMP concernée**
+  (claim `ref` = son propre matricule), qui reçoivent la fiche complète. L'arbitrage est fait
+  **ligne à ligne** : une PRMP retrouve sa fiche complète au milieu d'une liste, et reste en vue réduite
+  sur celle d'une consœur. L'**UGPM** en est exclue bien que son claim `ref` porte l'identifiant de sa
+  PRMP de tutelle : partager un périmètre d'instruction n'est pas partager une pièce d'identité. **Accès** :
+  mêmes profils que `GET /api/ugpms/par-tutelle/{idPrmp}` ; le Chargé de publication est refusé (403).
+  L'**écriture** reste réservée à l'Administrateur et manipule les dix champs.
 
 **Rectification en attente de décision PRMP (⚠️ règle ajoutée)**
 
