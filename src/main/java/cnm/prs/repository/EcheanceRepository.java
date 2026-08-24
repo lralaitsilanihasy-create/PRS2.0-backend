@@ -1,6 +1,7 @@
 package cnm.prs.repository;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -12,6 +13,13 @@ import cnm.prs.entity.Echeance;
 
 @Repository
 public interface EcheanceRepository extends JpaRepository<Echeance, Integer> {
+
+    /**
+     * Jalons portant sur l'une des lignes de marché données — support du scoping de
+     * {@code GET /api/echeances} sur le périmètre des marchés visibles (§1, §3.1). Un jalon n'a pas
+     * de périmètre propre : il hérite de celui de sa ligne de marché ({@code t_echeance.ID_DETAIL}).
+     */
+    List<Echeance> findByIdDetailIn(Collection<Integer> idDetails);
 
     /**
      * Jalons à alerter (§3.1, Module 04) : non encore alertés, non réalisés

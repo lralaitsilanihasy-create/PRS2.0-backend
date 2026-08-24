@@ -174,6 +174,12 @@ class CnmWorkflowIntegrationTest {
     @Autowired private cnm.prs.repository.SoaBeneficiaireRepository soaBeneficiaireRepository;
     @Autowired private cnm.prs.repository.ServiceBeneficiaireRepository serviceBeneficiaireRepository;
     @Autowired private cnm.prs.repository.UgpmRepository ugpmRepository;
+    // Gardes des contrôleurs de pilotage / circuit / bénéficiaires (2026-08-24).
+    @Autowired private cnm.prs.repository.EcheanceRepository echeanceRepository;
+    @Autowired private cnm.prs.repository.AnomalieRepository anomalieRepository;
+    @Autowired private cnm.prs.repository.RegleAnomalieRepository regleAnomalieRepository;
+    @Autowired private cnm.prs.repository.IndicateurPrmpRepository indicateurPrmpRepository;
+    @Autowired private cnm.prs.repository.SnapshotStatsRepository snapshotStatsRepository;
 
     private String tokenPresident;
     private String tokenCc;
@@ -10513,5 +10519,318 @@ class CnmWorkflowIntegrationTest {
         e.setImCtrlMembre(membre);
         e.setDateExamen(LocalDate.of(2026, 6, 4));
         return e;
+    }
+
+    // ————————————————————————————————————————————————————————————————————————————————————————————
+    // Gardes des neuf contrôleurs restés ouverts : pilotage, circuit, bénéficiaires.
+    //
+    // anomalies · copie-dossiers · echeances · indicateur-ctrls · indicateur-prmps · pv-navettes ·
+    // service-beneficiaires · snapshot-statss · soa-beneficiaires n'avaient AUCUNE garde : ni
+    // @PreAuthorize, ni entrée dans SecurityConfig, ni appel à Visibilite. Toutes retombaient sur
+    // `.anyRequest().authenticated()` : un simple jeton valide — celui d'une PRMP, partie contrôlée —
+    // servait la table entière et acceptait les écritures. Ces tests fixent, ressource par ressource,
+    // le périmètre servi ET le refus, pour que la fermeture ne puisse pas être défaite sans le voir.
+    // ————————————————————————————————————————————————————————————————————————————————————————————
+
+    /**
+     * Deux lignes de marché comparables, une par PRMP, dans la <strong>même localité</strong> (ANT) et
+     * toutes deux hors brouillon : marché 920 (dossier 320 / PPM 320, PRMP001) et marché 921 (dossier
+     * 321 / PPM 321, PRMP003). Le seul contraste est la <strong>propriété</strong> — c'est elle, et non
+     * la localité, que doivent voir les gardes des ressources filles du marché.
+     *
+     * @return le jeton de PRMP003 (PRMP001 = {@code tokenPrmp} du seed commun)
+     */
+    private String seedDeuxMarchesPourGardes() {
+        prmpRepository.save(prmp("PRMP003", "ANT"));
+        dossierRepository.save(dossierLoc(320, "SOUMIS", "ANT", "PRMP001"));
+        dossierRepository.save(dossierLoc(321, "SOUMIS", "ANT", "PRMP003"));
+        ppmRepository.save(ppm(320, 320, "PRMP001"));
+        ppmRepository.save(ppm(321, 321, "PRMP003"));
+        marcheRepository.save(marche(920, 320, 320));
+        marcheRepository.save(marche(921, 321, 321));
+        return bearer("PRMP003", ProfilUtilisateur.PRMP, TypeActeur.PRMP, "PRMP003", "ANT");
+    }
+
+    /** Jalon minimal rattaché à une ligne de marché (champs NOT NULL renseignés). */
+    private void seedEcheance(int id, int idDetail) {
+        cnm.prs.entity.Echeance e = new cnm.prs.entity.Echeance();
+        e.setIdEcheance(id);
+        e.setIdDetail(idDetail);
+        e.setTypeJalon("LANCEMENT");
+        e.setDatePrevue(LocalDate.of(2026, 9, 1));
+        echeanceRepository.save(e);
+    }
+
+    /** Anomalie minimale ; {@code idDetail} nul = anomalie de niveau PPM (sans ligne rattachée). */
+    private void seedAnomalie(int id, Integer idDetail, Integer idPpm) {
+        cnm.prs.entity.Anomalie a = new cnm.prs.entity.Anomalie();
+        a.setIdAnomalie(id);
+        a.setIdDetail(idDetail);
+        a.setIdPpm(idPpm);
+        a.setIdRegleAnomalie(1);
+        a.setTypeAnomalie("MONTANT");
+        a.setDescription("Ecart de montant constate");
+        anomalieRepository.save(a);
+    }
+
+    @Test
+    @DisplayName("Échéances — périmètre hérité de la ligne de marché : liste scopée, 403 hors périmètre, "
+            + "écriture fermée à tous sauf Administrateur (aucun écran n'écrit le calendrier)")
+    void gardes_echeances_perimetreDuMarcheEtEcritureAdmin() throws Exception {
+        String tokenPrmp3 = seedDeuxMarchesPourGardes();
+        seedEcheance(8900, 920);   // jalon d'un marché de PRMP001
+        seedEcheance(8901, 921);   // jalon d'un marché de PRMP003
+
+        // La liste ne renvoie plus la table entière : chaque PRMP ne voit que les jalons de SES marchés.
+        mvc.perform(get("/api/echeances").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idEcheance==8900)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idEcheance==8901)]", hasSize(0)));
+        mvc.perform(get("/api/echeances").header("Authorization", tokenPrmp3))
+                .andExpect(jsonPath("$[?(@.idEcheance==8901)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idEcheance==8900)]", hasSize(0)));
+        // Le Membre d'ANT voit les deux : même localité, dossiers non brouillon (§1) — le scoping filtre,
+        // il n'aveugle pas le circuit qui doit examiner ces dossiers.
+        mvc.perform(get("/api/echeances").header("Authorization", tokenMembre))
+                .andExpect(jsonPath("$[?(@.idEcheance==8900)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idEcheance==8901)]", hasSize(1)));
+
+        // Détail : le jalon d'autrui est refusé, le sien reste servi (aucune régression d'usage légitime —
+        // c'est l'appel du calendrier PRMP, seul écran consommateur de la ressource).
+        mvc.perform(get("/api/echeances/8901").header("Authorization", tokenPrmp))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/echeances/8900").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk());
+
+        // Écriture : le calendrier des jalons est alimenté par le suivi automatique, aucun écran ne l'écrit.
+        String corps = "{\"idEcheance\":8902,\"idDetail\":920,\"typeJalon\":\"LANCEMENT\",\"datePrevue\":\"2026-10-01\"}";
+        mvc.perform(post("/api/echeances").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content(corps))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/api/echeances").header("Authorization", tokenPresident)
+                .contentType(MediaType.APPLICATION_JSON).content(corps))
+                .andExpect(status().isForbidden());
+        mvc.perform(delete("/api/echeances/8901").header("Authorization", tokenPrmp3))
+                .andExpect(status().isForbidden());
+        assertTrue(echeanceRepository.existsById(8901));
+        // L'Administrateur passe la garde : la ressource reste opérationnelle pour l'exploitation.
+        mvc.perform(post("/api/echeances").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content(corps))
+                .andExpect(status().isCreated());
+        mvc.perform(delete("/api/echeances/8901").header("Authorization", tokenAdmin))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    @DisplayName("Anomalies — périmètre hérité de la ligne signalée : liste scopée, 403 hors périmètre, "
+            + "anomalie de niveau PPM réservée Président/Admin, écriture Administrateur seule")
+    void gardes_anomalies_perimetreDuMarcheEtEcritureAdmin() throws Exception {
+        String tokenPrmp3 = seedDeuxMarchesPourGardes();
+        cnm.prs.entity.RegleAnomalie regle = new cnm.prs.entity.RegleAnomalie();
+        regle.setIdRegleAnomalie(1);
+        regle.setCodeRegle("ECART_MONTANT");
+        regleAnomalieRepository.save(regle);
+        seedAnomalie(8600, 920, 320);    // anomalie sur une ligne de PRMP001
+        seedAnomalie(8601, 921, 321);    // anomalie sur une ligne de PRMP003
+        seedAnomalie(8602, null, 320);   // anomalie de niveau PPM : aucune ligne dont hériter
+
+        // La description d'une anomalie nomme le défaut constaté sur le marché d'autrui : elle sort du
+        // périmètre de qui n'est pas concerné.
+        mvc.perform(get("/api/anomalies").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idAnomalie==8600)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idAnomalie==8601)]", hasSize(0)));
+        mvc.perform(get("/api/anomalies").header("Authorization", tokenPrmp3))
+                .andExpect(jsonPath("$[?(@.idAnomalie==8601)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idAnomalie==8600)]", hasSize(0)));
+        mvc.perform(get("/api/anomalies/8601").header("Authorization", tokenPrmp))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/anomalies/8600").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk());
+
+        // Anomalie de niveau PPM : sans ligne parente, aucun périmètre à hériter → Président/Admin seuls.
+        mvc.perform(get("/api/anomalies/8602").header("Authorization", tokenPrmp))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/anomalies/8602").header("Authorization", tokenMembre))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/anomalies/8602").header("Authorization", tokenPresident))
+                .andExpect(status().isOk());
+
+        // Écriture : une anomalie est CONSTATÉE par le serveur. Laisser un client la clore (statut,
+        // imTraitement) reviendrait à laisser effacer le constat qui le vise.
+        String corps = "{\"idAnomalie\":8603,\"idDetail\":920,\"idRegleAnomalie\":1,"
+                + "\"statut\":\"TRAITEE\",\"imTraitement\":\"CTRMEM\"}";
+        mvc.perform(post("/api/anomalies").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content(corps))
+                .andExpect(status().isForbidden());
+        mvc.perform(put("/api/anomalies/8600").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content(corps))
+                .andExpect(status().isForbidden());
+        mvc.perform(put("/api/anomalies/8600").header("Authorization", tokenPresident)
+                .contentType(MediaType.APPLICATION_JSON).content(corps))
+                .andExpect(status().isForbidden());
+        mvc.perform(put("/api/anomalies/8600").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content(corps))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("Indicateurs contrôleur — périmètre nominatif : un contrôleur ne voit QUE ses propres "
+            + "indicateurs (403 sur ceux d'un collègue), la PRMP n'en voit aucun, écriture Administrateur")
+    void gardes_indicateurCtrl_perimetreNominatif() throws Exception {
+        cnm.prs.entity.IndicateurCtrl iMembre = new cnm.prs.entity.IndicateurCtrl();
+        iMembre.setIdIndicateur(8700);
+        iMembre.setImControleur("CTRMEM");
+        iMembre.setPeriode("2026-06");
+        iMembre.setNbExamens(12);
+        indicateurCtrlRepository.save(iMembre);
+        cnm.prs.entity.IndicateurCtrl iCc = new cnm.prs.entity.IndicateurCtrl();
+        iCc.setIdIndicateur(8701);
+        iCc.setImControleur("CTRCC1");
+        iCc.setPeriode("2026-06");
+        iCc.setNbExamens(30);
+        indicateurCtrlRepository.save(iCc);
+
+        // La performance individuelle est une donnée d'évaluation : le Membre voit la sienne, pas celle
+        // de son Chef de commission — et réciproquement.
+        mvc.perform(get("/api/indicateur-ctrls").header("Authorization", tokenMembre))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idIndicateur==8700)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idIndicateur==8701)]", hasSize(0)));
+        mvc.perform(get("/api/indicateur-ctrls/8701").header("Authorization", tokenMembre))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/indicateur-ctrls/8700").header("Authorization", tokenMembre))
+                .andExpect(status().isOk());
+        // La PRMP — partie contrôlée — n'a rien à connaître des notes des contrôleurs du CNM.
+        mvc.perform(get("/api/indicateur-ctrls").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+        mvc.perform(get("/api/indicateur-ctrls/8700").header("Authorization", tokenPrmp))
+                .andExpect(status().isForbidden());
+        // Le Président garde la vue « tous les membres de toutes les commissions » (§3.8, Module 09).
+        mvc.perform(get("/api/indicateur-ctrls").header("Authorization", tokenPresident))
+                .andExpect(jsonPath("$[?(@.idIndicateur==8700)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idIndicateur==8701)]", hasSize(1)));
+
+        // Écriture : un indicateur que le contrôleur évalué pourrait éditer ne mesurerait plus rien.
+        String corps = "{\"idIndicateur\":8700,\"imControleur\":\"CTRMEM\",\"periode\":\"2026-06\",\"nbExamens\":999}";
+        mvc.perform(put("/api/indicateur-ctrls/8700").header("Authorization", tokenMembre)
+                .contentType(MediaType.APPLICATION_JSON).content(corps))
+                .andExpect(status().isForbidden());
+        mvc.perform(put("/api/indicateur-ctrls/8700").header("Authorization", tokenPresident)
+                .contentType(MediaType.APPLICATION_JSON).content(corps))
+                .andExpect(status().isForbidden());
+        mvc.perform(put("/api/indicateur-ctrls/8700").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content(corps))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("Indicateurs PRMP — périmètre de propriété : une PRMP ne voit QUE son bilan (403 sur celui "
+            + "d'une homologue), le circuit n'en voit aucun, écriture Administrateur")
+    void gardes_indicateurPrmp_perimetreDePropriete() throws Exception {
+        String tokenPrmp3 = seedDeuxMarchesPourGardes();
+        indicateurPrmpRepository.save(indicateurPrmp(8800, "PRMP001"));
+        indicateurPrmpRepository.save(indicateurPrmp(8801, "PRMP003"));
+
+        // Le bilan annuel (taux de conformité, retours, retraits) JUGE la PRMP : le comparatif inter-PRMP
+        // est une vue de pilotage du Président, pas une donnée que les PRMP se lisent entre elles.
+        mvc.perform(get("/api/indicateur-prmps").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idIndicateurPrmp==8800)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idIndicateurPrmp==8801)]", hasSize(0)));
+        mvc.perform(get("/api/indicateur-prmps/8801").header("Authorization", tokenPrmp))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/indicateur-prmps/8800").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/indicateur-prmps").header("Authorization", tokenPrmp3))
+                .andExpect(jsonPath("$[?(@.idIndicateurPrmp==8801)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idIndicateurPrmp==8800)]", hasSize(0)));
+        // Un Membre n'a pas de périmètre sur cette ressource : liste vide, détail refusé.
+        mvc.perform(get("/api/indicateur-prmps").header("Authorization", tokenMembre))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+        mvc.perform(get("/api/indicateur-prmps/8800").header("Authorization", tokenMembre))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/indicateur-prmps").header("Authorization", tokenPresident))
+                .andExpect(jsonPath("$[?(@.idIndicateurPrmp==8800)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idIndicateurPrmp==8801)]", hasSize(1)));
+
+        // Écriture : le bilan d'une PRMP ne se corrige pas par la PRMP qu'il évalue.
+        String corps = "{\"idIndicateurPrmp\":8800,\"idPrmp\":\"PRMP001\",\"exercice\":2026,\"nbPpmSoumis\":9,"
+                + "\"nbDossiersSoumis\":9,\"nbDossiersConformes\":9,\"nbDossiersNonConformes\":0,"
+                + "\"nbRetours\":0,\"nbRetraits\":0}";
+        mvc.perform(put("/api/indicateur-prmps/8800").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content(corps))
+                .andExpect(status().isForbidden());
+        mvc.perform(put("/api/indicateur-prmps/8800").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content(corps))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("Instantanés statistiques — périmètre par localité : un CC voit la sienne (403 sur une autre "
+            + "et sur l'agrégat national), la PRMP n'en voit aucun, écriture Administrateur")
+    void gardes_snapshotStats_perimetreParLocalite() throws Exception {
+        snapshotStatsRepository.save(snapshot(8400, "ANT"));
+        snapshotStatsRepository.save(snapshot(8401, "TMS"));
+        snapshotStatsRepository.save(snapshot(8402, null));   // agrégat national
+
+        // Motif habituel (§1) : le CC d'ANT ne consolide pas les chiffres des autres localités, et
+        // l'agrégat national — qui n'appartient à aucune localité — ne lui est pas servi non plus.
+        mvc.perform(get("/api/snapshot-statss").header("Authorization", tokenCc))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idSnapshot==8400)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idSnapshot==8401)]", hasSize(0)))
+                .andExpect(jsonPath("$[?(@.idSnapshot==8402)]", hasSize(0)));
+        mvc.perform(get("/api/snapshot-statss/8401").header("Authorization", tokenCc))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/snapshot-statss/8402").header("Authorization", tokenCc))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/snapshot-statss/8400").header("Authorization", tokenCc))
+                .andExpect(status().isOk());
+        // La PRMP est un acteur externe au circuit : aucun instantané.
+        mvc.perform(get("/api/snapshot-statss").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+        mvc.perform(get("/api/snapshot-statss/8400").header("Authorization", tokenPrmp))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/snapshot-statss").header("Authorization", tokenPresident))
+                .andExpect(jsonPath("$", hasSize(3)));
+
+        // Écriture : l'instantané est un agrégat calculé, pas une donnée déclarative.
+        String corps = "{\"idSnapshot\":8403,\"dateSnapshot\":\"2026-07-01\",\"idLocalite\":\"ANT\",\"exercice\":2026}";
+        mvc.perform(post("/api/snapshot-statss").header("Authorization", tokenCc)
+                .contentType(MediaType.APPLICATION_JSON).content(corps))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/api/snapshot-statss").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content(corps))
+                .andExpect(status().isCreated());
+    }
+
+
+    private cnm.prs.entity.IndicateurPrmp indicateurPrmp(int id, String idPrmp) {
+        cnm.prs.entity.IndicateurPrmp i = new cnm.prs.entity.IndicateurPrmp();
+        i.setIdIndicateurPrmp(id);
+        i.setIdPrmp(idPrmp);
+        i.setExercice(2026);
+        i.setNbPpmSoumis(3);
+        i.setNbDossiersSoumis(5);
+        i.setNbDossiersConformes(4);
+        i.setNbDossiersNonConformes(1);
+        i.setNbRetours(2);
+        i.setNbRetraits(0);
+        return i;
+    }
+
+    /** Instantané statistique ; {@code idLocalite} nul = agrégat national. */
+    private cnm.prs.entity.SnapshotStats snapshot(int id, String idLocalite) {
+        cnm.prs.entity.SnapshotStats s = new cnm.prs.entity.SnapshotStats();
+        s.setIdSnapshot(id);
+        s.setDateSnapshot(LocalDate.of(2026, 6, 30));
+        s.setIdLocalite(idLocalite);
+        s.setExercice(2026);
+        s.setNbDossiersRecus(10);
+        return s;
     }
 }
