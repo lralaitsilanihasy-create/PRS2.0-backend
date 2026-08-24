@@ -1,5 +1,6 @@
 package cnm.prs.repository;
 
+import java.util.Collection;
 import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -16,6 +17,9 @@ public interface LotRepository extends JpaRepository<Lot, Integer> {
 
     /** Lots d'un dossier (tous les lots de toutes ses lignes de marché). */
     List<Lot> findByIdDossier(Integer idDossier);
+
+    /** Lots d'un ensemble de marchés — support du scoping de la liste sur le périmètre du marché parent. */
+    List<Lot> findByIdDetailIn(Collection<Integer> idDetails);
 
     /** Plus grand ID_LOT existant (0 si vide) — PK allouée serveur (Voie B). */
     @Query("select coalesce(max(l.idLot), 0) from Lot l")

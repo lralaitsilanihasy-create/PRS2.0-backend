@@ -2618,15 +2618,27 @@ de PV). Lecture filtrée par profil/localité. Cycle : `BROUILLON → SOUMIS →
 ---
 
 ## Lots
-**Ressource** `/api/lots` — Lecture / écriture : tout utilisateur authentifié. `GET /par-marche/{idDetail}` liste
-les lots d'une **ligne de marché** (`t_lot.ID_DETAIL`) — **liste vide** si aucun (ou marché inconnu), pas de 404 (filtre).
-`GET /par-dossier/{idDossier}` agrège **tous les lots d'un dossier** (`t_lot.ID_DOSSIER`, toutes ses lignes de marché) en **un seul appel** — même sémantique filtre (liste vide, pas de 404).
+**Ressource** `/api/lots` — ⚠️ **Périmètre hérité de la ligne de marché parente** (correction de sécurité) : un lot
+n'a pas de périmètre propre, il prend celui de son marché (`t_lot.ID_DETAIL`). **Lecture scopée** exactement comme
+`GET /api/marches` : Président/Administrateur voient tout, la PRMP (et l'UGPM sous sa tutelle) ne voit que **les
+siens**, les contrôleurs ceux de **leur localité** (dossier non brouillon), tout autre profil → **liste vide**. Cibler
+un lot ou un marché **hors périmètre** → **403**. **Écriture (POST/PUT/DELETE) réservée `PRMP`/`UGPM`** — mêmes rôles
+que sur `/api/marches` (les lignes d'un PPM appartiennent à la PRMP ; le circuit interne les lit, ne les édite pas) —
+**et** contrôlée sur le périmètre du marché visé (403 si le marché est celui d'une autre entité).
+⚠️ **`idLot` est désormais alloué par le serveur** (`max+1`) : **tout id envoyé par le client est ignoré**, comme sur
+`t_marche` (§ « Identifiants attribués par le serveur »). Sans cela, un client qui alloue son id par `max()` sur la
+liste — désormais **partielle** — viserait le lot d'une autre entité, que l'enregistrement écraserait.
+
+`GET /par-marche/{idDetail}` liste
+les lots d'une **ligne de marché** (`t_lot.ID_DETAIL`) — **liste vide** si aucun (ou marché inconnu), pas de 404 (filtre) ;
+**403** si le marché existe et est hors périmètre.
+`GET /par-dossier/{idDossier}` agrège **tous les lots d'un dossier** (`t_lot.ID_DOSSIER`, toutes ses lignes de marché) en **un seul appel** — même sémantique filtre (liste vide, pas de 404), chaque lot étant filtré sur la visibilité de **sa** ligne de marché (dossier hors périmètre → liste vide, pas de 403).
 
 **Champs `LotDto`**
 
 | Champ (JSON) | Type | Obligatoire | Contraintes |
 |---|---|---|---|
-| idLot | number | Oui (PK, au POST) | clé primaire |
+| idLot | number | **Non** (⚠️ ignoré au POST) | PK **allouée serveur** ; renvoyée dans la réponse |
 | idDossier | number | Oui | @NotNull |
 | idDetail | number | Oui | @NotNull |
 | designationLot | string | Oui | @NotBlank, max 200 |
@@ -2638,19 +2650,19 @@ les lots d'une **ligne de marché** (`t_lot.ID_DETAIL`) — **liste vide** si au
 
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
-| GET | /api/lots | — | `LotDto[]` | 200 | Authentifié |
-| GET | /api/lots/{id} | — | `LotDto` | 200, 404 | Authentifié |
-| GET | /api/lots/par-marche/{idDetail} | — | `LotDto[]` | 200 | Authentifié |
-| GET | /api/lots/par-dossier/{idDossier} | — | `LotDto[]` | 200 | Authentifié |
-| POST | /api/lots | `LotDto` | `LotDto` | 201, 400 | Authentifié |
-| PUT | /api/lots/{id} | `LotDto` | `LotDto` | 200, 400, 404 | Authentifié |
-| DELETE | /api/lots/{id} | — | — | 204, 404 | Authentifié |
+| GET | /api/lots | — | `LotDto[]` | 200 | Authentifié — **liste scopée** au périmètre du marché parent |
+| GET | /api/lots/{id} | — | `LotDto` | 200, **403**, 404 | Authentifié — périmètre du marché parent |
+| GET | /api/lots/par-marche/{idDetail} | — | `LotDto[]` | 200, **403** | Authentifié — périmètre du marché parent |
+| GET | /api/lots/par-dossier/{idDossier} | — | `LotDto[]` | 200 | Authentifié — filtré lot par lot (jamais 403) |
+| POST | /api/lots | `LotDto` | `LotDto` | 201, 400, **403** | **PRMP / UGPM** (périmètre du marché visé) |
+| PUT | /api/lots/{id} | `LotDto` | `LotDto` | 200, 400, **403**, 404 | **PRMP / UGPM** (périmètre, origine **et** destination) |
+| DELETE | /api/lots/{id} | — | — | 204, **403**, 404 | **PRMP / UGPM** (périmètre du marché parent) |
 
 `{id}` = idLot (number).
 
 **Exemple — requête**
 ```json
-{ "idLot": 88, "idDossier": 320, "idDetail": 1205, "designationLot": "Fourniture de mobilier - Lot 1", "montLot": 85000000.0, "qteLot": 150, "uniteLot": "unite" }
+{ "idDossier": 320, "idDetail": 1205, "designationLot": "Fourniture de mobilier - Lot 1", "montLot": 85000000.0, "qteLot": 150, "uniteLot": "unite" }
 ```
 
 ---
@@ -2907,7 +2919,12 @@ ouverte**, complétable sans livraison. Le mapping **mode de passation → type 
 ---
 
 ## Dossiers de mise en concurrence (DMC)
-**Ressource** `/api/dmcs` (table `t_dossier_mec`) — Authentifié. **Un DMC par ligne de marché** (relation 1-1 sur
+**Ressource** `/api/dmcs` (table `t_dossier_mec`) — ⚠️ **Réservée à l'`ADMINISTRATEUR`, lectures comprises**
+(correction de sécurité). Aucun écran du front ne consomme cette ressource : plutôt que de lui inventer un périmètre
+qu'aucun usage ne vient valider, elle est **fermée au plus strict** ; la garde s'ouvrira sur un besoin constaté. Le
+**déclenchement interne** (création du DMC, re-dérivation de son type au changement de mode, suppression en cascade
+avec le marché) passe par le service, **pas** par cette façade : il n'est pas concerné.
+**Un DMC par ligne de marché** (relation 1-1 sur
 `idDetail`). Son **type est dérivé du mode de passation** du marché (`tr_mode_passation.ID_TYPE_DMC`, pas d'enum codé
 en dur). Création par un **service dédié** (non câblé automatiquement sur la saisie/soumission). Si le mode n'est pas
 mappé à un type **actif** → **400** avec message de configuration (aucun DMC créé). Une 2ᵉ création pour le même
@@ -2921,14 +2938,19 @@ marché → **409** (unicité). Au **changement de mode** d'un marché, si son D
 
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
-| POST | /api/dmcs/par-marche/{idDetail} | — | `DmcDto` | 201, 400, 404, 409 | Authentifié |
-| GET | /api/dmcs/par-marche/{idDetail} | — | `DmcDto` | 200, 404 | Authentifié |
-| GET | /api/dmcs/{id} | — | `DmcDto` | 200, 404 | Authentifié |
+| POST | /api/dmcs/par-marche/{idDetail} | — | `DmcDto` | 201, 400, **403**, 404, 409 | **ADMINISTRATEUR** |
+| GET | /api/dmcs/par-marche/{idDetail} | — | `DmcDto` | 200, **403**, 404 | **ADMINISTRATEUR** |
+| GET | /api/dmcs/{id} | — | `DmcDto` | 200, **403**, 404 | **ADMINISTRATEUR** |
 
 ---
 
 ## Marchés — dates prévisionnelles
-**Ressource** `/api/marche-previsions` — Lecture / écriture : tout utilisateur authentifié.
+**Ressource** `/api/marche-previsions` — ⚠️ **Périmètre hérité de la ligne de marché parente**
+(`t_marche_prevision.ID_DETAIL`, correction de sécurité) : **mêmes règles que `/api/lots`** — lecture scopée comme
+`GET /api/marches`, **403** sur une prévision ou un `?marche=` hors périmètre, **écriture réservée `PRMP`/`UGPM`**
+(le calendrier prévisionnel est la parole de la PRMP ; le circuit le lit pour examiner, ne le modifie pas) et
+contrôlée sur le marché visé. `idPrevision` est **alloué par le serveur** (`max+1`) ; tout id envoyé par le client
+est **ignoré**.
 
 Dates prévisionnelles d'un marché, en relation **1,N** avec `/api/marches` : **une ligne par
 processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) et une `dateFin`
@@ -2939,7 +2961,7 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 
 | Champ (JSON) | Type | Obligatoire | Contraintes |
 |---|---|---|---|
-| idPrevision | number | Oui (PK, au POST) | @NotNull, clé primaire |
+| idPrevision | number | Oui (@NotNull) | ⚠️ **valeur ignorée** : PK **allouée serveur** ; renvoyée dans la réponse |
 | idDetail | number | Oui | @NotNull — FK vers le marché |
 | idCapm | number | Oui | @NotNull — FK vers `t_capm` (processus) |
 | dateDebut | string (date) | Oui | @NotNull — `yyyy-MM-dd` |
@@ -2950,12 +2972,12 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
-| GET | /api/marche-previsions | — | `MarchePrevisionDto[]` | 200 | Authentifié |
-| GET | /api/marche-previsions?marche={idDetail} | — | `MarchePrevisionDto[]` | 200 | Authentifié |
-| GET | /api/marche-previsions/{id} | — | `MarchePrevisionDto` | 200, 404 | Authentifié |
-| POST | /api/marche-previsions | `MarchePrevisionDto` | `MarchePrevisionDto` | 201, 400 | Authentifié |
-| PUT | /api/marche-previsions/{id} | `MarchePrevisionDto` | `MarchePrevisionDto` | 200, 400, 404 | Authentifié |
-| DELETE | /api/marche-previsions/{id} | — | — | 204, 404 | Authentifié |
+| GET | /api/marche-previsions | — | `MarchePrevisionDto[]` | 200 | Authentifié — **liste scopée** au périmètre du marché parent |
+| GET | /api/marche-previsions?marche={idDetail} | — | `MarchePrevisionDto[]` | 200, **403** | Authentifié — périmètre du marché |
+| GET | /api/marche-previsions/{id} | — | `MarchePrevisionDto` | 200, **403**, 404 | Authentifié — périmètre du marché parent |
+| POST | /api/marche-previsions | `MarchePrevisionDto` | `MarchePrevisionDto` | 201, 400, **403** | **PRMP / UGPM** (périmètre du marché visé) |
+| PUT | /api/marche-previsions/{id} | `MarchePrevisionDto` | `MarchePrevisionDto` | 200, 400, **403**, 404 | **PRMP / UGPM** (périmètre, origine **et** destination) |
+| DELETE | /api/marche-previsions/{id} | — | — | 204, **403**, 404 | **PRMP / UGPM** (périmètre du marché parent) |
 
 `{id}` = idPrevision (number). Le paramètre `marche` filtre par marché (idDetail).
 
@@ -4068,13 +4090,16 @@ au dépôt, **aucun archivage** — simple événement tracé).
 ---
 
 ## Tranches
-**Ressource** `/api/tranches` — Lecture / écriture : tout utilisateur authentifié.
+**Ressource** `/api/tranches` — ⚠️ **Périmètre hérité de la ligne de marché**, remonté par le lot
+(`t_tranche.ID_LOT` → `t_lot.ID_DETAIL`) : **mêmes règles que `/api/lots`** (lecture scopée, 403 hors périmètre,
+écriture réservée `PRMP`/`UGPM` et contrôlée sur le lot visé). `idTranche` est **alloué par le serveur** (`max+1`) ;
+tout id envoyé par le client est **ignoré**.
 
 **Champs `TrancheDto`**
 
 | Champ (JSON) | Type | Obligatoire | Contraintes |
 |---|---|---|---|
-| idTranche | number | Oui (PK, au POST) | clé primaire |
+| idTranche | number | **Non** (⚠️ ignoré au POST) | PK **allouée serveur** ; renvoyée dans la réponse |
 | lieuTrc | string | Non | max 100 |
 | montTrc | number | Non | |
 | idLot | number | Oui | @NotNull |
@@ -4083,11 +4108,11 @@ au dépôt, **aucun archivage** — simple événement tracé).
 
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
-| GET | /api/tranches | — | `TrancheDto[]` | 200 | Authentifié |
-| GET | /api/tranches/{id} | — | `TrancheDto` | 200, 404 | Authentifié |
-| POST | /api/tranches | `TrancheDto` | `TrancheDto` | 201, 400 | Authentifié |
-| PUT | /api/tranches/{id} | `TrancheDto` | `TrancheDto` | 200, 400, 404 | Authentifié |
-| DELETE | /api/tranches/{id} | — | — | 204, 404 | Authentifié |
+| GET | /api/tranches | — | `TrancheDto[]` | 200 | Authentifié — **liste scopée** au périmètre du marché parent |
+| GET | /api/tranches/{id} | — | `TrancheDto` | 200, **403**, 404 | Authentifié — périmètre du marché parent |
+| POST | /api/tranches | `TrancheDto` | `TrancheDto` | 201, 400, **403** | **PRMP / UGPM** (périmètre du lot visé) |
+| PUT | /api/tranches/{id} | `TrancheDto` | `TrancheDto` | 200, 400, **403**, 404 | **PRMP / UGPM** (périmètre, origine **et** destination) |
+| DELETE | /api/tranches/{id} | — | — | 204, **403**, 404 | **PRMP / UGPM** (périmètre du marché parent) |
 
 `{id}` = idTranche (number).
 
