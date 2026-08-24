@@ -520,6 +520,48 @@ class CnmWorkflowIntegrationTest {
                 .andExpect(jsonPath("$[?(@.idEntiteContract==1)].idLocalite", hasItem("ANT")));
     }
 
+    /**
+     * ⚠️ Durcissement (2026-08-24) — {@code GET /api/auth/prmps} servait anonymement le référentiel
+     * réduit des PRMP, c'est-à-dire la <strong>liste des comptes de connexion existants</strong>,
+     * alors que {@code POST /api/auth/login} n'est pas limité en débit : énumération de comptes puis
+     * martelage. La route est sortie du {@code permitAll} de {@code /api/auth/**} et réservée à
+     * l'Administrateur. Ce test verrouille la fermeture : il échouera si quelqu'un remet la route
+     * dans le {@code permitAll} (401 → 200) ou l'ouvre à un profil authentifié quelconque (403 → 200).
+     */
+    @Test
+    @DisplayName("Référentiel des PRMP : anonyme → 401, PRMP authentifiée → 403, Administrateur → 200")
+    void prmpsReferentiel_reserveAdministrateur() throws Exception {
+        mvc.perform(get("/api/auth/prmps")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/auth/prmps").header("Authorization", tokenPrmp))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/auth/prmps").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idPrmp=='PRMP001')]", hasSize(1)));
+    }
+
+    /**
+     * ⚠️ Non-régression du durcissement ci-dessus : en extrayant {@code GET /api/auth/prmps} du
+     * {@code permitAll} de {@code /api/auth/**}, il aurait été facile de fermer tout le préfixe et de
+     * casser l'ouverture de session et l'écran d'inscription. Les routes réellement publiques
+     * doivent rester joignables <strong>sans aucun jeton</strong> : sans elles, plus personne ne peut
+     * se connecter ni s'inscrire.
+     */
+    @Test
+    @DisplayName("Routes publiques préservées : login et référentiel d'entités répondent sans jeton")
+    void routesPubliques_restentOuvertesSansJeton() throws Exception {
+        // Login : 200 avec de bons identifiants — la route n'est pas passée derrière l'authentification.
+        mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"login\":\"CTRCC1\",\"motDePasse\":\"pw\"}"))
+                .andExpect(status().isOk());
+        // Mauvais mot de passe : 401 émis par l'authentification métier, PAS par le filtre de sécurité
+        // (une route devenue protégée renverrait 401 aussi — le 200 ci-dessus lève l'ambiguïté).
+        mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"login\":\"CTRCC1\",\"motDePasse\":\"faux\"}"))
+                .andExpect(status().isUnauthorized());
+        // Référentiel public des entités contractantes (écran d'inscription PRMP) : toujours ouvert.
+        mvc.perform(get("/api/auth/entites")).andExpect(status().isOk());
+    }
+
     @Test
     @DisplayName("Pièces jointes : stockage PDF (magic-bytes), remplacement par type, rejet d'un type non autorisé")
     void pieceJointe_stockageRemplacementRejet() throws Exception {
@@ -5180,13 +5222,8 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
-    @DisplayName("POST /api/auth/register/ugpm : auto-inscription publique EN_ATTENTE ; login refusé avant validation ; validée par l'Admin → login OK (UGPM) ; GET /api/auth/prmps public ; tutelle inconnue / déjà pris → 409")
+    @DisplayName("POST /api/auth/register/ugpm : auto-inscription publique EN_ATTENTE ; login refusé avant validation ; validée par l'Admin → login OK (UGPM) ; tutelle inconnue / déjà pris → 409")
     void ugpm_autoInscription() throws Exception {
-        // GET /api/auth/prmps (public, sans token) → contient la PRMP001 du seed.
-        mvc.perform(get("/api/auth/prmps"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.idPrmp=='PRMP001')]", hasSize(1)));
-
         byte[] jpeg = { (byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0, 0, 0, 0 };
         String data = "{\"login\":\"ugpm.reg\",\"motDePasse\":\"Ugpm@1234\",\"idUgpm\":\"UGPREG\","
                 + "\"nomUgpm\":\"Rakoto\",\"prenomsUgpm\":\"Jean\",\"cin\":\"101234567890\","

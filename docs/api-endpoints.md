@@ -13,8 +13,12 @@
 
 ### Authentification
 - Toutes les routes nécessitent un **jeton JWT**, **sauf** les routes publiques : `POST /api/auth/login`,
-  `POST /api/auth/register/prmp`, `POST /api/auth/register/ugpm`, `GET /api/auth/entites`, `GET /api/auth/prmps`
-  (tout `/api/auth/**`).
+  `POST /api/auth/logout`, `POST /api/auth/register/prmp`, `POST /api/auth/register/ugpm`,
+  `GET /api/auth/entites`.
+- ⚠️ **Exception au sein de `/api/auth/**` (2026-08-24)** : `GET /api/auth/prmps` **n'est plus public** —
+  il exige le rôle **`ADMINISTRATEUR`**. Servi anonymement, il livrait la liste des comptes de connexion
+  existants alors que `POST /api/auth/login` n'est pas limité en débit (énumération de comptes puis
+  martelage). Anonyme → **401**, autre profil authentifié → **403**.
 - Obtenir le jeton via `POST /api/auth/login`, puis l'envoyer sur chaque requête :
   `Authorization: Bearer <token>`.
 - Absence / invalidité du jeton → **401**. Rôle insuffisant → **403**.
@@ -298,7 +302,8 @@ actif** : c'est un coupe-circuit, pas une seconde activation (chaque actualité 
 ---
 
 ## Authentification
-**Ressource** `/api/auth` — Routes **publiques** (aucun token requis). Pas de CRUD.
+**Ressource** `/api/auth` — Routes **publiques** (aucun token requis), **sauf `GET /api/auth/prmps`**
+qui exige le rôle `ADMINISTRATEUR` (cf. *Authentification* en tête de document). Pas de CRUD.
 
 > ⚠️ **Cookie de session HttpOnly — phase 1 livrée (2026-08-17, plan `docs/plan-cookie-httponly.md`).**
 > - `POST /api/auth/login` pose désormais **aussi** le cookie **`PRS_SESSION`** (`HttpOnly; Secure;
@@ -387,7 +392,7 @@ actif** : c'est un coupe-circuit, pas une seconde activation (chaque actualité 
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
 | GET | /api/auth/entites | — | `EntitePubliqueDto[]` | 200 | PUBLIC |
-| GET | /api/auth/prmps | — | `PrmpPubliqueDto[]` | 200 | PUBLIC |
+| GET | /api/auth/prmps | — | `PrmpPubliqueDto[]` | 200, 401, 403 | **ADMINISTRATEUR** |
 | POST | /api/auth/login | `LoginRequest` | `LoginResponse` | 200, 400, 401 | PUBLIC |
 | POST | /api/auth/register/prmp | **`multipart/form-data`** (v2, ci-dessous) ou `RegisterPrmpRequest` (JSON, historique) | `RegisterResponse` | 201, 400, 409 | PUBLIC |
 | POST | /api/auth/register/ugpm | **`multipart/form-data`** : part `data` (`RegisterUgpmRequest`) + `cin` (obligatoire) + `photo` (opt.) | `RegisterResponse` | 201, 400, 409 | PUBLIC |
@@ -412,7 +417,9 @@ actif** : c'est un coupe-circuit, pas une seconde activation (chaque actualité 
 > Le compte est créé **`EN_ATTENTE`** (`TYPE_ACTEUR=UGPM`, `refActeur=idUgpm`) ; la connexion reste refusée
 > (**401**) jusqu'à validation. **`idPrmpTutelle` doit exister**, sinon **409** ; `idUgpm` ou `login` déjà pris
 > → **409**. Les **Administrateurs sont notifiés** (`NOUVELLE_INSCRIPTION`). `GET /api/auth/prmps` expose le
-> **référentiel réduit des PRMP** (`idPrmp`, `nomPrmp`, `prenomsPrmp`) pour le menu « PRMP de tutelle ».
+> **référentiel réduit des PRMP** (`idPrmp`, `nomPrmp`, `prenomsPrmp`) pour le menu « PRMP de tutelle » —
+> ⚠️ **route fermée depuis le 2026-08-24** (rôle `ADMINISTRATEUR` requis, cf. *Authentification*) : elle
+> n'est **pas** appelable depuis l'écran d'inscription anonyme. Aucun écran ne la consommait.
 > La validation suit le **même circuit Administrateur** que la PRMP (voir *Inscriptions* ci-dessous).
 
 **Exemple — login (requête / réponse)**
