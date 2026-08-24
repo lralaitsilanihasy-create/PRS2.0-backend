@@ -152,6 +152,7 @@ class CnmWorkflowIntegrationTest {
     @Autowired private cnm.prs.repository.TypeDmcRepository typeDmcRepository;
     @Autowired private cnm.prs.repository.DossierMecRepository dossierMecRepository;
     @Autowired private cnm.prs.repository.LotRepository lotRepository;
+    @Autowired private cnm.prs.repository.TrancheRepository trancheRepository;
     @Autowired private cnm.prs.service.PvDocumentGenerator pvDocumentGenerator;
     @Autowired private cnm.prs.service.ReferenceService referenceService;
     @Autowired private jakarta.persistence.EntityManager entityManager;
@@ -10381,6 +10382,239 @@ class CnmWorkflowIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idPrevision\":990021,\"idDetail\":9830,\"idCapm\":2,\"dateDebut\":\"2026-05-01\",\"dateFin\":\"2026-04-01\"}"))
                 .andExpect(status().isBadRequest());
+    }
+
+    // ————————————————————————————————————————————————————————————————————————————————————————————
+    // Périmètre des ressources FILLES du marché (lots, tranches, dates prévisionnelles, DMC).
+    //
+    // Ces quatre ressources n'avaient aucune garde : ni @PreAuthorize, ni entrée dans SecurityConfig,
+    // ni appel à Visibilite. Elles retombaient sur `.anyRequest().authenticated()` et servaient la
+    // table entière. Le symptôme mesurable : une PRMP recevait 403 sur GET /api/marches/{id} d'un
+    // marché d'une autre entité, mais 200 — avec les lots — sur GET /api/lots/par-marche/{le même id},
+    // et son DELETE passait. Ces tests fixent le contraire, endpoint par endpoint.
+    // ————————————————————————————————————————————————————————————————————————————————————————————
+
+    /**
+     * Deux lignes de marché comparables, une par PRMP, dans la <strong>même localité</strong> (ANT) et
+     * toutes deux hors brouillon : marché 900 (dossier 300 / PPM 300, PRMP001) et marché 901 (dossier 301 /
+     * PPM 301, PRMP002). Le seul contraste est la <strong>propriété</strong> — c'est bien elle, et non la
+     * localité, que les gardes des ressources filles doivent voir.
+     *
+     * @return le jeton de PRMP002 (PRMP001 = {@code tokenPrmp} du seed commun)
+     */
+    private String seedDeuxMarchesDeDeuxPrmp() {
+        prmpRepository.save(prmp("PRMP002", "ANT"));
+        dossierRepository.save(dossierLoc(300, "SOUMIS", "ANT", "PRMP001"));
+        dossierRepository.save(dossierLoc(301, "SOUMIS", "ANT", "PRMP002"));
+        ppmRepository.save(ppm(300, 300, "PRMP001"));
+        ppmRepository.save(ppm(301, 301, "PRMP002"));
+        marcheRepository.save(marche(900, 300, 300));
+        marcheRepository.save(marche(901, 301, 301));
+        return bearer("PRMP002", ProfilUtilisateur.PRMP, TypeActeur.PRMP, "PRMP002", "ANT");
+    }
+
+    /** Lot minimal rattaché à une ligne de marché (champs NOT NULL renseignés). */
+    private void seedLot(int idLot, int idDossier, int idDetail) {
+        cnm.prs.entity.Lot l = new cnm.prs.entity.Lot();
+        l.setIdLot(idLot);
+        l.setIdDossier(idDossier);
+        l.setIdDetail(idDetail);
+        l.setDesignationLot("Lot " + idLot);
+        lotRepository.save(l);
+    }
+
+    @Test
+    @DisplayName("Lots — périmètre hérité de la ligne de marché : liste scopée, 403 pour la PRMP d'une autre entité (lecture et DELETE), écriture fermée au circuit")
+    void scoping_lots_heriteDuMarcheParent() throws Exception {
+        String tokenPrmp2 = seedDeuxMarchesDeDeuxPrmp();
+        seedLot(8500, 300, 900);   // lot d'un marché de PRMP001
+        seedLot(8501, 301, 901);   // lot d'un marché de PRMP002
+
+        // La liste ne renvoie plus la table entière : chaque PRMP ne voit que les lots de SES marchés.
+        mvc.perform(get("/api/lots").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idLot==8500)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idLot==8501)]", hasSize(0)));
+        mvc.perform(get("/api/lots").header("Authorization", tokenPrmp2))
+                .andExpect(jsonPath("$[?(@.idLot==8501)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idLot==8500)]", hasSize(0)));
+        // Le Membre d'ANT voit les deux : même localité, dossiers non brouillon (§1) — le scoping filtre,
+        // il n'aveugle pas le circuit qui doit examiner ces dossiers.
+        mvc.perform(get("/api/lots").header("Authorization", tokenMembre))
+                .andExpect(jsonPath("$[?(@.idLot==8500)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idLot==8501)]", hasSize(1)));
+
+        // Le cœur de la faille : même id de marché, deux réponses opposées selon la ressource.
+        mvc.perform(get("/api/marches/901").header("Authorization", tokenPrmp))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/lots/par-marche/901").header("Authorization", tokenPrmp))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/lots/8501").header("Authorization", tokenPrmp))
+                .andExpect(status().isForbidden());
+        // Le marché dont elle est propriétaire reste servi (aucune régression d'usage légitime).
+        mvc.perform(get("/api/lots/par-marche/900").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)));
+        // par-dossier reste un FILTRE (liste vide, jamais 403) : le dossier d'autrui ne rend rien.
+        mvc.perform(get("/api/lots/par-dossier/301").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+
+        // DELETE : hors périmètre → 403 (PRMP d'une autre entité) ; hors rôle → 403 (circuit interne,
+        // Président compris : les lignes d'un PPM appartiennent à la PRMP, le circuit ne les édite pas).
+        mvc.perform(delete("/api/lots/8501").header("Authorization", tokenPrmp))
+                .andExpect(status().isForbidden());
+        mvc.perform(delete("/api/lots/8501").header("Authorization", tokenMembre))
+                .andExpect(status().isForbidden());
+        mvc.perform(delete("/api/lots/8501").header("Authorization", tokenPresident))
+                .andExpect(status().isForbidden());
+        assertTrue(lotRepository.existsById(8501));
+        // Le propriétaire, lui, supprime le sien.
+        mvc.perform(delete("/api/lots/8500").header("Authorization", tokenPrmp))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    @DisplayName("Tranches — périmètre remonté lot → marché : liste scopée, 403 pour la PRMP d'une autre entité (lecture et DELETE), écriture fermée au circuit")
+    void scoping_tranches_heriteDuMarcheParent() throws Exception {
+        String tokenPrmp2 = seedDeuxMarchesDeDeuxPrmp();
+        seedLot(8500, 300, 900);
+        seedLot(8501, 301, 901);
+        trancheRepository.save(new cnm.prs.entity.Tranche(7500, "Antananarivo", new BigDecimal("1000000"), 8500, null));
+        trancheRepository.save(new cnm.prs.entity.Tranche(7501, "Antananarivo", new BigDecimal("2000000"), 8501, null));
+
+        // La chaîne t_tranche.ID_LOT → t_lot.ID_DETAIL → périmètre du marché est bien parcourue.
+        mvc.perform(get("/api/tranches").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idTranche==7500)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idTranche==7501)]", hasSize(0)));
+        mvc.perform(get("/api/tranches").header("Authorization", tokenPrmp2))
+                .andExpect(jsonPath("$[?(@.idTranche==7501)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idTranche==7500)]", hasSize(0)));
+
+        mvc.perform(get("/api/tranches/7501").header("Authorization", tokenPrmp))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/tranches/7500").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk());
+
+        mvc.perform(delete("/api/tranches/7501").header("Authorization", tokenPrmp))
+                .andExpect(status().isForbidden());
+        mvc.perform(delete("/api/tranches/7501").header("Authorization", tokenMembre))
+                .andExpect(status().isForbidden());
+        assertTrue(trancheRepository.existsById(7501));
+        mvc.perform(delete("/api/tranches/7500").header("Authorization", tokenPrmp))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    @DisplayName("Dates prévisionnelles — périmètre hérité de la ligne de marché : liste scopée, 403 pour la PRMP d'une autre entité (lecture, ?marche=, DELETE), écriture fermée au circuit")
+    void scoping_marchePrevisions_heriteDuMarcheParent() throws Exception {
+        String tokenPrmp2 = seedDeuxMarchesDeDeuxPrmp();
+        capmRepository.save(new Capm(1, "LANCEMENT", 1, null, null));   // FK t_marche_prevision.ID_CAPM
+        marchePrevisionRepository.save(new MarchePrevision(9500, 900, 1,
+                LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 30), null, null));
+        marchePrevisionRepository.save(new MarchePrevision(9501, 901, 1,
+                LocalDate.of(2026, 6, 1), LocalDate.of(2026, 6, 30), null, null));
+
+        // Le calendrier prévisionnel de toutes les entités n'est plus lisible par tout porteur de jeton.
+        mvc.perform(get("/api/marche-previsions").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idPrevision==9500)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idPrevision==9501)]", hasSize(0)));
+        mvc.perform(get("/api/marche-previsions").header("Authorization", tokenPrmp2))
+                .andExpect(jsonPath("$[?(@.idPrevision==9501)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idPrevision==9500)]", hasSize(0)));
+        // Le Membre d'ANT garde la vue dont son examen dépend (les deux dossiers sont de sa localité).
+        mvc.perform(get("/api/marche-previsions").header("Authorization", tokenMembre))
+                .andExpect(jsonPath("$[?(@.idPrevision==9500)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idPrevision==9501)]", hasSize(1)));
+
+        mvc.perform(get("/api/marche-previsions?marche=901").header("Authorization", tokenPrmp))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/marche-previsions/9501").header("Authorization", tokenPrmp))
+                .andExpect(status().isForbidden());
+        // L'appel que fait réellement le front (dates d'UN marché à soi) reste servi, trié comme avant.
+        mvc.perform(get("/api/marche-previsions?marche=900").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].ordre").value(1));
+
+        mvc.perform(delete("/api/marche-previsions/9501").header("Authorization", tokenPrmp))
+                .andExpect(status().isForbidden());
+        mvc.perform(delete("/api/marche-previsions/9501").header("Authorization", tokenMembre))
+                .andExpect(status().isForbidden());
+        assertTrue(marchePrevisionRepository.existsById(9501));
+        mvc.perform(delete("/api/marche-previsions/9500").header("Authorization", tokenPrmp))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    @DisplayName("DMC — verrou strict ADMINISTRATEUR sur toute la ressource, lectures comprises (aucun écran front ne la consomme)")
+    void scoping_dmcs_reserveAdministrateur() throws Exception {
+        seedDeuxMarchesDeDeuxPrmp();
+
+        // Aucun profil autre que l'Administrateur n'entre, même sur son propre marché : la ressource est
+        // fermée par défaut plutôt que dotée d'un périmètre théorique qu'aucun usage ne vient valider.
+        mvc.perform(get("/api/dmcs/par-marche/900").header("Authorization", tokenPrmp))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/dmcs/par-marche/900").header("Authorization", tokenMembre))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/dmcs/par-marche/900").header("Authorization", tokenPresident))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/dmcs/1").header("Authorization", tokenPrmp))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/api/dmcs/par-marche/900").header("Authorization", tokenPrmp))
+                .andExpect(status().isForbidden());
+
+        // L'Administrateur passe la garde : 404 (aucun DMC sur ce marché), pas 403 — la ressource reste
+        // opérationnelle pour lui.
+        mvc.perform(get("/api/dmcs/par-marche/900").header("Authorization", tokenAdmin))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("Lots & prévisions : PK allouée serveur — id client ignoré, deux PRMP → PK distinctes (le front alloue par max() sur une liste désormais scopée)")
+    void ressourcesFilles_pkServeur_ignoreClientEtEviteLEcrasement() throws Exception {
+        String tokenPrmp2 = seedDeuxMarchesDeDeuxPrmp();
+        capmRepository.save(new Capm(1, "LANCEMENT", 1, null, null));
+
+        // Le front calcule son id par max() sur la liste REÇUE de /api/lots. Cette liste étant désormais
+        // scopée, deux PRMP calculent la même valeur — sans PK serveur, le second POST viendrait écraser
+        // (merge sur PK assignée) le lot du premier. Ici les deux envoient le même id client.
+        String l1 = mvc.perform(post("/api/lots").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idLot\":501,\"idDossier\":300,\"idDetail\":900,\"designationLot\":\"Lot A\"}"))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        String l2 = mvc.perform(post("/api/lots").header("Authorization", tokenPrmp2)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idLot\":501,\"idDossier\":301,\"idDetail\":901,\"designationLot\":\"Lot B\"}"))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        int idLot1 = com.jayway.jsonpath.JsonPath.read(l1, "$.idLot");
+        int idLot2 = com.jayway.jsonpath.JsonPath.read(l2, "$.idLot");
+        org.junit.jupiter.api.Assertions.assertNotEquals(idLot1, idLot2);
+        // Les deux lots coexistent : aucun n'a été écrasé.
+        org.junit.jupiter.api.Assertions.assertEquals("Lot A", lotRepository.findById(idLot1).orElseThrow().getDesignationLot());
+        org.junit.jupiter.api.Assertions.assertEquals("Lot B", lotRepository.findById(idLot2).orElseThrow().getDesignationLot());
+
+        // Même invariant sur les dates prévisionnelles.
+        String p1 = mvc.perform(post("/api/marche-previsions").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idPrevision\":701,\"idDetail\":900,\"idCapm\":1,\"dateDebut\":\"2026-03-01\"}"))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        String p2 = mvc.perform(post("/api/marche-previsions").header("Authorization", tokenPrmp2)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idPrevision\":701,\"idDetail\":901,\"idCapm\":1,\"dateDebut\":\"2026-03-01\"}"))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        int idPrev1 = com.jayway.jsonpath.JsonPath.read(p1, "$.idPrevision");
+        int idPrev2 = com.jayway.jsonpath.JsonPath.read(p2, "$.idPrevision");
+        org.junit.jupiter.api.Assertions.assertNotEquals(idPrev1, idPrev2);
+        assertTrue(marchePrevisionRepository.existsById(idPrev1) && marchePrevisionRepository.existsById(idPrev2));
+
+        // Et une PRMP ne peut pas créer chez l'autre, id serveur ou pas : le marché visé est contrôlé.
+        mvc.perform(post("/api/lots").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDossier\":301,\"idDetail\":901,\"designationLot\":\"Intrusion\"}"))
+                .andExpect(status().isForbidden());
     }
 
     private Marche marche(int idDetail, int dossier, int ppm) {

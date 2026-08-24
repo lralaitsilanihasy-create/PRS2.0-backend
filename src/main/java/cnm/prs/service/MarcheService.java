@@ -105,6 +105,79 @@ public class MarcheService {
         return MarcheMapper.toDto(entity);
     }
 
+    // ——— Périmètre du marché, exposé aux ressources FILLES (lots, tranches, dates prévisionnelles) ———
+    //
+    // ⚠️ Ces ressources n'ont pas de périmètre propre : le leur est celui de leur marché parent. Sans
+    // ces deux méthodes, chacune retombait sur `.anyRequest().authenticated()` et servait la table
+    // entière — une PRMP recevait 403 sur GET /api/marches/{id} d'un marché d'une autre entité, mais
+    // 200 sur GET /api/lots/par-marche/{le même id}. La règle est donc écrite ICI, une seule fois,
+    // et réutilisée telle quelle par les services filles.
+
+    /**
+     * Ids des marchés visibles de l'appelant — <strong>exactement le périmètre de {@link #findAll()}</strong>
+     * (§1, §3.1) : tout (Président/Administrateur), les siens (PRMP/UGPM, via la propriété du PPM), ceux de
+     * sa localité (contrôleurs, dossier non brouillon), rien sinon. Sert à scoper les listes filles.
+     */
+    @Transactional(readOnly = true)
+    public List<Integer> idsMarchesVisibles() {
+        if (Visibilite.voitTout()) {
+            return repository.findAll().stream().map(Marche::getIdDetail).toList();
+        }
+        if (Visibilite.estPrmp()) {
+            String idPrmp = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
+            return idPrmp == null ? List.of()
+                    : repository.findVisiblesPourPrmp(idPrmp).stream().map(Marche::getIdDetail).toList();
+        }
+        return Visibilite.localite()
+                .map(loc -> repository.findVisiblesParLocalite(loc).stream().map(Marche::getIdDetail).toList())
+                .orElseGet(List::of);
+    }
+
+    /**
+     * Vrai si le marché est dans le périmètre de l'appelant, <strong>mêmes requêtes que
+     * {@link #idsMarchesVisibles()}</strong> mais ciblées sur un identifiant.
+     *
+     * <p>⚠️ Une différence assumée avec {@link #controlerVisibilite(Marche)}, qui garde {@code GET
+     * /api/marches/{id}} : celui-ci ne reconnaît que le profil {@code PRMP} là où {@link Visibilite#estPrmp()}
+     * couvre aussi l'{@code UGPM} (dont le claim {@code ref} porte l'ID_PRMP de tutelle — même périmètre).
+     * Les écrans PRMP sont ouverts à l'UGPM (routes front {@code roles: ['PRMP','UGPM']}) et consomment
+     * lots / dates prévisionnelles : aligner les filles sur {@link #findAll()} est la seule lecture qui ne
+     * les casse pas. Le durcissement de {@code GET /api/marches/{id}} pour l'UGPM est une question ouverte,
+     * hors de cette correction de périmètre.</p>
+     */
+    @Transactional(readOnly = true)
+    public boolean estMarcheVisible(Integer idDetail) {
+        if (idDetail == null) {
+            return false;
+        }
+        if (Visibilite.voitTout()) {
+            return true;
+        }
+        if (Visibilite.estPrmp()) {
+            String idPrmp = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
+            return idPrmp != null && repository.existsVisiblePourPrmp(idDetail, idPrmp);
+        }
+        return Visibilite.localite().map(loc -> repository.existsVisibleParLocalite(idDetail, loc)).orElse(false);
+    }
+
+    /**
+     * Lève {@link AccessDeniedException} (→ 403) si le marché parent est hors périmètre.
+     *
+     * <p><strong>Marché inconnu ⇒ aucune levée</strong> : la ressource fille serait vide de toute façon, et
+     * les endpoints « par marché » sont contractuellement des filtres (liste vide, jamais 404). Contrôler un
+     * id inexistant aurait transformé un 200 {@code []} en 403 — régression de contrat, et oracle d'existence
+     * offert à l'appelant.</p>
+     */
+    @Transactional(readOnly = true)
+    public void controlerAccesMarche(Integer idDetail) {
+        if (idDetail == null || Visibilite.voitTout() || !repository.existsById(idDetail)) {
+            return;
+        }
+        if (!estMarcheVisible(idDetail)) {
+            throw new AccessDeniedException("Marché hors de votre périmètre de visibilité (§1, §3.1).");
+        }
+    }
+
     /** Vérifie que le marché est dans le périmètre de l'appelant (§1, §3.1) — sinon 403. */
     private void controlerVisibilite(Marche marche) {
         if (Visibilite.voitTout()) {

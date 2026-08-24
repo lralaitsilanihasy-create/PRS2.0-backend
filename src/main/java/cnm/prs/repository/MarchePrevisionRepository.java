@@ -1,5 +1,6 @@
 package cnm.prs.repository;
 
+import java.util.Collection;
 import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -14,6 +15,9 @@ public interface MarchePrevisionRepository extends JpaRepository<MarchePrevision
 
     /** Dates prévisionnelles d'un marché donné. */
     List<MarchePrevision> findByIdDetail(Integer idDetail);
+
+    /** Dates prévisionnelles d'un ensemble de marchés — scoping de la liste sur le périmètre du parent. */
+    List<MarchePrevision> findByIdDetailIn(Collection<Integer> idDetails);
 
     /** Dates prévisionnelles d'un marché, triées par l'ordre du processus ({@code t_capm.ORDRE}) ASC. */
     @Query("select p from MarchePrevision p left join fetch p.capm c where p.idDetail = :idDetail order by c.ordre asc")

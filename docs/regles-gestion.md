@@ -251,6 +251,11 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
   - ⚠️ **Règle ajoutée** : pour (situation, nature, montant, localité), `t_regle_passation` calcule l'**ensemble des modes autorisés** (libellés `tr_mode`) avec un **recommandé** (règle la plus prioritaire). La PRMP **choisit** dans cet ensemble ; le serveur **valide** (mode hors ensemble → **409**) ; aucun choix → **recommandé** appliqué ; aucune règle → saisie manuelle (alerte `MODE_NON_DETERMINE`). Aperçu sans enregistrement : `POST /api/regle-passations/suggestion-mode` (renvoie l'ensemble + recommandé + `modeNonDetermine`).
 - Identifiants attribués par le serveur [Auto]
   - ⚠️ **Règle ajoutée** : les PK dossier / PPM / marché sont **allouées par une séquence serveur** (`seq_dossier`/`seq_ppm`/`seq_marche`) ; tout id envoyé par le client est **ignoré** (plus de « identifiant en doublon »). Le formulaire ne saisit plus d'id. **Dette documentée** : séquence applicative (et non `IDENTITY`) pour éviter une refonte massive des fixtures de test sur ces 3 tables centrales ; bascule `IDENTITY` possible plus tard.
+  - ⚠️ **Extension (correction de périmètre des ressources filles)** : la même règle s'applique désormais aux PK
+    **lot** (`t_lot`), **tranche** (`t_tranche`) et **date prévisionnelle** (`t_marche_prevision`) — allouées serveur
+    (`max+1`), id client **ignoré**. Motif : depuis que `GET /api/lots` et `GET /api/marche-previsions` sont
+    **scopés au périmètre**, un client qui allouait son identifiant par `max()` sur la liste reçue — désormais
+    partielle — visait mécaniquement l'enregistrement d'une **autre entité**, que l'écriture aurait **écrasé**.
 - Suppression d'un marché / d'un PPM [Écriture]
   - ⚠️ **Règle ajoutée** : possible **uniquement** si le **dossier rattaché est en BROUILLON** et **propriété** de la PRMP (sinon **403** « Vous n'êtes pas le propriétaire… » / **409** « Opération impossible : le dossier n'est pas un brouillon »). Supprimer un **marché** efface **en cascade** ses **dates prévisionnelles** (`t_marche_prevision`) ; supprimer un **PPM** efface **en cascade** ses **marchés** et leurs prévisions — le tout dans la **même transaction** (la cascade ne touche **que** les enfants de la cible). *(Côté SGBD, un filet de sécurité distingue désormais les violations FK / doublon / valeur obligatoire.)*
 

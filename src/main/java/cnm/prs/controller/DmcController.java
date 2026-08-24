@@ -7,17 +7,25 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 import cnm.prs.dto.DmcDto;
 import cnm.prs.service.DmcService;
 
 /**
  * Contrôleur REST pour la ressource {@code dmcs} (table {@code t_dossier_mec}) : dossier de mise en
- * concurrence, un par ligne de marché, de type dérivé du mode de passation. Réservé aux utilisateurs
- * authentifiés (opération de préparation de dossier).
+ * concurrence, un par ligne de marché, de type dérivé du mode de passation.
+ *
+ * <p>⚠️ <strong>Réservé à l'{@code ADMINISTRATEUR}, lectures comprises.</strong> Aucun écran du front ne
+ * consomme cette ressource (vérifié) : plutôt que de lui inventer un périmètre théorique, on la ferme au
+ * plus strict tant qu'aucun usage réel ne la réclame. Le jour où un écran en a besoin, la garde s'ouvre en
+ * une ligne — et se conçoit alors sur un besoin constaté. Le <strong>déclenchement interne</strong>
+ * (création/re-dérivation/suppression depuis {@code MarcheService}) passe par le service, pas par cette
+ * façade : il n'est pas concerné par cette garde.</p>
  */
 @RestController
 @RequestMapping("/api/dmcs")
+@PreAuthorize("hasRole('ADMINISTRATEUR')")
 public class DmcController {
 
     private final DmcService service;
