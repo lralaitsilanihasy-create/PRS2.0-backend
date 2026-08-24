@@ -10551,6 +10551,22 @@ class CnmWorkflowIntegrationTest {
         return bearer("PRMP003", ProfilUtilisateur.PRMP, TypeActeur.PRMP, "PRMP003", "ANT");
     }
 
+    /**
+     * Un circuit complet par localité (dossier → réception → dispatch → examen) : 330 en ANT (reçu par
+     * CTRCC1) et 331 en TMS (reçu par CTRCC2). Support des ressources du circuit interne, dont le
+     * périmètre est la localité du contrôleur réceptionnaire.
+     */
+    private void seedCircuitDeuxLocalites() {
+        dossierRepository.save(dossierLoc(330, "EXAMINE", "ANT", "PRMP001"));
+        dossierRepository.save(dossierLoc(331, "EXAMINE", "TMS", "PRMP001"));
+        receptionRepository.save(reception(330, 330, "CTRCC1", true));
+        receptionRepository.save(reception(331, 331, "CTRCC2", true));
+        dispatchRepository.save(dispatch(330, 330, "CTRCC1", "CTRMEM"));
+        dispatchRepository.save(dispatch(331, 331, "CTRCC2", "CTRMEM"));
+        examenRepository.save(examen(330, 330, "CTRMEM"));
+        examenRepository.save(examen(331, 331, "CTRMEM"));
+    }
+
     /** Jalon minimal rattaché à une ligne de marché (champs NOT NULL renseignés). */
     private void seedEcheance(int id, int idDetail) {
         cnm.prs.entity.Echeance e = new cnm.prs.entity.Echeance();
@@ -10808,6 +10824,51 @@ class CnmWorkflowIntegrationTest {
                 .andExpect(status().isCreated());
     }
 
+    @Test
+    @DisplayName("Copies de dossier — périmètre par localité du dossier : un CC voit la sienne (403 sur une "
+            + "autre localité), la PRMP n'en voit aucune, écriture Administrateur")
+    void gardes_copieDossiers_perimetreParLocalite() throws Exception {
+        seedCircuitDeuxLocalites();
+        copieDossierRepository.save(copieDossier(8300, 330, 330, "CTRMEM"));   // ANT
+        copieDossierRepository.save(copieDossier(8301, 331, 331, "CTRCC2"));   // TMS
+
+        // La copie de dossier trace À QUI le CNM a transmis quel dossier : c'est la cartographie du
+        // circuit interne, matricules compris. La PRMP — partie contrôlée — n'a pas à la lire.
+        mvc.perform(get("/api/copie-dossiers").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+        mvc.perform(get("/api/copie-dossiers/8300").header("Authorization", tokenPrmp))
+                .andExpect(status().isForbidden());
+
+        mvc.perform(get("/api/copie-dossiers").header("Authorization", tokenCc))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idCopie==8300)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idCopie==8301)]", hasSize(0)));
+        mvc.perform(get("/api/copie-dossiers/8301").header("Authorization", tokenCc))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/copie-dossiers/8300").header("Authorization", tokenCc))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/copie-dossiers").header("Authorization", tokenPresident))
+                .andExpect(jsonPath("$[?(@.idCopie==8300)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idCopie==8301)]", hasSize(1)));
+
+        // Écriture : un accusé de réception posable par n'importe quel porteur de jeton attesterait une
+        // transmission qui n'a pas eu lieu.
+        String corps = "{\"idCopie\":8300,\"idDispatch\":330,\"idDossier\":330,\"imDestinataire\":\"CTRMEM\","
+                + "\"typeCopie\":\"DISPATCH_CC\",\"dateTransmission\":\"2026-06-10T09:00:00\","
+                + "\"accuseReception\":true,\"dateAccuse\":\"2026-06-11T09:00:00\"}";
+        mvc.perform(put("/api/copie-dossiers/8300").header("Authorization", tokenCc)
+                .contentType(MediaType.APPLICATION_JSON).content(corps))
+                .andExpect(status().isForbidden());
+        mvc.perform(put("/api/copie-dossiers/8300").header("Authorization", tokenPresident)
+                .contentType(MediaType.APPLICATION_JSON).content(corps))
+                .andExpect(status().isForbidden());
+        assertFalse(copieDossierRepository.findById(8300).orElseThrow().getAccuseReception());
+        mvc.perform(put("/api/copie-dossiers/8300").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content(corps))
+                .andExpect(status().isOk());
+    }
+
 
     private cnm.prs.entity.IndicateurPrmp indicateurPrmp(int id, String idPrmp) {
         cnm.prs.entity.IndicateurPrmp i = new cnm.prs.entity.IndicateurPrmp();
@@ -10832,5 +10893,17 @@ class CnmWorkflowIntegrationTest {
         s.setExercice(2026);
         s.setNbDossiersRecus(10);
         return s;
+    }
+
+    private cnm.prs.entity.CopieDossier copieDossier(int id, int idDispatch, int idDossier, String destinataire) {
+        cnm.prs.entity.CopieDossier c = new cnm.prs.entity.CopieDossier();
+        c.setIdCopie(id);
+        c.setIdDispatch(idDispatch);
+        c.setIdDossier(idDossier);
+        c.setImDestinataire(destinataire);
+        c.setTypeCopie("DISPATCH_CC");
+        c.setDateTransmission(LocalDateTime.of(2026, 6, 10, 9, 0));
+        c.setAccuseReception(false);
+        return c;
     }
 }

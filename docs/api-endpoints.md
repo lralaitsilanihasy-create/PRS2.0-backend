@@ -722,7 +722,7 @@ si aucun résultat (pas de 404). `{nom}` est un fragment (URL-encoder si espaces
 ---
 
 ## Copies de dossier
-**Ressource** `/api/copie-dossiers` — Lecture / écriture : tout utilisateur authentifié.
+**Ressource** `/api/copie-dossiers` — **Lecture scopée à la localité du dossier** (§1) : Président/Administrateur voient tout, les contrôleurs les copies de leur localité, la PRMP/UGPM une liste vide (**403** sur le détail). **Écriture réservée à l'`ADMINISTRATEUR`** (**403** sinon) — aucun écran ne la consomme ; un accusé de réception posable par tout porteur de jeton attesterait une transmission qui n'a pas eu lieu.
 
 **Champs `CopieDossierDto`**
 
@@ -742,11 +742,11 @@ si aucun résultat (pas de 404). `{nom}` est un fragment (URL-encoder si espaces
 
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
-| GET | /api/copie-dossiers | — | `CopieDossierDto[]` | 200 | Authentifié |
-| GET | /api/copie-dossiers/{id} | — | `CopieDossierDto` | 200, 404 | Authentifié |
-| POST | /api/copie-dossiers | `CopieDossierDto` | `CopieDossierDto` | 201, 400 | Authentifié |
-| PUT | /api/copie-dossiers/{id} | `CopieDossierDto` | `CopieDossierDto` | 200, 400, 404 | Authentifié |
-| DELETE | /api/copie-dossiers/{id} | — | — | 204, 404 | Authentifié |
+| GET | /api/copie-dossiers | — | `CopieDossierDto[]` | 200 | Authentifié — **liste scopée** |
+| GET | /api/copie-dossiers/{id} | — | `CopieDossierDto` | 200, **403**, 404 | Authentifié — **403 hors localité** |
+| POST | /api/copie-dossiers | `CopieDossierDto` | `CopieDossierDto` | 201, 400, **403** | **ADMINISTRATEUR** |
+| PUT | /api/copie-dossiers/{id} | `CopieDossierDto` | `CopieDossierDto` | 200, 400, **403**, 404 | **ADMINISTRATEUR** |
+| DELETE | /api/copie-dossiers/{id} | — | — | 204, **403**, 404 | **ADMINISTRATEUR** |
 
 `{id}` = idCopie (number).
 
