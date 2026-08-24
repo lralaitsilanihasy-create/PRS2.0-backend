@@ -6357,6 +6357,54 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
+    @DisplayName("Rectification marche : designation > 500 caracteres -> 400 nommant designationMarche (le contenu reste valide)")
+    void rectifier_marche_designationTropLongue_400() throws Exception {
+        // Le PATCH de rectification ne dispense QUE les champs d'identite (idDossier/idPpm), figes serveur.
+        // Les contraintes de contenu doivent continuer de s'appliquer : sans cela le texte trop long part
+        // jusqu'a la base et revient en 409 « Violation d'une contrainte de donnees », sans nommer le champ,
+        // alors que le meme corps en PUT donne un 400 exploitable par le front.
+        Dossier d = dossier(408, "EN_ATTENTE_DECISION_PRMP"); d.setIdTypeDossier("DDP"); d.setIdLocalite("ANT"); d.setIdPrmp("PRMP001");
+        dossierRepository.save(d);
+        ppmRepository.save(ppm(480, 408, "PRMP001"));
+        marcheRepository.save(marche(481, 408, 480));
+
+        mvc.perform(patch("/api/marches/481/rectifier").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"designationMarche\":\"" + "X".repeat(501) + "\",\"montEstim\":1000}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[?(@.champ=='designationMarche')]", hasSize(1)));
+    }
+
+    @Test
+    @DisplayName("Rectification PPM : reference > 100 caracteres -> 400 nommant reference (le contenu reste valide)")
+    void rectifier_ppm_referenceTropLongue_400() throws Exception {
+        // Meme raison que pour le marche : la dispense porte sur idDossier (identite figee), pas sur le contenu.
+        Dossier d = dossier(409, "EN_ATTENTE_DECISION_PRMP"); d.setIdTypeDossier("DDP"); d.setIdLocalite("ANT"); d.setIdPrmp("PRMP001");
+        dossierRepository.save(d);
+        ppmRepository.save(ppm(490, 409, "PRMP001"));
+
+        mvc.perform(patch("/api/ppms/490/rectifier").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"exercice\":2026,\"signataire\":\"Sign\",\"dateSignature\":\"2026-05-10\","
+                        + "\"reference\":\"" + "R".repeat(101) + "\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[?(@.champ=='reference')]", hasSize(1)));
+    }
+
+    @Test
+    @DisplayName("Creation marche : idDossier/idPpm restent exiges (le groupe Identite n'est pas tombe avec la rectification)")
+    void creation_marche_identiteToujoursExigee_400() throws Exception {
+        // Garde-fou du decoupage en groupes : deplacer les @NotNull d'identite dans un groupe dedie ne doit
+        // pas les desactiver sur POST/PUT, ou l'on creerait des lignes orphelines sans rattachement.
+        mvc.perform(post("/api/marches").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDetail\":9999,\"designationMarche\":\"Objet\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[?(@.champ=='idDossier')]", hasSize(1)))
+                .andExpect(jsonPath("$.erreurs[?(@.champ=='idPpm')]", hasSize(1)));
+    }
+
+    @Test
     @DisplayName("Erreur de validation : corps expose erreurs[].champ/message")
     void validation_erreurs_format() throws Exception {
         mvc.perform(post("/api/marches").header("Authorization", tokenPrmp)

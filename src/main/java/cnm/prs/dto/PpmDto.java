@@ -18,7 +18,11 @@ public class PpmDto {
 
     private Integer idPpm;
 
-    @NotNull
+    /**
+     * Rattachement figé au dossier. Exigé en création/mise à jour ({@link GroupesValidation.Identite}) ;
+     * non exigé en rectification, où le serveur conserve la valeur existante.
+     */
+    @NotNull(groups = GroupesValidation.Identite.class)
     private Integer idDossier;
 
     @NotNull

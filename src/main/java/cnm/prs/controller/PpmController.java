@@ -15,8 +15,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.security.access.prepost.PreAuthorize;
 
-import jakarta.validation.Valid;
+import org.springframework.validation.annotation.Validated;
 
+import jakarta.validation.groups.Default;
+
+import cnm.prs.dto.GroupesValidation;
 import cnm.prs.dto.PpmDto;
 import cnm.prs.service.PpmService;
 
@@ -53,23 +56,29 @@ public class PpmController {
     // Création brute réservée Admin ; la saisie passe par /api/saisies/ppm (PRMP).
     @PreAuthorize("hasRole('ADMINISTRATEUR')")
     @PostMapping
-    public ResponseEntity<PpmDto> create(@Valid @RequestBody PpmDto dto) {
+    public ResponseEntity<PpmDto> create(@Validated({ Default.class, GroupesValidation.Identite.class }) @RequestBody PpmDto dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.create(dto));
     }
 
     // Édition de l'en-tête PPM d'un brouillon : PRMP (propriétaire) ou Admin ; validé en service.
     @PreAuthorize("hasAnyRole('PRMP','UGPM','ADMINISTRATEUR')")
     @PutMapping("/{id}")
-    public PpmDto update(@PathVariable Integer id, @Valid @RequestBody PpmDto dto) {
+    public PpmDto update(@PathVariable Integer id, @Validated({ Default.class, GroupesValidation.Identite.class }) @RequestBody PpmDto dto) {
         return service.update(id, dto);
     }
 
-    // Édition restreinte (rectification) : PRMP propriétaire, uniquement si dossier EN_ATTENTE_DECISION_PRMP.
-    // Corps SANS validation des champs d'identité figés (idDossier/idPrmp/idLocalite), que le front n'envoie
-    // pas en rectification ; le contenu est appliqué, l'identité conservée serveur.
+    /**
+     * Édition restreinte (rectification) : PRMP propriétaire, uniquement si dossier EN_ATTENTE_DECISION_PRMP.
+     *
+     * <p>Validation du <strong>groupe {@code Default} seul</strong> : {@code idDossier} (identité figée,
+     * avec {@code idPrmp}/{@code idLocalite}) porte son {@code @NotNull} dans
+     * {@link GroupesValidation.Identite} et n'est donc pas exigé — mais les contraintes de
+     * <strong>contenu</strong> ({@code @NotBlank}, {@code @Size}) restent appliquées. Sans cela, un corps
+     * trop long partait jusqu'à la base et revenait en 409 opaque au lieu d'un 400 nommant le champ.</p>
+     */
     @PreAuthorize("hasAnyRole('PRMP','UGPM')")
     @PatchMapping("/{id}/rectifier")
-    public PpmDto rectifier(@PathVariable Integer id, @RequestBody PpmDto dto) {
+    public PpmDto rectifier(@PathVariable Integer id, @Validated @RequestBody PpmDto dto) {
         return service.modifierEnAttenteRectification(id, dto);
     }
 

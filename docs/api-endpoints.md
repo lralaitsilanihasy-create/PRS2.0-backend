@@ -2843,7 +2843,10 @@ active (`t_prmp_entite.ACTIF`) sur l'entité contractante du dossier. C'est ce s
 > repasser par le brouillon**. Statut du dossier **inchangé** (reste `EN_ATTENTE_DECISION_PRMP` jusqu'à
 > `POST /api/dossiers/{id}/resoumettre`). Hors `EN_ATTENTE_DECISION_PRMP` → **409** ; non-propriétaire → **403** ;
 > profil **PRMP strict** (Admin/vérificateur → **403**). Identité **figée** (idDossier, idPpm — **non requis** dans
-> le corps, ignorés s'ils sont envoyés ; le PATCH ne valide pas ces champs). Le `idMode` fourni est conservé
+> le corps, ignorés s'ils sont envoyés : leur `@NotNull` est porté par le groupe de validation `Identite`,
+> que le PATCH n'active pas). ⚠️ **Règle modifiée (2026-08-24)** — les contraintes de **contenu** (`@Size`) sont, elles,
+> **validées** : un corps trop long donne un **400 nommant le champ**, comme en `PUT`. *(Auparavant le corps n'était pas validé du tout :
+> la valeur partait jusqu'à la base et revenait en **409** opaque.)* Le `idMode` fourni est conservé
 > tel quel. Tracé `t_audit_log` (`MODIFICATION_RECTIFICATION`, `NOM_TABLE=t_marche`).
 
 > ⚠️ **`formeMarche` — forme du marché (règle ajoutée 2026-07-18).** Champ de `MarcheDto` (colonne
@@ -3501,7 +3504,10 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 > par le brouillon**. Statut du dossier **inchangé** (reste `EN_ATTENTE_DECISION_PRMP` jusqu'à
 > `POST /api/dossiers/{id}/resoumettre`). Hors `EN_ATTENTE_DECISION_PRMP` → **409** ; non-propriétaire → **403** ;
 > profil **PRMP strict** (Admin/vérificateur → **403**). Identité **figée** (idDossier, idPrmp, idLocalite —
-> **non requis** dans le corps, ignorés s'ils sont envoyés ; le PATCH ne valide pas ces champs).
+> **non requis** dans le corps, ignorés s'ils sont envoyés : leur `@NotNull` est porté par le groupe de
+> validation `Identite`, que le PATCH n'active pas). ⚠️ **Règle modifiée (2026-08-24)** — les contraintes de
+> **contenu** (`@NotBlank`, `@Size`) **sont validées** : un `signataire` vide ou une `reference` trop longue
+> donne un **400 nommant le champ**, comme en `PUT` (auparavant : aucune validation, puis **409** opaque).
 > Tracé `t_audit_log` (`MODIFICATION_RECTIFICATION`, `NOM_TABLE=t_ppm`).
 > *(DAO/MAOO : sans contenu éditable, donc non concernés. Les lignes de marché se corrigent via
 > `PATCH /api/marches/{id}/rectifier` ; pas d'ajout/suppression de lignes en rectification.)*
