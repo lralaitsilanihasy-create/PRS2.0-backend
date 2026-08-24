@@ -21,7 +21,13 @@ import cnm.prs.service.AuditLogService;
 
 /**
  * Contrôleur REST pour la ressource {@code audit-logs} (table {@code t_audit_log}).
- * Journal d'audit réservé à l'Administrateur (§3.8) ; suppression interdite (S5).
+ * Journal d'audit réservé à l'Administrateur (§3.8).
+ *
+ * <p><strong>Ressource en lecture seule.</strong> Le journal est alimenté par le serveur lui-même
+ * ({@code AuditInterceptor} et les services métier, via {@code AuditLogService#enregistrer}).
+ * Les trois verbes d'écriture restent routés pour porter un refus <strong>explicite</strong> —
+ * 409 « journal immuable », comme le {@code DELETE} le faisait déjà (S5) : un appelant apprend
+ * ainsi <em>pourquoi</em> l'écriture est refusée, là où un 405 ne dirait que « mauvais verbe ».</p>
  */
 @RestController
 @RequestMapping("/api/audit-logs")
@@ -44,11 +50,13 @@ public class AuditLogController {
         return service.findById(id);
     }
 
+    /** Routé pour refuser explicitement : le journal ne se forge pas (409, §3.8). */
     @PostMapping
     public ResponseEntity<AuditLogDto> create(@Valid @RequestBody AuditLogDto dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.create(dto));
     }
 
+    /** Routé pour refuser explicitement : le journal ne se réécrit pas (409, §3.8). */
     @PutMapping("/{id}")
     public AuditLogDto update(@PathVariable Long id, @Valid @RequestBody AuditLogDto dto) {
         return service.update(id, dto);
