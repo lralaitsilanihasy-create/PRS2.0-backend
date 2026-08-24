@@ -1416,8 +1416,9 @@ Administrateur** :
 - les **profils contrôleurs** — `PRESIDENT`, `CHEF_COMMISSION`, `SECRETAIRE`, `MEMBRE`, `VERIFICATEUR`,
   `ASSISTANT_CONTROLEUR` — pour **toute** tutelle et **sans filtre de localité** *(2026-08-20)* : ce sont eux
   qui instruisent les dossiers et doivent identifier l'unité qui a saisi celui qu'ils examinent. Deux raisons
-  d'écarter le filtre par localité : le répertoire des **PRMP** (`GET /api/prmps`) est déjà lisible **sans
-  filtre** par tout utilisateur authentifié — filtrer l'enfant serait incohérent ; et l'UGPM **n'a pas de
+  d'écarter le filtre par localité : le répertoire des **PRMP** (`GET /api/prmps`) est lisible **sans filtre
+  de localité** par ces mêmes profils — en **vue réduite** depuis le 2026-08-24, mais toujours à l'échelle
+  nationale — et filtrer l'enfant serait incohérent ; et l'UGPM **n'a pas de
   localité propre** (elle hérite de celles des entités contractantes actives de sa tutelle, qui peuvent
   couvrir **plusieurs** localités) — le filtre masquerait précisément l'unité qu'un contrôleur d'une autre
   localité doit identifier. `CHARGE_PUBLICATION` n'est pas concerné (hors instruction) → **403**.
@@ -3542,7 +3543,30 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 ---
 
 ## PRMP
-**Ressource** `/api/prmps` — Gestion des comptes PRMP (§3.8) : lecture ouverte ; écriture `ADMINISTRATEUR`. *(Fiche de la personne PRMP, distincte des PPM/marchés qu'elle soumet. Voir aussi l'auto-inscription dans **Authentification**.)*
+**Ressource** `/api/prmps` — Gestion des comptes PRMP (§3.8) : lecture ouverte aux profils du circuit **en vue réduite** ; écriture `ADMINISTRATEUR`. *(Fiche de la personne PRMP, distincte des PPM/marchés qu'elle soumet. Voir aussi l'auto-inscription dans **Authentification**.)*
+
+> ⚠️ **La forme de la réponse dépend du profil** (durcissement 2026-08-24). Les cinq lectures
+> (`GET /`, `/{id}`, `/par-localite/{idLocalite}`, `/par-entite/{idEntiteContract}`, `/par-nom/{nom}`)
+> ne portaient **aucune** garde et servaient la fiche **complète** — numéro de CIN, date et lieu de
+> délivrance compris — à **tout** utilisateur authentifié, quels que soient son profil et sa
+> localité. Donnée personnelle, sans usage métier hors gestion des comptes. Désormais :
+>
+> | Appelant | Réponse |
+> |---|---|
+> | `ADMINISTRATEUR` | **Fiche complète** : les 10 champs de `PrmpDto`. |
+> | La **PRMP concernée** (claim `ref` = `idPrmp` de la ligne) | **Fiche complète** — y compris au milieu d'une liste : l'arbitrage se fait **ligne à ligne**, pas par route. |
+> | Autres profils admis (`PRESIDENT`, `CHEF_COMMISSION`, `SECRETAIRE`, `MEMBRE`, `VERIFICATEUR`, `ASSISTANT_CONTROLEUR`, `UGPM`, PRMP sur la fiche d'une consœur) | **Vue réduite** : `cin`, `dateCin`, `lieuCin` à **`null`** ; les 7 autres champs servis normalement. |
+> | `CHARGE_PUBLICATION`, tout autre profil | **403** — les cinq lectures portent désormais une garde `@PreAuthorize` (même liste de profils que `GET /api/ugpms/par-tutelle/{idPrmp}`). |
+>
+> Les champs conservés en vue réduite (`idPrmp`, `nomPrmp`, `prenomsPrmp`, `arreteNomin`, `dateNomin`,
+> `emailPrmp`, `telPrmp`) sont exactement ceux que consomment les écrans : mentions d'un **acte
+> administratif** et coordonnées **de fonction**, affichées par l'onglet « Entité contractante » du
+> détail d'un plan de passation. Même découpage que la vue restreinte des UGPM
+> (`GET /api/ugpms/par-tutelle/{idPrmp}`) : ni CIN, mais courriel et téléphone.
+>
+> **Aucun changement pour l'écriture** : `POST`/`PUT` renvoient la fiche complète (routes
+> `ADMINISTRATEUR`), et `PUT /{id}` continue d'attendre les 10 champs — l'écran d'administration lit
+> donc bien la fiche complète avant de la réécrire.
 
 **Champs `PrmpDto`**
 
@@ -3553,9 +3577,9 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 | prenomsPrmp | string | Oui | @NotBlank, max 100 |
 | arreteNomin | string | Oui | @NotBlank, max 100 |
 | dateNomin | string (date) | Oui | @NotNull |
-| cin | string | Oui | @NotBlank, max 12 |
-| dateCin | string (date) | Oui | @NotNull |
-| lieuCin | string | Oui | @NotBlank, max 50 |
+| cin | string | Oui (à l'écriture) | @NotBlank, max 12 — **`null` en lecture, hors vue complète** |
+| dateCin | string (date) | Oui (à l'écriture) | @NotNull — **`null` en lecture, hors vue complète** |
+| lieuCin | string | Oui (à l'écriture) | @NotBlank, max 50 — **`null` en lecture, hors vue complète** |
 | emailPrmp | string | Oui | @NotBlank, max 100 |
 | telPrmp | string | Oui | @NotBlank, max 20 |
 
@@ -3577,11 +3601,11 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
-| GET | /api/prmps | — | `PrmpDto[]` | 200 | Authentifié |
-| GET | /api/prmps/{id} | — | `PrmpDto` | 200, 404 | Authentifié |
-| GET | /api/prmps/par-localite/{idLocalite} | — | `PrmpDto[]` | 200 | Authentifié |
-| GET | /api/prmps/par-entite/{idEntiteContract} | — | `PrmpDto[]` | 200 | Authentifié |
-| GET | /api/prmps/par-nom/{nom} | — | `PrmpDto[]` | 200 | Authentifié |
+| GET | /api/prmps | — | `PrmpDto[]` — **vue réduite** hors Admin/PRMP concernée | 200, 403 | ADMIN, PRMP, UGPM, PRESIDENT, CHEF_COMMISSION, SECRETAIRE, MEMBRE, VERIFICATEUR, ASSISTANT_CONTROLEUR |
+| GET | /api/prmps/{id} | — | `PrmpDto` — **vue réduite** hors Admin/PRMP concernée | 200, 403, 404 | idem |
+| GET | /api/prmps/par-localite/{idLocalite} | — | `PrmpDto[]` — **vue réduite** hors Admin/PRMP concernée | 200, 403 | idem |
+| GET | /api/prmps/par-entite/{idEntiteContract} | — | `PrmpDto[]` — **vue réduite** hors Admin/PRMP concernée | 200, 403 | idem |
+| GET | /api/prmps/par-nom/{nom} | — | `PrmpDto[]` — **vue réduite** hors Admin/PRMP concernée | 200, 403 | idem |
 | POST | /api/prmps | `CreerPrmpRequest` (**JSON**) | `PrmpDto` | 201, 400, 403, 409 | ADMINISTRATEUR |
 | POST | /api/prmps | **`multipart/form-data`** : part `data` (JSON `CreerPrmpRequest`) + `arrete`/`cin`/`photo` (opt.) | `PrmpDto` | 201, 400, 403, 409 | ADMINISTRATEUR |
 | PUT | /api/prmps/{id} | `PrmpDto` | `PrmpDto` | 200, 400, 404 | ADMINISTRATEUR |

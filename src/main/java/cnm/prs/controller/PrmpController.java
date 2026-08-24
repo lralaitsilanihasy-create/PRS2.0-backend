@@ -31,6 +31,11 @@ import cnm.prs.service.PrmpService;
 
 /**
  * Contrôleur REST pour la ressource {@code prmps} (table {@code t_prmp}).
+ *
+ * <p><strong>La forme de la réponse dépend du profil</strong> (2026-08-24) : les cinq lectures
+ * renvoient une <strong>vue réduite</strong> de {@code PrmpDto} — {@code cin}, {@code dateCin} et
+ * {@code lieuCin} à {@code null} — sauf pour l'{@code ADMINISTRATEUR} et pour la <strong>PRMP
+ * elle-même</strong>, qui reçoivent la fiche complète. Voir {@code PrmpService#vue}.</p>
  */
 @RestController
 @RequestMapping("/api/prmps")
@@ -42,29 +47,50 @@ public class PrmpController {
         this.service = service;
     }
 
+    /**
+     * Profils admis en <strong>lecture</strong> de la ressource : l'Administrateur (gestion des
+     * comptes), la PRMP et l'UGPM (leur propre fiche / celle de la tutelle), et l'ensemble des
+     * profils contrôleurs — la fiche du signataire d'un plan de passation fait partie de
+     * l'instruction du dossier (onglet « Entité contractante » du détail d'un plan). Même liste que
+     * {@code GET /api/ugpms/par-tutelle/{idPrmp}} ; le {@code CHARGE_PUBLICATION}, qui n'instruit
+     * aucun dossier, en est exclu.
+     *
+     * <p>⚠️ Durcissement (2026-08-24) — ces cinq lectures ne portaient <strong>aucune</strong> garde
+     * et retombaient sur {@code anyRequest().authenticated()}. Elles restent volontairement ouvertes
+     * au-delà de l'Administrateur, mais la réponse est désormais une <strong>vue réduite sans
+     * CIN</strong> hors Administrateur / PRMP concernée (cf. {@code PrmpService#vue}).</p>
+     */
+    private static final String LECTURE_REPERTOIRE = "hasAnyRole('ADMINISTRATEUR','PRMP','UGPM','PRESIDENT',"
+            + "'CHEF_COMMISSION','SECRETAIRE','MEMBRE','VERIFICATEUR','ASSISTANT_CONTROLEUR')";
+
+    @PreAuthorize(LECTURE_REPERTOIRE)
     @GetMapping
     public List<PrmpDto> findAll() {
         return service.findAll();
     }
 
+    @PreAuthorize(LECTURE_REPERTOIRE)
     @GetMapping("/{id}")
     public PrmpDto findById(@PathVariable String id) {
         return service.findById(id);
     }
 
     /** PRMP rattachées à une localité via leurs entités contractantes actives (liste, vide si aucune). */
+    @PreAuthorize(LECTURE_REPERTOIRE)
     @GetMapping("/par-localite/{idLocalite}")
     public List<PrmpDto> findByLocalite(@PathVariable String idLocalite) {
         return service.findByLocalite(idLocalite);
     }
 
     /** PRMP rattachée à une entité contractante (affectation active) : 0 ou 1, en liste (vide si aucune). */
+    @PreAuthorize(LECTURE_REPERTOIRE)
     @GetMapping("/par-entite/{idEntiteContract}")
     public List<PrmpDto> findByEntite(@PathVariable Integer idEntiteContract) {
         return service.findByEntite(idEntiteContract);
     }
 
     /** Recherche partielle par nom (contient, insensible à la casse ; liste, vide si aucun résultat). */
+    @PreAuthorize(LECTURE_REPERTOIRE)
     @GetMapping("/par-nom/{nom}")
     public List<PrmpDto> findByNom(@PathVariable String nom) {
         return service.findByNom(nom);
