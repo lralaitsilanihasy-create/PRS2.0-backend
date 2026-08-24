@@ -62,11 +62,24 @@ public class MarcheService {
      * siens</strong> (marchés de ses PPM) ; les contrôleurs ne voient que ceux de <strong>leur
      * localité</strong> (dossier non brouillon) ; tout autre profil (ou sans localité) → liste vide.
      */
-    /** ⚠️ Audit front (2026-08-16) — variante paginée ({@code ?page=&size=}), mêmes filtres de périmètre. */
+    /**
+     * ⚠️ Audit front (2026-08-16) — variante paginée ({@code ?page=&size=}), mêmes filtres de périmètre.
+     *
+     * <p>{@code idPpm} restreint au PPM demandé <strong>avant</strong> le découpage : l'écran
+     * « Marchés » filtré par PPM doit paginer l'ensemble filtré, sinon les pages porteraient sur
+     * l'ensemble complet et le filtre ne s'appliquerait qu'aux lignes déjà servies.</p>
+     */
     @Transactional(readOnly = true)
     public org.springframework.data.domain.Page<MarcheDto> findAllPagine(
-            org.springframework.data.domain.Pageable pageable) {
-        return Pagination.depuisListe(findAll(), pageable);
+            Integer idPpm, org.springframework.data.domain.Pageable pageable) {
+        return Pagination.depuisListe(findAll(idPpm), pageable);
+    }
+
+    /** Même liste que {@link #findAll()}, restreinte au PPM {@code idPpm} s'il est fourni. */
+    @Transactional(readOnly = true)
+    public List<MarcheDto> findAll(Integer idPpm) {
+        List<MarcheDto> tous = findAll();
+        return idPpm == null ? tous : tous.stream().filter(m -> idPpm.equals(m.getIdPpm())).toList();
     }
 
     @Transactional(readOnly = true)
