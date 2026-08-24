@@ -91,8 +91,17 @@ public class AuthController {
     }
 
     /**
-     * Référentiel public réduit des PRMP (id + nom), pour le menu « PRMP de tutelle » du
-     * formulaire d'inscription UGPM. Route publique (miroir de {@code GET /api/auth/entites}).
+     * Référentiel réduit des PRMP (id + nom), destiné à l'origine au menu « PRMP de tutelle »
+     * du formulaire d'inscription UGPM.
+     *
+     * <p>⚠️ Durcissement (2026-08-24) : cette route <strong>n'est plus publique</strong>. Servie
+     * anonymement, elle livrait la liste des comptes de connexion existants alors que
+     * {@code POST /api/auth/login} n'est pas limité en débit — énumération de comptes puis
+     * martelage. Elle exige désormais le rôle <strong>ADMINISTRATEUR</strong>
+     * ({@code SecurityConfig}, règle placée avant le {@code permitAll} de {@code /api/auth/**}) :
+     * appel anonyme → <strong>401</strong>, autre profil authentifié → <strong>403</strong>.
+     * Aucun écran du front ne la consomme. Les autres routes {@code /api/auth/**} (login, logout,
+     * register, entites) restent publiques.</p>
      */
     @GetMapping("/prmps")
     public List<PrmpPubliqueDto> prmps() {

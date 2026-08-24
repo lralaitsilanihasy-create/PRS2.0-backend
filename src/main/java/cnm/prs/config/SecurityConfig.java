@@ -40,7 +40,9 @@ import jakarta.servlet.http.Cookie;
  * Sécurité de l'API : authentification JWT (HMAC HS256) en mode stateless.
  *
  * <p>Tous les endpoints exigent désormais un jeton valide, sauf {@code /api/auth/**}
- * (connexion). Le rôle métier est porté par la claim {@code role} du jeton et exposé
+ * (connexion, auto-inscription, référentiel public des entités) — à l'exception de
+ * {@code GET /api/auth/prmps}, extrait du {@code permitAll} et réservé à l'Administrateur.
+ * Le rôle métier est porté par la claim {@code role} du jeton et exposé
  * comme autorité {@code ROLE_<PROFIL>} pour les futures règles {@code @PreAuthorize}
  * (activées via {@link EnableMethodSecurity}).</p>
  */
@@ -126,6 +128,18 @@ public class SecurityConfig {
                         .frameOptions(fo -> fo.sameOrigin()))
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                        // ⚠️ Durcissement (2026-08-24) — GET /api/auth/prmps sort du permitAll.
+                        //    Il servait publiquement le référentiel réduit des PRMP (idPrmp, nomPrmp,
+                        //    prenomsPrmp), c'est-à-dire la liste des comptes de connexion existants,
+                        //    alors qu'aucune limitation de débit ne protège POST /api/auth/login :
+                        //    énumération de comptes + martelage illimité. Aucun consommateur : la
+                        //    méthode AuthService#prmpsPubliques du front Angular n'est appelée nulle
+                        //    part et l'écran d'inscription UGPM n'existe pas encore. Réservé à
+                        //    l'ADMINISTRATEUR — seul profil dont le métier suppose le référentiel
+                        //    GLOBAL des PRMP (rattachement de tutelle UGPM, gestion des comptes) ;
+                        //    les autres profils passent par /api/prmps/par-localite ou /par-entite.
+                        //    DOIT précéder /api/auth/** : le 1er matcher qui correspond gagne.
+                        .requestMatchers(HttpMethod.GET, "/api/auth/prmps").hasRole("ADMINISTRATEUR")
                         .requestMatchers("/api/auth/**").permitAll()
                         // ⚠️ Règle ajoutée (2026-07-26) — création d'entité contractante ouverte à la PRMP
                         // (import PPM : autorité hors périmètre → nouvelle entité + rattachement EN ATTENTE),
