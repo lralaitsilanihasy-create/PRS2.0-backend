@@ -3,6 +3,8 @@ package cnm.prs.exception;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -22,6 +24,8 @@ import jakarta.persistence.EntityNotFoundException;
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler({ ResourceNotFoundException.class, EntityNotFoundException.class })
     public ResponseEntity<ErrorResponse> handleNotFound(RuntimeException ex, WebRequest request) {
@@ -71,6 +75,34 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException ex, WebRequest request) {
         return build(HttpStatus.FORBIDDEN, ex.getMessage(), request, null);
+    }
+
+    /**
+     * Verbe HTTP non supporté par la route → <strong>405</strong> avec l'en-tête {@code Allow}.
+     *
+     * <p>⚠️ Correction (2026-08-24) — sans ce gestionnaire, {@link HttpRequestMethodNotSupportedException}
+     * était captée par le {@code @ExceptionHandler(Exception.class)} de cette classe <em>avant</em> que le
+     * résolveur par défaut de Spring ne la voie : <strong>un mauvais verbe sur n'importe quelle route de
+     * l'API répondait 500</strong>, message d'exception à l'appui. Un client ne pouvait donc pas distinguer
+     * une route mal appelée d'une panne serveur, et l'API annonçait une défaillance là où elle avait
+     * simplement un contrat. Le gestionnaire spécifique l'emporte sur celui d'{@code Exception} quel que
+     * soit l'ordre de déclaration ; il est placé ici pour la lecture, entre les autres cas de protocole.</p>
+     *
+     * <p>{@code Allow} est peuplé depuis {@code getSupportedHttpMethods()}, qui peut être {@code null} ou
+     * vide (route inexistante côté mapping) : dans ce cas l'en-tête est omis plutôt que rendu vide.</p>
+     */
+    @ExceptionHandler(org.springframework.web.HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleMethodNotSupported(
+            org.springframework.web.HttpRequestMethodNotSupportedException ex, WebRequest request) {
+        ResponseEntity<ErrorResponse> reponse = build(HttpStatus.METHOD_NOT_ALLOWED,
+                "Méthode " + ex.getMethod() + " non autorisée sur cette ressource.", request, null);
+        java.util.Set<org.springframework.http.HttpMethod> autorisees = ex.getSupportedHttpMethods();
+        if (autorisees == null || autorisees.isEmpty()) {
+            return reponse;
+        }
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
+                .allow(autorisees.toArray(new org.springframework.http.HttpMethod[0]))
+                .body(reponse.getBody());
     }
 
     @ExceptionHandler(ChampsInvalidesException.class)
@@ -160,7 +192,9 @@ public class GlobalExceptionHandler {
                     "L'identifiant (clé primaire) est obligatoire à la création de cette ressource.",
                     request, null);
         }
-        return build(HttpStatus.INTERNAL_SERVER_ERROR, ex.getMessage(), request, null);
+        // Toute autre erreur JPA est un défaut serveur : même traitement générique que handleGeneric,
+        // le message d'origine (souvent porteur de SQL et de noms de tables) ne sort pas dans le corps.
+        return erreurInterne(ex, request);
     }
 
     /**
@@ -178,8 +212,62 @@ public class GlobalExceptionHandler {
                     "Doublon : un enregistrement avec cette clé existe déjà.", request, null);
             case "23502" -> build(HttpStatus.BAD_REQUEST,       // not_null_violation
                     "Valeur obligatoire manquante.", request, null);
+            case "22001" -> {                                   // string_data_right_truncation
+                // ⚠️ Correction (2026-08-24) — un dépassement de longueur tombait en `default` : 409
+                // « Violation d'une contrainte de données », sans nommer le champ. C'est une faute de SAISIE,
+                // corrigeable par l'appelant : elle relève du 400, comme la même valeur refusée en amont par
+                // `@Size`. Le front recevait deux réponses incomparables pour une seule et même erreur.
+                String champ = champTropLong(ex);
+                yield build(HttpStatus.BAD_REQUEST, "Valeur trop longue pour un champ de cette ressource.", request,
+                        champ == null ? null
+                                : List.of(new ErrorResponse.FieldError(champ, "Valeur trop longue pour ce champ.")));
+            }
             default -> build(HttpStatus.CONFLICT, "Violation d'une contrainte de données.", request, null);
         };
+    }
+
+    /**
+     * Nom du champ (JSON) en cause dans un dépassement de longueur, ou {@code null} si le pilote ne le dit pas.
+     *
+     * <p>Deux sources, dans cet ordre : le {@code ServerErrorMessage} de pgjdbc (lu <strong>par réflexion</strong>,
+     * comme pour Jackson — le pilote PostgreSQL n'est pas exposé à la compilation), puis, à défaut, le nom de
+     * colonne cité dans le message ({@code Value too long for column "DESIGNATION_MARCHE …"} côté H2). La colonne
+     * est ensuite convertie en nom de propriété : le modèle mappe les colonnes {@code SNAKE_MAJUSCULE} sur des
+     * propriétés {@code camelCase} homonymes, et les DTO reprennent ces noms — la conversion suffit donc.
+     * L'information reste <strong>facultative</strong> : sans elle, le 400 est rendu sans tableau {@code erreurs}.</p>
+     */
+    private static String champTropLong(Throwable ex) {
+        for (Throwable t = ex; t != null; t = t.getCause()) {
+            if (t instanceof java.sql.SQLException) {
+                Object serveur = invoquer(t, "getServerErrorMessage");
+                if (serveur != null && invoquer(serveur, "getColumn") instanceof String col && !col.isBlank()) {
+                    return camel(col);
+                }
+            }
+            if (t.getMessage() != null) {
+                java.util.regex.Matcher m = COLONNE_CITEE.matcher(t.getMessage());
+                if (m.find()) {
+                    return camel(m.group(1));
+                }
+            }
+        }
+        return null;
+    }
+
+    /** Nom de colonne cité dans un message de dépassement de longueur (H2 : {@code for column "NOM …"}). */
+    private static final java.util.regex.Pattern COLONNE_CITEE =
+            java.util.regex.Pattern.compile("(?i)column\\s+\"?([A-Za-z_][A-Za-z0-9_]*)");
+
+    /** {@code DESIGNATION_MARCHE} → {@code designationMarche} (convention de mapping du modèle). */
+    private static String camel(String colonne) {
+        String[] mots = colonne.toLowerCase(java.util.Locale.ROOT).split("_");
+        StringBuilder sb = new StringBuilder(mots[0]);
+        for (int i = 1; i < mots.length; i++) {
+            if (!mots[i].isEmpty()) {
+                sb.append(Character.toUpperCase(mots[i].charAt(0))).append(mots[i].substring(1));
+            }
+        }
+        return sb.toString();
     }
 
     /** Remonte la chaîne des causes jusqu'à un {@link java.sql.SQLException} pour lire son SQLSTATE. */
@@ -192,9 +280,29 @@ public class GlobalExceptionHandler {
         return null;
     }
 
+    /**
+     * Filet de sécurité : toute exception non traitée ci-dessus → 500 <strong>générique</strong>.
+     *
+     * <p>⚠️ Correction (2026-08-24) — le corps renvoyait {@code ex.getMessage()} brut. Selon l'exception, cela
+     * publiait au client un fragment de requête SQL avec ses noms de tables et de colonnes, un chemin de
+     * fichier du serveur ou un nom de classe interne : une carte du système offerte à qui sait provoquer une
+     * erreur, sur une API dont certaines routes sont publiques. Le client reçoit désormais une phrase fixe ;
+     * le détail n'est pas perdu pour autant — il part au journal ({@code ERROR} + trace complète), seul
+     * endroit où il est exploitable sans être exposé.</p>
+     */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneric(Exception ex, WebRequest request) {
-        return build(HttpStatus.INTERNAL_SERVER_ERROR, ex.getMessage(), request, null);
+        return erreurInterne(ex, request);
+    }
+
+    /** Message unique des 500 : aucun détail d'implémentation ne transite par le corps de réponse. */
+    static final String MESSAGE_ERREUR_INTERNE =
+            "Une erreur interne est survenue. L'incident a été enregistré ; réessayez plus tard.";
+
+    /** Journalise l'exception complète (seule trace du détail) puis rend le 500 générique. */
+    private ResponseEntity<ErrorResponse> erreurInterne(Exception ex, WebRequest request) {
+        log.error("Erreur non traitée sur {}", request.getDescription(false).replace("uri=", ""), ex);
+        return build(HttpStatus.INTERNAL_SERVER_ERROR, MESSAGE_ERREUR_INTERNE, request, null);
     }
 
     private ResponseEntity<ErrorResponse> build(HttpStatus status, String message, WebRequest request,

@@ -109,7 +109,9 @@ BROUILLON** pour l'édition, **cohérence type↔contenu** (PPM ⇒ a un PPM ; D
 | 401 | Non authentifié (JWT absent/invalide, ou compte désactivé) |
 | 403 | Interdit (rôle ou périmètre de localité insuffisant) |
 | 404 | Ressource introuvable |
+| 405 | ⚠️ **Verbe non autorisé sur la route** (2026-08-24) — réponse accompagnée de l'en-tête **`Allow`** listant les méthodes acceptées |
 | 409 | Conflit métier (transition d'état interdite, contrainte violée, doublon, suppression interdite) |
+| 500 | Erreur interne — ⚠️ **message générique** : le corps ne porte **aucun** détail d'implémentation ; l'exception complète part au journal serveur |
 
 ### Format d'erreur (`ErrorResponse`)
 ```json
@@ -124,6 +126,13 @@ BROUILLON** pour l'édition, **cohérence type↔contenu** (PPM ⇒ a un PPM ; D
 ```
 `erreurs` est un **tableau** d'objets `{ champ, message }`, renseigné uniquement pour les erreurs de
 validation (400) ; **omis** (absent du corps) pour les autres erreurs.
+
+> ⚠️ **500 — corps générique (règle ajoutée 2026-08-24).** Le `message` d'un 500 vaut invariablement
+> « Une erreur interne est survenue. L'incident a été enregistré ; réessayez plus tard. » Auparavant le corps
+> reprenait le texte brut de l'exception : fragment SQL avec ses noms de tables et de colonnes, chemin de
+> fichier du serveur, nom de classe interne — exposés à qui savait provoquer une erreur, y compris depuis les
+> routes publiques. Le détail n'est pas perdu : il est journalisé côté serveur en `ERROR`, avec la trace
+> complète. Le front ne doit donc **jamais** chercher à interpréter le `message` d'un 500.
 
 Un champ **`code`** (string) s'ajoute au corps pour les erreurs métier que le front doit traiter
 **spécifiquement** plutôt qu'en affichant le message brut ; il est **omis** partout ailleurs. Seule valeur
@@ -140,6 +149,7 @@ quand ils surviennent (mapping centralisé dans `GlobalExceptionHandler`). Côt�
 | **Validation des champs** (`@Valid`) | un champ obligatoire manque ou ne respecte pas une contrainte (`@NotNull`, `@NotBlank`, `@Size`…) | `message` = « Validation échouée » + tableau **`erreurs`** (`[{ champ, message }]`) renseigné |
 | **Corps illisible / mal formé** (`HttpMessageNotReadableException`) | JSON invalide, mauvais **type** (ex. `idEntiteContract` envoyé en **libellé** au lieu de l'id) ou **date hors ISO** `AAAA-MM-JJ` (ex. `23/06/2026`) | `message` = « Corps de requête invalide ou mal formé. » + **`erreurs`** `[{ champ, message }]` indiquant le **champ fautif** (ex. `dateSignature`, `marches[0].dateFin`) |
 | **Identifiant de création manquant** | POST de création sans la clé primaire (toutes les PK sont **assignées par le client**, cf. *Clés primaires*) | « L'identifiant (clé primaire) est obligatoire à la création… » |
+| **Valeur trop longue en base** (`SQLSTATE 22001`) | une valeur dépasse la longueur de sa colonne alors qu'aucun `@Size` ne l'avait arrêtée en amont | `message` = « Valeur trop longue pour un champ de cette ressource. » + **`erreurs`** nommant le champ **quand le pilote cite la colonne** (H2 le fait, PostgreSQL non — le **400** reste rendu dans les deux cas) |
 | **Règle d'entrée métier** (`BadRequestException`) | ex. `POST /api/mon-compte/changer-mot-de-passe` avec ancien mot de passe incorrect ou nouveau identique à l'ancien ; `POST /api/marches` quand la **localité du dossier** est introuvable (mode indéterminable) | message explicite |
 
 #### 403 — Forbidden *(authentifié mais non autorisé ; ne pas réessayer tel quel)*
@@ -158,9 +168,19 @@ quand ils surviennent (mapping centralisé dans `GlobalExceptionHandler`). Côt�
 | **Écriture interdite (journal immuable)** | `POST` ou `PUT` sur le journal d'audit : une entrée est *constatée* par le serveur, jamais *déclarée* par un client — ni forgeable, ni réattribuable à un tiers (§3.8) | `POST /api/audit-logs` ; `PUT /api/audit-logs/{id}` |
 | **Vacance de PRMP** (`code: "VACANCE_PRMP"`) | aucune PRMP en fonction à la date de l'action : toute action de traitement côté PRMP/UGPM attend la nomination (pas d'intérim) | `POST /api/dossiers/{id}/soumettre` pendant une transition — message « En attente de nomination de la nouvelle PRMP » |
 | **Mandat : règle de nomination** | 3ᵉ mandat pour la même personne, arrêté réutilisé, reconduction recouvrant le précédent (prolongation déguisée), durée > 3 ans | `POST /api/mandats` (cf. *Mandats PRMP*) |
-| **Violation de contrainte BD** (`DataIntegrityViolationException`) | identifiant en **doublon**, valeur obligatoire manquante (NOT NULL) ou **clé étrangère** inexistante | POST avec un id déjà utilisé, ou référençant une entité inexistante |
+| **Violation de contrainte BD** (`DataIntegrityViolationException`) | identifiant en **doublon** (`23505`) ou **clé étrangère** inexistante (`23503`) | POST avec un id déjà utilisé, ou référençant une entité inexistante — *(NOT NULL `23502` et longueur `22001` donnent un **400**, pas un 409)* |
 
-> Rappel : **401** (non authentifié : JWT absent/invalide ou compte désactivé) et **404** (ressource introuvable) restent distincts des trois ci-dessus.
+> ⚠️ **405 — mauvais verbe (règle ajoutée 2026-08-24).** Un verbe non supporté sur une route existante
+> (ex. `DELETE /api/marches`) renvoie **405** avec l'en-tête **`Allow`** peuplé des méthodes acceptées, et le
+> corps `ErrorResponse` habituel. Auparavant **toute l'API** répondait **500** dans ce cas : le
+> `@ExceptionHandler(Exception.class)` du `GlobalExceptionHandler` interceptait
+> `HttpRequestMethodNotSupportedException` avant le résolveur par défaut de Spring, et publiait en prime le
+> message d'exception. Un client ne pouvait pas distinguer un appel mal formé d'une panne serveur. *(Si le
+> mapping ne fournit aucune méthode supportée, `Allow` est omis plutôt que rendu vide ; le 405 est rendu
+> quand même.)*
+
+> Rappel : **401** (non authentifié : JWT absent/invalide ou compte désactivé), **404** (ressource introuvable)
+> et **405** (verbe non autorisé sur la route, avec `Allow`) restent distincts des trois ci-dessus.
 
 ### Types
 `Integer`/`Long` → `number` ; `String` → `string` ; `Boolean` → `boolean` ; `BigDecimal` → `number` ;
@@ -2813,11 +2833,11 @@ active (`t_prmp_entite.ACTIF`) sur l'entité contractante du dossier. C'est ce s
 | Champ (JSON) | Type | Obligatoire | Contraintes |
 |---|---|---|---|
 | idDetail | number | Oui (PK, au POST) | clé primaire |
-| idDossier | number | Oui | @NotNull |
-| idPpm | number | Oui | @NotNull |
+| idDossier | number | Oui | `@NotNull` (groupe `Identite` : **non exigé** en `PATCH .../rectifier`) |
+| idPpm | number | Oui | `@NotNull` (groupe `Identite` : **non exigé** en `PATCH .../rectifier`) |
 | designationMarche | string | Non | max 500 |
 | numCompte | string | Non | max 20 |
-| montEstim | number | Non | |
+| montEstim | number | Non | ⚠️ **≥ 0** (`@PositiveOrZero`) et **≤ 2 décimales** (`numeric(38,2)`, cf. note) |
 | ancienMontEstim | number | Non | |
 | nouvMontEstim | number | Non | |
 | financement | string | Non | max 20 |
@@ -2843,8 +2863,23 @@ active (`t_prmp_entite.ACTIF`) sur l'entité contractante du dossier. C'est ce s
 > repasser par le brouillon**. Statut du dossier **inchangé** (reste `EN_ATTENTE_DECISION_PRMP` jusqu'à
 > `POST /api/dossiers/{id}/resoumettre`). Hors `EN_ATTENTE_DECISION_PRMP` → **409** ; non-propriétaire → **403** ;
 > profil **PRMP strict** (Admin/vérificateur → **403**). Identité **figée** (idDossier, idPpm — **non requis** dans
-> le corps, ignorés s'ils sont envoyés ; le PATCH ne valide pas ces champs). Le `idMode` fourni est conservé
+> le corps, ignorés s'ils sont envoyés : leur `@NotNull` est porté par le groupe de validation `Identite`,
+> que le PATCH n'active pas). ⚠️ **Règle modifiée (2026-08-24)** — les contraintes de **contenu** (`@Size`) sont, elles,
+> **validées** : un corps trop long donne un **400 nommant le champ**, comme en `PUT`. *(Auparavant le corps n'était pas validé du tout :
+> la valeur partait jusqu'à la base et revenait en **409** opaque.)* Le `idMode` fourni est conservé
 > tel quel. Tracé `t_audit_log` (`MODIFICATION_RECTIFICATION`, `NOM_TABLE=t_marche`).
+
+> ⚠️ **`montEstim` — contraintes numériques (règle ajoutée 2026-08-24).** Le montant estimatif reste
+> **facultatif** (`null` = ligne non chiffrée ; l'import PPM émet l'anomalie `CHAMP_MANQUANT`, pas un refus
+> HTTP) et **zéro reste accepté** — mais un montant **négatif** est refusé (**400** nommant `montEstim`), de
+> même qu'un montant à **plus de deux décimales**. Motif : `montEstim` est comparé à la **somme des montants
+> par bénéficiaire** (invariant `Σ ancMontBenef = montEstim`) et sert de base aux écarts du diff de
+> rectification ; un négatif y passait sans bruit. Une **moins-value** ne se saisit jamais comme un montant
+> négatif : elle s'exprime par un `nouvMontEstim` inférieur à `montEstim` — d'où `@PositiveOrZero` et non
+> `@Positive`. La limite décimale reflète la colonne `t_marche.MONT_ESTIM numeric(38,2)`, qui arrondissait
+> jusqu'ici la 3ᵉ décimale **en silence**. S'applique à `POST`, `PUT` **et** `PATCH .../rectifier`.
+> *(`ancienMontEstim`/`nouvMontEstim` restent sans contrainte à ce stade — même colonne, mais aucun invariant
+> serveur ne s'y appuie aujourd'hui.)*
 
 > ⚠️ **`formeMarche` — forme du marché (règle ajoutée 2026-07-18).** Champ de `MarcheDto` (colonne
 > `t_marche.FORME_MARCHE`), liste fermée : **`A_COMMANDE`** (« Marché à commande »), **`CONTRAT_CADRE`**
@@ -3501,7 +3536,10 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 > par le brouillon**. Statut du dossier **inchangé** (reste `EN_ATTENTE_DECISION_PRMP` jusqu'à
 > `POST /api/dossiers/{id}/resoumettre`). Hors `EN_ATTENTE_DECISION_PRMP` → **409** ; non-propriétaire → **403** ;
 > profil **PRMP strict** (Admin/vérificateur → **403**). Identité **figée** (idDossier, idPrmp, idLocalite —
-> **non requis** dans le corps, ignorés s'ils sont envoyés ; le PATCH ne valide pas ces champs).
+> **non requis** dans le corps, ignorés s'ils sont envoyés : leur `@NotNull` est porté par le groupe de
+> validation `Identite`, que le PATCH n'active pas). ⚠️ **Règle modifiée (2026-08-24)** — les contraintes de
+> **contenu** (`@NotBlank`, `@Size`) **sont validées** : un `signataire` vide ou une `reference` trop longue
+> donne un **400 nommant le champ**, comme en `PUT` (auparavant : aucune validation, puis **409** opaque).
 > Tracé `t_audit_log` (`MODIFICATION_RECTIFICATION`, `NOM_TABLE=t_ppm`).
 > *(DAO/MAOO : sans contenu éditable, donc non concernés. Les lignes de marché se corrigent via
 > `PATCH /api/marches/{id}/rectifier` ; pas d'ajout/suppression de lignes en rectification.)*

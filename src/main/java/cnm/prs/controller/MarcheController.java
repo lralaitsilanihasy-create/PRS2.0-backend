@@ -16,8 +16,11 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.security.access.prepost.PreAuthorize;
 
-import jakarta.validation.Valid;
+import org.springframework.validation.annotation.Validated;
 
+import jakarta.validation.groups.Default;
+
+import cnm.prs.dto.GroupesValidation;
 import cnm.prs.dto.MarcheDto;
 import cnm.prs.service.MarcheService;
 
@@ -62,22 +65,28 @@ public class MarcheController {
     // Édition des lignes d'un brouillon : réservée à la PRMP (propriétaire) ; validé en service.
     @PreAuthorize("hasAnyRole('PRMP','UGPM')")
     @PostMapping
-    public ResponseEntity<MarcheDto> create(@Valid @RequestBody MarcheDto dto) {
+    public ResponseEntity<MarcheDto> create(@Validated({ Default.class, GroupesValidation.Identite.class }) @RequestBody MarcheDto dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.create(dto));
     }
 
     @PreAuthorize("hasAnyRole('PRMP','UGPM')")
     @PutMapping("/{id}")
-    public MarcheDto update(@PathVariable Integer id, @Valid @RequestBody MarcheDto dto) {
+    public MarcheDto update(@PathVariable Integer id, @Validated({ Default.class, GroupesValidation.Identite.class }) @RequestBody MarcheDto dto) {
         return service.update(id, dto);
     }
 
-    // Édition restreinte (rectification) : PRMP propriétaire, uniquement si dossier EN_ATTENTE_DECISION_PRMP.
-    // Corps SANS validation des champs d'identité figés (idDossier/idPpm), que le front n'envoie pas en
-    // rectification ; le contenu est appliqué, l'identité conservée serveur.
+    /**
+     * Édition restreinte (rectification) : PRMP propriétaire, uniquement si dossier EN_ATTENTE_DECISION_PRMP.
+     *
+     * <p>Validation du <strong>groupe {@code Default} seul</strong> : les champs d'identité figés
+     * ({@code idDossier}/{@code idPpm}), que le front n'envoie pas en rectification, portent leur
+     * {@code @NotNull} dans {@link GroupesValidation.Identite} et ne sont donc pas exigés — mais les
+     * contraintes de <strong>contenu</strong> ({@code @Size}, montant) restent appliquées. Sans cela, un
+     * corps trop long partait jusqu'à la base et revenait en 409 opaque au lieu d'un 400 nommant le champ.</p>
+     */
     @PreAuthorize("hasAnyRole('PRMP','UGPM')")
     @PatchMapping("/{id}/rectifier")
-    public MarcheDto rectifier(@PathVariable Integer id, @RequestBody MarcheDto dto) {
+    public MarcheDto rectifier(@PathVariable Integer id, @Validated @RequestBody MarcheDto dto) {
         return service.modifierEnAttenteRectification(id, dto);
     }
 
