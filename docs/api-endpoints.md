@@ -140,6 +140,7 @@ quand ils surviennent (mapping centralisé dans `GlobalExceptionHandler`). Côt�
 | **Validation des champs** (`@Valid`) | un champ obligatoire manque ou ne respecte pas une contrainte (`@NotNull`, `@NotBlank`, `@Size`…) | `message` = « Validation échouée » + tableau **`erreurs`** (`[{ champ, message }]`) renseigné |
 | **Corps illisible / mal formé** (`HttpMessageNotReadableException`) | JSON invalide, mauvais **type** (ex. `idEntiteContract` envoyé en **libellé** au lieu de l'id) ou **date hors ISO** `AAAA-MM-JJ` (ex. `23/06/2026`) | `message` = « Corps de requête invalide ou mal formé. » + **`erreurs`** `[{ champ, message }]` indiquant le **champ fautif** (ex. `dateSignature`, `marches[0].dateFin`) |
 | **Identifiant de création manquant** | POST de création sans la clé primaire (toutes les PK sont **assignées par le client**, cf. *Clés primaires*) | « L'identifiant (clé primaire) est obligatoire à la création… » |
+| **Valeur trop longue en base** (`SQLSTATE 22001`) | une valeur dépasse la longueur de sa colonne alors qu'aucun `@Size` ne l'avait arrêtée en amont | `message` = « Valeur trop longue pour un champ de cette ressource. » + **`erreurs`** nommant le champ **quand le pilote cite la colonne** (H2 le fait, PostgreSQL non — le **400** reste rendu dans les deux cas) |
 | **Règle d'entrée métier** (`BadRequestException`) | ex. `POST /api/mon-compte/changer-mot-de-passe` avec ancien mot de passe incorrect ou nouveau identique à l'ancien ; `POST /api/marches` quand la **localité du dossier** est introuvable (mode indéterminable) | message explicite |
 
 #### 403 — Forbidden *(authentifié mais non autorisé ; ne pas réessayer tel quel)*
@@ -158,7 +159,7 @@ quand ils surviennent (mapping centralisé dans `GlobalExceptionHandler`). Côt�
 | **Écriture interdite (journal immuable)** | `POST` ou `PUT` sur le journal d'audit : une entrée est *constatée* par le serveur, jamais *déclarée* par un client — ni forgeable, ni réattribuable à un tiers (§3.8) | `POST /api/audit-logs` ; `PUT /api/audit-logs/{id}` |
 | **Vacance de PRMP** (`code: "VACANCE_PRMP"`) | aucune PRMP en fonction à la date de l'action : toute action de traitement côté PRMP/UGPM attend la nomination (pas d'intérim) | `POST /api/dossiers/{id}/soumettre` pendant une transition — message « En attente de nomination de la nouvelle PRMP » |
 | **Mandat : règle de nomination** | 3ᵉ mandat pour la même personne, arrêté réutilisé, reconduction recouvrant le précédent (prolongation déguisée), durée > 3 ans | `POST /api/mandats` (cf. *Mandats PRMP*) |
-| **Violation de contrainte BD** (`DataIntegrityViolationException`) | identifiant en **doublon**, valeur obligatoire manquante (NOT NULL) ou **clé étrangère** inexistante | POST avec un id déjà utilisé, ou référençant une entité inexistante |
+| **Violation de contrainte BD** (`DataIntegrityViolationException`) | identifiant en **doublon** (`23505`) ou **clé étrangère** inexistante (`23503`) | POST avec un id déjà utilisé, ou référençant une entité inexistante — *(NOT NULL `23502` et longueur `22001` donnent un **400**, pas un 409)* |
 
 > Rappel : **401** (non authentifié : JWT absent/invalide ou compte désactivé) et **404** (ressource introuvable) restent distincts des trois ci-dessus.
 

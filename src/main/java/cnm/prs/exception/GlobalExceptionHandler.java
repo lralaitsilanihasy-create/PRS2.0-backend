@@ -178,8 +178,62 @@ public class GlobalExceptionHandler {
                     "Doublon : un enregistrement avec cette clé existe déjà.", request, null);
             case "23502" -> build(HttpStatus.BAD_REQUEST,       // not_null_violation
                     "Valeur obligatoire manquante.", request, null);
+            case "22001" -> {                                   // string_data_right_truncation
+                // ⚠️ Correction (2026-08-24) — un dépassement de longueur tombait en `default` : 409
+                // « Violation d'une contrainte de données », sans nommer le champ. C'est une faute de SAISIE,
+                // corrigeable par l'appelant : elle relève du 400, comme la même valeur refusée en amont par
+                // `@Size`. Le front recevait deux réponses incomparables pour une seule et même erreur.
+                String champ = champTropLong(ex);
+                yield build(HttpStatus.BAD_REQUEST, "Valeur trop longue pour un champ de cette ressource.", request,
+                        champ == null ? null
+                                : List.of(new ErrorResponse.FieldError(champ, "Valeur trop longue pour ce champ.")));
+            }
             default -> build(HttpStatus.CONFLICT, "Violation d'une contrainte de données.", request, null);
         };
+    }
+
+    /**
+     * Nom du champ (JSON) en cause dans un dépassement de longueur, ou {@code null} si le pilote ne le dit pas.
+     *
+     * <p>Deux sources, dans cet ordre : le {@code ServerErrorMessage} de pgjdbc (lu <strong>par réflexion</strong>,
+     * comme pour Jackson — le pilote PostgreSQL n'est pas exposé à la compilation), puis, à défaut, le nom de
+     * colonne cité dans le message ({@code Value too long for column "DESIGNATION_MARCHE …"} côté H2). La colonne
+     * est ensuite convertie en nom de propriété : le modèle mappe les colonnes {@code SNAKE_MAJUSCULE} sur des
+     * propriétés {@code camelCase} homonymes, et les DTO reprennent ces noms — la conversion suffit donc.
+     * L'information reste <strong>facultative</strong> : sans elle, le 400 est rendu sans tableau {@code erreurs}.</p>
+     */
+    private static String champTropLong(Throwable ex) {
+        for (Throwable t = ex; t != null; t = t.getCause()) {
+            if (t instanceof java.sql.SQLException) {
+                Object serveur = invoquer(t, "getServerErrorMessage");
+                if (serveur != null && invoquer(serveur, "getColumn") instanceof String col && !col.isBlank()) {
+                    return camel(col);
+                }
+            }
+            if (t.getMessage() != null) {
+                java.util.regex.Matcher m = COLONNE_CITEE.matcher(t.getMessage());
+                if (m.find()) {
+                    return camel(m.group(1));
+                }
+            }
+        }
+        return null;
+    }
+
+    /** Nom de colonne cité dans un message de dépassement de longueur (H2 : {@code for column "NOM …"}). */
+    private static final java.util.regex.Pattern COLONNE_CITEE =
+            java.util.regex.Pattern.compile("(?i)column\\s+\"?([A-Za-z_][A-Za-z0-9_]*)");
+
+    /** {@code DESIGNATION_MARCHE} → {@code designationMarche} (convention de mapping du modèle). */
+    private static String camel(String colonne) {
+        String[] mots = colonne.toLowerCase(java.util.Locale.ROOT).split("_");
+        StringBuilder sb = new StringBuilder(mots[0]);
+        for (int i = 1; i < mots.length; i++) {
+            if (!mots[i].isEmpty()) {
+                sb.append(Character.toUpperCase(mots[i].charAt(0))).append(mots[i].substring(1));
+            }
+        }
+        return sb.toString();
     }
 
     /** Remonte la chaîne des causes jusqu'à un {@link java.sql.SQLException} pour lire son SQLSTATE. */
