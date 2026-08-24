@@ -3972,7 +3972,7 @@ au dépôt, **aucun archivage** — simple événement tracé).
 ---
 
 ## Services bénéficiaires
-**Ressource** `/api/service-beneficiaires` — Lecture / écriture : tout utilisateur authentifié.
+**Ressource** `/api/service-beneficiaires` — **Lecture scopée au périmètre de la ligne de marché parente** (`ID_DETAIL`, §1/§3.1) : Président/Administrateur voient tout, la PRMP/UGPM les bénéficiaires de ses marchés, les contrôleurs ceux de leur localité, tout autre profil une liste vide. **Écriture réservée à `PRMP` / `UGPM`** (**403** sinon, circuit interne compris — la ventilation d'un PPM appartient à son propriétaire), et le **marché visé est contrôlé** (**403** sur celui d'une autre entité). ⚠️ **PK allouée serveur** : `idBenef` envoyé par le client est ignoré au POST — la liste étant scopée, deux PRMP calculeraient le même `max()+1` et la seconde écraserait la ligne de la première.
 
 **Champs `ServiceBeneficiaireDto`**
 
@@ -3989,11 +3989,11 @@ au dépôt, **aucun archivage** — simple événement tracé).
 
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
-| GET | /api/service-beneficiaires | — | `ServiceBeneficiaireDto[]` | 200 | Authentifié |
-| GET | /api/service-beneficiaires/{id} | — | `ServiceBeneficiaireDto` | 200, 404 | Authentifié |
-| POST | /api/service-beneficiaires | `ServiceBeneficiaireDto` | `ServiceBeneficiaireDto` | 201, 400 | Authentifié |
-| PUT | /api/service-beneficiaires/{id} | `ServiceBeneficiaireDto` | `ServiceBeneficiaireDto` | 200, 400, 404 | Authentifié |
-| DELETE | /api/service-beneficiaires/{id} | — | — | 204, 404 | Authentifié |
+| GET | /api/service-beneficiaires | — | `ServiceBeneficiaireDto[]` | 200 | Authentifié — **liste scopée** |
+| GET | /api/service-beneficiaires/{id} | — | `ServiceBeneficiaireDto` | 200, **403**, 404 | Authentifié — **403 hors périmètre** |
+| POST | /api/service-beneficiaires | `ServiceBeneficiaireDto` | `ServiceBeneficiaireDto` (PK serveur) | 201, 400, **403** | **PRMP / UGPM** — périmètre du marché |
+| PUT | /api/service-beneficiaires/{id} | `ServiceBeneficiaireDto` | `ServiceBeneficiaireDto` | 200, 400, **403**, 404 | **PRMP / UGPM** — périmètre du marché |
+| DELETE | /api/service-beneficiaires/{id} | — | — | 204, **403**, 404 | **PRMP / UGPM** — périmètre du marché |
 
 `{id}` = idBenef (number).
 
@@ -4039,7 +4039,7 @@ au dépôt, **aucun archivage** — simple événement tracé).
 ---
 
 ## SOA bénéficiaires
-**Ressource** `/api/soa-beneficiaires` — Lecture / écriture : tout utilisateur authentifié.
+**Ressource** `/api/soa-beneficiaires` — **Référentiel** (code SOA + libellé, aucune donnée de périmètre) : **lecture ouverte à tout utilisateur authentifié**. **Création ouverte à `PRMP` / `UGPM` en plus de l'`ADMINISTRATEUR`** — même motif que `POST /api/entite-contracts` et `POST /api/ministeres` : à l'import d'un PPM, la ventilation cite des codes SOA absents du référentiel, que la PRMP enregistre avant de pouvoir soumettre. **`PUT` et `DELETE` restent `ADMINISTRATEUR`** (**403** sinon) : une PRMP n'a pas à renommer ni retirer un code que d'autres entités utilisent.
 
 **Champs `SoaBeneficiaireDto`**
 
@@ -4054,9 +4054,9 @@ au dépôt, **aucun archivage** — simple événement tracé).
 |---|---|---|---|---|---|
 | GET | /api/soa-beneficiaires | — | `SoaBeneficiaireDto[]` | 200 | Authentifié |
 | GET | /api/soa-beneficiaires/{id} | — | `SoaBeneficiaireDto` | 200, 404 | Authentifié |
-| POST | /api/soa-beneficiaires | `SoaBeneficiaireDto` | `SoaBeneficiaireDto` | 201, 400 | Authentifié |
-| PUT | /api/soa-beneficiaires/{id} | `SoaBeneficiaireDto` | `SoaBeneficiaireDto` | 200, 400, 404 | Authentifié |
-| DELETE | /api/soa-beneficiaires/{id} | — | — | 204, 404 | Authentifié |
+| POST | /api/soa-beneficiaires | `SoaBeneficiaireDto` | `SoaBeneficiaireDto` | 201, 400, **403** | **PRMP / UGPM / ADMINISTRATEUR** |
+| PUT | /api/soa-beneficiaires/{id} | `SoaBeneficiaireDto` | `SoaBeneficiaireDto` | 200, 400, **403**, 404 | **ADMINISTRATEUR** |
+| DELETE | /api/soa-beneficiaires/{id} | — | — | 204, **403**, 404 | **ADMINISTRATEUR** |
 
 `{id}` = soaCode (string).
 

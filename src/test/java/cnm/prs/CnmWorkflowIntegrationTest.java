@@ -6996,14 +6996,18 @@ class CnmWorkflowIntegrationTest {
 
         String body = "{\"idBenef\":9700,\"idDetail\":9700,\"soaCode\":\"00-21-0-J00-00000\","
                 + "\"numCompte\":\"CPT-BENEF-01\",\"ancMontBenef\":1000000,\"nouvMontBenef\":1200000}";
-        mvc.perform(post("/api/service-beneficiaires").header("Authorization", tokenAdmin)
+        // ⚠️ Écriture réservée PRMP/UGPM (garde 2026-08-24) et PK allouée serveur : on relit l'id RENVOYÉ,
+        // plus celui envoyé — l'id client est désormais ignoré (cf. ServiceBeneficiaireService#create).
+        String cree = mvc.perform(post("/api/service-beneficiaires").header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.numCompte").value("CPT-BENEF-01"))
-                .andExpect(jsonPath("$.soaCode").value("00-21-0-J00-00000"));
+                .andExpect(jsonPath("$.soaCode").value("00-21-0-J00-00000"))
+                .andReturn().getResponse().getContentAsString();
+        int idBenef = com.jayway.jsonpath.JsonPath.read(cree, "$.idBenef");
 
         // Relecture : compte + code SOA long persistés et exposés.
-        mvc.perform(get("/api/service-beneficiaires/9700").header("Authorization", tokenAdmin))
+        mvc.perform(get("/api/service-beneficiaires/" + idBenef).header("Authorization", tokenPrmp))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.numCompte").value("CPT-BENEF-01"))
                 .andExpect(jsonPath("$.soaCode").value("00-21-0-J00-00000"));
@@ -7019,17 +7023,19 @@ class CnmWorkflowIntegrationTest {
         compteRepository.save(new cnm.prs.entity.Compte("CPT-810", "Compte", null, null));
         soaBeneficiaireRepository.save(new cnm.prs.entity.SoaBeneficiaire("00-21-0-J00-00000", "SOA"));
         // Bénéficiaire rattaché au marché 9810 → sans cascade, DELETE renverrait 409 (FK).
-        mvc.perform(post("/api/service-beneficiaires").header("Authorization", tokenPrmp)
+        String benef = mvc.perform(post("/api/service-beneficiaires").header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idBenef\":9810,\"idDetail\":9810,\"soaCode\":\"00-21-0-J00-00000\","
                         + "\"numCompte\":\"CPT-810\",\"ancMontBenef\":1000000}"))
-                .andExpect(status().isCreated());
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        int idBenef = com.jayway.jsonpath.JsonPath.read(benef, "$.idBenef");   // PK allouée serveur
 
         // Suppression du marché → 204 (cascade en transaction), pas de 409.
         mvc.perform(delete("/api/marches/9810").header("Authorization", tokenPrmp))
                 .andExpect(status().isNoContent());
         // Le bénéficiaire a été supprimé en cascade ; le marché a disparu.
-        mvc.perform(get("/api/service-beneficiaires/9810").header("Authorization", tokenPrmp))
+        mvc.perform(get("/api/service-beneficiaires/" + idBenef).header("Authorization", tokenPrmp))
                 .andExpect(status().isNotFound());
         mvc.perform(get("/api/marches/9810").header("Authorization", tokenPrmp))
                 .andExpect(status().isNotFound());
@@ -10941,6 +10947,109 @@ class CnmWorkflowIntegrationTest {
         assertFalse(pvNavetteRepository.existsById(8299));
     }
 
+    @Test
+    @DisplayName("Services bénéficiaires — périmètre hérité de la ligne de marché : liste scopée, 403 pour la "
+            + "PRMP d'une autre entité (lecture et DELETE), écriture fermée au circuit, PK allouée serveur")
+    void gardes_serviceBeneficiaires_perimetreDuMarcheParent() throws Exception {
+        String tokenPrmp3 = seedDeuxMarchesPourGardes();
+        soaBeneficiaireRepository.save(new cnm.prs.entity.SoaBeneficiaire("SOA-GARDE", "SOA de test"));
+        serviceBeneficiaireRepository.save(beneficiaire(8100, 920, "SOA-GARDE"));
+        serviceBeneficiaireRepository.save(beneficiaire(8101, 921, "SOA-GARDE"));
+
+        // La ventilation budgétaire (SOA, montants ancien/nouveau) d'une entité ne sort plus chez l'autre.
+        mvc.perform(get("/api/service-beneficiaires").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idBenef==8100)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idBenef==8101)]", hasSize(0)));
+        mvc.perform(get("/api/service-beneficiaires").header("Authorization", tokenPrmp3))
+                .andExpect(jsonPath("$[?(@.idBenef==8101)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idBenef==8100)]", hasSize(0)));
+        // Le circuit d'ANT voit les deux : l'examen des dossiers en dépend (§1).
+        mvc.perform(get("/api/service-beneficiaires").header("Authorization", tokenMembre))
+                .andExpect(jsonPath("$[?(@.idBenef==8100)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idBenef==8101)]", hasSize(1)));
+
+        mvc.perform(get("/api/service-beneficiaires/8101").header("Authorization", tokenPrmp))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/service-beneficiaires/8100").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk());
+
+        // DELETE : hors périmètre → 403 (PRMP d'une autre entité) ; hors rôle → 403 (circuit interne,
+        // Président compris : la ventilation d'un PPM appartient à la PRMP, le circuit ne l'édite pas).
+        mvc.perform(delete("/api/service-beneficiaires/8101").header("Authorization", tokenPrmp))
+                .andExpect(status().isForbidden());
+        mvc.perform(delete("/api/service-beneficiaires/8101").header("Authorization", tokenMembre))
+                .andExpect(status().isForbidden());
+        mvc.perform(delete("/api/service-beneficiaires/8101").header("Authorization", tokenPresident))
+                .andExpect(status().isForbidden());
+        assertTrue(serviceBeneficiaireRepository.existsById(8101));
+        mvc.perform(delete("/api/service-beneficiaires/8100").header("Authorization", tokenPrmp))
+                .andExpect(status().isNoContent());
+
+        // PK serveur : le front alloue son id par max() sur la liste REÇUE, désormais SCOPÉE — deux PRMP
+        // calculent donc la même valeur. Sans PK serveur, le second POST écraserait (merge) la ligne du
+        // premier. Ici les deux envoient le même id client et doivent obtenir des lignes distinctes.
+        String corps1 = "{\"idBenef\":8101,\"idDetail\":920,\"soaCode\":\"SOA-GARDE\",\"ancMontBenef\":1000}";
+        String corps2 = "{\"idBenef\":8101,\"idDetail\":921,\"soaCode\":\"SOA-GARDE\",\"ancMontBenef\":2000}";
+        String r1 = mvc.perform(post("/api/service-beneficiaires").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content(corps1))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        String r2 = mvc.perform(post("/api/service-beneficiaires").header("Authorization", tokenPrmp3)
+                .contentType(MediaType.APPLICATION_JSON).content(corps2))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        int id1 = com.jayway.jsonpath.JsonPath.read(r1, "$.idBenef");
+        int id2 = com.jayway.jsonpath.JsonPath.read(r2, "$.idBenef");
+        org.junit.jupiter.api.Assertions.assertNotEquals(id1, id2);
+        // La ligne 8101 de PRMP003, visée par l'id client, n'a pas été écrasée.
+        org.junit.jupiter.api.Assertions.assertEquals(921,
+                serviceBeneficiaireRepository.findById(8101).orElseThrow().getIdDetail());
+
+        // Et une PRMP ne peut pas écrire chez l'autre, id serveur ou pas : le marché visé est contrôlé.
+        mvc.perform(post("/api/service-beneficiaires").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content(corps2))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Référentiel SOA — lecture ouverte à tout authentifié, création ouverte à la PRMP (import PPM) "
+            + "mais refusée au circuit, renommage et suppression réservés à l'Administrateur")
+    void gardes_soaBeneficiaires_referentielCadre() throws Exception {
+        soaBeneficiaireRepository.save(new cnm.prs.entity.SoaBeneficiaire("SOA-EXISTANT", "Libelle initial"));
+
+        // Lecture : référentiel sans périmètre (code + libellé), ouverte comme les autres référentiels.
+        mvc.perform(get("/api/soa-beneficiaires").header("Authorization", tokenMembre))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.soaCode=='SOA-EXISTANT')]", hasSize(1)));
+
+        // Création : c'est l'usage RÉEL de l'écran de soumission — la ventilation importée cite des codes
+        // SOA absents du référentiel, que la PRMP enregistre avant de pouvoir soumettre. Fermer ce POST
+        // à l'Administrateur seul bloquerait la soumission de tout PPM citant un SOA nouveau.
+        mvc.perform(post("/api/soa-beneficiaires").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"soaCode\":\"SOA-NOUVEAU\",\"libelle\":\"Cree par la PRMP\"}"))
+                .andExpect(status().isCreated());
+        // Le circuit interne, lui, n'alimente pas le référentiel budgétaire.
+        mvc.perform(post("/api/soa-beneficiaires").header("Authorization", tokenMembre)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"soaCode\":\"SOA-MEMBRE\",\"libelle\":\"Refuse\"}"))
+                .andExpect(status().isForbidden());
+
+        // Renommer ou retirer un code que d'AUTRES entités utilisent reste à l'Administrateur : une PRMP
+        // qui renommerait SOA-EXISTANT changerait le libellé lu par toutes les autres.
+        String corps = "{\"soaCode\":\"SOA-EXISTANT\",\"libelle\":\"Libelle detourne\"}";
+        mvc.perform(put("/api/soa-beneficiaires/SOA-EXISTANT").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content(corps))
+                .andExpect(status().isForbidden());
+        mvc.perform(delete("/api/soa-beneficiaires/SOA-EXISTANT").header("Authorization", tokenPrmp))
+                .andExpect(status().isForbidden());
+        org.junit.jupiter.api.Assertions.assertEquals("Libelle initial",
+                soaBeneficiaireRepository.findById("SOA-EXISTANT").orElseThrow().getLibelle());
+        mvc.perform(put("/api/soa-beneficiaires/SOA-EXISTANT").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content(corps))
+                .andExpect(status().isOk());
+        mvc.perform(delete("/api/soa-beneficiaires/SOA-EXISTANT").header("Authorization", tokenAdmin))
+                .andExpect(status().isNoContent());
+    }
 
     private cnm.prs.entity.IndicateurPrmp indicateurPrmp(int id, String idPrmp) {
         cnm.prs.entity.IndicateurPrmp i = new cnm.prs.entity.IndicateurPrmp();
@@ -10989,5 +11098,14 @@ class CnmWorkflowIntegrationTest {
         n.setDateAction(LocalDateTime.of(2026, 6, 12, 11, 0));
         n.setCommentaire(commentaire);
         return n;
+    }
+
+    private cnm.prs.entity.ServiceBeneficiaire beneficiaire(int id, int idDetail, String soaCode) {
+        cnm.prs.entity.ServiceBeneficiaire b = new cnm.prs.entity.ServiceBeneficiaire();
+        b.setIdBenef(id);
+        b.setIdDetail(idDetail);
+        b.setSoaCode(soaCode);
+        b.setAncMontBenef(new BigDecimal("1000000"));
+        return b;
     }
 }
