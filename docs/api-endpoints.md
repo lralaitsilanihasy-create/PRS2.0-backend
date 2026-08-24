@@ -2764,6 +2764,13 @@ active (`t_prmp_entite.ACTIF`) sur l'entité contractante du dossier. C'est ce s
 > → ceux de **sa localité** (dossier non brouillon) ; autre profil → liste vide. `GET /api/marches/{id}`
 > hors périmètre → **403**. Le front n'a plus à filtrer côté client (corrige la fuite inter‑PRMP/localité).
 
+> 📌 **Filtre `?ppm=` (règle ajoutée 2026-08-24).** `GET /api/marches` accepte `?ppm=<idPpm>`, qui
+> restreint aux marchés de ce PPM — sur la liste plate comme sur la variante paginée. Le filtre est
+> appliqué **avant** le découpage en pages, **après** le scoping de périmètre. Sans lui, l'écran
+> « Marchés » filtré par PPM ne pouvait pas être paginé côté serveur : filtrer la page déjà servie
+> aurait produit des pages incomplètes et un `totalElements` portant sur l'ensemble non filtré.
+> `ppm` inconnu → liste vide (pas d'erreur) ; un marché hors périmètre reste invisible.
+
 **Champs `MarcheDto`**
 
 | Champ (JSON) | Type | Obligatoire | Contraintes |
@@ -2785,7 +2792,7 @@ active (`t_prmp_entite.ACTIF`) sur l'entité contractante du dossier. C'est ce s
 
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
-| GET | /api/marches | — | `MarcheDto[]` (scopé) | 200 | Authentifié — ⚠️ **paginable** (`?page=&size=`, cf. Conventions) |
+| GET | /api/marches | — | `MarcheDto[]` (scopé) | 200 | Authentifié — ⚠️ **paginable** (`?page=&size=`, cf. Conventions) ; filtre `?ppm=` |
 | GET | /api/marches/{id} | — | `MarcheDto` | 200, 403, 404 | Authentifié (dans son périmètre) |
 | POST | /api/marches | `MarcheDto` | `MarcheDto` | 201, 400 | Authentifié |
 | PUT | /api/marches/{id} | `MarcheDto` | `MarcheDto` | 200, 400, 404 | Authentifié |

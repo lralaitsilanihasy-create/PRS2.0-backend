@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.security.access.prepost.PreAuthorize;
 
@@ -33,16 +34,24 @@ public class MarcheController {
         this.service = service;
     }
 
-    /** ⚠️ Audit front (2026-08-16) — même liste, paginée ({@code ?page=&size=}) ; sans {@code page}, liste plate. */
+    /**
+     * ⚠️ Audit front (2026-08-16) — même liste, paginée ({@code ?page=&size=}) ; sans {@code page}, liste plate.
+     *
+     * <p>{@code ppm} (facultatif) restreint aux marchés d'un PPM. Le filtre est appliqué
+     * <strong>avant</strong> la pagination : c'est ce qui permet à l'écran « Marchés » filtré par PPM
+     * de ne plus télécharger la liste entière pour la découper lui-même.</p>
+     */
     @GetMapping(params = "page")
     public org.springframework.data.domain.Page<MarcheDto> findAllPagine(
+            @RequestParam(name = "ppm", required = false) Integer idPpm,
             org.springframework.data.domain.Pageable pageable) {
-        return service.findAllPagine(pageable);
+        return service.findAllPagine(idPpm, pageable);
     }
 
+    /** Liste plate, avec le même filtre {@code ppm} facultatif (compatibilité : sans lui, inchangée). */
     @GetMapping
-    public List<MarcheDto> findAll() {
-        return service.findAll();
+    public List<MarcheDto> findAll(@RequestParam(name = "ppm", required = false) Integer idPpm) {
+        return service.findAll(idPpm);
     }
 
     @GetMapping("/{id}")
