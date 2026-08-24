@@ -1560,6 +1560,57 @@ class CnmWorkflowIntegrationTest {
                 .andExpect(jsonPath("$[0].imActeur").value("CTRADM"));
     }
 
+    /**
+     * Le journal d'audit est la pièce probante du contrôle : sans cette garde, un administrateur
+     * pouvait, après une action litigieuse, réécrire l'entrée qui l'atteste et l'attribuer à un tiers
+     * en remplaçant {@code imActeur} — la substitution ne laissant elle-même aucune trace, puisque
+     * l'intercepteur ne journalise que le nom de la table, pas les valeurs réécrites. Le verbe reste
+     * routé mais refuse explicitement (409, §3.8), au même titre que la suppression.
+     */
+    @Test
+    @DisplayName("Audit immuable (§3.8) : PUT sur une entrée du journal est refusé — imActeur non réattribuable")
+    void audit_modificationInterdite() throws Exception {
+        // Une écriture réussie produit l'entrée n°1, imputée à l'administrateur qui l'a faite.
+        mvc.perform(post("/api/localites").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idLocalite\":\"TMS\",\"libelleLocalite\":\"Toamasina\"}"))
+                .andExpect(status().isCreated());
+
+        // Tentative de réattribution de l'action à un tiers (CTRMEM) — refusée avant toute écriture.
+        mvc.perform(put("/api/audit-logs/1").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idLog\":1,\"dateAction\":\"2026-01-01T00:00:00\",\"imActeur\":\"CTRMEM\","
+                        + "\"nomTable\":\"localites\",\"typeAction\":\"CREATE\"}"))
+                .andExpect(status().isConflict());
+
+        // L'entrée est intacte : toujours une seule, toujours imputée à CTRADM.
+        mvc.perform(get("/api/audit-logs").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].imActeur").value("CTRADM"));
+    }
+
+    /**
+     * Une entrée d'audit est <em>constatée</em> par le serveur, jamais <em>déclarée</em> par un client :
+     * l'unique voie d'écriture est {@code AuditLogService#enregistrer}, qui prend {@code imActeur} du
+     * principal courant. Le POST du CRUD générique laissait au contraire le client choisir l'acteur,
+     * la date et la table — de quoi fabriquer une preuve au nom d'un tiers. Écriture refusée (409, §3.8).
+     */
+    @Test
+    @DisplayName("Audit immuable (§3.8) : POST sur le journal est refusé — pas d'entrée forgée au nom d'un tiers")
+    void audit_creationParApiInterdite() throws Exception {
+        mvc.perform(post("/api/audit-logs").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idLog\":99,\"dateAction\":\"2026-01-01T00:00:00\",\"imActeur\":\"CTRMEM\","
+                        + "\"nomTable\":\"dossiers\",\"typeAction\":\"DELETE\"}"))
+                .andExpect(status().isConflict());
+
+        // Rien n'a été écrit — ni l'entrée forgée, ni une trace de la tentative (refus = pas d'écriture).
+        mvc.perform(get("/api/audit-logs").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+    }
+
     @Test
     @DisplayName("Module 10 : écriture comptes/hiérarchie réservée Admin, lecture ouverte, sessions Admin-only")
     void module10_gestionComptes() throws Exception {

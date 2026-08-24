@@ -151,6 +151,7 @@ quand ils surviennent (mapping centralisé dans `GlobalExceptionHandler`). Côt�
 | **Précondition de circuit non remplie** | l'étape précédente n'est pas atteinte | `dispatch` d'un dossier non `PRET_DISPATCH` ou **doublon** de dispatch ; `examen` d'un dossier non `DISPATCHE` ; **édition d'un examen verrouillé** (dossier `PV_SIGNE`) ; `vérification` hors PV `SIGNE` / avis ≠ `FAVR` / dossier clos |
 | **Autre règle de gestion** | contrainte métier violée | `NUM_PASSAGE = 1` ⟺ `TYPE_PASSAGE = INITIAL` ; `INTERIM_DISPATCH` incohérent avec la localité ; décision de retrait sans observation ; `sens` de navette invalide |
 | **Suppression interdite (immuabilité)** | `DELETE` d'une ressource à traçabilité immuable | `pv-navettes`, `audit-logs` |
+| **Écriture interdite (journal immuable)** | `POST` ou `PUT` sur le journal d'audit : une entrée est *constatée* par le serveur, jamais *déclarée* par un client — ni forgeable, ni réattribuable à un tiers (§3.8) | `POST /api/audit-logs` ; `PUT /api/audit-logs/{id}` |
 | **Vacance de PRMP** (`code: "VACANCE_PRMP"`) | aucune PRMP en fonction à la date de l'action : toute action de traitement côté PRMP/UGPM attend la nomination (pas d'intérim) | `POST /api/dossiers/{id}/soumettre` pendant une transition — message « En attente de nomination de la nouvelle PRMP » |
 | **Mandat : règle de nomination** | 3ᵉ mandat pour la même personne, arrêté réutilisé, reconduction recouvrant le précédent (prolongation déguisée), durée > 3 ans | `POST /api/mandats` (cf. *Mandats PRMP*) |
 | **Violation de contrainte BD** (`DataIntegrityViolationException`) | identifiant en **doublon**, valeur obligatoire manquante (NOT NULL) ou **clé étrangère** inexistante | POST avec un id déjà utilisé, ou référençant une entité inexistante |
@@ -2341,13 +2342,29 @@ de PV). Lecture filtrée par profil/localité. Cycle : `BROUILLON → SOUMIS →
 ---
 
 ## Journaux d'audit
-**Ressource** `/api/audit-logs` — Réservé à `ADMINISTRATEUR` pour **toutes** les opérations (lecture comprise). Le journal est alimenté **automatiquement** par le système. **DELETE interdit → 409** (journal immuable, §3.8).
+**Ressource** `/api/audit-logs` — Réservé à `ADMINISTRATEUR` pour **toutes** les opérations (lecture comprise). Le journal est alimenté **automatiquement** par le système.
 
-**Champs `AuditLogDto`**
+> ⚠️ **Journal immuable (§3.8) — ressource en lecture seule.** Le journal est la **pièce probante** du
+> contrôle : il est alimenté **exclusivement par le serveur** (l'intercepteur d'audit après chaque écriture
+> réussie, et les services métier pour leurs signaux explicites), qui impute toujours l'entrée au
+> **principal courant**. Les trois verbes d'écriture restent routés mais refusent explicitement,
+> **tous en 409** :
+> - **POST → 409.** Une entrée d'audit est *constatée* par le serveur, jamais *déclarée* par un client :
+>   laisser un appelant poser lui-même `imActeur` reviendrait à lui laisser forger une preuve au nom d'un tiers.
+> - **PUT → 409.** Une entrée écrite ne se réécrit pas — sans cette garde, un acteur pouvait réattribuer
+>   sa propre action à un tiers, la substitution ne laissant elle-même aucune trace.
+> - **DELETE → 409** (contrat historique, inchangé).
+>
+> Ces trois verbes sont fermés **même pour l'`ADMINISTRATEUR`** : c'est précisément l'acteur contre lequel
+> la trace doit rester opposable. Un 409 explicite est préféré à un 405 : l'appelant apprend *pourquoi*
+> l'écriture est refusée, pas seulement que le verbe n'existe pas.
+
+**Champs `AuditLogDto`** — **réponse uniquement** (aucune écriture n'est acceptée sur cette ressource) ;
+la colonne *Obligatoire* décrit les contraintes du modèle, pas un contrat d'entrée.
 
 | Champ (JSON) | Type | Obligatoire | Contraintes |
 |---|---|---|---|
-| idLog | number | Oui (PK, au POST) | clé primaire |
+| idLog | number | — (réponse) | clé primaire, posée par le serveur |
 | dateAction | string (date-time) | Oui | @NotNull |
 | imActeur | string | Non | max 7 |
 | nomTable | string | Non | max 50 |
@@ -2365,8 +2382,8 @@ de PV). Lecture filtrée par profil/localité. Cycle : `BROUILLON → SOUMIS →
 |---|---|---|---|---|---|
 | GET | /api/audit-logs | — | `AuditLogDto[]` | 200 | ADMINISTRATEUR |
 | GET | /api/audit-logs/{id} | — | `AuditLogDto` | 200, 404 | ADMINISTRATEUR |
-| POST | /api/audit-logs | `AuditLogDto` | `AuditLogDto` | 201, 400, 403 | ADMINISTRATEUR |
-| PUT | /api/audit-logs/{id} | `AuditLogDto` | `AuditLogDto` | 200, 400, 404 | ADMINISTRATEUR |
+| POST | /api/audit-logs | — | — | **409 (interdit)** | ADMINISTRATEUR |
+| PUT | /api/audit-logs/{id} | — | — | **409 (interdit)** | ADMINISTRATEUR |
 | DELETE | /api/audit-logs/{id} | — | — | **409 (interdit)** | ADMINISTRATEUR |
 
 `{id}` = idLog (number).

@@ -15,6 +15,12 @@ import cnm.prs.repository.AuditLogRepository;
 
 /**
  * Logique métier pour {@link AuditLog}.
+ *
+ * <p><strong>Journal immuable (§3.8).</strong> Le journal d'audit est la pièce probante du contrôle :
+ * il n'a qu'une seule voie d'écriture, {@link #enregistrer}, appelée par le serveur lui-même
+ * (intercepteur HTTP et services métier). Les trois verbes d'écriture du CRUD générique —
+ * création, modification, suppression — sont fermés sans exception : une entrée du journal ne peut
+ * être ni forgée, ni réécrite, ni effacée par un appel d'API, fût-il celui d'un administrateur.</p>
  */
 @Service
 @Transactional
@@ -38,25 +44,24 @@ public class AuditLogService {
         return AuditLogMapper.toDto(entity);
     }
 
+    /**
+     * Création par l'API interdite : une entrée d'audit n'est jamais déclarée par un client, elle est
+     * constatée par le serveur (§3.8). Laisser un client poser lui-même {@code imActeur} reviendrait
+     * à laisser fabriquer une preuve au nom d'un tiers. Voie d'écriture unique : {@link #enregistrer}.
+     * → HTTP 409.
+     */
     public AuditLogDto create(AuditLogDto dto) {
-        AuditLog entity = AuditLogMapper.toEntity(dto);
-        return AuditLogMapper.toDto(repository.save(entity));
+        throw new BusinessRuleException("Le journal d'audit est immuable : création interdite (§3.8).");
     }
 
+    /**
+     * Modification interdite : le journal d'audit est immuable — une entrée écrite ne se réécrit pas
+     * (§3.8). Sans cette garde, un acteur pouvait réattribuer sa propre action à un tiers en
+     * remplaçant {@code imActeur}, sans que la substitution laisse elle-même de trace.
+     * → HTTP 409.
+     */
     public AuditLogDto update(Long id, AuditLogDto dto) {
-        AuditLog existing = repository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("AuditLog introuvable : " + id));
-        existing.setDateAction(dto.getDateAction());
-        existing.setImActeur(dto.getImActeur());
-        existing.setNomTable(dto.getNomTable());
-        existing.setIdEnregistrement(dto.getIdEnregistrement());
-        existing.setTypeAction(dto.getTypeAction());
-        existing.setChampModifie(dto.getChampModifie());
-        existing.setAncienneValeur(dto.getAncienneValeur());
-        existing.setNouvelleValeur(dto.getNouvelleValeur());
-        existing.setIpAdresse(dto.getIpAdresse());
-        existing.setSessionId(dto.getSessionId());
-        return AuditLogMapper.toDto(repository.save(existing));
+        throw new BusinessRuleException("Le journal d'audit est immuable : modification interdite (§3.8).");
     }
 
     /**
@@ -68,8 +73,10 @@ public class AuditLogService {
     }
 
     /**
-     * Enregistre une entrée d'audit (§3.8). Appelé automatiquement par l'intercepteur HTTP
-     * après chaque écriture réussie. {@code SESSION_ID} reste {@code null} (FK vers
+     * Enregistre une entrée d'audit (§3.8). <strong>Seule voie d'écriture du journal</strong> : appelée
+     * par l'intercepteur HTTP après chaque écriture réussie, et par les services métier pour les
+     * signaux qu'ils veulent tracer explicitement. {@code imActeur} vient toujours du principal
+     * courant, jamais du corps d'une requête. {@code SESSION_ID} reste {@code null} (FK vers
      * {@code t_session_utilisateur}, pas de session réelle pour l'instant).
      */
     public void enregistrer(String imActeur, String nomTable, String idEnregistrement,
