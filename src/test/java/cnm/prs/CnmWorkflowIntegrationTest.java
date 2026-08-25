@@ -11540,6 +11540,81 @@ class CnmWorkflowIntegrationTest {
                 .andExpect(status().isNotFound());
     }
 
+    /**
+     * Le détail d'un marché doit servir <strong>exactement</strong> ce que la liste montre — ni plus, ni
+     * moins. La garde de {@code GET /api/marches/{id}} testait le seul profil {@code PRMP} là où la liste
+     * et les ressources filles passent par {@code Visibilite.estPrmp()}, qui couvre aussi l'UGPM (claim
+     * {@code ref} = ID_PRMP de tutelle). Une UGPM voyait donc un marché dans la liste et lisait ses lots,
+     * mais recevait 403 sur le détail du même id : une asymétrie qui ne protégeait rien, l'information
+     * étant déjà servie par une autre porte.
+     *
+     * <p>Ce test fixe les deux versants indissociables : l'ouverture (sa tutelle) <strong>et</strong> le
+     * refus (une autre PRMP) — c'est ce second point que l'alignement ne doit jamais coûter.</p>
+     */
+    @Test
+    @DisplayName("Détail d'un marché — l'UGPM entre au titre de sa PRMP de tutelle (comme en liste), 403 sur le marché d'une autre PRMP")
+    void detailMarche_ugpmAligneeSurLaListeDeSaTutelle() throws Exception {
+        seedDeuxMarchesDeDeuxPrmp();
+        // ref = PRMP001 (tutelle), aucune localité propre : le périmètre est celui de sa PRMP, pas une localité.
+        String tokenUgpm = bearer("UGPM1", ProfilUtilisateur.UGPM, TypeActeur.UGPM, "PRMP001", null);
+
+        // Cohérence liste ↔ détail, dans les deux sens : ce que la liste montre est lisible en détail…
+        mvc.perform(get("/api/marches").header("Authorization", tokenUgpm))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idDetail==900)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idDetail==901)]", hasSize(0)));
+        mvc.perform(get("/api/marches/900").header("Authorization", tokenUgpm))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.idDetail").value(900));
+        // …et ce qu'elle masque reste refusé. NON-RÉGRESSION CENTRALE : l'alignement ne donne accès
+        // au marché d'AUCUNE autre PRMP, pas plus par le détail que par les lots.
+        mvc.perform(get("/api/marches/901").header("Authorization", tokenUgpm))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/lots/par-marche/901").header("Authorization", tokenUgpm))
+                .andExpect(status().isForbidden());
+
+        // La PRMP de tutelle elle-même : inchangée (le sien passe, celui d'autrui non).
+        mvc.perform(get("/api/marches/900").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/marches/901").header("Authorization", tokenPrmp))
+                .andExpect(status().isForbidden());
+    }
+
+    /**
+     * Garde-fou de l'alignement précédent : il ne devait toucher que l'UGPM. Un contrôleur reste borné à
+     * sa localité et le circuit à ce que la localité lui donne — si la garde du détail avait été relâchée
+     * (retour systématique, périmètre ignoré), le Membre de TOA obtiendrait 200 sur des marchés d'ANT et
+     * ce test échouerait.
+     */
+    @Test
+    @DisplayName("Détail d'un marché — profils du circuit inchangés : Membre hors localité 403 (liste vide), Membre de la localité 200, Président/Admin 200")
+    void detailMarche_perimetreDesControleursInchange() throws Exception {
+        seedDeuxMarchesDeDeuxPrmp();   // marchés 900 et 901, tous deux en localité ANT
+        String tokenMembreToa = bearer("CTRTOA", ProfilUtilisateur.MEMBRE, TypeActeur.CONTROLEUR, "CTRTOA", "TOA");
+
+        // Contrôleur d'une AUTRE localité : rien en liste, rien en détail.
+        mvc.perform(get("/api/marches").header("Authorization", tokenMembreToa))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idDetail==900)]", hasSize(0)))
+                .andExpect(jsonPath("$[?(@.idDetail==901)]", hasSize(0)));
+        mvc.perform(get("/api/marches/900").header("Authorization", tokenMembreToa))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/marches/901").header("Authorization", tokenMembreToa))
+                .andExpect(status().isForbidden());
+
+        // Contrôleur d'ANT : les deux dossiers sont de sa localité et non brouillon (§1) — accès conservé.
+        mvc.perform(get("/api/marches/900").header("Authorization", tokenMembre))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/marches/901").header("Authorization", tokenMembre))
+                .andExpect(status().isOk());
+
+        // Président et Administrateur voient tout, sans condition de localité.
+        mvc.perform(get("/api/marches/901").header("Authorization", tokenPresident))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/marches/901").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk());
+    }
+
     @Test
     @DisplayName("Lots & prévisions : PK allouée serveur — id client ignoré, deux PRMP → PK distinctes (le front alloue par max() sur une liste désormais scopée)")
     void ressourcesFilles_pkServeur_ignoreClientEtEviteLEcrasement() throws Exception {

@@ -2928,9 +2928,18 @@ active (`t_prmp_entite.ACTIF`) sur l'entité contractante du dossier. C'est ce s
 **Ressource** `/api/marches` — Lecture **scopée au périmètre de l'appelant** (⚠️ changement de portée, voir note). **Écriture (POST/PUT/DELETE) réservée `PRMP`** : édition des lignes d'un dossier **PPM en BROUILLON** dont elle est propriétaire (sinon 403/409). Le **mode** est **saisi** (plus de détermination auto, cf. note). ⚠️ **Règle ajoutée** : à la **suppression** (`DELETE`), **tous les enregistrements liés** au marché sont supprimés **en cascade applicative** (même transaction, ordre FK-safe) : **tranches** de ses lots → **lots** (`t_lot`), **bénéficiaires** (`t_service_beneficiaire`) et **dates prévisionnelles** (`t_marche_prevision`). *(Un marché supprimable est BROUILLON → jamais dispatché : ni anomalie ni échéance possibles.)* Même cascade réutilisée par `DELETE /api/ppms/{id}` pour chacun de ses marchés.
 
 > **⚠️ Scoping serveur (changement de portée, §1/§3.1).** `GET /api/marches` ne renvoie **plus toute
-> la table** : Président/Administrateur → tout ; **PRMP → ses marchés** (ceux de ses PPM) ; contrôleur
-> → ceux de **sa localité** (dossier non brouillon) ; autre profil → liste vide. `GET /api/marches/{id}`
+> la table** : Président/Administrateur → tout ; **PRMP → ses marchés** (ceux de ses PPM), **et l'UGPM
+> ceux de sa PRMP de tutelle** ; contrôleur → ceux de **sa localité** (dossier non brouillon) ; autre
+> profil → liste vide. `GET /api/marches/{id}`
 > hors périmètre → **403**. Le front n'a plus à filtrer côté client (corrige la fuite inter‑PRMP/localité).
+
+> 📌 **Détail aligné sur la liste (règle ajoutée 2026-08-25).** `GET /api/marches/{id}` applique
+> **exactement** le périmètre de `GET /api/marches` : ce que la liste montre est lisible en détail, et
+> rien d'autre. L'**UGPM** y entre donc au titre de sa PRMP de tutelle, comme sur la liste et sur les
+> ressources filles (lots, tranches, dates prévisionnelles). Auparavant la garde du détail testait le
+> seul profil `PRMP` : une UGPM voyait un marché en liste et lisait ses lots, mais recevait **403** sur
+> le détail du même identifiant — une asymétrie sans effet protecteur, l'information étant déjà servie
+> par une autre porte. Périmètre des contrôleurs, du Président et de l'Administrateur **inchangé**.
 
 > 📌 **Filtre `?ppm=` (règle ajoutée 2026-08-24).** `GET /api/marches` accepte `?ppm=<idPpm>`, qui
 > restreint aux marchés de ce PPM — sur la liste plate comme sur la variante paginée. Le filtre est
@@ -2961,7 +2970,7 @@ active (`t_prmp_entite.ACTIF`) sur l'entité contractante du dossier. C'est ce s
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
 | GET | /api/marches | — | `MarcheDto[]` (scopé) | 200 | Authentifié — ⚠️ **paginable** (`?page=&size=`, cf. Conventions) ; filtre `?ppm=` |
-| GET | /api/marches/{id} | — | `MarcheDto` | 200, 403, 404 | Authentifié (dans son périmètre) |
+| GET | /api/marches/{id} | — | `MarcheDto` | 200, 403, 404 | Authentifié (dans son périmètre — **même périmètre que la liste**, UGPM comprise) |
 | POST | /api/marches | `MarcheDto` | `MarcheDto` | 201, 400 | Authentifié |
 | PUT | /api/marches/{id} | `MarcheDto` | `MarcheDto` | 200, 400, 404 | Authentifié |
 | PATCH | /api/marches/{id}/rectifier | `MarcheDto` | `MarcheDto` | 200, 403, 404, 409 | PRMP (propriétaire) |

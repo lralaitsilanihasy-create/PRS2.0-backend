@@ -57,6 +57,14 @@ public class MarcheController {
         return service.findAll(idPpm);
     }
 
+    /**
+     * Détail d'une ligne de marché — <strong>même périmètre que la liste</strong> ({@code GET /api/marches}) :
+     * ce qui y figure est accessible ici, et rien d'autre. Hors périmètre → 403.
+     *
+     * <p>L'UGPM y entre au titre de sa PRMP de tutelle, comme sur la liste et sur les ressources filles
+     * (lots, tranches, dates prévisionnelles). Elle en était exclue tant que la garde du détail testait le
+     * seul profil {@code PRMP} : le marché lui était servi en liste et par ses lots, mais refusé en détail.</p>
+     */
     @GetMapping("/{id}")
     public MarcheDto findById(@PathVariable Integer id) {
         return service.findById(id);
