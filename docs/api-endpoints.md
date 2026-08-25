@@ -53,10 +53,41 @@ Le rôle de l'utilisateur est porté par le jeton (claim `role`). Valeurs possib
 > signées et des PV définitifs (avis ≠ FAVR immédiatement ; FAVR après clôture du dossier).
 
 ### Clés primaires — IMPORTANT
-**Toutes les entités ont une clé primaire ASSIGNÉE par le client** (pas d'auto-génération).
-Le champ identifiant (le **1er champ** de chaque DTO) **doit être fourni dans le corps d'un POST de
-création** ; l'omettre renvoie **400** (« L'identifiant (clé primaire) est obligatoire à la création »).
-Les exemples de requête ci-dessous incluent donc toujours l'identifiant.
+⚠️ **Deux régimes coexistent** (mis à jour 2026-08-25). Il n'est plus vrai que *toutes* les entités
+ont une PK assignée par le client.
+
+**1. PK allouée par le SERVEUR (séquence).** L'identifiant vient d'une séquence PostgreSQL : **tout id
+envoyé dans le corps d'un POST est IGNORÉ**, et l'id réel figure **dans la réponse**. C'est celui-là,
+jamais celui envoyé, qu'il faut réutiliser pour les appels suivants — sinon **404**, ou pire, l'action
+porte sur l'enregistrement d'un tiers.
+
+| Ressource | Séquence | | Ressource | Séquence |
+|---|---|---|---|---|
+| `/api/dossiers` | `seq_dossier` | | `/api/service-beneficiaires` | `seq_service_beneficiaire` |
+| `/api/ppms` | `seq_ppm` | | `/api/messages` | `seq_message` |
+| `/api/marches` | `seq_marche` | | `/api/pv-examens` | `seq_pv_examen` |
+| `/api/receptions` | `seq_reception` | | `/api/notifications` | `seq_notification` |
+| `/api/lots` | `seq_lot` | | `/api/prmp-entites` | `seq_prmp_entite` |
+| `/api/tranches` | `seq_tranche` | | `/api/marche-previsions` | `seq_marche_prevision` |
+
+Six tables de plus sont sur séquence **sans création exposée au client** : `t_audit_log`
+(`seq_audit_log`) et `t_pv_navette` (`seq_pv_navette`) — POST refusé en **409**, historique immuable ;
+`t_piece_jointe` (`seq_piece_jointe`) — dépôt **multipart** ; `t_prmp_entite_demande`
+(`seq_prmp_entite_demande`) — créées par l'inscription ; `t_changement_ligne` (`seq_changement_ligne`)
+— trace interne, aucun endpoint ; `tr_entite_contract` (`seq_entite_contract`) — **⚠️ uniquement** au
+parcours d'inscription (entité proposée acceptée par l'Administrateur) : `POST /api/entite-contracts`
+attend **toujours** un `idEntiteContract` fourni par le client, et relève donc du régime 2.
+
+**2. PK assignée par le CLIENT.** Pour **toutes les autres** ressources (référentiels, `controleurs`,
+`dispatchs`, `examens`, `delegations`, `copie-dossiers`, `entite-contracts`, …), le champ identifiant
+(le **1er champ** de chaque DTO) **doit être fourni dans le corps d'un POST de création** ; l'omettre
+renvoie **400** (« L'identifiant (clé primaire) est obligatoire à la création »). Les exemples de
+requête de ces ressources incluent donc toujours l'identifiant.
+
+> **Exception isolée** — `/api/marche-previsions` relève du régime 1 (valeur **ignorée**), mais
+> `idPrevision` porte encore `@NotNull` dans son DTO : l'omettre renvoie **400** alors même que la
+> valeur envoyée ne sera pas utilisée. Il faut donc envoyer un nombre quelconque. Les onze autres
+> ressources du régime 1 acceptent l'**absence** du champ.
 
 ### Visibilité par localité
 Pour les ressources du circuit (`dossiers`, `receptions`, `dispatchs`, `examens`, `pv-examens`,
@@ -148,7 +179,7 @@ quand ils surviennent (mapping centralisé dans `GlobalExceptionHandler`). Côt�
 |---|---|---|
 | **Validation des champs** (`@Valid`) | un champ obligatoire manque ou ne respecte pas une contrainte (`@NotNull`, `@NotBlank`, `@Size`…) | `message` = « Validation échouée » + tableau **`erreurs`** (`[{ champ, message }]`) renseigné |
 | **Corps illisible / mal formé** (`HttpMessageNotReadableException`) | JSON invalide, mauvais **type** (ex. `idEntiteContract` envoyé en **libellé** au lieu de l'id) ou **date hors ISO** `AAAA-MM-JJ` (ex. `23/06/2026`) | `message` = « Corps de requête invalide ou mal formé. » + **`erreurs`** `[{ champ, message }]` indiquant le **champ fautif** (ex. `dateSignature`, `marches[0].dateFin`) |
-| **Identifiant de création manquant** | POST de création sans la clé primaire (toutes les PK sont **assignées par le client**, cf. *Clés primaires*) | « L'identifiant (clé primaire) est obligatoire à la création… » |
+| **Identifiant de création manquant** | POST de création sans la clé primaire, sur une ressource du **régime 2** (PK assignée par le client — cf. *Clés primaires* ; les ressources du **régime 1** allouent la PK par séquence et **ignorent** l'id envoyé) | « L'identifiant (clé primaire) est obligatoire à la création… » |
 | **Valeur trop longue en base** (`SQLSTATE 22001`) | une valeur dépasse la longueur de sa colonne alors qu'aucun `@Size` ne l'avait arrêtée en amont | `message` = « Valeur trop longue pour un champ de cette ressource. » + **`erreurs`** nommant le champ **quand le pilote cite la colonne** (H2 le fait, PostgreSQL non — le **400** reste rendu dans les deux cas) |
 | **Règle d'entrée métier** (`BadRequestException`) | ex. `POST /api/mon-compte/changer-mot-de-passe` avec ancien mot de passe incorrect ou nouveau identique à l'ancien ; `POST /api/marches` quand la **localité du dossier** est introuvable (mode indéterminable) | message explicite |
 
@@ -1147,7 +1178,7 @@ relation **1,N** : un point de contrôle a **0..N** lignes. Remplace l'ancien ch
 
 | Champ (JSON) | Type | Obligatoire | Contraintes |
 |---|---|---|---|
-| idDossier | number | Oui (PK, au POST) | clé primaire |
+| idDossier | number | **Non** (⚠️ ignoré au POST) | PK **allouée serveur** (`seq_dossier`) ; renvoyée dans la réponse |
 | idTypeDossier | string | Non | max 10 — **famille** (`DDP` / `DMC` / `DDM`, ⚠️ codes renommés 2026-07-17) ; déduite du sous-type |
 | idSousType | string | Non | max 20 — **sous-type** (référentiel `/api/sous-type-dossiers`) ; famille **DDP : dérivé serveur** (`PPM` / `PPM-AGPM` selon les marchés, valeur envoyée ignorée) ; **DMC/DDM : choisi à la saisie** |
 | idDossierParent | number | Non | |
@@ -1549,6 +1580,9 @@ volumineux → **400** (annule la création si multipart) ; **404** si l'UGPM ou
 > l'id figure **en sortie** (réponse). **Dette documentée** : choix d'une séquence applicative (et non
 > `IDENTITY` JPA) pour éviter une refonte massive des fixtures sur 3 tables centrales — migration vers
 > `IDENTITY` possible ultérieurement.
+> *(⚠️ 2026-08-25 — ce n'est plus un cas particulier : le motif couvre désormais **18 tables**. Voir
+> §« Clés primaires » en tête de document pour la liste complète et le régime applicable à chaque
+> ressource.)*
 
 **Endpoints**
 
@@ -2859,7 +2893,7 @@ active (`t_prmp_entite.ACTIF`) sur l'entité contractante du dossier. C'est ce s
 
 | Champ (JSON) | Type | Obligatoire | Contraintes |
 |---|---|---|---|
-| idDetail | number | Oui (PK, au POST) | clé primaire |
+| idDetail | number | **Non** (⚠️ ignoré au POST) | PK **allouée serveur** (`seq_marche`) ; renvoyée dans la réponse |
 | idDossier | number | Oui | `@NotNull` (groupe `Identite` : **non exigé** en `PATCH .../rectifier`) |
 | idPpm | number | Oui | `@NotNull` (groupe `Identite` : **non exigé** en `PATCH .../rectifier`) |
 | designationMarche | string | Non | max 500 |
@@ -3092,7 +3126,7 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 
 | Champ (JSON) | Type | Obligatoire | Contraintes |
 |---|---|---|---|
-| idMessage | number | Oui (PK, au POST générique) | clé primaire |
+| idMessage | number | **Non** (⚠️ ignoré au POST) | PK **allouée serveur** (`seq_message`) ; renvoyée dans la réponse |
 | idDossier | number | Non | |
 | expediteurIm | string | Oui | @NotBlank, max 7 (forcé à l'utilisateur courant) |
 | destinataireIm | string | Oui | @NotBlank, max 7 |
@@ -3120,7 +3154,7 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 |---|---|---|---|---|---|
 | GET | /api/messages | — | `MessageDto[]` (filtré à l'utilisateur) | 200 | Authentifié |
 | GET | /api/messages/{id} | — | `MessageDto` | 200, 403, 404 | Expéditeur / destinataire |
-| POST | /api/messages | `MessageDto` | `MessageDto` | 201, 400 | Authentifié |
+| POST | /api/messages | `MessageDto` | `MessageDto` (**PK serveur**) | 201, 400 | Authentifié — `idMessage` du corps **ignoré** |
 | PUT | /api/messages/{id} | `MessageDto` | `MessageDto` | 200, 400, 403, 404 | Expéditeur / destinataire |
 | DELETE | /api/messages/{id} | — | — | 204, 403, 404 | Expéditeur / destinataire |
 | POST | /api/messages/envoyer | `MessageEnvoiRequest` | `MessageDto` | 201, 400 | Authentifié |
@@ -3297,7 +3331,7 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 
 | Champ (JSON) | Type | Obligatoire | Contraintes |
 |---|---|---|---|
-| idNavette | number | Oui (PK, au POST) | clé primaire |
+| idNavette | number | — (réponse) | PK **allouée serveur** (`seq_pv_navette`) ; POST refusé en **409** (historique immuable) |
 | idPv | number | Oui | @NotNull |
 | numNavette | number | Oui | @NotNull |
 | sens | string | Oui | @NotBlank, max 20 — valeur contrôlée |
@@ -3317,7 +3351,7 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 
 `{id}` = idNavette (number). *En pratique, les navettes sont créées automatiquement par les actions du PV.*
 
-**Exemple — requête**
+**Exemple — réponse** *(lecture seule : POST/PUT/DELETE sont refusés en 409 ; `idNavette` est alloué par `seq_pv_navette`, `numNavette` reste le rang **métier** du mouvement dans SON PV)*
 ```json
 { "idNavette": 905, "idPv": 312, "numNavette": 1, "sens": "SOUMISSION", "imActeur": "MEMANT1", "dateAction": "2026-06-12T09:35:00", "commentaire": "Première soumission" }
 ```
@@ -3350,7 +3384,7 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 
 | Champ (JSON) | Type | Obligatoire | Contraintes |
 |---|---|---|---|
-| idNotification | number | Oui (PK, au POST) | clé primaire |
+| idNotification | number | **Non** (⚠️ ignoré au POST) | PK **allouée serveur** (`seq_notification`) ; renvoyée dans la réponse |
 | idDossier | number | Non | |
 | typeNotif | string | Oui | @NotBlank, max 30 |
 | destinataireIm | string | Non | max 7 — destinataire contrôleur (compat.) |
@@ -3376,7 +3410,7 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 | POST | /api/notifications/lire-tout | — | `{ "traitees": number }` | 200 | Authentifié (scopé) |
 | GET | /api/notifications | — | `NotificationDto[]` | 200, 403 | ADMINISTRATEUR |
 | GET | /api/notifications/{id} | — | `NotificationDto` | 200, 403, 404 | ADMINISTRATEUR |
-| POST | /api/notifications | `NotificationDto` | `NotificationDto` | 201, 400, 403 | ADMINISTRATEUR |
+| POST | /api/notifications | `NotificationDto` | `NotificationDto` (**PK serveur**) | 201, 400, 403 | ADMINISTRATEUR — `idNotification` du corps **ignoré** |
 | PUT | /api/notifications/{id} | `NotificationDto` | `NotificationDto` | 200, 400, 403, 404 | ADMINISTRATEUR |
 | DELETE | /api/notifications/{id} | — | — | 204, 403, 404 | ADMINISTRATEUR |
 
@@ -3520,7 +3554,7 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 
 | Champ (JSON) | Type | Obligatoire | Contraintes |
 |---|---|---|---|
-| idPpm | number | Oui (PK, au POST) | clé primaire |
+| idPpm | number | **Non** (⚠️ ignoré au POST) | PK **allouée serveur** (`seq_ppm`) ; renvoyée dans la réponse |
 | idDossier | number | Oui | @NotNull |
 | exercice | number | Oui | @NotNull |
 | signataire | string | Oui | @NotBlank, max 210 (auto-rempli « prénoms + nom » PRMP, couvre prénoms 100 + nom 100 + marge ; idem `EditionPpmRequest`) |
@@ -3774,7 +3808,7 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 
 | Champ (JSON) | Type | Obligatoire | Contraintes |
 |---|---|---|---|
-| idPv | number | Oui (PK, au POST) | clé primaire |
+| idPv | number | **Non** (⚠️ ignoré au POST) | PK **allouée serveur** (`seq_pv_examen`) ; renvoyée dans la réponse |
 | idExamen | number | Oui | @NotNull |
 | idAvis | string | Non (⚠️ 2026-08-01) | max 10 — **nullable** : `null` jusqu'à la **clôture de navette** (`…/accepter`, Président/CC) ; requis pour `signer` (409 sinon) |
 | imCtrlPresident | string | Non | max 7 |
@@ -3837,7 +3871,7 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 | GET | /api/pv-examens/definitifs | — | `PvExamenDto[]` | 200 | Authentifié (filtré) — **PV signés** uniquement |
 | GET | /api/pv-examens/{id} | — | `PvExamenDto` | 200, 404 | Authentifié (filtré) — tout PV (y c. signé) |
 | GET | /api/pv-examens/{id}/document | — | `application/pdf` | 200, 403, 404 | Authentifié (périmètre localité) — **PDF du Projet de PV** |
-| POST | /api/pv-examens | `PvExamenDto` | `PvExamenDto` | 201, 400, 403 | MEMBRE / CC / PRESIDENT |
+| POST | /api/pv-examens | `PvExamenDto` | `PvExamenDto` (**PK serveur**) | 201, 400, 403 | MEMBRE / CC / PRESIDENT — `idPv` du corps **ignoré** |
 | PUT | /api/pv-examens/{id} | `PvExamenDto` | `PvExamenDto` | 200, 400, 404, 409 | MEMBRE / CC / PRESIDENT |
 | DELETE | /api/pv-examens/{id} | — | — | 204, 404 | ADMINISTRATEUR |
 | POST | /api/pv-examens/{id}/soumettre | `PvActionRequest` | `PvExamenDto` | 200, 400, 403, 404, 409 | MEMBRE / CC / PRESIDENT |
@@ -3890,7 +3924,7 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 
 **Exemple — requête (création) / signature**
 ```json
-{ "idPv": 312, "idExamen": 201, "idAvis": "FAV", "imCtrlMembre": "MEMANT1", "statutPv": "BROUILLON", "nbNavettes": 0, "syntheseObservations": "RAS" }
+{ "idExamen": 201, "idAvis": "FAV", "imCtrlMembre": "MEMANT1", "statutPv": "BROUILLON", "nbNavettes": 0, "syntheseObservations": "RAS" }
 ```
 ```json
 { "imActeur": "CTRPRE", "role": "PRESIDENT" }
@@ -4124,7 +4158,7 @@ au dépôt, **aucun archivage** — simple événement tracé).
 
 | Champ (JSON) | Type | Obligatoire | Contraintes |
 |---|---|---|---|
-| idBenef | number | Oui (PK, au POST) | clé primaire |
+| idBenef | number | **Non** (⚠️ ignoré au POST) | PK **allouée serveur** (`seq_service_beneficiaire`) ; renvoyée dans la réponse |
 | ancMontBenef | number | Non | montant **par bénéficiaire** (ancien / initial) |
 | nouvMontBenef | number | Non | montant **par bénéficiaire** (nouveau) |
 | soaCode | string | Non | **max 25** — FK `tr_soa_beneficiaire` (ex. `00-21-0-J00-00000`) |
@@ -4145,7 +4179,7 @@ au dépôt, **aucun archivage** — simple événement tracé).
 
 **Exemple — requête**
 ```json
-{ "idBenef": 4501, "ancMontBenef": 120000.0, "nouvMontBenef": 135000.0, "soaCode": "00-21-0-J00-00000", "numCompte": "CPT-BENEF-01", "idDetail": 88 }
+{ "ancMontBenef": 120000.0, "nouvMontBenef": 135000.0, "soaCode": "00-21-0-J00-00000", "numCompte": "CPT-BENEF-01", "idDetail": 88 }
 ```
 
 ---
@@ -4242,7 +4276,7 @@ tout id envoyé par le client est **ignoré**.
 
 **Exemple — requête**
 ```json
-{ "idTranche": 305, "lieuTrc": "Antananarivo - Analakely", "montTrc": 7500000.0, "idLot": 42 }
+{ "lieuTrc": "Antananarivo - Analakely", "montTrc": 7500000.0, "idLot": 42 }
 ```
 
 ---
