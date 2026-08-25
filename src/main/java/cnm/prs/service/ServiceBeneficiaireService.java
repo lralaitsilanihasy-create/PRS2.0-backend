@@ -56,11 +56,12 @@ public class ServiceBeneficiaireService {
     public ServiceBeneficiaireDto create(ServiceBeneficiaireDto dto) {
         marcheService.controlerAccesMarche(dto.getIdDetail());
         ServiceBeneficiaire entity = ServiceBeneficiaireMapper.toEntity(dto);
-        // PK serveur (max+1) ; id client ignoré — même « Voie B » que t_lot. Indispensable depuis que
-        // GET /api/service-beneficiaires est scopé : le front alloue son id par max() sur la liste REÇUE,
-        // désormais partielle. Un id choisi par le client viserait alors le bénéficiaire d'une autre
-        // entité, que save() écraserait (merge sur PK assignée).
-        entity.setIdBenef(repository.findMaxIdBenef() + 1);
+        // PK serveur (seq_service_beneficiaire) ; id client ignoré — même « Voie B » que t_lot. Indispensable
+        // depuis que GET /api/service-beneficiaires est scopé : le front alloue son id par max() sur la liste
+        // REÇUE, désormais partielle. Un id choisi par le client viserait alors le bénéficiaire d'une autre
+        // entité, que save() écraserait (merge sur PK assignée). La séquence remplace le max+1 : deux PRMP
+        // ventilant en même temps ne lisent plus le même maximum.
+        entity.setIdBenef(repository.nextIdBenef().intValue());
         return ServiceBeneficiaireMapper.toDto(repository.save(entity));
     }
 

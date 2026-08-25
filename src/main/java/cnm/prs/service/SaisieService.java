@@ -171,7 +171,9 @@ public class SaisieService {
         Integer idPpm = ppmService.create(ppm).getIdPpm();          // PK séquence (retournée)
 
         if (req.marches() != null) {
-            int prevSeq = marchePrevisionRepository.findMaxId();   // PK prévision allouée serveur (max+1)
+            // idPrevision null : MarchePrevisionService#create alloue la PK sur seq_marche_prevision et
+            // écrasait de toute façon la valeur passée ici. Compter localement laisserait la séquence en
+            // retard et la saisie suivante réattribuerait les mêmes ids (save() sur PK assignée = merge).
             for (int i = 0; i < req.marches().size(); i++) {
                 SaisieMarcheLigne ligne = req.marches().get(i);
                 exigerAuMoinsUnProcessus(ligne, i);   // « au moins un processus » (NotEmpty, à la création)
@@ -180,7 +182,7 @@ public class SaisieService {
                 Integer idDetail = marcheService.create(toMarcheDto(ligne, idDossier, idPpm)).getIdDetail();
                 for (ProcessusMarche p : ligne.processus()) {
                     marchePrevisionService.create(new MarchePrevisionDto(
-                            ++prevSeq, idDetail, p.idCapm(), p.dateDebut(), p.dateFin(), null));
+                            null, idDetail, p.idCapm(), p.dateDebut(), p.dateFin(), null));
                 }
                 creerBeneficiaires(idDetail, ligne);   // une ligne t_service_beneficiaire par bénéficiaire
                 creerLots(idDetail, idDossier, ligne);   // une ligne t_lot par lot (aucun contrôle de somme)
@@ -329,7 +331,7 @@ public class SaisieService {
         }
         Set<Integer> demandes = new HashSet<>();
         if (req.marches() != null) {
-            int prevSeq = marchePrevisionRepository.findMaxId();   // PK prévision allouée serveur (max+1)
+            // idPrevision null : la PK est allouée par MarchePrevisionService#create (seq_marche_prevision).
             for (int i = 0; i < req.marches().size(); i++) {
                 SaisieMarcheLigne ligne = req.marches().get(i);
                 boolean nouvelle = !existants.contains(ligne.idDetail());
@@ -378,7 +380,7 @@ public class SaisieService {
                 if (ligne.processus() != null) {
                     for (ProcessusMarche p : ligne.processus()) {
                         marchePrevisionService.create(new MarchePrevisionDto(
-                                ++prevSeq, idDetail, p.idCapm(), p.dateDebut(), p.dateFin(), null));
+                                null, idDetail, p.idCapm(), p.dateDebut(), p.dateFin(), null));
                     }
                 }
                 creerBeneficiaires(idDetail, ligne);     // sans effet si beneficiaires null/vide
@@ -569,16 +571,21 @@ public class SaisieService {
         }
     }
 
-    /** (Règle ajoutée) Crée une ligne {@code t_service_beneficiaire} par bénéficiaire (PK allouée max+1). */
+    /**
+     * (Règle ajoutée) Crée une ligne {@code t_service_beneficiaire} par bénéficiaire. La PK vient de
+     * {@code seq_service_beneficiaire}, consommée <strong>à chaque ligne</strong> : l'allouer une fois
+     * puis incrémenter localement laisserait la séquence en retard, et la ventilation suivante
+     * réattribuerait les mêmes identifiants — {@code save()} sur PK assignée est un merge, elle
+     * écraserait la ventilation précédente au lieu de s'ajouter à elle.
+     */
     private void creerBeneficiaires(Integer idDetail, SaisieMarcheLigne ligne) {
         List<SaisieBeneficiaireLigne> benefs = ligne.beneficiaires();
         if (benefs == null || benefs.isEmpty()) {
             return;
         }
-        int nextId = serviceBeneficiaireRepository.findMaxIdBenef() + 1;
         for (SaisieBeneficiaireLigne b : benefs) {
             ServiceBeneficiaire sb = new ServiceBeneficiaire();
-            sb.setIdBenef(nextId++);
+            sb.setIdBenef(serviceBeneficiaireRepository.nextIdBenef().intValue());
             sb.setIdDetail(idDetail);
             sb.setSoaCode(resoudreOuCreerSoa(b.soaCode(), b.soaLibelle()));
             sb.setNumCompte(resoudreOuCreerCompte(b.numCompte()));
@@ -589,18 +596,20 @@ public class SaisieService {
     }
 
     /**
-     * (Règle ajoutée) Crée une ligne {@code t_lot} par lot (PK allouée max+1), rattachée au marché
-     * ({@code idDetail}) et à son dossier ({@code idDossier}). Descriptif — aucun contrôle de somme.
+     * (Règle ajoutée) Crée une ligne {@code t_lot} par lot, rattachée au marché ({@code idDetail}) et à
+     * son dossier ({@code idDossier}). Descriptif — aucun contrôle de somme. La PK vient de
+     * {@code seq_lot}, consommée <strong>à chaque ligne</strong> : l'allouer une fois puis incrémenter
+     * localement laisserait la séquence en retard, et la saisie suivante écraserait ces lots
+     * ({@code save()} sur PK assignée = merge).
      */
     private void creerLots(Integer idDetail, Integer idDossier, SaisieMarcheLigne ligne) {
         List<SaisieLotLigne> lots = ligne.lots();
         if (lots == null || lots.isEmpty()) {
             return;
         }
-        int nextId = lotRepository.findMaxIdLot() + 1;
         for (SaisieLotLigne l : lots) {
             Lot lot = new Lot();
-            lot.setIdLot(nextId++);
+            lot.setIdLot(lotRepository.nextIdLot().intValue());
             lot.setIdDossier(idDossier);
             lot.setIdDetail(idDetail);
             lot.setDesignationLot(l.designationLot());

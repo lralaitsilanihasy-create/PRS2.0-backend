@@ -267,8 +267,10 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
 - Identifiants attribués par le serveur [Auto]
   - ⚠️ **Règle ajoutée** : les PK dossier / PPM / marché sont **allouées par une séquence serveur** (`seq_dossier`/`seq_ppm`/`seq_marche`) ; tout id envoyé par le client est **ignoré** (plus de « identifiant en doublon »). Le formulaire ne saisit plus d'id. **Dette documentée** : séquence applicative (et non `IDENTITY`) pour éviter une refonte massive des fixtures de test sur ces 3 tables centrales ; bascule `IDENTITY` possible plus tard.
   - ⚠️ **Extension (correction de périmètre des ressources filles)** : la même règle s'applique désormais aux PK
-    **lot** (`t_lot`), **tranche** (`t_tranche`) et **date prévisionnelle** (`t_marche_prevision`) — allouées serveur
-    (`max+1`), id client **ignoré**. Motif : depuis que `GET /api/lots` et `GET /api/marche-previsions` sont
+    **lot** (`t_lot`), **tranche** (`t_tranche`), **date prévisionnelle** (`t_marche_prevision`) et **bénéficiaire**
+    (`t_service_beneficiaire`) — allouées serveur, id client **ignoré**. *(Depuis le 2026-08-25 : par **séquence**
+    — `seq_lot`, `seq_tranche`, `seq_marche_prevision`, `seq_service_beneficiaire` — et non plus par `max+1`.)*
+    Motif : depuis que `GET /api/lots` et `GET /api/marche-previsions` sont
     **scopés au périmètre**, un client qui allouait son identifiant par `max()` sur la liste reçue — désormais
     partielle — visait mécaniquement l'enregistrement d'une **autre entité**, que l'écriture aurait **écrasé**.
   - ⚠️ **Extension (2026-08-25) — journal d'audit et notifications.** Les PK **`t_audit_log`** (`seq_audit_log`)
@@ -278,6 +280,11 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
     lisaient le même maximum, et la violation d'unicité de la **seconde insertion annulait tout l'acte métier** :
     le dossier n'était pas validé, et l'utilisateur recevait un message de doublon sans rapport avec son action.
     L'échec ne restait donc pas confiné à la trace ou à l'avis, il **emportait l'opération qu'il accompagnait**.
+  - ⚠️ **Consommation de la séquence — une fois par ligne.** Toute création en lot (saisie d'un PPM, recopie d'une
+    version) doit appeler `nextval` **à chaque ligne écrite**. Allouer une valeur puis l'incrémenter localement
+    laisse la séquence **en retard** sur les lignes réellement insérées : la saisie suivante réattribue des
+    identifiants déjà pris et, `save()` sur PK assignée étant un **merge**, elle **écrase silencieusement** les
+    lignes précédentes au lieu de s'y ajouter — perte de données sans erreur visible.
 - Suppression d'un marché / d'un PPM [Écriture]
   - ⚠️ **Règle ajoutée** : possible **uniquement** si le **dossier rattaché est en BROUILLON** et **propriété** de la PRMP (sinon **403** « Vous n'êtes pas le propriétaire… » / **409** « Opération impossible : le dossier n'est pas un brouillon »). Supprimer un **marché** efface **en cascade** ses **dates prévisionnelles** (`t_marche_prevision`) ; supprimer un **PPM** efface **en cascade** ses **marchés** et leurs prévisions — le tout dans la **même transaction** (la cascade ne touche **que** les enfants de la cible). *(Côté SGBD, un filet de sécurité distingue désormais les violations FK / doublon / valeur obligatoire.)*
 

@@ -10877,6 +10877,75 @@ class CnmWorkflowIntegrationTest {
         org.junit.jupiter.api.Assertions.assertFalse(marcheRepository.existsById(a.getIdDetail()));
     }
 
+    /**
+     * Les PK des ressources filles du marché (lot, bénéficiaire, date prévisionnelle, tranche) étaient
+     * allouées par {@code max(id) + 1} : deux PRMP saisissant à la même seconde lisaient le même maximum
+     * et la seconde échouait en violation d'unicité.
+     *
+     * <p>La séquence corrige cela, mais introduit un piège que ce test verrouille et que H2 sait, lui,
+     * reproduire : consommer la séquence <strong>une seule fois</strong> puis incrémenter un compteur
+     * local — ce que faisaient {@code SaisieService.creerLots} / {@code creerBeneficiaires} et
+     * {@code MiseAJourPpmService.copierLignes} — laisse la séquence en retard sur les lignes réellement
+     * écrites. La saisie SUIVANTE réattribue alors des identifiants déjà pris, et comme {@code save()}
+     * sur PK assignée est un <em>merge</em>, elle écrase silencieusement les lignes de la précédente au
+     * lieu de s'y ajouter. D'où la vérification par le NOMBRE de lignes après deux saisies, et pas
+     * seulement par la plage des ids : une régression vers le compteur local ferait chuter ce compte.
+     *
+     * <p>⚠️ Ce test ne démontre pas l'absence de collision concurrente — H2 ne la reproduit pas. Il fige
+     * l'origine des PK et l'absence d'écrasement entre deux saisies successives.
+     */
+    @Test
+    @DisplayName("Ressources filles du marché : PK de seq_lot / seq_service_beneficiaire / seq_marche_prevision — séquence consommée à chaque ligne, deux saisies ne s'écrasent pas")
+    void ressourcesFilles_pkServeur_sequenceConsommeeParLigne() throws Exception {
+        natureRepository.save(new Nature(1, "Travaux", null));
+        modePassationRepository.save(new ModePassation(2, "AOR", null, null, null, null));
+        capmRepository.save(new Capm(1, "LANCEMENT", 1, null, null));
+
+        // Deux saisies successives, identiques en structure : 2 marchés, 2 lots et 2 bénéficiaires chacun.
+        // Attendu au total : 8 lots, 8 bénéficiaires, 4 dates prévisionnelles.
+        // ⚠️ DEUX lignes filles par marché au minimum : avec une seule, un compteur local et la séquence
+        // consommée ligne à ligne donnent le même résultat, et la régression passerait inaperçue.
+        String marche = "{\"designationMarche\":\"%1$s\",\"montEstim\":3000000,\"idNature\":1,\"idMode\":2,\"statut\":\"PREVU\","
+                + "\"lots\":[{\"designationLot\":\"Lot %1$s-1\",\"montLot\":2000000},"
+                + "{\"designationLot\":\"Lot %1$s-2\",\"montLot\":1000000}],"
+                + "\"beneficiaires\":[{\"soaCode\":\"SOA-1\",\"numCompte\":\"CPT-1\",\"ancMontBenef\":1000000},"
+                + "{\"soaCode\":\"SOA-2\",\"numCompte\":\"CPT-2\",\"ancMontBenef\":2000000}],"
+                + "\"processus\":[{\"idCapm\":1,\"dateDebut\":\"2026-02-01\",\"dateFin\":\"2026-06-30\"}]}";
+        for (String suffixe : List.of("I", "II")) {
+            String body = "{\"idEntiteContract\":1,\"exercice\":2026,\"signataire\":\"RABE\",\"dateSignature\":\"2026-01-10\","
+                    + "\"reference\":\"PPM-SEQ-" + suffixe + "\",\"marches\":["
+                    + String.format(marche, "A" + suffixe) + ","
+                    + String.format(marche, "B" + suffixe) + "]}";
+            mvc.perform(post("/api/saisies/ppm").header("Authorization", tokenPrmp)
+                    .contentType(MediaType.APPLICATION_JSON).content(body))
+                    .andExpect(status().isCreated());
+        }
+
+        // Aucune ligne écrasée : la séquence a bien été consommée une fois PAR ligne, sur les deux saisies.
+        List<cnm.prs.entity.Lot> lots = lotRepository.findAll();
+        List<cnm.prs.entity.ServiceBeneficiaire> benefs = serviceBeneficiaireRepository.findAll();
+        List<cnm.prs.entity.MarchePrevision> previsions = marchePrevisionRepository.findAll();
+        org.junit.jupiter.api.Assertions.assertEquals(8, lots.size(), "lots écrasés par un compteur local");
+        org.junit.jupiter.api.Assertions.assertEquals(8, benefs.size(), "bénéficiaires écrasés par un compteur local");
+        org.junit.jupiter.api.Assertions.assertEquals(4, previsions.size(), "prévisions écrasées par un compteur local");
+
+        // Et les PK viennent bien des séquences (plages de test), pas d'un comptage de lignes.
+        org.junit.jupiter.api.Assertions.assertTrue(lots.stream().allMatch(l -> l.getIdLot() >= 600001));
+        org.junit.jupiter.api.Assertions.assertTrue(benefs.stream().allMatch(b -> b.getIdBenef() >= 700001));
+        org.junit.jupiter.api.Assertions.assertTrue(previsions.stream().allMatch(p -> p.getIdPrevision() >= 800001));
+
+        // Tranche : PK de seq_tranche, l'idTranche envoyé par le client (777) est ignoré.
+        Integer idLot = lots.get(0).getIdLot();
+        String r = mvc.perform(post("/api/tranches").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idTranche\":777,\"idLot\":" + idLot + ",\"lieuTrc\":\"Antananarivo\",\"montTrc\":1000000}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        int idTranche = com.jayway.jsonpath.JsonPath.read(r, "$.idTranche");
+        org.junit.jupiter.api.Assertions.assertNotEquals(777, idTranche);
+        org.junit.jupiter.api.Assertions.assertTrue(idTranche >= 900001, "idTranche hors de seq_tranche : " + idTranche);
+    }
+
     @Test
     @DisplayName("GET /api/lots/par-marche/{idDetail} : lots d'une ligne de marché ; aucun/inconnu → liste vide")
     void lot_parMarche() throws Exception {

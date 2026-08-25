@@ -79,10 +79,11 @@ public class LotService {
     public LotDto create(LotDto dto) {
         marcheService.controlerAccesMarche(dto.getIdDetail());
         Lot entity = LotMapper.toEntity(dto);
-        // PK serveur (max+1) ; id client ignoré — même « Voie B » que t_marche. Indispensable depuis que
+        // PK serveur (seq_lot) ; id client ignoré — même « Voie B » que t_marche. Indispensable depuis que
         // GET /api/lots est scopé : le front alloue son id par max() sur la liste REÇUE, désormais partielle.
         // Un id choisi par le client viserait alors le lot d'une autre entité, que save() écraserait (merge).
-        entity.setIdLot(repository.findMaxIdLot() + 1);
+        // La séquence remplace le max+1 : deux PRMP saisissant en même temps ne lisent plus le même maximum.
+        entity.setIdLot(repository.nextIdLot().intValue());
         return LotMapper.toDto(repository.save(entity));
     }
 
