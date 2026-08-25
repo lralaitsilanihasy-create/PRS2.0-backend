@@ -52,20 +52,31 @@ public class DossierController {
      * présence du paramètre {@code page}) → enveloppe {@code Page} (content, totalElements, …), même
      * forme que {@code /examines}. Sans {@code page}, la liste plate ci-dessous reste servie
      * (rétro-compatible).
+     *
+     * <p>{@code type} (famille) et {@code brouillon} ({@code true} = BROUILLON seuls, {@code false} =
+     * <strong>tout sauf</strong> BROUILLON) sont les deux critères que l'écran « Mes dossiers » de la
+     * PRMP appliquait jusqu'ici en mémoire, après avoir téléchargé la liste entière. Ils s'appliquent
+     * <strong>à l'intérieur</strong> du périmètre de visibilité (§1) et <strong>avant</strong> le
+     * découpage en page — jamais à la place du périmètre : filtrer par type n'a jamais montré à une
+     * PRMP les dossiers d'une autre. Tous facultatifs : absents, la réponse est strictement
+     * inchangée.</p>
      */
     @GetMapping(params = "page")
     public Page<DossierDto> findAllPagine(@RequestParam(required = false) String statut,
             @RequestParam(required = false) String type,
             @RequestParam(required = false) String sousType,
+            @RequestParam(required = false) String brouillon,
             Pageable pageable) {
-        return service.findAllPagine(statut, type, sousType, pageable);
+        return service.findAllPagine(statut, type, sousType, brouillon, pageable);
     }
 
+    /** Liste plate, mêmes filtres facultatifs (compatibilité : sans eux, réponse inchangée). */
     @GetMapping
     public List<DossierDto> findAll(@RequestParam(required = false) String statut,
             @RequestParam(required = false) String type,
-            @RequestParam(required = false) String sousType) {
-        return service.findAll(statut, type, sousType);
+            @RequestParam(required = false) String sousType,
+            @RequestParam(required = false) String brouillon) {
+        return service.findAll(statut, type, sousType, brouillon);
     }
 
     /** File « à réceptionner » du Secrétaire (§3.4) : dossiers SOUMIS de sa localité sans réception. */

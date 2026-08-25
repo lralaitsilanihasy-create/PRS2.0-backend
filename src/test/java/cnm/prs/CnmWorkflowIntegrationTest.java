@@ -10027,6 +10027,116 @@ class CnmWorkflowIntegrationTest {
                 .andExpect(status().isBadRequest());
     }
 
+    /**
+     * Prérequis de la pagination de l'écran « Mes dossiers » (PRMP), le plus consulté : il téléchargeait
+     * la liste entière puis la filtrait en mémoire sur deux critères — la famille et l'appartenance au
+     * groupe BROUILLON. Paginer sans descendre ces filtres côté serveur reviendrait à découper l'ensemble
+     * NON filtré : les pages seraient trouées et {@code totalElements} compterait des dossiers absents de
+     * l'écran. {@code ?type=} existait déjà ; ce test verrouille {@code ?brouillon=}, son articulation avec
+     * {@code ?type=}, et surtout les deux invariants qu'il ne doit jamais violer :
+     * <ul>
+     * <li>sans paramètre, la réponse est <strong>strictement inchangée</strong> (aucun appelant existant
+     * ne voit de différence — les brouillons restent servis à la PRMP) ;</li>
+     * <li>un filtre n'élargit <strong>jamais</strong> le périmètre de visibilité (§1) : il s'applique
+     * à l'intérieur, jamais à sa place.</li>
+     * </ul>
+     * {@code brouillon=false} signifie <strong>tout sauf</strong> BROUILLON, pas « SOUMIS » : d'où le
+     * dossier CLOTURE du jeu d'essai, qui périrait si quelqu'un remplaçait la négation par une égalité.
+     */
+    @Test
+    @DisplayName("GET /api/dossiers : filtre ?brouillon=true|false (combinable à ?type=), appliqué dans le "
+            + "périmètre et AVANT la pagination ; absent → réponse inchangée ; valeur invalide → 400")
+    void dossiers_filtreBrouillon_dansLePerimetreEtAvantPagination() throws Exception {
+        prmpRepository.save(prmp("PRMP002", "ANT"));
+        String tokenPrmp2 = bearer("PRMP002", ProfilUtilisateur.PRMP, TypeActeur.PRMP, "PRMP002", "ANT");
+
+        Dossier b1 = dossierLoc(9610, "BROUILLON", "ANT", "PRMP001"); b1.setIdTypeDossier("DDP");
+        Dossier s1 = dossierLoc(9611, "SOUMIS", "ANT", "PRMP001"); s1.setIdTypeDossier("DDP");
+        // CLOTURE : ni BROUILLON ni SOUMIS — doit sortir avec brouillon=false.
+        Dossier c1 = dossierLoc(9612, "CLOTURE", "ANT", "PRMP001"); c1.setIdTypeDossier("DDP");
+        Dossier b2 = dossierLoc(9613, "BROUILLON", "ANT", "PRMP001"); b2.setIdTypeDossier("DMC");
+        // Brouillon d'une AUTRE PRMP, même localité et même famille : le filtre ne doit pas le faire apparaître.
+        Dossier autre = dossierLoc(9614, "BROUILLON", "ANT", "PRMP002"); autre.setIdTypeDossier("DDP");
+        dossierRepository.saveAll(java.util.List.of(b1, s1, c1, b2, autre));
+
+        // 1) NON-RÉGRESSION : sans paramètre, la PRMP reçoit toujours ses brouillons ET ses dossiers déposés.
+        mvc.perform(get("/api/dossiers").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idDossier==9610)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idDossier==9611)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idDossier==9612)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idDossier==9613)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idDossier==9614)]", hasSize(0)));
+
+        // 2) brouillon=true : les seuls BROUILLON, toutes familles confondues.
+        mvc.perform(get("/api/dossiers?brouillon=true").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idDossier==9610)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idDossier==9613)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idDossier==9611)]", hasSize(0)))
+                .andExpect(jsonPath("$[?(@.idDossier==9612)]", hasSize(0)))
+                .andExpect(jsonPath("$[?(@.statut!='BROUILLON')]", hasSize(0)));
+
+        // 3) brouillon=false : TOUT sauf BROUILLON — le CLOTURE en fait partie, pas seulement le SOUMIS.
+        mvc.perform(get("/api/dossiers?brouillon=false").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idDossier==9611)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idDossier==9612)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idDossier==9610)]", hasSize(0)))
+                .andExpect(jsonPath("$[?(@.idDossier==9613)]", hasSize(0)))
+                .andExpect(jsonPath("$[?(@.statut=='BROUILLON')]", hasSize(0)));
+
+        // 4) Les deux filtres combinés : exactement ce que demande un écran « DDP / Déposés ».
+        mvc.perform(get("/api/dossiers?type=DDP&brouillon=false").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idDossier==9611)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idDossier==9612)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idDossier==9610)]", hasSize(0)))
+                .andExpect(jsonPath("$[?(@.idDossier==9613)]", hasSize(0)));
+        // Et « DDP / Brouillons » : ne ramène pas le brouillon DDP de PRMP002 (périmètre intact).
+        mvc.perform(get("/api/dossiers?type=DDP&brouillon=true").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idDossier==9610)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idDossier==9614)]", hasSize(0)));
+        // Symétrique : PRMP002 filtrant à l'identique ne voit que le sien.
+        mvc.perform(get("/api/dossiers?type=DDP&brouillon=true").header("Authorization", tokenPrmp2))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idDossier==9614)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idDossier==9610)]", hasSize(0)));
+
+        // 5) Combinaison avec ?statut= : conjonction, donc contradiction → liste vide (et non 400).
+        mvc.perform(get("/api/dossiers?statut=BROUILLON&brouillon=false").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+
+        // 6) Valeur invalide → 400 explicite, comme ?statut= et ?type= (et non le 500 opaque du filet général).
+        mvc.perform(get("/api/dossiers?brouillon=oui").header("Authorization", tokenPrmp))
+                .andExpect(status().isBadRequest());
+        mvc.perform(get("/api/dossiers?page=0&size=10&brouillon=oui").header("Authorization", tokenPrmp))
+                .andExpect(status().isBadRequest());
+
+        // 7) PAGINÉ : le découpage porte sur l'ensemble DÉJÀ filtré. On compare totalElements à la taille
+        // de la liste plate pour les mêmes filtres : c'est l'invariant qui interdit de paginer avant de
+        // filtrer (sinon totalElements compterait des dossiers que l'écran n'affiche pas).
+        String plate = mvc.perform(get("/api/dossiers?type=DDP&brouillon=false").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        int attendu = com.jayway.jsonpath.JsonPath.<Integer>read(plate, "$.length()");
+        assertTrue(attendu >= 2, "le jeu d'essai doit fournir au moins les dossiers 9611 et 9612");
+        mvc.perform(get("/api/dossiers?type=DDP&brouillon=false&page=0&size=1").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content", hasSize(1)))
+                .andExpect(jsonPath("$.totalElements").value(attendu));
+        // Page entière : même contenu que la liste plate filtrée, brouillons exclus.
+        mvc.perform(get("/api/dossiers?type=DDP&brouillon=false&page=0&size=100").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content", hasSize(attendu)))
+                .andExpect(jsonPath("$.content[?(@.idDossier==9611)]", hasSize(1)))
+                .andExpect(jsonPath("$.content[?(@.idDossier==9612)]", hasSize(1)))
+                .andExpect(jsonPath("$.content[?(@.statut=='BROUILLON')]", hasSize(0)))
+                .andExpect(jsonPath("$.content[?(@.idDossier==9614)]", hasSize(0)));
+    }
+
     @Test
     @DisplayName("Grille d'examen par sous-type : PPM = points communs seuls ; PPM-AGPM = communs + spécifique ; gardes 400")
     void grilleExamen_parSousType() throws Exception {

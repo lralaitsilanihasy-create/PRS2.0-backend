@@ -142,30 +142,50 @@ public class DossierService {
      * côté serveur : Président / Administrateur voient tout ; les autres profils ne voient que les
      * dossiers de leur localité. La PRMP voit ses propres dossiers ({@code t_dossier.ID_PRMP} / PPM / marché).
      *
-     * @param statut   filtre serveur sur {@code t_dossier.STATUT} ; {@code null}/vide = tous statuts
-     * @param type     filtre sur la famille ({@code tr_type_dossier}) ; {@code null}/vide = toutes
-     * @param sousType filtre sur le sous-type ({@code tr_sous_type_dossier}) ; {@code null}/vide = tous
+     * @param statut    filtre serveur sur {@code t_dossier.STATUT} ; {@code null}/vide = tous statuts
+     * @param type      filtre sur la famille ({@code tr_type_dossier}) ; {@code null}/vide = toutes
+     * @param sousType  filtre sur le sous-type ({@code tr_sous_type_dossier}) ; {@code null}/vide = tous
+     * @param brouillon {@code "true"} = BROUILLON seuls ; {@code "false"} = <strong>tout sauf</strong>
+     *                  BROUILLON ; {@code null}/vide = les deux (comportement historique)
      * @throws BadRequestException si un filtre fourni n'est pas une valeur connue (→ 400)
      */
     /**
      * ⚠️ Audit front (2026-08-16) — variante PAGINÉE de la liste des dossiers ({@code ?page=&size=}) :
-     * mêmes filtres (périmètre + statut/type/sousType), enveloppe {@code Page} (voir {@link Pagination}).
+     * mêmes filtres (périmètre + statut/type/sousType/brouillon), enveloppe {@code Page} (voir
+     * {@link Pagination}). Les filtres sont appliqués <strong>avant</strong> le découpage : l'écran
+     * « Mes dossiers » de la PRMP, qui n'affiche qu'un type et qu'un groupe de statut, doit paginer
+     * l'ensemble déjà filtré — sinon les pages porteraient sur l'ensemble complet, le filtre ne
+     * s'appliquerait qu'aux lignes déjà servies et {@code totalElements} compterait des dossiers que
+     * l'écran n'affiche pas.
      */
     @Transactional(readOnly = true)
-    public Page<DossierDto> findAllPagine(String statut, String type, String sousType, Pageable pageable) {
-        return Pagination.depuisListe(findAll(statut, type, sousType), pageable);
+    public Page<DossierDto> findAllPagine(String statut, String type, String sousType, String brouillon,
+            Pageable pageable) {
+        return Pagination.depuisListe(findAll(statut, type, sousType, brouillon), pageable);
     }
 
     @Transactional(readOnly = true)
-    public List<DossierDto> findAll(String statut, String type, String sousType) {
+    public List<DossierDto> findAll(String statut, String type, String sousType, String brouillon) {
         String filtre = normaliserStatut(statut);
         String filtreType = normaliserType(type);
         String filtreSousType = normaliserSousType(sousType);
+        Boolean filtreBrouillon = normaliserBrouillon(brouillon);
         return enrichir(chargerScopees(filtre).stream()
                 // Filtres famille / sous-type appliqués côté serveur, après le scoping (volumes déjà réduits).
                 .filter(d -> filtreType == null || filtreType.equals(d.getIdTypeDossier()))
                 .filter(d -> filtreSousType == null || filtreSousType.equals(d.getIdSousType()))
+                .filter(d -> filtreBrouillon == null || filtreBrouillon == estBrouillon(d))
                 .map(DossierMapper::toDto).toList());
+    }
+
+    /**
+     * Appartenance au groupe BROUILLON. Un statut {@code null} (dossier jamais passé par la machine à
+     * états) n'est <strong>pas</strong> un brouillon : même convention que
+     * {@code DossierRepository#compterSoumis()} ({@code statut is null or statut <> 'BROUILLON'}), pour
+     * que {@code brouillon=true} et {@code brouillon=false} forment bien une partition du périmètre.
+     */
+    private static boolean estBrouillon(Dossier d) {
+        return StatutDossier.BROUILLON.name().equals(d.getStatut());
     }
 
     /** Dossiers du périmètre de l'appelant (scoping §1), optionnellement restreints à un statut. */
@@ -211,6 +231,31 @@ public class DossierService {
                     "Sous-type de dossier inconnu : « " + code + " » (référentiel /api/sous-type-dossiers).");
         }
         return code;
+    }
+
+    /**
+     * Valide le filtre {@code brouillon} : {@code null}/vide accepté (= pas de filtre), sinon
+     * {@code true}/{@code false} (insensible à la casse).
+     *
+     * <p>Paramètre déclaré en {@code String} et converti ici — et non en {@code Boolean} lié par Spring —
+     * parce qu'une valeur non convertible ({@code ?brouillon=oui}) lèverait un
+     * {@code MethodArgumentTypeMismatchException} qu'aucun handler ne traite : le client recevrait le 500
+     * opaque du filet général là où il doit recevoir un 400 nommant les valeurs admises, comme pour
+     * {@code statut} et {@code type}.</p>
+     */
+    private Boolean normaliserBrouillon(String brouillon) {
+        if (brouillon == null || brouillon.isBlank()) {
+            return null;
+        }
+        String valeur = brouillon.trim();
+        if ("true".equalsIgnoreCase(valeur)) {
+            return Boolean.TRUE;
+        }
+        if ("false".equalsIgnoreCase(valeur)) {
+            return Boolean.FALSE;
+        }
+        throw new BadRequestException("Filtre « brouillon » invalide : « " + brouillon
+                + " ». Valeurs admises : true (BROUILLON seuls), false (tout sauf BROUILLON).");
     }
 
     /** Valide le filtre statut : {@code null}/vide accepté (= tous), sinon doit être un {@link StatutDossier}. */

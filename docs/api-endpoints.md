@@ -1181,7 +1181,7 @@ relation **1,N** : un point de contrôle a **0..N** lignes. Remplace l'ancien ch
 
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
-| GET | /api/dossiers | — | `DossierDto[]` | 200, 400 | Authentifié (filtré, hors BROUILLON) — filtres `?statut=` `&type=` `&sousType=` ; ⚠️ **paginable** (`?page=&size=` → enveloppe `Page`, cf. Conventions) |
+| GET | /api/dossiers | — | `DossierDto[]` | 200, 400 | Authentifié (filtré ; les BROUILLON sont masqués aux **contrôleurs**, mais servis à leur **PRMP** et à l'**Administrateur**) — filtres `?statut=` `&type=` `&sousType=` `&brouillon=` ; ⚠️ **paginable** (`?page=&size=` → enveloppe `Page`, cf. Conventions) |
 | GET | /api/dossiers/a-receptionner | — | `DossierDto[]` | 200, 403 | `SECRETAIRE` (titulaire/délégué) ou `ADMINISTRATEUR` |
 | GET | /api/dossiers/a-examiner | — | `DossierDto[]` | 200, 403 | `MEMBRE` (titulaire/délégué) ou `ADMINISTRATEUR` |
 | GET | /api/dossiers/examines | — | `Page<DossierDto>` | 200, 403 | `MEMBRE` (titulaire/délégué) ou `ADMINISTRATEUR` |
@@ -1224,6 +1224,33 @@ relation **1,N** : un point de contrôle a **0..N** lignes. Remplace l'ancien ch
 > `?statut=`, les filtres serveur **`?type=`** (famille : `DDP`/`DMC`/`DDM`) et **`?sousType=`** (ex.
 > `PPM-AGPM`), combinables entre eux ; valeur inconnue du référentiel → **400**. Le scoping de visibilité
 > (localité / PRMP) s'applique toujours d'abord.
+
+> 📌 **Filtre `?brouillon=` (règle ajoutée 2026-08-25).** `GET /api/dossiers` accepte **`?brouillon=true`**
+> (les seuls `BROUILLON`) et **`?brouillon=false`** (**tout sauf** `BROUILLON` — pas seulement `SOUMIS` :
+> `EXAMINE`, `CLOTURE`, `EN_ATTENTE_DECISION_PRMP`… en font partie ; un `statut` nul compte comme
+> non-brouillon, même convention que le dénominateur `compterSoumis`). **Facultatif : absent, la réponse est
+> strictement inchangée.** Toute autre valeur (`?brouillon=oui`) → **400** nommant les valeurs admises — le
+> paramètre est volontairement lu en `String` et converti en service, un `Boolean` lié par Spring donnant un
+> **500 opaque** sur valeur non convertible.
+>
+> Combinable avec `?statut=`, `?type=` et `?sousType=` : les filtres se **cumulent** (ET). Une combinaison
+> contradictoire (`?statut=BROUILLON&brouillon=false`) renvoie donc une **liste vide**, et non une 400.
+>
+> Comme `?type=` / `?sousType=`, il s'applique **à l'intérieur** du périmètre de visibilité (§1) et
+> **avant** le découpage en page : filtrer n'élargit **jamais** le périmètre (une PRMP filtrant par type ne
+> voit pas les dossiers d'une autre), et `totalElements` compte l'ensemble **filtré**.
+>
+> **Origine.** L'écran « Mes dossiers » de la PRMP (`/prmp/dossiers/:type/:groupe`) appliquait ces deux
+> critères — famille et appartenance au groupe BROUILLON — **en mémoire**, après avoir téléchargé la table
+> entière. Il peut désormais demander directement
+> `GET /api/dossiers?type={idTypeDossier}&brouillon={true|false}&page=0&size=N`.
+>
+> ⚠️ **Ce que cela ne règle pas.** La pagination reste **applicative** (cf. « Pagination des grandes
+> listes ») : le serveur constitue la liste filtrée **complète** puis la découpe. Le gain porte sur le
+> **transfert réseau et le parse côté navigateur**, **pas** sur la charge base — le nombre de lignes lues
+> reste le même. Une pagination SQL supposerait de descendre les filtres de visibilité (localité, PRMP
+> propriétaire), aujourd'hui appliqués en Java, dans les requêtes JPQL : chantier de conception distinct,
+> non entrepris ici.
 
 > 📌 **Écran « Dossiers à rectifier » (PRMP).** Il n'existe **pas** d'endpoint dédié : la liste est alimentée
 > par le **filtre serveur** existant `GET /api/dossiers?statut=EN_ATTENTE_DECISION_PRMP` (scopé à la PRMP),
