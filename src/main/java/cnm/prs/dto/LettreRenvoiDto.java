@@ -52,4 +52,13 @@ public class LettreRenvoiDto {
 
     /** Assistant contrôleur archiveur (matricule, lecture seule). */
     private String imArchiveur;
+
+    /**
+     * ⚠️ 2026-08-19 — le PDF officiel est-il <strong>prêt à télécharger maintenant</strong> ?
+     * (lecture seule, peuplé serveur). Depuis que la génération est produite <strong>après commit</strong>
+     * de la signature, une lettre peut être {@code SIGNE} sans document pendant quelques secondes :
+     * le flag vaut alors {@code false} et repasse à {@code true} au rafraîchissement suivant.
+     * Même contrat que {@code PvExamenDto.documentDisponible} pour un PV signé.
+     */
+    private Boolean documentDisponible;
 }

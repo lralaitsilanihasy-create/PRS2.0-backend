@@ -61,6 +61,16 @@ Flux complet d'un dossier, avec navette du projet de PV :
 > la consultation d'un PV signé sans fichier (antérieur au correctif) relance la production en arrière-plan.
 > Le convertisseur Word est **préchauffé au démarrage** (première génération sans coût de lancement de Word).
 
+> ⚠️ **Règle ajoutée (2026-08-19) — même règle pour le PDF de la LETTRE DE RENVOI.** La signature d'une
+> lettre (`SOUMIS → SIGNE`, CC ou Président) souffrait du même défaut : la conversion Word se faisait dans
+> sa transaction, si bien qu'un Word absent ou planté **annulait une signature pourtant valide** (et
+> laissait un PDF orphelin sur le FSX). La signature marque désormais la lettre `SIGNE`, applique ses
+> effets métier (suspension de l'examen, retour de navette) et **répond immédiatement** ; le document part
+> **après commit, en tâche de fond**. `LettreRenvoiDto.documentDisponible` (champ ajouté) porte le même
+> contrat que celui du PV signé : **false pendant la fenêtre de génération**, true ensuite. Le
+> téléchargement conserve sa **régénération paresseuse** — réservée aux lettres `SIGNE` : une lettre non
+> signée n'a jamais de PDF officiel.
+
 > ⚠️ **Règle ajoutée (non issue de la brochure d'origine) — statut `DISPATCHE`.** La brochure ne nomme
 > aucun statut de dossier entre `PRET_DISPATCH` et `CLOTURE`. Pour matérialiser l'étape **Dispatch (3)**
 > dans le pipeline, le backend ajoute le statut **`DISPATCHE`** (« dispatché, en attente d'examen ») :

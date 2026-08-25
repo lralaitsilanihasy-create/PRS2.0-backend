@@ -91,6 +91,14 @@ public class LettreRenvoiDocumentGenerator {
         return pdfOut.toByteArray();
     }
 
+    /**
+     * ⚠️ 2026-08-19 — préchauffage au démarrage ({@link LettreRenvoiDocumentPrechauffage}) : démarre le
+     * pont Word pour que la première génération ne paie pas le lancement de Word.
+     */
+    public void prechauffer() {
+        convertisseur();
+    }
+
     /** Convertisseur Word partagé, (re)créé s'il est absent ou arrêté (initialisation paresseuse, thread-safe). */
     private IConverter convertisseur() {
         IConverter c = convertisseur;
