@@ -22,7 +22,11 @@ public interface MessageRepository extends JpaRepository<Message, Integer> {
     @Query("select m from Message m where m.expediteurIm = :ref or m.destinataireIm = :ref order by m.dateEnvoi desc")
     List<Message> findImpliquant(@Param("ref") String ref);
 
-    /** Plus grand ID_MESSAGE existant (0 si table vide) — pour générer la PK assignée. */
-    @Query("select coalesce(max(m.idMessage), 0) from Message m")
-    Integer findMaxId();
+    /**
+     * Prochaine PK de message, allouée par la séquence serveur (Voie B — l'id client est ignoré).
+     * Remplace un {@code max(ID_MESSAGE) + 1} : deux envois simultanés lisaient le même maximum et la
+     * seconde insertion échouait en violation d'unicité.
+     */
+    @Query(value = "select nextval('seq_message')", nativeQuery = true)
+    Long nextIdMessage();
 }

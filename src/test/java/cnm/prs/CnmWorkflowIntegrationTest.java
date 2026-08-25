@@ -1596,15 +1596,18 @@ class CnmWorkflowIntegrationTest {
     @Test
     @DisplayName("Messagerie : envoi, réception, marquage lu et confidentialité")
     void messagerie_envoiReceptionLu() throws Exception {
-        // Le Membre envoie un message au CC.
-        mvc.perform(post("/api/messages/envoyer").header("Authorization", tokenMembre)
+        // Le Membre envoie un message au CC. L'id est RELU dans la réponse, jamais deviné : la PK vient
+        // de seq_message depuis le 2026-08-25, elle ne vaut plus 1 et n'est plus prévisible.
+        String envoi = mvc.perform(post("/api/messages/envoyer").header("Authorization", tokenMembre)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"destinataireIm\":\"CTRCC1\",\"sujet\":\"Question\",\"corps\":\"Bonjour\"}"))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.idMessage").value(1))
                 .andExpect(jsonPath("$.expediteurIm").value("CTRMEM"))
                 .andExpect(jsonPath("$.destinataireIm").value("CTRCC1"))
-                .andExpect(jsonPath("$.lu").value(false));
+                .andExpect(jsonPath("$.lu").value(false))
+                .andReturn().getResponse().getContentAsString();
+        int idMsg = com.jayway.jsonpath.JsonPath.read(envoi, "$.idMessage");
+        org.junit.jupiter.api.Assertions.assertTrue(idMsg >= 1200001, "idMessage hors de seq_message : " + idMsg);
 
         // Boîte de réception du CC : 1 message ; envoyés du Membre : 1.
         mvc.perform(get("/api/messages/recus").header("Authorization", tokenCc))
@@ -1614,15 +1617,15 @@ class CnmWorkflowIntegrationTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1));
 
         // Le CC marque le message comme lu.
-        mvc.perform(post("/api/messages/1/lu").header("Authorization", tokenCc))
+        mvc.perform(post("/api/messages/" + idMsg + "/lu").header("Authorization", tokenCc))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.lu").value(true));
 
         // L'expéditeur (non destinataire) ne peut pas marquer lu → 403.
-        mvc.perform(post("/api/messages/1/lu").header("Authorization", tokenMembre))
+        mvc.perform(post("/api/messages/" + idMsg + "/lu").header("Authorization", tokenMembre))
                 .andExpect(status().isForbidden());
 
         // Un tiers ne peut pas lire le message (confidentialité) → 403.
-        mvc.perform(get("/api/messages/1").header("Authorization", tokenAdmin))
+        mvc.perform(get("/api/messages/" + idMsg).header("Authorization", tokenAdmin))
                 .andExpect(status().isForbidden());
     }
 
