@@ -5,11 +5,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
-import java.util.Locale;
 
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,9 +32,6 @@ import cnm.prs.mapper.LettreRenvoiMapper;
 import cnm.prs.repository.ControleurRepository;
 import cnm.prs.repository.DossierRepository;
 import cnm.prs.repository.ExamenRepository;
-import cnm.prs.entity.EntiteContract;
-import cnm.prs.repository.EntiteContractRepository;
-import cnm.prs.repository.LocaliteRepository;
 import cnm.prs.repository.LettreRenvoiLueRepository;
 import cnm.prs.repository.LettreRenvoiRepository;
 import cnm.prs.repository.PpmRepository;
@@ -63,26 +58,24 @@ public class LettreRenvoiService {
     private final ControleurRepository controleurRepository;
     private final NotificationService notificationService;
     private final LettreRenvoiLueRepository lueRepository;
-    private final EntiteContractRepository entiteContractRepository;
-    private final LocaliteRepository localiteRepository;
-    private final LettreRenvoiDocumentGenerator documentGenerator;
+    private final LettreRenvoiDocumentService documentService;
     private final ReferenceService referenceService;
     private final PvExamenRepository pvExamenRepository;
-
-    @Value("${storage.lettre-renvoi.path:${java.io.tmpdir}/prs-fsx/LR}")
-    private String cheminStockageLr;
+    /** ⚠️ 2026-08-19 — génération du PDF hors transaction : publication d'événement + tâche de fond. */
+    private final ApplicationEventPublisher evenements;
+    private final LettreRenvoiDocumentTache documentTache;
 
     public LettreRenvoiService(LettreRenvoiRepository repository, ExamenRepository examenRepository,
             DossierRepository dossierRepository, PpmRepository ppmRepository, PrmpRepository prmpRepository,
             ControleurDirectory controleurDirectory, ControleurRepository controleurRepository,
             NotificationService notificationService, LettreRenvoiLueRepository lueRepository,
-            EntiteContractRepository entiteContractRepository, LocaliteRepository localiteRepository,
-            LettreRenvoiDocumentGenerator documentGenerator, ReferenceService referenceService,
-            PvExamenRepository pvExamenRepository) {
+            LettreRenvoiDocumentService documentService, ReferenceService referenceService,
+            PvExamenRepository pvExamenRepository, ApplicationEventPublisher evenements,
+            LettreRenvoiDocumentTache documentTache) {
         this.pvExamenRepository = pvExamenRepository;
-        this.documentGenerator = documentGenerator;
-        this.localiteRepository = localiteRepository;
-        this.entiteContractRepository = entiteContractRepository;
+        this.documentService = documentService;
+        this.evenements = evenements;
+        this.documentTache = documentTache;
         this.repository = repository;
         this.examenRepository = examenRepository;
         this.dossierRepository = dossierRepository;
@@ -115,7 +108,7 @@ public class LettreRenvoiService {
         } else {
             lettres = List.of();
         }
-        return lettres.stream().map(LettreRenvoiMapper::toDto).map(this::peuplerNomSignataire).map(this::peuplerLue).toList();
+        return lettres.stream().map(this::toDtoLecture).toList();
     }
 
     /** Lettres signées concernant les dossiers de la PRMP connectée (lecture seule). */
@@ -125,8 +118,38 @@ public class LettreRenvoiService {
         if (idPrmp == null) {
             return List.of();
         }
-        return repository.findSigneesPourPrmp(idPrmp).stream()
-                .map(LettreRenvoiMapper::toDto).map(this::peuplerNomSignataire).map(this::peuplerLue).toList();
+        return repository.findSigneesPourPrmp(idPrmp).stream().map(this::toDtoLecture).toList();
+    }
+
+    /**
+     * DTO de <strong>lecture</strong> : nom du signataire, flag « lue » et {@code documentDisponible},
+     * plus le rattrapage de génération décrit dans {@link #peuplerDocument}.
+     */
+    private LettreRenvoiDto toDtoLecture(LettreRenvoi entity) {
+        LettreRenvoiDto dto = peuplerLue(peuplerNomSignataire(LettreRenvoiMapper.toDto(entity)));
+        peuplerDocument(dto, entity);
+        // ⚠️ 2026-08-19 — rattrapage des lettres signées SANS fichier (antérieures à la génération
+        // post-commit, ou dont la génération a échoué) : la production part en arrière-plan à la
+        // consultation — documentDisponible passera à true au prochain rafraîchissement, sans
+        // requête lente. Le registre de la tâche dédoublonne les demandes concurrentes.
+        if (Boolean.FALSE.equals(dto.getDocumentDisponible())
+                && StatutLettreRenvoi.SIGNE.name().equals(entity.getStatut())
+                && !documentTache.estEnCours(entity.getIdLettre())) {
+            documentTache.genererEnArrierePlan(entity.getIdLettre());
+        }
+        return dto;
+    }
+
+    /**
+     * Renseigne {@code documentDisponible} : « le PDF est prêt à télécharger <em>maintenant</em> »
+     * (⚠️ 2026-08-19, même contrat que le PV signé — {@code false} pendant la fenêtre de génération
+     * qui suit la signature). Aucun effet de bord.
+     */
+    private LettreRenvoiDto peuplerDocument(LettreRenvoiDto dto, LettreRenvoi entity) {
+        if (dto != null) {
+            dto.setDocumentDisponible(documentService.documentDisponible(entity));
+        }
+        return dto;
     }
 
     /**
@@ -145,9 +168,9 @@ public class LettreRenvoiService {
             // Marquage « lu » à la consultation par la PRMP propriétaire (silencieux, anti-doublon).
             lueRepository.save(new LettreRenvoiLue(null, id, ref, LocalDateTime.now()));
         }
-        LettreRenvoiDto dto = peuplerNomSignataire(LettreRenvoiMapper.toDto(entity));
-        dto.setLue(ref != null && lueRepository.existsByIdLettreAndIdPrmp(id, ref));
-        return dto;
+        // toDtoLecture pose nomSignataire, le flag « lue » (après le marquage ci-dessus) et
+        // documentDisponible, et relance au besoin la production du document en arrière-plan.
+        return toDtoLecture(entity);
     }
 
     /** Vrai si l'appelant est la PRMP propriétaire du dossier d'une lettre {@code SIGNE}. */
@@ -200,7 +223,8 @@ public class LettreRenvoiService {
         lettre.setDateExamen(examen.getDateExamen());
         lettre.setDateLettre(LocalDate.now());
         lettre.setStatut(StatutLettreRenvoi.BROUILLON.name());
-        return LettreRenvoiMapper.toDto(repository.save(lettre));
+        LettreRenvoi enregistree = repository.save(lettre);
+        return peuplerDocument(LettreRenvoiMapper.toDto(enregistree), enregistree);
     }
 
     /**
@@ -228,7 +252,8 @@ public class LettreRenvoiService {
             throw new BusinessRuleException("Lettre non éditable : statut « " + lettre.getStatut() + " » (attendu BROUILLON).");
         }
         lettre.setCorpsLettre(dto.getCorpsLettre());
-        return LettreRenvoiMapper.toDto(repository.save(lettre));
+        LettreRenvoi enregistree = repository.save(lettre);
+        return peuplerDocument(LettreRenvoiMapper.toDto(enregistree), enregistree);
     }
 
     /** Soumission par le Membre propriétaire (attributaire de l'examen) : BROUILLON → SOUMIS. */
@@ -239,7 +264,8 @@ public class LettreRenvoiService {
             throw new BusinessRuleException("Soumission impossible : statut « " + lettre.getStatut() + " » (attendu BROUILLON).");
         }
         lettre.setStatut(StatutLettreRenvoi.SOUMIS.name());
-        return LettreRenvoiMapper.toDto(repository.save(lettre));
+        LettreRenvoi enregistree = repository.save(lettre);
+        return peuplerDocument(LettreRenvoiMapper.toDto(enregistree), enregistree);
     }
 
     /**
@@ -257,24 +283,21 @@ public class LettreRenvoiService {
         }
         Dossier dossier = lettre.getIdDossier() == null ? null
                 : dossierRepository.findById(lettre.getIdDossier()).orElse(null);
-        String localite = dossier == null ? null : dossier.getIdLocalite();
-        if (localite == null || localite.isBlank()) {
-            localite = repository.findLocaliteByLettre(id).orElse(null);   // repli : localité de réception
-        }
-        boolean centrale = Localite.estCentrale(localite);   // source unique (cf. références « CNM »)
+        boolean centrale = Localite.estCentrale(documentService.localiteDeLaLettre(lettre));
         if (!centrale && CurrentUser.profil().orElse(null) != ProfilUtilisateur.CHEF_COMMISSION) {
             throw new AccessDeniedException(
                     "Seul le Chef de Commission peut signer une lettre de renvoi pour une localité régionale.");
         }
         String im = CurrentUser.ref().filter(s -> !s.isBlank())
                 .orElseThrow(() -> new AccessDeniedException("Signataire non identifié."));
-        String localiteLibelle = localite == null ? "" : localiteRepository.findById(localite)
-                .map(l -> l.getLibelleLocalite() == null ? "" : l.getLibelleLocalite()).orElse("");
         lettre.setImSignataire(im);
         lettre.setStatut(StatutLettreRenvoi.SIGNE.name());
-        byte[] pdf = documentGenerator.genererPdf(centrale,
-                construireRemplacements(lettre, dossier, nomComplet(im), centrale, localiteLibelle));
-        lettre.setCheminDocument(stockerSurFsx(lettre, pdf));   // PDF écrit sur le FSX (répertoire LR/)
+        // ⚠️ 2026-08-19 — la génération du PDF (Word piloté localement, plusieurs secondes) est SORTIE
+        // du chemin de la signature : la lettre est marquée SIGNE et la réponse part immédiatement ; le
+        // document est produit APRÈS COMMIT par LettreRenvoiDocumentTache, qui renseigne CHEMIN_DOCUMENT
+        // quand il est prêt (documentDisponible=false entre-temps). Un échec de génération ne peut plus
+        // faire échouer la signature — ni laisser un PDF orphelin sur le FSX après un rollback.
+        evenements.publishEvent(new LettreRenvoiSigneeEvent(lettre.getIdLettre()));
         // ⚠️ Règle MODIFIÉE (2026-08-01, spec navette cas 3) — la lettre signée SUSPEND l'examen : le dossier
         // passe EN_ATTENTE_PIECES (plus modifiable par les Membres, verrous d'examen exclus de ce statut).
         // La PRMP dépose les pièces demandées (apresLettreRenvoi=true) puis déclenche la reprise via
@@ -298,7 +321,7 @@ public class LettreRenvoiService {
         });
         LettreRenvoi saved = repository.save(lettre);
         notifierSignature(saved);
-        return peuplerNomSignataire(LettreRenvoiMapper.toDto(saved));
+        return peuplerDocument(peuplerNomSignataire(LettreRenvoiMapper.toDto(saved)), saved);
     }
 
     /**
@@ -321,92 +344,58 @@ public class LettreRenvoiService {
         }
         lettre.setDateArchivage(LocalDate.now());
         lettre.setImArchiveur(CurrentUser.ref().orElse(null));
-        return peuplerNomSignataire(LettreRenvoiMapper.toDto(repository.save(lettre)));
-    }
-
-    /** Écrit le PDF dans le répertoire FSX LR/ sous {@code {refLettre nettoyée}.pdf} ; renvoie le chemin. */
-    private String stockerSurFsx(LettreRenvoi lettre, byte[] pdf) {
-        String base = lettre.getRefLettre() != null && !lettre.getRefLettre().isBlank()
-                ? lettre.getRefLettre() : ("lettre-" + lettre.getIdLettre());
-        String nomFichier = base.replace('/', '_').replace('\\', '_') + ".pdf";
-        try {
-            Path dir = Path.of(cheminStockageLr);
-            Files.createDirectories(dir);
-            Path fichier = dir.resolve(nomFichier);
-            Files.write(fichier, pdf);
-            return fichier.toString();
-        } catch (IOException e) {
-            throw new BusinessRuleException("Stockage du document de la lettre impossible : " + e.getMessage());
-        }
+        LettreRenvoi saved = repository.save(lettre);
+        return peuplerDocument(peuplerNomSignataire(LettreRenvoiMapper.toDto(saved)), saved);
     }
 
     /**
      * Document PDF de la lettre signée (téléchargement). Accès : périmètre de localité habituel ou PRMP
      * propriétaire (lettre {@code SIGNE}). Lit le fichier sur le FSX ({@code CHEMIN_DOCUMENT}), avec repli
-     * sur le contenu en base ({@code DOCUMENT_PDF}). 404 si la lettre n'a pas de document.
+     * sur le contenu en base ({@code DOCUMENT_PDF}).
+     *
+     * <p>⚠️ 2026-08-19 — fenêtre post-signature : {@code documentDisponible} est {@code false} tant que
+     * la génération de fond n'a pas posé {@code CHEMIN_DOCUMENT}, un front à jour n'appelle donc pas ici
+     * pendant l'intervalle. Si un client appelle quand même (le front actuel affiche le bouton dès
+     * {@code SIGNE}), la <strong>régénération paresseuse</strong> ci-dessous sert le PDF — lentement mais
+     * correctement, exactement comme la signature le faisait avant. Elle sert aussi de migration des
+     * lettres signées dont la génération de fond a échoué. <strong>404</strong> seulement si la lettre
+     * n'est pas signée (un brouillon n'a jamais eu de document).</p>
      */
-    @Transactional(readOnly = true)
+    @Transactional
     public byte[] telechargerDocument(Integer id) {
         LettreRenvoi lettre = exigerExistante(id);
         if (!estPrmpProprietaireSignee(lettre)) {
             Visibilite.controler(loc -> repository.existsDansLocalite(id, loc));
         }
-        if (lettre.getCheminDocument() != null && !lettre.getCheminDocument().isBlank()) {
-            try {
-                return Files.readAllBytes(Path.of(lettre.getCheminDocument()));
-            } catch (IOException e) {
-                throw new ResourceNotFoundException("Document introuvable sur le FSX pour la lettre : " + id);
-            }
-        }
-        if (lettre.getDocumentPdf() != null && lettre.getDocumentPdf().length > 0) {
+        byte[] pdf = lireFsx(lettre.getCheminDocument());
+        if (pdf == null && lettre.getDocumentPdf() != null && lettre.getDocumentPdf().length > 0) {
             return lettre.getDocumentPdf();   // repli compatibilité (lettres signées avant le stockage FSX)
         }
-        throw new ResourceNotFoundException("Aucun document pour la lettre : " + id);
+        if (pdf == null && StatutLettreRenvoi.SIGNE.name().equals(lettre.getStatut())) {
+            String chemin = documentService.genererEtStocker(lettre).orElse(null);
+            if (chemin != null) {
+                lettre.setCheminDocument(chemin);
+                repository.save(lettre);
+                pdf = lireFsx(chemin);
+            }
+        }
+        if (pdf == null) {
+            throw new ResourceNotFoundException("Aucun document pour la lettre : " + id);
+        }
+        return pdf;
     }
 
-    /**
-     * Construit la table des remplacements de placeholders du modèle Word selon la localité.
-     * Communs aux deux modèles ; le central a le placeholder « PRESIDENT OU CHEF DE COMMISSION », le
-     * régional a « LOCALITE DOSSIER » et « CHEF DE COMMISSION ». Le nom du signataire remplace
-     * <strong>uniquement</strong> le placeholder (aucun libellé de rôle ajouté).
-     */
-    private java.util.Map<String, String> construireRemplacements(LettreRenvoi lettre, Dossier dossier,
-            String nomSignataire, boolean centrale, String localiteLibelle) {
-        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("dd MMMM yyyy", Locale.FRENCH);
-        String dateLettre = lettre.getDateLettre() == null ? "" : lettre.getDateLettre().format(fmt);
-        String dateExamen = lettre.getDateExamen() == null ? "" : lettre.getDateExamen().format(fmt);
-        String reference = dossier == null || dossier.getRefeDossier() == null ? "" : dossier.getRefeDossier();
-        String entite = dossier == null || dossier.getIdEntiteContract() == null ? ""
-                : entiteContractRepository.findById(dossier.getIdEntiteContract())
-                        .map(EntiteContract::getLibelleEntite).orElse("");
-        String corps = lettre.getCorpsLettre() == null ? "" : lettre.getCorpsLettre();
-        String nom = nomSignataire == null ? "" : nomSignataire;
-
-        java.util.Map<String, String> m = new java.util.HashMap<>();
-        m.put("<DATE_LETTRE>", dateLettre);
-        m.put("<NOM_ENTITE_CONTRACT>", entite);
-        m.put("<REFERENCE DOSSIER>", reference);
-        m.put("<DATE EXAMEN>", dateExamen);
-        m.put("<CORPS DE LA LETTRE>", corps);
-        if (centrale) {
-            m.put("<NOM ET PRENOMS DU PRESIDENT OU CHEF DE COMMISSION>", nom);
-        } else {
-            m.put("<LOCALITE DOSSIER>", localiteLibelle == null ? "" : localiteLibelle.toUpperCase(Locale.FRENCH));
-            m.put("<NOM ET PRENOMS DU CHEF DE COMMISSION>", nom);
+    /** Contenu du fichier FSX, ou {@code null} si le chemin est vide, absent ou illisible. */
+    private byte[] lireFsx(String chemin) {
+        if (chemin == null || chemin.isBlank()) {
+            return null;
         }
-        return m;
-    }
-
-    /** « Prénoms Nom » d'un contrôleur (signataire effectif), ou l'IM si introuvable. */
-    private String nomComplet(String im) {
-        if (im == null) {
-            return "";
+        try {
+            Path p = Path.of(chemin);
+            return Files.exists(p) ? Files.readAllBytes(p) : null;
+        } catch (IOException e) {
+            return null;
         }
-        return controleurRepository.findById(im).map(c -> {
-            String n = ((c.getPrenomsCont() == null ? "" : c.getPrenomsCont()) + " "
-                    + (c.getNomCont() == null ? "" : c.getNomCont())).trim();
-            return n.isBlank() ? im : n;
-        }).orElse(im);
     }
 
     public void delete(Integer id) {

@@ -2260,6 +2260,7 @@ de PV). Lecture filtrée par profil/localité. Cycle : `BROUILLON → SOUMIS →
 | imSignataire | string | — (réponse) | **posé à la signature** (JWT) — ignoré en entrée |
 | nomSignataire | string | — (réponse) | **nom complet du signataire** (« prénoms nom »), peuplé serveur — lecture seule |
 | lue | boolean | — (réponse) | **lecture seule** — `true` si la lettre a déjà été lue par la PRMP courante (trace `t_lettre_renvoi_lue`) |
+| documentDisponible | boolean | — (réponse) | ⚠️ **champ ajouté 2026-08-19** — **lecture seule** : le **PDF officiel est-il prêt à télécharger maintenant** (`CHEMIN_DOCUMENT` renseigné, ou `DOCUMENT_PDF` pour les anciennes lettres) ? **`false` pendant la fenêtre de génération post-commit** qui suit la signature, puis `true` au rafraîchissement suivant. `false` aussi pour une lettre non signée (un brouillon n'a jamais de document). Même contrat que `PvExamenDto.documentDisponible` pour un PV **signé** |
 
 > **Objet fixe** : l'objet de la lettre est constant (« lettre de renvoi », déjà inscrit en dur dans les modèles Word) — il n'est **plus saisi ni retourné** (champ `objetLettre` supprimé du DTO). S'il est encore envoyé dans le corps de la requête, il est **ignoré** (compat rétroactive du frontend). La colonne `t_lettre_renvoi.OBJET_LETTRE` reste en base pour l'historique mais n'est plus alimentée.
 
@@ -2270,7 +2271,7 @@ de PV). Lecture filtrée par profil/localité. Cycle : `BROUILLON → SOUMIS →
 | GET | /api/lettre-renvois | — | `LettreRenvoiDto[]` | 200 | Authentifié (filtré, voir ci-dessous) |
 | GET | /api/lettre-renvois/mes-lettres | — | `LettreRenvoiDto[]` | 200 | **PRMP** — lettres `SIGNE` de ses dossiers (lecture seule) |
 | GET | /api/lettre-renvois/{id} | — | `LettreRenvoiDto` | 200, 403, 404 | Authentifié (dans le périmètre) **ou PRMP propriétaire** (lettre `SIGNE`) — voir marquage « lu » |
-| GET | /api/lettre-renvois/{id}/document | — | fichier **PDF** | 200, 403, 404 | Authentifié (périmètre) — document de la lettre signée |
+| GET | /api/lettre-renvois/{id}/document | — | fichier **PDF** | 200, 403, 404 | Authentifié (périmètre) — document de la lettre **signée** (régénéré à la demande s'il n'est pas encore produit ; **404** si la lettre n'est pas signée) |
 | POST | /api/lettre-renvois | `LettreRenvoiDto` | `LettreRenvoiDto` | 201, 400, 403 | **CHEF_COMMISSION / PRESIDENT** (⚠️ 2026-08-01) — création à la clôture de navette (BROUILLON) |
 | PUT | /api/lettre-renvois/{id} | `LettreRenvoiDto` | `LettreRenvoiDto` | 200, 400, 404, 409 | **CHEF_COMMISSION / PRESIDENT** (brouillon : corps) |
 | POST | /api/lettre-renvois/{id}/soumettre | — | `LettreRenvoiDto` | 200, 403, 404, 409 | **CHEF_COMMISSION / PRESIDENT** (BROUILLON→SOUMIS) |
@@ -2302,7 +2303,8 @@ de PV). Lecture filtrée par profil/localité. Cycle : `BROUILLON → SOUMIS →
 > uniquement** (Président → **403**, message « Seul le Chef de Commission peut signer une lettre de renvoi
 > pour une localité régionale. »).
 >
-> **Document PDF (⚠️ règle ajoutée).** À la signature, le **PDF** de la lettre est **généré** puis **stocké
+> **Document PDF (⚠️ règle ajoutée ; génération post-commit 2026-08-19).** À la signature, le **PDF** de la
+> lettre est **généré en tâche de fond après commit** (la signature répond immédiatement) puis **stocké
 > sur le système de fichiers (FSX)** dans le répertoire **`LR/`** (`storage.lettre-renvoi.path`), sous le nom
 > **`{refLettre}.pdf`** (les `/` remplacés par `_`, ex. `00007_PPM_CNM_LR_2026.pdf`) ; le chemin est
 > conservé dans `t_lettre_renvoi.CHEMIN_DOCUMENT`. Téléchargeable via `GET /api/lettre-renvois/{id}/document`
@@ -2315,6 +2317,31 @@ de PV). Lecture filtrée par profil/localité. Cycle : `BROUILLON → SOUMIS →
 > un rendu **fidèle au modèle** (positionnement des pointillés d'en-tête et du signataire conformes à Word).
 > La mise en forme et l'**emblème** du modèle sont conservés ; le nom du signataire remplace uniquement le
 > placeholder (aucun libellé de rôle ajouté). _Pré-requis machine/CI : Microsoft Word installé (automation COM)._
+>
+> ⚠️ **Génération post-commit (2026-08-19) — même motif que le PV (cf. §PV « document généré »).** La
+> conversion `.docx → PDF` pilote Word localement (plusieurs secondes, incompressibles) et se faisait
+> **dans la transaction** de `POST /api/lettre-renvois/{id}/signer` : elle y retenait une connexion du pool
+> et le verrou de ligne, et un échec de conversion (Word absent, planté, FSX indisponible) **annulait une
+> signature pourtant valide** — en laissant au passage un PDF orphelin sur le FSX après rollback. La
+> signature marque désormais la lettre `SIGNE` et **répond immédiatement** ; le document est produit
+> **après commit** par une tâche de fond (`LettreRenvoiSigneeEvent` + `LettreRenvoiDocumentTache`), qui
+> renseigne `CHEMIN_DOCUMENT` quand il est prêt. **Un échec de génération ne peut plus faire échouer la
+> signature** (journalisé). Le **contrat de `signer` est inchangé** : il renvoyait déjà un
+> `LettreRenvoiDto`, jamais le PDF.
+>
+> **Fenêtre de génération et `GET /{id}/document`.** Pendant l'intervalle, `documentDisponible` vaut
+> **`false`** (cf. table des champs) — c'est l'indicateur que le front doit lire, comme il le fait déjà
+> pour les PV. Si un client appelle `…/document` malgré tout, la **régénération paresseuse** produit et
+> sert le PDF (lentement, exactement comme la signature le faisait avant) et pose `CHEMIN_DOCUMENT` :
+> **aucun 404 n'apparaît pendant la fenêtre**, le comportement observable du téléchargement est donc
+> inchangé pour un client existant. Cette régénération sert aussi de **rattrapage** des lettres signées
+> dont la génération de fond a échoué. Elle est **réservée aux lettres `SIGNE`** : sur un `BROUILLON` /
+> `SOUMIS`, `…/document` renvoie toujours **404** (jamais de PDF officiel d'une lettre non signée).
+> **Rattrapage à la consultation** : une lettre `SIGNE` sans fichier vue par `GET /api/lettre-renvois`
+> ou `GET /{id}` relance la production en arrière-plan — disponible au rafraîchissement suivant, sans
+> requête lente ; un registre en mémoire dédoublonne les générations concurrentes. Le convertisseur Word
+> des lettres est **préchauffé au démarrage** (`app.lettre-renvoi.document.prechauffage=true`, `false` en
+> test) — il a son propre `IConverter`, distinct de celui des PV.
 
 ---
 

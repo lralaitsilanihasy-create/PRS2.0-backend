@@ -146,6 +146,7 @@ class CnmWorkflowIntegrationTest {
     @Autowired private cnm.prs.repository.ExamenDetailRepository examenDetailRepository;
     @Autowired private cnm.prs.repository.PointsCtrlRepository pointsCtrlRepository;
     @Autowired private cnm.prs.repository.LettreRenvoiRepository lettreRenvoiRepository;
+    @Autowired private cnm.prs.service.LettreRenvoiDocumentService lettreRenvoiDocumentService;
     @Autowired private DemandeRetraitRepository demandeRetraitRepository;
     @Autowired private DelegationProfilRepository delegationProfilRepository;
     @Autowired private NatureRepository natureRepository;
@@ -9657,16 +9658,104 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
-    @DisplayName("Document : PDF stocké sur le FSX (répertoire LR/) à la signature")
+    @DisplayName("Document : PDF stocké sur le FSX (répertoire LR/) sous un nom dérivé de refLettre — posé APRÈS la signature, pas pendant")
     void document_genere_stocke_fsx_ok() throws Exception {
         int id = seedLettreSoumiseLoc(730, "ANT");
         mvc.perform(post("/api/lettre-renvois/" + id + "/signer").header("Authorization", tokenCc))
+                .andExpect(status().isOk());
+        // ⚠️ 2026-08-19 — la production du document est sortie de la transaction de signature : dans la
+        // transaction de test (jamais commitée) l'événement AFTER_COMMIT ne part pas, le chemin reste
+        // donc NULL — exactement l'état de la fenêtre de génération en production.
+        org.junit.jupiter.api.Assertions.assertNull(
+                lettreRenvoiRepository.findById(id).orElseThrow().getCheminDocument(),
+                "la signature ne produit plus le document dans sa transaction");
+        // Le téléchargement conserve la régénération paresseuse : c'est lui qui pose le chemin ici.
+        mvc.perform(get("/api/lettre-renvois/" + id + "/document").header("Authorization", tokenCc))
                 .andExpect(status().isOk());
         String chemin = lettreRenvoiRepository.findById(id).orElseThrow().getCheminDocument();
         assertTrue(chemin != null && java.nio.file.Files.exists(java.nio.file.Path.of(chemin)),
                 "fichier PDF présent sur le FSX : " + chemin);
         assertTrue(chemin.endsWith("00007_DDP_CRM-ANT_LR_2026.pdf"),
                 "nom de fichier dérivé de refLettre avec '/' remplacés par '_'");
+    }
+
+    @Test
+    @DisplayName("Signature lettre : statut SIGNE et documentDisponible=false dès la réponse — la réponse n'attend jamais Word")
+    void lettre_signature_reponse_immediate_sans_document() throws Exception {
+        // Empêche que quelqu'un remette un jour la conversion Word dans la transaction de signature :
+        // la réponse doit décrire une lettre signée SANS document, et le front sait l'afficher ainsi
+        // (même contrat que PvExamenDto.documentDisponible pour un PV SIGNE).
+        int id = seedLettreSoumiseLoc(750, "ANT");
+        mvc.perform(post("/api/lettre-renvois/" + id + "/signer").header("Authorization", tokenCc))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statut").value("SIGNE"))
+                .andExpect(jsonPath("$.imSignataire").value("CTRCC1"))
+                .andExpect(jsonPath("$.documentDisponible").value(false));
+        mvc.perform(get("/api/lettre-renvois/" + id).header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statut").value("SIGNE"))
+                .andExpect(jsonPath("$.documentDisponible").value(false));
+    }
+
+    @Test
+    @DisplayName("Signature lettre : reste acquise même si la production du document est impossible — l'acte métier ne dépend plus de Word")
+    void lettre_signature_reste_acquise_si_generation_impossible() throws Exception {
+        // Invariant central du correctif du 2026-08-19. Avant, la conversion Word se faisait DANS la
+        // transaction : une machine sans Word, un plantage du convertisseur ou un FSX indisponible
+        // annulaient une signature pourtant valide. On sabote ici l'étape de stockage (le répertoire
+        // cible est un FICHIER : createDirectories échoue) — la signature doit malgré tout aboutir.
+        java.nio.file.Path fichierBloquant = java.nio.file.Files.createTempFile("prs-lr-impossible", ".lock");
+        Object cheminInitial = org.springframework.test.util.ReflectionTestUtils
+                .getField(lettreRenvoiDocumentService, "cheminStockageLr");
+        org.springframework.test.util.ReflectionTestUtils.setField(lettreRenvoiDocumentService,
+                "cheminStockageLr", fichierBloquant.toString());
+        int id = seedLettreSoumiseLoc(751, "ANT");
+        try {
+            mvc.perform(post("/api/lettre-renvois/" + id + "/signer").header("Authorization", tokenCc))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.statut").value("SIGNE"));
+            // La signature est acquise en base, et les effets de bord métier ont bien eu lieu.
+            org.junit.jupiter.api.Assertions.assertEquals("SIGNE",
+                    lettreRenvoiRepository.findById(id).orElseThrow().getStatut(),
+                    "la lettre reste SIGNE : aucune défaillance de production du document ne l'annule");
+            org.junit.jupiter.api.Assertions.assertEquals("EN_ATTENTE_PIECES",
+                    dossierRepository.findById(751).orElseThrow().getStatut(),
+                    "les effets métier de la signature (suspension de l'examen) sont eux aussi acquis");
+        } finally {
+            org.springframework.test.util.ReflectionTestUtils.setField(lettreRenvoiDocumentService,
+                    "cheminStockageLr", cheminInitial);
+            java.nio.file.Files.deleteIfExists(fichierBloquant);
+        }
+    }
+
+    @Test
+    @DisplayName("Document pendant la fenêtre de génération : GET /{id}/document sert quand même le PDF (régénération paresseuse) puis documentDisponible passe à true")
+    void lettre_document_pendant_fenetre_regenere() throws Exception {
+        // Le front actuel affiche le bouton PDF dès le statut SIGNE (il ne lit pas encore
+        // documentDisponible) : un clic pendant la fenêtre ne doit pas donner un 404, mais le PDF —
+        // lentement, comme la signature le faisait avant. C'est le filet qui rend le correctif
+        // invisible pour l'utilisateur tant que le front n'est pas aligné.
+        int id = seedLettreSoumiseLoc(752, "ANT");
+        mvc.perform(post("/api/lettre-renvois/" + id + "/signer").header("Authorization", tokenCc))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.documentDisponible").value(false));
+        mvc.perform(get("/api/lettre-renvois/" + id + "/document").header("Authorization", tokenCc))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.APPLICATION_PDF));
+        mvc.perform(get("/api/lettre-renvois/" + id).header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.documentDisponible").value(true));
+    }
+
+    @Test
+    @DisplayName("Document : lettre non signée → 404 (la régénération paresseuse ne fabrique pas le PDF d'un brouillon)")
+    void lettre_document_brouillon_404() throws Exception {
+        // Garde-fou de la régénération paresseuse ajoutée au téléchargement : elle ne doit servir que
+        // les lettres SIGNE. Sans cette condition, un brouillon deviendrait téléchargeable en PDF
+        // officiel — un document non signé qui a l'apparence d'un document signé.
+        int id = seedLettreSoumiseLoc(753, "ANT");   // statut SOUMIS
+        mvc.perform(get("/api/lettre-renvois/" + id + "/document").header("Authorization", tokenCc))
+                .andExpect(status().isNotFound());
     }
 
     @Test
