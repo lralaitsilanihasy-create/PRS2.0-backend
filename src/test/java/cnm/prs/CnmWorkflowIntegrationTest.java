@@ -702,10 +702,11 @@ class CnmWorkflowIntegrationTest {
     @Test
     @DisplayName("Notifications : /mes scopé, comptage non-lues, marquer lu (refus si pas la mienne), liste globale Admin-only")
     void notifications_meScopeLectureGlobalAdmin() throws Exception {
-        // 2 notifications pour CTRMEM, 1 pour CTRPRE (émises via le service ; ids 1, 2, 3).
-        notificationService.emettreControleur(TypeNotification.PRET_DISPATCH, "CTRMEM", null, 1, TypeObjet.DOSSIER, 1, "Notif 1", "corps");
+        // 2 notifications pour CTRMEM, 1 pour CTRPRE. Les ids sont RELUS sur les entités renvoyées :
+        // la PK vient de seq_notification, elle n'est plus 1/2/3 et ne doit plus être devinée ici.
+        var n1 = notificationService.emettreControleur(TypeNotification.PRET_DISPATCH, "CTRMEM", null, 1, TypeObjet.DOSSIER, 1, "Notif 1", "corps");
         notificationService.emettreControleur(TypeNotification.PRET_DISPATCH, "CTRMEM", null, 2, TypeObjet.DOSSIER, 2, "Notif 2", "corps");
-        notificationService.emettreControleur(TypeNotification.PRET_DISPATCH, "CTRPRE", null, 3, TypeObjet.DOSSIER, 1, "Notif 3", "corps");
+        var n3 = notificationService.emettreControleur(TypeNotification.PRET_DISPATCH, "CTRPRE", null, 3, TypeObjet.DOSSIER, 1, "Notif 3", "corps");
 
         // Scoping : CTRMEM voit ses 2, CTRPRE voit sa 1.
         mvc.perform(get("/api/notifications/mes").header("Authorization", tokenMembre))
@@ -717,14 +718,14 @@ class CnmWorkflowIntegrationTest {
         mvc.perform(get("/api/notifications/mes/non-lues/count").header("Authorization", tokenMembre))
                 .andExpect(jsonPath("$.nonLues").value(2));
 
-        // Marquer la notif 1 comme lue (CTRMEM) → lu=true ; le compteur descend à 1.
-        mvc.perform(post("/api/notifications/1/lu").header("Authorization", tokenMembre))
+        // Marquer la 1re notification de CTRMEM comme lue → lu=true ; le compteur descend à 1.
+        mvc.perform(post("/api/notifications/" + n1.getIdNotification() + "/lu").header("Authorization", tokenMembre))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.lu").value(true));
         mvc.perform(get("/api/notifications/mes/non-lues/count").header("Authorization", tokenMembre))
                 .andExpect(jsonPath("$.nonLues").value(1));
 
-        // Marquer la notif de CTRPRE (id 3) en tant que CTRMEM → 403.
-        mvc.perform(post("/api/notifications/3/lu").header("Authorization", tokenMembre))
+        // Marquer la notification de CTRPRE en tant que CTRMEM → 403.
+        mvc.perform(post("/api/notifications/" + n3.getIdNotification() + "/lu").header("Authorization", tokenMembre))
                 .andExpect(status().isForbidden());
 
         // Tout marquer lu (CTRMEM) → 1 restante traitée, puis 0 non-lue.
@@ -738,6 +739,38 @@ class CnmWorkflowIntegrationTest {
                 .andExpect(status().isForbidden());
         mvc.perform(get("/api/notifications").header("Authorization", tokenAdmin))
                 .andExpect(status().isOk());
+    }
+
+    /**
+     * La PK de notification était allouée par {@code max(ID_NOTIFICATION) + 1}. Une notification est
+     * presque toujours émise <em>dans la transaction métier de l'appelant</em> — validation, dispatch,
+     * rectification — et le projet ne pose aucun {@code Propagation.REQUIRES_NEW} : deux transitions
+     * simultanées lisaient le même maximum, et la violation d'unicité de la seconde annulait l'acte
+     * métier lui-même, pas seulement son avis.
+     *
+     * <p>⚠️ H2 ne rejoue pas la concurrence : ce test ne démontre pas l'absence de collision, il fige
+     * l'origine de la PK. {@code seq_notification} rend des valeurs hors de portée d'un comptage de
+     * lignes — un retour au {@code max+1} redonnerait 1 et 2 sur une table vide et échouerait ici.
+     */
+    @Test
+    @DisplayName("Notifications : PK allouée par seq_notification — plus de max(ID_NOTIFICATION)+1 dans la transaction de l'appelant")
+    void notification_pkServeur_vientDeLaSequence() throws Exception {
+        var n1 = notificationService.emettreControleur(TypeNotification.PRET_DISPATCH, "CTRMEM", null,
+                1, TypeObjet.DOSSIER, 1, "Notif A", "corps");
+        var n2 = notificationService.emettreControleur(TypeNotification.PRET_DISPATCH, "CTRMEM", null,
+                2, TypeObjet.DOSSIER, 2, "Notif B", "corps");
+
+        // Plage de seq_notification (START 500001 en test) : sur une table vide, max+1 aurait donné 1 et 2.
+        org.junit.jupiter.api.Assertions.assertTrue(n1.getIdNotification() >= 500001,
+                "idNotification hors de la plage de seq_notification : " + n1.getIdNotification());
+        org.junit.jupiter.api.Assertions.assertTrue(n2.getIdNotification() >= 500001,
+                "idNotification hors de la plage de seq_notification : " + n2.getIdNotification());
+        org.junit.jupiter.api.Assertions.assertNotEquals(n1.getIdNotification(), n2.getIdNotification());
+
+        // L'id de la ressource exposée est bien celui de la séquence : le GET /mes le rend tel quel.
+        mvc.perform(get("/api/notifications/mes").header("Authorization", tokenMembre))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.titre=='Notif A')].idNotification", hasItem(n1.getIdNotification())));
     }
 
     @Test
@@ -1610,6 +1643,45 @@ class CnmWorkflowIntegrationTest {
     }
 
     /**
+     * L'id du journal était alloué par {@code max(ID_LOG) + 1}, lu <em>dans la transaction métier de
+     * l'appelant</em> — le projet ne pose aucun {@code Propagation.REQUIRES_NEW}. Deux écritures
+     * concurrentes lisaient donc le même maximum et inséraient la même PK : la violation d'unicité de
+     * la seconde annulait toute la transaction métier, et l'utilisateur voyait son dossier non validé
+     * pour un message de doublon qui ne décrivait pas son action.
+     *
+     * <p>⚠️ Ce test ne prouve pas l'absence de collision : H2 en transaction unique ne reproduit ni les
+     * séquences PostgreSQL sous charge ni les SQLSTATE réels. Il verrouille ce qui reste observable et
+     * qui suffit à empêcher le retour en arrière : la PK vient de {@code seq_audit_log}, elle n'est
+     * plus une fonction du contenu de la table. Un {@code max+1} redonnerait 1 puis 2 sur une table
+     * vide — l'assertion de plage échouerait aussitôt.
+     */
+    @Test
+    @DisplayName("Audit : PK du journal allouée par seq_audit_log — plus de max(ID_LOG)+1 dans la transaction de l'appelant")
+    void audit_pkServeur_vientDeLaSequence() throws Exception {
+        // Deux écritures API tracées par l'intercepteur → deux entrées de journal.
+        mvc.perform(post("/api/localites").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idLocalite\":\"TMS\",\"libelleLocalite\":\"Toamasina\"}"))
+                .andExpect(status().isCreated());
+        mvc.perform(post("/api/localites").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idLocalite\":\"FIA\",\"libelleLocalite\":\"Fianarantsoa\"}"))
+                .andExpect(status().isCreated());
+
+        String journal = mvc.perform(get("/api/audit-logs").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andReturn().getResponse().getContentAsString();
+
+        int id1 = com.jayway.jsonpath.JsonPath.read(journal, "$[0].idLog");
+        int id2 = com.jayway.jsonpath.JsonPath.read(journal, "$[1].idLog");
+        // Plage de seq_audit_log (START 400001 en test) : sur une table vide, max+1 aurait donné 1 et 2.
+        org.junit.jupiter.api.Assertions.assertTrue(id1 >= 400001, "idLog hors de la plage de seq_audit_log : " + id1);
+        org.junit.jupiter.api.Assertions.assertTrue(id2 >= 400001, "idLog hors de la plage de seq_audit_log : " + id2);
+        org.junit.jupiter.api.Assertions.assertNotEquals(id1, id2);
+    }
+
+    /**
      * Le journal d'audit est la pièce probante du contrôle : sans cette garde, un administrateur
      * pouvait, après une action litigieuse, réécrire l'entrée qui l'atteste et l'attribuer à un tiers
      * en remplaçant {@code imActeur} — la substitution ne laissant elle-même aucune trace, puisque
@@ -1625,10 +1697,18 @@ class CnmWorkflowIntegrationTest {
                 .content("{\"idLocalite\":\"TMS\",\"libelleLocalite\":\"Toamasina\"}"))
                 .andExpect(status().isCreated());
 
+        // L'id de l'entrée est LU dans le journal, jamais deviné : depuis que la PK vient de
+        // seq_audit_log, un « 1 » codé en dur ne désignerait plus aucune ligne — le 409 serait alors
+        // rendu sur une entrée inexistante et ne prouverait plus que l'entrée réelle est protégée.
+        String journal = mvc.perform(get("/api/audit-logs").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        int idLog = com.jayway.jsonpath.JsonPath.read(journal, "$[0].idLog");
+
         // Tentative de réattribution de l'action à un tiers (CTRMEM) — refusée avant toute écriture.
-        mvc.perform(put("/api/audit-logs/1").header("Authorization", tokenAdmin)
+        mvc.perform(put("/api/audit-logs/" + idLog).header("Authorization", tokenAdmin)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idLog\":1,\"dateAction\":\"2026-01-01T00:00:00\",\"imActeur\":\"CTRMEM\","
+                .content("{\"idLog\":" + idLog + ",\"dateAction\":\"2026-01-01T00:00:00\",\"imActeur\":\"CTRMEM\","
                         + "\"nomTable\":\"localites\",\"typeAction\":\"CREATE\"}"))
                 .andExpect(status().isConflict());
 

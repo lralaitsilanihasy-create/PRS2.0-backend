@@ -121,7 +121,7 @@ public class NotificationService {
     private Notification creer(TypeNotification type, String ref, String destType, String im, String email,
             Integer idObjet, String typeObjet, Integer idDossier, String titre, String corps) {
         Notification n = new Notification();
-        n.setIdNotification(repository.findMaxId() + 1);
+        n.setIdNotification(repository.nextIdNotification().intValue());   // PK serveur (seq_notification)
         n.setIdDossier(idDossier);
         n.setTypeNotif(type.name());
         n.setDestinataireRef(ref);

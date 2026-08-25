@@ -271,6 +271,13 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
     (`max+1`), id client **ignoré**. Motif : depuis que `GET /api/lots` et `GET /api/marche-previsions` sont
     **scopés au périmètre**, un client qui allouait son identifiant par `max()` sur la liste reçue — désormais
     partielle — visait mécaniquement l'enregistrement d'une **autre entité**, que l'écriture aurait **écrasé**.
+  - ⚠️ **Extension (2026-08-25) — journal d'audit et notifications.** Les PK **`t_audit_log`** (`seq_audit_log`)
+    et **`t_notification`** (`seq_notification`) sont elles aussi allouées par **séquence serveur**. Motif propre
+    à ces deux tables : elles sont écrites **à l'intérieur de la transaction métier de l'appelant** — le projet
+    ne pose aucun `Propagation.REQUIRES_NEW`. Avec un `max(id)+1`, deux acteurs agissant à la même seconde
+    lisaient le même maximum, et la violation d'unicité de la **seconde insertion annulait tout l'acte métier** :
+    le dossier n'était pas validé, et l'utilisateur recevait un message de doublon sans rapport avec son action.
+    L'échec ne restait donc pas confiné à la trace ou à l'avis, il **emportait l'opération qu'il accompagnait**.
 - Suppression d'un marché / d'un PPM [Écriture]
   - ⚠️ **Règle ajoutée** : possible **uniquement** si le **dossier rattaché est en BROUILLON** et **propriété** de la PRMP (sinon **403** « Vous n'êtes pas le propriétaire… » / **409** « Opération impossible : le dossier n'est pas un brouillon »). Supprimer un **marché** efface **en cascade** ses **dates prévisionnelles** (`t_marche_prevision`) ; supprimer un **PPM** efface **en cascade** ses **marchés** et leurs prévisions — le tout dans la **même transaction** (la cascade ne touche **que** les enfants de la cible). *(Côté SGBD, un filet de sécurité distingue désormais les violations FK / doublon / valeur obligatoire.)*
 

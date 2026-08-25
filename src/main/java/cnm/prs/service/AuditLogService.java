@@ -82,7 +82,7 @@ public class AuditLogService {
     public void enregistrer(String imActeur, String nomTable, String idEnregistrement,
             String typeAction, String ipAdresse) {
         AuditLog log = new AuditLog();
-        log.setIdLog(repository.findMaxId() + 1);
+        log.setIdLog(repository.nextIdAuditLog());   // PK serveur (seq_audit_log)
         log.setDateAction(LocalDateTime.now());
         log.setImActeur(imActeur);
         log.setNomTable(nomTable);
