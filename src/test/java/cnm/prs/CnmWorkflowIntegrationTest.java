@@ -6669,6 +6669,47 @@ class CnmWorkflowIntegrationTest {
                 .andExpect(jsonPath("$.path").value("/api/dossiers"));
     }
 
+    /**
+     * Même famille de défaut que le 405 ci-dessus, et pour la même raison : une exception MVC de Spring
+     * qu'aucun {@code @ExceptionHandler} ne déclarait tombait dans le filet {@code Exception.class} du
+     * GlobalExceptionHandler et sortait en <strong>500 générique</strong>. Ici la faute est entièrement du
+     * côté de l'appelant — un paramètre du mauvais type — et le message générique du 500 ne lui dit ni
+     * quel paramètre, ni ce qui était attendu : il ne peut pas corriger, et croit le serveur en panne.
+     *
+     * <p>Le test couvre les trois liaisons réellement exposées par l'API (entier, booléen, date) sur trois
+     * contrôleurs distincts, parce que le défaut n'était pas propre à une route : il portait sur tout
+     * paramètre typé du projet. Il vérifie aussi que le corps garde la forme {@code erreurs[]} des autres
+     * 400 — sans quoi le front devrait écrire un second chemin de traitement pour la même classe d'erreur.</p>
+     */
+    @Test
+    @DisplayName("Parametre de requete du mauvais type -> 400 nommant le parametre, jamais 500")
+    void parametreMauvaisType_400NommantLeParametre() throws Exception {
+        // Entier : ?ppm= sur /api/marches.
+        mvc.perform(get("/api/marches?ppm=abc").header("Authorization", tokenPrmp))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.erreurs", hasSize(1)))
+                .andExpect(jsonPath("$.erreurs[0].champ").value("ppm"))
+                .andExpect(jsonPath("$.erreurs[0].message", containsString("numérique")));
+
+        // Booléen : ?lu= sur /api/notifications/mes. « oui » est le piège naturel d'un client francophone.
+        mvc.perform(get("/api/notifications/mes?lu=oui").header("Authorization", tokenPrmp))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[0].champ").value("lu"))
+                .andExpect(jsonPath("$.erreurs[0].message", containsString("true")));
+
+        // Variable de chemin : /api/marches/{id} attend un entier — même exception, même traitement.
+        mvc.perform(get("/api/marches/abc").header("Authorization", tokenPrmp))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[0].champ").value("id"));
+
+        // Le message général reste exploitable et le chemin appelé est bien reporté (enveloppe ErrorResponse).
+        mvc.perform(get("/api/capm?mode=tous").header("Authorization", tokenPrmp))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.path").value("/api/capm"))
+                .andExpect(jsonPath("$.message", containsString("mode")));
+    }
+
     @Test
     @DisplayName("PV projets vs definitifs : un PV signe quitte /pv-examens et apparait dans /pv-examens/definitifs")
     void pv_projets_et_definitifs() throws Exception {
@@ -10374,6 +10415,121 @@ class CnmWorkflowIntegrationTest {
                 .andExpect(jsonPath("$.content[?(@.idDossier==9614)]", hasSize(0)));
     }
 
+    /**
+     * La recherche par référence de la barre supérieure faisait un {@code forkJoin} sur la liste des
+     * dossiers ET celle des PPM — deux tables complètes — à chaque soumission, pour retrouver UNE
+     * référence. {@code ?reference=} descend ce travail côté serveur, sur les deux ressources : la
+     * recherche interroge les deux parce qu'un dossier sans {@code refeDossier} s'affiche sous la
+     * référence de son PPM.
+     *
+     * <p>La comparaison est une <strong>sous-chaîne insensible à la casse</strong>, et non une égalité :
+     * le front compare par {@code includes()} sur la valeur repliée en minuscules, et l'utilisateur saisit
+     * un fragment. Une égalité exacte aurait rendu un contrat plus strict et une fonction morte — d'où
+     * l'assertion sur le fragment, qui périrait si quelqu'un « resserrait » le filtre en {@code equals}.</p>
+     *
+     * <p>Les deux invariants du motif de filtrage sont vérifiés comme pour {@code ?brouillon=} : le filtre
+     * s'applique <strong>dans</strong> le périmètre (jamais à sa place — c'est le point sensible ici,
+     * puisqu'une référence connue suffirait sinon à lire le dossier d'une autre PRMP) et <strong>avant</strong>
+     * le découpage en page, sans quoi {@code totalElements} compterait des lignes que l'écran n'affiche pas.</p>
+     */
+    @Test
+    @DisplayName("GET /api/dossiers et /api/ppms : filtre ?reference= (sous-chaîne, casse indifférente), "
+            + "dans le périmètre et AVANT la pagination ; absent → réponse inchangée")
+    void filtreReference_dossiersEtPpms_dansLePerimetreEtAvantPagination() throws Exception {
+        prmpRepository.save(prmp("PRMP002", "ANT"));
+        String tokenPrmp2 = bearer("PRMP002", ProfilUtilisateur.PRMP, TypeActeur.PRMP, "PRMP002", "ANT");
+
+        Dossier a = dossierLoc(9660, "SOUMIS", "ANT", "PRMP001"); a.setIdTypeDossier("DDP");
+        a.setRefeDossier("DOS-2026-ALPHA-001");
+        Dossier b = dossierLoc(9661, "BROUILLON", "ANT", "PRMP001"); b.setIdTypeDossier("DDP");
+        b.setRefeDossier("DOS-2026-ALPHA-002");
+        Dossier c = dossierLoc(9662, "SOUMIS", "ANT", "PRMP001"); c.setIdTypeDossier("DMC");
+        c.setRefeDossier("DOS-2026-BETA-001");
+        // Même référence, autre PRMP : le piège du sujet. Une référence connue ne doit pas ouvrir un dossier
+        // hors périmètre — le filtre restreint, il n'autorise pas.
+        Dossier intrus = dossierLoc(9663, "SOUMIS", "ANT", "PRMP002"); intrus.setIdTypeDossier("DDP");
+        intrus.setRefeDossier("DOS-2026-ALPHA-003");
+        dossierRepository.saveAll(java.util.List.of(a, b, c, intrus));
+
+        Ppm p1 = ppm(9670, 9660, "PRMP001"); p1.setReference("PPM-2026-ALPHA");
+        Ppm p2 = ppm(9671, 9662, "PRMP001"); p2.setReference("PPM-2026-BETA");
+        Ppm pIntrus = ppm(9672, 9663, "PRMP002"); pIntrus.setReference("PPM-2026-ALPHA-BIS");
+        ppmRepository.saveAll(java.util.List.of(p1, p2, pIntrus));
+
+        // 1) NON-RÉGRESSION : sans le paramètre, les deux listes sont strictement celles d'avant.
+        mvc.perform(get("/api/dossiers").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idDossier==9660)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idDossier==9662)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idDossier==9663)]", hasSize(0)));
+        mvc.perform(get("/api/ppms").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idPpm==9670)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idPpm==9671)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idPpm==9672)]", hasSize(0)));
+
+        // 2) SEUL : sous-chaîne, et non égalité — « ALPHA » n'est la référence complète d'aucun dossier.
+        mvc.perform(get("/api/dossiers?reference=ALPHA").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(2)))
+                .andExpect(jsonPath("$[?(@.idDossier==9660)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idDossier==9661)]", hasSize(1)));
+        // Casse indifférente : le front replie la saisie en minuscules, le serveur doit faire de même.
+        mvc.perform(get("/api/dossiers?reference=alpha-001").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].idDossier").value(9660));
+        mvc.perform(get("/api/ppms?reference=beta").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].idPpm").value(9671));
+
+        // 3) PÉRIMÈTRE : PRMP001 connaît la référence de PRMP002 — elle ne la lui ouvre pas.
+        mvc.perform(get("/api/dossiers?reference=DOS-2026-ALPHA-003").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+        mvc.perform(get("/api/ppms?reference=PPM-2026-ALPHA-BIS").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+        // Symétrique : PRMP002 cherchant le même fragment ne voit que le sien.
+        mvc.perform(get("/api/dossiers?reference=ALPHA").header("Authorization", tokenPrmp2))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].idDossier").value(9663));
+
+        // 4) COMBINÉ en ET avec les filtres existants — pas de remplacement, pas d'union.
+        mvc.perform(get("/api/dossiers?reference=ALPHA&brouillon=false").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].idDossier").value(9660));
+        mvc.perform(get("/api/dossiers?reference=BETA&type=DDP").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));   // BETA existe, mais en DMC : conjonction vide
+        mvc.perform(get("/api/dossiers?reference=BETA&type=DMC").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].idDossier").value(9662));
+
+        // 5) Sans correspondance → liste vide, pas 400 : une référence est du texte libre.
+        mvc.perform(get("/api/dossiers?reference=INEXISTANT").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+        // Valeur vide = pas de filtre (le champ de recherche vidé ne doit pas masquer la liste).
+        mvc.perform(get("/api/dossiers?reference=").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idDossier==9662)]", hasSize(1)));
+
+        // 6) PAGINÉ : le découpage porte sur l'ensemble DÉJÀ filtré — totalElements compte 2, pas le périmètre.
+        mvc.perform(get("/api/dossiers?reference=ALPHA&page=0&size=1").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content", hasSize(1)))
+                .andExpect(jsonPath("$.totalElements").value(2));
+        mvc.perform(get("/api/ppms?reference=ALPHA&page=0&size=10").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].idPpm").value(9670));
+    }
+
     @Test
     @DisplayName("Grille d'examen par sous-type : PPM = points communs seuls ; PPM-AGPM = communs + spécifique ; gardes 400")
     void grilleExamen_parSousType() throws Exception {
@@ -11426,6 +11582,64 @@ class CnmWorkflowIntegrationTest {
         mvc.perform(post("/api/lots").header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDossier\":301,\"idDetail\":901,\"designationLot\":\"Intrusion\"}"))
+                .andExpect(status().isForbidden());
+    }
+
+    /**
+     * {@code MarchePrevisionDto.idPrevision} portait encore {@code @NotNull}, hérité de l'époque où la PK
+     * était assignée par le client. Depuis le passage aux séquences le serveur l'écrase : le client était
+     * donc refusé en 400 sur un champ dont la valeur n'allait pas être utilisée, et devait inventer un
+     * nombre quelconque pour que sa requête passe. Ce test fige la seule règle qui vaille pour une
+     * ressource du régime 1 — l'absence de l'identifiant est acceptée, l'identifiant réel vient de la
+     * séquence — et vérifie qu'aucune autre validation n'a été emportée avec la contrainte retirée :
+     * {@code idDetail}, {@code idCapm} et {@code dateDebut} restent obligatoires, et le périmètre du
+     * marché visé reste contrôlé. Sans cette dernière assertion, assouplir le contrat pourrait ouvrir
+     * une porte au lieu d'en fermer une.
+     */
+    @Test
+    @DisplayName("Prévision sans idPrevision : acceptée, la PK venant de la séquence — les autres champs restent obligatoires")
+    void prevision_sansIdentifiant_accepteeEtPkServeur() throws Exception {
+        String tokenPrmp2 = seedDeuxMarchesDeDeuxPrmp();
+        capmRepository.save(new Capm(1, "LANCEMENT", 1, null, null));
+
+        // Aucun idPrevision dans le corps : le serveur alloue et renvoie l'id réel.
+        String cree = mvc.perform(post("/api/marche-previsions").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDetail\":900,\"idCapm\":1,\"dateDebut\":\"2026-03-01\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.idPrevision").exists())
+                .andReturn().getResponse().getContentAsString();
+        int idPrev = com.jayway.jsonpath.JsonPath.read(cree, "$.idPrevision");
+        assertTrue(marchePrevisionRepository.existsById(idPrev),
+                "l'id renvoyé doit désigner la ligne réellement écrite");
+
+        // Explicitement null : même traitement — l'appelant n'a plus à inventer de nombre.
+        mvc.perform(post("/api/marche-previsions").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idPrevision\":null,\"idDetail\":900,\"idCapm\":1,\"dateDebut\":\"2026-04-01\"}"))
+                .andExpect(status().isCreated());
+
+        // Ce qui reste obligatoire l'est toujours : le 400 n'a pas disparu, il a changé de motif.
+        mvc.perform(post("/api/marche-previsions").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idCapm\":1,\"dateDebut\":\"2026-03-01\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[?(@.champ=='idDetail')]", hasSize(1)));
+        mvc.perform(post("/api/marche-previsions").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDetail\":900,\"dateDebut\":\"2026-03-01\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[?(@.champ=='idCapm')]", hasSize(1)));
+        mvc.perform(post("/api/marche-previsions").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDetail\":900,\"idCapm\":1}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[?(@.champ=='dateDebut')]", hasSize(1)));
+
+        // L'assouplissement ne relâche pas le périmètre : sans id à fournir, le marché visé reste contrôlé.
+        mvc.perform(post("/api/marche-previsions").header("Authorization", tokenPrmp2)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDetail\":900,\"idCapm\":1,\"dateDebut\":\"2026-03-01\"}"))
                 .andExpect(status().isForbidden());
     }
 

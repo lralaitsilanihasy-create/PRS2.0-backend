@@ -105,6 +105,59 @@ public class GlobalExceptionHandler {
                 .body(reponse.getBody());
     }
 
+    /**
+     * Paramètre de requête (ou variable de chemin) d'un <strong>type incompatible</strong> —
+     * {@code ?ppm=abc} sur un {@code Integer}, {@code ?lu=oui} sur un {@code Boolean},
+     * {@code ?from=hier} sur une date → <strong>400</strong> nommant le paramètre et le type attendu.
+     *
+     * <p>⚠️ Correction (2026-08-25) — <em>même famille de défaut que le 405 traité ci-dessus</em> :
+     * {@link org.springframework.web.method.annotation.MethodArgumentTypeMismatchException} est une
+     * exception MVC de Spring, mais aucun gestionnaire ne la déclarait ici — elle tombait donc dans le
+     * {@code @ExceptionHandler(Exception.class)} de cette classe, <em>avant</em> le résolveur par défaut,
+     * et l'API répondait <strong>500 générique</strong>. L'appelant apprenait que le serveur avait planté
+     * alors qu'il avait simplement mal formé sa requête : rien dans la réponse ne lui permettait de
+     * corriger, et un moniteur de disponibilité comptait une 5xx à chaque paramètre mal tapé.</p>
+     *
+     * <p>La forme reste celle des autres 400 : message général, détail dans {@code erreurs[]} —
+     * {@code champ} = le nom du paramètre tel qu'il figure dans l'URL, {@code message} = le type attendu.
+     * Le front traite donc cette erreur avec le même code que celles de {@code @Valid}.</p>
+     */
+    @ExceptionHandler(org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleTypeMismatch(
+            org.springframework.web.method.annotation.MethodArgumentTypeMismatchException ex, WebRequest request) {
+        String nom = ex.getName();
+        List<ErrorResponse.FieldError> erreurs =
+                List.of(new ErrorResponse.FieldError(nom, attenduPour(ex.getRequiredType())));
+        return build(HttpStatus.BAD_REQUEST,
+                "Paramètre « " + nom + " » invalide : valeur du mauvais type.", request, erreurs);
+    }
+
+    /**
+     * Libellé du type attendu par un paramètre. Pour une énumération, les valeurs admises sont
+     * <strong>énumérées</strong> : c'est la seule information qui permette à l'appelant de corriger sans
+     * consulter la documentation — et c'est déjà ce que font les 400 métier ({@code ?statut=} inconnu).
+     * Le type peut être {@code null} (Spring ne le renseigne pas toujours) : repli générique.
+     */
+    private static String attenduPour(Class<?> type) {
+        if (type == null) {
+            return "Valeur du mauvais type pour ce paramètre.";
+        }
+        if (type.isEnum()) {
+            return "Valeur attendue parmi : " + java.util.Arrays.toString(type.getEnumConstants()) + ".";
+        }
+        if (Boolean.class.equals(type) || boolean.class.equals(type)) {
+            return "Valeur booléenne attendue : true ou false.";
+        }
+        if (Number.class.isAssignableFrom(type) || (type.isPrimitive() && !char.class.equals(type))) {
+            return "Valeur numérique attendue.";
+        }
+        if (java.time.temporal.Temporal.class.isAssignableFrom(type)
+                || java.util.Date.class.isAssignableFrom(type)) {
+            return "Date invalide : format attendu AAAA-MM-JJ.";
+        }
+        return "Valeur du mauvais type pour ce paramètre.";
+    }
+
     @ExceptionHandler(ChampsInvalidesException.class)
     public ResponseEntity<ErrorResponse> handleChampsInvalides(ChampsInvalidesException ex, WebRequest request) {
         return build(HttpStatus.BAD_REQUEST, ex.getMessage(), request, ex.getErreurs());

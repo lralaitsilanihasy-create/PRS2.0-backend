@@ -84,10 +84,9 @@ attend **toujours** un `idEntiteContract` fourni par le client, et relève donc 
 renvoie **400** (« L'identifiant (clé primaire) est obligatoire à la création »). Les exemples de
 requête de ces ressources incluent donc toujours l'identifiant.
 
-> **Exception isolée** — `/api/marche-previsions` relève du régime 1 (valeur **ignorée**), mais
-> `idPrevision` porte encore `@NotNull` dans son DTO : l'omettre renvoie **400** alors même que la
-> valeur envoyée ne sera pas utilisée. Il faut donc envoyer un nombre quelconque. Les onze autres
-> ressources du régime 1 acceptent l'**absence** du champ.
+> **Sans réserve** (2026-08-25) — les **douze** ressources du régime 1 acceptent l'**absence** du champ
+> identifiant à la création. `/api/marche-previsions` faisait exception (`idPrevision` portait encore
+> `@NotNull`, hérité de la PK assignée) : la contrainte est retirée, il n'y a plus de cas particulier.
 
 ### Visibilité par localité
 Pour les ressources du circuit (`dossiers`, `receptions`, `dispatchs`, `examens`, `pv-examens`,
@@ -181,6 +180,7 @@ quand ils surviennent (mapping centralisé dans `GlobalExceptionHandler`). Côt�
 | **Corps illisible / mal formé** (`HttpMessageNotReadableException`) | JSON invalide, mauvais **type** (ex. `idEntiteContract` envoyé en **libellé** au lieu de l'id) ou **date hors ISO** `AAAA-MM-JJ` (ex. `23/06/2026`) | `message` = « Corps de requête invalide ou mal formé. » + **`erreurs`** `[{ champ, message }]` indiquant le **champ fautif** (ex. `dateSignature`, `marches[0].dateFin`) |
 | **Identifiant de création manquant** | POST de création sans la clé primaire, sur une ressource du **régime 2** (PK assignée par le client — cf. *Clés primaires* ; les ressources du **régime 1** allouent la PK par séquence et **ignorent** l'id envoyé) | « L'identifiant (clé primaire) est obligatoire à la création… » |
 | **Valeur trop longue en base** (`SQLSTATE 22001`) | une valeur dépasse la longueur de sa colonne alors qu'aucun `@Size` ne l'avait arrêtée en amont | `message` = « Valeur trop longue pour un champ de cette ressource. » + **`erreurs`** nommant le champ **quand le pilote cite la colonne** (H2 le fait, PostgreSQL non — le **400** reste rendu dans les deux cas) |
+| **Paramètre de requête du mauvais type** (`MethodArgumentTypeMismatchException`) | un paramètre d'URL ou une variable de chemin ne se convertit pas dans le type attendu : `?ppm=abc` (entier), `?lu=oui` (booléen — écrire `true`/`false`), `?from=hier` (date), `/api/marches/abc` | `message` = « Paramètre « *nom* » invalide : valeur du mauvais type. » + **`erreurs`** `[{ champ, message }]` où `champ` = le **nom du paramètre** et `message` = le **type attendu** (les valeurs admises sont énumérées pour une énumération) |
 | **Règle d'entrée métier** (`BadRequestException`) | ex. `POST /api/mon-compte/changer-mot-de-passe` avec ancien mot de passe incorrect ou nouveau identique à l'ancien ; `POST /api/marches` quand la **localité du dossier** est introuvable (mode indéterminable) | message explicite |
 
 #### 403 — Forbidden *(authentifié mais non autorisé ; ne pas réessayer tel quel)*
@@ -1212,7 +1212,7 @@ relation **1,N** : un point de contrôle a **0..N** lignes. Remplace l'ancien ch
 
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
-| GET | /api/dossiers | — | `DossierDto[]` | 200, 400 | Authentifié (filtré ; les BROUILLON sont masqués aux **contrôleurs**, mais servis à leur **PRMP** et à l'**Administrateur**) — filtres `?statut=` `&type=` `&sousType=` `&brouillon=` ; ⚠️ **paginable** (`?page=&size=` → enveloppe `Page`, cf. Conventions) |
+| GET | /api/dossiers | — | `DossierDto[]` | 200, 400 | Authentifié (filtré ; les BROUILLON sont masqués aux **contrôleurs**, mais servis à leur **PRMP** et à l'**Administrateur**) — filtres `?statut=` `&type=` `&sousType=` `&brouillon=` `&reference=` ; ⚠️ **paginable** (`?page=&size=` → enveloppe `Page`, cf. Conventions) |
 | GET | /api/dossiers/a-receptionner | — | `DossierDto[]` | 200, 403 | `SECRETAIRE` (titulaire/délégué) ou `ADMINISTRATEUR` |
 | GET | /api/dossiers/a-examiner | — | `DossierDto[]` | 200, 403 | `MEMBRE` (titulaire/délégué) ou `ADMINISTRATEUR` |
 | GET | /api/dossiers/examines | — | `Page<DossierDto>` | 200, 403 | `MEMBRE` (titulaire/délégué) ou `ADMINISTRATEUR` |
@@ -1261,8 +1261,10 @@ relation **1,N** : un point de contrôle a **0..N** lignes. Remplace l'ancien ch
 > `EXAMINE`, `CLOTURE`, `EN_ATTENTE_DECISION_PRMP`… en font partie ; un `statut` nul compte comme
 > non-brouillon, même convention que le dénominateur `compterSoumis`). **Facultatif : absent, la réponse est
 > strictement inchangée.** Toute autre valeur (`?brouillon=oui`) → **400** nommant les valeurs admises — le
-> paramètre est volontairement lu en `String` et converti en service, un `Boolean` lié par Spring donnant un
-> **500 opaque** sur valeur non convertible.
+> paramètre est volontairement lu en `String` et converti en service, pour rendre un message *métier*
+> (`true` / `false` et ce qu'ils signifient) là où un `Boolean` lié par Spring ne dirait que « valeur
+> booléenne attendue ». *(Un `Boolean` donnait un **500 opaque** jusqu'au 2026-08-25 ; depuis, ce cas rend
+> lui aussi un 400 — cf. « Paramètre de requête du mauvais type » dans le détail des erreurs 400.)*
 >
 > Combinable avec `?statut=`, `?type=` et `?sousType=` : les filtres se **cumulent** (ET). Une combinaison
 > contradictoire (`?statut=BROUILLON&brouillon=false`) renvoie donc une **liste vide**, et non une 400.
@@ -1282,6 +1284,27 @@ relation **1,N** : un point de contrôle a **0..N** lignes. Remplace l'ancien ch
 > reste le même. Une pagination SQL supposerait de descendre les filtres de visibilité (localité, PRMP
 > propriétaire), aujourd'hui appliqués en Java, dans les requêtes JPQL : chantier de conception distinct,
 > non entrepris ici.
+
+> 📌 **Filtre `?reference=` (règle ajoutée 2026-08-25) — `GET /api/dossiers` ET `GET /api/ppms`.**
+> Restreint la liste aux enregistrements dont la référence **contient** la valeur : `t_dossier.REFE_DOSSIER`
+> côté dossiers, `t_ppm.REFERENCE` côté PPM. **Sous-chaîne, insensible à la casse** — *pas* une égalité :
+> l'utilisateur saisit un fragment (`ALPHA`), jamais la référence complète au caractère près.
+> **Facultatif : absent ou vide, la réponse est strictement inchangée.** Aucune valeur n'est rejetée — une
+> référence est du texte libre, une saisie sans correspondance rend une **liste vide** (200), pas un 400.
+>
+> Mêmes règles que les autres filtres : **cumulable en ET** (`?reference=ALPHA&brouillon=false`), appliqué
+> **à l'intérieur** du périmètre de visibilité (§1) et **avant** le découpage en page. Connaître la
+> référence d'un dossier d'une **autre** PRMP ne l'ouvre donc pas : le filtre restreint, il n'autorise pas.
+>
+> **Origine.** La recherche par référence de la barre supérieure (`main-layout`) faisait un `forkJoin` sur
+> `GET /api/dossiers` **et** `GET /api/ppms` — **deux tables complètes** — à chaque soumission du
+> formulaire, pour retrouver **une** référence par sous-chaîne. Elle interroge les deux ressources parce
+> qu'un dossier sans `refeDossier` s'affiche sous la référence de son PPM ; les deux appels subsistent
+> donc, mais filtrés (`?reference=`), et ne ramènent plus que les lignes utiles. Sur une correspondance
+> venue du **PPM**, le front dispose de `idDossier` et lit le dossier par `GET /api/dossiers/{id}`.
+>
+> ⚠️ Comme `?brouillon=`, le gain porte sur le **transfert réseau**, pas sur la charge base : la liste
+> scopée est constituée puis filtrée en Java.
 
 > 📌 **Écran « Dossiers à rectifier » (PRMP).** Il n'existe **pas** d'endpoint dédié : la liste est alimentée
 > par le **filtre serveur** existant `GET /api/dossiers?statut=EN_ATTENTE_DECISION_PRMP` (scopé à la PRMP),
@@ -3104,8 +3127,8 @@ marché → **409** (unicité). Au **changement de mode** d'un marché, si son D
 (`t_marche_prevision.ID_DETAIL`, correction de sécurité) : **mêmes règles que `/api/lots`** — lecture scopée comme
 `GET /api/marches`, **403** sur une prévision ou un `?marche=` hors périmètre, **écriture réservée `PRMP`/`UGPM`**
 (le calendrier prévisionnel est la parole de la PRMP ; le circuit le lit pour examiner, ne le modifie pas) et
-contrôlée sur le marché visé. `idPrevision` est **alloué par le serveur** (`max+1`) ; tout id envoyé par le client
-est **ignoré**.
+contrôlée sur le marché visé. `idPrevision` est **alloué par le serveur** (séquence `seq_marche_prevision`) ; tout id
+envoyé par le client est **ignoré**, et le champ peut être **omis** du corps.
 
 Dates prévisionnelles d'un marché, en relation **1,N** avec `/api/marches` : **une ligne par
 processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) et une `dateFin`
@@ -3116,7 +3139,7 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 
 | Champ (JSON) | Type | Obligatoire | Contraintes |
 |---|---|---|---|
-| idPrevision | number | Oui (@NotNull) | ⚠️ **valeur ignorée** : PK **allouée serveur** ; renvoyée dans la réponse |
+| idPrevision | number | **Non** | ⚠️ **valeur ignorée** : PK **allouée serveur** (`seq_marche_prevision`) ; l'**omettre** est accepté, l'id réel est renvoyé dans la réponse |
 | idDetail | number | Oui | @NotNull — FK vers le marché |
 | idCapm | number | Oui | @NotNull — FK vers `t_capm` (processus) |
 | dateDebut | string (date) | Oui | @NotNull — `yyyy-MM-dd` |
@@ -3603,7 +3626,7 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
-| GET | /api/ppms | — | `PpmDto[]` (scopé) | 200 | Authentifié — ⚠️ **paginable** (`?page=&size=`, cf. Conventions) |
+| GET | /api/ppms | — | `PpmDto[]` (scopé) | 200 | Authentifié — filtre `?reference=` (**sous-chaîne**, casse indifférente, sur `t_ppm.REFERENCE` ; facultatif, dans le périmètre, avant la pagination — cf. le 📌 du même filtre sous *Dossiers*) ; ⚠️ **paginable** (`?page=&size=`, cf. Conventions) |
 | GET | /api/ppms/{id} | — | `PpmDto` | 200, 403, 404 | Authentifié (dans son périmètre) |
 | POST | /api/ppms | `PpmDto` | `PpmDto` | 201, 400 | Authentifié |
 | PUT | /api/ppms/{id} | `PpmDto` | `PpmDto` | 200, 400, 404 | Authentifié |

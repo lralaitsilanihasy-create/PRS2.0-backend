@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.security.access.prepost.PreAuthorize;
 
@@ -36,16 +37,26 @@ public class PpmController {
         this.service = service;
     }
 
-    /** ⚠️ Audit front (2026-08-16) — même liste, paginée ({@code ?page=&size=}) ; sans {@code page}, liste plate. */
+    /**
+     * ⚠️ Audit front (2026-08-16) — même liste, paginée ({@code ?page=&size=}) ; sans {@code page}, liste plate.
+     *
+     * <p>⚠️ Audit front (2026-08-25) — {@code reference} (facultatif) restreint aux PPM dont la référence
+     * <strong>contient</strong> la valeur, casse indifférente. Symétrique du même paramètre sur
+     * {@code /api/dossiers} : la recherche de la barre supérieure interroge les deux ressources, parce
+     * qu'un dossier sans {@code refeDossier} s'affiche sous la référence de son PPM. Le filtre s'applique
+     * dans le périmètre de visibilité et <strong>avant</strong> le découpage ; absent, réponse inchangée.</p>
+     */
     @GetMapping(params = "page")
     public org.springframework.data.domain.Page<PpmDto> findAllPagine(
+            @RequestParam(required = false) String reference,
             org.springframework.data.domain.Pageable pageable) {
-        return service.findAllPagine(pageable);
+        return service.findAllPagine(reference, pageable);
     }
 
+    /** Liste plate, même filtre {@code reference} facultatif (compatibilité : sans lui, inchangée). */
     @GetMapping
-    public List<PpmDto> findAll() {
-        return service.findAll();
+    public List<PpmDto> findAll(@RequestParam(required = false) String reference) {
+        return service.findAll(reference);
     }
 
     @GetMapping("/{id}")

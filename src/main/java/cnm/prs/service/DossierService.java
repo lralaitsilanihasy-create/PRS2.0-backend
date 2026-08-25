@@ -147,6 +147,8 @@ public class DossierService {
      * @param sousType  filtre sur le sous-type ({@code tr_sous_type_dossier}) ; {@code null}/vide = tous
      * @param brouillon {@code "true"} = BROUILLON seuls ; {@code "false"} = <strong>tout sauf</strong>
      *                  BROUILLON ; {@code null}/vide = les deux (comportement historique)
+     * @param reference filtre sur {@code t_dossier.REFE_DOSSIER} — <strong>sous-chaîne, insensible à la
+     *                  casse</strong> ; {@code null}/vide = toutes (voir {@link #contientReference})
      * @throws BadRequestException si un filtre fourni n'est pas une valeur connue (→ 400)
      */
     /**
@@ -160,22 +162,54 @@ public class DossierService {
      */
     @Transactional(readOnly = true)
     public Page<DossierDto> findAllPagine(String statut, String type, String sousType, String brouillon,
-            Pageable pageable) {
-        return Pagination.depuisListe(findAll(statut, type, sousType, brouillon), pageable);
+            String reference, Pageable pageable) {
+        return Pagination.depuisListe(findAll(statut, type, sousType, brouillon, reference), pageable);
     }
 
     @Transactional(readOnly = true)
-    public List<DossierDto> findAll(String statut, String type, String sousType, String brouillon) {
+    public List<DossierDto> findAll(String statut, String type, String sousType, String brouillon,
+            String reference) {
         String filtre = normaliserStatut(statut);
         String filtreType = normaliserType(type);
         String filtreSousType = normaliserSousType(sousType);
         Boolean filtreBrouillon = normaliserBrouillon(brouillon);
+        String filtreReference = normaliserReference(reference);
         return enrichir(chargerScopees(filtre).stream()
                 // Filtres famille / sous-type appliqués côté serveur, après le scoping (volumes déjà réduits).
                 .filter(d -> filtreType == null || filtreType.equals(d.getIdTypeDossier()))
                 .filter(d -> filtreSousType == null || filtreSousType.equals(d.getIdSousType()))
                 .filter(d -> filtreBrouillon == null || filtreBrouillon == estBrouillon(d))
+                .filter(d -> filtreReference == null || contientReference(d.getRefeDossier(), filtreReference))
                 .map(DossierMapper::toDto).toList());
+    }
+
+    /**
+     * Normalise le filtre {@code ?reference=} : {@code null}/vide = pas de filtre. La comparaison étant
+     * insensible à la casse, la saisie est repliée en minuscules une seule fois ici plutôt qu'à chaque
+     * ligne comparée.
+     *
+     * <p>Aucune valeur n'est <strong>rejetée</strong> : une référence est du texte libre, il n'existe pas
+     * de « valeur invalide » à signaler par un 400 comme pour {@code statut} ou {@code type}. Une saisie
+     * qui ne correspond à rien rend simplement une liste vide — c'est une réponse, pas une erreur.</p>
+     */
+    private static String normaliserReference(String reference) {
+        if (reference == null || reference.isBlank()) {
+            return null;
+        }
+        return reference.trim().toLowerCase(java.util.Locale.ROOT);
+    }
+
+    /**
+     * Comparaison du filtre de référence : <strong>sous-chaîne, insensible à la casse</strong>.
+     *
+     * <p>⚠️ La sémantique n'est pas arbitraire. Ce filtre existe pour que la recherche de la barre
+     * supérieure cesse de télécharger la table des dossiers et celle des PPM à chaque soumission ; or
+     * cette recherche compare aujourd'hui par {@code includes()} sur la référence repliée en minuscules.
+     * Une égalité exacte aurait été un contrat plus strict — et aurait supprimé la fonction : l'utilisateur
+     * saisit un fragment de référence, jamais la référence complète au caractère près.</p>
+     */
+    private static boolean contientReference(String valeur, String filtreEnMinuscules) {
+        return valeur != null && valeur.toLowerCase(java.util.Locale.ROOT).contains(filtreEnMinuscules);
     }
 
     /**
@@ -237,11 +271,13 @@ public class DossierService {
      * Valide le filtre {@code brouillon} : {@code null}/vide accepté (= pas de filtre), sinon
      * {@code true}/{@code false} (insensible à la casse).
      *
-     * <p>Paramètre déclaré en {@code String} et converti ici — et non en {@code Boolean} lié par Spring —
-     * parce qu'une valeur non convertible ({@code ?brouillon=oui}) lèverait un
-     * {@code MethodArgumentTypeMismatchException} qu'aucun handler ne traite : le client recevrait le 500
-     * opaque du filet général là où il doit recevoir un 400 nommant les valeurs admises, comme pour
-     * {@code statut} et {@code type}.</p>
+     * <p>Paramètre déclaré en {@code String} et converti ici — et non en {@code Boolean} lié par Spring.
+     * Le motif d'origine (un {@code MethodArgumentTypeMismatchException} sans gestionnaire, donc un 500
+     * opaque) a disparu depuis que {@code GlobalExceptionHandler#handleTypeMismatch} rend un 400 sur ce
+     * cas ; la conversion explicite est <strong>conservée</strong> pour une autre raison, qui elle
+     * demeure : elle rend un message <em>métier</em> — « true = BROUILLON seuls, false = tout sauf
+     * BROUILLON » — là où la liaison automatique ne dirait que « valeur booléenne attendue ». C'est la
+     * même forme d'aide que pour {@code statut} et {@code type}, qui énumèrent aussi leurs valeurs.</p>
      */
     private Boolean normaliserBrouillon(String brouillon) {
         if (brouillon == null || brouillon.isBlank()) {

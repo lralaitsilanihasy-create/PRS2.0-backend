@@ -60,14 +60,21 @@ public class DossierController {
      * découpage en page — jamais à la place du périmètre : filtrer par type n'a jamais montré à une
      * PRMP les dossiers d'une autre. Tous facultatifs : absents, la réponse est strictement
      * inchangée.</p>
+     *
+     * <p>⚠️ Audit front (2026-08-25) — {@code reference} (facultatif) restreint aux dossiers dont
+     * {@code refeDossier} <strong>contient</strong> la valeur, casse indifférente. Il sert la recherche
+     * de la barre supérieure, qui téléchargeait la table des dossiers <em>et</em> celle des PPM à chaque
+     * soumission pour retrouver une seule référence. Mêmes règles que les autres filtres : dans le
+     * périmètre, en ET avec eux, avant le découpage.</p>
      */
     @GetMapping(params = "page")
     public Page<DossierDto> findAllPagine(@RequestParam(required = false) String statut,
             @RequestParam(required = false) String type,
             @RequestParam(required = false) String sousType,
             @RequestParam(required = false) String brouillon,
+            @RequestParam(required = false) String reference,
             Pageable pageable) {
-        return service.findAllPagine(statut, type, sousType, brouillon, pageable);
+        return service.findAllPagine(statut, type, sousType, brouillon, reference, pageable);
     }
 
     /** Liste plate, mêmes filtres facultatifs (compatibilité : sans eux, réponse inchangée). */
@@ -75,8 +82,9 @@ public class DossierController {
     public List<DossierDto> findAll(@RequestParam(required = false) String statut,
             @RequestParam(required = false) String type,
             @RequestParam(required = false) String sousType,
-            @RequestParam(required = false) String brouillon) {
-        return service.findAll(statut, type, sousType, brouillon);
+            @RequestParam(required = false) String brouillon,
+            @RequestParam(required = false) String reference) {
+        return service.findAll(statut, type, sousType, brouillon, reference);
     }
 
     /** File « à réceptionner » du Secrétaire (§3.4) : dossiers SOUMIS de sa localité sans réception. */
