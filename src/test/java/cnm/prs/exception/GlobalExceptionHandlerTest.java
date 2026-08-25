@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.sql.SQLException;
 import java.util.List;
@@ -19,6 +20,7 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 /**
  * Tests unitaires du mappage exception → réponse HTTP de {@link GlobalExceptionHandler}.
@@ -141,6 +143,39 @@ class GlobalExceptionHandlerTest {
                 handler.handleMethodNotSupported(new HttpRequestMethodNotSupportedException("TRACE"), requete());
         assertEquals(HttpStatus.METHOD_NOT_ALLOWED, sansVerbe.getStatusCode());
         assertFalse(sansVerbe.getHeaders().containsHeader("Allow"), "Allow ne doit pas etre rendu vide");
+    }
+
+    /**
+     * Le libellé du type attendu est la seule chose que l'appelant puisse exploiter pour corriger : un 400
+     * qui dirait seulement « mauvais type » ne vaudrait guère mieux que le 500 qu'il remplace. Deux points
+     * fragiles sont figés ici parce qu'ils ne sont pas atteignables depuis une requête HTTP réelle :
+     * l'énumération, dont les valeurs admises doivent être listées (comme le font déjà les 400 métier),
+     * et le type {@code null} — Spring ne renseigne pas toujours {@code getRequiredType()}, et un repli
+     * manquant transformerait ce gestionnaire en {@code NullPointerException}, donc en 500, c'est-à-dire
+     * exactement le défaut qu'il corrige.
+     */
+    @Test
+    @DisplayName("400 type incompatible : les valeurs admises d'une enum sont listees, type null tolere")
+    void typeIncompatible_libelleUtileEtTypeNullTolere() {
+        ResponseEntity<ErrorResponse> enumeration = handler.handleTypeMismatch(
+                new MethodArgumentTypeMismatchException("bleu", Couleur.class, "teinte", null, null), requete());
+        assertEquals(HttpStatus.BAD_REQUEST, enumeration.getStatusCode());
+        assertNotNull(enumeration.getBody());
+        assertNotNull(enumeration.getBody().erreurs());
+        assertEquals("teinte", enumeration.getBody().erreurs().get(0).champ());
+        assertTrue(enumeration.getBody().erreurs().get(0).message().contains("ROUGE"),
+                "les valeurs admises doivent figurer dans le message");
+
+        ResponseEntity<ErrorResponse> sansType = handler.handleTypeMismatch(
+                new MethodArgumentTypeMismatchException("x", null, "inconnu", null, null), requete());
+        assertEquals(HttpStatus.BAD_REQUEST, sansType.getStatusCode());
+        assertNotNull(sansType.getBody());
+        assertEquals("inconnu", sansType.getBody().erreurs().get(0).champ());
+    }
+
+    /** Énumération de test — le projet n'expose aucun paramètre de requête typé enum aujourd'hui. */
+    private enum Couleur {
+        ROUGE, VERT
     }
 
 }

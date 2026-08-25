@@ -237,11 +237,13 @@ public class DossierService {
      * Valide le filtre {@code brouillon} : {@code null}/vide accepté (= pas de filtre), sinon
      * {@code true}/{@code false} (insensible à la casse).
      *
-     * <p>Paramètre déclaré en {@code String} et converti ici — et non en {@code Boolean} lié par Spring —
-     * parce qu'une valeur non convertible ({@code ?brouillon=oui}) lèverait un
-     * {@code MethodArgumentTypeMismatchException} qu'aucun handler ne traite : le client recevrait le 500
-     * opaque du filet général là où il doit recevoir un 400 nommant les valeurs admises, comme pour
-     * {@code statut} et {@code type}.</p>
+     * <p>Paramètre déclaré en {@code String} et converti ici — et non en {@code Boolean} lié par Spring.
+     * Le motif d'origine (un {@code MethodArgumentTypeMismatchException} sans gestionnaire, donc un 500
+     * opaque) a disparu depuis que {@code GlobalExceptionHandler#handleTypeMismatch} rend un 400 sur ce
+     * cas ; la conversion explicite est <strong>conservée</strong> pour une autre raison, qui elle
+     * demeure : elle rend un message <em>métier</em> — « true = BROUILLON seuls, false = tout sauf
+     * BROUILLON » — là où la liaison automatique ne dirait que « valeur booléenne attendue ». C'est la
+     * même forme d'aide que pour {@code statut} et {@code type}, qui énumèrent aussi leurs valeurs.</p>
      */
     private Boolean normaliserBrouillon(String brouillon) {
         if (brouillon == null || brouillon.isBlank()) {

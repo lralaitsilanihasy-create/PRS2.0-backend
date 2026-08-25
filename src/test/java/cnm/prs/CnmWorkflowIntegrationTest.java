@@ -6669,6 +6669,47 @@ class CnmWorkflowIntegrationTest {
                 .andExpect(jsonPath("$.path").value("/api/dossiers"));
     }
 
+    /**
+     * Même famille de défaut que le 405 ci-dessus, et pour la même raison : une exception MVC de Spring
+     * qu'aucun {@code @ExceptionHandler} ne déclarait tombait dans le filet {@code Exception.class} du
+     * GlobalExceptionHandler et sortait en <strong>500 générique</strong>. Ici la faute est entièrement du
+     * côté de l'appelant — un paramètre du mauvais type — et le message générique du 500 ne lui dit ni
+     * quel paramètre, ni ce qui était attendu : il ne peut pas corriger, et croit le serveur en panne.
+     *
+     * <p>Le test couvre les trois liaisons réellement exposées par l'API (entier, booléen, date) sur trois
+     * contrôleurs distincts, parce que le défaut n'était pas propre à une route : il portait sur tout
+     * paramètre typé du projet. Il vérifie aussi que le corps garde la forme {@code erreurs[]} des autres
+     * 400 — sans quoi le front devrait écrire un second chemin de traitement pour la même classe d'erreur.</p>
+     */
+    @Test
+    @DisplayName("Parametre de requete du mauvais type -> 400 nommant le parametre, jamais 500")
+    void parametreMauvaisType_400NommantLeParametre() throws Exception {
+        // Entier : ?ppm= sur /api/marches.
+        mvc.perform(get("/api/marches?ppm=abc").header("Authorization", tokenPrmp))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.erreurs", hasSize(1)))
+                .andExpect(jsonPath("$.erreurs[0].champ").value("ppm"))
+                .andExpect(jsonPath("$.erreurs[0].message", containsString("numérique")));
+
+        // Booléen : ?lu= sur /api/notifications/mes. « oui » est le piège naturel d'un client francophone.
+        mvc.perform(get("/api/notifications/mes?lu=oui").header("Authorization", tokenPrmp))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[0].champ").value("lu"))
+                .andExpect(jsonPath("$.erreurs[0].message", containsString("true")));
+
+        // Variable de chemin : /api/marches/{id} attend un entier — même exception, même traitement.
+        mvc.perform(get("/api/marches/abc").header("Authorization", tokenPrmp))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[0].champ").value("id"));
+
+        // Le message général reste exploitable et le chemin appelé est bien reporté (enveloppe ErrorResponse).
+        mvc.perform(get("/api/capm?mode=tous").header("Authorization", tokenPrmp))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.path").value("/api/capm"))
+                .andExpect(jsonPath("$.message", containsString("mode")));
+    }
+
     @Test
     @DisplayName("PV projets vs definitifs : un PV signe quitte /pv-examens et apparait dans /pv-examens/definitifs")
     void pv_projets_et_definitifs() throws Exception {
