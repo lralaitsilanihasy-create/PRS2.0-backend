@@ -12,9 +12,18 @@ import cnm.prs.entity.Notification;
 @Repository
 public interface NotificationRepository extends JpaRepository<Notification, Integer> {
 
-    /** Plus grand ID_NOTIFICATION existant (0 si table vide) — pour générer la PK assignée. */
-    @Query("select coalesce(max(n.idNotification), 0) from Notification n")
-    Integer findMaxId();
+    /**
+     * Prochaine PK de notification, allouée par la séquence serveur (Voie B — même motif que
+     * {@code seq_dossier} / {@code seq_marche}).
+     *
+     * <p>Remplace un {@code max(ID_NOTIFICATION) + 1}. Une notification est presque toujours émise
+     * <strong>dans la transaction métier de l'appelant</strong> (validation, dispatch, rectification…)
+     * et le projet ne pose aucun {@code REQUIRES_NEW} : deux transitions simultanées lisaient le même
+     * maximum, et la violation d'unicité de la seconde annulait l'acte métier lui-même, pas seulement
+     * son avis. {@code nextval} est atomique et hors transaction.
+     */
+    @Query(value = "select nextval('seq_notification')", nativeQuery = true)
+    Long nextIdNotification();
 
     /** Notifications d'un contrôleur (clé unifiée {@code ref}+{@code type}), plus récentes d'abord. */
     @Query("""

@@ -272,15 +272,13 @@ public class MiseAJourPpmService {
      * précédente reste présente et restaurable dans la nouvelle.
      */
     private void copierLignes(Dossier source, Dossier cible, Ppm ppmCible) {
-        int seqLot = lotRepository.findMaxIdLot();
-        int seqPrevision = marchePrevisionRepository.findMaxId();
-        int seqBenef = serviceBeneficiaireRepository.findMaxIdBenef();
-
+        // ⚠️ Marché, lot, prévision et bénéficiaire viennent tous d'une SÉQUENCE serveur : la consommer
+        // à CHAQUE ligne. L'allouer une fois puis incrémenter localement laisse la séquence en retard —
+        // la création suivante réattribue les mêmes identifiants et ÉCRASE les copies (save() sur PK
+        // existante = update). Les trois compteurs locaux qui subsistaient ici pour les lignes filles
+        // (seqLot / seqPrevision / seqBenef) sont supprimés au profit de leurs séquences.
         for (Marche origine : marcheRepository.findByIdDossier(source.getIdDossier())) {
             Marche copie = new Marche();
-            // ⚠️ ID_DETAIL vient d'une SÉQUENCE serveur : la consommer à chaque ligne. L'allouer une fois
-            // puis incrémenter localement laisse la séquence en retard — la création suivante réattribue
-            // les mêmes identifiants et ÉCRASE les copies (save() sur PK existante = update).
             copie.setIdDetail(marcheRepository.nextIdMarche().intValue());
             copie.setIdLigneOrigine(origine.getIdLigneOrigine());   // getter coalescent : jamais null
             copie.setSupprimee(origine.getSupprimee());
@@ -300,7 +298,7 @@ public class MiseAJourPpmService {
 
             for (Lot lot : lotRepository.findByIdDetail(origine.getIdDetail())) {
                 Lot c = new Lot();
-                c.setIdLot(++seqLot);
+                c.setIdLot(lotRepository.nextIdLot().intValue());   // séquence consommée à CHAQUE ligne
                 c.setIdDossier(cible.getIdDossier());
                 c.setIdDetail(copie.getIdDetail());
                 c.setDesignationLot(lot.getDesignationLot());
@@ -311,7 +309,7 @@ public class MiseAJourPpmService {
             }
             for (MarchePrevision p : marchePrevisionRepository.findByIdDetail(origine.getIdDetail())) {
                 MarchePrevision c = new MarchePrevision();
-                c.setIdPrevision(++seqPrevision);
+                c.setIdPrevision(marchePrevisionRepository.nextIdMarchePrevision().intValue());
                 c.setIdDetail(copie.getIdDetail());
                 c.setIdCapm(p.getIdCapm());
                 c.setDateDebut(p.getDateDebut());
@@ -320,7 +318,7 @@ public class MiseAJourPpmService {
             }
             for (ServiceBeneficiaire b : serviceBeneficiaireRepository.findByIdDetail(origine.getIdDetail())) {
                 ServiceBeneficiaire c = new ServiceBeneficiaire();
-                c.setIdBenef(++seqBenef);
+                c.setIdBenef(serviceBeneficiaireRepository.nextIdBenef().intValue());
                 c.setIdDetail(copie.getIdDetail());
                 c.setSoaCode(b.getSoaCode());
                 c.setNumCompte(b.getNumCompte());
@@ -965,14 +963,18 @@ public class MiseAJourPpmService {
         DiffDossierDto diff = calculer(dossier, ppm == null ? null : ppm.getNumMaj(),
                 ppm == null ? null : ppm.getMotifMaj());
 
-        int seq = changementLigneRepository.findMaxId();
+        // PK allouée par seq_changement_ligne, consommée à CHAQUE ligne écrite (une par champ modifié,
+        // donc des dizaines d'affilée). Le compteur local qui tenait ce rang laissait la séquence en
+        // retard : la mise à jour de PPM suivante aurait réattribué les mêmes ids et écrasé cette trace.
         for (DiffDossierDto.LigneDiff l : diff.lignes()) {
             if (l.champs().isEmpty()) {
-                changementLigneRepository.save(trace(++seq, idDossier, l, null, null, null));
+                changementLigneRepository.save(trace(
+                        changementLigneRepository.nextIdChangement().intValue(), idDossier, l, null, null, null));
             } else {
                 for (DiffDossierDto.ChampDiff c : l.champs()) {
-                    changementLigneRepository.save(
-                            trace(++seq, idDossier, l, c.champ(), c.avant(), c.apres()));
+                    changementLigneRepository.save(trace(
+                            changementLigneRepository.nextIdChangement().intValue(), idDossier, l,
+                            c.champ(), c.avant(), c.apres()));
                 }
             }
         }

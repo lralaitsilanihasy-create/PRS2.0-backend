@@ -242,12 +242,15 @@ public class PvExamenService {
         dto.setIdExamen(idExamen);
         dto.setIdAvis(idAvis);
         dto.setIdSecretaireSeance(idSecretaireSeance);
-        dto.setIdPv(repository.findMaxId() + 1);
-        return create(dto);
+        return create(dto);   // PK allouée par create() sur seq_pv_examen
     }
 
     public PvExamenDto create(PvExamenDto dto) {
         PvExamen entity = PvExamenMapper.toEntity(dto);
+        // ⚠️ PK serveur (seq_pv_examen) ; l'idPv du corps est IGNORÉ. Il était repris tel quel : sur PK
+        // assignée save() est un merge, un id désignant un PV existant l'aurait écrasé — statut, avis et
+        // signatures compris, sur une pièce que §3.8 veut immuable une fois signée.
+        entity.setIdPv(repository.nextIdPvExamen().intValue());
         // ⚠️ Règle ajoutée — l'imCtrlMembre est l'attributaire de l'examen (dispatch), jamais le corps.
         entity.setImCtrlMembre(attributaireDeLExamen(dto.getIdExamen()));
         entity.setStatutPv(StatutPv.BROUILLON.name());
@@ -793,12 +796,19 @@ public class PvExamenService {
         }
     }
 
-    /** Insère un mouvement de navette (PK assignée + NUM_NAVETTE incrémenté) et met à jour NB_NAVETTES. */
+    /**
+     * Insère un mouvement de navette et met à jour NB_NAVETTES.
+     *
+     * <p>Deux numérotations distinctes, à ne pas confondre : la PK {@code ID_NAVETTE} vient de la
+     * séquence serveur {@code seq_pv_navette} (technique, globale) ; {@code NUM_NAVETTE} reste le rang
+     * MÉTIER du mouvement dans SON PV (1, 2, 3…), affiché et repris dans NB_NAVETTES — il est donc
+     * calculé par {@code max + 1} sur ce PV, et une séquence globale le rendrait faux.
+     */
     private void ajouterNavette(PvExamen pv, SensNavette sens, String imActeur, String commentaire) {
         int numNavette = navetteRepository.findMaxNumNavetteByPv(pv.getIdPv()) + 1;
 
         PvNavette navette = new PvNavette();
-        navette.setIdNavette(navetteRepository.findMaxIdNavette() + 1);
+        navette.setIdNavette(navetteRepository.nextIdNavette().intValue());
         navette.setIdPv(pv.getIdPv());
         navette.setNumNavette(numNavette);
         navette.setSens(sens.name());

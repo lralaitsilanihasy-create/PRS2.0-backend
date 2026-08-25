@@ -13,9 +13,16 @@ import cnm.prs.entity.PvNavette;
 @Repository
 public interface PvNavetteRepository extends JpaRepository<PvNavette, Integer> {
 
-    /** Plus grand ID_NAVETTE existant (0 si table vide) — pour générer la PK assignée. */
-    @Query("select coalesce(max(n.idNavette), 0) from PvNavette n")
-    Integer findMaxIdNavette();
+    /**
+     * Prochaine PK de navette, allouée par la séquence serveur (Voie B — l'id client est ignoré).
+     * Remplace un {@code max(ID_NAVETTE) + 1}, lu par deux mouvements simultanés à l'identique.
+     *
+     * <p>À ne pas confondre avec {@link #findMaxNumNavetteByPv} : {@code NUM_NAVETTE} est le rang
+     * MÉTIER du mouvement dans SON PV (1, 2, 3…), affiché à l'utilisateur et repris dans NB_NAVETTES.
+     * Il reste calculé par {@code max + 1} sur le PV concerné — une séquence globale le rendrait faux.
+     */
+    @Query(value = "select nextval('seq_pv_navette')", nativeQuery = true)
+    Long nextIdNavette();
 
     /**
      * Purge (⚠️ règle ajoutée §3.3) — supprime les navettes des PV du circuit d'un dossier retiré

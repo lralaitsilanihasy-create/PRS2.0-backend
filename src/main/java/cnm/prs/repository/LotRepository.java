@@ -21,9 +21,17 @@ public interface LotRepository extends JpaRepository<Lot, Integer> {
     /** Lots d'un ensemble de marchés — support du scoping de la liste sur le périmètre du marché parent. */
     List<Lot> findByIdDetailIn(Collection<Integer> idDetails);
 
-    /** Plus grand ID_LOT existant (0 si vide) — PK allouée serveur (Voie B). */
-    @Query("select coalesce(max(l.idLot), 0) from Lot l")
-    Integer findMaxIdLot();
+    /**
+     * Prochaine PK de lot, allouée par la séquence serveur (Voie B — l'id client est ignoré).
+     *
+     * <p>Remplace un {@code max(ID_LOT) + 1} : deux saisies concurrentes lisaient le même maximum et
+     * la seconde échouait en violation d'unicité. À consommer <strong>une fois par ligne</strong> —
+     * allouer une valeur puis l'incrémenter localement laisse la séquence en retard, et la création
+     * suivante réattribue les mêmes identifiants (sur PK assignée, {@code save()} est un merge : elle
+     * écraserait les lignes précédentes au lieu de les compléter).
+     */
+    @Query(value = "select nextval('seq_lot')", nativeQuery = true)
+    Long nextIdLot();
 
     /** Supprime les lots d'un marché (cascade applicative — leurs tranches doivent être retirées avant). */
     long deleteByIdDetail(Integer idDetail);

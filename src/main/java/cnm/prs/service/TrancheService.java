@@ -62,9 +62,10 @@ public class TrancheService {
     public TrancheDto create(TrancheDto dto) {
         controlerAccesLot(dto.getIdLot());
         Tranche entity = TrancheMapper.toEntity(dto);
-        // PK serveur (max+1) ; id client ignoré — cf. LotService#create : un id choisi par le client
-        // permettrait d'écraser (merge) la tranche d'une autre entité.
-        entity.setIdTranche(repository.findMaxIdTranche() + 1);
+        // PK serveur (seq_tranche) ; id client ignoré — cf. LotService#create : un id choisi par le client
+        // permettrait d'écraser (merge) la tranche d'une autre entité. La séquence remplace le max+1,
+        // que deux saisies simultanées lisaient à l'identique.
+        entity.setIdTranche(repository.nextIdTranche().intValue());
         return TrancheMapper.toDto(repository.save(entity));
     }
 

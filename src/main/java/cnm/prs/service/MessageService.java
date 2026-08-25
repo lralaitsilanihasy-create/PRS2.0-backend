@@ -50,10 +50,18 @@ public class MessageService {
         return MessageMapper.toDto(entity);
     }
 
-    /** Création générique : l'expéditeur est forcé à l'utilisateur courant. */
+    /**
+     * Création générique : l'expéditeur est forcé à l'utilisateur courant.
+     *
+     * <p>La PK vient de {@code seq_message} et l'{@code idMessage} du corps est désormais IGNORÉ. Il
+     * était auparavant repris tel quel quand le client en fournissait un : sur PK assignée,
+     * {@code save()} est un merge — un id pointant un message existant l'aurait écrasé, expéditeur et
+     * date compris. Le repli {@code max+1} qui servait en son absence collisionnait par ailleurs entre
+     * deux envois simultanés.
+     */
     public MessageDto create(MessageDto dto) {
         Message entity = MessageMapper.toEntity(dto);
-        entity.setIdMessage(dto.getIdMessage() != null ? dto.getIdMessage() : repository.findMaxId() + 1);
+        entity.setIdMessage(repository.nextIdMessage().intValue());
         entity.setExpediteurIm(expediteurCourant());
         entity.setDateEnvoi(LocalDateTime.now());
         entity.setLu(false);
@@ -63,7 +71,7 @@ public class MessageService {
     /** Envoi d'un message : expéditeur = utilisateur courant, non lu, horodaté. */
     public MessageDto envoyer(MessageEnvoiRequest req) {
         Message m = new Message();
-        m.setIdMessage(repository.findMaxId() + 1);
+        m.setIdMessage(repository.nextIdMessage().intValue());   // PK serveur (seq_message)
         m.setExpediteurIm(expediteurCourant());
         m.setDestinataireIm(req.destinataireIm());
         m.setSujet(req.sujet());

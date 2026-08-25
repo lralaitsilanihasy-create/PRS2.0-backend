@@ -73,9 +73,10 @@ public class MarchePrevisionService {
         marcheService.controlerAccesMarche(dto.getIdDetail());
         validerChronologie(dto, null);
         MarchePrevision entity = MarchePrevisionMapper.toEntity(dto);
-        // PK serveur (max+1) ; id client ignoré — cf. LotService#create. La façade de saisie
-        // (SaisieService) passe déjà une séquence calculée serveur : elle est simplement recalculée ici.
-        entity.setIdPrevision(repository.findMaxId() + 1);
+        // PK serveur (seq_marche_prevision) ; id client ignoré — cf. LotService#create. C'est l'UNIQUE
+        // point d'allocation : la façade de saisie (SaisieService) passe désormais un idPrevision null,
+        // puisque toute valeur qu'elle calculerait serait de toute façon écrasée ici.
+        entity.setIdPrevision(repository.nextIdMarchePrevision().intValue());
         return peuplerOrdre(MarchePrevisionMapper.toDto(repository.save(entity)));
     }
 

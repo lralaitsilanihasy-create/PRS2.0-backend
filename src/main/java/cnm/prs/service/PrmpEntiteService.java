@@ -99,7 +99,7 @@ public class PrmpEntiteService {
                     + " est déjà rattachée à la PRMP " + existante.getIdPrmp() + " (§3.1).");
         });
         PrmpEntite entity = new PrmpEntite();
-        entity.setIdPrmpEntite(repository.findMaxId() + 1);
+        entity.setIdPrmpEntite(repository.nextIdPrmpEntite().intValue());   // PK serveur (seq_prmp_entite)
         entity.setIdPrmp(dto.getIdPrmp());
         entity.setIdEntiteContract(dto.getIdEntiteContract());
         entity.setDateAffectation(dto.getDateAffectation() != null ? dto.getDateAffectation() : LocalDate.now());
@@ -125,7 +125,7 @@ public class PrmpEntiteService {
             return;   // lien déjà présent (idempotent en cas de re-création)
         }
         PrmpEntite lien = new PrmpEntite();
-        lien.setIdPrmpEntite(repository.findMaxId() + 1);
+        lien.setIdPrmpEntite(repository.nextIdPrmpEntite().intValue());   // PK serveur (seq_prmp_entite)
         lien.setIdPrmp(idPrmp);
         lien.setIdEntiteContract(idEntiteContract);
         lien.setDateAffectation(LocalDate.now());

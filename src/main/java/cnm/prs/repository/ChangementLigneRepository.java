@@ -23,7 +23,12 @@ public interface ChangementLigneRepository extends JpaRepository<ChangementLigne
     /** Historique complet d'UNE ligne à travers toutes les versions où elle a bougé. */
     List<ChangementLigne> findByIdLigneOrigineOrderByIdChangementAsc(Integer idLigneOrigine);
 
-    /** Plus grand ID_CHANGEMENT existant (0 si table vide) — PK assignée côté service. */
-    @Query("select coalesce(max(c.idChangement), 0) from ChangementLigne c")
-    Integer findMaxId();
+    /**
+     * Prochaine PK de ligne de changement, allouée par la séquence serveur (Voie B).
+     *
+     * <p>Remplace un {@code max(ID_CHANGEMENT) + 1}. À consommer <strong>une fois par ligne</strong> :
+     * la trace d'une mise à jour de PPM en écrit une par champ modifié, donc des dizaines d'affilée.
+     */
+    @Query(value = "select nextval('seq_changement_ligne')", nativeQuery = true)
+    Long nextIdChangement();
 }

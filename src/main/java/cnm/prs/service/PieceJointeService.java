@@ -60,7 +60,7 @@ public class PieceJointeService {
         PieceJointe piece = repository.findByLoginAndTypePiece(login, type.name())
                 .orElseGet(() -> {
                     PieceJointe p = new PieceJointe();
-                    p.setIdPiece(repository.findMaxId() + 1);
+                    p.setIdPiece(repository.nextIdPiece().intValue());   // PK serveur (seq_piece_jointe)
                     p.setLogin(login);
                     p.setTypePiece(type.name());
                     return p;

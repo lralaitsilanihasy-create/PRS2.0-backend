@@ -228,10 +228,13 @@ public class AuthService {
 
         // Déclarations d'entités (en attente de validation par l'Administrateur).
         LocalDate aujourdhui = LocalDate.now();
-        int prochainId = demandeRepository.findMaxId() + 1;
+        // PK allouée par seq_prmp_entite_demande, consommée à CHAQUE ligne. L'inscription est le seul
+        // acte ouvert à un utilisateur non authentifié : deux inscriptions simultanées lisaient le même
+        // max(ID_DEMANDE) et la seconde échouait en violation d'unicité — sur un parcours public, sans
+        // aucune coordination possible entre les deux acteurs.
         for (Integer id : idEntites) {
             PrmpEntiteDemande d = new PrmpEntiteDemande();
-            d.setIdDemande(prochainId++);
+            d.setIdDemande(demandeRepository.nextIdDemande().intValue());
             d.setLogin(req.login());
             d.setIdEntiteContract(id);
             d.setStatutDemande(StatutDemandeEntite.EN_ATTENTE.name());
@@ -240,7 +243,7 @@ public class AuthService {
         }
         for (EntiteNonListeeRequest e : proposees) {
             PrmpEntiteDemande d = new PrmpEntiteDemande();
-            d.setIdDemande(prochainId++);
+            d.setIdDemande(demandeRepository.nextIdDemande().intValue());
             d.setLogin(req.login());
             d.setLibellePropose(e.libelle());
             d.setAdressePropose(e.adresse());

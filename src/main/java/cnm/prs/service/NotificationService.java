@@ -54,8 +54,16 @@ public class NotificationService {
         return NotificationMapper.toDto(entity);
     }
 
+    /**
+     * CRUD Administrateur. La PK vient de {@code seq_notification} et l'{@code idNotification} du corps
+     * est IGNORÉ : il était repris tel quel, et sur PK assignée {@code save()} est un merge — un id
+     * désignant une notification existante l'aurait écrasée. Un id choisi librement pouvait en outre
+     * tomber dans la plage servie par la séquence, et provoquer plus tard la collision que celle-ci
+     * a précisément pour objet d'écarter.
+     */
     public NotificationDto create(NotificationDto dto) {
         Notification entity = NotificationMapper.toEntity(dto);
+        entity.setIdNotification(repository.nextIdNotification().intValue());
         return NotificationMapper.toDto(repository.save(entity));
     }
 
@@ -121,7 +129,7 @@ public class NotificationService {
     private Notification creer(TypeNotification type, String ref, String destType, String im, String email,
             Integer idObjet, String typeObjet, Integer idDossier, String titre, String corps) {
         Notification n = new Notification();
-        n.setIdNotification(repository.findMaxId() + 1);
+        n.setIdNotification(repository.nextIdNotification().intValue());   // PK serveur (seq_notification)
         n.setIdDossier(idDossier);
         n.setTypeNotif(type.name());
         n.setDestinataireRef(ref);

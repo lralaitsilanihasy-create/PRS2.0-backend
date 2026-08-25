@@ -82,9 +82,13 @@ public interface PvExamenRepository extends JpaRepository<PvExamen, Integer> {
             + "and pv.examen.dispatch.reception.ctrlRecept.idLocalite = :loc")
     long countDefinitifsParLocalite(@Param("loc") String loc);
 
-    /** Plus grand ID_PV existant (0 si table vide) — pour allouer la PK assignée à la soumission d'examen. */
-    @Query("select coalesce(max(p.idPv), 0) from PvExamen p")
-    Integer findMaxId();
+    /**
+     * Prochaine PK de PV, allouée par la séquence serveur (Voie B — l'id client est ignoré).
+     * Remplace un {@code max(ID_PV) + 1} : deux soumissions d'examen simultanées lisaient le même
+     * maximum et la seconde échouait en violation d'unicité.
+     */
+    @Query(value = "select nextval('seq_pv_examen')", nativeQuery = true)
+    Long nextIdPvExamen();
 
     /**
      * Identifiant(s) PRMP rattaché(s) à un PV, via la chaîne
