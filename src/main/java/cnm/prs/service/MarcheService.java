@@ -10,7 +10,6 @@ import cnm.prs.dto.MarcheDto;
 import cnm.prs.entity.Lot;
 import cnm.prs.entity.Marche;
 import cnm.prs.enums.FormeMarche;
-import cnm.prs.enums.ProfilUtilisateur;
 import cnm.prs.exception.ResourceNotFoundException;
 import cnm.prs.mapper.MarcheMapper;
 import cnm.prs.repository.LotRepository;
@@ -137,13 +136,12 @@ public class MarcheService {
      * Vrai si le marché est dans le périmètre de l'appelant, <strong>mêmes requêtes que
      * {@link #idsMarchesVisibles()}</strong> mais ciblées sur un identifiant.
      *
-     * <p>⚠️ Une différence assumée avec {@link #controlerVisibilite(Marche)}, qui garde {@code GET
-     * /api/marches/{id}} : celui-ci ne reconnaît que le profil {@code PRMP} là où {@link Visibilite#estPrmp()}
-     * couvre aussi l'{@code UGPM} (dont le claim {@code ref} porte l'ID_PRMP de tutelle — même périmètre).
-     * Les écrans PRMP sont ouverts à l'UGPM (routes front {@code roles: ['PRMP','UGPM']}) et consomment
-     * lots / dates prévisionnelles : aligner les filles sur {@link #findAll()} est la seule lecture qui ne
-     * les casse pas. Le durcissement de {@code GET /api/marches/{id}} pour l'UGPM est une question ouverte,
-     * hors de cette correction de périmètre.</p>
+     * <p><strong>Expression unique du périmètre d'un marché</strong> : {@link #findById(Integer)} (détail),
+     * les ressources filles et cette méthode s'y ramènent toutes. Le prédicat est donc, par construction,
+     * l'exact complément de {@link #findAll()} : un marché servi en liste est accessible en détail, et
+     * réciproquement. Deux expressions séparées avaient produit l'inverse — l'UGPM (dont le claim
+     * {@code ref} porte l'ID_PRMP de tutelle, cf. {@link Visibilite#estPrmp()}) voyait un marché en liste
+     * et par ses lots, mais recevait 403 sur le détail du même marché.</p>
      */
     @Transactional(readOnly = true)
     public boolean estMarcheVisible(Integer idDetail) {
@@ -178,22 +176,16 @@ public class MarcheService {
         }
     }
 
-    /** Vérifie que le marché est dans le périmètre de l'appelant (§1, §3.1) — sinon 403. */
+    /**
+     * Vérifie que le marché est dans le périmètre de l'appelant (§1, §3.1) — sinon 403.
+     *
+     * <p>Aucune règle propre : délègue à {@link #estMarcheVisible(Integer)}, seule expression du périmètre.
+     * Le détail ne peut donc plus diverger de la liste — c'est cette divergence qui rendait 403 sur
+     * {@code GET /api/marches/{id}} un marché que l'appelant recevait pourtant dans {@link #findAll()}.</p>
+     */
     private void controlerVisibilite(Marche marche) {
-        if (Visibilite.voitTout()) {
-            return;
-        }
-        if (CurrentUser.profil().orElse(null) == ProfilUtilisateur.PRMP) {
-            String idPrmp = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
-            if (idPrmp != null && repository.existsVisiblePourPrmp(marche.getIdDetail(), idPrmp)) {
-                return;
-            }
-            throw new AccessDeniedException("Marché hors de votre périmètre (§3.1).");
-        }
-        boolean ok = Visibilite.localite()
-                .map(loc -> repository.existsVisibleParLocalite(marche.getIdDetail(), loc)).orElse(false);
-        if (!ok) {
-            throw new AccessDeniedException("Marché hors de votre périmètre de visibilité (§1).");
+        if (!estMarcheVisible(marche.getIdDetail())) {
+            throw new AccessDeniedException("Marché hors de votre périmètre de visibilité (§1, §3.1).");
         }
     }
 
