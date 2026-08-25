@@ -84,10 +84,9 @@ attend **toujours** un `idEntiteContract` fourni par le client, et relève donc 
 renvoie **400** (« L'identifiant (clé primaire) est obligatoire à la création »). Les exemples de
 requête de ces ressources incluent donc toujours l'identifiant.
 
-> **Exception isolée** — `/api/marche-previsions` relève du régime 1 (valeur **ignorée**), mais
-> `idPrevision` porte encore `@NotNull` dans son DTO : l'omettre renvoie **400** alors même que la
-> valeur envoyée ne sera pas utilisée. Il faut donc envoyer un nombre quelconque. Les onze autres
-> ressources du régime 1 acceptent l'**absence** du champ.
+> **Sans réserve** (2026-08-25) — les **douze** ressources du régime 1 acceptent l'**absence** du champ
+> identifiant à la création. `/api/marche-previsions` faisait exception (`idPrevision` portait encore
+> `@NotNull`, hérité de la PK assignée) : la contrainte est retirée, il n'y a plus de cas particulier.
 
 ### Visibilité par localité
 Pour les ressources du circuit (`dossiers`, `receptions`, `dispatchs`, `examens`, `pv-examens`,
@@ -3105,8 +3104,8 @@ marché → **409** (unicité). Au **changement de mode** d'un marché, si son D
 (`t_marche_prevision.ID_DETAIL`, correction de sécurité) : **mêmes règles que `/api/lots`** — lecture scopée comme
 `GET /api/marches`, **403** sur une prévision ou un `?marche=` hors périmètre, **écriture réservée `PRMP`/`UGPM`**
 (le calendrier prévisionnel est la parole de la PRMP ; le circuit le lit pour examiner, ne le modifie pas) et
-contrôlée sur le marché visé. `idPrevision` est **alloué par le serveur** (`max+1`) ; tout id envoyé par le client
-est **ignoré**.
+contrôlée sur le marché visé. `idPrevision` est **alloué par le serveur** (séquence `seq_marche_prevision`) ; tout id
+envoyé par le client est **ignoré**, et le champ peut être **omis** du corps.
 
 Dates prévisionnelles d'un marché, en relation **1,N** avec `/api/marches` : **une ligne par
 processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) et une `dateFin`
@@ -3117,7 +3116,7 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 
 | Champ (JSON) | Type | Obligatoire | Contraintes |
 |---|---|---|---|
-| idPrevision | number | Oui (@NotNull) | ⚠️ **valeur ignorée** : PK **allouée serveur** ; renvoyée dans la réponse |
+| idPrevision | number | **Non** | ⚠️ **valeur ignorée** : PK **allouée serveur** (`seq_marche_prevision`) ; l'**omettre** est accepté, l'id réel est renvoyé dans la réponse |
 | idDetail | number | Oui | @NotNull — FK vers le marché |
 | idCapm | number | Oui | @NotNull — FK vers `t_capm` (processus) |
 | dateDebut | string (date) | Oui | @NotNull — `yyyy-MM-dd` |

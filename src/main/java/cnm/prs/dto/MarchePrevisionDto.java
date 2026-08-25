@@ -15,7 +15,16 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class MarchePrevisionDto {
 
-    @NotNull
+    /**
+     * PK de la ligne — <strong>allouée par le serveur</strong> ({@code seq_marche_prevision}) ; toute
+     * valeur envoyée en entrée est <strong>ignorée</strong>, et l'id réel figure dans la réponse.
+     *
+     * <p>⚠️ Correction (2026-08-25) — ce champ portait encore {@code @NotNull}, hérité de l'époque où la
+     * PK était assignée par le client. Depuis le passage aux séquences, l'omettre renvoyait <strong>400
+     * sur une valeur que le serveur allait de toute façon écraser</strong> : l'appelant devait inventer un
+     * nombre quelconque pour que sa requête passe. C'était la dernière exception au régime 1 (PK par
+     * séquence) — les onze autres ressources acceptaient déjà l'absence du champ.</p>
+     */
     private Integer idPrevision;
 
     @NotNull

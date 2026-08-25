@@ -11470,6 +11470,64 @@ class CnmWorkflowIntegrationTest {
                 .andExpect(status().isForbidden());
     }
 
+    /**
+     * {@code MarchePrevisionDto.idPrevision} portait encore {@code @NotNull}, hérité de l'époque où la PK
+     * était assignée par le client. Depuis le passage aux séquences le serveur l'écrase : le client était
+     * donc refusé en 400 sur un champ dont la valeur n'allait pas être utilisée, et devait inventer un
+     * nombre quelconque pour que sa requête passe. Ce test fige la seule règle qui vaille pour une
+     * ressource du régime 1 — l'absence de l'identifiant est acceptée, l'identifiant réel vient de la
+     * séquence — et vérifie qu'aucune autre validation n'a été emportée avec la contrainte retirée :
+     * {@code idDetail}, {@code idCapm} et {@code dateDebut} restent obligatoires, et le périmètre du
+     * marché visé reste contrôlé. Sans cette dernière assertion, assouplir le contrat pourrait ouvrir
+     * une porte au lieu d'en fermer une.
+     */
+    @Test
+    @DisplayName("Prévision sans idPrevision : acceptée, la PK venant de la séquence — les autres champs restent obligatoires")
+    void prevision_sansIdentifiant_accepteeEtPkServeur() throws Exception {
+        String tokenPrmp2 = seedDeuxMarchesDeDeuxPrmp();
+        capmRepository.save(new Capm(1, "LANCEMENT", 1, null, null));
+
+        // Aucun idPrevision dans le corps : le serveur alloue et renvoie l'id réel.
+        String cree = mvc.perform(post("/api/marche-previsions").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDetail\":900,\"idCapm\":1,\"dateDebut\":\"2026-03-01\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.idPrevision").exists())
+                .andReturn().getResponse().getContentAsString();
+        int idPrev = com.jayway.jsonpath.JsonPath.read(cree, "$.idPrevision");
+        assertTrue(marchePrevisionRepository.existsById(idPrev),
+                "l'id renvoyé doit désigner la ligne réellement écrite");
+
+        // Explicitement null : même traitement — l'appelant n'a plus à inventer de nombre.
+        mvc.perform(post("/api/marche-previsions").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idPrevision\":null,\"idDetail\":900,\"idCapm\":1,\"dateDebut\":\"2026-04-01\"}"))
+                .andExpect(status().isCreated());
+
+        // Ce qui reste obligatoire l'est toujours : le 400 n'a pas disparu, il a changé de motif.
+        mvc.perform(post("/api/marche-previsions").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idCapm\":1,\"dateDebut\":\"2026-03-01\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[?(@.champ=='idDetail')]", hasSize(1)));
+        mvc.perform(post("/api/marche-previsions").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDetail\":900,\"dateDebut\":\"2026-03-01\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[?(@.champ=='idCapm')]", hasSize(1)));
+        mvc.perform(post("/api/marche-previsions").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDetail\":900,\"idCapm\":1}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[?(@.champ=='dateDebut')]", hasSize(1)));
+
+        // L'assouplissement ne relâche pas le périmètre : sans id à fournir, le marché visé reste contrôlé.
+        mvc.perform(post("/api/marche-previsions").header("Authorization", tokenPrmp2)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDetail\":900,\"idCapm\":1,\"dateDebut\":\"2026-03-01\"}"))
+                .andExpect(status().isForbidden());
+    }
+
     private Marche marche(int idDetail, int dossier, int ppm) {
         Marche m = new Marche();
         m.setIdDetail(idDetail);
