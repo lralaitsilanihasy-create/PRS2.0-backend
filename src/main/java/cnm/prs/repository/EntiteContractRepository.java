@@ -9,8 +9,13 @@ import cnm.prs.entity.EntiteContract;
 @Repository
 public interface EntiteContractRepository extends JpaRepository<EntiteContract, Integer> {
 
-    /** Plus grand ID_ENTITE_CONTRACT existant (0 si table vide) — pour générer la PK assignée
-     *  lors de la création d'une entité proposée à la validation d'une inscription. */
-    @Query("select coalesce(max(e.idEntiteContract), 0) from EntiteContract e")
-    Integer findMaxId();
+    /**
+     * Prochaine PK d'entité contractante, allouée par la séquence serveur (Voie B), à la création
+     * d'une entité proposée lors de la validation d'une inscription.
+     *
+     * <p>Remplace un {@code max(ID_ENTITE_CONTRACT) + 1}. À consommer <strong>une fois par ligne</strong> :
+     * une validation peut accepter plusieurs entités proposées d'affilée.
+     */
+    @Query(value = "select nextval('seq_entite_contract')", nativeQuery = true)
+    Long nextIdEntiteContract();
 }

@@ -280,6 +280,19 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
     lisaient le même maximum, et la violation d'unicité de la **seconde insertion annulait tout l'acte métier** :
     le dossier n'était pas validé, et l'utilisateur recevait un message de doublon sans rapport avec son action.
     L'échec ne restait donc pas confiné à la trace ou à l'avis, il **emportait l'opération qu'il accompagnait**.
+  - ⚠️ **Généralisation (2026-08-25) — toutes les PK applicatives.** Le motif « séquence serveur » couvre désormais
+    **14 tables** : aux 4 historiques (`t_dossier`, `t_ppm`, `t_marche`, `t_reception`) s'ajoutent `t_audit_log`,
+    `t_notification`, `t_lot`, `t_tranche`, `t_marche_prevision`, `t_service_beneficiaire`, `t_message`,
+    `t_piece_jointe`, `t_pv_examen`, `t_pv_navette`, `t_prmp_entite`, `tr_entite_contract`,
+    `t_prmp_entite_demande` et `t_changement_ligne`. **Plus aucun `max(id)+1` n'alloue de PK dans le code.**
+    Corollaire pour trois ressources où l'id du corps était encore repris quand le client en fournissait un —
+    **message**, **PV d'examen** et (via son CRUD) **notification** : cet id est maintenant **ignoré**, comme
+    partout ailleurs. Sur PK assignée, `save()` est un **merge** : un id désignant un enregistrement existant
+    l'**écrasait** — pour le PV, statut, avis et signatures compris, alors même que `PUT` sur un PV signé est
+    refusé en 409. Le `POST` offrait la réécriture que le `PUT` interdisait.
+    *(Seule exception assumée : `t_pv_navette.NUM_NAVETTE`, qui n'est pas une PK mais le **rang métier** du
+    mouvement dans SON PV — 1, 2, 3… — affiché à l'utilisateur et repris dans `NB_NAVETTES`. Il reste calculé
+    par `max+1` sur le PV concerné ; une séquence globale le rendrait faux.)*
   - ⚠️ **Consommation de la séquence — une fois par ligne.** Toute création en lot (saisie d'un PPM, recopie d'une
     version) doit appeler `nextval` **à chaque ligne écrite**. Allouer une valeur puis l'incrémenter localement
     laisse la séquence **en retard** sur les lignes réellement insérées : la saisie suivante réattribue des

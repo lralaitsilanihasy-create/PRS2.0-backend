@@ -639,6 +639,56 @@ class CnmWorkflowIntegrationTest {
                 .andExpect(status().isBadRequest());
     }
 
+    /**
+     * Les PK des déclarations d'entités venaient d'un compteur local ({@code max(ID_DEMANDE) + 1} puis
+     * {@code ++}) : deux inscriptions simultanées lisaient le même maximum et la seconde échouait en
+     * violation d'unicité. C'est le site le plus exposé de la série — l'inscription est le SEUL acte du
+     * système ouvert à un utilisateur non authentifié, donc le seul dont deux exécutions concurrentes
+     * ne supposent aucune coordination préalable entre acteurs.
+     *
+     * <p>La concurrence n'est pas reproductible sur H2, mais le corollaire du compteur local l'est :
+     * une inscription déclare PLUSIEURS entités d'affilée, et une séquence consommée une seule fois
+     * puis incrémentée localement resterait en retard sur les lignes écrites — l'inscription suivante
+     * réattribuerait les mêmes ids et, {@code save()} sur PK assignée étant un merge, ÉCRASERAIT les
+     * déclarations de la première. D'où le décompte global après DEUX inscriptions : 4 déclarations,
+     * toutes distinctes. Un retour au compteur local ferait tomber ce total.
+     */
+    @Test
+    @DisplayName("Inscription : PK des déclarations allouées par seq_prmp_entite_demande — deux inscriptions ne s'écrasent pas")
+    void inscription_pkServeur_sequenceConsommeeParLigne() throws Exception {
+        MockMultipartFile arrete = new MockMultipartFile("arrete", "arrete.pdf", "application/pdf",
+                "%PDF-1.4 arrete".getBytes(StandardCharsets.US_ASCII));
+        MockMultipartFile cin = new MockMultipartFile("cin", "cin.png", "image/png",
+                new byte[] { (byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3 });
+        long avant = prmpEntiteDemandeRepository.count();
+
+        // Deux inscriptions successives, deux déclarations chacune (1 existante + 1 proposée).
+        for (int k = 1; k <= 2; k++) {
+            String data = "{\"login\":\"prmp.seq" + k + "\",\"motDePasse\":\"Passw0rd!\",\"idPrmp\":\"PRMPS0" + k + "\","
+                    + "\"nomPrmp\":\"Rakoto\",\"prenomsPrmp\":\"Seq" + k + "\","
+                    + "\"arreteNomin\":\"ARR-2026-91" + k + "\",\"dateNomin\":\"2026-01-01\","
+                    + "\"cin\":\"91" + k + "91" + k + "91" + k + "91" + k + "\",\"dateCin\":\"2010-01-01\","
+                    + "\"lieuCin\":\"Antananarivo\",\"emailPrmp\":\"seq" + k + "@prmp.mg\","
+                    + "\"telPrmp\":\"034000091" + k + "\",\"idEntites\":[1],"
+                    + "\"entitesNonListees\":[{\"libelle\":\"Autorite " + k + "\",\"adresse\":\"Adr\",\"idLocalite\":\"ANT\"}]}";
+            mvc.perform(multipart("/api/auth/register/prmp")
+                    .file(new MockMultipartFile("data", "", "application/json", data.getBytes(StandardCharsets.UTF_8)))
+                    .file(arrete).file(cin))
+                    .andExpect(status().isCreated());
+        }
+
+        // 2 + 2 déclarations bien présentes : aucune n'a été écrasée par la seconde inscription.
+        org.junit.jupiter.api.Assertions.assertEquals(avant + 4, prmpEntiteDemandeRepository.count(),
+                "déclarations écrasées par un compteur local");
+        org.junit.jupiter.api.Assertions.assertEquals(2, prmpEntiteDemandeRepository.findByLogin("prmp.seq1").size());
+        org.junit.jupiter.api.Assertions.assertEquals(2, prmpEntiteDemandeRepository.findByLogin("prmp.seq2").size());
+
+        // Et les PK viennent de la séquence (plage de test), pas d'un comptage de lignes.
+        org.junit.jupiter.api.Assertions.assertTrue(
+                prmpEntiteDemandeRepository.findAll().stream().allMatch(d -> d.getIdDemande() >= 1800001),
+                "idDemande hors de la plage de seq_prmp_entite_demande");
+    }
+
     @Test
     @DisplayName("Validation inscription : partielle (entité libre activée, conflit signalé, proposée créée) → ACTIF + login")
     void inscription_validationPartielle() throws Exception {

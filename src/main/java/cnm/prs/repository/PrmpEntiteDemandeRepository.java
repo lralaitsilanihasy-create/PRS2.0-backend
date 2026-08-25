@@ -17,7 +17,14 @@ public interface PrmpEntiteDemandeRepository extends JpaRepository<PrmpEntiteDem
     /** Déclarations d'une inscription dans un état donné (ex. EN_ATTENTE). */
     List<PrmpEntiteDemande> findByLoginAndStatutDemande(String login, String statutDemande);
 
-    /** Plus grand ID_DEMANDE existant (0 si table vide) — pour générer la PK assignée. */
-    @Query("select coalesce(max(d.idDemande), 0) from PrmpEntiteDemande d")
-    Integer findMaxId();
+    /**
+     * Prochaine PK de demande de rattachement, allouée par la séquence serveur (Voie B).
+     *
+     * <p>Remplace un {@code max(ID_DEMANDE) + 1}. À consommer <strong>une fois par ligne</strong> :
+     * une inscription déclare plusieurs entités d'affilée. C'est le site le plus exposé de la série —
+     * l'inscription est le seul acte du système ouvert à un utilisateur NON authentifié, donc le seul
+     * dont deux exécutions simultanées ne supposent aucune coordination préalable entre acteurs.
+     */
+    @Query(value = "select nextval('seq_prmp_entite_demande')", nativeQuery = true)
+    Long nextIdDemande();
 }

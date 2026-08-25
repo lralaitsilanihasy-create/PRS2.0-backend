@@ -30,7 +30,14 @@ public interface PrmpEntiteRepository extends JpaRepository<PrmpEntite, Integer>
      */
     Optional<PrmpEntite> findByIdEntiteContractAndActifTrue(Integer idEntiteContract);
 
-    /** Plus grand ID_PRMP_ENTITE existant (0 si table vide) — pour générer la PK assignée. */
-    @Query("select coalesce(max(p.idPrmpEntite), 0) from PrmpEntite p")
-    Integer findMaxId();
+    /**
+     * Prochaine PK de rattachement PRMP↔entité, allouée par la séquence serveur (Voie B).
+     *
+     * <p>Remplace un {@code max(ID_PRMP_ENTITE) + 1}. À consommer <strong>une fois par ligne</strong> :
+     * la validation d'une inscription en crée plusieurs d'affilée, et une valeur allouée une fois puis
+     * incrémentée localement laisserait la séquence en retard — la validation suivante écraserait les
+     * rattachements de la précédente ({@code save()} sur PK assignée = merge).
+     */
+    @Query(value = "select nextval('seq_prmp_entite')", nativeQuery = true)
+    Long nextIdPrmpEntite();
 }

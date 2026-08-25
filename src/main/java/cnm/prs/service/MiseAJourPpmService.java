@@ -963,14 +963,18 @@ public class MiseAJourPpmService {
         DiffDossierDto diff = calculer(dossier, ppm == null ? null : ppm.getNumMaj(),
                 ppm == null ? null : ppm.getMotifMaj());
 
-        int seq = changementLigneRepository.findMaxId();
+        // PK allouée par seq_changement_ligne, consommée à CHAQUE ligne écrite (une par champ modifié,
+        // donc des dizaines d'affilée). Le compteur local qui tenait ce rang laissait la séquence en
+        // retard : la mise à jour de PPM suivante aurait réattribué les mêmes ids et écrasé cette trace.
         for (DiffDossierDto.LigneDiff l : diff.lignes()) {
             if (l.champs().isEmpty()) {
-                changementLigneRepository.save(trace(++seq, idDossier, l, null, null, null));
+                changementLigneRepository.save(trace(
+                        changementLigneRepository.nextIdChangement().intValue(), idDossier, l, null, null, null));
             } else {
                 for (DiffDossierDto.ChampDiff c : l.champs()) {
-                    changementLigneRepository.save(
-                            trace(++seq, idDossier, l, c.champ(), c.avant(), c.apres()));
+                    changementLigneRepository.save(trace(
+                            changementLigneRepository.nextIdChangement().intValue(), idDossier, l,
+                            c.champ(), c.avant(), c.apres()));
                 }
             }
         }
