@@ -62,25 +62,51 @@ public class PpmService {
      */
     /** ⚠️ Audit front (2026-08-16) — variante paginée ({@code ?page=&size=}), mêmes filtres de périmètre. */
     @Transactional(readOnly = true)
-    public org.springframework.data.domain.Page<PpmDto> findAllPagine(
+    public org.springframework.data.domain.Page<PpmDto> findAllPagine(String reference,
             org.springframework.data.domain.Pageable pageable) {
-        return Pagination.depuisListe(findAll(), pageable);
+        return Pagination.depuisListe(findAll(reference), pageable);
     }
 
+    /** Liste scopée complète — pas de filtre de référence (compatibilité des appelants internes). */
     @Transactional(readOnly = true)
     public List<PpmDto> findAll() {
+        return findAll(null);
+    }
+
+    /**
+     * Même liste scopée, restreinte aux PPM dont la {@code reference} <strong>contient</strong> la valeur
+     * demandée, casse indifférente ({@code null}/vide = tous).
+     *
+     * <p>⚠️ Audit front (2026-08-25) — sert la recherche par référence de la barre supérieure, qui
+     * téléchargeait cette table entière (et celle des dossiers) à chaque soumission. Le filtre s'applique
+     * <strong>dans</strong> le périmètre de visibilité (§1, §3.1) et jamais à sa place : il est posé sur
+     * la liste déjà scopée, jamais sur {@code repository.findAll()}.</p>
+     *
+     * <p>Il est aussi posé <strong>avant</strong> {@link #enrichir}, qui coûte une requête
+     * {@code exists} par PPM : enrichir puis jeter reviendrait à payer le prix qu'on cherche à supprimer.</p>
+     */
+    @Transactional(readOnly = true)
+    public List<PpmDto> findAll(String reference) {
+        String filtre = reference == null || reference.isBlank() ? null
+                : reference.trim().toLowerCase(java.util.Locale.ROOT);
         if (Visibilite.voitTout()) {
-            return repository.findAll().stream().map(PpmMapper::toDto).map(this::enrichir).toList();
+            return rendre(repository.findAll(), filtre);
         }
         if (Visibilite.estPrmp()) {
             String idPrmp = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
-            return idPrmp == null ? List.of()
-                    : repository.findVisiblesParPrmp(idPrmp).stream().map(PpmMapper::toDto).map(this::enrichir).toList();
+            return idPrmp == null ? List.of() : rendre(repository.findVisiblesParPrmp(idPrmp), filtre);
         }
         return Visibilite.localite()
-                .map(loc -> repository.findVisiblesParLocalite(loc).stream()
-                        .map(PpmMapper::toDto).map(this::enrichir).toList())
+                .map(loc -> rendre(repository.findVisiblesParLocalite(loc), filtre))
                 .orElseGet(List::of);
+    }
+
+    /** Filtre de référence puis mappage/enrichissement, communs aux trois branches de périmètre. */
+    private List<PpmDto> rendre(List<Ppm> scopes, String filtreEnMinuscules) {
+        return scopes.stream()
+                .filter(p -> filtreEnMinuscules == null || (p.getReference() != null
+                        && p.getReference().toLowerCase(java.util.Locale.ROOT).contains(filtreEnMinuscules)))
+                .map(PpmMapper::toDto).map(this::enrichir).toList();
     }
 
     @Transactional(readOnly = true)

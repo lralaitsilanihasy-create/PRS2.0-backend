@@ -1212,7 +1212,7 @@ relation **1,N** : un point de contrôle a **0..N** lignes. Remplace l'ancien ch
 
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
-| GET | /api/dossiers | — | `DossierDto[]` | 200, 400 | Authentifié (filtré ; les BROUILLON sont masqués aux **contrôleurs**, mais servis à leur **PRMP** et à l'**Administrateur**) — filtres `?statut=` `&type=` `&sousType=` `&brouillon=` ; ⚠️ **paginable** (`?page=&size=` → enveloppe `Page`, cf. Conventions) |
+| GET | /api/dossiers | — | `DossierDto[]` | 200, 400 | Authentifié (filtré ; les BROUILLON sont masqués aux **contrôleurs**, mais servis à leur **PRMP** et à l'**Administrateur**) — filtres `?statut=` `&type=` `&sousType=` `&brouillon=` `&reference=` ; ⚠️ **paginable** (`?page=&size=` → enveloppe `Page`, cf. Conventions) |
 | GET | /api/dossiers/a-receptionner | — | `DossierDto[]` | 200, 403 | `SECRETAIRE` (titulaire/délégué) ou `ADMINISTRATEUR` |
 | GET | /api/dossiers/a-examiner | — | `DossierDto[]` | 200, 403 | `MEMBRE` (titulaire/délégué) ou `ADMINISTRATEUR` |
 | GET | /api/dossiers/examines | — | `Page<DossierDto>` | 200, 403 | `MEMBRE` (titulaire/délégué) ou `ADMINISTRATEUR` |
@@ -1261,8 +1261,10 @@ relation **1,N** : un point de contrôle a **0..N** lignes. Remplace l'ancien ch
 > `EXAMINE`, `CLOTURE`, `EN_ATTENTE_DECISION_PRMP`… en font partie ; un `statut` nul compte comme
 > non-brouillon, même convention que le dénominateur `compterSoumis`). **Facultatif : absent, la réponse est
 > strictement inchangée.** Toute autre valeur (`?brouillon=oui`) → **400** nommant les valeurs admises — le
-> paramètre est volontairement lu en `String` et converti en service, un `Boolean` lié par Spring donnant un
-> **500 opaque** sur valeur non convertible.
+> paramètre est volontairement lu en `String` et converti en service, pour rendre un message *métier*
+> (`true` / `false` et ce qu'ils signifient) là où un `Boolean` lié par Spring ne dirait que « valeur
+> booléenne attendue ». *(Un `Boolean` donnait un **500 opaque** jusqu'au 2026-08-25 ; depuis, ce cas rend
+> lui aussi un 400 — cf. « Paramètre de requête du mauvais type » dans le détail des erreurs 400.)*
 >
 > Combinable avec `?statut=`, `?type=` et `?sousType=` : les filtres se **cumulent** (ET). Une combinaison
 > contradictoire (`?statut=BROUILLON&brouillon=false`) renvoie donc une **liste vide**, et non une 400.
@@ -1282,6 +1284,27 @@ relation **1,N** : un point de contrôle a **0..N** lignes. Remplace l'ancien ch
 > reste le même. Une pagination SQL supposerait de descendre les filtres de visibilité (localité, PRMP
 > propriétaire), aujourd'hui appliqués en Java, dans les requêtes JPQL : chantier de conception distinct,
 > non entrepris ici.
+
+> 📌 **Filtre `?reference=` (règle ajoutée 2026-08-25) — `GET /api/dossiers` ET `GET /api/ppms`.**
+> Restreint la liste aux enregistrements dont la référence **contient** la valeur : `t_dossier.REFE_DOSSIER`
+> côté dossiers, `t_ppm.REFERENCE` côté PPM. **Sous-chaîne, insensible à la casse** — *pas* une égalité :
+> l'utilisateur saisit un fragment (`ALPHA`), jamais la référence complète au caractère près.
+> **Facultatif : absent ou vide, la réponse est strictement inchangée.** Aucune valeur n'est rejetée — une
+> référence est du texte libre, une saisie sans correspondance rend une **liste vide** (200), pas un 400.
+>
+> Mêmes règles que les autres filtres : **cumulable en ET** (`?reference=ALPHA&brouillon=false`), appliqué
+> **à l'intérieur** du périmètre de visibilité (§1) et **avant** le découpage en page. Connaître la
+> référence d'un dossier d'une **autre** PRMP ne l'ouvre donc pas : le filtre restreint, il n'autorise pas.
+>
+> **Origine.** La recherche par référence de la barre supérieure (`main-layout`) faisait un `forkJoin` sur
+> `GET /api/dossiers` **et** `GET /api/ppms` — **deux tables complètes** — à chaque soumission du
+> formulaire, pour retrouver **une** référence par sous-chaîne. Elle interroge les deux ressources parce
+> qu'un dossier sans `refeDossier` s'affiche sous la référence de son PPM ; les deux appels subsistent
+> donc, mais filtrés (`?reference=`), et ne ramènent plus que les lignes utiles. Sur une correspondance
+> venue du **PPM**, le front dispose de `idDossier` et lit le dossier par `GET /api/dossiers/{id}`.
+>
+> ⚠️ Comme `?brouillon=`, le gain porte sur le **transfert réseau**, pas sur la charge base : la liste
+> scopée est constituée puis filtrée en Java.
 
 > 📌 **Écran « Dossiers à rectifier » (PRMP).** Il n'existe **pas** d'endpoint dédié : la liste est alimentée
 > par le **filtre serveur** existant `GET /api/dossiers?statut=EN_ATTENTE_DECISION_PRMP` (scopé à la PRMP),
@@ -3603,7 +3626,7 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
-| GET | /api/ppms | — | `PpmDto[]` (scopé) | 200 | Authentifié — ⚠️ **paginable** (`?page=&size=`, cf. Conventions) |
+| GET | /api/ppms | — | `PpmDto[]` (scopé) | 200 | Authentifié — filtre `?reference=` (**sous-chaîne**, casse indifférente, sur `t_ppm.REFERENCE` ; facultatif, dans le périmètre, avant la pagination — cf. le 📌 du même filtre sous *Dossiers*) ; ⚠️ **paginable** (`?page=&size=`, cf. Conventions) |
 | GET | /api/ppms/{id} | — | `PpmDto` | 200, 403, 404 | Authentifié (dans son périmètre) |
 | POST | /api/ppms | `PpmDto` | `PpmDto` | 201, 400 | Authentifié |
 | PUT | /api/ppms/{id} | `PpmDto` | `PpmDto` | 200, 400, 404 | Authentifié |

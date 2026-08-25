@@ -10415,6 +10415,121 @@ class CnmWorkflowIntegrationTest {
                 .andExpect(jsonPath("$.content[?(@.idDossier==9614)]", hasSize(0)));
     }
 
+    /**
+     * La recherche par référence de la barre supérieure faisait un {@code forkJoin} sur la liste des
+     * dossiers ET celle des PPM — deux tables complètes — à chaque soumission, pour retrouver UNE
+     * référence. {@code ?reference=} descend ce travail côté serveur, sur les deux ressources : la
+     * recherche interroge les deux parce qu'un dossier sans {@code refeDossier} s'affiche sous la
+     * référence de son PPM.
+     *
+     * <p>La comparaison est une <strong>sous-chaîne insensible à la casse</strong>, et non une égalité :
+     * le front compare par {@code includes()} sur la valeur repliée en minuscules, et l'utilisateur saisit
+     * un fragment. Une égalité exacte aurait rendu un contrat plus strict et une fonction morte — d'où
+     * l'assertion sur le fragment, qui périrait si quelqu'un « resserrait » le filtre en {@code equals}.</p>
+     *
+     * <p>Les deux invariants du motif de filtrage sont vérifiés comme pour {@code ?brouillon=} : le filtre
+     * s'applique <strong>dans</strong> le périmètre (jamais à sa place — c'est le point sensible ici,
+     * puisqu'une référence connue suffirait sinon à lire le dossier d'une autre PRMP) et <strong>avant</strong>
+     * le découpage en page, sans quoi {@code totalElements} compterait des lignes que l'écran n'affiche pas.</p>
+     */
+    @Test
+    @DisplayName("GET /api/dossiers et /api/ppms : filtre ?reference= (sous-chaîne, casse indifférente), "
+            + "dans le périmètre et AVANT la pagination ; absent → réponse inchangée")
+    void filtreReference_dossiersEtPpms_dansLePerimetreEtAvantPagination() throws Exception {
+        prmpRepository.save(prmp("PRMP002", "ANT"));
+        String tokenPrmp2 = bearer("PRMP002", ProfilUtilisateur.PRMP, TypeActeur.PRMP, "PRMP002", "ANT");
+
+        Dossier a = dossierLoc(9660, "SOUMIS", "ANT", "PRMP001"); a.setIdTypeDossier("DDP");
+        a.setRefeDossier("DOS-2026-ALPHA-001");
+        Dossier b = dossierLoc(9661, "BROUILLON", "ANT", "PRMP001"); b.setIdTypeDossier("DDP");
+        b.setRefeDossier("DOS-2026-ALPHA-002");
+        Dossier c = dossierLoc(9662, "SOUMIS", "ANT", "PRMP001"); c.setIdTypeDossier("DMC");
+        c.setRefeDossier("DOS-2026-BETA-001");
+        // Même référence, autre PRMP : le piège du sujet. Une référence connue ne doit pas ouvrir un dossier
+        // hors périmètre — le filtre restreint, il n'autorise pas.
+        Dossier intrus = dossierLoc(9663, "SOUMIS", "ANT", "PRMP002"); intrus.setIdTypeDossier("DDP");
+        intrus.setRefeDossier("DOS-2026-ALPHA-003");
+        dossierRepository.saveAll(java.util.List.of(a, b, c, intrus));
+
+        Ppm p1 = ppm(9670, 9660, "PRMP001"); p1.setReference("PPM-2026-ALPHA");
+        Ppm p2 = ppm(9671, 9662, "PRMP001"); p2.setReference("PPM-2026-BETA");
+        Ppm pIntrus = ppm(9672, 9663, "PRMP002"); pIntrus.setReference("PPM-2026-ALPHA-BIS");
+        ppmRepository.saveAll(java.util.List.of(p1, p2, pIntrus));
+
+        // 1) NON-RÉGRESSION : sans le paramètre, les deux listes sont strictement celles d'avant.
+        mvc.perform(get("/api/dossiers").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idDossier==9660)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idDossier==9662)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idDossier==9663)]", hasSize(0)));
+        mvc.perform(get("/api/ppms").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idPpm==9670)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idPpm==9671)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idPpm==9672)]", hasSize(0)));
+
+        // 2) SEUL : sous-chaîne, et non égalité — « ALPHA » n'est la référence complète d'aucun dossier.
+        mvc.perform(get("/api/dossiers?reference=ALPHA").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(2)))
+                .andExpect(jsonPath("$[?(@.idDossier==9660)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idDossier==9661)]", hasSize(1)));
+        // Casse indifférente : le front replie la saisie en minuscules, le serveur doit faire de même.
+        mvc.perform(get("/api/dossiers?reference=alpha-001").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].idDossier").value(9660));
+        mvc.perform(get("/api/ppms?reference=beta").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].idPpm").value(9671));
+
+        // 3) PÉRIMÈTRE : PRMP001 connaît la référence de PRMP002 — elle ne la lui ouvre pas.
+        mvc.perform(get("/api/dossiers?reference=DOS-2026-ALPHA-003").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+        mvc.perform(get("/api/ppms?reference=PPM-2026-ALPHA-BIS").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+        // Symétrique : PRMP002 cherchant le même fragment ne voit que le sien.
+        mvc.perform(get("/api/dossiers?reference=ALPHA").header("Authorization", tokenPrmp2))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].idDossier").value(9663));
+
+        // 4) COMBINÉ en ET avec les filtres existants — pas de remplacement, pas d'union.
+        mvc.perform(get("/api/dossiers?reference=ALPHA&brouillon=false").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].idDossier").value(9660));
+        mvc.perform(get("/api/dossiers?reference=BETA&type=DDP").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));   // BETA existe, mais en DMC : conjonction vide
+        mvc.perform(get("/api/dossiers?reference=BETA&type=DMC").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].idDossier").value(9662));
+
+        // 5) Sans correspondance → liste vide, pas 400 : une référence est du texte libre.
+        mvc.perform(get("/api/dossiers?reference=INEXISTANT").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+        // Valeur vide = pas de filtre (le champ de recherche vidé ne doit pas masquer la liste).
+        mvc.perform(get("/api/dossiers?reference=").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idDossier==9662)]", hasSize(1)));
+
+        // 6) PAGINÉ : le découpage porte sur l'ensemble DÉJÀ filtré — totalElements compte 2, pas le périmètre.
+        mvc.perform(get("/api/dossiers?reference=ALPHA&page=0&size=1").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content", hasSize(1)))
+                .andExpect(jsonPath("$.totalElements").value(2));
+        mvc.perform(get("/api/ppms?reference=ALPHA&page=0&size=10").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].idPpm").value(9670));
+    }
+
     @Test
     @DisplayName("Grille d'examen par sous-type : PPM = points communs seuls ; PPM-AGPM = communs + spécifique ; gardes 400")
     void grilleExamen_parSousType() throws Exception {
