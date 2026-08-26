@@ -64,6 +64,13 @@ import cnm.prs.security.Visibilite;
 @Transactional
 public class DossierService {
 
+    /**
+     * Journal des transitions du circuit (⚠️ LOT 4 — 2026-08-26). Format homogène à tout le circuit :
+     * {@code [CIRCUIT] <transition> dossier={} acteur={} <détail>={}}. Uniquement les transitions
+     * RÉUSSIES ; jamais les lectures, jamais de donnée personnelle (identifiants et logins seulement).
+     */
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(DossierService.class);
+
     /** Famille « Dossier de Planification » (codes centralisés dans {@link DossierIntegriteService}). */
     private static final String FAMILLE_DDP = DossierIntegriteService.FAMILLE_DDP;
     /** Code du type de pièce AGPM dans le référentiel {@code t_type_piece_jointe} (obligation conditionnelle). */
@@ -514,6 +521,8 @@ public class DossierService {
             dossier.setDateRef(LocalDate.now());
         }
         repository.save(dossier);
+        log.info("[CIRCUIT] soumission dossier={} acteur={} localite={}",
+                dossier.getIdDossier(), CurrentUser.login().orElse(null), localite);
 
         // ⚠️ 2026-08-05 — mise à jour de PPM : c'est ICI, et pas à la création du brouillon, que la
         // nouvelle version devient opposable. On fige la trace du diff et on bascule le prédécesseur en
@@ -604,6 +613,8 @@ public class DossierService {
         }
         dossier.setStatut(StatutDossier.EN_VERIFICATION.name());
         repository.save(dossier);
+        log.info("[CIRCUIT] resoumission apres decision PRMP dossier={} acteur={} statut={}",
+                idDossier, CurrentUser.login().orElse(null), StatutDossier.EN_VERIFICATION.name());
 
         // Dernière vérification (le passage obsLevees=false qui a déclenché l'attente).
         Verification derniere = verificationRepository.findPassagesDuDossier(idDossier).stream()
@@ -638,6 +649,8 @@ public class DossierService {
         }
         dossier.setStatut(StatutDossier.EN_ATTENTE_COMPLEMENTS_DEPOT.name());
         repository.save(dossier);
+        log.info("[CIRCUIT] defauts de depot signales dossier={} acteur={} nbDefauts={}",
+                idDossier, CurrentUser.login().orElse(null), defauts.size());
 
         String ref = dossier.getRefeDossier() != null ? dossier.getRefeDossier() : ("n° " + dossier.getIdDossier());
         String titre = "Pièces manquantes ou non conformes au dépôt";
@@ -672,6 +685,8 @@ public class DossierService {
         }
         dossier.setStatut(StatutDossier.SOUMIS.name());
         repository.save(dossier);
+        log.info("[CIRCUIT] complements de depot transmis dossier={} acteur={} statut={}",
+                idDossier, CurrentUser.login().orElse(null), StatutDossier.SOUMIS.name());
         String ref = dossier.getRefeDossier() != null ? dossier.getRefeDossier() : ("n° " + dossier.getIdDossier());
         String titre = "Compléments de dépôt transmis";
         String corps = "Dossier " + ref + " — la PRMP a transmis les pièces demandées : reprenez le contrôle de "
@@ -735,6 +750,8 @@ public class DossierService {
         }
         dossier.setStatut(StatutDossier.A_REEXAMINER.name());
         repository.save(dossier);
+        log.info("[CIRCUIT] complements de renvoi transmis dossier={} acteur={} lettre={}",
+                idDossier, CurrentUser.login().orElse(null), idLettre);
         String ref = dossier.getRefeDossier() != null ? dossier.getRefeDossier() : ("n° " + dossier.getIdDossier());
         String titre = "Compléments transmis — dossier à réexaminer";
         String corps = "La PRMP a transmis les pièces / informations demandées par la lettre de renvoi pour le dossier "

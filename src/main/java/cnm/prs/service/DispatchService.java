@@ -32,6 +32,9 @@ import cnm.prs.security.Visibilite;
 @Transactional
 public class DispatchService {
 
+    /** Journal des transitions du circuit (⚠️ LOT 4 — 2026-08-26), format {@code [CIRCUIT] …}. */
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(DispatchService.class);
+
     private final DispatchRepository repository;
     private final ReceptionRepository receptionRepository;
     private final ControleurRepository controleurRepository;
@@ -204,6 +207,9 @@ public class DispatchService {
             if (StatutDossier.PRET_DISPATCH.name().equals(d.getStatut())) {
                 d.setStatut(StatutDossier.DISPATCHE.name());
                 dossierRepository.save(d);
+                log.info("[CIRCUIT] dispatch dossier={} acteur={} reception={} statut={}",
+                        idDossier, CurrentUser.login().orElse(null), idReception,
+                        StatutDossier.DISPATCHE.name());
             }
         });
     }
@@ -284,6 +290,9 @@ public class DispatchService {
         dossierRepository.findById(idDossier).ifPresent(d -> {
             d.setStatut(StatutDossier.PRET_DISPATCH.name());
             dossierRepository.save(d);
+            log.info("[CIRCUIT] dispatch annule dossier={} acteur={} statutPrecedent={} statut={}",
+                    idDossier, CurrentUser.login().orElse(null), statut,
+                    StatutDossier.PRET_DISPATCH.name());
         });
         notifierMembreRetrait(entity, idDossier);
         notifierCcRetrait(entity, idDossier);

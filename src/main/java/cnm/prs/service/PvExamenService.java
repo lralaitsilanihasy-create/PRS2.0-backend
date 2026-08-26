@@ -52,6 +52,9 @@ import cnm.prs.security.Visibilite;
 @Transactional
 public class PvExamenService {
 
+    /** Journal des transitions du circuit (⚠️ LOT 4 — 2026-08-26), format {@code [CIRCUIT] …}. */
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(PvExamenService.class);
+
     private final PvExamenRepository repository;
     private final PvNavetteRepository navetteRepository;
     private final PrmpRepository prmpRepository;
@@ -346,6 +349,15 @@ public class PvExamenService {
         });
     }
 
+    /**
+     * Dossier porteur du PV — uniquement pour la journalisation du circuit (⚠️ LOT 4, 2026-08-26),
+     * afin que toutes les lignes {@code [CIRCUIT]} restent greffables sur le même {@code dossier=}.
+     * Le surcoût (un SELECT indexé) est sans portée : ces transitions sont rares par dossier.
+     */
+    private Integer dossierDuPv(Integer idPv) {
+        return repository.findIdDossierByPv(idPv).orElse(null);
+    }
+
     /** Matricule du Membre attributaire de l'examen (dispatch) ; refuse si l'examen n'a pas d'attributaire. */
     private String attributaireDeLExamen(Integer idExamen) {
         return repository.findImCtrlMembreByExamen(idExamen)
@@ -384,6 +396,9 @@ public class PvExamenService {
                 }
             });
         }
+        log.info("[CIRCUIT] navette PV soumission dossier={} acteur={} pv={} statutPv={} navettes={}",
+                idDossier, CurrentUser.login().orElse(null), saved.getIdPv(),
+                StatutPv.PROJET_SOUMIS.name(), saved.getNbNavettes());
         // [Auto] Le CC et le Président de la localité sont notifiés qu'un projet de PV attend validation.
         notifierPvAValider(saved);
         return PvExamenMapper.toDto(saved);
@@ -535,6 +550,9 @@ public class PvExamenService {
         pv.setStatutPv(StatutPv.EN_RECTIFICATION.name());
         ajouterNavette(pv, SensNavette.RETOUR_RECTIF, req.imActeur(), req.commentaire());
         PvExamen saved = repository.save(pv);
+        log.info("[CIRCUIT] navette PV retour rectification dossier={} acteur={} pv={} statutPv={} navettes={}",
+                dossierDuPv(saved.getIdPv()), CurrentUser.login().orElse(null), saved.getIdPv(),
+                StatutPv.EN_RECTIFICATION.name(), saved.getNbNavettes());
         // [Auto] Le Membre auteur est notifié du retour pour rectification, avec le commentaire.
         notifierPvAuteur(saved, TypeNotification.PV_A_RECTIFIER, "Projet de PV à rectifier",
                 "Le projet de PV " + referencePv(saved) + " a été retourné pour rectification : " + req.commentaire());
@@ -570,6 +588,9 @@ public class PvExamenService {
         pv.setDateAcceptation(LocalDate.now());
         ajouterNavette(pv, SensNavette.ACCEPTATION, req.imActeur(), req.commentaire());
         PvExamen saved = repository.save(pv);
+        log.info("[CIRCUIT] navette PV acceptation dossier={} acteur={} pv={} statutPv={} navettes={}",
+                dossierDuPv(saved.getIdPv()), CurrentUser.login().orElse(null), saved.getIdPv(),
+                StatutPv.PROJET_ACCEPTE.name(), saved.getNbNavettes());
         // [Auto] Le Membre auteur est notifié de l'acceptation du projet de PV.
         notifierPvAuteur(saved, TypeNotification.PV_ACCEPTE, "Projet de PV accepté",
                 "Le projet de PV " + referencePv(saved) + " a été accepté.");
@@ -637,6 +658,9 @@ public class PvExamenService {
         if (membreSigne && coSigne) {
             pv.setStatutPv(StatutPv.SIGNE.name());
             pv.setDatePv(today);
+            log.info("[CIRCUIT] signature PV dossier={} acteur={} pv={} statutPv={}",
+                    dossierDuPv(pv.getIdPv()), CurrentUser.login().orElse(null), pv.getIdPv(),
+                    StatutPv.SIGNE.name());
             // ⚠️ 2026-08-19 — la génération du PDF (Word piloté localement, plusieurs secondes) est SORTIE
             // du chemin de la signature : le PV est marqué SIGNE et la réponse part immédiatement ; le
             // document est produit APRÈS COMMIT par PvDocumentTache, qui renseigne CHEMIN_DOCUMENT quand
@@ -683,6 +707,9 @@ public class PvExamenService {
         PvExamen saved = repository.save(pv);
         dossier.setStatut(StatutDossier.CLOTURE.name());
         dossierRepository.save(dossier);
+        log.info("[CIRCUIT] archivage PV et cloture dossier={} acteur={} pv={} statut={}",
+                idDossier, CurrentUser.login().orElse(null), saved.getIdPv(),
+                StatutDossier.CLOTURE.name());
         notifierClotureEligible(idDossier);
         return toDtoLecture(saved);
     }

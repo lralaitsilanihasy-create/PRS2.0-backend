@@ -741,6 +741,10 @@ public class SaisieService {
         Dossier cree = dossierRepository.save(d);
         journalDossier.tracer(cree, JournalDossierService.CREATION,
                 "Création du dossier (" + famille + " / " + sousType + ")");
+        // ⚠️ LOT 4 (2026-08-26) — entrée du dossier dans le circuit. Point de passage unique des deux
+        // voies de saisie (saisirPpm et saisirDossier), d'où un seul log ici.
+        log.info("[CIRCUIT] creation dossier={} acteur={} famille={} sousType={} prmp={}",
+                cree.getIdDossier(), CurrentUser.login().orElse(null), famille, sousType, idPrmp);
         return cree;
     }
 

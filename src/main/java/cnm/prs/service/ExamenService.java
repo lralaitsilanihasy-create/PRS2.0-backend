@@ -41,6 +41,9 @@ import cnm.prs.security.Visibilite;
 @Transactional
 public class ExamenService {
 
+    /** Journal des transitions du circuit (⚠️ LOT 4 — 2026-08-26), format {@code [CIRCUIT] …}. */
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ExamenService.class);
+
     private final ExamenRepository repository;
     private final DispatchRepository dispatchRepository;
     private final DossierRepository dossierRepository;
@@ -237,6 +240,9 @@ public class ExamenService {
             if (StatutDossier.DISPATCHE.name().equals(d.getStatut())) {
                 d.setStatut(StatutDossier.EXAMINE.name());
                 dossierRepository.save(d);
+                log.info("[CIRCUIT] examen clos dossier={} acteur={} dispatch={} statut={}",
+                        idDossier, CurrentUser.login().orElse(null), idDispatch,
+                        StatutDossier.EXAMINE.name());
             }
         });
     }

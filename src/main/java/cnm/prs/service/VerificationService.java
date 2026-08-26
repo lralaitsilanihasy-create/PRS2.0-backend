@@ -40,6 +40,9 @@ import cnm.prs.security.Visibilite;
 @Transactional
 public class VerificationService {
 
+    /** Journal des transitions du circuit (⚠️ LOT 4 — 2026-08-26), format {@code [CIRCUIT] …}. */
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(VerificationService.class);
+
     private final VerificationRepository repository;
     private final ReceptionRepository receptionRepository;
     private final DossierRepository dossierRepository;
@@ -233,9 +236,15 @@ public class VerificationService {
             if (Boolean.TRUE.equals(verification.getObsLevees())) {
                 dossier.setStatut(StatutDossier.OBSERVATIONS_LEVEES.name());
                 dossierRepository.save(dossier);
+                log.info("[CIRCUIT] verification observations levees dossier={} acteur={} verification={} statut={}",
+                        idDossier, CurrentUser.login().orElse(null), verification.getIdVerification(),
+                        StatutDossier.OBSERVATIONS_LEVEES.name());
             } else {
                 dossier.setStatut(StatutDossier.EN_ATTENTE_DECISION_PRMP.name());
                 dossierRepository.save(dossier);
+                log.info("[CIRCUIT] verification observations non levees dossier={} acteur={} verification={} statut={}",
+                        idDossier, CurrentUser.login().orElse(null), verification.getIdVerification(),
+                        StatutDossier.EN_ATTENTE_DECISION_PRMP.name());
                 notifierObservationPrmp(dossier, verification);
                 tracerObservationNonLevee(dossier, verification);
             }

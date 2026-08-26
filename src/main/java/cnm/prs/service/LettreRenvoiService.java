@@ -54,6 +54,9 @@ import cnm.prs.security.Visibilite;
 @Transactional
 public class LettreRenvoiService {
 
+    /** Journal des transitions du circuit (⚠️ LOT 4 — 2026-08-26), format {@code [CIRCUIT] …}. */
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(LettreRenvoiService.class);
+
     private final LettreRenvoiRepository repository;
     private final ExamenRepository examenRepository;
     private final DossierRepository dossierRepository;
@@ -244,7 +247,11 @@ public class LettreRenvoiService {
             throw new BusinessRuleException("Soumission impossible : statut « " + lettre.getStatut() + " » (attendu BROUILLON).");
         }
         lettre.setStatut(StatutLettreRenvoi.SOUMIS.name());
-        return LettreRenvoiMapper.toDto(repository.save(lettre));
+        LettreRenvoi soumise = repository.save(lettre);
+        log.info("[CIRCUIT] lettre de renvoi soumise dossier={} acteur={} lettre={} statut={}",
+                soumise.getIdDossier(), CurrentUser.login().orElse(null), soumise.getIdLettre(),
+                StatutLettreRenvoi.SOUMIS.name());
+        return LettreRenvoiMapper.toDto(soumise);
     }
 
     /**
@@ -280,6 +287,11 @@ public class LettreRenvoiService {
         byte[] pdf = documentGenerator.genererPdf(centrale,
                 construireRemplacements(lettre, dossier, nomComplet(im), centrale, localiteLibelle));
         lettre.setCheminDocument(stockerSurFsx(lettre, pdf));   // PDF écrit sur le FSX (répertoire LR/)
+        // Log posé APRÈS la génération/écriture du PDF : celles-ci peuvent échouer et faire refluer la
+        // signature ; journaliser plus haut annoncerait une transition qui n'a pas eu lieu.
+        log.info("[CIRCUIT] lettre de renvoi signee dossier={} acteur={} lettre={} statut={}",
+                lettre.getIdDossier(), CurrentUser.login().orElse(null), lettre.getIdLettre(),
+                StatutLettreRenvoi.SIGNE.name());
         // ⚠️ Règle MODIFIÉE (2026-08-01, spec navette cas 3) — la lettre signée SUSPEND l'examen : le dossier
         // passe EN_ATTENTE_PIECES (plus modifiable par les Membres, verrous d'examen exclus de ce statut).
         // La PRMP dépose les pièces demandées (apresLettreRenvoi=true) puis déclenche la reprise via
@@ -291,6 +303,9 @@ public class LettreRenvoiService {
                 || StatutDossier.A_REEXAMINER.name().equals(dossier.getStatut()))) {
             dossier.setStatut(StatutDossier.EN_ATTENTE_PIECES.name());
             dossierRepository.save(dossier);
+            log.info("[CIRCUIT] examen suspendu par lettre de renvoi dossier={} acteur={} lettre={} statut={}",
+                    dossier.getIdDossier(), CurrentUser.login().orElse(null), lettre.getIdLettre(),
+                    StatutDossier.EN_ATTENTE_PIECES.name());
         }
         // ⚠️ Règle ajoutée (2026-08-02, réexamen) — un projet de PV resté PROJET_SOUMIS repasse
         // EN_RECTIFICATION : la lettre de renvoi vaut retour de navette ; sans cela le Membre ne

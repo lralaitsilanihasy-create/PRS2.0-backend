@@ -31,6 +31,9 @@ import cnm.prs.security.Visibilite;
 @Transactional
 public class ReceptionService {
 
+    /** Journal des transitions du circuit (⚠️ LOT 4 — 2026-08-26), format {@code [CIRCUIT] …}. */
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ReceptionService.class);
+
     private final ReceptionRepository repository;
     private final DossierRepository dossierRepository;
     private final PpmRepository ppmRepository;
@@ -252,6 +255,11 @@ public class ReceptionService {
             dossier.setStatut(StatutDossier.PRET_DISPATCH.name());
             dossierRepository.save(dossier);
             if (!dejaPret) {
+                // Log dans cette branche seulement : hors d'elle, le dossier était DÉJÀ PRET_DISPATCH
+                // (re-enregistrement d'une réception complète), ce n'est pas une transition.
+                log.info("[CIRCUIT] reception complete dossier={} acteur={} reception={} statut={}",
+                        dossier.getIdDossier(), cnm.prs.security.CurrentUser.login().orElse(null),
+                        reception.getIdReception(), StatutDossier.PRET_DISPATCH.name());
                 notifierPretDispatch(reception, dossier.getIdDossier());
             }
         });

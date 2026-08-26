@@ -48,6 +48,9 @@ import cnm.prs.security.Visibilite;
 @Transactional
 public class DemandeRetraitService {
 
+    /** Journal des transitions du circuit (⚠️ LOT 4 — 2026-08-26), format {@code [CIRCUIT] …}. */
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(DemandeRetraitService.class);
+
     private final DemandeRetraitRepository repository;
     private final DossierRepository dossierRepository;
     private final PrmpRepository prmpRepository;
@@ -178,6 +181,9 @@ public class DemandeRetraitService {
         entity.setStatut(StatutRetrait.EN_ATTENTE.name());
         entity.setDateDemande(LocalDateTime.now());        // date serveur
         DemandeRetrait saved = repository.save(entity);    // ID auto-généré (IDENTITY)
+        log.info("[CIRCUIT] demande de retrait dossier={} acteur={} demande={} statut={}",
+                idDossier, CurrentUser.login().orElse(null), saved.getIdDemandeRetrait(),
+                StatutRetrait.EN_ATTENTE.name());
 
         PieceDemandeRetrait piece = new PieceDemandeRetrait();
         piece.setIdDemandeRetrait(saved.getIdDemandeRetrait());
@@ -298,6 +304,9 @@ public class DemandeRetraitService {
         demande.setImCtrlCc(decideurAuthentifie());      // décideur réel (CC ou Président), JWT
         demande.setDateDecision(LocalDateTime.now());
         DemandeRetrait saved = repository.save(demande);
+        log.info("[CIRCUIT] retrait accepte dossier={} acteur={} demande={} statut={}",
+                saved.getIdDossier(), CurrentUser.login().orElse(null), saved.getIdDemandeRetrait(),
+                StatutRetrait.ACCEPTEE.name());
         if (demande.getIdDossier() != null) {
             dossierRepository.findById(demande.getIdDossier()).ifPresent(d -> {
                 d.setStatut(StatutDossier.BROUILLON.name());
@@ -335,6 +344,9 @@ public class DemandeRetraitService {
         demande.setDateDecision(LocalDateTime.now());
         demande.setObsDecision(motif);
         DemandeRetrait saved = repository.save(demande);
+        log.info("[CIRCUIT] retrait refuse dossier={} acteur={} demande={} statut={}",
+                saved.getIdDossier(), CurrentUser.login().orElse(null), saved.getIdDemandeRetrait(),
+                StatutRetrait.REFUSEE.name());
         notifierDecision(saved, StatutRetrait.REFUSEE);
         return enrichir(DemandeRetraitMapper.toDto(saved));
     }
