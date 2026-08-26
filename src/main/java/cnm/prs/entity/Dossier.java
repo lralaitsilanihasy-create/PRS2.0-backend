@@ -9,6 +9,7 @@ import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
@@ -33,6 +34,11 @@ public class Dossier {
     @Id
     @Column(name = "ID_DOSSIER", nullable = false)
     private Integer idDossier;
+
+    /** Verrou optimiste (⚠️ LOT 4, 2026-08-26, migration V6) : une écriture concurrente perdante lève un 409 au lieu d'écraser. */
+    @Version
+    @Column(name = "VERSION", nullable = false)
+    private Integer version;
 
     @Column(name = "ID_TYPE_DOSSIER", length = 10)
     private String idTypeDossier;

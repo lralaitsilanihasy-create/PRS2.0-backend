@@ -181,6 +181,27 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Conflit de <strong>verrou optimiste</strong> (⚠️ LOT 4 — 2026-08-26, migration V6) : la ligne
+     * a été modifiée par une autre transaction entre son chargement et son enregistrement. Hibernate
+     * l'a détecté sur la colonne {@code VERSION} des six entités chaudes du circuit (Dossier, Ppm,
+     * Marche, PvExamen, LettreRenvoi, DemandeRetrait) et a refusé l'écriture — sans ce verrou, la
+     * seconde écriture aurait écrasé la première <em>silencieusement</em>.
+     * <p>
+     * → <strong>409</strong> : ce n'est pas une erreur serveur mais un conflit que l'appelant
+     * résout en rechargeant. Journalisé en {@code warn} (pas d'{@code error} : le cas est prévu),
+     * sans la pile, qui n'apprendrait rien.
+     */
+    @ExceptionHandler(org.springframework.orm.ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ErrorResponse> handleConflitVersion(
+            org.springframework.orm.ObjectOptimisticLockingFailureException ex, WebRequest request) {
+        log.warn("Conflit de verrou optimiste sur {} : {} (id {})",
+                uri(request), ex.getPersistentClassName(), ex.getIdentifier());
+        return build(HttpStatus.CONFLICT,
+                "La donnée a été modifiée par une autre opération entre-temps. Rechargez puis réessayez.",
+                request, null);
+    }
+
+    /**
      * Violation d'une contrainte de base : clé primaire en doublon, valeur obligatoire
      * manquante (NOT NULL) ou référence (clé étrangère) inexistante. → 409 plutôt qu'une 500.
      */

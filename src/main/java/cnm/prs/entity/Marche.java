@@ -12,6 +12,7 @@ import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.math.BigDecimal;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -34,6 +35,11 @@ public class Marche {
     @Id
     @Column(name = "ID_DETAIL", nullable = false)
     private Integer idDetail;
+
+    /** Verrou optimiste (⚠️ LOT 4, 2026-08-26, migration V6) : une écriture concurrente perdante lève un 409 au lieu d'écraser. */
+    @Version
+    @Column(name = "VERSION", nullable = false)
+    private Integer version;
 
     /**
      * ⚠️ Règle ajoutée (2026-08-05, mise à jour des PPM) — <strong>identité de la ligne à travers les
