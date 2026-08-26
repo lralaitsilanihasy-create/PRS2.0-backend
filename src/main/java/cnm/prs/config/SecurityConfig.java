@@ -177,8 +177,30 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
+    /**
+     * ⚠️ Durcissement (2026-08-26) — le secret n'a PLUS de valeur par défaut : l'application
+     * refuse de démarrer sans {@code APP_JWT_SECRET} valide. Sans cette garde, un déploiement
+     * qui oublie la variable démarrerait silencieusement avec un secret connu de quiconque lit
+     * le dépôt — n'importe qui pourrait alors forger un jeton ADMINISTRATEUR.
+     * En dev, {@code start-backend.ps1} génère et fournit un secret local ({@code .env.local}).
+     */
     @Bean
     public SecretKey jwtSecretKey(@Value("${app.jwt.secret}") String secret) {
+        if (secret == null || secret.isBlank()) {
+            throw new IllegalStateException(
+                    "Secret JWT absent : définir la variable d'environnement APP_JWT_SECRET "
+                            + "(>= 32 octets). En dev, lancer l'application via start-backend.ps1, "
+                            + "qui fournit un secret local.");
+        }
+        if (secret.getBytes(StandardCharsets.UTF_8).length < 32) {
+            throw new IllegalStateException(
+                    "Secret JWT trop court : APP_JWT_SECRET doit faire au moins 32 octets (HS256).");
+        }
+        if (secret.startsWith("dev-secret-please-change")) {
+            throw new IllegalStateException(
+                    "Secret JWT interdit : l'ancienne valeur de développement publiée dans le dépôt "
+                            + "ne doit plus jamais être utilisée. Générer un secret propre.");
+        }
         return new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
     }
 

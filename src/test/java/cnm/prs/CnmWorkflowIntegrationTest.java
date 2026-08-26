@@ -6782,6 +6782,7 @@ class CnmWorkflowIntegrationTest {
 
     @Test
     @DisplayName("Document PV — le PDF contient l'image de l'emblème")
+    @org.junit.jupiter.api.Tag("word") // conversion docx→PDF via MS Word (documents4j) — exclu en CI Linux (voir .github/workflows/ci.yml)
     void document_pv_genere_embleme_present() throws Exception {
         byte[] pdf = pvDocumentGenerator.genererPdf(ctxPv("Jean PRESIDENT", null, troisObservations()));
         assertTrue(contientImage(pdf), "le PDF du PV contient au moins un objet image (emblème)");
@@ -6789,6 +6790,7 @@ class CnmWorkflowIntegrationTest {
 
     @Test
     @DisplayName("Document PV — date d'examen en toutes lettres dans « L'an … » (année + et le + jour mois)")
+    @org.junit.jupiter.api.Tag("word") // conversion docx→PDF via MS Word (documents4j) — exclu en CI Linux (voir .github/workflows/ci.yml)
     void document_pv_date_examen_toutes_lettres() throws Exception {
         byte[] pdf = pvDocumentGenerator.genererPdf(ctxPv("Jean PRESIDENT", null, troisObservations()));
         assertTrue(texteDuPdf(pdf).contains("deux mille vingt-six et le vingt-trois juin"),
@@ -6811,6 +6813,7 @@ class CnmWorkflowIntegrationTest {
 
     @Test
     @DisplayName("Document PV — « Séance du » reste en chiffres « 30 juin 2026 »")
+    @org.junit.jupiter.api.Tag("word") // conversion docx→PDF via MS Word (documents4j) — exclu en CI Linux (voir .github/workflows/ci.yml)
     void document_pv_seance_format_chiffres() throws Exception {
         byte[] pdf = pvDocumentGenerator.genererPdf(
                 ctxPv(java.time.LocalDate.of(2026, 6, 30), "Jean PRESIDENT", null, troisObservations()));
@@ -6820,6 +6823,7 @@ class CnmWorkflowIntegrationTest {
 
     @Test
     @DisplayName("Document PV — « L'an … » au format toutes lettres (année + et le + jour mois)")
+    @org.junit.jupiter.api.Tag("word") // conversion docx→PDF via MS Word (documents4j) — exclu en CI Linux (voir .github/workflows/ci.yml)
     void document_pv_lan_format_lettres() throws Exception {
         byte[] pdf = pvDocumentGenerator.genererPdf(
                 ctxPv(java.time.LocalDate.of(2026, 6, 30), "Jean PRESIDENT", null, troisObservations()));
@@ -6831,6 +6835,7 @@ class CnmWorkflowIntegrationTest {
 
     @Test
     @DisplayName("Document PV — bloc présents filtré : PV sans Président → ligne Président absente")
+    @org.junit.jupiter.api.Tag("word") // conversion docx→PDF via MS Word (documents4j) — exclu en CI Linux (voir .github/workflows/ci.yml)
     void document_pv_presents_filtre_signataires() throws Exception {
         // Signé par le Membre + le Chef de commission, pas par le Président.
         byte[] pdf = pvDocumentGenerator.genererPdf(ctxPv(null, "Chef COMMISSION", troisObservations()));
@@ -6840,6 +6845,7 @@ class CnmWorkflowIntegrationTest {
 
     @Test
     @DisplayName("Document PV — ANNEXE : une ligne par observation (3 observations → 3 lignes)")
+    @org.junit.jupiter.api.Tag("word") // conversion docx→PDF via MS Word (documents4j) — exclu en CI Linux (voir .github/workflows/ci.yml)
     void document_pv_annexe_observations_multiples() throws Exception {
         String texte = texteDuPdf(pvDocumentGenerator.genererPdf(
                 ctxPv("Jean PRESIDENT", null, troisObservations())));
@@ -6849,6 +6855,7 @@ class CnmWorkflowIntegrationTest {
 
     @Test
     @DisplayName("Document PV — aucun placeholder résiduel <...>")
+    @org.junit.jupiter.api.Tag("word") // conversion docx→PDF via MS Word (documents4j) — exclu en CI Linux (voir .github/workflows/ci.yml)
     void document_pv_aucun_placeholder() throws Exception {
         String texte = texteDuPdf(pvDocumentGenerator.genererPdf(
                 ctxPv("Jean PRESIDENT", "Chef COMMISSION", troisObservations())));
@@ -6858,6 +6865,7 @@ class CnmWorkflowIntegrationTest {
 
     @Test
     @DisplayName("Document PV — titre « COMMISSION CENTRALE » sans « /REGIONALE »")
+    @org.junit.jupiter.api.Tag("word") // conversion docx→PDF via MS Word (documents4j) — exclu en CI Linux (voir .github/workflows/ci.yml)
     void document_pv_titre_sans_regionale() throws Exception {
         String texte = texteDuPdf(pvDocumentGenerator.genererPdf(
                 ctxPv("Jean PRESIDENT", null, troisObservations())));
@@ -6868,6 +6876,7 @@ class CnmWorkflowIntegrationTest {
 
     @Test
     @DisplayName("Document PV — phrase d'avis « Commission Centrale » sans « /Régionale »")
+    @org.junit.jupiter.api.Tag("word") // conversion docx→PDF via MS Word (documents4j) — exclu en CI Linux (voir .github/workflows/ci.yml)
     void document_pv_avis_sans_regionale() throws Exception {
         String texte = texteDuPdf(pvDocumentGenerator.genererPdf(
                 ctxPv("Jean PRESIDENT", null, troisObservations())));

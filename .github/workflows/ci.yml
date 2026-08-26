@@ -1,0 +1,38 @@
+# CI backend — chaque poussée et chaque pull request : compilation + suite de tests.
+# Sans cela, les 444 tests du dépôt ne s'exécutaient que manuellement (plan de
+# travaux 2026-08-26, LOT 0 ; modèle : CI du dépôt Collegue).
+#
+# Les tests tagués « word » (génération du PV via MS Word / documents4j) sont exclus :
+# les runners GitHub n'ont pas Word. Ils restent exécutés en local (mvnw test).
+name: CI
+
+on:
+  push:
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend — tests Maven
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Tests (hors groupe « word »)
+        run: ./mvnw --batch-mode test -DexcludedGroups=word
+        env:
+          # Secret de test explicite (>= 32 octets) : l'application refuse de
+          # démarrer sans secret depuis le durcissement du 2026-08-26.
+          APP_JWT_SECRET: ci-secret-0123456789-abcdefghijklmnopqrstuvwxyz
