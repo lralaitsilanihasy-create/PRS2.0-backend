@@ -9,8 +9,9 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * ⚠️ Règle ajoutée (2026-08-01) — entité JPA mappée sur {@code t_examen_piece} (table additive
@@ -20,7 +21,8 @@ import lombok.NoArgsConstructor;
  */
 @Entity
 @Table(name = "t_examen_piece")
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 public class ExamenPiece {

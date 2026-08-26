@@ -10,8 +10,9 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * Entité JPA mappée sur la table {@code t_delegation_profil}.
@@ -25,7 +26,8 @@ import lombok.NoArgsConstructor;
 @Entity
 @Table(name = "t_delegation_profil", uniqueConstraints = @UniqueConstraint(
         name = "UQ_DELEGATION_PAIRE", columnNames = { "ID_PROFILE_DELEGANT", "ID_PROFILE_DELEGUE" }))
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 public class DelegationProfil {

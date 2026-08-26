@@ -9,8 +9,9 @@ import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * ⚠️ Règle ajoutée (spec « Mandats PRMP ») — <strong>journal des actions</strong> d'un dossier, horodaté par auteur.
@@ -29,7 +30,8 @@ import lombok.NoArgsConstructor;
         @Index(name = "idx_action_dossier", columnList = "ID_DOSSIER"),
         @Index(name = "idx_action_dossier_date", columnList = "DATE_ACTION")
 })
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 public class ActionDossier {

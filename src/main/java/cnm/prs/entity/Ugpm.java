@@ -9,8 +9,9 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.LocalDate;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * Unité de Gestion de la Passation des Marchés (UGPM) — acteur rattaché à <strong>exactement une</strong>
@@ -19,7 +20,8 @@ import lombok.NoArgsConstructor;
  */
 @Entity
 @Table(name = "t_ugpm")
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 public class Ugpm {

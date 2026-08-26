@@ -13,8 +13,9 @@ import jakarta.persistence.Version;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * Entité JPA mappée sur la table {@code t_dossier}.
@@ -26,7 +27,8 @@ import lombok.NoArgsConstructor;
         @Index(name = "idx_dossier_prmp", columnList = "ID_PRMP"),
         @Index(name = "idx_dossier_statut", columnList = "STATUT")
 })
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 public class Dossier {

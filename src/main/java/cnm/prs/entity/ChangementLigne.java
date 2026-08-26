@@ -6,8 +6,9 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import cnm.prs.enums.TypeChangementLigne;
 
@@ -29,7 +30,8 @@ import cnm.prs.enums.TypeChangementLigne;
         @Index(name = "idx_changement_dossier", columnList = "ID_DOSSIER"),
         @Index(name = "idx_changement_ligne_origine", columnList = "ID_LIGNE_ORIGINE"),
 })
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 public class ChangementLigne {

@@ -10,8 +10,9 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * Actualité affichée à l'ouverture de session (table {@code t_actualite}) — spec du 2026-08-18.
@@ -23,7 +24,8 @@ import lombok.NoArgsConstructor;
  */
 @Entity
 @Table(name = "t_actualite")
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 public class Actualite {

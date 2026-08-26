@@ -7,8 +7,9 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * ⚠️ Spec « circuit des observations FAVR » (2026-08-02) — PÉRIMÈTRE FIGÉ des observations transmises
@@ -21,7 +22,8 @@ import lombok.NoArgsConstructor;
  */
 @Entity
 @Table(name = "t_observation_pv")
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 public class ObservationPv {

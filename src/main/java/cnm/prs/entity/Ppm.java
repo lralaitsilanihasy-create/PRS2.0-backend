@@ -12,8 +12,9 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.time.LocalDate;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * Entité JPA mappée sur la table {@code t_ppm}.
@@ -25,7 +26,8 @@ import lombok.NoArgsConstructor;
         @Index(name = "idx_ppm_prmp", columnList = "ID_PRMP"),
         @Index(name = "idx_ppm_localite", columnList = "ID_LOCALITE")
 })
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 public class Ppm {

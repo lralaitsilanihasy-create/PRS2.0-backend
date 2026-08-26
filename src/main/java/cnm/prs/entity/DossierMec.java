@@ -14,8 +14,9 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import cnm.prs.enums.StatutDmc;
 
@@ -26,7 +27,8 @@ import cnm.prs.enums.StatutDmc;
  */
 @Entity
 @Table(name = "t_dossier_mec")
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 public class DossierMec {

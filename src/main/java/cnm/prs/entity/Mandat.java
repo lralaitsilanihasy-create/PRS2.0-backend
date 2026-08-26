@@ -13,8 +13,9 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.LocalDate;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * ⚠️ Règle ajoutée (spec « Mandats PRMP ») — <strong>mandat</strong> d'une PRMP : l'acte de nomination
@@ -34,7 +35,8 @@ import lombok.NoArgsConstructor;
         @Index(name = "idx_mandat_prmp", columnList = "ID_PRMP"),
         @Index(name = "idx_mandat_statut", columnList = "STATUT")
 })
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 public class Mandat {

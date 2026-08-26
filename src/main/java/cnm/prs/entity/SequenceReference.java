@@ -9,7 +9,9 @@ import jakarta.persistence.IdClass;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * Compteur de référence par combinaison (TYPE_DOSSIER, CODE_LOCALITE, ANNEE_EXERCICE).
@@ -19,7 +21,8 @@ import lombok.NoArgsConstructor;
 @Entity
 @Table(name = "t_sequence_reference")
 @IdClass(SequenceReference.Cle.class)
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 public class SequenceReference {
@@ -39,6 +42,12 @@ public class SequenceReference {
     @Column(name = "DERNIERE_VALEUR", nullable = false)
     private Long derniereValeur;
 
+    /**
+     * ⚠️ LOT 4 (2026-08-26) — conserve {@code @Data} là où les entités l'ont perdu : ce n'est pas
+     * une entité mais la <strong>classe de clé composite</strong> de {@code @IdClass}, pour laquelle
+     * JPA <strong>exige</strong> {@code equals}/{@code hashCode} par valeur. Aucun des reproches
+     * faits à {@code @Data} sur les entités ne s'y applique : ni relation LAZY, ni identité JPA.
+     */
     @Data
     @NoArgsConstructor
     @AllArgsConstructor

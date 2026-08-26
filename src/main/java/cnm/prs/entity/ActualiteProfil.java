@@ -8,8 +8,9 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * Ciblage d'une actualité par profil (table {@code t_actualite_profil}) — spec du 2026-08-18.
@@ -24,7 +25,8 @@ import lombok.NoArgsConstructor;
 @Entity
 @Table(name = "t_actualite_profil",
         uniqueConstraints = @UniqueConstraint(columnNames = { "ID_ACTUALITE", "PROFIL" }))
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 public class ActualiteProfil {

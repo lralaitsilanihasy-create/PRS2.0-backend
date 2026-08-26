@@ -8,8 +8,9 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * ⚠️ Spec « circuit des observations FAVR » (2026-08-02) — HISTORIQUE append-only des décisions du
@@ -19,7 +20,8 @@ import lombok.NoArgsConstructor;
  */
 @Entity
 @Table(name = "t_suivi_observation")
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 public class SuiviObservation {

@@ -8,8 +8,9 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * ⚠️ Spec recevabilité au dépôt (2026-08-02) — vérification PIÈCE PAR PIÈCE des pièces jointes par le
@@ -20,7 +21,8 @@ import lombok.NoArgsConstructor;
  */
 @Entity
 @Table(name = "t_verification_piece_depot")
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 public class VerificationPieceDepot {

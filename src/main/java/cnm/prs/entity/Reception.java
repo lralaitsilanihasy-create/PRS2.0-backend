@@ -11,8 +11,9 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * Entité JPA mappée sur la table {@code t_reception}.
@@ -22,7 +23,8 @@ import lombok.NoArgsConstructor;
 @Table(name = "t_reception", indexes = {
         @Index(name = "idx_reception_dossier", columnList = "ID_DOSSIER")
 })
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 public class Reception {

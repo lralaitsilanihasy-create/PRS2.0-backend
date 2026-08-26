@@ -9,8 +9,9 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * Entité JPA mappée sur {@code t_demande_retrait_vue} : dernière consultation de l'écran « Demandes de
@@ -20,7 +21,8 @@ import lombok.NoArgsConstructor;
 @Entity
 @Table(name = "t_demande_retrait_vue",
         uniqueConstraints = @UniqueConstraint(name = "uk_demande_retrait_vue_prmp", columnNames = {"ID_PRMP"}))
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 public class DemandeRetraitVue {

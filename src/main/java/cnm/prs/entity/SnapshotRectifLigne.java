@@ -9,8 +9,9 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * ⚠️ Règle ajoutée (2026-08-15, visibilité des rectifications) — instantané <strong>pré-correction</strong>
@@ -27,7 +28,8 @@ import lombok.NoArgsConstructor;
  */
 @Entity
 @Table(name = "t_snapshot_rectif_ligne")
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 public class SnapshotRectifLigne {
 

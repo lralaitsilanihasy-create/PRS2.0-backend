@@ -9,8 +9,9 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * Entité JPA mappée sur {@code t_lettre_renvoi_lue} : trace de lecture d'une lettre de renvoi par une
@@ -20,7 +21,8 @@ import lombok.NoArgsConstructor;
 @Entity
 @Table(name = "t_lettre_renvoi_lue",
         uniqueConstraints = @UniqueConstraint(name = "uk_lettre_lue", columnNames = {"ID_LETTRE", "ID_PRMP"}))
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 public class LettreRenvoiLue {

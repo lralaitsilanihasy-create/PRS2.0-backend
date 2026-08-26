@@ -10,8 +10,9 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * Lettre de demande de retrait (datée et signée, PDF) jointe par la PRMP à sa demande
@@ -25,7 +26,8 @@ import lombok.NoArgsConstructor;
  */
 @Entity
 @Table(name = "t_piece_demande_retrait")
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 public class PieceDemandeRetrait {

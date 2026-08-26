@@ -15,8 +15,9 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.math.BigDecimal;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * Entité JPA mappée sur la table {@code t_marche}.
@@ -27,7 +28,8 @@ import lombok.NoArgsConstructor;
         @Index(name = "idx_marche_dossier", columnList = "ID_DOSSIER"),
         @Index(name = "idx_marche_ppm", columnList = "ID_PPM")
 })
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 public class Marche {

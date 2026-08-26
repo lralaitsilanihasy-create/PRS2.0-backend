@@ -5,8 +5,9 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * Entité JPA mappée sur la table référentielle {@code t_capm} : processus de marché
@@ -14,7 +15,8 @@ import lombok.NoArgsConstructor;
  */
 @Entity
 @Table(name = "t_capm")
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 public class Capm {

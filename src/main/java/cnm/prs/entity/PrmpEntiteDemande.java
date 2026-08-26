@@ -7,8 +7,9 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * Déclaration d'entité contractante faite par une PRMP à l'inscription (table
@@ -24,7 +25,8 @@ import lombok.NoArgsConstructor;
  */
 @Entity
 @Table(name = "t_prmp_entite_demande")
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 public class PrmpEntiteDemande {

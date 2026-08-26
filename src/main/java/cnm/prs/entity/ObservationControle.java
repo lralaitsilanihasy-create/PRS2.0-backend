@@ -11,8 +11,9 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * Entité JPA mappée sur la table {@code t_observation_controle} : une ligne « AU LIEU DE / LIRE »
@@ -21,7 +22,8 @@ import lombok.NoArgsConstructor;
  */
 @Entity
 @Table(name = "t_observation_controle")
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 public class ObservationControle {

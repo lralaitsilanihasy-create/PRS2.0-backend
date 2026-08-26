@@ -9,8 +9,9 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * Entité JPA mappée sur la table référentielle {@code tr_sous_type_dossier} (⚠️ règle ajoutée —
@@ -21,7 +22,8 @@ import lombok.NoArgsConstructor;
  */
 @Entity
 @Table(name = "tr_sous_type_dossier")
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 public class SousTypeDossier {

@@ -7,8 +7,9 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * Paramètre système général (table {@code t_parametre}) — clé/valeur éditable sans redéploiement.
@@ -18,7 +19,8 @@ import lombok.NoArgsConstructor;
  */
 @Entity
 @Table(name = "t_parametre")
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 public class Parametre {

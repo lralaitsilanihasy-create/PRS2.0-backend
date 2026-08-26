@@ -13,8 +13,9 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.time.LocalDate;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * Entité JPA mappée sur la table {@code t_lettre_renvoi} : lettre de renvoi d'un examen,
@@ -23,7 +24,8 @@ import lombok.NoArgsConstructor;
  */
 @Entity
 @Table(name = "t_lettre_renvoi")
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 public class LettreRenvoi {

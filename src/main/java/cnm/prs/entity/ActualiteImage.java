@@ -10,8 +10,9 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * Image d'une actualité (table {@code t_actualite_image}) — spec du 2026-08-18, même approche
@@ -21,7 +22,8 @@ import lombok.NoArgsConstructor;
  */
 @Entity
 @Table(name = "t_actualite_image")
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 public class ActualiteImage {

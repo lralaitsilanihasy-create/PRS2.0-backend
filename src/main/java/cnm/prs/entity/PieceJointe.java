@@ -8,8 +8,9 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * Pièce jointe à une inscription PRMP (table {@code t_piece_jointe}, §3.1) : arrêté de
@@ -22,7 +23,8 @@ import lombok.NoArgsConstructor;
  */
 @Entity
 @Table(name = "t_piece_jointe")
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 public class PieceJointe {
