@@ -209,6 +209,14 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
   d'identité (`cin`, `dateCin`, `lieuCin`) ni `login`**, réservés à l'Administrateur. Le Chargé de
   publication, hors instruction, n'est pas concerné (403), et le reste de la ressource UGPM demeure
   réservé à l'Administrateur.
+- ⚠️ **Correctif (2026-08-26) — l'UGPM lit le périmètre de sa tutelle.** Une UGPM connectée voit en
+  **lecture** ce que voit sa PRMP de tutelle : dossiers, PPM, marchés et lettres de renvoi signées
+  (le `ref` de son jeton porte l'ID_PRMP de tutelle — quatre services testaient `profil == PRMP` à la
+  main au lieu de la garde centrale `Visibilite.estPrmp()`, excluant l'UGPM de tout). Les **actions**
+  réservées à la PRMP (soumission, resoumission, transmission de compléments, retraits) restent
+  interdites à l'UGPM (403). Effet de bord assumé, **à confirmer côté métier** : la consultation d'une
+  lettre de renvoi par une UGPM la marque « lue » **pour la tutelle entière** (`t_lettre_renvoi_lue`
+  est clé sur `ID_PRMP`, sans notion d'agent individuel).
 
 **Rectification en attente de décision PRMP (⚠️ règle ajoutée)**
 
