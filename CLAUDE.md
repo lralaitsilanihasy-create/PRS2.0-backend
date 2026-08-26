@@ -46,8 +46,14 @@ Organisation par couches (à respecter) :
   - `spring.datasource.url=jdbc:postgresql://localhost:5432/DBPRS20`  ← à compléter
   - `spring.datasource.username=postgres`  (souvent `postgres`)
   - `spring.datasource.password=${DB_PASSWORD:}`  (jamais en clair — définir la variable d'environnement `DB_PASSWORD`)
-  - `spring.jpa.hibernate.ddl-auto=update` (Hibernate crée/ajoute les tables à partir des entités — **en sursis**, voir ci-dessous)
-- Stratégie de schéma : passage à **Flyway acté** (`docs/adr/ADR-0003-migrations-flyway.md`), implémentation en cours — baseline `V1` = dump du schéma actuel, `ddl-auto` passera d'`update` à `validate`. Les scripts manuels de `docs/migrations/` deviennent l'historique gelé ; toute nouvelle évolution de schéma doit anticiper ce passage plutôt que d'ajouter un 33ᵉ script narratif.
+  - `spring.jpa.hibernate.ddl-auto=validate` (Hibernate **vérifie** le schéma, n'y touche plus)
+- Stratégie de schéma : **Flyway en place** (`docs/adr/ADR-0003-migrations-flyway.md`, livré le 2026-08-26) —
+  migrations dans `src/main/resources/db/migration/` (`V1` = baseline du schéma réel, `V2-V4` = reprises des
+  ex-runners Java, `V5` = séquences de PK généralisées). `baseline-on-migrate` : une base déjà peuplée est
+  marquée V1 sans rejouer la baseline. **Toute évolution de schéma = une migration `V<n>__*.sql`** ; les
+  scripts manuels de `docs/migrations/` sont l'historique gelé d'avant Flyway, ne plus y ajouter.
+- Tests d'intégration : **Testcontainers PostgreSQL 17** (`docs/adr/ADR-0004`), socle `AbstractIntegrationTest`
+  (conteneur singleton) — le schéma des tests est celui de Flyway, plus de H2.
 
 ## Commandes
 - Lancer : `mvnw.cmd spring-boot:run` (Windows) — ou dans Eclipse : clic droit → Run As → Spring Boot App
