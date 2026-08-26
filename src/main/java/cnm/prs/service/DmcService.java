@@ -19,6 +19,7 @@ import cnm.prs.repository.DossierMecRepository;
 import cnm.prs.repository.MarcheRepository;
 import cnm.prs.repository.ModePassationRepository;
 import cnm.prs.repository.TypeDmcRepository;
+import cnm.prs.security.PerimetreDossier;
 
 /**
  * Dossier de mise en concurrence (DMC) : création <strong>par ligne de marché</strong> avec type
@@ -33,13 +34,16 @@ public class DmcService {
     private final MarcheRepository marcheRepository;
     private final ModePassationRepository modeRepository;
     private final TypeDmcRepository typeDmcRepository;
+    private final PerimetreDossier perimetre;
 
     public DmcService(DossierMecRepository repository, MarcheRepository marcheRepository,
-            ModePassationRepository modeRepository, TypeDmcRepository typeDmcRepository) {
+            ModePassationRepository modeRepository, TypeDmcRepository typeDmcRepository,
+            PerimetreDossier perimetre) {
         this.repository = repository;
         this.marcheRepository = marcheRepository;
         this.modeRepository = modeRepository;
         this.typeDmcRepository = typeDmcRepository;
+        this.perimetre = perimetre;
     }
 
     /**
@@ -67,14 +71,29 @@ public class DmcService {
 
     @Transactional(readOnly = true)
     public DmcDto findByMarche(Integer idDetail) {
-        return DmcMapper.toDto(repository.findByIdDetail(idDetail)
-                .orElseThrow(() -> new ResourceNotFoundException("Aucun DMC pour la ligne de marché : " + idDetail)));
+        DossierMec dmc = repository.findByIdDetail(idDetail)
+                .orElseThrow(() -> new ResourceNotFoundException("Aucun DMC pour la ligne de marché : " + idDetail));
+        controlerVisibilite(dmc);
+        return DmcMapper.toDto(dmc);
     }
 
     @Transactional(readOnly = true)
     public DmcDto findById(Long idDmc) {
-        return DmcMapper.toDto(repository.findById(idDmc)
-                .orElseThrow(() -> new ResourceNotFoundException("DMC introuvable : " + idDmc)));
+        DossierMec dmc = repository.findById(idDmc)
+                .orElseThrow(() -> new ResourceNotFoundException("DMC introuvable : " + idDmc));
+        controlerVisibilite(dmc);
+        return DmcMapper.toDto(dmc);
+    }
+
+    /**
+     * ⚠️ LOT 3a (2026-08-26) — §1/§3.1 : le DMC est rattaché à une ligne de marché, donc à un dossier ;
+     * sa lecture suit le périmètre de ce dossier (Président/Admin : tout ; contrôleurs : leur localité ;
+     * PRMP : ses dossiers). La <strong>création</strong> reste réservée à l'Administrateur
+     * ({@code @PreAuthorize} sur {@code DmcController}) : elle est un acte de préparation déclenché
+     * explicitement, jamais une écriture d'utilisateur final.
+     */
+    private void controlerVisibilite(DossierMec dmc) {
+        perimetre.controler(marcheRepository.findIdDossierByIdDetail(dmc.getIdDetail()).orElse(null));
     }
 
     /**

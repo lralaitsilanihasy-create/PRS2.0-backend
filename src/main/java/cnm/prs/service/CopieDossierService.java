@@ -10,29 +10,41 @@ import cnm.prs.entity.CopieDossier;
 import cnm.prs.exception.ResourceNotFoundException;
 import cnm.prs.mapper.CopieDossierMapper;
 import cnm.prs.repository.CopieDossierRepository;
+import cnm.prs.repository.DossierRepository;
+import cnm.prs.security.Visibilite;
 
 /**
  * Logique métier pour {@link CopieDossier}.
+ *
+ * <p>⚠️ LOT 3a (2026-08-26) — §1 : CRUD auparavant sans aucune garde. La copie de dossier est une
+ * pièce <strong>interne</strong> du circuit, créée par {@code DispatchService} au moment du dispatch.
+ * Lecture bornée à la localité du contrôleur (Président/Administrateur : tout ; PRMP : rien) ;
+ * écriture générique réservée à l'Administrateur ({@code @PreAuthorize} sur le contrôleur).</p>
  */
 @Service
 @Transactional
 public class CopieDossierService {
 
     private final CopieDossierRepository repository;
+    private final DossierRepository dossierRepository;
 
-    public CopieDossierService(CopieDossierRepository repository) {
+    public CopieDossierService(CopieDossierRepository repository, DossierRepository dossierRepository) {
         this.repository = repository;
+        this.dossierRepository = dossierRepository;
     }
 
     @Transactional(readOnly = true)
     public List<CopieDossierDto> findAll() {
-        return repository.findAll().stream().map(CopieDossierMapper::toDto).toList();
+        return Visibilite.filtrer(repository::findAll,
+                        loc -> repository.findByIdDossierIn(dossierRepository.findIdsVisiblesParLocalite(loc)))
+                .stream().map(CopieDossierMapper::toDto).toList();
     }
 
     @Transactional(readOnly = true)
     public CopieDossierDto findById(Integer id) {
         CopieDossier entity = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("CopieDossier introuvable : " + id));
+        Visibilite.controler(loc -> dossierRepository.existsDansLocalite(entity.getIdDossier(), loc));
         return CopieDossierMapper.toDto(entity);
     }
 

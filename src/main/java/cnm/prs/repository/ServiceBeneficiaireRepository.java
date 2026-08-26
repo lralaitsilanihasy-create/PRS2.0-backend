@@ -1,9 +1,12 @@
 package cnm.prs.repository;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import cnm.prs.entity.ServiceBeneficiaire;
@@ -20,4 +23,15 @@ public interface ServiceBeneficiaireRepository extends JpaRepository<ServiceBene
     /** Plus grand ID_BENEF (0 si table vide) — pour allouer la PK à la création (PK manuelle). */
     @Query("select coalesce(max(s.idBenef), 0) from ServiceBeneficiaire s")
     int findMaxIdBenef();
+
+    /**
+     * ⚠️ LOT 3a (2026-08-26) — §1/§3.1 : bénéficiaires des dossiers du périmètre de l'appelant
+     * (liste scopée), rattachés via la ligne de marché ({@code ID_DETAIL → t_marche.ID_DOSSIER}).
+     */
+    @Query("select s from ServiceBeneficiaire s, Marche m where m.idDetail = s.idDetail and m.idDossier in :idsDossiers")
+    List<ServiceBeneficiaire> findParDossiers(@Param("idsDossiers") Collection<Integer> idsDossiers);
+
+    /** Dossier rattaché à un bénéficiaire (via son marché) — contrôle de périmètre d'un accès unitaire. */
+    @Query("select m.idDossier from ServiceBeneficiaire s, Marche m where s.idBenef = :id and m.idDetail = s.idDetail")
+    Optional<Integer> findIdDossier(@Param("id") Integer id);
 }

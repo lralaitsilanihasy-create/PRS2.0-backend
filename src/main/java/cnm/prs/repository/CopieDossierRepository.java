@@ -1,5 +1,8 @@
 package cnm.prs.repository;
 
+import java.util.Collection;
+import java.util.List;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -18,4 +21,11 @@ public interface CopieDossierRepository extends JpaRepository<CopieDossier, Inte
     @Modifying
     @Query("delete from CopieDossier c where c.idDossier = :idDossier")
     int deleteParDossier(@Param("idDossier") Integer idDossier);
+
+    /**
+     * ⚠️ LOT 3a (2026-08-26) — §1 : copies des dossiers de la localité de l'appelant (liste scopée).
+     * {@code t_copie_dossier} porte {@code ID_DOSSIER} ; la PRMP n'a pas accès à cette ressource
+     * interne du circuit (périmètre vide côté {@code PerimetreDossier} → liste vide).
+     */
+    List<CopieDossier> findByIdDossierIn(Collection<Integer> idsDossiers);
 }

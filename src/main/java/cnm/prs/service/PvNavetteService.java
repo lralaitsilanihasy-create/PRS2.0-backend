@@ -12,9 +12,20 @@ import cnm.prs.exception.BusinessRuleException;
 import cnm.prs.exception.ResourceNotFoundException;
 import cnm.prs.mapper.PvNavetteMapper;
 import cnm.prs.repository.PvNavetteRepository;
+import cnm.prs.security.Visibilite;
 
 /**
  * Logique métier pour {@link PvNavette}.
+ *
+ * <p>⚠️ LOT 3a (2026-08-26) — §3.5 « aucune navette ne peut être supprimée » : l'immuabilité était
+ * posée sur {@link #delete} mais <strong>contournable par le {@code PUT} générique</strong>, qui
+ * réécrivait sens, acteur, date et commentaire d'une navette déjà tracée. {@link #update} refuse
+ * désormais pour <strong>tous</strong> les profils, Administrateur compris — cohérent avec la
+ * suppression, et c'est le sens même d'une trace.</p>
+ *
+ * <p>⚠️ LOT 3a — §1 : la navette est une pièce <strong>interne</strong> du circuit. Sa lecture est
+ * bornée à la localité du contrôleur (Président/Administrateur : tout) ; la PRMP n'y a pas accès —
+ * elle reçoit la synthèse par le PV, pas le détail de la navette (§3.1).</p>
  */
 @Service
 @Transactional
@@ -28,13 +39,15 @@ public class PvNavetteService {
 
     @Transactional(readOnly = true)
     public List<PvNavetteDto> findAll() {
-        return repository.findAll().stream().map(PvNavetteMapper::toDto).toList();
+        return Visibilite.filtrer(repository::findAll, repository::findParLocalite)
+                .stream().map(PvNavetteMapper::toDto).toList();
     }
 
     @Transactional(readOnly = true)
     public PvNavetteDto findById(Integer id) {
         PvNavette entity = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("PvNavette introuvable : " + id));
+        Visibilite.controler(loc -> repository.existsDansLocalite(id, loc));
         return PvNavetteMapper.toDto(entity);
     }
 
@@ -44,17 +57,14 @@ public class PvNavetteService {
         return PvNavetteMapper.toDto(repository.save(entity));
     }
 
+    /**
+     * Modification interdite : la navette est une trace, au même titre qu'elle est insupprimable
+     * (§3.5). Les vraies navettes naissent du flux PV (soumission / retour rectification /
+     * acceptation) qui les insère lui-même ; rien ne justifie de les réécrire ensuite.
+     */
     public PvNavetteDto update(Integer id, PvNavetteDto dto) {
-        validateSens(dto.getSens());
-        PvNavette existing = repository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("PvNavette introuvable : " + id));
-        existing.setIdPv(dto.getIdPv());
-        existing.setNumNavette(dto.getNumNavette());
-        existing.setSens(dto.getSens());
-        existing.setImActeur(dto.getImActeur());
-        existing.setDateAction(dto.getDateAction());
-        existing.setCommentaire(dto.getCommentaire());
-        return PvNavetteMapper.toDto(repository.save(existing));
+        throw new BusinessRuleException(
+                "Une navette de PV ne peut pas être modifiée : la navette est immuable (§3.5 — traçabilité).");
     }
 
     /**

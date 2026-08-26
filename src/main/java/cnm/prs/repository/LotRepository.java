@@ -1,5 +1,6 @@
 package cnm.prs.repository;
 
+import java.util.Collection;
 import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -23,4 +24,10 @@ public interface LotRepository extends JpaRepository<Lot, Integer> {
 
     /** Supprime les lots d'un marché (cascade applicative — leurs tranches doivent être retirées avant). */
     long deleteByIdDetail(Integer idDetail);
+
+    /**
+     * ⚠️ LOT 3a (2026-08-26) — §1/§3.1 : lots des dossiers du périmètre de l'appelant (liste scopée).
+     * Les identifiants viennent de {@code PerimetreDossier} ; {@code t_lot} porte {@code ID_DOSSIER}.
+     */
+    List<Lot> findByIdDossierIn(Collection<Integer> idsDossiers);
 }

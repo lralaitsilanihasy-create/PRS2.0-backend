@@ -1,6 +1,7 @@
 package cnm.prs.repository;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -24,6 +25,15 @@ public interface MarcheRepository extends JpaRepository<Marche, Integer> {
 
     /** Vrai si le dossier porte au moins une ligne de marché (précondition de soumission d'un PPM). */
     boolean existsByIdDossier(Integer idDossier);
+
+    /**
+     * ⚠️ LOT 3a (2026-08-26) — dossier <strong>faisant autorité</strong> d'une ligne de marché.
+     * Les enfants rattachés par {@code ID_DETAIL} (prévisions, échéances, bénéficiaires, lots, DMC)
+     * résolvent leur dossier par ici plutôt que de faire confiance à un {@code idDossier} envoyé
+     * par le client, qui permettrait de rattacher un enfant au marché d'autrui.
+     */
+    @Query("select m.idDossier from Marche m where m.idDetail = :idDetail")
+    Optional<Integer> findIdDossierByIdDetail(@Param("idDetail") Integer idDetail);
 
     /** Lignes historiques sans forme de marché (reprise idempotente {@code FormeMarcheMigration}). */
     List<Marche> findByFormeMarcheIsNull();

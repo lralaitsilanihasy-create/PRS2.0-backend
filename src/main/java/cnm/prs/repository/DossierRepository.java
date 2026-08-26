@@ -196,6 +196,40 @@ public interface DossierRepository extends JpaRepository<Dossier, Integer> {
     boolean existsVisiblePourPrmp(@Param("idDossier") Integer idDossier, @Param("idPrmp") String idPrmp);
 
     /**
+     * ⚠️ LOT 3a (2026-08-26) — §1 : identifiants des dossiers visibles d'une localité, projection de
+     * {@link #findVisiblesParLocalite} sur la seule PK. Sert à scoper les ressources
+     * <strong>enfants</strong> d'un dossier (lots, prévisions, échéances…) dont la table ne porte pas
+     * la localité — voir {@link cnm.prs.security.PerimetreDossier}. Prédicat volontairement identique
+     * à celui de la liste des dossiers : une seule définition de « dossier visible d'une localité ».
+     */
+    @Query("""
+            select d.idDossier from Dossier d where
+                (d.statut is null or d.statut <> 'BROUILLON')
+            and (
+                d.idLocalite = :localite
+             or exists (select 1 from Reception r
+                        where r.idDossier = d.idDossier and r.ctrlRecept.idLocalite = :localite)
+             or exists (select 1 from Ppm p
+                        where p.idDossier = d.idDossier and p.idLocalite = :localite))
+            """)
+    List<Integer> findIdsVisiblesParLocalite(@Param("localite") String localite);
+
+    /**
+     * ⚠️ LOT 3a (2026-08-26) — §3.1 : identifiants des dossiers d'une PRMP, projection de
+     * {@link #findVisiblesPourPrmp} sur la seule PK (même usage que
+     * {@link #findIdsVisiblesParLocalite}). Les <strong>brouillons</strong> y figurent : la PRMP
+     * propriétaire lit et édite les enfants de son brouillon.
+     */
+    @Query("""
+            select d.idDossier from Dossier d where
+               d.idPrmp = :idPrmp
+               or exists (select 1 from Ppm p where p.idDossier = d.idDossier and p.idPrmp = :idPrmp)
+               or exists (select 1 from Marche m, Ppm p2
+                          where m.idDossier = d.idDossier and m.idPpm = p2.idPpm and p2.idPrmp = :idPrmp)
+            """)
+    List<Integer> findIdsVisiblesPourPrmp(@Param("idPrmp") String idPrmp);
+
+    /**
      * Dossiers d'un ensemble de statuts <strong>attribués à un Membre</strong> (via réception → dispatch
      * {@code imCtrlMembre}). Sert à la file « à examiner » du Membre attributaire (§2.4) : DISPATCHE
      * (premier examen) + A_REEXAMINER (⚠️ 2026-08-02 — réexamen après lettre de renvoi, pièces reçues).
