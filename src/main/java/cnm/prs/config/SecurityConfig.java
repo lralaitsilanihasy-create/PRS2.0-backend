@@ -127,6 +127,10 @@ public class SecurityConfig {
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**").permitAll()
+                        // ⚠️ LOT 5 (2026-08-26) — documentation d'API générée (springdoc / Swagger UI) :
+                        // purement consultative, servie par l'application elle-même (aucune donnée métier).
+                        .requestMatchers("/v3/api-docs/**", "/v3/api-docs.yaml",
+                                "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         // ⚠️ Règle ajoutée (2026-07-26) — création d'entité contractante ouverte à la PRMP
                         // (import PPM : autorité hors périmètre → nouvelle entité + rattachement EN ATTENTE),
                         // EN PLUS de l'Admin. Doit précéder la règle REFERENTIELS (1er match gagne).

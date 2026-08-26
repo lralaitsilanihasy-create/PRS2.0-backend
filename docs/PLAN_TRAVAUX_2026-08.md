@@ -22,11 +22,11 @@
 | Ordre | Chantier | Taille | Etat |
 |---|---|---|---|
 | **LOT 0** | Outillage (CI, ESLint, Mailpit, secret JWT, CORS, pom jar/Java 21) | ~1 j | **Livre** (2026-08-26) |
-| **LOT 1** | Bugs actifs (scoping UGPM, audit tronque, blob revoque trop tot, CurrentUser) | ~1 j | **En cours** (swarm) |
-| **LOT 2** | Schema et tests (Flyway, Testcontainers, decoupage de la suite d'integration) | ~3-4 j | Preparation |
-| **LOT 3** | Autorisation et CRUD (services sans garde, anti-ecrasement, sequences) | ~3-5 j | A venir |
-| **LOT 4** | Robustesse (exceptions, verrou optimiste, entites, logs du circuit) | ~2-3 j | A venir |
-| **LOT 5** | Contrat d'API et documentation (OpenAPI, deduplication, ADR) | ~1-2 j | Entame (ADR) |
+| **LOT 1** | Bugs actifs (scoping UGPM, audit tronque, blob revoque trop tot, CurrentUser) | ~1 j | **Livre** (2026-08-26 — back `82602fc`, front `7fc30d5`) |
+| **LOT 2** | Schema et tests (Flyway, Testcontainers, decoupage de la suite d'integration) | ~3-4 j | **2.1-2.2 livres** (`d557cef`) ; 2.3 decoupage en cours |
+| **LOT 3** | Autorisation et CRUD (services sans garde, anti-ecrasement, sequences) | ~3-5 j | **Livre** (2026-08-26 — `69c3863` + `cfa5a5d`, 28 tests securite/PK) |
+| **LOT 4** | Robustesse (exceptions, verrou optimiste, entites, logs du circuit) | ~2-3 j | **Livre** (2026-08-26 — `d3c907f`..`71df209`, 4 volets) |
+| **LOT 5** | Contrat d'API et documentation (OpenAPI, deduplication, ADR) | ~1-2 j | **Livre** (springdoc 3.1.0, dedup docs, api-endpoints a jour) |
 
 **Parque en production** (decision utilisateur : rien ne demarre sur ce perimetre) :
 anti-bruteforce (modele `LoginRateLimiter` du depot Collegue), refresh token revocable
@@ -63,7 +63,7 @@ perimetre tant qu'aucune decision produit ne les active.
 
 ## LOT 1 — Bugs actifs
 
-**Etat : en cours (swarm).**
+**Etat : livre le 2026-08-26** (back `82602fc`, front `7fc30d5`).
 
 Quatre anomalies actives, sans dependance entre elles — traitables en parallele.
 
@@ -110,7 +110,7 @@ erreur serveur (500). Correctif : envelopper l'appel et retomber sur
 
 ## LOT 2 — Schema et tests
 
-**Etat : preparation.**
+**Etat : 2.1-2.2 livres le 2026-08-26** (`d557cef` — Flyway V1-V4, Testcontainers PostgreSQL 17) ; 2.3 (decoupage) en cours.
 
 ### 2.1 — Baseline Flyway
 
@@ -138,7 +138,7 @@ qu'aujourd'hui.
 
 ## LOT 3 — Autorisation et CRUD
 
-**Etat : a venir.**
+**Etat : livre le 2026-08-26** (`69c3863` fermeture des 13 CRUD + `cfa5a5d` anti-ecrasement et sequences V5).
 
 ### 3.1 — Fermeture des services sans garde d'autorisation
 
@@ -169,7 +169,7 @@ posees en 3.1 et eviter qu'une regression future en rouvre une.
 
 ## LOT 4 — Robustesse
 
-**Etat : a venir.**
+**Etat : livre le 2026-08-26** (`d3c907f` 500 journalisees, `f77dacd` verrou optimiste V6, `fc18caf` entites de-Lombok + open-in-view, `71df209` logs du circuit).
 
 - `handleGeneric` (gestionnaire d'erreur generique) : journaliser l'exception cote
   serveur avant de renvoyer une reponse masquee au client — aujourd'hui l'un ou l'autre
@@ -190,7 +190,7 @@ posees en 3.1 et eviter qu'une regression future en rouvre une.
 
 ## LOT 5 — Contrat d'API et documentation
 
-**Etat : entame** (les ADR de `docs/adr/`).
+**Etat : livre le 2026-08-26** (ADR, springdoc 3.1.0 + OpenApiConfig + test, deduplication des docs partagees, api-endpoints.md aligne sur LOT 3a/3b).
 
 - `springdoc-openapi` : generer un contrat d'API explorable a partir des controleurs et
   DTO existants, plutot que de ne s'appuyer que sur `docs/api-endpoints.md` tenu a la
@@ -200,3 +200,20 @@ posees en 3.1 et eviter qu'une regression future en rouvre une.
   maintenir sa propre copie en parallele.
 - ADR : ce chantier a produit `docs/adr/ADR-0001` a `ADR-0004` ; a poursuivre pour
   toute future decision d'architecture significative.
+
+---
+
+## Suivis ouverts (issus des livraisons du 2026-08-26)
+
+- **Lettre lue par une UGPM** : la consultation par une UGPM marque la lettre « lue » pour la
+  tutelle entière (`t_lettre_renvoi_lue` est clé sur `ID_PRMP`, sans notion d'agent). Cohérent
+  avec le périmètre partagé, mais **à confirmer côté métier** (badge PRMP).
+- **409 du verrou optimiste** : le handler `ObjectOptimisticLockingFailureException` (LOT 4)
+  renvoie un 409 sans `code` dédié — en ajouter un (modèle `VacancePrmpException.CODE`) pour que
+  le front affiche « rechargez puis réessayez » au lieu d'une erreur générique. Petit chantier
+  back + front.
+- **Version dans les DTO** : par HTTP, les DTO ne portent pas la version — deux PUT séquentiels
+  ne déclenchent pas le conflit (documenté dans `VerrouOptimisteIntegrationTest`). Faire transiter
+  la version dans les DTO des écrans d'édition si le besoin apparaît.
+- **Warnings a11y ESLint (front)** : ~124 avertissements assumés (`click-events-have-key-events`,
+  `interactive-supports-focus`, `label-has-associated-control`) — chantier a11y dédié, cf. AUDIT.md.

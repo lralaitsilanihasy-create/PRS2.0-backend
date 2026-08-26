@@ -92,6 +92,14 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-validation</artifactId>
 		</dependency>
+		<!-- Contrat d'API généré (OpenAPI 3 + Swagger UI) — LOT 5, 2026-08-26. springdoc n'est
+		     pas géré par le BOM Spring Boot : la ligne 3.x est celle de Boot 4 / Framework 7
+		     (la 2.8.x du dépôt Collegue est pour Boot 3.5 — ne pas la recopier). -->
+		<dependency>
+			<groupId>org.springdoc</groupId>
+			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+			<version>3.1.0</version>
+		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-webmvc</artifactId>
