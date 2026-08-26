@@ -29,6 +29,21 @@
 	<properties>
 		<java.version>21</java.version>
 	</properties>
+
+	<dependencyManagement>
+		<dependencies>
+			<!-- Boot 4.x ne gère plus les artefacts org.testcontainers : le BOM est importé ici,
+			     ALIGNÉ sur la version contre laquelle spring-boot-testcontainers 4.1.0 est bâti
+			     (2.0.5 — vérifier l'alignement à chaque montée de Boot). -->
+			<dependency>
+				<groupId>org.testcontainers</groupId>
+				<artifactId>testcontainers-bom</artifactId>
+				<version>2.0.5</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
 	<dependencies>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -93,6 +108,18 @@
 			<artifactId>postgresql</artifactId>
 			<scope>runtime</scope>
 		</dependency>
+		<!-- Migrations de schéma (ADR-0003, 2026-08-26) : baseline V1 = dump du schéma réel,
+		     reprises V2+ ; remplace ddl-auto=update + les scripts manuels de docs/migrations/.
+		     ⚠️ Boot 4 : l'auto-configuration Flyway vit dans le MODULE spring-boot-flyway
+		     (flyway-core seul ne déclenche plus rien, contrairement à Boot 3). -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-flyway</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.flywaydb</groupId>
+			<artifactId>flyway-database-postgresql</artifactId>
+		</dependency>
 		<dependency>
 			<groupId>org.projectlombok</groupId>
 			<artifactId>lombok</artifactId>
@@ -103,9 +130,28 @@
 			<artifactId>spring-boot-starter-data-jpa-test</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<!-- Tests d'intégration sur PostgreSQL réel (ADR-0004, 2026-08-26) : conteneur jetable
+		     Testcontainers, schéma rejoué par Flyway — H2 ne validait que le code Java, pas le
+		     schéma (contraintes CHECK, séquences, types PostgreSQL). -->
 		<dependency>
-			<groupId>com.h2database</groupId>
-			<artifactId>h2</artifactId>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-testcontainers</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>testcontainers-postgresql</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>testcontainers-junit-jupiter</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<!-- Requis par Testcontainers 2.x (la 1.x l'embarquait « shaded », plus la 2.x). -->
+		<dependency>
+			<groupId>org.apache.commons</groupId>
+			<artifactId>commons-lang3</artifactId>
 			<scope>test</scope>
 		</dependency>
 		<dependency>

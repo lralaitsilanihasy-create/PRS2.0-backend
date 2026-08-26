@@ -62,13 +62,7 @@ public interface DispatchRepository extends JpaRepository<Dispatch, Integer> {
             + "where d.imCtrlDispatch = :im or d.imCtrlCc = :im or d.imCtrlMembre = :im")
     boolean existsAvecControleur(@Param("im") String im);
 
-    /**
-     * Reprise (⚠️ règle modifiée 2026-08-15, association CC) — efface {@code IM_CTRL_CC} quand il
-     * désigne l'<strong>attributaire</strong> (doublon « Rôle Membre + Rôle CC » d'une
-     * auto-attribution) ou le <strong>dispatcheur</strong> lui-même (copie de son propre dispatch).
-     */
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("update Dispatch d set d.imCtrlCc = null where d.imCtrlCc is not null "
-            + "and (d.imCtrlCc = d.imCtrlMembre or d.imCtrlCc = d.imCtrlDispatch)")
-    int effacerAssociationCcInvalide();
+    // La reprise « association CC invalide » (règle modifiée 2026-08-15) vit désormais dans la
+    // migration Flyway V4 (LOT 2, 2026-08-26) — l'ex-requête effacerAssociationCcInvalide
+    // n'a plus d'appelant.
 }

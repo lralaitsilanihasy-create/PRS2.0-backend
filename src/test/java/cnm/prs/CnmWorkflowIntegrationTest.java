@@ -114,7 +114,29 @@ import cnm.prs.service.PieceJointeService;
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
-class CnmWorkflowIntegrationTest {
+class CnmWorkflowIntegrationTest extends AbstractIntegrationTest {
+
+    /**
+     * ⚠️ LOT 2 (2026-08-26) — exécute une migration Flyway de REPRISE DE DONNÉES (V2-V4, ex-runners
+     * Java supprimés) dans la transaction du test : flush d'abord (les entités créées par le test
+     * doivent être visibles du SQL), exécution du fichier réel de db/migration/, puis clear (le
+     * cache de premier niveau serait périmé après l'UPDATE SQL). Le test valide ainsi le SQL
+     * réellement livré, sur PostgreSQL réel — chose impossible du temps de H2.
+     */
+    private void executerMigrationFlyway(String nomFichier) {
+        String sql;
+        try {
+            sql = new String(
+                    new org.springframework.core.io.ClassPathResource("db/migration/" + nomFichier)
+                            .getInputStream().readAllBytes(),
+                    java.nio.charset.StandardCharsets.UTF_8);
+        } catch (java.io.IOException e) {
+            throw new java.io.UncheckedIOException("Migration introuvable : " + nomFichier, e);
+        }
+        entityManager.flush();
+        jdbcTemplate.execute(sql);
+        entityManager.clear();
+    }
 
     @Autowired private MockMvc mvc;
     @Autowired private TokenService tokenService;
@@ -139,7 +161,7 @@ class CnmWorkflowIntegrationTest {
     @Autowired private cnm.prs.repository.IndicateurCtrlRepository indicateurCtrlRepository;
     @Autowired private PpmRepository ppmRepository;
     @Autowired private MarcheRepository marcheRepository;
-    @Autowired private cnm.prs.seed.FormeMarcheMigration formeMarcheMigration;
+    @Autowired private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
     @Autowired private MarchePrevisionRepository marchePrevisionRepository;
     @Autowired private cnm.prs.repository.CapmRepository capmRepository;
     @Autowired private cnm.prs.repository.ExamenDetailRepository examenDetailRepository;
@@ -1269,7 +1291,7 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
-    @DisplayName("Reprise — association CC : IM_CTRL_CC effacé quand il désigne l'attributaire (doublon "
+    @DisplayName("Reprise Flyway V4 — association CC : IM_CTRL_CC effacé quand il désigne l'attributaire (doublon "
             + "auto-attribution) ou le dispatcheur lui-même ; les associations légitimes sont conservées")
     void migration_associationCcInvalide() {
         dossierRepository.save(dossier(4607, "DISPATCHE"));
@@ -1289,7 +1311,7 @@ class CnmWorkflowIntegrationTest {
         legitime.setImCtrlDispatch("CTRPRE");
         dispatchRepository.save(legitime);
 
-        new cnm.prs.seed.AssociationCcDispatchMigration(dispatchRepository).run();
+        executerMigrationFlyway("V4__reprise_association_cc_dispatch.sql");
 
         org.junit.jupiter.api.Assertions.assertNull(
                 dispatchRepository.findById(5607).orElseThrow().getImCtrlCc(),
@@ -2267,6 +2289,11 @@ class CnmWorkflowIntegrationTest {
         pv.setIdAvis("FAV");
         pv.setImCtrlMembre("CTRMEM");
         pv.setStatutPv("SIGNE");
+        // ⚠️ Schéma réel (contrainte t_pv_examen_cosignataire_check, migration 2026-06-17) : un PV
+        // SIGNE porte la signature du Membre ET d'un co-signataire — H2 ne l'imposait pas, le
+        // PostgreSQL de Testcontainers oui. La fixture reflète désormais l'invariant de production.
+        pv.setDateSignatureMembre(LocalDate.now());
+        pv.setDateSignaturePresident(LocalDate.now());
         pv.setNbNavettes(0);
         pvExamenRepository.save(pv);
     }
@@ -7042,6 +7069,8 @@ class CnmWorkflowIntegrationTest {
         cnm.prs.entity.PvExamen pvDef = new cnm.prs.entity.PvExamen();
         pvDef.setIdPv(601); pvDef.setIdExamen(502); pvDef.setIdAvis("NSP"); pvDef.setImCtrlMembre("CTRMEM");
         pvDef.setStatutPv("SIGNE"); pvDef.setNbNavettes(0);
+        // Invariant du schéma réel (t_pv_examen_cosignataire_check) : SIGNE => Membre + un co-signataire.
+        pvDef.setDateSignatureMembre(LocalDate.now()); pvDef.setDateSignaturePresident(LocalDate.now());
         pvExamenRepository.save(pvDef);
 
         // PROJET FAVR + ANT + PPM + cotation → true : « un document sera produit à la signature »
@@ -7078,6 +7107,8 @@ class CnmWorkflowIntegrationTest {
         cnm.prs.entity.PvExamen pv = new cnm.prs.entity.PvExamen();
         pv.setIdPv(700); pv.setIdExamen(700); pv.setIdAvis("FAVR"); pv.setImCtrlMembre("CTRMEM");
         pv.setStatutPv("SIGNE"); pv.setNbNavettes(0);
+        // Invariant du schéma réel (t_pv_examen_cosignataire_check) : SIGNE => Membre + un co-signataire.
+        pv.setDateSignatureMembre(LocalDate.now()); pv.setDateSignaturePresident(LocalDate.now());
         pvExamenRepository.save(pv);
 
         // Suppression du PV signé (Administrateur).
@@ -8015,7 +8046,7 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
-    @DisplayName("Migration forme du marché — lignes historiques (colonne NULL) reprises depuis la désignation, idempotente")
+    @DisplayName("Reprise Flyway V3 — forme du marché : lignes historiques (colonne NULL) reprises depuis la désignation, idempotente")
     void formeMarcheMigration_repriseHistorique() throws Exception {
         Dossier d = dossier(9601, "SOUMIS");
         d.setIdLocalite("ANT");
@@ -8035,7 +8066,7 @@ class CnmWorkflowIntegrationTest {
         marcheRepository.saveAll(java.util.List.of(cadre, commande, fixe));
         org.junit.jupiter.api.Assertions.assertEquals(3, marcheRepository.findByFormeMarcheIsNull().size());
 
-        formeMarcheMigration.run();
+        executerMigrationFlyway("V3__reprise_forme_marche.sql");
 
         // Formes dérivées des désignations (mêmes motifs que l'import) ; plus aucune ligne à reprendre.
         org.junit.jupiter.api.Assertions.assertEquals(cnm.prs.enums.FormeMarche.CONTRAT_CADRE,
@@ -8907,6 +8938,9 @@ class CnmWorkflowIntegrationTest {
         pv.setStatutPv("SIGNE");
         pv.setNbNavettes(0);
         pv.setIdSecretaireSeance("CTRVER");
+        // Invariant du schéma réel (t_pv_examen_cosignataire_check) : SIGNE => Membre + un co-signataire.
+        pv.setDateSignatureMembre(LocalDate.now());
+        pv.setDateSignaturePresident(LocalDate.now());
         pvExamenRepository.save(pv);
         mvc.perform(get("/api/pv-examens/definitifs").header("Authorization", tokenAdmin))
                 .andExpect(status().isOk())
@@ -10321,7 +10355,7 @@ class CnmWorkflowIntegrationTest {
     }
 
     @Test
-    @DisplayName("Modes : reprise CATEGORIE au démarrage — NORMAL sur les modes DECLENCHE_AGPM non classés, sans écraser un classement admin")
+    @DisplayName("Reprise Flyway V2 — CATEGORIE : NORMAL sur les modes DECLENCHE_AGPM non classés, sans écraser un classement admin")
     void mode_categorie_migration() throws Exception {
         ModePassation aoo = new ModePassation(71, "Appel d'offres ouvert", null, null, null, null);
         aoo.setDeclencheAgpm(true);
@@ -10332,7 +10366,7 @@ class CnmWorkflowIntegrationTest {
         dejaClasse.setCategorie(cnm.prs.enums.CategorieModePassation.DEROGATOIRE);   // classement admin : intouchable
         modePassationRepository.save(dejaClasse);
 
-        new cnm.prs.seed.CategorieModePassationMigration(modePassationRepository).run();
+        executerMigrationFlyway("V2__reprise_categorie_mode_passation.sql");
 
         org.junit.jupiter.api.Assertions.assertEquals(cnm.prs.enums.CategorieModePassation.NORMAL,
                 modePassationRepository.findById(71).orElseThrow().getCategorie());

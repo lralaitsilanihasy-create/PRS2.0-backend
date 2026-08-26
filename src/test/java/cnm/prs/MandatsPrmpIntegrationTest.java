@@ -55,7 +55,7 @@ import cnm.prs.security.TokenService;
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
-class MandatsPrmpIntegrationTest {
+class MandatsPrmpIntegrationTest extends AbstractIntegrationTest {
 
     private static final LocalDate AUJOURDHUI = LocalDate.now();
 
