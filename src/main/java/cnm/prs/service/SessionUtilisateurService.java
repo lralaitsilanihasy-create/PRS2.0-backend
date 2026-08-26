@@ -37,6 +37,8 @@ public class SessionUtilisateurService {
     }
 
     public SessionUtilisateurDto create(SessionUtilisateurDto dto) {
+        // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
+        ClePrimaire.exigerLibre(dto.getIdSession(), repository::existsById, "session utilisateur");
         SessionUtilisateur entity = SessionUtilisateurMapper.toEntity(dto);
         return SessionUtilisateurMapper.toDto(repository.save(entity));
     }

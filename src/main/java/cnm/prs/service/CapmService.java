@@ -73,6 +73,8 @@ public class CapmService {
 
     public CapmDto create(CapmDto dto) {
         Capm entity = CapmMapper.toEntity(dto);
+        // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
+        entity.setIdCapm(ClePrimaire.reallouer(dto.getIdCapm(), repository::existsById, repository::nextIdCapm));
         return CapmMapper.toDto(repository.save(entity));
     }
 

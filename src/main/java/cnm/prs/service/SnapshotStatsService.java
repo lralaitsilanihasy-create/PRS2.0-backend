@@ -37,6 +37,8 @@ public class SnapshotStatsService {
     }
 
     public SnapshotStatsDto create(SnapshotStatsDto dto) {
+        // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
+        ClePrimaire.exigerLibre(dto.getIdSnapshot(), repository::existsById, "statistique");
         SnapshotStats entity = SnapshotStatsMapper.toEntity(dto);
         return SnapshotStatsMapper.toDto(repository.save(entity));
     }

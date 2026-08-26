@@ -73,4 +73,9 @@ public interface ExamenDetailRepository extends JpaRepository<ExamenDetail, Inte
             group by ed.idPtControle, ed.ptControle.libelPointCtrl
             """)
     List<Object[]> statsNonConformiteParPointParLocalite(@Param("loc") String loc);
+
+
+    /** Prochaine PK allouee par la sequence serveur {@code seq_examen_detail} (allocation atomique). */
+    @Query(value = "select nextval('seq_examen_detail')", nativeQuery = true)
+    Long nextIdDetailExamen();
 }

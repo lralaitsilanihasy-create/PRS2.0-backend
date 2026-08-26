@@ -3,6 +3,7 @@ package cnm.prs.repository;
 import java.util.Collection;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import cnm.prs.entity.DelegationProfil;
@@ -19,4 +20,9 @@ public interface DelegationProfilRepository extends JpaRepository<DelegationProf
 
     /** Vrai si la paire (délégant, délégué) existe déjà — active ou non (unicité, seed idempotent). */
     boolean existsByIdProfileDelegantAndIdProfileDelegue(Integer delegant, Integer delegue);
+
+
+    /** Prochaine PK allouee par la sequence serveur {@code seq_delegation_profil} (allocation atomique). */
+    @Query(value = "select nextval('seq_delegation_profil')", nativeQuery = true)
+    Long nextIdDelegation();
 }

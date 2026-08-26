@@ -37,6 +37,8 @@ public class LocaliteService {
     }
 
     public LocaliteDto create(LocaliteDto dto) {
+        // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
+        ClePrimaire.exigerLibre(dto.getIdLocalite(), repository::existsById, "localité");
         Localite entity = LocaliteMapper.toEntity(dto);
         return LocaliteMapper.toDto(repository.save(entity));
     }

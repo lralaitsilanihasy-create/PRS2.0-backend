@@ -38,6 +38,8 @@ public class RegleAlerteService {
 
     public RegleAlerteDto create(RegleAlerteDto dto) {
         RegleAlerte entity = RegleAlerteMapper.toEntity(dto);
+        // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
+        entity.setIdRegleAlerte(ClePrimaire.reallouer(dto.getIdRegleAlerte(), repository::existsById, repository::nextIdRegleAlerte));
         return RegleAlerteMapper.toDto(repository.save(entity));
     }
 

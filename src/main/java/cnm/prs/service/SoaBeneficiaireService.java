@@ -37,6 +37,8 @@ public class SoaBeneficiaireService {
     }
 
     public SoaBeneficiaireDto create(SoaBeneficiaireDto dto) {
+        // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
+        ClePrimaire.exigerLibre(dto.getSoaCode(), repository::existsById, "service bénéficiaire SOA");
         SoaBeneficiaire entity = SoaBeneficiaireMapper.toEntity(dto);
         return SoaBeneficiaireMapper.toDto(repository.save(entity));
     }

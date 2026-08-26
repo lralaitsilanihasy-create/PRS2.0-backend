@@ -38,6 +38,8 @@ public class DelegationProfilService {
 
     public DelegationProfilDto create(DelegationProfilDto dto) {
         DelegationProfil entity = DelegationProfilMapper.toEntity(dto);
+        // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
+        entity.setIdDelegation(ClePrimaire.reallouer(dto.getIdDelegation(), repository::existsById, repository::nextIdDelegation));
         return DelegationProfilMapper.toDto(repository.save(entity));
     }
 

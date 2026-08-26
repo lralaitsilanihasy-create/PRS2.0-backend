@@ -37,6 +37,8 @@ public class CatCompteService {
     }
 
     public CatCompteDto create(CatCompteDto dto) {
+        // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
+        ClePrimaire.exigerLibre(dto.getIdCatCompte(), repository::existsById, "catégorie de compte");
         CatCompte entity = CatCompteMapper.toEntity(dto);
         return CatCompteMapper.toDto(repository.save(entity));
     }

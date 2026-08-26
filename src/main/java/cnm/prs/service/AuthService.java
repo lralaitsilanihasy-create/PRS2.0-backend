@@ -228,10 +228,12 @@ public class AuthService {
 
         // Déclarations d'entités (en attente de validation par l'Administrateur).
         LocalDate aujourdhui = LocalDate.now();
-        int prochainId = demandeRepository.findMaxId() + 1;
         for (Integer id : idEntites) {
             PrmpEntiteDemande d = new PrmpEntiteDemande();
-            d.setIdDemande(prochainId++);
+            // ⚠️ LOT 3b (2026-08-26) — PK allouée à la séquence seq_prmp_entite_demande, déclaration par
+            // déclaration. Le compteur local amorcé sur max+1 donnait les mêmes identifiants à deux
+            // inscriptions simultanées : la seconde écrasait les déclarations d'entités de la première.
+            d.setIdDemande(demandeRepository.nextIdDemande().intValue());
             d.setLogin(req.login());
             d.setIdEntiteContract(id);
             d.setStatutDemande(StatutDemandeEntite.EN_ATTENTE.name());
@@ -240,7 +242,7 @@ public class AuthService {
         }
         for (EntiteNonListeeRequest e : proposees) {
             PrmpEntiteDemande d = new PrmpEntiteDemande();
-            d.setIdDemande(prochainId++);
+            d.setIdDemande(demandeRepository.nextIdDemande().intValue());   // PK serveur (sequence)
             d.setLogin(req.login());
             d.setLibellePropose(e.libelle());
             d.setAdressePropose(e.adresse());

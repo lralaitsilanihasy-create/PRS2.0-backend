@@ -24,9 +24,9 @@ public interface MarchePrevisionRepository extends JpaRepository<MarchePrevision
     /** Supprime les dates prévisionnelles d'un marché (cascade applicative à la suppression du marché). */
     long deleteByIdDetail(Integer idDetail);
 
-    /** Plus grand ID_PREVISION existant (0 si table vide) — pour allouer la PK assignée à la saisie. */
-    @Query("select coalesce(max(p.idPrevision), 0) from MarchePrevision p")
-    Integer findMaxId();
+    /** Prochaine PK allouee par la sequence serveur {@code seq_marche_prevision} (allocation atomique). */
+    @Query(value = "select nextval('seq_marche_prevision')", nativeQuery = true)
+    Long nextIdPrevision();
 
     /**
      * ⚠️ LOT 3a (2026-08-26) — §1/§3.1 : dates prévisionnelles des dossiers du périmètre de l'appelant

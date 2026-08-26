@@ -67,7 +67,11 @@ public class ExamenDetailService {
         exigerExamenModifiable(dto.getIdExamen());
         validerObservations(dto);
         validerLigneEtUnicite(dto, null);
-        ExamenDetail saved = repository.save(ExamenDetailMapper.toEntity(dto));
+        ExamenDetail entity = ExamenDetailMapper.toEntity(dto);
+        // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
+        entity.setIdDetailExamen(ClePrimaire.reallouer(dto.getIdDetailExamen(),
+                repository::existsById, repository::nextIdDetailExamen));
+        ExamenDetail saved = repository.save(entity);
         remplacerObservations(saved.getIdDetailExamen(), dto.getObservations());
         return toDtoAvecObservations(saved);
     }

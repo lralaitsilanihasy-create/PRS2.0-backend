@@ -74,6 +74,8 @@ public class IndicateurPrmpService {
     }
 
     public IndicateurPrmpDto create(IndicateurPrmpDto dto) {
+        // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
+        ClePrimaire.exigerLibre(dto.getIdIndicateurPrmp(), repository::existsById, "indicateur PRMP");
         IndicateurPrmp entity = IndicateurPrmpMapper.toEntity(dto);
         return IndicateurPrmpMapper.toDto(repository.save(entity));
     }

@@ -35,4 +35,9 @@ public interface ExamenPieceRepository extends JpaRepository<ExamenPiece, Intege
             + "(select di.idDispatch from Dispatch di where di.idReception in "
             + "(select r.idReception from Reception r where r.idDossier = :idDossier)))")
     int deleteParDossier(@Param("idDossier") Integer idDossier);
+
+
+    /** Prochaine PK allouee par la sequence serveur {@code seq_examen_piece} (allocation atomique). */
+    @Query(value = "select nextval('seq_examen_piece')", nativeQuery = true)
+    Long nextIdExamenPiece();
 }

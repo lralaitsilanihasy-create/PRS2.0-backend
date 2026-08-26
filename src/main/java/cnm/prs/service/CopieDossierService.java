@@ -49,6 +49,8 @@ public class CopieDossierService {
     }
 
     public CopieDossierDto create(CopieDossierDto dto) {
+        // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
+        ClePrimaire.exigerLibre(dto.getIdCopie(), repository::existsById, "copie de dossier");
         CopieDossier entity = CopieDossierMapper.toEntity(dto);
         return CopieDossierMapper.toDto(repository.save(entity));
     }

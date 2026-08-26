@@ -55,4 +55,9 @@ public interface ExamenRepository extends JpaRepository<Examen, Integer> {
             where e.idExamen = :idExamen and d.idDossier = e.dispatch.reception.idDossier
             """)
     Optional<String> findRefeDossierByExamen(@Param("idExamen") Integer idExamen);
+
+
+    /** Prochaine PK allouee par la sequence serveur {@code seq_examen} (allocation atomique). */
+    @Query(value = "select nextval('seq_examen')", nativeQuery = true)
+    Long nextIdExamen();
 }

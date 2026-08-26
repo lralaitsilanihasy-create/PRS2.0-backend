@@ -43,6 +43,8 @@ public class DocumentPublicService {
     }
 
     public DocumentPublicDto create(DocumentPublicDto dto) {
+        // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
+        ClePrimaire.exigerLibre(dto.getIdDocPublic(), repository::existsById, "document public");
         DocumentPublic entity = DocumentPublicMapper.toEntity(dto);
         return DocumentPublicMapper.toDto(repository.save(entity));
     }

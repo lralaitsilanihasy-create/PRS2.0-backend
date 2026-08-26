@@ -12,9 +12,9 @@ import cnm.prs.entity.AuditLog;
 @Repository
 public interface AuditLogRepository extends JpaRepository<AuditLog, Long> {
 
-    /** Plus grand ID_LOG existant (0 si table vide) — pour générer la PK assignée. */
-    @Query("select coalesce(max(a.idLog), 0) from AuditLog a")
-    Long findMaxId();
+    /** Prochaine PK allouee par la sequence serveur {@code seq_audit_log} (allocation atomique). */
+    @Query(value = "select nextval('seq_audit_log')", nativeQuery = true)
+    Long nextIdAuditLog();
 
     /** Rectifications PRMP d'un dossier (audit), par date croissante — pour l'historique d'échanges. */
     @Query("""

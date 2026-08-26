@@ -54,6 +54,8 @@ public class SousTypeDossierService {
 
     public SousTypeDossierDto create(SousTypeDossierDto dto) {
         exigerFamille(dto.getIdTypeDossier());
+        // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
+        ClePrimaire.exigerLibre(dto.getIdSousType(), repository::existsById, "sous-type de dossier");
         SousTypeDossier entity = SousTypeDossierMapper.toEntity(dto);
         return SousTypeDossierMapper.toDto(repository.save(entity));
     }

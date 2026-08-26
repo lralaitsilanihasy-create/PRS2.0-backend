@@ -18,9 +18,9 @@ public interface LotRepository extends JpaRepository<Lot, Integer> {
     /** Lots d'un dossier (tous les lots de toutes ses lignes de marché). */
     List<Lot> findByIdDossier(Integer idDossier);
 
-    /** Plus grand ID_LOT existant (0 si vide) — PK allouée serveur (Voie B). */
-    @Query("select coalesce(max(l.idLot), 0) from Lot l")
-    Integer findMaxIdLot();
+    /** Prochaine PK allouee par la sequence serveur {@code seq_lot} (allocation atomique). */
+    @Query(value = "select nextval('seq_lot')", nativeQuery = true)
+    Long nextIdLot();
 
     /** Supprime les lots d'un marché (cascade applicative — leurs tranches doivent être retirées avant). */
     long deleteByIdDetail(Integer idDetail);

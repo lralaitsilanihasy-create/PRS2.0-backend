@@ -675,10 +675,14 @@ class CnmWorkflowIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("Notifications : /mes scopé, comptage non-lues, marquer lu (refus si pas la mienne), liste globale Admin-only")
     void notifications_meScopeLectureGlobalAdmin() throws Exception {
-        // 2 notifications pour CTRMEM, 1 pour CTRPRE (émises via le service ; ids 1, 2, 3).
-        notificationService.emettreControleur(TypeNotification.PRET_DISPATCH, "CTRMEM", null, 1, TypeObjet.DOSSIER, 1, "Notif 1", "corps");
+        // 2 notifications pour CTRMEM, 1 pour CTRPRE.
+        // ⚠️ LOT 3b (2026-08-26) — les ids ne sont plus 1, 2, 3 : ID_NOTIFICATION vient désormais de la
+        // séquence seq_notification (l'ancien max+1 n'était pas atomique) et une séquence ne se rejoue
+        // pas d'un test à l'autre. On retient donc les identifiants RENDUS par le service au lieu de
+        // les supposer.
+        int notifMembre1 = notificationService.emettreControleur(TypeNotification.PRET_DISPATCH, "CTRMEM", null, 1, TypeObjet.DOSSIER, 1, "Notif 1", "corps").getIdNotification();
         notificationService.emettreControleur(TypeNotification.PRET_DISPATCH, "CTRMEM", null, 2, TypeObjet.DOSSIER, 2, "Notif 2", "corps");
-        notificationService.emettreControleur(TypeNotification.PRET_DISPATCH, "CTRPRE", null, 3, TypeObjet.DOSSIER, 1, "Notif 3", "corps");
+        int notifPresident = notificationService.emettreControleur(TypeNotification.PRET_DISPATCH, "CTRPRE", null, 3, TypeObjet.DOSSIER, 1, "Notif 3", "corps").getIdNotification();
 
         // Scoping : CTRMEM voit ses 2, CTRPRE voit sa 1.
         mvc.perform(get("/api/notifications/mes").header("Authorization", tokenMembre))
@@ -690,14 +694,14 @@ class CnmWorkflowIntegrationTest extends AbstractIntegrationTest {
         mvc.perform(get("/api/notifications/mes/non-lues/count").header("Authorization", tokenMembre))
                 .andExpect(jsonPath("$.nonLues").value(2));
 
-        // Marquer la notif 1 comme lue (CTRMEM) → lu=true ; le compteur descend à 1.
-        mvc.perform(post("/api/notifications/1/lu").header("Authorization", tokenMembre))
+        // Marquer la première notif comme lue (CTRMEM) → lu=true ; le compteur descend à 1.
+        mvc.perform(post("/api/notifications/" + notifMembre1 + "/lu").header("Authorization", tokenMembre))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.lu").value(true));
         mvc.perform(get("/api/notifications/mes/non-lues/count").header("Authorization", tokenMembre))
                 .andExpect(jsonPath("$.nonLues").value(1));
 
-        // Marquer la notif de CTRPRE (id 3) en tant que CTRMEM → 403.
-        mvc.perform(post("/api/notifications/3/lu").header("Authorization", tokenMembre))
+        // Marquer la notif de CTRPRE en tant que CTRMEM → 403.
+        mvc.perform(post("/api/notifications/" + notifPresident + "/lu").header("Authorization", tokenMembre))
                 .andExpect(status().isForbidden());
 
         // Tout marquer lu (CTRMEM) → 1 restante traitée, puis 0 non-lue.
@@ -1401,7 +1405,11 @@ class CnmWorkflowIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("Référentiel : écriture interdite au Membre (403), permise à l'Admin (201)")
     void referentiel_ecritureAdminSeulement() throws Exception {
-        String body = "{\"idLocalite\":\"TMS\",\"libelleLocalite\":\"Toamasina\"}";
+        // ⚠️ LOT 3b (2026-08-26) — le test créait « TMS », que le jeu de fixtures pose déjà : il
+        // vérifiait donc, sans le savoir, l'ÉCRASEMENT silencieux d'un référentiel existant (save()
+        // sur une PK présente = MERGE, réponse 201). Cette création répond désormais 409. Le test
+        // porte sur l'autorisation, pas sur la collision : il crée une localité réellement nouvelle.
+        String body = "{\"idLocalite\":\"FIA\",\"libelleLocalite\":\"Fianarantsoa\"}";
 
         mvc.perform(post("/api/localites").header("Authorization", tokenMembre)
                 .contentType(MediaType.APPLICATION_JSON).content(body))
@@ -1569,9 +1577,12 @@ class CnmWorkflowIntegrationTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("Audit automatique : une écriture API est tracée dans t_audit_log (§3.8)")
     void audit_traceLesEcritures() throws Exception {
+        // ⚠️ LOT 3b (2026-08-26) — même correction que referentiel_ecritureAdminSeulement : « TMS »
+        // existe déjà dans les fixtures, sa création répond maintenant 409. Ce qui est tracé ici,
+        // c'est une écriture RÉUSSIE : elle doit donc porter sur une localité réellement nouvelle.
         mvc.perform(post("/api/localites").header("Authorization", tokenAdmin)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idLocalite\":\"TMS\",\"libelleLocalite\":\"Toamasina\"}"))
+                .content("{\"idLocalite\":\"FIA\",\"libelleLocalite\":\"Fianarantsoa\"}"))
                 .andExpect(status().isCreated());
 
         mvc.perform(get("/api/audit-logs").header("Authorization", tokenAdmin))

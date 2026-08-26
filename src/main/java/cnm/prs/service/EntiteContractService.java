@@ -54,6 +54,8 @@ public class EntiteContractService {
 
     public EntiteContractDto create(EntiteContractDto dto) {
         EntiteContract entity = EntiteContractMapper.toEntity(dto);
+        // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
+        entity.setIdEntiteContract(ClePrimaire.reallouer(dto.getIdEntiteContract(), repository::existsById, repository::nextIdEntiteContract));
         deriverNiveau(entity);
         EntiteContract saved = repository.save(entity);
         // ⚠️ Règle ajoutée (2026-07-26) — si l'appelant est une PRMP (import PPM : autorité hors périmètre),

@@ -266,7 +266,7 @@ public class VerificationService {
     /** ⚠️ Règle ajoutée — trace l'observation non levée dans {@code t_audit_log} (D1, option a). */
     private void tracerObservationNonLevee(Dossier dossier, Verification v) {
         AuditLog log = new AuditLog();
-        log.setIdLog(auditLogRepository.findMaxId() + 1);
+        log.setIdLog(auditLogRepository.nextIdAuditLog());   // PK serveur (sequence)
         log.setDateAction(LocalDateTime.now());
         log.setImActeur(v.getImCtrlVerif());
         log.setNomTable("t_verification");

@@ -37,6 +37,8 @@ public class AnomalieService {
     }
 
     public AnomalieDto create(AnomalieDto dto) {
+        // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
+        ClePrimaire.exigerLibre(dto.getIdAnomalie(), repository::existsById, "anomalie");
         Anomalie entity = AnomalieMapper.toEntity(dto);
         return AnomalieMapper.toDto(repository.save(entity));
     }

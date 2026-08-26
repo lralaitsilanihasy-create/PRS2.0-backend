@@ -13,9 +13,9 @@ import cnm.prs.entity.PvNavette;
 @Repository
 public interface PvNavetteRepository extends JpaRepository<PvNavette, Integer> {
 
-    /** Plus grand ID_NAVETTE existant (0 si table vide) — pour générer la PK assignée. */
-    @Query("select coalesce(max(n.idNavette), 0) from PvNavette n")
-    Integer findMaxIdNavette();
+    /** Prochaine PK allouee par la sequence serveur {@code seq_pv_navette} (allocation atomique). */
+    @Query(value = "select nextval('seq_pv_navette')", nativeQuery = true)
+    Long nextIdNavette();
 
     /**
      * Purge (⚠️ règle ajoutée §3.3) — supprime les navettes des PV du circuit d'un dossier retiré

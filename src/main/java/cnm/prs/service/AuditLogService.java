@@ -39,6 +39,8 @@ public class AuditLogService {
     }
 
     public AuditLogDto create(AuditLogDto dto) {
+        // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
+        ClePrimaire.exigerLibre(dto.getIdLog(), repository::existsById, "entrée de journal");
         AuditLog entity = AuditLogMapper.toEntity(dto);
         return AuditLogMapper.toDto(repository.save(entity));
     }
@@ -75,7 +77,7 @@ public class AuditLogService {
     public void enregistrer(String imActeur, String nomTable, String idEnregistrement,
             String typeAction, String ipAdresse) {
         AuditLog log = new AuditLog();
-        log.setIdLog(repository.findMaxId() + 1);
+        log.setIdLog(repository.nextIdAuditLog());   // PK serveur (sequence)
         log.setDateAction(LocalDateTime.now());
         log.setImActeur(imActeur);
         log.setNomTable(nomTable);

@@ -272,9 +272,6 @@ public class MiseAJourPpmService {
      * précédente reste présente et restaurable dans la nouvelle.
      */
     private void copierLignes(Dossier source, Dossier cible, Ppm ppmCible) {
-        int seqLot = lotRepository.findMaxIdLot();
-        int seqPrevision = marchePrevisionRepository.findMaxId();
-        int seqBenef = serviceBeneficiaireRepository.findMaxIdBenef();
 
         for (Marche origine : marcheRepository.findByIdDossier(source.getIdDossier())) {
             Marche copie = new Marche();
@@ -300,7 +297,8 @@ public class MiseAJourPpmService {
 
             for (Lot lot : lotRepository.findByIdDetail(origine.getIdDetail())) {
                 Lot c = new Lot();
-                c.setIdLot(++seqLot);
+                // ⚠️ LOT 3b (2026-08-26) — PK consommée à la séquence à chaque copie (même motif que ID_DETAIL ci-dessus).
+                c.setIdLot(ClePrimaire.allouerLibre(lotRepository::existsById, lotRepository::nextIdLot));
                 c.setIdDossier(cible.getIdDossier());
                 c.setIdDetail(copie.getIdDetail());
                 c.setDesignationLot(lot.getDesignationLot());
@@ -311,7 +309,9 @@ public class MiseAJourPpmService {
             }
             for (MarchePrevision p : marchePrevisionRepository.findByIdDetail(origine.getIdDetail())) {
                 MarchePrevision c = new MarchePrevision();
-                c.setIdPrevision(++seqPrevision);
+                // ⚠️ LOT 3b (2026-08-26) — PK consommée à la séquence à chaque copie.
+                c.setIdPrevision(ClePrimaire.allouerLibre(
+                        marchePrevisionRepository::existsById, marchePrevisionRepository::nextIdPrevision));
                 c.setIdDetail(copie.getIdDetail());
                 c.setIdCapm(p.getIdCapm());
                 c.setDateDebut(p.getDateDebut());
@@ -320,7 +320,9 @@ public class MiseAJourPpmService {
             }
             for (ServiceBeneficiaire b : serviceBeneficiaireRepository.findByIdDetail(origine.getIdDetail())) {
                 ServiceBeneficiaire c = new ServiceBeneficiaire();
-                c.setIdBenef(++seqBenef);
+                // ⚠️ LOT 3b (2026-08-26) — PK consommée à la séquence à chaque copie.
+                c.setIdBenef(ClePrimaire.allouerLibre(
+                        serviceBeneficiaireRepository::existsById, serviceBeneficiaireRepository::nextIdBenef));
                 c.setIdDetail(copie.getIdDetail());
                 c.setSoaCode(b.getSoaCode());
                 c.setNumCompte(b.getNumCompte());
@@ -965,14 +967,15 @@ public class MiseAJourPpmService {
         DiffDossierDto diff = calculer(dossier, ppm == null ? null : ppm.getNumMaj(),
                 ppm == null ? null : ppm.getMotifMaj());
 
-        int seq = changementLigneRepository.findMaxId();
+        // ⚠️ LOT 3b (2026-08-26) — PK de trace consommée à la séquence seq_changement_ligne, ligne par ligne :
+        // le compteur local amorcé sur max+1 collisionnait avec une autre mise à jour de PPM concurrente.
         for (DiffDossierDto.LigneDiff l : diff.lignes()) {
             if (l.champs().isEmpty()) {
-                changementLigneRepository.save(trace(++seq, idDossier, l, null, null, null));
+                changementLigneRepository.save(trace(prochainChangement(), idDossier, l, null, null, null));
             } else {
                 for (DiffDossierDto.ChampDiff c : l.champs()) {
                     changementLigneRepository.save(
-                            trace(++seq, idDossier, l, c.champ(), c.avant(), c.apres()));
+                            trace(prochainChangement(), idDossier, l, c.champ(), c.avant(), c.apres()));
                 }
             }
         }
@@ -997,6 +1000,12 @@ public class MiseAJourPpmService {
                 ppmRepository.save(ppm);
             }
         });
+    }
+
+    /** PK de trace allouée à la séquence {@code seq_changement_ligne} (⚠️ LOT 3b — allocation atomique). */
+    private int prochainChangement() {
+        return ClePrimaire.allouerLibre(
+                changementLigneRepository::existsById, changementLigneRepository::nextIdChangement);
     }
 
     private ChangementLigne trace(int id, Integer idDossier, DiffDossierDto.LigneDiff l,

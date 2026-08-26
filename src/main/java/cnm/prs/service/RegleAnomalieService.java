@@ -38,6 +38,8 @@ public class RegleAnomalieService {
 
     public RegleAnomalieDto create(RegleAnomalieDto dto) {
         RegleAnomalie entity = RegleAnomalieMapper.toEntity(dto);
+        // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
+        entity.setIdRegleAnomalie(ClePrimaire.reallouer(dto.getIdRegleAnomalie(), repository::existsById, repository::nextIdRegleAnomalie));
         return RegleAnomalieMapper.toDto(repository.save(entity));
     }
 

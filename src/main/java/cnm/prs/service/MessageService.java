@@ -53,7 +53,11 @@ public class MessageService {
     /** Création générique : l'expéditeur est forcé à l'utilisateur courant. */
     public MessageDto create(MessageDto dto) {
         Message entity = MessageMapper.toEntity(dto);
-        entity.setIdMessage(dto.getIdMessage() != null ? dto.getIdMessage() : repository.findMaxId() + 1);
+        // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant. La PK est
+        // désormais TOUJOURS serveur (séquence seq_message) : l'id du corps est ignoré. Il n'avait
+        // aucune sémantique côté client (le front passe par POST /api/messages/envoyer) et l'honorer
+        // laissait un POST écraser le message d'un tiers.
+        entity.setIdMessage(repository.nextIdMessage().intValue());
         entity.setExpediteurIm(expediteurCourant());
         entity.setDateEnvoi(LocalDateTime.now());
         entity.setLu(false);
@@ -63,7 +67,7 @@ public class MessageService {
     /** Envoi d'un message : expéditeur = utilisateur courant, non lu, horodaté. */
     public MessageDto envoyer(MessageEnvoiRequest req) {
         Message m = new Message();
-        m.setIdMessage(repository.findMaxId() + 1);
+        m.setIdMessage(repository.nextIdMessage().intValue());   // PK serveur (sequence)
         m.setExpediteurIm(expediteurCourant());
         m.setDestinataireIm(req.destinataireIm());
         m.setSujet(req.sujet());

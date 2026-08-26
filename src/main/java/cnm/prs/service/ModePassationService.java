@@ -40,6 +40,8 @@ public class ModePassationService {
 
     public ModePassationDto create(ModePassationDto dto) {
         ModePassation entity = ModePassationMapper.toEntity(dto);
+        // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
+        entity.setIdMode(ClePrimaire.reallouer(dto.getIdMode(), repository::existsById, repository::nextIdMode));
         // Auto-mapping : si aucun type de DMC fourni, le dériver du libellé.
         if (entity.getIdTypeDmc() == null) {
             entity.setIdTypeDmc(typeDmcService.deriverIdPourLibelle(entity.getLibelle()));

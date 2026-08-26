@@ -38,6 +38,8 @@ public class NatureService {
 
     public NatureDto create(NatureDto dto) {
         Nature entity = NatureMapper.toEntity(dto);
+        // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
+        entity.setIdNature(ClePrimaire.reallouer(dto.getIdNature(), repository::existsById, repository::nextIdNature));
         return NatureMapper.toDto(repository.save(entity));
     }
 

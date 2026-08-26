@@ -12,9 +12,9 @@ import cnm.prs.entity.Notification;
 @Repository
 public interface NotificationRepository extends JpaRepository<Notification, Integer> {
 
-    /** Plus grand ID_NOTIFICATION existant (0 si table vide) — pour générer la PK assignée. */
-    @Query("select coalesce(max(n.idNotification), 0) from Notification n")
-    Integer findMaxId();
+    /** Prochaine PK allouee par la sequence serveur {@code seq_notification} (allocation atomique). */
+    @Query(value = "select nextval('seq_notification')", nativeQuery = true)
+    Long nextIdNotification();
 
     /** Notifications d'un contrôleur (clé unifiée {@code ref}+{@code type}), plus récentes d'abord. */
     @Query("""

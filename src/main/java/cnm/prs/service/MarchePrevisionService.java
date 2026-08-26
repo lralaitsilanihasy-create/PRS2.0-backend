@@ -120,13 +120,16 @@ public class MarchePrevisionService {
     /**
      * ⚠️ LOT 3a (2026-08-26) — PK anti-collision, même motif que {@code LotService} : la liste rendue
      * au front est désormais scopée, son {@code max} n'est plus le max global. PK proposée conservée
-     * si libre, sinon réallouée par le serveur ({@code max + 1}) plutôt que d'écraser la ligne d'autrui.
+     * si libre, sinon réallouée par le serveur plutôt que d'écraser la ligne d'autrui.
+     *
+     * <p>⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant. La branche
+     * « réallouer » passait par {@code max + 1}, qui n'est pas atomique : deux créations concurrentes
+     * y lisaient le même maximum. Elle passe désormais par la séquence {@code seq_marche_prevision}
+     * (migration {@code V5}), via {@link ClePrimaire#reallouer}.</p>
      */
     private Integer prochaineCle(Integer idPropose) {
-        if (idPropose != null && !repository.existsByIdPrevision(idPropose)) {
-            return idPropose;
-        }
-        return repository.findMaxId() + 1;
+        return ClePrimaire.reallouer(idPropose, repository::existsByIdPrevision,
+                repository::nextIdPrevision);
     }
 
     /**

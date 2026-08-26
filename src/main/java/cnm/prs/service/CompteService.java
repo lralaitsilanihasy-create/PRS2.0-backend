@@ -37,6 +37,8 @@ public class CompteService {
     }
 
     public CompteDto create(CompteDto dto) {
+        // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
+        ClePrimaire.exigerLibre(dto.getNumCompte(), repository::existsById, "compte");
         Compte entity = CompteMapper.toEntity(dto);
         return CompteMapper.toDto(repository.save(entity));
     }

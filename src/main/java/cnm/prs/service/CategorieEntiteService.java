@@ -37,6 +37,8 @@ public class CategorieEntiteService {
     }
 
     public CategorieEntiteDto create(CategorieEntiteDto dto) {
+        // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
+        ClePrimaire.exigerLibre(dto.getLibelle(), repository::existsById, "catégorie d'entité");
         CategorieEntite entity = CategorieEntiteMapper.toEntity(dto);
         return CategorieEntiteMapper.toDto(repository.save(entity));
     }

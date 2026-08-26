@@ -21,7 +21,7 @@ public interface PieceJointeRepository extends JpaRepository<PieceJointe, Intege
     /** Purge toutes les pièces d'une clé acteur (suppression de l'acteur). */
     void deleteByLogin(String login);
 
-    /** Plus grand ID_PIECE existant (0 si table vide) — pour générer la PK assignée. */
-    @Query("select coalesce(max(p.idPiece), 0) from PieceJointe p")
-    Integer findMaxId();
+    /** Prochaine PK allouee par la sequence serveur {@code seq_piece_jointe} (allocation atomique). */
+    @Query(value = "select nextval('seq_piece_jointe')", nativeQuery = true)
+    Long nextIdPieceJointe();
 }

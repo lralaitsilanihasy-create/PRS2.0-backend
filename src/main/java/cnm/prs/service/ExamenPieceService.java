@@ -43,6 +43,8 @@ public class ExamenPieceService {
     public ExamenPieceDto create(ExamenPieceDto dto) {
         exigerUnicite(dto, null);
         ExamenPiece entity = ExamenPieceMapper.toEntity(dto);
+        // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
+        entity.setIdExamenPiece(ClePrimaire.reallouer(dto.getIdExamenPiece(), repository::existsById, repository::nextIdExamenPiece));
         return ExamenPieceMapper.toDto(repository.save(entity));
     }
 

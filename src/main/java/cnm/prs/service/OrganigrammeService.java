@@ -38,6 +38,8 @@ public class OrganigrammeService {
 
     public OrganigrammeDto create(OrganigrammeDto dto) {
         Organigramme entity = OrganigrammeMapper.toEntity(dto);
+        // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
+        entity.setIdOrganigramme(ClePrimaire.reallouer(dto.getIdOrganigramme(), repository::existsById, repository::nextIdOrganigramme));
         return OrganigrammeMapper.toDto(repository.save(entity));
     }
 

@@ -37,6 +37,8 @@ public class TypeDossierService {
     }
 
     public TypeDossierDto create(TypeDossierDto dto) {
+        // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
+        ClePrimaire.exigerLibre(dto.getIdTypeDossier(), repository::existsById, "type de dossier");
         TypeDossier entity = TypeDossierMapper.toEntity(dto);
         return TypeDossierMapper.toDto(repository.save(entity));
     }

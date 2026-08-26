@@ -37,6 +37,8 @@ public class ProfileService {
     }
 
     public ProfileDto create(ProfileDto dto) {
+        // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
+        ClePrimaire.exigerLibre(dto.getIdProfile(), repository::existsById, "profil");
         Profile entity = ProfileMapper.toEntity(dto);
         return ProfileMapper.toDto(repository.save(entity));
     }

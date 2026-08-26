@@ -49,6 +49,8 @@ public class EcheanceService {
     }
 
     public EcheanceDto create(EcheanceDto dto) {
+        // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
+        ClePrimaire.exigerLibre(dto.getIdEcheance(), repository::existsById, "échéance");
         Echeance entity = EcheanceMapper.toEntity(dto);
         return EcheanceMapper.toDto(repository.save(entity));
     }

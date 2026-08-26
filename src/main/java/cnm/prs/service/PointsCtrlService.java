@@ -76,6 +76,8 @@ public class PointsCtrlService {
     public PointsCtrlDto create(PointsCtrlDto dto) {
         exigerCoherenceSousType(dto.getIdTypeDossier(), dto.getIdSousType());
         PointsCtrl entity = PointsCtrlMapper.toEntity(dto);
+        // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
+        entity.setIdPointCtrl(ClePrimaire.reallouer(dto.getIdPointCtrl(), repository::existsById, repository::nextIdPointCtrl));
         return PointsCtrlMapper.toDto(repository.save(entity));
     }
 

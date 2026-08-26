@@ -65,4 +65,9 @@ public interface DispatchRepository extends JpaRepository<Dispatch, Integer> {
     // La reprise « association CC invalide » (règle modifiée 2026-08-15) vit désormais dans la
     // migration Flyway V4 (LOT 2, 2026-08-26) — l'ex-requête effacerAssociationCcInvalide
     // n'a plus d'appelant.
+
+
+    /** Prochaine PK allouee par la sequence serveur {@code seq_dispatch} (allocation atomique). */
+    @Query(value = "select nextval('seq_dispatch')", nativeQuery = true)
+    Long nextIdDispatch();
 }

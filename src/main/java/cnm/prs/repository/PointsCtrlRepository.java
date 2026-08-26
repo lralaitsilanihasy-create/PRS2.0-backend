@@ -27,4 +27,9 @@ public interface PointsCtrlRepository extends JpaRepository<PointsCtrl, Integer>
             order by p.ordrePointCtrl asc
             """)
     List<PointsCtrl> findGrilleEffective(@Param("famille") String famille, @Param("sousType") String sousType);
+
+
+    /** Prochaine PK allouee par la sequence serveur {@code seq_points_ctrl} (allocation atomique). */
+    @Query(value = "select nextval('seq_points_ctrl')", nativeQuery = true)
+    Long nextIdPointCtrl();
 }

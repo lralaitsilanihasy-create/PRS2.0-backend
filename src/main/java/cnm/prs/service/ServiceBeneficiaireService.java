@@ -52,6 +52,8 @@ public class ServiceBeneficiaireService {
     public ServiceBeneficiaireDto create(ServiceBeneficiaireDto dto) {
         garde.exigerEcritureSurMarche(dto.getIdDetail());
         ServiceBeneficiaire entity = ServiceBeneficiaireMapper.toEntity(dto);
+        // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
+        entity.setIdBenef(ClePrimaire.reallouer(dto.getIdBenef(), repository::existsById, repository::nextIdBenef));
         return ServiceBeneficiaireMapper.toDto(repository.save(entity));
     }
 

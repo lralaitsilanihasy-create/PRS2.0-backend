@@ -45,6 +45,8 @@ public class PublicationService {
 
     /** Création d'une publication : démarre toujours en {@link StatutPublication#EN_ATTENTE}. */
     public PublicationDto create(PublicationDto dto) {
+        // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
+        ClePrimaire.exigerLibre(dto.getIdPublication(), repository::existsById, "publication");
         Publication entity = PublicationMapper.toEntity(dto);
         entity.setStatutPubli(StatutPublication.EN_ATTENTE.name());
         entity.setNbConsultations(0);

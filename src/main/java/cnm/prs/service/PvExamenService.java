@@ -233,21 +233,25 @@ public class PvExamenService {
      * statut transmis : impossible de créer un PV directement accepté ou signé.
      */
     /**
-     * ⚠️ Règle ajoutée — crée le Projet de PV d'un examen à sa soumission (PK {@code idPv} allouée
-     * serveur, max+1) avec l'avis choisi et le Vérificateur désigné Secrétaire de séance
-     * ({@code idSecretaireSeance}, déjà validé). Réutilise {@link #create(PvExamenDto)}.
+     * ⚠️ Règle ajoutée — crée le Projet de PV d'un examen à sa soumission avec l'avis choisi et le
+     * Vérificateur désigné Secrétaire de séance ({@code idSecretaireSeance}, déjà validé).
+     * Réutilise {@link #create(PvExamenDto)}.
+     *
+     * <p>⚠️ LOT 3b (2026-08-26) — la PK n'est plus pré-allouée ici en {@code max + 1} : le DTO part
+     * sans identifiant et {@code create} la tire de la séquence {@code seq_pv_examen}.</p>
      */
     public PvExamenDto creerProjet(Integer idExamen, String idAvis, String idSecretaireSeance) {
         PvExamenDto dto = new PvExamenDto();
         dto.setIdExamen(idExamen);
         dto.setIdAvis(idAvis);
         dto.setIdSecretaireSeance(idSecretaireSeance);
-        dto.setIdPv(repository.findMaxId() + 1);
         return create(dto);
     }
 
     public PvExamenDto create(PvExamenDto dto) {
         PvExamen entity = PvExamenMapper.toEntity(dto);
+        // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
+        entity.setIdPv(ClePrimaire.reallouer(dto.getIdPv(), repository::existsById, repository::nextIdPv));
         // ⚠️ Règle ajoutée — l'imCtrlMembre est l'attributaire de l'examen (dispatch), jamais le corps.
         entity.setImCtrlMembre(attributaireDeLExamen(dto.getIdExamen()));
         entity.setStatutPv(StatutPv.BROUILLON.name());
@@ -798,7 +802,8 @@ public class PvExamenService {
         int numNavette = navetteRepository.findMaxNumNavetteByPv(pv.getIdPv()) + 1;
 
         PvNavette navette = new PvNavette();
-        navette.setIdNavette(navetteRepository.findMaxIdNavette() + 1);
+        // ⚠️ LOT 3b (2026-08-26) — PK allouée à la séquence seq_pv_navette (max+1 non atomique).
+        navette.setIdNavette(navetteRepository.nextIdNavette().intValue());
         navette.setIdPv(pv.getIdPv());
         navette.setNumNavette(numNavette);
         navette.setSens(sens.name());

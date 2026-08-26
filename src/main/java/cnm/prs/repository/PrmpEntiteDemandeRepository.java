@@ -17,7 +17,7 @@ public interface PrmpEntiteDemandeRepository extends JpaRepository<PrmpEntiteDem
     /** Déclarations d'une inscription dans un état donné (ex. EN_ATTENTE). */
     List<PrmpEntiteDemande> findByLoginAndStatutDemande(String login, String statutDemande);
 
-    /** Plus grand ID_DEMANDE existant (0 si table vide) — pour générer la PK assignée. */
-    @Query("select coalesce(max(d.idDemande), 0) from PrmpEntiteDemande d")
-    Integer findMaxId();
+    /** Prochaine PK allouee par la sequence serveur {@code seq_prmp_entite_demande} (allocation atomique). */
+    @Query(value = "select nextval('seq_prmp_entite_demande')", nativeQuery = true)
+    Long nextIdDemande();
 }

@@ -120,13 +120,14 @@ public class LotService {
      * ⚠️ LOT 3a (2026-08-26) — PK anti-collision. Le front alloue {@code ID_LOT} à partir du
      * {@code max} de <strong>la liste qu'il reçoit</strong> ; celle-ci étant désormais scopée, le max
      * vu par une PRMP n'est plus le max global. La PK proposée est donc conservée si elle est libre,
-     * et réallouée par le serveur ({@code max + 1}, motif « Voie B » déjà en place dans
-     * {@code SaisieService}) sinon — au lieu d'écraser silencieusement le lot d'autrui.
+     * et réallouée par le serveur sinon — au lieu d'écraser silencieusement le lot d'autrui.
+     *
+     * <p>⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant. La branche
+     * « réallouer » passait par {@code max + 1}, qui n'est pas atomique : deux créations concurrentes
+     * y lisaient le même maximum. Elle passe désormais par la séquence {@code seq_lot} (migration
+     * {@code V5}), via {@link ClePrimaire#reallouer}.</p>
      */
     private Integer prochaineCle(Integer idPropose) {
-        if (idPropose != null && !repository.existsById(idPropose)) {
-            return idPropose;
-        }
-        return repository.findMaxIdLot() + 1;
+        return ClePrimaire.reallouer(idPropose, repository::existsById, repository::nextIdLot);
     }
 }

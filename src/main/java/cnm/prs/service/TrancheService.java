@@ -49,6 +49,8 @@ public class TrancheService {
 
     public TrancheDto create(TrancheDto dto) {
         exigerEcritureSurLot(dto.getIdLot());
+        // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
+        ClePrimaire.exigerLibre(dto.getIdTranche(), repository::existsById, "tranche");
         Tranche entity = TrancheMapper.toEntity(dto);
         return TrancheMapper.toDto(repository.save(entity));
     }

@@ -213,6 +213,8 @@ public class ExamenService {
         exigerMembreAttributaire(dto.getIdDispatch());
         exigerDossierDispatche(dto.getIdDispatch());
         Examen entity = ExamenMapper.toEntity(dto);
+        // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
+        entity.setIdExamen(ClePrimaire.reallouer(dto.getIdExamen(), repository::existsById, repository::nextIdExamen));
         Examen saved = repository.save(entity);
         // ⚠️ Règle DÉPLACÉE (2026-08-01) — la création N'AVANCE PLUS le statut du dossier : l'examen
         // créé est un BROUILLON de progression (sauvegarde à chaque étape côté front) ; le dossier ne

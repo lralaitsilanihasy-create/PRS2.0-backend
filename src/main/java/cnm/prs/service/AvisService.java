@@ -37,6 +37,8 @@ public class AvisService {
     }
 
     public AvisDto create(AvisDto dto) {
+        // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
+        ClePrimaire.exigerLibre(dto.getIdAvis(), repository::existsById, "avis");
         Avis entity = AvisMapper.toEntity(dto);
         return AvisMapper.toDto(repository.save(entity));
     }

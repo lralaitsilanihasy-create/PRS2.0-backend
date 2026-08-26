@@ -96,6 +96,8 @@ public class DispatchService {
         validerInterimDispatch(dto);
         validerAttributaireMembre(dto);
         Dispatch entity = DispatchMapper.toEntity(dto);
+        // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
+        entity.setIdDispatch(ClePrimaire.reallouer(dto.getIdDispatch(), repository::existsById, repository::nextIdDispatch));
         // ⚠️ Règle MODIFIÉE (2026-08-15) — l'association CC ne vaut que quand le Président dispatche
         // à un Membre (le CC suit alors les dossiers de sa commission) : voir normaliserAssociationCc.
         normaliserAssociationCc(entity, true);

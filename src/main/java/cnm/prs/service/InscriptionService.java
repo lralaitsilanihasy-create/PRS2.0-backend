@@ -160,8 +160,6 @@ public class InscriptionService {
 
         List<PrmpEntiteDemande> demandes = demandeRepository
                 .findByLoginAndStatutDemande(login, StatutDemandeEntite.EN_ATTENTE.name());
-        int prochaineAffectation = prmpEntiteRepository.findMaxId() + 1;
-        int prochaineEntite = entiteContractRepository.findMaxId() + 1;
         List<String> validees = new ArrayList<>();
         List<Conflit> conflits = new ArrayList<>();
 
@@ -175,7 +173,7 @@ public class InscriptionService {
                     d.setMotif("Entité déjà rattachée à la PRMP " + active.get().getIdPrmp() + ".");
                     conflits.add(new Conflit(d.getIdEntiteContract(), null, d.getMotif()));
                 } else {
-                    creerAffectation(idPrmp, d.getIdEntiteContract(), prochaineAffectation++);
+                    creerAffectation(idPrmp, d.getIdEntiteContract());
                     d.setStatutDemande(StatutDemandeEntite.VALIDEE.name());
                     validees.add("entité " + d.getIdEntiteContract());
                 }
@@ -184,14 +182,15 @@ public class InscriptionService {
                 DecisionEntiteProposee dec = decisions.get(d.getIdDemande());
                 if (dec != null && dec.accepter() && dec.idOrganigramme() != null) {
                     EntiteContract e = new EntiteContract();
-                    e.setIdEntiteContract(prochaineEntite++);
+                    e.setIdEntiteContract(ClePrimaire.allouerLibre(
+                            entiteContractRepository::existsById, entiteContractRepository::nextIdEntiteContract));
                     e.setLibelleEntite(d.getLibellePropose());
                     e.setAdresse(d.getAdressePropose());
                     e.setCategorieEntite(d.getCategoriePropose());
                     e.setIdOrganigramme(dec.idOrganigramme());
                     e.setIdLocalite(d.getIdLocalitePropose());
                     entiteContractRepository.save(e);
-                    creerAffectation(idPrmp, e.getIdEntiteContract(), prochaineAffectation++);
+                    creerAffectation(idPrmp, e.getIdEntiteContract());
                     d.setIdEntiteContract(e.getIdEntiteContract());
                     d.setStatutDemande(StatutDemandeEntite.VALIDEE.name());
                     validees.add("entité proposée « " + d.getLibellePropose() + " » (créée id "
@@ -256,9 +255,16 @@ public class InscriptionService {
         return pieceJointeService.telecharger(login, type);
     }
 
-    private void creerAffectation(String idPrmp, Integer idEntite, int idAffectation) {
+    /**
+     * ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant. La PK ne vient
+     * plus d'un compteur local amorcé sur {@code max + 1} (deux validations d'inscription simultanées
+     * s'attribuaient les mêmes identifiants, la seconde écrasant les affectations de la première) mais
+     * de la séquence {@code seq_prmp_entite}, consommée affectation par affectation.
+     */
+    private void creerAffectation(String idPrmp, Integer idEntite) {
         PrmpEntite aff = new PrmpEntite();
-        aff.setIdPrmpEntite(idAffectation);
+        aff.setIdPrmpEntite(ClePrimaire.allouerLibre(
+                prmpEntiteRepository::existsById, prmpEntiteRepository::nextIdPrmpEntite));
         aff.setIdPrmp(idPrmp);
         aff.setIdEntiteContract(idEntite);
         aff.setDateAffectation(LocalDate.now());

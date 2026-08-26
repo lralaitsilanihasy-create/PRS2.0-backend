@@ -38,6 +38,8 @@ public class MinistereService {
 
     public MinistereDto create(MinistereDto dto) {
         Ministere entity = MinistereMapper.toEntity(dto);
+        // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
+        entity.setIdMinistere(ClePrimaire.reallouer(dto.getIdMinistere(), repository::existsById, repository::nextIdMinistere));
         return MinistereMapper.toDto(repository.save(entity));
     }
 

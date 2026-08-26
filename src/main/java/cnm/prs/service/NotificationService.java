@@ -55,6 +55,8 @@ public class NotificationService {
     }
 
     public NotificationDto create(NotificationDto dto) {
+        // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
+        ClePrimaire.exigerLibre(dto.getIdNotification(), repository::existsById, "notification");
         Notification entity = NotificationMapper.toEntity(dto);
         return NotificationMapper.toDto(repository.save(entity));
     }
@@ -121,7 +123,7 @@ public class NotificationService {
     private Notification creer(TypeNotification type, String ref, String destType, String im, String email,
             Integer idObjet, String typeObjet, Integer idDossier, String titre, String corps) {
         Notification n = new Notification();
-        n.setIdNotification(repository.findMaxId() + 1);
+        n.setIdNotification(repository.nextIdNotification().intValue());   // PK serveur (sequence)
         n.setIdDossier(idDossier);
         n.setTypeNotif(type.name());
         n.setDestinataireRef(ref);

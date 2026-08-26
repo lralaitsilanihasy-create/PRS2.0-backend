@@ -691,7 +691,7 @@ public class DossierService {
     /** Trace un événement du dossier dans {@code t_audit_log} (TYPE_ACTION court, détail en NOUVELLE_VALEUR). */
     private void tracerEvenementDossier(Dossier dossier, String typeAction, String detail) {
         AuditLog log = new AuditLog();
-        log.setIdLog(auditLogRepository.findMaxId() + 1);
+        log.setIdLog(auditLogRepository.nextIdAuditLog());   // PK serveur (sequence)
         log.setDateAction(LocalDateTime.now());
         log.setImActeur(CurrentUser.ref().orElse(null));
         log.setNomTable("t_dossier");
@@ -774,7 +774,7 @@ public class DossierService {
     /** Trace la rectification dans {@code t_audit_log} (NOM_TABLE=t_dossier, TYPE_ACTION=RECTIFICATION_PRMP). */
     private void tracerRectification(Dossier dossier, String idPrmp, String motif) {
         AuditLog log = new AuditLog();
-        log.setIdLog(auditLogRepository.findMaxId() + 1);
+        log.setIdLog(auditLogRepository.nextIdAuditLog());   // PK serveur (sequence)
         log.setDateAction(LocalDateTime.now());
         log.setImActeur(idPrmp);                          // <id PRMP>
         log.setNomTable("t_dossier");

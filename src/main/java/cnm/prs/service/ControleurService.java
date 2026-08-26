@@ -107,6 +107,8 @@ public class ControleurService {
     }
 
     public ControleurDto create(ControleurDto dto) {
+        // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
+        ClePrimaire.exigerLibre(dto.getImControleur(), repository::existsById, "contrôleur");
         Controleur entity = ControleurMapper.toEntity(dto);
         return ControleurMapper.toDto(repository.save(entity));
     }

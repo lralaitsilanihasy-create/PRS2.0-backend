@@ -37,6 +37,8 @@ public class IndicateurCtrlService {
     }
 
     public IndicateurCtrlDto create(IndicateurCtrlDto dto) {
+        // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
+        ClePrimaire.exigerLibre(dto.getIdIndicateur(), repository::existsById, "indicateur de contrôle");
         IndicateurCtrl entity = IndicateurCtrlMapper.toEntity(dto);
         return IndicateurCtrlMapper.toDto(repository.save(entity));
     }

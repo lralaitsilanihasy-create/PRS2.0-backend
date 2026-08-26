@@ -53,6 +53,8 @@ public class PvNavetteService {
 
     public PvNavetteDto create(PvNavetteDto dto) {
         validateSens(dto.getSens());
+        // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
+        ClePrimaire.exigerLibre(dto.getIdNavette(), repository::existsById, "navette de PV");
         PvNavette entity = PvNavetteMapper.toEntity(dto);
         return PvNavetteMapper.toDto(repository.save(entity));
     }

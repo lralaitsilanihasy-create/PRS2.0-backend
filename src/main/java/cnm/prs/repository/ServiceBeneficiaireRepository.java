@@ -20,9 +20,9 @@ public interface ServiceBeneficiaireRepository extends JpaRepository<ServiceBene
     /** Supprime les bénéficiaires d'un marché (cascade applicative à la suppression du marché). */
     long deleteByIdDetail(Integer idDetail);
 
-    /** Plus grand ID_BENEF (0 si table vide) — pour allouer la PK à la création (PK manuelle). */
-    @Query("select coalesce(max(s.idBenef), 0) from ServiceBeneficiaire s")
-    int findMaxIdBenef();
+    /** Prochaine PK allouee par la sequence serveur {@code seq_service_beneficiaire} (allocation atomique). */
+    @Query(value = "select nextval('seq_service_beneficiaire')", nativeQuery = true)
+    Long nextIdBenef();
 
     /**
      * ⚠️ LOT 3a (2026-08-26) — §1/§3.1 : bénéficiaires des dossiers du périmètre de l'appelant

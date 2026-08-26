@@ -171,7 +171,6 @@ public class SaisieService {
         Integer idPpm = ppmService.create(ppm).getIdPpm();          // PK séquence (retournée)
 
         if (req.marches() != null) {
-            int prevSeq = marchePrevisionRepository.findMaxId();   // PK prévision allouée serveur (max+1)
             for (int i = 0; i < req.marches().size(); i++) {
                 SaisieMarcheLigne ligne = req.marches().get(i);
                 exigerAuMoinsUnProcessus(ligne, i);   // « au moins un processus » (NotEmpty, à la création)
@@ -179,8 +178,10 @@ public class SaisieService {
                 validerCoherenceMontants(ligne, i);   // Σ bénéficiaires = montant(s) du marché (si beneficiaires[] non vide)
                 Integer idDetail = marcheService.create(toMarcheDto(ligne, idDossier, idPpm)).getIdDetail();
                 for (ProcessusMarche p : ligne.processus()) {
+                    // ⚠️ LOT 3b (2026-08-26) — PK null : allouee par la sequence seq_marche_prevision
+                    // (le compteur local max+1 rendait le meme id a deux saisies concurrentes).
                     marchePrevisionService.create(new MarchePrevisionDto(
-                            ++prevSeq, idDetail, p.idCapm(), p.dateDebut(), p.dateFin(), null));
+                            null, idDetail, p.idCapm(), p.dateDebut(), p.dateFin(), null));
                 }
                 creerBeneficiaires(idDetail, ligne);   // une ligne t_service_beneficiaire par bénéficiaire
                 creerLots(idDetail, idDossier, ligne);   // une ligne t_lot par lot (aucun contrôle de somme)
@@ -329,7 +330,6 @@ public class SaisieService {
         }
         Set<Integer> demandes = new HashSet<>();
         if (req.marches() != null) {
-            int prevSeq = marchePrevisionRepository.findMaxId();   // PK prévision allouée serveur (max+1)
             for (int i = 0; i < req.marches().size(); i++) {
                 SaisieMarcheLigne ligne = req.marches().get(i);
                 boolean nouvelle = !existants.contains(ligne.idDetail());
@@ -377,8 +377,10 @@ public class SaisieService {
                 }
                 if (ligne.processus() != null) {
                     for (ProcessusMarche p : ligne.processus()) {
+                        // ⚠️ LOT 3b (2026-08-26) — PK null : allouee par la sequence seq_marche_prevision
+                        // (le compteur local max+1 rendait le meme id a deux saisies concurrentes).
                         marchePrevisionService.create(new MarchePrevisionDto(
-                                ++prevSeq, idDetail, p.idCapm(), p.dateDebut(), p.dateFin(), null));
+                                null, idDetail, p.idCapm(), p.dateDebut(), p.dateFin(), null));
                     }
                 }
                 creerBeneficiaires(idDetail, ligne);     // sans effet si beneficiaires null/vide
@@ -427,7 +429,8 @@ public class SaisieService {
 
     /**
      * (Règle ajoutée) Résout la nature par id ; à défaut, par <strong>libellé normalisé</strong> (trim + casse +
-     * accents) dans {@code tr_nature} ; à défaut, la <strong>crée à la volée</strong> (PK = max+1) et la trace.
+     * accents) dans {@code tr_nature} ; à défaut, la <strong>crée à la volée</strong> (PK allouée à la
+     * séquence {@code seq_nature}) et la trace.
      * {@code null} si ni id ni libellé.
      */
     private Integer resoudreOuCreerNature(Integer id, String libelle) {
@@ -445,8 +448,9 @@ public class SaisieService {
         if (existant != null) {
             return existant;
         }
-        int nouvelId = refs.stream().map(Nature::getIdNature).filter(java.util.Objects::nonNull)
-                .max(Integer::compareTo).orElse(0) + 1;
+        // ⚠️ LOT 3b (2026-08-26) — PK allouée à la séquence seq_nature : le max+1 calculé sur la liste
+        // en mémoire rendait le même id à deux imports concurrents, et le second écrasait la nature du premier.
+        int nouvelId = ClePrimaire.allouerLibre(natureRepository::existsById, natureRepository::nextIdNature);
         natureRepository.save(new Nature(nouvelId, libelle.trim(), null));
         auditLogService.enregistrer(CurrentUser.ref().orElse(null), "tr_nature",
                 String.valueOf(nouvelId), "CREATION_A_LA_VOLEE", null);
@@ -479,8 +483,9 @@ public class SaisieService {
             return existant.getIdMode();
         }
         String cible = LibelleNormalisation.separerSource(libelle)[0];
-        int nouvelId = refs.stream().map(ModePassation::getIdMode).filter(java.util.Objects::nonNull)
-                .max(Integer::compareTo).orElse(0) + 1;
+        // ⚠️ LOT 3b (2026-08-26) — PK allouée à la séquence seq_mode_passation (même motif que la nature).
+        int nouvelId = ClePrimaire.allouerLibre(
+                modePassationRepository::existsById, modePassationRepository::nextIdMode);
         ModePassation md = new ModePassation();
         md.setIdMode(nouvelId);
         md.setLibelle(libelle.trim());
@@ -569,16 +574,17 @@ public class SaisieService {
         }
     }
 
-    /** (Règle ajoutée) Crée une ligne {@code t_service_beneficiaire} par bénéficiaire (PK allouée max+1). */
+    /** (Règle ajoutée) Crée une ligne {@code t_service_beneficiaire} par bénéficiaire (PK allouée à la séquence {@code seq_service_beneficiaire}). */
     private void creerBeneficiaires(Integer idDetail, SaisieMarcheLigne ligne) {
         List<SaisieBeneficiaireLigne> benefs = ligne.beneficiaires();
         if (benefs == null || benefs.isEmpty()) {
             return;
         }
-        int nextId = serviceBeneficiaireRepository.findMaxIdBenef() + 1;
         for (SaisieBeneficiaireLigne b : benefs) {
             ServiceBeneficiaire sb = new ServiceBeneficiaire();
-            sb.setIdBenef(nextId++);
+            // ⚠️ LOT 3b (2026-08-26) — PK allouee a la sequence, ligne par ligne (plus de compteur local).
+            sb.setIdBenef(ClePrimaire.allouerLibre(
+                    serviceBeneficiaireRepository::existsById, serviceBeneficiaireRepository::nextIdBenef));
             sb.setIdDetail(idDetail);
             sb.setSoaCode(resoudreOuCreerSoa(b.soaCode(), b.soaLibelle()));
             sb.setNumCompte(resoudreOuCreerCompte(b.numCompte()));
@@ -589,7 +595,7 @@ public class SaisieService {
     }
 
     /**
-     * (Règle ajoutée) Crée une ligne {@code t_lot} par lot (PK allouée max+1), rattachée au marché
+     * (Règle ajoutée) Crée une ligne {@code t_lot} par lot (PK allouée à la séquence {@code seq_lot}), rattachée au marché
      * ({@code idDetail}) et à son dossier ({@code idDossier}). Descriptif — aucun contrôle de somme.
      */
     private void creerLots(Integer idDetail, Integer idDossier, SaisieMarcheLigne ligne) {
@@ -597,10 +603,10 @@ public class SaisieService {
         if (lots == null || lots.isEmpty()) {
             return;
         }
-        int nextId = lotRepository.findMaxIdLot() + 1;
         for (SaisieLotLigne l : lots) {
             Lot lot = new Lot();
-            lot.setIdLot(nextId++);
+            // ⚠️ LOT 3b (2026-08-26) — PK allouee a la sequence, ligne par ligne (plus de compteur local).
+            lot.setIdLot(ClePrimaire.allouerLibre(lotRepository::existsById, lotRepository::nextIdLot));
             lot.setIdDossier(idDossier);
             lot.setIdDetail(idDetail);
             lot.setDesignationLot(l.designationLot());
