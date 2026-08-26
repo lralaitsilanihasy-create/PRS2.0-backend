@@ -174,6 +174,7 @@ class CnmWorkflowIntegrationTest {
     @Autowired private cnm.prs.repository.SoaBeneficiaireRepository soaBeneficiaireRepository;
     @Autowired private cnm.prs.repository.ServiceBeneficiaireRepository serviceBeneficiaireRepository;
     @Autowired private cnm.prs.repository.UgpmRepository ugpmRepository;
+    @Autowired private cnm.prs.repository.AuditLogRepository auditLogRepository;
 
     private String tokenPresident;
     private String tokenCc;
@@ -4955,6 +4956,109 @@ class CnmWorkflowIntegrationTest {
                 .andExpect(status().isOk());
         org.junit.jupiter.api.Assertions.assertEquals("PRMP001",
                 dossierRepository.findById(idDoss).orElseThrow().getSoumisPar());
+    }
+
+    @Test
+    @DisplayName("UGPM : voit et lit ce qu'elle a saisi sous sa tutelle (liste, détail, PPM, marché) ; "
+            + "une UGPM d'une AUTRE tutelle reste hors périmètre (liste vide, 403)")
+    void ugpm_lecture_partageLePerimetreDeSaTutelle() throws Exception {
+        // ⚠️ Correctif 2026-08-26 — la claim « ref » de l'UGPM porte l'ID_PRMP de TUTELLE et sa localité
+        // est nulle. Les scopings qui testaient « profil == PRMP » à la main excluaient l'UGPM : elle
+        // retombait sur la branche localité → liste vide / 403 sur ce qu'elle venait elle-même de saisir.
+        String tokenUgpm = bearer("UGPM1", ProfilUtilisateur.UGPM, TypeActeur.UGPM, "PRMP001", null);
+        natureRepository.save(new Nature(1, "Travaux", null));
+        modePassationRepository.save(new ModePassation(2, "AOR", null, null, null, null));
+        capmRepository.save(new Capm(1, "LANCEMENT", 1, null, null));
+
+        String body = "{\"idEntiteContract\":1,\"exercice\":2026,\"signataire\":\"X\",\"dateSignature\":\"2026-01-10\","
+                + "\"reference\":\"PPM-UGPM-LECTURE\","
+                + "\"marches\":[{\"designationMarche\":\"A\",\"montEstim\":1000000,\"idNature\":1,\"idMode\":2,\"statut\":\"PREVU\","
+                + "\"processus\":[{\"idCapm\":1,\"dateDebut\":\"2026-02-01\",\"dateFin\":\"2026-06-30\"}]}]}";
+        String resp = mvc.perform(post("/api/saisies/ppm").header("Authorization", tokenUgpm)
+                .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        int idDoss = com.jayway.jsonpath.JsonPath.read(resp, "$.idDossier");
+        Integer idPpm = ppmRepository.findByIdDossier(idDoss).stream().findFirst().orElseThrow().getIdPpm();
+        Integer idMarche = marcheRepository.findByIdPpm(idPpm).get(0).getIdDetail();
+
+        // Liste des dossiers : l'UGPM voit ce qu'elle vient de saisir (périmètre = celui de sa tutelle).
+        mvc.perform(get("/api/dossiers").header("Authorization", tokenUgpm))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idDossier==" + idDoss + ")]", hasSize(1)));
+        // Détail du dossier, PPM rattaché, PPM lu directement, marché : 200, jamais 403.
+        mvc.perform(get("/api/dossiers/" + idDoss).header("Authorization", tokenUgpm))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.idDossier").value(idDoss));
+        mvc.perform(get("/api/dossiers/" + idDoss + "/ppm").header("Authorization", tokenUgpm))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.idPpm").value(idPpm));
+        mvc.perform(get("/api/ppms/" + idPpm).header("Authorization", tokenUgpm))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/marches/" + idMarche).header("Authorization", tokenUgpm))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.idPpm").value(idPpm));
+        mvc.perform(get("/api/marches").header("Authorization", tokenUgpm))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idDetail==" + idMarche + ")]", hasSize(1)));
+        // « Mes PPM & marchés » exclut les brouillons par construction (findVisiblesParPrmp) : une fois
+        // le dossier soumis par la PRMP de tutelle, l'UGPM le suit dans cette liste comme sa tutelle.
+        mvc.perform(get("/api/ppms").header("Authorization", tokenUgpm))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idPpm==" + idPpm + ")]", hasSize(0)));
+        mvc.perform(post("/api/dossiers/" + idDoss + "/soumettre").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/ppms").header("Authorization", tokenUgpm))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idPpm==" + idPpm + ")]", hasSize(1)));
+
+        // Une UGPM d'une AUTRE tutelle ne voit rien de ce périmètre : ni la liste, ni le détail.
+        prmpRepository.save(prmp("PRMP003", "ANT"));
+        String tokenUgpmAutre = bearer("UGPM2", ProfilUtilisateur.UGPM, TypeActeur.UGPM, "PRMP003", null);
+        mvc.perform(get("/api/dossiers").header("Authorization", tokenUgpmAutre))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idDossier==" + idDoss + ")]", hasSize(0)));
+        mvc.perform(get("/api/dossiers/" + idDoss).header("Authorization", tokenUgpmAutre))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/ppms/" + idPpm).header("Authorization", tokenUgpmAutre))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/marches/" + idMarche).header("Authorization", tokenUgpmAutre))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Audit : un acteur dont la ref fait 8 à 10 caractères (« PRMP00001 ») est journalisé — IM_ACTEUR non null "
+            + "(la colonne est en varchar(10) depuis la migration 2026-06-19)")
+    void audit_refLongue_imActeurNonNull() throws Exception {
+        // ⚠️ Correctif 2026-08-26 — le filtre de l'intercepteur était resté à 7 caractères alors que
+        // IM_ACTEUR a été élargie à varchar(10) précisément pour porter un id PRMP (t_prmp.ID_PRMP).
+        prmpRepository.save(prmp("PRMP00001", "ANT"));
+        categorieEntiteRepository.save(new cnm.prs.entity.CategorieEntite("DIRECTION", 4));
+        String tokenPrmpLong = bearer("PRMP00001", ProfilUtilisateur.PRMP, TypeActeur.PRMP, "PRMP00001", "ANT");
+
+        mvc.perform(post("/api/entite-contracts").header("Authorization", tokenPrmpLong)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idEntiteContract\":300,\"libelleEntite\":\"Direction Longue\",\"adresse\":\"Rue Z\","
+                        + "\"categorieEntite\":\"DIRECTION\",\"idOrganigramme\":1}"))
+                .andExpect(status().isCreated());
+
+        List<cnm.prs.entity.AuditLog> traces = auditLogRepository.findAll().stream()
+                .filter(l -> "entite-contracts".equals(l.getNomTable())).toList();
+        org.junit.jupiter.api.Assertions.assertEquals(1, traces.size());
+        org.junit.jupiter.api.Assertions.assertEquals("PRMP00001", traces.get(0).getImActeur());
+    }
+
+    @Test
+    @DisplayName("Jeton au rôle inconnu : CurrentUser.profil() honore son contrat (vide) — les lectures scopées "
+            + "répondent 200 avec une liste vide, jamais 500")
+    void currentUser_roleInconnu_aucuneErreurServeur() throws Exception {
+        // ⚠️ Correctif 2026-08-26 — ProfilUtilisateur.valueOf() était appelé nu : un rôle inconnu levait
+        // IllegalArgumentException, rendue en 500 par le handler générique, là où le contrat promet « vide ».
+        String tokenInconnu = "Bearer " + tokenService.generer("inconnu", "INCONNU", TypeActeur.CONTROLEUR, "CTRX", null);
+        for (String url : List.of("/api/dossiers", "/api/ppms", "/api/marches")) {
+            mvc.perform(get(url).header("Authorization", tokenInconnu))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.length()").value(0));
+        }
     }
 
     @Test

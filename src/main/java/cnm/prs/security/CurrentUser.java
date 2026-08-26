@@ -47,12 +47,31 @@ public final class CurrentUser {
         return jwt().map(j -> j.getClaimAsString("acteurType"));
     }
 
-    /** Profil métier, ou vide si non reconnu. */
+    /**
+     * Profil métier, ou vide si non reconnu.
+     *
+     * <p>⚠️ Correctif 2026-08-26 — {@code valueOf} était appelé nu : un jeton portant un rôle
+     * inconnu levait {@link IllegalArgumentException} (→ 500) au lieu du « vide » promis par le
+     * contrat. Le rapprochement reste <strong>strict</strong> sur le nom de la constante (celui
+     * qu'émet {@code TokenService}, et dont {@code SecurityConfig} dérive l'autorité
+     * {@code ROLE_<role>}) : {@link ProfilUtilisateur#resolve(String)} est délibérément écarté ici
+     * — c'est un rapprochement <em>approchant</em> sur le libellé {@code tr_profile.PROFILE}, qui
+     * promouvrait un rôle forgé (« SUPER-ADMIN » → ADMINISTRATEUR).</p>
+     */
     public static Optional<ProfilUtilisateur> profil() {
         return jwt()
                 .map(j -> j.getClaimAsString("role"))
                 .filter(r -> r != null && !r.isBlank())
-                .map(ProfilUtilisateur::valueOf);
+                .flatMap(CurrentUser::profilStrict);
+    }
+
+    /** {@code valueOf} tolérant : le rôle inconnu donne {@link Optional#empty()} (aucun privilège). */
+    private static Optional<ProfilUtilisateur> profilStrict(String role) {
+        try {
+            return Optional.of(ProfilUtilisateur.valueOf(role));
+        } catch (IllegalArgumentException e) {
+            return Optional.empty();
+        }
     }
 
     /** Localité de rattachement ; vide = toutes localités (Président). */

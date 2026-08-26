@@ -9,7 +9,6 @@ import org.springframework.transaction.annotation.Transactional;
 import cnm.prs.dto.PpmDto;
 import cnm.prs.entity.Marche;
 import cnm.prs.entity.Ppm;
-import cnm.prs.enums.ProfilUtilisateur;
 import cnm.prs.exception.ResourceNotFoundException;
 import cnm.prs.mapper.PpmMapper;
 import cnm.prs.repository.DemandeRetraitRepository;
@@ -118,12 +117,17 @@ public class PpmService {
         return enrichir(PpmMapper.toDto(entity));
     }
 
-    /** Vérifie que le PPM est dans le périmètre de l'appelant (§1, §3.1) — sinon 403. */
+    /**
+     * Vérifie que le PPM est dans le périmètre de l'appelant (§1, §3.1) — sinon 403.
+     *
+     * <p>⚠️ Correctif 2026-08-26 — l'UGPM partage le périmètre de sa tutelle
+     * ({@link Visibilite#estPrmp()}), cf. §3.1.</p>
+     */
     private void controlerVisibilite(Ppm ppm) {
         if (Visibilite.voitTout()) {
             return;
         }
-        if (CurrentUser.profil().orElse(null) == ProfilUtilisateur.PRMP) {
+        if (Visibilite.estPrmp()) {
             String idPrmp = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
             if (idPrmp != null && idPrmp.equals(ppm.getIdPrmp())) {
                 return;

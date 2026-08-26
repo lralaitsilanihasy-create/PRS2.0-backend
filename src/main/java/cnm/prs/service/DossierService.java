@@ -55,6 +55,7 @@ import cnm.prs.repository.TypeDossierRepository;
 import cnm.prs.repository.TypePieceJointeRepository;
 import cnm.prs.repository.VerificationRepository;
 import cnm.prs.security.CurrentUser;
+import cnm.prs.security.Visibilite;
 
 /**
  * Logique métier pour {@link Dossier}.
@@ -168,13 +169,18 @@ public class DossierService {
                 .map(DossierMapper::toDto).toList());
     }
 
-    /** Dossiers du périmètre de l'appelant (scoping §1), optionnellement restreints à un statut. */
+    /**
+     * Dossiers du périmètre de l'appelant (scoping §1), optionnellement restreints à un statut.
+     *
+     * <p>⚠️ Correctif 2026-08-26 — l'UGPM partage le périmètre de sa tutelle
+     * ({@link Visibilite#estPrmp()}), cf. §3.1.</p>
+     */
     private List<Dossier> chargerScopees(String filtre) {
         ProfilUtilisateur profil = CurrentUser.profil().orElse(null);
         if (profil == ProfilUtilisateur.PRESIDENT || profil == ProfilUtilisateur.ADMINISTRATEUR) {
             return repository.findParStatut(filtre);
         }
-        if (profil == ProfilUtilisateur.PRMP) {
+        if (Visibilite.estPrmp()) {
             String idPrmp = CurrentUser.ref().orElse(null);
             if (idPrmp == null || idPrmp.isBlank()) {
                 return List.of();
@@ -372,13 +378,18 @@ public class DossierService {
         return page;
     }
 
-    /** Vérifie que le dossier est dans le périmètre de visibilité de l'utilisateur (§1). */
+    /**
+     * Vérifie que le dossier est dans le périmètre de visibilité de l'utilisateur (§1).
+     *
+     * <p>⚠️ Correctif 2026-08-26 — l'UGPM partage le périmètre de sa tutelle
+     * ({@link Visibilite#estPrmp()}), cf. §3.1.</p>
+     */
     private void controlerVisibilite(Integer idDossier) {
         ProfilUtilisateur profil = CurrentUser.profil().orElse(null);
         if (profil == ProfilUtilisateur.PRESIDENT || profil == ProfilUtilisateur.ADMINISTRATEUR) {
             return;
         }
-        if (profil == ProfilUtilisateur.PRMP) {
+        if (Visibilite.estPrmp()) {
             String idPrmp = CurrentUser.ref().orElse(null);
             if (idPrmp != null && !idPrmp.isBlank() && repository.existsVisiblePourPrmp(idDossier, idPrmp)) {
                 return;

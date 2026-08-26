@@ -10,7 +10,6 @@ import cnm.prs.dto.MarcheDto;
 import cnm.prs.entity.Lot;
 import cnm.prs.entity.Marche;
 import cnm.prs.enums.FormeMarche;
-import cnm.prs.enums.ProfilUtilisateur;
 import cnm.prs.exception.ResourceNotFoundException;
 import cnm.prs.mapper.MarcheMapper;
 import cnm.prs.repository.LotRepository;
@@ -92,12 +91,17 @@ public class MarcheService {
         return MarcheMapper.toDto(entity);
     }
 
-    /** Vérifie que le marché est dans le périmètre de l'appelant (§1, §3.1) — sinon 403. */
+    /**
+     * Vérifie que le marché est dans le périmètre de l'appelant (§1, §3.1) — sinon 403.
+     *
+     * <p>⚠️ Correctif 2026-08-26 — l'UGPM partage le périmètre de sa tutelle
+     * ({@link Visibilite#estPrmp()}), cf. §3.1.</p>
+     */
     private void controlerVisibilite(Marche marche) {
         if (Visibilite.voitTout()) {
             return;
         }
-        if (CurrentUser.profil().orElse(null) == ProfilUtilisateur.PRMP) {
+        if (Visibilite.estPrmp()) {
             String idPrmp = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
             if (idPrmp != null && repository.existsVisiblePourPrmp(marche.getIdDetail(), idPrmp)) {
                 return;

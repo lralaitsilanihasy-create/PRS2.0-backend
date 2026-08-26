@@ -150,10 +150,15 @@ public class LettreRenvoiService {
         return dto;
     }
 
-    /** Vrai si l'appelant est la PRMP propriétaire du dossier d'une lettre {@code SIGNE}. */
+    /**
+     * Vrai si l'appelant est la PRMP propriétaire du dossier d'une lettre {@code SIGNE}.
+     *
+     * <p>⚠️ Correctif 2026-08-26 — l'UGPM partage le périmètre de sa tutelle
+     * ({@link Visibilite#estPrmp()}), cf. §3.1.</p>
+     */
     private boolean estPrmpProprietaireSignee(LettreRenvoi entity) {
         String ref = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
-        return CurrentUser.profil().filter(p -> p == ProfilUtilisateur.PRMP).isPresent()
+        return Visibilite.estPrmp()
                 && ref != null
                 && StatutLettreRenvoi.SIGNE.name().equals(entity.getStatut())
                 && ppmRepository.existsByIdDossierAndIdPrmp(entity.getIdDossier(), ref);

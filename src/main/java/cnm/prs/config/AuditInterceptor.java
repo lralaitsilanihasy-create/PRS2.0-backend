@@ -56,8 +56,12 @@ public class AuditInterceptor implements HandlerInterceptor {
                     ? tronquer(sousAction.toUpperCase(), 10)
                     : typeParMethode(request.getMethod());
 
+            // ⚠️ Correctif 2026-08-26 — la limite suit la colonne : t_audit_log.IM_ACTEUR est passée
+            // à varchar(10) (docs/migrations/2026-06-19_audit_log_im_acteur_len10.sql) précisément
+            // pour porter un id PRMP (t_prmp.ID_PRMP = varchar 10). Le filtre était resté à 7 : tout
+            // acteur dont la ref fait 8 à 10 caractères était journalisé avec IM_ACTEUR null.
             String ref = CurrentUser.ref().orElse(null);
-            String imActeur = (ref != null && ref.length() <= 7) ? ref : null;
+            String imActeur = (ref != null && ref.length() <= 10) ? ref : null;
 
             auditLogService.enregistrer(imActeur, nomTable, idEnregistrement, typeAction, request.getRemoteAddr());
         } catch (Exception e) {
