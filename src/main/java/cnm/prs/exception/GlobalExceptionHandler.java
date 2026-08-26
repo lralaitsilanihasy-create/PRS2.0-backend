@@ -3,6 +3,8 @@ package cnm.prs.exception;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -22,6 +24,15 @@ import jakarta.persistence.EntityNotFoundException;
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    /**
+     * Message rendu au client pour toute erreur non prévue (500). Volontairement opaque :
+     * le détail technique (message d'exception, pile) part dans les journaux serveur, jamais
+     * dans la réponse HTTP — il renseignerait un attaquant sur la structure interne.
+     */
+    private static final String MESSAGE_ERREUR_INTERNE = "Une erreur interne est survenue.";
 
     @ExceptionHandler({ ResourceNotFoundException.class, EntityNotFoundException.class })
     public ResponseEntity<ErrorResponse> handleNotFound(RuntimeException ex, WebRequest request) {
@@ -151,6 +162,11 @@ public class GlobalExceptionHandler {
     /**
      * Identifiant (clé primaire assignée) manquant à la création : les entités du modèle
      * n'auto-génèrent pas leur PK, le client doit la fournir. → 400 plutôt qu'une 500 opaque.
+     * <p>
+     * ⚠️ Cette branche « must be manually assigned » est probablement morte depuis le LOT 3b
+     * (séquences serveur généralisées, migration V5) : elle est conservée en garde, son coût
+     * étant nul. Toute AUTRE {@code JpaSystemException} est une vraie 500 : journalisée avec
+     * sa pile, rendue au client sous le message générique.
      */
     @ExceptionHandler(JpaSystemException.class)
     public ResponseEntity<ErrorResponse> handleJpaSystem(JpaSystemException ex, WebRequest request) {
@@ -160,7 +176,8 @@ public class GlobalExceptionHandler {
                     "L'identifiant (clé primaire) est obligatoire à la création de cette ressource.",
                     request, null);
         }
-        return build(HttpStatus.INTERNAL_SERVER_ERROR, ex.getMessage(), request, null);
+        log.error("Erreur non prevue sur {} : ", uri(request), ex);
+        return build(HttpStatus.INTERNAL_SERVER_ERROR, MESSAGE_ERREUR_INTERNE, request, null);
     }
 
     /**
@@ -171,6 +188,10 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleDataIntegrity(DataIntegrityViolationException ex, WebRequest request) {
         // Distingue la cause racine (SQLSTATE PostgreSQL) au lieu d'un message fourre-tout.
         String sqlState = sqlState(ex);
+        // Les messages rendus au client (ci-dessous) restent volontairement génériques : c'est
+        // ici, dans le journal, que se lit la contrainte réellement violée (nom d'index, colonne).
+        log.warn("Violation de contrainte sur {} (SQLSTATE {}) : {}",
+                uri(request), sqlState, ex.getMostSpecificCause().getMessage());
         return switch (sqlState == null ? "" : sqlState) {
             case "23503" -> build(HttpStatus.CONFLICT,          // foreign_key_violation (insert : parent absent ; ou delete : enfant présent)
                     "Violation de clé étrangère : une donnée référencée est absente, ou cet enregistrement est encore référencé par d'autres.", request, null);
@@ -192,9 +213,20 @@ public class GlobalExceptionHandler {
         return null;
     }
 
+    /**
+     * Filet de sécurité : toute exception non prise en charge plus haut. Le détail technique
+     * est <strong>journalisé avec sa pile</strong> (seule trace exploitable pour le diagnostic,
+     * puisque le client ne reçoit plus qu'un message générique).
+     */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneric(Exception ex, WebRequest request) {
-        return build(HttpStatus.INTERNAL_SERVER_ERROR, ex.getMessage(), request, null);
+        log.error("Erreur non prevue sur {} : ", uri(request), ex);
+        return build(HttpStatus.INTERNAL_SERVER_ERROR, MESSAGE_ERREUR_INTERNE, request, null);
+    }
+
+    /** Chemin de la requête, tel que reporté dans le corps d'erreur. */
+    private static String uri(WebRequest request) {
+        return request.getDescription(false).replace("uri=", "");
     }
 
     private ResponseEntity<ErrorResponse> build(HttpStatus status, String message, WebRequest request,
