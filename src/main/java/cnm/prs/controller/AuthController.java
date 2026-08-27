@@ -7,6 +7,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 
 import cnm.prs.dto.EntitePubliqueDto;
@@ -25,12 +27,20 @@ import cnm.prs.dto.RegisterPrmpRequest;
 import cnm.prs.dto.RegisterPrmpV2Request;
 import cnm.prs.dto.RegisterResponse;
 import cnm.prs.dto.RegisterUgpmRequest;
+import cnm.prs.security.LoginRateLimiter;
 import cnm.prs.security.SessionCookies;
 import cnm.prs.service.AuthService;
 import cnm.prs.service.EntiteContractService;
 
 /**
  * Authentification : émission de jetons JWT. Endpoint public (cf. SecurityConfig).
+ *
+ * <p>⚠️ Audit 2026-08-27 (lot E) — toutes les routes publiques de ce contrôleur qui <em>coûtent</em>
+ * (vérification BCrypt, création de fiche, stockage de fichier) passent par
+ * {@link LoginRateLimiter}. La limitation est posée <strong>ici</strong> et non dans un filtre :
+ * le quota du login a besoin de l'identifiant tenté, qui n'est connu qu'une fois le corps JSON
+ * désérialisé, et le 429 traverse alors le {@code @RestControllerAdvice} comme toutes les autres
+ * erreurs de l'API — un seul format de corps ({@code ErrorResponse}) pour le front.</p>
  */
 @RestController
 @RequestMapping("/api/auth")
@@ -39,15 +49,17 @@ public class AuthController {
     private final AuthService service;
     private final EntiteContractService entiteContractService;
     private final SessionCookies sessionCookies;
+    private final LoginRateLimiter limiteur;
     /** Phase 3 du plan cookie : à {@code true}, le jeton ne sort plus dans le corps du login. */
     private final boolean cookieExclusif;
 
     public AuthController(AuthService service, EntiteContractService entiteContractService,
-            SessionCookies sessionCookies,
+            SessionCookies sessionCookies, LoginRateLimiter limiteur,
             @Value("${app.auth.cookie.exclusif:false}") boolean cookieExclusif) {
         this.service = service;
         this.entiteContractService = entiteContractService;
         this.sessionCookies = sessionCookies;
+        this.limiteur = limiteur;
         this.cookieExclusif = cookieExclusif;
     }
 
@@ -56,10 +68,25 @@ public class AuthController {
      * session {@code PRS_SESSION} (HttpOnly, SameSite=Strict — voir {@link SessionCookies}). Tant que
      * {@code app.auth.cookie.exclusif} est {@code false}, le jeton reste dans le corps (transition
      * Bearer, rétro-compatible) ; à {@code true} (phase 3), le corps n'en porte plus.
+     *
+     * <p>⚠️ Audit 2026-08-27 (lot E) — encadrée par {@link LoginRateLimiter} : le quota est vérifié
+     * <strong>avant</strong> que les identifiants ne soient examinés (→ 429), un échec l'incrémente,
+     * un succès le remet à zéro. Seule une {@link BadCredentialsException} compte comme échec :
+     * un refus métier (mandat vacant, par exemple) n'est pas une tentative d'intrusion.</p>
      */
     @PostMapping("/login")
-    public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
-        LoginResponse reponse = service.login(request);
+    public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request,
+            HttpServletRequest requete) {
+        String ip = adresse(requete);
+        limiteur.verifierLogin(ip, request.login());
+        LoginResponse reponse;
+        try {
+            reponse = service.login(request);
+        } catch (BadCredentialsException e) {
+            limiteur.echecLogin(ip, request.login());
+            throw e;
+        }
+        limiteur.succesLogin(ip, request.login());
         LoginResponse corps = cookieExclusif
                 ? new LoginResponse(null, reponse.login(), reponse.role(), reponse.typeActeur(),
                         reponse.ref(), reponse.nomAffichage(), reponse.localite(), reponse.expiresIn())
@@ -104,7 +131,9 @@ public class AuthController {
      * de la bascule du frontend vers la v2 multipart ; sera retirée ensuite.
      */
     @PostMapping(value = "/register/prmp", consumes = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<RegisterResponse> registerPrmp(@Valid @RequestBody RegisterPrmpRequest request) {
+    public ResponseEntity<RegisterResponse> registerPrmp(@Valid @RequestBody RegisterPrmpRequest request,
+            HttpServletRequest requete) {
+        limiteur.consommerInscription(adresse(requete));
         return ResponseEntity.status(HttpStatus.CREATED).body(service.registerPrmp(request));
     }
 
@@ -119,7 +148,9 @@ public class AuthController {
             @Valid @RequestPart("data") RegisterPrmpV2Request data,
             @RequestPart("arrete") MultipartFile arrete,
             @RequestPart("cin") MultipartFile cin,
-            @RequestPart(value = "photo", required = false) MultipartFile photo) {
+            @RequestPart(value = "photo", required = false) MultipartFile photo,
+            HttpServletRequest requete) {
+        limiteur.consommerInscription(adresse(requete));
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(service.registerPrmpV2(data, arrete, cin, photo));
     }
@@ -134,8 +165,25 @@ public class AuthController {
     public ResponseEntity<RegisterResponse> registerUgpm(
             @Valid @RequestPart("data") RegisterUgpmRequest data,
             @RequestPart("cin") MultipartFile cin,
-            @RequestPart(value = "photo", required = false) MultipartFile photo) {
+            @RequestPart(value = "photo", required = false) MultipartFile photo,
+            HttpServletRequest requete) {
+        limiteur.consommerInscription(adresse(requete));
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(service.registerUgpm(data, cin, photo));
+    }
+
+    /**
+     * Adresse de l'appelant, clé des quotas. {@code getRemoteAddr()} suffit :
+     * {@code server.forward-headers-strategy=framework} (application.properties) fait réécrire la
+     * requête par le {@code ForwardedHeaderFilter} de Spring, qui y reporte le {@code X-Forwarded-For}
+     * du proxy TLS.
+     * <p>
+     * ⚠️ En production, le reverse proxy <strong>doit écraser</strong> cet en-tête au lieu de le
+     * compléter : sinon un client le forge à chaque requête et se donne une adresse neuve — donc un
+     * quota neuf — à volonté.
+     */
+    private static String adresse(HttpServletRequest requete) {
+        String ip = requete.getRemoteAddr();
+        return ip == null || ip.isBlank() ? "adresse-inconnue" : ip;
     }
 }

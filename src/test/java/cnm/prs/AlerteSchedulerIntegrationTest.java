@@ -51,35 +51,8 @@ class AlerteSchedulerIntegrationTest extends CnmIntegrationTestSupport {
         }
     }
 
-    /** Horloge de test : instant figé, avançable à la demande ({@link #avancerA}). */
-    static final class HorlogeMutable extends Clock {
-        private volatile Instant instant;
-        private final ZoneId zone;
-
-        HorlogeMutable(Instant instant, ZoneId zone) {
-            this.instant = instant;
-            this.zone = zone;
-        }
-
-        @Override
-        public ZoneId getZone() {
-            return zone;
-        }
-
-        @Override
-        public Clock withZone(ZoneId zone) {
-            return new HorlogeMutable(instant, zone);
-        }
-
-        @Override
-        public Instant instant() {
-            return instant;
-        }
-
-        void avancerA(LocalDate date) {
-            this.instant = date.atStartOfDay(zone).toInstant();
-        }
-    }
+    // ⚠️ 2026-08-27 (lot E) — HorlogeMutable a quitté cette classe pour son propre fichier
+    // (cnm.prs.HorlogeMutable) : LimitationDebitAuthIntegrationTest en a besoin lui aussi.
 
     @Autowired private AlerteScheduler scheduler;
     @Autowired private MandatRepository mandatRepository;

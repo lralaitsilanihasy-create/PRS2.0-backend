@@ -93,6 +93,7 @@ abstract class CnmIntegrationTestSupport extends AbstractIntegrationTest {
     @Autowired protected MockMvc mvc;
     @Autowired protected TokenService tokenService;
     @Autowired protected cnm.prs.security.PermissionService permissionService;
+    @Autowired protected cnm.prs.security.LoginRateLimiter loginRateLimiter;
     @Autowired protected PasswordEncoder passwordEncoder;
     @Autowired protected PieceJointeService pieceJointeService;
     @Autowired protected NotificationService notificationService;
@@ -180,6 +181,11 @@ abstract class CnmIntegrationTestSupport extends AbstractIntegrationTest {
 
     @BeforeEach
     protected void seed() {
+        // ⚠️ Audit 2026-08-27 (lot E) — les compteurs du limiteur de debit vivent dans le bean, hors
+        // transaction : ils ne sont donc PAS annules avec le reste. Sans cette remise a zero, les
+        // echecs de connexion d'une classe de test (toutes vues de la meme adresse 127.0.0.1)
+        // s'accumuleraient jusqu'a verrouiller l'adresse pour les classes suivantes.
+        loginRateLimiter.reinitialiser();
         localiteRepository.save(localite("ANT", "Antananarivo"));
         // Familles (tr_type_dossier) + sous-types initiaux (tr_sous_type_dossier), hiérarchie §familles.
         typeDossierRepository.save(new TypeDossier("DDP", "Dossier de Planification"));

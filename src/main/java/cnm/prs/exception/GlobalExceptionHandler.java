@@ -6,6 +6,7 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -95,6 +96,24 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<ErrorResponse> handleBadCredentials(BadCredentialsException ex, WebRequest request) {
         return build(HttpStatus.UNAUTHORIZED, ex.getMessage(), request, null);
+    }
+
+    /**
+     * ⚠️ Audit 2026-08-27 (lot E) — quota de débit dépassé sur une route publique d'authentification
+     * (cf. {@code LoginRateLimiter}). <strong>429</strong> et non 401 : la demande n'a pas été jugée
+     * sur ses identifiants, elle n'a pas été jugée du tout. Le délai part aussi dans l'en-tête
+     * {@code Retry-After}, en secondes — la forme que les clients HTTP savent lire.
+     * <p>
+     * Journalisé en {@code warn} sans pile (le cas est prévu) : c'est cette trace qui permet de
+     * repérer un bruteforce en cours, le corps de la réponse ne disant rien à l'exploitant.
+     */
+    @ExceptionHandler(TropDeRequetesException.class)
+    public ResponseEntity<ErrorResponse> handleTropDeRequetes(TropDeRequetesException ex, WebRequest request) {
+        log.warn("Quota de debit depasse sur {} : {} (reprise dans {} s)",
+                uri(request), ex.getMessage(), ex.getSecondesAvantReprise());
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(HttpHeaders.RETRY_AFTER, String.valueOf(ex.getSecondesAvantReprise()))
+                .body(corps(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage(), request, null, null));
     }
 
     @ExceptionHandler(AccessDeniedException.class)
@@ -292,14 +311,22 @@ public class GlobalExceptionHandler {
 
     private ResponseEntity<ErrorResponse> build(HttpStatus status, String message, WebRequest request,
             List<ErrorResponse.FieldError> erreurs, String code) {
-        ErrorResponse body = new ErrorResponse(
+        return ResponseEntity.status(status).body(corps(status, message, request, erreurs, code));
+    }
+
+    /**
+     * Corps d'erreur standard, isolé de {@link #build} pour les réponses qui ajoutent un en-tête
+     * (le {@code Retry-After} du 429).
+     */
+    private ErrorResponse corps(HttpStatus status, String message, WebRequest request,
+            List<ErrorResponse.FieldError> erreurs, String code) {
+        return new ErrorResponse(
                 LocalDateTime.now(),
                 status.value(),
                 status.getReasonPhrase(),
                 message,
-                request.getDescription(false).replace("uri=", ""),
+                uri(request),
                 erreurs,
                 code);
-        return ResponseEntity.status(status).body(body);
     }
 }
