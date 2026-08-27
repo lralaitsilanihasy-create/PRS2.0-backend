@@ -21,7 +21,9 @@ import cnm.prs.service.AuditLogService;
 
 /**
  * Contrôleur REST pour la ressource {@code audit-logs} (table {@code t_audit_log}).
- * Journal d'audit réservé à l'Administrateur (§3.8) ; suppression interdite (S5).
+ * Journal d'audit réservé à l'Administrateur (§3.8) ; <strong>lecture seule</strong> —
+ * création, modification et suppression répondent 409 (⚠️ audit 2026-08-27 : le journal est en
+ * ajout seul, alimenté par le seul intercepteur d'écriture, et l'Administrateur lui-même n'y écrit pas).
  */
 @RestController
 @RequestMapping("/api/audit-logs")

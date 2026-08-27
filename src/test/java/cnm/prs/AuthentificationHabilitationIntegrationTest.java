@@ -7,6 +7,7 @@ import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -544,6 +545,49 @@ class AuthentificationHabilitationIntegrationTest extends CnmIntegrationTestSupp
                 .content("{\"idLocalite\":\"FIA\",\"libelleLocalite\":\"Fianarantsoa\"}"))
                 .andExpect(status().isCreated());
 
+        mvc.perform(get("/api/audit-logs").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].nomTable").value("localites"))
+                .andExpect(jsonPath("$[0].typeAction").value("CREATE"))
+                .andExpect(jsonPath("$[0].imActeur").value("CTRADM"));
+    }
+
+    @Test
+    @DisplayName("Journal d'audit §3.8 — ajout seul : POST (entrée forgée), PUT (réécriture) et DELETE répondent 409 même à l'Administrateur ; la trace reste intacte")
+    void audit_journalImmuable_troisVerbesRefuses() throws Exception {
+        // Seule voie d'alimentation légitime : l'intercepteur, après une écriture API réussie.
+        mvc.perform(post("/api/localites").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idLocalite\":\"FIA\",\"libelleLocalite\":\"Fianarantsoa\"}"))
+                .andExpect(status().isCreated());
+        String json = mvc.perform(get("/api/audit-logs").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andReturn().getResponse().getContentAsString();
+        long idLog = ((Number) com.jayway.jsonpath.JsonPath.parse(json).read("$[0].idLog")).longValue();
+
+        // POST — entrée FORGÉE (avant le correctif : 201, on écrivait ce qu'on voulait dans la preuve).
+        mvc.perform(post("/api/audit-logs").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"dateAction\":\"2020-01-01T00:00:00\",\"imActeur\":\"CTRADM\","
+                        + "\"nomTable\":\"dossiers\",\"idEnregistrement\":\"1\",\"typeAction\":\"DELETE\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message", containsString("immuable")));
+
+        // PUT — RÉÉCRITURE de la trace existante : date, acteur, table, IP (avant le correctif : 200).
+        mvc.perform(put("/api/audit-logs/" + idLog).header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idLog\":" + idLog + ",\"dateAction\":\"2020-01-01T00:00:00\",\"imActeur\":\"AUTRE\","
+                        + "\"nomTable\":\"autre\",\"typeAction\":\"READ\",\"ipAdresse\":\"1.2.3.4\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message", containsString("immuable")));
+
+        // DELETE — comportement d'origine, conservé.
+        mvc.perform(delete("/api/audit-logs/" + idLog).header("Authorization", tokenAdmin))
+                .andExpect(status().isConflict());
+
+        // Rien n'a été ajouté, rien n'a été réécrit : le journal est exactement ce qu'il était.
         mvc.perform(get("/api/audit-logs").header("Authorization", tokenAdmin))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1))

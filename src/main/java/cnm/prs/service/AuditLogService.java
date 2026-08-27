@@ -15,10 +15,20 @@ import cnm.prs.repository.AuditLogRepository;
 
 /**
  * Logique métier pour {@link AuditLog}.
+ *
+ * <p>⚠️ Audit 2026-08-27 (§3.2 du rapport) — le journal {@code t_audit_log} est en <strong>ajout
+ * seul</strong>. Son unique auteur est {@link #enregistrer}, appelé par l'intercepteur HTTP après
+ * chaque écriture réussie. Les trois verbes d'écriture du CRUD générique (POST, PUT, DELETE) sont
+ * donc refusés en 409 : jusqu'ici seul DELETE l'était, si bien que {@code update} réécrivait la
+ * totalité de la preuve (date, acteur, valeurs avant/après, IP, session) et que le POST permettait
+ * d'insérer des entrées forgées.</p>
  */
 @Service
 @Transactional
 public class AuditLogService {
+
+    /** Préfixe commun aux trois refus d'écriture (⚠️ audit 2026-08-27) — un seul message d'immuabilité. */
+    private static final String IMMUABLE = "Le journal d'audit est immuable :";
 
     private final AuditLogRepository repository;
 
@@ -38,27 +48,23 @@ public class AuditLogService {
         return AuditLogMapper.toDto(entity);
     }
 
+    /**
+     * Création manuelle interdite (⚠️ audit 2026-08-27) : le journal n'est alimenté que par
+     * {@link #enregistrer}, appelé par l'intercepteur HTTP après chaque écriture réussie. Un POST
+     * ouvert permettait d'y <strong>forger</strong> des entrées — un journal où l'on peut écrire à la
+     * main ne prouve plus rien. → HTTP 409, comme la suppression.
+     */
     public AuditLogDto create(AuditLogDto dto) {
-        // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
-        ClePrimaire.exigerLibre(dto.getIdLog(), repository::existsById, "entrée de journal");
-        AuditLog entity = AuditLogMapper.toEntity(dto);
-        return AuditLogMapper.toDto(repository.save(entity));
+        throw new BusinessRuleException(IMMUABLE + " création interdite (§3.8).");
     }
 
+    /**
+     * Modification interdite (⚠️ audit 2026-08-27) : {@code update} réécrivait date, acteur, table,
+     * valeurs avant/après, adresse IP et session — soit la totalité de la preuve. L'immuabilité
+     * annoncée n'était vraie que pour DELETE. → HTTP 409.
+     */
     public AuditLogDto update(Long id, AuditLogDto dto) {
-        AuditLog existing = repository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("AuditLog introuvable : " + id));
-        existing.setDateAction(dto.getDateAction());
-        existing.setImActeur(dto.getImActeur());
-        existing.setNomTable(dto.getNomTable());
-        existing.setIdEnregistrement(dto.getIdEnregistrement());
-        existing.setTypeAction(dto.getTypeAction());
-        existing.setChampModifie(dto.getChampModifie());
-        existing.setAncienneValeur(dto.getAncienneValeur());
-        existing.setNouvelleValeur(dto.getNouvelleValeur());
-        existing.setIpAdresse(dto.getIpAdresse());
-        existing.setSessionId(dto.getSessionId());
-        return AuditLogMapper.toDto(repository.save(existing));
+        throw new BusinessRuleException(IMMUABLE + " modification interdite (§3.8).");
     }
 
     /**
@@ -66,7 +72,7 @@ public class AuditLogService {
      * tracées et conservées (§3.8). → HTTP 409.
      */
     public void delete(Long id) {
-        throw new BusinessRuleException("Le journal d'audit est immuable : suppression interdite (§3.8).");
+        throw new BusinessRuleException(IMMUABLE + " suppression interdite (§3.8).");
     }
 
     /**
