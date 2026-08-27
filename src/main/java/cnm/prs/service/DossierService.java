@@ -811,11 +811,18 @@ public class DossierService {
      * trié date ASC : observations du vérificateur (t_verification, dont le passage final obsLevees=true)
      * + rectifications de la PRMP (t_audit_log). Accès PRMP / Vérificateur / Admin (rôle au contrôleur) ;
      * 403 si le dossier n'est pas {@code CLOTURE}.
+     *
+     * <p>⚠️ Audit 2026-08-27 (§3.1 du rapport) — le rôle était contrôlé par le {@code @PreAuthorize} du
+     * contrôleur, mais <strong>pas le périmètre</strong> : n'importe quelle PRMP lisait les observations
+     * et les rectifications d'un dossier clôturé d'autrui, n'importe quel vérificateur celles d'une autre
+     * localité. {@link #controlerVisibilite} est appliqué <strong>avant</strong> la garde de clôture, pour
+     * ne rien divulguer (pas même le statut) hors périmètre.</p>
      */
     @Transactional(readOnly = true)
     public List<EchangeDto> historiqueEchanges(Integer idDossier) {
         Dossier dossier = repository.findById(idDossier)
                 .orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable : " + idDossier));
+        controlerVisibilite(idDossier);
         if (!StatutDossier.CLOTURE.name().equals(dossier.getStatut())) {
             throw new AccessDeniedException("Historique disponible uniquement pour un dossier clôturé.");
         }

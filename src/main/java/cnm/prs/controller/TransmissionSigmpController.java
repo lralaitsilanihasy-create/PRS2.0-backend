@@ -20,7 +20,9 @@ import cnm.prs.service.TransmissionSigmpService;
 /**
  * ⚠️ Spec navette (2026-08-01) — ressource {@code sigmp-transmissions} : transmissions du sens de la
  * décision de la Commission vers SIGMP (enregistrées côté PRS 2.0 en attendant l'API SIGMP réelle).
- * POST réservé au VÉRIFICATEUR (localité contrôlée dans le service) ; lecture authentifiée.
+ * POST réservé au VÉRIFICATEUR (localité contrôlée dans le service) ; lecture authentifiée
+ * <strong>et bornée au périmètre</strong> (⚠️ audit 2026-08-27, §3.1 du rapport : localité du
+ * contrôleur, PRMP/UGPM exclue — avec ou sans le filtre {@code ?dossier=}).
  */
 @RestController
 @RequestMapping("/api/sigmp-transmissions")

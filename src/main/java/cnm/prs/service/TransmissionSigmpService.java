@@ -21,6 +21,7 @@ import cnm.prs.repository.DossierRepository;
 import cnm.prs.repository.PvExamenRepository;
 import cnm.prs.repository.TransmissionSigmpRepository;
 import cnm.prs.security.CurrentUser;
+import cnm.prs.security.Visibilite;
 
 /**
  * ⚠️ Spec navette (2026-08-01) — transmission par le VÉRIFICATEUR du sens de la décision de la
@@ -62,14 +63,33 @@ public class TransmissionSigmpService {
         this.permissionService = permissionService;
     }
 
+    /**
+     * ⚠️ Audit 2026-08-27 (§3.1 du rapport) — la liste était servie <strong>entière</strong> à tout
+     * authentifié. La décision transmise à SIGMP est un acte interne du circuit : la lecture est bornée
+     * au périmètre (§1) — Président/Administrateur tout, contrôleurs les dossiers visibles de leur
+     * localité, <strong>PRMP/UGPM rien</strong> (elle est notifiée de la décision, elle ne consulte pas
+     * le registre d'interopérabilité ; le front ne l'appelle que depuis l'écran du vérificateur).
+     */
     @Transactional(readOnly = true)
     public List<TransmissionSigmpDto> findAll() {
-        return repository.findAll().stream().map(this::toDto).toList();
+        return Visibilite.filtrer(repository::findAll, this::transmissionsDeLaLocalite)
+                .stream().map(this::toDto).toList();
     }
 
+    /** Transmissions d'un dossier — ⚠️ même périmètre : liste vide si le dossier n'est pas visible. */
     @Transactional(readOnly = true)
     public List<TransmissionSigmpDto> findByDossier(Integer idDossier) {
-        return repository.findByIdDossier(idDossier).stream().map(this::toDto).toList();
+        return Visibilite.filtrer(
+                        () -> repository.findByIdDossier(idDossier),
+                        loc -> dossierRepository.existsDansLocalite(idDossier, loc)
+                                ? repository.findByIdDossier(idDossier) : List.of())
+                .stream().map(this::toDto).toList();
+    }
+
+    /** Transmissions des dossiers visibles d'une localité (périmètre défini une seule fois, côté dossiers). */
+    private List<TransmissionSigmp> transmissionsDeLaLocalite(String localite) {
+        List<Integer> ids = dossierRepository.findIdsVisiblesParLocalite(localite);
+        return ids.isEmpty() ? List.of() : repository.findByIdDossierIn(ids);
     }
 
     /** Transmet le sens de la décision du dossier (dérivé de l'avis du PV signé) — Vérificateur de la localité. */

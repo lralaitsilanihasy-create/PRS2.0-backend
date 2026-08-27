@@ -468,4 +468,91 @@ class VerificationIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(get("/api/dossiers/1").header("Authorization", tokenVer))
                 .andExpect(jsonPath("$.statut").value("CLOTURE"));
     }
+
+    // ------------------------------------------------------------------
+    // Cloisonnement des lectures de fin de circuit (⚠️ audit 2026-08-27, §3.1 du rapport)
+    // ------------------------------------------------------------------
+
+    @Test
+    @DisplayName("Historique d'échanges §1 — dossier clôturé : 403 pour une PRMP étrangère et pour un vérificateur d'une autre localité")
+    void historique_echanges_horsPerimetre_403() throws Exception {
+        String tokenVer = bearer("CTRVER", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER", "ANT");
+        cloturerDossier1(123, tokenVer);
+
+        // Flux légitime : le vérificateur de la localité et la PRMP propriétaire lisent le fil.
+        mvc.perform(get("/api/dossiers/1/historique-echanges").header("Authorization", tokenVer))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(3));
+        mvc.perform(get("/api/dossiers/1/historique-echanges").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk());
+
+        // ⚠️ Avant le correctif : 200. Le rôle suffisait, le périmètre n'était pas vérifié — les
+        // observations du vérificateur et les rectifications de la PRMP sortaient du dossier.
+        String tokenPrmpEtrangere = bearer("PRMPXX", ProfilUtilisateur.PRMP, TypeActeur.PRMP, "PRMPXX", "ANT");
+        mvc.perform(get("/api/dossiers/1/historique-echanges").header("Authorization", tokenPrmpEtrangere))
+                .andExpect(status().isForbidden());
+        String tokenVerTms = bearer("CTRVER2", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER2", "TMS");
+        mvc.perform(get("/api/dossiers/1/historique-echanges").header("Authorization", tokenVerTms))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Transmissions SIGMP §1/§3.1 — liste bornée à la localité (avec et sans ?dossier=) ; PRMP exclue du registre")
+    void sigmp_transmissions_lectureCloisonnee() throws Exception {
+        String tokenVer = bearer("CTRVER", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER", "ANT");
+        cloturerDossier1(124, tokenVer);   // transmission SIGMP enregistrée sur le dossier 1 (ANT)
+
+        // Flux légitime : l'écran du vérificateur d'ANT (?dossier=) et sa liste complète.
+        mvc.perform(get("/api/sigmp-transmissions?dossier=1").header("Authorization", tokenVer))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)));
+        mvc.perform(get("/api/sigmp-transmissions").header("Authorization", tokenVer))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idDossier==1)]", hasSize(1)));
+
+        // ⚠️ Avant le correctif : findAll servait TOUT à tout authentifié.
+        String tokenVerTms = bearer("CTRVER2", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER2", "TMS");
+        mvc.perform(get("/api/sigmp-transmissions").header("Authorization", tokenVerTms))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+        mvc.perform(get("/api/sigmp-transmissions?dossier=1").header("Authorization", tokenVerTms))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+
+        // La PRMP est notifiée de la décision ; elle ne lit pas le registre d'interopérabilité (§3.1).
+        mvc.perform(get("/api/sigmp-transmissions").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+        mvc.perform(get("/api/sigmp-transmissions?dossier=1").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+
+        // NON-RÉGRESSION : le Président voit toutes les localités.
+        mvc.perform(get("/api/sigmp-transmissions").header("Authorization", tokenPresident))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idDossier==1)]", hasSize(1)));
+    }
+
+    /**
+     * Mène le dossier 1 (localité ANT) jusqu'à CLOTURE par le circuit FAVR complet : PV signé, rappel
+     * MAINTENUE, resoumission de la PRMP, levée, transmission SIGMP puis archivage par l'Assistant.
+     * Laisse derrière lui un historique d'échanges et une transmission SIGMP à cloisonner.
+     */
+    private void cloturerDossier1(int idPv, String tokenVer) throws Exception {
+        String tokenAss = bearer("CTRASS", ProfilUtilisateur.ASSISTANT_CONTROLEUR, TypeActeur.CONTROLEUR,
+                "CTRASS", "ANT");
+        signerPvAvecAvis(idPv, "FAVR");
+        passageObservationDossier1(tokenVer, "MAINTENUE", "a rectifier");
+        mvc.perform(post("/api/dossiers/1/resoumettre").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"motifRectification\":\"corrige\"}"))
+                .andExpect(status().isOk());
+        passageObservationDossier1(tokenVer, "LEVEE", null);
+        mvc.perform(post("/api/sigmp-transmissions").header("Authorization", tokenVer)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"idDossier\":1}"))
+                .andExpect(status().isCreated());
+        mvc.perform(post("/api/pv-examens/" + idPv + "/archiver").header("Authorization", tokenAss))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/dossiers/1").header("Authorization", tokenVer))
+                .andExpect(jsonPath("$.statut").value("CLOTURE"));
+    }
 }
