@@ -415,21 +415,58 @@ public class DossierService {
         return dto(repository.save(entity));
     }
 
+    /**
+     * PUT générique du dossier (Administrateur).
+     *
+     * <p>⚠️ Audit 2026-08-27 (lot B) — le statut du corps était recopié <strong>tel quel</strong> :
+     * une valeur hors de {@link StatutDossier} (« RECU », une faute de frappe…) s'installait en base
+     * et rendait le dossier invisible de toutes les files, qui filtrent sur des noms de constantes.
+     * La valeur est désormais validée contre l'énumération (400 sinon), et un changement de statut
+     * par cette porte est <strong>journalisé</strong> {@code [CIRCUIT]} comme toutes les autres
+     * transitions — c'est la seule qui n'obéit à aucune règle métier, elle mérite d'autant plus sa
+     * ligne de journal.</p>
+     */
     public DossierDto update(Integer id, DossierDto dto) {
         Dossier existing = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable : " + id));
         // ⚠️ Verrou optimiste HTTP (plan §3) : version périmée → 409 CONFLIT_VERSION, avant toute écriture.
         VerrouOptimiste.exigerVersionCourante(dto.getVersion(), existing.getVersion());
+        exigerStatutConnu(dto.getStatut());
+        String statutPrecedent = existing.getStatut();
         existing.setIdTypeDossier(dto.getIdTypeDossier());
         existing.setIdDossierParent(dto.getIdDossierParent());
         existing.setRefeDossier(dto.getRefeDossier());
         existing.setDateRef(dto.getDateRef());
         existing.setStatut(dto.getStatut());
+        if (dto.getStatut() != null && !dto.getStatut().equals(statutPrecedent)) {
+            log.info("[CIRCUIT] statut force (PUT administrateur) dossier={} acteur={} statutPrecedent={} statut={}",
+                    id, CurrentUser.login().orElse(null), statutPrecedent, dto.getStatut());
+        }
         existing.setIdLocalite(dto.getIdLocalite());
         existing.setIdEntiteContract(dto.getIdEntiteContract());
         // ⚠️ saveAndFlush : l'incrément de @Version se fait au flush — sans lui la réponse rendrait
         // l'ancienne version et le client re-conflicterait au PUT suivant (cf. plan §4).
         return dto(repository.saveAndFlush(existing));
+    }
+
+    /**
+     * ⚠️ Audit 2026-08-27 (lot B) — le statut fourni au {@code PUT} doit être une constante de
+     * {@link StatutDossier} : les files, compteurs et gardes du circuit comparent des noms de
+     * constantes, une valeur inconnue rendrait le dossier introuvable partout. {@code null} est
+     * toléré (champ non renseigné, comportement historique du PUT).
+     *
+     * @throws ChampsInvalidesException (→ 400 ciblé {@code statut}) valeur hors énumération
+     */
+    private void exigerStatutConnu(String statut) {
+        if (statut == null || statut.isBlank()) {
+            return;
+        }
+        boolean connu = java.util.Arrays.stream(StatutDossier.values())
+                .anyMatch(s -> s.name().equals(statut));
+        if (!connu) {
+            throw new ChampsInvalidesException(List.of(new ErrorResponse.FieldError("statut",
+                    "Statut de dossier inconnu : « " + statut + " ».")));
+        }
     }
 
     /**

@@ -2,6 +2,7 @@ package cnm.prs;
 
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasSize;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -25,6 +26,32 @@ import cnm.prs.enums.TypeActeur;
  * archivage jusqu'a CLOTURE.
  */
 class VerificationIntegrationTest extends CnmIntegrationTestSupport {
+
+    /** ⚠️ Audit 2026-08-27 (lot B) — garde de suppression d'un passage décidé. */
+    @org.springframework.beans.factory.annotation.Autowired
+    private cnm.prs.repository.VerificationRepository verificationRepository;
+
+    @Test
+    @DisplayName("Suppression d'un passage de verification (⚠️ audit lot B) : passage DECIDE -> 409 (trace de "
+            + "circuit) ; passage sans decision -> 204")
+    void verification_suppression_passageDecideRefusee() throws Exception {
+        seedPvSigne(485, 1);
+        cnm.prs.entity.Verification decidee = new cnm.prs.entity.Verification();
+        decidee.setIdReception(1); decidee.setIdPv(485); decidee.setImCtrlVerif("CTRVER");
+        decidee.setDateVerif(java.time.LocalDate.now()); decidee.setObsLevees(false);
+        int idDecidee = verificationRepository.save(decidee).getIdVerification();
+
+        cnm.prs.entity.Verification inachevee = new cnm.prs.entity.Verification();
+        inachevee.setIdReception(1); inachevee.setIdPv(485); inachevee.setImCtrlVerif("CTRVER");
+        int idInachevee = verificationRepository.save(inachevee).getIdVerification();
+
+        mvc.perform(delete("/api/verifications/" + idDecidee).header("Authorization", tokenAdmin))
+                .andExpect(status().isConflict());
+        org.junit.jupiter.api.Assertions.assertTrue(verificationRepository.existsById(idDecidee),
+                "le passage decide est conserve");
+        mvc.perform(delete("/api/verifications/" + idInachevee).header("Authorization", tokenAdmin))
+                .andExpect(status().isNoContent());
+    }
 
     @Test
     @DisplayName("[Auto] Circuit FAVR (⚠️ 2026-08-02) : obs. levées → OBSERVATIONS_LEVEES, transmission SIGMP → "

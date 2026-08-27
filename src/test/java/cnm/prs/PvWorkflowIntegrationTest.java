@@ -743,6 +743,23 @@ class PvWorkflowIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("Suppression d'un PV (⚠️ audit lot B) : un PV ARCHIVÉ est une pièce close du circuit → 409 ; "
+            + "un PV signé non archivé reste supprimable (garde-fou de réalignement du dossier)")
+    void suppressionPvArchive_refusee() throws Exception {
+        cnm.prs.entity.PvExamen archive = new cnm.prs.entity.PvExamen();
+        archive.setIdPv(953); archive.setIdExamen(1); archive.setIdAvis("FAV"); archive.setImCtrlMembre("CTRMEM");
+        archive.setStatutPv("SIGNE"); archive.setNbNavettes(0);
+        archive.setDateSignatureMembre(LocalDate.now()); archive.setDateSignaturePresident(LocalDate.now());
+        archive.setDateArchivage(LocalDate.now()); archive.setImArchiveur("CTRASS");
+        pvExamenRepository.save(archive);
+
+        mvc.perform(delete("/api/pv-examens/953").header("Authorization", tokenAdmin))
+                .andExpect(status().isConflict());
+        org.junit.jupiter.api.Assertions.assertTrue(pvExamenRepository.existsById(953),
+                "le PV archivé est conservé");
+    }
+
+    @Test
     @DisplayName("ANNEXE PV — préfixe du libellé par ligne de marché (unitaire, sans Word) : [Marché « … »] / [Dossier]")
     void pvAnnexe_prefixeLibelle() {
         org.junit.jupiter.api.Assertions.assertEquals("[Marché « Travaux RN13 »] Cohérence",

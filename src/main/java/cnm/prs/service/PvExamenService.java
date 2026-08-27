@@ -335,9 +335,22 @@ public class PvExamenService {
         return PvExamenMapper.toDto(repository.saveAndFlush(existing));
     }
 
+    /**
+     * Suppression d'un PV (Administrateur).
+     *
+     * <p>⚠️ Audit 2026-08-27 (lot B) — un PV <strong>archivé</strong> est une pièce close du circuit
+     * (date et auteur d'archivage posés, dossier CLÔTURÉ) : sa suppression est refusée (409), comme
+     * celle d'une navette. Un PV <em>signé</em> mais non archivé reste supprimable, à dessein : c'est
+     * le cas que {@link #realignerDossierSansPvSigne} rattrape (le dossier redescend à
+     * {@link StatutDossier#EXAMINE} pour qu'un PV puisse être reproduit) — le retirer fermerait
+     * l'unique porte de sortie d'un PV signé par erreur.</p>
+     */
     public void delete(Integer id) {
-        if (!repository.existsById(id)) {
-            throw new ResourceNotFoundException("PvExamen introuvable : " + id);
+        PvExamen pv = repository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("PvExamen introuvable : " + id));
+        if (pv.getDateArchivage() != null) {
+            throw new BusinessRuleException("Ce PV a été archivé le " + pv.getDateArchivage()
+                    + " : une pièce archivée du circuit ne se supprime pas (§3.5 — traçabilité).");
         }
         Integer idDossier = repository.findIdDossierByPv(id).orElse(null);
         repository.deleteById(id);

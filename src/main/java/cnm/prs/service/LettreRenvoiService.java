@@ -28,6 +28,7 @@ import cnm.prs.enums.StatutDossier;
 import cnm.prs.enums.StatutLettreRenvoi;
 import cnm.prs.enums.StatutPv;
 import cnm.prs.enums.TypeNotification;
+import cnm.prs.enums.TypeObjet;
 import cnm.prs.exception.BusinessRuleException;
 import cnm.prs.exception.ResourceNotFoundException;
 import cnm.prs.mapper.LettreRenvoiMapper;
@@ -461,8 +462,21 @@ public class LettreRenvoiService {
         }).orElse(im);
     }
 
+    /**
+     * Suppression d'une lettre (Administrateur).
+     *
+     * <p>⚠️ Audit 2026-08-27 (lot B) — la suppression n'avait aucune garde d'état : une lettre
+     * <strong>signée</strong> partait comme un brouillon, alors qu'elle a été notifiée à la PRMP, a
+     * suspendu l'examen (dossier EN_ATTENTE_PIECES) et a son PDF sur le FSX. Seuls les BROUILLON et
+     * les SOUMIS (non encore signés) restent supprimables ; au-delà, 409 — comme pour la navette.</p>
+     */
     public void delete(Integer id) {
-        exigerExistante(id);
+        LettreRenvoi lettre = exigerExistante(id);
+        if (StatutLettreRenvoi.SIGNE.name().equals(lettre.getStatut())) {
+            throw new BusinessRuleException("Cette lettre de renvoi est signée"
+                    + (lettre.getDateArchivage() != null ? " et archivée" : "")
+                    + " : une pièce du circuit déjà notifiée à la PRMP ne se supprime pas.");
+        }
         repository.deleteById(id);
     }
 
@@ -474,6 +488,10 @@ public class LettreRenvoiService {
         String refDossier = dossier == null || dossier.getRefeDossier() == null
                 ? (lettre.getIdDossier() == null ? "?" : "n° " + lettre.getIdDossier()) : dossier.getRefeDossier();
         // PRMP du dossier (via PPM).
+        // ⚠️ Audit 2026-08-27 (lot B) — la notification partait par E-MAIL SEUL (destinataireRef nul) :
+        // la lettre qui suspend l'examen de son dossier n'apparaissait pas dans « mes notifications »
+        // dès que l'e-mail du compte diffère de t_prmp.EMAIL_PRMP. Portée par la PRMP et rattachée au
+        // dossier, comme PV_SIGNE — donc actionnable côté front.
         if (lettre.getIdDossier() != null) {
             String titre = "Lettre de renvoi reçue";
             String corps = "La lettre de renvoi " + ref + " concernant le dossier " + refDossier + " a été signée.";
@@ -482,8 +500,8 @@ public class LettreRenvoiService {
                     continue;
                 }
                 String email = prmpRepository.findById(ppm.getIdPrmp()).map(Prmp::getEmailPrmp).orElse(null);
-                notificationService.emettre(lettre.getIdDossier(), TypeNotification.LETTRE_RENVOI_RECUE,
-                        null, email, titre, corps);
+                notificationService.emettrePrmp(TypeNotification.LETTRE_RENVOI_RECUE, ppm.getIdPrmp(), email,
+                        lettre.getIdDossier(), TypeObjet.DOSSIER, lettre.getIdDossier(), titre, corps);
             }
         }
         // Assistants contrôleurs de la localité de circuit (réception de l'examen) (copie).

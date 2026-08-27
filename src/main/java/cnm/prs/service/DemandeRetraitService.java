@@ -28,6 +28,7 @@ import cnm.prs.enums.ProfilUtilisateur;
 import cnm.prs.enums.StatutDossier;
 import cnm.prs.enums.StatutRetrait;
 import cnm.prs.enums.TypeNotification;
+import cnm.prs.enums.TypeObjet;
 import cnm.prs.exception.BadRequestException;
 import cnm.prs.exception.BusinessRuleException;
 import cnm.prs.exception.ResourceNotFoundException;
@@ -410,7 +411,15 @@ public class DemandeRetraitService {
                 .orElseThrow(() -> new AccessDeniedException("Décideur non identifié."));
     }
 
-    /** Notifie la PRMP de la décision (RETRAIT_ACCEPTE / RETRAIT_REFUSE), par e-mail. */
+    /**
+     * Notifie la PRMP de la décision (RETRAIT_ACCEPTE / RETRAIT_REFUSE).
+     *
+     * <p>⚠️ Audit 2026-08-27 (lot B) — la notification partait par <strong>e-mail seul</strong>
+     * ({@code destinataireRef} nul) : la décision qui renvoie son dossier en brouillon n'apparaissait
+     * pas dans « mes notifications » dès que l'e-mail du compte diffère de {@code t_prmp.EMAIL_PRMP}.
+     * Elle est désormais portée par la PRMP ({@code ref = ID_PRMP}) et pointe le dossier concerné —
+     * même forme que {@code PV_SIGNE}, donc actionnable côté front.</p>
+     */
     private void notifierDecision(DemandeRetrait demande, StatutRetrait decision) {
         String emailPrmp = prmpRepository.findById(demande.getIdPrmp())
                 .map(Prmp::getEmailPrmp).orElse(null);
@@ -423,7 +432,8 @@ public class DemandeRetraitService {
                         + " a été acceptée ; le dossier repasse en brouillon."
                 : "Votre demande de retrait du dossier " + demande.getIdDossier() + " a été refusée."
                         + (demande.getObsDecision() != null ? " Motif : " + demande.getObsDecision() : "");
-        notificationService.emettre(demande.getIdDossier(), type, null, emailPrmp, titre, corps);
+        notificationService.emettrePrmp(type, demande.getIdPrmp(), emailPrmp,
+                demande.getIdDossier(), TypeObjet.DOSSIER, demande.getIdDossier(), titre, corps);
     }
 
     /** File « à valider » : demandes EN_ATTENTE (Président : toutes ; CC : sa localité de dossier). */
@@ -449,9 +459,24 @@ public class DemandeRetraitService {
         return enrichir(list.stream().map(DemandeRetraitMapper::toDto).toList());
     }
 
+    /**
+     * Suppression d'une demande de retrait (Administrateur).
+     *
+     * <p>⚠️ Audit 2026-08-27 (lot B) — la suppression emportait la <strong>lettre de demande de
+     * retrait</strong> (règle 2026-08-17), qui « justifie la décision et doit lui survivre » : une
+     * demande <strong>décidée</strong> (ACCEPTEE / REFUSEE) partait avec sa pièce justificative, alors
+     * qu'une acceptation a purgé tout le circuit du dossier et l'a renvoyé en brouillon. Une demande
+     * décidée n'est donc plus supprimable (409) — sa lettre survit parce que la demande survit. Une
+     * demande encore EN_ATTENTE n'a rien décidé : elle reste supprimable avec sa pièce, qui ne
+     * justifie alors rien et dont l'unicité ({@code ID_DEMANDE_RETRAIT}) interdit l'orphelin.</p>
+     */
     public void delete(Integer id) {
-        if (!repository.existsById(id)) {
-            throw new ResourceNotFoundException("DemandeRetrait introuvable : " + id);
+        DemandeRetrait demande = repository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("DemandeRetrait introuvable : " + id));
+        if (!StatutRetrait.EN_ATTENTE.name().equals(demande.getStatut())) {
+            throw new BusinessRuleException("Cette demande de retrait a été traitée (statut « "
+                    + demande.getStatut() + " ») : la décision et la lettre qui la justifie sont "
+                    + "conservées (§3.3, règle 2026-08-17).");
         }
         pieceRepository.deleteByIdDemandeRetrait(id);   // la lettre suit la demande (pas d'orphelin)
         repository.deleteById(id);

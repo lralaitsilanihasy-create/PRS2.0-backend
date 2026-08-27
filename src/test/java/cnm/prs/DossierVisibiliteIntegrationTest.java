@@ -273,6 +273,17 @@ class DossierVisibiliteIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.creePar").value("ugpm.hanta"))
                 .andExpect(jsonPath("$.soumisPar").value("PRMP001"));
+
+        // ⚠️ Audit lot B — le statut du corps était recopié TEL QUEL : une valeur hors StatutDossier
+        // s'installait en base et rendait le dossier invisible de toutes les files (qui filtrent sur
+        // des noms de constantes). Validé désormais, 400 ciblé « statut », dossier inchangé.
+        mvc.perform(put("/api/dossiers/940").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDossier\":940,\"statut\":\"RECU\",\"idLocalite\":\"ANT\",\"idPrmp\":\"PRMP001\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[0].champ").value("statut"));
+        mvc.perform(get("/api/dossiers/940").header("Authorization", tokenAdmin))
+                .andExpect(jsonPath("$.statut").value("SOUMIS"));
     }
 
     @Test

@@ -201,9 +201,22 @@ public class VerificationService {
         return VerificationMapper.toDto(saved);
     }
 
+    /**
+     * Suppression d'un passage de vérification (Administrateur).
+     *
+     * <p>⚠️ Audit 2026-08-27 (lot B) — la suppression n'avait aucune garde : un passage
+     * <strong>décidé</strong> ({@code OBS_LEVEES} renseigné) est une trace du circuit qui a fait
+     * bouger le dossier (OBSERVATIONS_LEVEES ou EN_ATTENTE_DECISION_PRMP) et a été notifiée à la
+     * PRMP ; l'effacer laisserait un dossier dans un état que plus rien ne justifie. Refusé en 409,
+     * comme la navette du PV. Une ligne sans décision (passage inachevé) reste supprimable.</p>
+     */
     public void delete(Integer id) {
-        if (!repository.existsById(id)) {
-            throw new ResourceNotFoundException("Verification introuvable : " + id);
+        Verification existante = repository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Verification introuvable : " + id));
+        if (existante.getObsLevees() != null) {
+            throw new BusinessRuleException("Ce passage de vérification porte une décision "
+                    + "(observations " + (Boolean.TRUE.equals(existante.getObsLevees()) ? "levées" : "maintenues")
+                    + ") : une trace du circuit ne se supprime pas (§3.6).");
         }
         repository.deleteById(id);
     }
