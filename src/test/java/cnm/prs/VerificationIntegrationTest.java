@@ -133,17 +133,6 @@ class VerificationIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     /** Statue l'unique observation du périmètre du dossier 1 via le circuit des observations (⚠️ 2026-08-02). */
-    private void passageObservationDossier1(String tokenVer, String decision, String precision) throws Exception {
-        String obs = mvc.perform(get("/api/observations-pv").header("Authorization", tokenVer).param("dossier", "1"))
-                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        int idObs = com.jayway.jsonpath.JsonPath.read(obs, "$[0].idObservationPv");
-        mvc.perform(post("/api/observations-pv/passage").header("Authorization", tokenVer)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idDossier\":1,\"decisions\":[{\"idObservationPv\":" + idObs + ",\"decision\":\"" + decision
-                        + "\"" + (precision == null ? "" : ",\"precision\":\"" + precision + "\"") + "}]}"))
-                .andExpect(status().isOk());
-    }
-
     @Test
     @DisplayName("Passage obs. MAINTENUE (⚠️ 2026-08-02) → EN_ATTENTE_DECISION_PRMP + notif OBSERVATION_VERIFICATION (PRMP) ; saisie libre refusée 409")
     void verif_obsNonLevees_attenteDecisionPrmp() throws Exception {
@@ -607,26 +596,4 @@ class VerificationIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$[?(@.idDossier==1)]", hasSize(1)));
     }
 
-    /**
-     * Mène le dossier 1 (localité ANT) jusqu'à CLOTURE par le circuit FAVR complet : PV signé, rappel
-     * MAINTENUE, resoumission de la PRMP, levée, transmission SIGMP puis archivage par l'Assistant.
-     * Laisse derrière lui un historique d'échanges et une transmission SIGMP à cloisonner.
-     */
-    private void cloturerDossier1(int idPv, String tokenVer) throws Exception {
-        String tokenAss = bearer("CTRASS", ProfilUtilisateur.ASSISTANT_CONTROLEUR, TypeActeur.CONTROLEUR,
-                "CTRASS", "ANT");
-        signerPvAvecAvis(idPv, "FAVR");
-        passageObservationDossier1(tokenVer, "MAINTENUE", "a rectifier");
-        mvc.perform(post("/api/dossiers/1/resoumettre").header("Authorization", tokenPrmp)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"motifRectification\":\"corrige\"}"))
-                .andExpect(status().isOk());
-        passageObservationDossier1(tokenVer, "LEVEE", null);
-        mvc.perform(post("/api/sigmp-transmissions").header("Authorization", tokenVer)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"idDossier\":1}"))
-                .andExpect(status().isCreated());
-        mvc.perform(post("/api/pv-examens/" + idPv + "/archiver").header("Authorization", tokenAss))
-                .andExpect(status().isOk());
-        mvc.perform(get("/api/dossiers/1").header("Authorization", tokenVer))
-                .andExpect(jsonPath("$.statut").value("CLOTURE"));
-    }
 }

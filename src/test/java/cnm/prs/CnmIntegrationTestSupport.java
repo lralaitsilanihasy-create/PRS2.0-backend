@@ -1,5 +1,6 @@
 package cnm.prs;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -293,6 +294,45 @@ abstract class CnmIntegrationTestSupport extends AbstractIntegrationTest {
         mvc.perform(post("/api/pv-examens/" + idPv + "/signer").header("Authorization", tokenPresident)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRPRE\",\"role\":\"PRESIDENT\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.statutPv").value("SIGNE"));
+    }
+
+    /**
+     * Passe la (les) observation(s) courante(s) du dossier 1 par la décision donnée (⚠️ 2026-08-02) —
+     * partagé par {@code VerificationIntegrationTest} et {@code MiseAJourPpmIntegrationTest} (mène le
+     * dossier 1 jusqu'à CLOTURE).
+     */
+    protected void passageObservationDossier1(String tokenVer, String decision, String precision) throws Exception {
+        String obs = mvc.perform(get("/api/observations-pv").header("Authorization", tokenVer).param("dossier", "1"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        int idObs = com.jayway.jsonpath.JsonPath.read(obs, "$[0].idObservationPv");
+        mvc.perform(post("/api/observations-pv/passage").header("Authorization", tokenVer)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDossier\":1,\"decisions\":[{\"idObservationPv\":" + idObs + ",\"decision\":\"" + decision
+                        + "\"" + (precision == null ? "" : ",\"precision\":\"" + precision + "\"") + "}]}"))
+                .andExpect(status().isOk());
+    }
+
+    /**
+     * Mène le dossier 1 (localité ANT) jusqu'à CLOTURE par le circuit FAVR complet : PV signé, rappel
+     * MAINTENUE, resoumission de la PRMP, levée, transmission SIGMP puis archivage par l'Assistant.
+     * Laisse derrière lui un historique d'échanges et une transmission SIGMP à cloisonner.
+     */
+    protected void cloturerDossier1(int idPv, String tokenVer) throws Exception {
+        String tokenAss = bearer("CTRASS", ProfilUtilisateur.ASSISTANT_CONTROLEUR, TypeActeur.CONTROLEUR,
+                "CTRASS", "ANT");
+        signerPvAvecAvis(idPv, "FAVR");
+        passageObservationDossier1(tokenVer, "MAINTENUE", "a rectifier");
+        mvc.perform(post("/api/dossiers/1/resoumettre").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"motifRectification\":\"corrige\"}"))
+                .andExpect(status().isOk());
+        passageObservationDossier1(tokenVer, "LEVEE", null);
+        mvc.perform(post("/api/sigmp-transmissions").header("Authorization", tokenVer)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"idDossier\":1}"))
+                .andExpect(status().isCreated());
+        mvc.perform(post("/api/pv-examens/" + idPv + "/archiver").header("Authorization", tokenAss))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/dossiers/1").header("Authorization", tokenVer))
+                .andExpect(jsonPath("$.statut").value("CLOTURE"));
     }
 
     /** Pose une observation (point non conforme) sur l'examen 1 — pré-requis d'un avis FAVR (cohérence 2026-08-01). */
