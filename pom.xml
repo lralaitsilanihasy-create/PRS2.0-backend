@@ -156,11 +156,13 @@
 			<artifactId>testcontainers-junit-jupiter</artifactId>
 			<scope>test</scope>
 		</dependency>
-		<!-- Requis par Testcontainers 2.x (la 1.x l'embarquait « shaded », plus la 2.x). -->
+		<!-- Requis par Testcontainers 2.x (tests — la 1.x l'embarquait « shaded ») ET par
+		     springdoc à l'EXÉCUTION. ⚠️ Portée compile obligatoire : une déclaration directe
+		     en scope test écraserait la transitive de springdoc — les tests passeraient mais
+		     spring-boot:run échouerait en ClassNotFoundException (constaté le 2026-08-27). -->
 		<dependency>
 			<groupId>org.apache.commons</groupId>
 			<artifactId>commons-lang3</artifactId>
-			<scope>test</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
