@@ -214,9 +214,18 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
   (le `ref` de son jeton porte l'ID_PRMP de tutelle — quatre services testaient `profil == PRMP` à la
   main au lieu de la garde centrale `Visibilite.estPrmp()`, excluant l'UGPM de tout). Les **actions**
   réservées à la PRMP (soumission, resoumission, transmission de compléments, retraits) restent
-  interdites à l'UGPM (403). Effet de bord assumé, **à confirmer côté métier** : la consultation d'une
-  lettre de renvoi par une UGPM la marque « lue » **pour la tutelle entière** (`t_lettre_renvoi_lue`
-  est clé sur `ID_PRMP`, sans notion d'agent individuel).
+  interdites à l'UGPM (403).
+- ⚠️ **Décision (2026-08-27) — la lecture d'une lettre de renvoi est un suivi par agent, pas par
+  tutelle.** Le correctif ci-dessus avait un effet de bord non voulu : la consultation d'une lettre
+  par une UGPM marquait « lue » **pour la tutelle entière**, éteignant à tort le badge de sa PRMP
+  alors que celle-ci n'avait rien consulté. Décision métier du PO, tranchée le 2026-08-27 : le
+  marquage « lue » (`t_lettre_renvoi_lue`) devient **individuel**, identifié par le **login** du
+  compte (colonne `LOGIN_AGENT`, migration `V7`) plutôt que par le seul `ID_PRMP` — la lecture d'une
+  UGPM ne vaut plus lecture pour sa PRMP de tutelle, et réciproquement. `ID_PRMP` reste porté sur la
+  trace comme **périmètre de tutelle** (la purge par dossier, qui passe par `ID_LETTRE`, est
+  inchangée) mais n'entre plus dans l'unicité de la trace. Le champ `lue` du DTO et le compteur
+  « Mes lettres de renvoi » du menu PRMP reflètent désormais les lectures **de l'agent connecté**,
+  pas celles de toute la tutelle.
 
 **Rectification en attente de décision PRMP (⚠️ règle ajoutée)**
 

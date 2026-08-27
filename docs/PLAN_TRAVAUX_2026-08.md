@@ -205,9 +205,11 @@ posees en 3.1 et eviter qu'une regression future en rouvre une.
 
 ## Suivis ouverts (issus des livraisons du 2026-08-26)
 
-- **Lettre lue par une UGPM** : la consultation par une UGPM marque la lettre « lue » pour la
-  tutelle entière (`t_lettre_renvoi_lue` est clé sur `ID_PRMP`, sans notion d'agent). Cohérent
-  avec le périmètre partagé, mais **à confirmer côté métier** (badge PRMP).
+- **Lettre lue par une UGPM** : SOLDE le 2026-08-27 (`docs/plan-lettre-lue-par-agent.md`, tache T4).
+  Decision metier du PO : le marquage "lue" devient un suivi par agent (login), plus par tutelle.
+  Migration V7 + entite + services (`32a4d7c`), tests d'integration T2 (`c23c11f`). Voir
+  `docs/regles-gestion.md` (regle du 2026-08-27, section Attribution figee) et `docs/api-endpoints.md`
+  (champ `lue`, encart de marquage, compteur `lettresRenvoi`).
 - **409 du verrou optimiste** : SOLDE le 2026-08-27 (`docs/plan-conflit-version.md`, tache D1).
   Code dedie CONFLIT_VERSION sur les deux chemins du 409 (`9e8cbad`), voir
   `docs/adr/ADR-0005-version-optimiste-dto.md`.
@@ -215,5 +217,9 @@ posees en 3.1 et eviter qu'une regression future en rouvre une.
   aux 5 DTO du circuit et controle en service sur leurs 5 PUT (`613ad1f`), tests HTTP permanents
   (`7ef2e87`). Voir `docs/api-endpoints.md` (section *Verrou optimiste — champ `version`*) et
   `docs/adr/ADR-0005-version-optimiste-dto.md`.
-- **Warnings a11y ESLint (front)** : ~124 avertissements assumés (`click-events-have-key-events`,
-  `interactive-supports-focus`, `label-has-associated-control`) — chantier a11y dédié, cf. AUDIT.md.
+- **Warnings a11y ESLint (front)** : SOLDE le 2026-08-27. 124 avertissements resorbes a 0, regles
+  ESLint passees en severite error, fermeture des voiles centralisee dans une directive `appModale`
+  (9 commits sur `main` du depot front, dernier `85e0ff6`) ; `frontend/AUDIT.md` et
+  `frontend/CLAUDE.md` a jour, rien a repercuter ici.
+
+Apres ce soldage, il ne reste **aucun suivi ouvert** issu des livraisons du 2026-08-26.

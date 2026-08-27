@@ -4,8 +4,11 @@
 > **Décision métier du 2026-08-27 (PO)** : le marquage « lue » d'une lettre de renvoi passe d'un
 > état partagé par toute la tutelle à un **suivi par agent** — la consultation par une UGPM ne
 > doit plus éteindre le badge de sa PRMP de tutelle.
-> Statut : **à implémenter** (aucun code écrit à ce jour). Rappel de livraison : commits locaux
-> uniquement (push impossible, patron absent), atomiques et autoportants.
+> Statut : **livré le 2026-08-27** — T1 `32a4d7c` (migration V7 + entité + services), T2 `c23c11f`
+> (tests d'intégration), T3 `ed3eb60` côté frontend (commentaires), T4 `docs/api-endpoints.md`,
+> `docs/regles-gestion.md` et `docs/PLAN_TRAVAUX_2026-08.md` mis à jour dans le présent commit.
+> Vérifié en conditions réelles : la lecture d'une UGPM n'éteint plus le badge de la PRMP. Rappel de
+> livraison : commits locaux uniquement (push impossible, patron absent), atomiques et autoportants.
 
 ---
 

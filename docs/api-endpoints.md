@@ -2210,7 +2210,7 @@ de PV). Lecture filtrée par profil/localité. Cycle : `BROUILLON → SOUMIS →
 | statut | string | — (réponse) | `BROUILLON`/`SOUMIS`/`SIGNE` — **forcé** (ignoré en entrée) |
 | imSignataire | string | — (réponse) | **posé à la signature** (JWT) — ignoré en entrée |
 | nomSignataire | string | — (réponse) | **nom complet du signataire** (« prénoms nom »), peuplé serveur — lecture seule |
-| lue | boolean | — (réponse) | **lecture seule** — `true` si la lettre a déjà été lue par la PRMP courante (trace `t_lettre_renvoi_lue`) |
+| lue | boolean | — (réponse) | **lecture seule** — `true` si la lettre a déjà été lue par **l'agent connecté** (PRMP ou UGPM, trace `t_lettre_renvoi_lue`, ⚠️ suivi par agent depuis le 2026-08-27) |
 | version | number | Non | verrou optimiste (`@Version` JPA, ⚠️ 2026-08-27) — toujours renseigné en sortie ; en entrée de `PUT`, absent = comportement historique, périmé = **409** `CONFLIT_VERSION` (détail en tête de document, *Verrou optimiste — champ `version`*) |
 
 > **Objet fixe** : l'objet de la lettre est constant (« lettre de renvoi », déjà inscrit en dur dans les modèles Word) — il n'est **plus saisi ni retourné** (champ `objetLettre` supprimé du DTO). S'il est encore envoyé dans le corps de la requête, il est **ignoré** (compat rétroactive du frontend). La colonne `t_lettre_renvoi.OBJET_LETTRE` reste en base pour l'historique mais n'est plus alimentée.
@@ -2241,12 +2241,17 @@ de PV). Lecture filtrée par profil/localité. Cycle : `BROUILLON → SOUMIS →
 > les pièces manquantes (`apresLettreRenvoi=true`) ; le **premier** dépôt le fait avancer à `DISPATCHE` et notifie
 > le Membre (cf. `POST /api/piece-jointe-dossiers`).
 >
-> **Marquage « lu » à la consultation PRMP (⚠️ règle ajoutée).** La **PRMP propriétaire** du dossier peut
-> consulter le détail d'une lettre **`SIGNE`** via `GET /api/lettre-renvois/{id}` (au-delà du périmètre de
-> localité habituel, qui sinon lui renvoie 403). À cette consultation, la lettre est **marquée lue** pour
-> elle (trace `t_lettre_renvoi_lue`, **une seule entrée** par couple lettre/PRMP, opération idempotente et
-> silencieuse). Le champ `lue` du DTO reflète cet état, et le compteur **« Mes lettres de renvoi »** du
-> menu PRMP ne compte que les lettres `SIGNE` **non encore lues** (voir KPIs / `CompteursPrmpDto`).
+> **Marquage « lu » à la consultation (⚠️ règle ajoutée ; suivi par agent depuis le 2026-08-27).** La
+> **PRMP propriétaire** du dossier — ou une **UGPM de sa tutelle** — peut consulter le détail d'une
+> lettre **`SIGNE`** via `GET /api/lettre-renvois/{id}` (au-delà du périmètre de localité habituel, qui
+> sinon renvoie 403). À cette consultation, la lettre est **marquée lue pour l'agent connecté** (trace
+> `t_lettre_renvoi_lue`, identifiant = **login** du compte, **une seule entrée** par couple
+> lettre/**agent**, opération idempotente et silencieuse ; `ID_PRMP` reste porté sur la trace comme
+> périmètre de tutelle, sans effet sur l'unicité). Le champ `lue` du DTO reflète l'état **de l'agent qui
+> consulte** : la lecture d'une UGPM ne marque plus « lue » pour sa PRMP de tutelle, et réciproquement.
+> Le compteur **« Mes lettres de renvoi »** du menu PRMP (réservé au profil PRMP — `mes-lettres` reste
+> 403 pour l'UGPM, qui n'a ni liste ni badge) ne compte que les lettres `SIGNE` **non encore lues par
+> elle-même** (voir KPIs / `CompteursPrmpDto`).
 >
 > **Signature selon la localité (⚠️ règle ajoutée).** La localité de la lettre est celle du **dossier**
 > (`idLocalite`), avec **repli** sur la localité de **réception** si absente. Localité **centrale `ANT`** →
@@ -2477,7 +2482,7 @@ système).
 | ppmMarches | number | mes PPM & marchés (PPM de la PRMP, `t_ppm.ID_PRMP`, **hors BROUILLON** — colle à la liste `GET /api/ppms`) |
 | dossiersARectifier | number | mes dossiers à rectifier non traités (`t_dossier.STATUT = EN_ATTENTE_DECISION_PRMP`) |
 | dossiersVerifies | number | mes dossiers vérifiés (`t_dossier.STATUT IN (PV_SIGNE, CLOTURE)`) |
-| lettresRenvoi | number | mes lettres de renvoi signées **non encore lues** (`STATUT = SIGNE` sans trace dans `t_lettre_renvoi_lue` pour la PRMP) — voir marquage « lu » dans *Lettres de renvoi* |
+| lettresRenvoi | number | mes lettres de renvoi signées **non encore lues par moi** (`STATUT = SIGNE` sans trace dans `t_lettre_renvoi_lue` pour **mon login**, ⚠️ suivi par agent depuis le 2026-08-27 — la consultation d'une UGPM de ma tutelle ne décrémente plus ce compteur) — voir marquage « lu » dans *Lettres de renvoi* |
 | demandesRetraitNouvelles | number | mes demandes de retrait passées à `ACCEPTEE`/`REFUSEE` (`DATE_DECISION`) **depuis ma dernière consultation** de l'écran « Demandes de retrait » — voir marquage dans *Demandes de retrait* |
 
 **Champs `CompteursVerificateurDto`** (réponse de `mes-compteurs-verificateur`) — par section du menu **Vérificateur**, filtrés sur sa localité (miroir de ses worklists)
