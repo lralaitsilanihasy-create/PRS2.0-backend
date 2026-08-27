@@ -131,6 +131,7 @@ BROUILLON** pour l'édition, **cohérence type↔contenu** (PPM ⇒ a un PPM ; D
 | 401 | Non authentifié (JWT absent/invalide, ou compte désactivé) |
 | 403 | Interdit (rôle ou périmètre de localité insuffisant) |
 | 404 | Ressource introuvable |
+| 405 | ⚠️ **(2026-08-28)** Méthode HTTP non montée sur ce chemin (en-tête `Allow` : les méthodes permises) |
 | 409 | Conflit métier (transition d'état interdite, contrainte violée, doublon, suppression interdite) |
 | 413 | Fichier/image trop volumineux (ex. image d'actualité > 10 Mo) |
 | 415 | Type de contenu non supporté (ex. corps JSON envoyé à un endpoint attendant du multipart) |

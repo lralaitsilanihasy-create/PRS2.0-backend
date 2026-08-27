@@ -243,6 +243,77 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.NOT_FOUND, "Ressource introuvable.", request, null);
     }
 
+    /**
+     * ⚠️ Recette 2026-08-28 — <strong>méthode HTTP non montée</strong> ({@code PATCH /api/audit-logs}) :
+     * le chemin existe, le verbe n'y est pas. Comme les deux cas ci-dessus, l'exception tombait dans
+     * {@link #handleGeneric} — <strong>500</strong> pour une requête que le serveur a parfaitement
+     * comprise, et refusée en connaissance de cause.
+     * <p>
+     * → <strong>405</strong> nommant le verbe refusé et la liste des verbes permis, <em>triée</em> :
+     * l'ordre naturel de Spring suit le parcours de ses mappings, le message varierait d'un démarrage
+     * à l'autre. La même liste part dans l'en-tête {@code Allow}, que la RFC 9110 §15.5.6 rend
+     * obligatoire sur un 405 — c'est cette forme-là que lisent les clients HTTP, pas le corps.
+     * Journalisé en {@code debug} sans pile : rien à diagnostiquer côté serveur.
+     */
+    @ExceptionHandler(org.springframework.web.HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleMethodeNonAutorisee(
+            org.springframework.web.HttpRequestMethodNotSupportedException ex, WebRequest request) {
+        String[] supportees = ex.getSupportedMethods();
+        String permises = supportees == null ? ""
+                : java.util.Arrays.stream(supportees).sorted().collect(java.util.stream.Collectors.joining(", "));
+        log.debug("Methode {} non autorisee sur {} (permises : {})", ex.getMethod(), uri(request), permises);
+        String message = "Méthode " + ex.getMethod() + " non autorisée sur cette ressource."
+                + (permises.isEmpty() ? "" : " Méthodes permises : " + permises + ".");
+        ResponseEntity.BodyBuilder reponse = ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED);
+        if (!permises.isEmpty()) {
+            reponse.header(HttpHeaders.ALLOW, permises);
+        }
+        return reponse.body(corps(HttpStatus.METHOD_NOT_ALLOWED, message, request, null, null));
+    }
+
+    /**
+     * ⚠️ Recette 2026-08-28 — <strong>paramètre requis absent</strong> ({@code GET /api/observations-pv}
+     * sans son {@code ?dossier=}) : le contrôleur déclare le paramètre obligatoire, la liaison échoue
+     * avant même d'entrer dans la méthode. Là encore, {@link #handleGeneric} rendait une
+     * <strong>500</strong> — l'appelant ne pouvait pas deviner qu'il lui manquait un paramètre, ni lequel.
+     * <p>
+     * → <strong>400</strong> nommant le paramètre, dans la forme du 400 de
+     * {@link #handleTypeMismatch} (même message porté aussi dans {@code erreurs} : le front lit l'un
+     * ou l'autre selon l'écran). Journalisé en {@code debug} sans pile.
+     */
+    @ExceptionHandler(org.springframework.web.bind.MissingServletRequestParameterException.class)
+    public ResponseEntity<ErrorResponse> handleParametreManquant(
+            org.springframework.web.bind.MissingServletRequestParameterException ex, WebRequest request) {
+        String parametre = ex.getParameterName();
+        log.debug("Parametre requis absent sur {} : {}", uri(request), parametre);
+        return build(HttpStatus.BAD_REQUEST,
+                "Paramètre « " + parametre + " » manquant : ce paramètre est obligatoire.",
+                request,
+                List.of(new ErrorResponse.FieldError(parametre, "paramètre obligatoire.")));
+    }
+
+    /**
+     * ⚠️ Recette 2026-08-28 — <strong>type de contenu non supporté</strong> ({@code POST /api/audit-logs}
+     * en {@code text/plain}, ou un corps JSON envoyé à un endpoint multipart) : aucun convertisseur ne
+     * sait lire ce media type. Le cas complétait le trio des fautes d'appelant rendues
+     * <strong>500</strong> par {@link #handleGeneric}.
+     * <p>
+     * → <strong>415</strong>, code que {@code docs/api-endpoints.md} annonce déjà au contrat (retrait :
+     * {@code POST} JSON pur sur une route multipart). Le message rappelle le type <em>reçu</em> — seul
+     * élément que l'appelant contrôle. Journalisé en {@code debug} sans pile.
+     */
+    @ExceptionHandler(org.springframework.web.HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleTypeContenuNonSupporte(
+            org.springframework.web.HttpMediaTypeNotSupportedException ex, WebRequest request) {
+        String recu = ex.getContentType() == null ? null : ex.getContentType().toString();
+        log.debug("Type de contenu non supporte sur {} : {}", uri(request), recu);
+        return build(HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+                recu == null
+                        ? "Type de contenu absent : cette ressource attend un corps typé."
+                        : "Type de contenu « " + recu + " » non supporté par cette ressource.",
+                request, null);
+    }
+
     /** Invoque sans argument une méthode publique si elle existe (sinon {@code null}) — accès Jackson sans dépendance compile. */
     private static Object invoquer(Object cible, String methode) {
         try {
