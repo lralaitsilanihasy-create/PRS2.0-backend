@@ -65,10 +65,15 @@ Le rôle de l'utilisateur est porté par le jeton (claim `role`). Valeurs possib
 > signées et des PV définitifs (avis ≠ FAVR immédiatement ; FAVR après clôture du dossier).
 
 ### Clés primaires — IMPORTANT
-**Toutes les entités ont une clé primaire ASSIGNÉE par le client** (pas d'auto-génération).
-Le champ identifiant (le **1er champ** de chaque DTO) **doit être fourni dans le corps d'un POST de
-création** ; l'omettre renvoie **400** (« L'identifiant (clé primaire) est obligatoire à la création »).
-Les exemples de requête ci-dessous incluent donc toujours l'identifiant.
+⚠️ **Corrigé (2026-08-27) — ce paragraphe contredisait « Création et clés primaires LOT 3b » ci-dessus ;
+c'est ce dernier qui fait foi.** Il n'est **plus vrai** que toutes les entités ont une clé assignée par
+le client : depuis le LOT 3b, trois régimes coexistent (clé sémantique/fermée, réallocation, clé
+serveur — voir le paragraphe précédent). Ce qui reste vrai partout : le champ identifiant est le
+**1er champ** de chaque DTO, et les exemples de requête ci-dessous l'incluent toujours (même quand il
+est ignoré ou réalloué en régime « clé serveur »/« réallocation », l'envoyer ne casse rien). L'omettre
+sur une ressource en régime **clé sémantique** renvoie **400** (« L'identifiant (clé primaire) est
+obligatoire à la création… ») ; sur une ressource en régime **clé serveur**, le champ est simplement
+ignoré (aucune erreur si absent).
 
 ### Visibilité par localité
 Pour les ressources du circuit (`dossiers`, `receptions`, `dispatchs`, `examens`, `pv-examens`,
@@ -84,7 +89,12 @@ Pour les ressources du circuit (`dossiers`, `receptions`, `dispatchs`, `examens`
 - **Référentiels** (lecture ouverte, écriture POST/PUT/DELETE réservée à `ADMINISTRATEUR`) :
   `aviss`, `cat-comptes`, `categorie-entites`, `comptes`, `delegation-profils`, `entite-contracts`, `localites`,
   `ministeres`, `mode-passations`, `natures`, `points-ctrls`, `profiles`, `regle-alertes`,
-  `regle-anomalies`, `regle-passations`, `seuils`, `situations`, `sous-type-dossiers`, `type-dossiers`, `type-dmc`.
+  `regle-anomalies`, `sous-type-dossiers`, `type-dossiers`, `type-dmc`.
+  ⚠️ **Correction (doc obsolète)** : `regle-passations`, `seuils` et `situations` **n'existent plus** —
+  retirés du code par le commit `c432e73` (2026-07-04) : le mode de passation (`idMode` de `MarcheDto`/
+  `PpmDto`) est désormais **purement saisi** (par la PRMP ou l'import PPM), sans détermination ni
+  validation automatique par un référentiel de seuils. Un `idMode` invalide n'est détecté qu'à la
+  contrainte de clé étrangère en base (409), pas par une règle métier dédiée.
   ⚠️ **Exception (2026-07-26)** : `POST /api/entite-contracts` est ouvert à la **PRMP** (en plus de l'Admin) —
   création d'entité à l'import PPM + auto-rattachement en attente ; PUT/DELETE restent Administrateur.
   ⚠️ **Exception (2026-07-29)** : `POST /api/ministeres` et `POST /api/organigrammes` sont ouverts à la
@@ -122,6 +132,9 @@ BROUILLON** pour l'édition, **cohérence type↔contenu** (PPM ⇒ a un PPM ; D
 | 403 | Interdit (rôle ou périmètre de localité insuffisant) |
 | 404 | Ressource introuvable |
 | 409 | Conflit métier (transition d'état interdite, contrainte violée, doublon, suppression interdite) |
+| 413 | Fichier/image trop volumineux (ex. image d'actualité > 10 Mo) |
+| 415 | Type de contenu non supporté (ex. corps JSON envoyé à un endpoint attendant du multipart) |
+| 429 | ⚠️ **(2026-08-27)** Trop de requêtes — verrou de connexion ou quota d'inscription dépassé (voir *Limitation de débit* dans la section *Authentification*) |
 
 ### Format d'erreur (`ErrorResponse`)
 ```json
@@ -356,6 +369,20 @@ par les règles de `tr_regle_anomalie`, jamais saisies à la main.
 >   la phase 3 (2026-08-17)** : le jeton ne sort plus dans le corps de la réponse de login
 >   (`token: null`), le cookie fait tout côté navigateur ; rollback en repassant à `false`.
 
+> ⚠️ **Limitation de débit — 429 (2026-08-27, audit lot E).** `POST /api/auth/login` et
+> `POST /api/auth/register/prmp|ugpm` sont bridés par un limiteur **en mémoire** (`LoginRateLimiter`,
+> fenêtre glissante — voir `docs/deploiement.md` pour l'implication mono-instance) :
+> - **login** : verrou par couple **(IP, identifiant)** à **5 échecs / 15 min**, et garde par **IP seule**
+>   à **20 échecs / 15 min** (protège aussi contre un balayage de plusieurs identifiants depuis la même
+>   adresse) ; un **login réussi efface le compteur du couple** (pas celui de l'IP, volontairement — un
+>   attaquant qui devine un mot de passe au 5ᵉ essai après avoir échoué sur 15 autres comptes reste
+>   compté côté IP) ;
+> - **inscriptions publiques** (`register/prmp` en JSON **et** en multipart, `register/ugpm`) :
+>   **10 / heure / IP**, quota **partagé** entre les deux variantes de `register/prmp`.
+> - Dépassement → **429**, corps `ErrorResponse` standard, en-tête **`Retry-After`** (secondes avant
+>   réessai). La vérification a lieu **avant** le contrôle des identifiants : un identifiant inconnu
+>   consomme aussi le quota.
+
 **Champs `LoginRequest`** (corps de `/login`)
 
 | Champ (JSON) | Type | Obligatoire |
@@ -393,7 +420,7 @@ par les règles de `tr_regle_anomalie`, jamais saisies à la main.
 | Champ (JSON) | Type | Obligatoire | Contraintes |
 |---|---|---|---|
 | login | string | Oui | @NotBlank, max 100 |
-| motDePasse | string | Oui | @NotBlank, min 8, max 72 |
+| motDePasse | string | Oui | @NotBlank, 8-72 caractères, **au moins une lettre et un chiffre** (⚠️ règle 2026-08-27, voir encadré ci-dessous) |
 | idPrmp | string | Oui | @NotBlank, max 10 — **= matricule** de la PRMP (identifiant unifié, unique) |
 | nomPrmp | string | Oui | @NotBlank, max 100 |
 | prenomsPrmp | string | Oui | @NotBlank, max 100 |
@@ -406,6 +433,15 @@ par les règles de `tr_regle_anomalie`, jamais saisies à la main.
 | telPrmp | string | Oui | @NotBlank, max 20 |
 
 > La PRMP **n'a pas de localité propre** : l'inscription ne comporte plus de champ `idLocalite`.
+
+> ⚠️ **Règle de mot de passe (2026-08-27, audit lot E).** **8 à 72 caractères**, dont **au moins une
+> lettre et un chiffre** (`@MotDePasseValide` — annotation Jakarta composite, regexp Unicode
+> `\p{L}`/`\p{N}` : les caractères accentués comptent comme des lettres). Appliquée à **tout nouveau
+> mot de passe** : inscription (`register/prmp`, `register/ugpm`), création de compte par
+> l'Administrateur (`CreerPrmpRequest`, `CreerUgpmRequest`), réinitialisation
+> (`ReinitMotDePasseRequest`) et `POST /api/mon-compte/changer-mot-de-passe`. **Jamais** sur
+> `LoginRequest.motDePasse` (connexion) : un mot de passe créé **avant** cette règle continue de
+> fonctionner pour se connecter, et ne sera contraint qu'au **prochain changement**.
 
 **Champs `RegisterResponse`** (réponse de `/register/prmp`)
 
@@ -424,9 +460,9 @@ par les règles de `tr_regle_anomalie`, jamais saisies à la main.
 |---|---|---|---|---|---|
 | GET | /api/auth/entites | — | `EntitePubliqueDto[]` | 200 | PUBLIC |
 | GET | /api/auth/prmps | — | `PrmpPubliqueDto[]` | 200 | PUBLIC |
-| POST | /api/auth/login | `LoginRequest` | `LoginResponse` | 200, 400, 401 | PUBLIC |
-| POST | /api/auth/register/prmp | **`multipart/form-data`** (v2, ci-dessous) ou `RegisterPrmpRequest` (JSON, historique) | `RegisterResponse` | 201, 400, 409 | PUBLIC |
-| POST | /api/auth/register/ugpm | **`multipart/form-data`** : part `data` (`RegisterUgpmRequest`) + `cin` (obligatoire) + `photo` (opt.) | `RegisterResponse` | 201, 400, 409 | PUBLIC |
+| POST | /api/auth/login | `LoginRequest` | `LoginResponse` | 200, 400, 401, **429** | PUBLIC |
+| POST | /api/auth/register/prmp | **`multipart/form-data`** (v2, ci-dessous) ou `RegisterPrmpRequest` (JSON, historique) | `RegisterResponse` | 201, 400, 409, **429** | PUBLIC |
+| POST | /api/auth/register/ugpm | **`multipart/form-data`** : part `data` (`RegisterUgpmRequest`) + `cin` (obligatoire) + `photo` (opt.) | `RegisterResponse` | 201, 400, 409, **429** | PUBLIC |
 
 > **Inscription v2 (`multipart/form-data`).** Le corps comporte une part **`data`** (`application/json`,
 > `RegisterPrmpV2Request` = identité + **`idEntites: number[]`** (entités existantes) +
@@ -896,9 +932,23 @@ les vraies copies naissent du dispatch, pas d'un `POST` direct.
 | POST | /api/demande-retraits | **multipart** : `data` (`DemandeRetraitDto` JSON) + `fichier` (lettre PDF) | `DemandeRetraitDto` | 201, 400, 403, 409, 415 | PRMP |
 | POST | /api/demande-retraits/{id}/accepter | — | `DemandeRetraitDto` | 200, 403, 404, 409 | CHEF_COMMISSION / PRESIDENT |
 | POST | /api/demande-retraits/{id}/refuser | `{ motif? }` | `DemandeRetraitDto` | 200, 403, 404, 409 | CHEF_COMMISSION / PRESIDENT |
-| DELETE | /api/demande-retraits/{id} | — | — | 204, 404 | ADMINISTRATEUR |
+| DELETE | /api/demande-retraits/{id} | — | — | 204, 404, 409 | ADMINISTRATEUR |
 
 `{id}` = idDemandeRetrait (number). Le `PUT /{id}` générique est **supprimé** au profit de `accepter`/`refuser`.
+
+> ⚠️ **Re-contrôle d'état à la décision (2026-08-27, audit C3/lot A).** La garde « avant PV signé » ne
+> jouait qu'à la **création** de la demande — rien ne suspendait le circuit pendant qu'elle restait
+> `EN_ATTENTE` : un PV pouvait être signé entre la demande et la décision, et `accepter()` purgeait
+> alors PV, navettes, vérifications et lettres d'un dossier déjà tranché. `POST /{id}/accepter` **relit
+> désormais le statut du dossier en base** et le confronte au même ensemble unique
+> `StatutDossier.NOMS_AVANT_PV_SIGNE` qu'à la création : dossier ayant progressé au-delà →
+> **409 « la demande de retrait est caduque »**, la demande reste `EN_ATTENTE` et peut toujours être
+> **refusée** (le refus ne touche jamais au circuit).
+>
+> ⚠️ **Suppression refusée si traitée (2026-08-27, audit lot B).** `DELETE /{id}` n'efface plus qu'une
+> demande encore `EN_ATTENTE` (avec sa lettre justificative, dont l'unicité interdirait l'orphelin) —
+> **409** dès que la demande est `ACCEPTEE`/`REFUSEE` : la lettre qui a justifié la décision doit lui
+> **survivre**.
 
 **Exemple — requête (création, PRMP — multipart/form-data)**
 ```
@@ -921,6 +971,21 @@ Content-Type: multipart/form-data
 
 ## Détails d'examen
 **Ressource** `/api/examen-details` — POST/PUT : profil `MEMBRE` (titulaire ou délégué) ; DELETE : `ADMINISTRATEUR`.
+
+> ⚠️ **Lecture cloisonnée (2026-08-27, audit C2/lot A).** `findAll`/`findById` étaient sans aucun filtre
+> alors que le parent `ExamenService` était correctement scopé : la PRMP lisait la grille point par
+> point de n'importe quel examen, tous cloisonnements confondus. Désormais bornée exactement comme
+> l'examen parent : Président/Administrateur voient tout, les contrôleurs leur **localité**, la
+> **PRMP et l'UGPM rien** (liste vide en lecture collective, **403** sur l'accès unitaire) — la règle de
+> gestion ne donne le détail point par point qu'au Membre (écriture), au CC de sa localité et au
+> Président ; la PRMP reçoit la **synthèse** du PV définitif, pas la grille (§3.1/§3.5, effet assumé —
+> y compris dans « PV définitifs »).
+>
+> ⚠️ **Écriture — attributaire et verrou (2026-08-27, audit lot B).** POST/PUT/DELETE exigent en plus
+> l'**attributaire** de l'examen (localité **et** Membre du dispatch, ou délégation active vers Membre —
+> même garde que la soumission de l'examen) et un examen **encore modifiable** : dès que le dossier a
+> quitté `DISPATCHE`/`EXAMINE`/`A_REEXAMINER` (donc dès `PV_SIGNE`), toute écriture est **409** — le
+> détail devient définitif à la signature du PV, comme l'examen lui-même.
 
 **Champs `ExamenDetailDto`**
 
@@ -948,11 +1013,11 @@ Content-Type: multipart/form-data
 
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
-| GET | /api/examen-details | — | `ExamenDetailDto[]` | 200 | Authentifié |
-| GET | /api/examen-details/{id} | — | `ExamenDetailDto` | 200, 404 | Authentifié |
-| POST | /api/examen-details | `ExamenDetailDto` | `ExamenDetailDto` | 201, 400, 403 | MEMBRE (titulaire/délégué) |
-| PUT | /api/examen-details/{id} | `ExamenDetailDto` | `ExamenDetailDto` | 200, 400, 404 | MEMBRE (titulaire/délégué) |
-| DELETE | /api/examen-details/{id} | — | — | 204, 404 | ADMINISTRATEUR |
+| GET | /api/examen-details | — | `ExamenDetailDto[]` | 200 | Authentifié (filtré — **liste vide** pour PRMP/UGPM) |
+| GET | /api/examen-details/{id} | — | `ExamenDetailDto` | 200, 403, 404 | Authentifié (filtré — **403** pour PRMP/UGPM) |
+| POST | /api/examen-details | `ExamenDetailDto` | `ExamenDetailDto` | 201, 400, 403, 409 | MEMBRE (titulaire/délégué) |
+| PUT | /api/examen-details/{id} | `ExamenDetailDto` | `ExamenDetailDto` | 200, 400, 403, 404, 409 | MEMBRE (titulaire/délégué) |
+| DELETE | /api/examen-details/{id} | — | — | 204, 404, 409 | ADMINISTRATEUR |
 
 `{id}` = idDetailExamen (number).
 
@@ -966,13 +1031,21 @@ Content-Type: multipart/form-data
 ---
 
 ## Examen des pièces jointes
-**Ressource** `/api/examen-pieces` (table `t_examen_piece`, ⚠️ règle ajoutée) — **Lecture** : authentifié ;
-POST/PUT : profil **`MEMBRE`** (titulaire ou délégué) ; DELETE : `ADMINISTRATEUR`.
+**Ressource** `/api/examen-pieces` (table `t_examen_piece`, ⚠️ règle ajoutée) — **Lecture** : authentifié
+(filtrée, voir ci-dessous) ; POST/PUT : profil **`MEMBRE`** (titulaire ou délégué) ; DELETE : `ADMINISTRATEUR`.
 
 Résultat d'examen d'une **pièce jointe** du dossier, une par une (miroir des `examen-details` pour les
 lignes de marché) : `conforme` = RAS, sinon `observation` (texte libre) porte le constat. **Unicité** du
 couple (`idExamen`, `idPiece`) → **409** en cas de doublon (corriger via `PUT`). Purgés avec le circuit
 (retrait accepté / annulation de dispatch).
+
+> ⚠️ **Lecture cloisonnée + verrou après signature (2026-08-27, audit C2 et lot B).** Même correctif que
+> *Détails d'examen* : `findAll`/`findById` bornés par la localité de l'examen parent (Président/Admin
+> tout, contrôleurs leur localité, **PRMP/UGPM rien**). Côté écriture, ces pièces n'avaient **aucun
+> verrou d'état** avant ce chantier — contrairement aux détails — et restaient modifiables **après la
+> signature du PV** ; elles partagent désormais la même garde `ExamenGarde.exigerExamenModifiable`
+> (verrouillé dès que le dossier quitte `DISPATCHE`/`EXAMINE`/`A_REEXAMINER`) et la même garde
+> d'attributaire que les détails d'examen.
 
 **Champs `ExamenPieceDto`**
 
@@ -988,22 +1061,27 @@ couple (`idExamen`, `idPiece`) → **409** en cas de doublon (corriger via `PUT`
 
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
-| GET | /api/examen-pieces[?examen={idExamen}] | — | `ExamenPieceDto[]` | 200 | Authentifié |
-| GET | /api/examen-pieces/{id} | — | `ExamenPieceDto` | 200, 404 | Authentifié |
+| GET | /api/examen-pieces[?examen={idExamen}] | — | `ExamenPieceDto[]` | 200 | Authentifié (filtré — **liste vide** pour PRMP/UGPM ; le filtre `?examen=` s'ajoute à la localité, il ne la relâche pas) |
+| GET | /api/examen-pieces/{id} | — | `ExamenPieceDto` | 200, 403, 404 | Authentifié (filtré — **403** pour PRMP/UGPM) |
 | POST | /api/examen-pieces | `ExamenPieceDto` | `ExamenPieceDto` | 201, 400, 403, 409 | MEMBRE (titulaire/délégué) |
-| PUT | /api/examen-pieces/{id} | `ExamenPieceDto` | `ExamenPieceDto` | 200, 400, 404, 409 | MEMBRE (titulaire/délégué) |
-| DELETE | /api/examen-pieces/{id} | — | — | 204, 403, 404 | ADMINISTRATEUR |
+| PUT | /api/examen-pieces/{id} | `ExamenPieceDto` | `ExamenPieceDto` | 200, 400, 403, 404, 409 | MEMBRE (titulaire/délégué) |
+| DELETE | /api/examen-pieces/{id} | — | — | 204, 404, 409 | ADMINISTRATEUR |
 
 `{id}` = idExamenPiece (number).
 
 ---
 
 ## Observations de contrôle
-**Ressource** `/api/observation-controles` (table `t_observation_controle`) — **Lecture** : authentifié ;
-**écriture** (POST/PUT/DELETE) : profil **`MEMBRE`** (titulaire ou délégué).
+**Ressource** `/api/observation-controles` (table `t_observation_controle`) — **Lecture** : authentifié
+(filtrée, voir ci-dessous) ; **écriture** (POST/PUT/DELETE) : profil **`MEMBRE`** (titulaire ou délégué).
 
 Lignes structurées **« AU LIEU DE / LIRE »** d'un point de contrôle d'examen (`ExamenDetail`), en
 relation **1,N** : un point de contrôle a **0..N** lignes. Remplace l'ancien champ texte `observation`.
+Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `examen-details`/`examen-pieces`.
+
+> ⚠️ **Lecture cloisonnée (2026-08-27, audit C2/lot A).** Même correctif que le point de contrôle
+> parent : `findByDetail` est désormais bornée par `Visibilite`, exactement comme `ExamenService.findAll`
+> — Président/Administrateur tout, contrôleurs leur localité, **PRMP/UGPM liste vide**.
 
 **Champs `ObservationControleDto`**
 
@@ -1030,6 +1108,16 @@ relation **1,N** : un point de contrôle a **0..N** lignes. Remplace l'ancien ch
 **Ressource** `/api/dispatchs` — POST/PUT : `PRESIDENT` ou `CHEF_COMMISSION` ; DELETE : `ADMINISTRATEUR`. Lecture filtrée par localité.
 
 > **Précondition de circuit (création) → 409** : le dossier rattaché à la réception doit être au statut **`PRET_DISPATCH`** (§2.2/§2.3), et **aucun dispatch ne doit déjà exister** pour cette réception (anti-doublon, §3.2 ; corriger via `PUT`).
+
+> ⚠️ **Le `PUT` rejoue désormais les trois gardes du `POST` (2026-08-27, audit lot B).** Avant ce
+> chantier, corriger un dispatch n'avait **aucune** des gardes de sa création : ni localité, ni statut,
+> ni anti-doublon — on pouvait re-cibler un dispatch sur la réception d'un **autre** dossier (créant le
+> second dispatch que le POST interdit), depuis n'importe quelle localité, sur un dossier déjà statué.
+> `PUT /{id}` exige désormais : **localité** sur le dossier **en place** et sur celui **visé** (**403**
+> sinon) ; statut du dossier au plus `EXAMINE` (`PRET_DISPATCH`/`DISPATCHE`/`EXAMINE`, même frontière
+> que l'annulation — **409** au-delà, le PV est signé et l'examen s'appuie sur l'attributaire) ;
+> anti-doublon rejoué si `idReception` change (**409**). **`imCtrlDispatch` vient du JWT** (jamais du
+> corps), au POST comme au PUT — une trace de circuit déclarée par le client n'en est pas une.
 
 > ⚠️ **Transition de statut (règle ajoutée).** À la **création** d'un dispatch, le dossier passe **`PRET_DISPATCH` → `DISPATCHE`** dans la **même transaction** que le dispatch. C'est ce statut `DISPATCHE` qui conditionne l'étape suivante (l'examen l'exige).
 
@@ -1069,7 +1157,7 @@ relation **1,N** : un point de contrôle a **0..N** lignes. Remplace l'ancien ch
 | GET | /api/dispatchs | — | `DispatchDto[]` | 200 | Authentifié (filtré) |
 | GET | /api/dispatchs/{id} | — | `DispatchDto` | 200, 404 | Authentifié (filtré) |
 | POST | /api/dispatchs | `DispatchDto` | `DispatchDto` | 201, 400, 403, 409 | PRESIDENT / CHEF_COMMISSION |
-| PUT | /api/dispatchs/{id} | `DispatchDto` | `DispatchDto` | 200, 400, 404, 409 | PRESIDENT / CHEF_COMMISSION |
+| PUT | /api/dispatchs/{id} | `DispatchDto` | `DispatchDto` | 200, 400, 403, 404, 409 | PRESIDENT / CHEF_COMMISSION |
 | DELETE | /api/dispatchs/{id} | — | — | 204, 404 | ADMINISTRATEUR |
 | POST | /api/dispatchs/{id}/annuler | — | — | 204, 403, 404, 409 | PRESIDENT / CHEF_COMMISSION |
 
@@ -1166,7 +1254,7 @@ relation **1,N** : un point de contrôle a **0..N** lignes. Remplace l'ancien ch
 | idDossierParent | number | Non | |
 | refeDossier | string | Non | max 100 — **référence officielle, générée à la `…/réception`** ; **`null` avant** (BROUILLON/SOUMIS) ; laisser vide à la création |
 | dateRef | string (date) | Non | renseignée à la soumission si vide |
-| statut | string | Non | max 30 — cycle : `BROUILLON` → `SOUMIS` → `PRET_DISPATCH` → `DISPATCHE` → `EXAMINE` → `PV_SIGNE` → (`EN_VERIFICATION` si avis FAVR) → `CLOTURE` ; vérif. obs. non levées → `EN_ATTENTE_DECISION_PRMP` (ou `RETIRE`) ; posé par le système, **lecture seule** côté PRMP |
+| statut | string | Non | max 30 — cycle : `BROUILLON` → `SOUMIS` → `PRET_DISPATCH` → `DISPATCHE` → `EXAMINE` → `PV_SIGNE` (transitoire) → `EN_VERIFICATION` (⚠️ **corrigé 2026-08-27** — depuis la spec navette du 2026-08-01, **tous les avis** passent par `EN_VERIFICATION`, pas seulement `FAVR` ; ce paragraphe contredisait *Transmissions SIGMP* ci-dessous, qui fait foi) → `OBSERVATIONS_LEVEES`/`EN_ATTENTE_DECISION_PRMP` → `DECISION_TRANSMISE_SIGMP` → `CLOTURE` (à l'archivage) ; posé par le système, **lecture seule** côté PRMP |
 | idLocalite | string | Non | max 5 — localité (FK `tr_localite`) ; **dérivée de l'entité** du dossier (lecture seule à la saisie) |
 | idPrmp | string | Non | max 10 — PRMP **d'attribution** (FK `t_prmp`) ; posée à la saisie, **jamais recalculée** ; la PRMP **en fonction** peut aussi agir (cf. *Mandats PRMP*) |
 | idMandatAttrib | number | Non | **lecture seule** — mandat d'attribution (FK `t_mandat`), figé à la création et jamais recalculé ; `null` si la PRMP n'a pas de mandat déclaré (cf. *Mandats PRMP*) |
@@ -1202,6 +1290,8 @@ relation **1,N** : un point de contrôle a **0..N** lignes. Remplace l'ancien ch
 | GET | /api/dossiers/a-verifier | — | `DossierDto[]` | 200, 403 | `VERIFICATEUR` (titulaire/délégué) ou `ADMINISTRATEUR` — EN_VERIFICATION + EN_ATTENTE_DECISION_PRMP + OBSERVATIONS_LEVEES |
 | GET | /api/dossiers/verifies | — | `Page<DossierDto>` | 200, 403 | `VERIFICATEUR` (titulaire/délégué) ou `ADMINISTRATEUR` — DECISION_TRANSMISE_SIGMP + CLOTURE (PV signé) |
 | GET | /api/dossiers/en-attente-prmp | — | `DossierDto[]` | 200, 403 | `VERIFICATEUR` (titulaire/délégué) ou `ADMINISTRATEUR` — lecture seule |
+| GET | /api/dossiers/recherche?q= | — | `RechercheDossierDto[]` | 200, 400 | Authentifié (scopé comme la liste) |
+| GET | /api/dossiers/retirables | — | `DossierDto[]` | 200, 403 | **PRMP** — dossiers éligibles au retrait (§3.3, voir *Demandes de retrait*) |
 | GET | /api/dossiers/{id} | — | `DossierDto` | 200, 403, 404 | Authentifié (filtré) |
 | GET | /api/dossiers/{id}/ppm | — | `PpmDto` | 200, 403, 404 | Authentifié (propriétaire pour un BROUILLON) |
 | POST | /api/dossiers | `DossierDto` | `DossierDto` | 201, 400, 403 | **ADMINISTRATEUR** |
@@ -1213,6 +1303,19 @@ relation **1,N** : un point de contrôle a **0..N** lignes. Remplace l'ancien ch
 | GET | /api/dossiers/{id}/journal | — | `ActionDossierDto[]` | 200, 403, 404 | Authentifié (périmètre de visibilité du dossier) |
 
 `{id}` = idDossier (number). **`DossierResoumissionRequest`** = `{ motifRectification }` (String, **@NotBlank**, max 255).
+
+> ⚠️ **Recherche de la topbar — nouvel endpoint (2026-08-27, audit lot D).** `GET
+> /api/dossiers/recherche?q=` résout une référence saisie dans la barre de recherche **côté serveur**
+> (avant : le front téléchargeait dossiers + PPM entiers à chaque frappe). Ouvert à **tout profil
+> authentifié**, scopé **exactement comme la liste principale** (`GET /api/dossiers`) : Président/
+> Administrateur tout, PRMP/UGPM leurs dossiers, les autres contrôleurs les dossiers non-brouillon de
+> leur localité. `q` < **2 caractères** → **400**. Recherche **insensible à la casse**, en
+> sous-chaîne, sur `refeDossier` **ou** la référence du PPM rattaché. **10 résultats maximum**, triés
+> par **clé primaire décroissante** (les plus récents d'abord — même convention que la pagination des
+> grandes listes). Réponse `RechercheDossierDto[]` :
+> `{ idDossier (number), refeDossier (string|null), reference (string), idTypeDossier (string),
+> statut (string) }` — `reference` = `refeDossier` s'il est renseigné, **sinon la référence du PPM**
+> rattaché (résolue en lot, sans coût par ligne).
 
 > 📌 **Journal des actions (⚠️ spec « Mandats PRMP »).** `GET /api/dossiers/{id}/journal` renvoie, dans
 > l'ordre chronologique, **qui a agi, quand et sous quel mandat**. À ne pas confondre avec
@@ -1244,6 +1347,12 @@ relation **1,N** : un point de contrôle a **0..N** lignes. Remplace l'ancien ch
 > qui ne renvoie **que** les dossiers à ce statut. Cohérent avec le compteur KPI `dossiersARectifier`
 > (`t_dossier.STATUT = EN_ATTENTE_DECISION_PRMP`).
 
+> ⚠️ **`PUT` générique — validation du statut (2026-08-27, audit lot B).** `dto.statut` était jusqu'ici
+> recopié **tel quel** : une valeur hors de l'enum `StatutDossier` s'installait en base et rendait le
+> dossier invisible de **toutes** les files (qui filtrent sur les noms de constantes). Une valeur
+> inconnue renvoie désormais **400** (champ `statut`, `null`/vide toléré) ; tout changement de statut
+> par cette porte reste journalisé `[CIRCUIT]` comme les autres transitions.
+
 > ⚠️ **Suppression de dossier (règle ajoutée).** `DELETE /api/dossiers/{id}` est réservée à la **PRMP propriétaire**
 > (sinon **403**). Un dossier **`BROUILLON`** est **toujours supprimable** (sinon **409** « Ce dossier ne peut pas
 > être supprimé. »), **y compris s'il porte un historique de circuit** (revenu BROUILLON via retrait incomplet).
@@ -1251,6 +1360,13 @@ relation **1,N** : un point de contrôle a **0..N** lignes. Remplace l'ancien ch
 > (notifications, demandes de retrait, réceptions — un brouillon n'a jamais dépassé `PRET_DISPATCH`, donc des
 > réceptions sans dispatch/examen/PV/vérification). Le **journal d'audit** (`t_audit_log`, immuable §3.8, sans FK) est
 > **conservé**. Dossier inexistant → **404**.
+
+> ⚠️ **Historique d'échanges — périmètre corrigé (2026-08-27, audit §3.1/lot A).** Le contrôleur
+> vérifiait le **rôle** (PRMP, vérificateur, admin) mais le service n'appliquait **aucun contrôle de
+> périmètre** : n'importe quelle PRMP lisait les observations et rectifications d'un dossier clôturé
+> d'autrui, n'importe quel vérificateur celles d'une autre localité. `controlerVisibilite` est
+> désormais appelé **avant** la garde de clôture (pour ne rien divulguer hors périmètre, pas même le
+> statut) — **403** hors périmètre, avant même de savoir si le dossier est clos.
 
 > ⚠️ **Historique d'échanges (règle ajoutée).** `GET /api/dossiers/{id}/historique-echanges` retourne l'historique
 > complet d'un dossier **`CLOTURE`** (sinon **403**), en **fil chronologique entrelacé** (chaîne de réponse : chaque
@@ -1365,6 +1481,16 @@ sur un dossier. **Upload `multipart/form-data`** par la **`PRMP` propriétaire**
 `apresLettreRenvoi` **distingue les pièces initiales** (déposées à la création, `false`) **des pièces
 ajoutées après réception d'une lettre de renvoi** (`true`).
 
+> ⚠️ **Lecture bornée au périmètre du dossier (2026-08-27, audit C1/lot A).** Les trois lectures
+> (liste `?dossier=`, accès unitaire, téléchargement du contenu) n'avaient **aucun contrôle de
+> périmètre** : tout authentifié téléchargeait le contenu binaire de n'importe quelle pièce de
+> n'importe quel dossier en itérant sur les identifiants — asymétrie manifeste avec l'écriture, déjà
+> gardée. Les trois passent désormais par `PerimetreDossier.controler` (même périmètre que les autres
+> ressources enfants d'un dossier — lots, tranches, bénéficiaires) : Président/Administrateur tout,
+> **PRMP/UGPM** leurs dossiers **propriétaires**, les autres contrôleurs les dossiers **non brouillon**
+> de leur **localité**. Hors périmètre → **403** (pour les accès unitaires, l'`idDossier` est résolu
+> depuis la pièce chargée).
+
 **Champs `PieceJointeDossierDto`** *(le contenu binaire n'est jamais exposé en JSON)*
 
 | Champ (JSON) | Type | Obligatoire | Contraintes |
@@ -1384,10 +1510,10 @@ ajoutées après réception d'une lettre de renvoi** (`true`).
 
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
-| GET | /api/piece-jointe-dossiers?dossier={idDossier} | — | `PieceJointeDossierDto[]` | 200 | Authentifié |
-| GET | /api/piece-jointe-dossiers/{id} | — | `PieceJointeDossierDto` | 200, 404 | Authentifié |
-| GET | /api/piece-jointe-dossiers/{id}/contenu | — | fichier (octets) | 200, 404 | Authentifié |
-| POST | /api/piece-jointe-dossiers | `multipart/form-data` | `PieceJointeDossierDto` | 201, 400, 403, 404 | **PRMP** (propriétaire) |
+| GET | /api/piece-jointe-dossiers?dossier={idDossier} | — | `PieceJointeDossierDto[]` | 200, 403 | Authentifié (filtré, voir ci-dessus) |
+| GET | /api/piece-jointe-dossiers/{id} | — | `PieceJointeDossierDto` | 200, 403, 404 | Authentifié (filtré) |
+| GET | /api/piece-jointe-dossiers/{id}/contenu | — | fichier (octets) | 200, 403, 404 | Authentifié (filtré) |
+| POST | /api/piece-jointe-dossiers | `multipart/form-data` | `PieceJointeDossierDto` | 201, 400, 403, 404, 409 | **PRMP** (propriétaire) |
 | DELETE | /api/piece-jointe-dossiers/{id} | — | — | 204, 403, 404 | **PRMP** (dossier `BROUILLON`) ou ADMINISTRATEUR |
 
 `{id}` = idPiece (integer).
@@ -1396,9 +1522,19 @@ ajoutées après réception d'une lettre de renvoi** (`true`).
 - `data` : JSON `{ "idDossier": …, "idTypePiece": … }` (et `idLettre` pour un dépôt après lettre de renvoi) ;
 - `fichier` : le fichier **PDF/JPEG/PNG** (magic-bytes ; sinon **400**).
 
-**Règle `apresLettreRenvoi`** : si `idLettre` est fourni **et** le dossier est `SOUMIS`/`PRET_DISPATCH`
-**ou `EN_ATTENTE_PIECES`** (⚠️ spec navette 2026-08-02 — dossier suspendu par la lettre signée), la pièce
-est enregistrée `apresLettreRenvoi=true` (avec `idLettre`) ; sinon c'est une **pièce initiale** (`false`).
+**Règle `apresLettreRenvoi`** : si `idLettre` est fourni **et** le dossier est dans un statut qui
+autorise un dépôt « après lettre » (voir liste blanche ci-dessous), la pièce est enregistrée
+`apresLettreRenvoi=true` (avec `idLettre`) ; sinon c'est une **pièce initiale** (`false`).
+
+> ⚠️ **Dépôt borné à une liste blanche de statuts (2026-08-27, audit lot B).** Avant ce chantier, le
+> chemin « pièce initiale » n'avait **aucune garde d'état** : la PRMP pouvait verser une pièce à
+> n'importe quel moment du circuit, y compris après l'examen, après la signature du PV ou sur un
+> dossier clôturé. Deux listes blanches, sinon **409** :
+> - **dépôt initial** (`idLettre` absent), toujours ouvert : `BROUILLON`, `SOUMIS`,
+>   `EN_ATTENTE_COMPLEMENTS_DEPOT`, `EN_ATTENTE_PIECES`, `EN_ATTENTE_DECISION_PRMP` ;
+> - **dépôt après lettre de renvoi** (`idLettre` fourni), ouvert **en plus** sur les statuts de reprise
+>   d'examen : `PRET_DISPATCH`, `DISPATCHE`, `A_REEXAMINER` — le **premier** complément rouvre
+>   l'examen (`…/transmettre-complements`), les suivants arrivent sur un dossier déjà reparti.
 
 > ⚠️ **Reprise après lettre de renvoi (règle MODIFIÉE 2026-08-02, spec navette + réexamen).** Le dépôt
 > d'une pièce pendant `EN_ATTENTE_PIECES` **ne réactive PAS l'examen** : la reprise est une action
@@ -2099,6 +2235,14 @@ les jalons naissent des flux internes (alertes J-7 / J-1), aucun profil métier 
 > **Transition (⚠️ règle déplacée 2026-08-01)** : le dossier ne passe **`DISPATCHE` → `EXAMINE`** qu'à la **SOUMISSION** de l'examen (`POST /{id}/soumettre`, même transaction que le projet de PV) — il quitte alors « à examiner ». La **création** d'un examen est désormais un **brouillon de progression** (le front sauvegarde les résultats à chaque étape ; le dossier reste `DISPATCHE`, reprise possible). Le verrou d'écriture des examens/détails accepte donc `DISPATCHE` (brouillon) **ou** `EXAMINE` — refus 409 dès `PV_SIGNE`, inchangé.
 >
 > **Verrou (édition) → 409** : `PUT /api/examens/{id}` **et** les écritures sur `/api/examen-details` (création/MAJ/suppression) sont **refusées dès `PV_SIGNE`** : l'examen est modifiable tant que le dossier est `EXAMINE` (navette ouverte), **définitif** après signature du PV.
+>
+> ⚠️ **Garde attributaire étendue au PUT et à la soumission (2026-08-27, audit lot B).** Elle n'était
+> jouée qu'à la **création** : `PUT /api/examens/{id}` et `POST /{id}/soumettre` n'avaient **aucune**
+> garde d'identité — un attributaire pouvait déplacer vers son propre dispatch un examen qui ne lui
+> appartenait pas. La garde est désormais rejouée sur le dispatch **en place** et sur celui **visé**
+> par le corps (sinon **403**). **`imCtrlMembre` du corps est ignoré au `PUT`** — le serveur conserve
+> la valeur existante (l'attributaire est une donnée du **dispatch**, dérivée à la création, jamais
+> une déclaration du client).
 
 **Champs `ExamenDto`**
 
@@ -2117,9 +2261,9 @@ les jalons naissent des flux internes (alertes J-7 / J-1), aucun profil métier 
 | GET | /api/examens | — | `ExamenDto[]` | 200 | Authentifié (filtré) |
 | GET | /api/examens/{id} | — | `ExamenDto` | 200, 404 | Authentifié (filtré) |
 | POST | /api/examens | `ExamenDto` | `ExamenDto` | 201, 400, 403 | MEMBRE (titulaire/délégué) |
-| PUT | /api/examens/{id} | `ExamenDto` | `ExamenDto` | 200, 400, 403, 404 | MEMBRE (titulaire/délégué) |
+| PUT | /api/examens/{id} | `ExamenDto` | `ExamenDto` | 200, 400, 403, 404, 409 | MEMBRE (titulaire/délégué) |
 | DELETE | /api/examens/{id} | — | — | 204, 404 | ADMINISTRATEUR |
-| POST | /api/examens/{id}/soumettre | `ExamenSoumissionRequest` | `PvExamenDto` | 201, 400, 403, 404 | MEMBRE |
+| POST | /api/examens/{id}/soumettre | `ExamenSoumissionRequest` | `PvExamenDto` | 201, 400, 403, 404 | MEMBRE (titulaire/délégué) |
 
 `{id}` = idExamen (number).
 
@@ -2231,8 +2375,8 @@ de PV). Lecture filtrée par profil/localité. Cycle : `BROUILLON → SOUMIS →
 | POST | /api/lettre-renvois | `LettreRenvoiDto` | `LettreRenvoiDto` | 201, 400, 403 | **CHEF_COMMISSION / PRESIDENT** (⚠️ 2026-08-01) — création à la clôture de navette (BROUILLON) |
 | PUT | /api/lettre-renvois/{id} | `LettreRenvoiDto` | `LettreRenvoiDto` | 200, 400, 404, 409 | **CHEF_COMMISSION / PRESIDENT** (brouillon : corps) |
 | POST | /api/lettre-renvois/{id}/soumettre | — | `LettreRenvoiDto` | 200, 403, 404, 409 | **CHEF_COMMISSION / PRESIDENT** (BROUILLON→SOUMIS) |
-| POST | /api/lettre-renvois/{id}/signer | — | `LettreRenvoiDto` | 200, 403, 404, 409 | **CHEF_COMMISSION** (toutes localités) ou **PRESIDENT** (localité **centrale ANT** uniquement) — voir règle |
-| DELETE | /api/lettre-renvois/{id} | — | — | 204, 404 | ADMINISTRATEUR |
+| POST | /api/lettre-renvois/{id}/signer | — | `LettreRenvoiDto` | 200, 403, 404, 409 | **CHEF_COMMISSION** (**de la localité du dossier**) ou **PRESIDENT** (localité **centrale ANT** uniquement) — voir règle |
+| DELETE | /api/lettre-renvois/{id} | — | — | 204, 404, 409 | ADMINISTRATEUR |
 
 > **Scoping `GET /api/lettre-renvois`** : MEMBRE → **ses** lettres (par ses examens) ; CHEF_COMMISSION →
 > lettres `SOUMIS` de sa localité ; ASSISTANT_CONTROLEUR → lettres `SIGNE` de sa localité ;
@@ -2258,11 +2402,16 @@ de PV). Lecture filtrée par profil/localité. Cycle : `BROUILLON → SOUMIS →
 > 403 pour l'UGPM, qui n'a ni liste ni badge) ne compte que les lettres `SIGNE` **non encore lues par
 > elle-même** (voir KPIs / `CompteursPrmpDto`).
 >
-> **Signature selon la localité (⚠️ règle ajoutée).** La localité de la lettre est celle du **dossier**
-> (`idLocalite`), avec **repli** sur la localité de **réception** si absente. Localité **centrale `ANT`** →
-> signature par **CC ou Président** ; localité **régionale** (toute autre) → **Chef de Commission
-> uniquement** (Président → **403**, message « Seul le Chef de Commission peut signer une lettre de renvoi
-> pour une localité régionale. »).
+> **Signature selon la localité (⚠️ règle ajoutée ; garde CC complétée le 2026-08-27, audit lot B).** La
+> localité de la lettre est celle du **dossier** (`idLocalite`), avec **repli** sur la localité de
+> **réception** si absente. Localité **centrale `ANT`** → signature par **CC ou Président** ; localité
+> **régionale** (toute autre) → **Chef de Commission uniquement** (Président → **403**, message « Seul
+> le Chef de Commission peut signer une lettre de renvoi pour une localité régionale. »). **Pour une
+> lettre régionale, le CC doit en plus être celui de la commission concernée** : la garde ne vérifiait
+> jusqu'ici que le **profil**, pas la localité du CC lui-même — n'importe quel Chef de Commission
+> signait donc la lettre d'une **autre** commission (le PDF porte pourtant l'en-tête et la ligne « Le
+> Chef de la Commission Régionale des Marchés » de la localité du dossier). `Visibilite.exigerLocalite`
+> est désormais appliquée sur la localité du dossier → **403** pour un CC hors de sa commission.
 >
 > **Document PDF (⚠️ règle ajoutée).** À la signature, le **PDF** de la lettre est **généré** puis **stocké
 > sur le système de fichiers (FSX)** dans le répertoire **`LR/`** (`storage.lettre-renvoi.path`), sous le nom
@@ -2277,6 +2426,10 @@ de PV). Lecture filtrée par profil/localité. Cycle : `BROUILLON → SOUMIS →
 > un rendu **fidèle au modèle** (positionnement des pointillés d'en-tête et du signataire conformes à Word).
 > La mise en forme et l'**emblème** du modèle sont conservés ; le nom du signataire remplace uniquement le
 > placeholder (aucun libellé de rôle ajouté). _Pré-requis machine/CI : Microsoft Word installé (automation COM)._
+
+> ⚠️ **Suppression refusée si signée (2026-08-27, audit lot B).** `DELETE /{id}` n'efface plus qu'une
+> lettre encore `BROUILLON` ou `SOUMIS` — **409** dès `SIGNE` : une lettre signée a été notifiée à la
+> PRMP, a suspendu l'examen et a son PDF sur le FSX, elle ne part plus comme un simple brouillon.
 
 ---
 
@@ -2407,7 +2560,24 @@ système).
 ---
 
 ## Journaux d'audit
-**Ressource** `/api/audit-logs` — Réservé à `ADMINISTRATEUR` pour **toutes** les opérations (lecture comprise). Le journal est alimenté **automatiquement** par le système. **DELETE interdit → 409** (journal immuable, §3.8).
+**Ressource** `/api/audit-logs` — Réservé à `ADMINISTRATEUR` pour **toutes** les opérations (lecture comprise). Le journal est alimenté **automatiquement** par le système. **Les trois verbes d'écriture (POST, PUT, DELETE) sont refusés en 409** (journal immuable, §3.8, ⚠️ complété 2026-08-27).
+
+> ⚠️ **Immuabilité complétée à POST/PUT (2026-08-27, audit lot A).** Seul `DELETE` était refusé jusqu'ici :
+> `PUT` réécrivait la **totalité** de la preuve (date, acteur, table, type d'action, ancienne/nouvelle
+> valeur, IP, session) et `POST` permettait d'y **insérer des entrées forgées** — un journal
+> réinscriptible ne prouve plus rien. `create()` et `update()` renvoient désormais le **même 409**
+> que `delete()`. Les routes existent toujours (réservées Admin), elles répondent juste **409**
+> systématiquement plutôt qu'un succès : ce n'est pas un retrait de route (pas de 405). La **seule**
+> voie d'écriture réelle reste l'intercepteur HTTP interne (`enregistrer()`, hors API), appelé après
+> chaque écriture réussie.
+
+> ⚠️ **Lecture paginée et filtrée (2026-08-27, audit lot D).** `GET /api/audit-logs?page=&size=` accepte
+> en plus les filtres **`table`** et **`acteur`** (égalité **exacte**, pas une recherche partielle) et
+> **`du`**/**`au`** (`AAAA-MM-JJ`, **bornes incluses** — `au` inclut la journée entière ; absent/vide =
+> pas de filtre sur ce critère). **Tri imposé par le serveur** : `dateAction` **décroissant**, le
+> `sort` éventuel du `Pageable` client est **ignoré** (seuls `page`/`size` sont pris en compte). Sans
+> `page`, la **liste plate reste plafonnée aux 500 entrées les plus récentes** (`t_audit_log` croît
+> d'une ligne par écriture API — un `findAll()` non borné n'a plus sa place ici).
 
 **Champs `AuditLogDto`**
 
@@ -2429,10 +2599,11 @@ système).
 
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
-| GET | /api/audit-logs | — | `AuditLogDto[]` | 200 | ADMINISTRATEUR |
+| GET | /api/audit-logs | — | `AuditLogDto[]` | 200 | ADMINISTRATEUR — **plafonné aux 500 plus récentes** |
+| GET | /api/audit-logs?page=&size=[&table=][&acteur=][&du=][&au=] | — | `Page<AuditLogDto>` | 200 | ADMINISTRATEUR — tri `dateAction desc` imposé |
 | GET | /api/audit-logs/{id} | — | `AuditLogDto` | 200, 404 | ADMINISTRATEUR |
-| POST | /api/audit-logs | `AuditLogDto` | `AuditLogDto` | 201, 400, 403 | ADMINISTRATEUR |
-| PUT | /api/audit-logs/{id} | `AuditLogDto` | `AuditLogDto` | 200, 400, 404 | ADMINISTRATEUR |
+| POST | /api/audit-logs | `AuditLogDto` | — | **409 (interdit)** | ADMINISTRATEUR |
+| PUT | /api/audit-logs/{id} | `AuditLogDto` | — | **409 (interdit)** | ADMINISTRATEUR |
 | DELETE | /api/audit-logs/{id} | — | — | **409 (interdit)** | ADMINISTRATEUR |
 
 `{id}` = idLog (number).
@@ -2854,9 +3025,9 @@ active (`t_prmp_entite.ACTIF`) sur l'entité contractante du dossier. C'est ce s
 | idPpm | number | Oui | @NotNull |
 | designationMarche | string | Non | max 500 |
 | numCompte | string | Non | max 20 |
-| montEstim | number | Non | |
-| ancienMontEstim | number | Non | |
-| nouvMontEstim | number | Non | |
+| montEstim | number | Non | ⚠️ **borné (2026-08-27, audit lot B)** — `@PositiveOrZero` (négatif refusé) + `@Digits(integer=36, fraction=2)`, calé sur la colonne réelle `numeric(38,2)` — sinon **400** |
+| ancienMontEstim | number | Non | mêmes bornes que `montEstim` — **400** sinon |
+| nouvMontEstim | number | Non | mêmes bornes que `montEstim` — **400** sinon |
 | financement | string | Non | max 20 |
 | statut | string | Non | max 20 |
 | idNature | number | Non | nature du marché |
@@ -2871,7 +3042,7 @@ active (`t_prmp_entite.ACTIF`) sur l'entité contractante du dossier. C'est ce s
 | GET | /api/marches/{id} | — | `MarcheDto` | 200, 403, 404 | Authentifié (dans son périmètre) |
 | POST | /api/marches | `MarcheDto` | `MarcheDto` | 201, 400 | Authentifié |
 | PUT | /api/marches/{id} | `MarcheDto` | `MarcheDto` | 200, 400, 404, 409 | Authentifié |
-| PATCH | /api/marches/{id}/rectifier | `MarcheDto` | `MarcheDto` | 200, 403, 404, 409 | PRMP (propriétaire) |
+| PATCH | /api/marches/{id}/rectifier | `MarcheDto` | `MarcheDto` | 200, 400, 403, 404, 409 | PRMP (propriétaire) |
 | DELETE | /api/marches/{id} | — | — | 204, 403, 404, 409 | PRMP (propriétaire, brouillon) — ⚠️ cascade prévisions + bénéficiaires + lots/tranches |
 
 `{id}` = idDetail (number).
@@ -2882,7 +3053,17 @@ active (`t_prmp_entite.ACTIF`) sur l'entité contractante du dossier. C'est ce s
 > `POST /api/dossiers/{id}/resoumettre`). Hors `EN_ATTENTE_DECISION_PRMP` → **409** ; non-propriétaire → **403** ;
 > profil **PRMP strict** (Admin/vérificateur → **403**). Identité **figée** (idDossier, idPpm — **non requis** dans
 > le corps, ignorés s'ils sont envoyés ; le PATCH ne valide pas ces champs). Le `idMode` fourni est conservé
-> tel quel. Tracé `t_audit_log` (`MODIFICATION_RECTIFICATION`, `NOM_TABLE=t_marche`).
+> tel quel — **jamais revalidé** (aucun ensemble de modes autorisés n'existe plus, cf. note ci-dessous).
+> Tracé `t_audit_log` (`MODIFICATION_RECTIFICATION`, `NOM_TABLE=t_marche`).
+>
+> ⚠️ **Validation du contenu, sans les champs d'identité (2026-08-27, audit lot B).** Avec le PATCH PPM,
+> c'était le **seul** `RequestBody` du dépôt sans aucune validation — un montant négatif traversait la
+> rectification et remontait tel quel dans les cumuls KPI. Un `@Valid` nu aurait cassé le PATCH (le
+> corps n'y porte pas les champs d'identité obligatoires au POST/PUT). Un groupe de validation dédié,
+> **`GroupeRectification`**, valide désormais le **contenu** (bornes de `montEstim` et consorts) sans
+> exiger l'identité — les `@NotNull`/`@NotBlank` d'identité restent au seul groupe par défaut (POST/PUT).
+> ⚠️ Le **verrou de version n'est pas ajouté** à ce PATCH : la façade front passe par `PUT /api/saisies`
+> sans `version` (dette documentée dans `docs/plan-conflit-version.md`).
 
 > ⚠️ **`formeMarche` — forme du marché (règle ajoutée 2026-07-18).** Champ de `MarcheDto` (colonne
 > `t_marche.FORME_MARCHE`), liste fermée : **`A_COMMANDE`** (« Marché à commande »), **`CONTRAT_CADRE`**
@@ -3218,8 +3399,8 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 
 | Champ (JSON) | Type | Obligatoire | Contraintes |
 |---|---|---|---|
-| ancienMotDePasse | string | Oui | @NotBlank |
-| nouveauMotDePasse | string | Oui | @NotBlank, min 8, max 72 |
+| ancienMotDePasse | string | Oui | @NotBlank — simple preuve d'identité, **pas** de contrainte de complexité |
+| nouveauMotDePasse | string | Oui | 8-72 caractères, **au moins une lettre et un chiffre** (⚠️ règle 2026-08-27, voir *Authentification*) |
 
 **Champs `MessageResponse`** (réponse)
 
@@ -3367,7 +3548,7 @@ immuable). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **40
 | GET | /api/notifications/mes/non-lues/count | — | `{ "nonLues": number }` | 200 | Authentifié (scopé) |
 | POST | /api/notifications/{id}/lu | — | `NotificationDto` | 200, 403, 404 | Destinataire |
 | POST | /api/notifications/lire-tout | — | `{ "traitees": number }` | 200 | Authentifié (scopé) |
-| GET | /api/notifications | — | `NotificationDto[]` | 200, 403 | ADMINISTRATEUR |
+| GET | /api/notifications | — | `NotificationDto[]` | 200, 403 | ADMINISTRATEUR — ⚠️ **plafonné aux 500 plus récentes** (`dateEnvoi desc`, 2026-08-27, audit lot D — un `findAll()` non borné n'a plus sa place sur une table à croissance illimitée) |
 | GET | /api/notifications/{id} | — | `NotificationDto` | 200, 403, 404 | ADMINISTRATEUR |
 | POST | /api/notifications | `NotificationDto` | `NotificationDto` | 201, 400, 403 | ADMINISTRATEUR |
 | PUT | /api/notifications/{id} | `NotificationDto` | `NotificationDto` | 200, 400, 403, 404 | ADMINISTRATEUR |
@@ -3515,7 +3696,7 @@ immuable). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **40
 |---|---|---|---|
 | idPpm | number | Oui (PK, au POST) | clé primaire |
 | idDossier | number | Oui | @NotNull |
-| exercice | number | Oui | @NotNull |
+| exercice | number | Oui | @NotNull, ⚠️ **borné 2000-2100 (2026-08-27, audit lot B)** — sinon **400** (fenêtre large, écarte seulement la faute de frappe ; l'exercice est recopié dans la référence officielle du dossier et dans les filtres) |
 | signataire | string | Oui | @NotBlank, max 210 (auto-rempli « prénoms + nom » PRMP, couvre prénoms 100 + nom 100 + marge ; idem `EditionPpmRequest`) |
 | dateSignature | string (date) | Oui | @NotNull |
 | datePpmInit | string (date) | Non | |
@@ -3540,7 +3721,7 @@ immuable). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **40
 | GET | /api/ppms/{id} | — | `PpmDto` | 200, 403, 404 | Authentifié (dans son périmètre) |
 | POST | /api/ppms | `PpmDto` | `PpmDto` | 201, 400 | Authentifié |
 | PUT | /api/ppms/{id} | `PpmDto` | `PpmDto` | 200, 400, 404, 409 | Authentifié |
-| PATCH | /api/ppms/{id}/rectifier | `PpmDto` | `PpmDto` | 200, 403, 404, 409 | PRMP (propriétaire) |
+| PATCH | /api/ppms/{id}/rectifier | `PpmDto` | `PpmDto` | 200, 400, 403, 404, 409 | PRMP (propriétaire) |
 | DELETE | /api/ppms/{id} | — | — | 204, 403, 404, 409 | PRMP (propriétaire, brouillon) — ⚠️ cascade marchés + prévisions ; **+ dossier si brouillon vide** |
 
 `{id}` = idPpm (number).
@@ -3557,7 +3738,9 @@ immuable). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **40
 > par le brouillon**. Statut du dossier **inchangé** (reste `EN_ATTENTE_DECISION_PRMP` jusqu'à
 > `POST /api/dossiers/{id}/resoumettre`). Hors `EN_ATTENTE_DECISION_PRMP` → **409** ; non-propriétaire → **403** ;
 > profil **PRMP strict** (Admin/vérificateur → **403**). Identité **figée** (idDossier, idPrmp, idLocalite —
-> **non requis** dans le corps, ignorés s'ils sont envoyés ; le PATCH ne valide pas ces champs).
+> **non requis** dans le corps, ignorés s'ils sont envoyés ; le PATCH ne valide pas ces champs, mais
+> **valide le contenu** — `GroupeRectification`, même mécanisme que `marches/{id}/rectifier` : `exercice`
+> hors 2000-2100 → **400**, ⚠️ 2026-08-27).
 > Tracé `t_audit_log` (`MODIFICATION_RECTIFICATION`, `NOM_TABLE=t_ppm`).
 > *(DAO/MAOO : sans contenu éditable, donc non concernés. Les lignes de marché se corrigent via
 > `PATCH /api/marches/{id}/rectifier` ; pas d'ajout/suppression de lignes en rectification.)*
@@ -3789,7 +3972,7 @@ immuable). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **40
 
 | Champ (JSON) | Type | Obligatoire | Contraintes |
 |---|---|---|---|
-| imActeur | string | Oui | @NotBlank, max 7. **Non utilisé pour l'identité** : `signer` enregistre l'utilisateur authentifié (JWT), pas ce champ |
+| imActeur | string | Non (⚠️ **facultatif depuis 2026-08-27**) | max 7 — **ignoré** : toute action (soumettre/retourner/accepter/signer) enregistre l'**utilisateur authentifié** (JWT), jamais ce champ. Portait `@NotBlank` avant ce chantier ; la contrainte a été retirée puisqu'elle n'avait plus aucun effet — conservé pour compatibilité ascendante avec les clients qui l'envoient encore |
 | commentaire | string | Conditionnel | obligatoire pour `retourner` (sinon 409) |
 | role | string | Conditionnel | max 20 — obligatoire pour `signer` : `MEMBRE` / `PRESIDENT` / `CC` |
 | idAvis | string | Conditionnel (⚠️ 2026-08-01) | max 10 — **obligatoire pour `accepter`** (clôture de navette : pose l'avis global du PV, 400 sinon) ; ignoré ailleurs |
@@ -3807,14 +3990,32 @@ immuable). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **40
 | GET | /api/pv-examens/{id} | — | `PvExamenDto` | 200, 404 | Authentifié (filtré) — tout PV (y c. signé) |
 | GET | /api/pv-examens/{id}/document | — | `application/pdf` | 200, 403, 404 | Authentifié (périmètre localité) — **PDF du Projet de PV** |
 | POST | /api/pv-examens | `PvExamenDto` | `PvExamenDto` | 201, 400, 403 | MEMBRE / CC / PRESIDENT |
-| PUT | /api/pv-examens/{id} | `PvExamenDto` | `PvExamenDto` | 200, 400, 404, 409 | MEMBRE / CC / PRESIDENT |
-| DELETE | /api/pv-examens/{id} | — | — | 204, 404 | ADMINISTRATEUR |
-| POST | /api/pv-examens/{id}/soumettre | `PvActionRequest` | `PvExamenDto` | 200, 400, 403, 404, 409 | MEMBRE / CC / PRESIDENT |
-| POST | /api/pv-examens/{id}/retourner | `PvActionRequest` | `PvExamenDto` | 200, 400, 403, 404, 409 | CC / PRESIDENT |
-| POST | /api/pv-examens/{id}/accepter | `PvActionRequest` | `PvExamenDto` | 200, 403, 404, 409 | CC / PRESIDENT |
+| PUT | /api/pv-examens/{id} | `PvExamenDto` | `PvExamenDto` | 200, 400, 403, 404, 409 | MEMBRE / CC / PRESIDENT — **rédacteur du projet** (voir note) |
+| DELETE | /api/pv-examens/{id} | — | — | 204, 404, 409 | ADMINISTRATEUR — **409 si archivé** |
+| POST | /api/pv-examens/{id}/soumettre | `PvActionRequest` | `PvExamenDto` | 200, 400, 403, 404, 409 | MEMBRE / CC / PRESIDENT — **rédacteur du projet** |
+| POST | /api/pv-examens/{id}/retourner | `PvActionRequest` | `PvExamenDto` | 200, 400, 403, 404, 409 | CC / PRESIDENT — **CC de la localité du dossier** |
+| POST | /api/pv-examens/{id}/accepter | `PvActionRequest` | `PvExamenDto` | 200, 403, 404, 409 | CC / PRESIDENT — **CC de la localité du dossier** |
 | POST | /api/pv-examens/{id}/signer | `PvActionRequest` | `PvExamenDto` | 200, 400, 403, 404, 409 | MEMBRE / CC / PRESIDENT |
+| POST | /api/pv-examens/{id}/archiver | — | `PvExamenDto` | 200, 403, 404, 409 | ASSISTANT_CONTROLEUR (localité) — voir « Archivage » dans *Transmissions SIGMP* |
 
 `{id}` = idPv (number). `soumettre` : BROUILLON|EN_RECTIFICATION→PROJET_SOUMIS ; `retourner` : PROJET_SOUMIS→EN_RECTIFICATION (`commentaire` obligatoire) ; `accepter` : PROJET_SOUMIS→PROJET_ACCEPTE — ⚠️ **clôture de la navette (2026-08-01)** : `idAvis` + `idSecretaireSeance` **obligatoires** (400 sinon ; le serveur pose l'avis global et le secrétaire sur le PV) ; `signer` : passe à SIGNE quand le Membre **et** (le Président **ou** le CC) ont signé — **409 si l'avis global n'est pas posé** (navette non close).
+
+> ⚠️ **Garde d'identité étendue aux chemins secondaires de la navette (2026-08-27, audit lot B).** Le
+> contrôle d'identité n'existait auparavant qu'à la **signature** : les chemins secondaires passaient au
+> travers. `PUT /{id}` et `POST /{id}/soumettre` exigent désormais le **Membre attributaire** (ref du
+> JWT == `pv.imCtrlMembre`), ou un contrôleur d'un **autre profil** couvert par une paire (profil →
+> Membre) **active** de `t_delegation_profil` **et** de la localité du dossier — un Membre titulaire
+> **non attributaire** est refusé (**403**), la délégation ascendante ne joue jamais entre pairs.
+> `POST /{id}/retourner` et `/{id}/accepter` (clôture de navette) sont bornés à la **localité du
+> dossier** (`Visibilite.exigerLocalite`) — un CC d'une autre localité recevait auparavant **200**, il
+> reçoit désormais **403** ; le Président, sans localité, reste compétent partout.
+
+> ⚠️ **Suppression d'un PV — archivé refusé, signé non archivé assumé (2026-08-27, audit lot B).**
+> `DELETE /{id}` refuse (**409**) un PV **archivé** (dossier clôturé, `dateArchivage` renseignée) : il a
+> quitté le circuit, sa suppression n'a plus de sens. Un PV **signé mais pas encore archivé** reste
+> **volontairement supprimable** — c'est la seule porte de sortie pour rattraper un PV signé par erreur
+> (le dossier redescend alors à `EXAMINE` pour qu'un nouveau PV puisse être produit, cf. « Garde-fou de
+> cohérence dossier↔PV » ci-dessous) ; écart signalé par l'audit, laissé en l'état à dessein.
 
 > ⚠️ **Cohérence avis ↔ observations (règle ajoutée 2026-08-01).** À `accepter`, le serveur vérifie la cohérence
 > de l'avis avec les **observations de l'examen** (points de contrôle non conformes **+ pièces jointes non
@@ -3934,8 +4135,26 @@ au dépôt, **aucun archivage** — simple événement tracé).
 > passage** ; Président/Administrateur ne sont pas contraints. Si aucune localité n'est déterminable,
 > aucune contrainte (la réception l'établit).
 >
-> **Pas de réception d'un brouillon** : si le dossier est au statut `BROUILLON` (non soumis), la réception
-> est refusée (→ **409**).
+> ⚠️ **Liste blanche de statuts réceptionnables (2026-08-27, audit lot B) — remplace l'ancien refus
+> « BROUILLON seul ».** `exigerDossierReceptionnable` ne refusait auparavant que `BROUILLON` : tout le
+> reste passait, y compris un dossier déjà bien avancé dans le circuit. Une liste blanche couvre
+> désormais les quatre statuts « avant PV signé » (`SOUMIS`, `PRET_DISPATCH`, `DISPATCHE`, `EXAMINE`) et
+> les trois états d'attente qui appellent un **nouveau passage** (`EN_ATTENTE_PIECES`,
+> `A_REEXAMINER`, `EN_ATTENTE_COMPLEMENTS_DEPOT`) — au-delà (`BROUILLON`, `PV_SIGNE` et suivants), le
+> dossier a quitté le secrétariat → **409**. `PUT /{id}` rejoue la **même** garde (plus l'anti-régression
+> ci-dessous), avant vérifiée uniquement à la création.
+
+> ⚠️ **Anti-régression `complet=true` (2026-08-27, audit lot B).** L'effet `[Auto]` ne protégeait
+> auparavant que `RETIRE`/`CLOTURE` : une réception `complet=true` faisait **régresser** en
+> `PRET_DISPATCH` un dossier déjà `PV_SIGNE`, en vérification ou déjà transmis à SIGMP. La même liste
+> blanche que ci-dessus encadre désormais ce déclenchement.
+
+> ⚠️ **Anti-doublon du passage `INITIAL` (2026-08-27, audit lot B).** Le POST n'imposait pas l'unicité du
+> passage initial (`dejaReceptionne` n'était qu'un test de confort d'écran, non contraignant côté
+> serveur) et le `PUT` ne rejouait aucune précondition. Un **second** passage `INITIAL` (`numPassage`
+> null/1 ou `typePassage="INITIAL"`) sur un dossier qui en a déjà un → **409**. Un passage `RETOUR`
+> reste toujours accepté. La **localité** est contrôlée **avant** l'anti-doublon : hors périmètre, le
+> serveur répond **403** sans révéler l'historique de réception du dossier.
 
 > **Règles (sinon 409)** : `numPassage` ≥ 1 ; `numPassage = 1` ⟺ `typePassage = "INITIAL"`.
 > **Effet `[Auto]`** : si `complet = true`, le dossier passe au statut `PRET_DISPATCH`.
@@ -4368,8 +4587,14 @@ tiers inventé ; l'envoi réel sera branché plus tard.
 
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
-| GET | /api/sigmp-transmissions[?dossier=] | — | `TransmissionSigmpDto[]` | 200 | Authentifié |
+| GET | /api/sigmp-transmissions[?dossier=] | — | `TransmissionSigmpDto[]` | 200 | Authentifié (filtré — voir note) |
 | POST | /api/sigmp-transmissions | `{ idDossier }` | `TransmissionSigmpDto` | 201, 400, 403, 404, 409 | **VERIFICATEUR** (localité du dossier) |
+
+> ⚠️ **Lecture cloisonnée (2026-08-27, audit §3.1/lot A).** `findAll` servait la **table entière** à
+> tout authentifié — avec et sans le filtre `?dossier=`. Bornée désormais par `Visibilite`, comme les
+> dossiers : Président/Administrateur tout, contrôleurs les dossiers visibles de **leur localité**,
+> **PRMP/UGPM rien** (liste vide). Le périmètre par localité n'est **jamais redéfini** ici : il vient
+> de la même source que `GET /api/dossiers` (`DossierRepository.findIdsVisiblesParLocalite`).
 
 > Le **sens est dérivé serveur** de l'avis du PV **signé** du dossier : **cas 1** (dossier `EN_VERIFICATION`,
 > avis ≠ FAVR) — `FAV` → `APPROUVE`, `DEF`/`NSP` → `NON_APPROUVE` ; **cas 2** (dossier `OBSERVATIONS_LEVEES`,
@@ -4411,7 +4636,7 @@ tiers inventé ; l'envoi réel sera branché plus tard.
 | imCtrlVerif | string | Non | max 7 — **ignoré** : identité = JWT (`CurrentUser.ref`) |
 | dateVerif | string (date) | Non | **ignoré** : posée côté serveur (date du jour) |
 | observation | string | Non | max 500 |
-| obsLevees | boolean | Non | `true` → `CLOTURE` ; `false` → `EN_ATTENTE_DECISION_PRMP` + notif PRMP `OBSERVATION_VERIFICATION` + trace audit (si dossier `EN_VERIFICATION`) |
+| obsLevees | boolean | Non | ⚠️ **corrigé** — `true` → `OBSERVATIONS_LEVEES` (**pas** `CLOTURE` : la clôture n'intervient plus qu'à l'archivage du PV, cf. *Transmissions SIGMP*) ; `false` → `EN_ATTENTE_DECISION_PRMP` + notif PRMP `OBSERVATION_VERIFICATION` + trace audit (si dossier `EN_VERIFICATION`). Une fois renseigné (décision prise), la vérification n'est plus supprimable (409, voir *Endpoints*) |
 | motifRectif | string | — (sortie) | max 255 — motif de rectification PRMP, posé serveur à la resoumission ; **lecture seule** (visible côté vérificateur) |
 
 **Endpoints**
@@ -4422,9 +4647,12 @@ tiers inventé ; l'envoi réel sera branché plus tard.
 | GET | /api/verifications/{id} | — | `VerificationDto` | 200, 404 | Authentifié (filtré) |
 | POST | /api/verifications | `VerificationDto` | `VerificationDto` | 201, 400, 403, 409 | VERIFICATEUR strict (service) |
 | PUT | /api/verifications/{id} | `VerificationDto` | `VerificationDto` | 200, 400, 403, 404, 409 | VERIFICATEUR strict (service) |
-| DELETE | /api/verifications/{id} | — | — | 204, 404 | ADMINISTRATEUR |
+| DELETE | /api/verifications/{id} | — | — | 204, 404, 409 | ADMINISTRATEUR |
 
-`{id}` = idVerification (number).
+`{id}` = idVerification (number). ⚠️ **Suppression refusée si décidée (2026-08-27, audit lot B)** :
+un passage dont `obsLevees` est déjà **renseigné** (`true` ou `false`, décision prise — le dossier a
+bougé et a été notifié) → **409** ; un passage encore **inachevé** (`obsLevees` non posé) reste
+supprimable.
 
 **Exemple — requête**
 ```json
