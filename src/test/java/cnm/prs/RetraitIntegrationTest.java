@@ -202,6 +202,63 @@ class RetraitIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("Retrait C3 §3.3/§3.5 — le PV a été signé DEPUIS la demande : l'acceptation est refusée (409) et le circuit signé reste intact")
+    void retrait_accepte_dossierProgresseDepuisLaDemande_409() throws Exception {
+        // ⚠️ Audit 2026-08-27 (C3) — une demande EN_ATTENTE ne suspend pas le circuit : le dossier était
+        // EXAMINE (donc retirable) à la demande, il est PV_SIGNE au moment de la décision.
+        Dossier d = dossier(720, "EXAMINE"); d.setIdLocalite("ANT"); d.setIdPrmp("PRMP001");
+        dossierRepository.save(d);
+        receptionRepository.save(reception(720, 720, "CTRCC1", true));
+        dispatchRepository.save(dispatch(720, 720, "CTRCC1", "CTRMEM"));
+        examenRepository.save(examen(720, 720, "CTRMEM"));
+        cnm.prs.entity.PvExamen pv = new cnm.prs.entity.PvExamen();
+        pv.setIdPv(720); pv.setIdExamen(720); pv.setIdAvis("FAV"); pv.setImCtrlMembre("CTRMEM");
+        pv.setStatutPv("SIGNE"); pv.setNbNavettes(1);
+        pv.setDateSignatureMembre(java.time.LocalDate.now());
+        pv.setDateSignaturePresident(java.time.LocalDate.now());
+        pvExamenRepository.save(pv);
+
+        // La demande, elle, a été enregistrée avant : elle est toujours EN_ATTENTE.
+        int drId = demandeRetraitRepository.save(demandeRetrait(0, 720, "PRMP001")).getIdDemandeRetrait();
+        // Le circuit a progressé entre-temps jusqu'à la signature du PV.
+        Dossier progresse = dossierRepository.findById(720).orElseThrow();
+        progresse.setStatut("PV_SIGNE");
+        dossierRepository.save(progresse);
+
+        // Avant le correctif : 200, dossier ramené en BROUILLON et PV signé DÉTRUIT par la purge.
+        mvc.perform(post("/api/demande-retraits/" + drId + "/accepter").header("Authorization", tokenCc))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message", containsString("caduque")));
+
+        // Rien n'a bougé : ni le statut du dossier, ni le PV signé, ni le reste du circuit.
+        org.junit.jupiter.api.Assertions.assertEquals("PV_SIGNE",
+                dossierRepository.findById(720).orElseThrow().getStatut());
+        assertTrue(pvExamenRepository.existsById(720), "le PV signé survit à la demande caduque");
+        assertTrue(examenRepository.existsById(720), "l'examen n'est pas purgé");
+        assertTrue(receptionRepository.existsById(720), "la réception n'est pas purgée");
+        // La demande reste EN_ATTENTE : le décideur peut la REFUSER (le refus ne touche pas au circuit).
+        org.junit.jupiter.api.Assertions.assertEquals("EN_ATTENTE",
+                demandeRetraitRepository.findById(drId).orElseThrow().getStatut());
+        mvc.perform(post("/api/demande-retraits/" + drId + "/refuser").header("Authorization", tokenCc)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"motif\":\"PV deja signe\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statut").value("REFUSEE"));
+    }
+
+    @Test
+    @DisplayName("Retrait C3 — NON-RÉGRESSION : tant que le dossier reste avant PV signé, l'acceptation passe (200)")
+    void retrait_accepte_dossierEncoreRetirable_ok() throws Exception {
+        Dossier d = dossier(721, "DISPATCHE"); d.setIdLocalite("ANT"); d.setIdPrmp("PRMP001");
+        dossierRepository.save(d);
+        int drId = demandeRetraitRepository.save(demandeRetrait(0, 721, "PRMP001")).getIdDemandeRetrait();
+        mvc.perform(post("/api/demande-retraits/" + drId + "/accepter").header("Authorization", tokenCc))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statut").value("ACCEPTEE"));
+        org.junit.jupiter.api.Assertions.assertEquals("BROUILLON",
+                dossierRepository.findById(721).orElseThrow().getStatut());
+    }
+
+    @Test
     @DisplayName("Demande de retrait — doublon EN_ATTENTE → 409")
     void retrait_creation_doublonEnAttente_409() throws Exception {
         Dossier d = dossier(123, "PRET_DISPATCH"); d.setIdLocalite("ANT"); d.setIdPrmp("PRMP001");

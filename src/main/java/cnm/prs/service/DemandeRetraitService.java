@@ -296,10 +296,15 @@ public class DemandeRetraitService {
     /**
      * Décision d'<strong>acceptation</strong> d'une demande (CC de la localité ou Président).
      * ⚠️ Règle ajoutée — le dossier repasse en {@link StatutDossier#BROUILLON} ; la PRMP est notifiée.
+     *
+     * <p>⚠️ Audit 2026-08-27 (C3) — la précondition d'état est <strong>rejouée ici</strong>
+     * ({@link #exigerDossierEncoreRetirable}) : le circuit avance pendant l'instruction de la demande,
+     * et purger un dossier dont le PV a été signé entre-temps est irréversible.</p>
      */
     public DemandeRetraitDto accepter(Integer id) {
         DemandeRetrait demande = chargerEnAttente(id);
         exigerDecideur(demande);
+        exigerDossierEncoreRetirable(demande);
         demande.setStatut(StatutRetrait.ACCEPTEE.name());
         demande.setImCtrlCc(decideurAuthentifie());      // décideur réel (CC ou Président), JWT
         demande.setDateDecision(LocalDateTime.now());
@@ -349,6 +354,28 @@ public class DemandeRetraitService {
                 StatutRetrait.REFUSEE.name());
         notifierDecision(saved, StatutRetrait.REFUSEE);
         return enrichir(DemandeRetraitMapper.toDto(saved));
+    }
+
+    /**
+     * ⚠️ Audit 2026-08-27, constat critique C3 — la garde « avant PV signé » (§3.3) n'existait qu'à la
+     * <strong>création</strong> de la demande. Or une demande {@code EN_ATTENTE} ne suspend pas le
+     * circuit (§3.1) : le PV pouvait être signé entre la demande et la décision, et l'acceptation
+     * purgeait alors PV, navettes, vérifications et lettres via {@link CircuitCascadeService} — au
+     * mépris de §3.5 (immuabilité du PV signé).
+     *
+     * <p>Le statut est donc <strong>relu en base au moment de la décision</strong> et confronté au même
+     * ensemble unique {@link StatutDossier#NOMS_AVANT_PV_SIGNE} qu'à la création. Le dossier ayant
+     * progressé : <strong>409</strong>, la demande reste {@code EN_ATTENTE} et peut être refusée
+     * ({@link #refuser}), qui ne touche pas au circuit.</p>
+     */
+    private void exigerDossierEncoreRetirable(DemandeRetrait demande) {
+        String statut = demande.getIdDossier() == null ? null
+                : dossierRepository.findById(demande.getIdDossier()).map(Dossier::getStatut).orElse(null);
+        if (!StatutDossier.NOMS_AVANT_PV_SIGNE.contains(statut)) {
+            throw new BusinessRuleException("Le dossier a progressé depuis la demande (statut « " + statut
+                    + " ») : la demande de retrait est caduque. Le retrait n'est plus possible à partir de "
+                    + "la signature du PV (§3.3) — refusez la demande.");
+        }
     }
 
     /** Charge une demande qui doit être {@code EN_ATTENTE} (sinon 409 : déjà traitée). */
