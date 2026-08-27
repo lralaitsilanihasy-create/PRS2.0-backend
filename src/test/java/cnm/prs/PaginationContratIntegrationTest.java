@@ -160,6 +160,57 @@ class PaginationContratIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("Lot D §3 — la page est découpée EN SQL : demander 2 lignes sur 25 ne charge pas "
+            + "les 25 (dossiers, ppms, marchés)")
+    void pagination_decoupeeEnSql_neChargePasToutLeScope() throws Exception {
+        // ⚠️ Audit 2026-08-27 (lot D §3) : Pagination.depuisListe(findAll(), pageable) chargeait et
+        // mappait la table scopée ENTIÈRE à chaque page. Le compteur d'entités chargées par Hibernate
+        // le prouve directement — c'est la seule mesure qui distingue les deux implémentations, la
+        // forme de la réponse étant, elle, volontairement identique.
+        for (int i = 0; i < 25; i++) {
+            Dossier d = dossier(9301 + i, "SOUMIS");
+            d.setIdPrmp("PRMP001");
+            d.setIdLocalite("ANT");
+            dossierRepository.save(d);
+            ppmRepository.save(ppm(9301 + i, 9301 + i, "PRMP001"));
+            marcheRepository.save(marche(9301 + i, 9301 + i, 9301 + i));
+        }
+
+        assertPageDecoupeeEnSql("/api/dossiers", "statut", "SOUMIS");
+        assertPageDecoupeeEnSql("/api/ppms", null, null);
+        assertPageDecoupeeEnSql("/api/marches", null, null);
+    }
+
+    /**
+     * Demande 2 lignes de l'endpoint et vérifie que le serveur n'a pas chargé tout le périmètre pour
+     * les servir. Le seuil (12) laisse la place aux entités techniques de la requête (compte, acteur,
+     * référentiels) tout en restant très en dessous des 25 lignes du périmètre.
+     */
+    private void assertPageDecoupeeEnSql(String url, String param, String valeur) throws Exception {
+        org.hibernate.stat.Statistics stats = entityManager.getEntityManagerFactory()
+                .unwrap(org.hibernate.SessionFactory.class).getStatistics();
+        stats.setStatisticsEnabled(true);
+        entityManager.flush();
+        entityManager.clear();   // le cache de premier niveau masquerait les chargements
+        stats.clear();
+
+        var requete = get(url).header("Authorization", tokenPrmp).param("page", "0").param("size", "2");
+        if (param != null) {
+            requete = requete.param(param, valeur);
+        }
+        mvc.perform(requete)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content", hasSize(2)))
+                .andExpect(jsonPath("$.size").value(2));
+
+        long charges = stats.getEntityLoadCount();
+        org.junit.jupiter.api.Assertions.assertTrue(charges > 0, "statistiques Hibernate actives (" + url + ")");
+        org.junit.jupiter.api.Assertions.assertTrue(charges <= 12,
+                url + " : " + charges + " entités chargées pour 2 lignes demandées — le périmètre "
+                        + "entier (25 lignes) est encore chargé côté serveur");
+    }
+
+    @Test
     @DisplayName("GET /api/actualites?page= : forme Page (Administrateur), 2ᵉ page cohérente")
     void actualites_pagine_forme() throws Exception {
         for (int i = 0; i < 3; i++) {

@@ -3,6 +3,8 @@ package cnm.prs.repository;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -58,6 +60,14 @@ public interface MarcheRepository extends JpaRepository<Marche, Integer> {
             + "(select 1 from Ppm p where p.idPpm = m.idPpm and p.idPrmp = :idPrmp)")
     List<Marche> findVisiblesPourPrmp(@Param("idPrmp") String idPrmp);
 
+    /**
+     * ⚠️ Audit 2026-08-27 (lot D §3) — variante <strong>paginée en SQL</strong> de
+     * {@link #findVisiblesPourPrmp}, même prédicat de périmètre.
+     */
+    @Query("select m from Marche m where exists "
+            + "(select 1 from Ppm p where p.idPpm = m.idPpm and p.idPrmp = :idPrmp)")
+    Page<Marche> findVisiblesPourPrmpPagine(@Param("idPrmp") String idPrmp, Pageable pageable);
+
     /** Vrai si le marché appartient à la PRMP (via son PPM) — contrôle de {@code GET /{id}}. */
     @Query("select (count(m) > 0) from Marche m where m.idDetail = :id and exists "
             + "(select 1 from Ppm p where p.idPpm = m.idPpm and p.idPrmp = :idPrmp)")
@@ -74,6 +84,18 @@ public interface MarcheRepository extends JpaRepository<Marche, Integer> {
               and d.idLocalite = :localite
             """)
     List<Marche> findVisiblesParLocalite(@Param("localite") String localite);
+
+    /**
+     * ⚠️ Audit 2026-08-27 (lot D §3) — variante <strong>paginée en SQL</strong> de
+     * {@link #findVisiblesParLocalite}, même clause {@code where} au mot près.
+     */
+    @Query("""
+            select m from Marche m, Dossier d
+            where d.idDossier = m.idDossier
+              and (d.statut is null or d.statut <> 'BROUILLON')
+              and d.idLocalite = :localite
+            """)
+    Page<Marche> findVisiblesParLocalitePagine(@Param("localite") String localite, Pageable pageable);
 
     /** Vrai si le marché est visible dans la localité (dossier non brouillon, même localité). */
     @Query("""

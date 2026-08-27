@@ -51,6 +51,19 @@ public interface DossierRepository extends JpaRepository<Dossier, Integer> {
     @Query("select d from Dossier d where (:statut is null or d.statut = :statut)")
     List<Dossier> findParStatut(@Param("statut") String statut);
 
+    /**
+     * ⚠️ Audit 2026-08-27 (lot D §3) — variante <strong>paginée en SQL</strong> de
+     * {@link #findParStatut}, filtres famille et sous-type inclus (Président / Administrateur).
+     */
+    @Query("""
+            select d from Dossier d where
+                (:statut is null or d.statut = :statut)
+            and (:type is null or d.idTypeDossier = :type)
+            and (:sousType is null or d.idSousType = :sousType)
+            """)
+    Page<Dossier> findParStatutPagine(@Param("statut") String statut, @Param("type") String type,
+            @Param("sousType") String sousType, Pageable pageable);
+
     /** Comptage des dossiers par statut (pipeline du tableau de bord, §3.2). [statut, nombre] */
     @Query("select d.statut, count(d) from Dossier d group by d.statut")
     List<Object[]> compterParStatut();
@@ -143,6 +156,30 @@ public interface DossierRepository extends JpaRepository<Dossier, Integer> {
             @Param("statut") String statut);
 
     /**
+     * ⚠️ Audit 2026-08-27 (lot D §3) — variante <strong>paginée en SQL</strong> de
+     * {@link #findVisiblesParLocaliteEtStatut}, filtres famille et sous-type inclus. Périmètre
+     * strictement identique à celui de la liste plate correspondante : c'est la même clause
+     * {@code where}, à laquelle s'ajoutent les deux filtres que le service appliquait jusqu'ici en
+     * mémoire, après avoir tout chargé.
+     */
+    @Query("""
+            select d from Dossier d where
+                (d.statut is null or d.statut <> 'BROUILLON')
+            and (:statut is null or d.statut = :statut)
+            and (:type is null or d.idTypeDossier = :type)
+            and (:sousType is null or d.idSousType = :sousType)
+            and (
+                d.idLocalite = :localite
+             or exists (select 1 from Reception r
+                        where r.idDossier = d.idDossier and r.ctrlRecept.idLocalite = :localite)
+             or exists (select 1 from Ppm p
+                        where p.idDossier = d.idDossier and p.idLocalite = :localite))
+            """)
+    Page<Dossier> findVisiblesParLocalitePagine(@Param("localite") String localite,
+            @Param("statut") String statut, @Param("type") String type,
+            @Param("sousType") String sousType, Pageable pageable);
+
+    /**
      * Vrai si le dossier est visible dans la localité donnée — via sa propre localité, sa réception
      * ou son PPM — et qu'il n'est pas un brouillon (les brouillons sont masqués aux contrôleurs).
      */
@@ -184,6 +221,25 @@ public interface DossierRepository extends JpaRepository<Dossier, Integer> {
             """)
     List<Dossier> findVisiblesPourPrmpEtStatut(@Param("idPrmp") String idPrmp,
             @Param("statut") String statut);
+
+    /**
+     * ⚠️ Audit 2026-08-27 (lot D §3) — variante <strong>paginée en SQL</strong> de
+     * {@link #findVisiblesPourPrmpEtStatut}, filtres famille et sous-type inclus. Périmètre
+     * strictement identique à celui de la liste plate correspondante.
+     */
+    @Query("""
+            select d from Dossier d where
+               (:statut is null or d.statut = :statut)
+            and (:type is null or d.idTypeDossier = :type)
+            and (:sousType is null or d.idSousType = :sousType)
+            and (
+               d.idPrmp = :idPrmp
+               or exists (select 1 from Ppm p where p.idDossier = d.idDossier and p.idPrmp = :idPrmp)
+               or exists (select 1 from Marche m, Ppm p2
+                          where m.idDossier = d.idDossier and m.idPpm = p2.idPpm and p2.idPrmp = :idPrmp))
+            """)
+    Page<Dossier> findVisiblesPourPrmpPagine(@Param("idPrmp") String idPrmp, @Param("statut") String statut,
+            @Param("type") String type, @Param("sousType") String sousType, Pageable pageable);
 
     /** Vrai si le dossier appartient à la PRMP (propriétaire {@code t_dossier.ID_PRMP}, ou via PPM/marché). */
     @Query("""

@@ -68,11 +68,31 @@ public class MarcheService {
      * siens</strong> (marchés de ses PPM) ; les contrôleurs ne voient que ceux de <strong>leur
      * localité</strong> (dossier non brouillon) ; tout autre profil (ou sans localité) → liste vide.
      */
-    /** ⚠️ Audit front (2026-08-16) — variante paginée ({@code ?page=&size=}), mêmes filtres de périmètre. */
+    /**
+     * ⚠️ Audit front (2026-08-16) — variante paginée ({@code ?page=&size=}), mêmes filtres de périmètre.
+     *
+     * <p>⚠️ Audit 2026-08-27 (lot D §3) — découpage <strong>en SQL</strong> : {@code t_marche} est la
+     * plus volumineuse des trois tables paginées (une ligne par marché de chaque PPM), et elle était
+     * chargée puis mappée en entier à chaque page demandée. Le périmètre reproduit celui de
+     * {@link #findAll()} branche par branche.</p>
+     */
     @Transactional(readOnly = true)
     public org.springframework.data.domain.Page<MarcheDto> findAllPagine(
             org.springframework.data.domain.Pageable pageable) {
-        return Pagination.depuisListe(findAll(), pageable);
+        org.springframework.data.domain.Pageable page = Pagination.page(pageable, "idDetail");
+        org.springframework.data.domain.Page<Marche> scopees;
+        if (Visibilite.voitTout()) {
+            scopees = repository.findAll(page);
+        } else if (Visibilite.estPrmp()) {
+            String idPrmp = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
+            scopees = idPrmp == null ? org.springframework.data.domain.Page.empty(page)
+                    : repository.findVisiblesPourPrmpPagine(idPrmp, page);
+        } else {
+            String localite = Visibilite.localite().orElse(null);
+            scopees = localite == null ? org.springframework.data.domain.Page.empty(page)
+                    : repository.findVisiblesParLocalitePagine(localite, page);
+        }
+        return scopees.map(MarcheMapper::toDto);
     }
 
     @Transactional(readOnly = true)

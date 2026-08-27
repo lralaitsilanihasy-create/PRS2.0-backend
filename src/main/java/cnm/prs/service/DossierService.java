@@ -180,11 +180,48 @@ public class DossierService {
      */
     /**
      * ⚠️ Audit front (2026-08-16) — variante PAGINÉE de la liste des dossiers ({@code ?page=&size=}) :
-     * mêmes filtres (périmètre + statut/type/sousType), enveloppe {@code Page} (voir {@link Pagination}).
+     * mêmes filtres (périmètre + statut/type/sousType), enveloppe {@code Page}.
+     *
+     * <p>⚠️ Audit 2026-08-27 (lot D §3) — la page est désormais découpée <strong>en SQL</strong>.
+     * Elle passait par {@code Pagination.depuisListe(findAll(…))} : la table scopée entière était
+     * chargée et mappée en DTO à chaque appel, pour n'en rendre que vingt lignes — demander la page 3
+     * coûtait exactement le même travail serveur que de tout télécharger. Les trois branches de
+     * périmètre (Président/Administrateur, PRMP, contrôleur de localité) empruntent maintenant la
+     * variante paginée du <em>même</em> prédicat, et les filtres famille/sous-type, jusqu'ici appliqués
+     * en mémoire après chargement, sont passés à la requête. Forme de la réponse inchangée.</p>
      */
     @Transactional(readOnly = true)
     public Page<DossierDto> findAllPagine(String statut, String type, String sousType, Pageable pageable) {
-        return Pagination.depuisListe(findAll(statut, type, sousType), pageable);
+        String filtre = normaliserStatut(statut);
+        String filtreType = normaliserType(type);
+        String filtreSousType = normaliserSousType(sousType);
+        Pageable page = Pagination.page(pageable, "idDossier");
+        return enrichir(chargerScopeesPaginees(filtre, filtreType, filtreSousType, page)
+                .map(DossierMapper::toDto));
+    }
+
+    /**
+     * Miroir paginé de {@link #chargerScopees} — mêmes branches, mêmes prédicats (§1), le découpage
+     * en plus. Toute évolution du périmètre doit toucher les deux, sous peine de servir une page
+     * dont le contenu ne correspond plus à la liste plate.
+     */
+    private Page<Dossier> chargerScopeesPaginees(String statut, String type, String sousType, Pageable page) {
+        ProfilUtilisateur profil = CurrentUser.profil().orElse(null);
+        if (profil == ProfilUtilisateur.PRESIDENT || profil == ProfilUtilisateur.ADMINISTRATEUR) {
+            return repository.findParStatutPagine(statut, type, sousType, page);
+        }
+        if (Visibilite.estPrmp()) {
+            String idPrmp = CurrentUser.ref().orElse(null);
+            if (idPrmp == null || idPrmp.isBlank()) {
+                return Page.empty(page);
+            }
+            return repository.findVisiblesPourPrmpPagine(idPrmp, statut, type, sousType, page);
+        }
+        String localite = CurrentUser.localite().orElse(null);
+        if (localite == null || localite.isBlank()) {
+            return Page.empty(page);
+        }
+        return repository.findVisiblesParLocalitePagine(localite, statut, type, sousType, page);
     }
 
     @Transactional(readOnly = true)

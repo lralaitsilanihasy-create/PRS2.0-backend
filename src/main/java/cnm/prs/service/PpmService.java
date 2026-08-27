@@ -62,11 +62,33 @@ public class PpmService {
      * ({@code t_ppm.ID_PRMP}) ; les contrôleurs ne voient que ceux de <strong>leur localité</strong>
      * (dossier non brouillon) ; tout autre profil (ou sans localité) → liste vide.
      */
-    /** ⚠️ Audit front (2026-08-16) — variante paginée ({@code ?page=&size=}), mêmes filtres de périmètre. */
+    /**
+     * ⚠️ Audit front (2026-08-16) — variante paginée ({@code ?page=&size=}), mêmes filtres de périmètre.
+     *
+     * <p>⚠️ Audit 2026-08-27 (lot D §3) — découpage <strong>en SQL</strong> : la liste scopée entière
+     * n'est plus chargée ni mappée pour en rendre vingt lignes. Le périmètre reproduit celui de
+     * {@link #findAll()} branche par branche, <strong>exclusion des BROUILLON comprise</strong> pour
+     * la PRMP (les brouillons ont leur propre écran) : c'est bien cette liste-là que la page découpe.
+     * Effet de bord bienvenu : l'enrichissement {@code agpmRequis}, qui interroge les marchés PPM par
+     * PPM, est désormais borné à la taille de la page.</p>
+     */
     @Transactional(readOnly = true)
     public org.springframework.data.domain.Page<PpmDto> findAllPagine(
             org.springframework.data.domain.Pageable pageable) {
-        return Pagination.depuisListe(findAll(), pageable);
+        org.springframework.data.domain.Pageable page = Pagination.page(pageable, "idPpm");
+        org.springframework.data.domain.Page<Ppm> scopees;
+        if (Visibilite.voitTout()) {
+            scopees = repository.findAll(page);
+        } else if (Visibilite.estPrmp()) {
+            String idPrmp = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
+            scopees = idPrmp == null ? org.springframework.data.domain.Page.empty(page)
+                    : repository.findVisiblesParPrmpPagine(idPrmp, page);
+        } else {
+            String localite = Visibilite.localite().orElse(null);
+            scopees = localite == null ? org.springframework.data.domain.Page.empty(page)
+                    : repository.findVisiblesParLocalitePagine(localite, page);
+        }
+        return scopees.map(p -> enrichir(PpmMapper.toDto(p)));
     }
 
     @Transactional(readOnly = true)
