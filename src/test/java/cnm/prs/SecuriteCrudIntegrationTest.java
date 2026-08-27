@@ -35,6 +35,7 @@ import cnm.prs.entity.Localite;
 import cnm.prs.entity.Lot;
 import cnm.prs.entity.Marche;
 import cnm.prs.entity.MarchePrevision;
+import cnm.prs.entity.PieceJointeDossier;
 import cnm.prs.entity.Ppm;
 import cnm.prs.entity.Prmp;
 import cnm.prs.entity.Profile;
@@ -45,6 +46,7 @@ import cnm.prs.entity.ServiceBeneficiaire;
 import cnm.prs.entity.Tranche;
 import cnm.prs.entity.TypeDmc;
 import cnm.prs.entity.TypeDossier;
+import cnm.prs.entity.TypePieceJointe;
 import cnm.prs.enums.ProfilUtilisateur;
 import cnm.prs.enums.StatutDmc;
 import cnm.prs.enums.TypeActeur;
@@ -62,6 +64,7 @@ import cnm.prs.repository.LocaliteRepository;
 import cnm.prs.repository.LotRepository;
 import cnm.prs.repository.MarchePrevisionRepository;
 import cnm.prs.repository.MarcheRepository;
+import cnm.prs.repository.PieceJointeDossierRepository;
 import cnm.prs.repository.PpmRepository;
 import cnm.prs.repository.PrmpRepository;
 import cnm.prs.repository.ProfileRepository;
@@ -72,6 +75,7 @@ import cnm.prs.repository.ServiceBeneficiaireRepository;
 import cnm.prs.repository.TrancheRepository;
 import cnm.prs.repository.TypeDmcRepository;
 import cnm.prs.repository.TypeDossierRepository;
+import cnm.prs.repository.TypePieceJointeRepository;
 import cnm.prs.security.TokenService;
 
 /**
@@ -120,6 +124,8 @@ class SecuriteCrudIntegrationTest extends AbstractIntegrationTest {
     @Autowired private IndicateurPrmpRepository indicateurPrmpRepository;
     @Autowired private TypeDmcRepository typeDmcRepository;
     @Autowired private DossierMecRepository dossierMecRepository;
+    @Autowired private TypePieceJointeRepository typePieceJointeRepository;
+    @Autowired private PieceJointeDossierRepository pieceJointeDossierRepository;
 
     private String tokenPresident;
     private String tokenCc;
@@ -129,6 +135,10 @@ class SecuriteCrudIntegrationTest extends AbstractIntegrationTest {
     private String tokenPrmp1;
     /** PRMP <strong>étrangère</strong> : propriétaire du seul dossier 5002 (BROUILLON), localité TMS. */
     private String tokenPrmp2;
+    /** ⚠️ C1 — pièce jointe du BROUILLON 5001 (PRMP001) : un brouillon est masqué aux contrôleurs. */
+    private int idPieceBrouillon;
+    /** ⚠️ C1 — pièce jointe du dossier 5003 EXAMINE (PRMP001, réceptionné en ANT). */
+    private int idPieceExaminee;
 
     @BeforeEach
     void seed() {
@@ -182,6 +192,14 @@ class SecuriteCrudIntegrationTest extends AbstractIntegrationTest {
 
         indicateurPrmpRepository.save(indicateur(5901, "PRMP001"));
         indicateurPrmpRepository.save(indicateur(5902, "PRMP002"));
+
+        // ⚠️ Audit 2026-08-27 (C1) — une pièce jointe sur le brouillon 5001 et une sur le dossier
+        // examiné 5003, pour éprouver le périmètre de LECTURE (liste, unitaire, contenu binaire).
+        int typePiece = typePieceJointeRepository
+                .save(new TypePieceJointe(null, "Plan de passation des marches", null, true, "DDP", 1, null))
+                .getIdTypePiece();
+        idPieceBrouillon = pieceJointeDossierRepository.save(pieceJointe(5001, typePiece)).getIdPiece();
+        idPieceExaminee = pieceJointeDossierRepository.save(pieceJointe(5003, typePiece)).getIdPiece();
 
         tokenPresident = bearer("CTRPRE", ProfilUtilisateur.PRESIDENT, TypeActeur.CONTROLEUR, "CTRPRE", null);
         tokenCc = bearer("CTRCC1", ProfilUtilisateur.CHEF_COMMISSION, TypeActeur.CONTROLEUR, "CTRCC1", "ANT");
@@ -406,6 +424,63 @@ class SecuriteCrudIntegrationTest extends AbstractIntegrationTest {
         mvc.perform(post("/api/echeances").header("Authorization", tokenAdmin)
                         .contentType(MediaType.APPLICATION_JSON).content(corps))
                 .andExpect(status().isCreated());
+    }
+
+    // ------------------------------------------------------------------
+    // B bis — Pièces jointes de dossier (⚠️ audit 2026-08-27, constat C1)
+    // ------------------------------------------------------------------
+
+    @Test
+    @DisplayName("Pièces jointes C1 §1/§3.1 — la PRMP étrangère n'obtient ni la liste, ni la fiche, ni le CONTENU binaire d'une pièce d'autrui (403)")
+    void piecesJointes_prmpEtrangere_403SurLesTroisLectures() throws Exception {
+        // Avant le correctif, ces trois lectures répondaient 200 à tout authentifié : le contenu du
+        // dossier d'autrui se téléchargeait en itérant sur les identifiants de pièce.
+        mvc.perform(get("/api/piece-jointe-dossiers?dossier=5001").header("Authorization", tokenPrmp2))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/piece-jointe-dossiers/" + idPieceBrouillon).header("Authorization", tokenPrmp2))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/piece-jointe-dossiers/" + idPieceBrouillon + "/contenu")
+                        .header("Authorization", tokenPrmp2))
+                .andExpect(status().isForbidden());
+        // Le dossier examiné de PRMP001 lui est tout aussi fermé (elle n'est ni propriétaire ni de la localité).
+        mvc.perform(get("/api/piece-jointe-dossiers/" + idPieceExaminee + "/contenu")
+                        .header("Authorization", tokenPrmp2))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Pièces jointes C1 §1 — un contrôleur lit les pièces des dossiers de SA localité, jamais celles d'un BROUILLON (403)")
+    void piecesJointes_controleur_localiteOuiBrouillonNon() throws Exception {
+        // Dossier 5003 (EXAMINE, réceptionné en ANT) : le Membre d'ANT lit la fiche et le contenu.
+        mvc.perform(get("/api/piece-jointe-dossiers?dossier=5003").header("Authorization", tokenMembre))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idPiece==" + idPieceExaminee + ")]", hasSize(1)));
+        mvc.perform(get("/api/piece-jointe-dossiers/" + idPieceExaminee + "/contenu")
+                        .header("Authorization", tokenMembre))
+                .andExpect(status().isOk());
+        // Dossier 5001 : un BROUILLON reste invisible aux contrôleurs (§1), pièces comprises.
+        mvc.perform(get("/api/piece-jointe-dossiers?dossier=5001").header("Authorization", tokenMembre))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/piece-jointe-dossiers/" + idPieceBrouillon).header("Authorization", tokenMembre))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Pièces jointes C1 — NON-RÉGRESSION : la PRMP propriétaire et le Président lisent normalement les trois vues")
+    void piecesJointes_proprietaireEtPresident_lecturesOk() throws Exception {
+        mvc.perform(get("/api/piece-jointe-dossiers?dossier=5001").header("Authorization", tokenPrmp1))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idPiece==" + idPieceBrouillon + ")]", hasSize(1)));
+        mvc.perform(get("/api/piece-jointe-dossiers/" + idPieceBrouillon).header("Authorization", tokenPrmp1))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.libellePiece").value("Plan de passation des marches"));
+        mvc.perform(get("/api/piece-jointe-dossiers/" + idPieceBrouillon + "/contenu")
+                        .header("Authorization", tokenPrmp1))
+                .andExpect(status().isOk());
+        // Le Président voit toutes les localités, brouillons compris.
+        mvc.perform(get("/api/piece-jointe-dossiers/" + idPieceBrouillon + "/contenu")
+                        .header("Authorization", tokenPresident))
+                .andExpect(status().isOk());
     }
 
     // ------------------------------------------------------------------
@@ -802,6 +877,21 @@ class SecuriteCrudIntegrationTest extends AbstractIntegrationTest {
         c.setDateTransmission(LocalDateTime.of(2026, 6, 3, 15, 0));
         c.setAccuseReception(false);
         return c;
+    }
+
+    /** Pièce jointe PDF minimale d'un dossier (PK auto) — magic-bytes cohérents avec le format déclaré. */
+    private PieceJointeDossier pieceJointe(int idDossier, int idTypePiece) {
+        PieceJointeDossier p = new PieceJointeDossier();
+        p.setIdDossier(idDossier);
+        p.setIdTypePiece(idTypePiece);
+        p.setNomFichier("plan-" + idDossier + ".pdf");
+        p.setContenu("%PDF-1.4 contenu du dossier ".concat(String.valueOf(idDossier))
+                .getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+        p.setFormat("PDF");
+        p.setTaille(32L);
+        p.setDateUpload(LocalDateTime.of(2026, 6, 1, 9, 0));
+        p.setApresLettreRenvoi(false);
+        return p;
     }
 
     private IndicateurPrmp indicateur(int id, String idPrmp) {

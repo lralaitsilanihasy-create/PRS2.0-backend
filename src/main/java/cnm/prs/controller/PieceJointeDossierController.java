@@ -27,6 +27,11 @@ import cnm.prs.service.PieceJointeDossierService;
  * Contrôleur REST pour la ressource {@code piece-jointe-dossiers} (table {@code t_piece_jointe_dossier}).
  * Upload multipart (part {@code data} JSON + part {@code fichier}) réservé à la PRMP propriétaire ;
  * suppression à la PRMP (dossier BROUILLON) ou à l'Administrateur.
+ *
+ * <p><strong>Lecture</strong> (⚠️ audit 2026-08-27, C1) : ouverte à tous les profils, mais bornée au
+ * <strong>périmètre du dossier parent</strong> dans le service (Président/Administrateur : tout ;
+ * PRMP/UGPM : ses dossiers ; autres contrôleurs : les dossiers non brouillons de leur localité) —
+ * hors périmètre : <strong>403</strong>.</p>
  */
 @RestController
 @RequestMapping("/api/piece-jointe-dossiers")

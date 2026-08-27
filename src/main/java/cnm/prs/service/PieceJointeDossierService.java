@@ -27,11 +27,19 @@ import cnm.prs.repository.DossierRepository;
 import cnm.prs.repository.PieceJointeDossierRepository;
 import cnm.prs.repository.TypePieceJointeRepository;
 import cnm.prs.security.CurrentUser;
+import cnm.prs.security.PerimetreDossier;
 
 /**
  * Logique métier pour {@link PieceJointeDossier} : pièces jointes d'un dossier. Upload multipart
  * validé par magic-bytes (PDF/JPEG/PNG) ; {@code apresLettreRenvoi} distingue les pièces ajoutées
  * après réception d'une lettre de renvoi (dossier SOUMIS/PRET_DISPATCH + {@code idLettre}).
+ *
+ * <p>⚠️ Audit 2026-08-27, constat C1 — §1/§3.1 : les trois <strong>lectures</strong> (liste par
+ * dossier, accès unitaire, téléchargement du contenu) n'avaient <strong>aucun</strong> contrôle de
+ * périmètre alors que l'écriture était correctement gardée : tout authentifié téléchargeait le
+ * binaire de n'importe quelle pièce en itérant sur les identifiants. Elles passent désormais par
+ * {@link PerimetreDossier}, comme toutes les autres ressources enfants d'un dossier (lots,
+ * tranches, bénéficiaires…) — hors périmètre : <strong>403</strong>.</p>
  */
 @Service
 @Transactional
@@ -45,12 +53,16 @@ public class PieceJointeDossierService {
     private final NotificationService notificationService;
     /** ⚠️ Spec « Mandats PRMP » — garde de propriété partagée (attribution OU PRMP en fonction) + vacance. */
     private final DossierIntegriteService dossierIntegrite;
+    /** ⚠️ Audit 2026-08-27 (C1) — périmètre de LECTURE des pièces, résolu sur le dossier parent (§1). */
+    private final PerimetreDossier perimetre;
 
     public PieceJointeDossierService(PieceJointeDossierRepository repository,
             TypePieceJointeRepository typePieceRepository, DossierRepository dossierRepository,
             DispatchRepository dispatchRepository, ControleurRepository controleurRepository,
-            NotificationService notificationService, DossierIntegriteService dossierIntegrite) {
+            NotificationService notificationService, DossierIntegriteService dossierIntegrite,
+            PerimetreDossier perimetre) {
         this.dossierIntegrite = dossierIntegrite;
+        this.perimetre = perimetre;
         this.repository = repository;
         this.typePieceRepository = typePieceRepository;
         this.dossierRepository = dossierRepository;
@@ -59,20 +71,23 @@ public class PieceJointeDossierService {
         this.notificationService = notificationService;
     }
 
+    /** Pièces d'un dossier — ⚠️ C1 : 403 si le dossier est hors du périmètre de lecture (§1). */
     @Transactional(readOnly = true)
     public List<PieceJointeDossierDto> findByDossier(Integer idDossier) {
+        perimetre.controler(idDossier);
         return repository.findByIdDossier(idDossier).stream().map(this::toDtoAvecLibelle).toList();
     }
 
+    /** ⚠️ C1 : le dossier parent est résolu depuis la pièce chargée, puis contrôlé (403 hors périmètre). */
     @Transactional(readOnly = true)
     public PieceJointeDossierDto findById(Integer id) {
-        return toDtoAvecLibelle(exigerExistante(id));
+        return toDtoAvecLibelle(exigerExistanteDansPerimetre(id));
     }
 
-    /** Pièce complète (contenu + format) pour téléchargement. */
+    /** Pièce complète (contenu + format) pour téléchargement — ⚠️ C1 : même périmètre que la lecture. */
     @Transactional(readOnly = true)
     public PieceJointeDossier telecharger(Integer id) {
-        return exigerExistante(id);
+        return exigerExistanteDansPerimetre(id);
     }
 
     /**
@@ -184,6 +199,17 @@ public class PieceJointeDossierService {
     private PieceJointeDossier exigerExistante(Integer id) {
         return repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Pièce jointe introuvable : " + id));
+    }
+
+    /**
+     * ⚠️ Audit 2026-08-27 (C1) — pièce existante <strong>et</strong> dans le périmètre de lecture :
+     * l'{@code idDossier} n'étant pas dans l'URL des lectures unitaires, il est résolu depuis la pièce
+     * chargée avant d'être contrôlé (403 sinon).
+     */
+    private PieceJointeDossier exigerExistanteDansPerimetre(Integer id) {
+        PieceJointeDossier piece = exigerExistante(id);
+        perimetre.controler(piece.getIdDossier());
+        return piece;
     }
 
     /**
