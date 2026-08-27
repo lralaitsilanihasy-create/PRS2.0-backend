@@ -1,5 +1,6 @@
 package cnm.prs.repository;
 
+import java.util.Collection;
 import java.util.List;
 
 import org.springframework.data.domain.Page;
@@ -16,6 +17,12 @@ public interface PpmRepository extends JpaRepository<Ppm, Integer> {
 
     /** PPM rattachés à un dossier (pour résoudre localité/exercice à la soumission, §3.1). */
     List<Ppm> findByIdDossier(Integer idDossier);
+
+    /**
+     * PPM de plusieurs dossiers, en une requête (⚠️ audit 2026-08-27, lot D §6) — résolution EN LOT
+     * de la référence affichée dans les résultats de {@code GET /api/dossiers/recherche}.
+     */
+    List<Ppm> findByIdDossierIn(Collection<Integer> idsDossiers);
 
     /** Vrai si le dossier porte au moins un PPM (cohérence type↔contenu). */
     boolean existsByIdDossier(Integer idDossier);

@@ -47,6 +47,63 @@ public interface DossierRepository extends JpaRepository<Dossier, Integer> {
     /** Dossiers d'une localité, sans bornage de période (rapport « tous les dossiers » du CC). */
     List<Dossier> findByIdLocalite(String idLocalite);
 
+    /**
+     * ⚠️ Audit 2026-08-27 (lot D §6) — <strong>résolution d'une référence</strong>, périmètre
+     * Président / Administrateur. Cherche {@code motif} (déjà en minuscules, déjà entouré de
+     * {@code %}) dans la référence du dossier <em>ou</em> dans celle de son PPM : la topbar affiche
+     * l'une ou l'autre selon que le dossier a été réceptionné ou non, et l'utilisateur saisit ce
+     * qu'il voit. Le nombre de résultats est borné par le {@code Pageable}.
+     *
+     * <p>{@code escape '!'} : le motif est construit à partir d'une saisie libre, où {@code %} et
+     * {@code _} ne doivent pas devenir des jokers.</p>
+     */
+    @Query("""
+            select d from Dossier d
+            where lower(d.refeDossier) like :motif escape '!'
+               or exists (select 1 from Ppm p
+                          where p.idDossier = d.idDossier and lower(p.reference) like :motif escape '!')
+            """)
+    List<Dossier> rechercherParReference(@Param("motif") String motif, Pageable limite);
+
+    /**
+     * ⚠️ Audit 2026-08-27 (lot D §6) — idem, restreint au périmètre de la PRMP : <strong>même
+     * prédicat de propriété</strong> que {@link #findVisiblesPourPrmp} (dossier, PPM ou marché lui
+     * appartenant). Une PRMP ne résout donc jamais la référence d'une autre.
+     */
+    @Query("""
+            select d from Dossier d
+            where (lower(d.refeDossier) like :motif escape '!'
+                or exists (select 1 from Ppm pr
+                           where pr.idDossier = d.idDossier and lower(pr.reference) like :motif escape '!'))
+              and (
+                d.idPrmp = :idPrmp
+                or exists (select 1 from Ppm p where p.idDossier = d.idDossier and p.idPrmp = :idPrmp)
+                or exists (select 1 from Marche m, Ppm p2
+                           where m.idDossier = d.idDossier and m.idPpm = p2.idPpm and p2.idPrmp = :idPrmp))
+            """)
+    List<Dossier> rechercherParReferencePourPrmp(@Param("idPrmp") String idPrmp,
+            @Param("motif") String motif, Pageable limite);
+
+    /**
+     * ⚠️ Audit 2026-08-27 (lot D §6) — idem, restreint à la localité du contrôleur : <strong>même
+     * prédicat</strong> que {@link #findVisiblesParLocalite}, brouillons exclus compris.
+     */
+    @Query("""
+            select d from Dossier d
+            where (lower(d.refeDossier) like :motif escape '!'
+                or exists (select 1 from Ppm pr
+                           where pr.idDossier = d.idDossier and lower(pr.reference) like :motif escape '!'))
+              and (d.statut is null or d.statut <> 'BROUILLON')
+              and (
+                d.idLocalite = :localite
+             or exists (select 1 from Reception r
+                        where r.idDossier = d.idDossier and r.ctrlRecept.idLocalite = :localite)
+             or exists (select 1 from Ppm p
+                        where p.idDossier = d.idDossier and p.idLocalite = :localite))
+            """)
+    List<Dossier> rechercherParReferenceParLocalite(@Param("localite") String localite,
+            @Param("motif") String motif, Pageable limite);
+
     /** Tous les dossiers, filtrés par statut si fourni (Président/Admin). {@code statut=null} → tous. */
     @Query("select d from Dossier d where (:statut is null or d.statut = :statut)")
     List<Dossier> findParStatut(@Param("statut") String statut);

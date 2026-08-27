@@ -6,13 +6,17 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 import cnm.prs.dto.ActionDossierDto;
 import cnm.prs.dto.DossierDto;
 import cnm.prs.dto.EchangeDto;
+import cnm.prs.dto.RechercheDossierDto;
 import cnm.prs.entity.AuditLog;
 import cnm.prs.entity.Controleur;
 import cnm.prs.entity.Dossier;
@@ -79,6 +84,11 @@ public class DossierService {
     private static final String FAMILLE_DDP = DossierIntegriteService.FAMILLE_DDP;
     /** Code du type de pièce AGPM dans le référentiel {@code t_type_piece_jointe} (obligation conditionnelle). */
     private static final String CODE_PIECE_AGPM = "AGPM";
+
+    /** ⚠️ Lot D §6 — longueur minimale d'une recherche de référence : en deçà, elle ne discrimine rien. */
+    private static final int LONGUEUR_MIN_RECHERCHE = 2;
+    /** ⚠️ Lot D §6 — plafond de résultats : une barre de recherche propose, elle ne liste pas. */
+    private static final int MAX_RESULTATS_RECHERCHE = 10;
 
     private final DossierRepository repository;
     private final PpmRepository ppmRepository;
@@ -222,6 +232,76 @@ public class DossierService {
             return Page.empty(page);
         }
         return repository.findVisiblesParLocalitePagine(localite, statut, type, sousType, page);
+    }
+
+    /**
+     * ⚠️ Audit 2026-08-27 (lot D §6 — <strong>ajout de contrat</strong>) — résolution d'une saisie en
+     * dossier(s), pour la barre de recherche de la topbar.
+     *
+     * <p>Le front téléchargeait, à chaque recherche, la liste COMPLÈTE des dossiers <em>et</em> celle
+     * des PPM, puis cherchait la référence en JavaScript ({@code main-layout.ts:138}). Deux listes
+     * entières transférées et parsées pour retrouver une ligne. Cet endpoint fait le travail côté
+     * serveur et ne rend que l'essentiel.</p>
+     *
+     * <p><strong>Un seul endpoint</strong>, et non un second pour les PPM : la topbar ne cherche pas
+     * des PPM, elle cherche un DOSSIER dont la référence affichée est, selon l'avancement,
+     * {@code t_dossier.REFE_DOSSIER} (posée à la réception) ou celle de son PPM. La requête couvre
+     * donc les deux, et le champ {@code reference} du résultat rend celle qui est affichée.</p>
+     *
+     * <p><strong>Périmètre</strong> : celui de {@link #findAll} — Président/Administrateur résolvent
+     * tout, la PRMP (et son UGPM) seulement ses dossiers, les contrôleurs ceux de leur localité,
+     * brouillons exclus. Recherche insensible à la casse, sous-chaîne, <strong>10 résultats au
+     * plus</strong> (une barre de recherche n'est pas une liste), les plus récents d'abord.</p>
+     *
+     * @param q saisie de l'utilisateur, <strong>2 caractères minimum</strong>
+     * @throws BadRequestException si {@code q} est absent ou trop court (→ 400) : sous deux
+     *                             caractères, la recherche ramènerait une part arbitraire de la base
+     */
+    @Transactional(readOnly = true)
+    public List<RechercheDossierDto> rechercher(String q) {
+        String saisie = q == null ? "" : q.trim();
+        if (saisie.length() < LONGUEUR_MIN_RECHERCHE) {
+            throw new BadRequestException("La recherche demande au moins " + LONGUEUR_MIN_RECHERCHE
+                    + " caractères.");
+        }
+        String motif = "%" + echapperJokers(saisie.toLowerCase(Locale.ROOT)) + "%";
+        // Les plus récents d'abord : sur une barre de recherche, c'est presque toujours le bon.
+        Pageable limite = PageRequest.of(0, MAX_RESULTATS_RECHERCHE, Sort.by(Sort.Direction.DESC, "idDossier"));
+
+        List<Dossier> trouves;
+        ProfilUtilisateur profil = CurrentUser.profil().orElse(null);
+        if (profil == ProfilUtilisateur.PRESIDENT || profil == ProfilUtilisateur.ADMINISTRATEUR) {
+            trouves = repository.rechercherParReference(motif, limite);
+        } else if (Visibilite.estPrmp()) {
+            String idPrmp = CurrentUser.ref().orElse(null);
+            trouves = (idPrmp == null || idPrmp.isBlank()) ? List.of()
+                    : repository.rechercherParReferencePourPrmp(idPrmp, motif, limite);
+        } else {
+            String localite = CurrentUser.localite().orElse(null);
+            trouves = (localite == null || localite.isBlank()) ? List.of()
+                    : repository.rechercherParReferenceParLocalite(localite, motif, limite);
+        }
+        if (trouves.isEmpty()) {
+            return List.of();
+        }
+        // Référence affichée : celle du dossier, sinon celle de son PPM — résolue EN LOT (1 requête).
+        Map<Integer, String> refPpm = new HashMap<>();
+        for (Ppm ppm : ppmRepository.findByIdDossierIn(trouves.stream().map(Dossier::getIdDossier).toList())) {
+            if (ppm.getReference() != null && !ppm.getReference().isBlank()) {
+                refPpm.putIfAbsent(ppm.getIdDossier(), ppm.getReference());
+            }
+        }
+        return trouves.stream()
+                .map(d -> new RechercheDossierDto(d.getIdDossier(), d.getRefeDossier(),
+                        d.getRefeDossier() != null && !d.getRefeDossier().isBlank()
+                                ? d.getRefeDossier() : refPpm.get(d.getIdDossier()),
+                        d.getIdTypeDossier(), d.getStatut()))
+                .toList();
+    }
+
+    /** Neutralise les jokers {@code LIKE} d'une saisie libre (voir {@code escape '!'} des requêtes). */
+    private static String echapperJokers(String saisie) {
+        return saisie.replace("!", "!!").replace("%", "!%").replace("_", "!_");
     }
 
     @Transactional(readOnly = true)

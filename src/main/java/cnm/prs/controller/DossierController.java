@@ -24,6 +24,7 @@ import cnm.prs.dto.DossierDto;
 import cnm.prs.dto.DossierResoumissionRequest;
 import cnm.prs.dto.EchangeDto;
 import cnm.prs.dto.PpmDto;
+import cnm.prs.dto.RechercheDossierDto;
 import cnm.prs.service.DossierService;
 import cnm.prs.service.PpmService;
 
@@ -66,6 +67,29 @@ public class DossierController {
             @RequestParam(required = false) String type,
             @RequestParam(required = false) String sousType) {
         return service.findAll(statut, type, sousType);
+    }
+
+    /**
+     * ⚠️ Audit 2026-08-27 (lot D §6 — <strong>ajout de contrat</strong>) — résolution d'une référence
+     * pour la barre de recherche de la topbar : {@code GET /api/dossiers/recherche?q=}.
+     *
+     * <p>Le front téléchargeait la liste COMPLÈTE des dossiers <em>et</em> celle des PPM à chaque
+     * recherche, pour retrouver une ligne en JavaScript. Ici, la recherche se fait en base : elle
+     * porte sur la référence du dossier <strong>ou</strong> sur celle de son PPM (la topbar affiche
+     * l'une ou l'autre selon l'avancement), est insensible à la casse, et rend au plus 10 résultats
+     * allégés — un second endpoint pour les PPM serait sans objet, la topbar ne cherchant pas des PPM
+     * mais le dossier derrière la référence.</p>
+     *
+     * <p><strong>Ouvert à tous les profils authentifiés</strong>, comme la liste des dossiers, et
+     * <strong>scopé exactement comme elle</strong> : Président et Administrateur résolvent tout, la
+     * PRMP (et son UGPM) seulement ses dossiers, les autres contrôleurs ceux de leur localité,
+     * brouillons exclus. Aucune référence n'est donc résolue hors périmètre.</p>
+     *
+     * @param q saisie, 2 caractères minimum — en deçà, 400 (la recherche ne discriminerait rien)
+     */
+    @GetMapping("/recherche")
+    public List<RechercheDossierDto> rechercher(@RequestParam(required = false) String q) {
+        return service.rechercher(q);
     }
 
     /** File « à réceptionner » du Secrétaire (§3.4) : dossiers SOUMIS de sa localité sans réception. */
