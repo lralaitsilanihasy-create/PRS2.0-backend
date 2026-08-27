@@ -6,6 +6,7 @@ import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -388,6 +389,19 @@ class RetraitIntegrationTest extends CnmIntegrationTestSupport {
         org.junit.jupiter.api.Assertions.assertEquals("00003/DGB/PPM/2026", apres.getRefeDossier());
         mvc.perform(get("/api/notifications").header("Authorization", tokenAdmin))
                 .andExpect(jsonPath("$[?(@.typeNotif=='RETRAIT_ACCEPTE')]", hasSize(1)));
+        // ⚠️ Audit lot B — la décision était notifiée par E-MAIL SEUL (destinataireRef nul) : invisible
+        // de « mes notifications » dès que l'e-mail du compte diffère de t_prmp.EMAIL_PRMP.
+        mvc.perform(get("/api/notifications/mes").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.typeNotif=='RETRAIT_ACCEPTE')]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.typeNotif=='RETRAIT_ACCEPTE')].idObjet", hasItem(130)));
+
+        // ⚠️ Audit lot B — une demande DÉCIDÉE n'est plus supprimable : sa lettre justifie la décision
+        // (règle 2026-08-17) et lui survit parce que la demande survit.
+        mvc.perform(delete("/api/demande-retraits/" + drId).header("Authorization", tokenAdmin))
+                .andExpect(status().isConflict());
+        org.junit.jupiter.api.Assertions.assertTrue(demandeRetraitRepository.existsById(drId),
+                "la demande décidée est conservée");
     }
 
     @Test

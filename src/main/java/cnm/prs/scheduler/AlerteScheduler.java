@@ -83,7 +83,11 @@ public class AlerteScheduler {
             long joursRestants = ChronoUnit.DAYS.between(today, expiration);
 
             if (PALIERS_MANDAT.contains(joursRestants)) {
-                notificationService.emettre(null, TypeNotification.FIN_MANDAT, null, prmp.getEmailPrmp(),
+                // ⚠️ Audit 2026-08-27 (lot B) — l'alerte partait par e-mail SEUL (destinataireRef null) :
+                // invisible de « mes notifications » dès que l'e-mail du compte diffère de t_prmp.EMAIL_PRMP.
+                // Portée par la PRMP (ref = ID_PRMP), comme PV_SIGNE.
+                notificationService.emettrePrmp(TypeNotification.FIN_MANDAT, prmp.getIdPrmp(),
+                        prmp.getEmailPrmp(), null, null, null,
                         "Fin de mandat dans " + joursRestants + " jours",
                         "Votre mandat PRMP expire le " + expiration + " (J-" + joursRestants + ").");
             } else if (joursRestants <= 0) {

@@ -214,6 +214,27 @@ class SecuriteCrudIntegrationTest extends AbstractIntegrationTest {
     // ------------------------------------------------------------------
 
     @Test
+    @DisplayName("Handler 404 (⚠️ audit lot B) : le message brut d'EntityNotFoundException (nom de classe interne, "
+            + "anglais) ne sort plus ; un 404 métier garde son message français")
+    void handler_entityNotFound_messageGenerique() {
+        var requete = new org.springframework.web.context.request.ServletWebRequest(
+                new org.springframework.mock.web.MockHttpServletRequest("GET", "/api/dossiers/42"));
+        var handler = new cnm.prs.exception.GlobalExceptionHandler();
+
+        var jpa = handler.handleEntityNotFound(
+                new jakarta.persistence.EntityNotFoundException("Unable to find cnm.prs.entity.Dossier with id 42"),
+                requete);
+        org.junit.jupiter.api.Assertions.assertEquals(
+                org.springframework.http.HttpStatus.NOT_FOUND, jpa.getStatusCode());
+        org.junit.jupiter.api.Assertions.assertEquals("Ressource introuvable.", jpa.getBody().message());
+
+        // Le 404 métier, écrit par le service en français, reste rendu tel quel.
+        var metier = handler.handleNotFound(
+                new cnm.prs.exception.ResourceNotFoundException("Dossier introuvable : 42"), requete);
+        org.junit.jupiter.api.Assertions.assertEquals("Dossier introuvable : 42", metier.getBody().message());
+    }
+
+    @Test
     @DisplayName("Lots §1/§3.1 — une PRMP étrangère ne voit que SES lots dans la liste, et reçoit 403 sur le dossier d'autrui")
     void lots_prmpEtrangere_listeScopeeEt403() throws Exception {
         // PRMP002 ne voit que le lot de son propre dossier (5202), jamais ceux de PRMP001 (5201 / 5203).

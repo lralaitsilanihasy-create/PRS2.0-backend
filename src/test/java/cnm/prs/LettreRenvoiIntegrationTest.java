@@ -3,6 +3,7 @@ package cnm.prs;
 import static org.hamcrest.Matchers.hasSize;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -271,6 +272,25 @@ class LettreRenvoiIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(get("/api/lettre-renvois/" + id).header("Authorization", tokenPresident))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.statut").value("SOUMIS"));
+    }
+
+    @Test
+    @DisplayName("Suppression d'une lettre (⚠️ audit lot B) : lettre SIGNÉE → 409 (notifiée à la PRMP, PDF sur le "
+            + "FSX) ; brouillon → 204")
+    void suppression_lettreSignee_refusee() throws Exception {
+        int signee = seedLettreSignee();
+        mvc.perform(delete("/api/lettre-renvois/" + signee).header("Authorization", tokenAdmin))
+                .andExpect(status().isConflict());
+        org.junit.jupiter.api.Assertions.assertTrue(lettreRenvoiRepository.existsById(signee),
+                "la lettre signée est conservée");
+
+        // NON-RÉGRESSION : un brouillon (jamais soumis, jamais notifié) reste supprimable.
+        String creee = mvc.perform(post("/api/lettre-renvois").header("Authorization", tokenCc)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"idExamen\":1}"))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        int brouillon = com.jayway.jsonpath.JsonPath.read(creee, "$.idLettre");
+        mvc.perform(delete("/api/lettre-renvois/" + brouillon).header("Authorization", tokenAdmin))
+                .andExpect(status().isNoContent());
     }
 
     /** Jeton du Chef de commission de TMS (CTRCC2, seedé dans le socle). */

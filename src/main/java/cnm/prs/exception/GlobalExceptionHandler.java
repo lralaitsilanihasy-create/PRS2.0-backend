@@ -34,9 +34,27 @@ public class GlobalExceptionHandler {
      */
     private static final String MESSAGE_ERREUR_INTERNE = "Une erreur interne est survenue.";
 
-    @ExceptionHandler({ ResourceNotFoundException.class, EntityNotFoundException.class })
-    public ResponseEntity<ErrorResponse> handleNotFound(RuntimeException ex, WebRequest request) {
+    /**
+     * 404 métier : le message de {@link ResourceNotFoundException} est écrit par le service, en
+     * français et sans détail technique — il est rendu tel quel.
+     */
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleNotFound(ResourceNotFoundException ex, WebRequest request) {
         return build(HttpStatus.NOT_FOUND, ex.getMessage(), request, null);
+    }
+
+    /**
+     * ⚠️ Audit 2026-08-27 (lot B) — 404 levé par <strong>JPA</strong>
+     * ({@code getReference} sur un identifiant absent) : son message est celui d'Hibernate, en
+     * anglais et portant le <strong>nom de la classe interne</strong>
+     * (« Unable to find cnm.prs.entity.Dossier with id 42 ») — il partait tel quel au client, ce que
+     * la politique de {@link #MESSAGE_ERREUR_INTERNE} interdit précisément pour les 500. Le détail
+     * reste dans les journaux serveur ; le client reçoit un message générique en français.
+     */
+    @ExceptionHandler(EntityNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleEntityNotFound(EntityNotFoundException ex, WebRequest request) {
+        log.warn("Entite JPA introuvable sur {} : {}", uri(request), ex.getMessage());
+        return build(HttpStatus.NOT_FOUND, "Ressource introuvable.", request, null);
     }
 
     @ExceptionHandler(BusinessRuleException.class)

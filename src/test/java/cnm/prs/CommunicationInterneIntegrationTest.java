@@ -216,6 +216,13 @@ class CommunicationInterneIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isOk());
         mvc.perform(get("/api/notifications").header("Authorization", tokenAdmin))
                 .andExpect(jsonPath("$[?(@.typeNotif=='LETTRE_RENVOI_RECUE')]", hasSize(1)));
+        // ⚠️ Audit lot B — la notification était émise par E-MAIL SEUL (destinataireRef nul) : invisible
+        // de « mes notifications » dès que l'e-mail du compte diffère de t_prmp.EMAIL_PRMP. Elle est
+        // désormais portée par la PRMP et pointe son dossier.
+        mvc.perform(get("/api/notifications/mes").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.typeNotif=='LETTRE_RENVOI_RECUE')]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.typeNotif=='LETTRE_RENVOI_RECUE')].idObjet", hasItem(1)));
     }
 
     @Test
