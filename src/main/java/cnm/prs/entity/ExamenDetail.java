@@ -8,6 +8,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -28,6 +29,17 @@ public class ExamenDetail {
     @Id
     @Column(name = "ID_DETAIL_EXAMEN", nullable = false)
     private Integer idDetailExamen;
+
+    /**
+     * Verrou optimiste (⚠️ audit 2026-08-27, lot D §7, migration V9) : le détail d'examen est la ligne
+     * la plus disputée du circuit — c'est ici que se pose, point de contrôle par point de contrôle,
+     * l'avis de conformité. Sans verrou, deux enregistrements successifs se recouvrent en silence et
+     * un point déclaré non conforme peut redevenir conforme sans laisser de trace.
+     * Le champ ne remonte <strong>pas</strong> dans {@code ExamenDetailDto} : contrat HTTP inchangé.
+     */
+    @Version
+    @Column(name = "VERSION", nullable = false)
+    private Integer version;
 
     @Column(name = "ID_EXAMEN", nullable = false)
     private Integer idExamen;

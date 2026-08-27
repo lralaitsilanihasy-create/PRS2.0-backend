@@ -8,6 +8,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.time.LocalDate;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -29,6 +30,16 @@ public class Examen {
     @Id
     @Column(name = "ID_EXAMEN", nullable = false)
     private Integer idExamen;
+
+    /**
+     * Verrou optimiste (⚠️ audit 2026-08-27, lot D §7, migration V9) : l'examen est l'écriture la plus
+     * concurrente du circuit — plusieurs acteurs le remplissent point par point. Une écriture perdante
+     * lève un 409 {@code CONFLIT_VERSION} au lieu d'écraser silencieusement l'avis d'un autre.
+     * Le champ ne remonte <strong>pas</strong> dans {@code ExamenDto} : le contrat HTTP est inchangé.
+     */
+    @Version
+    @Column(name = "VERSION", nullable = false)
+    private Integer version;
 
     @Column(name = "ID_DISPATCH", nullable = false)
     private Integer idDispatch;
