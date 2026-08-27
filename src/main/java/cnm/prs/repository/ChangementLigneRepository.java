@@ -23,6 +23,14 @@ public interface ChangementLigneRepository extends JpaRepository<ChangementLigne
     /** Historique complet d'UNE ligne à travers toutes les versions où elle a bougé. */
     List<ChangementLigne> findByIdLigneOrigineOrderByIdChangementAsc(Integer idLigneOrigine);
 
+    /**
+     * Purge du diff figé d'un dossier supprimé (⚠️ audit 2026-08-27, lot D §2) — la trace est
+     * {@code append-only} tant que sa version existe, mais elle n'a plus d'objet quand le dossier
+     * disparaît : sans cette purge, {@code t_changement_ligne} accumule des lignes dont
+     * {@code ID_DOSSIER} ne désigne plus rien (aucune FK ne l'en empêchait).
+     */
+    long deleteByIdDossier(Integer idDossier);
+
     /** Prochaine PK allouee par la sequence serveur {@code seq_changement_ligne} (allocation atomique). */
     @Query(value = "select nextval('seq_changement_ligne')", nativeQuery = true)
     Long nextIdChangement();

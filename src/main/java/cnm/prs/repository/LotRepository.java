@@ -26,6 +26,14 @@ public interface LotRepository extends JpaRepository<Lot, Integer> {
     long deleteByIdDetail(Integer idDetail);
 
     /**
+     * Balayage de fermeture avant la suppression d'un dossier (⚠️ audit 2026-08-27, lot D §2) :
+     * {@code t_lot} porte DEUX FK, {@code ID_DETAIL → t_marche} et {@code ID_DOSSIER → t_dossier}.
+     * La cascade par marché ({@link #deleteByIdDetail}) ne ferme que la première ; ce balayage garantit
+     * qu'aucun lot ne retient le dossier lui-même.
+     */
+    long deleteByIdDossier(Integer idDossier);
+
+    /**
      * ⚠️ LOT 3a (2026-08-26) — §1/§3.1 : lots des dossiers du périmètre de l'appelant (liste scopée).
      * Les identifiants viennent de {@code PerimetreDossier} ; {@code t_lot} porte {@code ID_DOSSIER}.
      */

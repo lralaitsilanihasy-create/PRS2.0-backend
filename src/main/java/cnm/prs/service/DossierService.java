@@ -39,17 +39,21 @@ import cnm.prs.exception.ErrorResponse;
 import cnm.prs.exception.BusinessRuleException;
 import cnm.prs.exception.ResourceNotFoundException;
 import cnm.prs.mapper.DossierMapper;
+import cnm.prs.repository.AnomalieRepository;
 import cnm.prs.repository.AuditLogRepository;
+import cnm.prs.repository.ChangementLigneRepository;
 import cnm.prs.repository.DemandeRetraitRepository;
 import cnm.prs.repository.DossierRepository;
 import cnm.prs.repository.LettreRenvoiRepository;
+import cnm.prs.repository.LotRepository;
 import cnm.prs.repository.MarchePrevisionRepository;
 import cnm.prs.repository.MarcheRepository;
+import cnm.prs.repository.MessageRepository;
 import cnm.prs.repository.NotificationRepository;
+import cnm.prs.repository.PieceDemandeRetraitRepository;
 import cnm.prs.repository.PieceJointeDossierRepository;
 import cnm.prs.repository.PpmRepository;
 import cnm.prs.repository.PrmpRepository;
-import cnm.prs.repository.ReceptionRepository;
 import cnm.prs.repository.SousTypeDossierRepository;
 import cnm.prs.repository.TypeDossierRepository;
 import cnm.prs.repository.TypePieceJointeRepository;
@@ -87,7 +91,6 @@ public class DossierService {
     private final MarcheRepository marcheRepository;
     private final MarchePrevisionRepository marchePrevisionRepository;
     private final MarcheService marcheService;
-    private final ReceptionRepository receptionRepository;
     private final DemandeRetraitRepository demandeRetraitRepository;
     private final NotificationRepository notificationRepository;
     private final TypePieceJointeRepository typePieceJointeRepository;
@@ -104,12 +107,24 @@ public class DossierService {
     /** ⚠️ Spec « Mandats PRMP » — journal des actions, horodaté par opérateur courant. */
     private final JournalDossierService journalDossier;
 
+    /**
+     * ⚠️ Audit 2026-08-27 (lot D §2) — fermeture de la cascade de suppression. Le circuit passe par
+     * {@link CircuitCascadeService} (ordre FK-safe déjà documenté et testé) ; les cinq repositories qui
+     * suivent ferment les tables que la suppression laissait derrière elle (orphelins ou 409 de FK).
+     */
+    private final CircuitCascadeService circuitCascadeService;
+    private final ChangementLigneRepository changementLigneRepository;
+    private final MessageRepository messageRepository;
+    private final LotRepository lotRepository;
+    private final AnomalieRepository anomalieRepository;
+    private final PieceDemandeRetraitRepository pieceDemandeRetraitRepository;
+
     public DossierService(DossierRepository repository, PpmRepository ppmRepository,
             ControleurDirectory controleurDirectory, NotificationService notificationService,
             DossierIntegriteService dossierIntegrite, VerificationRepository verificationRepository,
             AuditLogRepository auditLogRepository, PrmpRepository prmpRepository,
             MarcheRepository marcheRepository, MarchePrevisionRepository marchePrevisionRepository,
-            ReceptionRepository receptionRepository, DemandeRetraitRepository demandeRetraitRepository,
+            DemandeRetraitRepository demandeRetraitRepository,
             NotificationRepository notificationRepository,
             TypePieceJointeRepository typePieceJointeRepository,
             PieceJointeDossierRepository pieceJointeDossierRepository, MarcheService marcheService,
@@ -117,7 +132,16 @@ public class DossierService {
             LettreRenvoiRepository lettreRenvoiRepository,
             VerificationPieceDepotService verificationPieceDepotService,
             MiseAJourPpmService miseAJourPpmService, JournalDossierService journalDossier,
-            ActeurDirectory acteurDirectory) {
+            ActeurDirectory acteurDirectory, CircuitCascadeService circuitCascadeService,
+            ChangementLigneRepository changementLigneRepository, MessageRepository messageRepository,
+            LotRepository lotRepository, AnomalieRepository anomalieRepository,
+            PieceDemandeRetraitRepository pieceDemandeRetraitRepository) {
+        this.circuitCascadeService = circuitCascadeService;
+        this.changementLigneRepository = changementLigneRepository;
+        this.messageRepository = messageRepository;
+        this.lotRepository = lotRepository;
+        this.anomalieRepository = anomalieRepository;
+        this.pieceDemandeRetraitRepository = pieceDemandeRetraitRepository;
         this.verificationPieceDepotService = verificationPieceDepotService;
         this.miseAJourPpmService = miseAJourPpmService;
         this.journalDossier = journalDossier;
@@ -133,7 +157,6 @@ public class DossierService {
         this.prmpRepository = prmpRepository;
         this.marcheRepository = marcheRepository;
         this.marchePrevisionRepository = marchePrevisionRepository;
-        this.receptionRepository = receptionRepository;
         this.demandeRetraitRepository = demandeRetraitRepository;
         this.notificationRepository = notificationRepository;
         this.typePieceJointeRepository = typePieceJointeRepository;
@@ -473,10 +496,20 @@ public class DossierService {
      * ⚠️ Règle ajoutée — suppression d'un dossier depuis « Mes brouillons » (PRMP propriétaire).
      * Un dossier <strong>{@code BROUILLON}</strong> est <strong>toujours supprimable</strong> (même revenu en
      * brouillon après un circuit incomplet via retrait), sinon <strong>409</strong>. Cascade complète en une
-     * transaction : <strong>contenu</strong> (prévisions → marchés → PPM) + <strong>historique de circuit</strong>
-     * (notifications, demandes de retrait, réceptions — un brouillon n'a jamais dépassé {@code PRET_DISPATCH},
-     * donc des réceptions <em>feuilles</em>, sans dispatch/examen/PV/vérification). Le <strong>journal d'audit</strong>
+     * transaction : <strong>pièces et traces du dossier</strong> → <strong>contenu</strong> (prévisions →
+     * marchés → PPM) → <strong>historique de circuit</strong> → dossier. Le <strong>journal d'audit</strong>
      * ({@code t_audit_log}, immuable §3.8, sans FK) est <strong>conservé</strong>.
+     *
+     * <p>⚠️ Audit 2026-08-27 (lot D §2) — la fermeture était <strong>incomplète</strong> sur deux plans.
+     * <em>Orphelins garantis</em> : {@code t_piece_jointe_dossier} (avec son {@code CONTENU} binaire) et
+     * {@code t_changement_ligne} survivaient à chaque suppression, sans FK pour le signaler ni écran pour
+     * les retrouver. <em>Violations de FK</em> : {@code t_message.ID_DOSSIER}, {@code t_anomalie.ID_DETAIL}
+     * et {@code t_echeance.ID_DETAIL} n'étaient jamais purgées — la suppression échouait alors en 409
+     * « violation de clé étrangère » dès que le brouillon avait réellement circulé, ce que le retrait
+     * accepté rend possible (l'hypothèse « un brouillon n'a jamais dépassé {@code PRET_DISPATCH} » est
+     * périmée). L'historique de circuit passe désormais par {@link CircuitCascadeService#purgerCircuit},
+     * qui applique l'ordre FK-safe déjà documenté et couvre dispatchs, examens, PV, lettres et copies —
+     * pas seulement les réceptions.</p>
      */
     public void delete(Integer id) {
         Dossier dossier = repository.findById(id)
@@ -485,17 +518,31 @@ public class DossierService {
         if (!StatutDossier.BROUILLON.name().equals(dossier.getStatut())) {
             throw new BusinessRuleException("Ce dossier ne peut pas être supprimé.");              // 409
         }
-        // Contenu : sous-lignes de chaque marché (tranches, lots, bénéficiaires, prévisions, DMC) → marchés → PPM(s).
+        // 1. Pièces jointes et trace de diff du dossier (orphelins garantis avant le lot D).
+        pieceJointeDossierRepository.deleteByIdDossier(id);
+        changementLigneRepository.deleteByIdDossier(id);
+        // 2. Historique de circuit COMPLET, dans l'ordre FK-safe du service dédié (observations, examens,
+        //    PV, navettes, vérifications, lettres, copies, dispatchs, réceptions). Un brouillon revenu de
+        //    circuit par retrait accepté en porte encore ; un brouillon jamais soumis n'en a aucun (0 ligne).
+        circuitCascadeService.purgerCircuit(id);
+        // 3. Contenu : sous-lignes de chaque marché (tranches, lots, bénéficiaires, prévisions, DMC,
+        //    anomalies, échéances) → marchés → anomalies du PPM → PPM(s).
         List<Marche> marches = marcheRepository.findByIdDossier(id);
         for (Marche m : marches) {
             marcheService.supprimerSousLignes(m.getIdDetail());   // cascade partagée (inclut t_lot) — pas d'orphelin FK
         }
         marcheRepository.deleteAll(marches);
-        ppmRepository.deleteAll(ppmRepository.findByIdDossier(id));
-        // Historique de circuit (un brouillon ≤ PRET_DISPATCH → réceptions sans dispatch/vérification).
+        for (Ppm ppm : ppmRepository.findByIdDossier(id)) {
+            anomalieRepository.deleteByIdPpm(ppm.getIdPpm());     // t_anomalie.ID_PPM → t_ppm
+            ppmRepository.delete(ppm);
+        }
+        // 4. Balayage de fermeture des dernières FK vers t_dossier : lots (2ᵉ FK), messages,
+        //    notifications, demandes de retrait.
+        lotRepository.deleteByIdDossier(id);
+        messageRepository.deleteByIdDossier(id);
         notificationRepository.deleteByIdDossier(id);
+        pieceDemandeRetraitRepository.deleteParDossier(id);   // PDF des demandes (sans FK) — avant les demandes
         demandeRetraitRepository.deleteByIdDossier(id);
-        receptionRepository.deleteByIdDossier(id);
         journalDossier.purger(id);   // le dossier disparaît : son journal d'actions n'a plus d'objet
         repository.deleteById(id);
     }

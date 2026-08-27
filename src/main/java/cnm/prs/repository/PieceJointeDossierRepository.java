@@ -21,4 +21,12 @@ public interface PieceJointeDossierRepository extends JpaRepository<PieceJointeD
      * 2026-08-02 — garde de {@code …/transmettre-complements} : pas de réexamen sans les pièces).
      */
     boolean existsByIdDossierAndIdLettreAndApresLettreRenvoiTrue(Integer idDossier, Integer idLettre);
+
+    /**
+     * Purge des pièces d'un dossier supprimé (⚠️ audit 2026-08-27, lot D §2) — la suppression d'un
+     * brouillon ne nettoyait pas cette table : chaque dossier supprimé y laissait ses pièces
+     * <strong>et leur contenu binaire</strong> ({@code CONTENU bytea}), sans aucun moyen de les
+     * retrouver. Appelée en tête de la cascade, avant que le dossier disparaisse.
+     */
+    long deleteByIdDossier(Integer idDossier);
 }

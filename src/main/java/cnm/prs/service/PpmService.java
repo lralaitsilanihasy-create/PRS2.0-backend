@@ -11,6 +11,7 @@ import cnm.prs.entity.Marche;
 import cnm.prs.entity.Ppm;
 import cnm.prs.exception.ResourceNotFoundException;
 import cnm.prs.mapper.PpmMapper;
+import cnm.prs.repository.AnomalieRepository;
 import cnm.prs.repository.DemandeRetraitRepository;
 import cnm.prs.repository.DossierRepository;
 import cnm.prs.repository.MarchePrevisionRepository;
@@ -36,12 +37,14 @@ public class PpmService {
     private final ReceptionRepository receptionRepository;
     private final DemandeRetraitRepository demandeRetraitRepository;
     private final MarcheService marcheService;
+    private final AnomalieRepository anomalieRepository;
 
     public PpmService(PpmRepository repository, DossierIntegriteService dossierIntegrite,
             MarcheRepository marcheRepository, MarchePrevisionRepository marchePrevisionRepository,
             AuditLogService auditLogService, DossierRepository dossierRepository,
             ReceptionRepository receptionRepository, DemandeRetraitRepository demandeRetraitRepository,
-            MarcheService marcheService) {
+            MarcheService marcheService, AnomalieRepository anomalieRepository) {
+        this.anomalieRepository = anomalieRepository;
         this.repository = repository;
         this.dossierIntegrite = dossierIntegrite;
         this.marcheRepository = marcheRepository;
@@ -221,6 +224,9 @@ public class PpmService {
             marcheService.supprimerSousLignes(m.getIdDetail());
         }
         marcheRepository.deleteAll(marches);
+        // ⚠️ Audit 2026-08-27 (lot D §2) — t_anomalie porte AUSSI une FK vers t_ppm (ID_PPM) : à purger
+        // avant le PPM, sinon la suppression échoue en 409 dès qu'une anomalie a été détectée sur lui.
+        anomalieRepository.deleteByIdPpm(id);
         repository.deleteById(id);
         // ⚠️ Règle ajoutée — cohérence « Mes brouillons » : si le dossier brouillon devient un
         // BROUILLON PUR (plus aucun PPM ni marché, et SANS historique de circuit : ni réception ni

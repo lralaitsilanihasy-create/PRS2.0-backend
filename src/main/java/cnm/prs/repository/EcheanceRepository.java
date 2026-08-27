@@ -35,6 +35,14 @@ public interface EcheanceRepository extends JpaRepository<Echeance, Integer> {
     @Query("select e from Echeance e, Marche m where m.idDetail = e.idDetail and m.idDossier in :idsDossiers")
     List<Echeance> findParDossiers(@Param("idsDossiers") Collection<Integer> idsDossiers);
 
+    /**
+     * Purge des jalons d'une ligne de marché supprimée (⚠️ audit 2026-08-27, lot D §2) —
+     * {@code t_echeance.ID_DETAIL} porte une FK vers {@code t_marche}, jamais nettoyée : un dossier
+     * revenu en BROUILLON par retrait accepté conserve les échéances posées pendant son circuit, et
+     * sa suppression échouait alors en 409 « violation de clé étrangère ».
+     */
+    long deleteByIdDetail(Integer idDetail);
+
     /** Dossier rattaché à une échéance (via son marché) — contrôle de périmètre d'un accès unitaire. */
     @Query("select m.idDossier from Echeance e, Marche m where e.idEcheance = :id and m.idDetail = e.idDetail")
     Optional<Integer> findIdDossier(@Param("id") Integer id);

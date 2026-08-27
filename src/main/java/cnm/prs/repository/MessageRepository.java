@@ -22,6 +22,15 @@ public interface MessageRepository extends JpaRepository<Message, Integer> {
     @Query("select m from Message m where m.expediteurIm = :ref or m.destinataireIm = :ref order by m.dateEnvoi desc")
     List<Message> findImpliquant(@Param("ref") String ref);
 
+    /**
+     * Purge des messages rattachés à un dossier supprimé (⚠️ audit 2026-08-27, lot D §2) —
+     * {@code t_message.ID_DOSSIER} porte une <strong>vraie FK</strong> vers {@code t_dossier} :
+     * sans cette purge, la suppression d'un brouillon ayant fait l'objet d'un échange (possible
+     * dès qu'il est revenu de circuit par un retrait accepté) échouait en 409 « violation de clé
+     * étrangère ». Appelée avant la suppression du dossier.
+     */
+    long deleteByIdDossier(Integer idDossier);
+
     /** Prochaine PK allouee par la sequence serveur {@code seq_message} (allocation atomique). */
     @Query(value = "select nextval('seq_message')", nativeQuery = true)
     Long nextIdMessage();

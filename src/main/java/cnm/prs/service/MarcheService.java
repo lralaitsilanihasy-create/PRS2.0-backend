@@ -12,6 +12,8 @@ import cnm.prs.entity.Marche;
 import cnm.prs.enums.FormeMarche;
 import cnm.prs.exception.ResourceNotFoundException;
 import cnm.prs.mapper.MarcheMapper;
+import cnm.prs.repository.AnomalieRepository;
+import cnm.prs.repository.EcheanceRepository;
 import cnm.prs.repository.LotRepository;
 import cnm.prs.repository.MarchePrevisionRepository;
 import cnm.prs.repository.MarcheRepository;
@@ -40,11 +42,14 @@ public class MarcheService {
     private final TrancheRepository trancheRepository;
     private final AuditLogService auditLogService;
     private final DmcService dmcService;
+    private final AnomalieRepository anomalieRepository;
+    private final EcheanceRepository echeanceRepository;
 
     public MarcheService(MarcheRepository repository, DossierIntegriteService dossierIntegrite,
             MarchePrevisionRepository marchePrevisionRepository,
             ServiceBeneficiaireRepository serviceBeneficiaireRepository, LotRepository lotRepository,
-            TrancheRepository trancheRepository, AuditLogService auditLogService, DmcService dmcService) {
+            TrancheRepository trancheRepository, AuditLogService auditLogService, DmcService dmcService,
+            AnomalieRepository anomalieRepository, EcheanceRepository echeanceRepository) {
         this.repository = repository;
         this.dossierIntegrite = dossierIntegrite;
         this.marchePrevisionRepository = marchePrevisionRepository;
@@ -53,6 +58,8 @@ public class MarcheService {
         this.trancheRepository = trancheRepository;
         this.auditLogService = auditLogService;
         this.dmcService = dmcService;
+        this.anomalieRepository = anomalieRepository;
+        this.echeanceRepository = echeanceRepository;
     }
 
     /**
@@ -199,7 +206,14 @@ public class MarcheService {
      * enregistrements liés à un marché avant sa suppression : <strong>tranches</strong> de ses lots, puis
      * <strong>lots</strong> (`t_lot`), <strong>bénéficiaires</strong> (`t_service_beneficiaire`) et
      * <strong>dates prévisionnelles</strong> (`t_marche_prevision`). Réutilisée par la suppression d'un PPM.
-     * <em>(Un marché supprimable est BROUILLON — jamais dispatché : ni anomalie ni échéance possibles.)</em>
+     *
+     * <p>⚠️ Audit 2026-08-27 (lot D §2) — le commentaire d'origine (« un marché supprimable est
+     * BROUILLON, jamais dispatché : ni anomalie ni échéance possibles ») reposait sur une hypothèse
+     * <strong>périmée</strong> : depuis que le retrait accepté ramène en {@code BROUILLON} un dossier
+     * qui a bel et bien circulé, ses lignes peuvent porter des <strong>anomalies</strong>
+     * ({@code t_anomalie.ID_DETAIL}) et des <strong>échéances</strong> ({@code t_echeance.ID_DETAIL}),
+     * deux vraies FK vers {@code t_marche}. Leur absence de purge rendait la suppression du brouillon
+     * en 409 « violation de clé étrangère ». Les deux tables ferment désormais la cascade.</p>
      */
     public void supprimerSousLignes(Integer idDetail) {
         dmcService.supprimerPourMarche(idDetail);   // DMC (1-1) de la ligne — cascade applicative
@@ -210,5 +224,7 @@ public class MarcheService {
         lotRepository.deleteByIdDetail(idDetail);
         serviceBeneficiaireRepository.deleteByIdDetail(idDetail);
         marchePrevisionRepository.deleteByIdDetail(idDetail);
+        anomalieRepository.deleteByIdDetail(idDetail);     // ⚠️ lot D §2 — trace de circuit, FK vers t_marche
+        echeanceRepository.deleteByIdDetail(idDetail);     // ⚠️ lot D §2 — jalons du marché, FK vers t_marche
     }
 }
