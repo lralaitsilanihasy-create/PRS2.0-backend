@@ -404,7 +404,10 @@ class ReceptionDispatchIntegrationTest extends CnmIntegrationTestSupport {
     @DisplayName("Garde réception : la 1ʳᵉ réception doit se faire dans la localité du dossier (via ID_LOCALITE)")
     void receptionDansLocaliteDuDossier() throws Exception {
         // Dossier estampillé TMS, aucune réception préalable.
-        Dossier d = dossier(9, "RECU");
+        // ⚠️ Audit 2026-08-27 (lot B) — le statut de la fixture était « RECU », qui n'existe pas dans
+        // StatutDossier : la liste blanche des statuts réceptionnables le refuserait à juste titre.
+        // SOUMIS est l'état réel d'un dossier qui attend sa première réception.
+        Dossier d = dossier(9, "SOUMIS");
         d.setIdLocalite("TMS");
         dossierRepository.save(d);
 
@@ -450,6 +453,123 @@ class ReceptionDispatchIntegrationTest extends CnmIntegrationTestSupport {
         // Un Membre n'y a pas accès → 403.
         mvc.perform(get("/api/dossiers/a-receptionner").header("Authorization", tokenMembre))
                 .andExpect(status().isForbidden());
+    }
+
+    // ------------------------------------------------------------------
+    // Gardes d'état de la réception (⚠️ audit 2026-08-27, lot B — constat 4)
+    // ------------------------------------------------------------------
+
+    @Test
+    @DisplayName("Réception (lot B) — un dossier qui a quitté le secrétariat n'est plus réceptionnable : "
+            + "EN_VERIFICATION et CLOTURE → 409, et aucune régression vers PRET_DISPATCH")
+    void reception_statutsAval_refuses() throws Exception {
+        String tokenSec = bearer("CTRSEC", ProfilUtilisateur.SECRETAIRE, TypeActeur.CONTROLEUR, "CTRSEC", "ANT");
+        dossierRepository.save(dossierLoc(340, "EN_VERIFICATION", "ANT", "PRMP001"));
+        dossierRepository.save(dossierLoc(341, "CLOTURE", "ANT", "PRMP001"));
+
+        mvc.perform(post("/api/receptions").header("Authorization", tokenSec)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDossier\":340,\"numPassage\":1,\"typePassage\":\"INITIAL\","
+                        + "\"imCtrlRecept\":\"CTRSEC\",\"complet\":true}"))
+                .andExpect(status().isConflict());
+        mvc.perform(post("/api/receptions").header("Authorization", tokenSec)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDossier\":341,\"numPassage\":1,\"typePassage\":\"INITIAL\","
+                        + "\"imCtrlRecept\":\"CTRSEC\",\"complet\":true}"))
+                .andExpect(status().isConflict());
+        // Le dossier en vérification n'a pas régressé (avant le correctif : PRET_DISPATCH).
+        mvc.perform(get("/api/dossiers/340").header("Authorization", tokenPresident))
+                .andExpect(jsonPath("$.statut").value("EN_VERIFICATION"));
+    }
+
+    @Test
+    @DisplayName("Réception (lot B) — le PUT rejoue la précondition d'état : corriger une réception d'un dossier "
+            + "passé PV_SIGNE → 409, statut inchangé")
+    void reception_put_rejoueLaGardeDEtat() throws Exception {
+        String tokenSec = bearer("CTRSEC", ProfilUtilisateur.SECRETAIRE, TypeActeur.CONTROLEUR, "CTRSEC", "ANT");
+        Dossier d = dossier(342, "SOUMIS"); d.setIdLocalite("ANT"); d.setIdTypeDossier("DDP");
+        dossierRepository.save(d);
+        String resp = mvc.perform(post("/api/receptions").header("Authorization", tokenSec)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDossier\":342,\"numPassage\":1,\"typePassage\":\"INITIAL\","
+                        + "\"imCtrlRecept\":\"CTRSEC\",\"complet\":false}"))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        int idRec = com.jayway.jsonpath.JsonPath.read(resp, "$.idReception");
+
+        // Le circuit avance jusqu'au PV signé : la réception n'est plus corrigeable.
+        Dossier avance = dossierRepository.findById(342).orElseThrow();
+        avance.setStatut("PV_SIGNE");
+        dossierRepository.save(avance);
+        mvc.perform(put("/api/receptions/" + idRec).header("Authorization", tokenSec)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDossier\":342,\"numPassage\":1,\"typePassage\":\"INITIAL\","
+                        + "\"imCtrlRecept\":\"CTRSEC\",\"complet\":true}"))
+                .andExpect(status().isConflict());
+        mvc.perform(get("/api/dossiers/342").header("Authorization", tokenPresident))
+                .andExpect(jsonPath("$.statut").value("PV_SIGNE"));
+    }
+
+    @Test
+    @DisplayName("Réception (lot B) — un seul passage INITIAL par dossier : le second → 409 ; un RETOUR reste accepté")
+    void reception_antiDoublonPassageInitial() throws Exception {
+        String tokenSec = bearer("CTRSEC", ProfilUtilisateur.SECRETAIRE, TypeActeur.CONTROLEUR, "CTRSEC", "ANT");
+        Dossier d = dossier(343, "SOUMIS"); d.setIdLocalite("ANT"); d.setIdTypeDossier("DDP"); d.setIdSousType("PPM");
+        dossierRepository.save(d);
+
+        mvc.perform(post("/api/receptions").header("Authorization", tokenSec)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDossier\":343,\"numPassage\":1,\"typePassage\":\"INITIAL\","
+                        + "\"imCtrlRecept\":\"CTRSEC\",\"complet\":false}"))
+                .andExpect(status().isCreated());
+        mvc.perform(post("/api/receptions").header("Authorization", tokenSec)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDossier\":343,\"numPassage\":1,\"typePassage\":\"INITIAL\","
+                        + "\"imCtrlRecept\":\"CTRSEC\",\"complet\":false}"))
+                .andExpect(status().isConflict());
+        // NON-RÉGRESSION : un passage RETOUR (2e) reste enregistrable.
+        mvc.perform(post("/api/receptions").header("Authorization", tokenSec)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDossier\":343,\"numPassage\":2,\"typePassage\":\"RETOUR\","
+                        + "\"imCtrlRecept\":\"CTRSEC\",\"complet\":false}"))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    @DisplayName("Réception (lot B) — la référence officielle du dossier est produite au PREMIER passage seulement : "
+            + "un RETOUR la reprend telle quelle et ne consomme pas la séquence")
+    void reception_referenceGenereeAuPremierPassageSeulement() throws Exception {
+        String tokenSec = bearer("CTRSEC", ProfilUtilisateur.SECRETAIRE, TypeActeur.CONTROLEUR, "CTRSEC", "ANT");
+        Dossier d = dossier(344, "SOUMIS"); d.setIdLocalite("ANT"); d.setIdTypeDossier("DDP"); d.setIdSousType("PPM");
+        dossierRepository.save(d);
+        ppmRepository.save(ppm(344, 344, "PRMP001"));
+
+        mvc.perform(post("/api/receptions").header("Authorization", tokenSec)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDossier\":344,\"numPassage\":1,\"typePassage\":\"INITIAL\","
+                        + "\"imCtrlRecept\":\"CTRSEC\",\"complet\":false}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.reference").value("00001/PPM/CNM/2026"));
+        // Passage RETOUR : même référence, le dossier n'est pas renommé.
+        mvc.perform(post("/api/receptions").header("Authorization", tokenSec)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDossier\":344,\"numPassage\":2,\"typePassage\":\"RETOUR\","
+                        + "\"imCtrlRecept\":\"CTRSEC\",\"complet\":false}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.reference").value("00001/PPM/CNM/2026"));
+        mvc.perform(get("/api/dossiers/344").header("Authorization", tokenPresident))
+                .andExpect(jsonPath("$.refeDossier").value("00001/PPM/CNM/2026"));
+
+        // La séquence de l'année n'a pas été consommée par le retour : le dossier suivant prend 00002.
+        Dossier suivant = dossier(345, "SOUMIS");
+        suivant.setIdLocalite("ANT"); suivant.setIdTypeDossier("DDP"); suivant.setIdSousType("PPM");
+        dossierRepository.save(suivant);
+        ppmRepository.save(ppm(345, 345, "PRMP001"));
+        mvc.perform(post("/api/receptions").header("Authorization", tokenSec)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDossier\":345,\"numPassage\":1,\"typePassage\":\"INITIAL\","
+                        + "\"imCtrlRecept\":\"CTRSEC\",\"complet\":false}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.reference").value("00002/PPM/CNM/2026"));
     }
 
     @Test

@@ -45,6 +45,20 @@ public interface ReceptionRepository extends JpaRepository<Reception, Integer> {
     /** Vrai si le dossier a déjà au moins une réception (test « déjà réceptionné » sans charger l'historique). */
     boolean existsByIdDossier(Integer idDossier);
 
+    /**
+     * ⚠️ Audit 2026-08-27 (lot B) — le dossier a-t-il déjà son <strong>passage initial</strong> (§3.4) ?
+     * Un dossier n'entre qu'une fois dans le circuit : les passages suivants sont des RETOURS
+     * ({@code NUM_PASSAGE >= 2}). La détection est celle de la réception initiale ailleurs dans le
+     * service — {@code TYPE_PASSAGE = INITIAL} <em>ou</em> {@code NUM_PASSAGE = 1} — pour qu'un client
+     * ne contourne pas l'unicité en n'envoyant que l'un des deux champs.
+     */
+    @Query("""
+            select (count(r) > 0) from Reception r
+            where r.idDossier = :idDossier
+              and (upper(coalesce(r.typePassage, '')) = 'INITIAL' or r.numPassage = 1)
+            """)
+    boolean existsPassageInitial(@Param("idDossier") Integer idDossier);
+
     /** Ce contrôleur a-t-il réceptionné au moins un dossier ? (garde de suppression) */
     boolean existsByImCtrlRecept(String imCtrlRecept);
 

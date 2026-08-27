@@ -134,9 +134,12 @@ public class ReceptionService {
     }
 
     public ReceptionDto create(ReceptionDto dto) {
-        exigerDossierSoumis(dto.getIdDossier());
+        exigerDossierReceptionnable(dto.getIdDossier());
+        // La localité est contrôlée AVANT l'anti-doublon : hors périmètre, on répond 403 sans révéler
+        // l'historique de réception du dossier.
         exigerLocaliteDossier(dto.getIdDossier());
         validatePassage(dto);
+        interdireDoublonPassageInitial(dto);
         exigerControleCompletude(dto);
         Reception entity = ReceptionMapper.toEntity(dto);
         entity.setIdReception(repository.nextIdReception().intValue());   // PK serveur (sequence), id client ignore (Voie B)
@@ -169,6 +172,14 @@ public class ReceptionService {
         if (dossier == null) {
             return null;
         }
+        // ⚠️ Audit 2026-08-27 (lot B) — la référence était régénérée à CHAQUE réception : un passage
+        // RETOUR renommait le dossier (sa référence officielle, déjà citée dans le PV, les lettres et
+        // les courriers) et consommait un numéro de la séquence de l'année. Elle n'est produite qu'une
+        // fois : si REFE_DOSSIER est déjà structurée, la réception en prend le snapshot, sans écriture
+        // ni tirage de séquence.
+        if (referenceStructuree(dossier.getRefeDossier())) {
+            return dossier.getRefeDossier();
+        }
         String famille = dossier.getIdTypeDossier();
         if (famille == null || famille.isBlank()) {
             // Dossier sans type : pas de référence structurée, mais la réception reste valide.
@@ -196,19 +207,68 @@ public class ReceptionService {
     }
 
     /**
-     * Précondition de circuit : on ne réceptionne pas un dossier encore en {@code BROUILLON}
-     * (non soumis). Cohérent avec les autres préconditions du circuit → 409.
+     * ⚠️ Audit 2026-08-27 (lot B) — <strong>liste blanche</strong> des statuts qui appellent une
+     * réception. La garde ne refusait que {@code BROUILLON} : tout le reste passait, y compris un
+     * dossier dont le PV était signé, clôturé ou retiré.
+     *
+     * <p>Le secrétariat reçoit un dossier <strong>avant que le PV ne soit signé</strong> : les quatre
+     * statuts « avant PV signé » (§3.3 — SOUMIS, PRET_DISPATCH, DISPATCHE, EXAMINE, un retour de
+     * circuit restant légitime tant que la Commission n'a pas statué) et les trois états d'
+     * <strong>attente</strong> qui appellent précisément un nouveau passage : EN_ATTENTE_PIECES et
+     * A_REEXAMINER (lettre de renvoi), EN_ATTENTE_COMPLEMENTS_DEPOT (recevabilité au dépôt). Au-delà
+     * — PV_SIGNE, EN_VERIFICATION, EN_ATTENTE_DECISION_PRMP, OBSERVATIONS_LEVEES,
+     * DECISION_TRANSMISE_SIGMP, CLOTURE, RETIRE, REMPLACE — le dossier a quitté le secrétariat.</p>
      */
-    private void exigerDossierSoumis(Integer idDossier) {
+    private static final java.util.Set<String> STATUTS_RECEPTIONNABLES = java.util.Set.of(
+            StatutDossier.SOUMIS.name(),
+            StatutDossier.PRET_DISPATCH.name(),
+            StatutDossier.DISPATCHE.name(),
+            StatutDossier.EXAMINE.name(),
+            StatutDossier.EN_ATTENTE_PIECES.name(),
+            StatutDossier.A_REEXAMINER.name(),
+            StatutDossier.EN_ATTENTE_COMPLEMENTS_DEPOT.name());
+
+    /**
+     * Précondition de circuit (→ 409) : le dossier doit être dans un statut qui appelle une réception
+     * ({@link #STATUTS_RECEPTIONNABLES}). Un dossier {@code BROUILLON} (non soumis) reste refusé, avec
+     * son message d'origine ; les statuts <strong>aval</strong> le sont désormais aussi.
+     */
+    private void exigerDossierReceptionnable(Integer idDossier) {
         String statut = idDossier == null ? null
                 : dossierRepository.findById(idDossier).map(Dossier::getStatut).orElse(null);
         if (StatutDossier.BROUILLON.name().equals(statut)) {
             throw new BusinessRuleException(
                     "Réception impossible : le dossier est en brouillon (non soumis).");
         }
+        if (statut != null && !STATUTS_RECEPTIONNABLES.contains(statut)) {
+            throw new BusinessRuleException(
+                    "Réception impossible : le dossier a quitté le secrétariat (statut « " + statut
+                            + " ») — une réception ne s'enregistre que tant que le PV n'est pas signé.");
+        }
     }
 
+    /**
+     * ⚠️ Audit 2026-08-27 (lot B) — un dossier n'a qu'<strong>un</strong> passage initial (§3.4) :
+     * {@code dejaReceptionne} existait comme test de confort côté écran, mais rien ne l'imposait au
+     * POST — deux enregistrements initiaux du même dossier étaient acceptés (doublons de file, de
+     * notification et de compteur).
+     */
+    private void interdireDoublonPassageInitial(ReceptionDto dto) {
+        if (!estPassageInitial(dto) || dto.getIdDossier() == null) {
+            return;
+        }
+        if (repository.existsPassageInitial(dto.getIdDossier())) {
+            throw new BusinessRuleException("Ce dossier a déjà été réceptionné (passage initial) ; "
+                    + "un nouveau passage doit être un RETOUR (NUM_PASSAGE >= 2) (§3.4).");
+        }
+    }
+
+    /**
+     * ⚠️ Audit 2026-08-27 (lot B) — le {@code PUT} ne rejouait <strong>aucune</strong> précondition
+     * d'état : corriger une réception rouvrait la porte que le POST venait de fermer.
+     */
     public ReceptionDto update(Integer id, ReceptionDto dto) {
+        exigerDossierReceptionnable(dto.getIdDossier());
         exigerLocaliteDossier(dto.getIdDossier());
         validatePassage(dto);
         Reception existing = repository.findById(id)
@@ -247,8 +307,11 @@ public class ReceptionService {
         }
         dossierRepository.findById(reception.getIdDossier()).ifPresent(dossier -> {
             String statut = dossier.getStatut();
-            // Ne pas réactiver un dossier déjà retiré ou clôturé.
-            if (StatutDossier.RETIRE.name().equals(statut) || StatutDossier.CLOTURE.name().equals(statut)) {
+            // ⚠️ Audit 2026-08-27 (lot B) — la garde ne couvrait que RETIRE et CLOTURE : une réception
+            // COMPLET faisait REGRESSER en PRET_DISPATCH un dossier dont le PV était signé, en
+            // vérification ou déjà transmis à SIGMP (le circuit repartait à zéro sur un dossier statué).
+            // Même liste blanche qu'à l'enregistrement : au-delà, aucune transition n'est posée.
+            if (statut != null && !STATUTS_RECEPTIONNABLES.contains(statut)) {
                 return;
             }
             boolean dejaPret = StatutDossier.PRET_DISPATCH.name().equals(statut);
@@ -322,14 +385,32 @@ public class ReceptionService {
     private static final String TYPE_PASSAGE_INITIAL = "INITIAL";
 
     /**
+     * Une réception est le <strong>passage initial</strong> si elle porte {@code TYPE_PASSAGE = INITIAL}
+     * ou {@code NUM_PASSAGE = 1} (le champ absent valant « premier passage »). Prédicat unique du
+     * contrôle de complétude au dépôt et de l'anti-doublon (⚠️ audit lot B).
+     */
+    private boolean estPassageInitial(ReceptionDto dto) {
+        return dto.getNumPassage() == null || dto.getNumPassage() == 1
+                || TYPE_PASSAGE_INITIAL.equalsIgnoreCase(dto.getTypePassage());
+    }
+
+    /**
+     * Une référence de dossier est <strong>structurée</strong> si elle a la forme
+     * {@code <seq>/<segment>/<localité>/<année>} produite par {@link ReferenceService} — même test que
+     * pour dériver la référence d'une lettre de renvoi. Les références historiques, non structurées,
+     * sont (re)générées au premier passage qui les rencontre.
+     */
+    private boolean referenceStructuree(String refeDossier) {
+        return refeDossier != null && refeDossier.matches("\\d+/[^/]+/[^/]+/\\d{4}");
+    }
+
+    /**
      * ⚠️ Spec recevabilité au dépôt (2026-08-02) — l'ENREGISTREMENT de la réception initiale est BLOQUÉ
      * tant que toutes les pièces OBLIGATOIRES du type n'ont pas été vérifiées et déclarées CONFORMES par
      * le Secrétaire ({@code t_verification_piece_depot}) → 409 listant les pièces en cause.
      */
     private void exigerControleCompletude(ReceptionDto dto) {
-        boolean initiale = dto.getNumPassage() == null || dto.getNumPassage() == 1
-                || TYPE_PASSAGE_INITIAL.equalsIgnoreCase(dto.getTypePassage());
-        if (!initiale) {
+        if (!estPassageInitial(dto)) {
             return;
         }
         List<String> bloquantes = verificationPieceDepotService.obligatoiresNonConformes(dto.getIdDossier());
