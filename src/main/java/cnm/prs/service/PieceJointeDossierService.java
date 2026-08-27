@@ -40,6 +40,9 @@ import cnm.prs.security.PerimetreDossier;
  * binaire de n'importe quelle pièce en itérant sur les identifiants. Elles passent désormais par
  * {@link PerimetreDossier}, comme toutes les autres ressources enfants d'un dossier (lots,
  * tranches, bénéficiaires…) — hors périmètre : <strong>403</strong>.</p>
+ *
+ * <p>⚠️ Audit 2026-08-27, lot B — le chemin « pièce initiale » du dépôt ({@code apres = false})
+ * n'avait aucune garde d'<strong>état</strong> : voir {@link #exigerDepotPossible}.</p>
  */
 @Service
 @Transactional
@@ -101,6 +104,7 @@ public class PieceJointeDossierService {
         Dossier dossier = dossierRepository.findById(meta.getIdDossier())
                 .orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable : " + meta.getIdDossier()));
         exigerProprietaire(dossier);
+        exigerDepotPossible(dossier, meta.getIdLettre() != null);
         boolean apres = false;
         Integer idLettre = null;
         if (meta.getIdLettre() != null
@@ -150,6 +154,54 @@ public class PieceJointeDossierService {
                     "Dossier complété après renvoi",
                     "Le dossier " + ref + " a été complété par la PRMP après lettre de renvoi ; il est à ré-examiner.");
         }
+    }
+
+    /**
+     * ⚠️ Audit 2026-08-27 (lot B) — statuts où un dépôt de pièce « initiale » ({@code apres=false})
+     * garde un sens : la <strong>constitution</strong> du dossier (BROUILLON, SOUMIS), les deux états
+     * d'<strong>attente</strong> qui appellent explicitement des pièces (EN_ATTENTE_COMPLEMENTS_DEPOT
+     * — recevabilité au dépôt ; EN_ATTENTE_PIECES — suspension par lettre de renvoi, la pièce déposée
+     * sans {@code idLettre} restant recevable) et la <strong>rectification</strong>
+     * (EN_ATTENTE_DECISION_PRMP, où la pièce est marquée « version corrigée »).
+     */
+    private static final java.util.Set<String> STATUTS_DEPOT_INITIAL = java.util.Set.of(
+            StatutDossier.BROUILLON.name(),
+            StatutDossier.SOUMIS.name(),
+            StatutDossier.EN_ATTENTE_COMPLEMENTS_DEPOT.name(),
+            StatutDossier.EN_ATTENTE_PIECES.name(),
+            StatutDossier.EN_ATTENTE_DECISION_PRMP.name());
+
+    /**
+     * Statuts supplémentaires ouverts au dépôt <strong>rattaché à une lettre de renvoi</strong>
+     * ({@code idLettre} fourni) : le <strong>premier</strong> complément rouvre l'examen
+     * (PRET_DISPATCH → DISPATCHE, cf. {@link #rouvrirExamenApresRenvoi}), et la PRMP doit pouvoir
+     * déposer les <strong>suivants</strong> alors que le dossier est déjà reparti en examen
+     * (DISPATCHE, ou A_REEXAMINER après {@code …/transmettre-complements}).
+     */
+    private static final java.util.Set<String> STATUTS_DEPOT_APRES_LETTRE = java.util.Set.of(
+            StatutDossier.PRET_DISPATCH.name(),
+            StatutDossier.DISPATCHE.name(),
+            StatutDossier.A_REEXAMINER.name());
+
+    /**
+     * ⚠️ Audit 2026-08-27 (lot B) — le chemin « pièce initiale » n'avait <strong>aucune</strong> garde
+     * d'état : la PRMP versait une pièce au dossier à n'importe quel moment du circuit, y compris après
+     * l'examen, après la signature du PV ou sur un dossier clôturé — le dossier n'est alors plus celui
+     * que la Commission a examiné. Hors des statuts qui appellent un dépôt, 409.
+     *
+     * @param avecLettre le dépôt se rattache à une lettre de renvoi ({@code idLettre} fourni), ce qui
+     *                   ouvre en plus les statuts de reprise d'examen
+     * @throws BusinessRuleException (→ 409) dossier hors des statuts de dépôt
+     */
+    private void exigerDepotPossible(Dossier dossier, boolean avecLettre) {
+        String statut = dossier.getStatut();
+        if (statut == null || STATUTS_DEPOT_INITIAL.contains(statut)
+                || (avecLettre && STATUTS_DEPOT_APRES_LETTRE.contains(statut))) {
+            return;
+        }
+        throw new BusinessRuleException("Dépôt impossible : le dossier est au statut « " + statut
+                + " ». Une pièce ne s'ajoute qu'à la constitution du dossier, sur demande de "
+                + "complément (lettre de renvoi ou recevabilité au dépôt), ou pendant la rectification.");
     }
 
     /** Enregistrement d'une pièce initiale (à la saisie) : {@code apresLettreRenvoi=false}. */

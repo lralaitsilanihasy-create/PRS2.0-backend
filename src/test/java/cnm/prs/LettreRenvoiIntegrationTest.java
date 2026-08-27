@@ -253,11 +253,30 @@ class LettreRenvoiIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("Signature lettre (régionale TMS) : le CC signe → 200")
+    @DisplayName("Signature lettre (régionale TMS) : le CC DE LA LOCALITÉ signe → 200")
     void signature_regionale_cc_ok() throws Exception {
         int id = seedLettreSoumiseLoc(712, "TMS");
-        mvc.perform(post("/api/lettre-renvois/" + id + "/signer").header("Authorization", tokenCc))
+        mvc.perform(post("/api/lettre-renvois/" + id + "/signer").header("Authorization", tokenCcTms()))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.statut").value("SIGNE"));
+    }
+
+    @Test
+    @DisplayName("Signature lettre régionale (⚠️ audit lot B) : un CC d'une AUTRE localité → 403 ; la lettre reste SOUMIS")
+    void signature_regionale_ccAutreLocalite_403() throws Exception {
+        int id = seedLettreSoumiseLoc(716, "TMS");
+        // Le CC d'ANT signait la lettre régionale de TMS — dont le PDF porte pourtant l'en-tête de
+        // TOAMASINA et la ligne « Le Chef de la Commission Régionale des Marchés ».
+        mvc.perform(post("/api/lettre-renvois/" + id + "/signer").header("Authorization", tokenCc))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/lettre-renvois/" + id).header("Authorization", tokenPresident))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statut").value("SOUMIS"));
+    }
+
+    /** Jeton du Chef de commission de TMS (CTRCC2, seedé dans le socle). */
+    private String tokenCcTms() {
+        return bearer("CTRCC2", cnm.prs.enums.ProfilUtilisateur.CHEF_COMMISSION,
+                cnm.prs.enums.TypeActeur.CONTROLEUR, "CTRCC2", "TMS");
     }
 
     @Test
@@ -280,9 +299,12 @@ class LettreRenvoiIntegrationTest extends CnmIntegrationTestSupport {
     @DisplayName("Document : signature régionale → PDF téléchargeable (200, application/pdf)")
     void document_genere_regionale_ok() throws Exception {
         int id = seedLettreSoumiseLoc(715, "TMS");
-        mvc.perform(post("/api/lettre-renvois/" + id + "/signer").header("Authorization", tokenCc))
+        // ⚠️ Audit lot B — la lettre régionale se signe dans SA localité : CC de TMS. Le téléchargement
+        // reste demandé par le Président (le périmètre de LECTURE suit la localité de réception, ANT
+        // dans cette fixture montée sur l'examen 1).
+        mvc.perform(post("/api/lettre-renvois/" + id + "/signer").header("Authorization", tokenCcTms()))
                 .andExpect(status().isOk());
-        mvc.perform(get("/api/lettre-renvois/" + id + "/document").header("Authorization", tokenCc))
+        mvc.perform(get("/api/lettre-renvois/" + id + "/document").header("Authorization", tokenPresident))
                 .andExpect(status().isOk())
                 .andExpect(content().contentType(MediaType.APPLICATION_PDF));
     }
@@ -351,9 +373,9 @@ class LettreRenvoiIntegrationTest extends CnmIntegrationTestSupport {
     @DisplayName("Document régional : en-tête contient la localité du dossier (TOAMASINA)")
     void document_genere_localite_dossier_ok() throws Exception {
         int id = seedLettreSoumiseLoc(731, "TMS");
-        mvc.perform(post("/api/lettre-renvois/" + id + "/signer").header("Authorization", tokenCc))
+        mvc.perform(post("/api/lettre-renvois/" + id + "/signer").header("Authorization", tokenCcTms()))
                 .andExpect(status().isOk());
-        byte[] pdf = mvc.perform(get("/api/lettre-renvois/" + id + "/document").header("Authorization", tokenCc))
+        byte[] pdf = mvc.perform(get("/api/lettre-renvois/" + id + "/document").header("Authorization", tokenPresident))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
         assertTrue(texteDuPdf(pdf).contains("COMMISSION REGIONALE DES MARCHES TOAMASINA"),
                 "localité du dossier injectée dans l'en-tête régional");
@@ -363,9 +385,9 @@ class LettreRenvoiIntegrationTest extends CnmIntegrationTestSupport {
     @DisplayName("Document régional : signataire « Le Chef de la Commission Régionale des Marchés »")
     void document_genere_signataire_regional_ok() throws Exception {
         int id = seedLettreSoumiseLoc(733, "TMS");
-        mvc.perform(post("/api/lettre-renvois/" + id + "/signer").header("Authorization", tokenCc))
+        mvc.perform(post("/api/lettre-renvois/" + id + "/signer").header("Authorization", tokenCcTms()))
                 .andExpect(status().isOk());
-        byte[] pdf = mvc.perform(get("/api/lettre-renvois/" + id + "/document").header("Authorization", tokenCc))
+        byte[] pdf = mvc.perform(get("/api/lettre-renvois/" + id + "/document").header("Authorization", tokenPresident))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
         assertTrue(texteDuPdf(pdf).contains("Le Chef de la Commission Régionale des Marchés"),
                 "ligne signataire régionale corrigée dans le modèle");

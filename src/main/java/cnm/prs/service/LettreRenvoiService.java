@@ -303,6 +303,13 @@ public class LettreRenvoiService {
             throw new AccessDeniedException(
                     "Seul le Chef de Commission peut signer une lettre de renvoi pour une localité régionale.");
         }
+        // ⚠️ Audit 2026-08-27 (lot B) — la garde s'arrêtait au PROFIL : n'importe quel Chef de commission
+        // signait la lettre régionale d'une AUTRE commission (le PDF porte pourtant l'en-tête de la
+        // localité du dossier et la ligne « Le Chef de la Commission Régionale des Marchés »). La
+        // localité est désormais celle du dossier, comme pour le choix du modèle. Président et
+        // Administrateur (sans localité) restent exemptés — le cas régional les a déjà écartés
+        // ci-dessus, il ne reste que la lettre centrale, qui relève bien du Président.
+        Visibilite.exigerLocalite(localite);
         String im = CurrentUser.ref().filter(s -> !s.isBlank())
                 .orElseThrow(() -> new AccessDeniedException("Signataire non identifié."));
         String localiteLibelle = localite == null ? "" : localiteRepository.findById(localite)

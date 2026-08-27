@@ -163,6 +163,43 @@ class PieceJointeIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("Dépôt de pièce initiale (⚠️ audit lot B) — refusé (409) dès que le dossier a quitté la phase de "
+            + "dépôt : EXAMINE et CLOTURE ; accepté pendant la rectification (version corrigée)")
+    void piece_upload_initiale_borneeAuxStatutsDeDepot() throws Exception {
+        Dossier examine = dossier(145, "EXAMINE"); examine.setIdTypeDossier("DDP");
+        examine.setIdPrmp("PRMP001"); examine.setIdLocalite("ANT"); dossierRepository.save(examine);
+        Dossier cloture = dossier(146, "CLOTURE"); cloture.setIdTypeDossier("DDP");
+        cloture.setIdPrmp("PRMP001"); cloture.setIdLocalite("ANT"); dossierRepository.save(cloture);
+        Dossier rectif = dossier(147, "EN_ATTENTE_DECISION_PRMP"); rectif.setIdTypeDossier("DDP");
+        rectif.setIdPrmp("PRMP001"); rectif.setIdLocalite("ANT"); dossierRepository.save(rectif);
+        int type = seedTypePiece("Plan de passation", true, "DDP", 1);
+        byte[] pdf = "%PDF-1.4 piece hors phase".getBytes(StandardCharsets.US_ASCII);
+
+        // Le dossier examiné n'est plus celui que la Commission a vu : dépôt refusé.
+        mvc.perform(deposer(145, type, pdf)).andExpect(status().isConflict());
+        mvc.perform(deposer(146, type, pdf)).andExpect(status().isConflict());
+        mvc.perform(get("/api/piece-jointe-dossiers?dossier=145").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+
+        // NON-RÉGRESSION : pendant la rectification, le dépôt reste ouvert et marque la version corrigée.
+        mvc.perform(deposer(147, type, pdf))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.versionCorrigee").value(true));
+    }
+
+    /** Requête multipart de dépôt d'une pièce par la PRMP propriétaire (pièce « initiale », sans lettre). */
+    private org.springframework.test.web.servlet.request.MockMultipartHttpServletRequestBuilder deposer(
+            int idDossier, int idTypePiece, byte[] contenu) {
+        return multipart("/api/piece-jointe-dossiers")
+                .file(new MockMultipartFile("data", "", "application/json",
+                        ("{\"idDossier\":" + idDossier + ",\"idTypePiece\":" + idTypePiece + "}")
+                                .getBytes(StandardCharsets.UTF_8)))
+                .file(new MockMultipartFile("fichier", "piece.pdf", "application/pdf", contenu))
+                .header("Authorization", tokenPrmp);
+    }
+
+    @Test
     @DisplayName("Soumission : pièce obligatoire manquante → 400 {champ:piecesJointes}")
     void piece_obligatoire_manquante_400() throws Exception {
         Dossier d = dossier(143, "BROUILLON"); d.setRefeDossier(null); d.setIdTypeDossier("DDP");
