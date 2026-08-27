@@ -20,6 +20,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.context.request.ServletWebRequest;
 
 import cnm.prs.entity.Dossier;
+import cnm.prs.exception.ConflitVersionException;
 import cnm.prs.exception.ErrorResponse;
 import cnm.prs.exception.GlobalExceptionHandler;
 import cnm.prs.repository.DossierRepository;
@@ -131,7 +132,7 @@ class VerrouOptimisteIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("Handler : un conflit de verrou optimiste est rendu en 409, pas en 500")
+    @DisplayName("Handler : un conflit de verrou optimiste est rendu en 409, pas en 500, avec le code CONFLIT_VERSION")
     void handler_conflitVersion_rendu409() {
         ServletWebRequest requete = new ServletWebRequest(
                 new MockHttpServletRequest("PUT", "/api/dossiers/42"));
@@ -144,6 +145,25 @@ class VerrouOptimisteIntegrationTest extends AbstractIntegrationTest {
         assertThat(corps).isNotNull();
         assertThat(corps.message())
                 .isEqualTo("La donnée a été modifiée par une autre opération entre-temps. Rechargez puis réessayez.");
+        // ⚠️ Chantier « conflit de version » : sans ce code, le front ne distingue pas ce 409 des autres.
+        assertThat(corps.code()).isEqualTo(ConflitVersionException.CODE);
+    }
+
+    @Test
+    @DisplayName("Handler : le chemin HTTP (ConflitVersionException) rend le MÊME corps 409 que le chemin transactionnel")
+    void handler_conflitVersionHttp_memeCorpsQueLeCheminTransactionnel() {
+        ServletWebRequest requete = new ServletWebRequest(
+                new MockHttpServletRequest("PUT", "/api/ppms/12"));
+
+        var reponse = new GlobalExceptionHandler().handleConflitVersionHttp(
+                new ConflitVersionException(), requete);
+
+        assertThat(reponse.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        ErrorResponse corps = reponse.getBody();
+        assertThat(corps).isNotNull();
+        assertThat(corps.message()).isEqualTo(ConflitVersionException.MESSAGE);
+        assertThat(corps.code()).isEqualTo("CONFLIT_VERSION");
+        assertThat(corps.path()).isEqualTo("/api/ppms/12");
     }
 
     /** Version telle qu'elle est RÉELLEMENT en base (hors cache de persistance). */

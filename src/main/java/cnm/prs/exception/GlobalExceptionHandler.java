@@ -190,15 +190,32 @@ public class GlobalExceptionHandler {
      * → <strong>409</strong> : ce n'est pas une erreur serveur mais un conflit que l'appelant
      * résout en rechargeant. Journalisé en {@code warn} (pas d'{@code error} : le cas est prévu),
      * sans la pile, qui n'apprendrait rien.
+     * <p>
+     * ⚠️ Chantier « conflit de version » (2026-08-27, {@code docs/plan-conflit-version.md}) : la réponse
+     * porte désormais le code {@link ConflitVersionException#CODE}, sans quoi le front ne pouvait pas
+     * distinguer ce 409 des autres (règle métier, doublon, clé étrangère).
      */
     @ExceptionHandler(org.springframework.orm.ObjectOptimisticLockingFailureException.class)
     public ResponseEntity<ErrorResponse> handleConflitVersion(
             org.springframework.orm.ObjectOptimisticLockingFailureException ex, WebRequest request) {
         log.warn("Conflit de verrou optimiste sur {} : {} (id {})",
                 uri(request), ex.getPersistentClassName(), ex.getIdentifier());
-        return build(HttpStatus.CONFLICT,
-                "La donnée a été modifiée par une autre opération entre-temps. Rechargez puis réessayez.",
-                request, null);
+        return build(HttpStatus.CONFLICT, ConflitVersionException.MESSAGE, request, null,
+                ConflitVersionException.CODE);
+    }
+
+    /**
+     * ⚠️ Chantier « conflit de version » — <strong>chemin HTTP</strong> : la version envoyée dans le
+     * corps du PUT ne correspond plus à celle de l'entité en base ; le service a refusé l'écriture
+     * <strong>avant</strong> de toucher quoi que ce soit (cf. {@link ConflitVersionException}).
+     * <p>
+     * Même corps que le chemin transactionnel ci-dessus — 409, même message, même code : le front
+     * n'a qu'un seul cas à traiter. Journalisé en {@code warn} sans pile (cas prévu).
+     */
+    @ExceptionHandler(ConflitVersionException.class)
+    public ResponseEntity<ErrorResponse> handleConflitVersionHttp(ConflitVersionException ex, WebRequest request) {
+        log.warn("Conflit de version sur {} : {}", uri(request), ex.getMessage());
+        return build(HttpStatus.CONFLICT, ex.getMessage(), request, null, ConflitVersionException.CODE);
     }
 
     /**
