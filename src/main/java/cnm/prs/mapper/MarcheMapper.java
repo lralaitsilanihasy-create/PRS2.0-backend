@@ -32,6 +32,7 @@ public final class MarcheMapper {
         dto.setIdNature(entity.getIdNature());
         dto.setIdMode(entity.getIdMode());
         dto.setFormeMarche(entity.getFormeMarche().name());   // getter coalescent → jamais null
+        dto.setVersion(entity.getVersion());   // ⚠️ verrou optimiste (docs/plan-conflit-version.md)
         return dto;
     }
 

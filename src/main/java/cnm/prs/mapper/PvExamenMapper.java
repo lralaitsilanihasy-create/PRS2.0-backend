@@ -36,6 +36,7 @@ public final class PvExamenMapper {
         dto.setIdSecretaireSeance(entity.getIdSecretaireSeance());
         dto.setDateArchivage(entity.getDateArchivage());
         dto.setImArchiveur(entity.getImArchiveur());
+        dto.setVersion(entity.getVersion());   // ⚠️ verrou optimiste (docs/plan-conflit-version.md)
         return dto;
     }
 

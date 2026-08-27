@@ -235,8 +235,12 @@ public class LettreRenvoiService {
         if (!StatutLettreRenvoi.BROUILLON.name().equals(lettre.getStatut())) {
             throw new BusinessRuleException("Lettre non éditable : statut « " + lettre.getStatut() + " » (attendu BROUILLON).");
         }
+        // ⚠️ Verrou optimiste HTTP (plan §3) : version périmée → 409 CONFLIT_VERSION, avant toute écriture.
+        VerrouOptimiste.exigerVersionCourante(dto.getVersion(), lettre.getVersion());
         lettre.setCorpsLettre(dto.getCorpsLettre());
-        return LettreRenvoiMapper.toDto(repository.save(lettre));
+        // ⚠️ saveAndFlush : l'incrément de @Version se fait au flush — sans lui la réponse rendrait
+        // l'ancienne version et le client re-conflicterait au PUT suivant (cf. plan §4).
+        return LettreRenvoiMapper.toDto(repository.saveAndFlush(lettre));
     }
 
     /** Soumission par le Membre propriétaire (attributaire de l'examen) : BROUILLON → SOUMIS. */

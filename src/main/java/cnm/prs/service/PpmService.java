@@ -155,6 +155,8 @@ public class PpmService {
                 .orElseThrow(() -> new ResourceNotFoundException("Ppm introuvable : " + id));
         // ⚠️ 2026-08-02 — accepté aussi EN_ATTENTE_DECISION_PRMP (rectification par import du PPM).
         dossierIntegrite.exigerModifiablePourEditionPpm(existing.getIdDossier());
+        // ⚠️ Verrou optimiste HTTP (plan §3) : version périmée → 409 CONFLIT_VERSION, avant toute écriture.
+        VerrouOptimiste.exigerVersionCourante(dto.getVersion(), existing.getVersion());
         existing.setIdDossier(dto.getIdDossier());
         existing.setExercice(dto.getExercice());
         existing.setSignataire(dto.getSignataire());
@@ -171,7 +173,9 @@ public class PpmService {
         existing.setVu(dto.getVu());
         existing.setIdPrmp(dto.getIdPrmp());
         existing.setMotifMaj(dto.getMotifMaj());
-        return PpmMapper.toDto(repository.save(existing));
+        // ⚠️ saveAndFlush : l'incrément de @Version se fait au flush — sans lui la réponse rendrait
+        // l'ancienne version et le client re-conflicterait au PUT suivant (cf. plan §4).
+        return PpmMapper.toDto(repository.saveAndFlush(existing));
     }
 
     /**

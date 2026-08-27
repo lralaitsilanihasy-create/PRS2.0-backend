@@ -32,6 +32,7 @@ public final class DossierMapper {
         // (annuaire des acteurs), en lot pour les listes.
         dto.setCreePar(entity.getCreePar());
         dto.setSoumisPar(entity.getSoumisPar());
+        dto.setVersion(entity.getVersion());   // ⚠️ verrou optimiste (docs/plan-conflit-version.md)
         return dto;
     }
 

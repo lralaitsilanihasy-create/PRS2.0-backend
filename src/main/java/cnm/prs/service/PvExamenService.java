@@ -310,6 +310,8 @@ public class PvExamenService {
     public PvExamenDto update(Integer id, PvExamenDto dto) {
         PvExamen existing = load(id);
         requireStatut(existing, StatutPv.BROUILLON, StatutPv.EN_RECTIFICATION);
+        // ⚠️ Verrou optimiste HTTP (plan §3) : version périmée → 409 CONFLIT_VERSION, avant toute écriture.
+        VerrouOptimiste.exigerVersionCourante(dto.getVersion(), existing.getVersion());
         existing.setIdExamen(dto.getIdExamen());
         existing.setIdAvis(dto.getIdAvis());
         existing.setImCtrlPresident(dto.getImCtrlPresident());
@@ -318,7 +320,9 @@ public class PvExamenService {
         existing.setImCtrlMembre(attributaireDeLExamen(dto.getIdExamen()));
         existing.setSyntheseObservations(dto.getSyntheseObservations());
         existing.setReferencePv(dto.getReferencePv());
-        return PvExamenMapper.toDto(repository.save(existing));
+        // ⚠️ saveAndFlush : l'incrément de @Version se fait au flush — sans lui la réponse rendrait
+        // l'ancienne version et le client re-conflicterait au PUT suivant (cf. plan §4).
+        return PvExamenMapper.toDto(repository.saveAndFlush(existing));
     }
 
     public void delete(Integer id) {

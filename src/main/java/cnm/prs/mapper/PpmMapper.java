@@ -33,6 +33,7 @@ public final class PpmMapper {
         dto.setVu(entity.getVu());
         dto.setIdPrmp(entity.getIdPrmp());
         dto.setMotifMaj(entity.getMotifMaj());
+        dto.setVersion(entity.getVersion());   // ⚠️ verrou optimiste (docs/plan-conflit-version.md)
         return dto;
     }
 

@@ -52,4 +52,14 @@ public class LettreRenvoiDto {
 
     /** Assistant contrôleur archiveur (matricule, lecture seule). */
     private String imArchiveur;
+
+    /**
+     * ⚠️ Verrou optimiste (cf. {@code docs/plan-conflit-version.md}) — numéro de version de la ligne.
+     * <strong>Toujours renseigné en sortie</strong> (GET, POST, PUT), le PUT rendant la version
+     * <em>incrémentée</em>. En entrée de PUT : comparé à la version courante, et s'il en diffère
+     * l'écriture n'a pas lieu (409 {@code CONFLIT_VERSION}). <strong>Absent/null : toléré</strong> —
+     * comportement historique (dernier écrit gagne), par compatibilité ascendante ; d'où l'absence
+     * volontaire de {@code @NotNull}. Ignoré en création.
+     */
+    private Integer version;
 }

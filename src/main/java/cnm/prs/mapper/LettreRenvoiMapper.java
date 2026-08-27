@@ -27,6 +27,7 @@ public final class LettreRenvoiMapper {
         dto.setImSignataire(entity.getImSignataire());
         dto.setDateArchivage(entity.getDateArchivage());
         dto.setImArchiveur(entity.getImArchiveur());
+        dto.setVersion(entity.getVersion());   // ⚠️ verrou optimiste (docs/plan-conflit-version.md)
         return dto;
     }
 }

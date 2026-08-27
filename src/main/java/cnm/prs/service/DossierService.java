@@ -418,6 +418,8 @@ public class DossierService {
     public DossierDto update(Integer id, DossierDto dto) {
         Dossier existing = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable : " + id));
+        // ⚠️ Verrou optimiste HTTP (plan §3) : version périmée → 409 CONFLIT_VERSION, avant toute écriture.
+        VerrouOptimiste.exigerVersionCourante(dto.getVersion(), existing.getVersion());
         existing.setIdTypeDossier(dto.getIdTypeDossier());
         existing.setIdDossierParent(dto.getIdDossierParent());
         existing.setRefeDossier(dto.getRefeDossier());
@@ -425,7 +427,9 @@ public class DossierService {
         existing.setStatut(dto.getStatut());
         existing.setIdLocalite(dto.getIdLocalite());
         existing.setIdEntiteContract(dto.getIdEntiteContract());
-        return dto(repository.save(existing));
+        // ⚠️ saveAndFlush : l'incrément de @Version se fait au flush — sans lui la réponse rendrait
+        // l'ancienne version et le client re-conflicterait au PUT suivant (cf. plan §4).
+        return dto(repository.saveAndFlush(existing));
     }
 
     /**

@@ -132,6 +132,8 @@ public class MarcheService {
                 .orElseThrow(() -> new ResourceNotFoundException("Marche introuvable : " + id));
         // ⚠️ 2026-08-02 — accepté aussi EN_ATTENTE_DECISION_PRMP (rectification par import du PPM).
         dossierIntegrite.exigerModifiablePourEditionPpm(existing.getIdDossier());
+        // ⚠️ Verrou optimiste HTTP (plan §3) : version périmée → 409 CONFLIT_VERSION, avant toute écriture.
+        VerrouOptimiste.exigerVersionCourante(dto.getVersion(), existing.getVersion());
 
         existing.setIdDossier(dto.getIdDossier());
         existing.setIdPpm(dto.getIdPpm());
@@ -145,7 +147,9 @@ public class MarcheService {
         existing.setIdNature(dto.getIdNature());
         existing.setIdMode(dto.getIdMode());   // mode choisi (saisie manuelle)
         existing.setFormeMarche(FormeMarche.depuisCodeOuDefaut(dto.getFormeMarche()));
-        MarcheDto resultat = MarcheMapper.toDto(repository.save(existing));
+        // ⚠️ saveAndFlush : l'incrément de @Version se fait au flush — sans lui la réponse rendrait
+        // l'ancienne version et le client re-conflicterait au PUT suivant (cf. plan §4).
+        MarcheDto resultat = MarcheMapper.toDto(repository.saveAndFlush(existing));
         // Si le mode a changé et qu'un DMC A_PREPARER existe, re-dériver son type.
         dmcService.reAffecterTypeSiApreparer(id);
         dossierIntegrite.recalculerSousTypeDdp(existing.getIdDossier());   // le mode a pu (dé)clencher l'AGPM
