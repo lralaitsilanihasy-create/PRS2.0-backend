@@ -10,15 +10,19 @@ import org.springframework.transaction.annotation.Transactional;
 import cnm.prs.dto.AbrogerMandatRequest;
 import cnm.prs.dto.CreerMandatRequest;
 import cnm.prs.dto.MandatDto;
+import cnm.prs.entity.CompteAuth;
 import cnm.prs.entity.Mandat;
 import cnm.prs.entity.Prmp;
 import cnm.prs.entity.Ugpm;
+import cnm.prs.enums.StatutCompte;
 import cnm.prs.enums.StatutMandat;
+import cnm.prs.enums.TypeActeur;
 import cnm.prs.exception.BadRequestException;
 import cnm.prs.exception.BusinessRuleException;
 import cnm.prs.exception.ResourceNotFoundException;
 import cnm.prs.exception.VacancePrmpException;
 import cnm.prs.mapper.MandatMapper;
+import cnm.prs.repository.CompteAuthRepository;
 import cnm.prs.repository.MandatRepository;
 import cnm.prs.repository.PrmpRepository;
 import cnm.prs.repository.UgpmRepository;
@@ -56,12 +60,15 @@ public class MandatService {
     private final MandatRepository repository;
     private final PrmpRepository prmpRepository;
     private final UgpmRepository ugpmRepository;
+    /** ⚠️ Audit 2026-08-27 (lot B) — déblocage du compte à la reconduction (§3.1). */
+    private final CompteAuthRepository compteAuthRepository;
 
     public MandatService(MandatRepository repository, PrmpRepository prmpRepository,
-            UgpmRepository ugpmRepository) {
+            UgpmRepository ugpmRepository, CompteAuthRepository compteAuthRepository) {
         this.repository = repository;
         this.prmpRepository = prmpRepository;
         this.ugpmRepository = ugpmRepository;
+        this.compteAuthRepository = compteAuthRepository;
     }
 
     // ------------------------------------------------------------------ lecture
@@ -211,7 +218,43 @@ public class MandatService {
         mandat.setRefArrete(refArrete);
         mandat.setNumeroMandat(numero);
         mandat.setStatut(statutEffectif(mandat, LocalDate.now()).name());
-        return versDto(repository.save(mandat));
+        Mandat enregistre = repository.save(mandat);
+        reactiverComptesDeLaPrmp(prmp.getIdPrmp(), enregistre);
+        return versDto(enregistre);
+    }
+
+    /**
+     * ⚠️ Audit 2026-08-27 (lot B) — <strong>déblocage automatique</strong> promis au §3.1 de
+     * {@code docs/regles-gestion.md} : {@code AlerteScheduler.expirerComptesPrmp} désactive le compte
+     * de la PRMP en fin de mandat, mais <strong>rien</strong> ne le rouvrait à la reconduction — la
+     * PRMP redevenait en fonction (la garde de vacance la laissait passer) sans pouvoir se connecter,
+     * et il fallait une intervention de l'Administrateur.
+     *
+     * <p><strong>Choix documenté</strong> — le modèle ne distingue pas une désactivation d'expiration
+     * d'une désactivation manuelle de l'Administrateur : {@code AlerteScheduler} et
+     * {@code CompteAuthService.desactiver} posent tous deux le seul {@code ACTIF = false}, sans
+     * marqueur. La réactivation porte donc sur <em>tout</em> compte PRMP éteint dont le
+     * {@code STATUT} est {@link StatutCompte#ACTIF}, c'est-à-dire un compte <strong>déjà validé</strong>
+     * par l'Administrateur : un blocage manuel d'une PRMP que l'on reconduit est levé du même geste.
+     * Les inscriptions {@code EN_ATTENTE} et {@code REFUSE} ne sont, elles, jamais activées — une
+     * nomination ne vaut pas validation d'inscription.</p>
+     *
+     * <p>Seul un mandat <strong>ACTIF à la date du jour</strong> débloque. Une nomination à effet
+     * futur ({@code EN_TRANSITION}) ne rouvre rien : dans ce cas le compte n'a d'ailleurs pas encore
+     * été expiré, la date de fin de mandat faisant autorité étant celle du dernier mandat déclaré.</p>
+     */
+    private void reactiverComptesDeLaPrmp(String idPrmp, Mandat mandat) {
+        if (statutEffectif(mandat, LocalDate.now()) != StatutMandat.ACTIF) {
+            return;
+        }
+        for (CompteAuth compte : compteAuthRepository.findByRefActeurAndTypeActeur(
+                idPrmp, TypeActeur.PRMP.name())) {
+            if (!Boolean.TRUE.equals(compte.getActif())
+                    && StatutCompte.ACTIF.name().equals(compte.getStatut())) {
+                compte.setActif(true);
+                compteAuthRepository.save(compte);
+            }
+        }
     }
 
     /**

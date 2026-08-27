@@ -20,6 +20,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.entity.CompteAuth;
 import cnm.prs.entity.Dossier;
 import cnm.prs.entity.EntiteContract;
 import cnm.prs.entity.Localite;
@@ -33,6 +34,7 @@ import cnm.prs.enums.ProfilUtilisateur;
 import cnm.prs.enums.StatutDossier;
 import cnm.prs.enums.StatutMandat;
 import cnm.prs.enums.TypeActeur;
+import cnm.prs.repository.CompteAuthRepository;
 import cnm.prs.repository.DossierRepository;
 import cnm.prs.repository.EntiteContractRepository;
 import cnm.prs.repository.LocaliteRepository;
@@ -70,6 +72,8 @@ class MandatsPrmpIntegrationTest extends AbstractIntegrationTest {
     @Autowired private EntiteContractRepository entiteContractRepository;
     @Autowired private PrmpEntiteRepository prmpEntiteRepository;
     @Autowired private DossierRepository dossierRepository;
+    /** ⚠️ Audit 2026-08-27 (lot B) — déblocage du compte à la reconduction. */
+    @Autowired private CompteAuthRepository compteAuthRepository;
 
     private String tokenAdmin;
     private String tokenSortante;
@@ -289,6 +293,33 @@ class MandatsPrmpIntegrationTest extends AbstractIntegrationTest {
         mvc.perform(post("/api/dossiers/9004/transmettre-complements-depot")
                 .header("Authorization", tokenTierce))
                 .andExpect(status().isForbidden());
+    }
+
+    // ------------------------------------------------------------------ déblocage du compte (⚠️ lot B)
+
+    @Test
+    @DisplayName("Reconduction (⚠️ audit lot B, §3.1) — le compte PRMP éteint en fin de mandat est RÉACTIVÉ ; "
+            + "une inscription jamais validée (EN_ATTENTE) ne l'est pas")
+    void reconduction_reactiveLeCompteExpire() throws Exception {
+        // 1er mandat achevé, puis effet d'AlerteScheduler.expirerComptesPrmp : ACTIF=false, STATUT inchangé.
+        mandatRepository.save(mandat("PRMPSOR", "ARR-A", AUJOURDHUI.minusYears(4), AUJOURDHUI.minusYears(1), 1));
+        CompteAuth expire = new CompteAuth("PRMPSOR", "hash", TypeActeur.PRMP.name(), "PRMPSOR", true);
+        expire.setActif(false);
+        compteAuthRepository.save(expire);
+        // Inscription d'une AUTRE PRMP, jamais validée par l'Administrateur (EN_ATTENTE).
+        compteAuthRepository.save(new CompteAuth("PRMPTIE", "hash", TypeActeur.PRMP.name(), "PRMPTIE", false));
+
+        // Reconduction : la PRMP redevient en fonction → son compte se rouvre, sans geste d'Admin.
+        creerMandat("PRMPSOR", "ARR-B", AUJOURDHUI.minusDays(1), null).andExpect(status().isCreated());
+        org.junit.jupiter.api.Assertions.assertTrue(
+                compteAuthRepository.findByLogin("PRMPSOR").orElseThrow().getActif(),
+                "le compte expiré est réactivé par la reconduction (déblocage automatique §3.1)");
+
+        // Une nomination ne vaut pas validation d'inscription : le compte EN_ATTENTE reste fermé.
+        creerMandat("PRMPTIE", "ARR-T", AUJOURDHUI.minusDays(1), null).andExpect(status().isCreated());
+        org.junit.jupiter.api.Assertions.assertFalse(
+                compteAuthRepository.findByLogin("PRMPTIE").orElseThrow().getActif(),
+                "une inscription EN_ATTENTE n'est jamais activée par un mandat");
     }
 
     // ------------------------------------------------------------------ outillage
