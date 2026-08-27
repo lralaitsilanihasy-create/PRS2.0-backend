@@ -4,6 +4,7 @@ import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -413,6 +414,52 @@ class VerificationIntegrationTest extends CnmIntegrationTestSupport {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDossier\":405,\"idPpm\":450,\"designationMarche\":\"X\",\"montEstim\":1000}"))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Rectification (⚠️ audit lot B) : le CONTENU est valide — montant negatif -> 400 cible montEstim, "
+            + "exercice hors bornes -> 400 cible exercice ; l'identite figee reste facultative")
+    void rectifier_contenuValide() throws Exception {
+        Dossier d = dossier(480, "EN_ATTENTE_DECISION_PRMP");
+        d.setIdTypeDossier("DDP"); d.setIdLocalite("ANT"); d.setIdPrmp("PRMP001");
+        dossierRepository.save(d);
+        ppmRepository.save(ppm(480, 480, "PRMP001"));
+        marcheRepository.save(marche(481, 480, 480));
+
+        // Avant le correctif : 200, et le montant negatif remontait jusqu'aux cumuls des KPI.
+        mvc.perform(patch("/api/marches/481/rectifier").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"designationMarche\":\"Objet\",\"montEstim\":-1000}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[0].champ").value("montEstim"));
+        mvc.perform(patch("/api/ppms/480/rectifier").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"exercice\":12,\"reference\":\"R\",\"libelle\":\"L\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[0].champ").value("exercice"));
+
+        // NON-REGRESSION : le corps sans identite figee (ni idDossier ni idPpm) passe toujours.
+        mvc.perform(patch("/api/marches/481/rectifier").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"designationMarche\":\"Objet\",\"montEstim\":1000}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.montEstim").value(1000));
+    }
+
+    @Test
+    @DisplayName("Saisie marche (⚠️ audit lot B) : montant negatif refuse aussi sur le PUT (borne @PositiveOrZero)")
+    void marche_put_montantNegatif_400() throws Exception {
+        Dossier d = dossier(482, "BROUILLON");
+        d.setIdTypeDossier("DDP"); d.setIdLocalite("ANT"); d.setIdPrmp("PRMP001");
+        dossierRepository.save(d);
+        ppmRepository.save(ppm(482, 482, "PRMP001"));
+        marcheRepository.save(marche(483, 482, 482));
+
+        mvc.perform(put("/api/marches/483").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDossier\":482,\"idPpm\":482,\"designationMarche\":\"Objet\",\"montEstim\":-5}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[0].champ").value("montEstim"));
     }
 
     @Test

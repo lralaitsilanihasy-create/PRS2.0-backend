@@ -14,9 +14,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
 
 import jakarta.validation.Valid;
 
+import cnm.prs.dto.GroupeRectification;
 import cnm.prs.dto.MarcheDto;
 import cnm.prs.service.MarcheService;
 
@@ -66,9 +68,13 @@ public class MarcheController {
     // Édition restreinte (rectification) : PRMP propriétaire, uniquement si dossier EN_ATTENTE_DECISION_PRMP.
     // Corps SANS validation des champs d'identité figés (idDossier/idPpm), que le front n'envoie pas en
     // rectification ; le contenu est appliqué, l'identité conservée serveur.
+    // ⚠️ Audit 2026-08-27 (lot B) — c'était le seul @RequestBody du dépôt sans validation : le CONTENU
+    // est désormais validé via le groupe GroupeRectification (longueurs, bornes des montants), sans
+    // exiger l'identité figée.
     @PreAuthorize("hasAnyRole('PRMP','UGPM')")
     @PatchMapping("/{id}/rectifier")
-    public MarcheDto rectifier(@PathVariable Integer id, @RequestBody MarcheDto dto) {
+    public MarcheDto rectifier(@PathVariable Integer id,
+            @Validated(GroupeRectification.class) @RequestBody MarcheDto dto) {
         return service.modifierEnAttenteRectification(id, dto);
     }
 

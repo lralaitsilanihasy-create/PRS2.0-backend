@@ -1,8 +1,11 @@
 package cnm.prs.dto;
 
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import jakarta.validation.groups.Default;
 import java.time.LocalDate;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -21,11 +24,21 @@ public class PpmDto {
     @NotNull
     private Integer idDossier;
 
+    /**
+     * ⚠️ Audit 2026-08-27, lot B — exercice budgétaire, jusque-là sans borne : « 12 » ou « 20260 »
+     * étaient acceptés et se retrouvaient dans la référence officielle du dossier
+     * ({@code .../<année>}) comme dans les filtres par exercice. Fenêtre volontairement large
+     * (2000-2100) : le but est d'écarter la faute de frappe, pas d'arbitrer un calendrier.
+     */
     @NotNull
+    @Min(value = 2000, message = "L'exercice budgétaire doit être compris entre 2000 et 2100.",
+            groups = { Default.class, GroupeRectification.class })
+    @Max(value = 2100, message = "L'exercice budgétaire doit être compris entre 2000 et 2100.",
+            groups = { Default.class, GroupeRectification.class })
     private Integer exercice;
 
     @NotBlank
-    @Size(max = 210)
+    @Size(max = 210, groups = { Default.class, GroupeRectification.class })
     private String signataire;
 
     @NotNull
@@ -42,24 +55,24 @@ public class PpmDto {
     private LocalDate dateMaj;
 
     @NotBlank
-    @Size(max = 100)
+    @Size(max = 100, groups = { Default.class, GroupeRectification.class })
     private String reference;
 
-    @Size(max = 200)
+    @Size(max = 200, groups = { Default.class, GroupeRectification.class })
     private String libelle;
 
     private LocalDate dateReceptionCnm;
 
-    @Size(max = 5)
+    @Size(max = 5, groups = { Default.class, GroupeRectification.class })
     private String idLocalite;
 
-    @Size(max = 100)
+    @Size(max = 100, groups = { Default.class, GroupeRectification.class })
     private String vu;
 
-    @Size(max = 10)
+    @Size(max = 10, groups = { Default.class, GroupeRectification.class })
     private String idPrmp;
 
-    @Size(max = 500)
+    @Size(max = 500, groups = { Default.class, GroupeRectification.class })
     private String motifMaj;
 
     /**

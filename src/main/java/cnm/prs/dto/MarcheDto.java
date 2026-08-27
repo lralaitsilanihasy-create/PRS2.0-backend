@@ -1,7 +1,10 @@
 package cnm.prs.dto;
 
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
+import jakarta.validation.groups.Default;
 import java.math.BigDecimal;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -32,22 +35,40 @@ public class MarcheDto {
     @NotNull
     private Integer idPpm;
 
-    @Size(max = 500)
+    @Size(max = 500, groups = { Default.class, GroupeRectification.class })
     private String designationMarche;
 
-    @Size(max = 20)
+    @Size(max = 20, groups = { Default.class, GroupeRectification.class })
     private String numCompte;
 
+    /**
+     * ⚠️ Audit 2026-08-27, lot B — les trois montants n'avaient <strong>aucune borne</strong> : un
+     * montant négatif traversait la saisie, la rectification et l'import, et remontait tel quel dans
+     * les cumuls des KPI (montant total d'un PPM, seuils de contrôle). Bornes calées sur la colonne
+     * réelle {@code numeric(38,2)} : {@code @Digits(integer = 36, fraction = 2)}.
+     */
+    @PositiveOrZero(message = "Le montant estimé ne peut pas être négatif.",
+            groups = { Default.class, GroupeRectification.class })
+    @Digits(integer = 36, fraction = 2, message = "Montant hors format (36 chiffres, 2 décimales).",
+            groups = { Default.class, GroupeRectification.class })
     private BigDecimal montEstim;
 
+    @PositiveOrZero(message = "L'ancien montant estimé ne peut pas être négatif.",
+            groups = { Default.class, GroupeRectification.class })
+    @Digits(integer = 36, fraction = 2, message = "Montant hors format (36 chiffres, 2 décimales).",
+            groups = { Default.class, GroupeRectification.class })
     private BigDecimal ancienMontEstim;
 
+    @PositiveOrZero(message = "Le nouveau montant estimé ne peut pas être négatif.",
+            groups = { Default.class, GroupeRectification.class })
+    @Digits(integer = 36, fraction = 2, message = "Montant hors format (36 chiffres, 2 décimales).",
+            groups = { Default.class, GroupeRectification.class })
     private BigDecimal nouvMontEstim;
 
-    @Size(max = 20)
+    @Size(max = 20, groups = { Default.class, GroupeRectification.class })
     private String financement;
 
-    @Size(max = 20)
+    @Size(max = 20, groups = { Default.class, GroupeRectification.class })
     private String statut;
 
     private Integer idNature;
@@ -60,7 +81,7 @@ public class MarcheDto {
      * Optionnel en entrée (absent/vide → défaut QUANTITE_FIXE, code inconnu → 400 ciblé) ;
      * toujours renseigné en sortie (jamais null).
      */
-    @Size(max = 20)
+    @Size(max = 20, groups = { Default.class, GroupeRectification.class })
     private String formeMarche;
 
     /**
