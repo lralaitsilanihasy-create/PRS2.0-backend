@@ -12,7 +12,8 @@ import jakarta.validation.Valid;
  */
 public record ValidationInscriptionRequest(
 
-        @Valid List<DecisionEntiteProposee> entitesProposees) {
+        // ⚠️ @Valid sur le paramètre de type (cf. SaisiePpmRequest) — sur la List, il est déprécié.
+        List<@Valid DecisionEntiteProposee> entitesProposees) {
 
     /**
      * Décision sur une entité proposée. Pour l'accepter, {@code accepter=true} et

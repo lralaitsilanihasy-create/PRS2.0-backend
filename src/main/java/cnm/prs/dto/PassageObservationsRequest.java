@@ -16,7 +16,8 @@ import java.util.List;
  */
 public record PassageObservationsRequest(
         @NotNull(message = "Le dossier est obligatoire.") Integer idDossier,
-        @NotEmpty(message = "Au moins une décision est requise.") @Valid List<ObservationDecision> decisions) {
+        // ⚠️ @Valid sur le paramètre de type (cf. SaisiePpmRequest) — sur la List, il est déprécié.
+        @NotEmpty(message = "Au moins une décision est requise.") List<@Valid ObservationDecision> decisions) {
 
     /**
      * Décision sur UNE observation du périmètre.

@@ -35,5 +35,6 @@ public record RegisterPrmpV2Request(
 
         List<Integer> idEntites,
 
-        @Valid List<EntiteNonListeeRequest> entitesNonListees) {
+        // ⚠️ @Valid sur le paramètre de type (cf. SaisiePpmRequest) — sur la List, il est déprécié.
+        List<@Valid EntiteNonListeeRequest> entitesNonListees) {
 }

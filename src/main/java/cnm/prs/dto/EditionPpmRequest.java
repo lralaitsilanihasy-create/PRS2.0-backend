@@ -44,6 +44,6 @@ public record EditionPpmRequest(
         @Size(max = 500)
         String motifMaj,
 
-        @Valid
-        List<SaisieMarcheLigne> marches) {
+        // ⚠️ @Valid sur le paramètre de type (cf. SaisiePpmRequest) — sur la List, il est déprécié.
+        List<@Valid SaisieMarcheLigne> marches) {
 }

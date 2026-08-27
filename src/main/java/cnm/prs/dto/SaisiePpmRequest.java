@@ -22,6 +22,8 @@ public record SaisiePpmRequest(
         @NotNull
         LocalDate dateSignature,
 
-        @Valid
-        List<SaisieMarcheLigne> marches) {
+        // ⚠️ @Valid porte sur le PARAMÈTRE DE TYPE, pas sur la List (Bean Validation 2.0) : sur le
+        // conteneur, il est déprécié (Hibernate Validator HV000271). Cascade et chemins de violation
+        // (« marches[0].champ ») inchangés.
+        List<@Valid SaisieMarcheLigne> marches) {
 }

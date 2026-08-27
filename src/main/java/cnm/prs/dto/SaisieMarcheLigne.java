@@ -49,21 +49,19 @@ public record SaisieMarcheLigne(
 
         // Bénéficiaires du marché (optionnel) : une ligne t_service_beneficiaire par élément. Si non vide, la
         // cohérence des montants est validée (Σ ancMontBenef = montEstim ; Σ nouvMontBenef = nouvMontEstim si fourni).
-        @Valid
-        List<SaisieBeneficiaireLigne> beneficiaires,
+        // ⚠️ @Valid sur le paramètre de type (cf. SaisiePpmRequest) — sur la List, il est déprécié.
+        List<@Valid SaisieBeneficiaireLigne> beneficiaires,
 
         // Lots du marché (optionnel, rétro-compatible) : une ligne t_lot par élément (comme les bénéficiaires).
         // Descriptif : aucun contrôle de somme des montants. Absent/vide → aucun lot.
-        @Valid
-        List<SaisieLotLigne> lots,
+        List<@Valid SaisieLotLigne> lots,
 
         // Processus de marché + dates prévisionnelles (idCapm, dateDebut, dateFin). @Valid cascade la
         // validation par processus (chemins marches[i].processus[j].champ). « Au moins un processus »
         // est exigé à la CRÉATION et pour toute ligne NOUVELLE à l'édition (SaisieService) — pas via
         // @NotEmpty ici : une ligne mise à jour (idDetail fourni) peut omettre la liste (= conservée) ;
         // fournie, elle REMPLACE les processus existants (vide → 400, invariant ≥1 par marché).
-        @Valid
-        List<ProcessusMarche> processus,
+        List<@Valid ProcessusMarche> processus,
 
         // idMode : mode de passation saisi (facultatif). Conservé tel quel (plus de détermination auto).
         Integer idMode,
