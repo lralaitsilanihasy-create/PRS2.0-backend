@@ -133,8 +133,9 @@ BROUILLON** pour l'édition, **cohérence type↔contenu** (PPM ⇒ a un PPM ; D
 validation (400) ; **omis** (absent du corps) pour les autres erreurs.
 
 Un champ **`code`** (string) s'ajoute au corps pour les erreurs métier que le front doit traiter
-**spécifiquement** plutôt qu'en affichant le message brut ; il est **omis** partout ailleurs. Seule valeur
-actuelle : **`VACANCE_PRMP`** (409, cf. *Mandats PRMP*).
+**spécifiquement** plutôt qu'en affichant le message brut ; il est **omis** partout ailleurs. Valeurs
+actuelles : **`VACANCE_PRMP`** (409, cf. *Mandats PRMP*) et **`CONFLIT_VERSION`** (409, ⚠️ 2026-08-27,
+cf. *Verrou optimiste — champ `version`* ci-dessous).
 
 ### Détail des erreurs 400 / 403 / 409
 Récapitulatif des trois codes d'erreur « métier » les plus fréquents, leur signification et
@@ -160,6 +161,7 @@ quand ils surviennent (mapping centralisé dans `GlobalExceptionHandler`). Côt�
 |---|---|---|
 | **Transition d'état du PV interdite** | l'action ne correspond pas au statut courant du PV | `accepter` hors `PROJET_SOUMIS` ; `signer` hors `PROJET_ACCEPTE` ; `retourner` **sans commentaire** ; `PUT` sur un PV déjà soumis/signé |
 | **Précondition de circuit non remplie** | l'étape précédente n'est pas atteinte | `dispatch` d'un dossier non `PRET_DISPATCH` ou **doublon** de dispatch ; `examen` d'un dossier non `DISPATCHE` ; **édition d'un examen verrouillé** (dossier `PV_SIGNE`) ; `vérification` hors PV `SIGNE` / avis ≠ `FAVR` / dossier clos |
+| **Verrou optimiste — version périmée** (`code: "CONFLIT_VERSION"`, ⚠️ 2026-08-27) | le champ `version` envoyé sur un `PUT` (`dossiers`, `ppms`, `marches`, `pv-examens`, `lettre-renvois`) ne correspond plus à la version en base : la donnée a été modifiée entre-temps, l'écriture n'a pas lieu | `PUT /api/ppms/{id}` avec une `version` périmée — message « La donnée a été modifiée par une autre opération entre-temps. Rechargez puis réessayez. » ; `version` **absente** de la requête → comportement historique, pas de 409 |
 | **Autre règle de gestion** | contrainte métier violée | `NUM_PASSAGE = 1` ⟺ `TYPE_PASSAGE = INITIAL` ; `INTERIM_DISPATCH` incohérent avec la localité ; décision de retrait sans observation ; `sens` de navette invalide |
 | **Suppression interdite (immuabilité)** | `DELETE` d'une ressource à traçabilité immuable | `pv-navettes`, `audit-logs` |
 | **Vacance de PRMP** (`code: "VACANCE_PRMP"`) | aucune PRMP en fonction à la date de l'action : toute action de traitement côté PRMP/UGPM attend la nomination (pas d'intérim) | `POST /api/dossiers/{id}/soumettre` pendant une transition — message « En attente de nomination de la nouvelle PRMP » |
@@ -167,6 +169,21 @@ quand ils surviennent (mapping centralisé dans `GlobalExceptionHandler`). Côt�
 | **Violation de contrainte BD** (`DataIntegrityViolationException`) | identifiant en **doublon**, valeur obligatoire manquante (NOT NULL) ou **clé étrangère** inexistante | POST avec un id déjà utilisé, ou référençant une entité inexistante |
 
 > Rappel : **401** (non authentifié : JWT absent/invalide ou compte désactivé) et **404** (ressource introuvable) restent distincts des trois ci-dessus.
+
+### Verrou optimiste — champ `version` (⚠️ 2026-08-27)
+Cinq ressources du circuit portent un champ **`version`** (`Integer`/`number`), reflet de la colonne
+`@Version` JPA (LOT 4, migration `V6`) : `dossiers`, `ppms`, `marches`, `pv-examens`, `lettre-renvois`.
+**Toujours renseigné en sortie** (GET/POST/PUT). En entrée d'un **PUT** :
+- **présente et différente de la version en base** → **409** `CONFLIT_VERSION`, l'écriture n'a pas lieu,
+  la donnée en base n'est **pas** modifiée ;
+- **absente/`null`** → comportement historique conservé (dernier écrit gagne) — compatibilité
+  ascendante pour la façade `/api/saisies` et les clients qui ne portent pas encore le champ.
+
+Le **PUT réussi renvoie la version incrémentée** : un client qui enchaîne deux enregistrements doit
+reprendre la version reçue en réponse, pas celle initialement chargée — sans quoi il re-conflicte au
+PUT suivant. **`demande-retraits` est hors périmètre** (aucun PUT sur cette ressource, le verrou
+transactionnel seul continue de la couvrir). Décision de contrat :
+`docs/adr/ADR-0005-version-optimiste-dto.md`.
 
 ### Types
 `Integer`/`Long` → `number` ; `String` → `string` ; `Boolean` → `boolean` ; `BigDecimal` → `number` ;
@@ -1153,6 +1170,7 @@ relation **1,N** : un point de contrôle a **0..N** lignes. Remplace l'ancien ch
 | soumisPar | string | — (réponse) | **login** de l'acteur ayant **soumis** le dossier (PRMP seule). Lecture seule, posé serveur |
 | creeParNom | string | — (réponse) | **Nom lisible** « Nom Prénoms » correspondant à `creePar`, **résolu serveur** ; `null` si le compte ou l'acteur est introuvable (le front garde alors le login brut) |
 | soumisParNom | string | — (réponse) | Nom lisible correspondant à `soumisPar` ; `null` si non résolvable |
+| version | number | Non | verrou optimiste (`@Version` JPA, ⚠️ 2026-08-27) — toujours renseigné en sortie ; en entrée de `PUT`, absent = comportement historique, périmé = **409** `CONFLIT_VERSION` (détail en tête de document, *Verrou optimiste — champ `version`*) |
 
 > ⚠️ **Auteur de la saisie (`creePar` / `soumisPar`) — ajouté 2026-08-19 (demande front).** Les deux colonnes
 > existaient en base (`t_dossier.CREE_PAR` / `SOUMIS_PAR`) mais n'étaient pas exposées. Elles portent un
@@ -1182,7 +1200,7 @@ relation **1,N** : un point de contrôle a **0..N** lignes. Remplace l'ancien ch
 | GET | /api/dossiers/{id} | — | `DossierDto` | 200, 403, 404 | Authentifié (filtré) |
 | GET | /api/dossiers/{id}/ppm | — | `PpmDto` | 200, 403, 404 | Authentifié (propriétaire pour un BROUILLON) |
 | POST | /api/dossiers | `DossierDto` | `DossierDto` | 201, 400, 403 | **ADMINISTRATEUR** |
-| PUT | /api/dossiers/{id} | `DossierDto` | `DossierDto` | 200, 400, 403, 404 | **ADMINISTRATEUR** |
+| PUT | /api/dossiers/{id} | `DossierDto` | `DossierDto` | 200, 400, 403, 404, 409 | **ADMINISTRATEUR** |
 | DELETE | /api/dossiers/{id} | — | — | 204, 403, 404, 409 | **PRMP** propriétaire — BROUILLON (cascade contenu + historique) |
 | POST | /api/dossiers/{id}/soumettre | — | `DossierDto` | 200, 400, 403, 404, 409 | **PRMP** |
 | POST | /api/dossiers/{id}/resoumettre | `DossierResoumissionRequest` | `DossierDto` | 200, 400, 403, 404, 409 | **PRMP** propriétaire |
@@ -2193,6 +2211,7 @@ de PV). Lecture filtrée par profil/localité. Cycle : `BROUILLON → SOUMIS →
 | imSignataire | string | — (réponse) | **posé à la signature** (JWT) — ignoré en entrée |
 | nomSignataire | string | — (réponse) | **nom complet du signataire** (« prénoms nom »), peuplé serveur — lecture seule |
 | lue | boolean | — (réponse) | **lecture seule** — `true` si la lettre a déjà été lue par la PRMP courante (trace `t_lettre_renvoi_lue`) |
+| version | number | Non | verrou optimiste (`@Version` JPA, ⚠️ 2026-08-27) — toujours renseigné en sortie ; en entrée de `PUT`, absent = comportement historique, périmé = **409** `CONFLIT_VERSION` (détail en tête de document, *Verrou optimiste — champ `version`*) |
 
 > **Objet fixe** : l'objet de la lettre est constant (« lettre de renvoi », déjà inscrit en dur dans les modèles Word) — il n'est **plus saisi ni retourné** (champ `objetLettre` supprimé du DTO). S'il est encore envoyé dans le corps de la requête, il est **ignoré** (compat rétroactive du frontend). La colonne `t_lettre_renvoi.OBJET_LETTRE` reste en base pour l'historique mais n'est plus alimentée.
 
@@ -2832,6 +2851,7 @@ active (`t_prmp_entite.ACTIF`) sur l'entité contractante du dossier. C'est ce s
 | statut | string | Non | max 20 |
 | idNature | number | Non | nature du marché |
 | idMode | number | Non | mode de passation **saisi** (PRMP/import), conservé tel quel — FK `tr_mode` |
+| version | number | Non | verrou optimiste (`@Version` JPA, ⚠️ 2026-08-27) — toujours renseigné en sortie ; en entrée de `PUT`, absent = comportement historique, périmé = **409** `CONFLIT_VERSION` (détail en tête de document, *Verrou optimiste — champ `version`*) |
 
 **Endpoints**
 
@@ -2840,7 +2860,7 @@ active (`t_prmp_entite.ACTIF`) sur l'entité contractante du dossier. C'est ce s
 | GET | /api/marches | — | `MarcheDto[]` (scopé) | 200 | Authentifié — ⚠️ **paginable** (`?page=&size=`, cf. Conventions) |
 | GET | /api/marches/{id} | — | `MarcheDto` | 200, 403, 404 | Authentifié (dans son périmètre) |
 | POST | /api/marches | `MarcheDto` | `MarcheDto` | 201, 400 | Authentifié |
-| PUT | /api/marches/{id} | `MarcheDto` | `MarcheDto` | 200, 400, 404 | Authentifié |
+| PUT | /api/marches/{id} | `MarcheDto` | `MarcheDto` | 200, 400, 404, 409 | Authentifié |
 | PATCH | /api/marches/{id}/rectifier | `MarcheDto` | `MarcheDto` | 200, 403, 404, 409 | PRMP (propriétaire) |
 | DELETE | /api/marches/{id} | — | — | 204, 403, 404, 409 | PRMP (propriétaire, brouillon) — ⚠️ cascade prévisions + bénéficiaires + lots/tranches |
 
@@ -3500,6 +3520,7 @@ immuable). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **40
 | vu | string | Non | max 100 |
 | idPrmp | string | Non | max 10 |
 | motifMaj | string | Non | max 500 |
+| version | number | Non | verrou optimiste (`@Version` JPA, ⚠️ 2026-08-27) — toujours renseigné en sortie ; en entrée de `PUT`, absent = comportement historique, périmé = **409** `CONFLIT_VERSION` (détail en tête de document, *Verrou optimiste — champ `version`*) |
 
 **Endpoints**
 
@@ -3508,7 +3529,7 @@ immuable). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **40
 | GET | /api/ppms | — | `PpmDto[]` (scopé) | 200 | Authentifié — ⚠️ **paginable** (`?page=&size=`, cf. Conventions) |
 | GET | /api/ppms/{id} | — | `PpmDto` | 200, 403, 404 | Authentifié (dans son périmètre) |
 | POST | /api/ppms | `PpmDto` | `PpmDto` | 201, 400 | Authentifié |
-| PUT | /api/ppms/{id} | `PpmDto` | `PpmDto` | 200, 400, 404 | Authentifié |
+| PUT | /api/ppms/{id} | `PpmDto` | `PpmDto` | 200, 400, 404, 409 | Authentifié |
 | PATCH | /api/ppms/{id}/rectifier | `PpmDto` | `PpmDto` | 200, 403, 404, 409 | PRMP (propriétaire) |
 | DELETE | /api/ppms/{id} | — | — | 204, 403, 404, 409 | PRMP (propriétaire, brouillon) — ⚠️ cascade marchés + prévisions ; **+ dossier si brouillon vide** |
 
@@ -3731,6 +3752,7 @@ immuable). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **40
 | idSecretaireSeance | string | — (⚠️ posé à la **clôture de navette**, 2026-08-01) | max 7 — **Secrétaire de séance** : Vérificateur titulaire de la localité **ou** contrôleur couvert par une paire « → Vérificateur » active (⚠️ élargi 2026-08-15 ; validé à `…/pv-examens/{id}/accepter` ; encore accepté à `…/examens/{id}/soumettre` si fourni) |
 | nomSecretaireSeance | string | — (réponse) | nom complet du secrétaire de séance (« prénoms nom »), peuplé serveur — lecture seule |
 | documentDisponible | boolean | — (réponse) | ⚠️ **Contrat révisé 2026-08-19** — PV **`SIGNE`** : `true` seulement quand le **fichier est prêt maintenant** (`CHEMIN_DOCUMENT` non nul) ; **`false` pendant la fenêtre de génération post-commit** qui suit la signature. PV **non signé** (projet) : sens historique conservé — `true` si le PV est **éligible** (un **modèle Word existe pour le cas** : avis `FAVR`/`FAV`/`DEF` + PPM avec ≥ 1 ligne de marché, **quel que soit le mode de passation** et la localité ; cf. tableau des modèles §PV). Lecture seule, peuplé serveur → le front masque « Télécharger le PDF » tant que c'est `false` |
+| version | number | Non | verrou optimiste (`@Version` JPA, ⚠️ 2026-08-27) — toujours renseigné en sortie ; en entrée de `PUT`, absent = comportement historique, périmé = **409** `CONFLIT_VERSION` (détail en tête de document, *Verrou optimiste — champ `version`*) |
 
 > ⚠️ **Disponibilité du document (`documentDisponible`) — contrat révisé (2026-08-19, génération post-commit).**
 > La génération du PDF (conversion Word, plusieurs secondes) est **sortie du chemin de la signature** : la

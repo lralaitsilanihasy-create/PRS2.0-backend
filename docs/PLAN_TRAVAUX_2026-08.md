@@ -208,12 +208,12 @@ posees en 3.1 et eviter qu'une regression future en rouvre une.
 - **Lettre lue par une UGPM** : la consultation par une UGPM marque la lettre « lue » pour la
   tutelle entière (`t_lettre_renvoi_lue` est clé sur `ID_PRMP`, sans notion d'agent). Cohérent
   avec le périmètre partagé, mais **à confirmer côté métier** (badge PRMP).
-- **409 du verrou optimiste** : le handler `ObjectOptimisticLockingFailureException` (LOT 4)
-  renvoie un 409 sans `code` dédié — en ajouter un (modèle `VacancePrmpException.CODE`) pour que
-  le front affiche « rechargez puis réessayez » au lieu d'une erreur générique. Petit chantier
-  back + front.
-- **Version dans les DTO** : par HTTP, les DTO ne portent pas la version — deux PUT séquentiels
-  ne déclenchent pas le conflit (documenté dans `VerrouOptimisteIntegrationTest`). Faire transiter
-  la version dans les DTO des écrans d'édition si le besoin apparaît.
+- **409 du verrou optimiste** : SOLDE le 2026-08-27 (`docs/plan-conflit-version.md`, tache D1).
+  Code dedie CONFLIT_VERSION sur les deux chemins du 409 (`9e8cbad`), voir
+  `docs/adr/ADR-0005-version-optimiste-dto.md`.
+- **Version dans les DTO** : SOLDE le 2026-08-27, meme plan que ci-dessus. Champ `version` ajoute
+  aux 5 DTO du circuit et controle en service sur leurs 5 PUT (`613ad1f`), tests HTTP permanents
+  (`7ef2e87`). Voir `docs/api-endpoints.md` (section *Verrou optimiste — champ `version`*) et
+  `docs/adr/ADR-0005-version-optimiste-dto.md`.
 - **Warnings a11y ESLint (front)** : ~124 avertissements assumés (`click-events-have-key-events`,
   `interactive-supports-focus`, `label-has-associated-control`) — chantier a11y dédié, cf. AUDIT.md.
