@@ -29,3 +29,12 @@ Basculer les tests d'intégration vers **Testcontainers**, avec un vrai conteneu
 ## Marche arrière
 
 Revenir à H2 : retirer la dépendance Testcontainers, restaurer `application-test.properties` en configuration H2. Fait perdre la garantie de fidélité au dialecte réel et réintroduit la nécessité de mirroiter à la main les domaines et séquences PostgreSQL.
+
+## Aboutissement (2026-08-27)
+
+Décision entièrement livrée : bascule H2 → Testcontainers PostgreSQL 17 + Flyway (`d557cef`),
+puis découpage de la classe unique en **18 classes par domaine** sur le socle
+`CnmIntegrationTestSupport` (`587aacc`) — la mention « 422 des 444 tests dans une seule classe »
+ci-dessus décrit l'état d'avant. La bascule a immédiatement révélé 4 fixtures violant la contrainte
+`t_pv_examen_cosignataire_check` du schéma réel, invisibles sous H2 — la classe de défauts exacte
+que cette décision visait.

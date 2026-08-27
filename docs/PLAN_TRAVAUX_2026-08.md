@@ -23,7 +23,7 @@
 |---|---|---|---|
 | **LOT 0** | Outillage (CI, ESLint, Mailpit, secret JWT, CORS, pom jar/Java 21) | ~1 j | **Livre** (2026-08-26) |
 | **LOT 1** | Bugs actifs (scoping UGPM, audit tronque, blob revoque trop tot, CurrentUser) | ~1 j | **Livre** (2026-08-26 — back `82602fc`, front `7fc30d5`) |
-| **LOT 2** | Schema et tests (Flyway, Testcontainers, decoupage de la suite d'integration) | ~3-4 j | **2.1-2.2 livres** (`d557cef`) ; 2.3 decoupage en cours |
+| **LOT 2** | Schema et tests (Flyway, Testcontainers, decoupage de la suite d'integration) | ~3-4 j | **Livre** (`d557cef` + `587aacc` — 18 classes par domaine) |
 | **LOT 3** | Autorisation et CRUD (services sans garde, anti-ecrasement, sequences) | ~3-5 j | **Livre** (2026-08-26 — `69c3863` + `cfa5a5d`, 28 tests securite/PK) |
 | **LOT 4** | Robustesse (exceptions, verrou optimiste, entites, logs du circuit) | ~2-3 j | **Livre** (2026-08-26 — `d3c907f`..`71df209`, 4 volets) |
 | **LOT 5** | Contrat d'API et documentation (OpenAPI, deduplication, ADR) | ~1-2 j | **Livre** (springdoc 3.1.0, dedup docs, api-endpoints a jour) |
@@ -110,7 +110,7 @@ erreur serveur (500). Correctif : envelopper l'appel et retomber sur
 
 ## LOT 2 — Schema et tests
 
-**Etat : 2.1-2.2 livres le 2026-08-26** (`d557cef` — Flyway V1-V4, Testcontainers PostgreSQL 17) ; 2.3 (decoupage) en cours.
+**Etat : livre** — 2.1-2.2 le 2026-08-26 (`d557cef`, Flyway V1-V4 + Testcontainers PostgreSQL 17) ; 2.3 le 2026-08-27 (`587aacc`, 425 tests repartis verbatim en 18 classes par domaine sur le socle CnmIntegrationTestSupport, duree de suite inchangee).
 
 ### 2.1 — Baseline Flyway
 

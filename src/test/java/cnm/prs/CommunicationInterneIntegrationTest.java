@@ -24,14 +24,11 @@ import cnm.prs.enums.TypeObjet;
  * reception, marquage lu, confidentialite).
  *
  * <p><b>Ordre imposé (⚠️ ne pas renommer la classe à la légère)</b> :
- * {@code messagerie_envoiReceptionLu} attend {@code idMessage == 1}. La PK vient de la séquence
- * {@code seq_message}, que le rollback des tests ne remet PAS à zéro : ce test doit donc être le
- * premier de la JVM à créer un message. D'où deux garde-fous —
- * {@code MethodOrderer.MethodName} le fait passer avant les {@code notification_*} de cette
- * classe, et le nom de la classe la place avant {@code CreationPkIntegrationTest}, seule autre
- * classe à consommer {@code seq_message} (surefire ordonne les classes par nom de fichier).</p>
+ * Les identifiants issus des séquences PostgreSQL ({@code seq_message}, {@code seq_notification} —
+ * LOT 3b) ne sont jamais supposés : chaque test LIT l'id rendu par le service (une séquence ne se
+ * rejoue pas d'un test à l'autre, le rollback ne la remet pas à zéro). Aucun test de cette classe
+ * ne dépend de l'ordre d'exécution.</p>
  */
-@org.junit.jupiter.api.TestMethodOrder(org.junit.jupiter.api.MethodOrderer.MethodName.class)
 class CommunicationInterneIntegrationTest extends CnmIntegrationTestSupport {
 
     @Test
@@ -177,14 +174,19 @@ class CommunicationInterneIntegrationTest extends CnmIntegrationTestSupport {
     @DisplayName("Messagerie : envoi, réception, marquage lu et confidentialité")
     void messagerie_envoiReceptionLu() throws Exception {
         // Le Membre envoie un message au CC.
-        mvc.perform(post("/api/messages/envoyer").header("Authorization", tokenMembre)
+        // ⚠️ Suivi du LOT 2.3 (2026-08-27) — l'id n'est plus supposé (== 1) mais LU dans la réponse :
+        // ID_MESSAGE vient de la séquence seq_message (LOT 3b), qu'aucun rollback ne remet à zéro —
+        // supposer 1 n'était vrai que si ce test était le premier de la JVM à créer un message.
+        // Même motif que notifications_meScopeLectureGlobalAdmin ci-dessus.
+        String reponse = mvc.perform(post("/api/messages/envoyer").header("Authorization", tokenMembre)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"destinataireIm\":\"CTRCC1\",\"sujet\":\"Question\",\"corps\":\"Bonjour\"}"))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.idMessage").value(1))
                 .andExpect(jsonPath("$.expediteurIm").value("CTRMEM"))
                 .andExpect(jsonPath("$.destinataireIm").value("CTRCC1"))
-                .andExpect(jsonPath("$.lu").value(false));
+                .andExpect(jsonPath("$.lu").value(false))
+                .andReturn().getResponse().getContentAsString();
+        int idMessage = com.jayway.jsonpath.JsonPath.read(reponse, "$.idMessage");
 
         // Boîte de réception du CC : 1 message ; envoyés du Membre : 1.
         mvc.perform(get("/api/messages/recus").header("Authorization", tokenCc))
@@ -194,15 +196,15 @@ class CommunicationInterneIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1));
 
         // Le CC marque le message comme lu.
-        mvc.perform(post("/api/messages/1/lu").header("Authorization", tokenCc))
+        mvc.perform(post("/api/messages/" + idMessage + "/lu").header("Authorization", tokenCc))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.lu").value(true));
 
         // L'expéditeur (non destinataire) ne peut pas marquer lu → 403.
-        mvc.perform(post("/api/messages/1/lu").header("Authorization", tokenMembre))
+        mvc.perform(post("/api/messages/" + idMessage + "/lu").header("Authorization", tokenMembre))
                 .andExpect(status().isForbidden());
 
         // Un tiers ne peut pas lire le message (confidentialité) → 403.
-        mvc.perform(get("/api/messages/1").header("Authorization", tokenAdmin))
+        mvc.perform(get("/api/messages/" + idMessage).header("Authorization", tokenAdmin))
                 .andExpect(status().isForbidden());
     }
 
