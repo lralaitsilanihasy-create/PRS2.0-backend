@@ -1,5 +1,6 @@
 package cnm.prs.scheduler;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.Set;
@@ -50,11 +51,14 @@ public class AlerteScheduler {
     private final NotificationService notificationService;
     /** ⚠️ Spec « Mandats PRMP » — source d'autorité de la date de fin de mandat. */
     private final cnm.prs.service.MandatService mandatService;
+    /** ⚠️ Audit 2026-08-27 (lot C) — horloge injectée : seule source de « aujourd'hui » du scheduler,
+     *  pour le rendre testable (cf. {@code cnm.prs.config.ClockConfig}). */
+    private final Clock clock;
 
     public AlerteScheduler(PrmpRepository prmpRepository, CompteAuthRepository compteAuthRepository,
             EcheanceRepository echeanceRepository, MarcheRepository marcheRepository,
             PpmRepository ppmRepository, NotificationService notificationService,
-            cnm.prs.service.MandatService mandatService) {
+            cnm.prs.service.MandatService mandatService, Clock clock) {
         this.mandatService = mandatService;
         this.prmpRepository = prmpRepository;
         this.compteAuthRepository = compteAuthRepository;
@@ -62,6 +66,7 @@ public class AlerteScheduler {
         this.marcheRepository = marcheRepository;
         this.ppmRepository = ppmRepository;
         this.notificationService = notificationService;
+        this.clock = clock;
     }
 
     /**
@@ -70,7 +75,7 @@ public class AlerteScheduler {
     @Scheduled(cron = "${app.alertes.cron-mandat:0 0 6 * * *}")
     @Transactional
     public void alerterFinMandat() {
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(clock);
         for (Prmp prmp : prmpRepository.findAll()) {
             if (prmp.getDateNomin() == null) {
                 continue;
@@ -103,7 +108,7 @@ public class AlerteScheduler {
     @Scheduled(cron = "${app.alertes.cron-jalons:0 30 6 * * *}")
     @Transactional
     public void alerterJalons() {
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(clock);
         LocalDate fin = today.plusDays(FENETRE_JALON_JOURS);
         for (Echeance echeance : echeanceRepository.findJalonsAAlerter(today, fin)) {
             String email = resoudreEmailPrmp(echeance.getIdDetail());
