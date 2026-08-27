@@ -67,6 +67,12 @@ class PaginationContratIntegrationTest extends CnmIntegrationTestSupport {
         // 2ᵉ page cohérente : pas de recouvrement avec la 1ʳᵉ, ensemble = les 3 dossiers de PRMP001.
         org.junit.jupiter.api.Assertions.assertEquals(3, tousLesIds.size(), "pas de doublon entre les 2 pages");
         org.junit.jupiter.api.Assertions.assertEquals(Set.of(6001, 6002, 6003), tousLesIds);
+        // ⚠️ Audit 2026-08-27 — tri PK DÉCROISSANT : le tableau de bord ouvre sur les dossiers les
+        // plus RÉCENTS. Le tri était croissant, la première page rendait donc les plus anciens.
+        org.junit.jupiter.api.Assertions.assertEquals(List.of(6003, 6002), idsP0,
+                "1ʳᵉ page : les dossiers les plus récents d'abord");
+        org.junit.jupiter.api.Assertions.assertEquals(List.of(6001), idsP1,
+                "2ᵉ page : le plus ancien en dernier");
         // Jamais les dossiers de la PRMP étrangère (périmètre de visibilité, §1).
         org.junit.jupiter.api.Assertions.assertTrue(java.util.Collections.disjoint(tousLesIds, Set.of(6101, 6102)));
     }
@@ -115,6 +121,9 @@ class PaginationContratIntegrationTest extends CnmIntegrationTestSupport {
         List<Integer> idsP1 = JsonPath.read(p1, "$.content[*].idPpm");
         Set<Integer> tous = java.util.stream.Stream.concat(idsP0.stream(), idsP1.stream()).collect(Collectors.toSet());
         org.junit.jupiter.api.Assertions.assertEquals(Set.of(7001, 7002, 7003), tous);
+        // ⚠️ Audit 2026-08-27 — tri PK décroissant : les PPM les plus récents d'abord.
+        org.junit.jupiter.api.Assertions.assertEquals(List.of(7003, 7002), idsP0);
+        org.junit.jupiter.api.Assertions.assertEquals(List.of(7001), idsP1);
         org.junit.jupiter.api.Assertions.assertTrue(java.util.Collections.disjoint(tous, Set.of(7101, 7102)));
     }
 
@@ -156,6 +165,9 @@ class PaginationContratIntegrationTest extends CnmIntegrationTestSupport {
         List<Integer> idsP1 = JsonPath.read(p1, "$.content[*].idDetail");
         Set<Integer> tous = java.util.stream.Stream.concat(idsP0.stream(), idsP1.stream()).collect(Collectors.toSet());
         org.junit.jupiter.api.Assertions.assertEquals(Set.of(8001, 8002, 8003), tous);
+        // ⚠️ Audit 2026-08-27 — tri PK décroissant : les marchés les plus récents d'abord.
+        org.junit.jupiter.api.Assertions.assertEquals(List.of(8003, 8002), idsP0);
+        org.junit.jupiter.api.Assertions.assertEquals(List.of(8001), idsP1);
         org.junit.jupiter.api.Assertions.assertTrue(java.util.Collections.disjoint(tous, Set.of(8101, 8102)));
     }
 
@@ -213,6 +225,10 @@ class PaginationContratIntegrationTest extends CnmIntegrationTestSupport {
     @Test
     @DisplayName("GET /api/actualites?page= : forme Page (Administrateur), 2ᵉ page cohérente")
     void actualites_pagine_forme() throws Exception {
+        // ⚠️ Audit 2026-08-27 — cette page-ci n'est PAS concernée par le passage au tri PK
+        // décroissant : elle découpe {@code ActualiteService.findAll()}, qui porte déjà un tri
+        // MÉTIER (date de création décroissante, les plus récentes d'abord). Aucun tri PK n'y est
+        // imposé, il n'y a donc rien à inverser — l'ordre attendu est déjà le bon.
         for (int i = 0; i < 3; i++) {
             mvc.perform(post("/api/actualites").header("Authorization", tokenAdmin)
                             .contentType(MediaType.APPLICATION_JSON)

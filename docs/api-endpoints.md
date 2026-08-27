@@ -36,9 +36,14 @@
 - `GET /api/dossiers`, `GET /api/ppms` et `GET /api/marches` acceptent `?page=&size=` (0-indexé) :
   la réponse devient l'**enveloppe `Page`** de Spring (`content[]`, `totalElements`, `totalPages`,
   `number`, `size`…) — même forme que `/api/dossiers/examines`. **Sans `page`, la liste plate est
-  conservée** (rétro-compatible). Pagination **applicative** : la liste est d'abord constituée avec les
-  filtres de périmètre habituels puis découpée — l'ordre est celui de la liste non paginée (le `sort`
-  du paramètre n'est pas appliqué).
+  conservée** (rétro-compatible). Pagination **en SQL** (`LIMIT`/`OFFSET` + `count`, lot D §3), avec les
+  filtres de périmètre habituels.
+- **Ordre imposé par le serveur** (⚠️ audit 2026-08-27) : **clé primaire décroissante**
+  (`idDossier`, `idPpm`, `idDetail`) — les enregistrements **les plus récents d'abord**, les PK étant
+  allouées par séquence. Il était croissant : la première page rendait les plus anciens. Le `sort`
+  du paramètre n'est **pas** appliqué.
+- `GET /api/actualites` pagine aussi (`?page=&size=`, Administrateur) mais garde son **tri métier**
+  (date de création décroissante) : pas de tri PK.
 
 ### Sécurité des réponses (⚠️ audit front 2026-08-16)
 - **En-têtes** posés sur toutes les réponses : `Content-Security-Policy: default-src 'self';

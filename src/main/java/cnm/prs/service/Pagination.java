@@ -27,7 +27,8 @@ final class Pagination {
 
     /**
      * Pageable servi au repository : même page et même taille que la demande, mais tri
-     * <strong>imposé par le serveur</strong> sur la propriété donnée.
+     * <strong>imposé par le serveur</strong> sur la propriété donnée, en ordre
+     * <strong>décroissant</strong>.
      *
      * <p>Le tri porté par le {@code Pageable} du client n'est délibérément <strong>pas</strong>
      * appliqué — c'est le contrat annoncé depuis l'origine de ces endpoints, et l'accepter
@@ -35,9 +36,16 @@ final class Pagination {
      * la clé primaire est en revanche <strong>indispensable</strong> : sans {@code ORDER BY},
      * PostgreSQL ne garantit aucun ordre entre deux requêtes, et deux pages successives pourraient
      * se recouvrir ou omettre des lignes.</p>
+     *
+     * <p>⚠️ Audit 2026-08-27 — le sens du tri était <strong>croissant</strong> : la première page,
+     * celle que le tableau de bord affiche, rendait les enregistrements les plus ANCIENS, et il
+     * fallait aller à la dernière page pour voir ce qui venait d'être saisi. Les clés primaires
+     * étant allouées par séquence (migration {@code V5}), leur ordre décroissant est l'ordre de
+     * création inverse : les plus récents d'abord, ce que le front attend d'une liste de travail.</p>
      */
     static Pageable page(Pageable pageable, String proprieteTri) {
-        return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), Sort.by(proprieteTri));
+        return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
+                Sort.by(proprieteTri).descending());
     }
 
     /**
