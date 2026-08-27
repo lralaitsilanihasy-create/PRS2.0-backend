@@ -55,18 +55,22 @@ public interface LettreRenvoiRepository extends JpaRepository<LettreRenvoi, Inte
     List<LettreRenvoi> findSigneesPourPrmp(@Param("idPrmp") String idPrmp);
 
     /**
-     * Nombre de lettres SIGNE des dossiers d'une PRMP <strong>non encore lues</strong> par elle
-     * (compteur « Mes lettres de renvoi » du menu PRMP). Exclut celles tracées dans
-     * {@code t_lettre_renvoi_lue} pour cette PRMP.
+     * Nombre de lettres SIGNE des dossiers d'une PRMP <strong>non encore lues par l'agent connecté</strong>
+     * (compteur « Mes lettres de renvoi » du menu PRMP). Le <em>périmètre</em> des lettres reste la tutelle
+     * ({@code Ppm.idPrmp} = claim {@code ref}) ; l'exclusion, elle, porte sur les traces
+     * {@code t_lettre_renvoi_lue} du <strong>login</strong> de l'agent.
+     *
+     * <p>⚠️ Décision métier 2026-08-27 — auparavant l'exclusion portait sur {@code ID_PRMP} : la lecture
+     * d'une UGPM décrémentait le badge de sa PRMP de tutelle.</p>
      */
     @Query("""
             select count(l) from LettreRenvoi l
             where l.statut = 'SIGNE'
               and exists (select 1 from Ppm p where p.idDossier = l.idDossier and p.idPrmp = :idPrmp)
               and not exists (select 1 from LettreRenvoiLue lu
-                              where lu.idLettre = l.idLettre and lu.idPrmp = :idPrmp)
+                              where lu.idLettre = l.idLettre and lu.loginAgent = :login)
             """)
-    long countSigneesNonLuesPourPrmp(@Param("idPrmp") String idPrmp);
+    long countSigneesNonLuesPourPrmp(@Param("idPrmp") String idPrmp, @Param("login") String login);
 
     /**
      * Dernière lettre de renvoi SIGNÉE d'un dossier (⚠️ règle ajoutée 2026-08-02) — la garde de

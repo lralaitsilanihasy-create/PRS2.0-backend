@@ -133,24 +133,45 @@ public class LettreRenvoiService {
     }
 
     /**
-     * Détail d'une lettre. Accès : périmètre de localité habituel <strong>ou</strong> PRMP propriétaire du
-     * dossier pour une lettre {@code SIGNE} (sinon la PRMP serait hors périmètre → 403). À cette occasion,
-     * la lettre est marquée « lue » pour la PRMP (trace {@code t_lettre_renvoi_lue}, idempotente, silencieuse).
+     * Détail d'une lettre. Accès : périmètre de localité habituel <strong>ou</strong> branche PRMP
+     * propriétaire du dossier pour une lettre {@code SIGNE} (sinon la PRMP serait hors périmètre → 403).
+     * À cette occasion, la lettre est marquée « lue » pour l'<strong>agent connecté</strong> (trace
+     * {@code t_lettre_renvoi_lue}, idempotente et silencieuse).
+     *
+     * <p>⚠️ Décision métier 2026-08-27 — la trace porte le <strong>login</strong> de l'agent (claim
+     * {@code sub}) et non plus la claim {@code ref} : pour une UGPM, {@code ref} est l'ID_PRMP de sa
+     * tutelle, si bien que sa consultation éteignait le badge de la PRMP. La garde d'accès, elle, ne
+     * bouge pas : seule la branche propriétaire (PRMP ou son UGPM) laisse une trace (acquis LOT 3a —
+     * un contrôleur du périmètre n'en pose jamais).</p>
      */
     public LettreRenvoiDto findById(Integer id) {
         LettreRenvoi entity = exigerExistante(id);
-        String ref = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
+        String login = CurrentUser.login().filter(s -> !s.isBlank()).orElse(null);
         boolean prmpProprietaire = estPrmpProprietaireSignee(entity);
         if (!prmpProprietaire) {
             // Périmètre de localité habituel (la PRMP non propriétaire reste hors périmètre → 403).
             Visibilite.controler(loc -> repository.existsDansLocalite(id, loc));
-        } else if (!lueRepository.existsByIdLettreAndIdPrmp(id, ref)) {
-            // Marquage « lu » à la consultation par la PRMP propriétaire (silencieux, anti-doublon).
-            lueRepository.save(new LettreRenvoiLue(null, id, ref, LocalDateTime.now()));
+        } else if (login != null && !lueRepository.existsByIdLettreAndLoginAgent(id, login)) {
+            // Marquage « lu » à la consultation par l'agent propriétaire (silencieux, anti-doublon).
+            tracerLecture(id, login, CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null));
         }
         LettreRenvoiDto dto = peuplerNomSignataire(LettreRenvoiMapper.toDto(entity));
-        dto.setLue(ref != null && lueRepository.existsByIdLettreAndIdPrmp(id, ref));
+        dto.setLue(login != null && lueRepository.existsByIdLettreAndLoginAgent(id, login));
         return dto;
+    }
+
+    /**
+     * Pose la trace de lecture d'un agent : son {@code login} porte l'unicité
+     * ({@code uk_lettre_lue_agent}), {@code idPrmpTutelle} (claim {@code ref}) documente le périmètre
+     * de tutelle dans lequel la lecture a eu lieu.
+     */
+    private void tracerLecture(Integer idLettre, String login, String idPrmpTutelle) {
+        LettreRenvoiLue trace = new LettreRenvoiLue();
+        trace.setIdLettre(idLettre);
+        trace.setLoginAgent(login);
+        trace.setIdPrmp(idPrmpTutelle);
+        trace.setDateLecture(LocalDateTime.now());
+        lueRepository.save(trace);
     }
 
     /**
@@ -167,11 +188,11 @@ public class LettreRenvoiService {
                 && ppmRepository.existsByIdDossierAndIdPrmp(entity.getIdDossier(), ref);
     }
 
-    /** Renseigne le flag {@code lue} pour la PRMP courante (trace {@code t_lettre_renvoi_lue}). */
+    /** Renseigne le flag {@code lue} pour l'<strong>agent connecté</strong> (trace {@code t_lettre_renvoi_lue}). */
     private LettreRenvoiDto peuplerLue(LettreRenvoiDto dto) {
-        String ref = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
+        String login = CurrentUser.login().filter(s -> !s.isBlank()).orElse(null);
         if (dto != null && dto.getIdLettre() != null) {
-            dto.setLue(ref != null && lueRepository.existsByIdLettreAndIdPrmp(dto.getIdLettre(), ref));
+            dto.setLue(login != null && lueRepository.existsByIdLettreAndLoginAgent(dto.getIdLettre(), login));
         }
         return dto;
     }

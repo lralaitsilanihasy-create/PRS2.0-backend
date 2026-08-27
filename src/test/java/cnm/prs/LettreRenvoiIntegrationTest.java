@@ -36,7 +36,8 @@ class LettreRenvoiIntegrationTest extends CnmIntegrationTestSupport {
         int id = seedLettreSignee();
         mvc.perform(get("/api/lettre-renvois/" + id).header("Authorization", tokenPrmp))
                 .andExpect(status().isOk());
-        assertTrue(lueRepository.existsByIdLettreAndIdPrmp(id, "PRMP001"), "trace de lecture créée");
+        // ⚠️ 2026-08-27 : la trace est posée pour l'AGENT (login du jeton), plus pour la tutelle.
+        assertTrue(lueRepository.existsByIdLettreAndLoginAgent(id, "PRMP001"), "trace de lecture créée");
     }
 
     @Test

@@ -172,7 +172,9 @@ class RetraitIntegrationTest extends CnmIntegrationTestSupport {
         lr.setIdExamen(710); lr.setIdDossier(710); lr.setObjetLettre("Renvoi"); lr.setStatut("SIGNE");
         int idLettre = lettreRenvoiRepository.save(lr).getIdLettre();
         cnm.prs.entity.LettreRenvoiLue lue = new cnm.prs.entity.LettreRenvoiLue();
-        lue.setIdLettre(idLettre); lue.setIdPrmp("PRMP001"); lue.setDateLecture(LocalDateTime.of(2026, 6, 6, 9, 0));
+        // ⚠️ 2026-08-27 : la trace porte le login de l'agent (NOT NULL), ID_PRMP restant la tutelle.
+        lue.setIdLettre(idLettre); lue.setIdPrmp("PRMP001"); lue.setLoginAgent("PRMP001");
+        lue.setDateLecture(LocalDateTime.of(2026, 6, 6, 9, 0));
         lueRepository.save(lue);
 
         int drId = demandeRetraitRepository.save(demandeRetrait(0, 710, "PRMP001")).getIdDemandeRetrait();
@@ -196,7 +198,7 @@ class RetraitIntegrationTest extends CnmIntegrationTestSupport {
         org.junit.jupiter.api.Assertions.assertFalse(pvNavetteRepository.existsById(7101), "navette purgée");
         org.junit.jupiter.api.Assertions.assertFalse(copieDossierRepository.existsById(7102), "copie purgée");
         org.junit.jupiter.api.Assertions.assertFalse(lettreRenvoiRepository.existsById(idLettre), "lettre de renvoi purgée");
-        org.junit.jupiter.api.Assertions.assertFalse(lueRepository.existsByIdLettreAndIdPrmp(idLettre, "PRMP001"), "accusé de lecture purgé");
+        org.junit.jupiter.api.Assertions.assertFalse(lueRepository.existsByIdLettreAndLoginAgent(idLettre, "PRMP001"), "accusé de lecture purgé");
     }
 
     @Test

@@ -11,8 +11,13 @@ import cnm.prs.entity.LettreRenvoiLue;
 @Repository
 public interface LettreRenvoiLueRepository extends JpaRepository<LettreRenvoiLue, Integer> {
 
-    /** Vrai si la PRMP a déjà lu la lettre (anti-doublon + flag {@code lue} du DTO). */
-    boolean existsByIdLettreAndIdPrmp(Integer idLettre, String idPrmp);
+    /**
+     * Vrai si l'<strong>agent</strong> (login) a déjà lu la lettre (anti-doublon + flag {@code lue} du DTO).
+     *
+     * <p>⚠️ Décision métier 2026-08-27 — remplace {@code existsByIdLettreAndIdPrmp} : le suivi de lecture
+     * est individuel, la consultation par une UGPM ne vaut plus lecture pour sa PRMP de tutelle.</p>
+     */
+    boolean existsByIdLettreAndLoginAgent(Integer idLettre, String loginAgent);
 
     /**
      * Purge (⚠️ règle ajoutée §3.3) — supprime les accusés de lecture des lettres de renvoi d'un dossier

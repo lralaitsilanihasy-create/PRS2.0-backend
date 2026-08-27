@@ -137,6 +137,10 @@ public class KpiService {
         if (idPrmp == null) {
             return new CompteursPrmpDto(0, 0, 0, 0, 0, 0);
         }
+        // ⚠️ Décision métier 2026-08-27 — les lettres non lues se comptent par AGENT (login, claim
+        // « sub ») et non plus par tutelle : la lecture d'une UGPM ne décrémente plus le badge de sa
+        // PRMP. Le périmètre des lettres, lui, reste la tutelle (idPrmp). Login absent → tout non lu.
+        String login = CurrentUser.login().filter(s -> !s.isBlank()).orElse("");
         // Demandes décidées (ACCEPTEE/REFUSEE) depuis la dernière consultation de l'écran (sinon tout l'historique).
         java.time.LocalDateTime seuil = demandeRetraitVueRepository.findByIdPrmp(idPrmp)
                 .map(cnm.prs.entity.DemandeRetraitVue::getDateDerniereVue)
@@ -147,7 +151,7 @@ public class KpiService {
                 dossierRepository.countByStatutAndIdPrmp(StatutDossier.EN_ATTENTE_DECISION_PRMP.name(), idPrmp),
                 dossierRepository.countByStatutInAndIdPrmp(
                         List.of(StatutDossier.PV_SIGNE.name(), StatutDossier.CLOTURE.name()), idPrmp),
-                lettreRenvoiRepository.countSigneesNonLuesPourPrmp(idPrmp),
+                lettreRenvoiRepository.countSigneesNonLuesPourPrmp(idPrmp, login),
                 demandeRetraitRepository.countNouvellesDecisionsPourPrmp(idPrmp, seuil));
     }
 
