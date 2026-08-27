@@ -179,6 +179,70 @@ public class GlobalExceptionHandler {
         return "Valeur invalide ou mal formatée pour ce champ.";
     }
 
+    /**
+     * ⚠️ Recette 2026-08-27 — <strong>paramètre d'URL mal typé</strong> : la valeur reçue ne se
+     * convertit pas vers le type déclaré du paramètre ({@code ?du=2026-08-01T00:00:00} sur un
+     * {@code LocalDate}, {@code ?dossier=abc} sur un {@code Integer}, identifiant de chemin non
+     * numérique). Faute d'un handler dédié, le cas tombait dans le filet {@link #handleGeneric} :
+     * l'appelant recevait <strong>500 « Une erreur interne est survenue. »</strong> pour une erreur
+     * qui est la sienne, sans savoir quel paramètre reprendre — et le serveur journalisait une pile
+     * à chaque fois.
+     * <p>
+     * → <strong>400</strong>, nommant le paramètre fautif et le format attendu, sur le motif du
+     * handler {@link #handleNotReadable} qui traite déjà la même faute dans le CORPS de la requête.
+     */
+    @ExceptionHandler(org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleTypeMismatch(
+            org.springframework.web.method.annotation.MethodArgumentTypeMismatchException ex, WebRequest request) {
+        String parametre = ex.getName();
+        String attendu = attenduPourParametre(ex.getRequiredType());
+        return build(HttpStatus.BAD_REQUEST,
+                "Paramètre « " + parametre + " » invalide : " + attendu,
+                request,
+                List.of(new ErrorResponse.FieldError(parametre, attendu)));
+    }
+
+    /**
+     * Formulation du type attendu par un paramètre d'URL. Les trois familles couvrent les types
+     * réellement déclarés par les contrôleurs (dates {@code LocalDate}, {@code Integer}/{@code Long},
+     * {@code Boolean}) ; tout autre type retombe sur la formulation générique.
+     */
+    private static String attenduPourParametre(Class<?> type) {
+        if (type == null) {
+            return "valeur non conforme au type attendu.";
+        }
+        if (java.time.temporal.Temporal.class.isAssignableFrom(type)) {
+            return "format de date attendu AAAA-MM-JJ.";
+        }
+        if (Number.class.isAssignableFrom(type)) {
+            return "valeur numérique attendue.";
+        }
+        if (Boolean.class.equals(type)) {
+            return "valeur booléenne attendue (true ou false).";
+        }
+        return "valeur non conforme au type attendu.";
+    }
+
+    /**
+     * ⚠️ Recette 2026-08-27 — <strong>chemin inconnu</strong> ({@code GET /api/auth/moi}) : aucun
+     * contrôleur ne répond, la requête finit chez le gestionnaire de ressources statiques qui lève
+     * {@code NoResourceFoundException} (Spring 6+ ; {@code NoHandlerFoundException} si le service
+     * des ressources statiques est coupé). Ces deux-là tombaient elles aussi dans
+     * {@link #handleGeneric} — <strong>500</strong> pour une simple faute de frappe d'URL, alors
+     * que le serveur va parfaitement bien.
+     * <p>
+     * → <strong>404</strong>, même message que le 404 JPA : rien de plus ne doit filtrer sur ce que
+     * l'API expose ou non. Journalisé en {@code debug} sans pile : les scanners d'URL en produisent
+     * en rafale, ce n'est pas une anomalie d'exploitation.
+     */
+    @ExceptionHandler({
+            org.springframework.web.servlet.resource.NoResourceFoundException.class,
+            org.springframework.web.servlet.NoHandlerFoundException.class })
+    public ResponseEntity<ErrorResponse> handleCheminInconnu(Exception ex, WebRequest request) {
+        log.debug("Chemin inconnu : {}", uri(request));
+        return build(HttpStatus.NOT_FOUND, "Ressource introuvable.", request, null);
+    }
+
     /** Invoque sans argument une méthode publique si elle existe (sinon {@code null}) — accès Jackson sans dépendance compile. */
     private static Object invoquer(Object cible, String methode) {
         try {
