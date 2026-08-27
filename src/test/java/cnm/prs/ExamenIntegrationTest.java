@@ -324,6 +324,109 @@ class ExamenIntegrationTest extends CnmIntegrationTestSupport {
         return p;
     }
 
+    // ------------------------------------------------------------------
+    // Gardes d'écriture de l'examen et de ses lignes (⚠️ audit 2026-08-27, lot B)
+    // ------------------------------------------------------------------
+
+    @Test
+    @DisplayName("Examen (lot B) — le PUT et la SOUMISSION sont réservés à l'attributaire : un autre Membre → 403 ; "
+            + "l'attributaire passe (non-régression)")
+    void examen_putEtSoumission_reservesALAttributaire() throws Exception {
+        String tokenAutreMembre = bearer("CTRMEM2", ProfilUtilisateur.MEMBRE, TypeActeur.CONTROLEUR, "CTRMEM2", "ANT");
+        // Examen 1 : dossier 1 (ANT), attributaire du dispatch 1 = CTRMEM.
+        mvc.perform(put("/api/examens/1").header("Authorization", tokenAutreMembre)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idExamen\":1,\"idDispatch\":1,\"imCtrlMembre\":\"CTRMEM2\"}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/api/examens/1/soumettre").header("Authorization", tokenAutreMembre)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"idAvis\":\"FAV\"}"))
+                .andExpect(status().isForbidden());
+        // NON-RÉGRESSION : l'attributaire modifie son examen.
+        mvc.perform(put("/api/examens/1").header("Authorization", tokenMembre)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idExamen\":1,\"idDispatch\":1,\"imCtrlMembre\":\"CTRMEM\"}"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("Examen (lot B) — imCtrlMembre du corps IGNORÉ au PUT : l'attributaire reste celui du dispatch")
+    void examen_put_imCtrlMembreDuCorpsIgnore() throws Exception {
+        mvc.perform(put("/api/examens/1").header("Authorization", tokenMembre)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idExamen\":1,\"idDispatch\":1,\"imCtrlMembre\":\"USURP\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.imCtrlMembre").value("CTRMEM"));
+        mvc.perform(get("/api/examens/1").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.imCtrlMembre").value("CTRMEM"));
+    }
+
+    @Test
+    @DisplayName("Détails d'examen (lot B) — écriture réservée à l'attributaire et à sa localité : autre Membre → 403, "
+            + "CC d'une autre localité → 403")
+    void examenDetails_ecritureGardee() throws Exception {
+        PointsCtrl pc = new PointsCtrl();
+        pc.setIdPointCtrl(1); pc.setLibelPointCtrl("Montant"); pc.setObligatoire(true); pc.setIdTypeDossier("DDP");
+        pointsCtrlRepository.save(pc);
+
+        String tokenAutreMembre = bearer("CTRMEM2", ProfilUtilisateur.MEMBRE, TypeActeur.CONTROLEUR, "CTRMEM2", "ANT");
+        mvc.perform(post("/api/examen-details").header("Authorization", tokenAutreMembre)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDetailExamen\":940,\"idExamen\":1,\"idPtControle\":1,\"conforme\":true}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/api/examen-details").header("Authorization", tokenCcTms())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDetailExamen\":941,\"idExamen\":1,\"idPtControle\":1,\"conforme\":true}"))
+                .andExpect(status().isForbidden());
+
+        // NON-RÉGRESSION : l'attributaire écrit, puis corrige sa ligne.
+        mvc.perform(post("/api/examen-details").header("Authorization", tokenMembre)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDetailExamen\":942,\"idExamen\":1,\"idPtControle\":1,\"conforme\":true}"))
+                .andExpect(status().isCreated());
+        mvc.perform(put("/api/examen-details/942").header("Authorization", tokenMembre)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDetailExamen\":942,\"idExamen\":1,\"idPtControle\":1,\"conforme\":true}"))
+                .andExpect(status().isOk());
+        // Et un autre Membre ne corrige pas la ligne écrite par l'attributaire.
+        mvc.perform(put("/api/examen-details/942").header("Authorization", tokenAutreMembre)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDetailExamen\":942,\"idExamen\":1,\"idPtControle\":1,\"conforme\":false}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Pièces d'examen (lot B) — écriture gardée comme les détails : autre Membre → 403, et FIGÉE (409) "
+            + "après signature du PV")
+    void examenPieces_ecritureGardeeEtFigeeApresSignature() throws Exception {
+        String tokenAutreMembre = bearer("CTRMEM2", ProfilUtilisateur.MEMBRE, TypeActeur.CONTROLEUR, "CTRMEM2", "ANT");
+        mvc.perform(post("/api/examen-pieces").header("Authorization", tokenAutreMembre)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idExamenPiece\":940,\"idExamen\":1,\"idPiece\":1,\"conforme\":true}"))
+                .andExpect(status().isForbidden());
+
+        // NON-RÉGRESSION : l'attributaire enregistre son constat de pièce tant que l'examen est ouvert.
+        mvc.perform(post("/api/examen-pieces").header("Authorization", tokenMembre)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idExamenPiece\":941,\"idExamen\":1,\"idPiece\":1,\"conforme\":true}"))
+                .andExpect(status().isCreated());
+
+        // PV signé (FAV) sur l'examen 1 → le dossier quitte EXAMINE : le constat de pièce est définitif.
+        signerPvAvecAvis(942, "FAV");
+        mvc.perform(put("/api/examen-pieces/941").header("Authorization", tokenMembre)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idExamenPiece\":941,\"idExamen\":1,\"idPiece\":1,\"conforme\":false}"))
+                .andExpect(status().isConflict());
+        mvc.perform(post("/api/examen-pieces").header("Authorization", tokenMembre)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idExamenPiece\":943,\"idExamen\":1,\"idPiece\":2,\"conforme\":true}"))
+                .andExpect(status().isConflict());
+        // Le constat d'origine n'a pas bougé (conforme = true).
+        mvc.perform(get("/api/examen-pieces/941").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.conforme").value(true));
+    }
+
     @Test
     @DisplayName("Observation-controle — création d'une ligne (Membre) → 201")
     void observation_creation_ok() throws Exception {

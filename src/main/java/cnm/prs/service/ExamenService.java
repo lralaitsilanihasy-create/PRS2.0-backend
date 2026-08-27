@@ -52,11 +52,15 @@ public class ExamenService {
     private final PointsCtrlRepository pointsCtrlRepository;
     private final MarcheRepository marcheRepository;
     private final ExamenDetailRepository examenDetailRepository;
+    /** ⚠️ Audit 2026-08-27 (lot B) — verrou d'état partagé avec les détails et les pièces d'examen. */
+    private final ExamenGarde examenGarde;
 
     public ExamenService(ExamenRepository repository, DispatchRepository dispatchRepository,
             DossierRepository dossierRepository, PvExamenService pvExamenService,
             ControleurDirectory controleurDirectory, PointsCtrlRepository pointsCtrlRepository,
-            MarcheRepository marcheRepository, ExamenDetailRepository examenDetailRepository) {
+            MarcheRepository marcheRepository, ExamenDetailRepository examenDetailRepository,
+            ExamenGarde examenGarde) {
+        this.examenGarde = examenGarde;
         this.repository = repository;
         this.dispatchRepository = dispatchRepository;
         this.dossierRepository = dossierRepository;
@@ -78,6 +82,10 @@ public class ExamenService {
     public PvExamenDto soumettre(Integer idExamen, ExamenSoumissionRequest req) {
         Examen examen = repository.findById(idExamen)
                 .orElseThrow(() -> new ResourceNotFoundException("Examen introuvable : " + idExamen));
+        // ⚠️ Audit 2026-08-27 (lot B) — la garde attributaire n'était posée qu'à la CRÉATION : la
+        // soumission, qui engage l'examen et produit le projet de PV, n'en avait aucune.
+        Visibilite.exigerLocalite(dispatchRepository.findLocaliteById(examen.getIdDispatch()));
+        exigerMembreAttributaire(examen.getIdDispatch());
         validerCompletude(idExamen);
         // ⚠️ Règle déplacée (2026-08-01) — avis global et Secrétaire de séance ne sont PLUS exigés à la
         // soumission (le Membre ne fournit que la synthèse) : ils sont posés à la CLÔTURE DE NAVETTE
@@ -282,13 +290,27 @@ public class ExamenService {
         }
     }
 
+    /**
+     * ⚠️ Audit 2026-08-27 (lot B) — deux trous fermés sur ce {@code PUT} générique :
+     * <ul>
+     *   <li>la <strong>garde attributaire</strong> n'était appelée qu'à la création : n'importe quel
+     *       Membre de la localité réécrivait l'examen d'un autre. Elle est jouée sur le dispatch
+     *       <em>en place</em> comme sur celui <em>visé</em> par le corps (sinon un attributaire
+     *       pourrait déplacer un examen qui ne lui appartient pas vers son propre dispatch) ;</li>
+     *   <li>{@code imCtrlMembre} était <strong>recopié du corps</strong> : l'attributaire est une donnée
+     *       du dispatch (§2.4), pas une déclaration du client. La valeur existante est conservée —
+     *       même principe qu'à la création du projet de PV, où elle est dérivée du dispatch.</li>
+     * </ul>
+     */
     public ExamenDto update(Integer id, ExamenDto dto) {
-        Visibilite.exigerLocalite(dispatchRepository.findLocaliteById(dto.getIdDispatch()));
-        exigerExamenModifiable(id);
         Examen existing = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Examen introuvable : " + id));
+        Visibilite.exigerLocalite(dispatchRepository.findLocaliteById(existing.getIdDispatch()));
+        exigerMembreAttributaire(existing.getIdDispatch());
+        Visibilite.exigerLocalite(dispatchRepository.findLocaliteById(dto.getIdDispatch()));
+        exigerMembreAttributaire(dto.getIdDispatch());
+        exigerExamenModifiable(id);
         existing.setIdDispatch(dto.getIdDispatch());
-        existing.setImCtrlMembre(dto.getImCtrlMembre());
         existing.setDateExamen(dto.getDateExamen());
         return ExamenMapper.toDto(repository.save(existing));
     }
@@ -301,25 +323,13 @@ public class ExamenService {
     }
 
     /**
-     * Verrou d'édition de l'examen (§2.6) : modifiable uniquement tant que le dossier est
-     * {@link StatutDossier#EXAMINE} (avant signature du PV) ; dès {@link StatutDossier#PV_SIGNE}
-     * l'examen est <strong>définitif</strong> → toute modification est refusée (409).
+     * Verrou d'édition de l'examen (§2.6) : DISPATCHE (brouillon), EXAMINE ou A_REEXAMINER ; dès la
+     * signature du PV l'examen est <strong>définitif</strong> → 409.
+     *
+     * <p>⚠️ Audit 2026-08-27 (lot B) — règle unique, portée par {@link ExamenGarde} : elle était
+     * recopiée ici et dans {@code ExamenDetailService}, et manquait aux pièces d'examen.</p>
      */
     private void exigerExamenModifiable(Integer idExamen) {
-        String statut = idExamen == null ? null
-                : repository.findStatutDossierByExamen(idExamen).orElse(null);
-        // ⚠️ Règle élargie (2026-08-01) — DISPATCHE accepté : l'examen est un BROUILLON tant que le
-        // dossier n'est pas soumis (la transition EXAMINE se fait à la soumission).
-        // ⚠️ Règle élargie (2026-08-02) — A_REEXAMINER accepté : réexamen après lettre de renvoi
-        // (pièces complémentaires transmises), l'examen est rouvert au Membre attributaire.
-        boolean modifiable = StatutDossier.DISPATCHE.name().equals(statut)
-                || StatutDossier.EXAMINE.name().equals(statut)
-                || StatutDossier.A_REEXAMINER.name().equals(statut);
-        if (!modifiable) {
-            throw new BusinessRuleException(
-                    "Examen verrouillé : modification possible uniquement tant que le dossier est DISPATCHE "
-                            + "(brouillon), EXAMINE ou A_REEXAMINER (statut actuel « " + statut
-                            + " », examen définitif après signature du PV, §2.6).");
-        }
+        examenGarde.exigerExamenModifiable(idExamen);
     }
 }

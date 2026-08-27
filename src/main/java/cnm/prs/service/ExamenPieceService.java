@@ -21,15 +21,24 @@ import cnm.prs.security.Visibilite;
  * {@code ?examen=}, et l'accès unitaire) était ouverte à tout authentifié. Comme les détails
  * d'examen, elle est bornée par {@link Visibilite} : Président/Administrateur tout, contrôleurs
  * leur localité, <strong>PRMP/UGPM rien</strong> (le constat pièce par pièce est interne).</p>
+ *
+ * <p>⚠️ Audit 2026-08-27, lot B — l'<strong>écriture</strong>, elle, n'avait ni verrou d'état ni
+ * garde d'identité : un résultat de pièce restait modifiable <em>après la signature du PV</em>
+ * (alors que le détail des points de contrôle, lui, était verrouillé — asymétrie manifeste), et par
+ * n'importe quel Membre de n'importe quelle localité. Les deux gardes de {@link ExamenGarde}
+ * s'appliquent désormais à la création, à la modification et à la suppression.</p>
  */
 @Service
 @Transactional
 public class ExamenPieceService {
 
     private final ExamenPieceRepository repository;
+    /** ⚠️ Audit 2026-08-27 (lot B) — verrou d'état + garde attributaire, partagés avec l'examen parent. */
+    private final ExamenGarde garde;
 
-    public ExamenPieceService(ExamenPieceRepository repository) {
+    public ExamenPieceService(ExamenPieceRepository repository, ExamenGarde garde) {
         this.repository = repository;
+        this.garde = garde;
     }
 
     /**
@@ -55,6 +64,8 @@ public class ExamenPieceService {
     }
 
     public ExamenPieceDto create(ExamenPieceDto dto) {
+        garde.exigerAttributaire(dto.getIdExamen());        // ⚠️ audit lot B — localité + attributaire
+        garde.exigerExamenModifiable(dto.getIdExamen());    // ⚠️ audit lot B — figé après signature du PV
         exigerUnicite(dto, null);
         ExamenPiece entity = ExamenPieceMapper.toEntity(dto);
         // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
@@ -65,6 +76,10 @@ public class ExamenPieceService {
     public ExamenPieceDto update(Integer id, ExamenPieceDto dto) {
         ExamenPiece existing = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Examen de pièce introuvable : " + id));
+        // ⚠️ Audit lot B — gardes sur la ligne EN PLACE et sur l'examen VISÉ par le corps.
+        garde.exigerAttributaire(existing.getIdExamen());
+        garde.exigerAttributaire(dto.getIdExamen());
+        garde.exigerExamenModifiable(existing.getIdExamen());
         exigerUnicite(dto, id);
         existing.setIdExamen(dto.getIdExamen());
         existing.setIdPiece(dto.getIdPiece());
@@ -74,9 +89,10 @@ public class ExamenPieceService {
     }
 
     public void delete(Integer id) {
-        if (!repository.existsById(id)) {
-            throw new ResourceNotFoundException("Examen de pièce introuvable : " + id);
-        }
+        ExamenPiece existing = repository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Examen de pièce introuvable : " + id));
+        garde.exigerAttributaire(existing.getIdExamen());        // ⚠️ audit lot B
+        garde.exigerExamenModifiable(existing.getIdExamen());    // ⚠️ audit lot B
         repository.deleteById(id);
     }
 

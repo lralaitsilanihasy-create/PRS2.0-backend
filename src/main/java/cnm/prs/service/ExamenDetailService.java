@@ -12,7 +12,6 @@ import cnm.prs.entity.ObservationControle;
 import cnm.prs.entity.PointsCtrl;
 import cnm.prs.enums.PorteePointCtrl;
 import cnm.prs.enums.StatutDossier;
-import cnm.prs.exception.BusinessRuleException;
 import cnm.prs.exception.ChampsInvalidesException;
 import cnm.prs.exception.ErrorResponse;
 import cnm.prs.exception.ResourceNotFoundException;
@@ -48,10 +47,13 @@ public class ExamenDetailService {
     private final ObservationControleRepository observationRepository;
     private final PointsCtrlRepository pointsCtrlRepository;
     private final MarcheRepository marcheRepository;
+    /** ⚠️ Audit 2026-08-27 (lot B) — verrou d'état + garde attributaire, partagés avec l'examen parent. */
+    private final ExamenGarde garde;
 
     public ExamenDetailService(ExamenDetailRepository repository, ExamenRepository examenRepository,
             ObservationControleRepository observationRepository, PointsCtrlRepository pointsCtrlRepository,
-            MarcheRepository marcheRepository) {
+            MarcheRepository marcheRepository, ExamenGarde garde) {
+        this.garde = garde;
         this.repository = repository;
         this.examenRepository = examenRepository;
         this.observationRepository = observationRepository;
@@ -76,6 +78,9 @@ public class ExamenDetailService {
     }
 
     public ExamenDetailDto create(ExamenDetailDto dto) {
+        // ⚠️ Audit 2026-08-27 (lot B) — l'écriture d'un point de contrôle n'avait AUCUNE garde
+        // d'identité : tout Membre, de n'importe quelle localité, évaluait l'examen d'un autre.
+        garde.exigerAttributaire(dto.getIdExamen());
         exigerExamenModifiable(dto.getIdExamen());
         validerObservations(dto);
         validerLigneEtUnicite(dto, null);
@@ -91,6 +96,9 @@ public class ExamenDetailService {
     public ExamenDetailDto update(Integer id, ExamenDetailDto dto) {
         ExamenDetail existing = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("ExamenDetail introuvable : " + id));
+        // ⚠️ Audit lot B — garde d'identité sur la ligne EN PLACE et sur l'examen VISÉ par le corps.
+        garde.exigerAttributaire(existing.getIdExamen());
+        garde.exigerAttributaire(dto.getIdExamen());
         exigerExamenModifiable(existing.getIdExamen());
         validerObservations(dto);
         validerLigneEtUnicite(dto, id);
@@ -107,6 +115,7 @@ public class ExamenDetailService {
     public void delete(Integer id) {
         ExamenDetail existing = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("ExamenDetail introuvable : " + id));
+        garde.exigerAttributaire(existing.getIdExamen());   // ⚠️ audit lot B
         exigerExamenModifiable(existing.getIdExamen());
         observationRepository.deleteByIdDetail(id);   // cascade des lignes d'observation
         repository.delete(existing);
@@ -189,23 +198,12 @@ public class ExamenDetailService {
 
     /**
      * Verrou (§2.6) : écriture d'un détail d'examen possible uniquement tant que le dossier est
-     * {@link StatutDossier#EXAMINE} ; refusée (409) dès {@link StatutDossier#PV_SIGNE}.
+     * DISPATCHE / EXAMINE / A_REEXAMINER ; refusée (409) dès {@link StatutDossier#PV_SIGNE}.
+     *
+     * <p>⚠️ Audit 2026-08-27 (lot B) — la règle, jusque-là recopiée à l'identique dans trois services,
+     * est portée par {@link ExamenGarde} (source unique).</p>
      */
     private void exigerExamenModifiable(Integer idExamen) {
-        String statut = idExamen == null ? null
-                : examenRepository.findStatutDossierByExamen(idExamen).orElse(null);
-        // ⚠️ Règle élargie (2026-08-01) — DISPATCHE accepté : l'examen est un BROUILLON tant qu'il
-        // n'est pas soumis (la transition EXAMINE se fait à la soumission de l'examen).
-        // ⚠️ Règle élargie (2026-08-02) — A_REEXAMINER accepté : réexamen après lettre de renvoi
-        // (pièces complémentaires transmises), l'examen est rouvert au Membre attributaire.
-        boolean modifiable = StatutDossier.DISPATCHE.name().equals(statut)
-                || StatutDossier.EXAMINE.name().equals(statut)
-                || StatutDossier.A_REEXAMINER.name().equals(statut);
-        if (!modifiable) {
-            throw new BusinessRuleException(
-                    "Examen verrouillé : modification possible uniquement tant que le dossier est DISPATCHE "
-                            + "(brouillon), EXAMINE ou A_REEXAMINER (statut actuel « " + statut
-                            + " », examen définitif après signature du PV, §2.6).");
-        }
+        garde.exigerExamenModifiable(idExamen);
     }
 }
