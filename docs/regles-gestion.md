@@ -37,20 +37,40 @@ Flux complet d'un dossier, avec navette du projet de PV :
 4. **Examen** — acteurs : Membre / CC / Président
 5. **Projet de PV** — rédigé par le Membre ; navette (aller-retour) possible
 6. **PV accepté & signé** — co-signature Président/CC + Membre
-7. **Vérification** — acteur : **Contrôleur vérificateur** (strict, ⚠️ règle ajoutée) — uniquement pour un avis `FAVR`
-8. **Clôture** — automatique (à la signature pour FAV/DEF/NSP, ou après levée des observations pour FAVR)
+7. **Vérification** — acteur : **Contrôleur vérificateur** (strict, ⚠️ règle ajoutée) — **pour tout avis** (⚠️ corrigé 2026-08-27, voir encadré ci-dessous — pas seulement `FAVR`)
+8. **Transmission SIGMP** — acteur : **Contrôleur vérificateur** — transmet le sens de la décision à SIGMP
+9. **Archivage & clôture** — acteur : **Assistant contrôleur** — archive le PV, ce qui clôt le dossier (⚠️ corrigé 2026-08-27 — la clôture n'est plus automatique à la signature, voir encadré ci-dessous)
 
 > Statuts de navette du PV : `PROJET_PV_SOUMIS`, `PROJET_PV_RETOUR`, `PROJET_PV_ACCEPTE`, puis `SIGNE`.
 
-> ⚠️ **Règle ajoutée (non issue de la brochure) — branchement du circuit à la signature du PV (selon l'avis).**
-> À la bascule `SIGNE`, le dossier est aiguillé selon `t_pv_examen.ID_AVIS` (référentiel `tr_avis` :
-> `FAV`, `FAVR`, `DEF`, `NSP`) :
-> - **`FAVR`** (favorable avec réserves) → dossier **`EN_VERIFICATION`** (vérification itérative ouverte) ;
-> - **`FAV`** / **`DEF`** / **`NSP`** (ne se prononce pas) → dossier **`CLOTURE`** automatique (pas de vérification).
+> ⚠️ **Règle CORRIGÉE (2026-08-27, audit — la clôture n'est PLUS automatique à la signature du PV, quel
+> que soit l'avis).** Ce paragraphe a longtemps décrit une clôture automatique à la signature pour
+> `FAV`/`DEF`/`NSP` ; ce n'est **plus le comportement réel depuis la spec navette du 2026-08-01**
+> (`PvExamenService.brancherSelonAvis`) — l'audit du 27/08 l'a jugé « matériellement périmé » sur ce
+> point précis. Le circuit réel, à la bascule `SIGNE` :
 >
-> Dans **tous** les cas le PV est **transmis à la PRMP** (`PV_SIGNE`) et le **Contrôleur vérificateur** de la
-> localité est notifié : `PV_A_VERIFIER` (FAVR, à vérifier) ou `PV_POUR_INFO` (FAV/DEF/NSP, lecture seule).
-> Le statut `PV_SIGNE` n'est donc **plus un état de repos** du dossier.
+> 1. **Tous les avis** (`FAV`, `FAVR`, `DEF`, `NSP`) font passer le dossier en **`EN_VERIFICATION`** —
+>    plus aucun avis ne clôture directement. Le PV est dans tous les cas **transmis à la PRMP**
+>    (notification `PV_SIGNE`) et le **Contrôleur vérificateur** de la localité est notifié :
+>    `PV_A_VERIFIER` (avis `FAVR`, boucle de rectification à ouvrir) ou **`DECISION_A_TRANSMETTRE`**
+>    (`FAV`/`DEF`/`NSP` — le vérificateur n'a plus qu'à transmettre le sens de la décision à SIGMP).
+> 2. Le **vérificateur transmet le sens de la décision à SIGMP** (`POST /api/sigmp-transmissions`,
+>    dérivé serveur de l'avis : `FAV` → `APPROUVE`, `DEF`/`NSP` → `NON_APPROUVE` ; pour un `FAVR`, ce
+>    n'est possible qu'après la boucle de vérification — observations toutes **levées**, statut
+>    `OBSERVATIONS_LEVEES`) → le dossier passe **`DECISION_TRANSMISE_SIGMP`**, notification
+>    `PV_A_ARCHIVER` aux Assistants contrôleurs de la localité.
+> 3. **L'Assistant contrôleur archive le PV** (`POST /api/pv-examens/{id}/archiver`, réservé à sa
+>    localité) : seul ce geste pose la **clôture** (`CLOTURE`) et déclenche `CLOTURE_ELIGIBLE`
+>    (Chargé de publication).
+>
+> Le statut `PV_SIGNE` n'est donc **jamais un état de repos** du dossier (transitoire, immédiatement
+> réécrit en `EN_VERIFICATION` dans la même transaction que la signature) : la clôture n'arrive
+> qu'à l'**archivage**, plusieurs étapes et plusieurs acteurs après la signature. Statuts intermédiaires
+> du circuit post-signature, absents des versions antérieures de ce document : **`OBSERVATIONS_LEVEES`**
+> (avis `FAVR`, observations toutes levées, en attente de transmission SIGMP), **`DECISION_TRANSMISE_SIGMP`**
+> (décision transmise, PV chez l'Assistant pour archivage). Voir aussi `EN_ATTENTE_PIECES` et
+> `A_REEXAMINER` (cas 3, lettre de renvoi) et `EN_ATTENTE_COMPLEMENTS_DEPOT` (contrôle de complétude
+> au dépôt) au Module 03.
 
 > ⚠️ **Règle ajoutée (2026-08-19) — le PDF du PV est produit HORS du chemin de la signature.** La conversion
 > .docx → PDF pilote Word localement (plusieurs secondes, incompressibles) : la signature finale marque le
@@ -69,9 +89,19 @@ Flux complet d'un dossier, avec navette du projet de PV :
 > Portée : étape Dispatch → Examen uniquement. Le frontend doit s'aligner sur ce statut.
 
 > ⚠️ **Règle ajoutée — statuts `EXAMINE` et `PV_SIGNE`.** Même principe que `DISPATCHE`, pour matérialiser
-> **Examen (4)** et **PV signé (6)** : à la **création de l'examen**, le dossier passe **`DISPATCHE` →
-> `EXAMINE`** (il **quitte « à examiner »**) ; à la **signature du PV**, il passe **`EXAMINE` → `PV_SIGNE`**.
-> Cycle : `… DISPATCHE → EXAMINE → PV_SIGNE → CLOTURE`. Transitions transactionnelles et idempotentes.
+> **Examen (4)** et **PV signé (6)** : à la **signature du PV**, il passe **`EXAMINE` → `PV_SIGNE`**
+> (transitoire, cf. encadré ci-dessus). Cycle complet : `… DISPATCHE → EXAMINE → PV_SIGNE →
+> EN_VERIFICATION → … → DECISION_TRANSMISE_SIGMP → CLOTURE` (à l'archivage). Transitions
+> transactionnelles et idempotentes.
+>
+> ⚠️ **Règle DÉPLACÉE (2026-08-01, corrigée dans ce document le 2026-08-27).** La transition
+> **`DISPATCHE` → `EXAMINE`** ne se produit **plus à la création de l'examen** mais à sa **SOUMISSION**
+> (`POST /api/examens/{id}/soumettre`, même transaction que la production du Projet de PV) — ce
+> document l'a longtemps décrite à la création, ce qui ne correspond plus au code depuis cette date.
+> La **création** d'un examen est un **brouillon de progression** : le dossier reste `DISPATCHE`, le
+> Membre peut sauvegarder ses résultats point par point sans faire avancer le dossier, et reprendre plus
+> tard. Le verrou d'écriture de l'examen et de ses détails accepte donc `DISPATCHE` (brouillon) **ou**
+> `EXAMINE` (navette ouverte) — refus (409) dès `PV_SIGNE`, inchangé.
 >
 > - **Verrou de l'examen** : l'examen et ses détails (`t_examen_detail`) sont **modifiables** tant que le
 >   dossier est `EXAMINE` (navette ouverte) ; toute modification est **refusée (409)** dès `PV_SIGNE`
@@ -162,6 +192,18 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
 - **Reprise de l'existant** : une PRMP sans mandat déclaré se voit reconstituer un mandat **implicite**
   depuis `t_prmp` (`DATE_NOMIN` → `+ 3 ans`, arrêté = `ARRETE_NOMIN`). Aucune reprise de données n'est
   requise, et la règle d'expiration ci-dessus (§ « Mandat de 3 ans ») devient opposable telle quelle.
+- ⚠️ **Réactivation automatique du compte à la reconduction (2026-08-27, audit lot B) — corrige un écart
+  avec la promesse de « déblocage automatique » ci-dessous.** `AlerteScheduler.expirerComptesPrmp`
+  **désactive** le compte d'authentification de la PRMP à l'échéance de son mandat (`t_compte_auth.ACTIF
+  = false`) ; jusqu'à ce chantier, **rien ne le réactivait** à la reconduction — une PRMP valablement
+  reconduite redevenait en fonction (la garde de vacance la laissait passer) mais **ne pouvait pas se
+  connecter** sans intervention manuelle de l'Administrateur. Désormais, la **création d'un nouveau
+  mandat** réactive le(s) compte(s) PRMP du titulaire, à condition que ce nouveau mandat soit **`ACTIF`
+  à la date du jour** (une nomination à effet futur, `EN_TRANSITION`, ne rouvre rien) et que le compte
+  soit déjà **validé** par l'Administrateur (statut d'inscription `ACTIF` — une inscription `EN_ATTENTE`
+  ou `REFUSE` n'est jamais activée par ce mécanisme : une nomination ne vaut pas validation d'inscription).
+  Un blocage manuel de l'Administrateur sur une PRMP que l'on reconduit est ainsi levé du même geste
+  (le modèle ne distingue pas une désactivation d'expiration d'une désactivation manuelle — assumé).
 
 **Standby de transition — vacance de PRMP (⚠️ règle ajoutée)**
 
@@ -232,7 +274,9 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
 - Sur un dossier au statut **`EN_ATTENTE_DECISION_PRMP`** (observations de vérification non levées), la PRMP
   propriétaire peut **corriger le contenu sans repasser par le brouillon**, via une **édition restreinte** :
   - `PATCH /api/ppms/{id}/rectifier` — en-tête du PPM ;
-  - `PATCH /api/marches/{id}/rectifier` — ligne de marché (mode de passation **revalidé**).
+  - `PATCH /api/marches/{id}/rectifier` — ligne de marché (⚠️ **corrigé 2026-08-27** — le mode de
+    passation n'est **plus revalidé** : `idMode` est simplement conservé tel quel, comme au POST/PUT,
+    depuis le retrait de la détermination automatique, voir Module 02 ci-dessous).
 - Le **statut reste `EN_ATTENTE_DECISION_PRMP`** jusqu'à la **resoumission** (`POST /api/dossiers/{id}/resoumettre`
   → `EN_VERIFICATION`). Hors `EN_ATTENTE_DECISION_PRMP` → **409**. Profil **PRMP strict** (Admin/vérificateur → 403).
 - **Identité figée** (PPM : idDossier/idPrmp/idLocalite ; Marché : idDossier/idPpm) et **édition en place**
@@ -264,8 +308,16 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
 
 - Création et mise à jour du PPM [Écriture]
   - En-tête, exercice, signataire, marchés, lots, tranches, SOA bénéficiaires.
-- Choix du mode parmi l'ensemble autorisé [Action]
-  - ⚠️ **Règle ajoutée** : pour (situation, nature, montant, localité), `t_regle_passation` calcule l'**ensemble des modes autorisés** (libellés `tr_mode`) avec un **recommandé** (règle la plus prioritaire). La PRMP **choisit** dans cet ensemble ; le serveur **valide** (mode hors ensemble → **409**) ; aucun choix → **recommandé** appliqué ; aucune règle → saisie manuelle (alerte `MODE_NON_DETERMINE`). Aperçu sans enregistrement : `POST /api/regle-passations/suggestion-mode` (renvoie l'ensemble + recommandé + `modeNonDetermine`).
+- Mode de passation — **purement saisi** [Écriture]
+  - ⚠️ **Règle RETIRÉE (corrigé 2026-08-27)**. Ce paragraphe décrivait une détermination automatique du
+    mode (référentiels `t_situation`/`t_regle_passation`/`t_seuil`, validation serveur avec 409 « hors
+    ensemble », endpoint d'aperçu `POST /api/regle-passations/suggestion-mode`) : c'est un **écart
+    d'origine** entre la doc et le code — ce socle a été **retiré** dès le commit `c432e73`
+    (2026-07-04), avant même le chantier d'audit d'août. Le mode de passation (`idMode` de
+    `MarcheDto`/`PpmDto`) est **purement saisi** par la PRMP (ou repris de l'import PPM) et **conservé
+    tel quel** à la création, à la mise à jour et à la rectification — aucune détermination, aucune
+    validation par situation/seuil, plus de notification `MODE_NON_DETERMINE`. Seule la **clé
+    étrangère** vers `tr_mode` garantit que le mode existe.
 - Identifiants attribués par le serveur [Auto]
   - ⚠️ **Règle ajoutée** : les PK dossier / PPM / marché sont **allouées par une séquence serveur** (`seq_dossier`/`seq_ppm`/`seq_marche`) ; tout id envoyé par le client est **ignoré** (plus de « identifiant en doublon »). Le formulaire ne saisit plus d'id. **Dette documentée** : séquence applicative (et non `IDENTITY`) pour éviter une refonte massive des fixtures de test sur ces 3 tables centrales ; bascule `IDENTITY` possible plus tard.
 - Suppression d'un marché / d'un PPM [Écriture]
@@ -315,8 +367,28 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
   - Accès à réception, date, secrétaire — en temps réel.
 - Consultation du PV d'examen [Lecture]
   - Accès en lecture au PV signé : référence, avis, synthèse des observations non conformes.
+  - ⚠️ **Détail des points de contrôle réservé au circuit interne (2026-08-27, audit constat C2/lot A —
+    effet assumé).** La PRMP n'a **jamais** accès à la grille point par point (`examen-details`,
+    `examen-pieces`, `observation-controles`) — y compris via « PV définitifs » (`GET
+    /api/pv-examens/definitifs`, `/{id}`, `/{id}/document`) : elle ne reçoit que la **synthèse** du PV
+    (avis, synthèse des observations, document PDF officiel), jamais la reconstruction du détail
+    interne à la commission (réservée aux contrôleurs de la localité). Avant ce chantier, les lectures
+    de détail n'appliquaient **aucun filtre** : la PRMP — et tout authentifié — lisait la grille de
+    n'importe quel examen. **À confirmer côté métier** : c'est un cloisonnement plus strict que
+    l'ancien comportement de fait, décidé par l'audit, pas encore validé explicitement par le PO comme
+    un choix produit définitif (voir `docs/plan-audit-2026-08.md`, décisions en attente).
 - Soumission du dossier corrigé [Action]
   - Dépôt en retour avec corrections basées sur les observations du PV.
+- Dépôt de pièce jointe — borné aux phases de dépôt (⚠️ règle ajoutée 2026-08-27, audit lot B) [Écriture]
+  - Avant ce chantier, le dépôt d'une **pièce initiale** (`POST /api/piece-jointe-dossiers`, sans
+    lettre de renvoi) n'avait **aucune garde d'état** : la PRMP pouvait verser une pièce à n'importe
+    quel moment du circuit, y compris après l'examen, après la signature du PV ou sur un dossier
+    clôturé. Deux listes blanches de statuts, sinon **409** :
+    - **dépôt initial** (`idLettre` absent), toujours ouvert : `BROUILLON`, `SOUMIS`,
+      `EN_ATTENTE_COMPLEMENTS_DEPOT`, `EN_ATTENTE_PIECES`, `EN_ATTENTE_DECISION_PRMP` ;
+    - **dépôt après lettre de renvoi** (`idLettre` fourni), ouvert **en plus** sur les statuts de
+      reprise d'examen : `PRET_DISPATCH`, `DISPATCHE`, `A_REEXAMINER` — le **premier** complément
+      rouvre l'examen (`…/transmettre-complements`), les suivants arrivent sur un dossier déjà reparti.
 
 **Module 11 — Retrait de dossier**
 
@@ -325,6 +397,15 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
   - ⚠️ **Règle ajoutée (2026-08-17) — lettre de demande de retrait obligatoire** : la PRMP joint, **au moment de la demande**, sa **lettre de demande de retrait datée et signée** (PDF uniquement, ≤ 10 Mo — validation par magic-bytes ; sinon **400**, la demande n'est pas créée). `POST /api/demande-retraits` passe en **multipart** (`data` JSON + `fichier` PDF). La lettre est stockée **avec la demande** (`t_piece_demande_retrait`, hors pièces du dossier) car elle **justifie la décision** : elle **survit à la purge du circuit** à l'acceptation. Lecture `GET /api/demande-retraits/{id}/document` : PRMP demanderesse + décideur (CC de la localité / Président ; Admin). **Rétro-compat** : les demandes antérieures sans lettre restent valides (`nomFichier` null, document → 404).
   - ⚠️ **Règle ajoutée** : la PRMP demandeuse est **l'utilisateur authentifié** (JWT), jamais le corps ; l'`ID_DEMANDE_RETRAIT` est **auto-généré**. Gardes (sinon 403/409) : **être propriétaire** du dossier, dossier **« avant PV signé »**, et **pas de demande déjà `EN_ATTENTE`** pour ce dossier. Liste déroulante des dossiers retirables : `GET /api/dossiers/retirables`.
   - ⚠️ **Règle ajoutée (§3.3) — retrait possible jusqu'au PV signé** : la demande est recevable **à toute étape du circuit tant que le PV n'est pas signé** (plus seulement « avant dispatch »). Statuts retirables **exacts** : **`SOUMIS`, `PRET_DISPATCH`, `DISPATCHE`, `EXAMINE`** ; refus (409) à partir de **`PV_SIGNE`** et au-delà (`EN_VERIFICATION`, `EN_ATTENTE_DECISION_PRMP`, `RETIRE`, `CLOTURE`). `BROUILLON` exclu (pré-circuit). La liste `GET /api/dossiers/retirables` et la garde du POST partagent **le même ensemble** (source unique serveur), donc ne divergent jamais.
+  - ⚠️ **Re-contrôle d'état à la décision (2026-08-27, audit constat C3, corrigé lot A).** La garde
+    ci-dessus ne s'appliquait **qu'à la création** de la demande : rien ne suspendant le circuit pendant
+    qu'une demande reste `EN_ATTENTE` (règle §3.1 — pas d'obligation d'intérim, pas de suspension), le PV
+    pouvait être signé **entre la demande et la décision**. `POST /{id}/accepter` **relit désormais le
+    statut du dossier en base** au moment de la décision, sur le même ensemble source : dossier ayant
+    progressé au-delà de `NOMS_AVANT_PV_SIGNE` → **409 « la demande de retrait est caduque »**. La
+    demande reste `EN_ATTENTE` et peut toujours être **refusée** (le refus ne touche jamais au circuit).
+    Avant ce correctif, l'acceptation d'une demande caduque **purgeait silencieusement** un PV déjà
+    signé, ses navettes, vérifications et lettres — en violation de l'immuabilité du PV signé (§3.5).
 - Suivi de la demande [Lecture]
   - Consultation du statut : **EN_ATTENTE / ACCEPTEE / REFUSEE** (⚠️ règle ajoutée). Ses demandes : `GET /api/demande-retraits`.
 - Notification décision [Lecture]
@@ -334,7 +415,14 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
 **Module 04 — Calendrier & notifications**
 
 - Calendrier des jalons [Lecture]
-  - Lancement, ouverture, attribution — alertes J-7 et J-1.
+  - Lancement, ouverture, attribution — ⚠️ **comportement réel corrigé (2026-08-27)** : ce document
+    promettait des alertes **J-7 ET J-1** ; le code (`AlerteScheduler.alerterJalons`) n'émet en réalité
+    qu'**une seule alerte par jalon**, dès son entrée dans la **fenêtre J-7** (job quotidien qui
+    sélectionne les échéances entre aujourd'hui et J+7). Un **drapeau** (`Echeance.alerteEnvoyee`) est
+    posé au premier envoi et empêche tout renvoi ultérieur — il n'y a **pas** de second passage à J-1.
+    **Écart d'origine**, non introduit par ce chantier : signalé par l'audit du 27/08, documenté ici
+    tel quel plutôt que corrigé (un J-1 réel demanderait de revoir la condition du job, hors périmètre
+    de ce chantier de documentation).
 - Notification PV accepté puis signé [Lecture]
   - Reçoit PV_SIGNE dès que le PV atteint le statut SIGNE (après navette et signature). Ne reçoit pas les notifications de la navette interne (PROJET_PV_SOUMIS / PROJET_PV_RETOUR / PROJET_PV_ACCEPTE — réservées aux contrôleurs).
 - Alerte fin de mandat [Lecture] [Auto]
@@ -596,6 +684,18 @@ Subordonné direct du Chef de commission. Voit tous les dossiers de sa localité
 - Rédaction du projet de PV [Écriture]
   - Le Membre rédige le projet de PV dans t_pv_examen (STATUT_PV = BROUILLON) : synthèse des observations non conformes de t_examen_detail.OBS_SI_NON_CONFORME, avis ID_AVIS. Le projet est modifiable librement tant qu'il n'a pas été soumis.
   - ⚠️ **Règle ajoutée** : l'attributaire `IM_CTRL_MEMBRE` du PV est **dérivé de l'attribution** (Examen→Dispatch.imCtrlMembre), **jamais saisi** dans le corps — c'est la source de vérité de la signature Membre. Un examen sans attributaire → création/MAJ refusée (409).
+  - ⚠️ **Garde attributaire étendue au PUT et à la soumission de l'examen, et à ses tables filles
+    (2026-08-27, audit lot B).** Elle n'était jouée **qu'à la création** : `PUT /api/examens/{id}` et
+    `POST /{id}/soumettre` n'avaient **aucune** garde d'identité, rejouée désormais sur le dispatch en
+    place **et** sur celui visé par le corps (sinon 403). Le `PUT` recopiait en outre `imCtrlMembre`
+    depuis le corps du client — l'attributaire est une donnée du **dispatch**, jamais une déclaration
+    du client : la valeur existante est conservée. Les écritures d'`ExamenDetailService` et
+    d'`ExamenPieceService` (points de contrôle, pièces d'examen) n'avaient elles-mêmes **aucune** garde
+    d'identité propre : localité et attributaire sont désormais exigés à la création, la modification
+    et la suppression de chacune. **Verrou d'examen étendu aux pièces** : le verrou d'état
+    (`DISPATCHE`/`EXAMINE`/`A_REEXAMINER` modifiable, refus dès `PV_SIGNE`) existait déjà pour les
+    points de contrôle mais **pas pour les pièces d'examen**, qui restaient modifiables **après la
+    signature du PV** — même garde désormais partagée par les deux (source unique, `ExamenGarde`).
 - Soumission du projet au Président/CC [Action]
   - Passage en PROJET_SOUMIS → insertion dans t_pv_navette (SENS = SOUMISSION, NUM_NAVETTE incrémenté) → notification PROJET_PV_SOUMIS envoyée au Président/CC destinataire.
 - Rectification sur retour [Écriture]
@@ -603,6 +703,16 @@ Subordonné direct du Chef de commission. Voit tous les dossiers de sa localité
 - Signature définitive du PV [Écriture]
   - Quand le projet est accepté (PROJET_ACCEPTE), **le Membre attributaire du PV** (IM_CTRL_MEMBRE) signe en renseignant DATE_SIGNATURE_MEMBRE dans t_pv_examen. Cette signature **n'est pas déléguable** : le service refuse (403) tout autre signataire que le Membre attributaire. Le PV passe à SIGNE quand DATE_SIGNATURE_MEMBRE ET (DATE_SIGNATURE_PRESIDENT ou DATE_SIGNATURE_CC) sont renseignées — le co-signataire devant être **une personne différente** du Membre (auto-co-signature interdite), **sauf** (⚠️ décision produit 2026-08-15, circuit court) un Président/CC attributaire couvert par une paire « → Membre » **active**, qui porte alors les deux parts lui-même (le **Membre titulaire** reste exclu de la co-signature : les rôles PRESIDENT/CC exigent leur profil). Sur le **document PV**, la ligne Membre est suffixée « **(par délégation)** » quand l'attributaire n'est pas un Membre titulaire.
   - **Identité du signataire** : pour chaque signature, le service enregistre l'identité de l'**utilisateur authentifié** (CurrentUser, principal JWT) dans IM_CTRL_MEMBRE / IM_CTRL_PRESIDENT / IM_CTRL_CC ; le champ `imActeur` du corps de requête n'est **pas** utilisé pour l'identité (non falsifiable).
+  - ⚠️ **Principe étendu aux chemins secondaires (2026-08-27, audit lot B) — identité toujours issue du
+    JWT.** Le principe ci-dessus (signature) ne couvrait pas encore le **reste de la navette** ni le
+    **dispatch**. `PvExamenService.ajouterNavette` pose désormais l'`IM_ACTEUR` de chaque navette depuis
+    `CurrentUser.ref()`, jamais depuis le corps de requête (`PvActionRequest.imActeur` reste **accepté**
+    pour compatibilité mais **n'a plus aucun effet** — sa contrainte `@NotBlank` a été retirée). Même
+    principe côté dispatch : `IM_CTRL_DISPATCH` (POST **et** PUT) vient de l'utilisateur authentifié,
+    jamais du corps — une trace de circuit déclarée par le client n'en est pas une. En plus de l'identité,
+    la **localité** de l'acteur est désormais vérifiée à `POST /{id}/retourner` et `/{id}/accepter`
+    (clôture de navette) : un CC d'une autre localité que celle du dossier recevait auparavant 200, il
+    reçoit désormais 403 (le Président, sans localité, reste compétent partout).
 
 **Module 04 — Messagerie**
 
@@ -642,15 +752,47 @@ Subordonné direct du Membre. Travaille sur la base du PV signé (STATUT_PV = SI
   - Accès au PV définitif (STATUT_PV = SIGNE) avant vérification : référence, avis, SYNTHESE_OBSERVATIONS issue de la navette acceptée — t_verification.ID_PV requis. Peut aussi consulter l'historique de la navette (t_pv_navette) pour comprendre les rectifications apportées.
 - Vérification de levée des observations [Action]
   - ⚠️ **Décision produit (2026-08-15) — pas de levée avant la première rectification de la PRMP** : les observations arrêtées au PV sont **réputées avec objet** (déjà validées par toute la chaîne — examen, acceptation P/CC, co-signature) ; le cas « levée sans objet » au premier passage n'existe pas. Le **premier passage** du vérificateur = **émission du rappel** : toutes les observations sont **MAINTENUES** ; la décision `LEVEE` est **refusée (409)** tant qu'aucune **resoumission** de la PRMP (`POST /api/dossiers/{id}/resoumettre`, action `RESOUMISSION` du journal `t_action_dossier`) n'est **postérieure à la signature du PV**. Après la première resoumission, levée/maintenue **libres** à chaque passage (boucle inchangée jusqu'à tout levé). Signal front : champ serveur **`leveePossible`** sur `GET /api/observations-pv?dossier=` (le front grise « Levée » en miroir, sans heuristique).
-  - OBS_LEVEES = true → clôture automatique (CLOTURE) ; OBS_LEVEES = false → ⚠️ **règle ajoutée** : le dossier passe en **`EN_ATTENTE_DECISION_PRMP`** (il ne reste **plus** en EN_VERIFICATION). L'observation est **transmise à la PRMP** du dossier (notification `OBSERVATION_VERIFICATION` : référence dossier, vérificateur, texte de l'observation, date) et l'événement est **tracé dans `t_audit_log`** (NOM_TABLE=`t_verification`, CHAMP_MODIFIE=`OBSERVATION_NON_LEVEE`, IM_ACTEUR=vérificateur). C'est ensuite la **PRMP** qui prend connaissance des observations, rectifie le dossier, puis décide de la suite.
-  - **Lecture seule côté vérificateur** : un dossier `EN_ATTENTE_DECISION_PRMP` **reste visible dans « à vérifier »** (`GET /api/dossiers/a-verifier` retourne `EN_VERIFICATION` **ou** `EN_ATTENTE_DECISION_PRMP`) — il ne disparaît de la liste qu'une fois `CLOTURE`. Il figure aussi dans la sous-vue `GET /api/dossiers/en-attente-prmp`. Dans les deux cas il est en **lecture seule** : il **ne peut plus être ni modifié ni re-vérifié** tant que la PRMP n'a pas statué (nouvelle vérification → 409).
+  - ⚠️ **Corrigé (2026-08-27) — OBS_LEVEES = true ne clôture PLUS directement.** Le dossier passe en
+    **`OBSERVATIONS_LEVEES`** : il reste au vérificateur de **transmettre le sens de la décision à
+    SIGMP** (`POST /api/sigmp-transmissions`, cas 2 — `APPROUVE` + `leveeObservations=true`), ce qui le
+    fait passer **`DECISION_TRANSMISE_SIGMP`** ; seul l'**archivage** du PV par l'Assistant contrôleur
+    clôt ensuite le dossier (voir Module 04 du circuit, §2). OBS_LEVEES = false → ⚠️ **règle ajoutée** :
+    le dossier passe en **`EN_ATTENTE_DECISION_PRMP`** (il ne reste **plus** en EN_VERIFICATION).
+    L'observation est **transmise à la PRMP** du dossier (notification `OBSERVATION_VERIFICATION` :
+    référence dossier, vérificateur, texte de l'observation, date) et l'événement est **tracé dans
+    `t_audit_log`** (NOM_TABLE=`t_verification`, CHAMP_MODIFIE=`OBSERVATION_NON_LEVEE`,
+    IM_ACTEUR=vérificateur). C'est ensuite la **PRMP** qui prend connaissance des observations,
+    rectifie le dossier, puis décide de la suite.
+  - **Lecture seule côté vérificateur** : un dossier `EN_ATTENTE_DECISION_PRMP` **reste visible dans « à
+    vérifier »** (⚠️ **composition corrigée 2026-08-27** — `GET /api/dossiers/a-verifier` retourne
+    l'ensemble **`EN_VERIFICATION` + `EN_ATTENTE_DECISION_PRMP` + `OBSERVATIONS_LEVEES`**, source unique
+    serveur, ni plus ni moins) — il ne disparaît de la liste qu'à la **transmission de la décision à
+    SIGMP** (`DECISION_TRANSMISE_SIGMP`), pas à la clôture : à cet instant précis il **quitte** « à
+    vérifier » et **apparaît** dans « vérifiés » (les deux ensembles sont complémentaires et disjoints,
+    aucun dossier concerné ne peut être dans les deux ni dans aucun). Il figure aussi dans la sous-vue
+    `GET /api/dossiers/en-attente-prmp`. Dans les deux cas il est en **lecture seule** : il **ne peut
+    plus être ni modifié ni re-vérifié** tant que la PRMP n'a pas statué (nouvelle vérification → 409).
   - ⚠️ **Règle ajoutée (2026-08-15) — visibilité de la rectification** : au premier `PUT /api/saisies/ppm/{id}` de chaque cycle (dossier `EN_ATTENTE_DECISION_PRMP`), l'état des lignes **avant correction** est figé (`t_snapshot_rectif_ligne`) — la rectification modifiant la version courante **en place**, c'est le seul moyen de comparer. Le **diff du dernier cycle** (avant → après, lignes `INCHANGEE`/`MODIFIEE` par `idDetail`, mêmes champs comparés que le diff des versions) est servi par `GET /api/dossiers/{id}/diff-rectification` (même `DiffDossierDto` — le front réutilise son tableau surligné) à **tous les profils qui consultent le dossier** : tout-voyant, PRMP propriétaire, contrôleurs de la localité (vérificateur titulaire ou délégué compris). Le vérificateur voit ainsi **ce que la PRMP a réellement changé** au moment de statuer la levée. Après une nouvelle transmission d'observations puis une nouvelle rectification, le **nouveau** cycle remplace l'ancien. Purge avec le circuit (retrait/annulation).
   - ⚠️ **Règle ajoutée — resoumission après rectification** : la PRMP propriétaire resoumet le dossier rectifié via `POST /api/dossiers/{id}/resoumettre` avec un **motif obligatoire** (vide → 400). Le dossier repasse en **`EN_VERIFICATION`** (retour au vérificateur). Le **vérificateur du dossier** est notifié (`RECTIFICATION_PRMP` : référence, nom PRMP, motif, date), l'événement est **tracé** dans `t_audit_log` (NOM_TABLE=t_dossier, TYPE_ACTION=RECTIFICATION_PRMP, IM_ACTEUR=PRMP, CHAMP_MODIFIE=motifRectification), et le **motif est enregistré** sur la dernière vérification (`t_verification.MOTIF_RECTIF`) pour être **visible dans les passages** côté vérificateur.
   - ⚠️ **Règle ajoutée** : la vérification n'est possible que si **PV `SIGNE` + avis `FAVR` + dossier `EN_VERIFICATION`** (sinon 403/409). Tâche du **profil Contrôleur vérificateur** — titulaire **ou délégation active** (⚠️ mise à jour 2026-08-14/15 : paires Président/CC → Vérificateur de `t_delegation_profil`, garde centrale — la mention antérieure « pas de délégation » est caduque). L'**identité** enregistrée (`IM_CTRL_VERIF`) et la **date** proviennent du **JWT / serveur**, jamais du corps de requête. L'`ID_VERIFICATION` est **auto-généré** (IDENTITY).
 - Historique des échanges d'un dossier clôturé [Lecture]
   - ⚠️ **Règle ajoutée** : `GET /api/dossiers/{id}/historique-echanges` (accessible **PRMP** et **Contrôleur vérificateur**, + Admin) retourne, pour un dossier **`CLOTURE`** uniquement (sinon 403), le **fil chronologique entrelacé** (chaque observation suivie de la rectification PRMP qui y répond) : observations du vérificateur (`t_verification` : date, vérificateur, texte, `obsLevees` — dont le passage final `obsLevees=true`) et rectifications de la PRMP (`t_audit_log` : date, PRMP, motif).
-- Déclenchement de la clôture [Auto]
-  - ⚠️ **Règle ajoutée** : `OBS_LEVEES = true` clôture le dossier **uniquement s'il est `EN_VERIFICATION`** (`declencherCloture` conditionnelle — fin de la clôture inconditionnelle). Notifie `CLOTURE_ELIGIBLE` au Chargé de publication.
+  - ⚠️ **Périmètre corrigé (2026-08-27, audit §3.1)** : le contrôleur vérifiait bien le **rôle** mais le
+    service n'appliquait **aucun contrôle de propriété/localité** — n'importe quelle PRMP lisait
+    l'historique d'un dossier clôturé d'autrui, n'importe quel vérificateur celui d'une autre localité.
+    Le contrôle de périmètre est désormais appliqué **avant** la garde de clôture (rien n'est divulgué
+    hors périmètre, pas même le statut).
+- Transmission de la décision à SIGMP, puis archivage [Auto + Action]
+  - ⚠️ **Règle CORRIGÉE (2026-08-27)** — ce paragraphe décrivait une clôture posée directement par
+    `OBS_LEVEES = true` ; ce n'est plus le circuit réel depuis la spec navette du 2026-08-01. Le
+    vérificateur **transmet le sens de la décision à SIGMP** (`POST /api/sigmp-transmissions`) — dérivé
+    serveur de l'avis du PV signé : dossier `EN_VERIFICATION` et avis ≠ `FAVR` → `FAV` = `APPROUVE`,
+    `DEF`/`NSP` = `NON_APPROUVE` ; dossier `OBSERVATIONS_LEVEES` (fin de boucle `FAVR`) → `APPROUVE` +
+    levée. Le dossier passe alors **`DECISION_TRANSMISE_SIGMP`**, et l'**Assistant contrôleur** de la
+    localité est notifié (`PV_A_ARCHIVER`). C'est son geste d'**archivage** du PV
+    (`POST /api/pv-examens/{id}/archiver`) qui **clôt** le dossier (`CLOTURE`) et notifie
+    `CLOTURE_ELIGIBLE` au Chargé de publication — la clôture n'est donc plus un effet automatique de la
+    vérification, mais l'aboutissement de deux gestes supplémentaires portés par deux acteurs distincts.
 
 **Module 04 — Messagerie**
 
@@ -663,7 +805,13 @@ Subordonné direct du Membre. Travaille sur la base du PV signé (STATUT_PV = SI
 
 - Pipeline de ses dossiers [Lecture]
   - Vue des dossiers en attente de vérification (PV signé) et des dossiers récemment clôturés ou retournés.
-  - ⚠️ **Règle ajoutée** — files scopées localité : **« à vérifier »** (`GET /api/dossiers/a-verifier` — dossiers `EN_VERIFICATION`) et **« vérifiés / clôturés »** (`GET /api/dossiers/verifies`, paginé, lecture seule — PV signés au statut `CLOTURE`, **y compris les auto-clôturés** FAV/DEF/NSP).
+  - ⚠️ **Règle ajoutée, composition corrigée le 2026-08-27** — files scopées localité, **exactement**
+    (source unique serveur, aucun autre statut) : **« à vérifier »** (`GET /api/dossiers/a-verifier`) =
+    **`EN_VERIFICATION` + `EN_ATTENTE_DECISION_PRMP` + `OBSERVATIONS_LEVEES`** ; **« vérifiés »**
+    (`GET /api/dossiers/verifies`, paginé, lecture seule) = **`DECISION_TRANSMISE_SIGMP` + `CLOTURE`**
+    (un dossier est donc « vérifié » **dès la transmission à SIGMP**, avant même l'archivage qui le
+    clôturera — le travail du vérificateur y est terminé). Les deux ensembles sont **exclusifs et
+    exhaustifs** pour tout dossier ayant un PV signé.
 
 **Restrictions / contraintes :**
 
@@ -714,8 +862,11 @@ Accès complet aux référentiels, comptes utilisateurs, journal d'audit, hiéra
 
 **Module 03 — Référentiels & paramétrage**
 
-- Localités, seuils, règles de passation [Écriture]
-  - Paramétrage complet de tr_localite, t_seuil, t_regle_passation.
+- Localités et référentiels de circuit [Écriture]
+  - Paramétrage complet de `tr_localite` et des référentiels de circuit. ⚠️ **Corrigé (2026-08-27)** :
+    ce paragraphe citait encore `t_seuil` et `t_regle_passation` — retirés du code (commit `c432e73`,
+    2026-07-04) avec la détermination automatique du mode de passation, voir Module 02 de la PRMP
+    ci-dessus.
 - Grilles de contrôle & règles d'anomalie [Écriture]
   - Configuration de tr_points_ctrl et t_regle_anomalie.
 - Comptes budgétaires & entités contractantes [Écriture]
@@ -786,6 +937,19 @@ Accès complet aux référentiels, comptes utilisateurs, journal d'audit, hiéra
   - Affectation des supérieurs (ID_SUPERIEUR) — construction de l'arbre via v_hierarchie_controleurs.
 - RBAC — contrôle d'accès par rôle [Auto]
   - Chaque profil n'accède qu'aux modules autorisés via tr_profile et t_delegation_profil.
+- Politique de mot de passe (⚠️ règle ajoutée 2026-08-27, audit lot E) [Auto]
+  - **8 à 72 caractères, dont au moins une lettre et un chiffre** (`@MotDePasseValide`, regexp Unicode
+    — les caractères accentués comptent comme des lettres). Appliquée à **tout nouveau mot de passe** :
+    inscription (PRMP/UGPM), création de compte par l'Administrateur, réinitialisation, et « changer mon
+    mot de passe ». **Jamais** à la connexion : un mot de passe créé **avant** cette règle continue de
+    fonctionner pour se connecter, et n'est contraint qu'à son **prochain changement**.
+- Limitation de débit — login et inscriptions (⚠️ règle ajoutée 2026-08-27, audit lot E) [Auto]
+  - Verrou par couple **(IP, identifiant)** à **5 échecs de connexion / 15 min** ; garde par **IP
+    seule** à **20 échecs / 15 min** (couvre aussi un balayage de plusieurs comptes depuis la même
+    adresse) ; **inscriptions publiques** (PRMP/UGPM) limitées à **10 / heure / IP**. Dépassement →
+    **429** avec en-tête `Retry-After` (secondes). Un **login réussi efface le compteur du couple**
+    (pas celui de l'IP, volontairement). Limiteur **en mémoire** (mono-instance par nature — voir
+    `docs/deploiement.md` pour l'implication en cas de plusieurs instances).
 
 **Module 05 — Tableau de bord global**
 
@@ -801,9 +965,35 @@ Accès complet aux référentiels, comptes utilisateurs, journal d'audit, hiéra
 **Module 08 — Journal d'audit**
 
 - Consultation & filtrage [Lecture]
-  - Par table, utilisateur, type d'action ou plage de dates.
+  - Par table, utilisateur, type d'action ou plage de dates. ⚠️ **Lecture paginée et plafonnée
+    (2026-08-27, audit lot D)** : `GET /api/audit-logs?page=&size=` accepte les filtres `table`/`acteur`
+    (égalité exacte) et `du`/`au` (bornes incluses), tri `dateAction` **décroissant imposé** (le `sort`
+    client est ignoré). Sans pagination, la liste plate reste **plafonnée aux 500 entrées les plus
+    récentes** (`t_audit_log` croît d'une ligne par écriture API).
 - Export CSV/Excel [Action]
   - Pour analyse externe ou transmission à un organe de contrôle supérieur.
+- Immuabilité du journal (⚠️ **complétée 2026-08-27, audit lot A**) [Auto]
+  - Seul `DELETE` était refusé jusqu'ici ; `PUT` réécrivait la **totalité** de la preuve (date, acteur,
+    table, type d'action, ancienne/nouvelle valeur, IP, session) et `POST` permettait d'y **insérer des
+    entrées forgées**. Les **trois verbes d'écriture** (POST, PUT, DELETE) sont désormais refusés en
+    **409** — un journal réinscriptible ne prouve plus rien. La **seule** voie d'écriture réelle est
+    l'intercepteur HTTP interne, appelé après chaque écriture API réussie.
+
+**Suppression refusée des actes décidés du circuit (⚠️ règle ajoutée 2026-08-27, audit lot B)**
+
+Les `DELETE` réservés à l'Administrateur sur les ressources du circuit rejouent désormais une garde
+d'état — une trace qui a déjà produit un effet (notification, transition de statut, document) ne
+s'efface plus comme un brouillon :
+
+- **Lettre de renvoi** `SIGNE` → 409 (elle a été notifiée à la PRMP, a suspendu l'examen, a son PDF sur
+  le FSX). `BROUILLON`/`SOUMIS` restent supprimables.
+- **Vérification décidée** (`obsLevees` renseigné, `true` ou `false`) → 409 : le dossier a bougé et a
+  été notifié. Un passage encore inachevé reste supprimable.
+- **Demande de retrait traitée** (`ACCEPTEE`/`REFUSEE`) → 409 : sa lettre justificative doit lui
+  survivre. Une demande `EN_ATTENTE` part avec sa pièce.
+- **PV `ARCHIVE`** (dossier clôturé) → 409. **Écart signalé, laissé en l'état à dessein** : un PV
+  **signé mais pas encore archivé reste supprimable** — c'est l'unique porte de sortie pour rattraper
+  un PV signé par erreur (le dossier redescend à `EXAMINE`).
 
 **Restrictions / contraintes :**
 
