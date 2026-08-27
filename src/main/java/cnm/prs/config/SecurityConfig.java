@@ -84,9 +84,26 @@ public class SecurityConfig {
             "/api/controleurs/*", "/api/prmps/*", "/api/organigrammes/*"
     };
 
+    /**
+     * Documentation d'API générée (springdoc / Swagger UI, LOT 5 — 2026-08-26). Ouverte ou
+     * réservée à l'Administrateur selon {@code app.docs.publics} (cf. {@link #filterChain}).
+     */
+    private static final String[] DOCUMENTATION = {
+            "/v3/api-docs/**", "/v3/api-docs.yaml", "/swagger-ui/**", "/swagger-ui.html"
+    };
+
+    /**
+     * @param docsPublics ⚠️ Audit 2026-08-27 (lot E) — la documentation générée était en
+     *        {@code permitAll} <strong>inconditionnel</strong> : n'importe qui sur le réseau
+     *        obtenait la carte complète de l'API (toutes les routes, tous les schémas de corps),
+     *        point de départ commode pour chercher les faiblesses. Défaut {@code true} (pratique
+     *        en développement) ; <strong>{@code false} en production</strong>, où ces routes
+     *        exigent alors le profil Administrateur.
+     */
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http, JwtAuthenticationConverter converter,
-            BearerTokenResolver bearerTokenResolver) throws Exception {
+            BearerTokenResolver bearerTokenResolver,
+            @Value("${app.docs.publics:true}") boolean docsPublics) throws Exception {
         http
                 // ⚠️ Plan cookie HttpOnly, phase 1 (2026-08-17) — CSRF en deux pièces :
                 // 1) le CsrfFilter de Spring est l'ÉMETTEUR du jeton — CookieCsrfTokenRepository pose
@@ -125,12 +142,18 @@ public class SecurityConfig {
                                 .maxAgeInSeconds(31536000))
                         .frameOptions(fo -> fo.sameOrigin()))
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/**").permitAll()
-                        // ⚠️ LOT 5 (2026-08-26) — documentation d'API générée (springdoc / Swagger UI) :
-                        // purement consultative, servie par l'application elle-même (aucune donnée métier).
-                        .requestMatchers("/v3/api-docs/**", "/v3/api-docs.yaml",
-                                "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                .authorizeHttpRequests(auth -> {
+                    auth.requestMatchers("/api/auth/**").permitAll();
+                    // ⚠️ LOT 5 (2026-08-26) — documentation d'API générée (springdoc / Swagger UI) :
+                    // purement consultative, servie par l'application elle-même (aucune donnée métier).
+                    // ⚠️ Audit 2026-08-27 (lot E) — mais elle décrit TOUTE la surface d'attaque :
+                    // app.docs.publics=false (valeur attendue en production) la réserve à l'Admin.
+                    if (docsPublics) {
+                        auth.requestMatchers(DOCUMENTATION).permitAll();
+                    } else {
+                        auth.requestMatchers(DOCUMENTATION).hasRole("ADMINISTRATEUR");
+                    }
+                    auth
                         // ⚠️ Règle ajoutée (2026-07-26) — création d'entité contractante ouverte à la PRMP
                         // (import PPM : autorité hors périmètre → nouvelle entité + rattachement EN ATTENTE),
                         // EN PLUS de l'Admin. Doit précéder la règle REFERENTIELS (1er match gagne).
@@ -149,7 +172,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, GESTION_COMPTES).hasRole("ADMINISTRATEUR")
                         .requestMatchers(HttpMethod.PUT, GESTION_COMPTES_ID).hasRole("ADMINISTRATEUR")
                         .requestMatchers(HttpMethod.DELETE, GESTION_COMPTES_ID).hasRole("ADMINISTRATEUR")
-                        .anyRequest().authenticated())
+                        .anyRequest().authenticated();
+                })
                 .oauth2ResourceServer(oauth -> oauth
                         .bearerTokenResolver(bearerTokenResolver)
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(converter)));
