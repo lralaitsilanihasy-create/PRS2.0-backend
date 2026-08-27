@@ -29,16 +29,23 @@ import cnm.prs.repository.DossierRepository;
  * Verrou optimiste (⚠️ LOT 4 — 2026-08-26, migration V6) : une écriture concurrente perdante
  * est refusée (409) au lieu d'écraser silencieusement la précédente.
  *
- * <p><b>Pourquoi ce test n'est PAS un test HTTP.</b> Par l'API, les DTO <em>ne portent pas</em>
- * le numéro de version : le client envoie un PUT sans version, et tous les services du circuit
- * mettent à jour en « charger-puis-modifier » sur une entité <em>managée</em> (jamais un
- * {@code save()} d'entité reconstruite depuis le DTO). Deux PUT séquentiels sur la même
- * ressource ne déclenchent donc jamais le conflit : chacun recharge la version courante.
- * C'est une <b>limite assumée</b> du dispositif — le verrou protège de l'entrelacement de deux
- * <em>transactions</em>, pas de deux formulaires ouverts côté navigateur (protéger ce cas-là
- * demanderait de faire transiter la version dans les DTO, hors périmètre de ce lot).</p>
+ * <p><b>Pourquoi ce test n'est PAS un test HTTP.</b> Cette classe vérifie exclusivement le
+ * <b>chemin transactionnel</b> : deux transactions distinctes qui s'entrelacent sur la même
+ * ligne, la seconde à partir d'un état périmé échouant avec
+ * {@code ObjectOptimisticLockingFailureException}. C'est un scénario que MockMvc, mono-thread,
+ * ne peut pas reproduire — d'où le passage direct par le repository sous
+ * {@link org.springframework.transaction.support.TransactionTemplate}.
  *
- * <p><b>Ce qui est donc vérifié</b> : le comportement transactionnel réel, avec deux
+ * <p>⚠️ Chantier « conflit de version » (2026-08-27, {@code docs/plan-conflit-version.md}) — la
+ * limite documentée ici jusqu'alors est <b>levée</b> : les 5 DTO du circuit (Dossier, Ppm, Marche,
+ * PvExamen, LettreRenvoi) portent désormais le champ {@code version}, comparé explicitement en
+ * service ({@link cnm.prs.service.VerrouOptimiste#exigerVersionCourante}) avant toute écriture.
+ * Deux PUT séquentiels sur la même ressource (deux formulaires ouverts dans deux navigateurs) se
+ * heurtent donc bien désormais, via le <b>chemin HTTP</b> ({@link ConflitVersionException}) — ce
+ * que couvrent les tests MockMvc permanents de {@code ConflitVersionHttpIntegrationTest} (Q1),
+ * pas cette classe-ci.</p>
+ *
+ * <p><b>Ce qui est donc vérifié ici</b> : le comportement transactionnel réel, avec deux
  * transactions distinctes sur la même ligne — la seconde à partir d'un état périmé échoue.
  * Cette classe n'est <b>pas</b> {@code @Transactional} : chaque étape doit COMMITTER pour que
  * la suivante voie l'écriture de la précédente (sous une transaction de test unique, les deux
