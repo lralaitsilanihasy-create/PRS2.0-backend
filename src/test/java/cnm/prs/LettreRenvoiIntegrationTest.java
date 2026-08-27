@@ -1,7 +1,9 @@
 package cnm.prs;
 
 import static org.hamcrest.Matchers.hasSize;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -207,6 +209,86 @@ class LettreRenvoiIntegrationTest extends CnmIntegrationTestSupport {
     void prmp_mes_lettres_lecture_seule() throws Exception {
         mvc.perform(get("/api/lettre-renvois/mes-lettres").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("Lot D §5 — mes-lettres : nom du signataire et flag « lue » résolus EN LOT — "
+            + "valeurs identiques par lettre, et coût en requêtes indépendant de la taille de la liste")
+    void mesLettres_nomSignataireEtLue_resolusEnLot() throws Exception {
+        // ⚠️ Audit 2026-08-27 (lot D §5) : peuplerNomSignataire + peuplerLue faisaient DEUX requêtes
+        // PAR LETTRE. Ici, 4 lettres de 4 signataires différents (dont un IM inconnu du référentiel)
+        // et 2 lectures posées : le contenu doit être exact ET le coût constant.
+        org.hibernate.stat.Statistics stats = entityManager.getEntityManagerFactory()
+                .unwrap(org.hibernate.SessionFactory.class).getStatistics();
+        stats.setStatisticsEnabled(true);
+
+        int seule = seedLettreSigneeSignee("CTRCC1");
+        marquerLue(seule, "PRMP001");
+        stats.clear();
+        mvc.perform(get("/api/lettre-renvois/mes-lettres").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)));
+        long coutUneLettre = stats.getPrepareStatementCount();
+
+        int deux = seedLettreSigneeSignee("CTRSEC");
+        int trois = seedLettreSigneeSignee("CTRMEM");
+        int quatre = seedLettreSigneeSignee("INCONU");   // IM absent de tr_controleur (aucune FK sur IM_SIGNATAIRE)
+        marquerLue(trois, "PRMP001");
+        stats.clear();
+        String corps = mvc.perform(get("/api/lettre-renvois/mes-lettres").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(4)))
+                .andReturn().getResponse().getContentAsString();
+        long coutQuatreLettres = stats.getPrepareStatementCount();
+
+        // Comportement identique à la résolution unitaire : nom « Prénoms Nom », null si l'IM est inconnu.
+        assertEquals("Prenoms NomCTRCC1", lire(corps, seule, "nomSignataire"));
+        assertEquals("Prenoms NomCTRSEC", lire(corps, deux, "nomSignataire"));
+        assertNull(lire(corps, quatre, "nomSignataire"), "signataire inconnu du référentiel → nomSignataire null");
+        // Flag « lue » individuel (login de l'agent), lettre par lettre.
+        assertEquals(Boolean.TRUE, lire(corps, seule, "lue"));
+        assertEquals(Boolean.FALSE, lire(corps, deux, "lue"));
+        assertEquals(Boolean.TRUE, lire(corps, trois, "lue"));
+        assertEquals(Boolean.FALSE, lire(corps, quatre, "lue"));
+
+        // Garde-fou : sans compteur actif, l'assertion suivante serait vraie pour de mauvaises raisons.
+        assertTrue(coutUneLettre > 0, "statistiques Hibernate actives");
+        // Trois lettres de plus ne doivent pas coûter trois requêtes de plus : avant le lot D, elles en
+        // coûtaient SIX (un findById du signataire + un exists de lecture par lettre).
+        assertTrue(coutQuatreLettres - coutUneLettre <= 1,
+                "coût constant attendu (1 lettre : " + coutUneLettre + " requêtes ; 4 lettres : "
+                        + coutQuatreLettres + ")");
+    }
+
+    /** Lettre SIGNE du dossier 1 (PPM de PRMP001), attribuée à un signataire donné. */
+    private int seedLettreSigneeSignee(String imSignataire) {
+        LettreRenvoi l = new LettreRenvoi();
+        l.setIdExamen(1);
+        l.setIdDossier(1);
+        l.setObjetLettre("Renvoi");
+        l.setStatut("SIGNE");
+        l.setImSignataire(imSignataire);
+        return lettreRenvoiRepository.save(l).getIdLettre();
+    }
+
+    /** Pose la trace de lecture d'un agent sur une lettre (unicité uk_lettre_lue_agent). */
+    private void marquerLue(int idLettre, String login) {
+        cnm.prs.entity.LettreRenvoiLue lue = new cnm.prs.entity.LettreRenvoiLue();
+        lue.setIdLettre(idLettre);
+        lue.setLoginAgent(login);
+        lue.setIdPrmp("PRMP001");
+        lue.setDateLecture(java.time.LocalDateTime.of(2026, 6, 6, 9, 0));
+        lueRepository.save(lue);
+    }
+
+    /** Valeur d'un champ de la lettre {@code idLettre} dans la réponse JSON de la liste. */
+    private Object lire(String corps, int idLettre, String champ) {
+        java.util.List<java.util.Map<String, Object>> lettres = com.jayway.jsonpath.JsonPath.read(corps, "$");
+        return lettres.stream()
+                .filter(m -> Integer.valueOf(idLettre).equals(m.get("idLettre")))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("lettre " + idLettre + " absente de la liste"))
+                .get(champ);
     }
 
     @Test

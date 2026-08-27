@@ -6,8 +6,13 @@ import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.access.AccessDeniedException;
@@ -119,7 +124,7 @@ public class LettreRenvoiService {
         } else {
             lettres = List.of();
         }
-        return lettres.stream().map(LettreRenvoiMapper::toDto).map(this::peuplerNomSignataire).map(this::peuplerLue).toList();
+        return peuplerEnLot(lettres.stream().map(LettreRenvoiMapper::toDto).toList());
     }
 
     /** Lettres signées concernant les dossiers de la PRMP connectée (lecture seule). */
@@ -129,8 +134,8 @@ public class LettreRenvoiService {
         if (idPrmp == null) {
             return List.of();
         }
-        return repository.findSigneesPourPrmp(idPrmp).stream()
-                .map(LettreRenvoiMapper::toDto).map(this::peuplerNomSignataire).map(this::peuplerLue).toList();
+        return peuplerEnLot(repository.findSigneesPourPrmp(idPrmp).stream()
+                .map(LettreRenvoiMapper::toDto).toList());
     }
 
     /**
@@ -189,13 +194,53 @@ public class LettreRenvoiService {
                 && ppmRepository.existsByIdDossierAndIdPrmp(entity.getIdDossier(), ref);
     }
 
-    /** Renseigne le flag {@code lue} pour l'<strong>agent connecté</strong> (trace {@code t_lettre_renvoi_lue}). */
-    private LettreRenvoiDto peuplerLue(LettreRenvoiDto dto) {
-        String login = CurrentUser.login().filter(s -> !s.isBlank()).orElse(null);
-        if (dto != null && dto.getIdLettre() != null) {
-            dto.setLue(login != null && lueRepository.existsByIdLettreAndLoginAgent(dto.getIdLettre(), login));
+    /**
+     * Renseigne {@code nomSignataire} et {@code lue} sur une LISTE, <strong>en lot</strong>
+     * (⚠️ audit 2026-08-27, lot D §5).
+     *
+     * <p>Les deux enrichissements se faisaient lettre par lettre : {@code peuplerNomSignataire} allait
+     * chercher le contrôleur signataire, {@code peuplerLue} interrogeait la trace de lecture — soit
+     * <strong>deux requêtes par lettre</strong>, sur des listes qui grossissent avec chaque examen non
+     * conforme. Ils tiennent désormais en <strong>deux requêtes au total</strong>, quelle que soit la
+     * taille de la liste, sur le modèle déjà en place dans le dépôt
+     * ({@link ActeurDirectory#nomsParLogin}, {@code findMetaByIdDemandeRetraitIn}).</p>
+     *
+     * <p>Comportement strictement identique à l'ancien enchaînement : un signataire introuvable ou
+     * sans nom laisse {@code nomSignataire} à {@code null}, et le flag {@code lue} n'est posé que sur
+     * les lettres qui portent un identifiant.</p>
+     */
+    private List<LettreRenvoiDto> peuplerEnLot(List<LettreRenvoiDto> dtos) {
+        if (dtos.isEmpty()) {
+            return dtos;
         }
-        return dto;
+        // 1 requête — noms des signataires (IM_CONTROLEUR est la PK de tr_controleur).
+        Set<String> signataires = dtos.stream().map(LettreRenvoiDto::getImSignataire)
+                .filter(im -> im != null && !im.isBlank()).collect(Collectors.toSet());
+        Map<String, String> noms = new HashMap<>();
+        if (!signataires.isEmpty()) {
+            for (Controleur c : controleurRepository.findAllById(signataires)) {
+                String nom = ((c.getPrenomsCont() == null ? "" : c.getPrenomsCont()) + " "
+                        + (c.getNomCont() == null ? "" : c.getNomCont())).trim();
+                if (!nom.isBlank()) {
+                    noms.put(c.getImControleur(), nom);
+                }
+            }
+        }
+        // 1 requête — lettres déjà lues par l'agent connecté (suivi individuel, décision du 2026-08-27).
+        String login = CurrentUser.login().filter(s -> !s.isBlank()).orElse(null);
+        List<Integer> ids = dtos.stream().map(LettreRenvoiDto::getIdLettre).filter(Objects::nonNull).toList();
+        Set<Integer> lues = (login == null || ids.isEmpty()) ? Set.of()
+                : Set.copyOf(lueRepository.findIdLettresLuesPourLogin(ids, login));
+
+        for (LettreRenvoiDto dto : dtos) {
+            if (dto.getImSignataire() != null) {
+                dto.setNomSignataire(noms.get(dto.getImSignataire()));
+            }
+            if (dto.getIdLettre() != null) {
+                dto.setLue(lues.contains(dto.getIdLettre()));
+            }
+        }
+        return dtos;
     }
 
     /** Renseigne {@code nomSignataire} (« prénoms nom ») depuis {@code tr_controleur} si la lettre est signée. */
