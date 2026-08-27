@@ -16,6 +16,23 @@ public interface ObservationControleRepository extends JpaRepository<Observation
     /** Lignes d'observation d'un point de contrôle, triées par ordre de saisie ASC. */
     List<ObservationControle> findByIdDetailOrderByOrdreAsc(Integer idDetail);
 
+    /**
+     * ⚠️ Audit 2026-08-27 (C2) — §1/§3.1 : lignes d'observation d'un point de contrôle, servies
+     * <strong>uniquement</strong> si ce point appartient à un examen de la localité de l'appelant
+     * (chaîne observation → détail → examen → dispatch → réception → contrôleur récepteur). Hors
+     * localité, la requête ne ramène rien : l'observation interne de la commission ne sort pas.
+     */
+    @Query("""
+            select o from ObservationControle o
+            where o.idDetail = :idDetail
+              and exists (select 1 from ExamenDetail ed, Examen e
+                          where ed.idDetailExamen = o.idDetail and e.idExamen = ed.idExamen
+                            and e.dispatch.reception.ctrlRecept.idLocalite = :loc)
+            order by o.ordre asc
+            """)
+    List<ObservationControle> findByIdDetailEtLocalite(@Param("idDetail") Integer idDetail,
+            @Param("loc") String loc);
+
     /** Supprime les lignes d'observation d'un point de contrôle (replace-on-save / cascade). */
     void deleteByIdDetail(Integer idDetail);
 

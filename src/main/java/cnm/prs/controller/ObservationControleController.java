@@ -22,8 +22,10 @@ import cnm.prs.service.ObservationControleService;
 
 /**
  * Contrôleur REST pour la ressource {@code observation-controles} (table {@code t_observation_controle}) :
- * lignes « AU LIEU DE / LIRE » d'un point de contrôle d'examen. Lecture : authentifié ;
- * écriture (POST/PUT/DELETE) : <strong>Membre</strong> (§3.5, comme les détails d'examen).
+ * lignes « AU LIEU DE / LIRE » d'un point de contrôle d'examen. Lecture : authentifié <strong>et</strong>
+ * bornée au périmètre du point de contrôle (⚠️ audit 2026-08-27, C2 — §1/§3.1 : localité du contrôleur ;
+ * la PRMP, acteur externe, n'a pas accès au détail interne) ; écriture (POST/PUT/DELETE) :
+ * <strong>Membre</strong> (§3.5, comme les détails d'examen).
  */
 @RestController
 @RequestMapping("/api/observation-controles")

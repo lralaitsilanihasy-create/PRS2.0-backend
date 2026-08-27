@@ -17,6 +17,20 @@ public interface ExamenDetailRepository extends JpaRepository<ExamenDetail, Inte
     List<ExamenDetail> findByIdExamen(Integer idExamen);
 
     /**
+     * ⚠️ Audit 2026-08-27 (C2) — §1/§3.1 : détails d'examen des examens d'une <strong>localité</strong>.
+     * Même chaîne que {@code ExamenRepository.findVisiblesParLocalite} (examen → dispatch → réception →
+     * contrôleur récepteur) : le parent et ses détails ne peuvent donc pas diverger de périmètre.
+     */
+    @Query("select ed from ExamenDetail ed where ed.idExamen in "
+            + "(select e.idExamen from Examen e where e.dispatch.reception.ctrlRecept.idLocalite = :loc)")
+    List<ExamenDetail> findVisiblesParLocalite(@Param("loc") String loc);
+
+    /** ⚠️ C2 — le détail {@code id} appartient-il à un examen de la localité ? (garde de l'accès unitaire) */
+    @Query("select (count(ed) > 0) from ExamenDetail ed where ed.idDetailExamen = :id and ed.idExamen in "
+            + "(select e.idExamen from Examen e where e.dispatch.reception.ctrlRecept.idLocalite = :loc)")
+    boolean existsDansLocalite(@Param("id") Integer id, @Param("loc") String loc);
+
+    /**
      * ⚠️ Règle ajoutée (2026-07-21) — unicité applicative du triplet ({@code idExamen}, {@code idDetail},
      * {@code idPtControle}). Traite explicitement {@code idDetail} NULL (points DOSSIER) — une contrainte
      * d'unicité SQL ne le ferait pas sous PostgreSQL (NULL ≠ NULL). {@code selfId} exclut la ligne

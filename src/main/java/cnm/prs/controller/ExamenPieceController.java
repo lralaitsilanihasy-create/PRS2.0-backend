@@ -24,6 +24,9 @@ import cnm.prs.service.ExamenPieceService;
  * ⚠️ Règle ajoutée (2026-08-01) — contrôleur REST {@code examen-pieces} (table {@code t_examen_piece}) :
  * examen des pièces jointes une par une. Écriture = tâche du Membre (titulaire ou par délégation, comme
  * {@code examen-details}) ; suppression réservée à l'Administrateur.
+ *
+ * <p><strong>Lecture</strong> (⚠️ audit 2026-08-27, C2) : bornée au périmètre dans le service, avec ou
+ * sans {@code ?examen=} — contrôleurs de la localité seulement ; la PRMP/UGPM n'y accède pas.</p>
  */
 @RestController
 @RequestMapping("/api/examen-pieces")

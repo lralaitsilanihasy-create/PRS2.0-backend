@@ -21,6 +21,10 @@ import cnm.prs.service.ExamenDetailService;
 
 /**
  * Contrôleur REST pour la ressource {@code examen-details} (table {@code t_examen_detail}).
+ *
+ * <p><strong>Lecture</strong> (⚠️ audit 2026-08-27, C2) : bornée au périmètre dans le service —
+ * Président/Administrateur voient tout, les contrôleurs leur localité, la PRMP/UGPM rien
+ * (liste vide, 403 sur l'accès unitaire) : l'évaluation point par point est interne à la commission.</p>
  */
 @RestController
 @RequestMapping("/api/examen-details")

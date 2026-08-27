@@ -115,6 +115,7 @@ abstract class CnmIntegrationTestSupport extends AbstractIntegrationTest {
     @Autowired protected MarchePrevisionRepository marchePrevisionRepository;
     @Autowired protected cnm.prs.repository.CapmRepository capmRepository;
     @Autowired protected cnm.prs.repository.ExamenDetailRepository examenDetailRepository;
+    @Autowired protected cnm.prs.repository.ExamenPieceRepository examenPieceRepository;
     @Autowired protected cnm.prs.repository.PointsCtrlRepository pointsCtrlRepository;
     @Autowired protected cnm.prs.repository.LettreRenvoiRepository lettreRenvoiRepository;
     @Autowired protected DemandeRetraitRepository demandeRetraitRepository;

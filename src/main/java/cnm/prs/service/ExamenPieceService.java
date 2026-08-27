@@ -11,10 +11,16 @@ import cnm.prs.exception.BusinessRuleException;
 import cnm.prs.exception.ResourceNotFoundException;
 import cnm.prs.mapper.ExamenPieceMapper;
 import cnm.prs.repository.ExamenPieceRepository;
+import cnm.prs.security.Visibilite;
 
 /**
  * ⚠️ Règle ajoutée (2026-08-01) — logique métier pour {@link ExamenPiece} : examen des pièces jointes
  * d'un dossier, une par une (miroir des {@code examen-details} pour les lignes de marché).
+ *
+ * <p>⚠️ Audit 2026-08-27, constat C2 — §1/§3.1 : la lecture ({@code findAll}, avec ou sans
+ * {@code ?examen=}, et l'accès unitaire) était ouverte à tout authentifié. Comme les détails
+ * d'examen, elle est bornée par {@link Visibilite} : Président/Administrateur tout, contrôleurs
+ * leur localité, <strong>PRMP/UGPM rien</strong> (le constat pièce par pièce est interne).</p>
  */
 @Service
 @Transactional
@@ -26,17 +32,25 @@ public class ExamenPieceService {
         this.repository = repository;
     }
 
-    /** Liste, optionnellement filtrée par examen ({@code ?examen=}). */
+    /**
+     * Liste, optionnellement filtrée par examen ({@code ?examen=}) — ⚠️ C2 : bornée au périmètre (§1)
+     * dans les deux cas, le filtre d'examen ne relâchant jamais la garde de localité.
+     */
     @Transactional(readOnly = true)
     public List<ExamenPieceDto> findAll(Integer examen) {
-        List<ExamenPiece> rows = examen == null ? repository.findAll() : repository.findByIdExamen(examen);
+        List<ExamenPiece> rows = examen == null
+                ? Visibilite.filtrer(repository::findAll, repository::findVisiblesParLocalite)
+                : Visibilite.filtrer(() -> repository.findByIdExamen(examen),
+                        loc -> repository.findByIdExamenEtLocalite(examen, loc));
         return rows.stream().map(ExamenPieceMapper::toDto).toList();
     }
 
+    /** ⚠️ C2 — accès unitaire : 403 hors de la localité de l'examen (et pour la PRMP/UGPM). */
     @Transactional(readOnly = true)
     public ExamenPieceDto findById(Integer id) {
         ExamenPiece entity = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Examen de pièce introuvable : " + id));
+        Visibilite.controler(loc -> repository.existsDansLocalite(id, loc));
         return ExamenPieceMapper.toDto(entity);
     }
 

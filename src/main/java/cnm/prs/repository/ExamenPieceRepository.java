@@ -16,6 +16,24 @@ public interface ExamenPieceRepository extends JpaRepository<ExamenPiece, Intege
     /** Résultats d'examen des pièces d'un examen. */
     List<ExamenPiece> findByIdExamen(Integer idExamen);
 
+    /**
+     * ⚠️ Audit 2026-08-27 (C2) — §1/§3.1 : résultats de pièces des examens d'une <strong>localité</strong>
+     * (même chaîne examen → dispatch → réception → contrôleur récepteur que le parent {@code Examen}).
+     */
+    @Query("select ep from ExamenPiece ep where ep.idExamen in "
+            + "(select e.idExamen from Examen e where e.dispatch.reception.ctrlRecept.idLocalite = :loc)")
+    List<ExamenPiece> findVisiblesParLocalite(@Param("loc") String loc);
+
+    /** ⚠️ C2 — résultats d'UN examen, restreints à la localité de l'appelant ({@code ?examen=}). */
+    @Query("select ep from ExamenPiece ep where ep.idExamen = :idExamen and ep.idExamen in "
+            + "(select e.idExamen from Examen e where e.dispatch.reception.ctrlRecept.idLocalite = :loc)")
+    List<ExamenPiece> findByIdExamenEtLocalite(@Param("idExamen") Integer idExamen, @Param("loc") String loc);
+
+    /** ⚠️ C2 — le résultat {@code id} appartient-il à un examen de la localité ? (garde de l'accès unitaire) */
+    @Query("select (count(ep) > 0) from ExamenPiece ep where ep.idExamenPiece = :id and ep.idExamen in "
+            + "(select e.idExamen from Examen e where e.dispatch.reception.ctrlRecept.idLocalite = :loc)")
+    boolean existsDansLocalite(@Param("id") Integer id, @Param("loc") String loc);
+
     /** Unicité applicative du couple (idExamen, idPiece) ; {@code selfId} exclut la ligne à la mise à jour. */
     @Query("""
             select count(ep) from ExamenPiece ep

@@ -10,9 +10,15 @@ import cnm.prs.entity.ObservationControle;
 import cnm.prs.exception.ResourceNotFoundException;
 import cnm.prs.mapper.ObservationControleMapper;
 import cnm.prs.repository.ObservationControleRepository;
+import cnm.prs.security.Visibilite;
 
 /**
  * Logique métier pour {@link ObservationControle} (lignes « AU LIEU DE / LIRE » des points de contrôle).
+ *
+ * <p>⚠️ Audit 2026-08-27, constat C2 — §1/§3.1 : {@code findByDetail} servait les observations
+ * <strong>internes</strong> de la commission à tout authentifié, toutes localités confondues et
+ * pendant la navette. La lecture est désormais bornée par {@link Visibilite}, sur la même chaîne que
+ * le détail d'examen parent — hors localité (et pour la PRMP/UGPM) : liste vide.</p>
  */
 @Service
 @Transactional
@@ -24,10 +30,13 @@ public class ObservationControleService {
         this.repository = repository;
     }
 
+    /** ⚠️ C2 — lignes du point de contrôle, bornées au périmètre (§1) : vide hors localité / pour la PRMP. */
     @Transactional(readOnly = true)
     public List<ObservationControleDto> findByDetail(Integer idDetail) {
-        return repository.findByIdDetailOrderByOrdreAsc(idDetail).stream()
-                .map(ObservationControleMapper::toDto).toList();
+        return Visibilite.filtrer(
+                        () -> repository.findByIdDetailOrderByOrdreAsc(idDetail),
+                        loc -> repository.findByIdDetailEtLocalite(idDetail, loc))
+                .stream().map(ObservationControleMapper::toDto).toList();
     }
 
     public ObservationControleDto create(ObservationControleDto dto) {

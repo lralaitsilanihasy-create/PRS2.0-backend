@@ -23,6 +23,7 @@ import cnm.prs.repository.ExamenRepository;
 import cnm.prs.repository.MarcheRepository;
 import cnm.prs.repository.ObservationControleRepository;
 import cnm.prs.repository.PointsCtrlRepository;
+import cnm.prs.security.Visibilite;
 
 /**
  * Logique métier pour {@link ExamenDetail}.
@@ -30,6 +31,13 @@ import cnm.prs.repository.PointsCtrlRepository;
  * <p>Verrou d'édition (§2.6) : un point de contrôle n'est modifiable que tant que le dossier de
  * l'examen est {@link StatutDossier#EXAMINE} (navette ouverte) ; dès la signature du PV
  * ({@link StatutDossier#PV_SIGNE}) l'examen devient définitif et toute écriture est refusée (409).</p>
+ *
+ * <p>⚠️ Audit 2026-08-27, constat C2 — §1/§3.1 : la <strong>lecture</strong> était totalement
+ * ouverte ({@code findAll()} sans filtre) alors que le parent {@code Examen} était correctement
+ * scopé. L'évaluation point par point est un travail <strong>interne</strong> de la commission :
+ * elle est désormais bornée par {@link Visibilite}, comme {@code ExamenService.findAll} —
+ * Président/Administrateur : tout ; contrôleurs : leur localité ; <strong>PRMP/UGPM : rien</strong>
+ * (acteur externe ; elle reçoit la synthèse du PV, pas le détail des points de contrôle).</p>
  */
 @Service
 @Transactional
@@ -51,15 +59,19 @@ public class ExamenDetailService {
         this.marcheRepository = marcheRepository;
     }
 
+    /** ⚠️ C2 — liste bornée au périmètre (§1) : localité du contrôleur, vide pour la PRMP/UGPM. */
     @Transactional(readOnly = true)
     public List<ExamenDetailDto> findAll() {
-        return repository.findAll().stream().map(this::toDtoAvecObservations).toList();
+        return Visibilite.filtrer(repository::findAll, repository::findVisiblesParLocalite)
+                .stream().map(this::toDtoAvecObservations).toList();
     }
 
+    /** ⚠️ C2 — accès unitaire : 403 hors de la localité de l'examen (et pour la PRMP/UGPM). */
     @Transactional(readOnly = true)
     public ExamenDetailDto findById(Integer id) {
         ExamenDetail entity = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("ExamenDetail introuvable : " + id));
+        Visibilite.controler(loc -> repository.existsDansLocalite(id, loc));
         return toDtoAvecObservations(entity);
     }
 

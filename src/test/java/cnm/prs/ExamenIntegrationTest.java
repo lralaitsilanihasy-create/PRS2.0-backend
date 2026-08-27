@@ -166,6 +166,164 @@ class ExamenIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$.content[?(@.idDossier==51)]", hasSize(0)));
     }
 
+    // ------------------------------------------------------------------
+    // Cloisonnement des lectures internes de l'examen (⚠️ audit 2026-08-27, constat C2)
+    // ------------------------------------------------------------------
+
+    @Test
+    @DisplayName("Détails d'examen C2 §1/§3.1 — liste bornée à la localité ; la PRMP n'accède pas au point par point (liste vide + 403 unitaire)")
+    void examenDetails_lecturesCloisonnees() throws Exception {
+        seedGrilleDansDeuxLocalites();
+
+        // Le Membre d'ANT voit le point de contrôle de SA localité, jamais celui de TMS.
+        mvc.perform(get("/api/examen-details").header("Authorization", tokenMembre))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idDetailExamen==960)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idDetailExamen==961)]", hasSize(0)));
+        mvc.perform(get("/api/examen-details/960").header("Authorization", tokenMembre))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.conforme").value(false));
+
+        // Le CC de TMS voit le sien et reçoit 403 sur celui d'ANT (avant le correctif : 200).
+        mvc.perform(get("/api/examen-details").header("Authorization", tokenCcTms()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idDetailExamen==961)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idDetailExamen==960)]", hasSize(0)));
+        mvc.perform(get("/api/examen-details/960").header("Authorization", tokenCcTms()))
+                .andExpect(status().isForbidden());
+
+        // La PRMP est un acteur externe : le détail des points de contrôle lui est fermé (§3.1).
+        mvc.perform(get("/api/examen-details").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+        mvc.perform(get("/api/examen-details/960").header("Authorization", tokenPrmp))
+                .andExpect(status().isForbidden());
+
+        // NON-RÉGRESSION : le Président voit toutes les localités.
+        mvc.perform(get("/api/examen-details").header("Authorization", tokenPresident))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idDetailExamen==960)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idDetailExamen==961)]", hasSize(1)));
+    }
+
+    @Test
+    @DisplayName("Pièces d'examen C2 §1/§3.1 — le filtre ?examen= ne relâche pas la garde de localité ; PRMP exclue (liste vide + 403 unitaire)")
+    void examenPieces_lecturesCloisonnees() throws Exception {
+        seedGrilleDansDeuxLocalites();
+
+        // Le Membre d'ANT : sa localité en liste complète comme via ?examen=.
+        mvc.perform(get("/api/examen-pieces").header("Authorization", tokenMembre))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idExamenPiece==960)]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idExamenPiece==961)]", hasSize(0)));
+        mvc.perform(get("/api/examen-pieces?examen=1").header("Authorization", tokenMembre))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)));
+        // ?examen=2 (TMS) depuis ANT : le filtre ne contourne pas le périmètre → rien.
+        mvc.perform(get("/api/examen-pieces?examen=2").header("Authorization", tokenMembre))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+
+        // PRMP : ni la liste, ni le filtre, ni l'accès unitaire.
+        mvc.perform(get("/api/examen-pieces").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+        mvc.perform(get("/api/examen-pieces?examen=1").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+        mvc.perform(get("/api/examen-pieces/960").header("Authorization", tokenPrmp))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/examen-pieces/960").header("Authorization", tokenCcTms()))
+                .andExpect(status().isForbidden());
+
+        // NON-RÉGRESSION : le Président lit les deux localités, filtre compris.
+        mvc.perform(get("/api/examen-pieces?examen=2").header("Authorization", tokenPresident))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)));
+        mvc.perform(get("/api/examen-pieces/961").header("Authorization", tokenPresident))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("Observations de contrôle C2 §1/§3.1 — les lignes « au lieu de / lire » ne sortent pas de la localité ; PRMP exclue")
+    void observationsControle_lecturesCloisonnees() throws Exception {
+        seedGrilleDansDeuxLocalites();
+
+        mvc.perform(get("/api/observation-controles?detail=960").header("Authorization", tokenMembre))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].lire").value("5000000"));
+        mvc.perform(get("/api/observation-controles?detail=961").header("Authorization", tokenMembre))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+
+        mvc.perform(get("/api/observation-controles?detail=961").header("Authorization", tokenCcTms()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)));
+        mvc.perform(get("/api/observation-controles?detail=960").header("Authorization", tokenCcTms()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+
+        // La PRMP ne lit aucune observation interne de la commission (§3.1), même sur son propre dossier.
+        mvc.perform(get("/api/observation-controles?detail=960").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+
+        // NON-RÉGRESSION : le Président lit les deux.
+        mvc.perform(get("/api/observation-controles?detail=960").header("Authorization", tokenPresident))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)));
+        mvc.perform(get("/api/observation-controles?detail=961").header("Authorization", tokenPresident))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)));
+    }
+
+    /** Jeton d'un Chef de commission d'une AUTRE localité (TMS) — le voisin qui ne doit rien voir d'ANT. */
+    private String tokenCcTms() {
+        return bearer("CTRCC2", ProfilUtilisateur.CHEF_COMMISSION, TypeActeur.CONTROLEUR, "CTRCC2", "TMS");
+    }
+
+    /**
+     * ⚠️ C2 — une grille identique dans DEUX localités : l'examen 1 (dossier 1, réceptionné en ANT par
+     * CTRCC1) et un examen 2 monté sur le dossier 2 (réceptionné en TMS par CTRCC2). Chacun porte un
+     * point de contrôle non conforme (960 / 961), sa ligne d'observation et un résultat de pièce.
+     */
+    private void seedGrilleDansDeuxLocalites() {
+        PointsCtrl pc = new PointsCtrl();
+        pc.setIdPointCtrl(960); pc.setLibelPointCtrl("Montant"); pc.setObligatoire(true); pc.setIdTypeDossier("DDP");
+        pointsCtrlRepository.save(pc);
+        // Circuit TMS : la réception 2 (CTRCC2) existe déjà dans le socle ; on ajoute dispatch et examen.
+        dispatchRepository.save(dispatch(2, 2, "CTRCC2", "CTRMEM"));
+        examenRepository.save(examen(2, 2, "CTRMEM"));
+
+        examenDetailRepository.save(detailNonConforme(960, 1));
+        examenDetailRepository.save(detailNonConforme(961, 2));
+        observationControleRepository.save(observation(960));
+        observationControleRepository.save(observation(961));
+        examenPieceRepository.save(resultatPiece(960, 1));
+        examenPieceRepository.save(resultatPiece(961, 2));
+    }
+
+    private ExamenDetail detailNonConforme(int idDetailExamen, int idExamen) {
+        ExamenDetail d = new ExamenDetail();
+        d.setIdDetailExamen(idDetailExamen); d.setIdExamen(idExamen); d.setIdPtControle(960);
+        d.setConforme(false); d.setObsSiNonConforme("Montant errone");
+        return d;
+    }
+
+    private cnm.prs.entity.ObservationControle observation(int idDetail) {
+        cnm.prs.entity.ObservationControle o = new cnm.prs.entity.ObservationControle();
+        o.setIdDetail(idDetail); o.setAuLieuDe("500000"); o.setLire("5000000"); o.setOrdre(1);
+        return o;
+    }
+
+    private cnm.prs.entity.ExamenPiece resultatPiece(int idExamenPiece, int idExamen) {
+        cnm.prs.entity.ExamenPiece p = new cnm.prs.entity.ExamenPiece();
+        p.setIdExamenPiece(idExamenPiece); p.setIdExamen(idExamen); p.setIdPiece(idExamenPiece);
+        p.setConforme(false); p.setObservation("Piece manquante");
+        return p;
+    }
+
     @Test
     @DisplayName("Observation-controle — création d'une ligne (Membre) → 201")
     void observation_creation_ok() throws Exception {
