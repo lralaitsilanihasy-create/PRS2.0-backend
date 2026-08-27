@@ -223,3 +223,11 @@ posees en 3.1 et eviter qu'une regression future en rouvre une.
   `frontend/CLAUDE.md` a jour, rien a repercuter ici.
 
 Apres ce soldage, il ne reste **aucun suivi ouvert** issu des livraisons du 2026-08-26.
+
+## Chantier suivant : audit global du 27/08/2026
+
+Un nouvel audit global (7 agents en parallele, rapport `AUDIT-GLOBAL-2026-08-27.md` a la racine du
+projet, hors depot) a releve 4 constats critiques et une serie de constats importants sur les deux
+depots. Traite sur la branche `chantier/audit-2026-08` (33 commits backend, 20 commits frontend).
+Voir **`docs/plan-audit-2026-08.md`** pour le detail par lot (A a F), les commits, l'etat final des
+suites (604 tests backend, 106 front) et les decisions produit laissees en attente.
