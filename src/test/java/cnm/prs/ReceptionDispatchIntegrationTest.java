@@ -456,6 +456,72 @@ class ReceptionDispatchIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     // ------------------------------------------------------------------
+    // Gardes du PUT de dispatch (⚠️ audit 2026-08-27, lot B — constats 5 et 7)
+    // ------------------------------------------------------------------
+
+    @Test
+    @DisplayName("Dispatch (lot B) — le PUT rejoue les gardes du POST : statut du dossier (409), localité (403) et "
+            + "anti-doublon au re-ciblage (409)")
+    void dispatch_put_rejoueLesGardesDuPost() throws Exception {
+        // Dispatch légitime sur le dossier 350 (ANT) → dossier DISPATCHE.
+        dossierRepository.save(dossier(350, "PRET_DISPATCH"));
+        receptionRepository.save(reception(450, 350, "CTRSEC", true));
+        mvc.perform(post("/api/dispatchs").header("Authorization", tokenCc).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDispatch\":350,\"idReception\":450,\"imCtrlMembre\":\"CTRMEM\",\"interimDispatch\":false}"))
+                .andExpect(status().isCreated());
+
+        // (a) Localité : le CC de TMS ne corrige pas un dispatch d'ANT (avant le correctif : 200).
+        String tokenCcTms = bearer("CTRCC2", ProfilUtilisateur.CHEF_COMMISSION, TypeActeur.CONTROLEUR, "CTRCC2", "TMS");
+        mvc.perform(put("/api/dispatchs/350").header("Authorization", tokenCcTms)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDispatch\":350,\"idReception\":450,\"imCtrlMembre\":\"CTRMEM\",\"interimDispatch\":true}"))
+                .andExpect(status().isForbidden());
+
+        // (b) Anti-doublon : re-cibler le dispatch sur une réception DÉJÀ dispatchée → 409.
+        dossierRepository.save(dossier(351, "PRET_DISPATCH"));
+        receptionRepository.save(reception(451, 351, "CTRSEC", true));
+        mvc.perform(post("/api/dispatchs").header("Authorization", tokenCc).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDispatch\":351,\"idReception\":451,\"imCtrlMembre\":\"CTRMEM\",\"interimDispatch\":false}"))
+                .andExpect(status().isCreated());
+        mvc.perform(put("/api/dispatchs/350").header("Authorization", tokenCc)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDispatch\":350,\"idReception\":451,\"imCtrlMembre\":\"CTRMEM\",\"interimDispatch\":false}"))
+                .andExpect(status().isConflict());
+
+        // (c) Statut : dossier passé EN_VERIFICATION (PV signé) → l'attribution est figée.
+        Dossier statue = dossierRepository.findById(350).orElseThrow();
+        statue.setStatut("EN_VERIFICATION");
+        dossierRepository.save(statue);
+        mvc.perform(put("/api/dispatchs/350").header("Authorization", tokenCc)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDispatch\":350,\"idReception\":450,\"imCtrlMembre\":\"CTRCC1\",\"interimDispatch\":false}"))
+                .andExpect(status().isConflict());
+        // L'attributaire d'origine n'a pas bougé.
+        mvc.perform(get("/api/dispatchs/350").header("Authorization", tokenPresident))
+                .andExpect(jsonPath("$.imCtrlMembre").value("CTRMEM"));
+    }
+
+    @Test
+    @DisplayName("Dispatch (lot B) — IM_CTRL_DISPATCH vient du JWT : un dispatcheur falsifié dans le corps est ignoré, "
+            + "au POST comme au PUT")
+    void dispatch_dispatcheurTraceDepuisLeJeton() throws Exception {
+        dossierRepository.save(dossier(352, "PRET_DISPATCH"));
+        receptionRepository.save(reception(452, 352, "CTRSEC", true));
+        mvc.perform(post("/api/dispatchs").header("Authorization", tokenCc).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDispatch\":352,\"idReception\":452,\"imCtrlDispatch\":\"CTRPRE\","
+                        + "\"imCtrlMembre\":\"CTRMEM\",\"interimDispatch\":false}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.imCtrlDispatch").value("CTRCC1"));
+        // Le Président corrige : c'est LUI qui devient le dispatcheur tracé, pas la valeur du corps.
+        mvc.perform(put("/api/dispatchs/352").header("Authorization", tokenPresident)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDispatch\":352,\"idReception\":452,\"imCtrlDispatch\":\"CTRMEM\","
+                        + "\"imCtrlMembre\":\"CTRMEM\",\"interimDispatch\":false}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.imCtrlDispatch").value("CTRPRE"));
+    }
+
+    // ------------------------------------------------------------------
     // Gardes d'état de la réception (⚠️ audit 2026-08-27, lot B — constat 4)
     // ------------------------------------------------------------------
 

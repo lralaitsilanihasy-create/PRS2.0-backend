@@ -27,6 +27,10 @@ import cnm.prs.security.Visibilite;
 
 /**
  * Logique métier pour {@link Dispatch}.
+ *
+ * <p>⚠️ Audit 2026-08-27, lot B — le {@code PUT} générique ne rejouait aucune des préconditions du
+ * {@code POST} (statut du dossier, localité, anti-doublon), et le dispatcheur tracé venait du corps
+ * de requête. Voir {@link #update} et {@link #dispatcheurAuthentifie()}.</p>
  */
 @Service
 @Transactional
@@ -101,6 +105,7 @@ public class DispatchService {
         Dispatch entity = DispatchMapper.toEntity(dto);
         // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
         entity.setIdDispatch(ClePrimaire.reallouer(dto.getIdDispatch(), repository::existsById, repository::nextIdDispatch));
+        entity.setImCtrlDispatch(dispatcheurAuthentifie());   // ⚠️ audit lot B — identité = JWT
         // ⚠️ Règle MODIFIÉE (2026-08-15) — l'association CC ne vaut que quand le Président dispatche
         // à un Membre (le CC suit alors les dossiers de sa commission) : voir normaliserAssociationCc.
         normaliserAssociationCc(entity, true);
@@ -228,6 +233,37 @@ public class DispatchService {
         }
     }
 
+    /**
+     * ⚠️ Audit 2026-08-27 (lot B) — le dispatcheur tracé est l'<strong>utilisateur authentifié</strong>,
+     * jamais le champ {@code imCtrlDispatch} du corps : c'est une trace de circuit (elle décide de la
+     * copie {@code DISPATCH_CC} et se lit dans l'historique du dossier). Le front envoyait déjà sa
+     * propre {@code ref} — le contrat ne bouge pas, la valeur du corps est simplement ignorée.
+     */
+    private String dispatcheurAuthentifie() {
+        return CurrentUser.ref().filter(s -> !s.isBlank())
+                .orElseThrow(() -> new org.springframework.security.access.AccessDeniedException(
+                        "Dispatcheur non identifié."));
+    }
+
+    /**
+     * ⚠️ Audit 2026-08-27 (lot B) — précondition du {@code PUT} : l'attribution ne se corrige que tant
+     * que le PV n'est pas signé — dossier {@link StatutDossier#PRET_DISPATCH} (dispatch enregistré mais
+     * dossier non encore avancé), {@link StatutDossier#DISPATCHE} ou {@link StatutDossier#EXAMINE}.
+     * Même frontière que {@link #annuler} : au-delà, l'examen et le PV s'appuient sur l'attributaire.
+     */
+    private void exigerDossierAvantPvSigne(Integer idReception) {
+        String statut = idReception == null ? null
+                : dossierRepository.findStatutByReception(idReception).orElse(null);
+        boolean corrigeable = StatutDossier.PRET_DISPATCH.name().equals(statut)
+                || StatutDossier.DISPATCHE.name().equals(statut)
+                || StatutDossier.EXAMINE.name().equals(statut);
+        if (!corrigeable) {
+            throw new BusinessRuleException(
+                    "Correction du dispatch impossible : le dossier doit être au statut PRET_DISPATCH, "
+                            + "DISPATCHE ou EXAMINE (avant PV signé), statut actuel « " + statut + " ».");
+        }
+    }
+
     /** Anti-doublon (§3.2, « dossiers complets sans dispatch existant ») : un seul dispatch par réception. */
     private void interdireDoublonDispatch(Integer idReception) {
         if (idReception != null && repository.existsByIdReception(idReception)) {
@@ -236,13 +272,31 @@ public class DispatchService {
         }
     }
 
+    /**
+     * ⚠️ Audit 2026-08-27 (lot B) — le {@code PUT} n'avait <strong>aucune</strong> des trois gardes du
+     * {@code POST} : ni statut du dossier, ni localité, ni anti-doublon. Corriger un dispatch permettait
+     * donc de le re-cibler sur la réception d'un autre dossier (créant le second dispatch que le POST
+     * interdit), depuis n'importe quelle localité, sur un dossier déjà statué.
+     *
+     * <p>Sont désormais exigés : le dossier <strong>en place</strong> et le dossier <strong>visé</strong>
+     * dans la localité de l'appelant (§3.3), un statut de dossier au plus {@code EXAMINE} (au-delà, le
+     * PV est signé et l'attribution est figée — même frontière que {@link #annuler}), et l'anti-doublon
+     * rejoué si {@code idReception} change. {@code IM_CTRL_DISPATCH} vient du JWT, comme au POST.</p>
+     */
     public DispatchDto update(Integer id, DispatchDto dto) {
-        validerInterimDispatch(dto);
-        validerAttributaireMembre(dto);
         Dispatch existing = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Dispatch introuvable : " + id));
+        Visibilite.exigerLocalite(resoudreLocaliteDossier(existing.getIdReception()));
+        Visibilite.exigerLocalite(resoudreLocaliteDossier(dto.getIdReception()));
+        exigerDossierAvantPvSigne(existing.getIdReception());
+        exigerDossierAvantPvSigne(dto.getIdReception());
+        if (!java.util.Objects.equals(existing.getIdReception(), dto.getIdReception())) {
+            interdireDoublonDispatch(dto.getIdReception());   // re-ciblage : un seul dispatch par réception
+        }
+        validerInterimDispatch(dto);
+        validerAttributaireMembre(dto);
         existing.setIdReception(dto.getIdReception());
-        existing.setImCtrlDispatch(dto.getImCtrlDispatch());
+        existing.setImCtrlDispatch(dispatcheurAuthentifie());   // ⚠️ audit lot B — identité = JWT
         existing.setImCtrlCc(dto.getImCtrlCc());
         existing.setImCtrlMembre(dto.getImCtrlMembre());
         existing.setDateDispatch(DispatchMapper.toLocalDateTime(dto.getDateDispatch()));
