@@ -3,6 +3,8 @@ package cnm.prs.service;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,10 +43,26 @@ public class NotificationService {
         this.streamRegistry = streamRegistry;
     }
 
-    /** Liste globale (supervision) — réservée à l'Administrateur via le contrôleur. */
+    /**
+     * ⚠️ Audit 2026-08-27 (lot D §4) — <strong>plafond de la liste de supervision</strong> : 500
+     * notifications. {@code t_notification} grossit à chaque événement du circuit, pour chaque
+     * destinataire : sa croissance est monotone, et l'écran d'administration en demandait la
+     * totalité. Il rend désormais les <strong>500 plus récentes</strong> ({@code DATE_ENVOI}
+     * décroissante), ce qui garde l'écran fonctionnel sans le rendre dépendant de l'âge de la base.
+     * Les notifications sans date d'envoi remontent en tête (défaut PostgreSQL {@code NULLS FIRST}
+     * en ordre décroissant) — elles sont, de fait, anormales et méritent d'être vues.
+     */
+    private static final int LIMITE_SUPERVISION = 500;
+
+    /**
+     * Liste globale (supervision) — réservée à l'Administrateur via le contrôleur, et bornée aux
+     * {@value #LIMITE_SUPERVISION} notifications les plus récentes (voir {@link #LIMITE_SUPERVISION}).
+     */
     @Transactional(readOnly = true)
     public List<NotificationDto> findAll() {
-        return repository.findAll().stream().map(NotificationMapper::toDto).toList();
+        return repository.findAll(PageRequest.of(0, LIMITE_SUPERVISION,
+                        Sort.by(Sort.Direction.DESC, "dateEnvoi")))
+                .map(NotificationMapper::toDto).getContent();
     }
 
     @Transactional(readOnly = true)

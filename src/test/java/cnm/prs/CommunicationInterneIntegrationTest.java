@@ -32,6 +32,36 @@ import cnm.prs.enums.TypeObjet;
 class CommunicationInterneIntegrationTest extends CnmIntegrationTestSupport {
 
     @Test
+    @DisplayName("Lot D §4 — la liste globale de supervision est plafonnée à 500 notifications, "
+            + "les plus récentes")
+    void notifications_listeGlobale_plafonnee() throws Exception {
+        // ⚠️ Audit 2026-08-27 (lot D §4) : t_notification grossit à chaque événement du circuit, pour
+        // chaque destinataire ; l'écran d'administration en demandait la TOTALITÉ. Semis direct en SQL
+        // (505 lignes) — passer par le service émettrait autant de courriels et de flux SSE.
+        java.util.List<Object[]> lignes = new java.util.ArrayList<>();
+        for (int i = 0; i < 505; i++) {
+            lignes.add(new Object[] {
+                    jdbcTemplate.queryForObject("select nextval('seq_notification')", Long.class),
+                    "PRET_DISPATCH", "CTRMEM",
+                    java.sql.Timestamp.valueOf(java.time.LocalDateTime.of(2026, 1, 1, 0, 0).plusMinutes(i)) });
+        }
+        jdbcTemplate.batchUpdate(
+                "INSERT INTO public.t_notification (\"ID_NOTIFICATION\", \"TYPE_NOTIF\", "
+                        + "\"DESTINATAIRE_IM\", \"DATE_ENVOI\") VALUES (?, ?, ?, ?)",
+                lignes);
+
+        String corps = mvc.perform(get("/api/notifications").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(500))
+                .andReturn().getResponse().getContentAsString();
+
+        // Ce sont bien les PLUS RÉCENTES : la toute première semée est écartée par le plafond.
+        java.util.List<String> dates = com.jayway.jsonpath.JsonPath.read(corps, "$[*].dateEnvoi");
+        org.junit.jupiter.api.Assertions.assertFalse(dates.contains("2026-01-01T00:00:00"),
+                "le plafond écarte les plus anciennes, pas les plus récentes");
+    }
+
+    @Test
     @DisplayName("Notifications : /mes scopé, comptage non-lues, marquer lu (refus si pas la mienne), liste globale Admin-only")
     void notifications_meScopeLectureGlobalAdmin() throws Exception {
         // 2 notifications pour CTRMEM, 1 pour CTRPRE.

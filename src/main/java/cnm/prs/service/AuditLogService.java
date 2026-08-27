@@ -1,8 +1,13 @@
 package cnm.prs.service;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,15 +35,65 @@ public class AuditLogService {
     /** Préfixe commun aux trois refus d'écriture (⚠️ audit 2026-08-27) — un seul message d'immuabilité. */
     private static final String IMMUABLE = "Le journal d'audit est immuable :";
 
+    /**
+     * ⚠️ Audit 2026-08-27 (lot D §4) — <strong>plafond de la liste historique</strong> : 500 entrées.
+     *
+     * <p>{@code t_audit_log} reçoit une ligne à chaque écriture de l'application ; sa croissance est
+     * monotone et sans fin. La liste plate en demandait la totalité, ce qui revient, après quelques
+     * mois d'exploitation, à télécharger des années de journal pour en regarder les vingt dernières
+     * lignes. Elle rend désormais les <strong>500 plus récentes</strong>, ce qui garde l'écran
+     * existant fonctionnel sans le rendre dépendant de l'âge de la base. Au-delà, la variante paginée
+     * ({@code ?page=&size=}, avec ses filtres) est le seul chemin d'accès complet.</p>
+     */
+    private static final int LIMITE_HISTORIQUE = 500;
+
+    /** Ordre du journal : du plus récent au plus ancien — le seul utile pour une consultation. */
+    private static final Sort PLUS_RECENT_DABORD = Sort.by(Sort.Direction.DESC, "dateAction");
+
     private final AuditLogRepository repository;
 
     public AuditLogService(AuditLogRepository repository) {
         this.repository = repository;
     }
 
+    /**
+     * Liste historique du journal, <strong>bornée aux {@value #LIMITE_HISTORIQUE} entrées les plus
+     * récentes</strong> (⚠️ audit 2026-08-27, lot D §4 — voir {@link #LIMITE_HISTORIQUE}). Pour
+     * remonter au-delà, ou filtrer, utiliser {@link #rechercher}.
+     */
     @Transactional(readOnly = true)
     public List<AuditLogDto> findAll() {
-        return repository.findAll().stream().map(AuditLogMapper::toDto).toList();
+        return repository.rechercher(null, null, null, null,
+                PageRequest.of(0, LIMITE_HISTORIQUE, PLUS_RECENT_DABORD))
+                .map(AuditLogMapper::toDto).getContent();
+    }
+
+    /**
+     * Recherche paginée et filtrée du journal (⚠️ audit 2026-08-27, lot D §4 — ajout de contrat).
+     * Tous les filtres sont facultatifs ; la page est triée du plus récent au plus ancien, quel que
+     * soit le tri demandé par le client (le journal n'a qu'un ordre de lecture sensé).
+     *
+     * @param nomTable table auditée ({@code t_audit_log.NOM_TABLE}), exacte ; {@code null}/vide = toutes
+     * @param acteur   acteur de l'écriture ({@code IM_ACTEUR}), exact ; {@code null}/vide = tous
+     * @param du       premier jour inclus ; {@code null} = pas de borne inférieure
+     * @param au       dernier jour <strong>inclus</strong> (la journée entière) ; {@code null} = pas de borne
+     */
+    @Transactional(readOnly = true)
+    public Page<AuditLogDto> rechercher(String nomTable, String acteur, LocalDate du, LocalDate au,
+            Pageable pageable) {
+        Pageable page = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), PLUS_RECENT_DABORD);
+        return repository.rechercher(vide(nomTable), vide(acteur),
+                du == null ? null : du.atStartOfDay(),
+                // Dernier instant représentable du jour (t_audit_log."DATE_ACTION" est un timestamp(6)) :
+                // la journée demandée est incluse en entier, sans risque d'arrondi sur le lendemain.
+                au == null ? null : au.plusDays(1).atStartOfDay().minusNanos(1_000),
+                page)
+                .map(AuditLogMapper::toDto);
+    }
+
+    /** Un filtre vide vaut « pas de filtre » (le front envoie volontiers une chaîne vide). */
+    private static String vide(String valeur) {
+        return valeur == null || valeur.isBlank() ? null : valeur.trim();
     }
 
     @Transactional(readOnly = true)
