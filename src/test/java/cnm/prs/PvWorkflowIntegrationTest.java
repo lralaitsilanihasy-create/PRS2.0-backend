@@ -2,6 +2,7 @@ package cnm.prs;
 
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -625,6 +626,120 @@ class PvWorkflowIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(get("/api/pv-examens/definitifs").header("Authorization", tokenAdmin))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.idPv==120)].nomSecretaireSeance", hasItem("Prenoms NomCTRVER")));
+    }
+
+    // ------------------------------------------------------------------
+    // Gardes d'identité et de localité de la navette (⚠️ audit 2026-08-27, lot B)
+    // ------------------------------------------------------------------
+
+    /** Crée un projet de PV BROUILLON sur l'examen 1 (attributaire CTRMEM, localité ANT). */
+    private void creerProjetSurExamen1(int idPv) throws Exception {
+        mvc.perform(post("/api/pv-examens").header("Authorization", tokenMembre)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idPv\":" + idPv + ",\"idExamen\":1,\"idAvis\":\"FAV\",\"imCtrlMembre\":\"CTRMEM\","
+                        + "\"statutPv\":\"BROUILLON\",\"nbNavettes\":0}"))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    @DisplayName("Projet de PV (lot B) — édition et soumission réservées à l'attributaire : un AUTRE Membre de la "
+            + "localité → 403 sur PUT et sur /soumettre ; l'attributaire passe (non-régression)")
+    void projetPv_editionEtSoumissionReserveesALAttributaire() throws Exception {
+        creerProjetSurExamen1(950);
+        // Un autre Membre d'ANT (non attributaire du dispatch 1) : ni PUT, ni soumission.
+        String tokenAutreMembre = bearer("CTRMEM2", ProfilUtilisateur.MEMBRE, TypeActeur.CONTROLEUR, "CTRMEM2", "ANT");
+        mvc.perform(put("/api/pv-examens/950").header("Authorization", tokenAutreMembre)
+                .contentType(MediaType.APPLICATION_JSON).content(corpsProjet950("usurpation")))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/api/pv-examens/950/soumettre").header("Authorization", tokenAutreMembre)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRMEM2\"}"))
+                .andExpect(status().isForbidden());
+        // La synthèse n'a pas été écrasée par la tentative.
+        mvc.perform(get("/api/pv-examens/950").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.syntheseObservations").value(nullValue()))
+                .andExpect(jsonPath("$.statutPv").value("BROUILLON"));
+
+        // NON-RÉGRESSION : l'attributaire édite puis soumet.
+        mvc.perform(put("/api/pv-examens/950").header("Authorization", tokenMembre)
+                .contentType(MediaType.APPLICATION_JSON).content(corpsProjet950("synthese")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.syntheseObservations").value("synthese"));
+        mvc.perform(post("/api/pv-examens/950/soumettre").header("Authorization", tokenMembre)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRMEM\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statutPv").value("PROJET_SOUMIS"));
+        // NON-RÉGRESSION délégation : le CC de la localité (paire CC → Membre active) peut éditer.
+        mvc.perform(post("/api/pv-examens/950/retourner").header("Authorization", tokenCc)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"commentaire\":\"a corriger\"}"))
+                .andExpect(status().isOk());
+        mvc.perform(put("/api/pv-examens/950").header("Authorization", tokenCc)
+                .contentType(MediaType.APPLICATION_JSON).content(corpsProjet950("reprise CC")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.syntheseObservations").value("reprise CC"));
+    }
+
+    /** Corps de PUT du projet 950 (champs obligatoires du DTO renseignés), avec la synthèse donnée. */
+    private String corpsProjet950(String synthese) {
+        return "{\"idPv\":950,\"idExamen\":1,\"idAvis\":\"FAV\",\"imCtrlMembre\":\"CTRMEM\","
+                + "\"statutPv\":\"BROUILLON\",\"nbNavettes\":0,\"syntheseObservations\":\"" + synthese + "\"}";
+    }
+
+    @Test
+    @DisplayName("Clôture de navette (lot B) — un CC d'une AUTRE localité ne retourne ni n'accepte le projet (403) ; "
+            + "le CC de la localité et le Président passent (non-régression)")
+    void clotureNavette_borneeALaLocaliteDuDossier() throws Exception {
+        creerProjetSurExamen1(951);
+        mvc.perform(post("/api/pv-examens/951/soumettre").header("Authorization", tokenMembre)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRMEM\"}"))
+                .andExpect(status().isOk());
+
+        // CC de TMS sur un dossier d'ANT : retour ET acceptation refusés (avant le correctif : 200).
+        String tokenCcTms = bearer("CTRCC2", ProfilUtilisateur.CHEF_COMMISSION, TypeActeur.CONTROLEUR, "CTRCC2", "TMS");
+        mvc.perform(post("/api/pv-examens/951/retourner").header("Authorization", tokenCcTms)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"commentaire\":\"hors localite\"}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/api/pv-examens/951/accepter").header("Authorization", tokenCcTms)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idAvis\":\"FAV\",\"idSecretaireSeance\":\"CTRVER\"}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/pv-examens/951").header("Authorization", tokenAdmin))
+                .andExpect(jsonPath("$.statutPv").value("PROJET_SOUMIS"));
+
+        // NON-RÉGRESSION : le Président (toutes localités) retourne, le CC d'ANT accepte.
+        mvc.perform(post("/api/pv-examens/951/retourner").header("Authorization", tokenPresident)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"commentaire\":\"a corriger\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statutPv").value("EN_RECTIFICATION"));
+        mvc.perform(post("/api/pv-examens/951/soumettre").header("Authorization", tokenMembre)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRMEM\"}"))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/pv-examens/951/accepter").header("Authorization", tokenCc)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idAvis\":\"FAV\",\"idSecretaireSeance\":\"CTRVER\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statutPv").value("PROJET_ACCEPTE"));
+    }
+
+    @Test
+    @DisplayName("Trace de navette (lot B) — IM_ACTEUR vient du JWT : un imActeur falsifié dans le corps est ignoré")
+    void navette_acteurTraceDepuisLeJeton() throws Exception {
+        creerProjetSurExamen1(952);
+        // Le Membre soumet en déclarant « CTRPRE » : la navette doit porter CTRMEM (son jeton).
+        mvc.perform(post("/api/pv-examens/952/soumettre").header("Authorization", tokenMembre)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRPRE\"}"))
+                .andExpect(status().isOk());
+        // Le CC retourne en déclarant « CTRMEM » : la navette doit porter CTRCC1.
+        mvc.perform(post("/api/pv-examens/952/retourner").header("Authorization", tokenCc)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"imActeur\":\"CTRMEM\",\"commentaire\":\"a corriger\"}"))
+                .andExpect(status().isOk());
+
+        mvc.perform(get("/api/pv-navettes").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idPv==952 && @.sens=='SOUMISSION')].imActeur", hasItem("CTRMEM")))
+                .andExpect(jsonPath("$[?(@.idPv==952 && @.sens=='RETOUR_RECTIF')].imActeur", hasItem("CTRCC1")))
+                .andExpect(jsonPath("$[?(@.idPv==952 && @.imActeur=='CTRPRE')]", hasSize(0)));
     }
 
     @Test

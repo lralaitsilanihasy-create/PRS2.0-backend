@@ -47,6 +47,13 @@ import cnm.prs.security.Visibilite;
  * workflow ne sont modifiables que via les transitions dédiées
  * ({@link #soumettre}, {@link #retourner}, {@link #accepter}, {@link #signer}) —
  * jamais par le {@code PUT} générique.</p>
+ *
+ * <p>⚠️ Audit 2026-08-27, lot B — <strong>gardes des chemins secondaires</strong> : le contrôle
+ * d'identité n'existait qu'à la signature. Sont désormais gardés de la même façon
+ * <em>l'édition et la soumission</em> du projet (Membre attributaire, ou délégué de la localité —
+ * {@link #exigerRedacteurDuProjet}) et la <em>clôture de navette</em> (retour / acceptation, bornée
+ * à la localité du dossier — {@link #exigerActeurDeLaLocalite}). L'acteur tracé dans la navette est
+ * l'utilisateur authentifié, plus le champ {@code imActeur} du corps de requête.</p>
  */
 @Service
 @Transactional
@@ -309,6 +316,9 @@ public class PvExamenService {
      */
     public PvExamenDto update(Integer id, PvExamenDto dto) {
         PvExamen existing = load(id);
+        // ⚠️ Audit 2026-08-27 (lot B) — le PUT générique n'exigeait AUCUNE identité : n'importe quel
+        // Membre de n'importe quelle localité réécrivait le projet d'un autre.
+        exigerRedacteurDuProjet(existing);
         requireStatut(existing, StatutPv.BROUILLON, StatutPv.EN_RECTIFICATION);
         // ⚠️ Verrou optimiste HTTP (plan §3) : version périmée → 409 CONFLIT_VERSION, avant toute écriture.
         VerrouOptimiste.exigerVersionCourante(dto.getVersion(), existing.getVersion());
@@ -380,13 +390,16 @@ public class PvExamenService {
      */
     public PvExamenDto soumettre(Integer id, PvActionRequest req) {
         PvExamen pv = load(id);
+        // ⚠️ Audit 2026-08-27 (lot B) — la soumission engage le Membre attributaire : elle ne peut
+        // pas être posée par un autre Membre (fût-il de la localité).
+        exigerRedacteurDuProjet(pv);
         requireStatut(pv, StatutPv.BROUILLON, StatutPv.EN_RECTIFICATION);
 
         if (pv.getDateSoumissionInitiale() == null) {
             pv.setDateSoumissionInitiale(LocalDate.now());
         }
         pv.setStatutPv(StatutPv.PROJET_SOUMIS.name());
-        ajouterNavette(pv, SensNavette.SOUMISSION, req.imActeur(), req.commentaire());
+        ajouterNavette(pv, SensNavette.SOUMISSION, req.commentaire());
         PvExamen saved = repository.save(pv);
         // ⚠️ Règle ajoutée (2026-08-02, réexamen après lettre de renvoi) — la re-soumission du projet
         // de PV CLÔT LE RÉEXAMEN : le dossier A_REEXAMINER redevient EXAMINE (même transaction), la
@@ -547,12 +560,15 @@ public class PvExamenService {
      */
     public PvExamenDto retourner(Integer id, PvActionRequest req) {
         PvExamen pv = load(id);
+        // ⚠️ Audit 2026-08-27 (lot B) — le CC ne clôt la navette que dans SA localité (§3.3) ;
+        // le Président (toutes localités) reste exempté, comme partout ailleurs.
+        exigerActeurDeLaLocalite(pv);
         requireStatut(pv, StatutPv.PROJET_SOUMIS);
         if (req.commentaire() == null || req.commentaire().isBlank()) {
             throw new BusinessRuleException("Le commentaire de rectification est obligatoire (§3.2).");
         }
         pv.setStatutPv(StatutPv.EN_RECTIFICATION.name());
-        ajouterNavette(pv, SensNavette.RETOUR_RECTIF, req.imActeur(), req.commentaire());
+        ajouterNavette(pv, SensNavette.RETOUR_RECTIF, req.commentaire());
         PvExamen saved = repository.save(pv);
         log.info("[CIRCUIT] navette PV retour rectification dossier={} acteur={} pv={} statutPv={} navettes={}",
                 dossierDuPv(saved.getIdPv()), CurrentUser.login().orElse(null), saved.getIdPv(),
@@ -570,6 +586,8 @@ public class PvExamenService {
      */
     public PvExamenDto accepter(Integer id, PvActionRequest req) {
         PvExamen pv = load(id);
+        // ⚠️ Audit 2026-08-27 (lot B) — même garde de localité qu'au retour de navette (§3.3).
+        exigerActeurDeLaLocalite(pv);
         requireStatut(pv, StatutPv.PROJET_SOUMIS);
 
         // ⚠️ Règle ajoutée (2026-08-01) — la CLÔTURE DE NAVETTE (acceptation, Président/CC) pose
@@ -590,7 +608,7 @@ public class PvExamenService {
 
         pv.setStatutPv(StatutPv.PROJET_ACCEPTE.name());
         pv.setDateAcceptation(LocalDate.now());
-        ajouterNavette(pv, SensNavette.ACCEPTATION, req.imActeur(), req.commentaire());
+        ajouterNavette(pv, SensNavette.ACCEPTATION, req.commentaire());
         PvExamen saved = repository.save(pv);
         log.info("[CIRCUIT] navette PV acceptation dossier={} acteur={} pv={} statutPv={} navettes={}",
                 dossierDuPv(saved.getIdPv()), CurrentUser.login().orElse(null), saved.getIdPv(),
@@ -749,6 +767,47 @@ public class PvExamenService {
                 "Le co-signataire doit être différent du Membre signataire (auto-co-signature interdite, §2.6).");
     }
 
+    /**
+     * ⚠️ Audit 2026-08-27 (lot B) — <strong>identité du rédacteur</strong> du projet de PV, exigée par
+     * {@link #update} et {@link #soumettre} (§2.4, §3.5). Sont admis :
+     * <ul>
+     *   <li>l'<strong>attributaire lui-même</strong> : la claim {@code ref} du jeton vaut
+     *       {@code pv.imCtrlMembre} — quel que soit son profil, ce qui couvre le Président ou le CC
+     *       auto-attribué au dispatch (circuit court, décision produit 2026-08-15) ;</li>
+     *   <li>un contrôleur d'un <strong>autre profil</strong> couvert par une paire (profil → Membre)
+     *       <strong>active</strong> de {@code t_delegation_profil}, à condition d'être <strong>de la
+     *       localité du dossier</strong> (§3.3) — même modèle data-driven que
+     *       {@link #exigerCoSignataireDistinct}.</li>
+     * </ul>
+     * Un Membre <em>titulaire</em> qui n'est pas l'attributaire est donc refusé (403) : la délégation
+     * ascendante ne joue jamais entre pairs.
+     */
+    private void exigerRedacteurDuProjet(PvExamen pv) {
+        String moi = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
+        if (moi != null && moi.equals(pv.getImCtrlMembre())) {
+            return;
+        }
+        ProfilUtilisateur profil = CurrentUser.profil().orElse(null);
+        if (profil != ProfilUtilisateur.MEMBRE && permissionService.peutExercer(profil, ProfilUtilisateur.MEMBRE)) {
+            exigerActeurDeLaLocalite(pv);   // la délégation reste bornée à la localité (§3.3)
+            return;
+        }
+        throw new AccessDeniedException(
+                "Projet de PV réservé au Membre attributaire de l'examen (§2.4, §3.5), ou à un contrôleur "
+                        + "de la localité du dossier couvert par une délégation active vers Membre.");
+    }
+
+    /**
+     * ⚠️ Audit 2026-08-27 (lot B) — clôture de navette ({@link #retourner}, {@link #accepter}) bornée à
+     * la localité du dossier (§3.3) : un CC d'une autre localité y accédait sans contrôle. Délègue à
+     * {@link Visibilite#exigerLocalite} — le Président (et l'Administrateur), sans localité, restent
+     * compétents sur toutes les commissions, contrairement à {@link #exigerCcDeLaLocalite} qui ne sert
+     * que la co-signature du CC.
+     */
+    private void exigerActeurDeLaLocalite(PvExamen pv) {
+        Visibilite.exigerLocalite(repository.findLocaliteByPv(pv.getIdPv()).orElse(null));
+    }
+
     /** Un Chef de commission ne co-signe que les PV de sa localité (§3.3). */
     private void exigerCcDeLaLocalite(PvExamen pv) {
         String localiteDossier = repository.findLocaliteByPv(pv.getIdPv()).orElse(null);
@@ -828,8 +887,16 @@ public class PvExamenService {
         }
     }
 
-    /** Insère un mouvement de navette (PK assignée + NUM_NAVETTE incrémenté) et met à jour NB_NAVETTES. */
-    private void ajouterNavette(PvExamen pv, SensNavette sens, String imActeur, String commentaire) {
+    /**
+     * Insère un mouvement de navette (PK assignée + NUM_NAVETTE incrémenté) et met à jour NB_NAVETTES.
+     *
+     * <p>⚠️ Audit 2026-08-27 (lot B) — l'acteur tracé est l'<strong>utilisateur authentifié</strong>
+     * ({@code CurrentUser.ref()}), plus le champ {@code imActeur} du corps de requête : une trace de
+     * circuit dont l'auteur est déclaré par le client n'en est pas une. Principe déjà appliqué aux
+     * signatures du PV. Le front envoyait déjà sa propre {@code ref} — le contrat ne bouge pas, le
+     * champ {@code imActeur} de {@code PvActionRequest} est simplement ignoré.</p>
+     */
+    private void ajouterNavette(PvExamen pv, SensNavette sens, String commentaire) {
         int numNavette = navetteRepository.findMaxNumNavetteByPv(pv.getIdPv()) + 1;
 
         PvNavette navette = new PvNavette();
@@ -838,7 +905,7 @@ public class PvExamenService {
         navette.setIdPv(pv.getIdPv());
         navette.setNumNavette(numNavette);
         navette.setSens(sens.name());
-        navette.setImActeur(imActeur);
+        navette.setImActeur(CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null));
         navette.setDateAction(LocalDateTime.now());
         navette.setCommentaire(commentaire);
         navetteRepository.save(navette);
