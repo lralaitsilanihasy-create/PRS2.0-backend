@@ -15,7 +15,7 @@ import jakarta.validation.constraints.Size;
 public record RegisterUgpmRequest(
 
         @NotBlank @Size(max = 100) String login,
-        @NotBlank @Size(min = 8, max = 72) String motDePasse,
+        @NotBlank @MotDePasseValide String motDePasse,
 
         @NotBlank @Size(max = 10) String idUgpm,
         @Size(max = 150) String libelle,

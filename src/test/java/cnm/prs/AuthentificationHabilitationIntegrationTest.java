@@ -99,6 +99,56 @@ class AuthentificationHabilitationIntegrationTest extends CnmIntegrationTestSupp
                 .andExpect(status().isUnauthorized());
     }
 
+    /** Changement de mot de passe du Membre, avec l'ancien « pw » du seed. */
+    private org.springframework.test.web.servlet.ResultActions changerPour(String nouveau) throws Exception {
+        return mvc.perform(post("/api/mon-compte/changer-mot-de-passe").header("Authorization", tokenMembre)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"ancienMotDePasse\":\"pw\",\"nouveauMotDePasse\":\"" + nouveau + "\"}"));
+    }
+
+    @Test
+    @DisplayName("⚠️ Audit lot E — politique de mot de passe : 8 caractères dont une lettre ET un chiffre, "
+            + "sur les NOUVEAUX mots de passe seulement (changement, réinitialisation Admin, inscription) ; "
+            + "l'ancien mot de passe n'y est jamais soumis")
+    void politiqueMotDePasse_nouveauxSeulement() throws Exception {
+        // Sans chiffre → 400, et le message dit ce qui manque, sur le bon champ.
+        changerPour("motdepassesanschiffre")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[?(@.champ=='nouveauMotDePasse')].message",
+                        hasItem(containsString("au moins une lettre et un chiffre"))));
+        // Sans lettre → 400.
+        changerPour("12345678").andExpect(status().isBadRequest());
+        // Trop court, meme avec lettre ET chiffre → 400 (la borne de 8 tient toujours).
+        changerPour("Abc123").andExpect(status().isBadRequest());
+
+        // ⚠️ Le cœur de la regle : l'ANCIEN mot de passe n'est PAS soumis a la politique.
+        // « pw » (2 caracteres, seede avant cette regle) reste accepte comme preuve d'identite —
+        // sinon plus aucun compte existant ne pourrait changer son mot de passe.
+        changerPour("Conforme2026").andExpect(status().isOk());
+
+        // Reinitialisation par l'Administrateur : meme regle.
+        mvc.perform(post("/api/comptes-auth/CTRMEM/reinitialiser-mot-de-passe").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"nouveauMotDePasse\":\"sanschiffre\"}"))
+                .andExpect(status().isBadRequest());
+
+        // Inscription publique : meme regle, avant toute creation de fiche.
+        mvc.perform(post("/api/auth/register/prmp").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"login\":\"prmp.faible\",\"motDePasse\":\"sanschiffre\",\"idPrmp\":\"PRMP960\","
+                        + "\"nomPrmp\":\"Rakoto\",\"prenomsPrmp\":\"Faible\","
+                        + "\"arreteNomin\":\"ARR-2026-960\",\"dateNomin\":\"2026-01-01\",\"cin\":\"960960960960\","
+                        + "\"dateCin\":\"2010-01-01\",\"lieuCin\":\"Antananarivo\","
+                        + "\"emailPrmp\":\"faible@prmp.mg\",\"telPrmp\":\"0340000960\"}"))
+                .andExpect(status().isBadRequest());
+        assertTrue(compteAuthRepository.findByLogin("prmp.faible").isEmpty(),
+                "aucun compte ne doit etre cree par une inscription au mot de passe refuse");
+
+        // ⚠️ Le login n'est PAS contraint : les comptes anterieurs a la politique doivent
+        // continuer a se connecter avec leur mot de passe faible.
+        mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"login\":\"CTRCC1\",\"motDePasse\":\"pw\"}"))
+                .andExpect(status().isOk());
+    }
+
     @Test
     @DisplayName("Auto-inscription PRMP : compte inactif → activation Admin → connexion")
     void autoInscriptionPrmp_validationAdmin() throws Exception {

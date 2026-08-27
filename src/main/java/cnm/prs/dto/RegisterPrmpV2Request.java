@@ -20,7 +20,7 @@ import jakarta.validation.constraints.Size;
 public record RegisterPrmpV2Request(
 
         @NotBlank @Size(max = 100) String login,
-        @NotBlank @Size(min = 8, max = 72) String motDePasse,
+        @NotBlank @MotDePasseValide String motDePasse,
 
         @NotBlank @Size(max = 10) String idPrmp,
         @NotBlank @Size(max = 100) String nomPrmp,

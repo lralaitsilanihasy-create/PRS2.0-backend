@@ -27,5 +27,6 @@ public record CreerPrmpRequest(
 
         // Credentials optionnels — si présents, créent le compte PRMP actif (refActeur = idPrmp).
         @Size(max = 100) String login,
-        @Size(min = 8, max = 72) String motDePasse) {
+        // @MotDePasseValide ignore null (contraintes Jakarta) : le champ reste facultatif.
+        @MotDePasseValide String motDePasse) {
 }

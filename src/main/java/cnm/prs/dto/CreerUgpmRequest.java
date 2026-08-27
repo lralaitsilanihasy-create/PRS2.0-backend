@@ -48,5 +48,6 @@ public record CreerUgpmRequest(
         String login,
 
         @NotBlank
+        @MotDePasseValide
         String motDePasse) {
 }
