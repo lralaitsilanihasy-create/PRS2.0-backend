@@ -125,6 +125,17 @@ mais affiche un logo casse, **silencieusement** — aucune erreur de build, aucu
 **Avant tout build de production, verifier explicitement la presence du fichier** sur le poste ou le
 pipeline qui build ; il ne suffit pas de cloner le depot.
 
+## 11. Donnees de reference minimales — a charger AVANT le seed de comptes
+
+`CompteSeeder` (`app.seed.comptes.enabled=true`, dev uniquement) ne cree que les **comptes** de
+`t_compte_auth` : il parcourt `tr_controleur` et `t_prmp` et ouvre un compte par fiche trouvee. **Sur
+une base vierge il cree donc 0 compte**, sans erreur ni avertissement autre que son propre
+« 0 compte(s) ... cree(s) » — l'application demarre, le seed a bien tourne, et personne ne peut se
+connecter (constat de recette du 27/08/2026). Flyway ne comble pas ce trou : `V1` cree le **schema**,
+pas le contenu metier. **Charger d'abord les donnees de reference minimales** — profils
+(`tr_profile`), puis fiches controleur (`tr_controleur`) et/ou PRMP (`t_prmp`) — et seulement ensuite
+activer le seed, qui leur ouvrira les comptes.
+
 ---
 
 *Rappel de contexte (comme dans tous les plans de ce chantier) : push impossible vers les deux depots

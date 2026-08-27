@@ -26,6 +26,18 @@ import cnm.prs.repository.PrmpRepository;
  * ({@code ID_PRMP}) ; tous reçoivent le même mot de passe par défaut
  * ({@code app.seed.comptes.password}, BCrypt). Idempotent : les logins déjà présents sont
  * ignorés. À n'utiliser qu'en environnement de développement.</p>
+ *
+ * <p>⚠️ <strong>Ce seed ne crée que des COMPTES, jamais les fiches qui les portent</strong>
+ * (constat de recette du 2026-08-27). Il <em>parcourt</em> {@code tr_controleur} et {@code t_prmp}
+ * et ouvre un compte pour chaque fiche trouvée : sur une base <strong>vierge</strong> — aucun
+ * contrôleur, aucune PRMP — il parcourt deux tables vides et crée <strong>0 compte</strong>, en
+ * journalisant « 0 compte(s) contrôleur + 0 compte(s) PRMP créé(s) » sans la moindre erreur. Le
+ * symptôme est alors trompeur : l'application démarre, le seed dit avoir tourné, et
+ * <strong>personne ne peut se connecter</strong>.</p>
+ *
+ * <p>Les <strong>données de référence minimales doivent donc exister d'abord</strong> : profils
+ * ({@code tr_profile}), puis fiches contrôleur et/ou PRMP. Elles ne sont livrées ni par Flyway (V1
+ * crée le schéma, pas le contenu métier) ni par ce seed. Voir {@code docs/deploiement.md}, §11.</p>
  */
 @Component
 @ConditionalOnProperty(name = "app.seed.comptes.enabled", havingValue = "true")

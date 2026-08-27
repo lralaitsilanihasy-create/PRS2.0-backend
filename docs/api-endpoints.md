@@ -165,6 +165,7 @@ quand ils surviennent (mapping centralisé dans `GlobalExceptionHandler`). Côt�
 |---|---|---|
 | **Validation des champs** (`@Valid`) | un champ obligatoire manque ou ne respecte pas une contrainte (`@NotNull`, `@NotBlank`, `@Size`…) | `message` = « Validation échouée » + tableau **`erreurs`** (`[{ champ, message }]`) renseigné |
 | **Corps illisible / mal formé** (`HttpMessageNotReadableException`) | JSON invalide, mauvais **type** (ex. `idEntiteContract` envoyé en **libellé** au lieu de l'id) ou **date hors ISO** `AAAA-MM-JJ` (ex. `23/06/2026`) | `message` = « Corps de requête invalide ou mal formé. » + **`erreurs`** `[{ champ, message }]` indiquant le **champ fautif** (ex. `dateSignature`, `marches[0].dateFin`) |
+| **Paramètre d'URL mal typé** (`MethodArgumentTypeMismatchException`, ⚠️ recette 2026-08-27) | la valeur d'un paramètre de requête ou de chemin ne se convertit pas vers son type déclaré : `?du=2026-08-01T00:00:00` sur une date `AAAA-MM-JJ`, `?dossier=abc` sur un entier, `/{id}` non numérique | `message` = « Paramètre « `<nom>` » invalide : … » + **`erreurs`** `[{ champ, message }]` nommant le paramètre. **C'était un 500** avant le correctif |
 | **Identifiant de création manquant** | POST de création sans la clé primaire (toutes les PK sont **assignées par le client**, cf. *Clés primaires*) | « L'identifiant (clé primaire) est obligatoire à la création… » |
 | **Règle d'entrée métier** (`BadRequestException`) | ex. `POST /api/mon-compte/changer-mot-de-passe` avec ancien mot de passe incorrect ou nouveau identique à l'ancien ; `POST /api/marches` quand la **localité du dossier** est introuvable (mode indéterminable) | message explicite |
 
@@ -187,6 +188,13 @@ quand ils surviennent (mapping centralisé dans `GlobalExceptionHandler`). Côt�
 | **Violation de contrainte BD** (`DataIntegrityViolationException`) | identifiant en **doublon**, valeur obligatoire manquante (NOT NULL) ou **clé étrangère** inexistante | POST avec un id déjà utilisé, ou référençant une entité inexistante |
 
 > Rappel : **401** (non authentifié : JWT absent/invalide ou compte désactivé) et **404** (ressource introuvable) restent distincts des trois ci-dessus.
+
+> ⚠️ **404 sur un chemin inconnu (recette 2026-08-27).** Une URL qui ne correspond à **aucune route**
+> (`GET /api/auth/moi`, faute de frappe, route rêvée par un client) répond **404** « Ressource
+> introuvable. » — même corps `ErrorResponse` que les autres erreurs. **C'était un 500** : le message
+> « Une erreur interne est survenue. » envoyait chercher une panne serveur là où il n'y avait qu'une
+> URL fausse. Un 404 ne distingue pas « route inexistante » de « enregistrement inexistant » : c'est
+> volontaire, l'API n'a pas à révéler la carte de ce qu'elle expose.
 
 ### Verrou optimiste — champ `version` (⚠️ 2026-08-27)
 Cinq ressources du circuit portent un champ **`version`** (`Integer`/`number`), reflet de la colonne
@@ -359,12 +367,28 @@ par les règles de `tr_regle_anomalie`, jamais saisies à la main.
 >   n'est pas supprimable par le JS du front.
 > - **CSRF** : réactivé, ciblé sur le **seul canal cookie** — double-submit `XSRF-TOKEN` (cookie
 >   lisible, posé dès la première réponse) → en-tête `X-XSRF-TOKEN` (automatique avec Angular
->   `HttpClient`). Une **mutation authentifiée par cookie sans `X-XSRF-TOKEN` → 403**. Exemptés :
->   `/api/auth/**`, les requêtes en `Authorization: Bearer` (en-tête non forgeable cross-site) et les
->   requêtes **sans cookie de session** (les mutations anonymes restent des **401**, pas des 403 CSRF).
->   Mise en œuvre : le `CsrfFilter` de Spring **émet** le jeton, la garde dédiée `CookieCsrfGarde`
->   l'**applique** (le resource server OAuth2 exempte d'office de l'enforcement standard toute requête
->   où le résolveur trouve un jeton — cookie compris — d'où l'exécuteur séparé).
+>   `HttpClient`). Exemptés : `/api/auth/**`, les requêtes en `Authorization: Bearer` (en-tête non
+>   forgeable cross-site) et les requêtes **sans cookie de session** (les mutations anonymes restent
+>   des **401**). Mise en œuvre : le `CsrfFilter` de Spring **émet** le jeton, la garde dédiée
+>   `CookieCsrfGarde` l'**applique** (le resource server OAuth2 exempte d'office de l'enforcement
+>   standard toute requête où le résolveur trouve un jeton — cookie compris — d'où l'exécuteur séparé).
+>
+> ⚠️ **À lire avant de scripter l'API au `curl` (recette 2026-08-27).** Toute mutation
+> (`POST`/`PUT`/`PATCH`/`DELETE`) authentifiée **par le cookie** exige les **deux** pièces du
+> double-submit — le cookie `XSRF-TOKEN` **et** l'en-tête `X-XSRF-TOKEN` de même valeur :
+> ```bash
+> curl -X POST http://localhost:8080/api/... \
+>      -b "PRS_SESSION=$JETON; XSRF-TOKEN=$XSRF" -H "X-XSRF-TOKEN: $XSRF" \
+>      -H 'Content-Type: application/json' -d '{...}'
+> ```
+> Sans l'en-tête, la réponse est **401 au corps vide**, et **non 403** : la garde répond bien 403,
+> mais son `sendError` déclenche un **ré-aiguillage `ERROR` du conteneur** vers `/error`, où le filtre
+> d'authentification (une-fois-par-requête, inactif sur ce ré-aiguillage) ne rejoue pas — le point
+> d'entrée conclut alors à un anonyme et **écrase le 403 par un 401**. Un 401 sur une mutation dont le
+> cookie est pourtant valide se lit donc « jeton CSRF manquant », pas « session expirée » : ne pas
+> partir se reconnecter. *(Les tests MockMvc voient le 403 d'origine — MockMvc ne rejoue pas le
+> ré-aiguillage `ERROR` du conteneur. C'est la réponse réelle, sur HTTP, qui fait foi ici.)*
+> Le plus simple reste d'utiliser `Authorization: Bearer` pour les scripts : ce canal est exempt de CSRF.
 > - Toggles : `app.auth.cookie.secure` (défaut `true`) ; `app.auth.cookie.exclusif` — **`true` depuis
 >   la phase 3 (2026-08-17)** : le jeton ne sort plus dans le corps de la réponse de login
 >   (`token: null`), le cookie fait tout côté navigateur ; rollback en repassant à `false`.

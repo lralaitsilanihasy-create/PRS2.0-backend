@@ -920,6 +920,12 @@ class AuthentificationHabilitationIntegrationTest extends CnmIntegrationTestSupp
                 "le cookie XSRF-TOKEN doit être posé dès la première réponse (chargement immédiat)");
 
         // 3) Mutation cookie-seul SANS X-XSRF-TOKEN → 403 (garde CSRF, ciblée sur le canal cookie).
+        // ⚠️ Recette 2026-08-27 — sur HTTP RÉEL, le client voit un 401 au corps vide, pas ce 403 : le
+        // sendError de la garde déclenche un ré-aiguillage ERROR du conteneur vers /error, où le filtre
+        // d'authentification (une-fois-par-requête) ne rejoue pas — le point d'entrée écrase le 403 par
+        // un 401. MockMvc ne rejoue pas ce ré-aiguillage, d'où le 403 nu observé ici. C'est bien la
+        // garde qui est éprouvée dans les deux cas ; le contrat rendu au client est documenté dans
+        // docs/api-endpoints.md (§ Authentification, encadré « à lire avant de scripter au curl »).
         mvc.perform(post("/api/dossiers/1/resoumettre").cookie(session)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"motifRectification\":\"x\"}"))
                 .andExpect(status().isForbidden());
