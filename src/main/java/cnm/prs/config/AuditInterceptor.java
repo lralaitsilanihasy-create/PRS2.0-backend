@@ -22,6 +22,25 @@ public class AuditInterceptor implements HandlerInterceptor {
 
     private static final Logger log = LoggerFactory.getLogger(AuditInterceptor.class);
 
+    /**
+     * Longueurs des colonnes de {@code t_audit_log} que cet intercepteur alimente (baseline Flyway
+     * V1, reprises dans {@code cnm.prs.entity.AuditLog}) : une valeur plus longue serait refusée par
+     * PostgreSQL, l'audit est donc tronqué ICI, au plus près de la colonne.
+     */
+    private static final int LONGUEUR_NOM_TABLE = 50;
+    private static final int LONGUEUR_ID_ENREGISTREMENT = 20;
+
+    /**
+     * ⚠️ Recette 2026-08-27 — {@code TYPE_ACTION} était tronqué à <strong>10</strong> en dur, valeur
+     * périmée depuis que la colonne est passée à {@code varchar(30)}
+     * ({@code docs/migrations/2026-06-19_audit_log_type_action_len30.sql}). Le journal d'audit
+     * enregistrait donc « CHANGER-MO » pour {@code POST /api/comptes/changer-mot-de-passe} : illisible,
+     * et ambigu dès que deux sous-actions partagent leurs dix premiers caractères. La limite suit
+     * désormais la colonne — 30 caractères couvrent la plus longue sous-action du contrat actuel
+     * ({@code transmettre-complements-depot}, 29).
+     */
+    private static final int LONGUEUR_TYPE_ACTION = 30;
+
     private final AuditLogService auditLogService;
 
     public AuditInterceptor(AuditLogService auditLogService) {
@@ -39,12 +58,12 @@ public class AuditInterceptor implements HandlerInterceptor {
             if (parts.length == 0) {
                 return;
             }
-            String nomTable = tronquer(parts[0], 50);
+            String nomTable = tronquer(parts[0], LONGUEUR_NOM_TABLE);
             String idEnregistrement = null;
             String sousAction = null;
             if (parts.length >= 2) {
                 if (parts[1].matches("\\d+")) {
-                    idEnregistrement = tronquer(parts[1], 20);
+                    idEnregistrement = tronquer(parts[1], LONGUEUR_ID_ENREGISTREMENT);
                     if (parts.length >= 3) {
                         sousAction = parts[2];
                     }
@@ -53,7 +72,7 @@ public class AuditInterceptor implements HandlerInterceptor {
                 }
             }
             String typeAction = sousAction != null
-                    ? tronquer(sousAction.toUpperCase(), 10)
+                    ? tronquer(sousAction.toUpperCase(), LONGUEUR_TYPE_ACTION)
                     : typeParMethode(request.getMethod());
 
             // ⚠️ Correctif 2026-08-26 — la limite suit la colonne : t_audit_log.IM_ACTEUR est passée

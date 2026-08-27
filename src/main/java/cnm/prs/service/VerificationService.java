@@ -293,7 +293,7 @@ public class VerificationService {
         log.setImActeur(v.getImCtrlVerif());
         log.setNomTable("t_verification");
         log.setIdEnregistrement(v.getIdVerification() == null ? null : String.valueOf(v.getIdVerification()));
-        log.setTypeAction("UPDATE");                       // TYPE_ACTION length 10 — libellé complet en CHAMP_MODIFIE
+        log.setTypeAction("UPDATE");                       // verbe court — libellé complet en CHAMP_MODIFIE
         log.setChampModifie("OBSERVATION_NON_LEVEE");
         log.setNouvelleValeur(v.getObservation());
         auditLogRepository.save(log);

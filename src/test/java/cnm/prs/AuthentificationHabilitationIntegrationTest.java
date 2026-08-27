@@ -604,6 +604,24 @@ class AuthentificationHabilitationIntegrationTest extends CnmIntegrationTestSupp
     }
 
     @Test
+    @DisplayName("⚠️ Recette 2026-08-27 — la sous-action tracée est LISIBLE : « CHANGER-MOT-DE-PASSE », plus « CHANGER-MO »")
+    void audit_sousActionNonTronqueeA10() throws Exception {
+        // L'intercepteur tronquait TYPE_ACTION à 10 caractères en dur alors que la colonne est
+        // passée à varchar(30) : le journal ne disait plus QUELLE action avait eu lieu.
+        mvc.perform(post("/api/mon-compte/changer-mot-de-passe").header("Authorization", tokenMembre)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"ancienMotDePasse\":\"pw\",\"nouveauMotDePasse\":\"Nouveau#2026\"}"))
+                .andExpect(status().isOk());
+
+        mvc.perform(get("/api/audit-logs").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].nomTable").value("mon-compte"))
+                .andExpect(jsonPath("$[0].typeAction").value("CHANGER-MOT-DE-PASSE"))
+                .andExpect(jsonPath("$[0].imActeur").value("CTRMEM"));
+    }
+
+    @Test
     @DisplayName("Journal d'audit §3.8 — ajout seul : POST (entrée forgée), PUT (réécriture) et DELETE répondent 409 même à l'Administrateur ; la trace reste intacte")
     void audit_journalImmuable_troisVerbesRefuses() throws Exception {
         // Seule voie d'alimentation légitime : l'intercepteur, après une écriture API réussie.
