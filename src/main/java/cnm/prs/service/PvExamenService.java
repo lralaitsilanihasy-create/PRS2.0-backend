@@ -7,6 +7,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -155,7 +156,7 @@ public class PvExamenService {
 
     /** Mappe un PV en DTO de lecture : nom du secrétaire + {@code documentDisponible} (chemin stocké ou PV éligible). */
     private PvExamenDto toDtoLecture(PvExamen entity) {
-        PvExamenDto dto = peuplerNomSecretaire(PvExamenMapper.toDto(entity));
+        PvExamenDto dto = peuplerNoms(PvExamenMapper.toDto(entity));
         dto.setDocumentDisponible(pvDocumentService.documentDisponible(entity));
         // ⚠️ 2026-08-19 — rattrapage des PV signés SANS fichier (antérieurs à la génération post-commit,
         // ou dont la génération a échoué) : s'ils sont éligibles, la production part en arrière-plan à la
@@ -280,19 +281,35 @@ public class PvExamenService {
         }
         entity.setRefePv(refePv);
         PvExamen saved = repository.save(entity);
-        return peuplerNomSecretaire(PvExamenMapper.toDto(saved));
+        return peuplerNoms(PvExamenMapper.toDto(saved));
     }
 
-    /** Renseigne {@code nomSecretaireSeance} (« prénoms nom ») depuis {@code tr_controleur} (lecture seule). */
-    private PvExamenDto peuplerNomSecretaire(PvExamenDto dto) {
-        if (dto != null && dto.getIdSecretaireSeance() != null) {
-            controleurRepository.findById(dto.getIdSecretaireSeance()).ifPresent(c -> {
-                String n = ((c.getPrenomsCont() == null ? "" : c.getPrenomsCont()) + " "
-                        + (c.getNomCont() == null ? "" : c.getNomCont())).trim();
-                dto.setNomSecretaireSeance(n.isBlank() ? null : n);
-            });
+    /**
+     * Renseigne les noms lisibles (« prénoms nom ») des désignations du PV depuis {@code tr_controleur},
+     * en lecture seule : le Secrétaire de séance et — ⚠️ depuis le 2026-08-28 — le Membre co-signataire.
+     * Sans ce second nom, le front devrait rappeler l'annuaire pour afficher « en attente de la signature
+     * de X » ; il charge déjà les contrôleurs, mais la liste n'est pas garantie chargée sur un PV isolé.
+     */
+    private PvExamenDto peuplerNoms(PvExamenDto dto) {
+        if (dto == null) {
+            return null;
+        }
+        if (dto.getIdSecretaireSeance() != null) {
+            nomComplet(dto.getIdSecretaireSeance()).ifPresent(dto::setNomSecretaireSeance);
+        }
+        if (dto.getImMembreCoSignataire() != null) {
+            nomComplet(dto.getImMembreCoSignataire()).ifPresent(dto::setNomMembreCoSignataire);
         }
         return dto;
+    }
+
+    /** « Prénoms nom » d'un contrôleur, vide si le matricule est inconnu ou l'état civil absent. */
+    private Optional<String> nomComplet(String imControleur) {
+        return controleurRepository.findById(imControleur).map(c -> {
+            String n = ((c.getPrenomsCont() == null ? "" : c.getPrenomsCont()) + " "
+                    + (c.getNomCont() == null ? "" : c.getNomCont())).trim();
+            return n.isBlank() ? null : n;
+        });
     }
 
     /**
@@ -499,6 +516,24 @@ public class PvExamenService {
         notificationService.emettreControleur(type, imAuteur, null, pv.getIdPv(), TypeObjet.PV, idDossier, titre, corps);
     }
 
+    /**
+     * [Auto] ⚠️ Co-signature (2026-08-28) — notifie le Membre DÉSIGNÉ ({@code PV_A_COSIGNER}) : il est
+     * seul à pouvoir poser la part Membre et n'a aucun autre moyen d'apprendre qu'on l'attend. La
+     * désignation ne figure ni dans sa liste de dossiers ni dans un dispatch — sans cette notification,
+     * le PV resterait en attente d'une signature que personne ne sait devoir donner.
+     */
+    private void notifierMembreCoSignataire(PvExamen pv) {
+        String designe = pv.getImMembreCoSignataire();
+        if (designe == null || designe.isBlank()) {
+            return;
+        }
+        Integer idDossier = repository.findIdDossierByPv(pv.getIdPv()).orElse(null);
+        String titre = "PV à co-signer";
+        String corps = "Vous avez été désigné pour co-signer le PV " + referencePv(pv) + " : votre signature est attendue.";
+        notificationService.emettreControleur(TypeNotification.PV_A_COSIGNER, designe, null,
+                pv.getIdPv(), TypeObjet.PV, idDossier, titre, corps);
+    }
+
     private String referencePv(PvExamen pv) {
         return pv.getReferencePv() != null ? pv.getReferencePv() : ("n° " + pv.getIdPv());
     }
@@ -658,20 +693,30 @@ public class PvExamenService {
         LocalDate today = LocalDate.now();
         switch (role) {
             case MEMBRE -> {
-                // Signature Membre réservée au Membre attributaire du PV (§3.5, pas de délégation).
-                if (!signataire.equals(pv.getImCtrlMembre())) {
+                // ⚠️ Co-signature (2026-08-28) — la part Membre appartient au DÉSIGNÉ, à personne d'autre.
+                // L'attributaire n'y a plus droit du seul fait d'avoir examiné : il doit avoir été désigné.
+                exigerDesignationFaite(pv);
+                if (!signataire.equals(pv.getImMembreCoSignataire())) {
                     throw new AccessDeniedException(
-                            "La signature Membre est réservée au Membre attributaire du PV (§3.5).");
+                            "La signature Membre est réservée au Membre désigné par le Président ou le Chef "
+                                    + "de commission (co-signature, §2.6/§3.5).");
                 }
                 exigerPasEncoreSigne(pv.getDateSignatureMembre(), "Membre");
                 pv.setDateSignatureMembre(today);
-                pv.setImCtrlMembre(signataire);
+                // ⚠️ IM_CTRL_MEMBRE n'est délibérément PAS réécrit ici (il l'était jusqu'au 2026-08-28,
+                // sans effet tant que signataire == attributaire). Il désigne QUI A EXAMINÉ le dossier :
+                // il est re-dérivé du dispatch à chaque create/update et IMPRIMÉ sur le PV officiel
+                // (PvDocumentService#nomMembreAttributaire). Le co-signataire étant désormais un tiers,
+                // l'écraser ferait dire au document qu'une autre personne a mené l'examen, détournerait
+                // les notifications de l'auteur (notifierPvAuteur) et déplacerait le droit de rédaction
+                // (exigerRedacteurDuProjet). Le signataire de la part Membre est tracé par
+                // IM_MEMBRE_COSIGNATAIRE, qui suffit.
             }
             case PRESIDENT -> {
                 if (profil != ProfilUtilisateur.PRESIDENT) {
                     throw new AccessDeniedException("La signature Président est réservée à un Président (§3.2).");
                 }
-                exigerCoSignataireDistinct(signataire, pv);
+                designerMembreCoSignataire(pv, req, signataire);
                 exigerPasEncoreSigne(pv.getDateSignaturePresident(), "Président");
                 pv.setDateSignaturePresident(today);
                 pv.setImCtrlPresident(signataire);
@@ -681,7 +726,7 @@ public class PvExamenService {
                     throw new AccessDeniedException("La signature CC est réservée à un Chef de commission (§3.3).");
                 }
                 exigerCcDeLaLocalite(pv);
-                exigerCoSignataireDistinct(signataire, pv);
+                designerMembreCoSignataire(pv, req, signataire);
                 exigerPasEncoreSigne(pv.getDateSignatureCc(), "Chef de commission");
                 pv.setDateSignatureCc(today);
                 pv.setImCtrlCc(signataire);
@@ -707,7 +752,14 @@ public class PvExamenService {
             brancherSelonAvis(pv);
             return dto;
         }
-        return PvExamenMapper.toDto(repository.save(pv));
+        PvExamen enregistre = repository.save(pv);
+        // ⚠️ Co-signature — le P/CC vient de désigner : on prévient le Membre attendu. Ce chemin est le
+        // SEUL possible après une signature P/CC : la part Membre exigeant une désignation préalable
+        // (ordre B), elle ne peut pas être déjà posée, donc la bascule en SIGNE ci-dessus n'a pas lieu.
+        if (role == RoleSignataire.PRESIDENT || role == RoleSignataire.CC) {
+            notifierMembreCoSignataire(enregistre);
+        }
+        return PvExamenMapper.toDto(enregistre);
     }
 
     /**
@@ -760,24 +812,57 @@ public class PvExamenService {
     }
 
     /**
-     * Le co-signataire (Président/CC) doit être une personne différente du Membre (§2.6) — SAUF
-     * (⚠️ décision produit 2026-08-15, circuit court) quand le signataire est couvert par une paire
-     * (profil → Membre) <strong>active</strong> de t_delegation_profil : le Président seul ou le CC
-     * seul porte alors les DEUX parts (part Membre en tant qu'attributaire, puis sa part de rôle —
-     * deux actions successives). Data-driven : paire désactivée en base → le verrou « une signature
-     * par personne » se referme sans changement de code. Le Membre titulaire reste structurellement
-     * exclu de la co-signature (contrôles de profil des rôles PRESIDENT/CC, en amont).
+     * ⚠️ Co-signature — DÉSIGNATION du Membre co-signataire par le Président / le Chef de commission,
+     * au moment où ils signent (arbitrage du pilote, 2026-08-28 ; remplace {@code exigerCoSignataireDistinct}).
+     *
+     * <p><strong>Ce qui est abandonné.</strong> La décision produit du 2026-08-15 laissait un P/CC
+     * auto-attribué porter les deux parts, la paire (profil → Membre) active de {@code t_delegation_profil}
+     * levant le verrou §2.6. Le pilote a tranché : <strong>l'auto-co-signature n'est jamais autorisée</strong>.
+     * La délégation ascendante n'est pas remise en cause pour autant — elle continue de désigner
+     * l'attributaire ({@code DispatchService}), le rédacteur ({@link #exigerRedacteurDuProjet}) et le
+     * Secrétaire de séance : elle autorise à <em>faire</em> le travail, pas à le contresigner seul.</p>
+     *
+     * <p><strong>Pourquoi ici et pas à l'acceptation.</strong> La désignation se fait au moment de signer,
+     * pas à la clôture de navette — contrairement au Secrétaire de séance. Le choix appartient au P/CC
+     * qui signe, et il ne peut pas lui échapper par antériorité : la part Membre n'est ouverte qu'après
+     * (voir {@link #exigerDesignationFaite}).</p>
+     *
+     * <p>Trois refus, tous en 409 (même famille que {@code validerSecretaireSeance}) : désignation
+     * absente, désignation de soi-même, désigné qui n'est pas un Membre de la localité du dossier.</p>
      */
-    private void exigerCoSignataireDistinct(String coSignataire, PvExamen pv) {
-        if (!coSignataire.equals(pv.getImCtrlMembre())) {
-            return;
+    private void designerMembreCoSignataire(PvExamen pv, PvActionRequest req, String signataire) {
+        String designe = req.imMembreCoSignataire() == null ? null : req.imMembreCoSignataire().trim();
+        if (designe == null || designe.isEmpty()) {
+            throw new BusinessRuleException(
+                    "Le Membre co-signataire est obligatoire pour signer : désignez le Membre de la localité "
+                            + "du dossier appelé à co-signer le PV (§2.6).");
         }
-        ProfilUtilisateur profil = CurrentUser.profil().orElse(null);
-        if (permissionService.peutExercer(profil, ProfilUtilisateur.MEMBRE)) {
-            return; // auto-co-signature du circuit court : couvert par la paire (profil → Membre) active
+        if (designe.equals(signataire)) {
+            throw new BusinessRuleException(
+                    "Vous ne pouvez pas vous désigner vous-même : le PV est co-signé par deux personnes "
+                            + "distinctes (auto-co-signature interdite, §2.6).");
         }
-        throw new BusinessRuleException(
-                "Le co-signataire doit être différent du Membre signataire (auto-co-signature interdite, §2.6).");
+        String localite = repository.findLocaliteByPv(pv.getIdPv()).orElse(null);
+        if (!controleurDirectory.peutEtreMembreCoSignataire(designe, localite)) {
+            throw new BusinessRuleException(
+                    "Le Membre co-signataire doit être un Membre de la localité du dossier (§3.3) — « "
+                            + designe + " » ne l'est pas.");
+        }
+        pv.setImMembreCoSignataire(designe);
+    }
+
+    /**
+     * ⚠️ Ordre B (arbitrage du pilote, 2026-08-28) — la part Membre n'est signable qu'APRÈS la
+     * désignation par le Président / le CC. Sans cette barrière, un Membre signant spontanément avant
+     * eux viderait leur choix de son objet : la part serait déjà posée. 409, pas 403 : le signataire
+     * n'est pas illégitime, c'est le circuit qui n'est pas encore à cette étape.
+     */
+    private void exigerDesignationFaite(PvExamen pv) {
+        if (pv.getImMembreCoSignataire() == null || pv.getImMembreCoSignataire().isBlank()) {
+            throw new BusinessRuleException(
+                    "La part Membre n'est pas encore ouverte : le Président ou le Chef de commission doit "
+                            + "d'abord signer et désigner le Membre co-signataire (§2.6).");
+        }
     }
 
     /**

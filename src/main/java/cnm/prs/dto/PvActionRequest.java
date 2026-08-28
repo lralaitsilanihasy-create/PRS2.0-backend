@@ -19,6 +19,12 @@ import jakarta.validation.constraints.Size;
  *                    (« accepter », Président/CC) ; obligatoire pour accepter, ignoré ailleurs
  * @param idSecretaireSeance Vérificateur (localité du dossier) désigné Secrétaire de séance —
  *                    posé à la clôture de navette (« accepter »), ignoré ailleurs
+ * @param imMembreCoSignataire ⚠️ Co-signature (2026-08-28) — Membre désigné par le Président ou le
+ *                    Chef de commission pour co-signer le PV. <strong>Obligatoire</strong> quand
+ *                    ils signent (« signer », rôle PRESIDENT ou CC), ignoré ailleurs — même
+ *                    traitement que {@code idSecretaireSeance} dans « accepter ». Le désigné doit
+ *                    être un Membre de la localité du dossier et différent du signataire :
+ *                    l'auto-co-signature n'est pas autorisée.
  */
 public record PvActionRequest(
 
@@ -34,5 +40,8 @@ public record PvActionRequest(
         String idAvis,
 
         @Size(max = 7)
-        String idSecretaireSeance) {
+        String idSecretaireSeance,
+
+        @Size(max = 7)
+        String imMembreCoSignataire) {
 }

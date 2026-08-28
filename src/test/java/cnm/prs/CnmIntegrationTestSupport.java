@@ -276,7 +276,14 @@ abstract class CnmIntegrationTestSupport extends AbstractIntegrationTest {
         tokenPublication = bearer("CTRPUB", ProfilUtilisateur.CHARGE_PUBLICATION, TypeActeur.CONTROLEUR, "CTRPUB", null);
     }
 
-    /** Crée un PV avec l'avis donné sur l'examen 1 (dossier 1) et le porte à SIGNE (Membre + Président). */
+    /**
+     * Crée un PV avec l'avis donné sur l'examen 1 (dossier 1) et le porte à SIGNE.
+     *
+     * <p>⚠️ Ordre B (co-signature, 2026-08-28) — le <strong>Président signe d'abord</strong> et désigne
+     * le Membre co-signataire, qui signe ensuite. L'ordre inverse (Membre puis Président), utilisé
+     * jusqu'ici, part désormais en 409 : la part Membre n'est pas ouverte tant que personne n'a été
+     * désigné. C'est le P/CC qui choisit, jamais l'antériorité.</p>
+     */
     protected void signerPvAvecAvis(int idPv, String avis) throws Exception {
         // ⚠️ Cohérence avis ↔ observations (2026-08-01) : FAVR exige ≥ 1 observation à l'examen.
         if ("FAVR".equals(avis)) {
@@ -294,11 +301,12 @@ abstract class CnmIntegrationTestSupport extends AbstractIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRCC1\",\"idAvis\":\"" + avis
                         + "\",\"idSecretaireSeance\":\"CTRVER\"}"))
                 .andExpect(status().isOk());
+        mvc.perform(post("/api/pv-examens/" + idPv + "/signer").header("Authorization", tokenPresident)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"imActeur\":\"CTRPRE\",\"role\":\"PRESIDENT\",\"imMembreCoSignataire\":\"CTRMEM\"}"))
+                .andExpect(status().isOk());
         mvc.perform(post("/api/pv-examens/" + idPv + "/signer").header("Authorization", tokenMembre)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRMEM\",\"role\":\"MEMBRE\"}"))
-                .andExpect(status().isOk());
-        mvc.perform(post("/api/pv-examens/" + idPv + "/signer").header("Authorization", tokenPresident)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRPRE\",\"role\":\"PRESIDENT\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.statutPv").value("SIGNE"));
     }
 
@@ -430,9 +438,21 @@ abstract class CnmIntegrationTestSupport extends AbstractIntegrationTest {
 
     protected org.springframework.test.web.servlet.ResultActions signer(String token, String acteur, String role)
             throws Exception {
+        return signer(token, acteur, role, null);
+    }
+
+    /**
+     * ⚠️ Co-signature (2026-08-28) — surcharge avec désignation du Membre co-signataire, obligatoire
+     * quand le rôle signé est PRESIDENT ou CC (ordre B : la part Membre n'est ouverte qu'ensuite).
+     */
+    protected org.springframework.test.web.servlet.ResultActions signer(String token, String acteur, String role,
+            String imMembreCoSignataire) throws Exception {
+        String corps = "{\"imActeur\":\"" + acteur + "\",\"role\":\"" + role + "\""
+                + (imMembreCoSignataire == null ? ""
+                        : ",\"imMembreCoSignataire\":\"" + imMembreCoSignataire + "\"")
+                + "}";
         return mvc.perform(post("/api/pv-examens/1/signer").header("Authorization", token)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"imActeur\":\"" + acteur + "\",\"role\":\"" + role + "\"}"));
+                .contentType(MediaType.APPLICATION_JSON).content(corps));
     }
 
     protected String bearer(String login, ProfilUtilisateur role, TypeActeur type, String ref, String loc) {

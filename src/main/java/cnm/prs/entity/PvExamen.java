@@ -92,6 +92,16 @@ public class PvExamen {
     @Column(name = "ID_SECRETAIRE_SEANCE", length = 7)
     private String idSecretaireSeance;
 
+    /**
+     * ⚠️ Co-signature (2026-08-28, arbitrage du pilote) — Membre <strong>désigné</strong> par le
+     * Président ou le Chef de commission au moment de signer, seul habilité à poser la part Membre.
+     * Distinct de {@code imCtrlMembre}, qui désigne l'attributaire ayant <em>examiné</em> le dossier
+     * et qui est imprimé sur le PV officiel. Vide jusqu'à la signature du P/CC : la désignation est
+     * préalable (ordre B), la part Membre n'est pas signable avant elle.
+     */
+    @Column(name = "IM_MEMBRE_COSIGNATAIRE", length = 7)
+    private String imMembreCoSignataire;
+
     /** Chemin du PDF du Projet de PV sur le FSX (renseigné si le PV est éligible à la génération). */
     @Column(name = "CHEMIN_DOCUMENT", length = 500)
     private String cheminDocument;

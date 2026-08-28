@@ -63,6 +63,14 @@ public enum TypeNotification {
     /** Projet de PV accepté — vers le Membre auteur (§3.2). */
     PV_ACCEPTE,
 
+    /**
+     * ⚠️ Co-signature (2026-08-28) — le Président / le CC a signé et DÉSIGNÉ un Membre pour
+     * co-signer : vers ce Membre, qui est seul à pouvoir poser la part Membre et n'a aucun autre
+     * moyen de l'apprendre. Distinct de {@link #PV_A_VALIDER}, qui appelle le P/CC à clore la
+     * navette : les deux ne s'adressent ni au même profil ni au même moment du circuit.
+     */
+    PV_A_COSIGNER,
+
     /** PV signé (favorable avec réserves) à vérifier — vers le Vérificateur de la localité (⚠️ règle ajoutée). */
     PV_A_VERIFIER,
 

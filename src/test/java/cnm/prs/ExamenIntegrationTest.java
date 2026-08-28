@@ -82,11 +82,13 @@ class ExamenIntegrationTest extends CnmIntegrationTestSupport {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"imActeur\":\"CTRCC1\",\"idAvis\":\"FAV\",\"idSecretaireSeance\":\"CTRVER\"}"))
                 .andExpect(status().isOk());
+        // ⚠️ Ordre B (2026-08-28) : le Président signe et désigne, le Membre désigné signe ensuite.
+        mvc.perform(post("/api/pv-examens/91/signer").header("Authorization", tokenPresident)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"imActeur\":\"CTRPRE\",\"role\":\"PRESIDENT\",\"imMembreCoSignataire\":\"CTRMEM\"}"))
+                .andExpect(status().isOk());
         mvc.perform(post("/api/pv-examens/91/signer").header("Authorization", tokenMembre)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRMEM\",\"role\":\"MEMBRE\"}"))
-                .andExpect(status().isOk());
-        mvc.perform(post("/api/pv-examens/91/signer").header("Authorization", tokenPresident)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRPRE\",\"role\":\"PRESIDENT\"}"))
                 .andExpect(status().isOk());
 
         // Examen verrouillé (dossier ≠ EXAMINE) : update de l'examen et écriture d'un détail → 409.

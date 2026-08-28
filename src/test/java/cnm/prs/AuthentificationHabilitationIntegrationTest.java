@@ -494,9 +494,9 @@ class AuthentificationHabilitationIntegrationTest extends CnmIntegrationTestSupp
     }
 
     @Test
-    @DisplayName("Délégation ascendante — auto-attribution du Président (circuit court) : dispatch à soi-même (201), "
-            + "examen par lui-même, puis signature COMPLÈTE par lui seul — part Membre (attributaire) ET part "
-            + "Président (⚠️ décision produit 2026-08-15 : verrou d'auto-co-signature levé, paire → Membre active)")
+    @DisplayName("Délégation ascendante — auto-attribution du Président (circuit court) : dispatch à soi-même (201) "
+            + "et examen par lui-même, mais signature IMPOSSIBLE seul (⚠️ arbitrage du pilote 2026-08-28 : "
+            + "l'auto-co-signature est abolie) — il désigne un Membre de la localité, qui co-signe")
     void delegation_autoAttributionPresident_circuitCourt() throws Exception {
         dossierRepository.save(dossier(4601, "PRET_DISPATCH"));
         receptionRepository.save(reception(5601, 4601, "CTRSEC", true)); // ANT
@@ -529,19 +529,38 @@ class AuthentificationHabilitationIntegrationTest extends CnmIntegrationTestSupp
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"imActeur\":\"CTRCC1\",\"idAvis\":\"FAV\",\"idSecretaireSeance\":\"CTRVER\"}"))
                 .andExpect(status().isOk());
-        // Signature de la part MEMBRE par le Président attributaire : OK (acte d'identité — il est l'attributaire).
+        // ⚠️ 2026-08-28 — la part MEMBRE n'est plus accessible à l'attributaire du seul fait qu'il a
+        // examiné : personne ne la signe avant désignation, pas même lui → 409 (ordre B).
         mvc.perform(post("/api/pv-examens/5601/signer").header("Authorization", tokenPresident)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRPRE\",\"role\":\"MEMBRE\"}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.imCtrlMembre").value("CTRPRE"));
-        // La part PRESIDENT par la MÊME personne (⚠️ décision produit 2026-08-15) : le verrou
-        // d'auto-co-signature est levé pour un signataire couvert par la paire → Membre active —
-        // le Président clôt SEUL la signature du PV (deux actions successives).
+                .andExpect(status().isConflict());
+        // Il ne peut pas non plus se désigner lui-même : l'auto-co-signature est abolie, sans exception.
         mvc.perform(post("/api/pv-examens/5601/signer").header("Authorization", tokenPresident)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRPRE\",\"role\":\"PRESIDENT\"}"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"imActeur\":\"CTRPRE\",\"role\":\"PRESIDENT\",\"imMembreCoSignataire\":\"CTRPRE\"}"))
+                .andExpect(status().isConflict());
+        // Ni désigner un contrôleur qui n'est pas Membre de la localité du dossier (§3.3).
+        mvc.perform(post("/api/pv-examens/5601/signer").header("Authorization", tokenPresident)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"imActeur\":\"CTRPRE\",\"role\":\"PRESIDENT\",\"imMembreCoSignataire\":\"CTRVER\"}"))
+                .andExpect(status().isConflict());
+        // Il signe sa part et DÉSIGNE un Membre d'ANT : le PV attend désormais CE Membre.
+        mvc.perform(post("/api/pv-examens/5601/signer").header("Authorization", tokenPresident)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"imActeur\":\"CTRPRE\",\"role\":\"PRESIDENT\",\"imMembreCoSignataire\":\"CTRMEM\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statutPv").value("PROJET_ACCEPTE"))
+                .andExpect(jsonPath("$.imCtrlPresident").value("CTRPRE"))
+                .andExpect(jsonPath("$.imMembreCoSignataire").value("CTRMEM"));
+        // Le Membre désigné co-signe → SIGNE. ⚠️ IM_CTRL_MEMBRE reste CTRPRE : c'est lui qui a EXAMINÉ
+        // le dossier, et c'est ce nom que le PV officiel imprime. La co-signature ne l'écrase pas.
+        String tokenMembreAnt = bearer("CTRMEM", ProfilUtilisateur.MEMBRE, TypeActeur.CONTROLEUR, "CTRMEM", "ANT");
+        mvc.perform(post("/api/pv-examens/5601/signer").header("Authorization", tokenMembreAnt)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRMEM\",\"role\":\"MEMBRE\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.statutPv").value("SIGNE"))
-                .andExpect(jsonPath("$.imCtrlPresident").value("CTRPRE"));
+                .andExpect(jsonPath("$.imCtrlMembre").value("CTRPRE"))
+                .andExpect(jsonPath("$.imMembreCoSignataire").value("CTRMEM"));
     }
 
     @Test
@@ -720,9 +739,10 @@ class AuthentificationHabilitationIntegrationTest extends CnmIntegrationTestSupp
     }
 
     @Test
-    @DisplayName("Circuit court CC (⚠️ décisions produit 2026-08-15) : auto-désignation Secrétaire de séance "
-            + "(paire active ; désactivée → 409) ; signature COMPLÈTE par le CC seul — part Membre + part CC "
-            + "(paire → Membre désactivée → 403, réactivée → SIGNE) ; passage statué sur SES PROPRES observations")
+    @DisplayName("Circuit court CC : auto-désignation Secrétaire de séance (paire active ; désactivée → 409) ; "
+            + "⚠️ 2026-08-28 — le CC ne signe PLUS seul : part Membre refusée avant désignation (409), sa part CC "
+            + "reste gouvernée par la paire → Membre (désactivée → 403), puis le Membre désigné co-signe → SIGNE ; "
+            + "passage statué sur SES PROPRES observations")
     void circuitCourtCc_secretaireSeanceParDelegation_etPassageParAttributaire() throws Exception {
         // Dossier ANT auto-attribué par le CC (garde attributaire : paire CC → Membre active).
         // Enrichi PPM + ligne de marché : support du diff de rectification (2026-08-15).
@@ -794,28 +814,41 @@ class AuthentificationHabilitationIntegrationTest extends CnmIntegrationTestSupp
                 .content("{\"imActeur\":\"CTRCC1\",\"idAvis\":\"FAVR\",\"idSecretaireSeance\":\"CTRCC1\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.idSecretaireSeance").value("CTRCC1"));
-        // Signature COMPLÈTE par le CC seul (⚠️ décision produit 2026-08-15) : part Membre (attributaire)…
+        // ⚠️ 2026-08-28 — le CC attributaire ne signe PLUS la part Membre : abolie, l'auto-co-signature.
+        // Avant toute désignation, la part n'est ouverte pour personne → 409 (ordre B).
         mvc.perform(post("/api/pv-examens/" + idPv + "/signer").header("Authorization", tokenCc)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRCC1\",\"role\":\"MEMBRE\"}"))
-                .andExpect(status().isOk());
-        // … puis sa part CC. Data-driven : paire 5 (CC → Membre) DÉSACTIVÉE → signature bloquée (403,
-        // l'endpoint exige « exercer la tâche du Membre ») ; RÉACTIVÉE → le CC clôt seul → SIGNE.
+                .andExpect(status().isConflict());
+        // Sa part CC reste data-driven : paire 5 (CC → Membre) DÉSACTIVÉE → 403, l'endpoint exigeant
+        // « exercer la tâche du Membre » ; RÉACTIVÉE → il signe. La paire gouverne toujours l'ACCÈS à
+        // l'endpoint ; ce qu'elle ne fait plus, c'est lever le verrou de la double signature.
         mvc.perform(put("/api/delegation-profils/5").header("Authorization", tokenAdmin)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDelegation\":5,\"idProfileDelegant\":3,\"idProfileDelegue\":5,\"actif\":false}"))
                 .andExpect(status().isOk());
         mvc.perform(post("/api/pv-examens/" + idPv + "/signer").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRCC1\",\"role\":\"CC\"}"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"imActeur\":\"CTRCC1\",\"role\":\"CC\",\"imMembreCoSignataire\":\"CTRMEM\"}"))
                 .andExpect(status().isForbidden());
         mvc.perform(put("/api/delegation-profils/5").header("Authorization", tokenAdmin)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDelegation\":5,\"idProfileDelegant\":3,\"idProfileDelegue\":5,\"actif\":true}"))
                 .andExpect(status().isOk());
+        // Il signe sa part et désigne un Membre d'ANT : le PV n'est pas encore SIGNE.
         mvc.perform(post("/api/pv-examens/" + idPv + "/signer").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRCC1\",\"role\":\"CC\"}"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"imActeur\":\"CTRCC1\",\"role\":\"CC\",\"imMembreCoSignataire\":\"CTRMEM\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statutPv").value("PROJET_ACCEPTE"))
+                .andExpect(jsonPath("$.imCtrlCc").value("CTRCC1"));
+        // Le Membre désigné co-signe → SIGNE. IM_CTRL_MEMBRE reste CTRCC1, qui a mené l'examen.
+        String tokenMembreAnt2 = bearer("CTRMEM", ProfilUtilisateur.MEMBRE, TypeActeur.CONTROLEUR, "CTRMEM", "ANT");
+        mvc.perform(post("/api/pv-examens/" + idPv + "/signer").header("Authorization", tokenMembreAnt2)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRMEM\",\"role\":\"MEMBRE\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.statutPv").value("SIGNE"))
-                .andExpect(jsonPath("$.imCtrlCc").value("CTRCC1"));
+                .andExpect(jsonPath("$.imCtrlCc").value("CTRCC1"))
+                .andExpect(jsonPath("$.imCtrlMembre").value("CTRCC1"));
         mvc.perform(get("/api/dossiers/4610").header("Authorization", tokenCc))
                 .andExpect(jsonPath("$.statut").value("EN_VERIFICATION"));
         // Q1a : le MÊME CC (attributaire, auteur des observations) statue le passage via la paire CC → Vérificateur

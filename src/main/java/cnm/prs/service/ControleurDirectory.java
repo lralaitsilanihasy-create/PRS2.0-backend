@@ -70,6 +70,33 @@ public class ControleurDirectory {
                 && (controleur.getIdLocalite() == null || localiteDossier.equals(controleur.getIdLocalite()));
     }
 
+    /**
+     * ⚠️ Co-signature (2026-08-28, arbitrage du pilote) — Membre désignable pour co-signer un PV :
+     * <strong>Membre titulaire</strong> de la <strong>localité du dossier</strong>.
+     *
+     * <p>Deux écarts délibérés avec {@link #peutEtreSecretaireSeance}, qui lui ressemble :</p>
+     * <ul>
+     *   <li><strong>Titulaire, pas de délégation.</strong> On ne passe pas par
+     *       {@code peutExercer(profil, MEMBRE)} : les paires (Président → Membre) et
+     *       (CC → Membre) rendraient un second P/CC désignable, et l'on retomberait sur deux
+     *       signatures de même rang — exactement ce que l'arbitrage ferme.</li>
+     *   <li><strong>Aucune exemption de localité.</strong> Le Secrétaire de séance tolère un
+     *       contrôleur sans localité (le Président, compétent partout) ; ici cette tolérance
+     *       rouvrirait la porte que §3.3 referme. Localité nulle → refus.</li>
+     * </ul>
+     */
+    public boolean peutEtreMembreCoSignataire(String imControleur, String localiteDossier) {
+        if (imControleur == null || imControleur.isBlank() || localiteDossier == null) {
+            return false;
+        }
+        Controleur controleur = controleurRepository.findById(imControleur.trim()).orElse(null);
+        if (controleur == null) {
+            return false;
+        }
+        return profilDe(imControleur).orElse(null) == ProfilUtilisateur.MEMBRE
+                && localiteDossier.equals(controleur.getIdLocalite());
+    }
+
     /** Tous les Présidents (visibilité toutes localités). */
     public List<Controleur> presidents() {
         return parProfil(ProfilUtilisateur.PRESIDENT);

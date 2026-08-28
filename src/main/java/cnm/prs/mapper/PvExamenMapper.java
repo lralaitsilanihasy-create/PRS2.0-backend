@@ -34,6 +34,7 @@ public final class PvExamenMapper {
         dto.setReferencePv(entity.getReferencePv());
         dto.setRefePv(entity.getRefePv());
         dto.setIdSecretaireSeance(entity.getIdSecretaireSeance());
+        dto.setImMembreCoSignataire(entity.getImMembreCoSignataire());
         dto.setDateArchivage(entity.getDateArchivage());
         dto.setImArchiveur(entity.getImArchiveur());
         dto.setVersion(entity.getVersion());   // ⚠️ verrou optimiste (docs/plan-conflit-version.md)

@@ -71,6 +71,18 @@ public class PvExamenDto {
     private String nomSecretaireSeance;
 
     /**
+     * ⚠️ Co-signature (2026-08-28) — Membre désigné par le Président / le Chef de commission pour
+     * co-signer. Lecture seule : posé par « signer » (rôle PRESIDENT ou CC), jamais par le corps
+     * d'un PUT. Nul tant que le P/CC n'a pas signé — le front s'en sert pour savoir si la part
+     * Membre est ouverte, et à qui.
+     */
+    @Size(max = 7)
+    private String imMembreCoSignataire;
+
+    /** Nom complet du Membre co-signataire (« prénoms nom ») — lecture seule, peuplé serveur. */
+    private String nomMembreCoSignataire;
+
+    /**
      * Vrai si un PDF officiel est réellement disponible (lecture seule, peuplé serveur) : fichier déjà stocké
      * ({@code CHEMIN_DOCUMENT} non nul) <strong>ou</strong> PV éligible à la génération à la demande (avis FAVR
      * + localité centrale ANT + toutes lignes de marché en appel d'offres ouvert). {@code false} sinon — le
