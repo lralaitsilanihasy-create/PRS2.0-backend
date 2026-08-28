@@ -80,6 +80,8 @@ import cnm.prs.security.CurrentUser;
 @Service
 public class MiseAJourPpmService {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(MiseAJourPpmService.class);
+
     /**
      * Statuts depuis lesquels une mise à jour est ouverte : la Commission a rendu sa décision, le PPM est
      * en vigueur. Un dossier encore dans le circuit se corrige (rectification), il ne se versionne pas.
@@ -343,6 +345,32 @@ public class MiseAJourPpmService {
      * que celles qui changent. Le drapeau {@code apresLettreRenvoi} et le rattachement à une lettre ne
      * sont PAS repris : ils qualifient l'instruction du dossier précédent, pas celle qui commence.
      */
+    /**
+     * PDF du PV pour la pièce d'historique, ou {@code null} si sa production échoue.
+     *
+     * <p>⚠️ 2026-08-28 — {@code documentPourHistorique} produit le PDF à la demande quand le fichier
+     * manque encore sur le FSX, ce qui pilote Word. Son échec remontait tel quel et faisait répondre
+     * <strong>409 à l'ouverture d'une mise à jour</strong> : une indisponibilité de Word bloquait une
+     * transition métier qui n'a rien à voir avec un document. Symptôme observé en CI, sur des runners
+     * dépourvus de Word — invisible en local, où Word est installé.</p>
+     *
+     * <p>La pièce n'est pas perdue pour autant : {@link #exigerDossierHistorique(Dossier)} constate son
+     * absence à la soumission et rappelle {@code joindreDossierHistorique} pour la reconstituer. Le
+     * chemin de réparation existait déjà, il était simplement court-circuité par l'exception.</p>
+     *
+     * <p>Même principe que la lettre de renvoi et le PV eux-mêmes : la production d'un document ne
+     * bloque jamais une transition d'état.</p>
+     */
+    private byte[] documentDuPvOuRien(Integer idPv) {
+        try {
+            return pvExamenService.documentPourHistorique(idPv);
+        } catch (RuntimeException indisponible) {
+            log.warn("Piece d'historique : PDF du PV {} indisponible a l'ouverture de la mise a jour ({}) — "
+                    + "elle sera reconstituee a la soumission.", idPv, indisponible.getMessage());
+            return null;
+        }
+    }
+
     private void copierPiecesJointes(Integer idSource, Integer idCible) {
         for (PieceJointeDossier p : pieceJointeDossierRepository.findByIdDossier(idSource)) {
             // Les pièces d'HISTORIQUE du prédécesseur ne sont pas recopiées telles quelles : elles sont
@@ -380,7 +408,7 @@ public class MiseAJourPpmService {
         // Idempotent : la méthode sert aussi à réparer une version incomplète (cf. exigerDossierHistorique).
         if (!pieceJointeDossierRepository.existsByIdDossierAndIdTypePiece(cible.getIdDossier(), TYPE_PV_PRECEDENT)) {
             pvExamenRepository.findSignesParDossierRows(source.getIdDossier()).stream().findFirst().ifPresent(pv -> {
-                byte[] pdf = pvExamenService.documentPourHistorique(pv.getIdPv());
+                byte[] pdf = documentDuPvOuRien(pv.getIdPv());
                 if (pdf != null) {
                     enregistrer(cible.getIdDossier(), TYPE_PV_PRECEDENT, pdf,
                             "PV-" + nomFichierSur(pv.getRefePv(), "pv-" + pv.getIdPv()) + ".pdf");

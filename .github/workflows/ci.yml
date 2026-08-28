@@ -36,11 +36,14 @@ jobs:
           # Secret de test explicite (>= 32 octets) : l'application refuse de
           # démarrer sans secret depuis le durcissement du 2026-08-26.
           APP_JWT_SECRET: ci-secret-0123456789-abcdefghijklmnopqrstuvwxyz
-          # ⚠️ 2026-08-28, DIAGNOSTIC — deux tests de MiseAJourPpmIntegrationTest échouent ici (409
-          # au lieu de 201) et passent sur le poste de développement, qui tourne en PostgreSQL 18
-          # quand la CI montait un 17. Toutes les autres pistes ont été écartées. On aligne la CI
-          # sur la version réellement utilisée en développement pour isoler la variable.
-          # Retirer cette ligne remet le défaut du socle (postgres:17, version de l'ADR-0004).
+          # ⚠️ 2026-08-28 — la CI teste sur PostgreSQL 18, version du poste de développement, et non
+          # plus sur le 17 du socle. Ce n'est PAS un diagnostic (celui-ci est clos : un run en 18 a
+          # échoué à l'identique, la version du moteur n'était pas en cause) mais un choix assumé :
+          # valider le moteur sur lequel le code est écrit plutôt qu'un autre.
+          # ⚠️ Il contredit l'ADR-0004, qui justifie le conteneur par « même version qu'en
+          # production » (17). Tant que l'ADR n'est pas révisé, cette ligne est la version qui fait
+          # foi et l'ADR est en retard sur elle. À trancher : soit la production passe en 18, soit
+          # cette ligne saute. Le défaut du socle reste postgres:17.
           PRS_TEST_PG_IMAGE: postgres:18
 
       # ⚠️ 2026-08-28 — sans jeton, les logs d'un run ne sont pas téléchargeables (403) et les
