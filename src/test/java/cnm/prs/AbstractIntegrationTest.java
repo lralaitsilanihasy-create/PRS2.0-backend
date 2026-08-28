@@ -68,9 +68,26 @@ public abstract class AbstractIntegrationTest {
     /** Vrai quand la suite se branche sur un PostgreSQL local au lieu d'un conteneur. */
     static final boolean BASE_LOCALE = URL_LOCALE != null && !URL_LOCALE.isBlank();
 
+    /**
+     * Image du conteneur, pilotable par {@code PRS_TEST_PG_IMAGE} (ou {@code prs.test.pg.image}).
+     *
+     * <p>⚠️ 2026-08-28 — rendue configurable pour trancher un diagnostic : deux tests de
+     * {@code MiseAJourPpmIntegrationTest} échouent en CI (409 au lieu de 201) et passent en local,
+     * où la base est un PostgreSQL 18 tandis que la CI monte un 17. Toutes les autres pistes ont été
+     * écartées (exclusion des tests {@code word}, base locale sale, séquences de PK). Basculer
+     * l'image en CI isole la variable sans toucher au code, et se révoque d'une ligne de workflow.</p>
+     *
+     * <p>Le défaut reste {@code postgres:17}, version de production selon l'ADR-0004 — étant observé
+     * que le poste de développement, lui, tourne en 18 : la CI teste aujourd'hui une version que
+     * personne n'utilise pour développer. Si l'expérience confirme l'écart, c'est cette tension-là
+     * qu'il faudra arbitrer, pas seulement ce test.</p>
+     */
+    private static final String IMAGE_POSTGRES =
+            valeurOuDefaut(reglage("PRS_TEST_PG_IMAGE", "prs.test.pg.image"), "postgres:17");
+
     /** Conteneur partagé par toute la suite — {@code null} en mode base locale (jamais démarré). */
     static final PostgreSQLContainer<?> POSTGRES =
-            BASE_LOCALE ? null : new PostgreSQLContainer<>("postgres:17");
+            BASE_LOCALE ? null : new PostgreSQLContainer<>(IMAGE_POSTGRES);
 
     static {
         if (BASE_LOCALE) {

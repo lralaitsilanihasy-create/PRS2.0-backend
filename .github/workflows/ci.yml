@@ -36,6 +36,12 @@ jobs:
           # Secret de test explicite (>= 32 octets) : l'application refuse de
           # démarrer sans secret depuis le durcissement du 2026-08-26.
           APP_JWT_SECRET: ci-secret-0123456789-abcdefghijklmnopqrstuvwxyz
+          # ⚠️ 2026-08-28, DIAGNOSTIC — deux tests de MiseAJourPpmIntegrationTest échouent ici (409
+          # au lieu de 201) et passent sur le poste de développement, qui tourne en PostgreSQL 18
+          # quand la CI montait un 17. Toutes les autres pistes ont été écartées. On aligne la CI
+          # sur la version réellement utilisée en développement pour isoler la variable.
+          # Retirer cette ligne remet le défaut du socle (postgres:17, version de l'ADR-0004).
+          PRS_TEST_PG_IMAGE: postgres:18
 
       # ⚠️ 2026-08-28 — sans jeton, les logs d'un run ne sont pas téléchargeables (403) et les
       # annotations de surefire ne portent que le message d'exception, jamais le nom du test. On
