@@ -30,6 +30,38 @@ Basculer les tests d'intégration vers **Testcontainers**, avec un vrai conteneu
 
 Revenir à H2 : retirer la dépendance Testcontainers, restaurer `application-test.properties` en configuration H2. Fait perdre la garantie de fidélité au dialecte réel et réintroduit la nécessité de mirroiter à la main les domaines et séquences PostgreSQL.
 
+## Révision (2026-08-28) — la version est PostgreSQL 18, et c'était l'ADR qui avait tort
+
+**Cette décision a annoncé trois versions différentes sans que personne ne vérifie laquelle
+tournait réellement en production.** Le titre et la section « Décision » ci-dessus disent
+**16** ; l'aboutissement dit **17** ; le socle de test appliquait **17** ; la CI a été montée
+en **18**. La production, elle, tourne en **18** — confirmé par le pilote le 28/08.
+
+L'argument central de l'ADR — « un vrai conteneur PostgreSQL, la version de production » — était
+donc juste dans son principe et faux dans son chiffre, depuis le premier jour.
+
+**Ce qui change :**
+
+- `AbstractIntegrationTest.IMAGE_POSTGRES` a pour défaut `postgres:18`. C'est le **seul** endroit
+  où la version est déclarée.
+- La surcharge `PRS_TEST_PG_IMAGE: postgres:18` a été retirée du workflow. Elle y avait été posée
+  le 28/08 comme instrument de diagnostic, puis conservée comme choix ; devenue redondante, elle
+  ne subsiste plus que comme réglage — utile pour reproduire un défaut sur une autre version, pas
+  pour porter la configuration de référence.
+- Le titre et la section « Décision » ne sont pas réécrits : un ADR est un enregistrement daté,
+  pas un document vivant. Cette révision fait foi.
+
+**Ce que l'épisode a coûté et enseigné.** Le passage de la CI en 18 visait à trancher un
+diagnostic : deux tests de `MiseAJourPpmIntegrationTest` répondaient 409 au lieu de 201. La
+version du moteur n'était pas en cause — le coupable était Word piloté en synchrone dans une
+transaction métier (`c2fdeb1`, troisième occurrence du même défaut). Une version dupliquée en
+trois endroits a servi de fausse piste à un bug qui n'avait aucun rapport avec elle.
+
+**À surveiller :** la clause « Docker doit être disponible partout où les tests tournent » s'est
+révélée fausse en local — aucun poste de développement n'a Docker. D'où l'aiguillage
+`PRS_TEST_DB_URL` (`5d6651f`), qui branche la suite sur un PostgreSQL local. La CI, elle, reste
+sur Testcontainers : c'est le mode de référence.
+
 ## Aboutissement (2026-08-27)
 
 Décision entièrement livrée : bascule H2 → Testcontainers PostgreSQL 17 + Flyway (`d557cef`),

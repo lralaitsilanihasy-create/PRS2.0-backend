@@ -71,19 +71,25 @@ public abstract class AbstractIntegrationTest {
     /**
      * Image du conteneur, pilotable par {@code PRS_TEST_PG_IMAGE} (ou {@code prs.test.pg.image}).
      *
-     * <p>⚠️ 2026-08-28 — rendue configurable pour trancher un diagnostic : deux tests de
-     * {@code MiseAJourPpmIntegrationTest} échouent en CI (409 au lieu de 201) et passent en local,
-     * où la base est un PostgreSQL 18 tandis que la CI monte un 17. Toutes les autres pistes ont été
-     * écartées (exclusion des tests {@code word}, base locale sale, séquences de PK). Basculer
-     * l'image en CI isole la variable sans toucher au code, et se révoque d'une ligne de workflow.</p>
+     * <p>⚠️ 2026-08-28 — le défaut passe de {@code postgres:17} à {@code postgres:18}, <strong>version
+     * de production confirmée par le pilote</strong>. C'est le seul point où la version est déclarée :
+     * la surcharge {@code PRS_TEST_PG_IMAGE} posée dans le workflow a été retirée du même coup, une
+     * version déclarée à deux endroits finissant toujours par diverger — ce qui venait précisément
+     * d'arriver.</p>
      *
-     * <p>Le défaut reste {@code postgres:17}, version de production selon l'ADR-0004 — étant observé
-     * que le poste de développement, lui, tourne en 18 : la CI teste aujourd'hui une version que
-     * personne n'utilise pour développer. Si l'expérience confirme l'écart, c'est cette tension-là
-     * qu'il faudra arbitrer, pas seulement ce test.</p>
+     * <p>Historique de la dérive, pour qu'elle ne se rejoue pas : l'ADR-0004 annonçait 16 dans son
+     * titre, 17 dans son aboutissement, et justifiait le conteneur par « même version qu'en
+     * production » sans que personne n'ait vérifié laquelle. La CI a ensuite été montée en 18 comme
+     * <em>instrument de diagnostic</em> — deux tests de {@code MiseAJourPpmIntegrationTest}
+     * répondaient 409 au lieu de 201. La version n'était pas en cause : le vrai coupable était Word
+     * piloté en synchrone dans la transaction ({@code c2fdeb1}). Le passage en 18 reste néanmoins
+     * juste, mais pour une autre raison que celle qui l'avait motivé.</p>
+     *
+     * <p>Le réglage reste surchargeable : il sert à reproduire un défaut sur une autre version, non
+     * à porter la configuration de référence.</p>
      */
     private static final String IMAGE_POSTGRES =
-            valeurOuDefaut(reglage("PRS_TEST_PG_IMAGE", "prs.test.pg.image"), "postgres:17");
+            valeurOuDefaut(reglage("PRS_TEST_PG_IMAGE", "prs.test.pg.image"), "postgres:18");
 
     /** Conteneur partagé par toute la suite — {@code null} en mode base locale (jamais démarré). */
     static final PostgreSQLContainer<?> POSTGRES =
