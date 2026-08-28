@@ -421,11 +421,17 @@ public class PvDocumentGenerator {
         }
     }
 
+    /**
+     * ⚠️ CI Linux (2026-08-28) — délègue à {@link #invaliderConvertisseur()}, dont le {@code shutDown()}
+     * est GARDÉ. Sur une machine sans Word (runners GitHub), {@code LocalConverter.build()} rend un
+     * convertisseur dont l'{@code executorService} est nul ; {@code shutDown()} y lève alors
+     * « Cannot invoke ExecutorService.shutdown() because this.executorService is null ». Ce PreDestroy
+     * s'exécutant à la fermeture de CHAQUE contexte Spring de test, l'exception faisait échouer la
+     * construction. La garde existait déjà à l'invalidation et manquait ici : deux chemins vers la même
+     * fermeture, un seul protégé. Le symptôme est invisible en local, où Word est présent.
+     */
     @PreDestroy
     void fermerConvertisseur() {
-        IConverter c = convertisseur;
-        if (c != null) {
-            c.shutDown();
-        }
+        invaliderConvertisseur();
     }
 }

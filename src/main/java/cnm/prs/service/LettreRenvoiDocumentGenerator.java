@@ -121,12 +121,15 @@ public class LettreRenvoiDocumentGenerator {
         }
     }
 
+    /**
+     * ⚠️ CI Linux (2026-08-28) — même correctif que {@code PvDocumentGenerator} : on délègue à
+     * {@link #invaliderConvertisseur()}, dont le {@code shutDown()} est gardé. Sans Word, le
+     * convertisseur construit a un {@code executorService} nul et sa fermeture lève un NPE à la
+     * destruction du contexte Spring.
+     */
     @PreDestroy
     void fermerConvertisseur() {
-        IConverter c = convertisseur;
-        if (c != null) {
-            c.shutDown();
-        }
+        invaliderConvertisseur();
     }
 
     /** Remplace les placeholders dans tout le document : corps, tableaux, en-têtes et pieds de page. */
