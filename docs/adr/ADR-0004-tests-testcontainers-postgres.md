@@ -1,7 +1,19 @@
-# ADR-0004 : Tests d'intégration — bascule de H2 vers Testcontainers PostgreSQL 16
+# ADR-0004 : Tests d'intégration — bascule de H2 vers Testcontainers PostgreSQL
 
-**Statut :** Adopté — implémentation en cours (plan de travaux 2026-08, LOT 2.2)
+**Statut :** Adopté — révisé le 2026-08-28 (voir « Révision » en fin de document)
 **Date :** 2026-08-26
+
+> ⚠️ **La version ne se lit pas dans ce document.** Elle est déclarée à un seul
+> endroit exécutable : le défaut d'`AbstractIntegrationTest.IMAGE_POSTGRES`.
+>
+> **Tout chiffre cité ici est daté**, y compris dans la révision : 16 dans la
+> décision d'origine, 17 dans l'aboutissement, 18 dans la révision du 28/08. Ce
+> sont des étapes, conservées parce qu'un ADR enregistre ce qui a été décidé
+> quand — pas ce qui est vrai aujourd'hui. Pour connaître la version en vigueur,
+> ouvrir le code.
+>
+> Le titre a perdu son numéro pour cette raison : il en portait un (16) qui n'a
+> jamais été implémenté, et qui a survécu deux montées de version.
 
 ## Contexte
 
@@ -48,8 +60,16 @@ donc juste dans son principe et faux dans son chiffre, depuis le premier jour.
   le 28/08 comme instrument de diagnostic, puis conservée comme choix ; devenue redondante, elle
   ne subsiste plus que comme réglage — utile pour reproduire un défaut sur une autre version, pas
   pour porter la configuration de référence.
-- Le titre et la section « Décision » ne sont pas réécrits : un ADR est un enregistrement daté,
-  pas un document vivant. Cette révision fait foi.
+- La section « Décision » n'est pas réécrite : un ADR est un enregistrement daté, pas un document
+  vivant. Cette révision fait foi. Le **titre**, lui, a perdu son numéro de version — il n'était
+  pas un enregistrement mais une étiquette, et il annonçait un chiffre (16) qui n'a jamais été
+  implémenté.
+
+**La règle à tenir, plus importante que le chiffre du jour.** Aligner les cinq endroits sur « 18 »
+aurait recréé le même piège pour la prochaine montée de version. La version se déclare à **un seul
+endroit exécutable** — le défaut d'`AbstractIntegrationTest` — et la prose y renvoie au lieu de la
+répéter. Un document qui cite un numéro de version le périme tôt ou tard ; celui qui pointe vers
+la source reste juste.
 
 **Ce que l'épisode a coûté et enseigné.** Le passage de la CI en 18 visait à trancher un
 diagnostic : deux tests de `MiseAJourPpmIntegrationTest` répondaient 409 au lieu de 201. La
