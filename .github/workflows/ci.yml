@@ -36,3 +36,25 @@ jobs:
           # Secret de test explicite (>= 32 octets) : l'application refuse de
           # démarrer sans secret depuis le durcissement du 2026-08-26.
           APP_JWT_SECRET: ci-secret-0123456789-abcdefghijklmnopqrstuvwxyz
+
+      # ⚠️ 2026-08-28 — sans jeton, les logs d'un run ne sont pas téléchargeables (403) et les
+      # annotations de surefire ne portent que le message d'exception, jamais le nom du test. On
+      # republie donc les échecs en commandes « ::error:: », qui, elles, deviennent des annotations
+      # lisibles par l'API publique. Diagnostiquer un échec de CI ne doit pas exiger un secret.
+      - name: Tests en échec — noms lisibles depuis l'API
+        if: failure()
+        run: |
+          shopt -s nullglob
+          trouve=0
+          for f in target/surefire-reports/*.txt; do
+            grep -qE '<<< (FAILURE|ERROR)!' "$f" || continue
+            classe=$(sed -n 's/^Test set: //p' "$f" | head -1)
+            while IFS= read -r ligne; do
+              [ -z "$ligne" ] && continue
+              trouve=1
+              echo "::error title=${classe}::${ligne}"
+            done < <(grep -E '<<< (FAILURE|ERROR)!' "$f" | grep -v '^Tests run:' | head -5)
+          done
+          if [ "$trouve" = "0" ]; then
+            echo "::error title=CI::Aucun rapport surefire en echec : l'echec precede l'execution des tests."
+          fi
