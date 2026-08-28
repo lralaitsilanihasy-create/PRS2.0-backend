@@ -6,13 +6,14 @@ import org.testcontainers.containers.PostgreSQLContainer;
 
 /**
  * Socle commun des tests d'intégration (chantier LOT 2, 2026-08-26 — modèle : dépôt Collegue) :
- * UN SEUL conteneur PostgreSQL 17 pour toute la JVM de test (pattern « singleton container »).
+ * UN SEUL conteneur PostgreSQL pour toute la JVM de test (pattern « singleton container »).
+ * La version est celle de {@link #IMAGE_POSTGRES} — seul endroit où elle est déclarée.
  *
  * <p><b>Pourquoi plus H2</b> : la suite validait le code Java, pas le schéma réel — ni les
  * contraintes CHECK des enums, ni les séquences, ni les types PostgreSQL (l'INIT de test créait
  * des domaines de compatibilité). Le schéma est désormais rejoué par <b>Flyway</b> (V1 baseline
  * issue de pg_dump + reprises) sur un vrai PostgreSQL — même moteur et même version qu'en
- * production (conteneur {@code prs20-db} : PostgreSQL 17).</p>
+ * production (conteneur {@code prs20-db}), la version étant portée par {@link #IMAGE_POSTGRES}.</p>
  *
  * <p><b>Démarrage</b> : conteneur {@code static} lancé dans un bloc statique — volontairement
  * SANS {@code @Testcontainers}/{@code @Container}, sinon l'extension JUnit l'arrêterait à la fin
@@ -33,10 +34,10 @@ import org.testcontainers.containers.PostgreSQLContainer;
  * comme avant. La CI ({@code .github/workflows/ci.yml}) ne la définit pas et reste donc sur
  * Testcontainers — le mode de référence.</p>
  *
- * <p><b>C'est un dépannage, pas une équivalence.</b> Une base locale n'est ni jetable ni
- * forcément en version 17 : on perd l'argument central de l'ADR-0004 (même moteur et même
- * version qu'en production). Un verdict de test obtenu par cette voie vaut pour le code métier,
- * pas pour la conformité du schéma. En cas de doute, l'arbitre reste la CI.</p>
+ * <p><b>C'est un dépannage, pas une équivalence.</b> Une base locale n'est ni jetable ni forcément
+ * à la version de {@link #IMAGE_POSTGRES} : on perd l'argument central de l'ADR-0004 (même moteur
+ * et même version qu'en production). Un verdict de test obtenu par cette voie vaut pour le code
+ * métier, pas pour la conformité du schéma. En cas de doute, l'arbitre reste la CI.</p>
  *
  * <p><b>Garde-fou</b> : la bascule <b>refuse</b> une base dont le nom ne se termine pas par
  * {@code _TEST}. Flyway migre ce qu'on lui donne et les tests y écrivent ; pointer la base de
