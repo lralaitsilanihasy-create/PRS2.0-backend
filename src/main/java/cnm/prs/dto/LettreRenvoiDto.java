@@ -62,4 +62,12 @@ public class LettreRenvoiDto {
      * volontaire de {@code @NotNull}. Ignoré en création.
      */
     private Integer version;
+
+    /**
+     * ⚠️ 2026-08-28 — vrai si le PDF de la lettre est réellement disponible (lecture seule, dérivé
+     * serveur). Depuis que la génération est sortie du chemin de la signature, une lettre peut être
+     * {@code SIGNE} sans document pendant quelques secondes ; le front masque alors « Télécharger »
+     * au lieu de proposer un lien qui partirait en 404.
+     */
+    private Boolean documentDisponible;
 }

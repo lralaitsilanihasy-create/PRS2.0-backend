@@ -77,6 +77,8 @@ public class LettreRenvoiService {
     private final LettreRenvoiDocumentGenerator documentGenerator;
     private final ReferenceService referenceService;
     private final PvExamenRepository pvExamenRepository;
+    /** ⚠️ 2026-08-28 — publie {@link LettreRenvoiSigneeEvent} : le PDF part APRÈS COMMIT. */
+    private final org.springframework.context.ApplicationEventPublisher evenements;
 
     @Value("${storage.lettre-renvoi.path:${java.io.tmpdir}/prs-fsx/LR}")
     private String cheminStockageLr;
@@ -87,7 +89,9 @@ public class LettreRenvoiService {
             NotificationService notificationService, LettreRenvoiLueRepository lueRepository,
             EntiteContractRepository entiteContractRepository, LocaliteRepository localiteRepository,
             LettreRenvoiDocumentGenerator documentGenerator, ReferenceService referenceService,
-            PvExamenRepository pvExamenRepository) {
+            PvExamenRepository pvExamenRepository,
+            org.springframework.context.ApplicationEventPublisher evenements) {
+        this.evenements = evenements;
         this.pvExamenRepository = pvExamenRepository;
         this.documentGenerator = documentGenerator;
         this.localiteRepository = localiteRepository;
@@ -362,11 +366,11 @@ public class LettreRenvoiService {
                 .map(l -> l.getLibelleLocalite() == null ? "" : l.getLibelleLocalite()).orElse("");
         lettre.setImSignataire(im);
         lettre.setStatut(StatutLettreRenvoi.SIGNE.name());
-        byte[] pdf = documentGenerator.genererPdf(centrale,
-                construireRemplacements(lettre, dossier, nomComplet(im), centrale, localiteLibelle));
-        lettre.setCheminDocument(stockerSurFsx(lettre, pdf));   // PDF écrit sur le FSX (répertoire LR/)
-        // Log posé APRÈS la génération/écriture du PDF : celles-ci peuvent échouer et faire refluer la
-        // signature ; journaliser plus haut annoncerait une transition qui n'a pas eu lieu.
+        // ⚠️ 2026-08-28 (option B) — la génération du PDF est SORTIE du chemin de la signature, comme
+        // pour le PV depuis le 2026-08-19 : elle pilote Word localement (plusieurs secondes) et son
+        // échec faisait refluer la signature. Elle part désormais APRÈS COMMIT via
+        // LettreRenvoiSigneeEvent → LettreRenvoiDocumentTache ; CHEMIN_DOCUMENT est renseigné quand le
+        // document est prêt, et le téléchargement garde une régénération paresseuse en filet.
         log.info("[CIRCUIT] lettre de renvoi signee dossier={} acteur={} lettre={} statut={}",
                 lettre.getIdDossier(), CurrentUser.login().orElse(null), lettre.getIdLettre(),
                 StatutLettreRenvoi.SIGNE.name());
@@ -396,7 +400,44 @@ public class LettreRenvoiService {
         });
         LettreRenvoi saved = repository.save(lettre);
         notifierSignature(saved);
+        evenements.publishEvent(new LettreRenvoiSigneeEvent(saved.getIdLettre()));
         return peuplerNomSignataire(LettreRenvoiMapper.toDto(saved));
+    }
+
+    /**
+     * ⚠️ 2026-08-28 (option B) — produit le PDF de la lettre signée et l'écrit sur le FSX, hors de la
+     * transaction de signature. Appelée APRÈS COMMIT par {@link LettreRenvoiDocumentTache}, et en
+     * dernier recours par {@link #telechargerDocument(Integer)} si le document manque encore.
+     *
+     * <p>Idempotente : une lettre déjà dotée d'un {@code CHEMIN_DOCUMENT} n'est pas régénérée. Ne
+     * produit rien pour une lettre non signée — le document n'a de sens qu'au statut {@code SIGNE}.</p>
+     *
+     * @return {@code true} si un document a été produit lors de cet appel
+     */
+    public boolean genererEtStockerDocument(Integer idLettre) {
+        LettreRenvoi lettre = repository.findById(idLettre).orElse(null);
+        if (lettre == null || !StatutLettreRenvoi.SIGNE.name().equals(lettre.getStatut())) {
+            return false;
+        }
+        if (lettre.getCheminDocument() != null && !lettre.getCheminDocument().isBlank()) {
+            return false;   // déjà produit
+        }
+        Dossier dossier = lettre.getIdDossier() == null ? null
+                : dossierRepository.findById(lettre.getIdDossier()).orElse(null);
+        String localite = dossier == null ? null : dossier.getIdLocalite();
+        if (localite == null || localite.isBlank()) {
+            localite = repository.findLocaliteByLettre(idLettre).orElse(null);
+        }
+        boolean centrale = Localite.estCentrale(localite);   // source unique (cf. références « CNM »)
+        String localiteLibelle = localite == null ? "" : localiteRepository.findById(localite)
+                .map(l -> l.getLibelleLocalite() == null ? "" : l.getLibelleLocalite()).orElse("");
+        String signataire = nomComplet(lettre.getImSignataire());
+        byte[] pdf = documentGenerator.genererPdf(centrale,
+                construireRemplacements(lettre, dossier, signataire, centrale, localiteLibelle));
+        lettre.setCheminDocument(stockerSurFsx(lettre, pdf));   // PDF écrit sur le FSX (répertoire LR/)
+        repository.save(lettre);
+        log.info("Document de la lettre de renvoi {} produit : {}", idLettre, lettre.getCheminDocument());
+        return true;
     }
 
     /**
@@ -443,11 +484,31 @@ public class LettreRenvoiService {
      * propriétaire (lettre {@code SIGNE}). Lit le fichier sur le FSX ({@code CHEMIN_DOCUMENT}), avec repli
      * sur le contenu en base ({@code DOCUMENT_PDF}). 404 si la lettre n'a pas de document.
      */
-    @Transactional(readOnly = true)
+    @Transactional
     public byte[] telechargerDocument(Integer id) {
         LettreRenvoi lettre = exigerExistante(id);
         if (!estPrmpProprietaireSignee(lettre)) {
             Visibilite.controler(loc -> repository.existsDansLocalite(id, loc));
+        }
+        // ⚠️ 2026-08-28 (option B) — régénération paresseuse EN FILET : depuis que le PDF est produit
+        // après commit, une lettre signée peut être consultée avant que le document soit prêt, ou après
+        // l'échec de la tâche de fond (Word indisponible au moment de la signature). On produit alors à
+        // la demande, ce qui rend l'attente visible plutôt que le document manquant. D'où @Transactional
+        // et non plus readOnly : ce chemin écrit CHEMIN_DOCUMENT.
+        if ((lettre.getCheminDocument() == null || lettre.getCheminDocument().isBlank())
+                && (lettre.getDocumentPdf() == null || lettre.getDocumentPdf().length == 0)
+                && StatutLettreRenvoi.SIGNE.name().equals(lettre.getStatut())) {
+            try {
+                genererEtStockerDocument(id);
+            } catch (RuntimeException indisponible) {
+                // Word absent ou arrêté : dire ce qui se passe plutôt que laisser filer une 500 opaque.
+                // La lettre reste SIGNE — c'est le document qui manque, pas la signature.
+                log.warn("Document de la lettre {} indisponible au téléchargement : {}", id,
+                        indisponible.getMessage());
+                throw new BusinessRuleException("Le document de cette lettre n'est pas encore disponible : "
+                        + "sa production est en cours ou a échoué. Réessayez dans un instant.");
+            }
+            lettre = exigerExistante(id);
         }
         if (lettre.getCheminDocument() != null && !lettre.getCheminDocument().isBlank()) {
             try {

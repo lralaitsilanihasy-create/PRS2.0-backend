@@ -391,6 +391,7 @@ class LettreRenvoiIntegrationTest extends CnmIntegrationTestSupport {
 
     @Test
     @DisplayName("Document : signature centrale → PDF téléchargeable (200, application/pdf)")
+    @org.junit.jupiter.api.Tag("word")   // telechargement du PDF : conversion docx→PDF via MS Word, exclu en CI Linux
     void document_genere_centrale_ok() throws Exception {
         byte[] pdf = signerEtPdf(714, "ANT", tokenCc);
         assertTrue(pdf.length > 0 && new String(pdf, 0, 4, StandardCharsets.ISO_8859_1).equals("%PDF"),
@@ -399,6 +400,7 @@ class LettreRenvoiIntegrationTest extends CnmIntegrationTestSupport {
 
     @Test
     @DisplayName("Document : signature régionale → PDF téléchargeable (200, application/pdf)")
+    @org.junit.jupiter.api.Tag("word")   // telechargement du PDF : conversion docx→PDF via MS Word, exclu en CI Linux
     void document_genere_regionale_ok() throws Exception {
         int id = seedLettreSoumiseLoc(715, "TMS");
         // ⚠️ Audit lot B — la lettre régionale se signe dans SA localité : CC de TMS. Le téléchargement
@@ -413,6 +415,7 @@ class LettreRenvoiIntegrationTest extends CnmIntegrationTestSupport {
 
     @Test
     @DisplayName("Document : texte EXACT du modèle (pas une paraphrase)")
+    @org.junit.jupiter.api.Tag("word")   // telechargement du PDF : conversion docx→PDF via MS Word, exclu en CI Linux
     void document_texte_identique_modele() throws Exception {
         String texte = texteDuPdf(signerEtPdf(740, "ANT", tokenCc));
         assertTrue(texte.contains("Commission Nationale des Marchés renvoie")
@@ -422,12 +425,14 @@ class LettreRenvoiIntegrationTest extends CnmIntegrationTestSupport {
 
     @Test
     @DisplayName("Document : le PDF contient l'image de l'emblème")
+    @org.junit.jupiter.api.Tag("word")   // telechargement du PDF : conversion docx→PDF via MS Word, exclu en CI Linux
     void document_contient_image() throws Exception {
         assertTrue(contientImage(signerEtPdf(741, "ANT", tokenCc)), "le PDF contient au moins un objet image");
     }
 
     @Test
     @DisplayName("Document : signataire = nom réel seul (pas de texte parasite)")
+    @org.junit.jupiter.api.Tag("word")   // telechargement du PDF : conversion docx→PDF via MS Word, exclu en CI Linux
     void document_signataire_sans_texte_parasite() throws Exception {
         String texte = texteDuPdf(signerEtPdf(742, "ANT", tokenCc));
         assertFalse(texte.contains("Le Président ou le Chef de Commission,"),
@@ -437,6 +442,7 @@ class LettreRenvoiIntegrationTest extends CnmIntegrationTestSupport {
 
     @Test
     @DisplayName("Document : aucun placeholder résiduel <...>")
+    @org.junit.jupiter.api.Tag("word")   // telechargement du PDF : conversion docx→PDF via MS Word, exclu en CI Linux
     void document_aucun_placeholder_residuel() throws Exception {
         String texte = texteDuPdf(signerEtPdf(743, "ANT", tokenCc));
         assertFalse(java.util.regex.Pattern.compile("<[A-Z _]+>").matcher(texte).find(),
@@ -445,6 +451,7 @@ class LettreRenvoiIntegrationTest extends CnmIntegrationTestSupport {
 
     @Test
     @DisplayName("Document : en-tête républicain présent")
+    @org.junit.jupiter.api.Tag("word")   // telechargement du PDF : conversion docx→PDF via MS Word, exclu en CI Linux
     void document_genere_entete_present() throws Exception {
         String texte = texteDuPdf(signerEtPdf(744, "ANT", tokenCc));
         assertTrue(texte.contains("REPOBLIKAN") && texte.contains("MADAGASIKARA"),
@@ -453,16 +460,25 @@ class LettreRenvoiIntegrationTest extends CnmIntegrationTestSupport {
 
     @Test
     @DisplayName("Document : corps de la lettre saisi présent")
+    @org.junit.jupiter.api.Tag("word")   // telechargement du PDF : conversion docx→PDF via MS Word, exclu en CI Linux
     void document_genere_corps_lettre_present() throws Exception {
         assertTrue(texteDuPdf(signerEtPdf(745, "ANT", tokenCc)).contains("Corps de la lettre de renvoi"),
                 "texte du corps présent dans le PDF");
     }
 
     @Test
-    @DisplayName("Document : PDF stocké sur le FSX (répertoire LR/) à la signature")
+    @DisplayName("Document : PDF stocké sur le FSX (répertoire LR/), produit après la signature")
+    @org.junit.jupiter.api.Tag("word")   // production du PDF : conversion docx→PDF via MS Word, exclu en CI Linux
     void document_genere_stocke_fsx_ok() throws Exception {
         int id = seedLettreSoumiseLoc(730, "ANT");
         mvc.perform(post("/api/lettre-renvois/" + id + "/signer").header("Authorization", tokenCc))
+                .andExpect(status().isOk())
+                // ⚠️ 2026-08-28 (option B) — la signature ne produit PLUS le PDF : elle commite seule et
+                // le document part après commit. À cet instant précis, il n'existe donc pas encore.
+                .andExpect(jsonPath("$.documentDisponible").value(false));
+        // Le téléchargement force la production (filet de régénération paresseuse) : c'est LUI qui
+        // garantit qu'une lettre signée finit toujours par avoir son fichier sur le FSX.
+        mvc.perform(get("/api/lettre-renvois/" + id + "/document").header("Authorization", tokenCc))
                 .andExpect(status().isOk());
         String chemin = lettreRenvoiRepository.findById(id).orElseThrow().getCheminDocument();
         assertTrue(chemin != null && java.nio.file.Files.exists(java.nio.file.Path.of(chemin)),
@@ -473,6 +489,7 @@ class LettreRenvoiIntegrationTest extends CnmIntegrationTestSupport {
 
     @Test
     @DisplayName("Document régional : en-tête contient la localité du dossier (TOAMASINA)")
+    @org.junit.jupiter.api.Tag("word")   // telechargement du PDF : conversion docx→PDF via MS Word, exclu en CI Linux
     void document_genere_localite_dossier_ok() throws Exception {
         int id = seedLettreSoumiseLoc(731, "TMS");
         mvc.perform(post("/api/lettre-renvois/" + id + "/signer").header("Authorization", tokenCcTms()))
@@ -485,6 +502,7 @@ class LettreRenvoiIntegrationTest extends CnmIntegrationTestSupport {
 
     @Test
     @DisplayName("Document régional : signataire « Le Chef de la Commission Régionale des Marchés »")
+    @org.junit.jupiter.api.Tag("word")   // telechargement du PDF : conversion docx→PDF via MS Word, exclu en CI Linux
     void document_genere_signataire_regional_ok() throws Exception {
         int id = seedLettreSoumiseLoc(733, "TMS");
         mvc.perform(post("/api/lettre-renvois/" + id + "/signer").header("Authorization", tokenCcTms()))
