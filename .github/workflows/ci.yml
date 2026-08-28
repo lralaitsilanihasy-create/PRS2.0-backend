@@ -49,11 +49,21 @@ jobs:
           for f in target/surefire-reports/*.txt; do
             grep -qE '<<< (FAILURE|ERROR)!' "$f" || continue
             classe=$(sed -n 's/^Test set: //p' "$f" | head -1)
+            # Chaque échec porte sa ligne surefire ET la ligne suivante — celle qui contient
+            # l'exception et le message d'assertion, sans quoi on connaît le test qui tombe mais
+            # pas pourquoi. Les « at ... » de pile sont écartés, ils ne tiennent pas dans un titre.
             while IFS= read -r ligne; do
               [ -z "$ligne" ] && continue
               trouve=1
               echo "::error title=${classe}::${ligne}"
-            done < <(grep -E '<<< (FAILURE|ERROR)!' "$f" | grep -v '^Tests run:' | head -5)
+            done < <(awk '/<<< (FAILURE|ERROR)!/ && !/^Tests run:/ {
+                            ligne = $0
+                            if ((getline suivante) > 0) {
+                              gsub(/^[ \t]+/, "", suivante)
+                              if (suivante !~ /^at /) ligne = ligne " || " suivante
+                            }
+                            print ligne
+                          }' "$f" | head -5)
           done
           if [ "$trouve" = "0" ]; then
             echo "::error title=CI::Aucun rapport surefire en echec : l'echec precede l'execution des tests."

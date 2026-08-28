@@ -589,6 +589,7 @@ class PvWorkflowIntegrationTest extends CnmIntegrationTestSupport {
 
     @Test
     @DisplayName("Téléchargement PV après signature → 200 application/pdf")
+    @org.junit.jupiter.api.Tag("word")   // telechargement du PDF du PV : conversion docx→PDF via MS Word, exclu en CI Linux
     void document_pv_telechargement_ok() throws Exception {
         signerPvEligible(111);
         var resp = mvc.perform(get("/api/pv-examens/111/document").header("Authorization", tokenAdmin))
@@ -599,6 +600,7 @@ class PvWorkflowIntegrationTest extends CnmIntegrationTestSupport {
 
     @Test
     @DisplayName("PV signé sans document (ancien) → régénération paresseuse au téléchargement → 200")
+    @org.junit.jupiter.api.Tag("word")   // telechargement du PDF du PV : conversion docx→PDF via MS Word, exclu en CI Linux
     void migration_pv_anciens_sans_document() throws Exception {
         signerPvEligible(112);
         cnm.prs.entity.PvExamen pv = pvExamenRepository.findById(112).orElseThrow();
