@@ -46,6 +46,27 @@ class MiseAJourPpmIntegrationTest extends CnmIntegrationTestSupport {
         dossierRepository.save(d);
     }
 
+    /**
+     * Ouvre une mise à jour et <strong>rapporte le corps de la réponse</strong> si elle est refusée.
+     *
+     * <p>⚠️ 2026-08-28 — sans cela, un échec ne dit que « expected:&lt;201&gt; but was:&lt;409&gt; », sans
+     * révéler LEQUEL des trois refus de {@code creerMiseAJour} s'applique (statut incompatible,
+     * brouillon déjà ouvert, PV signé absent). Le corps n'apparaît nulle part ailleurs : MockMvc ne
+     * l'imprime pas et un 409 n'est pas journalisé côté serveur. Ces deux tests passent en local et
+     * échouent en CI depuis le 2026-08-28 ; quatre hypothèses ont déjà été écartées faute de ce
+     * message — dont la version de PostgreSQL, testée en montant la CI en 18.</p>
+     */
+    private String ouvrirMiseAJour(int idDossier, String motif) throws Exception {
+        var res = mvc.perform(post("/api/saisies/ppm/" + idDossier + "/mise-a-jour")
+                        .header("Authorization", tokenPrmp)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"motif\":\"" + motif + "\"}"))
+                .andReturn();
+        org.junit.jupiter.api.Assertions.assertEquals(201, res.getResponse().getStatus(),
+                "ouverture de mise a jour refusee -- corps : " + res.getResponse().getContentAsString());
+        return res.getResponse().getContentAsString();
+    }
+
     @Test
     @DisplayName("POST mise-a-jour -> 201 BROUILLON rattaché ; GET versions liste les deux ; PATCH supprimer/restaurer une ligne copiée")
     void miseAJour_creation_versions_supprimerRestaurer() throws Exception {
@@ -59,13 +80,9 @@ class MiseAJourPpmIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$.statut").value("CLOTURE"));
 
         // Ouverture de la mise à jour : 201, BROUILLON, rattaché au dossier 1.
-        String rep = mvc.perform(post("/api/saisies/ppm/1/mise-a-jour").header("Authorization", tokenPrmp)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"motif\":\"Rectification budgetaire\"}"))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.statut").value("BROUILLON"))
-                .andExpect(jsonPath("$.idDossierParent").value(1))
-                .andReturn().getResponse().getContentAsString();
+        String rep = ouvrirMiseAJour(1, "Rectification budgetaire");
+        org.junit.jupiter.api.Assertions.assertEquals("BROUILLON", JsonPath.read(rep, "$.statut"));
+        org.junit.jupiter.api.Assertions.assertEquals(1, (int) (Integer) JsonPath.read(rep, "$.idDossierParent"));
         int idNouveau = (int) (Integer) JsonPath.read(rep, "$.idDossier");
 
         // Depuis le point d'entrée 1 : le brouillon de mise à jour n'y figure PAS encore — une mise à
@@ -134,9 +151,7 @@ class MiseAJourPpmIntegrationTest extends CnmIntegrationTestSupport {
         String tokenVer = bearer("CTRVER", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER", "ANT");
         cloturerDossier1(9811, tokenVer);
 
-        mvc.perform(post("/api/saisies/ppm/1/mise-a-jour").header("Authorization", tokenPrmp)
-                        .contentType(MediaType.APPLICATION_JSON).content("{\"motif\":\"Premiere mise a jour\"}"))
-                .andExpect(status().isCreated());
+        ouvrirMiseAJour(1, "Premiere mise a jour");
 
         mvc.perform(post("/api/saisies/ppm/1/mise-a-jour").header("Authorization", tokenPrmp)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"motif\":\"Deuxieme tentative\"}"))
