@@ -21,6 +21,7 @@ import jakarta.validation.Valid;
 
 import cnm.prs.dto.PvActionRequest;
 import cnm.prs.dto.PvExamenDto;
+import cnm.prs.dto.PvVisaRequest;
 import cnm.prs.service.PvExamenService;
 
 /**
@@ -108,14 +109,35 @@ public class PvExamenController {
         return service.retourner(id, req);
     }
 
-    /** Acceptation du projet par le Président / CC : → PROJET_ACCEPTE. */
+    /**
+     * ⚠️ RETIRÉ le 2026-08-31 — <strong>410 Gone</strong>. L'acceptation est fusionnée dans le VISA.
+     * Conservé plutôt que supprimé : la livraison se faisant « backend d'abord », un front pas encore
+     * aligné appellera encore ce chemin, et un 410 nommant son remplaçant se diagnostique là où un 404
+     * enverrait chercher une faute de frappe.
+     */
     @PreAuthorize("@perm.peutExercer('CHEF_COMMISSION')")
     @PostMapping("/{id}/accepter")
     public PvExamenDto accepter(@PathVariable Integer id, @Valid @RequestBody PvActionRequest req) {
         return service.accepter(id, req);
     }
 
-    /** Co-signature du PV (rôle MEMBRE / PRESIDENT / CC) : → SIGNE quand les deux camps ont signé. */
+    /**
+     * ⚠️ <strong>VISA</strong> (2026-08-31) — clôture de la navette en un seul geste : avis
+     * éventuellement modifié, Secrétaire de séance, Membre co-signataire et part de signature du rôle.
+     * Remplace {@code accepter} + {@code signer(role=PRESIDENT|CC)}.
+     *
+     * <p>Pas de champ {@code role} : la part signée est dérivée du profil de l'acteur. L'habilitation
+     * fine — <strong>seul le dispatcheur vise</strong> — est en service : elle porte sur l'IDENTITÉ,
+     * que {@code @PreAuthorize} ne sait pas exprimer (une paire de délégation active satisferait la
+     * garde de profil sans donner le droit de viser).</p>
+     */
+    @PreAuthorize("@perm.peutExercer('CHEF_COMMISSION')")
+    @PostMapping("/{id}/viser")
+    public PvExamenDto viser(@PathVariable Integer id, @Valid @RequestBody PvVisaRequest req) {
+        return service.viser(id, req);
+    }
+
+    /** Co-signature du PV — ⚠️ depuis le 2026-08-31, rôle MEMBRE seul : → SIGNE (la part P/CC vient du visa). */
     @PreAuthorize("@perm.peutExercer('MEMBRE')")
     @PostMapping("/{id}/signer")
     public PvExamenDto signer(@PathVariable Integer id, @Valid @RequestBody PvActionRequest req) {

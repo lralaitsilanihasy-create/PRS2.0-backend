@@ -47,14 +47,8 @@ class PvWorkflowIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(post("/api/pv-examens/90/soumettre").header("Authorization", tokenMembre)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRMEM\",\"commentaire\":\"go\"}"))
                 .andExpect(status().isOk());
-        mvc.perform(post("/api/pv-examens/90/accepter").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"imActeur\":\"CTRCC1\",\"idAvis\":\"FAVR\",\"idSecretaireSeance\":\"CTRVER\"}"))
-                .andExpect(status().isOk());
-        // ⚠️ Ordre B (2026-08-28) : le Président signe d'abord et désigne le co-signataire, le Membre suit.
-        mvc.perform(post("/api/pv-examens/90/signer").header("Authorization", tokenPresident)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"imActeur\":\"CTRPRE\",\"role\":\"PRESIDENT\",\"imMembreCoSignataire\":\"CTRMEM\"}"))
+        // ⚠️ VISA (2026-08-31) : avis + secrétaire + co-signataire + part du rôle, par le dispatcheur.
+        viser(90, tokenPresident, "CTRPRE", "FAVR", "CTRVER", "CTRMEM")
                 .andExpect(status().isOk());
         mvc.perform(post("/api/pv-examens/90/signer").header("Authorization", tokenMembre)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRMEM\",\"role\":\"MEMBRE\"}"))
@@ -120,15 +114,10 @@ class PvWorkflowIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(post("/api/pv-examens/92/soumettre").header("Authorization", tokenMembre)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRMEM\",\"commentaire\":\"go\"}"))
                 .andExpect(status().isOk());
-        mvc.perform(post("/api/pv-examens/92/accepter").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"imActeur\":\"CTRCC1\",\"idAvis\":\"FAV\",\"idSecretaireSeance\":\"CTRVER\"}"))
-                .andExpect(status().isOk());
-
-        // Un Membre ne peut PAS falsifier la signature Président → 403.
-        mvc.perform(post("/api/pv-examens/92/signer").header("Authorization", tokenMembre)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRMEM\",\"role\":\"PRESIDENT\"}"))
-                .andExpect(status().isForbidden());
+        // ⚠️ 2026-08-31 — la part PRÉSIDENT est retirée de « signer » : elle appartient au visa. 409.
+        mvc.perform(post("/api/pv-examens/92/signer").header("Authorization", tokenPresident)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRPRE\",\"role\":\"PRESIDENT\"}"))
+                .andExpect(status().isConflict());
 
         // ⚠️ Ordre B (2026-08-28) — AVANT désignation, la part Membre n'est ouverte pour PERSONNE :
         // même l'attributaire est refusé, et en 409 (le circuit n'est pas à cette étape), pas en 403.
@@ -136,13 +125,12 @@ class PvWorkflowIntegrationTest extends CnmIntegrationTestSupport {
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRMEM\",\"role\":\"MEMBRE\"}"))
                 .andExpect(status().isConflict());
 
-        // Le Président signe et DÉSIGNE CTRMEM → reste PROJET_ACCEPTE (la part Membre manque).
-        mvc.perform(post("/api/pv-examens/92/signer").header("Authorization", tokenPresident)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"imActeur\":\"CTRPRE\",\"role\":\"PRESIDENT\",\"imMembreCoSignataire\":\"CTRMEM\"}"))
+        // Le dispatcheur VISE et désigne CTRMEM → PROJET_ACCEPTE (la part Membre manque encore).
+        viser(92, tokenPresident, "CTRPRE", "FAV", "CTRVER", "CTRMEM")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.statutPv").value("PROJET_ACCEPTE"))
-                .andExpect(jsonPath("$.imMembreCoSignataire").value("CTRMEM"));
+                .andExpect(jsonPath("$.imMembreCoSignataire").value("CTRMEM"))
+                .andExpect(jsonPath("$.imDispatcheur").value("CTRPRE"));
 
         // ⚠️ (ii) — un Membre NON désigné est refusé, quand bien même il est Membre de la localité : la
         // part appartient au désigné, pas au profil. 403 cette fois, l'étape étant bien ouverte.
@@ -161,7 +149,8 @@ class PvWorkflowIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("Co-signature PV par le CC : CC de la localité OK (identité enregistrée), CC d'une autre localité → 403")
+    @DisplayName("Visa : aucun CC ne vise ce PV — ni celui d'une autre localité, ni celui d'ANT pourtant "
+            + "délégué (⚠️ 2026-08-31 : contrainte d'IDENTITÉ, seul le dispatcheur vise)")
     void cosignature_ccDeLaLocalite() throws Exception {
         mvc.perform(post("/api/pv-examens").header("Authorization", tokenMembre).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idPv\":93,\"idExamen\":1,\"idAvis\":\"FAV\",\"imCtrlMembre\":\"CTRMEM\","
@@ -170,24 +159,21 @@ class PvWorkflowIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(post("/api/pv-examens/93/soumettre").header("Authorization", tokenMembre)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRMEM\",\"commentaire\":\"go\"}"))
                 .andExpect(status().isOk());
-        mvc.perform(post("/api/pv-examens/93/accepter").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"imActeur\":\"CTRCC1\",\"idAvis\":\"FAV\",\"idSecretaireSeance\":\"CTRVER\"}"))
-                .andExpect(status().isOk());
-        // Un CC d'une AUTRE localité (TMS) ne peut pas co-signer un PV d'ANT → 403. La garde de localité
-        // passe AVANT la désignation : le refus tient même sans co-signataire dans le corps.
+        // ⚠️ 2026-08-31 — la contrainte du visa est une contrainte d'IDENTITÉ, et elle est vérifiée
+        // AVANT le périmètre. Deux CC sont donc refusés pour la même raison, quelle que soit leur
+        // localité : ni l'un ni l'autre n'a dispatché ce dossier (le dispatcheur est CTRPRE).
         String tokenCcTms = bearer("CTRCC2", ProfilUtilisateur.CHEF_COMMISSION, TypeActeur.CONTROLEUR, "CTRCC2", "TMS");
-        mvc.perform(post("/api/pv-examens/93/signer").header("Authorization", tokenCcTms)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"imActeur\":\"CTRCC2\",\"role\":\"CC\",\"imMembreCoSignataire\":\"CTRMEM\"}"))
+        viser(93, tokenCcTms, "CTRCC2", "FAV", "CTRVER", "CTRMEM")
                 .andExpect(status().isForbidden());
-        // Le CC de la localité (ANT) signe et désigne → PROJET_ACCEPTE, identité enregistrée.
-        mvc.perform(post("/api/pv-examens/93/signer").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"imActeur\":\"CTRCC1\",\"role\":\"CC\",\"imMembreCoSignataire\":\"CTRMEM\"}"))
+        // Le CC d'ANT est pourtant dans le bon périmètre, et couvert par la paire CC → Membre active :
+        // refusé quand même. C'est l'invariant du 15/08 — les actes d'identité ne se délèguent pas.
+        viser(93, tokenCc, "CTRCC1", "FAV", "CTRVER", "CTRMEM")
+                .andExpect(status().isForbidden());
+        // Seul le dispatcheur vise.
+        viser(93, tokenPresident, "CTRPRE", "FAV", "CTRVER", "CTRMEM")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.statutPv").value("PROJET_ACCEPTE"))
-                .andExpect(jsonPath("$.imCtrlCc").value("CTRCC1"));
+                .andExpect(jsonPath("$.imCtrlPresident").value("CTRPRE"));
         // Le Membre désigné referme la co-signature → SIGNE.
         mvc.perform(post("/api/pv-examens/93/signer").header("Authorization", tokenMembre)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRMEM\",\"role\":\"MEMBRE\"}"))
@@ -229,18 +215,13 @@ class PvWorkflowIntegrationTest extends CnmIntegrationTestSupport {
         soumettre(tokenMembre).andExpect(status().isOk())
                 .andExpect(jsonPath("$.statutPv").value("PROJET_SOUMIS"));
 
-        // ⚠️ Clôture de navette (2026-08-01) : l'acceptation pose l'avis global + le secrétaire de séance.
-        mvc.perform(post("/api/pv-examens/1/accepter").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"imActeur\":\"CTRCC1\",\"idAvis\":\"FAV\",\"idSecretaireSeance\":\"CTRVER\"}"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.statutPv").value("PROJET_ACCEPTE"));
-
-        // ⚠️ Ordre B — la part Membre n'est pas ouverte tant que le P/CC n'a pas désigné → 409.
+        // ⚠️ Ordre B — la part Membre n'est pas ouverte tant que le P/CC n'a pas visé → 409.
         signer(tokenMembre, "CTRMEM", "MEMBRE").andExpect(status().isConflict());
 
-        // Une seule signature ne suffit pas : le Président signe et désigne, le PV reste accepté.
-        signer(tokenPresident, "CTRPRE", "PRESIDENT", "CTRMEM").andExpect(status().isOk())
-                .andExpect(jsonPath("$.statutPv").value("PROJET_ACCEPTE"));
+        // ⚠️ VISA (2026-08-31) : avis + secrétaire + co-signataire + part du rôle, en un geste, par le
+        // dispatcheur. Une seule signature ne suffit pas : le PV reste PROJET_ACCEPTE.
+        viser(1, tokenPresident, "CTRPRE", "FAV", "CTRVER", "CTRMEM")
+                .andExpect(status().isOk()).andExpect(jsonPath("$.statutPv").value("PROJET_ACCEPTE"));
 
         // Co-signature par le Membre désigné → SIGNE.
         signer(tokenMembre, "CTRMEM", "MEMBRE").andExpect(status().isOk())
@@ -336,20 +317,20 @@ class PvWorkflowIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(get("/api/dossiers/3").header("Authorization", tokenPresident))
                 .andExpect(jsonPath("$.statut").value("EXAMINE"));
 
-        // 4) Navette : soumettre → accepter (clôture de navette : avis FAV + secrétaire), co-signature → SIGNE.
+        // 4) Navette : soumettre → VISER (avis + secrétaire + co-signataire + part du rôle), puis
+        // co-signature du Membre désigné → SIGNE.
         mvc.perform(post("/api/pv-examens/" + idPv + "/soumettre").header("Authorization", tokenMembre)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRMEM\"}"))
                 .andExpect(jsonPath("$.statutPv").value("PROJET_SOUMIS"));
-        mvc.perform(post("/api/pv-examens/" + idPv + "/accepter").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"imActeur\":\"CTRCC1\",\"idAvis\":\"FAV\",\"idSecretaireSeance\":\"CTRVER\"}"))
-                .andExpect(jsonPath("$.statutPv").value("PROJET_ACCEPTE"));
-        // Un seul signataire ne suffit pas : le PV reste PROJET_ACCEPTE. ⚠️ Ordre B — le Président
-        // signe et désigne d'abord, le Membre désigné referme ensuite.
-        mvc.perform(post("/api/pv-examens/" + idPv + "/signer").header("Authorization", tokenPresident)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"imActeur\":\"CTRPRE\",\"role\":\"PRESIDENT\",\"imMembreCoSignataire\":\"CTRMEM\"}"))
-                .andExpect(jsonPath("$.statutPv").value("PROJET_ACCEPTE"));
+        // ⚠️ C'est le CC qui a POSTé le dispatch à l'étape 2 : le dispatcheur est donc CTRCC1, et lui
+        // seul vise. Le Président, pourtant compétent partout, est refusé — la contrainte du 2026-08-31
+        // suit l'identité de celui qui a dispatché, pas le rang.
+        viser(idPv, tokenPresident, "CTRPRE", "FAV", "CTRVER", "CTRMEM").andExpect(status().isForbidden());
+        // Un seul signataire ne suffit pas : après le visa, le PV reste PROJET_ACCEPTE.
+        viser(idPv, tokenCc, "CTRCC1", "FAV", "CTRVER", "CTRMEM")
+                .andExpect(jsonPath("$.statutPv").value("PROJET_ACCEPTE"))
+                .andExpect(jsonPath("$.imDispatcheur").value("CTRCC1"))
+                .andExpect(jsonPath("$.imCtrlCc").value("CTRCC1"));
         mvc.perform(post("/api/pv-examens/" + idPv + "/signer").header("Authorization", tokenMembre)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRMEM\",\"role\":\"MEMBRE\"}"))
                 .andExpect(jsonPath("$.statutPv").value("SIGNE"));
@@ -380,20 +361,21 @@ class PvWorkflowIntegrationTest extends CnmIntegrationTestSupport {
                 .content("{\"idReception\":1,\"interimDispatch\":false}"))
                 .andExpect(status().isForbidden());
 
-        // Rôle : un Secrétaire ne peut pas accepter un projet de PV (réservé CC / Président) → 403.
-        mvc.perform(post("/api/pv-examens/1/accepter").header("Authorization", tokenSec)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRSEC\"}"))
-                .andExpect(status().isForbidden());
+        // Rôle : un Secrétaire ne peut pas viser un projet de PV (réservé CC / Président) → 403.
+        viser(1, tokenSec, "CTRSEC", "FAV", "CTRVER", "CTRMEM").andExpect(status().isForbidden());
 
-        // Saut d'étape : un PV en BROUILLON ne peut être ni accepté ni signé → 409.
+        // ⚠️ 2026-08-31 — « accepter » est retiré du contrat : 410 Gone, quel que soit l'appelant.
+        mvc.perform(post("/api/pv-examens/1/accepter").header("Authorization", tokenCc)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRCC1\"}"))
+                .andExpect(status().isGone());
+
+        // Saut d'étape : un PV en BROUILLON ne peut être ni visé ni signé → 409.
         mvc.perform(post("/api/pv-examens").header("Authorization", tokenMembre)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idPv\":4,\"idExamen\":1,\"idAvis\":\"FAV\",\"imCtrlMembre\":\"CTRMEM\","
                         + "\"statutPv\":\"BROUILLON\",\"nbNavettes\":0}"))
                 .andExpect(status().isCreated());
-        mvc.perform(post("/api/pv-examens/4/accepter").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRCC1\"}"))
-                .andExpect(status().isConflict());
+        viser(4, tokenPresident, "CTRPRE", "FAV", "CTRVER", "CTRMEM").andExpect(status().isConflict());
         mvc.perform(post("/api/pv-examens/4/signer").header("Authorization", tokenMembre)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRMEM\",\"role\":\"MEMBRE\"}"))
                 .andExpect(status().isConflict());
@@ -520,6 +502,14 @@ class PvWorkflowIntegrationTest extends CnmIntegrationTestSupport {
         // ⚠️ 2026-08-19 (génération post-commit) — PV SIGNE : le flag dit « fichier prêt MAINTENANT ».
         // Signé sans CHEMIN_DOCUMENT (fenêtre de génération) → false ; chemin posé → true.
         pvFavr.setStatutPv("SIGNE");
+        // ⚠️ 2026-08-31 — les dates de signature sont désormais posées ICI. Le schéma réel impose
+        // t_pv_examen_cosignataire_check (SIGNE ⇒ part Membre + une part P/CC) ; la fixture basculait le
+        // statut sans elles. Elle passait faute de flush à cet instant — la lecture qui suit n'interrogeait
+        // que tr_controleur. Depuis que le DTO résout le dispatcheur, elle interroge t_pv_examen, Hibernate
+        // vide sa file avant la requête, et la contrainte se réveille. Le test écrivait un état que la base
+        // de production refuse : ce n'est pas la lecture qui a cassé, c'est la fixture qui était fausse.
+        pvFavr.setDateSignatureMembre(LocalDate.now());
+        pvFavr.setDateSignaturePresident(LocalDate.now());
         pvExamenRepository.save(pvFavr);
         mvc.perform(get("/api/pv-examens/600").header("Authorization", tokenAdmin))
                 .andExpect(status().isOk())
@@ -711,8 +701,8 @@ class PvWorkflowIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("Clôture de navette (lot B) — un CC d'une AUTRE localité ne retourne ni n'accepte le projet (403) ; "
-            + "le CC de la localité et le Président passent (non-régression)")
+    @DisplayName("Navette bornée (lot B) — un CC d'une AUTRE localité ne retourne pas le projet (403) ; le "
+            + "Président retourne (rôle, non-régression) ⚠️ 2026-08-31 : et seul le dispatcheur vise")
     void clotureNavette_borneeALaLocaliteDuDossier() throws Exception {
         creerProjetSurExamen1(951);
         mvc.perform(post("/api/pv-examens/951/soumettre").header("Authorization", tokenMembre)
@@ -724,14 +714,13 @@ class PvWorkflowIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(post("/api/pv-examens/951/retourner").header("Authorization", tokenCcTms)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"commentaire\":\"hors localite\"}"))
                 .andExpect(status().isForbidden());
-        mvc.perform(post("/api/pv-examens/951/accepter").header("Authorization", tokenCcTms)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idAvis\":\"FAV\",\"idSecretaireSeance\":\"CTRVER\"}"))
-                .andExpect(status().isForbidden());
+        viser(951, tokenCcTms, "CTRCC2", "FAV", "CTRVER", "CTRMEM").andExpect(status().isForbidden());
         mvc.perform(get("/api/pv-examens/951").header("Authorization", tokenAdmin))
                 .andExpect(jsonPath("$.statutPv").value("PROJET_SOUMIS"));
 
-        // NON-RÉGRESSION : le Président (toutes localités) retourne, le CC d'ANT accepte.
+        // NON-RÉGRESSION : le Président (toutes localités) retourne — retourner reste une tâche de RÔLE,
+        // délégable, à la différence du visa. Un dispatcheur absent ne doit pas figer la navette entière,
+        // seulement sa clôture (arbitrage du 2026-08-31, §7.1 de la spec front).
         mvc.perform(post("/api/pv-examens/951/retourner").header("Authorization", tokenPresident)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"commentaire\":\"a corriger\"}"))
                 .andExpect(status().isOk())
@@ -739,9 +728,9 @@ class PvWorkflowIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(post("/api/pv-examens/951/soumettre").header("Authorization", tokenMembre)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRMEM\"}"))
                 .andExpect(status().isOk());
-        mvc.perform(post("/api/pv-examens/951/accepter").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idAvis\":\"FAV\",\"idSecretaireSeance\":\"CTRVER\"}"))
+        // Le CC d'ANT retournait ET acceptait avant le 2026-08-31 ; il ne vise plus (non dispatcheur).
+        viser(951, tokenCc, "CTRCC1", "FAV", "CTRVER", "CTRMEM").andExpect(status().isForbidden());
+        viser(951, tokenPresident, "CTRPRE", "FAV", "CTRVER", "CTRMEM")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.statutPv").value("PROJET_ACCEPTE"));
     }

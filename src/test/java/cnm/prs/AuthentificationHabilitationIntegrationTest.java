@@ -525,32 +525,23 @@ class AuthentificationHabilitationIntegrationTest extends CnmIntegrationTestSupp
         mvc.perform(post("/api/pv-examens/5601/soumettre").header("Authorization", tokenPresident)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRPRE\",\"commentaire\":\"go\"}"))
                 .andExpect(status().isOk());
-        mvc.perform(post("/api/pv-examens/5601/accepter").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"imActeur\":\"CTRCC1\",\"idAvis\":\"FAV\",\"idSecretaireSeance\":\"CTRVER\"}"))
-                .andExpect(status().isOk());
-        // ⚠️ 2026-08-28 — la part MEMBRE n'est plus accessible à l'attributaire du seul fait qu'il a
-        // examiné : personne ne la signe avant désignation, pas même lui → 409 (ordre B).
+        // ⚠️ VISA (2026-08-31) — c'est le Président qui a dispatché ce dossier (à lui-même) : lui seul
+        // vise. Le CC, qui clôturait la navette jusqu'ici, n'y a plus accès — contrainte d'identité.
+        viser(5601, tokenCc, "CTRCC1", "FAV", "CTRVER", "CTRMEM").andExpect(status().isForbidden());
+        // Il ne peut pas se désigner lui-même : l'auto-co-signature reste abolie, sans exception.
+        viser(5601, tokenPresident, "CTRPRE", "FAV", "CTRVER", "CTRPRE").andExpect(status().isConflict());
+        // Ni désigner un contrôleur qui n'est pas Membre de la localité du dossier (§3.3).
+        viser(5601, tokenPresident, "CTRPRE", "FAV", "CTRVER", "CTRVER").andExpect(status().isConflict());
+        // La part MEMBRE n'est ouverte pour personne avant le visa, pas même pour l'attributaire (ordre B).
         mvc.perform(post("/api/pv-examens/5601/signer").header("Authorization", tokenPresident)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRPRE\",\"role\":\"MEMBRE\"}"))
                 .andExpect(status().isConflict());
-        // Il ne peut pas non plus se désigner lui-même : l'auto-co-signature est abolie, sans exception.
-        mvc.perform(post("/api/pv-examens/5601/signer").header("Authorization", tokenPresident)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"imActeur\":\"CTRPRE\",\"role\":\"PRESIDENT\",\"imMembreCoSignataire\":\"CTRPRE\"}"))
-                .andExpect(status().isConflict());
-        // Ni désigner un contrôleur qui n'est pas Membre de la localité du dossier (§3.3).
-        mvc.perform(post("/api/pv-examens/5601/signer").header("Authorization", tokenPresident)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"imActeur\":\"CTRPRE\",\"role\":\"PRESIDENT\",\"imMembreCoSignataire\":\"CTRVER\"}"))
-                .andExpect(status().isConflict());
-        // Il signe sa part et DÉSIGNE un Membre d'ANT : le PV attend désormais CE Membre.
-        mvc.perform(post("/api/pv-examens/5601/signer").header("Authorization", tokenPresident)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"imActeur\":\"CTRPRE\",\"role\":\"PRESIDENT\",\"imMembreCoSignataire\":\"CTRMEM\"}"))
+        // Il vise : avis, secrétaire, désignation d'un Membre d'ANT et sa propre part, en un geste.
+        viser(5601, tokenPresident, "CTRPRE", "FAV", "CTRVER", "CTRMEM")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.statutPv").value("PROJET_ACCEPTE"))
                 .andExpect(jsonPath("$.imCtrlPresident").value("CTRPRE"))
+                .andExpect(jsonPath("$.imDispatcheur").value("CTRPRE"))
                 .andExpect(jsonPath("$.imMembreCoSignataire").value("CTRMEM"));
         // Le Membre désigné co-signe → SIGNE. ⚠️ IM_CTRL_MEMBRE reste CTRPRE : c'est lui qui a EXAMINÉ
         // le dossier, et c'est ce nom que le PV officiel imprime. La co-signature ne l'écrase pas.
@@ -784,63 +775,44 @@ class AuthentificationHabilitationIntegrationTest extends CnmIntegrationTestSupp
         mvc.perform(post("/api/pv-examens/" + idPv + "/soumettre").header("Authorization", tokenCc)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRCC1\",\"commentaire\":\"go\"}"))
                 .andExpect(status().isOk());
-        // Garde élargie, négatifs : un Secrétaire (aucune paire → Vérificateur) reste refusé…
-        mvc.perform(post("/api/pv-examens/" + idPv + "/accepter").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"imActeur\":\"CTRCC1\",\"idAvis\":\"FAVR\",\"idSecretaireSeance\":\"CTRSEC\"}"))
+        // ⚠️ VISA (2026-08-31) — les gardes du Secrétaire de séance sont reconduites telles quelles, mais
+        // portées par « viser » au lieu de « accepter ». Ici le CC EST le dispatcheur (il s'est dispatché
+        // le dossier), la contrainte d'identité est donc satisfaite et ce sont bien les gardes §3.3 que
+        // ces cas éprouvent.
+        // Négatifs : un Secrétaire (aucune paire → Vérificateur) reste refusé…
+        viser(idPv, tokenCc, "CTRCC1", "FAVR", "CTRSEC", "CTRMEM")
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.message", containsString("délégation active vers Vérificateur")));
         // … tout comme un CC d'une AUTRE localité (paire active mais hors périmètre : CTRCC2 = TMS, dossier ANT).
-        mvc.perform(post("/api/pv-examens/" + idPv + "/accepter").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"imActeur\":\"CTRCC1\",\"idAvis\":\"FAVR\",\"idSecretaireSeance\":\"CTRCC2\"}"))
-                .andExpect(status().isConflict());
+        viser(idPv, tokenCc, "CTRCC1", "FAVR", "CTRCC2", "CTRMEM").andExpect(status().isConflict());
         // Data-driven : paire 6 (CC → Vérificateur) DÉSACTIVÉE → l'auto-désignation du CC est refusée.
         mvc.perform(put("/api/delegation-profils/6").header("Authorization", tokenAdmin)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDelegation\":6,\"idProfileDelegant\":3,\"idProfileDelegue\":6,\"actif\":false}"))
                 .andExpect(status().isOk());
-        mvc.perform(post("/api/pv-examens/" + idPv + "/accepter").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"imActeur\":\"CTRCC1\",\"idAvis\":\"FAVR\",\"idSecretaireSeance\":\"CTRCC1\"}"))
-                .andExpect(status().isConflict());
-        // RÉACTIVÉE → le CC SE DÉSIGNE LUI-MÊME Secrétaire de séance (décision produit : « moi-même ⤴ »).
+        viser(idPv, tokenCc, "CTRCC1", "FAVR", "CTRCC1", "CTRMEM").andExpect(status().isConflict());
+        // RÉACTIVÉE → le CC SE DÉSIGNE LUI-MÊME Secrétaire de séance (décision produit : « moi-même ⤴ »),
+        // et le visa passe : il désigne CTRMEM pour co-signer, sa propre part étant posée du même geste.
         mvc.perform(put("/api/delegation-profils/6").header("Authorization", tokenAdmin)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDelegation\":6,\"idProfileDelegant\":3,\"idProfileDelegue\":6,\"actif\":true}"))
                 .andExpect(status().isOk());
-        mvc.perform(post("/api/pv-examens/" + idPv + "/accepter").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"imActeur\":\"CTRCC1\",\"idAvis\":\"FAVR\",\"idSecretaireSeance\":\"CTRCC1\"}"))
+        viser(idPv, tokenCc, "CTRCC1", "FAVR", "CTRCC1", "CTRMEM")
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.idSecretaireSeance").value("CTRCC1"));
-        // ⚠️ 2026-08-28 — le CC attributaire ne signe PLUS la part Membre : abolie, l'auto-co-signature.
-        // Avant toute désignation, la part n'est ouverte pour personne → 409 (ordre B).
+                .andExpect(jsonPath("$.idSecretaireSeance").value("CTRCC1"))
+                .andExpect(jsonPath("$.imCtrlCc").value("CTRCC1"))
+                .andExpect(jsonPath("$.imDispatcheur").value("CTRCC1"))
+                .andExpect(jsonPath("$.imMembreCoSignataire").value("CTRMEM"));
+        // ⚠️ 2026-08-31 — la part CC est sortie de « signer » : elle appartient au visa, déjà posé. 409.
+        mvc.perform(post("/api/pv-examens/" + idPv + "/signer").header("Authorization", tokenCc)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"imActeur\":\"CTRCC1\",\"role\":\"CC\",\"imMembreCoSignataire\":\"CTRMEM\"}"))
+                .andExpect(status().isConflict());
+        // ⚠️ 2026-08-28 — le CC attributaire ne prend pas non plus la part Membre : il a examiné, mais le
+        // désigné est CTRMEM. 403, l'étape étant ouverte et lui n'étant pas le désigné.
         mvc.perform(post("/api/pv-examens/" + idPv + "/signer").header("Authorization", tokenCc)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRCC1\",\"role\":\"MEMBRE\"}"))
-                .andExpect(status().isConflict());
-        // Sa part CC reste data-driven : paire 5 (CC → Membre) DÉSACTIVÉE → 403, l'endpoint exigeant
-        // « exercer la tâche du Membre » ; RÉACTIVÉE → il signe. La paire gouverne toujours l'ACCÈS à
-        // l'endpoint ; ce qu'elle ne fait plus, c'est lever le verrou de la double signature.
-        mvc.perform(put("/api/delegation-profils/5").header("Authorization", tokenAdmin)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idDelegation\":5,\"idProfileDelegant\":3,\"idProfileDelegue\":5,\"actif\":false}"))
-                .andExpect(status().isOk());
-        mvc.perform(post("/api/pv-examens/" + idPv + "/signer").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"imActeur\":\"CTRCC1\",\"role\":\"CC\",\"imMembreCoSignataire\":\"CTRMEM\"}"))
                 .andExpect(status().isForbidden());
-        mvc.perform(put("/api/delegation-profils/5").header("Authorization", tokenAdmin)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idDelegation\":5,\"idProfileDelegant\":3,\"idProfileDelegue\":5,\"actif\":true}"))
-                .andExpect(status().isOk());
-        // Il signe sa part et désigne un Membre d'ANT : le PV n'est pas encore SIGNE.
-        mvc.perform(post("/api/pv-examens/" + idPv + "/signer").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"imActeur\":\"CTRCC1\",\"role\":\"CC\",\"imMembreCoSignataire\":\"CTRMEM\"}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.statutPv").value("PROJET_ACCEPTE"))
-                .andExpect(jsonPath("$.imCtrlCc").value("CTRCC1"));
         // Le Membre désigné co-signe → SIGNE. IM_CTRL_MEMBRE reste CTRCC1, qui a mené l'examen.
         String tokenMembreAnt2 = bearer("CTRMEM", ProfilUtilisateur.MEMBRE, TypeActeur.CONTROLEUR, "CTRMEM", "ANT");
         mvc.perform(post("/api/pv-examens/" + idPv + "/signer").header("Authorization", tokenMembreAnt2)
@@ -1003,11 +975,10 @@ class AuthentificationHabilitationIntegrationTest extends CnmIntegrationTestSupp
         mvc.perform(post("/api/pv-examens/5611/soumettre").header("Authorization", tokenMembre)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRMEM\",\"commentaire\":\"go\"}"))
                 .andExpect(status().isOk());
-        // Le CC accepte en désignant le PRÉSIDENT Secrétaire de séance : couvert par la paire
-        // Président → Vérificateur active, et sans localité → accepté partout.
-        mvc.perform(post("/api/pv-examens/5611/accepter").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"imActeur\":\"CTRCC1\",\"idAvis\":\"FAV\",\"idSecretaireSeance\":\"CTRPRE\"}"))
+        // ⚠️ 2026-08-31 — le visa désigne le PRÉSIDENT Secrétaire de séance : couvert par la paire
+        // Président → Vérificateur active, et sans localité → désignable partout. La garde §3.3 est
+        // inchangée ; seul l'acteur l'est, le dispatcheur (CTRPRE) ayant remplacé le CC.
+        viser(5611, tokenPresident, "CTRPRE", "FAV", "CTRPRE", "CTRMEM")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.idSecretaireSeance").value("CTRPRE"));
     }

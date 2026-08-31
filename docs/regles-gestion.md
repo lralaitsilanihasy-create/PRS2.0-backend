@@ -43,6 +43,52 @@ Flux complet d'un dossier, avec navette du projet de PV :
 
 > Statuts de navette du PV : `PROJET_PV_SOUMIS`, `PROJET_PV_RETOUR`, `PROJET_PV_ACCEPTE`, puis `SIGNE`.
 
+> ## ⚠️ RÉFORME « VISA UNIQUE » (arbitrage du pilote, 2026-08-31) — fait autorité sur la navette
+>
+> **Énoncé du pilote** : « Le Membre qui fait l'examen du dossier émet son avis à la fin de l'examen.
+> Cet avis peut être modifié à la fin de la navette, qui finit par le visa du Président ou du CC **qui
+> a fait le dispatch**. Le visa consiste à choisir le co-signataire et à faire sa part de signature. »
+>
+> Cette réforme **inverse la règle du 2026-08-01** (l'avis était posé par le P/CC à l'acceptation, le PV
+> naissait sans avis) et **fusionne** l'acceptation et la signature du P/CC en un geste unique.
+>
+> | | Avant (01/08 + co-signature du 28/08) | Depuis le 31/08 |
+> |---|---|---|
+> | Soumission de l'examen (Membre) | synthèse seule, avis `NULL` | synthèse **+ avis du Membre** |
+> | Navette (`retourner` / re-soumettre) | inchangée | inchangée — l'avis peut être ajusté à chaque cycle |
+> | Clôture (P/CC) | `accepter` puis `signer(role=PRESIDENT\|CC)` | **`viser`** : avis + Secrétaire de séance + co-signataire + part du rôle |
+> | Part Membre | `signer(role=MEMBRE)` par le désigné | inchangée → `SIGNE` |
+>
+> **Le cycle d'états ne change pas.** `PROJET_ACCEPTE` devient « visé, en attente de la co-signature du
+> Membre désigné » ; `DATE_ACCEPTATION` est la date du visa.
+>
+> **⚠️ Contrainte d'IDENTITÉ, pas de profil.** Seul le **dispatcheur** (`IM_CTRL_DISPATCH` du dispatch de
+> l'examen) vise — **403 sinon, y compris couvert par une paire de délégation active**. C'est la ligne de
+> l'invariant du 2026-08-15 : la délégation ascendante autorise à exercer une **tâche de profil**, jamais
+> à endosser l'**identité** d'un autre. Viser, comme signer, atteste.
+> Conséquence assumée : dispatcheur indisponible ⇒ PV non visable ; le déblocage est un **re-dispatch**,
+> qui met `IM_CTRL_DISPATCH` à jour sur la même ligne (le `PUT` le repose depuis le JWT, comme le `POST`).
+>
+> **`retourner` reste une tâche de RÔLE** (P/CC de la localité), délégable. Asymétrie voulue : un visa
+> bloqué gèle la clôture d'un PV, un retour bloqué gèlerait **la navette entière** — le Membre ne pourrait
+> plus récupérer son projet pour le corriger. Retourner instruit ; viser atteste.
+>
+> **Contrat.** `POST /api/pv-examens/{id}/viser` — `idSecretaireSeance` et `imMembreCoSignataire`
+> obligatoires (**400**) ; `idAvis` optionnel (absent = avis du Membre conservé ; fourni = il le remplace,
+> cohérence revalidée). Pas de champ `role` : la part signée est **dérivée du profil de l'acteur**.
+> `POST /{id}/accepter` est **retiré (410 Gone)** ; `signer` ne porte plus que le rôle `MEMBRE`
+> (`PRESIDENT`/`CC` → **409** orientant vers `viser`). `PV_A_VALIDER` ne cible plus que le dispatcheur.
+>
+> **Gardes reconduites sans changement** : Secrétaire de séance (§3.3, mention « (par délégation) » sur le
+> document conservée) et Membre co-signataire (2026-08-28 : Membre titulaire de la localité, ≠ acteur).
+>
+> **Transition.** Un PV `PROJET_ACCEPTE` dont la part du rôle n'est pas signée (accepté sous l'ancien
+> contrat) reste **visable** ; un PV en navette sans avis exige que le visa en fournisse un (**409**).
+>
+> **Trou fermé au passage** : jusqu'au 31/08, un avis fourni à la soumission était posé **sans aucun
+> contrôle** — `validerCoherenceAvis` n'existait que dans `accepter`. Un Membre pouvait soumettre `FAV`
+> avec des observations relevées. La garde s'applique désormais à la soumission **et** au visa.
+
 > ⚠️ **Règle CORRIGÉE (2026-08-27, audit — la clôture n'est PLUS automatique à la signature du PV, quel
 > que soit l'avis).** Ce paragraphe a longtemps décrit une clôture automatique à la signature pour
 > `FAV`/`DEF`/`NSP` ; ce n'est **plus le comportement réel depuis la spec navette du 2026-08-01**

@@ -109,6 +109,17 @@ public interface PvExamenRepository extends JpaRepository<PvExamen, Integer> {
     @Query("select pv.examen.dispatch.reception.idDossier from PvExamen pv where pv.idPv = :idPv")
     Optional<Integer> findIdDossierByPv(@Param("idPv") Integer idPv);
 
+    /**
+     * ⚠️ Visa unique (2026-08-31) — matricule du <strong>dispatcheur</strong> du PV, seul habilité à
+     * viser (§4 de la spec front). Le chemin {@code examen→dispatch} suffit : {@code DispatchService}
+     * pose {@code IM_CTRL_DISPATCH} depuis le JWT au POST <em>comme au PUT</em>, si bien qu'un
+     * re-dispatch met le dispatcheur à jour SUR LA MÊME LIGNE au lieu d'en créer une seconde. Ce
+     * champ est donc toujours le dispatcheur courant — inutile de chercher « le dernier dispatch du
+     * dossier », et le déblocage par re-dispatch prévu par la spec fonctionne tel quel.
+     */
+    @Query("select pv.examen.dispatch.imCtrlDispatch from PvExamen pv where pv.idPv = :idPv")
+    Optional<String> findImDispatcheurByPv(@Param("idPv") Integer idPv);
+
     /** Nombre de PV <strong>SIGNÉS</strong> rattachés à un dossier (via examen→dispatch→réception) — garde-fou de cohérence dossier↔PV. */
     @Query("select count(pv) from PvExamen pv where pv.statutPv = 'SIGNE' and pv.examen.dispatch.reception.idDossier = :idDossier")
     long countSignesParDossier(@Param("idDossier") Integer idDossier);

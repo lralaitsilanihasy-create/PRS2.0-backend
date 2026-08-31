@@ -157,14 +157,16 @@ class CommunicationInterneIntegrationTest extends CnmIntegrationTestSupport {
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRMEM\",\"commentaire\":\"a valider\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.statutPv").value("PROJET_SOUMIS"));
 
-        // Le CC d'ANT reçoit PV_A_VALIDER pointant le PV 70 (objet PV).
-        mvc.perform(get("/api/notifications/mes").header("Authorization", tokenCc))
+        // ⚠️ 2026-08-31 — PV_A_VALIDER ne part plus « aux P/CC au sens large » mais au SEUL DISPATCHEUR,
+        // lui seul pouvant viser (§4). Le dispatcheur de la fixture est CTRPRE.
+        mvc.perform(get("/api/notifications/mes").header("Authorization", tokenPresident))
                 .andExpect(jsonPath("$[?(@.typeNotif=='PV_A_VALIDER')]", hasSize(1)))
                 .andExpect(jsonPath("$[?(@.typeNotif=='PV_A_VALIDER')].idObjet", hasItem(70)))
                 .andExpect(jsonPath("$[?(@.typeNotif=='PV_A_VALIDER')].typeObjet", hasItem("PV")));
-        // Le Président de la CNM aussi.
-        mvc.perform(get("/api/notifications/mes").header("Authorization", tokenPresident))
-                .andExpect(jsonPath("$[?(@.typeNotif=='PV_A_VALIDER')]", hasSize(1)));
+        // Le CC d'ANT, non dispatcheur, ne la reçoit PLUS : on ne lui annonce pas une tâche qu'il
+        // recevrait en 403.
+        mvc.perform(get("/api/notifications/mes").header("Authorization", tokenCc))
+                .andExpect(jsonPath("$[?(@.typeNotif=='PV_A_VALIDER')]", hasSize(0)));
     }
 
     @Test
@@ -187,13 +189,11 @@ class CommunicationInterneIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$[?(@.typeNotif=='PV_A_RECTIFIER')]", hasSize(1)))
                 .andExpect(jsonPath("$[?(@.typeNotif=='PV_A_RECTIFIER')].idObjet", hasItem(71)));
 
-        // Re-soumission puis acceptation par le CC → le Membre auteur reçoit PV_ACCEPTE.
+        // Re-soumission puis VISA par le dispatcheur → le Membre auteur reçoit PV_ACCEPTE.
         mvc.perform(post("/api/pv-examens/71/soumettre").header("Authorization", tokenMembre)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRMEM\",\"commentaire\":\"v2\"}"))
                 .andExpect(status().isOk());
-        mvc.perform(post("/api/pv-examens/71/accepter").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"imActeur\":\"CTRCC1\",\"idAvis\":\"FAV\",\"idSecretaireSeance\":\"CTRVER\"}"))
+        viser(71, tokenPresident, "CTRPRE", "FAV", "CTRVER", "CTRMEM")
                 .andExpect(status().isOk()).andExpect(jsonPath("$.statutPv").value("PROJET_ACCEPTE"));
         mvc.perform(get("/api/notifications/mes").header("Authorization", tokenMembre))
                 .andExpect(jsonPath("$[?(@.typeNotif=='PV_ACCEPTE')]", hasSize(1)))

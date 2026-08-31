@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import cnm.prs.dto.PvActionRequest;
 import cnm.prs.dto.PvExamenDto;
+import cnm.prs.dto.PvVisaRequest;
 import cnm.prs.entity.Controleur;
 import cnm.prs.entity.Dossier;
 import cnm.prs.entity.Prmp;
@@ -28,6 +29,7 @@ import cnm.prs.enums.StatutPv;
 import cnm.prs.enums.TypeNotification;
 import cnm.prs.enums.TypeObjet;
 import cnm.prs.exception.BusinessRuleException;
+import cnm.prs.exception.EndpointRetireException;
 import cnm.prs.exception.ResourceNotFoundException;
 import cnm.prs.mapper.PvExamenMapper;
 import cnm.prs.repository.ControleurRepository;
@@ -300,6 +302,16 @@ public class PvExamenService {
         if (dto.getImMembreCoSignataire() != null) {
             nomComplet(dto.getImMembreCoSignataire()).ifPresent(dto::setNomMembreCoSignataire);
         }
+        // ⚠️ Visa unique (2026-08-31) — le dispatcheur n'est pas une colonne du PV : il vient du
+        // dispatch, via l'examen. Le front en a besoin sur l'écran du PV pour conditionner « Viser »
+        // sans charger le dispatch. Coût : une requête de plus par PV — assumé, cohérent avec la
+        // résolution de noms déjà faite ici, mais c'est un N+1 supplémentaire sur les listes.
+        if (dto.getIdPv() != null) {
+            repository.findImDispatcheurByPv(dto.getIdPv()).filter(s -> !s.isBlank()).ifPresent(im -> {
+                dto.setImDispatcheur(im);
+                nomComplet(im).ifPresent(dto::setNomDispatcheur);
+            });
+        }
         return dto;
     }
 
@@ -459,6 +471,15 @@ public class PvExamenService {
      * « Favorable avec réserves » ({@code FAVR}) est refusé. {@code DEF}/{@code NSP} restent libres
      * (appréciation souveraine de la Commission).
      */
+    /**
+     * ⚠️ 2026-08-31 — même garde, exposée pour la SOUMISSION de l'examen : l'avis y étant désormais
+     * émis par le Membre, il doit y être contrôlé. Avant cette date, un avis fourni à la soumission
+     * était posé sans aucune vérification.
+     */
+    public void validerCoherenceAvisPublic(Integer idExamen, String idAvis) {
+        validerCoherenceAvis(idExamen, idAvis);
+    }
+
     private void validerCoherenceAvis(Integer idExamen, String idAvis) {
         long observations = examenDetailRepository.findByIdExamen(idExamen).stream()
                 .filter(d -> Boolean.FALSE.equals(d.getConforme())).count()
@@ -488,17 +509,34 @@ public class PvExamenService {
         return idSecretaire.trim();
     }
 
-    /** [Auto] Notifie le CC et le Président de la localité du dossier ({@code PV_A_VALIDER}). */
+    /**
+     * [Auto] Notifie le <strong>dispatcheur</strong> qu'un projet de PV attend son visa
+     * ({@code PV_A_VALIDER}).
+     *
+     * <p>⚠️ 2026-08-31 — la notification partait à TOUS les Présidents et aux CC de la localité. Depuis
+     * que le visa est réservé au dispatcheur (§4), prévenir les autres serait leur annoncer une tâche
+     * qu'ils recevront en 403. On cible donc le seul destinataire qui puisse agir.</p>
+     *
+     * <p>Repli : si le dispatch ne porte pas de dispatcheur (donnée incomplète), on retombe sur
+     * l'ancien large — mieux vaut une notification à trop de monde que zéro, un PV sans destinataire
+     * resterait indéfiniment en navette sans que personne ne le sache.</p>
+     */
     private void notifierPvAValider(PvExamen pv) {
         String localite = repository.findLocaliteByPv(pv.getIdPv()).orElse(null);
         Integer idDossier = repository.findIdDossierByPv(pv.getIdPv()).orElse(null);
         String reference = pv.getReferencePv() != null ? pv.getReferencePv() : ("n° " + pv.getIdPv());
-        String titre = "Projet de PV à valider";
-        String corps = "Le projet de PV " + reference + " a été soumis et attend votre validation.";
+        String titre = "Projet de PV à viser";
+        String corps = "Le projet de PV " + reference + " a été soumis et attend votre visa.";
 
-        List<Controleur> destinataires = new ArrayList<>(controleurDirectory.presidents());
-        if (localite != null) {
-            destinataires.addAll(controleurDirectory.chefsCommission(localite));
+        String dispatcheur = repository.findImDispatcheurByPv(pv.getIdPv()).filter(s -> !s.isBlank()).orElse(null);
+        List<Controleur> destinataires;
+        if (dispatcheur != null) {
+            destinataires = controleurRepository.findById(dispatcheur).map(List::of).orElseGet(List::of);
+        } else {
+            destinataires = new ArrayList<>(controleurDirectory.presidents());
+            if (localite != null) {
+                destinataires.addAll(controleurDirectory.chefsCommission(localite));
+            }
         }
         for (Controleur c : destinataires) {
             notificationService.emettreControleur(TypeNotification.PV_A_VALIDER, c.getImControleur(),
@@ -632,45 +670,134 @@ public class PvExamenService {
      * PROJET_SOUMIS → PROJET_ACCEPTE (le PV devient signable).
      * Insère une navette SENS = ACCEPTATION.
      */
+    /**
+     * ⚠️ RETIRÉ le 2026-08-31 (réforme « Visa unique ») — l'acceptation est fusionnée dans
+     * {@link #viser(Integer, PvVisaRequest)} : clore la navette et signer sa part étaient deux gestes
+     * pour une seule décision. 410 Gone, avec le remplaçant dans le message.
+     */
     public PvExamenDto accepter(Integer id, PvActionRequest req) {
-        PvExamen pv = load(id);
-        // ⚠️ Audit 2026-08-27 (lot B) — même garde de localité qu'au retour de navette (§3.3).
-        exigerActeurDeLaLocalite(pv);
-        requireStatut(pv, StatutPv.PROJET_SOUMIS);
-
-        // ⚠️ Règle ajoutée (2026-08-01) — la CLÔTURE DE NAVETTE (acceptation, Président/CC) pose
-        // l'AVIS GLOBAL et le SECRÉTAIRE DE SÉANCE : l'examen soumis par le Membre ne porte que les
-        // résultats des points de contrôle et la synthèse des observations.
-        if (req.idAvis() == null || req.idAvis().isBlank()) {
-            throw new BusinessRuleException(
-                    "L'avis global est obligatoire pour clore la navette (acceptation du projet de PV).");
-        }
-        validerCoherenceAvis(pv.getIdExamen(), req.idAvis().trim());
-        pv.setIdAvis(req.idAvis().trim());
-        if (req.idSecretaireSeance() != null && !req.idSecretaireSeance().isBlank()) {
-            pv.setIdSecretaireSeance(validerSecretaireSeance(id, req.idSecretaireSeance()));
-        } else if (pv.getIdSecretaireSeance() == null || pv.getIdSecretaireSeance().isBlank()) {
-            throw new BusinessRuleException(
-                    "Le Secrétaire de séance (Vérificateur de la localité du dossier) est obligatoire pour clore la navette.");
-        }
-
-        pv.setStatutPv(StatutPv.PROJET_ACCEPTE.name());
-        pv.setDateAcceptation(LocalDate.now());
-        ajouterNavette(pv, SensNavette.ACCEPTATION, req.commentaire());
-        PvExamen saved = repository.save(pv);
-        log.info("[CIRCUIT] navette PV acceptation dossier={} acteur={} pv={} statutPv={} navettes={}",
-                dossierDuPv(saved.getIdPv()), CurrentUser.login().orElse(null), saved.getIdPv(),
-                StatutPv.PROJET_ACCEPTE.name(), saved.getNbNavettes());
-        // [Auto] Le Membre auteur est notifié de l'acceptation du projet de PV.
-        notifierPvAuteur(saved, TypeNotification.PV_ACCEPTE, "Projet de PV accepté",
-                "Le projet de PV " + referencePv(saved) + " a été accepté.");
-        return PvExamenMapper.toDto(saved);
+        throw new EndpointRetireException(
+                "L'acceptation du projet de PV est retirée depuis le 2026-08-31 : elle est fusionnée "
+                        + "avec la signature du Président / Chef de commission dans le VISA. "
+                        + "Utilisez POST /api/pv-examens/" + id + "/viser (avis, Secrétaire de séance "
+                        + "et Membre co-signataire en un seul geste).");
     }
 
     /**
-     * Co-signature du PV accepté (§3.2, §3.3, §3.5). N'est possible qu'au statut
-     * PROJET_ACCEPTE. Renseigne la date de signature du rôle indiqué, puis bascule en
-     * SIGNE dès que le Membre <em>et</em> (le Président <em>ou</em> le CC) ont signé.
+     * ⚠️ <strong>VISA</strong> (réforme du 2026-08-31, arbitrage du pilote) — clôture de la navette en
+     * UN SEUL GESTE : avis éventuellement modifié + Secrétaire de séance + Membre co-signataire + part
+     * de signature du rôle. Remplace {@code accepter} suivi de {@code signer(role=PRESIDENT|CC)}.
+     *
+     * <p><strong>Ce que la réforme inverse.</strong> Depuis le 2026-08-01, l'avis était posé par le
+     * P/CC à l'acceptation et le PV naissait sans avis. Le pilote a tranché l'inverse : « le Membre qui
+     * fait l'examen émet son avis à la fin de l'examen ; cet avis peut être modifié à la fin de la
+     * navette, qui finit par le visa du Président ou du CC qui a fait le dispatch ».</p>
+     *
+     * <p><strong>Contrainte d'identité (§4 de la spec).</strong> Seul le <em>dispatcheur</em> vise —
+     * 403 sinon, <strong>même couvert par une paire de délégation active</strong>. C'est la ligne de
+     * l'invariant du 2026-08-15 : la délégation ascendante autorise à exercer une TÂCHE de profil, pas
+     * à endosser l'IDENTITÉ de quelqu'un. Viser, comme signer, atteste ; instruire se délègue. C'est
+     * aussi pourquoi {@link #retourner} reste ouvert au rôle : un visa bloqué gèle la clôture d'un PV,
+     * un retour bloqué gèlerait la navette entière.</p>
+     *
+     * <p><strong>Ordre des gardes.</strong> L'identité est vérifiée AVANT toute valeur du corps : un
+     * non-dispatcheur reçoit 403 sans qu'on lui dise si son secrétaire ou son co-signataire étaient
+     * valides.</p>
+     *
+     * <p><strong>Transition (§6).</strong> Accepté sur {@code PROJET_SOUMIS} et sur un
+     * {@code PROJET_ACCEPTE} dont la part du rôle n'est pas encore signée — les PV acceptés sous
+     * l'ancien contrat se complètent ainsi sans re-exiger ce qui est déjà posé.</p>
+     */
+    public PvExamenDto viser(Integer id, PvVisaRequest req) {
+        PvExamen pv = load(id);
+
+        // ① Identité d'abord : seul le dispatcheur vise (§4). AVANT le périmètre et le corps.
+        String acteur = CurrentUser.ref().filter(s -> !s.isBlank())
+                .orElseThrow(() -> new AccessDeniedException("Acteur non identifié."));
+        String dispatcheur = repository.findImDispatcheurByPv(id).filter(s -> !s.isBlank()).orElse(null);
+        if (dispatcheur == null) {
+            throw new BusinessRuleException(
+                    "Visa impossible : aucun dispatcheur enregistré pour ce dossier (dispatch incomplet).");
+        }
+        if (!dispatcheur.equals(acteur)) {
+            throw new AccessDeniedException(
+                    "Le visa est réservé au Président ou au Chef de commission QUI A FAIT LE DISPATCH "
+                            + "de ce dossier (§4). Une délégation active n'y donne pas droit : viser est un "
+                            + "acte d'identité. Pour débloquer, re-dispatchez le dossier.");
+        }
+
+        // ② Profil : la part signée est dérivée de l'acteur — pas de champ « role » dans le corps.
+        ProfilUtilisateur profil = CurrentUser.profil().orElse(null);
+        if (profil != ProfilUtilisateur.PRESIDENT && profil != ProfilUtilisateur.CHEF_COMMISSION) {
+            throw new AccessDeniedException(
+                    "Le visa est réservé au Président (§3.2) ou au Chef de commission (§3.3).");
+        }
+        // ③ Périmètre : le CC ne clôt que dans sa localité ; le Président reste compétent partout.
+        exigerActeurDeLaLocalite(pv);
+
+        // ④ État : navette en cours, OU PV déjà accepté dont la part du rôle reste à poser (§6).
+        LocalDate dejaSignee = profil == ProfilUtilisateur.PRESIDENT
+                ? pv.getDateSignaturePresident() : pv.getDateSignatureCc();
+        boolean navetteEnCours = StatutPv.PROJET_SOUMIS.name().equals(pv.getStatutPv());
+        boolean accepteNonSigne = StatutPv.PROJET_ACCEPTE.name().equals(pv.getStatutPv()) && dejaSignee == null;
+        if (!navetteEnCours && !accepteNonSigne) {
+            throw new BusinessRuleException("Visa impossible : statut « " + pv.getStatutPv()
+                    + " » (attendu PROJET_SOUMIS, ou PROJET_ACCEPTE dont votre part n'est pas signée).");
+        }
+
+        // ⑤ Avis : fourni → remplace après revalidation ; absent → celui du Membre est conservé.
+        if (req.idAvis() != null && !req.idAvis().isBlank()) {
+            validerCoherenceAvis(pv.getIdExamen(), req.idAvis().trim());
+            pv.setIdAvis(req.idAvis().trim());
+        } else if (pv.getIdAvis() == null || pv.getIdAvis().isBlank()) {
+            // PV en navette au moment du déploiement (§6) : personne n'a jamais posé d'avis.
+            throw new BusinessRuleException(
+                    "Ce projet de PV ne porte aucun avis : le visa doit en fournir un (« idAvis »).");
+        }
+
+        // ⑥ Secrétaire de séance et ⑦ Membre co-signataire : gardes existantes, inchangées.
+        pv.setIdSecretaireSeance(validerSecretaireSeance(id, req.idSecretaireSeance()));
+        designerMembreCoSignataire(pv, req.imMembreCoSignataire(), acteur);
+
+        // ⑧ Part de signature du rôle — le verrou « une signature par rôle » reste posé.
+        LocalDate aujourdhui = LocalDate.now();
+        if (profil == ProfilUtilisateur.PRESIDENT) {
+            exigerPasEncoreSigne(pv.getDateSignaturePresident(), "Président");
+            pv.setDateSignaturePresident(aujourdhui);
+            pv.setImCtrlPresident(acteur);
+        } else {
+            exigerPasEncoreSigne(pv.getDateSignatureCc(), "Chef de commission");
+            pv.setDateSignatureCc(aujourdhui);
+            pv.setImCtrlCc(acteur);
+        }
+
+        // ⑨ Clôture de la navette.
+        boolean etaitEnNavette = navetteEnCours;
+        pv.setStatutPv(StatutPv.PROJET_ACCEPTE.name());
+        pv.setDateAcceptation(aujourdhui);
+        if (etaitEnNavette) {
+            ajouterNavette(pv, SensNavette.ACCEPTATION, req.commentaire());
+        }
+        PvExamen saved = repository.save(pv);
+        log.info("[CIRCUIT] visa PV dossier={} acteur={} pv={} statutPv={} navettes={}",
+                dossierDuPv(saved.getIdPv()), CurrentUser.login().orElse(null), saved.getIdPv(),
+                StatutPv.PROJET_ACCEPTE.name(), saved.getNbNavettes());
+
+        // ⑩ Notifications : l'auteur apprend l'acceptation, le désigné qu'on attend sa signature.
+        notifierPvAuteur(saved, TypeNotification.PV_ACCEPTE, "Projet de PV visé",
+                "Le projet de PV " + referencePv(saved) + " a été visé : il attend la co-signature du Membre désigné.");
+        notifierMembreCoSignataire(saved);
+        return peuplerNoms(PvExamenMapper.toDto(saved));
+    }
+
+    /**
+     * Co-signature du PV visé — ⚠️ depuis le 2026-08-31, <strong>part du MEMBRE désigné uniquement</strong>
+     * (§3.5). N'est possible qu'au statut {@code PROJET_ACCEPTE} ; bascule en {@code SIGNE} puisque la
+     * part du Président ou du CC a déjà été posée par le {@link #viser(Integer, PvVisaRequest) visa}.
+     *
+     * <p>Les rôles {@code PRESIDENT} et {@code CC} y sont refusés en 409 : leur signature est devenue
+     * indissociable du visa, qui seul contrôle l'identité du dispatcheur et la désignation du
+     * co-signataire.</p>
      */
     public PvExamenDto signer(Integer id, PvActionRequest req) {
         // ⚠️ Anti-doublon (2026-08-02) — chargement VERROUILLÉ : la génération du PDF rend la signature
@@ -679,17 +806,17 @@ public class PvExamenService {
         PvExamen pv = repository.findByIdVerrouille(id)
                 .orElseThrow(() -> new ResourceNotFoundException("PvExamen introuvable : " + id));
         requireStatut(pv, StatutPv.PROJET_ACCEPTE);
-        // Garde-fou (⚠️ règle ajoutée 2026-08-01) : pas de signature sans avis global (posé à l'acceptation).
+        // Garde-fou (⚠️ 2026-08-01, reformulé le 2026-08-31) : pas de signature sans avis global. Il est
+        // désormais posé par le Membre à la soumission, et confirmé ou remplacé au visa.
         if (pv.getIdAvis() == null || pv.getIdAvis().isBlank()) {
             throw new BusinessRuleException(
-                    "Avis global manquant : clôturez la navette (acceptation avec avis) avant la signature.");
+                    "Avis global manquant : le projet de PV doit être visé (avis posé) avant la signature.");
         }
 
         RoleSignataire role = parseRole(req.role());
         // Le signataire est l'utilisateur authentifié (jamais req.imActeur(), falsifiable).
         String signataire = CurrentUser.ref().filter(s -> !s.isBlank())
                 .orElseThrow(() -> new AccessDeniedException("Signataire non identifié."));
-        ProfilUtilisateur profil = CurrentUser.profil().orElse(null);
         LocalDate today = LocalDate.now();
         switch (role) {
             case MEMBRE -> {
@@ -712,25 +839,14 @@ public class PvExamenService {
                 // (exigerRedacteurDuProjet). Le signataire de la part Membre est tracé par
                 // IM_MEMBRE_COSIGNATAIRE, qui suffit.
             }
-            case PRESIDENT -> {
-                if (profil != ProfilUtilisateur.PRESIDENT) {
-                    throw new AccessDeniedException("La signature Président est réservée à un Président (§3.2).");
-                }
-                designerMembreCoSignataire(pv, req, signataire);
-                exigerPasEncoreSigne(pv.getDateSignaturePresident(), "Président");
-                pv.setDateSignaturePresident(today);
-                pv.setImCtrlPresident(signataire);
-            }
-            case CC -> {
-                if (profil != ProfilUtilisateur.CHEF_COMMISSION) {
-                    throw new AccessDeniedException("La signature CC est réservée à un Chef de commission (§3.3).");
-                }
-                exigerCcDeLaLocalite(pv);
-                designerMembreCoSignataire(pv, req, signataire);
-                exigerPasEncoreSigne(pv.getDateSignatureCc(), "Chef de commission");
-                pv.setDateSignatureCc(today);
-                pv.setImCtrlCc(signataire);
-            }
+            // ⚠️ 2026-08-31 — les parts PRÉSIDENT et CC ne se signent plus ici : elles sont posées par
+            // le VISA, qui les fusionne avec la clôture de navette. Laisser ces branches ouvertes
+            // permettrait de signer sans désigner de co-signataire et sans être le dispatcheur — soit
+            // exactement les deux gardes que la réforme installe. 409 orientant vers le bon geste.
+            case PRESIDENT, CC -> throw new BusinessRuleException(
+                    "La signature du Président et du Chef de commission est retirée de « signer » depuis "
+                            + "le 2026-08-31 : elle fait partie du VISA. Utilisez POST /api/pv-examens/"
+                            + id + "/viser. « signer » ne porte plus que la part du Membre désigné.");
         }
 
         boolean membreSigne = pv.getDateSignatureMembre() != null;
@@ -830,8 +946,8 @@ public class PvExamenService {
      * <p>Trois refus, tous en 409 (même famille que {@code validerSecretaireSeance}) : désignation
      * absente, désignation de soi-même, désigné qui n'est pas un Membre de la localité du dossier.</p>
      */
-    private void designerMembreCoSignataire(PvExamen pv, PvActionRequest req, String signataire) {
-        String designe = req.imMembreCoSignataire() == null ? null : req.imMembreCoSignataire().trim();
+    private void designerMembreCoSignataire(PvExamen pv, String imDesigne, String signataire) {
+        String designe = imDesigne == null ? null : imDesigne.trim();
         if (designe == null || designe.isEmpty()) {
             throw new BusinessRuleException(
                     "Le Membre co-signataire est obligatoire pour signer : désignez le Membre de la localité "

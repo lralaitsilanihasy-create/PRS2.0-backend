@@ -87,13 +87,28 @@ public class ExamenService {
         Visibilite.exigerLocalite(dispatchRepository.findLocaliteById(examen.getIdDispatch()));
         exigerMembreAttributaire(examen.getIdDispatch());
         validerCompletude(idExamen);
-        // ⚠️ Règle déplacée (2026-08-01) — avis global et Secrétaire de séance ne sont PLUS exigés à la
-        // soumission (le Membre ne fournit que la synthèse) : ils sont posés à la CLÔTURE DE NAVETTE
-        // (« accepter » du projet de PV, Président/CC). S'ils sont fournis (compatibilité), on les valide.
+        // ⚠️ Règle INVERSÉE (2026-08-31, réforme « Visa unique ») — l'AVIS revient au Membre : « le
+        // Membre qui fait l'examen émet son avis à la fin de l'examen ; cet avis peut être modifié à la
+        // fin de la navette » (pilote). La règle du 2026-08-01, qui le confiait au P/CC à l'acceptation,
+        // est abandonnée. Le Secrétaire de séance, lui, RESTE posé au visa (arbitrage 3).
+        //
+        // ⚠️ LOT 1 : l'avis n'est pas encore OBLIGATOIRE ici. Le front n'ayant pas encore livré, exiger
+        // le champ tout de suite casserait sa soumission pendant l'intervalle. Une soumission sans avis
+        // crée donc encore un PV à avis NULL — cas déjà prévu, le visa devra alors le fournir (409). Le
+        // caractère obligatoire (400) arrive en LOT 2, après la livraison du front.
+        //
+        // ⚠️ Ce que ce lot ferme DÉJÀ : jusqu'ici l'avis fourni à la soumission était posé SANS aucun
+        // contrôle — validerCoherenceAvis n'existait que dans « accepter ». Un Membre pouvait donc
+        // soumettre FAV avec des observations relevées, et rien ne l'arrêtait avant la clôture. Ce
+        // n'était pas un simple déplacement de garde : c'était un trou.
+        String idAvis = req.idAvis() == null || req.idAvis().isBlank() ? null : req.idAvis().trim();
+        if (idAvis != null) {
+            pvExamenService.validerCoherenceAvisPublic(idExamen, idAvis);
+        }
         String idSecretaire = req.idSecretaireSeance() == null || req.idSecretaireSeance().isBlank()
                 ? null
                 : validerSecretaireSeance(idExamen, req.idSecretaireSeance());
-        PvExamenDto pv = pvExamenService.creerProjet(idExamen, req.idAvis(), idSecretaire);
+        PvExamenDto pv = pvExamenService.creerProjet(idExamen, idAvis, idSecretaire);
         // ⚠️ Règle DÉPLACÉE (2026-08-01) — le dossier n'avance DISPATCHE → EXAMINE qu'à la SOUMISSION :
         // la création d'un examen est désormais un BROUILLON de progression (le dossier reste « à
         // examiner » et le Membre peut reprendre plus tard). Même transaction que le projet de PV.

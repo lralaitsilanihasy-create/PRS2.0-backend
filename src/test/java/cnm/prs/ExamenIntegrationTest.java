@@ -78,14 +78,8 @@ class ExamenIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(post("/api/pv-examens/91/soumettre").header("Authorization", tokenMembre)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRMEM\",\"commentaire\":\"go\"}"))
                 .andExpect(status().isOk());
-        mvc.perform(post("/api/pv-examens/91/accepter").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"imActeur\":\"CTRCC1\",\"idAvis\":\"FAV\",\"idSecretaireSeance\":\"CTRVER\"}"))
-                .andExpect(status().isOk());
-        // ⚠️ Ordre B (2026-08-28) : le Président signe et désigne, le Membre désigné signe ensuite.
-        mvc.perform(post("/api/pv-examens/91/signer").header("Authorization", tokenPresident)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"imActeur\":\"CTRPRE\",\"role\":\"PRESIDENT\",\"imMembreCoSignataire\":\"CTRMEM\"}"))
+        // ⚠️ VISA (2026-08-31) : clôture + désignation + part du rôle en un geste, par le DISPATCHEUR.
+        viser(91, tokenPresident, "CTRPRE", "FAV", "CTRVER", "CTRMEM")
                 .andExpect(status().isOk());
         mvc.perform(post("/api/pv-examens/91/signer").header("Authorization", tokenMembre)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRMEM\",\"role\":\"MEMBRE\"}"))

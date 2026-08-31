@@ -63,6 +63,15 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.CONFLICT, ex.getMessage(), request, null);
     }
 
+    /**
+     * ⚠️ 2026-08-31 — endpoint retiré du contrat : 410 Gone plutôt que 404. Voir
+     * {@link EndpointRetireException} : le message porte le geste de remplacement.
+     */
+    @ExceptionHandler(EndpointRetireException.class)
+    public ResponseEntity<ErrorResponse> handleEndpointRetire(EndpointRetireException ex, WebRequest request) {
+        return build(HttpStatus.GONE, ex.getMessage(), request, null);
+    }
+
     @ExceptionHandler(BadRequestException.class)
     public ResponseEntity<ErrorResponse> handleBadRequest(BadRequestException ex, WebRequest request) {
         return build(HttpStatus.BAD_REQUEST, ex.getMessage(), request, null);

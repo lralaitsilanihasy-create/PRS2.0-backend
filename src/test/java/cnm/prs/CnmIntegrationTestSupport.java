@@ -296,15 +296,12 @@ abstract class CnmIntegrationTestSupport extends AbstractIntegrationTest {
         mvc.perform(post("/api/pv-examens/" + idPv + "/soumettre").header("Authorization", tokenMembre)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRMEM\",\"commentaire\":\"go\"}"))
                 .andExpect(status().isOk());
-        // ⚠️ Clôture de navette (2026-08-01) : l'acceptation pose l'avis global + le secrétaire de séance.
-        mvc.perform(post("/api/pv-examens/" + idPv + "/accepter").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRCC1\",\"idAvis\":\"" + avis
-                        + "\",\"idSecretaireSeance\":\"CTRVER\"}"))
-                .andExpect(status().isOk());
-        mvc.perform(post("/api/pv-examens/" + idPv + "/signer").header("Authorization", tokenPresident)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"imActeur\":\"CTRPRE\",\"role\":\"PRESIDENT\",\"imMembreCoSignataire\":\"CTRMEM\"}"))
-                .andExpect(status().isOk());
+        // ⚠️ VISA (2026-08-31) : un seul geste — avis + secrétaire de séance + co-signataire + part du
+        // rôle. Remplace l'ancien couple « accepter » puis « signer(PRESIDENT) ». Le visa est réservé
+        // au DISPATCHEUR : c'est CTRPRE dans la fixture, d'où le token Président et non celui du CC.
+        viser(idPv, tokenPresident, "CTRPRE", avis, "CTRVER", "CTRMEM")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statutPv").value("PROJET_ACCEPTE"));
         mvc.perform(post("/api/pv-examens/" + idPv + "/signer").header("Authorization", tokenMembre)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRMEM\",\"role\":\"MEMBRE\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.statutPv").value("SIGNE"));
@@ -434,6 +431,27 @@ abstract class CnmIntegrationTestSupport extends AbstractIntegrationTest {
     protected org.springframework.test.web.servlet.ResultActions soumettre(String token) throws Exception {
         return mvc.perform(post("/api/pv-examens/1/soumettre").header("Authorization", token)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRMEM\"}"));
+    }
+
+    /**
+     * ⚠️ VISA (2026-08-31) — clôture de navette en un geste. {@code avis} et {@code commentaire} sont
+     * facultatifs (avis absent = celui du Membre conservé) ; secrétaire et co-signataire ne le sont pas.
+     */
+    protected org.springframework.test.web.servlet.ResultActions viser(int idPv, String token, String acteur,
+            String avis, String idSecretaireSeance, String imMembreCoSignataire) throws Exception {
+        StringBuilder corps = new StringBuilder("{\"imActeur\":\"").append(acteur).append("\"");
+        if (avis != null) {
+            corps.append(",\"idAvis\":\"").append(avis).append("\"");
+        }
+        if (idSecretaireSeance != null) {
+            corps.append(",\"idSecretaireSeance\":\"").append(idSecretaireSeance).append("\"");
+        }
+        if (imMembreCoSignataire != null) {
+            corps.append(",\"imMembreCoSignataire\":\"").append(imMembreCoSignataire).append("\"");
+        }
+        corps.append("}");
+        return mvc.perform(post("/api/pv-examens/" + idPv + "/viser").header("Authorization", token)
+                .contentType(MediaType.APPLICATION_JSON).content(corps.toString()));
     }
 
     protected org.springframework.test.web.servlet.ResultActions signer(String token, String acteur, String role)
@@ -642,12 +660,24 @@ abstract class CnmIntegrationTestSupport extends AbstractIntegrationTest {
         return r;
     }
 
+    /**
+     * Dispatch de fixture — ⚠️ 2026-08-31 : le <strong>dispatcheur</strong> vaut {@code CTRPRE} par
+     * défaut. Il ne l'était pas jusqu'ici ({@code IM_CTRL_DISPATCH} restait NULL), ce qui n'avait
+     * aucune conséquence tant que personne ne le lisait. Depuis le visa, il porte l'habilitation :
+     * un dispatch sans dispatcheur rend le PV invisable. La surcharge à cinq arguments sert les tests
+     * qui ont besoin d'un dispatcheur nommé (CC dispatcheur, tiers non habilité).
+     */
     protected Dispatch dispatch(int id, int reception, String cc, String membre) {
+        return dispatch(id, reception, cc, membre, "CTRPRE");
+    }
+
+    protected Dispatch dispatch(int id, int reception, String cc, String membre, String dispatcheur) {
         Dispatch d = new Dispatch();
         d.setIdDispatch(id);
         d.setIdReception(reception);
         d.setImCtrlCc(cc);
         d.setImCtrlMembre(membre);
+        d.setImCtrlDispatch(dispatcheur);
         d.setDateDispatch(LocalDateTime.of(2026, 6, 3, 14, 45));
         d.setInterimDispatch(false);
         return d;

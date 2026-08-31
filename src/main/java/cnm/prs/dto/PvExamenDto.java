@@ -83,6 +83,18 @@ public class PvExamenDto {
     private String nomMembreCoSignataire;
 
     /**
+     * ⚠️ Visa unique (2026-08-31) — matricule du <strong>dispatcheur</strong> du dossier, seul habilité
+     * à viser (§4). Lecture seule, dérivé du dispatch. Le front s'en sert pour n'offrir le bouton
+     * « Viser » qu'à lui, avec une raison écrite pour les autres P/CC plutôt qu'un 403 subi — sans
+     * charger le dispatch, qui n'est pas sur l'écran du PV.
+     */
+    @Size(max = 7)
+    private String imDispatcheur;
+
+    /** Nom complet du dispatcheur (« prénoms nom ») — lecture seule, peuplé serveur. */
+    private String nomDispatcheur;
+
+    /**
      * Vrai si un PDF officiel est réellement disponible (lecture seule, peuplé serveur) : fichier déjà stocké
      * ({@code CHEMIN_DOCUMENT} non nul) <strong>ou</strong> PV éligible à la génération à la demande (avis FAVR
      * + localité centrale ANT + toutes lignes de marché en appel d'offres ouvert). {@code false} sinon — le

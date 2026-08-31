@@ -2294,14 +2294,25 @@ les jalons naissent des flux internes (alertes J-7 / J-1), aucun profil métier 
 
 > ⚠️ **Soumission de l'examen (règle MODIFIÉE 2026-08-01).** `POST /api/examens/{id}/soumettre` produit
 > **toujours un Projet de PV** (`PvExamenService`, `idPv` alloué serveur). Corps `ExamenSoumissionRequest`
-> `{ idAvis?, idSecretaireSeance? }` : les deux champs sont désormais **OPTIONNELS** — le Membre ne renseigne
-> que la **synthèse des observations** (PUT du PV) ; l'avis global et le Secrétaire de séance sont posés à la
-> **clôture de la navette** (`POST /api/pv-examens/{id}/accepter`, Président/CC — voir section PV). S'ils sont
-> fournis, `idSecretaireSeance` doit être un VERIFICATEUR **titulaire** de la **localité du dossier** ou un
-> contrôleur couvert par une paire « → Vérificateur » **active** (⚠️ élargi 2026-08-15 ; sinon **400**
+> `{ idAvis?, idSecretaireSeance? }`.
+>
+> ⚠️ **RÉFORME « Visa unique » (2026-08-31) — l'AVIS revient au Membre.** Le pilote a inversé la règle du
+> 01/08 : « le Membre qui fait l'examen émet son avis à la fin de l'examen ». `idAvis` est donc désormais
+> **l'avis du Membre**, posé ici et modifiable au **visa** du dispatcheur. La garde de cohérence
+> (**≥ 1 observation ⇒ `FAV` refusé, 409**) s'applique dorénavant **dès la soumission** — jusqu'au 31/08 un
+> avis fourni ici était posé **sans aucun contrôle**, `validerCoherenceAvis` n'existant que dans
+> `accepter` : ce n'était pas un déplacement de garde, c'était un trou.
+>
+> **Livraison en deux lots.** `idAvis` reste **optionnel** dans ce lot pour ne pas casser un front pas
+> encore aligné (une soumission sans avis crée un PV à avis `null`, que le visa devra alors fournir — 409
+> sinon). Il deviendra **obligatoire (400)** au lot 2, après la livraison du front.
+>
+> `idSecretaireSeance` reste **absent** de la soumission (arbitrage 3 : posé au visa). S'il est fourni, il
+> doit être un VERIFICATEUR **titulaire** de la **localité du dossier** ou un contrôleur couvert par une
+> paire « → Vérificateur » **active** (⚠️ élargi 2026-08-15 ; sinon **400**
 > `{ erreurs:[{ champ:"idSecretaireSeance", message }] }`). Le projet de PV = **résultats des points de
-> contrôle + synthèse du Membre** (avis `null` à ce stade). *(La lettre de renvoi appartient aussi à la
-> clôture de navette — ressource `/api/lettre-renvois`, Président/CC.)*
+> contrôle + synthèse + avis du Membre**. *(La lettre de renvoi appartient aussi à la clôture de navette —
+> ressource `/api/lettre-renvois`, Président/CC.)*
 >
 > ⚠️ **Complétude de l'examen à la soumission (règle ajoutée 2026-07-21).** Avant de produire le Projet de PV,
 > le serveur vérifie que **toutes les lignes ont été traitées** : chaque point de **portée LIGNE** de la
@@ -3952,7 +3963,7 @@ immuable). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **40
 |---|---|---|---|
 | idPv | number | Oui (PK, au POST) | clé primaire |
 | idExamen | number | Oui | @NotNull |
-| idAvis | string | Non (⚠️ 2026-08-01) | max 10 — **nullable** : `null` jusqu'à la **clôture de navette** (`…/accepter`, Président/CC) ; requis pour `signer` (409 sinon) |
+| idAvis | string | Non | max 10 — ⚠️ **2026-08-31** : posé par le **Membre à la soumission de l'examen** (règle du 01/08 inversée), modifiable au **visa**. Reste `nullable` pour les PV créés avant la réforme ; requis pour `signer` (409 sinon) |
 | imCtrlPresident | string | Non | max 7 |
 | imCtrlCc | string | Non | max 7 |
 | imCtrlMembre | string | Oui (validation) | @NotBlank, max 7 — **valeur ignorée** : dérivée de l'attribution (`Examen → Dispatch.imCtrlMembre`) ; examen sans attributaire → 409 |
@@ -3969,6 +3980,10 @@ immuable). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **40
 | refePv | string | — (réponse) | max 120 — **référence officielle dérivée du dossier**, générée serveur, **unique** (lecture seule) |
 | idSecretaireSeance | string | — (⚠️ posé à la **clôture de navette**, 2026-08-01) | max 7 — **Secrétaire de séance** : Vérificateur titulaire de la localité **ou** contrôleur couvert par une paire « → Vérificateur » active (⚠️ élargi 2026-08-15 ; validé à `…/pv-examens/{id}/accepter` ; encore accepté à `…/examens/{id}/soumettre` si fourni) |
 | nomSecretaireSeance | string | — (réponse) | nom complet du secrétaire de séance (« prénoms nom »), peuplé serveur — lecture seule |
+| imMembreCoSignataire | string | — (réponse ; posé au **visa**) | max 7 — Membre désigné pour co-signer (2026-08-28). Lecture seule : jamais accepté sur un `PUT` |
+| nomMembreCoSignataire | string | — (réponse) | nom complet du Membre co-signataire, peuplé serveur — lecture seule |
+| imDispatcheur | string | — (réponse) | ⚠️ **2026-08-31** — matricule du **dispatcheur**, dérivé du dispatch de l'examen. **Seul habilité à viser** : le front s'en sert pour conditionner le bouton « Viser » sans charger le dispatch |
+| nomDispatcheur | string | — (réponse) | nom complet du dispatcheur, peuplé serveur — lecture seule |
 | documentDisponible | boolean | — (réponse) | ⚠️ **Contrat révisé 2026-08-19** — PV **`SIGNE`** : `true` seulement quand le **fichier est prêt maintenant** (`CHEMIN_DOCUMENT` non nul) ; **`false` pendant la fenêtre de génération post-commit** qui suit la signature. PV **non signé** (projet) : sens historique conservé — `true` si le PV est **éligible** (un **modèle Word existe pour le cas** : avis `FAVR`/`FAV`/`DEF` + PPM avec ≥ 1 ligne de marché, **quel que soit le mode de passation** et la localité ; cf. tableau des modèles §PV). Lecture seule, peuplé serveur → le front masque « Télécharger le PDF » tant que c'est `false` |
 | version | number | Non | verrou optimiste (`@Version` JPA, ⚠️ 2026-08-27) — toujours renseigné en sortie ; en entrée de `PUT`, absent = comportement historique, périmé = **409** `CONFLIT_VERSION` (détail en tête de document, *Verrou optimiste — champ `version`*) |
 
@@ -4019,11 +4034,52 @@ immuable). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **40
 | DELETE | /api/pv-examens/{id} | — | — | 204, 404, 409 | ADMINISTRATEUR — **409 si archivé** |
 | POST | /api/pv-examens/{id}/soumettre | `PvActionRequest` | `PvExamenDto` | 200, 400, 403, 404, 409 | MEMBRE / CC / PRESIDENT — **rédacteur du projet** |
 | POST | /api/pv-examens/{id}/retourner | `PvActionRequest` | `PvExamenDto` | 200, 400, 403, 404, 409 | CC / PRESIDENT — **CC de la localité du dossier** |
-| POST | /api/pv-examens/{id}/accepter | `PvActionRequest` | `PvExamenDto` | 200, 403, 404, 409 | CC / PRESIDENT — **CC de la localité du dossier** |
-| POST | /api/pv-examens/{id}/signer | `PvActionRequest` | `PvExamenDto` | 200, 400, 403, 404, 409 | MEMBRE / CC / PRESIDENT |
+| POST | /api/pv-examens/{id}/viser | `PvVisaRequest` | `PvExamenDto` | 200, 400, 403, 404, 409 | CC / PRESIDENT — ⚠️ **le DISPATCHEUR seul** (2026-08-31) |
+| ~~POST~~ | ~~/api/pv-examens/{id}/accepter~~ | — | — | **410 Gone** | ⚠️ **RETIRÉ le 2026-08-31** — fusionné dans `viser` |
+| POST | /api/pv-examens/{id}/signer | `PvActionRequest` | `PvExamenDto` | 200, 400, 403, 404, 409 | MEMBRE — ⚠️ **rôles PRESIDENT/CC retirés le 2026-08-31 (409)** |
 | POST | /api/pv-examens/{id}/archiver | — | `PvExamenDto` | 200, 403, 404, 409 | ASSISTANT_CONTROLEUR (localité) — voir « Archivage » dans *Transmissions SIGMP* |
 
-`{id}` = idPv (number). `soumettre` : BROUILLON|EN_RECTIFICATION→PROJET_SOUMIS ; `retourner` : PROJET_SOUMIS→EN_RECTIFICATION (`commentaire` obligatoire) ; `accepter` : PROJET_SOUMIS→PROJET_ACCEPTE — ⚠️ **clôture de la navette (2026-08-01)** : `idAvis` + `idSecretaireSeance` **obligatoires** (400 sinon ; le serveur pose l'avis global et le secrétaire sur le PV) ; `signer` : passe à SIGNE quand le Membre **et** (le Président **ou** le CC) ont signé — **409 si l'avis global n'est pas posé** (navette non close).
+`{id}` = idPv (number). `soumettre` : BROUILLON|EN_RECTIFICATION→PROJET_SOUMIS ; `retourner` : PROJET_SOUMIS→EN_RECTIFICATION (`commentaire` obligatoire) ; `signer` : passe à SIGNE quand le Membre désigné signe, la part du P/CC ayant été posée au visa — **409 si l'avis global n'est pas posé**.
+
+> ## ⚠️ VISA UNIQUE (2026-08-31) — `POST /api/pv-examens/{id}/viser`
+>
+> Remplace `accepter` **et** `signer(role=PRESIDENT|CC)` : la clôture de la navette est **un seul geste**.
+> Règle du pilote : « le Membre qui fait l'examen émet son avis à la fin de l'examen ; cet avis peut être
+> modifié à la fin de la navette, qui finit par le visa du Président ou du CC **qui a fait le dispatch** ».
+> Inverse la règle du 2026-08-01, qui confiait l'avis au P/CC.
+>
+> **Corps** (`PvVisaRequest`) :
+>
+> | Champ | Obligatoire | Règle |
+> |---|---|---|
+> | `imActeur` | non | **ignoré** — l'acteur est l'utilisateur authentifié (JWT) |
+> | `commentaire` | non | tracé sur la navette |
+> | `idAvis` | **non** | absent → l'avis du Membre est **conservé** ; fourni → il le **remplace** (cohérence revalidée). ⚠️ **409** si absent ET que le PV n'en porte aucun |
+> | `idSecretaireSeance` | **oui (400)** | gardes §3.3 inchangées (Vérificateur titulaire de la localité, ou paire « → Vérificateur » active) |
+> | `imMembreCoSignataire` | **oui (400)** | gardes du 2026-08-28 inchangées (Membre titulaire de la localité, **≠ acteur**) |
+>
+> Pas de champ `role` : la part signée est **dérivée du profil de l'acteur** (PRESIDENT → part Président,
+> CHEF_COMMISSION → part CC ; autre profil → **403**).
+>
+> **Codes** — `400` : secrétaire ou co-signataire absent (validation du corps). `403` : acteur ≠
+> dispatcheur (**y compris avec une paire de délégation active** — contrainte d'IDENTITÉ, invariant du
+> 2026-08-15), profil hors P/CC, ou CC hors de sa localité. `409` : statut incompatible, avis absent sur
+> un PV qui n'en porte pas, avis incohérent (≥ 1 observation ⇒ `FAV` refusé), secrétaire ou co-signataire
+> invalide, part du rôle déjà signée.
+>
+> **États** : `PROJET_SOUMIS` → `PROJET_ACCEPTE` (+ `dateAcceptation`, navette `ACCEPTATION`, notifications
+> `PV_ACCEPTE` à l'auteur et `PV_A_COSIGNER` au désigné). ⚠️ **Transition** : accepté aussi sur un
+> `PROJET_ACCEPTE` dont la part du rôle n'est pas encore signée (PV acceptés sous l'ancien contrat).
+>
+> **Dispatcheur** = `IM_CTRL_DISPATCH` du dispatch de l'examen. Le `PUT` de dispatch le repose depuis le
+> JWT comme le `POST` : un **re-dispatch** change donc le dispatcheur sur la même ligne — c'est le moyen
+> de débloquer un PV dont le dispatcheur est indisponible.
+>
+> `PvExamenDto` expose **`imDispatcheur`** et **`nomDispatcheur`** (lecture seule) pour que le front
+> conditionne son bouton « Viser » sans charger le dispatch.
+>
+> `PV_A_VALIDER` ne cible plus que **le dispatcheur** (auparavant tous les Présidents + les CC de la
+> localité) : prévenir les autres serait leur annoncer une tâche qu'ils recevraient en 403.
 
 > ⚠️ **Garde d'identité étendue aux chemins secondaires de la navette (2026-08-27, audit lot B).** Le
 > contrôle d'identité n'existait auparavant qu'à la **signature** : les chemins secondaires passaient au
