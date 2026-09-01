@@ -21,6 +21,28 @@ ce que chaque utilisateur peut voir et faire.
 1.5. **Contrôleur vérificateur** — subordonné du Membre ; même localité.
 1.6. **Assistant contrôleur** — subordonné du Vérificateur ; même localité.
 
+1.7. ⚠️ **Rattachement nominatif (2026-09-01)** — indépendamment de la hiérarchie ci-dessus, chaque
+**Membre** peut désigner **son** Vérificateur, et chaque **Vérificateur** **son** Assistant
+(`t_controleur.IM_RATTACHE`, une seule colonne pour les deux liens). C'est ce lien — et non
+`ID_SUPERIEUR` — qui détermine **qui est notifié** et **quel dossier apparaît comme « le mien »**.
+
+> **Ne pas confondre `ID_SUPERIEUR` et `IM_RATTACHE`.** Le premier est la ligne hiérarchique
+> (organigramme, qui rend compte à qui) ; le second est l'**aiguillage opérationnel** d'un dossier
+> le long du circuit. Ils peuvent désigner des personnes différentes, et rien n'impose qu'ils
+> coïncident.
+>
+> Le rattachement se pose par `PUT /api/controleurs/{im}/rattachement`, réservé à l'**Administrateur**,
+> au **Président** et au **Chef de commission** (ce dernier **dans sa seule localité**). Le rattaché doit
+> avoir le profil attendu (Vérificateur pour un Membre, Assistant pour un Vérificateur), être de la
+> **même localité**, et ne pas être le porteur lui-même — sinon **409**.
+>
+> ⚠️ **Un rattachement cible, il ne verrouille pas.** Une chaîne **incomplète** (`IM_RATTACHE` nul) est
+> un état **normal et non bloquant** : le **repli localité** historique s'applique alors — tous les
+> Vérificateurs de la localité sont notifiés et peuvent agir. Aucune garde d'autorisation n'a été
+> ajoutée par cette règle : même rattaché, un dossier reste actionnable par tout Vérificateur de sa
+> localité. Le rattachement sert la **notification** et l'**affichage**, pas l'exclusivité.
+
+
 > Règle transversale : la visibilité des dossiers **des contrôleurs** est filtrée par `ID_LOCALITE`,
 > sauf pour le Président (`ID_LOCALITE = NULL`) qui voit tout. La **PRMP** (acteur externe) n'est
 > **pas** scopée par localité : elle ne voit que **ses propres** dossiers (propriété `t_dossier.ID_PRMP`).
@@ -242,6 +264,21 @@ Flux complet d'un dossier, avec navette du projet de PV :
 Le destinataire est déterminé par **rôle + localité** du dossier (ou par **assignation explicite**, ex. le
 Membre du dispatch). Chaque utilisateur ne consulte que **ses** notifications (`/api/notifications/mes`,
 comptage des non-lues, marquer lu) ; la **liste globale** est réservée à l'**Administrateur** (supervision).
+
+> ⚠️ **Ciblage nominatif des notifications (2026-09-01).** Deux destinataires, jusqu'ici diffusés à
+> **tous** les porteurs du rôle dans la localité, sont désormais **adressés** quand la chaîne de
+> rattachement (§1.7) est complète :
+>
+> - **PV signé → à vérifier** (`PV_A_VERIFIER`) : le **rattaché du Membre qui a EXAMINÉ** le dossier.
+>   Explicitement **pas** le co-signataire du PV — co-signer est un acte de PV, examiner est l'acte qui
+>   attribue le dossier.
+> - **Archivage** : le **rattaché du Vérificateur ayant EFFECTIVEMENT transmis** à SIGMP — pas le
+>   Vérificateur nominalement cible. Si le remplaçant a fait le travail, c'est **son** Assistant qui
+>   archive. À défaut de transmission identifiable, on retombe sur le rattaché du Vérificateur cible.
+>
+> **Repli sans exception** : chaîne incomplète, examinateur introuvable, rattaché supprimé → diffusion à
+> **tous** les porteurs du rôle dans la localité, exactement comme avant. Un rattachement manquant ne
+> fait **jamais** disparaître une notification.
 
 ### Actualités à l'ouverture de session (transversal)
 
@@ -987,6 +1024,15 @@ Accès complet aux référentiels, comptes utilisateurs, journal d'audit, hiéra
   - Plan comptable tr_compte et répertoire tr_entite_contract.
 - Délégations de profil [Écriture]
   - Gestion des entrées t_delegation_profil — quels profils peuvent exercer les tâches d'autres profils.
+- Rattachements Membre → Vérificateur → Assistant [Écriture] ⚠️ **Règle ajoutée (2026-09-01)**
+  - Écran de gestion de la chaîne nominative (§1.7) : `GET /api/controleurs/rattachements` liste les
+    Membres et Vérificateurs du périmètre avec leur rattaché résolu et le **profil attendu** ;
+    `PUT /api/controleurs/{im}/rattachement` pose ou retire le lien (`imRattache: null` = détacher).
+    **Partagé avec le Président et le Chef de commission** — ce dernier borné à **sa** localité — via
+    une **sous-ressource dédiée** : ouvrir le `PUT /api/controleurs/{id}` générique leur aurait donné
+    du même coup l'écriture sur le profil et la localité de tout contrôleur.
+    Un rattaché **nul** est signalé à l'écran comme une **chaîne incomplète** à combler, sans être une
+    erreur : le repli localité s'applique.
 - Actualités d'ouverture de session [Écriture] ⚠️ **Règle ajoutée (2026-08-19)**
   - CRUD des actualités (`/api/actualites`) : titre + contenu **markdown brut** (HTML refusé, 400), profils
     cibles (au moins un), fenêtre de dates, images JPEG redimensionnées serveur. Création **INACTIF** forcé ;

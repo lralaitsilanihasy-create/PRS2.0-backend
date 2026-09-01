@@ -148,7 +148,8 @@ public class ControleurDirectory {
         return controleurRepository.findByIdProfileInAndIdLocalite(ids, idLocalite);
     }
 
-    private List<Controleur> parProfil(ProfilUtilisateur profil) {
+    /** ⚠️ 2026-09-01 — ouverte au package pour le service des rattachements (liste des porteurs). */
+    List<Controleur> parProfil(ProfilUtilisateur profil) {
         List<Integer> ids = idProfiles(profil);
         return ids.isEmpty() ? List.of() : controleurRepository.findByIdProfileIn(ids);
     }

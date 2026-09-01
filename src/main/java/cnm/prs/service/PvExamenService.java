@@ -72,6 +72,8 @@ public class PvExamenService {
     private final PvNavetteRepository navetteRepository;
     private final PrmpRepository prmpRepository;
     private final NotificationService notificationService;
+    /** ⚠️ Rattachements (2026-09-01) — ciblage des notifications du circuit FAVR. */
+    private final RattachementService rattachementService;
     private final ControleurDirectory controleurDirectory;
     private final DossierRepository dossierRepository;
     private final ControleurRepository controleurRepository;
@@ -86,7 +88,8 @@ public class PvExamenService {
 
     public PvExamenService(PvExamenRepository repository, PvNavetteRepository navetteRepository,
             PrmpRepository prmpRepository, NotificationService notificationService,
-            ControleurDirectory controleurDirectory, DossierRepository dossierRepository,
+            ControleurDirectory controleurDirectory, RattachementService rattachementService,
+            DossierRepository dossierRepository,
             ControleurRepository controleurRepository, PvDocumentService pvDocumentService,
             ExamenDetailRepository examenDetailRepository, ExamenPieceRepository examenPieceRepository,
             ObservationPvService observationPvService,
@@ -102,6 +105,7 @@ public class PvExamenService {
         this.prmpRepository = prmpRepository;
         this.notificationService = notificationService;
         this.controleurDirectory = controleurDirectory;
+        this.rattachementService = rattachementService;
         this.dossierRepository = dossierRepository;
         this.controleurRepository = controleurRepository;
         this.pvDocumentService = pvDocumentService;
@@ -644,7 +648,14 @@ public class PvExamenService {
         String corps = reserve
                 ? "Le PV " + reference + " (favorable avec réserves) est à vérifier."
                 : "Le PV " + reference + " est signé : transmettez le sens de la décision à SIGMP, puis le PV à l'assistant pour archivage.";
-        for (Controleur v : controleurDirectory.verificateurs(localite)) {
+        // ⚠️ Rattachements (2026-09-01) — la notification cible le Vérificateur RATTACHÉ au Membre
+        // examinateur quand il est défini ; sinon tous ceux de la localité, comme avant. C'est un
+        // ciblage, pas une garde : les autres voient toujours le dossier et peuvent agir (arbitrage 1).
+        List<Controleur> destinataires = rattachementService.verificateurCible(idDossier)
+                .flatMap(controleurRepository::findById)
+                .map(List::of)
+                .orElseGet(() -> controleurDirectory.verificateurs(localite));
+        for (Controleur v : destinataires) {
             notificationService.emettre(idDossier, type, v.getImControleur(), v.getEmailCont(), titre, corps);
         }
     }

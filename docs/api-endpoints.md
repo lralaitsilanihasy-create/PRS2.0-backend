@@ -781,6 +781,8 @@ si aucun résultat (pas de 404). `{nom}` est un fragment (URL-encoder si espaces
 | POST | /api/controleurs/{id}/pieces/{type} | `multipart/form-data` (part `fichier`) ; `type` = `PHOTO` | `PieceJointeMetaDto` | 200, 400, 403, 404 | ADMINISTRATEUR |
 | GET | /api/controleurs/{id}/pieces/{type} | — ; `type` = `PHOTO` | fichier (binaire) | 200, 400, 403, 404 | Authentifié (⚠️ ouvert 2026-07-27 — affichage des photos hors admin ; dépôt/suppression restent ADMINISTRATEUR) |
 | DELETE | /api/controleurs/{id}/pieces/{type} | — ; `type` = `PHOTO` | — | 204, 400, 403, 404 | ADMINISTRATEUR |
+| GET | /api/controleurs/rattachements | — | `RattachementDto[]` | 200, 403 | ADMINISTRATEUR, PRESIDENT, CHEF_COMMISSION |
+| PUT | /api/controleurs/{im}/rattachement | `{imRattache}` (`null` = détacher) | `RattachementDto` | 200, 403, 404, 409 | ADMINISTRATEUR, PRESIDENT, CHEF_COMMISSION |
 
 > **DELETE** supprime le contrôleur **et son compte d'authentification**, en nettoyant ses données **dérivées**
 > (sessions, indicateurs). **Garde métier → 409** tant qu'il a une **activité** : supérieur hiérarchique d'un autre
@@ -805,6 +807,46 @@ si aucun résultat (pas de 404). `{nom}` est un fragment (URL-encoder si espaces
 > photo est inconnu(e). On peut aussi **supprimer la photo seule** (sans supprimer le contrôleur) via `DELETE
 > /api/controleurs/{id}/pieces/{type}` → **204** ; **400** si `type` ≠ `PHOTO`, **404** si le contrôleur ou la
 > photo est inconnu(e). Le **DELETE** d'un contrôleur **purge sa photo** (`t_piece_jointe`) — pas d'orphelin.
+
+
+### ⚠️ Rattachements Membre → Vérificateur → Assistant (arbitrage du pilote, 2026-09-01)
+
+Le circuit d'un dossier suit une **chaîne nominative** : le Membre qui examine a *son* Vérificateur, qui
+a *son* Assistant pour l'archivage. Ces deux liens sont portés par une colonne unique `IM_RATTACHE` sur
+`t_controleur` (migration `V12`) — un Membre y range son Vérificateur, un Vérificateur son Assistant.
+
+**Pourquoi une sous-ressource et non le `PUT /api/controleurs/{id}` existant.** Ce PUT est réservé à
+l'Administrateur ; l'ouvrir au Président et au Chef de commission pour qu'ils posent un rattachement leur
+donnerait du même coup l'écriture sur le nom, l'email, le **profil** et la **localité** de n'importe quel
+contrôleur. Un chemin séparé accorde exactement le droit voulu.
+
+**Champs `RattachementDto`**
+
+| Champ (JSON) | Type | Sens |
+|---|---|---|
+| imControleur | string | matricule du **porteur** |
+| nomControleur | string | « prénoms nom » du porteur |
+| profil | string | `MEMBRE` ou `VERIFICATEUR` (seuls profils porteurs d'une chaîne) |
+| idLocalite | string | localité du porteur |
+| imRattache | string \| **null** | matricule du rattaché ; **`null` = chaîne incomplète** |
+| nomRattache | string \| null | « prénoms nom » du rattaché |
+| profilAttendu | string | `VERIFICATEUR` si le porteur est Membre, `ASSISTANT_CONTROLEUR` s'il est Vérificateur — de quoi peupler la liste de choix sans rejouer la règle côté front |
+
+`GET /rattachements` rend les lignes du **périmètre de l'appelant** : toutes localités pour l'Administrateur
+et le Président, **sa seule localité** pour le Chef de commission. `PUT /{im}/rattachement` prend
+`{"imRattache": "CTRVER"}`, ou `{"imRattache": null}` (corps entièrement absent accepté) pour **détacher**,
+et rend la ligne réécrite.
+
+> **403** — appelant hors des trois profils, ou **CC visant une autre localité que la sienne**.
+> **409** — le porteur n'a pas de profil à chaîne (ni Membre ni Vérificateur) ; le rattaché n'a pas le
+> `profilAttendu` ; rattachement **inter-localités** ; **auto-rattachement**.
+> **404** — matricule inconnu.
+
+> **⚠️ Un rattachement cible, il ne verrouille pas.** `imRattache` nul est un état **normal** : la chaîne
+> est simplement incomplète, et le **repli localité** historique s'applique (tout Vérificateur de la
+> localité peut agir). Aucun endpoint n'a été durci par cette spec — c'est un **aiguillage de
+> notification et d'affichage**, pas une garde d'autorisation. L'écran d'administration se sert du
+> `imRattache` nul pour signaler les trous à combler.
 
 `{id}` = imControleur (string).
 
@@ -1288,6 +1330,10 @@ Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `
 | soumisPar | string | — (réponse) | **login** de l'acteur ayant **soumis** le dossier (PRMP seule). Lecture seule, posé serveur |
 | creeParNom | string | — (réponse) | **Nom lisible** « Nom Prénoms » correspondant à `creePar`, **résolu serveur** ; `null` si le compte ou l'acteur est introuvable (le front garde alors le login brut) |
 | soumisParNom | string | — (réponse) | Nom lisible correspondant à `soumisPar` ; `null` si non résolvable |
+| imVerificateurCible | string | — (réponse) | ⚠️ 2026-09-01 — matricule du **Vérificateur cible** : le rattaché du **Membre ayant examiné** (jamais le co-signataire du PV). `null` = chaîne incomplète, repli localité |
+| nomVerificateurCible | string | — (réponse) | Nom lisible du Vérificateur cible ; `null` en repli |
+| imAssistantCible | string | — (réponse) | ⚠️ 2026-09-01 — matricule de l'**Assistant cible** pour l'archivage : le rattaché du Vérificateur ayant **effectivement transmis** à SIGMP, à défaut celui du Vérificateur cible. `null` en repli |
+| nomAssistantCible | string | — (réponse) | Nom lisible de l'Assistant cible ; `null` en repli |
 | version | number | Non | verrou optimiste (`@Version` JPA, ⚠️ 2026-08-27) — toujours renseigné en sortie ; en entrée de `PUT`, absent = comportement historique, périmé = **409** `CONFLIT_VERSION` (détail en tête de document, *Verrou optimiste — champ `version`*) |
 
 > ⚠️ **Auteur de la saisie (`creePar` / `soumisPar`) — ajouté 2026-08-19 (demande front).** Les deux colonnes
@@ -1298,6 +1344,17 @@ Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `
 > résolution est faite **en lot** : trois requêtes au plus, quelle que soit la taille de la liste — les
 > listes de dossiers portent donc la même information sans coût par ligne. Un login non résolvable (compte
 > supprimé) laisse le nom à `null`, jamais d'erreur.
+
+> ⚠️ **Cibles de la chaîne de rattachement — ajouté 2026-09-01.** Quatre champs **en lecture seule**
+> (`imVerificateurCible` / `nomVerificateurCible`, `imAssistantCible` / `nomAssistantCible`) disent *à qui ce
+> dossier revient nominativement*, pour que le front distingue « **les miens** » du reste de la localité et
+> affiche un badge « à vérifier par X ». Résolus **en lot** comme les noms d'auteur (trois requêtes au plus
+> pour toute une liste), et présents **aussi bien sur `GET /api/dossiers/{id}` que sur les listes**.
+>
+> **Ce sont des cibles, pas des titulaires exclusifs** : aucune garde n'a été ajoutée, tout Vérificateur de
+> la localité peut toujours agir sur le dossier (arbitrage 1). Un `null` signale une chaîne incomplète — le
+> **repli localité** s'applique et le front n'affiche alors aucun badge. Détail des règles : section
+> *Contrôleurs → Rattachements*.
 
 > **Cycle de vie & saisie.** On **ne crée pas** un dossier brut : la **façade `/api/saisies`** (réservée PRMP)
 > crée le dossier (statut **`BROUILLON`**) et son contenu. Un brouillon est **invisible des contrôleurs** ;

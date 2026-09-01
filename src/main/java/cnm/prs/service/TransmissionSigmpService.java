@@ -50,11 +50,17 @@ public class TransmissionSigmpService {
     private final PvExamenRepository pvExamenRepository;
     private final NotificationService notificationService;
     private final ControleurDirectory controleurDirectory;
+    /** ⚠️ Rattachements (2026-09-01) — ciblage de l'archivage sur la chaîne du valideur effectif. */
+    private final RattachementService rattachementService;
+    private final cnm.prs.repository.ControleurRepository controleurRepository;
     private final cnm.prs.security.PermissionService permissionService;
 
     public TransmissionSigmpService(TransmissionSigmpRepository repository, DossierRepository dossierRepository,
             PvExamenRepository pvExamenRepository, NotificationService notificationService,
-            ControleurDirectory controleurDirectory, cnm.prs.security.PermissionService permissionService) {
+            ControleurDirectory controleurDirectory, cnm.prs.security.PermissionService permissionService,
+            RattachementService rattachementService, cnm.prs.repository.ControleurRepository controleurRepository) {
+        this.rattachementService = rattachementService;
+        this.controleurRepository = controleurRepository;
         this.repository = repository;
         this.dossierRepository = dossierRepository;
         this.pvExamenRepository = pvExamenRepository;
@@ -156,7 +162,16 @@ public class TransmissionSigmpService {
         String titre = "PV à archiver";
         String corps = "Décision transmise à SIGMP (" + (SENS_APPROUVE.equals(sens) ? "approuvé" : "non approuvé")
                 + (levee ? ", observations levées" : "") + ") : le PV " + ref + " est à archiver.";
-        for (Controleur a : controleurDirectory.assistantsControleurs(localite)) {
+        // ⚠️ Rattachements (2026-09-01) — cible l'Assistant rattaché au Vérificateur qui vient
+        // EFFECTIVEMENT de transmettre (la transmission est déjà enregistrée à ce stade, son
+        // IM_VERIFICATEUR fait donc foi). Si un suppléant a validé, c'est SA chaîne qui archive :
+        // notifier l'assistant du vérificateur nominal reviendrait à s'adresser à la chaîne de
+        // quelqu'un qui n'a rien fait. Repli : chaîne nominale, puis tous les assistants de la localité.
+        List<Controleur> destinataires = rattachementService.assistantCible(dossier.getIdDossier())
+                .flatMap(controleurRepository::findById)
+                .map(List::of)
+                .orElseGet(() -> controleurDirectory.assistantsControleurs(localite));
+        for (Controleur a : destinataires) {
             notificationService.emettre(dossier.getIdDossier(), TypeNotification.PV_A_ARCHIVER,
                     a.getImControleur(), a.getEmailCont(), titre, corps);
         }

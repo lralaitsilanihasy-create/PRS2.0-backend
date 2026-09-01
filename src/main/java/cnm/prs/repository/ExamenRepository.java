@@ -1,5 +1,6 @@
 package cnm.prs.repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -44,6 +45,30 @@ public interface ExamenRepository extends JpaRepository<Examen, Integer> {
     /** idDossier rattaché à un examen (examen→dispatch→réception→dossier). */
     @Query("select e.dispatch.reception.idDossier from Examen e where e.idExamen = :idExamen")
     Optional<Integer> findIdDossierByExamen(@Param("idExamen") Integer idExamen);
+
+    /**
+     * ⚠️ Rattachements (2026-09-01) — matricule du Membre ayant EXAMINÉ un dossier, le plus récent
+     * d'abord. C'est lui qui détermine le Vérificateur cible, et non le co-signataire du PV : les deux
+     * sont des personnes distinctes depuis le 2026-08-28, et c'est l'examinateur qui porte l'instruction.
+     */
+    @Query("""
+            select e.imCtrlMembre from Examen e
+            where e.dispatch.reception.idDossier = :idDossier and e.imCtrlMembre is not null
+            order by e.idExamen desc
+            """)
+    List<String> findImCtrlMembreParDossier(@Param("idDossier") Integer idDossier);
+
+    /**
+     * ⚠️ Rattachements (2026-09-01) — couples (idDossier, Membre examinateur) pour un LOT de dossiers.
+     * Sert l'enrichissement en lot des listes : sans elle, résoudre la cible dossier par dossier
+     * réintroduirait le N+1 que {@code DossierService.enrichir} avait précisément supprimé.
+     */
+    @Query("""
+            select e.dispatch.reception.idDossier, e.imCtrlMembre from Examen e
+            where e.dispatch.reception.idDossier in :idsDossiers and e.imCtrlMembre is not null
+            order by e.idExamen asc
+            """)
+    List<Object[]> findMembresParDossiers(@Param("idsDossiers") Collection<Integer> idsDossiers);
 
     /** Localité de circuit d'un examen (via la réception : examen→dispatch→réception→contrôleur récepteur). */
     @Query("select e.dispatch.reception.ctrlRecept.idLocalite from Examen e where e.idExamen = :idExamen")

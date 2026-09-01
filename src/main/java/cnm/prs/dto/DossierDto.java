@@ -74,6 +74,30 @@ public class DossierDto {
     private String soumisParNom;
 
     /**
+     * ⚠️ Rattachements (2026-09-01) — Vérificateur <strong>cible</strong> de ce dossier : le rattaché du
+     * Membre qui l'a EXAMINÉ (jamais le co-signataire du PV). Résolu serveur, en lot.
+     *
+     * <p><strong>Cible, pas titulaire exclusif</strong> : le front s'en sert pour distinguer « les
+     * miens » du reste de la localité et afficher « à vérifier par X ». Tout Vérificateur de la
+     * localité peut agir (arbitrage 1). {@code null} = chaîne incomplète, le repli localité s'applique
+     * et le front n'affiche aucun badge.</p>
+     */
+    private String imVerificateurCible;
+
+    /** Nom lisible du Vérificateur cible ; {@code null} en repli. */
+    private String nomVerificateurCible;
+
+    /**
+     * ⚠️ Rattachements (2026-09-01) — Assistant <strong>cible</strong> pour l'archivage : le rattaché du
+     * Vérificateur ayant EFFECTIVEMENT transmis à SIGMP, sinon celui du Vérificateur cible. Résolu
+     * serveur ; {@code null} en repli.
+     */
+    private String imAssistantCible;
+
+    /** Nom lisible de l'Assistant cible ; {@code null} en repli. */
+    private String nomAssistantCible;
+
+    /**
      * ⚠️ Verrou optimiste (cf. {@code docs/plan-conflit-version.md}) — numéro de version de la ligne.
      * <strong>Toujours renseigné en sortie</strong> (GET, POST, PUT), le PUT rendant la version
      * <em>incrémentée</em>. En entrée de PUT : comparé à la version courante, et s'il en diffère

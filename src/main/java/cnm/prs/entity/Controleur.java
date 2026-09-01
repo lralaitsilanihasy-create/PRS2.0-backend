@@ -47,6 +47,21 @@ public class Controleur {
     @Column(name = "ID_LOCALITE", length = 5)
     private String idLocalite;
 
+    /**
+     * ⚠️ Rattachement (arbitrage du pilote, 2026-09-01) — contrôleur rattaché à celui-ci : un
+     * <strong>Vérificateur</strong> si le porteur est Membre, un <strong>Assistant</strong> si le
+     * porteur est Vérificateur. C'est la même relation dans les deux cas — « mon rattaché » — dont le
+     * sens est fixé par le profil du porteur, d'où une colonne unique : elle impose structurellement
+     * « au plus un rattaché par porteur », et le partage reste libre (plusieurs porteurs peuvent
+     * désigner le même).
+     *
+     * <p>Sert au <strong>ciblage de files et de notifications</strong>, jamais à une habilitation
+     * (arbitrage 1) : un autre Vérificateur ou Assistant de la localité peut toujours agir. Nul =
+     * chaîne incomplète, cas prévu — le repli localité s'applique.</p>
+     */
+    @Column(name = "IM_RATTACHE", length = 7)
+    private String imRattache;
+
     @Column(name = "ID_SUPERIEUR", length = 7)
     private String idSuperieur;
 

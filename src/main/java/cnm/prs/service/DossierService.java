@@ -48,6 +48,9 @@ import cnm.prs.repository.AnomalieRepository;
 import cnm.prs.repository.AuditLogRepository;
 import cnm.prs.repository.ChangementLigneRepository;
 import cnm.prs.repository.DemandeRetraitRepository;
+import cnm.prs.repository.ControleurRepository;
+import cnm.prs.repository.ExamenRepository;
+import cnm.prs.repository.TransmissionSigmpRepository;
 import cnm.prs.repository.DossierRepository;
 import cnm.prs.repository.LettreRenvoiRepository;
 import cnm.prs.repository.LotRepository;
@@ -116,6 +119,10 @@ public class DossierService {
     private final ActeurDirectory acteurDirectory;
     /** ⚠️ Spec « Mandats PRMP » — journal des actions, horodaté par opérateur courant. */
     private final JournalDossierService journalDossier;
+    /** ⚠️ Rattachements (2026-09-01) — résolution EN LOT des cibles Vérificateur / Assistant. */
+    private final ExamenRepository examenRepository;
+    private final TransmissionSigmpRepository transmissionSigmpRepository;
+    private final ControleurRepository controleurRepository;
 
     /**
      * ⚠️ Audit 2026-08-27 (lot D §2) — fermeture de la cascade de suppression. Le circuit passe par
@@ -142,6 +149,8 @@ public class DossierService {
             LettreRenvoiRepository lettreRenvoiRepository,
             VerificationPieceDepotService verificationPieceDepotService,
             MiseAJourPpmService miseAJourPpmService, JournalDossierService journalDossier,
+            ExamenRepository examenRepository, TransmissionSigmpRepository transmissionSigmpRepository,
+            ControleurRepository controleurRepository,
             ActeurDirectory acteurDirectory, CircuitCascadeService circuitCascadeService,
             ChangementLigneRepository changementLigneRepository, MessageRepository messageRepository,
             LotRepository lotRepository, AnomalieRepository anomalieRepository,
@@ -155,6 +164,9 @@ public class DossierService {
         this.verificationPieceDepotService = verificationPieceDepotService;
         this.miseAJourPpmService = miseAJourPpmService;
         this.journalDossier = journalDossier;
+        this.examenRepository = examenRepository;
+        this.transmissionSigmpRepository = transmissionSigmpRepository;
+        this.controleurRepository = controleurRepository;
         this.acteurDirectory = acteurDirectory;
         this.lettreRenvoiRepository = lettreRenvoiRepository;
         this.repository = repository;
@@ -508,15 +520,82 @@ public class DossierService {
                 logins.add(dto.getSoumisPar());
             }
         }
-        if (logins.isEmpty()) {
-            return dtos;
+        // ⚠️ La sortie anticipée ne vaut QUE pour les noms d'auteur : un dossier sans CREE_PAR ni
+        // SOUMIS_PAR n'a aucun login à résoudre, mais il a un examinateur et donc des cibles. Placer
+        // l'enrichissement des cibles après ce return les rendait nulles sur tout dossier sans auteur —
+        // le dossier 1 du socle de test, entre autres, et le défaut n'apparaissait qu'à la lecture
+        // unitaire, la seule que le front utilise pour l'écran de vérification.
+        if (!logins.isEmpty()) {
+            Map<String, String> noms = acteurDirectory.nomsParLogin(logins);
+            for (DossierDto dto : dtos) {
+                dto.setCreeParNom(noms.get(dto.getCreePar()));
+                dto.setSoumisParNom(noms.get(dto.getSoumisPar()));
+            }
         }
-        Map<String, String> noms = acteurDirectory.nomsParLogin(logins);
-        for (DossierDto dto : dtos) {
-            dto.setCreeParNom(noms.get(dto.getCreePar()));
-            dto.setSoumisParNom(noms.get(dto.getSoumisPar()));
-        }
+        enrichirCibles(dtos);
         return dtos;
+    }
+
+    /**
+     * ⚠️ Rattachements (2026-09-01) — pose les cibles Vérificateur et Assistant sur chaque dossier.
+     *
+     * <p><strong>En lot, et c'est le point de vigilance</strong> : trois requêtes au plus quelle que
+     * soit la taille de la liste — les Membres examinateurs de tous les dossiers, les transmissions de
+     * tous les dossiers, puis l'annuaire des contrôleurs une seule fois. Résoudre la cible dossier par
+     * dossier aurait réintroduit exactement le N+1 que cette méthode avait supprimé pour les noms
+     * d'auteur.</p>
+     *
+     * <p>Cibles nulles en repli (chaîne incomplète, examinateur P/CC du circuit court, rattaché
+     * supprimé) : c'est un état normal, pas une anomalie.</p>
+     */
+    private void enrichirCibles(List<DossierDto> dtos) {
+        List<Integer> ids = dtos.stream().map(DossierDto::getIdDossier).filter(java.util.Objects::nonNull).toList();
+        if (ids.isEmpty()) {
+            return;
+        }
+        // Dernier examinateur connu par dossier (la requête est ordonnée croissant : le put final gagne).
+        Map<Integer, String> examinateurs = new java.util.HashMap<>();
+        for (Object[] ligne : examenRepository.findMembresParDossiers(ids)) {
+            examinateurs.put((Integer) ligne[0], (String) ligne[1]);
+        }
+        // Vérificateur ayant effectivement transmis, par dossier (le plus récent gagne).
+        Map<Integer, String> valideurs = new java.util.HashMap<>();
+        for (cnm.prs.entity.TransmissionSigmp t : transmissionSigmpRepository.findByIdDossierIn(ids)) {
+            if (t.getImVerificateur() != null && !t.getImVerificateur().isBlank()) {
+                valideurs.put(t.getIdDossier(), t.getImVerificateur());
+            }
+        }
+        Map<String, cnm.prs.entity.Controleur> annuaire = new java.util.HashMap<>();
+        for (cnm.prs.entity.Controleur c : controleurRepository.findAll()) {
+            annuaire.put(c.getImControleur(), c);
+        }
+        for (DossierDto dto : dtos) {
+            String verificateur = rattacheDans(annuaire, examinateurs.get(dto.getIdDossier()));
+            dto.setImVerificateurCible(verificateur);
+            dto.setNomVerificateurCible(nomDans(annuaire, verificateur));
+            String base = valideurs.get(dto.getIdDossier()) != null
+                    ? valideurs.get(dto.getIdDossier()) : verificateur;
+            String assistant = rattacheDans(annuaire, base);
+            dto.setImAssistantCible(assistant);
+            dto.setNomAssistantCible(nomDans(annuaire, assistant));
+        }
+    }
+
+    /** Rattaché d'un porteur dans l'annuaire déjà chargé ; {@code null} si absent ou disparu. */
+    private static String rattacheDans(Map<String, cnm.prs.entity.Controleur> annuaire, String imPorteur) {
+        cnm.prs.entity.Controleur porteur = imPorteur == null ? null : annuaire.get(imPorteur);
+        String rattache = porteur == null ? null : porteur.getImRattache();
+        return rattache != null && !rattache.isBlank() && annuaire.containsKey(rattache) ? rattache : null;
+    }
+
+    private static String nomDans(Map<String, cnm.prs.entity.Controleur> annuaire, String im) {
+        cnm.prs.entity.Controleur c = im == null ? null : annuaire.get(im);
+        if (c == null) {
+            return null;
+        }
+        String n = ((c.getPrenomsCont() == null ? "" : c.getPrenomsCont()) + " "
+                + (c.getNomCont() == null ? "" : c.getNomCont())).trim();
+        return n.isBlank() ? im : n;
     }
 
     /** Même enrichissement sur une page (le contenu est enrichi sur place, la page est renvoyée telle quelle). */
