@@ -2045,6 +2045,84 @@ volumineux → **400** (annule la création si multipart) ; **404** si l'UGPM ou
 
 **`SaisieMarcheLigne`** : `designationMarche`, **`formeMarche`**, `numCompte`, `montEstim`, **`nouvMontEstim`** (→ `t_marche.NOUV_MONT_ESTIM`), `financement`, `statut`, `idNature`, `natureLibelle`, `idMode`, `modeLibelle`, **`beneficiaires[]`**, **`lots[]`**. `idDetail` est **facultatif** — **null à la création** (PK serveur), renseigné seulement pour **identifier une ligne existante** lors de l'édition (réconciliation). `idDossier`/`idPpm` sont renseignés par le service. **`idMode`** = mode **saisi** (facultatif) ; **conservé tel quel** (plus de détermination automatique — `t_situation`/`t_regle_passation`/`t_seuil` retirés). **`nouvMontEstim`**, **`beneficiaires[]`** et **`lots[]`** sont **optionnels** (rétro-compatible).
 
+### ⚠️ Justifications de la fiche de présentation (arbitrage du pilote, 2026-09-01)
+
+La « Fiche de présentation » du dossier de planification énumère trois catégories de marchés qui appellent
+une justification : ① mode **dérogatoire**, ② **délai aménagé**, ③ **contrat-cadre**. Ces justifications sont
+désormais des **données saisies à la création** du dossier, et elles sont **bloquantes**.
+
+**Trois champs nouveaux**
+
+| Champ | Porté par | Exposé sur |
+|---|---|---|
+| `justifModeDerogatoire` | `SaisieMarcheLigne`, `MarcheDto` (`t_marche`) | `GET /api/marches`, `GET /api/marches/{id}` |
+| `justifDelaiAmenage` | `SaisieMarcheLigne`, `MarcheDto` (`t_marche`) | idem |
+| `justificationFiche` | `SaisiePpmRequest`, `EditionPpmRequest`, `PpmDto` (`t_ppm`) | `GET /api/ppms/{id}` |
+
+Tous **nullables**, `max 1000` caractères (dépassement → 400 de validation). Les plans créés avant la règle
+les rendent à `null` : **aucune reprise de données**, le front continue d'afficher « À compléter ».
+
+**Deux justifications par ligne, pas une.** Un marché peut être à la fois dérogatoire et à délai aménagé ;
+ce sont deux questions distinctes (pourquoi ce mode ? pourquoi ce délai ?), donc deux champs. Les
+**contrats-cadres n'ont pas de champ par ligne** : la justification **globale** les couvre, comme sur le
+formulaire papier.
+
+**Où la garde s'applique** — `POST /api/saisies/ppm` (JSON et multipart) et `PUT /api/saisies/ppm/{idDossier}`.
+Refus **400** :
+
+- ligne classée **dérogatoire** sans `justifModeDerogatoire` → champ `marches[i].justifModeDerogatoire` ;
+- ligne classée **à délai aménagé** sans `justifDelaiAmenage` → champ `marches[i].justifDelaiAmenage` ;
+- `justificationFiche` absente alors qu'**au moins une** des trois listes est non vide → champ `justificationFiche`.
+
+Toutes les erreurs sont rendues **dans une seule réponse**, une par manque, pour que le front affiche d'un
+coup son panneau « justifications manquantes ».
+
+> ⚠️ **Forme du 400 : la clé est `erreurs`, pas `fieldErrors`.** C'est le mécanisme d'erreur par champ déjà
+> utilisé partout dans ce contrat (cf. *Conventions générales*) :
+>
+> ```json
+> { "status": 400, "message": "Validation échouée",
+>   "erreurs": [ { "champ": "marches[0].justifModeDerogatoire", "message": "…" } ] }
+> ```
+
+**Le classement est refait par le serveur, jamais lu dans la requête.** Le front calcule les mêmes listes
+pour son affichage, mais c'est le serveur qui décide, depuis **ses** référentiels :
+
+- **dérogatoire** — `tr_mode_passation.CATEGORIE = DEROGATOIRE` du mode résolu ;
+- **délai aménagé** — `date(OUVERTURE) − date(LANCEMENT)` en **jours calendaires**, **strictement inférieure**
+  à `delaiMinJours` du mode. Les deux étapes sont appariées par **mot-clé** sur le libellé du processus CAPM
+  (normalisation habituelle : casse, accents, séparateurs) ;
+- **contrat-cadre** — `formeMarche = CONTRAT_CADRE`.
+
+Trois cas où **rien n'est exigé**, par construction : une seule des deux dates, un mode sans `delaiMinJours`,
+et l'**égalité au plancher** (la règle est un `<` strict — 30 jours pour un minimum de 30 est conforme). À
+l'inverse, une justification envoyée sur une ligne que le serveur ne classe pas est **acceptée et stockée** :
+on ne fabrique pas d'erreur là où il n'y a pas de règle.
+
+**Sémantique d'écriture** — identique sur les trois champs :
+
+| Valeur envoyée | Effet |
+|---|---|
+| absente / `null` | **inchangée** — la valeur stockée survit |
+| chaîne non blanche | écrite après `trim` |
+| chaîne blanche (`""`, espaces) | **effacée**, et comptée comme **absente** par la garde |
+
+Le `null` ne vaut pas effacement, contrairement aux autres champs de la façade : la mise à jour d'un PPM par
+import PDF traverse le même code sans porter aucune justification, et un écrasement effacerait silencieusement
+tout ce qui a été saisi.
+
+> ⚠️ **Une entrée reste hors garde.** `POST /api/saisies/ppm/{idDossier}/mise-a-jour/import` (mise à jour
+> pilotée par le PDF) est **exemptée** : un PDF ne peut pas porter de justification, et l'y soumettre
+> interdirait définitivement toute mise à jour comportant une ligne dérogatoire. **Conséquence assumée** :
+> une version créée par import peut contenir un marché dérogatoire non justifié, que la fiche affichera
+> « À compléter » jusqu'à édition par la façade. Combler ce trou suppose une section de saisie sur l'écran
+> de mise à jour — à planifier côté front.
+
+> Le **PUT unitaire** `/api/marches/{id}` transporte les deux champs de ligne mais **ne porte pas la garde** :
+> il modifie une ligne isolée, sans vue sur les trois listes de la fiche entière. Y appliquer une règle qui
+> dépend du plan complet produirait des refus incohérents selon le point d'entrée.
+
+
 > ⚠️ **`formeMarche` — forme du marché (règle ajoutée 2026-07-18).** Notion réglementaire à **liste fermée**
 > (enum contrôlé serveur, pas de référentiel en table) : **`A_COMMANDE`** (« Marché à commande »),
 > **`CONTRAT_CADRE`** (« Contrat cadre »), **`QUANTITE_FIXE`** (« À quantité fixe »). **Optionnel** partout

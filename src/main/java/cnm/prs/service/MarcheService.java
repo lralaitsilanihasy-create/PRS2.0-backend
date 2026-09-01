@@ -174,6 +174,18 @@ public class MarcheService {
         existing.setIdNature(dto.getIdNature());
         existing.setIdMode(dto.getIdMode());   // mode choisi (saisie manuelle)
         existing.setFormeMarche(FormeMarche.depuisCodeOuDefaut(dto.getFormeMarche()));
+        // ⚠️ Fiche de présentation (2026-09-01) — SEULS champs de cette méthode dont l'absence ne vaut
+        // PAS effacement. Les autres sont écrasés depuis le DTO, ce qui convient à une façade qui
+        // renvoie toujours la ligne entière ; mais la mise à jour d'un PPM par IMPORT du PDF passe ici
+        // avec des justifications nulles — le PDF n'en porte aucune —, et un écrasement effacerait
+        // silencieusement tout ce que la PRMP a saisi. null conserve donc ; une chaîne fournie écrit
+        // (trim), et un blanc efface volontairement, ce qui laisse au front un moyen de corriger.
+        if (dto.getJustifModeDerogatoire() != null) {
+            existing.setJustifModeDerogatoire(MarcheMapper.texteOuNull(dto.getJustifModeDerogatoire()));
+        }
+        if (dto.getJustifDelaiAmenage() != null) {
+            existing.setJustifDelaiAmenage(MarcheMapper.texteOuNull(dto.getJustifDelaiAmenage()));
+        }
         // ⚠️ saveAndFlush : l'incrément de @Version se fait au flush — sans lui la réponse rendrait
         // l'ancienne version et le client re-conflicterait au PUT suivant (cf. plan §4).
         MarcheDto resultat = MarcheMapper.toDto(repository.saveAndFlush(existing));
@@ -204,6 +216,18 @@ public class MarcheService {
         existing.setIdNature(dto.getIdNature());
         existing.setIdMode(dto.getIdMode());   // mode choisi (saisie manuelle)
         existing.setFormeMarche(FormeMarche.depuisCodeOuDefaut(dto.getFormeMarche()));
+        // ⚠️ Fiche de présentation (2026-09-01) — SEULS champs de cette méthode dont l'absence ne vaut
+        // PAS effacement. Les autres sont écrasés depuis le DTO, ce qui convient à une façade qui
+        // renvoie toujours la ligne entière ; mais la mise à jour d'un PPM par IMPORT du PDF passe ici
+        // avec des justifications nulles — le PDF n'en porte aucune —, et un écrasement effacerait
+        // silencieusement tout ce que la PRMP a saisi. null conserve donc ; une chaîne fournie écrit
+        // (trim), et un blanc efface volontairement, ce qui laisse au front un moyen de corriger.
+        if (dto.getJustifModeDerogatoire() != null) {
+            existing.setJustifModeDerogatoire(MarcheMapper.texteOuNull(dto.getJustifModeDerogatoire()));
+        }
+        if (dto.getJustifDelaiAmenage() != null) {
+            existing.setJustifDelaiAmenage(MarcheMapper.texteOuNull(dto.getJustifDelaiAmenage()));
+        }
         Marche saved = repository.save(existing);
         auditLogService.enregistrer(CurrentUser.ref().orElse(null), "t_marche",
                 String.valueOf(id), "MODIFICATION_RECTIFICATION", null);

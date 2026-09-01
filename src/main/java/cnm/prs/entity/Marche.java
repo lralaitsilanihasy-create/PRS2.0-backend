@@ -108,6 +108,22 @@ public class Marche {
     @Column(name = "FORME_MARCHE", length = 20)
     private FormeMarche formeMarche = FormeMarche.QUANTITE_FIXE;
 
+    /**
+     * ⚠️ Fiche de présentation (2026-09-01) — justification du <strong>mode dérogatoire</strong> de ce
+     * marché (liste ① de la fiche). Exigée par la façade de saisie quand le serveur classe la ligne
+     * comme dérogatoire ; {@code null} sur les lignes antérieures à la règle.
+     */
+    @Column(name = "JUSTIF_MODE_DEROGATOIRE", length = 1000)
+    private String justifModeDerogatoire;
+
+    /**
+     * ⚠️ Fiche de présentation (2026-09-01) — justification du <strong>délai aménagé</strong> (liste ②).
+     * Distincte de {@link #justifModeDerogatoire} : un marché peut cumuler les deux, et les deux
+     * questions sont distinctes (pourquoi ce mode ? pourquoi ce délai ?).
+     */
+    @Column(name = "JUSTIF_DELAI_AMENAGE", length = 1000)
+    private String justifDelaiAmenage;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ID_DOSSIER", insertable = false, updatable = false)
     @JsonIgnore

@@ -90,6 +90,16 @@ public class Ppm {
     @Column(name = "ID_LOCALITE", length = 5)
     private String idLocalite;
 
+    /**
+     * ⚠️ Fiche de présentation (2026-09-01) — la « Justification : » du bas du formulaire officiel,
+     * <strong>globale à la fiche</strong> et non rattachée à une ligne (arbitrage 2). Elle couvre en
+     * particulier les <strong>contrats-cadres</strong>, qui n'ont pas de justification par marché.
+     * Exigée dès qu'une des trois listes de la fiche est non vide ; {@code null} sur les plans
+     * antérieurs à la règle.
+     */
+    @Column(name = "JUSTIFICATION_FICHE", length = 1000)
+    private String justificationFiche;
+
     @Column(name = "VU", length = 100)
     private String vu;
 

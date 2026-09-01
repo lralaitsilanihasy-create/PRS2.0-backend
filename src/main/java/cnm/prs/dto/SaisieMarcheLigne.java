@@ -68,5 +68,19 @@ public record SaisieMarcheLigne(
 
         // Libellé de mode (import PPM) : utilisé UNIQUEMENT si idMode est absent → résolu-ou-créé (tr_mode).
         @Size(max = 100)
-        String modeLibelle) {
+        String modeLibelle,
+
+        // ⚠️ Fiche de présentation (2026-09-01) — justification du MODE DEROGATOIRE de ce marché
+        // (liste ① de la fiche). Exigée quand le SERVEUR classe la ligne comme dérogatoire : le
+        // classement du client n'est jamais cru, il est refait depuis tr_mode_passation.CATEGORIE.
+        // null = inchangé sur une ligne existante (un réimport PDF n'efface rien) ; blanc = effacé,
+        // et compté comme ABSENT par la garde.
+        @Size(max = 1000)
+        String justifModeDerogatoire,
+
+        // ⚠️ Fiche de présentation (2026-09-01) — justification du DELAI AMENAGE (liste ②), exigée
+        // quand ouverture − lancement (jours calendaires) est STRICTEMENT inférieur au delaiMinJours
+        // du mode. Indépendante de la précédente : un marché peut cumuler les deux.
+        @Size(max = 1000)
+        String justifDelaiAmenage) {
 }

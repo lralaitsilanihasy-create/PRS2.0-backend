@@ -104,6 +104,8 @@ public class SaisieService {
     private final JournalDossierService journalDossier;
     /** ⚠️ Visibilité des rectifications (2026-08-15) — gel de l'état pré-correction au 1er PUT du cycle. */
     private final RectificationDiffService rectificationDiffService;
+    /** ⚠️ Fiche de présentation (2026-09-01) — classement serveur et garde des justifications. */
+    private final FicheJustificationsService ficheJustifications;
 
     public SaisieService(DossierRepository dossierRepository, PpmRepository ppmRepository,
             MarcheRepository marcheRepository, PpmService ppmService,
@@ -119,7 +121,9 @@ public class SaisieService {
             TypeDmcService typeDmcService, LotRepository lotRepository,
             TrancheRepository trancheRepository, SousTypeDossierRepository sousTypeDossierRepository,
             MandatService mandatService, JournalDossierService journalDossier,
-            RectificationDiffService rectificationDiffService) {
+            RectificationDiffService rectificationDiffService,
+            FicheJustificationsService ficheJustifications) {
+        this.ficheJustifications = ficheJustifications;
         this.mandatService = mandatService;
         this.journalDossier = journalDossier;
         this.rectificationDiffService = rectificationDiffService;
@@ -151,6 +155,11 @@ public class SaisieService {
 
     /** Saisie d'un PPM = dossier (BROUILLON) + PPM + lignes de marché (mode auto), en une transaction. */
     public DossierDto saisirPpm(SaisiePpmRequest req) {
+        // ⚠️ Fiche de présentation (2026-09-01) — garde AVANT toute écriture : le dossier ne doit pas
+        // exister à moitié si une justification manque. Le classement est refait ici depuis les
+        // référentiels du serveur ; à la création il n'y a rien de stocké à compléter (idPpm null).
+        ficheJustifications.exigerJustifications(req.marches(), req.justificationFiche(), null);
+
         String idPrmp = prmpCourante();
         // Localité dérivée de l'entité contractante choisie (parmi les entités de la PRMP).
         String localite = dossierIntegrite.localiteDeLEntiteDeLaPrmp(req.idEntiteContract(), idPrmp);
@@ -168,6 +177,8 @@ public class SaisieService {
         ppm.setDateSignature(req.dateSignature());
         ppm.setReference(referenceService.genererPpm(libelleEntite(req.idEntiteContract()), req.exercice()));
         ppm.setIdLocalite(localite);
+        // ⚠️ Fiche de présentation (2026-09-01) — justification globale de la fiche (arbitrage 2).
+        ppm.setJustificationFiche(req.justificationFiche());
         Integer idPpm = ppmService.create(ppm).getIdPpm();          // PK séquence (retournée)
 
         if (req.marches() != null) {
@@ -271,6 +282,15 @@ public class SaisieService {
     }
 
     /**
+     * Édition par la <strong>façade</strong> ({@code PUT /api/saisies/ppm/{idDossier}}) : les
+     * justifications de la fiche de présentation sont <strong>exigées</strong> (arbitrage du pilote,
+     * 2026-09-01).
+     */
+    public DossierDto editerPpm(Integer idDossier, EditionPpmRequest req) {
+        return editerPpm(idDossier, req, true);
+    }
+
+    /**
      * Édition d'un brouillon PPM (§3.1 M02) : met à jour l'en-tête du PPM et <strong>réconcilie</strong>
      * ses lignes de marché avec la liste fournie (ajout / mise à jour par {@code idDetail} / retrait des
      * absentes), en une transaction. Garde-fous (propriété, statut BROUILLON, type PPM) + mode recalculé.
@@ -282,8 +302,14 @@ public class SaisieService {
      * liste <strong>fournie</strong> = <strong>remplacement complet</strong> des enfants de ce type ;
      * liste <strong>absente</strong> ({@code null}) = enfants <strong>conservés</strong>. Un remplacement
      * des processus par une liste vide est refusé (invariant « ≥1 processus par marché »).</p>
+     *
+     * <p>⚠️ Fiche de présentation (2026-09-01) — {@code exigerJustifications} vaut {@code true} pour la
+     * façade et {@code false} pour la mise à jour d'un PPM <strong>pilotée par import PDF</strong>
+     * ({@link MiseAJourPpmService}) : un PDF ne porte aucune justification, et l'y soumettre bloquerait
+     * définitivement toute mise à jour comportant une ligne dérogatoire. Voir
+     * {@link FicheJustificationsService} pour la portée exacte de la garde.</p>
      */
-    public DossierDto editerPpm(Integer idDossier, EditionPpmRequest req) {
+    public DossierDto editerPpm(Integer idDossier, EditionPpmRequest req, boolean exigerJustifications) {
         // ⚠️ Règle étendue (2026-08-02, demande user) — la RECTIFICATION après vérification passe par
         // l'IMPORTATION du PPM rectifié (même façade que l'édition de brouillon) : la façade accepte
         // aussi un dossier EN_ATTENTE_DECISION_PRMP (propriétaire). En rectification, la STRUCTURE est
@@ -310,12 +336,23 @@ public class SaisieService {
         Ppm ppm = ppmRepository.findByIdDossier(idDossier).stream().findFirst()
                 .orElseThrow(() -> new BusinessRuleException("Aucun PPM rattaché au dossier " + idDossier + "."));
 
+        // ⚠️ Fiche de présentation (2026-09-01) — garde AVANT toute écriture, une fois le PPM connu
+        // (sa justification globale déjà stockée compte comme fournie si la requête ne la renvoie pas).
+        if (exigerJustifications) {
+            ficheJustifications.exigerJustifications(req.marches(), req.justificationFiche(), ppm.getIdPpm());
+        }
+
         // 1) En-tête PPM (on repart de l'existant pour conserver idPrmp/idLocalite/idDossier).
         PpmDto entete = PpmMapper.toDto(ppm);
         entete.setExercice(req.exercice());
         entete.setSignataire(req.signataire());
         entete.setDateSignature(req.dateSignature());
         entete.setReference(req.reference());
+        // ⚠️ Fiche de présentation (2026-09-01) — absente, la globale déjà stockée est conservée
+        // (l'en-tête part de l'existant) ; fournie, elle est écrite ; blanche, elle est effacée.
+        if (req.justificationFiche() != null) {
+            entete.setJustificationFiche(req.justificationFiche());
+        }
         // Motif : corrigeable tant que la version n'est pas soumise ; ignoré hors version, et une valeur
         // absente conserve le motif posé à la création (jamais effacé par omission).
         if (version && req.motifMaj() != null && !req.motifMaj().isBlank()) {
@@ -424,6 +461,10 @@ public class SaisieService {
         // Nature / mode : id si fourni ; sinon résolus-ou-créés depuis le libellé (import PPM).
         m.setIdNature(resoudreOuCreerNature(ligne.idNature(), ligne.natureLibelle()));
         m.setIdMode(resoudreOuCreerMode(ligne.idMode(), ligne.modeLibelle()));
+        // ⚠️ Fiche de présentation (2026-09-01) — null laisse la valeur stockée intacte (MarcheService.update) :
+        // le PPM réimporté depuis un PDF traverse ce chemin sans justification, il ne doit rien effacer.
+        m.setJustifModeDerogatoire(ligne.justifModeDerogatoire());
+        m.setJustifDelaiAmenage(ligne.justifDelaiAmenage());
         return m;
     }
 

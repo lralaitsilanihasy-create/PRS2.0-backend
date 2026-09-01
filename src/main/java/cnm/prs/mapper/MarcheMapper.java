@@ -32,6 +32,8 @@ public final class MarcheMapper {
         dto.setIdNature(entity.getIdNature());
         dto.setIdMode(entity.getIdMode());
         dto.setFormeMarche(entity.getFormeMarche().name());   // getter coalescent → jamais null
+        dto.setJustifModeDerogatoire(entity.getJustifModeDerogatoire());   // ⚠️ fiche de présentation (2026-09-01)
+        dto.setJustifDelaiAmenage(entity.getJustifDelaiAmenage());
         dto.setVersion(entity.getVersion());   // ⚠️ verrou optimiste (docs/plan-conflit-version.md)
         return dto;
     }
@@ -55,6 +57,21 @@ public final class MarcheMapper {
         entity.setIdMode(dto.getIdMode());
         // Forme du marché : optionnelle (absent → QUANTITE_FIXE), code inconnu → 400 ciblé.
         entity.setFormeMarche(FormeMarche.depuisCodeOuDefaut(dto.getFormeMarche()));
+        // ⚠️ Fiche de présentation (2026-09-01) — normalisées à la CRÉATION : un blanc vaut absence,
+        // il ne doit pas se retrouver stocké comme une justification vide qui satisferait l'œil sans
+        // rien justifier. La sémantique « null = inchangé » ne concerne que la mise à jour, portée
+        // par MarcheService.update — ici l'entité naît, il n'y a rien à conserver.
+        entity.setJustifModeDerogatoire(texteOuNull(dto.getJustifModeDerogatoire()));
+        entity.setJustifDelaiAmenage(texteOuNull(dto.getJustifDelaiAmenage()));
         return entity;
+    }
+
+    /** Texte utile ou {@code null} : {@code trim}, et une chaîne blanche devient {@code null}. */
+    public static String texteOuNull(String s) {
+        if (s == null) {
+            return null;
+        }
+        String t = s.trim();
+        return t.isEmpty() ? null : t;
     }
 }

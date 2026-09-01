@@ -45,5 +45,14 @@ public record EditionPpmRequest(
         String motifMaj,
 
         // ⚠️ @Valid sur le paramètre de type (cf. SaisiePpmRequest) — sur la List, il est déprécié.
+
+        /**
+         * ⚠️ Fiche de présentation (2026-09-01) — la « Justification : » globale du bas du formulaire
+         * (arbitrage 2). <strong>Obligatoire dès qu'une des trois listes de la fiche est non vide</strong>
+         * (modes dérogatoires, délais aménagés, contrats-cadres) — refus 400 sur le champ
+         * {@code justificationFiche} sinon. Blanc = absent.
+         */
+        @Size(max = 1000)
+        String justificationFiche,
         List<@Valid SaisieMarcheLigne> marches) {
 }

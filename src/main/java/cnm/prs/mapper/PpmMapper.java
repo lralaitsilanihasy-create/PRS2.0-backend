@@ -33,6 +33,7 @@ public final class PpmMapper {
         dto.setVu(entity.getVu());
         dto.setIdPrmp(entity.getIdPrmp());
         dto.setMotifMaj(entity.getMotifMaj());
+        dto.setJustificationFiche(entity.getJustificationFiche());   // ⚠️ fiche de présentation (2026-09-01)
         dto.setVersion(entity.getVersion());   // ⚠️ verrou optimiste (docs/plan-conflit-version.md)
         return dto;
     }
@@ -59,6 +60,8 @@ public final class PpmMapper {
         entity.setVu(dto.getVu());
         entity.setIdPrmp(dto.getIdPrmp());
         entity.setMotifMaj(dto.getMotifMaj());
+        // ⚠️ Fiche de présentation (2026-09-01) — blanc = absence, normalisé dès la création.
+        entity.setJustificationFiche(MarcheMapper.texteOuNull(dto.getJustificationFiche()));
         return entity;
     }
 }

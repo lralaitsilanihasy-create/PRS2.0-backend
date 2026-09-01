@@ -10,6 +10,7 @@ import cnm.prs.dto.PpmDto;
 import cnm.prs.entity.Marche;
 import cnm.prs.entity.Ppm;
 import cnm.prs.exception.ResourceNotFoundException;
+import cnm.prs.mapper.MarcheMapper;
 import cnm.prs.mapper.PpmMapper;
 import cnm.prs.repository.AnomalieRepository;
 import cnm.prs.repository.DemandeRetraitRepository;
@@ -198,6 +199,11 @@ public class PpmService {
         existing.setVu(dto.getVu());
         existing.setIdPrmp(dto.getIdPrmp());
         existing.setMotifMaj(dto.getMotifMaj());
+        // ⚠️ Fiche de présentation (2026-09-01) — null = inchangé (même raison que sur les
+        // justifications de ligne : le PPM réimporté depuis un PDF n'en porte aucune) ; blanc = effacé.
+        if (dto.getJustificationFiche() != null) {
+            existing.setJustificationFiche(MarcheMapper.texteOuNull(dto.getJustificationFiche()));
+        }
         // ⚠️ saveAndFlush : l'incrément de @Version se fait au flush — sans lui la réponse rendrait
         // l'ancienne version et le client re-conflicterait au PUT suivant (cf. plan §4).
         return PpmMapper.toDto(repository.saveAndFlush(existing));

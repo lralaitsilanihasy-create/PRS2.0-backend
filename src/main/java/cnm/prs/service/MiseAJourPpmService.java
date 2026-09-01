@@ -542,7 +542,12 @@ public class MiseAJourPpmService {
                         ? LocalDate.parse(importe.dateSignature()) : ppm.getDateSignature(),
                 ppm.getReference(),
                 null,                       // motif : inchangé, il ne vient pas du PDF
-                lignes));
+                null,                       // justification globale : inchangée, le PDF ne la porte pas
+                lignes),
+                // ⚠️ Garde des justifications LEVÉE ici : la mise à jour est pilotée par IMPORT, et un
+                // PDF ne peut pas porter de justification. L'exiger interdirait définitivement toute
+                // mise à jour comportant une ligne dérogatoire (cf. FicheJustificationsService).
+                false);
 
         // Une ligne réapparue dans le PDF est remise en service (elle avait pu être supprimée avant).
         for (Integer idDetail : consommees) {
@@ -673,7 +678,10 @@ public class MiseAJourPpmService {
                 appariee == null ? STATUT_MARCHE_DEFAUT : appariee.getStatut(),
                 m.idNature(), m.natureLibelle(),
                 benefs, lots, processus,
-                m.idMode(), m.modeLibelle());
+                m.idMode(), m.modeLibelle(),
+                // ⚠️ Fiche de présentation (2026-09-01) — le PDF ne porte AUCUNE justification : nulles,
+                // elles laissent intactes celles déjà saisies (MarcheService.update conserve sur null).
+                null, null);
     }
 
     /** Étapes du PDF résolues en {@code idCapm} sur la grille effective du mode de la ligne. */

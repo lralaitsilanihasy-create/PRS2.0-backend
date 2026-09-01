@@ -457,7 +457,11 @@ class SaisiePpmIntegrationTest extends CnmIntegrationTestSupport {
         int ancienId = marcheRepository.findByIdDossier(idDoss).get(0).getIdDetail();
 
         // Ré-import front : PUT avec lignes SANS idDetail et sous-objets complets (payload front inchangé).
+        // ⚠️ Fiche de présentation (2026-09-01) — la ligne réimportée est un CONTRAT-CADRE : la liste ③
+        // de la fiche devient non vide, ce qui rend la justification globale obligatoire. Ajoutée ici,
+        // le test portant sur les sous-objets et non sur la garde (couverte par FicheJustificationsIntegrationTest).
         String edition = "{\"exercice\":2026,\"signataire\":\"RABE\",\"dateSignature\":\"2026-01-10\",\"reference\":\"PPM-RI\","
+                + "\"justificationFiche\":\"Contrat cadre motive\","
                 + "\"marches\":[{\"designationMarche\":\"Ligne reimportee (contrat cadre)\",\"formeMarche\":\"CONTRAT_CADRE\","
                 + "\"montEstim\":3000000,\"idNature\":1,\"statut\":\"PREVU\","
                 + "\"beneficiaires\":[{\"soaCode\":\"00-61-0-D10-00000\",\"numCompte\":\"2441\",\"ancMontBenef\":1000000},"

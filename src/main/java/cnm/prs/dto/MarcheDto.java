@@ -85,6 +85,26 @@ public class MarcheDto {
     private String formeMarche;
 
     /**
+     * ⚠️ Fiche de présentation (2026-09-01) — justification du <strong>mode dérogatoire</strong> de ce
+     * marché (liste ① de la fiche officielle).
+     *
+     * <p><strong>Sémantique d'écriture</strong> : {@code null} = <em>inchangé</em> (la valeur stockée
+     * survit — sans quoi un réimport PPM, qui ne porte aucune justification, les effacerait toutes) ;
+     * chaîne fournie = écrite après {@code trim}, une chaîne blanche <strong>efface</strong>. C'est ce
+     * qui donne au front un moyen d'effacer sans exposer le plan aux écrasements silencieux.</p>
+     */
+    @Size(max = 1000, groups = { Default.class, GroupeRectification.class })
+    private String justifModeDerogatoire;
+
+    /**
+     * ⚠️ Fiche de présentation (2026-09-01) — justification du <strong>délai aménagé</strong> (liste ②).
+     * Même sémantique d'écriture que {@link #justifModeDerogatoire}, dont elle est indépendante : un
+     * marché peut cumuler les deux.
+     */
+    @Size(max = 1000, groups = { Default.class, GroupeRectification.class })
+    private String justifDelaiAmenage;
+
+    /**
      * ⚠️ Verrou optimiste (cf. {@code docs/plan-conflit-version.md}) — numéro de version de la ligne.
      * <strong>Toujours renseigné en sortie</strong> (GET, POST, PUT), le PUT rendant la version
      * <em>incrémentée</em>. En entrée de PUT : comparé à la version courante, et s'il en diffère

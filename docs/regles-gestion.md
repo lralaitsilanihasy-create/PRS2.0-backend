@@ -469,6 +469,35 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
     tel quel** à la création, à la mise à jour et à la rectification — aucune détermination, aucune
     validation par situation/seuil, plus de notification `MODE_NON_DETERMINE`. Seule la **clé
     étrangère** vers `tr_mode` garantit que le mode existe.
+- Justifications de la fiche de présentation [Écriture] ⚠️ **Règle ajoutée (arbitrage du pilote, 2026-09-01)**
+  - La **fiche de présentation** du dossier de planification énumère trois catégories de marchés qui
+    appellent une justification : ① marchés passés selon un **mode dérogatoire**
+    (`tr_mode_passation.CATEGORIE = DEROGATOIRE`), ② marchés à **délai aménagé** (ouverture des plis −
+    lancement, en jours calendaires, **strictement inférieur** au `delaiMinJours` du mode), ③ **contrats-cadres**
+    (`formeMarche = CONTRAT_CADRE`).
+  - Ces justifications sont des **données saisies à la création**, et elles sont **bloquantes** :
+    `POST /api/saisies/ppm` et `PUT /api/saisies/ppm/{idDossier}` refusent en **400** un marché dérogatoire
+    sans sa justification, un marché à délai aménagé sans la sienne, et une **justification globale** absente
+    dès qu'une des trois listes est non vide. Les erreurs sont rendues **toutes ensemble**, une par champ.
+  - **Deux justifications par ligne, une pour la fiche.** Un marché peut cumuler mode dérogatoire et délai
+    aménagé — deux questions distinctes, deux champs (`justifModeDerogatoire`, `justifDelaiAmenage`). Les
+    **contrats-cadres n'ont pas de champ par ligne** : la justification globale portée par le plan
+    (`justificationFiche` sur `t_ppm`, la « Justification : » du bas du formulaire officiel) les couvre,
+    comme sur le document papier.
+  - ⚠️ **Le serveur re-classe les marchés lui-même**, depuis ses propres référentiels (catégorie et plancher
+    du mode, forme du marché, dates CAPM appariées par mot-clé LANCEMENT / OUVERTURE). Le classement envoyé
+    par le client n'est jamais cru : s'y fier permettrait de créer un dossier sans les justifications
+    réglementaires en se trompant — ou en mentant — sur la catégorie d'un marché.
+  - **Ce qui n'est pas exigé** compte autant : pas de délai calculable sans les **deux** dates, pas de règle
+    sans plancher au référentiel, et l'**égalité au plancher est conforme** (la comparaison est un `<` strict).
+    Une justification envoyée sur une ligne que le serveur ne classe pas est acceptée et conservée.
+  - **Transition** : aucune reprise de données. Les plans antérieurs rendent `null` et la fiche affiche
+    « À compléter » ; la règle ne porte que sur les écritures faites par la façade après le déploiement.
+  - ⚠️ **Une entrée reste hors garde** : la mise à jour d'un PPM **pilotée par import PDF**
+    (`POST /api/saisies/ppm/{id}/mise-a-jour/import`). Un PDF ne porte aucune justification, et l'y soumettre
+    interdirait définitivement toute mise à jour comportant une ligne dérogatoire. **Conséquence assumée** :
+    une version créée par import peut contenir un marché dérogatoire non justifié, à compléter ensuite par
+    la façade d'édition.
 - Identifiants attribués par le serveur [Auto]
   - ⚠️ **Règle ajoutée** : les PK dossier / PPM / marché sont **allouées par une séquence serveur** (`seq_dossier`/`seq_ppm`/`seq_marche`) ; tout id envoyé par le client est **ignoré** (plus de « identifiant en doublon »). Le formulaire ne saisit plus d'id. **Dette documentée** : séquence applicative (et non `IDENTITY`) pour éviter une refonte massive des fixtures de test sur ces 3 tables centrales ; bascule `IDENTITY` possible plus tard.
 - Suppression d'un marché / d'un PPM [Écriture]

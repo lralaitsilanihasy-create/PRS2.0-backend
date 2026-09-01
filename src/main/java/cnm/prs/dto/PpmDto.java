@@ -76,6 +76,18 @@ public class PpmDto {
     private String motifMaj;
 
     /**
+     * ⚠️ Fiche de présentation (2026-09-01) — la « Justification : » du bas du formulaire officiel,
+     * <strong>globale à la fiche</strong> (arbitrage 2). Exigée par la façade de saisie dès qu'au moins
+     * une des trois listes de la fiche est non vide — les contrats-cadres n'ayant pas de justification
+     * par ligne, c'est elle qui les couvre.
+     *
+     * <p>Écriture : {@code null} = inchangé, chaîne fournie = écrite après {@code trim}, blanc =
+     * effacé (même sémantique que les justifications de ligne sur {@link MarcheDto}).</p>
+     */
+    @Size(max = 1000, groups = { Default.class, GroupeRectification.class })
+    private String justificationFiche;
+
+    /**
      * <strong>Dérivé serveur (lecture seule)</strong> : {@code true} ssi ≥1 marché de ce PPM est en
      * « appel d'offres ouvert » ({@code ModePassation.declencheAgpm}). Indique au front qu'un AGPM
      * (Avis Général de Passation de Marché) doit accompagner le PPM. Le front l'<em>affiche</em>, ne le
