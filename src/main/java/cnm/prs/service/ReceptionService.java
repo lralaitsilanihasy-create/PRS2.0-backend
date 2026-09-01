@@ -13,6 +13,7 @@ import cnm.prs.entity.Dossier;
 import cnm.prs.entity.Localite;
 import cnm.prs.entity.Ppm;
 import cnm.prs.entity.Reception;
+import cnm.prs.enums.EtapeCircuit;
 import cnm.prs.enums.StatutDossier;
 import cnm.prs.enums.TypeNotification;
 import cnm.prs.exception.BusinessRuleException;
@@ -42,11 +43,15 @@ public class ReceptionService {
     private final NotificationService notificationService;
     private final ReferenceService referenceService;
     private final VerificationPieceDepotService verificationPieceDepotService;
+    /** ⚠️ Chronométrage des délais (2026-09-01) — clôture de l'étape RECEPTION. */
+    private final ChronometrageService chronometrageService;
 
     public ReceptionService(ReceptionRepository repository, DossierRepository dossierRepository,
             PpmRepository ppmRepository, ControleurRepository controleurRepository,
             ControleurDirectory controleurDirectory, NotificationService notificationService,
-            ReferenceService referenceService, VerificationPieceDepotService verificationPieceDepotService) {
+            ReferenceService referenceService, VerificationPieceDepotService verificationPieceDepotService,
+            ChronometrageService chronometrageService) {
+        this.chronometrageService = chronometrageService;
         this.repository = repository;
         this.dossierRepository = dossierRepository;
         this.ppmRepository = ppmRepository;
@@ -318,6 +323,10 @@ public class ReceptionService {
             dossier.setStatut(StatutDossier.PRET_DISPATCH.name());
             dossierRepository.save(dossier);
             if (!dejaPret) {
+                // ⚠️ Chronométrage (2026-09-01) — la réception COMPLET est le geste qui clôt l'étape
+                // RECEPTION et démarre le compteur global. Ce n'est pas « attribuer un numéro » (geste
+                // inexistant dans ce circuit) mais bien ce basculement-ci.
+                chronometrageService.cloturer(dossier.getIdDossier(), EtapeCircuit.RECEPTION);
                 // Log dans cette branche seulement : hors d'elle, le dossier était DÉJÀ PRET_DISPATCH
                 // (re-enregistrement d'une réception complète), ce n'est pas une transition.
                 log.info("[CIRCUIT] reception complete dossier={} acteur={} reception={} statut={}",

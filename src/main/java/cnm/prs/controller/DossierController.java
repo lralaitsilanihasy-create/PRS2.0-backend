@@ -20,11 +20,15 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import jakarta.validation.Valid;
 
 import cnm.prs.dto.ActionDossierDto;
+import cnm.prs.dto.ChronometrageDto;
 import cnm.prs.dto.DossierDto;
 import cnm.prs.dto.DossierResoumissionRequest;
 import cnm.prs.dto.EchangeDto;
 import cnm.prs.dto.PpmDto;
+import cnm.prs.dto.PriseEnChargeRequest;
 import cnm.prs.dto.RechercheDossierDto;
+import cnm.prs.dto.TacheDossierDto;
+import cnm.prs.service.ChronometrageService;
 import cnm.prs.service.DossierService;
 import cnm.prs.service.PpmService;
 
@@ -37,10 +41,14 @@ public class DossierController {
 
     private final DossierService service;
     private final PpmService ppmService;
+    /** ⚠️ Chronométrage des délais (2026-09-01) — prise en charge et frise. */
+    private final ChronometrageService chronometrageService;
 
-    public DossierController(DossierService service, PpmService ppmService) {
+    public DossierController(DossierService service, PpmService ppmService,
+            ChronometrageService chronometrageService) {
         this.service = service;
         this.ppmService = ppmService;
+        this.chronometrageService = chronometrageService;
     }
 
     /**
@@ -231,5 +239,31 @@ public class DossierController {
     @GetMapping("/{id}/journal")
     public List<ActionDossierDto> journal(@PathVariable Integer id) {
         return service.journal(id);
+    }
+
+    /**
+     * ⚠️ Chronométrage (2026-09-01) — <strong>prise en charge explicite</strong> de l'étape courante,
+     * avec la prévision du porteur en jours ouvrés (arbitrage ①). Rejouée sur une tâche encore ouverte,
+     * elle corrige la prévision au lieu d'ouvrir une occurrence.
+     *
+     * <p>403 si l'appelant n'est pas le porteur de l'étape (délégations et intérim résolus par la garde
+     * centrale) ou si le dossier n'est pas de sa localité ; <strong>409</strong> si aucune étape n'est
+     * ouverte — dossier en brouillon, en attente PRMP, clos ou retiré.</p>
+     */
+    @PostMapping("/{id}/prise-en-charge")
+    public TacheDossierDto prendreEnCharge(@PathVariable Integer id,
+            @Valid @RequestBody PriseEnChargeRequest req) {
+        return chronometrageService.prendreEnCharge(id, req.previsionJours());
+    }
+
+    /**
+     * ⚠️ Chronométrage (2026-09-01) — occurrences de tâches et compteurs globaux d'un dossier : matière
+     * de la frise. Même périmètre de lecture que le dossier lui-même (PRMP propriétaire, contrôleurs de
+     * la localité, tout-voyants) — la garde est celle de la consultation, appliquée en amont.
+     */
+    @GetMapping("/{id}/chronometrage")
+    public ChronometrageDto chronometrage(@PathVariable Integer id) {
+        service.findById(id);   // garde de visibilité du dossier, réutilisée telle quelle
+        return chronometrageService.chronometrage(id);
     }
 }

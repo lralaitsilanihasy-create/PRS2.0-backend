@@ -1,0 +1,472 @@
+package cnm.prs.service;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import cnm.prs.dto.ChronometrageDto;
+import cnm.prs.dto.TacheDossierDto;
+import cnm.prs.entity.Controleur;
+import cnm.prs.entity.Dossier;
+import cnm.prs.entity.SuspensionDossier;
+import cnm.prs.entity.TacheDossier;
+import cnm.prs.enums.EtapeCircuit;
+import cnm.prs.enums.ProfilUtilisateur;
+import cnm.prs.enums.StatutDossier;
+import cnm.prs.enums.StatutPv;
+import cnm.prs.exception.BusinessRuleException;
+import cnm.prs.exception.ResourceNotFoundException;
+import cnm.prs.repository.ControleurRepository;
+import cnm.prs.repository.DossierRepository;
+import cnm.prs.repository.PvExamenRepository;
+import cnm.prs.repository.SuspensionDossierRepository;
+import cnm.prs.repository.TacheDossierRepository;
+import cnm.prs.security.CurrentUser;
+import cnm.prs.security.PermissionService;
+
+/**
+ * ⚠️ <strong>Chronométrage et prévision des délais</strong> (règle du pilote, 2026-09-01).
+ *
+ * <p>Trois responsabilités : <strong>ouvrir</strong> une tâche (prise en charge explicite, arbitrage ①),
+ * la <strong>clore</strong> depuis le geste métier existant, et <strong>calculer</strong> la date
+ * prévisionnelle de fin que la PRMP consulte.</p>
+ *
+ * <p><strong>Le chronométrage n'empêche jamais le métier.</strong> C'est la règle qui gouverne tout ce
+ * service : la clôture est <em>tolérante</em> (un geste posé sans prise en charge préalable crée
+ * l'occurrence avec une durée nulle plutôt que d'échouer), et aucune exception levée ici ne fait tomber
+ * une transaction métier. Un chronomètre qui bloque un dossier serait pire que pas de chronomètre.</p>
+ *
+ * <p><strong>Deux sources, pour deux usages.</strong> Le drapeau {@code attentePrmp} exposé à la PRMP est
+ * dérivé du <strong>statut courant</strong> du dossier ; le cumul des attentes du compteur net vient de
+ * {@code t_suspension_dossier}. Ainsi une fenêtre non enregistrée fausserait un cumul, jamais
+ * l'affichage — la donnée la plus visible s'appuie sur la source la plus fiable.</p>
+ */
+@Service
+@Transactional
+public class ChronometrageService {
+
+    private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(ChronometrageService.class);
+
+    /**
+     * ⚠️ <strong>Cartographie des statuts suspensifs</strong> (arbitrage ④), validée le 2026-09-01 —
+     * associée à l'étape qui <strong>reprendra</strong> quand la PRMP rendra la main.
+     *
+     * <p>Trois statuts, et trois seulement. La « rectification des documents témoins » évoquée par la
+     * spec n'en est pas un quatrième : c'est exactement la période {@code EN_ATTENTE_DECISION_PRMP},
+     * pendant laquelle la PRMP corrige puis resoumet.</p>
+     *
+     * <p>Connaître l'étape de reprise n'est pas un luxe : sans elle, un dossier en attente après des
+     * observations non levées compterait la vérification comme franchie, alors qu'elle sera
+     * <strong>rejouée</strong> — la date annoncée serait trop optimiste d'une vérification entière.</p>
+     */
+    private static final Map<String, EtapeCircuit> REPRISE_APRES_ATTENTE = Map.of(
+            StatutDossier.EN_ATTENTE_COMPLEMENTS_DEPOT.name(), EtapeCircuit.RECEPTION,
+            StatutDossier.EN_ATTENTE_PIECES.name(), EtapeCircuit.EXAMEN,
+            StatutDossier.EN_ATTENTE_DECISION_PRMP.name(), EtapeCircuit.VERIFICATION);
+
+    private final TacheDossierRepository tacheRepository;
+    private final SuspensionDossierRepository suspensionRepository;
+    private final DelaiStandardService delaiStandardService;
+    private final DossierRepository dossierRepository;
+    private final PvExamenRepository pvExamenRepository;
+    private final ControleurRepository controleurRepository;
+    private final PermissionService permissionService;
+
+    public ChronometrageService(TacheDossierRepository tacheRepository,
+            SuspensionDossierRepository suspensionRepository, DelaiStandardService delaiStandardService,
+            DossierRepository dossierRepository, PvExamenRepository pvExamenRepository,
+            ControleurRepository controleurRepository, PermissionService permissionService) {
+        this.tacheRepository = tacheRepository;
+        this.suspensionRepository = suspensionRepository;
+        this.delaiStandardService = delaiStandardService;
+        this.dossierRepository = dossierRepository;
+        this.pvExamenRepository = pvExamenRepository;
+        this.controleurRepository = controleurRepository;
+        this.permissionService = permissionService;
+    }
+
+    // ------------------------------------------------------------------ étape courante
+
+    /**
+     * Étape ouverte d'un dossier, déduite de son statut et de celui de son PV. {@code null} quand aucune
+     * tâche CNM n'est en cours : brouillon, attente PRMP, dossier clos, retiré ou remplacé.
+     */
+    public EtapeCircuit etapeCourante(Dossier dossier) {
+        if (dossier == null || dossier.getStatut() == null) {
+            return null;
+        }
+        return etapeCourante(dossier.getStatut(), () -> statutPvDe(dossier.getIdDossier()));
+    }
+
+    /**
+     * Même résolution, le statut du PV étant fourni par l'appelant — utilisé par l'enrichissement en
+     * lot, où les statuts de PV sont chargés en une seule requête pour toute la liste.
+     */
+    private EtapeCircuit etapeCourante(String statut, java.util.function.Supplier<String> statutPv) {
+        if (StatutDossier.SOUMIS.name().equals(statut)) {
+            return EtapeCircuit.RECEPTION;
+        }
+        if (StatutDossier.PRET_DISPATCH.name().equals(statut)) {
+            return EtapeCircuit.DISPATCH;
+        }
+        if (StatutDossier.DISPATCHE.name().equals(statut) || StatutDossier.A_REEXAMINER.name().equals(statut)) {
+            return EtapeCircuit.EXAMEN;
+        }
+        if (StatutDossier.EXAMINE.name().equals(statut)) {
+            return etapeSelonPv(statutPv.get());
+        }
+        if (StatutDossier.EN_VERIFICATION.name().equals(statut)) {
+            return EtapeCircuit.VERIFICATION;
+        }
+        if (StatutDossier.OBSERVATIONS_LEVEES.name().equals(statut)) {
+            return EtapeCircuit.TRANSMISSION_SIGMP;
+        }
+        if (StatutDossier.DECISION_TRANSMISE_SIGMP.name().equals(statut)) {
+            return EtapeCircuit.ARCHIVAGE;
+        }
+        return null;
+    }
+
+    /**
+     * Sous-étape d'un dossier {@code EXAMINE} : le statut du dossier ne suffit pas, il couvre trois
+     * moments distincts du circuit. C'est le statut du PV qui tranche.
+     */
+    private EtapeCircuit etapeSelonPv(String statutPv) {
+        if (statutPv == null || StatutPv.BROUILLON.name().equals(statutPv)
+                || StatutPv.EN_RECTIFICATION.name().equals(statutPv)) {
+            return EtapeCircuit.EXAMEN;
+        }
+        if (StatutPv.PROJET_SOUMIS.name().equals(statutPv)) {
+            return EtapeCircuit.VISA;
+        }
+        if (StatutPv.PROJET_ACCEPTE.name().equals(statutPv)) {
+            return EtapeCircuit.COSIGNATURE;
+        }
+        return null;
+    }
+
+    private String statutPvDe(Integer idDossier) {
+        return pvExamenRepository.statutsPvParDossier(idDossier).stream()
+                .filter(java.util.Objects::nonNull).findFirst().orElse(null);
+    }
+
+    // ------------------------------------------------------------------ prise en charge
+
+    /**
+     * Prise en charge <strong>explicite</strong> de l'étape courante (arbitrage ①), avec la prévision du
+     * porteur. Rejouée sur une tâche encore ouverte, elle <strong>corrige</strong> la prévision au lieu
+     * de créer une occurrence : corriger son estimation n'est pas recommencer sa tâche.
+     *
+     * @throws BusinessRuleException si aucune étape n'est ouverte (409)
+     */
+    public TacheDossierDto prendreEnCharge(Integer idDossier, Integer previsionJours) {
+        Dossier dossier = dossierRepository.findById(idDossier)
+                .orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable : " + idDossier));
+        EtapeCircuit etape = etapeCourante(dossier);
+        if (etape == null) {
+            throw new BusinessRuleException("Aucune étape n'est en cours sur ce dossier (statut « "
+                    + dossier.getStatut() + " ») : rien à prendre en charge.");
+        }
+        exigerPorteurEligible(dossier, etape);
+
+        TacheDossier ouverte = tacheRepository
+                .findFirstByIdDossierAndEtapeAndDateFinIsNull(idDossier, etape.name()).orElse(null);
+        if (ouverte != null) {
+            ouverte.setPrevisionJours(previsionJours);
+            ouverte.setPrevisionStandard(Boolean.FALSE);
+            TacheDossier maj = tacheRepository.save(ouverte);
+            return TacheDossierDto.de(maj, nom(maj.getImActeur()));
+        }
+        TacheDossier tache = tacheRepository.save(
+                nouvelle(idDossier, etape, LocalDateTime.now(), previsionJours, false));
+        return TacheDossierDto.de(tache, nom(tache.getImActeur()));
+    }
+
+    /**
+     * Garde de la prise en charge : <strong>profil effectif</strong> (délégations et intérim résolus par
+     * la garde centrale) et <strong>périmètre</strong> du dossier.
+     *
+     * <p>Volontairement plus légère que le geste métier de l'étape, qui conserve sa garde intacte : une
+     * prise en charge indue n'altère aucune donnée métier, elle ne fait que démarrer un chronomètre.
+     * Rejouer ici chacune des huit gardes métier aurait multiplié les endroits où vivent les règles
+     * d'habilitation, pour un gain de sécurité nul.</p>
+     */
+    private void exigerPorteurEligible(Dossier dossier, EtapeCircuit etape) {
+        if (!permissionService.peutExercer(etape.porteur())) {
+            throw new AccessDeniedException(
+                    "Cette étape (" + etape.name() + ") revient au profil " + etape.porteur().name() + ".");
+        }
+        String localiteActeur = CurrentUser.localite().orElse(null);
+        if (!CurrentUser.voitToutesLocalites() && localiteActeur != null
+                && dossier.getIdLocalite() != null && !localiteActeur.equals(dossier.getIdLocalite())) {
+            throw new AccessDeniedException("Ce dossier n'est pas de votre localité.");
+        }
+    }
+
+    // ------------------------------------------------------------------ clôture (gestes métier)
+
+    /**
+     * Clôt la tâche ouverte d'une étape — appelée depuis le <strong>geste métier</strong> de clôture.
+     *
+     * <p><strong>Tolérante par construction</strong> : sans prise en charge préalable, l'occurrence est
+     * créée avec {@code priseEnCharge = fin} (durée nulle) et la prévision <em>standard</em> du
+     * référentiel. Ne lève jamais : une anomalie de chronométrage est journalisée, elle ne fait pas
+     * échouer la transaction métier qui l'appelle.</p>
+     */
+    public void cloturer(Integer idDossier, EtapeCircuit etape) {
+        if (idDossier == null || etape == null) {
+            return;
+        }
+        try {
+            LocalDateTime maintenant = LocalDateTime.now();
+            TacheDossier tache = tacheRepository
+                    .findFirstByIdDossierAndEtapeAndDateFinIsNull(idDossier, etape.name())
+                    .orElseGet(() -> nouvelle(idDossier, etape, maintenant,
+                            delaiStandardService.delai(etape), true));
+            tache.setDateFin(maintenant);
+            tacheRepository.save(tache);
+        } catch (RuntimeException ex) {
+            LOG.warn("[CHRONO] cloture impossible dossier={} etape={} : {}", idDossier, etape, ex.toString());
+        }
+    }
+
+    /** Construit une occurrence neuve, de rang suivant, sur l'acteur courant. */
+    private TacheDossier nouvelle(Integer idDossier, EtapeCircuit etape, LocalDateTime priseEnCharge,
+            Integer prevision, boolean standard) {
+        TacheDossier tache = new TacheDossier();
+        tache.setIdTache(tacheRepository.nextId());
+        tache.setIdDossier(idDossier);
+        tache.setEtape(etape.name());
+        Integer rang = tacheRepository.dernierRang(idDossier, etape.name());
+        tache.setOccurrence((rang == null ? 0 : rang) + 1);
+        tache.setImActeur(CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null));
+        tache.setProfil(CurrentUser.profil().map(ProfilUtilisateur::name).orElse(etape.porteur().name()));
+        tache.setDatePriseEnCharge(priseEnCharge);
+        tache.setPrevisionJours(prevision == null ? 1 : prevision);
+        tache.setPrevisionStandard(standard);
+        return tache;
+    }
+
+    // ------------------------------------------------------------------ suspensions PRMP
+
+    /** Ouvre une fenêtre d'attente PRMP. Sans effet si une fenêtre est déjà ouverte (idempotent). */
+    public void entrerEnAttentePrmp(Integer idDossier, StatutDossier statut) {
+        if (idDossier == null || statut == null) {
+            return;
+        }
+        try {
+            if (suspensionRepository.findFirstByIdDossierAndFinIsNullOrderByDebutDesc(idDossier).isPresent()) {
+                return;
+            }
+            SuspensionDossier suspension = new SuspensionDossier();
+            suspension.setIdSuspension(suspensionRepository.nextId());
+            suspension.setIdDossier(idDossier);
+            suspension.setStatut(statut.name());
+            suspension.setDebut(LocalDateTime.now());
+            suspensionRepository.save(suspension);
+        } catch (RuntimeException ex) {
+            LOG.warn("[CHRONO] ouverture d'attente PRMP impossible dossier={} : {}", idDossier, ex.toString());
+        }
+    }
+
+    /** Ferme la fenêtre d'attente ouverte, s'il y en a une. */
+    public void sortirDAttentePrmp(Integer idDossier) {
+        if (idDossier == null) {
+            return;
+        }
+        try {
+            suspensionRepository.findFirstByIdDossierAndFinIsNullOrderByDebutDesc(idDossier).ifPresent(s -> {
+                s.setFin(LocalDateTime.now());
+                suspensionRepository.save(s);
+            });
+        } catch (RuntimeException ex) {
+            LOG.warn("[CHRONO] fermeture d'attente PRMP impossible dossier={} : {}", idDossier, ex.toString());
+        }
+    }
+
+    /** Vrai si le dossier est dans un statut où la balle est chez la PRMP. */
+    public static boolean estEnAttentePrmp(String statut) {
+        return statut != null && REPRISE_APRES_ATTENTE.containsKey(statut);
+    }
+
+    // ------------------------------------------------------------------ calcul de la date prévisionnelle
+
+    /**
+     * Date prévisionnelle de fin de traitement, en jours <strong>ouvrés</strong> :
+     * {@code aujourd'hui + reste(étape en cours) + Σ prévisions des étapes restantes} jusqu'à la
+     * transmission SIGMP incluse. {@code null} si le dossier n'est pas dans le circuit.
+     *
+     * <p><strong>Une étape en dépassement compte 0</strong> : la date glisse jour après jour au lieu de
+     * mentir sur un rattrapage qui n'aura pas lieu. Les étapes non encore prises en charge comptent pour
+     * leur délai standard, ce qui permet d'annoncer une date dès la soumission.</p>
+     */
+    public LocalDate datePrevisionnelleFin(String statut, String statutPv, List<TacheDossier> taches,
+            LocalDate aujourdhui) {
+        return datePrevisionnelleFin(statut, statutPv, taches, aujourdhui, delaiStandardService.delais());
+    }
+
+    /**
+     * Même calcul, le référentiel étant fourni <strong>déjà chargé</strong> — indispensable pour les
+     * listes : relire les délais par étape et par dossier chargeait assez d'entités pour faire tomber le
+     * contrat de pagination (lot D §3).
+     */
+    public LocalDate datePrevisionnelleFin(String statut, String statutPv, List<TacheDossier> taches,
+            LocalDate aujourdhui, Map<EtapeCircuit, Integer> delais) {
+        EtapeCircuit reference = etapeCourante(statut, () -> statutPv);
+        if (reference == null) {
+            reference = REPRISE_APRES_ATTENTE.get(statut);
+        }
+        if (reference == null) {
+            return null;
+        }
+        Map<EtapeCircuit, TacheDossier> ouvertes = new HashMap<>();
+        Set<EtapeCircuit> closes = new HashSet<>();
+        for (TacheDossier t : taches == null ? List.<TacheDossier>of() : taches) {
+            EtapeCircuit etape = etapeDe(t);
+            if (etape == null) {
+                continue;
+            }
+            if (t.enCours()) {
+                ouvertes.put(etape, t);
+            } else {
+                closes.add(etape);
+            }
+        }
+        long total = 0L;
+        for (EtapeCircuit etape : EtapeCircuit.etapesDuCompteur()) {
+            if (etape.ordinal() < reference.ordinal()) {
+                continue;   // franchie : l'étape de référence fait foi, y compris après un retour en arrière
+            }
+            TacheDossier ouverte = ouvertes.get(etape);
+            if (ouverte != null) {
+                long ecoules = JoursOuvres.ecoules(ouverte.getDatePriseEnCharge(), aujourdhui.atStartOfDay());
+                total += Math.max(0L, ouverte.getPrevisionJours() - ecoules);
+            } else {
+                total += delais.getOrDefault(etape, 1);
+            }
+        }
+        return JoursOuvres.ajouter(aujourdhui, total);
+    }
+
+    private static EtapeCircuit etapeDe(TacheDossier tache) {
+        try {
+            return EtapeCircuit.valueOf(tache.getEtape());
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
+    }
+
+    // ------------------------------------------------------------------ restitution
+
+    /** Chronométrage complet d'un dossier : occurrences + compteurs globaux. */
+    @Transactional(readOnly = true)
+    public ChronometrageDto chronometrage(Integer idDossier) {
+        Dossier dossier = dossierRepository.findById(idDossier)
+                .orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable : " + idDossier));
+        List<TacheDossier> taches = tacheRepository.findByIdDossierOrderByDatePriseEnChargeAsc(idDossier);
+        List<SuspensionDossier> suspensions = suspensionRepository.findByIdDossierOrderByDebutAsc(idDossier);
+
+        Map<String, String> noms = new HashMap<>();
+        for (TacheDossier t : taches) {
+            if (t.getImActeur() != null) {
+                noms.computeIfAbsent(t.getImActeur(), this::nom);
+            }
+        }
+        List<TacheDossierDto> occurrences = taches.stream()
+                .map(t -> TacheDossierDto.de(t, noms.get(t.getImActeur()))).toList();
+
+        LocalDateTime debut = borne(taches, EtapeCircuit.RECEPTION);
+        LocalDateTime fin = borne(taches, EtapeCircuit.TRANSMISSION_SIGMP);
+        LocalDateTime jusqua = fin != null ? fin : LocalDateTime.now();
+        long brut = debut == null ? 0L : JoursOuvres.ecoules(debut, jusqua);
+        long attentes = cumulAttentes(suspensions, jusqua);
+        String statutPv = statutPvDe(idDossier);
+        EtapeCircuit courante = etapeCourante(dossier.getStatut(), () -> statutPv);
+
+        return new ChronometrageDto(idDossier, occurrences, debut, fin,
+                brut, Math.max(0L, brut - attentes), attentes,
+                courante == null ? null : courante.name(),
+                estEnAttentePrmp(dossier.getStatut()),
+                datePrevisionnelleFin(dossier.getStatut(), statutPv, taches, LocalDate.now()));
+    }
+
+    /** Fin de la dernière occurrence close d'une étape — borne du compteur global. */
+    private LocalDateTime borne(List<TacheDossier> taches, EtapeCircuit etape) {
+        return taches.stream()
+                .filter(t -> etape.name().equals(t.getEtape()) && t.getDateFin() != null)
+                .map(TacheDossier::getDateFin)
+                .max(LocalDateTime::compareTo).orElse(null);
+    }
+
+    /** Cumul en jours ouvrés des attentes PRMP ; une fenêtre encore ouverte court jusqu'à {@code jusqua}. */
+    private long cumulAttentes(List<SuspensionDossier> suspensions, LocalDateTime jusqua) {
+        long total = 0L;
+        for (SuspensionDossier s : suspensions) {
+            total += JoursOuvres.ecoules(s.getDebut(), s.getFin() != null ? s.getFin() : jusqua);
+        }
+        return total;
+    }
+
+    /** « Prénoms nom » d'un contrôleur ; {@code null} si le matricule est inconnu. */
+    private String nom(String imActeur) {
+        if (imActeur == null) {
+            return null;
+        }
+        return controleurRepository.findById(imActeur).map(ChronometrageService::nomComplet).orElse(null);
+    }
+
+    private static String nomComplet(Controleur c) {
+        String prenoms = c.getPrenomsCont() == null ? "" : c.getPrenomsCont().trim();
+        String nom = c.getNomCont() == null ? "" : c.getNomCont().trim();
+        String complet = (prenoms + " " + nom).trim();
+        return complet.isEmpty() ? null : complet;
+    }
+
+    // ------------------------------------------------------------------ enrichissement en lot
+
+    /** Tâches de plusieurs dossiers, groupées — une seule requête pour toute une liste. */
+    @Transactional(readOnly = true)
+    public Map<Integer, List<TacheDossier>> tachesParDossier(Collection<Integer> idsDossiers) {
+        Map<Integer, List<TacheDossier>> parDossier = new HashMap<>();
+        if (idsDossiers == null || idsDossiers.isEmpty()) {
+            return parDossier;
+        }
+        for (TacheDossier t : tacheRepository.findParDossiers(idsDossiers)) {
+            parDossier.computeIfAbsent(t.getIdDossier(), k -> new ArrayList<>()).add(t);
+        }
+        return parDossier;
+    }
+
+    /**
+     * Statut du PV le plus récent, par dossier — une seule requête. La liste étant ordonnée par
+     * {@code idPv} croissant, la dernière valeur écrite pour un dossier est bien la plus récente.
+     */
+    @Transactional(readOnly = true)
+    public Map<Integer, String> statutsPvParDossier(Collection<Integer> idsDossiers) {
+        Map<Integer, String> parDossier = new HashMap<>();
+        if (idsDossiers == null || idsDossiers.isEmpty()) {
+            return parDossier;
+        }
+        for (Object[] ligne : pvExamenRepository.statutsPvParDossiers(idsDossiers)) {
+            if (ligne.length >= 2 && ligne[0] != null && ligne[1] != null) {
+                parDossier.put((Integer) ligne[0], (String) ligne[1]);
+            }
+        }
+        return parDossier;
+    }
+
+    /** Étape courante d'un dossier dont le statut de PV est déjà connu (enrichissement en lot). */
+    public EtapeCircuit etapeCourante(String statut, String statutPv) {
+        return etapeCourante(statut, () -> statutPv);
+    }
+}

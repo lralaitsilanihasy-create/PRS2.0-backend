@@ -77,6 +77,8 @@ public class LettreRenvoiService {
     private final LettreRenvoiDocumentGenerator documentGenerator;
     private final ReferenceService referenceService;
     private final PvExamenRepository pvExamenRepository;
+    /** ⚠️ Chronométrage des délais (2026-09-01) — suspension du compteur net pendant l'attente PRMP. */
+    private final ChronometrageService chronometrageService;
     /** ⚠️ 2026-08-28 — publie {@link LettreRenvoiSigneeEvent} : le PDF part APRÈS COMMIT. */
     private final org.springframework.context.ApplicationEventPublisher evenements;
 
@@ -90,7 +92,9 @@ public class LettreRenvoiService {
             EntiteContractRepository entiteContractRepository, LocaliteRepository localiteRepository,
             LettreRenvoiDocumentGenerator documentGenerator, ReferenceService referenceService,
             PvExamenRepository pvExamenRepository,
-            org.springframework.context.ApplicationEventPublisher evenements) {
+            org.springframework.context.ApplicationEventPublisher evenements,
+            ChronometrageService chronometrageService) {
+        this.chronometrageService = chronometrageService;
         this.evenements = evenements;
         this.pvExamenRepository = pvExamenRepository;
         this.documentGenerator = documentGenerator;
@@ -385,6 +389,9 @@ public class LettreRenvoiService {
                 || StatutDossier.A_REEXAMINER.name().equals(dossier.getStatut()))) {
             dossier.setStatut(StatutDossier.EN_ATTENTE_PIECES.name());
             dossierRepository.save(dossier);
+            // ⚠️ Chronométrage (2026-09-01) — la lettre de renvoi signée met la balle chez la PRMP :
+            // le compteur net CNM se suspend jusqu'à la transmission des compléments.
+            chronometrageService.entrerEnAttentePrmp(dossier.getIdDossier(), StatutDossier.EN_ATTENTE_PIECES);
             log.info("[CIRCUIT] examen suspendu par lettre de renvoi dossier={} acteur={} lettre={} statut={}",
                     dossier.getIdDossier(), CurrentUser.login().orElse(null), lettre.getIdLettre(),
                     StatutDossier.EN_ATTENTE_PIECES.name());

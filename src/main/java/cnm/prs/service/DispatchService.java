@@ -9,6 +9,7 @@ import cnm.prs.dto.DispatchDto;
 import cnm.prs.entity.Controleur;
 import cnm.prs.entity.Dispatch;
 import cnm.prs.entity.Reception;
+import cnm.prs.enums.EtapeCircuit;
 import cnm.prs.enums.ProfilUtilisateur;
 import cnm.prs.enums.StatutDossier;
 import cnm.prs.enums.TypeNotification;
@@ -48,12 +49,15 @@ public class DispatchService {
     private final ControleurDirectory controleurDirectory;
     private final PermissionService permissionService;
     private final ProfileRepository profileRepository;
+    /** ⚠️ Chronométrage des délais (2026-09-01) — clôture de l'étape DISPATCH. */
+    private final ChronometrageService chronometrageService;
 
     public DispatchService(DispatchRepository repository, ReceptionRepository receptionRepository,
             ControleurRepository controleurRepository, DossierRepository dossierRepository,
             NotificationService notificationService, CircuitCascadeService circuitCascadeService,
             ControleurDirectory controleurDirectory, PermissionService permissionService,
-            ProfileRepository profileRepository) {
+            ProfileRepository profileRepository, ChronometrageService chronometrageService) {
+        this.chronometrageService = chronometrageService;
         this.repository = repository;
         this.receptionRepository = receptionRepository;
         this.controleurRepository = controleurRepository;
@@ -212,6 +216,8 @@ public class DispatchService {
             if (StatutDossier.PRET_DISPATCH.name().equals(d.getStatut())) {
                 d.setStatut(StatutDossier.DISPATCHE.name());
                 dossierRepository.save(d);
+                // ⚠️ Chronométrage (2026-09-01) — le dispatch clôt l'étape DISPATCH.
+                chronometrageService.cloturer(idDossier, EtapeCircuit.DISPATCH);
                 log.info("[CIRCUIT] dispatch dossier={} acteur={} reception={} statut={}",
                         idDossier, CurrentUser.login().orElse(null), idReception,
                         StatutDossier.DISPATCHE.name());

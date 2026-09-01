@@ -98,6 +98,35 @@ public class DossierDto {
     private String nomAssistantCible;
 
     /**
+     * ⚠️ Chronométrage (2026-09-01) — <strong>date prévisionnelle d'achèvement</strong> du traitement à
+     * la CNM, en jours ouvrés, calculée <strong>entièrement serveur</strong> : aucun calcul de date côté
+     * front. {@code null} si le dossier n'est pas dans le circuit (brouillon, clos, retiré, remplacé).
+     *
+     * <p>Elle <strong>glisse</strong> : une étape en dépassement compte pour zéro dans la somme, si bien
+     * que la date recule d'un jour ouvré par jour ouvré de retard au lieu de promettre un rattrapage qui
+     * n'aura pas lieu.</p>
+     */
+    private java.time.LocalDate datePrevisionnelleFin;
+
+    /**
+     * ⚠️ Chronométrage (2026-09-01) — vrai quand <strong>la balle est chez la PRMP</strong>
+     * ({@code EN_ATTENTE_COMPLEMENTS_DEPOT}, {@code EN_ATTENTE_PIECES}, {@code EN_ATTENTE_DECISION_PRMP}).
+     * La date prévisionnelle reste calculée, mais elle glissera tant que la PRMP n'aura pas rendu la
+     * main : c'est ce drapeau qui autorise le front à le dire.
+     *
+     * <p><strong>Wrapper et non {@code boolean} primitif</strong> : ce DTO est aussi un corps de
+     * <em>requête</em> ({@code POST}/{@code PUT /api/dossiers}), et un primitif y faisait échouer la
+     * désérialisation Jackson en 400 sur toute requête ne portant pas le champ — ce qui est le cas de
+     * tous les clients, puisqu'il est en lecture seule. Initialisé à {@code false} pour n'être jamais
+     * nul en sortie.</p>
+     */
+    private Boolean attentePrmp = Boolean.FALSE;
+
+    /** ⚠️ Chronométrage (2026-09-01) — étape ouverte du circuit ; {@code null} si aucune tâche CNM ne court. */
+    @Size(max = 30)
+    private String etapeCourante;
+
+    /**
      * ⚠️ Verrou optimiste (cf. {@code docs/plan-conflit-version.md}) — numéro de version de la ligne.
      * <strong>Toujours renseigné en sortie</strong> (GET, POST, PUT), le PUT rendant la version
      * <em>incrémentée</em>. En entrée de PUT : comparé à la version courante, et s'il en diffère

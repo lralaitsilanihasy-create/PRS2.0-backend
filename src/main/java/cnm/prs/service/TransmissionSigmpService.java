@@ -12,6 +12,7 @@ import cnm.prs.entity.Controleur;
 import cnm.prs.entity.Dossier;
 import cnm.prs.entity.PvExamen;
 import cnm.prs.entity.TransmissionSigmp;
+import cnm.prs.enums.EtapeCircuit;
 import cnm.prs.enums.ProfilUtilisateur;
 import cnm.prs.enums.StatutDossier;
 import cnm.prs.enums.TypeNotification;
@@ -52,13 +53,17 @@ public class TransmissionSigmpService {
     private final ControleurDirectory controleurDirectory;
     /** ⚠️ Rattachements (2026-09-01) — ciblage de l'archivage sur la chaîne du valideur effectif. */
     private final RattachementService rattachementService;
+    /** ⚠️ Chronométrage des délais (2026-09-01) — clôture de l'étape TRANSMISSION_SIGMP. */
+    private final ChronometrageService chronometrageService;
     private final cnm.prs.repository.ControleurRepository controleurRepository;
     private final cnm.prs.security.PermissionService permissionService;
 
     public TransmissionSigmpService(TransmissionSigmpRepository repository, DossierRepository dossierRepository,
             PvExamenRepository pvExamenRepository, NotificationService notificationService,
             ControleurDirectory controleurDirectory, cnm.prs.security.PermissionService permissionService,
-            RattachementService rattachementService, cnm.prs.repository.ControleurRepository controleurRepository) {
+            RattachementService rattachementService, cnm.prs.repository.ControleurRepository controleurRepository,
+            ChronometrageService chronometrageService) {
+        this.chronometrageService = chronometrageService;
         this.rattachementService = rattachementService;
         this.controleurRepository = controleurRepository;
         this.repository = repository;
@@ -147,6 +152,9 @@ public class TransmissionSigmpService {
 
         dossier.setStatut(StatutDossier.DECISION_TRANSMISE_SIGMP.name());
         dossierRepository.save(dossier);
+        // ⚠️ Chronométrage (2026-09-01) — la transmission à SIGMP clôt l'étape TRANSMISSION_SIGMP et
+        // ARRÊTE le compteur global : c'est la « validation sur SIGMP » de la règle du pilote.
+        chronometrageService.cloturer(dossier.getIdDossier(), EtapeCircuit.TRANSMISSION_SIGMP);
         notifierAssistantsPvAArchiver(dossier, pv, sens, levee);
         return toDto(saved);
     }

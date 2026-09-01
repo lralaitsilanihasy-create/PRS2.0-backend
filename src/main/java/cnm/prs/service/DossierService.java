@@ -135,6 +135,10 @@ public class DossierService {
     private final LotRepository lotRepository;
     private final AnomalieRepository anomalieRepository;
     private final PieceDemandeRetraitRepository pieceDemandeRetraitRepository;
+    /** ⚠️ Chronométrage des délais (2026-09-01) — suspensions PRMP et date prévisionnelle de fin. */
+    private final ChronometrageService chronometrage;
+    /** ⚠️ Chronométrage des délais (2026-09-01) — référentiel lu une fois par liste. */
+    private final DelaiStandardService delaiStandardService;
 
     public DossierService(DossierRepository repository, PpmRepository ppmRepository,
             ControleurDirectory controleurDirectory, NotificationService notificationService,
@@ -154,7 +158,10 @@ public class DossierService {
             ActeurDirectory acteurDirectory, CircuitCascadeService circuitCascadeService,
             ChangementLigneRepository changementLigneRepository, MessageRepository messageRepository,
             LotRepository lotRepository, AnomalieRepository anomalieRepository,
-            PieceDemandeRetraitRepository pieceDemandeRetraitRepository) {
+            PieceDemandeRetraitRepository pieceDemandeRetraitRepository,
+            ChronometrageService chronometrage, DelaiStandardService delaiStandardService) {
+        this.delaiStandardService = delaiStandardService;
+        this.chronometrage = chronometrage;
         this.circuitCascadeService = circuitCascadeService;
         this.changementLigneRepository = changementLigneRepository;
         this.messageRepository = messageRepository;
@@ -579,6 +586,33 @@ public class DossierService {
             dto.setImAssistantCible(assistant);
             dto.setNomAssistantCible(nomDans(annuaire, assistant));
         }
+        enrichirChronometrage(dtos, ids);
+    }
+
+    /**
+     * ⚠️ Chronométrage (2026-09-01) — date prévisionnelle de fin, étape courante et drapeau d'attente
+     * PRMP, posés <strong>en lot</strong> : deux requêtes de plus (les tâches de tous les dossiers, les
+     * statuts de PV de tous les dossiers) quelle que soit la taille de la liste.
+     *
+     * <p>Le calcul lui-même est en mémoire — le référentiel des délais standards est relu par étape,
+     * mais il ne compte que huit lignes et Hibernate le sert depuis son cache de premier niveau pour
+     * toute la durée de la transaction.</p>
+     */
+    private void enrichirChronometrage(List<DossierDto> dtos, List<Integer> ids) {
+        Map<Integer, List<cnm.prs.entity.TacheDossier>> taches = chronometrage.tachesParDossier(ids);
+        Map<Integer, String> statutsPv = chronometrage.statutsPvParDossier(ids);
+        // Référentiel lu UNE fois pour toute la liste, en projection scalaire : relire les délais par
+        // étape et par dossier chargeait assez d'entités pour faire tomber le contrat de pagination.
+        Map<cnm.prs.enums.EtapeCircuit, Integer> delais = delaiStandardService.delais();
+        java.time.LocalDate aujourdhui = java.time.LocalDate.now();
+        for (DossierDto dto : dtos) {
+            String statutPv = statutsPv.get(dto.getIdDossier());
+            dto.setDatePrevisionnelleFin(chronometrage.datePrevisionnelleFin(dto.getStatut(), statutPv,
+                    taches.getOrDefault(dto.getIdDossier(), List.of()), aujourdhui, delais));
+            dto.setAttentePrmp(ChronometrageService.estEnAttentePrmp(dto.getStatut()));
+            cnm.prs.enums.EtapeCircuit etape = chronometrage.etapeCourante(dto.getStatut(), statutPv);
+            dto.setEtapeCourante(etape == null ? null : etape.name());
+        }
     }
 
     /** Rattaché d'un porteur dans l'annuaire déjà chargé ; {@code null} si absent ou disparu. */
@@ -896,6 +930,8 @@ public class DossierService {
                             + dossier.getStatut() + " »).");
         }
         dossier.setStatut(StatutDossier.EN_VERIFICATION.name());
+        // ⚠️ Chronométrage (2026-09-01) — sortie d'attente PRMP : le compteur net CNM redémarre.
+        chronometrage.sortirDAttentePrmp(idDossier);
         repository.save(dossier);
         log.info("[CIRCUIT] resoumission apres decision PRMP dossier={} acteur={} statut={}",
                 idDossier, CurrentUser.login().orElse(null), StatutDossier.EN_VERIFICATION.name());
@@ -932,6 +968,8 @@ public class DossierService {
             throw new BusinessRuleException("Aucune pièce manquante ou non conforme relevée : rien à signaler.");
         }
         dossier.setStatut(StatutDossier.EN_ATTENTE_COMPLEMENTS_DEPOT.name());
+        // ⚠️ Chronométrage (2026-09-01) — incomplétude au dépôt : la balle repasse à la PRMP.
+        chronometrage.entrerEnAttentePrmp(idDossier, StatutDossier.EN_ATTENTE_COMPLEMENTS_DEPOT);
         repository.save(dossier);
         log.info("[CIRCUIT] defauts de depot signales dossier={} acteur={} nbDefauts={}",
                 idDossier, CurrentUser.login().orElse(null), defauts.size());
@@ -968,6 +1006,8 @@ public class DossierService {
                             + dossier.getStatut() + " »).");
         }
         dossier.setStatut(StatutDossier.SOUMIS.name());
+        // ⚠️ Chronométrage (2026-09-01) — sortie d'attente PRMP : le compteur net CNM redémarre.
+        chronometrage.sortirDAttentePrmp(idDossier);
         repository.save(dossier);
         log.info("[CIRCUIT] complements de depot transmis dossier={} acteur={} statut={}",
                 idDossier, CurrentUser.login().orElse(null), StatutDossier.SOUMIS.name());
@@ -1033,6 +1073,8 @@ public class DossierService {
                             + "lieu qu'une fois les pièces nécessaires présentes.");
         }
         dossier.setStatut(StatutDossier.A_REEXAMINER.name());
+        // ⚠️ Chronométrage (2026-09-01) — sortie d'attente PRMP : le compteur net CNM redémarre.
+        chronometrage.sortirDAttentePrmp(idDossier);
         repository.save(dossier);
         log.info("[CIRCUIT] complements de renvoi transmis dossier={} acteur={} lettre={}",
                 idDossier, CurrentUser.login().orElse(null), idLettre);

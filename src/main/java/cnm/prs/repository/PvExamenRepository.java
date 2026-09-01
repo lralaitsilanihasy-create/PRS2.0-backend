@@ -179,4 +179,18 @@ public interface PvExamenRepository extends JpaRepository<PvExamen, Integer> {
     @Query("select (count(pv) > 0) from PvExamen pv "
             + "where pv.imCtrlPresident = :im or pv.imCtrlCc = :im or pv.imCtrlMembre = :im")
     boolean existsAvecControleur(@Param("im") String im);
+
+    /**
+     * ⚠️ Chronométrage (2026-09-01) — statut du PV le plus récent d'un dossier. Le statut
+     * {@code EXAMINE} du dossier couvre trois moments distincts (le Membre rédige, le dispatcheur vise,
+     * le Membre co-signe) : c'est ce statut-ci qui départage l'étape en cours.
+     */
+    @Query("select pv.statutPv from PvExamen pv "
+            + "where pv.examen.dispatch.reception.idDossier = :idDossier order by pv.idPv desc")
+    List<String> statutsPvParDossier(@Param("idDossier") Integer idDossier);
+
+    /** Même information EN LOT, pour l'enrichissement des listes de dossiers (une seule requête). */
+    @Query("select pv.examen.dispatch.reception.idDossier, pv.statutPv from PvExamen pv "
+            + "where pv.examen.dispatch.reception.idDossier in :ids order by pv.idPv asc")
+    List<Object[]> statutsPvParDossiers(@Param("ids") java.util.Collection<Integer> ids);
 }

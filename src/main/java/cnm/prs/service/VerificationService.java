@@ -15,6 +15,7 @@ import cnm.prs.entity.Dossier;
 import cnm.prs.entity.Prmp;
 import cnm.prs.entity.Reception;
 import cnm.prs.entity.Verification;
+import cnm.prs.enums.EtapeCircuit;
 import cnm.prs.enums.ProfilUtilisateur;
 import cnm.prs.enums.StatutDossier;
 import cnm.prs.enums.StatutPv;
@@ -53,13 +54,17 @@ public class VerificationService {
     private final PrmpRepository prmpRepository;
     private final ObservationPvRepository observationPvRepository;
     private final cnm.prs.security.PermissionService permissionService;
+    /** ⚠️ Chronométrage des délais (2026-09-01) — clôture VERIFICATION et suspension PRMP. */
+    private final ChronometrageService chronometrageService;
 
     public VerificationService(VerificationRepository repository, ReceptionRepository receptionRepository,
             DossierRepository dossierRepository, PvExamenRepository pvExamenRepository,
             ControleurDirectory controleurDirectory, NotificationService notificationService,
             AuditLogRepository auditLogRepository, PrmpRepository prmpRepository,
             ObservationPvRepository observationPvRepository,
-            cnm.prs.security.PermissionService permissionService) {
+            cnm.prs.security.PermissionService permissionService,
+            ChronometrageService chronometrageService) {
+        this.chronometrageService = chronometrageService;
         this.permissionService = permissionService;
         this.observationPvRepository = observationPvRepository;
         this.repository = repository;
@@ -246,6 +251,11 @@ public class VerificationService {
             if (!StatutDossier.EN_VERIFICATION.name().equals(dossier.getStatut())) {
                 return;
             }
+            // ⚠️ Chronométrage (2026-09-01) — l'acte de vérification clôt l'étape VERIFICATION, quel
+            // que soit son sens. C'est la raison pour laquelle la vérification et la transmission SIGMP
+            // sont DEUX étapes : entre elles peut s'ouvrir une attente PRMP, qui ne doit être imputée
+            // à personne à la CNM.
+            chronometrageService.cloturer(idDossier, EtapeCircuit.VERIFICATION);
             if (Boolean.TRUE.equals(verification.getObsLevees())) {
                 dossier.setStatut(StatutDossier.OBSERVATIONS_LEVEES.name());
                 dossierRepository.save(dossier);
@@ -255,6 +265,9 @@ public class VerificationService {
             } else {
                 dossier.setStatut(StatutDossier.EN_ATTENTE_DECISION_PRMP.name());
                 dossierRepository.save(dossier);
+                // ⚠️ Chronométrage (2026-09-01) — la balle passe à la PRMP : le compteur net CNM se
+                // suspend ici et reprendra à la resoumission.
+                chronometrageService.entrerEnAttentePrmp(idDossier, StatutDossier.EN_ATTENTE_DECISION_PRMP);
                 log.info("[CIRCUIT] verification observations non levees dossier={} acteur={} verification={} statut={}",
                         idDossier, CurrentUser.login().orElse(null), verification.getIdVerification(),
                         StatutDossier.EN_ATTENTE_DECISION_PRMP.name());

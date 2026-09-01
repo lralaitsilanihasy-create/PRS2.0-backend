@@ -280,6 +280,51 @@ comptage des non-lues, marquer lu) ; la **liste globale** est réservée à l'**
 > **tous** les porteurs du rôle dans la localité, exactement comme avant. Un rattachement manquant ne
 > fait **jamais** disparaître une notification.
 
+### Chronométrage et prévision des délais (transversal au circuit)
+
+⚠️ **Règle du pilote (2026-09-01)** — la PRMP doit connaître la **date prévisionnelle d'achèvement** du
+traitement de son dossier. Chaque tâche affectée à un profil est chronométrée ; le **compteur global**
+court de l'**enregistrement** du dossier à la **validation sur SIGMP**.
+
+**Huit étapes**, chacune avec un porteur, un statut d'éligibilité et un **geste métier de clôture qui
+existe déjà** — la fin d'une tâche n'est jamais saisie, elle se déduit de l'acte que le porteur pose de
+toute façon : `RECEPTION` (Secrétaire), `DISPATCH` (P/CC), `EXAMEN` (Membre), `VISA` (dispatcheur ou son
+intérimaire), `COSIGNATURE` (Membre), `VERIFICATION` (Vérificateur), `TRANSMISSION_SIGMP` (Vérificateur),
+`ARCHIVAGE` (Assistant — chronométré mais **hors compteur global**).
+
+- **Prise en charge = geste EXPLICITE.** Le porteur ouvre sa tâche et saisit sa prévision en jours
+  ouvrés. Le temps d'attente **avant** la prise en charge est ainsi mesuré lui aussi. La prévision reste
+  corrigeable tant que la tâche est ouverte.
+- ⚠️ **Le chronométrage n'empêche JAMAIS le métier.** Un geste de clôture posé sans prise en charge
+  préalable n'est pas bloqué : l'occurrence est créée avec une durée nulle et la prévision standard. Un
+  chronomètre qui bloquerait un dossier serait pire que pas de chronomètre.
+- **Étapes rejouables** : réexamen, nouvelle navette de visa, passage supplémentaire du Vérificateur dans
+  la boucle FAVR — chaque occurrence est un enregistrement **distinct, append-only**, et la prévision se
+  ressaisit à chaque fois. C'est ce qui rend visible le nombre d'aller-retours.
+- **Jours ouvrés** : samedi et dimanche exclus, **jours fériés hors périmètre v1**. Le chronométrage est
+  horodaté **à la seconde** ; seule la restitution convertit en jours ouvrés, pour que le jour où les
+  fériés entreront dans le périmètre tout reste recalculable.
+
+**Deux compteurs.** Le **brut** (enregistrement → SIGMP, à la lettre) et le **net CNM**, où les périodes
+« balle chez la PRMP » sont **suspendues** — c'est le net qui juge la CNM. Statuts suspensifs, trois et
+trois seulement : `EN_ATTENTE_COMPLEMENTS_DEPOT`, `EN_ATTENTE_PIECES`, `EN_ATTENTE_DECISION_PRMP`. La
+« rectification des documents témoins » n'en est pas un quatrième : c'est exactement
+`EN_ATTENTE_DECISION_PRMP`, pendant laquelle la PRMP corrige puis resoumet.
+
+⚠️ **La vérification et la transmission SIGMP sont DEUX étapes.** Quand les observations ne sont pas
+levées, le dossier passe à `EN_ATTENTE_DECISION_PRMP` **entre** les deux actes. Une tâche unique
+enjamberait cette attente et ferait porter au Vérificateur le temps de la PRMP, alors que la règle veut
+précisément qu'aucune tâche CNM ne coure pendant ces fenêtres.
+
+**La date annoncée** = `aujourd'hui + reste(étape en cours) + Σ prévisions des étapes restantes`, en
+jours ouvrés, **calculée entièrement serveur**. Les étapes non encore prises en charge comptent pour leur
+**délai standard** (référentiel administrable), d'où une date disponible **dès la soumission**. Une étape
+en dépassement compte **0** : la date **glisse** au lieu de promettre un rattrapage qui n'aura pas lieu.
+Pendant une attente PRMP la date reste calculée, accompagnée du drapeau `attentePrmp`.
+
+> **Transition** : la base ayant été réinitialisée le 01/09, aucune reprise d'historique. Les dossiers
+> créés après le déploiement sont chronométrés dès leur soumission.
+
 ### Actualités à l'ouverture de session (transversal)
 
 ⚠️ **Règle ajoutée (2026-08-19, spec du 2026-08-18)** — un **modal d'actualités** (mini-page markdown +
@@ -502,6 +547,18 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
   - ⚠️ **Règle ajoutée** : les PK dossier / PPM / marché sont **allouées par une séquence serveur** (`seq_dossier`/`seq_ppm`/`seq_marche`) ; tout id envoyé par le client est **ignoré** (plus de « identifiant en doublon »). Le formulaire ne saisit plus d'id. **Dette documentée** : séquence applicative (et non `IDENTITY`) pour éviter une refonte massive des fixtures de test sur ces 3 tables centrales ; bascule `IDENTITY` possible plus tard.
 - Suppression d'un marché / d'un PPM [Écriture]
   - ⚠️ **Règle ajoutée** : possible **uniquement** si le **dossier rattaché est en BROUILLON** et **propriété** de la PRMP (sinon **403** « Vous n'êtes pas le propriétaire… » / **409** « Opération impossible : le dossier n'est pas un brouillon »). Supprimer un **marché** efface **en cascade** ses **dates prévisionnelles** (`t_marche_prevision`) ; supprimer un **PPM** efface **en cascade** ses **marchés** et leurs prévisions — le tout dans la **même transaction** (la cascade ne touche **que** les enfants de la cible). *(Côté SGBD, un filet de sécurité distingue désormais les violations FK / doublon / valeur obligatoire.)*
+
+- Date prévisionnelle de fin de traitement [Lecture] ⚠️ **Règle ajoutée (2026-09-01)**
+  - Chaque dossier porte sa **date prévisionnelle d'achèvement** à la CNM (`datePrevisionnelleFin` sur
+    `DossierDto`, présent sur la lecture unitaire **et** sur les listes), en jours ouvrés et **calculée
+    entièrement serveur**. Elle est disponible **dès la soumission**, avant que quiconque à la CNM ait
+    touché le dossier.
+  - Le drapeau **`attentePrmp`** l'accompagne : quand la balle est chez la PRMP
+    (`EN_ATTENTE_COMPLEMENTS_DEPOT`, `EN_ATTENTE_PIECES`, `EN_ATTENTE_DECISION_PRMP`), la date reste
+    calculée mais **glisse tant que la PRMP n'a pas rendu la main** — c'est le net CNM qui juge la
+    Commission, pas le temps que la PRMP prend à rectifier.
+  - `GET /api/dossiers/{id}/chronometrage` détaille les étapes franchies, leurs acteurs et les deux
+    compteurs. Détail de la règle : section « Chronométrage et prévision des délais » en §2.
 
 **Module 03 — Soumission & retours**
 
@@ -1053,6 +1110,17 @@ Accès complet aux référentiels, comptes utilisateurs, journal d'audit, hiéra
   - Plan comptable tr_compte et répertoire tr_entite_contract.
 - Délégations de profil [Écriture]
   - Gestion des entrées t_delegation_profil — quels profils peuvent exercer les tâches d'autres profils.
+- Délais standards du circuit [Écriture] ⚠️ **Règle ajoutée (2026-09-01)**
+  - Référentiel administrable des **délais par étape** (`GET /api/delais-standards`,
+    `PUT /api/delais-standards/{etape}`), en jours ouvrés. Il fournit la prévision des étapes **pas
+    encore prises en charge**, ce qui permet d'annoncer une date à la PRMP **dès la soumission** ; chaque
+    prise en charge le remplace, pour son étape, par la prévision réellement saisie.
+  - **Lecture ouverte** à tout utilisateur authentifié : ces délais expliquent la date annoncée, et une
+    date qu'on ne peut pas expliquer se conteste mal. **Écriture réservée à l'Administrateur.**
+  - Le référentiel rend **toujours les huit étapes**, même si la table en manque une (repli à 1 jour) :
+    un trou ferait disparaître un terme de la somme et la date serait silencieusement trop optimiste.
+    Délai **< 1 refusé** (400), étape hors circuit refusée (404). Détail : section « Chronométrage et
+    prévision des délais » en §2.
 - Rattachements Membre → Vérificateur → Assistant [Écriture] ⚠️ **Règle ajoutée (2026-09-01)**
   - Écran de gestion de la chaîne nominative (§1.7) : `GET /api/controleurs/rattachements` liste les
     Membres et Vérificateurs du périmètre avec leur rattaché résolu et le **profil attendu** ;

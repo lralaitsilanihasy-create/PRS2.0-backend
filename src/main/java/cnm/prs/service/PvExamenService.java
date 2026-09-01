@@ -21,6 +21,7 @@ import cnm.prs.entity.Dossier;
 import cnm.prs.entity.Prmp;
 import cnm.prs.entity.PvExamen;
 import cnm.prs.entity.PvNavette;
+import cnm.prs.enums.EtapeCircuit;
 import cnm.prs.enums.ProfilUtilisateur;
 import cnm.prs.enums.RoleSignataire;
 import cnm.prs.enums.SensNavette;
@@ -74,6 +75,8 @@ public class PvExamenService {
     private final NotificationService notificationService;
     /** ⚠️ Rattachements (2026-09-01) — ciblage des notifications du circuit FAVR. */
     private final RattachementService rattachementService;
+    /** ⚠️ Chronométrage des délais (2026-09-01) — clôtures EXAMEN, VISA, COSIGNATURE et ARCHIVAGE. */
+    private final ChronometrageService chronometrageService;
     private final ControleurDirectory controleurDirectory;
     private final DossierRepository dossierRepository;
     private final ControleurRepository controleurRepository;
@@ -95,7 +98,8 @@ public class PvExamenService {
             ObservationPvService observationPvService,
             cnm.prs.security.PermissionService permissionService,
             org.springframework.context.ApplicationEventPublisher evenements,
-            PvDocumentTache documentTache) {
+            PvDocumentTache documentTache, ChronometrageService chronometrageService) {
+        this.chronometrageService = chronometrageService;
         this.observationPvService = observationPvService;
         this.permissionService = permissionService;
         this.evenements = evenements;
@@ -469,6 +473,9 @@ public class PvExamenService {
                 }
             });
         }
+        // ⚠️ Chronométrage (2026-09-01) — la soumission du projet de PV clôt l'étape EXAMEN. Rejouable :
+        // un réexamen après lettre de renvoi ou un retour de navette ouvre une occurrence de plus.
+        chronometrageService.cloturer(idDossier, EtapeCircuit.EXAMEN);
         log.info("[CIRCUIT] navette PV soumission dossier={} acteur={} pv={} statutPv={} navettes={}",
                 idDossier, CurrentUser.login().orElse(null), saved.getIdPv(),
                 StatutPv.PROJET_SOUMIS.name(), saved.getNbNavettes());
@@ -837,6 +844,9 @@ public class PvExamenService {
             ajouterNavette(pv, SensNavette.ACCEPTATION, req.commentaire());
         }
         PvExamen saved = repository.save(pv);
+        // ⚠️ Chronométrage (2026-09-01) — le visa clôt l'étape VISA. Rejouable : chaque navette de
+        // retour au Membre, suivie d'un nouveau visa, ouvre une occurrence de plus.
+        chronometrageService.cloturer(dossierDuPv(saved.getIdPv()), EtapeCircuit.VISA);
         log.info("[CIRCUIT] visa PV dossier={} acteur={} pv={} statutPv={} navettes={} interim={}",
                 dossierDuPv(saved.getIdPv()), CurrentUser.login().orElse(null), saved.getIdPv(),
                 StatutPv.PROJET_ACCEPTE.name(), saved.getNbNavettes(), interim);
@@ -921,6 +931,8 @@ public class PvExamenService {
         if (membreSigne && coSigne) {
             pv.setStatutPv(StatutPv.SIGNE.name());
             pv.setDatePv(today);
+            // ⚠️ Chronométrage (2026-09-01) — la co-signature du Membre clôt l'étape COSIGNATURE.
+            chronometrageService.cloturer(dossierDuPv(pv.getIdPv()), EtapeCircuit.COSIGNATURE);
             log.info("[CIRCUIT] signature PV dossier={} acteur={} pv={} statutPv={}",
                     dossierDuPv(pv.getIdPv()), CurrentUser.login().orElse(null), pv.getIdPv(),
                     StatutPv.SIGNE.name());
@@ -977,6 +989,9 @@ public class PvExamenService {
         PvExamen saved = repository.save(pv);
         dossier.setStatut(StatutDossier.CLOTURE.name());
         dossierRepository.save(dossier);
+        // ⚠️ Chronométrage (2026-09-01) — l'archivage clôt l'étape ARCHIVAGE, chronométrée par profil
+        // mais HORS compteur global : la règle du pilote arrête le chronomètre à la validation SIGMP.
+        chronometrageService.cloturer(idDossier, EtapeCircuit.ARCHIVAGE);
         log.info("[CIRCUIT] archivage PV et cloture dossier={} acteur={} pv={} statut={}",
                 idDossier, CurrentUser.login().orElse(null), saved.getIdPv(),
                 StatutDossier.CLOTURE.name());

@@ -4930,3 +4930,125 @@ supprimable.
 ```json
 { "idVerification": 9012, "idReception": 5500, "idPv": 7321, "imCtrlVerif": "VERANT1", "dateVerif": "2026-06-11", "observation": "Observations levées", "obsLevees": true }
 ```
+
+---
+
+## Chronométrage et prévision des délais
+
+⚠️ **Règle du pilote (2026-09-01)** — la PRMP doit connaître la **date prévisionnelle d'achèvement** du
+traitement de son dossier à la CNM. Chaque tâche affectée à un profil est chronométrée ; à la prise en
+charge, le porteur saisit sa prévision ; la date annoncée est *aujourd'hui + somme des prévisions des
+étapes restantes*, en **jours ouvrés**. **Aucun calcul de date côté front** : tout vient du serveur.
+
+### Les huit étapes
+
+| # | `etape` | Porteur | Éligible dès | Close par |
+|---|---|---|---|---|
+| 0 | `RECEPTION` | Secrétaire | `SOUMIS` | réception marquée `COMPLET` |
+| 1 | `DISPATCH` | Président / CC | `PRET_DISPATCH` | `POST /api/dispatchs` |
+| 2 | `EXAMEN` | Membre dispatché | `DISPATCHE`, `A_REEXAMINER`, PV `BROUILLON`/`EN_RECTIFICATION` | `POST /api/pv-examens/{id}/soumettre` |
+| 3 | `VISA` | P/CC dispatcheur (ou intérim) | PV `PROJET_SOUMIS` | `POST /api/pv-examens/{id}/viser` |
+| 4 | `COSIGNATURE` | Membre | PV `PROJET_ACCEPTE` | `POST /api/pv-examens/{id}/signer` |
+| 5 | `VERIFICATION` | Vérificateur | `EN_VERIFICATION` | `POST /api/verifications` |
+| 6 | `TRANSMISSION_SIGMP` | Vérificateur | `OBSERVATIONS_LEVEES` | `POST /api/transmissions-sigmp` |
+| 7 | `ARCHIVAGE` | Assistant | `DECISION_TRANSMISE_SIGMP` | `POST /api/pv-examens/{id}/archiver` |
+
+Le **compteur global** court de la clôture de `RECEPTION` à celle de `TRANSMISSION_SIGMP` — l'étape
+`ARCHIVAGE` est chronométrée par profil mais **hors compteur**, la règle du pilote arrêtant le
+chronomètre à la validation sur SIGMP.
+
+> ⚠️ **La vérification et la transmission SIGMP sont DEUX étapes**, alors que la demande n'en proposait
+> qu'une. Quand les observations ne sont pas levées, le dossier passe à `EN_ATTENTE_DECISION_PRMP`
+> **entre** les deux actes : une tâche unique enjamberait cette attente et l'imputerait au Vérificateur.
+>
+> ⚠️ **L'étape `RECEPTION` ne se clôt pas par « attribuer un numéro »** — ce geste n'existe pas dans ce
+> circuit. C'est la **réception marquée `COMPLET`** (celle qui déclenche `PRET_DISPATCH`) qui la clôt.
+
+**Étapes rejouables.** Un réexamen, une nouvelle navette de visa, un passage supplémentaire du
+Vérificateur dans la boucle FAVR créent chacun une **occurrence distincte** (`occurrence` = 1, 2, 3…),
+jamais une mise à jour de la précédente : la table est **append-only**, et c'est ce qui rend visible le
+nombre d'aller-retours.
+
+### Prise en charge
+
+| Méthode | URL | Corps | Réponse | Statuts | Rôle |
+|---|---|---|---|---|---|
+| POST | /api/dossiers/{id}/prise-en-charge | `{ "previsionJours": 4 }` | `TacheDossierDto` | 200, 400, 403, 404, 409 | porteur de l'étape courante |
+| GET | /api/dossiers/{id}/chronometrage | — | `ChronometrageDto` | 200, 403, 404 | même périmètre que le dossier |
+| GET | /api/delais-standards | — | `DelaiStandardDto[]` | 200 | Authentifié |
+| PUT | /api/delais-standards/{etape} | `DelaiStandardDto` | `DelaiStandardDto` | 200, 400, 403, 404 | **ADMINISTRATEUR** |
+
+`previsionJours` : entier **≥ 1** (0 ou absent → **400**). **403** si l'appelant n'est pas le porteur de
+l'étape (délégations et intérim résolus par la garde centrale) ou si le dossier n'est pas de sa
+localité ; **409** si aucune étape n'est ouverte — brouillon, attente PRMP, dossier clos ou retiré.
+
+**Rejouer le POST sur une tâche encore ouverte corrige la prévision** et ne crée pas d'occurrence :
+corriger son estimation n'est pas recommencer sa tâche.
+
+> ⚠️ **TOLÉRANCE — le chronométrage n'empêche jamais le métier.** Un geste de clôture posé **sans prise
+> en charge préalable** n'est pas bloqué : le serveur crée l'occurrence avec `priseEnCharge = fin`
+> (durée nulle) et la prévision **standard** du référentiel. Aucun écran ne peut se retrouver coincé
+> parce qu'un bouton « Prendre en charge » n'a pas été cliqué.
+
+> **La garde de la prise en charge est plus légère que celle du geste métier** : profil effectif +
+> localité, sans rejouer les huit gardes métier (qui restent intactes sur leur propre acte). Une prise
+> en charge indue n'altère aucune donnée — elle ne fait que démarrer un chronomètre.
+
+**`TacheDossierDto`** = `{etape, occurrence, imActeur, nomActeur, profil, priseEnCharge, fin,
+previsionJours, previsionStandard, dureeJoursOuvres, enCours}`. `priseEnCharge`/`fin` sont horodatés
+**à la seconde** ; `dureeJoursOuvres` est la conversion en ouvrés (pour une tâche en cours, le temps
+déjà écoulé). `previsionStandard = true` signale une prévision venue du référentiel, pas d'une saisie.
+
+**`ChronometrageDto`** = `{idDossier, taches[], debutCompteur, finCompteur, dureeBruteJoursOuvres,
+dureeNetteJoursOuvres, attentePrmpJoursOuvres, etapeCourante, attentePrmp, datePrevisionnelleFin}`.
+
+### Les deux compteurs
+
+- **Brut** — `debutCompteur` → `finCompteur`, à la lettre de la règle (enregistrement → validation SIGMP).
+- **Net CNM** — le brut **moins les attentes PRMP**. C'est lui qui juge la CNM.
+
+**Statuts suspensifs** (cartographie validée, trois et trois seulement) : `EN_ATTENTE_COMPLEMENTS_DEPOT`,
+`EN_ATTENTE_PIECES`, `EN_ATTENTE_DECISION_PRMP`. La « rectification des documents témoins » n'en est pas
+un quatrième — c'est exactement `EN_ATTENTE_DECISION_PRMP`, pendant laquelle la PRMP corrige et resoumet.
+
+### Champs sur `DossierDto`
+
+| Champ | Type | Sens |
+|---|---|---|
+| `datePrevisionnelleFin` | string (date) \| null | date annoncée, en jours ouvrés ; `null` hors circuit (brouillon, clos, retiré, remplacé) |
+| `attentePrmp` | boolean | vrai quand la balle est **chez la PRMP** |
+| `etapeCourante` | string \| null | étape ouverte ; `null` si aucune tâche CNM ne court |
+
+Présents sur `GET /api/dossiers/{id}` **et** sur les listes, résolus **en lot** (deux requêtes de plus
+quelle que soit la taille de la liste).
+
+### Le calcul
+
+```
+datePrevisionnelleFin = aujourd'hui
+                      + reste(étape en cours)
+                      + Σ prévisions des étapes restantes jusqu'à TRANSMISSION_SIGMP incluse
+reste = max(0, prévision − jours ouvrés écoulés depuis la prise en charge)
+```
+
+- **Une étape en dépassement compte 0** : la date **glisse** d'un jour ouvré par jour de retard au lieu
+  de promettre un rattrapage qui n'aura pas lieu.
+- Une étape **non prise en charge** compte pour son **délai standard** — d'où une date annoncée **dès la
+  soumission**, avant que quiconque à la CNM ait touché le dossier.
+- **Jours ouvrés** : samedi et dimanche exclus ; **jours fériés hors périmètre v1**.
+- Pendant une attente PRMP, la date **reste calculée** et `attentePrmp` l'accompagne. L'étape qui
+  **reprendra** est prise en compte : après des observations non levées, la vérification sera **rejouée**,
+  et elle compte donc encore dans la somme.
+
+### Référentiel des délais standards
+
+`GET /api/delais-standards` rend **toujours les huit étapes**, même si la table en manque une (repli à
+1 jour) : un trou ferait disparaître un terme de la somme et la date serait silencieusement trop
+optimiste. Seed initial : `RECEPTION 1`, `DISPATCH 1`, `EXAMEN 5`, `VISA 2`, `COSIGNATURE 1`,
+`VERIFICATION 3`, `TRANSMISSION_SIGMP 1`, `ARCHIVAGE 2`.
+
+`PUT /api/delais-standards/{etape}` — **400** si `delaiJours < 1`, **404** si l'étape n'existe pas,
+**403** hors Administrateur.
+
+> **Transition** : la base ayant été réinitialisée le 01/09, **aucune reprise d'historique**. Les
+> dossiers créés après le déploiement sont chronométrés dès leur soumission ; rien n'est reconstitué.
