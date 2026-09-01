@@ -925,12 +925,15 @@ class AuthentificationHabilitationIntegrationTest extends CnmIntegrationTestSupp
                 "le cookie XSRF-TOKEN doit être posé dès la première réponse (chargement immédiat)");
 
         // 3) Mutation cookie-seul SANS X-XSRF-TOKEN → 403 (garde CSRF, ciblée sur le canal cookie).
-        // ⚠️ Recette 2026-08-27 — sur HTTP RÉEL, le client voit un 401 au corps vide, pas ce 403 : le
-        // sendError de la garde déclenche un ré-aiguillage ERROR du conteneur vers /error, où le filtre
-        // d'authentification (une-fois-par-requête) ne rejoue pas — le point d'entrée écrase le 403 par
-        // un 401. MockMvc ne rejoue pas ce ré-aiguillage, d'où le 403 nu observé ici. C'est bien la
-        // garde qui est éprouvée dans les deux cas ; le contrat rendu au client est documenté dans
-        // docs/api-endpoints.md (§ Authentification, encadré « à lire avant de scripter au curl »).
+        // ⚠️ CORRIGÉ le 2026-09-01 — ce commentaire décrivait jusqu'ici un écart entre MockMvc et HTTP
+        // réel : le sendError de la garde provoquait un ré-aiguillage vers /error, où le point d'entrée
+        // écrasait le 403 par un 401 au corps vide. On l'avait consigné comme une fatalité du conteneur ;
+        // c'en était une seulement tant qu'on passait par sendError. La garde écrit désormais sa réponse
+        // directement, et le 403 vaut sur les deux canaux. Le défaut a coûté une recette entière le
+        // 2026-09-01 : le front, déconnectant sur 401, mettait dehors un utilisateur dont la session
+        // était valide, et cherchait le bug dans une garde d'autorisation qui fonctionnait.
+        // ⚠️ Aucun test ne pouvait attraper cet écart : MockMvc ne rejoue pas le ré-aiguillage, il voyait
+        // donc déjà le 403 attendu. La non-régression est ici, mais elle ne prouve que la moitié.
         mvc.perform(post("/api/dossiers/1/resoumettre").cookie(session)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"motifRectification\":\"x\"}"))
                 .andExpect(status().isForbidden());

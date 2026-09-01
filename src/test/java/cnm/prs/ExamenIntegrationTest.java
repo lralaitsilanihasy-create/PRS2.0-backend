@@ -49,9 +49,13 @@ class ExamenIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$.statut").value("DISPATCHE"));
 
         // La soumission de l'examen (projet de PV) fait passer le dossier EXAMINE.
+        // ⚠️ 2026-09-01 (défaut de recette) — la RÉPONSE doit déjà porter le dispatcheur : le front
+        // conditionne le bouton « Viser » dessus, et le laisser nul l'obligeait à relire le PV.
         mvc.perform(post("/api/examens/80/soumettre").header("Authorization", tokenMembre)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"idAvis\":\"FAV\"}"))
-                .andExpect(status().isCreated());
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.imDispatcheur").value("CTRCC1"))
+                .andExpect(jsonPath("$.nomDispatcheur").exists());
         mvc.perform(get("/api/dossiers/30").header("Authorization", tokenCc))
                 .andExpect(jsonPath("$.statut").value("EXAMINE"));
 
@@ -389,6 +393,30 @@ class ExamenIntegrationTest extends CnmIntegrationTestSupport {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDetailExamen\":942,\"idExamen\":1,\"idPtControle\":1,\"conforme\":false}"))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Pièces d'examen — REPRISE d'examen : le propriétaire RÉÉCRIT un constat déjà posé (200). "
+            + "⚠️ Défaut de recette du 2026-09-01 : le cas nominal du PUT n'était couvert nulle part")
+    void examenPieces_reecritureParLeProprietaire_ok() throws Exception {
+        // Le Membre attributaire pose un constat, puis le réécrit — c'est exactement ce que fait la
+        // réconciliation du front à la REPRISE d'un examen : elle re-PUT chaque résultat déjà statué.
+        // Une passe SANS interruption ne fait que des POST, d'où l'invisibilité du défaut jusqu'ici.
+        mvc.perform(post("/api/examen-pieces").header("Authorization", tokenMembre)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idExamenPiece\":9701,\"idExamen\":1,\"idPiece\":1,\"conforme\":true}"))
+                .andExpect(status().isCreated());
+        mvc.perform(put("/api/examen-pieces/9701").header("Authorization", tokenMembre)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idExamenPiece\":9701,\"idExamen\":1,\"idPiece\":1,\"conforme\":false}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.conforme").value(false));
+        // Réécriture répétée : la réconciliation en émet une par pièce, à chaque reprise.
+        mvc.perform(put("/api/examen-pieces/9701").header("Authorization", tokenMembre)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idExamenPiece\":9701,\"idExamen\":1,\"idPiece\":1,\"conforme\":true}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.conforme").value(true));
     }
 
     @Test
