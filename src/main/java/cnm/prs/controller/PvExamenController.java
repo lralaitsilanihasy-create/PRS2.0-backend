@@ -8,6 +8,8 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -132,9 +134,50 @@ public class PvExamenController {
      * garde de profil sans donner le droit de viser).</p>
      */
     @PreAuthorize("@perm.peutExercer('CHEF_COMMISSION')")
-    @PostMapping("/{id}/viser")
+    @PostMapping(value = "/{id}/viser", consumes = MediaType.APPLICATION_JSON_VALUE)
     public PvExamenDto viser(@PathVariable Integer id, @Valid @RequestBody PvVisaRequest req) {
         return service.viser(id, req);
+    }
+
+    /**
+     * ⚠️ <strong>VISA PAR INTÉRIM</strong> (2026-09-01) — même geste, en multipart, avec la
+     * <strong>note d'intérim</strong> qui justifie l'absence du dispatcheur.
+     *
+     * <p>Deux mappages sur le même chemin, distingués par {@code consumes} : le chemin normal reste en
+     * JSON pur, strictement inchangé. Le front n'envoie du multipart que lorsqu'il sait l'acteur non
+     * dispatcheur — il le sait par {@code imDispatcheur} du DTO.</p>
+     *
+     * <p>Parties : <strong>{@code data}</strong> (le {@link PvVisaRequest} en JSON, identique au chemin
+     * normal) et <strong>{@code noteInterim}</strong> (le PDF). Même convention que le dépôt de pièces
+     * jointes, à ceci près que la partie fichier porte ici un nom explicite plutôt que « fichier » :
+     * une requête de visa peut un jour en transporter d'autres.</p>
+     *
+     * <p>Un dispatcheur qui enverrait quand même une note obtient le visa normal : la note est ignorée,
+     * elle n'a rien à justifier. L'inverse — un non-dispatcheur sans note — est un <strong>400</strong>.</p>
+     */
+    @PreAuthorize("@perm.peutExercer('CHEF_COMMISSION')")
+    @PostMapping(value = "/{id}/viser", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public PvExamenDto viserParInterim(@PathVariable Integer id,
+            @Valid @RequestPart("data") PvVisaRequest req,
+            @RequestPart(value = "noteInterim", required = false) MultipartFile noteInterim) {
+        return service.viser(id, req, noteInterim);
+    }
+
+    /**
+     * ⚠️ Note d'intérim (2026-09-01) — PDF justifiant l'absence du dispatcheur.
+     *
+     * <p>Accès <strong>plus étroit que le PV</strong> : contrôleurs du périmètre et Administrateur, la
+     * PRMP en est exclue (contrôlé en service). L'arbitrage du 01/09 retire toute mention d'intérim du
+     * PV central pour que l'extérieur ne l'apprenne pas ; ouvrir la note à la PRMP le rétablirait par
+     * une autre porte.</p>
+     */
+    @GetMapping("/{id}/note-interim")
+    public ResponseEntity<byte[]> noteInterim(@PathVariable Integer id) {
+        byte[] pdf = service.telechargerNoteInterim(id);
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"note-interim-" + id + ".pdf\"")
+                .body(pdf);
     }
 
     /** Co-signature du PV — ⚠️ depuis le 2026-08-31, rôle MEMBRE seul : → SIGNE (la part P/CC vient du visa). */

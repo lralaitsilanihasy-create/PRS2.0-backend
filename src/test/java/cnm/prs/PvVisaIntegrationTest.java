@@ -45,15 +45,19 @@ class PvVisaIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("Visa — SEUL le dispatcheur vise : un autre Président est refusé (403) bien qu'il ait le profil")
+    @DisplayName("Visa — un autre Président ne vise pas SANS NOTE : 400 depuis l'intérim du 2026-09-01 "
+            + "(c'était 403 tant que l'intérim n'existait pas)")
     void visa_reserveAuDispatcheur() throws Exception {
         projetSoumis(9401, "FAV");
-        // CTRPRE2 est Président, donc habilité PAR PROFIL — mais ce n'est pas lui qui a dispatché.
+        // ⚠️ Changement de contrat du 2026-09-01 : un P/CC non dispatcheur n'est plus interdit de visa,
+        // il lui manque une pièce. Le refus passe donc de 403 à 400 — le droit existe, la justification
+        // manque. Le 403 ne subsiste que pour ce qui reste structurellement impossible : profil hors
+        // P/CC, ou CC d'une autre localité.
         String tokenAutrePresident = bearer("CTRPRE2", ProfilUtilisateur.PRESIDENT, TypeActeur.CONTROLEUR,
                 "CTRPRE2", null);
         viser(9401, tokenAutrePresident, "CTRPRE2", "FAV", "CTRVER", "CTRMEM")
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.message", containsString("DISPATCH")));
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", containsString("Note d'intérim requise")));
         viser(9401, tokenPresident, "CTRPRE", "FAV", "CTRVER", "CTRMEM").andExpect(status().isOk());
     }
 
@@ -61,8 +65,11 @@ class PvVisaIntegrationTest extends CnmIntegrationTestSupport {
     @DisplayName("Visa — le corps n'usurpe pas l'identité : imActeur falsifié ignoré, le jeton fait foi")
     void visa_identiteDepuisLeJeton() throws Exception {
         projetSoumis(9402, "FAV");
-        // Le CC se déclare « CTRPRE » dans le corps : refusé, son jeton dit CTRCC1.
-        viser(9402, tokenCc, "CTRPRE", "FAV", "CTRVER", "CTRMEM").andExpect(status().isForbidden());
+        // Le CC se déclare « CTRPRE » dans le corps : le serveur lit son jeton (CTRCC1), le voit non
+        // dispatcheur, et réclame la note d'intérim. Le corps ne fabrique pas une identité.
+        viser(9402, tokenCc, "CTRPRE", "FAV", "CTRVER", "CTRMEM")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", containsString("Note d'intérim requise")));
     }
 
     @Test

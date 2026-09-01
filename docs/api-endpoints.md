@@ -2303,9 +2303,11 @@ les jalons naissent des flux internes (alertes J-7 / J-1), aucun profil métier 
 > avis fourni ici était posé **sans aucun contrôle**, `validerCoherenceAvis` n'existant que dans
 > `accepter` : ce n'était pas un déplacement de garde, c'était un trou.
 >
-> **Livraison en deux lots.** `idAvis` reste **optionnel** dans ce lot pour ne pas casser un front pas
-> encore aligné (une soumission sans avis crée un PV à avis `null`, que le visa devra alors fournir — 409
-> sinon). Il deviendra **obligatoire (400)** au lot 2, après la livraison du front.
+> **⚠️ LOT 2 livré le 2026-09-01** : `idAvis` est désormais **OBLIGATOIRE** — **400**
+> `{ erreurs:[{ champ:"idAvis", … }] }` s'il manque. La fenêtre de compatibilité du lot 1 (avis optionnel,
+> le temps que le front s'aligne) est refermée. La cohérence est également validée sur
+> `PUT /api/pv-examens/{id}`, canal par lequel le Membre change d'avis en rectification : sans quoi
+> l'obligation posée ici aurait été contournable par le PUT.
 >
 > `idSecretaireSeance` reste **absent** de la soumission (arbitrage 3 : posé au visa). S'il est fourni, il
 > doit être un VERIFICATEUR **titulaire** de la **localité du dossier** ou un contrôleur couvert par une
@@ -4080,6 +4082,50 @@ immuable). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **40
 >
 > `PV_A_VALIDER` ne cible plus que **le dispatcheur** (auparavant tous les Présidents + les CC de la
 > localité) : prévenir les autres serait leur annoncer une tâche qu'ils recevraient en 403.
+>
+> ### ⚠️ VISA PAR INTÉRIM (2026-09-01) — même endpoint, en multipart
+>
+> Un P/CC **non dispatcheur** vise en joignant la **note d'intérim** (PDF) qui justifie l'absence.
+> Même chemin, distingué par le `Content-Type` :
+>
+> | Appel | `Content-Type` | Corps |
+> |---|---|---|
+> | Visa normal (dispatcheur) | `application/json` | `PvVisaRequest` — **inchangé** |
+> | Visa par intérim | `multipart/form-data` | partie **`data`** = `PvVisaRequest` (JSON) + partie **`noteInterim`** = le PDF |
+>
+> **⚠️ Le refus d'un P/CC non dispatcheur passe de 403 à 400.** Il n'est plus interdit de viser : il lui
+> manque une pièce. Le 403 ne subsiste que pour ce qui est structurellement impossible.
+>
+> | Acteur | Code |
+> |---|---|
+> | P/CC non dispatcheur, bonne localité, **sans** note | **400** « Note d'intérim requise… » |
+> | P/CC non dispatcheur, bonne localité, **avec** note PDF | **200** — `viseParInterim = true` |
+> | Note d'un autre type que PDF | **400** — le type est lu sur les **octets**, pas sur le nom ni le `Content-Type` annoncé |
+> | CC d'une **autre** localité | **403** — la garde de localité tient aussi en intérim (contrairement à `INTERIM_DISPATCH` au dispatch) |
+> | Profil hors P/CC | **403** — la note ne crée pas l'habilitation |
+> | **Dispatcheur** qui joint quand même une note | **200** — visa normal, note ignorée, `viseParInterim = false` |
+>
+> Ordre des gardes : identité → profil → **périmètre** → note. Le périmètre passe avant la note pour ne
+> pas réclamer à un CC hors localité une pièce qui ne débloquerait rien.
+>
+> **Aucune vérification de l'absence réelle** du dispatcheur : elle est invérifiable côté serveur. La note
+> EST la justification, sous la responsabilité du signataire, tracée et versée au journal d'audit.
+>
+> | Méthode | Chemin | Réponse | Codes | Rôle |
+> |---|---|---|---|---|
+> | GET | /api/pv-examens/{id}/note-interim | `application/pdf` | 200, 403, 404 | Contrôleurs du périmètre + Admin — ⚠️ **fermé à la PRMP (403)** |
+>
+> La note est un document d'organisation **interne** : l'ouvrir à la PRMP rétablirait par une autre porte
+> ce que l'arbitrage 4 retire du PV central. 404 si le PV n'a pas été visé par intérim.
+>
+> **Champs `PvExamenDto` ajoutés** : `viseParInterim` (booléen), `noteInterimNom`, `noteInterimDisponible`
+> — ce dernier distinct du premier : le drapeau dit « ce visa était un intérim », l'autre dit « le document
+> est là ». Le front n'offre le lien que sur le second.
+>
+> **Mention sur le document PV** : « (par intérim) » suffixe le nom du P/CC dans le bloc « Étaient
+> présents », **hors localité centrale uniquement**. Aucun `.docx` modifié — le bloc de signature des 12
+> modèles ne porte que des légendes, sans ligne de signature du P/CC, et centrale et régionale y sont
+> identiques.
 
 > ⚠️ **Garde d'identité étendue aux chemins secondaires de la navette (2026-08-27, audit lot B).** Le
 > contrôle d'identité n'existait auparavant qu'à la **signature** : les chemins secondaires passaient au

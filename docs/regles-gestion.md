@@ -87,7 +87,60 @@ Flux complet d'un dossier, avec navette du projet de PV :
 >
 > **Trou fermé au passage** : jusqu'au 31/08, un avis fourni à la soumission était posé **sans aucun
 > contrôle** — `validerCoherenceAvis` n'existait que dans `accepter`. Un Membre pouvait soumettre `FAV`
-> avec des observations relevées. La garde s'applique désormais à la soumission **et** au visa.
+> avec des observations relevées. La garde s'applique désormais à la soumission, au **PUT** du PV (canal
+> par lequel le Membre change d'avis en rectification) **et** au visa. ⚠️ **2026-09-01** : `idAvis` est
+> devenu **obligatoire** à `POST /api/examens/{id}/soumettre` (400 sinon) — la fenêtre de compatibilité
+> du lot 1 est refermée.
+>
+> ### ⚠️ VISA PAR INTÉRIM (arbitrage du pilote, 2026-09-01)
+>
+> **Énoncé** : « Le P/CC non dispatcheur peut effectuer le visa en cas d'absence du dispatcheur. Cette
+> absence est justifiée par une note d'intérim. »
+>
+> La contrainte d'identité reste la règle ; l'intérim en est **l'exception justifiée**. C'est le pendant,
+> à la clôture, de l'`INTERIM_DISPATCH` du dispatch — mais avec **pièce justificative**, et **sans** levée
+> de la garde de localité : un CC ne supplée que dans SA localité, seul le Président supplée partout.
+>
+> **La note est téléversée** (PDF, multipart sur `viser`, parties `data` + `noteInterim`), auto-déclarée
+> par l'intérimaire **au moment du visa** : aucun écran préalable, l'absence du dispatcheur ne bloque
+> jamais le circuit. Le type est reconnu sur les **octets d'en-tête**, jamais sur le nom du fichier.
+>
+> **⚠️ Le refus d'un P/CC non dispatcheur passe de 403 à 400.** Il n'est plus interdit de viser : il lui
+> manque une pièce. Le 403 ne subsiste que pour ce qui reste structurellement impossible.
+>
+> | Acteur | Code |
+> |---|---|
+> | P/CC non dispatcheur, bonne localité, **sans** note | **400** « note d'intérim requise » |
+> | P/CC non dispatcheur, bonne localité, **avec** note PDF | **200** — visa posé, `viseParInterim = true` |
+> | CC d'une **autre** localité | **403** — aucune note ne l'autoriserait |
+> | Profil hors P/CC | **403** — la note ne crée pas l'habilitation |
+>
+> **L'ordre des gardes porte cette distinction** : identité → profil → **périmètre** → note. Le périmètre
+> passe avant la note, pour ne pas réclamer à un CC hors localité une pièce qui ne débloquerait rien.
+>
+> **Aucune vérification de l'absence réelle du dispatcheur.** Le serveur ne peut pas la constater, et une
+> garde invérifiable donne l'illusion du contrôle. La note EST la justification, sous la responsabilité du
+> signataire — tracée, horodatée, versée au journal d'audit. Un dispatcheur présent peut donc recevoir un
+> visa d'intérim ; sa note est alors simplement ignorée, le visa est normal.
+>
+> **Trace** : `VISE_PAR_INTERIM` + la note sur `t_pv_examen` (V11). Le signataire et la date ne sont pas
+> redits : ils sont déjà portés par `IM_CTRL_PRESIDENT`/`IM_CTRL_CC` et `DATE_ACCEPTATION`.
+>
+> **Consultation de la note** : `GET /api/pv-examens/{id}/note-interim`, **fermée à la PRMP** (403).
+> C'est un document d'organisation interne, pas un élément de la décision qui lui est notifiée — l'ouvrir
+> rétablirait par une autre porte ce que la règle du document retire ci-dessous.
+>
+> **Mention sur le document** — dépend de la **localité du dossier** : **centrale, aucune mention** ;
+> **toute autre localité**, la mention « (par intérim) » suffixe le nom du P/CC.
+>
+> ⚠️ **Où elle apparaît, et pourquoi pas ailleurs.** L'arbitrage la voulait « sur la ligne de signature du
+> P/CC », via les modèles régionaux. Vérification faite sur les 12 modèles : **cette ligne n'existe pas**.
+> Le bloc de signature ne porte que des légendes (« VISA DU SUPERIEUR HIERARCHIQUE », « (Nom, prénoms,
+> cachet et signature du membre en charge du dossier) ») — aucun placeholder de nom, aucun emplacement
+> pour le P/CC, et **les modèles centraux et régionaux y sont identiques**. Le seul endroit où le P/CC est
+> imprimé est le bloc « Étaient présents » ; la mention s'y pose, par le mécanisme même que citait
+> l'arbitrage — celui de « (par délégation) » du Secrétaire de séance, qui atterrit au même endroit.
+> Conséquence : **aucun `.docx` n'a été modifié**, et la condition de localité est en Java.
 
 > ⚠️ **Règle CORRIGÉE (2026-08-27, audit — la clôture n'est PLUS automatique à la signature du PV, quel
 > que soit l'avis).** Ce paragraphe a longtemps décrit une clôture automatique à la signature pour

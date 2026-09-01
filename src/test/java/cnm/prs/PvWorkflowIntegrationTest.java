@@ -159,16 +159,16 @@ class PvWorkflowIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(post("/api/pv-examens/93/soumettre").header("Authorization", tokenMembre)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRMEM\",\"commentaire\":\"go\"}"))
                 .andExpect(status().isOk());
-        // ⚠️ 2026-08-31 — la contrainte du visa est une contrainte d'IDENTITÉ, et elle est vérifiée
-        // AVANT le périmètre. Deux CC sont donc refusés pour la même raison, quelle que soit leur
-        // localité : ni l'un ni l'autre n'a dispatché ce dossier (le dispatcheur est CTRPRE).
+        // ⚠️ 2026-09-01 — les deux CC sont refusés, mais PLUS pour la même raison, et c'est le cœur du
+        // visa par intérim. Le CC de TMS ne pourra JAMAIS suppléer sur un dossier d'ANT : sa localité
+        // l'exclut, aucune note n'y changerait rien → 403. Le CC d'ANT, lui, POURRAIT suppléer : il est
+        // dans le bon périmètre, il lui manque seulement la note d'intérim → 400. Ce qui est
+        // structurellement impossible se dit en 403, ce qui n'est qu'incomplet en 400.
         String tokenCcTms = bearer("CTRCC2", ProfilUtilisateur.CHEF_COMMISSION, TypeActeur.CONTROLEUR, "CTRCC2", "TMS");
         viser(93, tokenCcTms, "CTRCC2", "FAV", "CTRVER", "CTRMEM")
                 .andExpect(status().isForbidden());
-        // Le CC d'ANT est pourtant dans le bon périmètre, et couvert par la paire CC → Membre active :
-        // refusé quand même. C'est l'invariant du 15/08 — les actes d'identité ne se délèguent pas.
         viser(93, tokenCc, "CTRCC1", "FAV", "CTRVER", "CTRMEM")
-                .andExpect(status().isForbidden());
+                .andExpect(status().isBadRequest());
         // Seul le dispatcheur vise.
         viser(93, tokenPresident, "CTRPRE", "FAV", "CTRVER", "CTRMEM")
                 .andExpect(status().isOk())
@@ -309,7 +309,7 @@ class PvWorkflowIntegrationTest extends CnmIntegrationTestSupport {
                 .content("{\"idExamen\":3,\"idDispatch\":3,\"imCtrlMembre\":\"CTRMEM\"}"))
                 .andExpect(status().isCreated());
         String pvBody = mvc.perform(post("/api/examens/3/soumettre").header("Authorization", tokenMembre)
-                .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"idAvis\":\"FAV\"}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.statutPv").value("BROUILLON"))
                 .andReturn().getResponse().getContentAsString();
@@ -325,7 +325,7 @@ class PvWorkflowIntegrationTest extends CnmIntegrationTestSupport {
         // ⚠️ C'est le CC qui a POSTé le dispatch à l'étape 2 : le dispatcheur est donc CTRCC1, et lui
         // seul vise. Le Président, pourtant compétent partout, est refusé — la contrainte du 2026-08-31
         // suit l'identité de celui qui a dispatché, pas le rang.
-        viser(idPv, tokenPresident, "CTRPRE", "FAV", "CTRVER", "CTRMEM").andExpect(status().isForbidden());
+        viser(idPv, tokenPresident, "CTRPRE", "FAV", "CTRVER", "CTRMEM").andExpect(status().isBadRequest());
         // Un seul signataire ne suffit pas : après le visa, le PV reste PROJET_ACCEPTE.
         viser(idPv, tokenCc, "CTRCC1", "FAV", "CTRVER", "CTRMEM")
                 .andExpect(jsonPath("$.statutPv").value("PROJET_ACCEPTE"))
@@ -729,7 +729,7 @@ class PvWorkflowIntegrationTest extends CnmIntegrationTestSupport {
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRMEM\"}"))
                 .andExpect(status().isOk());
         // Le CC d'ANT retournait ET acceptait avant le 2026-08-31 ; il ne vise plus (non dispatcheur).
-        viser(951, tokenCc, "CTRCC1", "FAV", "CTRVER", "CTRMEM").andExpect(status().isForbidden());
+        viser(951, tokenCc, "CTRCC1", "FAV", "CTRVER", "CTRMEM").andExpect(status().isBadRequest());
         viser(951, tokenPresident, "CTRPRE", "FAV", "CTRVER", "CTRMEM")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.statutPv").value("PROJET_ACCEPTE"));

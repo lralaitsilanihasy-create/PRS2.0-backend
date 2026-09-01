@@ -28,6 +28,9 @@ import cnm.prs.enums.StatutDossier;
 import cnm.prs.enums.StatutPv;
 import cnm.prs.enums.TypeNotification;
 import cnm.prs.enums.TypeObjet;
+import org.springframework.web.multipart.MultipartFile;
+
+import cnm.prs.exception.BadRequestException;
 import cnm.prs.exception.BusinessRuleException;
 import cnm.prs.exception.EndpointRetireException;
 import cnm.prs.exception.ResourceNotFoundException;
@@ -352,6 +355,13 @@ public class PvExamenService {
         // ⚠️ Verrou optimiste HTTP (plan §3) : version périmée → 409 CONFLIT_VERSION, avant toute écriture.
         VerrouOptimiste.exigerVersionCourante(dto.getVersion(), existing.getVersion());
         existing.setIdExamen(dto.getIdExamen());
+        // ⚠️ LOT 2 (2026-09-01) — le PUT est le canal par lequel le Membre change d'avis en rectification
+        // (confirmé au front le 01/09). Il posait cet avis SANS le valider : on pouvait donc y écrire FAV
+        // avec des observations relevées, re-soumettre, et n'être arrêté qu'au visa. Rendre l'avis
+        // obligatoire à la soumission d'examen sans fermer cette porte l'aurait laissée contournable.
+        if (dto.getIdAvis() != null && !dto.getIdAvis().isBlank()) {
+            validerCoherenceAvis(dto.getIdExamen(), dto.getIdAvis().trim());
+        }
         existing.setIdAvis(dto.getIdAvis());
         existing.setImCtrlPresident(dto.getImCtrlPresident());
         existing.setImCtrlCc(dto.getImCtrlCc());
@@ -709,6 +719,25 @@ public class PvExamenService {
      * l'ancien contrat se complètent ainsi sans re-exiger ce qui est déjà posé.</p>
      */
     public PvExamenDto viser(Integer id, PvVisaRequest req) {
+        return viser(id, req, null);
+    }
+
+    /**
+     * ⚠️ <strong>VISA PAR INTÉRIM</strong> (arbitrage du pilote, 2026-09-01) — surcharge acceptant la
+     * <strong>note d'intérim</strong> qui justifie l'absence du dispatcheur.
+     *
+     * <p>La contrainte d'identité du 2026-08-31 reste la règle ; l'intérim en est l'exception
+     * <em>justifiée</em> : un autre P/CC vise en joignant une note PDF. C'est le pendant, à la clôture,
+     * de l'{@code INTERIM_DISPATCH} du dispatch — mais avec pièce, et <strong>sans</strong> levée de la
+     * garde de localité : un CC ne supplée que dans SA localité, seul le Président supplée partout.</p>
+     *
+     * <p><strong>Aucune vérification de l'absence réelle du dispatcheur</strong> (décision du
+     * 2026-09-01). Le serveur ne peut pas la constater, et une garde invérifiable est pire qu'aucune :
+     * elle donne l'illusion du contrôle. La note EST la justification, sous la responsabilité du
+     * signataire — tracée, horodatée, et versée au journal d'audit. Un dispatcheur présent peut donc
+     * recevoir un visa d'intérim : c'est la trace qui répond, pas le blocage.</p>
+     */
+    public PvExamenDto viser(Integer id, PvVisaRequest req, MultipartFile noteInterim) {
         PvExamen pv = load(id);
 
         // ① Identité d'abord : seul le dispatcheur vise (§4). AVANT le périmètre et le corps.
@@ -719,21 +748,30 @@ public class PvExamenService {
             throw new BusinessRuleException(
                     "Visa impossible : aucun dispatcheur enregistré pour ce dossier (dispatch incomplet).");
         }
-        if (!dispatcheur.equals(acteur)) {
-            throw new AccessDeniedException(
-                    "Le visa est réservé au Président ou au Chef de commission QUI A FAIT LE DISPATCH "
-                            + "de ce dossier (§4). Une délégation active n'y donne pas droit : viser est un "
-                            + "acte d'identité. Pour débloquer, re-dispatchez le dossier.");
-        }
+        boolean interim = !dispatcheur.equals(acteur);
 
         // ② Profil : la part signée est dérivée de l'acteur — pas de champ « role » dans le corps.
+        // Vérifié AVANT la note : un profil hors P/CC n'a rien à faire ici, note ou pas (403, pas 400).
         ProfilUtilisateur profil = CurrentUser.profil().orElse(null);
         if (profil != ProfilUtilisateur.PRESIDENT && profil != ProfilUtilisateur.CHEF_COMMISSION) {
             throw new AccessDeniedException(
                     "Le visa est réservé au Président (§3.2) ou au Chef de commission (§3.3).");
         }
+
         // ③ Périmètre : le CC ne clôt que dans sa localité ; le Président reste compétent partout.
+        // ⚠️ La garde tient AUSSI en intérim (arbitrage 3, 2026-09-01) — contrairement à
+        // INTERIM_DISPATCH au dispatch, qui lève la localité. Suppléer n'étend pas le ressort.
+        // ⚠️ Vérifié AVANT la note, et l'ordre compte : un CC d'une autre localité ne pourra jamais
+        // suppléer ici. Lui réclamer d'abord une note d'intérim serait lui demander une pièce qui ne
+        // débloquerait rien. Ce qui est structurellement impossible se dit en premier (403), ce qui
+        // n'est qu'incomplet se dit ensuite (400).
         exigerActeurDeLaLocalite(pv);
+
+        // ④ Intérim : un P/CC non dispatcheur ne vise QUE muni de la note qui justifie l'absence.
+        byte[] note = null;
+        if (interim) {
+            note = lireNoteInterim(noteInterim);
+        }
 
         // ④ État : navette en cours, OU PV déjà accepté dont la part du rôle reste à poser (§6).
         LocalDate dejaSignee = profil == ProfilUtilisateur.PRESIDENT
@@ -771,7 +809,16 @@ public class PvExamenService {
             pv.setImCtrlCc(acteur);
         }
 
-        // ⑨ Clôture de la navette.
+        // ⑨ Intérim : le drapeau et la note. Posés APRÈS toutes les gardes — une note ne s'enregistre
+        // que sur un visa qui aboutit.
+        if (interim) {
+            pv.setViseParInterim(Boolean.TRUE);
+            pv.setNoteInterim(note);
+            pv.setNoteInterimNom(nomDeFichier(noteInterim));
+            pv.setNoteInterimTaille((long) note.length);
+        }
+
+        // ⑩ Clôture de la navette.
         boolean etaitEnNavette = navetteEnCours;
         pv.setStatutPv(StatutPv.PROJET_ACCEPTE.name());
         pv.setDateAcceptation(aujourdhui);
@@ -779,11 +826,20 @@ public class PvExamenService {
             ajouterNavette(pv, SensNavette.ACCEPTATION, req.commentaire());
         }
         PvExamen saved = repository.save(pv);
-        log.info("[CIRCUIT] visa PV dossier={} acteur={} pv={} statutPv={} navettes={}",
+        log.info("[CIRCUIT] visa PV dossier={} acteur={} pv={} statutPv={} navettes={} interim={}",
                 dossierDuPv(saved.getIdPv()), CurrentUser.login().orElse(null), saved.getIdPv(),
-                StatutPv.PROJET_ACCEPTE.name(), saved.getNbNavettes());
+                StatutPv.PROJET_ACCEPTE.name(), saved.getNbNavettes(), interim);
+        if (interim) {
+            // ⚠️ Trace d'audit dédiée (2026-09-01) : le visa par intérim est une DÉROGATION à la
+            // contrainte d'identité. Le journal doit pouvoir répondre « qui a suppléé qui, quand, et
+            // sur quelle note » sans lire la table du PV — c'est la seule garde qui reste quand on
+            // renonce à vérifier l'absence réelle.
+            log.warn("[AUDIT] visa PAR INTERIM pv={} dossier={} interimaire={} dispatcheur={} note={} ({} octets)",
+                    saved.getIdPv(), dossierDuPv(saved.getIdPv()), acteur, dispatcheur,
+                    saved.getNoteInterimNom(), saved.getNoteInterimTaille());
+        }
 
-        // ⑩ Notifications : l'auteur apprend l'acceptation, le désigné qu'on attend sa signature.
+        // ⑪ Notifications : l'auteur apprend l'acceptation, le désigné qu'on attend sa signature.
         notifierPvAuteur(saved, TypeNotification.PV_ACCEPTE, "Projet de PV visé",
                 "Le projet de PV " + referencePv(saved) + " a été visé : il attend la co-signature du Membre désigné.");
         notifierMembreCoSignataire(saved);
@@ -965,6 +1021,67 @@ public class PvExamenService {
                             + designe + " » ne l'est pas.");
         }
         pv.setImMembreCoSignataire(designe);
+    }
+
+    /**
+     * ⚠️ Note d'intérim (2026-09-01) — lit et valide le PDF justifiant l'absence du dispatcheur.
+     *
+     * <p><strong>400 et non 403</strong> : l'acteur A le droit de viser par intérim, il lui manque une
+     * pièce. Le distinguer compte pour le front, qui affiche « joignez la note » plutôt que « vous
+     * n'avez pas le droit ».</p>
+     *
+     * <p>Le type est reconnu sur les <strong>octets d'en-tête</strong> (« %PDF »), jamais sur le nom du
+     * fichier ni sur le {@code Content-Type} annoncé : les deux sont fournis par le client. Même
+     * principe que {@code PieceJointeDossierService}, restreint au seul PDF ici — une note d'intérim
+     * est un document signé, pas une photo.</p>
+     */
+    private byte[] lireNoteInterim(MultipartFile fichier) {
+        if (fichier == null || fichier.isEmpty()) {
+            throw new BadRequestException(
+                    "Note d'intérim requise : vous n'êtes pas le dispatcheur de ce dossier. Joignez la note "
+                            + "d'intérim (PDF) qui justifie son absence pour viser à sa place.");
+        }
+        byte[] contenu;
+        try {
+            contenu = fichier.getBytes();
+        } catch (java.io.IOException e) {
+            throw new BadRequestException("Note d'intérim illisible : " + e.getMessage());
+        }
+        boolean pdf = contenu.length >= 4 && contenu[0] == 0x25 && contenu[1] == 0x50
+                && contenu[2] == 0x44 && contenu[3] == 0x46;   // %PDF
+        if (!pdf) {
+            throw new BadRequestException("Note d'intérim invalide : seul le format PDF est accepté.");
+        }
+        return contenu;
+    }
+
+    private String nomDeFichier(MultipartFile fichier) {
+        String nom = fichier == null ? null : fichier.getOriginalFilename();
+        return nom == null || nom.isBlank() ? "note-interim.pdf" : nom;
+    }
+
+    /**
+     * ⚠️ Note d'intérim (2026-09-01) — téléchargement, <strong>plus restreint que le PV lui-même</strong>.
+     *
+     * <p>L'accès suit le périmètre de localité des contrôleurs, <strong>sans la branche PRMP</strong> qui
+     * ouvre {@link #controlerAcces} sur les PV signés. Ce n'est pas une omission : l'arbitrage du
+     * 2026-09-01 retire délibérément toute mention d'intérim du PV central pour que l'extérieur ne
+     * l'apprenne pas. Ouvrir la note à la PRMP contredirait cette décision — la note justifie une
+     * absence interne, elle ne fait pas partie de la décision qui lui est notifiée.</p>
+     */
+    @Transactional(readOnly = true)
+    public byte[] telechargerNoteInterim(Integer id) {
+        PvExamen pv = load(id);
+        if (Visibilite.estPrmp()) {
+            throw new AccessDeniedException(
+                    "La note d'intérim est un document interne à la Commission : elle n'est pas communiquée "
+                            + "aux personnes responsables des marchés publics.");
+        }
+        Visibilite.controler(loc -> repository.existsDansLocalite(id, loc));
+        if (pv.getNoteInterim() == null || pv.getNoteInterim().length == 0) {
+            throw new ResourceNotFoundException("Aucune note d'intérim pour ce PV : " + id);
+        }
+        return pv.getNoteInterim();
     }
 
     /**

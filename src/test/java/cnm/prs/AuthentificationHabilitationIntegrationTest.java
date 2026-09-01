@@ -513,7 +513,7 @@ class AuthentificationHabilitationIntegrationTest extends CnmIntegrationTestSupp
                 .content("{\"idExamen\":5601,\"idDispatch\":5601,\"imCtrlMembre\":\"CTRPRE\"}"))
                 .andExpect(status().isCreated());
         mvc.perform(post("/api/examens/5601/soumettre").header("Authorization", tokenPresident)
-                .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"idAvis\":\"FAV\"}"))
                 .andExpect(status().isCreated());
         // Projet de PV : l'attributaire est DÉRIVÉ du dispatch (= CTRPRE), navette classique via le CC.
         mvc.perform(post("/api/pv-examens").header("Authorization", tokenPresident)
@@ -527,7 +527,7 @@ class AuthentificationHabilitationIntegrationTest extends CnmIntegrationTestSupp
                 .andExpect(status().isOk());
         // ⚠️ VISA (2026-08-31) — c'est le Président qui a dispatché ce dossier (à lui-même) : lui seul
         // vise. Le CC, qui clôturait la navette jusqu'ici, n'y a plus accès — contrainte d'identité.
-        viser(5601, tokenCc, "CTRCC1", "FAV", "CTRVER", "CTRMEM").andExpect(status().isForbidden());
+        viser(5601, tokenCc, "CTRCC1", "FAV", "CTRVER", "CTRMEM").andExpect(status().isBadRequest());
         // Il ne peut pas se désigner lui-même : l'auto-co-signature reste abolie, sans exception.
         viser(5601, tokenPresident, "CTRPRE", "FAV", "CTRVER", "CTRPRE").andExpect(status().isConflict());
         // Ni désigner un contrôleur qui n'est pas Membre de la localité du dossier (§3.3).
@@ -768,7 +768,7 @@ class AuthentificationHabilitationIntegrationTest extends CnmIntegrationTestSupp
         nonConforme.setConforme(false);
         examenDetailRepository.save(nonConforme);
         String pvBody = mvc.perform(post("/api/examens/5610/soumettre").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"idAvis\":\"FAVR\"}"))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         int idPv = com.jayway.jsonpath.JsonPath.read(pvBody, "$.idPv");
         // Navette : le CC soumet SON projet puis l'accepte lui-même (accepteur = auteur — circuit court réel).

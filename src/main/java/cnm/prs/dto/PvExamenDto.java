@@ -95,6 +95,23 @@ public class PvExamenDto {
     private String nomDispatcheur;
 
     /**
+     * ⚠️ Visa par intérim (2026-09-01) — vrai si le visa a été posé par un P/CC autre que le
+     * dispatcheur, justifié par une note d'intérim. Lecture seule : posé par {@code viser}, jamais
+     * accepté sur un PUT.
+     */
+    private Boolean viseParInterim;
+
+    /** Nom du fichier de la note d'intérim — lecture seule ; {@code null} hors intérim. */
+    private String noteInterimNom;
+
+    /**
+     * Vrai si une note d'intérim est réellement téléchargeable. Distinct de {@link #viseParInterim} :
+     * le drapeau dit « ce visa était un intérim », celui-ci dit « le document est là ». Le front
+     * n'offre le lien que sur celui-ci, et évite un 404.
+     */
+    private Boolean noteInterimDisponible;
+
+    /**
      * Vrai si un PDF officiel est réellement disponible (lecture seule, peuplé serveur) : fichier déjà stocké
      * ({@code CHEMIN_DOCUMENT} non nul) <strong>ou</strong> PV éligible à la génération à la demande (avis FAVR
      * + localité centrale ANT + toutes lignes de marché en appel d'offres ouvert). {@code false} sinon — le

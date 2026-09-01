@@ -228,6 +228,34 @@ public class PvDocumentService {
     }
 
 
+    /**
+     * ⚠️ 2026-09-01 — <strong>contexte du document d'un PV</strong>, tel qu'il sera imprimé, sans produire
+     * le PDF.
+     *
+     * <p>Ajouté pour rendre vérifiable la mention « (par intérim) » de l'arbitrage 4 : la seule autre
+     * façon de la constater serait de générer le PDF, ce qui pilote Word et exclut le test de la CI
+     * Linux (groupe {@code word}). Une règle métier qui ne s'observe qu'avec Microsoft Word installé
+     * n'est pas une règle testée. Ce n'est pas un accesseur de complaisance : il rend lisible ce que le
+     * document dira, ce qu'aucune autre méthode publique n'offrait.</p>
+     *
+     * @return le contexte, ou {@code null} si le PV, son dossier ou son PPM sont introuvables
+     */
+    @Transactional(readOnly = true)
+    public PvDocumentContexte contexte(PvExamen pv) {
+        if (pv == null) {
+            return null;
+        }
+        Integer idExamen = pv.getIdExamen();
+        Integer idDossier = examenRepository.findIdDossierByExamen(idExamen).orElse(null);
+        Dossier dossier = idDossier == null ? null : dossierRepository.findById(idDossier).orElse(null);
+        Ppm ppm = idDossier == null ? null : ppmRepository.findByIdDossier(idDossier).stream().findFirst().orElse(null);
+        if (dossier == null || ppm == null) {
+            return null;
+        }
+        return construireContexte(pv, dossier, ppm, idExamen,
+                examenRepository.findLocaliteByExamen(idExamen).orElse(dossier.getIdLocalite()));
+    }
+
     private PvDocumentContexte construireContexte(PvExamen pv, Dossier dossier, Ppm ppm, Integer idExamen,
             String idLocalite) {
         LocalDate dateExamen = examenRepository.findById(idExamen).map(Examen::getDateExamen).orElse(null);
@@ -243,7 +271,8 @@ public class PvDocumentService {
         String chefLieu = loc == null || loc.getChefLieu() == null || loc.getChefLieu().isBlank()
                 ? localite : loc.getChefLieu();
         return new PvDocumentContexte(dateExamen, refPv, dateReception, entite, ppm.getExercice(), localite, chefLieu,
-                nomControleur(pv.getImCtrlPresident()), nomControleur(pv.getImCtrlCc()),
+                nomAvecMentionInterim(pv.getImCtrlPresident(), pv, idLocalite),
+                nomAvecMentionInterim(pv.getImCtrlCc(), pv, idLocalite),
                 nomMembreAttributaire(pv.getImCtrlMembre()), nomSecretaireSeance(pv.getIdSecretaireSeance()),
                 // ⚠️ 2026-08-05 — nature du plan : INITIAL (null/0) ou MODIFICATIF N°n si le dossier est
                 // une version. L'information est portée par le PPM lui-même (t_ppm.NUM_MAJ).
@@ -269,6 +298,32 @@ public class PvDocumentService {
      */
     private String nomMembreAttributaire(String im) {
         return nomAvecMentionDelegation(im, cnm.prs.enums.ProfilUtilisateur.MEMBRE);
+    }
+
+    /**
+     * ⚠️ Visa par intérim (arbitrage du pilote, 2026-09-01, RÉVISÉ le jour même) — nom du Président ou
+     * du Chef de commission, suffixé <strong>« (par intérim) »</strong> quand le visa a été posé par un
+     * P/CC autre que le dispatcheur, <strong>et seulement hors localité centrale</strong>.
+     *
+     * <p><strong>Où la mention apparaît, et pourquoi pas ailleurs.</strong> La spec demandait la mention
+     * « sur la ligne de signature du P/CC », via les modèles régionaux. Vérification faite sur les 12
+     * modèles : cette ligne <em>n'existe pas</em>. Le bloc de signature ne contient que des légendes
+     * (« VISA DU SUPERIEUR HIERARCHIQUE », « (Nom, prénoms, cachet et signature du membre en charge du
+     * dossier) ») — aucun placeholder de nom, et aucun emplacement pour le P/CC. Les modèles centraux et
+     * régionaux y sont d'ailleurs identiques. Le seul endroit où le P/CC est imprimé est le bloc
+     * « Étaient présents ». La mention s'y pose donc, par le mécanisme même que la spec cite en
+     * référence : {@code nomAvecMentionDelegation} suffixe le NOM, et ce nom atterrit dans ce bloc.
+     * Résultat : aucun {@code .docx} modifié, donc aucun des quatre pièges de dérivation.</p>
+     *
+     * <p><strong>La condition de localité est en Java, pas dans les modèles</strong> — pour la même
+     * raison : il n'y a rien à différencier côté régional. {@code Localite.estCentrale} tranche.</p>
+     */
+    private String nomAvecMentionInterim(String im, cnm.prs.entity.PvExamen pv, String idLocalite) {
+        String nom = nomControleur(im);
+        if (nom == null || !Boolean.TRUE.equals(pv.getViseParInterim()) || Localite.estCentrale(idLocalite)) {
+            return nom;
+        }
+        return nom + " (par intérim)";
     }
 
     /** Nom du contrôleur, suffixé « (par délégation) » si son profil n'est pas le profil titulaire du rôle. */

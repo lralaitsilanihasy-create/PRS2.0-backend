@@ -128,6 +128,8 @@ abstract class CnmIntegrationTestSupport extends AbstractIntegrationTest {
     @Autowired protected cnm.prs.repository.DossierMecRepository dossierMecRepository;
     @Autowired protected cnm.prs.repository.LotRepository lotRepository;
     @Autowired protected cnm.prs.service.PvDocumentGenerator pvDocumentGenerator;
+    /** ⚠️ 2026-09-01 — permet de lire ce que le document imprimera sans passer par Word (mention d'intérim). */
+    @Autowired protected cnm.prs.service.PvDocumentService pvDocumentService;
     @Autowired protected cnm.prs.service.ReferenceService referenceService;
     @Autowired protected jakarta.persistence.EntityManager entityManager;
     @Autowired protected TypeDossierRepository typeDossierRepository;
@@ -452,6 +454,42 @@ abstract class CnmIntegrationTestSupport extends AbstractIntegrationTest {
         corps.append("}");
         return mvc.perform(post("/api/pv-examens/" + idPv + "/viser").header("Authorization", token)
                 .contentType(MediaType.APPLICATION_JSON).content(corps.toString()));
+    }
+
+    /**
+     * ⚠️ VISA PAR INTÉRIM (2026-09-01) — visa en multipart : partie {@code data} (le corps JSON, identique
+     * au chemin normal) et partie {@code noteInterim} (le PDF justifiant l'absence du dispatcheur).
+     * {@code contenuNote} à {@code null} = aucune partie fichier, pour éprouver le 400.
+     */
+    protected org.springframework.test.web.servlet.ResultActions viserParInterim(int idPv, String token,
+            String acteur, String avis, String idSecretaireSeance, String imMembreCoSignataire,
+            byte[] contenuNote, String nomFichier) throws Exception {
+        StringBuilder corps = new StringBuilder("{\"imActeur\":\"").append(acteur).append("\"");
+        if (avis != null) {
+            corps.append(",\"idAvis\":\"").append(avis).append("\"");
+        }
+        if (idSecretaireSeance != null) {
+            corps.append(",\"idSecretaireSeance\":\"").append(idSecretaireSeance).append("\"");
+        }
+        if (imMembreCoSignataire != null) {
+            corps.append(",\"imMembreCoSignataire\":\"").append(imMembreCoSignataire).append("\"");
+        }
+        corps.append("}");
+        var data = new org.springframework.mock.web.MockMultipartFile("data", "", MediaType.APPLICATION_JSON_VALUE,
+                corps.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        var requete = org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .multipart("/api/pv-examens/" + idPv + "/viser").file(data);
+        if (contenuNote != null) {
+            requete = requete.file(new org.springframework.mock.web.MockMultipartFile("noteInterim", nomFichier,
+                    MediaType.APPLICATION_PDF_VALUE, contenuNote));
+        }
+        return mvc.perform(requete.header("Authorization", token));
+    }
+
+    /** Un PDF minimal mais authentique : la garde de type lit les octets d'en-tête, pas le nom du fichier. */
+    protected byte[] pdfMinimal() {
+        return "%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n"
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8);
     }
 
     protected org.springframework.test.web.servlet.ResultActions signer(String token, String acteur, String role)

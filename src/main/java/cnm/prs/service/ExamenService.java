@@ -92,19 +92,20 @@ public class ExamenService {
         // fin de la navette » (pilote). La règle du 2026-08-01, qui le confiait au P/CC à l'acceptation,
         // est abandonnée. Le Secrétaire de séance, lui, RESTE posé au visa (arbitrage 3).
         //
-        // ⚠️ LOT 1 : l'avis n'est pas encore OBLIGATOIRE ici. Le front n'ayant pas encore livré, exiger
-        // le champ tout de suite casserait sa soumission pendant l'intervalle. Une soumission sans avis
-        // crée donc encore un PV à avis NULL — cas déjà prévu, le visa devra alors le fournir (409). Le
-        // caractère obligatoire (400) arrive en LOT 2, après la livraison du front.
+        // ⚠️ LOT 2 (GO du 2026-09-01) — l'avis est désormais OBLIGATOIRE : 400 s'il manque. Le lot 1 le
+        // laissait optionnel pour ne pas casser la soumission d'un front pas encore aligné ; le front
+        // ayant livré et l'exigeant lui-même, la fenêtre de compatibilité se referme.
         //
-        // ⚠️ Ce que ce lot ferme DÉJÀ : jusqu'ici l'avis fourni à la soumission était posé SANS aucun
-        // contrôle — validerCoherenceAvis n'existait que dans « accepter ». Un Membre pouvait donc
-        // soumettre FAV avec des observations relevées, et rien ne l'arrêtait avant la clôture. Ce
-        // n'était pas un simple déplacement de garde : c'était un trou.
+        // ⚠️ Le lot 1 avait déjà fermé un trou plus ancien : l'avis fourni ici était posé SANS aucun
+        // contrôle, validerCoherenceAvis n'existant que dans « accepter ». Un Membre pouvait soumettre
+        // FAV avec des observations relevées. Ce n'était pas un déplacement de garde, c'était un trou.
         String idAvis = req.idAvis() == null || req.idAvis().isBlank() ? null : req.idAvis().trim();
-        if (idAvis != null) {
-            pvExamenService.validerCoherenceAvisPublic(idExamen, idAvis);
+        if (idAvis == null) {
+            throw new ChampsInvalidesException(List.of(new ErrorResponse.FieldError("idAvis",
+                    "L'avis global est obligatoire : le Membre qui examine le dossier émet son avis à la "
+                            + "soumission (règle du 2026-08-31). Il pourra être modifié au visa.")));
         }
+        pvExamenService.validerCoherenceAvisPublic(idExamen, idAvis);
         String idSecretaire = req.idSecretaireSeance() == null || req.idSecretaireSeance().isBlank()
                 ? null
                 : validerSecretaireSeance(idExamen, req.idSecretaireSeance());

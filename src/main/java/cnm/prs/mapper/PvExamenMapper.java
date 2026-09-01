@@ -35,6 +35,12 @@ public final class PvExamenMapper {
         dto.setRefePv(entity.getRefePv());
         dto.setIdSecretaireSeance(entity.getIdSecretaireSeance());
         dto.setImMembreCoSignataire(entity.getImMembreCoSignataire());
+        // ⚠️ Visa par intérim (2026-09-01) — dérivés, aucune requête supplémentaire. Le contenu de la
+        // note n'est JAMAIS mis dans le DTO : elle se télécharge par son endpoint dédié, dont l'accès
+        // est plus étroit que celui du PV (la PRMP en est exclue, décision du 2026-09-01).
+        dto.setViseParInterim(Boolean.TRUE.equals(entity.getViseParInterim()));
+        dto.setNoteInterimNom(entity.getNoteInterimNom());
+        dto.setNoteInterimDisponible(entity.getNoteInterim() != null && entity.getNoteInterim().length > 0);
         dto.setDateArchivage(entity.getDateArchivage());
         dto.setImArchiveur(entity.getImArchiveur());
         dto.setVersion(entity.getVersion());   // ⚠️ verrou optimiste (docs/plan-conflit-version.md)

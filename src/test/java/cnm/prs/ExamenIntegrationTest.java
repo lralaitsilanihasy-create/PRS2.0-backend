@@ -50,7 +50,7 @@ class ExamenIntegrationTest extends CnmIntegrationTestSupport {
 
         // La soumission de l'examen (projet de PV) fait passer le dossier EXAMINE.
         mvc.perform(post("/api/examens/80/soumettre").header("Authorization", tokenMembre)
-                .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"idAvis\":\"FAV\"}"))
                 .andExpect(status().isCreated());
         mvc.perform(get("/api/dossiers/30").header("Authorization", tokenCc))
                 .andExpect(jsonPath("$.statut").value("EXAMINE"));
@@ -150,7 +150,7 @@ class ExamenIntegrationTest extends CnmIntegrationTestSupport {
                 .content("{\"idExamen\":95,\"idDispatch\":95,\"imCtrlMembre\":\"CTRMEM\"}"))
                 .andExpect(status().isCreated());
         mvc.perform(post("/api/examens/95/soumettre").header("Authorization", tokenMembre)
-                .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"idAvis\":\"FAV\"}"))
                 .andExpect(status().isCreated());
 
         // Exclusivité : 50 quitte à-examiner et entre dans examinés (paginé → $.content).

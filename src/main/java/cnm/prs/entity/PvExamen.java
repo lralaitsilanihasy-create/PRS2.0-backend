@@ -102,6 +102,29 @@ public class PvExamen {
     @Column(name = "IM_MEMBRE_COSIGNATAIRE", length = 7)
     private String imMembreCoSignataire;
 
+    /**
+     * ⚠️ Visa par intérim (2026-09-01) — vrai si le visa a été posé par un P/CC <strong>autre que le
+     * dispatcheur</strong>, justifié par la note ci-dessous. Le signataire et la date ne sont pas
+     * redits ici : ils sont déjà portés par {@code imCtrlPresident}/{@code imCtrlCc} et
+     * {@code dateAcceptation}. Ce drapeau <em>qualifie</em> le visa, il ne le duplique pas.
+     */
+    @Column(name = "VISE_PAR_INTERIM", nullable = false)
+    private Boolean viseParInterim = Boolean.FALSE;
+
+    /**
+     * Note d'intérim (PDF) justifiant l'absence du dispatcheur — stockée en base, comme les pièces
+     * jointes et non comme le PDF du PV : le visa étant atomique, un rollback ne doit pas laisser de
+     * fichier orphelin sur le FSX.
+     */
+    @Column(name = "NOTE_INTERIM")
+    private byte[] noteInterim;
+
+    @Column(name = "NOTE_INTERIM_NOM", length = 255)
+    private String noteInterimNom;
+
+    @Column(name = "NOTE_INTERIM_TAILLE")
+    private Long noteInterimTaille;
+
     /** Chemin du PDF du Projet de PV sur le FSX (renseigné si le PV est éligible à la génération). */
     @Column(name = "CHEMIN_DOCUMENT", length = 500)
     private String cheminDocument;
