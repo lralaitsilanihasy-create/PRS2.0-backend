@@ -1,6 +1,7 @@
 # ADR-0004 : Tests d'intégration — bascule de H2 vers Testcontainers PostgreSQL
 
-**Statut :** Adopté — révisé le 2026-08-28 (voir « Révision » en fin de document)
+**Statut :** Adopté — révisé le 2026-08-28, complété le 2026-09-01 (sections datées en fin de document,
+par ordre chronologique)
 **Date :** 2026-08-26
 
 > ⚠️ **La version ne se lit pas dans ce document.** Elle est déclarée à un seul
@@ -42,6 +43,15 @@ Basculer les tests d'intégration vers **Testcontainers**, avec un vrai conteneu
 
 Revenir à H2 : retirer la dépendance Testcontainers, restaurer `application-test.properties` en configuration H2. Fait perdre la garantie de fidélité au dialecte réel et réintroduit la nécessité de mirroiter à la main les domaines et séquences PostgreSQL.
 
+## Aboutissement (2026-08-27)
+
+Décision entièrement livrée : bascule H2 → Testcontainers PostgreSQL 17 + Flyway (`d557cef`),
+puis découpage de la classe unique en **18 classes par domaine** sur le socle
+`CnmIntegrationTestSupport` (`587aacc`) — la mention « 422 des 444 tests dans une seule classe »
+ci-dessus décrit l'état d'avant. La bascule a immédiatement révélé 4 fixtures violant la contrainte
+`t_pv_examen_cosignataire_check` du schéma réel, invisibles sous H2 — la classe de défauts exacte
+que cette décision visait.
+
 ## Révision (2026-08-28) — la version est PostgreSQL 18, et c'était l'ADR qui avait tort
 
 **Cette décision a annoncé trois versions différentes sans que personne ne vérifie laquelle
@@ -78,15 +88,35 @@ transaction métier (`c2fdeb1`, troisième occurrence du même défaut). Une ver
 trois endroits a servi de fausse piste à un bug qui n'avait aucun rapport avec elle.
 
 **À surveiller :** la clause « Docker doit être disponible partout où les tests tournent » s'est
-révélée fausse en local — aucun poste de développement n'a Docker. D'où l'aiguillage
-`PRS_TEST_DB_URL` (`5d6651f`), qui branche la suite sur un PostgreSQL local. La CI, elle, reste
-sur Testcontainers : c'est le mode de référence.
+révélée fausse — le poste de développement sur lequel la suite a été reprise n'a pas Docker, et son
+installation y exige une élévation et un redémarrage. D'où l'aiguillage `PRS_TEST_DB_URL`
+(`5d6651f`), qui branche la suite sur un PostgreSQL local. La CI, elle, reste sur Testcontainers :
+c'est le mode de référence.
 
-## Aboutissement (2026-08-27)
+*(Rectification du 2026-09-01 : cette phrase affirmait « aucun poste de développement n'a Docker ».
+Un seul poste avait été constaté ; « aucun » revendiquait une connaissance de tous. Le fait observé
+suffisait à justifier l'aiguillage, la généralisation n'apportait rien et pouvait égarer.)*
 
-Décision entièrement livrée : bascule H2 → Testcontainers PostgreSQL 17 + Flyway (`d557cef`),
-puis découpage de la classe unique en **18 classes par domaine** sur le socle
-`CnmIntegrationTestSupport` (`587aacc`) — la mention « 422 des 444 tests dans une seule classe »
-ci-dessus décrit l'état d'avant. La bascule a immédiatement révélé 4 fixtures violant la contrainte
-`t_pv_examen_cosignataire_check` du schéma réel, invisibles sous H2 — la classe de défauts exacte
-que cette décision visait.
+## Note (2026-09-01) — ce que cette décision ne prouve pas
+
+Une semaine d'usage a montré que la promesse de cet ADR est **juste et plus étroite que ce qu'on en
+retient**. « La suite prouve que le schéma réel et le dialecte réel fonctionnent ensemble » : oui.
+Elle ne prouve pas que le **canal HTTP** fonctionne.
+
+Trois défauts sont passés au travers, tous trouvés en recette, aucun par la suite :
+
+| Défaut | Pourquoi la suite ne pouvait pas le voir |
+|---|---|
+| Garde CSRF rendant 401 au lieu de 403 (`624982d`) | MockMvc ne rejoue pas le ré-aiguillage `ERROR` du conteneur vers `/error` — il voyait déjà le 403 attendu |
+| Rotation du jeton CSRF en rafale concurrente (`a1cdd56`) | La suite émet des requêtes séquentielles ; la course n'existe qu'avec un vrai navigateur |
+| `PUT /api/examen-pieces` nominal jamais couvert | Trou de couverture ordinaire — le seul test du verbe vérifiait un 409, jamais le cas passant |
+
+Les deux premiers ne sont pas des oublis : ce sont les **limites du harnais**. Testcontainers a
+supprimé l'écart entre le schéma de test et le schéma réel ; il ne dit rien de l'écart entre le
+serveur de test et le serveur réel. Le premier de ces défauts était même **documenté en commentaire**
+dans notre propre suite depuis le 27/08, décrit comme une fatalité du conteneur — il n'en était pas
+une, et personne n'a rouvert la question tant que le vert de la CI paraissait suffire.
+
+**À retenir avant d'invoquer la CI comme arbitre :** verte, elle atteste le code et le schéma. Sur le
+comportement du canal — codes rendus au client, concurrence, sessions — elle est muette, et une recette
+navigateur reste nécessaire.
