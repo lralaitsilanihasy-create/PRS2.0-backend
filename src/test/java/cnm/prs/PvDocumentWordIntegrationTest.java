@@ -36,7 +36,13 @@ class PvDocumentWordIntegrationTest extends CnmIntegrationTestSupport {
                 nomPresident, nomChefCommission,
                 "Paul MEMBRE", "Vero VERIFICATEUR",
                 // ⚠️ Refonte du bloc VISA (2026-09-01) — ligne du viseur, présente sur TOUS les PV.
-                "Visé par : Jean PRESIDENT, Président de la Commission Nationale des Marchés",
+                // Elle nomme CELUI QUI A VISÉ : le Président s'il a signé, le CC sinon — même règle que
+                // PvDocumentService#ligneViseur. Une ligne codée en dur nommait un Président sur un PV
+                // qui n'en avait pas, et faisait échouer le test du filtrage des présents : la fixture
+                // affirmait deux choses contradictoires.
+                nomPresident != null
+                        ? "Visé par : " + nomPresident + ", Président de la Commission Nationale des Marchés"
+                        : "Visé par : " + nomChefCommission + ", Chef de la Commission",
                 null,                                       // numMaj (⚠️ 2026-08-05) : null = plan INITIAL
                 observations);
     }

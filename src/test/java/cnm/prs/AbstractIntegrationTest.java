@@ -99,6 +99,7 @@ public abstract class AbstractIntegrationTest {
     static {
         if (BASE_LOCALE) {
             exigerBaseDeTest(URL_LOCALE);
+            exigerMemeMajeure(URL_LOCALE);
         } else {
             POSTGRES.start();
         }
@@ -126,6 +127,55 @@ public abstract class AbstractIntegrationTest {
 
     private static String valeurOuDefaut(String valeur, String defaut) {
         return valeur == null || valeur.isBlank() ? defaut : valeur;
+    }
+
+    /**
+     * ⚠️ Mode local officialisé (2ᵉ révision de l'ADR-0004, 2026-09-01) — le PostgreSQL du poste doit
+     * être de la <strong>même majeure</strong> que {@link #IMAGE_POSTGRES}, sinon la suite s'arrête net.
+     *
+     * <p><strong>Pourquoi un garde-fou et pas une phrase.</strong> La contrainte aurait pu rester
+     * documentée ; cette semaine a montré trois fois qu'une règle écrite sans exécutant dérive — la
+     * version déclarée à trois endroits qui ont divergé, la clause « Docker partout » démentie dès le
+     * premier poste, le 403 mué en 401 consigné en commentaire et jamais corrigé. Une majeure qui
+     * s'écarte ne casse rien de visible : elle rend simplement le vert local moins probant que le vert
+     * de la CI, silencieusement. C'est exactement le fail-fast de l'ADR-0002 : mieux vaut un arrêt franc
+     * qu'un test qui passe pour de mauvaises raisons.</p>
+     *
+     * <p>Seule la MAJEURE est comparée : PostgreSQL garantit la compatibilité au sein d'une majeure, et
+     * exiger 18.3 contre 18.4 ferait échouer pour un motif sans portée. Aucun chiffre n'est écrit ici —
+     * la référence est lue dans {@link #IMAGE_POSTGRES}, conformément à la règle posée par l'ADR.</p>
+     */
+    private static void exigerMemeMajeure(String url) {
+        String attendue = majeureDeLImage(IMAGE_POSTGRES);
+        if (attendue == null) {
+            return;   // image sans version explicite (« postgres ») : rien à comparer
+        }
+        String serveur;
+        try (java.sql.Connection cnx = java.sql.DriverManager.getConnection(url, UTILISATEUR_LOCAL, MOT_DE_PASSE_LOCAL);
+                java.sql.Statement st = cnx.createStatement();
+                java.sql.ResultSet rs = st.executeQuery("select current_setting('server_version')")) {
+            serveur = rs.next() ? rs.getString(1) : null;
+        } catch (java.sql.SQLException e) {
+            throw new IllegalStateException("PRS_TEST_DB_URL : connexion impossible à « " + url + " » — "
+                    + e.getMessage(), e);
+        }
+        String majeureServeur = serveur == null ? null : serveur.split("[.\\s]")[0];
+        if (!attendue.equals(majeureServeur)) {
+            throw new IllegalStateException("Le PostgreSQL du poste est en majeure " + majeureServeur
+                    + " alors que la référence est " + IMAGE_POSTGRES + " (majeure " + attendue + "). "
+                    + "Le mode local n'a d'intérêt que s'il teste le même moteur que la CI : sur une "
+                    + "majeure différente, un vert local ne dit rien du vert de la CI. Installez la "
+                    + "majeure attendue, ou lancez la suite sans PRS_TEST_DB_URL (Testcontainers).");
+        }
+    }
+
+    /** « postgres:18 » → « 18 » ; « postgres:18.3 » → « 18 » ; « postgres » → {@code null}. */
+    private static String majeureDeLImage(String image) {
+        int deuxPoints = image.lastIndexOf(':');
+        if (deuxPoints < 0 || deuxPoints == image.length() - 1) {
+            return null;
+        }
+        return image.substring(deuxPoints + 1).split("[.\\-]")[0];
     }
 
     /**

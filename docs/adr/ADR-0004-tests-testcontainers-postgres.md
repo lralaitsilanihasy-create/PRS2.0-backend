@@ -120,3 +120,51 @@ une, et personne n'a rouvert la question tant que le vert de la CI paraissait su
 **À retenir avant d'invoquer la CI comme arbitre :** verte, elle atteste le code et le schéma. Sur le
 comportement du canal — codes rendus au client, concurrence, sessions — elle est muette, et une recette
 navigateur reste nécessaire.
+
+## Deuxième révision (2026-09-01) — le mode local sans Docker devient officiel
+
+Arbitrage du pilote, sur la question laissée à l'équipe par la relecture du jour. **Cette révision fait
+foi** ; les sections d'origine ne sont pas réécrites.
+
+### 1. La CI reste le mode de référence
+
+Rien ne change de ce côté : Testcontainers, vraies migrations Flyway, et **elle seule fait foi pour
+livrer**. Le mode local ne la remplace pas, il rend la suite exécutable là où elle ne l'était plus.
+
+### 2. La clause « Docker partout » est retirée
+
+L'aiguillage `PRS_TEST_DB_URL` (`5d6651f`) n'est plus un **dépannage** mais un **mode local assumé**. La
+clause « Docker doit être disponible partout où les tests tournent », inscrite aux conséquences du
+26/08, est **officiellement retirée** : elle était fausse dès le premier poste où la suite a été reprise,
+et l'exigence qu'elle portait — élévation, WSL2, redémarrage — dépassait ce qu'une décision sur les
+tests peut imposer à un poste de travail.
+
+Ce qui est perdu en mode local, et qui justifie que la CI garde le dernier mot : la base n'est pas
+jetable (elle persiste entre deux exécutions, à remettre à plat par `dropdb`/`createdb` si une
+exécution interrompue y laisse des résidus).
+
+### 3. Contrainte du mode local : même majeure que la référence
+
+Le PostgreSQL du poste doit être de la **même majeure** que le défaut d'`AbstractIntegrationTest.IMAGE_POSTGRES`.
+Aucun chiffre n'est écrit ici — la règle posée par la première révision s'applique à elle-même : la prose
+pointe le code, elle ne le recopie pas.
+
+Seule la **majeure** est comparée. PostgreSQL garantit la compatibilité en son sein ; exiger l'égalité
+des correctifs ferait échouer pour un motif sans portée.
+
+### La contrainte est OUTILLÉE, pas seulement écrite
+
+`AbstractIntegrationTest` lit `current_setting('server_version')` quand `PRS_TEST_DB_URL` est actif,
+compare la majeure à celle de l'image de référence, et **arrête la suite** en cas d'écart, avec le motif
+et la sortie de secours.
+
+C'est le fail-fast de l'ADR-0002 appliqué ici, et pour la même raison : **une règle écrite sans exécutant
+dérive**. Cet ADR en fournit trois exemples à lui seul — une version déclarée à trois endroits qui ont
+divergé sans que personne ne s'en aperçoive ; la clause « Docker partout » démentie dès le premier poste
+et restée en place ; le 403 mué en 401, consigné en commentaire dans la suite le 27/08 comme une fatalité,
+corrigé seulement le 01/09 après qu'il eut coûté une recette. Une majeure qui s'écarte ne casse rien de
+visible : elle rend le vert local moins probant que le vert de la CI, silencieusement. C'est précisément
+le genre d'écart qu'une phrase ne rattrape pas.
+
+**État constaté ce jour :** poste en 18.3, référence `postgres:18` — conforme. Constat daté, pas une
+garantie : c'est le garde-fou qui la donne, à chaque exécution.
