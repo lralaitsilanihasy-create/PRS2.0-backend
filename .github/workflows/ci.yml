@@ -22,9 +22,19 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      # ⚠️ 2026-09-01 — v4 → v5 : GitHub signalait ces deux actions dépréciées, leur runtime Node 20
+      # étant forcé sur Node 24. Les v5 font exactement ça et rien d'autre (passage à Node 24) ; leur
+      # seul changement de rupture est d'exiger un runner ≥ v2.327.1, largement dépassé sur les
+      # runners hébergés.
+      #
+      # Des majeures plus récentes existent (checkout v7, setup-java v6) et n'ont PAS été prises : elles
+      # apportent autre chose que la correction demandée — persistance des identifiants dans un fichier
+      # séparé (checkout v6), blocage des PR de fork sur pull_request_target (v7, déclencheur que nous
+      # n'utilisons pas), migration de l'API Zulu vers Azul (setup-java v6, sans effet en Temurin).
+      # Prendre la dernière majeure aurait été changer plus que ce que le problème demandait.
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
