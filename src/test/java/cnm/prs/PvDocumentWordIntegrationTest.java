@@ -35,6 +35,8 @@ class PvDocumentWordIntegrationTest extends CnmIntegrationTestSupport {
                 "ANTANANARIVO",                             // chef-lieu (⚠️ 2026-08-04, lieu « A …, le »)
                 nomPresident, nomChefCommission,
                 "Paul MEMBRE", "Vero VERIFICATEUR",
+                // ⚠️ Refonte du bloc VISA (2026-09-01) — ligne du viseur, présente sur TOUS les PV.
+                "Visé par : Jean PRESIDENT, Président de la Commission Nationale des Marchés",
                 null,                                       // numMaj (⚠️ 2026-08-05) : null = plan INITIAL
                 observations);
     }

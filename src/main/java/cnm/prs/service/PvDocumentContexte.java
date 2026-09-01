@@ -22,6 +22,15 @@ public record PvDocumentContexte(
         String nomMembre,
         String nomVerificateur,
         /**
+         * ⚠️ Refonte du bloc VISA (arbitrage du pilote, 2026-09-01) — ligne nommant le VISEUR :
+         * « Visé par : NOM Prénoms, qualité », suffixée « — par intérim » sur un PV de localité
+         * <strong>non centrale</strong> visé par intérim. Présente sur TOUS les PV (R1) ; jamais de
+         * mention en Centrale, intérim compris (R2). La qualité est reprise mot pour mot du bloc
+         * « Étaient présents » du même document, pour n'introduire aucun vocabulaire nouveau dans un
+         * formulaire officiel.
+         */
+        String ligneViseur,
+        /**
          * ⚠️ 2026-08-05 (versionnement des PPM) — numéro de mise à jour du PPM ({@code null} ou 0 =
          * plan INITIAL). Détermine la nature annoncée à la ligne « NATURE ET INTITULE DU DOSSIER » :
          * « INITIAL » pour le plan d'origine, « MODIFICATIF N°n » pour une version postérieure.

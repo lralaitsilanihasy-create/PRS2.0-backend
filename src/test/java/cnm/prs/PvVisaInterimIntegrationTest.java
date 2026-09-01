@@ -148,16 +148,34 @@ class PvVisaInterimIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("Document — mention « par intérim » ABSENTE sur un PV de localité CENTRALE (arbitrage 4)")
-    void document_centrale_sansMention() throws Exception {
+    @DisplayName("Document — CENTRALE visé par intérim : la ligne du viseur est là, SANS mention (R1 + R2)")
+    void document_centrale_ligneSansMention() throws Exception {
         projetSoumisCentral(9509);
         viserParInterim(9509, tokenCc, "CTRCC1", "FAV", "CTRVER", "CTRMEM", pdfMinimal(), "note.pdf")
                 .andExpect(status().isOk());
         cnm.prs.entity.PvExamen pv = pvExamenRepository.findById(9509).orElseThrow();
         assertTrue(Boolean.TRUE.equals(pv.getViseParInterim()), "le PV est bien visé par intérim");
-        // Le dossier 1 est en ANT (centrale) : le document ne porte AUCUNE mention.
-        assertFalse(contexteDuPv(9509).contains("(par intérim)"),
-                "aucune mention d'intérim sur un PV de localité centrale");
+        var ctx = contexte(9509);
+        // R1 : la ligne nomme le viseur sur TOUS les PV — ici le CC, qui a posé la part CC.
+        assertTrue(ctx.ligneViseur() != null && ctx.ligneViseur().startsWith("Visé par : "),
+                "la ligne du viseur est présente même en Centrale : " + ctx.ligneViseur());
+        assertTrue(ctx.ligneViseur().contains("Chef de la Commission"),
+                "la qualité du viseur est celle du bloc « Étaient présents »");
+        // R2 : rien ne révèle l'intérim en Centrale — l'arbitrage 4 du 01/09 est préservé.
+        assertFalse(ctx.ligneViseur().contains("par intérim"),
+                "aucune mention d'intérim en Centrale : " + ctx.ligneViseur());
+    }
+
+    @Test
+    @DisplayName("Document — visa NORMAL : la ligne du viseur est présente et sans mention (R1)")
+    void document_visaNormal_ligneSansMention() throws Exception {
+        projetSoumisCentral(9510);
+        viser(9510, tokenPresident, "CTRPRE", "FAV", "CTRVER", "CTRMEM").andExpect(status().isOk());
+        var ctx = contexte(9510);
+        assertTrue(ctx.ligneViseur() != null
+                && ctx.ligneViseur().contains("Président de la Commission Nationale des Marchés"),
+                "le visa normal nomme aussi son viseur : " + ctx.ligneViseur());
+        assertFalse(ctx.ligneViseur().contains("par intérim"), "un visa normal ne porte pas la mention");
     }
 
     @Test
@@ -184,19 +202,30 @@ class PvVisaInterimIntegrationTest extends CnmIntegrationTestSupport {
         viserParInterim(9601, tokenCcTms, "CTRCC2", "FAV", "CTRVER2", "CTRMEM2", pdfMinimal(), "note.pdf")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.viseParInterim").value(true));
-        assertTrue(contexteDuPv(9601).contains("(par intérim)"),
-                "la ligne du Chef de commission porte « (par intérim) » hors localité centrale");
+        var ctx = contexte(9601);
+        // La mention n'existe QUE là, et QUE dans ce cas : régional × intérim.
+        assertTrue(ctx.ligneViseur() != null && ctx.ligneViseur().endsWith(" — par intérim"),
+                "la ligne du viseur porte la mention hors localité centrale : " + ctx.ligneViseur());
+        // ⚠️ R3 (2026-09-01) — la mention a DÉMÉNAGÉ : « Étaient présents » n'en porte plus trace, même
+        // ici. Ce test vérifie le retrait autant que l'ajout ; sans lui, on aurait pu livrer les deux.
+        assertFalse(presents(9601).contains("par intérim"),
+                "le bloc « Étaient présents » est redevenu une simple liste : " + presents(9601));
     }
 
     /**
-     * Noms du bloc « Étaient présents » tels que le document les imprimera, à plat.
+     * Contexte du document tel qu'il sera imprimé.
      *
-     * <p>On interroge le CONTEXTE et non le PDF : produire le PDF pilote Word, ce qui rangerait ce test
-     * dans le groupe {@code word} exclu de la CI Linux. Une règle métier qui ne s'observe qu'avec Word
-     * installé n'est pas une règle testée.</p>
+     * <p>On interroge le CONTEXTE et non le PDF : produire le PDF pilote Word, ce qui rangerait ces
+     * tests dans le groupe {@code word} exclu de la CI Linux. Une règle métier qui ne s'observe qu'avec
+     * Word installé n'est pas une règle testée.</p>
      */
-    private String contexteDuPv(int idPv) {
-        var ctx = pvDocumentService.contexte(pvExamenRepository.findById(idPv).orElseThrow());
+    private cnm.prs.service.PvDocumentContexte contexte(int idPv) {
+        return pvDocumentService.contexte(pvExamenRepository.findById(idPv).orElseThrow());
+    }
+
+    /** Noms du bloc « Étaient présents », à plat — sert à vérifier que la mention n'y est PLUS. */
+    private String presents(int idPv) {
+        var ctx = contexte(idPv);
         return String.valueOf(ctx.nomPresident()) + " | " + String.valueOf(ctx.nomChefCommission())
                 + " | " + String.valueOf(ctx.nomMembre()) + " | " + String.valueOf(ctx.nomVerificateur());
     }

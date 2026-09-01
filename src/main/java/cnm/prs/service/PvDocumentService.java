@@ -271,9 +271,12 @@ public class PvDocumentService {
         String chefLieu = loc == null || loc.getChefLieu() == null || loc.getChefLieu().isBlank()
                 ? localite : loc.getChefLieu();
         return new PvDocumentContexte(dateExamen, refPv, dateReception, entite, ppm.getExercice(), localite, chefLieu,
-                nomAvecMentionInterim(pv.getImCtrlPresident(), pv, idLocalite),
-                nomAvecMentionInterim(pv.getImCtrlCc(), pv, idLocalite),
+                // ⚠️ R3 (2026-09-01) — la mention « (par intérim) » est RETIRÉE d'ici : « Étaient
+                // présents » redevient une simple liste de présence. Elle a déménagé au bloc VISA,
+                // seul endroit qui fasse foi sur l'acte.
+                nomControleur(pv.getImCtrlPresident()), nomControleur(pv.getImCtrlCc()),
                 nomMembreAttributaire(pv.getImCtrlMembre()), nomSecretaireSeance(pv.getIdSecretaireSeance()),
+                ligneViseur(pv, idLocalite),
                 // ⚠️ 2026-08-05 — nature du plan : INITIAL (null/0) ou MODIFICATIF N°n si le dossier est
                 // une version. L'information est portée par le PPM lui-même (t_ppm.NUM_MAJ).
                 ppm.getNumMaj(),
@@ -301,29 +304,37 @@ public class PvDocumentService {
     }
 
     /**
-     * ⚠️ Visa par intérim (arbitrage du pilote, 2026-09-01, RÉVISÉ le jour même) — nom du Président ou
-     * du Chef de commission, suffixé <strong>« (par intérim) »</strong> quand le visa a été posé par un
-     * P/CC autre que le dispatcheur, <strong>et seulement hors localité centrale</strong>.
+     * ⚠️ <strong>Ligne du VISEUR</strong> (refonte du bloc VISA, arbitrage du pilote 2026-09-01).
      *
-     * <p><strong>Où la mention apparaît, et pourquoi pas ailleurs.</strong> La spec demandait la mention
-     * « sur la ligne de signature du P/CC », via les modèles régionaux. Vérification faite sur les 12
-     * modèles : cette ligne <em>n'existe pas</em>. Le bloc de signature ne contient que des légendes
-     * (« VISA DU SUPERIEUR HIERARCHIQUE », « (Nom, prénoms, cachet et signature du membre en charge du
-     * dossier) ») — aucun placeholder de nom, et aucun emplacement pour le P/CC. Les modèles centraux et
-     * régionaux y sont d'ailleurs identiques. Le seul endroit où le P/CC est imprimé est le bloc
-     * « Étaient présents ». La mention s'y pose donc, par le mécanisme même que la spec cite en
-     * référence : {@code nomAvecMentionDelegation} suffixe le NOM, et ce nom atterrit dans ce bloc.
-     * Résultat : aucun {@code .docx} modifié, donc aucun des quatre pièges de dérivation.</p>
+     * <p>« Visé par : NOM Prénoms, qualité », suffixée « — par intérim » sur un PV de localité
+     * <strong>non centrale</strong> visé par intérim. Présente sur <strong>tous</strong> les PV (R1) :
+     * un seul gabarit, pas deux rendus du même formulaire. Jamais de mention en Centrale, intérim
+     * compris (R2) — l'arbitrage 4 du 01/09 tient : rien n'y révèle l'intérim.</p>
      *
-     * <p><strong>La condition de localité est en Java, pas dans les modèles</strong> — pour la même
-     * raison : il n'y a rien à différencier côté régional. {@code Localite.estCentrale} tranche.</p>
+     * <p><strong>Historique.</strong> La première livraison avait posé la mention sous « Étaient
+     * présents », faute d'emplacement : le bloc VISA des 12 modèles ne portait que des légendes (le
+     * supérieur hiérarchique de l'entité, le membre en charge du dossier) et aucune ligne pour le P/CC.
+     * Le pilote a tranché en créant l'emplacement manquant ; la mention a donc DÉMÉNAGÉ ici, et le bloc
+     * de présence est redevenu une simple liste (R3).</p>
+     *
+     * <p><strong>La qualité est reprise mot pour mot du bloc « Étaient présents » du même document</strong>
+     * — « Président de la Commission Nationale des Marchés », « Chef de la Commission ». Introduire un
+     * libellé nouveau dans un formulaire officiel aurait créé deux vocabulaires pour une même fonction.</p>
+     *
+     * @return la ligne, ou {@code null} si aucune part de rôle n'est signée (PV non encore visé) — le
+     *         placeholder est alors remplacé par une chaîne vide, la ligne reste blanche sur le document
      */
-    private String nomAvecMentionInterim(String im, cnm.prs.entity.PvExamen pv, String idLocalite) {
+    private String ligneViseur(cnm.prs.entity.PvExamen pv, String idLocalite) {
+        boolean president = pv.getImCtrlPresident() != null && !pv.getImCtrlPresident().isBlank();
+        String im = president ? pv.getImCtrlPresident() : pv.getImCtrlCc();
         String nom = nomControleur(im);
-        if (nom == null || !Boolean.TRUE.equals(pv.getViseParInterim()) || Localite.estCentrale(idLocalite)) {
-            return nom;
+        if (nom == null) {
+            return null;
         }
-        return nom + " (par intérim)";
+        String qualite = president ? "Président de la Commission Nationale des Marchés" : "Chef de la Commission";
+        String mention = Boolean.TRUE.equals(pv.getViseParInterim()) && !Localite.estCentrale(idLocalite)
+                ? " — par intérim" : "";
+        return "Visé par : " + nom + ", " + qualite + mention;
     }
 
     /** Nom du contrôleur, suffixé « (par délégation) » si son profil n'est pas le profil titulaire du rôle. */

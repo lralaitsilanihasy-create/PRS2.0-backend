@@ -4122,10 +4122,20 @@ immuable). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **40
 > — ce dernier distinct du premier : le drapeau dit « ce visa était un intérim », l'autre dit « le document
 > est là ». Le front n'offre le lien que sur le second.
 >
-> **Mention sur le document PV** : « (par intérim) » suffixe le nom du P/CC dans le bloc « Étaient
-> présents », **hors localité centrale uniquement**. Aucun `.docx` modifié — le bloc de signature des 12
-> modèles ne porte que des légendes, sans ligne de signature du P/CC, et centrale et régionale y sont
-> identiques.
+> **Mention sur le document PV — ⚠️ RÉVISÉ le 2026-09-01.** Le bloc VISA des 12 modèles a été **dérivé**
+> pour recevoir une ligne nommant le viseur (elle n'existait pas) :
+>
+> ```
+> Visé par : RAKOTOARISOA Hery, Président de la Commission Nationale des Marchés
+> Visé par : RANDRIA Paul, Chef de la Commission — par intérim
+> ```
+>
+> Présente sur **tous** les PV (R1) ; la mention « — par intérim » **seulement** sur un PV de localité
+> non centrale visé par intérim (R2). Elle a été **retirée** de « Étaient présents » (R3), où la
+> livraison précédente l'avait posée faute d'emplacement.
+>
+> Rien de tout cela n'est visible du contrat HTTP : le document est produit serveur. Le front n'a besoin
+> que de `viseParInterim` pour son affichage.
 
 > ⚠️ **Garde d'identité étendue aux chemins secondaires de la navette (2026-08-27, audit lot B).** Le
 > contrôle d'identité n'existait auparavant qu'à la **signature** : les chemins secondaires passaient au

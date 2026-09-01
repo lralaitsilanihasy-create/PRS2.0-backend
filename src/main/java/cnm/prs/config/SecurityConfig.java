@@ -32,6 +32,7 @@ import org.springframework.web.util.WebUtils;
 
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
 
+import cnm.prs.security.JetonCsrfParSession;
 import cnm.prs.security.CookieCsrfGarde;
 import cnm.prs.security.SessionCookies;
 import jakarta.servlet.http.Cookie;
@@ -102,6 +103,7 @@ public class SecurityConfig {
      */
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http, JwtAuthenticationConverter converter,
+            javax.crypto.SecretKey jwtSecretKey,
             BearerTokenResolver bearerTokenResolver,
             @Value("${app.docs.publics:true}") boolean docsPublics) throws Exception {
         http
@@ -120,7 +122,12 @@ public class SecurityConfig {
                 .csrf(csrf -> {
                     CsrfTokenRequestAttributeHandler handler = new CsrfTokenRequestAttributeHandler();
                     handler.setCsrfRequestAttributeName(null);
-                    csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+                    // ⚠️ CORRECTIF 2026-09-01 — jeton DÉRIVÉ de la session au lieu d'un aléa régénéré :
+                    // en rafale concurrente, plusieurs requêtes sans cookie en faisaient générer autant
+                    // de jetons différents, et celles encore en vol portaient un en-tête périmé. Voir
+                    // JetonCsrfParSession. Hors session : comportement standard du dépôt délégué.
+                    csrf.csrfTokenRepository(new JetonCsrfParSession(
+                                    CookieCsrfTokenRepository.withHttpOnlyFalse(), jwtSecretKey))
                             .csrfTokenRequestHandler(handler)
                             .ignoringRequestMatchers("/api/auth/**")
                             .ignoringRequestMatchers(request ->

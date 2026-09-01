@@ -130,8 +130,23 @@ Flux complet d'un dossier, avec navette du projet de PV :
 > C'est un document d'organisation interne, pas un élément de la décision qui lui est notifiée — l'ouvrir
 > rétablirait par une autre porte ce que la règle du document retire ci-dessous.
 >
-> **Mention sur le document** — dépend de la **localité du dossier** : **centrale, aucune mention** ;
-> **toute autre localité**, la mention « (par intérim) » suffixe le nom du P/CC.
+> **Mention sur le document — ⚠️ RÉVISÉ le 2026-09-01 (refonte du bloc VISA).** La première livraison
+> avait posé la mention sous « Étaient présents », faute d'emplacement : le bloc VISA des 12 modèles ne
+> portait que des légendes et **aucune ligne pour le P/CC**. Le pilote a tranché de **créer
+> l'emplacement manquant**. Trois règles :
+>
+> | | Règle |
+> |---|---|
+> | **R1** | Le bloc VISA nomme le viseur sur **TOUS** les PV : « Visé par : NOM Prénoms, qualité » — visa normal comme intérim, Centrale comme régional. Un seul gabarit, pas deux rendus du même formulaire. |
+> | **R2** | En **Centrale**, la ligne est là mais **jamais** la mention, intérim compris. L'arbitrage 4 tient : rien n'y révèle l'intérim. |
+> | **R3** | La mention a **DÉMÉNAGÉ** : retirée de « Étaient présents », qui redevient une simple liste de présence. Un seul endroit fait foi, celui de l'acte. |
+>
+> La qualité est reprise **mot pour mot** du bloc « Étaient présents » du même document (« Président de
+> la Commission Nationale des Marchés », « Chef de la Commission ») : aucun vocabulaire nouveau
+> introduit dans un formulaire officiel.
+>
+> Les 12 modèles PV ont été dérivés en conséquence (les 2 lettres de renvoi ne sont pas concernées) —
+> voir `docs/derivation-modeles-docx.md`.
 >
 > ⚠️ **Où elle apparaît, et pourquoi pas ailleurs.** L'arbitrage la voulait « sur la ligne de signature du
 > P/CC », via les modèles régionaux. Vérification faite sur les 12 modèles : **cette ligne n'existe pas**.

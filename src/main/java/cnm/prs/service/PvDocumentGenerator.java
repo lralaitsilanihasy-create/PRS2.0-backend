@@ -92,6 +92,13 @@ public class PvDocumentGenerator {
     private static final String CHEF_COMMISSION = "<NOM ET PRENOMS DU CHEF DE COMMISSION>";
     private static final String MEMBRE = "<NOM ET PRENOMS DU MEMBRE>";
     private static final String VERIFICATEUR = "<NOM ET PRENOMS DU VERIFICATEUR>";
+
+    /**
+     * ⚠️ Refonte du bloc VISA (2026-09-01) — ligne du viseur, ajoutée aux 12 modèles PV dans la table
+     * VISA (cellule de droite, côté Commission). Le P/CC n'y avait aucun emplacement : le bloc ne
+     * portait que le supérieur hiérarchique de l'entité et le membre en charge du dossier.
+     */
+    private static final String VISEUR = "<VISEUR>";
     private static final String LOCALITE = "<LOCALITE>";
     /**
      * ⚠️ 2026-08-04 — lieu d'établissement du document (« A &lt;chef-lieu&gt;, le … ») : la ville où
@@ -171,6 +178,7 @@ public class PvDocumentGenerator {
         m.put(ANNEE, ctx.anneeExercice() == null ? "" : String.valueOf(ctx.anneeExercice()));
         m.put(MEMBRE, nz(ctx.nomMembre()));
         m.put(VERIFICATEUR, nz(ctx.nomVerificateur()));
+        m.put(VISEUR, nz(ctx.ligneViseur()));
         m.put(LOCALITE, nz(ctx.localite()));
         // Lieu d'établissement : chef-lieu si renseigné, sinon libellé de la localité (repli).
         String lieu = nonVide(ctx.chefLieu()) ? ctx.chefLieu() : nz(ctx.localite());
