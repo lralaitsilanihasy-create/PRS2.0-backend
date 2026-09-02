@@ -3,6 +3,7 @@ package cnm.prs;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -131,6 +132,54 @@ class PvVisaIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.idSecretaireSeance").value("CTRVER"))
                 .andExpect(jsonPath("$.nomSecretaireSeance").exists());
+    }
+
+    @Test
+    @DisplayName("CRUD générique — le champ retiré n'est plus INSCRIPTIBLE : POST /api/pv-examens l'ignore")
+    void crudGenerique_secretaireSeanceNonInscriptible() throws Exception {
+        // Derniere porte d'ecriture fermee le 2026-09-02 : le mapper ne copie plus le champ vers
+        // l'entite. Un client qui le poste encore ne le persiste plus — sans quoi la notion serait
+        // reapparue un jour par ce canal, sans que personne comprenne d'ou.
+        mvc.perform(post("/api/pv-examens").header("Authorization", tokenMembre)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idPv\":9430,\"idExamen\":1,\"imCtrlMembre\":\"CTRMEM\",\"idAvis\":\"FAV\","
+                        + "\"statutPv\":\"BROUILLON\",\"nbNavettes\":0,\"idSecretaireSeance\":\"CTRVER\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.idSecretaireSeance").doesNotExist());
+
+        org.junit.jupiter.api.Assertions.assertNull(
+                pvExamenRepository.findAll().stream()
+                        .filter(p -> Integer.valueOf(1).equals(p.getIdExamen()))
+                        .findFirst().orElseThrow().getIdSecretaireSeance(),
+                "le champ poste ne doit pas etre persiste");
+    }
+
+    @Test
+    @DisplayName("Mise à jour — un PV HISTORIQUE modifié conserve son secrétaire (update n'y touche pas)")
+    void miseAJour_pvHistorique_conserveSonSecretaire() throws Exception {
+        // PV en BROUILLON (seul etat modifiable par le Membre) portant un secretaire, comme un PV
+        // redige avant le 2026-09-02.
+        mvc.perform(post("/api/pv-examens").header("Authorization", tokenMembre)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idPv\":9431,\"idExamen\":1,\"imCtrlMembre\":\"CTRMEM\",\"idAvis\":\"FAV\","
+                        + "\"statutPv\":\"BROUILLON\",\"nbNavettes\":0}"))
+                .andExpect(status().isCreated());
+        cnm.prs.entity.PvExamen pv = pvExamenRepository.findById(9431).orElseThrow();
+        pv.setIdSecretaireSeance("CTRVER");
+        pvExamenRepository.save(pv);
+
+        // La fermeture de la porte d'ecriture ne doit RIEN effacer : update reaffecte ses champs un
+        // par un et ne touche jamais celui-ci. Un PV redige hier garde sa trace.
+        mvc.perform(put("/api/pv-examens/9431").header("Authorization", tokenMembre)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idPv\":9431,\"idExamen\":1,\"imCtrlMembre\":\"CTRMEM\",\"idAvis\":\"FAV\","
+                        + "\"statutPv\":\"BROUILLON\",\"nbNavettes\":0,"
+                        + "\"syntheseObservations\":\"synthese revue\"}"))
+                .andExpect(status().isOk());
+
+        org.junit.jupiter.api.Assertions.assertEquals("CTRVER",
+                pvExamenRepository.findById(9431).orElseThrow().getIdSecretaireSeance(),
+                "un PV anterieur ne doit pas perdre son secretaire a la mise a jour");
     }
 
     @Test

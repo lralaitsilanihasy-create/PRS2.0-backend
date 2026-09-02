@@ -4298,6 +4298,15 @@ immuable). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **40
 > leur secrétaire, en base comme au DTO. **Aucune migration.** Un PV visé après le déploiement porte
 > `null`.
 >
+> **Lecture seule, au sens strict.** Le champ n'a plus **aucun** chemin d'écriture par l'API : ni le
+> visa, ni la soumission d'examen, ni le **CRUD générique** (`POST /api/pv-examens`, dont le mapper ne
+> le copie plus vers l'entité). Un client qui le poste encore obtient un **201**, mais la valeur n'est
+> pas persistée. Un champ dont la notion a disparu ne doit conserver aucune porte d'écriture, sinon il
+> réapparaît un jour par ce canal sans que personne comprenne d'où.
+>
+> `PUT /api/pv-examens/{id}` **ne l'efface pas pour autant** : la mise à jour réaffecte ses champs un
+> par un et ne touche jamais celui-ci — un PV antérieur modifié garde son secrétaire.
+>
 > ⚠️ **Un PV antérieur RÉGÉNÉRÉ n'imprime plus la ligne**, alors qu'il porte encore un secrétaire en
 > base. Décision assumée : le PDF déjà archivé fait foi, et le document réédité reflète la règle en
 > vigueur. Les documents déjà générés ne sont pas retouchés.

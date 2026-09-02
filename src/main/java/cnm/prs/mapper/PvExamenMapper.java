@@ -68,7 +68,15 @@ public final class PvExamenMapper {
         entity.setDateSignatureMembre(dto.getDateSignatureMembre());
         entity.setDatePv(dto.getDatePv());
         entity.setReferencePv(dto.getReferencePv());
-        entity.setIdSecretaireSeance(dto.getIdSecretaireSeance());
+        // ⚠️ Le Secrétaire de séance n'est plus ÉCRIT (règle du pilote, 2026-09-02). La notion a été
+        // retirée du cycle du PV — visa et soumission d'examen ne le posent plus —, mais ce mapper
+        // laissait ouverte une dernière porte : un POST /api/pv-examens portant le champ le
+        // persistait encore. Un champ dont la notion a disparu ne doit plus avoir AUCUN chemin
+        // d'écriture, sinon il réapparaît un jour par ce canal sans que personne comprenne d'où.
+        //
+        // Les PV ANTÉRIEURS ne risquent rien : ce mapper ne sert qu'à la CRÉATION (create), et
+        // update() réaffecte ses champs un par un sans jamais toucher à celui-ci — un PV historique
+        // modifié garde donc son secrétaire, qui reste exposé en lecture par toDto ci-dessus.
         return entity;
     }
 }

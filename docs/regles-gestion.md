@@ -311,6 +311,11 @@ l'exposer **en lecture** : les PV visés **avant** la règle gardent leur secré
 officiel — on ne réécrit pas son contenu a posteriori. **Aucune migration.** Un PV visé après le
 déploiement porte `null`.
 
+**Lecture seule, au sens strict.** Le champ n'a plus **aucun** chemin d'écriture par l'API — ni le visa,
+ni la soumission d'examen, ni le CRUD générique du PV. Une notion retirée qui garderait une porte
+d'écriture réapparaîtrait un jour par ce canal, sans que personne comprenne d'où. La **mise à jour**
+d'un PV ne l'efface pas pour autant : elle réaffecte ses champs un par un et ne touche jamais celui-ci.
+
 ⚠️ **Un PV antérieur RÉGÉNÉRÉ n'imprime plus la ligne**, alors qu'il porte encore un secrétaire en base.
 Décision assumée : le PDF déjà archivé fait foi, et un document réédité reflète la règle en vigueur.
 

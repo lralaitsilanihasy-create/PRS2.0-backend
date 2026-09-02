@@ -1013,15 +1013,16 @@ public class PvExamenService {
      * levant le verrou §2.6. Le pilote a tranché : <strong>l'auto-co-signature n'est jamais autorisée</strong>.
      * La délégation ascendante n'est pas remise en cause pour autant — elle continue de désigner
      * l'attributaire ({@code DispatchService}), le rédacteur ({@link #exigerRedacteurDuProjet}) et le
-     * Secrétaire de séance : elle autorise à <em>faire</em> le travail, pas à le contresigner seul.</p>
+     * Secrétaire de séance (jusqu’à son retrait, le 2026-09-02) : elle autorise à <em>faire</em> le
+     * travail, pas à le contresigner seul.</p>
      *
      * <p><strong>Pourquoi ici et pas à l'acceptation.</strong> La désignation se fait au moment de signer,
-     * pas à la clôture de navette — contrairement au Secrétaire de séance. Le choix appartient au P/CC
-     * qui signe, et il ne peut pas lui échapper par antériorité : la part Membre n'est ouverte qu'après
-     * (voir {@link #exigerDesignationFaite}).</p>
+     * pas à la clôture de navette — contrairement au Secrétaire de séance de l’époque. Le choix
+     * appartient au P/CC qui signe, et il ne peut pas lui échapper par antériorité : la part Membre
+     * n’est ouverte qu’après (voir {@link #exigerDesignationFaite}).</p>
      *
-     * <p>Trois refus, tous en 409 (même famille que {@code validerSecretaireSeance}) : désignation
-     * absente, désignation de soi-même, désigné qui n'est pas un Membre de la localité du dossier.</p>
+     * <p>Trois refus, tous en 409 : désignation absente, désignation de soi-même, désigné qui n'est pas
+     * un Membre de la localité du dossier.</p>
      */
     private void designerMembreCoSignataire(PvExamen pv, String imDesigne, String signataire) {
         String designe = imDesigne == null ? null : imDesigne.trim();
