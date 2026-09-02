@@ -517,26 +517,29 @@ class ExamenIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("Soumission examen — secrétaire non vérificateur (autre profil/localité) → 400")
-    void soumission_examen_secretaire_invalide_400() throws Exception {
-        // CTRMEM est un MEMBRE (pas un vérificateur) → secrétaire de séance invalide.
+    @DisplayName("Soumission examen — le champ Secrétaire de séance est TOLÉRÉ et IGNORÉ (retrait 2026-09-02)")
+    void soumission_examen_secretaireSeance_ignore() throws Exception {
+        // CTRMEM est un MEMBRE : avant le 2026-09-02, ce matricule partait en 400 « idSecretaireSeance ».
+        // La garde a été retirée avec la notion — un champ ignoré ne peut plus être invalide.
         mvc.perform(post("/api/examens/1/soumettre").header("Authorization", tokenMembre)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idAvis\":\"FAV\",\"idSecretaireSeance\":\"CTRMEM\"}"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.erreurs[0].champ").value("idSecretaireSeance"));
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.statutPv").value("BROUILLON"))
+                // La valeur envoyée n'est pas écrite : le projet de PV ne porte aucun secrétaire.
+                .andExpect(jsonPath("$.idSecretaireSeance").doesNotExist())
+                .andExpect(jsonPath("$.nomSecretaireSeance").doesNotExist());
     }
 
     @Test
-    @DisplayName("Soumission examen — secrétaire vérificateur valide → 201, PV avec secrétaire de séance")
-    void soumission_examen_secretaire_ok() throws Exception {
+    @DisplayName("Soumission examen — sans le champ retiré : 201, projet de PV sans secrétaire")
+    void soumission_examen_sansSecretaireSeance() throws Exception {
         mvc.perform(post("/api/examens/1/soumettre").header("Authorization", tokenMembre)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idAvis\":\"FAV\",\"idSecretaireSeance\":\"CTRVER\"}"))
+                .content("{\"idAvis\":\"FAV\"}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.statutPv").value("BROUILLON"))
-                .andExpect(jsonPath("$.idSecretaireSeance").value("CTRVER"))
-                .andExpect(jsonPath("$.nomSecretaireSeance").value("Prenoms NomCTRVER"));
+                .andExpect(jsonPath("$.idSecretaireSeance").doesNotExist());
     }
 
     @Test

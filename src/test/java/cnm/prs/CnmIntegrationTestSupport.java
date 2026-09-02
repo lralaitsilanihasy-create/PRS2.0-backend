@@ -437,7 +437,11 @@ abstract class CnmIntegrationTestSupport extends AbstractIntegrationTest {
 
     /**
      * ⚠️ VISA (2026-08-31) — clôture de navette en un geste. {@code avis} et {@code commentaire} sont
-     * facultatifs (avis absent = celui du Membre conservé) ; secrétaire et co-signataire ne le sont pas.
+     * facultatifs (avis absent = celui du Membre conservé) ; seul le co-signataire est obligatoire.
+     *
+     * <p>⚠️ {@code idSecretaireSeance} est conservé au corps mais IGNORÉ par le serveur depuis le
+     * retrait du Secrétaire de séance (2026-09-02) : les appels historiques du socle le passent encore,
+     * ce qui éprouve gratuitement la tolérance promise au front.</p>
      */
     protected org.springframework.test.web.servlet.ResultActions viser(int idPv, String token, String acteur,
             String avis, String idSecretaireSeance, String imMembreCoSignataire) throws Exception {

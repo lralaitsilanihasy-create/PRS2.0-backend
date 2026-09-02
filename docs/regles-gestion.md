@@ -78,7 +78,7 @@ Flux complet d'un dossier, avec navette du projet de PV :
 > |---|---|---|
 > | Soumission de l'examen (Membre) | synthèse seule, avis `NULL` | synthèse **+ avis du Membre** |
 > | Navette (`retourner` / re-soumettre) | inchangée | inchangée — l'avis peut être ajusté à chaque cycle |
-> | Clôture (P/CC) | `accepter` puis `signer(role=PRESIDENT\|CC)` | **`viser`** : avis + Secrétaire de séance + co-signataire + part du rôle |
+> | Clôture (P/CC) | `accepter` puis `signer(role=PRESIDENT|CC)` | **`viser`** : avis + co-signataire + part du rôle |
 > | Part Membre | `signer(role=MEMBRE)` par le désigné | inchangée → `SIGNE` |
 >
 > **Le cycle d'états ne change pas.** `PROJET_ACCEPTE` devient « visé, en attente de la co-signature du
@@ -95,14 +95,13 @@ Flux complet d'un dossier, avec navette du projet de PV :
 > bloqué gèle la clôture d'un PV, un retour bloqué gèlerait **la navette entière** — le Membre ne pourrait
 > plus récupérer son projet pour le corriger. Retourner instruit ; viser atteste.
 >
-> **Contrat.** `POST /api/pv-examens/{id}/viser` — `idSecretaireSeance` et `imMembreCoSignataire`
-> obligatoires (**400**) ; `idAvis` optionnel (absent = avis du Membre conservé ; fourni = il le remplace,
-> cohérence revalidée). Pas de champ `role` : la part signée est **dérivée du profil de l'acteur**.
+> **Contrat.** `POST /api/pv-examens/{id}/viser` — `imMembreCoSignataire` obligatoire (**400**) ;
+> `idAvis` optionnel (absent = avis du Membre conservé ; fourni = il le remplace, cohérence revalidée).
 > `POST /{id}/accepter` est **retiré (410 Gone)** ; `signer` ne porte plus que le rôle `MEMBRE`
 > (`PRESIDENT`/`CC` → **409** orientant vers `viser`). `PV_A_VALIDER` ne cible plus que le dispatcheur.
 >
-> **Gardes reconduites sans changement** : Secrétaire de séance (§3.3, mention « (par délégation) » sur le
-> document conservée) et Membre co-signataire (2026-08-28 : Membre titulaire de la localité, ≠ acteur).
+> **Garde reconduite sans changement** : Membre co-signataire (2026-08-28 : Membre titulaire de la
+> localité, ≠ acteur). ⚠️ Le **Secrétaire de séance a été retiré du visa** le 2026-09-02 (§ dédié).
 >
 > **Transition.** Un PV `PROJET_ACCEPTE` dont la part du rôle n'est pas signée (accepté sous l'ancien
 > contrat) reste **visable** ; un PV en navette sans avis exige que le visa en fournisse un (**409**).
@@ -176,7 +175,9 @@ Flux complet d'un dossier, avec navette du projet de PV :
 > cachet et signature du membre en charge du dossier) ») — aucun placeholder de nom, aucun emplacement
 > pour le P/CC, et **les modèles centraux et régionaux y sont identiques**. Le seul endroit où le P/CC est
 > imprimé est le bloc « Étaient présents » ; la mention s'y pose, par le mécanisme même que citait
-> l'arbitrage — celui de « (par délégation) » du Secrétaire de séance, qui atterrit au même endroit.
+> l’arbitrage — celui de « (par délégation) » du Secrétaire de séance, qui atterrissait au même endroit
+> (⚠️ ce mécanisme a disparu le 2026-09-02 avec la notion elle-même ; le paragraphe reste comme trace de
+> la décision d’alors).
 > Conséquence : **aucun `.docx` n'a été modifié**, et la condition de localité est en Java.
 
 > ⚠️ **Règle CORRIGÉE (2026-08-27, audit — la clôture n'est PLUS automatique à la signature du PV, quel
@@ -279,6 +280,39 @@ comptage des non-lues, marquer lu) ; la **liste globale** est réservée à l'**
 > **Repli sans exception** : chaîne incomplète, examinateur introuvable, rattaché supprimé → diffusion à
 > **tous** les porteurs du rôle dans la localité, exactement comme avant. Un rattachement manquant ne
 > fait **jamais** disparaître une notification.
+
+### Le Secrétaire de séance est retiré du cycle du PV (règle du pilote, 2026-09-02)
+
+⚠️ **La notion disparaît, désignation comprise.** Depuis les **rattachements Membre → Vérificateur →
+Assistant** (§1.7, 2026-09-01), la boucle de vérification est routée par les **chaînes nominatives** : le
+Secrétaire de séance n'avait plus qu'un rôle **documentaire** — une ligne sous « Étaient présents ». Le
+pilote retire cette ligne et la désignation qui la nourrissait.
+
+**Les deux points de désignation tombent** — c'est le point à retenir, la notion vivait à deux endroits :
+
+- **au visa** (`POST /api/pv-examens/{id}/viser`) : le champ était obligatoire, la garde 400 est retirée ;
+- **à la soumission de l'examen** (`POST /api/examens/{id}/soumettre`) : le champ y était optionnel mais
+  **validé** ; il est désormais ignoré.
+
+Les **gardes d'éligibilité** associées (Vérificateur titulaire de la localité, ou paire
+« → Vérificateur » active — règle élargie du 2026-08-15) sont **retirées avec la notion**. Une garde sans
+objet qu'on laisse en place devient une règle qui dérive en silence.
+
+**Tolérance.** Un client non à jour qui envoie encore le champ n'est **pas refusé** : la valeur est
+**ignorée**, jamais écrite. Un matricule fantaisiste ne déclenche plus aucun refus — un champ ignoré ne
+peut pas être invalide.
+
+**Documents.** La ligne « Secrétaire de séance : … » ne s'imprime plus, mention « (par délégation) »
+comprise. Les **12 modèles PV** ont été re-dérivés sans elle, et le générateur supprime tout paragraphe
+qui la porterait encore — un modèle mal re-dérivé n'imprimera jamais un marqueur brut à la place d'un nom.
+
+**Ce qui reste, et pourquoi.** La colonne `SECRETAIRE_SEANCE` n'est **pas purgée** et le DTO continue de
+l'exposer **en lecture** : les PV visés **avant** la règle gardent leur secrétaire. Un PV est un acte
+officiel — on ne réécrit pas son contenu a posteriori. **Aucune migration.** Un PV visé après le
+déploiement porte `null`.
+
+⚠️ **Un PV antérieur RÉGÉNÉRÉ n'imprime plus la ligne**, alors qu'il porte encore un secrétaire en base.
+Décision assumée : le PDF déjà archivé fait foi, et un document réédité reflète la règle en vigueur.
 
 ### Chronométrage et prévision des délais (transversal au circuit)
 
@@ -1160,21 +1194,17 @@ Accès complet aux référentiels, comptes utilisateurs, journal d'audit, hiéra
   - **Garde dérivée (2026-08-15)** : l'**attributaire** d'un dispatch (`IM_CTRL_MEMBRE`) est validé par
     la même règle data-driven — Membre titulaire **ou** paire (profil → Membre) **active** — ce qui
     autorise l'**auto-attribution** du Président/CC (voir §3.2, « Dispatch vers un membre »).
-  - **Décisions (2026-08-15) — passage vérificateur et Secrétaire de séance** : le passage vérificateur
-    (levée/maintenue des observations, suite de la navette) est une **tâche de profil** (titulaire OU
-    paire « → Vérificateur » active), **non** restreinte au Secrétaire de séance désigné ; dans le
-    circuit court, le décideur peut donc être l'**attributaire du même dossier** (auteur des
-    observations) — **assumé, sans garde de séparation** : la vérification juge la levée par la PRMP,
-    et chaque décision est tracée avec l'identité du décideur. La **désignation
-    du Secrétaire de séance** (`idSecretaireSeance`) est **élargie à la même règle** (décision produit
-    2026-08-15, annulant le statu quo du même jour) : Vérificateur **titulaire** de la localité du
-    dossier OU contrôleur couvert par une paire « → Vérificateur » **active**, dans le périmètre de sa
-    localité (contrôleur sans localité — Président — accepté partout) ; le Président/CC peut donc
-    **se désigner lui-même** à l'acceptation. Conséquence assumée : au bloc Signataires du PV du
-    circuit court, la même personne peut figurer comme Membre attributaire ET Secrétaire de séance —
-    et, depuis la levée du verrou d'auto-co-signature (décision produit 2026-08-15), porter aussi les
-    **deux parts de signature**. Le document PV suffixe de « **(par délégation)** » le nom du Secrétaire
-    de séance et la ligne Membre quand le titulaire du rôle n'est pas le profil attendu.
+  - **Décisions (2026-08-15) — passage vérificateur** : le passage vérificateur (levée/maintenue des
+    observations, suite de la navette) est une **tâche de profil** (titulaire OU paire
+    « → Vérificateur » active) ; dans le circuit court, le décideur peut donc être l'**attributaire du
+    même dossier** (auteur des observations) — **assumé, sans garde de séparation** : la vérification
+    juge la levée par la PRMP, et chaque décision est tracée avec l'identité du décideur.
+    ⚠️ **La désignation du Secrétaire de séance, élargie le 2026-08-15, est CADUQUE depuis le
+    2026-09-02** : la notion a été retirée du cycle du PV, garde d'éligibilité comprise (voir la règle
+    dédiée en §2). Conséquence assumée qui subsiste : au bloc Signataires du PV du circuit court, la
+    même personne peut porter la ligne Membre **et** les deux parts de signature (levée du verrou
+    d'auto-co-signature, 2026-08-15) ; le document suffixe alors la ligne Membre de
+    « **(par délégation)** ».
 - ⚠️ **Règle ajoutée (2026-08-13) — catégorie des modes de passation** [Écriture]
   - Chaque mode (`tr_mode_passation`) porte une **catégorie déclarative** `CATEGORIE` :
     **`NORMAL`** (mode de droit commun — l'appel d'offres ouvert au sens du Code des marchés publics)

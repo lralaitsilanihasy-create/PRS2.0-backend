@@ -39,7 +39,6 @@ class ApercuBlocVisaTest extends CnmIntegrationTestSupport {
                 null,                                   // pas de Président : c'est le CC qui a visé
                 "RANDRIA Paul",                         // Chef de la Commission (bloc « Étaient présents »)
                 "RAKOTO Jean",                          // Membre attributaire
-                "RASOA Vero",                           // Secrétaire de séance
                 ligneViseur,
                 null,
                 List.of(new PvDocumentContexte.Observation(

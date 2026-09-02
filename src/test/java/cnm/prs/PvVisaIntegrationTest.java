@@ -18,14 +18,15 @@ import cnm.prs.enums.TypeActeur;
  * ⚠️ Réforme « Visa unique » (arbitrage du pilote, 2026-08-31) — {@code POST /api/pv-examens/{id}/viser}.
  *
  * <p>Le visa fusionne l'ancienne clôture de navette ({@code accepter}, retirée en 410) et la signature
- * du Président / Chef de commission : avis éventuellement modifié, Secrétaire de séance, Membre
+ * du Président / Chef de commission : avis éventuellement modifié, Membre
  * co-signataire et part du rôle, en une transaction. La règle vient du pilote : « le Membre qui fait
  * l'examen émet son avis à la fin de l'examen ; cet avis peut être modifié à la fin de la navette, qui
  * finit par le visa du Président ou du CC QUI A FAIT LE DISPATCH ».</p>
  *
  * <p>Cette classe couvre ce que le visa AJOUTE : la contrainte d'identité (§4), les 400 de validation,
  * la conservation ou le remplacement de l'avis, la transition des PV acceptés sous l'ancien contrat
- * (§6) et le retrait de l'ancien contrat. Les gardes RECONDUITES — Secrétaire de séance (§3.3),
+ * (§6) et le retrait de l’ancien contrat, plus le RETRAIT DU SECRÉTAIRE DE SÉANCE (2026-09-02).
+ * Les gardes RECONDUITES —
  * co-signataire (2026-08-28), CC auto-attributaire — restent éprouvées là où elles vivaient déjà,
  * dans {@code AuthentificationHabilitationIntegrationTest} et {@code PvWorkflowIntegrationTest}.</p>
  */
@@ -73,13 +74,63 @@ class PvVisaIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("Visa — Secrétaire de séance et co-signataire obligatoires : 400 de validation, pas 409")
+    @DisplayName("Visa — seul le co-signataire est obligatoire : 400 de validation, pas 409")
     void visa_champsObligatoires_400() throws Exception {
         projetSoumis(9403, "FAV");
-        viser(9403, tokenPresident, "CTRPRE", "FAV", null, "CTRMEM").andExpect(status().isBadRequest());
         viser(9403, tokenPresident, "CTRPRE", "FAV", "CTRVER", null).andExpect(status().isBadRequest());
         mvc.perform(get("/api/pv-examens/9403").header("Authorization", tokenAdmin))
                 .andExpect(jsonPath("$.statutPv").value("PROJET_SOUMIS"));
+    }
+
+    @Test
+    @DisplayName("Visa SANS Secrétaire de séance — accepté : la notion est retirée du cycle du PV (2026-09-02)")
+    void visa_sansSecretaireSeance_accepte() throws Exception {
+        projetSoumis(9420, "FAV");
+        viser(9420, tokenPresident, "CTRPRE", "FAV", null, "CTRMEM")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statutPv").value("PROJET_ACCEPTE"))
+                .andExpect(jsonPath("$.idSecretaireSeance").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("Visa AVEC le champ retiré — toléré et IGNORÉ : le PV ne porte aucun secrétaire")
+    void visa_avecSecretaireSeance_ignore() throws Exception {
+        projetSoumis(9421, "FAV");
+        // Un client non a jour continue d'envoyer le champ : il ne doit pas etre refuse...
+        viser(9421, tokenPresident, "CTRPRE", "FAV", "CTRVER", "CTRMEM")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statutPv").value("PROJET_ACCEPTE"))
+                // ...mais la valeur n'est pas ecrite pour autant.
+                .andExpect(jsonPath("$.idSecretaireSeance").doesNotExist());
+        org.junit.jupiter.api.Assertions.assertNull(
+                pvExamenRepository.findById(9421).orElseThrow().getIdSecretaireSeance(),
+                "le champ envoye est ignore, jamais persiste");
+    }
+
+    @Test
+    @DisplayName("Visa — un matricule FANTAISISTE au champ retiré ne declenche plus aucune garde")
+    void visa_secretaireInexistant_neGardePlus() throws Exception {
+        projetSoumis(9422, "FAV");
+        // Avant le 2026-09-02 : 409 « doit etre un Verificateur de la localite ». La garde a ete
+        // retiree avec la notion — un champ ignore ne peut pas etre invalide.
+        viser(9422, tokenPresident, "CTRPRE", "FAV", "INCONNU", "CTRMEM")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.idSecretaireSeance").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("PV HISTORIQUE — un secrétaire deja en base reste lu au DTO (aucune purge)")
+    void pvHistorique_secretaireConserveAuDto() throws Exception {
+        projetSoumis(9423, "FAV");
+        // Trace d'un PV vise AVANT la regle : la colonne porte encore un secretaire.
+        cnm.prs.entity.PvExamen pv = pvExamenRepository.findById(9423).orElseThrow();
+        pv.setIdSecretaireSeance("CTRVER");
+        pvExamenRepository.save(pv);
+
+        mvc.perform(get("/api/pv-examens/9423").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.idSecretaireSeance").value("CTRVER"))
+                .andExpect(jsonPath("$.nomSecretaireSeance").exists());
     }
 
     @Test

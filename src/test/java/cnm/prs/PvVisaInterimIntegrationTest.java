@@ -223,10 +223,15 @@ class PvVisaInterimIntegrationTest extends CnmIntegrationTestSupport {
         return pvDocumentService.contexte(pvExamenRepository.findById(idPv).orElseThrow());
     }
 
-    /** Noms du bloc « Étaient présents », à plat — sert à vérifier que la mention n'y est PLUS. */
+    /**
+     * Noms du bloc « Étaient présents », à plat — sert à vérifier que la mention d'intérim n'y est PLUS.
+     *
+     * <p>⚠️ Le Secrétaire de séance a été retiré du bloc (règle du pilote, 2026-09-02) : il ne reste que
+     * le Président, le Chef de commission et le Membre.</p>
+     */
     private String presents(int idPv) {
         var ctx = contexte(idPv);
         return String.valueOf(ctx.nomPresident()) + " | " + String.valueOf(ctx.nomChefCommission())
-                + " | " + String.valueOf(ctx.nomMembre()) + " | " + String.valueOf(ctx.nomVerificateur());
+                + " | " + String.valueOf(ctx.nomMembre());
     }
 }

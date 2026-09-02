@@ -257,18 +257,19 @@ public class PvExamenService {
      * statut transmis : impossible de créer un PV directement accepté ou signé.
      */
     /**
-     * ⚠️ Règle ajoutée — crée le Projet de PV d'un examen à sa soumission avec l'avis choisi et le
-     * Vérificateur désigné Secrétaire de séance ({@code idSecretaireSeance}, déjà validé).
+     * ⚠️ Règle ajoutée — crée le Projet de PV d'un examen à sa soumission, avec l'avis choisi.
      * Réutilise {@link #create(PvExamenDto)}.
      *
      * <p>⚠️ LOT 3b (2026-08-26) — la PK n'est plus pré-allouée ici en {@code max + 1} : le DTO part
      * sans identifiant et {@code create} la tire de la séquence {@code seq_pv_examen}.</p>
+     *
+     * <p>⚠️ Le <strong>Secrétaire de séance</strong> a disparu de la signature (règle du pilote,
+     * 2026-09-02) : il n'est plus désigné, ni à la soumission ni au visa.</p>
      */
-    public PvExamenDto creerProjet(Integer idExamen, String idAvis, String idSecretaireSeance) {
+    public PvExamenDto creerProjet(Integer idExamen, String idAvis) {
         PvExamenDto dto = new PvExamenDto();
         dto.setIdExamen(idExamen);
         dto.setIdAvis(idAvis);
-        dto.setIdSecretaireSeance(idSecretaireSeance);
         return create(dto);
     }
 
@@ -516,18 +517,6 @@ public class PvExamenService {
                     "Aucune observation relevée à l'examen : l'avis « Favorable avec réserves » est incohérent"
                             + " — choisissez « Favorable ».");
         }
-    }
-
-    private String validerSecretaireSeance(Integer idPv, String idSecretaire) {
-        String localite = repository.findLocaliteByPv(idPv).orElse(null);
-        // ⚠️ Règle ÉLARGIE (2026-08-15, décision produit) : Vérificateur TITULAIRE de la localité OU
-        // contrôleur couvert par une paire « → Vérificateur » ACTIVE (auto-désignation du Président/CC).
-        if (!controleurDirectory.peutEtreSecretaireSeance(idSecretaire, localite)) {
-            throw new BusinessRuleException(
-                    "Le Secrétaire de séance doit être un Vérificateur de la localité du dossier, "
-                            + "ou un contrôleur couvert par une délégation active vers Vérificateur.");
-        }
-        return idSecretaire.trim();
     }
 
     /**
@@ -811,8 +800,14 @@ public class PvExamenService {
                     "Ce projet de PV ne porte aucun avis : le visa doit en fournir un (« idAvis »).");
         }
 
-        // ⑥ Secrétaire de séance et ⑦ Membre co-signataire : gardes existantes, inchangées.
-        pv.setIdSecretaireSeance(validerSecretaireSeance(id, req.idSecretaireSeance()));
+        // ⑥ Membre co-signataire : garde existante, inchangée.
+        //
+        // ⚠️ Le Secrétaire de séance a été RETIRÉ du visa (règle du pilote, 2026-09-02). Depuis les
+        // rattachements Membre → Vérificateur → Assistant, la boucle de vérification est routée par
+        // les chaînes nominatives : cette désignation n'avait plus qu'un rôle documentaire. Le champ
+        // reste accepté dans le corps pour ne pas casser un client non à jour, mais il n'est ni
+        // validé ni écrit — un PV visé à partir d'ici porte « null ». Les PV antérieurs gardent le
+        // leur, en base comme au DTO : on ne réécrit pas l'histoire d'un acte officiel.
         designerMembreCoSignataire(pv, req.imMembreCoSignataire(), acteur);
 
         // ⑧ Part de signature du rôle — le verrou « une signature par rôle » reste posé.

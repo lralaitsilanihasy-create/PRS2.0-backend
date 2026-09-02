@@ -730,11 +730,11 @@ class AuthentificationHabilitationIntegrationTest extends CnmIntegrationTestSupp
     }
 
     @Test
-    @DisplayName("Circuit court CC : auto-désignation Secrétaire de séance (paire active ; désactivée → 409) ; "
+    @DisplayName("Circuit court CC : il se dispatche, examine, vise son propre dossier et désigne le co-signataire ; "
             + "⚠️ 2026-08-28 — le CC ne signe PLUS seul : part Membre refusée avant désignation (409), sa part CC "
-            + "reste gouvernée par la paire → Membre (désactivée → 403), puis le Membre désigné co-signe → SIGNE ; "
-            + "passage statué sur SES PROPRES observations")
-    void circuitCourtCc_secretaireSeanceParDelegation_etPassageParAttributaire() throws Exception {
+            + "appartient au visa (signer → 409), puis le Membre désigné co-signe → SIGNE ; passage statué sur SES "
+            + "PROPRES observations. ⚠️ 2026-09-02 — le Secrétaire de séance a disparu du visa.")
+    void circuitCourtCc_visaParAttributaire_etPassageSurSesObservations() throws Exception {
         // Dossier ANT auto-attribué par le CC (garde attributaire : paire CC → Membre active).
         // Enrichi PPM + ligne de marché : support du diff de rectification (2026-08-15).
         Dossier d4610 = dossierLoc(4610, "PRET_DISPATCH", "ANT", "PRMP001");
@@ -775,31 +775,15 @@ class AuthentificationHabilitationIntegrationTest extends CnmIntegrationTestSupp
         mvc.perform(post("/api/pv-examens/" + idPv + "/soumettre").header("Authorization", tokenCc)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRCC1\",\"commentaire\":\"go\"}"))
                 .andExpect(status().isOk());
-        // ⚠️ VISA (2026-08-31) — les gardes du Secrétaire de séance sont reconduites telles quelles, mais
-        // portées par « viser » au lieu de « accepter ». Ici le CC EST le dispatcheur (il s'est dispatché
-        // le dossier), la contrainte d'identité est donc satisfaite et ce sont bien les gardes §3.3 que
-        // ces cas éprouvent.
-        // Négatifs : un Secrétaire (aucune paire → Vérificateur) reste refusé…
-        viser(idPv, tokenCc, "CTRCC1", "FAVR", "CTRSEC", "CTRMEM")
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.message", containsString("délégation active vers Vérificateur")));
-        // … tout comme un CC d'une AUTRE localité (paire active mais hors périmètre : CTRCC2 = TMS, dossier ANT).
-        viser(idPv, tokenCc, "CTRCC1", "FAVR", "CTRCC2", "CTRMEM").andExpect(status().isConflict());
-        // Data-driven : paire 6 (CC → Vérificateur) DÉSACTIVÉE → l'auto-désignation du CC est refusée.
-        mvc.perform(put("/api/delegation-profils/6").header("Authorization", tokenAdmin)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idDelegation\":6,\"idProfileDelegant\":3,\"idProfileDelegue\":6,\"actif\":false}"))
-                .andExpect(status().isOk());
-        viser(idPv, tokenCc, "CTRCC1", "FAVR", "CTRCC1", "CTRMEM").andExpect(status().isConflict());
-        // RÉACTIVÉE → le CC SE DÉSIGNE LUI-MÊME Secrétaire de séance (décision produit : « moi-même ⤴ »),
-        // et le visa passe : il désigne CTRMEM pour co-signer, sa propre part étant posée du même geste.
-        mvc.perform(put("/api/delegation-profils/6").header("Authorization", tokenAdmin)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idDelegation\":6,\"idProfileDelegant\":3,\"idProfileDelegue\":6,\"actif\":true}"))
-                .andExpect(status().isOk());
-        viser(idPv, tokenCc, "CTRCC1", "FAVR", "CTRCC1", "CTRMEM")
+        // ⚠️ Le Secrétaire de séance a été RETIRÉ du visa (règle du pilote, 2026-09-02) : les trois cas
+        // négatifs éprouvés ici — Secrétaire sans paire, CC d'une autre localité, paire désactivée —
+        // portaient tous sur cette désignation. Ils n'ont plus d'objet : le champ est ignoré, et un
+        // champ ignoré ne peut pas être invalide. Ce qui reste vérifié ci-dessous est ce qui SUBSISTE :
+        // le CC dispatcheur vise son propre dossier, sa part CC est posée du même geste, et il désigne
+        // le Membre co-signataire.
+        viser(idPv, tokenCc, "CTRCC1", "FAVR", null, "CTRMEM")
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.idSecretaireSeance").value("CTRCC1"))
+                .andExpect(jsonPath("$.idSecretaireSeance").doesNotExist())
                 .andExpect(jsonPath("$.imCtrlCc").value("CTRCC1"))
                 .andExpect(jsonPath("$.imDispatcheur").value("CTRCC1"))
                 .andExpect(jsonPath("$.imMembreCoSignataire").value("CTRMEM"));
@@ -824,7 +808,8 @@ class AuthentificationHabilitationIntegrationTest extends CnmIntegrationTestSupp
         mvc.perform(get("/api/dossiers/4610").header("Authorization", tokenCc))
                 .andExpect(jsonPath("$.statut").value("EN_VERIFICATION"));
         // Q1a : le MÊME CC (attributaire, auteur des observations) statue le passage via la paire CC → Vérificateur
-        // — tâche de PROFIL, aucune restriction au Secrétaire de séance ni garde de séparation.
+        // — tâche de PROFIL, sans garde de séparation (et, depuis le 2026-09-02, plus aucun lien avec
+        // le Secrétaire de séance, retiré du cycle du PV).
         // ⚠️ Décision produit 2026-08-15 : au PREMIER passage la levée est impossible (les observations
         // du PV sont réputées avec objet) — leveePossible=false au front, LEVEE → 409, tout MAINTENUE.
         String obs = mvc.perform(get("/api/observations-pv").header("Authorization", tokenCc).param("dossier", "4610"))
@@ -964,26 +949,6 @@ class AuthentificationHabilitationIntegrationTest extends CnmIntegrationTestSupp
                 .andExpect(header().string("X-Content-Type-Options", "nosniff"))
                 .andExpect(header().string("Content-Security-Policy",
                         "default-src 'self'; object-src 'none'; frame-ancestors 'self'"));
-    }
-
-    @Test
-    @DisplayName("Secrétaire de séance par délégation : le Président (sans localité, paire Président → Vérificateur "
-            + "active) est désignable sur un dossier de n'importe quelle localité")
-    void secretaireSeance_presidentParDelegation() throws Exception {
-        // PV sur l'examen 1 (dossier 1, ANT, attributaire CTRMEM), soumis par le Membre.
-        mvc.perform(post("/api/pv-examens").header("Authorization", tokenMembre).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idPv\":5611,\"idExamen\":1,\"idAvis\":\"FAV\",\"imCtrlMembre\":\"CTRMEM\","
-                        + "\"statutPv\":\"BROUILLON\",\"nbNavettes\":0}"))
-                .andExpect(status().isCreated());
-        mvc.perform(post("/api/pv-examens/5611/soumettre").header("Authorization", tokenMembre)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRMEM\",\"commentaire\":\"go\"}"))
-                .andExpect(status().isOk());
-        // ⚠️ 2026-08-31 — le visa désigne le PRÉSIDENT Secrétaire de séance : couvert par la paire
-        // Président → Vérificateur active, et sans localité → désignable partout. La garde §3.3 est
-        // inchangée ; seul l'acteur l'est, le dispatcheur (CTRPRE) ayant remplacé le CC.
-        viser(5611, tokenPresident, "CTRPRE", "FAV", "CTRPRE", "CTRMEM")
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.idSecretaireSeance").value("CTRPRE"));
     }
 
     @Test

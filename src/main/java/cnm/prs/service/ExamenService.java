@@ -74,10 +74,11 @@ public class ExamenService {
     /**
      * ⚠️ Règle ajoutée — soumission de l'examen : produit le <strong>Projet de PV</strong>
      * (via {@link PvExamenService}, {@code idPv} alloué serveur) avec l'avis fourni
-     * ({@code idAvis}, obligatoire sur le PV). Le <strong>Secrétaire de séance</strong>
-     * ({@code idSecretaireSeance}) doit être un VERIFICATEUR de la localité du dossier ou un contrôleur
-     * couvert par une paire « → Vérificateur » active (⚠️ règle élargie 2026-08-15 ; sinon 400
-     * {@code erreurs:[{champ:idSecretaireSeance}]}). La lettre de renvoi est une action séparée.
+     * ({@code idAvis}, obligatoire sur le PV). La lettre de renvoi est une action séparée.
+     *
+     * <p>⚠️ Le <strong>Secrétaire de séance</strong> a été retiré du cycle du PV (règle du pilote,
+     * 2026-09-02) : {@code idSecretaireSeance} n'est plus ni validé ni posé. Un client non à jour qui
+     * l'envoie encore n'est pas refusé — la valeur est ignorée.</p>
      */
     public PvExamenDto soumettre(Integer idExamen, ExamenSoumissionRequest req) {
         Examen examen = repository.findById(idExamen)
@@ -106,10 +107,9 @@ public class ExamenService {
                             + "soumission (règle du 2026-08-31). Il pourra être modifié au visa.")));
         }
         pvExamenService.validerCoherenceAvisPublic(idExamen, idAvis);
-        String idSecretaire = req.idSecretaireSeance() == null || req.idSecretaireSeance().isBlank()
-                ? null
-                : validerSecretaireSeance(idExamen, req.idSecretaireSeance());
-        PvExamenDto pv = pvExamenService.creerProjet(idExamen, idAvis, idSecretaire);
+        // ⚠️ Secrétaire de séance RETIRÉ du cycle du PV (règle du pilote, 2026-09-02) : le champ du
+        // corps est toléré mais ignoré, il n'est plus ni validé ni posé sur le projet de PV.
+        PvExamenDto pv = pvExamenService.creerProjet(idExamen, idAvis);
         // ⚠️ Règle DÉPLACÉE (2026-08-01) — le dossier n'avance DISPATCHE → EXAMINE qu'à la SOUMISSION :
         // la création d'un examen est désormais un BROUILLON de progression (le dossier reste « à
         // examiner » et le Membre peut reprendre plus tard). Même transaction que le projet de PV.
@@ -176,30 +176,6 @@ public class ExamenService {
     /** Clé d'un couple évalué ({@code idDetail} nul → « null ») pour la comparaison de complétude. */
     private static String cleCouple(Integer idDetail, Integer idPtControle) {
         return (idDetail == null ? "null" : idDetail) + "|" + idPtControle;
-    }
-
-    /**
-     * Valide le Secrétaire de séance : Vérificateur TITULAIRE de la localité du dossier, OU
-     * (⚠️ règle élargie 2026-08-15) contrôleur couvert par une paire « → Vérificateur » ACTIVE
-     * de t_delegation_profil — même garde qu'à l'acceptation du PV.
-     * @return le matricule validé (trimé)
-     * @throws ChampsInvalidesException (→ 400) si absent ou non couvert
-     */
-    private String validerSecretaireSeance(Integer idExamen, String idSecretaire) {
-        if (idSecretaire == null || idSecretaire.isBlank()) {
-            throw champInvalide("Le secrétaire de séance (vérificateur) est obligatoire.");
-        }
-        // Localité du circuit (réception : examen→dispatch→réception→contrôleur récepteur), cf. lettres de renvoi.
-        String localite = repository.findLocaliteByExamen(idExamen).orElse(null);
-        if (!controleurDirectory.peutEtreSecretaireSeance(idSecretaire, localite)) {
-            throw champInvalide("Le secrétaire de séance doit être un vérificateur de la localité du dossier, "
-                    + "ou un contrôleur couvert par une délégation active vers Vérificateur.");
-        }
-        return idSecretaire.trim();
-    }
-
-    private ChampsInvalidesException champInvalide(String message) {
-        return new ChampsInvalidesException(List.of(new ErrorResponse.FieldError("idSecretaireSeance", message)));
     }
 
     @Transactional(readOnly = true)

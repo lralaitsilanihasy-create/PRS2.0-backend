@@ -20,7 +20,6 @@ public record PvDocumentContexte(
         String nomPresident,
         String nomChefCommission,
         String nomMembre,
-        String nomVerificateur,
         /**
          * ⚠️ Refonte du bloc VISA (arbitrage du pilote, 2026-09-01) — ligne nommant le VISEUR :
          * « Visé par : NOM Prénoms, qualité », suffixée « — par intérim » sur un PV de localité

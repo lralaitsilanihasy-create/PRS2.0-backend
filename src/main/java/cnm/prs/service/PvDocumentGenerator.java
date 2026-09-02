@@ -91,7 +91,13 @@ public class PvDocumentGenerator {
     private static final String PRESIDENT = "<NOM ET PRENOMS DU PRESIDENT>";
     private static final String CHEF_COMMISSION = "<NOM ET PRENOMS DU CHEF DE COMMISSION>";
     private static final String MEMBRE = "<NOM ET PRENOMS DU MEMBRE>";
-    private static final String VERIFICATEUR = "<NOM ET PRENOMS DU VERIFICATEUR>";
+    /**
+     * ⚠️ <strong>Ligne retirée</strong> (règle du pilote, 2026-09-02) — le Secrétaire de séance a
+     * disparu du cycle du PV. Le placeholder est retiré des 12 modèles, mais la constante survit pour
+     * servir de <strong>garde</strong> : tout paragraphe qui le porterait encore est supprimé, de sorte
+     * qu'un modèle mal re-dérivé n'imprime jamais un marqueur brut à la place d'un nom.
+     */
+    private static final String SECRETAIRE_SEANCE_RETIRE = "<NOM ET PRENOMS DU VERIFICATEUR>";
 
     /**
      * ⚠️ Refonte du bloc VISA (2026-09-01) — ligne du viseur, ajoutée aux 12 modèles PV dans la table
@@ -177,7 +183,6 @@ public class PvDocumentGenerator {
         m.put(ENTITE, nz(ctx.entiteContractante()));
         m.put(ANNEE, ctx.anneeExercice() == null ? "" : String.valueOf(ctx.anneeExercice()));
         m.put(MEMBRE, nz(ctx.nomMembre()));
-        m.put(VERIFICATEUR, nz(ctx.nomVerificateur()));
         m.put(VISEUR, nz(ctx.ligneViseur()));
         m.put(LOCALITE, nz(ctx.localite()));
         // Lieu d'établissement : chef-lieu si renseigné, sinon libellé de la localité (repli).
@@ -198,6 +203,13 @@ public class PvDocumentGenerator {
         for (XWPFParagraph p : doc.getParagraphs()) {
             String texte = texteConcatene(p);
             if (texte.isEmpty()) {
+                continue;
+            }
+            // ⚠️ Secrétaire de séance retiré du PV (règle du pilote, 2026-09-02) : sa ligne est
+            // supprimée du document. Les 12 modèles ont été re-dérivés sans elle ; cette garde couvre
+            // le cas d'un modèle qui la porterait encore, pour qu'un marqueur brut ne s'imprime jamais.
+            if (texte.contains(SECRETAIRE_SEANCE_RETIRE)) {
+                aSupprimer.add(p);
                 continue;
             }
             if (texte.contains(PRESIDENT) && !president) {

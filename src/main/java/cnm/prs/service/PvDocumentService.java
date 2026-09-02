@@ -275,22 +275,16 @@ public class PvDocumentService {
                 // présents » redevient une simple liste de présence. Elle a déménagé au bloc VISA,
                 // seul endroit qui fasse foi sur l'acte.
                 nomControleur(pv.getImCtrlPresident()), nomControleur(pv.getImCtrlCc()),
-                nomMembreAttributaire(pv.getImCtrlMembre()), nomSecretaireSeance(pv.getIdSecretaireSeance()),
+                nomMembreAttributaire(pv.getImCtrlMembre()),
+                // ⚠️ Le Secrétaire de séance a été RETIRÉ du document (règle du pilote, 2026-09-02) :
+                // « Étaient présents » ne porte plus sa ligne, mention « (par délégation) » comprise.
+                // Un PV ANTÉRIEUR régénéré ne la porte pas non plus — décision assumée : le PDF déjà
+                // archivé fait foi, et le document réédité reflète la règle en vigueur.
                 ligneViseur(pv, idLocalite),
                 // ⚠️ 2026-08-05 — nature du plan : INITIAL (null/0) ou MODIFICATIF N°n si le dossier est
                 // une version. L'information est portée par le PPM lui-même (t_ppm.NUM_MAJ).
                 ppm.getNumMaj(),
                 construireObservations(idExamen));
-    }
-
-    /**
-     * ⚠️ Règle élargie (2026-08-15) — nom du Secrétaire de séance au bloc Signataires : suffixé
-     * « (par délégation) » quand le désigné n'est pas un Vérificateur titulaire (auto-désignation
-     * du Président/CC via une paire « → Vérificateur » active), pour que le cumul des mentions
-     * du circuit court reste lisible sur le document.
-     */
-    private String nomSecretaireSeance(String im) {
-        return nomAvecMentionDelegation(im, cnm.prs.enums.ProfilUtilisateur.VERIFICATEUR);
     }
 
     /**

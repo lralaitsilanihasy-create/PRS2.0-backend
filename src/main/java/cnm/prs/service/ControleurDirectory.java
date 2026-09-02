@@ -49,38 +49,17 @@ public class ControleurDirectory {
     }
 
     /**
-     * ⚠️ Règle ÉLARGIE (2026-08-15, décision produit) — Secrétaire de séance : Vérificateur
-     * <strong>titulaire</strong> de la localité du dossier, <strong>OU</strong> contrôleur couvert par
-     * une paire (profil → Vérificateur) <strong>active</strong> de {@code t_delegation_profil}
-     * (auto-désignation du Président/CC au panneau d'acceptation — parallèle exact de la garde
-     * attributaire du dispatch, data-driven : paire désactivée en base → refus sans changement de
-     * code). Le désigné reste dans son périmètre : sa localité doit être celle du dossier ; un
-     * contrôleur <strong>sans localité</strong> (Président) est accepté partout.
-     */
-    public boolean peutEtreSecretaireSeance(String imControleur, String localiteDossier) {
-        if (imControleur == null || imControleur.isBlank() || localiteDossier == null) {
-            return false;
-        }
-        Controleur controleur = controleurRepository.findById(imControleur.trim()).orElse(null);
-        if (controleur == null) {
-            return false;
-        }
-        ProfilUtilisateur profil = profilDe(imControleur).orElse(null);
-        return permissionService.peutExercer(profil, ProfilUtilisateur.VERIFICATEUR)
-                && (controleur.getIdLocalite() == null || localiteDossier.equals(controleur.getIdLocalite()));
-    }
-
-    /**
      * ⚠️ Co-signature (2026-08-28, arbitrage du pilote) — Membre désignable pour co-signer un PV :
      * <strong>Membre titulaire</strong> de la <strong>localité du dossier</strong>.
      *
-     * <p>Deux écarts délibérés avec {@link #peutEtreSecretaireSeance}, qui lui ressemble :</p>
+     * <p>Deux écarts délibérés avec l’ancienne garde du Secrétaire de séance (retirée le 2026-09-02
+     * avec la notion elle-même), dont elle était proche :</p>
      * <ul>
      *   <li><strong>Titulaire, pas de délégation.</strong> On ne passe pas par
      *       {@code peutExercer(profil, MEMBRE)} : les paires (Président → Membre) et
      *       (CC → Membre) rendraient un second P/CC désignable, et l'on retomberait sur deux
      *       signatures de même rang — exactement ce que l'arbitrage ferme.</li>
-     *   <li><strong>Aucune exemption de localité.</strong> Le Secrétaire de séance tolère un
+     *   <li><strong>Aucune exemption de localité.</strong> L’ancienne garde tolérait un
      *       contrôleur sans localité (le Président, compétent partout) ; ici cette tolérance
      *       rouvrirait la porte que §3.3 referme. Localité nulle → refus.</li>
      * </ul>

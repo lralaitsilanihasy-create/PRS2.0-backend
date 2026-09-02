@@ -34,7 +34,7 @@ class PvDocumentWordIntegrationTest extends CnmIntegrationTestSupport {
                 "ANTANANARIVO",                             // localité (libellé)
                 "ANTANANARIVO",                             // chef-lieu (⚠️ 2026-08-04, lieu « A …, le »)
                 nomPresident, nomChefCommission,
-                "Paul MEMBRE", "Vero VERIFICATEUR",
+                "Paul MEMBRE",
                 // ⚠️ Refonte du bloc VISA (2026-09-01) — ligne du viseur, présente sur TOUS les PV.
                 // Elle nomme CELUI QUI A VISÉ : le Président s'il a signé, le CC sinon — même règle que
                 // PvDocumentService#ligneViseur. Une ligne codée en dur nommait un Président sur un PV

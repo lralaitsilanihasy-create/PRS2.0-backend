@@ -17,12 +17,14 @@ import jakarta.validation.constraints.Size;
  * @param role        rôle du signataire (MEMBRE / PRESIDENT / CC) — uniquement pour « signer »
  * @param idAvis      ⚠️ règle ajoutée (2026-08-01) — avis global posé à la CLÔTURE DE NAVETTE
  *                    (« accepter », Président/CC) ; obligatoire pour accepter, ignoré ailleurs
- * @param idSecretaireSeance Vérificateur (localité du dossier) désigné Secrétaire de séance —
- *                    posé à la clôture de navette (« accepter »), ignoré ailleurs
+ * @param idSecretaireSeance ⚠️ <strong>MORT depuis le 2026-09-02</strong> — le Secrétaire de séance a
+ *                    été retiré du cycle du PV par le pilote. Ce champ n'était déjà plus lu que par
+ *                    l'ancien « accepter », retiré en 410 ; il est conservé pour ne pas casser le
+ *                    contrat d'un client non à jour, et <strong>ignoré</strong> en toute circonstance.
  * @param imMembreCoSignataire ⚠️ Co-signature (2026-08-28) — Membre désigné par le Président ou le
  *                    Chef de commission pour co-signer le PV. <strong>Obligatoire</strong> quand
  *                    ils signent (« signer », rôle PRESIDENT ou CC), ignoré ailleurs — même
- *                    traitement que {@code idSecretaireSeance} dans « accepter ». Le désigné doit
+ *                    traitement que l’ancien Secrétaire de séance. Le désigné doit
  *                    être un Membre de la localité du dossier et différent du signataire :
  *                    l'auto-co-signature n'est pas autorisée.
  */
