@@ -23,6 +23,7 @@ import cnm.prs.enums.ProfilUtilisateur;
 import cnm.prs.enums.TypeActeur;
 import cnm.prs.repository.SuspensionDossierRepository;
 import cnm.prs.repository.TacheDossierRepository;
+import cnm.prs.service.HeuresOuvrees;
 import cnm.prs.service.JoursOuvres;
 
 /**
@@ -51,28 +52,28 @@ class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$[0].etape").value("RECEPTION"))
                 .andExpect(jsonPath("$[7].etape").value("ARCHIVAGE"))
                 .andExpect(jsonPath("$[2].etape").value("EXAMEN"))
-                .andExpect(jsonPath("$[2].delaiJours").value(5));
+                .andExpect(jsonPath("$[2].delaiHeures").value(40));
     }
 
     @Test
     @DisplayName("Référentiel — réglage réservé à l'Administrateur ; délai < 1 refusé ; étape inconnue → 404")
     void referentiel_gardes() throws Exception {
         mvc.perform(put("/api/delais-standards/EXAMEN").header("Authorization", tokenMembre)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"delaiJours\":7}"))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"delaiHeures\":7}"))
                 .andExpect(status().isForbidden());
 
         mvc.perform(put("/api/delais-standards/EXAMEN").header("Authorization", tokenAdmin)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"delaiJours\":0}"))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"delaiHeures\":0}"))
                 .andExpect(status().isBadRequest());
 
         mvc.perform(put("/api/delais-standards/PAUSE_CAFE").header("Authorization", tokenAdmin)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"delaiJours\":3}"))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"delaiHeures\":3}"))
                 .andExpect(status().isNotFound());
 
         mvc.perform(put("/api/delais-standards/EXAMEN").header("Authorization", tokenAdmin)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"delaiJours\":7}"))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"delaiHeures\":7}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.delaiJours").value(7));
+                .andExpect(jsonPath("$.delaiHeures").value(7));
     }
 
     // ------------------------------------------------------------------ prise en charge
@@ -83,11 +84,11 @@ class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
         dossierEnStatut(1, "PRET_DISPATCH");
 
         mvc.perform(post("/api/dossiers/1/prise-en-charge").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"previsionJours\":4}"))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"previsionHeures\":4}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.etape").value("DISPATCH"))
                 .andExpect(jsonPath("$.occurrence").value(1))
-                .andExpect(jsonPath("$.previsionJours").value(4))
+                .andExpect(jsonPath("$.previsionHeures").value(4))
                 .andExpect(jsonPath("$.previsionStandard").value(false))
                 .andExpect(jsonPath("$.enCours").value(true))
                 .andExpect(jsonPath("$.imActeur").value("CTRCC1"));
@@ -100,10 +101,10 @@ class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
         prendreEnCharge(1, tokenCc, 4);
 
         mvc.perform(post("/api/dossiers/1/prise-en-charge").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"previsionJours\":9}"))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"previsionHeures\":9}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.occurrence").value(1))
-                .andExpect(jsonPath("$.previsionJours").value(9));
+                .andExpect(jsonPath("$.previsionHeures").value(9));
 
         assertEquals(1, tacheRepository.findByIdDossierOrderByDatePriseEnChargeAsc(1).size());
     }
@@ -114,13 +115,13 @@ class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
         dossierEnStatut(1, "PRET_DISPATCH");
         // L'étape DISPATCH revient au P/CC : la PRMP n'a rien à y prendre en charge.
         mvc.perform(post("/api/dossiers/1/prise-en-charge").header("Authorization", tokenPrmp)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"previsionJours\":2}"))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"previsionHeures\":2}"))
                 .andExpect(status().isForbidden());
 
         // CLOTURE : le dossier est sorti du circuit, plus aucune tâche n'est ouverte.
         dossierEnStatut(1, "CLOTURE");
         mvc.perform(post("/api/dossiers/1/prise-en-charge").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"previsionJours\":2}"))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"previsionHeures\":2}"))
                 .andExpect(status().isConflict());
     }
 
@@ -132,7 +133,7 @@ class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
                 .contentType(MediaType.APPLICATION_JSON).content("{}"))
                 .andExpect(status().isBadRequest());
         mvc.perform(post("/api/dossiers/1/prise-en-charge").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"previsionJours\":0}"))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"previsionHeures\":0}"))
                 .andExpect(status().isBadRequest());
     }
 
@@ -154,7 +155,7 @@ class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
                 .filter(t -> EtapeCircuit.RECEPTION.name().equals(t.getEtape())).findFirst().orElse(null);
         assertNotNull(tache, "la clôture doit créer l'occurrence même sans prise en charge");
         assertTrue(Boolean.TRUE.equals(tache.getPrevisionStandard()), "prévision reprise du référentiel");
-        assertEquals(0L, JoursOuvres.ecoules(tache.getDatePriseEnCharge(), tache.getDateFin()));
+        assertEquals(0L, HeuresOuvrees.ecoulees(tache.getDatePriseEnCharge(), tache.getDateFin()));
         assertNotNull(tache.getDateFin(), "la tâche est close par le geste métier");
     }
 
@@ -173,7 +174,7 @@ class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
         TacheDossier tache = tacheRepository.findByIdDossierOrderByDatePriseEnChargeAsc(500).get(0);
         assertEquals(EtapeCircuit.RECEPTION.name(), tache.getEtape());
         assertNotNull(tache.getDateFin());
-        assertEquals(3, tache.getPrevisionJours());
+        assertEquals(3, tache.getPrevisionHeures());
         assertTrue(Boolean.FALSE.equals(tache.getPrevisionStandard()), "prévision saisie, pas standard");
     }
 
@@ -183,8 +184,8 @@ class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
     @DisplayName("Date annoncée DÈS LA SOUMISSION — somme des délais standards des étapes du compteur")
     void datePrevisionnelle_desLaSoumission() throws Exception {
         dossierEnStatut(500, "SOUMIS");
-        // Seed : RECEPTION 1 + DISPATCH 1 + EXAMEN 5 + VISA 2 + COSIGNATURE 1 + VERIFICATION 3
-        // + TRANSMISSION_SIGMP 1 = 14 jours ouvrés. ARCHIVAGE (2) est HORS compteur global.
+        // Seed converti x 8 : RECEPTION 8 + DISPATCH 8 + EXAMEN 40 + VISA 16 + COSIGNATURE 8 + VERIFICATION 24
+        // + TRANSMISSION_SIGMP 8 = 112 h, soit 14 jours ouvrés — IDENTIQUE à avant la bascule d unité.
         LocalDate attendue = JoursOuvres.ajouter(LocalDate.now(), 14);
         mvc.perform(get("/api/dossiers/500").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk())
@@ -203,7 +204,7 @@ class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
         tache.setDatePriseEnCharge(java.time.LocalDateTime.now().minusDays(20));
         tacheRepository.save(tache);
 
-        // RECEPTION compte 0 (dépassée) ; il reste 1+5+2+1+3+1 = 13 jours ouvrés.
+        // RECEPTION compte 0 (dépassée) ; il reste 8+40+16+8+24+8 = 104 h, soit 13 jours ouvrés.
         LocalDate attendue = JoursOuvres.ajouter(LocalDate.now(), 13);
         mvc.perform(get("/api/dossiers/500").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk())
@@ -214,7 +215,7 @@ class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
     @DisplayName("Étapes déjà franchies exclues — un dossier EN_VERIFICATION ne recompte pas l'examen")
     void datePrevisionnelle_etapesFranchiesExclues() throws Exception {
         dossierEnStatut(500, "EN_VERIFICATION");
-        // Restent VERIFICATION (3) + TRANSMISSION_SIGMP (1) = 4 jours ouvrés.
+        // Restent VERIFICATION (24 h) + TRANSMISSION_SIGMP (8 h) = 32 h, soit 4 jours ouvrés.
         LocalDate attendue = JoursOuvres.ajouter(LocalDate.now(), 4);
         mvc.perform(get("/api/dossiers/500").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk())
@@ -255,7 +256,7 @@ class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
     @DisplayName("Attente après observations non levées — la VÉRIFICATION reste à faire, elle sera rejouée")
     void attentePrmp_verificationRestantAJouer() throws Exception {
         dossierEnStatut(500, "EN_ATTENTE_DECISION_PRMP");
-        // La reprise se fera en VERIFICATION : il reste 3 + 1 = 4 jours ouvrés, pas seulement 1.
+        // La reprise se fera en VERIFICATION : il reste 24 + 8 = 32 h, soit 4 jours ouvrés, pas seulement 1.
         LocalDate attendue = JoursOuvres.ajouter(LocalDate.now(), 4);
         mvc.perform(get("/api/dossiers/500").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk())
@@ -307,7 +308,7 @@ class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
     // ------------------------------------------------------------------ restitution
 
     @Test
-    @DisplayName("GET /chronometrage — occurrences, compteurs, et NET = BRUT − attentes PRMP")
+    @DisplayName("GET /chronometrage — occurrences, compteurs en HEURES ouvrées, et NET = BRUT − attentes PRMP")
     void chronometrage_compteurs() throws Exception {
         int idPv = 902;
         signerPvAvecAvis(idPv, "FAVR");
@@ -321,9 +322,9 @@ class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$.taches").isArray())
                 .andReturn().getResponse().getContentAsString();
 
-        int brut = com.jayway.jsonpath.JsonPath.read(resp, "$.dureeBruteJoursOuvres");
-        int net = com.jayway.jsonpath.JsonPath.read(resp, "$.dureeNetteJoursOuvres");
-        int attentes = com.jayway.jsonpath.JsonPath.read(resp, "$.attentePrmpJoursOuvres");
+        int brut = com.jayway.jsonpath.JsonPath.read(resp, "$.dureeBruteHeuresOuvrees");
+        int net = com.jayway.jsonpath.JsonPath.read(resp, "$.dureeNetteHeuresOuvrees");
+        int attentes = com.jayway.jsonpath.JsonPath.read(resp, "$.attentePrmpHeuresOuvrees");
         assertEquals(brut - attentes, net, "le net CNM est le brut moins les attentes PRMP");
         assertTrue(net >= 0, "le net ne peut pas être négatif");
     }
@@ -340,6 +341,75 @@ class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isForbidden());
     }
 
+    @Test
+    @DisplayName("Migration × 8 — le référentiel est en HEURES : le seed d'hier converti, pas réinitialisé")
+    void referentiel_migreEnHeures() throws Exception {
+        // V15 a multiplié par 8 les valeurs stockées (1/1/5/2/1/3/1/2 jours → 8/8/40/16/8/24/8/16 h).
+        mvc.perform(get("/api/delais-standards").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].delaiHeures").value(8))    // RECEPTION
+                .andExpect(jsonPath("$[1].delaiHeures").value(8))    // DISPATCH
+                .andExpect(jsonPath("$[2].delaiHeures").value(40))   // EXAMEN
+                .andExpect(jsonPath("$[3].delaiHeures").value(16))   // VISA
+                .andExpect(jsonPath("$[4].delaiHeures").value(8))    // COSIGNATURE
+                .andExpect(jsonPath("$[5].delaiHeures").value(24))   // VERIFICATION
+                .andExpect(jsonPath("$[6].delaiHeures").value(8))    // TRANSMISSION_SIGMP
+                .andExpect(jsonPath("$[7].delaiHeures").value(16));  // ARCHIVAGE
+    }
+
+    @Test
+    @DisplayName("Un client resté aux JOURS est refusé en 400 — jamais lu comme des heures en silence")
+    void priseEnCharge_previsionJours_refusee() throws Exception {
+        dossierEnStatut(1, "PRET_DISPATCH");
+        // « previsionJours » est une propriété inconnue : ignorée, donc previsionHeures manque → 400.
+        // Le refus est volontaire : 5 « jours » pris pour 5 heures fausseraient la date sans bruit.
+        mvc.perform(post("/api/dossiers/1/prise-en-charge").header("Authorization", tokenCc)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"previsionJours\":5}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("⚠️ Écoulé à la MÊME échelle — une tâche prise hier matin n'est PAS en dépassement")
+    void ecoule_pasDeFauxDepassement() throws Exception {
+        dossierEnStatut(500, "SOUMIS");
+        prendreEnCharge(500, tokenCc, 8);   // 8 h = un jour ouvré
+
+        // Prise en charge reculée d'un jour OUVRÉ à la même heure. En heures d'horloge l'écoulé vaudrait
+        // 24 h et la tâche serait en dépassement de 16 h ; en heures ouvrées il vaut exactement 8 h.
+        java.time.LocalDateTime hier = veilleOuvree(java.time.LocalDateTime.now().withHour(9).withMinute(0));
+        TacheDossier tache = tacheRepository.findByIdDossierOrderByDatePriseEnChargeAsc(500).get(0);
+        tache.setDatePriseEnCharge(hier);
+        tacheRepository.save(tache);
+
+        long ecoulees = HeuresOuvrees.ecoulees(hier, hier.plusDays(1));
+        org.junit.jupiter.api.Assertions.assertTrue(ecoulees <= 8L,
+                "l'écoulé doit rester dans l'échelle de la prévision (au plus 8 h par jour ouvré), et non "
+                        + ecoulees);
+    }
+
+    @Test
+    @DisplayName("Arrondi au jour SUPÉRIEUR — 9 h restantes tiennent sur 2 jours ouvrés, pas 1")
+    void datePrevisionnelle_arrondiSuperieur() throws Exception {
+        dossierEnStatut(500, "OBSERVATIONS_LEVEES");   // seule TRANSMISSION_SIGMP reste
+        // Le référentiel donne 8 h à cette étape → 1 jour. Porté à 9 h, il en faut 2.
+        mvc.perform(put("/api/delais-standards/TRANSMISSION_SIGMP").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"delaiHeures\":9}"))
+                .andExpect(status().isOk());
+
+        LocalDate attendue = JoursOuvres.ajouter(LocalDate.now(), 2);
+        mvc.perform(get("/api/dossiers/500").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.datePrevisionnelleFin").value(attendue.toString()));
+    }
+
+    /** Veille OUVRÉE d'un instant : recule d'un jour, puis saute le week-end. */
+    private static java.time.LocalDateTime veilleOuvree(java.time.LocalDateTime instant) {
+        java.time.LocalDateTime veille = instant.minusDays(1);
+        while (!JoursOuvres.estOuvre(veille.toLocalDate())) {
+            veille = veille.minusDays(1);
+        }
+        return veille;
+    }
     // ------------------------------------------------------------------ utilitaires
 
     /** Force le statut d'un dossier existant (ou le crée pour le dossier 2, absent du socle). */
@@ -359,7 +429,7 @@ class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
     private void prendreEnCharge(int idDossier, String token, int prevision) throws Exception {
         mvc.perform(post("/api/dossiers/" + idDossier + "/prise-en-charge").header("Authorization", token)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"previsionJours\":" + prevision + "}"))
+                .content("{\"previsionHeures\":" + prevision + "}"))
                 .andExpect(status().isOk());
     }
 }

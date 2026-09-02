@@ -35,8 +35,11 @@ import cnm.prs.repository.DelaiStandardRepository;
 @Transactional(readOnly = true)
 public class DelaiStandardService {
 
-    /** Repli si le référentiel est muet sur une étape — jamais 0, qui ferait mentir la date annoncée. */
-    private static final int DELAI_DE_REPLI = 1;
+    /**
+     * Repli si le référentiel est muet sur une étape — jamais 0, qui ferait mentir la date annoncée.
+     * ⚠️ Passé de 1 jour à <strong>8 heures</strong> le 2026-09-02 : même durée, nouvelle unité.
+     */
+    private static final int DELAI_DE_REPLI = HeuresOuvrees.HEURES_PAR_JOUR;
 
     private final DelaiStandardRepository repository;
 
@@ -69,7 +72,7 @@ public class DelaiStandardService {
         return parEtape;
     }
 
-    /** Délai standard d'une étape, en jours ouvrés. Jamais nul, jamais zéro. */
+    /** Délai standard d’une étape, en <strong>heures ouvrées</strong>. Jamais nul, jamais zéro. */
     public int delai(EtapeCircuit etape) {
         return etape == null ? DELAI_DE_REPLI : delais().get(etape);
     }
@@ -84,7 +87,7 @@ public class DelaiStandardService {
         for (EtapeCircuit etape : EtapeCircuit.values()) {
             DelaiStandard stocke = stockes.get(etape.name());
             lignes.add(new DelaiStandardDto(etape.name(),
-                    stocke == null || stocke.getDelaiJours() == null ? DELAI_DE_REPLI : stocke.getDelaiJours(),
+                    stocke == null || stocke.getDelaiHeures() == null ? DELAI_DE_REPLI : stocke.getDelaiHeures(),
                     stocke == null ? null : stocke.getLibelle()));
         }
         return lignes;
@@ -107,11 +110,11 @@ public class DelaiStandardService {
             neuf.setEtape(cible.name());
             return neuf;
         });
-        entite.setDelaiJours(dto.delaiJours());
+        entite.setDelaiHeures(dto.delaiHeures());
         if (dto.libelle() != null && !dto.libelle().isBlank()) {
             entite.setLibelle(dto.libelle().trim());
         }
         DelaiStandard sauve = repository.save(entite);
-        return new DelaiStandardDto(sauve.getEtape(), sauve.getDelaiJours(), sauve.getLibelle());
+        return new DelaiStandardDto(sauve.getEtape(), sauve.getDelaiHeures(), sauve.getLibelle());
     }
 }

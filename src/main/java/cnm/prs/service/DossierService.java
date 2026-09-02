@@ -604,11 +604,11 @@ public class DossierService {
         // Référentiel lu UNE fois pour toute la liste, en projection scalaire : relire les délais par
         // étape et par dossier chargeait assez d'entités pour faire tomber le contrat de pagination.
         Map<cnm.prs.enums.EtapeCircuit, Integer> delais = delaiStandardService.delais();
-        java.time.LocalDate aujourdhui = java.time.LocalDate.now();
+        java.time.LocalDateTime maintenant = java.time.LocalDateTime.now();
         for (DossierDto dto : dtos) {
             String statutPv = statutsPv.get(dto.getIdDossier());
             dto.setDatePrevisionnelleFin(chronometrage.datePrevisionnelleFin(dto.getStatut(), statutPv,
-                    taches.getOrDefault(dto.getIdDossier(), List.of()), aujourdhui, delais));
+                    taches.getOrDefault(dto.getIdDossier(), List.of()), maintenant, delais));
             dto.setAttentePrmp(ChronometrageService.estEnAttentePrmp(dto.getStatut()));
             cnm.prs.enums.EtapeCircuit etape = chronometrage.etapeCourante(dto.getStatut(), statutPv);
             dto.setEtapeCourante(etape == null ? null : etape.name());

@@ -29,8 +29,8 @@ public class DelaiStandard {
     @Column(name = "ETAPE", nullable = false, length = 30)
     private String etape;
 
-    @Column(name = "DELAI_JOURS", nullable = false)
-    private Integer delaiJours;
+    @Column(name = "DELAI_HEURES", nullable = false)
+    private Integer delaiHeures;
 
     @Column(name = "LIBELLE", length = 100)
     private String libelle;

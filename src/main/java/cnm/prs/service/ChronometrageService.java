@@ -169,7 +169,7 @@ public class ChronometrageService {
      *
      * @throws BusinessRuleException si aucune étape n'est ouverte (409)
      */
-    public TacheDossierDto prendreEnCharge(Integer idDossier, Integer previsionJours) {
+    public TacheDossierDto prendreEnCharge(Integer idDossier, Integer previsionHeures) {
         Dossier dossier = dossierRepository.findById(idDossier)
                 .orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable : " + idDossier));
         EtapeCircuit etape = etapeCourante(dossier);
@@ -182,13 +182,13 @@ public class ChronometrageService {
         TacheDossier ouverte = tacheRepository
                 .findFirstByIdDossierAndEtapeAndDateFinIsNull(idDossier, etape.name()).orElse(null);
         if (ouverte != null) {
-            ouverte.setPrevisionJours(previsionJours);
+            ouverte.setPrevisionHeures(previsionHeures);
             ouverte.setPrevisionStandard(Boolean.FALSE);
             TacheDossier maj = tacheRepository.save(ouverte);
             return TacheDossierDto.de(maj, nom(maj.getImActeur()));
         }
         TacheDossier tache = tacheRepository.save(
-                nouvelle(idDossier, etape, LocalDateTime.now(), previsionJours, false));
+                nouvelle(idDossier, etape, LocalDateTime.now(), previsionHeures, false));
         return TacheDossierDto.de(tache, nom(tache.getImActeur()));
     }
 
@@ -252,7 +252,7 @@ public class ChronometrageService {
         tache.setImActeur(CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null));
         tache.setProfil(CurrentUser.profil().map(ProfilUtilisateur::name).orElse(etape.porteur().name()));
         tache.setDatePriseEnCharge(priseEnCharge);
-        tache.setPrevisionJours(prevision == null ? 1 : prevision);
+        tache.setPrevisionHeures(prevision == null ? 1 : prevision);
         tache.setPrevisionStandard(standard);
         return tache;
     }
@@ -306,13 +306,23 @@ public class ChronometrageService {
      * {@code aujourd'hui + reste(étape en cours) + Σ prévisions des étapes restantes} jusqu'à la
      * transmission SIGMP incluse. {@code null} si le dossier n'est pas dans le circuit.
      *
+     * <p>⚠️ <strong>Unité : l'HEURE ouvrée</strong> depuis le 2026-09-02. La somme se fait en heures,
+     * puis se convertit en jours par tranche de 8 h, <strong>arrondie au supérieur</strong> : une journée
+     * entamée compte pleine. {@code datePrevisionnelleFin} reste une date — la seule rescapée de la
+     * bascule d'unité.</p>
+     *
+     * <p>⚠️ L'écoulé est mesuré jusqu'à <strong>{@code maintenant}</strong>, et non jusqu'au début du
+     * jour : en heures, s'arrêter à minuit sous-compterait la journée en cours et rendrait la date
+     * optimiste de huit heures au pire. L'instant est un paramètre pour que le calcul reste déterministe
+     * en test.</p>
+     *
      * <p><strong>Une étape en dépassement compte 0</strong> : la date glisse jour après jour au lieu de
      * mentir sur un rattrapage qui n'aura pas lieu. Les étapes non encore prises en charge comptent pour
      * leur délai standard, ce qui permet d'annoncer une date dès la soumission.</p>
      */
     public LocalDate datePrevisionnelleFin(String statut, String statutPv, List<TacheDossier> taches,
-            LocalDate aujourdhui) {
-        return datePrevisionnelleFin(statut, statutPv, taches, aujourdhui, delaiStandardService.delais());
+            LocalDateTime maintenant) {
+        return datePrevisionnelleFin(statut, statutPv, taches, maintenant, delaiStandardService.delais());
     }
 
     /**
@@ -321,7 +331,7 @@ public class ChronometrageService {
      * contrat de pagination (lot D §3).
      */
     public LocalDate datePrevisionnelleFin(String statut, String statutPv, List<TacheDossier> taches,
-            LocalDate aujourdhui, Map<EtapeCircuit, Integer> delais) {
+            LocalDateTime maintenant, Map<EtapeCircuit, Integer> delais) {
         EtapeCircuit reference = etapeCourante(statut, () -> statutPv);
         if (reference == null) {
             reference = REPRISE_APRES_ATTENTE.get(statut);
@@ -342,20 +352,23 @@ public class ChronometrageService {
                 closes.add(etape);
             }
         }
-        long total = 0L;
+        long totalHeures = 0L;
         for (EtapeCircuit etape : EtapeCircuit.etapesDuCompteur()) {
             if (etape.ordinal() < reference.ordinal()) {
                 continue;   // franchie : l'étape de référence fait foi, y compris après un retour en arrière
             }
             TacheDossier ouverte = ouvertes.get(etape);
             if (ouverte != null) {
-                long ecoules = JoursOuvres.ecoules(ouverte.getDatePriseEnCharge(), aujourdhui.atStartOfDay());
-                total += Math.max(0L, ouverte.getPrevisionJours() - ecoules);
+                // Ecoule et prevision dans la MEME echelle (8 h par jour ouvre) : tout l enjeu du point 5
+                // de la spec. Mesure en heures d horloge, une tache prise en charge la veille serait en
+                // depassement de 16 h alors qu un seul jour de travail a passe.
+                long ecoulees = HeuresOuvrees.ecoulees(ouverte.getDatePriseEnCharge(), maintenant);
+                totalHeures += Math.max(0L, ouverte.getPrevisionHeures() - ecoulees);
             } else {
-                total += delais.getOrDefault(etape, 1);
+                totalHeures += delais.getOrDefault(etape, HeuresOuvrees.HEURES_PAR_JOUR);
             }
         }
-        return JoursOuvres.ajouter(aujourdhui, total);
+        return JoursOuvres.ajouter(maintenant.toLocalDate(), HeuresOuvrees.enJoursArrondiSuperieur(totalHeures));
     }
 
     private static EtapeCircuit etapeDe(TacheDossier tache) {
@@ -388,7 +401,7 @@ public class ChronometrageService {
         LocalDateTime debut = borne(taches, EtapeCircuit.RECEPTION);
         LocalDateTime fin = borne(taches, EtapeCircuit.TRANSMISSION_SIGMP);
         LocalDateTime jusqua = fin != null ? fin : LocalDateTime.now();
-        long brut = debut == null ? 0L : JoursOuvres.ecoules(debut, jusqua);
+        long brut = debut == null ? 0L : HeuresOuvrees.ecoulees(debut, jusqua);
         long attentes = cumulAttentes(suspensions, jusqua);
         String statutPv = statutPvDe(idDossier);
         EtapeCircuit courante = etapeCourante(dossier.getStatut(), () -> statutPv);
@@ -397,7 +410,7 @@ public class ChronometrageService {
                 brut, Math.max(0L, brut - attentes), attentes,
                 courante == null ? null : courante.name(),
                 estEnAttentePrmp(dossier.getStatut()),
-                datePrevisionnelleFin(dossier.getStatut(), statutPv, taches, LocalDate.now()));
+                datePrevisionnelleFin(dossier.getStatut(), statutPv, taches, LocalDateTime.now()));
     }
 
     /** Fin de la dernière occurrence close d'une étape — borne du compteur global. */
@@ -408,13 +421,13 @@ public class ChronometrageService {
                 .max(LocalDateTime::compareTo).orElse(null);
     }
 
-    /** Cumul en jours ouvrés des attentes PRMP ; une fenêtre encore ouverte court jusqu'à {@code jusqua}. */
+    /** Cumul en <strong>heures ouvrées</strong> des attentes PRMP ; une fenêtre ouverte court jusqu’à {@code jusqua}. */
     private long cumulAttentes(List<SuspensionDossier> suspensions, LocalDateTime jusqua) {
-        long total = 0L;
+        long totalHeures = 0L;
         for (SuspensionDossier s : suspensions) {
-            total += JoursOuvres.ecoules(s.getDebut(), s.getFin() != null ? s.getFin() : jusqua);
+            totalHeures += HeuresOuvrees.ecoulees(s.getDebut(), s.getFin() != null ? s.getFin() : jusqua);
         }
-        return total;
+        return totalHeures;
     }
 
     /** « Prénoms nom » d'un contrôleur ; {@code null} si le matricule est inconnu. */

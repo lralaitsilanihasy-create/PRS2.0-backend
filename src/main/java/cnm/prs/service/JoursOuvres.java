@@ -2,16 +2,19 @@ package cnm.prs.service;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 
 /**
- * ⚠️ <strong>Chronométrage des délais</strong> (règle du pilote, 2026-09-01) — arithmétique des jours
- * <strong>ouvrés</strong>, source unique pour tout le chronométrage.
+ * ⚠️ <strong>Chronométrage des délais</strong> — arithmétique du <strong>calendrier</strong> ouvré :
+ * quels jours comptent, et comment décaler une date.
  *
- * <p><strong>Samedi et dimanche exclus ; jours fériés hors périmètre v1</strong> (arbitrage ③). Les
- * horodatages restent enregistrés <strong>à la seconde</strong> : seule la restitution convertit en
- * jours ouvrés. Mélanger les deux — stocker des jours ouvrés — rendrait impossible tout recalcul le jour
- * où les fériés entreront dans le périmètre.</p>
+ * <p><strong>Samedi et dimanche exclus ; jours fériés hors périmètre v1</strong> (arbitrage ③, 2026-09-01).
+ * Les horodatages restent enregistrés <strong>à la seconde</strong> ; seule la restitution convertit.</p>
+ *
+ * <p>⚠️ Depuis le 2026-09-02, l'unité du chronométrage est l'<strong>heure ouvrée</strong>
+ * ({@link HeuresOuvrees}, 8 h = 1 jour ouvré). Cette classe ne porte plus d'<em>écoulé</em> : mesurer une
+ * durée en jours à partir de deux horodatages offrait au premier appelant venu le piège d'échelle que la
+ * règle du 02/09 met en garde — une prévision en heures de service confrontée à des jours de calendrier.
+ * L'écoulé vit désormais dans {@link HeuresOuvrees#ecoulees}, et nulle part ailleurs.</p>
  */
 public final class JoursOuvres {
 
@@ -22,18 +25,6 @@ public final class JoursOuvres {
     public static boolean estOuvre(LocalDate date) {
         DayOfWeek jour = date.getDayOfWeek();
         return jour != DayOfWeek.SATURDAY && jour != DayOfWeek.SUNDAY;
-    }
-
-    /**
-     * Nombre de jours ouvrés <strong>écoulés</strong> entre deux instants, en comptant les jours entiers
-     * révolus : de lundi 9h à mardi 9h = 1. Rend 0 si {@code fin} précède {@code debut} — un intervalle
-     * négatif est une donnée incohérente, pas un crédit de temps.
-     */
-    public static long ecoules(LocalDateTime debut, LocalDateTime fin) {
-        if (debut == null || fin == null || fin.isBefore(debut)) {
-            return 0L;
-        }
-        return entre(debut.toLocalDate(), fin.toLocalDate());
     }
 
     /**

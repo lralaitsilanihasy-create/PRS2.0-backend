@@ -16,6 +16,6 @@ public interface DelaiStandardRepository extends JpaRepository<DelaiStandard, St
      * d'entites de Hibernate au point de faire tomber le contrat de pagination (lot D §3). Une paire
      * (etape, delai) ne charge rien.
      */
-    @Query("select d.etape, d.delaiJours from DelaiStandard d")
+    @Query("select d.etape, d.delaiHeures from DelaiStandard d")
     List<Object[]> tousLesDelais();
 }

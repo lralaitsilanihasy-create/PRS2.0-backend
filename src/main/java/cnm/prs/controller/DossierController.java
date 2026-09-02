@@ -243,7 +243,8 @@ public class DossierController {
 
     /**
      * ⚠️ Chronométrage (2026-09-01) — <strong>prise en charge explicite</strong> de l'étape courante,
-     * avec la prévision du porteur en jours ouvrés (arbitrage ①). Rejouée sur une tâche encore ouverte,
+     * avec la prévision du porteur en <strong>heures ouvrées</strong> (arbitrage ①, unité révisée le
+     * 2026-09-02). Rejouée sur une tâche encore ouverte,
      * elle corrige la prévision au lieu d'ouvrir une occurrence.
      *
      * <p>403 si l'appelant n'est pas le porteur de l'étape (délégations et intérim résolus par la garde
@@ -253,7 +254,7 @@ public class DossierController {
     @PostMapping("/{id}/prise-en-charge")
     public TacheDossierDto prendreEnCharge(@PathVariable Integer id,
             @Valid @RequestBody PriseEnChargeRequest req) {
-        return chronometrageService.prendreEnCharge(id, req.previsionJours());
+        return chronometrageService.prendreEnCharge(id, req.previsionHeures());
     }
 
     /**

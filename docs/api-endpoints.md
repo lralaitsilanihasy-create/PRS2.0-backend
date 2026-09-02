@@ -4977,7 +4977,10 @@ supprimable.
 ⚠️ **Règle du pilote (2026-09-01)** — la PRMP doit connaître la **date prévisionnelle d'achèvement** du
 traitement de son dossier à la CNM. Chaque tâche affectée à un profil est chronométrée ; à la prise en
 charge, le porteur saisit sa prévision ; la date annoncée est *aujourd'hui + somme des prévisions des
-étapes restantes*, en **jours ouvrés**. **Aucun calcul de date côté front** : tout vient du serveur.
+étapes restantes*. **Aucun calcul de date côté front** : tout vient du serveur.
+
+⚠️ **Révision du 2026-09-02 — l’unité est l’HEURE ouvrée**, partout : délais standards, prévision saisie,
+restes et compteurs. **8 h = 1 jour ouvré.** Seule `datePrevisionnelleFin` reste une date.
 
 ### Les huit étapes
 
@@ -5012,12 +5015,12 @@ nombre d'aller-retours.
 
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
-| POST | /api/dossiers/{id}/prise-en-charge | `{ "previsionJours": 4 }` | `TacheDossierDto` | 200, 400, 403, 404, 409 | porteur de l'étape courante |
+| POST | /api/dossiers/{id}/prise-en-charge | `{ "previsionHeures": 8 }` | `TacheDossierDto` | 200, 400, 403, 404, 409 | porteur de l’étape courante |
 | GET | /api/dossiers/{id}/chronometrage | — | `ChronometrageDto` | 200, 403, 404 | même périmètre que le dossier |
 | GET | /api/delais-standards | — | `DelaiStandardDto[]` | 200 | Authentifié |
 | PUT | /api/delais-standards/{etape} | `DelaiStandardDto` | `DelaiStandardDto` | 200, 400, 403, 404 | **ADMINISTRATEUR** |
 
-`previsionJours` : entier **≥ 1** (0 ou absent → **400**). **403** si l'appelant n'est pas le porteur de
+`previsionHeures` : entier **≥ 1**, en **heures ouvrées** (0 ou absent → **400**). **403** si l'appelant n'est pas le porteur de
 l'étape (délégations et intérim résolus par la garde centrale) ou si le dossier n'est pas de sa
 localité ; **409** si aucune étape n'est ouverte — brouillon, attente PRMP, dossier clos ou retiré.
 
@@ -5034,12 +5037,12 @@ corriger son estimation n'est pas recommencer sa tâche.
 > en charge indue n'altère aucune donnée — elle ne fait que démarrer un chronomètre.
 
 **`TacheDossierDto`** = `{etape, occurrence, imActeur, nomActeur, profil, priseEnCharge, fin,
-previsionJours, previsionStandard, dureeJoursOuvres, enCours}`. `priseEnCharge`/`fin` sont horodatés
-**à la seconde** ; `dureeJoursOuvres` est la conversion en ouvrés (pour une tâche en cours, le temps
+previsionHeures, previsionStandard, dureeHeuresOuvrees, enCours}`. `priseEnCharge`/`fin` sont horodatés
+**à la seconde** ; `dureeHeuresOuvrees` est la conversion en **heures ouvrées** (pour une tâche en cours, le temps
 déjà écoulé). `previsionStandard = true` signale une prévision venue du référentiel, pas d'une saisie.
 
-**`ChronometrageDto`** = `{idDossier, taches[], debutCompteur, finCompteur, dureeBruteJoursOuvres,
-dureeNetteJoursOuvres, attentePrmpJoursOuvres, etapeCourante, attentePrmp, datePrevisionnelleFin}`.
+**`ChronometrageDto`** = `{idDossier, taches[], debutCompteur, finCompteur, dureeBruteHeuresOuvrees,
+dureeNetteHeuresOuvrees, attentePrmpHeuresOuvrees, etapeCourante, attentePrmp, datePrevisionnelleFin}`.
 
 ### Les deux compteurs
 
@@ -5063,15 +5066,18 @@ quelle que soit la taille de la liste).
 
 ### Le calcul
 
+⚠️ **Unité : l'HEURE ouvrée** depuis le 2026-09-02 (**8 h = 1 jour ouvré**). Une seule unité partout —
+aucune somme ne mélange heures et jours. Seule `datePrevisionnelleFin` reste une **date**.
+
 ```
-datePrevisionnelleFin = aujourd'hui
-                      + reste(étape en cours)
-                      + Σ prévisions des étapes restantes jusqu'à TRANSMISSION_SIGMP incluse
-reste = max(0, prévision − jours ouvrés écoulés depuis la prise en charge)
+totalHeures = reste(étape en cours) + Σ prévisions des étapes restantes jusqu'à TRANSMISSION_SIGMP
+reste       = max(0, prévisionHeures − heures ouvrées écoulées depuis la prise en charge)
+datePrevisionnelleFin = aujourd'hui + ⌈ totalHeures / 8 ⌉ jours ouvrés
 ```
 
-- **Une étape en dépassement compte 0** : la date **glisse** d'un jour ouvré par jour de retard au lieu
-  de promettre un rattrapage qui n'aura pas lieu.
+- **Arrondi au jour SUPÉRIEUR** : une journée entamée compte pleine (9 h restantes tiennent sur 2 jours).
+- **Une étape en dépassement compte 0** : la date **glisse** au lieu de promettre un rattrapage qui
+  n'aura pas lieu.
 - Une étape **non prise en charge** compte pour son **délai standard** — d'où une date annoncée **dès la
   soumission**, avant que quiconque à la CNM ait touché le dossier.
 - **Jours ouvrés** : samedi et dimanche exclus ; **jours fériés hors périmètre v1**.
@@ -5079,14 +5085,49 @@ reste = max(0, prévision − jours ouvrés écoulés depuis la prise en charge)
   **reprendra** est prise en compte : après des observations non levées, la vérification sera **rejouée**,
   et elle compte donc encore dans la somme.
 
+> ### ⚠️ L'écoulé se mesure dans la MÊME échelle que la prévision
+>
+> C'est le point délicat de la bascule. Une prévision est en heures **de service** (8 h par jour) ; si
+> l'écoulé était compté en heures **d'horloge** (24 h par jour), une tâche prise en charge la veille au
+> matin afficherait 24 h d'écoulé contre 8 h prévues — en dépassement de deux journées alors qu'un seul
+> jour de travail a passé.
+>
+> **Algorithme retenu : fenêtre de service 08:00–16:00, du lundi au vendredi.** L'écoulé est le
+> *recouvrement* de l'intervalle avec ces fenêtres. Les horodatages restent enregistrés à la seconde ;
+> seule la restitution convertit.
+>
+> | Cas | Écoulé rendu |
+> |---|---|
+> | Prise lundi 09:00 → lundi 15:00 | **6 h** |
+> | Prise lundi 09:00 → **mardi 09:00** | **8 h** (7 h lundi + 1 h mardi) — soit exactement 1 jour ouvré |
+> | Prise vendredi 15:00 → lundi 09:00 | **2 h** (le week-end ne compte pas) |
+> | Prise lundi 22:00 → mardi 09:00 | **1 h** (hors fenêtre, rien avant l'ouverture) |
+>
+> L'alternative — un plafond de 8 h par jour ouvré touché — comptait une journée entière dès qu'un jour
+> était effleuré : elle rendait **16 h** au deuxième cas, réintroduisant à moindre échelle le défaut
+> qu'elle prétendait corriger.
+>
+> **Propriété qui en découle** : `heures ÷ 8 = jours ouvrés`, exactement. La nouvelle échelle est un
+> raffinement de l'ancienne, jamais un changement de sens — un dossier entièrement au délai standard
+> totalise `8+8+40+16+8+24+8 = 112 h`, soit **14 jours ouvrés**, la même date qu'avant la bascule.
+>
+> Une tâche prise en charge **hors fenêtre** (22:00, un dimanche) n'accumule rien jusqu'à l'ouverture
+> suivante : on ne compte pas comme temps de traitement une heure où personne ne travaille.
+
+> **Migration `V15` — conversion × 8, jamais de réinitialisation.** Les valeurs stockées étaient des
+> jours ; un jour vaut 8 h. `tr_delai_standard.DELAI_JOURS` devient `DELAI_HEURES` et
+> `t_tache_dossier.PREVISION_JOURS` devient `PREVISION_HEURES`, l'une comme l'autre multipliées par 8 —
+> y compris les lignes que l'Administrateur aurait ajustées depuis le seed. **Aucune purge** de
+> l'historique : convertir est à la fois correct et gratuit.
+
 ### Référentiel des délais standards
 
 `GET /api/delais-standards` rend **toujours les huit étapes**, même si la table en manque une (repli à
-1 jour) : un trou ferait disparaître un terme de la somme et la date serait silencieusement trop
-optimiste. Seed initial : `RECEPTION 1`, `DISPATCH 1`, `EXAMEN 5`, `VISA 2`, `COSIGNATURE 1`,
-`VERIFICATION 3`, `TRANSMISSION_SIGMP 1`, `ARCHIVAGE 2`.
+8 h) : un trou ferait disparaître un terme de la somme et la date serait silencieusement trop
+optimiste. Seed, converti × 8 le 2026-09-02 : `RECEPTION 8`, `DISPATCH 8`, `EXAMEN 40`, `VISA 16`, `COSIGNATURE 8`,
+`VERIFICATION 24`, `TRANSMISSION_SIGMP 8`, `ARCHIVAGE 16` — en **heures ouvrées**.
 
-`PUT /api/delais-standards/{etape}` — **400** si `delaiJours < 1`, **404** si l'étape n'existe pas,
+`PUT /api/delais-standards/{etape}` — **400** si `delaiHeures < 1`, **404** si l'étape n'existe pas,
 **403** hors Administrateur.
 
 > **Transition** : la base ayant été réinitialisée le 01/09, **aucune reprise d'historique**. Les

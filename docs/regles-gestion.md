@@ -340,9 +340,12 @@ intérimaire), `COSIGNATURE` (Membre), `VERIFICATION` (Vérificateur), `TRANSMIS
 - **Étapes rejouables** : réexamen, nouvelle navette de visa, passage supplémentaire du Vérificateur dans
   la boucle FAVR — chaque occurrence est un enregistrement **distinct, append-only**, et la prévision se
   ressaisit à chaque fois. C'est ce qui rend visible le nombre d'aller-retours.
+- ⚠️ **Unité : l'HEURE ouvrée** (révision du pilote, 2026-09-02) — **8 h = 1 jour ouvré**. Délais
+  standards, prévision saisie, restes et compteurs : une seule unité partout, aucune somme ne mélange
+  heures et jours. Seule la **date** prévisionnelle reste une date.
 - **Jours ouvrés** : samedi et dimanche exclus, **jours fériés hors périmètre v1**. Le chronométrage est
-  horodaté **à la seconde** ; seule la restitution convertit en jours ouvrés, pour que le jour où les
-  fériés entreront dans le périmètre tout reste recalculable.
+  horodaté **à la seconde** ; seule la restitution convertit, pour que le jour où les fériés entreront
+  dans le périmètre tout reste recalculable.
 
 **Deux compteurs.** Le **brut** (enregistrement → SIGMP, à la lettre) et le **net CNM**, où les périodes
 « balle chez la PRMP » sont **suspendues** — c'est le net qui juge la CNM. Statuts suspensifs, trois et
@@ -356,10 +359,25 @@ enjamberait cette attente et ferait porter au Vérificateur le temps de la PRMP,
 précisément qu'aucune tâche CNM ne coure pendant ces fenêtres.
 
 **La date annoncée** = `aujourd'hui + reste(étape en cours) + Σ prévisions des étapes restantes`, en
-jours ouvrés, **calculée entièrement serveur**. Les étapes non encore prises en charge comptent pour leur
-**délai standard** (référentiel administrable), d'où une date disponible **dès la soumission**. Une étape
+**heures ouvrées** puis convertie en jours par tranche de 8 h, **arrondie au supérieur** (une journée
+entamée compte pleine), **calculée entièrement serveur**. Les étapes non encore prises en charge comptent
+pour leur
+**délai standard** (référentiel administrable), d’où une date disponible **dès la soumission**. Une étape
 en dépassement compte **0** : la date **glisse** au lieu de promettre un rattrapage qui n'aura pas lieu.
 Pendant une attente PRMP la date reste calculée, accompagnée du drapeau `attentePrmp`.
+
+⚠️ **L'écoulé se mesure dans la MÊME échelle que la prévision.** Une prévision est en heures **de
+service** (8 h par jour). Compter l'écoulé en heures **d'horloge** (24 h par jour) mettrait en
+dépassement une tâche prise en charge la veille au matin — 24 h consommées contre 8 h prévues, alors
+qu'un seul jour de travail a passé. L'écoulé est donc le recouvrement de l'intervalle avec la **fenêtre
+de service 08:00–16:00, du lundi au vendredi** : une tâche prise lundi 09:00 et mesurée mardi 09:00 a
+consommé **8 h**, soit exactement un jour ouvré. Une tâche prise hors fenêtre n'accumule rien avant
+l'ouverture suivante — on ne compte pas comme temps de traitement une heure où personne ne travaille.
+
+> **La bascule d'unité n'a déplacé aucune date.** Un dossier entièrement au délai standard totalisait
+> 14 jours ouvrés ; il totalise 112 heures, soit 112 / 8 = 14 jours. Les valeurs stockées ont été
+> **converties × 8** (migration `V15`), jamais réinitialisées : les réglages de l'Administrateur ont été
+> préservés, et l'historique des tâches converti plutôt que purgé.
 
 > **Transition** : la base ayant été réinitialisée le 01/09, aucune reprise d'historique. Les dossiers
 > créés après le déploiement sont chronométrés dès leur soumission.
@@ -1150,15 +1168,16 @@ Accès complet aux référentiels, comptes utilisateurs, journal d'audit, hiéra
 - Délégations de profil [Écriture]
   - Gestion des entrées t_delegation_profil — quels profils peuvent exercer les tâches d'autres profils.
 - Délais standards du circuit [Écriture] ⚠️ **Règle ajoutée (2026-09-01)**
-  - Référentiel administrable des **délais par étape** (`GET /api/delais-standards`,
-    `PUT /api/delais-standards/{etape}`), en jours ouvrés. Il fournit la prévision des étapes **pas
+  - Référentiel administrable des **délais par étape**, en **heures ouvrées** (`GET /api/delais-standards`,
+    `PUT /api/delais-standards/{etape}`). ⚠️ Unité passée du jour à l’heure le 2026-09-02, valeurs
+    stockées converties × 8. Il fournit la prévision des étapes **pas
     encore prises en charge**, ce qui permet d'annoncer une date à la PRMP **dès la soumission** ; chaque
     prise en charge le remplace, pour son étape, par la prévision réellement saisie.
   - **Lecture ouverte** à tout utilisateur authentifié : ces délais expliquent la date annoncée, et une
     date qu'on ne peut pas expliquer se conteste mal. **Écriture réservée à l'Administrateur.**
-  - Le référentiel rend **toujours les huit étapes**, même si la table en manque une (repli à 1 jour) :
+  - Le référentiel rend **toujours les huit étapes**, même si la table en manque une (repli à 8 h) :
     un trou ferait disparaître un terme de la somme et la date serait silencieusement trop optimiste.
-    Délai **< 1 refusé** (400), étape hors circuit refusée (404). Détail : section « Chronométrage et
+    Délai **< 1 heure refusé** (400), étape hors circuit refusée (404). Détail : section « Chronométrage et
     prévision des délais » en §2.
 - Rattachements Membre → Vérificateur → Assistant [Écriture] ⚠️ **Règle ajoutée (2026-09-01)**
   - Écran de gestion de la chaîne nominative (§1.7) : `GET /api/controleurs/rattachements` liste les

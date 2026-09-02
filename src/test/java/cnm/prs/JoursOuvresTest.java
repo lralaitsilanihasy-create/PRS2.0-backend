@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -13,7 +12,7 @@ import org.junit.jupiter.api.Test;
 import cnm.prs.service.JoursOuvres;
 
 /**
- * ⚠️ Arithmétique des jours ouvrés (arbitrage ③, 2026-09-01) — test unitaire pur : aucune base, aucun
+ * ⚠️ Arithmétique du CALENDRIER ouvré (arbitrage ③, 2026-09-01) — test unitaire pur : aucune base, aucun
  * contexte Spring. C'est le socle de tout le chronométrage, il doit se vérifier en millisecondes.
  *
  * <p>Les dates de référence sont choisies pour être lisibles : le <strong>lundi 2026-09-07</strong> ouvre
@@ -61,23 +60,11 @@ class JoursOuvresTest {
     @DisplayName("Un intervalle négatif rend 0 : une incohérence de données n'est pas un crédit de temps")
     void intervalleNegatifVautZero() {
         assertEquals(0L, JoursOuvres.entre(VENDREDI, LUNDI));
-        assertEquals(0L, JoursOuvres.ecoules(VENDREDI.atTime(9, 0), LUNDI.atTime(9, 0)));
-    }
-
-    @Test
-    @DisplayName("Écoulé : lundi 9h → mardi 9h = 1 jour ouvré ; la même journée = 0")
-    void ecoulesCompteLesJoursRevolus() {
-        LocalDateTime lundiMatin = LUNDI.atTime(9, 0);
-        assertEquals(0L, JoursOuvres.ecoules(lundiMatin, LUNDI.atTime(18, 0)));
-        assertEquals(1L, JoursOuvres.ecoules(lundiMatin, LUNDI.plusDays(1).atTime(9, 0)));
-        assertEquals(4L, JoursOuvres.ecoules(lundiMatin, VENDREDI.atTime(9, 0)));
     }
 
     @Test
     @DisplayName("Nuls tolérés partout — le chronométrage ne doit jamais lever sur une donnée absente")
     void nullsToleres() {
-        assertEquals(0L, JoursOuvres.ecoules(null, LUNDI.atStartOfDay()));
-        assertEquals(0L, JoursOuvres.ecoules(LUNDI.atStartOfDay(), null));
         assertEquals(0L, JoursOuvres.entre(null, LUNDI));
         org.junit.jupiter.api.Assertions.assertNull(JoursOuvres.ajouter(null, 3));
     }

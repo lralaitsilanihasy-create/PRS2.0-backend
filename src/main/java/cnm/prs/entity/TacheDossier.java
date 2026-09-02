@@ -56,8 +56,8 @@ public class TacheDossier {
     @Column(name = "DATE_FIN")
     private LocalDateTime dateFin;
 
-    @Column(name = "PREVISION_JOURS", nullable = false)
-    private Integer previsionJours;
+    @Column(name = "PREVISION_HEURES", nullable = false)
+    private Integer previsionHeures;
 
     /** Vrai si la prevision vient du referentiel administrable, faux si elle a ete saisie par le porteur. */
     @Column(name = "PREVISION_STANDARD", nullable = false)
