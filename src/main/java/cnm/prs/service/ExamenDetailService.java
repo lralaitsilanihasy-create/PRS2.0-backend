@@ -151,9 +151,13 @@ public class ExamenDetailService {
         Integer idDetail = dto.getIdDetail();
         if (idDetail != null) {
             PointsCtrl point = pointsCtrlRepository.findById(dto.getIdPtControle()).orElse(null);
-            if (point != null && point.getPortee() == PorteePointCtrl.DOSSIER) {
+            // ⚠️ 2026-09-02 — le test portait sur « == DOSSIER » et laissait donc passer un idDetail sur
+            // un point FICHE ou AGPM : un résultat de fiche se serait accroché à une ligne de marché.
+            // Le prédicat range toute portée non-LIGNE du côté sûr.
+            if (point != null && !point.getPortee().parLigne()) {
                 throw champInvalide("idDetail", "Le point « " + point.getLibelPointCtrl()
-                        + " » est de portée DOSSIER : il s'évalue une seule fois, sans ligne de marché (idDetail nul).");
+                        + " » est de portée " + point.getPortee().name() + " : il s'évalue une seule fois, "
+                        + "sans ligne de marché (idDetail nul).");
             }
             Integer idDossier = examenRepository.findIdDossierByExamen(dto.getIdExamen()).orElse(null);
             boolean estLigneDuDossier = idDossier != null && marcheRepository.findByIdDossier(idDossier).stream()

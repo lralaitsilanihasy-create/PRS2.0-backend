@@ -3807,8 +3807,8 @@ immuable). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **40
 > contrôle « AGPM joint et conforme » du seul `PPM-AGPM` — migration `2026-07-17_points_ctrl_sous_type.sql`).
 > La **grille effective** d'un dossier = points communs de sa famille **+** points spécifiques de son
 > sous-type : c'est ce que renvoie **`GET /api/points-ctrls?sousType=X`** (la famille est déduite), la
-> requête de l'**écran d'examen** — la grille d'un `PPM` (7 points) ≠ celle d'un `PPM-AGPM` (8 points).
-> Chaque point renvoyé porte sa **`portee`** (`LIGNE`/`DOSSIER`, cf. table) : le front sait ainsi lesquels
+> requête de l'**écran d'examen** — la grille d’un `PPM` ≠ celle d’un `PPM-AGPM`.
+> Chaque point renvoyé porte sa **`portee`** (`LIGNE` / `DOSSIER` / `FICHE` / `AGPM`, cf. table) : le front sait ainsi lesquels
 > s'évaluent **par ligne de marché** et lesquels **une fois pour le dossier**.
 > `?typeDossier=` seul liste **tous** les points de la famille (écran admin). Gardes → **400** : sous-type
 > inconnu ; sous-type hors de la famille (`?typeDossier=` + `?sousType=` incohérents, ou POST/PUT dont
@@ -3826,7 +3826,44 @@ immuable). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **40
 | obligatoire | boolean | Oui | @NotNull |
 | idTypeDossier | string | Oui | @NotBlank — **famille** (`DDP`/`DMC`/`DDM`) |
 | idSousType | string | Non | max 20 — sous-type ciblé (doit appartenir à la famille, sinon 400) ; `null` = commun |
-| portee | string | Non | ⚠️ **règle ajoutée 2026-07-21** — **`LIGNE`** (point évalué par ligne de marché) ou **`DOSSIER`** (inter-lignes, ex. « fractionnement illicite »). Absent/vide en entrée → défaut **`LIGNE`** ; code inconnu → **400**. **Toujours renseigné en sortie** — le front lit ce champ pour placer chaque point (par ligne / au niveau dossier). Migration `2026-07-21_points_ctrl_portee.sql` (fractionnement → DOSSIER, autres → LIGNE) |
+| portee | string | Non | ⚠️ **règle ajoutée 2026-07-21, étendue 2026-09-02** — quatre valeurs : **`LIGNE`** (évalué par ligne de marché), **`DOSSIER`** (inter-lignes, ex. « fractionnement illicite »), **`FICHE`** (fiche de présentation) et **`AGPM`** (projet d’AGPM). Absent/vide en entrée → défaut **`LIGNE`** ; code inconnu → **400** nommant les quatre codes. **Toujours renseigné en sortie**. ⚠️ Seule `LIGNE` s’évalue par marché : **toute autre portée s’évalue une seule fois**, `idDetail` nul (un `idDetail` fourni → 400) 
+
+
+> ### ⚠️ La fiche de présentation et l'AGPM entrent dans l'examen (règle du pilote, 2026-09-02)
+>
+> Deux portées de plus, chacune avec **sa propre grille** : **`FICHE`** pour la fiche de présentation,
+> **`AGPM`** pour le projet d'AGPM. Aucune URL ni aucun DTO ne change — seules les valeurs de `portee`
+> s'ajoutent.
+>
+> **Rattachement.** Les points `FICHE` sont **communs à la famille DDP** (`idSousType` nul) : la grille
+> effective filtre déjà par famille, et DDP ne contient exactement que `PPM` et `PPM-AGPM` — un commun
+> DDP atteint donc précisément ces deux sous-types, sans jamais toucher DMC (`DAO`, `DAOR`) ni DDM
+> (`MAOO`, `MAOR`). Les points `AGPM`, eux, sont **spécifiques à `PPM-AGPM`** : un plan sans AGPM ne voit
+> jamais cette grille.
+>
+> **Stockage inchangé.** Un résultat sur un point `FICHE` ou `AGPM` s'enregistre comme un point
+> `DOSSIER` : `t_examen_detail`, `idDetail` **nul**, observations « AU LIEU DE / LIRE » comprises. Elles
+> suivent ensuite le circuit normal — synthèse, PV, boucle FAVR.
+>
+> ⚠️ **Seule `LIGNE` s'évalue par marché.** Les deux gardes qui décidaient du mode d'évaluation
+> testaient la portée par `== DOSSIER` et rangeaient tout le reste du côté « par ligne » : sans
+> correction, un point `FICHE` aurait exigé une évaluation **par marché** à la soumission, et accepté un
+> `idDetail` qu'il n'a pas. Elles s'appuient désormais sur un prédicat — toute portée qui n'est pas
+> `LIGNE` s'évalue **une seule fois**. Une portée ajoutée demain tombera donc du bon côté par défaut.
+>
+> **Complétude à la soumission** : ces points comptent comme les autres. Le message de refus nomme le
+> niveau d'évaluation (« fiche de présentation », « projet d'AGPM », « niveau dossier ») au lieu de
+> réclamer une évaluation par marché.
+>
+> **Seed.** Six points (3 `FICHE`, 3 `AGPM`) créés au démarrage par `PointsCtrlFicheAgpmSeeder`,
+> idempotent : il crée ce qui manque, ne réécrase jamais un libellé ajusté par l'Administrateur, et
+> s'abstient si la famille ou le sous-type référencé n'existe pas encore. ⚠️ **Pas un seed SQL** :
+> `tr_points_ctrl` porte des clés étrangères vers `tr_type_dossier` et `tr_sous_type_dossier`, que
+> **aucune migration ne crée** — un `INSERT` en migration échoue en 23503 sur toute base neuve.
+>
+> **Migration `V16`** : élargissement du `CHECK` sur `tr_points_ctrl.PORTEE`. ⚠️ La liste des portées
+> est fermée **à deux endroits** — l'énumération Java *et* cette contrainte. Les deux doivent bouger
+> ensemble ; l'oublier fait échouer toute écriture en 23514.
 
 **Endpoints**
 

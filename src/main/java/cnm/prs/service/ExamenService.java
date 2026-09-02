@@ -149,9 +149,12 @@ public class ExamenService {
         }
         List<String> manquants = new ArrayList<>();
         for (PointsCtrl p : grille) {
-            if (p.getPortee() == PorteePointCtrl.DOSSIER) {
+            if (!p.getPortee().parLigne()) {
+                // DOSSIER, FICHE, AGPM : une seule évaluation, sans ligne de marché. Le prédicat, plutôt
+                // qu'un « == DOSSIER », évite qu'une portée ajoutée demain se retrouve à exiger une
+                // évaluation par marché — c'est exactement ce qui serait arrivé à FICHE et AGPM.
                 if (!evalues.contains(cleCouple(null, p.getIdPointCtrl()))) {
-                    manquants.add("« " + p.getLibelPointCtrl() + " » (niveau dossier)");
+                    manquants.add("« " + p.getLibelPointCtrl() + " » (" + libelleDePortee(p.getPortee()) + ")");
                 }
             } else {
                 for (Marche m : marches) {
@@ -167,10 +170,23 @@ public class ExamenService {
             String apercu = manquants.stream().limit(5).collect(Collectors.joining(" ; "));
             String reste = manquants.size() > 5 ? " … (+" + (manquants.size() - 5) + ")" : "";
             throw new ChampsInvalidesException(List.of(new ErrorResponse.FieldError("grille",
-                    "Examen incomplet : " + manquants.size() + " évaluation(s) manquante(s) — chaque point LIGNE "
-                            + "doit être évalué pour chaque marché et chaque point DOSSIER une fois. À évaluer : "
-                            + apercu + reste + ".")));
+                    "Examen incomplet : " + manquants.size() + " évaluation(s) manquante(s) — un point de "
+                            + "portée LIGNE doit être évalué pour chaque marché, les autres une seule fois. "
+                            + "À évaluer : " + apercu + reste + ".")));
         }
+    }
+
+    /**
+     * Libellé du niveau d'évaluation, pour le message de complétude. ⚠️ Dérivé de la portée plutôt
+     * qu'écrit en dur : le message citait « niveau dossier » pour toute évaluation unique, ce qui aurait
+     * désigné un point de fiche comme un point de dossier depuis le 2026-09-02.
+     */
+    private static String libelleDePortee(PorteePointCtrl portee) {
+        return switch (portee) {
+            case FICHE -> "fiche de présentation";
+            case AGPM -> "projet d'AGPM";
+            default -> "niveau dossier";
+        };
     }
 
     /** Clé d'un couple évalué ({@code idDetail} nul → « null ») pour la comparaison de complétude. */

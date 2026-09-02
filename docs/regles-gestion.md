@@ -632,11 +632,31 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
   **affinables par sous-type** (⚠️ règle ajoutée 2026-07-17) : `ID_SOUS_TYPE` facultatif — null = point
   commun à la famille, renseigné = point spécifique au sous-type. **Grille effective d'un dossier =
   communs de sa famille + spécifiques de son sous-type** (`GET /api/points-ctrls?sousType=X`) : la
-  grille d'un `PPM` (7 points) ≠ celle d'un `PPM-AGPM` (8 points, dont « AGPM joint et conforme » —
+  grille d’un `PPM` ≠ celle d’un `PPM-AGPM` (qui ajoute « AGPM joint et conforme » et la grille AGPM —
   seed `2026-07-17_points_ctrl_sous_type.sql`). Les **nouvelles références**
   portent le segment **famille** (ex. `00012/DDP/CRM-ANT/2026`, numérotation continue) ; les
   références déjà émises sont conservées ; la référence initiale PPM (`xxxxx/<acronyme>/PPM/<année>`)
   garde son segment `PPM` (nom du document). Migration : `2026-07-17_familles_sous_types.sql`.
+
+- ⚠️ **La fiche de présentation et l'AGPM entrent dans l'examen (règle du pilote, 2026-09-02)** [Écriture]
+  - Deux **portées** de plus dans `tr_points_ctrl` : **`FICHE`** (fiche de présentation) et **`AGPM`**
+    (projet d'AGPM), à côté de `LIGNE` et `DOSSIER`. Chacun de ces deux documents dérivés a **sa propre
+    grille de contrôle**, servie par la grille effective du sous-type.
+  - **Rattachement** : les points `FICHE` sont **communs à la famille DDP** — la grille étant filtrée par
+    famille, et DDP ne contenant que `PPM` et `PPM-AGPM`, un commun atteint exactement ces deux
+    sous-types sans jamais toucher DMC ni DDM. Les points `AGPM` sont **spécifiques à `PPM-AGPM`** : un
+    plan sans AGPM ne voit jamais cette grille.
+  - **Stockage inchangé** : un résultat `FICHE`/`AGPM` s'enregistre comme un point `DOSSIER`
+    (`t_examen_detail`, `ID_DETAIL` nul, observations « AU LIEU DE / LIRE » comprises) et suit le circuit
+    normal — synthèse, PV, boucle FAVR.
+  - ⚠️ **Seule `LIGNE` s'évalue marché par marché.** Toute autre portée s'évalue **une seule fois**, sans
+    ligne de marché : un `idDetail` fourni sur un point `FICHE` ou `AGPM` est refusé (400). Les gardes
+    testaient auparavant la portée par égalité à `DOSSIER` et rangeaient le reste du côté par-ligne —
+    elles s'appuient désormais sur un prédicat, pour qu'une portée future tombe du bon côté par défaut.
+  - **Complétude à la soumission** : ces points comptent comme les autres, l'examen reste refusé tant
+    qu'un point de la grille effective n'est pas statué.
+  - **Seed** : 3 points `FICHE` + 3 points `AGPM` créés au démarrage (`PointsCtrlFicheAgpmSeeder`),
+    idempotents et jamais réécrasés — l'Administrateur ajuste ensuite libellés et caractère obligatoire.
 
 - Soumission du dossier [Action]
   - Envoi officiel avec génération de la référence unique.
