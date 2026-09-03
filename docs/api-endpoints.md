@@ -1629,15 +1629,21 @@ autorise un dépôt « après lettre » (voir liste blanche ci-dessous), la piè
 > `obligatoire` de la **famille** de dossier (référentiel ci-dessus, clé `DDP`/`DMC`/`DDM`) sont présentes.
 > Sinon **400** : `{ "erreurs": [ { "champ": "piecesJointes", "message": "La pièce '<libellé>' est obligatoire." } ] }`.
 >
-> ⚠️ **AGPM conditionnel (règle ajoutée).** En plus des pièces `obligatoire` statiques, un dossier de la
-> famille **DDP** comportant **≥1 marché en « appel d'offres ouvert »** — soit un sous-type dérivé
-> **`PPM-AGPM`** — exige la pièce **AGPM** (Avis Général de Passation de Marché). Absente → même **400**
-> `{ "champ": "piecesJointes", ... }` (message citant « AGPM »). Déclenchement **data-driven** : le mode de
-> passation porte le drapeau `declencheAgpm` (`tr_mode_passation.DECLENCHE_AGPM`, administrable via
-> `mode-passations`) ; la pièce AGPM est repérée par son **code stable `AGPM`**
-> (`t_type_piece_jointe.CODE`, famille `DDP`, `obligatoire` statique = false). Le PPM lu (`GET /api/ppms`,
-> `/api/ppms/{id}`) expose le dérivé **`agpmRequis`** (`true` ssi ≥1 marché déclencheur ; lecture seule,
-> ignoré en écriture) — même source de vérité que le sous-type `PPM-AGPM` du dossier.
+> ⚠️ **L'AGPM n'est PLUS une pièce conditionnelle — règle RETIRÉE le 2026-09-03.** Jusque-là, un dossier
+> de la famille **DDP** comportant **≥1 marché en « appel d'offres ouvert »** exigeait la pièce **AGPM**
+> à la soumission (400 `{ "champ": "piecesJointes" }` citant « AGPM »). Le pilote a retiré cette
+> obligation : le **projet d'AGPM dérivé du plan** — présenté au Membre à l'examen avec sa propre grille
+> de contrôle (portée `AGPM`) — tient désormais ce rôle. La pièce reste au référentiel comme une
+> **facultative ordinaire** : toujours déposable, toujours contrôlée à la réception **si elle est
+> déposée**, jamais réclamée. Ne subsistent au contrôle de soumission que les pièces marquées
+> `obligatoire = true` au référentiel.
+>
+> **Ce qui n'a PAS changé** : le sous-type dérivé **`PPM-AGPM`** continue de se recalculer sur
+> `declencheAgpm` (`tr_mode_passation.DECLENCHE_AGPM`) et de piloter la grille effective d'examen, le
+> projet d'AGPM et les modèles de PV. Le PPM lu expose toujours le dérivé **`agpmRequis`** (`true` ssi
+> ≥1 marché déclencheur ; lecture seule) — ⚠️ **son nom a survécu à sa règle** : il ne signifie plus
+> « une pièce AGPM est exigée » mais « ce plan comporte un appel d'offres ouvert ». Conservé sous ce nom
+> pour ne pas rompre le contrat que le front lit déjà.
 
 ---
 
@@ -1833,7 +1839,7 @@ volumineux → **400** (annule la création si multipart) ; **404** si l'UGPM ou
 > et le **PPM daté et signé de CHAQUE version antérieure** (type `23`, `PPM_ANTERIEUR`, une pièce par
 > ancêtre). Ces deux types restent `OBLIGATOIRE = false` au **référentiel** — ils n'ont aucun sens sur un
 > dossier initial : l'exigence est portée par le code pour les seuls dossiers rattachés à un prédécesseur,
-> comme l'obligation conditionnelle de l'AGPM.
+> comme l’était l’obligation conditionnelle de l’AGPM (retirée le 2026-09-03).
 >
 > Les pièces du dossier d'origine sont **reprises** dans la version (contenu dupliqué) : la PRMP ne
 > remplace que celles qui changent. Les deux pièces d'historique, elles, sont **constituées

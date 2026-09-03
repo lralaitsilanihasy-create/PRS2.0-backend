@@ -1057,19 +1057,19 @@ class SaisiePpmIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$[?(@.idPpm==9500 && @.agpmRequis==true)]", hasSize(1)))
                 .andExpect(jsonPath("$[?(@.idPpm==9501 && @.agpmRequis==false)]", hasSize(1)));
     }
-
     @Test
-    @DisplayName("PPM-AGPM : soumission d'un PPM en appel d'offres ouvert SANS pièce AGPM → 400 {piecesJointes} ; avec AGPM → SOUMIS ; PPM ordinaire non concerné")
-    void ppmAgpm_soumission_exigeAgpmConditionnel() throws Exception {
-        // Pièce AGPM au référentiel : repérée par son code stable, OBLIGATOIRE statique = false (conditionnelle).
-        int idAgpm = seedTypePieceCode("Avis Général de Passation de Marché", "AGPM", false, "DDP",6);
-        // Mode déclencheur (appel d'offres ouvert) + mode ordinaire.
+    @DisplayName("⚠️ 2026-09-03 — la pièce AGPM n'est PLUS requise : un PPM en appel d'offres ouvert se "
+            + "soumet sans elle, et le sous-type dérivé PPM-AGPM ne bouge pas")
+    void ppmAgpm_soumission_sansPieceAgpm() throws Exception {
+        // La pièce reste au référentiel, facultative (OBLIGATOIRE = false) : déposable, jamais réclamée.
+        int idAgpm = seedTypePieceCode("Avis Général de Passation de Marché", "AGPM", false, "DDP", 6);
         ModePassation aoo = new ModePassation(1, "Appel d'offres ouvert", null, null, null, null);
         aoo.setDeclencheAgpm(true);
         modePassationRepository.save(aoo);
         modePassationRepository.save(new ModePassation(4, "Cotation", null, null, null, null));
 
-        // (1) PPM avec un marché en appel d'offres ouvert, AGPM non fournie → soumission refusée (400).
+        // (1) PPM avec un marché en appel d'offres ouvert, AUCUNE pièce AGPM → soumission ACCEPTÉE.
+        // C'est la règle abrogée : jusqu'au 02/09 ce cas partait en 400 { piecesJointes }.
         Dossier d = dossier(9502, "BROUILLON");
         d.setRefeDossier(null); d.setIdTypeDossier("DDP"); d.setIdPrmp("PRMP001"); d.setIdLocalite("ANT");
         dossierRepository.save(d);
@@ -1077,12 +1077,14 @@ class SaisiePpmIntegrationTest extends CnmIntegrationTestSupport {
         Marche m = marche(95021, 9502, 9502); m.setIdMode(1); marcheRepository.save(m);
 
         mvc.perform(post("/api/dossiers/9502/soumettre").header("Authorization", tokenPrmp))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.erreurs[?(@.champ=='piecesJointes')]", hasSize(1)))
-                .andExpect(jsonPath("$.erreurs[?(@.champ=='piecesJointes')].message",
-                        org.hamcrest.Matchers.hasItem(org.hamcrest.Matchers.containsString("AGPM"))));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statut").value("SOUMIS"))
+                // ⚠️ CE QUI NE DOIT PAS BOUGER : le sous-type reste dérivé, car c'est lui qui pilote la
+                // grille d'examen AGPM, le projet d'AGPM et les modèles de PV. Sans cette assertion, le
+                // retrait de l'obligation pourrait emporter la dérivation sans que rien ne le signale.
+                .andExpect(jsonPath("$.idSousType").value("PPM-AGPM"));
 
-        // Dépôt de la pièce AGPM (PRMP propriétaire) via le mécanisme existant, puis soumission → 200 SOUMIS.
+        // (2) La pièce reste DÉPOSABLE : facultative ordinaire, pas retirée du référentiel.
         byte[] pdf = "%PDF-1.4 AGPM".getBytes(StandardCharsets.US_ASCII);
         mvc.perform(multipart("/api/piece-jointe-dossiers")
                 .file(new MockMultipartFile("data", "", "application/json",
@@ -1090,19 +1092,18 @@ class SaisiePpmIntegrationTest extends CnmIntegrationTestSupport {
                 .file(new MockMultipartFile("fichier", "agpm.pdf", "application/pdf", pdf))
                 .header("Authorization", tokenPrmp))
                 .andExpect(status().isCreated());
-        mvc.perform(post("/api/dossiers/9502/soumettre").header("Authorization", tokenPrmp))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.statut").value("SOUMIS"));
 
-        // (2) PPM ordinaire (aucun marché en appel d'offres ouvert) → AGPM non requise, soumission OK sans AGPM.
-        Dossier d2 = dossier(9503, "BROUILLON");
-        d2.setRefeDossier(null); d2.setIdTypeDossier("DDP"); d2.setIdPrmp("PRMP001"); d2.setIdLocalite("ANT");
-        dossierRepository.save(d2);
-        ppmRepository.save(ppm(9503, 9503, "PRMP001"));
-        Marche m2 = marche(95031, 9503, 9503); m2.setIdMode(4); marcheRepository.save(m2);
-        mvc.perform(post("/api/dossiers/9503/soumettre").header("Authorization", tokenPrmp))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.statut").value("SOUMIS"));
+        // (3) Une pièce réellement OBLIGATOIRE au référentiel refuse toujours la soumission : le retrait
+        // vise la seule obligation conditionnelle de l'AGPM, il ne désarme pas la complétude.
+        seedTypePiece("Lettre de transmission", true, "DDP", 7);
+        Dossier d3 = dossier(9504, "BROUILLON");
+        d3.setRefeDossier(null); d3.setIdTypeDossier("DDP"); d3.setIdPrmp("PRMP001"); d3.setIdLocalite("ANT");
+        dossierRepository.save(d3);
+        ppmRepository.save(ppm(9504, 9504, "PRMP001"));
+        Marche m3 = marche(95041, 9504, 9504); m3.setIdMode(4); marcheRepository.save(m3);
+        mvc.perform(post("/api/dossiers/9504/soumettre").header("Authorization", tokenPrmp))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[?(@.champ=='piecesJointes')]", hasSize(1)));
     }
 
     /**

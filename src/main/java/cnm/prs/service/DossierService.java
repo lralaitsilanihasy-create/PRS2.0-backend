@@ -85,8 +85,6 @@ public class DossierService {
 
     /** Famille « Dossier de Planification » (codes centralisés dans {@link DossierIntegriteService}). */
     private static final String FAMILLE_DDP = DossierIntegriteService.FAMILLE_DDP;
-    /** Code du type de pièce AGPM dans le référentiel {@code t_type_piece_jointe} (obligation conditionnelle). */
-    private static final String CODE_PIECE_AGPM = "AGPM";
 
     /** ⚠️ Lot D §6 — longueur minimale d'une recherche de référence : en deçà, elle ne discrimine rien. */
     private static final int LONGUEUR_MIN_RECHERCHE = 2;
@@ -856,6 +854,16 @@ public class DossierService {
      * Contrôle, à la soumission, que toutes les pièces jointes marquées {@code obligatoire} pour le
      * type du dossier (référentiel {@code t_type_piece_jointe}) sont effectivement attachées
      * ({@code t_piece_jointe_dossier}). Sinon → 400 {@code erreurs:[{champ:"piecesJointes", message}]}.
+     *
+     * <p>⚠️ <strong>L'obligation CONDITIONNELLE de la pièce AGPM a été RETIRÉE le 2026-09-03</strong>
+     * (règle du pilote). Un PPM comportant un marché en appel d'offres ouvert exigeait ici la pièce
+     * « Avis Général de Passation de Marché » ; c'est désormais le <strong>projet d'AGPM dérivé du
+     * plan</strong> qui tient ce rôle — document présenté au Membre à l'examen, avec sa propre grille de
+     * contrôle (portée {@code AGPM}, livrée la veille). La pièce redevient une facultative ordinaire :
+     * déposable, contrôlée à la réception si elle l'est, jamais réclamée.</p>
+     *
+     * <p>Ne restent donc ici que les pièces marquées {@code obligatoire = true} au référentiel — une
+     * obligation portée par la donnée, et non par du code.</p>
      */
     private void validerPiecesObligatoires(Dossier dossier) {
         List<ErrorResponse.FieldError> manquantes = new ArrayList<>(typePieceJointeRepository
@@ -865,33 +873,9 @@ public class DossierService {
                 .map(t -> new ErrorResponse.FieldError("piecesJointes",
                         "La pièce '" + t.getLibellePiece() + "' est obligatoire."))
                 .toList());
-        // Obligation CONDITIONNELLE de l'AGPM (cas « PPM-AGPM ») : ajoutée au même contrôle de complétude.
-        ajouterAgpmManquantSiRequis(dossier, manquantes);
         if (!manquantes.isEmpty()) {
             throw new ChampsInvalidesException(manquantes);
         }
-    }
-
-    /**
-     * ⚠️ Règle ajoutée — obligation <strong>conditionnelle</strong> de l'AGPM : un dossier de la famille
-     * {@code DDP} comportant au moins un marché en « appel d'offres ouvert » ({@code ModePassation.declencheAgpm},
-     * soit un sous-type dérivé {@code PPM-AGPM}) doit être accompagné de la pièce AGPM (Avis Général de
-     * Passation de Marché). Cette obligation ne peut être portée par le drapeau statique {@code OBLIGATOIRE}
-     * du référentiel : elle est évaluée ici. La pièce est repérée par son <strong>code</strong> stable
-     * {@code AGPM} (famille DDP). Sans effet si l'AGPM n'est pas requis, ou si le référentiel ne définit
-     * pas encore la pièce (config admin).
-     */
-    private void ajouterAgpmManquantSiRequis(Dossier dossier, List<ErrorResponse.FieldError> manquantes) {
-        if (!FAMILLE_DDP.equals(dossier.getIdTypeDossier())
-                || !marcheRepository.existsMarcheDeclencheurAgpmByDossier(dossier.getIdDossier())) {
-            return;
-        }
-        typePieceJointeRepository.findFirstByIdTypeDossierAndCode(FAMILLE_DDP, CODE_PIECE_AGPM)
-                .filter(t -> !pieceJointeDossierRepository
-                        .existsByIdDossierAndIdTypePiece(dossier.getIdDossier(), t.getIdTypePiece()))
-                .ifPresent(t -> manquantes.add(new ErrorResponse.FieldError("piecesJointes",
-                        "La pièce « AGPM » (Avis Général de Passation de Marché) est obligatoire lorsque le "
-                                + "PPM comporte au moins un marché en appel d'offres ouvert.")));
     }
 
     /** Notifie le Secrétaire et le CC de la localité qu'un dossier est soumis et attend réception. */

@@ -665,18 +665,22 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
     aucune ligne de marché est **refusée (HTTP 409)**. Ne s'applique **qu'à la famille DDP** — les
     dossiers **DMC/DDM** ne sont pas concernés. Justification : un PPM est un plan de passation de
     marchés ; un PPM vide n'a rien à soumettre au contrôle. Le frontend doit s'aligner sur cette précondition.
-  - ⚠️ **Règle ajoutée (non issue de la brochure d'origine) — AGPM conditionnel** : un PPM comportant
-    **au moins un marché en « appel d'offres ouvert »** doit être accompagné de la pièce **AGPM**
-    (Avis Général de Passation de Marché). À la soumission, si l'AGPM manque → **refus (HTTP 400,
-    champ `piecesJointes`)**, au même titre que les pièces obligatoires statiques. Le déclenchement est
-    **data-driven, jamais par mot-clé de libellé** : l'administrateur coche le drapeau `DECLENCHE_AGPM`
-    sur le(s) mode(s) de passation concerné(s) (`tr_mode_passation`), et la pièce AGPM est repérée dans
-    le référentiel `t_type_piece_jointe` par son **code stable `AGPM`** (son drapeau `OBLIGATOIRE`
-    statique reste **false** — l'obligation est conditionnelle). Le PPM lu expose un dérivé serveur
-    **`agpmRequis`** (true ssi ≥1 marché déclencheur) que le front **affiche** sans le recalculer.
-    Prérequis de paramétrage (admin) : cocher `DECLENCHE_AGPM` sur le mode « appel d'offres ouvert » et
-    créer la pièce de code `AGPM` sur la famille de dossier **DDP**. Un dossier DDP dans ce cas porte le
-    sous-type dérivé **`PPM-AGPM`** (cf. règle familles/sous-types ci-dessus).
+  - ⚠️ **AGPM conditionnel — RÈGLE RETIRÉE le 2026-09-03 (arbitrage du pilote)** : un PPM comportant au
+    moins un marché en « appel d'offres ouvert » devait être accompagné de la **pièce jointe** AGPM
+    (Avis Général de Passation de Marché), sous peine de refus à la soumission (400, champ
+    `piecesJointes`). Cette obligation **n'existe plus** : le **projet d'AGPM dérivé du plan** — que le
+    Membre a sous les yeux à l'examen, avec sa propre grille de contrôle (portée `AGPM`, 2026-09-02) —
+    tient désormais ce rôle. Un PPM en appel d'offres ouvert se soumet donc **sans** pièce AGPM.
+    - La pièce redevient une **facultative ordinaire** du référentiel : toujours déposable, toujours
+      contrôlée à la réception **si elle est déposée**, jamais réclamée. Son drapeau `OBLIGATOIRE`
+      restait de toute façon **false** — l'obligation vivait dans le code, elle en a été retirée.
+    - ⚠️ **Ce qui NE change pas** : le sous-type dérivé **`PPM-AGPM`** continue de se recalculer sur
+      `DECLENCHE_AGPM` (`tr_mode_passation`) et de piloter la grille effective d'examen, le projet
+      d'AGPM et les modèles de PV. Le dérivé serveur **`agpmRequis`** reste exposé sur le PPM lu — son
+      nom a survécu à sa règle : il signifie désormais « ce plan comporte un appel d'offres ouvert »,
+      et non « une pièce est exigée ». Conservé tel quel pour ne pas rompre le contrat du front.
+    - Trace conservée à dessein plutôt qu'effacée : les dossiers soumis avant cette date portent une
+      pièce AGPM parce que la règle l'exigeait alors.
 - Suivi de l'état de réception [Lecture]
   - Accès à réception, date, secrétaire — en temps réel.
 - Consultation du PV d'examen [Lecture]

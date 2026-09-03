@@ -89,9 +89,16 @@ public class PpmDto {
 
     /**
      * <strong>Dérivé serveur (lecture seule)</strong> : {@code true} ssi ≥1 marché de ce PPM est en
-     * « appel d'offres ouvert » ({@code ModePassation.declencheAgpm}). Indique au front qu'un AGPM
-     * (Avis Général de Passation de Marché) doit accompagner le PPM. Le front l'<em>affiche</em>, ne le
-     * recalcule pas ; toute valeur envoyée en écriture est ignorée.
+     * « appel d'offres ouvert » ({@code ModePassation.declencheAgpm}).
+     *
+     * <p>⚠️ <strong>Le nom a survécu à sa règle</strong> (2026-09-03). Il signifiait « un AGPM doit
+     * accompagner le PPM » ; l'obligation de la <em>pièce jointe</em> AGPM a été retirée par le pilote,
+     * le <strong>projet d'AGPM dérivé du plan</strong> tenant ce rôle. Ce que le drapeau dit encore, et
+     * qui reste utile : <strong>ce plan comporte un appel d'offres ouvert</strong> — d'où le sous-type
+     * dérivé {@code PPM-AGPM}, l'onglet du projet d'AGPM et sa grille de contrôle à l'examen.</p>
+     *
+     * <p>Conservé sous ce nom à dessein : le renommer romprait le contrat que le front lit déjà. Le
+     * front l'<em>affiche</em>, ne le recalcule pas ; toute valeur envoyée en écriture est ignorée.</p>
      */
     private Boolean agpmRequis;
 
