@@ -135,7 +135,8 @@ public class DispatchService {
         Integer idDossierDispatche = dossierDeLaReception(saved.getIdReception());
         if (idDossierDispatche != null) {
             String detail = "à " + nomControleur(saved.getImCtrlMembre())
-                    + (saved.getImCtrlCc() == null ? "" : " · copie à " + nomControleur(saved.getImCtrlCc()));
+                    + (saved.getImCtrlCc() == null ? "" : " · copie à " + nomControleur(saved.getImCtrlCc()))
+                    + consigne(saved);
             journalDossier.tracerControleur(idDossierDispatche, JournalDossierService.DISPATCH, detail);
         }
         return toDtoComplet(saved);
@@ -403,7 +404,7 @@ public class DispatchService {
                     "reprise à " + nomControleur(ancienAttributaire));
         } else {
             journalDossier.tracerControleur(idDossier, JournalDossierService.REATTRIBUTION,
-                    "de " + nomControleur(ancienAttributaire) + " à " + nomControleur(nouveau));
+                    "de " + nomControleur(ancienAttributaire) + " à " + nomControleur(nouveau) + consigne(dispatch));
         }
     }
 
@@ -462,6 +463,25 @@ public class DispatchService {
             throw new org.springframework.security.access.AccessDeniedException("Pas d'auto-retrait : vous êtes l'attributaire de ce dossier. "
                     + "Demandez le retrait au Président.");
         }
+    }
+
+    /**
+     * ⚠️ <strong>La consigne au journal</strong> (complément du pilote, 2026-09-04) — « Comment savoir
+     * que le dossier a été dispatché au CC avec instruction avant de le dispatcher au membre ? »
+     *
+     * <p>Le dispatch ne garde que la <strong>dernière</strong> consigne : le PUT de réattribution écrase
+     * celle du Président au CC, qui disparaît alors sans trace. La consigner dans le {@code detail} —
+     * append-only — la rend définitive, au moment où elle a été donnée et par qui.</p>
+     *
+     * <p>Rendue vide quand il n'y en a pas, pour ne pas afficher une rubrique creuse. Le
+     * {@code detail} est tronqué à 500 caractères par le journal, ce qui borne le cumul.</p>
+     */
+    private static String consigne(Dispatch dispatch) {
+        String instructions = dispatch.getInstructions();
+        if (instructions == null || instructions.isBlank()) {
+            return "";
+        }
+        return " — consigne : « " + instructions.trim() + " »";
     }
 
     /** Nom lisible d'un contrôleur pour le journal ; repli sur le matricule. */

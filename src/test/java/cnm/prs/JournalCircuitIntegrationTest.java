@@ -43,8 +43,14 @@ class JournalCircuitIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     private String corps(int id, int rec, String membre) {
+        return corps(id, rec, membre, null);
+    }
+
+    /** Corps de dispatch, avec une consigne facultative — c’est elle que le journal doit retenir. */
+    private String corps(int id, int rec, String membre, String instructions) {
         return "{\"idDispatch\":" + id + ",\"idReception\":" + rec
-                + ",\"imCtrlMembre\":\"" + membre + "\",\"interimDispatch\":false}";
+                + ",\"imCtrlMembre\":\"" + membre + "\",\"interimDispatch\":false"
+                + (instructions == null ? "" : ",\"instructions\":\"" + instructions + "\"") + "}";
     }
 
     private List<ActionDossier> journal(int idDossier, String type) {
@@ -53,11 +59,13 @@ class JournalCircuitIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("1 — Le Président dispatche au CC : ligne DISPATCH, opérateur Président, SANS marqueur PRMP")
+    @DisplayName("1 — Le Président dispatche au CC AVEC consigne : ligne DISPATCH, opérateur Président, "
+            + "SANS marqueur PRMP, consigne incluse au détail")
     void dispatch_tracé() throws Exception {
         int rec = preparerDossierCentral(7201);
         mvc.perform(post("/api/dispatchs").header("Authorization", tokenPresident)
-                .contentType(MediaType.APPLICATION_JSON).content(corps(7201, rec, "CTRCC1")))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(corps(7201, rec, "CTRCC1", "Vérifier les seuils avant examen")))
                 .andExpect(status().isCreated());
 
         List<ActionDossier> lignes = journal(7201, JournalDossierService.DISPATCH);
@@ -65,6 +73,10 @@ class JournalCircuitIntegrationTest extends CnmIntegrationTestSupport {
         ActionDossier a = lignes.get(0);
         Assertions.assertTrue(a.getDetail() != null && a.getDetail().startsWith("à "),
                 "le détail doit nommer l'attributaire : " + a.getDetail());
+        // ⚠️ Complément du 2026-09-04 — le dispatch ne garde que la DERNIÈRE consigne : celle du
+        // Président au CC disparaîtrait à la réattribution. Consignée ici, elle devient définitive.
+        Assertions.assertTrue(a.getDetail().contains("consigne : « Vérifier les seuils avant examen »"),
+                "la consigne doit figurer au détail : " + a.getDetail());
         Assertions.assertEquals("CTRPRE", a.getAuteur(), "l'auteur est le login de l'acteur");
         // ⚠️ Le marqueur « opérateur ≠ attributaire » du front s'allume sur idPrmpOperateur : le
         // renseigner avec un matricule de contrôleur serait un contresens.
@@ -74,14 +86,27 @@ class JournalCircuitIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("2 — Le CC réattribue à un Membre : ligne REATTRIBUTION « de … à … »")
+    @DisplayName("1 bis — Sans consigne, le détail n'affiche aucune rubrique creuse")
+    void dispatch_sansConsigne() throws Exception {
+        int rec = preparerDossierCentral(7206);
+        mvc.perform(post("/api/dispatchs").header("Authorization", tokenPresident)
+                .contentType(MediaType.APPLICATION_JSON).content(corps(7206, rec, "CTRCC1")))
+                .andExpect(status().isCreated());
+        Assertions.assertFalse(journal(7206, JournalDossierService.DISPATCH).get(0).getDetail()
+                .contains("consigne"), "aucune mention de consigne quand il n'y en a pas");
+    }
+
+    @Test
+    @DisplayName("2 — Le CC réattribue à un Membre : REATTRIBUTION « de … à … » avec SA consigne (la nouvelle)")
     void reattribution_tracee() throws Exception {
         int rec = preparerDossierCentral(7202);
         mvc.perform(post("/api/dispatchs").header("Authorization", tokenPresident)
-                .contentType(MediaType.APPLICATION_JSON).content(corps(7202, rec, "CTRCC1")))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(corps(7202, rec, "CTRCC1", "consigne du Président")))
                 .andExpect(status().isCreated());
         mvc.perform(put("/api/dispatchs/7202").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON).content(corps(7202, rec, "CTRMEM")))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(corps(7202, rec, "CTRMEM", "consigne du CC")))
                 .andExpect(status().isOk());
 
         List<ActionDossier> lignes = journal(7202, JournalDossierService.REATTRIBUTION);
@@ -89,6 +114,11 @@ class JournalCircuitIntegrationTest extends CnmIntegrationTestSupport {
         String detail = lignes.get(0).getDetail();
         Assertions.assertTrue(detail != null && detail.startsWith("de ") && detail.contains(" à "),
                 "le détail doit nommer l'ancien ET le nouveau : " + detail);
+        // C'est la consigne du RÉATTRIBUEUR qui compte ici — celle du Président reste sur SA ligne.
+        Assertions.assertTrue(detail.contains("consigne : « consigne du CC »"), detail);
+        Assertions.assertTrue(journal(7202, JournalDossierService.DISPATCH).get(0).getDetail()
+                .contains("consigne : « consigne du Président »"),
+                "la consigne initiale survit sur la ligne de dispatch — c'est tout l'enjeu");
     }
 
     @Test

@@ -1458,6 +1458,12 @@ Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `
 > de contrôleur allumerait à tort le marqueur « opérateur ≠ attributaire » du front. Seuls
 > `nomOperateur` (le nom du contrôleur, résolu serveur) et `auteur` (son login) sont renseignés.
 >
+> ⚠️ **La CONSIGNE au détail** (complément du 2026-09-04) — les lignes `DISPATCH` et `REATTRIBUTION`
+> portent l'instruction donnée avec le geste, quand il y en a une :
+> `à {nom} — consigne : « … »` et `de {ancien} à {nouveau} — consigne : « … »` (celle du réattribueur).
+> Un dispatch ne conserve que sa **dernière** consigne — le PUT écrase celle du Président au CC, qui
+> disparaîtrait sans trace. Consignée au journal, elle devient définitive : on sait ce qui a été demandé,
+> à qui, et par qui. Rien n'est ajouté quand il n'y a pas de consigne.
 > **Pourquoi ces traces.** Le chronométrage journalise les étapes et leurs durées, mais un dispatch ne
 > garde que son **dernier état** : une réattribution écrase l'attributaire, un retrait supprime la ligne.
 > Le journal étant **append-only**, la trace d'un retrait **survit** à la disparition du dispatch qu'elle

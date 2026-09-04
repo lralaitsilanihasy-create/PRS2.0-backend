@@ -489,7 +489,11 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
     du dispatch qu'elle décrit, et les dispatchs successifs d'un même dossier s'y accumulent.
   - **`REPRISE` ≠ `REATTRIBUTION`** : le « Retirer » d'un CC est une réattribution **vers lui-même** (le
     dossier revient dans SA file, il ne repart pas au Président) — la distinction est précisément ce que
-    le pilote voulait voir.
+  - ⚠️ **La CONSIGNE est consignée** (complément du 2026-09-04) — « Comment savoir que le dossier a été
+    dispatché au CC avec instruction avant de le dispatcher au membre ? » Les lignes `DISPATCH` et
+    `REATTRIBUTION` portent l'instruction donnée avec le geste. Un dispatch ne garde que sa **dernière**
+    consigne : le PUT de réattribution écrase celle du Président au CC, qui disparaîtrait sans trace.
+    Au journal, append-only, elle devient définitive — on sait ce qui a été demandé, à qui et par qui.
   - ⚠️ **Gestes de contrôleur : ni PRMP ni mandat.** Sur ces lignes, `ID_PRMP_OPERATEUR` et
     `ID_MANDAT_OPERATEUR` restent **nuls** — ce sont des concepts PRMP, et les renseigner avec un
     matricule de contrôleur allumerait à tort le marqueur « opérateur ≠ attributaire ». Seuls le **nom**
