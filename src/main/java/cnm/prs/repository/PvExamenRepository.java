@@ -120,6 +120,22 @@ public interface PvExamenRepository extends JpaRepository<PvExamen, Integer> {
     @Query("select pv.examen.dispatch.imCtrlDispatch from PvExamen pv where pv.idPv = :idPv")
     Optional<String> findImDispatcheurByPv(@Param("idPv") Integer idPv);
 
+    /**
+     * ⚠️ <strong>Circuit du PV</strong> (navette à deux niveaux, 2026-09-04) — localité du dossier,
+     * dispatcheur COURANT et attributaire, en <strong>une</strong> requête.
+     *
+     * <p>Les trois valeurs sont déjà lisibles séparément ({@code findLocaliteByPv},
+     * {@code findImDispatcheurByPv}, {@code findImCtrlMembreByExamen}), mais le discriminant du
+     * deux-niveaux les exige TOUTES pour chaque PV, y compris dans les listes de projets. Trois
+     * requêtes par ligne y auraient été trois de trop — c'est la leçon du référentiel des délais
+     * (2026-09-01), relu une fois par étape et par dossier avant d'être ramené à une projection.</p>
+     *
+     * @return {@code [localite, imCtrlDispatch, imCtrlMembre]}, ou vide si le PV n'a pas de dispatch
+     */
+    @Query("select pv.examen.dispatch.reception.ctrlRecept.idLocalite, pv.examen.dispatch.imCtrlDispatch, "
+            + "pv.examen.dispatch.imCtrlMembre from PvExamen pv where pv.idPv = :idPv")
+    List<Object[]> findCircuitByPv(@Param("idPv") Integer idPv);
+
     /** Nombre de PV <strong>SIGNÉS</strong> rattachés à un dossier (via examen→dispatch→réception) — garde-fou de cohérence dossier↔PV. */
     @Query("select count(pv) from PvExamen pv where pv.statutPv = 'SIGNE' and pv.examen.dispatch.reception.idDossier = :idDossier")
     long countSignesParDossier(@Param("idDossier") Integer idDossier);

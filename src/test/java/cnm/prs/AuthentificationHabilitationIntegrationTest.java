@@ -529,9 +529,13 @@ class AuthentificationHabilitationIntegrationTest extends CnmIntegrationTestSupp
         // vise. Le CC, qui clôturait la navette jusqu'ici, n'y a plus accès — contrainte d'identité.
         viser(5601, tokenCc, "CTRCC1", "FAV", "CTRVER", "CTRMEM").andExpect(status().isBadRequest());
         // Il ne peut pas se désigner lui-même : l'auto-co-signature reste abolie, sans exception.
-        viser(5601, tokenPresident, "CTRPRE", "FAV", "CTRVER", "CTRPRE").andExpect(status().isConflict());
+        // ⚠️ 2026-09-04 — ces deux refus passent de 409 à 400 avec la CO-SIGNATURE ÉLARGIE. Ils portent
+        // sur le corps de la requête, et la même erreur devait avoir le même code qu'elle arrive par
+        // « coSignataires » (400 exigé par la spec) ou par l'ancien « imMembreCoSignataire ». La règle
+        // de fond, elle, n'a pas bougé d'un pouce : ni auto-désignation, ni désigné hors localité.
+        viser(5601, tokenPresident, "CTRPRE", "FAV", "CTRVER", "CTRPRE").andExpect(status().isBadRequest());
         // Ni désigner un contrôleur qui n'est pas Membre de la localité du dossier (§3.3).
-        viser(5601, tokenPresident, "CTRPRE", "FAV", "CTRVER", "CTRVER").andExpect(status().isConflict());
+        viser(5601, tokenPresident, "CTRPRE", "FAV", "CTRVER", "CTRVER").andExpect(status().isBadRequest());
         // La part MEMBRE n'est ouverte pour personne avant le visa, pas même pour l'attributaire (ordre B).
         mvc.perform(post("/api/pv-examens/5601/signer").header("Authorization", tokenPresident)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRPRE\",\"role\":\"MEMBRE\"}"))

@@ -125,6 +125,31 @@ public class PvExamen {
     @Column(name = "NOTE_INTERIM_TAILLE")
     private Long noteInterimTaille;
 
+    /**
+     * ⚠️ <strong>Navette à deux niveaux</strong> (spec pilote du 2026-09-04) — étage courant du projet
+     * dans la navette Président ↔ CC ↔ Membre : {@code CC}, {@code PRESIDENT}, ou {@code null}.
+     *
+     * <p>{@code null} n'est pas un état dégradé : c'est une navette SIMPLE (le contrat d'avant, un
+     * seul étage), ou un projet qui n'est pas dans la navette P/CC — brouillon, en rectification chez
+     * le Membre, ou déjà visé. Le statut du PV ne pouvait pas porter cette information :
+     * {@code PROJET_SOUMIS} vaut aussi bien « soumis au CC » que « transmis au Président ».</p>
+     */
+    @Column(name = "NIVEAU_NAVETTE", length = 20)
+    private String niveauNavette;
+
+    /**
+     * ⚠️ <strong>Co-signature élargie</strong> (spec pilote du 2026-09-04) — Chef de commission
+     * <strong>désigné</strong> par le Président au visa, appelé à poser SA part de signature.
+     *
+     * <p>Distinct de {@code imCtrlCc}, qui nomme le CC ayant effectivement visé ou signé et que le
+     * document imprime. Les confondre rendrait indécidable la bascule en {@code SIGNE} — « ce CC
+     * doit-il encore signer, ou a-t-il déjà signé ? » — et ferait porter au PV le nom d'un signataire
+     * qui ne l'est pas encore. Même partage que {@code imMembreCoSignataire} face à
+     * {@code imCtrlMembre}.</p>
+     */
+    @Column(name = "IM_CC_COSIGNATAIRE", length = 7)
+    private String imCcCoSignataire;
+
     /** Chemin du PDF du Projet de PV sur le FSX (renseigné si le PV est éligible à la génération). */
     @Column(name = "CHEMIN_DOCUMENT", length = 500)
     private String cheminDocument;

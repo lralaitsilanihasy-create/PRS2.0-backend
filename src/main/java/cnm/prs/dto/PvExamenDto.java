@@ -83,6 +83,29 @@ public class PvExamenDto {
     private String nomMembreCoSignataire;
 
     /**
+     * ⚠️ <strong>Navette à deux niveaux</strong> (spec pilote du 2026-09-04) — étage courant du projet :
+     * {@code "CC"}, {@code "PRESIDENT"} ou {@code null}. Lecture seule, posé par les transitions.
+     *
+     * <p>C'est ce champ qui dit au front QUEL panneau ouvrir et à QUI : au niveau {@code CC}, le Chef
+     * de commission voit « Accepter et transmettre / Retourner au Membre » ; au niveau
+     * {@code PRESIDENT}, le Président voit « Viser / Retourner au CC ». {@code null} = navette simple
+     * (contrat d'avant, inchangé) ou projet hors navette P/CC. Le statut seul ne suffisait pas :
+     * {@code PROJET_SOUMIS} vaut pour les deux étages.</p>
+     */
+    @Size(max = 20)
+    private String niveauNavette;
+
+    /**
+     * ⚠️ <strong>Co-signature élargie</strong> (2026-09-04) — Chef de commission désigné au visa pour
+     * co-signer. Lecture seule. Nul quand la combinaison retenue n'appelle pas le CC.
+     */
+    @Size(max = 7)
+    private String imCcCoSignataire;
+
+    /** Nom complet du CC co-signataire (« prénoms nom ») — lecture seule, peuplé serveur. */
+    private String nomCcCoSignataire;
+
+    /**
      * ⚠️ Visa unique (2026-08-31) — matricule du <strong>dispatcheur</strong> du dossier, seul habilité
      * à viser (§4). Lecture seule, dérivé du dispatch. Le front s'en sert pour n'offrir le bouton
      * « Viser » qu'à lui, avec une raison écrite pour les autres P/CC plutôt qu'un 403 subi — sans

@@ -319,6 +319,78 @@ d'un PV ne l'efface pas pour autant : elle réaffecte ses champs un par un et ne
 ⚠️ **Un PV antérieur RÉGÉNÉRÉ n'imprime plus la ligne**, alors qu'il porte encore un secrétaire en base.
 Décision assumée : le PDF déjà archivé fait foi, et un document réédité reflète la règle en vigueur.
 
+### La navette du PV à DEUX NIVEAUX et la co-signature élargie (règle du pilote, 2026-09-04)
+
+> « Pour le dossier de dispatch à deux niveaux (Président vers CC, puis CC vers Membre), la navette du
+> projet de PV se fait à deux niveaux aussi (Membre avec CC, puis CC avec Président). La co-signature
+> peut être Président + CC + Membre ; ou Président + CC ; ou Président + Membre ; ou Président + un
+> autre Membre de la localité au niveau centrale. »
+
+⚠️ **Le périmètre est le CHEMIN RÉEL du dossier**, pas sa localité ni son type. Deux niveaux
+**seulement** quand le dossier est passé par les deux : le Président l'a dispatché au Chef de
+commission, qui l'a **réattribué** à un Membre. Un dispatch direct — Président → Membre, CC régional →
+Membre, ou P/CC auto-attributaire — garde la navette simple, **inchangée**.
+
+**Le discriminant tient à une propriété du circuit.** En centrale, *seul le Président dispatche*
+(règle du 2026-09-03). Si le dispatcheur courant d'un dossier central est un **CC**, c'est donc
+nécessairement qu'il a réattribué un dossier reçu du Président : le chemin P → CC → Membre est
+**prouvé** sans avoir à relire l'historique des dispatchs. Reste à écarter le CC qui examine lui-même
+(il soumettrait à lui-même) : d'où la troisième condition, `imCtrlDispatch` ≠ `imCtrlMembre`.
+
+**Le verrou par niveau : rien ne saute d'étage.** Le Membre soumet **au CC** ; le CC retourne au
+Membre **ou** accepte et transmet au Président ; le Président retourne **au CC** — qui corrige
+l'orientation, redescend ou re-transmet — **ou** vise. Trois refus le tiennent :
+
+- le **Président n'accepte pas** à la place du CC (403) : l'acceptation est l'acte de l'étage du bas ;
+- le **CC ne vise pas** (403) : son accord est une étape de la navette, pas sa clôture. Arrêter l'avis
+  n'est pas de son ressort sur ce circuit ;
+- le **Président ne renvoie pas directement au Membre** (403) : le CC a accepté le projet, il en
+  répond. Un retour qui lui passerait au-dessus le laisserait ignorer que ce qu'il a validé a été
+  refusé, et le Membre recevrait des corrections dont son chef de commission n'aurait pas connaissance.
+
+**Ce que l'acceptation du CC n'est pas.** Elle ne fige aucun avis, ne pose aucune signature et ne clôt
+pas la navette — d'où un sens de navette distinct (`TRANSMISSION_PRESIDENT`, et non `ACCEPTATION`) et
+un statut de PV **inchangé**. Le distinguer est ce qui permet de dire, plus tard, que le CC avait donné
+son accord **avant** le Président. Sur une navette simple, `accepter` reste **retiré** depuis le
+2026-08-31 : le rouvrir partout rendrait au P/CC un chemin pour clore la navette sans désigner de
+co-signataire et sans contrôle d'identité.
+
+**Aucun intérim sur ce circuit.** La réattribution du CC a écrasé le dispatcheur enregistré : le
+Président y apparaît comme un tiers alors qu'il est l'acteur légitime. Lui réclamer une note d'intérim
+reviendrait à lui faire justifier l'absence de quelqu'un qu'il a lui-même mandaté. La règle d'identité
+du visa change donc de forme ici — elle porte sur le **profil** (Président) et sur l'**étage** (le
+projet doit lui avoir été transmis).
+
+#### La co-signature élargie
+
+Le **Président choisit la combinaison au visa** : le CC du circuit et/ou un Membre — l'examinateur, ou
+un autre Membre de la centrale. Au minimum **deux personnes distinctes** au total, lui compris ; au
+maximum **trois**. Le PV n'imprime que les lignes des désignés.
+
+**Au plus un par rôle.** Ce n'est pas une restriction arbitraire : le PV n'a **qu'une ligne de
+signature par rôle**, et la table n'a qu'une colonne par part. Deux Membres désignés n'auraient nulle
+part où signer, et la bascule en `SIGNE` ne saurait plus qui attendre.
+
+**Désigné n'est pas signataire.** Le CC *désigné* (`IM_CC_COSIGNATAIRE`) est distinct du CC qui a
+*visé ou signé* (`IM_CTRL_CC`), celui que le document imprime. Les confondre rendrait indécidable la
+bascule en `SIGNE` — « ce CC doit-il encore signer, ou a-t-il déjà signé ? » — et ferait porter au PV
+le nom d'un signataire qui ne l'est pas encore. Même partage que `IM_MEMBRE_COSIGNATAIRE` face à
+`IM_CTRL_MEMBRE` depuis le 2026-08-28.
+
+**Le PV est signé quand la part du viseur ET celle de chaque désigné sont posées** — deux ou trois
+signatures selon la combinaison. L'ancienne règle (« le Membre a signé, et l'un des deux P/CC aussi »)
+aurait clos un PV désigné P + CC + Membre dès la signature du Membre, en laissant une part de CC
+ouverte sur un PV déjà définitif. ⚠️ Cette règle était **close en deux endroits** : le service et la
+contrainte `t_pv_examen_cosignataire_check`, qui exigeait une signature du Membre sur tout PV signé.
+Les deux ont bougé (migration `V17`) — laisser la contrainte aurait fait échouer en base un geste que
+toutes les gardes métier venaient d'accepter.
+
+**Sur le document**, la ligne « Membre » devient conditionnelle, comme celles du Président et du CC
+depuis l'origine : un PV visé P + CC seul ne l'imprime pas. Imprimer un nom sous une signature absente
+ferait porter à une pièce qui fait foi un signataire qui n'a rien signé. Le nom reste celui de
+l'**attributaire** dès qu'un Membre est désigné, y compris si le désigné est un autre Membre :
+`IM_CTRL_MEMBRE` dit **qui a examiné** le dossier, et c'est bien cela que « Étaient présents » énonce.
+
 ### Chronométrage et prévision des délais (transversal au circuit)
 
 ⚠️ **Règle du pilote (2026-09-01)** — la PRMP doit connaître la **date prévisionnelle d'achèvement** du

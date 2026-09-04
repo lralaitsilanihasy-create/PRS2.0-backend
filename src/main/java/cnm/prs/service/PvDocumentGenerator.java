@@ -199,6 +199,10 @@ public class PvDocumentGenerator {
         Map<String, String> base = baseMap(ctx);
         boolean president = nonVide(ctx.nomPresident());
         boolean chef = nonVide(ctx.nomChefCommission());
+        // ⚠️ Co-signature élargie (2026-09-04, §4) — la ligne « Membre » devient CONDITIONNELLE, comme
+        // celles du Président et du CC. Un PV visé P + CC seul n'a aucun Membre signataire : imprimer
+        // sa ligne ferait porter au document un nom sous une signature absente.
+        boolean membre = nonVide(ctx.nomMembre());
         List<XWPFParagraph> aSupprimer = new ArrayList<>();
         for (XWPFParagraph p : doc.getParagraphs()) {
             String texte = texteConcatene(p);
@@ -217,6 +221,10 @@ public class PvDocumentGenerator {
                 continue;
             }
             if (texte.contains(CHEF_COMMISSION) && !chef) {
+                aSupprimer.add(p);
+                continue;
+            }
+            if (texte.contains(MEMBRE) && !membre) {
                 aSupprimer.add(p);
                 continue;
             }

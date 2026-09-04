@@ -1,7 +1,8 @@
 package cnm.prs.dto;
 
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+
+import java.util.List;
 
 /**
  * Corps de {@code POST /api/pv-examens/{id}/viser} — ⚠️ réforme « Visa unique » (arbitrage du pilote
@@ -33,8 +34,18 @@ import jakarta.validation.constraints.Size;
  *                    n'est pas refusé — la valeur est <strong>ignorée</strong>, même esprit que la
  *                    note d'intérim envoyée par un dispatcheur. Le champ reste dans le contrat pour
  *                    ne pas casser ces clients ; il disparaîtra quand ils auront tous suivi.
- * @param imMembreCoSignataire Membre appelé à co-signer — <strong>obligatoire</strong>. Gardes du
- *                    2026-08-28 inchangées : Membre titulaire de la localité, différent de l'acteur.
+ * @param imMembreCoSignataire Membre appelé à co-signer — ⚠️ RÉTRO-COMPATIBILITÉ depuis le
+ *                    2026-09-04 : remplacé par {@link #coSignataires()}, il reste accepté seul et
+ *                    équivaut alors à une liste d'un élément. Fourni EN MÊME TEMPS que la liste, il
+ *                    est ignoré — deux sources pour une même désignation ne peuvent pas se
+ *                    contredire silencieusement, c'est la liste qui fait foi.
+ * @param coSignataires ⚠️ <strong>Co-signature élargie</strong> (spec pilote du 2026-09-04) — de UN à
+ *                    DEUX matricules, le Président signant toujours par ailleurs. Combinaisons
+ *                    admises sur une navette à deux niveaux : le CC du circuit, le Membre
+ *                    examinateur, ou un autre Membre de la localité centrale. Au plus un CC et au
+ *                    plus un Membre : le PV n'a qu'une ligne de signature par rôle, et deux Membres
+ *                    n'auraient nulle part où signer. Sur une navette simple, le contrat ne bouge
+ *                    pas : un seul co-signataire, Membre de la localité.
  */
 public record PvVisaRequest(
 
@@ -49,7 +60,15 @@ public record PvVisaRequest(
         @Size(max = 7)
         String idSecretaireSeance,
 
-        @NotBlank(message = "Le Membre co-signataire est obligatoire pour viser.")
         @Size(max = 7)
-        String imMembreCoSignataire) {
+        String imMembreCoSignataire,
+
+        /**
+         * ⚠️ Validé EN SERVICE, pas ici. La @NotBlank qui portait sur {@code imMembreCoSignataire} a
+         * été retirée : elle rendait impossible le seul envoi de {@code coSignataires}, alors que
+         * l'un OU l'autre suffit désormais. La règle « au moins un désigné » ne s'exprime plus sur un
+         * champ isolé — elle porte sur le couple. Le 400 est rendu par le service, avec un message
+         * qui nomme les combinaisons admises plutôt qu'un « ne doit pas être vide » aveugle.
+         */
+        List<@Size(max = 7) String> coSignataires) {
 }

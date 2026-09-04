@@ -112,10 +112,16 @@ public class PvExamenController {
     }
 
     /**
-     * ⚠️ RETIRÉ le 2026-08-31 — <strong>410 Gone</strong>. L'acceptation est fusionnée dans le VISA.
-     * Conservé plutôt que supprimé : la livraison se faisant « backend d'abord », un front pas encore
-     * aligné appellera encore ce chemin, et un 410 nommant son remplaçant se diagnostique là où un 404
-     * enverrait chercher une faute de frappe.
+     * ⚠️ <strong>ROUVERT le 2026-09-04, sur le seul circuit à DEUX NIVEAUX</strong> — le Chef de
+     * commission accepte le projet et le TRANSMET au Président. Ce n'est pas un visa : aucun avis
+     * n'est arrêté, aucune part n'est signée, la navette reste ouverte.
+     *
+     * <p>Sur une navette SIMPLE, l'endpoint reste <strong>410 Gone</strong> (retiré le 2026-08-31,
+     * fusionné dans le visa). Il n'a donc pas été « dé-retiré » : il sert un geste qui n'existait pas
+     * avant, et refuse toujours celui qu'on lui avait ôté.</p>
+     *
+     * <p>L'habilitation fine — le CC <em>du circuit</em>, pas n'importe quel CC — est en service :
+     * elle porte sur l'IDENTITÉ, que {@code @PreAuthorize} ne sait pas exprimer.</p>
      */
     @PreAuthorize("@perm.peutExercer('CHEF_COMMISSION')")
     @PostMapping("/{id}/accepter")

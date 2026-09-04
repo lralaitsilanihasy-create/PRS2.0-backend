@@ -18,10 +18,12 @@ import cnm.prs.dto.PvExamenDto;
 import cnm.prs.dto.PvVisaRequest;
 import cnm.prs.entity.Controleur;
 import cnm.prs.entity.Dossier;
+import cnm.prs.entity.Localite;
 import cnm.prs.entity.Prmp;
 import cnm.prs.entity.PvExamen;
 import cnm.prs.entity.PvNavette;
 import cnm.prs.enums.EtapeCircuit;
+import cnm.prs.enums.NiveauNavette;
 import cnm.prs.enums.ProfilUtilisateur;
 import cnm.prs.enums.RoleSignataire;
 import cnm.prs.enums.SensNavette;
@@ -460,6 +462,11 @@ public class PvExamenService {
             pv.setDateSoumissionInitiale(LocalDate.now());
         }
         pv.setStatutPv(StatutPv.PROJET_SOUMIS.name());
+        // ⚠️ Navette à deux niveaux (2026-09-04) — la soumission POSE l'étage. Sur un dossier passé du
+        // Président au CC puis du CC au Membre, le projet part au niveau CC et non directement au
+        // Président ; ailleurs, le niveau reste nul et le contrat d'avant s'applique tel quel.
+        // Rejouable : une re-soumission après rectification repose l'étage du bas, jamais celui du haut.
+        pv.setNiveauNavette(deuxNiveaux(circuit(id)) ? NiveauNavette.CC.name() : null);
         ajouterNavette(pv, SensNavette.SOUMISSION, req.commentaire());
         PvExamen saved = repository.save(pv);
         // ⚠️ Règle ajoutée (2026-08-02, réexamen après lettre de renvoi) — la re-soumission du projet
@@ -571,15 +578,19 @@ public class PvExamenService {
      * le PV resterait en attente d'une signature que personne ne sait devoir donner.
      */
     private void notifierMembreCoSignataire(PvExamen pv) {
-        String designe = pv.getImMembreCoSignataire();
-        if (designe == null || designe.isBlank()) {
-            return;
-        }
+        // ⚠️ 2026-09-04 — CHAQUE désigné est prévenu, Membre comme Chef de commission : la
+        // combinaison retenue au visa peut n'appeler que l'un, l'autre, ou les deux. N'en notifier
+        // qu'un laisserait le PV attendre une part que son signataire ignore devoir poser.
         Integer idDossier = repository.findIdDossierByPv(pv.getIdPv()).orElse(null);
         String titre = "PV à co-signer";
         String corps = "Vous avez été désigné pour co-signer le PV " + referencePv(pv) + " : votre signature est attendue.";
-        notificationService.emettreControleur(TypeNotification.PV_A_COSIGNER, designe, null,
-                pv.getIdPv(), TypeObjet.PV, idDossier, titre, corps);
+        // Stream.of et non List.of : ce dernier refuse les null, or l'un des deux désignés l'est
+        // presque toujours — une seule des deux lignes de co-signature est ouverte en général.
+        for (String designe : java.util.stream.Stream.of(pv.getImMembreCoSignataire(), pv.getImCcCoSignataire())
+                .filter(java.util.Objects::nonNull).filter(s -> !s.isBlank()).toList()) {
+            notificationService.emettreControleur(TypeNotification.PV_A_COSIGNER, designe, null,
+                    pv.getIdPv(), TypeObjet.PV, idDossier, titre, corps);
+        }
     }
 
     private String referencePv(PvExamen pv) {
@@ -657,9 +668,110 @@ public class PvExamenService {
     }
 
     /**
+    // ----------------------------------------------------------------------
+    // ⚠️ NAVETTE À DEUX NIVEAUX (spec pilote du 2026-09-04)
+    // ----------------------------------------------------------------------
+
+    /** Le circuit d'un PV : localité du dossier, dispatcheur courant, attributaire de l'examen. */
+    private record CircuitPv(String localite, String dispatcheur, String attributaire) {
+
+        boolean complet() {
+            return dispatcheur != null && !dispatcheur.isBlank() && attributaire != null;
+        }
+    }
+
+    /** Lit le circuit du PV en une requête ; jamais {@code null} (champs à {@code null} si sans dispatch). */
+    private CircuitPv circuit(Integer idPv) {
+        return repository.findCircuitByPv(idPv).stream().findFirst()
+                .map(r -> new CircuitPv((String) r[0], (String) r[1], (String) r[2]))
+                .orElseGet(() -> new CircuitPv(null, null, null));
+    }
+
+    /**
+     * ⚠️ <strong>Discriminant du « deux niveaux »</strong> (arbitrage 4 du pilote, 2026-09-04) — le
+     * périmètre est le <strong>chemin réel</strong> du dossier, pas sa localité ni son type.
+     *
+     * <p>Trois conditions, sur le dispatch courant : le dossier est <strong>central</strong>, son
+     * dispatcheur est un <strong>Chef de commission</strong>, et il n'est pas lui-même l'attributaire.
+     * Le raisonnement tient à une propriété du circuit : en centrale, <em>seul le Président
+     * dispatche</em> (garde du 2026-09-03). Si le dispatcheur courant est un CC, c'est donc
+     * nécessairement qu'il a RÉATTRIBUÉ un dossier reçu du Président — le chemin P → CC → Membre est
+     * prouvé sans avoir à relire l'historique des dispatchs.</p>
+     *
+     * <p><strong>Ce que la troisième condition exclut.</strong> Le CC qui examine lui-même le dossier
+     * que le Président lui a confié ({@code imCtrlMembre} = lui) reste à UN niveau : il soumettrait au
+     * CC, c'est-à-dire à lui-même. La navette est alors directe CC ↔ Président, comme avant.</p>
+     *
+     * <p>Un dispatch direct — Président → Membre, CC régional → Membre, ou P/CC auto-attributaire —
+     * garde donc la navette simple, sans qu'aucune de ces situations n'ait à être énumérée.</p>
+     */
+    private boolean deuxNiveaux(CircuitPv circuit) {
+        if (!circuit.complet() || !Localite.estCentrale(circuit.localite())) {
+            return false;
+        }
+        return !circuit.dispatcheur().equals(circuit.attributaire())
+                && controleurDirectory.profilDe(circuit.dispatcheur()).orElse(null)
+                        == ProfilUtilisateur.CHEF_COMMISSION;
+    }
+
+    /** Étage courant, ou {@code null} — lu tel quel : la colonne EST l'état, elle n'est pas re-dérivée. */
+    private NiveauNavette niveau(PvExamen pv) {
+        String valeur = pv.getNiveauNavette();
+        if (valeur == null || valeur.isBlank()) {
+            return null;
+        }
+        return NiveauNavette.valueOf(valeur);
+    }
+
+    /** 409 si le PV n'est pas à l'étage attendu — un geste hors de son étage sauterait un cran du circuit. */
+    private void exigerNiveau(PvExamen pv, NiveauNavette attendu, String geste) {
+        NiveauNavette courant = niveau(pv);
+        if (courant != attendu) {
+            throw new BusinessRuleException("Impossible de " + geste + " : le projet de PV est au niveau « "
+                    + (courant == null ? "aucun" : courant.name()) + " », attendu « " + attendu.name()
+                    + " ». Sur un dossier à deux niveaux, la navette monte et redescend étage par étage.");
+        }
+    }
+
+    /**
+     * [Auto] Notifie le(s) Président(s) qu'un projet leur est transmis par le CC.
+     *
+     * <p>Le destinataire n'est pas lisible sur le dispatch : {@code IM_CTRL_DISPATCH} porte le
+     * dispatcheur COURANT, que la réattribution du CC a écrasé — le Président qui avait dispatché le
+     * premier n'y figure plus. On s'adresse donc au profil, comme le fait déjà le repli de
+     * {@link #notifierPvAValider}. En centrale, ce profil ne compte qu'une personne.</p>
+     */
+    private void notifierPresidentsPourVisa(PvExamen pv) {
+        Integer idDossier = repository.findIdDossierByPv(pv.getIdPv()).orElse(null);
+        String corps = "Le projet de PV " + referencePv(pv) + " a été accepté par le Chef de commission "
+                + "et vous est transmis pour visa.";
+        for (Controleur c : controleurDirectory.presidents()) {
+            notificationService.emettreControleur(TypeNotification.PV_A_VALIDER, c.getImControleur(),
+                    c.getEmailCont(), pv.getIdPv(), TypeObjet.PV, idDossier, "Projet de PV à viser", corps);
+        }
+    }
+
+    /**
      * Retour du projet pour correction par le Président / CC (§3.2) :
      * PROJET_SOUMIS → EN_RECTIFICATION. Commentaire de rectification obligatoire.
      * Insère une navette SENS = RETOUR_RECTIF.
+     *
+     * <p>⚠️ <strong>Navette à deux niveaux</strong> (arbitrage 1 du pilote, 2026-09-04) — le retour
+     * descend d'UN étage à la fois, jamais deux :</p>
+     * <ul>
+     *   <li>au niveau <strong>PRESIDENT</strong>, le retour est le geste du <em>Président</em> et
+     *       renvoie AU CC ({@link SensNavette#RETOUR_CC}) : le projet reste {@code PROJET_SOUMIS}, il
+     *       change seulement d'étage. Le CC arbitre ensuite — il le renvoie au Membre, ou le
+     *       re-transmet après échange ;</li>
+     *   <li>au niveau <strong>CC</strong>, le retour est le geste du <em>CC</em> et renvoie au Membre
+     *       ({@code EN_RECTIFICATION}), comme sur une navette simple.</li>
+     * </ul>
+     *
+     * <p><strong>Pourquoi le Président ne peut pas renvoyer directement au Membre.</strong> Le CC a
+     * accepté le projet : il en répond. Un retour qui lui passerait au-dessus le laisserait ignorer
+     * que ce qu'il a validé a été refusé, et le Membre recevrait des corrections dont son chef de
+     * commission n'aurait pas connaissance. C'est le sens du verrou par niveau — 403 pour l'acteur
+     * qui n'est pas à l'étage, 409 pour l'étage qui n'est pas le bon.</p>
      */
     public PvExamenDto retourner(Integer id, PvActionRequest req) {
         PvExamen pv = load(id);
@@ -670,7 +782,22 @@ public class PvExamenService {
         if (req.commentaire() == null || req.commentaire().isBlank()) {
             throw new BusinessRuleException("Le commentaire de rectification est obligatoire (§3.2).");
         }
+        CircuitPv circuit = circuit(id);
+        if (deuxNiveaux(circuit) && niveau(pv) == NiveauNavette.PRESIDENT) {
+            return retournerAuCc(pv, circuit, req);
+        }
+        if (deuxNiveaux(circuit)) {
+            // Étage du bas : le retour au Membre appartient au CC. Le Président qui l'exercerait
+            // sauterait l'étage — c'est le cas que l'arbitrage 1 ferme explicitement.
+            exigerNiveau(pv, NiveauNavette.CC, "retourner le projet au Membre");
+            exigerCcDuCircuit(circuit, "Le retour du projet au Membre appartient au Chef de commission "
+                    + "qui l'a reçu : sur un dossier à deux niveaux, le Président retourne AU CC, "
+                    + "qui décide de redescendre ou non.");
+        }
         pv.setStatutPv(StatutPv.EN_RECTIFICATION.name());
+        // Le projet quitte la navette P/CC : il est chez le Membre, et aucun étage ne l'attend. Il en
+        // retrouvera un à la prochaine soumission — c'est elle qui pose le niveau, pas ce retour.
+        pv.setNiveauNavette(null);
         ajouterNavette(pv, SensNavette.RETOUR_RECTIF, req.commentaire());
         PvExamen saved = repository.save(pv);
         log.info("[CIRCUIT] navette PV retour rectification dossier={} acteur={} pv={} statutPv={} navettes={}",
@@ -683,21 +810,89 @@ public class PvExamenService {
     }
 
     /**
-     * Acceptation du projet par le Président / CC (§3.2) :
-     * PROJET_SOUMIS → PROJET_ACCEPTE (le PV devient signable).
-     * Insère une navette SENS = ACCEPTATION.
+     * Retour du <strong>Président au CC</strong> (2026-09-04) — le projet redescend d'un étage sans
+     * quitter la navette : le statut reste {@code PROJET_SOUMIS}, seul le niveau change.
      */
+    private PvExamenDto retournerAuCc(PvExamen pv, CircuitPv circuit, PvActionRequest req) {
+        ProfilUtilisateur profil = CurrentUser.profil().orElse(null);
+        if (profil != ProfilUtilisateur.PRESIDENT) {
+            throw new AccessDeniedException(
+                    "Le projet de PV est au niveau du Président : lui seul peut le retourner au Chef de "
+                            + "commission. Le CC le reprendra alors, et décidera de le redescendre au Membre.");
+        }
+        pv.setNiveauNavette(NiveauNavette.CC.name());
+        ajouterNavette(pv, SensNavette.RETOUR_CC, req.commentaire());
+        PvExamen saved = repository.save(pv);
+        log.info("[CIRCUIT] navette PV retour au CC dossier={} acteur={} pv={} niveau={} navettes={}",
+                dossierDuPv(saved.getIdPv()), CurrentUser.login().orElse(null), saved.getIdPv(),
+                NiveauNavette.CC, saved.getNbNavettes());
+        // [Auto] Le CC apprend que ce qu'il avait accepté lui revient, avec le motif.
+        controleurRepository.findById(circuit.dispatcheur()).ifPresent(c -> notificationService.emettreControleur(
+                TypeNotification.PV_A_RECTIFIER, c.getImControleur(), c.getEmailCont(), saved.getIdPv(),
+                TypeObjet.PV, repository.findIdDossierByPv(saved.getIdPv()).orElse(null),
+                "Projet de PV retourné par le Président",
+                "Le projet de PV " + referencePv(saved) + " vous est retourné par le Président : "
+                        + req.commentaire()));
+        return peuplerNoms(PvExamenMapper.toDto(saved));
+    }
+
+    /** 403 si l'acteur n'est pas le CC du circuit — l'étage du bas n'appartient qu'à lui. */
+    private void exigerCcDuCircuit(CircuitPv circuit, String message) {
+        String acteur = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
+        if (acteur == null || !acteur.equals(circuit.dispatcheur())) {
+            throw new AccessDeniedException(message);
+        }
+    }
+
     /**
-     * ⚠️ RETIRÉ le 2026-08-31 (réforme « Visa unique ») — l'acceptation est fusionnée dans
-     * {@link #viser(Integer, PvVisaRequest)} : clore la navette et signer sa part étaient deux gestes
-     * pour une seule décision. 410 Gone, avec le remplaçant dans le message.
+     * ⚠️ <strong>Acceptation intermédiaire du CC</strong> (arbitrage 1 du pilote, 2026-09-04 — verrou
+     * par niveau) : le Chef de commission valide le projet et le TRANSMET au Président.
+     *
+     * <p>Ce n'est pas un visa. Aucun avis n'est arrêté, aucune part n'est signée, la navette reste
+     * ouverte — c'est le seul geste qui fait monter le PV d'un étage. Le distinguer d'une
+     * {@link SensNavette#ACCEPTATION} est ce qui permet de dire, plus tard, que le CC avait donné son
+     * accord avant le Président.</p>
+     *
+     * <p><strong>Sur une navette simple, l'endpoint reste RETIRÉ</strong> (410 depuis le 2026-08-31,
+     * fusionné dans le visa). Le rouvrir partout aurait rendu au P/CC un chemin pour clore la navette
+     * sans désigner de co-signataire et sans contrôle d'identité — les deux gardes que la réforme du
+     * visa unique avait justement installées. Il ne rouvre donc que là où le circuit a réellement deux
+     * étages, et pour le seul acteur de l'étage du bas.</p>
      */
     public PvExamenDto accepter(Integer id, PvActionRequest req) {
-        throw new EndpointRetireException(
-                "L'acceptation du projet de PV est retirée depuis le 2026-08-31 : elle est fusionnée "
-                        + "avec la signature du Président / Chef de commission dans le VISA. "
-                        + "Utilisez POST /api/pv-examens/" + id + "/viser (avis, Secrétaire de séance "
-                        + "et Membre co-signataire en un seul geste).");
+        PvExamen pv = load(id);
+        CircuitPv circuit = circuit(id);
+        if (!deuxNiveaux(circuit)) {
+            throw new EndpointRetireException(
+                    "L'acceptation du projet de PV est retirée depuis le 2026-08-31 : elle est fusionnée "
+                            + "avec la signature du Président / Chef de commission dans le VISA. "
+                            + "Utilisez POST /api/pv-examens/" + id + "/viser (avis, Secrétaire de séance "
+                            + "et Membre co-signataire en un seul geste).");
+        }
+        // ① Identité : le CC du circuit, et lui seul. Le Président qui accepterait ici sauterait
+        // l'étage du CC — ce que le verrou par niveau interdit. 403 et non 409 : ce n'est pas l'étape
+        // qui manque, c'est la qualité de l'acteur.
+        String acteur = CurrentUser.ref().filter(s -> !s.isBlank())
+                .orElseThrow(() -> new AccessDeniedException("Acteur non identifié."));
+        if (!acteur.equals(circuit.dispatcheur())) {
+            throw new AccessDeniedException(
+                    "Sur un dossier dispatché à deux niveaux, l'acceptation appartient au Chef de commission "
+                            + "qui a réattribué le dossier : il transmet ensuite au Président, qui vise.");
+        }
+        // ② État : projet soumis, et encore à l'étage du CC.
+        requireStatut(pv, StatutPv.PROJET_SOUMIS);
+        exigerNiveau(pv, NiveauNavette.CC, "accepter");
+
+        pv.setNiveauNavette(NiveauNavette.PRESIDENT.name());
+        ajouterNavette(pv, SensNavette.TRANSMISSION_PRESIDENT, req == null ? null : req.commentaire());
+        PvExamen saved = repository.save(pv);
+        log.info("[CIRCUIT] navette PV transmission au President dossier={} acteur={} pv={} niveau={} navettes={}",
+                dossierDuPv(saved.getIdPv()), CurrentUser.login().orElse(null), saved.getIdPv(),
+                NiveauNavette.PRESIDENT, saved.getNbNavettes());
+        // [Auto] Sans cette notification, le projet resterait à l'étage du Président sans que personne
+        // ne sache qu'il y est monté : le CC a fini son tour, et le Président ne l'a pas vu arriver.
+        notifierPresidentsPourVisa(saved);
+        return peuplerNoms(PvExamenMapper.toDto(saved));
     }
 
     /**
@@ -755,7 +950,19 @@ public class PvExamenService {
             throw new BusinessRuleException(
                     "Visa impossible : aucun dispatcheur enregistré pour ce dossier (dispatch incomplet).");
         }
-        boolean interim = !dispatcheur.equals(acteur);
+        // ⚠️ NAVETTE À DEUX NIVEAUX (arbitrage 2 du pilote, 2026-09-04) — le visa final appartient au
+        // PRÉSIDENT, dispatcheur INITIAL du dossier. Le passage par le CC est une acceptation
+        // intermédiaire, pas un visa : c'est ce que « accepter » consigne désormais.
+        //
+        // Le dispatcheur courant ne peut pas servir de critère ici : la réattribution du CC a écrasé
+        // IM_CTRL_DISPATCH, si bien que le Président — l'acteur légitime — y apparaît comme un tiers.
+        // Lui réclamer une note d'intérim reviendrait à lui faire justifier l'absence de quelqu'un
+        // qu'il a lui-même mandaté. Sur ce circuit, la règle d'identité change donc de forme : elle
+        // porte sur le PROFIL (Président) et sur l'ÉTAGE (le projet doit lui avoir été transmis),
+        // vérifiés plus bas. Aucun intérim n'a de sens ici, et aucune note n'est réclamée.
+        CircuitPv circuit = circuit(id);
+        boolean deuxNiveaux = deuxNiveaux(circuit);
+        boolean interim = !deuxNiveaux && !dispatcheur.equals(acteur);
 
         // ② Profil : la part signée est dérivée de l'acteur — pas de champ « role » dans le corps.
         // Vérifié AVANT la note : un profil hors P/CC n'a rien à faire ici, note ou pas (403, pas 400).
@@ -765,6 +972,15 @@ public class PvExamenService {
                     "Le visa est réservé au Président (§3.2) ou au Chef de commission (§3.3).");
         }
 
+        // ② bis ⚠️ DEUX NIVEAUX (2026-09-04) — le visa y est réservé au PRÉSIDENT. Un CC qui viserait
+        // ici court-circuiterait son propre étage : il a déjà donné son accord en acceptant, et arrêter
+        // l'avis n'est pas de son ressort sur ce circuit. 403, comme pour tout profil hors P/CC.
+        if (deuxNiveaux && profil != ProfilUtilisateur.PRESIDENT) {
+            throw new AccessDeniedException(
+                    "Sur un dossier dispatché à deux niveaux, le visa appartient au Président. Le Chef de "
+                            + "commission accepte le projet et le lui transmet (POST /{id}/accepter) : "
+                            + "son accord est une étape de la navette, pas sa clôture.");
+        }
         // ③ Périmètre : le CC ne clôt que dans sa localité ; le Président reste compétent partout.
         // ⚠️ La garde tient AUSSI en intérim (arbitrage 3, 2026-09-01) — contrairement à
         // INTERIM_DISPATCH au dispatch, qui lève la localité. Suppléer n'étend pas le ressort.
@@ -790,6 +1006,14 @@ public class PvExamenService {
                     + " » (attendu PROJET_SOUMIS, ou PROJET_ACCEPTE dont votre part n'est pas signée).");
         }
 
+        // ④ bis ⚠️ DEUX NIVEAUX (2026-09-04) — l'ÉTAGE : le Président ne vise qu'un projet que le CC
+        // lui a transmis. Viser un projet resté au niveau CC sauterait l'acceptation intermédiaire,
+        // c'est-à-dire l'avis du chef de commission sur un dossier qu'il a lui-même attribué. 409 : ce
+        // n'est pas l'acteur qui est en cause, c'est le moment.
+        if (deuxNiveaux) {
+            exigerNiveau(pv, NiveauNavette.PRESIDENT, "viser");
+        }
+
         // ⑤ Avis : fourni → remplace après revalidation ; absent → celui du Membre est conservé.
         if (req.idAvis() != null && !req.idAvis().isBlank()) {
             validerCoherenceAvis(pv.getIdExamen(), req.idAvis().trim());
@@ -800,7 +1024,8 @@ public class PvExamenService {
                     "Ce projet de PV ne porte aucun avis : le visa doit en fournir un (« idAvis »).");
         }
 
-        // ⑥ Membre co-signataire : garde existante, inchangée.
+        // ⑥ Co-signataires : de UN à DEUX désignés (⚠️ élargi le 2026-09-04). L'ancien champ seul
+        // reste accepté et vaut une liste d'un élément — le contrat de la navette simple ne bouge pas.
         //
         // ⚠️ Le Secrétaire de séance a été RETIRÉ du visa (règle du pilote, 2026-09-02). Depuis les
         // rattachements Membre → Vérificateur → Assistant, la boucle de vérification est routée par
@@ -808,7 +1033,7 @@ public class PvExamenService {
         // reste accepté dans le corps pour ne pas casser un client non à jour, mais il n'est ni
         // validé ni écrit — un PV visé à partir d'ici porte « null ». Les PV antérieurs gardent le
         // leur, en base comme au DTO : on ne réécrit pas l'histoire d'un acte officiel.
-        designerMembreCoSignataire(pv, req.imMembreCoSignataire(), acteur);
+        designerCoSignataires(pv, req, acteur, circuit, deuxNiveaux);
 
         // ⑧ Part de signature du rôle — le verrou « une signature par rôle » reste posé.
         LocalDate aujourdhui = LocalDate.now();
@@ -834,6 +1059,9 @@ public class PvExamenService {
         // ⑩ Clôture de la navette.
         boolean etaitEnNavette = navetteEnCours;
         pv.setStatutPv(StatutPv.PROJET_ACCEPTE.name());
+        // ⚠️ 2026-09-04 — la navette est close : le projet n'est plus à aucun étage. Le laisser à
+        // PRESIDENT ferait croire au front qu'il attend encore un visa déjà posé.
+        pv.setNiveauNavette(null);
         pv.setDateAcceptation(aujourdhui);
         if (etaitEnNavette) {
             ajouterNavette(pv, SensNavette.ACCEPTATION, req.commentaire());
@@ -911,19 +1139,45 @@ public class PvExamenService {
                 // (exigerRedacteurDuProjet). Le signataire de la part Membre est tracé par
                 // IM_MEMBRE_COSIGNATAIRE, qui suffit.
             }
-            // ⚠️ 2026-08-31 — les parts PRÉSIDENT et CC ne se signent plus ici : elles sont posées par
-            // le VISA, qui les fusionne avec la clôture de navette. Laisser ces branches ouvertes
-            // permettrait de signer sans désigner de co-signataire et sans être le dispatcheur — soit
-            // exactement les deux gardes que la réforme installe. 409 orientant vers le bon geste.
-            case PRESIDENT, CC -> throw new BusinessRuleException(
-                    "La signature du Président et du Chef de commission est retirée de « signer » depuis "
+            // ⚠️ 2026-09-04 — la part CC se signe de nouveau ici, mais seulement quand elle a été
+            // DÉLÉGUÉE : le Président a désigné le CC au visa, et le CC pose ensuite SA part. C'est
+            // exactement la mécanique de la part Membre, transposée au CC par la co-signature élargie.
+            //
+            // Ce n'est PAS la réouverture de 2026-08-31 : le CC qui VISE signe toujours du même geste
+            // (le visa), et sans désignation cette branche reste fermée. La garde n'a donc pas bougé —
+            // on ne peut ni clore la navette ici, ni s'auto-désigner, ni contourner le dispatcheur.
+            case CC -> {
+                if (pv.getImCcCoSignataire() == null || pv.getImCcCoSignataire().isBlank()) {
+                    throw new BusinessRuleException(
+                            "La signature du Chef de commission est portée par le VISA (POST /api/pv-examens/"
+                                    + id + "/viser) depuis le 2026-08-31. Elle ne se signe séparément que "
+                                    + "lorsque le Président l'a désigné co-signataire, ce qui n'est pas le cas ici.");
+                }
+                if (!signataire.equals(pv.getImCcCoSignataire())) {
+                    throw new AccessDeniedException(
+                            "La part Chef de commission est réservée au CC désigné co-signataire par le "
+                                    + "Président (co-signature élargie, 2026-09-04).");
+                }
+                exigerPasEncoreSigne(pv.getDateSignatureCc(), "Chef de commission");
+                pv.setDateSignatureCc(today);
+                // IM_CTRL_CC porte le CC qui a effectivement signé : c'est lui que le document imprime.
+                pv.setImCtrlCc(signataire);
+            }
+            // ⚠️ 2026-08-31 — la part PRÉSIDENT ne se signe plus ici : elle est posée par le VISA, qui
+            // la fusionne avec la clôture de navette. Laisser cette branche ouverte permettrait de
+            // signer sans désigner de co-signataire et sans être le dispatcheur — soit exactement les
+            // deux gardes que la réforme installe. 409 orientant vers le bon geste.
+            case PRESIDENT -> throw new BusinessRuleException(
+                    "La signature du Président est retirée de « signer » depuis "
                             + "le 2026-08-31 : elle fait partie du VISA. Utilisez POST /api/pv-examens/"
-                            + id + "/viser. « signer » ne porte plus que la part du Membre désigné.");
+                            + id + "/viser. « signer » ne porte que les parts des co-signataires désignés.");
         }
 
-        boolean membreSigne = pv.getDateSignatureMembre() != null;
-        boolean coSigne = pv.getDateSignaturePresident() != null || pv.getDateSignatureCc() != null;
-        if (membreSigne && coSigne) {
+        // ⚠️ 2026-09-04 — le PV est SIGNÉ quand la part du viseur ET celle de CHAQUE désigné sont
+        // posées : deux signatures ou trois, selon la combinaison retenue au visa. L'ancienne condition
+        // (« le Membre a signé, et l'un des deux P/CC aussi ») aurait clos un PV désigné P + CC + Membre
+        // dès la signature du Membre, en laissant ouverte une part de CC sur un PV déjà définitif.
+        if (partsCompletes(pv)) {
             pv.setStatutPv(StatutPv.SIGNE.name());
             pv.setDatePv(today);
             // ⚠️ Chronométrage (2026-09-01) — la co-signature du Membre clôt l'étape COSIGNATURE.
@@ -942,14 +1196,11 @@ public class PvExamenService {
             brancherSelonAvis(pv);
             return dto;
         }
-        PvExamen enregistre = repository.save(pv);
-        // ⚠️ Co-signature — le P/CC vient de désigner : on prévient le Membre attendu. Ce chemin est le
-        // SEUL possible après une signature P/CC : la part Membre exigeant une désignation préalable
-        // (ordre B), elle ne peut pas être déjà posée, donc la bascule en SIGNE ci-dessus n'a pas lieu.
-        if (role == RoleSignataire.PRESIDENT || role == RoleSignataire.CC) {
-            notifierMembreCoSignataire(enregistre);
-        }
-        return PvExamenMapper.toDto(enregistre);
+        // ⚠️ 2026-09-04 — plus de notification ici. Elle prévenait le Membre après une signature P/CC,
+        // à l'époque où « signer » portait encore ces parts. Depuis le visa unique, TOUS les désignés
+        // sont prévenus au visa ; les rappeler à chaque part posée enverrait à celui qui vient de
+        // signer une invitation à signer.
+        return PvExamenMapper.toDto(repository.save(pv));
     }
 
     /**
@@ -1043,6 +1294,106 @@ public class PvExamenService {
                             + designe + " » ne l'est pas.");
         }
         pv.setImMembreCoSignataire(designe);
+    }
+
+    /**
+     * ⚠️ <strong>Co-signature élargie</strong> (spec pilote du 2026-09-04, arbitrage 3) — le Président
+     * choisit AU VISA la combinaison de signataires : le CC du circuit, le Membre examinateur, un autre
+     * Membre de la centrale, ou deux d'entre eux. Lui-même signe toujours ; au total, deux personnes
+     * distinctes au minimum.
+     *
+     * <p><strong>Deux entrées, une seule vérité.</strong> {@code coSignataires} est la liste ;
+     * {@code imMembreCoSignataire} reste accepté SEUL, par rétro-compatibilité, et vaut alors une liste
+     * d'un élément. Fournis ensemble, c'est la liste qui fait foi et l'ancien champ est ignoré : deux
+     * sources pour une même désignation ne doivent jamais pouvoir se contredire en silence.</p>
+     *
+     * <p><strong>Au plus un par rôle.</strong> Le PV n'a qu'une ligne de signature par rôle ; deux
+     * Membres désignés n'auraient nulle part où signer, et la bascule en {@code SIGNE} ne saurait plus
+     * qui attendre. La contrainte n'est donc pas une restriction arbitraire : c'est la forme du
+     * document et celle de la table.</p>
+     *
+     * <p><strong>Tous les refus en 400.</strong> Ils portent sur le CORPS de la requête — un matricule
+     * qui n'est ni le CC du circuit ni un Membre de la localité, l'acteur qui se désigne lui-même, une
+     * liste vide ou trop longue. ⚠️ Deux d'entre eux répondaient 409 avant le 2026-09-04
+     * (auto-désignation, désigné hors localité) : les rendre cohérents évite que la même erreur
+     * réponde 400 par la liste et 409 par l'ancien champ.</p>
+     */
+    private void designerCoSignataires(PvExamen pv, PvVisaRequest req, String acteur, CircuitPv circuit,
+            boolean deuxNiveaux) {
+        List<String> demandes = coSignatairesDemandes(req);
+        if (demandes.isEmpty()) {
+            throw new BadRequestException(
+                    "Au moins un co-signataire est obligatoire pour viser : désignez le Chef de commission "
+                            + "du circuit et/ou un Membre de la localité du dossier (§2.6).");
+        }
+        if (demandes.size() > 2) {
+            throw new BadRequestException("Au plus DEUX co-signataires : le PV porte trois signatures au "
+                    + "maximum, la vôtre comprise.");
+        }
+        if (demandes.size() == 2 && demandes.get(0).equals(demandes.get(1))) {
+            throw new BadRequestException("Les co-signataires doivent être deux personnes distinctes.");
+        }
+        if (demandes.contains(acteur)) {
+            throw new BadRequestException(
+                    "Vous ne pouvez pas vous désigner vous-même : vous signez déjà en visant, et le PV est "
+                            + "co-signé par des personnes distinctes (auto-co-signature interdite, §2.6).");
+        }
+
+        String localite = repository.findLocaliteByPv(pv.getIdPv()).orElse(null);
+        String ccDuCircuit = deuxNiveaux ? circuit.dispatcheur() : null;
+        String cc = null;
+        String membre = null;
+        for (String im : demandes) {
+            if (im.equals(ccDuCircuit)) {
+                if (cc != null) {
+                    throw new BadRequestException("Un seul Chef de commission peut co-signer : le PV n'a "
+                            + "qu'une ligne de signature pour ce rôle.");
+                }
+                cc = im;
+            } else if (controleurDirectory.peutEtreMembreCoSignataire(im, localite)) {
+                if (membre != null) {
+                    throw new BadRequestException("Un seul Membre peut co-signer : le PV n'a qu'une ligne "
+                            + "de signature pour ce rôle. Choisissez le Membre examinateur OU un autre "
+                            + "Membre de la localité, pas les deux.");
+                }
+                membre = im;
+            } else {
+                throw new BadRequestException("« " + im + " » ne peut pas co-signer ce PV : les "
+                        + "co-signataires admis sont "
+                        + (ccDuCircuit == null ? "" : "le Chef de commission du circuit (" + ccDuCircuit + ") et ")
+                        + "les Membres de la localité du dossier (§3.3).");
+            }
+        }
+        pv.setImCcCoSignataire(cc);
+        pv.setImMembreCoSignataire(membre);
+    }
+
+    /** La liste demandée : {@code coSignataires} si fournie, sinon l'ancien champ seul. Nettoyée, jamais nulle. */
+    private List<String> coSignatairesDemandes(PvVisaRequest req) {
+        List<String> liste = req.coSignataires() == null ? List.of() : req.coSignataires().stream()
+                .filter(java.util.Objects::nonNull).map(String::trim).filter(s -> !s.isEmpty()).toList();
+        if (!liste.isEmpty()) {
+            return liste;
+        }
+        String ancien = req.imMembreCoSignataire() == null ? null : req.imMembreCoSignataire().trim();
+        return ancien == null || ancien.isEmpty() ? List.of() : List.of(ancien);
+    }
+
+    /**
+     * ⚠️ <strong>Toutes les parts désignées sont-elles posées ?</strong> (2026-09-04) — le PV bascule en
+     * {@code SIGNE} quand la part du viseur ET celle de CHAQUE désigné le sont : deux signatures ou
+     * trois, selon la combinaison retenue au visa.
+     *
+     * <p>La règle d'avant — « le Membre a signé et l'un des deux, P ou CC, aussi » — ne suffisait plus :
+     * elle aurait clos un PV désigné P + CC + Membre dès la signature du Membre, en laissant la part du
+     * CC ouverte sur un PV déjà définitif. Elle reste couverte par la nouvelle : sur une navette simple,
+     * il n'y a qu'un désigné, et la condition se réduit à l'ancienne.</p>
+     */
+    private boolean partsCompletes(PvExamen pv) {
+        boolean viseur = pv.getDateSignaturePresident() != null || pv.getDateSignatureCc() != null;
+        boolean membreOk = pv.getImMembreCoSignataire() == null || pv.getDateSignatureMembre() != null;
+        boolean ccOk = pv.getImCcCoSignataire() == null || pv.getDateSignatureCc() != null;
+        return viseur && membreOk && ccOk;
     }
 
     /**

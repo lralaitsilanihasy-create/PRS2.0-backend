@@ -275,7 +275,7 @@ public class PvDocumentService {
                 // présents » redevient une simple liste de présence. Elle a déménagé au bloc VISA,
                 // seul endroit qui fasse foi sur l'acte.
                 nomControleur(pv.getImCtrlPresident()), nomControleur(pv.getImCtrlCc()),
-                nomMembreAttributaire(pv.getImCtrlMembre()),
+                nomMembreDuBlocSignatures(pv),
                 // ⚠️ Le Secrétaire de séance a été RETIRÉ du document (règle du pilote, 2026-09-02) :
                 // « Étaient présents » ne porte plus sa ligne, mention « (par délégation) » comprise.
                 // Un PV ANTÉRIEUR régénéré ne la porte pas non plus — décision assumée : le PDF déjà
@@ -285,6 +285,32 @@ public class PvDocumentService {
                 // une version. L'information est portée par le PPM lui-même (t_ppm.NUM_MAJ).
                 ppm.getNumMaj(),
                 construireObservations(idExamen));
+    }
+
+    /**
+     * ⚠️ <strong>Co-signature élargie</strong> (spec pilote du 2026-09-04, §4) — nom porté par la ligne
+     * « Membre » du bloc de signatures, ou {@code null} pour que la ligne soit <strong>retirée</strong>
+     * du document.
+     *
+     * <p>Depuis le 2026-09-04, le Président peut viser en désignant le CC SEUL : le PV se signe alors
+     * à deux, Président et Chef de commission, et aucun Membre n'y appose de signature. Laisser la
+     * ligne imprimée ferait porter au document officiel un signataire qui n'a rien signé — un blanc
+     * sous un nom, sur une pièce qui fait foi.</p>
+     *
+     * <p><strong>Avant le visa, rien ne change.</strong> Tant qu'aucune désignation n'a eu lieu
+     * ({@code dateAcceptation} nulle), on imprime l'attributaire comme toujours : un projet de PV
+     * n'a pas encore de combinaison de signataires, et l'amputer de sa ligne Membre le rendrait faux
+     * dans l'autre sens.</p>
+     *
+     * <p>Le nom reste celui de l'<strong>attributaire</strong> quand un Membre est désigné, y compris
+     * si le désigné est un autre Membre de la centrale : {@code IM_CTRL_MEMBRE} désigne QUI A EXAMINÉ
+     * le dossier, et c'est bien cela que le bloc « Étaient présents » énonce (décision du 2026-08-28,
+     * cf. V10). La désignation ouvre la part ; elle ne réécrit pas qui a mené l'examen.</p>
+     */
+    private String nomMembreDuBlocSignatures(cnm.prs.entity.PvExamen pv) {
+        boolean viseSansMembre = pv.getDateAcceptation() != null
+                && (pv.getImMembreCoSignataire() == null || pv.getImMembreCoSignataire().isBlank());
+        return viseSansMembre ? null : nomMembreAttributaire(pv.getImCtrlMembre());
     }
 
     /**

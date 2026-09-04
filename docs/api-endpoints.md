@@ -4281,11 +4281,117 @@ immuable). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **40
 | POST | /api/pv-examens/{id}/soumettre | `PvActionRequest` | `PvExamenDto` | 200, 400, 403, 404, 409 | MEMBRE / CC / PRESIDENT — **rédacteur du projet** |
 | POST | /api/pv-examens/{id}/retourner | `PvActionRequest` | `PvExamenDto` | 200, 400, 403, 404, 409 | CC / PRESIDENT — **CC de la localité du dossier** |
 | POST | /api/pv-examens/{id}/viser | `PvVisaRequest` | `PvExamenDto` | 200, 400, 403, 404, 409 | CC / PRESIDENT — ⚠️ **le DISPATCHEUR seul** (2026-08-31) |
-| ~~POST~~ | ~~/api/pv-examens/{id}/accepter~~ | — | — | **410 Gone** | ⚠️ **RETIRÉ le 2026-08-31** — fusionné dans `viser` |
+| POST | /api/pv-examens/{id}/accepter | `PvActionRequest` | `PvExamenDto` | 200, 403, 404, 409, **410** | ⚠️ **NAVETTE À DEUX NIVEAUX (2026-09-04)** — CC du circuit ; **410 Gone** sur une navette simple |
 | POST | /api/pv-examens/{id}/signer | `PvActionRequest` | `PvExamenDto` | 200, 400, 403, 404, 409 | MEMBRE — ⚠️ **rôles PRESIDENT/CC retirés le 2026-08-31 (409)** |
 | POST | /api/pv-examens/{id}/archiver | — | `PvExamenDto` | 200, 403, 404, 409 | ASSISTANT_CONTROLEUR (localité) — voir « Archivage » dans *Transmissions SIGMP* |
 
 `{id}` = idPv (number). `soumettre` : BROUILLON|EN_RECTIFICATION→PROJET_SOUMIS ; `retourner` : PROJET_SOUMIS→EN_RECTIFICATION (`commentaire` obligatoire) ; `signer` : passe à SIGNE quand le Membre désigné signe, la part du P/CC ayant été posée au visa — **409 si l'avis global n'est pas posé**.
+
+> ## ⚠️ NAVETTE À DEUX NIVEAUX (spec pilote du 2026-09-04)
+>
+> **Quand.** Un dossier **central** dispatché par le Président au **Chef de commission**, puis
+> **réattribué** par ce CC à un Membre. La navette du projet de PV suit alors le même chemin, à deux
+> étages : le Membre soumet **au CC**, le CC accepte et transmet **au Président**, le Président vise.
+>
+> **Le discriminant** se lit sur le dispatch courant : localité centrale, `imCtrlDispatch` = un
+> `CHEF_COMMISSION`, et `imCtrlDispatch` ≠ `imCtrlMembre`. En centrale, seul le Président dispatche
+> (garde du 2026-09-03) : si le dispatcheur courant est un CC, c'est **nécessairement** qu'il a
+> réattribué — le chemin P → CC → Membre est prouvé sans relire l'historique. Le CC qui examine
+> lui-même reste à **un** niveau ; un dispatch direct (P → Membre, CC régional → Membre, ou
+> auto-attribution) garde la navette simple, **inchangée**.
+>
+> **`PvExamenDto.niveauNavette`** — `"CC"`, `"PRESIDENT"` ou **absent**. C'est ce champ qui dit au
+> front quel panneau ouvrir : au niveau `CC`, le Chef de commission voit « Accepter et transmettre /
+> Retourner au Membre » ; au niveau `PRESIDENT`, le Président voit « Viser / Retourner au CC ».
+> Absent = navette simple, ou projet hors navette P/CC (brouillon, en rectification, déjà visé). Le
+> statut ne suffisait pas : `PROJET_SOUMIS` vaut pour les **deux** étages.
+>
+> **Le verrou par niveau — rien ne saute d'étage.**
+>
+> | Geste | Acteur | Étage exigé | Effet |
+> |---|---|---|---|
+> | `soumettre` | Membre | — | pose le niveau `CC` ; notifie le CC |
+> | `accepter` | **CC du circuit** (403 sinon) | `CC` (409 sinon) | navette `TRANSMISSION_PRESIDENT`, niveau → `PRESIDENT`, notifie le Président. Le statut **ne bouge pas** |
+> | `retourner` | **Président** (403 sinon) | `PRESIDENT` | navette `RETOUR_CC`, niveau → `CC`, statut inchangé, notifie le CC |
+> | `retourner` | **CC du circuit** (403 sinon) | `CC` | `EN_RECTIFICATION` chez le Membre, niveau effacé |
+> | `viser` | **Président** (403 pour le CC) | `PRESIDENT` (409 sinon) | clôture, comme sur une navette simple |
+>
+> **`accepter` n'est pas un visa** : aucun avis n'est arrêté, aucune part n'est signée, la navette
+> reste ouverte. C'est pourquoi son sens de navette est `TRANSMISSION_PRESIDENT` et non `ACCEPTATION`.
+> Sur une navette **simple**, l'endpoint reste **retiré (410)** : le rouvrir partout rendrait au P/CC
+> un chemin pour clore la navette sans désigner de co-signataire et sans contrôle d'identité.
+>
+> **Le Président ne renvoie jamais directement au Membre.** Le CC a accepté le projet : il en répond.
+> Un retour qui lui passerait au-dessus le laisserait ignorer que ce qu'il a validé a été refusé, et
+> le Membre recevrait des corrections dont son chef de commission n'aurait pas connaissance.
+>
+> **Aucune note d'intérim n'est réclamée au Président** sur ce circuit. La réattribution du CC a
+> écrasé `IM_CTRL_DISPATCH` : le Président — acteur légitime — y apparaît comme un tiers. Lui
+> demander de justifier l'absence de quelqu'un qu'il a lui-même mandaté n'aurait pas de sens. La
+> règle d'identité change donc de forme ici : elle porte sur le **profil** et sur l'**étage**.
+>
+>
+> ⚠️ **Changement de code sur deux refus du visa** (2026-09-04) — la désignation de **soi-même** comme
+> co-signataire, et la désignation d'un contrôleur **qui n'est pas Membre de la localité**, répondaient
+> **409** ; elles répondent désormais **400**. Ces refus portent sur le corps de la requête, et la même
+> erreur ne pouvait pas avoir deux codes selon qu'elle arrive par `coSignataires` (400, exigé par la
+> spec du 2026-09-04) ou par l'ancien `imMembreCoSignataire`. **Les règles de fond sont inchangées** :
+> ni auto-co-signature, ni désigné hors localité.
+> ### Co-signature élargie — `PvVisaRequest.coSignataires`
+>
+> `coSignataires` : liste de **1 à 2** matricules, le Président signant toujours par ailleurs.
+> `imMembreCoSignataire` reste accepté **seul** (rétro-compatibilité) et vaut alors une liste d'un
+> élément ; fournis **ensemble**, c'est la liste qui fait foi et l'ancien champ est ignoré — deux
+> sources pour une même désignation ne doivent pas pouvoir se contredire en silence.
+>
+> | Combinaison | `coSignataires` |
+> |---|---|
+> | Président + CC + Membre | `["<CC du circuit>", "<Membre examinateur>"]` |
+> | Président + CC | `["<CC du circuit>"]` |
+> | Président + Membre | `["<Membre examinateur>"]` |
+> | Président + autre Membre | `["<tout Membre de la centrale>"]` |
+>
+> **Gardes — toutes en 400** : au moins un désigné ; au plus deux ; distincts ; jamais l'acteur
+> lui-même ; **au plus un CC et au plus un Membre** (le PV n'a qu'une ligne de signature par rôle) ;
+> chaque désigné est soit le CC du circuit, soit un Membre de la localité du dossier.
+> ⚠️ Deux de ces refus répondaient **409** avant le 2026-09-04 (auto-désignation, désigné hors
+> localité) : ils passent en **400** pour que la même erreur n'ait pas deux codes selon qu'elle
+> arrive par la liste ou par l'ancien champ.
+>
+> **`PvExamenDto.imCcCoSignataire` / `nomCcCoSignataire`** exposent le CC désigné, en lecture seule —
+> symétriques de `imMembreCoSignataire`. Distinct de `imCtrlCc`, qui nomme le CC ayant **effectivement
+> visé ou signé** et que le document imprime.
+>
+> ### Signature par part
+>
+> `POST /{id}/signer` accepte de nouveau `role=CC`, **mais seulement pour le CC désigné** : `409` si
+> aucun CC n'a été désigné (sa part appartient alors au visa), `403` si l'appelant n'est pas le
+> désigné, `409` si la part est déjà posée. `role=PRESIDENT` reste **409** — la part du Président est
+> posée par le visa.
+>
+> **Le PV passe à `SIGNE`** quand la part du viseur **et celle de chaque désigné** sont posées : deux
+> ou trois signatures selon la combinaison. L'ancienne règle (« le Membre a signé, et l'un des deux
+> P/CC aussi ») aurait clos un PV désigné P + CC + Membre dès la signature du Membre, en laissant une
+> part de CC ouverte sur un PV déjà définitif. Notifications `PV_A_COSIGNER` à **chaque** désigné au
+> visa.
+>
+> ### Document
+>
+> La ligne « Membre » du bloc de signatures devient **conditionnelle**, comme celles du Président et
+> du CC depuis l'origine : un PV visé **P + CC seul** ne l'imprime pas. Imprimer un nom sous une
+> signature absente ferait porter au document officiel un signataire qui n'a rien signé. Avant le
+> visa, rien ne change — un projet n'a pas encore de combinaison de signataires. Mécanique inchangée :
+> le nom nul fait **retirer le paragraphe**, aucun modèle supplémentaire n'est créé.
+>
+> ### Migration `V17`
+>
+> `t_pv_examen.NIVEAU_NAVETTE` (varchar 20) et `IM_CC_COSIGNATAIRE` (varchar 7) ;
+> `t_pv_navette.SENS` élargi à **varchar(30)** (`TRANSMISSION_PRESIDENT` fait 22 caractères) ;
+> **`t_pv_examen_cosignataire_check` refaite** — elle exigeait `DATE_SIGNATURE_MEMBRE IS NOT NULL`
+> sur tout PV signé, ce que l'arbitrage 3 lève. Elle garantit désormais : au moins **deux**
+> signatures, le viseur a signé, et **chaque désigné a posé sa part** (miroir en base de
+> `partsCompletes`). Aucune reprise de données : les PV en cours restent en navette simple, le niveau
+> ne se posant qu'à la soumission.
 
 > ## ⚠️ VISA UNIQUE (2026-08-31) — `POST /api/pv-examens/{id}/viser`
 >

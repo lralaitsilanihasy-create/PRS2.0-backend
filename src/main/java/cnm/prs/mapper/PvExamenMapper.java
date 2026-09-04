@@ -35,6 +35,11 @@ public final class PvExamenMapper {
         dto.setRefePv(entity.getRefePv());
         dto.setIdSecretaireSeance(entity.getIdSecretaireSeance());
         dto.setImMembreCoSignataire(entity.getImMembreCoSignataire());
+        // ⚠️ Navette à deux niveaux (2026-09-04) — l'étage courant et le CC désigné sont exposés en
+        // lecture seule, comme le Membre désigné : le front en a besoin pour ouvrir le bon panneau au
+        // bon acteur, et pour dire qui reste attendu en signature.
+        dto.setNiveauNavette(entity.getNiveauNavette());
+        dto.setImCcCoSignataire(entity.getImCcCoSignataire());
         // ⚠️ Visa par intérim (2026-09-01) — dérivés, aucune requête supplémentaire. Le contenu de la
         // note n'est JAMAIS mis dans le DTO : elle se télécharge par son endpoint dédié, dont l'accès
         // est plus étroit que celui du PV (la PRMP en est exclue, décision du 2026-09-01).

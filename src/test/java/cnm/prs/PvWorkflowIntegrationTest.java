@@ -368,17 +368,20 @@ class PvWorkflowIntegrationTest extends CnmIntegrationTestSupport {
         // Rôle : un Secrétaire ne peut pas viser un projet de PV (réservé CC / Président) → 403.
         viser(1, tokenSec, "CTRSEC", "FAV", "CTRVER", "CTRMEM").andExpect(status().isForbidden());
 
-        // ⚠️ 2026-08-31 — « accepter » est retiré du contrat : 410 Gone, quel que soit l'appelant.
-        mvc.perform(post("/api/pv-examens/1/accepter").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRCC1\"}"))
-                .andExpect(status().isGone());
-
         // Saut d'étape : un PV en BROUILLON ne peut être ni visé ni signé → 409.
         mvc.perform(post("/api/pv-examens").header("Authorization", tokenMembre)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idPv\":4,\"idExamen\":1,\"idAvis\":\"FAV\",\"imCtrlMembre\":\"CTRMEM\","
                         + "\"statutPv\":\"BROUILLON\",\"nbNavettes\":0}"))
                 .andExpect(status().isCreated());
+        // ⚠️ « accepter » reste RETIRÉ sur une navette SIMPLE : 410 Gone, quel que soit l'appelant
+        // (retiré le 2026-08-31, rouvert le 2026-09-04 pour le seul circuit à DEUX NIVEAUX — le
+        // dispatch 1 est direct Président → Membre, donc simple). ⚠️ La vérification porte désormais
+        // sur un PV EXISTANT : décider 410 ou 200 exige de lire le circuit du dossier, donc de charger
+        // le PV — sur un identifiant inconnu, la réponse est un 404 ordinaire.
+        mvc.perform(post("/api/pv-examens/4/accepter").header("Authorization", tokenCc)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRCC1\"}"))
+                .andExpect(status().isGone());
         viser(4, tokenPresident, "CTRPRE", "FAV", "CTRVER", "CTRMEM").andExpect(status().isConflict());
         mvc.perform(post("/api/pv-examens/4/signer").header("Authorization", tokenMembre)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRMEM\",\"role\":\"MEMBRE\"}"))
