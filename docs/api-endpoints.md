@@ -2522,6 +2522,31 @@ les jalons naissent des flux internes (alertes J-7 / J-1), aucun profil métier 
 > traitées » — le workflow séquentiel/couleurs est géré côté front. **Vacant** (aucune exigence) si le dossier
 > n'a **pas de grille** (famille/sous-type sans points) → examens historiques et non-PPM non contraints.
 >
+> ⚠️ **« ON NE CONTRÔLE PAS LE VIDE »** (règle du pilote, 2026-09-04) — les points de portée **FICHE**
+> et **AGPM** ne sont exigés **que si le document dérivé a du contenu**.
+>
+> Le front sautait déjà l'onglet quand la fiche est vide ; la garde serveur, elle, réclamait
+> inconditionnellement une évaluation de chaque point non-LIGNE. Un examen de dossier à fiche vide
+> partait donc en **400 « grille »** alors qu'il n'y avait rien à contrôler — soumission impossible.
+>
+> | Document | Vide quand… | Effet |
+> |---|---|---|
+> | **fiche de présentation** | parmi les marchés **non supprimés**, aucun en mode **dérogatoire**, aucun à **délai aménagé**, aucun **contrat-cadre** (les trois listes vides) | les points `FICHE` ne sont plus exigés |
+> | **projet d'AGPM** | aucun marché en **appel d'offres ouvert** (`ModePassation.declencheAgpm`) | les points `AGPM` ne sont plus exigés |
+>
+> **Les deux documents sont jugés séparément** — c'est bien « par onglet » que la règle est formulée :
+> un `PPM-AGPM` dont la fiche est vide voit ses points AGPM exigés et ses points de fiche sautés.
+>
+> **Seule l'EXIGENCE tombe, jamais la possibilité de statuer.** Une évaluation `FICHE` ou `AGPM`
+> **excédentaire** — posée avant qu'une mise à jour ne vide la fiche, ou héritée d'un brouillon
+> antérieur — reste acceptée et conservée : la complétude compte ce qui **manque**, elle n'a jamais
+> rejeté d'excédent.
+>
+> **Une seule dérivation, partagée.** La fiche est dérivée par `FicheJustificationsService` — la même
+> classe qui décide, à la saisie, quelles lignes exigent une justification. L'AGPM se lit sur le
+> prédicat qui **dérive déjà le sous-type `PPM-AGPM`** : les deux ne peuvent pas se contredire,
+> puisque c'est ce sous-type qui fait entrer les points AGPM dans la grille.
+
 > ⚠️ **PV — document généré (règle ajoutée ; modèles étendus 2026-08-03 ; génération post-commit 2026-08-19).**
 > À la **signature finale** du PV (passage à `SIGNE`), le **PDF officiel** est généré **en tâche de fond
 > après commit** (la signature répond immédiatement ; `CHEMIN_DOCUMENT` est renseigné quand le document est

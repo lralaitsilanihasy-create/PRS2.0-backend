@@ -159,11 +159,48 @@ class ExamenFicheAgpmIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$.erreurs[0].message", containsString("AGPM")));
     }
 
+    /**
+     * ⚠️ 2026-09-04 — « on ne contrôle pas le vide » : depuis cette règle, les points de FICHE et
+     * d'AGPM ne sont exigés que si le document dérivé a du contenu. Les tests de complétude ci-dessous
+     * portent sur le dossier 1, qui n'a AUCUN marché dans la fixture : leurs deux documents y étaient
+     * donc vides, et leurs assertions ne tenaient que par l'ancienne exigence inconditionnelle. Ils
+     * fabriquent désormais le contenu qu'ils supposaient implicitement — ce qui les rend, au passage,
+     * plus fidèles au cas réel qu'ils décrivent.
+     */
+    private static final int MODE_AGPM = 811;
+    private static final int MODE_DEROG = 812;
+
+    private void referentielsDeModes() {
+        modePassationRepository.save(mode(MODE_AGPM, "Appel d'offres ouvert",
+                cnm.prs.enums.CategorieModePassation.NORMAL, true));
+        modePassationRepository.save(mode(MODE_DEROG, "Gré à gré",
+                cnm.prs.enums.CategorieModePassation.DEROGATOIRE, false));
+    }
+
+    private cnm.prs.entity.ModePassation mode(int id, String libelle,
+            cnm.prs.enums.CategorieModePassation categorie, boolean agpm) {
+        cnm.prs.entity.ModePassation m = new cnm.prs.entity.ModePassation();
+        m.setIdMode(id);
+        m.setLibelle(libelle);
+        m.setCategorie(categorie);
+        m.setDeclencheAgpm(agpm);
+        return m;
+    }
+
+    /** Ligne de marché du dossier 1, dans le mode voulu — c'est elle qui remplit fiche et/ou AGPM. */
+    private void ligneDossier1(int idDetail, int idMode) {
+        referentielsDeModes();
+        cnm.prs.entity.Marche m = marche(idDetail, 1, 1);
+        m.setIdMode(idMode);
+        marcheRepository.save(m);
+    }
+
     // ------------------------------------------------------------------ complétude
 
     @Test
     @DisplayName("⚠️ Complétude — un point FICHE non statué bloque la soumission, et UNE SEULE évaluation suffit")
     void completude_ficheExigeeUneSeuleFois() throws Exception {
+        ligneDossier1(8301, MODE_DEROG);   // un marché dérogatoire : la fiche a du contenu
         Dossier d = dossierRepository.findById(1).orElseThrow();
         d.setIdTypeDossier("DDP");   // sans famille, la grille effective est vide et la garde ne dit rien
         d.setIdSousType("PPM");
@@ -186,6 +223,7 @@ class ExamenFicheAgpmIntegrationTest extends CnmIntegrationTestSupport {
     @Test
     @DisplayName("Complétude — un dossier PPM ne réclame aucun point AGPM (grille effective par sous-type)")
     void completude_ppmSansAgpm() throws Exception {
+        ligneDossier1(8302, MODE_DEROG);   // fiche remplie, AGPM vide : c'est bien l'AGPM qu'on teste
         Dossier d = dossierRepository.findById(1).orElseThrow();
         d.setIdTypeDossier("DDP");   // sans famille, la grille effective est vide et la garde ne dit rien
         d.setIdSousType("PPM");
@@ -202,6 +240,7 @@ class ExamenFicheAgpmIntegrationTest extends CnmIntegrationTestSupport {
     @Test
     @DisplayName("Complétude — un PPM-AGPM réclame AUSSI les points AGPM")
     void completude_ppmAgpm_reclameAgpm() throws Exception {
+        ligneDossier1(8303, MODE_AGPM);   // appel d'offres ouvert : l'AGPM porte une ligne
         Dossier d = dossierRepository.findById(1).orElseThrow();
         d.setIdTypeDossier("DDP");   // sans famille, la grille effective est vide et la garde ne dit rien
         d.setIdSousType("PPM-AGPM");

@@ -53,13 +53,16 @@ public class ExamenService {
     private final ExamenDetailRepository examenDetailRepository;
     /** ⚠️ Audit 2026-08-27 (lot B) — verrou d'état partagé avec les détails et les pièces d'examen. */
     private final ExamenGarde examenGarde;
+    /** ⚠️ 2026-09-04 — dérivation de la fiche : source unique, partagée avec la saisie. */
+    private final FicheJustificationsService ficheJustifications;
 
     public ExamenService(ExamenRepository repository, DispatchRepository dispatchRepository,
             DossierRepository dossierRepository, PvExamenService pvExamenService,
             ControleurDirectory controleurDirectory, PointsCtrlRepository pointsCtrlRepository,
             MarcheRepository marcheRepository, ExamenDetailRepository examenDetailRepository,
-            ExamenGarde examenGarde) {
+            ExamenGarde examenGarde, FicheJustificationsService ficheJustifications) {
         this.examenGarde = examenGarde;
+        this.ficheJustifications = ficheJustifications;
         this.repository = repository;
         this.dispatchRepository = dispatchRepository;
         this.dossierRepository = dossierRepository;
@@ -146,12 +149,27 @@ public class ExamenService {
         for (Object[] couple : examenDetailRepository.couplesEvalues(idExamen)) {
             evalues.add(cleCouple((Integer) couple[0], (Integer) couple[1]));
         }
+        // ⚠️ « ON NE CONTRÔLE PAS LE VIDE » (règle du pilote, 2026-09-04) — les points de FICHE et
+        // d'AGPM ne sont exigés que si le document dérivé a du contenu. Une fiche sans marché
+        // dérogatoire, sans délai aménagé et sans contrat-cadre est une page blanche : réclamer qu'on
+        // y statue des points de contrôle bloquait la soumission d'un examen qui n'avait rien à
+        // contrôler. Le front a sauté l'étape ; la garde serveur suivait encore l'ancienne règle.
+        //
+        // La dérivation de la fiche est celle de FicheJustificationsService — la même qui décide, à la
+        // saisie, quelles lignes exigent une justification. L'AGPM se lit sur le prédicat qui DÉRIVE
+        // DÉJÀ le sous-type PPM-AGPM : les deux ne peuvent donc pas se contredire, puisque c'est ce
+        // sous-type qui fait entrer les points AGPM dans la grille.
+        boolean ficheVide = ficheJustifications.ficheVide(idDossier);
+        boolean agpmVide = !marcheRepository.existsMarcheDeclencheurAgpmByDossier(idDossier);
         List<String> manquants = new ArrayList<>();
         for (PointsCtrl p : grille) {
             if (!p.getPortee().parLigne()) {
                 // DOSSIER, FICHE, AGPM : une seule évaluation, sans ligne de marché. Le prédicat, plutôt
                 // qu'un « == DOSSIER », évite qu'une portée ajoutée demain se retrouve à exiger une
                 // évaluation par marché — c'est exactement ce qui serait arrivé à FICHE et AGPM.
+                if (documentSansContenu(p.getPortee(), ficheVide, agpmVide)) {
+                    continue;   // rien à contrôler : l'EXIGENCE tombe, pas la possibilité de statuer
+                }
                 if (!evalues.contains(cleCouple(null, p.getIdPointCtrl()))) {
                     manquants.add("« " + p.getLibelPointCtrl() + " » (" + libelleDePortee(p.getPortee()) + ")");
                 }
@@ -173,6 +191,24 @@ public class ExamenService {
                             + "portée LIGNE doit être évalué pour chaque marché, les autres une seule fois. "
                             + "À évaluer : " + apercu + reste + ".")));
         }
+    }
+
+    /**
+     * ⚠️ <strong>Le document de cette portée est-il sans contenu ?</strong> (règle du pilote,
+     * 2026-09-04) — vrai pour {@code FICHE} sur une fiche vide, pour {@code AGPM} sur un AGPM sans
+     * ligne. Toujours faux pour {@code DOSSIER} : le dossier lui-même n'est jamais « vide », c'est ce
+     * qu'on examine.
+     *
+     * <p>Seule l'<strong>exigence</strong> tombe. Une évaluation FICHE ou AGPM déjà posée — statuée
+     * avant qu'une mise à jour ne vide la fiche, ou héritée d'un brouillon antérieur — reste acceptée
+     * et conservée : la complétude ne compte que ce qui manque, elle n'a jamais rejeté d'excédent.</p>
+     */
+    private static boolean documentSansContenu(PorteePointCtrl portee, boolean ficheVide, boolean agpmVide) {
+        return switch (portee) {
+            case FICHE -> ficheVide;
+            case AGPM -> agpmVide;
+            default -> false;
+        };
     }
 
     /**

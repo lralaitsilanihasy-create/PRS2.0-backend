@@ -492,6 +492,32 @@ sont deux réponses distinctes, parce que ce sont deux situations distinctes :
 Partout ailleurs, deux tâches ouvertes sur une même étape signifieraient que deux personnes se croient
 responsables du même travail : c'est ce que le refus nominal empêche.
 
+#### « On ne contrôle pas le vide » (règle du pilote, 2026-09-04)
+
+> « S'il n'y a pas de contenu dans un onglet, sauter le contrôle car on ne contrôle pas le vide. »
+
+Les points de contrôle de la **fiche de présentation** et du **projet d'AGPM** ne sont exigés à la
+soumission de l'examen **que si le document dérivé a du contenu**. Une fiche sans marché dérogatoire,
+sans délai aménagé et sans contrat-cadre est une page blanche : réclamer qu'on y statue des points de
+contrôle revient à demander un avis sur du vide — et cela **bloquait la soumission** d'un examen qui
+n'avait rien à contrôler.
+
+Chaque document est jugé **séparément** — c'est bien « par onglet » que la règle est formulée. Un
+dossier `PPM-AGPM` dont la fiche est vide voit donc ses points d'AGPM exigés et ses points de fiche
+sautés.
+
+⚠️ **Seule l'EXIGENCE tombe.** Une évaluation de fiche ou d'AGPM déjà posée — statuée avant qu'une
+mise à jour ne vide la fiche, ou héritée d'un brouillon antérieur — reste acceptée et conservée. La
+complétude compte ce qui **manque** ; elle n'a jamais rejeté d'excédent, et ce n'est pas cette règle
+qui va lui en donner l'occasion.
+
+⚠️ **Une seule dérivation, partagée.** Le contenu de la fiche est déterminé par le service qui décide
+déjà, **à la saisie**, quelles lignes exigent une justification : les trois listes sont les mêmes, et
+il n'y a qu'un endroit où la règle vit. La refaire ailleurs aurait créé deux définitions du même
+document, libres de diverger au premier ajustement. Le contenu de l'AGPM, lui, se lit sur le prédicat
+qui **dérive déjà le sous-type `PPM-AGPM`** — les deux ne peuvent pas se contredire, puisque c'est ce
+sous-type qui fait entrer les points d'AGPM dans la grille.
+
 ### Actualités à l'ouverture de session (transversal)
 
 ⚠️ **Règle ajoutée (2026-08-19, spec du 2026-08-18)** — un **modal d'actualités** (mini-page markdown +
@@ -782,7 +808,8 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
     testaient auparavant la portée par égalité à `DOSSIER` et rangeaient le reste du côté par-ligne —
     elles s'appuient désormais sur un prédicat, pour qu'une portée future tombe du bon côté par défaut.
   - **Complétude à la soumission** : ces points comptent comme les autres, l'examen reste refusé tant
-    qu'un point de la grille effective n'est pas statué.
+    qu'un point de la grille effective n'est pas statué — ⚠️ **sauf si le document dérivé est VIDE**
+    (règle du pilote du 2026-09-04, ci-dessous : « on ne contrôle pas le vide »).
   - **Seed** : 3 points `FICHE` + 3 points `AGPM` créés au démarrage (`PointsCtrlFicheAgpmSeeder`),
     idempotents et jamais réécrasés — l'Administrateur ajuste ensuite libellés et caractère obligatoire.
 

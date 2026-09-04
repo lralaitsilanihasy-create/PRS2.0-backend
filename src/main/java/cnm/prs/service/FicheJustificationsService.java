@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import cnm.prs.dto.ProcessusMarche;
 import cnm.prs.dto.SaisieMarcheLigne;
@@ -125,6 +126,52 @@ public class FicheJustificationsService {
     }
 
     /**
+     * ⚠️ <strong>La fiche de présentation est-elle VIDE ?</strong> (règle du pilote, 2026-09-04 — « s'il
+     * n'y a pas de contenu dans un onglet, sauter le contrôle : on ne contrôle pas le vide »).
+     *
+     * <p>Vide au sens du document : parmi les marchés <strong>non supprimés</strong> du dossier, aucun
+     * n'alimente les trois listes de la fiche — ni mode dérogatoire, ni délai aménagé, ni contrat-cadre.
+     * Le document existe alors mais ne porte aucune ligne : exiger qu'on statue des points de contrôle
+     * dessus reviendrait à demander un avis sur une page blanche.</p>
+     *
+     * <p><strong>La dérivation vit ici, et nulle part ailleurs.</strong> C'est déjà cette classe qui
+     * décide, à la saisie, si une ligne « concerne la fiche » — la refaire dans
+     * {@code ExamenService} aurait créé deux définitions du même document, libres de diverger au
+     * premier ajustement de règle. Le classement est donc le même que celui des justifications
+     * obligatoires, appliqué cette fois aux lignes <em>telles qu'elles sont en base</em> : ni requête
+     * ni saisie en cours, rien que le plan tel qu'il est examiné.</p>
+     */
+    @Transactional(readOnly = true)
+    public boolean ficheVide(Integer idDossier) {
+        if (idDossier == null) {
+            return true;
+        }
+        return marcheRepository.findByIdDossier(idDossier).stream()
+                .filter(m -> !Boolean.TRUE.equals(m.getSupprimee()))
+                .noneMatch(this::concerneLaFiche);
+    }
+
+    /**
+     * Classement d'une ligne <strong>déjà persistée</strong> au regard des trois listes de la fiche —
+     * pendant de {@link #classer} pour la dérivation, où il n'y a pas de requête à faire primer.
+     */
+    private boolean concerneLaFiche(Marche stockee) {
+        ModePassation mode = stockee.getIdMode() == null ? null
+                : modePassationRepository.findById(stockee.getIdMode()).orElse(null);
+        if (mode != null && CategorieModePassation.DEROGATOIRE.equals(mode.getCategorie())) {
+            return true;
+        }
+        if (FormeMarche.CONTRAT_CADRE.equals(stockee.getFormeMarche())) {
+            return true;
+        }
+        // Le délai aménagé est le seul des trois qui se calcule : il exige le plancher du mode et les
+        // deux dates du processus. Sans eux, pas de classement — une donnée manquante ne se devine pas,
+        // exactement comme à la saisie.
+        return mode != null && mode.getDelaiMinJours() != null
+                && sousLePlancher(datesStockees(stockee), mode);
+    }
+
+    /**
      * Classement d'une ligne selon les référentiels du serveur.
      *
      * @param stockee ligne déjà persistée s'il s'agit d'une mise à jour, {@code null} sinon — elle
@@ -150,6 +197,13 @@ public class FicheJustificationsService {
         Map<String, LocalDate> dates = datesDuDelai(ligne, stockee);
         LocalDate lancement = dates.get(ETAPE_LANCEMENT);
         LocalDate ouverture = dates.get(ETAPE_OUVERTURE);
+        return sousLePlancher(dates, mode);
+    }
+
+    /** Cœur du classement « délai aménagé », partagé par la saisie et la dérivation depuis la base. */
+    private boolean sousLePlancher(Map<String, LocalDate> dates, ModePassation mode) {
+        LocalDate lancement = dates.get(ETAPE_LANCEMENT);
+        LocalDate ouverture = dates.get(ETAPE_OUVERTURE);
         if (lancement == null || ouverture == null) {
             return false;
         }
@@ -173,13 +227,20 @@ public class FicheJustificationsService {
                 capmRepository.findById(p.idCapm()).ifPresent(capm -> retenirSiEtape(dates, capm, p.dateDebut()));
             }
         } else if (stockee != null) {
-            for (MarchePrevision prev : marchePrevisionRepository.findByIdDetail(stockee.getIdDetail())) {
-                if (prev.getDateDebut() == null || prev.getIdCapm() == null) {
-                    continue;
-                }
-                capmRepository.findById(prev.getIdCapm())
-                        .ifPresent(capm -> retenirSiEtape(dates, capm, prev.getDateDebut()));
+            dates.putAll(datesStockees(stockee));
+        }
+        return dates;
+    }
+
+    /** Dates de lancement et d'ouverture LUES EN BASE — le chemin de la dérivation, sans requête. */
+    private Map<String, LocalDate> datesStockees(Marche stockee) {
+        Map<String, LocalDate> dates = new HashMap<>();
+        for (MarchePrevision prev : marchePrevisionRepository.findByIdDetail(stockee.getIdDetail())) {
+            if (prev.getDateDebut() == null || prev.getIdCapm() == null) {
+                continue;
             }
+            capmRepository.findById(prev.getIdCapm())
+                    .ifPresent(capm -> retenirSiEtape(dates, capm, prev.getDateDebut()));
         }
         return dates;
     }
