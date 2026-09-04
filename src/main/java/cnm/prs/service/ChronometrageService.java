@@ -81,11 +81,14 @@ public class ChronometrageService {
     private final PvExamenRepository pvExamenRepository;
     private final ControleurRepository controleurRepository;
     private final PermissionService permissionService;
+    /** ⚠️ 2026-09-04 — l'attributaire courant de l'examen : la seule étape nominativement attribuée. */
+    private final cnm.prs.repository.DispatchRepository dispatchRepository;
 
     public ChronometrageService(TacheDossierRepository tacheRepository,
             SuspensionDossierRepository suspensionRepository, DelaiStandardService delaiStandardService,
             DossierRepository dossierRepository, PvExamenRepository pvExamenRepository,
-            ControleurRepository controleurRepository, PermissionService permissionService) {
+            ControleurRepository controleurRepository, PermissionService permissionService,
+            cnm.prs.repository.DispatchRepository dispatchRepository) {
         this.tacheRepository = tacheRepository;
         this.suspensionRepository = suspensionRepository;
         this.delaiStandardService = delaiStandardService;
@@ -93,6 +96,7 @@ public class ChronometrageService {
         this.pvExamenRepository = pvExamenRepository;
         this.controleurRepository = controleurRepository;
         this.permissionService = permissionService;
+        this.dispatchRepository = dispatchRepository;
     }
 
     // ------------------------------------------------------------------ étape courante
@@ -167,7 +171,20 @@ public class ChronometrageService {
      * porteur. Rejouée sur une tâche encore ouverte, elle <strong>corrige</strong> la prévision au lieu
      * de créer une occurrence : corriger son estimation n'est pas recommencer sa tâche.
      *
-     * @throws BusinessRuleException si aucune étape n'est ouverte (409)
+     * <p>⚠️ <strong>Le replay ne vaut que pour le MÊME acteur</strong> (constat de recette du
+     * 2026-09-04). Il ne vérifiait pas qui appelait : un second acteur recevait 200 et
+     * <em>corrigeait la prévision du premier</em>. Vécu en recette — le CC avait pris l'examen, et
+     * l'assignataire se retrouvait sans recours : son propre appel « réussissait » en modifiant la
+     * tâche du CC. Un acteur différent reçoit désormais <strong>409 nominal</strong> : il faut savoir
+     * à qui parler pour débloquer.</p>
+     *
+     * <p><strong>Sauf pour les étapes à plusieurs porteurs</strong> ({@link EtapeCircuit#plusieursPorteurs()},
+     * c'est-à-dire la co-signature) : le CC désigné et le Membre désigné y tiennent chacun leur tâche,
+     * sans ordre imposé. Y appliquer le 409 ferait verrouiller le second par le premier — l'autre
+     * moitié du même constat.</p>
+     *
+     * @throws BusinessRuleException si aucune étape n'est ouverte, ou si un AUTRE acteur tient déjà
+     *         celle-ci (409)
      */
     public TacheDossierDto prendreEnCharge(Integer idDossier, Integer previsionHeures) {
         Dossier dossier = dossierRepository.findById(idDossier)
@@ -178,18 +195,56 @@ public class ChronometrageService {
                     + dossier.getStatut() + " ») : rien à prendre en charge.");
         }
         exigerPorteurEligible(dossier, etape);
+        exigerAttributaireSiExamen(idDossier, etape);
 
-        TacheDossier ouverte = tacheRepository
-                .findFirstByIdDossierAndEtapeAndDateFinIsNull(idDossier, etape.name()).orElse(null);
-        if (ouverte != null) {
-            ouverte.setPrevisionHeures(previsionHeures);
-            ouverte.setPrevisionStandard(Boolean.FALSE);
-            TacheDossier maj = tacheRepository.save(ouverte);
+        String moi = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
+        List<TacheDossier> ouvertes = tacheRepository.ouvertes(idDossier, etape.name());
+        TacheDossier mienne = ouvertes.stream()
+                .filter(t -> moi != null && moi.equals(t.getImActeur())).findFirst().orElse(null);
+        if (mienne != null) {
+            mienne.setPrevisionHeures(previsionHeures);
+            mienne.setPrevisionStandard(Boolean.FALSE);
+            TacheDossier maj = tacheRepository.save(mienne);
             return TacheDossierDto.de(maj, nom(maj.getImActeur()));
+        }
+        if (!ouvertes.isEmpty() && !etape.plusieursPorteurs()) {
+            String tenant = ouvertes.get(0).getImActeur();
+            throw new BusinessRuleException("Étape déjà prise en charge par " + nomOuMatricule(tenant)
+                    + " : une étape est tenue par une personne à la fois. Faites-la lui clore, ou "
+                    + "demandez-lui de vous la transmettre.");
         }
         TacheDossier tache = tacheRepository.save(
                 nouvelle(idDossier, etape, LocalDateTime.now(), previsionHeures, false));
         return TacheDossierDto.de(tache, nom(tache.getImActeur()));
+    }
+
+    /**
+     * ⚠️ <strong>L'EXAMEN se prend par son attributaire</strong> (constat de recette du 2026-09-04) —
+     * 403 pour tout autre, <strong>délégation comprise</strong>.
+     *
+     * <p>C'est la seule étape où la garde de profil ne suffit pas. Ailleurs, prendre une étape en
+     * charge ne fait que démarrer un chronomètre ; ici, elle est nominativement attribuée par le
+     * dispatch, et « seul l'assignataire examine » (règle du 2026-09-03). Un dispatcheur ou un CC en
+     * copie, que la délégation vers Membre rend éligibles au profil, ouvraient donc une tâche sur le
+     * travail de quelqu'un d'autre — et, avec la garde ci-dessus, l'y verrouillaient.</p>
+     *
+     * <p>Sans attributaire identifiable (dispatch incomplet), on ne bloque pas : la garde protège une
+     * attribution existante, elle n'en invente pas.</p>
+     */
+    private void exigerAttributaireSiExamen(Integer idDossier, EtapeCircuit etape) {
+        if (etape != EtapeCircuit.EXAMEN) {
+            return;
+        }
+        String attributaire = dispatchRepository.findImCtrlMembreByDossier(idDossier)
+                .filter(s -> !s.isBlank()).orElse(null);
+        if (attributaire == null) {
+            return;
+        }
+        String moi = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
+        if (!attributaire.equals(moi)) {
+            throw new AccessDeniedException("L'examen de ce dossier est attribué à " + nomOuMatricule(attributaire)
+                    + " : lui seul peut le prendre en charge, même par délégation.");
+        }
     }
 
     /**
@@ -237,6 +292,35 @@ public class ChronometrageService {
             tacheRepository.save(tache);
         } catch (RuntimeException ex) {
             LOG.warn("[CHRONO] cloture impossible dossier={} etape={} : {}", idDossier, etape, ex.toString());
+        }
+    }
+
+    /**
+     * ⚠️ <strong>Clôt la tâche d'UN acteur donné</strong> (2026-09-04) — variante nécessaire aux étapes
+     * à plusieurs porteurs, où « la » tâche ouverte n'existe pas : la co-signature en compte une par
+     * désigné, et chaque signature ne doit clore que la sienne.
+     *
+     * <p>Sans elle, la première signature fermait la tâche que {@code findFirst} rendait — souvent
+     * celle de l'autre —, et le PV se terminait avec une tâche ouverte au nom de quelqu'un qui avait
+     * pourtant signé. Même tolérance que {@link #cloturer} : sans prise en charge préalable, une
+     * occurrence est créée sur l'acteur puis close aussitôt.</p>
+     */
+    public void cloturerPourActeur(Integer idDossier, EtapeCircuit etape, String imActeur) {
+        if (idDossier == null || etape == null) {
+            return;
+        }
+        try {
+            LocalDateTime maintenant = LocalDateTime.now();
+            TacheDossier tache = tacheRepository.ouvertes(idDossier, etape.name()).stream()
+                    .filter(t -> imActeur != null && imActeur.equals(t.getImActeur()))
+                    .findFirst()
+                    .orElseGet(() -> nouvelle(idDossier, etape, maintenant,
+                            delaiStandardService.delai(etape), true));
+            tache.setDateFin(maintenant);
+            tacheRepository.save(tache);
+        } catch (RuntimeException ex) {
+            LOG.warn("[CHRONO] cloture impossible dossier={} etape={} acteur={} : {}",
+                    idDossier, etape, imActeur, ex.toString());
         }
     }
 
@@ -436,6 +520,15 @@ public class ChronometrageService {
             return null;
         }
         return controleurRepository.findById(imActeur).map(ChronometrageService::nomComplet).orElse(null);
+    }
+
+    /**
+     * Nom lisible, <strong>repli sur le matricule</strong>. Les messages du 2026-09-04 nomment la
+     * personne qui bloque : « déjà prise en charge par null » n'aiderait personne à savoir à qui parler.
+     */
+    private String nomOuMatricule(String imActeur) {
+        String n = nom(imActeur);
+        return n == null || n.isBlank() ? imActeur : n;
     }
 
     private static String nomComplet(Controleur c) {

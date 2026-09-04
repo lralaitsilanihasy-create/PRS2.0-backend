@@ -5243,6 +5243,63 @@ localité ; **409** si aucune étape n'est ouverte — brouillon, attente PRMP, 
 **Rejouer le POST sur une tâche encore ouverte corrige la prévision** et ne crée pas d'occurrence :
 corriger son estimation n'est pas recommencer sa tâche.
 
+> ## ⚠️ PRISE EN CHARGE — garde d'acteur et occurrences par niveau (2026-09-04)
+>
+> Trois corrections issues de la **recette réelle** du cycle à deux niveaux (dossier 100285, PV 12),
+> qui avait exigé trois réassignations SQL pour être menée à son terme. Elles ont un point commun : le
+> chronométrage supposait **une étape = une personne**, hypothèse qui tombe dès que la navette a deux
+> étages ou que la co-signature compte deux désignés.
+>
+> ### 1. Le replay n'appartient qu'à son auteur → **409 nominal**
+>
+> `POST /api/dossiers/{id}/prise-en-charge` **rejouée** corrige la prévision au lieu d'ouvrir une
+> occurrence. Elle ne vérifiait pas **qui** appelait : un second acteur recevait `200` et corrigeait
+> **la prévision du premier**. Désormais, un acteur différent reçoit :
+>
+> ```
+> 409 — Étape déjà prise en charge par {nom} : une étape est tenue par une personne à la fois.
+>       Faites-la lui clore, ou demandez-lui de vous la transmettre.
+> ```
+>
+> Le nom est **dans le message** : sans lui, l'appelant bloqué n'a personne à qui s'adresser — c'est
+> précisément ce qui a mené aux corrections en base. Repli sur le matricule si l'état civil manque.
+>
+> **Exception : les étapes à plusieurs porteurs.** `COSIGNATURE` seule y échappe (voir §3) — le 409 y
+> ferait verrouiller le second désigné par le premier.
+>
+> ### 2. L'`EXAMEN` se prend par son **attributaire** → **403**
+>
+> ```
+> 403 — L'examen de ce dossier est attribué à {nom} : lui seul peut le prendre en charge,
+>       même par délégation.
+> ```
+>
+> C'est la seule étape où la garde de profil ne suffit pas. Ailleurs, prendre une étape en charge ne
+> fait que démarrer un chronomètre ; ici, elle est **nominativement attribuée** par le dispatch, et
+> « seul l'assignataire examine » (règle du 2026-09-03). Le dispatcheur et le CC en copie, que la paire
+> « → Membre » rend éligibles au profil, ouvraient donc une tâche sur le travail d'autrui — et, avec la
+> garde §1, l'y verrouillaient. Sans attributaire identifiable (dispatch incomplet), aucun blocage :
+> la garde protège une attribution existante, elle n'en invente pas.
+>
+> ### 3. Une occurrence par niveau, une tâche par co-signataire
+>
+> | Étape | Avant | Après |
+> |---|---|---|
+> | `VISA` sur deux niveaux | **une** tâche pour deux acteurs successifs — le premier preneur verrouillait l'autre | `POST /{pv}/accepter` **clôt** l'occurrence du CC ; le Président ouvre `VISA#2` en la prenant en charge, et son visa la clôt |
+> | `COSIGNATURE` avec 2 désignés | une tâche ; la première signature fermait celle de l'autre | **une tâche par désigné**, en parallèle ; chaque signature ne clôt que **la sienne** |
+>
+> `EtapeCircuit.plusieursPorteurs()` porte cette distinction : `COSIGNATURE` est la **seule** étape du
+> circuit où deux tâches coexistent. Partout ailleurs, deux tâches ouvertes signifieraient que deux
+> acteurs se croient responsables du même travail.
+>
+> Chaque étage garde ainsi **sa** prévision et **sa** durée : le temps du CC ne se mêle plus à celui du
+> Président.
+>
+> ### 4. `PvExamenDto.nomCcCoSignataire` est peuplé
+>
+> Le champ existait mais valait toujours `null` — le front repliait sur le matricule. Il est désormais
+> résolu comme `nomMembreCoSignataire`, à l'écriture (réponse du visa) comme en lecture.
+
 > ⚠️ **TOLÉRANCE — le chronométrage n'empêche jamais le métier.** Un geste de clôture posé **sans prise
 > en charge préalable** n'est pas bloqué : le serveur crée l'occurrence avec `priseEnCharge = fin`
 > (durée nulle) et la prévision **standard** du référentiel. Aucun écran ne peut se retrouver coincé

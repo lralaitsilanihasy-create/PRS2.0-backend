@@ -250,6 +250,12 @@ public class DossierController {
      * <p>403 si l'appelant n'est pas le porteur de l'étape (délégations et intérim résolus par la garde
      * centrale) ou si le dossier n'est pas de sa localité ; <strong>409</strong> si aucune étape n'est
      * ouverte — dossier en brouillon, en attente PRMP, clos ou retiré.</p>
+     *
+     * <p>⚠️ <strong>Deux refus ajoutés le 2026-09-04</strong>, après la recette du cycle à deux niveaux :
+     * <strong>409 nominal</strong> si un AUTRE acteur tient déjà l'étape (le replay ne corrige que SA
+     * propre prévision — il corrigeait celle d'autrui), et <strong>403</strong> si l'étape est
+     * {@code EXAMEN} et que l'appelant n'en est pas l'attributaire, délégation comprise. La
+     * co-signature échappe au premier : plusieurs désignés y tiennent chacun leur tâche.</p>
      */
     @PostMapping("/{id}/prise-en-charge")
     public TacheDossierDto prendreEnCharge(@PathVariable Integer id,

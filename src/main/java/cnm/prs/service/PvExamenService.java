@@ -316,6 +316,11 @@ public class PvExamenService {
         if (dto.getImMembreCoSignataire() != null) {
             nomComplet(dto.getImMembreCoSignataire()).ifPresent(dto::setNomMembreCoSignataire);
         }
+        // ⚠️ 2026-09-04 — le CC désigné avait sa colonne et son champ, mais pas son nom : le front
+        // repliait sur le matricule. Un désigné se nomme, dans les deux rôles.
+        if (dto.getImCcCoSignataire() != null) {
+            nomComplet(dto.getImCcCoSignataire()).ifPresent(dto::setNomCcCoSignataire);
+        }
         // ⚠️ Visa unique (2026-08-31) — le dispatcheur n'est pas une colonne du PV : il vient du
         // dispatch, via l'examen. Le front en a besoin sur l'écran du PV pour conditionner « Viser »
         // sans charger le dispatch. Coût : une requête de plus par PV — assumé, cohérent avec la
@@ -886,6 +891,12 @@ public class PvExamenService {
         pv.setNiveauNavette(NiveauNavette.PRESIDENT.name());
         ajouterNavette(pv, SensNavette.TRANSMISSION_PRESIDENT, req == null ? null : req.commentaire());
         PvExamen saved = repository.save(pv);
+        // ⚠️ Chronométrage par NIVEAU (constat de recette du 2026-09-04) — la transmission clôt
+        // l'occurrence VISA du CC. L'étape reste VISA (le PV demeure PROJET_SOUMIS) : le Président
+        // ouvrira la SIENNE en la prenant en charge, et la clôra en visant. Sans cette clôture, une
+        // tâche unique aurait porté les deux acteurs — le premier preneur verrouillant le second, et
+        // le temps du CC se mêlant à celui du Président.
+        chronometrageService.cloturer(dossierDuPv(saved.getIdPv()), EtapeCircuit.VISA);
         log.info("[CIRCUIT] navette PV transmission au President dossier={} acteur={} pv={} niveau={} navettes={}",
                 dossierDuPv(saved.getIdPv()), CurrentUser.login().orElse(null), saved.getIdPv(),
                 NiveauNavette.PRESIDENT, saved.getNbNavettes());
@@ -1173,6 +1184,13 @@ public class PvExamenService {
                             + id + "/viser. « signer » ne porte que les parts des co-signataires désignés.");
         }
 
+        // ⚠️ Chronométrage par CO-SIGNATAIRE (constat de recette du 2026-09-04) — chaque signature
+        // clôt LA SIENNE, et non « la » tâche ouverte de l'étape. Sur une désignation P + CC + Membre,
+        // deux tâches coexistent : fermer la première venue aurait clos celle de l'autre, et le PV se
+        // serait terminé avec une tâche ouverte au nom de quelqu'un qui avait pourtant signé.
+        chronometrageService.cloturerPourActeur(dossierDuPv(pv.getIdPv()), EtapeCircuit.COSIGNATURE,
+                signataire);
+
         // ⚠️ 2026-09-04 — le PV est SIGNÉ quand la part du viseur ET celle de CHAQUE désigné sont
         // posées : deux signatures ou trois, selon la combinaison retenue au visa. L'ancienne condition
         // (« le Membre a signé, et l'un des deux P/CC aussi ») aurait clos un PV désigné P + CC + Membre
@@ -1180,8 +1198,6 @@ public class PvExamenService {
         if (partsCompletes(pv)) {
             pv.setStatutPv(StatutPv.SIGNE.name());
             pv.setDatePv(today);
-            // ⚠️ Chronométrage (2026-09-01) — la co-signature du Membre clôt l'étape COSIGNATURE.
-            chronometrageService.cloturer(dossierDuPv(pv.getIdPv()), EtapeCircuit.COSIGNATURE);
             log.info("[CIRCUIT] signature PV dossier={} acteur={} pv={} statutPv={}",
                     dossierDuPv(pv.getIdPv()), CurrentUser.login().orElse(null), pv.getIdPv(),
                     StatutPv.SIGNE.name());

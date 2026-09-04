@@ -454,6 +454,44 @@ l'ouverture suivante — on ne compte pas comme temps de traitement une heure o�
 > **Transition** : la base ayant été réinitialisée le 01/09, aucune reprise d'historique. Les dossiers
 > créés après le déploiement sont chronométrés dès leur soumission.
 
+#### Prise en charge : à qui appartient une tâche (constats de recette, 2026-09-04)
+
+Trois défauts relevés en **recette réelle** du cycle à deux niveaux — il avait fallu trois
+réassignations en base pour terminer le dossier. Ils tenaient tous à la même hypothèse implicite :
+**une étape = une personne**. Elle tombe dès que la navette a deux étages, ou que la co-signature
+compte deux désignés.
+
+⚠️ **Le replay n'appartient qu'à son auteur.** Reprendre en charge une étape qu'on tient déjà corrige
+sa prévision — c'est voulu, corriger son estimation n'est pas recommencer sa tâche. Mais la garde ne
+regardait pas **qui** appelait : un second acteur recevait un succès et corrigeait *la prévision du
+premier*. Vécu : le CC avait pris l'examen, et l'assignataire se retrouvait sans recours — son propre
+appel « réussissait » en modifiant la tâche du CC. Un acteur différent est désormais refusé, **et le
+refus nomme celui qui tient l'étape** : sans ce nom, la personne bloquée n'a personne à qui
+s'adresser, ce qui est exactement ce qui a mené aux corrections manuelles.
+
+⚠️ **L'examen se prend par son attributaire, délégation comprise.** C'est la seule étape où la garde de
+profil ne suffit pas. Ailleurs, une prise en charge ne fait que démarrer un chronomètre et n'altère
+aucune donnée métier ; ici l'étape est **nominativement attribuée** par le dispatch, et « seul
+l'assignataire examine ». Le dispatcheur et le CC en copie, que la paire « → Membre » rend éligibles
+au profil, ouvraient donc une tâche sur le travail d'autrui — et l'y verrouillaient. Sans attributaire
+identifiable, aucun blocage : la garde protège une attribution existante, elle n'en invente pas.
+
+⚠️ **Une occurrence par étage, une tâche par co-signataire.** Le visa d'un dossier à deux niveaux est
+tenu par deux acteurs successifs, et la co-signature élargie par deux désignés simultanés — dans les
+deux cas, une tâche unique faisait verrouiller le second par le premier, et mêlait leurs durées. Ce
+sont deux réponses distinctes, parce que ce sont deux situations distinctes :
+
+- **successive** : l'acceptation du CC **clôt** son occurrence de visa ; le Président ouvre la sienne
+  (rang suivant) en la prenant en charge, et son visa la clôt. Chaque étage garde sa prévision et sa
+  durée ;
+- **parallèle** : la co-signature est la **seule** étape du circuit admettant plusieurs tâches
+  ouvertes, une par désigné, chacune close par **sa** signature. Fermer « la » tâche ouverte aurait
+  clos celle de l'autre, et le PV se serait achevé avec une tâche ouverte au nom de quelqu'un qui
+  avait pourtant signé.
+
+Partout ailleurs, deux tâches ouvertes sur une même étape signifieraient que deux personnes se croient
+responsables du même travail : c'est ce que le refus nominal empêche.
+
 ### Actualités à l'ouverture de session (transversal)
 
 ⚠️ **Règle ajoutée (2026-08-19, spec du 2026-08-18)** — un **modal d'actualités** (mini-page markdown +

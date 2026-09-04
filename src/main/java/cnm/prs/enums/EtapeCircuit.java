@@ -33,8 +33,12 @@ public enum EtapeCircuit {
     /** Visa du projet de PV par le dispatcheur (ou son intérimaire). Rejouable (navettes successives). */
     VISA(ProfilUtilisateur.CHEF_COMMISSION, true),
 
-    /** Co-signature du PV par le Membre. */
-    COSIGNATURE(ProfilUtilisateur.MEMBRE, true),
+    /**
+     * Co-signature du PV. ⚠️ <strong>Plusieurs porteurs</strong> depuis la co-signature élargie
+     * (2026-09-04) : le visa peut désigner un Membre ET un Chef de commission, qui signent chacun leur
+     * part, dans l'ordre qu'ils veulent. C'est la seule étape du circuit où deux tâches coexistent.
+     */
+    COSIGNATURE(ProfilUtilisateur.MEMBRE, true, true),
 
     /** Vérification des documents témoins. Rejouable (boucle FAVR, resoumissions après rectification). */
     VERIFICATION(ProfilUtilisateur.VERIFICATEUR, true),
@@ -50,10 +54,29 @@ public enum EtapeCircuit {
 
     private final ProfilUtilisateur porteur;
     private final boolean dansCompteurGlobal;
+    private final boolean plusieursPorteurs;
 
     EtapeCircuit(ProfilUtilisateur porteur, boolean dansCompteurGlobal) {
+        this(porteur, dansCompteurGlobal, false);
+    }
+
+    EtapeCircuit(ProfilUtilisateur porteur, boolean dansCompteurGlobal, boolean plusieursPorteurs) {
         this.porteur = porteur;
         this.dansCompteurGlobal = dansCompteurGlobal;
+        this.plusieursPorteurs = plusieursPorteurs;
+    }
+
+    /**
+     * ⚠️ 2026-09-04 — vrai si l'étape admet <strong>plusieurs tâches ouvertes en parallèle</strong>, une
+     * par porteur.
+     *
+     * <p>Partout ailleurs, une étape est tenue par une personne à la fois : deux tâches ouvertes y
+     * signifieraient que deux acteurs se croient responsables du même travail. La co-signature fait
+     * exception par nature — les désignés signent chacun leur part, sans ordre imposé. Sans cette
+     * distinction, le premier preneur verrouillerait l'autre (constat de recette du 04/09).</p>
+     */
+    public boolean plusieursPorteurs() {
+        return plusieursPorteurs;
     }
 
     /**
