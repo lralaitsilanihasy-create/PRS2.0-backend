@@ -55,10 +55,14 @@ public class JournalDossierService {
     private final MandatService mandatService;
     /** ⚠️ 2026-09-04 — résolution du nom pour les gestes de circuit posés par un contrôleur. */
     private final cnm.prs.repository.ControleurRepository controleurRepository;
+    /** ⚠️ 2026-09-04 — les événements de traitement, dérivés à la lecture. */
+    private final JournalTraitementService traitement;
 
     public JournalDossierService(ActionDossierRepository repository, PrmpRepository prmpRepository,
-            MandatService mandatService, cnm.prs.repository.ControleurRepository controleurRepository) {
+            MandatService mandatService, cnm.prs.repository.ControleurRepository controleurRepository,
+            JournalTraitementService traitement) {
         this.controleurRepository = controleurRepository;
+        this.traitement = traitement;
         this.repository = repository;
         this.prmpRepository = prmpRepository;
         this.mandatService = mandatService;
@@ -129,8 +133,24 @@ public class JournalDossierService {
     }
     /** Journal d'un dossier, chronologique. Le contrôle de visibilité est fait par l'appelant. */
     public List<ActionDossierDto> journal(Integer idDossier) {
-        return repository.findByIdDossierOrderByDateActionAscIdActionAsc(idDossier).stream()
-                .map(JournalDossierService::toDto).toList();
+        // ⚠️ Journal COMPLET (règle du pilote, 2026-09-04) — les actions stockées, plus les événements
+        // de traitement DÉRIVÉS des données (navettes, dates du PV, vérifications, SIGMP). Le journal
+        // s'arrêtait à la réattribution alors que le chronométrage allait jusqu'à la co-signature.
+        // Dérivés et non écrits : les dossiers DÉJÀ traités deviennent complets d'office, ce qu'une
+        // écriture au fil de l'eau n'aurait jamais rattrapé.
+        List<ActionDossierDto> lignes = new java.util.ArrayList<>(
+                repository.findByIdDossierOrderByDateActionAscIdActionAsc(idDossier).stream()
+                        .map(JournalDossierService::toDto).toList());
+        lignes.addAll(traitement.evenements(idDossier));
+        // Ordre chronologique STRICT ; à instant égal, le rang du circuit tranche. Sans lui, les actes
+        // de fin de parcours — datés sans heure — se seraient rangés dans un ordre arbitraire.
+        lignes.sort(java.util.Comparator
+                .comparing(ActionDossierDto::getDateAction,
+                        java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder()))
+                .thenComparingInt(a -> JournalTraitementService.rang(a.getTypeAction()))
+                .thenComparing(ActionDossierDto::getIdAction,
+                        java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder())));
+        return lignes;
     }
 
     /** Supprime le journal d'un dossier (cascade de la suppression d'un brouillon). */

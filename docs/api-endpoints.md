@@ -1458,6 +1458,56 @@ Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `
 > de contrôleur allumerait à tort le marqueur « opérateur ≠ attributaire » du front. Seuls
 > `nomOperateur` (le nom du contrôleur, résolu serveur) et `auteur` (son login) sont renseignés.
 >
+> ## ⚠️ JOURNAL DU DOSSIER — le traitement raconté jusqu'au bout (2026-09-04)
+>
+> `GET /api/dossiers/{id}/journal` s'arrêtait à la réattribution : la suite du traitement — examen
+> soumis, retours de navette, transmission au Président, visa, signatures, vérification, SIGMP,
+> archivage — n'y figurait nulle part, alors que le chronométrage la racontait.
+>
+> **Neuf types de plus**, chacun daté et avec son opérateur nommé :
+>
+> | `typeAction` | Événement | Détail |
+> |---|---|---|
+> | `SOUMISSION_EXAMEN` | le Membre soumet le projet (chaque soumission) | n° de navette, commentaire |
+> | `RETOUR_RECTIFICATION` | le projet est retourné | destinataire (Membre ou Chef de commission) + commentaire |
+> | `TRANSMISSION_PRESIDENT` | deux niveaux : le CC accepte et transmet | commentaire |
+> | `VISA` | le viseur clôt la navette | avis arrêté, co-signataires **nommés**, « par intérim » le cas échéant |
+> | `SIGNATURE` | chaque part posée | rôle de la part (Président / Chef de commission / Membre) |
+> | `PV_SIGNE` | dernière part → PV définitif | référence du PV |
+> | `DECISION_VERIFICATION` | passage de vérification | observations levées ou maintenues |
+> | `TRANSMISSION_SIGMP` | transmission de la décision | sens |
+> | `ARCHIVAGE` | l'assistant clôt | — |
+>
+> ⚠️ **Le retour du Président AU CC est un `RETOUR_RECTIFICATION`**, pas un type de plus : le
+> destinataire se lit dans le détail. Un type supplémentaire aurait obligé le front à en connaître un
+> de plus pour dire la même chose.
+>
+> ### Dérivés à la lecture, jamais écrits
+>
+> Ces événements sont **reconstruits** depuis les données qui les portent déjà (`t_pv_navette`, dates
+> du PV, passages de vérification, transmissions SIGMP) — option (b) de la demande. Deux conséquences,
+> et la seconde est la raison du choix :
+>
+> - **les dossiers déjà traités sont complets d'office**, le 00002 compris. Une écriture au fil de
+>   l'eau n'aurait raconté que les dossiers à venir, alors que le constat portait sur un dossier
+>   ancien ;
+> - **aucune écriture ajoutée** : pas de transaction métier alourdie, et aucun risque de divergence
+>   entre la trace et la donnée — ici, la donnée *est* la trace.
+>
+> ⚠️ **`idAction` est `null` sur ces lignes** : elles n'existent pas en base. Le front ne doit pas s'en
+> servir comme clé — l'instant et le type les identifient. `idPrmpOperateur` et `idMandatOperateur`
+> restent nuls eux aussi : ce sont des gestes de contrôleur.
+>
+> ### L'ordre
+>
+> Chronologique **strict**, actions stockées et événements dérivés confondus. À instant égal, le
+> **rang du circuit** tranche — sans lui, les actes de fin de parcours se rangeraient arbitrairement.
+>
+> ⚠️ Les navettes portent un horodatage complet ; les signatures, la vérification et l'archivage ne
+> portent qu'une **date**. Ces derniers sont donc placés en **fin de journée**. C'est fidèle : ce sont
+> des actes de fin de parcours, qui ne bouclent pas et dont l'ordre est fixe — une signature ne précède
+> jamais son visa. Les placer à l'aube les aurait fait passer *avant* les navettes du même jour.
+
 > ⚠️ **La CONSIGNE au détail** (complément du 2026-09-04) — les lignes `DISPATCH` et `REATTRIBUTION`
 > portent l'instruction donnée avec le geste, quand il y en a une :
 > `à {nom} — consigne : « … »` et `de {ancien} à {nouveau} — consigne : « … »` (celle du réattribueur).

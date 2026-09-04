@@ -54,4 +54,13 @@ public interface PvNavetteRepository extends JpaRepository<PvNavette, Integer> {
               and r.ctrlRecept.idLocalite = :localite
             """)
     boolean existsDansLocalite(@Param("id") Integer id, @Param("localite") String localite);
+
+    /**
+     * ⚠️ 2026-09-04 — <strong>toutes les navettes d'un dossier</strong>, dans l'ordre où elles ont eu
+     * lieu. Source des événements de traitement du journal : ce sont elles qui portent l'acteur,
+     * l'instant PRÉCIS et le commentaire de chaque mouvement du projet de PV.
+     */
+    @Query("select n from PvNavette n where n.pv.examen.dispatch.reception.idDossier = :idDossier "
+            + "order by n.dateAction asc, n.numNavette asc, n.idNavette asc")
+    List<PvNavette> findParDossier(@Param("idDossier") Integer idDossier);
 }

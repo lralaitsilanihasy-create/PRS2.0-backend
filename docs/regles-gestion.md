@@ -654,6 +654,16 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
     du dispatch qu'elle décrit, et les dispatchs successifs d'un même dossier s'y accumulent.
   - **`REPRISE` ≠ `REATTRIBUTION`** : le « Retirer » d'un CC est une réattribution **vers lui-même** (le
     dossier revient dans SA file, il ne repart pas au Président) — la distinction est précisément ce que
+  - ⚠️ **Le journal raconte le traitement JUSQU'AU BOUT** (2026-09-04) — « le journal s'arrête à la
+    réattribution alors que le chronométrage va jusqu'à la co-signature ». Neuf événements de plus :
+    soumission d'examen, retour de rectification, transmission au Président, visa (avis arrêté et
+    co-signataires nommés), signature par part, PV signé, décision de vérification, transmission SIGMP,
+    archivage. Ils sont **dérivés à la lecture** des données qui les portent déjà — navettes, dates du
+    PV, passages de vérification — et non écrits au fil de l'eau : c'est ce qui rend complets les
+    dossiers DÉJÀ traités, alors qu'une écriture à la source n'aurait raconté que l'avenir. Le constat
+    portait précisément sur un dossier ancien. Ordre chronologique strict ; à instant égal, le rang du
+    circuit tranche, car les actes de fin de parcours ne portent qu'une date.
+
   - ⚠️ **La CONSIGNE est consignée** (complément du 2026-09-04) — « Comment savoir que le dossier a été
     dispatché au CC avec instruction avant de le dispatcher au membre ? » Les lignes `DISPATCH` et
     `REATTRIBUTION` portent l'instruction donnée avec le geste. Un dispatch ne garde que sa **dernière**
