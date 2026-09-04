@@ -413,6 +413,58 @@ class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
     // ------------------------------------------------------------------ utilitaires
 
     /** Force le statut d'un dossier existant (ou le crée pour le dossier 2, absent du socle). */
+    // ------------------------------------------------------------------ attributaire courant
+
+    @Test
+    @DisplayName("⚠️ GET /chronometrage — « attributaire » suit la RÉATTRIBUTION : c'est le titulaire courant, "
+            + "pas le premier assigné")
+    void chronometrage_attributaire_suitLaReattribution() throws Exception {
+        // Le dossier 1 est dispatché à CTRMEM par la fixture.
+        mvc.perform(get("/api/dossiers/1/chronometrage").header("Authorization", tokenMembre))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.attributaire").value("CTRMEM"));
+
+        // Réattribution : le dispatch ne garde que son dernier état, et c'est bien celui-là que le
+        // chronométrage doit servir — sinon le front masquerait le bouton au nouvel attributaire et
+        // l'offrirait à l'ancien, à qui le serveur répondrait 403.
+        controleurRepository.save(controleur("MEMANT7", 5, "ANT"));
+        var dispatch = dispatchRepository.findById(1).orElseThrow();
+        dispatch.setImCtrlMembre("MEMANT7");
+        dispatchRepository.save(dispatch);
+
+        mvc.perform(get("/api/dossiers/1/chronometrage").header("Authorization", tokenMembre))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.attributaire").value("MEMANT7"));
+
+        // ⚠️ La valeur servie est EXACTEMENT celle sur laquelle porte la garde de prise en charge :
+        // l'ancien attributaire est désormais refusé, le nouveau passe. Les deux ne peuvent pas
+        // diverger, c'est la même requête.
+        var d = dossierRepository.findById(1).orElseThrow();
+        d.setStatut("DISPATCHE");
+        dossierRepository.save(d);
+        mvc.perform(post("/api/dossiers/1/prise-en-charge").header("Authorization", tokenMembre)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"previsionHeures\":4}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/api/dossiers/1/prise-en-charge")
+                .header("Authorization", bearer("MEMANT7", ProfilUtilisateur.MEMBRE, TypeActeur.CONTROLEUR,
+                        "MEMANT7", "ANT"))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"previsionHeures\":4}"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("GET /chronometrage — dossier NON dispatché : « attributaire » est null, pas une chaîne vide")
+    void chronometrage_attributaire_nullSansDispatch() throws Exception {
+        // Un dossier en cours de réception n'a pas de dispatch : personne n'est attributaire, et le
+        // front doit pouvoir le distinguer d'un matricule inconnu.
+        dossierEnStatut(4700, "SOUMIS");
+
+        mvc.perform(get("/api/dossiers/4700/chronometrage").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.etapeCourante").value("RECEPTION"))
+                .andExpect(jsonPath("$.attributaire").doesNotExist());
+    }
+
     private void dossierEnStatut(int idDossier, String statut) {
         Dossier d = dossierRepository.findById(idDossier).orElseGet(() -> {
             Dossier neuf = dossier(idDossier, statut);

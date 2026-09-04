@@ -494,7 +494,13 @@ public class ChronometrageService {
                 brut, Math.max(0L, brut - attentes), attentes,
                 courante == null ? null : courante.name(),
                 estEnAttentePrmp(dossier.getStatut()),
-                datePrevisionnelleFin(dossier.getStatut(), statutPv, taches, LocalDateTime.now()));
+                datePrevisionnelleFin(dossier.getStatut(), statutPv, taches, LocalDateTime.now()),
+                // ⚠️ 2026-09-04 — l attributaire courant, EXACTEMENT la valeur sur laquelle porte la
+                // garde de la prise en charge d EXAMEN (exigerAttributaireSiExamen) : la meme requete,
+                // donc la meme reponse. Servir une derivation voisine aurait permis au front de
+                // masquer un bouton que le serveur aurait accepte, ou l inverse.
+                dispatchRepository.findImCtrlMembreByDossier(idDossier)
+                        .filter(s -> !s.isBlank()).orElse(null));
     }
 
     /** Fin de la dernière occurrence close d'une étape — borne du compteur global. */

@@ -469,6 +469,13 @@ appel « réussissait » en modifiant la tâche du CC. Un acteur différent est 
 refus nomme celui qui tient l'étape** : sans ce nom, la personne bloquée n'a personne à qui
 s'adresser, ce qui est exactement ce qui a mené aux corrections manuelles.
 
+⚠️ **Le chronométrage sert l'attributaire courant** (2026-09-04). `GET /dossiers/{id}/chronometrage`
+expose `attributaire` — l'`imCtrlMembre` du dispatch, réattributions comprises, `null` si non
+dispatché. C'est la MÊME valeur que celle sur laquelle porte la garde ci-dessous : un geste voué au
+refus ne doit pas être offert, et pour cela le front doit pouvoir savoir qui est attributaire même sur
+les écrans qui ne chargent pas les dispatchs. Deux dérivations voisines auraient permis de masquer un
+bouton que le serveur accepte, ou d'en offrir un qu'il refuse.
+
 ⚠️ **L'examen se prend par son attributaire, délégation comprise.** C'est la seule étape où la garde de
 profil ne suffit pas. Ailleurs, une prise en charge ne fait que démarrer un chronomètre et n'altère
 aucune donnée métier ; ici l'étape est **nominativement attribuée** par le dispatch, et « seul

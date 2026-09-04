@@ -5340,7 +5340,21 @@ previsionHeures, previsionStandard, dureeHeuresOuvrees, enCours}`. `priseEnCharg
 déjà écoulé). `previsionStandard = true` signale une prévision venue du référentiel, pas d'une saisie.
 
 **`ChronometrageDto`** = `{idDossier, taches[], debutCompteur, finCompteur, dureeBruteHeuresOuvrees,
-dureeNetteHeuresOuvrees, attentePrmpHeuresOuvrees, etapeCourante, attentePrmp, datePrevisionnelleFin}`.
+dureeNetteHeuresOuvrees, attentePrmpHeuresOuvrees, etapeCourante, attentePrmp, datePrevisionnelleFin,
+attributaire}`.
+
+> ⚠️ **`attributaire`** (string | null, ajouté le 2026-09-04) — matricule de l'**attributaire courant**
+> du dossier : l'`imCtrlMembre` du dispatch, **réattributions comprises** ; `null` tant que le dossier
+> n'est pas dispatché.
+>
+> C'est **exactement** la valeur sur laquelle porte la garde de `prise-en-charge` d'`EXAMEN` (403 pour
+> tout autre, même par délégation) : même requête, donc même réponse. Servir une dérivation voisine
+> aurait permis au front de masquer un bouton que le serveur aurait accepté, ou l'inverse.
+>
+> **Pourquoi ici.** Le front masque le geste `EXAMEN` aux non-attributaires ; les écrans qui
+> **connaissent** le dispatch (page des PV, écran d'examen) le passent au widget, mais la consultation
+> du dossier ne charge pas les dispatchs. Y ajouter deux appels de liste à chaque ouverture aurait
+> coûté plus que de servir un champ depuis la réponse qui a déjà le dispatch sous la main.
 
 ### Les deux compteurs
 

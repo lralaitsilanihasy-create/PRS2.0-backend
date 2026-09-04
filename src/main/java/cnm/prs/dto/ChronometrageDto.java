@@ -21,6 +21,13 @@ import java.util.List;
  * @param attentePrmp            vrai si la balle est CHEZ LA PRMP en ce moment (derive du statut courant)
  * @param datePrevisionnelleFin  date annoncee a la PRMP — reste une DATE, seule rescapee de la bascule
  *                               d unite du 2026-09-02 (somme en heures, convertie par tranche de 8 h)
+ * @param attributaire           ⚠️ 2026-09-04 — matricule de l ATTRIBUTAIRE COURANT du dossier
+ *                               (imCtrlMembre du dispatch, reattributions comprises), ou null tant
+ *                               que le dossier n est pas dispatche. Meme derivation que la garde de
+ *                               la prise en charge d EXAMEN : le front y masque le geste a quiconque
+ *                               n est pas l attributaire, et les ecrans qui ne chargent PAS les
+ *                               dispatchs (la consultation) n ont ainsi aucun appel de liste a
+ *                               ajouter — le serveur qui repond ici a deja le dispatch sous la main.
  */
 public record ChronometrageDto(
         Integer idDossier,
@@ -32,5 +39,6 @@ public record ChronometrageDto(
         long attentePrmpHeuresOuvrees,
         String etapeCourante,
         boolean attentePrmp,
-        LocalDate datePrevisionnelleFin) {
+        LocalDate datePrevisionnelleFin,
+        String attributaire) {
 }
