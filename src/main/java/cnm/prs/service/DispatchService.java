@@ -7,6 +7,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import cnm.prs.dto.DispatchDto;
 import cnm.prs.entity.Controleur;
+import cnm.prs.entity.Localite;
 import cnm.prs.entity.Dispatch;
 import cnm.prs.entity.Reception;
 import cnm.prs.enums.EtapeCircuit;
@@ -20,6 +21,7 @@ import cnm.prs.mapper.DispatchMapper;
 import cnm.prs.repository.ControleurRepository;
 import cnm.prs.repository.DispatchRepository;
 import cnm.prs.repository.DossierRepository;
+import cnm.prs.repository.ExamenRepository;
 import cnm.prs.repository.ProfileRepository;
 import cnm.prs.repository.ReceptionRepository;
 import cnm.prs.security.CurrentUser;
@@ -51,12 +53,19 @@ public class DispatchService {
     private final ProfileRepository profileRepository;
     /** ⚠️ Chronométrage des délais (2026-09-01) — clôture de l'étape DISPATCH. */
     private final ChronometrageService chronometrageService;
+    /** ⚠️ Journal du circuit (2026-09-04) — dispatch, réattribution, reprise, retrait. */
+    private final JournalDossierService journalDossier;
+    /** ⚠️ Réattribution (2026-09-03) — refus si un examen est déjà entamé sur le dispatch. */
+    private final ExamenRepository examenRepository;
 
     public DispatchService(DispatchRepository repository, ReceptionRepository receptionRepository,
             ControleurRepository controleurRepository, DossierRepository dossierRepository,
             NotificationService notificationService, CircuitCascadeService circuitCascadeService,
             ControleurDirectory controleurDirectory, PermissionService permissionService,
-            ProfileRepository profileRepository, ChronometrageService chronometrageService) {
+            ProfileRepository profileRepository, ChronometrageService chronometrageService,
+            JournalDossierService journalDossier, ExamenRepository examenRepository) {
+        this.journalDossier = journalDossier;
+        this.examenRepository = examenRepository;
         this.chronometrageService = chronometrageService;
         this.repository = repository;
         this.receptionRepository = receptionRepository;
@@ -102,6 +111,7 @@ public class DispatchService {
     }
 
     public DispatchDto create(DispatchDto dto) {
+        exigerPresidentSiCentrale(dto.getIdReception(), false);
         exigerDossierPretDispatch(dto.getIdReception());
         interdireDoublonDispatch(dto.getIdReception());
         validerInterimDispatch(dto);
@@ -120,6 +130,14 @@ public class DispatchService {
         notifierMembreAssigne(saved);
         // [Auto] Copie du dispatch au CC associé (sauf s'il est lui-même le dispatcheur).
         notifierCcCopie(saved);
+        // ⚠️ Journal du circuit (2026-09-04) : le dispatch ne garde que son dernier etat — sans cette
+        // trace, une reattribution ulterieure effacerait qui l a recu en premier.
+        Integer idDossierDispatche = dossierDeLaReception(saved.getIdReception());
+        if (idDossierDispatche != null) {
+            String detail = "à " + nomControleur(saved.getImCtrlMembre())
+                    + (saved.getImCtrlCc() == null ? "" : " · copie à " + nomControleur(saved.getImCtrlCc()));
+            journalDossier.tracerControleur(idDossierDispatche, JournalDossierService.DISPATCH, detail);
+        }
         return toDtoComplet(saved);
     }
 
@@ -292,6 +310,18 @@ public class DispatchService {
     public DispatchDto update(Integer id, DispatchDto dto) {
         Dispatch existing = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Dispatch introuvable : " + id));
+        // ⚠️ Dérogation « centrale » (2026-09-03) : le CC ATTRIBUTAIRE COURANT peut réattribuer le
+        // dossier que le Président lui a confié. La garde ne le vise donc pas dans ce cas précis.
+        // Le CC « concerne » par le dispatch : son ATTRIBUTAIRE courant (le President le lui a confie)
+        // OU son DISPATCHEUR. Le second cas n est pas une facilite : le « Retirer » du CC est un PUT de
+        // reattribution VERS LUI-MEME, or apres avoir reattribue a un Membre il n est plus attributaire
+        // mais dispatcheur. S en tenir a l attributaire lui interdirait de reprendre son propre dossier,
+        // ce que la regle prevoit explicitement. Un CC etranger au dispatch reste refuse.
+        String moi = CurrentUser.ref().orElse(null);
+        boolean jeSuisConcerne = moi != null
+                && (moi.equals(existing.getImCtrlMembre()) || moi.equals(existing.getImCtrlDispatch()));
+        exigerPresidentSiCentrale(existing.getIdReception(), jeSuisConcerne);
+        exigerPresidentSiCentrale(dto.getIdReception(), jeSuisConcerne);
         Visibilite.exigerLocalite(resoudreLocaliteDossier(existing.getIdReception()));
         Visibilite.exigerLocalite(resoudreLocaliteDossier(dto.getIdReception()));
         exigerDossierAvantPvSigne(existing.getIdReception());
@@ -301,6 +331,15 @@ public class DispatchService {
         }
         validerInterimDispatch(dto);
         validerAttributaireMembre(dto);
+        String ancienAttributaire = existing.getImCtrlMembre();
+        boolean changementAttributaire = !java.util.Objects.equals(ancienAttributaire, dto.getImCtrlMembre());
+        // ⚠️ Réattribution (2026-09-03) — 409 si l'examen est entamé : le circuit propre passe par
+        // « Retirer », qui purge l'aval. Changer l'attributaire ici laisserait à l'arrivant l'examen
+        // commencé par un autre, sous son propre nom.
+        if (changementAttributaire && examenRepository.existsByIdDispatch(id)) {
+            throw new BusinessRuleException("Réattribution impossible : l'examen de ce dossier est déjà "
+                    + "entamé. Retirez le dossier au Membre (ce qui purge l'examen) avant de le réattribuer.");
+        }
         existing.setIdReception(dto.getIdReception());
         existing.setImCtrlDispatch(dispatcheurAuthentifie());   // ⚠️ audit lot B — identité = JWT
         existing.setImCtrlCc(dto.getImCtrlCc());
@@ -311,9 +350,137 @@ public class DispatchService {
         existing.setInterimDispatch(dto.getInterimDispatch());
         // Même règle d'association CC qu'au POST (sans auto-association : le PUT respecte le corps).
         normaliserAssociationCc(existing, false);
-        return toDtoComplet(repository.save(existing));
+        Dispatch sauve = repository.save(existing);
+
+        // ⚠️ Réattribution (2026-09-03) — le PUT ne notifiait personne : l'ancien attributaire voyait le
+        // dossier disparaître de sa file en silence, le nouveau ne savait pas qu'il l'avait reçu.
+        if (changementAttributaire) {
+            Integer idDossierReattribue = dossierDeLaReception(sauve.getIdReception());
+            notifierReattribution(sauve, ancienAttributaire, idDossierReattribue);
+            tracerReattribution(sauve, ancienAttributaire, idDossierReattribue);
+        }
+        return toDtoComplet(sauve);
     }
 
+    /**
+     * Notifie le changement d'attributaire. Le <strong>nouveau</strong> reçoit un {@code EXAMEN_A_FAIRE}
+     * comme au POST — <strong>sauf s'il est l'acteur lui-même</strong> (reprise : on ne s'annonce pas à
+     * soi-même un dossier qu'on vient de reprendre). L'<strong>ancien</strong> est prévenu du retrait.
+     */
+    private void notifierReattribution(Dispatch dispatch, String ancienAttributaire, Integer idDossier) {
+        if (idDossier == null) {
+            return;
+        }
+        String moi = CurrentUser.ref().orElse(null);
+        String nouveau = dispatch.getImCtrlMembre();
+        if (nouveau != null && !nouveau.equals(moi)) {
+            controleurRepository.findById(nouveau).ifPresent(c -> notificationService.emettre(idDossier,
+                    TypeNotification.EXAMEN_A_FAIRE, c.getImControleur(), c.getEmailCont(),
+                    "Dossier à examiner",
+                    "Le dossier " + idDossier + " vous est attribué pour examen."));
+        }
+        if (ancienAttributaire != null && !ancienAttributaire.equals(nouveau)) {
+            controleurRepository.findById(ancienAttributaire).ifPresent(c -> notificationService.emettre(
+                    idDossier, TypeNotification.EXAMEN_A_FAIRE, c.getImControleur(), c.getEmailCont(),
+                    "Dossier retiré de votre file",
+                    "Le dossier " + idDossier + " ne vous est plus attribué : il a été réattribué."));
+        }
+    }
+
+    /**
+     * Consigne le geste au journal du circuit. <strong>REPRISE</strong> quand l'acteur se réattribue le
+     * dossier (le « Retirer » du CC est un PUT vers lui-même, pas une annulation), <strong>
+     * REATTRIBUTION</strong> sinon — la distinction est ce que le pilote demandait à voir.
+     */
+    private void tracerReattribution(Dispatch dispatch, String ancienAttributaire, Integer idDossier) {
+        if (idDossier == null) {
+            return;
+        }
+        String moi = CurrentUser.ref().orElse(null);
+        String nouveau = dispatch.getImCtrlMembre();
+        if (nouveau != null && nouveau.equals(moi)) {
+            journalDossier.tracerControleur(idDossier, JournalDossierService.REPRISE,
+                    "reprise à " + nomControleur(ancienAttributaire));
+        } else {
+            journalDossier.tracerControleur(idDossier, JournalDossierService.REATTRIBUTION,
+                    "de " + nomControleur(ancienAttributaire) + " à " + nomControleur(nouveau));
+        }
+    }
+
+    /**
+     * ⚠️ <strong>Pré-dispatch de la CENTRALE réservé au Président</strong> (règle du pilote, 2026-09-03).
+     *
+     * <p>« Pour le dossier de localité centrale (CNM), le CC ne doit pas voir les dossiers pour
+     * pré-dispatch. Seul le Président en a ce privilège. » Les commissions <strong>régionales</strong>
+     * sont inchangées : leur CC continue de dispatcher chez lui.</p>
+     *
+     * <p><strong>Garde par PROFIL COURANT</strong>, et non par la garde centrale de délégation : le
+     * dispatch est un droit <em>natif</em> du CC, les paires de {@code t_delegation_profil} n'ont pas à
+     * l'ouvrir ni à le fermer — même raisonnement que {@code normaliserAssociationCc}.</p>
+     *
+     * <p><strong>Dérogation</strong> (précision du même jour) : « le CC peut dispatcher le dossier que
+     * le président lui a dispatché ». Le CC <strong>attributaire courant</strong> peut donc RÉATTRIBUER
+     * — c'est {@code reattributionParAttributaire} qui le dit. La garde ne vise que le POST initial, un
+     * PUT sur un dispatch dont il n'est pas l'attributaire, et l'intérim.</p>
+     */
+    private void exigerPresidentSiCentrale(Integer idReception, boolean reattributionParAttributaire) {
+        if (CurrentUser.profil().orElse(null) != ProfilUtilisateur.CHEF_COMMISSION
+                || reattributionParAttributaire) {
+            return;
+        }
+        if (Localite.estCentrale(resoudreLocaliteDossier(idReception))) {
+            throw new org.springframework.security.access.AccessDeniedException("Le dispatch d'un dossier de la Commission nationale "
+                    + "(localité centrale) relève du seul Président.");
+        }
+    }
+
+    /**
+     * ⚠️ <strong>Retrait réservé au dispatcheur</strong> (arbitrage du pilote, 2026-09-03) — garde
+     * GÉNÉRALE, toutes localités : « Le CC ne doit pas pouvoir retirer le dossier qu'il n'a pas
+     * dispatché. Par contre, il peut retirer le dossier s'il est le dispatcheur de ce dossier. »
+     *
+     * <p><strong>Pas d'auto-retrait</strong> (confirmé le même jour) : le CC <em>attributaire</em> d'un
+     * dossier que le Président lui a confié ne se le retire pas lui-même — c'est le Président, qui l'a
+     * dispatché, qui le lui retire. Le cas où il est à la fois dispatcheur ET attributaire (post-reprise)
+     * est refusé pour la même raison : rendre le dossier n'est pas un geste qu'on se fait à soi-même.</p>
+     *
+     * <p>Le Président n'est pas restreint. Une réattribution par le CC pose {@code IM_CTRL_DISPATCH} =
+     * son matricule : il peut donc ensuite RETIRER AU MEMBRE, ce qui est voulu.</p>
+     */
+    private void exigerDispatcheurPourAnnuler(Dispatch dispatch) {
+        if (CurrentUser.profil().orElse(null) != ProfilUtilisateur.CHEF_COMMISSION) {
+            return;
+        }
+        String moi = CurrentUser.ref().orElse(null);
+        boolean dispatcheur = moi != null && moi.equals(dispatch.getImCtrlDispatch());
+        boolean attributaire = moi != null && moi.equals(dispatch.getImCtrlMembre());
+        if (!dispatcheur) {
+            throw new org.springframework.security.access.AccessDeniedException("Retrait réservé au dispatcheur du dossier : vous n'avez pas "
+                    + "dispatché ce dossier. Demandez le retrait au Président.");
+        }
+        if (attributaire) {
+            throw new org.springframework.security.access.AccessDeniedException("Pas d'auto-retrait : vous êtes l'attributaire de ce dossier. "
+                    + "Demandez le retrait au Président.");
+        }
+    }
+
+    /** Nom lisible d'un contrôleur pour le journal ; repli sur le matricule. */
+    private String nomControleur(String im) {
+        if (im == null) {
+            return "—";
+        }
+        return controleurRepository.findById(im).map(c -> {
+            String nom = ((c.getPrenomsCont() == null ? "" : c.getPrenomsCont()) + " "
+                    + (c.getNomCont() == null ? "" : c.getNomCont())).trim();
+            return nom.isBlank() ? im : nom;
+        }).orElse(im);
+    }
+
+    /** Dossier porté par une réception, ou {@code null} — repère commun au journal et aux gardes. */
+    private Integer dossierDeLaReception(Integer idReception) {
+        return idReception == null ? null
+                : receptionRepository.findById(idReception).map(Reception::getIdDossier).orElse(null);
+    }
     public void delete(Integer id) {
         if (!repository.existsById(id)) {
             throw new ResourceNotFoundException("Dispatch introuvable : " + id);
@@ -333,6 +500,7 @@ public class DispatchService {
         Dispatch entity = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Dispatch introuvable : " + id));
         Visibilite.controler(loc -> repository.existsDansLocalite(id, loc));
+        exigerDispatcheurPourAnnuler(entity);
         Integer idDossier = entity.getIdReception() == null ? null
                 : receptionRepository.findById(entity.getIdReception())
                         .map(Reception::getIdDossier).orElse(null);
@@ -354,6 +522,12 @@ public class DispatchService {
                     idDossier, CurrentUser.login().orElse(null), statut,
                     StatutDossier.PRET_DISPATCH.name());
         });
+        // ⚠️ Journal du circuit (2026-09-04) — la ligne SURVIT a la suppression du dispatch : c est
+        // tout l interet d un journal append-only, le dispatch lui-meme ne garde aucune trace du retrait.
+        if (idDossier != null) {
+            journalDossier.tracerControleur(idDossier, JournalDossierService.RETRAIT_DISPATCH,
+                    "retiré à " + nomControleur(entity.getImCtrlMembre()) + " — retour en pré-dispatch");
+        }
         notifierMembreRetrait(entity, idDossier);
         notifierCcRetrait(entity, idDossier);
     }

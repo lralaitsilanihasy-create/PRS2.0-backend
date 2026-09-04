@@ -85,4 +85,11 @@ public interface ExamenRepository extends JpaRepository<Examen, Integer> {
     /** Prochaine PK allouee par la sequence serveur {@code seq_examen} (allocation atomique). */
     @Query(value = "select nextval('seq_examen')", nativeQuery = true)
     Long nextIdExamen();
+
+    /**
+     * ⚠️ Réattribution (2026-09-03) — un dispatch porte-t-il déjà un examen ? Le re-ciblage d'un
+     * dispatch dont l'examen est entamé est refusé (409) : le circuit propre passe par « Retirer »,
+     * qui purge l'aval, plutôt que par un changement d'attributaire qui laisserait l'examen d'un autre.
+     */
+    boolean existsByIdDispatch(Integer idDispatch);
 }

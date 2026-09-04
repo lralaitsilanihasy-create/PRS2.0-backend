@@ -293,8 +293,8 @@ class PvWorkflowIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(get("/api/dossiers/3").header("Authorization", tokenPresident))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.statut").value("PRET_DISPATCH"));
 
-        // 2) Dispatch par le CC (titulaire dans sa localité ANT).
-        mvc.perform(post("/api/dispatchs").header("Authorization", tokenCc)
+        // 2) Dispatch par le Président (⚠️ 2026-09-03 : la localité ANT est CENTRALE, le CC n’y dispatche plus).
+        mvc.perform(post("/api/dispatchs").header("Authorization", tokenPresident)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDispatch\":3,\"idReception\":" + idRec + ",\"imCtrlDispatch\":\"CTRCC1\",\"imCtrlCc\":\"CTRCC1\","
                         + "\"imCtrlMembre\":\"CTRMEM\",\"interimDispatch\":false}"))
@@ -322,15 +322,19 @@ class PvWorkflowIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(post("/api/pv-examens/" + idPv + "/soumettre").header("Authorization", tokenMembre)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRMEM\"}"))
                 .andExpect(jsonPath("$.statutPv").value("PROJET_SOUMIS"));
-        // ⚠️ C'est le CC qui a POSTé le dispatch à l'étape 2 : le dispatcheur est donc CTRCC1, et lui
-        // seul vise. Le Président, pourtant compétent partout, est refusé — la contrainte du 2026-08-31
-        // suit l'identité de celui qui a dispatché, pas le rang.
-        viser(idPv, tokenPresident, "CTRPRE", "FAV", "CTRVER", "CTRMEM").andExpect(status().isBadRequest());
+        // ⚠️ Le dispatch de l'étape 2 est désormais posé par le PRÉSIDENT (localité centrale, règle du
+        // 2026-09-03) : le dispatcheur est donc CTRPRE, et lui seul vise. Le CC, pourtant compétent dans
+        // sa localité, est refusé (400 « note d’intérim requise ») — la contrainte du 2026-08-31 suit l’identité de celui qui a
+        // dispatché, pas le rang. Les rôles sont inversés, la règle éprouvée est la même.
+        viser(idPv, tokenCc, "CTRCC1", "FAV", "CTRVER", "CTRMEM").andExpect(status().isBadRequest());
         // Un seul signataire ne suffit pas : après le visa, le PV reste PROJET_ACCEPTE.
-        viser(idPv, tokenCc, "CTRCC1", "FAV", "CTRVER", "CTRMEM")
+        viser(idPv, tokenPresident, "CTRPRE", "FAV", "CTRVER", "CTRMEM")
                 .andExpect(jsonPath("$.statutPv").value("PROJET_ACCEPTE"))
-                .andExpect(jsonPath("$.imDispatcheur").value("CTRCC1"))
-                .andExpect(jsonPath("$.imCtrlCc").value("CTRCC1"));
+                .andExpect(jsonPath("$.imDispatcheur").value("CTRPRE"))
+                // Le visa pose la part du RÔLE de l’acteur : le Président visant, c’est sa part qui est
+                // posée et imCtrlCc reste nul. C’était CTRCC1 quand le CC dispatchait et visait.
+                .andExpect(jsonPath("$.imCtrlPresident").value("CTRPRE"))
+                .andExpect(jsonPath("$.imCtrlCc").value(nullValue()));
         mvc.perform(post("/api/pv-examens/" + idPv + "/signer").header("Authorization", tokenMembre)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRMEM\",\"role\":\"MEMBRE\"}"))
                 .andExpect(jsonPath("$.statutPv").value("SIGNE"));
@@ -393,7 +397,7 @@ class PvWorkflowIntegrationTest extends CnmIntegrationTestSupport {
         dossierRepository.save(dossier(14, "PRET_DISPATCH"));
         receptionRepository.save(reception(24, 14, "CTRSEC", true));
         dispatchRepository.save(dispatch(41, 24, "CTRCC1", "CTRMEM"));
-        mvc.perform(post("/api/dispatchs").header("Authorization", tokenCc).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/dispatchs").header("Authorization", tokenPresident).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDispatch\":42,\"idReception\":24,\"interimDispatch\":false}"))
                 .andExpect(status().isConflict());
 

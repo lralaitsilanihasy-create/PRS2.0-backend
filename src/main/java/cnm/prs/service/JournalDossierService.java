@@ -34,12 +34,31 @@ public class JournalDossierService {
     public static final String SUPPRESSION = "SUPPRESSION";
     public static final String MISE_A_JOUR = "MISE_A_JOUR";
 
+    /**
+     * ⚠️ Gestes du <strong>circuit de dispatch</strong> (règle du pilote, 2026-09-04). Le chronométrage
+     * journalise les ÉTAPES et leurs durées, mais le dispatch ne garde que son <em>dernier</em> état :
+     * une réattribution écrase l'attributaire, un retrait supprime la ligne. Sans ces traces, l'histoire
+     * du dossier — à qui il est passé, combien de fois — est irrécupérable.
+     */
+    public static final String DISPATCH = "DISPATCH";
+    /** Changement d'attributaire au profit d'un tiers. */
+    public static final String REATTRIBUTION = "REATTRIBUTION";
+    /** Changement d'attributaire au profit de l'appelant lui-même (le CC reprend le dossier). */
+    public static final String REPRISE = "REPRISE";
+    /** Retrait du dispatch : retour du dossier en pré-dispatch, aval purgé. */
+    public static final String RETRAIT_DISPATCH = "RETRAIT_DISPATCH";
+    /** Réception enregistrée COMPLET : le dossier devient prêt à dispatcher. */
+    public static final String RECEPTION = "RECEPTION";
+
     private final ActionDossierRepository repository;
     private final PrmpRepository prmpRepository;
     private final MandatService mandatService;
+    /** ⚠️ 2026-09-04 — résolution du nom pour les gestes de circuit posés par un contrôleur. */
+    private final cnm.prs.repository.ControleurRepository controleurRepository;
 
     public JournalDossierService(ActionDossierRepository repository, PrmpRepository prmpRepository,
-            MandatService mandatService) {
+            MandatService mandatService, cnm.prs.repository.ControleurRepository controleurRepository) {
+        this.controleurRepository = controleurRepository;
         this.repository = repository;
         this.prmpRepository = prmpRepository;
         this.mandatService = mandatService;
@@ -73,6 +92,41 @@ public class JournalDossierService {
         tracer(dossier.getIdDossier(), typeAction, detail);
     }
 
+    /**
+     * ⚠️ Variante <strong>CONTRÔLEUR</strong> (2026-09-04) — consigne un geste du circuit posé par un
+     * agent de la CNM (Président, Chef de commission…), et non par une PRMP.
+     *
+     * <p>{@code idPrmpOperateur} et {@code idMandatOperateur} restent <strong>nuls</strong> : ce sont des
+     * concepts PRMP. Les renseigner avec un matricule de contrôleur allumerait le marqueur « opérateur ≠
+     * attributaire » du front, qui signale qu'une PRMP <em>autre</em> que la propriétaire a agi — un
+     * contresens ici. Seul le <strong>nom</strong> est résolu, depuis l'annuaire des contrôleurs.</p>
+     */
+    @Transactional
+    public void tracerControleur(Integer idDossier, String typeAction, String detail) {
+        String im = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
+        ActionDossier action = new ActionDossier();
+        action.setIdDossier(idDossier);
+        action.setDateAction(LocalDateTime.now());
+        action.setTypeAction(typeAction);
+        action.setIdPrmpOperateur(null);
+        action.setIdMandatOperateur(null);
+        action.setNomOperateur(nomControleur(im));
+        action.setAuteur(CurrentUser.login().orElse(im));
+        action.setDetail(tronquer(detail, 500));
+        repository.save(action);
+    }
+
+    /** « Prénoms Nom » d'un contrôleur ; repli sur le matricule, {@code null} si l'acteur est inconnu. */
+    private String nomControleur(String imControleur) {
+        if (imControleur == null) {
+            return null;
+        }
+        return controleurRepository.findById(imControleur).map(c -> {
+            String nom = ((c.getPrenomsCont() == null ? "" : c.getPrenomsCont()) + " "
+                    + (c.getNomCont() == null ? "" : c.getNomCont())).trim();
+            return nom.isBlank() ? imControleur : nom;
+        }).orElse(imControleur);
+    }
     /** Journal d'un dossier, chronologique. Le contrôle de visibilité est fait par l'appelant. */
     public List<ActionDossierDto> journal(Integer idDossier) {
         return repository.findByIdDossierOrderByDateActionAscIdActionAsc(idDossier).stream()

@@ -1174,6 +1174,44 @@ Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `
 ## Dispatchs
 **Ressource** `/api/dispatchs` — POST/PUT : `PRESIDENT` ou `CHEF_COMMISSION` ; DELETE : `ADMINISTRATEUR`. Lecture filtrée par localité.
 
+> ### ⚠️ Localité CENTRALE : le pré-dispatch relève du seul Président (règle du pilote, 2026-09-03)
+>
+> Toute écriture de dispatch (`POST`, `PUT`, **intérim compris**) sur un dossier de la localité
+> **centrale** (`Localite.ID_CENTRALE`, segment « CNM » des références) est refusée en **403** au profil
+> `CHEF_COMMISSION` : « Le dispatch d'un dossier de la Commission nationale (localité centrale) relève du
+> seul Président. » Les commissions **régionales** sont **inchangées** — leur CC dispatche chez lui.
+>
+> Garde par **profil courant**, et non par la garde centrale de délégation : le dispatch est un droit
+> natif du CC, les paires de `t_delegation_profil` n'ont pas à l'ouvrir ni à le fermer.
+>
+> **Dérogation — le CC concerné par le dispatch.** Le CC peut agir sur un dispatch central dont il est
+> l'**attributaire courant** (le Président le lui a confié, « Chef de commission ⤴ ») **ou** le
+> **dispatcheur**. Le second cas n'est pas une facilité : le « Retirer » d'un CC est un `PUT` de
+> réattribution **vers lui-même**, or après avoir réattribué à un Membre il n'est plus attributaire mais
+> dispatcheur — s'en tenir à l'attributaire lui interdirait de reprendre son propre dossier, ce que la
+> règle prévoit. Un CC **étranger** au dispatch reste refusé.
+>
+> **Réattribution (`PUT` changeant `imCtrlMembre`)** — deux ajouts du même jour :
+> - le **nouvel** attributaire reçoit `EXAMEN_A_FAIRE` (sauf s'il est l'acteur : on ne s'annonce pas à
+>   soi-même une reprise) et l'**ancien** est prévenu du retrait — le `PUT` ne notifiait personne, le
+>   dossier disparaissait d'une file en silence ;
+> - **409** si un **examen est déjà entamé** sur ce dispatch : le circuit propre passe par « Retirer »,
+>   qui purge l'aval. Changer l'attributaire laisserait à l'arrivant l'examen commencé par un autre.
+>
+> **Annulation (`POST /{id}/annuler`)** — garde **GÉNÉRALE, toutes localités** : un CC n'annule que s'il
+> est le **dispatcheur** du dossier (**403** sinon), et **pas d'auto-retrait** — le CC à la fois
+> dispatcheur et attributaire est refusé lui aussi : rendre un dossier n'est pas un geste qu'on se fait à
+> soi-même, c'est le Président qui le retire. Le Président n'est pas restreint.
+>
+> **Examen réservé à l'ATTRIBUTAIRE** — l'exemption « délégation » de `ExamenService` est **retirée** :
+> la garde ne s'appliquait qu'au profil `MEMBRE`, si bien qu'un CC ou un Président passait sans contrôle.
+> Désormais, quel que soit le profil, seul l'**attributaire courant** du dispatch crée, modifie et soumet
+> l'examen (**403** sinon) — ni le dispatcheur, ni le CC en copie. Le P/CC **attributaire** (« moi-même
+> ⤴ », réattribution vers soi) reste autorisé : il EST l'attributaire.
+>
+> **Notification `PRET_DISPATCH`** : sur un dossier **central**, seul le Président est notifié — prévenir
+> le CC lui annoncerait une tâche qu'il recevra en 403. Régionales inchangées (Président **et** CC).
+
 > **Précondition de circuit (création) → 409** : le dossier rattaché à la réception doit être au statut **`PRET_DISPATCH`** (§2.2/§2.3), et **aucun dispatch ne doit déjà exister** pour cette réception (anti-doublon, §3.2 ; corriger via `PUT`).
 
 > ⚠️ **Le `PUT` rejoue désormais les trois gardes du `POST` (2026-08-27, audit lot B).** Avant ce
@@ -1408,9 +1446,23 @@ Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `
 > typeAction (string), idPrmpOperateur (string), nomOperateur (string), auteur (string),
 > idMandatOperateur (number|null), detail (string) }`.
 > `typeAction` ∈ `CREATION`, `SOUMISSION`, `RESOUMISSION`, `TRANSMISSION_COMPLEMENTS`,
-> `TRANSMISSION_COMPLEMENTS_DEPOT`, `SUPPRESSION`, `MISE_A_JOUR`.
+> `TRANSMISSION_COMPLEMENTS_DEPOT`, `SUPPRESSION`, `MISE_A_JOUR` — et, ⚠️ **depuis le 2026-09-04**, les
+> gestes du **circuit de dispatch** : `DISPATCH`, `REATTRIBUTION`, `REPRISE`, `RETRAIT_DISPATCH`,
+> `RECEPTION`.
 > **`idPrmpOperateur` est la PRMP en fonction à la date de l'action** — après un changement de titulaire
 > elle diffère de `idPrmp` / `idMandatAttrib` du dossier, qui eux ne bougent pas.
+>
+> ⚠️ **Gestes de CONTRÔLEUR : ni PRMP ni mandat.** Sur une ligne posée par un agent de la CNM
+> (`DISPATCH`, `REATTRIBUTION`, `REPRISE`, `RETRAIT_DISPATCH`, `RECEPTION`), `idPrmpOperateur` et
+> `idMandatOperateur` valent **`null`** : ce sont des concepts PRMP, et les renseigner avec un matricule
+> de contrôleur allumerait à tort le marqueur « opérateur ≠ attributaire » du front. Seuls
+> `nomOperateur` (le nom du contrôleur, résolu serveur) et `auteur` (son login) sont renseignés.
+>
+> **Pourquoi ces traces.** Le chronométrage journalise les étapes et leurs durées, mais un dispatch ne
+> garde que son **dernier état** : une réattribution écrase l'attributaire, un retrait supprime la ligne.
+> Le journal étant **append-only**, la trace d'un retrait **survit** à la disparition du dispatch qu'elle
+> décrit, et les dispatchs successifs d'un même dossier s'y accumulent. `REPRISE` et `REATTRIBUTION` sont
+> distinguées : le « Retirer » d'un CC est un PUT de réattribution **vers lui-même**, pas une annulation.
 
 > 📌 **Résolution `idDossier → PPM` (règle ajoutée).** `GET /api/dossiers/{id}/ppm` renvoie le **`PpmDto`
 > complet** du dossier, **y compris pour un `BROUILLON`** lu par son **propriétaire** (même critère de
@@ -2992,6 +3044,15 @@ système).
 
 ## Localités
 **Ressource** `/api/localites` — Référentiel : lecture ouverte ; écriture `ADMINISTRATEUR`.
+
+> ⚠️ **Champ `estCentrale` ajouté au `LocaliteDto` (2026-09-03)** — **dérivé serveur, lecture seule** :
+> `true` pour la localité **centrale** (Commission nationale), `false` ailleurs. Calculé au mapping
+> depuis `Localite.estCentrale(idLocalite)`, **sans colonne** : la centrale est définie par une constante
+> du code, pas par une case à cocher que quelqu'un pourrait renseigner de travers.
+>
+> Il existe pour que le front cesse de coder l'identifiant en dur là où il applique une règle propre à la
+> centrale (le pré-dispatch y relève du seul Président) : si la constante change un jour côté serveur, le
+> front suit **sans redéploiement coordonné**. Toute valeur envoyée en écriture est ignorée.
 
 > ⚠️ **Champs `referencement` et `localite` (code max 3) RETIRÉS du contrat (2026-07-17).** Colonnes
 > héritées du MLD **sans aucune sémantique** : jamais lues par la génération des références, les documents

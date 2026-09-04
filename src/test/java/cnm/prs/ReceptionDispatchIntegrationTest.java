@@ -35,15 +35,18 @@ class ReceptionDispatchIntegrationTest extends CnmIntegrationTestSupport {
             + "→ 409 ; CC refusé quand la paire CC → Membre est désactivée, accepté quand elle est réactivée "
             + "(data-driven) ; même garde au PUT")
     void dispatch_gardeAttributaireMembre() throws Exception {
+        // ⚠️ 2026-09-03 — le dossier est en localité CENTRALE (ANT) : depuis la règle du pilote, un CC
+        // n'y dispatche plus (403). Le Président prend donc le geste ; ce que ce test éprouve — les
+        // gardes de l'ATTRIBUTAIRE — est inchangé, l'acteur du dispatch y était incident.
         dossierRepository.save(dossier(4602, "PRET_DISPATCH"));
         receptionRepository.save(reception(5602, 4602, "CTRSEC", true)); // ANT
         // Secrétaire attributaire : aucune paire Secrétaire → Membre dans la table → dossier inexaminable → 409.
-        mvc.perform(post("/api/dispatchs").header("Authorization", tokenCc).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/dispatchs").header("Authorization", tokenPresident).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDispatch\":5602,\"idReception\":5602,\"imCtrlMembre\":\"CTRSEC\",\"interimDispatch\":false}"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.message", containsString("inexaminable")));
         // Matricule inconnu → refus explicite.
-        mvc.perform(post("/api/dispatchs").header("Authorization", tokenCc).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/dispatchs").header("Authorization", tokenPresident).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDispatch\":5602,\"idReception\":5602,\"imCtrlMembre\":\"ZZZ999\",\"interimDispatch\":false}"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.message", containsString("aucun contrôleur")));
@@ -52,7 +55,7 @@ class ReceptionDispatchIntegrationTest extends CnmIntegrationTestSupport {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDelegation\":5,\"idProfileDelegant\":3,\"idProfileDelegue\":5,\"actif\":false}"))
                 .andExpect(status().isOk());
-        mvc.perform(post("/api/dispatchs").header("Authorization", tokenCc).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/dispatchs").header("Authorization", tokenPresident).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDispatch\":5602,\"idReception\":5602,\"imCtrlMembre\":\"CTRCC1\",\"interimDispatch\":false}"))
                 .andExpect(status().isConflict());
         // RÉACTIVÉE → le même dispatch (auto-attribution du CC) passe, SANS changement de code.
@@ -60,12 +63,12 @@ class ReceptionDispatchIntegrationTest extends CnmIntegrationTestSupport {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDelegation\":5,\"idProfileDelegant\":3,\"idProfileDelegue\":5,\"actif\":true}"))
                 .andExpect(status().isOk());
-        mvc.perform(post("/api/dispatchs").header("Authorization", tokenCc).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/dispatchs").header("Authorization", tokenPresident).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDispatch\":5602,\"idReception\":5602,\"imCtrlMembre\":\"CTRCC1\",\"interimDispatch\":false}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.imCtrlMembre").value("CTRCC1"));
         // Même garde à la correction (PUT) : re-cibler un Secrétaire est refusé.
-        mvc.perform(put("/api/dispatchs/5602").header("Authorization", tokenCc)
+        mvc.perform(put("/api/dispatchs/5602").header("Authorization", tokenPresident)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDispatch\":5602,\"idReception\":5602,\"imCtrlMembre\":\"CTRSEC\",\"interimDispatch\":false}"))
                 .andExpect(status().isConflict())
@@ -77,25 +80,35 @@ class ReceptionDispatchIntegrationTest extends CnmIntegrationTestSupport {
             + "sans imCtrlCc ; CC → Membre → imCtrlCc client ignoré ; Président → Membre → association + copie "
             + "DISPATCH_CC conservées ; Président → lui-même → pas d'association")
     void dispatch_associationCcSelonDispatcheur() throws Exception {
+        // ⚠️ 2026-09-03 — les cas 1 et 2 portent sur LE CC DISPATCHEUR : ils déménagent en localité
+        // RÉGIONALE, où le CC dispatche toujours. La règle d'association CC est inchangée, seule la
+        // centrale lui est désormais fermée. Les cas 3 et 4 (Président) restent en ANT.
+        String tokenCcTms = bearer("CTRCC2", ProfilUtilisateur.CHEF_COMMISSION, TypeActeur.CONTROLEUR,
+                "CTRCC2", "TMS");
+        controleurRepository.save(controleur("MEMTMS8", 5, "TMS"));
         // 1) Le CC s'auto-dispatche → aucune association CC (une seule apparition : Rôle Membre).
-        dossierRepository.save(dossier(4603, "PRET_DISPATCH"));
-        receptionRepository.save(reception(5603, 4603, "CTRSEC", true)); // ANT
-        mvc.perform(post("/api/dispatchs").header("Authorization", tokenCc).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idDispatch\":5603,\"idReception\":5603,\"imCtrlMembre\":\"CTRCC1\",\"interimDispatch\":false}"))
+        Dossier d4603 = dossier(4603, "PRET_DISPATCH");
+        d4603.setIdLocalite("TMS");
+        dossierRepository.save(d4603);
+        receptionRepository.save(reception(5603, 4603, "CTRCC2", true));   // TMS
+        mvc.perform(post("/api/dispatchs").header("Authorization", tokenCcTms).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDispatch\":5603,\"idReception\":5603,\"imCtrlMembre\":\"CTRCC2\",\"interimDispatch\":false}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.imCtrlCc").value(nullValue()));
         // 2) Le CC dispatche à un Membre, imCtrlCc = lui-même envoyé par le client → IGNORÉ (forcé à null).
-        dossierRepository.save(dossier(4604, "PRET_DISPATCH"));
-        receptionRepository.save(reception(5604, 4604, "CTRSEC", true));
-        mvc.perform(post("/api/dispatchs").header("Authorization", tokenCc).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idDispatch\":5604,\"idReception\":5604,\"imCtrlCc\":\"CTRCC1\","
-                        + "\"imCtrlMembre\":\"CTRMEM\",\"interimDispatch\":false}"))
+        Dossier d4604 = dossier(4604, "PRET_DISPATCH");
+        d4604.setIdLocalite("TMS");
+        dossierRepository.save(d4604);
+        receptionRepository.save(reception(5604, 4604, "CTRCC2", true));
+        mvc.perform(post("/api/dispatchs").header("Authorization", tokenCcTms).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDispatch\":5604,\"idReception\":5604,\"imCtrlCc\":\"CTRCC2\","
+                        + "\"imCtrlMembre\":\"MEMTMS8\",\"interimDispatch\":false}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.imCtrlCc").value(nullValue()));
         // Aucune copie DISPATCH_CC émise pour ces deux dispatchs (le CC est l'acteur du dispatch).
-        mvc.perform(get("/api/notifications/mes").header("Authorization", tokenCc))
+        mvc.perform(get("/api/notifications/mes").header("Authorization", tokenCcTms))
+        // 3) Président → Membre → comportement conservé : CC de la localité auto-associé + copie.
                 .andExpect(jsonPath("$[?(@.typeNotif=='DISPATCH_CC')]", hasSize(0)));
-        // 3) Président → Membre → comportement conservé : CC de la localité auto-associé + copie DISPATCH_CC.
         dossierRepository.save(dossier(4605, "PRET_DISPATCH"));
         receptionRepository.save(reception(5605, 4605, "CTRSEC", true));
         mvc.perform(post("/api/dispatchs").header("Authorization", tokenPresident).contentType(MediaType.APPLICATION_JSON)
@@ -114,10 +127,10 @@ class ReceptionDispatchIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(get("/api/notifications/mes").header("Authorization", tokenCc))
                 .andExpect(jsonPath("$[?(@.typeNotif=='DISPATCH_CC')]", hasSize(1))); // toujours une seule
         // Même règle au PUT : le CC corrige son dispatch en renvoyant imCtrlCc = lui-même → ignoré.
-        mvc.perform(put("/api/dispatchs/5604").header("Authorization", tokenCc)
+        mvc.perform(put("/api/dispatchs/5604").header("Authorization", tokenCcTms)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idDispatch\":5604,\"idReception\":5604,\"imCtrlCc\":\"CTRCC1\","
-                        + "\"imCtrlMembre\":\"CTRMEM\",\"interimDispatch\":false}"))
+                .content("{\"idDispatch\":5604,\"idReception\":5604,\"imCtrlCc\":\"CTRCC2\","
+                        + "\"imCtrlMembre\":\"MEMTMS8\",\"interimDispatch\":false}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.imCtrlCc").value(nullValue()));
     }
@@ -262,7 +275,7 @@ class ReceptionDispatchIntegrationTest extends CnmIntegrationTestSupport {
     void dispatch_date_simple_acceptee() throws Exception {
         dossierRepository.save(dossier(310, "PRET_DISPATCH"));
         receptionRepository.save(reception(410, 310, "CTRSEC", true));   // CTRSEC = localité ANT
-        mvc.perform(post("/api/dispatchs").header("Authorization", tokenCc)
+        mvc.perform(post("/api/dispatchs").header("Authorization", tokenPresident)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDispatch\":310,\"idReception\":410,\"imCtrlMembre\":\"CTRMEM\","
                         + "\"interimDispatch\":false,\"dateDispatch\":\"2026-06-30\"}"))
@@ -366,12 +379,14 @@ class ReceptionDispatchIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(get("/api/dossiers/1").header("Authorization", tokenCc))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.statut").value("PRET_DISPATCH"));
 
-        // [Auto] Notification PRET_DISPATCH adressée au Président et au CC de la localité.
+        // ⚠️ 2026-09-03 — le dossier 1 est en localité CENTRALE : la notification ne part plus qu'au
+        // Président. Prévenir le CC lui annoncerait une tâche qu'il recevra en 403 (le pré-dispatch
+        // central relève du seul Président). Le cas RÉGIONAL — Président ET CC — est éprouvé par
+        // PreDispatchCentraleIntegrationTest.
         mvc.perform(get("/api/notifications").header("Authorization", tokenAdmin))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.typeNotif=='PRET_DISPATCH')]", hasSize(2)))
-                .andExpect(jsonPath("$[?(@.typeNotif=='PRET_DISPATCH')].destinataireIm", hasItem("CTRPRE")))
-                .andExpect(jsonPath("$[?(@.typeNotif=='PRET_DISPATCH')].destinataireIm", hasItem("CTRCC1")));
+                .andExpect(jsonPath("$[?(@.typeNotif=='PRET_DISPATCH')]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.typeNotif=='PRET_DISPATCH')].destinataireIm", hasItem("CTRPRE")));
     }
 
     @Test
@@ -389,7 +404,7 @@ class ReceptionDispatchIntegrationTest extends CnmIntegrationTestSupport {
         // B) Dispatch VIA L'API → le dossier passe à DISPATCHE, et l'examen devient alors permis.
         dossierRepository.save(dossier(16, "PRET_DISPATCH"));
         receptionRepository.save(reception(26, 16, "CTRSEC", true));
-        mvc.perform(post("/api/dispatchs").header("Authorization", tokenCc).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/dispatchs").header("Authorization", tokenPresident).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDispatch\":46,\"idReception\":26,\"imCtrlMembre\":\"CTRMEM\",\"interimDispatch\":false}"))
                 .andExpect(status().isCreated());
         mvc.perform(get("/api/dossiers/16").header("Authorization", tokenPresident))
@@ -466,7 +481,7 @@ class ReceptionDispatchIntegrationTest extends CnmIntegrationTestSupport {
         // Dispatch légitime sur le dossier 350 (ANT) → dossier DISPATCHE.
         dossierRepository.save(dossier(350, "PRET_DISPATCH"));
         receptionRepository.save(reception(450, 350, "CTRSEC", true));
-        mvc.perform(post("/api/dispatchs").header("Authorization", tokenCc).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/dispatchs").header("Authorization", tokenPresident).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDispatch\":350,\"idReception\":450,\"imCtrlMembre\":\"CTRMEM\",\"interimDispatch\":false}"))
                 .andExpect(status().isCreated());
 
@@ -480,10 +495,10 @@ class ReceptionDispatchIntegrationTest extends CnmIntegrationTestSupport {
         // (b) Anti-doublon : re-cibler le dispatch sur une réception DÉJÀ dispatchée → 409.
         dossierRepository.save(dossier(351, "PRET_DISPATCH"));
         receptionRepository.save(reception(451, 351, "CTRSEC", true));
-        mvc.perform(post("/api/dispatchs").header("Authorization", tokenCc).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/dispatchs").header("Authorization", tokenPresident).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDispatch\":351,\"idReception\":451,\"imCtrlMembre\":\"CTRMEM\",\"interimDispatch\":false}"))
                 .andExpect(status().isCreated());
-        mvc.perform(put("/api/dispatchs/350").header("Authorization", tokenCc)
+        mvc.perform(put("/api/dispatchs/350").header("Authorization", tokenPresident)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDispatch\":350,\"idReception\":451,\"imCtrlMembre\":\"CTRMEM\",\"interimDispatch\":false}"))
                 .andExpect(status().isConflict());
@@ -492,7 +507,7 @@ class ReceptionDispatchIntegrationTest extends CnmIntegrationTestSupport {
         Dossier statue = dossierRepository.findById(350).orElseThrow();
         statue.setStatut("EN_VERIFICATION");
         dossierRepository.save(statue);
-        mvc.perform(put("/api/dispatchs/350").header("Authorization", tokenCc)
+        mvc.perform(put("/api/dispatchs/350").header("Authorization", tokenPresident)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDispatch\":350,\"idReception\":450,\"imCtrlMembre\":\"CTRCC1\",\"interimDispatch\":false}"))
                 .andExpect(status().isConflict());
@@ -505,18 +520,26 @@ class ReceptionDispatchIntegrationTest extends CnmIntegrationTestSupport {
     @DisplayName("Dispatch (lot B) — IM_CTRL_DISPATCH vient du JWT : un dispatcheur falsifié dans le corps est ignoré, "
             + "au POST comme au PUT")
     void dispatch_dispatcheurTraceDepuisLeJeton() throws Exception {
-        dossierRepository.save(dossier(352, "PRET_DISPATCH"));
-        receptionRepository.save(reception(452, 352, "CTRSEC", true));
-        mvc.perform(post("/api/dispatchs").header("Authorization", tokenCc).contentType(MediaType.APPLICATION_JSON)
+        // ⚠️ 2026-09-03 — ce test porte sur LE CC DISPATCHEUR (le JWT prime sur le corps) : il ne peut
+        // donc pas changer d'acteur. Il déménage en localité RÉGIONALE, où le CC dispatche toujours ;
+        // la centrale, elle, est désormais réservée au Président.
+        Dossier d = dossier(352, "PRET_DISPATCH");
+        d.setIdLocalite("TMS");
+        dossierRepository.save(d);
+        receptionRepository.save(reception(452, 352, "CTRCC2", true));   // CTRCC2 = localité TMS
+        controleurRepository.save(controleur("MEMTMS9", 5, "TMS"));
+        String tokenCcTms = bearer("CTRCC2", ProfilUtilisateur.CHEF_COMMISSION, TypeActeur.CONTROLEUR,
+                "CTRCC2", "TMS");
+        mvc.perform(post("/api/dispatchs").header("Authorization", tokenCcTms).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDispatch\":352,\"idReception\":452,\"imCtrlDispatch\":\"CTRPRE\","
-                        + "\"imCtrlMembre\":\"CTRMEM\",\"interimDispatch\":false}"))
+                        + "\"imCtrlMembre\":\"MEMTMS9\",\"interimDispatch\":false}"))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.imCtrlDispatch").value("CTRCC1"));
+                .andExpect(jsonPath("$.imCtrlDispatch").value("CTRCC2"));
         // Le Président corrige : c'est LUI qui devient le dispatcheur tracé, pas la valeur du corps.
         mvc.perform(put("/api/dispatchs/352").header("Authorization", tokenPresident)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDispatch\":352,\"idReception\":452,\"imCtrlDispatch\":\"CTRMEM\","
-                        + "\"imCtrlMembre\":\"CTRMEM\",\"interimDispatch\":false}"))
+                        + "\"imCtrlMembre\":\"MEMTMS9\",\"interimDispatch\":false}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.imCtrlDispatch").value("CTRPRE"));
     }

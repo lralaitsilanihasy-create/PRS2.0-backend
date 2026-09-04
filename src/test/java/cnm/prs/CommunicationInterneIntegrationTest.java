@@ -132,8 +132,9 @@ class CommunicationInterneIntegrationTest extends CnmIntegrationTestSupport {
         // Dossier PRET_DISPATCH d'ANT avec une réception fraîche.
         dossierRepository.save(dossier(20, "PRET_DISPATCH"));
         receptionRepository.save(reception(40, 20, "CTRSEC", true)); // CTRSEC = localité ANT
-        // Le CC d'ANT dispatche le dossier au Membre CTRMEM (titulaire, même localité).
-        mvc.perform(post("/api/dispatchs").header("Authorization", tokenCc).contentType(MediaType.APPLICATION_JSON)
+        // ⚠️ 2026-09-03 — dossier CENTRAL : le dispatch relève du Président. Le sujet du test est la
+        // notification EXAMEN_A_FAIRE au Membre assigné, l’acteur du dispatch y est incident.
+        mvc.perform(post("/api/dispatchs").header("Authorization", tokenPresident).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDispatch\":50,\"idReception\":40,\"imCtrlMembre\":\"CTRMEM\",\"interimDispatch\":false}"))
                 .andExpect(status().isCreated());
 

@@ -34,4 +34,15 @@ public class LocaliteDto {
      */
     @Size(max = 50)
     private String chefLieu;
+
+    /**
+     * ⚠️ <strong>Dérivé serveur (lecture seule)</strong>, ajouté le 2026-09-03 : {@code true} pour la
+     * localité <strong>centrale</strong> (Commission nationale, segment « CNM » des références).
+     *
+     * <p>Calculé au mapping depuis {@code Localite.estCentrale(idLocalite)} — <strong>pas de colonne</strong>.
+     * Le front s'en sert pour les règles propres à la centrale (le pré-dispatch y relève du seul
+     * Président) au lieu d'un identifiant codé en dur : si la constante change un jour côté serveur, le
+     * front suit sans redéploiement coordonné. Toute valeur envoyée en écriture est ignorée.</p>
+     */
+    private Boolean estCentrale;
 }

@@ -479,7 +479,21 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
 - Chaque action porte au contraire l'**opérateur courant** — la PRMP **en fonction à la date de l'action** —
   consigné horodaté et par auteur dans **`t_action_dossier`**, lisible via
   `GET /api/dossiers/{id}/journal` par les profils concernés (périmètre de visibilité du dossier, §1). Ce
-  journal métier est distinct de `t_audit_log` (trace technique, réservée à l'Administrateur).
+- ⚠️ **Le journal consigne aussi les gestes du CIRCUIT (règle du pilote, 2026-09-04)** — « Est-ce qu'on
+  peut faire apparaître les réattributions du CC et le retrait, c'est-à-dire toutes les étapes que le
+  dossier a fait ? » Quatre types s'ajoutent au vocabulaire fermé, plus la réception :
+  **`DISPATCH`**, **`REATTRIBUTION`**, **`REPRISE`**, **`RETRAIT_DISPATCH`**, **`RECEPTION`**.
+  - **Pourquoi le journal et non le chronométrage** : ce dernier mesure les étapes et leurs durées, mais
+    un dispatch ne garde que son **dernier état** — une réattribution écrase l'attributaire, un retrait
+    supprime la ligne. Le journal étant **append-only**, la trace d'un retrait **survit** à la disparition
+    du dispatch qu'elle décrit, et les dispatchs successifs d'un même dossier s'y accumulent.
+  - **`REPRISE` ≠ `REATTRIBUTION`** : le « Retirer » d'un CC est une réattribution **vers lui-même** (le
+    dossier revient dans SA file, il ne repart pas au Président) — la distinction est précisément ce que
+    le pilote voulait voir.
+  - ⚠️ **Gestes de contrôleur : ni PRMP ni mandat.** Sur ces lignes, `ID_PRMP_OPERATEUR` et
+    `ID_MANDAT_OPERATEUR` restent **nuls** — ce sont des concepts PRMP, et les renseigner avec un
+    matricule de contrôleur allumerait à tort le marqueur « opérateur ≠ attributaire ». Seuls le **nom**
+    du contrôleur et son **login** sont consignés. Le journal PRMP existant est inchangé.
 - La **garde de propriété** accepte donc **deux titres** : la PRMP d'attribution **et** la PRMP en fonction
   sur le périmètre du dossier — celle qui a *à la fois* un mandat actif *et* une affectation active
   (`t_prmp_entite.ACTIF`) sur l'entité contractante du dossier. C'est ce second titre qui autorise la
@@ -872,6 +886,26 @@ Subordonné du Président. Rattaché à une localité définie — ne voit que l
 - Dispatch en intérim (autres localités) [Action]
   - En l'absence du Président — INTERIM_DISPATCH = true tracé dans t_dispatch.
   - ⚠️ La **garde de cohérence de l'attributaire** et l'**auto-attribution** (§3.2, Dispatch vers un membre) s'appliquent à l'identique au dispatch du CC — l'auto-attribution du CC n'est possible que si la paire CC → Membre est **active**.
+- ⚠️ **Localité CENTRALE : pas de pré-dispatch pour le CC (règle du pilote, 2026-09-03)** [Action]
+  - « Pour le dossier de localité centrale (CNM), le CC ne doit pas voir les dossiers pour pré-dispatch.
+    Seul le Président en a ce privilège. » Toute écriture de dispatch (POST, PUT, **intérim compris**) sur
+    un dossier de la localité centrale est refusée au CC en **403**. Les commissions **régionales** sont
+    **inchangées** : leur CC continue de dispatcher chez lui.
+  - Garde par **profil courant**, non par la délégation ascendante : le dispatch est un droit natif du CC,
+    les paires de `t_delegation_profil` n'ont pas à l'ouvrir ni à le fermer.
+  - **Dérogation — le CC concerné par le dispatch** : il peut agir sur un dispatch central dont il est
+    l'**attributaire courant** (« le CC peut dispatcher le dossier que le Président lui a dispatché »)
+    **ou** le **dispatcheur**. Ce second cas n'est pas une facilité : le « Retirer » du CC est une
+    réattribution **vers lui-même**, or après avoir réattribué à un Membre il n'est plus attributaire mais
+    dispatcheur — s'en tenir à l'attributaire lui interdirait de reprendre son propre dossier.
+  - **Réattribution** : le nouvel attributaire est notifié (`EXAMEN_A_FAIRE`, sauf s'il est l'acteur —
+    pas d'auto-notification à la reprise) et l'ancien est prévenu du retrait ; **409** si un examen est
+    déjà entamé (le circuit propre passe par « Retirer », qui purge l'aval).
+  - **Retrait** (garde **générale**, toutes localités) : un CC n'annule que s'il est le **dispatcheur**,
+    **403** sinon. **Pas d'auto-retrait** : le CC à la fois dispatcheur et attributaire est refusé — c'est
+    le Président qui lui retire le dossier. Le Président n'est jamais restreint.
+  - **Notification « prêt à dispatcher »** : sur un dossier central, seul le Président est notifié —
+    prévenir le CC lui annoncerait une tâche qu'il recevra en 403.
 - Réception copie du dossier [Lecture]
   - Copie formelle via t_copie_dossier (TYPE_COPIE = DISPATCH_CC) + notification DISPATCH_CC.
   - ⚠️ **Règle MODIFIÉE (2026-08-15)** : la copie/association CC ne vaut que pour les dispatchs du **Président vers un Membre**. Quand le CC dispatche lui-même (titulaire ou intérim, Membre ou auto-attribution), **aucune association CC** n'est posée — il est l'acteur du dispatch (voir §3.2, « Dispatch vers un membre »).
@@ -993,6 +1027,17 @@ Subordonné direct du Chef de commission. Partage sa localité avec son CC. Réc
 
 Subordonné direct du Chef de commission. Voit tous les dossiers de sa localité — pas seulement ceux qui lui sont dispatché. Instruit les dossiers point par point, rédige le projet de PV et anime la navette avec le Président ou le CC jusqu'à acceptation, puis co-signe le PV définitif.
 
+- ⚠️ **Examen réservé à l'ATTRIBUTAIRE — exemption « délégation » RETIRÉE (2026-09-03)** [Action]
+  - « Celui qui a dispatché le dossier à quelqu'un ne doit plus avoir accès à l'examen de ce même dossier.
+    De même, celui qui n'est pas assignataire, mais qui a reçu une copie (CC) du dossier, ne peut pas non
+    plus examiner. » (pilote)
+  - La garde ne comparait l'appelant à l'attributaire **que si son profil était MEMBRE** : un CC ou un
+    Président passait donc sans contrôle, de sorte que le **dispatcheur** pouvait examiner ce qu'il venait
+    de confier, et le **CC en copie** ce qu'il ne faisait que suivre. L'exemption est supprimée : quel que
+    soit le profil, seul l'**attributaire courant** du dernier dispatch crée, modifie et soumet l'examen
+    (**403** sinon).
+  - Le P/CC **attributaire** — « Chef de commission ⤴ », « moi-même ⤴ », réattribution vers soi — reste
+    autorisé : il EST l'attributaire, et c'est bien ce que la garde vérifie. Le circuit court est intact.
 **Module 02 — Circuit de contrôle**
 
 - Consultation de tous les dossiers [Lecture]

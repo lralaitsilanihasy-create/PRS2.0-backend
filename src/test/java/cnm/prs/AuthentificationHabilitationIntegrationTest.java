@@ -557,35 +557,42 @@ class AuthentificationHabilitationIntegrationTest extends CnmIntegrationTestSupp
     @Test
     @DisplayName("INTERIM_DISPATCH : titulaire dans sa localité (false), intérim hors localité (true)")
     void interimDispatch_conditionnel() throws Exception {
-        // Les gardes du dispatch exigent un dossier PRET_DISPATCH et une réception sans dispatch.
-        // On prépare des dossiers PRET_DISPATCH avec une réception dédiée chacun (ANT et TMS).
+        // ⚠️ 2026-09-03 — la règle d'intérim s'éprouve désormais entre DEUX RÉGIONALES : la localité
+        // centrale (ANT) est fermée à tout CC, si bien qu'un « CC titulaire chez lui » ou un « CC en
+        // intérim » y partiraient en 403 avant même d'atteindre la garde d'intérim. On ajoute donc une
+        // seconde région ; les cinq cas de la règle sont conservés à l'identique.
+        localiteRepository.save(localite("FIA", "Fianarantsoa"));
+        controleurRepository.save(controleur("CTRCC3", 3, "FIA"));
+        String tokenCcTms = bearer("CTRCC2", ProfilUtilisateur.CHEF_COMMISSION, TypeActeur.CONTROLEUR,
+                "CTRCC2", "TMS");
+
         dossierRepository.save(dossier(10, "PRET_DISPATCH"));
         dossierRepository.save(dossier(11, "PRET_DISPATCH"));
         dossierRepository.save(dossier(12, "PRET_DISPATCH"));
         dossierRepository.save(dossier(13, "PRET_DISPATCH"));
-        receptionRepository.save(reception(20, 10, "CTRSEC", true)); // ANT (CTRSEC = localité ANT)
-        receptionRepository.save(reception(21, 11, "CTRSEC", true)); // ANT
-        receptionRepository.save(reception(22, 12, "CTRCC2", true)); // TMS (CTRCC2 = localité TMS)
-        receptionRepository.save(reception(23, 13, "CTRCC2", true)); // TMS
+        receptionRepository.save(reception(20, 10, "CTRCC2", true)); // TMS
+        receptionRepository.save(reception(21, 11, "CTRCC2", true)); // TMS
+        receptionRepository.save(reception(22, 12, "CTRCC3", true)); // FIA
+        receptionRepository.save(reception(23, 13, "CTRCC3", true)); // FIA
 
-        // Cas conformes (CC d'ANT) — réceptions fraîches.
-        // Dossier d'ANT en titulaire.
-        mvc.perform(post("/api/dispatchs").header("Authorization", tokenCc).contentType(MediaType.APPLICATION_JSON)
+        // Cas conformes (CC de TMS).
+        // Dossier de SA localité en titulaire.
+        mvc.perform(post("/api/dispatchs").header("Authorization", tokenCcTms).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDispatch\":30,\"idReception\":20,\"interimDispatch\":false}"))
                 .andExpect(status().isCreated());
-        // Dossier de TMS en intérim.
-        mvc.perform(post("/api/dispatchs").header("Authorization", tokenCc).contentType(MediaType.APPLICATION_JSON)
+        // Dossier d'une AUTRE localité en intérim.
+        mvc.perform(post("/api/dispatchs").header("Authorization", tokenCcTms).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDispatch\":31,\"idReception\":22,\"interimDispatch\":true}"))
                 .andExpect(status().isCreated());
 
         // Cas non conformes (409) — la précondition passe (réceptions fraîches PRET_DISPATCH),
         // c'est la règle d'intérim qui bloque.
         // CC dans sa localité mais marqué intérim.
-        mvc.perform(post("/api/dispatchs").header("Authorization", tokenCc).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/dispatchs").header("Authorization", tokenCcTms).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDispatch\":32,\"idReception\":21,\"interimDispatch\":true}"))
                 .andExpect(status().isConflict());
         // CC hors de sa localité mais marqué titulaire.
-        mvc.perform(post("/api/dispatchs").header("Authorization", tokenCc).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/dispatchs").header("Authorization", tokenCcTms).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDispatch\":33,\"idReception\":23,\"interimDispatch\":false}"))
                 .andExpect(status().isConflict());
         // Le Président dispatche toujours en titulaire.
@@ -735,9 +742,16 @@ class AuthentificationHabilitationIntegrationTest extends CnmIntegrationTestSupp
             + "appartient au visa (signer → 409), puis le Membre désigné co-signe → SIGNE ; passage statué sur SES "
             + "PROPRES observations. ⚠️ 2026-09-02 — le Secrétaire de séance a disparu du visa.")
     void circuitCourtCc_visaParAttributaire_etPassageSurSesObservations() throws Exception {
-        // Dossier ANT auto-attribué par le CC (garde attributaire : paire CC → Membre active).
+        // ⚠️ 2026-09-03 — CE TEST DÉMÉNAGE EN LOCALITÉ RÉGIONALE. Il éprouve le CIRCUIT COURT complet
+        // du CC : il se dispatche, examine, vise et statue sur ses propres observations. Or la centrale
+        // est désormais fermée au CC — cette combinaison n'y existe plus. La règle éprouvée est
+        // inchangée, seule la localité l'est ; le circuit court reste bien vivant en CRM.
+        String tokenCcTms = bearer("CTRCC2", ProfilUtilisateur.CHEF_COMMISSION, TypeActeur.CONTROLEUR,
+                "CTRCC2", "TMS");
+        controleurRepository.save(controleur("MEMTMS7", 5, "TMS"));
+        // Dossier TMS auto-attribué par le CC régional (garde attributaire : paire CC → Membre active).
         // Enrichi PPM + ligne de marché : support du diff de rectification (2026-08-15).
-        Dossier d4610 = dossierLoc(4610, "PRET_DISPATCH", "ANT", "PRMP001");
+        Dossier d4610 = dossierLoc(4610, "PRET_DISPATCH", "TMS", "PRMP001");
         d4610.setIdTypeDossier("DDP");
         dossierRepository.save(d4610);
         ppmRepository.save(ppm(4610, 4610, "PRMP001"));
@@ -748,13 +762,15 @@ class AuthentificationHabilitationIntegrationTest extends CnmIntegrationTestSupp
         m4610.setIdNature(1);
         m4610.setFormeMarche(cnm.prs.enums.FormeMarche.QUANTITE_FIXE);
         marcheRepository.save(m4610);
-        receptionRepository.save(reception(5610, 4610, "CTRSEC", true));
-        mvc.perform(post("/api/dispatchs").header("Authorization", tokenCc).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idDispatch\":5610,\"idReception\":5610,\"imCtrlMembre\":\"CTRCC1\",\"interimDispatch\":false}"))
+        receptionRepository.save(reception(5610, 4610, "CTRCC2", true));
+        // Le CC RÉGIONAL s’auto-dispatche : il devient dispatcheur ET attributaire, ce qui est tout
+        // le sujet du circuit court — c’est lui qui visera ensuite.
+        mvc.perform(post("/api/dispatchs").header("Authorization", tokenCcTms).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDispatch\":5610,\"idReception\":5610,\"imCtrlMembre\":\"CTRCC2\",\"interimDispatch\":false}"))
                 .andExpect(status().isCreated());
         // Examen par le CC attributaire, avec un point NON CONFORME (source des observations du PV FAVR).
-        mvc.perform(post("/api/examens").header("Authorization", tokenCc).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idExamen\":5610,\"idDispatch\":5610,\"imCtrlMembre\":\"CTRCC1\"}"))
+        mvc.perform(post("/api/examens").header("Authorization", tokenCcTms).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idExamen\":5610,\"idDispatch\":5610,\"imCtrlMembre\":\"CTRCC2\"}"))
                 .andExpect(status().isCreated());
         if (!pointsCtrlRepository.existsById(990)) {
             PointsCtrl pc = new PointsCtrl();
@@ -767,13 +783,13 @@ class AuthentificationHabilitationIntegrationTest extends CnmIntegrationTestSupp
         nonConforme.setIdDetail(46100);   // point évalué SUR la ligne de marché (complétude par marché)
         nonConforme.setConforme(false);
         examenDetailRepository.save(nonConforme);
-        String pvBody = mvc.perform(post("/api/examens/5610/soumettre").header("Authorization", tokenCc)
+        String pvBody = mvc.perform(post("/api/examens/5610/soumettre").header("Authorization", tokenCcTms)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"idAvis\":\"FAVR\"}"))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         int idPv = com.jayway.jsonpath.JsonPath.read(pvBody, "$.idPv");
         // Navette : le CC soumet SON projet puis l'accepte lui-même (accepteur = auteur — circuit court réel).
-        mvc.perform(post("/api/pv-examens/" + idPv + "/soumettre").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRCC1\",\"commentaire\":\"go\"}"))
+        mvc.perform(post("/api/pv-examens/" + idPv + "/soumettre").header("Authorization", tokenCcTms)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRCC2\",\"commentaire\":\"go\"}"))
                 .andExpect(status().isOk());
         // ⚠️ Le Secrétaire de séance a été RETIRÉ du visa (règle du pilote, 2026-09-02) : les trois cas
         // négatifs éprouvés ici — Secrétaire sans paire, CC d'une autre localité, paire désactivée —
@@ -781,56 +797,56 @@ class AuthentificationHabilitationIntegrationTest extends CnmIntegrationTestSupp
         // champ ignoré ne peut pas être invalide. Ce qui reste vérifié ci-dessous est ce qui SUBSISTE :
         // le CC dispatcheur vise son propre dossier, sa part CC est posée du même geste, et il désigne
         // le Membre co-signataire.
-        viser(idPv, tokenCc, "CTRCC1", "FAVR", null, "CTRMEM")
+        viser(idPv, tokenCcTms, "CTRCC2", "FAVR", null, "MEMTMS7")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.idSecretaireSeance").doesNotExist())
-                .andExpect(jsonPath("$.imCtrlCc").value("CTRCC1"))
-                .andExpect(jsonPath("$.imDispatcheur").value("CTRCC1"))
-                .andExpect(jsonPath("$.imMembreCoSignataire").value("CTRMEM"));
+                .andExpect(jsonPath("$.imCtrlCc").value("CTRCC2"))
+                .andExpect(jsonPath("$.imDispatcheur").value("CTRCC2"))
+                .andExpect(jsonPath("$.imMembreCoSignataire").value("MEMTMS7"));
         // ⚠️ 2026-08-31 — la part CC est sortie de « signer » : elle appartient au visa, déjà posé. 409.
-        mvc.perform(post("/api/pv-examens/" + idPv + "/signer").header("Authorization", tokenCc)
+        mvc.perform(post("/api/pv-examens/" + idPv + "/signer").header("Authorization", tokenCcTms)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"imActeur\":\"CTRCC1\",\"role\":\"CC\",\"imMembreCoSignataire\":\"CTRMEM\"}"))
+                .content("{\"imActeur\":\"CTRCC2\",\"role\":\"CC\",\"imMembreCoSignataire\":\"MEMTMS7\"}"))
                 .andExpect(status().isConflict());
         // ⚠️ 2026-08-28 — le CC attributaire ne prend pas non plus la part Membre : il a examiné, mais le
-        // désigné est CTRMEM. 403, l'étape étant ouverte et lui n'étant pas le désigné.
-        mvc.perform(post("/api/pv-examens/" + idPv + "/signer").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRCC1\",\"role\":\"MEMBRE\"}"))
+        // désigné est MEMTMS7. 403, l'étape étant ouverte et lui n'étant pas le désigné.
+        mvc.perform(post("/api/pv-examens/" + idPv + "/signer").header("Authorization", tokenCcTms)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRCC2\",\"role\":\"MEMBRE\"}"))
                 .andExpect(status().isForbidden());
-        // Le Membre désigné co-signe → SIGNE. IM_CTRL_MEMBRE reste CTRCC1, qui a mené l'examen.
-        String tokenMembreAnt2 = bearer("CTRMEM", ProfilUtilisateur.MEMBRE, TypeActeur.CONTROLEUR, "CTRMEM", "ANT");
-        mvc.perform(post("/api/pv-examens/" + idPv + "/signer").header("Authorization", tokenMembreAnt2)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRMEM\",\"role\":\"MEMBRE\"}"))
+        // Le Membre désigné co-signe → SIGNE. IM_CTRL_MEMBRE reste CTRCC2, qui a mené l'examen.
+        String tokenMembreTms2 = bearer("MEMTMS7", ProfilUtilisateur.MEMBRE, TypeActeur.CONTROLEUR, "MEMTMS7", "TMS");
+        mvc.perform(post("/api/pv-examens/" + idPv + "/signer").header("Authorization", tokenMembreTms2)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"MEMTMS7\",\"role\":\"MEMBRE\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.statutPv").value("SIGNE"))
-                .andExpect(jsonPath("$.imCtrlCc").value("CTRCC1"))
-                .andExpect(jsonPath("$.imCtrlMembre").value("CTRCC1"));
-        mvc.perform(get("/api/dossiers/4610").header("Authorization", tokenCc))
+                .andExpect(jsonPath("$.imCtrlCc").value("CTRCC2"))
+                .andExpect(jsonPath("$.imCtrlMembre").value("CTRCC2"));
+        mvc.perform(get("/api/dossiers/4610").header("Authorization", tokenCcTms))
                 .andExpect(jsonPath("$.statut").value("EN_VERIFICATION"));
         // Q1a : le MÊME CC (attributaire, auteur des observations) statue le passage via la paire CC → Vérificateur
         // — tâche de PROFIL, sans garde de séparation (et, depuis le 2026-09-02, plus aucun lien avec
         // le Secrétaire de séance, retiré du cycle du PV).
         // ⚠️ Décision produit 2026-08-15 : au PREMIER passage la levée est impossible (les observations
         // du PV sont réputées avec objet) — leveePossible=false au front, LEVEE → 409, tout MAINTENUE.
-        String obs = mvc.perform(get("/api/observations-pv").header("Authorization", tokenCc).param("dossier", "4610"))
+        String obs = mvc.perform(get("/api/observations-pv").header("Authorization", tokenCcTms).param("dossier", "4610"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].leveePossible").value(false))
                 .andReturn().getResponse().getContentAsString();
         int idObs = com.jayway.jsonpath.JsonPath.read(obs, "$[0].idObservationPv");
-        mvc.perform(post("/api/observations-pv/passage").header("Authorization", tokenCc)
+        mvc.perform(post("/api/observations-pv/passage").header("Authorization", tokenCcTms)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDossier\":4610,\"decisions\":[{\"idObservationPv\":" + idObs + ",\"decision\":\"LEVEE\"}]}"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.message", containsString("première rectification")));
-        mvc.perform(post("/api/observations-pv/passage").header("Authorization", tokenCc)
+        mvc.perform(post("/api/observations-pv/passage").header("Authorization", tokenCcTms)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDossier\":4610,\"decisions\":[{\"idObservationPv\":" + idObs
                         + ",\"decision\":\"MAINTENUE\",\"precision\":\"a rectifier\"}]}"))
                 .andExpect(status().isOk());
-        mvc.perform(get("/api/dossiers/4610").header("Authorization", tokenCc))
+        mvc.perform(get("/api/dossiers/4610").header("Authorization", tokenCcTms))
                 .andExpect(jsonPath("$.statut").value("EN_ATTENTE_DECISION_PRMP"));
         // Diff de rectification (2026-08-15) — avant toute correction : aucun instantané → 409.
-        mvc.perform(get("/api/dossiers/4610/diff-rectification").header("Authorization", tokenCc))
+        mvc.perform(get("/api/dossiers/4610/diff-rectification").header("Authorization", tokenCcTms))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.message", containsString("Aucune rectification")));
         // La PRMP corrige EN PLACE (structure figée, mise à jour par idDetail). Le PREMIER PUT du cycle
@@ -846,7 +862,7 @@ class AuthentificationHabilitationIntegrationTest extends CnmIntegrationTestSupp
                 .andExpect(status().isOk());
         // Le CC (vérificateur par délégation) voit CE QUE LA PRMP A CHANGÉ : ligne MODIFIEE,
         // designation avant → après (comparée à l'état d'AVANT la première correction), cycle non clos.
-        mvc.perform(get("/api/dossiers/4610/diff-rectification").header("Authorization", tokenCc))
+        mvc.perform(get("/api/dossiers/4610/diff-rectification").header("Authorization", tokenCcTms))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.fige").value(false))
                 .andExpect(jsonPath("$.recap.modifiees").value(1))
@@ -860,17 +876,17 @@ class AuthentificationHabilitationIntegrationTest extends CnmIntegrationTestSupp
                 .contentType(MediaType.APPLICATION_JSON).content("{\"motifRectification\":\"corrige\"}"))
                 .andExpect(status().isOk());
         // Après resoumission, le diff du cycle CLOS reste servi (fige=true, motif de la rectification).
-        mvc.perform(get("/api/dossiers/4610/diff-rectification").header("Authorization", tokenCc))
+        mvc.perform(get("/api/dossiers/4610/diff-rectification").header("Authorization", tokenCcTms))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.fige").value(true))
                 .andExpect(jsonPath("$.motifMaj").value("corrige"));
-        mvc.perform(get("/api/observations-pv").header("Authorization", tokenCc).param("dossier", "4610"))
+        mvc.perform(get("/api/observations-pv").header("Authorization", tokenCcTms).param("dossier", "4610"))
                 .andExpect(jsonPath("$[0].leveePossible").value(true));
-        mvc.perform(post("/api/observations-pv/passage").header("Authorization", tokenCc)
+        mvc.perform(post("/api/observations-pv/passage").header("Authorization", tokenCcTms)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDossier\":4610,\"decisions\":[{\"idObservationPv\":" + idObs + ",\"decision\":\"LEVEE\"}]}"))
                 .andExpect(status().isOk());
-        mvc.perform(get("/api/dossiers/4610").header("Authorization", tokenCc))
+        mvc.perform(get("/api/dossiers/4610").header("Authorization", tokenCcTms))
                 .andExpect(jsonPath("$.statut").value("OBSERVATIONS_LEVEES"));
     }
 

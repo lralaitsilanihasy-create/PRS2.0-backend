@@ -19,6 +19,9 @@ public final class LocaliteMapper {
         dto.setIdLocalite(entity.getIdLocalite());
         dto.setLibelleLocalite(entity.getLibelleLocalite());
         dto.setChefLieu(entity.getChefLieu());
+        // ⚠️ 2026-09-03 — dérivé, jamais stocké : la centrale est définie par une constante du code
+        // (Localite.ID_CENTRALE), pas par une colonne que quelqu’un pourrait cocher de travers.
+        dto.setEstCentrale(Localite.estCentrale(entity.getIdLocalite()));
         return dto;
     }
 

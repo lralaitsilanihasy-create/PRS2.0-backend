@@ -18,7 +18,6 @@ import cnm.prs.entity.Examen;
 import cnm.prs.entity.Marche;
 import cnm.prs.entity.PointsCtrl;
 import cnm.prs.enums.PorteePointCtrl;
-import cnm.prs.enums.ProfilUtilisateur;
 import cnm.prs.enums.StatutDossier;
 import cnm.prs.exception.BusinessRuleException;
 import cnm.prs.exception.ChampsInvalidesException;
@@ -264,22 +263,28 @@ public class ExamenService {
     }
 
     /**
-     * Autorisation (§2.4, §3.5) : un Membre <strong>titulaire</strong> n'examine que les dossiers qui
-     * lui sont <strong>attribués</strong> ({@code Dispatch.imCtrlMembre}). Un CC / Président instruisant
-     * <strong>par délégation</strong> (profil ≠ MEMBRE, déjà contrôlé en localité) reste autorisé.
+     * Autorisation (§2.4, §3.5) — l'examen est réservé à l'<strong>ATTRIBUTAIRE COURANT</strong> du
+     * dispatch ({@code Dispatch.imCtrlMembre}), quel que soit son profil.
      *
-     * @throws AccessDeniedException (→ 403) si un Membre tente d'examiner le dossier d'un autre Membre
+     * <p>⚠️ <strong>L'exemption « délégation » a été RETIRÉE le 2026-09-03</strong> (règle du pilote) :
+     * « Celui qui a dispatché le dossier à quelqu'un ne doit plus avoir accès à l'examen de ce même
+     * dossier. De même, celui qui n'est pas assignataire, mais qui a reçu une copie (CC) du dossier, ne
+     * peut pas non plus examiner. » La garde ne s'appliquait qu'au profil {@code MEMBRE} : un CC ou un
+     * Président passait sans contrôle, donc le dispatcheur pouvait examiner ce qu'il venait de confier,
+     * et le CC en copie ce qu'il ne faisait que suivre.</p>
+     *
+     * <p>Le P/CC <strong>attributaire</strong> — « Chef de commission ⤴ », « moi-même ⤴ », réattribution
+     * vers soi — reste autorisé : il EST l'attributaire, et c'est bien ce que la garde vérifie.</p>
+     *
+     * @throws AccessDeniedException (→ 403) si l'appelant n'est pas l'attributaire du dispatch
      */
     private void exigerMembreAttributaire(Integer idDispatch) {
-        if (CurrentUser.profil().orElse(null) != ProfilUtilisateur.MEMBRE) {
-            return; // délégation (CC/Président) : autorisé, localité déjà vérifiée
-        }
         String attributaire = idDispatch == null ? null
                 : dispatchRepository.findImCtrlMembreById(idDispatch).orElse(null);
         String moi = CurrentUser.ref().orElse(null);
         if (attributaire == null || !attributaire.equals(moi)) {
-            throw new AccessDeniedException(
-                    "Examen réservé au Membre attributaire du dispatch (§2.4) : vous n'êtes pas l'attributaire.");
+            throw new AccessDeniedException("Examen réservé à l'attributaire du dispatch (§2.4) : "
+                    + "vous n'êtes pas l'attributaire de ce dossier.");
         }
     }
 

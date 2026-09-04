@@ -45,12 +45,15 @@ public class ReceptionService {
     private final VerificationPieceDepotService verificationPieceDepotService;
     /** ⚠️ Chronométrage des délais (2026-09-01) — clôture de l'étape RECEPTION. */
     private final ChronometrageService chronometrageService;
+    /** ⚠️ Journal du circuit (2026-09-04) — trace de la réception complète. */
+    private final JournalDossierService journalDossier;
 
     public ReceptionService(ReceptionRepository repository, DossierRepository dossierRepository,
             PpmRepository ppmRepository, ControleurRepository controleurRepository,
             ControleurDirectory controleurDirectory, NotificationService notificationService,
             ReferenceService referenceService, VerificationPieceDepotService verificationPieceDepotService,
-            ChronometrageService chronometrageService) {
+            ChronometrageService chronometrageService, JournalDossierService journalDossier) {
+        this.journalDossier = journalDossier;
         this.chronometrageService = chronometrageService;
         this.repository = repository;
         this.dossierRepository = dossierRepository;
@@ -332,12 +335,23 @@ public class ReceptionService {
                 log.info("[CIRCUIT] reception complete dossier={} acteur={} reception={} statut={}",
                         dossier.getIdDossier(), cnm.prs.security.CurrentUser.login().orElse(null),
                         reception.getIdReception(), StatutDossier.PRET_DISPATCH.name());
+                // ⚠️ Journal du circuit (2026-09-04) — la reception COMPLET est le geste qui rend le dossier
+                // dispatchable : premiere ligne de l histoire du circuit, avant tout dispatch.
+                journalDossier.tracerControleur(dossier.getIdDossier(), JournalDossierService.RECEPTION,
+                        "réception n° " + reception.getIdReception() + " — dossier complet");
                 notifierPretDispatch(reception, dossier.getIdDossier());
             }
         });
     }
 
-    /** Notifie le Président et le CC de la localité du passage d'un dossier en PRET_DISPATCH (§2.2, §3.4). */
+    /**
+     * Notifie le Président et le CC de la localité du passage d'un dossier en PRET_DISPATCH (§2.2, §3.4).
+     *
+     * <p>⚠️ <strong>Localité CENTRALE : Président seulement</strong> (règle du pilote, 2026-09-03). Le
+     * dispatch d'un dossier de la Commission nationale relève du seul Président ; notifier le CC lui
+     * annoncerait une tâche qu'il recevra en 403 — un cul-de-sac. Les commissions régionales sont
+     * inchangées : leur CC dispatche, il est donc prévenu.</p>
+     */
     private void notifierPretDispatch(Reception reception, Integer idDossier) {
         String titre = "Dossier prêt à dispatcher";
         String corps = "Le dossier " + idDossier + " est complet et prêt à être dispatché.";
@@ -349,7 +363,7 @@ public class ReceptionService {
         String localite = reception.getImCtrlRecept() == null ? null
                 : controleurRepository.findById(reception.getImCtrlRecept())
                         .map(Controleur::getIdLocalite).orElse(null);
-        if (localite != null) {
+        if (localite != null && !Localite.estCentrale(localite)) {
             for (Controleur cc : controleurDirectory.chefsCommission(localite)) {
                 notificationService.emettre(idDossier, TypeNotification.PRET_DISPATCH,
                         cc.getImControleur(), cc.getEmailCont(), titre, corps);

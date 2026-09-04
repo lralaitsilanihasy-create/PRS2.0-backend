@@ -34,7 +34,7 @@ class ExamenIntegrationTest extends CnmIntegrationTestSupport {
     void statut_examenAvanceVersExamine() throws Exception {
         dossierRepository.save(dossier(30, "PRET_DISPATCH"));
         receptionRepository.save(reception(60, 30, "CTRSEC", true)); // ANT
-        mvc.perform(post("/api/dispatchs").header("Authorization", tokenCc).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/dispatchs").header("Authorization", tokenPresident).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDispatch\":80,\"idReception\":60,\"imCtrlMembre\":\"CTRMEM\",\"interimDispatch\":false}"))
                 .andExpect(status().isCreated());
         // Avant examen : DISPATCHE (à examiner).
@@ -54,7 +54,7 @@ class ExamenIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(post("/api/examens/80/soumettre").header("Authorization", tokenMembre)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"idAvis\":\"FAV\"}"))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.imDispatcheur").value("CTRCC1"))
+                .andExpect(jsonPath("$.imDispatcheur").value("CTRPRE"))
                 .andExpect(jsonPath("$.nomDispatcheur").exists());
         mvc.perform(get("/api/dossiers/30").header("Authorization", tokenCc))
                 .andExpect(jsonPath("$.statut").value("EXAMINE"));
@@ -104,7 +104,7 @@ class ExamenIntegrationTest extends CnmIntegrationTestSupport {
         // Dossier dispatché au Membre CTRMEM.
         dossierRepository.save(dossier(40, "PRET_DISPATCH"));
         receptionRepository.save(reception(70, 40, "CTRSEC", true)); // ANT
-        mvc.perform(post("/api/dispatchs").header("Authorization", tokenCc).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/dispatchs").header("Authorization", tokenPresident).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDispatch\":90,\"idReception\":70,\"imCtrlMembre\":\"CTRMEM\",\"interimDispatch\":false}"))
                 .andExpect(status().isCreated());
 
@@ -119,15 +119,17 @@ class ExamenIntegrationTest extends CnmIntegrationTestSupport {
                 .content("{\"idExamen\":90,\"idDispatch\":90,\"imCtrlMembre\":\"CTRMEM\"}"))
                 .andExpect(status().isCreated());
 
-        // Délégation : le CC peut instruire l'examen à la place d'un Membre de sa localité → 201.
+        // ⚠️ 2026-09-03 — CE CAS EST INVERSÉ. Il affirmait « le CC peut instruire l'examen à la place
+        // d'un Membre de sa localité → 201 » ; le pilote a retiré cette exemption : « celui qui n'est
+        // pas assignataire, mais qui a reçu une copie (CC) du dossier, ne peut pas non plus examiner ».
         dossierRepository.save(dossier(41, "PRET_DISPATCH"));
         receptionRepository.save(reception(71, 41, "CTRSEC", true));
-        mvc.perform(post("/api/dispatchs").header("Authorization", tokenCc).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/dispatchs").header("Authorization", tokenPresident).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDispatch\":91,\"idReception\":71,\"imCtrlMembre\":\"CTRMEM\",\"interimDispatch\":false}"))
                 .andExpect(status().isCreated());
         mvc.perform(post("/api/examens").header("Authorization", tokenCc).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idExamen\":91,\"idDispatch\":91,\"imCtrlMembre\":\"CTRMEM\"}"))
-                .andExpect(status().isCreated());
+                .andExpect(status().isForbidden());
     }
 
     @Test
