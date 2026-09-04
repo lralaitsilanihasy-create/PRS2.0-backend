@@ -33,6 +33,18 @@ public interface DispatchRepository extends JpaRepository<Dispatch, Integer> {
     Optional<String> findImCtrlMembreByDossier(@Param("idDossier") Integer idDossier);
 
     /**
+     * ⚠️ <strong>Circuit du dossier</strong> (2026-09-04) — localité, dispatcheur COURANT et
+     * attributaire, en <strong>une</strong> requête. Pendant, côté dossier, de
+     * {@code PvExamenRepository#findCircuitByPv} : le chronométrage part du dossier, la navette part
+     * du PV, mais les deux ont besoin des mêmes trois valeurs pour trancher le « deux niveaux ».
+     *
+     * @return {@code [localite, imCtrlDispatch, imCtrlMembre]}, ou vide si le dossier n'a pas de dispatch
+     */
+    @Query("select d.reception.ctrlRecept.idLocalite, d.imCtrlDispatch, d.imCtrlMembre "
+            + "from Dispatch d where d.reception.idDossier = :idDossier")
+    java.util.List<Object[]> findCircuitByDossier(@Param("idDossier") Integer idDossier);
+
+    /**
      * Dispatchs visibles à l'écran « Dispatch des dossiers » : on <strong>exclut</strong> les dossiers
      * redevenus <strong>BROUILLON</strong> (ex. après acceptation d'une demande de retrait, qui laisse un
      * dispatch orphelin) ou <strong>RETIRE</strong> — ils ne doivent jamais y apparaître. Les états

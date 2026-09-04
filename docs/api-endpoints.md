@@ -5320,6 +5320,41 @@ corriger son estimation n'est pas recommencer sa tâche.
 > Chaque étage garde ainsi **sa** prévision et **sa** durée : le temps du CC ne se mêle plus à celui du
 > Président.
 >
+> ### ⚠️ Garde d'acteur étendue au VISA et à la CO-SIGNATURE (2026-09-04, second constat)
+>
+> La garde du matin couvrait les tâches **déjà ouvertes** (409 nominal) et l'attribution de l'`EXAMEN`.
+> Rien ne gardait la **création** d'une occurrence de `VISA` ou de `COSIGNATURE`. Vécu (dossier
+> 100286) : le CC, ayant transmis le PV au Président, a recliqué « Prendre en charge » — le serveur a
+> ouvert `VISA#2` **à son nom**, alors que cette occurrence revient au Président, qui s'est retrouvé
+> verrouillé sans recours dans l'interface (déblocage fait en base).
+>
+> | Étape | Acteurs acceptés | Sinon |
+> |---|---|---|
+> | `EXAMEN` | l'attributaire courant du dispatch | **403** |
+> | `VISA`, deux niveaux, étage `CC` | le **CC dispatcheur** | **403** |
+> | `VISA`, deux niveaux, étage `PRESIDENT` | les **Présidents** | **403** |
+> | `VISA`, navette simple | le dispatcheur **et** tout P/CC du périmètre (intérim) | garde de profil et de localité seulement |
+> | `COSIGNATURE` | les **co-signataires désignés** au visa | **403** |
+>
+> Ce sont les mêmes acteurs que `POST /pv-examens/{id}/viser` — ou `/accepter` à l'étage CC —
+> accepteraient. **403 et non 409** : ce n'est pas l'étape qui n'est pas prête, c'est l'appelant qui
+> n'est pas celui qu'on attend.
+>
+> ### `ChronometrageDto.acteursAttendus` (liste de matricules \| null)
+>
+> Les acteurs que la garde ci-dessus accepterait pour l'étape courante — **la même valeur**, calculée
+> une fois et servie deux : la garde s'en sert pour refuser, le front pour masquer. Les dériver
+> séparément aurait permis de masquer un bouton que le serveur accepte, ou d'en offrir un qu'il
+> refuse.
+>
+> ⚠️ **`null` n'est pas « personne », c'est « pas de liste close ».** Sur une navette simple, le visa
+> admet le dispatcheur *et* tout P/CC du périmètre par intérim : l'ensemble n'est pas énumérable. Le
+> serveur ne garde alors que le profil et la localité, et le front replie sur la règle du porteur
+> nominal. Une liste **vide** aurait dit « personne » et bloqué tout le monde — d'où `null`.
+>
+> Même chose pour un PV en navette **sans niveau** (soumis avant le 2026-09-04) : `null`, on ne
+> durcit pas rétroactivement un dossier en cours.
+
 > ### 4. `PvExamenDto.nomCcCoSignataire` est peuplé
 >
 > Le champ existait mais valait toujours `null` — le front repliait sur le matricule. Il est désormais
@@ -5341,7 +5376,7 @@ déjà écoulé). `previsionStandard = true` signale une prévision venue du ré
 
 **`ChronometrageDto`** = `{idDossier, taches[], debutCompteur, finCompteur, dureeBruteHeuresOuvrees,
 dureeNetteHeuresOuvrees, attentePrmpHeuresOuvrees, etapeCourante, attentePrmp, datePrevisionnelleFin,
-attributaire}`.
+attributaire, acteursAttendus}`.
 
 > ⚠️ **`attributaire`** (string | null, ajouté le 2026-09-04) — matricule de l'**attributaire courant**
 > du dossier : l'`imCtrlMembre` du dispatch, **réattributions comprises** ; `null` tant que le dossier

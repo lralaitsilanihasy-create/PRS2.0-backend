@@ -28,6 +28,16 @@ import java.util.List;
  *                               n est pas l attributaire, et les ecrans qui ne chargent PAS les
  *                               dispatchs (la consultation) n ont ainsi aucun appel de liste a
  *                               ajouter — le serveur qui repond ici a deja le dispatch sous la main.
+ * @param acteursAttendus        ⚠️ 2026-09-04 — matricules que la PRISE EN CHARGE accepterait pour
+ *                               l etape courante, ou null quand la liste ne peut pas etre CLOSE.
+ *                               EXAMEN : l attributaire. VISA a deux niveaux : le CC dispatcheur au
+ *                               niveau CC, les Presidents au niveau PRESIDENT. COSIGNATURE : les
+ *                               designes du visa. Partout ailleurs — et sur une navette SIMPLE, ou
+ *                               l interim ouvre le visa a tout P/CC du perimetre — null : le front
+ *                               replie alors sur le porteur nominal et le serveur tranche.
+ *                               ⚠️ null n est PAS « personne » : une liste vide aurait bloque tout le
+ *                               monde. C est la MEME valeur que celle sur laquelle porte la garde,
+ *                               jamais une derivation voisine.
  */
 public record ChronometrageDto(
         Integer idDossier,
@@ -40,5 +50,6 @@ public record ChronometrageDto(
         String etapeCourante,
         boolean attentePrmp,
         LocalDate datePrevisionnelleFin,
-        String attributaire) {
+        String attributaire,
+        List<String> acteursAttendus) {
 }

@@ -205,6 +205,23 @@ public interface PvExamenRepository extends JpaRepository<PvExamen, Integer> {
             + "where pv.examen.dispatch.reception.idDossier = :idDossier order by pv.idPv desc")
     List<String> statutsPvParDossier(@Param("idDossier") Integer idDossier);
 
+    /**
+     * ⚠️ 2026-09-04 — <strong>étage de navette</strong> du PV le plus récent d'un dossier. Sert la garde
+     * de prise en charge du VISA : c'est lui qui dit si l'occurrence revient au CC ou au Président.
+     */
+    @Query("select pv.niveauNavette from PvExamen pv "
+            + "where pv.examen.dispatch.reception.idDossier = :idDossier order by pv.idPv desc")
+    List<String> niveauxNavetteParDossier(@Param("idDossier") Integer idDossier);
+
+    /**
+     * ⚠️ 2026-09-04 — <strong>co-signataires désignés</strong> du PV le plus récent d'un dossier
+     * ({@code [imMembreCoSignataire, imCcCoSignataire]}). Sert la garde de prise en charge de la
+     * CO-SIGNATURE : seuls les désignés y ouvrent une tâche, chacun la sienne.
+     */
+    @Query("select pv.imMembreCoSignataire, pv.imCcCoSignataire from PvExamen pv "
+            + "where pv.examen.dispatch.reception.idDossier = :idDossier order by pv.idPv desc")
+    List<Object[]> coSignatairesParDossier(@Param("idDossier") Integer idDossier);
+
     /** Même information EN LOT, pour l'enrichissement des listes de dossiers (une seule requête). */
     @Query("select pv.examen.dispatch.reception.idDossier, pv.statutPv from PvExamen pv "
             + "where pv.examen.dispatch.reception.idDossier in :ids order by pv.idPv asc")

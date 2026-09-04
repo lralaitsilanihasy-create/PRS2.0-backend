@@ -469,9 +469,21 @@ appel « réussissait » en modifiant la tâche du CC. Un acteur différent est 
 refus nomme celui qui tient l'étape** : sans ce nom, la personne bloquée n'a personne à qui
 s'adresser, ce qui est exactement ce qui a mené aux corrections manuelles.
 
-⚠️ **Le chronométrage sert l'attributaire courant** (2026-09-04). `GET /dossiers/{id}/chronometrage`
+⚠️ **La garde vaut aussi pour le VISA et la CO-SIGNATURE** (second constat du 2026-09-04, dossier
+100286). La première version gardait les tâches DÉJÀ OUVERTES et l'attribution de l'examen, mais pas
+la CRÉATION d'une occurrence : le CC, ayant transmis le PV au Président, a recliqué « Prendre en
+charge » et le serveur a ouvert à son nom l'occurrence qui revenait au Président — lequel s'est
+retrouvé verrouillé sans recours, le déblocage se faisant en base. Sont désormais seuls admis : au
+visa, les acteurs que le visa lui-même accepterait (le CC dispatcheur à son étage, les Présidents au
+leur, et sur une navette simple le dispatcheur ou tout P/CC du périmètre par intérim) ; à la
+co-signature, les désignés du visa, chacun pour SA part.
+
+⚠️ **Le chronométrage sert l'attributaire courant, et les acteurs attendus** (2026-09-04). `GET /dossiers/{id}/chronometrage`
 expose `attributaire` — l'`imCtrlMembre` du dispatch, réattributions comprises, `null` si non
-dispatché. C'est la MÊME valeur que celle sur laquelle porte la garde ci-dessous : un geste voué au
+dispatché. Il expose de même `acteursAttendus` — les matricules que la prise en charge
+accepterait pour l'étape courante, ou `null` quand la liste ne peut pas être close (l'intérim ouvre
+le visa d'une navette simple à tout P/CC du périmètre). ⚠️ `null` n'est pas « personne » : une liste
+vide aurait bloqué tout le monde. C'est la MÊME valeur que celle sur laquelle porte la garde ci-dessous : un geste voué au
 refus ne doit pas être offert, et pour cela le front doit pouvoir savoir qui est attributaire même sur
 les écrans qui ne chargent pas les dispatchs. Deux dérivations voisines auraient permis de masquer un
 bouton que le serveur accepte, ou d'en offrir un qu'il refuse.

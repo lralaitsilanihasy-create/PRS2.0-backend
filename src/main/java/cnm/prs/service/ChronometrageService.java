@@ -9,6 +9,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -21,6 +22,7 @@ import cnm.prs.entity.Dossier;
 import cnm.prs.entity.SuspensionDossier;
 import cnm.prs.entity.TacheDossier;
 import cnm.prs.enums.EtapeCircuit;
+import cnm.prs.enums.NiveauNavette;
 import cnm.prs.enums.ProfilUtilisateur;
 import cnm.prs.enums.StatutDossier;
 import cnm.prs.enums.StatutPv;
@@ -83,12 +85,16 @@ public class ChronometrageService {
     private final PermissionService permissionService;
     /** ⚠️ 2026-09-04 — l'attributaire courant de l'examen : la seule étape nominativement attribuée. */
     private final cnm.prs.repository.DispatchRepository dispatchRepository;
+    /** ⚠️ 2026-09-04 — source unique du circuit : la garde du VISA lit le meme discriminant que la navette. */
+    private final CircuitDossierService circuitService;
+    private final ControleurDirectory controleurDirectory;
 
     public ChronometrageService(TacheDossierRepository tacheRepository,
             SuspensionDossierRepository suspensionRepository, DelaiStandardService delaiStandardService,
             DossierRepository dossierRepository, PvExamenRepository pvExamenRepository,
             ControleurRepository controleurRepository, PermissionService permissionService,
-            cnm.prs.repository.DispatchRepository dispatchRepository) {
+            cnm.prs.repository.DispatchRepository dispatchRepository,
+            CircuitDossierService circuitService, ControleurDirectory controleurDirectory) {
         this.tacheRepository = tacheRepository;
         this.suspensionRepository = suspensionRepository;
         this.delaiStandardService = delaiStandardService;
@@ -97,6 +103,8 @@ public class ChronometrageService {
         this.controleurRepository = controleurRepository;
         this.permissionService = permissionService;
         this.dispatchRepository = dispatchRepository;
+        this.circuitService = circuitService;
+        this.controleurDirectory = controleurDirectory;
     }
 
     // ------------------------------------------------------------------ étape courante
@@ -195,7 +203,7 @@ public class ChronometrageService {
                     + dossier.getStatut() + " ») : rien à prendre en charge.");
         }
         exigerPorteurEligible(dossier, etape);
-        exigerAttributaireSiExamen(idDossier, etape);
+        exigerActeurAttendu(idDossier, etape);
 
         String moi = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
         List<TacheDossier> ouvertes = tacheRepository.ouvertes(idDossier, etape.name());
@@ -218,34 +226,6 @@ public class ChronometrageService {
         return TacheDossierDto.de(tache, nom(tache.getImActeur()));
     }
 
-    /**
-     * ⚠️ <strong>L'EXAMEN se prend par son attributaire</strong> (constat de recette du 2026-09-04) —
-     * 403 pour tout autre, <strong>délégation comprise</strong>.
-     *
-     * <p>C'est la seule étape où la garde de profil ne suffit pas. Ailleurs, prendre une étape en
-     * charge ne fait que démarrer un chronomètre ; ici, elle est nominativement attribuée par le
-     * dispatch, et « seul l'assignataire examine » (règle du 2026-09-03). Un dispatcheur ou un CC en
-     * copie, que la délégation vers Membre rend éligibles au profil, ouvraient donc une tâche sur le
-     * travail de quelqu'un d'autre — et, avec la garde ci-dessus, l'y verrouillaient.</p>
-     *
-     * <p>Sans attributaire identifiable (dispatch incomplet), on ne bloque pas : la garde protège une
-     * attribution existante, elle n'en invente pas.</p>
-     */
-    private void exigerAttributaireSiExamen(Integer idDossier, EtapeCircuit etape) {
-        if (etape != EtapeCircuit.EXAMEN) {
-            return;
-        }
-        String attributaire = dispatchRepository.findImCtrlMembreByDossier(idDossier)
-                .filter(s -> !s.isBlank()).orElse(null);
-        if (attributaire == null) {
-            return;
-        }
-        String moi = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
-        if (!attributaire.equals(moi)) {
-            throw new AccessDeniedException("L'examen de ce dossier est attribué à " + nomOuMatricule(attributaire)
-                    + " : lui seul peut le prendre en charge, même par délégation.");
-        }
-    }
 
     /**
      * Garde de la prise en charge : <strong>profil effectif</strong> (délégations et intérim résolus par
@@ -266,6 +246,115 @@ public class ChronometrageService {
                 && dossier.getIdLocalite() != null && !localiteActeur.equals(dossier.getIdLocalite())) {
             throw new AccessDeniedException("Ce dossier n'est pas de votre localité.");
         }
+    }
+
+    /**
+     * ⚠️ <strong>Les acteurs que la prise en charge accepte</strong> pour l'étape courante (spec pilote
+     * du 2026-09-04) — liste FERMÉE de matricules, ou {@code null} quand elle ne peut pas l'être.
+     *
+     * <p><strong>Pourquoi une liste plutôt qu'un booléen.</strong> La même valeur sert deux fois : la
+     * garde s'en sert pour refuser, le DTO du chronométrage l'expose pour que le front masque le geste
+     * à quiconque n'y figure pas. Les dériver séparément aurait permis de masquer un bouton que le
+     * serveur accepte, ou d'en offrir un qu'il refuse — l'écart ne se voyant qu'en recette.</p>
+     *
+     * <p><strong>{@code null} n'est pas « personne », c'est « pas de liste close ».</strong> Sur une
+     * navette simple, le visa admet le dispatcheur <em>et</em> tout P/CC du périmètre par intérim :
+     * l'ensemble n'est pas énumérable. On ne garde alors rien de plus que le profil et la localité, et
+     * le front replie sur la règle du porteur nominal. Une liste vide aurait dit « personne » et
+     * bloqué tout le monde.</p>
+     */
+    @Transactional(readOnly = true)
+    public List<String> acteursAttendus(Integer idDossier, EtapeCircuit etape) {
+        if (idDossier == null || etape == null) {
+            return null;
+        }
+        return switch (etape) {
+            case EXAMEN -> unSeul(dispatchRepository.findImCtrlMembreByDossier(idDossier)
+                    .filter(s -> !s.isBlank()).orElse(null));
+            case VISA -> acteursDuVisa(idDossier);
+            case COSIGNATURE -> acteursDeLaCoSignature(idDossier);
+            // Les autres étapes n'ont pas de titulaire nominatif : profil et localité suffisent.
+            default -> null;
+        };
+    }
+
+    /**
+     * Acteurs du VISA — l'étage de la navette décide.
+     *
+     * <p>Deux niveaux : au niveau {@code CC}, le seul CC dispatcheur ; au niveau {@code PRESIDENT},
+     * les Présidents. Navette simple : {@code null}, l'intérim ouvrant la porte à tout P/CC du
+     * périmètre (cf. {@code PvExamenService#viser}) — c'est le cas non énumérable.</p>
+     *
+     * <p>Un PV en navette <strong>sans niveau</strong> — soumis avant la livraison du 2026-09-04 —
+     * retombe aussi sur {@code null} : on ne durcit pas rétroactivement un dossier en cours.</p>
+     */
+    private List<String> acteursDuVisa(Integer idDossier) {
+        CircuitDossierService.Circuit circuit = circuitService.parDossier(idDossier);
+        if (!circuitService.deuxNiveaux(circuit)) {
+            return null;
+        }
+        String niveau = pvExamenRepository.niveauxNavetteParDossier(idDossier).stream()
+                .filter(java.util.Objects::nonNull).findFirst().orElse(null);
+        if (NiveauNavette.CC.name().equals(niveau)) {
+            return unSeul(circuit.dispatcheur());
+        }
+        if (NiveauNavette.PRESIDENT.name().equals(niveau)) {
+            List<String> presidents = controleurDirectory.presidents().stream()
+                    .map(Controleur::getImControleur).filter(java.util.Objects::nonNull).toList();
+            return presidents.isEmpty() ? null : presidents;
+        }
+        return null;
+    }
+
+    /**
+     * Acteurs de la CO-SIGNATURE — les <strong>désignés</strong> du visa, et eux seuls : chacun ouvre
+     * SA tâche (l'étape admet plusieurs porteurs depuis le 2026-09-04). Aucun désigné lisible → pas de
+     * liste close, donc pas de garde nominative.
+     */
+    private List<String> acteursDeLaCoSignature(Integer idDossier) {
+        List<String> designes = pvExamenRepository.coSignatairesParDossier(idDossier).stream()
+                .flatMap(r -> java.util.stream.Stream.of((String) r[0], (String) r[1]))
+                .filter(java.util.Objects::nonNull).filter(s -> !s.isBlank()).distinct().toList();
+        return designes.isEmpty() ? null : designes;
+    }
+
+    private List<String> unSeul(String im) {
+        return im == null || im.isBlank() ? null : List.of(im);
+    }
+
+    /**
+     * ⚠️ <strong>Garde nominative de la prise en charge</strong> (2026-09-04) — 403 quand l'étape a des
+     * titulaires identifiables et que l'appelant n'en est pas.
+     *
+     * <p>Elle remplace la garde d'EXAMEN posée le matin même, dont elle est la généralisation. Le
+     * constat qui l'impose (dossier 100286) : le CC, ayant transmis le PV au Président, a re-cliqué
+     * « Prendre en charge » — le serveur a ouvert à son nom l'occurrence VISA qui revenait au
+     * Président, qui s'est retrouvé verrouillé sans recours dans l'UI. La mécanique par niveaux du
+     * 2026-09-04 fermait bien l'occurrence du CC ; rien ne gardait la <strong>création</strong> de la
+     * suivante.</p>
+     *
+     * <p>403 et non 409 : ce n'est pas l'étape qui n'est pas prête, c'est l'appelant qui n'est pas
+     * celui qu'on attend.</p>
+     */
+    private void exigerActeurAttendu(Integer idDossier, EtapeCircuit etape) {
+        List<String> attendus = acteursAttendus(idDossier, etape);
+        if (attendus == null || attendus.isEmpty()) {
+            return;   // pas de liste close : profil et localité restent les seules gardes
+        }
+        String moi = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
+        if (moi != null && attendus.contains(moi)) {
+            return;
+        }
+        String noms = attendus.stream().map(this::nomOuMatricule).collect(Collectors.joining(", "));
+        throw new AccessDeniedException(switch (etape) {
+            case EXAMEN -> "L'examen de ce dossier est attribué à " + noms
+                    + " : lui seul peut le prendre en charge, même par délégation.";
+            case VISA -> "Le visa de ce dossier revient à " + noms
+                    + " : sur un dossier à deux niveaux, chaque étage a son acteur et sa tâche.";
+            case COSIGNATURE -> "La co-signature de ce PV revient aux désignés du visa (" + noms
+                    + ") : chacun ouvre et clôt SA part.";
+            default -> "Cette étape revient à " + noms + ".";
+        });
     }
 
     // ------------------------------------------------------------------ clôture (gestes métier)
@@ -500,7 +589,10 @@ public class ChronometrageService {
                 // donc la meme reponse. Servir une derivation voisine aurait permis au front de
                 // masquer un bouton que le serveur aurait accepte, ou l inverse.
                 dispatchRepository.findImCtrlMembreByDossier(idDossier)
-                        .filter(s -> !s.isBlank()).orElse(null));
+                        .filter(s -> !s.isBlank()).orElse(null),
+                // ⚠️ 2026-09-04 — la MEME liste que celle sur laquelle porte la garde : le front masque
+                // le bouton a quiconque n y figure pas, et le serveur refusera exactement les memes.
+                acteursAttendus(idDossier, courante));
     }
 
     /** Fin de la dernière occurrence close d'une étape — borne du compteur global. */

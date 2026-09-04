@@ -79,6 +79,8 @@ public class PvExamenService {
     private final RattachementService rattachementService;
     /** ⚠️ Chronométrage des délais (2026-09-01) — clôtures EXAMEN, VISA, COSIGNATURE et ARCHIVAGE. */
     private final ChronometrageService chronometrageService;
+    /** ⚠️ 2026-09-04 — source unique du circuit et du discriminant « deux niveaux ». */
+    private final CircuitDossierService circuitService;
     private final ControleurDirectory controleurDirectory;
     private final DossierRepository dossierRepository;
     private final ControleurRepository controleurRepository;
@@ -100,8 +102,10 @@ public class PvExamenService {
             ObservationPvService observationPvService,
             cnm.prs.security.PermissionService permissionService,
             org.springframework.context.ApplicationEventPublisher evenements,
-            PvDocumentTache documentTache, ChronometrageService chronometrageService) {
+            PvDocumentTache documentTache, ChronometrageService chronometrageService,
+            CircuitDossierService circuitService) {
         this.chronometrageService = chronometrageService;
+        this.circuitService = circuitService;
         this.observationPvService = observationPvService;
         this.permissionService = permissionService;
         this.evenements = evenements;
@@ -677,46 +681,21 @@ public class PvExamenService {
     // ⚠️ NAVETTE À DEUX NIVEAUX (spec pilote du 2026-09-04)
     // ----------------------------------------------------------------------
 
-    /** Le circuit d'un PV : localité du dossier, dispatcheur courant, attributaire de l'examen. */
-    private record CircuitPv(String localite, String dispatcheur, String attributaire) {
-
-        boolean complet() {
-            return dispatcheur != null && !dispatcheur.isBlank() && attributaire != null;
-        }
-    }
-
-    /** Lit le circuit du PV en une requête ; jamais {@code null} (champs à {@code null} si sans dispatch). */
-    private CircuitPv circuit(Integer idPv) {
-        return repository.findCircuitByPv(idPv).stream().findFirst()
-                .map(r -> new CircuitPv((String) r[0], (String) r[1], (String) r[2]))
-                .orElseGet(() -> new CircuitPv(null, null, null));
-    }
-
     /**
-     * ⚠️ <strong>Discriminant du « deux niveaux »</strong> (arbitrage 4 du pilote, 2026-09-04) — le
-     * périmètre est le <strong>chemin réel</strong> du dossier, pas sa localité ni son type.
+     * ⚠️ Le circuit et son discriminant ont DÉMÉNAGÉ dans {@link CircuitDossierService} le 2026-09-04.
      *
-     * <p>Trois conditions, sur le dispatch courant : le dossier est <strong>central</strong>, son
-     * dispatcheur est un <strong>Chef de commission</strong>, et il n'est pas lui-même l'attributaire.
-     * Le raisonnement tient à une propriété du circuit : en centrale, <em>seul le Président
-     * dispatche</em> (garde du 2026-09-03). Si le dispatcheur courant est un CC, c'est donc
-     * nécessairement qu'il a RÉATTRIBUÉ un dossier reçu du Président — le chemin P → CC → Membre est
-     * prouvé sans avoir à relire l'historique des dispatchs.</p>
-     *
-     * <p><strong>Ce que la troisième condition exclut.</strong> Le CC qui examine lui-même le dossier
-     * que le Président lui a confié ({@code imCtrlMembre} = lui) reste à UN niveau : il soumettrait au
-     * CC, c'est-à-dire à lui-même. La navette est alors directe CC ↔ Président, comme avant.</p>
-     *
-     * <p>Un dispatch direct — Président → Membre, CC régional → Membre, ou P/CC auto-attributaire —
-     * garde donc la navette simple, sans qu'aucune de ces situations n'ait à être énumérée.</p>
+     * <p>Ils étaient privés ici, où ils décident qui accepte, qui retourne et qui vise. La garde de
+     * <em>prise en charge</em> a eu besoin du même raisonnement : l'y récrire aurait créé une seconde
+     * copie d'une règle de circuit, et deux copies ne restent jamais d'accord longtemps — leur
+     * désaccord ne se voyant qu'en recette, sur les seuls dossiers réattribués. Rien n'a changé de
+     * contenu : ces deux méthodes ne sont plus que des relais vers la source unique.</p>
      */
-    private boolean deuxNiveaux(CircuitPv circuit) {
-        if (!circuit.complet() || !Localite.estCentrale(circuit.localite())) {
-            return false;
-        }
-        return !circuit.dispatcheur().equals(circuit.attributaire())
-                && controleurDirectory.profilDe(circuit.dispatcheur()).orElse(null)
-                        == ProfilUtilisateur.CHEF_COMMISSION;
+    private CircuitDossierService.Circuit circuit(Integer idPv) {
+        return circuitService.parPv(idPv);
+    }
+
+    private boolean deuxNiveaux(CircuitDossierService.Circuit circuit) {
+        return circuitService.deuxNiveaux(circuit);
     }
 
     /** Étage courant, ou {@code null} — lu tel quel : la colonne EST l'état, elle n'est pas re-dérivée. */
@@ -787,7 +766,7 @@ public class PvExamenService {
         if (req.commentaire() == null || req.commentaire().isBlank()) {
             throw new BusinessRuleException("Le commentaire de rectification est obligatoire (§3.2).");
         }
-        CircuitPv circuit = circuit(id);
+        CircuitDossierService.Circuit circuit = circuit(id);
         if (deuxNiveaux(circuit) && niveau(pv) == NiveauNavette.PRESIDENT) {
             return retournerAuCc(pv, circuit, req);
         }
@@ -818,7 +797,7 @@ public class PvExamenService {
      * Retour du <strong>Président au CC</strong> (2026-09-04) — le projet redescend d'un étage sans
      * quitter la navette : le statut reste {@code PROJET_SOUMIS}, seul le niveau change.
      */
-    private PvExamenDto retournerAuCc(PvExamen pv, CircuitPv circuit, PvActionRequest req) {
+    private PvExamenDto retournerAuCc(PvExamen pv, CircuitDossierService.Circuit circuit, PvActionRequest req) {
         ProfilUtilisateur profil = CurrentUser.profil().orElse(null);
         if (profil != ProfilUtilisateur.PRESIDENT) {
             throw new AccessDeniedException(
@@ -842,7 +821,7 @@ public class PvExamenService {
     }
 
     /** 403 si l'acteur n'est pas le CC du circuit — l'étage du bas n'appartient qu'à lui. */
-    private void exigerCcDuCircuit(CircuitPv circuit, String message) {
+    private void exigerCcDuCircuit(CircuitDossierService.Circuit circuit, String message) {
         String acteur = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
         if (acteur == null || !acteur.equals(circuit.dispatcheur())) {
             throw new AccessDeniedException(message);
@@ -866,7 +845,7 @@ public class PvExamenService {
      */
     public PvExamenDto accepter(Integer id, PvActionRequest req) {
         PvExamen pv = load(id);
-        CircuitPv circuit = circuit(id);
+        CircuitDossierService.Circuit circuit = circuit(id);
         if (!deuxNiveaux(circuit)) {
             throw new EndpointRetireException(
                     "L'acceptation du projet de PV est retirée depuis le 2026-08-31 : elle est fusionnée "
@@ -971,7 +950,7 @@ public class PvExamenService {
         // qu'il a lui-même mandaté. Sur ce circuit, la règle d'identité change donc de forme : elle
         // porte sur le PROFIL (Président) et sur l'ÉTAGE (le projet doit lui avoir été transmis),
         // vérifiés plus bas. Aucun intérim n'a de sens ici, et aucune note n'est réclamée.
-        CircuitPv circuit = circuit(id);
+        CircuitDossierService.Circuit circuit = circuit(id);
         boolean deuxNiveaux = deuxNiveaux(circuit);
         boolean interim = !deuxNiveaux && !dispatcheur.equals(acteur);
 
@@ -1334,7 +1313,7 @@ public class PvExamenService {
      * (auto-désignation, désigné hors localité) : les rendre cohérents évite que la même erreur
      * réponde 400 par la liste et 409 par l'ancien champ.</p>
      */
-    private void designerCoSignataires(PvExamen pv, PvVisaRequest req, String acteur, CircuitPv circuit,
+    private void designerCoSignataires(PvExamen pv, PvVisaRequest req, String acteur, CircuitDossierService.Circuit circuit,
             boolean deuxNiveaux) {
         List<String> demandes = coSignatairesDemandes(req);
         if (demandes.isEmpty()) {
