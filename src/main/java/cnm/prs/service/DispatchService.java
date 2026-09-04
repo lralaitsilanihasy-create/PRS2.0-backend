@@ -359,6 +359,16 @@ public class DispatchService {
             Integer idDossierReattribue = dossierDeLaReception(sauve.getIdReception());
             notifierReattribution(sauve, ancienAttributaire, idDossierReattribue);
             tracerReattribution(sauve, ancienAttributaire, idDossierReattribue);
+            // ⚠️ Chronométrage (règle du pilote, 2026-09-04) — le geste du réattribueur laisse SA ligne.
+            // Le journal portait bien DISPATCH puis REATTRIBUTION, mais le chronométrage n'avait qu'une
+            // tâche : le passage par le CC n'existait nulle part dans le tableau des passages, alors
+            // qu'un retrait suivi d'un re-dispatch, lui, en produisait une. Le chemin réel doit se lire
+            // aux deux endroits, et avec les mêmes acteurs.
+            //
+            // Ce seul appel couvre AUSSI la REPRISE : le « Retirer » du CC est un PUT vers lui-même,
+            // donc un changement d'attributaire. Le « rendre » du Membre, lui, n'existe pas comme geste
+            // (aucun endpoint) : il reste hors lot, faute d'objet.
+            chronometrageService.consignerGesteInstantane(idDossierReattribue, EtapeCircuit.DISPATCH);
         }
         return toDtoComplet(sauve);
     }

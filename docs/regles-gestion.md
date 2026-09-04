@@ -469,6 +469,16 @@ appel « réussissait » en modifiant la tâche du CC. Un acteur différent est 
 refus nomme celui qui tient l'étape** : sans ce nom, la personne bloquée n'a personne à qui
 s'adresser, ce qui est exactement ce qui a mené aux corrections manuelles.
 
+⚠️ **La réattribution laisse sa trace au chronométrage** (2026-09-04). Le journal du circuit portait
+les deux gestes — dispatch du Président, réattribution du CC — mais le tableau des passages n'en
+connaissait qu'un : le chemin réel se lisait à un endroit et pas à l'autre, alors qu'un retrait suivi
+d'un re-dispatch produisait bien sa seconde occurrence. Tout geste qui CHANGE L'ATTRIBUTAIRE hors
+dispatch initial consigne désormais une occurrence de dispatch au nom de son auteur, quel que soit son
+profil. Elle est INSTANTANÉE — prise en charge et fin au même horodatage, prévision standard : un acte
+ponctuel n'a pas de durée à mesurer, et la prévision non saisie doit se distinguer d'une prévision
+choisie. La REPRISE est couverte par la même règle, le « Retirer » du CC étant une réattribution vers
+lui-même ; le « rendre » du Membre n'existe pas comme geste, il reste donc hors sujet.
+
 ⚠️ **La garde vaut aussi pour le VISA et la CO-SIGNATURE** (second constat du 2026-09-04, dossier
 100286). La première version gardait les tâches DÉJÀ OUVERTES et l'attribution de l'examen, mais pas
 la CRÉATION d'une occurrence : le CC, ayant transmis le PV au Président, a recliqué « Prendre en

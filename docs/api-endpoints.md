@@ -5360,6 +5360,27 @@ corriger son estimation n'est pas recommencer sa tâche.
 > Le champ existait mais valait toujours `null` — le front repliait sur le matricule. Il est désormais
 > résolu comme `nomMembreCoSignataire`, à l'écriture (réponse du visa) comme en lecture.
 
+>
+> ⚠️ **La RÉATTRIBUTION laisse sa trace** (règle du pilote, 2026-09-04) — tout geste qui **change
+> l'attributaire** hors dispatch initial consigne une tâche `DISPATCH` **occurrence n+1**, au nom de
+> **l'auteur du geste**, quel que soit son profil.
+>
+> Le journal du circuit portait bien `DISPATCH` (Président) puis `RÉATTRIBUTION` (CC), mais le
+> chronométrage n'avait qu'une tâche : le passage par le CC n'existait nulle part dans le tableau des
+> passages — alors qu'un retrait suivi d'un re-dispatch, lui, en produisait bien une seconde. Le chemin
+> réel doit se lire aux **deux** endroits, avec les mêmes acteurs et dans le même ordre.
+>
+> **Instantanée** : `datePriseEnCharge = dateFin = ` l'horodatage du geste — un acte ponctuel n'a pas
+> de durée à mesurer. **Prévision standard** du référentiel, `previsionStandard = true` : personne n'a
+> estimé quoi que ce soit, et la colonne ne peut pas rester vide.
+>
+> **Périmètre.** La **réattribution** et la **reprise** (le « Retirer » du CC est un `PUT` vers
+> lui-même, donc un changement d'attributaire) sont couvertes par la même règle, sans cas particulier.
+> Le « rendre » du Membre reste **hors lot** : ce geste n'existe pas dans l'API, il n'y a rien à
+> chronométrer.
+>
+> Ni l'étape courante ni la date prévisionnelle de fin ne bougent : une réattribution n'est pas un
+> retour en arrière du circuit, le dossier reste à examiner.
 > ⚠️ **TOLÉRANCE — le chronométrage n'empêche jamais le métier.** Un geste de clôture posé **sans prise
 > en charge préalable** n'est pas bloqué : le serveur crée l'occurrence avec `priseEnCharge = fin`
 > (durée nulle) et la prévision **standard** du référentiel. Aucun écran ne peut se retrouver coincé

@@ -413,6 +413,40 @@ public class ChronometrageService {
         }
     }
 
+    /**
+     * ⚠️ <strong>Consigne un geste INSTANTANÉ</strong> au chronométrage (règle du pilote, 2026-09-04) —
+     * une occurrence de rang suivant, ouverte et close au même horodatage, au nom de l'auteur du geste.
+     *
+     * <p><strong>Pourquoi ce n'est pas {@link #cloturer}.</strong> Clore, c'est terminer un travail
+     * qu'on avait commencé — la méthode cherche donc d'abord une tâche ouverte, et n'en crée une que
+     * par tolérance. Ici, il n'y a rien à terminer : la réattribution est un acte ponctuel, sans durée,
+     * qui doit produire SA propre ligne au nom de celui qui l'a posé. Passer par {@code cloturer}
+     * aurait pu refermer la tâche d'un autre au lieu d'en ouvrir une.</p>
+     *
+     * <p><strong>Pourquoi la prévision STANDARD.</strong> Un geste sans durée n'a rien à estimer ; on
+     * ne peut pas non plus laisser la colonne vide, elle est obligatoire. Le référentiel donne donc la
+     * valeur, et le drapeau {@code previsionStandard} dit que personne ne l'a saisie — exactement ce
+     * que fait déjà un dispatch posé sans prise en charge préalable.</p>
+     *
+     * <p>Tolérante comme {@link #cloturer} : une anomalie de chronométrage est journalisée, elle ne
+     * fait jamais échouer la transaction métier qui l'appelle.</p>
+     */
+    public void consignerGesteInstantane(Integer idDossier, EtapeCircuit etape) {
+        if (idDossier == null || etape == null) {
+            return;
+        }
+        try {
+            LocalDateTime maintenant = LocalDateTime.now();
+            TacheDossier tache = nouvelle(idDossier, etape, maintenant,
+                    delaiStandardService.delai(etape), true);
+            tache.setDateFin(maintenant);
+            tacheRepository.save(tache);
+        } catch (RuntimeException ex) {
+            LOG.warn("[CHRONO] geste instantane non consigne dossier={} etape={} : {}",
+                    idDossier, etape, ex.toString());
+        }
+    }
+
     /** Construit une occurrence neuve, de rang suivant, sur l'acteur courant. */
     private TacheDossier nouvelle(Integer idDossier, EtapeCircuit etape, LocalDateTime priseEnCharge,
             Integer prevision, boolean standard) {
