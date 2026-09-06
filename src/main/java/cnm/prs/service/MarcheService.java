@@ -246,6 +246,46 @@ public class MarcheService {
     }
 
     /**
+     * ⚠️ Règle pilote (2026-09-06, écart de rectification) — ajout d'une ligne <strong>pendant la
+     * rectification</strong> ({@code EN_ATTENTE_DECISION_PRMP}, propriétaire). Jusqu'ici la structure était
+     * strictement figée ; le pilote tolère désormais jusqu'à trois ajouts et trois retraits par
+     * rectification — la borne est tenue par la façade ({@code SaisieService.ECART_MAX_RECTIFICATION}),
+     * pas ici : ce service crée la ligne aux mêmes règles qu'à la saisie (PK serveur, sous-type recalculé)
+     * et trace le geste ({@code CREATION_RECTIFICATION}).
+     */
+    public MarcheDto creerEnRectification(MarcheDto dto) {
+        dossierIntegrite.exigerEnAttenteDecisionPrmpModifiable(dto.getIdDossier());
+        dossierIntegrite.exigerFamilleDdp(dto.getIdDossier());
+        Marche entity = MarcheMapper.toEntity(dto);
+        entity.setIdDetail(repository.nextIdMarche().intValue());   // PK serveur (séquence) ; id client ignoré
+        MarcheDto resultat = MarcheMapper.toDto(repository.save(entity));
+        auditLogService.enregistrer(CurrentUser.ref().orElse(null), "t_marche",
+                String.valueOf(resultat.getIdDetail()), "CREATION_RECTIFICATION", null);
+        dossierIntegrite.recalculerSousTypeDdp(dto.getIdDossier());   // le mode a pu (dé)clencher l'AGPM
+        return resultat;
+    }
+
+    /**
+     * ⚠️ Règle pilote (2026-09-06, écart de rectification) — retrait d'une ligne <strong>pendant la
+     * rectification</strong> : même cascade applicative que la suppression d'un brouillon
+     * ({@link #supprimerSousLignes} : DMC, tranches, lots, bénéficiaires, prévisions, anomalies,
+     * échéances), puis la ligne. Ce qui n'est PAS touché, volontairement : les lignes d'examen
+     * ({@code t_examen_detail}, sans FK) et les observations du PV — c'est l'<em>histoire</em> de
+     * l'instruction, et les versions archivées gardent la ligne telle qu'elle était. La garde « aucune
+     * observation non levée sur cette ligne » est tenue par la façade, avant toute écriture.
+     */
+    public void supprimerEnRectification(Integer id) {
+        Marche existing = repository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Marche introuvable : " + id));
+        dossierIntegrite.exigerEnAttenteDecisionPrmpModifiable(existing.getIdDossier());
+        supprimerSousLignes(id);
+        repository.deleteById(id);
+        auditLogService.enregistrer(CurrentUser.ref().orElse(null), "t_marche",
+                String.valueOf(id), "SUPPRESSION_RECTIFICATION", null);
+        dossierIntegrite.recalculerSousTypeDdp(existing.getIdDossier());   // le dernier marché AOO a pu disparaître
+    }
+
+    /**
      * ⚠️ Cascade applicative (règle ajoutée) — supprime, en <strong>ordre FK-safe</strong>, tous les
      * enregistrements liés à un marché avant sa suppression : <strong>tranches</strong> de ses lots, puis
      * <strong>lots</strong> (`t_lot`), <strong>bénéficiaires</strong> (`t_service_beneficiaire`) et

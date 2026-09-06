@@ -726,8 +726,27 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
 - Le **statut reste `EN_ATTENTE_DECISION_PRMP`** jusqu'à la **resoumission** (`POST /api/dossiers/{id}/resoumettre`
   → `EN_VERIFICATION`). Hors `EN_ATTENTE_DECISION_PRMP` → **409**. Profil **PRMP strict** (Admin/vérificateur → 403).
 - **Identité figée** (PPM : idDossier/idPrmp/idLocalite ; Marché : idDossier/idPpm) et **édition en place**
-  (pas d'ajout/suppression de lignes — ces opérations restent réservées au `BROUILLON`). Tracé `t_audit_log`
+  par les PATCH (qui n'ajoutent ni ne retirent de ligne). Tracé `t_audit_log`
   (`MODIFICATION_RECTIFICATION`). DAO/MAOO : sans contenu éditable, non concernés.
+- ⚠️ **Règle pilote (2026-09-06) — écart de structure toléré, borné à 3 par sens** : « lors de la
+  rectification du dossier de planification, il est interdit d'ajouter ou de retirer PLUS DE 3 lignes du
+  PPM à rectifier ». Le `PUT /api/saisies/ppm/{id}` d'un dossier `EN_ATTENTE_DECISION_PRMP` accepte donc,
+  dans `marches[]` : les lignes **avec `idDetail`** (mise à jour en place, inchangé), les lignes **sans
+  `idDetail`** (**créations**, mêmes validations qu'à la saisie — ≥ 1 processus, Σ bénéficiaires,
+  justifications de la fiche — tracées `CREATION_RECTIFICATION`), et les `idDetail` du dossier **absents
+  du corps** sont des **retraits** (cascade du DELETE marché : DMC, lots/tranches, bénéficiaires,
+  prévisions, anomalies, échéances ; tracés `SUPPRESSION_RECTIFICATION`). **Garde évaluée avant toute
+  écriture** : plus de 3 créations OU plus de 3 retraits → **400** « Le PPM rectifié ajoute N ligne(s) et
+  en retire M : l'écart maximal autorisé est de 3 dans chaque sens. » ; un `idDetail` étranger au dossier
+  → 400 nominatif. **Protection des observations** (proposition du front retenue) : le retrait d'une
+  ligne portant une **observation du PV non levée** (ÉMISE/MAINTENUE) → **400** nominatif — la
+  rectification répond aux observations, elle ne les escamote pas (rattachement par
+  `t_observation_pv.ID_DETAIL_EXAMEN`, V19, figé au snapshot du PV ; une observation antérieure sans ligne
+  détaillée est irrattachable et ne protège rien). Ce qui ne bouge pas : la **version remplacée est
+  archivée avant** (V18, telle quelle, lignes retirées comprises) ; les lignes d'examen et les
+  observations d'une ligne retirée **restent** (histoire de l'instruction) ; `/diff-rectification`
+  restitue `NOUVELLE` (ajoutée) et `SUPPRIMEE` (retirée, `idDetail` nul) — les types du diff des mises à
+  jour ; une ligne déjà hors plan d'une version (`supprimee`) n'est ni comptée ni retouchée.
 
 **Inscription et validation du compte**
 

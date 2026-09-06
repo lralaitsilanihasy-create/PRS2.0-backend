@@ -52,6 +52,17 @@ public class ObservationPv {
     @Column(name = "ID_EXAMEN_PIECE")
     private Integer idExamenPiece;
 
+    /**
+     * ⚠️ Règle pilote (2026-09-06, écart de rectification, V19) — ligne d'examen visée
+     * ({@code t_examen_detail.ID_DETAIL_EXAMEN}), figée au snapshot pour <strong>toute</strong>
+     * observation POINT, avec ou sans ligne détaillée « Au lieu de / Lire ». C'est par elle qu'on remonte
+     * au marché ({@code t_examen_detail.ID_DETAIL}) pour refuser le retrait d'une ligne dont une
+     * observation n'est pas levée. {@code null} : PIECE, ou observation antérieure à la V19 sans ligne
+     * détaillée (irrattachable après coup).
+     */
+    @Column(name = "ID_DETAIL_EXAMEN")
+    private Integer idDetailExamen;
+
     /** Libellé FIGÉ de l'observation (contexte + demande), tel qu'arrêté au PV. */
     @Column(name = "LIBELLE", length = 1000, nullable = false)
     private String libelle;

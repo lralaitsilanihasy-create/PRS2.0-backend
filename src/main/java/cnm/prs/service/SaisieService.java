@@ -3,7 +3,9 @@ package cnm.prs.service;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.math.BigDecimal;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.springframework.security.access.AccessDeniedException;
@@ -34,6 +36,7 @@ import cnm.prs.entity.ServiceBeneficiaire;
 import cnm.prs.entity.SoaBeneficiaire;
 import cnm.prs.entity.SousTypeDossier;
 import cnm.prs.enums.StatutDossier;
+import cnm.prs.exception.BadRequestException;
 import cnm.prs.exception.BusinessRuleException;
 import cnm.prs.exception.ChampsInvalidesException;
 import cnm.prs.exception.ErrorResponse;
@@ -75,6 +78,13 @@ public class SaisieService {
     /** Famille « Dossier de Planification » (codes centralisés dans {@link DossierIntegriteService}). */
     private static final String FAMILLE_DDP = DossierIntegriteService.FAMILLE_DDP;
 
+    /**
+     * ⚠️ Règle pilote (2026-09-06) — « lors de la rectification du dossier de planification, il est
+     * interdit d'ajouter ou de retirer PLUS DE 3 lignes du PPM à rectifier » : écart de structure
+     * maximal d'une rectification, dans chaque sens (créations, retraits).
+     */
+    public static final int ECART_MAX_RECTIFICATION = 3;
+
     private final DossierRepository dossierRepository;
     private final PpmRepository ppmRepository;
     private final MarcheRepository marcheRepository;
@@ -106,6 +116,8 @@ public class SaisieService {
     private final VersionDossierService versionDossierService;
     /** ⚠️ Fiche de présentation (2026-09-01) — classement serveur et garde des justifications. */
     private final FicheJustificationsService ficheJustifications;
+    /** ⚠️ Écart de rectification (2026-09-06) — lignes protégées par une observation du PV non levée. */
+    private final ObservationPvService observationPvService;
 
     public SaisieService(DossierRepository dossierRepository, PpmRepository ppmRepository,
             MarcheRepository marcheRepository, PpmService ppmService,
@@ -122,7 +134,8 @@ public class SaisieService {
             TrancheRepository trancheRepository, SousTypeDossierRepository sousTypeDossierRepository,
             MandatService mandatService, JournalDossierService journalDossier,
             VersionDossierService versionDossierService,
-            FicheJustificationsService ficheJustifications) {
+            FicheJustificationsService ficheJustifications, ObservationPvService observationPvService) {
+        this.observationPvService = observationPvService;
         this.ficheJustifications = ficheJustifications;
         this.mandatService = mandatService;
         this.journalDossier = journalDossier;
@@ -323,8 +336,16 @@ public class SaisieService {
         // posée ici, côté serveur, pour ne pas dépendre de ce que le client pense à renvoyer.
         boolean version = dossierRepository.findById(idDossier)
                 .map(d -> d.getIdDossierParent() != null).orElse(false);
+        // Lignes actuelles du dossier — une seule lecture pour la garde d'écart, la réconciliation et les retraits.
+        Map<Integer, Marche> lignesDossier = new LinkedHashMap<>();
+        for (Marche m : marcheRepository.findByIdDossier(idDossier)) {
+            lignesDossier.put(m.getIdDetail(), m);
+        }
         if (rectification) {
             dossierIntegrite.exigerEnAttenteDecisionPrmpModifiable(idDossier);
+            // ⚠️ Règle pilote (2026-09-06) — garde d'écart AVANT l'archivage et avant toute écriture : un
+            // refus ne laisse aucune trace, pas même une version archivée.
+            controlerEcartRectification(idDossier, req, lignesDossier);
             // ⚠️ Règle ajoutée (2026-08-15, visibilité des rectifications) — au PREMIER PUT du cycle,
             // l'état des lignes AVANT correction est figé (la rectification modifie la version courante
             // en place : sans instantané, rien à comparer pour le diff servi au vérificateur).
@@ -363,21 +384,19 @@ public class SaisieService {
         ppmService.update(ppm.getIdPpm(), entete);
 
         // 2) Réconciliation des lignes par idDetail — sous-objets compris (règle corrigée 2026-07-18).
-        Set<Integer> existants = new HashSet<>();
-        for (Marche m : marcheRepository.findByIdDossier(idDossier)) {
-            existants.add(m.getIdDetail());
-        }
+        //    ⚠️ Règle pilote (2026-09-06) — en RECTIFICATION, l'écart de structure est PERMIS mais BORNÉ :
+        //    au plus ECART_MAX_RECTIFICATION créations (lignes sans idDetail) et autant de retraits
+        //    (idDetail du dossier absents du corps), et aucune ligne portant une observation du PV non
+        //    levée ne se retire. La garde a été évaluée plus haut, AVANT l'archivage et toute écriture.
+        Set<Integer> existants = new HashSet<>(lignesDossier.keySet());
         Set<Integer> demandes = new HashSet<>();
         if (req.marches() != null) {
             for (int i = 0; i < req.marches().size(); i++) {
                 SaisieMarcheLigne ligne = req.marches().get(i);
-                boolean nouvelle = !existants.contains(ligne.idDetail());
-                if (rectification && nouvelle) {
-                    throw new BusinessRuleException("Rectification : la structure du dossier examiné est figée "
-                            + "— aucune ligne de marché ne peut être ajoutée (ligne " + (i + 1)
-                            + " sans correspondance). Le PPM rectifié doit comporter les mêmes lignes.");
+                boolean nouvelle = ligne.idDetail() == null || !existants.contains(ligne.idDetail());
+                if (ligne.idDetail() != null) {
+                    demandes.add(ligne.idDetail());
                 }
-                demandes.add(ligne.idDetail());
                 // Validations identiques au POST. Ligne nouvelle → ≥1 processus obligatoire ; ligne mise
                 // à jour → un remplacement explicite par une liste vide viderait le marché (refusé).
                 if (nouvelle) {
@@ -412,7 +431,9 @@ public class SaisieService {
                         lotRepository.deleteByIdDetail(idDetail);
                     }
                 } else {
-                    idDetail = marcheService.create(m).getIdDetail();
+                    // Création : en rectification (écart toléré), par la variante qui accepte le statut.
+                    idDetail = (rectification ? marcheService.creerEnRectification(m) : marcheService.create(m))
+                            .getIdDetail();
                 }
                 if (ligne.processus() != null) {
                     for (ProcessusMarche p : ligne.processus()) {
@@ -426,14 +447,17 @@ public class SaisieService {
                 creerLots(idDetail, idDossier, ligne);   // sans effet si lots null/vide
             }
         }
-        // 3) Retrait des lignes absentes de la demande — INTERDIT en rectification (structure figée),
-        //    SUPPRESSION LOGIQUE sur une version (jamais d'effacement), suppression franche ailleurs.
+        // 3) Retrait des lignes absentes de la demande — en rectification : suppression FRANCHE avec la
+        //    cascade du DELETE marché (écart déjà contrôlé, ≤ 3 ; une ligne déjà hors plan d'une version
+        //    n'est ni comptée ni retouchée) ; SUPPRESSION LOGIQUE sur une version (jamais d'effacement) ;
+        //    suppression franche ailleurs.
         for (Integer id : existants) {
             if (!demandes.contains(id)) {
                 if (rectification) {
-                    throw new BusinessRuleException("Rectification : la structure du dossier examiné est figée "
-                            + "— aucune ligne de marché ne peut être retirée. Le PPM rectifié doit comporter "
-                            + "les mêmes lignes que le dossier examiné.");
+                    if (!Boolean.TRUE.equals(lignesDossier.get(id).getSupprimee())) {
+                        marcheService.supprimerEnRectification(id);
+                    }
+                    continue;
                 }
                 if (version) {
                     marcheRepository.findById(id).ifPresent(m -> {
@@ -446,6 +470,61 @@ public class SaisieService {
             }
         }
         return DossierMapper.toDto(dossierRepository.findById(idDossier).orElseThrow());
+    }
+
+    /**
+     * ⚠️ Règle pilote (2026-09-06) — garde d'écart d'une rectification, évaluée <strong>avant toute
+     * écriture</strong> sur le corps entier (la transaction annulerait de toute façon, mais un refus doit
+     * être une décision, pas un accident en cours de route) :
+     * <ol>
+     *   <li>une ligne <strong>sans {@code idDetail}</strong> est une création ; une ligne avec un
+     *       {@code idDetail} étranger au dossier est refusée (400 nominatif — le front n'envoie une
+     *       création que sans identifiant, tout autre cas est une erreur d'appariement) ;</li>
+     *   <li>les {@code idDetail} du dossier absents du corps sont des retraits (les lignes déjà hors plan
+     *       d'une version — {@code supprimee} — ne comptent pas) ;</li>
+     *   <li>plus de {@value #ECART_MAX_RECTIFICATION} créations OU plus de {@value #ECART_MAX_RECTIFICATION}
+     *       retraits → 400 nommant l'écart ;</li>
+     *   <li>un retrait qui emporterait une ligne portant une <strong>observation du PV non levée</strong>
+     *       → 400 nominatif : la rectification répond aux observations, elle ne les escamote pas
+     *       (proposition du front retenue, cf. {@link ObservationPvService#lignesAvecObservationNonLevee}).</li>
+     * </ol>
+     */
+    private void controlerEcartRectification(Integer idDossier, EditionPpmRequest req,
+            Map<Integer, Marche> lignesDossier) {
+        List<SaisieMarcheLigne> lignes = req.marches() == null ? List.of() : req.marches();
+        int creations = 0;
+        Set<Integer> conservees = new HashSet<>();
+        for (int i = 0; i < lignes.size(); i++) {
+            Integer id = lignes.get(i).idDetail();
+            if (id == null) {
+                creations++;
+                continue;
+            }
+            if (!lignesDossier.containsKey(id)) {
+                throw new BadRequestException("Rectification : la ligne " + (i + 1) + " référence un marché (n° " + id
+                        + ") qui n'appartient pas au dossier — une ligne nouvelle s'envoie sans idDetail.");
+            }
+            conservees.add(id);
+        }
+        List<Marche> retirees = lignesDossier.values().stream()
+                .filter(m -> !Boolean.TRUE.equals(m.getSupprimee()) && !conservees.contains(m.getIdDetail()))
+                .toList();
+        if (creations > ECART_MAX_RECTIFICATION || retirees.size() > ECART_MAX_RECTIFICATION) {
+            throw new BadRequestException("Le PPM rectifié ajoute " + creations + " ligne(s) et en retire "
+                    + retirees.size() + " : l'écart maximal autorisé est de " + ECART_MAX_RECTIFICATION
+                    + " dans chaque sens.");
+        }
+        if (retirees.isEmpty()) {
+            return;
+        }
+        Set<Integer> protegees = observationPvService.lignesAvecObservationNonLevee(idDossier);
+        for (Marche m : retirees) {
+            if (protegees.contains(m.getIdDetail())) {
+                throw new BadRequestException("Rectification : la ligne « " + m.getDesignationMarche() + " » (n° "
+                        + m.getIdDetail() + ") porte une observation du PV non levée — elle ne peut pas être "
+                        + "retirée, la rectification doit y répondre.");
+            }
+        }
     }
 
     private MarcheDto toMarcheDto(SaisieMarcheLigne ligne, Integer idDossier, Integer idPpm) {

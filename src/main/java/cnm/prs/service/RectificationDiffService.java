@@ -40,8 +40,11 @@ import cnm.prs.repository.VerificationRepository;
  * correction du dernier cycle) aux lignes courantes — le vérificateur juge le dernier état.</p>
  *
  * <p>Un <strong>cycle</strong> = de la transmission des observations ({@code EN_ATTENTE_DECISION_PRMP})
- * à la resoumission. La structure étant figée en rectification, le diff ne produit que des lignes
- * {@code INCHANGEE} / {@code MODIFIEE} (appariement direct par {@code idDetail}).</p>
+ * à la resoumission. Appariement direct par {@code idDetail} : lignes {@code INCHANGEE} / {@code MODIFIEE},
+ * et — depuis la règle pilote du 2026-09-06 (écart de structure toléré, ≤ 3 par sens) — {@code NOUVELLE}
+ * pour une ligne ajoutée par la rectification, {@code SUPPRIMEE} pour une ligne retirée (rendue avec
+ * {@code idDetail} nul, son libellé archivé et son {@code idLigneOrigine}). Ce sont les types du diff des
+ * mises à jour : le front les connaît déjà.</p>
  *
  * <p>⚠️ Les empreintes de collections et la normalisation des valeurs ({@link EmpreintesLigne})
  * reprennent la même sémantique que {@code MiseAJourPpmService} (champs {@code CHAMPS_COMPARES}) — à
@@ -99,7 +102,8 @@ public class RectificationDiffService {
         for (SnapshotRectifLigne s : avant) {
             Marche m = courantes.remove(s.getIdDetail());
             if (m == null) {
-                // Défensif : la structure est figée en rectification, une ligne ne peut pas disparaître.
+                // Ligne RETIRÉE par la rectification (règle pilote 2026-09-06, ≤ 3 par sens) : elle n'existe
+                // plus dans le plan courant — idDetail nul, libellé et identité repris de la version archivée.
                 lignes.add(new DiffDossierDto.LigneDiff(null, s.getIdLigneOrigine(), s.getDesignationMarche(),
                         TypeChangementLigne.SUPPRIMEE.name(), "ORIGINE", List.of()));
                 continue;
@@ -110,7 +114,7 @@ public class RectificationDiffService {
                     (ecarts.isEmpty() ? TypeChangementLigne.INCHANGEE : TypeChangementLigne.MODIFIEE).name(),
                     "ORIGINE", ecarts));
         }
-        // Défensif : lignes apparues depuis l'instantané (impossible en rectification, structure figée).
+        // Lignes AJOUTÉES par la rectification (règle pilote 2026-09-06) : absentes de la version archivée.
         for (Marche m : courantes.values()) {
             lignes.add(new DiffDossierDto.LigneDiff(m.getIdDetail(), m.getIdLigneOrigine(),
                     m.getDesignationMarche(), TypeChangementLigne.NOUVELLE.name(), "ORIGINE", List.of()));

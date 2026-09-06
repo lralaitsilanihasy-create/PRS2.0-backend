@@ -2341,12 +2341,21 @@ et interprété comme un code de **sous-type** (les anciens payloads `{"idTypeDo
 > **`EN_ATTENTE_DECISION_PRMP`** se fait par l'**importation du PPM rectifié (PDF)** — plus de formulaire
 > manuel : le front parse le PDF (`POST /api/saisies/ppm/import`, read-only), prévisualise dans la grille
 > partagée, puis enregistre via **le même `PUT /api/saisies/ppm/{idDossier}`** (accepté à ce statut,
-> propriétaire). En rectification la **STRUCTURE est FIGÉE** : chaque ligne fournie doit porter l'`idDetail`
-> d'une ligne existante (mise à jour **en place** — l'examen et le périmètre des observations référencent
-> les lignes) ; **ajout → 409**, **retrait → 409**. L'entité du PDF doit être celle du dossier (garde front
-> au parse) ; signataire/référence actuels conservés. `PUT /api/ppms/{id}` et `PUT /api/marches/{id}`
-> (appelés par la façade) acceptent aussi ce statut pour le propriétaire ; **create/delete restent
-> BROUILLON uniquement**. Le statut reste `EN_ATTENTE_DECISION_PRMP` jusqu'à la resoumission
+> propriétaire). ⚠️ **Règle pilote (2026-09-06) — écart de structure TOLÉRÉ, borné à 3 par sens** (la
+> structure n'est plus strictement figée) : une ligne **avec `idDetail`** = mise à jour **en place** (inchangé) ;
+> une ligne **sans `idDetail`** = **création** (au plus 3, mêmes validations qu'à la saisie : ≥ 1 processus,
+> Σ bénéficiaires, justifications) ; un `idDetail` du dossier **absent du corps** = **retrait** (au plus 3,
+> cascade du DELETE marché). Plus de 3 créations OU plus de 3 retraits → **400** « Le PPM rectifié ajoute N
+> ligne(s) et en retire M : l'écart maximal autorisé est de 3 dans chaque sens. » ; `idDetail` étranger au
+> dossier → **400** nominatif ; retrait d'une ligne portant une **observation du PV non levée** → **400**
+> nominatif (« …porte une observation du PV non levée — elle ne peut pas être retirée »). Garde évaluée
+> **avant toute écriture**. La version remplacée est **archivée avant** (V18, `/versions-archivees`) ;
+> `/diff-rectification` restitue `NOUVELLE` / `SUPPRIMEE` (idDetail nul) pour les lignes ajoutées / retirées ;
+> lignes d'examen et observations d'une ligne retirée conservées (histoire). L'entité du PDF doit être celle
+> du dossier (garde front au parse) ; signataire/référence actuels conservés. `PUT /api/ppms/{id}` et
+> `PUT /api/marches/{id}` (appelés par la façade) acceptent aussi ce statut pour le propriétaire ;
+> **`POST`/`DELETE /api/marches` restent BROUILLON uniquement** (les créations/retraits de rectification
+> passent par la façade, seule à tenir la borne). Le statut reste `EN_ATTENTE_DECISION_PRMP` jusqu'à la resoumission
 > (`POST /api/dossiers/{id}/resoumettre`). Les PATCH `…/rectifier` (édition manuelle champ à champ)
 > subsistent côté API mais ne sont plus le parcours UI. ⚠️ La rectification couvre AUSSI les **pièces
 > jointes** (observations « pièce » du PV) : la PRMP joint la **version corrigée** — nouvel upload du

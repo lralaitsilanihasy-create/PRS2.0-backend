@@ -146,12 +146,14 @@ public class ObservationPvService {
                 String texte = d.getObsSiNonConforme() == null || d.getObsSiNonConforme().isBlank()
                         ? contexte + " : non conforme"
                         : contexte + " : " + d.getObsSiNonConforme();
-                rows.add(nouvelle(idDossier, pv.getIdPv(), "POINT", null, null, texte, ++ordre));
+                // Pas de ligne d'observation détaillée : seule la ligne d'examen (V19) rattache l'observation.
+                rows.add(nouvelle(idDossier, pv.getIdPv(), "POINT", null, d.getIdDetailExamen(), null, texte, ++ordre));
             } else {
                 for (ObservationControle oc : lignesObs) {
                     String texte = contexte + " : au lieu de « " + nvl(oc.getAuLieuDe())
                             + " », lire « " + nvl(oc.getLire()) + " »";
-                    rows.add(nouvelle(idDossier, pv.getIdPv(), "POINT", oc.getIdObservation(), null, texte, ++ordre));
+                    rows.add(nouvelle(idDossier, pv.getIdPv(), "POINT", oc.getIdObservation(), d.getIdDetailExamen(),
+                            null, texte, ++ordre));
                 }
             }
         }
@@ -166,22 +168,57 @@ public class ObservationPvService {
             String texte = "Pièce « " + nomPiece + " »"
                     + (ep.getObservation() == null || ep.getObservation().isBlank() ? " : non conforme"
                             : " : " + ep.getObservation());
-            rows.add(nouvelle(idDossier, pv.getIdPv(), "PIECE", null, ep.getIdExamenPiece(), texte, ++ordre));
+            rows.add(nouvelle(idDossier, pv.getIdPv(), "PIECE", null, null, ep.getIdExamenPiece(), texte, ++ordre));
         }
         repository.saveAll(rows);
     }
 
+    /**
+     * @param idDetailExamen ⚠️ V19 (2026-09-06) — ligne d'examen visée, figée pour TOUTE observation POINT
+     *                       (c'est elle qui rattache l'observation à sa ligne de marché) ; {@code null} pour PIECE.
+     */
     private ObservationPv nouvelle(Integer idDossier, Integer idPv, String source, Integer idObsCtrl,
-            Integer idExamenPiece, String libelle, int ordre) {
+            Integer idDetailExamen, Integer idExamenPiece, String libelle, int ordre) {
         ObservationPv o = new ObservationPv();
         o.setIdDossier(idDossier);
         o.setIdPv(idPv);
         o.setSource(source);
         o.setIdObservationCtrl(idObsCtrl);
+        o.setIdDetailExamen(idDetailExamen);
         o.setIdExamenPiece(idExamenPiece);
         o.setLibelle(libelle.length() > 1000 ? libelle.substring(0, 1000) : libelle);
         o.setOrdre(ordre);
         return o;
+    }
+
+    /**
+     * ⚠️ Règle pilote (2026-09-06, écart de rectification) — lignes de marché ({@code t_marche.ID_DETAIL})
+     * du dossier portant au moins une observation du PV <strong>non levée</strong> (ÉMISE ou MAINTENUE) :
+     * la rectification peut retirer jusqu'à trois lignes, mais pas celles-là — elle répond aux
+     * observations, elle ne les escamote pas. Rattachement observation → ligne d'examen
+     * ({@code idDetailExamen}, V19 ; repli par la ligne d'observation détaillée pour les observations
+     * antérieures) → marché ({@code t_examen_detail.ID_DETAIL}). Une observation irrattachable ne protège
+     * rien : mieux vaut un retrait de trop qu'un blocage sans motif visible.
+     */
+    @Transactional(readOnly = true)
+    public Set<Integer> lignesAvecObservationNonLevee(Integer idDossier) {
+        Map<Integer, String> etats = etatsCourants(idDossier);
+        Set<Integer> lignes = new HashSet<>();
+        for (ObservationPv o : repository.findByIdDossierOrderByOrdreAscIdObservationPvAsc(idDossier)) {
+            if (LEVEE.equals(etats.get(o.getIdObservationPv()))) {
+                continue;
+            }
+            Integer idDetailExamen = o.getIdDetailExamen();
+            if (idDetailExamen == null && o.getIdObservationCtrl() != null) {
+                idDetailExamen = observationControleRepository.findById(o.getIdObservationCtrl())
+                        .map(ObservationControle::getIdDetail).orElse(null);
+            }
+            if (idDetailExamen == null) {
+                continue;
+            }
+            examenDetailRepository.findById(idDetailExamen).map(ExamenDetail::getIdDetail).ifPresent(lignes::add);
+        }
+        return lignes;
     }
 
     // ------------------------------------------------------------------
