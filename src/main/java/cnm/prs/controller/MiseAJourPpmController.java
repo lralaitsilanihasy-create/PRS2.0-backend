@@ -19,9 +19,12 @@ import org.springframework.web.multipart.MultipartFile;
 import cnm.prs.dto.DiffDossierDto;
 import cnm.prs.dto.DossierDto;
 import cnm.prs.dto.MiseAJourRequest;
+import cnm.prs.dto.VersionArchiveeDetailDto;
+import cnm.prs.dto.VersionArchiveeDto;
 import cnm.prs.service.MiseAJourPpmService;
 import cnm.prs.service.RectificationDiffService;
 import cnm.prs.service.SaisiePpmImportService;
+import cnm.prs.service.VersionDossierService;
 
 import jakarta.validation.Valid;
 
@@ -31,24 +34,36 @@ import jakarta.validation.Valid;
  * {@code DossierController} et {@code MarcheController} : les chemins restent ceux des ressources
  * concernées, mais la fonctionnalité se lit d'un seul tenant.
  *
- * <p>Tout est réservé à la <strong>PRMP propriétaire</strong> du dossier (vérifiée dans le service, pas
- * seulement par le rôle) : l'UGPM, qui saisit sous tutelle, n'ouvre pas de nouvelle version.</p>
+ * <p>L'ouverture d'une version est réservée à la <strong>PRMP propriétaire</strong> du dossier (vérifiée
+ * dans le service, pas seulement par le rôle) : l'UGPM, qui saisit sous tutelle, n'ouvre pas de nouvelle
+ * version. Les lectures (diffs, chaîne des versions, versions archivées) sont ouvertes au circuit.</p>
+ *
+ * <p>⚠️ Deux notions de « version » coexistent ici, volontairement distinguées par le chemin :
+ * {@code /versions} = la <em>chaîne des mises à jour</em> (chaque version est un dossier à part entière) ;
+ * {@code /versions-archivees} = l'<em>historique des rectifications</em> d'un dossier (versions figées
+ * du même dossier, 2026-09-06).</p>
  */
 @RestController
 @RequestMapping("/api")
 public class MiseAJourPpmController {
+
+    private static final String LECTURE_CIRCUIT = "hasAnyRole('PRMP','PRESIDENT','CHEF_COMMISSION','SECRETAIRE',"
+            + "'MEMBRE','VERIFICATEUR','ASSISTANT_CONTROLEUR','ADMINISTRATEUR')";
 
     private final MiseAJourPpmService service;
     /** Parsing read-only du PPM PDF — la même façade que l'import de la saisie initiale. */
     private final SaisiePpmImportService importService;
     /** ⚠️ Visibilité des rectifications (2026-08-15) — diff du dernier cycle de rectification. */
     private final RectificationDiffService rectificationDiffService;
+    /** ⚠️ Versions archivées (2026-09-06) — historique des rectifications d'un dossier. */
+    private final VersionDossierService versionDossierService;
 
     public MiseAJourPpmController(MiseAJourPpmService service, SaisiePpmImportService importService,
-            RectificationDiffService rectificationDiffService) {
+            RectificationDiffService rectificationDiffService, VersionDossierService versionDossierService) {
         this.service = service;
         this.importService = importService;
         this.rectificationDiffService = rectificationDiffService;
+        this.versionDossierService = versionDossierService;
     }
 
     /**
@@ -91,8 +106,7 @@ public class MiseAJourPpmController {
      * était privé de donnée par le 403). Contrôle serveur : PRMP propriétaire, sinon périmètre de
      * localité habituel.</p>
      */
-    @PreAuthorize("hasAnyRole('PRMP','PRESIDENT','CHEF_COMMISSION','SECRETAIRE','MEMBRE','VERIFICATEUR',"
-            + "'ASSISTANT_CONTROLEUR','ADMINISTRATEUR')")
+    @PreAuthorize(LECTURE_CIRCUIT)
     @GetMapping("/dossiers/{idDossier}/diff")
     public DiffDossierDto diff(@PathVariable Integer idDossier) {
         return service.diff(idDossier);
@@ -100,14 +114,14 @@ public class MiseAJourPpmController {
 
     /**
      * ⚠️ Règle ajoutée (2026-08-15, visibilité des rectifications) — diff du <strong>dernier cycle de
-     * rectification</strong> (instantané pré-correction vs lignes courantes), même DTO que le diff des
+     * rectification</strong> (dernière version archivée vs lignes courantes), même DTO que le diff des
      * versions pour que le front réutilise son tableau tel quel. 409 si aucune rectification enregistrée.
      * Endpoint DÉDIÉ (décision backend) : {@code /diff} garde son contrat « mise à jour » (409 si pas de
      * version précédente) — un dossier peut être à la fois une version ET porter une rectification, les
-     * deux diffs coexistent et le front choisit selon le contexte.
+     * deux diffs coexistent et le front choisit selon le contexte. Contrat <strong>inchangé</strong> par
+     * l'archivage des versions (2026-09-06).
      */
-    @PreAuthorize("hasAnyRole('PRMP','PRESIDENT','CHEF_COMMISSION','SECRETAIRE','MEMBRE','VERIFICATEUR',"
-            + "'ASSISTANT_CONTROLEUR','ADMINISTRATEUR')")
+    @PreAuthorize(LECTURE_CIRCUIT)
     @GetMapping("/dossiers/{idDossier}/diff-rectification")
     public DiffDossierDto diffRectification(@PathVariable Integer idDossier) {
         return rectificationDiffService.diffRectification(idDossier);
@@ -121,6 +135,32 @@ public class MiseAJourPpmController {
     @GetMapping("/dossiers/{idDossier}/versions")
     public List<DossierDto> versions(@PathVariable Integer idDossier) {
         return service.chaineVersions(idDossier);
+    }
+
+    /**
+     * ⚠️ <strong>Versions archivées (demande pilote du 2026-09-06)</strong> — historique des rectifications
+     * du dossier : une entrée par version <em>remplacée</em> (numéro, date, auteur, origine, cycle, nombre
+     * de lignes), de la plus ancienne à la plus récente. <strong>Liste vide</strong> pour un dossier jamais
+     * rectifié (200, pas 409 — contrairement au diff, il n'y a rien d'anormal à n'avoir pas d'historique).
+     * La version <em>courante</em> n'y figure pas : c'est le dossier lui-même. Même périmètre de lecture
+     * que le diff de rectification. <strong>Ressource en lecture seule</strong> : toute autre méthode
+     * répond 405.
+     */
+    @PreAuthorize(LECTURE_CIRCUIT)
+    @GetMapping("/dossiers/{idDossier}/versions-archivees")
+    public List<VersionArchiveeDto> versionsArchivees(@PathVariable Integer idDossier) {
+        return versionDossierService.lister(idDossier);
+    }
+
+    /**
+     * ⚠️ Versions archivées (2026-09-06) — contenu complet d'une version archivée : en-tête + lignes de
+     * marché avec bénéficiaires, lots et dates prévisionnelles, telles qu'elles étaient. 404 si le numéro
+     * n'existe pas pour ce dossier. Lecture seule (405 sur toute autre méthode).
+     */
+    @PreAuthorize(LECTURE_CIRCUIT)
+    @GetMapping("/dossiers/{idDossier}/versions-archivees/{numero}")
+    public VersionArchiveeDetailDto versionArchivee(@PathVariable Integer idDossier, @PathVariable Integer numero) {
+        return versionDossierService.detail(idDossier, numero);
     }
 
     /** Suppression LOGIQUE d'une ligne dans un brouillon de mise à jour (restaurable, jamais effacée). */

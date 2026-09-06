@@ -15,9 +15,13 @@ import cnm.prs.repository.ObservationPvRepository;
 import cnm.prs.repository.PvExamenRepository;
 import cnm.prs.repository.PvNavetteRepository;
 import cnm.prs.repository.ReceptionRepository;
+import cnm.prs.repository.SnapshotRectifBeneficiaireRepository;
 import cnm.prs.repository.SnapshotRectifLigneRepository;
+import cnm.prs.repository.SnapshotRectifLotRepository;
+import cnm.prs.repository.SnapshotRectifPrevisionRepository;
 import cnm.prs.repository.SuiviObservationRepository;
 import cnm.prs.repository.VerificationRepository;
+import cnm.prs.repository.VersionDossierRepository;
 
 /**
  * ⚠️ Règle ajoutée (§3.3) — <strong>purge du circuit</strong> d'un dossier.
@@ -53,7 +57,12 @@ public class CircuitCascadeService {
     private final ReceptionRepository receptionRepository;
     private final SuiviObservationRepository suiviObservationRepository;
     private final ObservationPvRepository observationPvRepository;
+    /** ⚠️ Versions archivées (2026-09-06) — l'historique des rectifications part avec le circuit, enfants d'abord. */
+    private final SnapshotRectifBeneficiaireRepository snapshotRectifBeneficiaireRepository;
+    private final SnapshotRectifLotRepository snapshotRectifLotRepository;
+    private final SnapshotRectifPrevisionRepository snapshotRectifPrevisionRepository;
     private final SnapshotRectifLigneRepository snapshotRectifLigneRepository;
+    private final VersionDossierRepository versionDossierRepository;
 
     public CircuitCascadeService(ObservationControleRepository observationControleRepository,
             ExamenDetailRepository examenDetailRepository, ExamenPieceRepository examenPieceRepository,
@@ -63,10 +72,18 @@ public class CircuitCascadeService {
             CopieDossierRepository copieDossierRepository, ExamenRepository examenRepository,
             DispatchRepository dispatchRepository, ReceptionRepository receptionRepository,
             SuiviObservationRepository suiviObservationRepository, ObservationPvRepository observationPvRepository,
-            SnapshotRectifLigneRepository snapshotRectifLigneRepository) {
+            SnapshotRectifBeneficiaireRepository snapshotRectifBeneficiaireRepository,
+            SnapshotRectifLotRepository snapshotRectifLotRepository,
+            SnapshotRectifPrevisionRepository snapshotRectifPrevisionRepository,
+            SnapshotRectifLigneRepository snapshotRectifLigneRepository,
+            VersionDossierRepository versionDossierRepository) {
         this.suiviObservationRepository = suiviObservationRepository;
         this.observationPvRepository = observationPvRepository;
+        this.snapshotRectifBeneficiaireRepository = snapshotRectifBeneficiaireRepository;
+        this.snapshotRectifLotRepository = snapshotRectifLotRepository;
+        this.snapshotRectifPrevisionRepository = snapshotRectifPrevisionRepository;
         this.snapshotRectifLigneRepository = snapshotRectifLigneRepository;
+        this.versionDossierRepository = versionDossierRepository;
         this.observationControleRepository = observationControleRepository;
         this.examenDetailRepository = examenDetailRepository;
         this.examenPieceRepository = examenPieceRepository;
@@ -105,7 +122,12 @@ public class CircuitCascadeService {
         // ⚠️ Spec observations FAVR (2026-08-02) — suivi des observations du PV (historique puis périmètre).
         suiviObservationRepository.deleteParDossier(idDossier);      // 0a — enfant de t_observation_pv
         observationPvRepository.deleteParDossier(idDossier);         // 0b — enfant de t_dossier / t_pv_examen
-        snapshotRectifLigneRepository.deleteParDossier(idDossier);   // 0c — instantanés de rectification (sans FK)
+        // 0c — versions archivées de rectification (⚠️ 2026-09-06) : enfants → lignes → en-têtes (FK).
+        snapshotRectifBeneficiaireRepository.deleteParDossier(idDossier);
+        snapshotRectifLotRepository.deleteParDossier(idDossier);
+        snapshotRectifPrevisionRepository.deleteParDossier(idDossier);
+        snapshotRectifLigneRepository.deleteParDossier(idDossier);
+        versionDossierRepository.deleteParDossier(idDossier);
         observationControleRepository.deleteParDossier(idDossier);   // 1 — enfant de t_examen_detail
         examenDetailRepository.deleteParDossier(idDossier);          // 2 — enfant de t_examen
         examenPieceRepository.deleteParDossier(idDossier);           // 2b — enfant de t_examen (pièces examinées)

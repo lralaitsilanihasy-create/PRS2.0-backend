@@ -159,7 +159,7 @@ public class JournalDossierService {
         repository.deleteByIdDossier(idDossier);
     }
 
-    private String nomOperateur(String idPrmp) {
+    public String nomOperateur(String idPrmp) {
         if (idPrmp == null) {
             return null;
         }

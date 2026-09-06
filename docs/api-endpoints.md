@@ -1884,6 +1884,8 @@ volumineux → **400** (annule la création si multipart) ; **404** si l'UGPM ou
 | GET | /api/dossiers/{idDossier}/diff | — | `DiffDossierDto` | 200, 403, 404, 409 | **PRMP propriétaire OU contrôleur de la localité** (⚠️ lecture élargie 2026-08-15) |
 | GET | /api/dossiers/{idDossier}/diff-rectification | — | `DiffDossierDto` | 200, 403, 404, 409 | **PRMP propriétaire OU contrôleur de la localité** (⚠️ nouveau 2026-08-15) |
 | GET | /api/dossiers/{idDossier}/versions | — | `DossierDto[]` (plus récente d'abord) | 200, 404 | PRMP / PRESIDENT / CHEF_COMMISSION / MEMBRE / VERIFICATEUR / ADMINISTRATEUR |
+| GET | /api/dossiers/{idDossier}/versions-archivees | — | `VersionArchiveeDto[]` (plus ancienne d'abord ; **vide** si jamais rectifié) | 200, 403, 404 | **PRMP propriétaire OU contrôleur de la localité** (⚠️ nouveau 2026-09-06) |
+| GET | /api/dossiers/{idDossier}/versions-archivees/{numero} | — | `VersionArchiveeDetailDto` (lecture seule) | 200, 403, 404 (toute autre méthode : 405) | **PRMP propriétaire OU contrôleur de la localité** (⚠️ nouveau 2026-09-06) |
 | PATCH | /api/marches/{idDetail}/supprimer | — | — | 204, 403, 404, 409 | **PRMP propriétaire** |
 | PATCH | /api/marches/{idDetail}/restaurer | — | — | 204, 403, 404, 409 | **PRMP propriétaire** |
 
@@ -1909,9 +1911,44 @@ volumineux → **400** (annule la création si multipart) ; **404** si l'UGPM ou
 > figée en rectification ⇒ uniquement des lignes `INCHANGEE`/`MODIFIEE` (appariement direct par
 > `idDetail`). **409** si aucune rectification n'est enregistrée (aucun instantané). Après une nouvelle
 > transmission d'observations puis une nouvelle rectification, c'est le **nouveau** cycle qui est servi
-> (le vérificateur juge toujours le dernier). **Endpoint dédié** (décision backend) : `/diff` garde son
+> (le vérificateur juge toujours le dernier) — l'ancien n'est plus effacé mais **archivé** (⚠️ 2026-09-06,
+> ci-dessous). **Endpoint dédié** (décision backend) : `/diff` garde son
 > contrat « mise à jour » (409 si pas de version précédente) — un dossier peut être à la fois une version
 > ET porter une rectification, les deux diffs coexistent.
+>
+> ⚠️ **Versions archivées — historique des rectifications (demande pilote du 2026-09-06).** La rectification
+> corrigeant le PPM **en place**, chaque version **remplacée** est désormais **archivée** au lieu d'être
+> écrasée : au **premier** `PUT /api/saisies/ppm/{id}` de chaque cycle, l'état courant devient la version
+> n° `numero` du dossier (en-tête `t_version_dossier`, lignes `t_snapshot_rectif_ligne`, enfants
+> `t_snapshot_rectif_beneficiaire` / `_lot` / `_prevision`) — numéro d'ordre, `dateVersion`, **auteur**
+> (`idPrmpAuteur` = PRMP opératrice, `nomAuteur`, `auteur` = login réel), `origine` (`RECTIFICATION` ;
+> `MISE_A_JOUR` réservé), `cycle` (itération de rectification), en-tête du PPM au gel (`exercice`,
+> `reference`, `signataire`, `dateSignature`) et `nbLignes`. **Deux notions de « version » coexistent**,
+> distinguées par le chemin : `/versions` = chaîne des **mises à jour** (chaque version est un dossier) ;
+> `/versions-archivees` = historique des **rectifications** du même dossier. La mécanique des mises à jour
+> n'a pas été réutilisée : elle aurait créé des dossiers fantômes (sans statut ni circuit) dans les listes.
+>
+> `GET …/versions-archivees` liste les versions archivées, de la plus ancienne à la plus récente — **liste
+> vide (200)** pour un dossier jamais rectifié (contrairement au diff, pas de 409). La **version courante**
+> n'y figure pas : c'est le dossier lui-même (son numéro = nombre de versions archivées + 1 ; le badge est
+> posé par le front). `GET …/versions-archivees/{numero}` rend le contenu **complet** : `version` (en-tête)
+> + `lignes[]` avec les **mêmes champs** que `MarcheDto` (`idDetail`, `idLigneOrigine`, `designationMarche`,
+> `numCompte`, `montEstim`, `ancienMontEstim`, `nouvMontEstim`, `financement`, `statut`, `idNature`,
+> `idMode`, `formeMarche`, `supprimee`, `justifModeDerogatoire`, `justifDelaiAmenage`) et leurs collections
+> `beneficiaires[]` (`soaCode`, `numCompte`, `ancMontBenef`, `nouvMontBenef`), `lots[]` (`designationLot`,
+> `montLot`, `qteLot`, `uniteLot`), `processus[]` (`idCapm`, `ordre` = ordre d'affichage **actuel** du
+> référentiel, `dateDebut`, `dateFin`), lignes ordonnées par `idDetail`. **404** si le numéro n'existe pas
+> pour ce dossier.
+>
+> **Immuable** : ressource en **lecture seule** (toute autre méthode → **405**), entités Hibernate
+> `@Immutable`, et trigger PostgreSQL `fn_version_archivee_immuable` refusant tout `UPDATE` sur les cinq
+> tables. Les versions partent avec le **circuit** (retrait accepté, annulation de dispatch, suppression du
+> dossier), comme l'instantané qu'elles remplacent. **Reprise** (migration `V18`) : l'instantané du dernier
+> cycle déjà en base est devenu la version **n° 1** de son dossier (pas de trou pour 00002) ; ses collections,
+> figées seulement par empreinte, sont **reconstituées** à la lecture en mode dégradé (désignations de lots
+> en minuscules, `uniteLot` et `numCompte` de bénéficiaire absents, un seul montant par bénéficiaire porté
+> par `nouvMontBenef`) ; son en-tête PPM est nul. Le `/diff-rectification` est **inchangé** : il compare la
+> **dernière** version archivée aux lignes courantes. Même périmètre de lecture que le diff.
 >
 > **Lecture des deux diffs — élargie (2026-08-15, demande en attente depuis le 05/08)** : plus réservés à
 > la PRMP — **tout-voyant** (Président/Admin), **PRMP propriétaire**, ou **contrôleur de la localité du

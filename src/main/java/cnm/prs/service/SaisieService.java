@@ -102,8 +102,8 @@ public class SaisieService {
     /** ⚠️ Spec « Mandats PRMP » — habilitation à créer, et mandat d'attribution figé sur le dossier. */
     private final MandatService mandatService;
     private final JournalDossierService journalDossier;
-    /** ⚠️ Visibilité des rectifications (2026-08-15) — gel de l'état pré-correction au 1er PUT du cycle. */
-    private final RectificationDiffService rectificationDiffService;
+    /** ⚠️ Versions archivées (2026-09-06, ex-instantané 2026-08-15) — archivage de la version remplacée au 1er PUT du cycle. */
+    private final VersionDossierService versionDossierService;
     /** ⚠️ Fiche de présentation (2026-09-01) — classement serveur et garde des justifications. */
     private final FicheJustificationsService ficheJustifications;
 
@@ -121,12 +121,12 @@ public class SaisieService {
             TypeDmcService typeDmcService, LotRepository lotRepository,
             TrancheRepository trancheRepository, SousTypeDossierRepository sousTypeDossierRepository,
             MandatService mandatService, JournalDossierService journalDossier,
-            RectificationDiffService rectificationDiffService,
+            VersionDossierService versionDossierService,
             FicheJustificationsService ficheJustifications) {
         this.ficheJustifications = ficheJustifications;
         this.mandatService = mandatService;
         this.journalDossier = journalDossier;
-        this.rectificationDiffService = rectificationDiffService;
+        this.versionDossierService = versionDossierService;
         this.dossierRepository = dossierRepository;
         this.ppmRepository = ppmRepository;
         this.marcheRepository = marcheRepository;
@@ -328,7 +328,9 @@ public class SaisieService {
             // ⚠️ Règle ajoutée (2026-08-15, visibilité des rectifications) — au PREMIER PUT du cycle,
             // l'état des lignes AVANT correction est figé (la rectification modifie la version courante
             // en place : sans instantané, rien à comparer pour le diff servi au vérificateur).
-            rectificationDiffService.figerAvantPremiereCorrection(idDossier);
+            // ⚠️ Versions archivées (2026-09-06, demande pilote) — ce gel est désormais l'ARCHIVAGE de la
+            // version remplacée (numérotée, datée, signée, lignes complètes) : plus rien n'est effacé.
+            versionDossierService.archiverAvantPremiereCorrection(idDossier);
         } else {
             dossierIntegrite.exigerBrouillonModifiable(idDossier);
         }

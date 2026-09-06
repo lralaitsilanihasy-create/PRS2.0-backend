@@ -3,6 +3,8 @@ package cnm.prs.entity;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+import org.hibernate.annotations.Immutable;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -20,14 +22,22 @@ import lombok.Setter;
  * <em>en place</em> (structure figée, mise à jour par {@code idDetail}) : sans cet instantané, il n'y a
  * rien à comparer pour montrer au vérificateur ce que la PRMP a changé.
  *
+ * <p>⚠️ <strong>Versions archivées (2026-09-06, demande pilote)</strong> — chaque ligne appartient
+ * désormais à une <strong>version archivée</strong> ({@link VersionDossier}, {@code ID_VERSION}) et plus
+ * rien n'est effacé : toutes les séries de tous les cycles sont conservées, celle du dernier cycle
+ * servant toujours le diff. La ligne porte les <em>mêmes champs</em> que {@link Marche} pour être
+ * restituée telle quelle, et le contenu réel de ses collections vit dans
+ * {@link SnapshotRectifBeneficiaire}, {@link SnapshotRectifLot} et {@link SnapshotRectifPrevision}.
+ * Les <strong>empreintes</strong> ({@code EMP_*}) restent figées ici car le diff les compare à l'état
+ * courant — même sémantique que {@code MiseAJourPpmService} ({@code EmpreintesLigne}).</p>
+ *
  * <p>Un <strong>cycle</strong> = de la transmission des observations à la resoumission ; {@code CYCLE} =
- * nombre de resoumissions du dossier + 1 au moment du gel. Une seule série d'instantanés est conservée
- * par dossier (celle du dernier cycle — le vérificateur juge toujours le dernier). Les empreintes des
- * collections (bénéficiaires, lots, processus) sont figées ici car le diff les compare à l'état courant
- * — même sémantique que {@code MiseAJourPpmService}.</p>
+ * nombre de resoumissions du dossier + 1 au moment du gel. <strong>Immuable</strong> : {@link Immutable}
+ * côté Hibernate, trigger {@code fn_version_archivee_immuable} côté PostgreSQL.</p>
  */
 @Entity
 @Table(name = "t_snapshot_rectif_ligne")
+@Immutable
 @Getter
 @Setter
 @NoArgsConstructor
@@ -37,6 +47,10 @@ public class SnapshotRectifLigne {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "ID_SNAPSHOT", nullable = false)
     private Integer idSnapshot;
+
+    /** Version archivée à laquelle la ligne appartient ({@code t_version_dossier.ID_VERSION}). */
+    @Column(name = "ID_VERSION", nullable = false)
+    private Integer idVersion;
 
     @Column(name = "ID_DOSSIER", nullable = false)
     private Integer idDossier;
@@ -57,6 +71,9 @@ public class SnapshotRectifLigne {
 
     @Column(name = "MONT_ESTIM")
     private BigDecimal montEstim;
+
+    @Column(name = "ANCIEN_MONT_ESTIM")
+    private BigDecimal ancienMontEstim;
 
     @Column(name = "NOUV_MONT_ESTIM")
     private BigDecimal nouvMontEstim;
@@ -82,6 +99,12 @@ public class SnapshotRectifLigne {
 
     @Column(name = "SUPPRIMEE")
     private Boolean supprimee;
+
+    @Column(name = "JUSTIF_MODE_DEROGATOIRE", length = 1000)
+    private String justifModeDerogatoire;
+
+    @Column(name = "JUSTIF_DELAI_AMENAGE", length = 1000)
+    private String justifDelaiAmenage;
 
     /** Empreintes normalisées des collections au moment du gel (mêmes formats que le diff des versions). */
     @Column(name = "EMP_BENEFICIAIRES", length = 2000)

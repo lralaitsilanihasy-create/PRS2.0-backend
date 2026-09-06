@@ -10,14 +10,17 @@ import org.springframework.stereotype.Repository;
 
 import cnm.prs.entity.SnapshotRectifLigne;
 
+/**
+ * Lignes figées des versions archivées d'un dossier. Une ligne ne s'écrit qu'à l'archivage : aucune
+ * méthode de mise à jour, l'entité est immuable (⚠️ versions archivées, 2026-09-06).
+ */
 @Repository
 public interface SnapshotRectifLigneRepository extends JpaRepository<SnapshotRectifLigne, Integer> {
 
-    List<SnapshotRectifLigne> findByIdDossierOrderByIdDetailAsc(Integer idDossier);
+    /** Lignes d'une version, dans l'ordre des lignes de marché (le diff et la restitution s'y appuient). */
+    List<SnapshotRectifLigne> findByIdVersionOrderByIdDetailAsc(Integer idVersion);
 
-    boolean existsByIdDossierAndCycle(Integer idDossier, Integer cycle);
-
-    /** Purge (retrait / nouveau cycle) — la table est sans FK entrante, suppression directe. */
+    /** Purge avec le circuit — après les enfants (bénéficiaires, lots, prévisions), avant les en-têtes. */
     @Modifying
     @Query("delete from SnapshotRectifLigne s where s.idDossier = :idDossier")
     int deleteParDossier(@Param("idDossier") Integer idDossier);
