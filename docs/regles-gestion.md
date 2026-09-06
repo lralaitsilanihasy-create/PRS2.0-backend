@@ -826,6 +826,12 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
     (`EN_ATTENTE_COMPLEMENTS_DEPOT`, `EN_ATTENTE_PIECES`, `EN_ATTENTE_DECISION_PRMP`), la date reste
     calculée mais **glisse tant que la PRMP n'a pas rendu la main** — c'est le net CNM qui juge la
     Commission, pas le temps que la PRMP prend à rectifier.
+  - ⚠️ **Règle ajoutée (2026-09-06, demande pilote « Suivi des délais CNM »)** — `DossierDto` porte aussi
+    la **date d'enregistrement** (`dateEnregistrement`, date-heure) : la clôture de l'étape `RECEPTION`,
+    **exactement** le `debutCompteur` du chronométrage, résolue **en lot** sur les listes depuis les mêmes
+    tâches (aucun N+1) ; `null` tant que le Secrétaire n'a pas enregistré. C'est ce qui permet au tableau
+    de bord PRMP (référence · enregistrement · fin prévue) de se remplir sans élargir la portée de
+    `GET /api/receptions`, qui reste vide pour la PRMP.
   - `GET /api/dossiers/{id}/chronometrage` détaille les étapes franchies, leurs acteurs et les deux
     compteurs. Détail de la règle : section « Chronométrage et prévision des délais » en §2.
 

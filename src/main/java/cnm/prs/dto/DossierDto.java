@@ -109,6 +109,19 @@ public class DossierDto {
     private java.time.LocalDate datePrevisionnelleFin;
 
     /**
+     * ⚠️ Suivi des délais CNM (demande pilote 2026-09-06) — <strong>date d'enregistrement</strong> du
+     * dossier à la CNM : la clôture de l'étape {@code RECEPTION} du chronométrage, c'est-à-dire le
+     * {@code debutCompteur} de {@code GET /api/dossiers/{id}/chronometrage}, servi ici <strong>en lot</strong>
+     * sur les listes (mêmes requêtes que {@link #datePrevisionnelleFin}, aucun appel par dossier).
+     * {@code null} tant que le Secrétaire n'a pas enregistré le dossier.
+     *
+     * <p>Pourquoi sur ce DTO : {@code GET /api/receptions} est <em>vide</em> pour la PRMP (hors de son
+     * périmètre, et cela ne change pas) ; l'appel du chronométrage dossier par dossier aurait été un N+1
+     * sur son tableau de bord.</p>
+     */
+    private java.time.LocalDateTime dateEnregistrement;
+
+    /**
      * ⚠️ Chronométrage (2026-09-01) — vrai quand <strong>la balle est chez la PRMP</strong>
      * ({@code EN_ATTENTE_COMPLEMENTS_DEPOT}, {@code EN_ATTENTE_PIECES}, {@code EN_ATTENTE_DECISION_PRMP}).
      * La date prévisionnelle reste calculée, mais elle glissera tant que la PRMP n'aura pas rendu la

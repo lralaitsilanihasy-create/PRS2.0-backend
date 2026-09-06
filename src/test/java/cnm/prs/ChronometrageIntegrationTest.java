@@ -465,6 +465,67 @@ class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$.attributaire").doesNotExist());
     }
 
+    // ------------------------------------------------------------------ date d'enregistrement (2026-09-06)
+
+    /**
+     * ⚠️ Suivi des délais CNM (demande pilote 2026-09-06) — le tableau de bord PRMP affiche « référence ·
+     * enregistrement · fin prévue » ; {@code GET /api/receptions} est vide pour la PRMP et le chronométrage
+     * par dossier serait un N+1. Le {@code DossierDto} sert donc {@code dateEnregistrement}, résolue en lot.
+     */
+    @Test
+    @DisplayName("Date d'enregistrement — dossier réceptionné : dateEnregistrement = clôture de RECEPTION, "
+            + "identique au debutCompteur du chronométrage")
+    void dateEnregistrement_dossierReceptionne_egaleAuDebutCompteur() throws Exception {
+        dossierEnStatut(500, "SOUMIS");
+        mvc.perform(post("/api/receptions").header("Authorization", tokenCc)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDossier\":500,\"numPassage\":1,\"typePassage\":\"INITIAL\","
+                        + "\"imCtrlRecept\":\"CTRCC1\",\"complet\":true}"))
+                .andExpect(status().isCreated());
+
+        String chrono = mvc.perform(get("/api/dossiers/500/chronometrage").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.debutCompteur").exists())
+                .andReturn().getResponse().getContentAsString();
+        String debutCompteur = com.jayway.jsonpath.JsonPath.read(chrono, "$.debutCompteur");
+        assertNotNull(debutCompteur);
+
+        mvc.perform(get("/api/dossiers/500").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.dateEnregistrement").value(debutCompteur));
+    }
+
+    @Test
+    @DisplayName("Date d'enregistrement — dossier soumis non réceptionné : null (la date prévisionnelle, elle, est déjà là)")
+    void dateEnregistrement_nonReceptionne_null() throws Exception {
+        dossierEnStatut(500, "SOUMIS");
+        mvc.perform(get("/api/dossiers/500").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.dateEnregistrement").doesNotExist())
+                .andExpect(jsonPath("$.datePrevisionnelleFin").exists());
+    }
+
+    @Test
+    @DisplayName("Date d'enregistrement — la PRMP la lit sur SES dossiers via la liste GET /api/dossiers, "
+            + "sans que la portée de GET /api/receptions ne s'élargisse (toujours vide pour elle)")
+    void dateEnregistrement_visibleSurLaListePrmp_receptionsToujoursVides() throws Exception {
+        dossierEnStatut(500, "SOUMIS");
+        mvc.perform(post("/api/receptions").header("Authorization", tokenCc)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDossier\":500,\"numPassage\":1,\"typePassage\":\"INITIAL\","
+                        + "\"imCtrlRecept\":\"CTRCC1\",\"complet\":true}"))
+                .andExpect(status().isCreated());
+
+        mvc.perform(get("/api/dossiers").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idDossier==500)].dateEnregistrement", org.hamcrest.Matchers.hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idDossier==500)].dateEnregistrement[0]", org.hamcrest.Matchers.notNullValue()));
+        // Aucun élargissement de portée : la liste des réceptions reste vide pour la PRMP.
+        mvc.perform(get("/api/receptions").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(0)));
+    }
+
     private void dossierEnStatut(int idDossier, String statut) {
         Dossier d = dossierRepository.findById(idDossier).orElseGet(() -> {
             Dossier neuf = dossier(idDossier, statut);

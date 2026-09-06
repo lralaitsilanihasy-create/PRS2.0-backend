@@ -605,8 +605,12 @@ public class DossierService {
         java.time.LocalDateTime maintenant = java.time.LocalDateTime.now();
         for (DossierDto dto : dtos) {
             String statutPv = statutsPv.get(dto.getIdDossier());
+            List<cnm.prs.entity.TacheDossier> tachesDossier = taches.getOrDefault(dto.getIdDossier(), List.of());
             dto.setDatePrevisionnelleFin(chronometrage.datePrevisionnelleFin(dto.getStatut(), statutPv,
-                    taches.getOrDefault(dto.getIdDossier(), List.of()), maintenant, delais));
+                    tachesDossier, maintenant, delais));
+            // ⚠️ Suivi des délais CNM (2026-09-06) — date d'enregistrement = clôture de RECEPTION, depuis
+            // les MÊMES tâches déjà chargées en lot : aucune requête de plus, aucun N+1.
+            dto.setDateEnregistrement(chronometrage.dateEnregistrement(tachesDossier));
             dto.setAttentePrmp(ChronometrageService.estEnAttentePrmp(dto.getStatut()));
             cnm.prs.enums.EtapeCircuit etape = chronometrage.etapeCourante(dto.getStatut(), statutPv);
             dto.setEtapeCourante(etape == null ? null : etape.name());

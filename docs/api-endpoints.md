@@ -5524,6 +5524,7 @@ un quatrième — c'est exactement `EN_ATTENTE_DECISION_PRMP`, pendant laquelle 
 | `datePrevisionnelleFin` | string (date) \| null | date annoncée, en jours ouvrés ; `null` hors circuit (brouillon, clos, retiré, remplacé) |
 | `attentePrmp` | boolean | vrai quand la balle est **chez la PRMP** |
 | `etapeCourante` | string \| null | étape ouverte ; `null` si aucune tâche CNM ne court |
+| `dateEnregistrement` | string (date-heure) \| null | ⚠️ **2026-09-06** (demande pilote « Suivi des délais CNM ») — clôture de l'étape `RECEPTION`, **exactement** le `debutCompteur` du chronométrage ; `null` tant que le Secrétaire n'a pas enregistré. Sert la PRMP, pour qui `GET /api/receptions` est vide (portée inchangée) |
 
 Présents sur `GET /api/dossiers/{id}` **et** sur les listes, résolus **en lot** (deux requêtes de plus
 quelle que soit la taille de la liste).

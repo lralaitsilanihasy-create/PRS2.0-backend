@@ -629,6 +629,16 @@ public class ChronometrageService {
                 acteursAttendus(idDossier, courante));
     }
 
+    /**
+     * ⚠️ Suivi des délais CNM (2026-09-06) — date d'<strong>enregistrement</strong> du dossier : la clôture
+     * de l'étape {@code RECEPTION}, <strong>exactement</strong> le {@code debutCompteur} du chronométrage
+     * (même borne, même liste de tâches) — servie en lot sur {@code DossierDto} par la même méthode, pour
+     * que la liste et le détail ne puissent pas diverger. {@code null} avant l'enregistrement.
+     */
+    public LocalDateTime dateEnregistrement(List<TacheDossier> taches) {
+        return borne(taches, EtapeCircuit.RECEPTION);
+    }
+
     /** Fin de la dernière occurrence close d'une étape — borne du compteur global. */
     private LocalDateTime borne(List<TacheDossier> taches, EtapeCircuit etape) {
         return taches.stream()
