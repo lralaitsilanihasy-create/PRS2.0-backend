@@ -10,13 +10,20 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import cnm.prs.dto.ActionDossierDto;
+import cnm.prs.entity.ActionDossier;
+import cnm.prs.entity.DemandeRetrait;
 import cnm.prs.entity.PvExamen;
 import cnm.prs.entity.PvNavette;
 import cnm.prs.entity.TransmissionSigmp;
 import cnm.prs.entity.Verification;
 import cnm.prs.enums.SensNavette;
+import cnm.prs.enums.StatutDossier;
 import cnm.prs.enums.StatutPv;
+import cnm.prs.enums.StatutRetrait;
+import cnm.prs.repository.ActionDossierRepository;
 import cnm.prs.repository.ControleurRepository;
+import cnm.prs.repository.DemandeRetraitRepository;
+import cnm.prs.repository.PrmpRepository;
 import cnm.prs.repository.PvExamenRepository;
 import cnm.prs.repository.PvNavetteRepository;
 import cnm.prs.repository.TransmissionSigmpRepository;
@@ -60,21 +67,39 @@ public class JournalTraitementService {
     public static final String DECISION_VERIFICATION = "DECISION_VERIFICATION";
     public static final String TRANSMISSION_SIGMP = "TRANSMISSION_SIGMP";
     public static final String ARCHIVAGE = "ARCHIVAGE";
+    /**
+     * ⚠️ Recensement des trous (2026-09-07, T1, dossier 100299) — le RETRAIT, geste le plus lourd de la
+     * séquence puisqu'il fait reculer le dossier, n'apparaissait nulle part : dérivé de
+     * {@code t_demande_retrait}, rétroactif comme le reste. La demande est un acte de la PRMP (opérateur
+     * = la PRMP, donc pas de marqueur « opérateur ≠ attributaire ») ; la décision, celle du CC ou du
+     * Président. Visibles de tous (comme CREATION / SOUMISSION).
+     */
+    public static final String DEMANDE_RETRAIT = "DEMANDE_RETRAIT";
+    public static final String RETRAIT_ACCEPTE = "RETRAIT_ACCEPTE";
+    public static final String RETRAIT_REFUSE = "RETRAIT_REFUSE";
 
     private final PvNavetteRepository navetteRepository;
     private final PvExamenRepository pvExamenRepository;
     private final VerificationRepository verificationRepository;
     private final TransmissionSigmpRepository transmissionRepository;
     private final ControleurRepository controleurRepository;
+    private final DemandeRetraitRepository demandeRetraitRepository;
+    private final PrmpRepository prmpRepository;
+    private final ActionDossierRepository actionDossierRepository;
 
     public JournalTraitementService(PvNavetteRepository navetteRepository,
             PvExamenRepository pvExamenRepository, VerificationRepository verificationRepository,
-            TransmissionSigmpRepository transmissionRepository, ControleurRepository controleurRepository) {
+            TransmissionSigmpRepository transmissionRepository, ControleurRepository controleurRepository,
+            DemandeRetraitRepository demandeRetraitRepository, PrmpRepository prmpRepository,
+            ActionDossierRepository actionDossierRepository) {
         this.navetteRepository = navetteRepository;
         this.pvExamenRepository = pvExamenRepository;
         this.verificationRepository = verificationRepository;
         this.transmissionRepository = transmissionRepository;
         this.controleurRepository = controleurRepository;
+        this.demandeRetraitRepository = demandeRetraitRepository;
+        this.prmpRepository = prmpRepository;
+        this.actionDossierRepository = actionDossierRepository;
     }
 
     /**
@@ -89,6 +114,8 @@ public class JournalTraitementService {
             case JournalDossierService.CREATION -> 10;
             case JournalDossierService.MISE_A_JOUR -> 15;
             case JournalDossierService.SOUMISSION, JournalDossierService.RESOUMISSION -> 20;
+            case DEMANDE_RETRAIT -> 22;
+            case RETRAIT_ACCEPTE, RETRAIT_REFUSE -> 23;
             case JournalDossierService.TRANSMISSION_COMPLEMENTS,
                  JournalDossierService.TRANSMISSION_COMPLEMENTS_DEPOT -> 25;
             case JournalDossierService.RECEPTION -> 30;
@@ -131,7 +158,75 @@ public class JournalTraitementService {
                             ? "décision transmise à SIGMP — observations levées"
                             : "décision transmise à SIGMP"));
         }
+        for (DemandeRetrait dr : demandeRetraitRepository.findByIdDossierOrderByDateDemandeAsc(idDossier)) {
+            ajouterRetrait(evenements, idDossier, dr);
+        }
         return evenements;
+    }
+
+    /**
+     * ⚠️ T1 (2026-09-07) — la demande, puis la décision si elle est prise. Le statut d'AVANT le retrait
+     * n'est pas stocké sur la demande : il se relit dans le journal (dernière action de circuit avant la
+     * décision), grâce aux copies figées à la purge. À défaut, « retour en BROUILLON » sans état de départ.
+     */
+    private void ajouterRetrait(List<ActionDossierDto> cible, Integer idDossier, DemandeRetrait dr) {
+        String motif = dr.getMotifRetrait() == null || dr.getMotifRetrait().isBlank()
+                ? "" : " — motif : " + dr.getMotifRetrait().trim();
+        ActionDossierDto demande = evenement(idDossier, dr.getDateDemande(), DEMANDE_RETRAIT, null,
+                "Demande de retrait" + motif);
+        demande.setIdPrmpOperateur(dr.getIdPrmp());
+        demande.setNomOperateur(nomPrmp(dr.getIdPrmp()));
+        demande.setAuteur(dr.getIdPrmp());
+        cible.add(demande);
+
+        if (dr.getDateDecision() == null) {
+            return;
+        }
+        if (StatutRetrait.ACCEPTEE.name().equals(dr.getStatut())) {
+            String avant = statutAvantRetrait(idDossier, dr.getDateDecision());
+            cible.add(evenement(idDossier, dr.getDateDecision(), RETRAIT_ACCEPTE, dr.getImCtrlCc(),
+                    "Retrait accepté — " + (avant == null ? "retour en " : avant + " -> ")
+                            + StatutDossier.BROUILLON.name()));
+        } else if (StatutRetrait.REFUSEE.name().equals(dr.getStatut())) {
+            String obs = dr.getObsDecision() == null || dr.getObsDecision().isBlank()
+                    ? "" : " — " + dr.getObsDecision().trim();
+            cible.add(evenement(idDossier, dr.getDateDecision(), RETRAIT_REFUSE, dr.getImCtrlCc(),
+                    "Retrait refusé" + obs));
+        }
+    }
+
+    /** Statut du dossier juste avant une décision de retrait, relu dans les actions consignées. */
+    private String statutAvantRetrait(Integer idDossier, LocalDateTime decision) {
+        String statut = null;
+        for (ActionDossier a : actionDossierRepository.findByIdDossierOrderByDateActionAscIdActionAsc(idDossier)) {
+            if (a.getDateAction() == null || a.getDateAction().isAfter(decision)) {
+                continue;
+            }
+            switch (a.getTypeAction() == null ? "" : a.getTypeAction()) {
+                case JournalDossierService.SOUMISSION, JournalDossierService.RESOUMISSION,
+                     JournalDossierService.TRANSMISSION_COMPLEMENTS_DEPOT -> statut = StatutDossier.SOUMIS.name();
+                case JournalDossierService.RECEPTION, JournalDossierService.RETRAIT_DISPATCH ->
+                        statut = StatutDossier.PRET_DISPATCH.name();
+                case JournalDossierService.DISPATCH, JournalDossierService.REATTRIBUTION,
+                     JournalDossierService.REPRISE -> statut = StatutDossier.DISPATCHE.name();
+                case SOUMISSION_EXAMEN -> statut = StatutDossier.EXAMINE.name();
+                case RETRAIT_ACCEPTE -> statut = null;   // un retrait antérieur : le décor repart de zéro
+                default -> { }
+            }
+        }
+        return statut;
+    }
+
+    /** « Prénoms Nom » d'une PRMP ; repli sur l'identifiant. */
+    private String nomPrmp(String idPrmp) {
+        if (idPrmp == null || idPrmp.isBlank()) {
+            return null;
+        }
+        return prmpRepository.findById(idPrmp).map(p -> {
+            String complet = ((p.getPrenomsPrmp() == null ? "" : p.getPrenomsPrmp()) + " "
+                    + (p.getNomPrmp() == null ? "" : p.getNomPrmp())).trim();
+            return complet.isBlank() ? idPrmp : complet;
+        }).orElse(idPrmp);
     }
 
     /** Un mouvement de navette : c'est lui qui porte l'instant précis, l'acteur et le commentaire. */

@@ -670,6 +670,16 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
     en lignes de `t_action_dossier` (mêmes types, même opérateur, même détail) — une seule fois, exactement
     ce que le journal montrait la seconde d'avant ; rien n'est écrit en double tant que les sources vivent.
     Le journal reste donc complet après retrait : Création → … → Soumission d'examen → Retour → Retrait.
+  - ⚠️ **Le retrait se lit au journal** (recensement des trous 2026-09-07, T1, dossier 100299) — dérivés de
+    `t_demande_retrait`, rétroactifs : `DEMANDE_RETRAIT` (à la date de la demande, opérateur = la PRMP,
+    motif), `RETRAIT_ACCEPTE` (à la date de décision, opérateur = le décideur CC/Président, « {état d'avant}
+    -> BROUILLON », l'état d'avant étant relu dans les actions consignées), `RETRAIT_REFUSE` (observation de
+    la décision). Visibles de tous, comme CREATION / SOUMISSION.
+  - ⚠️ **La transmission SIGMP directe clôt la VERIFICATION** (recensement des trous 2026-09-07, T2) — sur
+    un avis FAV, la décision part à SIGMP sans passage de vérification ; l'occurrence VERIFICATION que le
+    Vérificateur avait prise en charge restait ouverte à jamais. `POST /api/sigmp-transmissions` clôt
+    désormais l'occurrence VERIFICATION **ouverte** du dossier (si elle existe — jamais créée) avant de
+    clore TRANSMISSION_SIGMP.
   - ⚠️ **Un examen n'est jamais prêté à qui ne l'a pas fait** (chronométrage, même signalement) — la
     soumission du projet de PV clôt l'étape EXAMEN **au nom de l'attributaire du dispatch**. Si un
     Président ou un CC re-soumet pour le Membre (délégation) sans qu'une tâche EXAMEN soit ouverte,
@@ -807,6 +817,14 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
     `POST /api/saisies/ppm` et `PUT /api/saisies/ppm/{idDossier}` refusent en **400** un marché dérogatoire
     sans sa justification, un marché à délai aménagé sans la sienne, et une **justification globale** absente
     dès qu'une des trois listes est non vide. Les erreurs sont rendues **toutes ensemble**, une par champ.
+  - ⚠️ **Règle complétée (recensement des trous 2026-09-07, T3)** — la **mise à jour d'un PPM par import PDF**
+    échappe **volontairement** à cette garde (un PDF ne porte aucune justification : l'y soumettre bloquerait
+    tout import d'un plan dérogatoire), de même que les PATCH de rectification champ à champ. Le trou se
+    ferme là où tous les chemins convergent : **`POST /api/dossiers/{id}/soumettre` exige les justifications**
+    d'un dossier DDP — mêmes règles, mêmes 400 par champ (`marches[i].justifModeDerogatoire`,
+    `marches[i].justifDelaiAmenage`, `justificationFiche`), calculées sur les lignes **stockées** (non
+    supprimées) et la globale du PPM. Un plan importé sans justification se corrige dans la grille avant
+    d'être soumis.
   - **Deux justifications par ligne, une pour la fiche.** Un marché peut cumuler mode dérogatoire et délai
     aménagé — deux questions distinctes, deux champs (`justifModeDerogatoire`, `justifDelaiAmenage`). Les
     **contrats-cadres n'ont pas de champ par ligne** : la justification globale portée par le plan

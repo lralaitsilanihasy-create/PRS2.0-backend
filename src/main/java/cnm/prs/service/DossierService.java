@@ -96,6 +96,8 @@ public class DossierService {
     private final ControleurDirectory controleurDirectory;
     private final NotificationService notificationService;
     private final DossierIntegriteService dossierIntegrite;
+    /** ⚠️ T3 (2026-09-07) — les justifications de la fiche sont exigées à la soumission, quel que soit le chemin. */
+    private final FicheJustificationsService ficheJustifications;
     private final VerificationRepository verificationRepository;
     private final AuditLogRepository auditLogRepository;
     private final PrmpRepository prmpRepository;
@@ -157,7 +159,9 @@ public class DossierService {
             ChangementLigneRepository changementLigneRepository, MessageRepository messageRepository,
             LotRepository lotRepository, AnomalieRepository anomalieRepository,
             PieceDemandeRetraitRepository pieceDemandeRetraitRepository,
-            ChronometrageService chronometrage, DelaiStandardService delaiStandardService) {
+            ChronometrageService chronometrage, DelaiStandardService delaiStandardService,
+            FicheJustificationsService ficheJustifications) {
+        this.ficheJustifications = ficheJustifications;
         this.delaiStandardService = delaiStandardService;
         this.chronometrage = chronometrage;
         this.circuitCascadeService = circuitCascadeService;
@@ -817,6 +821,12 @@ public class DossierService {
         dossierIntegrite.validerCoherenceAvantSoumission(dossier);
         // Filet de sécurité : le sous-type d'un dossier DDP colle aux marchés au moment de la soumission.
         dossierIntegrite.recalculerSousTypeDdp(idDossier);
+        // ⚠️ Recensement des trous (2026-09-07, T3) — justifications de la fiche exigées ICI, où tous les
+        // chemins convergent (saisie, PATCH de rectification, mise à jour par import PDF qui, elle, n'en
+        // porte pas) : 400 par champ, comme à la saisie.
+        if (FAMILLE_DDP.equals(dossier.getIdTypeDossier())) {
+            ficheJustifications.exigerJustificationsAvantSoumission(idDossier);
+        }
         // Pièces jointes obligatoires de la famille de dossier (référentiel) : toutes doivent être présentes.
         validerPiecesObligatoires(dossier);
         // ⚠️ 2026-08-05 — une MISE À JOUR exige en plus le PV du prédécesseur et le PPM daté et signé des

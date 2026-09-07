@@ -443,6 +443,28 @@ public class ChronometrageService {
         }
     }
 
+    /**
+     * ⚠️ Recensement des trous (2026-09-07, T2) — clôt l'occurrence <strong>ouverte</strong> d'une étape,
+     * et seulement elle : aucune occurrence instantanée n'est créée s'il n'y en a pas. Sert la transmission
+     * SIGMP <em>directe</em> (avis FAV) : le Vérificateur a pris le dossier en charge (VERIFICATION ouverte)
+     * mais aucun passage de vérification ne vient clore l'étape — la transmission le fait à sa place, sans
+     * inventer une tâche à un dossier qui n'a pas été pris en charge.
+     */
+    public void cloturerSiOuverte(Integer idDossier, EtapeCircuit etape) {
+        if (idDossier == null || etape == null) {
+            return;
+        }
+        try {
+            LocalDateTime maintenant = LocalDateTime.now();
+            for (TacheDossier t : tacheRepository.ouvertes(idDossier, etape.name())) {
+                t.setDateFin(maintenant);
+                tacheRepository.save(t);
+            }
+        } catch (RuntimeException ex) {
+            LOG.warn("[CHRONO] cloture si ouverte impossible dossier={} etape={} : {}", idDossier, etape, ex.toString());
+        }
+    }
+
     public void cloturerPourActeur(Integer idDossier, EtapeCircuit etape, String imActeur) {
         if (idDossier == null || etape == null) {
             return;

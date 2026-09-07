@@ -1417,7 +1417,7 @@ Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `
 | POST | /api/dossiers | `DossierDto` | `DossierDto` | 201, 400, 403 | **ADMINISTRATEUR** |
 | PUT | /api/dossiers/{id} | `DossierDto` | `DossierDto` | 200, 400, 403, 404, 409 | **ADMINISTRATEUR** |
 | DELETE | /api/dossiers/{id} | — | — | 204, 403, 404, 409 | **PRMP** propriétaire — BROUILLON (cascade contenu + historique) |
-| POST | /api/dossiers/{id}/soumettre | — | `DossierDto` | 200, 400, 403, 404, 409 | **PRMP** |
+| POST | /api/dossiers/{id}/soumettre | — | `DossierDto` | 200, 400, 403, 404, 409 | **PRMP** — ⚠️ 2026-09-07 (T3) : sur un DDP, **400 par champ** si les justifications de la fiche manquent (`marches[i].justifModeDerogatoire` / `justifDelaiAmenage` / `justificationFiche`), quel que soit le chemin qui a produit les lignes (saisie, PATCH, import PDF) |
 | POST | /api/dossiers/{id}/resoumettre | `DossierResoumissionRequest` | `DossierDto` | 200, 400, 403, 404, 409 | **PRMP** propriétaire |
 | GET | /api/dossiers/{id}/historique-echanges | — | `EchangeDto[]` | 200, 403, 404 | **PRMP** / **VERIFICATEUR** (titulaire/délégué) / **ADMINISTRATEUR** |
 | GET | /api/dossiers/{id}/journal | — | `ActionDossierDto[]` | 200, 403, 404 | Authentifié (périmètre de visibilité du dossier) |
@@ -1486,6 +1486,13 @@ Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `
 > | `DECISION_VERIFICATION` | passage de vérification | observations levées ou maintenues |
 > | `TRANSMISSION_SIGMP` | transmission de la décision | sens |
 > | `ARCHIVAGE` | l'assistant clôt | — |
+> | `DEMANDE_RETRAIT` | ⚠️ **2026-09-07 (T1)** — la PRMP demande le retrait (à `dateDemande`, opérateur = la PRMP, `idPrmpOperateur` posé) | « Demande de retrait — motif : … » |
+> | `RETRAIT_ACCEPTE` | le CC / Président accepte (à `dateDecision`) — le dossier recule en BROUILLON | « Retrait accepté — {état d'avant} -> BROUILLON » (état relu dans le journal ; « retour en BROUILLON » s'il est inconnu) |
+> | `RETRAIT_REFUSE` | le CC / Président refuse (à `dateDecision`) | « Retrait refusé — {obsDecision} » |
+>
+> Les trois derniers sont dérivés de `t_demande_retrait`, **rétroactifs** comme les autres, visibles de tous
+> (rang d'un acte PRMP, comme CREATION / SOUMISSION). Le constat portait sur le dossier réel 100299, dont le
+> journal sautait d'une réception à une seconde soumission sans dire pourquoi.
 >
 > ⚠️ **Le retour du Président AU CC est un `RETOUR_RECTIFICATION`**, pas un type de plus : le
 > destinataire se lit dans le détail. Un type supplémentaire aurait obligé le front à en connaître un
@@ -5341,7 +5348,7 @@ restes et compteurs. **8 h = 1 jour ouvré.** Seule `datePrevisionnelleFin` rest
 | 3 | `VISA` | P/CC dispatcheur (ou intérim) | PV `PROJET_SOUMIS` | `POST /api/pv-examens/{id}/viser` |
 | 4 | `COSIGNATURE` | Membre | PV `PROJET_ACCEPTE` | `POST /api/pv-examens/{id}/signer` |
 | 5 | `VERIFICATION` | Vérificateur | `EN_VERIFICATION` | `POST /api/verifications` |
-| 6 | `TRANSMISSION_SIGMP` | Vérificateur | `OBSERVATIONS_LEVEES` | `POST /api/transmissions-sigmp` |
+| 6 | `TRANSMISSION_SIGMP` | Vérificateur | `OBSERVATIONS_LEVEES` | `POST /api/sigmp-transmissions` |
 | 7 | `ARCHIVAGE` | Assistant | `DECISION_TRANSMISE_SIGMP` | `POST /api/pv-examens/{id}/archiver` |
 
 Le **compteur global** court de la clôture de `RECEPTION` à celle de `TRANSMISSION_SIGMP` — l'étape

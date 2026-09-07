@@ -141,6 +141,29 @@ public class FicheJustificationsService {
      * obligatoires, appliqué cette fois aux lignes <em>telles qu'elles sont en base</em> : ni requête
      * ni saisie en cours, rien que le plan tel qu'il est examiné.</p>
      */
+    /**
+     * ⚠️ Recensement des trous (2026-09-07, T3) — la garde par champ n'était tenue que par la façade de
+     * saisie ; la mise à jour d'un PPM <strong>par import PDF</strong> y échappe volontairement (un PDF ne
+     * porte aucune justification : l'y soumettre bloquerait tout import d'un plan dérogatoire). Le trou se
+     * ferme là où tous les chemins convergent : à la <strong>soumission</strong> du dossier. Les lignes
+     * stockées (non supprimées) sont classées comme à la saisie, sans valeur envoyée — ce qui est en base
+     * fait foi — et la globale est celle du PPM.
+     */
+    @Transactional(readOnly = true)
+    public void exigerJustificationsAvantSoumission(Integer idDossier) {
+        if (idDossier == null) {
+            return;
+        }
+        List<SaisieMarcheLigne> lignes = marcheRepository.findByIdDossier(idDossier).stream()
+                .filter(m -> !Boolean.TRUE.equals(m.getSupprimee()))
+                .map(m -> new SaisieMarcheLigne(m.getIdDetail(), null, null, null, null, null, null, null,
+                        null, null, null, null, null, null, null, null, null))
+                .toList();
+        Integer idPpm = ppmRepository.findByIdDossier(idDossier).stream().findFirst()
+                .map(p -> p.getIdPpm()).orElse(null);
+        exigerJustifications(lignes, null, idPpm);
+    }
+
     @Transactional(readOnly = true)
     public boolean ficheVide(Integer idDossier) {
         if (idDossier == null) {
