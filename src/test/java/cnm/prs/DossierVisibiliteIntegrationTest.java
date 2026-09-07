@@ -367,11 +367,16 @@ class DossierVisibiliteIntegrationTest extends CnmIntegrationTestSupport {
         ppmRepository.save(ppm);
         marcheRepository.save(marche(31, 3, 30)); // un PPM doit comporter au moins un marché (règle ajoutée)
 
-        // Soumission par la PRMP → 200, statut SOUMIS, refeDossier null (réf. posée à la réception).
+        // Avant la soumission, un brouillon n'a pas de date de dépôt (⚠️ V20, 2026-09-06).
+        mvc.perform(get("/api/dossiers/3").header("Authorization", tokenPrmp))
+                .andExpect(jsonPath("$.dateSoumission").doesNotExist());
+        // Soumission par la PRMP → 200, statut SOUMIS, refeDossier null (réf. posée à la réception),
+        // et la date de DÉPÔT est posée par l'acte lui-même (« la date de soumission EST la date de dépôt »).
         mvc.perform(post("/api/dossiers/3/soumettre").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.statut").value("SOUMIS"))
-                .andExpect(jsonPath("$.refeDossier").doesNotExist());
+                .andExpect(jsonPath("$.refeDossier").doesNotExist())
+                .andExpect(jsonPath("$.dateSoumission").exists());
 
         // Le Secrétaire et le CC de la localité sont notifiés.
         mvc.perform(get("/api/notifications").header("Authorization", tokenAdmin))

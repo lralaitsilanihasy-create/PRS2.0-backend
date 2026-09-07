@@ -611,6 +611,9 @@ public class DossierService {
             // ⚠️ Suivi des délais CNM (2026-09-06) — date d'enregistrement = clôture de RECEPTION, depuis
             // les MÊMES tâches déjà chargées en lot : aucune requête de plus, aucun N+1.
             dto.setDateEnregistrement(chronometrage.dateEnregistrement(tachesDossier));
+            // ⚠️ Frise du tableau de bord (2026-09-07) — dates de franchissement des sept étapes, mêmes
+            // tâches, même statut de PV déjà chargés : toujours aucune requête de plus.
+            dto.setDatesEtapes(chronometrage.datesEtapes(dto.getStatut(), statutPv, tachesDossier));
             dto.setAttentePrmp(ChronometrageService.estEnAttentePrmp(dto.getStatut()));
             cnm.prs.enums.EtapeCircuit etape = chronometrage.etapeCourante(dto.getStatut(), statutPv);
             dto.setEtapeCourante(etape == null ? null : etape.name());
@@ -837,6 +840,10 @@ public class DossierService {
         dossier.setIdLocalite(localite);             // propage la localité (§C) → visible par le Secrétaire
         dossier.setStatut(StatutDossier.SOUMIS.name());
         dossier.setSoumisPar(CurrentUser.login().orElse(null));   // traçabilité : soumission réservée à la PRMP
+        // ⚠️ 2026-09-06 (V20) — la date de soumission EST la date de dépôt du dossier (pilote) : posée ICI,
+        // à l'acte de soumission, et non plus à la création du brouillon. Servie sur DossierDto et sur
+        // ReceptionDto (Secrétaire) depuis la même colonne.
+        dossier.setDateSoumission(LocalDateTime.now());
         if (dossier.getDateRef() == null) {
             dossier.setDateRef(LocalDate.now());
         }

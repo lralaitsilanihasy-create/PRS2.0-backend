@@ -526,6 +526,74 @@ class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(0)));
     }
 
+    // ------------------------------------------------------------------ dates des étapes de la frise (2026-09-07)
+
+    @Autowired
+    private cnm.prs.service.ChronometrageService chronometrageService;
+
+    /**
+     * ⚠️ Frise du tableau de bord (demande pilote 2026-09-07) — le front datait chaque point par jointure de
+     * listes que la portée du lecteur rend vides (Président « toutes localités ») : {@code datesEtapes} sert
+     * la date de franchissement de chaque étape depuis le dossier lui-même, dérivée des tâches en lot.
+     */
+    @Test
+    @DisplayName("Dates des étapes — dossier examiné (projet de PV) : RECEPTION, DISPATCH, EXAMEN, PROJET_PV datés, "
+            + "PV_SIGNE / VERIFICATION / CLOTURE absents")
+    void datesEtapes_dossierExamine() throws Exception {
+        dossierEnStatut(500, "EXAMINE");
+        chronometrageService.cloturer(500, EtapeCircuit.RECEPTION);
+        chronometrageService.cloturer(500, EtapeCircuit.DISPATCH);
+        chronometrageService.cloturer(500, EtapeCircuit.EXAMEN);
+
+        mvc.perform(get("/api/dossiers/500").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.datesEtapes.RECEPTION").exists())
+                .andExpect(jsonPath("$.datesEtapes.DISPATCH").exists())
+                .andExpect(jsonPath("$.datesEtapes.EXAMEN").exists())
+                .andExpect(jsonPath("$.datesEtapes.PROJET_PV").exists())
+                .andExpect(jsonPath("$.datesEtapes.PV_SIGNE").doesNotExist())
+                .andExpect(jsonPath("$.datesEtapes.VERIFICATION").doesNotExist())
+                .andExpect(jsonPath("$.datesEtapes.CLOTURE").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("Dates des étapes — cohérence : datesEtapes.RECEPTION = dateEnregistrement, et un dossier jamais "
+            + "réceptionné n'a aucune étape datée")
+    void datesEtapes_receptionEgaleDateEnregistrement() throws Exception {
+        dossierEnStatut(500, "SOUMIS");
+        mvc.perform(get("/api/dossiers/500").header("Authorization", tokenPrmp))
+                .andExpect(jsonPath("$.datesEtapes.RECEPTION").doesNotExist())
+                .andExpect(jsonPath("$.dateEnregistrement").doesNotExist());
+
+        chronometrageService.cloturer(500, EtapeCircuit.RECEPTION);
+        String corps = mvc.perform(get("/api/dossiers/500").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.dateEnregistrement").exists())
+                .andReturn().getResponse().getContentAsString();
+        String enregistrement = com.jayway.jsonpath.JsonPath.read(corps, "$.dateEnregistrement");
+        assertEquals(enregistrement, com.jayway.jsonpath.JsonPath.read(corps, "$.datesEtapes.RECEPTION"));
+    }
+
+    @Test
+    @DisplayName("Dates des étapes — le Président les lit sur GET /api/dossiers, sans dépendre des listes "
+            + "dispatchs / examens (portée inchangée)")
+    void datesEtapes_surLaListeDuPresident() throws Exception {
+        dossierEnStatut(500, "DISPATCHE");
+        chronometrageService.cloturer(500, EtapeCircuit.RECEPTION);
+        chronometrageService.cloturer(500, EtapeCircuit.DISPATCH);
+        String tokenPresident = bearer("CTRPRE", ProfilUtilisateur.PRESIDENT, TypeActeur.CONTROLEUR, "CTRPRE", "ANT");
+
+        mvc.perform(get("/api/dossiers").header("Authorization", tokenPresident))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idDossier==500)].datesEtapes.RECEPTION", org.hamcrest.Matchers.hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idDossier==500)].datesEtapes.DISPATCH", org.hamcrest.Matchers.hasSize(1)))
+                // Étape non atteinte : la clé est servie avec la valeur null (contrat de la demande).
+                .andExpect(jsonPath("$[?(@.idDossier==500)].datesEtapes.EXAMEN", org.hamcrest.Matchers.hasItem(org.hamcrest.Matchers.nullValue())));
+        // Aucune réception, aucun dispatch, aucun examen n'existe pour ce dossier dans la fixture : la
+        // date ne peut venir que des tâches de chronométrage, pas d'une jointure sur ces listes.
+        assertTrue(receptionRepository.findByIdDossier(500).isEmpty(), "fixture sans réception");
+    }
+
     private void dossierEnStatut(int idDossier, String statut) {
         Dossier d = dossierRepository.findById(idDossier).orElseGet(() -> {
             Dossier neuf = dossier(idDossier, statut);

@@ -858,7 +858,9 @@ public class SaisieService {
         d.setIdMandatAttrib(mandatService.idMandatCourant(idPrmp));   // figé une fois pour toutes
         d.setIdEntiteContract(idEntiteContract);
         d.setStatut(StatutDossier.BROUILLON.name());
-        d.setDateSoumission(java.time.LocalDateTime.now());   // date/heure de saisie du dossier (§ secrétariat)
+        // ⚠️ 2026-09-06 (V20, « Suivi des dossiers CNM ») — DATE_SOUMISSION n'est PLUS posée ici : elle
+        // était écrite à la création du brouillon et servait donc une date de saisie sous un nom de
+        // soumission. Elle est posée à la soumission (DossierService.soumettre) ; un brouillon n'en a pas.
         d.setCreePar(CurrentUser.login().orElse(idPrmp));   // traçabilité : login créateur (PRMP ou UGPM)
         Dossier cree = dossierRepository.save(d);
         journalDossier.tracer(cree, JournalDossierService.CREATION,

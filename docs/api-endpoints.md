@@ -4856,8 +4856,11 @@ au dépôt, **aucun archivage** — simple événement tracé).
 
 > **Dates/heures (⚠️ règle ajoutée).** `dateReception` est désormais une **date-heure** (`yyyy-MM-dd HH:mm`,
 > colonne `t_reception.DATE_RECEPTION` en TIMESTAMP). `dateSoumission` (lecture seule) reprend la
-> date/heure de soumission du **dossier rattaché** (`t_dossier.DATE_SOUMISSION`, posée à la saisie —
-> `POST /api/saisies/ppm`) ; **`null`** pour un dossier antérieur à cette règle.
+> date/heure de soumission du **dossier rattaché** (`t_dossier.DATE_SOUMISSION`). ⚠️ **2026-09-06 (V20)** —
+> « la date de soumission EST la date de dépôt » (pilote) : elle est posée à la **soumission**
+> (`POST /api/dossiers/{id}/soumettre`), et non plus à la création du brouillon (une date de saisie sous
+> un nom de soumission) ; reprise depuis le journal pour l'existant. La PRMP lit la même valeur sur
+> `DossierDto.dateSoumission` (format ISO). **`null`** pour un dossier antérieur au journal jamais reposé.
 
 **Endpoints**
 
@@ -5525,6 +5528,8 @@ un quatrième — c'est exactement `EN_ATTENTE_DECISION_PRMP`, pendant laquelle 
 | `attentePrmp` | boolean | vrai quand la balle est **chez la PRMP** |
 | `etapeCourante` | string \| null | étape ouverte ; `null` si aucune tâche CNM ne court |
 | `dateEnregistrement` | string (date-heure) \| null | ⚠️ **2026-09-06** (demande pilote « Suivi des délais CNM ») — clôture de l'étape `RECEPTION`, **exactement** le `debutCompteur` du chronométrage ; `null` tant que le Secrétaire n'a pas enregistré. Sert la PRMP, pour qui `GET /api/receptions` est vide (portée inchangée) |
+| `dateSoumission` | string (date-heure ISO) \| null | ⚠️ **2026-09-06** (« Suivi des dossiers CNM », colonne « Dépôt du dossier ») — **date de dépôt** = horodatage de `POST /api/dossiers/{id}/soumettre`, **la même colonne** que `ReceptionDto.dateSoumission` (Secrétaire, format `yyyy-MM-dd HH:mm`). `null` pour un brouillon (jamais soumis, ou remis en brouillon par un retrait accepté). Colonne de l'entité : aucune requête de plus. ⚠️ **V20** : elle était posée à la *création* du brouillon ; reprise depuis le journal (`SOUMISSION`) |
+| `datesEtapes` | objet `{ [étape]: string (date-heure) \| null }` | ⚠️ **2026-09-07** (frise du tableau de bord) — date de **franchissement** de chaque étape de la frise, clés `RECEPTION`, `DISPATCH`, `EXAMEN`, `PROJET_PV`, `PV_SIGNE`, `VERIFICATION`, `CLOTURE` (les sept toujours présentes) ; une étape **non atteinte vaut `null`**. `RECEPTION` = `dateEnregistrement` ; `DISPATCH`/`EXAMEN` = clôture de la dernière occurrence ; `PROJET_PV` = clôture d'EXAMEN (le projet de PV en naît) ; `PV_SIGNE` = dernière signature (COSIGNATURE, à défaut VISA) **seulement si le PV est `SIGNE`** ; `VERIFICATION` = clôture de la vérification **une fois les observations levées** ; `CLOTURE` = archivage (à défaut transmission SIGMP) au statut `CLOTURE`. Dérivé des tâches déjà chargées en lot : aucune requête de plus ; servi quelle que soit la portée du lecteur (le Président « toutes localités » reçoit `dispatchs`/`examens` vides, pas `datesEtapes`) |
 
 Présents sur `GET /api/dossiers/{id}` **et** sur les listes, résolus **en lot** (deux requêtes de plus
 quelle que soit la taille de la liste).

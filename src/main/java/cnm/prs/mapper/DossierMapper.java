@@ -32,6 +32,9 @@ public final class DossierMapper {
         // (annuaire des acteurs), en lot pour les listes.
         dto.setCreePar(entity.getCreePar());
         dto.setSoumisPar(entity.getSoumisPar());
+        // ⚠️ 2026-09-06 (« Suivi des dossiers CNM ») — date de dépôt : une colonne de l'entité, donc servie
+        // sur les listes sans aucune requête de plus. Lecture seule : toEntity ne la reprend jamais du DTO.
+        dto.setDateSoumission(entity.getDateSoumission());
         dto.setVersion(entity.getVersion());   // ⚠️ verrou optimiste (docs/plan-conflit-version.md)
         return dto;
     }

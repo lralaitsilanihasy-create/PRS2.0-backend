@@ -316,6 +316,9 @@ public class DemandeRetraitService {
         if (demande.getIdDossier() != null) {
             dossierRepository.findById(demande.getIdDossier()).ifPresent(d -> {
                 d.setStatut(StatutDossier.BROUILLON.name());
+                // ⚠️ 2026-09-06 (V20) — le dépôt est annulé avec le retrait : un brouillon n'a pas de date
+                // de soumission (elle sera reposée à la prochaine soumission).
+                d.setDateSoumission(null);
                 // ⚠️ Règle ajoutée — restaure la référence INITIALE du dossier (celle générée à la création,
                 // stockée dans t_ppm.REFERENCE, ex. « 00003/DGB/PPM/2026 ») dans refeDossier, invalidant ainsi
                 // la référence de réception (ex. « 00002/PPM/CRM-ANT/2026 »). Le dossier redevient un brouillon

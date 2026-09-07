@@ -122,6 +122,30 @@ public class DossierDto {
     private java.time.LocalDateTime dateEnregistrement;
 
     /**
+     * ⚠️ Suivi des dossiers CNM (demande pilote 2026-09-06) — <strong>date de dépôt</strong> du dossier :
+     * « la date de soumission EST la date de dépôt » (pilote). L'horodatage de
+     * {@code POST /api/dossiers/{id}/soumettre}, le <strong>même</strong> que {@code ReceptionDto.dateSoumission}
+     * servi au Secrétaire (même colonne {@code t_dossier.DATE_SOUMISSION}, V20). Colonne de l'entité :
+     * aucune requête de plus sur les listes. {@code null} pour un brouillon, et pour un dossier ancien
+     * jamais journalisé. Lecture seule (ignoré en entrée).
+     */
+    private java.time.LocalDateTime dateSoumission;
+
+    /**
+     * ⚠️ Frise du tableau de bord (demande pilote 2026-09-07) — <strong>date de franchissement</strong> de
+     * chaque étape de la frise, clés {@code RECEPTION}, {@code DISPATCH}, {@code EXAMEN}, {@code PROJET_PV},
+     * {@code PV_SIGNE}, {@code VERIFICATION}, {@code CLOTURE} ({@code ChronometrageService.ETAPES_FRISE}) ;
+     * une étape non atteinte vaut <strong>{@code null}</strong> (les sept clés sont toujours présentes).
+     * Dérivée des tâches de chronométrage déjà chargées en lot pour {@link #dateEnregistrement} : aucune
+     * requête de plus. {@code RECEPTION} est <strong>identique</strong> à {@link #dateEnregistrement}.
+     *
+     * <p>Pourquoi : le front datait ses points par jointure des listes réceptions / dispatchs / examens /
+     * PV, qui reviennent vides selon la portée du lecteur (Président « toutes localités ») — la date vient
+     * désormais du dossier lui-même. Lecture seule.</p>
+     */
+    private java.util.Map<String, java.time.LocalDateTime> datesEtapes;
+
+    /**
      * ⚠️ Chronométrage (2026-09-01) — vrai quand <strong>la balle est chez la PRMP</strong>
      * ({@code EN_ATTENTE_COMPLEMENTS_DEPOT}, {@code EN_ATTENTE_PIECES}, {@code EN_ATTENTE_DECISION_PRMP}).
      * La date prévisionnelle reste calculée, mais elle glissera tant que la PRMP n'aura pas rendu la

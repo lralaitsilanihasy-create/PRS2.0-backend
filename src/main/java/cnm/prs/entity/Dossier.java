@@ -62,7 +62,13 @@ public class Dossier {
     @Column(name = "DATE_REF")
     private LocalDate dateRef;
 
-    /** Date et heure de soumission du dossier (TIMESTAMP). Posée à la saisie (POST /api/saisies/ppm). */
+    /**
+     * Date et heure de <strong>soumission</strong> du dossier par la PRMP — « la date de soumission EST la
+     * date de dépôt du dossier » (pilote, 2026-09-06). ⚠️ Posée à la <strong>soumission</strong>
+     * ({@code POST /api/dossiers/{id}/soumettre}) depuis le 2026-09-06 (V20) ; elle l'était à la
+     * <em>création</em> du brouillon, ce qui en faisait une date de saisie sous un nom de soumission.
+     * {@code null} pour un brouillon (jamais soumis, ou remis en brouillon par un retrait accepté).
+     */
     @Column(name = "DATE_SOUMISSION")
     private LocalDateTime dateSoumission;
 

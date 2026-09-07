@@ -204,6 +204,61 @@ class ReceptionDispatchIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$.dateSoumission").value("2026-06-20 09:15"));
     }
 
+    // ------------------------------------------------------------------ date de dépôt sur DossierDto (2026-09-06)
+
+    /**
+     * ⚠️ Suivi des dossiers CNM (demande pilote 2026-09-06) — « la date de soumission EST la date de dépôt
+     * du dossier ». Le {@code DossierDto} la sert depuis la MÊME colonne que la réception du Secrétaire,
+     * sans élargir la portée de {@code GET /api/receptions} (vide pour la PRMP).
+     */
+    @Test
+    @DisplayName("Date de dépôt — dossier soumis : DossierDto.dateSoumission = la valeur servie au Secrétaire "
+            + "sur la réception (même colonne, formats ISO / « yyyy-MM-dd HH:mm »)")
+    void dateSoumission_dossierSoumis_memeSourceQueLaReception() throws Exception {
+        Dossier d = dossier(151, "SOUMIS");
+        d.setIdLocalite("ANT");
+        d.setIdPrmp("PRMP001");
+        d.setDateSoumission(LocalDateTime.of(2026, 6, 20, 9, 15));
+        dossierRepository.save(d);
+        receptionRepository.save(reception(151, 151, "CTRCC1", true));
+
+        mvc.perform(get("/api/receptions/151").header("Authorization", tokenCc))
+                .andExpect(jsonPath("$.dateSoumission").value("2026-06-20 09:15"));
+        mvc.perform(get("/api/dossiers/151").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.dateSoumission").value("2026-06-20T09:15:00"));
+    }
+
+    @Test
+    @DisplayName("Date de dépôt — un brouillon n'en a pas (null), même s'il a été retiré après un premier dépôt")
+    void dateSoumission_brouillon_null() throws Exception {
+        Dossier d = dossier(152, "BROUILLON");
+        d.setIdLocalite("ANT");
+        d.setIdPrmp("PRMP001");
+        dossierRepository.save(d);
+        mvc.perform(get("/api/dossiers/152").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.dateSoumission").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("Date de dépôt — la PRMP la lit sur GET /api/dossiers ; GET /api/receptions lui reste vide")
+    void dateSoumission_surLaListePrmp_receptionsToujoursVides() throws Exception {
+        Dossier d = dossier(153, "SOUMIS");
+        d.setIdLocalite("ANT");
+        d.setIdPrmp("PRMP001");
+        d.setDateSoumission(LocalDateTime.of(2026, 6, 21, 8, 0));
+        dossierRepository.save(d);
+        receptionRepository.save(reception(153, 153, "CTRCC1", true));
+
+        mvc.perform(get("/api/dossiers").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idDossier==153)].dateSoumission", hasItem("2026-06-21T08:00:00")));
+        mvc.perform(get("/api/receptions").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+    }
+
     @Test
     @DisplayName("Réception — dateReception « yyyy-MM-dd » sans heure → 201 (plus d'erreur de parsing index 10)")
     void reception_creation_date_simple_ok() throws Exception {

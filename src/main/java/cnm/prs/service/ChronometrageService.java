@@ -639,6 +639,49 @@ public class ChronometrageService {
         return borne(taches, EtapeCircuit.RECEPTION);
     }
 
+    /** Clés de {@link #datesEtapes} — les sept étapes de la frise du front, dans son ordre. */
+    public static final List<String> ETAPES_FRISE = List.of(
+            "RECEPTION", "DISPATCH", "EXAMEN", "PROJET_PV", "PV_SIGNE", "VERIFICATION", "CLOTURE");
+
+    /**
+     * ⚠️ Frise du tableau de bord (demande pilote 2026-09-07) — <strong>date de franchissement</strong> de
+     * chacune des sept étapes de la frise du front, dérivée des tâches de chronométrage déjà chargées en
+     * lot (aucune requête) ; {@code null} pour une étape non atteinte. Le front datait ses points par
+     * jointure de listes qui reviennent vides selon la portée (Président « toutes localités ») : ici la
+     * date vient du dossier lui-même, quel que soit le profil qui le lit.
+     *
+     * <ul>
+     *   <li>{@code RECEPTION} : clôture de RECEPTION — <strong>identique</strong> à {@link #dateEnregistrement} ;</li>
+     *   <li>{@code DISPATCH} / {@code EXAMEN} : clôture de la dernière occurrence close ;</li>
+     *   <li>{@code PROJET_PV} : le projet de PV naît de la clôture d'EXAMEN — même date ;</li>
+     *   <li>{@code PV_SIGNE} : dernière signature (COSIGNATURE, à défaut VISA), <strong>seulement si le PV
+     *       est {@code SIGNE}</strong> — une signature sur deux ne date pas un PV signé ;</li>
+     *   <li>{@code VERIFICATION} : clôture de la dernière VERIFICATION, seulement une fois les observations
+     *       levées (un passage qui maintient des observations n'a pas franchi l'étape) ;</li>
+     *   <li>{@code CLOTURE} : archivage, à défaut transmission SIGMP, seulement au statut {@code CLOTURE}.</li>
+     * </ul>
+     * Le « franchissement » s'apprécie donc sur le <em>statut</em> ; la <em>date</em> vient des tâches.
+     */
+    public Map<String, LocalDateTime> datesEtapes(String statutDossier, String statutPv, List<TacheDossier> taches) {
+        Map<String, LocalDateTime> dates = new java.util.LinkedHashMap<>();
+        LocalDateTime examen = borne(taches, EtapeCircuit.EXAMEN);
+        dates.put("RECEPTION", borne(taches, EtapeCircuit.RECEPTION));
+        dates.put("DISPATCH", borne(taches, EtapeCircuit.DISPATCH));
+        dates.put("EXAMEN", examen);
+        dates.put("PROJET_PV", examen);
+        boolean pvSigne = "SIGNE".equals(statutPv);
+        LocalDateTime signature = borne(taches, EtapeCircuit.COSIGNATURE);
+        dates.put("PV_SIGNE", pvSigne ? (signature != null ? signature : borne(taches, EtapeCircuit.VISA)) : null);
+        boolean observationsLevees = statutDossier != null && List.of(
+                StatutDossier.OBSERVATIONS_LEVEES.name(), StatutDossier.DECISION_TRANSMISE_SIGMP.name(),
+                StatutDossier.CLOTURE.name()).contains(statutDossier);
+        dates.put("VERIFICATION", observationsLevees ? borne(taches, EtapeCircuit.VERIFICATION) : null);
+        LocalDateTime archivage = borne(taches, EtapeCircuit.ARCHIVAGE);
+        dates.put("CLOTURE", StatutDossier.CLOTURE.name().equals(statutDossier)
+                ? (archivage != null ? archivage : borne(taches, EtapeCircuit.TRANSMISSION_SIGMP)) : null);
+        return dates;
+    }
+
     /** Fin de la dernière occurrence close d'une étape — borne du compteur global. */
     private LocalDateTime borne(List<TacheDossier> taches, EtapeCircuit etape) {
         return taches.stream()

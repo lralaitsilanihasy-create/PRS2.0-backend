@@ -832,6 +832,23 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
     tâches (aucun N+1) ; `null` tant que le Secrétaire n'a pas enregistré. C'est ce qui permet au tableau
     de bord PRMP (référence · enregistrement · fin prévue) de se remplir sans élargir la portée de
     `GET /api/receptions`, qui reste vide pour la PRMP.
+  - ⚠️ **Règle précisée (2026-09-06, pilote : « la date de soumission EST la date de dépôt du dossier »)** —
+    `DossierDto.dateSoumission` (date-heure) = l'horodatage de `POST /api/dossiers/{id}/soumettre`, **même
+    colonne** que `ReceptionDto.dateSoumission` servi au Secrétaire ; `null` pour un brouillon (jamais
+    soumis, ou remis en brouillon par un retrait accepté — le dépôt est annulé avec le retrait). ⚠️ Jusqu'à
+    la **V20**, `t_dossier.DATE_SOUMISSION` était posée à la **création** du brouillon (une date de saisie
+    sous un nom de soumission) : elle est désormais posée à la soumission et reprise depuis le journal
+    (`t_action_dossier` / `SOUMISSION`, la plus récente) ; un dossier hors brouillon sans journal garde sa
+    valeur. Colonne « Dépôt du dossier » du « Suivi des dossiers CNM » PRMP.
+  - ⚠️ **Règle ajoutée (2026-09-07, demande pilote — frise du tableau de bord)** — `DossierDto.datesEtapes`
+    : la **date de franchissement** de chacune des sept étapes de la frise (`RECEPTION`, `DISPATCH`,
+    `EXAMEN`, `PROJET_PV`, `PV_SIGNE`, `VERIFICATION`, `CLOTURE`), dérivée des tâches de chronométrage
+    déjà chargées **en lot** (aucun N+1) ; étape non atteinte = `null` (sept clés toujours présentes). `RECEPTION` = `dateEnregistrement` ;
+    `PROJET_PV` = clôture d'EXAMEN ; `PV_SIGNE` = dernière signature, seulement si le PV est `SIGNE` ;
+    `VERIFICATION` seulement une fois les observations levées ; `CLOTURE` = archivage (à défaut SIGMP) au
+    statut `CLOTURE`. Le franchissement s'apprécie sur le **statut**, la date vient des **tâches**. Motif :
+    le front datait la frise par jointure de listes que la portée du lecteur rend vides (Président « toutes
+    localités » : `dispatchs`/`examens` = `[]`) — la date vient désormais du dossier lui-même.
   - `GET /api/dossiers/{id}/chronometrage` détaille les étapes franchies, leurs acteurs et les deux
     compteurs. Détail de la règle : section « Chronométrage et prévision des délais » en §2.
 
