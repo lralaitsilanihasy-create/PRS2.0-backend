@@ -492,7 +492,9 @@ public class PvExamenService {
         }
         // ⚠️ Chronométrage (2026-09-01) — la soumission du projet de PV clôt l'étape EXAMEN. Rejouable :
         // un réexamen après lettre de renvoi ou un retour de navette ouvre une occurrence de plus.
-        chronometrageService.cloturer(idDossier, EtapeCircuit.EXAMEN);
+        // ⚠️ Signalement pilote (2026-09-07) — au nom de l'ATTRIBUTAIRE : un Président ou un CC qui
+        // re-soumet pour le Membre (délégation) ne se voit plus prêter un examen instantané.
+        chronometrageService.cloturerExamen(idDossier);
         log.info("[CIRCUIT] navette PV soumission dossier={} acteur={} pv={} statutPv={} navettes={}",
                 idDossier, CurrentUser.login().orElse(null), saved.getIdPv(),
                 StatutPv.PROJET_SOUMIS.name(), saved.getNbNavettes());

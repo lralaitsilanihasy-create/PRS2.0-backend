@@ -1464,6 +1464,15 @@ Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `
 > soumis, retours de navette, transmission au Président, visa, signatures, vérification, SIGMP,
 > archivage — n'y figurait nulle part, alors que le chronométrage la racontait.
 >
+> ⚠️ **Survit à la purge (2026-09-07, signalement pilote 00001).** Ces événements sont dérivés à la
+> lecture des navettes, PV et vérifications ; une **annulation de dispatch** (`POST /api/dispatchs/{id}/annuler`)
+> ou un **retrait accepté** les effaçait du journal avec leurs sources. Ils sont désormais **figés en lignes
+> de `t_action_dossier` juste avant la purge** (mêmes `typeAction`, opérateur et détail, `idAction` posé) :
+> le journal d'un dossier retiré raconte toujours l'examen qu'il a connu. Rien n'est écrit en double tant
+> que les sources vivent. Côté chronométrage (`GET /api/dossiers/{id}/chronometrage`), la tâche EXAMEN
+> close par une re-soumission du projet faite **pour** le Membre (Président/CC en délégation) n'est plus
+> créée au nom du déclencheur : sans tâche ouverte de l'attributaire, aucune occurrence instantanée.
+>
 > **Neuf types de plus**, chacun daté et avec son opérateur nommé :
 >
 > | `typeAction` | Événement | Détail |
@@ -5529,7 +5538,7 @@ un quatrième — c'est exactement `EN_ATTENTE_DECISION_PRMP`, pendant laquelle 
 | `etapeCourante` | string \| null | étape ouverte ; `null` si aucune tâche CNM ne court |
 | `dateEnregistrement` | string (date-heure) \| null | ⚠️ **2026-09-06** (demande pilote « Suivi des délais CNM ») — clôture de l'étape `RECEPTION`, **exactement** le `debutCompteur` du chronométrage ; `null` tant que le Secrétaire n'a pas enregistré. Sert la PRMP, pour qui `GET /api/receptions` est vide (portée inchangée) |
 | `dateSoumission` | string (date-heure ISO) \| null | ⚠️ **2026-09-06** (« Suivi des dossiers CNM », colonne « Dépôt du dossier ») — **date de dépôt** = horodatage de `POST /api/dossiers/{id}/soumettre`, **la même colonne** que `ReceptionDto.dateSoumission` (Secrétaire, format `yyyy-MM-dd HH:mm`). `null` pour un brouillon (jamais soumis, ou remis en brouillon par un retrait accepté). Colonne de l'entité : aucune requête de plus. ⚠️ **V20** : elle était posée à la *création* du brouillon ; reprise depuis le journal (`SOUMISSION`) |
-| `datesEtapes` | objet `{ [étape]: string (date-heure) \| null }` | ⚠️ **2026-09-07** (frise du tableau de bord) — date de **franchissement** de chaque étape de la frise, clés `RECEPTION`, `DISPATCH`, `EXAMEN`, `PROJET_PV`, `PV_SIGNE`, `VERIFICATION`, `CLOTURE` (les sept toujours présentes) ; une étape **non atteinte vaut `null`**. `RECEPTION` = `dateEnregistrement` ; `DISPATCH`/`EXAMEN` = clôture de la dernière occurrence ; `PROJET_PV` = clôture d'EXAMEN (le projet de PV en naît) ; `PV_SIGNE` = dernière signature (COSIGNATURE, à défaut VISA) **seulement si le PV est `SIGNE`** ; `VERIFICATION` = clôture de la vérification **une fois les observations levées** ; `CLOTURE` = archivage (à défaut transmission SIGMP) au statut `CLOTURE`. Dérivé des tâches déjà chargées en lot : aucune requête de plus ; servi quelle que soit la portée du lecteur (le Président « toutes localités » reçoit `dispatchs`/`examens` vides, pas `datesEtapes`) |
+| `datesEtapes` | objet `{ [étape]: string (date-heure) \| null }` | ⚠️ **2026-09-07** (frise du tableau de bord) — date de **franchissement** de chaque étape de la frise, clés `RECEPTION`, `DISPATCH`, `EXAMEN`, `PROJET_PV`, `PV_SIGNE`, `VERIFICATION`, `CLOTURE` (les sept toujours présentes) ; une étape **non atteinte vaut `null`**. `RECEPTION` = `dateEnregistrement` ; `DISPATCH`/`EXAMEN` = clôture de la dernière occurrence, **seulement si le statut a dépassé l'étape** (un dispatch annulé → `PRET_DISPATCH`, un réexamen → `A_REEXAMINER` laissent des tâches closes sans franchissement) ; `PROJET_PV` = clôture d'EXAMEN (le projet de PV en naît), même condition ; `PV_SIGNE` = dernière signature (COSIGNATURE, à défaut VISA) **seulement si le PV est `SIGNE`** ; `VERIFICATION` = clôture de la vérification **une fois les observations levées** ; `CLOTURE` = archivage (à défaut transmission SIGMP) au statut `CLOTURE`. Dérivé des tâches déjà chargées en lot : aucune requête de plus ; servi quelle que soit la portée du lecteur (le Président « toutes localités » reçoit `dispatchs`/`examens` vides, pas `datesEtapes`) |
 
 Présents sur `GET /api/dossiers/{id}` **et** sur les listes, résolus **en lot** (deux requêtes de plus
 quelle que soit la taille de la liste).

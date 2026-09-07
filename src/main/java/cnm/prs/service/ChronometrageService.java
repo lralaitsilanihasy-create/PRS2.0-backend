@@ -394,6 +394,55 @@ public class ChronometrageService {
      * pourtant signé. Même tolérance que {@link #cloturer} : sans prise en charge préalable, une
      * occurrence est créée sur l'acteur puis close aussitôt.</p>
      */
+    /**
+     * ⚠️ Signalement pilote (2026-09-07, dossier 00001) — clôture de l'étape EXAMEN au nom de
+     * l'<strong>attributaire</strong> du dispatch, jamais du déclencheur de la transition.
+     *
+     * <p>Le constat : après un retour de navette, le Président a re-soumis le projet de PV pour le Membre
+     * (délégation Président → Membre). {@link #cloturer} ne trouvant aucune tâche EXAMEN ouverte, elle en
+     * créait une <em>instantanée</em> (prise en charge = fin, prévision standard) au nom de l'appelant —
+     * {@code PRES001} — alors qu'un examen appartient à l'attributaire (même principe que la garde
+     * d'acteur du VISA et de la co-signature, {@code 1a92f5a}).</p>
+     *
+     * <p>La règle : on clôt la tâche EXAMEN ouverte de l'attributaire (à défaut, la première ouverte) ;
+     * s'il n'y en a aucune, l'occurrence instantanée n'est créée que si l'appelant <strong>est</strong>
+     * l'attributaire (le Membre qui soumet sans avoir pris en charge — tolérance historique). Un tiers qui
+     * clôt l'étape à sa place ne laisse <strong>aucune</strong> tâche : le chronométrage ne prête pas
+     * l'examen à qui ne l'a pas fait. Sans dispatch connu, comportement de {@link #cloturer}.</p>
+     */
+    public void cloturerExamen(Integer idDossier) {
+        if (idDossier == null) {
+            return;
+        }
+        try {
+            String attributaire = dispatchRepository.findImCtrlMembreByDossier(idDossier)
+                    .filter(s -> s != null && !s.isBlank()).orElse(null);
+            if (attributaire == null) {
+                cloturer(idDossier, EtapeCircuit.EXAMEN);
+                return;
+            }
+            LocalDateTime maintenant = LocalDateTime.now();
+            List<TacheDossier> ouvertes = tacheRepository.ouvertes(idDossier, EtapeCircuit.EXAMEN.name());
+            TacheDossier tache = ouvertes.stream()
+                    .filter(t -> attributaire.equals(t.getImActeur())).findFirst()
+                    .orElse(ouvertes.isEmpty() ? null : ouvertes.get(0));
+            if (tache == null) {
+                String moi = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
+                if (!attributaire.equals(moi)) {
+                    LOG.info("[CHRONO] EXAMEN clos par {} sans tache ouverte : aucune occurrence creee, "
+                            + "l'examen du dossier {} appartient a {}", moi, idDossier, attributaire);
+                    return;
+                }
+                tache = nouvelle(idDossier, EtapeCircuit.EXAMEN, maintenant,
+                        delaiStandardService.delai(EtapeCircuit.EXAMEN), true);
+            }
+            tache.setDateFin(maintenant);
+            tacheRepository.save(tache);
+        } catch (RuntimeException ex) {
+            LOG.warn("[CHRONO] cloture EXAMEN impossible dossier={} : {}", idDossier, ex.toString());
+        }
+    }
+
     public void cloturerPourActeur(Integer idDossier, EtapeCircuit etape, String imActeur) {
         if (idDossier == null || etape == null) {
             return;
@@ -643,6 +692,20 @@ public class ChronometrageService {
     public static final List<String> ETAPES_FRISE = List.of(
             "RECEPTION", "DISPATCH", "EXAMEN", "PROJET_PV", "PV_SIGNE", "VERIFICATION", "CLOTURE");
 
+    /** Statuts pour lesquels le DISPATCH est franchi (un dispatch annulé ramène en PRET_DISPATCH : non). */
+    private static final Set<String> STATUTS_APRES_DISPATCH = Set.of(
+            StatutDossier.DISPATCHE.name(), StatutDossier.EXAMINE.name(), StatutDossier.PV_SIGNE.name(),
+            StatutDossier.EN_VERIFICATION.name(), StatutDossier.EN_ATTENTE_DECISION_PRMP.name(),
+            StatutDossier.OBSERVATIONS_LEVEES.name(), StatutDossier.DECISION_TRANSMISE_SIGMP.name(),
+            StatutDossier.EN_ATTENTE_PIECES.name(), StatutDossier.A_REEXAMINER.name(), StatutDossier.CLOTURE.name());
+
+    /** Statuts pour lesquels l'EXAMEN est franchi (un réexamen — A_REEXAMINER — le remet en jeu : non). */
+    private static final Set<String> STATUTS_APRES_EXAMEN = Set.of(
+            StatutDossier.EXAMINE.name(), StatutDossier.PV_SIGNE.name(), StatutDossier.EN_VERIFICATION.name(),
+            StatutDossier.EN_ATTENTE_DECISION_PRMP.name(), StatutDossier.OBSERVATIONS_LEVEES.name(),
+            StatutDossier.DECISION_TRANSMISE_SIGMP.name(), StatutDossier.EN_ATTENTE_PIECES.name(),
+            StatutDossier.CLOTURE.name());
+
     /**
      * ⚠️ Frise du tableau de bord (demande pilote 2026-09-07) — <strong>date de franchissement</strong> de
      * chacune des sept étapes de la frise du front, dérivée des tâches de chronométrage déjà chargées en
@@ -652,8 +715,10 @@ public class ChronometrageService {
      *
      * <ul>
      *   <li>{@code RECEPTION} : clôture de RECEPTION — <strong>identique</strong> à {@link #dateEnregistrement} ;</li>
-     *   <li>{@code DISPATCH} / {@code EXAMEN} : clôture de la dernière occurrence close ;</li>
-     *   <li>{@code PROJET_PV} : le projet de PV naît de la clôture d'EXAMEN — même date ;</li>
+     *   <li>{@code DISPATCH} / {@code EXAMEN} : clôture de la dernière occurrence close, <strong>seulement si le
+     *       statut a dépassé l'étape</strong> — un dispatch annulé ({@code PRET_DISPATCH}) ou un réexamen
+     *       ({@code A_REEXAMINER}) laissent des tâches closes derrière eux sans que l'étape soit franchie ;</li>
+     *   <li>{@code PROJET_PV} : le projet de PV naît de la clôture d'EXAMEN — même date, même condition ;</li>
      *   <li>{@code PV_SIGNE} : dernière signature (COSIGNATURE, à défaut VISA), <strong>seulement si le PV
      *       est {@code SIGNE}</strong> — une signature sur deux ne date pas un PV signé ;</li>
      *   <li>{@code VERIFICATION} : clôture de la dernière VERIFICATION, seulement une fois les observations
@@ -664,9 +729,11 @@ public class ChronometrageService {
      */
     public Map<String, LocalDateTime> datesEtapes(String statutDossier, String statutPv, List<TacheDossier> taches) {
         Map<String, LocalDateTime> dates = new java.util.LinkedHashMap<>();
-        LocalDateTime examen = borne(taches, EtapeCircuit.EXAMEN);
+        boolean dispatchFranchi = statutDossier != null && STATUTS_APRES_DISPATCH.contains(statutDossier);
+        boolean examenFranchi = statutDossier != null && STATUTS_APRES_EXAMEN.contains(statutDossier);
+        LocalDateTime examen = examenFranchi ? borne(taches, EtapeCircuit.EXAMEN) : null;
         dates.put("RECEPTION", borne(taches, EtapeCircuit.RECEPTION));
-        dates.put("DISPATCH", borne(taches, EtapeCircuit.DISPATCH));
+        dates.put("DISPATCH", dispatchFranchi ? borne(taches, EtapeCircuit.DISPATCH) : null);
         dates.put("EXAMEN", examen);
         dates.put("PROJET_PV", examen);
         boolean pvSigne = "SIGNE".equals(statutPv);

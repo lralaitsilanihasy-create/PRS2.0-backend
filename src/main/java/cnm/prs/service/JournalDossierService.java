@@ -153,6 +153,41 @@ public class JournalDossierService {
         return lignes;
     }
 
+    /**
+     * ⚠️ Signalement pilote (2026-09-07, dossier 00001) — <strong>fige</strong> les événements de traitement
+     * dérivés (soumission d'examen, retours, transmission, visa, signatures, vérifications, SIGMP,
+     * archivage) en lignes de {@code t_action_dossier}, <strong>juste avant</strong> que la purge du circuit
+     * n'efface leurs sources (annulation d'un dispatch, retrait accepté). Sans cela, le journal — dérivé à la
+     * lecture depuis les navettes et les PV — oubliait que le dossier était passé par l'examen, alors que le
+     * chronométrage, lui, gardait ses tâches.
+     *
+     * <p>Arbitrage (troisième voie entre « persister au fil de l'eau » et « documenter la perte ») : la
+     * dérivation à la lecture garde son intérêt — les dossiers déjà traités sont complets d'office, et rien
+     * n'est écrit en double tant que les sources vivent. On n'écrit qu'au moment où elles vont disparaître :
+     * une fois, et exactement ce que le journal montrait la seconde d'avant. Les copies portent les mêmes
+     * types que les événements dérivés, donc la même visibilité hiérarchique au front. Idempotent par
+     * construction : après la purge, plus rien n'est dérivable, donc plus rien à figer.</p>
+     */
+    @Transactional
+    public void figerTraitement(Integer idDossier) {
+        if (idDossier == null) {
+            return;
+        }
+        List<ActionDossierDto> evenements = traitement.evenements(idDossier);
+        for (ActionDossierDto e : evenements) {
+            ActionDossier action = new ActionDossier();
+            action.setIdDossier(idDossier);
+            action.setDateAction(e.getDateAction() == null ? LocalDateTime.now() : e.getDateAction());
+            action.setTypeAction(e.getTypeAction());
+            action.setIdPrmpOperateur(null);
+            action.setIdMandatOperateur(null);
+            action.setNomOperateur(e.getNomOperateur());
+            action.setAuteur(e.getAuteur());
+            action.setDetail(tronquer(e.getDetail(), 500));
+            repository.save(action);
+        }
+    }
+
     /** Supprime le journal d'un dossier (cascade de la suppression d'un brouillon). */
     @Transactional
     public void purger(Integer idDossier) {

@@ -557,6 +557,25 @@ class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("Dates des étapes — le franchissement se juge sur le STATUT : un dispatch annulé (PRET_DISPATCH) "
+            + "laisse ses tâches closes mais ne date ni DISPATCH ni EXAMEN")
+    void datesEtapes_dispatchAnnule_nonFranchi() throws Exception {
+        dossierEnStatut(500, "EXAMINE");
+        chronometrageService.cloturer(500, EtapeCircuit.RECEPTION);
+        chronometrageService.cloturer(500, EtapeCircuit.DISPATCH);
+        chronometrageService.cloturer(500, EtapeCircuit.EXAMEN);
+        // Annulation du dispatch : retour en PRET_DISPATCH, les tâches closes restent (histoire).
+        dossierEnStatut(500, "PRET_DISPATCH");
+
+        mvc.perform(get("/api/dossiers/500").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.datesEtapes.RECEPTION").exists())
+                .andExpect(jsonPath("$.datesEtapes.DISPATCH").doesNotExist())
+                .andExpect(jsonPath("$.datesEtapes.EXAMEN").doesNotExist())
+                .andExpect(jsonPath("$.datesEtapes.PROJET_PV").doesNotExist());
+    }
+
+    @Test
     @DisplayName("Dates des étapes — cohérence : datesEtapes.RECEPTION = dateEnregistrement, et un dossier jamais "
             + "réceptionné n'a aucune étape datée")
     void datesEtapes_receptionEgaleDateEnregistrement() throws Exception {

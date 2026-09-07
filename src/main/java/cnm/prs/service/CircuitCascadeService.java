@@ -63,6 +63,8 @@ public class CircuitCascadeService {
     private final SnapshotRectifPrevisionRepository snapshotRectifPrevisionRepository;
     private final SnapshotRectifLigneRepository snapshotRectifLigneRepository;
     private final VersionDossierRepository versionDossierRepository;
+    /** ⚠️ Signalement pilote (2026-09-07) — le journal fige les événements de traitement avant leur purge. */
+    private final JournalDossierService journalDossier;
 
     public CircuitCascadeService(ObservationControleRepository observationControleRepository,
             ExamenDetailRepository examenDetailRepository, ExamenPieceRepository examenPieceRepository,
@@ -76,7 +78,8 @@ public class CircuitCascadeService {
             SnapshotRectifLotRepository snapshotRectifLotRepository,
             SnapshotRectifPrevisionRepository snapshotRectifPrevisionRepository,
             SnapshotRectifLigneRepository snapshotRectifLigneRepository,
-            VersionDossierRepository versionDossierRepository) {
+            VersionDossierRepository versionDossierRepository, JournalDossierService journalDossier) {
+        this.journalDossier = journalDossier;
         this.suiviObservationRepository = suiviObservationRepository;
         this.observationPvRepository = observationPvRepository;
         this.snapshotRectifBeneficiaireRepository = snapshotRectifBeneficiaireRepository;
@@ -119,6 +122,9 @@ public class CircuitCascadeService {
      */
     @Transactional
     public void purgerApresDispatch(Integer idDossier) {
+        // ⚠️ Signalement pilote (2026-09-07) — AVANT d'effacer navettes, PV et vérifications, le journal en
+        // fige les événements de traitement : le dossier « est passé par l'examen », son histoire le dira.
+        journalDossier.figerTraitement(idDossier);
         // ⚠️ Spec observations FAVR (2026-08-02) — suivi des observations du PV (historique puis périmètre).
         suiviObservationRepository.deleteParDossier(idDossier);      // 0a — enfant de t_observation_pv
         observationPvRepository.deleteParDossier(idDossier);         // 0b — enfant de t_dossier / t_pv_examen

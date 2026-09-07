@@ -663,6 +663,20 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
     dossiers DÉJÀ traités, alors qu'une écriture à la source n'aurait raconté que l'avenir. Le constat
     portait précisément sur un dossier ancien. Ordre chronologique strict ; à instant égal, le rang du
     circuit tranche, car les actes de fin de parcours ne portent qu'une date.
+  - ⚠️ **Le journal survit à la purge du circuit** (signalement pilote 2026-09-07, dossier 00001) — une
+    annulation de dispatch ou un retrait accepté effacent navettes, PV et vérifications, dont les
+    événements ci-dessus étaient dérivés : le journal oubliait que le dossier « est passé par l'examen »,
+    alors que le chronométrage gardait ses tâches. **Juste avant la purge**, ces événements sont **figés**
+    en lignes de `t_action_dossier` (mêmes types, même opérateur, même détail) — une seule fois, exactement
+    ce que le journal montrait la seconde d'avant ; rien n'est écrit en double tant que les sources vivent.
+    Le journal reste donc complet après retrait : Création → … → Soumission d'examen → Retour → Retrait.
+  - ⚠️ **Un examen n'est jamais prêté à qui ne l'a pas fait** (chronométrage, même signalement) — la
+    soumission du projet de PV clôt l'étape EXAMEN **au nom de l'attributaire du dispatch**. Si un
+    Président ou un CC re-soumet pour le Membre (délégation) sans qu'une tâche EXAMEN soit ouverte,
+    **aucune** occurrence instantanée n'est plus créée à son nom (le déclencheur d'une transition n'est pas
+    l'acteur de la tâche) ; le Membre attributaire qui soumet sans prise en charge garde l'occurrence
+    instantanée à son nom (tolérance historique). Même principe que la garde d'acteur du visa et de la
+    co-signature (`1a92f5a`).
 
   - ⚠️ **La CONSIGNE est consignée** (complément du 2026-09-04) — « Comment savoir que le dossier a été
     dispatché au CC avec instruction avant de le dispatcher au membre ? » Les lignes `DISPATCH` et
@@ -844,6 +858,7 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
     : la **date de franchissement** de chacune des sept étapes de la frise (`RECEPTION`, `DISPATCH`,
     `EXAMEN`, `PROJET_PV`, `PV_SIGNE`, `VERIFICATION`, `CLOTURE`), dérivée des tâches de chronométrage
     déjà chargées **en lot** (aucun N+1) ; étape non atteinte = `null` (sept clés toujours présentes). `RECEPTION` = `dateEnregistrement` ;
+    `DISPATCH`/`EXAMEN` datés seulement si le statut a dépassé l'étape (dispatch annulé, réexamen : non) ;
     `PROJET_PV` = clôture d'EXAMEN ; `PV_SIGNE` = dernière signature, seulement si le PV est `SIGNE` ;
     `VERIFICATION` seulement une fois les observations levées ; `CLOTURE` = archivage (à défaut SIGMP) au
     statut `CLOTURE`. Le franchissement s'apprécie sur le **statut**, la date vient des **tâches**. Motif :
