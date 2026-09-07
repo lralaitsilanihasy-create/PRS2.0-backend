@@ -125,6 +125,8 @@ class RattachementIntegrationTest extends CnmIntegrationTestSupport {
     @DisplayName("Ciblage — SANS rattachement : cibles nulles, PV_A_VERIFIER à TOUS les vérificateurs (repli)")
     void ciblage_sansRattachement_repli() throws Exception {
         signerPvAvecAvis(9801, "FAVR");
+        // ⚠️ Réordonnancement FAVR (2026-09-07) — le vérificateur n'est notifié qu'APRÈS la rectification.
+        rectifierEtResoumettreDossier1SiEnAttente();
         mvc.perform(get("/api/dossiers/1").header("Authorization", tokenPresident))
                 .andExpect(jsonPath("$.imVerificateurCible").value(nullValue()))
                 .andExpect(jsonPath("$.nomVerificateurCible").value(nullValue()));
@@ -140,6 +142,8 @@ class RattachementIntegrationTest extends CnmIntegrationTestSupport {
         rattacher(tokenAdmin, "CTRMEM", "CTRVER").andExpect(status().isOk());
 
         signerPvAvecAvis(9802, "FAVR");
+        // ⚠️ 2026-09-07 — la notification part à la rectification, en gardant le ciblage par rattachement.
+        rectifierEtResoumettreDossier1SiEnAttente();
         mvc.perform(get("/api/dossiers/1").header("Authorization", tokenPresident))
                 .andExpect(jsonPath("$.imVerificateurCible").value("CTRVER"))
                 .andExpect(jsonPath("$.nomVerificateurCible").exists());
@@ -155,6 +159,7 @@ class RattachementIntegrationTest extends CnmIntegrationTestSupport {
         controleurRepository.save(controleur("CTRVER2", 6, "ANT"));
         rattacher(tokenAdmin, "CTRMEM", "CTRVER").andExpect(status().isOk());
         signerPvAvecAvis(9803, "FAVR");
+        rectifierEtResoumettreDossier1SiEnAttente();   // ⚠️ 2026-09-07 — la vérification s'ouvre après rectification
         // CTRVER2 n'est pas le ciblé, et agit néanmoins : l'instruction reste délégable (15/08).
         String tokenVer2 = bearer("CTRVER2", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER2", "ANT");
         String obs = mvc.perform(get("/api/observations-pv").header("Authorization", tokenVer2).param("dossier", "1"))

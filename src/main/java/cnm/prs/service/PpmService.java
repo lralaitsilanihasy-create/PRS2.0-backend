@@ -32,6 +32,8 @@ public class PpmService {
     private final PpmRepository repository;
     private final DossierIntegriteService dossierIntegrite;
     private final MarcheRepository marcheRepository;
+    /** ⚠️ 2026-09-07 — dérivé {@code agpmRequis}, même source que le sous-type (seuil AMI compris). */
+    private final AgpmService agpmService;
     private final MarchePrevisionRepository marchePrevisionRepository;
     private final AuditLogService auditLogService;
     private final DossierRepository dossierRepository;
@@ -44,7 +46,8 @@ public class PpmService {
             MarcheRepository marcheRepository, MarchePrevisionRepository marchePrevisionRepository,
             AuditLogService auditLogService, DossierRepository dossierRepository,
             ReceptionRepository receptionRepository, DemandeRetraitRepository demandeRetraitRepository,
-            MarcheService marcheService, AnomalieRepository anomalieRepository) {
+            MarcheService marcheService, AnomalieRepository anomalieRepository, AgpmService agpmService) {
+        this.agpmService = agpmService;
         this.anomalieRepository = anomalieRepository;
         this.repository = repository;
         this.dossierIntegrite = dossierIntegrite;
@@ -117,13 +120,15 @@ public class PpmService {
     }
 
     /**
-     * Renseigne le dérivé serveur {@code agpmRequis} sur un PPM lu : {@code true} ssi ≥1 marché du PPM
-     * est en « appel d'offres ouvert » ({@code ModePassation.declencheAgpm}). Appelé sur toutes les
+     * Renseigne le dérivé serveur {@code agpmRequis} sur un PPM lu : {@code true} ssi ≥1 marché du PPM est
+     * déclencheur d'AGPM — un <strong>appel d'offres</strong>, toutes variantes (2026-09-07), ou un
+     * <strong>appel à manifestation d'intérêt</strong> dont le montant atteint le seuil administrable
+     * (2026-09-07 « suite »). Règle tenue par {@link AgpmService}, source unique. Appelé sur toutes les
      * lectures PPM ({@link #findAll}, {@link #findById}, {@link #findByDossier}).
      */
     private PpmDto enrichir(PpmDto dto) {
         if (dto != null && dto.getIdPpm() != null) {
-            dto.setAgpmRequis(marcheRepository.existsMarcheDeclencheurAgpmByPpm(dto.getIdPpm()));
+            dto.setAgpmRequis(agpmService.requisPourPpm(dto.getIdPpm()));
         }
         return dto;
     }

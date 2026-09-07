@@ -624,30 +624,83 @@ public class PvExamenService {
      * cas, le PV est transmis à la PRMP ({@link #notifierPvSigne}).
      */
     /**
-     * ⚠️ Règle MODIFIÉE (2026-08-01, spec navette) — à la signature, TOUS les avis passent par le
-     * VÉRIFICATEUR (dossier {@code EN_VERIFICATION}) : FAVR → boucle de rectification (cas 2) ;
-     * FAV/DEF/NSP → transmission du sens de la décision à SIGMP puis archivage (cas 1). La clôture
-     * n'intervient plus ici : elle est posée à l'ARCHIVAGE du PV par l'Assistant contrôleur.
+     * ⚠️ Règle MODIFIÉE (2026-08-01, spec navette) — à la signature, le dossier quitte l'examen ;
+     * FAV/DEF/NSP → le VÉRIFICATEUR transmet le sens de la décision à SIGMP puis l'Assistant archive.
+     * La clôture n'intervient pas ici : elle est posée à l'ARCHIVAGE du PV.
+     *
+     * <p>⚠️ <strong>RÉORDONNANCEMENT FAVR (règle pilote du 2026-09-07)</strong> — pour un avis
+     * <strong>favorable avec réserves</strong>, la <strong>rectification de la PRMP précède désormais la
+     * vérification</strong>. À la co-signature, le PV définitif <em>et</em> les observations partent
+     * directement à la PRMP, et le dossier attend sa rectification
+     * ({@link StatutDossier#EN_ATTENTE_DECISION_PRMP}) : il n'entre en {@code EN_VERIFICATION} qu'une fois
+     * la PRMP ayant resoumis. Le <strong>vérificateur n'est ni notifié ni sollicité</strong> avant ce
+     * moment.</p>
+     *
+     * <p><strong>Ce que cela remplace.</strong> Le premier passage du vérificateur ne servait qu'à relayer
+     * les observations vers la PRMP : il forçait un « tout MAINTENUE » et interdisait la levée. Ce relais
+     * se fait maintenant sans mobiliser personne, et le vérificateur — qui ne voit plus que des dossiers
+     * <em>déjà rectifiés</em> — dispose des deux décisions dès son premier passage (cf.
+     * {@code ObservationPvService}). La boucle, elle, est conservée : une observation maintenue renvoie le
+     * dossier à la PRMP, comme avant.</p>
      */
     private void brancherSelonAvis(PvExamen pv) {
         boolean reserve = AVIS_FAVORABLE_RESERVE.equals(repository.findIdAvisByPv(pv.getIdPv()).orElse(null));
         Integer idDossier = repository.findIdDossierByPv(pv.getIdPv()).orElse(null);
-        if (idDossier != null) {
-            dossierRepository.findById(idDossier).ifPresent(d -> {
-                if (StatutDossier.EXAMINE.name().equals(d.getStatut())) {
-                    d.setStatut(StatutDossier.EN_VERIFICATION.name());
-                    dossierRepository.save(d);
-                }
-            });
-        }
         if (reserve) {
             // ⚠️ Spec « circuit des observations FAVR » (2026-08-02) — le PÉRIMÈTRE des observations
             // transmises à la PRMP est FIGÉ dès l'émission du PV : snapshot des observations de
             // l'examen arrêtées au PV (première transmission = ces observations, rien d'autre).
+            // Généré AVANT la transition : c'est ce périmètre qui part avec le PV vers la PRMP.
             observationPvService.genererPourPv(pv);
         }
-        notifierPvSigne(pv);                            // PRMP (transmission systématique)
-        notifierVerificateur(pv, reserve, idDossier);
+        if (idDossier != null) {
+            dossierRepository.findById(idDossier).ifPresent(d -> {
+                if (StatutDossier.EXAMINE.name().equals(d.getStatut())) {
+                    d.setStatut(reserve ? StatutDossier.EN_ATTENTE_DECISION_PRMP.name()
+                            : StatutDossier.EN_VERIFICATION.name());
+                    dossierRepository.save(d);
+                    if (reserve) {
+                        // ⚠️ Chronométrage — la balle est chez la PRMP dès la co-signature : le compteur
+                        // net CNM se suspend ici et reprendra à la resoumission. Sans cela, l'attente de
+                        // rectification serait imputée à la Commission.
+                        chronometrageService.entrerEnAttentePrmp(idDossier,
+                                StatutDossier.EN_ATTENTE_DECISION_PRMP);
+                    }
+                }
+            });
+        }
+        notifierPvSigne(pv);                            // PRMP : le PV définitif, dans tous les cas
+        if (reserve) {
+            notifierPrmpObservationsARectifier(pv, idDossier);   // + les réserves à rectifier
+        } else {
+            notifierVerificateur(pv, false, idDossier);          // FAV/DEF/NSP : décision à transmettre
+        }
+    }
+
+    /**
+     * ⚠️ Réordonnancement FAVR (2026-09-07) — prévient la PRMP que le PV définitif porte des
+     * <strong>réserves à rectifier</strong>, en énumérant les observations arrêtées au PV. C'est ce
+     * message qui remplace le « rappel » que produisait le premier passage du vérificateur ; il porte le
+     * même type de notification ({@code OBSERVATION_VERIFICATION}), donc le même écran côté front.
+     */
+    private void notifierPrmpObservationsARectifier(PvExamen pv, Integer idDossier) {
+        if (idDossier == null) {
+            return;
+        }
+        List<String> reserves = observationPvService.libellesDuPerimetre(idDossier);
+        if (reserves.isEmpty()) {
+            return;   // PV « avec réserves » sans observation : rien à rectifier, rien à annoncer
+        }
+        String titre = "PV signé — réserves à rectifier";
+        String corps = "Le PV " + referencePv(pv) + " est signé avec " + reserves.size() + " réserve(s) : "
+                + String.join(" ; ", reserves) + ". Rectifiez le dossier, puis resoumettez-le — "
+                + "il partira alors en vérification.";
+        for (String idPrmp : repository.findIdPrmpByPv(pv.getIdPv())) {
+            String email = prmpRepository.findById(idPrmp).map(Prmp::getEmailPrmp).orElse(null);
+            notificationService.emettrePrmp(TypeNotification.OBSERVATION_VERIFICATION, idPrmp, email,
+                    pv.getIdPv(), TypeObjet.PV, idDossier, titre,
+                    corps.length() > 500 ? corps.substring(0, 497) + "…" : corps);
+        }
     }
 
     /**

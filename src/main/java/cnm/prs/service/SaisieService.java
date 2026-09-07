@@ -612,6 +612,13 @@ public class SaisieService {
         md.setIdMode(nouvelId);
         md.setLibelle(libelle.trim());
         md.setIdTypeDmc(typeDmcService.deriverIdPourLibelle(md.getLibelle()));   // auto-mapping type de DMC
+        // ⚠️ Règle précisée (2026-09-07, pilote) — un mode d'APPEL D'OFFRES, toutes variantes, déclenche
+        // l'AGPM. Un mode créé à la volée par un import n'apporte qu'un libellé : le drapeau en est dérivé,
+        // sinon un « Appel d'offres avec préqualification » venu d'un PDF laisserait le plan en simple PPM.
+        md.setDeclencheAgpm(ModePassation.libelleDeclencheAgpm(md.getLibelle()));
+        // ⚠️ Arbitrage pilote (2026-09-07, suite) — l'appel à manifestation d'intérêt déclenche l'AGPM
+        // SOUS CONDITION DE MONTANT : drapeau conditionnel ici, seuil dans l'administration.
+        md.setAgpmSiSeuil(ModePassation.libelleAgpmSiSeuil(md.getLibelle()));
         modePassationRepository.save(md);
         auditLogService.enregistrer(CurrentUser.ref().orElse(null), "tr_mode_passation",
                 String.valueOf(nouvelId), "CREATION_A_LA_VOLEE", null);

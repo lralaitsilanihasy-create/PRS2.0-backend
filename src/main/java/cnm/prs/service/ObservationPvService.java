@@ -283,7 +283,6 @@ public class ObservationPvService {
         Map<Integer, ObservationPv> parId = new HashMap<>();
         perimetre.forEach(o -> parId.put(o.getIdObservationPv(), o));
 
-        boolean leveeAutorisee = leveePossible(req.idDossier(), pv);
         Set<Integer> statuees = new HashSet<>();
         for (PassageObservationsRequest.ObservationDecision dec : req.decisions()) {
             ObservationPv cible = parId.get(dec.idObservationPv());
@@ -302,16 +301,6 @@ public class ObservationPvService {
             if (LEVEE.equals(etats.get(dec.idObservationPv()))) {
                 throw new BusinessRuleException("L'observation " + dec.idObservationPv()
                         + " est déjà levée : une levée est définitive (acquise).");
-            }
-            // ⚠️ Décision produit (2026-08-15) — PAS de levée avant la première rectification de la
-            // PRMP : les observations arrêtées au PV sont réputées AVEC OBJET (validées par toute la
-            // chaîne — examen, acceptation, co-signature). Le premier passage = émission du rappel
-            // (tout MAINTENUE) ; la levée n'est possible qu'après une RESOUMISSION de la PRMP
-            // postérieure à la signature du PV.
-            if (LEVEE.equals(dec.decision()) && !leveeAutorisee) {
-                throw new BusinessRuleException("Levée impossible avant la première rectification de la "
-                        + "PRMP : aucune resoumission n'est intervenue depuis la signature du PV — au "
-                        + "premier passage, toutes les observations sont maintenues (rappel).");
             }
         }
         // Complétude : chaque observation restante (non levée) doit être statuée à cette itération.
@@ -388,20 +377,34 @@ public class ObservationPvService {
     }
 
     /**
-     * ⚠️ Décision produit (2026-08-15) — la LEVÉE n'est possible qu'après une <strong>resoumission de
-     * la PRMP</strong> ({@code POST /api/dossiers/{id}/resoumettre}, action {@code RESOUMISSION} du
-     * journal {@code t_action_dossier}) <strong>postérieure à la signature du PV</strong>. Sert la
-     * garde du passage ET le champ {@code leveePossible} exposé au front (miroir du bouton « Levée »).
+     * ⚠️ <strong>Réordonnancement FAVR (règle pilote du 2026-09-07)</strong> — la levée est possible
+     * <strong>dès le premier passage</strong>, et ce champ vaut donc toujours {@code true}.
+     *
+     * <p><strong>Ce qui a changé, et pourquoi.</strong> La décision produit du 2026-08-15 interdisait la
+     * levée tant que la PRMP n'avait pas resoumis : le premier passage du vérificateur ne servait qu'à
+     * relayer les observations vers elle (« tout MAINTENUE », rappel). Ce relais se fait désormais
+     * <em>à la co-signature</em>, directement, sans mobiliser le vérificateur — lequel ne voit plus que
+     * des dossiers <strong>déjà rectifiés</strong>. Lui interdire la levée à son premier passage n'aurait
+     * plus de sens : il juge une rectification, il doit pouvoir la déclarer satisfaisante.</p>
+     *
+     * <p>Conservé comme méthode, et non remplacé par un littéral : c'est ici que se logerait une
+     * condition future, et le champ {@code leveePossible} du DTO garde son sens pour le front (miroir du
+     * bouton « Levée »).</p>
      */
     private boolean leveePossible(Integer idDossier, PvExamen pv) {
-        if (pv == null) {
-            return false;
-        }
-        java.time.LocalDate depuis = pv.getDatePv();
-        return actionDossierRepository.findByIdDossierOrderByDateActionAscIdActionAsc(idDossier).stream()
-                .filter(a -> JournalDossierService.RESOUMISSION.equals(a.getTypeAction()))
-                .anyMatch(a -> a.getDateAction() != null
-                        && (depuis == null || !a.getDateAction().toLocalDate().isBefore(depuis)));
+        return pv != null;
+    }
+
+    /**
+     * ⚠️ Réordonnancement FAVR (2026-09-07) — libellés des observations arrêtées au PV, pour la
+     * notification qui les transmet à la PRMP à la co-signature. Liste vide si le périmètre n'existe pas.
+     */
+    @Transactional(readOnly = true)
+    public List<String> libellesDuPerimetre(Integer idDossier) {
+        return repository.findByIdDossierOrderByOrdreAscIdObservationPvAsc(idDossier).stream()
+                .map(ObservationPv::getLibelle)
+                .filter(l -> l != null && !l.isBlank())
+                .toList();
     }
 
     /** Statut courant par observation : dernière décision (LEVEE définitive) ; absente = EMISE. */

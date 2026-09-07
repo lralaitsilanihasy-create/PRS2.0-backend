@@ -825,23 +825,25 @@ class AuthentificationHabilitationIntegrationTest extends CnmIntegrationTestSupp
                 .andExpect(jsonPath("$.statutPv").value("SIGNE"))
                 .andExpect(jsonPath("$.imCtrlCc").value("CTRCC2"))
                 .andExpect(jsonPath("$.imCtrlMembre").value("CTRCC2"));
+        // ⚠️ Réordonnancement FAVR (règle pilote du 2026-09-07) — la co-signature envoie le PV et ses
+        // réserves à la PRMP : le dossier attend sa rectification, il n'est pas encore chez le vérificateur.
         mvc.perform(get("/api/dossiers/4610").header("Authorization", tokenCcTms))
+                .andExpect(jsonPath("$.statut").value("EN_ATTENTE_DECISION_PRMP"));
+        // La PRMP rectifie et resoumet : c'est ce geste qui OUVRE la vérification.
+        mvc.perform(post("/api/dossiers/4610/resoumettre").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"motifRectification\":\"rectifie\"}"))
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.statut").value("EN_VERIFICATION"));
         // Q1a : le MÊME CC (attributaire, auteur des observations) statue le passage via la paire CC → Vérificateur
         // — tâche de PROFIL, sans garde de séparation (et, depuis le 2026-09-02, plus aucun lien avec
         // le Secrétaire de séance, retiré du cycle du PV).
-        // ⚠️ Décision produit 2026-08-15 : au PREMIER passage la levée est impossible (les observations
-        // du PV sont réputées avec objet) — leveePossible=false au front, LEVEE → 409, tout MAINTENUE.
+        // ⚠️ 2026-09-07 — le dossier étant DÉJÀ rectifié, le vérificateur dispose des deux décisions dès
+        // son premier passage : leveePossible=true, et la levée n'est plus refusée.
         String obs = mvc.perform(get("/api/observations-pv").header("Authorization", tokenCcTms).param("dossier", "4610"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].leveePossible").value(false))
+                .andExpect(jsonPath("$[0].leveePossible").value(true))
                 .andReturn().getResponse().getContentAsString();
         int idObs = com.jayway.jsonpath.JsonPath.read(obs, "$[0].idObservationPv");
-        mvc.perform(post("/api/observations-pv/passage").header("Authorization", tokenCcTms)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idDossier\":4610,\"decisions\":[{\"idObservationPv\":" + idObs + ",\"decision\":\"LEVEE\"}]}"))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.message", containsString("première rectification")));
         mvc.perform(post("/api/observations-pv/passage").header("Authorization", tokenCcTms)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDossier\":4610,\"decisions\":[{\"idObservationPv\":" + idObs
@@ -875,7 +877,7 @@ class AuthentificationHabilitationIntegrationTest extends CnmIntegrationTestSupp
                         hasItem("Marche 46100")))
                 .andExpect(jsonPath("$.lignes[0].champs[?(@.champ=='designationMarche')].apres",
                         hasItem("Marche 46100 rectifie v2")));
-        // La PRMP rectifie et resoumet → la levée devient possible (leveePossible=true au front).
+        // La PRMP resoumet : le dossier revient en vérification pour un nouveau passage.
         mvc.perform(post("/api/dossiers/4610/resoumettre").header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"motifRectification\":\"corrige\"}"))
                 .andExpect(status().isOk());

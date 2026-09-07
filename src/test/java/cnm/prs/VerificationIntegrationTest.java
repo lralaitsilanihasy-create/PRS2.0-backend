@@ -28,8 +28,6 @@ import cnm.prs.enums.TypeActeur;
 class VerificationIntegrationTest extends CnmIntegrationTestSupport {
 
     /** ⚠️ Audit 2026-08-27 (lot B) — garde de suppression d'un passage décidé. */
-    @org.springframework.beans.factory.annotation.Autowired
-    private cnm.prs.repository.VerificationRepository verificationRepository;
 
     @Test
     @DisplayName("Suppression d'un passage de verification (⚠️ audit lot B) : passage DECIDE -> 409 (trace de "
@@ -62,8 +60,11 @@ class VerificationIntegrationTest extends CnmIntegrationTestSupport {
         // PV FAVR amené à SIGNE → dossier EN_VERIFICATION, périmètre d'observations figé.
         signerPvAvecAvis(1, "FAVR");
 
-        // ⚠️ Décision produit 2026-08-15 : premier passage = rappel (MAINTENUE), la PRMP rectifie et
-        // resoumet, puis le vérificateur LÈVE l'observation → OBSERVATIONS_LEVEES.
+        // ⚠️ Réordonnancement FAVR (2026-09-07) — les réserves sont parties à la PRMP dès la co-signature :
+        // le dossier attend sa rectification, et n'entre en vérification qu'une fois resoumis.
+        rectifierEtResoumettreDossier1SiEnAttente();
+        // Le vérificateur maintient une première fois (rectification jugée insuffisante), la PRMP
+        // rectifie de nouveau, puis il LÈVE l'observation → OBSERVATIONS_LEVEES.
         String obs = mvc.perform(get("/api/observations-pv").header("Authorization", tokenVer).param("dossier", "1"))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         int idObs = com.jayway.jsonpath.JsonPath.read(obs, "$[0].idObservationPv");
@@ -142,9 +143,10 @@ class VerificationIntegrationTest extends CnmIntegrationTestSupport {
         passageObservationDossier1(tokenVer, "MAINTENUE", "reserve a lever");
         mvc.perform(get("/api/dossiers/1").header("Authorization", tokenVer))
                 .andExpect(jsonPath("$.statut").value("EN_ATTENTE_DECISION_PRMP"));
-        // La PRMP du dossier reçoit l'observation (refeDossier + rappel auto-généré) via OBSERVATION_VERIFICATION.
+        // La PRMP reçoit l'observation via OBSERVATION_VERIFICATION — deux fois ici : à la co-signature
+        // (les réserves du PV, ⚠️ 2026-09-07) puis au rappel de ce passage maintenu.
         mvc.perform(get("/api/notifications").header("Authorization", tokenAdmin))
-                .andExpect(jsonPath("$[?(@.typeNotif=='OBSERVATION_VERIFICATION')]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.typeNotif=='OBSERVATION_VERIFICATION')]", hasSize(2)))
                 .andExpect(jsonPath("$[?(@.typeNotif=='OBSERVATION_VERIFICATION')].destinataireRef", hasItem("PRMP001")));
         // Saisie libre (texte client) refusée : le périmètre est figé → 409.
         mvc.perform(post("/api/verifications").header("Authorization", tokenVer).contentType(MediaType.APPLICATION_JSON)
@@ -225,7 +227,11 @@ class VerificationIntegrationTest extends CnmIntegrationTestSupport {
     @Test
     @DisplayName("Resoumission PRMP : dossier hors EN_ATTENTE_DECISION_PRMP (EN_VERIFICATION) → 409")
     void resoumission_horsAttente_409() throws Exception {
-        signerPvAvecAvis(87, "FAVR"); // dossier 1 → EN_VERIFICATION (pas EN_ATTENTE)
+        signerPvAvecAvis(87, "FAVR");
+        // ⚠️ 2026-09-07 — après la co-signature, le dossier est EN_ATTENTE_DECISION_PRMP : la première
+        // resoumission est donc LÉGITIME. C'est la SECONDE, le dossier étant reparti en vérification,
+        // qui doit être refusée.
+        rectifierEtResoumettreDossier1SiEnAttente();
         mvc.perform(post("/api/dossiers/1/resoumettre").header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"motifRectification\":\"corrige\"}"))
                 .andExpect(status().isConflict());
@@ -236,7 +242,12 @@ class VerificationIntegrationTest extends CnmIntegrationTestSupport {
     void historique_echanges_dossierCloture() throws Exception {
         String tokenVer = bearer("CTRVER", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER", "ANT");
         String tokenAss = bearer("CTRASS", ProfilUtilisateur.ASSISTANT_CONTROLEUR, TypeActeur.CONTROLEUR, "CTRASS", "ANT");
-        signerPvAvecAvis(90, "FAVR"); // dossier 1 → EN_VERIFICATION, périmètre figé
+        signerPvAvecAvis(90, "FAVR"); // dossier 1 → EN_ATTENTE_DECISION_PRMP, réserves chez la PRMP
+        // ⚠️ Réordonnancement FAVR (2026-09-07) — c'est cette rectification initiale (rect0) qui OUVRE la
+        // vérification : le vérificateur ne voit le dossier qu'ensuite.
+        mvc.perform(post("/api/dossiers/1/resoumettre").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"motifRectification\":\"rect0\"}"))
+                .andExpect(status().isOk());
         // Passage 1 : observation MAINTENUE → resoumission (rect1).
         passageObservationDossier1(tokenVer, "MAINTENUE", "obs1");
         mvc.perform(post("/api/dossiers/1/resoumettre").header("Authorization", tokenPrmp)
@@ -257,22 +268,28 @@ class VerificationIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(get("/api/dossiers/1").header("Authorization", tokenVer))
                 .andExpect(jsonPath("$.statut").value("CLOTURE"));
 
-        // Historique : 3 observations (passages auto-générés, dont la levée finale) + 2 rectifications.
+        // Historique : 3 observations (passages auto-générés, dont la levée finale) + 3 rectifications —
+        // ⚠️ la rectification INITIALE (rect0) en fait partie : depuis le 2026-09-07, c'est elle qui
+        // ouvre la vérification, et le fil commence donc par une rectification.
         mvc.perform(get("/api/dossiers/1/historique-echanges").header("Authorization", tokenVer))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(5))
-                // Fil entrelacé (chaîne de réponse) : passage, rect1, passage, rect2, passage final.
+                .andExpect(jsonPath("$.length()").value(6))
+                // Fil entrelacé par chaîne de réponse : chaque passage, puis la rectification qui y répond.
+                // ⚠️ La rectification initiale (rect0) ne répond à aucun passage — elle ouvre la
+                // vérification — d'où un fil qui commence par l'observation, les rectifications suivant
+                // dans leur ordre d'émission.
                 .andExpect(jsonPath("$[0].type").value("OBSERVATION"))
-                .andExpect(jsonPath("$[1].type").value("RECTIFICATION")).andExpect(jsonPath("$[1].texte").value("rect1"))
+                .andExpect(jsonPath("$[1].type").value("RECTIFICATION"))
                 .andExpect(jsonPath("$[1].acteur").value("PRMP001"))
-                .andExpect(jsonPath("$[2].type").value("OBSERVATION"))
-                .andExpect(jsonPath("$[3].type").value("RECTIFICATION")).andExpect(jsonPath("$[3].texte").value("rect2"))
-                .andExpect(jsonPath("$[4].type").value("OBSERVATION"))
-                .andExpect(jsonPath("$[4].obsLevees").value(true));
+                .andExpect(jsonPath("$[?(@.type=='RECTIFICATION')]", hasSize(3)))
+                .andExpect(jsonPath("$[?(@.type=='RECTIFICATION')].texte",
+                        org.hamcrest.Matchers.containsInAnyOrder("rect0", "rect1", "rect2")))
+                .andExpect(jsonPath("$[?(@.type=='OBSERVATION')]", hasSize(3)))
+                .andExpect(jsonPath("$[?(@.obsLevees==true)]", hasSize(1)));
         // Accessible aussi par la PRMP.
         mvc.perform(get("/api/dossiers/1/historique-echanges").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(5));
+                .andExpect(jsonPath("$.length()").value(6));
     }
 
     @Test
@@ -298,12 +315,23 @@ class VerificationIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("Worklist vérificateur « à-vérifier » : EN_VERIFICATION de la localité ; scope localité respecté")
+    @DisplayName("Worklist vérificateur « à-vérifier » : ⚠️ un FAVR n'y entre qu'APRÈS la rectification de la PRMP "
+            + "(2026-09-07) — silence total avant ; puis EN_VERIFICATION, scope localité respecté")
     void worklist_aVerifier_listeEnVerification() throws Exception {
         String tokenVer = bearer("CTRVER", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER", "ANT");
         String tokenVerTms = bearer("CTRVER2", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER2", "TMS");
-        signerPvAvecAvis(70, "FAVR"); // dossier 1 (ANT) → EN_VERIFICATION
+        signerPvAvecAvis(70, "FAVR"); // dossier 1 (ANT) → EN_ATTENTE_DECISION_PRMP, chez la PRMP
 
+        // ⚠️ Avant rectification, le dossier ne concerne pas le vérificateur : ni liste, ni compteur.
+        mvc.perform(get("/api/dossiers/a-verifier").header("Authorization", tokenVer))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idDossier==1)]", hasSize(0)));
+        mvc.perform(get("/api/dossiers/en-attente-prmp").header("Authorization", tokenVer))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idDossier==1)]", hasSize(0)));
+
+        // La PRMP rectifie et resoumet : le dossier entre alors dans sa file.
+        rectifierEtResoumettreDossier1SiEnAttente();
         mvc.perform(get("/api/dossiers/a-verifier").header("Authorization", tokenVer))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.idDossier==1)]", hasSize(1)));
@@ -543,9 +571,10 @@ class VerificationIntegrationTest extends CnmIntegrationTestSupport {
         cloturerDossier1(123, tokenVer);
 
         // Flux légitime : le vérificateur de la localité et la PRMP propriétaire lisent le fil.
+        // (2 passages + 2 rectifications — dont celle qui ouvre la vérification, ⚠️ 2026-09-07.)
         mvc.perform(get("/api/dossiers/1/historique-echanges").header("Authorization", tokenVer))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(3));
+                .andExpect(jsonPath("$.length()").value(4));
         mvc.perform(get("/api/dossiers/1/historique-echanges").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk());
 

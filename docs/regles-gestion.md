@@ -807,6 +807,53 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
     tel quel** à la création, à la mise à jour et à la rectification — aucune détermination, aucune
     validation par situation/seuil, plus de notification `MODE_NON_DETERMINE`. Seule la **clé
     étrangère** vers `tr_mode` garantit que le mode existe.
+- Sous-type PPM / PPM-AGPM et référence du dossier [Dérivation] ⚠️ **Règle précisée (pilote, 2026-09-07)**
+  - **L'AGPM est requis pour TOUT appel d'offres**, quelle que soit la variante — ouvert, **restreint**,
+    **avec préqualification**, en deux étapes… — et non pour le seul appel d'offres ouvert (règle
+    antérieure « ssi AOO », remplacée). Les modes hors appel d'offres (consultation des prix, gré à gré,
+    achat direct) restent en `PPM`, de même que l'« appel à manifestation d'intérêt », qui n'est pas une
+    procédure d'appel d'offres.
+  - La dérivation reste pilotée par le drapeau **`declencheAgpm`** porté par chaque mode (référentiel
+    **administrable** : c'est lui la source de vérité, pas un test de libellé en dur). La migration `V21`
+    l'a posé sur toute la famille « appel d'offres » ; un mode **créé à la volée** par un import PDF —
+    qui n'apporte qu'un libellé — le reçoit dérivé de son libellé (`ModePassation.libelleDeclencheAgpm`),
+    sans quoi un « Appel d'offres avec préqualification » venu d'un PDF laisserait le plan en simple PPM.
+  - ⚠️ **L'appel à manifestation d'intérêt déclenche l'AGPM, SOUS CONDITION DE MONTANT** (arbitrage pilote
+    du 2026-09-07, « suite » ; migration `V22`). Il sort de l'exclusion posée par la V21 sans devenir un
+    déclencheur inconditionnel. La règle se dit en **deux morceaux**, tous deux modifiables sans
+    redéploiement : **quels modes** sont conditionnels — drapeau **`agpmSiSeuil`** sur le mode, posé sur
+    l'AMI, administrable comme `declencheAgpm` — et **à partir de quel montant** — paramètre
+    **`AGPM_SEUIL_MONTANT`** (`GET`/`PUT /api/parametres/agpm-seuil-montant`, Administrateur). **Aucune
+    valeur numérique n'est écrite dans le code.**
+    - **La comparaison est par MARCHÉ**, jamais sur le total du dossier : c'est la maille de la dérivation
+      depuis toujours (un seul marché déclencheur suffit à faire basculer le plan). Deux marchés AMI sous
+      le seuil dont la somme le dépasse ne déclenchent donc pas.
+    - Le montant retenu est celui **en vigueur** : le nouveau montant estimatif s'il a été posé, l'initial
+      sinon. La borne est **incluse** (`≥ seuil`). Un marché **sans montant** ne franchit aucun seuil.
+    - **Seuil absent ou illisible = `0`** — tout marché AMI déclenche tant que le pilote n'a pas saisi le
+      sien. Le défaut penche du côté de la publicité : manquer un AGPM dû est un manquement réglementaire,
+      en produire un de trop ne l'est pas.
+    - Conséquence : un plan avec un marché AMI au-dessus du seuil devient **`PPM-AGPM`** — sous-type,
+      **référence** et **numéro de PV** suivent par la mécanique décrite ci-dessous. En dessous, il reste
+      `PPM`. Les modes hors appel d'offres (consultation des prix, gré à gré, achat direct) sont inchangés.
+    - La règle a une **source unique** côté serveur (`AgpmService`), partagée par les trois consommateurs :
+      le sous-type du dossier, la grille d'examen (« on ne contrôle pas le vide ») et le drapeau
+      `agpmRequis` du PPM. Trois copies auraient divergé au premier ajustement du seuil.
+  - ⚠️ **La référence porte le sous-type dérivé** : `…/PPM-AGPM/…` quand l'AGPM est requis, `…/PPM/…`
+    sinon. Le segment est **recomposé sans consommer de numéro** (compteur et acronyme d'entité inchangés)
+    à chaque recalcul du sous-type, sur les trois porteurs **ensemble** : `t_dossier.REFE_DOSSIER`, la
+    référence initiale du PPM (`t_ppm.REFERENCE`, celle qu'un retrait accepté restaure) et les
+    `t_pv_examen.REFE_PV`. **Pourquoi ensemble** : le front relie un PV à son dossier en reconstruisant la
+    référence (`refePv.replace('/PV/','/') == refeDossier`) — les désaligner casserait la jointure.
+  - Le **numéro de PV** dérive du `refeDossier` (insertion de `/PV` avant l'année) : corriger la référence
+    du dossier le propage, et la recomposition ci-dessus maintient l'alignement si le sous-type bascule
+    après la création du projet de PV.
+  - ⚠️ **Où s'arrête la correction** : dès qu'un **PV est signé**, la référence est **gelée** — elle est
+    imprimée sur un document officiel, citée dans les lettres et les courriers. Le sous-type, lui, continue
+    de suivre la réalité du plan ; l'écart est assumé, et il ne survient qu'à la rectification d'un dossier
+    déjà passé en commission. **Périmètre de la reprise `V21`** : les références déjà attribuées sont
+    réalignées (dossier + PPM + réception + PV, ensemble) **tant qu'aucun PV n'est signé** ; au-delà, elles
+    sont laissées telles quelles.
 - Justifications de la fiche de présentation [Écriture] ⚠️ **Règle ajoutée (arbitrage du pilote, 2026-09-01)**
   - La **fiche de présentation** du dossier de planification énumère trois catégories de marchés qui
     appellent une justification : ① marchés passés selon un **mode dérogatoire**
@@ -1369,7 +1416,31 @@ Subordonné direct du Membre. Travaille sur la base du PV signé (STATUT_PV = SI
 - Lecture du PV signé [Lecture]
   - Accès au PV définitif (STATUT_PV = SIGNE) avant vérification : référence, avis, SYNTHESE_OBSERVATIONS issue de la navette acceptée — t_verification.ID_PV requis. Peut aussi consulter l'historique de la navette (t_pv_navette) pour comprendre les rectifications apportées.
 - Vérification de levée des observations [Action]
-  - ⚠️ **Décision produit (2026-08-15) — pas de levée avant la première rectification de la PRMP** : les observations arrêtées au PV sont **réputées avec objet** (déjà validées par toute la chaîne — examen, acceptation P/CC, co-signature) ; le cas « levée sans objet » au premier passage n'existe pas. Le **premier passage** du vérificateur = **émission du rappel** : toutes les observations sont **MAINTENUES** ; la décision `LEVEE` est **refusée (409)** tant qu'aucune **resoumission** de la PRMP (`POST /api/dossiers/{id}/resoumettre`, action `RESOUMISSION` du journal `t_action_dossier`) n'est **postérieure à la signature du PV**. Après la première resoumission, levée/maintenue **libres** à chaque passage (boucle inchangée jusqu'à tout levé). Signal front : champ serveur **`leveePossible`** sur `GET /api/observations-pv?dossier=` (le front grise « Levée » en miroir, sans heuristique).
+  - ⚠️ **RÈGLE REMPLACÉE (règle pilote du 2026-09-07) — la rectification de la PRMP PRÉCÈDE la vérification.**
+    La décision produit du 2026-08-15 (« pas de levée avant la première rectification ») faisait du **premier
+    passage du vérificateur** une simple **émission de rappel** : toutes les observations forcées `MAINTENUE`,
+    la `LEVEE` refusée en 409, `leveePossible=false`. Ce passage ne servait qu'à **relayer les observations
+    vers la PRMP**. Ce relais se fait désormais **à la co-signature**, directement, sans mobiliser le
+    vérificateur :
+    - à la **co-signature d'un PV FAVR**, le **PV définitif ET les observations** partent à la **PRMP**, et
+      le dossier passe en **`EN_ATTENTE_DECISION_PRMP`** (il ne passe plus par `EN_VERIFICATION`). Le
+      compteur net CNM se **suspend** dès cet instant : l'attente de rectification n'est imputée à personne
+      à la Commission ;
+    - la **PRMP est notifiée** (`OBSERVATION_VERIFICATION`, corps portant les réserves à rectifier), en plus
+      du `PV_SIGNE` habituel. Le **vérificateur n'est ni notifié ni sollicité** : le dossier n'apparaît **ni**
+      dans sa file « à vérifier » **ni** dans « en attente PRMP » tant qu'il n'a **jamais** statué dessus ;
+    - la **resoumission** de la PRMP (`POST /api/dossiers/{id}/resoumettre`) fait entrer le dossier en
+      **`EN_VERIFICATION`** : c'est **là**, et pas avant, que le vérificateur est notifié — `PV_A_VERIFIER` à
+      son **premier** contact (avec le **ciblage par rattachement**, comme le faisait la signature),
+      `RECTIFICATION_PRMP` aux tours suivants ;
+    - au **premier passage**, le dossier étant **déjà rectifié**, le vérificateur dispose des **deux**
+      décisions : **`leveePossible` vaut `true`** d'emblée. `LEVEE` → `OBSERVATIONS_LEVEES` puis SIGMP ;
+      `MAINTENUE` → retour à la PRMP — **la boucle est conservée**, seul son point d'entrée a changé ;
+    - **cas `FAV` sans réserves : inchangé** — le PV part à la PRMP, le dossier va en `EN_VERIFICATION` et le
+      vérificateur transmet directement à SIGMP (cf. correctif T2 du 2026-09-07).
+
+    Signal front : champ serveur **`leveePossible`** sur `GET /api/observations-pv?dossier=` (le front
+    reflète, il ne décide pas).
   - ⚠️ **Corrigé (2026-08-27) — OBS_LEVEES = true ne clôture PLUS directement.** Le dossier passe en
     **`OBSERVATIONS_LEVEES`** : il reste au vérificateur de **transmettre le sens de la décision à
     SIGMP** (`POST /api/sigmp-transmissions`, cas 2 — `APPROUVE` + `leveeObservations=true`), ce qui le

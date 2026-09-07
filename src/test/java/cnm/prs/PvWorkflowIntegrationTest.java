@@ -54,9 +54,10 @@ class PvWorkflowIntegrationTest extends CnmIntegrationTestSupport {
                 .contentType(MediaType.APPLICATION_JSON).content("{\"imActeur\":\"CTRMEM\",\"role\":\"MEMBRE\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.statutPv").value("SIGNE"));
 
-        // Le dossier 1 (avis FAVR) est passé EXAMINE → EN_VERIFICATION.
+        // ⚠️ Réordonnancement FAVR (2026-09-07) — le dossier 1 (avis FAVR) passe EXAMINE →
+        // EN_ATTENTE_DECISION_PRMP : les réserves partent d'abord à la PRMP, la vérification vient après.
         mvc.perform(get("/api/dossiers/1").header("Authorization", tokenPresident))
-                .andExpect(jsonPath("$.statut").value("EN_VERIFICATION"));
+                .andExpect(jsonPath("$.statut").value("EN_ATTENTE_DECISION_PRMP"));
     }
 
     @Test
@@ -93,13 +94,24 @@ class PvWorkflowIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("Branchement signature — avis FAVORABLE AVEC RÉSERVE (FAVR) → dossier EN_VERIFICATION + vérificateur PV_A_VERIFIER + PRMP PV_SIGNE")
-    void signature_avisReserve_enVerification() throws Exception {
+    @DisplayName("⚠️ Réordonnancement FAVR (2026-09-07) — la co-signature envoie le PV ET les réserves à la PRMP "
+            + "(EN_ATTENTE_DECISION_PRMP) ; le vérificateur n'est PAS notifié, il ne l'est qu'après rectification")
+    void signature_avisReserve_partDirectementALaPrmp() throws Exception {
         signerPvAvecAvis(97, "FAVR");
         mvc.perform(get("/api/dossiers/1").header("Authorization", tokenPresident))
-                .andExpect(jsonPath("$.statut").value("EN_VERIFICATION"));
+                .andExpect(jsonPath("$.statut").value("EN_ATTENTE_DECISION_PRMP"));
+        // La PRMP reçoit le PV définitif ET les réserves à rectifier ; le vérificateur, rien.
         mvc.perform(get("/api/notifications").header("Authorization", tokenAdmin))
                 .andExpect(jsonPath("$[?(@.typeNotif=='PV_SIGNE')]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.typeNotif=='OBSERVATION_VERIFICATION')]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.typeNotif=='PV_A_VERIFIER')]", hasSize(0)));
+
+        // Après la rectification, et alors seulement, le vérificateur est prévenu.
+        mvc.perform(post("/api/dossiers/1/resoumettre").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"motifRectification\":\"corrige\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statut").value("EN_VERIFICATION"));
+        mvc.perform(get("/api/notifications").header("Authorization", tokenAdmin))
                 .andExpect(jsonPath("$[?(@.typeNotif=='PV_A_VERIFIER')].destinataireIm", hasItem("CTRVER")));
     }
 

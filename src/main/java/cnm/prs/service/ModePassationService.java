@@ -58,7 +58,8 @@ public class ModePassationService {
         existing.setDelaiMinJours(dto.getDelaiMinJours());
         existing.setBaseLegale(dto.getBaseLegale());
         existing.setIdTypeDmc(dto.getIdTypeDmc());   // mapping mode → type de DMC
-        existing.setDeclencheAgpm(dto.getDeclencheAgpm());   // marqueur « appel d'offres ouvert » → AGPM
+        existing.setDeclencheAgpm(dto.getDeclencheAgpm());   // marqueur « appel d'offres » → AGPM (toutes variantes)
+        existing.setAgpmSiSeuil(dto.getAgpmSiSeuil());       // ⚠️ 2026-09-07 — AGPM conditionnel au montant (AMI)
         existing.setIdModeModeleCapm(dto.getIdModeModeleCapm());   // modèle CAPM partagé (⚠️ règle ajoutée)
         existing.setCategorie(dto.getCategorie());   // catégorie NORMAL / DEROGATOIRE (⚠️ règle ajoutée)
         return ModePassationMapper.toDto(repository.save(existing));

@@ -56,6 +56,52 @@ public class ModePassation {
      * déterministe et data-driven (l'admin coche le(s) mode(s) concerné(s)), jamais par mot-clé de libellé.
      * {@code null} = false.
      */
+    /**
+     * ⚠️ Règle précisée (2026-09-07, pilote) — l'AGPM est requis pour les procédures d'<strong>appel
+     * d'offres</strong>, <em>toutes variantes</em> : ouvert, restreint, avec préqualification, en deux
+     * étapes… et non le seul appel d'offres ouvert. Le drapeau {@code DECLENCHE_AGPM} reste la source de
+     * vérité (référentiel administrable) ; cette méthode dit ce qu'il <strong>devrait</strong> valoir pour
+     * un libellé donné, et sert à le poser sur un mode créé à la volée par un import (le PDF n'apporte
+     * qu'un libellé). Les modes hors appel d'offres — consultation des prix, gré à gré, achat direct —
+     * restent hors AGPM, de même que l'« appel à manifestation d'intérêt », qui n'est pas un appel d'offres.
+     */
+    public static boolean libelleDeclencheAgpm(String libelle) {
+        String normalise = normaliserLibelle(libelle);
+        return normalise.contains("appel") && (normalise.contains("offre") || normalise.contains("aoo")
+                || normalise.contains("aor"));
+    }
+
+    /**
+     * ⚠️ Arbitrage pilote (2026-09-07, suite) — l'<strong>appel à manifestation d'intérêt</strong> déclenche
+     * l'AGPM lui aussi, mais <strong>sous condition de montant</strong> : il sort de l'exclusion posée par la
+     * V21, sans pour autant devenir un déclencheur inconditionnel. Le drapeau que cette méthode dérive
+     * ({@code AGPM_SI_SEUIL}) marque cette famille ; le <strong>seuil</strong>, lui, est un paramètre
+     * administrable ({@code ParametreService.AGPM_SEUIL_MONTANT}) — la valeur vit dans l'administration,
+     * jamais dans le code.
+     *
+     * <p>Sert, comme {@link #libelleDeclencheAgpm}, à poser le drapeau sur un mode créé à la volée par un
+     * import PDF, qui n'apporte qu'un libellé.</p>
+     */
+    public static boolean libelleAgpmSiSeuil(String libelle) {
+        String normalise = normaliserLibelle(libelle);
+        return normalise.contains("manifestation") && normalise.contains("interet");
+    }
+
+    /** Minuscules sans accents — les libellés viennent aussi bien de la saisie que d'un PDF. */
+    private static String normaliserLibelle(String libelle) {
+        return libelle == null ? "" : java.text.Normalizer.normalize(libelle, java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{M}+", "").toLowerCase(java.util.Locale.FRENCH);
+    }
+
+    /**
+     * ⚠️ Arbitrage pilote (2026-09-07, suite — V22) — déclenchement de l'AGPM <strong>conditionnel au
+     * montant</strong> : un marché passé selon ce mode ne rend l'AGPM requis que si son montant estimé
+     * atteint le seuil administrable. Porté par l'<strong>appel à manifestation d'intérêt</strong>.
+     * Indépendant de {@link #declencheAgpm}, qui reste le déclenchement inconditionnel (appels d'offres).
+     */
+    @Column(name = "AGPM_SI_SEUIL")
+    private Boolean agpmSiSeuil;
+
     @Column(name = "DECLENCHE_AGPM")
     private Boolean declencheAgpm;
 

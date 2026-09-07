@@ -91,6 +91,45 @@ public class ReferenceService {
         return String.format("%05d/%s/PPM/%d", valeur, code, annee);
     }
 
+    /**
+     * ⚠️ Règle ajoutée (2026-09-07, arbitrage pilote « la référence reflète le sous-type ») — remplace le
+     * <strong>segment de type</strong> d'une référence de dossier de planification par le sous-type courant,
+     * <strong>sans consommer de numéro</strong> : le compteur et l'acronyme ne bougent pas, seul le libellé
+     * du segment change. C'est ce qui permet à la référence de suivre la bascule {@code PPM ↔ PPM-AGPM}
+     * quand un marché en appel d'offres entre dans le plan (ou en sort).
+     *
+     * <p>Deux formats coexistent et sont tous deux couverts, car le segment de type est repéré par sa
+     * <em>valeur</em> et non par sa position : {@code 00002/MTP/PPM/2026} (référence PPM, dérivée de
+     * l'entité) et {@code 00013/PPM/CRM-ANT/2026} (référence de réception). Le format du PV,
+     * {@code 00002/MTP/PPM/PV/2026}, l'est aussi — le segment {@code PV} n'est jamais confondu.</p>
+     *
+     * <p>Le <strong>dernier</strong> segment correspondant est remplacé : une entité dont l'acronyme
+     * vaudrait « PPM » ne serait pas renommée par erreur.</p>
+     *
+     * @return la référence recomposée ; l'entrée inchangée si elle est nulle ou ne porte aucun segment de
+     *         sous-type DDP (référence d'une autre famille, ou format non structuré)
+     */
+    public static String remplacerSegmentSousType(String reference, String nouveauSousType) {
+        if (reference == null || nouveauSousType == null || nouveauSousType.isBlank()) {
+            return reference;
+        }
+        String[] segments = reference.split("/");
+        int cible = -1;
+        for (int i = 0; i < segments.length; i++) {
+            if (SOUS_TYPES_DDP.contains(segments[i])) {
+                cible = i;
+            }
+        }
+        if (cible < 0 || segments[cible].equals(nouveauSousType)) {
+            return reference;
+        }
+        segments[cible] = nouveauSousType;
+        return String.join("/", segments);
+    }
+
+    /** Codes de sous-type d'un dossier de planification, tels qu'ils apparaissent dans une référence. */
+    private static final Set<String> SOUS_TYPES_DDP = Set.of("PPM", "PPM-AGPM");
+
     /** Acronyme = initiales (sans accent) des mots significatifs du libellé. « Direction Générale du Budget » → « DGB ». */
     private String acronymeEntite(String libelle) {
         if (libelle == null || libelle.isBlank()) {

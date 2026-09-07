@@ -302,6 +302,19 @@ actif** : c'est un coupe-circuit, pas une seconde activation (chaque actualité 
 |---|---|---|---|---|---|
 | GET | /api/parametres/actualites-actives | — | `{ "actif": boolean }` | 200 | Authentifié |
 | PUT | /api/parametres/actualites-actives | `{ "actif": boolean }` | `{ "actif": boolean }` | 200, 400, 403 | ADMINISTRATEUR |
+| GET | /api/parametres/agpm-seuil-montant | — | `{ "seuil": number }` | 200 | Authentifié |
+| PUT | /api/parametres/agpm-seuil-montant | `{ "seuil": number }` | `{ "seuil": number }` | 200, 400, 403 | ADMINISTRATEUR |
+
+> ⚠️ **`AGPM_SEUIL_MONTANT` (arbitrage pilote 2026-09-07, « suite »).** Seuil de montant au-delà duquel un
+> marché passé selon un mode à déclenchement **conditionnel** (`agpmSiSeuil` — l'**appel à manifestation
+> d'intérêt**) rend l'**AGPM requis**, et fait donc basculer le plan en `PPM-AGPM` (sous-type, référence et
+> numéro de PV suivent, cf. § Saisies). **Administrable sans redéploiement** : la valeur vit dans
+> l'administration, aucune n'est écrite dans le code. Comparaison **par marché** (jamais le total du
+> dossier), sur le montant **en vigueur** (`nouvMontEstim` s'il est posé, `montEstim` sinon), borne
+> **incluse** (`≥`). **Ligne absente ou illisible = `0`**, c'est-à-dire « tout marché du mode concerné
+> déclenche » : le défaut penche du côté de la publicité — manquer un AGPM dû est un manquement
+> réglementaire, en produire un de trop ne l'est pas. Un montant **absent** ne franchit aucun seuil.
+> Valeur négative → **400**.
 
 ---
 
@@ -1355,7 +1368,8 @@ Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `
 |---|---|---|---|
 | idDossier | number | Oui (PK, au POST) | clé primaire |
 | idTypeDossier | string | Non | max 10 — **famille** (`DDP` / `DMC` / `DDM`, ⚠️ codes renommés 2026-07-17) ; déduite du sous-type |
-| idSousType | string | Non | max 20 — **sous-type** (référentiel `/api/sous-type-dossiers`) ; famille **DDP : dérivé serveur** (`PPM` / `PPM-AGPM` selon les marchés, valeur envoyée ignorée) ; **DMC/DDM : choisi à la saisie** |
+| idSousType | string | Non | max 20 — **sous-type** (référentiel `/api/sous-type-dossiers`) ; famille **DDP : dérivé serveur** (`PPM-AGPM` dès qu'un marché est passé par **appel d'offres — toutes variantes**, ⚠️ précisé 2026-09-07 ; `PPM` sinon ; valeur envoyée ignorée) ; **DMC/DDM : choisi à la saisie** |
+| refeDossier | string | — (réponse) | ⚠️ **2026-09-07** — le **segment de type** de la référence porte le **sous-type dérivé** : `00002/MTP/PPM-AGPM/2026`. Il est recomposé **sans consommer de numéro** à chaque bascule du sous-type, sur le dossier, la référence du PPM et les **PV** ensemble (le front relie le PV au dossier par `refePv.replace('/PV/','/') == refeDossier`). **Gelé** dès qu'un PV est signé : la référence est imprimée sur un document officiel |
 | idDossierParent | number | Non | |
 | refeDossier | string | Non | max 100 — **référence officielle, générée à la `…/réception`** ; **`null` avant** (BROUILLON/SOUMIS) ; laisser vide à la création |
 | dateRef | string (date) | Non | renseignée à la soumission si vide |
@@ -1766,7 +1780,14 @@ autorise un dépôt « après lettre » (voir liste blanche ci-dessous), la piè
 > `declencheAgpm` (`tr_mode_passation.DECLENCHE_AGPM`) et de piloter la grille effective d'examen, le
 > projet d'AGPM et les modèles de PV. Le PPM lu expose toujours le dérivé **`agpmRequis`** (`true` ssi
 > ≥1 marché déclencheur ; lecture seule) — ⚠️ **son nom a survécu à sa règle** : il ne signifie plus
-> « une pièce AGPM est exigée » mais « ce plan comporte un appel d'offres ouvert ». Conservé sous ce nom
+> « une pièce AGPM est exigée » mais « ce plan comporte un marché déclencheur » (⚠️ **précisé 2026-09-07** :
+> **tout appel d'offres**, toutes variantes — ouvert, restreint, avec préqualification, en deux étapes —,
+> et non le seul ouvert ; migration `V21` sur `DECLENCHE_AGPM`, drapeau dérivé du libellé pour un mode créé
+> à la volée par un import. ⚠️ **Complété le même jour (V22)** : l'**appel à manifestation d'intérêt**
+> déclenche lui aussi, mais **sous condition de montant** — drapeau `agpmSiSeuil` sur le mode, seuil
+> administrable `AGPM_SEUIL_MONTANT`, comparaison **par marché**). La règle a une **source unique**
+> côté serveur (`AgpmService`), partagée par le sous-type, la grille d'examen et ce drapeau : les trois
+> ne peuvent pas se contredire. Conservé sous ce nom
 > pour ne pas rompre le contrat que le front lit déjà.
 
 ---
@@ -2644,7 +2665,7 @@ les jalons naissent des flux internes (alertes J-7 / J-1), aucun profil métier 
 > | Document | Vide quand… | Effet |
 > |---|---|---|
 > | **fiche de présentation** | parmi les marchés **non supprimés**, aucun en mode **dérogatoire**, aucun à **délai aménagé**, aucun **contrat-cadre** (les trois listes vides) | les points `FICHE` ne sont plus exigés |
-> | **projet d'AGPM** | aucun marché en **appel d'offres ouvert** (`ModePassation.declencheAgpm`) | les points `AGPM` ne sont plus exigés |
+> | **projet d'AGPM** | aucun marché **déclencheur** : ni **appel d'offres** (toutes variantes, `declencheAgpm`), ni **appel à manifestation d'intérêt** atteignant le seuil (`agpmSiSeuil` + `AGPM_SEUIL_MONTANT`) — ⚠️ précisé 2026-09-07, source unique `AgpmService` | les points `AGPM` ne sont plus exigés |
 >
 > **Les deux documents sont jugés séparément** — c'est bien « par onglet » que la règle est formulée :
 > un `PPM-AGPM` dont la fiche est vide voit ses points AGPM exigés et ses points de fiche sautés.
@@ -3739,6 +3760,8 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 | baseLegale | string | Non | max 200 |
 | idTypeDmc | number | Non | **mapping vers le type de DMC** (`t_type_dmc`) dérivé pour les marchés de ce mode |
 | categorie | string enum | Non | `NORMAL` \| `DEROGATOIRE` \| `null` (= non classé) ; valeur hors enum → **400** `{ "champ": "categorie", ... }` |
+| declencheAgpm | boolean | Non | déclenchement **inconditionnel** de l'AGPM — les **appels d'offres**, toutes variantes (⚠️ V21, 2026-09-07) |
+| agpmSiSeuil | boolean | Non | ⚠️ **V22 (2026-09-07)** — déclenchement **conditionnel au montant** : un marché de ce mode ne rend l'AGPM requis que si son montant estimé atteint `AGPM_SEUIL_MONTANT` (cf. § Paramètres système). Porté par l'**appel à manifestation d'intérêt** ; indépendant de `declencheAgpm` |
 
 **Endpoints**
 
@@ -3948,7 +3971,7 @@ immuable). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **40
 | `PV_A_RECTIFIER` | navette retournée (commentaire) | Membre auteur | PV |
 | `PV_ACCEPTE` | projet de PV accepté | Membre auteur | PV |
 | `PV_SIGNE` | PV signé | PRMP | DOSSIER |
-| `PV_A_VERIFIER` | PV signé `FAVR` à vérifier | Vérificateur de la localité | DOSSIER |
+| `PV_A_VERIFIER` | ⚠️ **2026-09-07** — dossier FAVR **rectifié par la PRMP**, entrant en vérification (émis à la resoumission, plus à la signature) | Vérificateur **rattaché**, sinon ceux de la localité | DOSSIER |
 | `PV_POUR_INFO` | PV signé auto-clôturé (FAV/DEF/NSP) | Vérificateur de la localité | DOSSIER |
 | `OBSERVATION_VERIFICATION` | observations de vérification non levées à traiter | PRMP du dossier | DOSSIER |
 | `RECTIFICATION_PRMP` | dossier rectifié par la PRMP et resoumis | Vérificateur du dossier | DOSSIER |
@@ -5217,10 +5240,11 @@ Ouvert Restreint ».
 > dossiers FAVR signés avant la règle). **Aucun acteur ne peut élargir ce périmètre** à aucun stade :
 > - `GET /api/observations-pv?dossier=` (vérificateur localité / PRMP propriétaire / tout-voyant) :
 >   observations + **statut courant** (`EMISE` / `LEVEE` / `MAINTENUE`) + **historique par itération**
->   (`t_suivi_observation` : décision, précision, auteur, horodatage) + **`leveePossible`** (⚠️ décision
->   produit 2026-08-15 : `true` dès qu'une **resoumission** de la PRMP est intervenue depuis la
->   **signature du PV** — même valeur pour toutes les observations du dossier ; le front grise le
->   bouton « Levée » en miroir, sans heuristique sur l'historique).
+>   (`t_suivi_observation` : décision, précision, auteur, horodatage) + **`leveePossible`** (⚠️ **règle
+>   pilote du 2026-09-07 : vaut désormais toujours `true`**. La rectification de la PRMP précède la
+>   vérification — le vérificateur ne voit que des dossiers **déjà rectifiés** —, donc il dispose des deux
+>   décisions dès son premier passage. Remplace la décision produit du 2026-08-15, qui faisait du premier
+>   passage un « rappel » à `MAINTENUE` forcé).
 > - `POST /api/observations-pv/passage` (**VERIFICATEUR**, dossier `EN_VERIFICATION`) :
 >   `{ idDossier, decisions:[{ idObservationPv, decision: LEVEE|MAINTENUE, precision? }] }` — **chaque
 >   observation restante doit être statuée** (400 sinon) ; **hors périmètre → 409** (aucune création) ;
@@ -5270,8 +5294,20 @@ tiers inventé ; l'envoi réel sera branché plus tard.
 
 > ⚠️ **Branchement post-signature MODIFIÉ (2026-08-02).** À la signature du PV, **TOUS les avis** passent par le
 > vérificateur : dossier → `EN_VERIFICATION` (plus de clôture directe pour FAV/DEF/NSP). Notifications : PRMP
-> (`PV_SIGNE`), vérificateurs (`PV_A_VERIFIER` si FAVR, sinon `DECISION_A_TRANSMETTRE`). La copie assistant
+> (`PV_SIGNE`), vérificateurs (`DECISION_A_TRANSMETTRE`). La copie assistant
 > (`PV_DEFINITIF_COPIE`) est remplacée par `PV_A_ARCHIVER` (à la transmission SIGMP).
+>
+> ⚠️ **FAVR — RÉORDONNANCÉ (règle pilote du 2026-09-07) : la rectification de la PRMP précède la vérification.**
+> Pour un avis **favorable avec réserves**, la co-signature n'envoie plus le dossier au vérificateur : le **PV
+> définitif ET les observations** partent à la **PRMP**, et le dossier passe en **`EN_ATTENTE_DECISION_PRMP`**
+> (compteur net CNM **suspendu** dès cet instant). Notifications : PRMP → `PV_SIGNE` **et**
+> `OBSERVATION_VERIFICATION` (corps portant les réserves à rectifier) ; **vérificateur → aucune**, et le dossier
+> n'apparaît **ni** dans `GET /api/dossiers/a-verifier` **ni** dans `/en-attente-prmp` tant qu'il n'a jamais
+> statué dessus. C'est la **resoumission** (`POST /api/dossiers/{id}/resoumettre`) qui ouvre la vérification
+> (`EN_VERIFICATION`) et qui notifie alors le vérificateur : **`PV_A_VERIFIER`** à son premier contact (ciblé
+> par **rattachement**), `RECTIFICATION_PRMP` ensuite. Au premier passage, `leveePossible` vaut **`true`** :
+> le dossier est déjà rectifié, les deux décisions sont ouvertes ; `MAINTENUE` renvoie à la PRMP (**boucle
+> conservée**). Le premier passage « rappel » (tout `MAINTENUE` forcé) **n'existe plus**.
 
 > ⚠️ **Archivage (2026-08-02).** `POST /api/pv-examens/{id}/archiver` (**ASSISTANT_CONTROLEUR**, localité) :
 > PV `SIGNE` + dossier `DECISION_TRANSMISE_SIGMP` → pose `DATE_ARCHIVAGE`/`IM_ARCHIVEUR`, **clôt** le dossier

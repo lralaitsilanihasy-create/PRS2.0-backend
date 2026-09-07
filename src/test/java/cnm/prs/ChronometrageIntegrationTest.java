@@ -269,9 +269,11 @@ class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
         int idPv = 900;
         signerPvAvecAvis(idPv, "FAVR");
         String tokenVer = bearer("CTRVER", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER", "ANT");
-        // Observation MAINTENUE → EN_ATTENTE_DECISION_PRMP : la fenêtre s'ouvre.
+        // ⚠️ Réordonnancement FAVR (2026-09-07) — une PREMIÈRE fenêtre s'ouvre dès la co-signature (les
+        // réserves partent à la PRMP) et se ferme à sa resoumission ; l'observation MAINTENUE en ouvre
+        // une SECONDE. Deux attentes PRMP successives, donc deux fenêtres — et c'est fidèle.
         passageObservationDossier1(tokenVer, "MAINTENUE", "a rectifier");
-        assertEquals(1, suspensionRepository.findByIdDossierOrderByDebutAsc(1).size());
+        assertEquals(2, suspensionRepository.findByIdDossierOrderByDebutAsc(1).size());
         assertTrue(suspensionRepository.findFirstByIdDossierAndFinIsNullOrderByDebutDesc(1).isPresent(),
                 "la fenêtre reste ouverte tant que la PRMP n'a pas rendu la main");
 

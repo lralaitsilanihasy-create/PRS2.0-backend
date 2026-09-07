@@ -45,15 +45,25 @@ public interface MarcheRepository extends JpaRepository<Marche, Integer> {
      * ({@code tr_mode_passation.DECLENCHE_AGPM = true}) → dérivé {@code agpmRequis} exposé sur le PPM.
      * Les marchés sans mode ou dont le mode ne déclenche pas l'AGPM sont exclus.
      */
-    @Query("select (count(m) > 0) from Marche m where m.idPpm = :idPpm and m.mode.declencheAgpm = true")
-    boolean existsMarcheDeclencheurAgpmByPpm(@Param("idPpm") Integer idPpm);
+    @Query("""
+            select (count(m) > 0) from Marche m where m.idPpm = :idPpm and (
+                m.mode.declencheAgpm = true
+                or (m.mode.agpmSiSeuil = true and coalesce(m.nouvMontEstim, m.montEstim) >= :seuil))
+            """)
+    boolean existsMarcheDeclencheurAgpmByPpm(@Param("idPpm") Integer idPpm,
+            @Param("seuil") java.math.BigDecimal seuil);
 
     /**
      * Vrai si le <strong>dossier</strong> comporte ≥1 marché « appel d'offres ouvert » — base du contrôle
      * conditionnel de la pièce AGPM à la soumission (couvre le cas multi-PPM d'un même dossier).
      */
-    @Query("select (count(m) > 0) from Marche m where m.idDossier = :idDossier and m.mode.declencheAgpm = true")
-    boolean existsMarcheDeclencheurAgpmByDossier(@Param("idDossier") Integer idDossier);
+    @Query("""
+            select (count(m) > 0) from Marche m where m.idDossier = :idDossier and (
+                m.mode.declencheAgpm = true
+                or (m.mode.agpmSiSeuil = true and coalesce(m.nouvMontEstim, m.montEstim) >= :seuil))
+            """)
+    boolean existsMarcheDeclencheurAgpmByDossier(@Param("idDossier") Integer idDossier,
+            @Param("seuil") java.math.BigDecimal seuil);
 
     /** Marchés d'une PRMP (§3.1) : ceux dont le PPM lui appartient — son périmètre propre. */
     @Query("select m from Marche m where exists "

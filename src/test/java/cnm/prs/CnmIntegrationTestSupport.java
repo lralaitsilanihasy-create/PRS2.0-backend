@@ -142,6 +142,7 @@ abstract class CnmIntegrationTestSupport extends AbstractIntegrationTest {
     @Autowired protected cnm.prs.repository.PublicationRepository publicationRepository;
     @Autowired protected cnm.prs.repository.SousTypeDossierRepository sousTypeDossierRepository;
     @Autowired protected cnm.prs.repository.PvExamenRepository pvExamenRepository;
+    @Autowired protected cnm.prs.repository.VerificationRepository verificationRepository;
     @Autowired protected cnm.prs.repository.PvNavetteRepository pvNavetteRepository;
     @Autowired protected cnm.prs.repository.ObservationControleRepository observationControleRepository;
     @Autowired protected cnm.prs.repository.CopieDossierRepository copieDossierRepository;
@@ -315,6 +316,11 @@ abstract class CnmIntegrationTestSupport extends AbstractIntegrationTest {
      * dossier 1 jusqu'à CLOTURE).
      */
     protected void passageObservationDossier1(String tokenVer, String decision, String precision) throws Exception {
+        // ⚠️ Réordonnancement FAVR (règle pilote du 2026-09-07) — après la co-signature, le dossier part
+        // D'ABORD chez la PRMP pour rectification : le vérificateur ne le voit qu'une fois resoumis. Le
+        // helper franchit donc cette étape quand elle est en travers, pour que les tests qui portent sur
+        // le PASSAGE n'aient pas à la réécrire chacun.
+        rectifierEtResoumettreDossier1SiEnAttente();
         String obs = mvc.perform(get("/api/observations-pv").header("Authorization", tokenVer).param("dossier", "1"))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         int idObs = com.jayway.jsonpath.JsonPath.read(obs, "$[0].idObservationPv");
@@ -326,18 +332,37 @@ abstract class CnmIntegrationTestSupport extends AbstractIntegrationTest {
     }
 
     /**
-     * Mène le dossier 1 (localité ANT) jusqu'à CLOTURE par le circuit FAVR complet : PV signé, rappel
-     * MAINTENUE, resoumission de la PRMP, levée, transmission SIGMP puis archivage par l'Assistant.
-     * Laisse derrière lui un historique d'échanges et une transmission SIGMP à cloisonner.
+     * ⚠️ Réordonnancement FAVR (2026-09-07) — la PRMP rectifie et resoumet le dossier 1 <strong>si</strong>
+     * il attend sa décision. Sans effet sinon : les tests qui enchaînent plusieurs passages peuvent
+     * l'appeler sans se soucier de l'endroit du circuit où ils se trouvent.
+     */
+    protected void rectifierEtResoumettreDossier1SiEnAttente() throws Exception {
+        String statut = dossierRepository.findById(1).map(Dossier::getStatut).orElse(null);
+        if (!"EN_ATTENTE_DECISION_PRMP".equals(statut)) {
+            return;
+        }
+        mvc.perform(post("/api/dossiers/1/resoumettre").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"motifRectification\":\"corrige\"}"))
+                .andExpect(status().isOk());
+    }
+
+    /**
+     * Mène le dossier 1 (localité ANT) jusqu'à CLOTURE par le circuit FAVR complet : PV signé (les
+     * observations partent à la PRMP), rectification et resoumission de la PRMP, levée par le
+     * vérificateur, transmission SIGMP puis archivage par l'Assistant. Laisse derrière lui un historique
+     * d'échanges et une transmission SIGMP à cloisonner.
+     *
+     * <p>⚠️ Le « rappel » que produisait le premier passage du vérificateur a disparu avec le
+     * réordonnancement du 2026-09-07 : la rectification précède désormais la vérification.</p>
      */
     protected void cloturerDossier1(int idPv, String tokenVer) throws Exception {
         String tokenAss = bearer("CTRASS", ProfilUtilisateur.ASSISTANT_CONTROLEUR, TypeActeur.CONTROLEUR,
                 "CTRASS", "ANT");
         signerPvAvecAvis(idPv, "FAVR");
+        // La BOUCLE complète : le vérificateur maintient une première fois (le dossier retourne à la
+        // PRMP), puis lève au tour suivant. Chaque passage est précédé de la rectification, désormais
+        // obligatoire pour entrer en vérification (réordonnancement du 2026-09-07).
         passageObservationDossier1(tokenVer, "MAINTENUE", "a rectifier");
-        mvc.perform(post("/api/dossiers/1/resoumettre").header("Authorization", tokenPrmp)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"motifRectification\":\"corrige\"}"))
-                .andExpect(status().isOk());
         passageObservationDossier1(tokenVer, "LEVEE", null);
         mvc.perform(post("/api/sigmp-transmissions").header("Authorization", tokenVer)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"idDossier\":1}"))

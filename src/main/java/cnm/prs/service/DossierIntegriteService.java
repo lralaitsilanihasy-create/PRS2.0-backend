@@ -6,6 +6,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import cnm.prs.entity.Dossier;
 import cnm.prs.entity.EntiteContract;
+import cnm.prs.entity.Ppm;
+import cnm.prs.entity.PvExamen;
 import cnm.prs.enums.ProfilUtilisateur;
 import cnm.prs.enums.StatutDossier;
 import cnm.prs.exception.BadRequestException;
@@ -16,6 +18,7 @@ import cnm.prs.repository.EntiteContractRepository;
 import cnm.prs.repository.MarcheRepository;
 import cnm.prs.repository.PpmRepository;
 import cnm.prs.repository.PrmpEntiteRepository;
+import cnm.prs.repository.PvExamenRepository;
 import cnm.prs.security.CurrentUser;
 
 /**
@@ -54,10 +57,17 @@ public class DossierIntegriteService {
     private final EntiteContractRepository entiteContractRepository;
     private final PrmpEntiteRepository prmpEntiteRepository;
     private final MandatService mandatService;
+    /** ⚠️ 2026-09-07 — la référence suit le sous-type tant qu'aucun PV n'est signé (cf. propagation). */
+    private final PvExamenRepository pvExamenRepository;
+    /** ⚠️ 2026-09-07 (suite) — « ce plan requiert-il un AGPM ? », source unique (seuil AMI administrable). */
+    private final AgpmService agpmService;
 
     public DossierIntegriteService(DossierRepository dossierRepository, PpmRepository ppmRepository,
             MarcheRepository marcheRepository, EntiteContractRepository entiteContractRepository,
-            PrmpEntiteRepository prmpEntiteRepository, MandatService mandatService) {
+            PrmpEntiteRepository prmpEntiteRepository, MandatService mandatService,
+            PvExamenRepository pvExamenRepository, AgpmService agpmService) {
+        this.agpmService = agpmService;
+        this.pvExamenRepository = pvExamenRepository;
         this.dossierRepository = dossierRepository;
         this.ppmRepository = ppmRepository;
         this.marcheRepository = marcheRepository;
@@ -237,11 +247,54 @@ public class DossierIntegriteService {
         if (dossier == null || !FAMILLE_DDP.equals(dossier.getIdTypeDossier())) {
             return;
         }
-        String sousType = marcheRepository.existsMarcheDeclencheurAgpmByDossier(idDossier)
-                ? SOUS_TYPE_PPM_AGPM : SOUS_TYPE_PPM;
+        String sousType = agpmService.requisPourDossier(idDossier) ? SOUS_TYPE_PPM_AGPM : SOUS_TYPE_PPM;
         if (!sousType.equals(dossier.getIdSousType())) {
             dossier.setIdSousType(sousType);
             dossierRepository.save(dossier);
+            propagerSousTypeAuxReferences(dossier, sousType);
+        }
+    }
+
+    /**
+     * ⚠️ Arbitrage pilote (2026-09-07) — <strong>la référence porte le sous-type dérivé</strong> :
+     * {@code …/PPM-AGPM/…} dès qu'un marché est passé par appel d'offres, {@code …/PPM/…} sinon. Le segment
+     * est recomposé <strong>sans consommer de numéro</strong> (le compteur et l'acronyme ne bougent pas) sur
+     * les trois porteurs de la référence, <strong>ensemble</strong> : le dossier, la référence initiale du
+     * PPM (celle que restaure un retrait accepté) et les PV.
+     *
+     * <p><strong>Pourquoi ensemble.</strong> Le front relie un PV à son dossier en reconstruisant la
+     * référence ({@code refePv.replace("/PV/", "/") == refeDossier}) : désaligner les deux casserait la
+     * jointure. Ils bougent donc d'un seul geste, ou pas du tout.</p>
+     *
+     * <p><strong>Où s'arrête la correction.</strong> Dès qu'un PV est <strong>signé</strong>, la référence
+     * est <em>gelée</em> : elle est imprimée sur un document officiel, citée dans les lettres et les
+     * courriers — la renommer après coup réécrirait l'histoire. Le sous-type, lui, continue de suivre la
+     * réalité du plan ; c'est un écart assumé, et le seul cas où il survient est la rectification d'un
+     * dossier déjà passé en commission.</p>
+     */
+    private void propagerSousTypeAuxReferences(Dossier dossier, String sousType) {
+        Integer idDossier = dossier.getIdDossier();
+        if (!pvExamenRepository.findSignesParDossier(idDossier).isEmpty()) {
+            return;   // référence officielle déjà imprimée : elle ne se renomme plus
+        }
+        String refeDossier = ReferenceService.remplacerSegmentSousType(dossier.getRefeDossier(), sousType);
+        if (refeDossier != null && !refeDossier.equals(dossier.getRefeDossier())) {
+            dossier.setRefeDossier(refeDossier);
+            dossierRepository.save(dossier);
+        }
+        for (Ppm ppm : ppmRepository.findByIdDossier(idDossier)) {
+            String reference = ReferenceService.remplacerSegmentSousType(ppm.getReference(), sousType);
+            if (reference != null && !reference.equals(ppm.getReference())) {
+                ppm.setReference(reference);
+                ppmRepository.save(ppm);
+            }
+        }
+        for (PvExamen pv : pvExamenRepository.findTousParDossier(idDossier)) {
+            String refePv = ReferenceService.remplacerSegmentSousType(pv.getRefePv(), sousType);
+            if (refePv != null && !refePv.equals(pv.getRefePv())) {
+                pv.setRefePv(refePv);
+                pvExamenRepository.save(pv);
+            }
         }
     }
 

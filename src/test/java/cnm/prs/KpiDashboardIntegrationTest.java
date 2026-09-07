@@ -201,6 +201,19 @@ class KpiDashboardIntegrationTest extends CnmIntegrationTestSupport {
         String tokenVer = bearer("CTRVER", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER", "ANT");
         Dossier d = dossier(191, "EN_ATTENTE_DECISION_PRMP"); dossierRepository.save(d);
         receptionRepository.save(reception(191, 191, "CTRCC1", true)); // réception ANT
+        // ⚠️ Réordonnancement FAVR (2026-09-07) — le vérificateur ne voit un dossier en attente de PRMP
+        // que s'il l'a DÉJÀ vérifié une fois : avant son premier passage, le dossier ne le concerne pas
+        // (les réserves sont parties directement à la PRMP). Le décor porte donc ce premier passage.
+        dispatchRepository.save(dispatch(191, 191, "CTRCC1", "CTRMEM"));
+        examenRepository.save(examen(191, 191, "CTRMEM"));
+        seedPvSigne(191, 191);
+        cnm.prs.entity.Verification passage = new cnm.prs.entity.Verification();
+        passage.setIdReception(191);
+        passage.setIdPv(191);
+        passage.setImCtrlVerif("CTRVER");
+        passage.setDateVerif(java.time.LocalDate.now());
+        passage.setObsLevees(false);
+        verificationRepository.save(passage);
 
         mvc.perform(get("/api/kpis/mes-compteurs-verificateur").header("Authorization", tokenVer))
                 .andExpect(status().isOk())

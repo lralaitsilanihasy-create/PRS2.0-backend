@@ -38,6 +38,15 @@ public class ModePassationDto {
      */
     private Boolean declencheAgpm;
 
+    /**
+     * ⚠️ Arbitrage pilote (2026-09-07, suite) — déclenchement de l'AGPM <strong>conditionnel au montant</strong>
+     * : un marché passé selon ce mode ne rend l'AGPM requis que si son montant estimé atteint le seuil
+     * administrable ({@code GET/PUT /api/parametres/agpm-seuil-montant}). Porté par l'<strong>appel à
+     * manifestation d'intérêt</strong>, et indépendant de {@link #declencheAgpm} (inconditionnel, appels
+     * d'offres). Administrable comme lui.
+     */
+    private Boolean agpmSiSeuil;
+
     /** Mode dont ce mode réutilise le modèle CAPM (null = aucun partage) — administrable. */
     private Integer idModeModeleCapm;
 

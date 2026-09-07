@@ -53,6 +53,8 @@ public class ExamenService {
     private final ExamenDetailRepository examenDetailRepository;
     /** ⚠️ Audit 2026-08-27 (lot B) — verrou d'état partagé avec les détails et les pièces d'examen. */
     private final ExamenGarde examenGarde;
+    /** ⚠️ 2026-09-07 — « ce plan requiert-il un AGPM ? », même source que le sous-type (seuil AMI compris). */
+    private final AgpmService agpmService;
     /** ⚠️ 2026-09-04 — dérivation de la fiche : source unique, partagée avec la saisie. */
     private final FicheJustificationsService ficheJustifications;
 
@@ -60,7 +62,9 @@ public class ExamenService {
             DossierRepository dossierRepository, PvExamenService pvExamenService,
             ControleurDirectory controleurDirectory, PointsCtrlRepository pointsCtrlRepository,
             MarcheRepository marcheRepository, ExamenDetailRepository examenDetailRepository,
-            ExamenGarde examenGarde, FicheJustificationsService ficheJustifications) {
+            ExamenGarde examenGarde, FicheJustificationsService ficheJustifications,
+            AgpmService agpmService) {
+        this.agpmService = agpmService;
         this.examenGarde = examenGarde;
         this.ficheJustifications = ficheJustifications;
         this.repository = repository;
@@ -160,7 +164,7 @@ public class ExamenService {
         // DÉJÀ le sous-type PPM-AGPM : les deux ne peuvent donc pas se contredire, puisque c'est ce
         // sous-type qui fait entrer les points AGPM dans la grille.
         boolean ficheVide = ficheJustifications.ficheVide(idDossier);
-        boolean agpmVide = !marcheRepository.existsMarcheDeclencheurAgpmByDossier(idDossier);
+        boolean agpmVide = !agpmService.requisPourDossier(idDossier);
         List<String> manquants = new ArrayList<>();
         for (PointsCtrl p : grille) {
             if (!p.getPortee().parLigne()) {

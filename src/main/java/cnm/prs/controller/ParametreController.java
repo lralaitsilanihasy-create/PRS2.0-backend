@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.RestController;
 import jakarta.validation.Valid;
 
 import cnm.prs.dto.InterrupteurDto;
+import cnm.prs.dto.SeuilAgpmDto;
 import cnm.prs.service.ParametreService;
 
 /**
@@ -37,5 +38,22 @@ public class ParametreController {
     @PutMapping("/actualites-actives")
     public InterrupteurDto basculer(@Valid @RequestBody InterrupteurDto corps) {
         return new InterrupteurDto(service.basculerActualites(corps.actif()));
+    }
+
+    /**
+     * ⚠️ Arbitrage pilote (2026-09-07, suite) — seuil du déclenchement AGPM <strong>conditionnel</strong>
+     * (appel à manifestation d'intérêt). Lecture ouverte à tout authentifié : l'écran d'administration
+     * l'affiche, et le seuil explique pourquoi un plan est — ou n'est pas — en {@code PPM-AGPM}.
+     */
+    @GetMapping("/agpm-seuil-montant")
+    public SeuilAgpmDto seuilAgpm() {
+        return new SeuilAgpmDto(service.seuilAgpmMontant());
+    }
+
+    /** Réglage du seuil (Administrateur). Prend effet immédiatement, sans redéploiement. */
+    @PreAuthorize("hasRole('ADMINISTRATEUR')")
+    @PutMapping("/agpm-seuil-montant")
+    public SeuilAgpmDto fixerSeuilAgpm(@Valid @RequestBody SeuilAgpmDto corps) {
+        return new SeuilAgpmDto(service.fixerSeuilAgpmMontant(corps.seuil()));
     }
 }

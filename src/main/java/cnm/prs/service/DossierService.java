@@ -62,6 +62,7 @@ import cnm.prs.repository.PieceDemandeRetraitRepository;
 import cnm.prs.repository.PieceJointeDossierRepository;
 import cnm.prs.repository.PpmRepository;
 import cnm.prs.repository.PrmpRepository;
+import cnm.prs.repository.ReceptionRepository;
 import cnm.prs.repository.SousTypeDossierRepository;
 import cnm.prs.repository.TypeDossierRepository;
 import cnm.prs.repository.TypePieceJointeRepository;
@@ -98,6 +99,10 @@ public class DossierService {
     private final DossierIntegriteService dossierIntegrite;
     /** ⚠️ T3 (2026-09-07) — les justifications de la fiche sont exigées à la soumission, quel que soit le chemin. */
     private final FicheJustificationsService ficheJustifications;
+    /** ⚠️ Réordonnancement FAVR (2026-09-07) — ciblage du vérificateur rattaché à son premier contact. */
+    private final RattachementService rattachementService;
+    /** Localité de repli pour notifier les vérificateurs quand le dossier n'en porte pas. */
+    private final ReceptionRepository receptionRepository;
     private final VerificationRepository verificationRepository;
     private final AuditLogRepository auditLogRepository;
     private final PrmpRepository prmpRepository;
@@ -160,7 +165,10 @@ public class DossierService {
             LotRepository lotRepository, AnomalieRepository anomalieRepository,
             PieceDemandeRetraitRepository pieceDemandeRetraitRepository,
             ChronometrageService chronometrage, DelaiStandardService delaiStandardService,
-            FicheJustificationsService ficheJustifications) {
+            FicheJustificationsService ficheJustifications, RattachementService rattachementService,
+            ReceptionRepository receptionRepository) {
+        this.receptionRepository = receptionRepository;
+        this.rattachementService = rattachementService;
         this.ficheJustifications = ficheJustifications;
         this.delaiStandardService = delaiStandardService;
         this.chronometrage = chronometrage;
@@ -1097,23 +1105,52 @@ public class DossierService {
         return dto(dossier);
     }
 
-    /** Notifie le vérificateur du dossier (dernier vérificateur ; sinon les vérificateurs de la localité). */
+    /**
+     * Notifie le vérificateur du dossier (dernier vérificateur ; sinon les vérificateurs de la localité).
+     *
+     * <p>⚠️ <strong>Réordonnancement FAVR (2026-09-07)</strong> — c'est ici, et <strong>seulement ici</strong>,
+     * que le vérificateur découvre un dossier FAVR : la co-signature l'envoie d'abord à la PRMP, qui
+     * rectifie et resoumet. Au <strong>premier</strong> contact (aucun passage de vérification encore), la
+     * notification est donc un {@code PV_A_VERIFIER} — celui que la signature émettait autrefois — et elle
+     * <strong>cible le vérificateur rattaché</strong> au Membre examinateur, comme le faisait la signature
+     * (règle des rattachements du 2026-09-01). Aux tours suivants, c'est le {@code RECTIFICATION_PRMP}
+     * habituel, adressé au vérificateur qui a statué.</p>
+     */
     private void notifierRectification(Dossier dossier, Verification derniere, String idPrmp, String motif) {
         String nomPrmp = prmpRepository.findById(idPrmp)
                 .map(p -> ((p.getPrenomsPrmp() == null ? "" : p.getPrenomsPrmp() + " ")
                         + (p.getNomPrmp() == null ? "" : p.getNomPrmp())).trim())
                 .filter(s -> !s.isBlank()).orElse(idPrmp);
         String ref = dossier.getRefeDossier() != null ? dossier.getRefeDossier() : ("n° " + dossier.getIdDossier());
-        String titre = "Dossier rectifié par la PRMP — à re-vérifier";
-        String corps = "Dossier " + ref + " — la PRMP " + nomPrmp + " a rectifié le dossier le "
-                + LocalDate.now() + ". Motif : " + motif + ". Le dossier revient en vérification.";
         String imVerif = derniere == null ? null : derniere.getImCtrlVerif();
-        if (imVerif != null && !imVerif.isBlank()) {
-            notificationService.emettre(dossier.getIdDossier(), TypeNotification.RECTIFICATION_PRMP,
-                    imVerif, null, titre, corps);
+        boolean premierContact = imVerif == null || imVerif.isBlank();
+        TypeNotification type = premierContact
+                ? TypeNotification.PV_A_VERIFIER : TypeNotification.RECTIFICATION_PRMP;
+        String titre = premierContact
+                ? "PV à vérifier — dossier rectifié par la PRMP"
+                : "Dossier rectifié par la PRMP — à re-vérifier";
+        String corps = "Dossier " + ref + " — la PRMP " + nomPrmp + " a rectifié le dossier le "
+                + LocalDate.now() + ". Motif : " + motif + ". Le dossier "
+                + (premierContact ? "entre en vérification." : "revient en vérification.");
+        if (premierContact) {
+            // Premier contact : ciblage par rattachement, repli sur les vérificateurs de la localité.
+            String cible = rattachementService.verificateurCible(dossier.getIdDossier()).orElse(null);
+            if (cible != null) {
+                notificationService.emettre(dossier.getIdDossier(), type, cible, null, titre, corps);
+                return;
+            }
+        }
+        if (!premierContact) {
+            notificationService.emettre(dossier.getIdDossier(), type, imVerif, null, titre, corps);
         } else {
-            for (Controleur v : controleurDirectory.verificateurs(dossier.getIdLocalite())) {
-                notificationService.emettre(dossier.getIdDossier(), TypeNotification.RECTIFICATION_PRMP,
+            // Localité du dossier, à défaut celle de sa réception : c'est cette dernière que suivait la
+            // notification émise à la signature, et le dossier n'en porte pas toujours une.
+            String localite = dossier.getIdLocalite() != null ? dossier.getIdLocalite()
+                    : receptionRepository.findByIdDossier(dossier.getIdDossier()).stream()
+                            .map(r -> receptionRepository.findLocaliteById(r.getIdReception()))
+                            .filter(l -> l != null && !l.isBlank()).findFirst().orElse(null);
+            for (Controleur v : controleurDirectory.verificateurs(localite)) {
+                notificationService.emettre(dossier.getIdDossier(), type,
                         v.getImControleur(), v.getEmailCont(), titre, corps);
             }
         }

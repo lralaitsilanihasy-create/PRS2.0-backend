@@ -401,6 +401,8 @@ public interface DossierRepository extends JpaRepository<Dossier, Integer> {
     @Query("""
             select d from Dossier d where d.statut in
               ('EN_VERIFICATION', 'EN_ATTENTE_DECISION_PRMP', 'OBSERVATIONS_LEVEES')
+              and (d.statut <> 'EN_ATTENTE_DECISION_PRMP'
+                   or exists (select 1 from Verification v where v.reception.idDossier = d.idDossier))
               and exists (select 1 from Reception r
                           where r.idDossier = d.idDossier and r.ctrlRecept.idLocalite = :loc)
             """)
@@ -417,6 +419,8 @@ public interface DossierRepository extends JpaRepository<Dossier, Integer> {
     @Query("""
             select count(d) from Dossier d where d.statut in
               ('EN_VERIFICATION', 'EN_ATTENTE_DECISION_PRMP', 'OBSERVATIONS_LEVEES')
+              and (d.statut <> 'EN_ATTENTE_DECISION_PRMP'
+                   or exists (select 1 from Verification v where v.reception.idDossier = d.idDossier))
               and exists (select 1 from Reception r
                           where r.idDossier = d.idDossier and r.ctrlRecept.idLocalite = :loc)
             """)
@@ -478,6 +482,7 @@ public interface DossierRepository extends JpaRepository<Dossier, Integer> {
      */
     @Query("""
             select d from Dossier d where d.statut = 'EN_ATTENTE_DECISION_PRMP'
+              and exists (select 1 from Verification v where v.reception.idDossier = d.idDossier)
               and exists (select 1 from Reception r
                           where r.idDossier = d.idDossier and r.ctrlRecept.idLocalite = :loc)
             """)
@@ -486,6 +491,7 @@ public interface DossierRepository extends JpaRepository<Dossier, Integer> {
     /** Compteur « en attente PRMP » du Vérificateur (miroir de {@link #findEnAttentePrmpParLocalite}). */
     @Query("""
             select count(d) from Dossier d where d.statut = 'EN_ATTENTE_DECISION_PRMP'
+              and exists (select 1 from Verification v where v.reception.idDossier = d.idDossier)
               and exists (select 1 from Reception r
                           where r.idDossier = d.idDossier and r.ctrlRecept.idLocalite = :loc)
             """)

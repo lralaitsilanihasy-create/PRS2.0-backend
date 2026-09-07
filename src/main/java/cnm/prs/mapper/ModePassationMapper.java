@@ -24,6 +24,7 @@ public final class ModePassationMapper {
         dto.setBaseLegale(entity.getBaseLegale());
         dto.setIdTypeDmc(entity.getIdTypeDmc());
         dto.setDeclencheAgpm(entity.getDeclencheAgpm());
+        dto.setAgpmSiSeuil(entity.getAgpmSiSeuil());   // ⚠️ 2026-09-07 — déclenchement conditionnel (AMI)
         dto.setIdModeModeleCapm(entity.getIdModeModeleCapm());
         dto.setCategorie(entity.getCategorie());
         return dto;
@@ -42,6 +43,7 @@ public final class ModePassationMapper {
         entity.setBaseLegale(dto.getBaseLegale());
         entity.setIdTypeDmc(dto.getIdTypeDmc());
         entity.setDeclencheAgpm(dto.getDeclencheAgpm());
+        entity.setAgpmSiSeuil(dto.getAgpmSiSeuil());
         entity.setIdModeModeleCapm(dto.getIdModeModeleCapm());
         entity.setCategorie(dto.getCategorie());
         return entity;
