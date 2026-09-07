@@ -1640,6 +1640,10 @@ Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `
 > motif, date) ; trace dans `t_audit_log` (NOM_TABLE=`t_dossier`, TYPE_ACTION=`RECTIFICATION_PRMP`,
 > IM_ACTEUR=`<idPrmp>`, CHAMP_MODIFIE=`motifRectification`) ; le **motif** est enregistré sur la dernière
 > vérification (`t_verification.MOTIF_RECTIF`) et exposé dans `VerificationDto.motifRectif` (visible côté vérificateur).
+>
+> ⚠️ **Prise en charge préalable (2026-09-07)** — **409** tant que la PRMP n'a pas pris en charge l'étape
+> `RECTIFICATION_PRMP` (`POST /api/dossiers/{id}/prise-en-charge`). La même garde ferme l'**édition** de
+> rectification. Détail : « RECTIFICATION PRMP — l'étape `RECTIFICATION_PRMP` », section Chronométrage.
 
 > **Soumission (§3.1, Module 03).** `POST /api/dossiers/{id}/soumettre` (réservé **PRMP propriétaire**) :
 > passe le dossier de **`BROUILLON` → `SOUMIS`** (statut autre → **409**), vérifie la **cohérence
@@ -2392,7 +2396,8 @@ et interprété comme un code de **sous-type** (les anciens payloads `{"idTypeDo
 > du dossier (garde front au parse) ; signataire/référence actuels conservés. `PUT /api/ppms/{id}` et
 > `PUT /api/marches/{id}` (appelés par la façade) acceptent aussi ce statut pour le propriétaire ;
 > **`POST`/`DELETE /api/marches` restent BROUILLON uniquement** (les créations/retraits de rectification
-> passent par la façade, seule à tenir la borne). Le statut reste `EN_ATTENTE_DECISION_PRMP` jusqu'à la resoumission
+> passent par la façade, seule à tenir la borne). ⚠️ **409 tant que la rectification n'est pas PRISE EN
+> CHARGE** (2026-09-07, cf. « RECTIFICATION PRMP », section Chronométrage). Le statut reste `EN_ATTENTE_DECISION_PRMP` jusqu'à la resoumission
 > (`POST /api/dossiers/{id}/resoumettre`). Les PATCH `…/rectifier` (édition manuelle champ à champ)
 > subsistent côté API mais ne sont plus le parcours UI. ⚠️ La rectification couvre AUSSI les **pièces
 > jointes** (observations « pièce » du PV) : la PRMP joint la **version corrigée** — nouvel upload du
@@ -3454,6 +3459,8 @@ active (`t_prmp_entite.ACTIF`) sur l'entité contractante du dossier. C'est ce s
 > PRMP propriétaire de corriger une ligne de marché dont le **dossier est `EN_ATTENTE_DECISION_PRMP`**, **sans
 > repasser par le brouillon**. Statut du dossier **inchangé** (reste `EN_ATTENTE_DECISION_PRMP` jusqu'à
 > `POST /api/dossiers/{id}/resoumettre`). Hors `EN_ATTENTE_DECISION_PRMP` → **409** ; non-propriétaire → **403** ;
+> ⚠️ **409 aussi tant que la rectification n'est pas PRISE EN CHARGE** (2026-09-07) — cf. « RECTIFICATION
+> PRMP — l'étape `RECTIFICATION_PRMP` », section Chronométrage.
 > profil **PRMP strict** (Admin/vérificateur → **403**). Identité **figée** (idDossier, idPpm — **non requis** dans
 > le corps, ignorés s'ils sont envoyés ; le PATCH ne valide pas ces champs). Le `idMode` fourni est conservé
 > tel quel — **jamais revalidé** (aucun ensemble de modes autorisés n'existe plus, cf. note ci-dessous).
@@ -4179,6 +4186,8 @@ immuable). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **40
 > propriétaire de corriger l'en-tête d'un PPM dont le **dossier est `EN_ATTENTE_DECISION_PRMP`**, **sans repasser
 > par le brouillon**. Statut du dossier **inchangé** (reste `EN_ATTENTE_DECISION_PRMP` jusqu'à
 > `POST /api/dossiers/{id}/resoumettre`). Hors `EN_ATTENTE_DECISION_PRMP` → **409** ; non-propriétaire → **403** ;
+> ⚠️ **409 aussi tant que la rectification n'est pas PRISE EN CHARGE** (2026-09-07) — cf. « RECTIFICATION
+> PRMP — l'étape `RECTIFICATION_PRMP` », section Chronométrage.
 > profil **PRMP strict** (Admin/vérificateur → **403**). Identité **figée** (idDossier, idPrmp, idLocalite —
 > **non requis** dans le corps, ignorés s'ils sont envoyés ; le PATCH ne valide pas ces champs, mais
 > **valide le contenu** — `GroupeRectification`, même mécanisme que `marches/{id}/rectifier` : `exercice`
@@ -5414,10 +5423,59 @@ nombre d'aller-retours.
 
 `previsionHeures` : entier **≥ 1**, en **heures ouvrées** (0 ou absent → **400**). **403** si l'appelant n'est pas le porteur de
 l'étape (délégations et intérim résolus par la garde centrale) ou si le dossier n'est pas de sa
-localité ; **409** si aucune étape n'est ouverte — brouillon, attente PRMP, dossier clos ou retiré.
+localité ; **409** si aucune étape n'est ouverte — brouillon, dossier clos ou retiré (⚠️ l'attente de
+rectification PRMP n'en fait plus partie depuis le 2026-09-07, voir ci-dessous).
 
 **Rejouer le POST sur une tâche encore ouverte corrige la prévision** et ne crée pas d'occurrence :
 corriger son estimation n'est pas recommencer sa tâche.
+
+> ## ⚠️ RECTIFICATION PRMP — l'étape `RECTIFICATION_PRMP` (2026-09-07)
+>
+> Pendant `EN_ATTENTE_DECISION_PRMP`, **aucune étape n'était ouverte** : `prise-en-charge` répondait
+> `409`, `chronometrage` servait `etapeCourante: null`, et la PRMP rectifiait sans qu'aucun geste ne
+> soit horodaté. « Aucune action sans prise en charge » s'arrêtait au seuil de la PRMP.
+>
+> | | Valeur pendant `EN_ATTENTE_DECISION_PRMP` |
+> |---|---|
+> | `etapeCourante` | `RECTIFICATION_PRMP` (était `null`) |
+> | `acteursAttendus` | `["<idPrmp du dossier>"]` — liste **close**, ou `null` si le dossier n'a pas de PRMP propriétaire connue |
+> | `attributaire` | **inchangé** : l'`imCtrlMembre` du dispatch. C'est la valeur sur laquelle porte la garde d'`EXAMEN` ; y servir la PRMP l'aurait désalignée de sa garde |
+> | `attentePrmp` | `true` — inchangé, le temps reste suspensif |
+> | `datePrevisionnelleFin` | **inchangée** par la prise en charge |
+>
+> `POST /api/dossiers/{id}/prise-en-charge` **fonctionne** donc dans cet état, et ouvre la tâche au nom
+> de la PRMP. **403** pour tout autre acteur — contrôleur de la CNM comme autre PRMP :
+>
+> ```
+> 403 — La rectification de ce dossier revient à la PRMP : elle seule la prend en charge.
+> 403 — La rectification de ce dossier revient à sa PRMP ({nom}) : elle seule la prend en charge,
+>       puis resoumet.
+> ```
+>
+> ### Gardes serveur en miroir — le verrou n'est pas cosmétique
+>
+> Tant que l'étape n'est pas prise en charge, **409** sur les deux gestes de la rectification :
+>
+> | Geste | Endpoints |
+> |---|---|
+> | Resoumettre | `POST /api/dossiers/{id}/resoumettre` |
+> | Rectifier | `PUT /api/saisies/ppm/{idDossier}` (façade, import compris), `PATCH /api/ppms/{id}/rectifier`, `PATCH /api/marches/{id}/rectifier`, création/suppression de ligne en rectification |
+>
+> ```
+> 409 — Prenez d'abord en charge la rectification de ce dossier (« Prendre en charge ») :
+>       elle ouvre votre tâche, et vous permet de rectifier puis de resoumettre.
+> ```
+>
+> Ne fermer que la resoumission aurait laissé « Modifier le dossier » **cosmétique** : le contenu
+> serait passé par l'API sans qu'aucune tâche ne soit ouverte. Le **brouillon** reste libre — la garde
+> ne mord que sur `EN_ATTENTE_DECISION_PRMP`.
+>
+> ### Clôture et compteur
+>
+> La **resoumission** clôt la tâche ; le dossier repart en `EN_VERIFICATION` et plus aucune étape PRMP
+> n'est ouverte. ⚠️ L'étape reste **hors du compteur net CNM** : ce temps est déjà compté dans
+> `attentePrmpHeuresOuvrees`, et `GET /api/delais-standards` garde ses **huit** étapes — il ne décrit
+> que les délais de la Commission.
 
 > ## ⚠️ PRISE EN CHARGE — garde d'acteur et occurrences par niveau (2026-09-04)
 >

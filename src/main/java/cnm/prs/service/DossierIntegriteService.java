@@ -8,6 +8,7 @@ import cnm.prs.entity.Dossier;
 import cnm.prs.entity.EntiteContract;
 import cnm.prs.entity.Ppm;
 import cnm.prs.entity.PvExamen;
+import cnm.prs.enums.EtapeCircuit;
 import cnm.prs.enums.ProfilUtilisateur;
 import cnm.prs.enums.StatutDossier;
 import cnm.prs.exception.BadRequestException;
@@ -19,6 +20,7 @@ import cnm.prs.repository.MarcheRepository;
 import cnm.prs.repository.PpmRepository;
 import cnm.prs.repository.PrmpEntiteRepository;
 import cnm.prs.repository.PvExamenRepository;
+import cnm.prs.repository.TacheDossierRepository;
 import cnm.prs.security.CurrentUser;
 
 /**
@@ -61,11 +63,15 @@ public class DossierIntegriteService {
     private final PvExamenRepository pvExamenRepository;
     /** ⚠️ 2026-09-07 (suite) — « ce plan requiert-il un AGPM ? », source unique (seuil AMI administrable). */
     private final AgpmService agpmService;
+    /** ⚠️ 2026-09-07 — « aucune action sans prise en charge » : la tâche RECTIFICATION_PRMP fait foi. */
+    private final TacheDossierRepository tacheRepository;
 
     public DossierIntegriteService(DossierRepository dossierRepository, PpmRepository ppmRepository,
             MarcheRepository marcheRepository, EntiteContractRepository entiteContractRepository,
             PrmpEntiteRepository prmpEntiteRepository, MandatService mandatService,
-            PvExamenRepository pvExamenRepository, AgpmService agpmService) {
+            PvExamenRepository pvExamenRepository, AgpmService agpmService,
+            TacheDossierRepository tacheRepository) {
+        this.tacheRepository = tacheRepository;
         this.agpmService = agpmService;
         this.pvExamenRepository = pvExamenRepository;
         this.dossierRepository = dossierRepository;
@@ -133,6 +139,10 @@ public class DossierIntegriteService {
                     "Opération impossible : le dossier n'est ni un brouillon ni en attente de décision PRMP "
                             + "(statut « " + statut + " »).");
         }
+        // Un brouillon s'édite librement ; une RECTIFICATION est un geste du circuit, donc prise en charge.
+        if (StatutDossier.EN_ATTENTE_DECISION_PRMP.name().equals(statut)) {
+            exigerRectificationPriseEnCharge(idDossier);
+        }
         return dossier;
     }
 
@@ -153,7 +163,40 @@ public class DossierIntegriteService {
                     "Rectification impossible : le dossier n'est pas en attente de décision PRMP (statut « "
                             + dossier.getStatut() + " »).");
         }
+        exigerRectificationPriseEnCharge(idDossier);
         return dossier;
+    }
+
+    /**
+     * ⚠️ <strong>Règle pilote (2026-09-07) — « aucune action sans prise en charge », étendue à la
+     * PRMP</strong> : pendant {@code EN_ATTENTE_DECISION_PRMP}, l'étape {@code RECTIFICATION_PRMP} est
+     * ouverte et revient à la PRMP propriétaire. Tant qu'elle ne l'a pas <em>prise en charge</em>, aucune
+     * rectification ne passe — ni l'édition (façade de saisie, import du PPM rectifié, lignes de marché),
+     * ni la resoumission.
+     *
+     * <p><strong>Pourquoi la garde vit ici et pas seulement sur la resoumission.</strong> Le front
+     * verrouille deux boutons, « Modifier le dossier » et « Resoumettre » ; ne fermer que le second
+     * aurait laissé le premier cosmétique — la rectification elle-même serait passée par l'API sans
+     * qu'aucune tâche ne soit ouverte, et le geste qu'on cherche à horodater n'aurait pas eu lieu.</p>
+     *
+     * <p>La garde lit les <strong>tâches</strong> et non le chronométrage complet : {@code
+     * ChronometrageService} dépend déjà de ce service, l'inverse ferait un cycle.</p>
+     *
+     * @throws BusinessRuleException 409 tant que l'étape n'est pas prise en charge
+     */
+    public void exigerRectificationPriseEnCharge(Integer idDossier) {
+        if (rectificationPriseEnCharge(idDossier)) {
+            return;
+        }
+        throw new BusinessRuleException("Prenez d'abord en charge la rectification de ce dossier "
+                + "(« Prendre en charge ») : elle ouvre votre tâche, et vous permet de rectifier puis "
+                + "de resoumettre.");
+    }
+
+    /** Vrai si l'étape {@code RECTIFICATION_PRMP} du dossier est ouverte (prise en charge, non close). */
+    public boolean rectificationPriseEnCharge(Integer idDossier) {
+        return idDossier != null
+                && !tacheRepository.ouvertes(idDossier, EtapeCircuit.RECTIFICATION_PRMP.name()).isEmpty();
     }
 
     /**

@@ -240,9 +240,8 @@ class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
     @Test
     @DisplayName("Attente PRMP — le drapeau suit le STATUT COURANT, et la date reste annoncée")
     void attentePrmp_drapeauEtDateConservee() throws Exception {
-        // Les trois statuts suspensifs de la cartographie validée.
-        for (String statut : new String[] { "EN_ATTENTE_COMPLEMENTS_DEPOT", "EN_ATTENTE_PIECES",
-                "EN_ATTENTE_DECISION_PRMP" }) {
+        // Les statuts d'attente de PIÈCES : personne n'est nommément attendu, aucune étape n'est portée.
+        for (String statut : new String[] { "EN_ATTENTE_COMPLEMENTS_DEPOT", "EN_ATTENTE_PIECES" }) {
             dossierEnStatut(500, statut);
             mvc.perform(get("/api/dossiers/500").header("Authorization", tokenPrmp))
                     .andExpect(status().isOk())
@@ -250,6 +249,16 @@ class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
                     .andExpect(jsonPath("$.datePrevisionnelleFin").exists())
                     .andExpect(jsonPath("$.etapeCourante").doesNotExist());
         }
+
+        // ⚠️ Prise en charge de la rectification (2026-09-07) — EN_ATTENTE_DECISION_PRMP porte désormais
+        // une étape NOMMÉE, RECTIFICATION_PRMP : l'attente reste suspensive (drapeau et date inchangés,
+        // l'étape est hors compteur), mais elle a un porteur — la PRMP, qui prend en charge puis rectifie.
+        dossierEnStatut(500, "EN_ATTENTE_DECISION_PRMP");
+        mvc.perform(get("/api/dossiers/500").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.attentePrmp").value(true))
+                .andExpect(jsonPath("$.datePrevisionnelleFin").exists())
+                .andExpect(jsonPath("$.etapeCourante").value("RECTIFICATION_PRMP"));
     }
 
     @Test
@@ -277,6 +286,7 @@ class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
         assertTrue(suspensionRepository.findFirstByIdDossierAndFinIsNullOrderByDebutDesc(1).isPresent(),
                 "la fenêtre reste ouverte tant que la PRMP n'a pas rendu la main");
 
+        prendreEnChargeRectification(1);
         mvc.perform(post("/api/dossiers/1/resoumettre").header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"motifRectification\":\"corrige\"}"))
                 .andExpect(status().isOk());
@@ -294,6 +304,7 @@ class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
         String tokenVer = bearer("CTRVER", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER", "ANT");
 
         passageObservationDossier1(tokenVer, "MAINTENUE", "a rectifier");
+        prendreEnChargeRectification(1);
         mvc.perform(post("/api/dossiers/1/resoumettre").header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"motifRectification\":\"corrige\"}"))
                 .andExpect(status().isOk());

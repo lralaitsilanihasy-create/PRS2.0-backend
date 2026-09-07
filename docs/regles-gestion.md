@@ -403,6 +403,11 @@ toute façon : `RECEPTION` (Secrétaire), `DISPATCH` (P/CC), `EXAMEN` (Membre), 
 intérimaire), `COSIGNATURE` (Membre), `VERIFICATION` (Vérificateur), `TRANSMISSION_SIGMP` (Vérificateur),
 `ARCHIVAGE` (Assistant — chronométré mais **hors compteur global**).
 
+⚠️ Une **neuvième** étape existe depuis le 2026-09-07, `RECTIFICATION_PRMP` : elle n'est pas portée par
+la CNM mais par la **PRMP**, et reste elle aussi **hors compteur global** (voir « La rectification de la
+PRMP se prend en charge elle aussi », plus bas). Le référentiel des délais standards, qui ne décrit que
+les délais de la Commission, garde donc ses **huit** lignes.
+
 - **Prise en charge = geste EXPLICITE.** Le porteur ouvre sa tâche et saisit sa prévision en jours
   ouvrés. Le temps d'attente **avant** la prise en charge est ainsi mesuré lui aussi. La prévision reste
   corrigeable tant que la tâche est ouverte.
@@ -520,6 +525,29 @@ sont deux réponses distinctes, parce que ce sont deux situations distinctes :
 
 Partout ailleurs, deux tâches ouvertes sur une même étape signifieraient que deux personnes se croient
 responsables du même travail : c'est ce que le refus nominal empêche.
+
+⚠️ **La rectification de la PRMP se prend en charge elle aussi** (règle du pilote, 2026-09-07).
+« Aucune action sans prise en charge » s'arrêtait au seuil de la PRMP : pendant
+`EN_ATTENTE_DECISION_PRMP`, **aucune étape n'était ouverte** — la prise en charge répondait 409, le
+front n'avait rien sur quoi verrouiller, et la rectification se faisait sans qu'aucun geste ne soit
+horodaté. Une étape `RECTIFICATION_PRMP` est désormais ouverte pendant toute cette attente, portée par
+la **PRMP propriétaire** du dossier, et close par le geste qui l'achève : la resoumission.
+
+- **Porteur nominal** : la PRMP propriétaire, et elle seule. `acteursAttendus` la nomme, et la garde
+  refuse en **403** tout autre acteur — un contrôleur de la CNM comme une autre PRMP. La rectification
+  ne se délègue pas à la Commission qui l'a demandée.
+- **Deux gestes fermés, pas un.** La resoumission *et* l'édition de rectification (façade de saisie,
+  import du PPM rectifié, `PATCH` d'en-tête ou de ligne de marché) répondent **409** tant que l'étape
+  n'est pas prise en charge. Ne fermer que la resoumission aurait laissé « Modifier le dossier »
+  cosmétique : le contenu serait passé par l'API, et le geste qu'on cherche justement à horodater
+  n'aurait pas eu lieu. Le refus **dit le geste à poser**, il ne se contente pas de refuser.
+- **Le brouillon reste libre** : la garde ne mord que sur `EN_ATTENTE_DECISION_PRMP`. Saisir son
+  dossier n'est pas un geste du circuit ; le rectifier en est un.
+- ⚠️ **Hors du compteur net CNM** (arbitrage retenu, la demande le laissait ouvert). Ce temps est
+  **suspensif** : il est déjà compté dans `attentePrmpHeuresOuvrees`, et l'imputer une seconde fois
+  ferait payer à la Commission l'attente de la PRMP. L'étape est donc absente du référentiel des délais
+  standards, et **la prise en charge ne déplace pas la date prévisionnelle annoncée**. Elle vaut comme
+  *geste* — début d'action et verrou — et mesure, accessoirement, le délai propre de la PRMP.
 
 #### « On ne contrôle pas le vide » (règle du pilote, 2026-09-04)
 

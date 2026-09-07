@@ -341,8 +341,25 @@ abstract class CnmIntegrationTestSupport extends AbstractIntegrationTest {
         if (!"EN_ATTENTE_DECISION_PRMP".equals(statut)) {
             return;
         }
-        mvc.perform(post("/api/dossiers/1/resoumettre").header("Authorization", tokenPrmp)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"motifRectification\":\"corrige\"}"))
+        resoumettreDossier(1, "corrige");
+    }
+
+    /**
+     * ⚠️ Règle pilote (2026-09-07) — « aucune action sans prise en charge », étendue à la PRMP : elle prend
+     * en charge la rectification <strong>avant</strong> de resoumettre (sinon 409). Ce helper pose les deux
+     * gestes, pour que les tests qui portent sur la SUITE du circuit n'aient pas à les réécrire.
+     */
+    protected void resoumettreDossier(int idDossier, String motif) throws Exception {
+        prendreEnChargeRectification(idDossier);
+        mvc.perform(post("/api/dossiers/" + idDossier + "/resoumettre").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"motifRectification\":\"" + motif + "\"}"))
+                .andExpect(status().isOk());
+    }
+
+    /** La PRMP prend en charge la rectification (étape {@code RECTIFICATION_PRMP}) — sans effet si déjà prise. */
+    protected void prendreEnChargeRectification(int idDossier) throws Exception {
+        mvc.perform(post("/api/dossiers/" + idDossier + "/prise-en-charge").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"previsionHeures\":8}"))
                 .andExpect(status().isOk());
     }
 

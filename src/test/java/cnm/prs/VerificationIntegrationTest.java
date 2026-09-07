@@ -73,6 +73,7 @@ class VerificationIntegrationTest extends CnmIntegrationTestSupport {
                 .content("{\"idDossier\":1,\"decisions\":[{\"idObservationPv\":" + idObs
                         + ",\"decision\":\"MAINTENUE\",\"precision\":\"a rectifier\"}]}"))
                 .andExpect(status().isOk());
+        prendreEnChargeRectification(1);
         mvc.perform(post("/api/dossiers/1/resoumettre").header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"motifRectification\":\"corrige\"}"))
                 .andExpect(status().isOk());
@@ -198,6 +199,7 @@ class VerificationIntegrationTest extends CnmIntegrationTestSupport {
         String tokenVer = bearer("CTRVER", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER", "ANT");
         dossier1EnAttenteDecisionPrmp(85, tokenVer);
 
+        prendreEnChargeRectification(1);
         mvc.perform(post("/api/dossiers/1/resoumettre").header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"motifRectification\":\"corrige\"}"))
                 .andExpect(status().isOk())
@@ -245,16 +247,19 @@ class VerificationIntegrationTest extends CnmIntegrationTestSupport {
         signerPvAvecAvis(90, "FAVR"); // dossier 1 → EN_ATTENTE_DECISION_PRMP, réserves chez la PRMP
         // ⚠️ Réordonnancement FAVR (2026-09-07) — c'est cette rectification initiale (rect0) qui OUVRE la
         // vérification : le vérificateur ne voit le dossier qu'ensuite.
+        prendreEnChargeRectification(1);
         mvc.perform(post("/api/dossiers/1/resoumettre").header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"motifRectification\":\"rect0\"}"))
                 .andExpect(status().isOk());
         // Passage 1 : observation MAINTENUE → resoumission (rect1).
         passageObservationDossier1(tokenVer, "MAINTENUE", "obs1");
+        prendreEnChargeRectification(1);
         mvc.perform(post("/api/dossiers/1/resoumettre").header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"motifRectification\":\"rect1\"}"))
                 .andExpect(status().isOk());
         // Passage 2 : observation MAINTENUE → resoumission (rect2).
         passageObservationDossier1(tokenVer, "MAINTENUE", "obs2");
+        prendreEnChargeRectification(1);
         mvc.perform(post("/api/dossiers/1/resoumettre").header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"motifRectification\":\"rect2\"}"))
                 .andExpect(status().isOk());
@@ -374,6 +379,7 @@ class VerificationIntegrationTest extends CnmIntegrationTestSupport {
         Dossier d = dossier(400, "EN_ATTENTE_DECISION_PRMP"); d.setIdTypeDossier("DDP"); d.setIdLocalite("ANT"); d.setIdPrmp("PRMP001");
         dossierRepository.save(d);
         ppmRepository.save(ppm(400, 400, "PRMP001"));
+        prendreEnChargeRectification(400);
 
         mvc.perform(patch("/api/ppms/400/rectifier").header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -419,6 +425,7 @@ class VerificationIntegrationTest extends CnmIntegrationTestSupport {
         dossierRepository.save(d);
         ppmRepository.save(ppm(410, 401, "PRMP001"));
         marcheRepository.save(marche(411, 401, 410));
+        prendreEnChargeRectification(401);
         modePassationRepository.save(new ModePassation(2, "AOR", null, null, null, null));
 
         mvc.perform(patch("/api/marches/411/rectifier").header("Authorization", tokenPrmp)
@@ -469,6 +476,7 @@ class VerificationIntegrationTest extends CnmIntegrationTestSupport {
         dossierRepository.save(d);
         ppmRepository.save(ppm(480, 480, "PRMP001"));
         marcheRepository.save(marche(481, 480, 480));
+        prendreEnChargeRectification(480);
 
         // Avant le correctif : 200, et le montant negatif remontait jusqu'aux cumuls des KPI.
         mvc.perform(patch("/api/marches/481/rectifier").header("Authorization", tokenPrmp)
@@ -512,6 +520,7 @@ class VerificationIntegrationTest extends CnmIntegrationTestSupport {
         Dossier d = dossier(406, "EN_ATTENTE_DECISION_PRMP"); d.setIdTypeDossier("DDP"); d.setIdLocalite("ANT"); d.setIdPrmp("PRMP001");
         dossierRepository.save(d);
         ppmRepository.save(ppm(460, 406, "PRMP001"));
+        prendreEnChargeRectification(406);
         mvc.perform(patch("/api/ppms/460/rectifier").header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"exercice\":2026,\"signataire\":\"Sign\",\"dateSignature\":\"2026-05-10\",\"reference\":\"R\",\"libelle\":\"L\"}"))
@@ -526,6 +535,7 @@ class VerificationIntegrationTest extends CnmIntegrationTestSupport {
         dossierRepository.save(d);
         ppmRepository.save(ppm(470, 407, "PRMP001"));
         marcheRepository.save(marche(471, 407, 470));
+        prendreEnChargeRectification(407);
         modePassationRepository.save(new ModePassation(2, "AOR", null, null, null, null));
         mvc.perform(patch("/api/marches/471/rectifier").header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -543,6 +553,7 @@ class VerificationIntegrationTest extends CnmIntegrationTestSupport {
         // ⚠️ Décision produit 2026-08-15 : premier passage = rappel (MAINTENUE), puis la PRMP rectifie
         // et resoumet — la levée n'est possible qu'ensuite.
         passageObservationDossier1(tokenVer, "MAINTENUE", "a rectifier"); // → EN_ATTENTE_DECISION_PRMP
+        prendreEnChargeRectification(1);
         mvc.perform(post("/api/dossiers/1/resoumettre").header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"motifRectification\":\"corrige\"}"))
                 .andExpect(status().isOk());                              // → EN_VERIFICATION

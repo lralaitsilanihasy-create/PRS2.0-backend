@@ -107,6 +107,7 @@ class PvWorkflowIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$[?(@.typeNotif=='PV_A_VERIFIER')]", hasSize(0)));
 
         // Après la rectification, et alors seulement, le vérificateur est prévenu.
+        prendreEnChargeRectification(1);
         mvc.perform(post("/api/dossiers/1/resoumettre").header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"motifRectification\":\"corrige\"}"))
                 .andExpect(status().isOk())

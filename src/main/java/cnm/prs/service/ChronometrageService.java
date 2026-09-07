@@ -35,6 +35,7 @@ import cnm.prs.repository.SuspensionDossierRepository;
 import cnm.prs.repository.TacheDossierRepository;
 import cnm.prs.security.CurrentUser;
 import cnm.prs.security.PermissionService;
+import cnm.prs.security.Visibilite;
 
 /**
  * ⚠️ <strong>Chronométrage et prévision des délais</strong> (règle du pilote, 2026-09-01).
@@ -88,13 +89,17 @@ public class ChronometrageService {
     /** ⚠️ 2026-09-04 — source unique du circuit : la garde du VISA lit le meme discriminant que la navette. */
     private final CircuitDossierService circuitService;
     private final ControleurDirectory controleurDirectory;
+    /** ⚠️ 2026-09-07 — l'étape de la PRMP se garde par la propriété du dossier et un mandat actif. */
+    private final DossierIntegriteService dossierIntegrite;
 
     public ChronometrageService(TacheDossierRepository tacheRepository,
             SuspensionDossierRepository suspensionRepository, DelaiStandardService delaiStandardService,
             DossierRepository dossierRepository, PvExamenRepository pvExamenRepository,
             ControleurRepository controleurRepository, PermissionService permissionService,
             cnm.prs.repository.DispatchRepository dispatchRepository,
-            CircuitDossierService circuitService, ControleurDirectory controleurDirectory) {
+            CircuitDossierService circuitService, ControleurDirectory controleurDirectory,
+            DossierIntegriteService dossierIntegrite) {
+        this.dossierIntegrite = dossierIntegrite;
         this.tacheRepository = tacheRepository;
         this.suspensionRepository = suspensionRepository;
         this.delaiStandardService = delaiStandardService;
@@ -136,6 +141,12 @@ public class ChronometrageService {
         }
         if (StatutDossier.EXAMINE.name().equals(statut)) {
             return etapeSelonPv(statutPv.get());
+        }
+        // ⚠️ Règle pilote (2026-09-07) — pendant l'attente de rectification, l'étape ouverte est celle de
+        // la PRMP : c'est elle qui doit prendre en charge avant de rectifier puis de resoumettre. Le
+        // dossier n'est pas « sans étape » parce qu'aucun contrôleur n'y travaille.
+        if (StatutDossier.EN_ATTENTE_DECISION_PRMP.name().equals(statut)) {
+            return EtapeCircuit.RECTIFICATION_PRMP;
         }
         if (StatutDossier.EN_VERIFICATION.name().equals(statut)) {
             return EtapeCircuit.VERIFICATION;
@@ -237,6 +248,18 @@ public class ChronometrageService {
      * d'habilitation, pour un gain de sécurité nul.</p>
      */
     private void exigerPorteurEligible(Dossier dossier, EtapeCircuit etape) {
+        // ⚠️ 2026-09-07 — l'étape de la PRMP se garde par la PROPRIÉTÉ du dossier, pas par la localité :
+        // une PRMP agit sur SES dossiers (et il lui faut un mandat actif, comme pour tout geste de PRMP).
+        // La délégation ascendante entre contrôleurs ne s'y applique pas — la rectification n'est pas
+        // délégable à la Commission qui l'a demandée.
+        if (etape.porteur() == ProfilUtilisateur.PRMP) {
+            if (!Visibilite.estPrmp()) {
+                throw new AccessDeniedException(
+                        "La rectification de ce dossier revient à la PRMP : elle seule la prend en charge.");
+            }
+            dossierIntegrite.exigerOperateurHabilite(dossier);
+            return;
+        }
         if (!permissionService.peutExercer(etape.porteur())) {
             throw new AccessDeniedException(
                     "Cette étape (" + etape.name() + ") revient au profil " + etape.porteur().name() + ".");
@@ -273,6 +296,9 @@ public class ChronometrageService {
                     .filter(s -> !s.isBlank()).orElse(null));
             case VISA -> acteursDuVisa(idDossier);
             case COSIGNATURE -> acteursDeLaCoSignature(idDossier);
+            // ⚠️ 2026-09-07 — la rectification revient à la PRMP PROPRIÉTAIRE du dossier, et à elle seule.
+            case RECTIFICATION_PRMP -> unSeul(dossierRepository.findById(idDossier)
+                    .map(Dossier::getIdPrmp).filter(s -> s != null && !s.isBlank()).orElse(null));
             // Les autres étapes n'ont pas de titulaire nominatif : profil et localité suffisent.
             default -> null;
         };
@@ -353,6 +379,8 @@ public class ChronometrageService {
                     + " : sur un dossier à deux niveaux, chaque étage a son acteur et sa tâche.";
             case COSIGNATURE -> "La co-signature de ce PV revient aux désignés du visa (" + noms
                     + ") : chacun ouvre et clôt SA part.";
+            case RECTIFICATION_PRMP -> "La rectification de ce dossier revient à sa PRMP (" + noms
+                    + ") : elle seule la prend en charge, puis resoumet.";
             default -> "Cette étape revient à " + noms + ".";
         });
     }
@@ -442,6 +470,7 @@ public class ChronometrageService {
             LOG.warn("[CHRONO] cloture EXAMEN impossible dossier={} : {}", idDossier, ex.toString());
         }
     }
+
 
     /**
      * ⚠️ Recensement des trous (2026-09-07, T2) — clôt l'occurrence <strong>ouverte</strong> d'une étape,

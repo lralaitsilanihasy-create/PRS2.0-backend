@@ -41,6 +41,19 @@ public enum EtapeCircuit {
     COSIGNATURE(ProfilUtilisateur.MEMBRE, true, true),
 
     /** Vérification des documents témoins. Rejouable (boucle FAVR, resoumissions après rectification). */
+    /**
+     * ⚠️ Règle pilote (2026-09-07) — « aucune action sans prise en charge » étendue à la <strong>PRMP</strong>.
+     * Étape ouverte tant que le dossier attend la rectification ({@code EN_ATTENTE_DECISION_PRMP}), portée
+     * par la <strong>PRMP propriétaire</strong> : elle prend en charge avant de rectifier et de resoumettre,
+     * comme un contrôleur avant d'agir.
+     *
+     * <p><strong>Hors compteur global</strong> ({@code dansCompteurGlobal = false}) : ce temps est
+     * <em>suspensif</em>, déjà mesuré à part en attente PRMP ({@code attentePrmpHeuresOuvrees}) — il ne
+     * s'impute pas à la Commission, et la date prévisionnelle ne le somme pas. La prise en charge sert
+     * ici de <strong>geste</strong> (début d'action, verrou des deux actions de la PRMP) et de mesure du
+     * délai propre à la PRMP.</p>
+     */
+    RECTIFICATION_PRMP(ProfilUtilisateur.PRMP, false),
     VERIFICATION(ProfilUtilisateur.VERIFICATEUR, true),
 
     /** Transmission du sens de la décision à SIGMP — dernière étape du compteur global. */

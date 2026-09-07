@@ -54,7 +54,7 @@ class RectificationEcartIntegrationTest extends CnmIntegrationTestSupport {
     private SuiviObservationRepository suiviObservationRepository;
 
     @BeforeEach
-    void dossierDeCinqLignesEnAttenteDecisionPrmp() {
+    void dossierDeCinqLignesEnAttenteDecisionPrmp() throws Exception {
         natureRepository.save(new Nature(1, "Travaux", null));
         capmRepository.save(new Capm(1, "LANCEMENT", 1, null, null));
         Dossier d = dossierLoc(DOSSIER, "EN_ATTENTE_DECISION_PRMP", "ANT", "PRMP001");
@@ -67,6 +67,9 @@ class RectificationEcartIntegrationTest extends CnmIntegrationTestSupport {
             m.setIdNature(1);   // même nature que le corps des PUT : une ligne renvoyée à l'identique est INCHANGEE
             marcheRepository.save(m);
         }
+        // ⚠️ 2026-09-07 — « aucune action sans prise en charge » : la PRMP ouvre sa tâche de
+        // rectification avant de corriger (verrou éprouvé par PriseEnChargeRectificationPrmpIntegrationTest).
+        prendreEnChargeRectification(DOSSIER);
     }
 
     // ------------------------------------------------------------------ 1. écart 3/3 accepté

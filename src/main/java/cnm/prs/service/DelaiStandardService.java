@@ -84,7 +84,13 @@ public class DelaiStandardService {
             stockes.put(d.getEtape(), d);
         }
         List<DelaiStandardDto> lignes = new ArrayList<>();
+        // ⚠️ 2026-09-07 — le référentiel des délais est celui des étapes de la CNM : l'étape portée par la
+        // PRMP (rectification) n'y figure pas. Son délai n'est pas de la responsabilité de la Commission,
+        // et son temps est de toute façon suspensif — l'Administrateur n'a rien à y régler.
         for (EtapeCircuit etape : EtapeCircuit.values()) {
+            if (etape.porteur() == cnm.prs.enums.ProfilUtilisateur.PRMP) {
+                continue;
+            }
             DelaiStandard stocke = stockes.get(etape.name());
             lignes.add(new DelaiStandardDto(etape.name(),
                     stocke == null || stocke.getDelaiHeures() == null ? DELAI_DE_REPLI : stocke.getDelaiHeures(),
@@ -103,6 +109,11 @@ public class DelaiStandardService {
         try {
             cible = EtapeCircuit.valueOf(etape);
         } catch (IllegalArgumentException ex) {
+            throw new ResourceNotFoundException("Étape inconnue : " + etape);
+        }
+        // Ce qui ne figure pas au référentiel ne s'y règle pas : l'étape de la PRMP n'est pas un délai
+        // de la Commission, et un réglage qui n'apparaît nulle part serait un piège pour l'Administrateur.
+        if (cible.porteur() == cnm.prs.enums.ProfilUtilisateur.PRMP) {
             throw new ResourceNotFoundException("Étape inconnue : " + etape);
         }
         DelaiStandard entite = repository.findById(cible.name()).orElseGet(() -> {

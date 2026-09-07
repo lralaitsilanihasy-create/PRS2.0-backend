@@ -942,7 +942,13 @@ public class DossierService {
                     "Resoumission impossible : le dossier n'est pas en attente de décision PRMP (statut « "
                             + dossier.getStatut() + " »).");
         }
+        // ⚠️ Règle pilote (2026-09-07) — « aucune action sans prise en charge », étendue à la PRMP : elle
+        // prend en charge la rectification avant de resoumettre, comme avant de rectifier. Garde SERVEUR
+        // partagée avec l'édition, pour que le verrou posé par le front ne soit pas cosmétique.
+        dossierIntegrite.exigerRectificationPriseEnCharge(idDossier);
         dossier.setStatut(StatutDossier.EN_VERIFICATION.name());
+        // La tâche de rectification est close par le geste qui l'achève — la resoumission.
+        chronometrage.cloturerSiOuverte(idDossier, cnm.prs.enums.EtapeCircuit.RECTIFICATION_PRMP);
         // ⚠️ Chronométrage (2026-09-01) — sortie d'attente PRMP : le compteur net CNM redémarre.
         chronometrage.sortirDAttentePrmp(idDossier);
         repository.save(dossier);
