@@ -1495,11 +1495,12 @@ Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `
 >   *identifiant de PRMP* sur un événement dérivé ou une copie figée : les trois annuaires sont
 >   interrogés, chacun **une fois** quel que soit le nombre de lignes. Sans résolution, le nom stocké est
 >   conservé — un nom connu n'est jamais remplacé par un identifiant brut.
-> - ⚠️ **Constat de livraison** : aujourd'hui une UGPM ne peut poser qu'un seul geste consigné, la
->   **création**. `/soumettre`, `/resoumettre` et `/transmettre-complements*` exigent le rôle `PRMP`
->   (**403** pour une UGPM). La dérivation est néanmoins **générale** — elle porte sur l'auteur de la
->   ligne, pas sur son type — donc elle vaudra sans retouche si le modèle d'habilitation s'ouvre, et elle
->   corrige déjà les lignes de ce genre présentes en base.
+> - ⚠️ **Portée réelle — « l'UGPM saisit, la PRMP engage »** (tranché par le pilote le 2026-09-08). Une
+>   UGPM ne peut poser qu'un seul geste consigné, la **création** : `/soumettre`, `/resoumettre` et
+>   `/transmettre-complements*` exigent le rôle `PRMP` (**403** pour une UGPM) et **restent ainsi**. La
+>   dérivation est néanmoins **générale** — elle porte sur l'auteur de la ligne, pas sur son type : elle
+>   corrige déjà les lignes de cette forme présentes en base et vaudra sans retouche si ce partage évolue.
+>   **Dormante, pas morte** : ne pas la spécialiser à `CREATION`, ce serait reconduire le défaut d'origine.
 >
 > ## ⚠️ JOURNAL DU DOSSIER — le traitement raconté jusqu'au bout (2026-09-04)
 >

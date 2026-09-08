@@ -739,9 +739,14 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
       `creeParNom` / `soumisParNom` et le nom d'affichage du login.
     Rétroactif, comme le reste : les lignes déjà écrites dans l'ancien ordre se relisent corrigées.
     Sans résolution possible, le nom stocké est conservé — jamais remplacé par un identifiant brut.
-    ⚠️ **Constat de livraison** : une UGPM ne peut aujourd'hui poser qu'un seul geste consigné, la
-    **création** — soumission, resoumission et transmissions de compléments exigent le rôle PRMP (403).
-    La règle est néanmoins générale, portant sur l'auteur et non sur le type d'action.
+    ⚠️ **Portée réelle, tranchée par le pilote le 2026-09-08 : la CRÉATION SEULE.** L'UGPM saisit et crée
+    le dossier ; les **actes formels** — soumission, resoumission, transmission de compléments — restent
+    à la PRMP seule (`hasRole('PRMP')`, **403** pour une UGPM ; règle du 2026-08-26 ci-dessous,
+    reconfirmée). La création est donc son unique geste consigné, et la dérivation « auteur réel » n'a
+    d'effet visible que sur cette ligne. Elle reste **volontairement générale** — elle porte sur l'auteur
+    de la ligne, pas sur le type d'action : elle corrige déjà les lignes de cette forme présentes en base,
+    et vaudra sans retouche si ce partage des rôles évolue. **Dormante, pas morte** : ne pas la
+    « simplifier » en la spécialisant à `CREATION`, ce serait reconduire le défaut d'origine.
 
   - ⚠️ **La CONSIGNE est consignée** (complément du 2026-09-04) — « Comment savoir que le dossier a été
     dispatché au CC avec instruction avant de le dispatcher au membre ? » Les lignes `DISPATCH` et
@@ -781,7 +786,9 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
   (le `ref` de son jeton porte l'ID_PRMP de tutelle — quatre services testaient `profil == PRMP` à la
   main au lieu de la garde centrale `Visibilite.estPrmp()`, excluant l'UGPM de tout). Les **actions**
   réservées à la PRMP (soumission, resoumission, transmission de compléments, retraits) restent
-  interdites à l'UGPM (403).
+  interdites à l'UGPM (403). ⚠️ **Reconfirmé par le pilote le 2026-09-08** — la question s'est reposée au
+  moment d'étendre le journal à l'auteur réel : le partage retenu est **« l'UGPM saisit, la PRMP
+  engage »**. L'UGPM crée le dossier ; les actes qui engagent l'entité contractante restent à la PRMP.
 - ⚠️ **Décision (2026-08-27) — la lecture d'une lettre de renvoi est un suivi par agent, pas par
   tutelle.** Le correctif ci-dessus avait un effet de bord non voulu : la consultation d'une lettre
   par une UGPM marquait « lue » **pour la tutelle entière**, éteignant à tort le badge de sa PRMP
