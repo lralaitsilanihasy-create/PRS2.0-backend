@@ -36,17 +36,25 @@ import cnm.prs.service.JournalDossierService;
  * n'est pas un acte de traitement sous mandat, c'est une saisie, et le dossier sait qui l'a faite
  * ({@code CREE_PAR}). Le journal contredisait donc le {@code DossierDto}, qui servait déjà le bon nom.</p>
  *
- * <p>Ce que ces tests protègent : le <strong>nom de l'UGPM</strong> sur la CRÉATION, la
- * <strong>SOUMISSION laissée à la PRMP</strong>, la <strong>rétroactivité</strong> (dérivé à la lecture,
- * donc les dossiers déjà créés se corrigent seuls), et le <strong>repli</strong> qui ne remplace jamais
- * un nom connu par un login brut.</p>
+ * <p><strong>2ᵉ tour (arbitrages du pilote, même jour)</strong> : la règle vaut pour <strong>tous</strong>
+ * les gestes — une soumission ou une resoumission faite par l'UGPM porte son nom, pas celui de sa
+ * tutelle — et les noms s'écrivent dans <strong>une seule convention</strong>, « NOM Prénoms ». Les trois
+ * annuaires en servaient deux : la même personne changeait d'ordre d'une ligne à l'autre du même tableau.</p>
+ *
+ * <p>Ce que ces tests protègent : le <strong>nom de l'UGPM</strong> sur la CRÉATION puis sur
+ * <strong>tous</strong> ses gestes, la <strong>SOUMISSION laissée à la PRMP</strong> quand c'est elle qui
+ * soumet, l'<strong>ordre uniforme</strong>, la <strong>rétroactivité</strong> (dérivé à la lecture, donc
+ * les lignes déjà écrites se corrigent seules), et le <strong>repli</strong> qui ne remplace jamais un nom
+ * connu par un identifiant brut.</p>
  */
-class JournalCreationOperateurIntegrationTest extends CnmIntegrationTestSupport {
+class JournalOperateurReelIntegrationTest extends CnmIntegrationTestSupport {
 
     /** Nom lisible attendu pour l'UGPM créatrice : « NOM Prénoms », comme {@code creeParNom}. */
     private static final String NOM_UGPM = "RALAITSILANIHASY Lantonirina Annick";
-    /** Nom de la PRMP tel que le journal le compose depuis l'annuaire des PRMP (« Prénoms Nom »). */
-    private static final String NOM_PRMP = "Prenoms Nom";
+    /** Nom de la PRMP dans la convention CANONIQUE « NOM Prénoms » — la seule du journal depuis le 08/09. */
+    private static final String NOM_PRMP = "Nom Prenoms";
+    /** Le MÊME nom dans l'ancien ordre « Prénoms Nom », tel que les lignes déjà écrites le portent. */
+    private static final String NOM_PRMP_ANCIEN_ORDRE = "Prenoms Nom";
 
     @Autowired
     private ActionDossierRepository actionDossierRepository;
@@ -131,7 +139,7 @@ class JournalCreationOperateurIntegrationTest extends CnmIntegrationTestSupport 
         ancienne.setDateAction(LocalDateTime.now().minusDays(3));
         ancienne.setTypeAction(JournalDossierService.CREATION);
         ancienne.setIdPrmpOperateur("PRMP001");
-        ancienne.setNomOperateur(NOM_PRMP);
+        ancienne.setNomOperateur(NOM_PRMP_ANCIEN_ORDRE);
         ancienne.setAuteur("ugpm.annick");
         actionDossierRepository.save(ancienne);
 
@@ -140,7 +148,7 @@ class JournalCreationOperateurIntegrationTest extends CnmIntegrationTestSupport 
                 .andExpect(jsonPath("$[?(@.typeAction=='CREATION')].nomOperateur", hasItem(NOM_UGPM)));
         // Rien n'a été réécrit en base : c'est la LECTURE qui corrige.
         assertThat(actionDossierRepository.findById(ancienne.getIdAction()).orElseThrow().getNomOperateur())
-                .isEqualTo(NOM_PRMP);
+                .isEqualTo(NOM_PRMP_ANCIEN_ORDRE);
     }
 
     // ------------------------------------------------------------------ 4. replis
@@ -158,13 +166,13 @@ class JournalCreationOperateurIntegrationTest extends CnmIntegrationTestSupport 
         sansCreateur.setDateAction(LocalDateTime.now().minusDays(5));
         sansCreateur.setTypeAction(JournalDossierService.CREATION);
         sansCreateur.setIdPrmpOperateur("PRMP001");
-        sansCreateur.setNomOperateur(NOM_PRMP);
+        sansCreateur.setNomOperateur(NOM_PRMP_ANCIEN_ORDRE);
         sansCreateur.setAuteur(null);
         actionDossierRepository.save(sansCreateur);
 
         mvc.perform(get("/api/dossiers/911/journal").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.typeAction=='CREATION')].nomOperateur", hasItem(NOM_PRMP)));
+                .andExpect(jsonPath("$[?(@.typeAction=='CREATION')].nomOperateur", hasItem(NOM_PRMP_ANCIEN_ORDRE)));
 
         // Créateur consigné mais absent de l'annuaire (compte supprimé) : le nom connu tient.
         Dossier e = dossierLoc(912, "BROUILLON", "ANT", "PRMP001");
@@ -176,12 +184,90 @@ class JournalCreationOperateurIntegrationTest extends CnmIntegrationTestSupport 
         inconnue.setDateAction(LocalDateTime.now().minusDays(5));
         inconnue.setTypeAction(JournalDossierService.CREATION);
         inconnue.setIdPrmpOperateur("PRMP001");
-        inconnue.setNomOperateur(NOM_PRMP);
+        inconnue.setNomOperateur(NOM_PRMP_ANCIEN_ORDRE);
         inconnue.setAuteur("compte.efface");
         actionDossierRepository.save(inconnue);
 
         mvc.perform(get("/api/dossiers/912/journal").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.typeAction=='CREATION')].nomOperateur", hasItem(NOM_PRMP)));
+                .andExpect(jsonPath("$[?(@.typeAction=='CREATION')].nomOperateur", hasItem(NOM_PRMP_ANCIEN_ORDRE)));
+    }
+
+    // ------------------------------------------------------------------ 5. 2ᵉ tour : TOUS les gestes
+
+    @Test
+    @DisplayName("Arbitrage ② — la règle ne vaut pas que pour la CRÉATION : toute ligne dont l'auteur est "
+            + "une UGPM porte SON nom, quel que soit le type d'action (ici RESOUMISSION et MISE_A_JOUR)")
+    void tousLesGestesDeLUgpm_portentSonNom() throws Exception {
+        int idDossier = dossierCreeParLUgpm();
+        // ⚠️ Constat de livraison (2026-09-08) : l'API ne permet PAS aujourd'hui à une UGPM de soumettre
+        // ou resoumettre — /soumettre, /resoumettre et /transmettre-complements* exigent le rôle PRMP
+        // (403). La création est son seul geste consigné accessible. La règle est donc éprouvée ici sur
+        // la FORME des lignes, telles qu'elles existeraient (ou existent déjà) : c'est l'auteur consigné
+        // qui décide du nom, pas le type de l'action.
+        mvc.perform(post("/api/dossiers/" + idDossier + "/soumettre").header("Authorization", tokenUgpm()))
+                .andExpect(status().isForbidden());
+
+        for (String type : new String[] { JournalDossierService.RESOUMISSION,
+                JournalDossierService.MISE_A_JOUR }) {
+            ActionDossier ligne = new ActionDossier();
+            ligne.setIdDossier(idDossier);
+            ligne.setDateAction(LocalDateTime.now());
+            ligne.setTypeAction(type);
+            ligne.setIdPrmpOperateur("PRMP001");
+            ligne.setNomOperateur(NOM_PRMP_ANCIEN_ORDRE);   // ce que l'ancien code écrivait
+            ligne.setAuteur("ugpm.annick");                 // ce que l'auteur réel était déjà
+            actionDossierRepository.save(ligne);
+        }
+
+        mvc.perform(get("/api/dossiers/" + idDossier + "/journal").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.typeAction=='CREATION')].nomOperateur", hasItem(NOM_UGPM)))
+                .andExpect(jsonPath("$[?(@.typeAction=='RESOUMISSION')].nomOperateur", hasItem(NOM_UGPM)))
+                .andExpect(jsonPath("$[?(@.typeAction=='MISE_A_JOUR')].nomOperateur", hasItem(NOM_UGPM)))
+                // Le rattachement à la tutelle ne bouge pas : le marqueur « opérateur ≠ attributaire »
+                // du front ne doit pas s'allumer parce qu'une UGPM a agi pour SA PRMP.
+                .andExpect(jsonPath("$[?(@.typeAction=='RESOUMISSION')].idPrmpOperateur", hasItem("PRMP001")));
+    }
+
+    // ------------------------------------------------------------------ 6. 2ᵉ tour : ordre uniforme
+
+    @Test
+    @DisplayName("Arbitrage ① — une seule convention « NOM Prénoms » sur TOUTES les lignes : la même "
+            + "personne ne change plus d'ordre d'une ligne à l'autre, et l'ancien ordre est corrigé à la relecture")
+    void ordreDesNoms_uniformeSurToutesLesLignes() throws Exception {
+        // Créé ET soumis par la PRMP : les deux lignes nomment la même personne — elles doivent
+        // désormais l'écrire pareil. Avant : « Nom Prenoms » à la création, « Prenoms Nom » à la soumission.
+        String reponse = mvc.perform(post("/api/saisies/dossier").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idTypeDossier\":\"DAO\",\"idEntiteContract\":1}"))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        int idDossier = JsonPath.read(reponse, "$.idDossier");
+        mvc.perform(post("/api/dossiers/" + idDossier + "/soumettre").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk());
+
+        String journal = mvc.perform(get("/api/dossiers/" + idDossier + "/journal")
+                .header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.typeAction=='CREATION')].nomOperateur", hasItem(NOM_PRMP)))
+                .andExpect(jsonPath("$[?(@.typeAction=='SOUMISSION')].nomOperateur", hasItem(NOM_PRMP)))
+                .andReturn().getResponse().getContentAsString();
+        // Aucune ligne ne porte plus l'ancien ordre.
+        java.util.List<String> noms = JsonPath.read(journal, "$[*].nomOperateur");
+        assertThat(noms).isNotEmpty().doesNotContain(NOM_PRMP_ANCIEN_ORDRE);
+
+        // RÉTROACTIF sur l'ordre : une ligne écrite « Prénoms Nom » se relit « NOM Prénoms ».
+        ActionDossier ancienOrdre = new ActionDossier();
+        ancienOrdre.setIdDossier(idDossier);
+        ancienOrdre.setDateAction(LocalDateTime.now());
+        ancienOrdre.setTypeAction(JournalDossierService.TRANSMISSION_COMPLEMENTS);
+        ancienOrdre.setIdPrmpOperateur("PRMP001");
+        ancienOrdre.setNomOperateur(NOM_PRMP_ANCIEN_ORDRE);
+        ancienOrdre.setAuteur("PRMP001");
+        actionDossierRepository.save(ancienOrdre);
+
+        mvc.perform(get("/api/dossiers/" + idDossier + "/journal").header("Authorization", tokenPrmp))
+                .andExpect(jsonPath("$[?(@.typeAction=='TRANSMISSION_COMPLEMENTS')].nomOperateur",
+                        hasItem(NOM_PRMP)));
     }
 }

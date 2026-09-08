@@ -1472,29 +1472,34 @@ Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `
 > de contrôleur allumerait à tort le marqueur « opérateur ≠ attributaire » du front. Seuls
 > `nomOperateur` (le nom du contrôleur, résolu serveur) et `auteur` (son login) sont renseignés.
 >
-> ⚠️ **`CREATION` porte son AUTEUR RÉEL, pas la PRMP de tutelle** (signalement du 2026-09-08, dossier
-> 00305). Un brouillon saisi par une **UGPM** affichait la création au nom de sa PRMP : à l'écriture,
-> l'opérateur d'une action est la PRMP en fonction, et pour un agent UGPM c'est sa tutelle. Mais créer
-> un dossier n'est pas un acte de traitement sous mandat — c'est une saisie, et le dossier sait qui l'a
-> faite. `nomOperateur` et `auteur` de la ligne `CREATION` sont donc **dérivés de `CREE_PAR`**, la même
-> valeur que `DossierDto.creePar` / `creeParNom` : le journal et le dossier disent désormais **la même
-> chaîne**, au caractère près.
+> ⚠️ **`nomOperateur` nomme l'AUTEUR RÉEL du geste, dans UNE SEULE convention** (signalement du
+> 2026-09-08 sur la création, dossier 00305, puis arbitrages du pilote du même jour). Un brouillon saisi
+> par une **UGPM** affichait la création au nom de sa PRMP : à l'écriture, l'opérateur d'une action est
+> la PRMP en fonction, et pour un agent UGPM c'est sa tutelle. Mais agir n'est pas être le responsable
+> sous mandat, et le dossier sait qui a saisi. Deux règles en découlent :
 >
-> - **Dérivé à la lecture, donc rétroactif** : les dossiers déjà créés se corrigent d'eux-mêmes, sans
->   reprise de données. Rien n'est réécrit en base.
-> - **`idPrmpOperateur` ne bouge pas** : c'est la PRMP de tutelle, sous l'autorité de laquelle l'UGPM a
->   saisi. Y mettre l'UGPM allumerait le marqueur « opérateur ≠ attributaire », qui signale qu'une
->   *autre PRMP* a agi — un contresens ici.
-> - **Replis, dans l'ordre** : le `CREE_PAR` du dossier, puis le login consigné sur la ligne, puis le nom
->   stocké. Un nom connu n'est jamais remplacé par un login brut.
-> - **`SOUMISSION` est inchangée** : elle porte déjà `SOUMIS_PAR`. ⚠️ Conséquence visible d'un dossier
->   créé *et* soumis par la même PRMP : `CREATION` adopte l'ordre « NOM Prénoms » de `creeParNom`, tandis
->   que `SOUMISSION` garde l'ordre « Prénoms Nom » de l'annuaire des PRMP. Même personne, deux
->   conventions d'affichage — dites-le si vous voulez les aligner.
-> - ⚠️ **Les autres actions restent sur la PRMP de tutelle.** Une `RESOUMISSION` ou une `MISE_A_JOUR`
->   posée par un agent UGPM est donc encore nommée au nom de sa PRMP. C'est le même écart que celui
->   signalé sur la création, mais sur des lignes qui n'ont pas été rapportées : la correction n'a pas
->   été étendue sans arbitrage.
+> 1. **L'auteur décide du nom, sur TOUTES les lignes.** `nomOperateur` est dérivé de l'identité portée
+>    par `auteur` — pour la `CREATION`, du `CREE_PAR` du dossier, qui fait foi même si la ligne est
+>    muette. Le journal et le `DossierDto` servent donc **la même chaîne**, au caractère près.
+> 2. **Une seule convention d'affichage : « NOM Prénoms »**, nom de famille en tête. Les trois annuaires
+>    (PRMP, contrôleurs, unités) en servaient deux : la même personne changeait d'ordre d'une ligne à
+>    l'autre du même tableau. Elle vaut aussi pour `creeParNom` / `soumisParNom` et le `nomAffichage` du
+>    login — une seule règle, un seul endroit (`ActeurDirectory.nomCanonique`).
+>
+> - **Dérivé à la lecture, donc rétroactif** : les lignes déjà écrites — y compris celles qui portent
+>   l'ancien ordre — se corrigent d'elles-mêmes. Rien n'est réécrit en base.
+> - **`idPrmpOperateur` ne bouge pas** : c'est la PRMP sous l'autorité de laquelle l'agent a agi. Y
+>   mettre l'UGPM allumerait le marqueur « opérateur ≠ attributaire », qui signale qu'une *autre PRMP* a
+>   agi — un contresens ici. **Seul le nom affiché change de source.**
+> - **Identités et replis.** L'auteur est un *login* sur une action consignée, un *matricule* ou un
+>   *identifiant de PRMP* sur un événement dérivé ou une copie figée : les trois annuaires sont
+>   interrogés, chacun **une fois** quel que soit le nombre de lignes. Sans résolution, le nom stocké est
+>   conservé — un nom connu n'est jamais remplacé par un identifiant brut.
+> - ⚠️ **Constat de livraison** : aujourd'hui une UGPM ne peut poser qu'un seul geste consigné, la
+>   **création**. `/soumettre`, `/resoumettre` et `/transmettre-complements*` exigent le rôle `PRMP`
+>   (**403** pour une UGPM). La dérivation est néanmoins **générale** — elle porte sur l'auteur de la
+>   ligne, pas sur son type — donc elle vaudra sans retouche si le modèle d'habilitation s'ouvre, et elle
+>   corrige déjà les lignes de ce genre présentes en base.
 >
 > ## ⚠️ JOURNAL DU DOSSIER — le traitement raconté jusqu'au bout (2026-09-04)
 >

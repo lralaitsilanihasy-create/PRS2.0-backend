@@ -278,7 +278,9 @@ class MandatsPrmpIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$", hasSize(1)))
                 .andExpect(jsonPath("$[0].typeAction").value("TRANSMISSION_COMPLEMENTS_DEPOT"))
                 .andExpect(jsonPath("$[0].idPrmpOperateur").value("PRMPSUC"))
-                .andExpect(jsonPath("$[0].nomOperateur").value("Prenoms Successeur"));
+                // ⚠️ Convention canonique unique « NOM Prénoms » (arbitrage du pilote, 2026-09-08) : le
+                // journal servait deux ordres selon l'annuaire d'origine. Ce test disait l'ancien.
+                .andExpect(jsonPath("$[0].nomOperateur").value("Successeur Prenoms"));
     }
 
     @Test

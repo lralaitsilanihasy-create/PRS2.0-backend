@@ -127,14 +127,13 @@ public class JournalDossierService {
         repository.save(action);
     }
 
-    /** « Prénoms Nom » d'un contrôleur ; repli sur le matricule, {@code null} si l'acteur est inconnu. */
+    /** « NOM Prénoms » d'un contrôleur (convention canonique) ; repli sur le matricule. */
     private String nomControleur(String imControleur) {
         if (imControleur == null) {
             return null;
         }
         return controleurRepository.findById(imControleur).map(c -> {
-            String nom = ((c.getPrenomsCont() == null ? "" : c.getPrenomsCont()) + " "
-                    + (c.getNomCont() == null ? "" : c.getNomCont())).trim();
+            String nom = ActeurDirectory.nomCanonique(c.getNomCont(), c.getPrenomsCont());
             return nom.isBlank() ? imControleur : nom;
         }).orElse(imControleur);
     }
@@ -149,7 +148,7 @@ public class JournalDossierService {
                 repository.findByIdDossierOrderByDateActionAscIdActionAsc(idDossier).stream()
                         .map(JournalDossierService::toDto).toList());
         lignes.addAll(traitement.evenements(idDossier));
-        attribuerLaCreationAuCreateur(idDossier, lignes);
+        nommerLesAuteursReels(idDossier, lignes);
         // Ordre chronologique STRICT ; à instant égal, le rang du circuit tranche. Sans lui, les actes
         // de fin de parcours — datés sans heure — se seraient rangés dans un ordre arbitraire.
         lignes.sort(java.util.Comparator
@@ -162,44 +161,72 @@ public class JournalDossierService {
     }
 
     /**
-     * ⚠️ <strong>Signalement pilote (2026-09-08, dossier 00305)</strong> — la ligne {@code CREATION} revient
-     * à son <strong>auteur réel</strong>, et non à la PRMP de tutelle.
+     * ⚠️ <strong>Le journal nomme l'AUTEUR RÉEL de chaque geste, dans UNE SEULE convention</strong>
+     * (signalement du 2026-09-08 sur la création, dossier 00305, puis arbitrages du pilote du même jour).
      *
-     * <p>À l'écriture, l'opérateur d'une action est la <strong>PRMP en fonction</strong> ({@code
-     * CurrentUser.ref()}), qui pour un agent UGPM est sa PRMP de tutelle : c'est ce qui donne son sens au
-     * couple opérateur/mandat, et il ne change pas. Mais la <em>création</em> d'un dossier n'est pas un acte
-     * de traitement sous mandat : c'est une saisie, et le dossier sait qui l'a faite — {@code CREE_PAR}
-     * porte le login créateur, celui-là même que {@code DossierDto.creePar} expose déjà correctement. Le
-     * journal disait donc « la PRMP » d'un brouillon saisi par l'UGPM, en contradiction avec le dossier.</p>
+     * <p><strong>Le constat.</strong> À l'écriture, l'opérateur d'une action est la <strong>PRMP en
+     * fonction</strong> ({@code CurrentUser.ref()}), qui pour un agent UGPM est sa PRMP de tutelle. Un
+     * brouillon saisi par l'UGPM était donc consigné au nom de la PRMP, en contradiction avec le dossier
+     * lui-même ({@code CREE_PAR}). Le pilote a tranché deux fois : la ligne doit porter <em>celui qui a
+     * fait le geste</em>, et cela vaut pour <strong>tous</strong> les gestes, pas seulement la création.</p>
      *
-     * <p><strong>Dérivé à la lecture, donc rétroactif</strong> — comme le reste de la fusion : les dossiers
-     * déjà créés se corrigent d'eux-mêmes, sans reprise de données. Seul le <strong>nom</strong> (et
-     * l'auteur) bouge : {@code idPrmpOperateur} reste la PRMP de tutelle, qui est bien celle sous
-     * l'autorité de laquelle l'UGPM a saisi. Y mettre l'UGPM allumerait le marqueur « opérateur ≠
-     * attributaire » du front, qui signale qu'une <em>autre PRMP</em> a agi — un contresens ici.</p>
+     * <p><strong>Une seule convention.</strong> Les noms venaient de trois annuaires qui les assemblaient
+     * dans deux ordres : la même personne s'écrivait « Prénoms Nom » sur une ligne et « NOM Prénoms » sur
+     * la suivante, dans le même tableau. Tout passe désormais par
+     * {@link ActeurDirectory#nomCanonique(String, String)} — le défaut ne venait pas d'un annuaire fautif,
+     * mais de l'absence de source unique.</p>
      *
-     * <p>Replis, dans l'ordre : le {@code CREE_PAR} du dossier, puis le login consigné sur la ligne
-     * elle-même (un dossier d'avant {@code CREE_PAR}), puis le nom stocké — on ne remplace jamais un nom
-     * connu par un login brut.</p>
+     * <p><strong>Dérivé à la lecture, donc rétroactif</strong>, comme le reste de la fusion : les lignes
+     * déjà écrites — y compris celles qui portent un nom dans l'ancien ordre — se corrigent d'elles-mêmes,
+     * sans reprise de données et sans rien réécrire en base.</p>
+     *
+     * <p><strong>Ce qui ne bouge pas</strong> : {@code idPrmpOperateur}. C'est la PRMP sous l'autorité de
+     * laquelle l'agent a agi ; y mettre l'UGPM allumerait le marqueur « opérateur ≠ attributaire » du
+     * front, qui signale qu'une <em>autre PRMP</em> a agi — un contresens. Seul le nom affiché change de
+     * source.</p>
+     *
+     * <p><strong>Identités et replis.</strong> L'auteur d'une ligne est un <em>login</em> pour une action
+     * consignée, un <em>matricule</em> ou un <em>identifiant de PRMP</em> pour un événement dérivé (ou une
+     * copie figée) : les trois annuaires sont donc interrogés, chacun une seule fois quel que soit le
+     * nombre de lignes. La {@code CREATION} prend d'abord son auteur sur le dossier, qui fait foi même
+     * lorsque la ligne est muette. Sans résolution, le nom stocké est conservé : on ne remplace jamais un
+     * nom connu par un identifiant brut.</p>
      */
-    private void attribuerLaCreationAuCreateur(Integer idDossier, List<ActionDossierDto> lignes) {
-        List<ActionDossierDto> creations = lignes.stream()
-                .filter(l -> CREATION.equals(l.getTypeAction())).toList();
-        if (creations.isEmpty()) {
+    private void nommerLesAuteursReels(Integer idDossier, List<ActionDossierDto> lignes) {
+        if (lignes.isEmpty()) {
             return;
         }
+        // La création : CREE_PAR fait foi, y compris sur une ligne écrite avant que l'auteur soit consigné.
         String createur = dossierRepository.findById(idDossier).map(Dossier::getCreePar)
+                .filter(s -> s != null && !s.isBlank()).orElse(null);
+        if (createur != null) {
+            for (ActionDossierDto ligne : lignes) {
+                if (CREATION.equals(ligne.getTypeAction())) {
+                    ligne.setAuteur(createur);
+                }
+            }
+        }
+        java.util.Set<String> identites = lignes.stream().map(ActionDossierDto::getAuteur)
                 .filter(s -> s != null && !s.isBlank())
-                .orElseGet(() -> creations.stream().map(ActionDossierDto::getAuteur)
-                        .filter(s -> s != null && !s.isBlank()).findFirst().orElse(null));
-        if (createur == null) {
+                .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
+        if (identites.isEmpty()) {
             return;
         }
-        String nom = acteurDirectory.nomsParLogin(java.util.Set.of(createur)).get(createur);
-        for (ActionDossierDto creation : creations) {
-            creation.setAuteur(createur);
+        java.util.Map<String, String> noms = new java.util.HashMap<>(acteurDirectory.nomsParLogin(identites));
+        java.util.Set<String> restantes = identites.stream().filter(i -> !noms.containsKey(i))
+                .collect(java.util.stream.Collectors.toSet());
+        if (!restantes.isEmpty()) {
+            // Événements dérivés et copies figées : l'auteur y est un matricule de contrôleur…
+            controleurRepository.findAllById(restantes).forEach(c -> noms.put(c.getImControleur(),
+                    ActeurDirectory.nomCanonique(c.getNomCont(), c.getPrenomsCont())));
+            // … ou un identifiant de PRMP (demande de retrait).
+            prmpRepository.findAllById(restantes).forEach(p -> noms.putIfAbsent(p.getIdPrmp(),
+                    ActeurDirectory.nomCanonique(p.getNomPrmp(), p.getPrenomsPrmp())));
+        }
+        for (ActionDossierDto ligne : lignes) {
+            String nom = ligne.getAuteur() == null ? null : noms.get(ligne.getAuteur());
             if (nom != null && !nom.isBlank()) {
-                creation.setNomOperateur(nom);
+                ligne.setNomOperateur(nom);
             }
         }
     }
@@ -250,8 +277,7 @@ public class JournalDossierService {
             return null;
         }
         return prmpRepository.findById(idPrmp).map(p -> {
-            String nom = ((p.getPrenomsPrmp() == null ? "" : p.getPrenomsPrmp()) + " "
-                    + (p.getNomPrmp() == null ? "" : p.getNomPrmp())).trim();
+            String nom = ActeurDirectory.nomCanonique(p.getNomPrmp(), p.getPrenomsPrmp());
             return nom.isBlank() ? idPrmp : nom;
         }).orElse(idPrmp);
     }

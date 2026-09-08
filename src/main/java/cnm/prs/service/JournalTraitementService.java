@@ -217,14 +217,13 @@ public class JournalTraitementService {
         return statut;
     }
 
-    /** « Prénoms Nom » d'une PRMP ; repli sur l'identifiant. */
+    /** « NOM Prénoms » d'une PRMP (convention canonique unique) ; repli sur l'identifiant. */
     private String nomPrmp(String idPrmp) {
         if (idPrmp == null || idPrmp.isBlank()) {
             return null;
         }
         return prmpRepository.findById(idPrmp).map(p -> {
-            String complet = ((p.getPrenomsPrmp() == null ? "" : p.getPrenomsPrmp()) + " "
-                    + (p.getNomPrmp() == null ? "" : p.getNomPrmp())).trim();
+            String complet = ActeurDirectory.nomCanonique(p.getNomPrmp(), p.getPrenomsPrmp());
             return complet.isBlank() ? idPrmp : complet;
         }).orElse(idPrmp);
     }
@@ -349,14 +348,13 @@ public class JournalTraitementService {
         return dto;
     }
 
-    /** « Prénoms Nom » d'un contrôleur ; repli sur le matricule. */
+    /** « NOM Prénoms » d'un contrôleur (convention canonique unique) ; repli sur le matricule. */
     private String nom(String im) {
         if (im == null || im.isBlank()) {
             return null;
         }
         return controleurRepository.findById(im).map(c -> {
-            String complet = ((c.getPrenomsCont() == null ? "" : c.getPrenomsCont()) + " "
-                    + (c.getNomCont() == null ? "" : c.getNomCont())).trim();
+            String complet = ActeurDirectory.nomCanonique(c.getNomCont(), c.getPrenomsCont());
             return complet.isBlank() ? im : complet;
         }).orElse(im);
     }

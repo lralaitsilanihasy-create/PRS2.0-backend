@@ -725,8 +725,23 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
     **rétroactivement**, et sans reprise de données. `ID_PRMP_OPERATEUR` ne bouge pas — c'est bien sous
     l'autorité de la tutelle que l'UGPM a saisi, et y mettre l'UGPM allumerait le marqueur « opérateur ≠
     attributaire », qui signale qu'une *autre PRMP* a agi. `SOUMISSION` reste sur `SOUMIS_PAR`.
-    ⚠️ Les **autres** actions d'un agent UGPM (`RESOUMISSION`, `MISE_A_JOUR`…) portent encore le nom de
-    sa PRMP : même écart, sur des lignes non signalées — non étendu sans arbitrage du pilote.
+  - ⚠️ **Généralisé, et une seule convention de nom** (arbitrages du pilote, 2026-09-08, 2ᵉ tour) —
+    « le journal doit nommer l'auteur réel de **chaque** geste », et « les noms doivent s'écrire
+    **partout pareil** ». Deux règles :
+    - **L'auteur décide du nom, quelle que soit l'action.** Le nom affiché est dérivé de l'identité
+      portée par l'auteur de la ligne — un login pour une action consignée, un matricule ou un
+      identifiant de PRMP pour un événement dérivé ou une copie figée. La création garde sa source
+      propre (`CREE_PAR` du dossier), qui fait foi même quand la ligne est muette.
+    - **Convention canonique : « NOM Prénoms »**, le nom de famille en tête — forme administrative
+      usuelle. Les trois annuaires en servaient deux, si bien que la même personne changeait d'ordre
+      d'une ligne à l'autre du même tableau. Le défaut ne venait pas d'un annuaire fautif mais de
+      l'**absence de source unique** : elle est désormais à un seul endroit, et vaut aussi pour
+      `creeParNom` / `soumisParNom` et le nom d'affichage du login.
+    Rétroactif, comme le reste : les lignes déjà écrites dans l'ancien ordre se relisent corrigées.
+    Sans résolution possible, le nom stocké est conservé — jamais remplacé par un identifiant brut.
+    ⚠️ **Constat de livraison** : une UGPM ne peut aujourd'hui poser qu'un seul geste consigné, la
+    **création** — soumission, resoumission et transmissions de compléments exigent le rôle PRMP (403).
+    La règle est néanmoins générale, portant sur l'auteur et non sur le type d'action.
 
   - ⚠️ **La CONSIGNE est consignée** (complément du 2026-09-04) — « Comment savoir que le dossier a été
     dispatché au CC avec instruction avant de le dispatcher au membre ? » Les lignes `DISPATCH` et

@@ -121,10 +121,22 @@ public class ActeurDirectory {
     }
 
     /**
-     * Nom d'affichage « Nom Prénoms » — <strong>même convention que le {@code nomAffichage} du
-     * login</strong> ({@code AuthService}), pour que la même personne s'écrive partout pareil.
+     * ⚠️ <strong>Convention CANONIQUE d'affichage d'une personne : « NOM Prénoms »</strong> (arbitrage du
+     * pilote, 2026-09-08) — le nom de famille en tête, forme administrative usuelle des documents
+     * officiels. C'est la <strong>seule</strong> convention de l'application : elle vaut pour le
+     * {@code nomAffichage} du login ({@code AuthService}), pour {@code creeParNom} / {@code soumisParNom},
+     * et depuis le 2026-09-08 pour <em>toutes</em> les lignes du journal d'un dossier.
+     *
+     * <p>Elle est ici, et publique, pour qu'il n'existe qu'un endroit où elle vive : le journal
+     * assemblait la même personne dans deux ordres selon l'annuaire d'origine (« Prénoms Nom » depuis les
+     * annuaires PRMP et contrôleurs, « NOM Prénoms » depuis celui-ci), et les deux se côtoyaient dans le
+     * même tableau. Le défaut ne venait pas d'un annuaire fautif mais de l'absence de source unique.</p>
      */
-    private static String assembler(String prenoms, String nom) {
+    public static String nomCanonique(String nom, String prenoms) {
         return ((nom == null ? "" : nom.trim()) + " " + (prenoms == null ? "" : prenoms.trim())).trim();
+    }
+
+    private static String assembler(String prenoms, String nom) {
+        return nomCanonique(nom, prenoms);
     }
 }
