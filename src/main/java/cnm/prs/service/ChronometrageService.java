@@ -217,13 +217,21 @@ public class ChronometrageService {
         exigerActeurAttendu(idDossier, etape);
         exigerNonExaminateurAuVisa(idDossier, etape);
 
+        // ⚠️ Demande pilote (2026-09-08) — la prévision est FACULTATIVE : « Prendre en charge » ne
+        // demande plus rien, il démarre le chronomètre. Absente, on prend le délai standard de l'étape,
+        // et le drapeau dit qu'elle n'a PAS été estimée — c'est toute la différence entre une prévision
+        // choisie et une prévision par défaut, et elle doit rester lisible dans le tableau des passages.
+        boolean standard = previsionHeures == null;
+        int prevision = standard ? delaiStandardService.delai(etape) : previsionHeures;
+
         String moi = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
         List<TacheDossier> ouvertes = tacheRepository.ouvertes(idDossier, etape.name());
         TacheDossier mienne = ouvertes.stream()
                 .filter(t -> moi != null && moi.equals(t.getImActeur())).findFirst().orElse(null);
         if (mienne != null) {
-            mienne.setPrevisionHeures(previsionHeures);
-            mienne.setPrevisionStandard(Boolean.FALSE);
+            // Rejeu idempotent : sans prévision, on ré-applique le standard ; avec, on corrige la sienne.
+            mienne.setPrevisionHeures(prevision);
+            mienne.setPrevisionStandard(standard);
             TacheDossier maj = tacheRepository.save(mienne);
             return TacheDossierDto.de(maj, nom(maj.getImActeur()));
         }
@@ -234,7 +242,7 @@ public class ChronometrageService {
                     + "demandez-lui de vous la transmettre.");
         }
         TacheDossier tache = tacheRepository.save(
-                nouvelle(idDossier, etape, LocalDateTime.now(), previsionHeures, false));
+                nouvelle(idDossier, etape, LocalDateTime.now(), prevision, standard));
         return TacheDossierDto.de(tache, nom(tache.getImActeur()));
     }
 

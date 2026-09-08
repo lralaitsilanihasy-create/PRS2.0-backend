@@ -126,12 +126,15 @@ class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("Prise en charge — prévision absente ou nulle refusée en 400")
-    void priseEnCharge_previsionObligatoire() throws Exception {
+    @DisplayName("Prise en charge — ⚠️ 2026-09-08 : prévision ABSENTE acceptée (standard de l'étape) ; "
+            + "zéro toujours refusé en 400 — ne rien dire n'autorise pas à dire n'importe quoi")
+    void priseEnCharge_previsionFacultative_maisBornee() throws Exception {
         dossierEnStatut(1, "PRET_DISPATCH");
+        // La prévision n'est plus obligatoire : le bouton démarre le chronomètre, le référentiel décide.
         mvc.perform(post("/api/dossiers/1/prise-en-charge").header("Authorization", tokenCc)
                 .contentType(MediaType.APPLICATION_JSON).content("{}"))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.previsionStandard").value(true));
         mvc.perform(post("/api/dossiers/1/prise-en-charge").header("Authorization", tokenCc)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"previsionHeures\":0}"))
                 .andExpect(status().isBadRequest());
@@ -374,8 +377,9 @@ class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
     @DisplayName("Un client resté aux JOURS est refusé en 400 — jamais lu comme des heures en silence")
     void priseEnCharge_previsionJours_refusee() throws Exception {
         dossierEnStatut(1, "PRET_DISPATCH");
-        // « previsionJours » est une propriété inconnue : ignorée, donc previsionHeures manque → 400.
-        // Le refus est volontaire : 5 « jours » pris pour 5 heures fausseraient la date sans bruit.
+        // ⚠️ 2026-09-08 — ce refus était jusqu'ici un EFFET DE BORD (propriété inconnue ignorée, champ
+        // requis manquant). La prévision devenue facultative, il aurait disparu : les « 5 jours » auraient
+        // été remplacés par le standard en silence. Le champ est donc déclaré POUR ÊTRE INTERDIT.
         mvc.perform(post("/api/dossiers/1/prise-en-charge").header("Authorization", tokenCc)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"previsionJours\":5}"))
                 .andExpect(status().isBadRequest());

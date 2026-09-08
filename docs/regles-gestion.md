@@ -408,9 +408,22 @@ la CNM mais par la **PRMP**, et reste elle aussi **hors compteur global** (voir 
 PRMP se prend en charge elle aussi », plus bas). Le référentiel des délais standards, qui ne décrit que
 les délais de la Commission, garde donc ses **huit** lignes.
 
-- **Prise en charge = geste EXPLICITE.** Le porteur ouvre sa tâche et saisit sa prévision en jours
-  ouvrés. Le temps d'attente **avant** la prise en charge est ainsi mesuré lui aussi. La prévision reste
-  corrigeable tant que la tâche est ouverte.
+- **Prise en charge = geste EXPLICITE.** Le porteur ouvre sa tâche ; le temps d'attente **avant** la
+  prise en charge est ainsi mesuré lui aussi. ⚠️ **La prévision ne se saisit plus** (demande pilote du
+  2026-09-08) : le bouton ne sert qu'à *démarrer le chronomètre*, et la prévision est celle du
+  **référentiel administrable** de l'étape, l'occurrence étant marquée `previsionStandard = true`. Une
+  valeur explicite reste acceptée — elle vaut alors prévision *estimée*, drapeau à `false` : c'est cette
+  distinction, entre un choix et un défaut, que le tableau des passages doit continuer de montrer. Le
+  rejeu est idempotent, et n'ouvre jamais d'occurrence.
+  - **`RECTIFICATION_PRMP` n'entre pas au référentiel pour autant** : elle n'est pas un délai de la
+    Commission (voir plus bas), et sa prise en charge prend le **repli serveur de 8 h**, comme toute
+    étape que l'Administrateur n'a pas réglée. Si le pilote veut pouvoir l'ajuster, c'est le sens même
+    du référentiel qui change — une décision à prendre, pas un réglage à glisser.
+  - ⚠️ **Ne rien dire n'autorise pas à dire n'importe quoi** : `previsionHeures` à zéro reste refusé, et
+    l'ancienne unité `previsionJours` **aussi**. Ce refus-là était jusqu'ici un *effet de bord* — la
+    propriété inconnue était ignorée, le champ obligatoire manquait. En rendant la prévision facultative,
+    il disparaissait : cinq « jours » auraient été silencieusement remplacés par le standard. Le champ
+    est donc déclaré **pour être interdit**, et le refus qui était un accident devient une règle.
 - ⚠️ **Le chronométrage n'empêche JAMAIS le métier.** Un geste de clôture posé sans prise en charge
   préalable n'est pas bloqué : l'occurrence est créée avec une durée nulle et la prévision standard. Un
   chronomètre qui bloquerait un dossier serait pire que pas de chronomètre.

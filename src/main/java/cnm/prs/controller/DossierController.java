@@ -259,8 +259,10 @@ public class DossierController {
      */
     @PostMapping("/{id}/prise-en-charge")
     public TacheDossierDto prendreEnCharge(@PathVariable Integer id,
-            @Valid @RequestBody PriseEnChargeRequest req) {
-        return chronometrageService.prendreEnCharge(id, req.previsionHeures());
+            @Valid @RequestBody(required = false) PriseEnChargeRequest req) {
+        // ⚠️ 2026-09-08 — corps FACULTATIF : « Prendre en charge » ne demande plus de prévision, il
+        // démarre le chronomètre. Sans corps (ou sans le champ), le service applique le délai standard.
+        return chronometrageService.prendreEnCharge(id, req == null ? null : req.previsionHeures());
     }
 
     /**

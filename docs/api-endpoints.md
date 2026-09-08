@@ -5507,13 +5507,33 @@ nombre d'aller-retours.
 | GET | /api/delais-standards | — | `DelaiStandardDto[]` | 200 | Authentifié |
 | PUT | /api/delais-standards/{etape} | `DelaiStandardDto` | `DelaiStandardDto` | 200, 400, 403, 404 | **ADMINISTRATEUR** |
 
-`previsionHeures` : entier **≥ 1**, en **heures ouvrées** (0 ou absent → **400**). **403** si l'appelant n'est pas le porteur de
+⚠️ **`previsionHeures` est FACULTATIF depuis le 2026-09-08**, et le **corps entier peut manquer** : le
+bouton « Prendre en charge » ne demande plus rien, il démarre le chronomètre.
+
+| Corps | Prévision retenue | `previsionStandard` |
+|---|---|---|
+| absent, `{}`, ou `previsionHeures: null` | le **délai standard de l'étape** (`/api/delais-standards`) | `true` |
+| `{"previsionHeures": 12}` | 12 — prévision **estimée** (compat, toujours acceptée) | `false` |
+| `{"previsionHeures": 0}` ou négatif | — | **400** |
+| `{"previsionJours": 5}` | — | **400** nommant le champ (ancienne unité, abandonnée le 2026-09-02) |
+
+Le drapeau `previsionStandard` porte toute la différence : une prévision **choisie** ne se lit pas comme
+une prévision **par défaut**. ⚠️ Le refus de `previsionJours` était jusqu'ici un *effet de bord* (champ
+obligatoire manquant) ; la prévision devenue facultative, il est désormais **explicite** — sans quoi
+cinq « jours » auraient été silencieusement remplacés par le standard.
+
+**403** si l'appelant n'est pas le porteur de
 l'étape (délégations et intérim résolus par la garde centrale) ou si le dossier n'est pas de sa
 localité ; **409** si aucune étape n'est ouverte — brouillon, dossier clos ou retiré (⚠️ l'attente de
 rectification PRMP n'en fait plus partie depuis le 2026-09-07, voir ci-dessous).
 
 **Rejouer le POST sur une tâche encore ouverte corrige la prévision** et ne crée pas d'occurrence :
-corriger son estimation n'est pas recommencer sa tâche.
+corriger son estimation n'est pas recommencer sa tâche. Rejoué **sans corps**, il ré-applique le
+standard — idempotent.
+
+⚠️ **`RECTIFICATION_PRMP` ne figure pas au référentiel** (ce n'est pas un délai de la Commission) : sa
+prise en charge prend le **repli serveur de 8 h**, comme toute étape que l'Administrateur n'a pas réglée.
+`PUT /api/delais-standards/RECTIFICATION_PRMP` répond toujours **404**.
 
 > ## ⚠️ RECTIFICATION PRMP — l'étape `RECTIFICATION_PRMP` (2026-09-07)
 >
