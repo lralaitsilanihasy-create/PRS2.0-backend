@@ -215,6 +215,7 @@ public class ChronometrageService {
         }
         exigerPorteurEligible(dossier, etape);
         exigerActeurAttendu(idDossier, etape);
+        exigerNonExaminateurAuVisa(idDossier, etape);
 
         String moi = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
         List<TacheDossier> ouvertes = tacheRepository.ouvertes(idDossier, etape.name());
@@ -314,6 +315,42 @@ public class ChronometrageService {
      * <p>Un PV en navette <strong>sans niveau</strong> — soumis avant la livraison du 2026-09-04 —
      * retombe aussi sur {@code null} : on ne durcit pas rétroactivement un dossier en cours.</p>
      */
+    /**
+     * ⚠️ <strong>L'examinateur ne prend pas en charge le visa de son propre examen</strong> (arbitrage du
+     * pilote, 2026-09-08) — garde <strong>négative</strong>, sur une navette simple.
+     *
+     * <p><strong>Pourquoi elle ne passe pas par {@code acteursAttendus}.</strong> Cette liste est
+     * <em>close</em> par nature : y mettre le seul dispatcheur masquerait le geste au suppléant par
+     * intérim, qui reste légitime. L'ensemble admis — le dispatcheur, plus tout P/CC du périmètre par
+     * intérim, moins l'examinateur — n'est pas énumérable ; la liste reste donc {@code null} et la
+     * réserve s'exprime en refus. C'est la seule exclusion du chronométrage, et elle est ici plutôt que
+     * dans la liste parce qu'une soustraction ne se dit pas avec une énumération.</p>
+     *
+     * <p><strong>Pourquoi elle vaut la peine.</strong> Sans elle, l'examinateur pourrait ouvrir la tâche
+     * de visa — un geste qu'il ne pourra jamais achever (403 au visa) — et <strong>verrouiller l'étape
+     * contre le vrai dispatcheur</strong>, que le 409 nominal du 2026-09-04 renverrait alors vers lui.
+     * Exactement le blocage que ce 409 avait pour but d'éviter.</p>
+     */
+    private void exigerNonExaminateurAuVisa(Integer idDossier, EtapeCircuit etape) {
+        if (etape != EtapeCircuit.VISA) {
+            return;
+        }
+        CircuitDossierService.Circuit circuit = circuitService.parDossier(idDossier);
+        if (circuitService.deuxNiveaux(circuit)) {
+            return;   // deux niveaux : les règles d'étage tiennent déjà l'acteur de chaque visa
+        }
+        String moi = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
+        if (moi == null || !moi.equals(circuit.attributaire())) {
+            return;
+        }
+        if (moi.equals(circuit.dispatcheur())) {
+            return;   // dispatché à lui-même : il cumule légitimement examen, soumission et visa
+        }
+        throw new AccessDeniedException("Le visa de ce dossier revient à son dispatcheur ("
+                + nomOuMatricule(circuit.dispatcheur()) + ") : vous l'avez examiné, et l'examinateur ne "
+                + "vise pas son propre examen.");
+    }
+
     private List<String> acteursDuVisa(Integer idDossier) {
         CircuitDossierService.Circuit circuit = circuitService.parDossier(idDossier);
         if (!circuitService.deuxNiveaux(circuit)) {

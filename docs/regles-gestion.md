@@ -557,6 +557,29 @@ n'est pas dépanner** : c'est engager l'examen, et l'examen est le travail de so
   le champ `imActeur` du corps de requête n'est lu nulle part. Le point de vigilance de la demande était
   donc déjà couvert ; un test le fige, en tentant la soumission avec un `imActeur` mensonger.
 
+⚠️ **…et symétriquement, l'EXAMINATEUR NE VISE PAS son propre examen** (arbitrage du pilote,
+2026-09-08). Quand le Président dispatche l'examen au CC, le CC examinait puis se voyait proposer de
+**viser** le même dossier — directement, ou par la voie de l'**intérim**, étant P/CC du périmètre. La
+séparation des rôles tombait : celui qui examine ne vise pas. C'est la règle ci-dessus prise à l'envers,
+et elle vaut pour le **visa** comme pour le **retour pour rectification**, qui en est l'autre issue.
+
+- ⚠️ **Le critère n'est pas « est l'examinateur » mais « examinateur ET pas dispatcheur ».** Par
+  délégation de profil, une même personne peut se dispatcher le dossier **à elle-même** puis l'examiner :
+  elle cumule alors **légitimement** examen, soumission et visa — il n'y a personne dont la séparer.
+  Bloquer sur le seul fait d'examiner fermerait ce circuit court.
+- **L'intérim n'ouvre rien ici** : suppléer un absent, c'est tenir SA place, pas s'auto-délivrer un visa.
+  Le refus vient **avant** la note d'intérim — lui réclamer une pièce qui ne débloquerait rien serait
+  malhonnête. Un suppléant qui n'est pas l'examinateur, lui, garde le geste.
+- **La prise en charge du VISA suit la même réserve.** Sans cela, l'examinateur ouvrait une tâche qu'il
+  ne pourrait jamais achever et **verrouillait l'étape contre le dispatcheur** — que le refus nominal du
+  2026-09-04 renvoyait alors vers lui. Exactement le blocage que ce refus visait à empêcher.
+- ⚠️ **`acteursAttendus` reste `null` sur une navette simple** : l'ensemble admis — le dispatcheur, plus
+  tout P/CC du périmètre par intérim, **moins** l'examinateur — n'est pas énumérable. Une **soustraction
+  ne se dit pas avec une énumération** : la réserve s'exprime donc en refus, et c'est la seule exclusion
+  du chronométrage. Y mettre le seul dispatcheur aurait masqué le geste aux suppléants légitimes.
+- La navette à **deux niveaux** n'est pas concernée : ses règles d'étage tiennent déjà l'acteur de chaque
+  visa, et le CC y a son acceptation propre.
+
 ⚠️ **Une occurrence par étage, une tâche par co-signataire.** Le visa d'un dossier à deux niveaux est
 tenu par deux acteurs successifs, et la co-signature élargie par deux désignés simultanés — dans les
 deux cas, une tâche unique faisait verrouiller le second par le premier, et mêlait leurs durées. Ce

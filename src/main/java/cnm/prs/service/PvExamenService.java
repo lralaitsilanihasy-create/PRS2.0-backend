@@ -824,6 +824,13 @@ public class PvExamenService {
             throw new BusinessRuleException("Le commentaire de rectification est obligatoire (§3.2).");
         }
         CircuitDossierService.Circuit circuit = circuit(id);
+        // ⚠️ 2026-09-08 — même règle que le visa, dont le retour est l'autre issue : sur une navette
+        // simple, l'examinateur ne renvoie pas en rectification son propre examen. Sauf s'il en est
+        // aussi le dispatcheur. Avant toute écriture.
+        if (!deuxNiveaux(circuit)) {
+            exigerViseurHorsExaminateur(pv, CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null),
+                    circuit.dispatcheur(), "Le retour pour rectification");
+        }
         if (deuxNiveaux(circuit) && niveau(pv) == NiveauNavette.PRESIDENT) {
             return retournerAuCc(pv, circuit, req);
         }
@@ -1010,6 +1017,13 @@ public class PvExamenService {
         CircuitDossierService.Circuit circuit = circuit(id);
         boolean deuxNiveaux = deuxNiveaux(circuit);
         boolean interim = !deuxNiveaux && !dispatcheur.equals(acteur);
+
+        // ① bis ⚠️ 2026-09-08 — l'examinateur ne vise pas son propre examen, intérim compris. Placé
+        // AVANT le profil et l'intérim : lui réclamer une note d'intérim serait lui demander une pièce
+        // qui ne débloquerait rien. Sauf s'il est aussi le dispatcheur — il cumule alors légitimement.
+        if (!deuxNiveaux) {
+            exigerViseurHorsExaminateur(pv, acteur, dispatcheur, "Le visa");
+        }
 
         // ② Profil : la part signée est dérivée de l'acteur — pas de champ « role » dans le corps.
         // Vérifié AVANT la note : un profil hors P/CC n'a rien à faire ici, note ou pas (403, pas 400).
@@ -1578,18 +1592,53 @@ public class PvExamenService {
             return;
         }
         throw new AccessDeniedException("Soumission réservée à l'examinateur du dossier ("
-                + nomExaminateur(pv.getImCtrlMembre()) + ") : lui seul soumet le projet de PV de son "
+                + nomControleur(pv.getImCtrlMembre()) + ") : lui seul soumet le projet de PV de son "
                 + "examen, même par délégation.");
     }
 
-    /** Nom de l'examinateur pour le message de refus ; repli sur le matricule. Le refus doit NOMMER. */
-    private String nomExaminateur(String im) {
+    /** Nom d'un contrôleur pour les messages de refus ; repli sur le matricule. Le refus doit NOMMER. */
+    private String nomControleur(String im) {
         if (im == null || im.isBlank()) {
             return "non identifié";
         }
         return controleurRepository.findById(im)
                 .map(c -> ActeurDirectory.nomCanonique(c.getNomCont(), c.getPrenomsCont()))
                 .filter(n -> !n.isBlank()).orElse(im);
+    }
+
+    /**
+     * ⚠️ <strong>L'EXAMINATEUR ne vise pas son propre examen</strong> (arbitrage du pilote, 2026-09-08) —
+     * garde du <strong>visa</strong> et du <strong>retour pour rectification</strong> d'une navette
+     * <strong>simple</strong>.
+     *
+     * <p><strong>Le constat.</strong> Quand le Président dispatche l'examen au CC, le CC examine puis se
+     * voyait proposer de viser le même dossier — directement, ou par la voie de l'<em>intérim</em>, étant
+     * P/CC du périmètre. C'est la séparation des rôles qui tombe : celui qui examine ne vise pas. C'est
+     * l'exact pendant de « la soumission revient à l'examinateur », pris à l'envers.</p>
+     *
+     * <p><strong>L'exception, et pourquoi le critère n'est pas « est l'examinateur ».</strong> Par
+     * délégation de profil, une même personne peut dispatcher le dossier <em>à elle-même</em> puis
+     * l'examiner. Elle cumule alors <strong>légitimement</strong> examen, soumission et visa : il n'y a
+     * personne d'autre à séparer d'elle-même. Le critère est donc « <strong>examinateur ET pas
+     * dispatcheur</strong> » — bloquer sur le seul fait d'examiner fermerait le circuit court.</p>
+     *
+     * <p><strong>L'intérim n'ouvre rien ici.</strong> Suppléer un absent, c'est tenir SA place ; ce n'est
+     * pas s'auto-délivrer un visa. Un suppléant qui n'est pas l'examinateur, lui, garde le geste.</p>
+     *
+     * <p>La navette à <strong>deux niveaux</strong> n'est pas concernée : ses règles d'étage tiennent
+     * déjà l'acteur de chaque visa, et le CC y a son acceptation propre.</p>
+     */
+    private void exigerViseurHorsExaminateur(PvExamen pv, String acteur, String dispatcheur, String geste) {
+        String examinateur = pv.getImCtrlMembre();
+        if (acteur == null || examinateur == null || !examinateur.equals(acteur)) {
+            return;   // l'appelant n'est pas l'examinateur : cette garde ne le concerne pas
+        }
+        if (dispatcheur != null && dispatcheur.equals(acteur)) {
+            return;   // EXCEPTION : il s'est dispatché le dossier à lui-même, il cumule légitimement
+        }
+        throw new AccessDeniedException(geste + " revient au dispatcheur du dossier ("
+                + nomControleur(dispatcheur) + ") : vous avez examiné ce dossier, et l'examinateur ne "
+                + "vise pas son propre examen — pas même en suppléant par intérim.");
     }
 
     /**

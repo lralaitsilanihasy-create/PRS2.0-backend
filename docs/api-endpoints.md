@@ -4478,8 +4478,8 @@ immuable). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **40
 | PUT | /api/pv-examens/{id} | `PvExamenDto` | `PvExamenDto` | 200, 400, 403, 404, 409 | MEMBRE / CC / PRESIDENT — **rédacteur du projet** (voir note) |
 | DELETE | /api/pv-examens/{id} | — | — | 204, 404, 409 | ADMINISTRATEUR — **409 si archivé** |
 | POST | /api/pv-examens/{id}/soumettre | `PvActionRequest` | `PvExamenDto` | 200, 400, 403, 404, 409 | ⚠️ l'**EXAMINATEUR** du dossier, et lui seul (2026-09-08) |
-| POST | /api/pv-examens/{id}/retourner | `PvActionRequest` | `PvExamenDto` | 200, 400, 403, 404, 409 | CC / PRESIDENT — **CC de la localité du dossier** |
-| POST | /api/pv-examens/{id}/viser | `PvVisaRequest` | `PvExamenDto` | 200, 400, 403, 404, 409 | CC / PRESIDENT — ⚠️ **le DISPATCHEUR seul** (2026-08-31) |
+| POST | /api/pv-examens/{id}/retourner | `PvActionRequest` | `PvExamenDto` | 200, 400, 403, 404, 409 | CC / PRESIDENT — **CC de la localité**, ⚠️ **jamais l'examinateur** (2026-09-08) |
+| POST | /api/pv-examens/{id}/viser | `PvVisaRequest` | `PvExamenDto` | 200, 400, 403, 404, 409 | CC / PRESIDENT — ⚠️ **le DISPATCHEUR seul** (2026-08-31), ⚠️ **jamais l'examinateur** (2026-09-08) |
 | POST | /api/pv-examens/{id}/accepter | `PvActionRequest` | `PvExamenDto` | 200, 403, 404, 409, **410** | ⚠️ **NAVETTE À DEUX NIVEAUX (2026-09-04)** — CC du circuit ; **410 Gone** sur une navette simple |
 | POST | /api/pv-examens/{id}/signer | `PvActionRequest` | `PvExamenDto` | 200, 400, 403, 404, 409 | MEMBRE — ⚠️ **rôles PRESIDENT/CC retirés le 2026-08-31 (409)** |
 | POST | /api/pv-examens/{id}/archiver | — | `PvExamenDto` | 200, 403, 404, 409 | ASSISTANT_CONTROLEUR (localité) — voir « Archivage » dans *Transmissions SIGMP* |
@@ -4509,6 +4509,38 @@ immuable). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **40
 >   transitions : la navette consigne l'utilisateur **authentifié**. Le champ reste au contrat pour
 >   compatibilité, mais il est **décoratif** ; l'envoyer mensonger ne change rien et ne contourne aucune
 >   garde.
+
+> ## ⚠️ VISER et RETOURNER excluent l'EXAMINATEUR — navette simple (2026-09-08)
+>
+> Le pendant de la règle ci-dessus, pris à l'envers. Quand le Président dispatche l'examen au **CC**,
+> celui-ci examinait puis pouvait **viser** le même dossier — directement ou par **intérim**, étant P/CC
+> du périmètre. Celui qui examine ne vise pas.
+>
+> **403** sur `POST /{id}/viser` (variante intérim comprise) et `POST /{id}/retourner` quand l'appelant
+> est l'**examinateur** (`imCtrlMembre`) **et n'est pas le dispatcheur** :
+>
+> ```
+> 403 — Le visa revient au dispatcheur du dossier ({nom}) : vous avez examiné ce dossier, et
+>       l'examinateur ne vise pas son propre examen — pas même en suppléant par intérim.
+> ```
+>
+> | Appelant | Visa / retour |
+> |---|---|
+> | Le **dispatcheur** | **200** — inchangé |
+> | Un **P/CC du périmètre non examinateur**, par intérim | **200** avec sa note (400 si elle manque) |
+> | L'**examinateur**, dispatcheur ≠ lui | **403**, avant même la note d'intérim |
+> | L'**examinateur QUI EST le dispatcheur** (dispatché à lui-même) | **200** — il cumule légitimement examen, soumission et visa |
+>
+> - Le refus vient **avant** la note d'intérim : réclamer une pièce qui ne débloquerait rien serait
+>   malhonnête.
+> - **La prise en charge de l'étape `VISA` suit la même réserve** (`POST /dossiers/{id}/prise-en-charge`,
+>   **403**). Sans cela l'examinateur ouvrait une tâche qu'il ne pouvait achever et **verrouillait
+>   l'étape contre le dispatcheur**, à qui le 409 nominal renvoyait alors son propre nom.
+> - ⚠️ **`acteursAttendus` reste `null`** sur une navette simple : l'ensemble admis — le dispatcheur,
+>   plus tout P/CC du périmètre par intérim, **moins** l'examinateur — n'est pas énumérable. Une
+>   soustraction ne s'écrit pas avec une énumération ; la réserve s'exprime donc en refus. Le front
+>   applique la même exclusion de son côté (bouton masqué), le serveur reste l'autorité.
+> - La navette à **deux niveaux** garde ses règles d'étage, inchangées.
 
 > ## ⚠️ NAVETTE À DEUX NIVEAUX (spec pilote du 2026-09-04)
 >
