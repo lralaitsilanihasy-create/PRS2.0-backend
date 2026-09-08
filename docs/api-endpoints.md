@@ -5620,6 +5620,28 @@ corriger son estimation n'est pas recommencer sa tâche.
 >
 > Ni l'étape courante ni la date prévisionnelle de fin ne bougent : une réattribution n'est pas un
 > retour en arrière du circuit, le dossier reste à examiner.
+>
+> ### ⚠️ …et elle FERME l'occurrence `EXAMEN` du sortant (2026-09-08, dossier 00305)
+>
+> La règle ci-dessus n'avait fait que la moitié du chemin : on **ouvrait** l'occurrence du redispatcheur
+> sans **clore** celle du Membre qui tenait déjà l'examen. Elle restait ouverte à jamais, et le nouvel
+> attributaire s'en trouvait **en impasse** — l'étape paraissait prise en charge par quelqu'un qui
+> n'était plus là, donc pas de bouton « Prendre en charge », donc aucune action possible.
+>
+> ```
+> avant :  occ EXAMEN #1  MEMANT1  priseEnCharge 06:55  fin = null   enCours = true   ← orpheline
+> après :  occ EXAMEN #1  MEMANT1  priseEnCharge 06:55  fin = 07:18  enCours = false
+>          puis, à la prise en charge du nouvel attributaire : occ EXAMEN #2, à SON nom
+> ```
+>
+> - **Fermée, pas supprimée** : l'examen entamé a eu lieu, sa durée est mesurée jusqu'à l'instant du
+>   retrait — un passage abandonné reste un passage.
+> - **`attributaire` et `acteursAttendus` ne changent pas** : ils étaient déjà justes. Seul le cycle de
+>   vie de l'occurrence est corrigé.
+> - **Le RETRAIT du dispatch fait de même, pour tout l'aval** (`POST /api/dispatchs/{id}/annuler`, et
+>   tout appelant de la purge : retrait accepté, suppression). La purge efface examens, PV et
+>   vérifications ; leurs occurrences n'auraient plus rien pour les clore. `RECEPTION` est épargnée (les
+>   réceptions survivent) et `DISPATCH` aussi (occurrences instantanées, jamais ouvertes).
 > ⚠️ **TOLÉRANCE — le chronométrage n'empêche jamais le métier.** Un geste de clôture posé **sans prise
 > en charge préalable** n'est pas bloqué : le serveur crée l'occurrence avec `priseEnCharge = fin`
 > (durée nulle) et la prévision **standard** du référentiel. Aucun écran ne peut se retrouver coincé

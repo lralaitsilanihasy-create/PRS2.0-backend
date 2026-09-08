@@ -484,6 +484,31 @@ ponctuel n'a pas de durée à mesurer, et la prévision non saisie doit se disti
 choisie. La REPRISE est couverte par la même règle, le « Retirer » du CC étant une réattribution vers
 lui-même ; le « rendre » du Membre n'existe pas comme geste, il reste donc hors sujet.
 
+⚠️ **…et elle FERME l'occurrence du sortant** (signalement pilote du 2026-09-08, dossier 00305). La
+règle ci-dessus n'avait fait que la moitié du chemin : on ouvrait l'occurrence du redispatcheur, sans
+clore celle du Membre qui tenait déjà l'examen. Elle restait **ouverte à jamais**, et le nouvel
+attributaire s'en trouvait **en impasse** — l'étape paraissait prise en charge par quelqu'un qui n'était
+plus là, donc aucun « Prendre en charge » ne lui était offert, et sans prise en charge il ne pouvait
+rien faire. L'attribution était pourtant juste : c'est la **vie de l'occurrence** qui manquait une étape.
+
+- **Fermer, et non supprimer.** L'examen entamé par le sortant a eu lieu : sa durée est mesurée jusqu'à
+  l'instant du retrait, comme un passage abandonné. Le chronométrage est append-only, comme le journal —
+  on ne réécrit pas l'histoire, on la termine.
+- **Le RETRAIT du dispatch fait de même, et pour tout l'aval.** La purge efface examens, PV et
+  vérifications ; les occurrences qui en dépendaient n'auraient plus rien pour les clore. Elles sont
+  donc fermées à l'instant de la purge — `RECEPTION` exceptée (les réceptions survivent) et `DISPATCH`
+  aussi, ses occurrences étant instantanées. La règle vaut pour **tous** les appelants de la purge :
+  retrait du dispatch, retrait accepté, suppression du dossier.
+- **Rien ne change sur l'attributaire** ni sur les acteurs attendus : ils étaient déjà justes. C'est le
+  seul cycle de vie de l'occurrence qui est corrigé.
+- ⚠️ **Reprise nécessaire** (`V23`) — contrairement aux corrections du journal, dérivées à la lecture et
+  donc rétroactives par construction, celle-ci **écrit** : elle agit au moment du geste et ne peut rien
+  pour les dossiers **déjà** réattribués. La migration ferme les occurrences `EXAMEN` orphelines
+  existantes — signature exacte : encore ouvertes, et dont l'acteur n'est plus l'attributaire d'aucun
+  dispatch du dossier. Une occurrence tenue par l'attributaire courant est un examen **en cours** : elle
+  n'est pas touchée. La fin est posée à l'instant du redispatch, à défaut à la dernière trace de circuit
+  au journal, et jamais avant sa propre prise en charge.
+
 ⚠️ **La garde vaut aussi pour le VISA et la CO-SIGNATURE** (second constat du 2026-09-04, dossier
 100286). La première version gardait les tâches DÉJÀ OUVERTES et l'attribution de l'examen, mais pas
 la CRÉATION d'une occurrence : le CC, ayant transmis le PV au Président, a recliqué « Prendre en

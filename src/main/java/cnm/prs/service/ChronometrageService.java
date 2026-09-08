@@ -494,6 +494,36 @@ public class ChronometrageService {
         }
     }
 
+    /**
+     * ⚠️ <strong>Trou de chronométrage (signalement pilote du 2026-09-08, dossier 00305)</strong> — clôt
+     * les occurrences <strong>ouvertes</strong> de tout ce qui suit le dispatch, à l'instant où l'aval est
+     * défait : réattribution, retrait du dispatch, retrait accepté, suppression.
+     *
+     * <p><strong>Le constat.</strong> Le Membre avait pris l'examen en charge ; le Président a redispatché
+     * au CC. Le chronométrage traçait bien le geste du redispatcheur ({@code DISPATCH} n+1), mais
+     * l'occurrence {@code EXAMEN} du sortant restait <em>ouverte à jamais</em>. Le nouvel attributaire s'en
+     * trouvait <strong>en impasse</strong> : l'étape paraissait déjà prise en charge — par quelqu'un
+     * d'autre — donc aucun bouton « Prendre en charge » ne lui était offert, et sans prise en charge il ne
+     * pouvait rien faire. La donnée d'attribution était pourtant juste : c'est la <em>vie de l'occurrence</em>
+     * qui manquait une étape.</p>
+     *
+     * <p><strong>Fermer, et non supprimer.</strong> L'examen entamé par le sortant a bien eu lieu : sa
+     * durée est mesurée jusqu'à l'instant du retrait, comme un passage abandonné. Le journal est
+     * append-only, le chronométrage aussi — on ne réécrit pas l'histoire, on la termine.</p>
+     *
+     * <p><strong>Toutes les étapes de l'aval, pas seulement EXAMEN</strong> : ce qui est purgé n'a plus
+     * rien pour clore ses tâches. {@code RECEPTION} est épargnée (les réceptions survivent au retrait) et
+     * {@code DISPATCH} aussi — ses occurrences sont instantanées, jamais ouvertes.</p>
+     */
+    public void cloturerAvalDuDispatch(Integer idDossier) {
+        for (EtapeCircuit etape : EtapeCircuit.values()) {
+            if (etape == EtapeCircuit.RECEPTION || etape == EtapeCircuit.DISPATCH) {
+                continue;
+            }
+            cloturerSiOuverte(idDossier, etape);
+        }
+    }
+
     public void cloturerPourActeur(Integer idDossier, EtapeCircuit etape, String imActeur) {
         if (idDossier == null || etape == null) {
             return;

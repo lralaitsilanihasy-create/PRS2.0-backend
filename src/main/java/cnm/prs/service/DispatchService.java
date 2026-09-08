@@ -369,6 +369,13 @@ public class DispatchService {
             // donc un changement d'attributaire. Le « rendre » du Membre, lui, n'existe pas comme geste
             // (aucun endpoint) : il reste hors lot, faute d'objet.
             chronometrageService.consignerGesteInstantane(idDossierReattribue, EtapeCircuit.DISPATCH);
+            // ⚠️ Trou de chronométrage (signalement pilote du 2026-09-08, dossier 00305) — SYMÉTRIQUE du
+            // geste ci-dessus : on ouvre l'occurrence du redispatcheur, il faut FERMER celle du sortant.
+            // L'examen que le précédent attributaire avait pris en charge restait ouvert à jamais, et le
+            // nouveau se retrouvait en impasse — l'étape paraissait tenue par quelqu'un qui n'était plus
+            // là, donc aucun « Prendre en charge » ne lui était offert. Sa durée est mesurée jusqu'ici :
+            // le passage a eu lieu, il est abandonné, pas effacé.
+            chronometrageService.cloturerSiOuverte(idDossierReattribue, EtapeCircuit.EXAMEN);
         }
         return toDtoComplet(sauve);
     }
