@@ -1967,6 +1967,13 @@ volumineux → **400** (annule la création si multipart) ; **404** si l'UGPM ou
 > métier `t_ppm.NUM_MAJ` s'incrémente (`NUM_MAJ_PREC`/`DATE_MAJ_PREC` rappellent la version précédente,
 > `DATE_PPM_INIT` se propage inchangée) et **`MOTIF_MAJ` est obligatoire** (400 s'il est vide).
 >
+> ⚠️ **Les JUSTIFICATIONS font partie de la copie** (2026-09-08) : `JUSTIF_MODE_DEROGATOIRE` et
+> `JUSTIF_DELAI_AMENAGE` de chaque ligne, ainsi que `t_ppm.JUSTIFICATION_FICHE` du plan. Elles y
+> manquaient alors que compte, statut, lots et bénéficiaires y étaient — d'où deux symptômes d'une même
+> cause : une mise à jour **à plan inchangé** réclamait des justifications déjà données, et un
+> **réimport** les gardait à `null`, une ligne appariée « reprenant de l'existant » ne reprenant que du
+> vide. Le contenu se copie en entier.
+>
 > ⚠️ **Ne pas confondre avec la rectification** (`PUT /api/saisies/ppm/{id}` sur un dossier
 > `EN_ATTENTE_DECISION_PRMP`), qui corrige la version courante en réponse aux observations du PV : même
 > dossier, même identité. Le versionnement, lui, s'applique à un PPM déjà instruit.

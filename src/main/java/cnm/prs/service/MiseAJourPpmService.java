@@ -253,6 +253,10 @@ public class MiseAJourPpmService {
         ppm.setDateSignature(source.getDateSignature());   // modifiable ensuite dans le brouillon
         ppm.setIdLocalite(source.getIdLocalite());
         ppm.setLibelle(source.getLibelle());
+        // ⚠️ Signalement (2026-09-08) — la JUSTIFICATION DE LA FICHE se reprend, comme tout le contenu.
+        // Sans elle, une mise à jour à plan inchangé réclamait à la PRMP une justification qu'elle avait
+        // déjà donnée : la version nouvelle repart du contenu de l'ancienne, justifications comprises.
+        ppm.setJustificationFiche(source.getJustificationFiche());
         // ⚠️ 2026-08-05 (demande user) — la référence n'est PAS consommée ici : ouvrir une mise à jour ne
         // doit rien rendre effectif. Un compteur brûlé par une mise à jour abandonnée laisserait un trou
         // dans la numérotation officielle. La vraie référence est attribuée à la SOUMISSION.
@@ -295,6 +299,12 @@ public class MiseAJourPpmService {
             copie.setIdNature(origine.getIdNature());
             copie.setIdMode(origine.getIdMode());
             copie.setFormeMarche(origine.getFormeMarche());
+            // ⚠️ Signalement (2026-09-08) — les JUSTIFICATIONS de la ligne suivent la ligne. Elles
+            // manquaient à cette copie alors que compte, statut, lots et bénéficiaires y étaient : une
+            // mise à jour à plan inchangé réclamait donc des justifications déjà données, et un réimport
+            // les laissait à null — une ligne appariée « reprend de l'existant », c'est-à-dire du vide.
+            copie.setJustifModeDerogatoire(origine.getJustifModeDerogatoire());
+            copie.setJustifDelaiAmenage(origine.getJustifDelaiAmenage());
             marcheRepository.save(copie);
 
             for (Lot lot : lotRepository.findByIdDetail(origine.getIdDetail())) {

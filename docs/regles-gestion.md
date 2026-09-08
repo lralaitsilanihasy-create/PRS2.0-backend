@@ -1036,6 +1036,14 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
     interdirait définitivement toute mise à jour comportant une ligne dérogatoire. **Conséquence assumée** :
     une version créée par import peut contenir un marché dérogatoire non justifié, à compléter ensuite par
     la façade d'édition.
+  - ⚠️ **Les justifications SUIVENT la copie d'une mise à jour** (signalement du 2026-09-08). L'ouverture
+    d'une mise à jour recopie le plan sous une nouvelle version ; cette copie transportait le compte, le
+    statut, les lots et les bénéficiaires, **mais pas les justifications**. Deux effets, une seule cause :
+    une mise à jour **à plan inchangé** réclamait à la PRMP des justifications qu'elle avait déjà données,
+    et un **réimport** les laissait à `null` — une ligne appariée « reprend de l'existant », c'est-à-dire
+    du vide. La copie transporte désormais `justifModeDerogatoire` et `justifDelaiAmenage` de la ligne,
+    ainsi que le `justificationFiche` du PPM parent. Le contenu se reprend en entier, ou il ne se reprend
+    pas : les montants et les justifications répondent des mêmes lignes.
 - Identifiants attribués par le serveur [Auto]
   - ⚠️ **Règle ajoutée** : les PK dossier / PPM / marché sont **allouées par une séquence serveur** (`seq_dossier`/`seq_ppm`/`seq_marche`) ; tout id envoyé par le client est **ignoré** (plus de « identifiant en doublon »). Le formulaire ne saisit plus d'id. **Dette documentée** : séquence applicative (et non `IDENTITY`) pour éviter une refonte massive des fixtures de test sur ces 3 tables centrales ; bascule `IDENTITY` possible plus tard.
 - Suppression d'un marché / d'un PPM [Écriture]

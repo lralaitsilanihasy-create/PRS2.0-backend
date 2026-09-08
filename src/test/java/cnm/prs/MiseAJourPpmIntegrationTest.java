@@ -174,4 +174,42 @@ class MiseAJourPpmIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(patch("/api/marches/9820/restaurer").header("Authorization", tokenMembre))
                 .andExpect(status().isForbidden());
     }
+
+    @Test
+    @DisplayName("⚠️ Signalement 2026-09-08 — les JUSTIFICATIONS suivent la copie : celles de la ligne "
+            + "(mode dérogatoire, délai aménagé) et celle de la fiche du PPM parent sont reprises telles quelles")
+    void miseAJour_recopieLesJustifications() throws Exception {
+        enrichirDossier1PourPrmp();
+        // Une ligne dérogatoire DÉJÀ justifiée, sur un PPM dont la fiche l'est aussi.
+        cnm.prs.entity.Marche source = marche(9830, 1, 1);
+        source.setJustifModeDerogatoire("Urgence sanitaire — arrêté 12/2026");
+        source.setJustifDelaiAmenage("Délai raccourci : campagne de vaccination");
+        marcheRepository.save(source);
+        cnm.prs.entity.Ppm ppmSource = ppmRepository.findById(1).orElseThrow();
+        ppmSource.setJustificationFiche("Plan arrêté en conseil du 3 mars");
+        ppmRepository.save(ppmSource);
+
+        String tokenVer = bearer("CTRVER", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER", "ANT");
+        cloturerDossier1(9831, tokenVer);
+        int idNouveau = (int) (Integer) JsonPath.read(ouvrirMiseAJour(1, "Plan inchangé"), "$.idDossier");
+
+        // La ligne copiée porte SES justifications : une mise à jour à plan inchangé ne redemande rien.
+        cnm.prs.entity.Marche copie = marcheRepository.findByIdDossier(idNouveau).stream()
+                .filter(m -> Integer.valueOf(9830).equals(m.getIdLigneOrigine())).findFirst().orElseThrow();
+        org.junit.jupiter.api.Assertions.assertNotEquals(9830, (int) copie.getIdDetail(), "nouvelle PK");
+        org.junit.jupiter.api.Assertions.assertEquals("Urgence sanitaire — arrêté 12/2026",
+                copie.getJustifModeDerogatoire());
+        org.junit.jupiter.api.Assertions.assertEquals("Délai raccourci : campagne de vaccination",
+                copie.getJustifDelaiAmenage());
+
+        // Et la fiche du PPM suit son plan : c'est le contenu qui se reprend, pas seulement les montants.
+        cnm.prs.entity.Ppm ppmCopie = ppmRepository.findByIdDossier(idNouveau).stream().findFirst().orElseThrow();
+        org.junit.jupiter.api.Assertions.assertEquals("Plan arrêté en conseil du 3 mars",
+                ppmCopie.getJustificationFiche());
+
+        // Conséquence directe : la nouvelle version est soumissible sans ressaisir ce qui est déjà justifié.
+        mvc.perform(get("/api/dossiers/" + idNouveau + "/ppm").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.justificationFiche").value("Plan arrêté en conseil du 3 mars"));
+    }
 }
