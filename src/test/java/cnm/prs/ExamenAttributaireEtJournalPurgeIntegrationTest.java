@@ -34,8 +34,14 @@ import cnm.prs.service.JournalTraitementService;
  * </ol>
  *
  * <p>Décor : le dossier 1 du socle ({@code EXAMINE}, réception 1, dispatch 1 CTRCC1 → CTRMEM, examen 1),
- * dispatcheur {@code CTRPRE}. La délégation Président → Membre du socle autorise le Président à soumettre
- * le projet à la place du Membre — c'est exactement le geste qui a produit l'examen fantôme.</p>
+ * dispatcheur {@code CTRPRE}.</p>
+ *
+ * <p>⚠️ <strong>Mis à jour le 2026-09-08</strong> — le geste qui avait produit l'examen fantôme, la
+ * soumission du projet <em>par le Président pour le Membre</em> via la délégation, est désormais
+ * <strong>refusée à la porte</strong> (403, soumission réservée à l'examinateur). Ces tests disent donc
+ * les deux vérités : le refus au seuil, <em>et</em> le fait qu'aucune occurrence ne naît au nom d'un
+ * déclencheur — la garde du chronométrage reste utile pour les chemins qui subsistent, et ce qui la
+ * protégeait ici ne doit pas disparaître avec le scénario qui l'a révélée.</p>
  */
 class ExamenAttributaireEtJournalPurgeIntegrationTest extends CnmIntegrationTestSupport {
 
@@ -57,11 +63,17 @@ class ExamenAttributaireEtJournalPurgeIntegrationTest extends CnmIntegrationTest
         assertThat(apresMembre.get(0).getImActeur()).isEqualTo("CTRMEM");
 
         retourner(90, tokenPresident);
-        soumettre(90, tokenPresident);   // re-soumission POUR le Membre (délégation Président → Membre)
+        // ⚠️ 2026-09-08 — le geste qui créait l'examen fantôme est maintenant refusé AU SEUIL : la
+        // soumission revient à l'examinateur, la délégation ne la porte plus.
+        soumissionRefusee(90, tokenPresident);
+        soumettre(90, tokenMembre);   // c'est l'attributaire qui re-soumet
 
         List<TacheDossier> apresPresident = tachesExamen();
-        assertThat(apresPresident).extracting(TacheDossier::getImActeur).doesNotContain("CTRPRE");
-        assertThat(apresPresident).as("aucune occurrence créée par la transition du Président").hasSize(1);
+        assertThat(apresPresident).as("aucune occurrence au nom du déclencheur, jamais")
+                .extracting(TacheDossier::getImActeur).containsOnly("CTRMEM");
+        // Deux occurrences, une par soumission de l'attributaire — la tentative du Président n'en a
+        // créé aucune, puisqu'elle n'a même pas franchi la garde.
+        assertThat(apresPresident).hasSize(2);
         mvc.perform(get("/api/dossiers/1/chronometrage").header("Authorization", tokenPresident))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.taches[?(@.etape=='EXAMEN' && @.imActeur=='CTRPRE')]", org.hamcrest.Matchers.hasSize(0)));
@@ -80,9 +92,10 @@ class ExamenAttributaireEtJournalPurgeIntegrationTest extends CnmIntegrationTest
                 .andExpect(status().isOk());
         assertThat(tacheRepository.ouvertes(1, EtapeCircuit.EXAMEN.name())).hasSize(1);
 
-        // Le Président retourne encore et re-soumet à sa place : rien d'instantané ne naît, et la tâche
-        // ouverte du Membre est celle qui se clôt.
-        soumettre(91, tokenPresident);
+        // ⚠️ 2026-09-08 — le Président ne peut plus re-soumettre à sa place (403). C'est l'attributaire
+        // qui re-soumet : rien d'instantané ne naît, et sa tâche ouverte est celle qui se clôt.
+        soumissionRefusee(91, tokenPresident);
+        soumettre(91, tokenMembre);
         List<TacheDossier> taches = tachesExamen();
         assertThat(taches).hasSize(2);
         assertThat(taches).extracting(TacheDossier::getImActeur).containsOnly("CTRMEM");
@@ -144,6 +157,13 @@ class ExamenAttributaireEtJournalPurgeIntegrationTest extends CnmIntegrationTest
         mvc.perform(post("/api/pv-examens/" + idPv + "/soumettre").header("Authorization", token)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"commentaire\":\"prêt\"}"))
                 .andExpect(status().isOk());
+    }
+
+    /** ⚠️ 2026-09-08 — la soumission est réservée à l'examinateur : tout autre acteur est refusé. */
+    private void soumissionRefusee(int idPv, String token) throws Exception {
+        mvc.perform(post("/api/pv-examens/" + idPv + "/soumettre").header("Authorization", token)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"commentaire\":\"prêt\"}"))
+                .andExpect(status().isForbidden());
     }
 
     private void retourner(int idPv, String token) throws Exception {

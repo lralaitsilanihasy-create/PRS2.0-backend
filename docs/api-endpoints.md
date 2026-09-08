@@ -4477,7 +4477,7 @@ immuable). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **40
 | POST | /api/pv-examens | `PvExamenDto` | `PvExamenDto` | 201, 400, 403 | MEMBRE / CC / PRESIDENT |
 | PUT | /api/pv-examens/{id} | `PvExamenDto` | `PvExamenDto` | 200, 400, 403, 404, 409 | MEMBRE / CC / PRESIDENT — **rédacteur du projet** (voir note) |
 | DELETE | /api/pv-examens/{id} | — | — | 204, 404, 409 | ADMINISTRATEUR — **409 si archivé** |
-| POST | /api/pv-examens/{id}/soumettre | `PvActionRequest` | `PvExamenDto` | 200, 400, 403, 404, 409 | MEMBRE / CC / PRESIDENT — **rédacteur du projet** |
+| POST | /api/pv-examens/{id}/soumettre | `PvActionRequest` | `PvExamenDto` | 200, 400, 403, 404, 409 | ⚠️ l'**EXAMINATEUR** du dossier, et lui seul (2026-09-08) |
 | POST | /api/pv-examens/{id}/retourner | `PvActionRequest` | `PvExamenDto` | 200, 400, 403, 404, 409 | CC / PRESIDENT — **CC de la localité du dossier** |
 | POST | /api/pv-examens/{id}/viser | `PvVisaRequest` | `PvExamenDto` | 200, 400, 403, 404, 409 | CC / PRESIDENT — ⚠️ **le DISPATCHEUR seul** (2026-08-31) |
 | POST | /api/pv-examens/{id}/accepter | `PvActionRequest` | `PvExamenDto` | 200, 403, 404, 409, **410** | ⚠️ **NAVETTE À DEUX NIVEAUX (2026-09-04)** — CC du circuit ; **410 Gone** sur une navette simple |
@@ -4485,6 +4485,30 @@ immuable). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **40
 | POST | /api/pv-examens/{id}/archiver | — | `PvExamenDto` | 200, 403, 404, 409 | ASSISTANT_CONTROLEUR (localité) — voir « Archivage » dans *Transmissions SIGMP* |
 
 `{id}` = idPv (number). `soumettre` : BROUILLON|EN_RECTIFICATION→PROJET_SOUMIS ; `retourner` : PROJET_SOUMIS→EN_RECTIFICATION (`commentaire` obligatoire) ; `signer` : passe à SIGNE quand le Membre désigné signe, la part du P/CC ayant été posée au visa — **409 si l'avis global n'est pas posé**.
+
+> ## ⚠️ SOUMETTRE est réservé à l'EXAMINATEUR (arbitrage du pilote, 2026-09-08)
+>
+> Un Président dispatcheur a pu soumettre le projet de PV d'un examen mené par le **CC** à qui il avait
+> redispatché le dossier (#100305) : la navette a consigné son nom. La garde du rédacteur l'admettait par
+> sa branche de **délégation ascendante** vers Membre — celle qui existe pour que la Commission ne reste
+> pas bloquée. Mais **soumettre n'est pas dépanner** : c'est engager l'examen, et l'examen est le travail
+> de son assignataire.
+>
+> ```
+> 403 — Soumission réservée à l'examinateur du dossier ({nom}) : lui seul soumet le projet de PV
+>       de son examen, même par délégation.
+> ```
+>
+> - Vaut pour la **première soumission** comme pour la **re-soumission** en `EN_RECTIFICATION`.
+> - L'examinateur est `PvExamen.imCtrlMembre` (colonne **NOT NULL** : toujours identifiable).
+> - **Circuit court inchangé** : un P/CC auto-attribué au dispatch soumet le PV de *son* propre examen —
+>   la garde vise l'attributaire, pas le profil.
+> - **`PUT /api/pv-examens/{id}` (édition du projet) garde la délégation** : corriger une frappe pour un
+>   collègue absent n'engage personne. Seul le geste qui *engage* est nominatif.
+> - ⚠️ **`PvActionRequest.imActeur` n'est lu nulle part** — ni ici, ni à la signature, ni sur les autres
+>   transitions : la navette consigne l'utilisateur **authentifié**. Le champ reste au contrat pour
+>   compatibilité, mais il est **décoratif** ; l'envoyer mensonger ne change rien et ne contourne aucune
+>   garde.
 
 > ## ⚠️ NAVETTE À DEUX NIVEAUX (spec pilote du 2026-09-04)
 >

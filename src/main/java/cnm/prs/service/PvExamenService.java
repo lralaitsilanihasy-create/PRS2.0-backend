@@ -464,7 +464,9 @@ public class PvExamenService {
         PvExamen pv = load(id);
         // ⚠️ Audit 2026-08-27 (lot B) — la soumission engage le Membre attributaire : elle ne peut
         // pas être posée par un autre Membre (fût-il de la localité).
-        exigerRedacteurDuProjet(pv);
+        // ⚠️ Arbitrage du pilote (2026-09-08) — et pas davantage par un DÉLÉGUÉ : la soumission est
+        // réservée à l'examinateur, première ET re-soumission (voir exigerExaminateur).
+        exigerExaminateur(pv);
         requireStatut(pv, StatutPv.BROUILLON, StatutPv.EN_RECTIFICATION);
 
         if (pv.getDateSoumissionInitiale() == null) {
@@ -1549,6 +1551,45 @@ public class PvExamenService {
         throw new AccessDeniedException(
                 "Projet de PV réservé au Membre attributaire de l'examen (§2.4, §3.5), ou à un contrôleur "
                         + "de la localité du dossier couvert par une délégation active vers Membre.");
+    }
+
+    /**
+     * ⚠️ <strong>La SOUMISSION du projet est réservée à l'EXAMINATEUR</strong> (constat et arbitrage du
+     * pilote, 2026-09-08, dossier 00305) — première soumission comme re-soumission après rectification.
+     *
+     * <p><strong>Le constat.</strong> Un Président dispatcheur a soumis le projet de PV d'un examen mené
+     * par le CC à qui il avait redispatché le dossier ; la navette a consigné son nom. La garde
+     * {@link #exigerRedacteurDuProjet} l'admettait par sa <em>seconde</em> branche, la délégation
+     * ascendante vers Membre — celle qui existe pour que la Commission ne soit pas bloquée. Mais soumettre
+     * n'est pas dépanner : c'est <strong>engager l'examen</strong>, et l'examen est le travail de son
+     * assignataire. C'est le même esprit que « seul l'assignataire examine ».</p>
+     *
+     * <p><strong>Seule la première branche subsiste ici</strong> : l'examinateur lui-même, quel que soit
+     * son profil — ce qui couvre le Président ou le CC <em>auto-attribué</em> au dispatch (circuit court),
+     * qui soumet alors le PV de SON propre examen. L'édition du projet ({@link #update}) garde, elle, la
+     * délégation : corriger une frappe pour un collègue absent n'engage personne.</p>
+     *
+     * <p>{@code IM_CTRL_MEMBRE} est NOT NULL sur le PV : l'examinateur est toujours identifiable, la
+     * garde n'a donc pas de cas « sans attributaire » à ménager.</p>
+     */
+    private void exigerExaminateur(PvExamen pv) {
+        String moi = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
+        if (moi != null && moi.equals(pv.getImCtrlMembre())) {
+            return;
+        }
+        throw new AccessDeniedException("Soumission réservée à l'examinateur du dossier ("
+                + nomExaminateur(pv.getImCtrlMembre()) + ") : lui seul soumet le projet de PV de son "
+                + "examen, même par délégation.");
+    }
+
+    /** Nom de l'examinateur pour le message de refus ; repli sur le matricule. Le refus doit NOMMER. */
+    private String nomExaminateur(String im) {
+        if (im == null || im.isBlank()) {
+            return "non identifié";
+        }
+        return controleurRepository.findById(im)
+                .map(c -> ActeurDirectory.nomCanonique(c.getNomCont(), c.getPrenomsCont()))
+                .filter(n -> !n.isBlank()).orElse(im);
     }
 
     /**

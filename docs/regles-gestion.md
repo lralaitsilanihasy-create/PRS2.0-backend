@@ -535,6 +535,28 @@ l'assignataire examine ». Le dispatcheur et le CC en copie, que la paire « →
 au profil, ouvraient donc une tâche sur le travail d'autrui — et l'y verrouillaient. Sans attributaire
 identifiable, aucun blocage : la garde protège une attribution existante, elle n'en invente pas.
 
+⚠️ **…et la SOUMISSION du projet de PV lui revient aussi** (constat et arbitrage du pilote, 2026-09-08,
+dossier 00305). Un Président dispatcheur a pu soumettre le projet de PV d'un examen mené par le CC à qui
+il avait redispatché le dossier : la navette a consigné son nom, et le journal l'a désigné comme auteur
+de la soumission d'examen. La garde du rédacteur l'admettait par sa **seconde** branche, la délégation
+ascendante vers Membre — celle qui existe pour que la Commission ne reste pas bloquée. Mais **soumettre
+n'est pas dépanner** : c'est engager l'examen, et l'examen est le travail de son assignataire.
+
+- **Première soumission ET re-soumission** après rectification : réservées à l'examinateur
+  (`IM_CTRL_MEMBRE` du PV, colonne NOT NULL — il est toujours identifiable), **403** pour tout autre,
+  message nommant l'examinateur. La capacité de profil ne suffit plus, la délégation non plus.
+- **Le circuit court n'est pas touché** : un P/CC **auto-attribué** au dispatch soumet le PV de *son*
+  propre examen. La garde vise l'attributaire, jamais le profil.
+- **L'ÉDITION du projet garde sa délégation** : corriger une frappe pour un collègue absent n'engage
+  personne. C'est la ligne de partage retenue — seul le geste qui *engage* est nominatif.
+- ⚠️ **Effet de bord assumé** : le scénario qui avait produit l'« examen fantôme » du 2026-09-07 (le
+  Président re-soumet pour le Membre) est désormais **refusé au seuil**. La garde du chronométrage qui
+  l'avait corrigé reste en place pour les chemins subsistants — on ne retire pas un filet parce que
+  l'accident précis qu'il a rattrapé ne peut plus se produire par cette porte-là.
+- **L'acteur consigné n'a jamais été falsifiable** : la navette enregistre l'utilisateur authentifié, et
+  le champ `imActeur` du corps de requête n'est lu nulle part. Le point de vigilance de la demande était
+  donc déjà couvert ; un test le fige, en tentant la soumission avec un `imActeur` mensonger.
+
 ⚠️ **Une occurrence par étage, une tâche par co-signataire.** Le visa d'un dossier à deux niveaux est
 tenu par deux acteurs successifs, et la co-signature élargie par deux désignés simultanés — dans les
 deux cas, une tâche unique faisait verrouiller le second par le premier, et mêlait leurs durées. Ce
