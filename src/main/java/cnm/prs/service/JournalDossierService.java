@@ -57,10 +57,17 @@ public class JournalDossierService {
     private final cnm.prs.repository.ControleurRepository controleurRepository;
     /** ⚠️ 2026-09-04 — les événements de traitement, dérivés à la lecture. */
     private final JournalTraitementService traitement;
+    /** ⚠️ 2026-09-08 — la CRÉATION revient à son auteur réel : le dossier porte le login créateur. */
+    private final cnm.prs.repository.DossierRepository dossierRepository;
+    /** ⚠️ 2026-09-08 — login → nom lisible, quel que soit le type d'acteur (PRMP, UGPM, contrôleur). */
+    private final ActeurDirectory acteurDirectory;
 
     public JournalDossierService(ActionDossierRepository repository, PrmpRepository prmpRepository,
             MandatService mandatService, cnm.prs.repository.ControleurRepository controleurRepository,
-            JournalTraitementService traitement) {
+            JournalTraitementService traitement, cnm.prs.repository.DossierRepository dossierRepository,
+            ActeurDirectory acteurDirectory) {
+        this.dossierRepository = dossierRepository;
+        this.acteurDirectory = acteurDirectory;
         this.controleurRepository = controleurRepository;
         this.traitement = traitement;
         this.repository = repository;
@@ -142,6 +149,7 @@ public class JournalDossierService {
                 repository.findByIdDossierOrderByDateActionAscIdActionAsc(idDossier).stream()
                         .map(JournalDossierService::toDto).toList());
         lignes.addAll(traitement.evenements(idDossier));
+        attribuerLaCreationAuCreateur(idDossier, lignes);
         // Ordre chronologique STRICT ; à instant égal, le rang du circuit tranche. Sans lui, les actes
         // de fin de parcours — datés sans heure — se seraient rangés dans un ordre arbitraire.
         lignes.sort(java.util.Comparator
@@ -151,6 +159,49 @@ public class JournalDossierService {
                 .thenComparing(ActionDossierDto::getIdAction,
                         java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder())));
         return lignes;
+    }
+
+    /**
+     * ⚠️ <strong>Signalement pilote (2026-09-08, dossier 00305)</strong> — la ligne {@code CREATION} revient
+     * à son <strong>auteur réel</strong>, et non à la PRMP de tutelle.
+     *
+     * <p>À l'écriture, l'opérateur d'une action est la <strong>PRMP en fonction</strong> ({@code
+     * CurrentUser.ref()}), qui pour un agent UGPM est sa PRMP de tutelle : c'est ce qui donne son sens au
+     * couple opérateur/mandat, et il ne change pas. Mais la <em>création</em> d'un dossier n'est pas un acte
+     * de traitement sous mandat : c'est une saisie, et le dossier sait qui l'a faite — {@code CREE_PAR}
+     * porte le login créateur, celui-là même que {@code DossierDto.creePar} expose déjà correctement. Le
+     * journal disait donc « la PRMP » d'un brouillon saisi par l'UGPM, en contradiction avec le dossier.</p>
+     *
+     * <p><strong>Dérivé à la lecture, donc rétroactif</strong> — comme le reste de la fusion : les dossiers
+     * déjà créés se corrigent d'eux-mêmes, sans reprise de données. Seul le <strong>nom</strong> (et
+     * l'auteur) bouge : {@code idPrmpOperateur} reste la PRMP de tutelle, qui est bien celle sous
+     * l'autorité de laquelle l'UGPM a saisi. Y mettre l'UGPM allumerait le marqueur « opérateur ≠
+     * attributaire » du front, qui signale qu'une <em>autre PRMP</em> a agi — un contresens ici.</p>
+     *
+     * <p>Replis, dans l'ordre : le {@code CREE_PAR} du dossier, puis le login consigné sur la ligne
+     * elle-même (un dossier d'avant {@code CREE_PAR}), puis le nom stocké — on ne remplace jamais un nom
+     * connu par un login brut.</p>
+     */
+    private void attribuerLaCreationAuCreateur(Integer idDossier, List<ActionDossierDto> lignes) {
+        List<ActionDossierDto> creations = lignes.stream()
+                .filter(l -> CREATION.equals(l.getTypeAction())).toList();
+        if (creations.isEmpty()) {
+            return;
+        }
+        String createur = dossierRepository.findById(idDossier).map(Dossier::getCreePar)
+                .filter(s -> s != null && !s.isBlank())
+                .orElseGet(() -> creations.stream().map(ActionDossierDto::getAuteur)
+                        .filter(s -> s != null && !s.isBlank()).findFirst().orElse(null));
+        if (createur == null) {
+            return;
+        }
+        String nom = acteurDirectory.nomsParLogin(java.util.Set.of(createur)).get(createur);
+        for (ActionDossierDto creation : creations) {
+            creation.setAuteur(createur);
+            if (nom != null && !nom.isBlank()) {
+                creation.setNomOperateur(nom);
+            }
+        }
     }
 
     /**

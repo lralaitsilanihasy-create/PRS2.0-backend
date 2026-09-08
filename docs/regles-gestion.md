@@ -715,6 +715,18 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
     l'acteur de la tâche) ; le Membre attributaire qui soumet sans prise en charge garde l'occurrence
     instantanée à son nom (tolérance historique). Même principe que la garde d'acteur du visa et de la
     co-signature (`1a92f5a`).
+  - ⚠️ **La CRÉATION revient à son auteur réel, pas à la PRMP de tutelle** (signalement pilote
+    2026-09-08, dossier 00305) — un brouillon saisi par une **UGPM** était consigné au nom de sa PRMP.
+    L'opérateur d'une action est la PRMP **en fonction**, et pour un agent UGPM c'est sa tutelle : c'est
+    ce qui donne son sens au couple opérateur/mandat, et cela ne change pas. Mais **créer un dossier
+    n'est pas un acte de traitement sous mandat** — c'est une saisie, et le dossier sait qui l'a faite
+    (`CREE_PAR`). Le journal contredisait donc le dossier, qui servait déjà le bon nom. Le nom et
+    l'auteur de la ligne `CREATION` sont désormais **dérivés de `CREE_PAR`** : à la lecture, donc
+    **rétroactivement**, et sans reprise de données. `ID_PRMP_OPERATEUR` ne bouge pas — c'est bien sous
+    l'autorité de la tutelle que l'UGPM a saisi, et y mettre l'UGPM allumerait le marqueur « opérateur ≠
+    attributaire », qui signale qu'une *autre PRMP* a agi. `SOUMISSION` reste sur `SOUMIS_PAR`.
+    ⚠️ Les **autres** actions d'un agent UGPM (`RESOUMISSION`, `MISE_A_JOUR`…) portent encore le nom de
+    sa PRMP : même écart, sur des lignes non signalées — non étendu sans arbitrage du pilote.
 
   - ⚠️ **La CONSIGNE est consignée** (complément du 2026-09-04) — « Comment savoir que le dossier a été
     dispatché au CC avec instruction avant de le dispatcher au membre ? » Les lignes `DISPATCH` et
