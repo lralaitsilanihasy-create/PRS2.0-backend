@@ -102,8 +102,11 @@ public class MiseAJourPpmService {
      */
     public static final String REFERENCE_PROVISOIRE = "(mise à jour en cours)";
 
-    /** Statut d'une ligne de marché neuve, aligné sur le défaut de la saisie initiale. */
-    private static final String STATUT_MARCHE_DEFAUT = "PREVU";
+    /**
+     * Statut d'une ligne de marché neuve. ⚠️ 2026-09-09 — repris du référentiel, et non plus écrit en
+     * dur ici : deux littéraux « PREVU » auraient fini par diverger le jour où le défaut change.
+     */
+    private static final String STATUT_MARCHE_DEFAUT = StatutMarcheService.CODE_DEFAUT;
 
     /** Types de pièce du référentiel DDP mobilisés par le versionnement (cf. `t_type_piece_jointe`). */
     private static final Integer TYPE_PPM_SIGNE = 1;          // « Plan de passation des marchés daté et signé »

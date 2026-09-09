@@ -59,7 +59,8 @@ public class SecurityConfig {
             "/api/regle-anomalies", "/api/regle-alertes", "/api/comptes", "/api/cat-comptes",
             "/api/entite-contracts", "/api/categorie-entites", "/api/delegation-profils", "/api/aviss", "/api/natures",
             "/api/mode-passations", "/api/type-dossiers", "/api/sous-type-dossiers", "/api/ministeres",
-            "/api/profiles", "/api/capm", "/api/type-piece-jointes", "/api/type-dmc"
+            "/api/profiles", "/api/capm", "/api/type-piece-jointes", "/api/type-dmc",
+            "/api/statut-marches"
     };
 
     /** Mêmes ressources, ciblées par identifiant (pour PUT / DELETE). */
@@ -68,7 +69,8 @@ public class SecurityConfig {
             "/api/regle-anomalies/*", "/api/regle-alertes/*", "/api/comptes/*", "/api/cat-comptes/*",
             "/api/entite-contracts/*", "/api/categorie-entites/*", "/api/delegation-profils/*", "/api/aviss/*", "/api/natures/*",
             "/api/mode-passations/*", "/api/type-dossiers/*", "/api/sous-type-dossiers/*", "/api/ministeres/*",
-            "/api/profiles/*", "/api/capm/*", "/api/type-piece-jointes/*", "/api/type-dmc/*"
+            "/api/profiles/*", "/api/capm/*", "/api/type-piece-jointes/*", "/api/type-dmc/*",
+            "/api/statut-marches/*"
     };
 
     /**

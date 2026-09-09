@@ -3905,6 +3905,42 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 { "idNature": 1, "libelle": "Fournitures", "description": "Marchés de fournitures courantes" }
 ```
 
+### Statuts de marché (`tr_statut_marche`) ⚠️ 2026-09-09
+
+| Méthode | URL | Corps | Réponse | Statuts | Rôle |
+|---|---|---|---|---|---|
+| GET | /api/statut-marches | — | `StatutMarcheDto[]` | 200 | Authentifié |
+| GET | /api/statut-marches/{code} | — | `StatutMarcheDto` | 200, 404 | Authentifié |
+| POST | /api/statut-marches | `StatutMarcheDto` | `StatutMarcheDto` | 201, 400, 403, 409 | ADMINISTRATEUR |
+| PUT | /api/statut-marches/{code} | `StatutMarcheDto` | `StatutMarcheDto` | 200, 400, 403, 404 | ADMINISTRATEUR |
+| DELETE | /api/statut-marches/{code} | — | — | 204, 403, 404, **409** | ADMINISTRATEUR |
+
+**`StatutMarcheDto`** = `{ code (string ≤ 20, obligatoire), libelle (string ≤ 100, obligatoire),
+ordre (number|null), actif (boolean|null) }`. La **clé est le code** — c'est lui que
+`t_marche.STATUT` porte déjà ; un identifiant technique aurait imposé une reprise de toutes les lignes
+pour ne rien gagner. Le code **ne se renomme pas** (le `PUT` ne change que libellé, ordre et activité).
+Liste triée par `ordre` puis `code` ; `ordre` absent se range en dernier ; `actif` absent vaut **vrai**.
+
+> ⚠️ **Le statut d'un marché est validé à l'écriture** (`POST`/`PUT /api/marches`, `PATCH …/rectifier`,
+> et la façade `PUT /api/saisies/ppm/{id}` qui passe par elles) :
+>
+> | `statut` envoyé | Effet |
+> |---|---|
+> | absent ou vide | **`PREVU`**, le défaut serveur |
+> | code du référentiel | accepté tel quel |
+> | code inconnu | **400**, et le message **énumère les valeurs possibles** |
+>
+> - **`PREVU` ne se supprime pas** (**409**) : c'est le repli des écritures, et un référentiel qu'on peut
+>   vider de sa valeur pivot cesse d'en être un. Le message propose la **désactivation** à la place.
+> - ⚠️ **Un statut désactivé reste ACCEPTÉ à l'écriture.** Il n'est plus *proposé*, mais des marchés le
+>   portent : refuser leur code interdirait de les ré-enregistrer, ce qui ferait de la désactivation une
+>   opération destructrice. `actif` guide la saisie, il ne réécrit pas l'histoire.
+> - **Pas de clé étrangère** sur `t_marche.STATUT` : la validation est applicative, pour que le refus
+>   soit un message lisible plutôt qu'une violation de contrainte. La donnée s'y prêterait (seul `PREVU`
+>   est présent) — à poser si le pilote veut le verrou au niveau du SGBD.
+> - Effet de bord assumé : une écriture sans statut ne laisse plus la colonne à `null`. Les deux lignes
+>   nulles en base prendront `PREVU` à leur prochaine édition.
+
 ---
 
 ## Navettes de PV

@@ -44,12 +44,16 @@ public class MarcheService {
     private final DmcService dmcService;
     private final AnomalieRepository anomalieRepository;
     private final EcheanceRepository echeanceRepository;
+    /** ⚠️ 2026-09-09 — le statut d'un marché est désormais un code de référentiel, validé à l'écriture. */
+    private final StatutMarcheService statutMarcheService;
 
     public MarcheService(MarcheRepository repository, DossierIntegriteService dossierIntegrite,
             MarchePrevisionRepository marchePrevisionRepository,
             ServiceBeneficiaireRepository serviceBeneficiaireRepository, LotRepository lotRepository,
             TrancheRepository trancheRepository, AuditLogService auditLogService, DmcService dmcService,
-            AnomalieRepository anomalieRepository, EcheanceRepository echeanceRepository) {
+            AnomalieRepository anomalieRepository, EcheanceRepository echeanceRepository,
+            StatutMarcheService statutMarcheService) {
+        this.statutMarcheService = statutMarcheService;
         this.repository = repository;
         this.dossierIntegrite = dossierIntegrite;
         this.marchePrevisionRepository = marchePrevisionRepository;
@@ -147,6 +151,8 @@ public class MarcheService {
         dossierIntegrite.exigerBrouillonModifiable(dto.getIdDossier());
         dossierIntegrite.exigerFamilleDdp(dto.getIdDossier());
         Marche entity = MarcheMapper.toEntity(dto);
+        // ⚠️ 2026-09-09 — statut = code du référentiel : absent → défaut serveur, inconnu → 400.
+        entity.setStatut(statutMarcheService.normaliser(dto.getStatut()));
         entity.setIdDetail(repository.nextIdMarche().intValue());   // PK serveur (séquence) ; id client ignoré
         // Mode = celui saisi (PRMP/import) ; plus de détermination automatique (t_situation/t_regle/t_seuil retirés).
         MarcheDto resultat = MarcheMapper.toDto(repository.save(entity));
@@ -170,7 +176,7 @@ public class MarcheService {
         existing.setAncienMontEstim(dto.getAncienMontEstim());
         existing.setNouvMontEstim(dto.getNouvMontEstim());
         existing.setFinancement(dto.getFinancement());
-        existing.setStatut(dto.getStatut());
+        existing.setStatut(statutMarcheService.normaliser(dto.getStatut()));
         existing.setIdNature(dto.getIdNature());
         existing.setIdMode(dto.getIdMode());   // mode choisi (saisie manuelle)
         existing.setFormeMarche(FormeMarche.depuisCodeOuDefaut(dto.getFormeMarche()));
@@ -212,7 +218,7 @@ public class MarcheService {
         existing.setAncienMontEstim(dto.getAncienMontEstim());
         existing.setNouvMontEstim(dto.getNouvMontEstim());
         existing.setFinancement(dto.getFinancement());
-        existing.setStatut(dto.getStatut());
+        existing.setStatut(statutMarcheService.normaliser(dto.getStatut()));
         existing.setIdNature(dto.getIdNature());
         existing.setIdMode(dto.getIdMode());   // mode choisi (saisie manuelle)
         existing.setFormeMarche(FormeMarche.depuisCodeOuDefaut(dto.getFormeMarche()));
@@ -257,6 +263,7 @@ public class MarcheService {
         dossierIntegrite.exigerEnAttenteDecisionPrmpModifiable(dto.getIdDossier());
         dossierIntegrite.exigerFamilleDdp(dto.getIdDossier());
         Marche entity = MarcheMapper.toEntity(dto);
+        entity.setStatut(statutMarcheService.normaliser(dto.getStatut()));   // ⚠️ 2026-09-09 — code du référentiel
         entity.setIdDetail(repository.nextIdMarche().intValue());   // PK serveur (séquence) ; id client ignoré
         MarcheDto resultat = MarcheMapper.toDto(repository.save(entity));
         auditLogService.enregistrer(CurrentUser.ref().orElse(null), "t_marche",

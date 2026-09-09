@@ -1710,6 +1710,26 @@ Accès complet aux référentiels, comptes utilisateurs, journal d'audit, hiéra
     ce paragraphe citait encore `t_seuil` et `t_regle_passation` — retirés du code (commit `c432e73`,
     2026-07-04) avec la détermination automatique du mode de passation, voir Module 02 de la PRMP
     ci-dessus.
+- Statuts de marché [Écriture] ⚠️ **Référentiel ajouté (2026-09-09)**
+  - `t_marche.STATUT` était un **texte libre** : toujours `PREVU` en pratique, mais rien ne l'imposait et
+    l'Administrateur n'avait aucun moyen d'ajouter une valeur. Le code devient une valeur de
+    **`tr_statut_marche`**, sur le moule des natures et des modes de passation — lecture ouverte aux
+    profils authentifiés, écriture réservée à l'Administrateur.
+  - **La clé est le code**, pas un identifiant technique : c'est lui que les lignes portent déjà. Un
+    entier aurait imposé une reprise de toutes les données pour ne rien gagner. Le code ne se renomme
+    donc pas ; seuls le libellé, le rang d'affichage et l'activité se corrigent.
+  - **Validé à l'écriture d'un marché** : absent → **`PREVU`** (le défaut serveur, celui que la saisie
+    posait en dur) ; inconnu → **400**, et le refus **énumère les valeurs possibles** — sans quoi
+    l'appelant n'a aucun moyen de savoir ce qu'on attend de lui. Les quatre voies d'écriture (création,
+    mise à jour, rectification, création en rectification) passent par le même point.
+  - ⚠️ **Deux règles protègent le référentiel de lui-même.** `PREVU` **ne se supprime pas** (409) : c'est
+    le repli des écritures, et un référentiel qu'on peut vider de sa valeur pivot cesse d'en être un — le
+    refus propose la désactivation. Et un statut **désactivé reste accepté à l'écriture** : des marchés le
+    portent, refuser leur code interdirait de les ré-enregistrer, ce qui ferait de la désactivation une
+    opération destructrice. `actif` guide la saisie ; il ne réécrit pas l'histoire.
+  - **Pas de clé étrangère** sur `t_marche.STATUT`, volontairement : la validation est applicative pour
+    que le refus soit un message lisible, et non une violation de contrainte remontée telle quelle. La
+    donnée s'y prêterait (seul `PREVU` est présent) ; le verrou SGBD reste posable si le pilote le veut.
 - Grilles de contrôle & règles d'anomalie [Écriture]
   - Configuration de tr_points_ctrl et t_regle_anomalie.
 - Comptes budgétaires & entités contractantes [Écriture]
