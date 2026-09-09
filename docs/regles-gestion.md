@@ -169,6 +169,21 @@ Flux complet d'un dossier, avec navette du projet de PV :
 > Les 12 modèles PV ont été dérivés en conséquence (les 2 lettres de renvoi ne sont pas concernées) —
 > voir `docs/derivation-modeles-docx.md`.
 >
+> ⚠️ **R4 — CORRIGÉ le 2026-09-09 : chaque nom sous sa propre légende.** La dérivation du 2026-09-01
+> avait posé le viseur dans la cellule de **droite**, celle dont la légende annonce « le membre en charge
+> du dossier ». Le PV imprimait donc « Visé par … Président » à la place du nom du Membre, pendant que la
+> colonne de gauche — « VISA DU SUPÉRIEUR HIÉRARCHIQUE » — restait vide. Viseur et membre sont **deux
+> personnes distinctes** : les 12 modèles portent désormais le **viseur à gauche** et le **nom du Membre
+> en charge à droite**, celui-là même qui figure sous « Étaient présents ».
+>
+> - La correction est **dans les modèles**, pas dans le générateur : le placeholder appartient à
+>   l'endroit où le texte s'imprime, et la substitution reste un simple remplacement.
+> - Une cellule dont le nom manque rend **vide**, sans marqueur brut : dans un bloc de signature, une
+>   case vide est exactement ce qu'il faut quand personne n'a signé.
+> - `ModelesPvTest` lit désormais les **colonnes** du bloc, et non le texte global : deux noms présents
+>   mais intervertis passeraient n'importe quelle vérification par « contient ». C'est ce qui a manqué
+>   pour attraper l'erreur à la dérivation précédente.
+>
 > ⚠️ **Où elle apparaît, et pourquoi pas ailleurs.** L'arbitrage la voulait « sur la ligne de signature du
 > P/CC », via les modèles régionaux. Vérification faite sur les 12 modèles : **cette ligne n'existe pas**.
 > Le bloc de signature ne porte que des légendes (« VISA DU SUPERIEUR HIERARCHIQUE », « (Nom, prénoms,

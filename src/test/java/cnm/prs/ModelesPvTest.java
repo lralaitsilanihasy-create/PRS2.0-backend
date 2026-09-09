@@ -79,6 +79,49 @@ class ModelesPvTest {
         }
     }
 
+    /**
+     * ⚠️ <strong>Bloc VISA — chaque nom sous sa propre légende</strong> (correction du 2026-09-09).
+     *
+     * <p>La dérivation du 2026-09-01 avait ajouté le VISEUR dans la cellule de <em>droite</em>, celle
+     * dont la légende annonce « le membre en charge du dossier » : le PV imprimait donc « Visé par …
+     * Président » sous le nom attendu du Membre, et la colonne de gauche restait vide. Viseur et membre
+     * sont deux personnes distinctes ; leurs noms doivent tomber sous la bonne légende.</p>
+     *
+     * <p>Le test lit les <strong>colonnes</strong>, pas le texte global : une table dont les deux noms
+     * seraient présents mais intervertis passerait n'importe quelle vérification par « contient ».</p>
+     */
+    @Test
+    @DisplayName("⚠️ Bloc VISA — le VISEUR est dans la colonne du supérieur hiérarchique (gauche) et le "
+            + "MEMBRE dans celle du membre en charge du dossier (droite), sur les 12 modèles")
+    void blocVisa_viseurAGauche_membreADroite() throws Exception {
+        for (String modele : MODELES) {
+            try (XWPFDocument doc = ouvrir(modele)) {
+                XWPFTable visa = tableVisa(doc);
+                assertTrue(visa != null, modele + " : table VISA introuvable");
+
+                // La ligne des légendes situe les colonnes : gauche = supérieur, droite = membre.
+                XWPFTableRow legendes = ligneContenant(visa, "SUPERIEUR");
+                assertTrue(legendes != null, modele + " : ligne des légendes du bloc VISA introuvable");
+                assertEquals(2, legendes.getTableCells().size(), modele + " : le bloc VISA a deux colonnes");
+                assertTrue(legendes.getCell(0).getText().contains("SUPERIEUR"),
+                        modele + " : la légende du supérieur hiérarchique doit être à GAUCHE");
+                assertTrue(legendes.getCell(1).getText().contains("membre en charge du dossier"),
+                        modele + " : la légende du membre en charge doit être à DROITE");
+
+                // Et les noms tombent chacun sous la sienne.
+                XWPFTableRow noms = ligneContenant(visa, "<VISEUR>");
+                assertTrue(noms != null, modele + " : ligne des noms du bloc VISA introuvable");
+                assertEquals(2, noms.getTableCells().size(), modele + " : la ligne des noms a deux colonnes");
+                assertTrue(noms.getCell(0).getText().contains("<VISEUR>"),
+                        modele + " : le VISEUR doit être à GAUCHE, sous « visa du supérieur hiérarchique »");
+                assertTrue(noms.getCell(1).getText().contains("<NOM ET PRENOMS DU MEMBRE>"),
+                        modele + " : le MEMBRE doit être à DROITE, sous « membre en charge du dossier »");
+                assertTrue(!noms.getCell(1).getText().contains("<VISEUR>"),
+                        modele + " : le VISEUR ne doit plus figurer dans la colonne du membre");
+            }
+        }
+    }
+
     // ------------------------------------------------------------------ utilitaires
 
     private static XWPFDocument ouvrir(String modele) throws Exception {
@@ -120,6 +163,28 @@ class ModelesPvTest {
             }
         }
         return false;
+    }
+
+    /** La table VISA, cherchée par sa légende — jamais par son index (les AFSR en portent deux). */
+    private static XWPFTable tableVisa(XWPFDocument doc) {
+        for (XWPFTable t : doc.getTables()) {
+            if (t.getText() != null && t.getText().contains("SUPERIEUR")) {
+                return t;
+            }
+        }
+        return null;
+    }
+
+    /** Première ligne de la table dont une cellule porte le motif. */
+    private static XWPFTableRow ligneContenant(XWPFTable table, String motif) {
+        for (XWPFTableRow r : table.getRows()) {
+            for (XWPFTableCell c : r.getTableCells()) {
+                if (c.getText() != null && c.getText().contains(motif)) {
+                    return r;
+                }
+            }
+        }
+        return null;
     }
 
     private static int occurrences(String texte, String motif) {

@@ -101,8 +101,16 @@ public class PvDocumentGenerator {
 
     /**
      * ⚠️ Refonte du bloc VISA (2026-09-01) — ligne du viseur, ajoutée aux 12 modèles PV dans la table
-     * VISA (cellule de droite, côté Commission). Le P/CC n'y avait aucun emplacement : le bloc ne
-     * portait que le supérieur hiérarchique de l'entité et le membre en charge du dossier.
+     * VISA. Le P/CC n'y avait aucun emplacement : le bloc ne portait que le supérieur hiérarchique de
+     * l'entité et le membre en charge du dossier.
+     *
+     * <p>⚠️ <strong>Corrigé le 2026-09-09</strong> — elle avait été posée dans la cellule de
+     * <em>droite</em>, celle dont la légende annonce « le membre en charge du dossier » : le PV
+     * imprimait donc « Visé par … Président » sous le nom attendu du Membre, et la colonne de gauche
+     * restait vide. Viseur et membre sont <strong>deux personnes distinctes</strong> ; les 12 modèles
+     * portent désormais le viseur à gauche (visa du supérieur hiérarchique) et
+     * {@link #MEMBRE} à droite. {@code ModelesPvTest} lit les <em>colonnes</em> pour l'empêcher de
+     * repartir : une table dont les deux noms seraient intervertis passerait un simple « contient ».</p>
      */
     private static final String VISEUR = "<VISEUR>";
     private static final String LOCALITE = "<LOCALITE>";

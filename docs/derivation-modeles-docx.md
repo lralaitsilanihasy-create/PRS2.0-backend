@@ -149,3 +149,51 @@ Conséquence pour la co-signature (règle du 2026-08-28) : le document nomme cel
 (`IM_MEMBRE_COSIGNATAIRE`) n'apparaît nulle part sur le PV — c'est une absence, pas une erreur.
 Réaffecter le placeholder existant au signataire le ferait figurer parmi les **présents** d'une
 séance à laquelle il n'a pas assisté : le défaut serait introduit, pas corrigé.
+
+---
+
+## ⚠️ Correction du 2026-09-09 — le VISEUR passe à GAUCHE, le MEMBRE apparaît à droite
+
+**Le défaut.** La dérivation du 2026-09-01 avait ajouté `<VISEUR>` dans la cellule de **droite** de la
+table VISA — celle dont la légende annonce « (Nom, prénoms, cachet et signature du **membre en charge du
+dossier**) ». Le PV imprimait donc « Visé par : … Président de la Commission Nationale des Marchés » à la
+place du nom du Membre, pendant que la colonne de gauche, « VISA DU SUPÉRIEUR HIÉRARCHIQUE », restait
+vide. Viseur et membre sont deux personnes distinctes.
+
+**La correction**, sur les 12 modèles, porte sur la dernière ligne de la table VISA :
+
+```xml
+<!-- avant -->
+<w:tr><w:tc><w:p/></w:tc><w:tc>…<w:t>&lt;VISEUR></w:t>…</w:tc></w:tr>
+<!-- après -->
+<w:tr><w:tc>…<w:t>&lt;VISEUR></w:t>…</w:tc><w:tc>…<w:t>&lt;NOM ET PRENOMS DU MEMBRE></w:t>…</w:tc></w:tr>
+```
+
+`<NOM ET PRENOMS DU MEMBRE>` est déjà substitué par le générateur (bloc « Étaient présents ») : la
+seconde occurrence est remplie sans une ligne de code de plus. Elle est servie par
+`remplirTablesHorsAnnexe`, qui applique `baseMap` — donc **vide** si aucun membre n'est nommé, sans
+marqueur brut. Dans un bloc de signature, une case vide est exactement ce qu'il faut quand personne n'a
+signé.
+
+### ⚠️ Le piège de la réécriture d'un `.docx` (à relire avant toute prochaine dérivation)
+
+`zip` n'existe pas dans l'environnement du poste ; deux méthodes ont été essayées :
+
+1. **Mettre à jour l'entrée en place** (`ZipArchiveMode::Update` de .NET) — l'archive produite est
+   refusée par Apache POI : *« No valid entries or contents found, this is not a valid OOXML file »*.
+   Supprimer puis recréer `word/document.xml` le renvoie **en fin d'archive**, et l'ordre des entrées
+   cesse d'être celui qu'un paquet OPC attend. Les 14 tests Word l'ont dit immédiatement.
+2. **Reconstruire l'archive entière** en réécrivant les entrées **dans leur ordre d'origine**
+   (`[Content_Types].xml` en premier), en ne remplaçant que le contenu de `word/document.xml`. Valide,
+   relue par POI, et les 14 tests Word passent.
+
+**Retenir la seconde.** Et vérifier après coup avec les tests Word : un `.docx` cassé ne casse aucune
+compilation, il ne se voit qu'à la génération.
+
+### Ce qui garde la correction
+
+`ModelesPvTest.blocVisa_viseurAGauche_membreADroite` lit les **colonnes** de la table sur les 12
+modèles : la légende du supérieur hiérarchique et le `<VISEUR>` en cellule 0, la légende du membre en
+charge et `<NOM ET PRENOMS DU MEMBRE>` en cellule 1. Une table dont les deux noms seraient présents mais
+**intervertis** passerait n'importe quelle vérification par « contient » — c'est précisément ce qui a
+laissé passer l'erreur de la dérivation précédente.
