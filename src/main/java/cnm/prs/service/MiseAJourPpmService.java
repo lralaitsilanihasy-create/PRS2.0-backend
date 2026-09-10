@@ -470,6 +470,12 @@ public class MiseAJourPpmService {
      * ⚠️ 2026-08-05 — pièces exigées d'une VERSION en plus de celles d'un dossier neuf. Contrôlé ici et
      * pas au référentiel : sur un dossier initial ces pièces n'ont aucun sens (même principe que
      * l'obligation conditionnelle de l'AGPM).
+     *
+     * <p>⚠️ <strong>2026-09-10</strong> — les deux pièces ne pèsent pas du même poids, parce que
+     * l'application ne les détient pas de la même façon : le <strong>PV du prédécesseur</strong> est
+     * exigible (elle le génère et sait le régénérer), le <strong>PPM antérieur</strong> ne l'est que si un
+     * ancêtre porte le « Projet de PPM » facultatif dont il est tiré. Sans cette source, l'exigence tombe
+     * — voir le détail au point de contrôle.</p>
      */
     public void exigerDossierHistorique(Dossier dossier) {
         if (dossier.getIdDossierParent() == null) {
@@ -493,9 +499,21 @@ public class MiseAJourPpmService {
             manquantes.add(new ErrorResponse.FieldError("piecesJointes",
                     "Le PV du dossier précédent est obligatoire pour une mise à jour."));
         }
+        // ⚠️ <strong>Signalement front 2026-09-10</strong> — le PPM antérieur ne s'exige QUE si la chaîne
+        // peut le fournir. Il est recopié de la pièce « Projet de PPM » (type 1) d'un ancêtre, laquelle est
+        // FACULTATIVE au référentiel — et que rien, dans le backend, ne pose automatiquement : le PDF
+        // importé à la saisie est parsé puis jeté, et il n'existe aucun générateur de document PPM (le
+        // pendant de PvDocumentService n'existe pas). Quand aucun ancêtre n'en porte — le cas de TOUS les
+        // dossiers du pilote — l'application n'a rien à constituer, et la réclamer enfermait la mise à jour
+        // dans une impasse : jamais soumise, donc jamais dispatchée ni examinée.
+        //
+        // Le plan antérieur n'est pas perdu pour autant : /versions, /versions-archivees et /diff le
+        // tiennent des DONNÉES, pas d'un document. À l'inverse du PV du prédécesseur ci-dessus, que
+        // l'application détient et sait régénérer — lui reste exigé.
         if (!pieceJointeDossierRepository.existsByIdDossierAndIdTypePiece(dossier.getIdDossier(), TYPE_PPM_ANTERIEUR)) {
-            manquantes.add(new ErrorResponse.FieldError("piecesJointes",
-                    "Le PPM daté et signé des versions antérieures est obligatoire pour une mise à jour."));
+            log.warn("Mise a jour {} : aucun PPM date et signe dans la chaine des versions (aucun ancetre ne "
+                    + "porte de piece de type {}) — l'exigence de la piece d'historique tombe.",
+                    dossier.getIdDossier(), TYPE_PPM_SIGNE);
         }
         if (!manquantes.isEmpty()) {
             throw new ChampsInvalidesException(manquantes);

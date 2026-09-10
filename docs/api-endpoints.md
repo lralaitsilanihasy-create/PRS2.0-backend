@@ -2073,6 +2073,17 @@ volumineux → **400** (annule la création si multipart) ; **404** si l'UGPM ou
 > pièce supprimée par erreur), elles sont **reconstituées puis contrôlées** : un brouillon ne peut pas se
 > retrouver dans l'impasse d'un document qu'il n'a aucun moyen de produire.
 >
+> ⚠️ **Correctif 2026-09-10 (signalement front)** — la promesse ci-dessus n'était tenue que pour le PV. Le
+> **PPM antérieur** est recopié de la pièce **« Projet de PPM » (type `1`)** d'un ancêtre, qui est
+> **facultative** et que **rien ne pose automatiquement** : le PDF importé à la saisie est *parsé puis
+> jeté*, et il n'existe **aucun générateur de document PPM**. Aucun ancêtre n'en portant chez le pilote,
+> `POST /api/dossiers/{id}/soumettre` répondait **400** « Le PPM daté et signé des versions antérieures est
+> obligatoire pour une mise à jour » **sans issue** : aucune mise à jour n'était soumissible, donc aucune
+> examinable. Désormais **l'exigence du type `23` tombe quand la chaîne n'offre aucune source** (trace au
+> journal serveur) ; elle **s'applique normalement** dès qu'un ancêtre porte le type `1`. Le **PV du
+> prédécesseur reste exigé** — l'application le régénère, il est toujours constituable. Le plan antérieur,
+> lui, reste consultable par `/versions`, `/versions-archivees` et `/diff`, qui le tiennent des **données**.
+>
 > ⚠️ **Corollaire** : `POST …/mise-a-jour` **409** si le dossier source n'a pas de PV signé — on ne
 > versionne pas un plan dont la Commission n'a jamais rendu d'avis. En circuit normal, un dossier clôturé
 > porte toujours son PV.

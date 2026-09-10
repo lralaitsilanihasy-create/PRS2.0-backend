@@ -1089,6 +1089,27 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
     du vide. La copie transporte désormais `justifModeDerogatoire` et `justifDelaiAmenage` de la ligne,
     ainsi que le `justificationFiche` du PPM parent. Le contenu se reprend en entier, ou il ne se reprend
     pas : les montants et les justifications répondent des mêmes lignes.
+  - ⚠️ **Pièces d'historique d'une version : on n'exige que ce que l'application détient**
+    (signalement front du 2026-09-10). Une version porte, en plus des pièces d'un dossier neuf, le **PV du
+    prédécesseur** (type 22) et le **PPM antérieur daté et signé** (type 23). Ces pièces sont **constituées
+    par l'application** — jamais déposées par la PRMP — et la garde de soumission les **reconstitue avant de
+    contrôler**. Les deux ne pèsent pourtant pas du même poids, parce qu'elles ne viennent pas de la même
+    source :
+    - **PV du prédécesseur — exigé.** L'application le génère et sait le **régénérer** à la demande
+      (`documentPourHistorique`) : il est toujours constituable.
+    - **PPM antérieur — exigé seulement si la chaîne peut le fournir.** Il est recopié de la pièce
+      « Projet de PPM » (**type 1**), **facultative au référentiel** et que **rien ne pose
+      automatiquement** : le PDF importé à la saisie est **parsé puis jeté**, et il n'existe **aucun
+      générateur de document PPM** (le pendant de `PvDocumentService` n'existe pas). Quand aucun ancêtre
+      n'en porte — le cas de **tous** les dossiers du pilote — l'exigence **tombe**, avec une trace au
+      journal serveur. La réclamer enfermait la mise à jour dans une **impasse** : un brouillon se voyait
+      demander un document qu'il n'avait aucun moyen de produire, donc **jamais soumise, jamais dispatchée,
+      jamais examinée**.
+    - **Ce qui n'est pas perdu** : le plan antérieur reste consultable par `/versions`,
+      `/versions-archivees` et `/diff`, qui le tiennent des **données** et non d'un document. L'exigence
+      qui tombe est celle d'une **pièce**, pas celle de l'historique.
+    - **Si un ancêtre porte bien le type 1**, la pièce est reprise et l'exigence **garde ses dents** —
+      la garde n'est pas désarmée, elle est rendue proportionnée à ce que la chaîne contient.
 - Identifiants attribués par le serveur [Auto]
   - ⚠️ **Règle ajoutée** : les PK dossier / PPM / marché sont **allouées par une séquence serveur** (`seq_dossier`/`seq_ppm`/`seq_marche`) ; tout id envoyé par le client est **ignoré** (plus de « identifiant en doublon »). Le formulaire ne saisit plus d'id. **Dette documentée** : séquence applicative (et non `IDENTITY`) pour éviter une refonte massive des fixtures de test sur ces 3 tables centrales ; bascule `IDENTITY` possible plus tard.
 - Suppression d'un marché / d'un PPM [Écriture]
