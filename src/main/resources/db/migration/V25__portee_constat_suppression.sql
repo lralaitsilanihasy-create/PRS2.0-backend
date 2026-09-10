@@ -25,10 +25,6 @@
 -- qu'une reprise de données déplace sans prévenir.
 -- =====================================================================================================
 
--- ⚠️ La colonne fait 10 caractères depuis l'origine : « SUPPRESSION » en compte 11. L'élargir fait
--- partie de la même livraison — sans quoi le seeder échouerait sur la longueur avant même le CHECK.
-ALTER TABLE public.tr_points_ctrl ALTER COLUMN "PORTEE" TYPE varchar(20);
-
 ALTER TABLE public.tr_points_ctrl DROP CONSTRAINT IF EXISTS "tr_points_ctrl_PORTEE_check";
 ALTER TABLE public.tr_points_ctrl ADD CONSTRAINT "tr_points_ctrl_PORTEE_check"
     CHECK ("PORTEE" IN ('LIGNE', 'DOSSIER', 'FICHE', 'AGPM', 'SUPPRESSION'));
