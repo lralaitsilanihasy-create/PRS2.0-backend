@@ -122,7 +122,61 @@ class ModelesPvTest {
         }
     }
 
+    /**
+     * ⚠️ <strong>Mise en page du bloc VISA</strong> (ajustement du 2026-09-09) — deux propriétés que le
+     * rendu seul ne trahit pas tant qu'on ne l'imprime pas.
+     *
+     * <ul>
+     *   <li><strong>L'espace de signature</strong> : le nom se posait à ~12 pt sous sa légende, sans
+     *       place pour la signature ni le cachet qu'elle annonce. Un retrait avant est désormais exigé —
+     *       une légende qui promet un cachet doit lui laisser la place.</li>
+     *   <li><strong>L'alignement</strong> : chaque nom s'indente comme la légende qui le surmonte. Dans
+     *       la cellule de droite, le nom du Membre partait de la marge (0) quand la légende et la ligne
+     *       « A …, le … » partaient de 446 twips — 22 pt d'écart, visibles à l'œil.</li>
+     * </ul>
+     *
+     * <p>Le test lit les propriétés de paragraphe, et non le texte : une mise en page perdue à la
+     * prochaine dérivation ne se verrait, sinon, qu'à l'impression d'un PV officiel.</p>
+     */
+    @Test
+    @DisplayName("⚠️ Bloc VISA — chaque nom laisse un espace de signature sous sa légende et s'aligne sur "
+            + "elle, sur les 12 modèles")
+    void blocVisa_espaceDeSignature_etAlignementSurLesLegendes() throws Exception {
+        for (String modele : MODELES) {
+            try (XWPFDocument doc = ouvrir(modele)) {
+                XWPFTable visa = tableVisa(doc);
+                XWPFTableRow legendes = ligneContenant(visa, "SUPERIEUR");
+                XWPFTableRow noms = ligneContenant(visa, "<VISEUR>");
+
+                for (int colonne = 0; colonne < 2; colonne++) {
+                    String cote = colonne == 0 ? "gauche (viseur)" : "droite (membre)";
+                    XWPFParagraph legende = dernierParagrapheNonVide(legendes.getCell(colonne));
+                    XWPFParagraph nom = dernierParagrapheNonVide(noms.getCell(colonne));
+                    assertTrue(nom != null, modele + " / " + cote + " : paragraphe du nom introuvable");
+
+                    assertTrue(nom.getSpacingBefore() > 0,
+                            modele + " / " + cote + " : le nom doit laisser un espace de signature sous "
+                                    + "sa légende (retrait avant nul)");
+                    assertEquals(legende.getIndentationLeft(), nom.getIndentationLeft(),
+                            modele + " / " + cote + " : le nom doit s'aligner sur la légende qui le "
+                                    + "surmonte (indentation différente)");
+                }
+            }
+        }
+    }
+
     // ------------------------------------------------------------------ utilitaires
+
+    /** Dernier paragraphe porteur de texte d'une cellule — la légende, ou le nom. */
+    private static XWPFParagraph dernierParagrapheNonVide(XWPFTableCell cellule) {
+        XWPFParagraph trouve = null;
+        for (XWPFParagraph p : cellule.getParagraphs()) {
+            if (p.getText() != null && !p.getText().isBlank()) {
+                trouve = p;
+            }
+        }
+        return trouve;
+    }
 
     private static XWPFDocument ouvrir(String modele) throws Exception {
         InputStream flux = ModelesPvTest.class.getResourceAsStream("/templates/" + modele + ".docx");

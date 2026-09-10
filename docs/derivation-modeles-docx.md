@@ -197,3 +197,28 @@ modèles : la légende du supérieur hiérarchique et le `<VISEUR>` en cellule 0
 charge et `<NOM ET PRENOMS DU MEMBRE>` en cellule 1. Une table dont les deux noms seraient présents mais
 **intervertis** passerait n'importe quelle vérification par « contient » — c'est précisément ce qui a
 laissé passer l'erreur de la dérivation précédente.
+
+### Ajustement de mise en page du 2026-09-09 (même bloc, deux réglages)
+
+Le rendu à deux colonnes corrigé plus haut restait serré : le nom se posait à **~12 pt** sous sa légende,
+sans place pour la signature ni le cachet qu'elle annonce, et dans la cellule de droite il partait de la
+**marge** quand la légende et la ligne « A …, le … » partaient de **446 twips** — 22 pt d'écart, visibles
+à l'œil (x = 281 au lieu de 303 sur le PDF).
+
+La ligne des noms reçoit donc, dans **chaque** cellule, un `<w:pPr>` qui n'existait pas :
+
+```xml
+<w:pPr><w:pStyle w:val="TableParagraph"/><w:spacing w:before="1134"/><w:ind w:left="{50|446}"/></w:pPr>
+```
+
+- `w:before="1134"` = **2 cm** d'espace de signature. Une légende qui promet un cachet doit lui laisser
+  la place.
+- `w:ind` reprend **l'indentation de la légende qui surmonte le nom**, relevée dans chaque modèle et non
+  codée en dur : `50` à gauche, `446` à droite. Les 12 modèles portaient les mêmes valeurs — la
+  vérification valait mieux que l'hypothèse.
+- La cellule **gauche** est alignée elle aussi, bien que le constat ne portât que sur la droite : le
+  décalage y était de 50 twips (2,5 pt), même défaut à plus petite échelle.
+
+`ModelesPvTest.blocVisa_espaceDeSignature_etAlignementSurLesLegendes` lit les **propriétés de
+paragraphe** — retrait avant non nul, indentation égale à celle de la légende — sur les 12 modèles. Une
+mise en page perdue à la prochaine dérivation ne se verrait, sinon, qu'à l'impression d'un PV officiel.
