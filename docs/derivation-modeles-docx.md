@@ -222,3 +222,7 @@ La ligne des noms reçoit donc, dans **chaque** cellule, un `<w:pPr>` qui n'exis
 `ModelesPvTest.blocVisa_espaceDeSignature_etAlignementSurLesLegendes` lit les **propriétés de
 paragraphe** — retrait avant non nul, indentation égale à celle de la légende — sur les 12 modèles. Une
 mise en page perdue à la prochaine dérivation ne se verrait, sinon, qu'à l'impression d'un PV officiel.
+
+> ✅ **Validé par le pilote le 2026-09-10** — le rendu correspond à sa capture. L'alignement de la
+> cellule **gauche**, étendu sans avoir été demandé, est **conservé** : la question posée à la livraison
+> est close. Ne pas revenir à l'état antérieur (`f5f5038`) en croyant corriger un excès de zèle.
