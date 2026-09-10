@@ -65,6 +65,20 @@ public interface MarcheRepository extends JpaRepository<Marche, Integer> {
     boolean existsMarcheDeclencheurAgpmByDossier(@Param("idDossier") Integer idDossier,
             @Param("seuil") java.math.BigDecimal seuil);
 
+    /**
+     * ⚠️ 2026-09-10 — les identifiants des lignes <strong>déclencheuses</strong>, pour le périmètre
+     * d'examen d'une mise à jour : le projet d'AGPM n'est réexaminé que si l'une d'elles a changé.
+     * <strong>Même prédicat</strong> que ci-dessus — « existe-t-il » et « lesquelles » ne peuvent donc
+     * pas se contredire.
+     */
+    @Query("""
+            select m.idDetail from Marche m where m.idDossier = :idDossier and (
+                m.mode.declencheAgpm = true
+                or (m.mode.agpmSiSeuil = true and coalesce(m.nouvMontEstim, m.montEstim) >= :seuil))
+            """)
+    java.util.List<Integer> idsMarchesDeclencheursAgpm(@Param("idDossier") Integer idDossier,
+            @Param("seuil") java.math.BigDecimal seuil);
+
     /** Marchés d'une PRMP (§3.1) : ceux dont le PPM lui appartient — son périmètre propre. */
     @Query("select m from Marche m where exists "
             + "(select 1 from Ppm p where p.idPpm = m.idPpm and p.idPrmp = :idPrmp)")

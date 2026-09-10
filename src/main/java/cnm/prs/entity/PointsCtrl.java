@@ -63,7 +63,7 @@ public class PointsCtrl {
      * côté Java : défaut LIGNE, getter coalescent — les points historiques sans portée comptent comme LIGNE.
      */
     @Enumerated(EnumType.STRING)
-    @Column(name = "PORTEE", length = 10)
+    @Column(name = "PORTEE", length = 20)
     private PorteePointCtrl portee = PorteePointCtrl.LIGNE;
 
     @ManyToOne(fetch = FetchType.LAZY)

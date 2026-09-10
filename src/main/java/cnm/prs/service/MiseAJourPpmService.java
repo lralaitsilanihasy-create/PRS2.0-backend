@@ -821,6 +821,7 @@ public class MiseAJourPpmService {
         return calculer(dossier, numMaj, motif);
     }
 
+
     /** Lecture du diff : tout-voyant, PRMP propriétaire, ou contrôleur de la localité du dossier. */
     private void controlerAccesLectureDiff(Dossier dossier) {
         if (cnm.prs.security.Visibilite.voitTout()) {

@@ -15,6 +15,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.dto.PerimetreExamenDto;
 import cnm.prs.entity.Controleur;
 import cnm.prs.entity.Dossier;
 import cnm.prs.enums.StatutPv;
@@ -65,6 +66,8 @@ public class PvDocumentService {
 
     private final PvDocumentGenerator generator;
     private final ExamenRepository examenRepository;
+    /** ⚠️ 2026-09-10 — le PV ne rapporte que ce qui relève du périmètre d'examen. */
+    private final PerimetreExamenService perimetreExamenService;
     private final DossierRepository dossierRepository;
     private final PpmRepository ppmRepository;
     private final MarcheRepository marcheRepository;
@@ -82,7 +85,8 @@ public class PvDocumentService {
     @Value("${storage.pv-examen.path:${java.io.tmpdir}/prs-fsx/PV}")
     private String cheminStockagePv;
 
-    public PvDocumentService(PvDocumentGenerator generator, ExamenRepository examenRepository,
+    public PvDocumentService(PerimetreExamenService perimetreExamenService,
+            PvDocumentGenerator generator, ExamenRepository examenRepository,
             DossierRepository dossierRepository, PpmRepository ppmRepository, MarcheRepository marcheRepository,
             ReceptionRepository receptionRepository,
             EntiteContractRepository entiteContractRepository, LocaliteRepository localiteRepository,
@@ -93,6 +97,7 @@ public class PvDocumentService {
             TypePieceJointeRepository typePieceJointeRepository,
             ControleurDirectory controleurDirectory) {
         this.generator = generator;
+        this.perimetreExamenService = perimetreExamenService;
         this.examenRepository = examenRepository;
         this.dossierRepository = dossierRepository;
         this.ppmRepository = ppmRepository;
@@ -393,7 +398,15 @@ public class PvDocumentService {
     private List<PvDocumentContexte.Observation> construireObservations(Integer idExamen) {
         List<PvDocumentContexte.Observation> out = new ArrayList<>();
         java.util.Map<Integer, String> designationsParLigne = new java.util.HashMap<>();
+        // ⚠️ PÉRIMÈTRE D'EXAMEN (2026-09-10) — sur une MISE À JOUR, le PV ne rend compte que de ce qui a
+        // été examiné : une observation posée sur une ligne INCHANGÉE n'y figure pas. Le PV et la
+        // complétude lisent le même périmètre — un document qui rapporterait ce que la garde n'exige
+        // pas ferait porter à la Commission un avis sur des lignes qu'elle n'avait pas à rouvrir.
+        java.util.Set<Integer> horsPerimetre = lignesHorsPerimetre(idExamen);
         for (ExamenDetail ed : examenDetailRepository.findByIdExamen(idExamen)) {
+            if (ed.getIdDetail() != null && horsPerimetre.contains(ed.getIdDetail())) {
+                continue;
+            }
             if (Boolean.FALSE.equals(ed.getConforme())) {
                 String libelle = ed.getPtControle() == null ? null : ed.getPtControle().getLibelPointCtrl();
                 String point = prefixerParLigne(ed.getIdDetail(), libelle, designationsParLigne);
@@ -426,6 +439,36 @@ public class PvDocumentService {
                             : "n°" + idPiece;
                 })
                 .orElse("n°" + idPiece);
+    }
+
+    /**
+     * ⚠️ 2026-09-10 — les lignes que le PV ne doit PAS rapporter : sur une mise à jour, celles qui n'ont
+     * pas changé. Hors mise à jour, l'ensemble est vide et le PV rend compte de tout, comme avant.
+     *
+     * <p>Le filtre porte sur les lignes, jamais sur les points de portée DOSSIER, FICHE ou AGPM : ceux-là
+     * n'ont pas d'{@code idDetail}, et leur avis vaut pour le plan entier.</p>
+     *
+     * <p>Une évaluation posée sur une ligne inchangée n'est pas <em>effacée</em> — elle reste en base, et
+     * l'examinateur avait le droit de la poser (la règle du 2026-09-04 le dit : l'exigence tombe, pas la
+     * possibilité de statuer). Elle ne sort que du <strong>document</strong>, dont le périmètre est celui
+     * de l'examen.</p>
+     */
+    private java.util.Set<Integer> lignesHorsPerimetre(Integer idExamen) {
+        Integer idDossier = examenRepository.findIdDossierByExamen(idExamen).orElse(null);
+        if (idDossier == null) {
+            return java.util.Set.of();
+        }
+        PerimetreExamenDto perimetre = perimetreExamenService.perimetre(idDossier);
+        if (!perimetre.miseAJour()) {
+            return java.util.Set.of();
+        }
+        java.util.Set<Integer> hors = new java.util.LinkedHashSet<>();
+        for (PerimetreExamenDto.LignePerimetre l : perimetre.lignes()) {
+            if (!l.aExaminer() && !l.constatRequis()) {
+                hors.add(l.idDetail());
+            }
+        }
+        return hors;
     }
 
     /** Préfixe le libellé du point par la ligne de marché (désignation mise en cache) ou « [Dossier] ». */

@@ -21,6 +21,7 @@ import jakarta.validation.Valid;
 
 import cnm.prs.dto.ActionDossierDto;
 import cnm.prs.dto.ChronometrageDto;
+import cnm.prs.dto.PerimetreExamenDto;
 import cnm.prs.dto.DossierDto;
 import cnm.prs.dto.DossierResoumissionRequest;
 import cnm.prs.dto.EchangeDto;
@@ -30,6 +31,7 @@ import cnm.prs.dto.RechercheDossierDto;
 import cnm.prs.dto.TacheDossierDto;
 import cnm.prs.service.ChronometrageService;
 import cnm.prs.service.DossierService;
+import cnm.prs.service.PerimetreExamenService;
 import cnm.prs.service.PpmService;
 
 /**
@@ -43,9 +45,12 @@ public class DossierController {
     private final PpmService ppmService;
     /** ⚠️ Chronométrage des délais (2026-09-01) — prise en charge et frise. */
     private final ChronometrageService chronometrageService;
+    /** ⚠️ 2026-09-10 — le périmètre d'examen, servi tel que la complétude l'exigera. */
+    private final PerimetreExamenService perimetreExamenService;
 
     public DossierController(DossierService service, PpmService ppmService,
-            ChronometrageService chronometrageService) {
+            ChronometrageService chronometrageService, PerimetreExamenService perimetreExamenService) {
+        this.perimetreExamenService = perimetreExamenService;
         this.service = service;
         this.ppmService = ppmService;
         this.chronometrageService = chronometrageService;
@@ -274,5 +279,25 @@ public class DossierController {
     public ChronometrageDto chronometrage(@PathVariable Integer id) {
         service.findById(id);   // garde de visibilité du dossier, réutilisée telle quelle
         return chronometrageService.chronometrage(id);
+    }
+
+    /**
+     * ⚠️ <strong>Périmètre d'examen</strong> (demande pilote du 2026-09-10) — ce que l'examinateur doit
+     * statuer sur ce dossier, et rien de plus. Sur une <strong>mise à jour</strong>, seules les lignes
+     * changées, plus un constat par ligne retirée ; sur un dossier initial, tout.
+     *
+     * <p><strong>C'est la valeur que la garde applique</strong> : la complétude de la soumission
+     * d'examen s'appuie sur le même calcul. Le front n'a donc rien à re-déduire du diff — servir ici le
+     * type de changement <em>et</em> ce qu'il implique évite qu'il refasse, à sa façon, une règle dont le
+     * serveur est l'autorité. Deux dérivations voisines auraient permis d'annoncer une ligne hors
+     * périmètre que la soumission aurait ensuite exigée.</p>
+     *
+     * <p>Même périmètre de lecture que le dossier lui-même : la garde de la consultation, appliquée en
+     * amont, suffit — un examinateur voit le dossier qu'il examine.</p>
+     */
+    @GetMapping("/{id}/perimetre-examen")
+    public PerimetreExamenDto perimetreExamen(@PathVariable Integer id) {
+        service.findById(id);   // garde de visibilité du dossier, réutilisée telle quelle
+        return perimetreExamenService.perimetre(id);
     }
 }

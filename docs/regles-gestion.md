@@ -1051,6 +1051,36 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
     interdirait définitivement toute mise à jour comportant une ligne dérogatoire. **Conséquence assumée** :
     une version créée par import peut contenir un marché dérogatoire non justifié, à compléter ensuite par
     la façade d'édition.
+  - ⚠️ **L'examen d'une MISE À JOUR ne porte que sur les lignes CHANGÉES** (demande pilote du
+    2026-09-10). Une version de PPM réclamait, comme un plan initial, l'évaluation de chaque point de
+    portée LIGNE sur *chaque* marché : sur une version qui corrige trois lignes d'un plan qui en compte
+    soixante, la Commission réexaminait un plan qu'elle avait déjà validé, et le PV rendait compte de
+    tout — noyant les corrections dans l'inchangé.
+    - **Nouvelles, modifiées, restaurées** : tous les points LIGNE, comme avant.
+    - **Retirées** : le seul **constat de suppression** (portée `SUPPRESSION`, un point semé pour la
+      famille DDP), qui vaut RAS ou observation. Il est porté par l'**`idDetail` de la ligne retirée
+      elle-même** — elle survit dans la version, la copie conservant les lignes supprimées (2026-08-05),
+      donc rien n'est à inventer pour l'y rattacher. Les deux ensembles sont **disjoints** : une ligne du
+      plan ne reçoit jamais de constat, une ligne retirée ne reçoit rien d'autre.
+    - **Inchangées** : rien. Elles sortent de la complétude **et** du PV.
+    - **FICHE / AGPM** : réexaminés seulement si une ligne **qui les concerne** a changé — sinon le
+      document dérivé est celui qu'on a déjà validé. « On ne contrôle pas le vide » reste la première
+      borne : le périmètre ne fait que **réduire**, jamais élargir.
+    - **DOSSIER** : toujours. Un point inter-lignes juge l'équilibre du plan entier, que la modification
+      d'une seule ligne peut rompre.
+    - **Dossier initial ou en rectification : rien ne change.** Sans prédécesseur, tout est à examiner.
+    - ⚠️ **Le périmètre est SERVI, pas re-déduit** : `GET /api/dossiers/{id}/perimetre-examen` rend le
+      type de changement de chaque ligne *et ce qu'il implique*, sur le calcul même que la complétude
+      applique. Le front n'a donc rien à re-dériver du diff — deux dérivations voisines auraient permis
+      d'annoncer une ligne hors périmètre que la soumission aurait ensuite exigée.
+    - ⚠️ **Le périmètre se lit sur la TRACE figée** à la soumission de la version, pas sur un recalcul :
+      l'examen vient après la soumission, la trace existe donc toujours, et c'est elle qui fait foi pour
+      le diff que le front affiche. Sans trace (version encore en brouillon, qui n'est de toute façon
+      pas examinée), aucune ligne n'est classée et tout reste à examiner — on ne dispense jamais
+      d'examiner sur un silence.
+    - **Une évaluation posée hors périmètre n'est pas refusée ni effacée** — l'exigence tombe, pas la
+      possibilité de statuer (règle du 2026-09-04) — mais elle **ne sort pas dans le PV** : le document
+      rend compte de l'examen, dont le périmètre est celui-ci.
   - ⚠️ **Les justifications SUIVENT la copie d'une mise à jour** (signalement du 2026-09-08). L'ouverture
     d'une mise à jour recopie le plan sous une nouvelle version ; cette copie transportait le compte, le
     statut, les lots et les bénéficiaires, **mais pas les justifications**. Deux effets, une seule cause :

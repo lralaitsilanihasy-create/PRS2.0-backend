@@ -16,8 +16,9 @@ import cnm.prs.repository.SousTypeDossierRepository;
 import cnm.prs.repository.TypeDossierRepository;
 
 /**
- * ⚠️ Règle du pilote (2026-09-02) — seed des <strong>six points de contrôle</strong> qui font entrer la
- * <strong>fiche de présentation</strong> et le <strong>projet d'AGPM</strong> dans l'examen de dossier.
+ * ⚠️ Règle du pilote (2026-09-02) — seed des points de contrôle qui font entrer la <strong>fiche de
+ * présentation</strong> et le <strong>projet d'AGPM</strong> dans l'examen de dossier, plus (⚠️ 2026-09-10)
+ * le <strong>constat de suppression</strong> des lignes retirées par une mise à jour.
  *
  * <h2>Pourquoi un seeder et non une migration SQL</h2>
  *
@@ -59,7 +60,7 @@ public class PointsCtrlFicheAgpmSeeder implements CommandLineRunner {
     /** Sous-type qui, seul, comporte un projet d'AGPM. */
     private static final String SOUS_TYPE_AGPM = "PPM-AGPM";
 
-    /** Les six points, dans l'ordre d'affichage. {@code sousType} nul = commun à la famille. */
+    /** Les points semés, dans l'ordre d'affichage. {@code sousType} nul = commun à la famille. */
     private static final List<Graine> GRAINES = List.of(
             new Graine("Listes de la fiche cohérentes avec le plan",
                     "Modes dérogatoires, délais aménagés et contrats-cadres : les trois listes de la fiche "
@@ -81,7 +82,14 @@ public class PointsCtrlFicheAgpmSeeder implements CommandLineRunner {
                     PorteePointCtrl.AGPM, SOUS_TYPE_AGPM),
             new Graine("Forme conforme au modèle officiel",
                     "Le projet d'AGPM respecte-t-il la forme du modèle officiel ?",
-                    PorteePointCtrl.AGPM, SOUS_TYPE_AGPM));
+                    PorteePointCtrl.AGPM, SOUS_TYPE_AGPM),
+            // ⚠️ 2026-09-10 — le constat des lignes RETIRÉES par une mise à jour. Commun à la famille :
+            // toute version de plan peut retirer une ligne, AGPM ou non. Jamais exigé hors mise à jour,
+            // un dossier initial n'ayant pas de ligne « retirée » au sens d'une version.
+            new Graine("Constat de suppression de la ligne",
+                    "Mise à jour : la ligne a été retirée du plan. Constater le retrait (RAS), ou "
+                            + "l'assortir d'une observation si sa disparition appelle une réserve.",
+                    PorteePointCtrl.SUPPRESSION, null));
 
     private final PointsCtrlRepository pointsCtrlRepository;
     private final TypeDossierRepository typeDossierRepository;

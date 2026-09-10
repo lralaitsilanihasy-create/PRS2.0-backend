@@ -60,6 +60,17 @@ public class AgpmService {
         return idPpm != null && marcheRepository.existsMarcheDeclencheurAgpmByPpm(idPpm, seuil());
     }
 
+    /**
+     * ⚠️ 2026-09-10 — les lignes qui DÉCLENCHENT l'AGPM, pour le périmètre d'examen d'une mise à jour :
+     * le projet d'AGPM n'est réexaminé que si l'une d'elles a changé. Même prédicat que
+     * {@link #requisPourDossier} — « existe-t-il » et « lesquelles » ne peuvent pas se contredire.
+     */
+    @Transactional(readOnly = true)
+    public java.util.Set<Integer> lignesDeclenchantAgpm(Integer idDossier) {
+        return idDossier == null ? java.util.Set.of()
+                : new java.util.LinkedHashSet<>(marcheRepository.idsMarchesDeclencheursAgpm(idDossier, seuil()));
+    }
+
     /** Seuil courant des modes à déclenchement conditionnel, tel que l'administration le porte. */
     @Transactional(readOnly = true)
     public BigDecimal seuil() {

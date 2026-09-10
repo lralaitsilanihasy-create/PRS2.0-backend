@@ -3,6 +3,7 @@ package cnm.prs.service;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -12,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import cnm.prs.dto.ExamenDto;
 import cnm.prs.dto.ExamenSoumissionRequest;
+import cnm.prs.dto.PerimetreExamenDto;
 import cnm.prs.dto.PvExamenDto;
 import cnm.prs.entity.Dossier;
 import cnm.prs.entity.Examen;
@@ -57,13 +59,16 @@ public class ExamenService {
     private final AgpmService agpmService;
     /** ⚠️ 2026-09-04 — dérivation de la fiche : source unique, partagée avec la saisie. */
     private final FicheJustificationsService ficheJustifications;
+    /** ⚠️ 2026-09-10 — le périmètre d'examen : sur une mise à jour, seules les lignes changées. */
+    private final PerimetreExamenService perimetreExamen;
 
     public ExamenService(ExamenRepository repository, DispatchRepository dispatchRepository,
             DossierRepository dossierRepository, PvExamenService pvExamenService,
             ControleurDirectory controleurDirectory, PointsCtrlRepository pointsCtrlRepository,
             MarcheRepository marcheRepository, ExamenDetailRepository examenDetailRepository,
             ExamenGarde examenGarde, FicheJustificationsService ficheJustifications,
-            AgpmService agpmService) {
+            AgpmService agpmService, PerimetreExamenService perimetreExamen) {
+        this.perimetreExamen = perimetreExamen;
         this.agpmService = agpmService;
         this.examenGarde = examenGarde;
         this.ficheJustifications = ficheJustifications;
@@ -143,11 +148,19 @@ public class ExamenService {
         if (grille.isEmpty()) {
             return;   // pas de grille pour ce (famille, sous-type) → rien à exiger
         }
+        // ⚠️ PÉRIMÈTRE D'EXAMEN (demande pilote du 2026-09-10) — sur une MISE À JOUR, on n'examine que
+        // ce qui a changé. Le périmètre est calculé par le service dédié, celui-là même que l'écran
+        // d'examen interroge : ce qui est annoncé au front est exactement ce qui est exigé ici.
+        //
         // ⚠️ 2026-08-05 (versionnement des PPM) — les lignes SUPPRIMÉES d'une version sont conservées en
-        // base (restaurables, jamais effacées) mais ne font plus partie du plan : exiger leur évaluation
-        // rendrait l'examen impossible à terminer.
+        // base (restaurables, jamais effacées) mais ne font plus partie du plan : exiger sur elles les
+        // points du plan rendrait l'examen impossible à terminer. Elles ne portent qu'un CONSTAT.
+        Map<Integer, PerimetreExamenDto.LignePerimetre> perimetre = perimetreExamen.parLigne(idDossier);
         List<Marche> marches = marcheRepository.findByIdDossier(idDossier).stream()
-                .filter(m -> !m.getSupprimee())
+                .filter(m -> aExaminer(perimetre, m))
+                .toList();
+        List<Marche> retirees = marcheRepository.findByIdDossier(idDossier).stream()
+                .filter(m -> constatRequis(perimetre, m))
                 .toList();
         Set<String> evalues = new HashSet<>();
         for (Object[] couple : examenDetailRepository.couplesEvalues(idExamen)) {
@@ -163,11 +176,24 @@ public class ExamenService {
         // saisie, quelles lignes exigent une justification. L'AGPM se lit sur le prédicat qui DÉRIVE
         // DÉJÀ le sous-type PPM-AGPM : les deux ne peuvent donc pas se contredire, puisque c'est ce
         // sous-type qui fait entrer les points AGPM dans la grille.
-        boolean ficheVide = ficheJustifications.ficheVide(idDossier);
-        boolean agpmVide = !agpmService.requisPourDossier(idDossier);
+        // ⚠️ 2026-09-10 — sur une mise à jour, la FICHE et l'AGPM ne sont réexaminés que si une ligne
+        // QUI LES CONCERNE a changé : sinon le document dérivé est celui qu'on a déjà validé. Le
+        // périmètre porte les deux drapeaux, « on ne contrôle pas le vide » y étant déjà appliqué.
+        PerimetreExamenDto vue = perimetreExamen.perimetre(idDossier);
+        boolean ficheVide = !vue.ficheAExaminer();
+        boolean agpmVide = !vue.agpmAExaminer();
         List<String> manquants = new ArrayList<>();
         for (PointsCtrl p : grille) {
-            if (!p.getPortee().parLigne()) {
+            if (p.getPortee().surLigneRetiree()) {
+                // Constat de suppression : exigé sur chaque ligne RETIRÉE, et sur elles seules. Il est
+                // porté par l'idDetail de la ligne retirée elle-même, qui survit dans la version.
+                for (Marche m : retirees) {
+                    if (!evalues.contains(cleCouple(m.getIdDetail(), p.getIdPointCtrl()))) {
+                        manquants.add("« " + p.getLibelPointCtrl() + " » — ligne retirée « "
+                                + designation(m) + " »");
+                    }
+                }
+            } else if (!p.getPortee().parLigne()) {
                 // DOSSIER, FICHE, AGPM : une seule évaluation, sans ligne de marché. Le prédicat, plutôt
                 // qu'un « == DOSSIER », évite qu'une portée ajoutée demain se retrouve à exiger une
                 // évaluation par marché — c'est exactement ce qui serait arrivé à FICHE et AGPM.
@@ -180,9 +206,7 @@ public class ExamenService {
             } else {
                 for (Marche m : marches) {
                     if (!evalues.contains(cleCouple(m.getIdDetail(), p.getIdPointCtrl()))) {
-                        String marche = m.getDesignationMarche() == null || m.getDesignationMarche().isBlank()
-                                ? "n°" + m.getIdDetail() : m.getDesignationMarche();
-                        manquants.add("« " + p.getLibelPointCtrl() + " » — marché « " + marche + " »");
+                        manquants.add("« " + p.getLibelPointCtrl() + " » — marché « " + designation(m) + " »");
                     }
                 }
             }
@@ -231,6 +255,27 @@ public class ExamenService {
     /** Clé d'un couple évalué ({@code idDetail} nul → « null ») pour la comparaison de complétude. */
     private static String cleCouple(Integer idDetail, Integer idPtControle) {
         return (idDetail == null ? "null" : idDetail) + "|" + idPtControle;
+    }
+
+    /**
+     * ⚠️ 2026-09-10 — la ligne relève-t-elle des points du PLAN ? Le périmètre décide ; son absence de
+     * la table vaut « à examiner », jamais l'inverse — on ne dispense pas d'examiner sur un silence.
+     */
+    private static boolean aExaminer(Map<Integer, PerimetreExamenDto.LignePerimetre> perimetre, Marche m) {
+        PerimetreExamenDto.LignePerimetre l = perimetre.get(m.getIdDetail());
+        return l == null ? !Boolean.TRUE.equals(m.getSupprimee()) : l.aExaminer();
+    }
+
+    /** La ligne est-elle RETIRÉE, et attend-elle donc son seul constat de suppression ? */
+    private static boolean constatRequis(Map<Integer, PerimetreExamenDto.LignePerimetre> perimetre, Marche m) {
+        PerimetreExamenDto.LignePerimetre l = perimetre.get(m.getIdDetail());
+        return l != null && l.constatRequis();
+    }
+
+    /** Libellé d'un marché pour les messages ; repli sur son numéro — un refus doit désigner. */
+    private static String designation(Marche m) {
+        return m.getDesignationMarche() == null || m.getDesignationMarche().isBlank()
+                ? "n°" + m.getIdDetail() : m.getDesignationMarche();
     }
 
     @Transactional(readOnly = true)

@@ -166,12 +166,29 @@ public class FicheJustificationsService {
 
     @Transactional(readOnly = true)
     public boolean ficheVide(Integer idDossier) {
+        return lignesDeLaFiche(idDossier).isEmpty();
+    }
+
+    /**
+     * ⚠️ 2026-09-10 — les lignes qui <strong>alimentent la fiche</strong> (mode dérogatoire, contrat-cadre,
+     * délai aménagé), pour le périmètre d'examen d'une mise à jour : la fiche n'est réexaminée que si
+     * l'une d'elles a changé.
+     *
+     * <p>{@link #ficheVide} s'y ramène désormais — « la fiche est-elle vide » et « quelles lignes la
+     * remplissent » sont la <strong>même</strong> question, et deux dérivations auraient fini par se
+     * contredire : une fiche déclarée non vide dont aucune ligne n'aurait été identifiée aurait rendu la
+     * réponse « rien à réexaminer » sur un document qui, lui, réclamait un avis.</p>
+     */
+    @Transactional(readOnly = true)
+    public java.util.Set<Integer> lignesDeLaFiche(Integer idDossier) {
         if (idDossier == null) {
-            return true;
+            return java.util.Set.of();
         }
         return marcheRepository.findByIdDossier(idDossier).stream()
                 .filter(m -> !Boolean.TRUE.equals(m.getSupprimee()))
-                .noneMatch(this::concerneLaFiche);
+                .filter(this::concerneLaFiche)
+                .map(Marche::getIdDetail)
+                .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
     }
 
     /**

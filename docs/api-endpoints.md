@@ -5547,6 +5547,7 @@ nombre d'aller-retours.
 |---|---|---|---|---|---|
 | POST | /api/dossiers/{id}/prise-en-charge | `{ "previsionHeures": 8 }` | `TacheDossierDto` | 200, 400, 403, 404, 409 | porteur de l’étape courante |
 | GET | /api/dossiers/{id}/chronometrage | — | `ChronometrageDto` | 200, 403, 404 | même périmètre que le dossier |
+| GET | /api/dossiers/{id}/perimetre-examen | — | `PerimetreExamenDto` | 200, 403, 404 | même périmètre que le dossier |
 | GET | /api/delais-standards | — | `DelaiStandardDto[]` | 200 | Authentifié |
 | PUT | /api/delais-standards/{etape} | `DelaiStandardDto` | `DelaiStandardDto` | 200, 400, 403, 404 | **ADMINISTRATEUR** |
 
@@ -5577,6 +5578,46 @@ standard — idempotent.
 ⚠️ **`RECTIFICATION_PRMP` ne figure pas au référentiel** (ce n'est pas un délai de la Commission) : sa
 prise en charge prend le **repli serveur de 8 h**, comme toute étape que l'Administrateur n'a pas réglée.
 `PUT /api/delais-standards/RECTIFICATION_PRMP` répond toujours **404**.
+
+> ## ⚠️ PÉRIMÈTRE D'EXAMEN — n'examiner que les lignes changées (2026-09-10)
+>
+> L'examen d'une **mise à jour** de PPM réclamait, comme celui d'un plan initial, l'évaluation de chaque
+> point de portée LIGNE sur *chaque* marché. Sur une version qui corrige trois lignes d'un plan qui en
+> compte soixante, la Commission réexaminait un plan déjà validé — et le PV rendait compte de tout.
+>
+> **`GET /api/dossiers/{id}/perimetre-examen`** sert ce que l'examinateur doit statuer, et rien de plus :
+>
+> ```json
+> { "idDossier": 641, "idDossierParent": 640, "miseAJour": true,
+>   "ficheAExaminer": false, "agpmAExaminer": false, "dossierAExaminer": true,
+>   "lignes": [
+>     { "idDetail": 6411, "designation": "Fournitures", "typeChangement": "INCHANGEE",
+>       "aExaminer": false, "constatRequis": false },
+>     { "idDetail": 6412, "designation": "Toiture",     "typeChangement": "MODIFIEE",
+>       "aExaminer": true,  "constatRequis": false },
+>     { "idDetail": 6413, "designation": "Matériel",    "typeChangement": "SUPPRIMEE",
+>       "aExaminer": false, "constatRequis": true } ] }
+> ```
+>
+> | Type | Ce qui est exigé |
+> |---|---|
+> | `NOUVELLE`, `MODIFIEE`, `RESTAUREE` | tous les points de portée **LIGNE** |
+> | `SUPPRIMEE` | le seul **constat de suppression** (portée `SUPPRESSION`), porté par l'`idDetail` **de la ligne retirée elle-même** |
+> | `INCHANGEE` | **rien** — hors complétude et hors PV |
+> | `null` (hors mise à jour, ou ligne non classée) | tous les points LIGNE — on ne dispense pas d'examiner sur un doute |
+>
+> - **FICHE / AGPM** : réexaminés seulement si une ligne **qui les concerne** a changé. « On ne contrôle
+>   pas le vide » (2026-09-04) reste la première borne — le périmètre **réduit**, il n'élargit jamais.
+> - **DOSSIER** : toujours exigé. Un point inter-lignes juge l'équilibre du plan entier.
+> - **Dossier initial ou en rectification** : `miseAJour = false`, tout est à examiner, rien ne change.
+> - ⚠️ **C'est la valeur que la garde applique.** La complétude de `POST /api/examens/{id}/soumettre`
+>   s'appuie sur le même calcul : ce qui est annoncé ici est exactement ce qui sera exigé. Le front n'a
+>   rien à re-déduire de `GET /dossiers/{id}/diff` (ouvert au circuit depuis le 2026-08-15) — deux
+>   dérivations voisines auraient permis d'annoncer une ligne hors périmètre puis de l'exiger.
+> - ⚠️ Le périmètre se lit sur la **trace figée** à la soumission de la version, celle qui fait foi pour
+>   le diff. Sans trace, aucune ligne n'est classée et tout reste à examiner.
+> - Une évaluation posée **hors périmètre** est acceptée et conservée (l'exigence tombe, pas la
+>   possibilité de statuer) mais **ne sort pas dans le PV**.
 
 > ## ⚠️ RECTIFICATION PRMP — l'étape `RECTIFICATION_PRMP` (2026-09-07)
 >

@@ -43,14 +43,41 @@ public enum PorteePointCtrl {
     FICHE,
 
     /** ⚠️ 2026-09-02 — évalué une fois sur le projet d'AGPM (idDetail = null), sous-type PPM-AGPM. */
-    AGPM;
+    AGPM,
 
     /**
-     * Le point s'évalue-t-il <strong>marché par marché</strong> ? Seule {@link #LIGNE} le fait ; toute
-     * autre portée s'évalue <strong>une seule fois</strong>, sans ligne de marché.
+     * ⚠️ 2026-09-10 — <strong>constat de suppression</strong> : le résultat unique que l'examinateur pose
+     * sur une ligne RETIRÉE par une mise à jour (RAS, ou observation). Évalué <strong>par ligne</strong>
+     * comme { #LIGNE}, mais sur les seules lignes supprimées — et réciproquement, une ligne
+     * supprimée ne doit rien d'autre.
+     *
+     * <p>Le résultat est stocké comme tout autre : un { t_examen_detail} dont l'{ ID_DETAIL}
+     * est celui de la <strong>ligne retirée elle-même</strong>. Elle existe toujours dans la version —
+     * la copie d'une mise à jour conserve les lignes supprimées, restaurables — donc rien n'est à
+     * inventer pour l'y rattacher.</p>
+     */
+    SUPPRESSION;
+
+    /**
+     * Le point s'évalue-t-il <strong>marché par marché</strong> ({@code idDetail} renseigné) ? {@link #LIGNE}
+     * et {@link #SUPPRESSION} le font ; toute autre portée s'évalue <strong>une seule fois</strong>, sans
+     * ligne de marché.
+     *
+     * <p>⚠️ Ce prédicat dit <em>comment</em> un point se rattache, pas <em>à quelles lignes</em> : LIGNE
+     * vise les lignes du plan, SUPPRESSION les seules lignes retirées. C'est la complétude qui tranche —
+     * voir {@link #surLigneRetiree()}.</p>
      */
     public boolean parLigne() {
-        return this == LIGNE;
+        return this == LIGNE || this == SUPPRESSION;
+    }
+
+    /**
+     * ⚠️ 2026-09-10 — le point porte-t-il sur une ligne <strong>retirée</strong> par une mise à jour ?
+     * Seule {@link #SUPPRESSION}. Les deux ensembles sont disjoints : une ligne du plan ne reçoit jamais
+     * de constat de suppression, une ligne retirée ne reçoit rien d'autre.
+     */
+    public boolean surLigneRetiree() {
+        return this == SUPPRESSION;
     }
 
     /** Liste des codes acceptés, pour les messages d'erreur — dérivée de l'énumération, jamais recopiée. */
