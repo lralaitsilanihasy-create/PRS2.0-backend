@@ -115,6 +115,15 @@ public class PrmpEntiteService {
      * <strong>pas</strong> l'invariant d'unicité des liens <em>actifs</em> (le lien est en attente) ; celui-ci
      * s'applique à l'<strong>activation</strong> ({@link #update} avec {@code actif=true} → 409 si conflit).
      * Idempotent : ne recrée pas un lien PRMP↔entité déjà présent.
+     *
+     * <p>⚠️ <strong>2026-09-10 — vaut tel quel quand c'est une UGPM qui crée l'entité</strong>, et c'est
+     * voulu : le claim {@code ref} d'une UGPM <strong>porte l'ID de sa PRMP de tutelle</strong>, posé à
+     * l'authentification ({@code AuthService}, « périmètre = la PRMP de tutelle »). {@code CurrentUser.ref()}
+     * rend donc déjà la tutelle, le lien cible la <strong>PRMP</strong> et non l'UGPM, et l'entité entre
+     * après approbation dans le périmètre que la PRMP <em>et</em> ses UGPM partagent. Aucune dérivation
+     * supplémentaire n'est à faire ici — en ajouter une lirait l'UGPM comme un titulaire de rattachement,
+     * ce qu'elle n'est pas. Le nom de la méthode reste exact : la condition porte sur ce que {@code ref}
+     * <em>désigne</em> (une PRMP), pas sur le profil qui appelle.</p>
      */
     public void autoRattacherEnAttenteSiPrmp(Integer idEntiteContract) {
         String idPrmp = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);

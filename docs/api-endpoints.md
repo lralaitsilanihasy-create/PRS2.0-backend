@@ -100,6 +100,12 @@ Pour les ressources du circuit (`dossiers`, `receptions`, `dispatchs`, `examens`
   ⚠️ **Exception (2026-07-29)** : `POST /api/ministeres` et `POST /api/organigrammes` sont ouverts à la
   **PRMP** (en plus de l'Admin) — ministère d'appartenance absent du référentiel lors de l'enregistrement
   d'une nouvelle entité (le front crée le ministère puis son organigramme actif) ; PUT/DELETE restent Administrateur.
+  ⚠️ **Extension (2026-09-10, décision pilote)** : ces **trois** POST (`entite-contracts`, `ministeres`,
+  `organigrammes`) sont ouverts à l'**UGPM** en plus de la PRMP. Créer une entité absente du référentiel est
+  un acte de **saisie** — préparer le dossier avant dépôt — borné par l'ADMIN qui seul active le
+  rattachement : « l'UGPM saisit, la PRMP engage » n'est pas entamé. La frontière tient ailleurs et ne
+  bouge pas : `/soumettre`, `/resoumettre` et `/transmettre-complements*` restent `hasRole('PRMP')`.
+  **PUT/DELETE restent Administrateur** pour tous.
 - **Gestion des comptes / hiérarchie** (écriture `ADMINISTRATEUR`, lecture ouverte) :
   `controleurs`, `prmps`, `organigrammes`.
 - **Réservé `ADMINISTRATEUR`** (lecture comprise) : `audit-logs`, `session-utilisateurs`, `comptes-auth`.
@@ -2562,7 +2568,7 @@ les jalons naissent des flux internes (alertes J-7 / J-1), aucun profil métier 
 |---|---|---|---|---|---|
 | GET | /api/entite-contracts | — | `EntiteContractDto[]` | 200 | Authentifié |
 | GET | /api/entite-contracts/{id} | — | `EntiteContractDto` | 200, 404 | Authentifié |
-| POST | /api/entite-contracts | `EntiteContractDto` | `EntiteContractDto` | 201, 400, 403 | **PRMP ou ADMINISTRATEUR** |
+| POST | /api/entite-contracts | `EntiteContractDto` | `EntiteContractDto` | 201, 400, 403 | **PRMP, UGPM ou ADMINISTRATEUR** |
 | PUT | /api/entite-contracts/{id} | `EntiteContractDto` | `EntiteContractDto` | 200, 400, 404 | ADMINISTRATEUR |
 | DELETE | /api/entite-contracts/{id} | — | — | 204, 404 | ADMINISTRATEUR |
 
@@ -2598,13 +2604,18 @@ les jalons naissent des flux internes (alertes J-7 / J-1), aucun profil métier 
 - **Invariant d'unicité** : une entité ne peut être rattachée qu'à **une seule PRMP active** ;
   toute tentative d'**activer** une entité déjà rattachée activement → **409**. Une PRMP peut gérer
   **plusieurs** entités. Les affectations sont **stables** (pas de transfert d'une PRMP à une autre).
-- ⚠️ **Auto-rattachement EN ATTENTE (règle ajoutée 2026-07-26).** Quand une **PRMP** crée une entité
+- ⚠️ **Auto-rattachement EN ATTENTE (règle ajoutée 2026-07-26 ; UGPM depuis le 2026-09-10).** Quand une
+  **PRMP** — ou une **UGPM** — crée une entité
   contractante (`POST /api/entite-contracts`, cf. Entités contractantes), le backend crée
   **automatiquement** un lien PRMP↔entité **`actif=false`** (en attente d'approbation). L'invariant
   d'unicité **ne bloque pas** cette création (le lien est en attente) ; il s'applique à l'**activation**.
   **Approuver** = `PUT /api/prmp-entites/{id}` `{actif:true}` (Administrateur → **409** si une autre PRMP
   est déjà active sur l'entité). **Rejeter** = `DELETE /api/prmp-entites/{id}`. Une fois **actif=true**,
   l'entité apparaît dans le `GET /api/prmp-entites` scopé de la PRMP (le front filtre `actif=true`).
+  ⚠️ **Le lien cible toujours une PRMP, jamais une UGPM** — et aucune dérivation n'a été ajoutée pour cela :
+  le claim `ref` d'une UGPM **est** l'ID de sa PRMP de tutelle, posé à l'authentification. Le rattachement
+  créé par une UGPM vise donc sa tutelle, et l'entité approuvée entre dans le périmètre que la PRMP **et**
+  ses UGPM partagent (`Visibilite.estPrmp()` couvre les deux profils).
 
 **Champs `PrmpEntiteDto`**
 
@@ -3787,7 +3798,7 @@ processus** (`idCapm` → **CAPM**), chacune avec une `dateDebut` (obligatoire) 
 |---|---|---|---|---|---|
 | GET | /api/ministeres | — | `MinistereDto[]` | 200 | Authentifié |
 | GET | /api/ministeres/{id} | — | `MinistereDto` | 200, 404 | Authentifié |
-| POST | /api/ministeres | `MinistereDto` | `MinistereDto` | 201, 400, 403 | ADMINISTRATEUR |
+| POST | /api/ministeres | `MinistereDto` | `MinistereDto` | 201, 400, 403 | **PRMP, UGPM ou ADMINISTRATEUR** |
 | PUT | /api/ministeres/{id} | `MinistereDto` | `MinistereDto` | 200, 400, 404 | ADMINISTRATEUR |
 | DELETE | /api/ministeres/{id} | — | — | 204, 404 | ADMINISTRATEUR |
 
@@ -4109,7 +4120,7 @@ immuable). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **40
 |---|---|---|---|---|---|
 | GET | /api/organigrammes | — | `OrganigrammeDto[]` | 200 | Authentifié |
 | GET | /api/organigrammes/{id} | — | `OrganigrammeDto` | 200, 404 | Authentifié |
-| POST | /api/organigrammes | `OrganigrammeDto` | `OrganigrammeDto` | 201, 400, 403 | ADMINISTRATEUR |
+| POST | /api/organigrammes | `OrganigrammeDto` | `OrganigrammeDto` | 201, 400, 403 | **PRMP, UGPM ou ADMINISTRATEUR** |
 | PUT | /api/organigrammes/{id} | `OrganigrammeDto` | `OrganigrammeDto` | 200, 400, 404 | ADMINISTRATEUR |
 | DELETE | /api/organigrammes/{id} | — | — | 204, 404 | ADMINISTRATEUR |
 

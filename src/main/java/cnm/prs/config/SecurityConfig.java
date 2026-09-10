@@ -167,12 +167,19 @@ public class SecurityConfig {
                         // (import PPM : autorité hors périmètre → nouvelle entité + rattachement EN ATTENTE),
                         // EN PLUS de l'Admin. Doit précéder la règle REFERENTIELS (1er match gagne).
                         // PUT/DELETE /api/entite-contracts/* restent Administrateur (via REFERENTIELS_ID).
-                        .requestMatchers(HttpMethod.POST, "/api/entite-contracts").hasAnyRole("PRMP", "ADMINISTRATEUR")
+                        //
+                        // ⚠️ 2026-09-10 (décision pilote) — OUVERT AUSSI À L'UGPM, sur les trois écritures.
+                        // Créer une entité absente du référentiel est un acte de SAISIE — préparer le dossier
+                        // avant dépôt — pas un acte d'engagement : « l'UGPM saisit, la PRMP engage » n'est pas
+                        // entamé. Le geste reste borné par l'ADMIN, qui seul active le rattachement.
+                        // ⚠️ La frontière tient ailleurs et n'est PAS touchée : /soumettre, /resoumettre et
+                        // /transmettre-complements* restent hasRole('PRMP') (gardés par @PreAuthorize).
+                        .requestMatchers(HttpMethod.POST, "/api/entite-contracts").hasAnyRole("PRMP", "UGPM", "ADMINISTRATEUR")
                         // ⚠️ Règle ajoutée (2026-07-29) — création d'un MINISTÈRE (et de son organigramme)
                         // ouverte à la PRMP : nouvelle entité à l'import dont le ministère d'appartenance
                         // manque au référentiel. PUT/DELETE restent Administrateur (règles génériques).
-                        .requestMatchers(HttpMethod.POST, "/api/ministeres").hasAnyRole("PRMP", "ADMINISTRATEUR")
-                        .requestMatchers(HttpMethod.POST, "/api/organigrammes").hasAnyRole("PRMP", "ADMINISTRATEUR")
+                        .requestMatchers(HttpMethod.POST, "/api/ministeres").hasAnyRole("PRMP", "UGPM", "ADMINISTRATEUR")
+                        .requestMatchers(HttpMethod.POST, "/api/organigrammes").hasAnyRole("PRMP", "UGPM", "ADMINISTRATEUR")
                         // Référentiels & paramétrage : écriture réservée à l'Administrateur.
                         .requestMatchers(HttpMethod.POST, REFERENTIELS).hasRole("ADMINISTRATEUR")
                         .requestMatchers(HttpMethod.PUT, REFERENTIELS_ID).hasRole("ADMINISTRATEUR")

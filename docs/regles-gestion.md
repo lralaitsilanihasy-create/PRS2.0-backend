@@ -887,6 +887,20 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
   interdites à l'UGPM (403). ⚠️ **Reconfirmé par le pilote le 2026-09-08** — la question s'est reposée au
   moment d'étendre le journal à l'auteur réel : le partage retenu est **« l'UGPM saisit, la PRMP
   engage »**. L'UGPM crée le dossier ; les actes qui engagent l'entité contractante restent à la PRMP.
+- ⚠️ **Extension (2026-09-10, décision pilote) — l'UGPM crée aussi le référentiel qui lui manque.**
+  `POST /api/ministeres`, `POST /api/organigrammes` et `POST /api/entite-contracts` sont ouverts à
+  l'**UGPM**, en plus de la PRMP et de l'Admin. Une UGPM qui importait un PPM dont l'autorité et son
+  ministère étaient absents du référentiel se heurtait à un **403** et ne pouvait pas préparer son dossier.
+  - **Pourquoi ce n'est pas une entorse au partage** : créer une entité absente est un acte de **saisie**
+    — préparer le dossier avant dépôt — et non un acte d'engagement. Il reste **borné par l'ADMIN**, qui
+    seul active le rattachement. La frontière n'est donc pas déplacée, elle est simplement tenue là où elle
+    est : `/soumettre`, `/resoumettre` et `/transmettre-complements*` restent `hasRole('PRMP')`, et
+    **PUT/DELETE de ces référentiels restent Administrateur**.
+  - ⚠️ **Le rattachement en attente cible la PRMP de tutelle, sans dérivation ajoutée.** Le claim `ref`
+    d'une UGPM **est** l'ID de sa PRMP de tutelle, posé à l'authentification (`AuthService`) : le lien créé
+    vise donc la PRMP, jamais l'UGPM, et l'entité approuvée entre dans le périmètre que la PRMP **et** ses
+    UGPM partagent. **Rien n'a été ajouté au serveur pour cela** — y ajouter une dérivation lirait l'UGPM
+    comme un titulaire de rattachement, ce qu'elle n'est pas.
 - ⚠️ **Décision (2026-08-27) — la lecture d'une lettre de renvoi est un suivi par agent, pas par
   tutelle.** Le correctif ci-dessus avait un effet de bord non voulu : la consultation d'une lettre
   par une UGPM marquait « lue » **pour la tutelle entière**, éteignant à tort le badge de sa PRMP
