@@ -71,7 +71,7 @@ public class Marche {
     @Column(name = "ID_PPM", nullable = false)
     private Integer idPpm;
 
-    @Column(name = "DESIGNATION_MARCHE", length = 500)
+    @Column(name = "DESIGNATION_MARCHE", columnDefinition = "text")
     private String designationMarche;
 
     @Column(name = "NUM_COMPTE", length = 20)

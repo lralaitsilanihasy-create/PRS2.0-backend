@@ -66,7 +66,7 @@ public class SnapshotRectifLigne {
     @Column(name = "ID_LIGNE_ORIGINE")
     private Integer idLigneOrigine;
 
-    @Column(name = "DESIGNATION_MARCHE", length = 500)
+    @Column(name = "DESIGNATION_MARCHE", columnDefinition = "text")
     private String designationMarche;
 
     @Column(name = "MONT_ESTIM")

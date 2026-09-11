@@ -49,7 +49,7 @@ public class ChangementLigne {
     private Integer idLigneOrigine;
 
     /** Désignation de la ligne au moment du figeage — lisible même si la ligne évolue ensuite. */
-    @Column(name = "DESIGNATION", length = 500)
+    @Column(name = "DESIGNATION", columnDefinition = "text")
     private String designation;
 
     @Column(name = "TYPE_CHANGEMENT", length = 20, nullable = false)
@@ -59,9 +59,9 @@ public class ChangementLigne {
     @Column(name = "CHAMP", length = 50)
     private String champ;
 
-    @Column(name = "VALEUR_AVANT", length = 500)
+    @Column(name = "VALEUR_AVANT", columnDefinition = "text")
     private String valeurAvant;
 
-    @Column(name = "VALEUR_APRES", length = 500)
+    @Column(name = "VALEUR_APRES", columnDefinition = "text")
     private String valeurApres;
 }

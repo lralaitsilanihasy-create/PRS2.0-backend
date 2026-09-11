@@ -18,7 +18,10 @@ public record SaisieMarcheLigne(
         // ligne existante lors de l'édition d'un brouillon (réconciliation par idDetail).
         Integer idDetail,
 
-        @Size(max = 500)
+        // ⚠️ 2026-09-10 (demande pilote) — 500 → 4000 : un objet de marché réel dépassait la borne et la
+        // saisie était refusée. La colonne est passée en « text » (V27) ; la borne n'écarte plus que
+        // l'aberrant. Elle reste alignée sur MarcheDto : les deux façades décrivent le même champ.
+        @Size(max = 4000)
         String designationMarche,
 
         // ⚠️ Règle ajoutée (2026-07-18) — forme du marché : A_COMMANDE / CONTRAT_CADRE / QUANTITE_FIXE.

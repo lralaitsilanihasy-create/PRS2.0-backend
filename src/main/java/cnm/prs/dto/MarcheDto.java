@@ -35,7 +35,15 @@ public class MarcheDto {
     @NotNull
     private Integer idPpm;
 
-    @Size(max = 500, groups = { Default.class, GroupeRectification.class })
+    /**
+     * ⚠️ <strong>2026-09-10 (demande pilote)</strong> — l'objet d'un marché passe de 500 à 4000. Un objet
+     * réel dépasse 500 caractères (libellé administratif complet, lieu, tranche, financement) et la saisie
+     * était refusée. La colonne est désormais en {@code text} : la borne ne sert plus qu'à écarter
+     * l'aberrant, pas à cadrer le métier — 4000 est déjà une page de texte pour une désignation.
+     * Elle est <strong>conservée</strong> plutôt que retirée : un champ sans borne est une porte ouverte
+     * (cf. audit 2026-08-27 sur les montants).
+     */
+    @Size(max = 4000, groups = { Default.class, GroupeRectification.class })
     private String designationMarche;
 
     @Size(max = 20, groups = { Default.class, GroupeRectification.class })
