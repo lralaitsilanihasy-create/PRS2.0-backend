@@ -5,6 +5,7 @@ import java.util.HashSet;
 import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Optional;
 import java.util.Map;
 import java.util.Set;
 
@@ -323,6 +324,23 @@ public class SaisieService {
      * {@link FicheJustificationsService} pour la portée exacte de la garde.</p>
      */
     public DossierDto editerPpm(Integer idDossier, EditionPpmRequest req, boolean exigerJustifications) {
+        return editerPpm(idDossier, req, exigerJustifications, true);
+    }
+
+    /**
+     * ⚠️ <strong>2026-09-11 (demande pilote)</strong> — {@code coherenceMontantsStricte} vaut {@code true}
+     * partout SAUF sur l'<strong>import d'une mise à jour</strong>, qui doit se comporter comme l'import de
+     * création : charger, signaler, ne pas rejeter. Une seule ligne incohérente bloquait l'import entier
+     * d'un PPM d'une soixantaine de lignes, et l'utilisateur ne pouvait même pas afficher le diff pour la
+     * corriger.
+     *
+     * <p>⚠️ <strong>La règle n'est pas levée, elle est déplacée</strong> : l'incohérence remonte en
+     * anomalie sur la ligne, et la validation stricte s'applique au premier enregistrement de la grille
+     * ({@code PUT /api/saisies/ppm/{id}}, qui passe par le mode strict). Ce qui est relâché ici, c'est le
+     * moment du contrôle — pas son existence.</p>
+     */
+    public DossierDto editerPpm(Integer idDossier, EditionPpmRequest req, boolean exigerJustifications,
+            boolean coherenceMontantsStricte) {
         // ⚠️ Règle étendue (2026-08-02, demande user) — la RECTIFICATION après vérification passe par
         // l'IMPORTATION du PPM rectifié (même façade que l'édition de brouillon) : la façade accepte
         // aussi un dossier EN_ATTENTE_DECISION_PRMP (propriétaire). En rectification, la STRUCTURE est
@@ -408,7 +426,9 @@ public class SaisieService {
                 if (ligne.processus() != null) {
                     validerChronologieProcessus(ligne, i);
                 }
-                validerCoherenceMontants(ligne, i);   // Σ bénéficiaires (si beneficiaires[] non vide)
+                if (coherenceMontantsStricte) {
+                    validerCoherenceMontants(ligne, i);   // Σ bénéficiaires (si beneficiaires[] non vide)
+                }
 
                 MarcheDto m = toMarcheDto(ligne, idDossier, ppm.getIdPpm());
                 Integer idDetail;
@@ -673,34 +693,48 @@ public class SaisieService {
      * {@code Σ nouvMontBenef = nouvMontEstim}. Écart → 400 ciblé sur {@code marches[i].beneficiaires}.
      */
     private void validerCoherenceMontants(SaisieMarcheLigne ligne, int i) {
+        incoherenceMontants(ligne).ifPresent(message -> {
+            throw new ChampsInvalidesException(List.of(
+                    new ErrorResponse.FieldError("marches[" + i + "].beneficiaires", message)));
+        });
+    }
+
+    /**
+     * ⚠️ <strong>2026-09-11</strong> — la règle ci-dessus, rendue <strong>constatable sans être
+     * fatale</strong> : {@code Optional} vide = cohérent, sinon le message exact du refus.
+     *
+     * <p>Elle est <strong>ici et nulle part ailleurs</strong>. L'import d'une mise à jour signale ces mêmes
+     * incohérences en anomalies au lieu de rejeter ; les réécrire de son côté aurait fait deux règles
+     * jumelles vouées à diverger — et c'est précisément une divergence entre deux imports qui a motivé
+     * cette demande.</p>
+     */
+    public Optional<String> incoherenceMontants(SaisieMarcheLigne ligne) {
         List<SaisieBeneficiaireLigne> benefs = ligne.beneficiaires();
         if (benefs == null || benefs.isEmpty()) {
-            return;
+            return Optional.empty();
         }
-        String champ = "marches[" + i + "].beneficiaires";
         BigDecimal montEstim = ligne.montEstim() == null ? BigDecimal.ZERO : ligne.montEstim();
         BigDecimal sommeAnc = benefs.stream()
                 .map(b -> b.ancMontBenef() == null ? BigDecimal.ZERO : b.ancMontBenef())
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         if (sommeAnc.compareTo(montEstim) != 0) {
-            throw new ChampsInvalidesException(List.of(new ErrorResponse.FieldError(champ,
-                    "La somme des montants par bénéficiaire (" + sommeAnc.toPlainString()
-                            + ") doit égaler le montant estimatif du marché (" + montEstim.toPlainString() + ").")));
+            return Optional.of("La somme des montants par bénéficiaire (" + sommeAnc.toPlainString()
+                    + ") doit égaler le montant estimatif du marché (" + montEstim.toPlainString() + ").");
         }
         if (ligne.nouvMontEstim() != null) {
             if (benefs.stream().anyMatch(b -> b.nouvMontBenef() == null)) {
-                throw new ChampsInvalidesException(List.of(new ErrorResponse.FieldError(champ,
-                        "Le nouveau montant estimatif est fourni : chaque bénéficiaire doit porter nouvMontBenef.")));
+                return Optional.of(
+                        "Le nouveau montant estimatif est fourni : chaque bénéficiaire doit porter nouvMontBenef.");
             }
             BigDecimal sommeNouv = benefs.stream().map(SaisieBeneficiaireLigne::nouvMontBenef)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
             if (sommeNouv.compareTo(ligne.nouvMontEstim()) != 0) {
-                throw new ChampsInvalidesException(List.of(new ErrorResponse.FieldError(champ,
-                        "La somme des nouveaux montants par bénéficiaire (" + sommeNouv.toPlainString()
-                                + ") doit égaler le nouveau montant estimatif du marché ("
-                                + ligne.nouvMontEstim().toPlainString() + ").")));
+                return Optional.of("La somme des nouveaux montants par bénéficiaire (" + sommeNouv.toPlainString()
+                        + ") doit égaler le nouveau montant estimatif du marché ("
+                        + ligne.nouvMontEstim().toPlainString() + ").");
             }
         }
+        return Optional.empty();
     }
 
     /** (Règle ajoutée) Crée une ligne {@code t_service_beneficiaire} par bénéficiaire (PK allouée à la séquence {@code seq_service_beneficiaire}). */

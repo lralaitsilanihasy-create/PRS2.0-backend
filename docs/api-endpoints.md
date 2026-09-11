@@ -2108,6 +2108,22 @@ volumineux → **400** (annule la création si multipart) ; **404** si l'UGPM ou
 > une ligne nouvelle exige au moins un processus. Retourne le **diff recalculé**, à vérifier avant de
 > créer la mise à jour. 409 si le dossier n'est pas une version ou n'est plus un brouillon.
 >
+> ⚠️ **L'import CHARGE, il ne juge pas (correctif 2026-09-11, demande pilote).** Cet import **rejetait en
+> bloc** (400) dès qu'une ligne était incohérente : sur le PPM JIRAMA, une seule ligne sur une soixantaine
+> condamnait l'import entier, et l'écran ne pouvait même pas afficher le diff pour la corriger. Il se
+> comporte désormais **comme l'import de création** — charger, signaler, auto-corriger :
+> - **Auto-correction du cas non ambigu** : marché à **un seul bénéficiaire**, `nouvMontEstim` fourni et
+>   `nouvMontBenef` vide → la valeur du marché est posée sur le bénéficiaire, avec une anomalie
+>   `corrige:true` / `A_VERIFIER` (« à confirmer »). **Miroir** sur `montEstim` / `ancMontBenef`.
+> - **Cas ambigu** (**≥ 2 bénéficiaires**) : **rien n'est inventé** — la répartition n'est pas déductible.
+>   L'incohérence remonte en anomalie **`BLOQUANT`** sur la ligne, sans rejet.
+> - **La règle n'est pas levée, elle est déplacée** : la cohérence Σ bénéficiaires = montants s'applique
+>   toujours, au premier **enregistrement de la grille** (`PUT /api/saisies/ppm/{id}`), avec le même **400
+>   par champ** qu'avant. Ce qui est relâché, c'est le **moment** du contrôle, pas son existence.
+> - Le `DiffDossierDto` rendu porte donc **`lignes[].anomalies[]`** (même contrat que
+>   `SaisiePpmImportResult.MarcheImport.anomalies`) et **`nbAVerifier`**. Hors import — `GET
+>   /dossiers/{id}/diff`, trace figée — `anomalies` est vide et `nbAVerifier` vaut `0`.
+>
 > ⚠️ **Une mise à jour ne change pas d'entité contractante (règle ajoutée 2026-08-06).** L'entité est
 > **héritée** du prédécesseur (champ verrouillé à l'écran) : importer le plan d'un autre organisme
 > produirait un dossier incohérent — mêmes identités de lignes, tout autre entité. `POST …/mise-a-jour/import`
@@ -3490,7 +3506,7 @@ active (`t_prmp_entite.ACTIF`) sur l'entité contractante du dossier. C'est ce s
 | idDetail | number | Oui (PK, au POST) | clé primaire |
 | idDossier | number | Oui | @NotNull |
 | idPpm | number | Oui | @NotNull |
-| designationMarche | string | Non | max 500 |
+| designationMarche | string | Non | ⚠️ **max 4000 (2026-09-10, demande pilote)** — était `max 500`, qui refusait un objet de marché réel ; la colonne est passée en `text` (V27) et la borne n'écarte plus que l'aberrant |
 | numCompte | string | Non | max 20 |
 | montEstim | number | Non | ⚠️ **borné (2026-08-27, audit lot B)** — `@PositiveOrZero` (négatif refusé) + `@Digits(integer=36, fraction=2)`, calé sur la colonne réelle `numeric(38,2)` — sinon **400** |
 | ancienMontEstim | number | Non | mêmes bornes que `montEstim` — **400** sinon |

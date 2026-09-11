@@ -1028,6 +1028,17 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
     déjà passé en commission. **Périmètre de la reprise `V21`** : les références déjà attribuées sont
     réalignées (dossier + PPM + réception + PV, ensemble) **tant qu'aucun PV n'est signé** ; au-delà, elles
     sont laissées telles quelles.
+- ⚠️ **L'objet d'un marché est du texte libre (2026-09-10, demande pilote).** `designationMarche`
+  plafonnait à **500** caractères — en base **et** à la validation — et refusait un objet réel : libellé
+  administratif complet, lieu, tranche, référence de financement. La colonne passe en **`text`** (V27) et la
+  borne de validation à **4000**, conservée pour écarter l'aberrant, non pour cadrer le métier.
+  - ⚠️ **Quatre colonnes, pas une.** L'objet est **recopié** le long du circuit : la ligne du plan
+    (`t_marche`), l'**archive** d'une version remplacée (`t_snapshot_rectif_ligne`, rectification), la
+    **trace figée** d'une mise à jour (`t_changement_ligne.DESIGNATION`) et, quand c'est l'objet qui change,
+    ses **deux versions** (`VALEUR_AVANT` / `VALEUR_APRES`). N'en élargir qu'une aurait déplacé l'échec plus
+    loin — sur un dossier **déjà accepté à la saisie**, au moment de l'archiver ou de le soumettre.
+  - **Ce qui ne bouge pas** : `t_lot.designationLot` reste borné à **200**. C'est un intitulé de lot, un
+    autre champ, hors de cette demande.
 - Justifications de la fiche de présentation [Écriture] ⚠️ **Règle ajoutée (arbitrage du pilote, 2026-09-01)**
   - La **fiche de présentation** du dossier de planification énumère trois catégories de marchés qui
     appellent une justification : ① marchés passés selon un **mode dérogatoire**
@@ -1060,6 +1071,26 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
     Une justification envoyée sur une ligne que le serveur ne classe pas est acceptée et conservée.
   - **Transition** : aucune reprise de données. Les plans antérieurs rendent `null` et la fiche affiche
     « À compléter » ; la règle ne porte que sur les écritures faites par la façade après le déploiement.
+  - ⚠️ **Un import charge, il ne juge pas (2026-09-11, demande pilote).** L'import d'une **mise à jour**
+    rejetait en bloc dès qu'une ligne était incohérente, alors que l'import de **création** charge, signale et
+    auto-corrige. Sur un PPM d'une soixantaine de lignes, une seule ligne condamnait l'import entier — et
+    l'écran ne pouvait même pas afficher le diff pour la corriger. Les deux imports se comportent désormais
+    pareil.
+    - **Ce que la machine peut conclure** : un marché à **un seul bénéficiaire** dont le montant par
+      bénéficiaire est vide ne pose aucune question — la valeur attendue est le montant du marché. Elle est
+      posée, et **signalée** (`corrige:true`, « à confirmer ») : auto-corrigée n'est pas avalée en silence.
+    - **Ce qu'elle ne peut que signaler** : à **deux bénéficiaires ou plus**, la répartition n'est pas
+      déductible. **Aucune valeur n'est inventée** ; l'incohérence remonte en anomalie bloquante et l'humain
+      tranche dans la grille. La frontière entre déduire et signaler passe exactement là.
+    - ⚠️ **La règle de cohérence n'est pas levée, elle est déplacée.** Σ bénéficiaires = montants du marché
+      s'applique toujours — au premier **enregistrement de la grille**, avec le même refus par champ. Ce qui
+      est relâché, c'est le **moment** du contrôle, pas son existence. La règle vit en **un seul endroit**
+      (`SaisieService.incoherenceMontants`), que la validation stricte et l'import consomment tous deux : deux
+      règles jumelles auraient divergé, et c'est précisément une divergence entre deux imports qui a motivé
+      cette demande.
+    - ⚠️ **Reste à la charge de l'écran** : entre l'import et l'enregistrement, la version porte en base des
+      montants incohérents. C'est le prix assumé du chargement permissif — la grille doit les faire corriger
+      avant enregistrement.
   - ⚠️ **Une entrée reste hors garde** : la mise à jour d'un PPM **pilotée par import PDF**
     (`POST /api/saisies/ppm/{id}/mise-a-jour/import`). Un PDF ne porte aucune justification, et l'y soumettre
     interdirait définitivement toute mise à jour comportant une ligne dérogatoire. **Conséquence assumée** :

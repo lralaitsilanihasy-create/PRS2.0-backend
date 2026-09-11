@@ -9,6 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -35,7 +36,10 @@ import cnm.prs.entity.MarchePrevision;
 import cnm.prs.entity.PieceJointeDossier;
 import cnm.prs.entity.Ppm;
 import cnm.prs.entity.ServiceBeneficiaire;
+import cnm.prs.enums.ChampAnomalie;
+import cnm.prs.enums.GraviteAnomalie;
 import cnm.prs.enums.StatutDossier;
+import cnm.prs.enums.TypeAnomalie;
 import cnm.prs.enums.TypeChangementLigne;
 import cnm.prs.exception.BusinessRuleException;
 import cnm.prs.exception.ChampsInvalidesException;
@@ -556,14 +560,31 @@ public class MiseAJourPpmService {
         exigerMemeEntiteContractante(dossier, importe);
 
         List<Marche> existantes = new ArrayList<>(marcheRepository.findByIdDossier(idDossier));
+        Set<Integer> detailsAvant = existantes.stream().map(Marche::getIdDetail).collect(Collectors.toSet());
         List<Integer> consommees = new ArrayList<>();
         List<SaisieMarcheLigne> lignes = new ArrayList<>();
+        // ⚠️ 2026-09-11 — anomalies et identités suivies EN PARALLÈLE des lignes importées : l'index est
+        // le seul lien fiable entre ce que le PDF disait et ce que la base porte après coup.
+        List<List<SaisiePpmImportResult.AnomalieTranscription>> anomaliesParIndex = new ArrayList<>();
+        List<Integer> detailParIndex = new ArrayList<>();
+        List<String> libelleParIndex = new ArrayList<>();
         for (SaisiePpmImportResult.MarcheImport m : importe.marches() == null ? List.<SaisiePpmImportResult.MarcheImport>of() : importe.marches()) {
             Marche appariee = apparier(m, existantes, consommees);
             if (appariee != null) {
                 consommees.add(appariee.getIdDetail());
             }
-            lignes.add(versLigne(m, appariee));
+            List<SaisiePpmImportResult.AnomalieTranscription> anomalies = new ArrayList<>();
+            SaisieMarcheLigne ligne = versLigne(m, appariee, anomalies);
+            // Ce que l'auto-correction n'a pas pu trancher remonte en anomalie BLOQUANTE, sans rejet :
+            // la ligne s'affiche dans la grille, et c'est l'enregistrement qui la refusera.
+            saisieService.incoherenceMontants(ligne).ifPresent(message -> anomalies.add(
+                    new SaisiePpmImportResult.AnomalieTranscription(ChampAnomalie.BENEFICIAIRE,
+                            TypeAnomalie.MONTANT_INCOHERENT, GraviteAnomalie.BLOQUANT, null,
+                            message + " À corriger dans la grille avant d'enregistrer la mise à jour.")));
+            lignes.add(ligne);
+            anomaliesParIndex.add(anomalies);
+            detailParIndex.add(appariee == null ? null : appariee.getIdDetail());
+            libelleParIndex.add(normaliser(m.designationMarche()));
         }
 
         saisieService.editerPpm(idDossier, new EditionPpmRequest(
@@ -578,6 +599,11 @@ public class MiseAJourPpmService {
                 // ⚠️ Garde des justifications LEVÉE ici : la mise à jour est pilotée par IMPORT, et un
                 // PDF ne peut pas porter de justification. L'exiger interdirait définitivement toute
                 // mise à jour comportant une ligne dérogatoire (cf. FicheJustificationsService).
+                false,
+                // ⚠️ 2026-09-11 — et cohérence des montants NON STRICTE, pour la même raison de fond :
+                // un import CHARGE, il ne juge pas. Une seule ligne incohérente rejetait le PPM entier,
+                // et l'écran ne pouvait même pas afficher le diff pour la corriger. Le contrôle strict
+                // s'applique au premier enregistrement de la grille, qui passe en mode strict.
                 false);
 
         // Une ligne réapparue dans le PDF est remise en service (elle avait pu être supprimée avant).
@@ -589,7 +615,49 @@ public class MiseAJourPpmService {
                 }
             });
         }
-        return diff(idDossier);
+
+        // Les lignes NOUVELLES n'avaient pas d'identité avant l'écriture : on la récupère ici, par le même
+        // libellé normalisé qui sert déjà au rapprochement — sans quoi leurs anomalies n'auraient nulle
+        // part où se poser.
+        Map<String, Integer> nouvellesParLibelle = marcheRepository.findByIdDossier(idDossier).stream()
+                .filter(l -> !detailsAvant.contains(l.getIdDetail()))
+                .collect(Collectors.toMap(l -> normaliser(l.getDesignationMarche()), Marche::getIdDetail,
+                        (a, b) -> a, LinkedHashMap::new));
+        Map<Integer, List<SaisiePpmImportResult.AnomalieTranscription>> anomaliesParDetail = new LinkedHashMap<>();
+        for (int i = 0; i < anomaliesParIndex.size(); i++) {
+            if (anomaliesParIndex.get(i).isEmpty()) {
+                continue;
+            }
+            Integer idDetail = detailParIndex.get(i) != null
+                    ? detailParIndex.get(i) : nouvellesParLibelle.get(libelleParIndex.get(i));
+            if (idDetail != null) {
+                anomaliesParDetail.computeIfAbsent(idDetail, k -> new ArrayList<>()).addAll(anomaliesParIndex.get(i));
+            }
+        }
+        return diffAvecAnomalies(idDossier, anomaliesParDetail);
+    }
+
+    /**
+     * ⚠️ <strong>2026-09-11</strong> — le diff ordinaire, <strong>augmenté des anomalies de l'import</strong>
+     * qui vient de l'écrire. Greffées ici plutôt que portées à travers le calcul du diff : le diff se lit
+     * aussi hors import ({@code GET /dossiers/{id}/diff}, trace figée), où ces anomalies n'existent pas.
+     */
+    private DiffDossierDto diffAvecAnomalies(Integer idDossier,
+            Map<Integer, List<SaisiePpmImportResult.AnomalieTranscription>> parDetail) {
+        DiffDossierDto base = diff(idDossier);
+        if (parDetail.isEmpty()) {
+            return base;
+        }
+        List<DiffDossierDto.LigneDiff> lignes = base.lignes().stream().map(l -> {
+            List<SaisiePpmImportResult.AnomalieTranscription> a = l.idDetail() == null
+                    ? List.<SaisiePpmImportResult.AnomalieTranscription>of()
+                    : parDetail.getOrDefault(l.idDetail(), List.of());
+            return a.isEmpty() ? l : new DiffDossierDto.LigneDiff(l.idDetail(), l.idLigneOrigine(),
+                    l.designation(), l.type(), l.apparieePar(), l.champs(), a);
+        }).toList();
+        int nbAVerifier = (int) lignes.stream().filter(l -> !l.anomalies().isEmpty()).count();
+        return new DiffDossierDto(base.idDossier(), base.idDossierPrecedent(), base.numMaj(), base.motifMaj(),
+                base.fige(), base.recap(), lignes, nbAVerifier);
     }
 
     /**
@@ -679,18 +747,14 @@ public class MiseAJourPpmService {
     }
 
     /** Conversion d'une ligne du PDF vers la façade de saisie, en portant l'{@code idDetail} apparié. */
-    private SaisieMarcheLigne versLigne(SaisiePpmImportResult.MarcheImport m, Marche appariee) {
+    private SaisieMarcheLigne versLigne(SaisiePpmImportResult.MarcheImport m, Marche appariee,
+            List<SaisiePpmImportResult.AnomalieTranscription> anomalies) {
         Integer idDetail = appariee == null ? null : appariee.getIdDetail();
         // ⚠️ 2026-08-06 — un import ne doit RIEN effacer. Le PPM PDF ne porte ni le compte du marché, ni
         // son statut, ni toujours ses lots ou ses bénéficiaires : sur une ligne appariée, ces champs sont
         // REPRIS de l'existant, sinon un simple réimport les viderait et le diff annoncerait des
         // « modifications » qui n'en sont pas (compte, statut et lots passant à vide).
-        List<SaisieBeneficiaireLigne> benefs = m.beneficiaires() == null || m.beneficiaires().isEmpty()
-                ? null   // liste absente = enfants conservés (contrat de la façade d'édition)
-                : m.beneficiaires().stream()
-                        .map(b -> new SaisieBeneficiaireLigne(b.soaCode(), b.soaLibelle(), b.numCompte(),
-                                b.ancMontBenef(), b.nouvMontBenef()))
-                        .toList();
+        List<SaisieBeneficiaireLigne> benefs = beneficiairesCorriges(m, anomalies);
         List<SaisieLotLigne> lots = m.lots() == null || m.lots().isEmpty()
                 ? null
                 : m.lots().stream()
@@ -713,6 +777,54 @@ public class MiseAJourPpmService {
                 // ⚠️ Fiche de présentation (2026-09-01) — le PDF ne porte AUCUNE justification : nulles,
                 // elles laissent intactes celles déjà saisies (MarcheService.update conserve sur null).
                 null, null);
+    }
+
+    /**
+     * ⚠️ <strong>Auto-correction du cas NON AMBIGU</strong> (demande pilote 2026-09-11) — le PPM JIRAMA,
+     * source externe, laisse souvent la colonne « montant par bénéficiaire » vide quand le marché n'a
+     * <strong>qu'un</strong> bénéficiaire : la valeur attendue est alors le montant du marché lui-même, et
+     * il n'y a rien à deviner. On la pose, avec une anomalie {@code corrige=true} — <em>auto-corrigé, à
+     * confirmer</em> —, exactement comme les auto-corrections de montant de l'import de création.
+     *
+     * <p>⚠️ <strong>Un seul bénéficiaire, et pas davantage.</strong> À deux bénéficiaires ou plus, la
+     * répartition n'est pas déductible : aucune valeur n'est inventée, l'incohérence remonte en anomalie
+     * bloquante et c'est l'humain qui tranche dans la grille. La frontière entre ce que la machine peut
+     * conclure et ce qu'elle ne peut que signaler passe exactement là.</p>
+     *
+     * <p>Miroir sur l'ancien montant : même cas, même traitement.</p>
+     *
+     * @return la liste corrigée, ou {@code null} si le PDF n'en portait pas (contrat de la façade
+     *         d'édition : liste absente = enfants conservés)
+     */
+    private List<SaisieBeneficiaireLigne> beneficiairesCorriges(SaisiePpmImportResult.MarcheImport m,
+            List<SaisiePpmImportResult.AnomalieTranscription> anomalies) {
+        if (m.beneficiaires() == null || m.beneficiaires().isEmpty()) {
+            return null;
+        }
+        boolean unSeul = m.beneficiaires().size() == 1;
+        List<SaisieBeneficiaireLigne> corriges = new ArrayList<>();
+        for (SaisiePpmImportResult.BeneficiaireImport b : m.beneficiaires()) {
+            BigDecimal anc = b.ancMontBenef();
+            BigDecimal nouv = b.nouvMontBenef();
+            if (unSeul && anc == null && m.montEstim() != null) {
+                anc = m.montEstim();
+                anomalies.add(autoCorrigee("Montant par bénéficiaire absent et un seul bénéficiaire : repris du "
+                        + "montant estimatif du marché (" + m.montEstim().toPlainString() + ") — à confirmer."));
+            }
+            if (unSeul && nouv == null && m.nouvMontEstim() != null) {
+                nouv = m.nouvMontEstim();
+                anomalies.add(autoCorrigee("Nouveau montant par bénéficiaire absent et un seul bénéficiaire : "
+                        + "repris du nouveau montant estimatif du marché (" + m.nouvMontEstim().toPlainString()
+                        + ") — à confirmer."));
+            }
+            corriges.add(new SaisieBeneficiaireLigne(b.soaCode(), b.soaLibelle(), b.numCompte(), anc, nouv));
+        }
+        return corriges;
+    }
+
+    private SaisiePpmImportResult.AnomalieTranscription autoCorrigee(String message) {
+        return new SaisiePpmImportResult.AnomalieTranscription(ChampAnomalie.BENEFICIAIRE,
+                TypeAnomalie.MONTANT_INCOHERENT, GraviteAnomalie.A_VERIFIER, Boolean.TRUE, message);
     }
 
     /** Étapes du PDF résolues en {@code idCapm} sur la grille effective du mode de la ligne. */

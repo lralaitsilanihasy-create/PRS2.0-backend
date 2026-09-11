@@ -15,6 +15,8 @@ import java.util.List;
  *                            {@code false} s'il est recalculé à la volée sur un brouillon
  * @param recap               compteurs par type de changement
  * @param lignes              une entrée par ligne de marché des deux versions réunies
+ * @param nbAVerifier         ⚠️ 2026-09-11 — nombre de lignes portant au moins une anomalie d'import
+ *                            (miroir de {@code SaisiePpmImportResult.nbAVerifier}). {@code 0} hors import.
  */
 public record DiffDossierDto(
         Integer idDossier,
@@ -23,7 +25,14 @@ public record DiffDossierDto(
         String motifMaj,
         boolean fige,
         RecapDiff recap,
-        List<LigneDiff> lignes) {
+        List<LigneDiff> lignes,
+        Integer nbAVerifier) {
+
+    /** Diff sans anomalies d'import — la lecture ordinaire ({@code GET /dossiers/{id}/diff}). */
+    public DiffDossierDto(Integer idDossier, Integer idDossierPrecedent, Integer numMaj, String motifMaj,
+            boolean fige, RecapDiff recap, List<LigneDiff> lignes) {
+        this(idDossier, idDossierPrecedent, numMaj, motifMaj, fige, recap, lignes, 0);
+    }
 
     /**
      * Récapitulatif chiffré exigé avant validation. {@code total} = nombre de lignes distinctes
@@ -50,6 +59,10 @@ public record DiffDossierDto(
      * @param apparieePar     {@code ORIGINE} (clé stable) ou {@code LIBELLE_SOA} (repli pour une ligne
      *                        sans ancêtre, typiquement issue d'un réimport PDF) — rend l'appariement auditable
      * @param champs          champs modifiés, vide hors {@code MODIFIEE}
+     * @param anomalies       ⚠️ 2026-09-11 — anomalies de transcription de CETTE ligne, quand le diff
+     *                        est rendu par l'<strong>import</strong> d'une mise à jour ; vide partout
+     *                        ailleurs. Même contrat que {@code SaisiePpmImportResult.MarcheImport.anomalies}
+     *                        — la grille partagée du front les affiche déjà, il n'y avait qu'à les servir.
      */
     public record LigneDiff(
             Integer idDetail,
@@ -57,7 +70,14 @@ public record DiffDossierDto(
             String designation,
             String type,
             String apparieePar,
-            List<ChampDiff> champs) {
+            List<ChampDiff> champs,
+            List<SaisiePpmImportResult.AnomalieTranscription> anomalies) {
+
+        /** Ligne de diff sans anomalie — la lecture ordinaire, hors import. */
+        public LigneDiff(Integer idDetail, Integer idLigneOrigine, String designation, String type,
+                String apparieePar, List<ChampDiff> champs) {
+            this(idDetail, idLigneOrigine, designation, type, apparieePar, champs, List.of());
+        }
     }
 
     /** Un champ modifié, avec ses valeurs avant/après rendues en texte comparable. */
