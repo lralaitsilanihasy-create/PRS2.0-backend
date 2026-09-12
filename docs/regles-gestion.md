@@ -419,32 +419,50 @@ intérimaire), `COSIGNATURE` (Membre), `VERIFICATION` (Vérificateur), `TRANSMIS
 `ARCHIVAGE` (Assistant — chronométré mais **hors compteur global**).
 
 ⚠️ Une **neuvième** étape existe depuis le 2026-09-07, `RECTIFICATION_PRMP` : elle n'est pas portée par
-la CNM mais par la **PRMP**, et reste elle aussi **hors compteur global** (voir « La rectification de la
-PRMP se prend en charge elle aussi », plus bas). Le référentiel des délais standards, qui ne décrit que
-les délais de la Commission, garde donc ses **huit** lignes.
+la CNM mais par la **PRMP**, et reste elle aussi **hors compteur global** (voir « Le délai propre de la
+PRMP », plus bas). Le référentiel des délais standards, qui ne décrit que les délais de la Commission,
+garde donc ses **huit** lignes.
 
-- **Prise en charge = geste EXPLICITE.** Le porteur ouvre sa tâche ; le temps d'attente **avant** la
-  prise en charge est ainsi mesuré lui aussi. ⚠️ **La prévision ne se saisit plus** (demande pilote du
-  2026-09-08) : le bouton ne sert qu'à *démarrer le chronomètre*, et la prévision est celle du
-  **référentiel administrable** de l'étape, l'occurrence étant marquée `previsionStandard = true`. Une
-  valeur explicite reste acceptée — elle vaut alors prévision *estimée*, drapeau à `false` : c'est cette
-  distinction, entre un choix et un défaut, que le tableau des passages doit continuer de montrer. Le
-  rejeu est idempotent, et n'ouvre jamais d'occurrence.
-  - **`RECTIFICATION_PRMP` n'entre pas au référentiel pour autant** : elle n'est pas un délai de la
-    Commission (voir plus bas), et sa prise en charge prend le **repli serveur de 8 h**, comme toute
-    étape que l'Administrateur n'a pas réglée. Si le pilote veut pouvoir l'ajuster, c'est le sens même
-    du référentiel qui change — une décision à prendre, pas un réglage à glisser.
-  - ⚠️ **Ne rien dire n'autorise pas à dire n'importe quoi** : `previsionHeures` à zéro reste refusé, et
-    l'ancienne unité `previsionJours` **aussi**. Ce refus-là était jusqu'ici un *effet de bord* — la
-    propriété inconnue était ignorée, le champ obligatoire manquait. En rendant la prévision facultative,
-    il disparaissait : cinq « jours » auraient été silencieusement remplacés par le standard. Le champ
-    est donc déclaré **pour être interdit**, et le refus qui était un accident devient une règle.
-- ⚠️ **Le chronométrage n'empêche JAMAIS le métier.** Un geste de clôture posé sans prise en charge
-  préalable n'est pas bloqué : l'occurrence est créée avec une durée nulle et la prévision standard. Un
-  chronomètre qui bloquerait un dossier serait pire que pas de chronomètre.
+##### ⚠️ Le délai d'une étape se MESURE, il ne se déclare plus (demande pilote du 2026-09-12)
+
+Jusqu'ici, un porteur **prenait en charge** son étape — un geste explicite (`POST
+/api/dossiers/{id}/prise-en-charge`) qui ouvrait la tâche, en horodatait le début, portait sa prévision,
+et sans lequel **aucune action du circuit n'était possible**. Tout cet étage est supprimé. Réception,
+dispatch, examen, visa, signature, vérification et archivage **s'exécutent directement**, et le délai de
+chaque étape est **calculé** :
+
+> `durée(étape) = fin de l'étape − entrée dans l'étape`, en heures ouvrées.
+
+- **Les deux bornes existaient déjà.** La **fin** est l'horodatage du geste métier qui achève l'étape —
+  celui-là même qui datait la frise (`datesEtapes`) et le journal. L'**entrée** est **dérivée** : c'est
+  la fin du passage précédent, car un dossier qui sort d'une étape entre dans la suivante à cet instant.
+- **Pourquoi dériver plutôt que stocker une seconde borne.** Une date d'entrée écrite à côté de la fin du
+  passage précédent serait une **copie** : deux colonnes censées porter le même instant, donc deux
+  occasions de diverger, et un écart qui ne se verrait qu'en recette. Dérivée, la chaîne des passages est
+  par construction **sans trou ni recouvrement** — la fin de l'un est l'entrée de l'autre.
+- ⚠️ **Trois bornes peuvent faire entrer dans une étape** ; on retient la plus récente qui précède la
+  fin : la fin du passage précédent, le **dépôt** du dossier (première étape, et après un retrait suivi
+  d'une nouvelle soumission — le temps passé en brouillon ne s'impute à personne), et la **sortie d'une
+  attente PRMP**. Cette dernière est ce qui empêche le temps de la PRMP de s'imputer à la Commission :
+  un examen repris après une lettre de renvoi commence quand le dossier **revient**, pas quand il est
+  parti. Seule `RECTIFICATION_PRMP` y échappe — cette étape *est* l'attente, sa sortie est sa propre fin.
+- **Rien ne se saisit, rien ne se stocke de plus.** `t_tache_dossier` ne porte plus qu'une **fin** par
+  passage (`V28` : `DATE_PRISE_EN_CHARGE`, `PREVISION_HEURES` et `PREVISION_STANDARD` retirées,
+  `DATE_FIN` devenue obligatoire — une ligne n'existe que parce qu'un passage s'est achevé). Les lignes
+  encore *ouvertes* à la migration ont été supprimées : elles ne disaient qu'une prise en charge, c'est
+  exactement la notion qu'on retire. Les fins déjà enregistrées, elles, sont conservées — **les durées de
+  l'historique se recalculent donc toutes seules**, sans reprise.
+- **Toute sortie d'étape doit être enregistrée.** C'est le corollaire de la règle : une sortie manquée ne
+  laisse pas un trou, elle **déverse** son temps sur l'étape suivante. Le retour du projet de PV pour
+  rectification — l'autre issue du visa, jusque-là sans clôture — en enregistre donc une, comme le visa
+  lui-même ; la transmission SIGMP directe (avis FAV) clôt la vérification qu'aucun passage n'a close ;
+  la réattribution et la purge ferment l'étape en cours de ce qui va disparaître.
+- ⚠️ **Le chronométrage n'empêche JAMAIS le métier.** C'était déjà la règle quand le chronomètre pouvait
+  bloquer un dossier ; elle est d'autant plus vraie maintenant qu'il ne fait qu'**observer** — aucune
+  exception levée par le chronométrage ne fait échouer une transaction métier.
 - **Étapes rejouables** : réexamen, nouvelle navette de visa, passage supplémentaire du Vérificateur dans
-  la boucle FAVR — chaque occurrence est un enregistrement **distinct, append-only**, et la prévision se
-  ressaisit à chaque fois. C'est ce qui rend visible le nombre d'aller-retours.
+  la boucle FAVR — chaque passage est un enregistrement **distinct, append-only**. C'est ce qui rend
+  visible le nombre d'aller-retours.
 - ⚠️ **Unité : l'HEURE ouvrée** (révision du pilote, 2026-09-02) — **8 h = 1 jour ouvré**. Délais
   standards, prévision saisie, restes et compteurs : une seule unité partout, aucune somme ne mélange
   heures et jours. Seule la **date** prévisionnelle reste une date.
@@ -463,21 +481,22 @@ levées, le dossier passe à `EN_ATTENTE_DECISION_PRMP` **entre** les deux actes
 enjamberait cette attente et ferait porter au Vérificateur le temps de la PRMP, alors que la règle veut
 précisément qu'aucune tâche CNM ne coure pendant ces fenêtres.
 
-**La date annoncée** = `aujourd'hui + reste(étape en cours) + Σ prévisions des étapes restantes`, en
-**heures ouvrées** puis convertie en jours par tranche de 8 h, **arrondie au supérieur** (une journée
-entamée compte pleine), **calculée entièrement serveur**. Les étapes non encore prises en charge comptent
-pour leur
-**délai standard** (référentiel administrable), d’où une date disponible **dès la soumission**. Une étape
-en dépassement compte **0** : la date **glisse** au lieu de promettre un rattrapage qui n'aura pas lieu.
+**La date annoncée** = `aujourd'hui + reste(étape en cours) + Σ délais standards des étapes restantes`,
+en **heures ouvrées** puis convertie en jours par tranche de 8 h, **arrondie au supérieur** (une journée
+entamée compte pleine), **calculée entièrement serveur**. ⚠️ Depuis le 2026-09-12, la prévision d'une
+étape est **toujours** son **délai standard** (référentiel administrable) : plus personne ne saisit
+d'estimation. Le référentiel reste donc ce qui permet d'annoncer une date **dès la soumission**, avant
+que quiconque à la CNM ait touché le dossier — c'est même devenu sa seule raison d'être. Une étape en
+dépassement compte **0** : la date **glisse** au lieu de promettre un rattrapage qui n'aura pas lieu.
 Pendant une attente PRMP la date reste calculée, accompagnée du drapeau `attentePrmp`.
 
-⚠️ **L'écoulé se mesure dans la MÊME échelle que la prévision.** Une prévision est en heures **de
-service** (8 h par jour). Compter l'écoulé en heures **d'horloge** (24 h par jour) mettrait en
-dépassement une tâche prise en charge la veille au matin — 24 h consommées contre 8 h prévues, alors
-qu'un seul jour de travail a passé. L'écoulé est donc le recouvrement de l'intervalle avec la **fenêtre
-de service 08:00–16:00, du lundi au vendredi** : une tâche prise lundi 09:00 et mesurée mardi 09:00 a
-consommé **8 h**, soit exactement un jour ouvré. Une tâche prise hors fenêtre n'accumule rien avant
-l'ouverture suivante — on ne compte pas comme temps de traitement une heure où personne ne travaille.
+⚠️ **L'écoulé se mesure dans la MÊME échelle que le délai standard.** Un délai standard est en heures
+**de service** (8 h par jour). Compter l'écoulé en heures **d'horloge** (24 h par jour) mettrait en
+dépassement une étape entamée la veille au matin — 24 h consommées contre 8 h prévues, alors qu'un seul
+jour de travail a passé. L'écoulé est donc le recouvrement de l'intervalle avec la **fenêtre de service
+08:00–16:00, du lundi au vendredi** : une étape entrée lundi 09:00 et mesurée mardi 09:00 a consommé
+**8 h**, soit exactement un jour ouvré. Une étape entrée hors fenêtre n'accumule rien avant l'ouverture
+suivante — on ne compte pas comme temps de traitement une heure où personne ne travaille.
 
 > **La bascule d'unité n'a déplacé aucune date.** Un dossier entièrement au délai standard totalisait
 > 14 jours ouvrés ; il totalise 112 heures, soit 112 / 8 = 14 jours. Les valeurs stockées ont été
@@ -487,81 +506,53 @@ l'ouverture suivante — on ne compte pas comme temps de traitement une heure o�
 > **Transition** : la base ayant été réinitialisée le 01/09, aucune reprise d'historique. Les dossiers
 > créés après le déploiement sont chronométrés dès leur soumission.
 
-#### Prise en charge : à qui appartient une tâche (constats de recette, 2026-09-04)
+#### À qui appartient un passage (constats de recette, 2026-09-04 ; revus le 2026-09-12)
 
-Trois défauts relevés en **recette réelle** du cycle à deux niveaux — il avait fallu trois
-réassignations en base pour terminer le dossier. Ils tenaient tous à la même hypothèse implicite :
-**une étape = une personne**. Elle tombe dès que la navette a deux étages, ou que la co-signature
-compte deux désignés.
+Les défauts relevés en **recette réelle** du cycle à deux niveaux tenaient tous à la même hypothèse
+implicite : **une étape = une personne**. Elle tombe dès que la navette a deux étages, ou que la
+co-signature compte deux désignés.
 
-⚠️ **Le replay n'appartient qu'à son auteur.** Reprendre en charge une étape qu'on tient déjà corrige
-sa prévision — c'est voulu, corriger son estimation n'est pas recommencer sa tâche. Mais la garde ne
-regardait pas **qui** appelait : un second acteur recevait un succès et corrigeait *la prévision du
-premier*. Vécu : le CC avait pris l'examen, et l'assignataire se retrouvait sans recours — son propre
-appel « réussissait » en modifiant la tâche du CC. Un acteur différent est désormais refusé, **et le
-refus nomme celui qui tient l'étape** : sans ce nom, la personne bloquée n'a personne à qui
-s'adresser, ce qui est exactement ce qui a mené aux corrections manuelles.
+> ⚠️ **La moitié « garde » de ces constats a disparu avec la prise en charge** (2026-09-12) : il n'y a
+> plus de tâche à ouvrir, donc plus personne à verrouiller — ni 409 nominal, ni 403 du non-attributaire,
+> ni `acteursAttendus`. Ce qui reste, et qui compte désormais davantage puisque les durées en dépendent,
+> c'est la **découpe** : à quelle personne chaque passage est imputé, et où il commence.
 
-⚠️ **La réattribution laisse sa trace au chronométrage** (2026-09-04). Le journal du circuit portait
-les deux gestes — dispatch du Président, réattribution du CC — mais le tableau des passages n'en
-connaissait qu'un : le chemin réel se lisait à un endroit et pas à l'autre, alors qu'un retrait suivi
-d'un re-dispatch produisait bien sa seconde occurrence. Tout geste qui CHANGE L'ATTRIBUTAIRE hors
-dispatch initial consigne désormais une occurrence de dispatch au nom de son auteur, quel que soit son
-profil. Elle est INSTANTANÉE — prise en charge et fin au même horodatage, prévision standard : un acte
-ponctuel n'a pas de durée à mesurer, et la prévision non saisie doit se distinguer d'une prévision
-choisie. La REPRISE est couverte par la même règle, le « Retirer » du CC étant une réattribution vers
-lui-même ; le « rendre » du Membre n'existe pas comme geste, il reste donc hors sujet.
+⚠️ **La réattribution laisse sa trace, et FERME l'examen du sortant** (2026-09-04, complété le
+2026-09-08 — dossier 00305). Le journal du circuit portait les deux gestes — dispatch du Président,
+réattribution du CC — mais le tableau des passages n'en connaissait qu'un. Tout geste qui CHANGE
+L'ATTRIBUTAIRE hors dispatch initial produit donc **deux écritures**, et leur **ordre** porte le sens :
 
-⚠️ **…et elle FERME l'occurrence du sortant** (signalement pilote du 2026-09-08, dossier 00305). La
-règle ci-dessus n'avait fait que la moitié du chemin : on ouvrait l'occurrence du redispatcheur, sans
-clore celle du Membre qui tenait déjà l'examen. Elle restait **ouverte à jamais**, et le nouvel
-attributaire s'en trouvait **en impasse** — l'étape paraissait prise en charge par quelqu'un qui n'était
-plus là, donc aucun « Prendre en charge » ne lui était offert, et sans prise en charge il ne pouvait
-rien faire. L'attribution était pourtant juste : c'est la **vie de l'occurrence** qui manquait une étape.
+1. **l'examen du sortant est fermé**, à SON nom, à l'instant de la réattribution. Le passage a eu lieu,
+   il est abandonné, pas effacé — et sans cette fin, tout son temps se déverserait sur l'examen de son
+   successeur, qui paraîtrait avoir mis des jours là où il commence à peine ;
+2. **le geste du réattribueur laisse sa ligne de dispatch**, au nom de son auteur quel que soit son
+   profil — instantanée, puisqu'elle s'ouvre et se ferme sur la fin qu'on vient d'écrire.
 
-- **Fermer, et non supprimer.** L'examen entamé par le sortant a eu lieu : sa durée est mesurée jusqu'à
-  l'instant du retrait, comme un passage abandonné. Le chronométrage est append-only, comme le journal —
-  on ne réécrit pas l'histoire, on la termine.
-- **Le RETRAIT du dispatch fait de même, et pour tout l'aval.** La purge efface examens, PV et
-  vérifications ; les occurrences qui en dépendaient n'auraient plus rien pour les clore. Elles sont
-  donc fermées à l'instant de la purge — `RECEPTION` exceptée (les réceptions survivent) et `DISPATCH`
-  aussi, ses occurrences étant instantanées. La règle vaut pour **tous** les appelants de la purge :
-  retrait du dispatch, retrait accepté, suppression du dossier.
-- **Rien ne change sur l'attributaire** ni sur les acteurs attendus : ils étaient déjà justes. C'est le
-  seul cycle de vie de l'occurrence qui est corrigé.
-- ⚠️ **Reprise nécessaire** (`V23`) — contrairement aux corrections du journal, dérivées à la lecture et
-  donc rétroactives par construction, celle-ci **écrit** : elle agit au moment du geste et ne peut rien
-  pour les dossiers **déjà** réattribués. La migration ferme les occurrences `EXAMEN` orphelines
-  existantes — signature exacte : encore ouvertes, et dont l'acteur n'est plus l'attributaire d'aucun
-  dispatch du dossier. Une occurrence tenue par l'attributaire courant est un examen **en cours** : elle
-  n'est pas touchée. La fin est posée à l'instant du redispatch, à défaut à la dernière trace de circuit
-  au journal, et jamais avant sa propre prise en charge.
+La REPRISE est couverte par la même règle, le « Retirer » du CC étant une réattribution vers lui-même ;
+le « rendre » du Membre n'existe pas comme geste, il reste donc hors sujet.
 
-⚠️ **La garde vaut aussi pour le VISA et la CO-SIGNATURE** (second constat du 2026-09-04, dossier
-100286). La première version gardait les tâches DÉJÀ OUVERTES et l'attribution de l'examen, mais pas
-la CRÉATION d'une occurrence : le CC, ayant transmis le PV au Président, a recliqué « Prendre en
-charge » et le serveur a ouvert à son nom l'occurrence qui revenait au Président — lequel s'est
-retrouvé verrouillé sans recours, le déblocage se faisant en base. Sont désormais seuls admis : au
-visa, les acteurs que le visa lui-même accepterait (le CC dispatcheur à son étage, les Présidents au
-leur, et sur une navette simple le dispatcheur ou tout P/CC du périmètre par intérim) ; à la
-co-signature, les désignés du visa, chacun pour SA part.
+- **Le RETRAIT du dispatch fait de même.** La purge efface examens, PV et vérifications ; l'étape en
+  cours n'aurait plus rien pour la clore et son temps se déverserait sur celle qui reprend. Elle est
+  donc fermée à l'instant de la purge, au nom de **celui à qui elle revenait** (l'attributaire du
+  dispatch pour l'examen, la PRMP propriétaire pour la rectification) et non de celui qui défait l'aval.
+  La règle vaut pour **tous** les appelants de la purge : retrait du dispatch, retrait accepté,
+  suppression du dossier.
+- ⚠️ **Reprise historique** (`V23`, 2026-09-08) — la migration avait fermé les occurrences `EXAMEN`
+  orphelines laissées ouvertes par les réattributions antérieures au correctif. `V28` a depuis supprimé
+  toutes les lignes encore ouvertes : la notion même a disparu.
 
-⚠️ **Le chronométrage sert l'attributaire courant, et les acteurs attendus** (2026-09-04). `GET /dossiers/{id}/chronometrage`
-expose `attributaire` — l'`imCtrlMembre` du dispatch, réattributions comprises, `null` si non
-dispatché. Il expose de même `acteursAttendus` — les matricules que la prise en charge
-accepterait pour l'étape courante, ou `null` quand la liste ne peut pas être close (l'intérim ouvre
-le visa d'une navette simple à tout P/CC du périmètre). ⚠️ `null` n'est pas « personne » : une liste
-vide aurait bloqué tout le monde. C'est la MÊME valeur que celle sur laquelle porte la garde ci-dessous : un geste voué au
-refus ne doit pas être offert, et pour cela le front doit pouvoir savoir qui est attributaire même sur
-les écrans qui ne chargent pas les dispatchs. Deux dérivations voisines auraient permis de masquer un
-bouton que le serveur accepte, ou d'en offrir un qu'il refuse.
+⚠️ **Le chronométrage sert l'attributaire courant.** `GET /dossiers/{id}/chronometrage` expose
+`attributaire` — l'`imCtrlMembre` du dispatch, réattributions comprises, `null` si non dispatché — pour
+que les écrans qui ne chargent **pas** les dispatchs (la consultation) n'aient aucun appel de liste à
+ajouter : le serveur qui répond a déjà le dispatch sous la main. ⚠️ Le champ voisin `acteursAttendus`,
+lui, **n'existe plus** (2026-09-12) : il servait à masquer le bouton « Prendre en charge » à qui le
+serveur aurait refusé, et il n'y a plus de bouton.
 
-⚠️ **L'examen se prend par son attributaire, délégation comprise.** C'est la seule étape où la garde de
-profil ne suffit pas. Ailleurs, une prise en charge ne fait que démarrer un chronomètre et n'altère
-aucune donnée métier ; ici l'étape est **nominativement attribuée** par le dispatch, et « seul
-l'assignataire examine ». Le dispatcheur et le CC en copie, que la paire « → Membre » rend éligibles
-au profil, ouvraient donc une tâche sur le travail d'autrui — et l'y verrouillaient. Sans attributaire
-identifiable, aucun blocage : la garde protège une attribution existante, elle n'en invente pas.
+⚠️ **L'examen est mesuré au nom de son ATTRIBUTAIRE, jamais du déclencheur** (signalement pilote du
+2026-09-07, dossier 00001). Après un retour de navette, le Président avait re-soumis le projet de PV
+pour le Membre (délégation) : l'examen se retrouvait mesuré à son nom. Un examen appartient à celui à
+qui il a été dispatché — même principe que la co-signature, où chaque part est nominative. La fin de
+l'étape `EXAMEN` porte donc l'attributaire du dispatch, quel que soit l'auteur de la transition.
 
 ⚠️ **…et la SOUMISSION du projet de PV lui revient aussi** (constat et arbitrage du pilote, 2026-09-08,
 dossier 00305). Un Président dispatcheur a pu soumettre le projet de PV d'un examen mené par le CC à qui
@@ -578,8 +569,8 @@ n'est pas dépanner** : c'est engager l'examen, et l'examen est le travail de so
 - **L'ÉDITION du projet garde sa délégation** : corriger une frappe pour un collègue absent n'engage
   personne. C'est la ligne de partage retenue — seul le geste qui *engage* est nominatif.
 - ⚠️ **Effet de bord assumé** : le scénario qui avait produit l'« examen fantôme » du 2026-09-07 (le
-  Président re-soumet pour le Membre) est désormais **refusé au seuil**. La garde du chronométrage qui
-  l'avait corrigé reste en place pour les chemins subsistants — on ne retire pas un filet parce que
+  Président re-soumet pour le Membre) est désormais **refusé au seuil**. L'imputation du chronométrage à
+  l'attributaire reste en place pour les chemins subsistants — on ne retire pas un filet parce que
   l'accident précis qu'il a rattrapé ne peut plus se produire par cette porte-là.
 - **L'acteur consigné n'a jamais été falsifiable** : la navette enregistre l'utilisateur authentifié, et
   le champ `imActeur` du corps de requête n'est lu nulle part. Le point de vigilance de la demande était
@@ -598,54 +589,44 @@ et elle vaut pour le **visa** comme pour le **retour pour rectification**, qui e
 - **L'intérim n'ouvre rien ici** : suppléer un absent, c'est tenir SA place, pas s'auto-délivrer un visa.
   Le refus vient **avant** la note d'intérim — lui réclamer une pièce qui ne débloquerait rien serait
   malhonnête. Un suppléant qui n'est pas l'examinateur, lui, garde le geste.
-- **La prise en charge du VISA suit la même réserve.** Sans cela, l'examinateur ouvrait une tâche qu'il
-  ne pourrait jamais achever et **verrouillait l'étape contre le dispatcheur** — que le refus nominal du
-  2026-09-04 renvoyait alors vers lui. Exactement le blocage que ce refus visait à empêcher.
-- ⚠️ **`acteursAttendus` reste `null` sur une navette simple** : l'ensemble admis — le dispatcheur, plus
-  tout P/CC du périmètre par intérim, **moins** l'examinateur — n'est pas énumérable. Une **soustraction
-  ne se dit pas avec une énumération** : la réserve s'exprime donc en refus, et c'est la seule exclusion
-  du chronométrage. Y mettre le seul dispatcheur aurait masqué le geste aux suppléants légitimes.
 - La navette à **deux niveaux** n'est pas concernée : ses règles d'étage tiennent déjà l'acteur de chaque
   visa, et le CC y a son acceptation propre.
+- ⚠️ La réserve **jumelle côté chronométrage a disparu** avec la prise en charge (2026-09-12) : il n'y a
+  plus de tâche de visa à ouvrir indûment, donc plus d'étape à verrouiller contre le dispatcheur.
 
-⚠️ **Une occurrence par étage, une tâche par co-signataire.** Le visa d'un dossier à deux niveaux est
-tenu par deux acteurs successifs, et la co-signature élargie par deux désignés simultanés — dans les
-deux cas, une tâche unique faisait verrouiller le second par le premier, et mêlait leurs durées. Ce
-sont deux réponses distinctes, parce que ce sont deux situations distinctes :
+⚠️ **Un passage par étage, un passage par co-signataire.** Le visa d'un dossier à deux niveaux est tenu
+par deux acteurs successifs, et la co-signature élargie par deux désignés simultanés — dans les deux cas,
+un passage unique mêlerait leurs durées et attribuerait à l'un le travail de l'autre :
 
-- **successive** : l'acceptation du CC **clôt** son occurrence de visa ; le Président ouvre la sienne
-  (rang suivant) en la prenant en charge, et son visa la clôt. Chaque étage garde sa prévision et sa
-  durée ;
-- **parallèle** : la co-signature est la **seule** étape du circuit admettant plusieurs tâches
-  ouvertes, une par désigné, chacune close par **sa** signature. Fermer « la » tâche ouverte aurait
-  clos celle de l'autre, et le PV se serait achevé avec une tâche ouverte au nom de quelqu'un qui
-  avait pourtant signé.
+- **successive** : l'acceptation du CC **clôt** son passage de visa, et celui du Président s'ouvre à cet
+  instant ; son visa le clôt. Le **retour** au CC (le projet redescend d'un étage) clôt de même celui du
+  Président. Chaque étage a sa durée ;
+- **parallèle** : la co-signature est la **seule** étape du circuit où plusieurs personnes travaillent de
+  front — chaque signature laisse SA part, nominative. Attribuer les deux à un seul acteur effacerait ce
+  que l'étape a d'unique.
 
-Partout ailleurs, deux tâches ouvertes sur une même étape signifieraient que deux personnes se croient
-responsables du même travail : c'est ce que le refus nominal empêche.
+#### Le délai propre de la PRMP (`RECTIFICATION_PRMP`, 2026-09-07 ; revu le 2026-09-12)
 
-⚠️ **La rectification de la PRMP se prend en charge elle aussi** (règle du pilote, 2026-09-07).
-« Aucune action sans prise en charge » s'arrêtait au seuil de la PRMP : pendant
-`EN_ATTENTE_DECISION_PRMP`, **aucune étape n'était ouverte** — la prise en charge répondait 409, le
-front n'avait rien sur quoi verrouiller, et la rectification se faisait sans qu'aucun geste ne soit
-horodaté. Une étape `RECTIFICATION_PRMP` est désormais ouverte pendant toute cette attente, portée par
-la **PRMP propriétaire** du dossier, et close par le geste qui l'achève : la resoumission.
+Pendant `EN_ATTENTE_DECISION_PRMP`, l'étape ouverte est `RECTIFICATION_PRMP`, portée par la **PRMP
+propriétaire** du dossier : elle court de la vérification qui a maintenu les observations jusqu'à la
+**resoumission**, qui la clôt. Le dossier n'est pas « sans étape » parce qu'aucun contrôleur n'y
+travaille — et c'est ce temps-là qu'on lui mesure.
 
-- **Porteur nominal** : la PRMP propriétaire, et elle seule. `acteursAttendus` la nomme, et la garde
-  refuse en **403** tout autre acteur — un contrôleur de la CNM comme une autre PRMP. La rectification
-  ne se délègue pas à la Commission qui l'a demandée.
-- **Deux gestes fermés, pas un.** La resoumission *et* l'édition de rectification (façade de saisie,
-  import du PPM rectifié, `PATCH` d'en-tête ou de ligne de marché) répondent **409** tant que l'étape
-  n'est pas prise en charge. Ne fermer que la resoumission aurait laissé « Modifier le dossier »
-  cosmétique : le contenu serait passé par l'API, et le geste qu'on cherche justement à horodater
-  n'aurait pas eu lieu. Le refus **dit le geste à poser**, il ne se contente pas de refuser.
-- **Le brouillon reste libre** : la garde ne mord que sur `EN_ATTENTE_DECISION_PRMP`. Saisir son
-  dossier n'est pas un geste du circuit ; le rectifier en est un.
+- ⚠️ **Plus aucun verrou** (2026-09-12). Le 2026-09-07, « aucune action sans prise en charge » avait été
+  étendue à la PRMP : ni rectifier ni resoumettre ne passait tant qu'elle n'avait pas ouvert sa tâche.
+  Ce verrou est retiré comme tous les autres — les deux gestes s'exécutent directement, et le délai se
+  mesure seul.
+- **Les gardes de PROPRIÉTÉ demeurent, intactes** : rectifier et resoumettre restent réservés à la PRMP
+  propriétaire (ou à celle **en fonction** sur le périmètre) — **403** pour un contrôleur de la CNM comme
+  pour une autre PRMP. Retirer le verrou du chronomètre n'ouvre la rectification à personne.
 - ⚠️ **Hors du compteur net CNM** (arbitrage retenu, la demande le laissait ouvert). Ce temps est
   **suspensif** : il est déjà compté dans `attentePrmpHeuresOuvrees`, et l'imputer une seconde fois
   ferait payer à la Commission l'attente de la PRMP. L'étape est donc absente du référentiel des délais
-  standards, et **la prise en charge ne déplace pas la date prévisionnelle annoncée**. Elle vaut comme
-  *geste* — début d'action et verrou — et mesure, accessoirement, le délai propre de la PRMP.
+  standards — ce qui ne s'y règle pas ne s'y lit pas non plus — et la date prévisionnelle ne la somme
+  jamais. Elle existe pour que ce délai soit **visible**, à côté de ceux de la CNM et dans la même unité.
+- ⚠️ **Son entrée ne suit pas la règle des reprises.** Partout ailleurs, une sortie d'attente PRMP
+  redémarre l'étape qui reprend ; ici l'étape *est* l'attente, et sa sortie est sa propre fin — la
+  retenir réduirait à zéro la seule durée qui mesure la PRMP.
 
 #### « On ne contrôle pas le vide » (règle du pilote, 2026-09-04)
 
@@ -802,17 +783,14 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
     -> BROUILLON », l'état d'avant étant relu dans les actions consignées), `RETRAIT_REFUSE` (observation de
     la décision). Visibles de tous, comme CREATION / SOUMISSION.
   - ⚠️ **La transmission SIGMP directe clôt la VERIFICATION** (recensement des trous 2026-09-07, T2) — sur
-    un avis FAV, la décision part à SIGMP sans passage de vérification ; l'occurrence VERIFICATION que le
-    Vérificateur avait prise en charge restait ouverte à jamais. `POST /api/sigmp-transmissions` clôt
-    désormais l'occurrence VERIFICATION **ouverte** du dossier (si elle existe — jamais créée) avant de
-    clore TRANSMISSION_SIGMP.
+    un avis FAV, la décision part à SIGMP sans passage de vérification, et rien ne donnait de fin à l'étape
+    VERIFICATION : tout son temps se serait reporté sur la transmission. `POST /api/sigmp-transmissions`
+    clôt donc VERIFICATION **si elle est l'étape en cours** (après une levée d'observations, le passage l'a
+    déjà close et une seconde fin serait un doublon), avant de clore TRANSMISSION_SIGMP.
   - ⚠️ **Un examen n'est jamais prêté à qui ne l'a pas fait** (chronométrage, même signalement) — la
-    soumission du projet de PV clôt l'étape EXAMEN **au nom de l'attributaire du dispatch**. Si un
-    Président ou un CC re-soumet pour le Membre (délégation) sans qu'une tâche EXAMEN soit ouverte,
-    **aucune** occurrence instantanée n'est plus créée à son nom (le déclencheur d'une transition n'est pas
-    l'acteur de la tâche) ; le Membre attributaire qui soumet sans prise en charge garde l'occurrence
-    instantanée à son nom (tolérance historique). Même principe que la garde d'acteur du visa et de la
-    co-signature (`1a92f5a`).
+    soumission du projet de PV clôt l'étape EXAMEN **au nom de l'attributaire du dispatch**, quel que soit
+    l'auteur de la transition : un Président ou un CC qui re-soumet pour le Membre (délégation) ne se voit
+    pas prêter son examen. Même principe que la part nominative de chaque co-signataire (`1a92f5a`).
   - ⚠️ **La CRÉATION revient à son auteur réel, pas à la PRMP de tutelle** (signalement pilote
     2026-09-08, dossier 00305) — un brouillon saisi par une **UGPM** était consigné au nom de sa PRMP.
     L'opérateur d'une action est la PRMP **en fonction**, et pour un agent UGPM c'est sa tutelle : c'est
@@ -1193,8 +1171,10 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
     statut `CLOTURE`. Le franchissement s'apprécie sur le **statut**, la date vient des **tâches**. Motif :
     le front datait la frise par jointure de listes que la portée du lecteur rend vides (Président « toutes
     localités » : `dispatchs`/`examens` = `[]`) — la date vient désormais du dossier lui-même.
-  - `GET /api/dossiers/{id}/chronometrage` détaille les étapes franchies, leurs acteurs et les deux
-    compteurs. Détail de la règle : section « Chronométrage et prévision des délais » en §2.
+  - `GET /api/dossiers/{id}/chronometrage` détaille les **passages par étape** — `entree`, `fin`,
+    `dureeHeuresOuvrees`, acteur — et les deux compteurs. ⚠️ Depuis le 2026-09-12, le tableau `taches`
+    (les prises en charge et leur prévision saisie) est remplacé par `etapes`, et `acteursAttendus` a
+    disparu. Détail de la règle : section « Chronométrage et prévision des délais » en §2.
 
 **Module 03 — Soumission & retours**
 
@@ -1850,9 +1830,10 @@ Accès complet aux référentiels, comptes utilisateurs, journal d'audit, hiéra
 - Délais standards du circuit [Écriture] ⚠️ **Règle ajoutée (2026-09-01)**
   - Référentiel administrable des **délais par étape**, en **heures ouvrées** (`GET /api/delais-standards`,
     `PUT /api/delais-standards/{etape}`). ⚠️ Unité passée du jour à l’heure le 2026-09-02, valeurs
-    stockées converties × 8. Il fournit la prévision des étapes **pas
-    encore prises en charge**, ce qui permet d'annoncer une date à la PRMP **dès la soumission** ; chaque
-    prise en charge le remplace, pour son étape, par la prévision réellement saisie.
+    stockées converties × 8. Il donne la prévision de **chaque** étape restante, ce qui permet d'annoncer
+    une date à la PRMP **dès la soumission**. ⚠️ Depuis le 2026-09-12, c'est sa **seule** raison d'être :
+    la prévision saisie par le porteur a disparu avec la prise en charge, et plus rien ne remplace le
+    référentiel pour aucune étape.
   - **Lecture ouverte** à tout utilisateur authentifié : ces délais expliquent la date annoncée, et une
     date qu'on ne peut pas expliquer se conteste mal. **Écriture réservée à l'Administrateur.**
   - Le référentiel rend **toujours les huit étapes**, même si la table en manque une (repli à 8 h) :

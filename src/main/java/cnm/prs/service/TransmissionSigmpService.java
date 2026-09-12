@@ -150,12 +150,14 @@ public class TransmissionSigmpService {
         t.setStatutEnvoi(ENVOI_ENREGISTREE);
         TransmissionSigmp saved = repository.save(t);
 
+        // ⚠️ Recensement des trous (2026-09-07, T2) — sur un avis FAV la transmission est DIRECTE, sans
+        // passage de vérification : rien n'aurait donné de fin à l'étape VERIFICATION, et tout son temps
+        // se serait reporté sur la transmission. Elle est close ici SI elle est bien l'étape en cours —
+        // après une levée d'observations, le passage l'a déjà close et une seconde fin serait un doublon.
+        // ⚠️ AVANT le changement de statut : c'est le statut qui dit quelle étape est ouverte.
+        chronometrageService.cloturerSiCourante(dossier.getIdDossier(), EtapeCircuit.VERIFICATION);
         dossier.setStatut(StatutDossier.DECISION_TRANSMISE_SIGMP.name());
         dossierRepository.save(dossier);
-        // ⚠️ Recensement des trous (2026-09-07, T2) — sur un avis FAV la transmission est DIRECTE, sans
-        // passage de vérification : l'occurrence VERIFICATION prise en charge par le Vérificateur restait
-        // ouverte à jamais. Elle est close ici, si elle existe — jamais créée.
-        chronometrageService.cloturerSiOuverte(dossier.getIdDossier(), EtapeCircuit.VERIFICATION);
         // ⚠️ Chronométrage (2026-09-01) — la transmission à SIGMP clôt l'étape TRANSMISSION_SIGMP et
         // ARRÊTE le compteur global : c'est la « validation sur SIGMP » de la règle du pilote.
         chronometrageService.cloturer(dossier.getIdDossier(), EtapeCircuit.TRANSMISSION_SIGMP);

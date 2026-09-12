@@ -345,21 +345,13 @@ abstract class CnmIntegrationTestSupport extends AbstractIntegrationTest {
     }
 
     /**
-     * ⚠️ Règle pilote (2026-09-07) — « aucune action sans prise en charge », étendue à la PRMP : elle prend
-     * en charge la rectification <strong>avant</strong> de resoumettre (sinon 409). Ce helper pose les deux
-     * gestes, pour que les tests qui portent sur la SUITE du circuit n'aient pas à les réécrire.
+     * La PRMP resoumet son dossier rectifié. ⚠️ 2026-09-12 — un seul geste : la prise en charge préalable
+     * a disparu avec la notion elle-même, et le délai de la rectification se mesure tout seul (de la
+     * vérification qui a maintenu les observations jusqu'ici).
      */
     protected void resoumettreDossier(int idDossier, String motif) throws Exception {
-        prendreEnChargeRectification(idDossier);
         mvc.perform(post("/api/dossiers/" + idDossier + "/resoumettre").header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"motifRectification\":\"" + motif + "\"}"))
-                .andExpect(status().isOk());
-    }
-
-    /** La PRMP prend en charge la rectification (étape {@code RECTIFICATION_PRMP}) — sans effet si déjà prise. */
-    protected void prendreEnChargeRectification(int idDossier) throws Exception {
-        mvc.perform(post("/api/dossiers/" + idDossier + "/prise-en-charge").header("Authorization", tokenPrmp)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"previsionHeures\":8}"))
                 .andExpect(status().isOk());
     }
 

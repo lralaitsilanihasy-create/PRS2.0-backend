@@ -848,6 +848,11 @@ public class PvExamenService {
         pv.setNiveauNavette(null);
         ajouterNavette(pv, SensNavette.RETOUR_RECTIF, req.commentaire());
         PvExamen saved = repository.save(pv);
+        // ⚠️ Chronométrage (2026-09-12) — le retour est l'AUTRE issue du visa, et il le clôt comme le
+        // visa lui-même : le projet repart chez le Membre. Sans cette fin, le temps que le viseur a passé
+        // sur le projet serait recompté dans le réexamen — la durée d'une étape étant désormais mesurée
+        // depuis la fin de la précédente, une sortie non enregistrée se déverse sur la suivante.
+        chronometrageService.cloturer(dossierDuPv(saved.getIdPv()), EtapeCircuit.VISA);
         log.info("[CIRCUIT] navette PV retour rectification dossier={} acteur={} pv={} statutPv={} navettes={}",
                 dossierDuPv(saved.getIdPv()), CurrentUser.login().orElse(null), saved.getIdPv(),
                 StatutPv.EN_RECTIFICATION.name(), saved.getNbNavettes());
@@ -871,6 +876,10 @@ public class PvExamenService {
         pv.setNiveauNavette(NiveauNavette.CC.name());
         ajouterNavette(pv, SensNavette.RETOUR_CC, req.commentaire());
         PvExamen saved = repository.save(pv);
+        // ⚠️ Chronométrage (2026-09-12) — le projet redescend d'un étage : l'occurrence VISA du Président
+        // se clôt ici, et celle du CC s'ouvre à cet instant. Même règle que la montée (« accepter »), dans
+        // l'autre sens : chaque étage a son passage, et sa durée.
+        chronometrageService.cloturer(dossierDuPv(saved.getIdPv()), EtapeCircuit.VISA);
         log.info("[CIRCUIT] navette PV retour au CC dossier={} acteur={} pv={} niveau={} navettes={}",
                 dossierDuPv(saved.getIdPv()), CurrentUser.login().orElse(null), saved.getIdPv(),
                 NiveauNavette.CC, saved.getNbNavettes());

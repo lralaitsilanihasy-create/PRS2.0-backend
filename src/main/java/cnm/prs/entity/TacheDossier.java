@@ -12,7 +12,13 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
- * Entite JPA mappee sur {@code t_tache_dossier} — une OCCURRENCE de tache chronometree.
+ * Entite JPA mappee sur {@code t_tache_dossier} — la <strong>FIN</strong> d'un passage par une etape.
+ *
+ * <p>⚠️ <strong>Demande pilote du 2026-09-12 — la prise en charge a disparu.</strong> Une ligne n'est
+ * plus ouverte par un geste de porteur puis close : elle est ecrite, deja close, par le geste metier qui
+ * <em>termine</em> l'etape. Il n'y a donc plus ni {@code DATE_PRISE_EN_CHARGE} ni prevision saisie ;
+ * l'<strong>entree</strong> dans l'etape est DERIVEE a la lecture (fin du passage precedent, depot du
+ * dossier, ou sortie d'attente PRMP — cf. {@code ChronometrageService}), et la duree s'en deduit.</p>
  *
  * <p>Append-only : une etape rejouee (reexamen, nouvelle navette de visa, passage supplementaire dans
  * la boucle FAVR) cree une ligne de plus, jamais une mise a jour de la precedente. C'est ce qui rend
@@ -41,30 +47,18 @@ public class TacheDossier {
     @Column(name = "OCCURRENCE", nullable = false)
     private Integer occurrence;
 
-    /** Matricule de l'acteur ; nul si la tache a ete ouverte par tolerance sans acteur identifiable. */
+    /** Matricule de l'acteur a qui l'etape revenait ; nul si aucun acteur n'est identifiable. */
     @Column(name = "IM_ACTEUR", length = 7)
     private String imActeur;
 
-    /** Profil sous lequel l'acteur agit (delegation ou interim compris) au moment de la prise en charge. */
+    /** Profil sous lequel l'etape a ete tenue (delegation ou interim compris). */
     @Column(name = "PROFIL", length = 30)
     private String profil;
 
-    @Column(name = "DATE_PRISE_EN_CHARGE", nullable = false)
-    private LocalDateTime datePriseEnCharge;
-
-    /** Nul tant que la tache est en cours ; posee par le geste metier de cloture. */
-    @Column(name = "DATE_FIN")
+    /**
+     * Instant ou l'etape s'est TERMINEE — le geste metier de cloture. Jamais nul : une ligne n'existe
+     * que parce qu'un passage s'est acheve (2026-09-12). L'entree, elle, n'est pas stockee.
+     */
+    @Column(name = "DATE_FIN", nullable = false)
     private LocalDateTime dateFin;
-
-    @Column(name = "PREVISION_HEURES", nullable = false)
-    private Integer previsionHeures;
-
-    /** Vrai si la prevision vient du referentiel administrable, faux si elle a ete saisie par le porteur. */
-    @Column(name = "PREVISION_STANDARD", nullable = false)
-    private Boolean previsionStandard = Boolean.FALSE;
-
-    /** Tache encore ouverte : aucune date de fin. */
-    public boolean enCours() {
-        return dateFin == null;
-    }
 }

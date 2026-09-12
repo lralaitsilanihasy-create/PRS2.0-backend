@@ -129,11 +129,10 @@ public class CircuitCascadeService {
         // ⚠️ Signalement pilote (2026-09-07) — AVANT d'effacer navettes, PV et vérifications, le journal en
         // fige les événements de traitement : le dossier « est passé par l'examen », son histoire le dira.
         journalDossier.figerTraitement(idDossier);
-        // ⚠️ Signalement pilote (2026-09-08, dossier 00305) — et l'on ferme les chronomètres de ce qui va
-        // disparaître : une occurrence dont la source est purgée n'a plus rien pour la clore, et resterait
-        // ouverte à jamais — au point de mettre le prochain porteur en impasse (l'étape paraît déjà prise
-        // en charge, par quelqu'un qui n'est plus là). Fermer, pas supprimer : le passage a eu lieu.
-        chronometrageService.cloturerAvalDuDispatch(idDossier);
+        // ⚠️ Signalement pilote (2026-09-08, dossier 00305) — et l'on ferme le chronomètre de ce qui va
+        // disparaître : l'étape en cours n'a plus rien pour la clore une fois sa source purgée, et son
+        // temps se déverserait sur l'étape qui reprend. Fermer, pas supprimer : le passage a eu lieu.
+        chronometrageService.cloturerEtapeCourante(idDossier);
         // ⚠️ Spec observations FAVR (2026-08-02) — suivi des observations du PV (historique puis périmètre).
         suiviObservationRepository.deleteParDossier(idDossier);      // 0a — enfant de t_observation_pv
         observationPvRepository.deleteParDossier(idDossier);         // 0b — enfant de t_dossier / t_pv_examen

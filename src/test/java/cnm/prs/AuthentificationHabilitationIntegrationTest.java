@@ -830,7 +830,6 @@ class AuthentificationHabilitationIntegrationTest extends CnmIntegrationTestSupp
         mvc.perform(get("/api/dossiers/4610").header("Authorization", tokenCcTms))
                 .andExpect(jsonPath("$.statut").value("EN_ATTENTE_DECISION_PRMP"));
         // La PRMP rectifie et resoumet : c'est ce geste qui OUVRE la vérification.
-        prendreEnChargeRectification(4610);
         mvc.perform(post("/api/dossiers/4610/resoumettre").header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"motifRectification\":\"rectifie\"}"))
                 .andExpect(status().isOk())
@@ -859,7 +858,6 @@ class AuthentificationHabilitationIntegrationTest extends CnmIntegrationTestSupp
         // La PRMP corrige EN PLACE (structure figée, mise à jour par idDetail). Le PREMIER PUT du cycle
         // fige l'état pré-correction ; le second ne re-fige pas (le diff compare toujours à l'AVANT).
         // ⚠️ 2026-09-07 — la PRMP prend en charge sa rectification avant de corriger (garde serveur).
-        prendreEnChargeRectification(4610);
         String entete = "{\"exercice\":2026,\"signataire\":\"PRMP Test\",\"dateSignature\":\"2026-06-01\","
                 + "\"reference\":\"PPM-4610\",\"marches\":[{\"idDetail\":46100,\"formeMarche\":\"QUANTITE_FIXE\","
                 + "\"montEstim\":500000000,\"idNature\":1,\"statut\":\"PREVU\",\"designationMarche\":\"";
@@ -881,7 +879,6 @@ class AuthentificationHabilitationIntegrationTest extends CnmIntegrationTestSupp
                 .andExpect(jsonPath("$.lignes[0].champs[?(@.champ=='designationMarche')].apres",
                         hasItem("Marche 46100 rectifie v2")));
         // La PRMP resoumet : le dossier revient en vérification pour un nouveau passage.
-        prendreEnChargeRectification(4610);
         mvc.perform(post("/api/dossiers/4610/resoumettre").header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"motifRectification\":\"corrige\"}"))
                 .andExpect(status().isOk());

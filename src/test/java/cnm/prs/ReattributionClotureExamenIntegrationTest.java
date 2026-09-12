@@ -1,8 +1,6 @@
 package cnm.prs;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.hamcrest.Matchers.hasItem;
-import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -22,21 +20,19 @@ import cnm.prs.enums.EtapeCircuit;
 import cnm.prs.repository.TacheDossierRepository;
 
 /**
- * ⚠️ <strong>La réattribution clôt l'occurrence EXAMEN du sortant</strong> (signalement pilote du
- * 2026-09-08, dossier 00305 —
- * {@code docs/demande-backend-2026-09-08-reattribution-cloture-occurrence-examen.md}).
+ * ⚠️ <strong>La réattribution clôt l'examen du sortant</strong> (signalement pilote du 2026-09-08,
+ * dossier 00305 — {@code docs/demande-backend-2026-09-08-reattribution-cloture-occurrence-examen.md}).
  *
- * <p>Le Membre avait pris l'examen en charge ; le Président a redispatché au CC. Le chronométrage
- * traçait bien le geste du redispatcheur ({@code DISPATCH} n+1) mais laissait l'occurrence
- * {@code EXAMEN} du sortant <strong>ouverte à jamais</strong>. Le nouvel attributaire s'en trouvait en
- * <strong>impasse</strong> : l'étape paraissait déjà prise en charge — par quelqu'un qui n'était plus
- * là — donc aucun « Prendre en charge » ne lui était offert, et sans prise en charge il ne pouvait rien
- * faire. L'attribution, elle, était juste : c'est la vie de l'occurrence qui manquait une étape.</p>
+ * <p>À l'origine, le chronométrage traçait bien le geste du redispatcheur ({@code DISPATCH} n+1) mais
+ * laissait l'occurrence {@code EXAMEN} du sortant <strong>ouverte à jamais</strong>, mettant le nouvel
+ * attributaire en impasse — l'étape paraissait prise en charge par quelqu'un qui n'était plus là.</p>
  *
- * <p>Ce que ces tests protègent : la <strong>fermeture</strong> de l'occurrence sortante (et non sa
- * suppression — le passage a eu lieu), l'<strong>absence d'occurrence ouverte</strong> après le geste,
- * la <strong>sortie d'impasse</strong> du nouvel attributaire, et la même symétrie sur le
- * <strong>retrait</strong> du dispatch, où la purge de l'aval laissait le même orphelin.</p>
+ * <p>⚠️ <strong>2026-09-12</strong> — l'impasse a disparu avec la prise en charge elle-même. Ce qui
+ * <em>reste</em>, et qui compte désormais davantage : la <strong>mesure</strong>. Le délai d'une étape
+ * court depuis la fin de la précédente ; si l'examen abandonné n'était pas fermé, tout le temps du
+ * sortant se déverserait sur l'examen de son successeur, qui paraîtrait avoir mis des jours là où il
+ * commence à peine. Fermer, et non supprimer : le passage a eu lieu, sa durée est mesurée jusqu'au
+ * retrait.</p>
  */
 class ReattributionClotureExamenIntegrationTest extends CnmIntegrationTestSupport {
 
@@ -59,108 +55,78 @@ class ReattributionClotureExamenIntegrationTest extends CnmIntegrationTestSuppor
                 .andExpect(status().isCreated());
     }
 
-    /** Le Membre attributaire ouvre son occurrence EXAMEN — le geste que la réattribution va interrompre. */
-    private void membrePrendEnChargeLExamen() throws Exception {
-        mvc.perform(post("/api/dossiers/" + DOSSIER + "/prise-en-charge").header("Authorization", tokenMembre)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"previsionHeures\":8}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.etape").value("EXAMEN"))
-                .andExpect(jsonPath("$.imActeur").value("CTRMEM"))
-                .andExpect(jsonPath("$.enCours").value(true));
-    }
-
-    private List<TacheDossier> examens() {
-        return tacheRepository.findByIdDossierOrderByDatePriseEnChargeAsc(DOSSIER).stream()
-                .filter(t -> EtapeCircuit.EXAMEN.name().equals(t.getEtape())).toList();
-    }
-
-    // ------------------------------------------------------------------ 1. la réattribution ferme
-
-    @Test
-    @DisplayName("Recette 1 — après réattribution au CC, l'occurrence EXAMEN du Membre sortant porte une "
-            + "fin ; plus aucune occurrence EXAMEN ouverte, et sa durée entamée reste mesurée")
-    void reattribution_clotLOccurrenceDuSortant() throws Exception {
-        membrePrendEnChargeLExamen();
-
+    private void reattribuerAuCc() throws Exception {
         mvc.perform(put("/api/dispatchs/" + DISPATCH).header("Authorization", tokenPresident)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDispatch\":" + DISPATCH + ",\"idReception\":" + RECEPTION
                         + ",\"imCtrlMembre\":\"CTRCC1\",\"interimDispatch\":false}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.imCtrlMembre").value("CTRCC1"));
+    }
+
+    private List<TacheDossier> examens() {
+        return tacheRepository.findParDossier(DOSSIER).stream()
+                .filter(t -> EtapeCircuit.EXAMEN.name().equals(t.getEtape())).toList();
+    }
+
+    // ------------------------------------------------------------------ 1. la réattribution ferme
+
+    @Test
+    @DisplayName("Recette 1 — après réattribution au CC, l'examen du Membre sortant est fermé à son nom : "
+            + "le passage a eu lieu, sa durée entamée reste mesurée")
+    void reattribution_fermeLExamenDuSortant() throws Exception {
+        reattribuerAuCc();
 
         List<TacheDossier> examens = examens();
-        assertThat(examens).as("l'occurrence du sortant est FERMÉE, pas supprimée : le passage a eu lieu")
+        assertThat(examens).as("l'examen du sortant est FERMÉ, pas supprimé : le passage a eu lieu")
                 .hasSize(1);
-        TacheDossier sortante = examens.get(0);
-        assertThat(sortante.getImActeur()).isEqualTo("CTRMEM");
-        assertThat(sortante.getDatePriseEnCharge()).isNotNull();
-        assertThat(sortante.getDateFin()).as("la fin est posée à l'instant de la réattribution").isNotNull();
-        assertThat(tacheRepository.ouvertes(DOSSIER, EtapeCircuit.EXAMEN.name())).isEmpty();
+        TacheDossier sortant = examens.get(0);
+        assertThat(sortant.getImActeur()).as("mesuré au nom du sortant, jamais du réattribueur")
+                .isEqualTo("CTRMEM");
+        assertThat(sortant.getDateFin()).as("la fin est posée à l'instant de la réattribution").isNotNull();
     }
 
     @Test
-    @DisplayName("Recette 2 & 3 — le nouvel attributaire n'est plus en impasse : aucune tâche EXAMEN "
-            + "ouverte au chronométrage, il prend en charge à neuf et obtient l'occurrence n° 2")
-    void apresReattribution_leNouvelAttributaireSortDeLImpasse() throws Exception {
-        membrePrendEnChargeLExamen();
-        mvc.perform(put("/api/dispatchs/" + DISPATCH).header("Authorization", tokenPresident)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idDispatch\":" + DISPATCH + ",\"idReception\":" + RECEPTION
-                        + ",\"imCtrlMembre\":\"CTRCC1\",\"interimDispatch\":false}"))
-                .andExpect(status().isOk());
+    @DisplayName("Recette 2 & 3 — l'examen du NOUVEL attributaire repart à zéro : son entrée est l'instant "
+            + "de la réattribution, pas le dispatch initial — le temps du sortant ne lui est pas imputé")
+    void apresReattribution_lExamenDuSuccesseurRepartDeLaReattribution() throws Exception {
+        reattribuerAuCc();
 
-        // Ce que lit le widget : l'étape est bien EXAMEN, attendue du NOUVEL attributaire, et plus
-        // aucune tâche de cette étape n'est en cours — donc le bouton « Prendre en charge » s'affiche.
-        mvc.perform(get("/api/dossiers/" + DOSSIER + "/chronometrage").header("Authorization", tokenPresident))
+        String chrono = mvc.perform(get("/api/dossiers/" + DOSSIER + "/chronometrage")
+                .header("Authorization", tokenPresident))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.etapeCourante").value("EXAMEN"))
                 .andExpect(jsonPath("$.attributaire").value("CTRCC1"))
-                .andExpect(jsonPath("$.acteursAttendus", hasItem("CTRCC1")))
-                .andExpect(jsonPath("$.taches[?(@.etape=='EXAMEN' && @.enCours==true)]", hasSize(0)));
+                .andReturn().getResponse().getContentAsString();
 
-        // Et le geste passe : occurrence n° 2, à SON nom, sans toucher à celle du sortant.
-        mvc.perform(post("/api/dossiers/" + DOSSIER + "/prise-en-charge").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"previsionHeures\":6}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.etape").value("EXAMEN"))
-                .andExpect(jsonPath("$.occurrence").value(2))
-                .andExpect(jsonPath("$.imActeur").value("CTRCC1"))
-                .andExpect(jsonPath("$.enCours").value(true));
+        // Le dernier passage est l'examen EN COURS du successeur ; le précédent, le DISPATCH qui l'a
+        // ouvert. L'un entre là où l'autre s'arrête : c'est toute la règle.
+        List<Object> enCours = com.jayway.jsonpath.JsonPath.read(chrono, "$.etapes[?(@.enCours==true)].etape");
+        assertThat(enCours).containsExactly("EXAMEN");
+        String entreeCourante = com.jayway.jsonpath.JsonPath.<List<String>>read(
+                chrono, "$.etapes[?(@.enCours==true)].entree").get(0);
+        List<String> finsDispatch = com.jayway.jsonpath.JsonPath.read(chrono, "$.etapes[?(@.etape=='DISPATCH')].fin");
+        assertThat(entreeCourante).as("l'examen du successeur commence à la réattribution")
+                .isEqualTo(finsDispatch.get(finsDispatch.size() - 1));
 
-        List<TacheDossier> examens = examens();
-        assertThat(examens).hasSize(2);
-        assertThat(examens.get(0).getImActeur()).isEqualTo("CTRMEM");
-        assertThat(examens.get(0).getDateFin()).isNotNull();
-        assertThat(examens.get(1).getImActeur()).isEqualTo("CTRCC1");
-        assertThat(examens.get(1).getDateFin()).isNull();
+        // L'examen du sortant, lui, garde sa propre borne de fin : les deux ne se recouvrent pas.
+        assertThat(examens()).hasSize(1);
+        assertThat(examens().get(0).getImActeur()).isEqualTo("CTRMEM");
     }
 
     // ------------------------------------------------------------------ 2. le retrait ferme aussi
 
     @Test
-    @DisplayName("Symétrie — le RETRAIT du dispatch clôt lui aussi l'occurrence EXAMEN ouverte : la purge "
-            + "de l'aval effaçait les sources sans fermer les chronomètres qui en dépendaient")
-    void retraitDuDispatch_clotAussiLOccurrenceOuverte() throws Exception {
-        membrePrendEnChargeLExamen();
-        dossierEnStatut("DISPATCHE");
-
+    @DisplayName("Symétrie — le RETRAIT du dispatch ferme lui aussi l'examen en cours : la purge de l'aval "
+            + "efface les sources, le chronomètre doit être arrêté avant qu'elles disparaissent")
+    void retraitDuDispatch_fermeAussiLEtapeEnCours() throws Exception {
         mvc.perform(post("/api/dispatchs/" + DISPATCH + "/annuler").header("Authorization", tokenPresident))
                 .andExpect(status().isNoContent());
 
-        assertThat(tacheRepository.ouvertes(DOSSIER, EtapeCircuit.EXAMEN.name()))
-                .as("plus aucune occurrence EXAMEN ouverte après le retrait").isEmpty();
         List<TacheDossier> examens = examens();
         assertThat(examens).hasSize(1);
         assertThat(examens.get(0).getDateFin()).isNotNull();
-        assertThat(examens.get(0).getImActeur()).isEqualTo("CTRMEM");
-    }
-
-    /** Le retrait exige un dossier DISPATCHE ou EXAMINE ; la prise en charge, elle, ne change pas le statut. */
-    private void dossierEnStatut(String statut) {
-        dossierRepository.findById(DOSSIER).ifPresent(d -> {
-            d.setStatut(statut);
-            dossierRepository.save(d);
-        });
+        assertThat(examens.get(0).getImActeur()).as("au nom de celui à qui l'examen revenait")
+                .isEqualTo("CTRMEM");
     }
 }

@@ -67,9 +67,6 @@ class RectificationEcartIntegrationTest extends CnmIntegrationTestSupport {
             m.setIdNature(1);   // même nature que le corps des PUT : une ligne renvoyée à l'identique est INCHANGEE
             marcheRepository.save(m);
         }
-        // ⚠️ 2026-09-07 — « aucune action sans prise en charge » : la PRMP ouvre sa tâche de
-        // rectification avant de corriger (verrou éprouvé par PriseEnChargeRectificationPrmpIntegrationTest).
-        prendreEnChargeRectification(DOSSIER);
     }
 
     // ------------------------------------------------------------------ 1. écart 3/3 accepté

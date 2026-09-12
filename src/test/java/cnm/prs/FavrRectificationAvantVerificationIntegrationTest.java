@@ -89,7 +89,6 @@ class FavrRectificationAvantVerificationIntegrationTest extends CnmIntegrationTe
         signerPvAvecAvis(942, "FAVR");
         String tokenVer = tokenVer();
 
-        prendreEnChargeRectification(1);
         mvc.perform(post("/api/dossiers/1/resoumettre").header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"motifRectification\":\"corrige\"}"))
                 .andExpect(status().isOk())

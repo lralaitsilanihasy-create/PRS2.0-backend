@@ -359,23 +359,20 @@ public class DispatchService {
             Integer idDossierReattribue = dossierDeLaReception(sauve.getIdReception());
             notifierReattribution(sauve, ancienAttributaire, idDossierReattribue);
             tracerReattribution(sauve, ancienAttributaire, idDossierReattribue);
-            // ⚠️ Chronométrage (règle du pilote, 2026-09-04) — le geste du réattribueur laisse SA ligne.
-            // Le journal portait bien DISPATCH puis REATTRIBUTION, mais le chronométrage n'avait qu'une
-            // tâche : le passage par le CC n'existait nulle part dans le tableau des passages, alors
-            // qu'un retrait suivi d'un re-dispatch, lui, en produisait une. Le chemin réel doit se lire
-            // aux deux endroits, et avec les mêmes acteurs.
+            // ⚠️ Chronométrage — DEUX écritures, et leur ORDRE porte le sens (2026-09-04, revu le
+            // 2026-09-12). D'abord l'examen du SORTANT : il est abandonné à cet instant, sa durée court
+            // depuis le dispatch initial et s'arrête ici — le passage a eu lieu, il n'est pas effacé.
+            // Sans cette fin, le temps du sortant se déverserait sur l'examen de son successeur.
+            chronometrageService.cloturerPourActeur(idDossierReattribue, EtapeCircuit.EXAMEN,
+                    ancienAttributaire);
+            // Puis le geste du réattribueur, qui laisse SA ligne de dispatch — instantanée, puisqu'elle
+            // s'ouvre et se ferme sur la fin qu'on vient d'écrire. Le journal portait bien DISPATCH puis
+            // REATTRIBUTION ; le chronométrage doit dire le même chemin, avec les mêmes acteurs.
             //
-            // Ce seul appel couvre AUSSI la REPRISE : le « Retirer » du CC est un PUT vers lui-même,
+            // Ce second appel couvre AUSSI la REPRISE : le « Retirer » du CC est un PUT vers lui-même,
             // donc un changement d'attributaire. Le « rendre » du Membre, lui, n'existe pas comme geste
             // (aucun endpoint) : il reste hors lot, faute d'objet.
-            chronometrageService.consignerGesteInstantane(idDossierReattribue, EtapeCircuit.DISPATCH);
-            // ⚠️ Trou de chronométrage (signalement pilote du 2026-09-08, dossier 00305) — SYMÉTRIQUE du
-            // geste ci-dessus : on ouvre l'occurrence du redispatcheur, il faut FERMER celle du sortant.
-            // L'examen que le précédent attributaire avait pris en charge restait ouvert à jamais, et le
-            // nouveau se retrouvait en impasse — l'étape paraissait tenue par quelqu'un qui n'était plus
-            // là, donc aucun « Prendre en charge » ne lui était offert. Sa durée est mesurée jusqu'ici :
-            // le passage a eu lieu, il est abandonné, pas effacé.
-            chronometrageService.cloturerSiOuverte(idDossierReattribue, EtapeCircuit.EXAMEN);
+            chronometrageService.cloturer(idDossierReattribue, EtapeCircuit.DISPATCH);
         }
         return toDtoComplet(sauve);
     }

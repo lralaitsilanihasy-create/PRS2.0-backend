@@ -129,7 +129,6 @@ class DesignationMarcheLongueIntegrationTest extends CnmIntegrationTestSupport {
         m.setMontEstim(new BigDecimal("100"));
         m.setDesignationMarche(designationInitiale);
         marcheRepository.save(m);
-        prendreEnChargeRectification(700);
     }
 
     @Test

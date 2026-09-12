@@ -26,9 +26,7 @@ import cnm.prs.dto.DossierDto;
 import cnm.prs.dto.DossierResoumissionRequest;
 import cnm.prs.dto.EchangeDto;
 import cnm.prs.dto.PpmDto;
-import cnm.prs.dto.PriseEnChargeRequest;
 import cnm.prs.dto.RechercheDossierDto;
-import cnm.prs.dto.TacheDossierDto;
 import cnm.prs.service.ChronometrageService;
 import cnm.prs.service.DossierService;
 import cnm.prs.service.PerimetreExamenService;
@@ -43,7 +41,7 @@ public class DossierController {
 
     private final DossierService service;
     private final PpmService ppmService;
-    /** ⚠️ Chronométrage des délais (2026-09-01) — prise en charge et frise. */
+    /** ⚠️ Chronométrage des délais (2026-09-01) — frise et durées par étape, toutes dérivées. */
     private final ChronometrageService chronometrageService;
     /** ⚠️ 2026-09-10 — le périmètre d'examen, servi tel que la complétude l'exigera. */
     private final PerimetreExamenService perimetreExamenService;
@@ -247,33 +245,15 @@ public class DossierController {
     }
 
     /**
-     * ⚠️ Chronométrage (2026-09-01) — <strong>prise en charge explicite</strong> de l'étape courante,
-     * avec la prévision du porteur en <strong>heures ouvrées</strong> (arbitrage ①, unité révisée le
-     * 2026-09-02). Rejouée sur une tâche encore ouverte,
-     * elle corrige la prévision au lieu d'ouvrir une occurrence.
+     * ⚠️ Chronométrage (2026-09-01) — <strong>passages par étape</strong> et compteurs globaux d'un
+     * dossier : matière de la frise. Même périmètre de lecture que le dossier lui-même (PRMP
+     * propriétaire, contrôleurs de la localité, tout-voyants) — la garde est celle de la consultation,
+     * appliquée en amont.
      *
-     * <p>403 si l'appelant n'est pas le porteur de l'étape (délégations et intérim résolus par la garde
-     * centrale) ou si le dossier n'est pas de sa localité ; <strong>409</strong> si aucune étape n'est
-     * ouverte — dossier en brouillon, en attente PRMP, clos ou retiré.</p>
-     *
-     * <p>⚠️ <strong>Deux refus ajoutés le 2026-09-04</strong>, après la recette du cycle à deux niveaux :
-     * <strong>409 nominal</strong> si un AUTRE acteur tient déjà l'étape (le replay ne corrige que SA
-     * propre prévision — il corrigeait celle d'autrui), et <strong>403</strong> si l'étape est
-     * {@code EXAMEN} et que l'appelant n'en est pas l'attributaire, délégation comprise. La
-     * co-signature échappe au premier : plusieurs désignés y tiennent chacun leur tâche.</p>
-     */
-    @PostMapping("/{id}/prise-en-charge")
-    public TacheDossierDto prendreEnCharge(@PathVariable Integer id,
-            @Valid @RequestBody(required = false) PriseEnChargeRequest req) {
-        // ⚠️ 2026-09-08 — corps FACULTATIF : « Prendre en charge » ne demande plus de prévision, il
-        // démarre le chronomètre. Sans corps (ou sans le champ), le service applique le délai standard.
-        return chronometrageService.prendreEnCharge(id, req == null ? null : req.previsionHeures());
-    }
-
-    /**
-     * ⚠️ Chronométrage (2026-09-01) — occurrences de tâches et compteurs globaux d'un dossier : matière
-     * de la frise. Même périmètre de lecture que le dossier lui-même (PRMP propriétaire, contrôleurs de
-     * la localité, tout-voyants) — la garde est celle de la consultation, appliquée en amont.
+     * <p>⚠️ <strong>Refonte du 2026-09-12</strong> : chaque étape s'y lit en <em>entrée</em>,
+     * <em>fin</em> et <em>durée</em> (heures ouvrées), toutes trois dérivées des transitions déjà
+     * horodatées. Le geste de prise en charge ayant disparu, {@code taches} et {@code acteursAttendus}
+     * ont disparu avec lui : {@code etapes} les remplace, et il n'y a plus de bouton à masquer.</p>
      */
     @GetMapping("/{id}/chronometrage")
     public ChronometrageDto chronometrage(@PathVariable Integer id) {

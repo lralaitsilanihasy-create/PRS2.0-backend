@@ -58,7 +58,7 @@ class ChronoReattributionIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     private List<TacheDossier> dispatchs(int idDossier) {
-        return tacheDossierRepository.findByIdDossierOrderByDatePriseEnChargeAsc(idDossier).stream()
+        return tacheDossierRepository.findParDossier(idDossier).stream()
                 .filter(t -> EtapeCircuit.DISPATCH.name().equals(t.getEtape()))
                 .sorted(java.util.Comparator.comparing(TacheDossier::getOccurrence)).toList();
     }
@@ -70,8 +70,8 @@ class ChronoReattributionIntegrationTest extends CnmIntegrationTestSupport {
     // ------------------------------------------------------------------
 
     @Test
-    @DisplayName("1 — Président → CC puis CC → Membre : DISPATCH#1 (P) et DISPATCH#2 (CC), closes "
-            + "instantanément, prévision standard")
+    @DisplayName("1 — Président → CC puis CC → Membre : DISPATCH#1 (P) et DISPATCH#2 (CC), chacun clos "
+            + "par son geste")
     void reattribution_ouvreUneOccurrenceAuNomDuReattribueur() throws Exception {
         dossierPretADispatcher(9901);
 
@@ -93,15 +93,19 @@ class ChronoReattributionIntegrationTest extends CnmIntegrationTestSupport {
         Assertions.assertEquals(2, second.getOccurrence());
         Assertions.assertEquals("CTRCC1", second.getImActeur(), "la seconde porte l'auteur du geste");
 
-        // Instantanées : un acte ponctuel n'a pas de durée à mesurer.
+        // ⚠️ 2026-09-12 — un passage n'existe QUE clos : sa durée se lit entre deux transitions, et
+        // personne n'a rien eu à saisir pour qu'elle existe.
         for (TacheDossier t : taches) {
-            Assertions.assertNotNull(t.getDateFin(), "un geste instantané est clos d'emblée");
-            Assertions.assertEquals(t.getDatePriseEnCharge(), t.getDateFin(),
-                    "prise en charge et fin au même horodatage");
-            Assertions.assertTrue(Boolean.TRUE.equals(t.getPrevisionStandard()),
-                    "personne n'a saisi de prévision : c'est le référentiel qui la donne");
-            Assertions.assertNotNull(t.getPrevisionHeures());
+            Assertions.assertNotNull(t.getDateFin(), "un passage n'existe que parce qu'il s'est achevé");
         }
+
+        // La réattribution ferme AUSSI l'examen du sortant, au nom du sortant : sans cette fin, son temps
+        // se déverserait sur l'examen de son successeur.
+        List<TacheDossier> examens = tacheDossierRepository.findParDossier(9901).stream()
+                .filter(t -> EtapeCircuit.EXAMEN.name().equals(t.getEtape())).toList();
+        Assertions.assertEquals(1, examens.size(), "l'examen abandonné par le CC laisse son passage");
+        Assertions.assertEquals("CTRCC1", examens.get(0).getImActeur(),
+                "il est mesuré au nom du sortant, pas du réattribueur");
     }
 
     @Test

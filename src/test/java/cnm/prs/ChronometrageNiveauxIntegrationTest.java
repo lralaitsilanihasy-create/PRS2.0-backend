@@ -6,7 +6,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.util.List;
 
-import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -20,15 +19,18 @@ import cnm.prs.enums.EtapeCircuit;
 import cnm.prs.repository.TacheDossierRepository;
 
 /**
- * ⚠️ <strong>Prise en charge : garde d'acteur et occurrences par niveau</strong> (constats de la
- * recette réelle du cycle à deux niveaux, 2026-09-04 — dossier 100285, PV 12).
+ * ⚠️ <strong>Un passage par ÉTAGE, un passage par DÉSIGNÉ</strong> (constats de la recette réelle du
+ * cycle à deux niveaux, 2026-09-04 — dossier 100285, PV 12 ; revus le 2026-09-12).
  *
- * <p>Ces trois défauts avaient un point commun : le chronométrage supposait <strong>une étape = une
- * personne</strong>. Cette hypothèse tombe dès que la navette a deux étages (VISA passe du CC au
- * Président) ou que la co-signature compte deux désignés. Là où elle tenait encore — l'examen —, elle
- * n'était pas assez ferme : n'importe quel porteur de profil pouvait ouvrir la tâche d'autrui, et
- * l'assignataire s'en trouvait verrouillé sans recours. Trois réassignations SQL ont été nécessaires
- * pour terminer la recette ; c'est ce que ces tests empêchent de revivre.</p>
+ * <p>Le défaut d'origine : le chronométrage supposait <strong>une étape = une personne</strong>. Cette
+ * hypothèse tombe dès que la navette a deux étages (VISA passe du CC au Président) ou que la
+ * co-signature compte deux désignés — le temps de l'un se mêlait à celui de l'autre.</p>
+ *
+ * <p>⚠️ <strong>2026-09-12</strong> — la moitié « garde » de ces constats (409 nominal, 403 du
+ * non-attributaire) a disparu avec la prise en charge elle-même : il n'y a plus de tâche à ouvrir, donc
+ * plus personne à verrouiller. Ce qui reste, et qui compte toujours, c'est la <strong>découpe</strong> :
+ * chaque étage et chaque désigné laisse SON passage, avec son acteur et sa durée propre — et l'entrée de
+ * l'un est la fin de l'autre.</p>
  */
 class ChronometrageNiveauxIntegrationTest extends CnmIntegrationTestSupport {
 
@@ -49,14 +51,8 @@ class ChronometrageNiveauxIntegrationTest extends CnmIntegrationTestSupport {
         dispatchRepository.save(dispatch);
     }
 
-    private ResultActions pec(int idDossier, String token, int prevision) throws Exception {
-        return mvc.perform(post("/api/dossiers/" + idDossier + "/prise-en-charge")
-                .header("Authorization", token).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"previsionHeures\":" + prevision + "}"));
-    }
-
     private List<TacheDossier> taches(int idDossier, EtapeCircuit etape) {
-        return tacheRepository.findByIdDossierOrderByDatePriseEnChargeAsc(idDossier).stream()
+        return tacheRepository.findParDossier(idDossier).stream()
                 .filter(t -> etape.name().equals(t.getEtape())).toList();
     }
 
@@ -85,117 +81,46 @@ class ChronometrageNiveauxIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     // ------------------------------------------------------------------
-    // 1 — Le replay n'appartient qu'à son auteur
+    // 1 — Un passage de VISA par étage
     // ------------------------------------------------------------------
 
     @Test
-    @DisplayName("1 — Une étape tenue par A : B reçoit 409 nominal ; A la rejoue et corrige SA prévision")
-    void pecParUnAutre_409Nominal() throws Exception {
-        // Dossier PRET_DISPATCH : l'étape courante est DISPATCH, portée par le CC (le Président
-        // l'exerce aussi, par délégation — c'est bien pour cela que deux acteurs peuvent s'y croiser).
-        var d = dossierRepository.findById(1).orElseThrow();
-        d.setStatut("PRET_DISPATCH");
-        dossierRepository.save(d);
-
-        pec(1, tokenCc, 4).andExpect(status().isOk())
-                .andExpect(jsonPath("$.imActeur").value("CTRCC1"))
-                .andExpect(jsonPath("$.occurrence").value(1));
-
-        // ⚠️ Le cœur du constat : ce POST répondait 200 et écrasait la prévision du CC. Il refuse
-        // désormais, EN NOMMANT celui qui tient l'étape — sans le nom, l'appelant n'a personne à qui
-        // s'adresser pour se débloquer, et c'est exactement ce qui a mené aux corrections SQL.
-        pec(1, tokenPresident, 9).andExpect(status().isConflict())
-                .andExpect(jsonPath("$.message", Matchers.containsString("déjà prise en charge par")))
-                .andExpect(jsonPath("$.message", Matchers.containsString("NomCTRCC1")));
-
-        // La prévision du CC est intacte : le refus n'a rien touché.
-        Assertions.assertEquals(1, taches(1, EtapeCircuit.DISPATCH).size(), "aucune occurrence de plus");
-        Assertions.assertEquals(4, taches(1, EtapeCircuit.DISPATCH).get(0).getPrevisionHeures());
-
-        // Le titulaire, lui, rejoue et corrige : le replay n'a pas disparu, il s'est restreint.
-        pec(1, tokenCc, 6).andExpect(status().isOk())
-                .andExpect(jsonPath("$.occurrence").value(1))
-                .andExpect(jsonPath("$.previsionHeures").value(6));
-        Assertions.assertEquals(1, taches(1, EtapeCircuit.DISPATCH).size());
-    }
-
-    // ------------------------------------------------------------------
-    // 2 — L'examen se prend par son attributaire
-    // ------------------------------------------------------------------
-
-    @Test
-    @DisplayName("2 — PEC d'EXAMEN : refusée au dispatcheur et au CC (403), ouverte au seul attributaire")
-    void pecExamen_reserveeALAttributaire() throws Exception {
-        var d = dossierRepository.findById(1).orElseThrow();
-        d.setStatut("DISPATCHE");
-        dossierRepository.save(d);
-
-        // Le dispatcheur (Président) et le CC en copie exercent tous deux le profil MEMBRE par
-        // délégation : la garde de profil les laissait passer. Ils ouvraient donc une tâche sur le
-        // travail de quelqu'un d'autre — et, avec la garde du test 1, l'y verrouillaient.
-        pec(1, tokenPresident, 8).andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.message", Matchers.containsString("attribué à")));
-        pec(1, tokenCc, 8).andExpect(status().isForbidden());
-        Assertions.assertTrue(taches(1, EtapeCircuit.EXAMEN).isEmpty(),
-                "aucune tâche ne doit avoir été ouverte par un non-attributaire");
-
-        // L'attributaire, lui, passe.
-        pec(1, tokenMembre, 8).andExpect(status().isOk())
-                .andExpect(jsonPath("$.etape").value("EXAMEN"))
-                .andExpect(jsonPath("$.imActeur").value("CTRMEM"));
-    }
-
-    // ------------------------------------------------------------------
-    // 3 — Une occurrence de VISA par étage
-    // ------------------------------------------------------------------
-
-    @Test
-    @DisplayName("3 — Deux niveaux : le CC tient VISA#1, « accepter » la clôt, le Président ouvre VISA#2 "
-            + "que son visa clôt")
-    void visa_uneOccurrenceParNiveau() throws Exception {
+    @DisplayName("1 — Deux niveaux : « accepter » clôt le VISA du CC, le visa du Président clôt le sien — "
+            + "deux passages, deux acteurs, et l'entrée du second est la fin du premier")
+    void visa_unPassageParNiveau() throws Exception {
         dispatchReattribueParLeCc();
         projetSoumis(9701);
 
-        // ① Le CC prend l'étage du bas.
-        pec(1, tokenCc, 3).andExpect(status().isOk())
-                .andExpect(jsonPath("$.etape").value("VISA"))
-                .andExpect(jsonPath("$.occurrence").value(1))
-                .andExpect(jsonPath("$.imActeur").value("CTRCC1"));
-
-        // ② Il transmet. Son occurrence se clôt : le PV reste à l'étape VISA, mais plus chez lui.
+        // ① Le CC transmet au Président : son passage se clôt, le PV reste à l'étape VISA mais change
+        // d'étage. Sans cette fin, un seul passage aurait porté les deux acteurs et mêlé leurs durées.
         mvc.perform(post("/api/pv-examens/9701/accepter").header("Authorization", tokenCc)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"commentaire\":\"transmis\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.niveauNavette").value("PRESIDENT"));
         List<TacheDossier> visas = taches(1, EtapeCircuit.VISA);
         Assertions.assertEquals(1, visas.size());
-        Assertions.assertNotNull(visas.get(0).getDateFin(), "l'occurrence du CC doit être close");
         Assertions.assertEquals("CTRCC1", visas.get(0).getImActeur());
 
-        // ③ Le Président ouvre la SIENNE — et n'est plus verrouillé par celle du CC, puisqu'elle est
-        // close. C'est le déblocage que la recette avait dû faire en SQL.
-        pec(1, tokenPresident, 5).andExpect(status().isOk())
-                .andExpect(jsonPath("$.etape").value("VISA"))
-                .andExpect(jsonPath("$.occurrence").value(2))
-                .andExpect(jsonPath("$.imActeur").value("CTRPRE"));
-
-        // ④ Le visa clôt VISA#2. Chaque étage a sa tâche, sa prévision et sa durée.
+        // ② Le visa du Président clôt le SIEN.
         viserAvec(9701, tokenPresident, "CTRMEM").andExpect(status().isOk());
         visas = taches(1, EtapeCircuit.VISA);
-        Assertions.assertEquals(2, visas.size(), "une occurrence par étage, pas une pour deux");
-        Assertions.assertTrue(visas.stream().allMatch(t -> t.getDateFin() != null),
-                "les deux occurrences sont closes");
-        Assertions.assertEquals(3, visas.get(0).getPrevisionHeures(), "la prévision du CC lui reste");
-        Assertions.assertEquals(5, visas.get(1).getPrevisionHeures(), "celle du Président aussi");
+        Assertions.assertEquals(2, visas.size(), "un passage par étage, pas un pour deux");
+        Assertions.assertEquals("CTRCC1", visas.get(0).getImActeur());
+        Assertions.assertEquals("CTRPRE", visas.get(1).getImActeur());
+        Assertions.assertEquals(1, visas.get(0).getOccurrence());
+        Assertions.assertEquals(2, visas.get(1).getOccurrence());
+        Assertions.assertTrue(visas.get(1).getDateFin().isAfter(visas.get(0).getDateFin())
+                || visas.get(1).getDateFin().isEqual(visas.get(0).getDateFin()),
+                "l'étage du Président commence là où celui du CC s'arrête");
     }
 
     // ------------------------------------------------------------------
-    // 4 — Une tâche de COSIGNATURE par désigné
+    // 2 — Un passage de COSIGNATURE par désigné
     // ------------------------------------------------------------------
 
     @Test
-    @DisplayName("4 — Visa P + CC + Membre : deux tâches COSIGNATURE, chacune close par SA signature")
-    void cosignature_uneTacheParDesigne() throws Exception {
+    @DisplayName("2 — Visa P + CC + Membre : chaque signature laisse SON passage de co-signature, nominatif")
+    void cosignature_unPassageParDesigne() throws Exception {
         dispatchReattribueParLeCc();
         projetSoumis(9702);
         mvc.perform(post("/api/pv-examens/9702/accepter").header("Authorization", tokenCc)
@@ -203,37 +128,26 @@ class ChronometrageNiveauxIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isOk());
         viserAvec(9702, tokenPresident, "CTRCC1", "CTRMEM").andExpect(status().isOk());
 
-        // ⚠️ La co-signature est la SEULE étape à plusieurs porteurs : le 409 du test 1 n'y joue pas,
-        // sans quoi le second désigné serait verrouillé par le premier — l'autre moitié du constat.
-        pec(1, tokenCc, 2).andExpect(status().isOk())
-                .andExpect(jsonPath("$.etape").value("COSIGNATURE"))
-                .andExpect(jsonPath("$.imActeur").value("CTRCC1"));
-        pec(1, tokenMembre, 3).andExpect(status().isOk())
-                .andExpect(jsonPath("$.etape").value("COSIGNATURE"))
-                .andExpect(jsonPath("$.imActeur").value("CTRMEM"));
-        Assertions.assertEquals(2, taches(1, EtapeCircuit.COSIGNATURE).size(),
-                "un désigné, une tâche");
-
-        // Chaque signature ne clôt que la sienne. Fermer « la » tâche ouverte aurait clos celle de
-        // l'autre, et le PV se serait terminé avec une tâche ouverte au nom d'un signataire.
+        // La co-signature est la seule étape où plusieurs personnes travaillent de front : chacune y
+        // laisse sa part. Attribuer les deux à un seul acteur aurait effacé ce que l'étape a d'unique.
         signer(9702, tokenCc, "CC").andExpect(status().isOk());
-        var parActeur = taches(1, EtapeCircuit.COSIGNATURE).stream()
-                .collect(java.util.stream.Collectors.toMap(TacheDossier::getImActeur, t -> t));
-        Assertions.assertNotNull(parActeur.get("CTRCC1").getDateFin(), "le CC a signé : sa tâche est close");
-        Assertions.assertNull(parActeur.get("CTRMEM").getDateFin(), "celle du Membre reste ouverte");
+        Assertions.assertEquals(List.of("CTRCC1"), taches(1, EtapeCircuit.COSIGNATURE).stream()
+                .map(TacheDossier::getImActeur).toList(), "seule la part du CC est posée");
 
         signer(9702, tokenMembre, "MEMBRE").andExpect(status().isOk())
                 .andExpect(jsonPath("$.statutPv").value("SIGNE"));
+        Assertions.assertEquals(List.of("CTRCC1", "CTRMEM"), taches(1, EtapeCircuit.COSIGNATURE).stream()
+                .map(TacheDossier::getImActeur).toList(), "un désigné, un passage");
         Assertions.assertTrue(taches(1, EtapeCircuit.COSIGNATURE).stream()
-                .allMatch(t -> t.getDateFin() != null), "aucune tâche ne survit au PV signé");
+                .allMatch(t -> t.getDateFin() != null), "un passage n'existe que clos");
     }
 
     // ------------------------------------------------------------------
-    // 5 — Le nom du CC désigné
+    // 3 — Le nom du CC désigné
     // ------------------------------------------------------------------
 
     @Test
-    @DisplayName("5 — « nomCcCoSignataire » est peuplé après un visa désignant le CC (le front ne replie plus "
+    @DisplayName("3 — « nomCcCoSignataire » est peuplé après un visa désignant le CC (le front ne replie plus "
             + "sur le matricule)")
     void nomCcCoSignataire_peuple() throws Exception {
         dispatchReattribueParLeCc();

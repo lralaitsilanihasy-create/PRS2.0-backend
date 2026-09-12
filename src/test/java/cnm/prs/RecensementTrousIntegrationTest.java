@@ -119,9 +119,9 @@ class RecensementTrousIntegrationTest extends CnmIntegrationTestSupport {
     // ------------------------------------------------------------------ T2 — SIGMP direct clôt VERIFICATION
 
     @Test
-    @DisplayName("T2 — avis FAV : la transmission SIGMP DIRECTE clôt l'occurrence VERIFICATION prise en charge ; "
-            + "sans prise en charge, aucune occurrence n'est inventée")
-    void transmissionSigmpDirecte_clotLaVerificationOuverte() throws Exception {
+    @DisplayName("T2 — avis FAV : la transmission SIGMP DIRECTE clôt l'étape VERIFICATION, qu'aucun passage "
+            + "de vérification n'avait close — sans quoi tout son temps se reporterait sur la transmission")
+    void transmissionSigmpDirecte_clotLaVerificationEnCours() throws Exception {
         Dossier d = dossierRepository.findById(1).orElseThrow();
         d.setStatut("EN_VERIFICATION");
         d.setIdLocalite("ANT");
@@ -129,25 +129,18 @@ class RecensementTrousIntegrationTest extends CnmIntegrationTestSupport {
         seedPvSigne(700, 1);   // PV SIGNE, avis FAV : pas de boucle FAVR, donc pas de passage de vérification
         String tokenVer = bearer("CTRVER", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER", "ANT");
 
-        mvc.perform(post("/api/dossiers/1/prise-en-charge").header("Authorization", tokenVer)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"previsionHeures\":4}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.etape").value("VERIFICATION"));
-        assertThat(tacheRepository.ouvertes(1, EtapeCircuit.VERIFICATION.name())).hasSize(1);
-
         mvc.perform(post("/api/sigmp-transmissions").header("Authorization", tokenVer)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"idDossier\":1}"))
                 .andExpect(status().isCreated());
 
-        assertThat(tacheRepository.ouvertes(1, EtapeCircuit.VERIFICATION.name())).as("VERIFICATION close").isEmpty();
-        List<TacheDossier> verifications = tacheRepository.findByIdDossierOrderByDatePriseEnChargeAsc(1).stream()
+        List<TacheDossier> verifications = tacheRepository.findParDossier(1).stream()
                 .filter(t -> EtapeCircuit.VERIFICATION.name().equals(t.getEtape())).toList();
-        assertThat(verifications).hasSize(1);
+        assertThat(verifications).as("l'étape est close ici, faute d'autre geste pour le faire").hasSize(1);
         assertThat(verifications.get(0).getDateFin()).isNotNull();
         assertThat(verifications.get(0).getImActeur()).isEqualTo("CTRVER");
         mvc.perform(get("/api/dossiers/1/chronometrage").header("Authorization", tokenVer))
-                .andExpect(jsonPath("$.taches[?(@.etape=='VERIFICATION' && @.enCours==true)]", hasSize(0)))
-                .andExpect(jsonPath("$.taches[?(@.etape=='TRANSMISSION_SIGMP')]", hasSize(1)));
+                .andExpect(jsonPath("$.etapes[?(@.etape=='VERIFICATION' && @.enCours==true)]", hasSize(0)))
+                .andExpect(jsonPath("$.etapes[?(@.etape=='TRANSMISSION_SIGMP')]", hasSize(1)));
     }
 
     // ------------------------------------------------------------------ T3 — justifications à la soumission

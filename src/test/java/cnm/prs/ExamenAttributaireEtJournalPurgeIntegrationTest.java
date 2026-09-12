@@ -76,35 +76,40 @@ class ExamenAttributaireEtJournalPurgeIntegrationTest extends CnmIntegrationTest
         assertThat(apresPresident).hasSize(2);
         mvc.perform(get("/api/dossiers/1/chronometrage").header("Authorization", tokenPresident))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.taches[?(@.etape=='EXAMEN' && @.imActeur=='CTRPRE')]", org.hamcrest.Matchers.hasSize(0)));
+                .andExpect(jsonPath("$.etapes[?(@.etape=='EXAMEN' && @.imActeur=='CTRPRE')]", org.hamcrest.Matchers.hasSize(0)));
     }
 
     @Test
-    @DisplayName("Test attendu n° 2 — aucune tâche EXAMEN instantanée (prise en charge = fin) née d'une transition du "
-            + "Président ; la tâche que l'attributaire a prise en charge est bien celle qui se clôt à sa re-soumission")
-    void tacheExamen_priseEnChargeParLAttributaire_closeParSaResoumission() throws Exception {
+    @DisplayName("Test attendu n° 2 — le RÉEXAMEN est une occurrence à part, et son délai court depuis le "
+            + "RETOUR du projet : le temps du visa n'y est pas recompté")
+    void reexamen_occurrenceDistincte_delaiDepuisLeRetour() throws Exception {
         creerProjet(91);
         soumettre(91, tokenMembre);
         retourner(91, tokenPresident);
-        // Le Membre prend en charge la reprise de son examen : une occurrence OUVERTE, à son nom, prévision réelle.
-        mvc.perform(post("/api/dossiers/1/prise-en-charge").header("Authorization", tokenMembre)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"previsionHeures\":6}"))
-                .andExpect(status().isOk());
-        assertThat(tacheRepository.ouvertes(1, EtapeCircuit.EXAMEN.name())).hasSize(1);
 
-        // ⚠️ 2026-09-08 — le Président ne peut plus re-soumettre à sa place (403). C'est l'attributaire
-        // qui re-soumet : rien d'instantané ne naît, et sa tâche ouverte est celle qui se clôt.
+        // ⚠️ 2026-09-08 — le Président ne peut pas re-soumettre à la place du Membre (403). C'est
+        // l'attributaire qui re-soumet, et lui seul.
         soumissionRefusee(91, tokenPresident);
         soumettre(91, tokenMembre);
+
         List<TacheDossier> taches = tachesExamen();
         assertThat(taches).hasSize(2);
         assertThat(taches).extracting(TacheDossier::getImActeur).containsOnly("CTRMEM");
-        assertThat(taches).allMatch(t -> t.getDateFin() != null, "toutes closes");
-        TacheDossier reprise = taches.stream().filter(t -> !Boolean.TRUE.equals(t.getPrevisionStandard())).findFirst().orElseThrow();
-        assertThat(reprise.getPrevisionHeures()).isEqualTo(6);
-        assertThat(reprise.getDateFin()).isAfterOrEqualTo(reprise.getDatePriseEnCharge());
-        assertThat(taches).noneMatch(t -> "CTRPRE".equals(t.getImActeur())
-                && t.getDateFin() != null && t.getDateFin().equals(t.getDatePriseEnCharge()));
+        assertThat(taches).allMatch(t -> t.getDateFin() != null, "un passage n'existe que clos");
+
+        // ⚠️ 2026-09-12 — le délai du réexamen est mesuré, jamais déclaré : son entrée est la fin du
+        // passage précédent (le VISA que le retour a clos), pas la première soumission. Le front lit
+        // exactement cette borne.
+        String chrono = mvc.perform(get("/api/dossiers/1/chronometrage").header("Authorization", tokenPresident))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        // Le dernier VISA de la liste est celui qui est EN COURS (le projet vient d'être re-soumis) : il
+        // n'a pas de fin. C'est la fin du visa ACHEVÉ — le retour — qui a ouvert le réexamen.
+        List<String> finsVisa = JsonPath.<List<String>>read(chrono, "$.etapes[?(@.etape=='VISA')].fin")
+                .stream().filter(java.util.Objects::nonNull).toList();
+        List<String> entreesExamen = JsonPath.read(chrono, "$.etapes[?(@.etape=='EXAMEN')].entree");
+        assertThat(entreesExamen).hasSize(2);
+        assertThat(entreesExamen.get(1)).as("le réexamen entre à la fin du visa qui l'a renvoyé")
+                .isEqualTo(finsVisa.get(finsVisa.size() - 1));
     }
 
     // ------------------------------------------------------------------ constat 2 : journal après purge
@@ -173,7 +178,7 @@ class ExamenAttributaireEtJournalPurgeIntegrationTest extends CnmIntegrationTest
     }
 
     private List<TacheDossier> tachesExamen() {
-        return tacheRepository.findByIdDossierOrderByDatePriseEnChargeAsc(1).stream()
+        return tacheRepository.findParDossier(1).stream()
                 .filter(t -> EtapeCircuit.EXAMEN.name().equals(t.getEtape())).toList();
     }
 

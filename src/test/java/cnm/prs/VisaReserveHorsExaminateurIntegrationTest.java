@@ -140,40 +140,4 @@ class VisaReserveHorsExaminateurIntegrationTest extends CnmIntegrationTestSuppor
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.statutPv").value("PROJET_ACCEPTE"));
     }
-
-    // ------------------------------------------------------------------ la prise en charge suit
-
-    @Test
-    @DisplayName("Chronométrage — l'examinateur ne PREND PAS EN CHARGE le visa non plus : sans cette "
-            + "réserve, il ouvrirait une tâche qu'il ne peut achever et verrouillerait le dispatcheur")
-    void priseEnChargeDuVisa_refuseeALExaminateur_ouverteAuDispatcheur() throws Exception {
-        decor(974, "CTRPRE", "CTRCC1");
-        projetSoumisParLExaminateur(974, tokenCc, "CTRCC1");
-
-        mvc.perform(post("/api/dossiers/974/prise-en-charge").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"previsionHeures\":4}"))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.message", containsString("dispatcheur")));
-
-        // Le dispatcheur, lui, ouvre bien l'étape VISA.
-        mvc.perform(post("/api/dossiers/974/prise-en-charge").header("Authorization", tokenPresident)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"previsionHeures\":4}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.etape").value("VISA"))
-                .andExpect(jsonPath("$.imActeur").value("CTRPRE"));
-    }
-
-    @Test
-    @DisplayName("EXCEPTION au chronométrage — celui qui s'est dispatché le dossier prend en charge son "
-            + "propre visa : la réserve vise la séparation des rôles, pas le cumul assumé")
-    void priseEnChargeDuVisa_ouverteAuCumulant() throws Exception {
-        decor(975, "CTRCC1", "CTRCC1");
-        projetSoumisParLExaminateur(975, tokenCc, "CTRCC1");
-
-        mvc.perform(post("/api/dossiers/975/prise-en-charge").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"previsionHeures\":4}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.etape").value("VISA"))
-                .andExpect(jsonPath("$.imActeur").value("CTRCC1"));
-    }
 }

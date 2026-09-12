@@ -5,8 +5,12 @@ package cnm.prs.enums;
  * chronométrées du circuit, dans leur ordre de parcours.
  *
  * <p>Chaque étape a un <strong>porteur</strong> (profil), un <strong>statut d'éligibilité</strong> et un
- * <strong>geste métier de clôture qui existe déjà</strong> : la fin d'une tâche n'est jamais saisie, elle
+ * <strong>geste métier de clôture qui existe déjà</strong> : la fin d'une étape n'est jamais saisie, elle
  * est déduite de l'acte que le porteur pose de toute façon.</p>
+ *
+ * <p>⚠️ <strong>2026-09-12 — son ENTRÉE non plus ne se saisit pas</strong> : le geste de « prise en
+ * charge » a été supprimé, et l'entrée dans une étape est la fin de celle qui précède. Un porteur n'a
+ * plus rien à déclarer avant d'agir ; son délai se mesure entre deux transitions déjà horodatées.</p>
  *
  * <p><strong>Pourquoi la vérification et la transmission SIGMP sont DEUX étapes</strong> (la spec n'en
  * proposait qu'une). Quand les observations ne sont pas levées, le dossier passe à
@@ -34,26 +38,25 @@ public enum EtapeCircuit {
     VISA(ProfilUtilisateur.CHEF_COMMISSION, true),
 
     /**
-     * Co-signature du PV. ⚠️ <strong>Plusieurs porteurs</strong> depuis la co-signature élargie
-     * (2026-09-04) : le visa peut désigner un Membre ET un Chef de commission, qui signent chacun leur
-     * part, dans l'ordre qu'ils veulent. C'est la seule étape du circuit où deux tâches coexistent.
+     * Co-signature du PV. ⚠️ Depuis la co-signature élargie (2026-09-04), le visa peut désigner un Membre
+     * ET un Chef de commission : chacun signe SA part, dans l'ordre qu'il veut, et chaque signature
+     * enregistre son propre passage — c'est la seule étape du circuit à en produire plusieurs de front.
      */
-    COSIGNATURE(ProfilUtilisateur.MEMBRE, true, true),
+    COSIGNATURE(ProfilUtilisateur.MEMBRE, true),
 
-    /** Vérification des documents témoins. Rejouable (boucle FAVR, resoumissions après rectification). */
     /**
-     * ⚠️ Règle pilote (2026-09-07) — « aucune action sans prise en charge » étendue à la <strong>PRMP</strong>.
-     * Étape ouverte tant que le dossier attend la rectification ({@code EN_ATTENTE_DECISION_PRMP}), portée
-     * par la <strong>PRMP propriétaire</strong> : elle prend en charge avant de rectifier et de resoumettre,
-     * comme un contrôleur avant d'agir.
+     * ⚠️ Le <strong>délai propre à la PRMP</strong> : l'étape ouverte tant que le dossier attend sa
+     * rectification ({@code EN_ATTENTE_DECISION_PRMP}), de la vérification qui a maintenu les
+     * observations jusqu'à la resoumission.
      *
      * <p><strong>Hors compteur global</strong> ({@code dansCompteurGlobal = false}) : ce temps est
      * <em>suspensif</em>, déjà mesuré à part en attente PRMP ({@code attentePrmpHeuresOuvrees}) — il ne
-     * s'impute pas à la Commission, et la date prévisionnelle ne le somme pas. La prise en charge sert
-     * ici de <strong>geste</strong> (début d'action, verrou des deux actions de la PRMP) et de mesure du
-     * délai propre à la PRMP.</p>
+     * s'impute pas à la Commission, et la date prévisionnelle ne le somme pas. L'étape existe pour que ce
+     * délai soit <em>visible</em>, à côté de ceux de la CNM et dans la même unité.</p>
      */
     RECTIFICATION_PRMP(ProfilUtilisateur.PRMP, false),
+
+    /** Vérification des documents témoins. Rejouable (boucle FAVR, resoumissions après rectification). */
     VERIFICATION(ProfilUtilisateur.VERIFICATEUR, true),
 
     /** Transmission du sens de la décision à SIGMP — dernière étape du compteur global. */
@@ -67,29 +70,10 @@ public enum EtapeCircuit {
 
     private final ProfilUtilisateur porteur;
     private final boolean dansCompteurGlobal;
-    private final boolean plusieursPorteurs;
 
     EtapeCircuit(ProfilUtilisateur porteur, boolean dansCompteurGlobal) {
-        this(porteur, dansCompteurGlobal, false);
-    }
-
-    EtapeCircuit(ProfilUtilisateur porteur, boolean dansCompteurGlobal, boolean plusieursPorteurs) {
         this.porteur = porteur;
         this.dansCompteurGlobal = dansCompteurGlobal;
-        this.plusieursPorteurs = plusieursPorteurs;
-    }
-
-    /**
-     * ⚠️ 2026-09-04 — vrai si l'étape admet <strong>plusieurs tâches ouvertes en parallèle</strong>, une
-     * par porteur.
-     *
-     * <p>Partout ailleurs, une étape est tenue par une personne à la fois : deux tâches ouvertes y
-     * signifieraient que deux acteurs se croient responsables du même travail. La co-signature fait
-     * exception par nature — les désignés signent chacun leur part, sans ordre imposé. Sans cette
-     * distinction, le premier preneur verrouillerait l'autre (constat de recette du 04/09).</p>
-     */
-    public boolean plusieursPorteurs() {
-        return plusieursPorteurs;
     }
 
     /**

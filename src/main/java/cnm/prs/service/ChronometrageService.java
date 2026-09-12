@@ -5,28 +5,23 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import cnm.prs.dto.ChronometrageDto;
-import cnm.prs.dto.TacheDossierDto;
+import cnm.prs.dto.PassageEtapeDto;
 import cnm.prs.entity.Controleur;
 import cnm.prs.entity.Dossier;
 import cnm.prs.entity.SuspensionDossier;
 import cnm.prs.entity.TacheDossier;
 import cnm.prs.enums.EtapeCircuit;
-import cnm.prs.enums.NiveauNavette;
 import cnm.prs.enums.ProfilUtilisateur;
 import cnm.prs.enums.StatutDossier;
 import cnm.prs.enums.StatutPv;
-import cnm.prs.exception.BusinessRuleException;
 import cnm.prs.exception.ResourceNotFoundException;
 import cnm.prs.repository.ControleurRepository;
 import cnm.prs.repository.DossierRepository;
@@ -34,20 +29,47 @@ import cnm.prs.repository.PvExamenRepository;
 import cnm.prs.repository.SuspensionDossierRepository;
 import cnm.prs.repository.TacheDossierRepository;
 import cnm.prs.security.CurrentUser;
-import cnm.prs.security.PermissionService;
-import cnm.prs.security.Visibilite;
 
 /**
- * ⚠️ <strong>Chronométrage et prévision des délais</strong> (règle du pilote, 2026-09-01).
+ * ⚠️ <strong>Chronométrage et prévision des délais</strong> (règle du pilote, 2026-09-01 ;
+ * <strong>refonte du 2026-09-12</strong>).
  *
- * <p>Trois responsabilités : <strong>ouvrir</strong> une tâche (prise en charge explicite, arbitrage ①),
- * la <strong>clore</strong> depuis le geste métier existant, et <strong>calculer</strong> la date
- * prévisionnelle de fin que la PRMP consulte.</p>
+ * <h2>Le délai d'une étape ne se déclare plus, il se mesure</h2>
  *
- * <p><strong>Le chronométrage n'empêche jamais le métier.</strong> C'est la règle qui gouverne tout ce
- * service : la clôture est <em>tolérante</em> (un geste posé sans prise en charge préalable crée
- * l'occurrence avec une durée nulle plutôt que d'échouer), et aucune exception levée ici ne fait tomber
- * une transaction métier. Un chronomètre qui bloque un dossier serait pire que pas de chronomètre.</p>
+ * <p>Jusqu'ici, un porteur <em>prenait en charge</em> son étape — un geste explicite qui ouvrait la
+ * tâche, en horodatait le début et portait sa prévision — et aucune action du circuit n'était possible
+ * sans lui. La demande du pilote (2026-09-12) supprime tout cet étage : <strong>réception, dispatch,
+ * examen, visa, signature, vérification et archivage s'exécutent directement</strong>, et le délai de
+ * chaque étape est <strong>calculé</strong> :</p>
+ *
+ * <pre>durée(étape) = fin de l'étape − entrée dans l'étape, en heures ouvrées</pre>
+ *
+ * <p>Les deux bornes existaient déjà. La <strong>fin</strong> est l'horodatage du geste métier qui
+ * achève l'étape — celui-là même qui datait déjà la frise ({@link #datesEtapes}) et le journal. L'
+ * <strong>entrée</strong> est <em>dérivée</em> : c'est la fin du passage précédent, car un dossier qui
+ * sort d'une étape entre dans la suivante à cet instant précis. Rien ne se saisit, rien ne se stocke de
+ * plus — {@code t_tache_dossier} ne porte plus qu'une fin par passage.</p>
+ *
+ * <h2>Pourquoi dériver plutôt que stocker une seconde borne</h2>
+ *
+ * <p>Une date d'entrée écrite à côté de la fin du passage précédent serait une <strong>copie</strong> :
+ * deux colonnes censées porter le même instant, donc deux occasions de diverger, et un écart qui ne se
+ * verrait qu'en recette. En la dérivant, la chaîne des passages est par construction sans trou ni
+ * recouvrement — la fin de l'un est l'entrée de l'autre.</p>
+ *
+ * <p><strong>Trois bornes peuvent faire entrer dans une étape</strong>, et l'on retient la plus récente
+ * qui précède la fin : la fin du passage précédent, le <strong>dépôt</strong> du dossier (pour la toute
+ * première étape, et après un retrait suivi d'une nouvelle soumission), et la <strong>sortie d'une
+ * attente PRMP</strong>. Cette dernière est ce qui empêche le temps de la PRMP de s'imputer à la
+ * Commission : un examen repris après une lettre de renvoi commence quand le dossier revient, pas quand
+ * il était parti. Seule {@code RECTIFICATION_PRMP} y échappe — cette étape <em>est</em> l'attente, sa
+ * sortie est sa propre fin.</p>
+ *
+ * <h2>Ce qui n'a pas changé</h2>
+ *
+ * <p><strong>Le chronométrage n'empêche jamais le métier</strong> : aucune exception levée ici ne fait
+ * tomber une transaction métier, une anomalie est journalisée et le geste passe. C'était vrai quand le
+ * chronomètre pouvait bloquer un dossier ; ça l'est d'autant plus maintenant qu'il ne fait qu'observer.</p>
  *
  * <p><strong>Deux sources, pour deux usages.</strong> Le drapeau {@code attentePrmp} exposé à la PRMP est
  * dérivé du <strong>statut courant</strong> du dossier ; le cumul des attentes du compteur net vient de
@@ -83,33 +105,21 @@ public class ChronometrageService {
     private final DossierRepository dossierRepository;
     private final PvExamenRepository pvExamenRepository;
     private final ControleurRepository controleurRepository;
-    private final PermissionService permissionService;
-    /** ⚠️ 2026-09-04 — l'attributaire courant de l'examen : la seule étape nominativement attribuée. */
+    /** L'attributaire courant de l'examen : la seule étape nominativement attribuée. */
     private final cnm.prs.repository.DispatchRepository dispatchRepository;
-    /** ⚠️ 2026-09-04 — source unique du circuit : la garde du VISA lit le meme discriminant que la navette. */
-    private final CircuitDossierService circuitService;
-    private final ControleurDirectory controleurDirectory;
-    /** ⚠️ 2026-09-07 — l'étape de la PRMP se garde par la propriété du dossier et un mandat actif. */
-    private final DossierIntegriteService dossierIntegrite;
 
     public ChronometrageService(TacheDossierRepository tacheRepository,
             SuspensionDossierRepository suspensionRepository, DelaiStandardService delaiStandardService,
             DossierRepository dossierRepository, PvExamenRepository pvExamenRepository,
-            ControleurRepository controleurRepository, PermissionService permissionService,
-            cnm.prs.repository.DispatchRepository dispatchRepository,
-            CircuitDossierService circuitService, ControleurDirectory controleurDirectory,
-            DossierIntegriteService dossierIntegrite) {
-        this.dossierIntegrite = dossierIntegrite;
+            ControleurRepository controleurRepository,
+            cnm.prs.repository.DispatchRepository dispatchRepository) {
         this.tacheRepository = tacheRepository;
         this.suspensionRepository = suspensionRepository;
         this.delaiStandardService = delaiStandardService;
         this.dossierRepository = dossierRepository;
         this.pvExamenRepository = pvExamenRepository;
         this.controleurRepository = controleurRepository;
-        this.permissionService = permissionService;
         this.dispatchRepository = dispatchRepository;
-        this.circuitService = circuitService;
-        this.controleurDirectory = controleurDirectory;
     }
 
     // ------------------------------------------------------------------ étape courante
@@ -142,9 +152,8 @@ public class ChronometrageService {
         if (StatutDossier.EXAMINE.name().equals(statut)) {
             return etapeSelonPv(statutPv.get());
         }
-        // ⚠️ Règle pilote (2026-09-07) — pendant l'attente de rectification, l'étape ouverte est celle de
-        // la PRMP : c'est elle qui doit prendre en charge avant de rectifier puis de resoumettre. Le
-        // dossier n'est pas « sans étape » parce qu'aucun contrôleur n'y travaille.
+        // Pendant l'attente de rectification, l'étape ouverte est celle de la PRMP : le dossier n'est pas
+        // « sans étape » parce qu'aucun contrôleur n'y travaille — et c'est ce temps-là qu'on lui mesure.
         if (StatutDossier.EN_ATTENTE_DECISION_PRMP.name().equals(statut)) {
             return EtapeCircuit.RECTIFICATION_PRMP;
         }
@@ -183,460 +192,152 @@ public class ChronometrageService {
                 .filter(java.util.Objects::nonNull).findFirst().orElse(null);
     }
 
-    // ------------------------------------------------------------------ prise en charge
+    // ------------------------------------------------------------------ fin d'étape (gestes métier)
 
     /**
-     * Prise en charge <strong>explicite</strong> de l'étape courante (arbitrage ①), avec la prévision du
-     * porteur. Rejouée sur une tâche encore ouverte, elle <strong>corrige</strong> la prévision au lieu
-     * de créer une occurrence : corriger son estimation n'est pas recommencer sa tâche.
+     * Enregistre la <strong>fin</strong> d'un passage par une étape — appelée depuis le <strong>geste
+     * métier</strong> qui l'achève, au nom de l'utilisateur courant.
      *
-     * <p>⚠️ <strong>Le replay ne vaut que pour le MÊME acteur</strong> (constat de recette du
-     * 2026-09-04). Il ne vérifiait pas qui appelait : un second acteur recevait 200 et
-     * <em>corrigeait la prévision du premier</em>. Vécu en recette — le CC avait pris l'examen, et
-     * l'assignataire se retrouvait sans recours : son propre appel « réussissait » en modifiant la
-     * tâche du CC. Un acteur différent reçoit désormais <strong>409 nominal</strong> : il faut savoir
-     * à qui parler pour débloquer.</p>
+     * <p>Depuis la refonte du 2026-09-12, il n'y a plus de tâche ouverte à retrouver : chaque appel écrit
+     * une occurrence de rang suivant, déjà close. L'entrée — donc la durée — se dérive de la chaîne à la
+     * lecture.</p>
      *
-     * <p><strong>Sauf pour les étapes à plusieurs porteurs</strong> ({@link EtapeCircuit#plusieursPorteurs()},
-     * c'est-à-dire la co-signature) : le CC désigné et le Membre désigné y tiennent chacun leur tâche,
-     * sans ordre imposé. Y appliquer le 409 ferait verrouiller le second par le premier — l'autre
-     * moitié du même constat.</p>
-     *
-     * @throws BusinessRuleException si aucune étape n'est ouverte, ou si un AUTRE acteur tient déjà
-     *         celle-ci (409)
-     */
-    public TacheDossierDto prendreEnCharge(Integer idDossier, Integer previsionHeures) {
-        Dossier dossier = dossierRepository.findById(idDossier)
-                .orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable : " + idDossier));
-        EtapeCircuit etape = etapeCourante(dossier);
-        if (etape == null) {
-            throw new BusinessRuleException("Aucune étape n'est en cours sur ce dossier (statut « "
-                    + dossier.getStatut() + " ») : rien à prendre en charge.");
-        }
-        exigerPorteurEligible(dossier, etape);
-        exigerActeurAttendu(idDossier, etape);
-        exigerNonExaminateurAuVisa(idDossier, etape);
-
-        // ⚠️ Demande pilote (2026-09-08) — la prévision est FACULTATIVE : « Prendre en charge » ne
-        // demande plus rien, il démarre le chronomètre. Absente, on prend le délai standard de l'étape,
-        // et le drapeau dit qu'elle n'a PAS été estimée — c'est toute la différence entre une prévision
-        // choisie et une prévision par défaut, et elle doit rester lisible dans le tableau des passages.
-        boolean standard = previsionHeures == null;
-        int prevision = standard ? delaiStandardService.delai(etape) : previsionHeures;
-
-        String moi = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
-        List<TacheDossier> ouvertes = tacheRepository.ouvertes(idDossier, etape.name());
-        TacheDossier mienne = ouvertes.stream()
-                .filter(t -> moi != null && moi.equals(t.getImActeur())).findFirst().orElse(null);
-        if (mienne != null) {
-            // Rejeu idempotent : sans prévision, on ré-applique le standard ; avec, on corrige la sienne.
-            mienne.setPrevisionHeures(prevision);
-            mienne.setPrevisionStandard(standard);
-            TacheDossier maj = tacheRepository.save(mienne);
-            return TacheDossierDto.de(maj, nom(maj.getImActeur()));
-        }
-        if (!ouvertes.isEmpty() && !etape.plusieursPorteurs()) {
-            String tenant = ouvertes.get(0).getImActeur();
-            throw new BusinessRuleException("Étape déjà prise en charge par " + nomOuMatricule(tenant)
-                    + " : une étape est tenue par une personne à la fois. Faites-la lui clore, ou "
-                    + "demandez-lui de vous la transmettre.");
-        }
-        TacheDossier tache = tacheRepository.save(
-                nouvelle(idDossier, etape, LocalDateTime.now(), prevision, standard));
-        return TacheDossierDto.de(tache, nom(tache.getImActeur()));
-    }
-
-
-    /**
-     * Garde de la prise en charge : <strong>profil effectif</strong> (délégations et intérim résolus par
-     * la garde centrale) et <strong>périmètre</strong> du dossier.
-     *
-     * <p>Volontairement plus légère que le geste métier de l'étape, qui conserve sa garde intacte : une
-     * prise en charge indue n'altère aucune donnée métier, elle ne fait que démarrer un chronomètre.
-     * Rejouer ici chacune des huit gardes métier aurait multiplié les endroits où vivent les règles
-     * d'habilitation, pour un gain de sécurité nul.</p>
-     */
-    private void exigerPorteurEligible(Dossier dossier, EtapeCircuit etape) {
-        // ⚠️ 2026-09-07 — l'étape de la PRMP se garde par la PROPRIÉTÉ du dossier, pas par la localité :
-        // une PRMP agit sur SES dossiers (et il lui faut un mandat actif, comme pour tout geste de PRMP).
-        // La délégation ascendante entre contrôleurs ne s'y applique pas — la rectification n'est pas
-        // délégable à la Commission qui l'a demandée.
-        if (etape.porteur() == ProfilUtilisateur.PRMP) {
-            if (!Visibilite.estPrmp()) {
-                throw new AccessDeniedException(
-                        "La rectification de ce dossier revient à la PRMP : elle seule la prend en charge.");
-            }
-            dossierIntegrite.exigerOperateurHabilite(dossier);
-            return;
-        }
-        if (!permissionService.peutExercer(etape.porteur())) {
-            throw new AccessDeniedException(
-                    "Cette étape (" + etape.name() + ") revient au profil " + etape.porteur().name() + ".");
-        }
-        String localiteActeur = CurrentUser.localite().orElse(null);
-        if (!CurrentUser.voitToutesLocalites() && localiteActeur != null
-                && dossier.getIdLocalite() != null && !localiteActeur.equals(dossier.getIdLocalite())) {
-            throw new AccessDeniedException("Ce dossier n'est pas de votre localité.");
-        }
-    }
-
-    /**
-     * ⚠️ <strong>Les acteurs que la prise en charge accepte</strong> pour l'étape courante (spec pilote
-     * du 2026-09-04) — liste FERMÉE de matricules, ou {@code null} quand elle ne peut pas l'être.
-     *
-     * <p><strong>Pourquoi une liste plutôt qu'un booléen.</strong> La même valeur sert deux fois : la
-     * garde s'en sert pour refuser, le DTO du chronométrage l'expose pour que le front masque le geste
-     * à quiconque n'y figure pas. Les dériver séparément aurait permis de masquer un bouton que le
-     * serveur accepte, ou d'en offrir un qu'il refuse — l'écart ne se voyant qu'en recette.</p>
-     *
-     * <p><strong>{@code null} n'est pas « personne », c'est « pas de liste close ».</strong> Sur une
-     * navette simple, le visa admet le dispatcheur <em>et</em> tout P/CC du périmètre par intérim :
-     * l'ensemble n'est pas énumérable. On ne garde alors rien de plus que le profil et la localité, et
-     * le front replie sur la règle du porteur nominal. Une liste vide aurait dit « personne » et
-     * bloqué tout le monde.</p>
-     */
-    @Transactional(readOnly = true)
-    public List<String> acteursAttendus(Integer idDossier, EtapeCircuit etape) {
-        if (idDossier == null || etape == null) {
-            return null;
-        }
-        return switch (etape) {
-            case EXAMEN -> unSeul(dispatchRepository.findImCtrlMembreByDossier(idDossier)
-                    .filter(s -> !s.isBlank()).orElse(null));
-            case VISA -> acteursDuVisa(idDossier);
-            case COSIGNATURE -> acteursDeLaCoSignature(idDossier);
-            // ⚠️ 2026-09-07 — la rectification revient à la PRMP PROPRIÉTAIRE du dossier, et à elle seule.
-            case RECTIFICATION_PRMP -> unSeul(dossierRepository.findById(idDossier)
-                    .map(Dossier::getIdPrmp).filter(s -> s != null && !s.isBlank()).orElse(null));
-            // Les autres étapes n'ont pas de titulaire nominatif : profil et localité suffisent.
-            default -> null;
-        };
-    }
-
-    /**
-     * Acteurs du VISA — l'étage de la navette décide.
-     *
-     * <p>Deux niveaux : au niveau {@code CC}, le seul CC dispatcheur ; au niveau {@code PRESIDENT},
-     * les Présidents. Navette simple : {@code null}, l'intérim ouvrant la porte à tout P/CC du
-     * périmètre (cf. {@code PvExamenService#viser}) — c'est le cas non énumérable.</p>
-     *
-     * <p>Un PV en navette <strong>sans niveau</strong> — soumis avant la livraison du 2026-09-04 —
-     * retombe aussi sur {@code null} : on ne durcit pas rétroactivement un dossier en cours.</p>
-     */
-    /**
-     * ⚠️ <strong>L'examinateur ne prend pas en charge le visa de son propre examen</strong> (arbitrage du
-     * pilote, 2026-09-08) — garde <strong>négative</strong>, sur une navette simple.
-     *
-     * <p><strong>Pourquoi elle ne passe pas par {@code acteursAttendus}.</strong> Cette liste est
-     * <em>close</em> par nature : y mettre le seul dispatcheur masquerait le geste au suppléant par
-     * intérim, qui reste légitime. L'ensemble admis — le dispatcheur, plus tout P/CC du périmètre par
-     * intérim, moins l'examinateur — n'est pas énumérable ; la liste reste donc {@code null} et la
-     * réserve s'exprime en refus. C'est la seule exclusion du chronométrage, et elle est ici plutôt que
-     * dans la liste parce qu'une soustraction ne se dit pas avec une énumération.</p>
-     *
-     * <p><strong>Pourquoi elle vaut la peine.</strong> Sans elle, l'examinateur pourrait ouvrir la tâche
-     * de visa — un geste qu'il ne pourra jamais achever (403 au visa) — et <strong>verrouiller l'étape
-     * contre le vrai dispatcheur</strong>, que le 409 nominal du 2026-09-04 renverrait alors vers lui.
-     * Exactement le blocage que ce 409 avait pour but d'éviter.</p>
-     */
-    private void exigerNonExaminateurAuVisa(Integer idDossier, EtapeCircuit etape) {
-        if (etape != EtapeCircuit.VISA) {
-            return;
-        }
-        CircuitDossierService.Circuit circuit = circuitService.parDossier(idDossier);
-        if (circuitService.deuxNiveaux(circuit)) {
-            return;   // deux niveaux : les règles d'étage tiennent déjà l'acteur de chaque visa
-        }
-        String moi = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
-        if (moi == null || !moi.equals(circuit.attributaire())) {
-            return;
-        }
-        if (moi.equals(circuit.dispatcheur())) {
-            return;   // dispatché à lui-même : il cumule légitimement examen, soumission et visa
-        }
-        throw new AccessDeniedException("Le visa de ce dossier revient à son dispatcheur ("
-                + nomOuMatricule(circuit.dispatcheur()) + ") : vous l'avez examiné, et l'examinateur ne "
-                + "vise pas son propre examen.");
-    }
-
-    private List<String> acteursDuVisa(Integer idDossier) {
-        CircuitDossierService.Circuit circuit = circuitService.parDossier(idDossier);
-        if (!circuitService.deuxNiveaux(circuit)) {
-            return null;
-        }
-        String niveau = pvExamenRepository.niveauxNavetteParDossier(idDossier).stream()
-                .filter(java.util.Objects::nonNull).findFirst().orElse(null);
-        if (NiveauNavette.CC.name().equals(niveau)) {
-            return unSeul(circuit.dispatcheur());
-        }
-        if (NiveauNavette.PRESIDENT.name().equals(niveau)) {
-            List<String> presidents = controleurDirectory.presidents().stream()
-                    .map(Controleur::getImControleur).filter(java.util.Objects::nonNull).toList();
-            return presidents.isEmpty() ? null : presidents;
-        }
-        return null;
-    }
-
-    /**
-     * Acteurs de la CO-SIGNATURE — les <strong>désignés</strong> du visa, et eux seuls : chacun ouvre
-     * SA tâche (l'étape admet plusieurs porteurs depuis le 2026-09-04). Aucun désigné lisible → pas de
-     * liste close, donc pas de garde nominative.
-     */
-    private List<String> acteursDeLaCoSignature(Integer idDossier) {
-        List<String> designes = pvExamenRepository.coSignatairesParDossier(idDossier).stream()
-                .flatMap(r -> java.util.stream.Stream.of((String) r[0], (String) r[1]))
-                .filter(java.util.Objects::nonNull).filter(s -> !s.isBlank()).distinct().toList();
-        return designes.isEmpty() ? null : designes;
-    }
-
-    private List<String> unSeul(String im) {
-        return im == null || im.isBlank() ? null : List.of(im);
-    }
-
-    /**
-     * ⚠️ <strong>Garde nominative de la prise en charge</strong> (2026-09-04) — 403 quand l'étape a des
-     * titulaires identifiables et que l'appelant n'en est pas.
-     *
-     * <p>Elle remplace la garde d'EXAMEN posée le matin même, dont elle est la généralisation. Le
-     * constat qui l'impose (dossier 100286) : le CC, ayant transmis le PV au Président, a re-cliqué
-     * « Prendre en charge » — le serveur a ouvert à son nom l'occurrence VISA qui revenait au
-     * Président, qui s'est retrouvé verrouillé sans recours dans l'UI. La mécanique par niveaux du
-     * 2026-09-04 fermait bien l'occurrence du CC ; rien ne gardait la <strong>création</strong> de la
-     * suivante.</p>
-     *
-     * <p>403 et non 409 : ce n'est pas l'étape qui n'est pas prête, c'est l'appelant qui n'est pas
-     * celui qu'on attend.</p>
-     */
-    private void exigerActeurAttendu(Integer idDossier, EtapeCircuit etape) {
-        List<String> attendus = acteursAttendus(idDossier, etape);
-        if (attendus == null || attendus.isEmpty()) {
-            return;   // pas de liste close : profil et localité restent les seules gardes
-        }
-        String moi = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
-        if (moi != null && attendus.contains(moi)) {
-            return;
-        }
-        String noms = attendus.stream().map(this::nomOuMatricule).collect(Collectors.joining(", "));
-        throw new AccessDeniedException(switch (etape) {
-            case EXAMEN -> "L'examen de ce dossier est attribué à " + noms
-                    + " : lui seul peut le prendre en charge, même par délégation.";
-            case VISA -> "Le visa de ce dossier revient à " + noms
-                    + " : sur un dossier à deux niveaux, chaque étage a son acteur et sa tâche.";
-            case COSIGNATURE -> "La co-signature de ce PV revient aux désignés du visa (" + noms
-                    + ") : chacun ouvre et clôt SA part.";
-            case RECTIFICATION_PRMP -> "La rectification de ce dossier revient à sa PRMP (" + noms
-                    + ") : elle seule la prend en charge, puis resoumet.";
-            default -> "Cette étape revient à " + noms + ".";
-        });
-    }
-
-    // ------------------------------------------------------------------ clôture (gestes métier)
-
-    /**
-     * Clôt la tâche ouverte d'une étape — appelée depuis le <strong>geste métier</strong> de clôture.
-     *
-     * <p><strong>Tolérante par construction</strong> : sans prise en charge préalable, l'occurrence est
-     * créée avec {@code priseEnCharge = fin} (durée nulle) et la prévision <em>standard</em> du
-     * référentiel. Ne lève jamais : une anomalie de chronométrage est journalisée, elle ne fait pas
-     * échouer la transaction métier qui l'appelle.</p>
+     * <p>Ne lève jamais : une anomalie de chronométrage est journalisée, elle ne fait pas échouer la
+     * transaction métier qui l'appelle.</p>
      */
     public void cloturer(Integer idDossier, EtapeCircuit etape) {
-        if (idDossier == null || etape == null) {
-            return;
-        }
-        try {
-            LocalDateTime maintenant = LocalDateTime.now();
-            TacheDossier tache = tacheRepository
-                    .findFirstByIdDossierAndEtapeAndDateFinIsNull(idDossier, etape.name())
-                    .orElseGet(() -> nouvelle(idDossier, etape, maintenant,
-                            delaiStandardService.delai(etape), true));
-            tache.setDateFin(maintenant);
-            tacheRepository.save(tache);
-        } catch (RuntimeException ex) {
-            LOG.warn("[CHRONO] cloture impossible dossier={} etape={} : {}", idDossier, etape, ex.toString());
-        }
+        cloturerPourActeur(idDossier, etape, CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null));
     }
 
     /**
-     * ⚠️ <strong>Clôt la tâche d'UN acteur donné</strong> (2026-09-04) — variante nécessaire aux étapes
-     * à plusieurs porteurs, où « la » tâche ouverte n'existe pas : la co-signature en compte une par
-     * désigné, et chaque signature ne doit clore que la sienne.
+     * Même enregistrement, l'<strong>acteur</strong> étant imposé par l'appelant — nécessaire partout où
+     * celui qui pose le geste n'est pas celui à qui l'étape revient : la co-signature (chaque désigné
+     * signe SA part), l'examen soumis par délégation, l'examen abandonné à la réattribution.
      *
-     * <p>Sans elle, la première signature fermait la tâche que {@code findFirst} rendait — souvent
-     * celle de l'autre —, et le PV se terminait avec une tâche ouverte au nom de quelqu'un qui avait
-     * pourtant signé. Même tolérance que {@link #cloturer} : sans prise en charge préalable, une
-     * occurrence est créée sur l'acteur puis close aussitôt.</p>
+     * <p>Le profil suit l'acteur : imposer un acteur tiers sans imposer son profil aurait attribué au
+     * porteur réel le rôle sous lequel un <em>autre</em> a cliqué.</p>
      */
-    /**
-     * ⚠️ Signalement pilote (2026-09-07, dossier 00001) — clôture de l'étape EXAMEN au nom de
-     * l'<strong>attributaire</strong> du dispatch, jamais du déclencheur de la transition.
-     *
-     * <p>Le constat : après un retour de navette, le Président a re-soumis le projet de PV pour le Membre
-     * (délégation Président → Membre). {@link #cloturer} ne trouvant aucune tâche EXAMEN ouverte, elle en
-     * créait une <em>instantanée</em> (prise en charge = fin, prévision standard) au nom de l'appelant —
-     * {@code PRES001} — alors qu'un examen appartient à l'attributaire (même principe que la garde
-     * d'acteur du VISA et de la co-signature, {@code 1a92f5a}).</p>
-     *
-     * <p>La règle : on clôt la tâche EXAMEN ouverte de l'attributaire (à défaut, la première ouverte) ;
-     * s'il n'y en a aucune, l'occurrence instantanée n'est créée que si l'appelant <strong>est</strong>
-     * l'attributaire (le Membre qui soumet sans avoir pris en charge — tolérance historique). Un tiers qui
-     * clôt l'étape à sa place ne laisse <strong>aucune</strong> tâche : le chronométrage ne prête pas
-     * l'examen à qui ne l'a pas fait. Sans dispatch connu, comportement de {@link #cloturer}.</p>
-     */
-    public void cloturerExamen(Integer idDossier) {
-        if (idDossier == null) {
-            return;
-        }
-        try {
-            String attributaire = dispatchRepository.findImCtrlMembreByDossier(idDossier)
-                    .filter(s -> s != null && !s.isBlank()).orElse(null);
-            if (attributaire == null) {
-                cloturer(idDossier, EtapeCircuit.EXAMEN);
-                return;
-            }
-            LocalDateTime maintenant = LocalDateTime.now();
-            List<TacheDossier> ouvertes = tacheRepository.ouvertes(idDossier, EtapeCircuit.EXAMEN.name());
-            TacheDossier tache = ouvertes.stream()
-                    .filter(t -> attributaire.equals(t.getImActeur())).findFirst()
-                    .orElse(ouvertes.isEmpty() ? null : ouvertes.get(0));
-            if (tache == null) {
-                String moi = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
-                if (!attributaire.equals(moi)) {
-                    LOG.info("[CHRONO] EXAMEN clos par {} sans tache ouverte : aucune occurrence creee, "
-                            + "l'examen du dossier {} appartient a {}", moi, idDossier, attributaire);
-                    return;
-                }
-                tache = nouvelle(idDossier, EtapeCircuit.EXAMEN, maintenant,
-                        delaiStandardService.delai(EtapeCircuit.EXAMEN), true);
-            }
-            tache.setDateFin(maintenant);
-            tacheRepository.save(tache);
-        } catch (RuntimeException ex) {
-            LOG.warn("[CHRONO] cloture EXAMEN impossible dossier={} : {}", idDossier, ex.toString());
-        }
-    }
-
-
-    /**
-     * ⚠️ Recensement des trous (2026-09-07, T2) — clôt l'occurrence <strong>ouverte</strong> d'une étape,
-     * et seulement elle : aucune occurrence instantanée n'est créée s'il n'y en a pas. Sert la transmission
-     * SIGMP <em>directe</em> (avis FAV) : le Vérificateur a pris le dossier en charge (VERIFICATION ouverte)
-     * mais aucun passage de vérification ne vient clore l'étape — la transmission le fait à sa place, sans
-     * inventer une tâche à un dossier qui n'a pas été pris en charge.
-     */
-    public void cloturerSiOuverte(Integer idDossier, EtapeCircuit etape) {
-        if (idDossier == null || etape == null) {
-            return;
-        }
-        try {
-            LocalDateTime maintenant = LocalDateTime.now();
-            for (TacheDossier t : tacheRepository.ouvertes(idDossier, etape.name())) {
-                t.setDateFin(maintenant);
-                tacheRepository.save(t);
-            }
-        } catch (RuntimeException ex) {
-            LOG.warn("[CHRONO] cloture si ouverte impossible dossier={} etape={} : {}", idDossier, etape, ex.toString());
-        }
-    }
-
-    /**
-     * ⚠️ <strong>Trou de chronométrage (signalement pilote du 2026-09-08, dossier 00305)</strong> — clôt
-     * les occurrences <strong>ouvertes</strong> de tout ce qui suit le dispatch, à l'instant où l'aval est
-     * défait : réattribution, retrait du dispatch, retrait accepté, suppression.
-     *
-     * <p><strong>Le constat.</strong> Le Membre avait pris l'examen en charge ; le Président a redispatché
-     * au CC. Le chronométrage traçait bien le geste du redispatcheur ({@code DISPATCH} n+1), mais
-     * l'occurrence {@code EXAMEN} du sortant restait <em>ouverte à jamais</em>. Le nouvel attributaire s'en
-     * trouvait <strong>en impasse</strong> : l'étape paraissait déjà prise en charge — par quelqu'un
-     * d'autre — donc aucun bouton « Prendre en charge » ne lui était offert, et sans prise en charge il ne
-     * pouvait rien faire. La donnée d'attribution était pourtant juste : c'est la <em>vie de l'occurrence</em>
-     * qui manquait une étape.</p>
-     *
-     * <p><strong>Fermer, et non supprimer.</strong> L'examen entamé par le sortant a bien eu lieu : sa
-     * durée est mesurée jusqu'à l'instant du retrait, comme un passage abandonné. Le journal est
-     * append-only, le chronométrage aussi — on ne réécrit pas l'histoire, on la termine.</p>
-     *
-     * <p><strong>Toutes les étapes de l'aval, pas seulement EXAMEN</strong> : ce qui est purgé n'a plus
-     * rien pour clore ses tâches. {@code RECEPTION} est épargnée (les réceptions survivent au retrait) et
-     * {@code DISPATCH} aussi — ses occurrences sont instantanées, jamais ouvertes.</p>
-     */
-    public void cloturerAvalDuDispatch(Integer idDossier) {
-        for (EtapeCircuit etape : EtapeCircuit.values()) {
-            if (etape == EtapeCircuit.RECEPTION || etape == EtapeCircuit.DISPATCH) {
-                continue;
-            }
-            cloturerSiOuverte(idDossier, etape);
-        }
-    }
-
     public void cloturerPourActeur(Integer idDossier, EtapeCircuit etape, String imActeur) {
         if (idDossier == null || etape == null) {
             return;
         }
         try {
-            LocalDateTime maintenant = LocalDateTime.now();
-            TacheDossier tache = tacheRepository.ouvertes(idDossier, etape.name()).stream()
-                    .filter(t -> imActeur != null && imActeur.equals(t.getImActeur()))
-                    .findFirst()
-                    .orElseGet(() -> nouvelle(idDossier, etape, maintenant,
-                            delaiStandardService.delai(etape), true));
-            tache.setDateFin(maintenant);
-            tacheRepository.save(tache);
+            String moi = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
+            String profil = imActeur != null && imActeur.equals(moi)
+                    ? CurrentUser.profil().map(ProfilUtilisateur::name).orElse(etape.porteur().name())
+                    : etape.porteur().name();
+            TacheDossier passage = new TacheDossier();
+            passage.setIdTache(tacheRepository.nextId());
+            passage.setIdDossier(idDossier);
+            passage.setEtape(etape.name());
+            Integer rang = tacheRepository.dernierRang(idDossier, etape.name());
+            passage.setOccurrence((rang == null ? 0 : rang) + 1);
+            passage.setImActeur(imActeur);
+            passage.setProfil(profil);
+            passage.setDateFin(LocalDateTime.now());
+            tacheRepository.save(passage);
         } catch (RuntimeException ex) {
-            LOG.warn("[CHRONO] cloture impossible dossier={} etape={} acteur={} : {}",
+            LOG.warn("[CHRONO] fin d'etape non enregistree dossier={} etape={} acteur={} : {}",
                     idDossier, etape, imActeur, ex.toString());
         }
     }
 
     /**
-     * ⚠️ <strong>Consigne un geste INSTANTANÉ</strong> au chronométrage (règle du pilote, 2026-09-04) —
-     * une occurrence de rang suivant, ouverte et close au même horodatage, au nom de l'auteur du geste.
+     * ⚠️ <strong>Fin de l'étape EXAMEN au nom de l'ATTRIBUTAIRE</strong> du dispatch, jamais du
+     * déclencheur de la transition (signalement pilote du 2026-09-07, dossier 00001).
      *
-     * <p><strong>Pourquoi ce n'est pas {@link #cloturer}.</strong> Clore, c'est terminer un travail
-     * qu'on avait commencé — la méthode cherche donc d'abord une tâche ouverte, et n'en crée une que
-     * par tolérance. Ici, il n'y a rien à terminer : la réattribution est un acte ponctuel, sans durée,
-     * qui doit produire SA propre ligne au nom de celui qui l'a posé. Passer par {@code cloturer}
-     * aurait pu refermer la tâche d'un autre au lieu d'en ouvrir une.</p>
+     * <p>Le constat : après un retour de navette, le Président avait re-soumis le projet de PV pour le
+     * Membre (délégation Président → Membre), et l'examen se retrouvait mesuré au nom du Président. Un
+     * examen appartient à celui à qui il a été dispatché — même principe que la co-signature, où chaque
+     * part est nominative.</p>
      *
-     * <p><strong>Pourquoi la prévision STANDARD.</strong> Un geste sans durée n'a rien à estimer ; on
-     * ne peut pas non plus laisser la colonne vide, elle est obligatoire. Le référentiel donne donc la
-     * valeur, et le drapeau {@code previsionStandard} dit que personne ne l'a saisie — exactement ce
-     * que fait déjà un dispatch posé sans prise en charge préalable.</p>
-     *
-     * <p>Tolérante comme {@link #cloturer} : une anomalie de chronométrage est journalisée, elle ne
-     * fait jamais échouer la transaction métier qui l'appelle.</p>
+     * <p>Sans dispatch connu, l'acteur courant fait foi : mieux vaut une étape datée sans titulaire
+     * certain qu'un trou dans la chaîne, qui reporterait toute la durée de l'examen sur le visa.</p>
      */
-    public void consignerGesteInstantane(Integer idDossier, EtapeCircuit etape) {
+    public void cloturerExamen(Integer idDossier) {
+        if (idDossier == null) {
+            return;
+        }
+        String attributaire = dispatchRepository.findImCtrlMembreByDossier(idDossier)
+                .filter(s -> s != null && !s.isBlank())
+                .orElse(CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null));
+        cloturerPourActeur(idDossier, EtapeCircuit.EXAMEN, attributaire);
+    }
+
+    /**
+     * Enregistre la fin d'une étape <strong>seulement si c'est bien l'étape en cours</strong> du dossier.
+     *
+     * <p>Sert les gestes qui peuvent survenir à deux moments du circuit et ne doivent clore l'étape que
+     * dans l'un d'eux : la transmission SIGMP achève la vérification quand elle est <em>directe</em>
+     * (avis FAV, aucun passage de vérification ne l'a close), mais ne doit rien enregistrer quand elle
+     * suit une levée d'observations — la vérification y a déjà sa fin, et une seconde occurrence lui
+     * aurait attribué le temps de la transmission.</p>
+     *
+     * <p>⚠️ À appeler <strong>avant</strong> que le geste ne change le statut du dossier : c'est le
+     * statut qui dit quelle étape est ouverte.</p>
+     */
+    public void cloturerSiCourante(Integer idDossier, EtapeCircuit etape) {
         if (idDossier == null || etape == null) {
             return;
         }
         try {
-            LocalDateTime maintenant = LocalDateTime.now();
-            TacheDossier tache = nouvelle(idDossier, etape, maintenant,
-                    delaiStandardService.delai(etape), true);
-            tache.setDateFin(maintenant);
-            tacheRepository.save(tache);
+            Dossier dossier = dossierRepository.findById(idDossier).orElse(null);
+            if (dossier != null && etapeCourante(dossier) == etape) {
+                cloturer(idDossier, etape);
+            }
         } catch (RuntimeException ex) {
-            LOG.warn("[CHRONO] geste instantane non consigne dossier={} etape={} : {}",
+            LOG.warn("[CHRONO] fin d'etape conditionnelle impossible dossier={} etape={} : {}",
                     idDossier, etape, ex.toString());
         }
     }
 
-    /** Construit une occurrence neuve, de rang suivant, sur l'acteur courant. */
-    private TacheDossier nouvelle(Integer idDossier, EtapeCircuit etape, LocalDateTime priseEnCharge,
-            Integer prevision, boolean standard) {
-        TacheDossier tache = new TacheDossier();
-        tache.setIdTache(tacheRepository.nextId());
-        tache.setIdDossier(idDossier);
-        tache.setEtape(etape.name());
-        Integer rang = tacheRepository.dernierRang(idDossier, etape.name());
-        tache.setOccurrence((rang == null ? 0 : rang) + 1);
-        tache.setImActeur(CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null));
-        tache.setProfil(CurrentUser.profil().map(ProfilUtilisateur::name).orElse(etape.porteur().name()));
-        tache.setDatePriseEnCharge(priseEnCharge);
-        tache.setPrevisionHeures(prevision == null ? 1 : prevision);
-        tache.setPrevisionStandard(standard);
-        return tache;
+    /**
+     * ⚠️ <strong>Ferme l'étape en cours d'un dossier dont l'aval va disparaître</strong> — réattribution,
+     * retrait du dispatch, retrait accepté, suppression (signalement pilote du 2026-09-08, dossier 00305).
+     *
+     * <p>Ce qui est purgé n'a plus rien pour clore son étape : sans cet appel, le temps passé dans
+     * l'étape défaite se déverserait sur celle qui reprend. <strong>Fermer, et non supprimer</strong> :
+     * l'examen entamé par le sortant a bien eu lieu, sa durée est mesurée jusqu'à l'instant du retrait,
+     * comme un passage abandonné. Le journal est append-only, le chronométrage aussi — on ne réécrit pas
+     * l'histoire, on la termine.</p>
+     *
+     * <p>L'acteur est celui à qui l'étape revenait — l'attributaire du dispatch pour l'examen, la PRMP
+     * propriétaire pour la rectification —, et non celui qui défait l'aval.</p>
+     */
+    public void cloturerEtapeCourante(Integer idDossier) {
+        if (idDossier == null) {
+            return;
+        }
+        try {
+            Dossier dossier = dossierRepository.findById(idDossier).orElse(null);
+            EtapeCircuit etape = etapeCourante(dossier);
+            if (etape == null) {
+                return;
+            }
+            cloturerPourActeur(idDossier, etape, porteurPresume(dossier, etape));
+        } catch (RuntimeException ex) {
+            LOG.warn("[CHRONO] fermeture de l'etape courante impossible dossier={} : {}", idDossier, ex.toString());
+        }
+    }
+
+    /**
+     * Acteur à qui une étape <strong>revient</strong>, quand il est nominativement connu : l'attributaire
+     * du dispatch pour l'examen, la PRMP propriétaire pour la rectification. Ailleurs, l'étape est portée
+     * par un profil et non par une personne — {@code null}, et le geste qui la clôt nommera son auteur.
+     */
+    private String porteurPresume(Dossier dossier, EtapeCircuit etape) {
+        if (dossier == null || etape == null) {
+            return null;
+        }
+        if (etape == EtapeCircuit.EXAMEN) {
+            return dispatchRepository.findImCtrlMembreByDossier(dossier.getIdDossier())
+                    .filter(s -> s != null && !s.isBlank()).orElse(null);
+        }
+        if (etape == EtapeCircuit.RECTIFICATION_PRMP) {
+            String prmp = dossier.getIdPrmp();
+            return prmp == null || prmp.isBlank() ? null : prmp;
+        }
+        return null;
     }
 
     // ------------------------------------------------------------------ suspensions PRMP
@@ -681,11 +382,94 @@ public class ChronometrageService {
         return statut != null && REPRISE_APRES_ATTENTE.containsKey(statut);
     }
 
+    // ------------------------------------------------------------------ la chaîne des passages
+
+    /**
+     * ⚠️ <strong>Le cœur de la refonte du 2026-09-12</strong> — la chaîne des passages d'un dossier :
+     * chaque fin d'étape déjà horodatée, son entrée dérivée, et la durée qui s'en déduit.
+     *
+     * <p>Les passages arrivent <strong>triés par fin</strong> (l'identifiant départage deux fins au même
+     * instant, dans l'ordre d'écriture : une étape abandonnée est fermée avant que la suivante ne
+     * s'ouvre). On remonte la chaîne, chaque fin servant d'entrée à la suivante ; l'étape
+     * <strong>en cours</strong>, qui n'a pas encore de fin, ferme la liste avec le temps déjà écoulé.</p>
+     */
+    private List<PassageEtapeDto> passages(Dossier dossier, List<TacheDossier> taches,
+            List<SuspensionDossier> suspensions, EtapeCircuit courante, LocalDateTime maintenant,
+            Map<String, String> noms) {
+        List<LocalDateTime> reprises = reprises(suspensions);
+        LocalDateTime depot = dossier == null ? null : dossier.getDateSoumission();
+        List<PassageEtapeDto> lignes = new ArrayList<>();
+        Map<String, Integer> rangs = new HashMap<>();
+        LocalDateTime precedente = null;
+        for (TacheDossier t : taches) {
+            LocalDateTime entree = entree(precedente, t.getDateFin(), depot, reprises, etapeDe(t));
+            rangs.merge(t.getEtape(), 1, Integer::sum);
+            lignes.add(new PassageEtapeDto(t.getEtape(), t.getOccurrence(), t.getImActeur(),
+                    noms.get(t.getImActeur()), t.getProfil(), entree, t.getDateFin(),
+                    HeuresOuvrees.ecoulees(entree, t.getDateFin()), false));
+            precedente = t.getDateFin();
+        }
+        if (courante != null) {
+            LocalDateTime entree = entree(precedente, maintenant, depot, reprises, courante);
+            String porteur = porteurPresume(dossier, courante);
+            lignes.add(new PassageEtapeDto(courante.name(), rangs.getOrDefault(courante.name(), 0) + 1,
+                    porteur, noms.get(porteur), courante.porteur().name(), entree, null,
+                    HeuresOuvrees.ecoulees(entree, maintenant), true));
+        }
+        return lignes;
+    }
+
+    /**
+     * <strong>Entrée</strong> dans une étape qui s'achève à {@code borne} : la plus récente des bornes
+     * qui la précèdent — fin du passage précédent, dépôt du dossier, sortie d'attente PRMP.
+     *
+     * <p>Le <strong>dépôt</strong> compte pour la toute première étape (rien ne la précède), et de
+     * nouveau après un retrait accepté : le dossier repart en brouillon, {@code DATE_SOUMISSION} est
+     * effacée puis reposée à la nouvelle soumission, et le temps passé en brouillon ne s'impute à
+     * personne.</p>
+     *
+     * <p>La <strong>sortie d'attente PRMP</strong> compte pour toutes les étapes sauf
+     * {@code RECTIFICATION_PRMP} : celle-ci <em>est</em> l'attente, sa sortie est sa propre fin — la
+     * retenir aurait réduit à zéro la seule durée qui mesure la PRMP. Partout ailleurs, elle est ce qui
+     * empêche l'attente de s'imputer à la Commission : un examen repris après une lettre de renvoi
+     * commence quand le dossier revient.</p>
+     *
+     * <p>{@code null} quand aucune borne n'est connue — un dossier antérieur au chronométrage, dont la
+     * première fin n'a rien derrière elle : la durée est alors nulle plutôt qu'inventée.</p>
+     */
+    private static LocalDateTime entree(LocalDateTime finPrecedente, LocalDateTime borne,
+            LocalDateTime depot, List<LocalDateTime> reprises, EtapeCircuit etape) {
+        LocalDateTime retenue = candidate(null, finPrecedente, borne);
+        retenue = candidate(retenue, depot, borne);
+        if (etape != EtapeCircuit.RECTIFICATION_PRMP) {
+            for (LocalDateTime reprise : reprises) {
+                retenue = candidate(retenue, reprise, borne);
+            }
+        }
+        return retenue;
+    }
+
+    /** Retient {@code candidate} si elle est connue, ne dépasse pas la borne, et bat la meilleure courante. */
+    private static LocalDateTime candidate(LocalDateTime meilleure, LocalDateTime candidate, LocalDateTime borne) {
+        if (candidate == null || (borne != null && candidate.isAfter(borne))) {
+            return meilleure;
+        }
+        return meilleure == null || candidate.isAfter(meilleure) ? candidate : meilleure;
+    }
+
+    /** Fins des fenêtres d'attente PRMP CLOSES — les instants où la balle est revenue à la Commission. */
+    private static List<LocalDateTime> reprises(List<SuspensionDossier> suspensions) {
+        if (suspensions == null) {
+            return List.of();
+        }
+        return suspensions.stream().map(SuspensionDossier::getFin).filter(java.util.Objects::nonNull).toList();
+    }
+
     // ------------------------------------------------------------------ calcul de la date prévisionnelle
 
     /**
      * Date prévisionnelle de fin de traitement, en jours <strong>ouvrés</strong> :
-     * {@code aujourd'hui + reste(étape en cours) + Σ prévisions des étapes restantes} jusqu'à la
+     * {@code aujourd'hui + reste(étape en cours) + Σ délais standards des étapes restantes} jusqu'à la
      * transmission SIGMP incluse. {@code null} si le dossier n'est pas dans le circuit.
      *
      * <p>⚠️ <strong>Unité : l'HEURE ouvrée</strong> depuis le 2026-09-02. La somme se fait en heures,
@@ -693,18 +477,24 @@ public class ChronometrageService {
      * entamée compte pleine. {@code datePrevisionnelleFin} reste une date — la seule rescapée de la
      * bascule d'unité.</p>
      *
-     * <p>⚠️ L'écoulé est mesuré jusqu'à <strong>{@code maintenant}</strong>, et non jusqu'au début du
-     * jour : en heures, s'arrêter à minuit sous-compterait la journée en cours et rendrait la date
-     * optimiste de huit heures au pire. L'instant est un paramètre pour que le calcul reste déterministe
-     * en test.</p>
+     * <p>⚠️ <strong>Depuis le 2026-09-12, la prévision d'une étape est TOUJOURS son délai standard</strong>
+     * ({@code tr_delai_standard}, administrable) : plus personne ne saisit d'estimation. Le référentiel
+     * reste donc ce qui permet d'annoncer une date <em>dès la soumission</em>, avant que quiconque à la
+     * CNM ait touché le dossier — c'est même devenu sa seule raison d'être.</p>
+     *
+     * <p>L'écoulé de l'étape en cours est mesuré depuis son <strong>entrée dérivée</strong> et jusqu'à
+     * {@code maintenant} : en heures, s'arrêter au début du jour sous-compterait la journée en cours et
+     * rendrait la date optimiste de huit heures au pire. L'instant est un paramètre pour que le calcul
+     * reste déterministe en test.</p>
      *
      * <p><strong>Une étape en dépassement compte 0</strong> : la date glisse jour après jour au lieu de
-     * mentir sur un rattrapage qui n'aura pas lieu. Les étapes non encore prises en charge comptent pour
-     * leur délai standard, ce qui permet d'annoncer une date dès la soumission.</p>
+     * mentir sur un rattrapage qui n'aura pas lieu.</p>
      */
-    public LocalDate datePrevisionnelleFin(String statut, String statutPv, List<TacheDossier> taches,
-            LocalDateTime maintenant) {
-        return datePrevisionnelleFin(statut, statutPv, taches, maintenant, delaiStandardService.delais());
+    public LocalDate datePrevisionnelleFin(Dossier dossier, String statutPv, List<TacheDossier> taches,
+            List<SuspensionDossier> suspensions, LocalDateTime maintenant) {
+        return datePrevisionnelleFin(dossier == null ? null : dossier.getStatut(), statutPv, taches,
+                suspensions, dossier == null ? null : dossier.getDateSoumission(), maintenant,
+                delaiStandardService.delais());
     }
 
     /**
@@ -713,44 +503,38 @@ public class ChronometrageService {
      * contrat de pagination (lot D §3).
      */
     public LocalDate datePrevisionnelleFin(String statut, String statutPv, List<TacheDossier> taches,
-            LocalDateTime maintenant, Map<EtapeCircuit, Integer> delais) {
-        EtapeCircuit reference = etapeCourante(statut, () -> statutPv);
-        if (reference == null) {
-            reference = REPRISE_APRES_ATTENTE.get(statut);
-        }
+            List<SuspensionDossier> suspensions, LocalDateTime depot, LocalDateTime maintenant,
+            Map<EtapeCircuit, Integer> delais) {
+        EtapeCircuit courante = etapeCourante(statut, () -> statutPv);
+        EtapeCircuit reference = courante != null ? courante : REPRISE_APRES_ATTENTE.get(statut);
         if (reference == null) {
             return null;
         }
-        Map<EtapeCircuit, TacheDossier> ouvertes = new HashMap<>();
-        Set<EtapeCircuit> closes = new HashSet<>();
-        for (TacheDossier t : taches == null ? List.<TacheDossier>of() : taches) {
-            EtapeCircuit etape = etapeDe(t);
-            if (etape == null) {
-                continue;
-            }
-            if (t.enCours()) {
-                ouvertes.put(etape, t);
-            } else {
-                closes.add(etape);
-            }
-        }
+        // Entrée de l'étape en cours : la même dérivation que la chaîne des passages, bornée à maintenant.
+        LocalDateTime entreeCourante = courante == null ? null
+                : entree(derniereFin(taches), maintenant, depot, reprises(suspensions), courante);
         long totalHeures = 0L;
         for (EtapeCircuit etape : EtapeCircuit.etapesDuCompteur()) {
             if (etape.ordinal() < reference.ordinal()) {
                 continue;   // franchie : l'étape de référence fait foi, y compris après un retour en arrière
             }
-            TacheDossier ouverte = ouvertes.get(etape);
-            if (ouverte != null) {
-                // Ecoule et prevision dans la MEME echelle (8 h par jour ouvre) : tout l enjeu du point 5
-                // de la spec. Mesure en heures d horloge, une tache prise en charge la veille serait en
-                // depassement de 16 h alors qu un seul jour de travail a passe.
-                long ecoulees = HeuresOuvrees.ecoulees(ouverte.getDatePriseEnCharge(), maintenant);
-                totalHeures += Math.max(0L, ouverte.getPrevisionHeures() - ecoulees);
+            int standard = delais.getOrDefault(etape, HeuresOuvrees.HEURES_PAR_JOUR);
+            if (etape == courante && entreeCourante != null) {
+                // Écoulé et délai standard dans la MÊME échelle (8 h par jour ouvré) : mesurer en heures
+                // d'horloge mettrait en dépassement une étape entamée la veille alors qu'un seul jour de
+                // travail a passé.
+                totalHeures += Math.max(0L, standard - HeuresOuvrees.ecoulees(entreeCourante, maintenant));
             } else {
-                totalHeures += delais.getOrDefault(etape, HeuresOuvrees.HEURES_PAR_JOUR);
+                totalHeures += standard;
             }
         }
         return JoursOuvres.ajouter(maintenant.toLocalDate(), HeuresOuvrees.enJoursArrondiSuperieur(totalHeures));
+    }
+
+    /** Fin du dernier passage enregistré — l'entrée de l'étape en cours, avant arbitrage des autres bornes. */
+    private static LocalDateTime derniereFin(List<TacheDossier> taches) {
+        return taches == null ? null : taches.stream().map(TacheDossier::getDateFin)
+                .filter(java.util.Objects::nonNull).max(LocalDateTime::compareTo).orElse(null);
     }
 
     private static EtapeCircuit etapeDe(TacheDossier tache) {
@@ -763,13 +547,16 @@ public class ChronometrageService {
 
     // ------------------------------------------------------------------ restitution
 
-    /** Chronométrage complet d'un dossier : occurrences + compteurs globaux. */
+    /** Chronométrage complet d'un dossier : passages par étape (entrée, fin, durée) + compteurs globaux. */
     @Transactional(readOnly = true)
     public ChronometrageDto chronometrage(Integer idDossier) {
         Dossier dossier = dossierRepository.findById(idDossier)
                 .orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable : " + idDossier));
-        List<TacheDossier> taches = tacheRepository.findByIdDossierOrderByDatePriseEnChargeAsc(idDossier);
+        List<TacheDossier> taches = tacheRepository.findParDossier(idDossier);
         List<SuspensionDossier> suspensions = suspensionRepository.findByIdDossierOrderByDebutAsc(idDossier);
+        String statutPv = statutPvDe(idDossier);
+        EtapeCircuit courante = etapeCourante(dossier.getStatut(), () -> statutPv);
+        LocalDateTime maintenant = LocalDateTime.now();
 
         Map<String, String> noms = new HashMap<>();
         for (TacheDossier t : taches) {
@@ -777,37 +564,33 @@ public class ChronometrageService {
                 noms.computeIfAbsent(t.getImActeur(), this::nom);
             }
         }
-        List<TacheDossierDto> occurrences = taches.stream()
-                .map(t -> TacheDossierDto.de(t, noms.get(t.getImActeur()))).toList();
+        String porteurCourant = porteurPresume(dossier, courante);
+        if (porteurCourant != null) {
+            noms.computeIfAbsent(porteurCourant, this::nom);
+        }
 
         LocalDateTime debut = borne(taches, EtapeCircuit.RECEPTION);
         LocalDateTime fin = borne(taches, EtapeCircuit.TRANSMISSION_SIGMP);
-        LocalDateTime jusqua = fin != null ? fin : LocalDateTime.now();
+        LocalDateTime jusqua = fin != null ? fin : maintenant;
         long brut = debut == null ? 0L : HeuresOuvrees.ecoulees(debut, jusqua);
         long attentes = cumulAttentes(suspensions, jusqua);
-        String statutPv = statutPvDe(idDossier);
-        EtapeCircuit courante = etapeCourante(dossier.getStatut(), () -> statutPv);
 
-        return new ChronometrageDto(idDossier, occurrences, debut, fin,
-                brut, Math.max(0L, brut - attentes), attentes,
+        return new ChronometrageDto(idDossier,
+                passages(dossier, taches, suspensions, courante, maintenant, noms),
+                debut, fin, brut, Math.max(0L, brut - attentes), attentes,
                 courante == null ? null : courante.name(),
                 estEnAttentePrmp(dossier.getStatut()),
-                datePrevisionnelleFin(dossier.getStatut(), statutPv, taches, LocalDateTime.now()),
-                // ⚠️ 2026-09-04 — l attributaire courant, EXACTEMENT la valeur sur laquelle porte la
-                // garde de la prise en charge d EXAMEN (exigerAttributaireSiExamen) : la meme requete,
-                // donc la meme reponse. Servir une derivation voisine aurait permis au front de
-                // masquer un bouton que le serveur aurait accepte, ou l inverse.
-                dispatchRepository.findImCtrlMembreByDossier(idDossier)
-                        .filter(s -> !s.isBlank()).orElse(null),
-                // ⚠️ 2026-09-04 — la MEME liste que celle sur laquelle porte la garde : le front masque
-                // le bouton a quiconque n y figure pas, et le serveur refusera exactement les memes.
-                acteursAttendus(idDossier, courante));
+                datePrevisionnelleFin(dossier, statutPv, taches, suspensions, maintenant),
+                // L'attributaire courant du dossier : les écrans qui ne chargent PAS les dispatchs (la
+                // consultation) n'ont ainsi aucun appel de liste à ajouter — le serveur qui répond ici a
+                // déjà le dispatch sous la main.
+                dispatchRepository.findImCtrlMembreByDossier(idDossier).filter(s -> !s.isBlank()).orElse(null));
     }
 
     /**
      * ⚠️ Suivi des délais CNM (2026-09-06) — date d'<strong>enregistrement</strong> du dossier : la clôture
      * de l'étape {@code RECEPTION}, <strong>exactement</strong> le {@code debutCompteur} du chronométrage
-     * (même borne, même liste de tâches) — servie en lot sur {@code DossierDto} par la même méthode, pour
+     * (même borne, même liste de passages) — servie en lot sur {@code DossierDto} par la même méthode, pour
      * que la liste et le détail ne puissent pas diverger. {@code null} avant l'enregistrement.
      */
     public LocalDateTime dateEnregistrement(List<TacheDossier> taches) {
@@ -834,24 +617,24 @@ public class ChronometrageService {
 
     /**
      * ⚠️ Frise du tableau de bord (demande pilote 2026-09-07) — <strong>date de franchissement</strong> de
-     * chacune des sept étapes de la frise du front, dérivée des tâches de chronométrage déjà chargées en
-     * lot (aucune requête) ; {@code null} pour une étape non atteinte. Le front datait ses points par
-     * jointure de listes qui reviennent vides selon la portée (Président « toutes localités ») : ici la
-     * date vient du dossier lui-même, quel que soit le profil qui le lit.
+     * chacune des sept étapes de la frise du front, dérivée des passages déjà chargés en lot (aucune
+     * requête) ; {@code null} pour une étape non atteinte. Le front datait ses points par jointure de
+     * listes qui reviennent vides selon la portée (Président « toutes localités ») : ici la date vient du
+     * dossier lui-même, quel que soit le profil qui le lit.
      *
      * <ul>
-     *   <li>{@code RECEPTION} : clôture de RECEPTION — <strong>identique</strong> à {@link #dateEnregistrement} ;</li>
-     *   <li>{@code DISPATCH} / {@code EXAMEN} : clôture de la dernière occurrence close, <strong>seulement si le
-     *       statut a dépassé l'étape</strong> — un dispatch annulé ({@code PRET_DISPATCH}) ou un réexamen
-     *       ({@code A_REEXAMINER}) laissent des tâches closes derrière eux sans que l'étape soit franchie ;</li>
-     *   <li>{@code PROJET_PV} : le projet de PV naît de la clôture d'EXAMEN — même date, même condition ;</li>
+     *   <li>{@code RECEPTION} : fin de RECEPTION — <strong>identique</strong> à {@link #dateEnregistrement} ;</li>
+     *   <li>{@code DISPATCH} / {@code EXAMEN} : fin du dernier passage, <strong>seulement si le statut a
+     *       dépassé l'étape</strong> — un dispatch annulé ({@code PRET_DISPATCH}) ou un réexamen
+     *       ({@code A_REEXAMINER}) laissent des passages derrière eux sans que l'étape soit franchie ;</li>
+     *   <li>{@code PROJET_PV} : le projet de PV naît de la fin d'EXAMEN — même date, même condition ;</li>
      *   <li>{@code PV_SIGNE} : dernière signature (COSIGNATURE, à défaut VISA), <strong>seulement si le PV
      *       est {@code SIGNE}</strong> — une signature sur deux ne date pas un PV signé ;</li>
-     *   <li>{@code VERIFICATION} : clôture de la dernière VERIFICATION, seulement une fois les observations
+     *   <li>{@code VERIFICATION} : fin de la dernière VERIFICATION, seulement une fois les observations
      *       levées (un passage qui maintient des observations n'a pas franchi l'étape) ;</li>
      *   <li>{@code CLOTURE} : archivage, à défaut transmission SIGMP, seulement au statut {@code CLOTURE}.</li>
      * </ul>
-     * Le « franchissement » s'apprécie donc sur le <em>statut</em> ; la <em>date</em> vient des tâches.
+     * Le « franchissement » s'apprécie donc sur le <em>statut</em> ; la <em>date</em> vient des passages.
      */
     public Map<String, LocalDateTime> datesEtapes(String statutDossier, String statutPv, List<TacheDossier> taches) {
         Map<String, LocalDateTime> dates = new java.util.LinkedHashMap<>();
@@ -875,7 +658,7 @@ public class ChronometrageService {
         return dates;
     }
 
-    /** Fin de la dernière occurrence close d'une étape — borne du compteur global. */
+    /** Fin du dernier passage par une étape — borne du compteur global. */
     private LocalDateTime borne(List<TacheDossier> taches, EtapeCircuit etape) {
         return taches.stream()
                 .filter(t -> etape.name().equals(t.getEtape()) && t.getDateFin() != null)
@@ -900,15 +683,6 @@ public class ChronometrageService {
         return controleurRepository.findById(imActeur).map(ChronometrageService::nomComplet).orElse(null);
     }
 
-    /**
-     * Nom lisible, <strong>repli sur le matricule</strong>. Les messages du 2026-09-04 nomment la
-     * personne qui bloque : « déjà prise en charge par null » n'aiderait personne à savoir à qui parler.
-     */
-    private String nomOuMatricule(String imActeur) {
-        String n = nom(imActeur);
-        return n == null || n.isBlank() ? imActeur : n;
-    }
-
     private static String nomComplet(Controleur c) {
         String prenoms = c.getPrenomsCont() == null ? "" : c.getPrenomsCont().trim();
         String nom = c.getNomCont() == null ? "" : c.getNomCont().trim();
@@ -918,7 +692,7 @@ public class ChronometrageService {
 
     // ------------------------------------------------------------------ enrichissement en lot
 
-    /** Tâches de plusieurs dossiers, groupées — une seule requête pour toute une liste. */
+    /** Passages de plusieurs dossiers, groupés — une seule requête pour toute une liste. */
     @Transactional(readOnly = true)
     public Map<Integer, List<TacheDossier>> tachesParDossier(Collection<Integer> idsDossiers) {
         Map<Integer, List<TacheDossier>> parDossier = new HashMap<>();
@@ -927,6 +701,23 @@ public class ChronometrageService {
         }
         for (TacheDossier t : tacheRepository.findParDossiers(idsDossiers)) {
             parDossier.computeIfAbsent(t.getIdDossier(), k -> new ArrayList<>()).add(t);
+        }
+        return parDossier;
+    }
+
+    /**
+     * Fenêtres d'attente PRMP de plusieurs dossiers, groupées — une seule requête pour toute une liste.
+     * ⚠️ 2026-09-12 : nécessaire à la date prévisionnelle, dont l'écoulé part de l'entrée dans l'étape en
+     * cours — et une reprise après attente PRMP est l'une des bornes qui la fixent.
+     */
+    @Transactional(readOnly = true)
+    public Map<Integer, List<SuspensionDossier>> suspensionsParDossier(Collection<Integer> idsDossiers) {
+        Map<Integer, List<SuspensionDossier>> parDossier = new HashMap<>();
+        if (idsDossiers == null || idsDossiers.isEmpty()) {
+            return parDossier;
+        }
+        for (SuspensionDossier s : suspensionRepository.findParDossiers(idsDossiers)) {
+            parDossier.computeIfAbsent(s.getIdDossier(), k -> new ArrayList<>()).add(s);
         }
         return parDossier;
     }

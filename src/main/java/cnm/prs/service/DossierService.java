@@ -601,8 +601,8 @@ public class DossierService {
 
     /**
      * ⚠️ Chronométrage (2026-09-01) — date prévisionnelle de fin, étape courante et drapeau d'attente
-     * PRMP, posés <strong>en lot</strong> : deux requêtes de plus (les tâches de tous les dossiers, les
-     * statuts de PV de tous les dossiers) quelle que soit la taille de la liste.
+     * PRMP, posés <strong>en lot</strong> : trois requêtes de plus (les passages, les attentes PRMP et
+     * les statuts de PV de tous les dossiers) quelle que soit la taille de la liste.
      *
      * <p>Le calcul lui-même est en mémoire — le référentiel des délais standards est relu par étape,
      * mais il ne compte que huit lignes et Hibernate le sert depuis son cache de premier niveau pour
@@ -610,6 +610,10 @@ public class DossierService {
      */
     private void enrichirChronometrage(List<DossierDto> dtos, List<Integer> ids) {
         Map<Integer, List<cnm.prs.entity.TacheDossier>> taches = chronometrage.tachesParDossier(ids);
+        // ⚠️ 2026-09-12 — les attentes PRMP entrent dans le calcul : l'entrée dans l'étape en cours est la
+        // plus récente des bornes qui la précèdent, et la sortie d'attente en est une. Une requête de plus
+        // pour toute la liste, comme les deux autres.
+        Map<Integer, List<cnm.prs.entity.SuspensionDossier>> suspensions = chronometrage.suspensionsParDossier(ids);
         Map<Integer, String> statutsPv = chronometrage.statutsPvParDossier(ids);
         // Référentiel lu UNE fois pour toute la liste, en projection scalaire : relire les délais par
         // étape et par dossier chargeait assez d'entités pour faire tomber le contrat de pagination.
@@ -619,7 +623,8 @@ public class DossierService {
             String statutPv = statutsPv.get(dto.getIdDossier());
             List<cnm.prs.entity.TacheDossier> tachesDossier = taches.getOrDefault(dto.getIdDossier(), List.of());
             dto.setDatePrevisionnelleFin(chronometrage.datePrevisionnelleFin(dto.getStatut(), statutPv,
-                    tachesDossier, maintenant, delais));
+                    tachesDossier, suspensions.getOrDefault(dto.getIdDossier(), List.of()),
+                    dto.getDateSoumission(), maintenant, delais));
             // ⚠️ Suivi des délais CNM (2026-09-06) — date d'enregistrement = clôture de RECEPTION, depuis
             // les MÊMES tâches déjà chargées en lot : aucune requête de plus, aucun N+1.
             dto.setDateEnregistrement(chronometrage.dateEnregistrement(tachesDossier));
@@ -942,13 +947,11 @@ public class DossierService {
                     "Resoumission impossible : le dossier n'est pas en attente de décision PRMP (statut « "
                             + dossier.getStatut() + " »).");
         }
-        // ⚠️ Règle pilote (2026-09-07) — « aucune action sans prise en charge », étendue à la PRMP : elle
-        // prend en charge la rectification avant de resoumettre, comme avant de rectifier. Garde SERVEUR
-        // partagée avec l'édition, pour que le verrou posé par le front ne soit pas cosmétique.
-        dossierIntegrite.exigerRectificationPriseEnCharge(idDossier);
+        // ⚠️ 2026-09-12 — l'étape RECTIFICATION_PRMP s'achève ici, et sa durée se mesure seule : elle court
+        // depuis la vérification qui a maintenu les observations. C'est le SEUL délai imputé à la PRMP, et
+        // il reste hors compteur global. Enregistré AVANT le changement de statut, qui la ferme.
+        chronometrage.cloturer(idDossier, cnm.prs.enums.EtapeCircuit.RECTIFICATION_PRMP);
         dossier.setStatut(StatutDossier.EN_VERIFICATION.name());
-        // La tâche de rectification est close par le geste qui l'achève — la resoumission.
-        chronometrage.cloturerSiOuverte(idDossier, cnm.prs.enums.EtapeCircuit.RECTIFICATION_PRMP);
         // ⚠️ Chronométrage (2026-09-01) — sortie d'attente PRMP : le compteur net CNM redémarre.
         chronometrage.sortirDAttentePrmp(idDossier);
         repository.save(dossier);

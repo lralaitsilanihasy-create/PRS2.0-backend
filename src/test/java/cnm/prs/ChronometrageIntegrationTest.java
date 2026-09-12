@@ -10,6 +10,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.List;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -23,15 +25,17 @@ import cnm.prs.enums.ProfilUtilisateur;
 import cnm.prs.enums.TypeActeur;
 import cnm.prs.repository.SuspensionDossierRepository;
 import cnm.prs.repository.TacheDossierRepository;
-import cnm.prs.service.HeuresOuvrees;
 import cnm.prs.service.JoursOuvres;
 
 /**
- * ⚠️ <strong>Chronométrage et prévision des délais</strong> (règle du pilote, 2026-09-01).
+ * ⚠️ <strong>Chronométrage et prévision des délais</strong> (règle du pilote, 2026-09-01 ; refonte du
+ * 2026-09-12).
  *
- * <p>Ce que ces tests protègent en priorité : que le chronométrage <strong>n'empêche jamais le
- * métier</strong> (tolérance), que la date annoncée <strong>glisse au lieu de mentir</strong>, et que
- * les attentes PRMP ne soient <strong>imputées à personne</strong> à la CNM.</p>
+ * <p>Ce que ces tests protègent en priorité : que le délai de chaque étape soit <strong>mesuré et
+ * jamais saisi</strong> (fin − entrée, l'entrée étant dérivée de la transition précédente), que le
+ * chronométrage <strong>n'empêche jamais le métier</strong>, que la date annoncée <strong>glisse au lieu
+ * de mentir</strong>, et que les attentes PRMP ne soient <strong>imputées à personne</strong> à la
+ * CNM.</p>
  */
 class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
 
@@ -40,6 +44,9 @@ class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
 
     @Autowired
     private SuspensionDossierRepository suspensionRepository;
+
+    @Autowired
+    private cnm.prs.service.ChronometrageService chronometrageService;
 
     // ------------------------------------------------------------------ référentiel des délais standards
 
@@ -51,102 +58,47 @@ class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(8)))
                 .andExpect(jsonPath("$[0].etape").value("RECEPTION"))
                 .andExpect(jsonPath("$[7].etape").value("ARCHIVAGE"))
-                .andExpect(jsonPath("$[2].etape").value("EXAMEN"))
-                .andExpect(jsonPath("$[2].delaiHeures").value(40));
+                .andExpect(jsonPath("$[2].etape").value("EXAMEN"));
     }
 
     @Test
     @DisplayName("Référentiel — réglage réservé à l'Administrateur ; délai < 1 refusé ; étape inconnue → 404")
     void referentiel_gardes() throws Exception {
-        mvc.perform(put("/api/delais-standards/EXAMEN").header("Authorization", tokenMembre)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"delaiHeures\":7}"))
+        mvc.perform(put("/api/delais-standards/EXAMEN").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"delaiHeures\":48}"))
                 .andExpect(status().isForbidden());
 
         mvc.perform(put("/api/delais-standards/EXAMEN").header("Authorization", tokenAdmin)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"delaiHeures\":0}"))
                 .andExpect(status().isBadRequest());
 
-        mvc.perform(put("/api/delais-standards/PAUSE_CAFE").header("Authorization", tokenAdmin)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"delaiHeures\":3}"))
+        mvc.perform(put("/api/delais-standards/INCONNUE").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"delaiHeures\":8}"))
                 .andExpect(status().isNotFound());
 
         mvc.perform(put("/api/delais-standards/EXAMEN").header("Authorization", tokenAdmin)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"delaiHeures\":7}"))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"delaiHeures\":48}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.delaiHeures").value(7));
+                .andExpect(jsonPath("$.delaiHeures").value(48));
     }
 
-    // ------------------------------------------------------------------ prise en charge
+    // ------------------------------------------------------------------ plus de prise en charge (2026-09-12)
 
     @Test
-    @DisplayName("Prise en charge — le porteur de l'étape ouvre la tâche avec sa prévision")
-    void priseEnCharge_ouvreLaTache() throws Exception {
-        dossierEnStatut(1, "PRET_DISPATCH");
-
-        mvc.perform(post("/api/dossiers/1/prise-en-charge").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"previsionHeures\":4}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.etape").value("DISPATCH"))
-                .andExpect(jsonPath("$.occurrence").value(1))
-                .andExpect(jsonPath("$.previsionHeures").value(4))
-                .andExpect(jsonPath("$.previsionStandard").value(false))
-                .andExpect(jsonPath("$.enCours").value(true))
-                .andExpect(jsonPath("$.imActeur").value("CTRCC1"));
+    @DisplayName("⚠️ 2026-09-12 — POST /prise-en-charge n'existe plus : la route est inconnue, pour tous les profils")
+    void priseEnCharge_routeSupprimee() throws Exception {
+        dossierEnStatut(500, "PRET_DISPATCH");
+        for (String token : new String[] { tokenCc, tokenPrmp, tokenAdmin }) {
+            mvc.perform(post("/api/dossiers/500/prise-en-charge").header("Authorization", token)
+                    .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                    .andExpect(status().isNotFound());
+        }
     }
 
     @Test
-    @DisplayName("Prise en charge REJOUÉE sur une tâche ouverte — corrige la prévision, n'ouvre PAS d'occurrence")
-    void priseEnCharge_rejouee_corrige() throws Exception {
-        dossierEnStatut(1, "PRET_DISPATCH");
-        prendreEnCharge(1, tokenCc, 4);
-
-        mvc.perform(post("/api/dossiers/1/prise-en-charge").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"previsionHeures\":9}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.occurrence").value(1))
-                .andExpect(jsonPath("$.previsionHeures").value(9));
-
-        assertEquals(1, tacheRepository.findByIdDossierOrderByDatePriseEnChargeAsc(1).size());
-    }
-
-    @Test
-    @DisplayName("Prise en charge — profil hors étape → 403 ; aucune étape ouverte → 409")
-    void priseEnCharge_gardes() throws Exception {
-        dossierEnStatut(1, "PRET_DISPATCH");
-        // L'étape DISPATCH revient au P/CC : la PRMP n'a rien à y prendre en charge.
-        mvc.perform(post("/api/dossiers/1/prise-en-charge").header("Authorization", tokenPrmp)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"previsionHeures\":2}"))
-                .andExpect(status().isForbidden());
-
-        // CLOTURE : le dossier est sorti du circuit, plus aucune tâche n'est ouverte.
-        dossierEnStatut(1, "CLOTURE");
-        mvc.perform(post("/api/dossiers/1/prise-en-charge").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"previsionHeures\":2}"))
-                .andExpect(status().isConflict());
-    }
-
-    @Test
-    @DisplayName("Prise en charge — ⚠️ 2026-09-08 : prévision ABSENTE acceptée (standard de l'étape) ; "
-            + "zéro toujours refusé en 400 — ne rien dire n'autorise pas à dire n'importe quoi")
-    void priseEnCharge_previsionFacultative_maisBornee() throws Exception {
-        dossierEnStatut(1, "PRET_DISPATCH");
-        // La prévision n'est plus obligatoire : le bouton démarre le chronomètre, le référentiel décide.
-        mvc.perform(post("/api/dossiers/1/prise-en-charge").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON).content("{}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.previsionStandard").value(true));
-        mvc.perform(post("/api/dossiers/1/prise-en-charge").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"previsionHeures\":0}"))
-                .andExpect(status().isBadRequest());
-    }
-
-    // ------------------------------------------------------------------ tolérance et clôture
-
-    @Test
-    @DisplayName("TOLÉRANCE — un geste métier sans prise en charge n'est pas bloqué : durée nulle et prévision STANDARD")
-    void tolerance_gesteSansPriseEnCharge() throws Exception {
-        // Réception COMPLET du dossier 2 (SOUMIS) : geste de clôture de l'étape RECEPTION, sans qu'aucun
-        // Secrétaire ait cliqué « Prendre en charge ».
+    @DisplayName("⚠️ 2026-09-12 — le geste métier s'exécute DIRECTEMENT : la réception enregistre la fin de "
+            + "RECEPTION sans qu'aucun Secrétaire ait eu à déclarer quoi que ce soit")
+    void gesteMetier_sExecuteDirectement() throws Exception {
         dossierEnStatut(500, "SOUMIS");
         mvc.perform(post("/api/receptions").header("Authorization", tokenCc)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -154,31 +106,86 @@ class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
                         + "\"imCtrlRecept\":\"CTRCC1\",\"complet\":true}"))
                 .andExpect(status().isCreated());
 
-        TacheDossier tache = tacheRepository.findByIdDossierOrderByDatePriseEnChargeAsc(500).stream()
+        TacheDossier passage = tacheRepository.findParDossier(500).stream()
                 .filter(t -> EtapeCircuit.RECEPTION.name().equals(t.getEtape())).findFirst().orElse(null);
-        assertNotNull(tache, "la clôture doit créer l'occurrence même sans prise en charge");
-        assertTrue(Boolean.TRUE.equals(tache.getPrevisionStandard()), "prévision reprise du référentiel");
-        assertEquals(0L, HeuresOuvrees.ecoulees(tache.getDatePriseEnCharge(), tache.getDateFin()));
-        assertNotNull(tache.getDateFin(), "la tâche est close par le geste métier");
+        assertNotNull(passage, "le geste métier enregistre à lui seul la fin de l'étape");
+        assertNotNull(passage.getDateFin(), "une ligne n'existe que parce qu'un passage s'est achevé");
+        assertEquals("CTRCC1", passage.getImActeur());
+        assertEquals(1, passage.getOccurrence());
+    }
+
+    // ------------------------------------------------------------------ délai mesuré, jamais saisi
+
+    @Test
+    @DisplayName("⚠️ Délai AUTOMATIQUE — l'entrée d'une étape est la fin de la précédente : la durée de "
+            + "DISPATCH court depuis la clôture de RECEPTION, sans aucune saisie")
+    void duree_entreeDeriveeDeLaTransitionPrecedente() throws Exception {
+        dossierEnStatut(500, "SOUMIS");
+        chronometrageService.cloturer(500, EtapeCircuit.RECEPTION);
+        dossierEnStatut(500, "PRET_DISPATCH");
+        chronometrageService.cloturer(500, EtapeCircuit.DISPATCH);
+
+        String corps = mvc.perform(get("/api/dossiers/500/chronometrage").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.etapes", org.hamcrest.Matchers.hasSize(3)))
+                .andExpect(jsonPath("$.etapes[0].etape").value("RECEPTION"))
+                .andExpect(jsonPath("$.etapes[1].etape").value("DISPATCH"))
+                // Le troisième est l'étape EN COURS, ouverte par la fin du dispatch.
+                .andExpect(jsonPath("$.etapes[2].enCours").value(true))
+                .andExpect(jsonPath("$.etapes[2].fin").doesNotExist())
+                .andReturn().getResponse().getContentAsString();
+
+        String finReception = com.jayway.jsonpath.JsonPath.read(corps, "$.etapes[0].fin");
+        String entreeDispatch = com.jayway.jsonpath.JsonPath.read(corps, "$.etapes[1].entree");
+        String finDispatch = com.jayway.jsonpath.JsonPath.read(corps, "$.etapes[1].fin");
+        String entreeCourante = com.jayway.jsonpath.JsonPath.read(corps, "$.etapes[2].entree");
+        assertEquals(finReception, entreeDispatch,
+                "l'entrée du dispatch est EXACTEMENT la fin de la réception : une seule et même borne");
+        assertEquals(finDispatch, entreeCourante, "et l'étape en cours entre à la fin du dispatch");
     }
 
     @Test
-    @DisplayName("Clôture — la tâche prise en charge est fermée par le geste métier, la prévision saisie est conservée")
-    void cloture_fermeLaTachePriseEnCharge() throws Exception {
-        dossierEnStatut(500, "SOUMIS");
-        // Le Secrétaire — ici le CC, qui peut exercer ses tâches — prend en charge puis réceptionne.
-        prendreEnCharge(500, tokenCc, 3);
-        mvc.perform(post("/api/receptions").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"idDossier\":500,\"numPassage\":1,\"typePassage\":\"INITIAL\","
-                        + "\"imCtrlRecept\":\"CTRCC1\",\"complet\":true}"))
-                .andExpect(status().isCreated());
+    @DisplayName("⚠️ GET /chronometrage — plus de « taches » ni d'« acteursAttendus » : les deux champs que "
+            + "servait la prise en charge ont disparu avec elle")
+    void chronometrage_champsDeLaPriseEnChargeRetires() throws Exception {
+        mvc.perform(get("/api/dossiers/1/chronometrage").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.taches").doesNotExist())
+                .andExpect(jsonPath("$.acteursAttendus").doesNotExist())
+                .andExpect(jsonPath("$.etapes").isArray())
+                // ... et aucune prévision nulle part : plus rien ne se saisit.
+                .andExpect(jsonPath("$..previsionHeures").isEmpty())
+                .andExpect(jsonPath("$..previsionStandard").isEmpty());
+    }
 
-        TacheDossier tache = tacheRepository.findByIdDossierOrderByDatePriseEnChargeAsc(500).get(0);
-        assertEquals(EtapeCircuit.RECEPTION.name(), tache.getEtape());
-        assertNotNull(tache.getDateFin());
-        assertEquals(3, tache.getPrevisionHeures());
-        assertTrue(Boolean.FALSE.equals(tache.getPrevisionStandard()), "prévision saisie, pas standard");
+    @Test
+    @DisplayName("⚠️ L'attente PRMP n'est imputée à PERSONNE — l'étape qui reprend entre à la SORTIE de "
+            + "l'attente, pas à l'endroit où le dossier est parti")
+    void duree_lAttentePrmpNeSImputePasALEtapeQuiReprend() throws Exception {
+        dossierEnStatut(500, "EXAMINE");
+        // Un examen clos il y a longtemps, puis une fenêtre d'attente PRMP fermée à l'instant.
+        chronometrageService.cloturer(500, EtapeCircuit.EXAMEN);
+        TacheDossier examen = tacheRepository.findParDossier(500).get(0);
+        examen.setDateFin(LocalDateTime.now().minusDays(30));
+        tacheRepository.save(examen);
+
+        cnm.prs.entity.SuspensionDossier attente = new cnm.prs.entity.SuspensionDossier();
+        attente.setIdSuspension(suspensionRepository.nextId());
+        attente.setIdDossier(500);
+        attente.setStatut("EN_ATTENTE_PIECES");
+        attente.setDebut(LocalDateTime.now().minusDays(29));
+        attente.setFin(LocalDateTime.now().minusHours(1));
+        suspensionRepository.save(attente);
+
+        // Le dossier revient à l'examen : l'occurrence en cours ne doit PAS porter les 30 jours d'attente.
+        dossierEnStatut(500, "A_REEXAMINER");
+        String corps = mvc.perform(get("/api/dossiers/500/chronometrage").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.etapes[1].enCours").value(true))
+                .andExpect(jsonPath("$.etapes[1].etape").value("EXAMEN"))
+                .andReturn().getResponse().getContentAsString();
+        int duree = com.jayway.jsonpath.JsonPath.read(corps, "$.etapes[1].dureeHeuresOuvrees");
+        assertTrue(duree <= 8, "le réexamen ne compte que depuis le retour du dossier, et non " + duree + " h");
     }
 
     // ------------------------------------------------------------------ date prévisionnelle
@@ -201,11 +208,11 @@ class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
     @DisplayName("La date GLISSE — une étape en dépassement compte 0, elle ne promet pas de rattrapage")
     void datePrevisionnelle_etapeEnDepassementCompteZero() throws Exception {
         dossierEnStatut(500, "SOUMIS");
-        prendreEnCharge(500, tokenCc, 1);
-        // Prise en charge reculée de 10 jours ouvrés : le reste de l'étape est largement négatif.
-        TacheDossier tache = tacheRepository.findByIdDossierOrderByDatePriseEnChargeAsc(500).get(0);
-        tache.setDatePriseEnCharge(java.time.LocalDateTime.now().minusDays(20));
-        tacheRepository.save(tache);
+        // ⚠️ 2026-09-12 — plus de prise en charge à reculer : l'entrée dans la première étape est le DÉPÔT
+        // du dossier. Déposé il y a vingt jours et toujours pas réceptionné, il est largement en dépassement.
+        Dossier d = dossierRepository.findById(500).orElseThrow();
+        d.setDateSoumission(LocalDateTime.now().minusDays(20));
+        dossierRepository.save(d);
 
         // RECEPTION compte 0 (dépassée) ; il reste 8+40+16+8+24+8 = 104 h, soit 13 jours ouvrés.
         LocalDate attendue = JoursOuvres.ajouter(LocalDate.now(), 13);
@@ -253,9 +260,9 @@ class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
                     .andExpect(jsonPath("$.etapeCourante").doesNotExist());
         }
 
-        // ⚠️ Prise en charge de la rectification (2026-09-07) — EN_ATTENTE_DECISION_PRMP porte désormais
-        // une étape NOMMÉE, RECTIFICATION_PRMP : l'attente reste suspensive (drapeau et date inchangés,
-        // l'étape est hors compteur), mais elle a un porteur — la PRMP, qui prend en charge puis rectifie.
+        // ⚠️ EN_ATTENTE_DECISION_PRMP porte une étape NOMMÉE, RECTIFICATION_PRMP : l'attente reste
+        // suspensive (drapeau et date inchangés, l'étape est hors compteur), mais elle a un porteur — et
+        // c'est ce qui donne à la PRMP un délai mesuré, à côté de ceux de la Commission.
         dossierEnStatut(500, "EN_ATTENTE_DECISION_PRMP");
         mvc.perform(get("/api/dossiers/500").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk())
@@ -289,10 +296,7 @@ class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
         assertTrue(suspensionRepository.findFirstByIdDossierAndFinIsNullOrderByDebutDesc(1).isPresent(),
                 "la fenêtre reste ouverte tant que la PRMP n'a pas rendu la main");
 
-        prendreEnChargeRectification(1);
-        mvc.perform(post("/api/dossiers/1/resoumettre").header("Authorization", tokenPrmp)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"motifRectification\":\"corrige\"}"))
-                .andExpect(status().isOk());
+        resoumettreDossier(1, "corrige");
         assertTrue(suspensionRepository.findFirstByIdDossierAndFinIsNullOrderByDebutDesc(1).isEmpty(),
                 "la resoumission referme la fenêtre");
     }
@@ -307,24 +311,38 @@ class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
         String tokenVer = bearer("CTRVER", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER", "ANT");
 
         passageObservationDossier1(tokenVer, "MAINTENUE", "a rectifier");
-        prendreEnChargeRectification(1);
-        mvc.perform(post("/api/dossiers/1/resoumettre").header("Authorization", tokenPrmp)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"motifRectification\":\"corrige\"}"))
-                .andExpect(status().isOk());
+        resoumettreDossier(1, "corrige");
         passageObservationDossier1(tokenVer, "LEVEE", null);
 
-        java.util.List<TacheDossier> verifs = tacheRepository
-                .findByIdDossierOrderByDatePriseEnChargeAsc(1).stream()
+        java.util.List<TacheDossier> verifs = tacheRepository.findParDossier(1).stream()
                 .filter(t -> EtapeCircuit.VERIFICATION.name().equals(t.getEtape())).toList();
         assertEquals(2, verifs.size(), "chaque passage du Vérificateur est une occurrence distincte");
         assertEquals(1, verifs.get(0).getOccurrence());
         assertEquals(2, verifs.get(1).getOccurrence());
     }
 
+    @Test
+    @DisplayName("⚠️ Le délai de la PRMP est mesuré à part — la RECTIFICATION_PRMP a son propre passage, "
+            + "clos par la resoumission, et reste hors compteur global")
+    void rectificationPrmp_passageMesureSansAucuneSaisie() throws Exception {
+        int idPv = 903;
+        signerPvAvecAvis(idPv, "FAVR");
+        String tokenVer = bearer("CTRVER", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER", "ANT");
+        passageObservationDossier1(tokenVer, "MAINTENUE", "a rectifier");
+
+        resoumettreDossier(1, "corrige");
+
+        java.util.List<TacheDossier> rectifs = tacheRepository.findParDossier(1).stream()
+                .filter(t -> EtapeCircuit.RECTIFICATION_PRMP.name().equals(t.getEtape())).toList();
+        assertTrue(!rectifs.isEmpty(), "la resoumission enregistre la fin de l'étape de la PRMP");
+        assertNotNull(rectifs.get(rectifs.size() - 1).getDateFin());
+        assertEquals("PRMP001", rectifs.get(rectifs.size() - 1).getImActeur());
+    }
+
     // ------------------------------------------------------------------ restitution
 
     @Test
-    @DisplayName("GET /chronometrage — occurrences, compteurs en HEURES ouvrées, et NET = BRUT − attentes PRMP")
+    @DisplayName("GET /chronometrage — passages, compteurs en HEURES ouvrées, et NET = BRUT − attentes PRMP")
     void chronometrage_compteurs() throws Exception {
         int idPv = 902;
         signerPvAvecAvis(idPv, "FAVR");
@@ -335,7 +353,7 @@ class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.idDossier").value(1))
                 .andExpect(jsonPath("$.attentePrmp").value(true))
-                .andExpect(jsonPath("$.taches").isArray())
+                .andExpect(jsonPath("$.etapes").isArray())
                 .andReturn().getResponse().getContentAsString();
 
         int brut = com.jayway.jsonpath.JsonPath.read(resp, "$.dureeBruteHeuresOuvrees");
@@ -374,34 +392,37 @@ class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("Un client resté aux JOURS est refusé en 400 — jamais lu comme des heures en silence")
-    void priseEnCharge_previsionJours_refusee() throws Exception {
-        dossierEnStatut(1, "PRET_DISPATCH");
-        // ⚠️ 2026-09-08 — ce refus était jusqu'ici un EFFET DE BORD (propriété inconnue ignorée, champ
-        // requis manquant). La prévision devenue facultative, il aurait disparu : les « 5 jours » auraient
-        // été remplacés par le standard en silence. Le champ est donc déclaré POUR ÊTRE INTERDIT.
-        mvc.perform(post("/api/dossiers/1/prise-en-charge").header("Authorization", tokenCc)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"previsionJours\":5}"))
-                .andExpect(status().isBadRequest());
+    @DisplayName("⚠️ Durée à la MÊME échelle — une étape entrée hier matin et close ce matin vaut 8 h "
+            + "ouvrées (et non 24 h d'horloge) : la mesure reste dans l'échelle du délai standard")
+    void duree_enHeuresOuvrees_pasEnHeuresDHorloge() throws Exception {
+        dossierEnStatut(500, "PRET_DISPATCH");
+        chronometrageService.cloturer(500, EtapeCircuit.RECEPTION);
+        chronometrageService.cloturer(500, EtapeCircuit.DISPATCH);
+
+        // Deux jours OUVRÉS consécutifs, à la même heure : en heures d'horloge l'écart vaut 24 h (72 h
+        // par-dessus un week-end), et le dispatch paraîtrait en dépassement de son délai standard de 8 h.
+        LocalDateTime jour2 = jourOuvre(LocalDateTime.now().withHour(9).withMinute(0).withSecond(0).withNano(0));
+        LocalDateTime jour1 = veilleOuvree(jour2);
+        List<TacheDossier> passages = tacheRepository.findParDossier(500);
+        passages.get(0).setDateFin(jour1);
+        passages.get(1).setDateFin(jour2);
+        tacheRepository.saveAll(passages);
+
+        String corps = mvc.perform(get("/api/dossiers/500/chronometrage").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.etapes[1].etape").value("DISPATCH"))
+                .andReturn().getResponse().getContentAsString();
+        int duree = com.jayway.jsonpath.JsonPath.read(corps, "$.etapes[1].dureeHeuresOuvrees");
+        assertEquals(8, duree, "7 h la veille (09:00 → 16:00) + 1 h le lendemain (08:00 → 09:00)");
     }
 
-    @Test
-    @DisplayName("⚠️ Écoulé à la MÊME échelle — une tâche prise hier matin n'est PAS en dépassement")
-    void ecoule_pasDeFauxDepassement() throws Exception {
-        dossierEnStatut(500, "SOUMIS");
-        prendreEnCharge(500, tokenCc, 8);   // 8 h = un jour ouvré
-
-        // Prise en charge reculée d'un jour OUVRÉ à la même heure. En heures d'horloge l'écoulé vaudrait
-        // 24 h et la tâche serait en dépassement de 16 h ; en heures ouvrées il vaut exactement 8 h.
-        java.time.LocalDateTime hier = veilleOuvree(java.time.LocalDateTime.now().withHour(9).withMinute(0));
-        TacheDossier tache = tacheRepository.findByIdDossierOrderByDatePriseEnChargeAsc(500).get(0);
-        tache.setDatePriseEnCharge(hier);
-        tacheRepository.save(tache);
-
-        long ecoulees = HeuresOuvrees.ecoulees(hier, hier.plusDays(1));
-        org.junit.jupiter.api.Assertions.assertTrue(ecoulees <= 8L,
-                "l'écoulé doit rester dans l'échelle de la prévision (au plus 8 h par jour ouvré), et non "
-                        + ecoulees);
+    /** Dernier jour OUVRÉ à cette heure-là : le week-end n'est pas un jour de service. */
+    private static LocalDateTime jourOuvre(LocalDateTime instant) {
+        LocalDateTime jour = instant;
+        while (!JoursOuvres.estOuvre(jour.toLocalDate())) {
+            jour = jour.minusDays(1);
+        }
+        return jour;
     }
 
     @Test
@@ -420,16 +441,14 @@ class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     /** Veille OUVRÉE d'un instant : recule d'un jour, puis saute le week-end. */
-    private static java.time.LocalDateTime veilleOuvree(java.time.LocalDateTime instant) {
-        java.time.LocalDateTime veille = instant.minusDays(1);
+    private static LocalDateTime veilleOuvree(LocalDateTime instant) {
+        LocalDateTime veille = instant.minusDays(1);
         while (!JoursOuvres.estOuvre(veille.toLocalDate())) {
             veille = veille.minusDays(1);
         }
         return veille;
     }
-    // ------------------------------------------------------------------ utilitaires
 
-    /** Force le statut d'un dossier existant (ou le crée pour le dossier 2, absent du socle). */
     // ------------------------------------------------------------------ attributaire courant
 
     @Test
@@ -442,8 +461,7 @@ class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$.attributaire").value("CTRMEM"));
 
         // Réattribution : le dispatch ne garde que son dernier état, et c'est bien celui-là que le
-        // chronométrage doit servir — sinon le front masquerait le bouton au nouvel attributaire et
-        // l'offrirait à l'ancien, à qui le serveur répondrait 403.
+        // chronométrage doit servir — c'est aussi lui qui portera l'examen quand il sera clos.
         controleurRepository.save(controleur("MEMANT7", 5, "ANT"));
         var dispatch = dispatchRepository.findById(1).orElseThrow();
         dispatch.setImCtrlMembre("MEMANT7");
@@ -453,20 +471,14 @@ class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.attributaire").value("MEMANT7"));
 
-        // ⚠️ La valeur servie est EXACTEMENT celle sur laquelle porte la garde de prise en charge :
-        // l'ancien attributaire est désormais refusé, le nouveau passe. Les deux ne peuvent pas
-        // diverger, c'est la même requête.
+        // ⚠️ L'étape EXAMEN en cours est servie au nom du titulaire COURANT : c'est lui qu'elle mesure.
         var d = dossierRepository.findById(1).orElseThrow();
         d.setStatut("DISPATCHE");
         dossierRepository.save(d);
-        mvc.perform(post("/api/dossiers/1/prise-en-charge").header("Authorization", tokenMembre)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"previsionHeures\":4}"))
-                .andExpect(status().isForbidden());
-        mvc.perform(post("/api/dossiers/1/prise-en-charge")
-                .header("Authorization", bearer("MEMANT7", ProfilUtilisateur.MEMBRE, TypeActeur.CONTROLEUR,
-                        "MEMANT7", "ANT"))
-                .contentType(MediaType.APPLICATION_JSON).content("{\"previsionHeures\":4}"))
-                .andExpect(status().isOk());
+        mvc.perform(get("/api/dossiers/1/chronometrage").header("Authorization", tokenMembre))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.etapeCourante").value("EXAMEN"))
+                .andExpect(jsonPath("$.etapes[-1:].imActeur").value("MEMANT7"));
     }
 
     @Test
@@ -545,13 +557,10 @@ class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
 
     // ------------------------------------------------------------------ dates des étapes de la frise (2026-09-07)
 
-    @Autowired
-    private cnm.prs.service.ChronometrageService chronometrageService;
-
     /**
      * ⚠️ Frise du tableau de bord (demande pilote 2026-09-07) — le front datait chaque point par jointure de
      * listes que la portée du lecteur rend vides (Président « toutes localités ») : {@code datesEtapes} sert
-     * la date de franchissement de chaque étape depuis le dossier lui-même, dérivée des tâches en lot.
+     * la date de franchissement de chaque étape depuis le dossier lui-même, dérivée des passages en lot.
      */
     @Test
     @DisplayName("Dates des étapes — dossier examiné (projet de PV) : RECEPTION, DISPATCH, EXAMEN, PROJET_PV datés, "
@@ -575,13 +584,13 @@ class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
 
     @Test
     @DisplayName("Dates des étapes — le franchissement se juge sur le STATUT : un dispatch annulé (PRET_DISPATCH) "
-            + "laisse ses tâches closes mais ne date ni DISPATCH ni EXAMEN")
+            + "laisse ses passages derrière lui mais ne date ni DISPATCH ni EXAMEN")
     void datesEtapes_dispatchAnnule_nonFranchi() throws Exception {
         dossierEnStatut(500, "EXAMINE");
         chronometrageService.cloturer(500, EtapeCircuit.RECEPTION);
         chronometrageService.cloturer(500, EtapeCircuit.DISPATCH);
         chronometrageService.cloturer(500, EtapeCircuit.EXAMEN);
-        // Annulation du dispatch : retour en PRET_DISPATCH, les tâches closes restent (histoire).
+        // Annulation du dispatch : retour en PRET_DISPATCH, les passages restent (histoire).
         dossierEnStatut(500, "PRET_DISPATCH");
 
         mvc.perform(get("/api/dossiers/500").header("Authorization", tokenPrmp))
@@ -626,10 +635,13 @@ class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
                 // Étape non atteinte : la clé est servie avec la valeur null (contrat de la demande).
                 .andExpect(jsonPath("$[?(@.idDossier==500)].datesEtapes.EXAMEN", org.hamcrest.Matchers.hasItem(org.hamcrest.Matchers.nullValue())));
         // Aucune réception, aucun dispatch, aucun examen n'existe pour ce dossier dans la fixture : la
-        // date ne peut venir que des tâches de chronométrage, pas d'une jointure sur ces listes.
+        // date ne peut venir que des passages du chronométrage, pas d'une jointure sur ces listes.
         assertTrue(receptionRepository.findByIdDossier(500).isEmpty(), "fixture sans réception");
     }
 
+    // ------------------------------------------------------------------ utilitaires
+
+    /** Force le statut d'un dossier existant (ou le crée pour le dossier 500, absent du socle). */
     private void dossierEnStatut(int idDossier, String statut) {
         Dossier d = dossierRepository.findById(idDossier).orElseGet(() -> {
             Dossier neuf = dossier(idDossier, statut);
@@ -641,12 +653,5 @@ class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
         d.setIdPrmp("PRMP001");
         d.setIdLocalite("ANT");
         dossierRepository.save(d);
-    }
-
-    private void prendreEnCharge(int idDossier, String token, int prevision) throws Exception {
-        mvc.perform(post("/api/dossiers/" + idDossier + "/prise-en-charge").header("Authorization", token)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"previsionHeures\":" + prevision + "}"))
-                .andExpect(status().isOk());
     }
 }

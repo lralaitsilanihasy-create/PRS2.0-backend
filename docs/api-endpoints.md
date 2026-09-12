@@ -1519,9 +1519,9 @@ Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `
 > ou un **retrait accepté** les effaçait du journal avec leurs sources. Ils sont désormais **figés en lignes
 > de `t_action_dossier` juste avant la purge** (mêmes `typeAction`, opérateur et détail, `idAction` posé) :
 > le journal d'un dossier retiré raconte toujours l'examen qu'il a connu. Rien n'est écrit en double tant
-> que les sources vivent. Côté chronométrage (`GET /api/dossiers/{id}/chronometrage`), la tâche EXAMEN
-> close par une re-soumission du projet faite **pour** le Membre (Président/CC en délégation) n'est plus
-> créée au nom du déclencheur : sans tâche ouverte de l'attributaire, aucune occurrence instantanée.
+> que les sources vivent. Côté chronométrage (`GET /api/dossiers/{id}/chronometrage`), l'étape EXAMEN
+> close par une re-soumission du projet faite **pour** le Membre (Président/CC en délégation) est
+> enregistrée au nom de l'**attributaire**, jamais du déclencheur.
 >
 > **Neuf types de plus**, chacun daté et avec son opérateur nommé :
 >
@@ -1677,9 +1677,12 @@ Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `
 > IM_ACTEUR=`<idPrmp>`, CHAMP_MODIFIE=`motifRectification`) ; le **motif** est enregistré sur la dernière
 > vérification (`t_verification.MOTIF_RECTIF`) et exposé dans `VerificationDto.motifRectif` (visible côté vérificateur).
 >
-> ⚠️ **Prise en charge préalable (2026-09-07)** — **409** tant que la PRMP n'a pas pris en charge l'étape
-> `RECTIFICATION_PRMP` (`POST /api/dossiers/{id}/prise-en-charge`). La même garde ferme l'**édition** de
-> rectification. Détail : « RECTIFICATION PRMP — l'étape `RECTIFICATION_PRMP` », section Chronométrage.
+> ⚠️ **Plus de prise en charge préalable (2026-09-12)** — le **409** « Prenez d'abord en charge la
+> rectification », posé le 2026-09-07 sur la resoumission **et** sur l'édition de rectification, est
+> **retiré** : les deux gestes s'exécutent directement. La resoumission enregistre la **fin** de l'étape
+> `RECTIFICATION_PRMP`, dont la durée court depuis la vérification qui a maintenu les observations. Les
+> gardes de **propriété** (403 hors PRMP propriétaire) sont inchangées. Détail : « Le délai propre de la
+> PRMP », section Chronométrage.
 
 > **Soumission (§3.1, Module 03).** `POST /api/dossiers/{id}/soumettre` (réservé **PRMP propriétaire**) :
 > passe le dossier de **`BROUILLON` → `SOUMIS`** (statut autre → **409**), vérifie la **cohérence
@@ -4614,13 +4617,10 @@ immuable). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **40
 >
 > - Le refus vient **avant** la note d'intérim : réclamer une pièce qui ne débloquerait rien serait
 >   malhonnête.
-> - **La prise en charge de l'étape `VISA` suit la même réserve** (`POST /dossiers/{id}/prise-en-charge`,
->   **403**). Sans cela l'examinateur ouvrait une tâche qu'il ne pouvait achever et **verrouillait
->   l'étape contre le dispatcheur**, à qui le 409 nominal renvoyait alors son propre nom.
-> - ⚠️ **`acteursAttendus` reste `null`** sur une navette simple : l'ensemble admis — le dispatcheur,
->   plus tout P/CC du périmètre par intérim, **moins** l'examinateur — n'est pas énumérable. Une
->   soustraction ne s'écrit pas avec une énumération ; la réserve s'exprime donc en refus. Le front
->   applique la même exclusion de son côté (bouton masqué), le serveur reste l'autorité.
+> - ⚠️ **La réserve jumelle côté chronométrage a disparu** (2026-09-12) : `POST
+>   /dossiers/{id}/prise-en-charge` n'existe plus, il n'y a donc plus de tâche de visa à ouvrir
+>   indûment ni d'étape à verrouiller contre le dispatcheur. Le refus ci-dessus, lui, est inchangé — il
+>   porte sur le **geste métier**.
 > - La navette à **deux niveaux** garde ses règles d'étage, inchangées.
 
 > ## ⚠️ NAVETTE À DEUX NIVEAUX (spec pilote du 2026-09-04)
@@ -5543,12 +5543,38 @@ supprimable.
 ## Chronométrage et prévision des délais
 
 ⚠️ **Règle du pilote (2026-09-01)** — la PRMP doit connaître la **date prévisionnelle d'achèvement** du
-traitement de son dossier à la CNM. Chaque tâche affectée à un profil est chronométrée ; à la prise en
-charge, le porteur saisit sa prévision ; la date annoncée est *aujourd'hui + somme des prévisions des
-étapes restantes*. **Aucun calcul de date côté front** : tout vient du serveur.
+traitement de son dossier à la CNM. Chaque étape du circuit est chronométrée ; la date annoncée est
+*aujourd'hui + somme des délais des étapes restantes*. **Aucun calcul de date côté front** : tout vient
+du serveur.
 
-⚠️ **Révision du 2026-09-02 — l’unité est l’HEURE ouvrée**, partout : délais standards, prévision saisie,
-restes et compteurs. **8 h = 1 jour ouvré.** Seule `datePrevisionnelleFin` reste une date.
+⚠️ **Révision du 2026-09-02 — l’unité est l’HEURE ouvrée**, partout : délais standards, restes et
+compteurs. **8 h = 1 jour ouvré.** Seule `datePrevisionnelleFin` reste une date.
+
+> ## ⚠️ REFONTE DU 2026-09-12 — LE DÉLAI PAR ÉTAPE EST AUTOMATIQUE
+>
+> **Ce qui disparaît**, en trois points :
+>
+> 1. **`POST /api/dossiers/{id}/prise-en-charge` n'existe plus** (la route répond **404**). Réception,
+>    dispatch, examen, visa, signature, vérification et archivage **s'exécutent directement** ; la garde
+>    « aucune action sans prise en charge », qui fermait aussi la rectification de la PRMP, est retirée.
+> 2. **Plus aucune saisie.** Le délai d'une étape est `fin − entrée`, en heures ouvrées, **dérivé des
+>    transitions déjà horodatées** — celles-là mêmes qui datent `datesEtapes` et le journal. L'entrée
+>    d'une étape est la **fin du passage précédent** ; elle n'est ni saisie ni stockée.
+> 3. **`ChronometrageDto` change de forme** : `taches` (les prises en charge et leur prévision saisie)
+>    devient **`etapes`** — `entree`, `fin`, `dureeHeuresOuvrees` par passage — et **`acteursAttendus`
+>    disparaît**, faute de geste à autoriser. `attributaire` reste : c'est une donnée du dossier, pas du
+>    chronomètre.
+>
+> **Trois bornes** peuvent faire entrer dans une étape ; on retient la plus récente qui précède la fin :
+> la fin du passage précédent, le **dépôt** du dossier (première étape, et après un retrait suivi d'une
+> nouvelle soumission), la **sortie d'une attente PRMP** (le temps de la PRMP ne s'impute pas à l'étape
+> qui reprend). Seule `RECTIFICATION_PRMP` échappe à la troisième : cette étape *est* l'attente.
+>
+> **Schéma** (`V28`) : `t_tache_dossier` ne porte plus qu'une **fin** par passage —
+> `DATE_PRISE_EN_CHARGE`, `PREVISION_HEURES` et `PREVISION_STANDARD` retirées, `DATE_FIN` devenue
+> obligatoire. Les lignes encore *ouvertes* ont été supprimées (elles ne disaient qu'une prise en charge) ;
+> les fins déjà enregistrées sont conservées, si bien que **les durées de l'historique se recalculent
+> toutes seules**.
 
 ### Les huit étapes
 
@@ -5575,47 +5601,34 @@ chronomètre à la validation sur SIGMP.
 > circuit. C'est la **réception marquée `COMPLET`** (celle qui déclenche `PRET_DISPATCH`) qui la clôt.
 
 **Étapes rejouables.** Un réexamen, une nouvelle navette de visa, un passage supplémentaire du
-Vérificateur dans la boucle FAVR créent chacun une **occurrence distincte** (`occurrence` = 1, 2, 3…),
-jamais une mise à jour de la précédente : la table est **append-only**, et c'est ce qui rend visible le
+Vérificateur dans la boucle FAVR créent chacun un **passage distinct** (`occurrence` = 1, 2, 3…),
+jamais une mise à jour du précédent : la table est **append-only**, et c'est ce qui rend visible le
 nombre d'aller-retours.
 
-### Prise en charge
+⚠️ **Toute SORTIE d'étape est enregistrée**, c'est le corollaire du délai dérivé : une sortie manquée ne
+laisse pas un trou, elle **déverse** son temps sur l'étape suivante. S'ajoutent donc aux clôtures du
+tableau ci-dessus : le **retour du projet de PV** (`POST /api/pv-examens/{id}/retourner`), autre issue du
+visa — qu'il renvoie au Membre ou redescende du Président au CC ; la **transmission SIGMP directe** (avis
+FAV), qui clôt la vérification qu'aucun passage n'a close ; la **réattribution** et la **purge**, qui
+ferment l'étape en cours de ce qui va disparaître.
+
+### Endpoints
 
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
-| POST | /api/dossiers/{id}/prise-en-charge | `{ "previsionHeures": 8 }` | `TacheDossierDto` | 200, 400, 403, 404, 409 | porteur de l’étape courante |
 | GET | /api/dossiers/{id}/chronometrage | — | `ChronometrageDto` | 200, 403, 404 | même périmètre que le dossier |
 | GET | /api/dossiers/{id}/perimetre-examen | — | `PerimetreExamenDto` | 200, 403, 404 | même périmètre que le dossier |
 | GET | /api/delais-standards | — | `DelaiStandardDto[]` | 200 | Authentifié |
 | PUT | /api/delais-standards/{etape} | `DelaiStandardDto` | `DelaiStandardDto` | 200, 400, 403, 404 | **ADMINISTRATEUR** |
 
-⚠️ **`previsionHeures` est FACULTATIF depuis le 2026-09-08**, et le **corps entier peut manquer** : le
-bouton « Prendre en charge » ne demande plus rien, il démarre le chronomètre.
+⚠️ **`POST /api/dossiers/{id}/prise-en-charge` a été SUPPRIMÉ le 2026-09-12** — la route répond **404**
+pour tous les profils. Avec elle disparaissent le corps `PriseEnChargeRequest` (`previsionHeures`,
+`previsionJours`) et les champs `previsionHeures` / `previsionStandard` des passages : plus rien ne se
+saisit au chronométrage.
 
-| Corps | Prévision retenue | `previsionStandard` |
-|---|---|---|
-| absent, `{}`, ou `previsionHeures: null` | le **délai standard de l'étape** (`/api/delais-standards`) | `true` |
-| `{"previsionHeures": 12}` | 12 — prévision **estimée** (compat, toujours acceptée) | `false` |
-| `{"previsionHeures": 0}` ou négatif | — | **400** |
-| `{"previsionJours": 5}` | — | **400** nommant le champ (ancienne unité, abandonnée le 2026-09-02) |
-
-Le drapeau `previsionStandard` porte toute la différence : une prévision **choisie** ne se lit pas comme
-une prévision **par défaut**. ⚠️ Le refus de `previsionJours` était jusqu'ici un *effet de bord* (champ
-obligatoire manquant) ; la prévision devenue facultative, il est désormais **explicite** — sans quoi
-cinq « jours » auraient été silencieusement remplacés par le standard.
-
-**403** si l'appelant n'est pas le porteur de
-l'étape (délégations et intérim résolus par la garde centrale) ou si le dossier n'est pas de sa
-localité ; **409** si aucune étape n'est ouverte — brouillon, dossier clos ou retiré (⚠️ l'attente de
-rectification PRMP n'en fait plus partie depuis le 2026-09-07, voir ci-dessous).
-
-**Rejouer le POST sur une tâche encore ouverte corrige la prévision** et ne crée pas d'occurrence :
-corriger son estimation n'est pas recommencer sa tâche. Rejoué **sans corps**, il ré-applique le
-standard — idempotent.
-
-⚠️ **`RECTIFICATION_PRMP` ne figure pas au référentiel** (ce n'est pas un délai de la Commission) : sa
-prise en charge prend le **repli serveur de 8 h**, comme toute étape que l'Administrateur n'a pas réglée.
-`PUT /api/delais-standards/RECTIFICATION_PRMP` répond toujours **404**.
+⚠️ **`RECTIFICATION_PRMP` ne figure pas au référentiel** (ce n'est pas un délai de la Commission) :
+`PUT /api/delais-standards/RECTIFICATION_PRMP` répond **404**, et `GET /api/delais-standards` rend
+toujours **huit** lignes. Ce qui ne s'y règle pas ne s'y lit pas non plus.
 
 > ## ⚠️ PÉRIMÈTRE D'EXAMEN — n'examiner que les lignes changées (2026-09-10)
 >
@@ -5657,140 +5670,63 @@ prise en charge prend le **repli serveur de 8 h**, comme toute étape que l'Admi
 > - Une évaluation posée **hors périmètre** est acceptée et conservée (l'exigence tombe, pas la
 >   possibilité de statuer) mais **ne sort pas dans le PV**.
 
-> ## ⚠️ RECTIFICATION PRMP — l'étape `RECTIFICATION_PRMP` (2026-09-07)
+> ## ⚠️ LE DÉLAI PROPRE DE LA PRMP — l'étape `RECTIFICATION_PRMP` (2026-09-07, revu le 2026-09-12)
 >
-> Pendant `EN_ATTENTE_DECISION_PRMP`, **aucune étape n'était ouverte** : `prise-en-charge` répondait
-> `409`, `chronometrage` servait `etapeCourante: null`, et la PRMP rectifiait sans qu'aucun geste ne
-> soit horodaté. « Aucune action sans prise en charge » s'arrêtait au seuil de la PRMP.
+> Pendant `EN_ATTENTE_DECISION_PRMP`, l'étape en cours est `RECTIFICATION_PRMP`, portée par la **PRMP
+> propriétaire** : elle court de la vérification qui a maintenu les observations jusqu'à la
+> **resoumission**, qui l'achève. Le dossier n'est pas « sans étape » parce qu'aucun contrôleur n'y
+> travaille — et c'est ce temps-là qu'on lui mesure.
 >
 > | | Valeur pendant `EN_ATTENTE_DECISION_PRMP` |
 > |---|---|
-> | `etapeCourante` | `RECTIFICATION_PRMP` (était `null`) |
-> | `acteursAttendus` | `["<idPrmp du dossier>"]` — liste **close**, ou `null` si le dossier n'a pas de PRMP propriétaire connue |
-> | `attributaire` | **inchangé** : l'`imCtrlMembre` du dispatch. C'est la valeur sur laquelle porte la garde d'`EXAMEN` ; y servir la PRMP l'aurait désalignée de sa garde |
-> | `attentePrmp` | `true` — inchangé, le temps reste suspensif |
-> | `datePrevisionnelleFin` | **inchangée** par la prise en charge |
+> | `etapeCourante` | `RECTIFICATION_PRMP` |
+> | dernier élément de `etapes` | ce même `RECTIFICATION_PRMP`, `enCours: true`, `fin: null`, `imActeur` = l'`idPrmp` du dossier |
+> | `attributaire` | **inchangé** : l'`imCtrlMembre` du dispatch — c'est une donnée du dossier, pas de l'étape en cours |
+> | `attentePrmp` | `true` — le temps reste suspensif |
+> | `datePrevisionnelleFin` | **inchangée** : l'étape est hors compteur |
 >
-> `POST /api/dossiers/{id}/prise-en-charge` **fonctionne** donc dans cet état, et ouvre la tâche au nom
-> de la PRMP. **403** pour tout autre acteur — contrôleur de la CNM comme autre PRMP :
+> ### ⚠️ Plus aucun verrou (2026-09-12)
 >
-> ```
-> 403 — La rectification de ce dossier revient à la PRMP : elle seule la prend en charge.
-> 403 — La rectification de ce dossier revient à sa PRMP ({nom}) : elle seule la prend en charge,
->       puis resoumet.
-> ```
+> Le 2026-09-07, « aucune action sans prise en charge » avait été étendue à la PRMP : ni rectifier ni
+> resoumettre ne passait (**409**) tant qu'elle n'avait pas ouvert sa tâche. **Ce verrou est retiré**,
+> comme tous les autres. Les deux gestes s'exécutent directement :
 >
-> ### Gardes serveur en miroir — le verrou n'est pas cosmétique
+> | Geste | Endpoints | Aujourd'hui |
+> |---|---|---|
+> | Resoumettre | `POST /api/dossiers/{id}/resoumettre` | **200** ; enregistre la **fin** de `RECTIFICATION_PRMP` |
+> | Rectifier | `PUT /api/saisies/ppm/{idDossier}` (façade, import compris), `PATCH /api/ppms/{id}/rectifier`, `PATCH /api/marches/{id}/rectifier` | **200** |
 >
-> Tant que l'étape n'est pas prise en charge, **409** sur les deux gestes de la rectification :
+> **Les gardes de PROPRIÉTÉ, elles, sont intactes** : les deux gestes restent réservés à la PRMP
+> propriétaire (ou à celle **en fonction** sur le périmètre) — **403** pour un contrôleur de la CNM comme
+> pour une autre PRMP. Retirer le verrou du chronomètre n'ouvre la rectification à personne.
 >
-> | Geste | Endpoints |
-> |---|---|
-> | Resoumettre | `POST /api/dossiers/{id}/resoumettre` |
-> | Rectifier | `PUT /api/saisies/ppm/{idDossier}` (façade, import compris), `PATCH /api/ppms/{id}/rectifier`, `PATCH /api/marches/{id}/rectifier`, création/suppression de ligne en rectification |
+> ### Compteur
 >
-> ```
-> 409 — Prenez d'abord en charge la rectification de ce dossier (« Prendre en charge ») :
->       elle ouvre votre tâche, et vous permet de rectifier puis de resoumettre.
-> ```
->
-> Ne fermer que la resoumission aurait laissé « Modifier le dossier » **cosmétique** : le contenu
-> serait passé par l'API sans qu'aucune tâche ne soit ouverte. Le **brouillon** reste libre — la garde
-> ne mord que sur `EN_ATTENTE_DECISION_PRMP`.
->
-> ### Clôture et compteur
->
-> La **resoumission** clôt la tâche ; le dossier repart en `EN_VERIFICATION` et plus aucune étape PRMP
-> n'est ouverte. ⚠️ L'étape reste **hors du compteur net CNM** : ce temps est déjà compté dans
+> ⚠️ L'étape reste **hors du compteur net CNM** : ce temps est déjà compté dans
 > `attentePrmpHeuresOuvrees`, et `GET /api/delais-standards` garde ses **huit** étapes — il ne décrit
-> que les délais de la Commission.
+> que les délais de la Commission. ⚠️ **Son entrée ne suit pas la règle des reprises** : partout ailleurs,
+> une sortie d'attente PRMP redémarre l'étape qui reprend ; ici l'étape *est* l'attente, et sa sortie est
+> sa propre fin — la retenir réduirait à zéro la seule durée qui mesure la PRMP.
 
-> ## ⚠️ PRISE EN CHARGE — garde d'acteur et occurrences par niveau (2026-09-04)
+> ## ⚠️ UN PASSAGE PAR ÉTAGE, UN PASSAGE PAR CO-SIGNATAIRE (2026-09-04, revu le 2026-09-12)
 >
-> Trois corrections issues de la **recette réelle** du cycle à deux niveaux (dossier 100285, PV 12),
-> qui avait exigé trois réassignations SQL pour être menée à son terme. Elles ont un point commun : le
-> chronométrage supposait **une étape = une personne**, hypothèse qui tombe dès que la navette a deux
-> étages ou que la co-signature compte deux désignés.
+> Les constats de la **recette réelle** du cycle à deux niveaux (dossier 100285, PV 12) avaient un point
+> commun : le chronométrage supposait **une étape = une personne**, hypothèse qui tombe dès que la
+> navette a deux étages ou que la co-signature compte deux désignés.
 >
-> ### 1. Le replay n'appartient qu'à son auteur → **409 nominal**
+> ⚠️ **La moitié « garde » de ces constats a disparu avec la prise en charge** (2026-09-12) : plus de
+> 409 nominal, plus de 403 du non-attributaire, plus d'`acteursAttendus` — il n'y a plus de tâche à
+> ouvrir, donc plus personne à verrouiller. Ce qui reste, et qui compte désormais davantage puisque les
+> durées en dépendent, c'est la **découpe** :
 >
-> `POST /api/dossiers/{id}/prise-en-charge` **rejouée** corrige la prévision au lieu d'ouvrir une
-> occurrence. Elle ne vérifiait pas **qui** appelait : un second acteur recevait `200` et corrigeait
-> **la prévision du premier**. Désormais, un acteur différent reçoit :
+> | Étape | Découpe |
+> |---|---|
+> | `VISA` sur deux niveaux | `POST /{pv}/accepter` **clôt** le passage du CC ; celui du Président s'ouvre à cet instant et son visa le clôt. `POST /{pv}/retourner` (le projet redescend d'un étage) clôt de même celui du Président |
+> | `VISA` → retour au Membre | `POST /{pv}/retourner` clôt le passage du viseur : c'est l'autre issue du visa, et sans cette fin son temps se recompterait dans le réexamen |
+> | `COSIGNATURE` avec 2 désignés | **un passage par désigné**, chacun enregistré par **sa** signature — la seule étape du circuit où plusieurs personnes travaillent de front |
+> | `EXAMEN` | enregistré au nom de l'**attributaire** du dispatch, quel que soit l'auteur de la transition (un P/CC qui re-soumet pour le Membre ne se voit pas prêter son examen) |
 >
-> ```
-> 409 — Étape déjà prise en charge par {nom} : une étape est tenue par une personne à la fois.
->       Faites-la lui clore, ou demandez-lui de vous la transmettre.
-> ```
->
-> Le nom est **dans le message** : sans lui, l'appelant bloqué n'a personne à qui s'adresser — c'est
-> précisément ce qui a mené aux corrections en base. Repli sur le matricule si l'état civil manque.
->
-> **Exception : les étapes à plusieurs porteurs.** `COSIGNATURE` seule y échappe (voir §3) — le 409 y
-> ferait verrouiller le second désigné par le premier.
->
-> ### 2. L'`EXAMEN` se prend par son **attributaire** → **403**
->
-> ```
-> 403 — L'examen de ce dossier est attribué à {nom} : lui seul peut le prendre en charge,
->       même par délégation.
-> ```
->
-> C'est la seule étape où la garde de profil ne suffit pas. Ailleurs, prendre une étape en charge ne
-> fait que démarrer un chronomètre ; ici, elle est **nominativement attribuée** par le dispatch, et
-> « seul l'assignataire examine » (règle du 2026-09-03). Le dispatcheur et le CC en copie, que la paire
-> « → Membre » rend éligibles au profil, ouvraient donc une tâche sur le travail d'autrui — et, avec la
-> garde §1, l'y verrouillaient. Sans attributaire identifiable (dispatch incomplet), aucun blocage :
-> la garde protège une attribution existante, elle n'en invente pas.
->
-> ### 3. Une occurrence par niveau, une tâche par co-signataire
->
-> | Étape | Avant | Après |
-> |---|---|---|
-> | `VISA` sur deux niveaux | **une** tâche pour deux acteurs successifs — le premier preneur verrouillait l'autre | `POST /{pv}/accepter` **clôt** l'occurrence du CC ; le Président ouvre `VISA#2` en la prenant en charge, et son visa la clôt |
-> | `COSIGNATURE` avec 2 désignés | une tâche ; la première signature fermait celle de l'autre | **une tâche par désigné**, en parallèle ; chaque signature ne clôt que **la sienne** |
->
-> `EtapeCircuit.plusieursPorteurs()` porte cette distinction : `COSIGNATURE` est la **seule** étape du
-> circuit où deux tâches coexistent. Partout ailleurs, deux tâches ouvertes signifieraient que deux
-> acteurs se croient responsables du même travail.
->
-> Chaque étage garde ainsi **sa** prévision et **sa** durée : le temps du CC ne se mêle plus à celui du
-> Président.
->
-> ### ⚠️ Garde d'acteur étendue au VISA et à la CO-SIGNATURE (2026-09-04, second constat)
->
-> La garde du matin couvrait les tâches **déjà ouvertes** (409 nominal) et l'attribution de l'`EXAMEN`.
-> Rien ne gardait la **création** d'une occurrence de `VISA` ou de `COSIGNATURE`. Vécu (dossier
-> 100286) : le CC, ayant transmis le PV au Président, a recliqué « Prendre en charge » — le serveur a
-> ouvert `VISA#2` **à son nom**, alors que cette occurrence revient au Président, qui s'est retrouvé
-> verrouillé sans recours dans l'interface (déblocage fait en base).
->
-> | Étape | Acteurs acceptés | Sinon |
-> |---|---|---|
-> | `EXAMEN` | l'attributaire courant du dispatch | **403** |
-> | `VISA`, deux niveaux, étage `CC` | le **CC dispatcheur** | **403** |
-> | `VISA`, deux niveaux, étage `PRESIDENT` | les **Présidents** | **403** |
-> | `VISA`, navette simple | le dispatcheur **et** tout P/CC du périmètre (intérim) | garde de profil et de localité seulement |
-> | `COSIGNATURE` | les **co-signataires désignés** au visa | **403** |
->
-> Ce sont les mêmes acteurs que `POST /pv-examens/{id}/viser` — ou `/accepter` à l'étage CC —
-> accepteraient. **403 et non 409** : ce n'est pas l'étape qui n'est pas prête, c'est l'appelant qui
-> n'est pas celui qu'on attend.
->
-> ### `ChronometrageDto.acteursAttendus` (liste de matricules \| null)
->
-> Les acteurs que la garde ci-dessus accepterait pour l'étape courante — **la même valeur**, calculée
-> une fois et servie deux : la garde s'en sert pour refuser, le front pour masquer. Les dériver
-> séparément aurait permis de masquer un bouton que le serveur accepte, ou d'en offrir un qu'il
-> refuse.
->
-> ⚠️ **`null` n'est pas « personne », c'est « pas de liste close ».** Sur une navette simple, le visa
-> admet le dispatcheur *et* tout P/CC du périmètre par intérim : l'ensemble n'est pas énumérable. Le
-> serveur ne garde alors que le profil et la localité, et le front replie sur la règle du porteur
-> nominal. Une liste **vide** aurait dit « personne » et bloqué tout le monde — d'où `null`.
->
-> Même chose pour un PV en navette **sans niveau** (soumis avant le 2026-09-04) : `null`, on ne
-> durcit pas rétroactivement un dossier en cours.
+> Chaque étage garde ainsi **sa** durée : le temps du CC ne se mêle pas à celui du Président.
 
 > ### 4. `PvExamenDto.nomCcCoSignataire` est peuplé
 >
@@ -5798,78 +5734,63 @@ prise en charge prend le **repli serveur de 8 h**, comme toute étape que l'Admi
 > résolu comme `nomMembreCoSignataire`, à l'écriture (réponse du visa) comme en lecture.
 
 >
-> ⚠️ **La RÉATTRIBUTION laisse sa trace** (règle du pilote, 2026-09-04) — tout geste qui **change
-> l'attributaire** hors dispatch initial consigne une tâche `DISPATCH` **occurrence n+1**, au nom de
-> **l'auteur du geste**, quel que soit son profil.
+> ⚠️ **La RÉATTRIBUTION laisse sa trace, et FERME l'examen du sortant** (2026-09-04, complété le
+> 2026-09-08 — dossier 00305). Tout geste qui **change l'attributaire** hors dispatch initial produit
+> **deux écritures**, et leur **ordre** porte le sens :
+>
+> ```
+> 1) fin EXAMEN   #1  au nom du SORTANT   ← son passage s'arrête ici ; sans cette fin, tout son
+>                                           temps se déverserait sur l'examen de son successeur
+> 2) fin DISPATCH #2  au nom de l'AUTEUR  ← le geste du réattribueur, instantané : il s'ouvre et se
+>                                           ferme sur la fin qu'on vient d'écrire
+> ```
 >
 > Le journal du circuit portait bien `DISPATCH` (Président) puis `RÉATTRIBUTION` (CC), mais le
-> chronométrage n'avait qu'une tâche : le passage par le CC n'existait nulle part dans le tableau des
-> passages — alors qu'un retrait suivi d'un re-dispatch, lui, en produisait bien une seconde. Le chemin
-> réel doit se lire aux **deux** endroits, avec les mêmes acteurs et dans le même ordre.
+> chronométrage n'avait qu'un passage : le chemin réel doit se lire aux **deux** endroits, avec les
+> mêmes acteurs et dans le même ordre.
 >
-> **Instantanée** : `datePriseEnCharge = dateFin = ` l'horodatage du geste — un acte ponctuel n'a pas
-> de durée à mesurer. **Prévision standard** du référentiel, `previsionStandard = true` : personne n'a
-> estimé quoi que ce soit, et la colonne ne peut pas rester vide.
->
-> **Périmètre.** La **réattribution** et la **reprise** (le « Retirer » du CC est un `PUT` vers
-> lui-même, donc un changement d'attributaire) sont couvertes par la même règle, sans cas particulier.
-> Le « rendre » du Membre reste **hors lot** : ce geste n'existe pas dans l'API, il n'y a rien à
-> chronométrer.
->
-> Ni l'étape courante ni la date prévisionnelle de fin ne bougent : une réattribution n'est pas un
-> retour en arrière du circuit, le dossier reste à examiner.
->
-> ### ⚠️ …et elle FERME l'occurrence `EXAMEN` du sortant (2026-09-08, dossier 00305)
->
-> La règle ci-dessus n'avait fait que la moitié du chemin : on **ouvrait** l'occurrence du redispatcheur
-> sans **clore** celle du Membre qui tenait déjà l'examen. Elle restait ouverte à jamais, et le nouvel
-> attributaire s'en trouvait **en impasse** — l'étape paraissait prise en charge par quelqu'un qui
-> n'était plus là, donc pas de bouton « Prendre en charge », donc aucune action possible.
->
-> ```
-> avant :  occ EXAMEN #1  MEMANT1  priseEnCharge 06:55  fin = null   enCours = true   ← orpheline
-> après :  occ EXAMEN #1  MEMANT1  priseEnCharge 06:55  fin = 07:18  enCours = false
->          puis, à la prise en charge du nouvel attributaire : occ EXAMEN #2, à SON nom
-> ```
->
-> - **Fermée, pas supprimée** : l'examen entamé a eu lieu, sa durée est mesurée jusqu'à l'instant du
+> - **Fermé, pas supprimé** : l'examen entamé a eu lieu, sa durée est mesurée jusqu'à l'instant du
 >   retrait — un passage abandonné reste un passage.
-> - **`attributaire` et `acteursAttendus` ne changent pas** : ils étaient déjà justes. Seul le cycle de
->   vie de l'occurrence est corrigé.
-> - **Le RETRAIT du dispatch fait de même, pour tout l'aval** (`POST /api/dispatchs/{id}/annuler`, et
->   tout appelant de la purge : retrait accepté, suppression). La purge efface examens, PV et
->   vérifications ; leurs occurrences n'auraient plus rien pour les clore. `RECEPTION` est épargnée (les
->   réceptions survivent) et `DISPATCH` aussi (occurrences instantanées, jamais ouvertes).
-> ⚠️ **TOLÉRANCE — le chronométrage n'empêche jamais le métier.** Un geste de clôture posé **sans prise
-> en charge préalable** n'est pas bloqué : le serveur crée l'occurrence avec `priseEnCharge = fin`
-> (durée nulle) et la prévision **standard** du référentiel. Aucun écran ne peut se retrouver coincé
-> parce qu'un bouton « Prendre en charge » n'a pas été cliqué.
+> - **Périmètre.** La **réattribution** et la **reprise** (le « Retirer » du CC est un `PUT` vers
+>   lui-même, donc un changement d'attributaire) sont couvertes par la même règle, sans cas particulier.
+>   Le « rendre » du Membre reste **hors lot** : ce geste n'existe pas dans l'API.
+> - **Le RETRAIT du dispatch fait de même** (`POST /api/dispatchs/{id}/annuler`, et tout appelant de la
+>   purge : retrait accepté, suppression). La purge efface examens, PV et vérifications ; l'étape en
+>   cours n'aurait plus rien pour la clore. Elle est fermée au nom de **celui à qui elle revenait** —
+>   l'attributaire du dispatch pour l'examen, la PRMP propriétaire pour la rectification — et non de
+>   celui qui défait l'aval.
+> - Ni l'étape courante ni la date prévisionnelle ne bougent : une réattribution n'est pas un retour en
+>   arrière du circuit, le dossier reste à examiner.
+>
+> ⚠️ **Le chronométrage n'empêche jamais le métier.** C'était déjà la règle quand le chronomètre pouvait
+> bloquer un dossier ; elle est d'autant plus vraie maintenant qu'il ne fait qu'**observer** — aucune
+> anomalie de chronométrage ne fait échouer la transaction métier qui l'appelle.
 
-> **La garde de la prise en charge est plus légère que celle du geste métier** : profil effectif +
-> localité, sans rejouer les huit gardes métier (qui restent intactes sur leur propre acte). Une prise
-> en charge indue n'altère aucune donnée — elle ne fait que démarrer un chronomètre.
+**`PassageEtapeDto`** = `{etape, occurrence, imActeur, nomActeur, profil, entree, fin,
+dureeHeuresOuvrees, enCours}`. `entree`/`fin` sont horodatés **à la seconde** ; `dureeHeuresOuvrees` est
+`fin − entree` converti en **heures ouvrées**. ⚠️ `entree` est **dérivée** (fin du passage précédent,
+dépôt du dossier, ou sortie d'attente PRMP — la plus récente qui précède la fin) et peut être `null`
+quand aucune borne antérieure n'est connue : la durée vaut alors 0 plutôt qu'une valeur inventée. Le
+**dernier** élément de `etapes` est l'étape **en cours** quand il y en a une : `fin: null`,
+`enCours: true`, et `dureeHeuresOuvrees` = le temps déjà écoulé.
 
-**`TacheDossierDto`** = `{etape, occurrence, imActeur, nomActeur, profil, priseEnCharge, fin,
-previsionHeures, previsionStandard, dureeHeuresOuvrees, enCours}`. `priseEnCharge`/`fin` sont horodatés
-**à la seconde** ; `dureeHeuresOuvrees` est la conversion en **heures ouvrées** (pour une tâche en cours, le temps
-déjà écoulé). `previsionStandard = true` signale une prévision venue du référentiel, pas d'une saisie.
-
-**`ChronometrageDto`** = `{idDossier, taches[], debutCompteur, finCompteur, dureeBruteHeuresOuvrees,
+**`ChronometrageDto`** = `{idDossier, etapes[], debutCompteur, finCompteur, dureeBruteHeuresOuvrees,
 dureeNetteHeuresOuvrees, attentePrmpHeuresOuvrees, etapeCourante, attentePrmp, datePrevisionnelleFin,
-attributaire, acteursAttendus}`.
+attributaire}`.
+
+> ⚠️ **Migration front (2026-09-12)** : `taches[]` → `etapes[]`, `priseEnCharge` → `entree`, et les
+> champs `previsionHeures` / `previsionStandard` / `acteursAttendus` **disparaissent**. Le tableau des
+> passages se lit désormais en trois colonnes — entrée, fin, durée — et il n'y a plus de bouton
+> « Prendre en charge » à afficher ni à masquer.
 
 > ⚠️ **`attributaire`** (string | null, ajouté le 2026-09-04) — matricule de l'**attributaire courant**
 > du dossier : l'`imCtrlMembre` du dispatch, **réattributions comprises** ; `null` tant que le dossier
 > n'est pas dispatché.
 >
-> C'est **exactement** la valeur sur laquelle porte la garde de `prise-en-charge` d'`EXAMEN` (403 pour
-> tout autre, même par délégation) : même requête, donc même réponse. Servir une dérivation voisine
-> aurait permis au front de masquer un bouton que le serveur aurait accepté, ou l'inverse.
->
-> **Pourquoi ici.** Le front masque le geste `EXAMEN` aux non-attributaires ; les écrans qui
-> **connaissent** le dispatch (page des PV, écran d'examen) le passent au widget, mais la consultation
-> du dossier ne charge pas les dispatchs. Y ajouter deux appels de liste à chaque ouverture aurait
-> coûté plus que de servir un champ depuis la réponse qui a déjà le dispatch sous la main.
+> **Pourquoi ici.** Les écrans qui **connaissent** le dispatch (page des PV, écran d'examen) l'ont déjà ;
+> la consultation du dossier, elle, ne charge pas les dispatchs. Y ajouter deux appels de liste à chaque
+> ouverture aurait coûté plus que de servir un champ depuis la réponse qui a déjà le dispatch sous la
+> main. C'est aussi l'acteur que porte le passage `EXAMEN` en cours.
 
 ### Les deux compteurs
 
@@ -5900,27 +5821,30 @@ quelle que soit la taille de la liste).
 aucune somme ne mélange heures et jours. Seule `datePrevisionnelleFin` reste une **date**.
 
 ```
-totalHeures = reste(étape en cours) + Σ prévisions des étapes restantes jusqu'à TRANSMISSION_SIGMP
-reste       = max(0, prévisionHeures − heures ouvrées écoulées depuis la prise en charge)
+totalHeures = reste(étape en cours) + Σ délais standards des étapes restantes jusqu'à TRANSMISSION_SIGMP
+reste       = max(0, délai standard − heures ouvrées écoulées depuis l'ENTRÉE dans l'étape)
 datePrevisionnelleFin = aujourd'hui + ⌈ totalHeures / 8 ⌉ jours ouvrés
 ```
 
 - **Arrondi au jour SUPÉRIEUR** : une journée entamée compte pleine (9 h restantes tiennent sur 2 jours).
 - **Une étape en dépassement compte 0** : la date **glisse** au lieu de promettre un rattrapage qui
   n'aura pas lieu.
-- Une étape **non prise en charge** compte pour son **délai standard** — d'où une date annoncée **dès la
-  soumission**, avant que quiconque à la CNM ait touché le dossier.
+- ⚠️ **La prévision d'une étape est TOUJOURS son délai standard** depuis le 2026-09-12 : plus personne
+  ne saisit d'estimation. D'où une date annoncée **dès la soumission**, avant que quiconque à la CNM ait
+  touché le dossier — c'est même devenu la seule raison d'être du référentiel.
+- **L'entrée dans l'étape en cours** est dérivée comme celle de tout passage : fin du dernier passage
+  enregistré, dépôt du dossier, ou sortie d'attente PRMP — la plus récente.
 - **Jours ouvrés** : samedi et dimanche exclus ; **jours fériés hors périmètre v1**.
 - Pendant une attente PRMP, la date **reste calculée** et `attentePrmp` l'accompagne. L'étape qui
   **reprendra** est prise en compte : après des observations non levées, la vérification sera **rejouée**,
   et elle compte donc encore dans la somme.
 
-> ### ⚠️ L'écoulé se mesure dans la MÊME échelle que la prévision
+> ### ⚠️ L'écoulé se mesure dans la MÊME échelle que le délai standard
 >
-> C'est le point délicat de la bascule. Une prévision est en heures **de service** (8 h par jour) ; si
-> l'écoulé était compté en heures **d'horloge** (24 h par jour), une tâche prise en charge la veille au
-> matin afficherait 24 h d'écoulé contre 8 h prévues — en dépassement de deux journées alors qu'un seul
-> jour de travail a passé.
+> C'est le point délicat de la bascule. Un délai standard est en heures **de service** (8 h par jour) ;
+> si l'écoulé était compté en heures **d'horloge** (24 h par jour), une étape entrée la veille au matin
+> afficherait 24 h d'écoulé contre 8 h prévues — en dépassement de deux journées alors qu'un seul jour
+> de travail a passé.
 >
 > **Algorithme retenu : fenêtre de service 08:00–16:00, du lundi au vendredi.** L'écoulé est le
 > *recouvrement* de l'intervalle avec ces fenêtres. Les horodatages restent enregistrés à la seconde ;
@@ -5928,10 +5852,10 @@ datePrevisionnelleFin = aujourd'hui + ⌈ totalHeures / 8 ⌉ jours ouvrés
 >
 > | Cas | Écoulé rendu |
 > |---|---|
-> | Prise lundi 09:00 → lundi 15:00 | **6 h** |
-> | Prise lundi 09:00 → **mardi 09:00** | **8 h** (7 h lundi + 1 h mardi) — soit exactement 1 jour ouvré |
-> | Prise vendredi 15:00 → lundi 09:00 | **2 h** (le week-end ne compte pas) |
-> | Prise lundi 22:00 → mardi 09:00 | **1 h** (hors fenêtre, rien avant l'ouverture) |
+> | Entrée lundi 09:00 → lundi 15:00 | **6 h** |
+> | Entrée lundi 09:00 → **mardi 09:00** | **8 h** (7 h lundi + 1 h mardi) — soit exactement 1 jour ouvré |
+> | Entrée vendredi 15:00 → lundi 09:00 | **2 h** (le week-end ne compte pas) |
+> | Entrée lundi 22:00 → mardi 09:00 | **1 h** (hors fenêtre, rien avant l'ouverture) |
 >
 > L'alternative — un plafond de 8 h par jour ouvré touché — comptait une journée entière dès qu'un jour
 > était effleuré : elle rendait **16 h** au deuxième cas, réintroduisant à moindre échelle le défaut
@@ -5941,14 +5865,15 @@ datePrevisionnelleFin = aujourd'hui + ⌈ totalHeures / 8 ⌉ jours ouvrés
 > raffinement de l'ancienne, jamais un changement de sens — un dossier entièrement au délai standard
 > totalise `8+8+40+16+8+24+8 = 112 h`, soit **14 jours ouvrés**, la même date qu'avant la bascule.
 >
-> Une tâche prise en charge **hors fenêtre** (22:00, un dimanche) n'accumule rien jusqu'à l'ouverture
-> suivante : on ne compte pas comme temps de traitement une heure où personne ne travaille.
+> Une étape entrée **hors fenêtre** (22:00, un dimanche) n'accumule rien jusqu'à l'ouverture suivante :
+> on ne compte pas comme temps de traitement une heure où personne ne travaille.
 
 > **Migration `V15` — conversion × 8, jamais de réinitialisation.** Les valeurs stockées étaient des
 > jours ; un jour vaut 8 h. `tr_delai_standard.DELAI_JOURS` devient `DELAI_HEURES` et
 > `t_tache_dossier.PREVISION_JOURS` devient `PREVISION_HEURES`, l'une comme l'autre multipliées par 8 —
 > y compris les lignes que l'Administrateur aurait ajustées depuis le seed. **Aucune purge** de
-> l'historique : convertir est à la fois correct et gratuit.
+> l'historique : convertir est à la fois correct et gratuit. ⚠️ `PREVISION_HEURES` a depuis été
+> **retirée** (`V28`, 2026-09-12) : la prévision saisie n'existe plus.
 
 ### Référentiel des délais standards
 

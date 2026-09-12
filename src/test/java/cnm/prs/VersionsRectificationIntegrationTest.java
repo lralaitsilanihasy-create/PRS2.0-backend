@@ -80,10 +80,6 @@ class VersionsRectificationIntegrationTest extends CnmIntegrationTestSupport {
         ppmRepository.save(ppm(PPM, DOSSIER, "PRMP001"));
         Marche m = marche(LIGNE, DOSSIER, PPM);
         m.setMontEstim(new BigDecimal("100"));
-        // ⚠️ 2026-09-07 — « aucune action sans prise en charge » : la PRMP ouvre sa tâche de
-        // rectification avant de corriger. Ce qui est éprouvé ici, c'est l'archivage, pas le verrou
-        // (couvert par PriseEnChargeRectificationPrmpIntegrationTest).
-        prendreEnChargeRectification(DOSSIER);
         marcheRepository.save(m);
     }
 
@@ -102,7 +98,6 @@ class VersionsRectificationIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$", hasSize(1)));
 
         // La PRMP resoumet (clôt le cycle 1) ; le vérificateur maintient à nouveau → cycle 2.
-        prendreEnChargeRectification(DOSSIER);
         mvc.perform(post("/api/dossiers/" + DOSSIER + "/resoumettre").header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"motifRectification\":\"corrige\"}"))
                 .andExpect(status().isOk())
@@ -110,7 +105,6 @@ class VersionsRectificationIntegrationTest extends CnmIntegrationTestSupport {
         Dossier d = dossierRepository.findById(DOSSIER).orElseThrow();
         d.setStatut("EN_ATTENTE_DECISION_PRMP");
         dossierRepository.save(d);
-        prendreEnChargeRectification(DOSSIER);
 
         // Cycle 2 : le premier PUT archive l'état de fin de cycle 1 (250, avec ses enfants) comme version 2.
         rectifier(corps("300", "Marche 7001 v2", false)).andExpect(status().isOk());
@@ -301,14 +295,12 @@ class VersionsRectificationIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(get(VERSIONS).header("Authorization", tokenPrmp))
                 .andExpect(jsonPath("$", hasSize(1)));
         // … et le cycle SUIVANT archive à la suite : numéro 2, cycle 2, sans rien effacer.
-        prendreEnChargeRectification(DOSSIER);
         mvc.perform(post("/api/dossiers/" + DOSSIER + "/resoumettre").header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"motifRectification\":\"corrige\"}"))
                 .andExpect(status().isOk());
         Dossier d = dossierRepository.findById(DOSSIER).orElseThrow();
         d.setStatut("EN_ATTENTE_DECISION_PRMP");
         dossierRepository.save(d);
-        prendreEnChargeRectification(DOSSIER);
         rectifier(corps("300", "Marche 7001 cycle 2", false)).andExpect(status().isOk());
         mvc.perform(get(VERSIONS).header("Authorization", tokenPrmp))
                 .andExpect(jsonPath("$", hasSize(2)))
