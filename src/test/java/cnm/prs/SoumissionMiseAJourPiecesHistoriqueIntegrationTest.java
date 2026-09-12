@@ -29,7 +29,21 @@ import cnm.prs.enums.TypeActeur;
  * <p>Ces tests couvrent les deux versants : la chaîne <strong>muette</strong> (l'exigence tombe, la
  * soumission passe) et la chaîne <strong>documentée</strong> (le PPM de l'ancêtre est repris, et
  * l'exigence garde ses dents).</p>
+ *
+ * <p>⚠️ <strong>Tagués {@code word} (2026-09-12)</strong> — les deux passent par la réparation de la
+ * pièce d'historique, qui <strong>régénère le PV du prédécesseur</strong> : docx rempli par POI puis
+ * converti en PDF par <strong>MS Word</strong> (documents4j). Sur un runner Linux la conversion échoue,
+ * la pièce n'est pas posée et la soumission part en 400 — un échec d'<em>environnement</em>, pas de
+ * règle. Ils rejoignent donc le groupe exclu en CI ({@code -DexcludedGroups=word}) et restent exécutés
+ * en local, où Word est installé.</p>
+ *
+ * <p>⚠️ Ce que ce tag ne corrige pas, et qu'il ne faut pas perdre de vue : <strong>la soumission d'une
+ * mise à jour exige Word sur le serveur</strong>. Sans issue aujourd'hui (le backend tourne sous
+ * Windows), mais c'est une contrainte de déploiement réelle — la lever demanderait de n'exiger le PV du
+ * prédécesseur que si l'application peut le produire, comme il a été fait le 2026-09-10 pour le PPM
+ * antérieur. Arbitrage métier, non pris ici.</p>
  */
+@org.junit.jupiter.api.Tag("word")
 class SoumissionMiseAJourPiecesHistoriqueIntegrationTest extends CnmIntegrationTestSupport {
 
     @org.springframework.beans.factory.annotation.Autowired

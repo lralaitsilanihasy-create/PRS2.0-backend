@@ -173,7 +173,13 @@ class DesignationMarcheLongueIntegrationTest extends CnmIntegrationTestSupport {
 
     // ------------------------------------------------------------------ 3. mise à jour : la trace figée
 
+    // ⚠️ Tagué « word » (2026-09-12) — SEUL test de cette classe à soumettre une MISE À JOUR, donc à
+    // passer par la pièce d'historique : elle régénère le PV du prédécesseur via MS Word (documents4j),
+    // indisponible sur un runner Linux. Échec d'environnement, pas de règle ; exclu en CI
+    // (-DexcludedGroups=word), exécuté en local. Voir SoumissionMiseAJourPiecesHistoriqueIntegrationTest
+    // pour la contrainte de déploiement que ce tag laisse entière.
     @Test
+    @org.junit.jupiter.api.Tag("word")
     @DisplayName("Mise à jour : la TRACE figée à la soumission garde l'objet long, avant ET après")
     void miseAJour_traceFigee_gardeLesDeuxObjetsLongs() throws Exception {
         String avant = objet(700);

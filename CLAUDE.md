@@ -57,7 +57,7 @@ Organisation par couches (à respecter) :
 
 ## Commandes
 - Lancer : `mvnw.cmd spring-boot:run` (Windows) — ou dans Eclipse : clic droit → Run As → Spring Boot App
-- Tests : `mvnw.cmd test` — en CI (`.github/workflows/ci.yml`, chaque poussée) : `mvnw test -DexcludedGroups=word`, qui exclut les 9 tests de génération du PV via MS Word (`documents4j`, tagués JUnit `word`) faute de Word sur les runners Linux ; ils restent exécutés en local.
+- Tests : `mvnw.cmd test` — en CI (`.github/workflows/ci.yml`, chaque poussée) : `mvnw test -DexcludedGroups=word`, qui exclut les **27** tests ayant besoin de MS Word (`documents4j`) faute de Word sur les runners Linux ; ils restent exécutés en local. ⚠️ Le tag `word` ne couvre pas que la *génération* du PV : il couvre aussi **tout test qui soumet une mise à jour**, dont la pièce d'historique régénère le PV du prédécesseur (donc passe par Word). Un test qui part en 400 « Le PV du dossier précédent est obligatoire » en CI et vert en local est ce cas-là. Repères : 871 tests en local, 844 en CI.
 - Build : `mvnw.cmd clean package`
 - L'API démarre par défaut sur `http://localhost:8080`.
 
