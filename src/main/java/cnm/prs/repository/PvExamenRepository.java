@@ -222,10 +222,16 @@ public interface PvExamenRepository extends JpaRepository<PvExamen, Integer> {
             + "where pv.examen.dispatch.reception.idDossier = :idDossier order by pv.idPv desc")
     List<Object[]> coSignatairesParDossier(@Param("idDossier") Integer idDossier);
 
-    /** Même information EN LOT, pour l'enrichissement des listes de dossiers (une seule requête). */
-    @Query("select pv.examen.dispatch.reception.idDossier, pv.statutPv from PvExamen pv "
-            + "where pv.examen.dispatch.reception.idDossier in :ids order by pv.idPv asc")
-    List<Object[]> statutsPvParDossiers(@Param("ids") java.util.Collection<Integer> ids);
+    /**
+     * Même information EN LOT, pour l'enrichissement des listes de dossiers (une seule requête), élargie
+     * le 2026-09-13 aux <strong>parts de signature</strong> : (idDossier, statutPv, imCtrlMembre,
+     * imMembreCoSignataire, dateSignatureMembre, imCtrlCc, dateSignatureCc, imCtrlPresident,
+     * dateSignaturePresident). Croissant par PV : le plus récent est lu en dernier.
+     */
+    @Query("select pv.examen.dispatch.reception.idDossier, pv.statutPv, pv.imCtrlMembre, pv.imMembreCoSignataire, "
+            + "pv.dateSignatureMembre, pv.imCtrlCc, pv.dateSignatureCc, pv.imCtrlPresident, pv.dateSignaturePresident "
+            + "from PvExamen pv where pv.examen.dispatch.reception.idDossier in :ids order by pv.idPv asc")
+    List<Object[]> etatsPvParDossiers(@Param("ids") java.util.Collection<Integer> ids);
 
     /**
      * ⚠️ 2026-09-04 — <strong>tous les PV d'un dossier</strong>, le plus ancien d'abord. Source des

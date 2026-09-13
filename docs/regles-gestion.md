@@ -554,6 +554,13 @@ pour le Membre (délégation) : l'examen se retrouvait mesuré à son nom. Un ex
 qui il a été dispatché — même principe que la co-signature, où chaque part est nominative. La fin de
 l'étape `EXAMEN` porte donc l'attributaire du dispatch, quel que soit l'auteur de la transition.
 
+⚠️ **Le passage DISPATCH reste au nom du dispatcheur ; la frise, elle, nomme l'attributaire** (2026-09-13).
+`acteursEtapes.DISPATCH` (sur `DossierDto`) sert l'attributaire courant du dispatch — ce que la frise du
+tableau de bord affiche sous la date —, alors que le passage `DISPATCH` de `GET /dossiers/{id}/chronometrage`
+est consigné au nom de l'**auteur** du geste (ed86707, réattributions comprises). Les deux lectures divergent
+volontairement : le chronométrage mesure qui a fait, la frise dit à qui c'est allé. Le front ne recopie pas
+`nomActeur` du passage dans la frise.
+
 ⚠️ **…et la SOUMISSION du projet de PV lui revient aussi** (constat et arbitrage du pilote, 2026-09-08,
 dossier 00305). Un Président dispatcheur a pu soumettre le projet de PV d'un examen mené par le CC à qui
 il avait redispatché le dossier : la navette a consigné son nom, et le journal l'a désigné comme auteur
@@ -1171,6 +1178,15 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
     statut `CLOTURE`. Le franchissement s'apprécie sur le **statut**, la date vient des **tâches**. Motif :
     le front datait la frise par jointure de listes que la portée du lecteur rend vides (Président « toutes
     localités » : `dispatchs`/`examens` = `[]`) — la date vient désormais du dossier lui-même.
+  - ⚠️ **Règle ajoutée (2026-09-13 — frise du tableau de bord, acteurs)** — `DossierDto.acteursEtapes` : **qui**
+    a franchi chacune des sept étapes, mêmes clés que `datesEtapes` (toujours présentes), nom nu « Prénoms
+    Nom », `null` si non franchie. **Invariant** : nommé ⇔ daté — même passage, même règle de recul (dispatch
+    annulé, réexamen). `DISPATCH` nomme l'**attributaire courant** (réattributions comprises), pas le
+    dispatcheur : divergence **voulue** avec le passage `DISPATCH` du chronométrage, consigné au nom de
+    l'auteur du geste — la frise dit « à qui », le chronométrage dit « par qui ». `PV_SIGNE` : une seule
+    chaîne, les signataires **effectivement** signés (parts datées sur le PV) joints par « · », ordre
+    Membre · CC · Président. `CLOTURE` : l'archiveur, à défaut le vérificateur qui a transmis au SIGMP.
+    Dérivé en lot (aucun N+1), servi quelle que soit la portée du lecteur.
   - `GET /api/dossiers/{id}/chronometrage` détaille les **passages par étape** — `entree`, `fin`,
     `dureeHeuresOuvrees`, acteur — et les deux compteurs. ⚠️ Depuis le 2026-09-12, le tableau `taches`
     (les prises en charge et leur prévision saisie) est remplacé par `etapes`, et `acteursAttendus` a

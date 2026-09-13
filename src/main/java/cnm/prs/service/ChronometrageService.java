@@ -635,35 +635,154 @@ public class ChronometrageService {
      *   <li>{@code CLOTURE} : archivage, à défaut transmission SIGMP, seulement au statut {@code CLOTURE}.</li>
      * </ul>
      * Le « franchissement » s'apprécie donc sur le <em>statut</em> ; la <em>date</em> vient des passages.
+     *
+     * <p>Raccourci de {@link #frise} sans acteurs — pour qui n'a besoin que des dates.</p>
      */
     public Map<String, LocalDateTime> datesEtapes(String statutDossier, String statutPv, List<TacheDossier> taches) {
+        return frise(statutDossier, statutPv, taches, null, null, Map.of()).dates();
+    }
+
+    /**
+     * ⚠️ Frise du tableau de bord (2026-09-13) — les <strong>dates</strong> et les <strong>acteurs</strong> de
+     * franchissement des sept étapes, dérivés ensemble. Invariant : une clé est nommée <strong>si et
+     * seulement si</strong> elle est datée — même passage, même règle de recul (dispatch annulé, réexamen).
+     */
+    public record Frise(Map<String, LocalDateTime> dates, Map<String, String> acteurs) {
+    }
+
+    /**
+     * État du PV le plus récent d'un dossier, lu en lot : son statut et, pour chaque part, le matricule de
+     * qui l'a <strong>effectivement</strong> signée ({@code null} tant que la part n'est pas posée).
+     */
+    public record EtatPv(String statut, String imMembre, String imCc, String imPresident) {
+    }
+
+    /**
+     * ⚠️ Frise du tableau de bord (2026-09-13) — dates <em>et</em> acteurs de franchissement des sept
+     * étapes. Les dates suivent la règle de {@link #datesEtapes} ; l'acteur d'une clé est celui du
+     * <strong>même passage</strong> que sa date, en « Prénoms Nom » nu, {@code null} si la clé n'est pas
+     * datée. Deux clés s'en écartent, volontairement :
+     * <ul>
+     *   <li>{@code DISPATCH} : l'<strong>attributaire courant</strong> (réattributions comprises), et non
+     *       l'auteur du passage — le chronométrage, lui, consigne ce passage au nom du
+     *       <em>dispatcheur</em> (ed86707). La frise dit « à qui », le chronométrage dit « par qui » : le
+     *       front ne doit pas recopier {@code nomActeur} du passage. Sans attributaire connu sous un statut
+     *       qui a pourtant franchi l'étape (circuit purgé : état dégradé), l'auteur du passage, pour que la
+     *       clé reste nommée dès qu'elle est datée ;</li>
+     *   <li>{@code PV_SIGNE} : une seule chaîne, les signataires <strong>effectivement signés</strong> lus
+     *       sur le PV, joints par « · » dans l'ordre Membre · CC · Président. À défaut de part datée sur un
+     *       PV pourtant {@code SIGNE} (données antérieures), l'acteur du passage qui date la clé.</li>
+     * </ul>
+     * Les noms sont résolus dans l'{@code annuaire} déjà chargé (aucune requête) ; un matricule qui n'y
+     * figure pas est servi tel quel.
+     */
+    public Frise frise(String statutDossier, String statutPv, List<TacheDossier> taches,
+            String attributaire, EtatPv pv, Map<String, Controleur> annuaire) {
         Map<String, LocalDateTime> dates = new java.util.LinkedHashMap<>();
+        Map<String, String> acteurs = new java.util.LinkedHashMap<>();
         boolean dispatchFranchi = statutDossier != null && STATUTS_APRES_DISPATCH.contains(statutDossier);
         boolean examenFranchi = statutDossier != null && STATUTS_APRES_EXAMEN.contains(statutDossier);
-        LocalDateTime examen = examenFranchi ? borne(taches, EtapeCircuit.EXAMEN) : null;
-        dates.put("RECEPTION", borne(taches, EtapeCircuit.RECEPTION));
-        dates.put("DISPATCH", dispatchFranchi ? borne(taches, EtapeCircuit.DISPATCH) : null);
-        dates.put("EXAMEN", examen);
-        dates.put("PROJET_PV", examen);
-        boolean pvSigne = "SIGNE".equals(statutPv);
-        LocalDateTime signature = borne(taches, EtapeCircuit.COSIGNATURE);
-        dates.put("PV_SIGNE", pvSigne ? (signature != null ? signature : borne(taches, EtapeCircuit.VISA)) : null);
+
+        TacheDossier reception = dernierPassage(taches, EtapeCircuit.RECEPTION);
+        poser(dates, acteurs, "RECEPTION", reception, nomNu(annuaire, acteurDe(reception)));
+
+        TacheDossier dispatch = dispatchFranchi ? dernierPassage(taches, EtapeCircuit.DISPATCH) : null;
+        String imAttributaire = attributaire != null && !attributaire.isBlank() ? attributaire : acteurDe(dispatch);
+        poser(dates, acteurs, "DISPATCH", dispatch, nomNu(annuaire, imAttributaire));
+
+        TacheDossier examen = examenFranchi ? dernierPassage(taches, EtapeCircuit.EXAMEN) : null;
+        String examinateur = nomNu(annuaire, acteurDe(examen));
+        poser(dates, acteurs, "EXAMEN", examen, examinateur);
+        poser(dates, acteurs, "PROJET_PV", examen, examinateur);
+
+        boolean pvSigne = StatutPv.SIGNE.name().equals(statutPv);
+        TacheDossier signature = null;
+        if (pvSigne) {
+            signature = dernierPassage(taches, EtapeCircuit.COSIGNATURE);
+            if (signature == null) {
+                signature = dernierPassage(taches, EtapeCircuit.VISA);
+            }
+        }
+        String signataires = pvSigne ? signataires(pv, annuaire) : null;
+        poser(dates, acteurs, "PV_SIGNE", signature,
+                signataires != null ? signataires : nomNu(annuaire, acteurDe(signature)));
+
         boolean observationsLevees = statutDossier != null && List.of(
                 StatutDossier.OBSERVATIONS_LEVEES.name(), StatutDossier.DECISION_TRANSMISE_SIGMP.name(),
                 StatutDossier.CLOTURE.name()).contains(statutDossier);
-        dates.put("VERIFICATION", observationsLevees ? borne(taches, EtapeCircuit.VERIFICATION) : null);
-        LocalDateTime archivage = borne(taches, EtapeCircuit.ARCHIVAGE);
-        dates.put("CLOTURE", StatutDossier.CLOTURE.name().equals(statutDossier)
-                ? (archivage != null ? archivage : borne(taches, EtapeCircuit.TRANSMISSION_SIGMP)) : null);
-        return dates;
+        TacheDossier verification = observationsLevees ? dernierPassage(taches, EtapeCircuit.VERIFICATION) : null;
+        poser(dates, acteurs, "VERIFICATION", verification, nomNu(annuaire, acteurDe(verification)));
+
+        TacheDossier cloture = null;
+        if (StatutDossier.CLOTURE.name().equals(statutDossier)) {
+            cloture = dernierPassage(taches, EtapeCircuit.ARCHIVAGE);
+            if (cloture == null) {
+                cloture = dernierPassage(taches, EtapeCircuit.TRANSMISSION_SIGMP);
+            }
+        }
+        poser(dates, acteurs, "CLOTURE", cloture, nomNu(annuaire, acteurDe(cloture)));
+        return new Frise(dates, acteurs);
+    }
+
+    /** Une clé est datée ET nommée par le même passage — ou ni l'un ni l'autre : c'est l'invariant. */
+    private static void poser(Map<String, LocalDateTime> dates, Map<String, String> acteurs, String cle,
+            TacheDossier passage, String nom) {
+        dates.put(cle, passage == null ? null : passage.getDateFin());
+        acteurs.put(cle, passage == null ? null : nom);
+    }
+
+    private static String acteurDe(TacheDossier passage) {
+        return passage == null ? null : passage.getImActeur();
+    }
+
+    /**
+     * « Membre · CC · Président » des parts <strong>effectivement</strong> signées du PV ; {@code null} si
+     * aucune part n'est datée (ou sans PV).
+     */
+    static String signataires(EtatPv pv, Map<String, Controleur> annuaire) {
+        if (pv == null) {
+            return null;
+        }
+        List<String> noms = new ArrayList<>();
+        for (String im : new String[] {pv.imMembre(), pv.imCc(), pv.imPresident()}) {
+            String nom = nomNu(annuaire, im);
+            if (nom != null) {
+                noms.add(nom);
+            }
+        }
+        return noms.isEmpty() ? null : String.join(" · ", noms);
+    }
+
+    /**
+     * Dernier passage par une étape — fin la plus tardive, à égalité le rang d'écriture (même tri que
+     * les passages servis : {@code dateFin, idTache}) ; {@code null} si aucun.
+     */
+    private static TacheDossier dernierPassage(List<TacheDossier> taches, EtapeCircuit etape) {
+        return taches.stream()
+                .filter(t -> etape.name().equals(t.getEtape()) && t.getDateFin() != null)
+                .max(java.util.Comparator.comparing(TacheDossier::getDateFin)
+                        .thenComparing(TacheDossier::getIdTache,
+                                java.util.Comparator.nullsFirst(java.util.Comparator.naturalOrder())))
+                .orElse(null);
     }
 
     /** Fin du dernier passage par une étape — borne du compteur global. */
     private LocalDateTime borne(List<TacheDossier> taches, EtapeCircuit etape) {
-        return taches.stream()
-                .filter(t -> etape.name().equals(t.getEtape()) && t.getDateFin() != null)
-                .map(TacheDossier::getDateFin)
-                .max(LocalDateTime::compareTo).orElse(null);
+        TacheDossier dernier = dernierPassage(taches, etape);
+        return dernier == null ? null : dernier.getDateFin();
+    }
+
+    /**
+     * « Prénoms Nom » nu d'un matricule, résolu dans un annuaire déjà chargé (aucune requête) ; le
+     * matricule lui-même s'il n'y figure pas ou n'y a pas de nom ; {@code null} sans matricule.
+     */
+    public static String nomNu(Map<String, Controleur> annuaire, String im) {
+        if (im == null || im.isBlank()) {
+            return null;
+        }
+        Controleur c = annuaire == null ? null : annuaire.get(im);
+        String nom = c == null ? null : nomNu(c);
+        return nom != null ? nom : im;
     }
 
     /** Cumul en <strong>heures ouvrées</strong> des attentes PRMP ; une fenêtre ouverte court jusqu’à {@code jusqua}. */
@@ -680,10 +799,11 @@ public class ChronometrageService {
         if (imActeur == null) {
             return null;
         }
-        return controleurRepository.findById(imActeur).map(ChronometrageService::nomComplet).orElse(null);
+        return controleurRepository.findById(imActeur).map(ChronometrageService::nomNu).orElse(null);
     }
 
-    private static String nomComplet(Controleur c) {
+    /** « Prénoms Nom » nu d'un contrôleur — la seule composition du nom pour la frise ; {@code null} si vide. */
+    public static String nomNu(Controleur c) {
         String prenoms = c.getPrenomsCont() == null ? "" : c.getPrenomsCont().trim();
         String nom = c.getNomCont() == null ? "" : c.getNomCont().trim();
         String complet = (prenoms + " " + nom).trim();
@@ -723,17 +843,48 @@ public class ChronometrageService {
     }
 
     /**
-     * Statut du PV le plus récent, par dossier — une seule requête. La liste étant ordonnée par
-     * {@code idPv} croissant, la dernière valeur écrite pour un dossier est bien la plus récente.
+     * État du PV le plus récent, par dossier — une seule requête : son statut et ses parts signées
+     * (⚠️ 2026-09-13, pour {@code acteursEtapes.PV_SIGNE}). La liste étant ordonnée par {@code idPv}
+     * croissant, la dernière valeur écrite pour un dossier est bien la plus récente.
+     *
+     * <p>Une part n'est retenue que <strong>datée</strong> : {@code imCtrlCc} et {@code imCtrlPresident}
+     * sont aussi posés à la création du PV (le circuit), ils ne disent pas qu'on a signé. La part Membre
+     * est celle du co-signataire désigné ; à défaut (PV antérieurs à la co-signature du 2026-08-28),
+     * l'attributaire, qui signait alors lui-même.</p>
      */
     @Transactional(readOnly = true)
-    public Map<Integer, String> statutsPvParDossier(Collection<Integer> idsDossiers) {
+    public Map<Integer, EtatPv> etatsPvParDossier(Collection<Integer> idsDossiers) {
+        Map<Integer, EtatPv> parDossier = new HashMap<>();
+        if (idsDossiers == null || idsDossiers.isEmpty()) {
+            return parDossier;
+        }
+        for (Object[] l : pvExamenRepository.etatsPvParDossiers(idsDossiers)) {
+            if (l.length < 9 || l[0] == null || l[1] == null) {
+                continue;
+            }
+            String coSignataire = (String) l[3];
+            String imMembre = l[4] == null ? null
+                    : (coSignataire != null && !coSignataire.isBlank() ? coSignataire : (String) l[2]);
+            String imCc = l[6] == null ? null : (String) l[5];
+            String imPresident = l[8] == null ? null : (String) l[7];
+            parDossier.put((Integer) l[0], new EtatPv((String) l[1], imMembre, imCc, imPresident));
+        }
+        return parDossier;
+    }
+
+    /**
+     * Attributaire courant ({@code imCtrlMembre} du dispatch, réattributions comprises) de plusieurs
+     * dossiers — une seule requête pour toute une liste (⚠️ 2026-09-13, pour {@code acteursEtapes.DISPATCH}).
+     * Même source que {@code ChronometrageDto.attributaire}.
+     */
+    @Transactional(readOnly = true)
+    public Map<Integer, String> attributairesParDossier(Collection<Integer> idsDossiers) {
         Map<Integer, String> parDossier = new HashMap<>();
         if (idsDossiers == null || idsDossiers.isEmpty()) {
             return parDossier;
         }
-        for (Object[] ligne : pvExamenRepository.statutsPvParDossiers(idsDossiers)) {
-            if (ligne.length >= 2 && ligne[0] != null && ligne[1] != null) {
+        for (Object[] ligne : dispatchRepository.findAttributairesParDossiers(idsDossiers)) {
+            if (ligne.length >= 2 && ligne[0] != null && ligne[1] != null && !((String) ligne[1]).isBlank()) {
                 parDossier.put((Integer) ligne[0], (String) ligne[1]);
             }
         }

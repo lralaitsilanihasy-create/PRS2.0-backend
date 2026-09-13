@@ -596,31 +596,38 @@ public class DossierService {
             dto.setImAssistantCible(assistant);
             dto.setNomAssistantCible(nomDans(annuaire, assistant));
         }
-        enrichirChronometrage(dtos, ids);
+        enrichirChronometrage(dtos, ids, annuaire);
     }
 
     /**
      * ⚠️ Chronométrage (2026-09-01) — date prévisionnelle de fin, étape courante et drapeau d'attente
-     * PRMP, posés <strong>en lot</strong> : trois requêtes de plus (les passages, les attentes PRMP et
-     * les statuts de PV de tous les dossiers) quelle que soit la taille de la liste.
+     * PRMP, posés <strong>en lot</strong> : quatre requêtes de plus (les passages, les attentes PRMP,
+     * l'état des PV et les attributaires de tous les dossiers) quelle que soit la taille de la liste.
      *
      * <p>Le calcul lui-même est en mémoire — le référentiel des délais standards est relu par étape,
      * mais il ne compte que huit lignes et Hibernate le sert depuis son cache de premier niveau pour
-     * toute la durée de la transaction.</p>
+     * toute la durée de la transaction. Les noms des acteurs viennent de l'{@code annuaire} que
+     * {@link #enrichirCibles} a déjà chargé : aucune lecture de contrôleur par dossier.</p>
      */
-    private void enrichirChronometrage(List<DossierDto> dtos, List<Integer> ids) {
+    private void enrichirChronometrage(List<DossierDto> dtos, List<Integer> ids,
+            Map<String, cnm.prs.entity.Controleur> annuaire) {
         Map<Integer, List<cnm.prs.entity.TacheDossier>> taches = chronometrage.tachesParDossier(ids);
         // ⚠️ 2026-09-12 — les attentes PRMP entrent dans le calcul : l'entrée dans l'étape en cours est la
         // plus récente des bornes qui la précèdent, et la sortie d'attente en est une. Une requête de plus
         // pour toute la liste, comme les deux autres.
         Map<Integer, List<cnm.prs.entity.SuspensionDossier>> suspensions = chronometrage.suspensionsParDossier(ids);
-        Map<Integer, String> statutsPv = chronometrage.statutsPvParDossier(ids);
+        // ⚠️ 2026-09-13 — la même requête que l'ancien statut de PV, élargie aux parts signées (pour
+        // acteursEtapes.PV_SIGNE) ; et l'attributaire courant de chaque dossier (pour acteursEtapes.DISPATCH),
+        // une requête de plus pour toute la liste — jamais une par dossier.
+        Map<Integer, ChronometrageService.EtatPv> pvs = chronometrage.etatsPvParDossier(ids);
+        Map<Integer, String> attributaires = chronometrage.attributairesParDossier(ids);
         // Référentiel lu UNE fois pour toute la liste, en projection scalaire : relire les délais par
         // étape et par dossier chargeait assez d'entités pour faire tomber le contrat de pagination.
         Map<cnm.prs.enums.EtapeCircuit, Integer> delais = delaiStandardService.delais();
         java.time.LocalDateTime maintenant = java.time.LocalDateTime.now();
         for (DossierDto dto : dtos) {
-            String statutPv = statutsPv.get(dto.getIdDossier());
+            ChronometrageService.EtatPv pv = pvs.get(dto.getIdDossier());
+            String statutPv = pv == null ? null : pv.statut();
             List<cnm.prs.entity.TacheDossier> tachesDossier = taches.getOrDefault(dto.getIdDossier(), List.of());
             dto.setDatePrevisionnelleFin(chronometrage.datePrevisionnelleFin(dto.getStatut(), statutPv,
                     tachesDossier, suspensions.getOrDefault(dto.getIdDossier(), List.of()),
@@ -628,9 +635,13 @@ public class DossierService {
             // ⚠️ Suivi des délais CNM (2026-09-06) — date d'enregistrement = clôture de RECEPTION, depuis
             // les MÊMES tâches déjà chargées en lot : aucune requête de plus, aucun N+1.
             dto.setDateEnregistrement(chronometrage.dateEnregistrement(tachesDossier));
-            // ⚠️ Frise du tableau de bord (2026-09-07) — dates de franchissement des sept étapes, mêmes
-            // tâches, même statut de PV déjà chargés : toujours aucune requête de plus.
-            dto.setDatesEtapes(chronometrage.datesEtapes(dto.getStatut(), statutPv, tachesDossier));
+            // ⚠️ Frise du tableau de bord (2026-09-07, acteurs le 2026-09-13) — dates ET acteurs de
+            // franchissement des sept étapes, dérivés ensemble des mêmes tâches (invariant : nommé ⇔ daté),
+            // même état de PV déjà chargé, noms lus dans l'annuaire : toujours aucune requête de plus.
+            ChronometrageService.Frise frise = chronometrage.frise(dto.getStatut(), statutPv, tachesDossier,
+                    attributaires.get(dto.getIdDossier()), pv, annuaire);
+            dto.setDatesEtapes(frise.dates());
+            dto.setActeursEtapes(frise.acteurs());
             dto.setAttentePrmp(ChronometrageService.estEnAttentePrmp(dto.getStatut()));
             cnm.prs.enums.EtapeCircuit etape = chronometrage.etapeCourante(dto.getStatut(), statutPv);
             dto.setEtapeCourante(etape == null ? null : etape.name());

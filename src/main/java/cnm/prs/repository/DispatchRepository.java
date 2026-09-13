@@ -33,6 +33,16 @@ public interface DispatchRepository extends JpaRepository<Dispatch, Integer> {
     Optional<String> findImCtrlMembreByDossier(@Param("idDossier") Integer idDossier);
 
     /**
+     * ⚠️ Frise du tableau de bord (2026-09-13) — même information <strong>EN LOT</strong> : (idDossier,
+     * imCtrlMembre) de l'attributaire courant de chaque dossier d'une liste, une seule requête quelle
+     * que soit sa taille. Croissant par dispatch : à plusieurs lignes pour un même dossier, la plus
+     * récente est lue en dernier.
+     */
+    @Query("select d.reception.idDossier, d.imCtrlMembre from Dispatch d "
+            + "where d.reception.idDossier in :ids order by d.idDispatch asc")
+    List<Object[]> findAttributairesParDossiers(@Param("ids") java.util.Collection<Integer> ids);
+
+    /**
      * ⚠️ <strong>Circuit du dossier</strong> (2026-09-04) — localité, dispatcheur COURANT et
      * attributaire, en <strong>une</strong> requête. Pendant, côté dossier, de
      * {@code PvExamenRepository#findCircuitByPv} : le chronométrage part du dossier, la navette part

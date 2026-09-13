@@ -2,6 +2,7 @@ package cnm.prs;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -637,6 +638,305 @@ class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
         // Aucune réception, aucun dispatch, aucun examen n'existe pour ce dossier dans la fixture : la
         // date ne peut venir que des passages du chronométrage, pas d'une jointure sur ces listes.
         assertTrue(receptionRepository.findByIdDossier(500).isEmpty(), "fixture sans réception");
+    }
+
+    // ------------------------------------------------------------------ acteurs des étapes de la frise (2026-09-13)
+
+    /**
+     * ⚠️ Frise du tableau de bord (2026-09-13) — sous chaque date, <em>qui</em> a franchi l'étape :
+     * {@code acteursEtapes}, sept clés, noms nus « Prénoms Nom », dérivés en lot des <strong>mêmes
+     * passages</strong> que {@code datesEtapes}. L'invariant que chacun de ces tests protège : une clé est
+     * nommée si et seulement si elle est datée — même passage, même règle de recul.
+     */
+    @Test
+    @DisplayName("Acteurs des étapes — dossier examiné : RECEPTION = le Secrétaire, DISPATCH = l'ATTRIBUTAIRE, "
+            + "EXAMEN / PROJET_PV = l'examinateur ; les trois autres clés présentes et nulles")
+    void acteursEtapes_dossierExamine() throws Exception {
+        // Dossier 1 : dispatché à CTRMEM par CTRPRE (fixture). Chaque passage porte son auteur réel.
+        dossierEnStatut(1, "EXAMINE");
+        chronometrageService.cloturerPourActeur(1, EtapeCircuit.RECEPTION, "CTRSEC");
+        chronometrageService.cloturerPourActeur(1, EtapeCircuit.DISPATCH, "CTRPRE");
+        chronometrageService.cloturerPourActeur(1, EtapeCircuit.EXAMEN, "CTRMEM");
+
+        String corps = mvc.perform(get("/api/dossiers/1").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.acteursEtapes.RECEPTION").value("Prenoms NomCTRSEC"))
+                .andExpect(jsonPath("$.acteursEtapes.DISPATCH").value("Prenoms NomCTRMEM"))
+                .andExpect(jsonPath("$.acteursEtapes.EXAMEN").value("Prenoms NomCTRMEM"))
+                .andExpect(jsonPath("$.acteursEtapes.PROJET_PV").value("Prenoms NomCTRMEM"))
+                .andReturn().getResponse().getContentAsString();
+        java.util.Map<String, Object> acteurs = acteursEtapes(corps);
+        assertEquals(List.of("RECEPTION", "DISPATCH", "EXAMEN", "PROJET_PV", "PV_SIGNE", "VERIFICATION", "CLOTURE"),
+                new java.util.ArrayList<>(acteurs.keySet()), "sept clés, dans l'ordre de la frise");
+        for (String cle : List.of("PV_SIGNE", "VERIFICATION", "CLOTURE")) {
+            assertTrue(acteurs.containsKey(cle) && acteurs.get(cle) == null, cle + " : clé présente, valeur nulle");
+        }
+        assertNommeSsiDate(corps);
+    }
+
+    @Test
+    @DisplayName("Acteurs des étapes — DISPATCH nomme l'ATTRIBUTAIRE, pas le dispatcheur qui a posé le geste "
+            + "(divergence voulue avec le passage DISPATCH du chronométrage), et suit la réattribution")
+    void acteursEtapes_dispatch_attributairePasDispatcheur_suitLaReattribution() throws Exception {
+        dossierEnStatut(1, "DISPATCHE");
+        chronometrageService.cloturerPourActeur(1, EtapeCircuit.RECEPTION, "CTRSEC");
+        chronometrageService.cloturerPourActeur(1, EtapeCircuit.DISPATCH, "CTRPRE");   // le dispatcheur
+
+        // Le chronométrage, lui, consigne le passage au nom de son AUTEUR (ed86707) : la frise dit « à qui »,
+        // le chronométrage dit « par qui ». Le front ne doit pas recopier nomActeur du passage.
+        mvc.perform(get("/api/dossiers/1/chronometrage").header("Authorization", tokenMembre))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.etapes[?(@.etape=='DISPATCH')].imActeur")
+                        .value(org.hamcrest.Matchers.contains("CTRPRE")))
+                .andExpect(jsonPath("$.attributaire").value("CTRMEM"));
+        assertEquals("Prenoms NomCTRMEM", acteursEtapes(lireDossier(1)).get("DISPATCH"));
+
+        // Réattribution : le dispatch ne garde que son dernier état — la frise nomme le nouvel attributaire,
+        // sans qu'aucun passage n'ait été réécrit.
+        controleurRepository.save(controleur("MEMANT7", 5, "ANT"));
+        var dispatch = dispatchRepository.findById(1).orElseThrow();
+        dispatch.setImCtrlMembre("MEMANT7");
+        dispatchRepository.save(dispatch);
+        String corps = lireDossier(1);
+        assertEquals("Prenoms NomMEMANT7", acteursEtapes(corps).get("DISPATCH"));
+        assertNull(acteursEtapes(corps).get("EXAMEN"), "l'examen du nouvel attributaire n'a pas eu lieu");
+        assertNommeSsiDate(corps);
+    }
+
+    @Test
+    @DisplayName("Acteurs des étapes — même règle de recul que les dates : un dispatch annulé efface DISPATCH / "
+            + "EXAMEN / PROJET_PV, un réexamen efface EXAMEN / PROJET_PV et garde DISPATCH ; nommé ⇔ daté sur "
+            + "tous les statuts du circuit")
+    void acteursEtapes_reculentAvecLesDates_etInvariantSurToutLeCircuit() throws Exception {
+        dossierEnStatut(1, "EXAMINE");
+        chronometrageService.cloturerPourActeur(1, EtapeCircuit.RECEPTION, "CTRSEC");
+        chronometrageService.cloturerPourActeur(1, EtapeCircuit.DISPATCH, "CTRPRE");
+        chronometrageService.cloturerPourActeur(1, EtapeCircuit.EXAMEN, "CTRMEM");
+
+        // Dispatch annulé : retour en PRET_DISPATCH, les passages restent — plus personne après RECEPTION.
+        dossierEnStatut(1, "PRET_DISPATCH");
+        String corps = lireDossier(1);
+        assertEquals("Prenoms NomCTRSEC", acteursEtapes(corps).get("RECEPTION"));
+        for (String cle : List.of("DISPATCH", "EXAMEN", "PROJET_PV")) {
+            assertNull(acteursEtapes(corps).get(cle), cle + " remis à null par l'annulation du dispatch");
+        }
+        assertNommeSsiDate(corps);
+
+        // Réexamen : DISPATCH reste franchi (et nommé : l'attributaire), EXAMEN / PROJET_PV retombent.
+        dossierEnStatut(1, "A_REEXAMINER");
+        corps = lireDossier(1);
+        assertEquals("Prenoms NomCTRMEM", acteursEtapes(corps).get("DISPATCH"));
+        assertNull(acteursEtapes(corps).get("EXAMEN"), "EXAMEN remis à null par le réexamen");
+        assertNull(acteursEtapes(corps).get("PROJET_PV"), "PROJET_PV remis à null par le réexamen");
+        assertNommeSsiDate(corps);
+
+        // Balayage : tous les passages et un PV signé existent ; quel que soit le statut, une clé nommée est
+        // une clé datée, et réciproquement.
+        chronometrageService.cloturerPourActeur(1, EtapeCircuit.VISA, "CTRPRE");
+        chronometrageService.cloturerPourActeur(1, EtapeCircuit.COSIGNATURE, "CTRMEM");
+        chronometrageService.cloturerPourActeur(1, EtapeCircuit.VERIFICATION, "CTRVER");
+        chronometrageService.cloturerPourActeur(1, EtapeCircuit.TRANSMISSION_SIGMP, "CTRVER");
+        chronometrageService.cloturerPourActeur(1, EtapeCircuit.ARCHIVAGE, "CTRASS");
+        pvSigne(9101, 1, "CTRMEM", null, "CTRPRE");
+        for (String statut : List.of("SOUMIS", "PRET_DISPATCH", "DISPATCHE", "EXAMINE", "A_REEXAMINER",
+                "EN_ATTENTE_PIECES", "PV_SIGNE", "EN_VERIFICATION", "EN_ATTENTE_DECISION_PRMP",
+                "OBSERVATIONS_LEVEES", "DECISION_TRANSMISE_SIGMP", "CLOTURE")) {
+            dossierEnStatut(1, statut);
+            assertNommeSsiDate(lireDossier(1));
+        }
+    }
+
+    @Test
+    @DisplayName("Acteurs des étapes — PV_SIGNE : une seule chaîne, les signataires EFFECTIVEMENT signés, "
+            + "« Membre · CC · Président » ; un CC du circuit qui n'a pas signé n'y figure pas")
+    void acteursEtapes_pvSigne_signatairesDansLOrdreMembreCcPresident() throws Exception {
+        dossierEnStatut(1, "EXAMINE");
+        chronometrageService.cloturerPourActeur(1, EtapeCircuit.RECEPTION, "CTRSEC");
+        chronometrageService.cloturerPourActeur(1, EtapeCircuit.DISPATCH, "CTRPRE");
+        chronometrageService.cloturerPourActeur(1, EtapeCircuit.EXAMEN, "CTRMEM");
+        chronometrageService.cloturerPourActeur(1, EtapeCircuit.VISA, "CTRPRE");
+        chronometrageService.cloturerPourActeur(1, EtapeCircuit.COSIGNATURE, "CTRCC1");
+        chronometrageService.cloturerPourActeur(1, EtapeCircuit.COSIGNATURE, "CTRMEM");
+
+        // Sans PV signé : rien — même si des passages de signature existent (une signature sur deux ne signe pas).
+        assertNull(acteursEtapes(lireDossier(1)).get("PV_SIGNE"));
+
+        // Trois parts posées : Membre désigné, CC désigné, Président viseur — l'ordre est celui du PV, pas
+        // celui des gestes (le CC a signé avant le Membre).
+        cnm.prs.entity.PvExamen pv = pvSigne(9101, 1, "CTRMEM", "CTRCC1", "CTRPRE");
+        String corps = lireDossier(1);
+        assertEquals("Prenoms NomCTRMEM · Prenoms NomCTRCC1 · Prenoms NomCTRPRE", acteursEtapes(corps).get("PV_SIGNE"));
+        assertNommeSsiDate(corps);
+
+        // Le CC du circuit est toujours porté par le PV, mais sa part n'est plus datée : il n'a pas signé.
+        pv.setDateSignatureCc(null);
+        pvExamenRepository.save(pv);
+        corps = lireDossier(1);
+        assertEquals("Prenoms NomCTRMEM · Prenoms NomCTRPRE", acteursEtapes(corps).get("PV_SIGNE"));
+        assertNommeSsiDate(corps);
+    }
+
+    @Test
+    @DisplayName("Acteurs des étapes — VERIFICATION nomme le vérificateur une fois les observations levées (pas "
+            + "avant) ; CLOTURE nomme l'archiveur au statut CLOTURE, à défaut le vérificateur qui a transmis au SIGMP")
+    void acteursEtapes_verificationEtCloture() throws Exception {
+        dossierEnStatut(1, "EN_VERIFICATION");
+        chronometrageService.cloturerPourActeur(1, EtapeCircuit.RECEPTION, "CTRSEC");
+        chronometrageService.cloturerPourActeur(1, EtapeCircuit.DISPATCH, "CTRPRE");
+        chronometrageService.cloturerPourActeur(1, EtapeCircuit.EXAMEN, "CTRMEM");
+        chronometrageService.cloturerPourActeur(1, EtapeCircuit.VERIFICATION, "CTRVER");
+
+        // Un passage de vérification qui maintient des observations n'a pas franchi l'étape.
+        String corps = lireDossier(1);
+        assertNull(acteursEtapes(corps).get("VERIFICATION"));
+        assertNommeSsiDate(corps);
+
+        dossierEnStatut(1, "OBSERVATIONS_LEVEES");
+        corps = lireDossier(1);
+        assertEquals("Prenoms NomCTRVER", acteursEtapes(corps).get("VERIFICATION"));
+        assertNull(acteursEtapes(corps).get("CLOTURE"));
+
+        // Transmission SIGMP puis clôture sans archivage : le transmetteur date et nomme CLOTURE.
+        chronometrageService.cloturerPourActeur(1, EtapeCircuit.TRANSMISSION_SIGMP, "CTRVER");
+        dossierEnStatut(1, "CLOTURE");
+        corps = lireDossier(1);
+        assertEquals("Prenoms NomCTRVER", acteursEtapes(corps).get("CLOTURE"));
+        assertNommeSsiDate(corps);
+
+        // Archivage : l'archiveur prend le pas sur la transmission.
+        chronometrageService.cloturerPourActeur(1, EtapeCircuit.ARCHIVAGE, "CTRASS");
+        corps = lireDossier(1);
+        assertEquals("Prenoms NomCTRASS", acteursEtapes(corps).get("CLOTURE"));
+        assertNommeSsiDate(corps);
+    }
+
+    @Test
+    @DisplayName("Acteurs des étapes — servis sur GET /api/dossiers quelle que soit la portée : le Président "
+            + "« toutes localités » et la PRMP (dont GET /api/dispatchs est vide) lisent les mêmes noms")
+    void acteursEtapes_surLaListe_presidentToutesLocalites_etPrmpSansDispatchs() throws Exception {
+        dossierEnStatut(1, "EXAMINE");
+        chronometrageService.cloturerPourActeur(1, EtapeCircuit.RECEPTION, "CTRSEC");
+        chronometrageService.cloturerPourActeur(1, EtapeCircuit.DISPATCH, "CTRPRE");
+        chronometrageService.cloturerPourActeur(1, EtapeCircuit.EXAMEN, "CTRMEM");
+
+        // tokenPresident : Président SANS localité dans son jeton — « toutes localités ».
+        mvc.perform(get("/api/dossiers").header("Authorization", tokenPresident))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idDossier==1)].acteursEtapes.RECEPTION")
+                        .value(org.hamcrest.Matchers.contains("Prenoms NomCTRSEC")))
+                .andExpect(jsonPath("$[?(@.idDossier==1)].acteursEtapes.DISPATCH")
+                        .value(org.hamcrest.Matchers.contains("Prenoms NomCTRMEM")))
+                .andExpect(jsonPath("$[?(@.idDossier==1)].acteursEtapes.EXAMEN")
+                        .value(org.hamcrest.Matchers.contains("Prenoms NomCTRMEM")))
+                // Étape non atteinte : la clé est servie, à null (contrat : les sept clés toujours présentes).
+                .andExpect(jsonPath("$[?(@.idDossier==1)].acteursEtapes.CLOTURE",
+                        org.hamcrest.Matchers.hasItem(org.hamcrest.Matchers.nullValue())));
+
+        // La PRMP n'a AUCUN dispatch dans sa portée : le nom de l'attributaire ne peut venir que du dossier
+        // lui-même, pas d'une jointure côté front sur la liste des dispatchs.
+        mvc.perform(get("/api/dispatchs").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(0)));
+        mvc.perform(get("/api/dossiers").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idDossier==1)].acteursEtapes.DISPATCH")
+                        .value(org.hamcrest.Matchers.contains("Prenoms NomCTRMEM")));
+    }
+
+    @Test
+    @DisplayName("Acteurs des étapes — aucun N+1 : le nombre de requêtes SQL de GET /api/dossiers ne bouge pas "
+            + "quand trois dossiers de plus portent passages nominatifs, dispatch et PV signé")
+    void acteursEtapes_listeSansN1_compteurDeRequetes() throws Exception {
+        // Dossier 1 (fixture : réception, dispatch, examen) porté au bout du circuit, PV signé à trois parts.
+        circuitCompletNominatif(1, 1, 9101);
+        long avant = requetesSqlPour(get("/api/dossiers").header("Authorization", tokenPresident));
+
+        // Trois dossiers de plus, chacun avec son propre circuit, ses passages nominatifs et son PV signé :
+        // chaque nom, chaque attributaire, chaque PV est une occasion de requête par dossier.
+        for (int i = 0; i < 3; i++) {
+            int id = 600 + i;
+            dossierEnStatut(id, "EXAMINE");
+            receptionRepository.save(reception(id, id, "CTRCC1", true));
+            dispatchRepository.save(dispatch(id, id, "CTRCC1", "CTRMEM"));
+            examenRepository.save(examen(id, id, "CTRMEM"));
+            circuitCompletNominatif(id, id, 9200 + i);
+        }
+        long apres = requetesSqlPour(get("/api/dossiers").header("Authorization", tokenPresident));
+        assertEquals(avant, apres,
+                "le nombre de requêtes SQL doit être indépendant du nombre de dossiers enrichis (N+1)");
+    }
+
+    // ------------------------------------------------------------------ utilitaires (acteurs des étapes)
+
+    private String lireDossier(int idDossier) throws Exception {
+        return mvc.perform(get("/api/dossiers/" + idDossier).header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+    }
+
+    private static java.util.Map<String, Object> acteursEtapes(String corps) {
+        return com.jayway.jsonpath.JsonPath.read(corps, "$.acteursEtapes");
+    }
+
+    /** L'invariant : sept clés, dans l'ordre, et pour chacune {@code acteursEtapes[k] != null ⇔ datesEtapes[k] != null}. */
+    private static void assertNommeSsiDate(String corps) {
+        java.util.Map<String, Object> dates = com.jayway.jsonpath.JsonPath.read(corps, "$.datesEtapes");
+        java.util.Map<String, Object> acteurs = acteursEtapes(corps);
+        List<String> attendues = List.of("RECEPTION", "DISPATCH", "EXAMEN", "PROJET_PV", "PV_SIGNE", "VERIFICATION", "CLOTURE");
+        assertEquals(attendues, new java.util.ArrayList<>(dates.keySet()), "datesEtapes : sept clés");
+        assertEquals(attendues, new java.util.ArrayList<>(acteurs.keySet()), "acteursEtapes : sept clés");
+        for (String cle : attendues) {
+            assertEquals(dates.get(cle) == null, acteurs.get(cle) == null,
+                    cle + " : nommé ⇔ daté (date=" + dates.get(cle) + ", acteur=" + acteurs.get(cle) + ")");
+        }
+    }
+
+    /** PV SIGNE sur un examen, avec les parts données (matricule ⇒ part datée ; {@code null} ⇒ part absente). */
+    private cnm.prs.entity.PvExamen pvSigne(int idPv, int idExamen, String membre, String cc, String president) {
+        cnm.prs.entity.PvExamen pv = new cnm.prs.entity.PvExamen();
+        pv.setIdPv(idPv);
+        pv.setIdExamen(idExamen);
+        pv.setIdAvis("FAV");
+        pv.setImCtrlMembre("CTRMEM");
+        pv.setStatutPv("SIGNE");
+        pv.setNbNavettes(0);
+        pv.setImMembreCoSignataire(membre);
+        pv.setDateSignatureMembre(membre == null ? null : LocalDate.now());
+        pv.setImCtrlCc(cc);
+        pv.setDateSignatureCc(cc == null ? null : LocalDate.now());
+        pv.setImCtrlPresident(president);
+        pv.setDateSignaturePresident(president == null ? null : LocalDate.now());
+        return pvExamenRepository.save(pv);
+    }
+
+    /** Tous les passages du circuit, nominatifs, plus un PV signé à trois parts. */
+    private void circuitCompletNominatif(int idDossier, int idExamen, int idPv) {
+        dossierEnStatut(idDossier, "CLOTURE");
+        chronometrageService.cloturerPourActeur(idDossier, EtapeCircuit.RECEPTION, "CTRSEC");
+        chronometrageService.cloturerPourActeur(idDossier, EtapeCircuit.DISPATCH, "CTRPRE");
+        chronometrageService.cloturerPourActeur(idDossier, EtapeCircuit.EXAMEN, "CTRMEM");
+        chronometrageService.cloturerPourActeur(idDossier, EtapeCircuit.VISA, "CTRPRE");
+        chronometrageService.cloturerPourActeur(idDossier, EtapeCircuit.COSIGNATURE, "CTRCC1");
+        chronometrageService.cloturerPourActeur(idDossier, EtapeCircuit.COSIGNATURE, "CTRMEM");
+        chronometrageService.cloturerPourActeur(idDossier, EtapeCircuit.VERIFICATION, "CTRVER");
+        chronometrageService.cloturerPourActeur(idDossier, EtapeCircuit.TRANSMISSION_SIGMP, "CTRVER");
+        chronometrageService.cloturerPourActeur(idDossier, EtapeCircuit.ARCHIVAGE, "CTRASS");
+        pvSigne(idPv, idExamen, "CTRMEM", "CTRCC1", "CTRPRE");
+    }
+
+    /** Nombre d'ordres SQL préparés par une requête HTTP, cache de premier niveau vidé au préalable. */
+    private long requetesSqlPour(org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder requete)
+            throws Exception {
+        org.hibernate.stat.Statistics stats = entityManager.getEntityManagerFactory()
+                .unwrap(org.hibernate.SessionFactory.class).getStatistics();
+        stats.setStatisticsEnabled(true);
+        entityManager.flush();
+        entityManager.clear();   // le cache de premier niveau masquerait les chargements
+        stats.clear();
+        mvc.perform(requete).andExpect(status().isOk());
+        long total = stats.getPrepareStatementCount();
+        assertTrue(total > 0, "statistiques Hibernate actives");
+        return total;
     }
 
     // ------------------------------------------------------------------ utilitaires

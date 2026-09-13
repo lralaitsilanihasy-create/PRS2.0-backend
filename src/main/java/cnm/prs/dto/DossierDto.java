@@ -146,6 +146,21 @@ public class DossierDto {
     private java.util.Map<String, java.time.LocalDateTime> datesEtapes;
 
     /**
+     * ⚠️ Frise du tableau de bord (2026-09-13) — <strong>acteur du franchissement</strong> de chaque étape,
+     * mêmes sept clés que {@link #datesEtapes}, toujours présentes ; nom nu « Prénoms Nom », {@code null}
+     * si l'étape n'est pas franchie. <strong>Invariant</strong> : {@code acteursEtapes[k]} est non nul si et
+     * seulement si {@code datesEtapes[k]} l'est — même passage, même règle de recul (un dispatch annulé, un
+     * réexamen remettent les deux à {@code null}). Dérivé en lot des mêmes tâches : aucune requête de plus.
+     *
+     * <p>Deux clés ont un sens propre : {@code DISPATCH} nomme l'<strong>attributaire</strong> courant
+     * (réattributions comprises), pas le dispatcheur — c'est une divergence <em>voulue</em> avec le passage
+     * DISPATCH du chronométrage, consigné au nom de l'auteur du geste ; {@code PV_SIGNE} est une seule
+     * chaîne, les signataires effectivement signés joints par « · », dans l'ordre Membre · CC · Président.
+     * Lecture seule.</p>
+     */
+    private java.util.Map<String, String> acteursEtapes;
+
+    /**
      * ⚠️ Chronométrage (2026-09-01) — vrai quand <strong>la balle est chez la PRMP</strong>
      * ({@code EN_ATTENTE_COMPLEMENTS_DEPOT}, {@code EN_ATTENTE_PIECES}, {@code EN_ATTENTE_DECISION_PRMP}).
      * La date prévisionnelle reste calculée, mais elle glissera tant que la PRMP n'aura pas rendu la
