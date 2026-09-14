@@ -83,6 +83,45 @@ public final class HeuresOuvrees {
     }
 
     /**
+     * ⚠️ <strong>Réciproque de {@link #ecoulees}</strong> (demande front du 2026-09-14, accueil « À faire ») —
+     * le premier instant auquel {@code heures} heures ouvrées se sont écoulées depuis {@code debut}, sur la même
+     * fenêtre 08:00–16:00 du lundi au vendredi. C'est l'<strong>échéance</strong> d'une étape entrée à
+     * {@code debut} avec un délai standard de {@code heures}.
+     *
+     * <p><strong>Propriété</strong> : {@code ecoulees(debut, ajouter(debut, h)) == h} pour tout {@code h >= 0}, et
+     * l'instant rendu est le plus tôt qui la vérifie. Pour la tenir <em>exactement</em>, le calcul consomme les
+     * minutes <strong>comme {@code ecoulees} les compte</strong> : jour par jour, minutes pleines. Un début hors
+     * fenêtre (22:00, un samedi) ne consomme rien avant l'ouverture suivante ; une échéance qui tombe pile à la
+     * fermeture reste à 16:00 du jour, elle ne glisse pas au lendemain 08:00.</p>
+     *
+     * <p>{@code heures <= 0} rend {@code debut} tel quel (rien à ajouter) ; {@code debut} nul rend {@code null}.</p>
+     */
+    public static LocalDateTime ajouter(LocalDateTime debut, long heures) {
+        if (debut == null || heures <= 0L) {
+            return debut;
+        }
+        long restantes = heures * 60L;
+        LocalDateTime curseur = debut;
+        while (true) {
+            LocalDate jour = curseur.toLocalDate();
+            if (JoursOuvres.estOuvre(jour)) {
+                LocalDateTime ouverture = LocalDateTime.of(jour, OUVERTURE);
+                LocalDateTime fermeture = LocalDateTime.of(jour, FERMETURE);
+                LocalDateTime debutUtile = curseur.isAfter(ouverture) ? curseur : ouverture;
+                if (fermeture.isAfter(debutUtile)) {
+                    // Même mesure qu'ecoulees : minutes pleines entre le début utile et la fermeture.
+                    long disponibles = Duration.between(debutUtile, fermeture).toMinutes();
+                    if (restantes <= disponibles) {
+                        return debutUtile.plusMinutes(restantes);
+                    }
+                    restantes -= disponibles;
+                }
+            }
+            curseur = LocalDateTime.of(jour.plusDays(1), OUVERTURE);
+        }
+    }
+
+    /**
      * Conversion d'un total d'heures ouvrées en jours ouvrés, <strong>arrondi au supérieur</strong> :
      * une journée entamée compte pleine. C'est ce qui fait glisser la date prévisionnelle au lieu de la
      * faire mentir — 9 h de travail restant tiennent sur 2 jours, pas sur 1.

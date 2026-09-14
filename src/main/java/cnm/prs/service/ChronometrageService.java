@@ -1,5 +1,6 @@
 package cnm.prs.service;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -113,8 +114,12 @@ public class ChronometrageService {
      * <p>Connaître l'étape de reprise n'est pas un luxe : sans elle, un dossier en attente après des
      * observations non levées compterait la vérification comme franchie, alors qu'elle sera
      * <strong>rejouée</strong> — la date annoncée serait trop optimiste d'une vérification entière.</p>
+     *
+     * <p>⚠️ 2026-09-14 — <strong>publique</strong> (lecture seule, {@code Map.of} est immuable) : l'accueil
+     * « À faire » y lit l'étape qui porte un dossier en attente PRMP. La lire ici, et non la recopier, est ce
+     * qui garantit que les deux écrans parlent de la même étape.</p>
      */
-    private static final Map<String, EtapeCircuit> REPRISE_APRES_ATTENTE = Map.of(
+    public static final Map<String, EtapeCircuit> REPRISE_APRES_ATTENTE = Map.of(
             StatutDossier.EN_ATTENTE_COMPLEMENTS_DEPOT.name(), EtapeCircuit.RECEPTION,
             StatutDossier.EN_ATTENTE_PIECES.name(), EtapeCircuit.EXAMEN,
             StatutDossier.EN_ATTENTE_DECISION_PRMP.name(), EtapeCircuit.VERIFICATION);
@@ -127,12 +132,18 @@ public class ChronometrageService {
     private final ControleurRepository controleurRepository;
     /** L'attributaire courant de l'examen : la seule étape nominativement attribuée. */
     private final cnm.prs.repository.DispatchRepository dispatchRepository;
+    /**
+     * ⚠️ 2026-09-14 — horloge injectée ({@code ClockConfig}) : seul « maintenant » du service, pour les fins de
+     * passage, les fenêtres d'attente et la restitution. Horloge système en production — aucun changement de
+     * comportement ; une horloge figée en test rend l'écoulé et l'échéance vérifiables à l'heure près.
+     */
+    private final Clock clock;
 
     public ChronometrageService(TacheDossierRepository tacheRepository,
             SuspensionDossierRepository suspensionRepository, DelaiStandardService delaiStandardService,
             DossierRepository dossierRepository, PvExamenRepository pvExamenRepository,
             ControleurRepository controleurRepository,
-            cnm.prs.repository.DispatchRepository dispatchRepository) {
+            cnm.prs.repository.DispatchRepository dispatchRepository, Clock clock) {
         this.tacheRepository = tacheRepository;
         this.suspensionRepository = suspensionRepository;
         this.delaiStandardService = delaiStandardService;
@@ -140,6 +151,7 @@ public class ChronometrageService {
         this.pvExamenRepository = pvExamenRepository;
         this.controleurRepository = controleurRepository;
         this.dispatchRepository = dispatchRepository;
+        this.clock = clock;
     }
 
     // ------------------------------------------------------------------ étape courante
@@ -264,7 +276,7 @@ public class ChronometrageService {
             passage.setOccurrence((rang == null ? 0 : rang) + 1);
             passage.setImActeur(imActeur);
             passage.setProfil(profil);
-            passage.setDateFin(LocalDateTime.now());
+            passage.setDateFin(LocalDateTime.now(clock));
             tacheRepository.save(passage);
         } catch (RuntimeException ex) {
             LOG.warn("[CHRONO] fin d'etape non enregistree dossier={} etape={} acteur={} : {}",
@@ -414,7 +426,7 @@ public class ChronometrageService {
             suspension.setIdSuspension(suspensionRepository.nextId());
             suspension.setIdDossier(idDossier);
             suspension.setStatut(statut.name());
-            suspension.setDebut(LocalDateTime.now());
+            suspension.setDebut(LocalDateTime.now(clock));
             suspensionRepository.save(suspension);
         } catch (RuntimeException ex) {
             LOG.warn("[CHRONO] ouverture d'attente PRMP impossible dossier={} : {}", idDossier, ex.toString());
@@ -428,7 +440,7 @@ public class ChronometrageService {
         }
         try {
             suspensionRepository.findFirstByIdDossierAndFinIsNullOrderByDebutDesc(idDossier).ifPresent(s -> {
-                s.setFin(LocalDateTime.now());
+                s.setFin(LocalDateTime.now(clock));
                 suspensionRepository.save(s);
             });
         } catch (RuntimeException ex) {
@@ -580,30 +592,99 @@ public class ChronometrageService {
     public LocalDate datePrevisionnelleFin(String statut, String statutPv, List<TacheDossier> taches,
             List<SuspensionDossier> suspensions, LocalDateTime depot, LocalDateTime maintenant,
             Map<EtapeCircuit, Integer> delais) {
-        EtapeCircuit courante = etapeCourante(statut, () -> statutPv);
-        EtapeCircuit reference = courante != null ? courante : REPRISE_APRES_ATTENTE.get(statut);
+        // ⚠️ 2026-09-14 — une seule dérivation : l'étape en cours, son entrée et son reste viennent de
+        // delaiCourant, que l'accueil « À faire » sert tel quel. Les résultats n'ont pas bougé d'un jour.
+        DelaiCourant courant = delaiCourant(statut, statutPv, taches, suspensions, depot, maintenant, delais);
+        EtapeCircuit reference = courant.etape() != null ? courant.etape() : etapeDeReprise(statut);
         if (reference == null) {
             return null;
         }
-        // Entrée de l'étape en cours : la même dérivation que la chaîne des passages, bornée à maintenant.
-        LocalDateTime entreeCourante = courante == null ? null
-                : entree(derniereFin(taches), maintenant, depot, reprises(suspensions), courante);
         long totalHeures = 0L;
         for (EtapeCircuit etape : EtapeCircuit.etapesDuCompteur()) {
             if (etape.ordinal() < reference.ordinal()) {
                 continue;   // franchie : l'étape de référence fait foi, y compris après un retour en arrière
             }
-            int standard = delais.getOrDefault(etape, HeuresOuvrees.HEURES_PAR_JOUR);
-            if (etape == courante && entreeCourante != null) {
+            if (etape == courant.etape() && courant.entree() != null) {
                 // Écoulé et délai standard dans la MÊME échelle (8 h par jour ouvré) : mesurer en heures
                 // d'horloge mettrait en dépassement une étape entamée la veille alors qu'un seul jour de
-                // travail a passé.
-                totalHeures += Math.max(0L, standard - HeuresOuvrees.ecoulees(entreeCourante, maintenant));
+                // travail a passé. Une étape en dépassement compte 0.
+                totalHeures += Math.max(0L, courant.restantHeures());
             } else {
-                totalHeures += standard;
+                totalHeures += standard(delais, etape);
             }
         }
         return JoursOuvres.ajouter(maintenant.toLocalDate(), HeuresOuvrees.enJoursArrondiSuperieur(totalHeures));
+    }
+
+    /**
+     * ⚠️ <strong>Le délai de l'étape en cours</strong> (demande front du 2026-09-14, accueil « À faire », §4) —
+     * ce que {@code GET /api/dossiers/{id}/chronometrage} sert pour son passage {@code enCours}, plus ce qu'il
+     * faut pour juger l'urgence : délai standard, reste, échéance, et la pause PRMP en cours.
+     *
+     * @param etape         étape courante ({@link #etapeCourante(String, String)}) ; {@code null} hors circuit
+     *                      et pendant une attente PRMP autre que la rectification — les autres champs du délai
+     *                      sont alors nuls, seule la pause peut être renseignée
+     * @param entree        entrée dérivée, <strong>la même</strong> que celle du passage en cours de la chaîne
+     *                      ({@link #entree}) ; {@code null} si aucune borne n'est connue
+     * @param ecouleHeures  heures ouvrées de l'entrée à {@code maintenant} — égal au {@code dureeHeuresOuvrees}
+     *                      du passage {@code enCours} ; 0 sans entrée connue (« nulle plutôt qu'inventée »)
+     * @param standardHeures délai standard de l'étape ({@code tr_delai_standard}, repli 8 h comme la prévision)
+     * @param restantHeures standard − écoulé ; négatif en dépassement
+     * @param echeance      entrée + standard en heures ouvrées ({@link HeuresOuvrees#ajouter}) ; {@code null} sans
+     *                      entrée connue
+     * @param pauseDepuis   statut suspensif seulement : début de la fenêtre d'attente PRMP OUVERTE
+     *                      ({@code t_suspension_dossier}), {@code null} s'il n'y en a pas
+     * @param pauseHeures   heures ouvrées écoulées depuis {@code pauseDepuis} ; {@code null} sans fenêtre ouverte
+     */
+    public record DelaiCourant(EtapeCircuit etape, LocalDateTime entree, Long ecouleHeures, Integer standardHeures,
+            Long restantHeures, LocalDateTime echeance, LocalDateTime pauseDepuis, Long pauseHeures) {
+    }
+
+    /**
+     * Délai de l'étape en cours d'un dossier, calculé <strong>en mémoire</strong> sur des données déjà chargées
+     * (en lot pour une liste) : aucune requête. L'entrée de l'étape suit exactement la dérivation de la chaîne
+     * des passages — fin du dernier passage, dépôt, sortie d'attente PRMP (sauf pour la rectification) —, si
+     * bien que l'écoulé servi ici et celui du passage {@code enCours} ne peuvent pas diverger.
+     *
+     * <p>{@code maintenant} est un paramètre, comme pour {@link #datePrevisionnelleFin} : l'appelant le lit une
+     * fois (horloge injectée) pour toute sa liste, et le calcul reste déterministe en test.</p>
+     */
+    public DelaiCourant delaiCourant(String statut, String statutPv, List<TacheDossier> taches,
+            List<SuspensionDossier> suspensions, LocalDateTime depot, LocalDateTime maintenant,
+            Map<EtapeCircuit, Integer> delais) {
+        LocalDateTime pauseDepuis = estEnAttentePrmp(statut) ? debutAttenteOuverte(suspensions) : null;
+        Long pauseHeures = pauseDepuis == null ? null : HeuresOuvrees.ecoulees(pauseDepuis, maintenant);
+        EtapeCircuit courante = etapeCourante(statut, () -> statutPv);
+        if (courante == null) {
+            return new DelaiCourant(null, null, null, null, null, null, pauseDepuis, pauseHeures);
+        }
+        // Entrée de l'étape en cours : la même dérivation que la chaîne des passages, bornée à maintenant.
+        LocalDateTime entree = entree(derniereFin(taches), maintenant, depot, reprises(suspensions), courante);
+        long ecoule = HeuresOuvrees.ecoulees(entree, maintenant);
+        int standard = standard(delais, courante);
+        return new DelaiCourant(courante, entree, ecoule, standard, standard - ecoule,
+                entree == null ? null : HeuresOuvrees.ajouter(entree, standard), pauseDepuis, pauseHeures);
+    }
+
+    /**
+     * Étape qui <strong>reprendra</strong> quand la PRMP rendra la main ({@link #REPRISE_APRES_ATTENTE}) ;
+     * {@code null} si le statut n'est pas suspensif.
+     */
+    public static EtapeCircuit etapeDeReprise(String statut) {
+        return statut == null ? null : REPRISE_APRES_ATTENTE.get(statut);
+    }
+
+    /** Délai standard d'une étape dans le référentiel chargé — repli 8 h, celui de la prévision. */
+    private static int standard(Map<EtapeCircuit, Integer> delais, EtapeCircuit etape) {
+        return delais.getOrDefault(etape, HeuresOuvrees.HEURES_PAR_JOUR);
+    }
+
+    /** Début de la fenêtre d'attente PRMP ouverte (sans fin) la plus récente ; {@code null} s'il n'y en a pas. */
+    private static LocalDateTime debutAttenteOuverte(List<SuspensionDossier> suspensions) {
+        return suspensions == null ? null : suspensions.stream()
+                .filter(s -> s.getFin() == null && s.getDebut() != null)
+                .map(SuspensionDossier::getDebut)
+                .max(LocalDateTime::compareTo).orElse(null);
     }
 
     /** Fin du dernier passage enregistré — l'entrée de l'étape en cours, avant arbitrage des autres bornes. */
@@ -631,7 +712,7 @@ public class ChronometrageService {
         List<SuspensionDossier> suspensions = suspensionRepository.findByIdDossierOrderByDebutAsc(idDossier);
         String statutPv = statutPvDe(idDossier);
         EtapeCircuit courante = etapeCourante(dossier.getStatut(), () -> statutPv);
-        LocalDateTime maintenant = LocalDateTime.now();
+        LocalDateTime maintenant = LocalDateTime.now(clock);
 
         Map<String, String> noms = new HashMap<>();
         for (TacheDossier t : taches) {
