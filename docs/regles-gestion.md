@@ -1247,6 +1247,11 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
     ligne de marché : un `idDetail` fourni sur un point `FICHE` ou `AGPM` est refusé (400). Les gardes
     testaient auparavant la portée par égalité à `DOSSIER` et rangeaient le reste du côté par-ligne —
     elles s'appuient désormais sur un prédicat, pour qu'une portée future tombe du bon côté par défaut.
+  - ⚠️ **Audit 2026-09-14 (E3) — la portée d'un point ne s'écrase pas à la modification.** Le défaut
+    `LIGNE` ne vaut qu'à la **création** ; un `PUT` **sans** portée **conserve** celle du point (un code
+    fourni mais inconnu reste refusé en 400). L'écran d'administration n'envoyait pas ce champ : chaque
+    modification d'un point `FICHE`, `AGPM`, `DOSSIER` ou `SUPPRESSION` le repassait silencieusement en
+    `LIGNE` et le sortait de sa grille d'examen.
   - **Complétude à la soumission** : ces points comptent comme les autres, l'examen reste refusé tant
     qu'un point de la grille effective n'est pas statué — ⚠️ **sauf si le document dérivé est VIDE**
     (règle du pilote du 2026-09-04, ci-dessous : « on ne contrôle pas le vide »).

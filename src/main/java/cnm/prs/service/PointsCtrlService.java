@@ -91,7 +91,13 @@ public class PointsCtrlService {
         existing.setObligatoire(dto.getObligatoire());
         existing.setIdTypeDossier(dto.getIdTypeDossier());
         existing.setIdSousType(dto.getIdSousType());
-        existing.setPortee(PorteePointCtrl.depuisCodeOuDefaut(dto.getPortee()));   // absent → LIGNE, inconnu → 400
+        // ⚠️ Audit 2026-09-14 (E3) — à la MODIFICATION, une portée absente CONSERVE la portée existante (le
+        // défaut LIGNE ne vaut qu'à la création). L'écran d'administration n'envoyait pas ce champ : chaque
+        // modification d'un point FICHE, AGPM, DOSSIER ou SUPPRESSION le repassait en LIGNE, en silence, et
+        // le sortait des grilles d'examen correspondantes. Code fourni mais inconnu → toujours 400.
+        if (dto.getPortee() != null && !dto.getPortee().isBlank()) {
+            existing.setPortee(PorteePointCtrl.depuisCodeOuDefaut(dto.getPortee()));
+        }
         return PointsCtrlMapper.toDto(repository.save(existing));
     }
 

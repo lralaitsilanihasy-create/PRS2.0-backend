@@ -4185,7 +4185,7 @@ immuable). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **40
 | obligatoire | boolean | Oui | @NotNull |
 | idTypeDossier | string | Oui | @NotBlank — **famille** (`DDP`/`DMC`/`DDM`) |
 | idSousType | string | Non | max 20 — sous-type ciblé (doit appartenir à la famille, sinon 400) ; `null` = commun |
-| portee | string | Non | ⚠️ **règle ajoutée 2026-07-21, étendue 2026-09-02** — quatre valeurs : **`LIGNE`** (évalué par ligne de marché), **`DOSSIER`** (inter-lignes, ex. « fractionnement illicite »), **`FICHE`** (fiche de présentation) et **`AGPM`** (projet d’AGPM). Absent/vide en entrée → défaut **`LIGNE`** ; code inconnu → **400** nommant les quatre codes. **Toujours renseigné en sortie**. ⚠️ Seule `LIGNE` s’évalue par marché : **toute autre portée s’évalue une seule fois**, `idDetail` nul (un `idDetail` fourni → 400) 
+| portee | string | Non | ⚠️ **règle ajoutée 2026-07-21, étendue 2026-09-02** — quatre valeurs : **`LIGNE`** (évalué par ligne de marché), **`DOSSIER`** (inter-lignes, ex. « fractionnement illicite »), **`FICHE`** (fiche de présentation) et **`AGPM`** (projet d’AGPM). Absent/vide en entrée → défaut **`LIGNE`** **à la création (POST)** ; ⚠️ **Audit 2026-09-14 (E3)** : absent/vide **à la modification (PUT) → portée existante conservée** ; code inconnu → **400** nommant les quatre codes. **Toujours renseigné en sortie**. ⚠️ Seule `LIGNE` s’évalue par marché : **toute autre portée s’évalue une seule fois**, `idDetail` nul (un `idDetail` fourni → 400) 
 
 
 > ### ⚠️ La fiche de présentation et l'AGPM entrent dans l'examen (règle du pilote, 2026-09-02)

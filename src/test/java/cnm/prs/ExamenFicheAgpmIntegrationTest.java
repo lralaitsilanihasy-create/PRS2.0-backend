@@ -4,6 +4,7 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -88,6 +89,29 @@ class ExamenFicheAgpmIntegrationTest extends CnmIntegrationTestSupport {
                 // Le message énumère les codes DEPUIS l'enum : il ne peut plus diverger de la liste réelle.
                 .andExpect(jsonPath("$.message", containsString("FICHE")))
                 .andExpect(jsonPath("$.message", containsString("AGPM")));
+    }
+
+    @Test
+    @DisplayName("⚠️ Audit 2026-09-14 (E3) — PUT SANS portée : un point FICHE reste FICHE (plus d'écrasement en "
+            + "LIGNE) ; PUT AVEC portée AGPM : la portée change")
+    void modification_porteeAbsenteConservee_porteeFournieAppliquee() throws Exception {
+        // L'écran d'administration n'envoie que ses champs, sans portée : c'est ce corps-là qui écrasait.
+        mvc.perform(put("/api/points-ctrls/" + FICHE_1).header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idPointCtrl\":" + FICHE_1 + ",\"libelPointCtrl\":\"Listes de la fiche (libelle revu)\","
+                        + "\"obligatoire\":true,\"idTypeDossier\":\"DDP\",\"ordrePointCtrl\":9}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.libelPointCtrl").value("Listes de la fiche (libelle revu)"))
+                .andExpect(jsonPath("$.portee").value("FICHE"));
+        org.junit.jupiter.api.Assertions.assertEquals(PorteePointCtrl.FICHE,
+                pointsCtrlRepository.findById(FICHE_1).orElseThrow().getPortee());
+
+        mvc.perform(put("/api/points-ctrls/" + FICHE_1).header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idPointCtrl\":" + FICHE_1 + ",\"libelPointCtrl\":\"Listes de la fiche (libelle revu)\","
+                        + "\"obligatoire\":true,\"idTypeDossier\":\"DDP\",\"ordrePointCtrl\":9,\"portee\":\"AGPM\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.portee").value("AGPM"));
     }
 
     // ------------------------------------------------------------------ grille effective
