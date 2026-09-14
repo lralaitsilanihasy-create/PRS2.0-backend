@@ -47,6 +47,22 @@ public class ObservationControle {
     @Column(name = "ORDRE")
     private Integer ordre;
 
+    /**
+     * ⚠️ V30 (2026-09-14) — code de la <strong>cellule</strong> du document visée par la ligne
+     * ({@link cnm.prs.enums.ChampCible}) ; {@code null} = aucune cellule, comportement antérieur. Validé
+     * par {@code ObservationCibleValidateur} ; le CHECK SQL interdit une cible sans champ.
+     */
+    @Column(name = "CHAMP_CIBLE", length = 40)
+    private String champCible;
+
+    /** ⚠️ V30 — ligne de marché visée ({@code t_marche.ID_DETAIL}), sans FK ; {@code null} sans champ. */
+    @Column(name = "ID_MARCHE_CIBLE")
+    private Integer idMarcheCible;
+
+    /** ⚠️ V30 — bénéficiaire visé ({@code t_service_beneficiaire.ID_BENEF}), colonnes par bénéficiaire seulement. */
+    @Column(name = "ID_BENEF_CIBLE")
+    private Integer idBenefCible;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ID_DETAIL", insertable = false, updatable = false)
     @JsonIgnore

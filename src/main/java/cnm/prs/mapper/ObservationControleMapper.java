@@ -21,6 +21,9 @@ public final class ObservationControleMapper {
         dto.setAuLieuDe(entity.getAuLieuDe());
         dto.setLire(entity.getLire());
         dto.setOrdre(entity.getOrdre());
+        dto.setChamp(entity.getChampCible());
+        dto.setIdMarcheCible(entity.getIdMarcheCible());
+        dto.setIdBenefCible(entity.getIdBenefCible());
         return dto;
     }
 
@@ -34,6 +37,9 @@ public final class ObservationControleMapper {
         entity.setAuLieuDe(dto.getAuLieuDe());
         entity.setLire(dto.getLire());
         entity.setOrdre(dto.getOrdre());
+        entity.setChampCible(dto.getChamp());
+        entity.setIdMarcheCible(dto.getIdMarcheCible());
+        entity.setIdBenefCible(dto.getIdBenefCible());
         return entity;
     }
 }

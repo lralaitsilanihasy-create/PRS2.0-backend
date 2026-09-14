@@ -152,8 +152,14 @@ public class ObservationPvService {
                 for (ObservationControle oc : lignesObs) {
                     String texte = contexte + " : au lieu de « " + nvl(oc.getAuLieuDe())
                             + " », lire « " + nvl(oc.getLire()) + " »";
-                    rows.add(nouvelle(idDossier, pv.getIdPv(), "POINT", oc.getIdObservation(), d.getIdDetailExamen(),
-                            null, texte, ++ordre));
+                    ObservationPv row = nouvelle(idDossier, pv.getIdPv(), "POINT", oc.getIdObservation(),
+                            d.getIdDetailExamen(), null, texte, ++ordre);
+                    // ⚠️ V30 (2026-09-14) — la cellule visée est RECOPIÉE telle quelle ; le libellé ci-dessus,
+                    // lui, ne change pas d'un caractère (le front le redécoupe toujours).
+                    row.setChampCible(oc.getChampCible());
+                    row.setIdMarcheCible(oc.getIdMarcheCible());
+                    row.setIdBenefCible(oc.getIdBenefCible());
+                    rows.add(row);
                 }
             }
         }
@@ -441,6 +447,12 @@ public class ObservationPvService {
             dto.setSource(o.getSource());
             dto.setIdExamenPiece(o.getIdExamenPiece());
             dto.setLibelle(o.getLibelle());
+            // ⚠️ V30 — la cellule visée, servie à tous (PRMP comprise : ce n'est pas une identité).
+            dto.setChamp(o.getChampCible());
+            dto.setIdMarcheCible(o.getIdMarcheCible());
+            dto.setIdBenefCible(o.getIdBenefCible());
+            cnm.prs.enums.ChampCible.DocumentCible document = cnm.prs.enums.ChampCible.documentDuCode(o.getChampCible());
+            dto.setDocumentCible(document == null ? null : document.name());
             dto.setOrdre(o.getOrdre());
             dto.setStatut(dernier == null ? "EMISE" : dernier.getDecision());
             dto.setPrecision(dernier == null ? null : dernier.getPrecision());

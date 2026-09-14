@@ -63,6 +63,22 @@ public class ObservationPv {
     @Column(name = "ID_DETAIL_EXAMEN")
     private Integer idDetailExamen;
 
+    /**
+     * ⚠️ V30 (2026-09-14) — cellule visée, <strong>recopiée</strong> de la ligne d'observation
+     * ({@code t_observation_controle}) au snapshot ; {@code null} pour une PIECE ou un point sans ligne
+     * détaillée. Le libellé figé, lui, ne change pas d'un caractère.
+     */
+    @Column(name = "CHAMP_CIBLE", length = 40)
+    private String champCible;
+
+    /** ⚠️ V30 — ligne de marché visée ({@code t_marche.ID_DETAIL}), recopiée au snapshot. */
+    @Column(name = "ID_MARCHE_CIBLE")
+    private Integer idMarcheCible;
+
+    /** ⚠️ V30 — bénéficiaire visé ({@code t_service_beneficiaire.ID_BENEF}), recopié au snapshot. */
+    @Column(name = "ID_BENEF_CIBLE")
+    private Integer idBenefCible;
+
     /** Libellé FIGÉ de l'observation (contexte + demande), tel qu'arrêté au PV. */
     @Column(name = "LIBELLE", length = 1000, nullable = false)
     private String libelle;

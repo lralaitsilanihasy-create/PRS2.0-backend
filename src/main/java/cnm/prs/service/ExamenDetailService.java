@@ -49,11 +49,14 @@ public class ExamenDetailService {
     private final MarcheRepository marcheRepository;
     /** ⚠️ Audit 2026-08-27 (lot B) — verrou d'état + garde attributaire, partagés avec l'examen parent. */
     private final ExamenGarde garde;
+    /** ⚠️ V30 (2026-09-14) — cellule visée par chaque ligne d'observation : même validateur que la ressource fille. */
+    private final ObservationCibleValidateur cibleValidateur;
 
     public ExamenDetailService(ExamenDetailRepository repository, ExamenRepository examenRepository,
             ObservationControleRepository observationRepository, PointsCtrlRepository pointsCtrlRepository,
-            MarcheRepository marcheRepository, ExamenGarde garde) {
+            MarcheRepository marcheRepository, ExamenGarde garde, ObservationCibleValidateur cibleValidateur) {
         this.garde = garde;
+        this.cibleValidateur = cibleValidateur;
         this.repository = repository;
         this.examenRepository = examenRepository;
         this.observationRepository = observationRepository;
@@ -84,6 +87,7 @@ public class ExamenDetailService {
         exigerExamenModifiable(dto.getIdExamen());
         validerObservations(dto);
         validerLigneEtUnicite(dto, null);
+        cibleValidateur.validerResultat(dto);   // ⚠️ V30 — après la ligne du résultat, qui sert de contexte
         ExamenDetail entity = ExamenDetailMapper.toEntity(dto);
         // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
         entity.setIdDetailExamen(ClePrimaire.reallouer(dto.getIdDetailExamen(),
@@ -102,6 +106,7 @@ public class ExamenDetailService {
         exigerExamenModifiable(existing.getIdExamen());
         validerObservations(dto);
         validerLigneEtUnicite(dto, id);
+        cibleValidateur.validerResultat(dto);   // ⚠️ V30 — après la ligne du résultat, qui sert de contexte
         existing.setIdExamen(dto.getIdExamen());
         existing.setIdDetail(dto.getIdDetail());
         existing.setIdPtControle(dto.getIdPtControle());

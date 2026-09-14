@@ -26,6 +26,18 @@ public class ObservationPvDto {
     private Integer idExamenPiece;
     /** Libellé figé de l'observation, tel qu'arrêté au PV. */
     private String libelle;
+    /**
+     * ⚠️ V30 (2026-09-14) — cellule visée, recopiée de l'observation d'examen à la signature ({@code null} pour
+     * une pièce, un point sans ligne détaillée ou une observation antérieure). Servie à tous, PRMP comprise :
+     * ce n'est pas une identité.
+     */
+    private String champ;
+    /** ⚠️ V30 — ligne de marché visée ({@code t_marche.ID_DETAIL}). */
+    private Integer idMarcheCible;
+    /** ⚠️ V30 — bénéficiaire visé ({@code t_service_beneficiaire.ID_BENEF}). */
+    private Integer idBenefCible;
+    /** ⚠️ V30 — document déduit du code : {@code PPM}, {@code FICHE}, {@code AGPM} ou {@code null}. */
+    private String documentCible;
     private Integer ordre;
 
     /** Statut courant : {@code EMISE} / {@code LEVEE} / {@code MAINTENUE}. */

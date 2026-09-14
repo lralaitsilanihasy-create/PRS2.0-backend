@@ -1082,7 +1082,7 @@ Content-Type: multipart/form-data
 | idDetail | number | Non | ⚠️ **règle ajoutée 2026-07-21** — **ligne de marché** examinée (FK `t_marche`) : renseignée pour un point de **portée LIGNE** (résultat par marché), **`null`** pour un point **DOSSIER** (inter-lignes) ou un examen **historique** (résultat niveau dossier). Doit appartenir au dossier de l'examen (sinon **400** `idDetail`) ; un point **DOSSIER** avec `idDetail` renseigné → **400** `idDetail` |
 | idPtControle | number | Oui | @NotNull |
 | conforme | boolean | Oui | @NotNull |
-| observations | `ObservationControleDto[]` | Non | lignes « AU LIEU DE / LIRE » (cf. *Observations de contrôle*) ; **`[]` si conforme**, **N lignes si non conforme** (sinon **400**, champ `observations`) ; persistées par le service (remplacement à l'enregistrement) |
+| observations | `ObservationControleDto[]` | Non | lignes « AU LIEU DE / LIRE » (cf. *Observations de contrôle*) ; **`[]` si conforme**, **N lignes si non conforme** (sinon **400**, champ `observations`) ; persistées par le service (remplacement à l'enregistrement). ⚠️ **V30 (2026-09-14)** — chaque ligne peut viser une **cellule** (`champ`, `idMarcheCible`, `idBenefCible`) : mêmes règles que *Observations de contrôle*, erreurs **400** ciblées sur **`observations[i].champ`**, **`observations[i].idMarcheCible`** ou **`observations[i].idBenefCible`** ; point **LIGNE** : `idMarcheCible` absent → **forcé** à `idDetail` dans la réponse |
 | obsSiNonConforme | string | Non | max 500 |
 
 > ⚠️ **Examen séquentiel par ligne de marché (règle ajoutée 2026-07-21).** Un dossier de planification (PPM)
@@ -1178,6 +1178,47 @@ Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `
 | auLieuDe | string | Non | max 500 |
 | lire | string | Non | max 500 |
 | ordre | number | Oui | @NotNull — ordre de saisie (tri ASC) |
+| champ | string \| null | Non | ⚠️ **V30** — code de la **cellule** visée, liste fermée ci-dessous ; absent, vide ou blanc = `null` |
+| idMarcheCible | number \| null | Non | ⚠️ **V30** — ligne de marché visée (`t_marche.ID_DETAIL`) |
+| idBenefCible | number \| null | Non | ⚠️ **V30** — bénéficiaire visé (`t_service_beneficiaire.ID_BENEF`), colonnes par bénéficiaire seulement |
+
+> ⚠️ **Cellule visée par une observation (V30, demande front du 2026-09-14).** Une ligne « Au lieu de / Lire »
+> peut désigner la **cellule** du document officiel qu'elle corrige (ex. « MODE DE PASSATION » de la ligne 6) :
+> le front l'encadre et pré-remplit « Au lieu de ». Retrouver la cellule par sa valeur était ambigu (montants
+> égaux, bénéficiaires fusionnés) et impossible pour la fiche et l'AGPM, dont les résultats n'ont pas de ligne.
+> **Rétrocompatible** : les trois champs sont facultatifs, un corps qui les ignore écrit `null` (comportement
+> d'avant). ⚠️ Un **PUT** porte l'état complet de la ligne : une cible absente du corps est **effacée**.
+>
+> **Codes admis** (liste fermée, `ChampCible` ; le préfixe dit le document) :
+>
+> | Document | Portée du point | Codes |
+> |---|---|---|
+> | PPM | `LIGNE`, `DOSSIER` | `nature` `objet` `montEstim` `nouvMontEstim` `mode` `financement` `lancement` `ouverture` `attribution` ; par bénéficiaire : `soa` `compte` `montBenef` `nouvMontBenef` |
+> | Fiche de présentation | `FICHE` | `derogatoires.{objet,montEstim,mode,justification}`, `delaisAmenages.{objet,montEstim,mode,delaiRemise,justification}`, `contratsCadres.{objet,montEstim,mode,delaiRemise}` |
+> | Projet d'AGPM | `AGPM` | `agpm.{compte,nature,objet,montEstim,financement,mode,dateDao}` |
+>
+> **Validation → 400 ciblé** (un seul validateur, `ObservationCibleValidateur`, pour cette ressource — champs
+> `champ`, `idMarcheCible`, `idBenefCible` — et pour `/api/examen-details` — champs `observations[i].…`) :
+> 1. `champ` nul → `idMarcheCible` et `idBenefCible` doivent être nuls (400 sur celui qui est posé) ; le
+>    CHECK `…_CIBLE_check` de V30 tient le même invariant en base ;
+> 2. code **inconnu**, ou **étranger au document** de la portée du point → 400 `champ` ; un point de portée
+>    **`SUPPRESSION`** n'accepte **aucun** champ → 400 `champ` ;
+> 3. portée **`LIGNE`** : `idMarcheCible` facultatif, **forcé** à la ligne du résultat (`idDetail`) ; fourni et
+>    différent → 400 `idMarcheCible` (un résultat LIGNE historique sans `idDetail` suit la règle 4) ;
+> 4. portées **`DOSSIER`**, **`FICHE`**, **`AGPM`** : `idMarcheCible` **obligatoire** dès qu'un champ est posé,
+>    et ligne **du dossier examiné** → sinon 400 `idMarcheCible`. Le serveur ne vérifie **pas** que la ligne
+>    figure dans la fiche ou l'AGPM (documents calculés côté front) ;
+> 5. `idBenefCible` admis **seulement** avec `soa`/`compte`/`montBenef`/`nouvMontBenef`, et doit être un
+>    bénéficiaire de `idMarcheCible` → sinon 400 `idBenefCible`.
+>
+> Ici, un `champ` posé sur un `idDetail` (résultat d'examen) introuvable → 400 `idDetail`. **Verrous et
+> profils inchangés.**
+
+**Exemple — requête** (point FICHE : la ligne est portée par le corps)
+```json
+{ "idDetail": 4502, "ordre": 1, "auLieuDe": "30 jours", "lire": "15 jours",
+  "champ": "delaisAmenages.delaiRemise", "idMarcheCible": 18, "idBenefCible": null }
+```
 
 **Endpoints**
 
@@ -5451,6 +5492,11 @@ Ouvert Restreint ».
 >   vérification — le vérificateur ne voit que des dossiers **déjà rectifiés** —, donc il dispose des deux
 >   décisions dès son premier passage. Remplace la décision produit du 2026-08-15, qui faisait du premier
 >   passage un « rappel » à `MAINTENUE` forcé).
+>   ⚠️ **V30 (2026-09-14) — cellule visée** : chaque observation porte aussi `champ`, `idMarcheCible`,
+>   `idBenefCible` (**recopiés** de la ligne « Au lieu de / Lire » au snapshot de la signature ; `null` pour
+>   une pièce, un point sans ligne détaillée ou une observation antérieure) et **`documentCible`** déduit du
+>   code (`PPM`, `FICHE`, `AGPM` ou `null`). Servis **à tous, PRMP et UGPM comprises** (ce n'est pas une
+>   identité). Le **`libelle` figé ne change pas d'un caractère** et le PV Word est inchangé.
 > - `POST /api/observations-pv/passage` (**VERIFICATEUR**, dossier `EN_VERIFICATION`) :
 >   `{ idDossier, decisions:[{ idObservationPv, decision: LEVEE|MAINTENUE, precision? }] }` — **chaque
 >   observation restante doit être statuée** (400 sinon) ; **hors périmètre → 409** (aucune création) ;

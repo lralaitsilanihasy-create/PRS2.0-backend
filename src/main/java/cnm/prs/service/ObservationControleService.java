@@ -25,9 +25,13 @@ import cnm.prs.security.Visibilite;
 public class ObservationControleService {
 
     private final ObservationControleRepository repository;
+    /** ⚠️ V30 (2026-09-14) — cellule visée : le même validateur que {@code /api/examen-details}. */
+    private final ObservationCibleValidateur cibleValidateur;
 
-    public ObservationControleService(ObservationControleRepository repository) {
+    public ObservationControleService(ObservationControleRepository repository,
+            ObservationCibleValidateur cibleValidateur) {
         this.repository = repository;
+        this.cibleValidateur = cibleValidateur;
     }
 
     /** ⚠️ C2 — lignes du point de contrôle, bornées au périmètre (§1) : vide hors localité / pour la PRMP. */
@@ -40,6 +44,7 @@ public class ObservationControleService {
     }
 
     public ObservationControleDto create(ObservationControleDto dto) {
+        cibleValidateur.validerLigne(dto);
         ObservationControle entity = ObservationControleMapper.toEntity(dto);
         entity.setIdObservation(null);   // PK auto (IDENTITY) ; tout id fourni est ignoré
         return ObservationControleMapper.toDto(repository.save(entity));
@@ -48,10 +53,15 @@ public class ObservationControleService {
     public ObservationControleDto update(Integer id, ObservationControleDto dto) {
         ObservationControle existing = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Observation introuvable : " + id));
+        cibleValidateur.validerLigne(dto);
         existing.setIdDetail(dto.getIdDetail());
         existing.setAuLieuDe(dto.getAuLieuDe());
         existing.setLire(dto.getLire());
         existing.setOrdre(dto.getOrdre());
+        // ⚠️ V30 — un PUT porte l'état complet de la ligne : une cible absente du corps est effacée.
+        existing.setChampCible(dto.getChamp());
+        existing.setIdMarcheCible(dto.getIdMarcheCible());
+        existing.setIdBenefCible(dto.getIdBenefCible());
         return ObservationControleMapper.toDto(repository.save(existing));
     }
 

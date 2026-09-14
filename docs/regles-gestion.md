@@ -1650,6 +1650,22 @@ Subordonné direct du Chef de commission. Voit tous les dossiers de sa localité
   - Accès en lecture à tous les dossiers de sa localité — pas uniquement ceux qui lui sont dispatché.
 - Examen point par point [Écriture]
   - Renseigne chaque point de tr_points_ctrl : conforme / non conforme + observation (t_examen_detail).
+  - ⚠️ **Règle ajoutée (2026-09-14, V30) — une ligne « Au lieu de / Lire » peut viser la CELLULE du document
+    qu'elle corrige** (demande front du 2026-09-14, refonte de l'examen). Trois colonnes facultatives sur
+    `t_observation_controle` : `CHAMP_CIBLE` (code de la colonne, liste fermée `ChampCible` — colonnes du PPM,
+    préfixes `derogatoires.`/`delaisAmenages.`/`contratsCadres.` pour la fiche de présentation, `agpm.` pour le
+    projet d'AGPM), `ID_MARCHE_CIBLE` (ligne de marché) et `ID_BENEF_CIBLE` (bénéficiaire). Sans champ, pas de
+    cible (CHECK en base). Le code doit appartenir au **document de la portée du point** : PPM pour
+    `LIGNE`/`DOSSIER`, fiche pour `FICHE`, AGPM pour `AGPM` ; un **constat de suppression** (`SUPPRESSION`)
+    n'en accepte aucun. Sur un point **LIGNE**, la ligne visée est **celle du résultat** (forcée ; une autre →
+    400) ; sur un point évalué une fois (`DOSSIER`, `FICHE`, `AGPM`), elle est **obligatoire** et doit être
+    une ligne **du dossier examiné** — le serveur ne vérifie pas qu'elle figure dans la fiche ou l'AGPM,
+    documents calculés côté front. Un bénéficiaire ne se cible qu'avec une colonne par bénéficiaire (`soa`,
+    `compte`, `montBenef`, `nouvMontBenef`) et doit être un bénéficiaire de la ligne visée. **Un seul
+    validateur** sert les deux portes d'écriture (`/api/examen-details`, `/api/observation-controles`). Les
+    verrous ne changent pas (examen modifiable jusqu'à `PV_SIGNE`). À la signature d'un PV FAVR, la cible est
+    **recopiée** dans le périmètre figé (`t_observation_pv`) et servie à la PRMP — ce n'est pas une identité ;
+    le **libellé figé et le PV Word sont inchangés**. Aucune reprise : l'existant reste sans cible.
 - Rédaction du projet de PV [Écriture]
   - Le Membre rédige le projet de PV dans t_pv_examen (STATUT_PV = BROUILLON) : synthèse des observations non conformes de t_examen_detail.OBS_SI_NON_CONFORME, avis ID_AVIS. Le projet est modifiable librement tant qu'il n'a pas été soumis.
   - ⚠️ **Règle ajoutée** : l'attributaire `IM_CTRL_MEMBRE` du PV est **dérivé de l'attribution** (Examen→Dispatch.imCtrlMembre), **jamais saisi** dans le corps — c'est la source de vérité de la signature Membre. Un examen sans attributaire → création/MAJ refusée (409).
