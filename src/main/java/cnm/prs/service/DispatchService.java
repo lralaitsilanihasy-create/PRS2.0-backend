@@ -7,7 +7,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import cnm.prs.dto.DispatchDto;
 import cnm.prs.entity.Controleur;
-import cnm.prs.entity.Localite;
 import cnm.prs.entity.Dispatch;
 import cnm.prs.entity.Reception;
 import cnm.prs.enums.EtapeCircuit;
@@ -321,8 +320,8 @@ public class DispatchService {
         // mais dispatcheur. S en tenir a l attributaire lui interdirait de reprendre son propre dossier,
         // ce que la regle prevoit explicitement. Un CC etranger au dispatch reste refuse.
         String moi = CurrentUser.ref().orElse(null);
-        boolean jeSuisConcerne = moi != null
-                && (moi.equals(existing.getImCtrlMembre()) || moi.equals(existing.getImCtrlDispatch()));
+        boolean jeSuisConcerne = PredicatsIdentite.estAttributaire(moi, existing.getImCtrlMembre())
+                || PredicatsIdentite.estDispatcheur(moi, existing.getImCtrlDispatch());
         exigerPresidentSiCentrale(existing.getIdReception(), jeSuisConcerne);
         exigerPresidentSiCentrale(dto.getIdReception(), jeSuisConcerne);
         Visibilite.exigerLocalite(resoudreLocaliteDossier(existing.getIdReception()));
@@ -453,11 +452,13 @@ public class DispatchService {
      * PUT sur un dispatch dont il n'est pas l'attributaire, et l'intérim.</p>
      */
     private void exigerPresidentSiCentrale(Integer idReception, boolean reattributionParAttributaire) {
-        if (CurrentUser.profil().orElse(null) != ProfilUtilisateur.CHEF_COMMISSION
-                || reattributionParAttributaire) {
-            return;
+        ProfilUtilisateur profil = CurrentUser.profil().orElse(null);
+        if (profil != ProfilUtilisateur.CHEF_COMMISSION || reattributionParAttributaire) {
+            return;   // la localité n'est lue que pour le cas que la règle vise
         }
-        if (Localite.estCentrale(resoudreLocaliteDossier(idReception))) {
+        // ⚠️ 2026-09-14 — la condition elle-même est un prédicat partagé (PredicatsIdentite).
+        if (!PredicatsIdentite.peutDispatcherSelonLocalite(profil, reattributionParAttributaire,
+                resoudreLocaliteDossier(idReception))) {
             throw new org.springframework.security.access.AccessDeniedException("Le dispatch d'un dossier de la Commission nationale "
                     + "(localité centrale) relève du seul Président.");
         }
@@ -477,12 +478,12 @@ public class DispatchService {
      * son matricule : il peut donc ensuite RETIRER AU MEMBRE, ce qui est voulu.</p>
      */
     private void exigerDispatcheurPourAnnuler(Dispatch dispatch) {
-        if (CurrentUser.profil().orElse(null) != ProfilUtilisateur.CHEF_COMMISSION) {
+        if (!PredicatsIdentite.retraitDispatchReserveAuDispatcheur(CurrentUser.profil().orElse(null))) {
             return;
         }
         String moi = CurrentUser.ref().orElse(null);
-        boolean dispatcheur = moi != null && moi.equals(dispatch.getImCtrlDispatch());
-        boolean attributaire = moi != null && moi.equals(dispatch.getImCtrlMembre());
+        boolean dispatcheur = PredicatsIdentite.estDispatcheur(moi, dispatch.getImCtrlDispatch());
+        boolean attributaire = PredicatsIdentite.estAttributaire(moi, dispatch.getImCtrlMembre());
         if (!dispatcheur) {
             throw new org.springframework.security.access.AccessDeniedException("Retrait réservé au dispatcheur du dossier : vous n'avez pas "
                     + "dispatché ce dossier. Demandez le retrait au Président.");

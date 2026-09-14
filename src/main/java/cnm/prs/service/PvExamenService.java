@@ -806,8 +806,9 @@ public class PvExamenService {
      * fait. Plus robuste qu'une reprise de données, qui ne couvrirait que les bases migrées.</p>
      */
     private void exigerNiveau(PvExamen pv, NiveauNavette attendu, String geste) {
-        NiveauNavette courant = niveau(pv) == null ? NiveauNavette.CC : niveau(pv);
-        if (courant != attendu) {
+        // ⚠️ 2026-09-14 — « niveau nul = étage du CC » est un prédicat partagé (PredicatsIdentite).
+        NiveauNavette courant = PredicatsIdentite.niveauEffectif(niveau(pv));
+        if (!PredicatsIdentite.estALEtage(niveau(pv), attendu)) {
             throw new BusinessRuleException("Impossible de " + geste + " : le projet de PV est au niveau « "
                     + courant.name() + " », attendu « " + attendu.name()
                     + " ». Sur un dossier à deux niveaux, la navette monte et redescend étage par étage.");
@@ -871,7 +872,7 @@ public class PvExamenService {
             exigerViseurHorsExaminateur(pv, CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null),
                     circuit.dispatcheur(), "Le retour pour rectification");
         }
-        if (deuxNiveaux(circuit) && niveau(pv) == NiveauNavette.PRESIDENT) {
+        if (deuxNiveaux(circuit) && PredicatsIdentite.estALEtage(niveau(pv), NiveauNavette.PRESIDENT)) {
             return retournerAuCc(pv, circuit, req);
         }
         if (deuxNiveaux(circuit)) {
@@ -908,7 +909,7 @@ public class PvExamenService {
      */
     private PvExamenDto retournerAuCc(PvExamen pv, CircuitDossierService.Circuit circuit, PvActionRequest req) {
         ProfilUtilisateur profil = CurrentUser.profil().orElse(null);
-        if (profil != ProfilUtilisateur.PRESIDENT) {
+        if (!PredicatsIdentite.estViseurDeuxNiveaux(profil)) {
             throw new AccessDeniedException(
                     "Le projet de PV est au niveau du Président : lui seul peut le retourner au Chef de "
                             + "commission. Le CC le reprendra alors, et décidera de le redescendre au Membre.");
@@ -936,7 +937,7 @@ public class PvExamenService {
     /** 403 si l'acteur n'est pas le CC du circuit — l'étage du bas n'appartient qu'à lui. */
     private void exigerCcDuCircuit(CircuitDossierService.Circuit circuit, String message) {
         String acteur = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
-        if (acteur == null || !acteur.equals(circuit.dispatcheur())) {
+        if (!PredicatsIdentite.estCcDuCircuit(acteur, circuit)) {
             throw new AccessDeniedException(message);
         }
     }
@@ -971,7 +972,7 @@ public class PvExamenService {
         // qui manque, c'est la qualité de l'acteur.
         String acteur = CurrentUser.ref().filter(s -> !s.isBlank())
                 .orElseThrow(() -> new AccessDeniedException("Acteur non identifié."));
-        if (!acteur.equals(circuit.dispatcheur())) {
+        if (!PredicatsIdentite.estCcDuCircuit(acteur, circuit)) {
             throw new AccessDeniedException(
                     "Sur un dossier dispatché à deux niveaux, l'acceptation appartient au Chef de commission "
                             + "qui a réattribué le dossier : il transmet ensuite au Président, qui vise.");
@@ -1065,7 +1066,7 @@ public class PvExamenService {
         // vérifiés plus bas. Aucun intérim n'a de sens ici, et aucune note n'est réclamée.
         CircuitDossierService.Circuit circuit = circuit(id);
         boolean deuxNiveaux = deuxNiveaux(circuit);
-        boolean interim = !deuxNiveaux && !dispatcheur.equals(acteur);
+        boolean interim = PredicatsIdentite.visaParInterim(deuxNiveaux, acteur, dispatcheur);
 
         // ① bis ⚠️ 2026-09-08 — l'examinateur ne vise pas son propre examen, intérim compris. Placé
         // AVANT le profil et l'intérim : lui réclamer une note d'intérim serait lui demander une pièce
@@ -1077,7 +1078,7 @@ public class PvExamenService {
         // ② Profil : la part signée est dérivée de l'acteur — pas de champ « role » dans le corps.
         // Vérifié AVANT la note : un profil hors P/CC n'a rien à faire ici, note ou pas (403, pas 400).
         ProfilUtilisateur profil = CurrentUser.profil().orElse(null);
-        if (profil != ProfilUtilisateur.PRESIDENT && profil != ProfilUtilisateur.CHEF_COMMISSION) {
+        if (!PredicatsIdentite.estProfilViseur(profil)) {
             throw new AccessDeniedException(
                     "Le visa est réservé au Président (§3.2) ou au Chef de commission (§3.3).");
         }
@@ -1085,7 +1086,7 @@ public class PvExamenService {
         // ② bis ⚠️ DEUX NIVEAUX (2026-09-04) — le visa y est réservé au PRÉSIDENT. Un CC qui viserait
         // ici court-circuiterait son propre étage : il a déjà donné son accord en acceptant, et arrêter
         // l'avis n'est pas de son ressort sur ce circuit. 403, comme pour tout profil hors P/CC.
-        if (deuxNiveaux && profil != ProfilUtilisateur.PRESIDENT) {
+        if (deuxNiveaux && !PredicatsIdentite.estViseurDeuxNiveaux(profil)) {
             throw new AccessDeniedException(
                     "Sur un dossier dispatché à deux niveaux, le visa appartient au Président. Le Chef de "
                             + "commission accepte le projet et le lui transmet (POST /{id}/accepter) : "
@@ -1233,7 +1234,7 @@ public class PvExamenService {
                 // ⚠️ Co-signature (2026-08-28) — la part Membre appartient au DÉSIGNÉ, à personne d'autre.
                 // L'attributaire n'y a plus droit du seul fait d'avoir examiné : il doit avoir été désigné.
                 exigerDesignationFaite(pv);
-                if (!signataire.equals(pv.getImMembreCoSignataire())) {
+                if (!PredicatsIdentite.estDesigne(signataire, pv.getImMembreCoSignataire())) {
                     throw new AccessDeniedException(
                             "La signature Membre est réservée au Membre désigné par le Président ou le Chef "
                                     + "de commission (co-signature, §2.6/§3.5).");
@@ -1257,13 +1258,13 @@ public class PvExamenService {
             // (le visa), et sans désignation cette branche reste fermée. La garde n'a donc pas bougé —
             // on ne peut ni clore la navette ici, ni s'auto-désigner, ni contourner le dispatcheur.
             case CC -> {
-                if (pv.getImCcCoSignataire() == null || pv.getImCcCoSignataire().isBlank()) {
+                if (!PredicatsIdentite.designationFaite(pv.getImCcCoSignataire())) {
                     throw new BusinessRuleException(
                             "La signature du Chef de commission est portée par le VISA (POST /api/pv-examens/"
                                     + id + "/viser) depuis le 2026-08-31. Elle ne se signe séparément que "
                                     + "lorsque le Président l'a désigné co-signataire, ce qui n'est pas le cas ici.");
                 }
-                if (!signataire.equals(pv.getImCcCoSignataire())) {
+                if (!PredicatsIdentite.estDesigne(signataire, pv.getImCcCoSignataire())) {
                     throw new AccessDeniedException(
                             "La part Chef de commission est réservée au CC désigné co-signataire par le "
                                     + "Président (co-signature élargie, 2026-09-04).");
@@ -1335,7 +1336,7 @@ public class PvExamenService {
         }
         String localite = repository.findLocaliteByPv(id).orElse(null);
         String maLocalite = CurrentUser.localite().filter(s -> !s.isBlank()).orElse(null);
-        if (localite != null && !localite.equals(maLocalite)) {
+        if (!PredicatsIdentite.localiteStricteAdmise(localite, maLocalite)) {
             throw new AccessDeniedException("Archivage réservé à l'Assistant contrôleur de la localité du dossier.");
         }
         Integer idDossier = repository.findIdDossierByPv(id).orElse(null);
@@ -1579,7 +1580,7 @@ public class PvExamenService {
      * n'est pas illégitime, c'est le circuit qui n'est pas encore à cette étape.
      */
     private void exigerDesignationFaite(PvExamen pv) {
-        if (pv.getImMembreCoSignataire() == null || pv.getImMembreCoSignataire().isBlank()) {
+        if (!PredicatsIdentite.designationFaite(pv.getImMembreCoSignataire())) {
             throw new BusinessRuleException(
                     "La part Membre n'est pas encore ouverte : le Président ou le Chef de commission doit "
                             + "d'abord signer et désigner le Membre co-signataire (§2.6).");
@@ -1603,11 +1604,13 @@ public class PvExamenService {
      */
     private void exigerRedacteurDuProjet(PvExamen pv) {
         String moi = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
-        if (moi != null && moi.equals(pv.getImCtrlMembre())) {
+        if (PredicatsIdentite.estExaminateur(moi, pv.getImCtrlMembre())) {
             return;
         }
         ProfilUtilisateur profil = CurrentUser.profil().orElse(null);
-        if (profil != ProfilUtilisateur.MEMBRE && permissionService.peutExercer(profil, ProfilUtilisateur.MEMBRE)) {
+        // peutExercer(MEMBRE, MEMBRE) répond sans requête (titulaire) : l'évaluer avant le prédicat ne change rien.
+        if (PredicatsIdentite.redactionParDelegation(profil,
+                permissionService.peutExercer(profil, ProfilUtilisateur.MEMBRE))) {
             exigerActeurDeLaLocalite(pv);   // la délégation reste bornée à la localité (§3.3)
             return;
         }
@@ -1637,7 +1640,7 @@ public class PvExamenService {
      */
     private void exigerExaminateur(PvExamen pv) {
         String moi = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
-        if (moi != null && moi.equals(pv.getImCtrlMembre())) {
+        if (PredicatsIdentite.estExaminateur(moi, pv.getImCtrlMembre())) {
             return;
         }
         throw new AccessDeniedException("Soumission réservée à l'examinateur du dossier ("
@@ -1678,12 +1681,10 @@ public class PvExamenService {
      * déjà l'acteur de chaque visa, et le CC y a son acceptation propre.</p>
      */
     private void exigerViseurHorsExaminateur(PvExamen pv, String acteur, String dispatcheur, String geste) {
-        String examinateur = pv.getImCtrlMembre();
-        if (acteur == null || examinateur == null || !examinateur.equals(acteur)) {
-            return;   // l'appelant n'est pas l'examinateur : cette garde ne le concerne pas
-        }
-        if (dispatcheur != null && dispatcheur.equals(acteur)) {
-            return;   // EXCEPTION : il s'est dispatché le dossier à lui-même, il cumule légitimement
+        // ⚠️ 2026-09-14 — la condition est un prédicat partagé (PredicatsIdentite) : non-examinateur, ou
+        // examinateur qui s'est dispatché le dossier à lui-même.
+        if (PredicatsIdentite.viseurHorsExaminateur(acteur, pv.getImCtrlMembre(), dispatcheur)) {
+            return;
         }
         throw new AccessDeniedException(geste + " revient au dispatcheur du dossier ("
                 + nomControleur(dispatcheur) + ") : vous avez examiné ce dossier, et l'examinateur ne "
@@ -1705,7 +1706,7 @@ public class PvExamenService {
     private void exigerCcDeLaLocalite(PvExamen pv) {
         String localiteDossier = repository.findLocaliteByPv(pv.getIdPv()).orElse(null);
         String localiteCc = CurrentUser.localite().filter(s -> !s.isBlank()).orElse(null);
-        if (localiteDossier != null && !localiteDossier.equals(localiteCc)) {
+        if (!PredicatsIdentite.localiteStricteAdmise(localiteDossier, localiteCc)) {
             throw new AccessDeniedException("Le CC ne peut co-signer que les PV de sa localité (§3.3).");
         }
     }

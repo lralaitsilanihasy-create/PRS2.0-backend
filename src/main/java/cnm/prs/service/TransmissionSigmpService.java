@@ -118,7 +118,7 @@ public class TransmissionSigmpService {
                         "Aucun PV signé pour ce dossier : transmission SIGMP impossible."));
         String localiteDossier = pvExamenRepository.findLocaliteByPv(pv.getIdPv()).orElse(null);
         String maLocalite = CurrentUser.localite().filter(s -> !s.isBlank()).orElse(null);
-        if (localiteDossier != null && !localiteDossier.equals(maLocalite)) {
+        if (!PredicatsIdentite.localiteStricteAdmise(localiteDossier, maLocalite)) {
             throw new AccessDeniedException("Transmission réservée au vérificateur de la localité du dossier.");
         }
 

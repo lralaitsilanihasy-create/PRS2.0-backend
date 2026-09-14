@@ -352,8 +352,8 @@ public class LettreRenvoiService {
         if (localite == null || localite.isBlank()) {
             localite = repository.findLocaliteByLettre(id).orElse(null);   // repli : localité de réception
         }
-        boolean centrale = Localite.estCentrale(localite);   // source unique (cf. références « CNM »)
-        if (!centrale && CurrentUser.profil().orElse(null) != ProfilUtilisateur.CHEF_COMMISSION) {
+        // Centrale ou régionale : Localite.estCentrale, source unique (cf. références « CNM »), lue par le prédicat.
+        if (!PredicatsIdentite.signatureLettreProfilAdmis(CurrentUser.profil().orElse(null), localite)) {
             throw new AccessDeniedException(
                     "Seul le Chef de Commission peut signer une lettre de renvoi pour une localité régionale.");
         }
@@ -462,7 +462,7 @@ public class LettreRenvoiService {
         }
         String localite = repository.findLocaliteByLettre(id).orElse(null);
         String maLocalite = CurrentUser.localite().filter(s -> !s.isBlank()).orElse(null);
-        if (localite != null && !localite.equals(maLocalite)) {
+        if (!PredicatsIdentite.localiteStricteAdmise(localite, maLocalite)) {
             throw new AccessDeniedException("Archivage réservé à l'Assistant contrôleur de la localité du dossier.");
         }
         lettre.setDateArchivage(LocalDate.now());
@@ -646,7 +646,7 @@ public class LettreRenvoiService {
         String attributaire = examenRepository.findById(lettre.getIdExamen())
                 .map(Examen::getImCtrlMembre).orElse(null);
         String moi = CurrentUser.ref().orElse(null);
-        if (attributaire == null || !attributaire.equals(moi)) {
+        if (!PredicatsIdentite.estExaminateur(moi, attributaire)) {
             throw new AccessDeniedException("Lettre réservée au Président / Chef de Commission (clôture de navette).");
         }
     }

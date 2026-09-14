@@ -81,11 +81,23 @@ public class CircuitDossierService {
      * donc la navette simple, sans qu'aucune de ces situations n'ait à être énumérée.</p>
      */
     public boolean deuxNiveaux(Circuit circuit) {
-        if (circuit == null || !circuit.complet() || !Localite.estCentrale(circuit.localite())) {
-            return false;
-        }
-        return !circuit.dispatcheur().equals(circuit.attributaire())
-                && controleurDirectory.profilDe(circuit.dispatcheur()).orElse(null)
-                        == ProfilUtilisateur.CHEF_COMMISSION;
+        // Le profil du dispatcheur n'est lu (une requête) que si le chemin peut être à deux niveaux.
+        return cheminCentralReattribuable(circuit)
+                && deuxNiveaux(circuit, controleurDirectory.profilDe(circuit.dispatcheur()).orElse(null));
+    }
+
+    /**
+     * ⚠️ 2026-09-14 — le même discriminant en <strong>prédicat pur</strong>, le profil du dispatcheur étant fourni
+     * par l'appelant (accueil « À faire » : annuaire des contrôleurs déjà chargé, aucune requête par dossier). La
+     * méthode d'instance ci-dessus n'est que ce prédicat, alimenté par {@link ControleurDirectory#profilDe}.
+     */
+    public static boolean deuxNiveaux(Circuit circuit, ProfilUtilisateur profilDispatcheur) {
+        return cheminCentralReattribuable(circuit) && profilDispatcheur == ProfilUtilisateur.CHEF_COMMISSION;
+    }
+
+    /** Circuit complet, central, et dont le dispatcheur n'est pas l'attributaire. */
+    private static boolean cheminCentralReattribuable(Circuit circuit) {
+        return circuit != null && circuit.complet() && Localite.estCentrale(circuit.localite())
+                && !circuit.dispatcheur().equals(circuit.attributaire());
     }
 }

@@ -24,8 +24,27 @@ public final class Visibilite {
     }
 
     public static boolean voitTout() {
-        ProfilUtilisateur p = CurrentUser.profil().orElse(null);
-        return p == ProfilUtilisateur.PRESIDENT || p == ProfilUtilisateur.ADMINISTRATEUR;
+        return voitTout(CurrentUser.profil().orElse(null));
+    }
+
+    /**
+     * ⚠️ 2026-09-14 — prédicat pur de {@link #voitTout()} : Président et Administrateur ne sont bornés par aucune
+     * localité. Pour qui raisonne sur un profil sans jeton (accueil « À faire »).
+     */
+    public static boolean voitTout(ProfilUtilisateur profil) {
+        return profil == ProfilUtilisateur.PRESIDENT || profil == ProfilUtilisateur.ADMINISTRATEUR;
+    }
+
+    /**
+     * ⚠️ 2026-09-14 — prédicat pur de {@link #exigerLocalite} (§3.3), extrait sans changement : un acteur n'agit
+     * que sur une ressource de sa localité, sauf Président et Administrateur ; une ressource de localité
+     * indéterminée ne contraint rien. Une localité d'acteur absente ou vide ne correspond à aucune ressource.
+     */
+    public static boolean localiteAdmise(ProfilUtilisateur profil, String localiteActeur, String localiteRessource) {
+        if (voitTout(profil) || localiteRessource == null) {
+            return true;
+        }
+        return localiteActeur != null && !localiteActeur.isBlank() && localiteRessource.equals(localiteActeur);
     }
 
     /**
@@ -81,10 +100,7 @@ public final class Visibilite {
      * contrainte (cas d'une première réception qui établit la localité).
      */
     public static void exigerLocalite(String localiteRessource) {
-        if (voitTout() || localiteRessource == null) {
-            return;
-        }
-        if (!localite().map(localiteRessource::equals).orElse(false)) {
+        if (!localiteAdmise(CurrentUser.profil().orElse(null), localite().orElse(null), localiteRessource)) {
             throw new AccessDeniedException(
                     "Action hors de votre localité : la délégation reste limitée à votre localité (§3.3).");
         }

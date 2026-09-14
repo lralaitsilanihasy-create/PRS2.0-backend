@@ -5,7 +5,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import cnm.prs.entity.Examen;
-import cnm.prs.enums.ProfilUtilisateur;
 import cnm.prs.enums.StatutDossier;
 import cnm.prs.exception.BusinessRuleException;
 import cnm.prs.repository.DispatchRepository;
@@ -70,14 +69,14 @@ public class ExamenGarde {
     public void exigerAttributaire(Integer idExamen) {
         Visibilite.exigerLocalite(idExamen == null ? null
                 : examenRepository.findLocaliteByExamen(idExamen).orElse(null));
-        if (CurrentUser.profil().orElse(null) != ProfilUtilisateur.MEMBRE) {
+        if (PredicatsIdentite.ecritureExamenParDelegation(CurrentUser.profil().orElse(null))) {
             return; // délégation (CC/Président/Admin) : autorisé, localité déjà vérifiée
         }
         String attributaire = idExamen == null ? null
                 : examenRepository.findById(idExamen).map(Examen::getIdDispatch)
                         .flatMap(dispatchRepository::findImCtrlMembreById).orElse(null);
         String moi = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
-        if (attributaire == null || !attributaire.equals(moi)) {
+        if (!PredicatsIdentite.estAttributaire(moi, attributaire)) {
             throw new AccessDeniedException(
                     "Examen réservé au Membre attributaire du dispatch (§2.4) : vous n'êtes pas l'attributaire.");
         }

@@ -367,7 +367,7 @@ public class ExamenService {
         String attributaire = idDispatch == null ? null
                 : dispatchRepository.findImCtrlMembreById(idDispatch).orElse(null);
         String moi = CurrentUser.ref().orElse(null);
-        if (attributaire == null || !attributaire.equals(moi)) {
+        if (!PredicatsIdentite.estAttributaire(moi, attributaire)) {
             throw new AccessDeniedException("Examen réservé à l'attributaire du dispatch (§2.4) : "
                     + "vous n'êtes pas l'attributaire de ce dossier.");
         }
