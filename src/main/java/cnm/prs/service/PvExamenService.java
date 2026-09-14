@@ -764,12 +764,23 @@ public class PvExamenService {
         return NiveauNavette.valueOf(valeur);
     }
 
-    /** 409 si le PV n'est pas à l'étage attendu — un geste hors de son étage sauterait un cran du circuit. */
+    /**
+     * 409 si le PV n'est pas à l'étage attendu — un geste hors de son étage sauterait un cran du circuit.
+     *
+     * <p>⚠️ Audit 2026-09-14 (E4) — n'est appelée que sur un circuit <strong>à deux niveaux</strong>, et y
+     * lit un niveau <strong>nul</strong> comme l'étage du bas ({@link NiveauNavette#CC}). V17 n'a pas repris
+     * {@code NIVEAU_NAVETTE} : un PV déjà {@code PROJET_SOUMIS} à son déploiement garde un niveau nul, alors
+     * que le régime est re-dérivé du dispatch courant. Lu tel quel, ce nul répondait 409 à
+     * {@code accepter}, {@code viser} et {@code retourner} — le PV n'avait plus aucune issue que la
+     * suppression. Un projet qui n'a pas été transmis au Président est, par construction, chez le CC : le
+     * CC peut donc l'accepter ou le retourner, et le visa du Président reste refusé tant qu'il ne l'a pas
+     * fait. Plus robuste qu'une reprise de données, qui ne couvrirait que les bases migrées.</p>
+     */
     private void exigerNiveau(PvExamen pv, NiveauNavette attendu, String geste) {
-        NiveauNavette courant = niveau(pv);
+        NiveauNavette courant = niveau(pv) == null ? NiveauNavette.CC : niveau(pv);
         if (courant != attendu) {
             throw new BusinessRuleException("Impossible de " + geste + " : le projet de PV est au niveau « "
-                    + (courant == null ? "aucun" : courant.name()) + " », attendu « " + attendu.name()
+                    + courant.name() + " », attendu « " + attendu.name()
                     + " ». Sur un dossier à deux niveaux, la navette monte et redescend étage par étage.");
         }
     }

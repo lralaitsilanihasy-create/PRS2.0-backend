@@ -4657,6 +4657,11 @@ immuable). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **40
 > | `retourner` | **CC du circuit** (403 sinon) | `CC` | `EN_RECTIFICATION` chez le Membre, niveau effacé |
 > | `viser` | **Président** (403 pour le CC) | `PRESIDENT` (409 sinon) | clôture, comme sur une navette simple |
 >
+> ⚠️ **Audit 2026-09-14 (E4)** — sur un circuit à deux niveaux, un `niveauNavette` **absent** (PV soumis avant
+> `V17`, qui n'a pas repris la colonne) vaut l'étage **`CC`** : `accepter` et `retourner` du CC passent (200),
+> `viser` du Président reste en **409** tant que le CC n'a pas transmis. Le champ du DTO reste absent jusqu'au
+> premier geste qui pose un étage.
+>
 > **`accepter` n'est pas un visa** : aucun avis n'est arrêté, aucune part n'est signée, la navette
 > reste ouverte. C'est pourquoi son sens de navette est `TRANSMISSION_PRESIDENT` et non `ACCEPTATION`.
 > Sur une navette **simple**, l'endpoint reste **retiré (410)** : le rouvrir partout rendrait au P/CC

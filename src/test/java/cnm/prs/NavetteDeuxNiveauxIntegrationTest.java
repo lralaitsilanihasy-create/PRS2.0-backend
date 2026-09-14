@@ -433,4 +433,47 @@ class NavetteDeuxNiveauxIntegrationTest extends CnmIntegrationTestSupport {
         var ctx = pvDocumentService.contexte(pvExamenRepository.findById(9613).orElseThrow());
         Assertions.assertNotNull(ctx.nomMembre(), "un Membre est désigné : sa ligne doit être imprimée");
     }
+
+    // ------------------------------------------------------------------
+    // 9 — ⚠️ Audit 2026-09-14 (E4) : un PV en vol au déploiement de V17 (niveau nul)
+    // ------------------------------------------------------------------
+
+    /**
+     * Force {@code NIVEAU_NAVETTE} à NULL en base, comme sur un PV déjà soumis quand V17 est passée (la
+     * migration n'a pas repris la colonne) ; le cache de premier niveau est vidé pour relire la base.
+     */
+    private void niveauNulEnBase(int idPv) {
+        entityManager.flush();
+        jdbcTemplate.update("UPDATE public.t_pv_examen SET \"NIVEAU_NAVETTE\" = NULL WHERE \"ID_PV\" = ?", idPv);
+        entityManager.clear();
+        Assertions.assertNull(niveau(idPv));
+    }
+
+    @Test
+    @DisplayName("9 — ⚠️ Audit 2026-09-14 (E4) : PV PROJET_SOUMIS à niveau NUL sur un circuit à deux niveaux — "
+            + "le nul vaut l'étage du CC : le Président ne vise toujours pas (409), le CC accepte (200 → PRESIDENT)")
+    void niveauNul_deuxNiveaux_vautEtageDuCc_leCcAccepte() throws Exception {
+        projetSoumisDeuxNiveaux(9620);
+        niveauNulEnBase(9620);
+
+        // Voulu : le visa du Président attend l'acceptation du CC, niveau nul ou non.
+        viserAvec(9620, tokenPresident, "FAV", "CTRMEM")
+                .andExpect(status().isConflict());
+        accepter(9620, tokenCc, "reprise du PV en vol")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.niveauNavette").value("PRESIDENT"))
+                .andExpect(jsonPath("$.statutPv").value("PROJET_SOUMIS"));
+    }
+
+    @Test
+    @DisplayName("9 bis — ⚠️ Audit 2026-09-14 (E4) : au même niveau nul, le CC peut aussi retourner le projet "
+            + "au Membre (200 → EN_RECTIFICATION) — la seconde issue de l'étage du bas")
+    void niveauNul_deuxNiveaux_leCcRetourneAuMembre() throws Exception {
+        projetSoumisDeuxNiveaux(9621);
+        niveauNulEnBase(9621);
+
+        retourner(9621, tokenCc, "a reprendre")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statutPv").value("EN_RECTIFICATION"));
+    }
 }

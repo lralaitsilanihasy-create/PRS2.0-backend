@@ -363,6 +363,14 @@ l'orientation, redescend ou re-transmet — **ou** vise. Trois refus le tiennent
   répond. Un retour qui lui passerait au-dessus le laisserait ignorer que ce qu'il a validé a été
   refusé, et le Membre recevrait des corrections dont son chef de commission n'aurait pas connaissance.
 
+⚠️ **Audit 2026-09-14 (E4) — un niveau NUL vaut l'étage du CC.** `V17` n'a pas repris `NIVEAU_NAVETTE` :
+un PV déjà `PROJET_SOUMIS` à son déploiement garde un niveau nul, alors que le régime (simple ou deux
+niveaux) est re-dérivé du dispatch courant. Lu tel quel, ce nul répondait 409 à `accepter`, `viser` **et**
+`retourner` — le PV n'avait plus d'autre issue que la suppression. Sur un circuit à deux niveaux, le
+verrou lit donc un niveau nul comme l'**étage du bas** : un projet qui n'a pas été transmis au Président
+est, par construction, chez le CC. Le CC peut l'accepter ou le retourner au Membre ; le **visa du
+Président reste refusé (409)** tant que le CC ne l'a pas transmis — c'est voulu.
+
 **Ce que l'acceptation du CC n'est pas.** Elle ne fige aucun avis, ne pose aucune signature et ne clôt
 pas la navette — d'où un sens de navette distinct (`TRANSMISSION_PRESIDENT`, et non `ACCEPTATION`) et
 un statut de PV **inchangé**. Le distinguer est ce qui permet de dire, plus tard, que le CC avait donné
