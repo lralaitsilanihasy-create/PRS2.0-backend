@@ -40,7 +40,7 @@ class PvWorkflowIntegrationTest extends CnmIntegrationTestSupport {
     void statut_signaturePvAvanceVersPvSigne() throws Exception {
         // Dossier 1 = EXAMINE (seed). PV FAVR (≥ 1 observation requise) sur l'examen 1, soumis, accepté, co-signé.
         ajouterObservationExamen1();
-        mvc.perform(post("/api/pv-examens").header("Authorization", tokenMembre).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/pv-examens").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idPv\":90,\"idExamen\":1,\"imCtrlMembre\":\"CTRMEM\","
                         + "\"statutPv\":\"BROUILLON\",\"nbNavettes\":0}"))
                 .andExpect(status().isCreated());
@@ -119,7 +119,7 @@ class PvWorkflowIntegrationTest extends CnmIntegrationTestSupport {
     @DisplayName("Co-signature PV : rôle↔acteur authentifié, identité enregistrée (Membre attributaire + Président réel)")
     void cosignature_authentificationEtIdentite() throws Exception {
         // PV sur examen 1 (Membre CTRMEM), porté à PROJET_ACCEPTE.
-        mvc.perform(post("/api/pv-examens").header("Authorization", tokenMembre).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/pv-examens").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idPv\":92,\"idExamen\":1,\"idAvis\":\"FAV\",\"imCtrlMembre\":\"CTRMEM\","
                         + "\"statutPv\":\"BROUILLON\",\"nbNavettes\":0}"))
                 .andExpect(status().isCreated());
@@ -164,7 +164,7 @@ class PvWorkflowIntegrationTest extends CnmIntegrationTestSupport {
     @DisplayName("Visa : aucun CC ne vise ce PV — ni celui d'une autre localité, ni celui d'ANT pourtant "
             + "délégué (⚠️ 2026-08-31 : contrainte d'IDENTITÉ, seul le dispatcheur vise)")
     void cosignature_ccDeLaLocalite() throws Exception {
-        mvc.perform(post("/api/pv-examens").header("Authorization", tokenMembre).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/pv-examens").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idPv\":93,\"idExamen\":1,\"idAvis\":\"FAV\",\"imCtrlMembre\":\"CTRMEM\","
                         + "\"statutPv\":\"BROUILLON\",\"nbNavettes\":0}"))
                 .andExpect(status().isCreated());
@@ -197,7 +197,7 @@ class PvWorkflowIntegrationTest extends CnmIntegrationTestSupport {
     @DisplayName("Workflow PV : cycle complet BROUILLON → SIGNE avec gardes et navette")
     void workflowPv_cycleComplet() throws Exception {
         // Création : le statut envoyé (SIGNE) est ignoré, le PV démarre en BROUILLON.
-        mvc.perform(post("/api/pv-examens").header("Authorization", tokenMembre)
+        mvc.perform(post("/api/pv-examens").header("Authorization", tokenAdmin)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idPv\":1,\"idExamen\":1,\"idAvis\":\"FAV\",\"imCtrlMembre\":\"CTRMEM\","
                         + "\"statutPv\":\"SIGNE\",\"nbNavettes\":99}"))
@@ -266,7 +266,7 @@ class PvWorkflowIntegrationTest extends CnmIntegrationTestSupport {
     @DisplayName("Création PV : imCtrlMembre dérivé de l'attribution (dispatch), le corps est ignoré")
     void creationPv_imCtrlMembreDeriveDeLAttribution() throws Exception {
         // Examen 1 → dispatch 1 → attributaire CTRMEM ; le corps tente d'usurper « USURP ».
-        mvc.perform(post("/api/pv-examens").header("Authorization", tokenMembre).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/pv-examens").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idPv\":60,\"idExamen\":1,\"idAvis\":\"FAV\",\"imCtrlMembre\":\"USURP\","
                         + "\"statutPv\":\"BROUILLON\",\"nbNavettes\":0}"))
                 .andExpect(status().isCreated())
@@ -280,7 +280,7 @@ class PvWorkflowIntegrationTest extends CnmIntegrationTestSupport {
         receptionRepository.save(reception(60, 60, "CTRCC1", true));
         dispatchRepository.save(dispatch(60, 60, "CTRCC1", null)); // dispatch sans attributaire
         examenRepository.save(examen(60, 60, "CTRMEM"));
-        mvc.perform(post("/api/pv-examens").header("Authorization", tokenMembre).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/pv-examens").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idPv\":61,\"idExamen\":60,\"idAvis\":\"FAV\",\"imCtrlMembre\":\"CTRMEM\","
                         + "\"statutPv\":\"BROUILLON\",\"nbNavettes\":0}"))
                 .andExpect(status().isConflict());
@@ -381,7 +381,7 @@ class PvWorkflowIntegrationTest extends CnmIntegrationTestSupport {
         viser(1, tokenSec, "CTRSEC", "FAV", "CTRVER", "CTRMEM").andExpect(status().isForbidden());
 
         // Saut d'étape : un PV en BROUILLON ne peut être ni visé ni signé → 409.
-        mvc.perform(post("/api/pv-examens").header("Authorization", tokenMembre)
+        mvc.perform(post("/api/pv-examens").header("Authorization", tokenAdmin)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idPv\":4,\"idExamen\":1,\"idAvis\":\"FAV\",\"imCtrlMembre\":\"CTRMEM\","
                         + "\"statutPv\":\"BROUILLON\",\"nbNavettes\":0}"))
@@ -423,7 +423,7 @@ class PvWorkflowIntegrationTest extends CnmIntegrationTestSupport {
 
         // (d) Vérification sur un PV non SIGNE (BROUILLON) → 409 (par un vérificateur, pour atteindre la garde PV SIGNE).
         String tokenVer = bearer("CTRVER", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER", "ANT");
-        mvc.perform(post("/api/pv-examens").header("Authorization", tokenMembre).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/pv-examens").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idPv\":5,\"idExamen\":1,\"idAvis\":\"FAVR\",\"imCtrlMembre\":\"CTRMEM\","
                         + "\"statutPv\":\"BROUILLON\",\"nbNavettes\":0}"))
                 .andExpect(status().isCreated());
@@ -436,7 +436,7 @@ class PvWorkflowIntegrationTest extends CnmIntegrationTestSupport {
     @DisplayName("PV projets vs definitifs : un PV signe quitte /pv-examens et apparait dans /pv-examens/definitifs")
     void pv_projets_et_definitifs() throws Exception {
         // PV non signé (BROUILLON) sur examen 1.
-        mvc.perform(post("/api/pv-examens").header("Authorization", tokenMembre)
+        mvc.perform(post("/api/pv-examens").header("Authorization", tokenAdmin)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idPv\":96,\"idExamen\":1,\"idAvis\":\"FAV\",\"imCtrlMembre\":\"CTRMEM\","
                         + "\"statutPv\":\"BROUILLON\",\"nbNavettes\":0}"))
@@ -668,7 +668,7 @@ class PvWorkflowIntegrationTest extends CnmIntegrationTestSupport {
 
     /** Crée un projet de PV BROUILLON sur l'examen 1 (attributaire CTRMEM, localité ANT). */
     private void creerProjetSurExamen1(int idPv) throws Exception {
-        mvc.perform(post("/api/pv-examens").header("Authorization", tokenMembre)
+        mvc.perform(post("/api/pv-examens").header("Authorization", tokenAdmin)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idPv\":" + idPv + ",\"idExamen\":1,\"idAvis\":\"FAV\",\"imCtrlMembre\":\"CTRMEM\","
                         + "\"statutPv\":\"BROUILLON\",\"nbNavettes\":0}"))
@@ -711,6 +711,52 @@ class PvWorkflowIntegrationTest extends CnmIntegrationTestSupport {
                 .contentType(MediaType.APPLICATION_JSON).content(corpsProjet950("reprise CC")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.syntheseObservations").value("reprise CC"));
+    }
+
+    @Test
+    @DisplayName("⚠️ Audit 2026-09-14 (E2) — POST /api/pv-examens réservé à l'Administrateur : Membre, CC et "
+            + "Président → 403 (le projet naît de la soumission d'examen) ; Administrateur → 201")
+    void creationPv_reserveeALAdministrateur() throws Exception {
+        String corps = "{\"idPv\":952,\"idExamen\":1,\"idAvis\":\"FAV\",\"imCtrlMembre\":\"CTRMEM\","
+                + "\"statutPv\":\"BROUILLON\",\"nbNavettes\":0}";
+        for (String token : new String[] { tokenMembre, tokenCc, tokenPresident }) {
+            mvc.perform(post("/api/pv-examens").header("Authorization", token)
+                    .contentType(MediaType.APPLICATION_JSON).content(corps))
+                    .andExpect(status().isForbidden());
+        }
+        org.junit.jupiter.api.Assertions.assertFalse(pvExamenRepository.existsById(952),
+                "aucun PV parasite n'a été créé par les refus");
+        mvc.perform(post("/api/pv-examens").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content(corps))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.statutPv").value("BROUILLON"));
+    }
+
+    @Test
+    @DisplayName("⚠️ Audit 2026-09-14 (E2) — PUT : l'examen du PV est FIGÉ — un autre idExamen → 409 et rien ne "
+            + "bouge ; le même idExamen → 200 (non-régression)")
+    void projetPv_put_idExamenFige() throws Exception {
+        creerProjetSurExamen1(953);
+        // Un autre examen, bien réel, sur un autre dossier : la cible d'un déplacement.
+        dispatchRepository.save(dispatch(2, 2, "CTRCC2", "CTRMEM"));
+        examenRepository.save(examen(2, 2, "CTRMEM"));
+
+        mvc.perform(put("/api/pv-examens/953").header("Authorization", tokenMembre)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idPv\":953,\"idExamen\":2,\"idAvis\":\"FAV\",\"imCtrlMembre\":\"CTRMEM\","
+                        + "\"statutPv\":\"BROUILLON\",\"nbNavettes\":0,\"syntheseObservations\":\"deplace\"}"))
+                .andExpect(status().isConflict());
+        mvc.perform(get("/api/pv-examens/953").header("Authorization", tokenAdmin))
+                .andExpect(jsonPath("$.idExamen").value(1))
+                .andExpect(jsonPath("$.syntheseObservations").value(nullValue()));
+
+        mvc.perform(put("/api/pv-examens/953").header("Authorization", tokenMembre)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idPv\":953,\"idExamen\":1,\"idAvis\":\"FAV\",\"imCtrlMembre\":\"CTRMEM\","
+                        + "\"statutPv\":\"BROUILLON\",\"nbNavettes\":0,\"syntheseObservations\":\"reste\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.idExamen").value(1))
+                .andExpect(jsonPath("$.syntheseObservations").value("reste"));
     }
 
     /** Corps de PUT du projet 950 (champs obligatoires du DTO renseignés), avec la synthèse donnée. */

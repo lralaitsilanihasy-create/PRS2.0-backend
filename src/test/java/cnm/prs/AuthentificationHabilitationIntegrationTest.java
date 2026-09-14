@@ -516,7 +516,7 @@ class AuthentificationHabilitationIntegrationTest extends CnmIntegrationTestSupp
                 .contentType(MediaType.APPLICATION_JSON).content("{\"idAvis\":\"FAV\"}"))
                 .andExpect(status().isCreated());
         // Projet de PV : l'attributaire est DÉRIVÉ du dispatch (= CTRPRE), navette classique via le CC.
-        mvc.perform(post("/api/pv-examens").header("Authorization", tokenPresident)
+        mvc.perform(post("/api/pv-examens").header("Authorization", tokenAdmin)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idPv\":5601,\"idExamen\":5601,\"idAvis\":\"FAV\",\"imCtrlMembre\":\"CTRPRE\","
                         + "\"statutPv\":\"BROUILLON\",\"nbNavettes\":0}"))

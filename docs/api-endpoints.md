@@ -4563,8 +4563,8 @@ immuable). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **40
 | GET | /api/pv-examens/definitifs | — | `PvExamenDto[]` | 200 | Authentifié (filtré) — **PV signés** uniquement |
 | GET | /api/pv-examens/{id} | — | `PvExamenDto` | 200, 404 | Authentifié (filtré) — tout PV (y c. signé) |
 | GET | /api/pv-examens/{id}/document | — | `application/pdf` | 200, 403, 404 | Authentifié (périmètre localité) — **PDF du Projet de PV** |
-| POST | /api/pv-examens | `PvExamenDto` | `PvExamenDto` | 201, 400, 403 | MEMBRE / CC / PRESIDENT |
-| PUT | /api/pv-examens/{id} | `PvExamenDto` | `PvExamenDto` | 200, 400, 403, 404, 409 | MEMBRE / CC / PRESIDENT — **rédacteur du projet** (voir note) |
+| POST | /api/pv-examens | `PvExamenDto` | `PvExamenDto` | 201, 400, 403 | ⚠️ **ADMINISTRATEUR** seul (Audit 2026-09-14, E2) — le projet naît de la soumission d’examen |
+| PUT | /api/pv-examens/{id} | `PvExamenDto` | `PvExamenDto` | 200, 400, 403, 404, 409 | MEMBRE / CC / PRESIDENT — **rédacteur du projet** (voir note) — ⚠️ `idExamen` **figé** : différent de l’existant → **409** (Audit 2026-09-14, E2) |
 | DELETE | /api/pv-examens/{id} | — | — | 204, 404, 409 | ADMINISTRATEUR — **409 si archivé** |
 | POST | /api/pv-examens/{id}/soumettre | `PvActionRequest` | `PvExamenDto` | 200, 400, 403, 404, 409 | ⚠️ l'**EXAMINATEUR** du dossier, et lui seul (2026-09-08) |
 | POST | /api/pv-examens/{id}/retourner | `PvActionRequest` | `PvExamenDto` | 200, 400, 403, 404, 409 | CC / PRESIDENT — **CC de la localité**, ⚠️ **jamais l'examinateur** (2026-09-08) |

@@ -292,7 +292,10 @@ abstract class CnmIntegrationTestSupport extends AbstractIntegrationTest {
         if ("FAVR".equals(avis)) {
             ajouterObservationExamen1();
         }
-        mvc.perform(post("/api/pv-examens").header("Authorization", tokenMembre).contentType(MediaType.APPLICATION_JSON)
+        // ⚠️ Audit 2026-09-14 (E2) — la création HTTP d'un PV est réservée à l'Administrateur (elle était ouverte
+        // au Membre) : les fixtures qui fabriquent un projet par cette porte le font sous son jeton. Le
+        // rédacteur reste le Membre attributaire, dérivé du dispatch — la suite du circuit ne change pas.
+        mvc.perform(post("/api/pv-examens").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idPv\":" + idPv + ",\"idExamen\":1,\"imCtrlMembre\":\"CTRMEM\","
                         + "\"statutPv\":\"BROUILLON\",\"nbNavettes\":0}"))
                 .andExpect(status().isCreated());

@@ -58,7 +58,7 @@ class ChronometrageNiveauxIntegrationTest extends CnmIntegrationTestSupport {
 
     /** Crée le projet de PV sur l'examen 1 et le soumet — le dossier 1 passe alors à l'étape VISA. */
     private void projetSoumis(int idPv) throws Exception {
-        mvc.perform(post("/api/pv-examens").header("Authorization", tokenMembre)
+        mvc.perform(post("/api/pv-examens").header("Authorization", tokenAdmin)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idPv\":" + idPv + ",\"idExamen\":1,\"idAvis\":\"FAV\",\"imCtrlMembre\":\"CTRMEM\","
                         + "\"statutPv\":\"BROUILLON\",\"nbNavettes\":0}"))

@@ -73,7 +73,7 @@ class NavetteDeuxNiveauxIntegrationTest extends CnmIntegrationTestSupport {
 
     /** Crée le projet de PV sur l'examen 1 et le SOUMET (le Membre est CTRMEM). */
     private void projetSoumis(int idPv) throws Exception {
-        mvc.perform(post("/api/pv-examens").header("Authorization", tokenMembre)
+        mvc.perform(post("/api/pv-examens").header("Authorization", tokenAdmin)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idPv\":" + idPv + ",\"idExamen\":1,\"idAvis\":\"FAV\",\"imCtrlMembre\":\"CTRMEM\","
                         + "\"statutPv\":\"BROUILLON\",\"nbNavettes\":0}"))
@@ -387,7 +387,7 @@ class NavetteDeuxNiveauxIntegrationTest extends CnmIntegrationTestSupport {
         examen.setImCtrlMembre("CTRCC1");
         examenRepository.save(examen);
 
-        mvc.perform(post("/api/pv-examens").header("Authorization", tokenCc)
+        mvc.perform(post("/api/pv-examens").header("Authorization", tokenAdmin)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idPv\":9611,\"idExamen\":1,\"idAvis\":\"FAV\",\"imCtrlMembre\":\"CTRCC1\","
                         + "\"statutPv\":\"BROUILLON\",\"nbNavettes\":0}"))

@@ -56,7 +56,7 @@ class VisaReserveHorsExaminateurIntegrationTest extends CnmIntegrationTestSuppor
     /** Le projet de PV, soumis par son examinateur — seul geste qui lui revient (règle du même jour). */
     private void projetSoumisParLExaminateur(int id, String tokenExaminateur, String examinateur)
             throws Exception {
-        mvc.perform(post("/api/pv-examens").header("Authorization", tokenExaminateur)
+        mvc.perform(post("/api/pv-examens").header("Authorization", tokenAdmin)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idPv\":" + id + ",\"idExamen\":" + id + ",\"imCtrlMembre\":\"" + examinateur
                         + "\",\"statutPv\":\"BROUILLON\",\"nbNavettes\":0}"))

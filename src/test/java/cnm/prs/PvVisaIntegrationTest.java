@@ -36,7 +36,7 @@ class PvVisaIntegrationTest extends CnmIntegrationTestSupport {
     /** Crée un projet de PV sur l'examen 1 (dossier 1, ANT, dispatcheur CTRPRE) et le soumet. */
     private void projetSoumis(int idPv, String avis) throws Exception {
         String corpsAvis = avis == null ? "" : ",\"idAvis\":\"" + avis + "\"";
-        mvc.perform(post("/api/pv-examens").header("Authorization", tokenMembre)
+        mvc.perform(post("/api/pv-examens").header("Authorization", tokenAdmin)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idPv\":" + idPv + ",\"idExamen\":1" + corpsAvis + ",\"imCtrlMembre\":\"CTRMEM\","
                         + "\"statutPv\":\"BROUILLON\",\"nbNavettes\":0}"))
@@ -140,7 +140,7 @@ class PvVisaIntegrationTest extends CnmIntegrationTestSupport {
         // Derniere porte d'ecriture fermee le 2026-09-02 : le mapper ne copie plus le champ vers
         // l'entite. Un client qui le poste encore ne le persiste plus — sans quoi la notion serait
         // reapparue un jour par ce canal, sans que personne comprenne d'ou.
-        mvc.perform(post("/api/pv-examens").header("Authorization", tokenMembre)
+        mvc.perform(post("/api/pv-examens").header("Authorization", tokenAdmin)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idPv\":9430,\"idExamen\":1,\"imCtrlMembre\":\"CTRMEM\",\"idAvis\":\"FAV\","
                         + "\"statutPv\":\"BROUILLON\",\"nbNavettes\":0,\"idSecretaireSeance\":\"CTRVER\"}"))
@@ -159,7 +159,7 @@ class PvVisaIntegrationTest extends CnmIntegrationTestSupport {
     void miseAJour_pvHistorique_conserveSonSecretaire() throws Exception {
         // PV en BROUILLON (seul etat modifiable par le Membre) portant un secretaire, comme un PV
         // redige avant le 2026-09-02.
-        mvc.perform(post("/api/pv-examens").header("Authorization", tokenMembre)
+        mvc.perform(post("/api/pv-examens").header("Authorization", tokenAdmin)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idPv\":9431,\"idExamen\":1,\"imCtrlMembre\":\"CTRMEM\",\"idAvis\":\"FAV\","
                         + "\"statutPv\":\"BROUILLON\",\"nbNavettes\":0}"))

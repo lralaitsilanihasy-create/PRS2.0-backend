@@ -151,7 +151,7 @@ class ExamenAttributaireEtJournalPurgeIntegrationTest extends CnmIntegrationTest
     // ------------------------------------------------------------------ helpers
 
     private void creerProjet(int idPv) throws Exception {
-        mvc.perform(post("/api/pv-examens").header("Authorization", tokenMembre)
+        mvc.perform(post("/api/pv-examens").header("Authorization", tokenAdmin)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idPv\":" + idPv + ",\"idExamen\":1,\"idAvis\":\"FAV\",\"imCtrlMembre\":\"CTRMEM\","
                         + "\"statutPv\":\"BROUILLON\",\"nbNavettes\":0}"))

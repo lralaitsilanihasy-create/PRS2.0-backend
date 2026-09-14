@@ -374,19 +374,25 @@ public class PvExamenService {
         requireStatut(existing, StatutPv.BROUILLON, StatutPv.EN_RECTIFICATION);
         // ⚠️ Verrou optimiste HTTP (plan §3) : version périmée → 409 CONFLIT_VERSION, avant toute écriture.
         VerrouOptimiste.exigerVersionCourante(dto.getVersion(), existing.getVersion());
-        existing.setIdExamen(dto.getIdExamen());
+        // ⚠️ Audit 2026-09-14 (E2) — l'examen d'un PV est FIGÉ : le PUT recopiait idExamen du corps et
+        // déplaçait ainsi le projet sur l'examen d'un autre dossier. Absent ou identique → accepté (le
+        // front renvoie le PV chargé tel quel) ; différent → 409, avant toute écriture.
+        if (dto.getIdExamen() != null && !dto.getIdExamen().equals(existing.getIdExamen())) {
+            throw new BusinessRuleException("L'examen d'un projet de PV ne se change pas : ce PV est rattaché à "
+                    + "l'examen " + existing.getIdExamen() + " (reçu : " + dto.getIdExamen() + ").");
+        }
         // ⚠️ LOT 2 (2026-09-01) — le PUT est le canal par lequel le Membre change d'avis en rectification
         // (confirmé au front le 01/09). Il posait cet avis SANS le valider : on pouvait donc y écrire FAV
         // avec des observations relevées, re-soumettre, et n'être arrêté qu'au visa. Rendre l'avis
         // obligatoire à la soumission d'examen sans fermer cette porte l'aurait laissée contournable.
         if (dto.getIdAvis() != null && !dto.getIdAvis().isBlank()) {
-            validerCoherenceAvis(dto.getIdExamen(), dto.getIdAvis().trim());
+            validerCoherenceAvis(existing.getIdExamen(), dto.getIdAvis().trim());
         }
         existing.setIdAvis(dto.getIdAvis());
         existing.setImCtrlPresident(dto.getImCtrlPresident());
         existing.setImCtrlCc(dto.getImCtrlCc());
         // ⚠️ Règle ajoutée — imCtrlMembre re-dérivé de l'attribution (dispatch), jamais le corps.
-        existing.setImCtrlMembre(attributaireDeLExamen(dto.getIdExamen()));
+        existing.setImCtrlMembre(attributaireDeLExamen(existing.getIdExamen()));
         existing.setSyntheseObservations(dto.getSyntheseObservations());
         existing.setReferencePv(dto.getReferencePv());
         // ⚠️ saveAndFlush : l'incrément de @Version se fait au flush — sans lui la réponse rendrait

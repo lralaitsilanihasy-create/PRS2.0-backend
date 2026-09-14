@@ -33,7 +33,7 @@ class PvVisaInterimIntegrationTest extends CnmIntegrationTestSupport {
 
     /** Projet de PV soumis sur l'examen 1 (dossier 1, localité ANT = CENTRALE, dispatcheur CTRPRE). */
     private void projetSoumisCentral(int idPv) throws Exception {
-        mvc.perform(post("/api/pv-examens").header("Authorization", tokenMembre)
+        mvc.perform(post("/api/pv-examens").header("Authorization", tokenAdmin)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idPv\":" + idPv + ",\"idExamen\":1,\"idAvis\":\"FAV\",\"imCtrlMembre\":\"CTRMEM\","
                         + "\"statutPv\":\"BROUILLON\",\"nbNavettes\":0}"))

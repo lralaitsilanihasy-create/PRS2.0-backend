@@ -1646,6 +1646,13 @@ Subordonné direct du Chef de commission. Voit tous les dossiers de sa localité
     (`DISPATCHE`/`EXAMINE`/`A_REEXAMINER` modifiable, refus dès `PV_SIGNE`) existait déjà pour les
     points de contrôle mais **pas pour les pièces d'examen**, qui restaient modifiables **après la
     signature du PV** — même garde désormais partagée par les deux (source unique, `ExamenGarde`).
+  - ⚠️ **Audit 2026-09-14 (E2) — le projet de PV naît de la soumission d'examen, et nulle part ailleurs.**
+    `POST /api/pv-examens` est réservé à l'**Administrateur** (comme `POST /api/pv-navettes`) : ouvert au
+    Membre, il laissait créer un PV parasite sur l'examen d'autrui — la soumission légitime échouait
+    ensuite sur « Un PV existe déjà » — ou son propre projet **sans** les gardes de complétude et d'avis de
+    la soumission d'examen. Le Membre crée son projet en soumettant son examen (`POST
+    /api/examens/{id}/soumettre`), puis l'**édite** par `PUT`. Au `PUT`, l'**examen du PV est figé** :
+    un `idExamen` différent de l'existant est refusé (409) — le projet ne se déplace pas sur un autre dossier.
 - Soumission du projet au Président/CC [Action]
   - Passage en PROJET_SOUMIS → insertion dans t_pv_navette (SENS = SOUMISSION, NUM_NAVETTE incrémenté) → notification PROJET_PV_SOUMIS envoyée au Président/CC destinataire.
 - Rectification sur retour [Écriture]

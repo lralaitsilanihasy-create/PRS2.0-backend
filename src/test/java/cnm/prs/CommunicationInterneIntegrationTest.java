@@ -149,7 +149,7 @@ class CommunicationInterneIntegrationTest extends CnmIntegrationTestSupport {
     @DisplayName("Notification PV : la soumission d'un projet de PV notifie le CC et le Président (PV_A_VALIDER, objet PV)")
     void notification_pvAValider() throws Exception {
         // Création d'un PV sur l'examen 1 (chaîne → localité ANT), par le Membre.
-        mvc.perform(post("/api/pv-examens").header("Authorization", tokenMembre).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/pv-examens").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idPv\":70,\"idExamen\":1,\"idAvis\":\"FAV\",\"imCtrlMembre\":\"CTRMEM\","
                         + "\"statutPv\":\"BROUILLON\",\"nbNavettes\":0}"))
                 .andExpect(status().isCreated());
@@ -174,7 +174,7 @@ class CommunicationInterneIntegrationTest extends CnmIntegrationTestSupport {
     @DisplayName("Notification navette : retour (PV_A_RECTIFIER) et acceptation (PV_ACCEPTE) notifient le Membre auteur")
     void notification_navettePvAuteur() throws Exception {
         // Création + soumission d'un PV (auteur CTRMEM, localité ANT).
-        mvc.perform(post("/api/pv-examens").header("Authorization", tokenMembre).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/pv-examens").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idPv\":71,\"idExamen\":1,\"idAvis\":\"FAV\",\"imCtrlMembre\":\"CTRMEM\","
                         + "\"statutPv\":\"BROUILLON\",\"nbNavettes\":0}"))
                 .andExpect(status().isCreated());

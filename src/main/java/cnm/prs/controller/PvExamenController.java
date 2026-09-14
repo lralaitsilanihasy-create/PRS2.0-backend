@@ -73,8 +73,15 @@ public class PvExamenController {
                 .body(pdf);
     }
 
-    // Rédaction / édition du projet de PV : Membre (rédacteur), CC ou Président (§3.5).
-    @PreAuthorize("@perm.peutExercer('MEMBRE')")
+    /**
+     * ⚠️ Audit 2026-09-14 (E2) — création générique réservée à l'<strong>Administrateur</strong>, comme
+     * {@code POST /api/pv-navettes}. Le projet de PV naît de la <strong>soumission d'examen</strong>
+     * ({@code ExamenService.soumettre} → {@code PvExamenService.creerProjet}, appel interne) : ouverte au
+     * Membre, cette porte laissait créer un PV parasite sur l'examen d'autrui (la soumission légitime
+     * échouait ensuite sur « Un PV existe déjà ») ou son propre projet sans les gardes de complétude et
+     * d'avis de la soumission. 403 pour tout autre profil.
+     */
+    @PreAuthorize("hasRole('ADMINISTRATEUR')")
     @PostMapping
     public ResponseEntity<PvExamenDto> create(@Valid @RequestBody PvExamenDto dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.create(dto));

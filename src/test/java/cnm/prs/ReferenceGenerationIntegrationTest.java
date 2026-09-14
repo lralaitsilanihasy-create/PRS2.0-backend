@@ -271,7 +271,7 @@ class ReferenceGenerationIntegrationTest extends CnmIntegrationTestSupport {
         dispatchRepository.save(dispatch(500, 500, "CTRCC1", "CTRMEM"));
         examenRepository.save(examen(500, 500, "CTRMEM"));
 
-        mvc.perform(post("/api/pv-examens").header("Authorization", tokenMembre)
+        mvc.perform(post("/api/pv-examens").header("Authorization", tokenAdmin)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idPv\":201,\"idExamen\":500,\"idAvis\":\"FAV\",\"imCtrlMembre\":\"CTRMEM\","
                         + "\"statutPv\":\"BROUILLON\",\"nbNavettes\":0}"))
@@ -288,7 +288,7 @@ class ReferenceGenerationIntegrationTest extends CnmIntegrationTestSupport {
         dispatchRepository.save(dispatch(502, 502, "CTRCC1", "CTRMEM"));
         examenRepository.save(examen(502, 502, "CTRMEM"));
 
-        mvc.perform(post("/api/pv-examens").header("Authorization", tokenMembre)
+        mvc.perform(post("/api/pv-examens").header("Authorization", tokenAdmin)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idPv\":204,\"idExamen\":502,\"idAvis\":\"FAV\",\"imCtrlMembre\":\"CTRMEM\","
                         + "\"statutPv\":\"BROUILLON\",\"nbNavettes\":0}"))
@@ -304,12 +304,12 @@ class ReferenceGenerationIntegrationTest extends CnmIntegrationTestSupport {
         dispatchRepository.save(dispatch(501, 501, "CTRCC1", "CTRMEM"));
         examenRepository.save(examen(501, 501, "CTRMEM"));
 
-        mvc.perform(post("/api/pv-examens").header("Authorization", tokenMembre)
+        mvc.perform(post("/api/pv-examens").header("Authorization", tokenAdmin)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idPv\":202,\"idExamen\":501,\"idAvis\":\"FAV\",\"imCtrlMembre\":\"CTRMEM\","
                         + "\"statutPv\":\"BROUILLON\",\"nbNavettes\":0}"))
                 .andExpect(status().isCreated());
-        mvc.perform(post("/api/pv-examens").header("Authorization", tokenMembre)
+        mvc.perform(post("/api/pv-examens").header("Authorization", tokenAdmin)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idPv\":203,\"idExamen\":501,\"idAvis\":\"FAV\",\"imCtrlMembre\":\"CTRMEM\","
                         + "\"statutPv\":\"BROUILLON\",\"nbNavettes\":0}"))

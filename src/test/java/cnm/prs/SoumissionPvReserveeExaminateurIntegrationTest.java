@@ -46,7 +46,7 @@ class SoumissionPvReserveeExaminateurIntegrationTest extends CnmIntegrationTestS
 
     /** Projet de PV en BROUILLON sur l'examen 1 du socle, mené par le Membre CTRMEM. */
     private void projetDuMembre(int idPv) throws Exception {
-        mvc.perform(post("/api/pv-examens").header("Authorization", tokenMembre)
+        mvc.perform(post("/api/pv-examens").header("Authorization", tokenAdmin)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idPv\":" + idPv + ",\"idExamen\":1,\"imCtrlMembre\":\"CTRMEM\","
                         + "\"statutPv\":\"BROUILLON\",\"nbNavettes\":0}"))

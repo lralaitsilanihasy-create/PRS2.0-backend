@@ -172,7 +172,7 @@ class ReferencePpmAgpmIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(refeDossier).isEqualTo("00007/DGB/PPM-AGPM/2026");
 
         // Le projet de PV est créé APRÈS : sa référence dérive du refeDossier déjà corrigé.
-        String reponse = mvc.perform(post("/api/pv-examens").header("Authorization", tokenMembre)
+        String reponse = mvc.perform(post("/api/pv-examens").header("Authorization", tokenAdmin)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idPv\":95,\"idExamen\":1,\"idAvis\":\"FAV\",\"imCtrlMembre\":\"CTRMEM\","
                         + "\"statutPv\":\"BROUILLON\",\"nbNavettes\":0}"))
