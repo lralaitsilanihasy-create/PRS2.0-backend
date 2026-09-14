@@ -186,7 +186,30 @@ public class PvExamenService {
                 && pvDocumentService.estEligible(entity)) {
             documentTache.genererEnArrierePlan(entity.getIdPv());
         }
+        masquerInterneCnmPourPrmp(dto);
         return dto;
+    }
+
+    /**
+     * ⚠️ Audit 2026-09-14 (C2) — <strong>point de projection unique</strong> du PV pour la partie contrôlée :
+     * les trois lectures qui lui sont ouvertes ({@code /definitifs}, {@code /{id}}, la liste des projets —
+     * vide pour elle) passent par {@link #toDtoLecture}.
+     *
+     * <p>Pour la PRMP et l'UGPM, les éléments <strong>internes au contrôle</strong> sont retirés :
+     * {@code viseParInterim}, {@code noteInterimNom}, {@code noteInterimDisponible} (secret de l'intérim —
+     * la note elle-même leur est déjà refusée « pour que l'extérieur ne l'apprenne pas ») et
+     * {@code imDispatcheur} / {@code nomDispatcheur} (organisation interne de la Commission). Les
+     * <strong>signataires officiels</strong> du PV signé restent servis : ils figurent sur l'acte.</p>
+     */
+    private static void masquerInterneCnmPourPrmp(PvExamenDto dto) {
+        if (dto == null || !Visibilite.estPrmp()) {
+            return;
+        }
+        dto.setViseParInterim(null);
+        dto.setNoteInterimNom(null);
+        dto.setNoteInterimDisponible(null);
+        dto.setImDispatcheur(null);
+        dto.setNomDispatcheur(null);
     }
 
     /**

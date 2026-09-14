@@ -650,7 +650,7 @@ public class ChronometrageService {
         long brut = debut == null ? 0L : HeuresOuvrees.ecoulees(debut, jusqua);
         long attentes = cumulAttentes(suspensions, jusqua);
 
-        return new ChronometrageDto(idDossier,
+        ChronometrageDto complet = new ChronometrageDto(idDossier,
                 passages(dossier, taches, suspensions, courante, maintenant, noms),
                 debut, fin, brut, Math.max(0L, brut - attentes), attentes,
                 courante == null ? null : courante.name(),
@@ -660,6 +660,25 @@ public class ChronometrageService {
                 // consultation) n'ont ainsi aucun appel de liste à ajouter — le serveur qui répond ici a
                 // déjà le dispatch sous la main.
                 dispatchRepository.findImCtrlMembreByDossier(idDossier).filter(s -> !s.isBlank()).orElse(null));
+        return cnm.prs.security.Visibilite.estPrmp() ? sansIdentites(complet) : complet;
+    }
+
+    /**
+     * ⚠️ Audit 2026-09-14 (C2) — <strong>vue de la partie contrôlée</strong> (PRMP, UGPM) du chronométrage :
+     * le même objet, <strong>sans identités</strong>. {@code imActeur} et {@code nomActeur} de chaque passage
+     * et l'{@code attributaire} passent à {@code null} — qui traite le dossier à la CNM est une information
+     * interne (règle pilote du 2026-09-06). Tout le reste est conservé : étapes, dates, durées,
+     * {@code profil}, compteurs, {@code attentePrmp} et {@code datePrevisionnelleFin}, dont le widget compact
+     * de l'écran de rectification (étape courante + fin prévue) a besoin.
+     */
+    private static ChronometrageDto sansIdentites(ChronometrageDto dto) {
+        List<PassageEtapeDto> etapes = dto.etapes() == null ? null : dto.etapes().stream()
+                .map(p -> new PassageEtapeDto(p.etape(), p.occurrence(), null, null, p.profil(), p.entree(),
+                        p.fin(), p.dureeHeuresOuvrees(), p.enCours()))
+                .toList();
+        return new ChronometrageDto(dto.idDossier(), etapes, dto.debutCompteur(), dto.finCompteur(),
+                dto.dureeBruteHeuresOuvrees(), dto.dureeNetteHeuresOuvrees(), dto.attentePrmpHeuresOuvrees(),
+                dto.etapeCourante(), dto.attentePrmp(), dto.datePrevisionnelleFin(), null);
     }
 
     /**

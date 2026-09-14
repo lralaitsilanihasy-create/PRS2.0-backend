@@ -1378,6 +1378,14 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
   `dateFin` du mandat déclaré (`t_mandat`) qui prime dès qu'il en existe un. **Reconductible une seule
   fois**, par un mandat distinct ; sans mandat actif, tout traitement est suspendu (409 `VACANCE_PRMP`).
 - Aucun accès au journal d'audit, aux anomalies ni aux statistiques CNM globales
+- ⚠️ **Audit 2026-09-14 (C2) — vues internes CNM filtrées par le serveur.** La PRMP (et son UGPM) suit
+  l'**avancement** de son dossier, pas **qui** le traite : le journal du dossier lui est refusé (403) ; le
+  chronométrage lui est servi sans identités (dates, durées, étape courante et fin prévue conservées) ;
+  les cibles Vérificateur/Assistant et les acteurs de chaque étape ne figurent pas dans ses `DossierDto` ;
+  l'intérim et l'identité du dispatcheur ne figurent pas dans les PV qu'elle lit. Prolonge au serveur la
+  règle pilote du 2026-09-06 (« vues internes CNM », jusque-là appliquée par le seul front) et le secret de
+  l'intérim (note refusée à la PRMP). Les signataires officiels d'un PV signé restent lisibles : ils figurent
+  sur l'acte.
 
 ---
 

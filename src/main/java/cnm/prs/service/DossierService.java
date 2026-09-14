@@ -550,7 +550,32 @@ public class DossierService {
             }
         }
         enrichirCibles(dtos);
+        masquerActeursInternesPourPrmp(dtos);
         return dtos;
+    }
+
+    /**
+     * ⚠️ Audit 2026-09-14 (C2) — <strong>point de projection unique</strong> du {@code DossierDto} pour la
+     * partie contrôlée : toute lecture (unitaire, listes, pages) passe par {@link #enrichir(List)}.
+     *
+     * <p>Pour la PRMP et l'UGPM ({@link Visibilite#estPrmp()}), les <strong>identités internes au
+     * contrôle</strong> sont retirées : Vérificateur et Assistant visés (matricule et nom) et acteurs de
+     * chaque étape ({@code acteursEtapes}). Règle pilote du 2026-09-06 (« vues internes CNM ») : le front les
+     * masquait, le serveur les servait. Restent servis les <strong>dates</strong> — {@code datesEtapes},
+     * {@code dateEnregistrement}, {@code dateSoumission}, {@code datePrevisionnelleFin} — et
+     * {@code attentePrmp} : la PRMP suit l'avancement de son dossier, pas qui le traite.</p>
+     */
+    private static void masquerActeursInternesPourPrmp(List<DossierDto> dtos) {
+        if (!Visibilite.estPrmp()) {
+            return;
+        }
+        for (DossierDto dto : dtos) {
+            dto.setImVerificateurCible(null);
+            dto.setNomVerificateurCible(null);
+            dto.setImAssistantCible(null);
+            dto.setNomAssistantCible(null);
+            dto.setActeursEtapes(null);
+        }
     }
 
     /**
@@ -1260,6 +1285,14 @@ public class DossierService {
     public List<ActionDossierDto> journal(Integer idDossier) {
         if (!repository.existsById(idDossier)) {
             throw new ResourceNotFoundException("Dossier introuvable : " + idDossier);
+        }
+        // ⚠️ Audit 2026-09-14 (C2) — le journal est une VUE INTERNE CNM (règle pilote du 2026-09-06) : il
+        // porte les consignes de dispatch, les commentaires de navette (projets non signés compris), l'avis
+        // arrêté au visa, les co-signataires et la mention d'intérim. Le front le masquait à la PRMP et à
+        // l'UGPM, mais le serveur le leur servait. Aucun de leurs écrans ne l'affiche : 403.
+        if (Visibilite.estPrmp()) {
+            throw new AccessDeniedException("Le journal du dossier est une vue interne à la CNM : il n'est pas "
+                    + "consultable par la PRMP ni par l'UGPM.");
         }
         controlerVisibilite(idDossier);
         return journalDossier.journal(idDossier);

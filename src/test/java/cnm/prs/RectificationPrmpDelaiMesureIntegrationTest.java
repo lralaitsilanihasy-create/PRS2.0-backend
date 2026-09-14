@@ -1,9 +1,11 @@
 package cnm.prs;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.everyItem;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -85,6 +87,11 @@ class RectificationPrmpDelaiMesureIntegrationTest extends CnmIntegrationTestSupp
                 // L'étape en cours ferme la liste des passages, sans fin et au nom de son porteur.
                 .andExpect(jsonPath("$.etapes[?(@.etape=='RECTIFICATION_PRMP')]", hasSize(1)))
                 .andExpect(jsonPath("$.etapes[?(@.etape=='RECTIFICATION_PRMP')].enCours", hasItem(true)))
+                // ⚠️ Audit 2026-09-14 (C2) — la PRMP reçoit le chronométrage SANS identités (vues internes CNM).
+                .andExpect(jsonPath("$.etapes[*].imActeur", everyItem(nullValue())));
+        // Le porteur de l'étape reste bien la PRMP propriétaire : la Commission le lit.
+        mvc.perform(get("/api/dossiers/" + DOSSIER + "/chronometrage").header("Authorization", tokenPresident))
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.etapes[?(@.etape=='RECTIFICATION_PRMP')].imActeur", hasItem("PRMP001")));
     }
 

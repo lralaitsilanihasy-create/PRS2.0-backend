@@ -90,7 +90,10 @@ class JournalOperateurReelIntegrationTest extends CnmIntegrationTestSupport {
         int idDossier = dossierCreeParLUgpm();
         assertThat(dossierRepository.findById(idDossier).orElseThrow().getCreePar()).isEqualTo("ugpm.annick");
 
-        mvc.perform(get("/api/dossiers/" + idDossier + "/journal").header("Authorization", tokenPrmp))
+        // ⚠️ Audit 2026-09-14 (C2) — le journal est une vue interne CNM : la PRMP et l'UGPM reçoivent 403.
+        // Toutes les relectures de cette classe passent donc par l'Administrateur, qui voit aussi les
+        // brouillons ; ce qui est éprouvé ici est le NOM des auteurs, pas le lecteur.
+        mvc.perform(get("/api/dossiers/" + idDossier + "/journal").header("Authorization", tokenAdmin))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.typeAction=='CREATION')]", hasSize(1)))
                 .andExpect(jsonPath("$[?(@.typeAction=='CREATION')].nomOperateur", hasItem(NOM_UGPM)))
@@ -116,7 +119,7 @@ class JournalOperateurReelIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(post("/api/dossiers/" + idDossier + "/soumettre").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk());
 
-        mvc.perform(get("/api/dossiers/" + idDossier + "/journal").header("Authorization", tokenPrmp))
+        mvc.perform(get("/api/dossiers/" + idDossier + "/journal").header("Authorization", tokenAdmin))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.typeAction=='CREATION')].nomOperateur", hasItem(NOM_UGPM)))
                 .andExpect(jsonPath("$[?(@.typeAction=='SOUMISSION')].nomOperateur", hasItem(NOM_PRMP)))
@@ -143,7 +146,7 @@ class JournalOperateurReelIntegrationTest extends CnmIntegrationTestSupport {
         ancienne.setAuteur("ugpm.annick");
         actionDossierRepository.save(ancienne);
 
-        mvc.perform(get("/api/dossiers/910/journal").header("Authorization", tokenPrmp))
+        mvc.perform(get("/api/dossiers/910/journal").header("Authorization", tokenAdmin))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.typeAction=='CREATION')].nomOperateur", hasItem(NOM_UGPM)));
         // Rien n'a été réécrit en base : c'est la LECTURE qui corrige.
@@ -170,7 +173,7 @@ class JournalOperateurReelIntegrationTest extends CnmIntegrationTestSupport {
         sansCreateur.setAuteur(null);
         actionDossierRepository.save(sansCreateur);
 
-        mvc.perform(get("/api/dossiers/911/journal").header("Authorization", tokenPrmp))
+        mvc.perform(get("/api/dossiers/911/journal").header("Authorization", tokenAdmin))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.typeAction=='CREATION')].nomOperateur", hasItem(NOM_PRMP_ANCIEN_ORDRE)));
 
@@ -188,7 +191,7 @@ class JournalOperateurReelIntegrationTest extends CnmIntegrationTestSupport {
         inconnue.setAuteur("compte.efface");
         actionDossierRepository.save(inconnue);
 
-        mvc.perform(get("/api/dossiers/912/journal").header("Authorization", tokenPrmp))
+        mvc.perform(get("/api/dossiers/912/journal").header("Authorization", tokenAdmin))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.typeAction=='CREATION')].nomOperateur", hasItem(NOM_PRMP_ANCIEN_ORDRE)));
     }
@@ -220,7 +223,7 @@ class JournalOperateurReelIntegrationTest extends CnmIntegrationTestSupport {
             actionDossierRepository.save(ligne);
         }
 
-        mvc.perform(get("/api/dossiers/" + idDossier + "/journal").header("Authorization", tokenPrmp))
+        mvc.perform(get("/api/dossiers/" + idDossier + "/journal").header("Authorization", tokenAdmin))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.typeAction=='CREATION')].nomOperateur", hasItem(NOM_UGPM)))
                 .andExpect(jsonPath("$[?(@.typeAction=='RESOUMISSION')].nomOperateur", hasItem(NOM_UGPM)))
@@ -247,7 +250,7 @@ class JournalOperateurReelIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isOk());
 
         String journal = mvc.perform(get("/api/dossiers/" + idDossier + "/journal")
-                .header("Authorization", tokenPrmp))
+                .header("Authorization", tokenAdmin))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.typeAction=='CREATION')].nomOperateur", hasItem(NOM_PRMP)))
                 .andExpect(jsonPath("$[?(@.typeAction=='SOUMISSION')].nomOperateur", hasItem(NOM_PRMP)))
@@ -266,7 +269,7 @@ class JournalOperateurReelIntegrationTest extends CnmIntegrationTestSupport {
         ancienOrdre.setAuteur("PRMP001");
         actionDossierRepository.save(ancienOrdre);
 
-        mvc.perform(get("/api/dossiers/" + idDossier + "/journal").header("Authorization", tokenPrmp))
+        mvc.perform(get("/api/dossiers/" + idDossier + "/journal").header("Authorization", tokenAdmin))
                 .andExpect(jsonPath("$[?(@.typeAction=='TRANSMISSION_COMPLEMENTS')].nomOperateur",
                         hasItem(NOM_PRMP)));
     }

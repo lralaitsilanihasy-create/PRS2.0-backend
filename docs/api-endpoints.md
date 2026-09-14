@@ -1388,9 +1388,9 @@ Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `
 | soumisPar | string | — (réponse) | **login** de l'acteur ayant **soumis** le dossier (PRMP seule). Lecture seule, posé serveur |
 | creeParNom | string | — (réponse) | **Nom lisible** « Nom Prénoms » correspondant à `creePar`, **résolu serveur** ; `null` si le compte ou l'acteur est introuvable (le front garde alors le login brut) |
 | soumisParNom | string | — (réponse) | Nom lisible correspondant à `soumisPar` ; `null` si non résolvable |
-| imVerificateurCible | string | — (réponse) | ⚠️ 2026-09-01 — matricule du **Vérificateur cible** : le rattaché du **Membre ayant examiné** (jamais le co-signataire du PV). `null` = chaîne incomplète, repli localité |
+| imVerificateurCible | string | — (réponse) | ⚠️ 2026-09-01 — matricule du **Vérificateur cible** : le rattaché du **Membre ayant examiné** (jamais le co-signataire du PV). `null` = chaîne incomplète, repli localité ; ⚠️ **2026-09-14 : `null` pour la PRMP et l'UGPM** (vues internes CNM) |
 | nomVerificateurCible | string | — (réponse) | Nom lisible du Vérificateur cible ; `null` en repli |
-| imAssistantCible | string | — (réponse) | ⚠️ 2026-09-01 — matricule de l'**Assistant cible** pour l'archivage : le rattaché du Vérificateur ayant **effectivement transmis** à SIGMP, à défaut celui du Vérificateur cible. `null` en repli |
+| imAssistantCible | string | — (réponse) | ⚠️ 2026-09-01 — matricule de l'**Assistant cible** pour l'archivage : le rattaché du Vérificateur ayant **effectivement transmis** à SIGMP, à défaut celui du Vérificateur cible. `null` en repli ; ⚠️ **2026-09-14 : `null` pour la PRMP et l'UGPM** (vues internes CNM) |
 | nomAssistantCible | string | — (réponse) | Nom lisible de l'Assistant cible ; `null` en repli |
 | version | number | Non | verrou optimiste (`@Version` JPA, ⚠️ 2026-08-27) — toujours renseigné en sortie ; en entrée de `PUT`, absent = comportement historique, périmé = **409** `CONFLIT_VERSION` (détail en tête de document, *Verrou optimiste — champ `version`*) |
 
@@ -1440,9 +1440,22 @@ Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `
 | POST | /api/dossiers/{id}/soumettre | — | `DossierDto` | 200, 400, 403, 404, 409 | **PRMP** — ⚠️ 2026-09-07 (T3) : sur un DDP, **400 par champ** si les justifications de la fiche manquent (`marches[i].justifModeDerogatoire` / `justifDelaiAmenage` / `justificationFiche`), quel que soit le chemin qui a produit les lignes (saisie, PATCH, import PDF) |
 | POST | /api/dossiers/{id}/resoumettre | `DossierResoumissionRequest` | `DossierDto` | 200, 400, 403, 404, 409 | **PRMP** propriétaire |
 | GET | /api/dossiers/{id}/historique-echanges | — | `EchangeDto[]` | 200, 403, 404 | **PRMP** / **VERIFICATEUR** (titulaire/délégué) / **ADMINISTRATEUR** |
-| GET | /api/dossiers/{id}/journal | — | `ActionDossierDto[]` | 200, 403, 404 | Authentifié (périmètre de visibilité du dossier) |
+| GET | /api/dossiers/{id}/journal | — | `ActionDossierDto[]` | 200, 403, 404 | Authentifié (périmètre de visibilité du dossier) — ⚠️ **2026-09-14 : 403 pour la PRMP et l'UGPM** (vue interne CNM) |
 
 `{id}` = idDossier (number). **`DossierResoumissionRequest`** = `{ motifRectification }` (String, **@NotBlank**, max 255).
+
+> ⚠️ **Vues internes CNM — ce que reçoivent la PRMP et l'UGPM (2026-09-14, audit C2).** La règle pilote du
+> 2026-09-06 réserve à la Commission le journal et le chronométrage nominatifs, et le secret de l'intérim
+> refuse la note à la PRMP « pour que l'extérieur ne l'apprenne pas ». Le front masquait ces informations,
+> mais le serveur les servait. Le filtrage est désormais fait **côté serveur**, pour la PRMP **et** l'UGPM
+> (même périmètre, `Visibilite.estPrmp()`) ; les autres profils ne voient aucun changement.
+>
+> | Ressource | PRMP / UGPM |
+> |---|---|
+> | `GET /api/dossiers/{id}/journal` | **403** |
+> | `GET /api/dossiers/{id}/chronometrage` | servi **sans identités** : `etapes[].imActeur`, `etapes[].nomActeur` et `attributaire` à `null` ; étapes, dates, durées, `profil`, compteurs, `attentePrmp` et `datePrevisionnelleFin` conservés |
+> | `DossierDto` (unitaire, listes, pages) | `imVerificateurCible`, `nomVerificateurCible`, `imAssistantCible`, `nomAssistantCible` et `acteursEtapes` à `null` ; `datesEtapes`, `dateEnregistrement`, `dateSoumission`, `datePrevisionnelleFin` et `attentePrmp` conservés |
+> | `PvExamenDto` (`/definitifs`, `/{id}`) | `viseParInterim`, `noteInterimNom`, `noteInterimDisponible`, `imDispatcheur` et `nomDispatcheur` à `null` ; les signataires officiels du PV signé restent servis (ils figurent sur l'acte) |
 
 > ⚠️ **Recherche de la topbar — nouvel endpoint (2026-08-27, audit lot D).** `GET
 > /api/dossiers/recherche?q=` résout une référence saisie dans la barre de recherche **côté serveur**
@@ -4516,7 +4529,7 @@ immuable). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **40
 | nomSecretaireSeance | string | — (réponse) | nom complet du secrétaire de séance (« prénoms nom »), peuplé serveur — lecture seule |
 | imMembreCoSignataire | string | — (réponse ; posé au **visa**) | max 7 — Membre désigné pour co-signer (2026-08-28). Lecture seule : jamais accepté sur un `PUT` |
 | nomMembreCoSignataire | string | — (réponse) | nom complet du Membre co-signataire, peuplé serveur — lecture seule |
-| imDispatcheur | string | — (réponse) | ⚠️ **2026-08-31** — matricule du **dispatcheur**, dérivé du dispatch de l'examen. **Seul habilité à viser** : le front s'en sert pour conditionner le bouton « Viser » sans charger le dispatch |
+| imDispatcheur | string | — (réponse) | ⚠️ **2026-08-31** — matricule du **dispatcheur**, dérivé du dispatch de l'examen. **Seul habilité à viser** : le front s'en sert pour conditionner le bouton « Viser » sans charger le dispatch ; ⚠️ **2026-09-14 : `null` pour la PRMP et l'UGPM** (vues internes CNM) |
 | nomDispatcheur | string | — (réponse) | nom complet du dispatcheur, peuplé serveur — lecture seule |
 | documentDisponible | boolean | — (réponse) | ⚠️ **Contrat révisé 2026-08-19** — PV **`SIGNE`** : `true` seulement quand le **fichier est prêt maintenant** (`CHEMIN_DOCUMENT` non nul) ; **`false` pendant la fenêtre de génération post-commit** qui suit la signature. PV **non signé** (projet) : sens historique conservé — `true` si le PV est **éligible** (un **modèle Word existe pour le cas** : avis `FAVR`/`FAV`/`DEF` + PPM avec ≥ 1 ligne de marché, **quel que soit le mode de passation** et la localité ; cf. tableau des modèles §PV). Lecture seule, peuplé serveur → le front masque « Télécharger le PDF » tant que c'est `false` |
 | version | number | Non | verrou optimiste (`@Version` JPA, ⚠️ 2026-08-27) — toujours renseigné en sortie ; en entrée de `PUT`, absent = comportement historique, périmé = **409** `CONFLIT_VERSION` (détail en tête de document, *Verrou optimiste — champ `version`*) |
@@ -4822,6 +4835,8 @@ immuable). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **40
 > **Champs `PvExamenDto` ajoutés** : `viseParInterim` (booléen), `noteInterimNom`, `noteInterimDisponible`
 > — ce dernier distinct du premier : le drapeau dit « ce visa était un intérim », l'autre dit « le document
 > est là ». Le front n'offre le lien que sur le second.
+> ⚠️ **2026-09-14 (audit C2)** : ces trois champs, comme `imDispatcheur` / `nomDispatcheur`, sont **`null` pour la
+> PRMP et l'UGPM** — le secret de l'intérim ne tenait jusque-là que par le refus de la note.
 >
 > **Mention sur le document PV — ⚠️ RÉVISÉ le 2026-09-01.** Le bloc VISA des 12 modèles a été **dérivé**
 > pour recevoir une ligne nommant le viseur (elle n'existait pas) :
@@ -5631,7 +5646,7 @@ ferment l'étape en cours de ce qui va disparaître.
 
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
-| GET | /api/dossiers/{id}/chronometrage | — | `ChronometrageDto` | 200, 403, 404 | même périmètre que le dossier |
+| GET | /api/dossiers/{id}/chronometrage | — | `ChronometrageDto` | 200, 403, 404 | même périmètre que le dossier ; PRMP/UGPM : **sans identités** (⚠️ 2026-09-14, encart « Vues internes CNM ») |
 | GET | /api/dossiers/{id}/perimetre-examen | — | `PerimetreExamenDto` | 200, 403, 404 | même périmètre que le dossier |
 | GET | /api/delais-standards | — | `DelaiStandardDto[]` | 200 | Authentifié |
 | PUT | /api/delais-standards/{etape} | `DelaiStandardDto` | `DelaiStandardDto` | 200, 400, 403, 404 | **ADMINISTRATEUR** |
@@ -5829,7 +5844,7 @@ un quatrième — c'est exactement `EN_ATTENTE_DECISION_PRMP`, pendant laquelle 
 | `dateEnregistrement` | string (date-heure) \| null | ⚠️ **2026-09-06** (demande pilote « Suivi des délais CNM ») — clôture de l'étape `RECEPTION`, **exactement** le `debutCompteur` du chronométrage ; `null` tant que le Secrétaire n'a pas enregistré. Sert la PRMP, pour qui `GET /api/receptions` est vide (portée inchangée) |
 | `dateSoumission` | string (date-heure ISO) \| null | ⚠️ **2026-09-06** (« Suivi des dossiers CNM », colonne « Dépôt du dossier ») — **date de dépôt** = horodatage de `POST /api/dossiers/{id}/soumettre`, **la même colonne** que `ReceptionDto.dateSoumission` (Secrétaire, format `yyyy-MM-dd HH:mm`). `null` pour un brouillon (jamais soumis, ou remis en brouillon par un retrait accepté). Colonne de l'entité : aucune requête de plus. ⚠️ **V20** : elle était posée à la *création* du brouillon ; reprise depuis le journal (`SOUMISSION`) |
 | `datesEtapes` | objet `{ [étape]: string (date-heure) \| null }` | ⚠️ **2026-09-07** (frise du tableau de bord) — date de **franchissement** de chaque étape de la frise, clés `RECEPTION`, `DISPATCH`, `EXAMEN`, `PROJET_PV`, `PV_SIGNE`, `VERIFICATION`, `CLOTURE` (les sept toujours présentes) ; une étape **non atteinte vaut `null`**. `RECEPTION` = `dateEnregistrement` ; `DISPATCH`/`EXAMEN` = clôture de la dernière occurrence, **seulement si le statut a dépassé l'étape** (un dispatch annulé → `PRET_DISPATCH`, un réexamen → `A_REEXAMINER` laissent des tâches closes sans franchissement) ; `PROJET_PV` = clôture d'EXAMEN (le projet de PV en naît), même condition ; `PV_SIGNE` = dernière signature (COSIGNATURE, à défaut VISA) **seulement si le PV est `SIGNE`** ; `VERIFICATION` = clôture de la vérification **une fois les observations levées** ; `CLOTURE` = archivage (à défaut transmission SIGMP) au statut `CLOTURE`. Dérivé des tâches déjà chargées en lot : aucune requête de plus ; servi quelle que soit la portée du lecteur (le Président « toutes localités » reçoit `dispatchs`/`examens` vides, pas `datesEtapes`) |
-| `acteursEtapes` | objet `{ [étape]: string \| null }` | ⚠️ **2026-09-13** (frise du tableau de bord, acteurs) — **qui** a franchi chaque étape : mêmes sept clés que `datesEtapes` (toujours présentes), nom nu « Prénoms Nom », `null` si non franchie. **Invariant** : `acteursEtapes[k]` non nul ⇔ `datesEtapes[k]` non nul — même passage, même règle de recul (dispatch annulé, réexamen remettent les deux à `null`). `RECEPTION` = le Secrétaire qui a enregistré ; `DISPATCH` = l\x27**attributaire courant** (réattributions comprises), **pas** le dispatcheur — divergence **voulue** avec le passage `DISPATCH` de `GET /dossiers/{id}/chronometrage`, consigné au nom de l\x27auteur du geste : le front ne recopie pas `nomActeur` ; `EXAMEN` / `PROJET_PV` = l\x27examinateur ; `PV_SIGNE` = **une seule chaîne**, les signataires **effectivement** signés (parts datées sur le PV) joints par « · », ordre **Membre · CC · Président** (un CC du circuit qui n\x27a pas signé n\x27y figure pas) ; `VERIFICATION` = le vérificateur ; `CLOTURE` = l\x27archiveur, à défaut le vérificateur qui a transmis au SIGMP. Dérivé en lot des mêmes tâches, plus l\x27attributaire et l\x27état du PV (une requête chacun pour toute la liste) : aucun N+1 ; servi quelle que soit la portée du lecteur (la PRMP, dont `GET /api/dispatchs` est vide, lit le nom de l\x27attributaire) |
+| `acteursEtapes` | objet `{ [étape]: string \| null }` | ⚠️ **2026-09-13** (frise du tableau de bord, acteurs) — **qui** a franchi chaque étape : mêmes sept clés que `datesEtapes` (toujours présentes), nom nu « Prénoms Nom », `null` si non franchie. **Invariant** : `acteursEtapes[k]` non nul ⇔ `datesEtapes[k]` non nul — même passage, même règle de recul (dispatch annulé, réexamen remettent les deux à `null`). `RECEPTION` = le Secrétaire qui a enregistré ; `DISPATCH` = l\x27**attributaire courant** (réattributions comprises), **pas** le dispatcheur — divergence **voulue** avec le passage `DISPATCH` de `GET /dossiers/{id}/chronometrage`, consigné au nom de l\x27auteur du geste : le front ne recopie pas `nomActeur` ; `EXAMEN` / `PROJET_PV` = l\x27examinateur ; `PV_SIGNE` = **une seule chaîne**, les signataires **effectivement** signés (parts datées sur le PV) joints par « · », ordre **Membre · CC · Président** (un CC du circuit qui n\x27a pas signé n\x27y figure pas) ; `VERIFICATION` = le vérificateur ; `CLOTURE` = l\x27archiveur, à défaut le vérificateur qui a transmis au SIGMP. Dérivé en lot des mêmes tâches, plus l\x27attributaire et l\x27état du PV (une requête chacun pour toute la liste) : aucun N+1 ; servi quelle que soit la portée du lecteur **contrôleur** ; ⚠️ **2026-09-14 (audit C2) : `null` pour la PRMP et l'UGPM** — qui traite le dossier à la CNM est une vue interne |
 
 Présents sur `GET /api/dossiers/{id}` **et** sur les listes, résolus **en lot** (quatre requêtes de plus — passages, attentes PRMP, état des PV, attributaires —
 quelle que soit la taille de la liste).

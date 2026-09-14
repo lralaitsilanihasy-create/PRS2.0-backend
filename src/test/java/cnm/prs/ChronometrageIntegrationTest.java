@@ -658,7 +658,8 @@ class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
         chronometrageService.cloturerPourActeur(1, EtapeCircuit.DISPATCH, "CTRPRE");
         chronometrageService.cloturerPourActeur(1, EtapeCircuit.EXAMEN, "CTRMEM");
 
-        String corps = mvc.perform(get("/api/dossiers/1").header("Authorization", tokenPrmp))
+        // ⚠️ Audit 2026-09-14 (C2) — lu par le Président : la PRMP ne reçoit plus acteursEtapes.
+        String corps = mvc.perform(get("/api/dossiers/1").header("Authorization", tokenPresident))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.acteursEtapes.RECEPTION").value("Prenoms NomCTRSEC"))
                 .andExpect(jsonPath("$.acteursEtapes.DISPATCH").value("Prenoms NomCTRMEM"))
@@ -811,9 +812,9 @@ class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("Acteurs des étapes — servis sur GET /api/dossiers quelle que soit la portée : le Président "
-            + "« toutes localités » et la PRMP (dont GET /api/dispatchs est vide) lisent les mêmes noms")
-    void acteursEtapes_surLaListe_presidentToutesLocalites_etPrmpSansDispatchs() throws Exception {
+    @DisplayName("Acteurs des étapes — servis sur GET /api/dossiers au Président « toutes localités » ; "
+            + "⚠️ audit 2026-09-14 (C2) : la PRMP ne les reçoit plus, ses dates restent servies")
+    void acteursEtapes_surLaListe_presidentToutesLocalites_etPrmpSansActeurs() throws Exception {
         dossierEnStatut(1, "EXAMINE");
         chronometrageService.cloturerPourActeur(1, EtapeCircuit.RECEPTION, "CTRSEC");
         chronometrageService.cloturerPourActeur(1, EtapeCircuit.DISPATCH, "CTRPRE");
@@ -832,15 +833,18 @@ class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$[?(@.idDossier==1)].acteursEtapes.CLOTURE",
                         org.hamcrest.Matchers.hasItem(org.hamcrest.Matchers.nullValue())));
 
-        // La PRMP n'a AUCUN dispatch dans sa portée : le nom de l'attributaire ne peut venir que du dossier
-        // lui-même, pas d'une jointure côté front sur la liste des dispatchs.
+        // ⚠️ Audit 2026-09-14 (C2) — la PRMP n'a aucun dispatch dans sa portée, et ne reçoit plus non plus les
+        // acteurs du dossier : qui traite le dossier à la CNM est une vue interne (règle pilote du 2026-09-06).
+        // Ses dates, elles, restent servies : elle suit l'avancement, pas les personnes.
         mvc.perform(get("/api/dispatchs").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(0)));
         mvc.perform(get("/api/dossiers").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.idDossier==1)].acteursEtapes.DISPATCH")
-                        .value(org.hamcrest.Matchers.contains("Prenoms NomCTRMEM")));
+                .andExpect(jsonPath("$[?(@.idDossier==1)].acteursEtapes",
+                        org.hamcrest.Matchers.everyItem(org.hamcrest.Matchers.nullValue())))
+                .andExpect(jsonPath("$[?(@.idDossier==1)].datesEtapes.RECEPTION",
+                        org.hamcrest.Matchers.everyItem(org.hamcrest.Matchers.notNullValue())));
     }
 
     @Test
@@ -869,7 +873,8 @@ class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
     // ------------------------------------------------------------------ utilitaires (acteurs des étapes)
 
     private String lireDossier(int idDossier) throws Exception {
-        return mvc.perform(get("/api/dossiers/" + idDossier).header("Authorization", tokenPrmp))
+        // ⚠️ Audit 2026-09-14 (C2) — lu par le Président (toutes localités) : la PRMP ne reçoit plus acteursEtapes.
+        return mvc.perform(get("/api/dossiers/" + idDossier).header("Authorization", tokenPresident))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
     }
