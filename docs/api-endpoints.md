@@ -5762,9 +5762,12 @@ toujours **huit** lignes. Ce qui ne s'y règle pas ne s'y lit pas non plus.
 > - Ni l'étape courante ni la date prévisionnelle ne bougent : une réattribution n'est pas un retour en
 >   arrière du circuit, le dossier reste à examiner.
 >
-> ⚠️ **Le chronométrage n'empêche jamais le métier.** C'était déjà la règle quand le chronomètre pouvait
-> bloquer un dossier ; elle est d'autant plus vraie maintenant qu'il ne fait qu'**observer** — aucune
-> anomalie de chronométrage ne fait échouer la transaction métier qui l'appelle.
+> ⚠️ **Le chronométrage ne doit pas empêcher le métier** (garantie précisée par l'Audit 2026-09-14, C3) :
+> avant d'écrire un passage, le serveur valide ce qui violerait le schéma (longueurs, dossier inexistant) ;
+> une écriture qui ne tiendrait pas est **écartée** avec un WARN `[CHRONO]`, et le geste métier répond
+> normalement — le passage manque alors à la chaîne. Une violation imprévisible (panne de base) fait en
+> revanche échouer le geste : l'écriture rejoint sa transaction. `imActeur` admet un identifiant PRMP de
+> 10 caractères (`V29`).
 
 **`PassageEtapeDto`** = `{etape, occurrence, imActeur, nomActeur, profil, entree, fin,
 dureeHeuresOuvrees, enCours}`. `entree`/`fin` sont horodatés **à la seconde** ; `dureeHeuresOuvrees` est

@@ -32,6 +32,16 @@ import lombok.Setter;
 @AllArgsConstructor
 public class TacheDossier {
 
+    /**
+     * ⚠️ Audit 2026-09-14 (C3) — longueurs des colonnes texte, declarees UNE fois : l'annotation
+     * {@code @Column} et la validation prealable de {@code ChronometrageService} lisent la meme
+     * constante, pour que la garde ne puisse pas diverger du schema. {@code IM_ACTEUR} passe a 10 (V29) :
+     * l'acteur d'un passage peut etre une PRMP ({@code ID_PRMP varchar(10)}), pas seulement un controleur.
+     */
+    public static final int LONGUEUR_ETAPE = 30;
+    public static final int LONGUEUR_IM_ACTEUR = 10;
+    public static final int LONGUEUR_PROFIL = 30;
+
     @Id
     @Column(name = "ID_TACHE", nullable = false)
     private Integer idTache;
@@ -40,19 +50,22 @@ public class TacheDossier {
     private Integer idDossier;
 
     /** Valeur de {@code cnm.prs.enums.EtapeCircuit}, stockee en texte. */
-    @Column(name = "ETAPE", nullable = false, length = 30)
+    @Column(name = "ETAPE", nullable = false, length = LONGUEUR_ETAPE)
     private String etape;
 
     /** Rang de l'occurrence pour ce dossier et cette etape (1 = premier passage). */
     @Column(name = "OCCURRENCE", nullable = false)
     private Integer occurrence;
 
-    /** Matricule de l'acteur a qui l'etape revenait ; nul si aucun acteur n'est identifiable. */
-    @Column(name = "IM_ACTEUR", length = 7)
+    /**
+     * Matricule du controleur, ou identifiant de la PRMP (resoumission, rectification), a qui l'etape
+     * revenait ; nul si aucun acteur n'est identifiable.
+     */
+    @Column(name = "IM_ACTEUR", length = LONGUEUR_IM_ACTEUR)
     private String imActeur;
 
     /** Profil sous lequel l'etape a ete tenue (delegation ou interim compris). */
-    @Column(name = "PROFIL", length = 30)
+    @Column(name = "PROFIL", length = LONGUEUR_PROFIL)
     private String profil;
 
     /**

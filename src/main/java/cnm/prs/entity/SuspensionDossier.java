@@ -26,6 +26,9 @@ import lombok.Setter;
 @AllArgsConstructor
 public class SuspensionDossier {
 
+    /** ⚠️ Audit 2026-09-14 (C3) — longueur de STATUT, lue aussi par la garde prealable du chronometrage. */
+    public static final int LONGUEUR_STATUT = 40;
+
     @Id
     @Column(name = "ID_SUSPENSION", nullable = false)
     private Integer idSuspension;
@@ -34,7 +37,7 @@ public class SuspensionDossier {
     private Integer idDossier;
 
     /** Statut suspensif ayant ouvert la fenetre. */
-    @Column(name = "STATUT", nullable = false, length = 40)
+    @Column(name = "STATUT", nullable = false, length = LONGUEUR_STATUT)
     private String statut;
 
     @Column(name = "DEBUT", nullable = false)

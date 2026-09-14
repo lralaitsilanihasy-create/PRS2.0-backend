@@ -457,9 +457,20 @@ chaque étape est **calculé** :
   rectification — l'autre issue du visa, jusque-là sans clôture — en enregistre donc une, comme le visa
   lui-même ; la transmission SIGMP directe (avis FAV) clôt la vérification qu'aucun passage n'a close ;
   la réattribution et la purge ferment l'étape en cours de ce qui va disparaître.
-- ⚠️ **Le chronométrage n'empêche JAMAIS le métier.** C'était déjà la règle quand le chronomètre pouvait
-  bloquer un dossier ; elle est d'autant plus vraie maintenant qu'il ne fait qu'**observer** — aucune
-  exception levée par le chronométrage ne fait échouer une transaction métier.
+- ⚠️ **Le chronométrage ne doit pas empêcher le métier — et voici exactement ce qui est garanti**
+  (⚠️ Audit 2026-09-14, constat C3 ; la formulation « JAMAIS » était une promesse que le code ne tenait
+  pas). Les écritures du chronomètre rejoignent la transaction du geste métier et leur INSERT part au
+  commit : un `try/catch` ne les rattrape pas, un `flush()` non plus (PostgreSQL avorte la transaction),
+  et une transaction séparée ne verrait pas le dossier ni les passages du geste en cours. La garantie
+  repose donc sur une **validation préalable** : avant d'écrire un passage (ou d'ouvrir une attente
+  PRMP), le service vérifie ce qui violerait le schéma — longueur de l'acteur, du profil, de l'étape ou
+  du statut, dossier inexistant. Une écriture qui ne tiendrait pas est **écartée** avec un WARN
+  `[CHRONO]` et le geste passe sans elle. **Non garanti** : une violation imprévisible (panne de base,
+  dossier supprimé plus loin dans le même geste sans purge de ses passages) fait échouer le geste.
+- ⚠️ **L'acteur d'un passage peut être une PRMP** (Audit 2026-09-14, C3) — resoumission et rectification :
+  `t_tache_dossier.IM_ACTEUR` est donc dimensionné sur `ID_PRMP` (`varchar(10)`, migration `V29`), et non
+  plus sur le matricule d'un contrôleur (`varchar(7)`, qui faisait tomber la resoumission d'une PRMP de 8 à
+  10 caractères).
 - **Étapes rejouables** : réexamen, nouvelle navette de visa, passage supplémentaire du Vérificateur dans
   la boucle FAVR — chaque passage est un enregistrement **distinct, append-only**. C'est ce qui rend
   visible le nombre d'aller-retours.

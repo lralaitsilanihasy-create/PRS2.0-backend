@@ -54,6 +54,9 @@ class RectificationPrmpDelaiMesureIntegrationTest extends CnmIntegrationTestSupp
     @Autowired
     private TacheDossierRepository tacheRepository;
 
+    @Autowired
+    private cnm.prs.service.ChronometrageService chronometrageService;
+
     /** Dossier DDP de PRMP001, en attente de rectification — l'état où tout se joue. */
     @BeforeEach
     void dossierEnAttenteDeRectification() {
@@ -151,15 +154,68 @@ class RectificationPrmpDelaiMesureIntegrationTest extends CnmIntegrationTestSupp
                 .andExpect(jsonPath("$.dureeNetteHeuresOuvrees").value(0));
     }
 
+    // ------------------------------------------------------------------ 5. ⚠️ Audit 2026-09-14 (C3)
+
+    @Test
+    @DisplayName("5 — ⚠️ Audit 2026-09-14 (C3) : une PRMP dont l'identifiant fait 10 caractères rectifie puis "
+            + "resoumet → 200, et le passage RECTIFICATION_PRMP porte son identifiant COMPLET (IM_ACTEUR "
+            + "varchar(7) faisait tomber la resoumission au flush)")
+    void prmpIdentifiantDixCaracteres_resoumissionEtPassageComplet() throws Exception {
+        // Fixture dédiée : t_prmp.ID_PRMP fait 10 caractères, la PRMP du socle (« PRMP001 ») seulement 7 —
+        // c'est cette coïncidence de longueur qui gardait la suite verte.
+        String idLong = "PRMP000010";
+        assertThat(idLong).hasSize(10);
+        int dossier = 801;
+        int ppm = 801;
+        int ligne = 8011;
+        prmpRepository.save(prmp(idLong, "ANT"));
+        Dossier d = dossierLoc(dossier, "EN_ATTENTE_DECISION_PRMP", "ANT", idLong);
+        d.setIdTypeDossier("DDP");
+        dossierRepository.save(d);
+        ppmRepository.save(ppm(ppm, dossier, idLong));
+        Marche m = marche(ligne, dossier, ppm);
+        m.setMontEstim(new BigDecimal("100"));
+        marcheRepository.save(m);
+        String tokenPrmpLongue = bearer(idLong, ProfilUtilisateur.PRMP, TypeActeur.PRMP, idLong, null);
+
+        rectifier(tokenPrmpLongue, dossier, ligne, "300").andExpect(status().isOk());
+        mvc.perform(post("/api/dossiers/" + dossier + "/resoumettre").header("Authorization", tokenPrmpLongue)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"motifRectification\":\"corrige\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statut").value("EN_VERIFICATION"));
+        // L'INSERT du passage part au flush — au commit en production : on le force ici, là où il cassait.
+        entityManager.flush();
+
+        TacheDossier passage = tacheRepository.findParDossier(dossier).stream()
+                .filter(t -> EtapeCircuit.RECTIFICATION_PRMP.name().equals(t.getEtape())).findFirst().orElseThrow();
+        assertThat(passage.getImActeur()).isEqualTo(idLong);
+    }
+
+    @Test
+    @DisplayName("6 — ⚠️ Audit 2026-09-14 (C3) : garde du chronomètre — un acteur plus long que la colonne est "
+            + "écarté AVANT l'écriture ; le flush de la transaction appelante passe, aucun passage n'est écrit")
+    void acteurTropLong_passageEcarteAvantEcriture_transactionIntacte() {
+        chronometrageService.cloturerPourActeur(DOSSIER, EtapeCircuit.RECTIFICATION_PRMP, "ACTEUR_A_11");
+
+        // Sans la garde, l'INSERT refusé (22001) ferait tomber ce flush — et avec lui le geste métier.
+        entityManager.flush();
+        assertThat(tacheRepository.findParDossier(DOSSIER)).isEmpty();
+        assertThat(dossierRepository.findById(DOSSIER)).isPresent();
+    }
+
     // ------------------------------------------------------------------ outillage
 
     /** PUT de rectification (façade de saisie) — la structure est figée, seul le montant change. */
     private ResultActions rectifier(String montEstim) throws Exception {
+        return rectifier(tokenPrmp, DOSSIER, LIGNE, montEstim);
+    }
+
+    private ResultActions rectifier(String token, int dossier, int ligne, String montEstim) throws Exception {
         String corps = "{\"exercice\":2026,\"signataire\":\"PRMP Test\",\"dateSignature\":\"2026-06-01\","
-                + "\"reference\":\"PPM-800\",\"marches\":[{\"idDetail\":" + LIGNE
+                + "\"reference\":\"PPM-" + dossier + "\",\"marches\":[{\"idDetail\":" + ligne
                 + ",\"formeMarche\":\"QUANTITE_FIXE\",\"montEstim\":" + montEstim
-                + ",\"idNature\":1,\"statut\":\"PREVU\",\"designationMarche\":\"Marche 8001\"}]}";
-        return mvc.perform(put("/api/saisies/ppm/" + DOSSIER).header("Authorization", tokenPrmp)
+                + ",\"idNature\":1,\"statut\":\"PREVU\",\"designationMarche\":\"Marche " + ligne + "\"}]}";
+        return mvc.perform(put("/api/saisies/ppm/" + dossier).header("Authorization", token)
                 .contentType(MediaType.APPLICATION_JSON).content(corps));
     }
 }

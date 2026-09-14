@@ -67,9 +67,29 @@ import cnm.prs.security.CurrentUser;
  *
  * <h2>Ce qui n'a pas changé</h2>
  *
- * <p><strong>Le chronométrage n'empêche jamais le métier</strong> : aucune exception levée ici ne fait
- * tomber une transaction métier, une anomalie est journalisée et le geste passe. C'était vrai quand le
- * chronomètre pouvait bloquer un dossier ; ça l'est d'autant plus maintenant qu'il ne fait qu'observer.</p>
+ * <p><strong>Le chronométrage ne doit pas empêcher le métier</strong> — et voici exactement ce qui est
+ * garanti (⚠️ Audit 2026-09-14, constat C3 : la version précédente de ce paragraphe promettait
+ * « jamais », ce que le code ne tenait pas).</p>
+ *
+ * <p>Les écritures du chronomètre <strong>rejoignent la transaction du geste métier</strong>. L'INSERT
+ * d'un passage ne part qu'au flush — souvent au commit, bien après le retour de ce service : un
+ * {@code try/catch} autour du {@code save()} ne voit donc pas la violation SQL, qui annule le geste
+ * entier. Les deux remèdes intuitifs sont faux : un {@code flush()} dans le {@code try} ne sauve rien
+ * (PostgreSQL avorte la transaction à la première erreur, JPA la marque rollback-only), et
+ * {@code REQUIRES_NEW} ne voit pas les lignes non commitées du geste en cours (dossier, passages
+ * précédents) — clé étrangère refusée ou rangs d'occurrence faux.</p>
+ *
+ * <p><strong>Ce qui est garanti</strong> : avant toute écriture, ce qui violerait une contrainte connue du
+ * schéma est <strong>validé</strong> — longueur de l'acteur, du profil, de l'étape ou du statut suspensif,
+ * dossier inexistant. Une écriture qui ne tiendrait pas est <strong>écartée</strong> avec un WARN
+ * {@code [CHRONO]}, et le geste métier passe sans elle (le passage manque à la chaîne ; sa durée se
+ * reporte sur le suivant).</p>
+ *
+ * <p><strong>Ce qui ne l'est pas</strong> : une violation que la validation ne peut pas prévoir (dossier
+ * supprimé plus loin dans le même geste sans purge de ses passages, panne de la base) fait échouer le
+ * geste avec son passage. Et une exception levée <em>par un repository</em> dans le {@code try} marque
+ * la transaction rollback-only même rattrapée : les {@code try/catch} de ce service ne couvrent que les
+ * erreurs de calcul du service lui-même.</p>
  *
  * <p><strong>Deux sources, pour deux usages.</strong> Le drapeau {@code attentePrmp} exposé à la PRMP est
  * dérivé du <strong>statut courant</strong> du dossier ; le cumul des attentes du compteur net vient de
@@ -202,8 +222,9 @@ public class ChronometrageService {
      * une occurrence de rang suivant, déjà close. L'entrée — donc la durée — se dérive de la chaîne à la
      * lecture.</p>
      *
-     * <p>Ne lève jamais : une anomalie de chronométrage est journalisée, elle ne fait pas échouer la
-     * transaction métier qui l'appelle.</p>
+     * <p>Un passage qui ne tiendrait pas dans le schéma est écarté <strong>avant</strong> d'être écrit,
+     * avec un WARN, et le geste métier passe ; les limites de cette garantie sont décrites en tête de
+     * classe (⚠️ Audit 2026-09-14, C3).</p>
      */
     public void cloturer(Integer idDossier, EtapeCircuit etape) {
         cloturerPourActeur(idDossier, etape, CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null));
@@ -226,6 +247,15 @@ public class ChronometrageService {
             String profil = imActeur != null && imActeur.equals(moi)
                     ? CurrentUser.profil().map(ProfilUtilisateur::name).orElse(etape.porteur().name())
                     : etape.porteur().name();
+            // ⚠️ Audit 2026-09-14 (C3) — valider AVANT d'écrire : l'INSERT part au commit, hors de portée du
+            // catch ci-dessous. Un acteur trop long (une PRMP de 10 caractères quand IM_ACTEUR en faisait 7)
+            // annulait en silence la resoumission entière ; désormais le passage est écarté, le geste passe.
+            String rejet = motifDeRejetPassage(idDossier, etape, imActeur, profil);
+            if (rejet != null) {
+                LOG.warn("[CHRONO] fin d'etape ecartee avant ecriture dossier={} etape={} acteur={} : {}",
+                        idDossier, etape, imActeur, rejet);
+                return;
+            }
             TacheDossier passage = new TacheDossier();
             passage.setIdTache(tacheRepository.nextId());
             passage.setIdDossier(idDossier);
@@ -240,6 +270,29 @@ public class ChronometrageService {
             LOG.warn("[CHRONO] fin d'etape non enregistree dossier={} etape={} acteur={} : {}",
                     idDossier, etape, imActeur, ex.toString());
         }
+    }
+
+    /**
+     * ⚠️ Audit 2026-09-14 (C3) — ce qui ferait refuser l'INSERT d'un passage par PostgreSQL, vérifié
+     * <strong>avant</strong> l'écriture ; {@code null} si le passage tient. Les longueurs sont celles de
+     * l'entité ({@link TacheDossier#LONGUEUR_IM_ACTEUR}…), déclarées au même endroit que ses
+     * {@code @Column}. Les champs obligatoires restants (identifiant, rang, date de fin) sont posés par
+     * {@link #cloturerPourActeur} lui-même et ne peuvent pas manquer.
+     */
+    private String motifDeRejetPassage(Integer idDossier, EtapeCircuit etape, String imActeur, String profil) {
+        if (etape.name().length() > TacheDossier.LONGUEUR_ETAPE) {
+            return "etape de " + etape.name().length() + " caracteres (max " + TacheDossier.LONGUEUR_ETAPE + ")";
+        }
+        if (imActeur != null && imActeur.length() > TacheDossier.LONGUEUR_IM_ACTEUR) {
+            return "acteur de " + imActeur.length() + " caracteres (max " + TacheDossier.LONGUEUR_IM_ACTEUR + ")";
+        }
+        if (profil != null && profil.length() > TacheDossier.LONGUEUR_PROFIL) {
+            return "profil de " + profil.length() + " caracteres (max " + TacheDossier.LONGUEUR_PROFIL + ")";
+        }
+        if (!dossierRepository.existsById(idDossier)) {
+            return "dossier inexistant (cle etrangere)";
+        }
+        return null;
     }
 
     /**
@@ -349,6 +402,12 @@ public class ChronometrageService {
         }
         try {
             if (suspensionRepository.findFirstByIdDossierAndFinIsNullOrderByDebutDesc(idDossier).isPresent()) {
+                return;
+            }
+            // ⚠️ Audit 2026-09-14 (C3) — même garde préalable que pour les passages : l'INSERT part au commit.
+            if (statut.name().length() > SuspensionDossier.LONGUEUR_STATUT || !dossierRepository.existsById(idDossier)) {
+                LOG.warn("[CHRONO] attente PRMP ecartee avant ecriture dossier={} statut={} : statut trop long "
+                        + "ou dossier inexistant", idDossier, statut);
                 return;
             }
             SuspensionDossier suspension = new SuspensionDossier();

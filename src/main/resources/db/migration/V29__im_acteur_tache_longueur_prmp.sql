@@ -1,0 +1,23 @@
+-- =====================================================================================================
+-- V29 — Élargir t_tache_dossier.IM_ACTEUR à varchar(10) : l'acteur d'un passage peut être une PRMP.
+--
+-- ⚠️ Audit 2026-09-14 (constat C3). V14 a dimensionné IM_ACTEUR sur le matricule d'un contrôleur
+-- (tr_controleur.IM_CONTROLEUR, varchar(7)). Or le chronométrage y écrit aussi l'identifiant d'une PRMP :
+-- l'acteur courant (CurrentUser.ref(), qui vaut l'ID_PRMP pour une PRMP et l'ID_PRMP de tutelle pour une
+-- UGPM) quand elle resoumet son dossier rectifié, et la PRMP propriétaire quand l'étape
+-- RECTIFICATION_PRMP est fermée par un retrait. t_prmp.ID_PRMP fait 10 caractères (V1) et l'API de
+-- création l'admet jusqu'à 10 (CreerPrmpRequest) : la suite de tests ne passait que parce que sa PRMP
+-- s'appelle « PRMP001 », exactement 7 caractères. Une PRMP de 8 à 10 caractères faisait tomber la
+-- resoumission sur 22001 au flush.
+--
+-- RECENSEMENT DES AUTRES COLONNES D'ACTEUR DE V10 À V28 — rien d'autre à élargir :
+--   * t_pv_examen.IM_MEMBRE_COSIGNATAIRE (V10), IM_CC_COSIGNATAIRE (V17), tr_controleur.IM_RATTACHE
+--     (V12) : ne reçoivent que des matricules de contrôleur, désignés et vérifiés contre tr_controleur ;
+--   * t_version_dossier.ID_PRMP_AUTEUR (V18) : déjà varchar(10) ;
+--   * t_suspension_dossier (V14) : ne porte aucune colonne d'acteur.
+--
+-- Idempotente de fait, comme V26 : élargir un varchar est une opération de métadonnées en PostgreSQL
+-- (pas de réécriture de table), et la rejouer sur une colonne déjà en varchar(10) ne change rien.
+-- =====================================================================================================
+
+ALTER TABLE public.t_tache_dossier ALTER COLUMN "IM_ACTEUR" TYPE varchar(10);
