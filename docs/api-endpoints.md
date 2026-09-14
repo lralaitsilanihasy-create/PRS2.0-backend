@@ -1281,7 +1281,7 @@ Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `
 | GET | /api/dispatchs | — | `DispatchDto[]` | 200 | Authentifié (filtré) |
 | GET | /api/dispatchs/{id} | — | `DispatchDto` | 200, 404 | Authentifié (filtré) |
 | POST | /api/dispatchs | `DispatchDto` | `DispatchDto` | 201, 400, 403, 409 | PRESIDENT / CHEF_COMMISSION |
-| PUT | /api/dispatchs/{id} | `DispatchDto` | `DispatchDto` | 200, 400, 403, 404, 409 | PRESIDENT / CHEF_COMMISSION |
+| PUT | /api/dispatchs/{id} | `DispatchDto` | `DispatchDto` | 200, 400, 403, 404, 409 | PRESIDENT / CHEF_COMMISSION — ⚠️ `imCtrlDispatch` = l'appelant **seulement si `imCtrlMembre` change** (Audit 2026-09-14, C1) |
 | DELETE | /api/dispatchs/{id} | — | — | 204, 404 | ADMINISTRATEUR |
 | POST | /api/dispatchs/{id}/annuler | — | — | 204, 403, 404, 409 | PRESIDENT / CHEF_COMMISSION |
 
@@ -4772,6 +4772,11 @@ immuable). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **40
 > **Dispatcheur** = `IM_CTRL_DISPATCH` du dispatch de l'examen. Le `PUT` de dispatch le repose depuis le
 > JWT comme le `POST` : un **re-dispatch** change donc le dispatcheur sur la même ligne — c'est le moyen
 > de débloquer un PV dont le dispatcheur est indisponible.
+>
+> ⚠️ **Audit 2026-09-14 (C1)** — le `PUT` ne repose le dispatcheur **que si `imCtrlMembre` change**. Un PUT
+> identique le laisse inchangé, et le changement d'attributaire étant refusé (409) dès qu'un examen
+> existe, le dispatcheur est **figé une fois l'examen entamé**. Un PV en navette dont le dispatcheur est
+> indisponible se débloque par le **visa par intérim**, plus par un re-dispatch.
 >
 > `PvExamenDto` expose **`imDispatcheur`** et **`nomDispatcheur`** (lecture seule) pour que le front
 > conditionne son bouton « Viser » sans charger le dispatch.

@@ -590,11 +590,21 @@ class ReceptionDispatchIntegrationTest extends CnmIntegrationTestSupport {
                         + "\"imCtrlMembre\":\"MEMTMS9\",\"interimDispatch\":false}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.imCtrlDispatch").value("CTRCC2"));
-        // Le Président corrige : c'est LUI qui devient le dispatcheur tracé, pas la valeur du corps.
+        // ⚠️ Audit 2026-09-14 (C1) — ce test attendait qu'un PUT à attributaire INCHANGÉ fasse du Président
+        // le dispatcheur tracé : c'était précisément l'usurpation. Un PUT identique garde désormais le
+        // dispatcheur (ni le JWT, ni le corps) ; le JWT ne prime qu'à un changement d'attributaire.
         mvc.perform(put("/api/dispatchs/352").header("Authorization", tokenPresident)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDispatch\":352,\"idReception\":452,\"imCtrlDispatch\":\"CTRMEM\","
                         + "\"imCtrlMembre\":\"MEMTMS9\",\"interimDispatch\":false}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.imCtrlDispatch").value("CTRCC2"));
+        // Le Président RÉATTRIBUE : c'est alors LUI qui devient le dispatcheur tracé, pas la valeur du corps.
+        controleurRepository.save(controleur("MEMTMS8", 5, "TMS"));
+        mvc.perform(put("/api/dispatchs/352").header("Authorization", tokenPresident)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDispatch\":352,\"idReception\":452,\"imCtrlDispatch\":\"CTRMEM\","
+                        + "\"imCtrlMembre\":\"MEMTMS8\",\"interimDispatch\":false}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.imCtrlDispatch").value("CTRPRE"));
     }

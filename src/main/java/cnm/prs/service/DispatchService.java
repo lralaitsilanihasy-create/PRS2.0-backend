@@ -306,7 +306,9 @@ public class DispatchService {
      * <p>Sont désormais exigés : le dossier <strong>en place</strong> et le dossier <strong>visé</strong>
      * dans la localité de l'appelant (§3.3), un statut de dossier au plus {@code EXAMINE} (au-delà, le
      * PV est signé et l'attribution est figée — même frontière que {@link #annuler}), et l'anti-doublon
-     * rejoué si {@code idReception} change. {@code IM_CTRL_DISPATCH} vient du JWT, comme au POST.</p>
+     * rejoué si {@code idReception} change. {@code IM_CTRL_DISPATCH} vient du JWT, comme au POST — et,
+     * ⚠️ depuis l'audit du 2026-09-14 (C1), <strong>seulement quand l'attributaire change</strong> : un PUT
+     * qui garde l'attributaire garde aussi le dispatcheur.</p>
      */
     public DispatchDto update(Integer id, DispatchDto dto) {
         Dispatch existing = repository.findById(id)
@@ -341,8 +343,20 @@ public class DispatchService {
             throw new BusinessRuleException("Réattribution impossible : l'examen de ce dossier est déjà "
                     + "entamé. Retirez le dossier au Membre (ce qui purge l'examen) avant de le réattribuer.");
         }
+        // ⚠️ Audit 2026-09-14 (C1) — le dispatcheur n'est réécrit QUE si l'attributaire change. Un PUT
+        // identique transférait l'identité de dispatcheur à l'appelant, sans trace : le CC attributaire d'un
+        // dossier central devenait « dispatcheur » et visait son propre examen sans le Président ; le
+        // Président non dispatcheur d'un dossier régional visait sans note d'intérim. Les usages légitimes
+        // changent tous l'attributaire et restent intacts : réattribution par le CC d'un dossier reçu du
+        // Président (le CC devient dispatcheur → circuit à deux niveaux), « Retirer » du CC (PUT vers
+        // lui-même), reprise. Conséquence voulue : le changement d'attributaire étant refusé (409) dès
+        // qu'un examen existe, le dispatcheur est figé une fois l'examen entamé — ce qui ferme aussi le
+        // basculement du régime de navette (simple / deux niveaux) en plein vol. L'appelant reste exigé.
+        String auteurDuPut = dispatcheurAuthentifie();   // ⚠️ audit lot B — identité = JWT, jamais le corps
         existing.setIdReception(dto.getIdReception());
-        existing.setImCtrlDispatch(dispatcheurAuthentifie());   // ⚠️ audit lot B — identité = JWT
+        if (changementAttributaire) {
+            existing.setImCtrlDispatch(auteurDuPut);
+        }
         existing.setImCtrlCc(dto.getImCtrlCc());
         existing.setImCtrlMembre(dto.getImCtrlMembre());
         existing.setDateDispatch(DispatchMapper.toLocalDateTime(dto.getDateDispatch()));

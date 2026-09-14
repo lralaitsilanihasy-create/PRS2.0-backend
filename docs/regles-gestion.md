@@ -91,6 +91,17 @@ Flux complet d'un dossier, avec navette du projet de PV :
 > Conséquence assumée : dispatcheur indisponible ⇒ PV non visable ; le déblocage est un **re-dispatch**,
 > qui met `IM_CTRL_DISPATCH` à jour sur la même ligne (le `PUT` le repose depuis le JWT, comme le `POST`).
 >
+> ⚠️ **Audit 2026-09-14 (C1) — le dispatcheur n'est réécrit qu'au CHANGEMENT D'ATTRIBUTAIRE.** Un `PUT` de
+> dispatch identique transférait l'identité de dispatcheur à son auteur, sans trace : le CC attributaire
+> d'un dossier central visait ainsi son propre examen sans le Président, et un Président non dispatcheur
+> visait sans note d'intérim. Désormais un `PUT` qui garde l'attributaire garde aussi le dispatcheur. Les
+> usages légitimes changent tous l'attributaire et restent intacts (réattribution du CC → circuit à deux
+> niveaux, « Retirer » du CC vers lui-même, reprise). **Conséquence** : le changement d'attributaire étant
+> refusé (409) dès qu'un examen existe, **le dispatcheur est figé une fois l'examen entamé** — ce qui ferme
+> aussi le basculement du régime de navette (simple ↔ deux niveaux) en plein vol. Le re-dispatch ci-dessus
+> ne débloque donc plus un PV en navette : un dispatcheur indisponible s'y supplée par le **visa par
+> intérim** (note PDF, règle du 2026-09-01).
+>
 > **`retourner` reste une tâche de RÔLE** (P/CC de la localité), délégable. Asymétrie voulue : un visa
 > bloqué gèle la clôture d'un PV, un retour bloqué gèlerait **la navette entière** — le Membre ne pourrait
 > plus récupérer son projet pour le corriger. Retourner instruit ; viser atteste.
