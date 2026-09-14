@@ -1316,6 +1316,7 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
 - Notification décision [Lecture]
   - Reçoit **RETRAIT_ACCEPTE** ou **RETRAIT_REFUSE**. ⚠️ **Règle ajoutée** : si **accepté**, le dossier **repasse en `BROUILLON`** (et non `RETIRE`) ; si refusé, dossier inchangé (motif de refus optionnel).
   - ⚠️ **Règle ajoutée (§3.3) — purge du circuit à l'acceptation** : un dossier retiré à un stade avancé (`DISPATCHE`/`EXAMINE`) porte un enchaînement réception → dispatch → examen → projet de PV → navettes (+ copies, lettres de renvoi, observations). L'acceptation **supprime tout cet historique** en une transaction, dans l'ordre FK-safe, pour que le dossier redevienne un `BROUILLON` propre (re-soumissible → re-réception `INITIAL`). Le journal d'audit (`t_audit_log`, sans FK) est conservé.
+  - ⚠️ **Audit 2026-09-14 (E1) — le chronométrage survit au retrait, pas à la suppression.** Passages (`t_tache_dossier`) et attentes PRMP (`t_suspension_dossier`) sont append-only, comme le journal : le retrait ferme l'étape en cours et **conserve** l'historique. Seule la **suppression** du brouillon (`DELETE /api/dossiers/{id}`) les purge, avec le journal du dossier — faute de quoi leurs FK vers `t_dossier` rendaient insupprimable tout brouillon revenu de circuit (409).
 
 **Module 04 — Calendrier & notifications**
 

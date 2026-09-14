@@ -32,4 +32,12 @@ public interface TacheDossierRepository extends JpaRepository<TacheDossier, Inte
 
     @Query(value = "select nextval('seq_tache_dossier')", nativeQuery = true)
     Integer nextId();
+
+    /**
+     * ⚠️ Audit 2026-09-14 (E1) — supprime les passages d'un dossier. Appelee par la SEULE suppression du
+     * dossier ({@code DossierService#delete}) : la FK vers {@code t_dossier} (V14, sans cascade) faisait
+     * echouer en 409 la suppression d'un brouillon revenu de circuit par retrait. Jamais au retrait : le
+     * chronometrage est append-only, l'historique d'un dossier retire survit a sa remise en brouillon.
+     */
+    long deleteByIdDossier(Integer idDossier);
 }

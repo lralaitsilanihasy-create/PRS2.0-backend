@@ -436,6 +436,22 @@ public class ChronometrageService {
         }
     }
 
+    /**
+     * ⚠️ Audit 2026-09-14 (E1) — efface passages et fenêtres d'attente d'un dossier <strong>qui
+     * disparaît</strong>. Réservé à la suppression du dossier ({@code DossierService#delete}) : leurs FK
+     * vers {@code t_dossier} (V14, sans cascade) faisaient échouer en 409 la suppression d'un brouillon
+     * revenu de circuit par retrait.
+     *
+     * <p><strong>Jamais au retrait</strong> ({@code CircuitCascadeService#purgerCircuit}) : là, le dossier
+     * survit, et son chronométrage est append-only comme son journal — on ferme l'étape en cours, on
+     * n'efface pas l'histoire. Contrairement aux écritures de ce service, cette purge <strong>ne rattrape
+     * aucune exception</strong> : une suppression qui échoue doit échouer.</p>
+     */
+    public void purgerDossier(Integer idDossier) {
+        tacheRepository.deleteByIdDossier(idDossier);
+        suspensionRepository.deleteByIdDossier(idDossier);
+    }
+
     /** Vrai si le dossier est dans un statut où la balle est chez la PRMP. */
     public static boolean estEnAttentePrmp(String statut) {
         return statut != null && REPRISE_APRES_ATTENTE.containsKey(statut);

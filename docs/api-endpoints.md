@@ -1616,6 +1616,11 @@ Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `
 > (notifications, demandes de retrait, réceptions — un brouillon n'a jamais dépassé `PRET_DISPATCH`, donc des
 > réceptions sans dispatch/examen/PV/vérification). Le **journal d'audit** (`t_audit_log`, immuable §3.8, sans FK) est
 > **conservé**. Dossier inexistant → **404**.
+>
+> ⚠️ **Audit 2026-09-14 (E1)** — la cascade purge aussi le **journal du dossier** (`t_action_dossier`) et son
+> **chronométrage** : passages (`t_tache_dossier`) et fenêtres d'attente PRMP (`t_suspension_dossier`), dont les
+> FK vers `t_dossier` (V14) faisaient échouer en **409** la suppression d'un brouillon revenu de circuit par retrait.
+> Le **retrait accepté**, lui, ne touche pas au chronométrage : le dossier survit, son historique aussi.
 
 > ⚠️ **Historique d'échanges — périmètre corrigé (2026-08-27, audit §3.1/lot A).** Le contrôleur
 > vérifiait le **rôle** (PRMP, vérificateur, admin) mais le service n'appliquait **aucun contrôle de

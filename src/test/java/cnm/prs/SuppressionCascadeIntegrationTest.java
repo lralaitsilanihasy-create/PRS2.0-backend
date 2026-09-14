@@ -1,6 +1,7 @@
 package cnm.prs;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -13,6 +14,7 @@ import java.time.LocalDateTime;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 
 import cnm.prs.entity.Anomalie;
 import cnm.prs.entity.ChangementLigne;
@@ -26,6 +28,7 @@ import cnm.prs.entity.PieceDemandeRetrait;
 import cnm.prs.entity.PieceJointeDossier;
 import cnm.prs.entity.Ppm;
 import cnm.prs.entity.RegleAnomalie;
+import cnm.prs.entity.SuspensionDossier;
 import cnm.prs.repository.AnomalieRepository;
 import cnm.prs.repository.ChangementLigneRepository;
 import cnm.prs.repository.EcheanceRepository;
@@ -33,6 +36,7 @@ import cnm.prs.repository.MessageRepository;
 import cnm.prs.repository.PieceDemandeRetraitRepository;
 import cnm.prs.repository.PieceJointeDossierRepository;
 import cnm.prs.repository.RegleAnomalieRepository;
+import cnm.prs.repository.SuspensionDossierRepository;
 
 /**
  * ⚠️ Audit 2026-08-27 (lot D §2) — <strong>fermeture de la cascade de suppression d'un dossier</strong>.
@@ -64,6 +68,7 @@ class SuppressionCascadeIntegrationTest extends CnmIntegrationTestSupport {
     @Autowired private EcheanceRepository echeanceRepository;
     @Autowired private RegleAnomalieRepository regleAnomalieRepository;
     @Autowired private PieceDemandeRetraitRepository pieceDemandeRetraitRepository;
+    @Autowired private SuspensionDossierRepository suspensionDossierRepository;
 
     @Test
     @DisplayName("Lot D §2 — suppression d'un brouillon REVENU d'un circuit complet (retrait accepté) : "
@@ -162,6 +167,65 @@ class SuppressionCascadeIntegrationTest extends CnmIntegrationTestSupport {
         assertEquals(0, jdbcTemplate.queryForObject(
                 "SELECT count(*) FROM public.t_examen WHERE \"ID_EXAMEN\" = ?", Integer.class, idDossier),
                 "examens purgés");
+    }
+
+    @Test
+    @DisplayName("⚠️ Audit 2026-09-14 (E1) — brouillon revenu de retrait APRÈS des passages chronométrés : le "
+            + "retrait garde l'historique, la suppression le purge — 204 et plus aucune ligne dans "
+            + "t_tache_dossier ni t_suspension_dossier")
+    void suppressionBrouillonRevenuDeRetrait_purgeLeChronometrage() throws Exception {
+        final int idDossier = 930;
+        Dossier d = dossierLoc(idDossier, "SOUMIS", "ANT", "PRMP001");
+        d.setRefeDossier("00098/DDP/CRM-ANT/2026");
+        dossierRepository.save(d);
+        Ppm p = ppm(idDossier, idDossier, "PRMP001");
+        p.setReference("00098/DGB/PPM/2026");
+        ppmRepository.save(p);
+
+        // — Le circuit réel : réception puis dispatch, chacun clôt son étape au chronomètre.
+        String reception = mvc.perform(post("/api/receptions").header("Authorization", tokenCc)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDossier\":" + idDossier + ",\"numPassage\":1,\"typePassage\":\"INITIAL\","
+                        + "\"imCtrlRecept\":\"CTRCC1\",\"complet\":true}"))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        int idReception = com.jayway.jsonpath.JsonPath.read(reception, "$.idReception");
+        // ANT est la localité centrale : son dispatch relève du Président.
+        mvc.perform(post("/api/dispatchs").header("Authorization", tokenPresident).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idReception\":" + idReception + ",\"imCtrlMembre\":\"CTRMEM\",\"interimDispatch\":false}"))
+                .andExpect(status().isCreated());
+        // — Une fenêtre d'attente PRMP close (la seconde table à FK), posée en fixture : aucun geste de ce
+        //   scénario ne passe par une attente, mais un dossier ayant circulé peut en porter.
+        SuspensionDossier attente = new SuspensionDossier();
+        attente.setIdSuspension(suspensionDossierRepository.nextId());
+        attente.setIdDossier(idDossier);
+        attente.setStatut("EN_ATTENTE_COMPLEMENTS_DEPOT");
+        attente.setDebut(LocalDateTime.of(2026, 6, 2, 9, 0));
+        attente.setFin(LocalDateTime.of(2026, 6, 2, 11, 0));
+        suspensionDossierRepository.save(attente);
+        entityManager.flush();
+        int passages = compter("t_tache_dossier", "ID_DOSSIER", idDossier);
+        assertTrue(passages >= 2, "réception et dispatch sont chronométrés (passages : " + passages + ")");
+
+        // — Retrait accepté : le dossier redevient BROUILLON, son chronométrage est CONSERVÉ (append-only).
+        int idDemande = demandeRetraitRepository.save(demandeRetrait(0, idDossier, "PRMP001")).getIdDemandeRetrait();
+        mvc.perform(post("/api/demande-retraits/" + idDemande + "/accepter").header("Authorization", tokenCc))
+                .andExpect(status().isOk());
+        entityManager.flush();
+        assertEquals("BROUILLON", dossierRepository.findById(idDossier).orElseThrow().getStatut());
+        assertTrue(compter("t_tache_dossier", "ID_DOSSIER", idDossier) >= passages,
+                "le retrait ne purge pas l'historique des passages");
+        assertEquals(1, compter("t_suspension_dossier", "ID_DOSSIER", idDossier),
+                "le retrait ne purge pas les attentes PRMP");
+
+        // — Suppression par la PRMP : avant le correctif, la FK de V14 faisait échouer la suppression (409 au
+        //   commit ; ici, au flush de la transaction de test).
+        mvc.perform(delete("/api/dossiers/" + idDossier).header("Authorization", tokenPrmp))
+                .andExpect(status().isNoContent());
+        entityManager.flush();
+        entityManager.clear();
+        assertEquals(0, compter("t_dossier", "ID_DOSSIER", idDossier), "dossier supprimé");
+        assertEquals(0, compter("t_tache_dossier", "ID_DOSSIER", idDossier), "passages purgés");
+        assertEquals(0, compter("t_suspension_dossier", "ID_DOSSIER", idDossier), "attentes PRMP purgées");
     }
 
     /** Les satellites d'un dossier ayant circulé : pièces, diff, message, anomalies, échéance, lot. */

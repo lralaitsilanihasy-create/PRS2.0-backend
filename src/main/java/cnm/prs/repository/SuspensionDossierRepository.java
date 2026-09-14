@@ -22,4 +22,11 @@ public interface SuspensionDossierRepository extends JpaRepository<SuspensionDos
 
     @Query(value = "select nextval('seq_suspension_dossier')", nativeQuery = true)
     Integer nextId();
+
+    /**
+     * ⚠️ Audit 2026-09-14 (E1) — supprime les fenetres d'attente d'un dossier. Meme usage, et meme limite,
+     * que {@code TacheDossierRepository#deleteByIdDossier} : suppression du dossier seulement, jamais au
+     * retrait.
+     */
+    long deleteByIdDossier(Integer idDossier);
 }

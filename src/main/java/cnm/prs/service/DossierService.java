@@ -807,6 +807,10 @@ public class DossierService {
         pieceDemandeRetraitRepository.deleteParDossier(id);   // PDF des demandes (sans FK) — avant les demandes
         demandeRetraitRepository.deleteByIdDossier(id);
         journalDossier.purger(id);   // le dossier disparaît : son journal d'actions n'a plus d'objet
+        // ⚠️ Audit 2026-09-14 (E1) — et son chronométrage de même : t_tache_dossier et t_suspension_dossier
+        // portent une FK vers t_dossier (V14) jamais purgée, d'où un 409 sur tout brouillon revenu de circuit
+        // par retrait. Purgé ICI, pas au retrait : le dossier retiré garde son historique de passages.
+        chronometrage.purgerDossier(id);
         repository.deleteById(id);
     }
 
