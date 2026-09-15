@@ -1458,7 +1458,7 @@ Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `
 | DELETE | /api/dossiers/{id} | — | — | 204, 403, 404, 409 | **PRMP** propriétaire — BROUILLON (cascade contenu + historique) |
 | POST | /api/dossiers/{id}/soumettre | — | `DossierDto` | 200, 400, 403, 404, 409 | **PRMP** — ⚠️ 2026-09-07 (T3) : sur un DDP, **400 par champ** si les justifications de la fiche manquent (`marches[i].justifModeDerogatoire` / `justifDelaiAmenage` / `justificationFiche`), quel que soit le chemin qui a produit les lignes (saisie, PATCH, import PDF) |
 | POST | /api/dossiers/{id}/resoumettre | `DossierResoumissionRequest` | `DossierDto` | 200, 400, 403, 404, 409 | **PRMP** propriétaire |
-| GET | /api/dossiers/{id}/historique-echanges | — | `EchangeDto[]` | 200, 403, 404 | **PRMP** / **VERIFICATEUR** (titulaire/délégué) / **ADMINISTRATEUR** |
+| GET | /api/dossiers/{id}/historique-echanges | — | `EchangeDto[]` | 200, 403, 404 | **PRMP** / **VERIFICATEUR** (titulaire/délégué) / **ADMINISTRATEUR** — ⚠️ **2026-09-14 : la PRMP ne reçoit pas le matricule du vérificateur** (vue interne CNM) |
 | GET | /api/dossiers/{id}/journal | — | `ActionDossierDto[]` | 200, 403, 404 | Authentifié (périmètre de visibilité du dossier) — ⚠️ **2026-09-14 : 403 pour la PRMP et l'UGPM** (vue interne CNM) |
 
 `{id}` = idDossier (number). **`DossierResoumissionRequest`** = `{ motifRectification }` (String, **@NotBlank**, max 255).
@@ -1476,6 +1476,7 @@ Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `
 > | `DossierDto` (unitaire, listes, pages) | `imVerificateurCible`, `nomVerificateurCible`, `imAssistantCible`, `nomAssistantCible` et `acteursEtapes` à `null` ; `datesEtapes`, `dateEnregistrement`, `dateSoumission`, `datePrevisionnelleFin` et `attentePrmp` conservés |
 > | `PvExamenDto` (`/definitifs`, `/{id}`) | `viseParInterim`, `noteInterimNom`, `noteInterimDisponible`, `imDispatcheur` et `nomDispatcheur` à `null` ; les signataires officiels du PV signé restent servis (ils figurent sur l'acte) |
 > | `GET /api/observations-pv?dossier=` (⚠️ revue du 2026-09-14) | `historique[].imVerificateur` (auteur de chaque décision de vérification, seul matricule du DTO) à `null` ; `libelle`, `statut`, `precision`, `iteration`, `leveePossible` et, dans l'historique, `iteration`, `decision`, `precision`, `dateDecision` conservés |
+> | `GET /api/dossiers/{id}/historique-echanges` (⚠️ revue du 2026-09-14) | `acteur` des entrées `OBSERVATION` (matricule du vérificateur, seule identité de contrôleur du DTO) à `null` ; l'`acteur` des `RECTIFICATION` (identifiant de la PRMP) et `type`, `date`, `texte`, `obsLevees` conservés. L'UGPM est de toute façon refusée (**403**) par la garde du contrôleur (`hasRole('PRMP')`) |
 
 > ⚠️ **Recherche de la topbar — nouvel endpoint (2026-08-27, audit lot D).** `GET
 > /api/dossiers/recherche?q=` résout une référence saisie dans la barre de recherche **côté serveur**
@@ -1667,7 +1668,7 @@ Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `
 > observation est suivie de la rectification PRMP qui y répond) : les observations du vérificateur (source
 > `t_verification`, dont le passage final `obsLevees=true` qui a déclenché la clôture) et les rectifications de la PRMP
 > (source `t_audit_log`, `TYPE_ACTION=RECTIFICATION_PRMP`). **`EchangeDto`** = `{ type (`OBSERVATION` | `RECTIFICATION`),
-> date (jour `yyyy-MM-dd` pour OBSERVATION, date-heure pour RECTIFICATION), acteur (matricule vérificateur ou idPrmp),
+> date (jour `yyyy-MM-dd` pour OBSERVATION, date-heure pour RECTIFICATION), acteur (matricule vérificateur ou idPrmp ; ⚠️ 2026-09-14 : matricule à `null` pour la PRMP, encart « Vues internes CNM »),
 > texte (observation ou motif), obsLevees (renseigné pour OBSERVATION, `null` pour RECTIFICATION) }`.
 
 > **Filtre serveur `?statut=` (nouveau).** `GET /api/dossiers?statut=SOUMIS` restreint la liste à ce

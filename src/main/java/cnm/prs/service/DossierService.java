@@ -1262,7 +1262,28 @@ public class DossierService {
         while (!rectifications.isEmpty()) {
             echanges.add(toRectificationEchange(rectifications.poll()));
         }
-        return echanges;
+        return echangesSansActeursInternesPourPrmp(echanges);
+    }
+
+    /**
+     * ⚠️ Revue du 2026-09-14 (C2, suite de l'audit du même jour) — <strong>point de projection unique</strong>
+     * du fil d'échanges pour la partie contrôlée, sur le modèle de {@link #masquerActeursInternesPourPrmp}.
+     *
+     * <p>Pour la PRMP et l'UGPM ({@link Visibilite#estPrmp()}), l'{@code acteur} d'une
+     * {@code OBSERVATION} — matricule du vérificateur qui a statué, seule identité de contrôleur du DTO —
+     * passe à {@code null} : qui vérifie le dossier à la CNM est une vue interne (règle pilote du
+     * 2026-09-06). L'{@code acteur} d'une {@code RECTIFICATION} reste servi : c'est l'identifiant de la PRMP
+     * elle-même, pas celui d'un contrôleur. Type, date, texte et {@code obsLevees} sont conservés.</p>
+     */
+    private static List<EchangeDto> echangesSansActeursInternesPourPrmp(List<EchangeDto> echanges) {
+        if (!Visibilite.estPrmp()) {
+            return echanges;
+        }
+        return echanges.stream()
+                .map(e -> "OBSERVATION".equals(e.type())
+                        ? new EchangeDto(e.type(), e.date(), null, e.texte(), e.obsLevees())
+                        : e)
+                .toList();
     }
 
     private EchangeDto toRectificationEchange(AuditLog a) {
