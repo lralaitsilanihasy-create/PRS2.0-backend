@@ -1034,17 +1034,30 @@ public class ChronometrageService {
             return parDossier;
         }
         for (Object[] l : pvExamenRepository.etatsPvParDossiers(idsDossiers)) {
-            if (l.length < 9 || l[0] == null || l[1] == null) {
-                continue;
+            EtatPv etat = etatPvDe(l);
+            if (etat != null) {
+                parDossier.put((Integer) l[0], etat);
             }
-            String coSignataire = (String) l[3];
-            String imMembre = l[4] == null ? null
-                    : (coSignataire != null && !coSignataire.isBlank() ? coSignataire : (String) l[2]);
-            String imCc = l[6] == null ? null : (String) l[5];
-            String imPresident = l[8] == null ? null : (String) l[7];
-            parDossier.put((Integer) l[0], new EtatPv((String) l[1], imMembre, imCc, imPresident));
         }
         return parDossier;
+    }
+
+    /**
+     * ⚠️ 2026-09-15 — lecture d'<strong>une</strong> ligne de {@code PvExamenRepository#etatsPvParDossiers},
+     * extraite sans changement de {@link #etatsPvParDossier} : l'accueil « À faire » lit la même requête (élargie
+     * de colonnes ajoutées en fin de ligne) et doit en tirer le même {@link EtatPv} pour la frise. {@code null}
+     * pour une ligne inexploitable (dossier ou statut absent).
+     */
+    public static EtatPv etatPvDe(Object[] l) {
+        if (l == null || l.length < 9 || l[0] == null || l[1] == null) {
+            return null;
+        }
+        String coSignataire = (String) l[3];
+        String imMembre = l[4] == null ? null
+                : (coSignataire != null && !coSignataire.isBlank() ? coSignataire : (String) l[2]);
+        String imCc = l[6] == null ? null : (String) l[5];
+        String imPresident = l[8] == null ? null : (String) l[7];
+        return new EtatPv((String) l[1], imMembre, imCc, imPresident);
     }
 
     /**

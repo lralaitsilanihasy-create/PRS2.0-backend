@@ -84,6 +84,30 @@ public class PermissionService {
         return delegationRepository.existsByActifTrueAndIdProfileDelegantInAndIdProfileDelegueIn(idsCourant, idsCible);
     }
 
+    /**
+     * ⚠️ 2026-09-15 — <strong>tous les profils cibles</strong> que {@code courant} peut exercer, en une requête :
+     * le sien (titulaire) et ceux des paires <strong>actives</strong> dont il est délégant. Même règle que
+     * {@link #peutExercer(ProfilUtilisateur, ProfilUtilisateur)} — titulaire, ou paire active rapprochée par
+     * libellé de profil, non transitive — calculée pour toutes les cibles à la fois : pour tout {@code cible},
+     * {@code profilsExercables(courant).contains(cible) == peutExercer(courant, cible)}. Sert l'accueil
+     * « À faire », qui pose la question pour une liste entière sans requête par ligne.
+     */
+    public java.util.Set<ProfilUtilisateur> profilsExercables(ProfilUtilisateur courant) {
+        java.util.Set<ProfilUtilisateur> cibles = java.util.EnumSet.noneOf(ProfilUtilisateur.class);
+        if (courant == null) {
+            return cibles;
+        }
+        cibles.add(courant);   // titulaire
+        for (Object[] paire : delegationRepository.findPairesActivesParLibelle()) {
+            ProfilUtilisateur delegant = ProfilUtilisateur.resolve((String) paire[0]);
+            ProfilUtilisateur delegue = ProfilUtilisateur.resolve((String) paire[1]);
+            if (delegant == courant && delegue != null) {
+                cibles.add(delegue);
+            }
+        }
+        return cibles;
+    }
+
     private List<Integer> idProfiles(ProfilUtilisateur profil) {
         return profileRepository.findAll().stream()
                 .filter(p -> ProfilUtilisateur.resolve(p.getProfile()) == profil)

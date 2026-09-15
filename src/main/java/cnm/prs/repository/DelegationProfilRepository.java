@@ -18,6 +18,18 @@ public interface DelegationProfilRepository extends JpaRepository<DelegationProf
     boolean existsByActifTrueAndIdProfileDelegantInAndIdProfileDelegueIn(
             Collection<Integer> delegants, Collection<Integer> delegues);
 
+    /**
+     * ⚠️ 2026-09-15 — <strong>paires actives</strong>, par libellé de profil ({@code tr_profile.PROFILE}) :
+     * {@code [libellé délégant, libellé délégué]}. Une requête pour toutes les paires, là où
+     * {@link #existsByActifTrueAndIdProfileDelegantInAndIdProfileDelegueIn} en coûte une par couple testé —
+     * l'accueil « À faire » pose la question pour plusieurs profils cibles sur toute une liste.
+     */
+    @Query("""
+            select pd.profile, pe.profile from DelegationProfil d, Profile pd, Profile pe
+            where d.actif = true and pd.idProfile = d.idProfileDelegant and pe.idProfile = d.idProfileDelegue
+            """)
+    java.util.List<Object[]> findPairesActivesParLibelle();
+
     /** Vrai si la paire (délégant, délégué) existe déjà — active ou non (unicité, seed idempotent). */
     boolean existsByIdProfileDelegantAndIdProfileDelegue(Integer delegant, Integer delegue);
 

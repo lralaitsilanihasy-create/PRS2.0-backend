@@ -596,30 +596,24 @@ public class DossierService {
             return;
         }
         // Dernier examinateur connu par dossier (la requête est ordonnée croissant : le put final gagne).
-        Map<Integer, String> examinateurs = new java.util.HashMap<>();
-        for (Object[] ligne : examenRepository.findMembresParDossiers(ids)) {
-            examinateurs.put((Integer) ligne[0], (String) ligne[1]);
-        }
+        Map<Integer, String> examinateurs =
+                RattachementService.examinateursParDossier(examenRepository.findMembresParDossiers(ids));
         // Vérificateur ayant effectivement transmis, par dossier (le plus récent gagne).
-        Map<Integer, String> valideurs = new java.util.HashMap<>();
-        for (cnm.prs.entity.TransmissionSigmp t : transmissionSigmpRepository.findByIdDossierIn(ids)) {
-            if (t.getImVerificateur() != null && !t.getImVerificateur().isBlank()) {
-                valideurs.put(t.getIdDossier(), t.getImVerificateur());
-            }
-        }
+        Map<Integer, String> valideurs =
+                RattachementService.valideursParDossier(transmissionSigmpRepository.findByIdDossierIn(ids));
         Map<String, cnm.prs.entity.Controleur> annuaire = new java.util.HashMap<>();
         for (cnm.prs.entity.Controleur c : controleurRepository.findAll()) {
             annuaire.put(c.getImControleur(), c);
         }
         for (DossierDto dto : dtos) {
-            String verificateur = rattacheDans(annuaire, examinateurs.get(dto.getIdDossier()));
-            dto.setImVerificateurCible(verificateur);
-            dto.setNomVerificateurCible(nomDans(annuaire, verificateur));
-            String base = valideurs.get(dto.getIdDossier()) != null
-                    ? valideurs.get(dto.getIdDossier()) : verificateur;
-            String assistant = rattacheDans(annuaire, base);
-            dto.setImAssistantCible(assistant);
-            dto.setNomAssistantCible(nomDans(annuaire, assistant));
+            // ⚠️ 2026-09-15 — la règle de ciblage est un prédicat pur partagé avec l'accueil « À faire »
+            // (RattachementService.ciblesDans), extrait d'ici sans changement.
+            RattachementService.Cibles cibles = RattachementService.ciblesDans(annuaire,
+                    examinateurs.get(dto.getIdDossier()), valideurs.get(dto.getIdDossier()));
+            dto.setImVerificateurCible(cibles.verificateur());
+            dto.setNomVerificateurCible(nomDans(annuaire, cibles.verificateur()));
+            dto.setImAssistantCible(cibles.assistant());
+            dto.setNomAssistantCible(nomDans(annuaire, cibles.assistant()));
         }
         enrichirChronometrage(dtos, ids, annuaire);
     }
@@ -671,13 +665,6 @@ public class DossierService {
             cnm.prs.enums.EtapeCircuit etape = chronometrage.etapeCourante(dto.getStatut(), statutPv);
             dto.setEtapeCourante(etape == null ? null : etape.name());
         }
-    }
-
-    /** Rattaché d'un porteur dans l'annuaire déjà chargé ; {@code null} si absent ou disparu. */
-    private static String rattacheDans(Map<String, cnm.prs.entity.Controleur> annuaire, String imPorteur) {
-        cnm.prs.entity.Controleur porteur = imPorteur == null ? null : annuaire.get(imPorteur);
-        String rattache = porteur == null ? null : porteur.getImRattache();
-        return rattache != null && !rattache.isBlank() && annuaire.containsKey(rattache) ? rattache : null;
     }
 
     private static String nomDans(Map<String, cnm.prs.entity.Controleur> annuaire, String im) {

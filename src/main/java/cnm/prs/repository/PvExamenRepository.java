@@ -227,9 +227,16 @@ public interface PvExamenRepository extends JpaRepository<PvExamen, Integer> {
      * le 2026-09-13 aux <strong>parts de signature</strong> : (idDossier, statutPv, imCtrlMembre,
      * imMembreCoSignataire, dateSignatureMembre, imCtrlCc, dateSignatureCc, imCtrlPresident,
      * dateSignaturePresident). Croissant par PV : le plus récent est lu en dernier.
+     *
+     * <p>⚠️ 2026-09-15 — <strong>élargie en fin de ligne</strong> pour l'accueil « À faire » (demande front du
+     * 2026-09-14, §6), sans jointure nouvelle : (9) idPv, (10) niveauNavette, (11) imCcCoSignataire, (12) idAvis,
+     * (13) dateArchivage, (14) idExamen, (15) idDispatch. Les neuf premières colonnes et leur ordre sont
+     * inchangés : la frise les lit toujours par position.</p>
      */
     @Query("select pv.examen.dispatch.reception.idDossier, pv.statutPv, pv.imCtrlMembre, pv.imMembreCoSignataire, "
-            + "pv.dateSignatureMembre, pv.imCtrlCc, pv.dateSignatureCc, pv.imCtrlPresident, pv.dateSignaturePresident "
+            + "pv.dateSignatureMembre, pv.imCtrlCc, pv.dateSignatureCc, pv.imCtrlPresident, pv.dateSignaturePresident, "
+            + "pv.idPv, pv.niveauNavette, pv.imCcCoSignataire, pv.idAvis, pv.dateArchivage, pv.idExamen, "
+            + "pv.examen.idDispatch "
             + "from PvExamen pv where pv.examen.dispatch.reception.idDossier in :ids order by pv.idPv asc")
     List<Object[]> etatsPvParDossiers(@Param("ids") java.util.Collection<Integer> ids);
 

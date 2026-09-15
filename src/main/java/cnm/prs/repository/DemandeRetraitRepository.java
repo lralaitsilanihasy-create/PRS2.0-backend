@@ -56,6 +56,10 @@ public interface DemandeRetraitRepository extends JpaRepository<DemandeRetrait, 
     /** Demandes à un (ou plusieurs) statut(s) — Président, toutes localités. */
     List<DemandeRetrait> findByStatutIn(List<String> statuts);
 
+    /** ⚠️ 2026-09-15 — demandes d'une liste de dossiers à un statut, en une requête (accueil « À faire »). */
+    List<DemandeRetrait> findByIdDossierInAndStatutOrderByIdDemandeRetraitAsc(java.util.Collection<Integer> idsDossiers,
+            String statut);
+
     /** Demandes d'un ou plusieurs statuts dont le DOSSIER est dans la localité (scope CC, §3.3). */
     @Query("""
             select dr from DemandeRetrait dr where dr.statut in :statuts

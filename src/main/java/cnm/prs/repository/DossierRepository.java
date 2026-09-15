@@ -472,6 +472,70 @@ public interface DossierRepository extends JpaRepository<Dossier, Integer> {
             """)
     List<Dossier> findRetirablesPourPrmp(@Param("idPrmp") String idPrmp, @Param("statuts") List<String> statuts);
 
+    // ------------------------------------------------------------------ accueil « À faire » (2026-09-15)
+
+    /**
+     * ⚠️ 2026-09-15 — projection commune aux trois requêtes de l'accueil « À faire » (demande front du
+     * 2026-09-14, §6) : le dossier, ses libellés et ses agrégats, <strong>en une requête</strong> pour toute la
+     * liste. Colonnes : (0) idDossier, (1) refeDossier, (2) dateSoumission, (3) idTypeDossier, (4) idSousType,
+     * (5) idEntiteContract, (6) libelleEntite, (7) idLocalite, (8) libelleLocalite, (9) statut, (10) dateRef,
+     * (11) lignes de marché non supprimées, (12) somme de leurs montants estimés, (13) pièces jointes,
+     * (14) observations du périmètre du PV, (15) passages de vérification.
+     */
+    String SELECT_A_FAIRE = """
+            select d.idDossier, d.refeDossier, d.dateSoumission, d.idTypeDossier, d.idSousType, d.idEntiteContract,
+                   e.libelleEntite, d.idLocalite, l.libelleLocalite, d.statut, d.dateRef,
+                   (select count(m) from Marche m
+                     where m.idDossier = d.idDossier and (m.supprimee is null or m.supprimee = false)),
+                   (select sum(m2.montEstim) from Marche m2
+                     where m2.idDossier = d.idDossier and (m2.supprimee is null or m2.supprimee = false)),
+                   (select count(p) from PieceJointeDossier p where p.idDossier = d.idDossier),
+                   (select count(o) from ObservationPv o where o.idDossier = d.idDossier),
+                   (select count(v) from Verification v where v.reception.idDossier = d.idDossier)
+            from Dossier d left join d.entiteContract e left join d.localite l
+            """;
+
+    /**
+     * ⚠️ 2026-09-15 — accueil « À faire », périmètre <strong>Président</strong> (aucune localité) : les dossiers
+     * aux statuts demandés. Même périmètre que {@link #findParStatut}, restreint aux statuts actifs.
+     */
+    @Query(SELECT_A_FAIRE + " where d.statut in :statuts")
+    List<Object[]> findAFaireTous(@Param("statuts") java.util.Collection<String> statuts);
+
+    /**
+     * ⚠️ 2026-09-15 — accueil « À faire », périmètre d'un <strong>contrôleur de localité</strong> : prédicat
+     * identique à {@link #findIdsVisiblesParLocalite} (source unique de {@code PerimetreDossier}), brouillons
+     * exclus compris, restreint aux statuts demandés.
+     */
+    @Query(SELECT_A_FAIRE + """
+             where d.statut in :statuts
+               and (d.statut is null or d.statut <> 'BROUILLON')
+               and (
+                   d.idLocalite = :localite
+                or exists (select 1 from Reception rl
+                           where rl.idDossier = d.idDossier and rl.ctrlRecept.idLocalite = :localite)
+                or exists (select 1 from Ppm pl
+                           where pl.idDossier = d.idDossier and pl.idLocalite = :localite))
+            """)
+    List<Object[]> findAFaireParLocalite(@Param("localite") String localite,
+            @Param("statuts") java.util.Collection<String> statuts);
+
+    /**
+     * ⚠️ 2026-09-15 — accueil « À faire », périmètre de la <strong>PRMP</strong> ou de l'<strong>UGPM</strong>
+     * (claim {@code ref} = ID_PRMP de tutelle) : prédicat de propriété identique à
+     * {@link #findIdsVisiblesPourPrmp}, restreint aux statuts demandés (brouillons compris s'ils sont demandés).
+     */
+    @Query(SELECT_A_FAIRE + """
+             where d.statut in :statuts
+               and (
+                  d.idPrmp = :idPrmp
+                  or exists (select 1 from Ppm pp where pp.idDossier = d.idDossier and pp.idPrmp = :idPrmp)
+                  or exists (select 1 from Marche mp, Ppm pp2
+                             where mp.idDossier = d.idDossier and mp.idPpm = pp2.idPpm and pp2.idPrmp = :idPrmp))
+            """)
+    List<Object[]> findAFairePourPrmp(@Param("idPrmp") String idPrmp,
+            @Param("statuts") java.util.Collection<String> statuts);
+
     /** Prochaine PK dossier, allouée par la séquence serveur (Voie B — l'id client est ignoré). */
     @Query(value = "select nextval('seq_dossier')", nativeQuery = true)
     Long nextIdDossier();

@@ -53,6 +53,70 @@ public class RattachementService {
     }
 
     // ------------------------------------------------------------------
+    // Ciblage en lot : prédicats purs (⚠️ 2026-09-15, accueil « À faire »)
+    // ------------------------------------------------------------------
+
+    /**
+     * Cibles nominatives d'un dossier : le Vérificateur et l'Assistant qui en ont la charge par défaut.
+     * {@code null} = chaîne incomplète, repli sur la localité.
+     */
+    public record Cibles(String verificateur, String assistant) {
+    }
+
+    /**
+     * ⚠️ 2026-09-15 — <strong>le rattachement cible, en prédicat pur</strong>, extrait sans changement de
+     * {@code DossierService.enrichirCibles} (demande front du 2026-09-14, accueil « À faire », §6). Les listes
+     * de dossiers et l'accueil posent la même question — « à qui revient ce dossier ? » — sur des données
+     * déjà chargées en lot : la règle vit ici, une fois.
+     *
+     * <ul>
+     *   <li><strong>Vérificateur cible</strong> : le rattaché du dernier Membre ayant examiné le dossier ;</li>
+     *   <li><strong>Assistant cible</strong> : le rattaché du Vérificateur qui a effectivement transmis à
+     *       SIGMP, à défaut celui du Vérificateur cible.</li>
+     * </ul>
+     * Un rattaché absent de l'{@code annuaire} (supprimé du référentiel) ne cible personne.
+     *
+     * @param annuaire    contrôleurs déjà chargés, par matricule
+     * @param examinateur dernier examinateur du dossier ({@link #examinateursParDossier}), ou {@code null}
+     * @param valideur    Vérificateur ayant transmis à SIGMP ({@link #valideursParDossier}), ou {@code null}
+     */
+    public static Cibles ciblesDans(java.util.Map<String, Controleur> annuaire, String examinateur, String valideur) {
+        String verificateur = rattacheDans(annuaire, examinateur);
+        String base = valideur != null ? valideur : verificateur;
+        return new Cibles(verificateur, rattacheDans(annuaire, base));
+    }
+
+    /** Rattaché d'un porteur dans un annuaire déjà chargé ; {@code null} si absent ou disparu. */
+    public static String rattacheDans(java.util.Map<String, Controleur> annuaire, String imPorteur) {
+        Controleur porteur = imPorteur == null ? null : annuaire.get(imPorteur);
+        String rattache = porteur == null ? null : porteur.getImRattache();
+        return rattache != null && !rattache.isBlank() && annuaire.containsKey(rattache) ? rattache : null;
+    }
+
+    /**
+     * Dernier examinateur connu par dossier, depuis les lignes de
+     * {@code ExamenRepository.findMembresParDossiers} (ordonnées croissant : la dernière écrite gagne).
+     */
+    public static java.util.Map<Integer, String> examinateursParDossier(List<Object[]> lignes) {
+        java.util.Map<Integer, String> parDossier = new java.util.HashMap<>();
+        for (Object[] ligne : lignes) {
+            parDossier.put((Integer) ligne[0], (String) ligne[1]);
+        }
+        return parDossier;
+    }
+
+    /** Vérificateur ayant effectivement transmis à SIGMP, par dossier (le plus récent gagne, vides ignorés). */
+    public static java.util.Map<Integer, String> valideursParDossier(List<cnm.prs.entity.TransmissionSigmp> transmissions) {
+        java.util.Map<Integer, String> parDossier = new java.util.HashMap<>();
+        for (cnm.prs.entity.TransmissionSigmp t : transmissions) {
+            if (t.getImVerificateur() != null && !t.getImVerificateur().isBlank()) {
+                parDossier.put(t.getIdDossier(), t.getImVerificateur());
+            }
+        }
+        return parDossier;
+    }
+
+    // ------------------------------------------------------------------
     // Ciblage
     // ------------------------------------------------------------------
 

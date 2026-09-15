@@ -55,6 +55,25 @@ public interface DispatchRepository extends JpaRepository<Dispatch, Integer> {
     java.util.List<Object[]> findCircuitByDossier(@Param("idDossier") Integer idDossier);
 
     /**
+     * ⚠️ 2026-09-15 — <strong>réceptions et circuits EN LOT</strong> (accueil « À faire », demande front du
+     * 2026-09-14, §6) : la variante {@code in :ids} de {@link #findCircuitByDossier}, étendue aux réceptions sans
+     * dispatch (un dossier prêt à dispatcher en a une) et aux faits du dispatch. Une ligne par réception, et par
+     * dispatch de cette réception le cas échéant — croissant, si bien que la dernière lue est la plus récente.
+     *
+     * <p>Colonnes : (0) idDossier, (1) idReception, (2) localité du contrôleur de réception — la même que
+     * {@code Circuit.localite} —, (3) idDispatch, (4) imCtrlDispatch, (5) imCtrlMembre, (6) instructions,
+     * (7) plus grand idExamen du dispatch ({@code null} : examen non entamé).</p>
+     */
+    @Query("""
+            select r.idDossier, r.idReception, c.idLocalite, di.idDispatch, di.imCtrlDispatch, di.imCtrlMembre,
+                   di.instructions, (select max(e.idExamen) from Examen e where e.idDispatch = di.idDispatch)
+            from Reception r left join r.ctrlRecept c left join Dispatch di on di.idReception = r.idReception
+            where r.idDossier in :ids
+            order by r.idReception asc, di.idDispatch asc
+            """)
+    List<Object[]> findReceptionsEtCircuitsParDossiers(@Param("ids") java.util.Collection<Integer> ids);
+
+    /**
      * Dispatchs visibles à l'écran « Dispatch des dossiers » : on <strong>exclut</strong> les dossiers
      * redevenus <strong>BROUILLON</strong> (ex. après acceptation d'une demande de retrait, qui laisse un
      * dispatch orphelin) ou <strong>RETIRE</strong> — ils ne doivent jamais y apparaître. Les états

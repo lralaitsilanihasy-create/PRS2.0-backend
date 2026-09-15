@@ -79,6 +79,22 @@ public interface LettreRenvoiRepository extends JpaRepository<LettreRenvoi, Inte
      */
     java.util.Optional<LettreRenvoi> findFirstByIdDossierAndStatutOrderByIdLettreDesc(Integer idDossier, String statut);
 
+    /**
+     * ⚠️ 2026-09-15 — lettres <strong>à traiter</strong> d'une liste de dossiers, en une requête (accueil
+     * « À faire ») : à signer ({@code SOUMIS}) ou à archiver ({@code SIGNE} non archivée). Colonnes : (0) idDossier,
+     * (1) idLettre, (2) statut, (3) dateLettre, (4) localité de réception — celle de
+     * {@link #findLocaliteByLettre}, jointe à gauche pour ne perdre aucune lettre. Croissant par lettre.
+     */
+    @Query("""
+            select l.idDossier, l.idLettre, l.statut, l.dateLettre, c.idLocalite
+            from LettreRenvoi l left join l.examen e left join e.dispatch di left join di.reception r
+                 left join r.ctrlRecept c
+            where l.idDossier in :ids
+              and (l.statut = 'SOUMIS' or (l.statut = 'SIGNE' and l.dateArchivage is null))
+            order by l.idLettre asc
+            """)
+    java.util.List<Object[]> findATraiterParDossiers(@Param("ids") java.util.Collection<Integer> ids);
+
     /** Localité de la lettre via la réception (repli quand {@code dossier.idLocalite} est absent). */
     @Query("select l.examen.dispatch.reception.ctrlRecept.idLocalite from LettreRenvoi l where l.idLettre = :id")
     java.util.Optional<String> findLocaliteByLettre(@Param("id") Integer id);

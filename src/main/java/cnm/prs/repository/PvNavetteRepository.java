@@ -29,6 +29,20 @@ public interface PvNavetteRepository extends JpaRepository<PvNavette, Integer> {
             + "(select r.idReception from Reception r where r.idDossier = :idDossier))))")
     int deleteParDossier(@Param("idDossier") Integer idDossier);
 
+    /**
+     * ⚠️ 2026-09-15 — <strong>retours de navette</strong> (au Membre ou au CC) des PV d'une liste de dossiers, en
+     * une requête (accueil « À faire ») : (0) idDossier, (1) idPv, (2) commentaire. Croissant par navette : le
+     * dernier retour d'un PV est lu en dernier.
+     */
+    @Query("""
+            select pv.examen.dispatch.reception.idDossier, n.idPv, n.commentaire
+            from PvNavette n, PvExamen pv
+            where pv.idPv = n.idPv and pv.examen.dispatch.reception.idDossier in :ids
+              and n.sens in ('RETOUR_RECTIF', 'RETOUR_CC')
+            order by n.idNavette asc
+            """)
+    List<Object[]> findRetoursParDossiers(@Param("ids") java.util.Collection<Integer> ids);
+
     /** Plus grand NUM_NAVETTE pour un PV donné (0 si aucune navette) — pour incrémenter. */
     @Query("select coalesce(max(n.numNavette), 0) from PvNavette n where n.idPv = :idPv")
     Integer findMaxNumNavetteByPv(@Param("idPv") Integer idPv);

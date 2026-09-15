@@ -19,6 +19,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 
 import jakarta.validation.Valid;
 
+import cnm.prs.dto.AFaireDto;
 import cnm.prs.dto.ActionDossierDto;
 import cnm.prs.dto.ChronometrageDto;
 import cnm.prs.dto.PerimetreExamenDto;
@@ -27,6 +28,7 @@ import cnm.prs.dto.DossierResoumissionRequest;
 import cnm.prs.dto.EchangeDto;
 import cnm.prs.dto.PpmDto;
 import cnm.prs.dto.RechercheDossierDto;
+import cnm.prs.service.AFaireService;
 import cnm.prs.service.ChronometrageService;
 import cnm.prs.service.DossierService;
 import cnm.prs.service.PerimetreExamenService;
@@ -45,9 +47,13 @@ public class DossierController {
     private final ChronometrageService chronometrageService;
     /** ⚠️ 2026-09-10 — le périmètre d'examen, servi tel que la complétude l'exigera. */
     private final PerimetreExamenService perimetreExamenService;
+    /** ⚠️ 2026-09-15 — accueil « À faire » : les gestes attendus du connecté. */
+    private final AFaireService aFaireService;
 
     public DossierController(DossierService service, PpmService ppmService,
-            ChronometrageService chronometrageService, PerimetreExamenService perimetreExamenService) {
+            ChronometrageService chronometrageService, PerimetreExamenService perimetreExamenService,
+            AFaireService aFaireService) {
+        this.aFaireService = aFaireService;
         this.perimetreExamenService = perimetreExamenService;
         this.service = service;
         this.ppmService = ppmService;
@@ -143,6 +149,25 @@ public class DossierController {
     @GetMapping("/en-attente-prmp")
     public List<DossierDto> enAttentePrmp() {
         return service.enAttentePrmp();
+    }
+
+    /**
+     * ⚠️ <strong>Accueil « À faire »</strong> (demande front du 2026-09-14 ; arbitrages du 2026-09-15) — les gestes
+     * attendus du connecté, calculés par le serveur à partir des gardes du circuit : sections, lignes triées par
+     * urgence, geste principal, délai en heures ouvrées. Lecture seule, à la volée.
+     *
+     * <p><strong>Profils</strong> : Président, Chef de commission, Secrétaire, Membre, Vérificateur, Assistant
+     * contrôleur, PRMP et UGPM. L'Administrateur et le Chargé de publication reçoivent 403 : ils gardent leur
+     * accueil. Titulaire du profil uniquement (et non {@code @perm.peutExercer}) : les tâches exerçables par
+     * délégation sont servies à chacun dans son propre accueil, dans le bloc délégation.</p>
+     *
+     * @param delegations {@code true} pour recevoir les lignes du bloc délégation (sinon, ses seuls totaux)
+     */
+    @PreAuthorize("hasAnyRole('PRESIDENT','CHEF_COMMISSION','SECRETAIRE','MEMBRE','VERIFICATEUR',"
+            + "'ASSISTANT_CONTROLEUR','PRMP','UGPM')")
+    @GetMapping("/a-faire")
+    public AFaireDto aFaire(@RequestParam(defaultValue = "false") boolean delegations) {
+        return aFaireService.aFaire(delegations);
     }
 
     /** Liste déroulante « dossiers retirables » de la PRMP (SOUMIS/PRET_DISPATCH dont elle est propriétaire). */
