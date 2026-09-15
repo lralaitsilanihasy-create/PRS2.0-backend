@@ -1794,7 +1794,10 @@ public class PvExamenService {
 
         PvNavette navette = new PvNavette();
         // ⚠️ LOT 3b (2026-08-26) — PK allouée à la séquence seq_pv_navette (max+1 non atomique).
-        navette.setIdNavette(navetteRepository.nextIdNavette().intValue());
+        // ⚠️ 2026-09-15 — en sautant les valeurs prises : POST /api/pv-navettes honore une PK cliente sans
+        // consommer la séquence, et nextval TEL QUEL la rendait une seconde fois — le save (merge) écrasait
+        // alors la navette posée par l'Administrateur.
+        navette.setIdNavette(ClePrimaire.allouerLibre(navetteRepository::existsById, navetteRepository::nextIdNavette));
         navette.setIdPv(pv.getIdPv());
         navette.setNumNavette(numNavette);
         navette.setSens(sens.name());
