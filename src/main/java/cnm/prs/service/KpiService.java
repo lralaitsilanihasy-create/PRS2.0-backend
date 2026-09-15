@@ -60,13 +60,17 @@ public class KpiService {
     private final CompteAuthRepository compteAuthRepository;
     private final AuditLogRepository auditLogRepository;
     private final DemandeRetraitVueRepository demandeRetraitVueRepository;
+    /** ⚠️ 2026-09-15 — le badge « À faire » vient du calcul de l'accueil lui-même, jamais d'un comptage parallèle. */
+    private final AFaireService aFaireService;
 
     public KpiService(DossierRepository dossierRepository, VerificationRepository verificationRepository,
             ExamenDetailRepository examenDetailRepository, PvExamenRepository pvExamenRepository,
             LettreRenvoiRepository lettreRenvoiRepository, DemandeRetraitRepository demandeRetraitRepository,
             PpmRepository ppmRepository, ReceptionRepository receptionRepository,
             PublicationRepository publicationRepository, CompteAuthRepository compteAuthRepository,
-            AuditLogRepository auditLogRepository, DemandeRetraitVueRepository demandeRetraitVueRepository) {
+            AuditLogRepository auditLogRepository, DemandeRetraitVueRepository demandeRetraitVueRepository,
+            AFaireService aFaireService) {
+        this.aFaireService = aFaireService;
         this.demandeRetraitVueRepository = demandeRetraitVueRepository;
         this.dossierRepository = dossierRepository;
         this.verificationRepository = verificationRepository;
@@ -107,7 +111,7 @@ public class KpiService {
     public cnm.prs.dto.BadgesDto badges() {
         ProfilUtilisateur profil = CurrentUser.profil().orElse(null);
         if (profil == null) {
-            return new cnm.prs.dto.BadgesDto(null, Map.of());
+            return new cnm.prs.dto.BadgesDto(null, Map.of(), null);
         }
         Object compteurs = switch (profil) {
             case PRMP -> mesCompteursPrmp();
@@ -124,7 +128,9 @@ public class KpiService {
             case ADMINISTRATEUR -> mesCompteursAdmin();
             default -> Map.of();
         };
-        return new cnm.prs.dto.BadgesDto(profil.name(), compteurs);
+        // ⚠️ 2026-09-15 — badge de l'accueil « À faire » : compteurs.aFaire du même calcul (lignes titulaires, hors
+        // suivi, hors bloc délégation) ; null pour l'Administrateur et le Chargé de publication.
+        return new cnm.prs.dto.BadgesDto(profil.name(), compteurs, aFaireService.compterAFaire());
     }
 
     /**

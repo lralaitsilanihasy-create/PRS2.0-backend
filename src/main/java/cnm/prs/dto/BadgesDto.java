@@ -12,6 +12,10 @@ package cnm.prs.dto;
  *                  {@code /api/kpis/mes-compteurs*} existants ({@code CompteursPrmpDto},
  *                  {@code CompteursDto} pour Président/CC, {@code CompteursSecretaireDto}, …) ;
  *                  objet vide si le profil n'a pas de compteurs
+ * @param aFaire    ⚠️ 2026-09-15 — badge de l'accueil « À faire » : {@code compteurs.aFaire} de
+ *                  {@code GET /api/dossiers/a-faire}, calculé par le même service (lignes titulaires, hors suivi et
+ *                  hors bloc délégation) ; {@code null} pour l'Administrateur, le Chargé de publication et un profil
+ *                  non reconnu
  */
-public record BadgesDto(String profil, Object compteurs) {
+public record BadgesDto(String profil, Object compteurs, Integer aFaire) {
 }

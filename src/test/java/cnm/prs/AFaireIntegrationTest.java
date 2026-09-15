@@ -594,28 +594,66 @@ class AFaireIntegrationTest extends CnmIntegrationTestSupport {
     // ================================================================== 11 — requêtes et badge
 
     @Test
-    @DisplayName("11a — Nombre d'ordres SQL constant, de 1 à 40 dossiers, et au plus 15 (Président, Assistant, PRMP)")
+    @DisplayName("11a — Nombre d'ordres SQL constant, de 1 à 40 dossiers, et au plus 15 (Président, Vérificateur, Assistant, PRMP)")
     void sql_constant() throws Exception {
         decorMixte(7100);
         long presidentUn = ordresSql(tokenPresident);
         long assistantUn = ordresSql(tokenAss);
+        long verificateurUn = ordresSql(tokenVer);
         long prmpUn = ordresSql(tokenPrmp);
         for (int i = 1; i < 40; i++) {
             decorMixte(7100 + i * 10);
         }
         long presidentQuarante = ordresSql(tokenPresident);
         long assistantQuarante = ordresSql(tokenAss);
+        long verificateurQuarante = ordresSql(tokenVer);
         long prmpQuarante = ordresSql(tokenPrmp);
 
         assertThat(presidentQuarante).isEqualTo(presidentUn).isLessThanOrEqualTo(15);
         assertThat(assistantQuarante).isEqualTo(assistantUn).isLessThanOrEqualTo(15);
+        assertThat(verificateurQuarante).isEqualTo(verificateurUn).isLessThanOrEqualTo(15);
         assertThat(prmpQuarante).isEqualTo(prmpUn).isLessThanOrEqualTo(15);
-        // Valeurs mesurées (2026-09-15) : 12 pour la CNM, 14 pour l'Assistant (rattachements), 7 pour la PRMP. Une
-        // hausse n'est pas une faute en soi, mais elle doit être voulue : ce test la rend visible.
-        assertThat(List.of(presidentUn, assistantUn, prmpUn)).containsExactly(12L, 14L, 7L);
+        // Valeurs mesurées (2026-09-15) : 12 pour la CNM, 13 pour le Vérificateur et 14 pour l'Assistant
+        // (rattachements), 7 pour la PRMP. Une hausse n'est pas une faute en soi, mais elle doit être voulue : ce test
+        // la rend visible.
+        assertThat(List.of(presidentUn, verificateurUn, assistantUn, prmpUn)).containsExactly(12L, 13L, 14L, 7L);
         // Et le calcul a bien porté sur les quarante décors.
         assertThat(JsonPath.<List<Object>>read(aFaire(tokenPresident),
                 "$.taches[?(@.section == 'PV_A_VISER')]")).hasSizeGreaterThanOrEqualTo(40);
+    }
+
+    @Test
+    @DisplayName("11b — badges.aFaire = compteurs.aFaire pour chaque profil ; null pour l'Administrateur et le Chargé "
+            + "de publication ; invariants des compteurs")
+    void badge_concordance() throws Exception {
+        for (int i = 0; i < 3; i++) {
+            decorMixte(7100 + i * 10);
+        }
+        dossier(7300, "BROUILLON", "ANT");
+        String tokenMembreDecor = jeton("CTRMEM", ProfilUtilisateur.MEMBRE, "ANT");
+        List<String> jetons = List.of(tokenPresident, tokenCc, tokenCcTms, tokenSec, tokenMembreDecor, tokenMembreTms,
+                tokenVer, tokenAss, tokenPrmp, tokenUgpm);
+        for (String jeton : jetons) {
+            String accueil = aFaire(jeton);
+            String badges = mvc.perform(get("/api/kpis/badges").header("Authorization", jeton))
+                    .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+            assertThat(JsonPath.<Integer>read(badges, "$.aFaire"))
+                    .as("badge de %s", JsonPath.<String>read(accueil, "$.profil"))
+                    .isEqualTo(JsonPath.<Integer>read(accueil, "$.compteurs.aFaire"));
+            String profil = JsonPath.read(accueil, "$.profil");
+            if ("PRMP".equals(profil) || "UGPM".equals(profil)) {
+                assertInvariantPartieControlee(accueil);
+            } else {
+                assertInvariantCnm(accueil);
+            }
+        }
+        assertThat(JsonPath.<Integer>read(aFaire(tokenPresident), "$.compteurs.aFaire")).isPositive();
+        for (String jeton : List.of(tokenAdmin, tokenPublication)) {
+            String badges = mvc.perform(get("/api/kpis/badges").header("Authorization", jeton))
+                    .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+            assertThat(JsonPath.<Object>read(badges, "$.aFaire")).isNull();
+            assertThat(JsonPath.<Object>read(badges, "$.compteurs")).isNotNull();
+        }
     }
 
     @Test
