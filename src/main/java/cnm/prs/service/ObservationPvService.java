@@ -463,7 +463,31 @@ public class ObservationPvService {
                     s.getDateDecision())).toList());
             dtos.add(dto);
         }
+        masquerInterneCnmPourPrmp(dtos);
         return dtos;
+    }
+
+    /**
+     * ⚠️ Revue du 2026-09-14 (C2, suite de l'audit du même jour) — <strong>point de projection unique</strong>
+     * des observations du PV pour la partie contrôlée : la lecture ({@code GET /api/observations-pv}) et la
+     * réponse du passage passent toutes deux par {@link #mapper}.
+     *
+     * <p>Pour la PRMP et l'UGPM ({@link Visibilite#estPrmp()}), l'<strong>auteur</strong> de chaque décision
+     * de vérification ({@code historique[].imVerificateur}) est retiré : qui vérifie le dossier à la CNM est
+     * une vue interne (règle pilote du 2026-09-06), au même titre que les cibles Vérificateur/Assistant du
+     * {@code DossierDto} ou les acteurs du chronométrage. C'était le seul matricule du DTO. Restent servis :
+     * le libellé figé, le statut courant, la précision (le rappel de ce qui manque, qui leur est destiné),
+     * l'itération et la date de chaque décision.</p>
+     */
+    private static void masquerInterneCnmPourPrmp(List<ObservationPvDto> dtos) {
+        if (!Visibilite.estPrmp()) {
+            return;
+        }
+        for (ObservationPvDto dto : dtos) {
+            if (dto.getHistorique() != null) {
+                dto.getHistorique().forEach(suivi -> suivi.setImVerificateur(null));
+            }
+        }
     }
 
     private static String nvl(String s) {

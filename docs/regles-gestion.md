@@ -1446,7 +1446,9 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
   l'**avancement** de son dossier, pas **qui** le traite : le journal du dossier lui est refusé (403) ; le
   chronométrage lui est servi sans identités (dates, durées, étape courante et fin prévue conservées) ;
   les cibles Vérificateur/Assistant et les acteurs de chaque étape ne figurent pas dans ses `DossierDto` ;
-  l'intérim et l'identité du dispatcheur ne figurent pas dans les PV qu'elle lit. Prolonge au serveur la
+  l'intérim et l'identité du dispatcheur ne figurent pas dans les PV qu'elle lit ; l'auteur des décisions
+  de vérification ne figure ni dans le suivi des observations du PV ni dans l'historique des échanges d'un
+  dossier clôturé (revue du 2026-09-14). Prolonge au serveur la
   règle pilote du 2026-09-06 (« vues internes CNM », jusque-là appliquée par le seul front) et le secret de
   l'intérim (note refusée à la PRMP). Les signataires officiels d'un PV signé restent lisibles : ils figurent
   sur l'acte.

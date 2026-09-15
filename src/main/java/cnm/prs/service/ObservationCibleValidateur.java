@@ -95,6 +95,10 @@ public class ObservationCibleValidateur {
      * Ligne d'observation seule ({@code /api/observation-controles}, POST et PUT) : erreurs ciblées sur
      * {@code champ}, {@code idMarcheCible}, {@code idBenefCible}. Le contexte est lu sur le résultat
      * {@code idDetail} en place.
+     *
+     * <p>⚠️ Fusion de {@code main} (2026-09-15) — {@code ObservationControleService} appelle ce validateur
+     * <strong>après</strong> les gardes d'{@link ExamenGarde} : un résultat introuvable y est déjà refusé (403
+     * ou 409). Le 400 {@code idDetail} ci-dessous reste une défense pour tout autre appelant.</p>
      */
     public void validerLigne(ObservationControleDto ligne) {
         normaliser(ligne);

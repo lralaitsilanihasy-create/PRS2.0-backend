@@ -100,9 +100,10 @@ public class ExamenDetailService {
     public ExamenDetailDto update(Integer id, ExamenDetailDto dto) {
         ExamenDetail existing = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("ExamenDetail introuvable : " + id));
-        // ⚠️ Audit lot B — garde d'identité sur la ligne EN PLACE et sur l'examen VISÉ par le corps.
+        // ⚠️ Audit lot B — garde d'identité sur la ligne EN PLACE. ⚠️ Revue 2026-09-14 — l'examen VISÉ par le
+        // corps n'est plus gardé à part : il doit être le même (400), le verrou ne portant que sur celui en place.
         garde.exigerAttributaire(existing.getIdExamen());
-        garde.exigerAttributaire(dto.getIdExamen());
+        garde.exigerRattachementInchange(existing.getIdExamen(), dto.getIdExamen());
         exigerExamenModifiable(existing.getIdExamen());
         validerObservations(dto);
         validerLigneEtUnicite(dto, id);
@@ -131,12 +132,9 @@ public class ExamenDetailService {
      * doit comporter au moins une ligne d'observation, sinon 400 (champ {@code observations}).
      */
     private void validerObservations(ExamenDetailDto dto) {
-        if (Boolean.FALSE.equals(dto.getConforme())
-                && (dto.getObservations() == null || dto.getObservations().isEmpty())) {
-            throw new ChampsInvalidesException(List.of(new ErrorResponse.FieldError(
-                    "observations",
-                    "Au moins une ligne d'observation est obligatoire si le point est non conforme.")));
-        }
+        // ⚠️ Revue 2026-09-14 — règle et message portés par ExamenGarde, partagés avec /api/observation-controles.
+        garde.exigerObservationSiNonConforme(dto.getConforme(),
+                dto.getObservations() == null || dto.getObservations().isEmpty());
     }
 
     /**

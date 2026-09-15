@@ -141,7 +141,10 @@ public class NotificationService {
     private Notification creer(TypeNotification type, String ref, String destType, String im, String email,
             Integer idObjet, String typeObjet, Integer idDossier, String titre, String corps) {
         Notification n = new Notification();
-        n.setIdNotification(repository.nextIdNotification().intValue());   // PK serveur (sequence)
+        // PK serveur (séquence). ⚠️ 2026-09-15 — en sautant les valeurs prises : POST /api/notifications honore
+        // une PK cliente sans consommer seq_notification, et nextval TEL QUEL la rendait une seconde fois — le
+        // save (merge) écrasait alors la notification posée par l'Administrateur.
+        n.setIdNotification(ClePrimaire.allouerLibre(repository::existsById, repository::nextIdNotification));
         n.setIdDossier(idDossier);
         n.setTypeNotif(type.name());
         n.setDestinataireRef(ref);

@@ -33,6 +33,9 @@ public interface ObservationControleRepository extends JpaRepository<Observation
     List<ObservationControle> findByIdDetailEtLocalite(@Param("idDetail") Integer idDetail,
             @Param("loc") String loc);
 
+    /** ⚠️ Revue 2026-09-14 — nombre de lignes d'un point de contrôle (un point non conforme en garde au moins une). */
+    long countByIdDetail(Integer idDetail);
+
     /** Supprime les lignes d'observation d'un point de contrôle (replace-on-save / cascade). */
     void deleteByIdDetail(Integer idDetail);
 

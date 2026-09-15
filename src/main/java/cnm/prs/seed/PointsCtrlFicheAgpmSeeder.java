@@ -14,6 +14,7 @@ import cnm.prs.enums.PorteePointCtrl;
 import cnm.prs.repository.PointsCtrlRepository;
 import cnm.prs.repository.SousTypeDossierRepository;
 import cnm.prs.repository.TypeDossierRepository;
+import cnm.prs.service.ClePrimaire;
 
 /**
  * ⚠️ Règle du pilote (2026-09-02) — seed des points de contrôle qui font entrer la <strong>fiche de
@@ -42,7 +43,8 @@ import cnm.prs.repository.TypeDossierRepository;
  * AGPM ne doit jamais voir cette grille.</p>
  *
  * <p><strong>Idempotent et non intrusif</strong> : crée un point absent (repéré par son libellé et sa
- * portée) ; ne touche <strong>jamais</strong> un point existant — un libellé ajusté par l'Administrateur,
+ * portée), sous une PK <strong>libre</strong> ({@link ClePrimaire#allouerLibre}, ⚠️ 2026-09-15) ; ne touche
+ * <strong>jamais</strong> un point existant — un libellé ajusté par l'Administrateur,
  * ou un point qu'il aurait rendu facultatif, survit aux redémarrages. <strong>S'abstient</strong> si la
  * famille ou le sous-type référencé manque encore au référentiel, plutôt que d'échouer au démarrage.
  * Désactivable avec {@code app.seed.points-ctrl-fiche-agpm.enabled=false}.</p>
@@ -125,7 +127,13 @@ public class PointsCtrlFicheAgpmSeeder implements CommandLineRunner {
                 continue;   // point déjà là (créé ici ou ajusté par l'Administrateur) : intouchable
             }
             PointsCtrl point = new PointsCtrl();
-            point.setIdPointCtrl(pointsCtrlRepository.nextIdPointCtrl().intValue());
+            // ⚠️ Perte de données constatée en recette (2026-09-15) — la PK venait de nextval TEL QUEL. Or
+            // tr_points_ctrl honore aussi la PK calculée par l'écran d'administration (ClePrimaire.reallouer,
+            // max + 1) sans consommer la séquence : nextval rendait alors l'identifiant d'un point créé par
+            // l'Administrateur, et save() — un merge sur une PK présente — l'écrasait à chaque démarrage.
+            // allouerLibre saute les valeurs prises : la PK est libre, le save est une insertion.
+            point.setIdPointCtrl(ClePrimaire.allouerLibre(
+                    pointsCtrlRepository::existsById, pointsCtrlRepository::nextIdPointCtrl));
             point.setLibelPointCtrl(graine.libelle());
             point.setDecriptPointCtrl(graine.description());
             point.setOrdrePointCtrl(prochainOrdre++);

@@ -245,6 +245,50 @@ class ObservationCelluleCibleIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$.idBenefCible").doesNotExist());
     }
 
+    @Test
+    @DisplayName("4 ter — observation-controles : les gardes d'ExamenGarde répondent AVANT la cellule — autre Membre "
+            + "403, résultat introuvable 403 (Membre) ou 409 (CC délégué), PV signé 409 ; rien n'est écrit")
+    void observationControles_gardesAvantCellule() throws Exception {
+        // ⚠️ Fusion de main (2026-09-15) — la porte fille applique d'abord les gardes de /api/examen-details
+        // (a0b1172), puis le validateur de cellule (V30) : une cible invalide ne renseigne pas un tiers.
+        int res = resultatDe(PT_LIGNE);
+        int idObservation = observation(res);
+        long lignes = observationControleRepository.count();
+        String cibleInvalide = "{\"idDetail\":" + res + ",\"ordre\":1,\"auLieuDe\":\"a\",\"lire\":\"b\","
+                + "\"champ\":\"bidule\"}";
+
+        String autreMembre = bearer("CTRMEM2", ProfilUtilisateur.MEMBRE, TypeActeur.CONTROLEUR, "CTRMEM2", "ANT");
+        mvc.perform(post("/api/observation-controles").header("Authorization", autreMembre)
+                .contentType(MediaType.APPLICATION_JSON).content(cibleInvalide))
+                .andExpect(status().isForbidden());
+        mvc.perform(put("/api/observation-controles/" + idObservation).header("Authorization", autreMembre)
+                .contentType(MediaType.APPLICATION_JSON).content(cibleInvalide))
+                .andExpect(status().isForbidden());
+
+        // Résultat introuvable : examen inconnu, traité comme sur /api/examen-details. Le 400 « idDetail » du
+        // validateur n'est plus atteint par cette porte.
+        String introuvable = "{\"idDetail\":8499,\"ordre\":1,\"auLieuDe\":\"a\",\"lire\":\"b\",\"champ\":\"objet\"}";
+        mvc.perform(post("/api/observation-controles").header("Authorization", tokenMembre)
+                .contentType(MediaType.APPLICATION_JSON).content(introuvable))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/api/observation-controles").header("Authorization", tokenCc)
+                .contentType(MediaType.APPLICATION_JSON).content(introuvable))
+                .andExpect(status().isConflict());
+
+        cnm.prs.entity.Dossier dossier = dossierRepository.findById(1).orElseThrow();
+        dossier.setStatut("PV_SIGNE");
+        dossierRepository.save(dossier);
+        mvc.perform(post("/api/observation-controles").header("Authorization", tokenMembre)
+                .contentType(MediaType.APPLICATION_JSON).content(cibleInvalide))
+                .andExpect(status().isConflict());
+        mvc.perform(put("/api/observation-controles/" + idObservation).header("Authorization", tokenMembre)
+                .contentType(MediaType.APPLICATION_JSON).content(cibleInvalide))
+                .andExpect(status().isConflict());
+
+        assertThat(observationControleRepository.count()).as("aucune ligne écrite par un refus").isEqualTo(lignes);
+        assertThat(observationControleRepository.findById(idObservation).orElseThrow().getChampCible()).isNull();
+    }
+
     // ------------------------------------------------------------------ 5 & 6 — instantané FAVR, PRMP
 
     @Test

@@ -76,9 +76,10 @@ public class ExamenPieceService {
     public ExamenPieceDto update(Integer id, ExamenPieceDto dto) {
         ExamenPiece existing = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Examen de pièce introuvable : " + id));
-        // ⚠️ Audit lot B — gardes sur la ligne EN PLACE et sur l'examen VISÉ par le corps.
+        // ⚠️ Audit lot B — gardes sur la ligne EN PLACE. ⚠️ Revue 2026-09-14 — même trou que les détails
+        // d'examen (verrou non vérifié sur l'examen visé) : l'examen du corps doit être le même (400).
         garde.exigerAttributaire(existing.getIdExamen());
-        garde.exigerAttributaire(dto.getIdExamen());
+        garde.exigerRattachementInchange(existing.getIdExamen(), dto.getIdExamen());
         garde.exigerExamenModifiable(existing.getIdExamen());
         exigerUnicite(dto, id);
         existing.setIdExamen(dto.getIdExamen());

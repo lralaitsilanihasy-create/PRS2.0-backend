@@ -1102,10 +1102,19 @@ Content-Type: multipart/form-data
 | GET | /api/examen-details | — | `ExamenDetailDto[]` | 200 | Authentifié (filtré — **liste vide** pour PRMP/UGPM) |
 | GET | /api/examen-details/{id} | — | `ExamenDetailDto` | 200, 403, 404 | Authentifié (filtré — **403** pour PRMP/UGPM) |
 | POST | /api/examen-details | `ExamenDetailDto` | `ExamenDetailDto` | 201, 400, 403, 409 | MEMBRE (titulaire/délégué) |
-| PUT | /api/examen-details/{id} | `ExamenDetailDto` | `ExamenDetailDto` | 200, 400, 403, 404, 409 | MEMBRE (titulaire/délégué) |
+| PUT | /api/examen-details/{id} | `ExamenDetailDto` | `ExamenDetailDto` | 200, 400, 403, 404, 409 | MEMBRE (titulaire/délégué) — ⚠️ 2026-09-14 : **rattachement figé**, `idExamen` différent de l'examen en place → **400** `idExamen` (après la garde d'attributaire) |
 | DELETE | /api/examen-details/{id} | — | — | 204, 404, 409 | ADMINISTRATEUR |
 
 `{id}` = idDetailExamen (number).
+
+> ⚠️ **Rattachement figé au PUT (revue du 2026-09-14).** Le `PUT` gardait l'attributaire de l'examen visé par
+> le corps, mais le verrou d'état seulement sur l'examen en place : l'attributaire de deux examens rattachait un
+> résultat à celui dont le PV était signé (200). Un résultat appartient à la grille de **son** examen (unicité,
+> complétude à la soumission, instantané des observations du PV) : un `idExamen` différent de celui en place
+> est désormais refusé en **400** (champ `idExamen`), même vers un examen ouvert. Ordre : 404, garde
+> d'attributaire sur l'examen en place (403), rattachement (400), verrou (409). Même règle pour
+> `PUT /api/examen-pieces/{id}`. Le front n'est pas concerné : il ne met à jour que les résultats de l'examen
+> qu'il enregistre.
 
 **Exemple — requête** (non conforme : au moins une ligne d'observation obligatoire)
 ```json
@@ -1150,7 +1159,7 @@ couple (`idExamen`, `idPiece`) → **409** en cas de doublon (corriger via `PUT`
 | GET | /api/examen-pieces[?examen={idExamen}] | — | `ExamenPieceDto[]` | 200 | Authentifié (filtré — **liste vide** pour PRMP/UGPM ; le filtre `?examen=` s'ajoute à la localité, il ne la relâche pas) |
 | GET | /api/examen-pieces/{id} | — | `ExamenPieceDto` | 200, 403, 404 | Authentifié (filtré — **403** pour PRMP/UGPM) |
 | POST | /api/examen-pieces | `ExamenPieceDto` | `ExamenPieceDto` | 201, 400, 403, 409 | MEMBRE (titulaire/délégué) |
-| PUT | /api/examen-pieces/{id} | `ExamenPieceDto` | `ExamenPieceDto` | 200, 400, 403, 404, 409 | MEMBRE (titulaire/délégué) |
+| PUT | /api/examen-pieces/{id} | `ExamenPieceDto` | `ExamenPieceDto` | 200, 400, 403, 404, 409 | MEMBRE (titulaire/délégué) — ⚠️ 2026-09-14 : **rattachement figé**, `idExamen` différent de l'examen en place → **400** `idExamen` (après la garde d'attributaire) |
 | DELETE | /api/examen-pieces/{id} | — | — | 204, 404, 409 | ADMINISTRATEUR |
 
 `{id}` = idExamenPiece (number).
@@ -1159,7 +1168,8 @@ couple (`idExamen`, `idPiece`) → **409** en cas de doublon (corriger via `PUT`
 
 ## Observations de contrôle
 **Ressource** `/api/observation-controles` (table `t_observation_controle`) — **Lecture** : authentifié
-(filtrée, voir ci-dessous) ; **écriture** (POST/PUT/DELETE) : profil **`MEMBRE`** (titulaire ou délégué).
+(filtrée, voir ci-dessous) ; **écriture** (POST/PUT/DELETE) : profil **`MEMBRE`** (titulaire ou délégué),
+**et** mêmes gardes que l'écriture d'un résultat via `/api/examen-details` (⚠️ 2026-09-14, voir ci-dessous).
 
 Lignes structurées **« AU LIEU DE / LIRE »** d'un point de contrôle d'examen (`ExamenDetail`), en
 relation **1,N** : un point de contrôle a **0..N** lignes. Remplace l'ancien champ texte `observation`.
@@ -1168,6 +1178,31 @@ Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `
 > ⚠️ **Lecture cloisonnée (2026-08-27, audit C2/lot A).** Même correctif que le point de contrôle
 > parent : `findByDetail` est désormais bornée par `Visibilite`, exactement comme `ExamenService.findAll`
 > — Président/Administrateur tout, contrôleurs leur localité, **PRMP/UGPM liste vide**.
+
+> ⚠️ **Écriture gardée comme les résultats d'examen (revue du 2026-09-14).** Jusqu'ici le profil suffisait :
+> tout Membre écrivait sur le résultat d'examen d'un autre, de n'importe quelle localité, et même après la
+> signature du PV. Une ligne appartient à un résultat (`t_examen_detail`, via `idDetail`) : le serveur
+> résout l'examen de ce résultat et lui applique **les gardes de `/api/examen-details`** (`ExamenGarde`,
+> mêmes méthodes, même ordre, mêmes codes et messages) :
+> 1. **localité** du circuit de l'examen (Président/Administrateur exemptés) → sinon **403** ;
+> 2. **Membre attributaire** du dispatch ; un CC ou un Président qui exerce le profil Membre par
+>    **délégation** est admis, le CC dans sa seule localité → sinon **403** ;
+> 3. **verrou d'état** : dossier `DISPATCHE`, `EXAMINE` ou `A_REEXAMINER` ; dès `PV_SIGNE` → **409**.
+>
+> `POST` : gardes sur le résultat `idDetail` du corps. `PUT` : sur le résultat **en place** et sur le
+> résultat **visé** par le corps (déplacer une ligne, c'est écrire sur les deux ; identités d'abord, verrous
+> ensuite). `DELETE` : sur le résultat de la ligne ; il reste ouvert au profil Membre — supprimer une ligne
+> réécrit le résultat (le `PUT` d'un détail d'examen remplace ses lignes), ce n'est pas supprimer le
+> résultat, réservé à l'Administrateur. `idDetail` introuvable : traité comme un `idExamen` inconnu sur
+> `/api/examen-details` (403 pour un Membre ; 409 pour un CC ou un Président délégué, qu'aucun statut
+> modifiable ne laisse passer). Aucun écran du front n'appelle ces trois routes : il écrit les
+> lignes dans le corps de `/api/examen-details`.
+>
+> **Point non conforme : au moins une ligne.** Retirer la **dernière** ligne d'un point `conforme=false` —
+> `DELETE`, ou `PUT` qui la déplace vers un autre `idDetail` — → **400**, champ `observations`, même message
+> que `/api/examen-details` (« Au moins une ligne d'observation est obligatoire si le point est non
+> conforme. »), vérifié après les gardes ci-dessus. `conforme` est lu en base : un point repassé conforme par
+> `PUT /api/examen-details` peut perdre sa dernière ligne (et ce `PUT` remplace de toute façon les lignes).
 
 **Champs `ObservationControleDto`**
 
@@ -1211,8 +1246,11 @@ Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `
 > 5. `idBenefCible` admis **seulement** avec `soa`/`compte`/`montBenef`/`nouvMontBenef`, et doit être un
 >    bénéficiaire de `idMarcheCible` → sinon 400 `idBenefCible`.
 >
-> Ici, un `champ` posé sur un `idDetail` (résultat d'examen) introuvable → 400 `idDetail`. **Verrous et
-> profils inchangés.**
+> **Ordre des réponses** : les **gardes d'écriture** ci-dessus (identité → 403, puis verrou → 409, puis, pour
+> un `PUT` qui déplace la ligne, la règle « point non conforme » → 400 `observations`) passent **avant** ce
+> validateur, comme sur `PUT /api/examen-details`. Un tiers ne reçoit donc jamais le diagnostic d'une cellule,
+> et un `idDetail` introuvable n'atteint pas la validation de cellule (403 ou 409, voir plus haut). La V30 ne
+> change ni les verrous ni les profils.
 
 **Exemple — requête** (point FICHE : la ligne est portée par le corps)
 ```json
@@ -1225,9 +1263,9 @@ Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
 | GET | /api/observation-controles?detail={idDetail} | — | `ObservationControleDto[]` | 200 | Authentifié |
-| POST | /api/observation-controles | `ObservationControleDto` | `ObservationControleDto` | 201, 400, 403 | **MEMBRE** |
-| PUT | /api/observation-controles/{id} | `ObservationControleDto` | `ObservationControleDto` | 200, 400, 403, 404 | **MEMBRE** |
-| DELETE | /api/observation-controles/{id} | — | — | 204, 403, 404 | **MEMBRE** |
+| POST | /api/observation-controles | `ObservationControleDto` | `ObservationControleDto` | 201, 400, 403, 409 | **MEMBRE** attributaire (ou CC/Président délégué) — ⚠️ 2026-09-14 |
+| PUT | /api/observation-controles/{id} | `ObservationControleDto` | `ObservationControleDto` | 200, 400, 403, 404, 409 | **MEMBRE** attributaire (ou CC/Président délégué) — ⚠️ 2026-09-14 |
+| DELETE | /api/observation-controles/{id} | — | — | 204, 400, 403, 404, 409 | **MEMBRE** attributaire (ou CC/Président délégué) — ⚠️ 2026-09-14 |
 
 ---
 
@@ -1481,7 +1519,7 @@ Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `
 | DELETE | /api/dossiers/{id} | — | — | 204, 403, 404, 409 | **PRMP** propriétaire — BROUILLON (cascade contenu + historique) |
 | POST | /api/dossiers/{id}/soumettre | — | `DossierDto` | 200, 400, 403, 404, 409 | **PRMP** — ⚠️ 2026-09-07 (T3) : sur un DDP, **400 par champ** si les justifications de la fiche manquent (`marches[i].justifModeDerogatoire` / `justifDelaiAmenage` / `justificationFiche`), quel que soit le chemin qui a produit les lignes (saisie, PATCH, import PDF) |
 | POST | /api/dossiers/{id}/resoumettre | `DossierResoumissionRequest` | `DossierDto` | 200, 400, 403, 404, 409 | **PRMP** propriétaire |
-| GET | /api/dossiers/{id}/historique-echanges | — | `EchangeDto[]` | 200, 403, 404 | **PRMP** / **VERIFICATEUR** (titulaire/délégué) / **ADMINISTRATEUR** |
+| GET | /api/dossiers/{id}/historique-echanges | — | `EchangeDto[]` | 200, 403, 404 | **PRMP** / **VERIFICATEUR** (titulaire/délégué) / **ADMINISTRATEUR** — ⚠️ **2026-09-14 : la PRMP ne reçoit pas le matricule du vérificateur** (vue interne CNM) |
 | GET | /api/dossiers/{id}/journal | — | `ActionDossierDto[]` | 200, 403, 404 | Authentifié (périmètre de visibilité du dossier) — ⚠️ **2026-09-14 : 403 pour la PRMP et l'UGPM** (vue interne CNM) |
 
 `{id}` = idDossier (number). **`DossierResoumissionRequest`** = `{ motifRectification }` (String, **@NotBlank**, max 255).
@@ -1498,6 +1536,8 @@ Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `
 > | `GET /api/dossiers/{id}/chronometrage` | servi **sans identités** : `etapes[].imActeur`, `etapes[].nomActeur` et `attributaire` à `null` ; étapes, dates, durées, `profil`, compteurs, `attentePrmp` et `datePrevisionnelleFin` conservés |
 > | `DossierDto` (unitaire, listes, pages) | `imVerificateurCible`, `nomVerificateurCible`, `imAssistantCible`, `nomAssistantCible` et `acteursEtapes` à `null` ; `datesEtapes`, `dateEnregistrement`, `dateSoumission`, `datePrevisionnelleFin` et `attentePrmp` conservés |
 > | `PvExamenDto` (`/definitifs`, `/{id}`) | `viseParInterim`, `noteInterimNom`, `noteInterimDisponible`, `imDispatcheur` et `nomDispatcheur` à `null` ; les signataires officiels du PV signé restent servis (ils figurent sur l'acte) |
+> | `GET /api/observations-pv?dossier=` (⚠️ revue du 2026-09-14) | `historique[].imVerificateur` (auteur de chaque décision de vérification, seul matricule du DTO) à `null` ; `libelle`, `statut`, `precision`, `iteration`, `leveePossible` et, dans l'historique, `iteration`, `decision`, `precision`, `dateDecision` conservés |
+> | `GET /api/dossiers/{id}/historique-echanges` (⚠️ revue du 2026-09-14) | `acteur` des entrées `OBSERVATION` (matricule du vérificateur, seule identité de contrôleur du DTO) à `null` ; l'`acteur` des `RECTIFICATION` (identifiant de la PRMP) et `type`, `date`, `texte`, `obsLevees` conservés. L'UGPM est de toute façon refusée (**403**) par la garde du contrôleur (`hasRole('PRMP')`) |
 
 > ⚠️ **Recherche de la topbar — nouvel endpoint (2026-08-27, audit lot D).** `GET
 > /api/dossiers/recherche?q=` résout une référence saisie dans la barre de recherche **côté serveur**
@@ -1689,7 +1729,7 @@ Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `
 > observation est suivie de la rectification PRMP qui y répond) : les observations du vérificateur (source
 > `t_verification`, dont le passage final `obsLevees=true` qui a déclenché la clôture) et les rectifications de la PRMP
 > (source `t_audit_log`, `TYPE_ACTION=RECTIFICATION_PRMP`). **`EchangeDto`** = `{ type (`OBSERVATION` | `RECTIFICATION`),
-> date (jour `yyyy-MM-dd` pour OBSERVATION, date-heure pour RECTIFICATION), acteur (matricule vérificateur ou idPrmp),
+> date (jour `yyyy-MM-dd` pour OBSERVATION, date-heure pour RECTIFICATION), acteur (matricule vérificateur ou idPrmp ; ⚠️ 2026-09-14 : matricule à `null` pour la PRMP, encart « Vues internes CNM »),
 > texte (observation ou motif), obsLevees (renseigné pour OBSERVATION, `null` pour RECTIFICATION) }`.
 
 > **Filtre serveur `?statut=` (nouveau).** `GET /api/dossiers?statut=SOUMIS` restreint la liste à ce
@@ -5620,7 +5660,8 @@ Ouvert Restreint ».
 > dossiers FAVR signés avant la règle). **Aucun acteur ne peut élargir ce périmètre** à aucun stade :
 > - `GET /api/observations-pv?dossier=` (vérificateur localité / PRMP propriétaire / tout-voyant) :
 >   observations + **statut courant** (`EMISE` / `LEVEE` / `MAINTENUE`) + **historique par itération**
->   (`t_suivi_observation` : décision, précision, auteur, horodatage) + **`leveePossible`** (⚠️ **règle
+>   (`t_suivi_observation` : décision, précision, auteur — **`null` pour la PRMP et l'UGPM**, ⚠️ 2026-09-14,
+>   encart « Vues internes CNM » —, horodatage) + **`leveePossible`** (⚠️ **règle
 >   pilote du 2026-09-07 : vaut désormais toujours `true`**. La rectification de la PRMP précède la
 >   vérification — le vérificateur ne voit que des dossiers **déjà rectifiés** —, donc il dispose des deux
 >   décisions dès son premier passage. Remplace la décision produit du 2026-08-15, qui faisait du premier
