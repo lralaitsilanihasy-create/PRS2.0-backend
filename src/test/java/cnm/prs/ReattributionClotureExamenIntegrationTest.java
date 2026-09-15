@@ -114,6 +114,91 @@ class ReattributionClotureExamenIntegrationTest extends CnmIntegrationTestSuppor
         assertThat(examens().get(0).getImActeur()).isEqualTo("CTRMEM");
     }
 
+    // ------------------------------------------------------------------ 1 bis. ... sans lui voler son nom
+
+    /**
+     * ⚠️ <strong>Recette Q2 du 2026-09-16 — « Examiné par » faux après une réattribution.</strong>
+     *
+     * <p>Constat à l'écran : le CC réattribue l'examen à un Membre, le Membre examine, et jusqu'à la
+     * soumission du PV la frise du dossier et le volet « Examiné par » nommaient <strong>le sortant</strong>.
+     * La cause n'est pas une passe mal rattachée : depuis la refonte du 2026-09-12, une passe n'est
+     * qu'une <em>fin</em> et rien n'en rouvre. Entre la réattribution et la soumission du PV, la seule
+     * fin d'EXAMEN écrite est celle que la réattribution pose au nom du sortant — or le dossier passe
+     * pourtant à {@code EXAMINE} dès que le successeur rend son avis, et la frise lit alors ce dernier
+     * passage. {@code ChronometrageService.cloturerExamen}, qui remet l'examen au nom de l'attributaire,
+     * n'arrive qu'à {@code POST /pv-examens/{id}/soumettre} : bien trop tard.</p>
+     *
+     * <p>Correctif <strong>en lecture seule</strong> : la frise nomme l'EXAMEN d'après l'<strong>attributaire
+     * courant</strong>, comme elle le fait déjà du DISPATCH. Aucune passe n'est écrite, déplacée ni
+     * réécrite — les durées sont celles des trois tests voisins, inchangées.</p>
+     */
+    @Test
+    @DisplayName("⚠️ Recette Q2 — après réattribution, « Examiné par » nomme le NOUVEL attributaire dès son "
+            + "examen, sans attendre la soumission du PV (dossier ET /gestes)")
+    void apresReattribution_lExamenEstNommeAuNouvelAttributaire_avantToutPv() throws Exception {
+        reattribuerAuCc();
+        // Le nouvel attributaire examine et soumet son examen : dossier EXAMINE, projet de PV en BROUILLON.
+        // Aucun geste n'a encore soumis le PV — c'est exactement la fenêtre du défaut.
+        examinerEtSoumettre(tokenCc, "CTRCC1");
+        assertThat(pvExamenRepository.statutsPvParDossier(DOSSIER)).as("le PV n'est pas soumis")
+                .containsExactly("BROUILLON");
+
+        // 1. La page dossier.
+        String dossier = mvc.perform(get("/api/dossiers/" + DOSSIER).header("Authorization", tokenPresident))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statut").value("EXAMINE"))
+                .andExpect(jsonPath("$.acteursEtapes.EXAMEN").value("Prenoms NomCTRCC1"))
+                .andExpect(jsonPath("$.acteursEtapes.PROJET_PV").value("Prenoms NomCTRCC1"))
+                .andExpect(jsonPath("$.acteursEtapes.DISPATCH").value("Prenoms NomCTRCC1"))
+                .andReturn().getResponse().getContentAsString();
+        assertThat(com.jayway.jsonpath.JsonPath.<String>read(dossier, "$.acteursEtapes.EXAMEN"))
+                .as("jamais le sortant").isNotEqualTo("Prenoms NomCTRMEM");
+
+        // 2. La même frise, servie par la page dossier guidée.
+        String gestes = mvc.perform(get("/api/dossiers/" + DOSSIER + "/gestes").header("Authorization", tokenCc))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(com.jayway.jsonpath.JsonPath.<List<String>>read(gestes, "$.taches[*].geste"))
+                .as("le nouvel attributaire a bien la main").contains("SOUMETTRE_PV");
+        assertThat(com.jayway.jsonpath.JsonPath.<List<String>>read(
+                gestes, "$.taches[*].dossier.acteursEtapes.EXAMEN"))
+                .as("/gestes sert la même frise que le dossier").containsOnly("Prenoms NomCTRCC1");
+
+        // 3. Le chronométrage n'a pas bougé d'un pouce : la passe du sortant est toujours là, close, à SON
+        // nom — le correctif ne touche qu'à la lecture de la frise.
+        assertThat(examens()).hasSize(1);
+        assertThat(examens().get(0).getImActeur()).isEqualTo("CTRMEM");
+        assertThat(examens().get(0).getDateFin()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("Non-régression — SANS réattribution, rien ne change : aucune fin d'EXAMEN n'étant écrite "
+            + "avant la soumission du PV, la clé reste non datée DONC non nommée (nommé ⇔ daté)")
+    void sansReattribution_laFriseEstInchangee() throws Exception {
+        examinerEtSoumettre(tokenMembre, "CTRMEM");
+
+        mvc.perform(get("/api/dossiers/" + DOSSIER).header("Authorization", tokenPresident))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statut").value("EXAMINE"))
+                .andExpect(jsonPath("$.acteursEtapes.DISPATCH").value("Prenoms NomCTRMEM"))
+                .andExpect(jsonPath("$.datesEtapes.EXAMEN").doesNotExist())
+                .andExpect(jsonPath("$.acteursEtapes.EXAMEN").doesNotExist())
+                .andExpect(jsonPath("$.acteursEtapes.PROJET_PV").doesNotExist());
+        assertThat(examens()).as("aucune passe d'EXAMEN tant que le PV n'est pas soumis").isEmpty();
+    }
+
+    /** Le titulaire examine et soumet son examen : dossier {@code EXAMINE}, projet de PV en {@code BROUILLON}. */
+    private void examinerEtSoumettre(String jeton, String im) throws Exception {
+        mvc.perform(post("/api/examens").header("Authorization", jeton)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idExamen\":" + DISPATCH + ",\"idDispatch\":" + DISPATCH
+                        + ",\"imCtrlMembre\":\"" + im + "\"}"))
+                .andExpect(status().isCreated());
+        mvc.perform(post("/api/examens/" + DISPATCH + "/soumettre").header("Authorization", jeton)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"idAvis\":\"FAV\"}"))
+                .andExpect(status().isCreated());
+    }
+
     // ------------------------------------------------------------------ 2. le retrait ferme aussi
 
     @Test

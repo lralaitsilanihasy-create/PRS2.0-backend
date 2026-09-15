@@ -844,6 +844,11 @@ public class ChronometrageService {
      *       front ne doit pas recopier {@code nomActeur} du passage. Sans attributaire connu sous un statut
      *       qui a pourtant franchi l'étape (circuit purgé : état dégradé), l'auteur du passage, pour que la
      *       clé reste nommée dès qu'elle est datée ;</li>
+     *   <li>{@code EXAMEN} / {@code PROJET_PV} : l'<strong>attributaire courant</strong> lui aussi (⚠️
+     *       2026-09-16, réattribution), pour la même raison — le dernier passage d'EXAMEN peut être la passe
+     *       <em>abandonnée</em> du titulaire sortant, close par la réattribution, alors que l'examen qui
+     *       vient d'être rendu est celui de son successeur. Même repli qu'au DISPATCH : sans attributaire
+     *       connu, l'auteur du passage ;</li>
      *   <li>{@code PV_SIGNE} : une seule chaîne, les signataires <strong>effectivement signés</strong> lus
      *       sur le PV, joints par « · » dans l'ordre Membre · CC · Président. À défaut de part datée sur un
      *       PV pourtant {@code SIGNE} (données antérieures), l'acteur du passage qui date la clé.</li>
@@ -866,7 +871,14 @@ public class ChronometrageService {
         poser(dates, acteurs, "DISPATCH", dispatch, nomNu(annuaire, imAttributaire));
 
         TacheDossier examen = examenFranchi ? dernierPassage(taches, EtapeCircuit.EXAMEN) : null;
-        String examinateur = nomNu(annuaire, acteurDe(examen));
+        // ⚠️ Réattribution (2026-09-16) — l'examinateur est l'ATTRIBUTAIRE COURANT, comme le DISPATCH juste
+        // au-dessus, et non l'auteur du passage. Le passage le plus récent d'EXAMEN peut être celui du
+        // SORTANT : la réattribution clôt sa passe (DispatchService, cloturerPourActeur) et rien ne réécrit
+        // EXAMEN tant que le PV n'est pas soumis (cloturerExamen). Le dossier passant pourtant à EXAMINE dès
+        // que le nouvel attributaire rend son avis, la frise et le volet « Examiné par » nommaient le sortant
+        // pendant toute cette fenêtre. L'attributaire tranche : lui seul peut porter l'examen en cours.
+        String imExaminateur = attributaire != null && !attributaire.isBlank() ? attributaire : acteurDe(examen);
+        String examinateur = nomNu(annuaire, imExaminateur);
         poser(dates, acteurs, "EXAMEN", examen, examinateur);
         poser(dates, acteurs, "PROJET_PV", examen, examinateur);
 

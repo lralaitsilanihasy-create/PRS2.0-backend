@@ -705,6 +705,22 @@ class ChronometrageIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("⚠️ Recette Q2 (2026-09-16) — EXAMEN nomme l'ATTRIBUTAIRE COURANT comme le DISPATCH ; sans "
+            + "attributaire connu (circuit purgé), repli sur l'auteur du passage — jamais une clé datée sans nom")
+    void acteursEtapes_examen_attributaireCourant_etRepliSurLAuteurDuPassage() throws Exception {
+        // Dossier 500 : aucun dispatch (il n'est pas dans le socle). L'EXAMEN a pourtant sa fin, au nom de
+        // celui qui l'a portée — c'est ce repli qui garde la clé nommée dès qu'elle est datée.
+        dossierEnStatut(500, "EXAMINE");
+        chronometrageService.cloturerPourActeur(500, EtapeCircuit.RECEPTION, "CTRSEC");
+        chronometrageService.cloturerPourActeur(500, EtapeCircuit.EXAMEN, "CTRMEM");
+
+        String corps = lireDossier(500);
+        assertEquals("Prenoms NomCTRMEM", acteursEtapes(corps).get("EXAMEN"));
+        assertEquals("Prenoms NomCTRMEM", acteursEtapes(corps).get("PROJET_PV"));
+        assertNommeSsiDate(corps);
+    }
+
+    @Test
     @DisplayName("Acteurs des étapes — même règle de recul que les dates : un dispatch annulé efface DISPATCH / "
             + "EXAMEN / PROJET_PV, un réexamen efface EXAMEN / PROJET_PV et garde DISPATCH ; nommé ⇔ daté sur "
             + "tous les statuts du circuit")
