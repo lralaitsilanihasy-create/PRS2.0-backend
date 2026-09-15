@@ -591,6 +591,19 @@ est consigné au nom de l'**auteur** du geste (ed86707, réattributions comprise
 volontairement : le chronométrage mesure qui a fait, la frise dit à qui c'est allé. Le front ne recopie pas
 `nomActeur` du passage dans la frise.
 
+⚠️ **`acteursEtapes.EXAMEN` nomme lui aussi l'attributaire courant** (recette Q2 du 2026-09-16). Le défaut
+constaté à l'écran : après une **réattribution**, la frise et le volet « Examiné par » nommaient le titulaire
+**sortant** jusqu'à la soumission du PV. La cause tient à la nature des passages — depuis le 2026-09-12, un
+passage n'est qu'une **fin**, et aucune n'est écrite entre la réattribution et la soumission du PV : la seule
+fin d'`EXAMEN` de cette fenêtre est la passe **abandonnée** du sortant, que la réattribution pose à son nom
+(et qui doit y rester : sans elle, son temps se déverserait sur l'examen de son successeur). Or le dossier
+passe à `EXAMINE` dès que le successeur rend son avis, et la frise lisait ce dernier passage.
+`acteursEtapes.EXAMEN` et `acteursEtapes.PROJET_PV` suivent donc l'**attributaire courant**, exactement comme
+`DISPATCH`, avec le même repli sur l'auteur du passage quand aucun attributaire n'est connu (circuit purgé).
+Correctif **en lecture seule** : aucune passe n'est écrite, déplacée ni réécrite, **les durées sont
+inchangées**. Sans réattribution, rien ne bouge : la clé reste non datée — donc non nommée, l'invariant tient
+— tant que le PV n'est pas soumis.
+
 ⚠️ **…et la SOUMISSION du projet de PV lui revient aussi** (constat et arbitrage du pilote, 2026-09-08,
 dossier 00305). Un Président dispatcheur a pu soumettre le projet de PV d'un examen mené par le CC à qui
 il avait redispatché le dossier : la navette a consigné son nom, et le journal l'a désigné comme auteur
@@ -1277,7 +1290,9 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
     Nom », `null` si non franchie. **Invariant** : nommé ⇔ daté — même passage, même règle de recul (dispatch
     annulé, réexamen). `DISPATCH` nomme l'**attributaire courant** (réattributions comprises), pas le
     dispatcheur : divergence **voulue** avec le passage `DISPATCH` du chronométrage, consigné au nom de
-    l'auteur du geste — la frise dit « à qui », le chronométrage dit « par qui ». `PV_SIGNE` : une seule
+    l'auteur du geste — la frise dit « à qui », le chronométrage dit « par qui ». ⚠️ **2026-09-16** (recette
+    Q2) : `EXAMEN` et `PROJET_PV` nomment l'**attributaire courant** pour la même raison — après une
+    réattribution, le dernier passage `EXAMEN` est la passe abandonnée du sortant. `PV_SIGNE` : une seule
     chaîne, les signataires **effectivement** signés (parts datées sur le PV) joints par « · », ordre
     Membre · CC · Président. `CLOTURE` : l'archiveur, à défaut le vérificateur qui a transmis au SIGMP.
     Dérivé en lot (aucun N+1), servi quelle que soit la portée du lecteur.
@@ -1401,6 +1416,7 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
     signé, ses navettes, vérifications et lettres — en violation de l'immuabilité du PV signé (§3.5).
 - Suivi de la demande [Lecture]
   - Consultation du statut : **EN_ATTENTE / ACCEPTEE / REFUSEE** (⚠️ règle ajoutée). Ses demandes : `GET /api/demande-retraits`.
+  - ⚠️ **Recette Q2 du 2026-09-16 (règle C2, « vues internes CNM ») — la PRMP et l'UGPM ne reçoivent pas le décideur.** `imCtrlCc`, le matricule du Chef de commission (ou du Président) qui a tranché la demande, est servi à `null` sur `GET /api/demande-retraits`, `/{id}` et `/mes-demandes` : **qui décide à la CNM est une vue interne** (règle pilote du 2026-09-06), au même titre que l'auteur des décisions d'observation et l'acteur des entrées `OBSERVATION` de l'historique des échanges. La PRMP garde le **statut**, les **deux dates**, son **motif** et le **motif de la décision** (`obsDecision`) : elle suit sa demande, pas qui l'a tranchée. Les profils de la CNM sont inchangés — les files du CC (`/a-valider`, `/historique`) servent le décideur.
 - Notification décision [Lecture]
   - Reçoit **RETRAIT_ACCEPTE** ou **RETRAIT_REFUSE**. ⚠️ **Règle ajoutée** : si **accepté**, le dossier **repasse en `BROUILLON`** (et non `RETIRE`) ; si refusé, dossier inchangé (motif de refus optionnel).
   - ⚠️ **Règle ajoutée (§3.3) — purge du circuit à l'acceptation** : un dossier retiré à un stade avancé (`DISPATCHE`/`EXAMINE`) porte un enchaînement réception → dispatch → examen → projet de PV → navettes (+ copies, lettres de renvoi, observations). L'acceptation **supprime tout cet historique** en une transaction, dans l'ordre FK-safe, pour que le dossier redevienne un `BROUILLON` propre (re-soumissible → re-réception `INITIAL`). Le journal d'audit (`t_audit_log`, sans FK) est conservé.
