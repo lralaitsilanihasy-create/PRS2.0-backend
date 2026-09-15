@@ -82,4 +82,26 @@ public class ExamenGarde {
                     "Examen réservé au Membre attributaire du dispatch (§2.4) : vous n'êtes pas l'attributaire.");
         }
     }
+
+    /**
+     * ⚠️ Revue du 2026-09-14 — <strong>rattachement figé</strong> d'une ligne d'examen (résultat de point de
+     * contrôle, résultat de pièce) : un {@code PUT} ne la change pas d'examen.
+     *
+     * <p>Le PUT vérifiait l'attributaire de l'examen visé par le corps, mais le verrou d'état seulement sur
+     * l'examen en place : l'attributaire de deux examens déplaçait un résultat vers celui dont le PV était
+     * signé (200). Plutôt que d'étendre le verrou à l'examen visé, le déplacement est refusé : un résultat
+     * est un morceau de la grille de <em>son</em> examen (unicité, complétude à la soumission, instantané des
+     * observations du PV), et le déplacer, même entre deux examens ouverts, fausse les deux grilles. Aucun
+     * appelant ne le fait : le front ne met à jour que les résultats de l'examen qu'il enregistre.</p>
+     *
+     * @throws cnm.prs.exception.ChampsInvalidesException (→ 400, champ {@code idExamen}) si l'examen change
+     */
+    public void exigerRattachementInchange(Integer idExamenEnPlace, Integer idExamenDuCorps) {
+        if (!java.util.Objects.equals(idExamenEnPlace, idExamenDuCorps)) {
+            throw new cnm.prs.exception.ChampsInvalidesException(java.util.List.of(
+                    new cnm.prs.exception.ErrorResponse.FieldError("idExamen",
+                            "Un résultat d'examen ne change pas d'examen de rattachement (examen " + idExamenEnPlace
+                                    + ", reçu " + idExamenDuCorps + ") : le créer sur l'examen visé.")));
+        }
+    }
 }

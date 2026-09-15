@@ -1102,10 +1102,19 @@ Content-Type: multipart/form-data
 | GET | /api/examen-details | — | `ExamenDetailDto[]` | 200 | Authentifié (filtré — **liste vide** pour PRMP/UGPM) |
 | GET | /api/examen-details/{id} | — | `ExamenDetailDto` | 200, 403, 404 | Authentifié (filtré — **403** pour PRMP/UGPM) |
 | POST | /api/examen-details | `ExamenDetailDto` | `ExamenDetailDto` | 201, 400, 403, 409 | MEMBRE (titulaire/délégué) |
-| PUT | /api/examen-details/{id} | `ExamenDetailDto` | `ExamenDetailDto` | 200, 400, 403, 404, 409 | MEMBRE (titulaire/délégué) |
+| PUT | /api/examen-details/{id} | `ExamenDetailDto` | `ExamenDetailDto` | 200, 400, 403, 404, 409 | MEMBRE (titulaire/délégué) — ⚠️ 2026-09-14 : **rattachement figé**, `idExamen` différent de l'examen en place → **400** `idExamen` (après la garde d'attributaire) |
 | DELETE | /api/examen-details/{id} | — | — | 204, 404, 409 | ADMINISTRATEUR |
 
 `{id}` = idDetailExamen (number).
+
+> ⚠️ **Rattachement figé au PUT (revue du 2026-09-14).** Le `PUT` gardait l'attributaire de l'examen visé par
+> le corps, mais le verrou d'état seulement sur l'examen en place : l'attributaire de deux examens rattachait un
+> résultat à celui dont le PV était signé (200). Un résultat appartient à la grille de **son** examen (unicité,
+> complétude à la soumission, instantané des observations du PV) : un `idExamen` différent de celui en place
+> est désormais refusé en **400** (champ `idExamen`), même vers un examen ouvert. Ordre : 404, garde
+> d'attributaire sur l'examen en place (403), rattachement (400), verrou (409). Même règle pour
+> `PUT /api/examen-pieces/{id}`. Le front n'est pas concerné : il ne met à jour que les résultats de l'examen
+> qu'il enregistre.
 
 **Exemple — requête** (non conforme : au moins une ligne d'observation obligatoire)
 ```json
@@ -1150,7 +1159,7 @@ couple (`idExamen`, `idPiece`) → **409** en cas de doublon (corriger via `PUT`
 | GET | /api/examen-pieces[?examen={idExamen}] | — | `ExamenPieceDto[]` | 200 | Authentifié (filtré — **liste vide** pour PRMP/UGPM ; le filtre `?examen=` s'ajoute à la localité, il ne la relâche pas) |
 | GET | /api/examen-pieces/{id} | — | `ExamenPieceDto` | 200, 403, 404 | Authentifié (filtré — **403** pour PRMP/UGPM) |
 | POST | /api/examen-pieces | `ExamenPieceDto` | `ExamenPieceDto` | 201, 400, 403, 409 | MEMBRE (titulaire/délégué) |
-| PUT | /api/examen-pieces/{id} | `ExamenPieceDto` | `ExamenPieceDto` | 200, 400, 403, 404, 409 | MEMBRE (titulaire/délégué) |
+| PUT | /api/examen-pieces/{id} | `ExamenPieceDto` | `ExamenPieceDto` | 200, 400, 403, 404, 409 | MEMBRE (titulaire/délégué) — ⚠️ 2026-09-14 : **rattachement figé**, `idExamen` différent de l'examen en place → **400** `idExamen` (après la garde d'attributaire) |
 | DELETE | /api/examen-pieces/{id} | — | — | 204, 404, 409 | ADMINISTRATEUR |
 
 `{id}` = idExamenPiece (number).
