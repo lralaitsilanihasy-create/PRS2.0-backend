@@ -1473,6 +1473,7 @@ Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `
 | GET | /api/dossiers/en-attente-prmp | — | `DossierDto[]` | 200, 403 | `VERIFICATEUR` (titulaire/délégué) ou `ADMINISTRATEUR` — lecture seule |
 | GET | /api/dossiers/recherche?q= | — | `RechercheDossierDto[]` | 200, 400 | Authentifié (scopé comme la liste) |
 | GET | /api/dossiers/retirables | — | `DossierDto[]` | 200, 403 | **PRMP** — dossiers éligibles au retrait (§3.3, voir *Demandes de retrait*) |
+| GET | /api/dossiers/a-faire?delegations= | — | `AFaireDto` | 200, 401, 403 | ⚠️ **2026-09-15** — `PRESIDENT`, `CHEF_COMMISSION`, `SECRETAIRE`, `MEMBRE`, `VERIFICATEUR`, `ASSISTANT_CONTROLEUR`, `PRMP`, `UGPM` (titulaires du profil) ; **403** Administrateur et Chargé de publication — accueil « À faire », voir la section dédiée ci-dessous |
 | GET | /api/dossiers/{id} | — | `DossierDto` | 200, 403, 404 | Authentifié (filtré) |
 | GET | /api/dossiers/{id}/ppm | — | `PpmDto` | 200, 403, 404 | Authentifié (propriétaire pour un BROUILLON) |
 | POST | /api/dossiers | `DossierDto` | `DossierDto` | 201, 400, 403 | **ADMINISTRATEUR** |
@@ -1757,6 +1758,132 @@ Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `
 **Exemple — réponse après `…/soumettre`** (statut SOUMIS, `refeDossier` encore `null` — réf. posée à la réception)
 ```json
 { "idDossier": 1023, "idTypeDossier": "DAO", "refeDossier": null, "dateRef": "2026-03-10", "statut": "SOUMIS", "idLocalite": "ANT", "idPrmp": "PRMP001" }
+```
+
+### ⚠️ Accueil « À faire » — `GET /api/dossiers/a-faire` (ajouté 2026-09-15)
+
+Demande front du 2026-09-14 (`frontend/docs/demande-backend-2026-09-14-accueil-a-faire.md`), arbitrages du
+2026-09-15. Les **gestes attendus du connecté**, calculés par le serveur à partir des gardes du circuit : des
+sections par geste, des lignes triées par urgence, **un geste principal par ligne** et un délai en heures ouvrées.
+Lecture seule, à la volée, **sans table ni migration**. Règles détaillées (qui voit quoi, seuils, délégations) :
+`docs/regles-gestion.md`, *Accueil « À faire »*.
+
+| Paramètre | Type | Défaut | Effet |
+|---|---|---|---|
+| delegations | boolean | `false` | `true` : sert les lignes du **bloc délégation** (`delegations.taches`). Sinon seuls ses totaux sont servis |
+
+**Accès.** `hasAnyRole('PRESIDENT','CHEF_COMMISSION','SECRETAIRE','MEMBRE','VERIFICATEUR','ASSISTANT_CONTROLEUR','PRMP','UGPM')`
+— **titulaires** du profil (et non `@perm.peutExercer`) : ce qu'un profil peut faire par délégation lui est servi
+dans son propre accueil, au bloc délégation. **403** Administrateur et Chargé de publication (ils gardent leur
+accueil) ; **401** anonyme.
+
+**`AFaireDto`** — toutes les clés sont **toujours présentes**, à `null` quand elles ne s'appliquent pas.
+
+| Champ (JSON) | Type | Description |
+|---|---|---|
+| profil | string | profil du connecté |
+| genereLe | string (date-time) | instant du calcul (horloge serveur) |
+| compteurs | `Compteurs` | lignes **`TITULAIRE` seulement** — le bloc délégation n'y entre jamais |
+| sections | `Section[]` | sections **non vides** de la liste principale, **dans l'ordre du circuit** (énumération ci-dessous) |
+| taches | `Tache[]` | lignes `TITULAIRE`, triées, `rang` à partir de 1 |
+| delegations | `Delegations` | `{ total, parSection: [{ code, total }], taches: Tache[] }` — `taches` vide sans `?delegations=true` |
+
+**`Compteurs`** = `{ aFaire, enRetard, bientot, dansLesDelais, sansDelai, enPause, suivi }` (numbers). `sansDelai`
+regroupe les urgences `SANS_DELAI` et `HORS_DELAI`. `aFaire` **exclut** les sections de suivi `EN_ATTENTE_PRMP` et
+`EN_COURS_CNM`, que `enPause` et `suivi` comptent. **Invariants** : CNM, `aFaire = enRetard + bientot + dansLesDelais
++ sansDelai` ; PRMP et UGPM, `aFaire = enPause + sansDelai`.
+
+**`Section`** = `{ code (string), total (number), standardHeures (number|null) }` — délai standard (`tr_delai_standard`)
+de l'étape de la section ; `null` pour un geste non chronométré (lettres, retraits, sections PRMP).
+
+**`Tache`** — clé d'une ligne : (`dossier.idDossier`, `section`) ; un même dossier peut produire deux lignes.
+
+| Champ (JSON) | Type | Description |
+|---|---|---|
+| section | string | code de section |
+| geste | string | geste principal |
+| gestesSecondaires | string[] | gestes secondaires (ex. `["RETOURNER"]` avec `VISER`) ; `[]` sinon |
+| mode | string | `TITULAIRE` dans `taches` ; `DELEGATION`, `INTERIM`, `COLLEGUE` ou `SUPPLEANCE` dans `delegations.taches` |
+| urgence | string | voir énumération |
+| rang | number | position dans sa liste, à partir de 1 |
+| dossier | `Dossier` | `{ idDossier, refeDossier, dateSoumission, idTypeDossier, idSousType, idEntiteContract, libelleEntite, idLocalite, libelleLocalite, statut, statutPv, niveauNavette, datesEtapes, acteursEtapes }` — `datesEtapes` / `acteursEtapes` : mêmes sept clés et mêmes règles que `DossierDto` |
+| delai | `Delai` | `{ etape, entree, standardHeures, ecouleHeures, restantHeures, echeance, pauseDepuis, pauseHeures, datePrevisionnelleFin }` — lu dans `ChronometrageService.delaiCourant` ; `ecouleHeures` = `dureeHeuresOuvrees` du passage `enCours` de `GET /{id}/chronometrage` |
+| faits | `Faits` | `{ nbLignes, montantTotal, nbPieces, idAvis, nbObservations, consigneDispatch, dernierRetourNavette, motifRetrait, examenEntame, partsAttendues }` |
+| refs | `Refs` | `{ idReception, idDispatch, idExamen, idPv, idLettre, idDemandeRetrait }` |
+
+Précisions sur `delai`, `faits` et `refs` :
+- `delai.etape` est **toujours l'étape courante** du dossier ; nulle pendant une attente PRMP autre que la
+  rectification. Pour une **lettre** ou un **retrait** (geste non chronométré), `entree` = date de la lettre ou de la
+  demande, et `standardHeures`, `ecouleHeures`, `restantHeures`, `echeance` sont `null`.
+- `faits.nbLignes` : lignes de marché non supprimées, `null` s'il n'y en a aucune (DAO…) ; `montantTotal` : somme des
+  montants estimés, `null` sans ligne ; `nbPieces` : pièces jointes (0 possible) ; `idAvis` : avis du PV le plus
+  récent ; `nbObservations` : observations du périmètre figé du PV, `null` s'il n'y en a pas ; `consigneDispatch` :
+  consigne du dispatch courant ; `dernierRetourNavette` : commentaire du dernier retour (au Membre ou au CC) du PV le
+  plus récent ; `motifRetrait` : demande `EN_ATTENTE` ; `examenEntame` : `null` sans dispatch ; `partsAttendues` :
+  PV `PROJET_ACCEPTE` seulement, rôles désignés (`MEMBRE`, `CC`) dont la part n'est pas datée.
+- `refs.idLettre` n'est renseigné que sur une ligne `LETTRES_A_SIGNER` / `LETTRES_A_ARCHIVER` ; `idExamen` et `idPv`
+  désignent l'examen et le PV les plus récents.
+
+**Règle C2 — PRMP et UGPM.** `dossier.acteursEtapes`, `dossier.niveauNavette`, `faits.consigneDispatch`,
+`faits.dernierRetourNavette`, `faits.partsAttendues` et `refs.idDispatch` sont **`null`** : le corps ne contient ni nom
+ni matricule de contrôleur, et seulement les dossiers dont la tutelle (`ref`) est propriétaire.
+
+**Énumérations** (le serveur sert les codes, le front porte les libellés) :
+- `section`, dans l'ordre servi : `A_RECEPTIONNER`, `A_DISPATCHER`, `A_EXAMINER`, `A_REEXAMINER`, `PV_A_SOUMETTRE`,
+  `PV_A_REPRENDRE`, `PV_A_ACCEPTER`, `PV_A_VISER`, `PV_A_SIGNER`, `LETTRES_A_SIGNER`, `RETRAITS_A_DECIDER`,
+  `A_VERIFIER`, `A_TRANSMETTRE_SIGMP`, `A_ARCHIVER`, `LETTRES_A_ARCHIVER`, `EN_ATTENTE_PRMP`, `BROUILLONS`,
+  `PIECES_DEPOT_A_COMPLETER`, `COMPLEMENTS_A_TRANSMETTRE`, `A_RECTIFIER`, `EN_COURS_CNM`.
+- `geste` : `NUMEROTER`, `DISPATCHER`, `EXAMINER`, `REATTRIBUER`, `REEXAMINER`, `SOUMETTRE_PV`, `REPRENDRE_EXAMEN`,
+  `ACCEPTER`, `RETOURNER`, `VISER`, `SIGNER`, `SIGNER_LETTRE`, `DECIDER_RETRAIT`, `VERIFIER`, `TRANSMETTRE_DECISION`,
+  `TRANSMETTRE_SIGMP`, `ARCHIVER_PV`, `ARCHIVER_LETTRE`, `VOIR`, `SOUMETTRE`, `COMPLETER_BROUILLON`,
+  `COMPLETER_PIECES_DEPOT`, `TRANSMETTRE_COMPLEMENTS`, `RECTIFIER`, `SUIVRE`.
+- `mode` : `TITULAIRE`, `DELEGATION` (paire active de `t_delegation_profil`), `INTERIM` (visa d'un P/CC autre que le
+  dispatcheur), `COLLEGUE` (dossier ciblé sur un collègue par rattachement), `SUPPLEANCE` (pré-dispatch régional par
+  le Président).
+- `urgence`, **dans l'ordre de tri** : `EN_RETARD` (reste < 0), `BIENTOT` (0 ≤ reste ≤ max(2 h, ⌈35 % du standard⌉)),
+  `DANS_LES_DELAIS`, `SANS_DELAI` (lettres, retraits, **ou entrée inconnue** : `delaiCourant` sans entrée, écoulé 0 et
+  pas d'échéance), `HORS_DELAI` (brouillon), `EN_PAUSE` (attente PRMP), `SUIVI` (dossier suivi par la PRMP/UGPM).
+
+**Tri de `taches`** (et de `delegations.taches`) : urgence dans l'ordre ci-dessus ; puis `restantHeures` croissant
+(urgences chronométrées), date la plus ancienne (`SANS_DELAI`, `HORS_DELAI`, `EN_PAUSE` : début de pause, entrée,
+dépôt, date de référence), `datePrevisionnelleFin` croissante (`SUIVI`) ; enfin `idDossier`, puis l'ordre des sections.
+
+**Périmètre et statuts.** Dossiers visibles du connecté (mêmes prédicats que `PerimetreDossier` : Président sans
+localité, contrôleur de sa localité hors brouillons, PRMP/UGPM propriétaire), aux statuts actifs : **exclus**
+`CLOTURE`, `RETIRE`, `REMPLACE` et `PV_SIGNE` (transitoire), et `BROUILLON` hors PRMP/UGPM.
+
+**Performance.** Nombre d'ordres SQL **constant** quelle que soit la taille du périmètre, vérifié au compteur
+Hibernate de 1 à 40 dossiers : **12** pour un profil CNM, **13** pour le Vérificateur et **14** pour l'Assistant
+(rattachements), **7** pour la PRMP et l'UGPM.
+
+**Exemple — Président, mardi 15/09/2026 10:05** (`?delegations=true`, abrégé)
+```json
+{
+  "profil": "PRESIDENT", "genereLe": "2026-09-15T10:05:10",
+  "compteurs": { "aFaire": 4, "enRetard": 1, "bientot": 1, "dansLesDelais": 1, "sansDelai": 1, "enPause": 0, "suivi": 0 },
+  "sections": [ { "code": "A_DISPATCHER", "total": 2, "standardHeures": 8 },
+                { "code": "PV_A_VISER", "total": 1, "standardHeures": 16 },
+                { "code": "RETRAITS_A_DECIDER", "total": 1, "standardHeures": null } ],
+  "taches": [
+    { "section": "A_DISPATCHER", "geste": "DISPATCHER", "gestesSecondaires": [], "mode": "TITULAIRE",
+      "urgence": "EN_RETARD", "rang": 1,
+      "dossier": { "idDossier": 1051, "refeDossier": "00015/DGSR/DAO/2026", "statut": "PRET_DISPATCH", "statutPv": null,
+                   "idLocalite": "ANT", "libelleEntite": "Direction générale de la Sécurité routière", "niveauNavette": null,
+                   "datesEtapes": { "RECEPTION": "2026-09-11T14:00:00", "DISPATCH": null, "…": null },
+                   "acteursEtapes": { "RECEPTION": "Fanja Rasoanaivo", "DISPATCH": null, "…": null } },
+      "delai": { "etape": "DISPATCH", "entree": "2026-09-11T14:00:00", "standardHeures": 8, "ecouleHeures": 12,
+                 "restantHeures": -4, "echeance": "2026-09-14T14:00:00", "pauseDepuis": null, "pauseHeures": null,
+                 "datePrevisionnelleFin": "2026-10-01" },
+      "faits": { "nbLignes": null, "montantTotal": null, "nbPieces": 0, "idAvis": null, "…": null },
+      "refs": { "idReception": 402, "idDispatch": null, "idExamen": null, "idPv": null, "idLettre": null, "idDemandeRetrait": null } },
+    { "section": "PV_A_VISER", "geste": "VISER", "gestesSecondaires": ["RETOURNER"], "mode": "TITULAIRE",
+      "urgence": "BIENTOT", "rang": 2, "…": "…" }
+  ],
+  "delegations": { "total": 2,
+    "parSection": [ { "code": "A_RECEPTIONNER", "total": 1 }, { "code": "A_DISPATCHER", "total": 1 } ],
+    "taches": [ { "section": "A_DISPATCHER", "mode": "SUPPLEANCE", "urgence": "EN_RETARD", "rang": 1, "…": "…" },
+                { "section": "A_RECEPTIONNER", "mode": "DELEGATION", "urgence": "DANS_LES_DELAIS", "rang": 2, "…": "…" } ] }
+}
 ```
 
 ---
@@ -3246,7 +3373,7 @@ système).
 
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
-| GET | /api/kpis/badges | — | `BadgesDto` | 200 | **Tout authentifié** — ⚠️ audit front 2026-08-16, voir note ci-dessous |
+| GET | /api/kpis/badges | — | `BadgesDto` | 200 | **Tout authentifié** — ⚠️ audit front 2026-08-16 ; champ `aFaire` ajouté le 2026-09-15 ; voir note ci-dessous |
 | GET | /api/kpis/tableau-bord | — | `TableauBordDto` | 200, 403 | PRESIDENT / ADMINISTRATEUR / CHEF_COMMISSION |
 | GET | /api/kpis/mes-compteurs | — | `CompteursPrmpDto` | 200, 403 | **PRMP** (compteurs de son propre périmètre) |
 | GET | /api/kpis/mes-compteurs-verificateur | — | `CompteursVerificateurDto` | 200, 403 | **VERIFICATEUR** (ou délégué) / ADMINISTRATEUR — compteurs de sa localité |
@@ -3257,6 +3384,12 @@ système).
 | GET | /api/kpis/mes-compteurs-admin | — | `CompteursAdminDto` | 200, 403 | **ADMINISTRATEUR** — inscriptions, comptes, audit (global) |
 
 > ⚠️ **Badges de menu agrégés (audit front 2026-08-16).** `GET /api/kpis/badges` renvoie en **un appel** les compteurs du **rôle du connecté** (routage serveur sur le profil du JWT) : `{ "profil": "<PROFIL>", "compteurs": { … } }`. Le champ `compteurs` porte **le même DTO** que l'endpoint `mes-compteurs*` du rôle (`CompteursPrmpDto` pour la PRMP ; **`CompteursDto` du tableau de bord** pour Président — global — et Chef de commission — sa localité, dont `predispatch` ; `CompteursSecretaireDto` avec `aReceptionner` ; etc.) — le front réutilise ses lecteurs existants et **cesse de rejouer les endpoints de liste pour lire des `.length`**. Profil sans compteurs → `compteurs` vide.
+>
+> ⚠️ **2026-09-15 — champ `aFaire` (Integer).** `{ "profil", "compteurs", "aFaire" }` : `aFaire` est le
+> `compteurs.aFaire` de `GET /api/dossiers/a-faire`, **calculé par le même service** (lignes `TITULAIRE`, hors sections
+> de suivi et hors bloc délégation) — le badge et l'écran ne peuvent pas diverger. **`null`** pour l'Administrateur, le
+> Chargé de publication et un profil non reconnu ; `0` possible pour les huit autres profils. Les `compteurs` existants
+> sont inchangés.
 
 **Exemple — réponse**
 ```json

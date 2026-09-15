@@ -691,6 +691,70 @@ document, libres de diverger au premier ajustement. Le contenu de l'AGPM, lui, s
 qui **dérive déjà le sous-type `PPM-AGPM`** — les deux ne peuvent pas se contredire, puisque c'est ce
 sous-type qui fait entrer les points d'AGPM dans la grille.
 
+### Accueil « À faire » (transversal)
+
+⚠️ **Demande front du 2026-09-14, arbitrages de Mathieu du 2026-09-15** (`GET /api/dossiers/a-faire`, badge
+`BadgesDto.aFaire`). Chaque profil du circuit arrive sur « À faire » : les **gestes qui l'attendent**, regroupés par
+section, triés par urgence, un geste principal par ligne et un délai en heures ouvrées. L'Administrateur et le Chargé
+de publication gardent leur accueil (403).
+
+**Principe : la garde fait foi.** Aucune règle de circuit n'est réécrite pour l'accueil. Chaque ligne est l'assemblage
+des **prédicats que les gardes appellent elles-mêmes** — `PredicatsIdentite` (identités, étages, localité stricte,
+lettres, retraits), `Visibilite.localiteAdmise` (Président exempté), `CircuitDossierService.deuxNiveaux`, le
+rattachement cible (`RattachementService.ciblesDans`, extrait de l'enrichissement des listes) et
+`ChronometrageService.etapeDeReprise`. Un geste n'est proposé que si l'endpoint qui l'exécute l'accepterait, **y compris
+son `@PreAuthorize`** : le Président dispatche, vise, signe les lettres et décide des retraits au titre de la
+paire active **Président → Chef de commission** ; désactiver la paire retire ces lignes. Les refus qui ne portent que
+sur le corps ou un état ponctuel (note d'intérim à joindre, co-signataire à désigner, mandat PRMP vacant) ne retirent
+pas la ligne. Le délai vient de `ChronometrageService.delaiCourant`, sans recalcul.
+
+**Qui voit quoi.** « Localité » = celle du dossier ; pour le dispatch, l'examen, la navette, la transmission SIGMP et
+l'archivage, celle du **contrôleur de réception** (celle que lisent leurs gardes). Le Président n'est borné par aucune
+localité, sauf là où la garde exige la localité stricte.
+
+| Section | Statut du dossier (et du PV) | Liste principale (`TITULAIRE`) | Bloc délégation | Geste |
+|---|---|---|---|---|
+| `A_RECEPTIONNER` | SOUMIS sans réception | Secrétaire de la localité | P et CC de la localité, paire → Secrétaire active (`DELEGATION`) | `NUMEROTER` |
+| `A_DISPATCHER` | PRET_DISPATCH | Central : Président. Régional : CC de la localité | Régional : Président (`SUPPLEANCE`, arbitrage 2) | `DISPATCHER` |
+| `A_EXAMINER` | DISPATCHE | Attributaire courant, paire → Membre active s'il n'est pas Membre | — | `EXAMINER` ; CC attributaire d'un dossier central sans examen : `REATTRIBUER`, puis `EXAMINER` (arbitrage 3) |
+| `A_REEXAMINER` | A_REEXAMINER | Attributaire | — | `REEXAMINER` |
+| `PV_A_SOUMETTRE` / `PV_A_REPRENDRE` | EXAMINE, PV BROUILLON / EN_RECTIFICATION | Examinateur (`imCtrlMembre`) | — | `SOUMETTRE_PV` / `REPRENDRE_EXAMEN` |
+| `PV_A_ACCEPTER` | EXAMINE, PV PROJET_SOUMIS, deux niveaux, étage CC (niveau nul compris) | CC du circuit (dispatcheur) | — | `ACCEPTER`, puis `RETOURNER` |
+| `PV_A_VISER` | Deux niveaux, étage PRESIDENT | Président | — (pas d'intérim) | `VISER`, puis `RETOURNER` |
+| `PV_A_VISER` | Navette simple : PV PROJET_SOUMIS, ou PROJET_ACCEPTE sans aucune part de viseur | Dispatcheur (P/CC) | P, ou CC de la localité, sauf l'examinateur non dispatcheur (`INTERIM`) | `VISER` (+ `RETOURNER` sur un projet soumis) |
+| `PV_A_SIGNER` | EXAMINE, PV PROJET_ACCEPTE avec avis | Désigné Membre ou CC dont la part n'est pas datée | — | `SIGNER` |
+| `LETTRES_A_SIGNER` | Lettre SOUMIS | Régional : CC de la localité. Central : CC de la localité et Président | — | `SIGNER_LETTRE` |
+| `RETRAITS_A_DECIDER` | Demande EN_ATTENTE (le refus reste possible si le dossier a avancé) | CC de la localité, Président | — | `DECIDER_RETRAIT` |
+| `A_VERIFIER` | EN_VERIFICATION, PV signé | Vérificateur de la localité : la cible, ou tous sans cible | Autres Vérificateurs (`COLLEGUE`) ; CC de la localité (`DELEGATION`) ; Président **seulement** sur avis FAVR | `VERIFIER` (FAVR), sinon `TRANSMETTRE_DECISION` |
+| `A_TRANSMETTRE_SIGMP` | OBSERVATIONS_LEVEES | Comme `A_VERIFIER` | `COLLEGUE` ; CC de la localité (`DELEGATION`) ; **jamais le Président** | `TRANSMETTRE_SIGMP` |
+| `A_ARCHIVER` | DECISION_TRANSMISE_SIGMP, PV signé non archivé | Assistant de la localité : la cible, ou tous sans cible | Autres Assistants (`COLLEGUE`) ; CC de la localité (`DELEGATION`) ; **jamais le Président** (arbitrage 5) | `ARCHIVER_PV` |
+| `LETTRES_A_ARCHIVER` | Lettre SIGNE non archivée (la plus ancienne) | Assistants de la localité | CC de la localité (`DELEGATION`) ; jamais le Président | `ARCHIVER_LETTRE` |
+| `EN_ATTENTE_PRMP` | Attente PRMP (suivi, hors `aFaire`) | Porteur de la reprise : Secrétaire (dépôt), attributaire (lettre de renvoi), Vérificateur cible ou de la localité s'il a déjà vérifié (rectification) | — | `VOIR` |
+| `BROUILLONS` | BROUILLON | PRMP (`SOUMETTRE`) ; UGPM de la tutelle (`COMPLETER_BROUILLON`, arbitrage 6) | — | voir colonne |
+| `PIECES_DEPOT_A_COMPLETER` / `COMPLEMENTS_A_TRANSMETTRE` / `A_RECTIFIER` | EN_ATTENTE_COMPLEMENTS_DEPOT / EN_ATTENTE_PIECES / EN_ATTENTE_DECISION_PRMP | PRMP propriétaire (gestes réservés à la PRMP : l'UGPM ne les reçoit pas) | — | `COMPLETER_PIECES_DEPOT` / `TRANSMETTRE_COMPLEMENTS` / `RECTIFIER` |
+| `EN_COURS_CNM` | SOUMIS à DECISION_TRANSMISE_SIGMP, hors attente (suivi, hors `aFaire`) | PRMP ou UGPM propriétaire | — | `SUIVRE` |
+
+Exclus : statuts `CLOTURE`, `RETIRE`, `REMPLACE` et `PV_SIGNE` (transitoire), lettres de renvoi non lues et décisions
+de retrait (déjà badgées), brouillon de lettre du Membre.
+
+**Bloc délégation (arbitrage 1).** Les lignes réalisables par délégation, intérim, collègue ou suppléance sont
+**repliées** : servies seulement sur `?delegations=true`, jamais dans `compteurs` ni dans le badge. Sans ce repli, le
+Président verrait toutes les réceptions et vérifications du pays.
+
+**Urgence et seuils (arbitrage 4).** Étape chronométrée : reste < 0 → `EN_RETARD` ; **0 ≤ reste ≤ max(2 h, ⌈35 % du
+délai standard⌉)** → `BIENTOT` (3 h pour 8 h, 6 h pour 16 h ; constantes `ReglesAFaire.SEUIL_BIENTOT_*`) ; au-delà →
+`DANS_LES_DELAIS`. **Entrée inconnue** (dossier antérieur au chronométrage : écoulé 0, pas d'échéance) → `SANS_DELAI` :
+l'urgence ne s'invente pas. Lettres et retraits → `SANS_DELAI` ; brouillons → `HORS_DELAI` ; attentes PRMP →
+`EN_PAUSE` ; suivi PRMP → `SUIVI`. Compteurs sur les lignes titulaires : CNM, `aFaire = enRetard + bientot +
+dansLesDelais + sansDelai` ; PRMP et UGPM, `aFaire = enPause + sansDelai`.
+
+**Règle C2.** Pour la PRMP et l'UGPM, rien d'interne à la CNM : ni acteurs de la frise, ni étage de navette, ni consigne
+de dispatch, ni retour de navette, ni parts attendues, ni identifiant de dispatch — et l'annuaire des contrôleurs n'est
+pas même chargé. Leur périmètre est celui de leur tutelle.
+
+**Performance.** Nombre de requêtes constant (12 pour un profil CNM, 13 pour le Vérificateur, 14 pour l'Assistant, 7 pour la PRMP et l'UGPM), vérifié au compteur
+Hibernate de 1 à 40 dossiers.
+
 ### Actualités à l'ouverture de session (transversal)
 
 ⚠️ **Règle ajoutée (2026-08-19, spec du 2026-08-18)** — un **modal d'actualités** (mini-page markdown +
