@@ -127,12 +127,9 @@ public class ExamenDetailService {
      * doit comporter au moins une ligne d'observation, sinon 400 (champ {@code observations}).
      */
     private void validerObservations(ExamenDetailDto dto) {
-        if (Boolean.FALSE.equals(dto.getConforme())
-                && (dto.getObservations() == null || dto.getObservations().isEmpty())) {
-            throw new ChampsInvalidesException(List.of(new ErrorResponse.FieldError(
-                    "observations",
-                    "Au moins une ligne d'observation est obligatoire si le point est non conforme.")));
-        }
+        // ⚠️ Revue 2026-09-14 — règle et message portés par ExamenGarde, partagés avec /api/observation-controles.
+        garde.exigerObservationSiNonConforme(dto.getConforme(),
+                dto.getObservations() == null || dto.getObservations().isEmpty());
     }
 
     /**

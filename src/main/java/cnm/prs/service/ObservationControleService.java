@@ -68,6 +68,9 @@ public class ObservationControleService {
         // ⚠️ Revue 2026-09-14 — comme le PUT d'un détail d'examen : garde sur le résultat EN PLACE et sur
         // le résultat VISÉ par le corps (un PUT peut déplacer la ligne vers un autre point de contrôle).
         exigerEcritureDesResultats(existing.getIdDetail(), dto.getIdDetail());
+        if (!java.util.Objects.equals(existing.getIdDetail(), dto.getIdDetail())) {
+            exigerUneLigneRestanteApresRetrait(existing.getIdDetail());   // ⚠️ revue 2026-09-14
+        }
         existing.setIdDetail(dto.getIdDetail());
         existing.setAuLieuDe(dto.getAuLieuDe());
         existing.setLire(dto.getLire());
@@ -79,7 +82,23 @@ public class ObservationControleService {
         ObservationControle existing = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Observation introuvable : " + id));
         exigerEcritureDesResultats(existing.getIdDetail());   // ⚠️ revue 2026-09-14
+        exigerUneLigneRestanteApresRetrait(existing.getIdDetail());
         repository.delete(existing);
+    }
+
+    /**
+     * ⚠️ Revue 2026-09-14 — retirer une ligne (DELETE, ou PUT qui la déplace) ne doit pas laisser un point
+     * <strong>non conforme</strong> sans observation : même règle, même 400 et même message que
+     * {@code /api/examen-details} ({@link ExamenGarde#exigerObservationSiNonConforme}), vérifiés après les
+     * gardes d'identité et de verrou, comme là-bas.
+     *
+     * <p>L'état {@code conforme} est lu en base au moment de la requête. Un point repassé conforme par
+     * {@code /api/examen-details} peut donc perdre sa dernière ligne ensuite ; et ce PUT, qui remplace les
+     * lignes du point, n'a de toute façon pas besoin de cette route pour les retirer.</p>
+     */
+    private void exigerUneLigneRestanteApresRetrait(Integer idDetail) {
+        Boolean conforme = examenDetailRepository.findById(idDetail).map(ExamenDetail::getConforme).orElse(null);
+        garde.exigerObservationSiNonConforme(conforme, repository.countByIdDetail(idDetail) <= 1);
     }
 
     /**

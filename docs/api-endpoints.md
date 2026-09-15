@@ -1196,6 +1196,12 @@ Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `
 > résultat, réservé à l'Administrateur. `idDetail` introuvable : traité comme un `idExamen` inconnu sur
 > `/api/examen-details` (403 pour un Membre). Aucun écran du front n'appelle ces trois routes : il écrit les
 > lignes dans le corps de `/api/examen-details`.
+>
+> **Point non conforme : au moins une ligne.** Retirer la **dernière** ligne d'un point `conforme=false` —
+> `DELETE`, ou `PUT` qui la déplace vers un autre `idDetail` — → **400**, champ `observations`, même message
+> que `/api/examen-details` (« Au moins une ligne d'observation est obligatoire si le point est non
+> conforme. »), vérifié après les gardes ci-dessus. `conforme` est lu en base : un point repassé conforme par
+> `PUT /api/examen-details` peut perdre sa dernière ligne (et ce `PUT` remplace de toute façon les lignes).
 
 **Champs `ObservationControleDto`**
 
@@ -1214,7 +1220,7 @@ Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `
 | GET | /api/observation-controles?detail={idDetail} | — | `ObservationControleDto[]` | 200 | Authentifié |
 | POST | /api/observation-controles | `ObservationControleDto` | `ObservationControleDto` | 201, 400, 403, 409 | **MEMBRE** attributaire (ou CC/Président délégué) — ⚠️ 2026-09-14 |
 | PUT | /api/observation-controles/{id} | `ObservationControleDto` | `ObservationControleDto` | 200, 400, 403, 404, 409 | **MEMBRE** attributaire (ou CC/Président délégué) — ⚠️ 2026-09-14 |
-| DELETE | /api/observation-controles/{id} | — | — | 204, 403, 404, 409 | **MEMBRE** attributaire (ou CC/Président délégué) — ⚠️ 2026-09-14 |
+| DELETE | /api/observation-controles/{id} | — | — | 204, 400, 403, 404, 409 | **MEMBRE** attributaire (ou CC/Président délégué) — ⚠️ 2026-09-14 |
 
 ---
 

@@ -104,4 +104,27 @@ public class ExamenGarde {
                                     + ", reçu " + idExamenDuCorps + ") : le créer sur l'examen visé.")));
         }
     }
+
+    /** Message de la règle « point non conforme ⇒ au moins une ligne d'observation », à une seule place. */
+    static final String OBSERVATION_OBLIGATOIRE_SI_NON_CONFORME =
+            "Au moins une ligne d'observation est obligatoire si le point est non conforme.";
+
+    /**
+     * ⚠️ Règle ajoutée — un point de contrôle <strong>non conforme</strong> ({@code conforme=false}) porte au
+     * moins une ligne d'observation, sinon 400 (champ {@code observations}).
+     *
+     * <p>⚠️ Revue du 2026-09-14 — la règle n'était tenue que par {@code /api/examen-details}, sur le corps
+     * reçu ; {@code PUT}/{@code DELETE /api/observation-controles} retiraient la dernière ligne d'un point non
+     * conforme sans rien vérifier. Elle vit ici pour que les deux portes disent la même chose.</p>
+     *
+     * @param conforme  état du point ({@code null} = non renseigné : aucune exigence)
+     * @param sansLigne vrai si le point n'aura plus aucune ligne une fois l'écriture faite
+     */
+    public void exigerObservationSiNonConforme(Boolean conforme, boolean sansLigne) {
+        if (Boolean.FALSE.equals(conforme) && sansLigne) {
+            throw new cnm.prs.exception.ChampsInvalidesException(java.util.List.of(
+                    new cnm.prs.exception.ErrorResponse.FieldError("observations",
+                            OBSERVATION_OBLIGATOIRE_SI_NON_CONFORME)));
+        }
+    }
 }

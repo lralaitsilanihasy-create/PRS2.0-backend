@@ -37,6 +37,10 @@ import cnm.prs.enums.TypeActeur;
  * témoin du même examen via {@code /api/examen-details}, avec le même jeton : même code HTTP et même message.
  * La règle éprouvée est donc « celle d'examen-details », pas une copie écrite ici.</p>
  *
+ * <p>⚠️ Même revue — la règle « point non conforme ⇒ au moins une ligne » de {@code /api/examen-details}
+ * s'applique aussi au retrait d'une ligne par cette route (DELETE, ou PUT qui la déplace) : 400, même corps
+ * d'erreur ; un point repassé conforme n'est pas bloqué.</p>
+ *
  * <p>Décor : dossier 1 du socle ({@code EXAMINE}, ANT, dispatch 1 → Membre {@code CTRMEM}, examen 1) ; un
  * résultat non conforme {@value #RESULTAT} porteur d'une ligne, et un résultat témoin {@value #TEMOIN}.</p>
  */
@@ -165,6 +169,89 @@ class ObservationControleEcritureGardeeIntegrationTest extends CnmIntegrationTes
         signerLePv();
         refuseeCommeExamenDetails(() -> delete("/api/observation-controles/" + idLigne), tokenMembre, 409);
         assertThat(observationControleRepository.existsById(idLigne)).isTrue();
+    }
+
+    // ------------------------------------------------------------------ point non conforme : au moins une ligne
+
+    @Test
+    @DisplayName("DELETE observation-controles — la dernière ligne d'un point NON CONFORME : 400 observations, même "
+            + "corps d'erreur que /examen-details ; avec une autre ligne restante : 204")
+    void delete_derniereLigneDUnPointNonConforme_400() throws Exception {
+        MvcResult observation = mvc.perform(delete("/api/observation-controles/" + idLigne)
+                .header("Authorization", tokenMembre)).andReturn();
+        assertThat(observation.getResponse().getStatus()).isEqualTo(400);
+        memeErreurQueExamenDetailsSansLigne(observation);
+        assertThat(observationControleRepository.existsById(idLigne)).as("la ligne est toujours là").isTrue();
+
+        ligne(RESULTAT, "1", "2", 2);
+        mvc.perform(delete("/api/observation-controles/" + idLigne).header("Authorization", tokenMembre))
+                .andExpect(status().isNoContent());
+        assertThat(lignesDu(RESULTAT)).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("PUT observation-controles — déplacer la dernière ligne d'un point NON CONFORME vers un autre point : "
+            + "400, même corps d'erreur que /examen-details ; s'il en garde une autre : 200")
+    void put_deplacementDeLaDerniereLigne_400() throws Exception {
+        Supplier<MockHttpServletRequestBuilder> versLeTemoin = () -> put("/api/observation-controles/" + idLigne)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDetail\":" + TEMOIN + ",\"auLieuDe\":\"500000\",\"lire\":\"5000000\",\"ordre\":1}");
+
+        MvcResult observation = mvc.perform(versLeTemoin.get().header("Authorization", tokenMembre)).andReturn();
+        assertThat(observation.getResponse().getStatus()).isEqualTo(400);
+        memeErreurQueExamenDetailsSansLigne(observation);
+        assertThat(observationControleRepository.findById(idLigne).orElseThrow().getIdDetail()).isEqualTo(RESULTAT);
+
+        ligne(RESULTAT, "1", "2", 2);
+        mvc.perform(versLeTemoin.get().header("Authorization", tokenMembre))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.idDetail").value(TEMOIN));
+    }
+
+    @Test
+    @DisplayName("Point repassé CONFORME par /examen-details : sa dernière ligne se supprime (204) ; repassé conforme "
+            + "sans ligne, /examen-details les a déjà retirées et rien ne bloque")
+    void pointRepasseConforme_derniereLigneSupprimable() throws Exception {
+        // Le Membre corrige son constat : conforme, en gardant (pour l'instant) une ligne.
+        mvc.perform(put("/api/examen-details/" + RESULTAT).header("Authorization", tokenMembre)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDetailExamen\":" + RESULTAT + ",\"idExamen\":1,\"idPtControle\":" + PT_RESULTAT
+                        + ",\"conforme\":true,\"observations\":[{\"auLieuDe\":\"500000\",\"lire\":\"5000000\","
+                        + "\"ordre\":1}]}"))
+                .andExpect(status().isOk());
+        int ligneRestante = observationControleRepository.findByIdDetailOrderByOrdreAsc(RESULTAT).get(0)
+                .getIdObservation();
+        mvc.perform(delete("/api/observation-controles/" + ligneRestante).header("Authorization", tokenMembre))
+                .andExpect(status().isNoContent());
+        assertThat(lignesDu(RESULTAT)).isZero();
+
+        // Repassé conforme SANS ligne : le PUT d'examen-details remplace les lignes, il n'y a plus rien à retirer.
+        int autre = ligne(TEMOIN, "a", "b", 1);
+        mvc.perform(put("/api/examen-details/" + TEMOIN).header("Authorization", tokenMembre)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDetailExamen\":" + TEMOIN + ",\"idExamen\":1,\"idPtControle\":" + PT_TEMOIN
+                        + ",\"conforme\":true,\"observations\":[]}"))
+                .andExpect(status().isOk());
+        assertThat(observationControleRepository.existsById(autre)).isFalse();
+    }
+
+    /**
+     * Le refus reçu (400) est celui de {@code /api/examen-details} pour un point non conforme sans ligne : même
+     * message, mêmes erreurs de champ. Référence : PUT du résultat, non conforme et sans observation.
+     */
+    private void memeErreurQueExamenDetailsSansLigne(MvcResult observation) throws Exception {
+        MvcResult reference = mvc.perform(put("/api/examen-details/" + RESULTAT).header("Authorization", tokenMembre)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idDetailExamen\":" + RESULTAT + ",\"idExamen\":1,\"idPtControle\":" + PT_RESULTAT
+                        + ",\"conforme\":false,\"observations\":[]}"))
+                .andReturn();
+        assertThat(reference.getResponse().getStatus()).as("référence examen-details").isEqualTo(400);
+        assertThat(message(observation)).isEqualTo(message(reference));
+        Object erreurs = JsonPath.read(observation.getResponse().getContentAsString(), "$.erreurs");
+        Object erreursReference = JsonPath.read(reference.getResponse().getContentAsString(), "$.erreurs");
+        assertThat(erreurs).as("mêmes erreurs de champ qu'examen-details").isEqualTo(erreursReference);
+        assertThat(JsonPath.<String>read(observation.getResponse().getContentAsString(), "$.erreurs[0].champ"))
+                .isEqualTo("observations");
     }
 
     // ------------------------------------------------------------------ helpers
