@@ -26,6 +26,12 @@ import cnm.prs.service.ObservationControleService;
  * bornée au périmètre du point de contrôle (⚠️ audit 2026-08-27, C2 — §1/§3.1 : localité du contrôleur ;
  * la PRMP, acteur externe, n'a pas accès au détail interne) ; écriture (POST/PUT/DELETE) :
  * <strong>Membre</strong> (§3.5, comme les détails d'examen).
+ *
+ * <p>⚠️ Revue du 2026-09-14 — le profil ne suffit plus : le service applique les gardes d'écriture de
+ * {@code /api/examen-details} au résultat d'examen de la ligne (Membre attributaire ou CC/Président par
+ * délégation dans sa localité, sinon 403 ; verrou dès {@code PV_SIGNE}, 409). Le DELETE d'une ligne reste
+ * ouvert au profil Membre : supprimer une ligne, c'est réécrire le résultat (le PUT d'un détail d'examen
+ * remplace ses lignes), pas supprimer le résultat lui-même (réservé à l'Administrateur).</p>
  */
 @RestController
 @RequestMapping("/api/observation-controles")

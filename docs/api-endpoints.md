@@ -1159,7 +1159,8 @@ couple (`idExamen`, `idPiece`) → **409** en cas de doublon (corriger via `PUT`
 
 ## Observations de contrôle
 **Ressource** `/api/observation-controles` (table `t_observation_controle`) — **Lecture** : authentifié
-(filtrée, voir ci-dessous) ; **écriture** (POST/PUT/DELETE) : profil **`MEMBRE`** (titulaire ou délégué).
+(filtrée, voir ci-dessous) ; **écriture** (POST/PUT/DELETE) : profil **`MEMBRE`** (titulaire ou délégué),
+**et** mêmes gardes que l'écriture d'un résultat via `/api/examen-details` (⚠️ 2026-09-14, voir ci-dessous).
 
 Lignes structurées **« AU LIEU DE / LIRE »** d'un point de contrôle d'examen (`ExamenDetail`), en
 relation **1,N** : un point de contrôle a **0..N** lignes. Remplace l'ancien champ texte `observation`.
@@ -1168,6 +1169,24 @@ Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `
 > ⚠️ **Lecture cloisonnée (2026-08-27, audit C2/lot A).** Même correctif que le point de contrôle
 > parent : `findByDetail` est désormais bornée par `Visibilite`, exactement comme `ExamenService.findAll`
 > — Président/Administrateur tout, contrôleurs leur localité, **PRMP/UGPM liste vide**.
+
+> ⚠️ **Écriture gardée comme les résultats d'examen (revue du 2026-09-14).** Jusqu'ici le profil suffisait :
+> tout Membre écrivait sur le résultat d'examen d'un autre, de n'importe quelle localité, et même après la
+> signature du PV. Une ligne appartient à un résultat (`t_examen_detail`, via `idDetail`) : le serveur
+> résout l'examen de ce résultat et lui applique **les gardes de `/api/examen-details`** (`ExamenGarde`,
+> mêmes méthodes, même ordre, mêmes codes et messages) :
+> 1. **localité** du circuit de l'examen (Président/Administrateur exemptés) → sinon **403** ;
+> 2. **Membre attributaire** du dispatch ; un CC ou un Président qui exerce le profil Membre par
+>    **délégation** est admis, le CC dans sa seule localité → sinon **403** ;
+> 3. **verrou d'état** : dossier `DISPATCHE`, `EXAMINE` ou `A_REEXAMINER` ; dès `PV_SIGNE` → **409**.
+>
+> `POST` : gardes sur le résultat `idDetail` du corps. `PUT` : sur le résultat **en place** et sur le
+> résultat **visé** par le corps (déplacer une ligne, c'est écrire sur les deux ; identités d'abord, verrous
+> ensuite). `DELETE` : sur le résultat de la ligne ; il reste ouvert au profil Membre — supprimer une ligne
+> réécrit le résultat (le `PUT` d'un détail d'examen remplace ses lignes), ce n'est pas supprimer le
+> résultat, réservé à l'Administrateur. `idDetail` introuvable : traité comme un `idExamen` inconnu sur
+> `/api/examen-details` (403 pour un Membre). Aucun écran du front n'appelle ces trois routes : il écrit les
+> lignes dans le corps de `/api/examen-details`.
 
 **Champs `ObservationControleDto`**
 
@@ -1184,9 +1203,9 @@ Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
 | GET | /api/observation-controles?detail={idDetail} | — | `ObservationControleDto[]` | 200 | Authentifié |
-| POST | /api/observation-controles | `ObservationControleDto` | `ObservationControleDto` | 201, 400, 403 | **MEMBRE** |
-| PUT | /api/observation-controles/{id} | `ObservationControleDto` | `ObservationControleDto` | 200, 400, 403, 404 | **MEMBRE** |
-| DELETE | /api/observation-controles/{id} | — | — | 204, 403, 404 | **MEMBRE** |
+| POST | /api/observation-controles | `ObservationControleDto` | `ObservationControleDto` | 201, 400, 403, 409 | **MEMBRE** attributaire (ou CC/Président délégué) — ⚠️ 2026-09-14 |
+| PUT | /api/observation-controles/{id} | `ObservationControleDto` | `ObservationControleDto` | 200, 400, 403, 404, 409 | **MEMBRE** attributaire (ou CC/Président délégué) — ⚠️ 2026-09-14 |
+| DELETE | /api/observation-controles/{id} | — | — | 204, 403, 404, 409 | **MEMBRE** attributaire (ou CC/Président délégué) — ⚠️ 2026-09-14 |
 
 ---
 

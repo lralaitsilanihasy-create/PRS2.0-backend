@@ -1,14 +1,17 @@
 package cnm.prs.service;
 
 import java.util.List;
+import java.util.stream.Stream;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import cnm.prs.dto.ObservationControleDto;
+import cnm.prs.entity.ExamenDetail;
 import cnm.prs.entity.ObservationControle;
 import cnm.prs.exception.ResourceNotFoundException;
 import cnm.prs.mapper.ObservationControleMapper;
+import cnm.prs.repository.ExamenDetailRepository;
 import cnm.prs.repository.ObservationControleRepository;
 import cnm.prs.security.Visibilite;
 
@@ -19,15 +22,28 @@ import cnm.prs.security.Visibilite;
  * <strong>internes</strong> de la commission à tout authentifié, toutes localités confondues et
  * pendant la navette. La lecture est désormais bornée par {@link Visibilite}, sur la même chaîne que
  * le détail d'examen parent — hors localité (et pour la PRMP/UGPM) : liste vide.</p>
+ *
+ * <p>⚠️ Revue du 2026-09-14 — l'<strong>écriture</strong> (POST/PUT/DELETE) n'avait, elle, aucune garde
+ * au-delà du profil : tout Membre, de n'importe quelle localité, écrivait sur le résultat d'examen d'un
+ * autre, y compris après la signature du PV. Une ligne d'observation est un morceau du résultat
+ * ({@code t_examen_detail}) auquel elle appartient : elle obéit désormais aux gardes de
+ * {@code /api/examen-details}, portées par {@link ExamenGarde} (source unique, aucune règle recopiée).</p>
  */
 @Service
 @Transactional
 public class ObservationControleService {
 
     private final ObservationControleRepository repository;
+    /** ⚠️ Revue 2026-09-14 — résout l'examen du résultat auquel appartient la ligne. */
+    private final ExamenDetailRepository examenDetailRepository;
+    /** ⚠️ Revue 2026-09-14 — gardes d'écriture partagées avec {@code ExamenDetailService}. */
+    private final ExamenGarde garde;
 
-    public ObservationControleService(ObservationControleRepository repository) {
+    public ObservationControleService(ObservationControleRepository repository,
+            ExamenDetailRepository examenDetailRepository, ExamenGarde garde) {
         this.repository = repository;
+        this.examenDetailRepository = examenDetailRepository;
+        this.garde = garde;
     }
 
     /** ⚠️ C2 — lignes du point de contrôle, bornées au périmètre (§1) : vide hors localité / pour la PRMP. */
@@ -40,6 +56,7 @@ public class ObservationControleService {
     }
 
     public ObservationControleDto create(ObservationControleDto dto) {
+        exigerEcritureDesResultats(dto.getIdDetail());   // ⚠️ revue 2026-09-14
         ObservationControle entity = ObservationControleMapper.toEntity(dto);
         entity.setIdObservation(null);   // PK auto (IDENTITY) ; tout id fourni est ignoré
         return ObservationControleMapper.toDto(repository.save(entity));
@@ -48,6 +65,9 @@ public class ObservationControleService {
     public ObservationControleDto update(Integer id, ObservationControleDto dto) {
         ObservationControle existing = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Observation introuvable : " + id));
+        // ⚠️ Revue 2026-09-14 — comme le PUT d'un détail d'examen : garde sur le résultat EN PLACE et sur
+        // le résultat VISÉ par le corps (un PUT peut déplacer la ligne vers un autre point de contrôle).
+        exigerEcritureDesResultats(existing.getIdDetail(), dto.getIdDetail());
         existing.setIdDetail(dto.getIdDetail());
         existing.setAuLieuDe(dto.getAuLieuDe());
         existing.setLire(dto.getLire());
@@ -56,9 +76,35 @@ public class ObservationControleService {
     }
 
     public void delete(Integer id) {
-        if (!repository.existsById(id)) {
-            throw new ResourceNotFoundException("Observation introuvable : " + id);
-        }
-        repository.deleteById(id);
+        ObservationControle existing = repository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Observation introuvable : " + id));
+        exigerEcritureDesResultats(existing.getIdDetail());   // ⚠️ revue 2026-09-14
+        repository.delete(existing);
+    }
+
+    /**
+     * ⚠️ Revue 2026-09-14 — gardes d'écriture d'un résultat d'examen, appliquées au(x) résultat(s)
+     * ({@code t_examen_detail}) auquel la ligne appartient : <strong>exactement</strong> celles de
+     * {@code ExamenDetailService} (création et mise à jour), dans le même ordre, par les mêmes méthodes de
+     * {@link ExamenGarde} —
+     * <ol>
+     *   <li>{@link ExamenGarde#exigerAttributaire} : localité du circuit, puis Membre attributaire du dispatch
+     *       (CC/Président par délégation admis dans leur localité) → 403 ;</li>
+     *   <li>{@link ExamenGarde#exigerExamenModifiable} : dossier {@code DISPATCHE}, {@code EXAMINE} ou
+     *       {@code A_REEXAMINER}, écriture refusée dès {@code PV_SIGNE} → 409.</li>
+     * </ol>
+     * Toutes les identités sont vérifiées avant tout verrou, comme au PUT d'un détail d'examen. Un résultat
+     * introuvable donne un examen {@code null}, que les gardes traitent comme pour un {@code idExamen}
+     * inconnu sur {@code /api/examen-details}.
+     */
+    private void exigerEcritureDesResultats(Integer... idsDetail) {
+        List<Integer> examens = Stream.of(idsDetail).map(this::examenDuResultat).distinct().toList();
+        examens.forEach(garde::exigerAttributaire);
+        examens.forEach(garde::exigerExamenModifiable);
+    }
+
+    private Integer examenDuResultat(Integer idDetail) {
+        return idDetail == null ? null
+                : examenDetailRepository.findById(idDetail).map(ExamenDetail::getIdExamen).orElse(null);
     }
 }
