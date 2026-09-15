@@ -1514,6 +1514,7 @@ Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `
 | GET | /api/dossiers/a-faire?delegations= | — | `AFaireDto` | 200, 401, 403 | ⚠️ **2026-09-15** — `PRESIDENT`, `CHEF_COMMISSION`, `SECRETAIRE`, `MEMBRE`, `VERIFICATEUR`, `ASSISTANT_CONTROLEUR`, `PRMP`, `UGPM` (titulaires du profil) ; **403** Administrateur et Chargé de publication — accueil « À faire », voir la section dédiée ci-dessous |
 | GET | /api/dossiers/{id} | — | `DossierDto` | 200, 403, 404 | Authentifié (filtré) |
 | GET | /api/dossiers/{id}/ppm | — | `PpmDto` | 200, 403, 404 | Authentifié (propriétaire pour un BROUILLON) |
+| GET | /api/dossiers/{id}/gestes | — | `GestesDossierDto` | 200, 401, 403, 404 | ⚠️ **2026-09-15** — mêmes profils que `a-faire` (`PRESIDENT`, `CHEF_COMMISSION`, `SECRETAIRE`, `MEMBRE`, `VERIFICATEUR`, `ASSISTANT_CONTROLEUR`, `PRMP`, `UGPM`), **puis** périmètre du dossier (garde de `GET /{id}`) ; **403** Administrateur et Chargé de publication — page dossier, voir la section dédiée ci-dessous |
 | POST | /api/dossiers | `DossierDto` | `DossierDto` | 201, 400, 403 | **ADMINISTRATEUR** |
 | PUT | /api/dossiers/{id} | `DossierDto` | `DossierDto` | 200, 400, 403, 404, 409 | **ADMINISTRATEUR** |
 | DELETE | /api/dossiers/{id} | — | — | 204, 403, 404, 409 | **PRMP** propriétaire — BROUILLON (cascade contenu + historique) |
@@ -1925,6 +1926,87 @@ Hibernate de 1 à 40 dossiers : **12** pour un profil CNM, **13** pour le Vérif
                 { "section": "A_RECEPTIONNER", "mode": "DELEGATION", "urgence": "DANS_LES_DELAIS", "rang": 2, "…": "…" } ] }
 }
 ```
+
+### ⚠️ Page dossier — `GET /api/dossiers/{id}/gestes` (ajouté 2026-09-15)
+
+Refonte ergonomique, lot L4-B1 (`frontend/docs/plan-refonte-L4-page-dossier.md` §6 ; demande
+`frontend/docs/demande-backend-2026-09-15-gestes-dossier.md`). **Ce que le connecté peut faire sur ce dossier-là**,
+et le délai de son étape en cours : le calcul de l'accueil « À faire » **rejoué sur un seul dossier** (mêmes
+chargements, mêmes règles `ReglesAFaire`, même règle C2, rien de recalculé à part). Lecture seule, à la volée,
+**sans migration**. Aucun paramètre. Le dossier lui-même, sa frise, son journal et son chronométrage restent servis
+par leurs endpoints : le front appelle `GET /{id}` et `GET /{id}/gestes` en parallèle.
+
+**Accès.** `hasAnyRole('PRESIDENT','CHEF_COMMISSION','SECRETAIRE','MEMBRE','VERIFICATEUR','ASSISTANT_CONTROLEUR','PRMP','UGPM')`,
+comme `a-faire`, **puis la garde de visibilité du dossier**, celle de `GET /api/dossiers/{id}`, dans le même ordre et
+avec les mêmes messages :
+
+| Cas | Statut | `message` |
+|---|---|---|
+| anonyme | 401 | — |
+| Administrateur, Chargé de publication | 403 | — |
+| dossier inexistant (pour tout profil admis) | 404 | `Dossier introuvable : {id}` |
+| dossier hors périmètre : contrôleur d'une autre localité, brouillon pour un contrôleur autre que le Président, PRMP ou UGPM d'une autre tutelle | 403 | `Dossier hors de votre périmètre de visibilité (§1).` |
+
+**`GestesDossierDto`** — toutes les clés sont **toujours présentes**, à `null` quand elles ne s'appliquent pas.
+
+| Champ (JSON) | Type | Description |
+|---|---|---|
+| idDossier | number | le dossier demandé |
+| profil | string | profil du connecté |
+| genereLe | string (date-time) | instant du calcul (horloge serveur) |
+| etapeCourante | `EtapeCourante` \| null | délai de l'étape en cours, **indépendant des gestes du connecté** (voir ci-dessous) |
+| taches | `Tache[]` | **forme exacte** de `Tache` de l'accueil (section précédente) : toutes les lignes du connecté sur ce dossier |
+
+**`EtapeCourante`** = `{ urgence (string), delai (Delai) }`.
+- **`null`** sur un statut hors des statuts actifs de l'appelant : `CLOTURE`, `RETIRE`, `REMPLACE`, `PV_SIGNE` ; et
+  `BROUILLON` pour un contrôleur (seul le Président le lit). Sinon servie **même quand `taches` est vide** : un Membre
+  qui consulte le dossier d'un collègue voit le délai.
+- `delai` : le `Delai` de l'accueil, lu dans `ChronometrageService.delaiCourant`, **champs du chronomètre compris**
+  (`standardHeures`, `ecouleHeures`, `restantHeures`, `echeance`) ; égal au `delai` de toute ligne chronométrée du
+  même dossier.
+- `urgence` : mêmes seuils que les lignes chronométrées — `EN_RETARD`, `BIENTOT`, `DANS_LES_DELAIS` ; `SANS_DELAI` si
+  l'entrée est inconnue ; `EN_PAUSE` sur un statut suspensif (`EN_ATTENTE_*`, avec `delai.pauseDepuis`) ; `HORS_DELAI`
+  pour un brouillon (PRMP, UGPM). **Jamais `SUIVI`** : la ligne `EN_COURS_CNM` de la PRMP reste `SUIVI`, l'étape
+  porte l'urgence réelle.
+
+**`taches`.**
+- **Toutes** les lignes du connecté sur ce dossier, titulaire **et** non titulaire (`mode` le dit) ; pas de paramètre
+  `delegations`.
+- Tri : lignes `TITULAIRE` d'abord, puis les autres, chaque groupe dans l'ordre de l'accueil ; **`rang` part de 1 sur
+  toute la liste** (l'accueil numérote `taches` et `delegations.taches` séparément).
+- **Invariant de parité**, testé pour chaque profil et chaque dossier du jeu de test : hors `rang`, `taches` est égal,
+  dans l'ordre, aux lignes de `GET /api/dossiers/a-faire?delegations=true` (`taches` puis `delegations.taches`) dont
+  `dossier.idDossier` vaut `id`.
+- Vide si le connecté n'a aucun geste sur ce dossier, et sur un statut hors des statuts actifs (une lettre ou une
+  demande de retrait en cours sur un dossier clôturé ne produit rien, comme dans l'accueil).
+
+**Règle C2 — PRMP et UGPM.** Mêmes champs à `null` que dans l'accueil : `dossier.acteursEtapes`,
+`dossier.niveauNavette`, `faits.consigneDispatch`, `faits.dernierRetourNavette`, `faits.partsAttendues`,
+`refs.idDispatch`. L'annuaire des contrôleurs n'est pas chargé ; le corps ne contient ni nom ni matricule de
+contrôleur. `etapeCourante` leur est servie (le front n'en affiche que la pause).
+
+**Performance.** Nombre d'ordres SQL **constant d'un dossier à l'autre, garde comprise**, vérifié au compteur
+Hibernate : **12** pour le Président, **13** pour le Chef de commission, le Secrétaire et le Membre (garde de
+localité), **14** pour le Vérificateur et **15** pour l'Assistant (rattachements), **8** pour la PRMP et l'UGPM. La
+ligne du dossier sert de test d'existence (404). Sur un statut hors des statuts actifs, rien n'est calculé : deux
+ordres au plus.
+
+**Exemple — Membre non attributaire** (réponse relevée sur une copie de la base de recette le 15/09/2026, dossier
+`DISPATCHE` attribué à un collègue)
+```json
+{
+  "idDossier": 100007, "profil": "MEMBRE", "genereLe": "2026-09-15T14:54:44.3128952",
+  "etapeCourante": {
+    "urgence": "DANS_LES_DELAIS",
+    "delai": { "etape": "EXAMEN", "entree": "2026-09-15T13:41:12.296072", "standardHeures": 40, "ecouleHeures": 1,
+               "restantHeures": 39, "echeance": "2026-09-22T13:42:00", "pauseDepuis": null, "pauseHeures": null,
+               "datePrevisionnelleFin": "2026-10-01" }
+  },
+  "taches": []
+}
+```
+L'attributaire reçoit la même `etapeCourante` et, dans `taches`, la ligne `A_EXAMINER` / `EXAMINER` (`mode`
+`TITULAIRE`, `rang` 1) dont le `delai` est identique.
 
 ---
 
