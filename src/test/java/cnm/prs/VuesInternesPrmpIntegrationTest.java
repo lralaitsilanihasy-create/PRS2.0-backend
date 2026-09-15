@@ -40,7 +40,9 @@ import cnm.prs.service.ChronometrageService;
  *   <li>⚠️ revue du 2026-09-14 — {@code GET /api/observations-pv} → sans l'auteur des décisions de
  *       vérification ({@code historique[].imVerificateur}) ;</li>
  *   <li>⚠️ revue du 2026-09-14 — {@code GET /api/dossiers/{id}/historique-echanges} → sans le matricule du
- *       vérificateur sur les entrées {@code OBSERVATION}.</li>
+ *       vérificateur sur les entrées {@code OBSERVATION} ;</li>
+ *   <li>⚠️ recette Q2 du 2026-09-16 — {@code /api/demande-retraits} (liste, {@code /{id}} et
+ *       {@code mes-demandes}) → sans le matricule du Chef de commission qui a décidé ({@code imCtrlCc}).</li>
  * </ol>
  * <p>Chaque chemin est éprouvé avec un jeton PRMP, l'UGPM au moins une fois par chemin, et un contrôleur
  * qui, lui, reçoit toujours les champs.</p>
@@ -278,6 +280,72 @@ class VuesInternesPrmpIntegrationTest extends CnmIntegrationTestSupport {
                     .andExpect(jsonPath("$[?(@.type=='OBSERVATION')].acteur", contains("CTRVER", "CTRVER")))
                     .andExpect(jsonPath("$[1].acteur").value("PRMP001"));
         }
+    }
+
+    // ------------------------------------------------------------------ 7. demandes de retrait
+
+    @Test
+    @DisplayName("C2.7 — demande-retraits : PRMP et UGPM reçoivent le statut, les dates, le motif et le motif "
+            + "de décision, SANS le matricule du décideur (imCtrlCc), sur la liste, /{id} et mes-demandes ; "
+            + "aucun matricule ni nom de contrôleur dans le corps brut ; le CC reçoit le décideur")
+    void demandeRetrait_sansDecideurPourPrmpEtUgpm() throws Exception {
+        int id = demandeDecideeParLeCc();
+
+        // La liste et le détail, pour la PRMP demanderesse comme pour son UGPM.
+        for (String token : new String[] { tokenPrmp, tokenUgpm }) {
+            for (String url : new String[] { "/api/demande-retraits", "/api/demande-retraits/" + id }) {
+                String corps = mvc.perform(get(url).header("Authorization", token))
+                        .andExpect(status().isOk())
+                        .andReturn().getResponse().getContentAsString();
+                assertThat(corps).as(url + " : le décideur est retiré").doesNotContain("CTRCC1");
+                sansIdentiteDeControleur(corps);
+            }
+            mvc.perform(get("/api/demande-retraits/" + id).header("Authorization", token))
+                    .andExpect(jsonPath("$.imCtrlCc").value(nullValue()))
+                    // Ce qui reste servi : la PRMP suit sa demande, pas qui l'a tranchée.
+                    .andExpect(jsonPath("$.statut").value("ACCEPTEE"))
+                    .andExpect(jsonPath("$.idPrmp").value("PRMP001"))
+                    .andExpect(jsonPath("$.motifRetrait").value("Motif de retrait"))
+                    .andExpect(jsonPath("$.obsDecision").value("Retrait accorde"))
+                    .andExpect(jsonPath("$.dateDemande").value(notNullValue()))
+                    .andExpect(jsonPath("$.dateDecision").value(notNullValue()));
+        }
+
+        // « Mes demandes » : écran de la PRMP seule (l'UGPM y est refusée par hasRole('PRMP')).
+        String mesDemandes = mvc.perform(get("/api/demande-retraits/mes-demandes").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idDemandeRetrait==" + id + ")]", hasSize(1)))
+                .andExpect(jsonPath("$[?(@.idDemandeRetrait==" + id + ")].imCtrlCc", everyItem(nullValue())))
+                .andExpect(jsonPath("$[?(@.idDemandeRetrait==" + id + ")].statut", contains("ACCEPTEE")))
+                .andReturn().getResponse().getContentAsString();
+        sansIdentiteDeControleur(mesDemandes);
+        mvc.perform(get("/api/demande-retraits/mes-demandes").header("Authorization", tokenUgpm))
+                .andExpect(status().isForbidden());
+
+        // Contre-épreuve CNM : le CC, lui, voit qui a décidé — sur le détail comme sur son historique.
+        mvc.perform(get("/api/demande-retraits/" + id).header("Authorization", tokenCc))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.imCtrlCc").value("CTRCC1"))
+                .andExpect(jsonPath("$.obsDecision").value("Retrait accorde"));
+        mvc.perform(get("/api/demande-retraits/historique").header("Authorization", tokenCc))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.idDemandeRetrait==" + id + ")].imCtrlCc", contains("CTRCC1")));
+    }
+
+    /** La demande de retrait du socle (dossier 1, PRMP001), acceptée par le CC CTRCC1. */
+    private int demandeDecideeParLeCc() {
+        // L'historique du CC est filtré sur la localité du DOSSIER : sans elle, sa contre-épreuve serait vide.
+        cnm.prs.entity.Dossier dossier = dossierRepository.findById(1).orElseThrow();
+        dossier.setIdLocalite("ANT");
+        dossierRepository.save(dossier);
+
+        cnm.prs.entity.DemandeRetrait demande = demandeRetraitRepository.findAll().stream()
+                .filter(d -> Integer.valueOf(1).equals(d.getIdDossier())).findFirst().orElseThrow();
+        demande.setStatut("ACCEPTEE");
+        demande.setImCtrlCc("CTRCC1");
+        demande.setDateDecision(java.time.LocalDateTime.of(2026, 6, 6, 9, 0));
+        demande.setObsDecision("Retrait accorde");
+        return demandeRetraitRepository.save(demande).getIdDemandeRetrait();
     }
 
     /** Aucun matricule ni nom de contrôleur du socle dans un corps brut, quel que soit le champ qui le porterait. */

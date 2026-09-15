@@ -482,8 +482,17 @@ public class DemandeRetraitService {
         repository.deleteById(id);
     }
 
-    /** Reporte {@code nomFichier}/{@code tailleFichier} de la lettre jointe sur les DTO (métadonnées seules, jamais le contenu). */
+    /**
+     * Retire les identités internes à la CNM pour la partie contrôlée (règle C2), puis reporte
+     * {@code nomFichier}/{@code tailleFichier} de la lettre jointe sur les DTO (métadonnées seules, jamais
+     * le contenu). Le masquage passe <strong>avant</strong> le retour anticipé sur liste sans identifiant.
+     *
+     * <p><strong>Point de projection unique</strong> de la ressource : toute sortie de
+     * {@code /api/demande-retraits} — {@code findAll}, {@code findById}, {@code mes-demandes},
+     * {@code a-valider}, {@code historique}, la création et les deux décisions — passe par ici.</p>
+     */
     private List<DemandeRetraitDto> enrichir(List<DemandeRetraitDto> dtos) {
+        masquerInterneCnmPourPrmp(dtos);
         List<Integer> ids = dtos.stream().map(DemandeRetraitDto::getIdDemandeRetrait).filter(java.util.Objects::nonNull).toList();
         if (ids.isEmpty()) {
             return dtos;
@@ -498,6 +507,27 @@ public class DemandeRetraitService {
             }
         }
         return dtos;
+    }
+
+    /**
+     * ⚠️ Revue du 2026-09-16 (C2, suite de l'audit du 2026-09-14) — pour la PRMP et l'UGPM
+     * ({@link Visibilite#estPrmp()}), {@code imCtrlCc} est retiré : c'est le matricule du Chef de commission
+     * (ou du Président) qui a <strong>décidé</strong> de la demande, et qui décide à la CNM est une vue
+     * interne (règle pilote du 2026-09-06), au même titre que l'auteur des décisions d'observation
+     * ({@code cea45c2}) et l'acteur des entrées OBSERVATION de l'historique des échanges ({@code f2cf171}).
+     *
+     * <p>C'est le <strong>seul</strong> champ d'identité CNM du DTO : {@code idPrmp} est l'identité de la
+     * PRMP elle-même et {@code obsDecision} le motif qui lui est destiné. Restent donc servis le statut, les
+     * deux dates, le motif, le motif de décision et les métadonnées de la lettre jointe : la PRMP suit sa
+     * demande, pas qui l'a tranchée. Profils CNM inchangés.</p>
+     */
+    private static void masquerInterneCnmPourPrmp(List<DemandeRetraitDto> dtos) {
+        if (!Visibilite.estPrmp()) {
+            return;
+        }
+        for (DemandeRetraitDto dto : dtos) {
+            dto.setImCtrlCc(null);
+        }
     }
 
     private DemandeRetraitDto enrichir(DemandeRetraitDto dto) {
