@@ -688,8 +688,13 @@ public class DossierService {
      *
      * <p>⚠️ Correctif 2026-08-26 — l'UGPM partage le périmètre de sa tutelle
      * ({@link Visibilite#estPrmp()}), cf. §3.1.</p>
+     *
+     * <p>⚠️ 2026-09-15 — <strong>publique</strong> pour la page dossier ({@code AFaireService#gestesDossier}),
+     * sans changement : c'est la garde de {@link #findById} moins sa projection, que l'endpoint des gestes ne
+     * peut pas payer (une douzaine de requêtes d'enrichissement pour un DTO jeté). L'existence du dossier (404)
+     * reste à la charge de l'appelant, <strong>avant</strong> cet appel, comme dans {@link #findById}.</p>
      */
-    private void controlerVisibilite(Integer idDossier) {
+    public void controlerVisibilite(Integer idDossier) {
         ProfilUtilisateur profil = CurrentUser.profil().orElse(null);
         if (profil == ProfilUtilisateur.PRESIDENT || profil == ProfilUtilisateur.ADMINISTRATEUR) {
             return;

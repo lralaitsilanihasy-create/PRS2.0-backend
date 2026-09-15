@@ -19,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import cnm.prs.dto.AFaireDto;
+import cnm.prs.dto.GestesDossierDto;
 import cnm.prs.entity.Controleur;
 import cnm.prs.entity.DemandeRetrait;
 import cnm.prs.entity.Profile;
@@ -31,6 +32,7 @@ import cnm.prs.enums.SectionAFaire;
 import cnm.prs.enums.StatutPv;
 import cnm.prs.enums.StatutRetrait;
 import cnm.prs.enums.UrgenceTache;
+import cnm.prs.exception.ResourceNotFoundException;
 import cnm.prs.repository.ControleurRepository;
 import cnm.prs.repository.DemandeRetraitRepository;
 import cnm.prs.repository.DispatchRepository;
@@ -77,6 +79,13 @@ import cnm.prs.service.ReglesAFaire.PvEnCours;
  * {@code niveauNavette}, {@code consigneDispatch}, {@code dernierRetourNavette}, {@code partsAttendues},
  * {@code idDispatch}) : même principe que {@code DossierService.masquerActeursInternesPourPrmp}. L'annuaire des
  * contrôleurs n'est même pas chargé.</p>
+ *
+ * <h2>Page dossier</h2>
+ *
+ * <p>⚠️ 2026-09-15 (refonte ergonomique, lot L4-B1) — {@link #gestesDossier} rejoue <strong>le même calcul</strong>
+ * sur un lot d'un seul dossier : mêmes étapes de chargement ({@code charger}, {@code etat}, {@code taches}), mêmes
+ * règles, même règle C2. Invariant testé : ses lignes sont celles de l'accueil ({@code taches} ∪
+ * {@code delegations.taches}) pour ce dossier.</p>
  */
 @Service
 @Transactional(readOnly = true)
@@ -101,6 +110,8 @@ public class AFaireService {
     private final ChronometrageService chronometrage;
     private final DelaiStandardService delaiStandardService;
     private final PermissionService permissionService;
+    /** ⚠️ 2026-09-15 — page dossier : la garde de visibilité du dossier, réutilisée telle quelle. */
+    private final DossierService dossierService;
     private final Clock clock;
 
     public AFaireService(DossierRepository dossierRepository, DispatchRepository dispatchRepository,
@@ -109,7 +120,8 @@ public class AFaireService {
             ControleurRepository controleurRepository, ProfileRepository profileRepository,
             ExamenRepository examenRepository, TransmissionSigmpRepository transmissionSigmpRepository,
             ChronometrageService chronometrage, DelaiStandardService delaiStandardService,
-            PermissionService permissionService, Clock clock) {
+            PermissionService permissionService, DossierService dossierService, Clock clock) {
+        this.dossierService = dossierService;
         this.dossierRepository = dossierRepository;
         this.dispatchRepository = dispatchRepository;
         this.pvExamenRepository = pvExamenRepository;
@@ -151,6 +163,62 @@ public class AFaireService {
         return calculer(acteurCourant(), false).compteurs().aFaire();
     }
 
+    /**
+     * ⚠️ <strong>Page dossier</strong> ({@code GET /api/dossiers/{id}/gestes}, lot L4-B1, plan du 2026-09-15 §6) —
+     * les lignes du connecté sur <strong>ce</strong> dossier, titulaires et non titulaires, et le délai de son étape
+     * en cours. Le profil est garanti par le {@code @PreAuthorize} du contrôleur.
+     *
+     * <p><strong>Garde</strong>, dans l'ordre de {@code DossierService#findById} et avec ses messages : dossier
+     * inexistant → 404 ; hors périmètre → 403 ({@code DossierService#controlerVisibilite}). La lecture de la ligne
+     * du dossier sert de test d'existence : une requête de moins que la garde complète.</p>
+     *
+     * <p><strong>Calcul</strong> : celui de {@link #aFaire} sur un lot d'un seul identifiant — mêmes statuts actifs,
+     * {@code charger}, {@code etat}, {@link ReglesAFaire#lignes}, {@code taches} et même tri. Au plus quinze ordres
+     * SQL, garde comprise (quinze pour l'Assistant, qui lit les rattachements). Sur un statut hors des statuts
+     * actifs, rien n'est calculé : la ligne du dossier et la garde, puis {@code taches} vide et
+     * {@code etapeCourante} nulle.</p>
+     */
+    public GestesDossierDto gestesDossier(Integer idDossier) {
+        List<Object[]> lignesDossiers = dossierRepository.findAFaireParId(idDossier);
+        if (lignesDossiers.isEmpty()) {
+            throw new ResourceNotFoundException("Dossier introuvable : " + idDossier);
+        }
+        dossierService.controlerVisibilite(idDossier);
+
+        LocalDateTime maintenant = LocalDateTime.now(clock);
+        ProfilUtilisateur profilCourant = CurrentUser.profil().orElse(null);
+        String profil = profilCourant == null ? null : profilCourant.name();
+        Object[] d = lignesDossiers.get(0);
+        String statut = (String) d[9];
+        // Statuts actifs de l'appelant : ceux de perimetre(), appliqués ici à la ligne déjà lue.
+        Set<String> statutsActifs = profilCourant == ProfilUtilisateur.PRMP || profilCourant == ProfilUtilisateur.UGPM
+                ? ReglesAFaire.STATUTS_ACTIFS_PARTIE_CONTROLEE : ReglesAFaire.STATUTS_ACTIFS_CNM;
+        if (profilCourant == null || !PROFILS_CONCERNES.contains(profilCourant) || statut == null
+                || !statutsActifs.contains(statut)) {
+            return new GestesDossierDto(idDossier, profil, maintenant, null, List.of());
+        }
+        Acteur acteur = acteurCourant();
+        boolean cnm = !acteur.partieControlee();
+        Lot lot = charger(acteur, cnm, lignesDossiers);
+        EtatDossier etat = etat(lot, d);
+        Chrono chrono = chrono(lot, d, etat, maintenant);
+
+        List<Ligne> lignes = ReglesAFaire.lignes(acteur, etat);
+        List<Candidat> candidats = new ArrayList<>();
+        if (!lignes.isEmpty()) {
+            candidats.addAll(taches(lot, cnm, d, etat, lignes, chrono, maintenant, idDossier));
+        }
+        candidats.sort(ORDRE);
+        List<Candidat> titulairesPuisAutres = new ArrayList<>(candidats.size());
+        candidats.stream().filter(c -> c.mode() == ModeTache.TITULAIRE).forEach(titulairesPuisAutres::add);
+        candidats.stream().filter(c -> c.mode() != ModeTache.TITULAIRE).forEach(titulairesPuisAutres::add);
+
+        GestesDossierDto.EtapeCourante etapeCourante = new GestesDossierDto.EtapeCourante(
+                ReglesAFaire.urgenceEtape(statut, chrono.courant()).name(),
+                delaiChronometre(chrono.courant(), chrono.finPrevue()));
+        return new GestesDossierDto(idDossier, profil, maintenant, etapeCourante, classer(titulairesPuisAutres));
+    }
+
     private Acteur acteurCourant() {
         ProfilUtilisateur profil = CurrentUser.profil().orElse(null);
         String im = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
@@ -183,14 +251,11 @@ public class AFaireService {
             if (lignes.isEmpty()) {
                 continue;
             }
-            candidats.addAll(taches(lot, cnm, d, etat, lignes, maintenant, idDossier));
+            candidats.addAll(taches(lot, cnm, d, etat, lignes, chrono(lot, d, etat, maintenant), maintenant,
+                    idDossier));
         }
 
-        Comparator<Candidat> ordre = Comparator.comparingInt((Candidat c) -> c.urgence().ordinal())
-                .thenComparing(Candidat::cleIntraUrgence, Comparator.nullsLast(Comparator.naturalOrder()))
-                .thenComparing(Candidat::idDossier)
-                .thenComparingInt(c -> c.section().ordinal());
-        candidats.sort(ordre);
+        candidats.sort(ORDRE);
 
         List<Candidat> titulaires = candidats.stream().filter(c -> c.mode() == ModeTache.TITULAIRE).toList();
         List<Candidat> delegues = candidats.stream().filter(c -> c.mode() != ModeTache.TITULAIRE).toList();
@@ -378,20 +443,41 @@ public class AFaireService {
             Integer idDossier, Double cleIntraUrgence) {
     }
 
+    /** Ordre des lignes (§5) : urgence, clé intra-urgence, dossier, section. Partagé par l'accueil et la page dossier. */
+    private static final Comparator<Candidat> ORDRE = Comparator.comparingInt((Candidat c) -> c.urgence().ordinal())
+            .thenComparing(Candidat::cleIntraUrgence, Comparator.nullsLast(Comparator.naturalOrder()))
+            .thenComparing(Candidat::idDossier)
+            .thenComparingInt(c -> c.section().ordinal());
+
+    /** Délai de l'étape en cours et date annoncée d'un dossier. */
+    private record Chrono(ChronometrageService.DelaiCourant courant, LocalDate finPrevue) {
+    }
+
+    /** Le délai et la date annoncée : ceux du chronométrage, sur les données déjà chargées (aucune requête). */
+    private Chrono chrono(Lot lot, Object[] d, EtatDossier etat, LocalDateTime maintenant) {
+        Integer idDossier = (Integer) d[0];
+        String statut = (String) d[9];
+        LocalDateTime depot = (LocalDateTime) d[2];
+        String statutPv = etat.pv() == null ? null : etat.pv().statut();
+        List<TacheDossier> taches = lot.taches().getOrDefault(idDossier, List.of());
+        List<SuspensionDossier> suspensions = lot.suspensions().getOrDefault(idDossier, List.of());
+        return new Chrono(
+                chronometrage.delaiCourant(statut, statutPv, taches, suspensions, depot, maintenant, lot.delais()),
+                chronometrage.datePrevisionnelleFin(statut, statutPv, taches, suspensions, depot, maintenant,
+                        lot.delais()));
+    }
+
     private List<Candidat> taches(Lot lot, boolean cnm, Object[] d, EtatDossier etat,
-            List<Ligne> lignes, LocalDateTime maintenant, Integer idDossier) {
+            List<Ligne> lignes, Chrono chrono, LocalDateTime maintenant, Integer idDossier) {
         String statut = (String) d[9];
         LocalDateTime depot = (LocalDateTime) d[2];
         Object[] pvLigne = lot.pvs().get(idDossier);
         String statutPv = etat.pv() == null ? null : etat.pv().statut();
         List<TacheDossier> taches = lot.taches().getOrDefault(idDossier, List.of());
-        List<SuspensionDossier> suspensions = lot.suspensions().getOrDefault(idDossier, List.of());
 
-        // Le délai, la date annoncée et la frise : ceux du chronométrage, sur les données déjà chargées.
-        ChronometrageService.DelaiCourant courant = chronometrage.delaiCourant(statut, statutPv, taches, suspensions,
-                depot, maintenant, lot.delais());
-        LocalDate finPrevue = chronometrage.datePrevisionnelleFin(statut, statutPv, taches, suspensions, depot,
-                maintenant, lot.delais());
+        // Le délai et la date annoncée (calculés par chrono), puis la frise : ceux du chronométrage.
+        ChronometrageService.DelaiCourant courant = chrono.courant();
+        LocalDate finPrevue = chrono.finPrevue();
         Circuits c = lot.circuits().get(idDossier);
         ChronometrageService.Frise frise = chronometrage.frise(statut, statutPv, taches,
                 c == null ? null : c.attributaireFrise, pvLigne == null ? null : ChronometrageService.etatPvDe(pvLigne),
@@ -440,8 +526,14 @@ public class AFaireService {
             return new AFaireDto.Delai(etape, entree, null, null, null, null, courant.pauseDepuis(),
                     courant.pauseHeures(), finPrevue);
         }
-        return new AFaireDto.Delai(etape, courant.entree(), courant.standardHeures(), courant.ecouleHeures(),
-                courant.restantHeures(), courant.echeance(), courant.pauseDepuis(), courant.pauseHeures(), finPrevue);
+        return delaiChronometre(courant, finPrevue);
+    }
+
+    /** Délai d'une étape chronométrée, champs du chronomètre compris — lignes chronométrées et étape en cours. */
+    private static AFaireDto.Delai delaiChronometre(ChronometrageService.DelaiCourant courant, LocalDate finPrevue) {
+        return new AFaireDto.Delai(courant.etape() == null ? null : courant.etape().name(), courant.entree(),
+                courant.standardHeures(), courant.ecouleHeures(), courant.restantHeures(), courant.echeance(),
+                courant.pauseDepuis(), courant.pauseHeures(), finPrevue);
     }
 
     /**

@@ -142,6 +142,33 @@ class ReglesAFaireTest {
         assertThat(ReglesAFaire.lignes(president, vise)).isEmpty();
     }
 
+    @Test
+    @DisplayName("Page dossier — urgence de l'étape en cours : seuils des lignes chronométrées, EN_PAUSE sur un statut "
+            + "suspensif, HORS_DELAI pour un brouillon, SANS_DELAI si l'entrée est inconnue, jamais SUIVI")
+    void urgenceEtape() {
+        // Mêmes bornes que les lignes chronométrées, sur tous les statuts où la PRMP n'aurait qu'un suivi.
+        for (String statut : List.of("SOUMIS", "PRET_DISPATCH", "DISPATCHE", "A_REEXAMINER", "EXAMINE",
+                "EN_VERIFICATION", "OBSERVATIONS_LEVEES", "DECISION_TRANSMISE_SIGMP")) {
+            assertThat(ReglesAFaire.urgenceEtape(statut, delai(8, -1))).as(statut).isEqualTo(UrgenceTache.EN_RETARD);
+            assertThat(ReglesAFaire.urgenceEtape(statut, delai(8, 3))).as(statut).isEqualTo(UrgenceTache.BIENTOT);
+            assertThat(ReglesAFaire.urgenceEtape(statut, delai(8, 4))).as(statut).isEqualTo(UrgenceTache.DANS_LES_DELAIS);
+            assertThat(ReglesAFaire.urgenceEtape(statut, delai(8, 4)))
+                    .isEqualTo(ReglesAFaire.urgence(SectionAFaire.A_DISPATCHER, delai(8, 4)));
+        }
+        DelaiCourant inconnue = new DelaiCourant(EtapeCircuit.EXAMEN, null, 0L, 8, 8L, null, null, null);
+        assertThat(ReglesAFaire.urgenceEtape("DISPATCHE", inconnue)).isEqualTo(UrgenceTache.SANS_DELAI);
+        // Statuts suspensifs : en pause, quel que soit le délai (la rectification garde une étape).
+        for (String statut : List.of("EN_ATTENTE_COMPLEMENTS_DEPOT", "EN_ATTENTE_PIECES", "EN_ATTENTE_DECISION_PRMP")) {
+            assertThat(ReglesAFaire.urgenceEtape(statut, delai(8, -5))).as(statut).isEqualTo(UrgenceTache.EN_PAUSE);
+        }
+        assertThat(ReglesAFaire.urgenceEtape("BROUILLON", delai(8, -5))).isEqualTo(UrgenceTache.HORS_DELAI);
+        for (String statut : List.of("SOUMIS", "EXAMINE", "EN_ATTENTE_PIECES", "BROUILLON")) {
+            for (long reste : new long[] {-3, 0, 2, 10}) {
+                assertThat(ReglesAFaire.urgenceEtape(statut, delai(8, reste))).isNotEqualTo(UrgenceTache.SUIVI);
+            }
+        }
+    }
+
     // ------------------------------------------------------------------ outils
 
     private static UrgenceTache urgence(int standard, long reste) {

@@ -26,6 +26,7 @@ import cnm.prs.dto.PerimetreExamenDto;
 import cnm.prs.dto.DossierDto;
 import cnm.prs.dto.DossierResoumissionRequest;
 import cnm.prs.dto.EchangeDto;
+import cnm.prs.dto.GestesDossierDto;
 import cnm.prs.dto.PpmDto;
 import cnm.prs.dto.RechercheDossierDto;
 import cnm.prs.service.AFaireService;
@@ -304,5 +305,26 @@ public class DossierController {
     public PerimetreExamenDto perimetreExamen(@PathVariable Integer id) {
         service.findById(id);   // garde de visibilité du dossier, réutilisée telle quelle
         return perimetreExamenService.perimetre(id);
+    }
+
+    /**
+     * ⚠️ <strong>Page dossier</strong> (refonte ergonomique, lot L4-B1, plan du 2026-09-15 §6) — ce que le connecté
+     * peut faire sur <strong>ce</strong> dossier, et le délai de son étape en cours : le calcul de l'accueil
+     * « À faire » rejoué sur un seul dossier. Lecture seule, à la volée, sans migration.
+     *
+     * <p><strong>Profils</strong> : les huit de {@code /a-faire} — Président, Chef de commission, Secrétaire, Membre,
+     * Vérificateur, Assistant contrôleur, PRMP et UGPM ; l'Administrateur et le Chargé de publication reçoivent 403.
+     * <strong>Puis la garde de visibilité du dossier</strong>, celle de {@code GET /{id}} avec ses messages : 404
+     * dossier inexistant, 403 hors périmètre.</p>
+     *
+     * <p>{@code taches} porte <strong>toutes</strong> les lignes du connecté sur ce dossier (titulaire d'abord, puis
+     * délégation, intérim, collègue, suppléance), de la forme exacte des lignes de {@code /a-faire}. Invariant : ce
+     * sont les lignes de {@code /a-faire?delegations=true} dont {@code dossier.idDossier} vaut {@code id}.</p>
+     */
+    @PreAuthorize("hasAnyRole('PRESIDENT','CHEF_COMMISSION','SECRETAIRE','MEMBRE','VERIFICATEUR',"
+            + "'ASSISTANT_CONTROLEUR','PRMP','UGPM')")
+    @GetMapping("/{id}/gestes")
+    public GestesDossierDto gestes(@PathVariable Integer id) {
+        return aFaireService.gestesDossier(id);
     }
 }

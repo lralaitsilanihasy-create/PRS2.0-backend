@@ -536,6 +536,16 @@ public interface DossierRepository extends JpaRepository<Dossier, Integer> {
     List<Object[]> findAFairePourPrmp(@Param("idPrmp") String idPrmp,
             @Param("statuts") java.util.Collection<String> statuts);
 
+    /**
+     * ⚠️ 2026-09-15 — page dossier ({@code GET /api/dossiers/{id}/gestes}, lot L4-B1) : la ligne de
+     * {@link #SELECT_A_FAIRE} d'un <strong>seul</strong> dossier, <strong>sans filtre de périmètre ni de
+     * statut</strong>. La visibilité est tranchée ensuite par la garde du dossier, les statuts actifs par
+     * l'appelant (même ensemble que les trois requêtes ci-dessus) ; une liste vide signifie « dossier inexistant »
+     * (404), ce qui épargne la lecture d'existence de la garde.
+     */
+    @Query(SELECT_A_FAIRE + " where d.idDossier = :idDossier")
+    List<Object[]> findAFaireParId(@Param("idDossier") Integer idDossier);
+
     /** Prochaine PK dossier, allouée par la séquence serveur (Voie B — l'id client est ignoré). */
     @Query(value = "select nextval('seq_dossier')", nativeQuery = true)
     Long nextIdDossier();

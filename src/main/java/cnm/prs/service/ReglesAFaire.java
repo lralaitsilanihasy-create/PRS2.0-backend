@@ -522,7 +522,26 @@ public final class ReglesAFaire {
      * inventé. Les autres sections ont une urgence fixe ({@link SectionAFaire.NatureDelai}).
      */
     public static UrgenceTache urgence(SectionAFaire section, ChronometrageService.DelaiCourant delai) {
-        switch (section.natureDelai()) {
+        return urgence(section.natureDelai(), delai);
+    }
+
+    /**
+     * ⚠️ <strong>Page dossier</strong> (2026-09-15, lot L4-B1, {@code GET /api/dossiers/{id}/gestes}) — urgence de
+     * l'<strong>étape en cours</strong> d'un dossier, hors de toute ligne. Mêmes seuils que les lignes
+     * ({@link #urgence(SectionAFaire, ChronometrageService.DelaiCourant)}) ; seule la nature du délai est lue sur le
+     * statut au lieu de la section : {@code EN_PAUSE} sur un statut suspensif, {@code HORS_DELAI} pour un brouillon,
+     * sinon chronométrée ({@code SANS_DELAI} si l'entrée est inconnue). <strong>Jamais {@code SUIVI}</strong> : le
+     * suivi est le titre d'une ligne de la PRMP, pas un état de l'étape.
+     */
+    public static UrgenceTache urgenceEtape(String statut, ChronometrageService.DelaiCourant delai) {
+        SectionAFaire.NatureDelai nature = ChronometrageService.estEnAttentePrmp(statut) ? SectionAFaire.NatureDelai.PAUSE
+                : StatutDossier.BROUILLON.name().equals(statut) ? SectionAFaire.NatureDelai.HORS_DELAI
+                : SectionAFaire.NatureDelai.CHRONOMETRE;
+        return urgence(nature, delai);
+    }
+
+    private static UrgenceTache urgence(SectionAFaire.NatureDelai nature, ChronometrageService.DelaiCourant delai) {
+        switch (nature) {
             case SUIVI:
                 return UrgenceTache.SUIVI;
             case PAUSE:
