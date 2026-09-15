@@ -1475,6 +1475,7 @@ Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `
 > | `GET /api/dossiers/{id}/chronometrage` | servi **sans identités** : `etapes[].imActeur`, `etapes[].nomActeur` et `attributaire` à `null` ; étapes, dates, durées, `profil`, compteurs, `attentePrmp` et `datePrevisionnelleFin` conservés |
 > | `DossierDto` (unitaire, listes, pages) | `imVerificateurCible`, `nomVerificateurCible`, `imAssistantCible`, `nomAssistantCible` et `acteursEtapes` à `null` ; `datesEtapes`, `dateEnregistrement`, `dateSoumission`, `datePrevisionnelleFin` et `attentePrmp` conservés |
 > | `PvExamenDto` (`/definitifs`, `/{id}`) | `viseParInterim`, `noteInterimNom`, `noteInterimDisponible`, `imDispatcheur` et `nomDispatcheur` à `null` ; les signataires officiels du PV signé restent servis (ils figurent sur l'acte) |
+> | `GET /api/observations-pv?dossier=` (⚠️ revue du 2026-09-14) | `historique[].imVerificateur` (auteur de chaque décision de vérification, seul matricule du DTO) à `null` ; `libelle`, `statut`, `precision`, `iteration`, `leveePossible` et, dans l'historique, `iteration`, `decision`, `precision`, `dateDecision` conservés |
 
 > ⚠️ **Recherche de la topbar — nouvel endpoint (2026-08-27, audit lot D).** `GET
 > /api/dossiers/recherche?q=` résout une référence saisie dans la barre de recherche **côté serveur**
@@ -5465,7 +5466,8 @@ Ouvert Restreint ».
 > dossiers FAVR signés avant la règle). **Aucun acteur ne peut élargir ce périmètre** à aucun stade :
 > - `GET /api/observations-pv?dossier=` (vérificateur localité / PRMP propriétaire / tout-voyant) :
 >   observations + **statut courant** (`EMISE` / `LEVEE` / `MAINTENUE`) + **historique par itération**
->   (`t_suivi_observation` : décision, précision, auteur, horodatage) + **`leveePossible`** (⚠️ **règle
+>   (`t_suivi_observation` : décision, précision, auteur — **`null` pour la PRMP et l'UGPM**, ⚠️ 2026-09-14,
+>   encart « Vues internes CNM » —, horodatage) + **`leveePossible`** (⚠️ **règle
 >   pilote du 2026-09-07 : vaut désormais toujours `true`**. La rectification de la PRMP précède la
 >   vérification — le vérificateur ne voit que des dossiers **déjà rectifiés** —, donc il dispose des deux
 >   décisions dès son premier passage. Remplace la décision produit du 2026-08-15, qui faisait du premier

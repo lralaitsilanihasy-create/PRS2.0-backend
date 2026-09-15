@@ -1,5 +1,7 @@
 package cnm.prs;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.everyItem;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasSize;
@@ -34,7 +36,9 @@ import cnm.prs.service.ChronometrageService;
  *   <li>{@code GET /api/dossiers/{id}/journal} → <strong>403</strong> ;</li>
  *   <li>{@code GET /api/dossiers/{id}/chronometrage} → servi <strong>sans identités</strong> ;</li>
  *   <li>{@code PvExamenDto} → ni intérim ni dispatcheur ;</li>
- *   <li>{@code DossierDto} → ni cibles Vérificateur/Assistant, ni {@code acteursEtapes}.</li>
+ *   <li>{@code DossierDto} → ni cibles Vérificateur/Assistant, ni {@code acteursEtapes} ;</li>
+ *   <li>⚠️ revue du 2026-09-14 — {@code GET /api/observations-pv} → sans l'auteur des décisions de
+ *       vérification ({@code historique[].imVerificateur}).</li>
  * </ol>
  * <p>Chaque chemin est éprouvé avec un jeton PRMP, l'UGPM au moins une fois par chemin, et un contrôleur
  * qui, lui, reçoit toujours les champs.</p>
@@ -43,6 +47,10 @@ class VuesInternesPrmpIntegrationTest extends CnmIntegrationTestSupport {
 
     @Autowired
     private ChronometrageService chronometrageService;
+    @Autowired
+    private cnm.prs.repository.ObservationPvRepository observationPvRepository;
+    @Autowired
+    private cnm.prs.repository.SuiviObservationRepository suiviObservationRepository;
 
     /** Agent UGPM sous la tutelle de PRMP001 : son jeton porte la ref de sa tutelle. */
     private String tokenUgpm;
@@ -197,5 +205,65 @@ class VuesInternesPrmpIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$.imAssistantCible").value("CTRASS"))
                 .andExpect(jsonPath("$.nomAssistantCible").value("Prenoms NomCTRASS"))
                 .andExpect(jsonPath("$.acteursEtapes.RECEPTION").value("Prenoms NomCTRSEC"));
+    }
+
+    // ------------------------------------------------------------------ 5. observations du PV
+
+    @Test
+    @DisplayName("C2.5 — observations-pv : PRMP et UGPM reçoivent statut, précision, itérations et dates, SANS "
+            + "l'auteur des décisions (historique[].imVerificateur) ; aucun matricule ni nom de contrôleur dans le "
+            + "corps brut ; le contrôleur reçoit l'auteur")
+    void observationsPv_sansVerificateurPourPrmpEtUgpm() throws Exception {
+        observationMaintenuePuisLevee();
+
+        for (String token : new String[] { tokenPrmp, tokenUgpm }) {
+            String corps = mvc.perform(get("/api/observations-pv").param("dossier", "1")
+                            .header("Authorization", token))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$", hasSize(1)))
+                    .andExpect(jsonPath("$[0].historique", hasSize(2)))
+                    .andExpect(jsonPath("$[0].historique[*].imVerificateur", everyItem(nullValue())))
+                    // Ce qui reste servi : l'avancement de la rectification, pas qui l'a jugée.
+                    .andExpect(jsonPath("$[0].statut").value("LEVEE"))
+                    .andExpect(jsonPath("$[0].historique[*].decision", contains("MAINTENUE", "LEVEE")))
+                    .andExpect(jsonPath("$[0].historique[0].precision").value("piece justificative manquante"))
+                    .andExpect(jsonPath("$[0].historique[*].dateDecision", everyItem(notNullValue())))
+                    .andReturn().getResponse().getContentAsString();
+            // Corps brut : aucune identité interne, quel que soit le champ qui la porterait.
+            for (Controleur c : controleurRepository.findAll()) {
+                assertThat(corps).as("matricule d'un contrôleur").doesNotContain(c.getImControleur());
+                assertThat(corps).as("nom d'un contrôleur").doesNotContain(c.getNomCont());
+            }
+        }
+        mvc.perform(get("/api/observations-pv").param("dossier", "1").header("Authorization", tokenCc))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].historique[*].imVerificateur", contains("CTRVER", "CTRVER")));
+    }
+
+    /**
+     * Une observation du PV 9801 sur le dossier 1, maintenue par le vérificateur CTRVER à la première itération
+     * puis levée à la seconde. Libellé et précision sans identité : c'est le serveur qui ne doit rien ajouter.
+     */
+    private void observationMaintenuePuisLevee() {
+        cnm.prs.entity.ObservationPv observation = new cnm.prs.entity.ObservationPv();
+        observation.setIdDossier(1);
+        observation.setIdPv(9801);
+        observation.setSource("POINT");
+        observation.setLibelle("Montant : au lieu de « 500 000 », lire « 5 000 000 »");
+        observation.setOrdre(1);
+        int id = observationPvRepository.save(observation).getIdObservationPv();
+        decision(id, 1, "MAINTENUE", "piece justificative manquante");
+        decision(id, 2, "LEVEE", null);
+    }
+
+    private void decision(int idObservationPv, int iteration, String decision, String precision) {
+        cnm.prs.entity.SuiviObservation suivi = new cnm.prs.entity.SuiviObservation();
+        suivi.setIdObservationPv(idObservationPv);
+        suivi.setIteration(iteration);
+        suivi.setDecision(decision);
+        suivi.setPrecision(precision);
+        suivi.setImVerificateur("CTRVER");
+        suivi.setDateDecision(java.time.LocalDateTime.of(2026, 9, 10 + iteration, 9, 0));
+        suiviObservationRepository.save(suivi);
     }
 }
