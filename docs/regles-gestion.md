@@ -768,6 +768,35 @@ pas même chargé. Leur périmètre est celui de leur tutelle.
 **Performance.** Nombre de requêtes constant (12 pour un profil CNM, 13 pour le Vérificateur, 14 pour l'Assistant, 7 pour la PRMP et l'UGPM), vérifié au compteur
 Hibernate de 1 à 40 dossiers.
 
+**Page dossier — `GET /api/dossiers/{id}/gestes` (⚠️ règle ajoutée, refonte ergonomique lot L4-B1, 2026-09-15).**
+Même calcul que l'accueil, rejoué sur un lot d'un seul dossier (`AFaireService.gestesDossier`) : aucune règle de
+`ReglesAFaire` n'est réécrite, rien n'est recalculé à part. La ligne du dossier (`findAFaireParId`, sans filtre de
+périmètre ni de statut) sert de test d'existence — absente, 404 avant même la garde ; présente,
+`DossierService.controlerVisibilite` tranche le périmètre (403), la même garde que la consultation du dossier.
+**Invariant de parité, testé** : hors `rang`, `taches` est égal aux lignes de `GET /a-faire?delegations=true`
+(`taches` ∪ `delegations.taches`) dont `dossier.idDossier` vaut l'identifiant demandé — titulaires d'abord, puis
+délégation, intérim, collègue, suppléance ; l'accueil numérote ses deux listes séparément, la page numérote toute la
+liste (`rang` à partir de 1 sur l'ensemble).
+
+**`etapeCourante` est indépendante des gestes du connecté.** Elle est servie **même quand `taches` est vide** : un
+Membre qui consulte le dossier d'un collègue voit le délai de l'étape sans qu'aucun geste ne lui soit proposé. Elle
+vaut `null` sur un statut hors des statuts actifs de l'appelant — `CLOTURE`, `RETIRE`, `REMPLACE`, `PV_SIGNE`, et
+`BROUILLON`, qui n'est jamais actif pour un profil CNM, Président compris (les autres contrôleurs n'atteignent de
+toute façon jamais un brouillon, la garde de visibilité l'excluant déjà). Son urgence suit les mêmes seuils que les
+lignes chronométrées de l'accueil : `EN_PAUSE` sur un statut suspensif, `HORS_DELAI` pour un brouillon (PRMP, UGPM),
+`SANS_DELAI` si l'entrée est inconnue — **jamais `SUIVI`** : la ligne `EN_COURS_CNM` de la PRMP reste `SUIVI` dans
+l'accueil, mais l'étape du dossier, elle, porte son urgence réelle.
+
+**Règle C2, identique à l'accueil.** Les mêmes champs sont masqués à la PRMP et à l'UGPM (`dossier.acteursEtapes`,
+`niveauNavette`, `faits.consigneDispatch`, `dernierRetourNavette`, `partsAttendues`, `refs.idDispatch`), l'annuaire
+des contrôleurs n'est pas chargé, et `etapeCourante` — servie à ces deux profils — ne porte qu'un délai, jamais un
+acteur.
+
+**Performance.** Même ordre de grandeur que l'accueil, garde de visibilité comprise et constant d'un dossier à
+l'autre : 12 pour le Président, 13 pour le Chef de commission, le Secrétaire et le Membre, 14 pour le Vérificateur,
+15 pour l'Assistant, 8 pour la PRMP et l'UGPM (compteur Hibernate). Sur un statut hors des statuts actifs, rien n'est
+calculé : deux requêtes au plus.
+
 ### Actualités à l'ouverture de session (transversal)
 
 ⚠️ **Règle ajoutée (2026-08-19, spec du 2026-08-18)** — un **modal d'actualités** (mini-page markdown +

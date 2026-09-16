@@ -1960,8 +1960,11 @@ avec les mêmes messages :
 
 **`EtapeCourante`** = `{ urgence (string), delai (Delai) }`.
 - **`null`** sur un statut hors des statuts actifs de l'appelant : `CLOTURE`, `RETIRE`, `REMPLACE`, `PV_SIGNE` ; et
-  `BROUILLON` pour un contrôleur (seul le Président le lit). Sinon servie **même quand `taches` est vide** : un Membre
-  qui consulte le dossier d'un collègue voit le délai.
+  `BROUILLON`, qui n'est **jamais** actif pour un profil CNM, **Président compris** — testé (§7 test 3, dossier
+  brouillon : `null` pour le Président aussi). Les autres contrôleurs n'atteignent de toute façon jamais un brouillon,
+  la garde de visibilité l'excluant déjà (403) : seul le Président peut interroger `/gestes` sur un tel dossier, pour
+  recevoir `etapeCourante = null` et `taches = []`. Sinon servie **même quand `taches` est vide** : un Membre qui
+  consulte le dossier d'un collègue voit le délai.
 - `delai` : le `Delai` de l'accueil, lu dans `ChronometrageService.delaiCourant`, **champs du chronomètre compris**
   (`standardHeures`, `ecouleHeures`, `restantHeures`, `echeance`) ; égal au `delai` de toute ligne chronométrée du
   même dossier.
