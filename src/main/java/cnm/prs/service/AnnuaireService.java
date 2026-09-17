@@ -483,12 +483,13 @@ public class AnnuaireService {
      * {@code CompteAuthService.desactiver} pose {@code ACTIF = false} en laissant {@code STATUT} à
      * {@code ACTIF}, là où un refus écrit {@code STATUT = REFUSE}.</p>
      *
-     * <p><strong>⚠️ Invariant rompu, documenté ici faute de l'être ailleurs.</strong> Le javadoc de
-     * {@link StatutCompte} annonce {@code ACTIF=true ⟺ STATUT=ACTIF} ; ni
-     * {@code CompteAuthService.desactiver} ni {@code CompteAuthService.activer} ne tiennent cette
-     * promesse — tous deux n'écrivent que le booléen. C'est précisément cet écart qui rend la
-     * distinction possible ici. Il n'est <strong>pas</strong> corrigé : le login s'appuie sur
-     * {@code ACTIF}, et y toucher dépasse le périmètre de ce lot.</p>
+     * <p><strong>⚠️ Invariant tenu d'un seul côté, à dessein</strong> (précisé le 2026-09-17). Le
+     * javadoc de {@link StatutCompte} annonce {@code ACTIF=true ⟺ STATUT=ACTIF}. Depuis la garde
+     * d'activation, {@code CompteAuthService.activer} le tient (il pose {@code STATUT = ACTIF}, ne
+     * portant plus que sur un compte déjà validé) ; {@code CompteAuthService.desactiver} ne le tient
+     * <strong>pas</strong> et n'écrit que le booléen. C'est précisément cet écart, assumé, qui rend la
+     * distinction possible ici : le login s'appuie sur {@code ACTIF}, et un compte fermé après coup
+     * doit rester reconnaissable d'une inscription jamais ouverte.</p>
      */
     static StatutCompteAnnuaire statutDe(CompteAuth compte) {
         if (compte == null) {

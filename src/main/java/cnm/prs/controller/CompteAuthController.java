@@ -17,8 +17,13 @@ import cnm.prs.dto.ReinitMotDePasseRequest;
 import cnm.prs.service.CompteAuthService;
 
 /**
- * Gestion des comptes d'authentification — réservée à l'Administrateur (§3.8) :
- * validation des inscriptions (activation/désactivation).
+ * Gestion des comptes d'authentification — réservée à l'Administrateur (§3.8) : suspendre et
+ * rouvrir un compte <strong>déjà validé</strong>, réinitialiser un mot de passe.
+ *
+ * <p>⚠️ L'<strong>instruction des inscriptions</strong> (validation, refus motivé) n'est pas ici
+ * mais sur {@code /api/inscriptions} ({@link cnm.prs.service.InscriptionService}) : depuis le
+ * 2026-09-17, activer ou suspendre une inscription {@code EN_ATTENTE} ou {@code REFUSE} est refusé
+ * (409).</p>
  */
 @RestController
 @RequestMapping("/api/comptes-auth")
@@ -37,13 +42,26 @@ public class CompteAuthController {
         return service.enAttente();
     }
 
-    /** Active un compte (valide une inscription). */
+    /**
+     * Rouvre un compte déjà validé (« réactiver »).
+     *
+     * <p>⚠️ Ce n'est <strong>pas</strong> la validation d'une inscription : celle-ci passe par
+     * {@code POST /api/inscriptions/{login}/valider}. Sur une inscription {@code EN_ATTENTE} ou
+     * {@code REFUSE} → <strong>409</strong> (garde du 2026-09-17,
+     * {@link cnm.prs.service.CompteAuthService#activer}).</p>
+     */
     @PostMapping("/{login}/activer")
     public CompteAuthResumeDto activer(@PathVariable String login) {
         return service.activer(login);
     }
 
-    /** Désactive un compte. */
+    /**
+     * Suspend un compte déjà validé.
+     *
+     * <p>⚠️ Sur une inscription {@code EN_ATTENTE} ou {@code REFUSE} → <strong>409</strong> : il n'y
+     * a pas de compte ouvert à fermer ; bloquer une inscription se dit
+     * {@code POST /api/inscriptions/{login}/refuser}, avec motif.</p>
+     */
     @PostMapping("/{login}/desactiver")
     public CompteAuthResumeDto desactiver(@PathVariable String login) {
         return service.desactiver(login);

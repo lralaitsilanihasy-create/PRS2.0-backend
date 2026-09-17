@@ -149,8 +149,21 @@ class AuthentificationHabilitationIntegrationTest extends CnmIntegrationTestSupp
                 .andExpect(status().isOk());
     }
 
+    /**
+     * ⚠️ 2026-09-17 — ce test validait l'inscription par {@code POST /api/comptes-auth/{login}/activer},
+     * qui n'imposait aucune condition sur {@code STATUT}. Ce raccourci n'existe plus (409 sur une
+     * inscription {@code EN_ATTENTE}) : la validation passe par la porte qui instruit vraiment,
+     * {@code POST /api/inscriptions/{login}/valider} — celle qu'appelle l'écran « Demandes d'accès ».
+     * Le reste du parcours (inscription publique, notification de l'Administrateur, connexion refusée
+     * avant validation, doublon de login) est inchangé.
+     *
+     * <p>La variante JSON <strong>historique</strong> de {@code /register/prmp} ne déclare aucune
+     * entité contractante (seule la v2 multipart en exige) ; la déclaration est donc insérée ici comme
+     * {@code registerPrmpV2} l'écrirait, sans quoi la validation ne pourrait rien rattacher et le
+     * compte resterait — à bon droit — en attente.</p>
+     */
     @Test
-    @DisplayName("Auto-inscription PRMP : compte inactif → activation Admin → connexion")
+    @DisplayName("Auto-inscription PRMP : compte inactif → validation Admin par les demandes d'accès → connexion")
     void autoInscriptionPrmp_validationAdmin() throws Exception {
         String inscription = "{"
                 + "\"login\":\"prmp.new\",\"motDePasse\":\"Passw0rd!\",\"idPrmp\":\"PRMP777\","
@@ -175,13 +188,20 @@ class AuthentificationHabilitationIntegrationTest extends CnmIntegrationTestSupp
                 .content("{\"login\":\"prmp.new\",\"motDePasse\":\"Passw0rd!\"}"))
                 .andExpect(status().isUnauthorized());
 
-        // Un non-administrateur ne peut pas activer → 403.
+        // Un non-administrateur ne peut pas activer → 403 (avant toute règle métier).
         mvc.perform(post("/api/comptes-auth/prmp.new/activer").header("Authorization", tokenMembre))
                 .andExpect(status().isForbidden());
 
-        // L'Administrateur valide le compte.
-        mvc.perform(post("/api/comptes-auth/prmp.new/activer").header("Authorization", tokenAdmin))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.actif").value(true));
+        // Entité libre déclarée par l'inscription (cf. javadoc : la variante JSON n'en porte pas).
+        entiteContractRepository.save(entite(7, 1, "ANT"));
+        prmpEntiteDemandeRepository.save(demande(9300, "prmp.new", 7, null));
+
+        // L'Administrateur valide l'inscription là où elle s'instruit.
+        mvc.perform(post("/api/inscriptions/prmp.new/valider").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.statutCompte").value("ACTIF"))
+                .andExpect(jsonPath("$.validees.length()").value(1));
 
         // La connexion fonctionne désormais, avec le rôle PRMP.
         mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
@@ -400,6 +420,100 @@ class AuthentificationHabilitationIntegrationTest extends CnmIntegrationTestSupp
         mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"login\":\"prmp.ref\",\"motDePasse\":\"pw\"}"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    /**
+     * ⚠️ 2026-09-17 — <strong>garde d'activation</strong>. {@code POST /api/comptes-auth/{login}/activer}
+     * posait {@code ACTIF = true} sans regarder {@code STATUT} : un appel direct (script, outil, futur
+     * écran) donnait l'accès à une inscription en attente ou refusée, en contournant l'instruction que
+     * seul {@code /api/inscriptions/{login}/valider} fait — rattachement des entités, date de décision,
+     * validateur, notification. La règle n'existait que dans l'écran ({@code annuaire-admin.ts}).
+     *
+     * <p>Les deux statuts sont refusés, pas seulement {@code REFUSE} : ils décrivent tous deux un accès
+     * jamais accordé, et c'est déjà le périmètre de {@code MandatService.reactiverComptesDeLaPrmp}
+     * (« une nomination ne vaut pas validation d'inscription »).</p>
+     */
+    @Test
+    @DisplayName("Garde d'activation : activer une inscription EN_ATTENTE ou REFUSE → 409, le compte reste fermé")
+    void activation_refuseeSurInscriptionJamaisAcceptee() throws Exception {
+        prmpRepository.save(prmp("PRMP910", "ANT"));
+        prmpRepository.save(prmp("PRMP911", "ANT"));
+        compteAuthRepository.save(new CompteAuth("prmp.att", passwordEncoder.encode("pw"), "PRMP", "PRMP910", false));
+        CompteAuth refuse = new CompteAuth("prmp.nok", passwordEncoder.encode("pw"), "PRMP", "PRMP911", false);
+        refuse.setStatut("REFUSE");
+        refuse.setMotifRefus("Arrêté non conforme");
+        compteAuthRepository.save(refuse);
+
+        // Inscription en attente : le message renvoie à la porte qui instruit.
+        mvc.perform(post("/api/comptes-auth/prmp.att/activer").header("Authorization", tokenAdmin))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message", containsString("/api/inscriptions/prmp.att/valider")));
+
+        // Inscription refusée : rouvrir l'accès demande une nouvelle décision.
+        mvc.perform(post("/api/comptes-auth/prmp.nok/activer").header("Authorization", tokenAdmin))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message", containsString("a été refusée")));
+
+        // Suspendre n'a pas plus de sens : il n'y a aucun compte ouvert à fermer (409, pas un 200 muet).
+        mvc.perform(post("/api/comptes-auth/prmp.att/desactiver").header("Authorization", tokenAdmin))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message", containsString("/api/inscriptions/prmp.att/refuser")));
+        mvc.perform(post("/api/comptes-auth/prmp.nok/desactiver").header("Authorization", tokenAdmin))
+                .andExpect(status().isConflict());
+
+        // Aucun des deux comptes n'a bougé : la connexion reste refusée.
+        assertFalse(compteAuthRepository.findByLogin("prmp.att").orElseThrow().getActif());
+        assertFalse(compteAuthRepository.findByLogin("prmp.nok").orElseThrow().getActif());
+        mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"login\":\"prmp.att\",\"motDePasse\":\"pw\"}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    /**
+     * ⚠️ Le cas que la garde ne doit PAS casser : la (ré)ouverture d'un compte déjà validé — la seule
+     * raison d'être de {@code activer} côté écran (« Réactiver le compte », {@code actions-compte.ts}). Un
+     * compte suspendu garde {@code STATUT = ACTIF} ; il repasse donc la garde.
+     */
+    @Test
+    @DisplayName("Garde d'activation : un compte validé se suspend puis se rouvre, et la connexion revient")
+    void reactivation_compteValideRendLaConnexion() throws Exception {
+        // PRMP001 est seedée avec un compte ACTIF (mot de passe « pw »).
+        mvc.perform(post("/api/comptes-auth/PRMP001/desactiver").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.actif").value(false));
+        mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"login\":\"PRMP001\",\"motDePasse\":\"pw\"}"))
+                .andExpect(status().isUnauthorized());
+
+        // ⚠️ La suspension laisse STATUT à ACTIF : c'est ce qui distingue un compte fermé d'une
+        // inscription refusée (StatutCompteAnnuaire) — et ce qui laisse passer la réactivation.
+        assertTrue("ACTIF".equals(compteAuthRepository.findByLogin("PRMP001").orElseThrow().getStatut()),
+                "suspendre ne touche pas STATUT");
+
+        mvc.perform(post("/api/comptes-auth/PRMP001/activer").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.actif").value(true));
+        mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"login\":\"PRMP001\",\"motDePasse\":\"pw\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.role").value("PRMP"));
+    }
+
+    /**
+     * ⚠️ Lignes antérieures à la colonne {@code STATUT} (nullable depuis la baseline) : l'annuaire les
+     * lit {@code SUSPENDU} et l'écran y propose donc la réactivation. La garde doit les laisser passer —
+     * et l'activation en profite pour poser {@code STATUT = ACTIF}, ce que l'invariant annoncé par
+     * {@code StatutCompte} promet ({@code ACTIF=true} ⟺ {@code STATUT=ACTIF}).
+     */
+    @Test
+    @DisplayName("Garde d'activation : un compte au STATUT nul (ligne héritée) se rouvre et récupère STATUT = ACTIF")
+    void reactivation_ligneHeriteeSansStatut() throws Exception {
+        prmpRepository.save(prmp("PRMP912", "ANT"));
+        CompteAuth herite = new CompteAuth("prmp.old", passwordEncoder.encode("pw"), "PRMP", "PRMP912", false);
+        herite.setStatut(null);
+        compteAuthRepository.save(herite);
+
+        mvc.perform(post("/api/comptes-auth/prmp.old/activer").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.actif").value(true));
+        assertTrue("ACTIF".equals(compteAuthRepository.findByLogin("prmp.old").orElseThrow().getStatut()),
+                "l'activation rétablit l'invariant ACTIF=true <=> STATUT=ACTIF");
     }
 
     /** Positionne le contexte de sécurité sur un JWT du profil donné (test direct de la garde centrale). */
