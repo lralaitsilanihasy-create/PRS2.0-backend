@@ -76,8 +76,9 @@ public class SecurityConfig {
     /**
      * Gestion des comptes & de la hiérarchie (§3.8 Module 10) : contrôleurs, PRMP,
      * organigramme. Écriture réservée à l'Administrateur ; lecture ouverte (l'UI affiche
-     * noms et hiérarchie). Les sessions ({@code /api/session-utilisateurs}) sont, elles,
-     * entièrement réservées à l'Admin (cf. SessionUtilisateurController).
+     * noms et hiérarchie). Le journal des connexions ({@code /api/sessions}) est, lui,
+     * entièrement réservé à l'Admin et en <strong>lecture seule</strong> (cf. SessionController) —
+     * ⚠️ lot 6, 2026-09-17 : il remplace le CRUD {@code /api/session-utilisateurs}, retiré.
      */
     private static final String[] GESTION_COMPTES = {
             "/api/controleurs", "/api/prmps", "/api/organigrammes"

@@ -696,10 +696,12 @@ class AuthentificationHabilitationIntegrationTest extends CnmIntegrationTestSupp
         // Lecture des contrôleurs ouverte (l'UI affiche les noms).
         mvc.perform(get("/api/controleurs").header("Authorization", tokenMembre))
                 .andExpect(status().isOk());
-        // Sessions utilisateur : réservées à l'Administrateur (lecture comprise).
-        mvc.perform(get("/api/session-utilisateurs").header("Authorization", tokenMembre))
+        // Journal des connexions : réservé à l'Administrateur (lecture comprise).
+        // ⚠️ Lot 6 (2026-09-17, §B4) — la ressource s'appelle désormais /api/sessions et n'a plus
+        // d'écriture : le CRUD /api/session-utilisateurs a été retiré (voir SessionController).
+        mvc.perform(get("/api/sessions").header("Authorization", tokenMembre))
                 .andExpect(status().isForbidden());
-        mvc.perform(get("/api/session-utilisateurs").header("Authorization", tokenAdmin))
+        mvc.perform(get("/api/sessions").header("Authorization", tokenAdmin))
                 .andExpect(status().isOk());
     }
 
