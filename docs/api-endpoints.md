@@ -324,6 +324,77 @@ actif** : c'est un coupe-circuit, pas une seconde activation (chaque actualité 
 
 ---
 
+## Annuaire des personnes (⚠️ ressource ajoutée 2026-09-17, lot 6)
+**Ressource** `/api/annuaire` — **lecture seule**, réservée à l'**ADMINISTRATEUR** (anonyme → **401**,
+tout autre profil → **403**). Recherche unifiée des personnes : l'administrateur cherche « quelqu'un »,
+pas « un contrôleur ». Réunit en **une** liste paginée les trois populations qui vivent dans trois
+tables et trois ressources (`/api/controleurs`, `/api/prmps`, `/api/ugpms` — inchangées, l'annuaire ne
+les remplace pas), avec des identifiants de longueurs différentes (`IM_CONTROLEUR` 7, `ID_PRMP` et
+`ID_UGPM` 10), et y joint le **statut du compte**, qui vit dans `t_compte_auth` et non dans les tables
+de personnes. Aucune écriture : les gestes de compte restent sur `/api/comptes-auth/**`.
+
+**Champs `AnnuairePersonneDto`**
+
+| Champ (JSON) | Type | Description |
+|---|---|---|
+| ref | string | identifiant de la personne : `IM_CONTROLEUR`, `ID_PRMP` ou `ID_UGPM` |
+| type | string | population : `CONTROLEUR` · `PRMP` · `UGPM` |
+| nom | string | nom de famille |
+| prenoms | string | prénoms |
+| profil | string \| null | profil du contrôleur (`MEMBRE`, `CHEF_COMMISSION`…) ; **null** pour PRMP et UGPM, dont le type tient lieu de rôle |
+| localite | string \| null | **code** de localité (`ID_LOCALITE`, ex. `ANT`) — le libellé vient de `/api/localites` ; **null** hors contrôleurs (ni la PRMP ni l'UGPM n'en portent, `PrmpDto` ne porte plus `idLocalite`) |
+| entite | string \| null | entité(s) contractante(s) **actives** de rattachement, séparées par « · » ; celles de la **tutelle** pour une UGPM ; **null** pour un contrôleur |
+| login | string \| null | login du compte ; **null** si la personne n'en a aucun |
+| statutCompte | string | `ACTIF` · `DESACTIVE` · `EN_ATTENTE` · `SANS_COMPTE` |
+
+**Endpoints**
+
+| Méthode | URL | Corps | Réponse | Statuts | Rôle |
+|---|---|---|---|---|---|
+| GET | /api/annuaire?q=&type=&profil=&localite=&statut=&page=&size= | — | `Page<AnnuairePersonneDto>` | 200, 400, 401, 403 | **ADMINISTRATEUR** |
+
+**Paramètres** — tous facultatifs et **cumulatifs** ; une valeur inconnue d'un critère énuméré → **400**
+(et non une liste vide, qui se lirait « personne » au lieu de « critère erroné »).
+
+| Paramètre | Valeurs | Effet |
+|---|---|---|
+| `q` | texte libre | cherche **sans la casse ni les accents** dans le nom, les prénoms, la référence, le login **et l'entité** — « herivelo » trouve « Hérivélo », « DGCF » trouve la PRMP de la DGCF **et** ses UGPM |
+| `type` | `CONTROLEUR` · `PRMP` · `UGPM` | population |
+| `profil` | `MEMBRE`, `CHEF_COMMISSION`, … | profil du contrôleur ; exclut de fait PRMP et UGPM, qui n'en portent pas — c'est `type` qui sert à les isoler |
+| `localite` | code (`ANT`), casse indifférente | ne retient que des contrôleurs, seuls porteurs d'une localité |
+| `statut` | `ACTIF` · `DESACTIVE` · `EN_ATTENTE` · `SANS_COMPTE` | état d'accès, **`SANS_COMPTE` compris** |
+| `page`, `size` | number | forme `Page` habituelle (`content`, `totalElements`, `number`, `size`) ; défaut `size=20` |
+
+> **Tri imposé par le serveur** : nom, puis prénoms, puis référence, sans les accents. La référence
+> départage les homonymes et rend l'ordre **total** — sans elle, deux pages successives pourraient se
+> recouvrir. Le tri demandé par le client n'est pas appliqué (contrat des autres listes paginées).
+
+> ⚠️ **`statutCompte` — d'où il vient.** `t_compte_auth` n'a pas de valeur `DESACTIVE` : son énuméré est
+> `EN_ATTENTE` / `ACTIF` / `REFUSE`, et `POST /api/comptes-auth/{login}/desactiver` ne touche que le
+> booléen `ACTIF`, celui que le login consulte. La correspondance est donc : aucun compte →
+> `SANS_COMPTE` ; `STATUT = EN_ATTENTE` → `EN_ATTENTE` ; `ACTIF = true` → `ACTIF` ; tout le reste →
+> `DESACTIVE` (compte suspendu **ou** inscription refusée). C'est la règle qui sert aussi à
+> `comptesSuspendus` de `CompteursAdminDto`, pour que l'accueil et l'annuaire comptent pareil. Si une
+> personne porte **plusieurs** comptes (rien ne l'interdit, la PK est le login), c'est le **moins
+> fermé** qui est servi : c'est l'accès dont elle dispose réellement.
+
+**Exemple — réponse**
+```json
+{
+  "content": [
+    { "ref": "CTR0142", "type": "CONTROLEUR", "nom": "RAKOTOMALALA", "prenoms": "Mamy",
+      "profil": "MEMBRE", "localite": "ANT", "entite": null,
+      "login": "m.rakotomalala", "statutCompte": "ACTIF" },
+    { "ref": "PRMP001", "type": "PRMP", "nom": "RANDRIANARISOA", "prenoms": "Hanta",
+      "profil": null, "localite": null, "entite": "Direction générale du contrôle financier",
+      "login": null, "statutCompte": "SANS_COMPTE" }
+  ],
+  "totalElements": 2, "number": 0, "size": 20
+}
+```
+
+---
+
 ## Anomalies
 **Ressource** `/api/anomalies` — ⚠️ LOT 3a (2026-08-26) : la ressource était lisible et modifiable par
 tout authentifié. **Lecture** réservée **Président + Administrateur** (§3.1 « aucun accès au journal
@@ -3494,6 +3565,28 @@ système).
 | inscriptionsEnAttente | number | inscriptions PRMP en attente de validation (`t_compte_auth.STATUT = EN_ATTENTE`, type PRMP) |
 | comptes | number | nombre total de comptes d'authentification |
 | journalAudit | number | nombre total d'entrées du journal d'audit |
+| rattachementsEnAttente | number | ⚠️ 2026-09-17 — déclarations de rattachement **PRMP⇄entité** non décidées (`t_prmp_entite_demande.STATUT_DEMANDE = EN_ATTENTE`) |
+| inscriptionDoyenneLe | string (date-time) \| null | ⚠️ 2026-09-17 — dépôt de la **plus ancienne inscription PRMP encore en attente** ; `null` si la file est vide |
+| rattachementDoyenLe | string (date-time) \| null | ⚠️ 2026-09-17 — **première déclaration** de rattachement encore en attente (`DATE_DECLARATION` est une date : l'heure est donc `00:00:00`) ; `null` si la file est vide |
+| comptesActifs | number | ⚠️ 2026-09-17 — comptes connectables (`t_compte_auth.ACTIF = true`) |
+| comptesSuspendus | number | ⚠️ 2026-09-17 — comptes existants **non connectables hors inscription en attente** : suspendus par l'Administrateur ou refusés (même règle que `statutCompte = DESACTIVE` de l'annuaire) |
+| mandatsExpirantSous30j | number | ⚠️ 2026-09-17 — mandats PRMP **non abrogés** dont `DATE_FIN` tombe dans les 30 jours (bornes incluses) |
+
+> ⚠️ **2026-09-17 (lot 6, §B1) — six champs ajoutés, aucun retiré.** Les trois compteurs d'origine sont
+> inchangés, périmètre compris : le front lit `inscriptionsEnAttente` pour la pastille du menu.
+> **Ce qui compte pour l'accueil n'est pas le volume mais l'ancienneté** de la plus vieille demande de
+> chaque file — c'est elle qui dit s'il y a urgence.
+>
+> **D'où vient `inscriptionDoyenneLe`.** `t_compte_auth` ne porte **aucune date de dépôt** : seule
+> `DATE_DECISION` y figure, renseignée quand l'Administrateur tranche, donc jamais pour une inscription
+> en attente. La demande excluant toute migration, l'ancienneté se lit sur la **première pièce déposée**
+> (`t_piece_jointe.DATE_DEPOT`, écrite dans la même transaction que l'inscription) ; à défaut — variante
+> JSON historique de l'inscription, sans pièce — sur la première déclaration d'entité. Même périmètre
+> que le compteur qu'elle accompagne (type PRMP).
+>
+> **`sessionsOuvertes` et `echecsConnexion24h` n'existent pas** tant que `t_session_utilisateur` n'est
+> pas alimentée (besoin B4, non livré) : une mesure fausse sur un tableau de bord de sécurité est pire
+> qu'une mesure absente.
 
 **Endpoints**
 
@@ -3507,7 +3600,7 @@ système).
 | GET | /api/kpis/mes-compteurs-membre | — | `CompteursMembreDto` | 200, 403 | **MEMBRE** (ou délégué) / ADMINISTRATEUR — compteurs de ses dossiers attribués |
 | GET | /api/kpis/mes-compteurs-publication | — | `CompteursPublicationDto` | 200, 403 | **CHARGE_PUBLICATION** / ADMINISTRATEUR — workflow de publication (global) |
 | GET | /api/kpis/mes-compteurs-assistant | — | `CompteursAssistantDto` | 200, 403 | **ASSISTANT_CONTROLEUR** / ADMINISTRATEUR — documents signés de sa localité |
-| GET | /api/kpis/mes-compteurs-admin | — | `CompteursAdminDto` | 200, 403 | **ADMINISTRATEUR** — inscriptions, comptes, audit (global) |
+| GET | /api/kpis/mes-compteurs-admin | — | `CompteursAdminDto` | 200, 403 | **ADMINISTRATEUR** — inscriptions, rattachements, comptes, mandats, audit (global) |
 
 > ⚠️ **Badges de menu agrégés (audit front 2026-08-16).** `GET /api/kpis/badges` renvoie en **un appel** les compteurs du **rôle du connecté** (routage serveur sur le profil du JWT) : `{ "profil": "<PROFIL>", "compteurs": { … } }`. Le champ `compteurs` porte **le même DTO** que l'endpoint `mes-compteurs*` du rôle (`CompteursPrmpDto` pour la PRMP ; **`CompteursDto` du tableau de bord** pour Président — global — et Chef de commission — sa localité, dont `predispatch` ; `CompteursSecretaireDto` avec `aReceptionner` ; etc.) — le front réutilise ses lecteurs existants et **cesse de rejouer les endpoints de liste pour lire des `.length`**. Profil sans compteurs → `compteurs` vide.
 >
