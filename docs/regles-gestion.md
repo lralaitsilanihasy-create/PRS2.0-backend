@@ -2116,6 +2116,49 @@ Accès complet aux référentiels, comptes utilisateurs, journal d'audit, hiéra
     **429** avec en-tête `Retry-After` (secondes). Un **login réussi efface le compteur du couple**
     (pas celui de l'IP, volontairement). Limiteur **en mémoire** (mono-instance par nature — voir
     `docs/deploiement.md` pour l'implication en cas de plusieurs instances).
+- Cycle de vie d'un compte d'authentification (⚠️ règle ajoutée 2026-09-17, lot 6) [Auto]
+  - Cinq états se lisent au contrat (`StatutCompteAnnuaire`, `/api/annuaire`) : `ACTIF`, `SUSPENDU`,
+    `REFUSE`, `EN_ATTENTE`, `SANS_COMPTE` — alors que l'énuméré `StatutCompte` de la table n'en porte
+    que trois (`EN_ATTENTE`, `ACTIF`, `REFUSE`). **Un compte suspendu n'est pas une inscription
+    refusée** : `CompteAuthService.desactiver()` ne touche que le booléen `ACTIF` (`STATUT` reste à
+    `ACTIF`), tandis qu'un refus d'inscription écrit `STATUT = REFUSE` (et son motif). C'est ce qui les
+    rend distinguables malgré l'invariant annoncé par le javadoc de `StatutCompte`
+    (`ACTIF=true ⟺ STATUT=ACTIF`), que ni `activer` ni `desactiver` ne tiennent en réalité — l'écart
+    n'est pas corrigé, c'est lui qui permet la distinction.
+  - **Le booléen `ACTIF` prime sur `STATUT` quand ils divergent** : c'est lui, et lui seul, que le
+    login consulte. Le compteur « comptes suspendus » de l'accueil Administrateur (`comptesSuspendus`,
+    `CompteursAdminDto`) ne compte donc que `STATUT = ACTIF` avec `ACTIF = false` — une inscription
+    refusée n'y figure jamais, la tuile étant une mesure de sécurité qu'une refusée gonflerait à tort.
+  - **Les gestes de compte (suspendre, réactiver, réinitialiser le mot de passe) sont refusés sur un
+    compte `EN_ATTENTE` ou `REFUSE`**, même s'il porte déjà un login : « réactiver » y poserait
+    `ACTIF = true` et ouvrirait un accès jamais accordé — la validation d'une inscription se fait dans
+    son propre écran (« Demandes d'accès »), avec son instruction et son motif. ⚠️ Cette garde n'est
+    posée aujourd'hui que côté front (`annuaire-admin.ts`, `gestesDeCompte`) : `POST
+    /api/comptes-auth/{login}/activer` et `.../desactiver` n'imposent eux-mêmes aucune condition sur
+    `STATUT` — un appel direct à l'API contournerait la règle.
+- Périmètre du badge « inscriptions en attente » (⚠️ périmètre changé 2026-09-17, lot 6) [Auto]
+  - `inscriptionsEnAttente` (`CompteursAdminDto`, badge de menu) compte désormais les inscriptions
+    **PRMP et UGPM**, comme l'écran qu'il annonce (`GET /api/inscriptions/en-attente`, union des deux
+    types depuis l'ouverture de l'inscription UGPM). Avant ce lot, seules les PRMP étaient comptées —
+    un badge affichant 5 au-dessus d'une liste de 7 est le défaut même que corrige ce changement. Le
+    chiffre peut donc augmenter sans qu'aucune inscription PRMP n'ait été déposée.
+- Journal des connexions (⚠️ règle ajoutée 2026-09-17, lot 6 — voir
+  `docs/adr/ADR-0006-journal-des-connexions.md`) [Auto]
+  - `t_session_utilisateur` est alimentée par trois événements, et rien d'autre : un **login réussi**
+    écrit une ligne (référence de l'acteur, horodatage, IP, agent, `SUCCES = true`) ; un **login
+    refusé** écrit une ligne avec `SUCCES = false` et le **login tenté** — l'acteur n'est renseigné
+    que si ce login existe, laissé nul s'il est inconnu (personne à désigner) ; un **logout**
+    (`POST /api/auth/logout`) pose la date de fin sur la ligne de son jeton.
+  - **Un refus du limiteur anti-bruteforce (429, `LoginRateLimiter`) n'est jamais journalisé** : une
+    tentative bloquée avant tout examen des identifiants n'est pas une tentative de connexion, et
+    l'écrire retirerait au verrou son effet de plafond sur le volume — c'est pendant le verrou qu'un
+    attaquant frappe le plus.
+  - **Une tentative sur un login inconnu n'est attribuable à personne** (`acteur = null`) et ne se
+    lit nulle part ailleurs que dans `GET /api/sessions` — ni l'annuaire ni aucune fiche ne peut la
+    rattacher à quelqu'un.
+  - **Aucune purge n'est implémentée, et c'est délibéré** : la durée de rétention d'un journal de
+    preuve est une décision produit (combien de temps la CNM doit-elle pouvoir prouver qui s'est
+    connecté ?), non un choix d'implémentation. À arbitrer.
 
 **Module 05 — Tableau de bord global**
 
