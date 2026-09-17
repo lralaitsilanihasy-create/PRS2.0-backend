@@ -31,11 +31,17 @@ import java.util.List;
  *                           {@code null} tant que l'inscription n'a pas été validée, et {@code null} pour une
  *                           inscription refusée : {@code DATE_DECISION} porte alors la date du refus, qui
  *                           n'est pas une date d'activation
- * @param derniereConnexion  <strong>toujours {@code null}</strong> — dépend de B4 (journal des connexions),
- *                           qui n'est pas livré. Servi quand même, pour que le contrat ne change pas le jour
- *                           où il le sera ; le front ne l'affiche pas tant qu'il est nul (plan §6 : une mesure
- *                           fausse sur un écran de sécurité est pire qu'une mesure absente)
- * @param echecs30j          <strong>toujours {@code null}</strong>, même raison
+ * @param derniereConnexion  ⚠️ 2026-09-17, §B4 — <strong>servi</strong> depuis que le journal des
+ *                           connexions existe (migration {@code V31}) : la plus récente connexion
+ *                           <strong>réussie</strong> de cette personne. {@code null} pour qui ne s'est
+ *                           jamais connecté depuis que le journal existe — au début, tout le monde ; le
+ *                           front ne l'affiche pas dans ce cas (plan §6 : une mesure fausse sur un écran
+ *                           de sécurité est pire qu'une mesure absente)
+ * @param echecs30j          ⚠️ 2026-09-17, §B4 — tentatives de connexion <strong>refusées</strong>
+ *                           attribuées à cette personne sur 30 jours glissants, même fenêtre que
+ *                           {@code actionsJournal30j}. Une tentative sur un login inconnu n'est
+ *                           attribuable à personne et n'y figure donc pas : elle se lit dans
+ *                           {@code GET /api/sessions}
  * @param superieur          supérieur hiérarchique ({@code tr_controleur.ID_SUPERIEUR}), résolu ; {@code null}
  *                           s'il n'en a pas ou hors contrôleurs
  * @param transversal        contrôleur transversal ({@code TRANSVERSAL}) ; {@code null} hors contrôleurs

@@ -38,6 +38,7 @@ import cnm.prs.repository.EntiteContractRepository;
 import cnm.prs.repository.PrmpEntiteRepository;
 import cnm.prs.repository.PrmpRepository;
 import cnm.prs.repository.ProfileRepository;
+import cnm.prs.repository.SessionUtilisateurRepository;
 import cnm.prs.repository.UgpmRepository;
 
 /**
@@ -96,6 +97,8 @@ public class AnnuaireService {
     private final EntiteContractRepository entiteContractRepository;
     private final DelegationProfilRepository delegationProfilRepository;
     private final AuditLogRepository auditLogRepository;
+    /** ⚠️ Lot 6 (2026-09-17, §B4) — bloc « Accès » de la fiche : dernière connexion et échecs sur 30 jours. */
+    private final SessionUtilisateurRepository sessionRepository;
     private final MandatService mandatService;
 
     public AnnuaireService(ControleurRepository controleurRepository, ProfileRepository profileRepository,
@@ -103,7 +106,7 @@ public class AnnuaireService {
             CompteAuthRepository compteAuthRepository, PrmpEntiteRepository prmpEntiteRepository,
             EntiteContractRepository entiteContractRepository,
             DelegationProfilRepository delegationProfilRepository, AuditLogRepository auditLogRepository,
-            MandatService mandatService) {
+            SessionUtilisateurRepository sessionRepository, MandatService mandatService) {
         this.controleurRepository = controleurRepository;
         this.profileRepository = profileRepository;
         this.prmpRepository = prmpRepository;
@@ -113,6 +116,7 @@ public class AnnuaireService {
         this.entiteContractRepository = entiteContractRepository;
         this.delegationProfilRepository = delegationProfilRepository;
         this.auditLogRepository = auditLogRepository;
+        this.sessionRepository = sessionRepository;
         this.mandatService = mandatService;
     }
 
@@ -215,10 +219,11 @@ public class AnnuaireService {
      * {@link #entitesParPrmp}, le rapprochement du compte par le couple (type d'acteur, référence) —
      * de sorte que la ligne de liste et la fiche ne peuvent pas se contredire d'un clic à l'autre.</p>
      *
-     * <p>{@code derniereConnexion} et {@code echecs30j} sont servis <strong>nuls</strong> : ils
-     * dépendent du journal des connexions (B4), qui n'est pas livré. Les servir nuls plutôt que les
-     * omettre garde le contrat stable pour le jour où il le sera, et le front ne les affiche pas tant
-     * qu'ils sont nuls (plan §6).</p>
+     * <p>⚠️ <strong>2026-09-17, §B4</strong> — {@code derniereConnexion} et {@code echecs30j} sont
+     * désormais <strong>servis</strong> : ils étaient nuls faute de journal des connexions, que la
+     * migration {@code V31} et {@link JournalConnexionService} viennent de livrer. Le bloc « Accès » de
+     * la maquette C peut s'afficher. {@code derniereConnexion} reste nulle pour qui ne s'est jamais
+     * connecté <em>depuis que le journal existe</em> — c'est-à-dire, au début, pour tout le monde.</p>
      *
      * @param type population de la personne ; le contrôleur lie l'énuméré, une valeur inconnue part en 400
      * @param ref  identifiant dans cette population
@@ -241,7 +246,8 @@ public class AnnuaireService {
         CompteAuth compte = compteDe(TypeActeur.CONTROLEUR, im);
         return new AnnuaireFicheDto(c.getImControleur(), TypeActeur.CONTROLEUR.name(),
                 c.getNomCont(), c.getPrenomsCont(), nom(profil), c.getIdLocalite(), null,
-                login(compte), statutDe(compte).name(), dateActivation(compte), null, null,
+                login(compte), statutDe(compte).name(), dateActivation(compte),
+                derniereConnexion(im), echecs30j(im),
                 superieur(c, profils), c.getTransversal(), chaineControle(c, profils),
                 delegations(profil), null, actionsJournal30j(im));
     }
@@ -251,7 +257,8 @@ public class AnnuaireService {
         CompteAuth compte = compteDe(TypeActeur.PRMP, id);
         return new AnnuaireFicheDto(p.getIdPrmp(), TypeActeur.PRMP.name(), p.getNomPrmp(), p.getPrenomsPrmp(),
                 null, null, entitesParPrmp().get(p.getIdPrmp()),
-                login(compte), statutDe(compte).name(), dateActivation(compte), null, null,
+                login(compte), statutDe(compte).name(), dateActivation(compte),
+                derniereConnexion(id), echecs30j(id),
                 null, null, List.of(), List.of(),
                 // Le mandat en fonction ce jour, servi par le service qui fait déjà foi partout ailleurs
                 // (mandat déclaré, ou reconstitué depuis t_prmp quand aucun ne l'a encore été).
@@ -268,7 +275,8 @@ public class AnnuaireService {
         CompteAuth compte = compteDe(TypeActeur.UGPM, id);
         return new AnnuaireFicheDto(u.getIdUgpm(), TypeActeur.UGPM.name(), u.getNomUgpm(), u.getPrenomsUgpm(),
                 null, null, entitesParPrmp().get(u.getIdPrmpTutelle()),
-                login(compte), statutDe(compte).name(), dateActivation(compte), null, null,
+                login(compte), statutDe(compte).name(), dateActivation(compte),
+                derniereConnexion(id), echecs30j(id),
                 null, null, List.of(), List.of(), null, actionsJournal30j(id));
     }
 
@@ -372,6 +380,24 @@ public class AnnuaireService {
     /** Écritures portées au nom de la personne sur 30 jours glissants ({@code t_audit_log.IM_ACTEUR}). */
     private long actionsJournal30j(String ref) {
         return auditLogRepository.compterActionsDepuis(ref, LocalDateTime.now().minusDays(JOURS_ACTIVITE));
+    }
+
+    /**
+     * ⚠️ Lot 6 (2026-09-17, §B4) — « dernière connexion » du bloc « Accès ». Nulle pour qui ne s'est
+     * jamais connecté <strong>depuis que le journal existe</strong> (V31) : au début, c'est tout le
+     * monde, et c'est exact — le journal ne remonte pas le temps.
+     */
+    private LocalDateTime derniereConnexion(String ref) {
+        return sessionRepository.derniereConnexionDe(ref);
+    }
+
+    /**
+     * ⚠️ Lot 6 (2026-09-17, §B4) — tentatives refusées attribuées à cette personne sur la même fenêtre
+     * de {@value #JOURS_ACTIVITE} jours que les actions au journal, pour que les deux chiffres du bloc
+     * se lisent sur la même période.
+     */
+    private long echecs30j(String ref) {
+        return sessionRepository.compterEchecsDe(ref, LocalDateTime.now().minusDays(JOURS_ACTIVITE));
     }
 
     // ------------------------------------------------------------------

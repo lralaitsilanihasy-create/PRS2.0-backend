@@ -56,6 +56,30 @@ public interface SessionUtilisateurRepository extends JpaRepository<SessionUtili
             """)
     long compterOuvertes(@Param("depuis") LocalDateTime depuis);
 
+    /**
+     * ⚠️ Lot 6 (2026-09-17, §B4) — « dernière connexion » du bloc « Accès » de la fiche d'annuaire
+     * (§B3) : la plus récente connexion <strong>réussie</strong> de cet acteur, ou {@code null} s'il ne
+     * s'est jamais connecté depuis que le journal existe.
+     */
+    @Query("""
+            select max(s.dateConnexion) from SessionUtilisateur s
+            where s.imControleur = :ref and s.succes = true
+            """)
+    LocalDateTime derniereConnexionDe(@Param("ref") String ref);
+
+    /**
+     * ⚠️ Lot 6 (2026-09-17, §B4) — « échecs sur 30 jours » de la fiche d'annuaire (§B3).
+     *
+     * <p>Le comptage porte sur la <strong>référence d'acteur</strong> : une tentative sur un login
+     * inconnu n'est attribuable à personne et n'a donc pas sa place sur la fiche de quelqu'un. Elle
+     * reste lisible dans {@code GET /api/sessions}, qui est le bon endroit pour la voir.</p>
+     */
+    @Query("""
+            select count(s) from SessionUtilisateur s
+            where s.imControleur = :ref and s.succes = false and s.dateConnexion >= :depuis
+            """)
+    long compterEchecsDe(@Param("ref") String ref, @Param("depuis") LocalDateTime depuis);
+
     /** ⚠️ Lot 6 (2026-09-17, §B4) — compteur {@code echecsConnexion24h} de l'accueil. */
     @Query("""
             select count(s) from SessionUtilisateur s

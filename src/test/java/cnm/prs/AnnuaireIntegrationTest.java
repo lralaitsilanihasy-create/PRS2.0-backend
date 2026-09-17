@@ -510,14 +510,45 @@ class AnnuaireIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("Fiche : dernière connexion et échecs servis NULS tant que B4 n'est pas livré")
-    void fiche_connexionsNullesSansB4() throws Exception {
-        // ⚠️ Les deux champs existent au contrat et valent null : le front ne les affiche pas (plan §6).
-        // Le jour où le journal des connexions sera écrit, c'est la valeur qui changera, pas la forme.
+    @DisplayName("Fiche §B4 : sans aucune trace au journal, la dernière connexion est nulle et les échecs à zéro")
+    void fiche_connexionsSansTrace() throws Exception {
+        // La forme n'a pas changé le jour où B4 a été livré : seule la valeur change. Une personne qui
+        // ne s'est jamais connectée DEPUIS QUE LE JOURNAL EXISTE n'a pas de dernière connexion — et le
+        // front ne l'affiche pas (plan §6).
         mvc.perform(get("/api/annuaire/CONTROLEUR/CTRADM").header("Authorization", tokenAdmin))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.derniereConnexion").value(nullValue()))
-                .andExpect(jsonPath("$.echecs30j").value(nullValue()));
+                .andExpect(jsonPath("$.echecs30j").value(0));
+    }
+
+    @Test
+    @DisplayName("Fiche §B4 : la dernière connexion RÉUSSIE et les échecs de 30 jours remontent sur la fiche")
+    void fiche_accesDepuisLeJournal() throws Exception {
+        semerSession("S-1", "CTRADM", LocalDateTime.of(2026, 9, 10, 8, 0), true);
+        semerSession("S-2", "CTRADM", LocalDateTime.of(2026, 9, 12, 9, 0), true);
+        // Un échec ne fait pas une « dernière connexion », même s'il est plus récent.
+        semerSession("S-3", "CTRADM", LocalDateTime.now().minusDays(1), false);
+        semerSession("S-4", "CTRADM", LocalDateTime.now().minusDays(2), false);
+        // Hors fenêtre de 30 jours : ne compte pas.
+        semerSession("S-5", "CTRADM", LocalDateTime.now().minusDays(45), false);
+        // Échec d'un autre acteur : sa fiche, pas celle-ci.
+        semerSession("S-6", "CTRMEM", LocalDateTime.now().minusHours(3), false);
+
+        mvc.perform(get("/api/annuaire/CONTROLEUR/CTRADM").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.derniereConnexion").value("2026-09-12T09:00:00"))
+                .andExpect(jsonPath("$.echecs30j").value(2));
+    }
+
+    /** Une ligne du journal des connexions (§B4). */
+    private void semerSession(String id, String acteur, LocalDateTime quand, boolean succes) {
+        cnm.prs.entity.SessionUtilisateur s = new cnm.prs.entity.SessionUtilisateur();
+        s.setIdSession(id);
+        s.setImControleur(acteur);
+        s.setLogin(acteur);
+        s.setDateConnexion(quand);
+        s.setSucces(succes);
+        sessionUtilisateurRepository.save(s);
     }
 
     /** Insère {@code combien} écritures d'audit au nom d'un acteur, espacées d'une minute. */
