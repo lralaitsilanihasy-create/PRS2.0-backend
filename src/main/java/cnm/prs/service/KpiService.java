@@ -52,6 +52,13 @@ import cnm.prs.security.CurrentUser;
 @Transactional(readOnly = true)
 public class KpiService {
 
+    /**
+     * ⚠️ Lot 6 (2026-09-17, demande front « espace d'administration » §B1) — fenêtre de surveillance des
+     * mandats PRMP : le bloc « À surveiller » de l'accueil compte ceux dont le terme tombe dans les
+     * {@value} prochains jours.
+     */
+    private static final int PREAVIS_MANDAT_JOURS = 30;
+
     private final DossierRepository dossierRepository;
     private final VerificationRepository verificationRepository;
     private final ExamenDetailRepository examenDetailRepository;
@@ -222,12 +229,6 @@ public class KpiService {
     }
 
     /**
-     * ⚠️ Lot 6 (2026-09-17, demande front « espace d'administration » §B1) — fenêtre de surveillance des
-     * mandats PRMP : ceux dont le terme tombe dans les {@value} prochains jours.
-     */
-    private static final int PREAVIS_MANDAT_JOURS = 30;
-
-    /**
      * Compteurs de contenu du menu Administrateur — comptes <strong>globaux</strong> (rôle transversal) :
      * inscriptions PRMP en attente de validation, total des comptes d'authentification, total des entrées
      * du journal d'audit.
@@ -255,6 +256,7 @@ public class KpiService {
      */
     public CompteursAdminDto mesCompteursAdmin() {
         java.time.LocalDate aujourdhui = java.time.LocalDate.now();
+        // Lue une seule fois : elle sert de doyenneté aux rattachements, et de repli aux inscriptions.
         java.time.LocalDate premiereDeclaration =
                 prmpEntiteDemandeRepository.premiereDeclaration(StatutDemandeEntite.EN_ATTENTE.name());
         return new CompteursAdminDto(
@@ -262,7 +264,7 @@ public class KpiService {
                 compteAuthRepository.count(),
                 auditLogRepository.count(),
                 prmpEntiteDemandeRepository.countByStatutDemande(StatutDemandeEntite.EN_ATTENTE.name()),
-                inscriptionDoyenneLe(),
+                inscriptionDoyenneLe(premiereDeclaration),
                 premiereDeclaration == null ? null : premiereDeclaration.atStartOfDay(),
                 compteAuthRepository.countByActifTrue(),
                 compteAuthRepository.compterNonConnectablesHorsAttente(StatutCompte.EN_ATTENTE.name()),
@@ -271,18 +273,20 @@ public class KpiService {
 
     /**
      * Dépôt de la plus ancienne inscription PRMP encore en attente ({@code null} si la file est vide) :
-     * première pièce déposée, à défaut première déclaration d'entité (à minuit). Voir
-     * {@link #mesCompteursAdmin()} pour le motif de cette dérivation.
+     * la première pièce déposée. Voir {@link #mesCompteursAdmin()} pour le motif de cette dérivation.
+     *
+     * <p>Sans aucune pièce — l'inscription par la variante JSON historique n'en dépose pas —, le repli
+     * est le jour de la première déclaration d'entité <strong>encore en attente</strong> : une telle
+     * déclaration n'existe que portée par une inscription en attente, et elle naît avec elle. Les deux
+     * doyennetés se confondent alors, ce qui est exact et non un recopiage.</p>
      */
-    private java.time.LocalDateTime inscriptionDoyenneLe() {
+    private java.time.LocalDateTime inscriptionDoyenneLe(java.time.LocalDate premiereDeclarationEnAttente) {
         java.time.LocalDateTime parPiece = pieceJointeRepository.premierDepotDesComptes(
                 StatutCompte.EN_ATTENTE.name(), TypeActeur.PRMP.name());
         if (parPiece != null) {
             return parPiece;
         }
-        java.time.LocalDate parDeclaration =
-                prmpEntiteDemandeRepository.premiereDeclaration(StatutDemandeEntite.EN_ATTENTE.name());
-        return parDeclaration == null ? null : parDeclaration.atStartOfDay();
+        return premiereDeclarationEnAttente == null ? null : premiereDeclarationEnAttente.atStartOfDay();
     }
 
     /**
