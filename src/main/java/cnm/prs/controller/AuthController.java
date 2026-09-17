@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -31,6 +32,7 @@ import cnm.prs.security.LoginRateLimiter;
 import cnm.prs.security.SessionCookies;
 import cnm.prs.service.AuthService;
 import cnm.prs.service.EntiteContractService;
+import cnm.prs.service.JournalConnexionService;
 
 /**
  * Authentification : émission de jetons JWT. Endpoint public (cf. SecurityConfig).
@@ -50,16 +52,23 @@ public class AuthController {
     private final EntiteContractService entiteContractService;
     private final SessionCookies sessionCookies;
     private final LoginRateLimiter limiteur;
+    /** ⚠️ Lot 6 (2026-09-17, §B4) — journal des connexions (table {@code t_session_utilisateur}). */
+    private final JournalConnexionService journal;
+    /** Résout le jeton présenté : en-tête {@code Bearer} ou cookie {@code PRS_SESSION} (SecurityConfig). */
+    private final BearerTokenResolver jetonPresente;
     /** Phase 3 du plan cookie : à {@code true}, le jeton ne sort plus dans le corps du login. */
     private final boolean cookieExclusif;
 
     public AuthController(AuthService service, EntiteContractService entiteContractService,
             SessionCookies sessionCookies, LoginRateLimiter limiteur,
+            JournalConnexionService journal, BearerTokenResolver jetonPresente,
             @Value("${app.auth.cookie.exclusif:false}") boolean cookieExclusif) {
         this.service = service;
         this.entiteContractService = entiteContractService;
         this.sessionCookies = sessionCookies;
         this.limiteur = limiteur;
+        this.journal = journal;
+        this.jetonPresente = jetonPresente;
         this.cookieExclusif = cookieExclusif;
     }
 
@@ -73,6 +82,12 @@ public class AuthController {
      * <strong>avant</strong> que les identifiants ne soient examinés (→ 429), un échec l'incrémente,
      * un succès le remet à zéro. Seule une {@link BadCredentialsException} compte comme échec :
      * un refus métier (mandat vacant, par exemple) n'est pas une tentative d'intrusion.</p>
+     *
+     * <p>⚠️ Lot 6 (2026-09-17, §B4) — chaque tentative, <strong>réussie ou refusée</strong>, laisse une
+     * ligne dans {@code t_session_utilisateur} ({@link JournalConnexionService}). Le journal est appelé
+     * <em>après</em> que le sort de la connexion est scellé, et il ne peut ni la faire échouer ni changer
+     * son code de retour. Les refus du quota (429) ne sont pas journalisés : ils n'examinent aucun
+     * identifiant, et les journaliser ôterait au verrou son effet de plafond sur le volume.</p>
      */
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request,
@@ -84,9 +99,11 @@ public class AuthController {
             reponse = service.login(request);
         } catch (BadCredentialsException e) {
             limiteur.echecLogin(ip, request.login());
+            journal.connexionRefusee(request.login(), ip, agent(requete));
             throw e;
         }
         limiteur.succesLogin(ip, request.login());
+        journal.connexionReussie(request.login(), reponse.token(), ip, agent(requete));
         LoginResponse corps = cookieExclusif
                 ? new LoginResponse(null, reponse.login(), reponse.role(), reponse.typeActeur(),
                         reponse.ref(), reponse.nomAffichage(), reponse.localite(), reponse.expiresIn())
@@ -100,12 +117,35 @@ public class AuthController {
      * ⚠️ Plan cookie HttpOnly, phase 1 — déconnexion : vide le cookie de session (un cookie HttpOnly
      * n'est pas supprimable par le JS du front). Route publique ({@code /api/auth/**}) : appelable
      * même avec une session expirée.
+     *
+     * <p>⚠️ Lot 6 (2026-09-17, §B4) — ferme au passage la ligne de {@code t_session_utilisateur} ouverte
+     * par le login, retrouvée par l'empreinte du jeton présenté. Sans jeton exploitable, il n'y a rien à
+     * fermer : le {@code logout} reste public et répond 204 comme avant.</p>
      */
     @PostMapping("/logout")
-    public ResponseEntity<Void> logout() {
+    public ResponseEntity<Void> logout(HttpServletRequest requete) {
+        journal.deconnexion(jetonDe(requete));
         return ResponseEntity.noContent()
                 .header(HttpHeaders.SET_COOKIE, sessionCookies.suppression().toString())
                 .build();
+    }
+
+    /**
+     * Jeton présenté par l'appelant (cookie {@code PRS_SESSION} ou en-tête {@code Bearer}), ou
+     * {@code null}. Le résolveur lève sur une requête malformée — deux transports à la fois, en-tête
+     * tronqué : ce n'est pas une raison de refuser une déconnexion, il n'y a alors rien à fermer.
+     */
+    private String jetonDe(HttpServletRequest requete) {
+        try {
+            return jetonPresente.resolve(requete);
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    /** Agent du poste appelant ({@code User-Agent}), pour le journal des connexions. */
+    private static String agent(HttpServletRequest requete) {
+        return requete.getHeader(HttpHeaders.USER_AGENT);
     }
 
     /**
