@@ -63,7 +63,7 @@ public class AuditLogService {
      */
     @Transactional(readOnly = true)
     public List<AuditLogDto> findAll() {
-        return repository.rechercher(null, null, null, null,
+        return repository.rechercher(true, List.of(), null, null, null,
                 PageRequest.of(0, LIMITE_HISTORIQUE, PLUS_RECENT_DABORD))
                 .map(AuditLogMapper::toDto).getContent();
     }
@@ -73,16 +73,23 @@ public class AuditLogService {
      * Tous les filtres sont facultatifs ; la page est triée du plus récent au plus ancien, quel que
      * soit le tri demandé par le client (le journal n'a qu'un ordre de lecture sensé).
      *
-     * @param nomTable table auditée ({@code t_audit_log.NOM_TABLE}), exacte ; {@code null}/vide = toutes
-     * @param acteur   acteur de l'écriture ({@code IM_ACTEUR}), exact ; {@code null}/vide = tous
-     * @param du       premier jour inclus ; {@code null} = pas de borne inférieure
-     * @param au       dernier jour <strong>inclus</strong> (la journée entière) ; {@code null} = pas de borne
+     * <p>⚠️ Lot 6 (2026-09-17, demande front §B5) — {@code nomTables} est une <strong>liste</strong> :
+     * l'accueil de l'Administrateur suit les écritures des six tables de paramétrage d'un seul tenant.
+     * Une seule valeur se comporte exactement comme avant (égalité exacte), une liste vaut « l'une de
+     * ces tables », et une liste vide — comme {@code null} — vaut « toutes les tables ».</p>
+     *
+     * @param nomTables tables auditées ({@code t_audit_log.NOM_TABLE}), égalité exacte, en OU entre
+     *                  elles ; {@code null}/vide = toutes
+     * @param acteur    acteur de l'écriture ({@code IM_ACTEUR}), exact ; {@code null}/vide = tous
+     * @param du        premier jour inclus ; {@code null} = pas de borne inférieure
+     * @param au        dernier jour <strong>inclus</strong> (la journée entière) ; {@code null} = pas de borne
      */
     @Transactional(readOnly = true)
-    public Page<AuditLogDto> rechercher(String nomTable, String acteur, LocalDate du, LocalDate au,
+    public Page<AuditLogDto> rechercher(List<String> nomTables, String acteur, LocalDate du, LocalDate au,
             Pageable pageable) {
         Pageable page = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), PLUS_RECENT_DABORD);
-        return repository.rechercher(vide(nomTable), vide(acteur),
+        List<String> tables = tables(nomTables);
+        return repository.rechercher(tables.isEmpty(), tables, vide(acteur),
                 du == null ? null : du.atStartOfDay(),
                 // Dernier instant représentable du jour (t_audit_log."DATE_ACTION" est un timestamp(6)) :
                 // la journée demandée est incluse en entier, sans risque d'arrondi sur le lendemain.
@@ -94,6 +101,19 @@ public class AuditLogService {
     /** Un filtre vide vaut « pas de filtre » (le front envoie volontiers une chaîne vide). */
     private static String vide(String valeur) {
         return valeur == null || valeur.isBlank() ? null : valeur.trim();
+    }
+
+    /**
+     * Liste de tables retenue : valeurs vides écartées, espaces ôtés, doublons supprimés (⚠️ lot 6,
+     * §B5). Une liste où ne restent que des valeurs vides ({@code ?table=} seul, ou {@code ?table=&
+     * table=}) vaut « pas de filtre », exactement comme la chaîne vide de la variante à une valeur —
+     * le front envoie volontiers un paramètre vide plutôt que de l'omettre.
+     */
+    private static List<String> tables(List<String> nomTables) {
+        if (nomTables == null) {
+            return List.of();
+        }
+        return nomTables.stream().map(AuditLogService::vide).filter(t -> t != null).distinct().toList();
     }
 
     @Transactional(readOnly = true)

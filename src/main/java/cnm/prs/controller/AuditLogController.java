@@ -50,15 +50,24 @@ public class AuditLogController {
      *
      * <p>Réservé à l'<strong>Administrateur</strong>, comme toute la ressource. Sans {@code page},
      * la liste plate ci-dessous reste servie (rétro-compatible), désormais plafonnée.</p>
+     *
+     * <p>⚠️ Lot 6 (2026-09-17, demande front §B5) — {@code table} accepte <strong>plusieurs
+     * valeurs</strong>, sous les deux formes, au choix du client : paramètre répété
+     * ({@code ?table=t_delai_standard&table=t_points_ctrl}) ou liste séparée par des virgules
+     * ({@code ?table=t_delai_standard,t_points_ctrl}). Les entrées retenues sont celles de
+     * <em>l'une</em> des tables citées. Le bloc « derniers changements de paramétrage » de l'accueil
+     * suivait six tables de réglage : six appels pour afficher quatre lignes. Une valeur unique se
+     * comporte <strong>exactement comme avant</strong> (égalité exacte), et un {@code table=} vide
+     * vaut toujours « pas de filtre ».</p>
      */
     @GetMapping(params = "page")
     public Page<AuditLogDto> rechercher(
-            @RequestParam(name = "table", required = false) String nomTable,
+            @RequestParam(name = "table", required = false) List<String> nomTables,
             @RequestParam(required = false) String acteur,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate du,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate au,
             Pageable pageable) {
-        return service.rechercher(nomTable, acteur, du, au, pageable);
+        return service.rechercher(nomTables, acteur, du, au, pageable);
     }
 
     /**

@@ -3452,6 +3452,18 @@ système).
 > `page`, la **liste plate reste plafonnée aux 500 entrées les plus récentes** (`t_audit_log` croît
 > d'une ligne par écriture API — un `findAll()` non borné n'a plus sa place ici).
 
+> ⚠️ **`table` accepte plusieurs valeurs (2026-09-17, lot 6 §B5).** Deux écritures, au choix du
+> client, **équivalentes** : paramètre **répété** (`?table=t_delai_standard&table=t_points_ctrl`) ou
+> liste **séparée par des virgules** (`?table=t_delai_standard,t_points_ctrl`). Les entrées retenues
+> sont celles de **l'une** des tables citées (OU), l'égalité reste **exacte** pour chacune, et le
+> filtre se cumule comme avant avec `acteur`, `du` et `au`. Les espaces autour d'une valeur sont
+> ôtés, les doublons ignorés, et une liste qui ne contient que du vide (`?table=`, `?table=&table=`)
+> vaut **« pas de filtre »** — comme la chaîne vide seule. **Une valeur unique se comporte
+> exactement comme avant** : rien à changer pour les clients existants. Motif : le bloc « derniers
+> changements de paramétrage » de l'accueil Administrateur suit six tables de réglage (délais
+> standards, seuil AGPM, points de contrôle, règles d'alerte, règles d'anomalie, chaînes de
+> contrôle) — six appels pour afficher quatre lignes.
+
 **Champs `AuditLogDto`**
 
 | Champ (JSON) | Type | Obligatoire | Contraintes |
@@ -3473,7 +3485,7 @@ système).
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
 | GET | /api/audit-logs | — | `AuditLogDto[]` | 200 | ADMINISTRATEUR — **plafonné aux 500 plus récentes** |
-| GET | /api/audit-logs?page=&size=[&table=][&acteur=][&du=][&au=] | — | `Page<AuditLogDto>` | 200 | ADMINISTRATEUR — tri `dateAction desc` imposé |
+| GET | /api/audit-logs?page=&size=[&table=][&acteur=][&du=][&au=] | — | `Page<AuditLogDto>` | 200 | ADMINISTRATEUR — tri `dateAction desc` imposé ; **`table` répétable ou en liste à virgules** (lot 6 §B5) |
 | GET | /api/audit-logs/{id} | — | `AuditLogDto` | 200, 404 | ADMINISTRATEUR |
 | POST | /api/audit-logs | `AuditLogDto` | — | **409 (interdit)** | ADMINISTRATEUR |
 | PUT | /api/audit-logs/{id} | `AuditLogDto` | — | **409 (interdit)** | ADMINISTRATEUR |

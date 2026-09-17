@@ -81,6 +81,65 @@ class AuditLogListeIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("Lot 6 §B5 — table en liste : paramètre répété ou virgules, une seule valeur inchangée")
+    void auditLogs_pagine_filtreTableEnListe() throws Exception {
+        semer(2, "t_delai_standard", "ADMIN01", LocalDateTime.of(2026, 5, 2, 8, 0));
+        semer(3, "t_points_ctrl", "ADMIN01", LocalDateTime.of(2026, 5, 3, 8, 0));
+        semer(4, "t_regle_alerte", "ADMIN01", LocalDateTime.of(2026, 5, 4, 8, 0));
+        semer(5, "t_dossier", "CTRCC1", LocalDateTime.of(2026, 5, 5, 8, 0));
+
+        // Une seule valeur : strictement le comportement d'avant (égalité exacte, rien d'autre).
+        mvc.perform(get("/api/audit-logs").header("Authorization", tokenAdmin)
+                        .param("page", "0").param("size", "50").param("table", "t_points_ctrl"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(3));
+
+        // Paramètre répété : l'union des tables citées, et elles seules (t_dossier reste dehors).
+        mvc.perform(get("/api/audit-logs").header("Authorization", tokenAdmin)
+                        .param("page", "0").param("size", "50")
+                        .param("table", "t_delai_standard")
+                        .param("table", "t_points_ctrl")
+                        .param("table", "t_regle_alerte"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(9));
+
+        // Même liste, écrite séparée par des virgules : même réponse — les deux formes sont admises.
+        mvc.perform(get("/api/audit-logs").header("Authorization", tokenAdmin)
+                        .param("page", "0").param("size", "50")
+                        .param("table", "t_delai_standard,t_points_ctrl,t_regle_alerte"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(9));
+
+        // Les filtres se cumulent toujours : la liste de tables ET l'acteur ET la fenêtre de dates.
+        mvc.perform(get("/api/audit-logs").header("Authorization", tokenAdmin)
+                        .param("page", "0").param("size", "50")
+                        .param("table", "t_points_ctrl,t_dossier").param("acteur", "ADMIN01"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(3));
+
+        // Une table inconnue ne ramène rien plutôt que tout : la liste n'ouvre pas le filtre.
+        mvc.perform(get("/api/audit-logs").header("Authorization", tokenAdmin)
+                        .param("page", "0").param("size", "50")
+                        .param("table", "t_inconnue,t_pas_davantage"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(0));
+
+        // Doublons et espaces : sans effet sur le décompte (la liste est nettoyée avant la requête).
+        mvc.perform(get("/api/audit-logs").header("Authorization", tokenAdmin)
+                        .param("page", "0").param("size", "50")
+                        .param("table", " t_points_ctrl , t_points_ctrl "))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(3));
+
+        // Une liste qui ne contient que du vide vaut « pas de filtre », comme la chaîne vide seule.
+        mvc.perform(get("/api/audit-logs").header("Authorization", tokenAdmin)
+                        .param("page", "0").param("size", "50")
+                        .param("table", "").param("table", "  "))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(14));
+    }
+
+    @Test
     @DisplayName("Lot D §4 — la liste historique est plafonnée à 500 entrées, les plus récentes")
     void auditLogs_listeHistorique_plafonnee() throws Exception {
         semer(505, "t_dossier", "CTRCC1", LocalDateTime.of(2026, 1, 1, 0, 0));

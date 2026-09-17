@@ -1,6 +1,7 @@
 package cnm.prs.repository;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 
 import org.springframework.data.domain.Page;
@@ -36,18 +37,26 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, Long> {
      * PostgreSQL refuse un paramètre nul dont il ne peut pas déduire le type
      * (« could not determine data type of parameter »), alors qu'il le déduit sans peine de l'autre
      * argument du {@code coalesce}. Comme {@code DATE_ACTION} est {@code NOT NULL}, une borne absente
-     * se compare à la colonne elle-même — condition toujours vraie. Les filtres textuels gardent la
-     * forme {@code :param is null}, qui leur convient (et qui, elle, ne peut pas être remplacée par
+     * se compare à la colonne elle-même — condition toujours vraie. Le filtre d'acteur garde la
+     * forme {@code :param is null}, qui lui convient (et qui, elle, ne peut pas être remplacée par
      * un {@code coalesce} : une colonne nulle serait alors exclue au lieu d'être retenue).</p>
+     *
+     * <p>⚠️ Lot 6 (2026-09-17, demande front §B5) — le filtre de table porte sur une
+     * <strong>liste</strong> : l'accueil de l'Administrateur suit d'un seul tenant les écritures des
+     * six tables de paramétrage, là où une table à la fois imposait six appels pour afficher quatre
+     * lignes. « Pas de filtre » ne peut pas s'écrire {@code :nomTables is null} — un paramètre
+     * multivalué nul n'est pas liable — d'où le drapeau {@code sansFiltreTable}, que le service met à
+     * vrai quand la liste est absente ou vide ; la liste passée est alors sans effet.</p>
      */
     @Query("""
             select a from AuditLog a
-            where (:nomTable is null or a.nomTable = :nomTable)
+            where (:sansFiltreTable = true or a.nomTable in :nomTables)
               and (:acteur is null or a.imActeur = :acteur)
               and a.dateAction >= coalesce(:debut, a.dateAction)
               and a.dateAction <= coalesce(:fin, a.dateAction)
             """)
-    Page<AuditLog> rechercher(@Param("nomTable") String nomTable, @Param("acteur") String acteur,
+    Page<AuditLog> rechercher(@Param("sansFiltreTable") boolean sansFiltreTable,
+            @Param("nomTables") Collection<String> nomTables, @Param("acteur") String acteur,
             @Param("debut") LocalDateTime debut, @Param("fin") LocalDateTime fin, Pageable pageable);
 
     /** Rectifications PRMP d'un dossier (audit), par date croissante — pour l'historique d'échanges. */
