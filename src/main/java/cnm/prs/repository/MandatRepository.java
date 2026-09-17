@@ -43,6 +43,19 @@ public interface MandatRepository extends JpaRepository<Mandat, Integer> {
             """)
     List<Mandat> findEnVigueur(@Param("idPrmp") String idPrmp, @Param("date") LocalDate date);
 
+    /**
+     * ⚠️ Lot 6 (2026-09-17, §B1) — mandats dont le terme tombe dans une fenêtre, abrogés exclus : le
+     * bloc « À surveiller » de l'accueil de l'Administrateur. Les deux bornes sont
+     * <strong>incluses</strong> ; un mandat abrogé n'expire pas, il a déjà pris fin.
+     */
+    @Query("""
+            select count(m) from Mandat m
+            where m.dateAbrogation is null
+              and m.dateFin >= :debut
+              and m.dateFin <= :fin
+            """)
+    long compterExpirantEntre(@Param("debut") LocalDate debut, @Param("fin") LocalDate fin);
+
     /** Dernier mandat déclaré d'une PRMP (le plus récent par date de début). */
     Optional<Mandat> findFirstByIdPrmpOrderByDateDebutDescIdMandatDesc(String idPrmp);
 

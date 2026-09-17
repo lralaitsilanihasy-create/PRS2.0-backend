@@ -21,6 +21,7 @@ import cnm.prs.dto.TableauBordDto;
 import cnm.prs.enums.ProfilUtilisateur;
 import cnm.prs.enums.StatutDossier;
 import cnm.prs.enums.StatutCompte;
+import cnm.prs.enums.StatutDemandeEntite;
 import cnm.prs.enums.StatutLettreRenvoi;
 import cnm.prs.enums.StatutPublication;
 import cnm.prs.enums.StatutPv;
@@ -33,7 +34,10 @@ import cnm.prs.repository.DemandeRetraitVueRepository;
 import cnm.prs.repository.DossierRepository;
 import cnm.prs.repository.ExamenDetailRepository;
 import cnm.prs.repository.LettreRenvoiRepository;
+import cnm.prs.repository.MandatRepository;
+import cnm.prs.repository.PieceJointeRepository;
 import cnm.prs.repository.PpmRepository;
+import cnm.prs.repository.PrmpEntiteDemandeRepository;
 import cnm.prs.repository.PublicationRepository;
 import cnm.prs.repository.PvExamenRepository;
 import cnm.prs.repository.ReceptionRepository;
@@ -60,6 +64,10 @@ public class KpiService {
     private final CompteAuthRepository compteAuthRepository;
     private final AuditLogRepository auditLogRepository;
     private final DemandeRetraitVueRepository demandeRetraitVueRepository;
+    /** ⚠️ Lot 6 (2026-09-17, §B1) — files et ancienneté de l'accueil de l'Administrateur. */
+    private final PrmpEntiteDemandeRepository prmpEntiteDemandeRepository;
+    private final PieceJointeRepository pieceJointeRepository;
+    private final MandatRepository mandatRepository;
     /** ⚠️ 2026-09-15 — le badge « À faire » vient du calcul de l'accueil lui-même, jamais d'un comptage parallèle. */
     private final AFaireService aFaireService;
 
@@ -69,9 +77,13 @@ public class KpiService {
             PpmRepository ppmRepository, ReceptionRepository receptionRepository,
             PublicationRepository publicationRepository, CompteAuthRepository compteAuthRepository,
             AuditLogRepository auditLogRepository, DemandeRetraitVueRepository demandeRetraitVueRepository,
-            AFaireService aFaireService) {
+            PrmpEntiteDemandeRepository prmpEntiteDemandeRepository, PieceJointeRepository pieceJointeRepository,
+            MandatRepository mandatRepository, AFaireService aFaireService) {
         this.aFaireService = aFaireService;
         this.demandeRetraitVueRepository = demandeRetraitVueRepository;
+        this.prmpEntiteDemandeRepository = prmpEntiteDemandeRepository;
+        this.pieceJointeRepository = pieceJointeRepository;
+        this.mandatRepository = mandatRepository;
         this.dossierRepository = dossierRepository;
         this.verificationRepository = verificationRepository;
         this.examenDetailRepository = examenDetailRepository;
@@ -210,15 +222,67 @@ public class KpiService {
     }
 
     /**
+     * ⚠️ Lot 6 (2026-09-17, demande front « espace d'administration » §B1) — fenêtre de surveillance des
+     * mandats PRMP : ceux dont le terme tombe dans les {@value} prochains jours.
+     */
+    private static final int PREAVIS_MANDAT_JOURS = 30;
+
+    /**
      * Compteurs de contenu du menu Administrateur — comptes <strong>globaux</strong> (rôle transversal) :
      * inscriptions PRMP en attente de validation, total des comptes d'authentification, total des entrées
      * du journal d'audit.
+     *
+     * <p>⚠️ Lot 6 (2026-09-17, §B1) — enrichis pour l'accueil de l'Administrateur, <strong>sans migration
+     * ni route neuve</strong> (c'est {@code GET /api/kpis/badges} qui porte le tout). Les trois compteurs
+     * d'origine sont inchangés, y compris leur périmètre.</p>
+     *
+     * <ul>
+     *   <li><strong>Ancienneté des files</strong> — ce qui dit s'il y a urgence n'est pas le volume mais
+     *       la date de la plus vieille demande. Côté rattachements, c'est {@code DATE_DECLARATION}
+     *       (une date : elle remonte donc à minuit). Côté inscriptions, {@code t_compte_auth} ne porte
+     *       aucune date de dépôt — la migration étant exclue, l'ancienneté se lit sur la première pièce
+     *       déposée, écrite dans la même transaction que l'inscription ; à défaut (variante JSON
+     *       historique, sans pièce) sur la première déclaration d'entité.</li>
+     *   <li><strong>Périmètre de l'ancienneté d'inscription</strong> : celui du compteur qu'elle
+     *       accompagne — les inscriptions de type PRMP. Afficher « 3 en attente, la plus ancienne du
+     *       12/08 » avec une date venue d'une file non comptée serait incohérent.</li>
+     *   <li><strong>Actifs / suspendus</strong> : {@code ACTIF} fait foi, car c'est lui que le login
+     *       consulte. {@link cnm.prs.enums.StatutCompte} n'a pas de valeur {@code DESACTIVE} — la
+     *       désactivation ne touche que le booléen — d'où « non connectable hors attente » pour les
+     *       suspendus (désactivés + inscriptions refusées). Même règle que le statut affiché par
+     *       l'annuaire ({@code AnnuaireService}), pour que les deux écrans comptent pareil.</li>
+     * </ul>
      */
     public CompteursAdminDto mesCompteursAdmin() {
+        java.time.LocalDate aujourdhui = java.time.LocalDate.now();
+        java.time.LocalDate premiereDeclaration =
+                prmpEntiteDemandeRepository.premiereDeclaration(StatutDemandeEntite.EN_ATTENTE.name());
         return new CompteursAdminDto(
                 compteAuthRepository.countByStatutAndTypeActeur(StatutCompte.EN_ATTENTE.name(), TypeActeur.PRMP.name()),
                 compteAuthRepository.count(),
-                auditLogRepository.count());
+                auditLogRepository.count(),
+                prmpEntiteDemandeRepository.countByStatutDemande(StatutDemandeEntite.EN_ATTENTE.name()),
+                inscriptionDoyenneLe(),
+                premiereDeclaration == null ? null : premiereDeclaration.atStartOfDay(),
+                compteAuthRepository.countByActifTrue(),
+                compteAuthRepository.compterNonConnectablesHorsAttente(StatutCompte.EN_ATTENTE.name()),
+                mandatRepository.compterExpirantEntre(aujourdhui, aujourdhui.plusDays(PREAVIS_MANDAT_JOURS)));
+    }
+
+    /**
+     * Dépôt de la plus ancienne inscription PRMP encore en attente ({@code null} si la file est vide) :
+     * première pièce déposée, à défaut première déclaration d'entité (à minuit). Voir
+     * {@link #mesCompteursAdmin()} pour le motif de cette dérivation.
+     */
+    private java.time.LocalDateTime inscriptionDoyenneLe() {
+        java.time.LocalDateTime parPiece = pieceJointeRepository.premierDepotDesComptes(
+                StatutCompte.EN_ATTENTE.name(), TypeActeur.PRMP.name());
+        if (parPiece != null) {
+            return parPiece;
+        }
+        java.time.LocalDate parDeclaration =
+                prmpEntiteDemandeRepository.premiereDeclaration(StatutDemandeEntite.EN_ATTENTE.name());
+        return parDeclaration == null ? null : parDeclaration.atStartOfDay();
     }
 
     /**

@@ -9,24 +9,34 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import cnm.prs.entity.CompteAuth;
 import cnm.prs.entity.DemandeRetrait;
 import cnm.prs.entity.Dossier;
 import cnm.prs.entity.Examen;
 import cnm.prs.entity.LettreRenvoi;
+import cnm.prs.entity.Mandat;
+import cnm.prs.entity.PieceJointe;
+import cnm.prs.entity.PrmpEntiteDemande;
 import cnm.prs.enums.ProfilUtilisateur;
+import cnm.prs.enums.StatutDemandeEntite;
 import cnm.prs.enums.TypeActeur;
+import cnm.prs.repository.MandatRepository;
 
 /**
  * Tableaux de bord et indicateurs : compteurs de menu par profil, badges agreges, KPIs du
  * pipeline, KPIs par localite et rapports exportes (PDF, Excel).
  */
 class KpiDashboardIntegrationTest extends CnmIntegrationTestSupport {
+
+    /** ⚠️ Lot 6 (2026-09-17, §B1) — mandats PRMP expirant sous 30 jours, bloc « À surveiller » de l'accueil. */
+    @Autowired private MandatRepository mandatRepository;
 
     @Test
     @DisplayName("KPIs : tableau de bord (pipeline + taux de conformité) réservé Président/Admin")
@@ -375,6 +385,144 @@ class KpiDashboardIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(get("/api/kpis/mes-compteurs-admin").header("Authorization", tokenAdmin))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.comptes").value(greaterThanOrEqualTo(1)));
+    }
+
+    // ------------------------------------------------------------------
+    // ⚠️ Lot 6 (2026-09-17, §B1) — compteurs enrichis de l'Administrateur
+    // ------------------------------------------------------------------
+
+    @Test
+    @DisplayName("Admin §B1 : les six compteurs ajoutés sont servis, files vides → doyennetés nulles")
+    void dashboard_admin_b1_champs_presents() throws Exception {
+        mvc.perform(get("/api/kpis/mes-compteurs-admin").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                // Les trois compteurs d'origine ne bougent pas (la pastille du menu les lit).
+                .andExpect(jsonPath("$.inscriptionsEnAttente").value(greaterThanOrEqualTo(0)))
+                .andExpect(jsonPath("$.comptes").value(greaterThanOrEqualTo(0)))
+                .andExpect(jsonPath("$.journalAudit").value(greaterThanOrEqualTo(0)))
+                .andExpect(jsonPath("$.rattachementsEnAttente").value(0))
+                .andExpect(jsonPath("$.inscriptionDoyenneLe").doesNotExist())
+                .andExpect(jsonPath("$.rattachementDoyenLe").doesNotExist())
+                .andExpect(jsonPath("$.comptesActifs").value(greaterThanOrEqualTo(1)))
+                .andExpect(jsonPath("$.comptesSuspendus").value(0))
+                .andExpect(jsonPath("$.mandatsExpirantSous30j").value(0))
+                // B4 n'est pas livré : ces deux mesures ne doivent PAS apparaître (plan L6 §6).
+                .andExpect(jsonPath("$.sessionsOuvertes").doesNotExist())
+                .andExpect(jsonPath("$.echecsConnexion24h").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("Admin §B1 : rattachement PRMP⇄entité EN_ATTENTE → compté, et sa déclaration fait la doyenneté")
+    void dashboard_admin_b1_rattachements() throws Exception {
+        seedDemandeEntite("prmp.att", StatutDemandeEntite.EN_ATTENTE.name(), LocalDate.of(2026, 8, 12));
+        seedDemandeEntite("prmp.att2", StatutDemandeEntite.EN_ATTENTE.name(), LocalDate.of(2026, 9, 1));
+        // Une déclaration déjà tranchée ne compte ni ne rajeunit la file.
+        seedDemandeEntite("prmp.vu", StatutDemandeEntite.VALIDEE.name(), LocalDate.of(2026, 1, 5));
+
+        mvc.perform(get("/api/kpis/mes-compteurs-admin").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rattachementsEnAttente").value(2))
+                .andExpect(jsonPath("$.rattachementDoyenLe").value("2026-08-12T00:00:00"));
+    }
+
+    @Test
+    @DisplayName("Admin §B1 : l'ancienneté d'une inscription en attente se lit sur sa première pièce")
+    void dashboard_admin_b1_inscription_doyenne() throws Exception {
+        CompteAuth c = new CompteAuth("prmp.att", "x", "PRMP", "PRMP001", false);
+        c.setStatut("EN_ATTENTE");
+        compteAuthRepository.save(c);
+        seedPiece("prmp.att", "CIN", LocalDateTime.of(2026, 9, 3, 9, 30));
+        seedPiece("prmp.att", "ARRETE_NOMIN", LocalDateTime.of(2026, 9, 3, 9, 15));
+        // Pièce d'un compte déjà actif : hors file, elle ne doit pas vieillir la doyenneté.
+        seedPiece("CTRADM", "PHOTO", LocalDateTime.of(2020, 1, 1, 8, 0));
+
+        mvc.perform(get("/api/kpis/mes-compteurs-admin").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.inscriptionsEnAttente").value(1))
+                .andExpect(jsonPath("$.inscriptionDoyenneLe").value("2026-09-03T09:15:00"));
+    }
+
+    @Test
+    @DisplayName("Admin §B1 : compte désactivé → il quitte les actifs et rejoint les suspendus")
+    void dashboard_admin_b1_actifs_suspendus() throws Exception {
+        long actifsAvant = compteAuthRepository.countByActifTrue();
+        CompteAuth suspendu = compteAuthRepository.findByLogin("CTRMEM").orElseThrow();
+        suspendu.setActif(false);              // désactivation Administrateur : le STATUT reste ACTIF
+        compteAuthRepository.save(suspendu);
+        CompteAuth enAttente = new CompteAuth("prmp.att", "x", "PRMP", "PRMP001", false);
+        enAttente.setStatut("EN_ATTENTE");     // une inscription en attente n'est pas un compte suspendu
+        compteAuthRepository.save(enAttente);
+
+        mvc.perform(get("/api/kpis/mes-compteurs-admin").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.comptesActifs").value((int) actifsAvant - 1))
+                .andExpect(jsonPath("$.comptesSuspendus").value(1));
+    }
+
+    @Test
+    @DisplayName("Admin §B1 : mandat finissant sous 30 jours compté ; au-delà, ou abrogé, non")
+    void dashboard_admin_b1_mandats_expirants() throws Exception {
+        LocalDate aujourdhui = LocalDate.now();
+        mandatRepository.save(mandatPrmp001("ARR-B1-A", aujourdhui.minusYears(3).plusDays(10), aujourdhui.plusDays(10),
+                null));
+        mandatRepository.save(mandatPrmp001("ARR-B1-B", aujourdhui.minusYears(2), aujourdhui.plusDays(60), null));
+        mandatRepository.save(mandatPrmp001("ARR-B1-C", aujourdhui.minusYears(3), aujourdhui.plusDays(5),
+                aujourdhui.minusDays(1)));   // abrogé : il n'expire pas, il a déjà pris fin
+
+        mvc.perform(get("/api/kpis/mes-compteurs-admin").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.mandatsExpirantSous30j").value(1));
+    }
+
+    @Test
+    @DisplayName("Admin §B1 : GET /api/kpis/badges porte les compteurs enrichis (pas de route neuve)")
+    void dashboard_admin_b1_badges() throws Exception {
+        seedDemandeEntite("prmp.att", StatutDemandeEntite.EN_ATTENTE.name(), LocalDate.of(2026, 8, 12));
+
+        mvc.perform(get("/api/kpis/badges").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.profil").value("ADMINISTRATEUR"))
+                .andExpect(jsonPath("$.compteurs.inscriptionsEnAttente").isNumber())
+                .andExpect(jsonPath("$.compteurs.rattachementsEnAttente").value(1))
+                .andExpect(jsonPath("$.compteurs.rattachementDoyenLe").value("2026-08-12T00:00:00"))
+                .andExpect(jsonPath("$.compteurs.comptesActifs").isNumber())
+                .andExpect(jsonPath("$.compteurs.mandatsExpirantSous30j").isNumber());
+    }
+
+    private void seedDemandeEntite(String login, String statut, LocalDate declaration) {
+        PrmpEntiteDemande d = new PrmpEntiteDemande();
+        d.setIdDemande(prmpEntiteDemandeRepository.nextIdDemande().intValue());
+        d.setLogin(login);
+        d.setIdEntiteContract(1);          // entité seedée
+        d.setStatutDemande(statut);
+        d.setDateDeclaration(declaration);
+        prmpEntiteDemandeRepository.save(d);
+    }
+
+    private void seedPiece(String login, String typePiece, LocalDateTime depot) {
+        PieceJointe p = new PieceJointe();
+        p.setIdPiece(pieceJointeRepository.nextIdPieceJointe().intValue());
+        p.setLogin(login);
+        p.setTypePiece(typePiece);
+        p.setLibelle(typePiece + ".pdf");
+        p.setFormat("application/pdf");
+        p.setTailleOctets(10L);
+        p.setDateDepot(depot);
+        p.setContenu(new byte[] {1, 2, 3});
+        pieceJointeRepository.save(p);
+    }
+
+    private Mandat mandatPrmp001(String refArrete, LocalDate debut, LocalDate fin, LocalDate abrogation) {
+        Mandat m = new Mandat();
+        m.setIdPrmp("PRMP001");
+        m.setTitulaire("Nom Prenoms");
+        m.setRefArrete(refArrete);
+        m.setDateDebut(debut);
+        m.setDateFin(fin);
+        m.setNumeroMandat(1);
+        m.setStatut("ACTIF");
+        m.setDateAbrogation(abrogation);
+        return m;
     }
 
     @Test
