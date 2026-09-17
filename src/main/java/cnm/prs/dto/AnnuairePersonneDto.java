@@ -24,7 +24,8 @@ package cnm.prs.dto;
  *                     PRMP, celles de sa tutelle pour une UGPM ; {@code null} pour un contrôleur
  * @param login        login du compte d'authentification ; {@code null} si la personne n'en a aucun
  * @param statutCompte état d'accès ({@link cnm.prs.enums.StatutCompteAnnuaire}) : {@code ACTIF},
- *                     {@code DESACTIVE}, {@code EN_ATTENTE} ou {@code SANS_COMPTE}
+ *                     {@code SUSPENDU} (compte fermé par l'Administrateur), {@code REFUSE}
+ *                     (inscription rejetée), {@code EN_ATTENTE} ou {@code SANS_COMPTE}
  */
 public record AnnuairePersonneDto(
         String ref,

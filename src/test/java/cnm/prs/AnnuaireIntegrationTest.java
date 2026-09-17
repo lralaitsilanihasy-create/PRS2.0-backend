@@ -108,30 +108,61 @@ class AnnuaireIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("Annuaire : les quatre états de compte — actif, désactivé, en attente, sans compte")
-    void annuaire_quatreStatuts() throws Exception {
-        CompteAuth desactive = compteAuthRepository.findByLogin("CTRMEM").orElseThrow();
-        desactive.setActif(false);        // suspension Administrateur : le STATUT reste ACTIF
-        compteAuthRepository.save(desactive);
+    @DisplayName("Annuaire : les cinq états — actif, suspendu, refusé, en attente, sans compte")
+    void annuaire_cinqStatuts() throws Exception {
+        CompteAuth suspendu = compteAuthRepository.findByLogin("CTRMEM").orElseThrow();
+        suspendu.setActif(false);         // suspension Administrateur : le STATUT reste ACTIF
+        compteAuthRepository.save(suspendu);
         ugpmRepository.save(ugpm("UGPM001", "PRMP001", "Randria", "Hanta"));
         CompteAuth enAttente = new CompteAuth("ugpm.att", "x", "UGPM", "UGPM001", false);
         enAttente.setStatut("EN_ATTENTE");
         compteAuthRepository.save(enAttente);
+        // Inscription refusée : STATUT = REFUSE et son motif — ce n'est PAS un compte suspendu.
+        CompteAuth refuse = new CompteAuth("ctrver.ref", "x", "CONTROLEUR", "CTRVER", false);
+        refuse.setStatut("REFUSE");
+        refuse.setMotifRefus("Arrêté non conforme.");
+        compteAuthRepository.save(refuse);
 
         mvc.perform(get("/api/annuaire").header("Authorization", tokenAdmin).param("q", "CTRADM"))
                 .andExpect(jsonPath("$.content[0].statutCompte").value("ACTIF"))
                 .andExpect(jsonPath("$.content[0].login").value("CTRADM"));
         mvc.perform(get("/api/annuaire").header("Authorization", tokenAdmin).param("q", "CTRMEM"))
-                .andExpect(jsonPath("$.content[0].statutCompte").value("DESACTIVE"));
+                .andExpect(jsonPath("$.content[0].statutCompte").value("SUSPENDU"));
+        mvc.perform(get("/api/annuaire").header("Authorization", tokenAdmin).param("q", "CTRVER"))
+                .andExpect(jsonPath("$.content[0].statutCompte").value("REFUSE"))
+                .andExpect(jsonPath("$.content[0].login").value("ctrver.ref"));
         mvc.perform(get("/api/annuaire").header("Authorization", tokenAdmin).param("q", "UGPM001"))
                 .andExpect(jsonPath("$.content[0].statutCompte").value("EN_ATTENTE"))
                 .andExpect(jsonPath("$.content[0].login").value("ugpm.att"));
         mvc.perform(get("/api/annuaire").header("Authorization", tokenAdmin).param("q", "CTRSEC"))
                 .andExpect(jsonPath("$.content[0].statutCompte").value("SANS_COMPTE"));
 
-        mvc.perform(get("/api/annuaire").header("Authorization", tokenAdmin).param("statut", "DESACTIVE"))
+        // ⚠️ Les deux filtres ne se recouvrent jamais : un refusé n'est pas un suspendu.
+        mvc.perform(get("/api/annuaire").header("Authorization", tokenAdmin).param("statut", "SUSPENDU"))
                 .andExpect(jsonPath("$.totalElements").value(1))
                 .andExpect(jsonPath("$.content[0].ref").value("CTRMEM"));
+        mvc.perform(get("/api/annuaire").header("Authorization", tokenAdmin).param("statut", "REFUSE"))
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].ref").value("CTRVER"));
+        // L'ancienne valeur fourre-tout n'existe plus : elle part en 400, pas en liste vide.
+        mvc.perform(get("/api/annuaire").header("Authorization", tokenAdmin).param("statut", "DESACTIVE"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("Annuaire : plusieurs comptes pour une personne → le moins fermé l'emporte")
+    void annuaire_plusieursComptes() throws Exception {
+        // CTRSEC n'a aucun compte dans le socle : on lui en donne deux, un refusé et un actif.
+        CompteAuth refuse = new CompteAuth("ctrsec.ref", "x", "CONTROLEUR", "CTRSEC", false);
+        refuse.setStatut("REFUSE");
+        compteAuthRepository.save(refuse);
+        compteAuthRepository.save(new CompteAuth("ctrsec.ok", "x", "CONTROLEUR", "CTRSEC", true));
+
+        mvc.perform(get("/api/annuaire").header("Authorization", tokenAdmin).param("q", "CTRSEC"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].statutCompte").value("ACTIF"))
+                .andExpect(jsonPath("$.content[0].login").value("ctrsec.ok"));
     }
 
     @Test
@@ -238,9 +269,16 @@ class AnnuaireIntegrationTest extends CnmIntegrationTestSupport {
     @Test
     @DisplayName("Annuaire : une valeur inconnue d'un critère énuméré est refusée (400), pas ignorée")
     void annuaire_critereInconnu() throws Exception {
-        mvc.perform(get("/api/annuaire").header("Authorization", tokenAdmin).param("statut", "SUSPENDU"))
+        mvc.perform(get("/api/annuaire").header("Authorization", tokenAdmin).param("statut", "FERME"))
                 .andExpect(status().isBadRequest());
         mvc.perform(get("/api/annuaire").header("Authorization", tokenAdmin).param("type", "AGENT"))
                 .andExpect(status().isBadRequest());
+        mvc.perform(get("/api/annuaire").header("Authorization", tokenAdmin).param("profil", "STAGIAIRE"))
+                .andExpect(status().isBadRequest());
+        // Un critère VIDE, lui, n'est pas une erreur : c'est « pas de filtre » (le front sert « tous »).
+        mvc.perform(get("/api/annuaire").header("Authorization", tokenAdmin)
+                        .param("statut", "").param("type", "").param("profil", ""))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(10));   // 9 contrôleurs + PRMP001
     }
 }

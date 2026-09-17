@@ -460,6 +460,47 @@ class KpiDashboardIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("Admin §B1 : une inscription REFUSEE n'est pas un compte suspendu et n'est pas comptée")
+    void dashboard_admin_b1_refuse_hors_suspendus() throws Exception {
+        CompteAuth suspendu = compteAuthRepository.findByLogin("CTRMEM").orElseThrow();
+        suspendu.setActif(false);              // fermé après validation : STATUT = ACTIF, ACTIF = false
+        compteAuthRepository.save(suspendu);
+        CompteAuth refuse = new CompteAuth("prmp.ref", "x", "PRMP", "PRMP001", false);
+        refuse.setStatut("REFUSE");            // jamais ouvert : ce n'est pas une suspension
+        refuse.setMotifRefus("Arrêté non conforme.");
+        compteAuthRepository.save(refuse);
+
+        mvc.perform(get("/api/kpis/mes-compteurs-admin").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.comptesSuspendus").value(1))          // le seul CTRMEM
+                .andExpect(jsonPath("$.inscriptionsEnAttente").value(0));    // ni une inscription en attente
+    }
+
+    @Test
+    @DisplayName("Admin §B1 : le badge compte ce que l'écran liste — inscriptions PRMP ET UGPM")
+    void dashboard_admin_b1_inscriptions_prmp_et_ugpm() throws Exception {
+        ugpmRepository.save(ugpm("UGPM001", "PRMP001", "Randria", "Hanta"));
+        CompteAuth inscriptionPrmp = new CompteAuth("prmp.att", "x", "PRMP", "PRMP001", false);
+        inscriptionPrmp.setStatut("EN_ATTENTE");
+        compteAuthRepository.save(inscriptionPrmp);
+        CompteAuth inscriptionUgpm = new CompteAuth("ugpm.att", "x", "UGPM", "UGPM001", false);
+        inscriptionUgpm.setStatut("EN_ATTENTE");
+        compteAuthRepository.save(inscriptionUgpm);
+        // L'UGPM s'est inscrite en premier : sa pièce fait donc la doyenneté de la file.
+        seedPiece("ugpm.att", "CIN", LocalDateTime.of(2026, 8, 20, 8, 5));
+        seedPiece("prmp.att", "CIN", LocalDateTime.of(2026, 9, 3, 9, 30));
+
+        // L'écran des inscriptions en attente en liste deux : le badge doit dire deux.
+        mvc.perform(get("/api/inscriptions/en-attente").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(2)));
+        mvc.perform(get("/api/kpis/mes-compteurs-admin").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.inscriptionsEnAttente").value(2))
+                .andExpect(jsonPath("$.inscriptionDoyenneLe").value("2026-08-20T08:05:00"));
+    }
+
+    @Test
     @DisplayName("Admin §B1 : mandat finissant sous 30 jours compté ; au-delà, ou abrogé, non")
     void dashboard_admin_b1_mandats_expirants() throws Exception {
         LocalDate aujourdhui = LocalDate.now();

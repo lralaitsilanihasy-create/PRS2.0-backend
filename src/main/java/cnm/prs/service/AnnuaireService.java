@@ -34,7 +34,7 @@ import cnm.prs.repository.ProfileRepository;
 import cnm.prs.repository.UgpmRepository;
 
 /**
- * ⚠️ Lot 6 (2026-09-17, demande front « espace d'administration » §B2) — <strong>annuaire unifié des
+ * Lot 6 (2026-09-17, demande front « espace d'administration » §B2) — <strong>annuaire unifié des
  * personnes</strong> : contrôleurs, PRMP et UGPM dans une seule liste cherchable et paginée.
  *
  * <p><strong>Pourquoi côté serveur.</strong> Les trois populations vivent dans trois tables, exposées
@@ -107,7 +107,7 @@ public class AnnuaireService {
      */
     public Page<AnnuairePersonneDto> rechercher(String q, TypeActeur type, ProfilUtilisateur profil,
             String localite, StatutCompteAnnuaire statut, Pageable pageable) {
-        Map<String, CompteAuth> comptes = comptesParActeur();
+        Map<CleActeur, CompteAuth> comptes = comptesParActeur();
         List<AnnuairePersonneDto> personnes = new ArrayList<>();
         if (type == null || type == TypeActeur.CONTROLEUR) {
             personnes.addAll(controleurs(comptes));
@@ -138,7 +138,7 @@ public class AnnuaireService {
     // Les trois populations
     // ------------------------------------------------------------------
 
-    private List<AnnuairePersonneDto> controleurs(Map<String, CompteAuth> comptes) {
+    private List<AnnuairePersonneDto> controleurs(Map<CleActeur, CompteAuth> comptes) {
         Map<Integer, ProfilUtilisateur> profils = new HashMap<>();
         for (Profile p : profileRepository.findAll()) {
             // Résolution par le LIBELLÉ, comme l'authentification : ID_PROFILE n'a pas de sémantique fixée.
@@ -147,7 +147,7 @@ public class AnnuaireService {
         List<AnnuairePersonneDto> lignes = new ArrayList<>();
         for (Controleur c : controleurRepository.findAll()) {
             ProfilUtilisateur profil = c.getIdProfile() == null ? null : profils.get(c.getIdProfile());
-            CompteAuth compte = comptes.get(cle(TypeActeur.CONTROLEUR, c.getImControleur()));
+            CompteAuth compte = comptes.get(new CleActeur(TypeActeur.CONTROLEUR.name(), c.getImControleur()));
             lignes.add(new AnnuairePersonneDto(c.getImControleur(), TypeActeur.CONTROLEUR.name(),
                     c.getNomCont(), c.getPrenomsCont(), profil == null ? null : profil.name(),
                     c.getIdLocalite(), null, login(compte), statutDe(compte).name()));
@@ -155,10 +155,10 @@ public class AnnuaireService {
         return lignes;
     }
 
-    private List<AnnuairePersonneDto> prmps(Map<String, CompteAuth> comptes, Map<String, String> entites) {
+    private List<AnnuairePersonneDto> prmps(Map<CleActeur, CompteAuth> comptes, Map<String, String> entites) {
         List<AnnuairePersonneDto> lignes = new ArrayList<>();
         for (Prmp p : prmpRepository.findAll()) {
-            CompteAuth compte = comptes.get(cle(TypeActeur.PRMP, p.getIdPrmp()));
+            CompteAuth compte = comptes.get(new CleActeur(TypeActeur.PRMP.name(), p.getIdPrmp()));
             lignes.add(new AnnuairePersonneDto(p.getIdPrmp(), TypeActeur.PRMP.name(),
                     p.getNomPrmp(), p.getPrenomsPrmp(), null, null, entites.get(p.getIdPrmp()),
                     login(compte), statutDe(compte).name()));
@@ -172,10 +172,10 @@ public class AnnuaireService {
      * « DGCF » rend la PRMP de la DGCF <em>et</em> ses UGPM, la question même que l'écran doit savoir
      * poser.
      */
-    private List<AnnuairePersonneDto> ugpms(Map<String, CompteAuth> comptes, Map<String, String> entites) {
+    private List<AnnuairePersonneDto> ugpms(Map<CleActeur, CompteAuth> comptes, Map<String, String> entites) {
         List<AnnuairePersonneDto> lignes = new ArrayList<>();
         for (Ugpm u : ugpmRepository.findAll()) {
-            CompteAuth compte = comptes.get(cle(TypeActeur.UGPM, u.getIdUgpm()));
+            CompteAuth compte = comptes.get(new CleActeur(TypeActeur.UGPM.name(), u.getIdUgpm()));
             lignes.add(new AnnuairePersonneDto(u.getIdUgpm(), TypeActeur.UGPM.name(),
                     u.getNomUgpm(), u.getPrenomsUgpm(), null, null, entites.get(u.getIdPrmpTutelle()),
                     login(compte), statutDe(compte).name()));
@@ -187,20 +187,24 @@ public class AnnuaireService {
     // Jointures en lot
     // ------------------------------------------------------------------
 
+    /** Un compte appartient à un couple (type d'acteur, référence) : {@code REF_ACTEUR} seul ne suffit pas. */
+    private record CleActeur(String type, String ref) {
+    }
+
     /**
-     * Comptes indexés par (type d'acteur, référence) — la jointure que le front ne peut pas faire :
-     * le login n'est pas l'identifiant de la personne.
+     * Comptes indexés par (type d'acteur, référence) : la jointure que le front ne peut pas faire, le
+     * login n'étant pas l'identifiant de la personne.
      *
      * <p>Rien n'interdit en base plusieurs comptes pour une même personne (la PK est le login) ; on
      * garde alors le <strong>moins fermé</strong>, car c'est l'accès dont elle dispose réellement.</p>
      */
-    private Map<String, CompteAuth> comptesParActeur() {
-        Map<String, CompteAuth> parActeur = new HashMap<>();
+    private Map<CleActeur, CompteAuth> comptesParActeur() {
+        Map<CleActeur, CompteAuth> parActeur = new HashMap<>();
         for (CompteAuth compte : compteAuthRepository.findAll()) {
             if (compte.getTypeActeur() == null || compte.getRefActeur() == null) {
                 continue;
             }
-            parActeur.merge(compte.getTypeActeur() + " " + compte.getRefActeur(), compte,
+            parActeur.merge(new CleActeur(compte.getTypeActeur(), compte.getRefActeur()), compte,
                     AnnuaireService::leMoinsFerme);
         }
         return parActeur;
@@ -236,22 +240,41 @@ public class AnnuaireService {
     // ------------------------------------------------------------------
 
     /**
-     * État d'accès d'une personne. {@link StatutCompte} ne comporte pas de valeur {@code DESACTIVE} —
-     * {@code CompteAuthService.desactiver} ne touche que le booléen {@code ACTIF}, celui que le login
-     * consulte — d'où la dernière ligne, qui réunit les comptes suspendus et les inscriptions
-     * refusées. Même règle que {@code comptesSuspendus} de {@code KpiService}, pour que l'accueil et
-     * l'annuaire comptent pareil.
+     * État d'accès d'une personne, dans l'ordre où les cas se tranchent.
+     *
+     * <p><strong>{@code ACTIF} prime sur {@code STATUT}</strong> : le login ne consulte que ce booléen,
+     * donc quelqu'un qui peut se connecter est actif, quoi que dise le statut. Ensuite seulement
+     * viennent l'inscription en attente, l'inscription refusée, et enfin la suspension.</p>
+     *
+     * <p><strong>⚠️ Suspendu et refusé ne sont pas le même état</strong> (correction du 2026-09-17) :
+     * un compte fermé après coup, et une inscription qui n'a jamais été ouverte. Les confondre
+     * gonflerait la tuile « comptes suspendus » de l'accueil, qui est une mesure de sécurité. Les deux
+     * restent distinguables bien que {@link StatutCompte} n'ait pas de valeur {@code DESACTIVE} :
+     * {@code CompteAuthService.desactiver} pose {@code ACTIF = false} en laissant {@code STATUT} à
+     * {@code ACTIF}, là où un refus écrit {@code STATUT = REFUSE}.</p>
+     *
+     * <p><strong>⚠️ Invariant rompu, documenté ici faute de l'être ailleurs.</strong> Le javadoc de
+     * {@link StatutCompte} annonce {@code ACTIF=true ⟺ STATUT=ACTIF} ; ni
+     * {@code CompteAuthService.desactiver} ni {@code CompteAuthService.activer} ne tiennent cette
+     * promesse — tous deux n'écrivent que le booléen. C'est précisément cet écart qui rend la
+     * distinction possible ici. Il n'est <strong>pas</strong> corrigé : le login s'appuie sur
+     * {@code ACTIF}, et y toucher dépasse le périmètre de ce lot.</p>
      */
     static StatutCompteAnnuaire statutDe(CompteAuth compte) {
         if (compte == null) {
             return StatutCompteAnnuaire.SANS_COMPTE;
         }
+        if (Boolean.TRUE.equals(compte.getActif())) {
+            return StatutCompteAnnuaire.ACTIF;
+        }
         if (StatutCompte.EN_ATTENTE.name().equals(compte.getStatut())) {
             return StatutCompteAnnuaire.EN_ATTENTE;
         }
-        return Boolean.TRUE.equals(compte.getActif())
-                ? StatutCompteAnnuaire.ACTIF
-                : StatutCompteAnnuaire.DESACTIVE;
+        if (StatutCompte.REFUSE.name().equals(compte.getStatut())) {
+            return StatutCompteAnnuaire.REFUSE;
+        }
+        // STATUT = ACTIF (ou nul sur une ligne héritée) avec ACTIF = false : fermé par l'Administrateur.
+        return StatutCompteAnnuaire.SUSPENDU;
     }
 
     /** Vrai si l'un des champs cherchables contient le texte demandé (tout est déjà normalisé). */
@@ -278,10 +301,6 @@ public class AnnuaireService {
                 .toLowerCase(Locale.FRENCH);
     }
 
-    private static String cle(TypeActeur type, String ref) {
-        return type.name() + " " + ref;
-    }
-
     private static String login(CompteAuth compte) {
         return compte == null ? null : compte.getLogin();
     }
@@ -290,12 +309,14 @@ public class AnnuaireService {
         return rang(statutDe(candidat)) < rang(statutDe(existant)) ? candidat : existant;
     }
 
+    /** Du plus ouvert au plus fermé — sert à départager plusieurs comptes d'une même personne. */
     private static int rang(StatutCompteAnnuaire statut) {
         return switch (statut) {
             case ACTIF -> 0;
             case EN_ATTENTE -> 1;
-            case DESACTIVE -> 2;
-            case SANS_COMPTE -> 3;
+            case SUSPENDU -> 2;
+            case REFUSE -> 3;
+            case SANS_COMPTE -> 4;
         };
     }
 }

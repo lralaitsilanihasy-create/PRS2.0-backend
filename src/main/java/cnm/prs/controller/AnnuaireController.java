@@ -49,7 +49,9 @@ public class AnnuaireController {
      * @param type     {@code CONTROLEUR} · {@code PRMP} · {@code UGPM}
      * @param profil   profil du contrôleur (ex. {@code MEMBRE}) ; exclut PRMP et UGPM, qui n'en portent pas
      * @param localite code de localité ({@code ID_LOCALITE}) ; ne retient que des contrôleurs
-     * @param statut   {@code ACTIF} · {@code DESACTIVE} · {@code EN_ATTENTE} · {@code SANS_COMPTE}
+     * @param statut   {@code ACTIF} · {@code SUSPENDU} · {@code REFUSE} · {@code EN_ATTENTE} ·
+     *                 {@code SANS_COMPTE} — suspendu (compte fermé) et refusé (inscription rejetée)
+     *                 sont deux états distincts, jamais confondus
      */
     @GetMapping
     public Page<AnnuairePersonneDto> rechercher(

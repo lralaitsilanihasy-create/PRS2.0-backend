@@ -27,8 +27,15 @@ public interface CompteAuthRepository extends JpaRepository<CompteAuth, String> 
     /** Comptes par statut et type d'acteur (ex. inscriptions PRMP EN_ATTENTE). */
     List<CompteAuth> findByStatutAndTypeActeur(String statut, String typeActeur);
 
-    /** Nombre de comptes à un statut donné pour un type d'acteur (compteur du menu Administrateur). */
-    long countByStatutAndTypeActeur(String statut, String typeActeur);
+    /**
+     * ⚠️ Lot 6 (2026-09-17, §B1) — inscriptions à un statut donné pour <strong>plusieurs</strong> types
+     * d'acteur.
+     *
+     * <p>Remplace le comptage sur le seul type PRMP : le badge du menu doit compter ce que l'écran
+     * liste, or {@code InscriptionService.enAttente()} rend les inscriptions PRMP <strong>et</strong>
+     * UGPM. Un badge qui annonce 5 au-dessus d'une liste de 7 est un défaut, pas un contrat.</p>
+     */
+    long countByStatutAndTypeActeurIn(String statut, Collection<String> typesActeur);
 
     /**
      * ⚠️ Lot 6 (2026-09-17, §B1) — comptes <strong>connectables</strong>. Le login s'appuie sur le
@@ -37,19 +44,22 @@ public interface CompteAuthRepository extends JpaRepository<CompteAuth, String> 
     long countByActifTrue();
 
     /**
-     * ⚠️ Lot 6 (2026-09-17, §B1) — comptes existants <strong>non connectables</strong>, hors
-     * inscriptions encore en attente : désactivés par l'Administrateur ({@code ACTIF = false} alors que
-     * {@code STATUT} vaut toujours {@code ACTIF}) ou refusés.
+     * ⚠️ Lot 6 (2026-09-17, §B1) — comptes <strong>suspendus</strong> : validés puis fermés par
+     * l'Administrateur, c'est-à-dire {@code ACTIF = false} alors que {@code STATUT} vaut toujours
+     * {@code ACTIF}.
      *
-     * <p>{@link cnm.prs.enums.StatutCompte} ne comporte <strong>pas</strong> de valeur
-     * {@code DESACTIVE} — la désactivation ne touche que le booléen ({@code CompteAuthService.desactiver}) —,
-     * d'où un prédicat sur {@code ACTIF} et non sur le statut. Le {@code statut is null} couvre les
-     * lignes antérieures à l'introduction de la colonne : {@code <>} seul les exclurait (comparaison à
-     * {@code null} = inconnu).</p>
+     * <p><strong>Les inscriptions refusées ({@code STATUT = REFUSE}) en sont exclues</strong>
+     * (correction du 2026-09-17) : une inscription qu'on n'a jamais ouverte n'est pas un compte qu'on a
+     * fermé, et la tuile « comptes suspendus » de l'accueil est une mesure de sécurité — les y verser
+     * la gonflerait. Les deux restent distinguables bien que {@link cnm.prs.enums.StatutCompte} n'ait
+     * pas de valeur {@code DESACTIVE}, parce que {@code CompteAuthService.desactiver} ne touche que le
+     * booléen. Le {@code statut is null} couvre les lignes antérieures à l'introduction de la colonne,
+     * qu'une égalité seule exclurait (comparaison à {@code null} = inconnu) ; c'est le même périmètre
+     * que {@code SUSPENDU} dans l'annuaire, pour que l'accueil et l'annuaire comptent pareil.</p>
      */
     @Query("""
             select count(c) from CompteAuth c
-            where c.actif = false and (c.statut is null or c.statut <> :statutEnAttente)
+            where c.actif = false and (c.statut is null or c.statut = :statutActif)
             """)
-    long compterNonConnectablesHorsAttente(@Param("statutEnAttente") String statutEnAttente);
+    long compterSuspendus(@Param("statutActif") String statutActif);
 }

@@ -345,7 +345,7 @@ de personnes. Aucune écriture : les gestes de compte restent sur `/api/comptes-
 | localite | string \| null | **code** de localité (`ID_LOCALITE`, ex. `ANT`) — le libellé vient de `/api/localites` ; **null** hors contrôleurs (ni la PRMP ni l'UGPM n'en portent, `PrmpDto` ne porte plus `idLocalite`) |
 | entite | string \| null | entité(s) contractante(s) **actives** de rattachement, séparées par « · » ; celles de la **tutelle** pour une UGPM ; **null** pour un contrôleur |
 | login | string \| null | login du compte ; **null** si la personne n'en a aucun |
-| statutCompte | string | `ACTIF` · `DESACTIVE` · `EN_ATTENTE` · `SANS_COMPTE` |
+| statutCompte | string | `ACTIF` · `SUSPENDU` · `REFUSE` · `EN_ATTENTE` · `SANS_COMPTE` |
 
 **Endpoints**
 
@@ -362,21 +362,34 @@ de personnes. Aucune écriture : les gestes de compte restent sur `/api/comptes-
 | `type` | `CONTROLEUR` · `PRMP` · `UGPM` | population |
 | `profil` | `MEMBRE`, `CHEF_COMMISSION`, … | profil du contrôleur ; exclut de fait PRMP et UGPM, qui n'en portent pas — c'est `type` qui sert à les isoler |
 | `localite` | code (`ANT`), casse indifférente | ne retient que des contrôleurs, seuls porteurs d'une localité |
-| `statut` | `ACTIF` · `DESACTIVE` · `EN_ATTENTE` · `SANS_COMPTE` | état d'accès, **`SANS_COMPTE` compris** |
+| `statut` | `ACTIF` · `SUSPENDU` · `REFUSE` · `EN_ATTENTE` · `SANS_COMPTE` | état d'accès, **`SANS_COMPTE` compris** ; `SUSPENDU` et `REFUSE` ne se recouvrent jamais |
 | `page`, `size` | number | forme `Page` habituelle (`content`, `totalElements`, `number`, `size`) ; défaut `size=20` |
 
 > **Tri imposé par le serveur** : nom, puis prénoms, puis référence, sans les accents. La référence
 > départage les homonymes et rend l'ordre **total** — sans elle, deux pages successives pourraient se
 > recouvrir. Le tri demandé par le client n'est pas appliqué (contrat des autres listes paginées).
 
-> ⚠️ **`statutCompte` — d'où il vient.** `t_compte_auth` n'a pas de valeur `DESACTIVE` : son énuméré est
-> `EN_ATTENTE` / `ACTIF` / `REFUSE`, et `POST /api/comptes-auth/{login}/desactiver` ne touche que le
-> booléen `ACTIF`, celui que le login consulte. La correspondance est donc : aucun compte →
-> `SANS_COMPTE` ; `STATUT = EN_ATTENTE` → `EN_ATTENTE` ; `ACTIF = true` → `ACTIF` ; tout le reste →
-> `DESACTIVE` (compte suspendu **ou** inscription refusée). C'est la règle qui sert aussi à
-> `comptesSuspendus` de `CompteursAdminDto`, pour que l'accueil et l'annuaire comptent pareil. Si une
-> personne porte **plusieurs** comptes (rien ne l'interdit, la PK est le login), c'est le **moins
-> fermé** qui est servi : c'est l'accès dont elle dispose réellement.
+> ⚠️ **`statutCompte` — d'où il vient, et pourquoi `SUSPENDU` ≠ `REFUSE`.** Les cas se tranchent dans
+> cet ordre : aucun compte → `SANS_COMPTE` ; **`ACTIF = true` → `ACTIF`** (ce booléen prime, car c'est
+> le seul que le login consulte : qui peut se connecter est actif) ; `STATUT = EN_ATTENTE` →
+> `EN_ATTENTE` ; `STATUT = REFUSE` → `REFUSE` ; le reste (`STATUT = ACTIF` avec `ACTIF = false`) →
+> `SUSPENDU`.
+>
+> **Un compte fermé après coup et une inscription jamais ouverte sont deux états distincts**, jamais
+> confondus : `POST /api/comptes-auth/{login}/desactiver` ne touche que le booléen `ACTIF` en laissant
+> `STATUT` à `ACTIF`, là où un refus d'inscription écrit `STATUT = REFUSE` et son `MOTIF_REFUS`. C'est
+> ce qui les rend distinguables bien que l'énuméré `StatutCompte` (`EN_ATTENTE` / `ACTIF` / `REFUSE`)
+> n'ait pas de valeur `DESACTIVE`. La même règle gouverne `comptesSuspendus` de `CompteursAdminDto`,
+> qui ne compte **que** les suspendus — la tuile de l'accueil est une mesure de sécurité, y verser les
+> inscriptions refusées la gonflerait.
+>
+> À noter pour qui lit le code : le javadoc de `StatutCompte` annonce l'invariant `ACTIF=true ⟺
+> STATUT=ACTIF` ; ni `desactiver` ni `activer` ne le tiennent (tous deux n'écrivent que le booléen).
+> L'écart n'est pas corrigé — le login s'appuie sur `ACTIF` — mais c'est lui qui rend la distinction
+> ci-dessus possible.
+>
+> Si une personne porte **plusieurs** comptes (rien ne l'interdit, la PK est le login), c'est le
+> **moins fermé** qui est servi : c'est l'accès dont elle dispose réellement.
 
 **Exemple — réponse**
 ```json
@@ -3562,20 +3575,27 @@ système).
 
 | Champ (JSON) | Type | Description |
 |---|---|---|
-| inscriptionsEnAttente | number | inscriptions PRMP en attente de validation (`t_compte_auth.STATUT = EN_ATTENTE`, type PRMP) |
+| inscriptionsEnAttente | number | inscriptions en attente de validation (`t_compte_auth.STATUT = EN_ATTENTE`) — ⚠️ **2026-09-17 : types PRMP *et* UGPM**, et non plus PRMP seul (voir l'encart) |
 | comptes | number | nombre total de comptes d'authentification |
 | journalAudit | number | nombre total d'entrées du journal d'audit |
 | rattachementsEnAttente | number | ⚠️ 2026-09-17 — déclarations de rattachement **PRMP⇄entité** non décidées (`t_prmp_entite_demande.STATUT_DEMANDE = EN_ATTENTE`) |
-| inscriptionDoyenneLe | string (date-time) \| null | ⚠️ 2026-09-17 — dépôt de la **plus ancienne inscription PRMP encore en attente** ; `null` si la file est vide |
+| inscriptionDoyenneLe | string (date-time) \| null | ⚠️ 2026-09-17 — dépôt de la **plus ancienne inscription encore en attente** (même file que `inscriptionsEnAttente` : PRMP et UGPM) ; `null` si la file est vide |
 | rattachementDoyenLe | string (date-time) \| null | ⚠️ 2026-09-17 — **première déclaration** de rattachement encore en attente (`DATE_DECLARATION` est une date : l'heure est donc `00:00:00`) ; `null` si la file est vide |
 | comptesActifs | number | ⚠️ 2026-09-17 — comptes connectables (`t_compte_auth.ACTIF = true`) |
-| comptesSuspendus | number | ⚠️ 2026-09-17 — comptes existants **non connectables hors inscription en attente** : suspendus par l'Administrateur ou refusés (même règle que `statutCompte = DESACTIVE` de l'annuaire) |
+| comptesSuspendus | number | ⚠️ 2026-09-17 — comptes validés puis **fermés** par l'Administrateur (`STATUT = ACTIF` avec `ACTIF = false`). Les inscriptions **refusées** n'y sont **pas** comptées : même règle que `statutCompte = SUSPENDU` de l'annuaire, qui expose les refusées sous `REFUSE` |
 | mandatsExpirantSous30j | number | ⚠️ 2026-09-17 — mandats PRMP **non abrogés** dont `DATE_FIN` tombe dans les 30 jours (bornes incluses) |
 
-> ⚠️ **2026-09-17 (lot 6, §B1) — six champs ajoutés, aucun retiré.** Les trois compteurs d'origine sont
-> inchangés, périmètre compris : le front lit `inscriptionsEnAttente` pour la pastille du menu.
-> **Ce qui compte pour l'accueil n'est pas le volume mais l'ancienneté** de la plus vieille demande de
-> chaque file — c'est elle qui dit s'il y a urgence.
+> ⚠️ **2026-09-17 (lot 6, §B1) — six champs ajoutés, aucun retiré.** La **forme** des trois compteurs
+> d'origine ne bouge pas (le front lit `inscriptionsEnAttente` pour la pastille du menu, et `BadgesDto`
+> est partagé avec les neuf autres profils). **Ce qui compte pour l'accueil n'est pas le volume mais
+> l'ancienneté** de la plus vieille demande de chaque file — c'est elle qui dit s'il y a urgence.
+>
+> ⚠️ **Changement de périmètre d'`inscriptionsEnAttente`** (même jour, arbitrage du chantier) : il
+> compte désormais les inscriptions **PRMP et UGPM**, là où il ne comptait que les PRMP. C'est ce que
+> liste l'écran qu'il annonce (`GET /api/inscriptions/en-attente`, union des deux types depuis
+> l'ouverture de l'inscription UGPM) : un badge affichant 5 au-dessus d'une liste de 7 est un défaut,
+> pas un contrat. `inscriptionDoyenneLe` suit la même file. **Le front peut voir ce nombre augmenter
+> sans qu'aucune inscription n'ait été déposée** : ce sont les inscriptions UGPM jusqu'ici invisibles.
 >
 > **D'où vient `inscriptionDoyenneLe`.** `t_compte_auth` ne porte **aucune date de dépôt** : seule
 > `DATE_DECISION` y figure, renseignée quand l'Administrateur tranche, donc jamais pour une inscription

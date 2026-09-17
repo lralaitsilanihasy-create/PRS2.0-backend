@@ -1,6 +1,7 @@
 package cnm.prs.repository;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -25,7 +26,8 @@ public interface PieceJointeRepository extends JpaRepository<PieceJointe, Intege
 
     /**
      * ⚠️ Lot 6 (2026-09-17, §B1) — <strong>dépôt de la plus ancienne inscription encore en attente</strong>
-     * pour un type d'acteur, ou {@code null} si la file est vide.
+     * pour les types d'acteur donnés (PRMP <strong>et</strong> UGPM : la doyenneté couvre la même file
+     * que le compteur qu'elle accompagne), ou {@code null} si la file est vide.
      *
      * <p>{@code t_compte_auth} ne porte <strong>aucune date de création</strong> (cf. {@code V1__baseline.sql}) :
      * seule {@code DATE_DECISION} y figure, renseignée au moment où l'Administrateur tranche — donc jamais
@@ -41,9 +43,10 @@ public interface PieceJointeRepository extends JpaRepository<PieceJointe, Intege
             select min(p.dateDepot) from PieceJointe p
             where p.login in (
                 select c.login from CompteAuth c
-                where c.statut = :statut and c.typeActeur = :typeActeur)
+                where c.statut = :statut and c.typeActeur in :typesActeur)
             """)
-    LocalDateTime premierDepotDesComptes(@Param("statut") String statut, @Param("typeActeur") String typeActeur);
+    LocalDateTime premierDepotDesComptes(@Param("statut") String statut,
+            @Param("typesActeur") Collection<String> typesActeur);
 
     /** Prochaine PK allouee par la sequence serveur {@code seq_piece_jointe} (allocation atomique). */
     @Query(value = "select nextval('seq_piece_jointe')", nativeQuery = true)

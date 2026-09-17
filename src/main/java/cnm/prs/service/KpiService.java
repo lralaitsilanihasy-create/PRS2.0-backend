@@ -59,6 +59,14 @@ public class KpiService {
      */
     private static final int PREAVIS_MANDAT_JOURS = 30;
 
+    /**
+     * ⚠️ Lot 6 (2026-09-17, §B1, corrigé le jour même) — populations qui <strong>s'inscrivent</strong> :
+     * le badge doit compter ce que l'écran liste, or {@code InscriptionService.enAttente()} rend les
+     * inscriptions PRMP <strong>et</strong> UGPM. Le compteur ne portait que sur PRMP.
+     */
+    private static final List<String> TYPES_QUI_S_INSCRIVENT =
+            List.of(TypeActeur.PRMP.name(), TypeActeur.UGPM.name());
+
     private final DossierRepository dossierRepository;
     private final VerificationRepository verificationRepository;
     private final ExamenDetailRepository examenDetailRepository;
@@ -230,28 +238,33 @@ public class KpiService {
 
     /**
      * Compteurs de contenu du menu Administrateur — comptes <strong>globaux</strong> (rôle transversal) :
-     * inscriptions PRMP en attente de validation, total des comptes d'authentification, total des entrées
-     * du journal d'audit.
+     * inscriptions en attente de validation, total des comptes d'authentification, total des entrées du
+     * journal d'audit.
      *
      * <p>⚠️ Lot 6 (2026-09-17, §B1) — enrichis pour l'accueil de l'Administrateur, <strong>sans migration
-     * ni route neuve</strong> (c'est {@code GET /api/kpis/badges} qui porte le tout). Les trois compteurs
-     * d'origine sont inchangés, y compris leur périmètre.</p>
+     * ni route neuve</strong> (c'est {@code GET /api/kpis/badges} qui porte le tout).</p>
      *
      * <ul>
+     *   <li><strong>⚠️ Changement de périmètre (2026-09-17, arbitrage du chantier) :
+     *       {@code inscriptionsEnAttente} compte désormais les inscriptions <strong>PRMP et UGPM</strong>,
+     *       et non plus les seules PRMP.</strong> C'est ce que liste l'écran qu'il annonce
+     *       ({@code InscriptionService.enAttente()}) : un badge qui affiche 5 au-dessus d'une liste de 7
+     *       est précisément le défaut que ce lot corrige. La forme du DTO, elle, ne change pas — les neuf
+     *       autres profils ne sont pas concernés.</li>
      *   <li><strong>Ancienneté des files</strong> — ce qui dit s'il y a urgence n'est pas le volume mais
      *       la date de la plus vieille demande. Côté rattachements, c'est {@code DATE_DECLARATION}
      *       (une date : elle remonte donc à minuit). Côté inscriptions, {@code t_compte_auth} ne porte
      *       aucune date de dépôt — la migration étant exclue, l'ancienneté se lit sur la première pièce
      *       déposée, écrite dans la même transaction que l'inscription ; à défaut (variante JSON
-     *       historique, sans pièce) sur la première déclaration d'entité.</li>
-     *   <li><strong>Périmètre de l'ancienneté d'inscription</strong> : celui du compteur qu'elle
-     *       accompagne — les inscriptions de type PRMP. Afficher « 3 en attente, la plus ancienne du
-     *       12/08 » avec une date venue d'une file non comptée serait incohérent.</li>
+     *       historique, sans pièce) sur la première déclaration d'entité. Même file que le compteur
+     *       qu'elle accompagne, PRMP et UGPM.</li>
      *   <li><strong>Actifs / suspendus</strong> : {@code ACTIF} fait foi, car c'est lui que le login
-     *       consulte. {@link cnm.prs.enums.StatutCompte} n'a pas de valeur {@code DESACTIVE} — la
-     *       désactivation ne touche que le booléen — d'où « non connectable hors attente » pour les
-     *       suspendus (désactivés + inscriptions refusées). Même règle que le statut affiché par
-     *       l'annuaire ({@code AnnuaireService}), pour que les deux écrans comptent pareil.</li>
+     *       consulte. Un compte <strong>suspendu</strong> est un compte validé puis fermé
+     *       ({@code STATUT = ACTIF}, {@code ACTIF = false}) ; une <strong>inscription refusée</strong>
+     *       ({@code STATUT = REFUSE}) n'en est pas un et n'est <strong>pas</strong> comptée ici — la
+     *       tuile est une mesure de sécurité, l'y verser la gonflerait. Même règle que
+     *       {@code SUSPENDU} dans l'annuaire ({@code AnnuaireService.statutDe}), pour que les deux
+     *       écrans comptent pareil ; les refusées s'y retrouvent sous {@code REFUSE}.</li>
      * </ul>
      */
     public CompteursAdminDto mesCompteursAdmin() {
@@ -260,29 +273,32 @@ public class KpiService {
         java.time.LocalDate premiereDeclaration =
                 prmpEntiteDemandeRepository.premiereDeclaration(StatutDemandeEntite.EN_ATTENTE.name());
         return new CompteursAdminDto(
-                compteAuthRepository.countByStatutAndTypeActeur(StatutCompte.EN_ATTENTE.name(), TypeActeur.PRMP.name()),
+                compteAuthRepository.countByStatutAndTypeActeurIn(
+                        StatutCompte.EN_ATTENTE.name(), TYPES_QUI_S_INSCRIVENT),
                 compteAuthRepository.count(),
                 auditLogRepository.count(),
                 prmpEntiteDemandeRepository.countByStatutDemande(StatutDemandeEntite.EN_ATTENTE.name()),
                 inscriptionDoyenneLe(premiereDeclaration),
                 premiereDeclaration == null ? null : premiereDeclaration.atStartOfDay(),
                 compteAuthRepository.countByActifTrue(),
-                compteAuthRepository.compterNonConnectablesHorsAttente(StatutCompte.EN_ATTENTE.name()),
+                compteAuthRepository.compterSuspendus(StatutCompte.ACTIF.name()),
                 mandatRepository.compterExpirantEntre(aujourdhui, aujourdhui.plusDays(PREAVIS_MANDAT_JOURS)));
     }
 
     /**
-     * Dépôt de la plus ancienne inscription PRMP encore en attente ({@code null} si la file est vide) :
-     * la première pièce déposée. Voir {@link #mesCompteursAdmin()} pour le motif de cette dérivation.
+     * Dépôt de la plus ancienne inscription encore en attente, PRMP ou UGPM ({@code null} si la file est
+     * vide) : la première pièce déposée. Voir {@link #mesCompteursAdmin()} pour le motif de cette
+     * dérivation.
      *
      * <p>Sans aucune pièce — l'inscription par la variante JSON historique n'en dépose pas —, le repli
      * est le jour de la première déclaration d'entité <strong>encore en attente</strong> : une telle
      * déclaration n'existe que portée par une inscription en attente, et elle naît avec elle. Les deux
-     * doyennetés se confondent alors, ce qui est exact et non un recopiage.</p>
+     * doyennetés se confondent alors, ce qui est exact et non un recopiage. Ce repli ne vaut que pour
+     * une PRMP : une UGPM ne déclare aucune entité.</p>
      */
     private java.time.LocalDateTime inscriptionDoyenneLe(java.time.LocalDate premiereDeclarationEnAttente) {
         java.time.LocalDateTime parPiece = pieceJointeRepository.premierDepotDesComptes(
-                StatutCompte.EN_ATTENTE.name(), TypeActeur.PRMP.name());
+                StatutCompte.EN_ATTENTE.name(), TYPES_QUI_S_INSCRIVENT);
         if (parPiece != null) {
             return parPiece;
         }
