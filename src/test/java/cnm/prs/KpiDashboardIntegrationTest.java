@@ -406,9 +406,58 @@ class KpiDashboardIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$.comptesActifs").value(greaterThanOrEqualTo(1)))
                 .andExpect(jsonPath("$.comptesSuspendus").value(0))
                 .andExpect(jsonPath("$.mandatsExpirantSous30j").value(0))
-                // B4 n'est pas livré : ces deux mesures ne doivent PAS apparaître (plan L6 §6).
-                .andExpect(jsonPath("$.sessionsOuvertes").doesNotExist())
-                .andExpect(jsonPath("$.echecsConnexion24h").doesNotExist());
+                // ⚠️ 2026-09-17, §B4 livré : les deux mesures que l'accueil refusait d'afficher sont
+                // servies, et valent zéro tant qu'aucune connexion n'a été tracée.
+                .andExpect(jsonPath("$.sessionsOuvertes").value(0))
+                .andExpect(jsonPath("$.echecsConnexion24h").value(0));
+    }
+
+    // ------------------------------------------------------------------
+    // ⚠️ Lot 6 (2026-09-17, §B4) — les deux tuiles que le journal des connexions rallume
+    // ------------------------------------------------------------------
+
+    @Test
+    @DisplayName("Admin §B4 : sessionsOuvertes compte les connexions réussies non fermées et RÉCENTES")
+    void dashboard_admin_b4_sessions_ouvertes() throws Exception {
+        seedSession("S-VIVE", "CTRADM", LocalDateTime.now().minusHours(2), null, true);
+        // Fermée : elle n'est plus ouverte.
+        seedSession("S-FERMEE", "CTRADM", LocalDateTime.now().minusHours(3),
+                LocalDateTime.now().minusHours(1), true);
+        // Jamais fermée mais vieille de deux jours : l'onglet a été fermé, la tuile ne doit pas la garder.
+        seedSession("S-OUBLIEE", "CTRADM", LocalDateTime.now().minusDays(2), null, true);
+        // Un échec n'ouvre aucune session.
+        seedSession("S-ECHEC", null, LocalDateTime.now().minusHours(1), null, false);
+
+        mvc.perform(get("/api/kpis/mes-compteurs-admin").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.sessionsOuvertes").value(1));
+    }
+
+    @Test
+    @DisplayName("Admin §B4 : echecsConnexion24h ne compte que les refus des 24 dernières heures")
+    void dashboard_admin_b4_echecs_24h() throws Exception {
+        seedSession("E-1", "CTRADM", LocalDateTime.now().minusHours(1), null, false);
+        seedSession("E-2", null, LocalDateTime.now().minusHours(23), null, false);
+        seedSession("E-VIEUX", null, LocalDateTime.now().minusHours(30), null, false);
+        seedSession("S-OK", "CTRADM", LocalDateTime.now().minusHours(2), null, true);
+
+        mvc.perform(get("/api/kpis/mes-compteurs-admin").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.echecsConnexion24h").value(2))
+                .andExpect(jsonPath("$.sessionsOuvertes").value(1));
+    }
+
+    /** Une ligne du journal des connexions (§B4). */
+    private void seedSession(String id, String acteur, LocalDateTime connexion,
+            LocalDateTime deconnexion, boolean succes) {
+        cnm.prs.entity.SessionUtilisateur s = new cnm.prs.entity.SessionUtilisateur();
+        s.setIdSession(id);
+        s.setImControleur(acteur);
+        s.setLogin(acteur == null ? "inconnu" : acteur);
+        s.setDateConnexion(connexion);
+        s.setDateDeconnexion(deconnexion);
+        s.setSucces(succes);
+        sessionUtilisateurRepository.save(s);
     }
 
     @Test

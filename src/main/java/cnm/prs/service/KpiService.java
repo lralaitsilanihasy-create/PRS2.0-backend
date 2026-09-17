@@ -40,6 +40,7 @@ import cnm.prs.repository.PrmpEntiteDemandeRepository;
 import cnm.prs.repository.PublicationRepository;
 import cnm.prs.repository.PvExamenRepository;
 import cnm.prs.repository.ReceptionRepository;
+import cnm.prs.repository.SessionUtilisateurRepository;
 import cnm.prs.repository.VerificationRepository;
 import cnm.prs.security.CurrentUser;
 
@@ -57,6 +58,21 @@ public class KpiService {
      * {@value} prochains jours.
      */
     private static final int PREAVIS_MANDAT_JOURS = 30;
+
+    /**
+     * ⚠️ Lot 6 (2026-09-17, §B4) — au-delà de {@value} heures, une connexion jamais fermée n'est plus
+     * comptée comme une session ouverte.
+     *
+     * <p>Une session n'est fermée que par un {@code logout} explicite, or la plupart des utilisateurs
+     * ferment simplement leur onglet : sans borne, la tuile ne redescendrait jamais et mesurerait
+     * l'historique des connexions, pas les sessions vivantes. Douze heures parce que c'est plus qu'une
+     * journée de travail (personne n'est « encore connecté » de la veille) et moins qu'un jour entier
+     * (une connexion du matin ne survit pas à la nuit).</p>
+     */
+    private static final int DUREE_SESSION_OUVERTE_HEURES = 12;
+
+    /** ⚠️ Lot 6 (2026-09-17, §B4) — fenêtre du compteur d'échecs de connexion de l'accueil. */
+    private static final int FENETRE_ECHECS_HEURES = 24;
 
     /**
      * ⚠️ Lot 6 (2026-09-17, §B1, corrigé le jour même) — populations qui <strong>s'inscrivent</strong> :
@@ -81,6 +97,8 @@ public class KpiService {
     /** ⚠️ Lot 6 (2026-09-17, §B1) — files et ancienneté de l'accueil de l'Administrateur. */
     private final PrmpEntiteDemandeRepository prmpEntiteDemandeRepository;
     private final MandatRepository mandatRepository;
+    /** ⚠️ Lot 6 (2026-09-17, §B4) — sessions ouvertes et échecs de connexion de l'accueil. */
+    private final SessionUtilisateurRepository sessionRepository;
     /** ⚠️ 2026-09-15 — le badge « À faire » vient du calcul de l'accueil lui-même, jamais d'un comptage parallèle. */
     private final AFaireService aFaireService;
 
@@ -91,11 +109,13 @@ public class KpiService {
             PublicationRepository publicationRepository, CompteAuthRepository compteAuthRepository,
             AuditLogRepository auditLogRepository, DemandeRetraitVueRepository demandeRetraitVueRepository,
             PrmpEntiteDemandeRepository prmpEntiteDemandeRepository,
-            MandatRepository mandatRepository, AFaireService aFaireService) {
+            MandatRepository mandatRepository, SessionUtilisateurRepository sessionRepository,
+            AFaireService aFaireService) {
         this.aFaireService = aFaireService;
         this.demandeRetraitVueRepository = demandeRetraitVueRepository;
         this.prmpEntiteDemandeRepository = prmpEntiteDemandeRepository;
         this.mandatRepository = mandatRepository;
+        this.sessionRepository = sessionRepository;
         this.dossierRepository = dossierRepository;
         this.verificationRepository = verificationRepository;
         this.examenDetailRepository = examenDetailRepository;
@@ -263,12 +283,18 @@ public class KpiService {
      *       tuile est une mesure de sécurité, l'y verser la gonflerait. Même règle que
      *       {@code SUSPENDU} dans l'annuaire ({@code AnnuaireService.statutDe}), pour que les deux
      *       écrans comptent pareil ; les refusées s'y retrouvent sous {@code REFUSE}.</li>
+     *   <li><strong>⚠️ 2026-09-17, §B4 — sessions et échecs</strong> : les deux mesures que l'accueil
+     *       refusait d'afficher (plan L6 §6) faute de source. {@code t_session_utilisateur} étant
+     *       désormais alimentée au login ({@code JournalConnexionService}), elles sont servies. Une
+     *       session « ouverte » est une connexion réussie non fermée et récente — voir
+     *       {@link #DUREE_SESSION_OUVERTE_HEURES} pour la borne, qui n'est pas un détail.</li>
      * </ul>
      */
     public CompteursAdminDto mesCompteursAdmin() {
         java.time.LocalDate aujourdhui = java.time.LocalDate.now();
         java.time.LocalDate premiereDeclaration =
                 prmpEntiteDemandeRepository.premiereDeclaration(StatutDemandeEntite.EN_ATTENTE.name());
+        java.time.LocalDateTime maintenant = java.time.LocalDateTime.now();
         return new CompteursAdminDto(
                 compteAuthRepository.countByStatutAndTypeActeurIn(
                         StatutCompte.EN_ATTENTE.name(), TYPES_QUI_S_INSCRIVENT),
@@ -279,7 +305,9 @@ public class KpiService {
                 premiereDeclaration == null ? null : premiereDeclaration.atStartOfDay(),
                 compteAuthRepository.countByActifTrue(),
                 compteAuthRepository.compterSuspendus(StatutCompte.ACTIF.name()),
-                mandatRepository.compterExpirantEntre(aujourdhui, aujourdhui.plusDays(PREAVIS_MANDAT_JOURS)));
+                mandatRepository.compterExpirantEntre(aujourdhui, aujourdhui.plusDays(PREAVIS_MANDAT_JOURS)),
+                sessionRepository.compterOuvertes(maintenant.minusHours(DUREE_SESSION_OUVERTE_HEURES)),
+                sessionRepository.compterEchecsDepuis(maintenant.minusHours(FENETRE_ECHECS_HEURES)));
     }
 
     /**

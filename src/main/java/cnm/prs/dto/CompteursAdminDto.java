@@ -13,10 +13,11 @@ import java.time.LocalDateTime;
  * neuf autres profils) ; seul le <strong>périmètre</strong> d'{@code inscriptionsEnAttente} est
  * corrigé — voir son paramètre.</p>
  *
- * <p>{@code sessionsOuvertes} et {@code echecsConnexion24h} ne figurent volontairement
- * <strong>pas</strong> ici : leur source ({@code t_session_utilisateur} alimentée au login) relève du
- * besoin B4, non livré. Une mesure fausse sur un tableau de bord de sécurité est pire qu'une mesure
- * absente.</p>
+ * <p>⚠️ <strong>2026-09-17, §B4</strong> — {@code sessionsOuvertes} et {@code echecsConnexion24h} sont
+ * désormais servis : {@code t_session_utilisateur} est alimentée au login et au logout
+ * ({@code JournalConnexionService}, migration {@code V31}). Ce sont les deux tuiles que l'accueil
+ * refusait d'afficher (plan L6 §6) faute de source — « une mesure fausse sur un tableau de bord de
+ * sécurité est pire qu'une mesure absente ».</p>
  *
  * @param inscriptionsEnAttente inscriptions en attente de validation
  *                              ({@code t_compte_auth.STATUT = EN_ATTENTE}) — ⚠️ 2026-09-17 : types
@@ -38,6 +39,14 @@ import java.time.LocalDateTime;
  *                              n'y sont PAS comptées — ce n'est pas le même état, et la tuile est une
  *                              mesure de sécurité. L'annuaire les expose sous {@code statut=REFUSE}
  * @param mandatsExpirantSous30j mandats PRMP non abrogés dont la fin tombe dans les 30 jours
+ * @param sessionsOuvertes      ⚠️ §B4 — connexions <strong>réussies</strong> jamais fermées et datant
+ *                              de moins de 12 heures. La borne n'est pas un détail : une session n'est
+ *                              fermée que par un {@code logout} explicite, or la plupart des
+ *                              utilisateurs ferment simplement leur onglet — sans elle, la tuile ne
+ *                              redescendrait jamais (cf. {@code KpiService.DUREE_SESSION_OUVERTE_HEURES})
+ * @param echecsConnexion24h    ⚠️ §B4 — tentatives de connexion refusées des 24 dernières heures,
+ *                              identifiants inconnus compris. Les refus du quota (429) n'y figurent
+ *                              pas : ils n'examinent aucun identifiant et ne sont pas journalisés
  */
 public record CompteursAdminDto(
         long inscriptionsEnAttente,
@@ -48,5 +57,7 @@ public record CompteursAdminDto(
         LocalDateTime rattachementDoyenLe,
         long comptesActifs,
         long comptesSuspendus,
-        long mandatsExpirantSous30j) {
+        long mandatsExpirantSous30j,
+        long sessionsOuvertes,
+        long echecsConnexion24h) {
 }
