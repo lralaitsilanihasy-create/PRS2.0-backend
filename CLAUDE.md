@@ -52,8 +52,11 @@ Organisation par couches (à respecter) :
   ex-runners Java, `V5` = séquences de PK généralisées). `baseline-on-migrate` : une base déjà peuplée est
   marquée V1 sans rejouer la baseline. **Toute évolution de schéma = une migration `V<n>__*.sql`** ; les
   scripts manuels de `docs/migrations/` sont l'historique gelé d'avant Flyway, ne plus y ajouter.
-- Tests d'intégration : **Testcontainers PostgreSQL 17** (`docs/adr/ADR-0004`), socle `AbstractIntegrationTest`
-  (conteneur singleton) — le schéma des tests est celui de Flyway, plus de H2.
+- Tests d'intégration : **Testcontainers PostgreSQL 18** (`docs/adr/ADR-0004`), socle `AbstractIntegrationTest`
+  (conteneur singleton) — le schéma des tests est celui de Flyway, plus de H2. ⚠️ La version est passée
+  de 17 à 18 le 2026-08-28, confirmée version de production par le pilote ce même jour ; elle ne se lit
+  qu'à un seul endroit exécutable, le défaut d'`IMAGE_POSTGRES` dans `AbstractIntegrationTest` — ni
+  l'ADR ni cette ligne ne font foi si le code a de nouveau bougé depuis.
 
 ## Commandes
 - Lancer : `mvnw.cmd spring-boot:run` (Windows) — ou dans Eclipse : clic droit → Run As → Spring Boot App
@@ -70,3 +73,13 @@ Organisation par couches (à respecter) :
 ## Règles de gestion
 - Les règles métier de référence sont documentées dans `docs/regles-gestion.md`.
 - Toujours les respecter et les consulter **avant** de modifier la logique métier.
+
+## Demandes du front (`demande-backend-AAAA-MM-JJ-<sujet>.md`)
+- C'est le canal par lequel un besoin serveur né côté frontend arrive jusqu'ici : il s'écrit dans un
+  fichier de ce nom sous `frontend/docs/` (un sujet par fichier ; plusieurs besoins liés numérotés B1,
+  B2… à l'intérieur). Le backend y répond par un commit qui referme le besoin, et sa propre
+  documentation (`docs/api-endpoints.md`, `docs/regles-gestion.md`, un ADR si la décision l'exige) suit
+  dans la foulée.
+- **Le document est corrigé en place** quand la livraison s'écarte de la demande — jamais réécrit à
+  côté : un encadré ⚠️ daté note l'écart et sa raison, à l'endroit même que corrige la livraison
+  (exemple : `frontend/docs/demande-backend-2026-09-17-espace-admin.md`, §B1, §B2 et §B5).
