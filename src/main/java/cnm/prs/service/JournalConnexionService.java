@@ -24,7 +24,7 @@ import cnm.prs.repository.SessionUtilisateurRepository;
  * enregistrement, champ) là où une session décrit une <em>durée</em> ; {@code AuditInterceptor} ignore
  * tout ce qui renvoie ≥ 400, donc les échecs — précisément ce qu'on veut voir — seraient perdus ; et la
  * table comme sa clé étrangère depuis {@code t_audit_log.SESSION_ID} existent depuis la baseline, il n'y
- * avait rien à concevoir. Voir {@code docs/adr/ADR-0005-journal-des-connexions.md}.
+ * avait rien à concevoir. Voir {@code docs/adr/ADR-0006-journal-des-connexions.md}.
  *
  * <h2>L'identifiant de session est l'empreinte du jeton</h2>
  * Pour une connexion réussie, {@code ID_SESSION} est le SHA-256 du JWT émis ({@link #empreinte}). Le

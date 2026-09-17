@@ -108,7 +108,9 @@ Pour les ressources du circuit (`dossiers`, `receptions`, `dispatchs`, `examens`
   **PUT/DELETE restent Administrateur** pour tous.
 - **Gestion des comptes / hiérarchie** (écriture `ADMINISTRATEUR`, lecture ouverte) :
   `controleurs`, `prmps`, `organigrammes`.
-- **Réservé `ADMINISTRATEUR`** (lecture comprise) : `audit-logs`, `session-utilisateurs`, `comptes-auth`.
+- **Réservé `ADMINISTRATEUR`** (lecture comprise) : `audit-logs`, `sessions`, `comptes-auth`, `annuaire`.
+  ⚠️ 2026-09-17 : `audit-logs` et `sessions` sont **en lecture seule** — un journal de preuve où l'on peut
+  écrire ne prouve plus rien. `/api/session-utilisateurs` (CRUD) a été **retiré** au profit de `/api/sessions`.
 
 ### Saisie d'un dossier & endpoints restreints
 La création d'un dossier passe par la **façade `/api/saisies`** (réservée `PRMP`), pas par les endpoints
@@ -428,8 +430,8 @@ noms et calculés par le même code : la ligne de liste et la fiche ne peuvent p
 |---|---|---|
 | ref, type, nom, prenoms, profil, localite, entite, login, statutCompte | | identiques à `AnnuairePersonneDto` ci-dessus |
 | dateActivation | string (date-time) \| null | date de la **décision d'ouverture** du compte (`t_compte_auth.DATE_DECISION`) — le « actif depuis le … » de la fiche. **null** tant que l'inscription n'est pas validée **et pour une inscription refusée** : `DATE_DECISION` porte alors la date du refus, qui n'est pas une date d'activation |
-| derniereConnexion | null | **toujours null** — dépend de **B4** (journal des connexions), non livré |
-| echecs30j | null | **toujours null**, même raison |
+| derniereConnexion | string (date-time) \| null | ⚠️ 2026-09-17 (**§B4**) — plus récente connexion **réussie** de cette personne (`/api/sessions`). **null** pour qui ne s'est jamais connecté **depuis que le journal existe** — au début, tout le monde |
+| echecs30j | number | ⚠️ 2026-09-17 (**§B4**) — tentatives de connexion **refusées** attribuées à cette personne sur **30 jours glissants**, même fenêtre qu'`actionsJournal30j`. Une tentative sur un login inconnu n'est attribuable à personne et n'y figure pas : elle se lit dans `/api/sessions` |
 | superieur | object \| null | `{ ref, nom, prenoms, profil, localite }` — `tr_controleur.ID_SUPERIEUR` résolu ; **null** s'il n'en a pas, si le matricule ne désigne plus personne, ou hors contrôleurs |
 | transversal | boolean \| null | `tr_controleur.TRANSVERSAL` ; **null** hors contrôleurs |
 | chaineControle | array | chaîne de rattachement Membre → Vérificateur → Assistant (`IM_RATTACHE`), **la personne en tête** : `{ ref, nom, prenoms, profil, lui }`, `lui=true` sur le premier maillon. **Un seul maillon = chaîne incomplète** (état normal : le repli localité s'applique) ; **vide** hors contrôleurs |
@@ -437,11 +439,11 @@ noms et calculés par le même code : la ligne de liste et la fiche ne peuvent p
 | mandat | `MandatDto` \| null | mandat **en fonction ce jour**, pour une **PRMP seulement** (`implicite: true` quand il est reconstitué depuis `t_prmp`, faute de mandat déclaré) ; **null** pour un contrôleur, pour une UGPM (elle travaille sous celui de sa tutelle, la fiche ne le lui attribue pas) et pour une PRMP en vacance de mandat |
 | actionsJournal30j | number | nombre d'écritures portées à son nom au journal d'audit (`t_audit_log.IM_ACTEUR`) sur **30 jours glissants** |
 
-> ⚠️ **`derniereConnexion` et `echecs30j` sont servis nuls, pas omis.** Aucune connexion n'est tracée
-> durablement tant que **B4** n'est pas livré ; les champs existent au contrat pour que sa livraison
-> change la **valeur** et non la forme. Le front ne les affiche pas tant qu'ils sont nuls — pas à zéro,
-> pas avec un tiret : absents (plan L6 §6, « une mesure fausse sur un tableau de bord de sécurité est
-> pire qu'une mesure absente »).
+> ⚠️ **`derniereConnexion` et `echecs30j` sont servis depuis le 2026-09-17 (§B4).** Ils étaient nuls
+> — pas omis — faute de journal des connexions ; la livraison de B4 change donc la **valeur** et non la
+> forme, comme annoncé. `derniereConnexion` reste nulle pour qui ne s'est pas connecté depuis que le
+> journal existe : le front ne l'affiche alors pas — pas à zéro, pas avec un tiret : absente (plan L6
+> §6, « une mesure fausse sur un tableau de bord de sécurité est pire qu'une mesure absente »).
 
 > **Les délégations sont portées par le profil, pas par la personne** (`t_delegation_profil`) : une
 > paire active vaut pour tous les titulaires du profil. La fiche les montre parce que c'est ce qui
@@ -455,7 +457,7 @@ noms et calculés par le même code : la ligne de liste et la fiche ne peuvent p
   "ref": "CTR0142", "type": "CONTROLEUR", "nom": "RAKOTOMALALA", "prenoms": "Mamy",
   "profil": "MEMBRE", "localite": "ANT", "entite": null,
   "login": "m.rakotomalala", "statutCompte": "ACTIF", "dateActivation": "2026-03-14T09:30:00",
-  "derniereConnexion": null, "echecs30j": null,
+  "derniereConnexion": "2026-09-16T08:12:44", "echecs30j": 0,
   "superieur": { "ref": "CTRCC1", "nom": "RANDRIANARISOA", "prenoms": "Paul",
                  "profil": "CHEF_COMMISSION", "localite": "ANT" },
   "transversal": false,
@@ -536,6 +538,14 @@ par les règles de `tr_regle_anomalie`, jamais saisies à la main.
 >   **même origine** (phase 0 : proxy front → `/api`).
 > - **`POST /api/auth/logout`** (public, 204) : vide le cookie (`Max-Age=0`) — un cookie HttpOnly
 >   n'est pas supprimable par le JS du front.
+
+> ⚠️ **Journal des connexions (2026-09-17, lot 6 §B4).** `POST /api/auth/login` écrit désormais **une
+> ligne par tentative examinée** dans `t_session_utilisateur` — réussie ou refusée, l'identifiant tenté
+> compris — et `POST /api/auth/logout` y pose la date de fin de la session du jeton présenté. Ces
+> écritures **ne changent ni le code de retour, ni le corps, ni le contrat** de ces deux routes : une
+> panne du journal est avalée et consignée en `WARN`, jamais remontée (même principe que
+> `AuditInterceptor`). Les refus de quota (**429**) ne sont **pas** journalisés. Lecture :
+> **`GET /api/sessions`** (Administrateur). Voir `docs/adr/ADR-0006-journal-des-connexions.md`.
 > - **CSRF** : réactivé, ciblé sur le **seul canal cookie** — double-submit `XSRF-TOKEN` (cookie
 >   lisible, posé dès la première réponse) → en-tête `X-XSRF-TOKEN` (automatique avec Angular
 >   `HttpClient`). Exemptés : `/api/auth/**`, les requêtes en `Authorization: Bearer` (en-tête non
@@ -656,6 +666,7 @@ par les règles de `tr_regle_anomalie`, jamais saisies à la main.
 | GET | /api/auth/entites | — | `EntitePubliqueDto[]` | 200 | PUBLIC |
 | GET | /api/auth/prmps | — | `PrmpPubliqueDto[]` | 200 | PUBLIC |
 | POST | /api/auth/login | `LoginRequest` | `LoginResponse` | 200, 400, 401, **429** | PUBLIC |
+| POST | /api/auth/logout | — | — | 204 | PUBLIC (appelable même avec une session expirée) |
 | POST | /api/auth/register/prmp | **`multipart/form-data`** (v2, ci-dessous) ou `RegisterPrmpRequest` (JSON, historique) | `RegisterResponse` | 201, 400, 409, **429** | PUBLIC |
 | POST | /api/auth/register/ugpm | **`multipart/form-data`** : part `data` (`RegisterUgpmRequest`) + `cin` (obligatoire) + `photo` (opt.) | `RegisterResponse` | 201, 400, 409, **429** | PUBLIC |
 
@@ -3663,6 +3674,8 @@ système).
 | comptesActifs | number | ⚠️ 2026-09-17 — comptes connectables (`t_compte_auth.ACTIF = true`) |
 | comptesSuspendus | number | ⚠️ 2026-09-17 — comptes validés puis **fermés** par l'Administrateur (`STATUT = ACTIF` avec `ACTIF = false`). Les inscriptions **refusées** n'y sont **pas** comptées : même règle que `statutCompte = SUSPENDU` de l'annuaire, qui expose les refusées sous `REFUSE` |
 | mandatsExpirantSous30j | number | ⚠️ 2026-09-17 — mandats PRMP **non abrogés** dont `DATE_FIN` tombe dans les 30 jours (bornes incluses) |
+| sessionsOuvertes | number | ⚠️ 2026-09-17 (**§B4**) — connexions **réussies** jamais fermées et datant de **moins de 12 heures**. La borne n'est pas un détail : une session n'est fermée que par un `logout` explicite, or la plupart des utilisateurs ferment simplement leur onglet — sans elle, la tuile ne redescendrait jamais et mesurerait l'historique des connexions |
+| echecsConnexion24h | number | ⚠️ 2026-09-17 (**§B4**) — tentatives de connexion **refusées** des 24 dernières heures, identifiants inconnus compris. Les refus de quota (429) n'y figurent pas : ils n'examinent aucun identifiant et ne sont pas journalisés |
 
 > ⚠️ **2026-09-17 (lot 6, §B1) — six champs ajoutés, aucun retiré.** La **forme** des trois compteurs
 > d'origine ne bouge pas (le front lit `inscriptionsEnAttente` pour la pastille du menu, et `BadgesDto`
@@ -3676,16 +3689,20 @@ système).
 > pas un contrat. `inscriptionDoyenneLe` suit la même file. **Le front peut voir ce nombre augmenter
 > sans qu'aucune inscription n'ait été déposée** : ce sont les inscriptions UGPM jusqu'ici invisibles.
 >
-> **D'où vient `inscriptionDoyenneLe`.** `t_compte_auth` ne porte **aucune date de dépôt** : seule
-> `DATE_DECISION` y figure, renseignée quand l'Administrateur tranche, donc jamais pour une inscription
-> en attente. La demande excluant toute migration, l'ancienneté se lit sur la **première pièce déposée**
-> (`t_piece_jointe.DATE_DEPOT`, écrite dans la même transaction que l'inscription) ; à défaut — variante
-> JSON historique de l'inscription, sans pièce — sur la première déclaration d'entité. Même périmètre
-> que le compteur qu'elle accompagne (type PRMP).
+> **D'où vient `inscriptionDoyenneLe`.** ⚠️ **Corrigé le 2026-09-17 (§B4, migration `V31`)** : la
+> mesure se **lit** désormais sur `t_compte_auth.DATE_DEMANDE`, colonne posée à la persistance du
+> compte quelle que soit la voie de création. Jusque-là, la table ne portait **aucune date de dépôt** —
+> seule `DATE_DECISION`, renseignée quand l'Administrateur tranche, donc jamais pour une inscription en
+> attente — et B1 interdisant toute migration, l'ancienneté était **dérivée** de la première pièce
+> déposée (`t_piece_jointe.DATE_DEPOT`) avec repli sur la première déclaration d'entité. C'était exact,
+> mais suspendu à une coïncidence de transaction : la dérivation serait tombée le jour où une
+> inscription aurait été créée sans pièce. V31 a rejoué cette dérivation **une fois**, en reprise, pour
+> les comptes déjà en base.
 >
-> **`sessionsOuvertes` et `echecsConnexion24h` n'existent pas** tant que `t_session_utilisateur` n'est
-> pas alimentée (besoin B4, non livré) : une mesure fausse sur un tableau de bord de sécurité est pire
-> qu'une mesure absente.
+> ⚠️ **`sessionsOuvertes` et `echecsConnexion24h` sont servis depuis le 2026-09-17** (§B4) :
+> `t_session_utilisateur` est alimentée au login et au logout. Ce sont les deux tuiles que l'accueil
+> refusait d'afficher (plan L6 §6) faute de source — « une mesure fausse sur un tableau de bord de
+> sécurité est pire qu'une mesure absente ». Voir `/api/sessions`.
 
 **Endpoints**
 
@@ -5732,36 +5749,66 @@ exempté).
 
 ---
 
-## Sessions utilisateur
-**Ressource** `/api/session-utilisateurs` — Données de sécurité (§3.8) : réservé à `ADMINISTRATEUR` pour **toutes** les opérations (lecture comprise).
+## Sessions — journal des connexions
+**Ressource** `/api/sessions` — ⚠️ **Lot 6 (2026-09-17, demande front §B4)** — journal des connexions
+(table `t_session_utilisateur`), **réservé `ADMINISTRATEUR`** et **en lecture seule**.
 
-**Champs `SessionUtilisateurDto`**
+> ⚠️ **Cette ressource REMPLACE `/api/session-utilisateurs`, retiré le 2026-09-17.** L'ancienne route
+> servait un CRUD générique sur la même table : l'Administrateur pouvait y créer une fausse trace de
+> connexion, modifier une date ou supprimer la sienne. Un journal de preuve modifiable est pire
+> qu'absent — c'est le motif même pour lequel cet écran quitte l'application. Même raisonnement, et
+> même conclusion, que pour `/api/audit-logs` le 2026-08-27. Il n'y a donc **ni POST, ni PUT, ni
+> DELETE** ; `/api/session-utilisateurs` répond désormais **404**.
 
-| Champ (JSON) | Type | Obligatoire | Contraintes |
-|---|---|---|---|
-| idSession | string | Oui (PK, au POST) | clé primaire, max 100 |
-| imControleur | string | Non | max 7 |
-| dateConnexion | string (date-time) | Non | |
-| dateDeconnexion | string (date-time) | Non | |
-| ipAdresse | string | Non | max 45 |
-| userAgent | string | Non | max 300 |
-| succes | boolean | Non | |
+**Ce qui alimente la table** — et rien d'autre : `POST /api/auth/login` (une ligne par tentative
+examinée, réussie ou refusée) et `POST /api/auth/logout` (date de fin). Voir
+`docs/adr/ADR-0006-journal-des-connexions.md`.
+
+- Les refus de quota (**429**, `LoginRateLimiter`) **ne sont pas journalisés** : ils n'examinent aucun
+  identifiant, et les journaliser retirerait au verrou son effet de plafond sur le volume.
+- **Aucune purge n'est implémentée** : la durée de conservation est une décision produit, à arbitrer.
+
+> ⚠️ **Le nom de colonne `IM_CONTROLEUR` est trompeur, et conservé.** Depuis la migration `V31` elle
+> porte la référence de **n'importe quel acteur** — `IM_CONTROLEUR` (`tr_controleur`), `ID_PRMP`
+> (`t_prmp`) ou `ID_UGPM` (`t_ugpm`) — elle est passée de `varchar(7)` à `varchar(10)`, et **sa clé
+> étrangère vers `tr_controleur` a été retirée** : une PRMP n'y figure pas, l'insertion aurait été
+> refusée. Avant V31, aucune connexion de PRMP ni d'UGPM n'était traçable (même défaut que C3 de
+> l'audit du 2026-09-14, sur une autre colonne). L'API l'expose sous le nom **`acteur`**.
+
+**Champs `SessionDto`**
+
+| Champ (JSON) | Type | Remarque |
+|---|---|---|
+| acteur | string (nullable) | référence de la personne connectée (`IM_CONTROLEUR`, `ID_PRMP`, `ID_UGPM`) ; `null` quand la tentative a échoué sur un login inconnu — il n'y a alors personne à désigner |
+| login | string | identifiant **tenté**, renseigné dans tous les cas (tronqué à 100 caractères) |
+| dateConnexion | string (date-time) | horodatage de la tentative |
+| dateDeconnexion | string (date-time, nullable) | fermeture par `POST /api/auth/logout` ; `null` si la session est encore ouverte — ou si l'utilisateur a simplement fermé son onglet, ce que rien ne permet de distinguer |
+| dureeSecondes | number (nullable) | calculé à la lecture ; `null` tant que la session n'est pas fermée, et pour un échec, qui n'a pas de durée |
+| ipAdresse | string (nullable) | adresse de l'appelant |
+| userAgent | string (nullable) | le « poste » de la maquette : en-tête `User-Agent` |
+| succes | boolean | `true` si les identifiants ont été acceptés |
+
+> `idSession` **n'est volontairement pas exposé** : c'est l'empreinte SHA-256 du jeton émis (le
+> `logout` la recalcule depuis le cookie pour retrouver sa ligne), elle n'a aucun usage à l'écran.
 
 **Endpoints**
 
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
-| GET | /api/session-utilisateurs | — | `SessionUtilisateurDto[]` | 200, 403 | ADMINISTRATEUR |
-| GET | /api/session-utilisateurs/{id} | — | `SessionUtilisateurDto` | 200, 403, 404 | ADMINISTRATEUR |
-| POST | /api/session-utilisateurs | `SessionUtilisateurDto` | `SessionUtilisateurDto` | 201, 400, 403 | ADMINISTRATEUR |
-| PUT | /api/session-utilisateurs/{id} | `SessionUtilisateurDto` | `SessionUtilisateurDto` | 200, 400, 403, 404 | ADMINISTRATEUR |
-| DELETE | /api/session-utilisateurs/{id} | — | — | 204, 403, 404 | ADMINISTRATEUR |
+| GET | /api/sessions?acteur=&succes=&du=&au=&page=&size= | — | `Page<SessionDto>` | 200, 401, 403 | ADMINISTRATEUR |
 
-`{id}` = idSession (string).
+Tous les filtres sont facultatifs et se cumulent ; la page est triée **du plus récent au plus ancien**,
+quel que soit le tri demandé par le client.
 
-**Exemple — requête**
+| Paramètre | Effet |
+|---|---|
+| `acteur` | référence d'acteur **ou** login tenté (sans la casse sur le login). Les deux, parce qu'un échec sur un login inconnu ne porte aucune référence : filtrer sur la seule référence masquerait ce qu'on vient regarder. Vide = pas de filtre |
+| `succes` | `true` = connexions acceptées, `false` = tentatives refusées ; absent = les deux |
+| `du`, `au` | bornes `AAAA-MM-JJ`, **journées entières incluses** (même calcul que `/api/audit-logs`) |
+
+**Exemple — réponse**
 ```json
-{ "idSession": "SESS-2026-0007", "imControleur": "CTRMEM", "dateConnexion": "2026-06-11T08:32:17", "ipAdresse": "192.168.1.42", "userAgent": "Mozilla/5.0", "succes": true }
+{ "content": [ { "acteur": "PRMP123456", "login": "prmp.longue", "dateConnexion": "2026-09-17T08:32:17", "dateDeconnexion": "2026-09-17T10:02:17", "dureeSecondes": 5400, "ipAdresse": "192.168.1.42", "userAgent": "Mozilla/5.0", "succes": true }, { "acteur": null, "login": "intrus.inconnu", "dateConnexion": "2026-09-17T03:15:00", "dateDeconnexion": null, "dureeSecondes": null, "ipAdresse": "10.0.0.7", "userAgent": "curl/8.4.0", "succes": false } ], "totalElements": 2, "number": 0, "size": 20 }
 ```
 
 ---
