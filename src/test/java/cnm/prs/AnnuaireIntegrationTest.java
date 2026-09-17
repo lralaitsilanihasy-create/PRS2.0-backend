@@ -1,10 +1,12 @@
 package cnm.prs;
 
 import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 import org.junit.jupiter.api.Assertions;
@@ -19,8 +21,10 @@ import cnm.prs.enums.ProfilUtilisateur;
 import cnm.prs.enums.TypeActeur;
 
 /**
- * ⚠️ Lot 6 (2026-09-17, demande front « espace d'administration » §B2) — {@code GET /api/annuaire} :
- * recherche unifiée des personnes (contrôleurs, PRMP, UGPM), réservée à l'Administrateur.
+ * ⚠️ Lot 6 (2026-09-17, demande front « espace d'administration » §B2 et §B3) — l'annuaire des
+ * personnes : {@code GET /api/annuaire}, recherche unifiée (contrôleurs, PRMP, UGPM), et
+ * {@code GET /api/annuaire/{type}/{ref}}, la fiche de la maquette C. Tout est réservé à
+ * l'Administrateur.
  *
  * <p>Jeu de départ du socle : 9 contrôleurs (dont 6 en localité ANT, 1 en TMS, 2 sans localité),
  * 1 PRMP (PRMP001, deux entités actives), aucune UGPM, et des comptes pour CTRPRE, CTRCC1, CTRMEM,
@@ -280,5 +284,249 @@ class AnnuaireIntegrationTest extends CnmIntegrationTestSupport {
                         .param("statut", "").param("type", "").param("profil", ""))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(10));   // 9 contrôleurs + PRMP001
+    }
+
+    // ------------------------------------------------------------------
+    // Fiche (§B3) — GET /api/annuaire/{type}/{ref}
+    // ------------------------------------------------------------------
+
+    @Test
+    @DisplayName("Fiche : 401 anonyme, 403 pour tout profil autre qu'Administrateur, 200 pour lui")
+    void fiche_reserveALAdministrateur() throws Exception {
+        mvc.perform(get("/api/annuaire/CONTROLEUR/CTRMEM")).andExpect(status().isUnauthorized());
+
+        mvc.perform(get("/api/annuaire/CONTROLEUR/CTRMEM").header("Authorization", tokenPresident))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/annuaire/CONTROLEUR/CTRMEM").header("Authorization", tokenCc))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/annuaire/CONTROLEUR/CTRMEM").header("Authorization", tokenMembre))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/annuaire/CONTROLEUR/CTRMEM").header("Authorization", tokenPrmp))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/annuaire/CONTROLEUR/CTRMEM").header("Authorization", tokenPublication))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/annuaire/CONTROLEUR/CTRMEM").header("Authorization",
+                        bearer("CTRSEC", ProfilUtilisateur.SECRETAIRE, TypeActeur.CONTROLEUR, "CTRSEC", "ANT")))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/annuaire/CONTROLEUR/CTRMEM").header("Authorization",
+                        bearer("CTRVER", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER", "ANT")))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/annuaire/CONTROLEUR/CTRMEM").header("Authorization",
+                        bearer("CTRASS", ProfilUtilisateur.ASSISTANT_CONTROLEUR, TypeActeur.CONTROLEUR, "CTRASS", "ANT")))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/annuaire/CONTROLEUR/CTRMEM").header("Authorization",
+                        bearer("UGPM001", ProfilUtilisateur.UGPM, TypeActeur.UGPM, "UGPM001", "ANT")))
+                .andExpect(status().isForbidden());
+
+        // ⚠️ Même la personne concernée ne lit pas sa propre fiche : c'est un écran d'administration.
+        mvc.perform(get("/api/annuaire/CONTROLEUR/CTRMEM").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("Fiche : 404 sur une référence inconnue, 400 sur un type qui n'existe pas")
+    void fiche_referenceInconnueEtTypeInconnu() throws Exception {
+        mvc.perform(get("/api/annuaire/CONTROLEUR/CTRXXX").header("Authorization", tokenAdmin))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/annuaire/PRMP/PRMP999").header("Authorization", tokenAdmin))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/annuaire/UGPM/UGPM999").header("Authorization", tokenAdmin))
+                .andExpect(status().isNotFound());
+        // La bonne personne dans la mauvaise population n'existe pas non plus.
+        mvc.perform(get("/api/annuaire/PRMP/CTRMEM").header("Authorization", tokenAdmin))
+                .andExpect(status().isNotFound());
+        // Un type hors des trois valeurs est une faute de client, pas une personne absente.
+        mvc.perform(get("/api/annuaire/AGENT/CTRMEM").header("Authorization", tokenAdmin))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("Fiche d'un contrôleur : identité, compte, supérieur, transversal, chaîne et délégations")
+    void fiche_controleur() throws Exception {
+        Controleur membre = controleurRepository.findById("CTRMEM").orElseThrow();
+        membre.setIdSuperieur("CTRCC1");
+        membre.setTransversal(true);
+        membre.setImRattache("CTRVER");
+        controleurRepository.save(membre);
+        Controleur verificateur = controleurRepository.findById("CTRVER").orElseThrow();
+        verificateur.setImRattache("CTRASS");
+        controleurRepository.save(verificateur);
+        CompteAuth compte = compteAuthRepository.findByLogin("CTRMEM").orElseThrow();
+        compte.setDateDecision(LocalDateTime.of(2026, 3, 14, 9, 30));
+        compteAuthRepository.save(compte);
+
+        mvc.perform(get("/api/annuaire/CONTROLEUR/CTRMEM").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                // Identité : les mêmes champs, sous les mêmes noms, que la ligne de liste.
+                .andExpect(jsonPath("$.ref").value("CTRMEM"))
+                .andExpect(jsonPath("$.type").value("CONTROLEUR"))
+                .andExpect(jsonPath("$.nom").value("NomCTRMEM"))
+                .andExpect(jsonPath("$.profil").value("MEMBRE"))
+                .andExpect(jsonPath("$.localite").value("ANT"))
+                .andExpect(jsonPath("$.entite").value(nullValue()))
+                // Compte : login, statut et « actif depuis le … ».
+                .andExpect(jsonPath("$.login").value("CTRMEM"))
+                .andExpect(jsonPath("$.statutCompte").value("ACTIF"))
+                .andExpect(jsonPath("$.dateActivation").value("2026-03-14T09:30:00"))
+                // Organisation.
+                .andExpect(jsonPath("$.superieur.ref").value("CTRCC1"))
+                .andExpect(jsonPath("$.superieur.profil").value("CHEF_COMMISSION"))
+                .andExpect(jsonPath("$.superieur.localite").value("ANT"))
+                .andExpect(jsonPath("$.transversal").value(true))
+                .andExpect(jsonPath("$.chaineControle", hasSize(3)))
+                .andExpect(jsonPath("$.chaineControle[0].ref").value("CTRMEM"))
+                .andExpect(jsonPath("$.chaineControle[0].lui").value(true))
+                .andExpect(jsonPath("$.chaineControle[1].ref").value("CTRVER"))
+                .andExpect(jsonPath("$.chaineControle[1].profil").value("VERIFICATEUR"))
+                .andExpect(jsonPath("$.chaineControle[1].lui").value(false))
+                .andExpect(jsonPath("$.chaineControle[2].ref").value("CTRASS"))
+                .andExpect(jsonPath("$.chaineControle[2].profil").value("ASSISTANT_CONTROLEUR"))
+                // Les tâches d'un Membre sont exerçables par le Président et par le Chef de commission.
+                .andExpect(jsonPath("$.delegations", hasSize(2)))
+                .andExpect(jsonPath("$.delegations[0].sens").value("EXERCEE_PAR"))
+                .andExpect(jsonPath("$.delegations[0].profil").value("CHEF_COMMISSION"))
+                .andExpect(jsonPath("$.delegations[1].profil").value("PRESIDENT"))
+                // Un contrôleur n'a jamais de mandat : le mandat est l'acte de nomination d'une PRMP.
+                .andExpect(jsonPath("$.mandat").value(nullValue()));
+
+        // Le Chef de commission, lui, exerce quatre profils et voit le sien exercé par le Président.
+        String cc = mvc.perform(get("/api/annuaire/CONTROLEUR/CTRCC1").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.delegations", hasSize(5)))
+                .andReturn().getResponse().getContentAsString();
+        Assertions.assertEquals(List.of("EXERCE", "EXERCE", "EXERCE", "EXERCE", "EXERCEE_PAR"),
+                JsonPath.read(cc, "$.delegations[*].sens"),
+                "les délégations reçues d'abord, la délégation consentie ensuite");
+    }
+
+    @Test
+    @DisplayName("Fiche : chaîne incomplète à un seul maillon, et rattachement qui boucle sans tourner en rond")
+    void fiche_chaineIncompleteEtBouclee() throws Exception {
+        // Aucun rattaché : la chaîne se réduit à la personne — état normal, pas une erreur.
+        mvc.perform(get("/api/annuaire/CONTROLEUR/CTRSEC").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.chaineControle", hasSize(1)))
+                .andExpect(jsonPath("$.chaineControle[0].ref").value("CTRSEC"))
+                .andExpect(jsonPath("$.chaineControle[0].lui").value(true))
+                .andExpect(jsonPath("$.superieur").value(nullValue()))
+                .andExpect(jsonPath("$.transversal").value(false));
+
+        // Rien n'interdit en base que deux contrôleurs se rattachent l'un à l'autre.
+        Controleur publication = controleurRepository.findById("CTRPUB").orElseThrow();
+        publication.setImRattache("CTRPRE");
+        controleurRepository.save(publication);
+        Controleur president = controleurRepository.findById("CTRPRE").orElseThrow();
+        president.setImRattache("CTRPUB");
+        controleurRepository.save(president);
+
+        mvc.perform(get("/api/annuaire/CONTROLEUR/CTRPUB").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.chaineControle", hasSize(2)))
+                .andExpect(jsonPath("$.chaineControle[0].ref").value("CTRPUB"))
+                .andExpect(jsonPath("$.chaineControle[1].ref").value("CTRPRE"));
+
+        // Un supérieur qui ne désigne plus personne ne cite personne (référentiel purgé).
+        Controleur orphelin = controleurRepository.findById("CTRASS").orElseThrow();
+        orphelin.setIdSuperieur("CTRZZZ");
+        controleurRepository.save(orphelin);
+        mvc.perform(get("/api/annuaire/CONTROLEUR/CTRASS").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.superieur").value(nullValue()));
+    }
+
+    @Test
+    @DisplayName("Fiche : une personne sans compte — login et date d'activation nuls, statut SANS_COMPTE")
+    void fiche_personneSansCompte() throws Exception {
+        mvc.perform(get("/api/annuaire/CONTROLEUR/CTRVER").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.ref").value("CTRVER"))
+                .andExpect(jsonPath("$.profil").value("VERIFICATEUR"))
+                .andExpect(jsonPath("$.login").value(nullValue()))
+                .andExpect(jsonPath("$.statutCompte").value("SANS_COMPTE"))
+                .andExpect(jsonPath("$.dateActivation").value(nullValue()))
+                .andExpect(jsonPath("$.actionsJournal30j").value(0));
+
+        // Inscription refusée : DATE_DECISION date le REFUS, ce n'est pas une date d'activation.
+        CompteAuth refuse = new CompteAuth("ctrver.ref", "x", "CONTROLEUR", "CTRVER", false);
+        refuse.setStatut("REFUSE");
+        refuse.setDateDecision(LocalDateTime.of(2026, 4, 2, 11, 0));
+        compteAuthRepository.save(refuse);
+        mvc.perform(get("/api/annuaire/CONTROLEUR/CTRVER").header("Authorization", tokenAdmin))
+                .andExpect(jsonPath("$.statutCompte").value("REFUSE"))
+                .andExpect(jsonPath("$.login").value("ctrver.ref"))
+                .andExpect(jsonPath("$.dateActivation").value(nullValue()));
+    }
+
+    @Test
+    @DisplayName("Fiche d'une PRMP et d'une UGPM : entité, mandat en fonction, et rien qu'elles ne portent pas")
+    void fiche_prmpEtUgpm() throws Exception {
+        ugpmRepository.save(ugpm("UGPM001", "PRMP001", "Randria", "Hanta"));
+
+        mvc.perform(get("/api/annuaire/PRMP/PRMP001").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.type").value("PRMP"))
+                .andExpect(jsonPath("$.entite").value("Entite 1 · Entite 2"))
+                .andExpect(jsonPath("$.login").value("PRMP001"))
+                .andExpect(jsonPath("$.statutCompte").value("ACTIF"))
+                // Ni profil de contrôle, ni localité, ni supérieur, ni chaîne, ni délégation.
+                .andExpect(jsonPath("$.profil").value(nullValue()))
+                .andExpect(jsonPath("$.localite").value(nullValue()))
+                .andExpect(jsonPath("$.superieur").value(nullValue()))
+                .andExpect(jsonPath("$.transversal").value(nullValue()))
+                .andExpect(jsonPath("$.chaineControle", hasSize(0)))
+                .andExpect(jsonPath("$.delegations", hasSize(0)))
+                // Mandat en fonction ce jour : ici celui reconstitué depuis t_prmp, faute de mandat déclaré.
+                .andExpect(jsonPath("$.mandat.refArrete").value("ARR-001"))
+                .andExpect(jsonPath("$.mandat.dateDebut").value("2024-01-15"))
+                .andExpect(jsonPath("$.mandat.statut").value("ACTIF"))
+                .andExpect(jsonPath("$.mandat.implicite").value(true));
+
+        // L'UGPM est située par les entités de sa tutelle, mais ne porte pas son mandat.
+        mvc.perform(get("/api/annuaire/UGPM/UGPM001").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.type").value("UGPM"))
+                .andExpect(jsonPath("$.nom").value("Randria"))
+                .andExpect(jsonPath("$.entite").value("Entite 1 · Entite 2"))
+                .andExpect(jsonPath("$.statutCompte").value("SANS_COMPTE"))
+                .andExpect(jsonPath("$.mandat").value(nullValue()))
+                .andExpect(jsonPath("$.chaineControle", hasSize(0)));
+    }
+
+    @Test
+    @DisplayName("Fiche : actions au journal sur 30 jours glissants, les plus anciennes exclues")
+    void fiche_activiteJournal30j() throws Exception {
+        semerAudit("CTRMEM", LocalDateTime.now().minusDays(1), 3);
+        semerAudit("CTRMEM", LocalDateTime.now().minusDays(40), 2);   // hors fenêtre
+        semerAudit("CTRCC1", LocalDateTime.now().minusDays(2), 4);    // un autre acteur
+        semerAudit("PRMP001", LocalDateTime.now().minusHours(3), 5);  // une PRMP agit aussi
+
+        mvc.perform(get("/api/annuaire/CONTROLEUR/CTRMEM").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.actionsJournal30j").value(3));
+        mvc.perform(get("/api/annuaire/CONTROLEUR/CTRCC1").header("Authorization", tokenAdmin))
+                .andExpect(jsonPath("$.actionsJournal30j").value(4));
+        mvc.perform(get("/api/annuaire/PRMP/PRMP001").header("Authorization", tokenAdmin))
+                .andExpect(jsonPath("$.actionsJournal30j").value(5));
+    }
+
+    @Test
+    @DisplayName("Fiche : dernière connexion et échecs servis NULS tant que B4 n'est pas livré")
+    void fiche_connexionsNullesSansB4() throws Exception {
+        // ⚠️ Les deux champs existent au contrat et valent null : le front ne les affiche pas (plan §6).
+        // Le jour où le journal des connexions sera écrit, c'est la valeur qui changera, pas la forme.
+        mvc.perform(get("/api/annuaire/CONTROLEUR/CTRADM").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.derniereConnexion").value(nullValue()))
+                .andExpect(jsonPath("$.echecs30j").value(nullValue()));
+    }
+
+    /** Insère {@code combien} écritures d'audit au nom d'un acteur, espacées d'une minute. */
+    private void semerAudit(String acteur, LocalDateTime depart, int combien) {
+        for (int i = 0; i < combien; i++) {
+            jdbcTemplate.update(
+                    "INSERT INTO public.t_audit_log (\"ID_LOG\", \"DATE_ACTION\", \"IM_ACTEUR\", \"NOM_TABLE\","
+                            + " \"TYPE_ACTION\") VALUES (nextval('seq_audit_log'), ?, ?, ?, ?)",
+                    java.sql.Timestamp.valueOf(depart.plusMinutes(i)), acteur, "t_dossier", "MODIFICATION");
+        }
     }
 }

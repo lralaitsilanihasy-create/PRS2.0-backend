@@ -59,6 +59,17 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, Long> {
             @Param("nomTables") Collection<String> nomTables, @Param("acteur") String acteur,
             @Param("debut") LocalDateTime debut, @Param("fin") LocalDateTime fin, Pageable pageable);
 
+    /**
+     * ⚠️ Lot 6 (2026-09-17, demande front §B3) — nombre d'écritures portées au nom d'un acteur depuis
+     * un instant donné : le « … actions au journal » de la fiche d'annuaire.
+     *
+     * <p>{@code IM_ACTEUR} porte la <strong>référence</strong> de l'acteur ({@code IM_CONTROLEUR} ou
+     * {@code ID_PRMP} / {@code ID_UGPM}, colonne {@code varchar(10)}), jamais son login : c'est bien
+     * la référence de la fiche qu'on passe ici.</p>
+     */
+    @Query("select count(a) from AuditLog a where a.imActeur = :acteur and a.dateAction >= :depuis")
+    long compterActionsDepuis(@Param("acteur") String acteur, @Param("depuis") LocalDateTime depuis);
+
     /** Rectifications PRMP d'un dossier (audit), par date croissante — pour l'historique d'échanges. */
     @Query("""
             select a from AuditLog a

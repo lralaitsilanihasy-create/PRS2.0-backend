@@ -406,6 +406,73 @@ de personnes. Aucune écriture : les gestes de compte restent sur `/api/comptes-
 }
 ```
 
+### Fiche d'une personne (⚠️ ajout 2026-09-17, lot 6 §B3)
+
+`GET /api/annuaire/{type}/{ref}` — la **fiche** que l'écran ouvre à droite de la liste. Même règle
+d'accès que la liste (**ADMINISTRATEUR** seul ; anonyme → 401, autre profil → 403), lecture seule.
+
+| Méthode | URL | Corps | Réponse | Statuts | Rôle |
+|---|---|---|---|---|---|
+| GET | /api/annuaire/{type}/{ref} | — | `AnnuaireFicheDto` | 200, 400, 401, 403, 404 | **ADMINISTRATEUR** |
+
+`{type}` = `CONTROLEUR` · `PRMP` · `UGPM` (les valeurs que la liste rend dans `type`) ; `{ref}` =
+`IM_CONTROLEUR`, `ID_PRMP` ou `ID_UGPM`. **Deux erreurs distinctes** : un `type` hors des trois valeurs
+est une faute de client → **400** (comme `?type=` et `?statut=` de la liste) ; une référence inconnue
+*dans* une population existante → **404** — y compris la bonne personne cherchée dans la mauvaise
+population (`/api/annuaire/PRMP/CTRMEM`).
+
+**Champs `AnnuaireFicheDto`** — les **neuf premiers sont ceux d'`AnnuairePersonneDto`**, sous les mêmes
+noms et calculés par le même code : la ligne de liste et la fiche ne peuvent pas se contredire.
+
+| Champ (JSON) | Type | Description |
+|---|---|---|
+| ref, type, nom, prenoms, profil, localite, entite, login, statutCompte | | identiques à `AnnuairePersonneDto` ci-dessus |
+| dateActivation | string (date-time) \| null | date de la **décision d'ouverture** du compte (`t_compte_auth.DATE_DECISION`) — le « actif depuis le … » de la fiche. **null** tant que l'inscription n'est pas validée **et pour une inscription refusée** : `DATE_DECISION` porte alors la date du refus, qui n'est pas une date d'activation |
+| derniereConnexion | null | **toujours null** — dépend de **B4** (journal des connexions), non livré |
+| echecs30j | null | **toujours null**, même raison |
+| superieur | object \| null | `{ ref, nom, prenoms, profil, localite }` — `tr_controleur.ID_SUPERIEUR` résolu ; **null** s'il n'en a pas, si le matricule ne désigne plus personne, ou hors contrôleurs |
+| transversal | boolean \| null | `tr_controleur.TRANSVERSAL` ; **null** hors contrôleurs |
+| chaineControle | array | chaîne de rattachement Membre → Vérificateur → Assistant (`IM_RATTACHE`), **la personne en tête** : `{ ref, nom, prenoms, profil, lui }`, `lui=true` sur le premier maillon. **Un seul maillon = chaîne incomplète** (état normal : le repli localité s'applique) ; **vide** hors contrôleurs |
+| delegations | array | délégations de profil **actives** touchant son profil : `{ sens, profil }`, `sens` = `EXERCE` (elle exerce les tâches du profil cité) ou `EXERCEE_PAR` (les tâches de son profil sont exerçables par le profil cité) ; **vide** hors contrôleurs |
+| mandat | `MandatDto` \| null | mandat **en fonction ce jour**, pour une **PRMP seulement** (`implicite: true` quand il est reconstitué depuis `t_prmp`, faute de mandat déclaré) ; **null** pour un contrôleur, pour une UGPM (elle travaille sous celui de sa tutelle, la fiche ne le lui attribue pas) et pour une PRMP en vacance de mandat |
+| actionsJournal30j | number | nombre d'écritures portées à son nom au journal d'audit (`t_audit_log.IM_ACTEUR`) sur **30 jours glissants** |
+
+> ⚠️ **`derniereConnexion` et `echecs30j` sont servis nuls, pas omis.** Aucune connexion n'est tracée
+> durablement tant que **B4** n'est pas livré ; les champs existent au contrat pour que sa livraison
+> change la **valeur** et non la forme. Le front ne les affiche pas tant qu'ils sont nuls — pas à zéro,
+> pas avec un tiret : absents (plan L6 §6, « une mesure fausse sur un tableau de bord de sécurité est
+> pire qu'une mesure absente »).
+
+> **Les délégations sont portées par le profil, pas par la personne** (`t_delegation_profil`) : une
+> paire active vaut pour tous les titulaires du profil. La fiche les montre parce que c'est ce qui
+> explique qu'une personne agisse là où son profil seul ne le permettrait pas. Convention de la table,
+> celle de `PermissionService` : le **délégant** exerce, le **délégué** est celui dont la tâche est
+> exercée.
+
+**Exemple — réponse**
+```json
+{
+  "ref": "CTR0142", "type": "CONTROLEUR", "nom": "RAKOTOMALALA", "prenoms": "Mamy",
+  "profil": "MEMBRE", "localite": "ANT", "entite": null,
+  "login": "m.rakotomalala", "statutCompte": "ACTIF", "dateActivation": "2026-03-14T09:30:00",
+  "derniereConnexion": null, "echecs30j": null,
+  "superieur": { "ref": "CTRCC1", "nom": "RANDRIANARISOA", "prenoms": "Paul",
+                 "profil": "CHEF_COMMISSION", "localite": "ANT" },
+  "transversal": false,
+  "chaineControle": [
+    { "ref": "CTR0142", "nom": "RAKOTOMALALA", "prenoms": "Mamy", "profil": "MEMBRE", "lui": true },
+    { "ref": "CTRVER1", "nom": "RASOARIMALALA", "prenoms": "Noro", "profil": "VERIFICATEUR", "lui": false },
+    { "ref": "CTRASS1", "nom": "ANDRIANJAFY", "prenoms": "Tovo", "profil": "ASSISTANT_CONTROLEUR", "lui": false }
+  ],
+  "delegations": [
+    { "sens": "EXERCEE_PAR", "profil": "CHEF_COMMISSION" },
+    { "sens": "EXERCEE_PAR", "profil": "PRESIDENT" }
+  ],
+  "mandat": null,
+  "actionsJournal30j": 112
+}
+```
+
 ---
 
 ## Anomalies

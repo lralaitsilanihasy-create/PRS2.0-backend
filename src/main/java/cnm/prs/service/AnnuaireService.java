@@ -1,18 +1,22 @@
 package cnm.prs.service;
 
 import java.text.Normalizer;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.dto.AnnuaireFicheDto;
 import cnm.prs.dto.AnnuairePersonneDto;
 import cnm.prs.entity.CompteAuth;
 import cnm.prs.entity.Controleur;
@@ -25,8 +29,11 @@ import cnm.prs.enums.ProfilUtilisateur;
 import cnm.prs.enums.StatutCompte;
 import cnm.prs.enums.StatutCompteAnnuaire;
 import cnm.prs.enums.TypeActeur;
+import cnm.prs.exception.ResourceNotFoundException;
+import cnm.prs.repository.AuditLogRepository;
 import cnm.prs.repository.CompteAuthRepository;
 import cnm.prs.repository.ControleurRepository;
+import cnm.prs.repository.DelegationProfilRepository;
 import cnm.prs.repository.EntiteContractRepository;
 import cnm.prs.repository.PrmpEntiteRepository;
 import cnm.prs.repository.PrmpRepository;
@@ -61,6 +68,15 @@ public class AnnuaireService {
     /** Séparateur des entités multiples d'une même PRMP (une PRMP peut en chapeauter plusieurs). */
     private static final String SEPARATEUR_ENTITES = " · ";
 
+    /** Fenêtre d'activité de la fiche (§B3) : « actions au journal sur 30 jours ». */
+    private static final int JOURS_ACTIVITE = 30;
+
+    /** Délégation reçue : la personne exerce les tâches du profil cité (elle est <em>délégante</em>). */
+    private static final String SENS_EXERCE = "EXERCE";
+
+    /** Délégation consentie : les tâches de son profil sont exerçables par le profil cité (elle est <em>déléguée</em>). */
+    private static final String SENS_EXERCEE_PAR = "EXERCEE_PAR";
+
     /**
      * Ordre servi : nom, puis prénoms, puis référence — l'ordre d'un annuaire, insensible aux accents
      * comme la recherche. La référence tranche les homonymes et rend l'ordre
@@ -78,11 +94,16 @@ public class AnnuaireService {
     private final CompteAuthRepository compteAuthRepository;
     private final PrmpEntiteRepository prmpEntiteRepository;
     private final EntiteContractRepository entiteContractRepository;
+    private final DelegationProfilRepository delegationProfilRepository;
+    private final AuditLogRepository auditLogRepository;
+    private final MandatService mandatService;
 
     public AnnuaireService(ControleurRepository controleurRepository, ProfileRepository profileRepository,
             PrmpRepository prmpRepository, UgpmRepository ugpmRepository,
             CompteAuthRepository compteAuthRepository, PrmpEntiteRepository prmpEntiteRepository,
-            EntiteContractRepository entiteContractRepository) {
+            EntiteContractRepository entiteContractRepository,
+            DelegationProfilRepository delegationProfilRepository, AuditLogRepository auditLogRepository,
+            MandatService mandatService) {
         this.controleurRepository = controleurRepository;
         this.profileRepository = profileRepository;
         this.prmpRepository = prmpRepository;
@@ -90,6 +111,9 @@ public class AnnuaireService {
         this.compteAuthRepository = compteAuthRepository;
         this.prmpEntiteRepository = prmpEntiteRepository;
         this.entiteContractRepository = entiteContractRepository;
+        this.delegationProfilRepository = delegationProfilRepository;
+        this.auditLogRepository = auditLogRepository;
+        this.mandatService = mandatService;
     }
 
     /**
@@ -139,17 +163,12 @@ public class AnnuaireService {
     // ------------------------------------------------------------------
 
     private List<AnnuairePersonneDto> controleurs(Map<CleActeur, CompteAuth> comptes) {
-        Map<Integer, ProfilUtilisateur> profils = new HashMap<>();
-        for (Profile p : profileRepository.findAll()) {
-            // Résolution par le LIBELLÉ, comme l'authentification : ID_PROFILE n'a pas de sémantique fixée.
-            profils.put(p.getIdProfile(), ProfilUtilisateur.resolve(p.getProfile()));
-        }
+        Map<Integer, ProfilUtilisateur> profils = profilsParId();
         List<AnnuairePersonneDto> lignes = new ArrayList<>();
         for (Controleur c : controleurRepository.findAll()) {
-            ProfilUtilisateur profil = c.getIdProfile() == null ? null : profils.get(c.getIdProfile());
             CompteAuth compte = comptes.get(new CleActeur(TypeActeur.CONTROLEUR.name(), c.getImControleur()));
             lignes.add(new AnnuairePersonneDto(c.getImControleur(), TypeActeur.CONTROLEUR.name(),
-                    c.getNomCont(), c.getPrenomsCont(), profil == null ? null : profil.name(),
+                    c.getNomCont(), c.getPrenomsCont(), nom(profilDe(c, profils)),
                     c.getIdLocalite(), null, login(compte), statutDe(compte).name()));
         }
         return lignes;
@@ -184,6 +203,178 @@ public class AnnuaireService {
     }
 
     // ------------------------------------------------------------------
+    // Fiche d'une personne (§B3)
+    // ------------------------------------------------------------------
+
+    /**
+     * ⚠️ Lot 6 (2026-09-17, demande front §B3) — fiche d'une personne : ce que la maquette C affiche
+     * quand on la sélectionne dans la liste, et rien de plus.
+     *
+     * <p><strong>La même personne, dite pareil.</strong> L'identité, le login et l'état du compte
+     * sortent des mêmes fonctions que {@link #rechercher} — {@link #statutDe}, {@link #leMoinsFerme},
+     * {@link #entitesParPrmp}, le rapprochement du compte par le couple (type d'acteur, référence) —
+     * de sorte que la ligne de liste et la fiche ne peuvent pas se contredire d'un clic à l'autre.</p>
+     *
+     * <p>{@code derniereConnexion} et {@code echecs30j} sont servis <strong>nuls</strong> : ils
+     * dépendent du journal des connexions (B4), qui n'est pas livré. Les servir nuls plutôt que les
+     * omettre garde le contrat stable pour le jour où il le sera, et le front ne les affiche pas tant
+     * qu'ils sont nuls (plan §6).</p>
+     *
+     * @param type population de la personne ; le contrôleur lie l'énuméré, une valeur inconnue part en 400
+     * @param ref  identifiant dans cette population
+     * @throws ResourceNotFoundException référence inconnue dans cette population → 404
+     */
+    public AnnuaireFicheDto fiche(TypeActeur type, String ref) {
+        String cle = ref == null ? "" : ref.trim();
+        return switch (type) {
+            case CONTROLEUR -> ficheControleur(cle);
+            case PRMP -> fichePrmp(cle);
+            case UGPM -> ficheUgpm(cle);
+        };
+    }
+
+    private AnnuaireFicheDto ficheControleur(String im) {
+        Controleur c = controleurRepository.findById(im)
+                .orElseThrow(() -> introuvable(TypeActeur.CONTROLEUR, im));
+        Map<Integer, ProfilUtilisateur> profils = profilsParId();
+        ProfilUtilisateur profil = profilDe(c, profils);
+        CompteAuth compte = compteDe(TypeActeur.CONTROLEUR, im);
+        return new AnnuaireFicheDto(c.getImControleur(), TypeActeur.CONTROLEUR.name(),
+                c.getNomCont(), c.getPrenomsCont(), nom(profil), c.getIdLocalite(), null,
+                login(compte), statutDe(compte).name(), dateActivation(compte), null, null,
+                superieur(c, profils), c.getTransversal(), chaineControle(c, profils),
+                delegations(profil), null, actionsJournal30j(im));
+    }
+
+    private AnnuaireFicheDto fichePrmp(String id) {
+        Prmp p = prmpRepository.findById(id).orElseThrow(() -> introuvable(TypeActeur.PRMP, id));
+        CompteAuth compte = compteDe(TypeActeur.PRMP, id);
+        return new AnnuaireFicheDto(p.getIdPrmp(), TypeActeur.PRMP.name(), p.getNomPrmp(), p.getPrenomsPrmp(),
+                null, null, entitesParPrmp().get(p.getIdPrmp()),
+                login(compte), statutDe(compte).name(), dateActivation(compte), null, null,
+                null, null, List.of(), List.of(),
+                // Le mandat en fonction ce jour, servi par le service qui fait déjà foi partout ailleurs
+                // (mandat déclaré, ou reconstitué depuis t_prmp quand aucun ne l'a encore été).
+                mandatService.mandatActif(null, p.getIdPrmp()).orElse(null), actionsJournal30j(id));
+    }
+
+    /**
+     * Une UGPM n'a ni profil de contrôle, ni entité en propre, ni mandat : elle travaille sous celui
+     * de sa PRMP de tutelle. La fiche ne le lui attribue pas — ce serait lui prêter une habilitation
+     * qui n'est pas la sienne — mais la situe par les entités de sa tutelle, comme la liste.
+     */
+    private AnnuaireFicheDto ficheUgpm(String id) {
+        Ugpm u = ugpmRepository.findById(id).orElseThrow(() -> introuvable(TypeActeur.UGPM, id));
+        CompteAuth compte = compteDe(TypeActeur.UGPM, id);
+        return new AnnuaireFicheDto(u.getIdUgpm(), TypeActeur.UGPM.name(), u.getNomUgpm(), u.getPrenomsUgpm(),
+                null, null, entitesParPrmp().get(u.getIdPrmpTutelle()),
+                login(compte), statutDe(compte).name(), dateActivation(compte), null, null,
+                null, null, List.of(), List.of(), null, actionsJournal30j(id));
+    }
+
+    private static ResourceNotFoundException introuvable(TypeActeur type, String ref) {
+        return new ResourceNotFoundException("Personne introuvable à l'annuaire : " + type.name() + " " + ref);
+    }
+
+    /** Compte de la personne, le <strong>moins fermé</strong> si elle en a plusieurs — règle de la liste. */
+    private CompteAuth compteDe(TypeActeur type, String ref) {
+        return compteAuthRepository.findByRefActeurAndTypeActeur(ref, type.name()).stream()
+                .reduce(AnnuaireService::leMoinsFerme).orElse(null);
+    }
+
+    /**
+     * « Actif depuis le … » de la maquette : la date de la décision d'<strong>ouverture</strong> du
+     * compte. {@code t_compte_auth} ne porte qu'une date, {@code DATE_DECISION}, écrite quand
+     * l'Administrateur tranche — validation comme refus. Elle n'est donc servie que pour un compte
+     * effectivement ouvert (actif ou suspendu depuis) : sur un refus, elle date le refus, et la
+     * publier sous le nom « date d'activation » dirait le contraire de ce qui s'est passé. Une
+     * inscription en attente n'en a aucune (défaut relevé à la livraison de B1, à corriger avec B4).
+     */
+    private static LocalDateTime dateActivation(CompteAuth compte) {
+        if (compte == null) {
+            return null;
+        }
+        StatutCompteAnnuaire statut = statutDe(compte);
+        return statut == StatutCompteAnnuaire.ACTIF || statut == StatutCompteAnnuaire.SUSPENDU
+                ? compte.getDateDecision()
+                : null;
+    }
+
+    /** Supérieur hiérarchique résolu ; un matricule qui ne désigne plus personne ne cite personne. */
+    private AnnuaireFicheDto.Personne superieur(Controleur c, Map<Integer, ProfilUtilisateur> profils) {
+        String im = c.getIdSuperieur();
+        if (im == null || im.isBlank()) {
+            return null;
+        }
+        return controleurRepository.findById(im.trim())
+                .map(s -> new AnnuaireFicheDto.Personne(s.getImControleur(), s.getNomCont(), s.getPrenomsCont(),
+                        nom(profilDe(s, profils)), s.getIdLocalite()))
+                .orElse(null);
+    }
+
+    /**
+     * Chaîne de rattachement Membre → Vérificateur → Assistant ({@code IM_RATTACHE}), la personne en
+     * tête. Un seul maillon = <strong>chaîne incomplète</strong> : état normal, pas une erreur, le
+     * repli localité s'applique (arbitrage du pilote du 2026-09-01).
+     *
+     * <p>Le parcours s'arrête sur un matricule déjà vu : rien n'interdit en base qu'un rattachement
+     * boucle (A rattaché à B, B rattaché à A), et une fiche ne doit pas tourner indéfiniment pour
+     * autant.</p>
+     */
+    private List<AnnuaireFicheDto.Maillon> chaineControle(Controleur depart, Map<Integer, ProfilUtilisateur> profils) {
+        List<AnnuaireFicheDto.Maillon> chaine = new ArrayList<>();
+        Set<String> vus = new HashSet<>();
+        Controleur courant = depart;
+        while (courant != null && vus.add(courant.getImControleur())) {
+            chaine.add(new AnnuaireFicheDto.Maillon(courant.getImControleur(), courant.getNomCont(),
+                    courant.getPrenomsCont(), nom(profilDe(courant, profils)), chaine.isEmpty()));
+            String suivant = courant.getImRattache();
+            courant = suivant == null || suivant.isBlank() ? null
+                    : controleurRepository.findById(suivant.trim()).orElse(null);
+        }
+        return chaine;
+    }
+
+    /**
+     * Délégations de profil actives qui concernent ce profil, dans les deux sens (cf.
+     * {@link cnm.prs.dto.AnnuaireFicheDto.Delegation}). La convention de {@code t_delegation_profil}
+     * est celle de {@code PermissionService} : le <em>délégant</em> exerce, le <em>délégué</em> est
+     * celui dont la tâche est exercée.
+     *
+     * <p>Les paires sont lues par <strong>libellé</strong> de profil, comme l'habilitation elle-même ;
+     * plusieurs lignes de {@code tr_profile} pouvant porter le même libellé, deux paires peuvent se
+     * ramener à la même délégation — elles ne sont alors citées qu'une fois.</p>
+     */
+    private List<AnnuaireFicheDto.Delegation> delegations(ProfilUtilisateur profil) {
+        if (profil == null) {
+            return List.of();
+        }
+        List<AnnuaireFicheDto.Delegation> lignes = new ArrayList<>();
+        for (Object[] paire : delegationProfilRepository.findPairesActivesParLibelle()) {
+            ProfilUtilisateur delegant = ProfilUtilisateur.resolve((String) paire[0]);
+            ProfilUtilisateur delegue = ProfilUtilisateur.resolve((String) paire[1]);
+            if (delegant == null || delegue == null || delegant == delegue) {
+                continue;
+            }
+            if (delegant == profil) {
+                lignes.add(new AnnuaireFicheDto.Delegation(SENS_EXERCE, delegue.name()));
+            } else if (delegue == profil) {
+                lignes.add(new AnnuaireFicheDto.Delegation(SENS_EXERCEE_PAR, delegant.name()));
+            }
+        }
+        return lignes.stream()
+                .distinct()
+                .sorted(Comparator.comparing(AnnuaireFicheDto.Delegation::sens)
+                        .thenComparing(AnnuaireFicheDto.Delegation::profil))
+                .toList();
+    }
+
+    /** Écritures portées au nom de la personne sur 30 jours glissants ({@code t_audit_log.IM_ACTEUR}). */
+    private long actionsJournal30j(String ref) {
+        return auditLogRepository.compterActionsDepuis(ref, LocalDateTime.now().minusDays(JOURS_ACTIVITE));
+    }
+
+    // ------------------------------------------------------------------
     // Jointures en lot
     // ------------------------------------------------------------------
 
@@ -208,6 +399,19 @@ public class AnnuaireService {
                     AnnuaireService::leMoinsFerme);
         }
         return parActeur;
+    }
+
+    /**
+     * Profils du référentiel, par {@code ID_PROFILE}, résolus par le <strong>LIBELLÉ</strong> comme
+     * l'authentification : {@code ID_PROFILE} n'a pas de sémantique fixée. Partagé par la liste et la
+     * fiche — les deux nomment le profil d'une personne de la même façon.
+     */
+    private Map<Integer, ProfilUtilisateur> profilsParId() {
+        Map<Integer, ProfilUtilisateur> profils = new HashMap<>();
+        for (Profile p : profileRepository.findAll()) {
+            profils.put(p.getIdProfile(), ProfilUtilisateur.resolve(p.getProfile()));
+        }
+        return profils;
     }
 
     /** Entités contractantes <strong>actives</strong> de chaque PRMP, assemblées en un libellé lisible. */
@@ -303,6 +507,16 @@ public class AnnuaireService {
 
     private static String login(CompteAuth compte) {
         return compte == null ? null : compte.getLogin();
+    }
+
+    /** Profil d'un contrôleur dans un référentiel déjà chargé ; nul s'il n'en porte pas. */
+    private static ProfilUtilisateur profilDe(Controleur c, Map<Integer, ProfilUtilisateur> profils) {
+        return c.getIdProfile() == null ? null : profils.get(c.getIdProfile());
+    }
+
+    /** Nom d'un profil pour l'API, ou {@code null} : l'API expose des codes, jamais des libellés. */
+    private static String nom(ProfilUtilisateur profil) {
+        return profil == null ? null : profil.name();
     }
 
     private static CompteAuth leMoinsFerme(CompteAuth existant, CompteAuth candidat) {
