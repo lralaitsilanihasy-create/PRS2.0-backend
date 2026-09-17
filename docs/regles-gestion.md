@@ -2123,8 +2123,9 @@ Accès complet aux référentiels, comptes utilisateurs, journal d'audit, hiéra
     refusée** : `CompteAuthService.desactiver()` ne touche que le booléen `ACTIF` (`STATUT` reste à
     `ACTIF`), tandis qu'un refus d'inscription écrit `STATUT = REFUSE` (et son motif). C'est ce qui les
     rend distinguables malgré l'invariant annoncé par le javadoc de `StatutCompte`
-    (`ACTIF=true ⟺ STATUT=ACTIF`), que ni `activer` ni `desactiver` ne tiennent en réalité — l'écart
-    n'est pas corrigé, c'est lui qui permet la distinction.
+    (`ACTIF=true ⟺ STATUT=ACTIF`). ⚠️ Corrigé le 2026-09-17 : `activer` tient désormais cet invariant
+    (il pose `STATUT = ACTIF`) ; `desactiver` ne le tient **volontairement** pas, et c'est ce seul
+    écart, assumé, qui permet la distinction.
   - **Le booléen `ACTIF` prime sur `STATUT` quand ils divergent** : c'est lui, et lui seul, que le
     login consulte. Le compteur « comptes suspendus » de l'accueil Administrateur (`comptesSuspendus`,
     `CompteursAdminDto`) ne compte donc que `STATUT = ACTIF` avec `ACTIF = false` — une inscription
@@ -2132,10 +2133,33 @@ Accès complet aux référentiels, comptes utilisateurs, journal d'audit, hiéra
   - **Les gestes de compte (suspendre, réactiver, réinitialiser le mot de passe) sont refusés sur un
     compte `EN_ATTENTE` ou `REFUSE`**, même s'il porte déjà un login : « réactiver » y poserait
     `ACTIF = true` et ouvrirait un accès jamais accordé — la validation d'une inscription se fait dans
-    son propre écran (« Demandes d'accès »), avec son instruction et son motif. ⚠️ Cette garde n'est
-    posée aujourd'hui que côté front (`annuaire-admin.ts`, `gestesDeCompte`) : `POST
-    /api/comptes-auth/{login}/activer` et `.../desactiver` n'imposent eux-mêmes aucune condition sur
-    `STATUT` — un appel direct à l'API contournerait la règle.
+    son propre écran (« Demandes d'accès »), avec son instruction et son motif.
+  - **Garde serveur (⚠️ règle tenue par le code depuis le 2026-09-17)** : `POST
+    /api/comptes-auth/{login}/activer` et `.../desactiver` **refusent (409)** un compte dont le
+    `STATUT` vaut `EN_ATTENTE` ou `REFUSE`, et ne portent donc plus que sur un compte **déjà validé**
+    (`STATUT = ACTIF`, ou `null` sur une ligne antérieure à la colonne — le périmètre `ACTIF` ∪
+    `SUSPENDU` de l'annuaire). Le message renvoie à la porte compétente : `POST
+    /api/inscriptions/{login}/valider` pour valider, `.../refuser` pour refuser avec motif. Les deux
+    statuts sont visés, pas seulement `REFUSE` : l'un comme l'autre décrivent un accès jamais accordé,
+    et c'est déjà le périmètre du déblocage automatique à la reconduction d'un mandat
+    (`MandatService.reactiverComptesDeLaPrmp`, §3.1 — « une nomination ne vaut pas validation
+    d'inscription »). Activer une inscription en attente contournait tout ce que
+    `InscriptionService.valider` fait seul : rattachement des entités (une PRMP se serait connectée
+    sans aucune entité), `DATE_DECISION`, `IM_VALIDATEUR`, notification au demandeur — et laissait
+    l'inscription dans la file des demandes tout en la rendant connectable.
+  - **La validation d'une inscription n'est pas concernée** : elle passe par `POST
+    /api/inscriptions/{login}/valider` (écran « Demandes d'accès ») et n'a jamais emprunté
+    `/api/comptes-auth/{login}/activer`, qui ne sert qu'à **rouvrir** un compte suspendu
+    (`actions-compte.ts`, « Réactiver le compte »).
+  - **Cas laissé hors garde** : `POST /api/comptes-auth/{login}/reinitialiser-mot-de-passe` reste
+    accepté quel que soit le `STATUT`. Un nouveau mot de passe n'ouvre aucun accès — le login ne
+    consulte que `ACTIF` — et le refuser n'écarterait aucun risque ; l'écran, lui, ne propose le geste
+    que sur un compte ouvert.
+  - **Invariant, côté `activer`** : l'activation pose désormais aussi `STATUT = ACTIF`. Après la garde
+    le statut ne peut plus valoir que `ACTIF` ou `null`, donc l'écriture ne fait que **tenir la
+    promesse** du javadoc de `StatutCompte` (`ACTIF=true ⟺ STATUT=ACTIF`) et régulariser les lignes
+    héritées. `desactiver` continue, **volontairement**, de ne toucher que le booléen : c'est cet écart
+    qui distingue un compte *suspendu* d'une inscription *refusée* (ci-dessus).
 - Périmètre du badge « inscriptions en attente » (⚠️ périmètre changé 2026-09-17, lot 6) [Auto]
   - `inscriptionsEnAttente` (`CompteursAdminDto`, badge de menu) compte désormais les inscriptions
     **PRMP et UGPM**, comme l'écran qu'il annonce (`GET /api/inscriptions/en-attente`, union des deux

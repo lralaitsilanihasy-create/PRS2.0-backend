@@ -386,9 +386,10 @@ de personnes. Aucune écriture : les gestes de compte restent sur `/api/comptes-
 > inscriptions refusées la gonflerait.
 >
 > À noter pour qui lit le code : le javadoc de `StatutCompte` annonce l'invariant `ACTIF=true ⟺
-> STATUT=ACTIF` ; ni `desactiver` ni `activer` ne le tiennent (tous deux n'écrivent que le booléen).
-> L'écart n'est pas corrigé — le login s'appuie sur `ACTIF` — mais c'est lui qui rend la distinction
-> ci-dessus possible.
+> STATUT=ACTIF`. Depuis le **2026-09-17**, `activer` le tient (il pose `STATUT = ACTIF`, ne portant
+> plus que sur un compte déjà validé — cf. la garde sur `/api/comptes-auth`) ; `desactiver` ne le tient
+> **volontairement pas** et n'écrit que le booléen — le login s'appuie sur `ACTIF`, et c'est ce seul
+> écart, assumé, qui rend la distinction ci-dessus possible.
 >
 > Si une personne porte **plusieurs** comptes (rien ne l'interdit, la PK est le login), c'est le
 > **moins fermé** qui est servi : c'est l'accès dont elle dispose réellement.
@@ -757,6 +758,11 @@ par les règles de `tr_regle_anomalie`, jamais saisies à la main.
 >
 > **`refuser`** passe le compte à **`REFUSE`** (+ `MOTIF_REFUS`), marque les déclarations `REFUSEE`
 > et **notifie la PRMP** (`INSCRIPTION_REFUSEE`). La connexion reste refusée.
+>
+> ⚠️ **Ces deux routes sont la seule porte de la décision** (garde du 2026-09-17) : `POST
+> /api/comptes-auth/{login}/activer` **refuse (409)** un compte `EN_ATTENTE` ou `REFUSE`, et ne sert
+> donc qu'à rouvrir un compte déjà validé. Le raccourci contournait tout ce que `valider` fait seul :
+> rattachement des entités, `DATE_DECISION`, `IM_VALIDATEUR`, notification.
 
 **Modèle de données associé**
 - `t_compte_auth.STATUT` : `EN_ATTENTE` / `ACTIF` / `REFUSE` (+ `MOTIF_REFUS`, `DATE_DECISION`, `IM_VALIDATEUR`) ; le login reste piloté par `ACTIF` (`ACTIF=true` ⟺ `STATUT=ACTIF`).
@@ -879,7 +885,19 @@ CABINET→2, SECRETARIAT GENERAL→2, DIRECTION GENERALE→3, DIRECTION→4, SER
 ---
 
 ## Comptes d'authentification
-**Ressource** `/api/comptes-auth` — **Réservé `ADMINISTRATEUR`**. Gestion/validation des comptes de connexion (notamment les inscriptions PRMP en attente). Le mot de passe n'est jamais exposé.
+**Ressource** `/api/comptes-auth` — **Réservé `ADMINISTRATEUR`**. Gestion des comptes de connexion **déjà validés** : suspendre, rouvrir, réinitialiser un mot de passe. Le mot de passe n'est jamais exposé.
+
+> ⚠️ **Garde d'activation (contrat changé le 2026-09-17)** — `activer` et `desactiver` **refusent
+> (409)** un compte dont le `STATUT` vaut `EN_ATTENTE` ou `REFUSE`, avec un message qui renvoie à la
+> porte compétente (`POST /api/inscriptions/{login}/valider` ou `.../refuser`). Ces deux gestes ne
+> portent donc que sur un compte déjà validé (`STATUT = ACTIF`, ou `null` sur une ligne antérieure à la
+> colonne). Jusque-là ils ne posaient que le booléen `ACTIF`, sans condition de statut : un appel
+> direct ouvrait l'accès d'une inscription en attente ou refusée en contournant l'instruction — la
+> règle n'existait que dans l'écran (`annuaire-admin.ts`). **L'instruction d'une inscription n'est pas
+> ici** : elle est sur `/api/inscriptions` (validation, refus motivé), et ne passe pas par `activer`.
+> `reinitialiser-mot-de-passe` reste, lui, accepté quel que soit le statut (un mot de passe n'ouvre
+> aucun accès, le login ne consulte que `ACTIF`). `activer` pose aussi `STATUT = ACTIF` — après la
+> garde, c'est sans effet de bord, et cela régularise les lignes héritées au statut nul.
 
 **Champs `CompteAuthResumeDto`** (réponse)
 
@@ -901,8 +919,8 @@ CABINET→2, SECRETARIAT GENERAL→2, DIRECTION GENERALE→3, DIRECTION→4, SER
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
 | GET | /api/comptes-auth/en-attente | — | `CompteAuthResumeDto[]` (comptes inactifs) | 200, 403 | ADMINISTRATEUR |
-| POST | /api/comptes-auth/{login}/activer | — | `CompteAuthResumeDto` | 200, 403, 404 | ADMINISTRATEUR |
-| POST | /api/comptes-auth/{login}/desactiver | — | `CompteAuthResumeDto` | 200, 403, 404 | ADMINISTRATEUR |
+| POST | /api/comptes-auth/{login}/activer | — | `CompteAuthResumeDto` | 200, 403, 404, **409** | ADMINISTRATEUR |
+| POST | /api/comptes-auth/{login}/desactiver | — | `CompteAuthResumeDto` | 200, 403, 404, **409** | ADMINISTRATEUR |
 | POST | /api/comptes-auth/{login}/reinitialiser-mot-de-passe | `ReinitMotDePasseRequest` | `CompteAuthResumeDto` | 200, 400, 403, 404 | ADMINISTRATEUR |
 
 `{login}` = login du compte (string). La réinitialisation impose un nouveau mot de passe à un
