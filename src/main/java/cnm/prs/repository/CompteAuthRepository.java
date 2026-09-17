@@ -1,5 +1,6 @@
 package cnm.prs.repository;
 
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -62,4 +63,22 @@ public interface CompteAuthRepository extends JpaRepository<CompteAuth, String> 
             where c.actif = false and (c.statut is null or c.statut = :statutActif)
             """)
     long compterSuspendus(@Param("statutActif") String statutActif);
+
+    /**
+     * ⚠️ Lot 6 (2026-09-17, §B4, migration {@code V31}) — <strong>dépôt de la plus ancienne demande
+     * encore à ce statut</strong>, pour les types d'acteur donnés ; {@code null} si la file est vide.
+     *
+     * <p>Remplace la dérivation de {@code PieceJointeRepository.premierDepotDesComptes} : jusqu'à V31,
+     * {@code t_compte_auth} ne portait aucune date de dépôt et l'ancienneté se lisait sur la première
+     * pièce jointe déposée, écrite dans la même transaction que l'inscription. C'était exact mais
+     * suspendu à cette coïncidence — une inscription créée un jour sans pièce serait devenue invisible.
+     * La colonne {@code DATE_DEMANDE} rend la question triviale ; la reprise de V31 a rejoué l'ancienne
+     * dérivation une fois pour l'existant.</p>
+     */
+    @Query("""
+            select min(c.dateDemande) from CompteAuth c
+            where c.statut = :statut and c.typeActeur in :typesActeur
+            """)
+    LocalDateTime premiereDemande(@Param("statut") String statut,
+            @Param("typesActeur") Collection<String> typesActeur);
 }

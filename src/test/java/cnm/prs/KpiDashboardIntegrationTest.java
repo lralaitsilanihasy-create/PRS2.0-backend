@@ -426,13 +426,16 @@ class KpiDashboardIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("Admin §B1 : l'ancienneté d'une inscription en attente se lit sur sa première pièce")
+    @DisplayName("Admin §B4/V31 : l'ancienneté d'une inscription en attente se LIT sur DATE_DEMANDE")
     void dashboard_admin_b1_inscription_doyenne() throws Exception {
+        // ⚠️ 2026-09-17, §B4 — jusqu'à V31 cette mesure était DÉRIVÉE de la première pièce jointe, faute
+        // de date de dépôt sur t_compte_auth (B1 interdisait la migration). Elle se lit maintenant sur la
+        // colonne : une pièce plus ancienne que la demande ne doit donc plus rien changer.
         CompteAuth c = new CompteAuth("prmp.att", "x", "PRMP", "PRMP001", false);
         c.setStatut("EN_ATTENTE");
+        c.setDateDemande(LocalDateTime.of(2026, 9, 3, 9, 15));
         compteAuthRepository.save(c);
         seedPiece("prmp.att", "CIN", LocalDateTime.of(2026, 9, 3, 9, 30));
-        seedPiece("prmp.att", "ARRETE_NOMIN", LocalDateTime.of(2026, 9, 3, 9, 15));
         // Pièce d'un compte déjà actif : hors file, elle ne doit pas vieillir la doyenneté.
         seedPiece("CTRADM", "PHOTO", LocalDateTime.of(2020, 1, 1, 8, 0));
 
@@ -440,6 +443,35 @@ class KpiDashboardIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.inscriptionsEnAttente").value(1))
                 .andExpect(jsonPath("$.inscriptionDoyenneLe").value("2026-09-03T09:15:00"));
+    }
+
+    @Test
+    @DisplayName("Admin §B4/V31 : une inscription SANS aucune pièce porte quand même son ancienneté")
+    void dashboard_admin_v31_inscription_sans_piece() throws Exception {
+        // C'est le cas que l'ancienne dérivation ne savait pas traiter : sans pièce, elle retombait sur
+        // la première déclaration d'entité, et sans déclaration elle rendait null. La colonne, elle,
+        // est posée à la persistance du compte quoi qu'il arrive.
+        CompteAuth c = new CompteAuth("prmp.nue", "x", "PRMP", "PRMP001", false);
+        c.setStatut("EN_ATTENTE");
+        c.setDateDemande(LocalDateTime.of(2026, 7, 1, 7, 45));
+        compteAuthRepository.save(c);
+
+        mvc.perform(get("/api/kpis/mes-compteurs-admin").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.inscriptionDoyenneLe").value("2026-07-01T07:45:00"));
+    }
+
+    @Test
+    @DisplayName("Admin §B4/V31 : DATE_DEMANDE est posée d'office à la création, sans que l'appelant y pense")
+    void dashboard_admin_v31_date_demande_automatique() throws Exception {
+        LocalDateTime avant = LocalDateTime.now().minusSeconds(1);
+        CompteAuth c = new CompteAuth("prmp.auto", "x", "PRMP", "PRMP001", false);
+        c.setStatut("EN_ATTENTE");
+        compteAuthRepository.saveAndFlush(c);
+
+        LocalDateTime posee = compteAuthRepository.findByLogin("prmp.auto").orElseThrow().getDateDemande();
+        org.junit.jupiter.api.Assertions.assertNotNull(posee, "DATE_DEMANDE doit être posée à la persistance");
+        org.junit.jupiter.api.Assertions.assertFalse(posee.isBefore(avant));
     }
 
     @Test
@@ -482,13 +514,13 @@ class KpiDashboardIntegrationTest extends CnmIntegrationTestSupport {
         ugpmRepository.save(ugpm("UGPM001", "PRMP001", "Randria", "Hanta"));
         CompteAuth inscriptionPrmp = new CompteAuth("prmp.att", "x", "PRMP", "PRMP001", false);
         inscriptionPrmp.setStatut("EN_ATTENTE");
+        inscriptionPrmp.setDateDemande(LocalDateTime.of(2026, 9, 3, 9, 30));
         compteAuthRepository.save(inscriptionPrmp);
         CompteAuth inscriptionUgpm = new CompteAuth("ugpm.att", "x", "UGPM", "UGPM001", false);
         inscriptionUgpm.setStatut("EN_ATTENTE");
+        // L'UGPM s'est inscrite en premier : sa demande fait donc la doyenneté de la file.
+        inscriptionUgpm.setDateDemande(LocalDateTime.of(2026, 8, 20, 8, 5));
         compteAuthRepository.save(inscriptionUgpm);
-        // L'UGPM s'est inscrite en premier : sa pièce fait donc la doyenneté de la file.
-        seedPiece("ugpm.att", "CIN", LocalDateTime.of(2026, 8, 20, 8, 5));
-        seedPiece("prmp.att", "CIN", LocalDateTime.of(2026, 9, 3, 9, 30));
 
         // L'écran des inscriptions en attente en liste deux : le badge doit dire deux.
         mvc.perform(get("/api/inscriptions/en-attente").header("Authorization", tokenAdmin))

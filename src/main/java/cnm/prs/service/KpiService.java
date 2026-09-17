@@ -35,7 +35,6 @@ import cnm.prs.repository.DossierRepository;
 import cnm.prs.repository.ExamenDetailRepository;
 import cnm.prs.repository.LettreRenvoiRepository;
 import cnm.prs.repository.MandatRepository;
-import cnm.prs.repository.PieceJointeRepository;
 import cnm.prs.repository.PpmRepository;
 import cnm.prs.repository.PrmpEntiteDemandeRepository;
 import cnm.prs.repository.PublicationRepository;
@@ -81,7 +80,6 @@ public class KpiService {
     private final DemandeRetraitVueRepository demandeRetraitVueRepository;
     /** ⚠️ Lot 6 (2026-09-17, §B1) — files et ancienneté de l'accueil de l'Administrateur. */
     private final PrmpEntiteDemandeRepository prmpEntiteDemandeRepository;
-    private final PieceJointeRepository pieceJointeRepository;
     private final MandatRepository mandatRepository;
     /** ⚠️ 2026-09-15 — le badge « À faire » vient du calcul de l'accueil lui-même, jamais d'un comptage parallèle. */
     private final AFaireService aFaireService;
@@ -92,12 +90,11 @@ public class KpiService {
             PpmRepository ppmRepository, ReceptionRepository receptionRepository,
             PublicationRepository publicationRepository, CompteAuthRepository compteAuthRepository,
             AuditLogRepository auditLogRepository, DemandeRetraitVueRepository demandeRetraitVueRepository,
-            PrmpEntiteDemandeRepository prmpEntiteDemandeRepository, PieceJointeRepository pieceJointeRepository,
+            PrmpEntiteDemandeRepository prmpEntiteDemandeRepository,
             MandatRepository mandatRepository, AFaireService aFaireService) {
         this.aFaireService = aFaireService;
         this.demandeRetraitVueRepository = demandeRetraitVueRepository;
         this.prmpEntiteDemandeRepository = prmpEntiteDemandeRepository;
-        this.pieceJointeRepository = pieceJointeRepository;
         this.mandatRepository = mandatRepository;
         this.dossierRepository = dossierRepository;
         this.verificationRepository = verificationRepository;
@@ -253,11 +250,12 @@ public class KpiService {
      *       autres profils ne sont pas concernés.</li>
      *   <li><strong>Ancienneté des files</strong> — ce qui dit s'il y a urgence n'est pas le volume mais
      *       la date de la plus vieille demande. Côté rattachements, c'est {@code DATE_DECLARATION}
-     *       (une date : elle remonte donc à minuit). Côté inscriptions, {@code t_compte_auth} ne porte
-     *       aucune date de dépôt — la migration étant exclue, l'ancienneté se lit sur la première pièce
-     *       déposée, écrite dans la même transaction que l'inscription ; à défaut (variante JSON
-     *       historique, sans pièce) sur la première déclaration d'entité. Même file que le compteur
-     *       qu'elle accompagne, PRMP et UGPM.</li>
+     *       (une date : elle remonte donc à minuit). Côté inscriptions, c'est
+     *       {@code t_compte_auth.DATE_DEMANDE} — ⚠️ <strong>2026-09-17, §B4 / migration V31</strong> :
+     *       une simple lecture, là où B1 devait <em>dériver</em> l'ancienneté de la première pièce
+     *       jointe faute de date de dépôt en base. La dérivation et son repli sur la première
+     *       déclaration d'entité sont retirés ; V31 les a rejoués une fois, en reprise, pour les
+     *       comptes déjà en base. Même file que le compteur qu'elle accompagne, PRMP et UGPM.</li>
      *   <li><strong>Actifs / suspendus</strong> : {@code ACTIF} fait foi, car c'est lui que le login
      *       consulte. Un compte <strong>suspendu</strong> est un compte validé puis fermé
      *       ({@code STATUT = ACTIF}, {@code ACTIF = false}) ; une <strong>inscription refusée</strong>
@@ -269,7 +267,6 @@ public class KpiService {
      */
     public CompteursAdminDto mesCompteursAdmin() {
         java.time.LocalDate aujourdhui = java.time.LocalDate.now();
-        // Lue une seule fois : elle sert de doyenneté aux rattachements, et de repli aux inscriptions.
         java.time.LocalDate premiereDeclaration =
                 prmpEntiteDemandeRepository.premiereDeclaration(StatutDemandeEntite.EN_ATTENTE.name());
         return new CompteursAdminDto(
@@ -278,31 +275,11 @@ public class KpiService {
                 compteAuthRepository.count(),
                 auditLogRepository.count(),
                 prmpEntiteDemandeRepository.countByStatutDemande(StatutDemandeEntite.EN_ATTENTE.name()),
-                inscriptionDoyenneLe(premiereDeclaration),
+                compteAuthRepository.premiereDemande(StatutCompte.EN_ATTENTE.name(), TYPES_QUI_S_INSCRIVENT),
                 premiereDeclaration == null ? null : premiereDeclaration.atStartOfDay(),
                 compteAuthRepository.countByActifTrue(),
                 compteAuthRepository.compterSuspendus(StatutCompte.ACTIF.name()),
                 mandatRepository.compterExpirantEntre(aujourdhui, aujourdhui.plusDays(PREAVIS_MANDAT_JOURS)));
-    }
-
-    /**
-     * Dépôt de la plus ancienne inscription encore en attente, PRMP ou UGPM ({@code null} si la file est
-     * vide) : la première pièce déposée. Voir {@link #mesCompteursAdmin()} pour le motif de cette
-     * dérivation.
-     *
-     * <p>Sans aucune pièce — l'inscription par la variante JSON historique n'en dépose pas —, le repli
-     * est le jour de la première déclaration d'entité <strong>encore en attente</strong> : une telle
-     * déclaration n'existe que portée par une inscription en attente, et elle naît avec elle. Les deux
-     * doyennetés se confondent alors, ce qui est exact et non un recopiage. Ce repli ne vaut que pour
-     * une PRMP : une UGPM ne déclare aucune entité.</p>
-     */
-    private java.time.LocalDateTime inscriptionDoyenneLe(java.time.LocalDate premiereDeclarationEnAttente) {
-        java.time.LocalDateTime parPiece = pieceJointeRepository.premierDepotDesComptes(
-                StatutCompte.EN_ATTENTE.name(), TYPES_QUI_S_INSCRIVENT);
-        if (parPiece != null) {
-            return parPiece;
-        }
-        return premiereDeclarationEnAttente == null ? null : premiereDeclarationEnAttente.atStartOfDay();
     }
 
     /**

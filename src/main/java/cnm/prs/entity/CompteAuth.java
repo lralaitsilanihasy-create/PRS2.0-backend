@@ -6,6 +6,7 @@ import cnm.prs.enums.StatutCompte;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -57,6 +58,19 @@ public class CompteAuth {
     @Column(name = "MOTIF_REFUS", length = 500)
     private String motifRefus;
 
+    /**
+     * ⚠️ Lot 6 (2026-09-17, §B4, migration {@code V31}) — horodatage du <strong>dépôt</strong> de la
+     * demande, à ne pas confondre avec {@link #dateDecision}, qui date la validation ou le refus et
+     * n'existe donc <em>jamais</em> pour une inscription en attente. C'est cette absence qui obligeait
+     * {@code KpiService} à <em>dériver</em> l'ancienneté de la file des inscriptions de
+     * {@code t_piece_jointe.DATE_DEPOT} — exact, mais suspendu à une coïncidence de transaction.
+     *
+     * <p>Posée par {@link #horodaterLaDemande()} à la persistance, et seulement si elle est absente :
+     * la reprise de V31 et les tests peuvent donc fixer une date antérieure.</p>
+     */
+    @Column(name = "DATE_DEMANDE")
+    private LocalDateTime dateDemande;
+
     /** Horodatage de la décision (validation ou refus). */
     @Column(name = "DATE_DECISION")
     private LocalDateTime dateDecision;
@@ -77,5 +91,22 @@ public class CompteAuth {
         this.refActeur = refActeur;
         this.actif = actif;
         this.statut = Boolean.TRUE.equals(actif) ? StatutCompte.ACTIF.name() : StatutCompte.EN_ATTENTE.name();
+    }
+
+    /**
+     * ⚠️ V31 — date de dépôt posée à la persistance, <strong>quelle que soit la voie de création</strong>
+     * (inscription publique PRMP ou UGPM, création par l'Administrateur, amorce). Un seul point
+     * d'écriture vaut mieux que cinq appelants à ne pas oublier, et un compte créé par l'Administrateur
+     * porte alors sa date de création — inutile pour le compteur, qui ne regarde que les
+     * {@code EN_ATTENTE}, mais jamais faux.
+     *
+     * <p>Ne fait rien si la valeur est déjà posée : une reprise ou un test peut dater une demande
+     * d'hier.</p>
+     */
+    @PrePersist
+    void horodaterLaDemande() {
+        if (dateDemande == null) {
+            dateDemande = LocalDateTime.now();
+        }
     }
 }
