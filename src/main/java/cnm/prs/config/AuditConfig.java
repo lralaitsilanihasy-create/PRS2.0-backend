@@ -20,6 +20,8 @@ public class AuditConfig implements WebMvcConfigurer {
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(auditInterceptor)
                 .addPathPatterns("/api/**")
-                .excludePathPatterns("/api/auth/**", "/api/audit-logs/**");
+                // L'assistant IA journalise lui-même chaque échange, question et réponse comprises
+                // (AssistantIaService) : la ligne générique de l'intercepteur ferait doublon.
+                .excludePathPatterns("/api/auth/**", "/api/audit-logs/**", "/api/assistant-ia/**");
     }
 }

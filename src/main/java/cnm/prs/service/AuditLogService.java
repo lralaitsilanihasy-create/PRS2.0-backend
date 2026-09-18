@@ -157,13 +157,29 @@ public class AuditLogService {
      */
     public void enregistrer(String imActeur, String nomTable, String idEnregistrement,
             String typeAction, String ipAdresse) {
+        enregistrerDetail(imActeur, nomTable, idEnregistrement, typeAction, null, null, ipAdresse);
+    }
+
+    /**
+     * Enregistre une entrée d'audit avec son détail : {@code CHAMP_MODIFIE} et {@code NOUVELLE_VALEUR}
+     * (texte libre). Sert l'assistant IA (2026-09-18, {@code docs/plan-assistant-ia.md} §5) : chaque
+     * échange est tracé — qui a demandé, quand, avec quel modèle, la question, la réponse et ses
+     * sources — pour qu'on sache exactement ce que l'assistant a dit et sur quoi.
+     *
+     * <p>Les longueurs suivent les colonnes de {@code t_audit_log} : {@code CHAMP_MODIFIE} est tronqué
+     * à 50 caractères, {@code IM_ACTEUR} laissé nul au-delà de 10 (même règle que l'intercepteur).</p>
+     */
+    public void enregistrerDetail(String imActeur, String nomTable, String idEnregistrement,
+            String typeAction, String champModifie, String nouvelleValeur, String ipAdresse) {
         AuditLog log = new AuditLog();
         log.setIdLog(repository.nextIdAuditLog());   // PK serveur (sequence)
         log.setDateAction(LocalDateTime.now());
-        log.setImActeur(imActeur);
+        log.setImActeur(imActeur != null && imActeur.length() <= 10 ? imActeur : null);
         log.setNomTable(nomTable);
         log.setIdEnregistrement(idEnregistrement);
         log.setTypeAction(typeAction);
+        log.setChampModifie(champModifie != null && champModifie.length() > 50 ? champModifie.substring(0, 50) : champModifie);
+        log.setNouvelleValeur(nouvelleValeur);
         log.setIpAdresse(ipAdresse);
         repository.save(log);
     }
