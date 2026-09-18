@@ -138,6 +138,46 @@ activer le seed, qui leur ouvrira les comptes.
 
 ---
 
+## 12. Assistant IA local — desactive par defaut, serveur d'inference a installer a part
+
+Ajoute le 18/09/2026 (`docs/plan-assistant-ia.md`, lot 1 ; ADR-0007). L'assistant repond aux questions
+sur les regles du controle des marches, a partir d'un corpus documentaire. **Il est desactive par
+defaut** (`app.ia.actif=false`) : sans activation explicite, le front le masque et son API repond 404.
+Rien a faire au deploiement tant qu'on ne l'active pas.
+
+Pour l'activer, cinq points :
+
+1. **Le modele ne tourne pas dans le jar.** Il faut un serveur d'inference a l'API compatible OpenAI —
+   Ollama (developpement : poste de Mathieu, Ollama 0.34.2) ou vLLM / Ollama sur un serveur a GPU en
+   production. Variables : `APP_IA_ACTIF=true`, `APP_IA_BASE_URL` (ex. `http://serveur-ia:11434/v1`),
+   `APP_IA_MODELE` (en developpement `qwen3.5:9b-q4_K_M`).
+2. **Le serveur d'inference ne doit etre joignable QUE par le backend.** Son API n'a aucune
+   authentification : quiconque l'atteint peut le faire calculer. Ollama n'ecoute que `127.0.0.1` par
+   defaut — c'est le bon reglage quand il est sur la meme machine que le backend. Sur une autre machine,
+   fermer son port a tout sauf l'hote du backend (pare-feu).
+3. **Contexte de 8 192 jetons au minimum.** Le backend envoie jusqu'a cinq extraits (~5 000 jetons au
+   pire) plus la reponse (900). ⚠️ Ollama, sur une carte de moins de 24 Go, prend par defaut un contexte
+   de **4 096** : la demande serait alors tronquee **sans erreur**, et la reponse fausse sans que rien ne
+   le signale. Sur le poste de developpement (RTX 5050, 8 Go) : `OLLAMA_CONTEXT_LENGTH=8192`,
+   `OLLAMA_FLASH_ATTENTION=1`, `OLLAMA_KV_CACHE_TYPE=q8_0` — sans les deux derniers, 8 192 jetons
+   debordent sur le processeur.
+4. **Le corpus n'est pas dans le jar.** `APP_IA_MANUEL` = chemin du PDF du manuel de controle a priori,
+   `APP_IA_REGLES` = chemin de `docs/regles-gestion.md`. Un fichier absent est **ignore avec un
+   avertissement**, sans empecher le demarrage : verifier au demarrage la ligne
+   « Assistant IA : corpus charge — N passage(s) dans M document(s) » (attendu en developpement :
+   deux documents).
+5. **Reverse proxy : ne pas mettre en tampon `POST /api/assistant-ia/questions`.** La reponse arrive en
+   flux (`text/event-stream`) ; un proxy qui met en tampon ne la livre qu'a la fin, et l'ecran attend
+   sans rien afficher. Avec nginx : `proxy_buffering off;` sur `/api/assistant-ia/`.
+
+**Avant de changer de modele**, rejouer la batterie de reference contre le nouveau :
+`mvnw test -Dtest=AssistantIaBatterieModeleTest -Dia.batterie=true` (manuel present, serveur joignable).
+Le 18/09/2026, `qwen3.5:9b-q4_K_M` y fait 12/12. Le journal d'audit (`NOM_TABLE = assistant_ia`) garde
+chaque question telle que tapee et chaque reponse : il suit la meme politique de conservation que le
+reste de `t_audit_log`.
+
+---
+
 *Rappel de contexte (comme dans tous les plans de ce chantier) : push impossible vers les deux depots
 (403, proprietaire absent) — ce document, comme le reste du chantier, existe en commit local
 uniquement.*

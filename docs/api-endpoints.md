@@ -528,6 +528,58 @@ par les règles de `tr_regle_anomalie`, jamais saisies à la main.
 
 ---
 
+## Assistant IA (⚠️ ressource ajoutée 2026-09-18, lot 1 — `docs/plan-assistant-ia.md`, ADR-0007)
+**Ressource** `/api/assistant-ia` — assistant local qui répond aux questions sur les règles du contrôle
+des marchés et de PRS, à partir d'un **corpus documentaire** (manuel de contrôle a priori de la CNM,
+règles de gestion de PRS). **Lecture seule, non décisionnaire** : aucune donnée de dossier n'est lue,
+rien n'est écrit hors du journal d'audit. Ouvert aux **dix profils**, PRMP comprise.
+
+> ⚠️ **Désactivé par défaut.** `app.ia.actif=false` : `GET /etat` répond `actif: false` (le front
+> masque l'assistant) et `POST /questions` répond **404**. Le modèle tourne **hors du JVM**, derrière
+> une API compatible OpenAI (`app.ia.base-url`, `app.ia.modele`) — voir `docs/deploiement.md` §12.
+
+> ⚠️ **Réponse en flux SSE sur un POST.** `POST /questions` produit `text/event-stream` (le client lit
+> le flux au fil du téléchargement : `EventSource` ne fait que du GET). Événements, dans l'ordre :
+>
+> | Événement | Données (JSON) | Sens |
+> |---|---|---|
+> | `sources` | `SourceIaDto[]` | extraits fournis au modèle, numérotés — la réponse les cite `[n]` ; **toujours en premier** |
+> | `texte` | `{ "t": "…" }` | un morceau de réponse ; zéro ou plusieurs |
+> | `fin` | `{ "modele": "…", "dureeMs": 4200 }` | réponse complète |
+> | `erreur` | `{ "message": "…" }` | service de calcul injoignable, en erreur ou trop lent, ou file d'attente pleine — message pour l'utilisateur |
+>
+> Sans extrait pertinent, `sources` est vide et la réponse est un **texte fixe** : le modèle n'est pas
+> appelé (il ne répond jamais de mémoire). Fermer la connexion interrompt la génération.
+
+> ⚠️ **Journal.** Chaque échange écrit **une** ligne `t_audit_log` : `NOM_TABLE = assistant_ia`,
+> `TYPE_ACTION` = `QUESTION` | `QUESTION_ECHEC` | `QUESTION_INTERROMPUE` | `QUESTION_REFUSEE`,
+> `CHAMP_MODIFIE` = modèle, `NOUVELLE_VALEUR` = profil, question, réponse, sources, durée (et erreur).
+> La ligne est écrite **avant** l'événement `fin` ou `erreur`. L'intercepteur d'audit générique est
+> exclu de `/api/assistant-ia/**` : il ferait doublon, sans la question ni la réponse.
+
+**Champs**
+
+| DTO | Champ (JSON) | Type | Contraintes |
+|---|---|---|---|
+| `QuestionIaRequest` | question | string | @NotBlank, max 1 000 caractères (400 sinon) |
+| `SourceIaDto` | numero | number | Rang cité dans la réponse (`[1]`, `[2]`…) |
+| | document | string | Libellé du document (ex. « Manuel de contrôle a priori (CNM, février 2026) ») |
+| | reference | string | Emplacement : « p. 15 » (PDF) ou chemin des titres (Markdown) |
+| | extrait | string | Texte fourni au modèle, coupé à 3 600 caractères (« […] ») |
+| `EtatAssistantIaDto` | actif | boolean | `app.ia.actif` |
+| | disponible | boolean | Le serveur d'inférence répond et connaît le modèle (sonde de 2 s) ; `false` si inactif |
+| | modele | string | `null` si inactif |
+| | documents | `{ libelle, passages }[]` | Documents du corpus effectivement chargés ; vide si inactif |
+
+**Endpoints**
+
+| Méthode | URL | Corps | Réponse | Statuts | Rôle |
+|---|---|---|---|---|---|
+| GET | /api/assistant-ia/etat | — | `EtatAssistantIaDto` | 200, 401 | Authentifié (tous profils) |
+| POST | /api/assistant-ia/questions | `QuestionIaRequest` | flux SSE (ci-dessus) | 200, 400, 401, 404 (inactif) | Authentifié (tous profils) — envoyer `Accept: text/event-stream, application/json` pour recevoir un 400 en JSON |
+
+---
+
 ## Authentification
 **Ressource** `/api/auth` — Routes **publiques** (aucun token requis). Pas de CRUD.
 

@@ -819,6 +819,30 @@ dans `t_audit_log` par l'intercepteur d'audit (comme toute écriture API).
 
 ---
 
+### Assistant IA (transversal)
+
+⚠️ **Règle ajoutée (2026-09-18, demande du pilote — `docs/plan-assistant-ia.md`, lot 1 ; ADR-0007)** — un
+**assistant IA local** répond aux questions sur les règles du contrôle des marchés publics et sur le
+fonctionnement de PRS. Il est ouvert aux **dix profils, PRMP comprise**, et peut citer à la PRMP le
+manuel de contrôle a priori (décision du pilote, 2026-09-18) : c'est ce qui lui permet de savoir, avant
+de déposer, ce que le contrôleur vérifiera.
+
+- **Il ne décide rien et n'écrit rien.** Aucune donnée de dossier n'est lue au lot 1 : l'assistant ne
+  s'appuie que sur un **corpus documentaire** identique pour tous — le *Manuel de contrôle a priori des
+  marchés publics* (CNM, février 2026) et le présent document. Sa consigne lui interdit tout avis sur un
+  dossier réel (favorable, défavorable, conforme) : cette décision appartient à la Commission.
+- **Il ne répond pas de mémoire.** Chaque réponse cite ses extraits (`[1]`, `[2]`…), que l'utilisateur
+  peut déplier ; sans passage pertinent dans le corpus, la réponse est un texte fixe et le modèle n'est
+  pas appelé. (Interrogé sans le manuel, le modèle cite le droit français — d'où cette règle.)
+- **Le modèle tourne hors de l'application, sur les serveurs de la CNM** : aucune question ni aucune
+  donnée ne sort du réseau. L'assistant est **désactivé par défaut** (`app.ia.actif`) et masqué tant
+  qu'il l'est.
+- **Chaque échange est journalisé** dans `t_audit_log` (`NOM_TABLE = assistant_ia`) : qui a demandé,
+  quand, avec quel modèle, la question, la réponse et ses sources — pour savoir exactement ce que
+  l'assistant a dit, et sur quoi.
+
+---
+
 ## 3. Fonctionnalités et règles par profil
 
 ### 3.1. PRMP
@@ -1092,6 +1116,11 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
 
 - Création et mise à jour du PPM [Écriture]
   - En-tête, exercice, signataire, marchés, lots, tranches, SOA bénéficiaires.
+- Montants — **hors taxes** [Écriture] ⚠️ **Précision du pilote (2026-09-18)**
+  - Les montants estimatifs des lignes du PPM (montant initial, nouveau montant, montants par service
+    bénéficiaire) sont saisis et conservés **hors taxes**, comme les seuils de l'arrêté
+    n° 13 156/2019-MEF auxquels ils se comparent (« hors taxes sur les valeurs ajoutées », article 2).
+    Aucune conversion n'est donc faite avant une comparaison à un seuil. Rien ne l'écrivait jusqu'ici.
 - Mode de passation — **purement saisi** [Écriture]
   - ⚠️ **Règle RETIRÉE (corrigé 2026-08-27)**. Ce paragraphe décrivait une détermination automatique du
     mode (référentiels `t_situation`/`t_regle_passation`/`t_seuil`, validation serveur avec 409 « hors
