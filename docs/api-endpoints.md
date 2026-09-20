@@ -5030,6 +5030,40 @@ soumission : elle est journalisée et avalée.
 
 ---
 
+
+---
+
+## Pré-contrôle du PPM — taux d'écartement par règle (assistant IA, lot 3, étape 7)
+**Ressource** `/api/pre-controle/statistiques` — ⚠️ **Lot 3, étape 7 (2026-09-20)**. Ressource **séparée**
+de `/api/pre-controle` et c'est délibéré : celle-là sert des **plans** à ceux qui y ont droit, celle-ci ne
+sert que des **compteurs**. L'Administrateur peut donc la lire sans qu'on lui ouvre l'accès aux dossiers.
+
+**Rôle** : `ADMINISTRATEUR`, `PRESIDENT`. Tous les autres : **403**.
+
+**À quoi elle sert**, très concrètement : repérer la règle écartée dans 80 % des cas et l'éteindre depuis
+`/api/regle-anomalies` (`ACTIF = false`), sans redéploiement. C'est la contre-mesure à la fatigue d'alerte
+(plan, §4, lot 3, 3.e) : si l'outil signale trop, tout le monde écarte tout sans lire.
+
+**Champs `StatistiquesReglesDto`** : `exercice` (filtre appliqué, ou `null`), `total`, `ecartes`,
+`tauxGlobal` (0 à 1), `regles[]`.
+
+**Champs d'une ligne** : `code`, `libelle`, `source` (`REGLE` ou `IA`), `actif`, `total`, `ouverts`,
+`ecartes`, `leves`, `taux`, `suspecte`.
+
+⚠️ **`leves` n'est pas `ecartes`, et ne compte pas dans le taux.** Un signalement **levé** a disparu parce
+que la PRMP a corrigé son plan : c'est la **réussite** de la règle. Un signalement **écarté** est un
+désaccord motivé. Les confondre ferait éteindre les règles qui marchent le mieux.
+
+**Endpoints**
+
+| Méthode | URL | Corps | Réponse | Statuts | Rôle |
+|---|---|---|---|---|---|
+| GET | /api/pre-controle/statistiques | — | `StatistiquesReglesDto` | 200, 403 | ADMINISTRATEUR / PRESIDENT |
+| GET | /api/pre-controle/statistiques?exercice=2026 | — | `StatistiquesReglesDto` | 200, 403 | idem — une règle peut être bonne une année et mauvaise la suivante |
+
+Les règles qui n'ont encore rien produit sont servies **à zéro** : leur absence donnerait à penser
+qu'elles n'existent pas, alors qu'elles attendent peut-être leur premier plan.
+
 ## Profils
 **Ressource** `/api/profiles` — Référentiel RBAC (§3.8) : lecture ouverte ; écriture `ADMINISTRATEUR`.
 

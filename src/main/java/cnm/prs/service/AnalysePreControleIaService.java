@@ -89,10 +89,18 @@ public class AnalysePreControleIaService {
     }
 
     /**
-     * Ce qu'une analyse rend : la phrase de hiérarchisation — <strong>non enregistrée</strong>, c'est une
-     * aide à la lecture recalculée à la demande — et le compte rendu du rapprochement.
+     * Ce qu'une analyse rend.
+     *
+     * @param synthese        la phrase de hiérarchisation — <strong>non enregistrée</strong>, c'est une aide
+     *                        à la lecture recalculée à la demande
+     * @param lignesAnalysees combien de lignes l'assistant a réellement <strong>lues</strong>
+     * @param lignesDuPlan    combien le plan en porte. Les deux sont rendus, et l'écran le dit : une
+     *                        couverture partielle <strong>annoncée</strong> vaut mieux qu'une couverture
+     *                        totale supposée — c'est le défaut que la recette du 2026-09-20 a révélé
+     * @param resultat        le compte rendu du rapprochement
      */
-    public record Analyse(String synthese, ResultatPreControle resultat) {
+    public record Analyse(String synthese, int lignesAnalysees, int lignesDuPlan,
+            ResultatPreControle resultat) {
     }
 
     /**
@@ -111,46 +119,57 @@ public class AnalysePreControleIaService {
         Set<String> typesActifs = typesActifs();
         if (typesActifs.isEmpty()) {
             log.info("[PRE-CONTROLE IA] aucune piste active : analyse inutile sur le PPM {}", ppm.getIdPpm());
-            return new Analyse(null, preControle.enregistrerConstatsIa(ppm.getIdPpm(), List.of(), Set.of()));
+            return new Analyse(null, 0, contexte.lignes().size(),
+                    preControle.enregistrerConstatsIa(ppm.getIdPpm(), List.of(), Set.of()));
         }
 
-        List<Marche> lignes = dialogue.lignesAnalysees(contexte);
-        String inventaire = dialogue.inventaire(contexte, lignes);
+        List<List<Marche>> lots = dialogue.lots(contexte);
+        int lignesAnalysees = lots.stream().mapToInt(List::size).sum();
         long debut = System.nanoTime();
 
         // ⚠️ UNE PASSE PAR TYPE, et non une question portant les trois. La batterie de référence a tranché :
         // une consigne unique avec ses exceptions et son ordre de priorité fait se contredire un modèle de
         // 9 milliards de paramètres. Trois questions courtes coûtent plus de calcul et rendent bien mieux —
         // et l'analyse est un geste explicite et rare, pas une frappe au clavier.
+        //
+        // ⚠️ ET PAR LOTS DE LIGNES (recette du 2026-09-20) : un plan réel de 130 lignes faisait un
+        // inventaire de 37 000 caractères, très au-delà de la fenêtre de contexte d'un modèle local. Le
+        // prompt arrivait tronqué, la réponse était illisible, et l'analyse annonçait « rien à signaler »
+        // sur un plan qu'elle n'avait pas lu.
         List<SignalementDetecte> pistes = new ArrayList<>();
         Set<String> clesVues = new LinkedHashSet<>();
         for (TypeSignalement type : TypeSignalement.typesDeLAssistant()) {
-            if (!typesActifs.contains(type.name()) || pistes.size() >= DialogueAnalyseIa.PISTES_MAX) {
+            if (!typesActifs.contains(type.name())) {
                 continue;
             }
-            String reponse;
-            try {
-                reponse = client.generer(
-                        List.of(new ClientModeleIa.Message("system", dialogue.consigne(type)),
-                                new ClientModeleIa.Message("user", inventaire)),
-                        fragment -> { /* pas de flux : une passe rend un JSON complet ou rien */ },
-                        () -> false);
-            } catch (ClientModeleIa.ModeleIndisponibleException e) {
-                // Le serveur d'inférence est tombé : on ne garde rien de ce qui précède plutôt que de
-                // livrer une analyse tronquée qui passerait pour complète.
-                journaliser(refActeur, ppm, 0, millisecondes(debut), e.getMessage());
-                throw e;
-            }
-            for (SignalementDetecte piste : dialogue.lire(reponse, type, contexte, lignes, clesVues).pistes()) {
-                if (pistes.size() < DialogueAnalyseIa.PISTES_MAX) {
-                    pistes.add(piste);
+            for (List<Marche> lot : lots) {
+                if (pistes.size() >= DialogueAnalyseIa.PISTES_MAX) {
+                    break;
+                }
+                String reponse;
+                try {
+                    reponse = client.generer(
+                            List.of(new ClientModeleIa.Message("system", dialogue.consigne(type)),
+                                    new ClientModeleIa.Message("user", dialogue.inventaire(contexte, lot))),
+                            fragment -> { /* pas de flux : une passe rend un JSON complet ou rien */ },
+                            () -> false, DialogueAnalyseIa.JETONS_PAR_PASSE);
+                } catch (ClientModeleIa.ModeleIndisponibleException e) {
+                    // Le serveur d'inférence est tombé : on ne garde rien de ce qui précède plutôt que de
+                    // livrer une analyse tronquée qui passerait pour complète.
+                    journaliser(refActeur, ppm, 0, lignesAnalysees, millisecondes(debut), e.getMessage());
+                    throw e;
+                }
+                for (SignalementDetecte piste : dialogue.lire(reponse, type, contexte, lot, clesVues).pistes()) {
+                    if (pistes.size() < DialogueAnalyseIa.PISTES_MAX) {
+                        pistes.add(piste);
+                    }
                 }
             }
         }
 
         ResultatPreControle resultat = preControle.enregistrerConstatsIa(ppm.getIdPpm(), pistes, typesActifs);
-        journaliser(refActeur, ppm, pistes.size(), millisecondes(debut), null);
-        return new Analyse(dialogue.synthese(pistes), resultat);
+        journaliser(refActeur, ppm, pistes.size(), lignesAnalysees, millisecondes(debut), null);
+        return new Analyse(dialogue.synthese(pistes), lignesAnalysees, contexte.lignes().size(), resultat);
     }
 
     /** Les types de l'assistant dont la ligne de {@code t_regle_anomalie} est active. */
@@ -167,9 +186,11 @@ public class AnalysePreControleIaService {
 
     // ------------------------------------------------------------------ journal
 
-    private void journaliser(String refActeur, Ppm ppm, int pistes, long dureeMs, String erreur) {
+    private void journaliser(String refActeur, Ppm ppm, int pistes, int lignesAnalysees, long dureeMs,
+            String erreur) {
         String trace = "Analyse du pré-contrôle — PPM " + ppm.getIdPpm()
                 + " (exercice " + ppm.getExercice() + ")"
+                + "\nLignes examinées : " + lignesAnalysees
                 + "\nPistes retenues : " + pistes
                 + "\nDurée : " + dureeMs + " ms"
                 + (erreur == null ? "" : "\nErreur : " + erreur);

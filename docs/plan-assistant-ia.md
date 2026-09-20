@@ -425,7 +425,7 @@ Le lot est le plus lourd des cinq : il se livre par étapes, chacune vérifiée,
 | **4. Écran de la PRMP** | « Vérifier mon PPM », liste des signalements, fenêtre d'écartement portant l'avertissement de visibilité | **livrée** (ci-dessous) |
 | **5. Écran du contrôleur** | signalements rattachés aux points de la grille, écartés visibles avec leur motif, fait et piste distingués | **livrée** (ci-dessous) |
 | **6. Couche IA** | la phrase utile, la hiérarchisation, le fractionnement déguisé, la suggestion au format de l'annexe du PV ; batterie de qualité | **livrée** (ci-dessous) |
-| **7. Tableau de bord des écartements** | taux d'écartement par règle dans l'espace Administrateur (3.e), et complètement des imputations budgétaires des données de recette | à faire |
+| **7. Tableau de bord des écartements** | taux d'écartement par règle dans l'espace Administrateur (3.e), et complètement des imputations budgétaires des données de recette | **livrée** (ci-dessous) |
 
 #### Livraison de l'étape 1 — le socle de données (2026-09-20, branche `chantier/assistant-ia-lot3`)
 
@@ -692,6 +692,70 @@ illisible ne casse rien, le modèle bavard est plafonné, la panne rend 503 sans
 règles, les deux populations ne se mélangent jamais, une piste s'écarte et se retrouve écartée, un type
 éteint n'est plus proposé, et l'analyse est journalisée. Plus la batterie de qualité, sur demande
 (`-Dia.batterie=true`). Front : 2 tests de plus (740 verts).
+
+
+#### Livraison de l'étape 7 — le taux d'écartement, et la recette sur l'application réelle (2026-09-20)
+
+**Le tableau de bord qui rend l'outil crédible dans la durée.** `GET /api/pre-controle/statistiques`
+(Administrateur, Président) rend, par règle : total, ouverts, écartés, levés, taux d'écartement, et un
+drapeau **suspecte** au-delà de 80 % d'écartements sur au moins 5 signalements — le seuil du plan (3.e).
+Il ne porte **que des compteurs** : aucun plan, aucun marché, aucun acteur, ce qui permet de l'ouvrir à
+l'Administrateur sans lui ouvrir les dossiers.
+
+Deux distinctions que l'écran rend évidentes, parce que les confondre ferait éteindre les règles qui
+marchent :
+
+- un signalement **levé** est un **succès** — la PRMP a corrigé son plan — et ne compte pas dans le taux ;
+- une **piste** de l'assistant ne se juge pas comme une **règle** : une piste écartée reste une piste, une
+  règle écartée souvent est un défaut.
+
+**Écran** : `/admin/pre-controle-regles`, **sans entrée de menu** (celui de l'Administrateur est à sa
+capacité — garde-fou `hauteur-menu.mjs` du lot 6). On y arrive depuis « À surveiller » de l'accueil, qui
+annonce « N règle(s) du pré-contrôle est/sont écartée(s) presque à chaque fois », et depuis les règles
+d'anomalie, là où on éteint la règle fautive.
+
+**Données de recette** : les 65 services bénéficiaires de `PRS_RECETTE` n'avaient **aucune imputation
+budgétaire** — sans compte, la règle du fractionnement ne peut rien montrer. Le script
+`recette-assistant-ia/imputations-recette.sql` (hors dépôts, ce sont des données de test) les attribue
+**par objet**, avec deux objets volontairement sur le même compte, et sème les douze comptes et leurs deux
+catégories.
+
+---
+
+#### ⚠️ Ce que la recette a trouvé, et que rien d'autre ne pouvait trouver (2026-09-20)
+
+La recette s'est faite sur l'application réelle : backend sur `PRS_RECETTE` (port 18080), front en 4300,
+modèle local. Elle a révélé **trois défauts**, tous dans la couche IA, tous invisibles en test :
+
+1. **L'analyse annonçait « rien à signaler » sur un plan qu'elle n'avait pas lu.** Le plan de recette
+   porte **130 lignes** ; l'inventaire envoyé au modèle faisait **37 000 caractères**, très au-delà de la
+   fenêtre de contexte d'un modèle local. Le prompt arrivait tronqué, la réponse était illisible, et les
+   trois passes étaient ignorées **en silence**. C'est le pire défaut possible pour cette fonctionnalité.
+   → Analyse **par lots** de 30 lignes, deux lots par recherche, et la **couverture réelle est dite** à
+   l'écran : « l'assistant a examiné les 60 premières lignes sur 130 : ce qu'il n'a pas lu n'est pas pour
+   autant conforme. Les règles, elles, ont vu tout le plan. »
+2. **La réponse du modèle était coupée à 900 jetons** — le budget d'une réponse de *chat*, inadapté à une
+   réponse *structurée*. Un JSON tronqué est un JSON illisible. → Budget propre à l'analyse (1 500),
+   consigne « au plus trois pistes, un constat d'une phrase », et surtout **récupération** des pistes
+   complètes d'une réponse coupée, au lieu de tout jeter.
+3. **Aucun journal ne disait ce que le modèle avait répondu.** Le diagnostic a coûté plusieurs
+   allers-retours pour cette seule raison. → L'extrait reçu est désormais écrit au journal technique quand
+   une réponse est jugée illisible. Cette ligne restera.
+
+Deux défauts d'écran ont été corrigés au passage, mesurés à 1366×768 : le constat d'un fractionnement
+citait ses **sept** lignes in extenso (mur de texte, alors qu'elles sont listées juste en dessous — trois
+citées, le reste compté), et le tableau du tableau de bord débordait de l'écran (en-têtes raccourcis).
+
+**Ce que la recette a confirmé**, sur données réelles : 21 signalements de règles sur le plan de recette —
+fractionnement sur quatre comptes (jusqu'à 7 lignes et 2 milliards d'ariary cumulés), 14 modes en deçà du
+seuil avec l'article et le montant cités, 3 catégories de seuil à préciser ; puis **9 pistes** de
+l'assistant en 68 secondes, dont le **fractionnement déguisé** d'une même route nationale et d'un même
+bâtiment sous des comptes différents — exactement ce qu'aucune règle ne peut voir. Écartement motivé,
+visibilité du motif côté contrôleur, figeage, tableau de bord : tout se comporte comme prévu.
+
+**Outillage de recette** (hors dépôts, `C:\dev\PRS2.0\recette-assistant-ia\`) :
+`capturer-precontrole.mjs` et `capturer-controleur.mjs` (Chrome piloté par CDP, 1366×768),
+`imputations-recette.sql`, et les douze captures de `captures-lot3\`.
 
 ### Lot 4 — Chatbot transverse
 

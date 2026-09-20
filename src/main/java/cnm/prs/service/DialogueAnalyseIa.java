@@ -63,13 +63,40 @@ public class DialogueAnalyseIa {
     public static final int PISTES_MAX = 8;
 
     /**
-     * Plafond de lignes envoyées au modèle. Un PPM de plusieurs centaines de lignes dépasserait la fenêtre
-     * de contexte d'un modèle local, et la réponse s'en dégraderait sans avertissement.
+     * ⚠️ <strong>Lignes par question posée au modèle</strong> — réglé en recette le 2026-09-20, et c'est un
+     * défaut qui n'était visible que là.
+     *
+     * <p>La première version envoyait le plan entier, plafonné à 120 lignes. Sur un plan réel de 130
+     * lignes, l'inventaire faisait <strong>37 000 caractères</strong> — environ 10 000 jetons, très
+     * au-delà de la fenêtre de contexte d'un modèle local (4 096 par défaut sous Ollama). Le modèle
+     * recevait un prompt tronqué et rendait une réponse illisible : les trois passes étaient
+     * <strong>ignorées en silence</strong>, et l'analyse annonçait « rien à signaler » sur un plan qu'elle
+     * n'avait pas lu. C'est le pire des défauts possibles pour cette fonctionnalité, et aucun test contre
+     * un faux serveur ne pouvait le voir.</p>
+     *
+     * <p>D'où le découpage : des lots d'une trentaine de lignes (~7 000 caractères), et
+     * {@link #LOTS_MAX} lots au plus par question — soit six appels pour les trois recherches. Au-delà, un
+     * geste explicite se transformerait en attente de plusieurs minutes.</p>
      */
-    public static final int LIGNES_MAX = 120;
+    public static final int LIGNES_PAR_LOT = 30;
 
-    /** Longueur maximale d'un objet transmis : au-delà, la phrase est tronquée, pas la liste. */
-    private static final int OBJET_MAX = 220;
+    /**
+     * Nombre de lots examinés par recherche. Borne le temps d'une analyse (six appels au modèle) — et
+     * <strong>ce qu'elle a vu se dit à l'écran</strong> : « l'assistant a examiné les 60 premières lignes
+     * sur 130 ». Une couverture partielle annoncée vaut mieux qu'une couverture totale supposée.
+     */
+    public static final int LOTS_MAX = 2;
+
+    /** Nombre maximal de lignes qu'une analyse examine, toutes passes confondues. */
+    public static final int LIGNES_MAX = LIGNES_PAR_LOT * LOTS_MAX;
+
+    /**
+     * Longueur maximale d'un objet transmis. Ramenée de 220 à 160 caractères en recette : la partie
+     * distinctive d'un objet est à son début (« Acquisition de matériels informatiques… »), la fin porte
+     * les mentions de lot et d'exercice, que le modèle n'a pas à lire — et chaque caractère compte dans la
+     * fenêtre de contexte.
+     */
+    private static final int OBJET_MAX = 160;
 
     /** Longueur maximale d'un texte rendu par le modèle (constat ou suggestion). */
     private static final int TEXTE_MAX = 900;
@@ -81,16 +108,33 @@ public class DialogueAnalyseIa {
             d'offres.
             """;
 
+    /**
+     * ⚠️ Le format, et le <strong>plafond de trois pistes par réponse</strong> — réglé en recette le
+     * 2026-09-20. Le modèle répondait juste, mais long : plus de 3 000 caractères de constats et de
+     * suggestions, que le serveur d'inférence coupait à son budget de sortie. Un JSON tronqué est un JSON
+     * illisible, et l'analyse concluait « rien à signaler ». Demander peu, et court, est la première des
+     * deux parades ; la seconde est de savoir <strong>récupérer</strong> une réponse coupée
+     * ({@link #json}).
+     */
     private static final String FORMAT = """
 
             Réponds UNIQUEMENT par cet objet JSON, sans texte autour :
-            {"pistes":[{"lignes":[1,2],"constat":"une ou deux phrases","suggestion":"Au lieu de : ...\\nLire : ..."}]}
+            {"pistes":[{"lignes":[1,2],"constat":"une phrase","suggestion":"Au lieu de : ...\\nLire : ..."}]}
+            Au plus TROIS pistes, les plus nettes. Un constat d'UNE phrase, une suggestion d'une ligne : une \
+            réponse trop longue est coupée et perdue.
             S'il n'y a rien à signaler, réponds exactement {"pistes":[]} — c'est une réponse normale et \
             fréquente. Ne cherche pas à trouver quelque chose pour avoir trouvé quelque chose.
             N'utilise que des numéros de ligne présents dans la liste. Écris en français, vouvoie, et \
             emploie « il semble » ou « à vérifier » : ce sont des pistes, pas des constats. Ne donne aucun \
             avis sur le dossier — cette décision appartient à la Commission.
             """;
+
+    /**
+     * Budget de sortie d'une passe, en jetons. Large au regard de trois pistes courtes — le défaut trouvé
+     * en recette venait de l'inverse : le budget d'une réponse de chat (900) coupait un JSON de trois
+     * pistes en plein milieu.
+     */
+    public static final int JETONS_PAR_PASSE = 1500;
 
     private final ObjectMapper mapper;
 
@@ -150,9 +194,23 @@ public class DialogueAnalyseIa {
         } + FORMAT;
     }
 
-    /** Les lignes soumises au modèle : celles du plan, plafonnées. */
+    /** Les lignes soumises au modèle, toutes passes confondues : celles du plan, plafonnées. */
     public List<Marche> lignesAnalysees(ContextePreControle contexte) {
         return contexte.lignes().stream().limit(LIGNES_MAX).toList();
+    }
+
+    /**
+     * Les <strong>lots</strong> de lignes, un par question posée au modèle. Voir {@link #LIGNES_PAR_LOT} :
+     * un plan entier ne tient pas dans la fenêtre de contexte d'un modèle local, et le lui envoyer quand
+     * même produit une réponse illisible — donc une analyse qui dit « rien à signaler » sans avoir lu.
+     */
+    public List<List<Marche>> lots(ContextePreControle contexte) {
+        List<Marche> lignes = lignesAnalysees(contexte);
+        List<List<Marche>> lots = new ArrayList<>();
+        for (int debut = 0; debut < lignes.size(); debut += LIGNES_PAR_LOT) {
+            lots.add(lignes.subList(debut, Math.min(debut + LIGNES_PAR_LOT, lignes.size())));
+        }
+        return lots;
     }
 
     /**
@@ -196,8 +254,13 @@ public class DialogueAnalyseIa {
             List<Marche> lignes, Set<String> dejaVues) {
         JsonNode racine = json(reponse);
         if (racine == null) {
-            log.warn("[PRE-CONTROLE IA] réponse illisible du modèle ({}) sur le PPM {} : passe ignorée.",
-                    type.name(), contexte.ppm().getIdPpm());
+            // ⚠️ L'extrait est dans le journal, et il y reste : sans lui, une réponse illisible est
+            // indiagnosticable — on ne sait pas si le modèle a refusé, divagué, ou été coupé. C'est ce qui
+            // a coûté le plus de temps à la recette du 2026-09-20.
+            log.warn("[PRE-CONTROLE IA] réponse illisible du modèle ({}) sur le PPM {} : passe ignorée. "
+                    + "Réponse reçue ({} caractères) : {}",
+                    type.name(), contexte.ppm().getIdPpm(), reponse == null ? 0 : reponse.length(),
+                    extrait(reponse));
             return new Lecture(List.of());
         }
         Map<Integer, Marche> parNumero = lignes.stream()
@@ -312,6 +375,15 @@ public class DialogueAnalyseIa {
         return communs == null || communs.isEmpty();
     }
 
+    /** Début d'une réponse, sur une seule ligne, pour le journal technique. */
+    private static String extrait(String reponse) {
+        if (reponse == null || reponse.isBlank()) {
+            return "(vide)";
+        }
+        String propre = reponse.strip().replaceAll("\\s+", " ");
+        return propre.length() <= 300 ? propre : propre.substring(0, 300) + "…";
+    }
+
     private static String texteBorne(String texte, int max) {
         if (texte == null || texte.isBlank()) {
             return null;
@@ -323,18 +395,75 @@ public class DialogueAnalyseIa {
     /**
      * Extrait l'objet JSON de la réponse, même si le modèle l'a entouré de texte ou d'une clôture de bloc
      * Markdown — ce qu'un modèle local fait régulièrement malgré la consigne.
+     *
+     * <p>⚠️ <strong>Et même s'il a été coupé en plein milieu</strong> (recette du 2026-09-20) : quand la
+     * réponse dépasse le budget de sortie, le serveur d'inférence la tronque, et tout est perdu pour un
+     * point-virgule manquant. {@link #reparer} récupère alors les pistes <strong>complètes</strong> qui
+     * précèdent la coupure. Jeter trois bonnes pistes parce que la quatrième est incomplète serait
+     * absurde.</p>
      */
     private JsonNode json(String reponse) {
         if (reponse == null || reponse.isBlank()) {
             return null;
         }
         int debut = reponse.indexOf('{');
+        if (debut < 0) {
+            return null;
+        }
         int fin = reponse.lastIndexOf('}');
-        if (debut < 0 || fin <= debut) {
+        if (fin > debut) {
+            try {
+                return mapper.readTree(reponse.substring(debut, fin + 1));
+            } catch (RuntimeException e) {
+                // La réponse est probablement tronquée : on tente de sauver ce qui est complet.
+                log.info("[PRE-CONTROLE IA] réponse mal formée, tentative de récupération des pistes "
+                        + "complètes ({} caractères).", reponse.length());
+            }
+        }
+        return reparer(reponse.substring(debut));
+    }
+
+    /**
+     * Reconstruit un JSON exploitable à partir d'une réponse <strong>coupée</strong> : on garde les
+     * éléments complets de {@code "pistes"} et on referme le tableau.
+     *
+     * <p>La profondeur d'accolades suffit à repérer la fin de chaque piste : à chaque retour au niveau du
+     * tableau, l'élément qui précède est complet. On coupe après le dernier, et on ajoute {@code ]}}.
+     * {@code null} si aucune piste complète n'a été reçue.</p>
+     */
+    private JsonNode reparer(String brut) {
+        int crochet = brut.indexOf('[');
+        if (crochet < 0) {
+            return null;
+        }
+        int profondeur = 0;
+        int finDernierElement = -1;
+        boolean dansChaine = false;
+        boolean echappe = false;
+        for (int i = crochet + 1; i < brut.length(); i++) {
+            char c = brut.charAt(i);
+            if (echappe) {
+                echappe = false;
+                continue;
+            }
+            if (c == '\\') {
+                echappe = true;
+            } else if (c == '"') {
+                dansChaine = !dansChaine;
+            } else if (!dansChaine && c == '{') {
+                profondeur++;
+            } else if (!dansChaine && c == '}') {
+                profondeur--;
+                if (profondeur == 0) {
+                    finDernierElement = i;
+                }
+            }
+        }
+        if (finDernierElement < 0) {
             return null;
         }
         try {
-            return mapper.readTree(reponse.substring(debut, fin + 1));
+            return mapper.readTree(brut.substring(0, finDernierElement + 1) + "]}");
         } catch (RuntimeException e) {
             return null;
         }

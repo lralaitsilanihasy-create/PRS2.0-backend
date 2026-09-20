@@ -127,7 +127,8 @@ public class SignalementPreControleService {
         Ppm ppm = exigerAccesAuPlan(idPpm);
         AnalysePreControleIaService.Analyse analyse = analyseIa.analyser(
                 preControle.chargerContexte(idPpm), CurrentUser.ref().orElse(null));
-        return new AnalyseIaDto(analyse.synthese(), resume(ppm));
+        return new AnalyseIaDto(analyse.synthese(), analyse.lignesAnalysees(), analyse.lignesDuPlan(),
+                resume(ppm));
     }
 
     // ------------------------------------------------------------------ écartement

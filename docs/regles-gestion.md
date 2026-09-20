@@ -918,6 +918,20 @@ marchés publics qu'il cite. Chacune s'éteint depuis l'administration, sans red
 | `MENTION_DELAI_REDUIT` | délai aménagé justifié, mention « délai réduit » absente de l'objet | manuel p. 14 et p. 16 |
 | `DATES_PREVISION_INCOHERENTES` | une date de fin avant son début, ou une date antérieure à l'exercice du plan | manuel p. 15 |
 
+
+**Le taux d'écartement, et ce qu'on en fait** ⚠️ **(2026-09-20, lot 3, étape 7)** — c'est la mesure qui dit
+si l'outil reste utile. **Une règle écartée dans 80 % des cas est une mauvaise règle** : elle fatigue la
+PRMP et le contrôleur, qui finissent par tout écarter sans lire. Elle s'éteint depuis l'écran des règles
+d'anomalie, **sans redéploiement**, et sans rien perdre — les signalements déjà écartés gardent leur motif.
+
+- Le tableau de bord vit dans l'espace **Administrateur** (`/admin/pre-controle-regles`), et l'accueil
+  l'annonce dans « À surveiller » dès qu'une règle dépasse le seuil.
+- Il ne porte **que des compteurs** : aucun plan, aucun marché, aucun acteur.
+- ⚠️ **Un signalement levé n'est pas un écartement.** « Levé » veut dire que la PRMP a corrigé son plan :
+  c'est la réussite de la règle, et cela ne compte pas dans son taux. Les confondre ferait éteindre les
+  règles qui marchent le mieux.
+- Le seuil ne s'applique qu'à partir de **5 signalements** : trois signalements dont deux écartés ne disent
+  rien.
 - **Un mode dérogatoire n'est jamais signalé par la règle des seuils** : sa justification est un point de
   la fiche de présentation, que le contrôleur examine à part. Le signaler deux fois n'apprendrait rien et
   noierait l'écran de la PRMP.

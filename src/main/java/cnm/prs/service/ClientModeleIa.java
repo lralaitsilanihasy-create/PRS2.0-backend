@@ -98,11 +98,27 @@ public class ClientModeleIa {
      * @throws ModeleIndisponibleException service injoignable, réponse en erreur, ou délai dépassé
      */
     public String generer(List<Message> messages, Consumer<String> surFragment, BooleanSupplier annule) {
+        return generer(messages, surFragment, annule, props.longueurMaxReponse());
+    }
+
+    /**
+     * ⚠️ Même génération, avec un <strong>budget de sortie explicite</strong> (2026-09-20, pré-contrôle du
+     * PPM, étape 6).
+     *
+     * <p>Pourquoi cette surcharge : {@code app.ia.longueur-max-reponse} (900) est calibré sur une
+     * <strong>réponse de chat</strong>, lue par un humain. Une réponse <strong>structurée</strong> — un JSON
+     * listant des pistes avec leurs constats — dépasse facilement ce budget, et le serveur d'inférence la
+     * coupe alors <strong>au milieu</strong> : le JSON devient illisible, et l'analyse conclut « rien à
+     * signaler » sur un plan qu'elle avait pourtant lu. Défaut trouvé en recette, invisible en test contre
+     * un faux serveur, et qui n'apparaissait dans aucun journal avant qu'on y écrive l'extrait reçu.</p>
+     */
+    public String generer(List<Message> messages, Consumer<String> surFragment, BooleanSupplier annule,
+            int maxJetons) {
         Map<String, Object> corps = new LinkedHashMap<>();
         corps.put("model", props.modele());
         corps.put("stream", true);
         corps.put("temperature", TEMPERATURE);
-        corps.put("max_tokens", props.longueurMaxReponse());
+        corps.put("max_tokens", maxJetons > 0 ? maxJetons : props.longueurMaxReponse());
         corps.put("reasoning_effort", "none");
         corps.put("chat_template_kwargs", Map.of("enable_thinking", false));
         corps.put("messages", messages);

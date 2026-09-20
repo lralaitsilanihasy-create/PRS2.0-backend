@@ -47,6 +47,13 @@ public final class ReglesPreControle {
 
     private static final DateTimeFormatter JOUR = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
+    /**
+     * Nombre de lignes citées dans le texte d'un constat inter-lignes. Au-delà, on compte : un groupe de
+     * sept lignes aux libellés voisins produisait un paragraphe illisible, alors que les lignes sont
+     * listées juste en dessous, avec leur montant (recette du 2026-09-20).
+     */
+    private static final int LIGNES_CITEES = 3;
+
     private ReglesPreControle() {
     }
 
@@ -141,10 +148,18 @@ public final class ReglesPreControle {
             texte.append(", même forme de marché (").append(libelleForme(groupe.forme()))
                     .append("), totalisent ").append(ContextePreControle.formaterMontant(cumul))
                     .append(" Ar HT : ");
-            texte.append(lignes.stream()
+            // ⚠️ Trois lignes citées au plus, et le reste compté (recette du 2026-09-20). Sur un groupe de
+            // sept lignes aux libellés voisins, la phrase devenait un mur illisible — et les lignes sont
+            // de toute façon listées juste en dessous, avec leur montant.
+            texte.append(lignes.stream().limit(LIGNES_CITEES)
                     .map(l -> "« " + ctx.designation(l) + " » ("
                             + ContextePreControle.formaterMontant(ctx.montant(l)) + " Ar HT)")
                     .collect(Collectors.joining(", ")));
+            if (lignes.size() > LIGNES_CITEES) {
+                texte.append(", et ").append(lignes.size() - LIGNES_CITEES)
+                        .append(lignes.size() - LIGNES_CITEES == 1 ? " autre ligne" : " autres lignes")
+                        .append(" (voir le détail ci-dessous)");
+            }
             texte.append(". Le manuel de contrôle a priori (p. 15) demande, pour plusieurs prestations "
                     + "identiques d'un même compte, d'exiger de les fusionner et éventuellement de les "
                     + "allotir (articles 27 et 28 du code des marchés publics).");
