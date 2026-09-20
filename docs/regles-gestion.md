@@ -904,6 +904,34 @@ posées dès maintenant.
 - **Le fractionnement vise plusieurs lignes**, jamais une seule : les lignes visées sont listées
   (`t_anomalie_ligne`) avec leur montant du moment.
 
+**Les six règles livrées** ⚠️ **(2026-09-20, lot 3, étape 2)** — ce ne sont pas des règles inventées : ce
+sont les points de vérification du manuel de contrôle a priori (p. 12-17) et les articles du code des
+marchés publics qu'il cite. Chacune s'éteint depuis l'administration, sans redéploiement
+(`t_regle_anomalie.ACTIF`).
+
+| Code | Ce qu'elle établit | Texte |
+|---|---|---|
+| `FRACTIONNEMENT_COMPTE` | plusieurs lignes d'un **même compte**, même source de financement, même forme de marché : à fusionner, éventuellement à allotir. **Prioritaire** si le cumul change la procédure ou franchit le seuil de contrôle a priori | manuel p. 15 ; art. 27 et 28 CMP |
+| `MODE_SOUS_LE_SEUIL` | le mode saisi est **moins ouvert à la concurrence** que le montant ne l'exige | manuel p. 14 ; arrêté art. 2, 2° |
+| `CATEGORIE_SEUIL_A_PRECISER` | la catégorie de seuil manque **et** les catégories plausibles de la nature donnent des réponses différentes | arrêté art. 2 |
+| `LOTS_SOMME_DIVERGENTE` | la somme des lots diffère du montant de la ligne | art. 6 CMP |
+| `MENTION_DELAI_REDUIT` | délai aménagé justifié, mention « délai réduit » absente de l'objet | manuel p. 14 et p. 16 |
+| `DATES_PREVISION_INCOHERENTES` | une date de fin avant son début, ou une date antérieure à l'exercice du plan | manuel p. 15 |
+
+- **Un mode dérogatoire n'est jamais signalé par la règle des seuils** : sa justification est un point de
+  la fiche de présentation, que le contrôleur examine à part. Le signaler deux fois n'apprendrait rien et
+  noierait l'écran de la PRMP.
+- **La règle ne joue que dans un sens** : un appel d'offres ouvert là où une consultation suffirait
+  n'enfreint rien, et ne se signale pas.
+- **Le mode de passation reste purement saisi** : aucune de ces règles ne le détermine, ne le corrige ni
+  ne le refuse.
+- **Le pré-contrôle est idempotent** : deux exécutions de suite sur un plan inchangé ne créent aucun
+  signalement de plus. Il peut donc être lancé sur un bouton et à la soumission, autant de fois que la
+  PRMP le veut.
+- **Le palier de chaque mode** (`tr_mode_passation.PROCEDURE_SEUIL`) est une donnée administrable, posée
+  au démarrage d'après le libellé du mode et corrigeable par l'Administrateur. Un mode non classé rend la
+  règle des seuils **muette** pour lui : on ne devine pas.
+
 ---
 
 ## 3. Fonctionnalités et règles par profil

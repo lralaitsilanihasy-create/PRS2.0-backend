@@ -420,7 +420,7 @@ Le lot est le plus lourd des cinq : il se livre par étapes, chacune vérifiée,
 | Étape | Contenu | État |
 |---|---|---|
 | **1. Socle de données** | référentiel de seuils daté et administrable, catégorie de seuil sur la ligne, signalement écartable par une PRMP, signalements inter-lignes | **livrée** (ci-dessous) |
-| **2. Moteur de règles** | les points de vérification du manuel (3.g) en règles, `t_regle_anomalie` semée, réconciliation d'une exécution à l'autre | à faire |
+| **2. Moteur de règles** | les points de vérification du manuel (3.g) en règles, `t_regle_anomalie` semée, réconciliation d'une exécution à l'autre | **livrée** (ci-dessous) |
 | **3. API scopée et écartement motivé** | la PRMP ne voit que ses PPM, le contrôleur que sa localité ; écartement avec motif obligatoire ; visibilité croisée et symétrie hiérarchique (3.f) | à faire |
 | **4. Écran de la PRMP** | « Vérifier mon PPM », liste des signalements, fenêtre d'écartement portant l'avertissement de visibilité | à faire |
 | **5. Écran du contrôleur** | signalements rattachés aux points de la grille, écartés visibles avec leur motif, fait et piste distingués | à faire |
@@ -476,6 +476,70 @@ verdict sur le même montant, datation, silence sur une case absente) et 9 d'int
 (`PreControleSocleIntegrationTest` — les 30 valeurs semées et leurs montants, l'écartement par une PRMP
 de 10 caractères, l'unicité de la clé, le vocabulaire fermé, les lignes d'un signalement inter-lignes,
 le bornage d'une valeur remplacée).
+
+
+#### Livraison de l'étape 2 — le moteur de règles (2026-09-20, branche `chantier/assistant-ia-lot3`)
+
+**Six règles, qui sont six points du manuel.** Elles vivent dans un seul fichier, `ReglesPreControle`,
+parce qu'elles forment une grille : les lire à la suite, c'est lire ce que le contrôleur vérifie. Chacune
+est une classe imbriquée sans état, porte en tête le texte dont elle découle, et rend des constats — elle
+n'écrit rien.
+
+| Règle | Ce qu'elle établit | Source |
+|---|---|---|
+| `FRACTIONNEMENT_COMPTE` | plusieurs lignes d'un **même compte**, même financement, même forme de marché : à fusionner, éventuellement à allotir. **Prioritaire** si le cumul change la procédure ou franchit le seuil de contrôle a priori | manuel p. 15, art. 27-28 CMP |
+| `MODE_SOUS_LE_SEUIL` | le mode saisi est **moins ouvert** que le montant ne l'exige | manuel p. 14, arrêté art. 2, 2° |
+| `CATEGORIE_SEUIL_A_PRECISER` | la catégorie manque **et** les catégories plausibles de la nature donnent des réponses **différentes** | conséquence de l'arrêté |
+| `LOTS_SOMME_DIVERGENTE` | la somme des lots ≠ le montant de la ligne, alors que la procédure se détermine sur la totalité des lots | art. 6 CMP |
+| `MENTION_DELAI_REDUIT` | délai aménagé justifié, mention « délai réduit » absente de l'objet | manuel p. 14 et p. 16 |
+| `DATES_PREVISION_INCOHERENTES` | une fin avant son début, ou une date **antérieure** à l'exercice | manuel p. 15 |
+
+**Trois abstentions délibérées**, qui valent autant que les règles elles-mêmes :
+
+1. **Les modes dérogatoires ne sont pas signalés**, même très au-dessus du seuil. Une entente directe à
+   900 millions est exactement ce que les articles 38 et 39 autorisent sous condition, et sa justification
+   est déjà un point de la fiche de présentation que le contrôleur examine. Le signaler ici ne dirait rien
+   de neuf et remplirait l'écran de la PRMP de constats qu'elle a déjà justifiés.
+2. **La catégorie de seuil n'est demandée que si elle change la réponse.** Sur la grande majorité des
+   lignes, les trois lectures d'un marché de travaux concordent et la PRMP n'a rien à faire ; elle n'est
+   sollicitée qu'aux montants où la réponse en dépend vraiment. Tant que la catégorie reste incertaine, la
+   règle du mode **se tait** au lieu de deviner.
+3. **Les dates ne sont pas comparées aux délais minimaux des modes.** Cela demanderait de savoir lequel des
+   processus CAPM porte la publicité, ce que le référentiel ne dit pas. Une règle qui se tromperait là
+   apprendrait à la PRMP à écarter sans lire.
+
+**Le rapprochement, cœur du lot.** `PreControlePpmService` charge le plan une fois
+(`ContextePreControle` : lignes vivantes, bénéficiaires et leurs comptes, lots, prévisions, natures, modes,
+barème), exécute les règles **actives**, puis rapproche les constats de ce qui est en base par la
+`CLE_SIGNALEMENT` :
+
+- un signalement **déjà écarté** qui ressort **retrouve sa ligne**, avec le motif de la PRMP : son constat
+  est réécrit (les montants ont pu changer), son statut et son motif ne sont **jamais** touchés ;
+- un signalement qui ne ressort plus est **levé**, jamais supprimé, avec sa date ; s'il ressort plus tard,
+  il redevient ouvert et la trace de levée disparaît, puisqu'elle n'est plus vraie ;
+- une règle **éteinte** ne lève pas ses anciens signalements : leur silence ne prouverait pas que le plan
+  a changé. Seule une règle qui a bel et bien tourné peut lever les siens ;
+- les signalements de source **IA** ne sont jamais touchés par une exécution des règles ;
+- deux exécutions de suite sur un plan inchangé ne créent **aucun doublon** — le service est idempotent,
+  donc appelable sur un bouton et à la soumission, autant de fois que la PRMP le veut.
+
+⚠️ **Limite assumée** : le `DETAIL_LEVEE` dit aujourd'hui que le constat ne ressort plus, pas **quelle**
+ligne a été réécrite. Le rapprochement fin avec le journal des changements de lignes
+(`t_changement_ligne`, qui existe déjà) est prévu à l'étape 3, où l'écran du contrôleur en a l'usage.
+
+**Deux données de référentiel, semées au démarrage** (`ReglesPreControleSeeder`, idempotent et non
+intrusif, sur le patron de `PointsCtrlFicheAgpmSeeder`) : une ligne de `t_regle_anomalie` par règle — c'est
+elle qui porte l'`ACTIF`, donc l'extinction sans redéploiement —, et le point de grille
+**« Fractionnement illicite »**, de portée `DOSSIER`, que la grille du PPM n'avait pas alors que le manuel
+en fait un point de vérification. Il classe aussi les modes de passation au barème de l'arrêté
+(`tr_mode_passation.PROCEDURE_SEUIL`, migration **V33**) d'après leur libellé, comme `DECLENCHE_AGPM` est
+posé sur un mode créé par un import : la colonne reste la source de vérité, administrable, et un mode non
+classé rend la règle des seuils muette pour lui.
+
+**Tests** : 20 d'intégration (`PreControleReglesIntegrationTest`) — chaque règle sur un cas qui la
+déclenche et un cas qui doit la laisser muette, les deux paliers de gravité du fractionnement, le silence
+sur un mode dérogatoire et sur un mode plus ouvert que nécessaire, l'écartement motivé qui survit, la
+levée et la réouverture, la règle éteinte qui ne lève rien, l'absence de doublon, et le semis idempotent.
 
 ### Lot 4 — Chatbot transverse
 

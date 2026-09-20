@@ -1,6 +1,7 @@
 package cnm.prs.entity;
 
 import cnm.prs.enums.CategorieModePassation;
+import cnm.prs.enums.ProcedureAttendue;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -104,6 +105,59 @@ public class ModePassation {
 
     @Column(name = "DECLENCHE_AGPM")
     private Boolean declencheAgpm;
+
+    /**
+     * ⚠️ Pré-contrôle du PPM (2026-09-20, assistant IA lot 3, étape 2, migration V33) — <strong>palier de
+     * l'arrêté n° 13 156/2019-MEF</strong> auquel ce mode appartient (art. 2, 2°). C'est le terme qui
+     * manquait pour comparer le mode <strong>saisi</strong> à ce que le montant <strong>appelle</strong>.
+     *
+     * <p><strong>Administrable</strong>, comme {@link #declencheAgpm} : la valeur initiale est posée au
+     * démarrage d'après le libellé ({@link #procedureSeuilDepuisLibelle}), mais c'est la colonne qui fait
+     * foi. {@code null} = mode non classé : la règle reste <strong>muette</strong> pour lui, elle ne
+     * devine pas.</p>
+     *
+     * <p>Ne détermine rien : le mode reste purement saisi, et l'écart se signale, il ne se refuse pas.</p>
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "PROCEDURE_SEUIL", length = 30)
+    private ProcedureAttendue procedureSeuil;
+
+    /**
+     * ⚠️ Étape 2 — palier <strong>déduit du libellé</strong>, pour poser la valeur initiale de
+     * {@link #procedureSeuil} sur les modes qui n'en portent pas encore (dont ceux créés à la volée par un
+     * import PDF, qui n'apporte qu'un libellé). Rend {@code null} sur un libellé non reconnu : mieux vaut
+     * un mode non classé, donc muet, qu'un mode mal classé, qui produirait un signalement injuste.
+     *
+     * <ul>
+     *   <li><strong>Appel d'offres</strong>, toutes variantes (ouvert, restreint, avec préqualification,
+     *       en deux étapes) → {@code APPEL_OFFRES_OUVERT} : ce sont les procédures du palier haut. Les
+     *       variantes restreintes relèvent des exceptions des articles 38 et 39 du code des marchés
+     *       publics, dont la justification est un point de la fiche de présentation — ce n'est pas à la
+     *       règle des seuils de les relever ;</li>
+     *   <li><strong>consultation</strong> (de prix, d'entrepreneurs, de fournisseurs, ouverte ou
+     *       restreinte) → {@code CONSULTATION} ; l'<strong>appel à manifestation d'intérêt</strong>, qui
+     *       n'est pas un appel d'offres, y est rangé aussi : c'est la procédure des prestations
+     *       intellectuelles, pour lesquelles l'arrêté ne fixe pas de seuil de procédure ;</li>
+     *   <li><strong>achat direct</strong>, bon de commande, gré à gré, entente directe → {@code ACHAT_DIRECT}.</li>
+     * </ul>
+     */
+    public static ProcedureAttendue procedureSeuilDepuisLibelle(String libelle) {
+        String n = normaliserLibelle(libelle);
+        if (n.isBlank()) {
+            return null;
+        }
+        if (libelleDeclencheAgpm(libelle)) {
+            return ProcedureAttendue.APPEL_OFFRES_OUVERT;
+        }
+        if (n.contains("consultation") || libelleAgpmSiSeuil(libelle)) {
+            return ProcedureAttendue.CONSULTATION;
+        }
+        if (n.contains("achat direct") || n.contains("bon de commande") || n.contains("gre a gre")
+                || n.contains("entente directe")) {
+            return ProcedureAttendue.ACHAT_DIRECT;
+        }
+        return null;
+    }
 
     /**
      * ⚠️ Règle ajoutée (2026-08-13) — <strong>catégorie</strong> du mode : {@code NORMAL} (droit commun)

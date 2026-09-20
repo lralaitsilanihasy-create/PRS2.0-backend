@@ -24,5 +24,25 @@ public enum ProcedureAttendue {
     CONSULTATION,
 
     /** En dessous du seuil de consultation : exécution directe par bon de commande réglementaire. */
-    ACHAT_DIRECT
+    ACHAT_DIRECT;
+
+    /**
+     * ⚠️ Étape 2 — <strong>degré d'ouverture à la concurrence</strong> : 2 pour l'appel d'offres ouvert,
+     * 1 pour la consultation, 0 pour l'achat direct.
+     *
+     * <p>Sert à comparer <strong>ce que le montant appelle</strong> à <strong>ce que la PRMP a
+     * saisi</strong> : un mode de niveau inférieur à celui qu'appelle le montant se signale (la
+     * concurrence est moins ouverte que le texte ne le demande) ; un mode de niveau supérieur ne se
+     * signale pas — passer un appel d'offres ouvert là où une consultation suffirait n'enfreint rien.</p>
+     *
+     * <p>Le degré est écrit ici, et non déduit de l'ordre de déclaration : un ajout de valeur dans
+     * l'énumération ne doit pas changer silencieusement un verdict.</p>
+     */
+    public int niveau() {
+        return switch (this) {
+            case APPEL_OFFRES_OUVERT -> 2;
+            case CONSULTATION -> 1;
+            case ACHAT_DIRECT -> 0;
+        };
+    }
 }
