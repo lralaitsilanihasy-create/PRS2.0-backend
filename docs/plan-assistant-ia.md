@@ -905,8 +905,73 @@ sans refaire l'analyse par le modèle : `capturer-brouillon.mjs` (le chemin d'en
 
 ### Lot 4 — Chatbot transverse
 
-Élargissement de la liste blanche (KPI, indicateurs, annuaire, PPM, marchés) et conversation
-multi-tours. À n'ouvrir qu'une fois le lot 2 vérifié profil par profil.
+Le panneau du lot 1 cesse de ne répondre que sur les **documents** : il répond aussi sur **les données
+que l'utilisateur a déjà le droit de voir**, et il garde le fil de la conversation. ⚠️ *Le plan le
+conditionnait à la vérification du lot 2 profil par profil ; ouvert sur décision du pilote le
+2026-09-20, cette vérification restant à faire.*
+
+#### 4.a. Le problème que ce lot pose, et qu'aucun lot précédent ne posait
+
+Au lot 2, **le modèle ne choisissait rien** : l'identifiant venait de l'URL. Ici, la question est libre
+(« qu'est-ce que j'ai à faire ? », « où en est le 00002/PPM/CNM/2026 ? »), donc **quelque chose** doit
+décider quelle lecture faire. Trois façons, et le choix n'est pas neutre :
+
+| | Qui décide | Ce qu'on y gagne | Ce qu'on y risque |
+|---|---|---|---|
+| Appel d'outils libre | le modèle, avec des paramètres libres | souple | un modèle de 9 milliards de paramètres choisit mal, et toute donnée lue devient une surface d'injection |
+| Aiguillage déterministe seul | des mots-clés | sûr, testable | rigide : « où en est mon dossier » et « mon dossier avance ? » demandent deux règles |
+| **Aiguillage fermé** *(retenu)* | le modèle, mais **seulement pour nommer une intention d'une liste close** | la souplesse de la langue | borné : une intention inconnue retombe sur la réponse documentaire |
+
+> **Le modèle nomme une intention, il n'ouvre pas une porte.** Sa réponse est validée contre une
+> énumération : tout ce qui n'y est pas devient `REGLE` — la réponse documentaire du lot 1, celle qui ne
+> lit aucune donnée.
+
+Et **ce qui peut être décidé sans lui ne lui est pas demandé** : une question qui contient une référence
+de dossier (`00002/PPM/CNM/2026`) part directement sur le dossier, sans passe de classification.
+
+#### 4.b. La règle des paramètres — la vraie garantie
+
+Un paramètre extrait d'une question libre (un terme de recherche, un nom) **ne peut qu'élargir à
+l'intérieur de ce que l'utilisateur voit déjà** : `DossierController.rechercher` filtre sur le périmètre
+de l'appelant, `AnnuaireController` est réservé à l'Administrateur. Autrement dit, le pire qu'une
+injection obtienne est **une liste que l'utilisateur pouvait déjà afficher d'un clic**.
+
+C'est la généralisation de la doctrine du lot 2 : on n'interdit pas au modèle de proposer, on s'arrange
+pour que **rien de ce qu'il propose ne franchisse une frontière**. Aucun paramètre ne désigne jamais un
+profil, une localité, une PRMP ou un identifiant d'acteur.
+
+#### 4.c. Les lectures ouvertes au chatbot
+
+| Intention | Lecture (toutes déjà gardées) | Qui l'obtient |
+|---|---|---|
+| `MES_TACHES` | `DossierController.aFaire` | 8 profils ; Administrateur et Chargé de publication : 403 |
+| `MES_CHIFFRES` | `KpiController.badges` | tous — la réponse ne porte **que** les compteurs du rôle appelant |
+| `TABLEAU_DE_BORD` | `KpiController.tableauBord` | Président, Administrateur, Chef de commission |
+| `TROUVER_DOSSIER` | `DossierController.rechercher` | tous, filtré sur le périmètre |
+| `ETAT_DOSSIER` | la lecture factuelle du **lot 2** (`OutilsDossierIa`) | selon le dossier |
+| `ANNUAIRE` | `AnnuaireController.rechercher` | Administrateur seul |
+| `REGLE` | le corpus documentaire du **lot 1** | tous — c'est le repli |
+
+#### 4.d. La conversation multi-tours, et pourquoi elle est bornée
+
+Le serveur reste **sans mémoire** : c'est l'écran qui renvoie les derniers tours, et le serveur les
+borne (trois tours, textes coupés). Deux raisons de ne pas garder l'historique côté serveur : il
+faudrait le rattacher à une session — donc stocker des questions qui peuvent contenir des données
+sensibles — et un historique long ne tient pas dans la fenêtre d'un modèle local.
+
+⚠️ **L'historique est une donnée, jamais une consigne** : il traverse le même désamorçage que les textes
+de dossiers (lot 2), et la consigne le dit au modèle.
+
+#### 4.e. Découpage du lot 4
+
+| # | Étape | État |
+|---|---|---|
+| 1 | L'aiguillage fermé : énumération des intentions, pré-routage déterministe, classification bornée | à faire |
+| 2 | Les lectures transverses et leurs tests de sécurité par profil | à faire |
+| 3 | La réponse composée (faits + extraits documentaires), et la batterie de qualité | à faire |
+| 4 | La conversation multi-tours, bornée et désamorcée | à faire |
+| 5 | L'écran : le panneau du lot 1 qui montre ce qu'il a lu | à faire |
+| 6 | Recette sur l'application réelle, captures légendées | à faire |
 
 ### Lot 5 — Brouillons rédactionnels *(optionnel)*
 
