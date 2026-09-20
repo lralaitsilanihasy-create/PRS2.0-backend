@@ -99,6 +99,23 @@ public class OutilsDossierIa {
             Map.entry("RETIRE", "retiré"),
             Map.entry("REMPLACE", "remplacé par une version postérieure"));
 
+    /**
+     * Libellés des étapes du circuit — miroir de {@code ETAPE_CIRCUIT_LABELS} du frontend
+     * ({@code models/circuit.model.ts}). Sans eux, le matériau porterait {@code TRANSMISSION_SIGMP} là
+     * où la consigne interdit au modèle tout vocabulaire technique : on ne peut pas lui reprocher de
+     * recopier ce qu'on lui donne.
+     */
+    private static final Map<String, String> ETAPES = Map.of(
+            "RECEPTION", "Réception et enregistrement",
+            "DISPATCH", "Dispatch",
+            "EXAMEN", "Examen",
+            "VISA", "Visa",
+            "COSIGNATURE", "Co-signature",
+            "VERIFICATION", "Vérification",
+            "TRANSMISSION_SIGMP", "Transmission à SIGMP",
+            "ARCHIVAGE", "Archivage",
+            "RECTIFICATION_PRMP", "Rectification par la PRMP");
+
     /** Une section du dossier factuel : un titre, et des lignes déjà rédigées en français. */
     public record Section(String titre, List<String> lignes) {
     }
@@ -208,7 +225,7 @@ public class OutilsDossierIa {
         lignes.add("Référence : " + valeur(d.getRefeDossier()));
         lignes.add("Statut : " + STATUTS.getOrDefault(d.getStatut(), valeur(d.getStatut())));
         if (d.getEtapeCourante() != null) {
-            lignes.add("Étape en cours : " + d.getEtapeCourante());
+            lignes.add("Étape en cours : " + etape(d.getEtapeCourante()));
         }
         if (Boolean.TRUE.equals(d.getAttentePrmp())) {
             lignes.add("Le dossier est en attente d'une action de la PRMP : le compteur de la CNM ne court pas.");
@@ -259,10 +276,10 @@ public class OutilsDossierIa {
                 + (c.attentePrmpHeuresOuvrees() > 0
                         ? ", hors " + heures(c.attentePrmpHeuresOuvrees()) + " d'attente de la PRMP" : ""));
         if (c.etapeCourante() != null) {
-            lignes.add("Étape ouverte : " + c.etapeCourante());
+            lignes.add("Étape ouverte : " + etape(c.etapeCourante()));
         }
         for (PassageEtapeDto e : passagesRecents(c)) {
-            lignes.add("Étape « " + e.etape() + " » : " + heures(e.dureeHeuresOuvrees()) + " ouvrées"
+            lignes.add("Étape « " + etape(e.etape()) + " » : " + heures(e.dureeHeuresOuvrees()) + " ouvrées"
                     + (e.nomActeur() == null ? "" : ", par " + e.nomActeur())
                     + (e.fin() == null ? " (en cours)" : ""));
         }
@@ -365,6 +382,11 @@ public class OutilsDossierIa {
 
     private static String valeur(String texte) {
         return texte == null || texte.isBlank() ? "non renseigné" : texte.strip();
+    }
+
+    /** Le libellé d'une étape du circuit ; le code brut si le référentiel a bougé sans qu'on le suive. */
+    private static String etape(String code) {
+        return code == null ? "non renseignée" : ETAPES.getOrDefault(code, code);
     }
 
     private static String borne(String texte) {

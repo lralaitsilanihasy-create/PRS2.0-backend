@@ -260,11 +260,23 @@ serveur, la prose est du modèle*.
 
 | # | Étape | État |
 |---|---|---|
-| 1 | Registre de la liste blanche + assemblage du dossier factuel, et les tests de sécurité par profil | à faire |
-| 2 | La rédaction par le modèle : consigne, sections fixes, garde-fous, batterie de qualité | à faire |
-| 3 | L'API : `POST /api/assistant-ia/dossiers/{id}/synthese` en flux SSE (`faits`, `texte`, `fin`) | à faire |
-| 4 | L'écran : bloc « Synthèse » de la page d'un dossier, geste explicite, faits dépliables | à faire |
+| 1 | Registre de la liste blanche + assemblage du dossier factuel, et les tests de sécurité par profil | **livrée** |
+| 2 | La rédaction par le modèle : consigne, sections dictées, désamorçage, batterie de qualité | **livrée** |
+| 3 | L'API : `POST /api/assistant-ia/dossiers/{id}/synthese` en flux SSE (`faits`, `texte`, `fin`) | **livrée** |
+| 4 | L'écran : bloc « Synthèse » de la page d'un dossier, geste explicite, faits dépliables | **livrée** |
 | 5 | Recette sur l'application réelle, captures légendées | à faire |
+
+L'écran vit dans la **page d'un dossier** (`/<espace>/dossier/:idDossier`), commune aux sept profils qui
+peuvent ouvrir un dossier : un seul bloc, sous la frise, là où se pose la question « où en est ce
+dossier ». Rien ne se déclenche à l'ouverture — un modèle qui tournerait à chaque page coûterait cher
+sans rien apporter à qui ne l'a pas demandé. Le bloc **disparaît** si le serveur dit l'assistant absent
+(404), comme le bouton du pré-contrôle au lot 3.
+
+L'étape 3 a fait **extraire la file de génération** (`FluxGenerationIa`) du service du lot 1 :
+**un seul pool pour toute l'application**, puisque le serveur d'inférence ne calcule qu'une réponse à la
+fois. Deux files — une par fonctionnalité — ne doubleraient pas le débit, elles se disputeraient le même
+GPU et allongeraient les deux attentes. La tâche de génération n'y reçoit plus l'émetteur, mais un
+**canal** : elle ne peut ni laisser le flux ouvert par oubli, ni écrire après l'avoir clos.
 
 ### Lot 3 — Pré-contrôle assisté du PPM *(demande du pilote, 2026-09-17)*
 

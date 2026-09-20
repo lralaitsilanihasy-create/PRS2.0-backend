@@ -1,20 +1,13 @@
 package cnm.prs.service;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -26,7 +19,8 @@ import cnm.prs.enums.ProfilUtilisateur;
 import cnm.prs.exception.ResourceNotFoundException;
 import cnm.prs.service.ClientModeleIa.Message;
 import cnm.prs.service.ClientModeleIa.ModeleIndisponibleException;
-import jakarta.annotation.PreDestroy;
+import cnm.prs.service.FluxGenerationIa.Canal;
+import cnm.prs.service.FluxGenerationIa.ClientPartiException;
 
 /**
  * Assistant IA local, lot 1 : il répond aux questions sur les règles du contrôle des marchés et de
@@ -43,9 +37,9 @@ import jakarta.annotation.PreDestroy;
  * </ul>
  *
  * <h2>Déroulé d'une question</h2>
- * <p>Recherche des passages dans le fil de la requête, puis génération dans un pool privé — deux
- * générations à la fois au plus, huit en attente : le serveur d'inférence n'en calcule qu'une à la
- * fois, une file plus longue ne ferait qu'allonger l'attente. Le flux SSE émet, dans l'ordre :
+ * <p>Recherche des passages dans le fil de la requête, puis génération dans la file partagée de
+ * l'assistant ({@link FluxGenerationIa}) — un seul pool pour tous les gestes qui font travailler le
+ * modèle, puisque le serveur d'inférence n'en calcule qu'un à la fois. Le flux SSE émet, dans l'ordre :
  * {@code sources} (les extraits numérotés), {@code texte} (chaque morceau de réponse), puis
  * {@code fin} — ou {@code erreur} avec un message pour l'utilisateur.</p>
  *
@@ -58,8 +52,6 @@ public class AssistantIaService {
     private static final Logger log = LoggerFactory.getLogger(AssistantIaService.class);
 
     static final String TABLE_AUDIT = "assistant_ia";
-    private static final int GENERATIONS_SIMULTANEES = 2;
-    private static final int FILE_D_ATTENTE = 8;
     /**
      * Au-delà, un extrait est coupé : cinq extraits et la réponse doivent tenir dans le contexte de
      * 8 192 jetons. Une page du manuel fait au plus 3 000 caractères (médiane 2 000), plus 600 de la
@@ -73,37 +65,19 @@ public class AssistantIaService {
     public record Demandeur(String ref, ProfilUtilisateur profil, String ip) {
     }
 
-    /** Le navigateur ne lit plus le flux (panneau fermé, page quittée) : on cesse de calculer. */
-    private static final class ClientPartiException extends RuntimeException {
-        ClientPartiException(Throwable cause) {
-            super(cause);
-        }
-    }
-
     private final AssistantIaProperties props;
     private final CorpusIaService corpus;
     private final ClientModeleIa client;
     private final AuditLogService audit;
-    private final ThreadPoolExecutor pool;
+    private final FluxGenerationIa flux;
 
     public AssistantIaService(AssistantIaProperties props, CorpusIaService corpus, ClientModeleIa client,
-            AuditLogService audit) {
+            AuditLogService audit, FluxGenerationIa flux) {
         this.props = props;
         this.corpus = corpus;
         this.client = client;
         this.audit = audit;
-        AtomicInteger numero = new AtomicInteger();
-        this.pool = new ThreadPoolExecutor(GENERATIONS_SIMULTANEES, GENERATIONS_SIMULTANEES, 60, TimeUnit.SECONDS,
-                new ArrayBlockingQueue<>(FILE_D_ATTENTE), tache -> {
-                    Thread t = new Thread(tache, "assistant-ia-" + numero.incrementAndGet());
-                    t.setDaemon(true);
-                    return t;
-                });
-    }
-
-    @PreDestroy
-    void arreter() {
-        pool.shutdownNow();
+        this.flux = flux;
     }
 
     /** État affiché par le front ; ne sonde le serveur d'inférence que si l'assistant est actif. */
@@ -127,44 +101,35 @@ public class AssistantIaService {
             throw new ResourceNotFoundException("L'assistant IA n'est pas activé.");
         }
         String q = question.strip();
+        // ⚠️ La recherche a lieu ICI, dans le fil de la requête : au-delà, il n'y a plus d'utilisateur.
         List<SourceIaDto> sources = numeroter(corpus.rechercher(q, props.extraits()));
-        SseEmitter emetteur = new SseEmitter(props.timeoutSecondes() * 1000L + MARGE_FLUX_MS);
-        AtomicBoolean annule = new AtomicBoolean();
-        emetteur.onTimeout(() -> annule.set(true));
-        emetteur.onError(e -> annule.set(true));
-        try {
-            pool.execute(() -> repondre(q, sources, demandeur, emetteur, annule));
-        } catch (RejectedExecutionException e) {
-            String message = "L'assistant est très sollicité en ce moment. Réessayez dans un instant.";
-            envoyerErreur(emetteur, message);
-            journaliser(demandeur, "QUESTION_REFUSEE", q, "", sources, 0, message);
-        }
-        return emetteur;
+        return flux.lancer(props.timeoutSecondes() * 1000L + MARGE_FLUX_MS,
+                canal -> repondre(q, sources, demandeur, canal),
+                message -> journaliser(demandeur, "QUESTION_REFUSEE", q, "", sources, 0, message));
     }
 
     /**
      * Calcule la réponse, la <strong>journalise</strong>, puis clôt le flux ({@code fin} ou
      * {@code erreur}) : l'échange est tracé avant que l'utilisateur ne le voie terminé.
      */
-    private void repondre(String question, List<SourceIaDto> sources, Demandeur demandeur, SseEmitter emetteur,
-            AtomicBoolean annule) {
+    private void repondre(String question, List<SourceIaDto> sources, Demandeur demandeur, Canal canal) {
         long debut = System.nanoTime();
         StringBuilder reponse = new StringBuilder();
         String action = "QUESTION";
         String erreur = null;
         try {
-            envoyer(emetteur, "sources", sources, annule);
+            canal.envoyer("sources", sources);
             if (sources.isEmpty()) {
                 String texte = aucunPassage();
                 reponse.append(texte);
-                envoyer(emetteur, "texte", Map.of("t", texte), annule);
+                canal.envoyer("texte", Map.of("t", texte));
             } else {
                 client.generer(messages(question, sources, demandeur.profil()), morceau -> {
                     reponse.append(morceau);
-                    envoyer(emetteur, "texte", Map.of("t", morceau), annule);
-                }, annule::get);
+                    canal.envoyer("texte", Map.of("t", morceau));
+                }, canal::annule);
             }
-            if (annule.get()) {
+            if (canal.annule()) {
                 action = "QUESTION_INTERROMPUE";
             }
         } catch (ClientPartiException e) {
@@ -181,21 +146,17 @@ public class AssistantIaService {
         journaliser(demandeur, action, question, reponse.toString(), sources, dureeMs, erreur);
 
         if (erreur != null) {
-            envoyerErreur(emetteur, erreur);
+            canal.erreur(erreur);
         } else if (!"QUESTION_INTERROMPUE".equals(action)) {
             try {
-                envoyer(emetteur, "fin", Map.of("modele", props.modele(), "dureeMs", dureeMs), annule);
-                emetteur.complete();
+                canal.envoyer("fin", Map.of("modele", props.modele(), "dureeMs", dureeMs));
+                canal.terminer();
             } catch (ClientPartiException e) {
                 log.debug("Assistant IA : fin de réponse non transmise, le navigateur est parti");
             }
         } else {
             // Navigateur parti : on libère la requête asynchrone sans attendre son expiration.
-            try {
-                emetteur.complete();
-            } catch (RuntimeException e) {
-                log.debug("Assistant IA : flux déjà clos ({})", e.getMessage());
-            }
+            canal.terminer();
         }
     }
 
@@ -279,25 +240,7 @@ public class AssistantIaService {
         };
     }
 
-    // ---------------------------------------------------------------- flux et journal
-
-    private void envoyer(SseEmitter emetteur, String evenement, Object donnees, AtomicBoolean annule) {
-        try {
-            emetteur.send(SseEmitter.event().name(evenement).data(donnees, MediaType.APPLICATION_JSON));
-        } catch (IOException | IllegalStateException e) {
-            annule.set(true);
-            throw new ClientPartiException(e);
-        }
-    }
-
-    private void envoyerErreur(SseEmitter emetteur, String message) {
-        try {
-            emetteur.send(SseEmitter.event().name("erreur").data(Map.of("message", message), MediaType.APPLICATION_JSON));
-            emetteur.complete();
-        } catch (IOException | IllegalStateException e) {
-            log.debug("Assistant IA : message d'erreur non transmis, le navigateur est parti ({})", e.getMessage());
-        }
-    }
+    // ---------------------------------------------------------------- journal
 
     private void journaliser(Demandeur demandeur, String action, String question, String reponse,
             List<SourceIaDto> sources, long dureeMs, String erreur) {

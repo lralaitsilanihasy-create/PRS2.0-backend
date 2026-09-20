@@ -28,4 +28,16 @@ class AssistantIaInactifIntegrationTest extends CnmIntegrationTestSupport {
                         .content("{\"question\":\"Quel délai ?\"}"))
                 .andExpect(status().isNotFound());
     }
+
+    @Test
+    @DisplayName("⚠️ Assistant inactif : la synthèse d'un dossier répond 404 AVANT de lire quoi que ce "
+            + "soit — c'est ce 404 qui fait disparaître le bloc de l'écran, plutôt qu'un bouton qui "
+            + "échouerait toujours")
+    void syntheseInactive_404AvantTouteLecture() throws Exception {
+        // L'identifiant n'existe pas, et c'est exprès : si le 404 venait de la lecture du dossier au lieu
+        // du réglage, la garde ne serait pas là où on croit.
+        mvc.perform(post("/api/assistant-ia/dossiers/999999/synthese").header("Authorization", tokenMembre)
+                        .accept(MediaType.TEXT_EVENT_STREAM, MediaType.APPLICATION_JSON))
+                .andExpect(status().isNotFound());
+    }
 }

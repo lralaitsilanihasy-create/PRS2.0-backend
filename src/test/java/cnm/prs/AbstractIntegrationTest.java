@@ -92,9 +92,23 @@ public abstract class AbstractIntegrationTest {
     private static final String IMAGE_POSTGRES =
             valeurOuDefaut(reglage("PRS_TEST_PG_IMAGE", "prs.test.pg.image"), "postgres:18");
 
-    /** Conteneur partagé par toute la suite — {@code null} en mode base locale (jamais démarré). */
-    static final PostgreSQLContainer<?> POSTGRES =
-            BASE_LOCALE ? null : new PostgreSQLContainer<>(IMAGE_POSTGRES);
+    /**
+     * Conteneur partagé par toute la suite — {@code null} en mode base locale (jamais démarré).
+     *
+     * <p>⚠️ <strong>{@code max_connections} relevé</strong> (2026-09-20). La suite partage un seul
+     * conteneur, mais Spring garde en cache <strong>un contexte par jeu de propriétés</strong>
+     * ({@code @DynamicPropertySource}), et chaque contexte garde son pool. Au cinquième contexte, le
+     * conteneur répondait « sorry, too many clients already » et la classe la plus récente échouait à
+     * son démarrage — un défaut d'outillage qui se lit comme un défaut de code.</p>
+     *
+     * <p>Le réglage est mis <strong>ici</strong>, et non en bornant les pools : un pool étroit déplace
+     * le problème dans les tests qui ouvrent plusieurs connexions à la fois (transaction du test,
+     * écriture d'audit en {@code REQUIRES_NEW}, requête asynchrone), et les fait échouer loin de leur
+     * cause. Mesuré : 200 connexions tiennent sans effort, la suite reste à un conteneur.</p>
+     */
+    static final PostgreSQLContainer<?> POSTGRES = BASE_LOCALE ? null
+            : new PostgreSQLContainer<>(IMAGE_POSTGRES)
+                    .withCommand("postgres", "-c", "max_connections=200");
 
     static {
         if (BASE_LOCALE) {
