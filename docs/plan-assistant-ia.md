@@ -422,8 +422,8 @@ Le lot est le plus lourd des cinq : il se livre par étapes, chacune vérifiée,
 | **1. Socle de données** | référentiel de seuils daté et administrable, catégorie de seuil sur la ligne, signalement écartable par une PRMP, signalements inter-lignes | **livrée** (ci-dessous) |
 | **2. Moteur de règles** | les points de vérification du manuel (3.g) en règles, `t_regle_anomalie` semée, réconciliation d'une exécution à l'autre | **livrée** (ci-dessous) |
 | **3. API scopée et écartement motivé** | la PRMP ne voit que ses PPM, le contrôleur que sa localité ; écartement avec motif obligatoire ; visibilité croisée et symétrie hiérarchique (3.f) | **livrée** (ci-dessous) |
-| **4. Écran de la PRMP** | « Vérifier mon PPM », liste des signalements, fenêtre d'écartement portant l'avertissement de visibilité | à faire |
-| **5. Écran du contrôleur** | signalements rattachés aux points de la grille, écartés visibles avec leur motif, fait et piste distingués | à faire |
+| **4. Écran de la PRMP** | « Vérifier mon PPM », liste des signalements, fenêtre d'écartement portant l'avertissement de visibilité | **livrée** (ci-dessous) |
+| **5. Écran du contrôleur** | signalements rattachés aux points de la grille, écartés visibles avec leur motif, fait et piste distingués | **livrée** (ci-dessous) |
 | **6. Couche IA** | la phrase utile, la hiérarchisation, le fractionnement déguisé, la suggestion au format de l'annexe du PV ; batterie de qualité | à faire |
 | **7. Tableau de bord des écartements** | taux d'écartement par règle dans l'espace Administrateur (3.e), et complètement des imputations budgétaires des données de recette | à faire |
 
@@ -590,6 +590,51 @@ l'Administrateur nulle part, l'Assistant contrôleur qui lit sans écarter. Puis
 dissuasion : motif obligatoire et suffisant, avertissement exigé par le serveur, contrôleur qui lit le
 motif de la PRMP, figeage à la soumission (soumission réelle par l'API, pour que le branchement soit
 vérifié et pas seulement compilé).
+
+
+#### Livraison des étapes 4 et 5 — les écrans, PRMP et contrôleur (2026-09-20, dépôt frontend, branche `chantier/assistant-ia-lot3`)
+
+**Un seul panneau pour les deux côtés du circuit** (`shared/pre-controle/pre-controle-panneau`). C'est
+délibéré : les deux camps doivent lire **la même chose**, et c'est le serveur — non l'écran — qui décide
+de ce que chacun voit (y compris de masquer à la PRMP l'écartement d'un contrôleur). L'écran n'a donc
+aucune règle de visibilité à tenir, et il ne peut pas en oublier une.
+
+Ce que le panneau rend visible, parce que c'est ce qui en fait une aide et pas un décideur :
+
+- **un fait et une piste ne se présentent pas pareil** — pastille « Règle » ou « Piste de l'assistant »,
+  avec l'infobulle qui dit ce que cela change (« pas un constat opposable ») ;
+- **la correction proposée telle qu'elle est rédigée**, retours à la ligne compris : c'est le format de
+  l'annexe d'un PV (« Au lieu de : … / Lire : … »), le contrôleur doit pouvoir la recopier ;
+- **les lignes visées** d'un fractionnement, avec leur montant du moment de la détection ;
+- **le point de la grille** que le signalement éclaire ;
+- **l'avertissement avant tout écartement**, en toutes lettres dans la fenêtre — et c'est cette fenêtre,
+  et elle seule, qui envoie `avertissementLu: true`. Le drapeau n'est pas une case à cocher qu'on poserait
+  ailleurs : il atteste que la phrase a été affichée ;
+- **le motif compté à la frappe** (20 caractères au moins), avec la raison de cette borne ;
+- **rien qui s'efface** : les écartements restent affichés avec leur motif, les signalements levés avec ce
+  que le constat disait ;
+- **la mention du bas** : le pré-contrôle signale, il ne refuse aucune soumission et ne remplace ni le
+  contrôleur ni la Commission.
+
+**Côté PRMP (étape 4)** — le geste vit là où elle travaille : un bouton **« Vérifier »** par brouillon,
+dans « Mes brouillons », qui ouvre `/prmp/verifier-ppm/:idPpm`. **Volontairement pas une entrée de
+menu** : ce n'est pas une page où l'on va, c'est un geste sur un plan — et le menu n'a pas à s'allonger
+pour cela (le garde-fou de hauteur du lot 6 est déjà serré). Le bouton n'apparaît que sur un dossier qui
+porte un PPM.
+
+**Côté contrôleur (étape 5)** — le panneau est monté dans l'écran d'examen, **au-dessus de la grille** :
+il dit où regarder d'abord, il ne remplace aucun point de l'examen. Chaque signalement y nomme le point
+de grille qu'il éclaire, et le contrôleur y lit les écartements de la PRMP **avec leur motif** — ce qui
+est tout l'objet de la décision du pilote du 2026-09-18. L'accrochage **ligne par ligne** dans la grille
+elle-même reste à faire : il demande d'entrer dans `examen-grille`, et le gain — retrouver le signalement
+au point exact — ne justifiait pas de risquer une régression sur l'écran le plus chargé de
+l'application au même commit.
+
+**Tests** : 11 unitaires (`pre-controle-panneau.spec.ts`) — la phrase du bandeau écrite depuis les
+compteurs du serveur, fait et piste distingués, lignes visées et suggestion, l'avertissement affiché et le
+motif trop court refusé, `avertissementLu` envoyé, le contrôleur qui lit le motif de la PRMP, le plan
+soumis qui fige, l'Assistant contrôleur qui lit sans écarter, la reprise réservée à l'auteur, la garde
+anti-double-clic et l'état d'erreur avec sa reprise. Suite front : **738 tests verts**, lint propre.
 
 ### Lot 4 — Chatbot transverse
 
