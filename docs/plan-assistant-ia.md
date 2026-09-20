@@ -413,6 +413,70 @@ tableau de `seuils.pptx`).
 
 Effort estimé : le plus lourd des cinq lots — les règles métier en sont l'essentiel, l'IA la finition.
 
+#### 3.h. Découpage du lot 3 en sept étapes (2026-09-20)
+
+Le lot est le plus lourd des cinq : il se livre par étapes, chacune vérifiée, dans cet ordre.
+
+| Étape | Contenu | État |
+|---|---|---|
+| **1. Socle de données** | référentiel de seuils daté et administrable, catégorie de seuil sur la ligne, signalement écartable par une PRMP, signalements inter-lignes | **livrée** (ci-dessous) |
+| **2. Moteur de règles** | les points de vérification du manuel (3.g) en règles, `t_regle_anomalie` semée, réconciliation d'une exécution à l'autre | à faire |
+| **3. API scopée et écartement motivé** | la PRMP ne voit que ses PPM, le contrôleur que sa localité ; écartement avec motif obligatoire ; visibilité croisée et symétrie hiérarchique (3.f) | à faire |
+| **4. Écran de la PRMP** | « Vérifier mon PPM », liste des signalements, fenêtre d'écartement portant l'avertissement de visibilité | à faire |
+| **5. Écran du contrôleur** | signalements rattachés aux points de la grille, écartés visibles avec leur motif, fait et piste distingués | à faire |
+| **6. Couche IA** | la phrase utile, la hiérarchisation, le fractionnement déguisé, la suggestion au format de l'annexe du PV ; batterie de qualité | à faire |
+| **7. Tableau de bord des écartements** | taux d'écartement par règle dans l'espace Administrateur (3.e), et complètement des imputations budgétaires des données de recette | à faire |
+
+#### Livraison de l'étape 1 — le socle de données (2026-09-20, branche `chantier/assistant-ia-lot3`)
+
+**Migration `V32__pre_controle_ppm_socle.sql`.** Elle ne pose que des données : aucune règle, aucun
+endpoint.
+
+1. **`tr_seuil_marche` — le référentiel de seuils, neuf, daté, administrable.** Une valeur = (type de
+   seuil × catégorie de prestations × barème) avec son montant hors taxes, sa date d'effet, sa date de
+   fin et **sa base légale**, citée telle quelle dans le signalement. Les 30 valeurs de l'arrêté
+   n° 13 156/2019-MEF y sont semées — seuils de contrôle a priori, d'appel d'offres ouvert et de
+   consultation, pour les deux barèmes — plus les deux formes de publicité des prestations
+   intellectuelles (voie de presse à 100 M et 30 jours, affichage en dessous et 10 jours), avec leur
+   base légale propre : décret n° 2019-1310 modifié, et non l'arrêté, qui ne les fixe pas.
+   **Aucun montant n'est écrit dans le code.** Une valeur ne se corrige pas en place : la nouvelle
+   **borne** celle qu'elle remplace, pour que le pré-contrôle d'un plan ancien reste juste.
+2. **`t_marche.CATEGORIE_SEUIL`** — la catégorie de l'arrêté, sur la ligne, **facultative**. Une ligne
+   sans catégorie n'est pas en faute : le moteur de règles évaluera les catégories plausibles de sa
+   nature (« Travaux » en a trois, « Services » deux) et ne demandera une précision que si elles
+   divergent. C'est la parade à la fatigue d'alerte, appliquée dès le socle.
+3. **`t_anomalie` — le signalement devient écartable par une PRMP.** `IM_TRAITEMENT` passe de 7 à 10
+   caractères et **perd sa clé étrangère** vers `tr_controleur` (une PRMP n'y figure pas) ; un
+   `TYPE_ACTEUR_TRAITEMENT` dit de quel référentiel vient la référence. C'était le défaut C3 de l'audit
+   du 2026-09-14, pour la troisième fois après V29 et V31 — un test d'intégration le garde désormais.
+   S'y ajoutent `ID_POINT_CTRL` (le point de la grille que le signalement éclaire), `CLE_SIGNALEMENT`
+   (identité stable, **unique par PPM** : une nouvelle exécution retrouve le signalement écarté au lieu
+   d'en créer un double vierge), `SUGGESTION`, `DATE_LEVEE`/`DETAIL_LEVEE` (ce qui a changé dans le plan
+   et a fait taire l'alarme) et `FIGE`. `GRAVITE` passe à 20 caractères — « PRIORITAIRE » en fait 11 —
+   ici et sur `t_regle_anomalie.GRAVITE_DEFAUT`. Le vocabulaire des quatre colonnes est fermé par des
+   `CHECK`, posés `NOT VALID` pour ne pas faire échouer la migration sur une base inconnue.
+4. **`t_anomalie_ligne`** — les lignes visées par un signalement **inter-lignes**, avec leur montant du
+   moment : le fractionnement ne concerne jamais une ligne seule, et `ID_DETAIL` n'en désigne qu'une.
+5. **`seq_anomalie`** — la séquence manquait (V5 avait sauté cette table, qu'aucun code n'alimentait).
+
+**Code.** Six énumérations (`TypeSeuil`, `CategorieSeuil`, `BaremeSeuil`, `ProcedureAttendue`,
+`SourceSignalement`, `GraviteSignalement`, `StatutSignalement` — distinctes de `GraviteAnomalie` et
+`TypeAnomalie`, qui appartiennent à l'import), les entités `SeuilMarche` et `AnomalieLigne`,
+`SeuilMarcheRepository`, `SeuilMarcheService` et `SeuilsEnVigueur` — une **photographie du barème** à
+une date, prise une fois par exécution puis interrogée en mémoire (un PPM porte des centaines de
+lignes, le barème en a trente valeurs). `BaremeSeuil.pourLocalite` déduit le barème de l'organisme de
+contrôle, sans champ nouveau.
+
+**Ce que le socle refuse de faire** : deviner. Quand le référentiel ne porte pas une case, les lectures
+rendent « rien » et l'appelant s'abstient de signaler — aucun seuil de repli n'est écrit dans le code.
+Mieux vaut ne rien dire que d'opposer à une PRMP un montant qui ne vient d'aucun texte.
+
+**Tests** : 8 unitaires (`SeuilsEnVigueurTest` — comparaison « égal ou supérieur », barème qui change le
+verdict sur le même montant, datation, silence sur une case absente) et 9 d'intégration
+(`PreControleSocleIntegrationTest` — les 30 valeurs semées et leurs montants, l'écartement par une PRMP
+de 10 caractères, l'unicité de la clé, le vocabulaire fermé, les lignes d'un signalement inter-lignes,
+le bornage d'une valeur remplacée).
+
 ### Lot 4 — Chatbot transverse
 
 Élargissement de la liste blanche (KPI, indicateurs, annuaire, PPM, marchés) et conversation

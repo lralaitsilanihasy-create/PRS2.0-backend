@@ -1,6 +1,7 @@
 package cnm.prs.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import cnm.prs.enums.CategorieSeuil;
 import cnm.prs.enums.FormeMarche;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -123,6 +124,20 @@ public class Marche {
      */
     @Column(name = "JUSTIF_DELAI_AMENAGE", length = 1000)
     private String justifDelaiAmenage;
+
+    /**
+     * ⚠️ Pré-contrôle du PPM (2026-09-20, assistant IA lot 3, migration V32) — <strong>catégorie de
+     * prestations</strong> de l'arrêté n° 13 156/2019-MEF, qui choisit la ligne du barème de seuils.
+     * L'arrêté en distingue quatre là où PRS n'a que trois natures : avec la seule nature, impossible de
+     * dire quel seuil s'applique à un marché de travaux.
+     *
+     * <p><strong>Facultative</strong> et sans effet sur le circuit : elle ne détermine ni ne bloque rien,
+     * elle affine le signalement. {@code null} = non précisée — le pré-contrôle évalue alors les
+     * catégories plausibles de la nature et ne signale que si elles divergent.</p>
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "CATEGORIE_SEUIL", length = 40)
+    private CategorieSeuil categorieSeuil;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ID_DOSSIER", insertable = false, updatable = false)

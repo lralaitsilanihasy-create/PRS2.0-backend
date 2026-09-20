@@ -843,6 +843,69 @@ de déposer, ce que le contrôleur vérifiera.
 
 ---
 
+### Référentiel des seuils de marchés publics (pré-contrôle du PPM)
+
+⚠️ **Règle ajoutée (2026-09-20, `docs/plan-assistant-ia.md`, lot 3, étape 1 ; migration V32)** — PRS porte
+de nouveau un **référentiel de seuils** (`tr_seuil_marche`), semé aux valeurs de l'**arrêté
+n° 13 156/2019-MEF du 4 juillet 2019**. Il ne revient **pas** sur le retrait de la détermination
+automatique du mode (`c432e73`, 2026-07-04) : le mode de passation reste **purement saisi**.
+
+- **Il sert uniquement à SIGNALER.** Aucun mode n'est déterminé, aucune saisie n'est refusée, aucun
+  dossier n'est bloqué. Un écart entre le mode saisi et le mode que les seuils appellent produit un
+  **signalement écartable**, avec l'article et le montant qui le fondent.
+- **Aucun montant n'est écrit dans le code** (comme le paramètre `AGPM_SEUIL_MONTANT`) : les valeurs
+  vivent dans le référentiel, administrables.
+- **Il est daté.** Une valeur vaut à partir de sa date d'effet ; remplacée, elle est **bornée** et
+  conservée. Le pré-contrôle d'un plan lit le barème **en vigueur à sa date** — un plan ancien reste
+  lisible avec le barème de son temps, et un contrôleur comprend, un an plus tard, pourquoi un
+  signalement citait tel montant.
+- **Les montants sont hors taxes**, comme ceux du PPM (précision du pilote du 2026-09-18) : la
+  comparaison est directe.
+- **Deux barèmes**, et le bon se **déduit de l'organisme de contrôle** de l'entité, sans champ nouveau
+  (arbitrage du pilote du 2026-09-18) : CNM (`tr_localite` = `ANT`) → barème central, CRM → barème
+  déconcentré. La « localité » de PRS **est** l'organisme de contrôle, pas un lieu.
+- **Catégorie de seuil** (`t_marche.CATEGORIE_SEUIL`) — l'arrêté fixe ses seuils par catégorie de
+  prestations (construction ou réhabilitation de routes, entretien routier, travaux non routiers,
+  fournitures et services, prestations intellectuelles) là où PRS n'a que trois natures. La catégorie se
+  pose **sur la ligne** et reste **facultative** : une ligne sans catégorie n'est pas en faute — le
+  pré-contrôle évalue les catégories plausibles de sa nature et ne demande une précision que si elles
+  **divergent**.
+- **Prestations intellectuelles** : l'arrêté ne leur fixe **pas** de seuil de procédure ; il ne leur donne
+  qu'un seuil de contrôle a priori, celui des fournitures et services (300 M central, 150 M déconcentré).
+  Leur publicité relève du décret n° 2019-1310 modifié : appel à manifestation d'intérêt **par voie de
+  presse** (30 jours au moins) à partir de **100 000 000 Ar** — arbitrage du pilote du 2026-09-18 —, **par
+  affichage** (10 jours au moins) en dessous.
+- **Le référentiel muet ne se devine pas.** S'il ne porte pas une case (type × catégorie × barème), rien
+  n'est signalé : aucun seuil de repli n'existe dans le code. Mieux vaut ne rien dire que d'opposer à une
+  PRMP un montant qui ne vient d'aucun texte.
+
+### Signalement du pré-contrôle : écartable, motivé, jamais effacé
+
+⚠️ **Règle ajoutée (2026-09-20, lot 3, étape 1 ; migration V32)** — un **signalement** (`t_anomalie`) est ce
+que le pré-contrôle porte à la connaissance de la PRMP avant qu'elle ne soumette, et du contrôleur avant
+qu'il n'examine. Les endpoints et les écrans viennent aux étapes suivantes ; les règles de fond sont
+posées dès maintenant.
+
+- **Il n'est jamais bloquant.** Un signalement qu'on peut écarter n'est pas un refus : deux gravités
+  seulement, `A_VERIFIER` et `PRIORITAIRE` (le cumul change la procédure ou soustrait le marché au
+  contrôle a priori).
+- **Un fait et une piste ne pèsent pas pareil** : `SOURCE = REGLE` pour ce qu'une règle établit, avec sa
+  base légale ; `SOURCE = IA` pour une suggestion. Les deux ne sont jamais présentés de la même façon.
+- **L'écartement est motivé, et son auteur est enregistré** — contrôleur **ou PRMP** : la colonne
+  `IM_TRAITEMENT` admet désormais un `ID_PRMP` (10 caractères) et `TYPE_ACTEUR_TRAITEMENT` dit de quel
+  référentiel vient la référence. Un agent d'UGPM est enregistré comme sa **PRMP de tutelle**.
+- **Rien ne s'efface.** Un signalement qui ne ressort plus parce que le plan a changé passe
+  `LEVE_MODIFICATION`, avec le détail de ce qui a changé ; un écartement est **figé** à la soumission.
+- **Un signalement ne se dédouble pas** : sa clé (`CLE_SIGNALEMENT`) est unique dans son PPM, et une
+  nouvelle exécution **retrouve** le signalement déjà écarté — donc son motif — au lieu d'en créer un
+  double vierge.
+- **Il s'accroche à la grille de contrôle** (`ID_POINT_CTRL`) : le contrôleur le trouve là où il
+  travaille déjà.
+- **Le fractionnement vise plusieurs lignes**, jamais une seule : les lignes visées sont listées
+  (`t_anomalie_ligne`) avec leur montant du moment.
+
+---
+
 ## 3. Fonctionnalités et règles par profil
 
 ### 3.1. PRMP

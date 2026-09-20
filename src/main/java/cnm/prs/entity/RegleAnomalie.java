@@ -41,6 +41,10 @@ public class RegleAnomalie {
     @Column(name = "ACTIF")
     private Boolean actif;
 
-    @Column(name = "GRAVITE_DEFAUT", length = 10)
+    /**
+     * ⚠️ Élargie de 10 à 20 caractères par V32 (pré-contrôle du PPM, lot 3) : la gravité
+     * {@code PRIORITAIRE} de {@link cnm.prs.enums.GraviteSignalement} en fait 11.
+     */
+    @Column(name = "GRAVITE_DEFAUT", length = 20)
     private String graviteDefaut;
 }
