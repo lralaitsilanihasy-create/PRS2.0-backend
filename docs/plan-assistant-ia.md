@@ -264,13 +264,40 @@ serveur, la prose est du modèle*.
 | 2 | La rédaction par le modèle : consigne, sections dictées, désamorçage, batterie de qualité | **livrée** |
 | 3 | L'API : `POST /api/assistant-ia/dossiers/{id}/synthese` en flux SSE (`faits`, `texte`, `fin`) | **livrée** |
 | 4 | L'écran : bloc « Synthèse » de la page d'un dossier, geste explicite, faits dépliables | **livrée** |
-| 5 | Recette sur l'application réelle, captures légendées | à faire |
+| 5 | Recette sur l'application réelle, captures légendées | **livrée** (ci-dessous) |
 
 L'écran vit dans la **page d'un dossier** (`/<espace>/dossier/:idDossier`), commune aux sept profils qui
 peuvent ouvrir un dossier : un seul bloc, sous la frise, là où se pose la question « où en est ce
 dossier ». Rien ne se déclenche à l'ouverture — un modèle qui tournerait à chaque page coûterait cher
 sans rien apporter à qui ne l'a pas demandé. Le bloc **disparaît** si le serveur dit l'assistant absent
 (404), comme le bouton du pré-contrôle au lot 3.
+
+#### ⚠️ Ce que la recette du lot 2 a montré (2026-09-20)
+
+Recette sur l'application réelle — backend sur `PRS_RECETTE` (18080), front en 4300, modèle local — du
+**même dossier vu par deux profils**, ce qui est le seul essai qui compte pour ce lot :
+
+| | Contrôleur (`MEMANT1`) | PRMP (`PRMP001`) |
+|---|---|---|
+| Rubriques lues | 4 : dossier, plan, délais, **journal du circuit** | 3 : dossier, plan, délais |
+| Rubriques écartées | navette, périmètre d'examen, pièces | **journal du circuit**, navette, périmètre, pièces |
+| Délais | 29 h ouvrées, **par Jean Claude Rakoto** | 29 h ouvrées, **sans aucun nom** |
+| Durée de la rédaction | 28,5 s | 12,9 s |
+
+Deux propriétés s'y vérifient d'un coup d'œil, et aucune n'a demandé une ligne de code de sécurité dans
+l'assistant :
+
+1. **Le journal du circuit ne franchit pas la frontière.** C'est une vue interne à la CNM (audit C2), et
+   `DossierService.journal` répond 403 à la PRMP. La liste blanche le constate, retire la rubrique, et
+   l'écran **le dit** : « Non lu pour votre profil, ou sans objet sur ce dossier : journal du circuit… ».
+2. **Le masquage des identités s'hérite.** Le serveur sert le chronométrage à la PRMP *sans les
+   identités* (C2 encore : ce qui est confidentiel, c'est **qui** traite le dossier, pas les durées). La
+   synthèse de la PRMP porte donc les durées et aucun nom, sans que l'assistant ait à le savoir. C'est
+   toute la valeur de passer par les contrôleurs plutôt que par les services.
+
+**Outillage** : `capturer-synthese.mjs` (hors dépôts), qui prend les deux profils dans la foulée et
+**imprime en clair** si le journal du circuit apparaît dans la synthèse de la PRMP — un contrôle de
+non-régression qu'on relit sans ouvrir une image.
 
 L'étape 3 a fait **extraire la file de génération** (`FluxGenerationIa`) du service du lot 1 :
 **un seul pool pour toute l'application**, puisque le serveur d'inférence ne calcule qu'une réponse à la
