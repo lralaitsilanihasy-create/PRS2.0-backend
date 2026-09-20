@@ -116,6 +116,38 @@ public class OutilsDossierIa {
             "ARCHIVAGE", "Archivage",
             "RECTIFICATION_PRMP", "Rectification par la PRMP");
 
+    /**
+     * Libellés des gestes du journal — miroir de {@code actionLabel}
+     * ({@code features/circuit/dossier/journal-libelles.ts}). Même raison que pour les étapes : la
+     * recette du 2026-09-20 montrait « DISPATCH », « SOUMISSION » dans les faits affichés, là où
+     * l'utilisateur lit du français partout ailleurs.
+     */
+    private static final Map<String, String> GESTES = Map.ofEntries(
+            Map.entry("CREATION", "Création"),
+            Map.entry("SOUMISSION", "Soumission"),
+            Map.entry("RESOUMISSION", "Resoumission"),
+            Map.entry("TRANSMISSION_COMPLEMENTS", "Transmission de compléments"),
+            Map.entry("TRANSMISSION_COMPLEMENTS_DEPOT", "Compléments de dépôt"),
+            Map.entry("SUPPRESSION", "Suppression"),
+            Map.entry("MISE_A_JOUR", "Mise à jour"),
+            Map.entry("RECEPTION", "Réception"),
+            Map.entry("DISPATCH", "Dispatch"),
+            Map.entry("REATTRIBUTION", "Réattribution"),
+            Map.entry("REPRISE", "Reprise par le dispatcheur"),
+            Map.entry("RETRAIT_DISPATCH", "Retrait du dispatch"),
+            Map.entry("DEMANDE_RETRAIT", "Demande de retrait"),
+            Map.entry("RETRAIT_ACCEPTE", "Retrait accepté"),
+            Map.entry("RETRAIT_REFUSE", "Retrait refusé"),
+            Map.entry("SOUMISSION_EXAMEN", "Soumission d'examen"),
+            Map.entry("RETOUR_RECTIFICATION", "Retour pour rectification"),
+            Map.entry("TRANSMISSION_PRESIDENT", "Transmission au Président"),
+            Map.entry("VISA", "Visa"),
+            Map.entry("SIGNATURE", "Signature"),
+            Map.entry("PV_SIGNE", "PV signé"),
+            Map.entry("DECISION_VERIFICATION", "Passage de vérification"),
+            Map.entry("TRANSMISSION_SIGMP", "Transmission à SIGMP"),
+            Map.entry("ARCHIVAGE", "Archivage"));
+
     /** Une section du dossier factuel : un titre, et des lignes déjà rédigées en français. */
     public record Section(String titre, List<String> lignes) {
     }
@@ -325,7 +357,7 @@ public class OutilsDossierIa {
                 .toList();
         List<String> lignes = new ArrayList<>();
         for (ActionDossierDto a : recentes) {
-            lignes.add(valeur(a.getTypeAction())
+            lignes.add(geste(a.getTypeAction())
                     + (a.getDateAction() == null ? "" : " le " + jourHeure(a.getDateAction()))
                     + (a.getNomOperateur() == null ? "" : ", par " + a.getNomOperateur())
                     + (a.getDetail() == null ? "" : " — " + borne(a.getDetail())));
@@ -387,6 +419,11 @@ public class OutilsDossierIa {
     /** Le libellé d'une étape du circuit ; le code brut si le référentiel a bougé sans qu'on le suive. */
     private static String etape(String code) {
         return code == null ? "non renseignée" : ETAPES.getOrDefault(code, code);
+    }
+
+    /** Le libellé d'un geste du journal ; le code brut si le vocabulaire s'est enrichi sans nous. */
+    private static String geste(String code) {
+        return code == null ? "geste non nommé" : GESTES.getOrDefault(code, code);
     }
 
     private static String borne(String texte) {

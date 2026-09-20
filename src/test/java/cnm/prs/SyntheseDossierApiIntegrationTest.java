@@ -211,7 +211,7 @@ class SyntheseDossierApiIntegrationTest extends CnmIntegrationTestSupport {
 
         assertThat(flux).contains("\"outilsRefuses\"", "journal du circuit");
         assertThat(flux).doesNotContain("\"titre\":\"Journal du circuit\"");
-        assertThat(flux).doesNotContain("SOUMISSION le 02/06/2026");
+        assertThat(flux).doesNotContain("Soumission le 02/06/2026");
     }
 
     @Test
@@ -219,7 +219,7 @@ class SyntheseDossierApiIntegrationTest extends CnmIntegrationTestSupport {
     void faitsDUnControleur_avecJournal() throws Exception {
         String flux = synthetiser(tokenMembreAnt, DOSSIER_ANT);
 
-        assertThat(flux).contains("Journal du circuit", "SOUMISSION le 02/06/2026");
+        assertThat(flux).contains("Journal du circuit", "Soumission le 02/06/2026");
     }
 
     // ------------------------------------------------------------------ 3. la trace

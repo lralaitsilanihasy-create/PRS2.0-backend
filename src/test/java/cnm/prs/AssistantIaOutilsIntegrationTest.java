@@ -156,7 +156,7 @@ class AssistantIaOutilsIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(titres(faits)).contains("Le dossier").doesNotContain("Journal du circuit");
         // La lecture refusée est NOMMÉE : elle part au journal d'audit, elle ne disparaît pas en silence.
         assertThat(faits.outilsRefuses()).contains("journal du circuit");
-        assertThat(faits.materiau()).doesNotContain("SOUMISSION", "CREATION");
+        assertThat(faits.materiau()).doesNotContain("Soumission", "Création");
     }
 
     @Test
@@ -167,7 +167,9 @@ class AssistantIaOutilsIntegrationTest extends CnmIntegrationTestSupport {
         Faits faits = outils.lire(DOSSIER_ANT);
 
         assertThat(titres(faits)).contains("Journal du circuit");
-        assertThat(faits.materiau()).contains("SOUMISSION", "02/06/2026");
+        // ⚠️ « Soumission », pas « SOUMISSION » : le matériau est en français jusqu'au bout, sinon on
+        // reprocherait au modèle de recopier le vocabulaire technique qu'on lui a donné.
+        assertThat(faits.materiau()).contains("Soumission le 02/06/2026", "Création le 01/06/2026");
         assertThat(faits.outilsLus()).contains("dossier", "journal du circuit");
     }
 
