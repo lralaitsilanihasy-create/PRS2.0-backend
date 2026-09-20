@@ -919,15 +919,30 @@ décider quelle lecture faire. Trois façons, et le choix n'est pas neutre :
 | | Qui décide | Ce qu'on y gagne | Ce qu'on y risque |
 |---|---|---|---|
 | Appel d'outils libre | le modèle, avec des paramètres libres | souple | un modèle de 9 milliards de paramètres choisit mal, et toute donnée lue devient une surface d'injection |
-| Aiguillage déterministe seul | des mots-clés | sûr, testable | rigide : « où en est mon dossier » et « mon dossier avance ? » demandent deux règles |
-| **Aiguillage fermé** *(retenu)* | le modèle, mais **seulement pour nommer une intention d'une liste close** | la souplesse de la langue | borné : une intention inconnue retombe sur la réponse documentaire |
+| Aiguillage fermé | le modèle, mais **seulement pour nommer une intention d'une liste close** | la souplesse de la langue | borné : une intention inconnue retombe sur la réponse documentaire |
+| **Aiguillage déterministe** *(retenu, après mesure)* | des tournures reconnues | sûr, gratuit, testable sans serveur d'inférence | rigide : chaque tournure nouvelle est une règle à écrire |
 
-> **Le modèle nomme une intention, il n'ouvre pas une porte.** Sa réponse est validée contre une
-> énumération : tout ce qui n'y est pas devient `REGLE` — la réponse documentaire du lot 1, celle qui ne
-> lit aucune donnée.
+#### ⚠️ Pourquoi l'aiguillage fermé a été abandonné : la mesure (2026-09-20)
 
-Et **ce qui peut être décidé sans lui ne lui est pas demandé** : une question qui contient une référence
-de dossier (`00002/PPM/CNM/2026`) part directement sur le dossier, sans passe de classification.
+L'aiguillage fermé était la solution retenue en écrivant ce plan. Une batterie de dix questions l'a
+réglé : **4/10**, et pour une raison qu'aucune reformulation de consigne ne corrige.
+
+> **Le modèle réfléchit avant de répondre, et sa réflexion consomme tout le budget de sortie.** À douze
+> jetons comme à deux cents, le champ de contenu revient **vide** : la réponse entière est partie dans
+> le champ `reasoning`, que le client ne lit pas — et ne doit pas lire.
+
+Le mode réflexion **se coupe**, mais seulement par l'**API native** d'Ollama (`think: false` sur
+`/api/chat` : réponse juste, 0,5 s). Or l'assistant parle l'**API compatible OpenAI**, et c'est
+délibéré (ADR-0007) : c'est ce qui permet de changer de serveur d'inférence sans recompiler. On ne
+troque pas cette portabilité contre une classification que des mots-clés font aussi bien.
+
+D'où la règle, qui est celle du lot 3 appliquée à la compréhension : **ce qui peut être décidé sans le
+modèle ne lui est pas demandé**. L'aiguillage ne coûte plus rien, ne bloque plus le fil de la requête —
+et les dix questions de la batterie passent, sans serveur d'inférence.
+
+Ce qu'on perd est réel : la souplesse de la langue. Une tournure non prévue retombe sur la réponse
+documentaire au lieu de lire la donnée attendue. C'est un **manque de précision, jamais une fuite** —
+et chaque tournure s'ajoute là où on peut la tester.
 
 #### 4.b. La règle des paramètres — la vraie garantie
 
@@ -966,9 +981,9 @@ de dossiers (lot 2), et la consigne le dit au modèle.
 
 | # | Étape | État |
 |---|---|---|
-| 1 | L'aiguillage fermé : énumération des intentions, pré-routage déterministe, classification bornée | à faire |
-| 2 | Les lectures transverses et leurs tests de sécurité par profil | à faire |
-| 3 | La réponse composée (faits + extraits documentaires), et la batterie de qualité | à faire |
+| 1 | L'aiguillage : énumération des intentions, référence de dossier, tournures reconnues | **livrée** |
+| 2 | Les lectures transverses et leurs tests de sécurité par profil | **livrée** |
+| 3 | La réponse composée (faits OU extraits documentaires) | **livrée** |
 | 4 | La conversation multi-tours, bornée et désamorcée | à faire |
 | 5 | L'écran : le panneau du lot 1 qui montre ce qu'il a lu | à faire |
 | 6 | Recette sur l'application réelle, captures légendées | à faire |

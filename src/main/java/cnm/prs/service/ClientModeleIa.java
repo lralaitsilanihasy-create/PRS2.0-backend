@@ -114,6 +114,7 @@ public class ClientModeleIa {
      */
     public String generer(List<Message> messages, Consumer<String> surFragment, BooleanSupplier annule,
             int maxJetons) {
+        int timeoutSecondes = props.timeoutSecondes();
         Map<String, Object> corps = new LinkedHashMap<>();
         corps.put("model", props.modele());
         corps.put("stream", true);
@@ -124,13 +125,13 @@ public class ClientModeleIa {
         corps.put("messages", messages);
 
         HttpRequest requete = HttpRequest.newBuilder(URI.create(props.baseUrl() + "/chat/completions"))
-                .timeout(Duration.ofSeconds(props.timeoutSecondes()))
+                .timeout(Duration.ofSeconds(timeoutSecondes))
                 .header("Content-Type", "application/json")
                 .header("Accept", "text/event-stream")
                 .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(corps)))
                 .build();
 
-        long echeance = System.nanoTime() + Duration.ofSeconds(props.timeoutSecondes()).toNanos();
+        long echeance = System.nanoTime() + Duration.ofSeconds(timeoutSecondes).toNanos();
         StringBuilder reponse = new StringBuilder();
         HttpResponse<Stream<String>> resultat;
         try {

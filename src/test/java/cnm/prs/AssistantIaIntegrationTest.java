@@ -224,6 +224,8 @@ class AssistantIaIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(flux).contains("event:sources").contains("[]")
                 .contains("aucun passage qui traite de cette question")
                 .contains("event:fin");
+        // ⚠️ Le modèle n'est PAS appelé — pas même pour comprendre la question : l'aiguillage du lot 4
+        // est déterministe, précisément pour ne rien demander qui puisse se décider sans lui.
         assertThat(APPELS.get()).isEqualTo(avant);
     }
 
