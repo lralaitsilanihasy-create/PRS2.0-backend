@@ -103,6 +103,13 @@ public class DossierService {
     private final RattachementService rattachementService;
     /** Localité de repli pour notifier les vérificateurs quand le dossier n'en porte pas. */
     private final ReceptionRepository receptionRepository;
+
+    /**
+     * ⚠️ Pré-contrôle du PPM (2026-09-20, assistant IA lot 3, étape 3) — la soumission est le second
+     * moment où les règles tournent (le premier est le bouton « Vérifier mon PPM »), et celui où les
+     * écartements se figent. Voir {@link #preControlerEtFiger}.
+     */
+    private final PreControlePpmService preControle;
     private final VerificationRepository verificationRepository;
     private final AuditLogRepository auditLogRepository;
     private final PrmpRepository prmpRepository;
@@ -166,7 +173,8 @@ public class DossierService {
             PieceDemandeRetraitRepository pieceDemandeRetraitRepository,
             ChronometrageService chronometrage, DelaiStandardService delaiStandardService,
             FicheJustificationsService ficheJustifications, RattachementService rattachementService,
-            ReceptionRepository receptionRepository) {
+            ReceptionRepository receptionRepository, PreControlePpmService preControle) {
+        this.preControle = preControle;
         this.receptionRepository = receptionRepository;
         this.rattachementService = rattachementService;
         this.ficheJustifications = ficheJustifications;
@@ -911,9 +919,38 @@ public class DossierService {
         // REMPLACE. Sans effet si le dossier n'est pas une mise à jour (pas de dossier parent).
         miseAJourPpmService.figerDiffEtRemplacerParent(idDossier);
 
+        // ⚠️ Pré-contrôle du PPM (2026-09-20, lot 3) — dernière passe des règles, puis figeage des
+        // écartements. Ne bloque JAMAIS la soumission : voir preControlerEtFiger.
+        preControlerEtFiger(dossier, ppms);
+
         notifierSoumission(dossier, localite);
         journalDossier.tracer(dossier, JournalDossierService.SOUMISSION, "BROUILLON -> SOUMIS");
         return dto(dossier);
+    }
+
+    /**
+     * ⚠️ Pré-contrôle du PPM (2026-09-20, assistant IA lot 3, étape 3) — à la soumission, les règles
+     * tournent une dernière fois et les <strong>écartements se figent</strong> : la PRMP a écarté en
+     * sachant que son motif partirait avec le dossier, et le contrôleur lit un état qui ne bouge plus.
+     *
+     * <p><strong>Rien de tout cela ne peut empêcher une soumission.</strong> Le pré-contrôle signale, il ne
+     * décide pas : un plan avec dix signalements prioritaires se soumet exactement comme un plan sans
+     * aucun. Une panne du pré-contrôle est donc journalisée et avalée — refuser une soumission pour une
+     * erreur d'un outil d'aide serait le pire des défauts.</p>
+     */
+    private void preControlerEtFiger(Dossier dossier, List<Ppm> ppms) {
+        if (!FAMILLE_DDP.equals(dossier.getIdTypeDossier())) {
+            return;
+        }
+        for (Ppm ppm : ppms) {
+            try {
+                preControle.executer(ppm.getIdPpm());
+                preControle.figer(ppm.getIdPpm());
+            } catch (RuntimeException e) {
+                log.error("[PRE-CONTROLE] echec a la soumission du dossier={} ppm={} : {}",
+                        dossier.getIdDossier(), ppm.getIdPpm(), e.getMessage(), e);
+            }
+        }
     }
 
     /**
@@ -989,6 +1026,10 @@ public class DossierService {
         repository.save(dossier);
         log.info("[CIRCUIT] resoumission apres decision PRMP dossier={} acteur={} statut={}",
                 idDossier, CurrentUser.login().orElse(null), StatutDossier.EN_VERIFICATION.name());
+
+        // ⚠️ Pré-contrôle du PPM (2026-09-20, lot 3) — le plan a été rectifié : les règles retournent, et
+        // les écartements prononcés pendant la rectification se figent à leur tour. Jamais bloquant.
+        preControlerEtFiger(dossier, ppmRepository.findByIdDossier(idDossier));
 
         // Dernière vérification (le passage obsLevees=false qui a déclenché l'attente).
         Verification derniere = verificationRepository.findPassagesDuDossier(idDossier).stream()

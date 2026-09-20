@@ -932,6 +932,32 @@ marchés publics qu'il cite. Chacune s'éteint depuis l'administration, sans red
   au démarrage d'après le libellé du mode et corrigeable par l'Administrateur. Un mode non classé rend la
   règle des seuils **muette** pour lui : on ne devine pas.
 
+**Qui voit quoi, qui écarte quoi** ⚠️ **(2026-09-20, lot 3, étape 3)**
+
+- **PRMP et agent d'UGPM** : leurs propres plans, et rien d'autre. **Contrôleurs** : les plans de leur
+  localité — c'est-à-dire de leur organisme de contrôle. Le **Président**, sans localité, les voit tous.
+  Le **Secrétaire** et le **Chargé de publication** n'y entrent pas (ils n'examinent pas), et
+  l'**Administrateur** non plus : son rôle est technique, et son tableau de bord des taux d'écartement
+  lira des compteurs, pas des plans.
+- **L'Assistant contrôleur lit, il n'écarte pas** : il prépare le travail de l'examinateur.
+- ⚠️ **Un écartement de contrôleur n'est pas montré à la PRMP.** C'est une appréciation interne au
+  contrôle, qui se dit dans le PV ; le signalement lui reste présenté tel qu'elle l'a laissé. La
+  visibilité voulue par le pilote est l'inverse — le contrôleur voit les écartements de la PRMP, **avec
+  leur motif** —, et la symétrie annoncée est hiérarchique.
+- **Un seul écartement par signalement**, par qui agit le premier. Un contrôleur ne ré-écarte pas
+  par-dessus la PRMP : cela effacerait son motif. S'il n'en est pas convaincu, il porte une
+  **observation dans son examen** — le circuit a déjà ce qu'il faut pour cela.
+- **Le motif doit faire au moins 20 caractères**, et le serveur exige la **confirmation que
+  l'avertissement de visibilité a été montré** : sans lui, l'écartement serait un piège et il n'y aurait
+  pas de dissuasion.
+- **Reprendre son écartement** est possible tant que le plan n'est pas soumis, et **seulement par son
+  auteur**. Le motif est alors effacé : avant la soumission, rien n'a été transmis à personne.
+- **À la soumission** (et à la resoumission après rectification), les règles tournent une dernière fois
+  et les écartements sont **figés**. La PRMP ne peut alors plus ni écarter ni reprendre ; un contrôleur,
+  lui, écarte encore — son examen commence là où le travail de la PRMP s'arrête.
+- **Une panne du pré-contrôle n'empêche jamais une soumission** : elle est journalisée et avalée.
+  Refuser une soumission pour une erreur d'un outil d'aide serait le pire des défauts.
+
 ---
 
 ## 3. Fonctionnalités et règles par profil

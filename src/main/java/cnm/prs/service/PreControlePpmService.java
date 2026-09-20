@@ -368,10 +368,13 @@ public class PreControlePpmService {
     /**
      * Un signalement qui ne ressort plus est <strong>levé</strong>, jamais supprimé, et la date le dit.
      *
-     * <p>⚠️ Le <strong>détail</strong> de ce qui a changé reste sommaire à cette étape : le service sait
-     * que le constat ne ressort plus, pas quelle ligne a été réécrite. Le rapprochement fin avec le
-     * journal des changements de lignes ({@code t_changement_ligne}, qui existe déjà pour les mises à
-     * jour) est prévu à l'étape 3, où l'écran du contrôleur en a l'usage.</p>
+     * <p><strong>Ce que le détail dit, et ce qu'il ne dit pas.</strong> Il conserve <strong>le constat tel
+     * qu'il était</strong> au moment de disparaître, avec sa date : le contrôleur lit donc exactement ce
+     * qui était signalé, et peut le confronter au plan qu'il a sous les yeux. Il ne dit pas
+     * <em>quelle</em> ligne a été réécrite, et ce n'est pas un oubli : sur un plan en brouillon, aucune
+     * trace des modifications n'existe — {@code t_changement_ligne} ne se remplit qu'au figeage d'une
+     * <strong>version soumise</strong>, entre deux versions. Fabriquer un diff de brouillon serait un
+     * chantier à part entière ; garder le constat d'origine donne au contrôleur l'essentiel.</p>
      */
     private void lever(Anomalie orphelin, LocalDateTime maintenant) {
         orphelin.setStatut(StatutSignalement.LEVE_MODIFICATION.name());
@@ -380,8 +383,28 @@ public class PreControlePpmService {
                 + maintenant.toLocalDate() + " : le plan a changé depuis sa détection"
                 + (orphelin.getDateDetection() == null ? ""
                         : " du " + orphelin.getDateDetection().toLocalDate())
-                + ".");
+                + ". Il disait : « " + (orphelin.getDescription() == null ? "" : orphelin.getDescription())
+                + " »");
         anomalieRepository.save(orphelin);
+    }
+
+    /**
+     * ⚠️ Étape 3 — <strong>fige</strong> les signalements d'un plan : à la soumission, un écartement ne se
+     * défait plus (plan, 3.f, condition 3). C'est ce qui donne son poids à la dissuasion : la PRMP écarte
+     * en sachant que son motif partira avec le dossier.
+     *
+     * @return le nombre de signalements figés
+     */
+    public int figer(Integer idPpm) {
+        int figes = 0;
+        for (Anomalie a : anomalieRepository.findByIdPpmOrderByIdAnomalie(idPpm)) {
+            if (!a.getFige()) {
+                a.setFige(Boolean.TRUE);
+                anomalieRepository.save(a);
+                figes++;
+            }
+        }
+        return figes;
     }
 
     /** Réécrit les lignes visées par un signalement inter-lignes (le groupe change quand le plan change). */

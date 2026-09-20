@@ -421,7 +421,7 @@ Le lot est le plus lourd des cinq : il se livre par étapes, chacune vérifiée,
 |---|---|---|
 | **1. Socle de données** | référentiel de seuils daté et administrable, catégorie de seuil sur la ligne, signalement écartable par une PRMP, signalements inter-lignes | **livrée** (ci-dessous) |
 | **2. Moteur de règles** | les points de vérification du manuel (3.g) en règles, `t_regle_anomalie` semée, réconciliation d'une exécution à l'autre | **livrée** (ci-dessous) |
-| **3. API scopée et écartement motivé** | la PRMP ne voit que ses PPM, le contrôleur que sa localité ; écartement avec motif obligatoire ; visibilité croisée et symétrie hiérarchique (3.f) | à faire |
+| **3. API scopée et écartement motivé** | la PRMP ne voit que ses PPM, le contrôleur que sa localité ; écartement avec motif obligatoire ; visibilité croisée et symétrie hiérarchique (3.f) | **livrée** (ci-dessous) |
 | **4. Écran de la PRMP** | « Vérifier mon PPM », liste des signalements, fenêtre d'écartement portant l'avertissement de visibilité | à faire |
 | **5. Écran du contrôleur** | signalements rattachés aux points de la grille, écartés visibles avec leur motif, fait et piste distingués | à faire |
 | **6. Couche IA** | la phrase utile, la hiérarchisation, le fractionnement déguisé, la suggestion au format de l'annexe du PV ; batterie de qualité | à faire |
@@ -541,6 +541,56 @@ déclenche et un cas qui doit la laisser muette, les deux paliers de gravité du
 sur un mode dérogatoire et sur un mode plus ouvert que nécessaire, l'écartement motivé qui survit, la
 levée et la réouverture, la règle éteinte qui ne lève rien, l'absence de doublon, et le semis idempotent.
 
+
+#### Livraison de l'étape 3 — l'API scopée et l'écartement motivé (2026-09-20, branche `chantier/assistant-ia-lot3`)
+
+**Quatre endpoints** sous `/api/pre-controle` (contrat détaillé dans `docs/api-endpoints.md`) : lire les
+signalements d'un plan, relancer les règles (« Vérifier mon PPM »), **écarter** un signalement avec motif,
+**reprendre** son propre écartement.
+
+**Toutes les gardes en un seul endroit** (`SignalementPreControleService`). Le moteur de l'étape 2 n'en
+porte aucune, délibérément : il n'est appelé que par des couches qui en ont déjà posé une. Le périmètre est
+celui du circuit, pas un nouveau : la PRMP et son UGPM sur leurs propres plans (garde
+`exigerProprietaire`, qui admet la PRMP en fonction après une passation de témoin), les contrôleurs sur
+leur localité, le Président partout. L'Administrateur n'entre pas — son tableau de bord de l'étape 7 lira
+des compteurs, pas des plans.
+
+**Trois décisions prises à l'écriture**, qui ne figuraient pas explicitement dans le cadrage :
+
+1. **Un seul écartement par signalement**, par qui agit le premier. Le modèle ne porte qu'un écartement
+   (`IM_TRAITEMENT` + `COMMENTAIRE_TRAITEMENT`) et c'est le bon choix : un contrôleur qui ré-écarterait
+   par-dessus la PRMP **effacerait son motif**, alors que « rien ne s'efface » est la troisième condition
+   de la dissuasion. Le refus (409) lui rappelle ce motif et l'oriente vers une **observation d'examen**,
+   que le circuit sait déjà porter.
+2. **Un écartement de contrôleur n'est pas montré à la PRMP.** Le cadrage règle la visibilité dans l'autre
+   sens (PRMP → contrôleur) et la symétrie hiérarchique (contrôleur → CC/Président) ; il ne dit rien du
+   retour vers la PRMP. La lecture prudente s'impose : l'appréciation du contrôle se dit dans le PV, pas
+   dans l'écran de la PRMP. ⚠️ **À confirmer par le pilote** — c'est le seul point de ce lot qui ne
+   découle pas d'un de ses arbitrages.
+3. **Le serveur exige la confirmation que l'avertissement de visibilité a été montré**
+   (`avertissementLu`). La première condition de la dissuasion — « la PRMP le sait au moment d'écarter » —
+   ne devait pas dépendre du seul écran. ⚠️ Deux annotations sont nécessaires (`@NotNull` **et**
+   `@AssertTrue`) : un booléen absent satisfait `@AssertTrue` seul, et l'omettre suffisait à contourner la
+   condition.
+
+**Le figeage a son moment** : la soumission (et la resoumission après rectification) relance les règles une
+dernière fois, puis fige les écartements. Après quoi la PRMP ne peut plus ni écarter ni reprendre — c'est
+ce qui donne sa valeur à son motif devant le contrôleur —, tandis qu'un contrôleur écarte encore. Une
+**panne du pré-contrôle n'empêche jamais une soumission** : elle est journalisée et avalée. Refuser une
+soumission pour une erreur d'un outil d'aide serait le pire des défauts.
+
+**Le tri est servi, pas calculé par l'écran** : ouverts d'abord, prioritaires en tête. C'est la
+hiérarchisation qui rend l'outil utile sur un plan de 120 lignes, et deux écrans ne doivent pas compter
+différemment.
+
+**Tests** : 13 d'intégration (`PreControleApiIntegrationTest`), dont la moitié sont des tests de sécurité
+par profil — une PRMP devant le plan d'une autre PRMP (**403**, c'est la fuite que l'audit du 2026-09-14
+avait classée critique), un contrôleur devant un plan d'une autre commission (403), le Président partout,
+l'Administrateur nulle part, l'Assistant contrôleur qui lit sans écarter. Puis les quatre conditions de la
+dissuasion : motif obligatoire et suffisant, avertissement exigé par le serveur, contrôleur qui lit le
+motif de la PRMP, figeage à la soumission (soumission réelle par l'API, pour que le branchement soit
+vérifié et pas seulement compilé).
+
 ### Lot 4 — Chatbot transverse
 
 Élargissement de la liste blanche (KPI, indicateurs, annuaire, PPM, marchés) et conversation
@@ -586,6 +636,7 @@ contestation, on sait exactement ce que l'assistant a dit et sur quoi.
 | ~~Montants HT ou TTC ?~~ **RÉPONDU (pilote, 2026-09-18) : HT** — comparaison directe aux seuils | — |
 | ~~PI entre 100 M et 150 M~~ **TRANCHÉ (pilote, 2026-09-18) : 100 M** | — |
 | ~~Type d'organisme~~ **TRANCHÉ (pilote, 2026-09-18) : déduit de l'organisme de contrôle assigné à l'entité** — CNM → central, CRM → déconcentré (3.g, point 3) | — |
+| Un écartement prononcé par un **contrôleur** est-il montré à la PRMP ? **Livré non montré** (étape 3, décision 2) : c'est une appréciation interne au contrôle, qui se dit dans le PV. À confirmer. | pilote |
 | Matériel du serveur de production (GPU ou non) — conditionne la taille du modèle | pilote, à l'issue du lot 1 |
 | ~~L'assistant est-il ouvert à la PRMP ?~~ **TRANCHÉ (pilote, 2026-09-18) : oui**, et il peut lui citer le manuel | — |
 | Qui exploite le serveur d'inférence (redémarrage, mise à jour du modèle) ? | pilote |

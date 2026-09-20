@@ -4914,6 +4914,101 @@ immuable). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **40
 
 ---
 
+## Pré-contrôle du PPM (assistant IA, lot 3)
+**Ressource** `/api/pre-controle` — ⚠️ **Lot 3, étape 3 (2026-09-20)**, cadrage
+`docs/plan-assistant-ia.md` §4 lot 3. Signale à la PRMP les problèmes de son plan **avant qu'elle ne
+soumette**, et au contrôleur les points à regarder **avant qu'il n'examine**. **Rien n'y bloque** : aucune
+soumission n'est refusée, aucun mode corrigé — le mode de passation reste celui que la PRMP a saisi.
+
+**Qui entre** : `PRMP`, `UGPM`, `PRESIDENT`, `CHEF_COMMISSION`, `MEMBRE`, `VERIFICATEUR`,
+`ASSISTANT_CONTROLEUR` (lecture seule). Hors ressource : `SECRETAIRE` et `CHARGE_PUBLICATION` (ils
+n'examinent pas) et `ADMINISTRATEUR` (rôle technique — son tableau de bord des taux d'écartement lira des
+compteurs, pas des plans).
+
+**Périmètre, tenu côté service** :
+
+- **PRMP / UGPM** — leurs propres plans, et rien d'autre (garde du circuit : PRMP d'attribution **ou**
+  PRMP en fonction sur le périmètre, pour qu'un successeur puisse vérifier après une passation de témoin).
+  **403** sur le plan d'une autre PRMP.
+- **Contrôleurs** — les plans de **leur localité** (leur organisme de contrôle) ; **403** ailleurs. Le
+  Président, sans localité au jeton, les voit tous.
+- ⚠️ **Ce que la PRMP ne voit pas** : un écartement prononcé par un **contrôleur** ne lui est pas servi
+  (`ecartement` absent, `statut` rendu `OUVERT`). C'est une appréciation interne au contrôle, qui se dit
+  dans le PV. La visibilité voulue par le pilote est l'inverse : le contrôleur voit **les écartements de la
+  PRMP, avec leur motif**.
+
+**Champs `SignalementDto`**
+
+| Champ (JSON) | Type | Description |
+|---|---|---|
+| id | number | identifiant du signalement (`t_anomalie.ID_ANOMALIE`) |
+| type | string | code de la règle : `FRACTIONNEMENT_COMPTE`, `MODE_SOUS_LE_SEUIL`, `CATEGORIE_SEUIL_A_PRECISER`, `LOTS_SOMME_DIVERGENTE`, `MENTION_DELAI_REDUIT`, `DATES_PREVISION_INCOHERENTES` |
+| libelleRegle | string | libellé **administrable** de la règle (`t_regle_anomalie.LIBELLE`) |
+| gravite | string | `A_VERIFIER` ou `PRIORITAIRE` — **jamais bloquant** |
+| source | string | `REGLE` (fait opposable, avec sa base légale) ou `IA` (piste) — ⚠️ **à ne jamais présenter de la même façon** |
+| statut | string | `OUVERT`, `ECARTE`, `LEVE_MODIFICATION` |
+| description | string | le constat, avec le texte qui le fonde (manuel, articles, seuil et base légale) |
+| suggestion | string | la correction proposée, au format de l'annexe d'un PV (« Au lieu de : … Lire : … ») |
+| idDetail | number | la ligne visée, si le signalement n'en vise qu'une ; `null` pour un constat inter-lignes |
+| designationLigne | string | désignation de cette ligne |
+| lignes | array | lignes visées d'un constat inter-lignes : `{ idDetail, designation, montant }` — `montant` est celui **du moment de la détection** |
+| idPointCtrl / libellePointCtrl | number / string | point de la grille de contrôle que le signalement éclaire |
+| dateDetection | date-time | dernière détection |
+| ecartement | object | `{ typeActeur (PRMP\|CONTROLEUR), refActeur, date, motif }` — `null` s'il n'y a pas d'écartement, ou si le lecteur n'a pas à le voir |
+| fige | boolean | vrai depuis la soumission : l'écartement ne se défait plus |
+| dateLevee / detailLevee | date-time / string | quand le signalement a cessé de ressortir, et le constat tel qu'il était |
+
+**Champs `ResumePreControleDto`** : `idPpm`, `exercice`, `dateVerification`, `nbOuverts`,
+`nbPrioritaires` (parmi les ouverts), `nbEcartes`, `nbLeves`, `signalements[]` — **triés ouverts d'abord,
+prioritaires en tête** (la hiérarchisation est servie, pas recalculée par l'écran).
+
+**Champs `EcartementRequest`**
+
+| Champ (JSON) | Type | Obligatoire | Contraintes |
+|---|---|---|---|
+| motif | string | **Oui** | @NotBlank, **min 20**, max 2000 — « RAS » ne dit rien au contrôleur |
+| avertissementLu | boolean | **Oui** | @NotNull + @AssertTrue — l'écran doit avoir montré que l'écartement et son motif seront lus de l'autre côté du circuit. ⚠️ Les **deux** annotations : un booléen absent satisfait `@AssertTrue` seul, et l'omettre aurait suffi à contourner la condition même de la dissuasion |
+
+**Endpoints**
+
+| Méthode | URL | Corps | Réponse | Statuts | Rôle |
+|---|---|---|---|---|---|
+| GET | /api/pre-controle/ppm/{idPpm} | — | `ResumePreControleDto` | 200, 403, 404 | PRMP/UGPM (ses plans), contrôleurs (sa localité) |
+| POST | /api/pre-controle/ppm/{idPpm}/verifier | — | `ResumePreControleDto` | 200, 403, 404 | idem — relance les règles (**idempotent**) |
+| POST | /api/pre-controle/signalements/{id}/ecarter | `EcartementRequest` | `SignalementDto` | 200, 400, 403, 404, 409 | PRMP/UGPM, PRESIDENT, CHEF_COMMISSION, MEMBRE, VERIFICATEUR |
+| POST | /api/pre-controle/signalements/{id}/reprendre | — | `SignalementDto` | 200, 403, 404, 409 | idem — **son propre** écartement, plan non soumis |
+
+**409 et leurs raisons**
+
+- **déjà écarté** — un seul écartement par signalement, par qui agit le premier. Un second effacerait le
+  motif du premier, et *rien ne s'efface* : le refus rappelle ce motif et oriente le contrôleur vers une
+  observation d'examen s'il n'en est pas convaincu ;
+- **figé** — après la soumission, la PRMP ne peut plus ni écarter ni reprendre. Un contrôleur, lui,
+  écarte encore : son examen commence là où le travail de la PRMP s'arrête ;
+- **levé par modification** — il n'y a plus rien à écarter.
+
+**Quand les règles tournent** (plan, 3.d) : sur le bouton **« Vérifier mon PPM »**, et à la
+**soumission** (et à la resoumission après rectification), où les écartements sont ensuite **figés**. Le
+pré-contrôle ne tourne **jamais** à chaque frappe. Une panne du pré-contrôle **n'empêche pas** une
+soumission : elle est journalisée et avalée.
+
+**Exemple — réponse (extrait)**
+```json
+{ "idPpm": 760, "exercice": 2026, "dateVerification": "2026-09-20T10:12:31",
+  "nbOuverts": 1, "nbPrioritaires": 1, "nbEcartes": 1, "nbLeves": 0,
+  "signalements": [
+    { "id": 12, "type": "MODE_SOUS_LE_SEUIL", "libelleRegle": "Mode de passation en deçà du seuil applicable au montant",
+      "gravite": "A_VERIFIER", "source": "REGLE", "statut": "OUVERT",
+      "description": "« Acquisition de matériel informatique » (fournitures et services, 200 000 000 Ar HT) est prévue en « Consultation de prix », alors que ce montant appelle un appel d'offres ouvert à partir de 150 000 000 Ar HT (Arrêté n° 13 156/2019-MEF du 4 juillet 2019, art. 2, 2°) i°) a)). Manuel de contrôle a priori, p. 14.",
+      "suggestion": "Au lieu de : « Consultation de prix ».\nLire : « Appel d'offres ouvert » — ou la justification du mode dérogatoire dans la fiche de présentation, si le marché relève des articles 38 ou 39 du code des marchés publics.",
+      "idDetail": 7604, "designationLigne": "Acquisition de matériel informatique", "lignes": [],
+      "idPointCtrl": 13, "libellePointCtrl": "Mode de passation conforme",
+      "dateDetection": "2026-09-20T10:12:31", "ecartement": null, "fige": false }
+  ] }
+```
+
+---
+
 ## Profils
 **Ressource** `/api/profiles` — Référentiel RBAC (§3.8) : lecture ouverte ; écriture `ADMINISTRATEUR`.
 
@@ -5759,7 +5854,7 @@ au dépôt, **aucun archivage** — simple événement tracé).
 | parametreNum | number | Non | |
 | parametreTxt | string | Non | max 200 |
 | actif | boolean | Non | |
-| graviteDefaut | string | Non | max 10 |
+| graviteDefaut | string | Non | max 20 (⚠️ élargi par V32 : « PRIORITAIRE » fait 11 caractères) |
 
 **Endpoints**
 
