@@ -11,6 +11,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cnm.prs.dto.AnalyseIaDto;
 import cnm.prs.dto.EcartementRequest;
 import cnm.prs.dto.ResumePreControleDto;
 import cnm.prs.dto.SignalementDto;
@@ -77,12 +78,15 @@ public class SignalementPreControleService {
     private final PointsCtrlRepository pointsCtrlRepository;
     private final PreControlePpmService preControle;
     private final DossierIntegriteService dossierIntegrite;
+    private final AnalysePreControleIaService analyseIa;
 
     public SignalementPreControleService(PpmRepository ppmRepository, DossierRepository dossierRepository,
             MarcheRepository marcheRepository, AnomalieRepository anomalieRepository,
             AnomalieLigneRepository anomalieLigneRepository,
             RegleAnomalieRepository regleAnomalieRepository, PointsCtrlRepository pointsCtrlRepository,
-            PreControlePpmService preControle, DossierIntegriteService dossierIntegrite) {
+            PreControlePpmService preControle, DossierIntegriteService dossierIntegrite,
+            AnalysePreControleIaService analyseIa) {
+        this.analyseIa = analyseIa;
         this.ppmRepository = ppmRepository;
         this.dossierRepository = dossierRepository;
         this.marcheRepository = marcheRepository;
@@ -107,6 +111,23 @@ public class SignalementPreControleService {
     @Transactional(readOnly = true)
     public ResumePreControleDto lire(Integer idPpm) {
         return resume(exigerAccesAuPlan(idPpm));
+    }
+
+    /**
+     * ⚠️ Étape 6 — demande à l'<strong>assistant</strong> ce que les règles ne peuvent pas voir : le
+     * fractionnement déguisé, un objet imprécis, une nature incohérente. Ses constats arrivent en
+     * <strong>pistes</strong> ({@code source = IA}), à côté des faits, jamais à leur place.
+     *
+     * <p>Même garde de périmètre que le reste : on ne fait analyser que ce qu'on a le droit de lire. Et
+     * l'appel est <strong>explicite</strong> — un modèle n'est jamais sollicité à la frappe.</p>
+     *
+     * @throws cnm.prs.exception.ResourceNotFoundException si l'assistant n'est pas activé (contrat du lot 1)
+     */
+    public AnalyseIaDto analyserParLAssistant(Integer idPpm) {
+        Ppm ppm = exigerAccesAuPlan(idPpm);
+        AnalysePreControleIaService.Analyse analyse = analyseIa.analyser(
+                preControle.chargerContexte(idPpm), CurrentUser.ref().orElse(null));
+        return new AnalyseIaDto(analyse.synthese(), resume(ppm));
     }
 
     // ------------------------------------------------------------------ écartement

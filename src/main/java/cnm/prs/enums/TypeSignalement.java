@@ -83,7 +83,41 @@ public enum TypeSignalement {
      * établit sans risque d'erreur : une fin avant son début, ou une date hors de l'exercice du plan.
      */
     DATES_PREVISION_INCOHERENTES("Dates prévisionnelles incohérentes (fin avant début, ou hors exercice)",
-            GraviteSignalement.A_VERIFIER, PointDeGrille.MONTANT);
+            GraviteSignalement.A_VERIFIER, PointDeGrille.MONTANT),
+
+    // =============================================================================================
+    // ⚠️ Étape 6 (2026-09-20) — ce que l'ASSISTANT propose, et qu'aucune règle ne peut établir.
+    // Ces trois types portent SOURCE = IA : ce sont des PISTES, à ne jamais présenter comme des faits.
+    // Ils ont eux aussi leur ligne dans t_regle_anomalie, donc leur interrupteur : la couche IA est la
+    // plus susceptible d'être bruyante, c'est celle qu'on doit pouvoir éteindre la première.
+    // =============================================================================================
+
+    /**
+     * <strong>Fractionnement déguisé</strong> — même besoin réparti sur des comptes ou des libellés
+     * différents : même route nationale, même périmètre irrigué, même bâtiment. La règle du compte ne
+     * peut pas le voir (les comptes diffèrent, c'est tout le procédé) ; l'information n'est que dans la
+     * désignation, et le manuel le dit explicitement pour les travaux routiers (« une seule opération
+     * […] pour une seule Route Nationale ») et hydro-agricoles (« pour un périmètre irrigué »).
+     */
+    FRACTIONNEMENT_DEGUISE("Même besoin réparti sur plusieurs lignes, comptes ou libellés différents",
+            GraviteSignalement.A_VERIFIER, PointDeGrille.FRACTIONNEMENT, SourceSignalement.IA),
+
+    /**
+     * <strong>Objet imprécis</strong> — le manuel énumère ce que l'objet doit contenir (p. 14) : type et
+     * quantité des fournitures, site et consistance des travaux, domaine d'intervention des prestations
+     * intellectuelles, immatriculation du véhicule pour un entretien, numéro et objet des lots et des
+     * tranches. Aucune règle ne sait lire cela dans une phrase libre.
+     */
+    OBJET_IMPRECIS("Objet peu explicite au regard des mentions attendues par le manuel",
+            GraviteSignalement.A_VERIFIER, PointDeGrille.DESIGNATION, SourceSignalement.IA),
+
+    /**
+     * <strong>Nature incohérente</strong> avec l'objet ou le compte (manuel, p. 14 : « vérifier si la
+     * nature des prestations est cohérente avec l'objet », « si l'objet est cohérent avec la nature et le
+     * compte PCOP/PCG »). C'est une appréciation de sens, hors de portée d'une règle.
+     */
+    NATURE_INCOHERENTE("Nature déclarée peu cohérente avec l'objet ou le compte",
+            GraviteSignalement.A_VERIFIER, PointDeGrille.DESIGNATION, SourceSignalement.IA);
 
     /**
      * Point de la grille de contrôle du PPM ({@code tr_points_ctrl}) que le signalement éclaire — le
@@ -121,11 +155,33 @@ public enum TypeSignalement {
     private final String libelle;
     private final GraviteSignalement graviteDefaut;
     private final PointDeGrille pointDeGrille;
+    private final SourceSignalement source;
 
+    /** Type de règle : ce qu'une règle établit est un fait ({@link SourceSignalement#REGLE}). */
     TypeSignalement(String libelle, GraviteSignalement graviteDefaut, PointDeGrille pointDeGrille) {
+        this(libelle, graviteDefaut, pointDeGrille, SourceSignalement.REGLE);
+    }
+
+    TypeSignalement(String libelle, GraviteSignalement graviteDefaut, PointDeGrille pointDeGrille,
+            SourceSignalement source) {
         this.libelle = libelle;
         this.graviteDefaut = graviteDefaut;
         this.pointDeGrille = pointDeGrille;
+        this.source = source;
+    }
+
+    /**
+     * D'où vient ce type de signalement : une <strong>règle</strong> (fait opposable, avec sa base
+     * légale) ou l'<strong>assistant</strong> (piste). C'est porté par le type, et non laissé au bon
+     * vouloir de l'appelant, pour qu'une piste ne puisse jamais être enregistrée comme un fait.
+     */
+    public SourceSignalement source() {
+        return source;
+    }
+
+    /** Les types que l'assistant peut proposer — les seuls qu'une analyse IA est autorisée à produire. */
+    public static java.util.List<TypeSignalement> typesDeLAssistant() {
+        return java.util.Arrays.stream(values()).filter(t -> t.source == SourceSignalement.IA).toList();
     }
 
     /** Libellé de la règle, tel qu'il est semé dans {@code t_regle_anomalie.LIBELLE} (200 caractères). */

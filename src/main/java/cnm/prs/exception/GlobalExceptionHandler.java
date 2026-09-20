@@ -400,6 +400,24 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * ⚠️ Pré-contrôle du PPM (2026-09-20, assistant IA lot 3, étape 6) — le <strong>serveur d'inférence</strong>
+     * ne répond pas, refuse la requête ou dépasse le délai. → <strong>503</strong>, et non une 500 opaque :
+     * ce n'est pas une panne de PRS, c'est un service de calcul absent, et l'utilisateur peut réessayer.
+     *
+     * <p>Le message reste utilisable par un agent : l'assistant est une <strong>aide</strong>, son
+     * indisponibilité n'empêche ni la saisie, ni la soumission, ni le pré-contrôle par les règles.</p>
+     */
+    @ExceptionHandler(cnm.prs.service.ClientModeleIa.ModeleIndisponibleException.class)
+    public ResponseEntity<ErrorResponse> handleModeleIndisponible(
+            cnm.prs.service.ClientModeleIa.ModeleIndisponibleException ex, WebRequest request) {
+        log.warn("Assistant IA indisponible sur {} : {}", uri(request), ex.getMessage());
+        return build(HttpStatus.SERVICE_UNAVAILABLE,
+                "L'assistant n'est pas joignable pour le moment. Les points signalés par les règles "
+                        + "restent disponibles, et rien n'empêche de poursuivre.",
+                request, null);
+    }
+
+    /**
      * Violation d'une contrainte de base : clé primaire en doublon, valeur obligatoire
      * manquante (NOT NULL) ou référence (clé étrangère) inexistante. → 409 plutôt qu'une 500.
      */

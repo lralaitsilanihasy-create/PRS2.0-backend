@@ -932,6 +932,32 @@ marchés publics qu'il cite. Chacune s'éteint depuis l'administration, sans red
   au démarrage d'après le libellé du mode et corrigeable par l'Administrateur. Un mode non classé rend la
   règle des seuils **muette** pour lui : on ne devine pas.
 
+**Les trois pistes de l'assistant** ⚠️ **(2026-09-20, lot 3, étape 6)** — l'assistant ne double jamais une
+règle : il cherche ce qu'aucune règle ne peut établir, parce que l'information n'est que dans une phrase
+libre. Ses constats sont des **pistes** (`SOURCE = IA`), jamais des faits.
+
+| Code | Ce qu'il cherche | Texte |
+|---|---|---|
+| `FRACTIONNEMENT_DEGUISE` | même besoin réparti sur des lignes aux comptes ou libellés **différents** : même route nationale, même bâtiment, même périmètre irrigué | manuel p. 15-16 (variantes travaux routiers, hydro-agricoles et prestations intellectuelles) |
+| `OBJET_IMPRECIS` | objet générique au regard des mentions attendues (type et quantité, site et consistance, domaine, immatriculation, lots) | manuel p. 14 |
+| `NATURE_INCOHERENTE` | nature déclarée qui ne correspond pas à l'objet ou au compte | manuel p. 14 |
+
+- **L'assistant ne va jamais sur le terrain des règles** : mode de passation, seuils, montants, dates,
+  somme des lots, fractionnement par un même compte. Là, le constat doit être opposable — et un modèle ne
+  l'est pas. Une piste de fractionnement portant sur des lignes du **même compte** est refusée par le
+  serveur lui-même, pas par la consigne.
+- **L'analyse est un geste explicite** (« Demander une piste à l'assistant »), jamais déclenchée à la
+  frappe ni à la soumission : elle fait travailler un modèle partagé par tous les utilisateurs.
+- **Une piste s'écarte comme un constat**, avec le même motif obligatoire, et se retrouve écartée à
+  l'analyse suivante. Une PRMP qui écarte à raison une intuition fausse du modèle n'en porte pas la marque.
+- **Chaque type de piste s'éteint** depuis l'administration, sans redéploiement : la couche IA est la plus
+  susceptible d'être bruyante, c'est celle qu'on doit pouvoir éteindre la première.
+- **Aucune donnée d'acteur ne sort** : le modèle reçoit l'objet, la nature, le compte, le financement et le
+  montant des lignes. Chaque analyse est journalisée comme tout échange avec l'assistant.
+- **La qualité est mesurée, pas supposée** : une batterie de sept plans de référence — dont **deux qui
+  doivent rester silencieux** — se rejoue avant tout changement de modèle. Mesure du 2026-09-20 avec
+  `qwen3.5:9b-q4_K_M` : 5 puis 6 cas sur 7.
+
 **Qui voit quoi, qui écarte quoi** ⚠️ **(2026-09-20, lot 3, étape 3)**
 
 - **PRMP et agent d'UGPM** : leurs propres plans, et rien d'autre. **Contrôleurs** : les plans de leur

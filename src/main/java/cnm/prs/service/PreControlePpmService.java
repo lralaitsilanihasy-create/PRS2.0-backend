@@ -146,7 +146,35 @@ public class PreControlePpmService {
     public ResultatPreControle executer(Integer idPpm) {
         Ppm ppm = ppmRepository.findById(idPpm)
                 .orElseThrow(() -> new ResourceNotFoundException("PPM introuvable : " + idPpm));
-        return rapprocher(ppm, executerRegles(charger(ppm)));
+        return rapprocher(ppm, executerRegles(charger(ppm)), SourceSignalement.REGLE);
+    }
+
+    /**
+     * ⚠️ Étape 6 — enregistre les <strong>pistes de l'assistant</strong> avec exactement le même
+     * rapprochement que les règles : une piste déjà écartée qui ressort retrouve sa ligne et son motif,
+     * une piste qui ne ressort plus est levée, jamais effacée.
+     *
+     * <p>Les deux populations ne se mélangent jamais : ce rapprochement ne voit que les signalements de
+     * source {@code IA}, comme celui des règles ne voit que les leurs. Une analyse de l'assistant ne peut
+     * donc pas lever un constat de règle, ni l'inverse.</p>
+     *
+     * @param constats       les pistes retenues, déjà validées par l'appelant
+     * @param codesExecutes  les types que l'analyse a réellement examinés — seuls ceux-là peuvent voir
+     *                       leurs anciennes pistes levées (voir {@link Execution})
+     */
+    public ResultatPreControle enregistrerConstatsIa(Integer idPpm, List<SignalementDetecte> constats,
+            java.util.Set<String> codesExecutes) {
+        Ppm ppm = ppmRepository.findById(idPpm)
+                .orElseThrow(() -> new ResourceNotFoundException("PPM introuvable : " + idPpm));
+        // Garde de cohérence : la source d'un signalement vient de son TYPE. Un constat de règle glissé
+        // ici serait enregistré comme un fait tout en étant rapproché contre les pistes — donc dédoublé.
+        List<SignalementDetecte> pistes = constats.stream()
+                .filter(c -> c.type().source() == SourceSignalement.IA).toList();
+        if (pistes.size() != constats.size()) {
+            log.warn("[PRE-CONTROLE IA] {} constat(s) de règle écarté(s) d'une analyse de l'assistant.",
+                    constats.size() - pistes.size());
+        }
+        return rapprocher(ppm, new Execution(pistes, codesExecutes), SourceSignalement.IA);
     }
 
     /** Les constats des règles actives, sans rien écrire — pour un aperçu ou un test. */
@@ -155,6 +183,18 @@ public class PreControlePpmService {
         Ppm ppm = ppmRepository.findById(idPpm)
                 .orElseThrow(() -> new ResourceNotFoundException("PPM introuvable : " + idPpm));
         return executerRegles(charger(ppm)).constats();
+    }
+
+    /**
+     * ⚠️ Étape 6 — le plan chargé, pour qui doit le lire sans le relire : l'analyse de l'assistant travaille
+     * sur <strong>exactement les mêmes données</strong> que les règles (objets, natures, comptes, montants
+     * en vigueur), et il n'y a aucune raison de les charger deux fois.
+     */
+    @Transactional(readOnly = true)
+    public ContextePreControle chargerContexte(Integer idPpm) {
+        Ppm ppm = ppmRepository.findById(idPpm)
+                .orElseThrow(() -> new ResourceNotFoundException("PPM introuvable : " + idPpm));
+        return charger(ppm);
     }
 
     /**
@@ -265,11 +305,18 @@ public class PreControlePpmService {
 
     // ------------------------------------------------------------------ 3. rapprocher
 
-    private ResultatPreControle rapprocher(Ppm ppm, Execution execution) {
+    /**
+     * @param source la population rapprochée : les constats des <strong>règles</strong> ou les pistes de
+     *               l'<strong>assistant</strong>. Les deux ne se mélangent jamais — une passe sur l'une ne
+     *               doit ni modifier ni lever un signalement de l'autre, qui est produit par un tout
+     *               autre mécanisme.
+     */
+    private ResultatPreControle rapprocher(Ppm ppm, Execution execution, SourceSignalement source) {
         List<SignalementDetecte> constats = execution.constats();
         Map<String, Anomalie> existants = anomalieRepository.findByIdPpmOrderByIdAnomalie(ppm.getIdPpm())
                 .stream()
-                .filter(a -> !SourceSignalement.IA.name().equals(a.getSource()))
+                .filter(a -> source.name().equals(
+                        a.getSource() == null ? SourceSignalement.REGLE.name() : a.getSource()))
                 .filter(a -> a.getCleSignalement() != null)
                 .collect(Collectors.toMap(Anomalie::getCleSignalement, Function.identity(), (a, b) -> a,
                         LinkedHashMap::new));
@@ -325,7 +372,8 @@ public class PreControlePpmService {
         a.setIdRegleAnomalie(idRegle);
         a.setTypeAnomalie(constat.type().name());
         a.setGravite(constat.gravite().name());
-        a.setSource(SourceSignalement.REGLE.name());
+        // La source vient du TYPE, jamais de l'appelant : une piste ne peut pas être enregistrée en fait.
+        a.setSource(constat.type().source().name());
         a.setStatut(StatutSignalement.OUVERT.name());
         a.setDescription(constat.description());
         a.setSuggestion(constat.suggestion());

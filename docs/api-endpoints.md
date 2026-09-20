@@ -4975,6 +4975,7 @@ prioritaires en tête** (la hiérarchisation est servie, pas recalculée par l'�
 |---|---|---|---|---|---|
 | GET | /api/pre-controle/ppm/{idPpm} | — | `ResumePreControleDto` | 200, 403, 404 | PRMP/UGPM (ses plans), contrôleurs (sa localité) |
 | POST | /api/pre-controle/ppm/{idPpm}/verifier | — | `ResumePreControleDto` | 200, 403, 404 | idem — relance les règles (**idempotent**) |
+| POST | /api/pre-controle/ppm/{idPpm}/analyse-ia | — | `AnalyseIaDto` | 200, 403, 404, 503 | idem — **404** si l'assistant n'est pas activé, **503** si le serveur d'inférence ne répond pas |
 | POST | /api/pre-controle/signalements/{id}/ecarter | `EcartementRequest` | `SignalementDto` | 200, 400, 403, 404, 409 | PRMP/UGPM, PRESIDENT, CHEF_COMMISSION, MEMBRE, VERIFICATEUR |
 | POST | /api/pre-controle/signalements/{id}/reprendre | — | `SignalementDto` | 200, 403, 404, 409 | idem — **son propre** écartement, plan non soumis |
 
@@ -4986,6 +4987,26 @@ prioritaires en tête** (la hiérarchisation est servie, pas recalculée par l'�
 - **figé** — après la soumission, la PRMP ne peut plus ni écarter ni reprendre. Un contrôleur, lui,
   écarte encore : son examen commence là où le travail de la PRMP s'arrête ;
 - **levé par modification** — il n'y a plus rien à écarter.
+
+**Analyse par l'assistant** (`POST …/analyse-ia`, ⚠️ étape 6) — ce que les règles ne peuvent pas établir :
+`FRACTIONNEMENT_DEGUISE` (même besoin sous des comptes ou des libellés différents), `OBJET_IMPRECIS`,
+`NATURE_INCOHERENTE`. Ses constats rejoignent les signalements du plan avec `source = "IA"` : **des pistes,
+jamais des faits**. Réponse `AnalyseIaDto` : `{ synthese, resume }` — `synthese` dit **où regarder
+d'abord**, n'est **pas enregistrée** (aide à la lecture, recalculée) et peut être `null`.
+
+- Geste **explicite**, comme la vérification : trois appels au modèle (une passe par type), quelques
+  secondes. Jamais à la frappe.
+- **Ne touche jamais** aux constats des règles, et une exécution des règles ne lève jamais une piste : deux
+  populations, deux mécanismes, chacune rapprochée contre la sienne.
+- Une piste **s'écarte comme un constat** (même endpoint, même motif obligatoire) et se **retrouve écartée**
+  à l'analyse suivante.
+- Chaque type de piste a son **interrupteur** dans `t_regle_anomalie` : la couche IA est la plus
+  susceptible d'être bruyante, c'est celle qu'on éteint la première, sans redéploiement.
+- **Aucune donnée d'acteur** n'est transmise au modèle : objet, nature, compte, financement, montant.
+  Chaque analyse est journalisée (`t_audit_log`, `NOM_TABLE = assistant_ia`,
+  `TYPE_ACTION = ANALYSE_PRE_CONTROLE`).
+- **503** : l'assistant n'est pas joignable. Les points signalés par les règles restent servis par les
+  autres endpoints — l'indisponibilité du modèle ne prive personne du pré-contrôle.
 
 **Quand les règles tournent** (plan, 3.d) : sur le bouton **« Vérifier mon PPM »**, et à la
 **soumission** (et à la resoumission après rectification), où les écartements sont ensuite **figés**. Le

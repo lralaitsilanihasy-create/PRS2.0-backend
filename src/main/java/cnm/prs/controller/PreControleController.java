@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import jakarta.validation.Valid;
 
+import cnm.prs.dto.AnalyseIaDto;
 import cnm.prs.dto.EcartementRequest;
 import cnm.prs.dto.ResumePreControleDto;
 import cnm.prs.dto.SignalementDto;
@@ -61,6 +62,22 @@ public class PreControleController {
     @PostMapping("/ppm/{idPpm}/verifier")
     public ResumePreControleDto verifier(@PathVariable Integer idPpm) {
         return service.verifier(idPpm);
+    }
+
+    /**
+     * ⚠️ Étape 6 — demande à l'<strong>assistant</strong> ce que les règles ne peuvent pas voir :
+     * fractionnement déguisé, objet imprécis, nature incohérente. Ses constats arrivent en
+     * <strong>pistes</strong> ({@code source = IA}), et il rend une phrase qui dit où regarder d'abord.
+     *
+     * <p>Sur un geste explicite, comme la vérification : un modèle n'est jamais appelé à la frappe, et le
+     * GPU est partagé par tous les utilisateurs. <strong>404</strong> si l'assistant n'est pas activé
+     * (même contrat que le lot 1), <strong>503</strong> si le serveur d'inférence ne répond pas — et dans
+     * les deux cas, les constats des règles restent servis par les autres endpoints : l'indisponibilité du
+     * modèle ne prive personne du pré-contrôle.</p>
+     */
+    @PostMapping("/ppm/{idPpm}/analyse-ia")
+    public AnalyseIaDto analyser(@PathVariable Integer idPpm) {
+        return service.analyserParLAssistant(idPpm);
     }
 
     /**

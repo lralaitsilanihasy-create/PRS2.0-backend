@@ -424,7 +424,7 @@ Le lot est le plus lourd des cinq : il se livre par étapes, chacune vérifiée,
 | **3. API scopée et écartement motivé** | la PRMP ne voit que ses PPM, le contrôleur que sa localité ; écartement avec motif obligatoire ; visibilité croisée et symétrie hiérarchique (3.f) | **livrée** (ci-dessous) |
 | **4. Écran de la PRMP** | « Vérifier mon PPM », liste des signalements, fenêtre d'écartement portant l'avertissement de visibilité | **livrée** (ci-dessous) |
 | **5. Écran du contrôleur** | signalements rattachés aux points de la grille, écartés visibles avec leur motif, fait et piste distingués | **livrée** (ci-dessous) |
-| **6. Couche IA** | la phrase utile, la hiérarchisation, le fractionnement déguisé, la suggestion au format de l'annexe du PV ; batterie de qualité | à faire |
+| **6. Couche IA** | la phrase utile, la hiérarchisation, le fractionnement déguisé, la suggestion au format de l'annexe du PV ; batterie de qualité | **livrée** (ci-dessous) |
 | **7. Tableau de bord des écartements** | taux d'écartement par règle dans l'espace Administrateur (3.e), et complètement des imputations budgétaires des données de recette | à faire |
 
 #### Livraison de l'étape 1 — le socle de données (2026-09-20, branche `chantier/assistant-ia-lot3`)
@@ -635,6 +635,63 @@ compteurs du serveur, fait et piste distingués, lignes visées et suggestion, l
 motif trop court refusé, `avertissementLu` envoyé, le contrôleur qui lit le motif de la PRMP, le plan
 soumis qui fige, l'Assistant contrôleur qui lit sans écarter, la reprise réservée à l'auteur, la garde
 anti-double-clic et l'état d'erreur avec sa reprise. Suite front : **738 tests verts**, lint propre.
+
+
+#### Livraison de l'étape 6 — la couche IA (2026-09-20, branches `chantier/assistant-ia-lot3`)
+
+**Ce que l'assistant apporte, et ce qu'on ne lui demande pas.** Les règles détectent, l'assistant cherche
+ce qu'aucune règle ne peut établir — parce que l'information n'existe que dans une phrase libre :
+
+| Piste | Ce qu'elle cherche | Pourquoi une règle ne peut pas |
+|---|---|---|
+| `FRACTIONNEMENT_DEGUISE` | même besoin sous des libellés ou des comptes **différents** : même route nationale, même bâtiment, même périmètre irrigué | c'est le procédé même d'évasion — les comptes diffèrent, la règle du compte ne voit rien |
+| `OBJET_IMPRECIS` | objet générique (« Achat de matériel », « Travaux divers ») au regard des mentions du manuel, p. 14 | juger si une phrase dit ce qu'elle achète n'est pas mécanisable |
+| `NATURE_INCOHERENTE` | nature déclarée qui ne correspond pas à l'objet | appréciation de sens |
+
+Il n'est **jamais** appelé sur le terrain des règles (mode, seuils, montants, dates, somme des lots,
+fractionnement par compte) : là, le constat doit être **opposable**, et un modèle ne l'est pas. Ses
+constats naissent en **pistes** (`SOURCE = IA`), portées par le **type** et non par l'appelant — une piste
+ne peut pas être enregistrée comme un fait.
+
+**La forme a été dictée par la mesure, pas par l'intuition.** La batterie de référence
+(`PreControleIaBatterieTest`, sept plans de référence dont **deux qui doivent rester silencieux**) a été
+écrite avant le réglage, et rejouée à chaque retouche contre `qwen3.5:9b-q4_K_M` :
+
+1. une **question unique** portant les trois recherches, avec leurs exceptions et un ordre de priorité :
+   **3 cas sur 7**. Le modèle se contredisait (une piste « objet imprécis » dont le constat disait que
+   l'objet était suffisant), oubliait l'interdiction du même compte, confondait les types ;
+2. consigne allongée pour corriger : **4/7**, puis **3/7** — allonger ne corrigeait rien ;
+3. **une passe courte par type** (trois appels au lieu d'un) + le garde-fou du même compte **passé en
+   code** : **5/7**, puis **5/7 et 6/7** après un dernier réglage du critère de l'objet.
+
+Deux enseignements consignés dans le code : sur un modèle local de 9 milliards de paramètres, **une
+question = une réponse**, et **ce qui peut être vérifié ne se demande pas** — une piste de fractionnement
+sur des lignes du même compte est refusée par le code, pas par la consigne, parce que le modèle
+l'oubliait une fois sur deux.
+
+**La phrase de hiérarchisation** (« À regarder d'abord : lignes 12 et 14 — même besoin possible »), que le
+plan attend de l'assistant, est **composée en code** à partir des pistes retenues, et non demandée au
+modèle : une phrase générée de plus serait une surface d'hallucination pour un gain nul — les lignes à
+regarder, nous les connaissons exactement. Elle n'est **pas enregistrée** : c'est une aide à la lecture.
+
+**Garde-fous.** Rien de ce que le modèle rend n'est cru sur parole : la ligne doit exister dans **ce**
+plan, les textes sont bornés, les doublons écartés, les pistes plafonnées à 8 et les lignes envoyées à 120.
+Aucune donnée d'acteur ne sort — le modèle reçoit objet, nature, compte, financement, montant, et rien de
+plus. Chaque analyse est **journalisée** (`assistant_ia` / `ANALYSE_PRE_CONTROLE`). Chaque type de piste a
+son **interrupteur** : la couche IA est la plus susceptible d'être bruyante, c'est celle qu'on doit pouvoir
+éteindre la première. Et une panne du modèle rend un **503 explicite** sans priver personne des constats
+des règles.
+
+**Écran.** Un second bouton, « Demander une piste à l'assistant », distinct de « Vérifier le plan » : il
+fait travailler un modèle partagé et prend quelques secondes. Il disparaît si le serveur répond que
+l'assistant n'est pas activé. La phrase de hiérarchisation s'affiche en information, jamais en alerte.
+
+**Tests** : 11 d'intégration (`PreControleIaIntegrationTest`, contre un faux serveur d'inférence) — la
+piste naît bien en piste, la ligne inventée est jetée, le type réservé aux règles est refusé, la réponse
+illisible ne casse rien, le modèle bavard est plafonné, la panne rend 503 sans toucher aux constats des
+règles, les deux populations ne se mélangent jamais, une piste s'écarte et se retrouve écartée, un type
+éteint n'est plus proposé, et l'analyse est journalisée. Plus la batterie de qualité, sur demande
+(`-Dia.batterie=true`). Front : 2 tests de plus (740 verts).
 
 ### Lot 4 — Chatbot transverse
 
