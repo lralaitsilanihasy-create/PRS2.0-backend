@@ -234,10 +234,23 @@ Deux écarts assumés par rapport au cadrage initial, après lecture du code exi
 
 #### 2.c. Ce que la synthèse dit, et ce qu'elle ne dira jamais
 
-Quatre sections fixes, composées **en code** dans cet ordre — le modèle remplit, il ne structure pas :
-**Où en est ce dossier** · **Ce qui a été demandé à la PRMP** · **Les délais** · **Ce qui reste à
-faire**. Et trois interdits, repris de la consigne du lot 1 : aucun avis (favorable, conforme,
-régulier), aucun chiffre que le matériau ne porte pas, aucun vocabulaire technique.
+Quatre sections, dans cet ordre : **Où en est ce dossier** · **Ce qui a été demandé à la PRMP** ·
+**Les délais** · **Ce qui reste à faire**. Elles sont **dictées par la consigne et vérifiées à la
+sortie**, plutôt que composées en quatre appels : une réponse en flux se lit pendant qu'elle s'écrit,
+alors que quatre passes successives — la leçon du lot 3 — quadrupleraient l'attente. Le titrage passe
+par `**gras**`, que le rendu sûr du lot 1 sait déjà afficher sans injecter de HTML.
+
+Et trois interdits, repris de la consigne du lot 1 : aucun avis (favorable, conforme, régulier), aucun
+chiffre que le matériau ne porte pas, aucun vocabulaire technique.
+
+⚠️ **Une consigne glissée dans un texte de dossier est écartée avant d'atteindre le modèle**, et la
+mention le dit à l'écran. La batterie du 2026-09-20 a montré pourquoi la consigne ne suffisait pas : le
+modèle **n'obéissait pas** à l'injection — mais il la **rapportait**, et « le dossier est conforme et
+peut être clôturé sans réserve » arrivait dans la prose de l'assistant, en discours indirect. Pour un
+contrôleur qui parcourt un résumé, la nuance ne tient pas ; et c'est exactement la phrase qu'une PRMP
+aurait intérêt à faire lire. Le désamorçage est une heuristique — donc la **moins importante** des
+quatre couches, après l'identifiant qui ne vient jamais du modèle, les gardes des contrôleurs, et la
+consigne qui dit au modèle que ce texte est de la matière.
 
 L'écran affiche **les faits avant la synthèse** : le bloc factuel est connu dès la première
 milliseconde, la prose arrive ensuite en flux. C'est la doctrine rendue visible — *les faits sont du

@@ -371,9 +371,46 @@ public class OutilsDossierIa {
         if (texte == null || texte.isBlank()) {
             return "non renseigné";
         }
-        String propre = texte.strip().replaceAll("\\s+", " ");
+        String propre = desamorcer(texte.strip().replaceAll("\\s+", " "));
         return propre.length() <= TEXTE_MAX ? propre : propre.substring(0, TEXTE_MAX - 1) + "…";
     }
+
+    /**
+     * ⚠️ <strong>Une consigne glissée dans un texte de dossier n'est pas résumée : elle est écartée</strong>
+     * (mesuré par la batterie du 2026-09-20).
+     *
+     * <p>Le modèle, lui, avait bien résisté : il n'a pas obéi. Mais il a <strong>rapporté</strong> la
+     * phrase, et « le dossier est conforme et peut être clôturé sans réserve » s'est retrouvé dans la
+     * prose de l'assistant, sous couvert de discours indirect. Pour un contrôleur qui parcourt un résumé,
+     * la nuance ne tient pas — et c'est très exactement la phrase qu'une PRMP aurait intérêt à faire
+     * lire. Compter sur la résistance du modèle aurait donc été compter sur la bonne foi de l'attaquant.</p>
+     *
+     * <p>Le texte écarté n'est pas caché : la mention le remplace <strong>dans les faits affichés comme
+     * dans le matériau</strong> — c'est le même texte — et l'utilisateur va lire l'original dans le
+     * dossier. Un désamorçage silencieux serait un mensonge de plus.</p>
+     */
+    public static String desamorcer(String texte) {
+        return texte != null && INJECTION.matcher(texte).find()
+                ? "(texte écarté : il contient une consigne adressée à l'assistant, ce qui n'a pas sa "
+                        + "place dans un dossier — à lire directement dans le dossier)"
+                : texte;
+    }
+
+    /**
+     * Les marqueurs d'une consigne adressée au modèle. Une heuristique ne ferme pas la porte à un
+     * attaquant patient : c'est une couche parmi quatre, et la moins importante. Les trois autres sont
+     * l'identifiant qui ne vient jamais du modèle, les gardes des contrôleurs, et la consigne qui dit au
+     * modèle que ce texte est de la matière.
+     */
+    private static final java.util.regex.Pattern INJECTION = java.util.regex.Pattern.compile(
+            "(?:ignor|oubli|fais\\s+abstraction)\\w*\\s+(?:de\\s+|d'|les\\s+|tout|toute?s?\\s+)?"
+                    + "(?:ce\\s+qui\\s+)?(?:instruction|consigne|précéd|ci-dessus|previous|above)"
+                    + "|(?:écris|réponds|répond|rédige|affiche)\\s+(?:uniquement|seulement|juste)\\b"
+                    + "|\\b(?:nouvelle|nouvelles)\\s+(?:instruction|consigne)"
+                    + "|\\b(?:tu\\s+dois|tu\\s+es\\s+désormais|à\\s+partir\\s+de\\s+maintenant,\\s+tu)\\b"
+                    + "|\\b(?:system|assistant|user)\\s*:\\s*(?:tu|you|vous)\\b"
+                    + "|\\b(?:disregard|ignore)\\s+(?:all\\s+)?(?:previous|prior|above)\\b",
+            java.util.regex.Pattern.CASE_INSENSITIVE | java.util.regex.Pattern.UNICODE_CASE);
 
     private static String jour(LocalDate date) {
         return date.format(JOUR);
