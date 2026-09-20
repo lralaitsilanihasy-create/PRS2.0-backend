@@ -78,6 +78,20 @@ public class OutilsTransversesIa {
             Map.entry("A_RECTIFIER", "à rectifier"),
             Map.entry("EN_COURS_CNM", "en cours à la CNM"));
 
+    /**
+     * Libellés des classes d'urgence — miroir de {@code LIBELLES_URGENCES} du frontend
+     * ({@code features/home/a-faire/a-faire-libelles.ts}). Sans eux, la recette du 2026-09-20 montrait
+     * « (bientot) » et « (hors_delai) » dans les faits affichés.
+     */
+    private static final Map<String, String> URGENCES = Map.of(
+            "EN_RETARD", "en retard",
+            "BIENTOT", "bientôt à échéance",
+            "DANS_LES_DELAIS", "dans les délais",
+            "SANS_DELAI", "sans délai",
+            "HORS_DELAI", "hors délai CNM",
+            "EN_PAUSE", "chez la PRMP",
+            "SUIVI", "en suivi");
+
     private final DossierController dossiers;
     private final KpiController kpis;
     private final AnnuaireController annuaire;
@@ -187,7 +201,7 @@ public class OutilsTransversesIa {
                 String reference = t.dossier() == null ? null : t.dossier().refeDossier();
                 lignes.add("À traiter : " + (reference == null ? "dossier sans référence" : reference)
                         + " — " + section(t.section())
-                        + (t.urgence() == null ? "" : " (" + t.urgence().toLowerCase(java.util.Locale.FRENCH) + ")"));
+                        + (t.urgence() == null ? "" : " (" + urgence(t.urgence()) + ")"));
             }
             if (aFaire.taches().size() > TACHES_MAX) {
                 lignes.add("… et " + (aFaire.taches().size() - TACHES_MAX) + " autres tâches.");
@@ -295,6 +309,12 @@ public class OutilsTransversesIa {
     private static String section(String code) {
         return code == null ? "dossier(s)"
                 : SECTIONS.getOrDefault(code, code.toLowerCase(java.util.Locale.FRENCH).replace('_', ' '));
+    }
+
+    /** Le libellé d.une classe d.urgence ; le code brut si le référentiel a bougé sans nous. */
+    private static String urgence(String code) {
+        return code == null ? "" : URGENCES.getOrDefault(code, code.toLowerCase(java.util.Locale.FRENCH)
+                .replace('_', ' '));
     }
 
     private static String valeur(String texte) {

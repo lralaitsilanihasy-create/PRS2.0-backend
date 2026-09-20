@@ -985,8 +985,36 @@ de dossiers (lot 2), et la consigne le dit au modèle.
 | 2 | Les lectures transverses et leurs tests de sécurité par profil | **livrée** |
 | 3 | La réponse composée (faits OU extraits documentaires) | **livrée** |
 | 4 | La conversation multi-tours, bornée et désamorcée | **livrée** |
-| 5 | L'écran : le panneau du lot 1 qui montre ce qu'il a lu | à faire |
-| 6 | Recette sur l'application réelle, captures légendées | à faire |
+| 5 | L'écran : le panneau du lot 1 qui montre ce qu'il a lu | **livrée** |
+| 6 | Recette sur l'application réelle, captures légendées | **livrée** (ci-dessous) |
+
+#### ⚠️ Ce que la recette du lot 4 a montré (2026-09-20)
+
+La question qui compte est **la même, posée par deux profils** — parce que le chatbot n'a qu'une
+manière de répondre juste : lire la file de **celui qui demande**.
+
+| « Qu'est-ce que j'ai à faire ? » | Contrôleur (`MEMANT1`) | PRMP (`PRMP001`) |
+|---|---|---|
+| Ce que l'assistant a lu | 1 dossier à traiter, 1 à examiner | 2 à traiter, 1 brouillon, 1 à rectifier, 6 en suivi |
+| Le dossier cité | `00002/PPM/CNM/2026` — à examiner | `00008`, `00004`, puis les siens |
+| La réponse | « Vous devez examiner le dossier 00002… » | « Vous devez soumettre les brouillons du dossier 00008, rectifier le 00004… » |
+
+Et **l'écran derrière le panneau dit exactement la même chose** : la réponse se vérifie d'un coup
+d'œil, sans quitter la page. C'est ce qu'on cherchait — un assistant qui ne raconte pas sa propre
+version des données.
+
+Trois choses vérifiées au passage :
+
+1. **Une question de règle ne part pas en lecture** : « que dit le manuel sur le fractionnement ? »
+   rend les extraits numérotés du lot 1, avec ses citations. Le lot 1 ne bouge pas.
+2. **Les faits sont repliés** sous la réponse, comme les extraits : une justification, pas la réponse.
+3. **Deux défauts de vocabulaire corrigés** — les files affichaient `A_EXAMINER`, puis les urgences
+   `(bientot)`, `(hors_delai)`. Même règle qu'aux lots 2 et 3 : on ne peut pas interdire au modèle le
+   vocabulaire technique et le lui donner en même temps.
+
+**Outillage** : `capturer-chatbot.mjs` (hors dépôts). ⚠️ Piège noté dans le script : saisir la question
+et cliquer « Envoyer » dans le **même tour** ne marche pas — le bouton est encore désactivé, et la
+capture montre alors l'écran d'accueil.
 
 ### Lot 5 — Brouillons rédactionnels *(optionnel)*
 
