@@ -163,7 +163,7 @@ class PreControleIaBatterieTest {
                     + "\n      attendu : " + (cas.typeAttendu() == null ? "aucune piste"
                             : cas.typeAttendu().name() + " sur " + cas.lignesVisees())
                     + "\n      rendu   : " + resume(pistes)
-                    + "\n      synthèse : " + dialogue.synthese(pistes));
+                    + "\n      synthèse : " + dialogue.synthese(pistes, contexte));
         }
 
         double taux = (double) reussis / CAS.size();

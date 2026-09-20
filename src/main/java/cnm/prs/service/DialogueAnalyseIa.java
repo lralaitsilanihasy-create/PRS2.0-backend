@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
@@ -101,6 +102,28 @@ public class DialogueAnalyseIa {
     /** Longueur maximale d'un texte rendu par le modèle (constat ou suggestion). */
     private static final int TEXTE_MAX = 900;
 
+    /**
+     * ⚠️ Longueur minimale d'un constat — réglée en recette le 2026-09-20. Trois pistes s'étaient
+     * enregistrées avec « une phrase » pour constat : le modèle avait <strong>recopié le gabarit</strong>
+     * du format au lieu de le remplir. La PRMP lisait alors un point signalé qui ne disait rien.
+     *
+     * <p>Le gabarit ne se demande donc plus en clair ({@link #FORMAT}), et ce qui en resterait est refusé
+     * ici. Le plancher reste <strong>bas à dessein</strong> : il est là pour écarter ce qui n'est pas un
+     * constat (« une phrase », « à préciser »), pas pour légiférer sur le style — une piste brève mais
+     * informative reste une piste. Sur un plan réel, le plus court qu'ait rendu la recette faisait 99
+     * caractères.</p>
+     */
+    private static final int CONSTAT_MIN = 20;
+
+    /** Ce qu'un gabarit non rempli laisse derrière lui : {@code <…>}. */
+    private static final Pattern GABARIT = Pattern.compile("<[^>]{0,80}>");
+
+    /**
+     * Longueur d'un objet cité dans la phrase de hiérarchisation. Trois objets entiers du plan de recette
+     * feraient 600 caractères : la phrase censée faire gagner du temps en ferait perdre.
+     */
+    private static final int OBJET_SYNTHESE = 55;
+
     /** Tête commune des consignes : le cadre, et le format de réponse. Volontairement brève. */
     private static final String CADRE = """
             Tu aides le contrôle a priori des marchés publics de Madagascar (Commission Nationale des \
@@ -119,7 +142,9 @@ public class DialogueAnalyseIa {
     private static final String FORMAT = """
 
             Réponds UNIQUEMENT par cet objet JSON, sans texte autour :
-            {"pistes":[{"lignes":[1,2],"constat":"une phrase","suggestion":"Au lieu de : ...\\nLire : ..."}]}
+            {"pistes":[{"lignes":[1,2],"constat":"<ce qui vous semble anormal>","suggestion":"Au lieu de : \
+            <ce qui est écrit>\\nLire : <ce qu'il faudrait lire>"}]}
+            Remplace ce qui est entre chevrons ; ne recopie pas les chevrons.
             Au plus TROIS pistes, les plus nettes. Un constat d'UNE phrase, une suggestion d'une ligne : une \
             réponse trop longue est coupée et perdue.
             S'il n'y a rien à signaler, réponds exactement {"pistes":[]} — c'est une réponse normale et \
@@ -279,17 +304,38 @@ public class DialogueAnalyseIa {
      * <p>Elle est <strong>composée ici</strong>, à partir des pistes retenues, et non demandée au modèle :
      * une phrase de synthèse générée est une surface d'hallucination de plus, pour un gain nul — les
      * lignes à regarder, nous les connaissons exactement.</p>
+     *
+     * <p>⚠️ Elle nomme les lignes par leur <strong>objet</strong>, pas par leur identifiant technique
+     * (recette du 2026-09-20 : « lignes 300009 et 300029 » ne dit rien à une PRMP, qui ne voit nulle part
+     * ce numéro dans son plan — la phrase censée dire OÙ REGARDER ne le disait donc pas).</p>
      */
-    public String synthese(List<SignalementDetecte> pistes) {
+    public String synthese(List<SignalementDetecte> pistes, ContextePreControle contexte) {
         if (pistes.isEmpty()) {
             return null;
         }
+        Map<Integer, Marche> parNumero = contexte.lignes().stream().collect(
+                Collectors.toMap(Marche::getIdDetail, l -> l, (a, b) -> a, LinkedHashMap::new));
         String liste = pistes.stream().limit(3)
-                .map(p -> "lignes " + numeros(p).stream().map(String::valueOf)
-                        .collect(Collectors.joining(" et ")) + " (" + resumeType(p.type()) + ')')
+                .map(p -> designationCourte(numeros(p), parNumero, contexte) + " (" + resumeType(p.type()) + ')')
                 .collect(Collectors.joining(" ; "));
         return "À regarder d'abord : " + liste
                 + (pistes.size() > 3 ? " — et " + (pistes.size() - 3) + " autre(s) piste(s)." : ".");
+    }
+
+    /** L'objet de la première ligne visée, écourté, et le compte des autres. */
+    private static String designationCourte(List<Integer> numeros, Map<Integer, Marche> parNumero,
+            ContextePreControle contexte) {
+        Marche premiere = numeros.isEmpty() ? null : parNumero.get(numeros.get(0));
+        String objet = premiere == null ? null : contexte.designation(premiere);
+        if (objet == null || objet.isBlank()) {
+            // Repli : mieux vaut un identifiant qu'une phrase amputée.
+            return "lignes " + numeros.stream().map(String::valueOf).collect(Collectors.joining(" et "));
+        }
+        String court = objet.length() <= OBJET_SYNTHESE ? objet
+                : objet.substring(0, OBJET_SYNTHESE - 1).trim() + "…";
+        return "« " + court + " »"
+                + (numeros.size() > 1 ? " et " + (numeros.size() - 1)
+                        + (numeros.size() == 2 ? " autre ligne" : " autres lignes") : "");
     }
 
     private static List<Integer> numeros(SignalementDetecte piste) {
@@ -314,7 +360,9 @@ public class DialogueAnalyseIa {
     private Optional<SignalementDetecte> retenir(JsonNode brute, TypeSignalement type,
             Map<Integer, Marche> parNumero, ContextePreControle contexte, Set<String> dejaVues) {
         String constat = texteBorne(brute.path("constat").asString(null), TEXTE_MAX);
-        if (constat == null) {
+        // ⚠️ Un constat qui a gardé le gabarit, ou qui tient en trois mots, n'apprend rien à la PRMP et
+        // occupe la place d'un vrai point (recette du 2026-09-20). Cela se vérifie : cela ne se demande pas.
+        if (constat == null || constat.length() < CONSTAT_MIN || GABARIT.matcher(constat).find()) {
             return Optional.empty();
         }
         List<Integer> numeros = new ArrayList<>();
@@ -339,6 +387,9 @@ public class DialogueAnalyseIa {
             return Optional.empty();
         }
         String suggestion = texteBorne(brute.path("suggestion").asString(null), TEXTE_MAX);
+        if (suggestion != null && GABARIT.matcher(suggestion).find()) {
+            suggestion = null;   // le constat vaut seul ; un gabarit affiché ne vaut rien
+        }
         if (numeros.size() == 1) {
             return Optional.of(SignalementDetecte.surLigne(type, GraviteSignalement.A_VERIFIER, cle,
                     numeros.get(0), constat, suggestion));

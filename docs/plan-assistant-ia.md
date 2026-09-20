@@ -725,7 +725,7 @@ catégories.
 #### ⚠️ Ce que la recette a trouvé, et que rien d'autre ne pouvait trouver (2026-09-20)
 
 La recette s'est faite sur l'application réelle : backend sur `PRS_RECETTE` (port 18080), front en 4300,
-modèle local. Elle a révélé **trois défauts**, tous dans la couche IA, tous invisibles en test :
+modèle local. Elle a révélé **cinq défauts**, presque tous dans la couche IA, tous invisibles en test :
 
 1. **L'analyse annonçait « rien à signaler » sur un plan qu'elle n'avait pas lu.** Le plan de recette
    porte **130 lignes** ; l'inventaire envoyé au modèle faisait **37 000 caractères**, très au-delà de la
@@ -741,10 +741,28 @@ modèle local. Elle a révélé **trois défauts**, tous dans la couche IA, tous
 3. **Aucun journal ne disait ce que le modèle avait répondu.** Le diagnostic a coûté plusieurs
    allers-retours pour cette seule raison. → L'extrait reçu est désormais écrit au journal technique quand
    une réponse est jugée illisible. Cette ligne restera.
+4. **Trois pistes s'étaient enregistrées avec « une phrase » pour constat.** Le modèle avait **recopié le
+   gabarit** du format JSON au lieu de le remplir — et comme ses *suggestions*, elles, étaient justes,
+   rien ne trahissait l'anomalie avant l'écran de la PRMP, qui lisait un point signalé vide de sens.
+   → Le gabarit ne se demande plus en clair (chevrons, « ne recopie pas les chevrons »), et **le serveur
+   refuse** un constat qui les a gardés ou qui tient en trois mots. *Ce qui peut être vérifié ne se
+   demande pas* — le même enseignement que le garde-fou du même compte.
+5. **La phrase « où regarder d'abord » citait des identifiants techniques** : « lignes 300009 et
+   300029 ». Une PRMP ne voit ce numéro **nulle part** dans son plan — la phrase censée dire où regarder
+   ne le disait donc pas. → Elle nomme les lignes par leur **objet**, écourté : « *Travaux de
+   réhabilitation et de renforcement de la cha…* » et 1 autre ligne (même besoin possible).
 
-Deux défauts d'écran ont été corrigés au passage, mesurés à 1366×768 : le constat d'un fractionnement
-citait ses **sept** lignes in extenso (mur de texte, alors qu'elles sont listées juste en dessous — trois
-citées, le reste compté), et le tableau du tableau de bord débordait de l'écran (en-têtes raccourcis).
+Trois défauts d'écran ont été corrigés au passage, mesurés à 1366×768 : la fenêtre d'écartement s'ouvrait
+**sans en-tête** (classes inexistantes dans le design system), le constat d'un fractionnement citait ses
+**sept** lignes in extenso (mur de texte, alors qu'elles sont listées juste en dessous — trois citées, le
+reste compté), et le tableau du tableau de bord débordait de l'écran (en-têtes raccourcis).
+
+⚠️ **Et un trou de recette, pas de code** : la base de recette ne portait **aucun brouillon**, donc le
+bouton « Vérifier » de « Mes brouillons » — le **seul** chemin d'entrée de la PRMP vers le pré-contrôle —
+n'avait jamais été ni montré ni cliqué. Ce bouton ne connaît que l'identifiant du **dossier** et doit
+retrouver celui du **PPM** par `GET /api/marches` : cela ne se vérifie que sur un brouillon réel.
+`brouillon-recette.sql` en pose un (quatre lignes, un fractionnement prioritaire et un mode en deçà du
+seuil), et le chemin fonctionne.
 
 **Ce que la recette a confirmé**, sur données réelles : 21 signalements de règles sur le plan de recette —
 fractionnement sur quatre comptes (jusqu'à 7 lignes et 2 milliards d'ariary cumulés), 14 modes en deçà du
@@ -753,9 +771,13 @@ l'assistant en 68 secondes, dont le **fractionnement déguisé** d'une même rou
 bâtiment sous des comptes différents — exactement ce qu'aucune règle ne peut voir. Écartement motivé,
 visibilité du motif côté contrôleur, figeage, tableau de bord : tout se comporte comme prévu.
 
-**Outillage de recette** (hors dépôts, `C:\dev\PRS2.0\recette-assistant-ia\`) :
-`capturer-precontrole.mjs` et `capturer-controleur.mjs` (Chrome piloté par CDP, 1366×768),
-`imputations-recette.sql`, et les douze captures de `captures-lot3\`.
+**Outillage de recette** (hors dépôts, `C:\dev\PRS2.0\recette-assistant-ia\`) : `start-backend-recette.ps1`
+(API sur 18080, base `PRS_RECETTE`, même secret JWT que le poste de développement), quatre scripts de
+capture — Chrome piloté par CDP en 1366×768, **une scène par script** pour que chacune se rejoue seule
+sans refaire l'analyse par le modèle : `capturer-brouillon.mjs` (le chemin d'entrée),
+`capturer-precontrole.mjs` (le grand plan, l'écartement, l'assistant), `capturer-controleur.mjs` et
+`capturer-admin.mjs` — puis `imputations-recette.sql`, `brouillon-recette.sql`, et les treize captures de
+`captures-lot3\`.
 
 ### Lot 4 — Chatbot transverse
 

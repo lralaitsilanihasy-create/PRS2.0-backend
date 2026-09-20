@@ -169,7 +169,8 @@ public class AnalysePreControleIaService {
 
         ResultatPreControle resultat = preControle.enregistrerConstatsIa(ppm.getIdPpm(), pistes, typesActifs);
         journaliser(refActeur, ppm, pistes.size(), lignesAnalysees, millisecondes(debut), null);
-        return new Analyse(dialogue.synthese(pistes), lignesAnalysees, contexte.lignes().size(), resultat);
+        return new Analyse(dialogue.synthese(pistes, contexte), lignesAnalysees, contexte.lignes().size(),
+                resultat);
     }
 
     /** Les types de l'assistant dont la ligne de {@code t_regle_anomalie} est active. */

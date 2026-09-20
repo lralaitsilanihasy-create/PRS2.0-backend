@@ -4991,8 +4991,15 @@ prioritaires en tête** (la hiérarchisation est servie, pas recalculée par l'�
 **Analyse par l'assistant** (`POST …/analyse-ia`, ⚠️ étape 6) — ce que les règles ne peuvent pas établir :
 `FRACTIONNEMENT_DEGUISE` (même besoin sous des comptes ou des libellés différents), `OBJET_IMPRECIS`,
 `NATURE_INCOHERENTE`. Ses constats rejoignent les signalements du plan avec `source = "IA"` : **des pistes,
-jamais des faits**. Réponse `AnalyseIaDto` : `{ synthese, resume }` — `synthese` dit **où regarder
-d'abord**, n'est **pas enregistrée** (aide à la lecture, recalculée) et peut être `null`.
+jamais des faits**. Réponse `AnalyseIaDto` : `{ synthese, lignesAnalysees, lignesDuPlan, resume }`.
+
+- `synthese` dit **où regarder d'abord**, n'est **pas enregistrée** (aide à la lecture, recalculée) et
+  peut être `null`. Elle nomme les lignes par leur **objet**, écourté — jamais par leur identifiant
+  technique, que l'utilisateur ne voit nulle part dans son plan.
+- ⚠️ `lignesAnalysees` / `lignesDuPlan` : ce que l'assistant a **réellement lu**, et ce que le plan porte.
+  Un modèle local ne lit pas 130 lignes d'un coup ; l'analyse se fait par lots bornés, et l'écran doit
+  **annoncer** la couverture. Une couverture partielle annoncée vaut mieux qu'une couverture totale
+  supposée : sans cette phrase, « rien trouvé » se lirait « plan propre ».
 
 - Geste **explicite**, comme la vérification : trois appels au modèle (une passe par type), quelques
   secondes. Jamais à la frappe.

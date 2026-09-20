@@ -2,6 +2,7 @@ package cnm.prs;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -236,7 +237,10 @@ class PreControleIaIntegrationTest extends CnmIntegrationTestSupport {
                 // La phrase « où regarder d'abord » est composée par le serveur à partir des pistes
                 // retenues, pas rendue par le modèle : une phrase générée de plus n'apporterait rien.
                 .andExpect(jsonPath("$.synthese", containsString("À regarder d'abord")))
-                .andExpect(jsonPath("$.synthese", containsString("7801")))
+                // ⚠️ Elle nomme la ligne par son OBJET, pas par son identifiant technique : « ligne 7801 »
+                // ne dit rien à une PRMP, qui ne voit ce numéro nulle part dans son plan (recette 2026-09-20).
+                .andExpect(jsonPath("$.synthese", containsString("Entretien de la RN2")))
+                .andExpect(jsonPath("$.synthese", not(containsString("7801"))))
                 .andExpect(jsonPath("$.resume.idPpm").value(PPM));
         entityManager.flush();
         entityManager.clear();
@@ -304,6 +308,36 @@ class PreControleIaIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(signalements())
                 .noneMatch(a -> TypeSignalement.MODE_SOUS_LE_SEUIL.name().equals(a.getTypeAnomalie())
                         && SourceSignalement.IA.name().equals(a.getSource()));
+    }
+
+    @Test
+    @DisplayName("⚠️ Une piste dont le constat a gardé le GABARIT de la consigne est jetée : le modèle a "
+            + "recopié l'exemple au lieu de le remplir, et un point signalé qui ne dit rien est pire que rien")
+    void constatResteAuGabarit_jete() throws Exception {
+        // Défaut trouvé en recette le 2026-09-20, sur un plan réel : trois pistes s'étaient enregistrées
+        // avec « une phrase » pour constat. La PRMP lisait un point signalé vide de sens — et les
+        // suggestions, elles, étaient justes, donc rien ne trahissait l'anomalie avant l'écran.
+        PASSE.set(TypeSignalement.FRACTIONNEMENT_DEGUISE.name());
+        REPONSE.set("{\"pistes\":[{\"lignes\":[7801,7802],\"constat\":\"une phrase\","
+                + "\"suggestion\":\"Au lieu de : deux lignes.\\nLire : une seule opération.\"}]}");
+
+        mvc.perform(post("/api/pre-controle/ppm/" + PPM + "/analyse-ia").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk());
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(pistes()).isEmpty();
+
+        // Même refus quand le modèle rend les chevrons du gabarit, aussi long soit le texte.
+        REPONSE.set("{\"pistes\":[{\"lignes\":[7801,7802],"
+                + "\"constat\":\"<ce qui vous semble anormal sur ces deux lignes du plan annuel>\"}]}");
+
+        mvc.perform(post("/api/pre-controle/ppm/" + PPM + "/analyse-ia").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk());
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(pistes()).isEmpty();
     }
 
     @Test
