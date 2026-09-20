@@ -544,6 +544,7 @@ rien n'est écrit hors du journal d'audit. Ouvert aux **dix profils**, PRMP comp
 > | Événement | Données (JSON) | Sens |
 > |---|---|---|
 > | `sources` | `SourceIaDto[]` | extraits fournis au modèle, numérotés — la réponse les cite `[n]` ; **toujours en premier** |
+> | `faits` | *(voir la synthèse de dossier)* | ⚠️ **(2026-09-20, lot 4)** — **à la place de** `sources` quand la question porte sur des **données** : ce que le serveur a lu pour cet utilisateur. Jamais les deux : une seule matière par réponse |
 > | `texte` | `{ "t": "…" }` | un morceau de réponse ; zéro ou plusieurs |
 > | `fin` | `{ "modele": "…", "dureeMs": 4200 }` | réponse complète |
 > | `erreur` | `{ "message": "…" }` | service de calcul injoignable, en erreur ou trop lent, ou file d'attente pleine — message pour l'utilisateur |
@@ -562,6 +563,7 @@ rien n'est écrit hors du journal d'audit. Ouvert aux **dix profils**, PRMP comp
 | DTO | Champ (JSON) | Type | Contraintes |
 |---|---|---|---|
 | `QuestionIaRequest` | question | string | @NotBlank, max 1 000 caractères (400 sinon) |
+| | historique | `{ question, reponse }[]` | ⚠️ **(2026-09-20, lot 4)** les tours précédents, le plus ancien d'abord. Facultatif, au plus 20 (garde contre l'excès) — **le serveur ne garde que les 3 derniers** et coupe chaque texte à 600 caractères. L'écran n'a donc pas à connaître la taille de la fenêtre du modèle |
 | `SourceIaDto` | numero | number | Rang cité dans la réponse (`[1]`, `[2]`…) |
 | | document | string | Libellé du document (ex. « Manuel de contrôle a priori (CNM, février 2026) ») |
 | | reference | string | Emplacement : « p. 15 » (PDF) ou chemin des titres (Markdown) |

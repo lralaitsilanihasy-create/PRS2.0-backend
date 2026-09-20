@@ -54,7 +54,7 @@ public class AssistantIaController {
      */
     @PostMapping(value = "/questions", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter poser(@Valid @RequestBody QuestionIaRequest requete, HttpServletRequest http) {
-        return service.poser(requete.question(), demandeur(http));
+        return service.poser(requete.question(), requete.historique(), demandeur(http));
     }
 
     /**

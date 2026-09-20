@@ -984,7 +984,7 @@ de dossiers (lot 2), et la consigne le dit au modèle.
 | 1 | L'aiguillage : énumération des intentions, référence de dossier, tournures reconnues | **livrée** |
 | 2 | Les lectures transverses et leurs tests de sécurité par profil | **livrée** |
 | 3 | La réponse composée (faits OU extraits documentaires) | **livrée** |
-| 4 | La conversation multi-tours, bornée et désamorcée | à faire |
+| 4 | La conversation multi-tours, bornée et désamorcée | **livrée** |
 | 5 | L'écran : le panneau du lot 1 qui montre ce qu'il a lu | à faire |
 | 6 | Recette sur l'application réelle, captures légendées | à faire |
 

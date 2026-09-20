@@ -109,6 +109,19 @@ public class AiguillageAssistantIa {
      *                 {@link IntentionAssistant#REGLE} en fait toujours partie
      */
     public Aiguillage decider(String question, List<IntentionAssistant> ouvertes) {
+        return decider(question, ouvertes, null);
+    }
+
+    /**
+     * Décide de l'intention d'une question, en tenant compte du tour précédent.
+     *
+     * @param precedente l'intention du tour d'avant, ou {@code null} au premier tour. Elle ne sert que
+     *                   pour une <strong>relance</strong> — « et pour celui-là ? », « et le mois
+     *                   dernier ? » — c'est-à-dire une question courte qui ne porte aucune tournure
+     *                   reconnaissable. Une question complète décide toujours toute seule.
+     */
+    public Aiguillage decider(String question, List<IntentionAssistant> ouvertes,
+            IntentionAssistant precedente) {
         if (question == null || question.isBlank()) {
             return Aiguillage.de(IntentionAssistant.REGLE, null);
         }
@@ -122,7 +135,26 @@ public class AiguillageAssistantIa {
                 return Aiguillage.de(regle.intention(), parametre(regle.intention(), question));
             }
         }
+        // ⚠️ La relance : rien n'est reconnu, mais la question est visiblement la SUITE de la
+        // précédente. On reprend alors l'intention du tour d'avant — jamais son paramètre, qui
+        // appartenait à une autre question.
+        if (precedente != null && precedente.litDesDonnees() && ouvertes.contains(precedente)
+                && estUneRelance(normalisee)) {
+            return Aiguillage.de(precedente, parametre(precedente, question));
+        }
         return Aiguillage.de(IntentionAssistant.REGLE, null);
+    }
+
+    /**
+     * Une <strong>relance</strong> : une question courte qui s'appuie sur ce qui précède. Le critère est
+     * volontairement étroit — une amorce de continuité <em>et</em> une brièveté — parce qu'une relance
+     * mal reconnue ferait lire une donnée que l'utilisateur ne demandait pas.
+     */
+    private static boolean estUneRelance(String questionNormalisee) {
+        return questionNormalisee.length() <= 60
+                && Pattern.compile("^(?:et|puis|alors|ok|d'accord|merci)\\b|\\bcelui[- ]la\\b|\\bcelle[- ]la\\b"
+                        + "|\\ble\\s+mien\\b|\\bpareil\\b|\\bencore\\b|\\bet\\s+maintenant\\b")
+                        .matcher(questionNormalisee).find();
     }
 
     /**

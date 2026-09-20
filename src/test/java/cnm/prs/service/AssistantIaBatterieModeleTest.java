@@ -82,7 +82,7 @@ class AssistantIaBatterieModeleTest {
         for (Cas cas : BATTERIE) {
             List<SourceIaDto> sources = AssistantIaService.numeroter(corpus.rechercher(cas.question(), props.extraits()));
             long debut = System.nanoTime();
-            String reponse = client.generer(AssistantIaService.messages(cas.question(), sources, ProfilUtilisateur.MEMBRE),
+            String reponse = client.generer(AssistantIaService.messages(cas.question(), List.of(), sources, ProfilUtilisateur.MEMBRE),
                     morceau -> { }, () -> false);
             long ms = (System.nanoTime() - debut) / 1_000_000;
             String bas = reponse.toLowerCase(Locale.ROOT);

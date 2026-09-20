@@ -14,7 +14,9 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import cnm.prs.config.AssistantIaProperties;
 import cnm.prs.dto.EtatAssistantIaDto;
 import cnm.prs.dto.EtatAssistantIaDto.DocumentIaDto;
+import cnm.prs.dto.QuestionIaRequest.TourIa;
 import cnm.prs.dto.SourceIaDto;
+import cnm.prs.enums.IntentionAssistant;
 import cnm.prs.enums.ProfilUtilisateur;
 import cnm.prs.exception.ResourceNotFoundException;
 import cnm.prs.service.AiguillageAssistantIa.Aiguillage;
@@ -63,6 +65,13 @@ public class AssistantIaService {
     /** Le flux reste ouvert un peu au-delà du délai du modèle, pour pouvoir dire pourquoi il s'arrête. */
     private static final long MARGE_FLUX_MS = 30_000;
 
+    /**
+     * ⚠️ Bornes de l'historique (lot 4). Trois tours : au-delà, la question courante se noie dans ce qui
+     * précède, et la fenêtre du modèle avec elle. Les textes sont coupés pour la même raison.
+     */
+    private static final int TOURS_MAX = 3;
+    private static final int TAILLE_TOUR = 600;
+
     /** Qui pose la question — relevé dans le fil de la requête, avant de passer au pool de calcul. */
     public record Demandeur(String ref, ProfilUtilisateur profil, String ip) {
     }
@@ -104,30 +113,78 @@ public class AssistantIaService {
      * @throws ResourceNotFoundException si l'assistant n'est pas activé
      */
     public SseEmitter poser(String question, Demandeur demandeur) {
+        return poser(question, List.of(), demandeur);
+    }
+
+    /**
+     * Pose une question, avec les <strong>tours précédents</strong> (lot 4). L'historique vient de
+     * l'écran — le serveur reste sans mémoire — et il est borné puis désamorcé avant d'atteindre le
+     * modèle : c'est une donnée, jamais une consigne.
+     */
+    public SseEmitter poser(String question, List<TourIa> historique, Demandeur demandeur) {
         if (!props.actif()) {
             throw new ResourceNotFoundException("L'assistant IA n'est pas activé.");
         }
         String q = question.strip();
+        List<TourIa> tours = borner(historique);
         // ⚠️ TOUT ce qui lit — l'aiguillage et la lecture qu'il décide — a lieu ICI, dans le fil de la
         // requête : au-delà, il n'y a plus d'utilisateur authentifié, donc plus de garde (§2 du plan).
-        Aiguillage aiguillage = aiguilleur.decider(q, outils.ouvertes(demandeur.profil()));
+        List<IntentionAssistant> ouvertes = outils.ouvertes(demandeur.profil());
+        Aiguillage aiguillage = aiguilleur.decider(q, ouvertes, intentionPrecedente(tours, ouvertes));
         Faits faits = outils.lire(aiguillage);
         // Une question sur des DONNÉES ne se répond pas avec des extraits du manuel, et inversement : une
         // seule matière à la fois, c'est la leçon du lot 3 (« une question = une réponse »).
         List<SourceIaDto> sources = faits == null
                 ? numeroter(corpus.rechercher(q, props.extraits())) : List.of();
         return flux.lancer(props.timeoutSecondes() * 1000L + MARGE_FLUX_MS,
-                canal -> repondre(q, aiguillage, faits, sources, demandeur, canal),
+                canal -> repondre(q, tours, aiguillage, faits, sources, demandeur, canal),
                 message -> journaliser(demandeur, "QUESTION_REFUSEE", q, "", sources, aiguillage, faits, 0,
                         message));
+    }
+
+    /**
+     * L'historique, borné et <strong>désamorcé</strong> : trois tours au plus, les plus récents, et
+     * chaque texte passe par le même filtre que les textes de dossiers (lot 2). Un tour qui portait une
+     * consigne adressée au modèle ne la lui porte pas une seconde fois.
+     */
+    private static List<TourIa> borner(List<TourIa> historique) {
+        if (historique == null || historique.isEmpty()) {
+            return List.of();
+        }
+        List<TourIa> recents = historique.size() <= TOURS_MAX ? historique
+                : historique.subList(historique.size() - TOURS_MAX, historique.size());
+        return recents.stream()
+                .map(t -> new TourIa(OutilsDossierIa.desamorcer(couper(t.question(), TAILLE_TOUR)),
+                        OutilsDossierIa.desamorcer(couper(t.reponse(), TAILLE_TOUR))))
+                .toList();
+    }
+
+    private static String couper(String texte, int max) {
+        if (texte == null) {
+            return "";
+        }
+        String propre = texte.strip();
+        return propre.length() <= max ? propre : propre.substring(0, max - 1) + "…";
+    }
+
+    /**
+     * L'intention du dernier tour, relue de la même façon que la question courante. On ne la
+     * <strong>transporte pas</strong> depuis l'écran : ce serait laisser le navigateur choisir une
+     * lecture, et c'est exactement ce que ce lot refuse.
+     */
+    private IntentionAssistant intentionPrecedente(List<TourIa> tours, List<IntentionAssistant> ouvertes) {
+        if (tours.isEmpty()) {
+            return null;
+        }
+        return aiguilleur.decider(tours.get(tours.size() - 1).question(), ouvertes).intention();
     }
 
     /**
      * Calcule la réponse, la <strong>journalise</strong>, puis clôt le flux ({@code fin} ou
      * {@code erreur}) : l'échange est tracé avant que l'utilisateur ne le voie terminé.
      */
-    private void repondre(String question, Aiguillage aiguillage, Faits faits, List<SourceIaDto> sources,
-            Demandeur demandeur, Canal canal) {
+    private void repondre(String question, List<TourIa> historique, Aiguillage aiguillage, Faits faits,
+            List<SourceIaDto> sources, Demandeur demandeur, Canal canal) {
         long debut = System.nanoTime();
         StringBuilder reponse = new StringBuilder();
         String action = "QUESTION";
@@ -146,8 +203,8 @@ public class AssistantIaService {
                 canal.envoyer("texte", Map.of("t", texte));
             } else {
                 List<Message> messages = faits != null
-                        ? messagesSurDonnees(question, faits, demandeur.profil())
-                        : messages(question, sources, demandeur.profil());
+                        ? messagesSurDonnees(question, historique, faits, demandeur.profil())
+                        : messages(question, historique, sources, demandeur.profil());
                 client.generer(messages, morceau -> {
                     reponse.append(morceau);
                     canal.envoyer("texte", Map.of("t", morceau));
@@ -188,7 +245,8 @@ public class AssistantIaService {
     // ---------------------------------------------------------------- consigne et extraits
 
     /** Consigne système, puis la question accompagnée de ses extraits numérotés. */
-    static List<Message> messages(String question, List<SourceIaDto> sources, ProfilUtilisateur profil) {
+    static List<Message> messages(String question, List<TourIa> historique, List<SourceIaDto> sources,
+            ProfilUtilisateur profil) {
         String consigne = """
                 Tu es l'Assistant IA de PRS (Procurement Review System), l'application de la Commission \
                 nationale des marchés (CNM) de Madagascar pour le contrôle a priori des marchés publics.
@@ -219,7 +277,7 @@ public class AssistantIaService {
                     .append(s.reference()).append('\n').append(s.extrait()).append('\n');
         }
         demande.append("\nQuestion : ").append(question);
-        return List.of(new Message("system", consigne), new Message("user", demande.toString()));
+        return avecHistorique(consigne, historique, demande.toString());
     }
 
     /**
@@ -236,7 +294,8 @@ public class AssistantIaService {
      * <p>Le reste est identique — pas d'avis, pas de vocabulaire technique, vouvoiement — parce que ce
      * sont les garde-fous du lot, pas ceux d'une fonctionnalité.</p>
      */
-    static List<Message> messagesSurDonnees(String question, Faits faits, ProfilUtilisateur profil) {
+    static List<Message> messagesSurDonnees(String question, List<TourIa> historique, Faits faits,
+            ProfilUtilisateur profil) {
         String consigne = """
                 Tu es l'Assistant IA de PRS (Procurement Review System), l'application de la Commission \
                 nationale des marchés (CNM) de Madagascar pour le contrôle a priori des marchés publics.
@@ -258,7 +317,30 @@ public class AssistantIaService {
 
                 L'utilisateur est : %s.""".formatted(libelleProfil(profil));
         String demande = "Éléments lus pour vous :\n\n" + faits.materiau() + "\n\nQuestion : " + question;
-        return List.of(new Message("system", consigne), new Message("user", demande));
+        return avecHistorique(consigne, historique, demande);
+    }
+
+    /**
+     * Assemble la conversation : la consigne, puis les tours précédents, puis la demande.
+     *
+     * <p>⚠️ Les tours sont rendus comme de vrais tours de dialogue ({@code user} / {@code assistant}),
+     * et non recopiés dans la demande : c'est la forme que les modèles de chat attendent, et celle qui
+     * distingue le plus nettement <strong>ce qui a été dit</strong> de <strong>ce qui est demandé</strong>.
+     * Ils arrivent déjà bornés et désamorcés ({@link #borner}).</p>
+     */
+    private static List<Message> avecHistorique(String consigne, List<TourIa> historique, String demande) {
+        List<Message> messages = new ArrayList<>();
+        messages.add(new Message("system", consigne));
+        for (TourIa tour : historique == null ? List.<TourIa>of() : historique) {
+            if (tour.question() != null && !tour.question().isBlank()) {
+                messages.add(new Message("user", tour.question()));
+            }
+            if (tour.reponse() != null && !tour.reponse().isBlank()) {
+                messages.add(new Message("assistant", tour.reponse()));
+            }
+        }
+        messages.add(new Message("user", demande));
+        return List.copyOf(messages);
     }
 
     static List<SourceIaDto> numeroter(List<CorpusIaService.Passage> passages) {

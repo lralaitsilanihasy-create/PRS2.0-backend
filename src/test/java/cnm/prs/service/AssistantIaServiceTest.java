@@ -19,7 +19,7 @@ class AssistantIaServiceTest {
     @Test
     @DisplayName("Consigne : réponse sur extraits seuls, droit malgache, citations numérotées, aucun avis sur un dossier réel")
     void consigne_regles() {
-        List<Message> messages = AssistantIaService.messages("Qu'est-ce qu'un avenant ?", List.of(), ProfilUtilisateur.PRMP);
+        List<Message> messages = AssistantIaService.messages("Qu'est-ce qu'un avenant ?", List.of(), List.of(), ProfilUtilisateur.PRMP);
 
         String consigne = messages.get(0).content();
         assertThat(messages.get(0).role()).isEqualTo("system");
@@ -40,7 +40,7 @@ class AssistantIaServiceTest {
                 new Passage("d0-p15", "Manuel", "p. 15", "Fractionnement illicite : un seul marché par compte."),
                 new Passage("d1-s3", "Règles", "3.1. PRMP", "Le mode de passation est purement saisi.")));
 
-        String demande = AssistantIaService.messages("Le fractionnement ?", sources, ProfilUtilisateur.MEMBRE).get(1).content();
+        String demande = AssistantIaService.messages("Le fractionnement ?", List.of(), sources, ProfilUtilisateur.MEMBRE).get(1).content();
 
         assertThat(sources).extracting(SourceIaDto::numero).containsExactly(1, 2);
         assertThat(demande)

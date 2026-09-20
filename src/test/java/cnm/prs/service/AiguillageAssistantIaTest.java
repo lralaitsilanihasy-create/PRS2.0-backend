@@ -174,4 +174,46 @@ class AiguillageAssistantIaTest {
         assertThat(aiguillage.decider("qu'est-ce que j'ai à faire ?", CONTROLEUR).parametre()).isNull();
         assertThat(aiguillage.decider("combien de dossiers en retard ?", CONTROLEUR).parametre()).isNull();
     }
+
+    // ------------------------------------------------------------------ 5. la relance (lot 4, étape 4)
+
+    @Test
+    @DisplayName("Une RELANCE courte reprend l'intention du tour précédent : « et maintenant ? » après "
+            + "une question sur les compteurs parle encore des compteurs")
+    void relance_reprendLIntentionPrecedente() {
+        assertThat(aiguillage.decider("et maintenant ?", CONTROLEUR, IntentionAssistant.MES_CHIFFRES)
+                .intention()).isEqualTo(IntentionAssistant.MES_CHIFFRES);
+        assertThat(aiguillage.decider("et celui-là ?", CONTROLEUR, IntentionAssistant.MES_TACHES)
+                .intention()).isEqualTo(IntentionAssistant.MES_TACHES);
+    }
+
+    @Test
+    @DisplayName("⚠️ Une question COMPLÈTE décide toujours toute seule : le tour précédent ne l'emporte "
+            + "jamais sur ce qui est écrit")
+    void questionComplete_ignoreLePrecedent() {
+        assertThat(aiguillage.decider("qu'est-ce que j'ai à faire ?", CONTROLEUR,
+                IntentionAssistant.MES_CHIFFRES).intention()).isEqualTo(IntentionAssistant.MES_TACHES);
+        assertThat(aiguillage.decider("qu'est-ce qu'un fractionnement illicite ?", CONTROLEUR,
+                IntentionAssistant.MES_CHIFFRES).intention()).isEqualTo(IntentionAssistant.REGLE);
+    }
+
+    @Test
+    @DisplayName("⚠️ Le critère de relance est ÉTROIT : une phrase longue, ou sans amorce de continuité, "
+            + "n'est pas une relance — une relance mal reconnue ferait lire une donnée non demandée")
+    void relance_critereEtroit() {
+        assertThat(aiguillage.decider("pourriez-vous me dire ce qu'il en est de la situation générale "
+                + "du service cette semaine", CONTROLEUR, IntentionAssistant.MES_CHIFFRES).intention())
+                .isEqualTo(IntentionAssistant.REGLE);
+        assertThat(aiguillage.decider("merci beaucoup", CONTROLEUR, null).intention())
+                .isEqualTo(IntentionAssistant.REGLE);
+    }
+
+    @Test
+    @DisplayName("Une relance ne réveille jamais une intention fermée au profil")
+    void relance_neReveillePasUneIntentionFermee() {
+        List<IntentionAssistant> sansChiffres = List.of(IntentionAssistant.REGLE);
+
+        assertThat(aiguillage.decider("et maintenant ?", sansChiffres, IntentionAssistant.MES_CHIFFRES)
+                .intention()).isEqualTo(IntentionAssistant.REGLE);
+    }
 }
