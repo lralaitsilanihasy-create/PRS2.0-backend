@@ -135,6 +135,16 @@ public class PvExamenDto {
     private Boolean noteInterimDisponible;
 
     /**
+     * ⚠️ Intérim désigné (2026-09-21, §B4.2) — lecture seule : identifiant de l'intérim quand le visa a été
+     * posé par un intérimaire <strong>désigné</strong> ({@code viseParInterim = true}, {@code noteInterim*} à
+     * {@code null}), et matricule du titulaire suppléé. {@code null} pour le repli ponctuel (note PDF) comme
+     * pour un visa normal. Masqués pour la PRMP et l'UGPM (règle C2).
+     */
+    private Integer idInterim;
+
+    private String interimDe;
+
+    /**
      * Vrai si un PDF officiel est réellement disponible (lecture seule, peuplé serveur) : fichier déjà stocké
      * ({@code CHEMIN_DOCUMENT} non nul) <strong>ou</strong> PV éligible à la génération à la demande (avis FAVR
      * + localité centrale ANT + toutes lignes de marché en appel d'offres ouvert). {@code false} sinon — le

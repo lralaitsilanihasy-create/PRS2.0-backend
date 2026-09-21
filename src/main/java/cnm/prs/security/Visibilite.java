@@ -23,8 +23,13 @@ public final class Visibilite {
     private Visibilite() {
     }
 
+    /**
+     * ⚠️ 2026-09-21 (intérim désigné, §B4.1) — le connecté voit tout aussi quand il <strong>supplée le
+     * Président</strong> : le périmètre est celui du titulaire, et celui du Président est toutes les localités.
+     * Lu dans {@link InterimContexte}, posé une fois par requête ; hors requête, rien n'est étendu.
+     */
     public static boolean voitTout() {
-        return voitTout(CurrentUser.profil().orElse(null));
+        return voitTout(CurrentUser.profil().orElse(null)) || InterimContexte.suppleeLePresident();
     }
 
     /**
@@ -100,6 +105,10 @@ public final class Visibilite {
      * contrainte (cas d'une première réception qui établit la localité).
      */
     public static void exigerLocalite(String localiteRessource) {
+        // ⚠️ 2026-09-21 — l'intérimaire du Président agit partout, comme lui (périmètre du titulaire).
+        if (InterimContexte.suppleeLePresident()) {
+            return;
+        }
         if (!localiteAdmise(CurrentUser.profil().orElse(null), localite().orElse(null), localiteRessource)) {
             throw new AccessDeniedException(
                     "Action hors de votre localité : la délégation reste limitée à votre localité (§3.3).");

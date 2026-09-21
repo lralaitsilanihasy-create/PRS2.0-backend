@@ -24,7 +24,9 @@ import cnm.prs.repository.ExamenRepository;
 import cnm.prs.repository.ProfileRepository;
 import cnm.prs.repository.ReceptionRepository;
 import cnm.prs.security.CurrentUser;
+import cnm.prs.security.InterimContexte;
 import cnm.prs.security.PermissionService;
+import cnm.prs.security.Suppleance;
 import cnm.prs.security.Visibilite;
 
 /**
@@ -56,13 +58,17 @@ public class DispatchService {
     private final JournalDossierService journalDossier;
     /** ⚠️ Réattribution (2026-09-03) — refus si un examen est déjà entamé sur le dispatch. */
     private final ExamenRepository examenRepository;
+    /** ⚠️ Intérim désigné (2026-09-21) — au titre de qui le connecté dispatche. */
+    private final InterimService interimService;
 
     public DispatchService(DispatchRepository repository, ReceptionRepository receptionRepository,
             ControleurRepository controleurRepository, DossierRepository dossierRepository,
             NotificationService notificationService, CircuitCascadeService circuitCascadeService,
             ControleurDirectory controleurDirectory, PermissionService permissionService,
             ProfileRepository profileRepository, ChronometrageService chronometrageService,
-            JournalDossierService journalDossier, ExamenRepository examenRepository) {
+            JournalDossierService journalDossier, ExamenRepository examenRepository,
+            InterimService interimService) {
+        this.interimService = interimService;
         this.journalDossier = journalDossier;
         this.examenRepository = examenRepository;
         this.chronometrageService = chronometrageService;
@@ -110,21 +116,35 @@ public class DispatchService {
     }
 
     public DispatchDto create(DispatchDto dto) {
-        exigerPresidentSiCentrale(dto.getIdReception(), false);
+        // ⚠️ Intérim désigné (2026-09-21, §B4.1) — au titre de qui le connecté dispatche : en son nom s'il le
+        // peut, sinon par intérim du CC de la localité ou du Président. Vide = les gardes ordinaires, en son nom.
+        Suppleance suppleance = interimService.suppleanceDispatch(resoudreLocaliteDossier(dto.getIdReception()))
+                .orElse(null);
+        exigerHabiliteEnTitre(suppleance);
+        ProfilUtilisateur profilEffectif = profilEffectif(suppleance);
+        exigerPresidentSiCentrale(dto.getIdReception(), false, profilEffectif);
         exigerDossierPretDispatch(dto.getIdReception());
         interdireDoublonDispatch(dto.getIdReception());
-        validerInterimDispatch(dto);
+        if (suppleance == null) {
+            validerInterimDispatch(dto);
+        } else {
+            // La désignation EST la justification : le drapeau du repli ponctuel n'a rien à dire ici.
+            dto.setInterimDispatch(Boolean.FALSE);
+        }
         validerAttributaireMembre(dto);
         Dispatch entity = DispatchMapper.toEntity(dto);
         // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
         entity.setIdDispatch(ClePrimaire.reallouer(dto.getIdDispatch(), repository::existsById, repository::nextIdDispatch));
-        entity.setImCtrlDispatch(dispatcheurAuthentifie());   // ⚠️ audit lot B — identité = JWT
+        // ⚠️ audit lot B — identité = JWT ; par intérim, le dispatcheur enregistré est le TITULAIRE (ADR-0008) :
+        // c'est lui que l'aval reconnaît (visa, retrait, deux-niveaux), l'auteur réel est sur ID_INTERIM.
+        entity.setImCtrlDispatch(suppleance == null ? dispatcheurAuthentifie() : suppleance.imTitulaire());
+        entity.setIdInterim(suppleance == null ? null : suppleance.idInterim());
         // ⚠️ Règle MODIFIÉE (2026-08-15) — l'association CC ne vaut que quand le Président dispatche
         // à un Membre (le CC suit alors les dossiers de sa commission) : voir normaliserAssociationCc.
-        normaliserAssociationCc(entity, true);
+        normaliserAssociationCc(entity, true, profilEffectif);
         Dispatch saved = repository.save(entity);
         // [Auto] Le dossier avance PRET_DISPATCH → DISPATCHE, dans la même transaction que le dispatch.
-        avancerDossierVersDispatche(dto.getIdReception());
+        avancerDossierVersDispatche(dto.getIdReception(), suppleance);
         // [Auto] Le Membre assigné est notifié qu'un dossier lui est transmis pour examen.
         notifierMembreAssigne(saved);
         // [Auto] Copie du dispatch au CC associé (sauf s'il est lui-même le dispatcheur).
@@ -136,9 +156,57 @@ public class DispatchService {
             String detail = "à " + nomControleur(saved.getImCtrlMembre())
                     + (saved.getImCtrlCc() == null ? "" : " · copie à " + nomControleur(saved.getImCtrlCc()))
                     + consigne(saved);
-            journalDossier.tracerControleur(idDossierDispatche, JournalDossierService.DISPATCH, detail);
+            journalDossier.tracerControleur(idDossierDispatche, JournalDossierService.DISPATCH, detail, suppleance);
         }
-        return toDtoComplet(saved);
+        DispatchDto reponse = toDtoComplet(saved);
+        return reponse;
+    }
+
+    /** Le profil sous lequel le connecté agit : celui du titulaire suppléé, à défaut le sien. */
+    private static ProfilUtilisateur profilEffectif(Suppleance suppleance) {
+        return suppleance != null ? suppleance.profilTitulaire() : CurrentUser.profil().orElse(null);
+    }
+
+    /**
+     * ⚠️ Intérim désigné (2026-09-21) — sans suppléance applicable ici, le connecté agit <strong>en son nom</strong> :
+     * il doit alors pouvoir dispatcher par lui-même (Président, ou Chef de commission — profil ou délégation).
+     * Le {@code @PreAuthorize} du contrôleur laisse passer un Membre qui supplée un CC ; s'il agit hors du
+     * périmètre de ce CC (un dossier central, par exemple), les gardes suivantes ne doivent pas le juger comme
+     * un CC : 403, en nommant la règle.
+     */
+    private void exigerHabiliteEnTitre(Suppleance suppleance) {
+        if (suppleance != null) {
+            return;
+        }
+        if (!permissionService.peutExercer(CurrentUser.profil().orElse(null), ProfilUtilisateur.CHEF_COMMISSION)) {
+            throw new org.springframework.security.access.AccessDeniedException("Le dispatch relève du Président "
+                    + "ou d'un Chef de commission : vous ne suppléez ici personne qui le puisse (l'intérim n'est "
+                    + "pas transitif, et chaque intérim porte son seul titulaire).");
+        }
+    }
+
+    /**
+     * ⚠️ Intérim désigné (2026-09-21) — au titre de qui le connecté <strong>corrige</strong> ou <strong>retire</strong>
+     * un dispatch existant : en son nom s'il est le dispatcheur, l'attributaire, le Président, ou un CC de la
+     * localité d'un dossier régional ; sinon par intérim du dispatcheur, de l'attributaire (le CC attributaire
+     * d'un dossier central, dérogation du 2026-09-03), du CC de la localité, ou du Président.
+     */
+    private Suppleance suppleanceSur(Dispatch dispatch) {
+        String moi = CurrentUser.ref().orElse(null);
+        ProfilUtilisateur profil = CurrentUser.profil().orElse(null);
+        String localiteDossier = resoudreLocaliteDossier(dispatch.getIdReception());
+        if (profil == ProfilUtilisateur.PRESIDENT
+                || PredicatsIdentite.estDispatcheur(moi, dispatch.getImCtrlDispatch())
+                || PredicatsIdentite.estAttributaire(moi, dispatch.getImCtrlMembre())
+                || (profil == ProfilUtilisateur.CHEF_COMMISSION && localiteDossier != null
+                        && localiteDossier.equals(CurrentUser.localite().orElse(null))
+                        && !cnm.prs.entity.Localite.estCentrale(localiteDossier))) {
+            return null;
+        }
+        return InterimService.suppleanceFace(moi, dispatch.getImCtrlDispatch())
+                .or(() -> InterimService.suppleanceFace(moi, dispatch.getImCtrlMembre()))
+                .or(() -> interimService.suppleanceDispatch(localiteDossier))
+                .orElse(null);
     }
 
     /**
@@ -159,8 +227,9 @@ public class DispatchService {
      *       copie {@code DISPATCH_CC}.</li>
      * </ul>
      */
-    private void normaliserAssociationCc(Dispatch entity, boolean associerParDefaut) {
-        ProfilUtilisateur profil = CurrentUser.profil().orElse(null);
+    private void normaliserAssociationCc(Dispatch entity, boolean associerParDefaut, ProfilUtilisateur profil) {
+        // Le profil est celui sous lequel le dispatch est posé (le titulaire suppléé, le cas échéant) ; l'auto-
+        // attribution, elle, se juge sur la PERSONNE qui clique — c'est elle qui examinera.
         String moi = CurrentUser.ref().orElse(null);
         boolean autoAttribution = moi != null && moi.equals(entity.getImCtrlMembre());
         if (profil == ProfilUtilisateur.CHEF_COMMISSION || autoAttribution) {
@@ -221,7 +290,7 @@ public class DispatchService {
      * La précondition {@link #exigerDossierPretDispatch} garantit l'état de départ ; on ne réécrit
      * que si le dossier est bien PRET_DISPATCH (jamais un dossier déjà clôturé/retiré).
      */
-    private void avancerDossierVersDispatche(Integer idReception) {
+    private void avancerDossierVersDispatche(Integer idReception, Suppleance suppleance) {
         if (idReception == null) {
             return;
         }
@@ -235,7 +304,7 @@ public class DispatchService {
                 d.setStatut(StatutDossier.DISPATCHE.name());
                 dossierRepository.save(d);
                 // ⚠️ Chronométrage (2026-09-01) — le dispatch clôt l'étape DISPATCH.
-                chronometrageService.cloturer(idDossier, EtapeCircuit.DISPATCH);
+                chronometrageService.cloturer(idDossier, EtapeCircuit.DISPATCH, suppleance);
                 log.info("[CIRCUIT] dispatch dossier={} acteur={} reception={} statut={}",
                         idDossier, CurrentUser.login().orElse(null), idReception,
                         StatutDossier.DISPATCHE.name());
@@ -320,10 +389,16 @@ public class DispatchService {
         // mais dispatcheur. S en tenir a l attributaire lui interdirait de reprendre son propre dossier,
         // ce que la regle prevoit explicitement. Un CC etranger au dispatch reste refuse.
         String moi = CurrentUser.ref().orElse(null);
-        boolean jeSuisConcerne = PredicatsIdentite.estAttributaire(moi, existing.getImCtrlMembre())
-                || PredicatsIdentite.estDispatcheur(moi, existing.getImCtrlDispatch());
-        exigerPresidentSiCentrale(existing.getIdReception(), jeSuisConcerne);
-        exigerPresidentSiCentrale(dto.getIdReception(), jeSuisConcerne);
+        // ⚠️ Intérim désigné (2026-09-21, §B4.1) — « le dispatcheur » ou « le CC attributaire » : lui, ou son
+        // intérimaire actif. Les identités du connecté sont les siennes plus celles des titulaires qu'il supplée.
+        java.util.Set<String> identites = InterimContexte.identites(moi);
+        Suppleance suppleance = suppleanceSur(existing);
+        exigerHabiliteEnTitre(suppleance);
+        ProfilUtilisateur profilEffectif = profilEffectif(suppleance);
+        boolean jeSuisConcerne = PredicatsIdentite.estAttributaireParmi(identites, existing.getImCtrlMembre())
+                || PredicatsIdentite.estDispatcheurParmi(identites, existing.getImCtrlDispatch());
+        exigerPresidentSiCentrale(existing.getIdReception(), jeSuisConcerne, profilEffectif);
+        exigerPresidentSiCentrale(dto.getIdReception(), jeSuisConcerne, profilEffectif);
         Visibilite.exigerLocalite(resoudreLocaliteDossier(existing.getIdReception()));
         Visibilite.exigerLocalite(resoudreLocaliteDossier(dto.getIdReception()));
         exigerDossierAvantPvSigne(existing.getIdReception());
@@ -331,7 +406,11 @@ public class DispatchService {
         if (!java.util.Objects.equals(existing.getIdReception(), dto.getIdReception())) {
             interdireDoublonDispatch(dto.getIdReception());   // re-ciblage : un seul dispatch par réception
         }
-        validerInterimDispatch(dto);
+        if (suppleance == null) {
+            validerInterimDispatch(dto);
+        } else {
+            dto.setInterimDispatch(Boolean.FALSE);
+        }
         validerAttributaireMembre(dto);
         String ancienAttributaire = existing.getImCtrlMembre();
         boolean changementAttributaire = !java.util.Objects.equals(ancienAttributaire, dto.getImCtrlMembre());
@@ -351,10 +430,12 @@ public class DispatchService {
         // lui-même), reprise. Conséquence voulue : le changement d'attributaire étant refusé (409) dès
         // qu'un examen existe, le dispatcheur est figé une fois l'examen entamé — ce qui ferme aussi le
         // basculement du régime de navette (simple / deux niveaux) en plein vol. L'appelant reste exigé.
-        String auteurDuPut = dispatcheurAuthentifie();   // ⚠️ audit lot B — identité = JWT, jamais le corps
+        // ⚠️ audit lot B — identité = JWT, jamais le corps ; par intérim, le TITULAIRE suppléé (ADR-0008).
+        String auteurDuPut = suppleance == null ? dispatcheurAuthentifie() : suppleance.imTitulaire();
         existing.setIdReception(dto.getIdReception());
         if (changementAttributaire) {
             existing.setImCtrlDispatch(auteurDuPut);
+            existing.setIdInterim(suppleance == null ? null : suppleance.idInterim());
         }
         existing.setImCtrlCc(dto.getImCtrlCc());
         existing.setImCtrlMembre(dto.getImCtrlMembre());
@@ -363,7 +444,7 @@ public class DispatchService {
         existing.setInstructions(dto.getInstructions());
         existing.setInterimDispatch(dto.getInterimDispatch());
         // Même règle d'association CC qu'au POST (sans auto-association : le PUT respecte le corps).
-        normaliserAssociationCc(existing, false);
+        normaliserAssociationCc(existing, false, profilEffectif);
         Dispatch sauve = repository.save(existing);
 
         // ⚠️ Réattribution (2026-09-03) — le PUT ne notifiait personne : l'ancien attributaire voyait le
@@ -371,7 +452,7 @@ public class DispatchService {
         if (changementAttributaire) {
             Integer idDossierReattribue = dossierDeLaReception(sauve.getIdReception());
             notifierReattribution(sauve, ancienAttributaire, idDossierReattribue);
-            tracerReattribution(sauve, ancienAttributaire, idDossierReattribue);
+            tracerReattribution(sauve, ancienAttributaire, idDossierReattribue, suppleance);
             // ⚠️ Chronométrage — DEUX écritures, et leur ORDRE porte le sens (2026-09-04, revu le
             // 2026-09-12). D'abord l'examen du SORTANT : il est abandonné à cet instant, sa durée court
             // depuis le dispatch initial et s'arrête ici — le passage a eu lieu, il n'est pas effacé.
@@ -385,7 +466,7 @@ public class DispatchService {
             // Ce second appel couvre AUSSI la REPRISE : le « Retirer » du CC est un PUT vers lui-même,
             // donc un changement d'attributaire. Le « rendre » du Membre, lui, n'existe pas comme geste
             // (aucun endpoint) : il reste hors lot, faute d'objet.
-            chronometrageService.cloturer(idDossierReattribue, EtapeCircuit.DISPATCH);
+            chronometrageService.cloturer(idDossierReattribue, EtapeCircuit.DISPATCH, suppleance);
         }
         return toDtoComplet(sauve);
     }
@@ -420,7 +501,8 @@ public class DispatchService {
      * dossier (le « Retirer » du CC est un PUT vers lui-même, pas une annulation), <strong>
      * REATTRIBUTION</strong> sinon — la distinction est ce que le pilote demandait à voir.
      */
-    private void tracerReattribution(Dispatch dispatch, String ancienAttributaire, Integer idDossier) {
+    private void tracerReattribution(Dispatch dispatch, String ancienAttributaire, Integer idDossier,
+            Suppleance suppleance) {
         if (idDossier == null) {
             return;
         }
@@ -428,10 +510,11 @@ public class DispatchService {
         String nouveau = dispatch.getImCtrlMembre();
         if (nouveau != null && nouveau.equals(moi)) {
             journalDossier.tracerControleur(idDossier, JournalDossierService.REPRISE,
-                    "reprise à " + nomControleur(ancienAttributaire));
+                    "reprise à " + nomControleur(ancienAttributaire), suppleance);
         } else {
             journalDossier.tracerControleur(idDossier, JournalDossierService.REATTRIBUTION,
-                    "de " + nomControleur(ancienAttributaire) + " à " + nomControleur(nouveau) + consigne(dispatch));
+                    "de " + nomControleur(ancienAttributaire) + " à " + nomControleur(nouveau) + consigne(dispatch),
+                    suppleance);
         }
     }
 
@@ -451,8 +534,9 @@ public class DispatchService {
      * — c'est {@code reattributionParAttributaire} qui le dit. La garde ne vise que le POST initial, un
      * PUT sur un dispatch dont il n'est pas l'attributaire, et l'intérim.</p>
      */
-    private void exigerPresidentSiCentrale(Integer idReception, boolean reattributionParAttributaire) {
-        ProfilUtilisateur profil = CurrentUser.profil().orElse(null);
+    private void exigerPresidentSiCentrale(Integer idReception, boolean reattributionParAttributaire,
+            ProfilUtilisateur profil) {
+        // ⚠️ 2026-09-21 — le profil est celui sous lequel le geste est posé : le titulaire suppléé, le cas échéant.
         if (profil != ProfilUtilisateur.CHEF_COMMISSION || reattributionParAttributaire) {
             return;   // la localité n'est lue que pour le cas que la règle vise
         }
@@ -477,12 +561,13 @@ public class DispatchService {
      * <p>Le Président n'est pas restreint. Une réattribution par le CC pose {@code IM_CTRL_DISPATCH} =
      * son matricule : il peut donc ensuite RETIRER AU MEMBRE, ce qui est voulu.</p>
      */
-    private void exigerDispatcheurPourAnnuler(Dispatch dispatch) {
-        if (!PredicatsIdentite.retraitDispatchReserveAuDispatcheur(CurrentUser.profil().orElse(null))) {
+    private void exigerDispatcheurPourAnnuler(Dispatch dispatch, Suppleance suppleance) {
+        if (!PredicatsIdentite.retraitDispatchReserveAuDispatcheur(profilEffectif(suppleance))) {
             return;
         }
         String moi = CurrentUser.ref().orElse(null);
-        boolean dispatcheur = PredicatsIdentite.estDispatcheur(moi, dispatch.getImCtrlDispatch());
+        // ⚠️ 2026-09-21 — le dispatcheur, ou son intérimaire actif ; l'auto-retrait se juge sur la personne.
+        boolean dispatcheur = PredicatsIdentite.estDispatcheurParmi(InterimContexte.identites(moi), dispatch.getImCtrlDispatch());
         boolean attributaire = PredicatsIdentite.estAttributaire(moi, dispatch.getImCtrlMembre());
         if (!dispatcheur) {
             throw new org.springframework.security.access.AccessDeniedException("Retrait réservé au dispatcheur du dossier : vous n'avez pas "
@@ -549,7 +634,9 @@ public class DispatchService {
         Dispatch entity = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Dispatch introuvable : " + id));
         Visibilite.controler(loc -> repository.existsDansLocalite(id, loc));
-        exigerDispatcheurPourAnnuler(entity);
+        Suppleance suppleance = suppleanceSur(entity);
+        exigerHabiliteEnTitre(suppleance);
+        exigerDispatcheurPourAnnuler(entity, suppleance);
         Integer idDossier = entity.getIdReception() == null ? null
                 : receptionRepository.findById(entity.getIdReception())
                         .map(Reception::getIdDossier).orElse(null);
@@ -575,7 +662,7 @@ public class DispatchService {
         // tout l interet d un journal append-only, le dispatch lui-meme ne garde aucune trace du retrait.
         if (idDossier != null) {
             journalDossier.tracerControleur(idDossier, JournalDossierService.RETRAIT_DISPATCH,
-                    "retiré à " + nomControleur(entity.getImCtrlMembre()) + " — retour en pré-dispatch");
+                    "retiré à " + nomControleur(entity.getImCtrlMembre()) + " — retour en pré-dispatch", suppleance);
         }
         notifierMembreRetrait(entity, idDossier);
         notifierCcRetrait(entity, idDossier);

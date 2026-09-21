@@ -69,4 +69,11 @@ public class ActionDossier {
 
     @Column(name = "DETAIL", length = 500)
     private String detail;
+
+    /** ⚠️ Intérim désigné (V34) — geste posé PAR INTÉRIM de ce titulaire ; l'auteur reste celui qui a agi. */
+    @Column(name = "INTERIM_DE", length = 10)
+    private String interimDe;
+
+    @Column(name = "ID_INTERIM")
+    private Integer idInterim;
 }

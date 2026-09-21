@@ -10,7 +10,11 @@ public enum ModeTache {
     TITULAIRE,
     /** Réalisable par une paire active de {@code t_delegation_profil} (profil courant → profil porteur). */
     DELEGATION,
-    /** Visa par intérim d'un P/CC autre que le dispatcheur (note d'intérim requise). */
+    /**
+     * Par intérim : tâche du titulaire servie à son <strong>intérimaire désigné</strong> ({@code interimDe} et
+     * {@code idInterim} renseignés sur la ligne ; 2026-09-21, §B4.6), ou — sens d'origine, {@code idInterim} nul —
+     * visa par intérim ponctuel d'un P/CC autre que le dispatcheur (note d'intérim requise).
+     */
     INTERIM,
     /** Dossier ciblé sur un collègue de même profil (rattachement), que la localité permet de traiter. */
     COLLEGUE,

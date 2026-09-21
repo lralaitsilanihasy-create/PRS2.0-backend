@@ -56,6 +56,9 @@ public final class DispatchMapper {
         dto.setDateCtrlAssigne(entity.getDateCtrlAssigne());
         dto.setInstructions(entity.getInstructions());
         dto.setInterimDispatch(entity.getInterimDispatch());
+        // ⚠️ Intérim désigné (2026-09-21) — lecture seule : le titulaire suppléé EST le dispatcheur enregistré.
+        dto.setIdInterim(entity.getIdInterim());
+        dto.setInterimDe(entity.getIdInterim() == null ? null : entity.getImCtrlDispatch());
         return dto;
     }
 

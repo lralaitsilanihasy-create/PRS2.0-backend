@@ -44,4 +44,14 @@ public class DispatchDto {
 
     @NotNull
     private Boolean interimDispatch;
+
+    /**
+     * ⚠️ Intérim désigné (2026-09-21, §B5) — lecture seule : identifiant de l'intérim quand le dispatch a été
+     * posé par un intérimaire désigné, et matricule du titulaire suppléé ({@code interimDe}, égal à
+     * {@code imCtrlDispatch} : le dispatcheur enregistré est le titulaire, ADR-0008). {@code null} sinon.
+     * {@code interimDispatch} reste le repli ponctuel, inchangé.
+     */
+    private Integer idInterim;
+
+    private String interimDe;
 }

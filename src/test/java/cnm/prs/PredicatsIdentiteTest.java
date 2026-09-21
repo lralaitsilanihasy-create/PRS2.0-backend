@@ -49,6 +49,39 @@ class PredicatsIdentiteTest {
     }
 
     @Test
+    @DisplayName("⚠️ Intérim désigné — parmi les identités (la sienne + ses titulaires) : le dispatcheur, l'attributaire "
+            + "réattribuant, le CC du circuit et le CC désigné admettent l'intérimaire actif ; jamais sur un nul")
+    void identitesParInterim() {
+        java.util.Set<String> identites = java.util.Set.of("CTRMEM2", "CTRCC2");   // CTRMEM2 supplée CTRCC2
+        assertTrue(PredicatsIdentite.estDispatcheurParmi(identites, "CTRCC2"), "le dispatcheur, par intérim");
+        assertTrue(PredicatsIdentite.estDispatcheurParmi(identites, "CTRMEM2"), "ou lui-même");
+        assertFalse(PredicatsIdentite.estDispatcheurParmi(identites, "CTRPRE"), "pas un titulaire qu'il ne supplée pas");
+        assertFalse(PredicatsIdentite.estDispatcheurParmi(identites, null));
+        assertFalse(PredicatsIdentite.estDispatcheurParmi(null, "CTRCC2"));
+        assertFalse(PredicatsIdentite.estDispatcheurParmi(java.util.Set.of(), "CTRCC2"));
+        assertTrue(PredicatsIdentite.estAttributaireParmi(identites, "CTRCC2"));
+        assertTrue(PredicatsIdentite.estDesigneParmi(identites, "CTRCC2"));
+        assertTrue(PredicatsIdentite.estCcDuCircuitParmi(identites, new Circuit(REGIONALE, "CTRCC2", "CTRMEM4")));
+        assertFalse(PredicatsIdentite.estCcDuCircuitParmi(identites, new Circuit(REGIONALE, "CTRCC1", "CTRMEM4")));
+        assertFalse(PredicatsIdentite.estCcDuCircuitParmi(identites, null));
+        // Les prédicats à un acteur ne bougent pas : l'examen reste à l'attributaire seul.
+        assertFalse(PredicatsIdentite.estAttributaire("CTRMEM2", "CTRCC2"));
+    }
+
+    @Test
+    @DisplayName("⚠️ Une part par personne et par PV — déjà signataire d'une part (datée, sous son nom) ; une part "
+            + "non datée ou signée par un autre ne compte pas ; acteur nul jamais")
+    void aDejaSigne() {
+        java.time.LocalDate d = java.time.LocalDate.of(2026, 9, 21);
+        assertTrue(PredicatsIdentite.aDejaSigne("CTRCC2", null, null, "CTRCC2", d, null, null), "part CC signée par lui");
+        assertTrue(PredicatsIdentite.aDejaSigne("CTRCC2", "CTRCC2", d, null, null, null, null), "part Président signée par lui");
+        assertTrue(PredicatsIdentite.aDejaSigne("CTRMEM4", null, null, null, null, "CTRMEM4", d), "part Membre signée par lui");
+        assertFalse(PredicatsIdentite.aDejaSigne("CTRCC2", null, null, "CTRCC2", null, null, null), "désigné mais non datée");
+        assertFalse(PredicatsIdentite.aDejaSigne("CTRCC2", null, null, "CTRCC1", d, null, null), "signée par un autre");
+        assertFalse(PredicatsIdentite.aDejaSigne(null, "X", d, "X", d, "X", d));
+    }
+
+    @Test
     @DisplayName("Désignation faite — un matricule non vide ; nul, vide ou blanc : la part n'est pas ouverte")
     void designationFaite() {
         assertTrue(PredicatsIdentite.designationFaite("CTRMEM"));

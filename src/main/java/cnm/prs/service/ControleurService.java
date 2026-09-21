@@ -49,13 +49,17 @@ public class ControleurService {
     private final SessionUtilisateurRepository sessionRepository;
     private final IndicateurCtrlRepository indicateurCtrlRepository;
     private final PieceJointeService pieceJointeService;
+    /** ⚠️ Intérim désigné (2026-09-21, §B5) — liens « suppléé par » / « supplée » sur les fiches. */
+    private final InterimService interimService;
 
     public ControleurService(ControleurRepository repository, CompteAuthRepository compteRepository,
             ExamenRepository examenRepository, PvExamenRepository pvExamenRepository,
             VerificationRepository verificationRepository, DispatchRepository dispatchRepository,
             ReceptionRepository receptionRepository, DemandeRetraitRepository demandeRetraitRepository,
             LettreRenvoiRepository lettreRenvoiRepository, SessionUtilisateurRepository sessionRepository,
-            IndicateurCtrlRepository indicateurCtrlRepository, PieceJointeService pieceJointeService) {
+            IndicateurCtrlRepository indicateurCtrlRepository, PieceJointeService pieceJointeService,
+            InterimService interimService) {
+        this.interimService = interimService;
         this.repository = repository;
         this.compteRepository = compteRepository;
         this.examenRepository = examenRepository;
@@ -72,38 +76,49 @@ public class ControleurService {
 
     @Transactional(readOnly = true)
     public List<ControleurDto> findAll() {
-        return repository.findAll().stream().map(ControleurMapper::toDto).toList();
+        return avecInterims(repository.findAll());
     }
 
     @Transactional(readOnly = true)
     public ControleurDto findById(String id) {
         Controleur entity = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Controleur introuvable : " + id));
-        return ControleurMapper.toDto(entity);
+        return avecInterims(List.of(entity)).get(0);
     }
 
     /** Contrôleurs affectés à une localité ({@code idLocalite} = X). Liste, vide si aucun ; transversaux exclus. */
     @Transactional(readOnly = true)
     public List<ControleurDto> findByLocalite(String idLocalite) {
-        return repository.findByIdLocalite(idLocalite).stream().map(ControleurMapper::toDto).toList();
+        return avecInterims(repository.findByIdLocalite(idLocalite));
     }
 
     /** Contrôleurs d'un profil (rôle) donné ({@code idProfile} = X). Liste, vide si aucun. */
     @Transactional(readOnly = true)
     public List<ControleurDto> findByProfil(Integer idProfile) {
-        return repository.findByIdProfile(idProfile).stream().map(ControleurMapper::toDto).toList();
+        return avecInterims(repository.findByIdProfile(idProfile));
     }
 
     /** Subordonnés directs d'un contrôleur ({@code idSuperieur} = imSuperieur). Liste, vide si aucun. */
     @Transactional(readOnly = true)
     public List<ControleurDto> findBySuperieur(String imSuperieur) {
-        return repository.findByIdSuperieur(imSuperieur).stream().map(ControleurMapper::toDto).toList();
+        return avecInterims(repository.findByIdSuperieur(imSuperieur));
     }
 
     /** Recherche partielle par nom (contient, insensible à la casse). Liste, vide si aucun résultat. */
     @Transactional(readOnly = true)
     public List<ControleurDto> findByNom(String nom) {
-        return repository.findByNomContContainingIgnoreCase(nom).stream().map(ControleurMapper::toDto).toList();
+        return avecInterims(repository.findByNomContContainingIgnoreCase(nom));
+    }
+
+    /**
+     * ⚠️ Intérim désigné (2026-09-21, §B5) — fiches d'annuaire avec leurs liens d'intérim ACTIFS du jour
+     * ({@code interimEnCours}, {@code interimPour}), résolus en une requête pour toute la liste ; masqués pour
+     * la PRMP et l'UGPM (vue interne, règle C2).
+     */
+    private List<ControleurDto> avecInterims(List<Controleur> controleurs) {
+        List<ControleurDto> fiches = new java.util.ArrayList<>(controleurs.stream().map(ControleurMapper::toDto).toList());
+        interimService.enrichir(fiches);
+        return fiches;
     }
 
     public ControleurDto create(ControleurDto dto) {

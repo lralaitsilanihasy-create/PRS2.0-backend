@@ -11,7 +11,8 @@ import cnm.prs.repository.DelegationProfilRepository;
 import cnm.prs.repository.ProfileRepository;
 
 /**
- * Autorisations tenant compte des délégations de profil (§3.2, §3.3, §3.8).
+ * Autorisations tenant compte des délégations de profil (§3.2, §3.3, §3.8) — et, depuis le 2026-09-21, de
+ * l'<strong>intérim désigné</strong>.
  *
  * <p>Exposé sous le nom {@code perm} pour les expressions {@code @PreAuthorize} :
  * {@code @perm.peutExercer('SECRETAIRE')}.</p>
@@ -21,6 +22,12 @@ import cnm.prs.repository.ProfileRepository;
  * (ex. Président) ; {@code ID_PROFILE_DELEGUE} est le profil <em>dont la tâche est exercée</em>
  * (ex. Secrétaire). Une ligne (délégant = Président, délégué = Secrétaire, actif = true)
  * autorise donc le Président à agir comme Secrétaire.</p>
+ *
+ * <p>⚠️ <strong>Garde centrale étendue (lot 1 intérim, 2026-09-21, §B4.1)</strong> : « titulaire OU délégation
+ * OU intérimaire actif du titulaire ». L'intérimaire exerce ce que son titulaire exerce — le Membre
+ * intérimaire d'un CC reçoit les capacités du CC (dispatch, visa, et les tâches que le CC tient par
+ * délégation). Les suppléances sont lues dans {@link InterimContexte}, posé une fois par requête : cette
+ * garde ne fait aucune requête de plus, et n'est consultée qu'après le refus du profil courant.</p>
  */
 @Component("perm")
 @Transactional(readOnly = true)
@@ -37,7 +44,8 @@ public class PermissionService {
 
     /**
      * Vrai si l'utilisateur courant peut exercer les tâches du profil cible : soit parce qu'il
-     * en est titulaire, soit via une délégation active.
+     * en est titulaire, soit via une délégation active, soit parce qu'il supplée par intérim un
+     * titulaire qui le peut.
      *
      * @param profilCible nom d'un {@link ProfilUtilisateur} (ex. {@code SECRETAIRE})
      */
@@ -59,14 +67,24 @@ public class PermissionService {
      * commission est SOUS le Secrétaire dans la hiérarchie mais la paire CC → Secrétaire est
      * listée — un modèle « rang ≥ rang requis » casserait ce cas. Non transitive.
      * Surcharge utilisée par les services (les {@code @PreAuthorize} passent par la variante String).
+     *
+     * <p>⚠️ 2026-09-21 — OU <strong>intérimaire actif</strong> d'un titulaire qui peut exercer la cible
+     * (profil du titulaire, titulaire ou délégation) : c'est la seule surcharge qui lit le connecté, donc
+     * la seule qui connaît ses suppléances. Non transitive elle aussi : les suppléances du titulaire
+     * n'entrent pas en compte.</p>
      */
     public boolean peutExercer(ProfilUtilisateur cible) {
-        return peutExercer(CurrentUser.profil().orElse(null), cible);
+        ProfilUtilisateur courant = CurrentUser.profil().orElse(null);
+        if (peutExercer(courant, cible)) {
+            return true;
+        }
+        return InterimContexte.suppleances().stream().anyMatch(s -> peutExercer(s.profilTitulaire(), cible));
     }
 
     /**
      * Même garde pour un profil <strong>arbitraire</strong> (pas seulement l'utilisateur courant) —
      * utilisée pour valider l'attributaire d'un dispatch (auto-attribution du Président/CC).
+     * Aucun intérim ici : la question porte sur un profil, pas sur une personne.
      */
     public boolean peutExercer(ProfilUtilisateur courant, ProfilUtilisateur cible) {
         if (courant == null || cible == null) {
@@ -90,7 +108,9 @@ public class PermissionService {
      * {@link #peutExercer(ProfilUtilisateur, ProfilUtilisateur)} — titulaire, ou paire active rapprochée par
      * libellé de profil, non transitive — calculée pour toutes les cibles à la fois : pour tout {@code cible},
      * {@code profilsExercables(courant).contains(cible) == peutExercer(courant, cible)}. Sert l'accueil
-     * « À faire », qui pose la question pour une liste entière sans requête par ligne.
+     * « À faire », qui pose la question pour une liste entière sans requête par ligne. Sans intérim, comme la
+     * surcharge à deux profils : l'accueil calcule les lignes d'intérim en se plaçant dans le profil du
+     * titulaire.
      */
     public java.util.Set<ProfilUtilisateur> profilsExercables(ProfilUtilisateur courant) {
         java.util.Set<ProfilUtilisateur> cibles = java.util.EnumSet.noneOf(ProfilUtilisateur.class);

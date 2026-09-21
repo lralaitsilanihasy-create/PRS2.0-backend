@@ -243,6 +243,16 @@ public class ChronometrageService {
     }
 
     /**
+     * ⚠️ Intérim désigné (2026-09-21, §B4.8) — même enregistrement, le geste étant posé <strong>par intérim</strong>
+     * d'un titulaire : l'acteur reste le connecté (celui qui a agi), le profil devient celui du titulaire
+     * (celui sous lequel l'étape a été tenue), et {@code interimDe} dit au nom de qui. {@code null} = pas
+     * d'intérim, strictement {@link #cloturer(Integer, EtapeCircuit)}.
+     */
+    public void cloturer(Integer idDossier, EtapeCircuit etape, cnm.prs.security.Suppleance suppleance) {
+        cloturerPourActeur(idDossier, etape, CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null), suppleance);
+    }
+
+    /**
      * Même enregistrement, l'<strong>acteur</strong> étant imposé par l'appelant — nécessaire partout où
      * celui qui pose le geste n'est pas celui à qui l'étape revient : la co-signature (chaque désigné
      * signe SA part), l'examen soumis par délégation, l'examen abandonné à la réattribution.
@@ -251,18 +261,26 @@ public class ChronometrageService {
      * porteur réel le rôle sous lequel un <em>autre</em> a cliqué.</p>
      */
     public void cloturerPourActeur(Integer idDossier, EtapeCircuit etape, String imActeur) {
+        cloturerPourActeur(idDossier, etape, imActeur, null);
+    }
+
+    /** Variante par intérim de {@link #cloturerPourActeur(Integer, EtapeCircuit, String)} — voir {@link #cloturer(Integer, EtapeCircuit, cnm.prs.security.Suppleance)}. */
+    public void cloturerPourActeur(Integer idDossier, EtapeCircuit etape, String imActeur,
+            cnm.prs.security.Suppleance suppleance) {
         if (idDossier == null || etape == null) {
             return;
         }
         try {
             String moi = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
-            String profil = imActeur != null && imActeur.equals(moi)
+            String profil = suppleance != null ? suppleance.profilTitulaire().name()
+                    : imActeur != null && imActeur.equals(moi)
                     ? CurrentUser.profil().map(ProfilUtilisateur::name).orElse(etape.porteur().name())
                     : etape.porteur().name();
+            String interimDe = suppleance == null ? null : suppleance.imTitulaire();
             // ⚠️ Audit 2026-09-14 (C3) — valider AVANT d'écrire : l'INSERT part au commit, hors de portée du
             // catch ci-dessous. Un acteur trop long (une PRMP de 10 caractères quand IM_ACTEUR en faisait 7)
             // annulait en silence la resoumission entière ; désormais le passage est écarté, le geste passe.
-            String rejet = motifDeRejetPassage(idDossier, etape, imActeur, profil);
+            String rejet = motifDeRejetPassage(idDossier, etape, imActeur, profil, interimDe);
             if (rejet != null) {
                 LOG.warn("[CHRONO] fin d'etape ecartee avant ecriture dossier={} etape={} acteur={} : {}",
                         idDossier, etape, imActeur, rejet);
@@ -277,6 +295,8 @@ public class ChronometrageService {
             passage.setImActeur(imActeur);
             passage.setProfil(profil);
             passage.setDateFin(LocalDateTime.now(clock));
+            passage.setInterimDe(interimDe);
+            passage.setIdInterim(suppleance == null ? null : suppleance.idInterim());
             tacheRepository.save(passage);
         } catch (RuntimeException ex) {
             LOG.warn("[CHRONO] fin d'etape non enregistree dossier={} etape={} acteur={} : {}",
@@ -291,12 +311,16 @@ public class ChronometrageService {
      * {@code @Column}. Les champs obligatoires restants (identifiant, rang, date de fin) sont posés par
      * {@link #cloturerPourActeur} lui-même et ne peuvent pas manquer.
      */
-    private String motifDeRejetPassage(Integer idDossier, EtapeCircuit etape, String imActeur, String profil) {
+    private String motifDeRejetPassage(Integer idDossier, EtapeCircuit etape, String imActeur, String profil,
+            String interimDe) {
         if (etape.name().length() > TacheDossier.LONGUEUR_ETAPE) {
             return "etape de " + etape.name().length() + " caracteres (max " + TacheDossier.LONGUEUR_ETAPE + ")";
         }
         if (imActeur != null && imActeur.length() > TacheDossier.LONGUEUR_IM_ACTEUR) {
             return "acteur de " + imActeur.length() + " caracteres (max " + TacheDossier.LONGUEUR_IM_ACTEUR + ")";
+        }
+        if (interimDe != null && interimDe.length() > TacheDossier.LONGUEUR_IM_ACTEUR) {
+            return "titulaire supplee de " + interimDe.length() + " caracteres (max " + TacheDossier.LONGUEUR_IM_ACTEUR + ")";
         }
         if (profil != null && profil.length() > TacheDossier.LONGUEUR_PROFIL) {
             return "profil de " + profil.length() + " caracteres (max " + TacheDossier.LONGUEUR_PROFIL + ")";
@@ -493,7 +517,7 @@ public class ChronometrageService {
             rangs.merge(t.getEtape(), 1, Integer::sum);
             lignes.add(new PassageEtapeDto(t.getEtape(), t.getOccurrence(), t.getImActeur(),
                     noms.get(t.getImActeur()), t.getProfil(), entree, t.getDateFin(),
-                    HeuresOuvrees.ecoulees(entree, t.getDateFin()), false));
+                    HeuresOuvrees.ecoulees(entree, t.getDateFin()), false, t.getInterimDe(), t.getIdInterim()));
             precedente = t.getDateFin();
         }
         if (courante != null) {
@@ -501,7 +525,7 @@ public class ChronometrageService {
             String porteur = porteurPresume(dossier, courante);
             lignes.add(new PassageEtapeDto(courante.name(), rangs.getOrDefault(courante.name(), 0) + 1,
                     porteur, noms.get(porteur), courante.porteur().name(), entree, null,
-                    HeuresOuvrees.ecoulees(entree, maintenant), true));
+                    HeuresOuvrees.ecoulees(entree, maintenant), true, null, null));
         }
         return lignes;
     }
@@ -755,7 +779,7 @@ public class ChronometrageService {
     private static ChronometrageDto sansIdentites(ChronometrageDto dto) {
         List<PassageEtapeDto> etapes = dto.etapes() == null ? null : dto.etapes().stream()
                 .map(p -> new PassageEtapeDto(p.etape(), p.occurrence(), null, null, p.profil(), p.entree(),
-                        p.fin(), p.dureeHeuresOuvrees(), p.enCours()))
+                        p.fin(), p.dureeHeuresOuvrees(), p.enCours(), null, null))
                 .toList();
         return new ChronometrageDto(dto.idDossier(), etapes, dto.debutCompteur(), dto.finCompteur(),
                 dto.dureeBruteHeuresOuvrees(), dto.dureeNetteHeuresOuvrees(), dto.attentePrmpHeuresOuvrees(),

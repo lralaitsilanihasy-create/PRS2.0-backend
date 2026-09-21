@@ -46,6 +46,8 @@ import cnm.prs.repository.PrmpRepository;
 import cnm.prs.repository.PvExamenRepository;
 import cnm.prs.repository.PvNavetteRepository;
 import cnm.prs.security.CurrentUser;
+import cnm.prs.security.InterimContexte;
+import cnm.prs.security.Suppleance;
 import cnm.prs.security.Visibilite;
 
 /**
@@ -208,6 +210,8 @@ public class PvExamenService {
         dto.setViseParInterim(null);
         dto.setNoteInterimNom(null);
         dto.setNoteInterimDisponible(null);
+        dto.setIdInterim(null);
+        dto.setInterimDe(null);
         dto.setImDispatcheur(null);
         dto.setNomDispatcheur(null);
     }
@@ -865,12 +869,16 @@ public class PvExamenService {
             throw new BusinessRuleException("Le commentaire de rectification est obligatoire (§3.2).");
         }
         CircuitDossierService.Circuit circuit = circuit(id);
+        String acteur = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
+        // ⚠️ Intérim désigné (2026-09-21) — au titre de qui : le dispatcheur (navette simple) ou le CC du
+        // circuit, ou leur intérimaire actif. Sur deux niveaux à l'étage du Président, voir retournerAuCc.
+        Suppleance suppleance = InterimService.suppleanceFace(acteur, circuit.dispatcheur()).orElse(null);
         // ⚠️ 2026-09-08 — même règle que le visa, dont le retour est l'autre issue : sur une navette
         // simple, l'examinateur ne renvoie pas en rectification son propre examen. Sauf s'il en est
         // aussi le dispatcheur. Avant toute écriture.
         if (!deuxNiveaux(circuit)) {
-            exigerViseurHorsExaminateur(pv, CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null),
-                    circuit.dispatcheur(), "Le retour pour rectification");
+            exigerInterimaireHorsAttributaire(pv, acteur, suppleance);
+            exigerViseurHorsExaminateur(pv, acteur, circuit.dispatcheur(), "Le retour pour rectification");
         }
         if (deuxNiveaux(circuit) && PredicatsIdentite.estALEtage(niveau(pv), NiveauNavette.PRESIDENT)) {
             return retournerAuCc(pv, circuit, req);
@@ -893,7 +901,7 @@ public class PvExamenService {
         // visa lui-même : le projet repart chez le Membre. Sans cette fin, le temps que le viseur a passé
         // sur le projet serait recompté dans le réexamen — la durée d'une étape étant désormais mesurée
         // depuis la fin de la précédente, une sortie non enregistrée se déverse sur la suivante.
-        chronometrageService.cloturer(dossierDuPv(saved.getIdPv()), EtapeCircuit.VISA);
+        chronometrageService.cloturer(dossierDuPv(saved.getIdPv()), EtapeCircuit.VISA, suppleance);
         log.info("[CIRCUIT] navette PV retour rectification dossier={} acteur={} pv={} statutPv={} navettes={}",
                 dossierDuPv(saved.getIdPv()), CurrentUser.login().orElse(null), saved.getIdPv(),
                 StatutPv.EN_RECTIFICATION.name(), saved.getNbNavettes());
@@ -908,7 +916,9 @@ public class PvExamenService {
      * quitter la navette : le statut reste {@code PROJET_SOUMIS}, seul le niveau change.
      */
     private PvExamenDto retournerAuCc(PvExamen pv, CircuitDossierService.Circuit circuit, PvActionRequest req) {
-        ProfilUtilisateur profil = CurrentUser.profil().orElse(null);
+        // ⚠️ Intérim désigné (2026-09-21) — le Président, ou son intérimaire actif : profil du titulaire.
+        Suppleance suppleance = suppleanceDuPresident();
+        ProfilUtilisateur profil = suppleance != null ? suppleance.profilTitulaire() : CurrentUser.profil().orElse(null);
         if (!PredicatsIdentite.estViseurDeuxNiveaux(profil)) {
             throw new AccessDeniedException(
                     "Le projet de PV est au niveau du Président : lui seul peut le retourner au Chef de "
@@ -920,7 +930,7 @@ public class PvExamenService {
         // ⚠️ Chronométrage (2026-09-12) — le projet redescend d'un étage : l'occurrence VISA du Président
         // se clôt ici, et celle du CC s'ouvre à cet instant. Même règle que la montée (« accepter »), dans
         // l'autre sens : chaque étage a son passage, et sa durée.
-        chronometrageService.cloturer(dossierDuPv(saved.getIdPv()), EtapeCircuit.VISA);
+        chronometrageService.cloturer(dossierDuPv(saved.getIdPv()), EtapeCircuit.VISA, suppleance);
         log.info("[CIRCUIT] navette PV retour au CC dossier={} acteur={} pv={} niveau={} navettes={}",
                 dossierDuPv(saved.getIdPv()), CurrentUser.login().orElse(null), saved.getIdPv(),
                 NiveauNavette.CC, saved.getNbNavettes());
@@ -934,11 +944,53 @@ public class PvExamenService {
         return peuplerNoms(PvExamenMapper.toDto(saved));
     }
 
-    /** 403 si l'acteur n'est pas le CC du circuit — l'étage du bas n'appartient qu'à lui. */
+    /** 403 si l'acteur n'est pas le CC du circuit — ou son intérimaire actif (2026-09-21) : l'étage du bas n'appartient qu'à lui. */
     private void exigerCcDuCircuit(CircuitDossierService.Circuit circuit, String message) {
         String acteur = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
-        if (!PredicatsIdentite.estCcDuCircuit(acteur, circuit)) {
+        if (!PredicatsIdentite.estCcDuCircuitParmi(InterimContexte.identites(acteur), circuit)) {
             throw new AccessDeniedException(message);
+        }
+    }
+
+    /**
+     * ⚠️ Intérim désigné (2026-09-21) — la suppléance du Président par le connecté, s'il n'est pas lui-même
+     * Président ; sinon {@code null} (il agit en son nom).
+     */
+    private static Suppleance suppleanceDuPresident() {
+        if (CurrentUser.profil().orElse(null) == ProfilUtilisateur.PRESIDENT) {
+            return null;
+        }
+        return InterimContexte.duPresident().orElse(null);
+    }
+
+    /**
+     * ⚠️ <strong>Une personne, un rôle par PV</strong> (2026-09-21, §B4.3) — l'intérimaire d'un CC qui est
+     * l'<strong>attributaire</strong> du dossier ne vise pas (ni ne retourne) le PV de son propre examen :
+     * 409 nominatif, avant la règle générale de l'examinateur (403). Il peut se dispatcher un dossier par
+     * intérim ; ce PV sera visé par le CC de retour, ou par le Président.
+     */
+    private void exigerInterimaireHorsAttributaire(PvExamen pv, String acteur, Suppleance suppleance) {
+        if (suppleance != null && acteur != null && acteur.equals(pv.getImCtrlMembre())) {
+            throw new BusinessRuleException("Vous êtes l'attributaire de ce dossier : vous ne pouvez ni viser ni "
+                    + "signer la part " + (suppleance.duPresident() ? "Président" : "Chef de commission")
+                    + " de son PV par intérim de " + suppleance.nomTitulaire() + " — celui qui examine ne vise "
+                    + "pas. Ce PV sera visé par " + suppleance.nomTitulaire() + " à son retour, ou par le Président.");
+        }
+    }
+
+    /**
+     * ⚠️ <strong>Une part par personne et par PV</strong> (2026-09-21, §B4.4-5) — l'intérimaire qui a déjà signé
+     * une autre part de ce PV ne signe pas celle de son titulaire : elle attend le titulaire, ou un autre
+     * intérimaire. 409 nominatif (cas résiduel de la chaîne Q3 : le CC intérimaire du Président a signé la
+     * part CC avant d'être désigné).
+     */
+    private void exigerPasEncoreSignataire(PvExamen pv, String acteur, Suppleance suppleance, String roleLibelle) {
+        if (suppleance != null && PredicatsIdentite.aDejaSigne(acteur, pv.getImCtrlPresident(),
+                pv.getDateSignaturePresident(), pv.getImCtrlCc(), pv.getDateSignatureCc(),
+                pv.getImMembreCoSignataire(), pv.getDateSignatureMembre())) {
+            throw new BusinessRuleException("Part " + roleLibelle + " : vous avez déjà signé une autre part de ce "
+                    + "PV, et un PV est signé par des personnes distinctes. Elle attend " + suppleance.nomTitulaire()
+                    + " à son retour, ou un autre intérimaire.");
         }
     }
 
@@ -972,11 +1024,13 @@ public class PvExamenService {
         // qui manque, c'est la qualité de l'acteur.
         String acteur = CurrentUser.ref().filter(s -> !s.isBlank())
                 .orElseThrow(() -> new AccessDeniedException("Acteur non identifié."));
-        if (!PredicatsIdentite.estCcDuCircuit(acteur, circuit)) {
+        // ⚠️ Intérim désigné (2026-09-21) — le CC du circuit, ou son intérimaire actif (« VISA#1 CC »).
+        if (!PredicatsIdentite.estCcDuCircuitParmi(InterimContexte.identites(acteur), circuit)) {
             throw new AccessDeniedException(
                     "Sur un dossier dispatché à deux niveaux, l'acceptation appartient au Chef de commission "
                             + "qui a réattribué le dossier : il transmet ensuite au Président, qui vise.");
         }
+        Suppleance suppleance = InterimService.suppleanceFace(acteur, circuit.dispatcheur()).orElse(null);
         // ② État : projet soumis, et encore à l'étage du CC.
         requireStatut(pv, StatutPv.PROJET_SOUMIS);
         exigerNiveau(pv, NiveauNavette.CC, "accepter");
@@ -989,7 +1043,7 @@ public class PvExamenService {
         // ouvrira la SIENNE en la prenant en charge, et la clôra en visant. Sans cette clôture, une
         // tâche unique aurait porté les deux acteurs — le premier preneur verrouillant le second, et
         // le temps du CC se mêlant à celui du Président.
-        chronometrageService.cloturer(dossierDuPv(saved.getIdPv()), EtapeCircuit.VISA);
+        chronometrageService.cloturer(dossierDuPv(saved.getIdPv()), EtapeCircuit.VISA, suppleance);
         log.info("[CIRCUIT] navette PV transmission au President dossier={} acteur={} pv={} niveau={} navettes={}",
                 dossierDuPv(saved.getIdPv()), CurrentUser.login().orElse(null), saved.getIdPv(),
                 NiveauNavette.PRESIDENT, saved.getNbNavettes());
@@ -1066,18 +1120,27 @@ public class PvExamenService {
         // vérifiés plus bas. Aucun intérim n'a de sens ici, et aucune note n'est réclamée.
         CircuitDossierService.Circuit circuit = circuit(id);
         boolean deuxNiveaux = deuxNiveaux(circuit);
-        boolean interim = PredicatsIdentite.visaParInterim(deuxNiveaux, acteur, dispatcheur);
+        // ⚠️ INTÉRIM DÉSIGNÉ (lot 1, 2026-09-21, §B4.2) — l'intérimaire actif du dispatcheur (navette simple)
+        // ou du Président (deux niveaux) vise SANS note : la désignation est la justification. Le chemin
+        // ponctuel (note PDF, P/CC du périmètre non désigné) reste tel quel, en repli (arbitrage Q4).
+        Suppleance suppleance = deuxNiveaux ? suppleanceDuPresident()
+                : InterimService.suppleanceFace(acteur, dispatcheur).orElse(null);
+        boolean interimDesigne = suppleance != null;
+        boolean interim = !interimDesigne && PredicatsIdentite.visaParInterim(deuxNiveaux, acteur, dispatcheur);
 
         // ① bis ⚠️ 2026-09-08 — l'examinateur ne vise pas son propre examen, intérim compris. Placé
         // AVANT le profil et l'intérim : lui réclamer une note d'intérim serait lui demander une pièce
         // qui ne débloquerait rien. Sauf s'il est aussi le dispatcheur — il cumule alors légitimement.
+        // L'intérimaire DÉSIGNÉ qui est l'attributaire reçoit un 409 nominatif (§B4.3), avant le 403.
         if (!deuxNiveaux) {
+            exigerInterimaireHorsAttributaire(pv, acteur, suppleance);
             exigerViseurHorsExaminateur(pv, acteur, dispatcheur, "Le visa");
         }
 
         // ② Profil : la part signée est dérivée de l'acteur — pas de champ « role » dans le corps.
         // Vérifié AVANT la note : un profil hors P/CC n'a rien à faire ici, note ou pas (403, pas 400).
-        ProfilUtilisateur profil = CurrentUser.profil().orElse(null);
+        // Par intérim désigné, le profil est celui du TITULAIRE : le Membre intérimaire d'un CC signe la part CC.
+        ProfilUtilisateur profil = interimDesigne ? suppleance.profilTitulaire() : CurrentUser.profil().orElse(null);
         if (!PredicatsIdentite.estProfilViseur(profil)) {
             throw new AccessDeniedException(
                     "Le visa est réservé au Président (§3.2) ou au Chef de commission (§3.3).");
@@ -1146,14 +1209,17 @@ public class PvExamenService {
         // leur, en base comme au DTO : on ne réécrit pas l'histoire d'un acte officiel.
         designerCoSignataires(pv, req, acteur, circuit, deuxNiveaux);
 
-        // ⑧ Part de signature du rôle — le verrou « une signature par rôle » reste posé.
+        // ⑧ Part de signature du rôle — le verrou « une signature par rôle » reste posé ; par intérim, le
+        // verrou « une part par PERSONNE » aussi (§B4.4-5) : l'intérimaire qui a déjà signé attend.
         LocalDate aujourdhui = LocalDate.now();
         if (profil == ProfilUtilisateur.PRESIDENT) {
             exigerPasEncoreSigne(pv.getDateSignaturePresident(), "Président");
+            exigerPasEncoreSignataire(pv, acteur, suppleance, "Président");
             pv.setDateSignaturePresident(aujourdhui);
             pv.setImCtrlPresident(acteur);
         } else {
             exigerPasEncoreSigne(pv.getDateSignatureCc(), "Chef de commission");
+            exigerPasEncoreSignataire(pv, acteur, suppleance, "Chef de commission");
             pv.setDateSignatureCc(aujourdhui);
             pv.setImCtrlCc(acteur);
         }
@@ -1165,6 +1231,13 @@ public class PvExamenService {
             pv.setNoteInterim(note);
             pv.setNoteInterimNom(nomDeFichier(noteInterim));
             pv.setNoteInterimTaille((long) note.length);
+        }
+        if (interimDesigne) {
+            // Même qualification que le repli ponctuel (mention « — par intérim » sur les PV régionaux, Q5),
+            // sans note : l'intérim désigné dit qui, et au nom de qui.
+            pv.setViseParInterim(Boolean.TRUE);
+            pv.setIdInterim(suppleance.idInterim());
+            pv.setInterimDe(suppleance.imTitulaire());
         }
 
         // ⑩ Clôture de la navette.
@@ -1180,10 +1253,15 @@ public class PvExamenService {
         PvExamen saved = repository.save(pv);
         // ⚠️ Chronométrage (2026-09-01) — le visa clôt l'étape VISA. Rejouable : chaque navette de
         // retour au Membre, suivie d'un nouveau visa, ouvre une occurrence de plus.
-        chronometrageService.cloturer(dossierDuPv(saved.getIdPv()), EtapeCircuit.VISA);
-        log.info("[CIRCUIT] visa PV dossier={} acteur={} pv={} statutPv={} navettes={} interim={}",
+        chronometrageService.cloturer(dossierDuPv(saved.getIdPv()), EtapeCircuit.VISA, suppleance);
+        log.info("[CIRCUIT] visa PV dossier={} acteur={} pv={} statutPv={} navettes={} interim={} interimDesigne={}",
                 dossierDuPv(saved.getIdPv()), CurrentUser.login().orElse(null), saved.getIdPv(),
-                StatutPv.PROJET_ACCEPTE.name(), saved.getNbNavettes(), interim);
+                StatutPv.PROJET_ACCEPTE.name(), saved.getNbNavettes(), interim, saved.getIdInterim());
+        if (interimDesigne) {
+            log.warn("[AUDIT] visa PAR INTERIM DESIGNE pv={} dossier={} interimaire={} titulaire={} interim={}",
+                    saved.getIdPv(), dossierDuPv(saved.getIdPv()), acteur, suppleance.imTitulaire(),
+                    suppleance.idInterim());
+        }
         if (interim) {
             // ⚠️ Trace d'audit dédiée (2026-09-01) : le visa par intérim est une DÉROGATION à la
             // contrainte d'identité. Le journal doit pouvoir répondre « qui a suppléé qui, quand, et
@@ -1229,6 +1307,7 @@ public class PvExamenService {
         String signataire = CurrentUser.ref().filter(s -> !s.isBlank())
                 .orElseThrow(() -> new AccessDeniedException("Signataire non identifié."));
         LocalDate today = LocalDate.now();
+        Suppleance suppleance = null;   // posée par la part CC quand elle est signée par intérim
         switch (role) {
             case MEMBRE -> {
                 // ⚠️ Co-signature (2026-08-28) — la part Membre appartient au DÉSIGNÉ, à personne d'autre.
@@ -1264,12 +1343,16 @@ public class PvExamenService {
                                     + id + "/viser) depuis le 2026-08-31. Elle ne se signe séparément que "
                                     + "lorsque le Président l'a désigné co-signataire, ce qui n'est pas le cas ici.");
                 }
-                if (!PredicatsIdentite.estDesigne(signataire, pv.getImCcCoSignataire())) {
+                // ⚠️ Intérim désigné (2026-09-21, §B4.4) — le CC désigné, ou son intérimaire actif, qui signe la
+                // part de son titulaire sous son propre nom ; s'il a déjà signé une autre part, elle attend.
+                if (!PredicatsIdentite.estDesigneParmi(InterimContexte.identites(signataire), pv.getImCcCoSignataire())) {
                     throw new AccessDeniedException(
                             "La part Chef de commission est réservée au CC désigné co-signataire par le "
                                     + "Président (co-signature élargie, 2026-09-04).");
                 }
+                suppleance = InterimService.suppleanceFace(signataire, pv.getImCcCoSignataire()).orElse(null);
                 exigerPasEncoreSigne(pv.getDateSignatureCc(), "Chef de commission");
+                exigerPasEncoreSignataire(pv, signataire, suppleance, "Chef de commission");
                 pv.setDateSignatureCc(today);
                 // IM_CTRL_CC porte le CC qui a effectivement signé : c'est lui que le document imprime.
                 pv.setImCtrlCc(signataire);
@@ -1289,7 +1372,7 @@ public class PvExamenService {
         // deux tâches coexistent : fermer la première venue aurait clos celle de l'autre, et le PV se
         // serait terminé avec une tâche ouverte au nom de quelqu'un qui avait pourtant signé.
         chronometrageService.cloturerPourActeur(dossierDuPv(pv.getIdPv()), EtapeCircuit.COSIGNATURE,
-                signataire);
+                signataire, suppleance);
 
         // ⚠️ 2026-09-04 — le PV est SIGNÉ quand la part du viseur ET celle de CHAQUE désigné sont
         // posées : deux signatures ou trois, selon la combinaison retenue au visa. L'ancienne condition

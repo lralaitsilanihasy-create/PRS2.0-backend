@@ -33,4 +33,13 @@ public class ActionDossierDto {
     private Integer idMandatOperateur;
 
     private String detail;
+
+    /**
+     * ⚠️ Intérim désigné (2026-09-21, §B4.8) — geste posé <strong>par intérim</strong> de ce titulaire
+     * (matricule) ; l'auteur et le nom de la ligne restent ceux de l'intérimaire, qui a agi. {@code null} sinon.
+     * Le front en dérive la visibilité hiérarchique (rang du titulaire) : le serveur ne filtre pas.
+     */
+    private String interimDe;
+
+    private Integer idInterim;
 }

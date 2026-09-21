@@ -31,6 +31,8 @@ public final class NotificationMapper {
         dto.setDestinataireType(entity.getDestinataireType());
         dto.setIdObjet(entity.getIdObjet());
         dto.setTypeObjet(entity.getTypeObjet());
+        dto.setInterimDe(entity.getInterimDe());
+        dto.setIdInterim(entity.getIdInterim());
         return dto;
     }
 

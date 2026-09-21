@@ -38,4 +38,14 @@ public class ControleurDto {
 
     @NotNull
     private Boolean transversal;
+
+    /**
+     * ⚠️ Intérim désigné (2026-09-21, §B5) — lecture seule, ignoré en écriture. Sur un titulaire absent :
+     * l'intérim ACTIF qui le supplée aujourd'hui, ou {@code null}. Masqué (null) pour la PRMP et l'UGPM :
+     * qui supplée qui à la Commission est une vue interne (règle C2).
+     */
+    private InterimLiensDto.EnCours interimEnCours;
+
+    /** Lecture seule : les intérims ACTIFS que ce contrôleur exerce aujourd'hui ; vide s'il n'en exerce aucun. */
+    private java.util.List<InterimLiensDto.Pour> interimPour;
 }

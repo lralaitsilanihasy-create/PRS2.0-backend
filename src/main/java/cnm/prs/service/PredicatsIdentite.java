@@ -203,6 +203,58 @@ public final class PredicatsIdentite {
                 && localiteDossier.equals(localiteActeur);
     }
 
+    // ------------------------------------------------------------------ identités étendues par intérim
+
+    /**
+     * ⚠️ <strong>Intérim désigné</strong> (lot 1, 2026-09-21, §B4.1) — les mêmes prédicats nominatifs, posés
+     * sur les <strong>identités</strong> du connecté : la sienne, plus celle de chaque titulaire qu'il supplée
+     * aujourd'hui ({@code InterimContexte.identites(moi)}). « Le dispatcheur » devient ainsi « le dispatcheur
+     * ou son intérimaire actif » sans qu'aucune garde ne réécrive la règle ; ce qui n'est PAS étendu
+     * (l'attributaire, l'examinateur, le Membre désigné — actes d'attributaire, hors lot) garde les surcharges
+     * à un acteur. Toujours purs : l'ensemble est fourni par l'appelant.
+     */
+    public static boolean estDispatcheurParmi(java.util.Collection<String> identites, String dispatcheur) {
+        return memePersonne(identites, dispatcheur);
+    }
+
+    /**
+     * L'attributaire, ou son intérimaire actif — pour la seule <strong>réattribution</strong> par le CC attributaire
+     * d'un dossier central (dérogation du 2026-09-03), qui est un acte de CC. L'examen, lui, reste à l'attributaire
+     * seul ({@link #estAttributaire(String, String)}).
+     */
+    public static boolean estAttributaireParmi(java.util.Collection<String> identites, String attributaire) {
+        return memePersonne(identites, attributaire);
+    }
+
+    /** Le CC désigné co-signataire, ou son intérimaire actif (la part CC se signe par intérim, §B4.4). */
+    public static boolean estDesigneParmi(java.util.Collection<String> identites, String designe) {
+        return memePersonne(identites, designe);
+    }
+
+    /** Le CC du circuit, ou son intérimaire actif (acceptation et retour au Membre sur deux niveaux). */
+    public static boolean estCcDuCircuitParmi(java.util.Collection<String> identites, CircuitDossierService.Circuit circuit) {
+        return circuit != null && memePersonne(identites, circuit.dispatcheur());
+    }
+
+    /**
+     * L'acteur a-t-il déjà <strong>signé une part</strong> de ce PV, sous son propre nom ? « Une part par personne
+     * et par PV » (§B4.4-5) : l'intérimaire qui a déjà signé une autre part ne signe pas celle du titulaire —
+     * elle attend le titulaire ou un autre intérimaire. Chaque part est jugée sur sa date ET son signataire.
+     */
+    public static boolean aDejaSigne(String acteur, String imPresident, java.time.LocalDate datePresident,
+            String imCc, java.time.LocalDate dateCc, String imMembreCoSignataire, java.time.LocalDate dateMembre) {
+        if (acteur == null) {
+            return false;
+        }
+        return (datePresident != null && acteur.equals(imPresident))
+                || (dateCc != null && acteur.equals(imCc))
+                || (dateMembre != null && acteur.equals(imMembreCoSignataire));
+    }
+
+    private static boolean memePersonne(java.util.Collection<String> identites, String titulaire) {
+        return titulaire != null && identites != null && identites.contains(titulaire);
+    }
+
     private static boolean memePersonne(String acteur, String titulaire) {
         return acteur != null && acteur.equals(titulaire);
     }

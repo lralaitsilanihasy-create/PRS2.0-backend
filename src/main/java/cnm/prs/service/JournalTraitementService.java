@@ -86,12 +86,15 @@ public class JournalTraitementService {
     private final DemandeRetraitRepository demandeRetraitRepository;
     private final PrmpRepository prmpRepository;
     private final ActionDossierRepository actionDossierRepository;
+    /** ⚠️ Intérim désigné (2026-09-21) — dit quelle part un visa par intérim a signée (profil du titulaire). */
+    private final cnm.prs.repository.InterimRepository interimRepository;
 
     public JournalTraitementService(PvNavetteRepository navetteRepository,
             PvExamenRepository pvExamenRepository, VerificationRepository verificationRepository,
             TransmissionSigmpRepository transmissionRepository, ControleurRepository controleurRepository,
             DemandeRetraitRepository demandeRetraitRepository, PrmpRepository prmpRepository,
-            ActionDossierRepository actionDossierRepository) {
+            ActionDossierRepository actionDossierRepository, cnm.prs.repository.InterimRepository interimRepository) {
+        this.interimRepository = interimRepository;
         this.navetteRepository = navetteRepository;
         this.pvExamenRepository = pvExamenRepository;
         this.verificationRepository = verificationRepository;
@@ -250,14 +253,20 @@ public class JournalTraitementService {
                     "projet accepté et transmis au Président" + commentaire));
         } else if (SensNavette.ACCEPTATION.name().equals(sens)) {
             // L'ACCEPTATION est la trace laissée par le VISA : c'est le même geste, vu de la navette.
-            cible.add(evenement(idDossier, n.getDateAction(), VISA, n.getImActeur(),
-                    detailDuVisa(idDossier, n.getIdPv()) + commentaire));
+            PvExamen pv = pvExamenRepository.findById(n.getIdPv()).orElse(null);
+            ActionDossierDto visa = evenement(idDossier, n.getDateAction(), VISA, n.getImActeur(),
+                    detailDuVisa(pv) + commentaire);
+            // ⚠️ Intérim désigné (2026-09-21, §B4.8) — « Visé par Y, par intérim de X » : la ligne porte le titulaire.
+            if (pv != null && pv.getIdInterim() != null) {
+                visa.setInterimDe(pv.getInterimDe());
+                visa.setIdInterim(pv.getIdInterim());
+            }
+            cible.add(visa);
         }
     }
 
     /** « avis arrêté ; co-signataires désignés ; par intérim le cas échéant » — le contenu du visa. */
-    private String detailDuVisa(Integer idDossier, Integer idPv) {
-        PvExamen pv = pvExamenRepository.findById(idPv).orElse(null);
+    private String detailDuVisa(PvExamen pv) {
         if (pv == null) {
             return "projet de PV visé";
         }
@@ -271,7 +280,10 @@ public class JournalTraitementService {
         if (designes != null) {
             detail.append(" — co-signataire(s) : ").append(designes);
         }
-        if (Boolean.TRUE.equals(pv.getViseParInterim())) {
+        if (pv.getIdInterim() != null) {
+            // Intérim DÉSIGNÉ (2026-09-21) : le titulaire suppléé est connu, on le nomme.
+            detail.append(" — par intérim de ").append(nom(pv.getInterimDe()));
+        } else if (Boolean.TRUE.equals(pv.getViseParInterim())) {
             detail.append(" — par intérim");
         }
         return detail.toString();
@@ -284,13 +296,20 @@ public class JournalTraitementService {
      * ordonnés entre eux par le rang du circuit (visa &lt; signature &lt; PV signé &lt; archivage).</p>
      */
     private void ajouterSignatures(List<ActionDossierDto> cible, Integer idDossier, PvExamen pv) {
-        ajouterPart(cible, idDossier, pv.getDateSignaturePresident(), pv.getImCtrlPresident(), "Président");
-        ajouterPart(cible, idDossier, pv.getDateSignatureCc(), pv.getImCtrlCc(), "Chef de commission");
+        // ⚠️ Intérim désigné (2026-09-21) — le PV ne dit pas QUELLE part le visa par intérim a signée : c'est le
+        // profil du titulaire suppléé qui le dit (Président → part Président, CC → part CC).
+        cnm.prs.enums.ProfilUtilisateur profilSupplee = pv.getIdInterim() == null ? null
+                : interimRepository.findById(pv.getIdInterim())
+                        .map(i -> cnm.prs.enums.ProfilUtilisateur.valueOf(i.getProfilTitulaire())).orElse(null);
+        ajouterPart(cible, idDossier, pv.getDateSignaturePresident(), pv.getImCtrlPresident(), "Président",
+                profilSupplee == cnm.prs.enums.ProfilUtilisateur.PRESIDENT ? pv : null);
+        ajouterPart(cible, idDossier, pv.getDateSignatureCc(), pv.getImCtrlCc(), "Chef de commission",
+                profilSupplee == cnm.prs.enums.ProfilUtilisateur.CHEF_COMMISSION ? pv : null);
         // ⚠️ La part Membre appartient au DÉSIGNÉ depuis le 2026-08-28 ; les PV antérieurs n'en ont pas,
         // et c'est alors l'attributaire qui l'avait posée. Le repli garde ces PV lisibles.
         String membre = pv.getImMembreCoSignataire() == null || pv.getImMembreCoSignataire().isBlank()
                 ? pv.getImCtrlMembre() : pv.getImMembreCoSignataire();
-        ajouterPart(cible, idDossier, pv.getDateSignatureMembre(), membre, "Membre");
+        ajouterPart(cible, idDossier, pv.getDateSignatureMembre(), membre, "Membre", null);
 
         if (StatutPv.SIGNE.name().equals(pv.getStatutPv()) && pv.getDatePv() != null) {
             String reference = pv.getRefePv() != null ? pv.getRefePv()
@@ -304,12 +323,25 @@ public class JournalTraitementService {
         }
     }
 
+    /**
+     * Une part de signature. ⚠️ Intérim désigné (2026-09-21) — la part que le <strong>visa</strong> a signée, posée
+     * par un intérimaire désigné, porte « par intérim de X » ({@code pv} n'est fourni que pour cette part-là :
+     * le PV ne trace qu'un intérim, celui du visa). La part CC signée séparément par un intérimaire du CC
+     * désigné se lit au chronométrage ({@code COSIGNATURE}, {@code interimDe}).
+     */
     private void ajouterPart(List<ActionDossierDto> cible, Integer idDossier, LocalDate date,
-            String im, String role) {
+            String im, String role, PvExamen pv) {
         if (date == null) {
             return;
         }
-        cible.add(evenement(idDossier, finDeJournee(date), SIGNATURE, im, "part " + role + " signée"));
+        boolean parInterim = pv != null && pv.getIdInterim() != null;
+        ActionDossierDto part = evenement(idDossier, finDeJournee(date), SIGNATURE, im,
+                "part " + role + " signée" + (parInterim ? " — par intérim de " + nom(pv.getInterimDe()) : ""));
+        if (parInterim) {
+            part.setInterimDe(pv.getInterimDe());
+            part.setIdInterim(pv.getIdInterim());
+        }
+        cible.add(part);
     }
 
     private void ajouterVerification(List<ActionDossierDto> cible, Integer idDossier, Verification v) {

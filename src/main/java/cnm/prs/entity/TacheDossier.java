@@ -74,4 +74,15 @@ public class TacheDossier {
      */
     @Column(name = "DATE_FIN", nullable = false)
     private LocalDateTime dateFin;
+
+    /**
+     * ⚠️ Interim designe (V34, 2026-09-21) — passage tenu PAR INTERIM de ce titulaire : {@code imActeur} reste
+     * l'interimaire (celui qui a agi), {@code profil} le profil du titulaire (celui sous lequel l'etape a ete
+     * tenue). Meme longueur que {@code IM_ACTEUR}, relue par la garde prealable.
+     */
+    @Column(name = "INTERIM_DE", length = LONGUEUR_IM_ACTEUR)
+    private String interimDe;
+
+    @Column(name = "ID_INTERIM")
+    private Integer idInterim;
 }

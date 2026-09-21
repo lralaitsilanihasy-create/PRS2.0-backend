@@ -254,7 +254,7 @@ public class DossierService {
      */
     private Page<Dossier> chargerScopeesPaginees(String statut, String type, String sousType, Pageable page) {
         ProfilUtilisateur profil = CurrentUser.profil().orElse(null);
-        if (profil == ProfilUtilisateur.PRESIDENT || profil == ProfilUtilisateur.ADMINISTRATEUR) {
+        if (Visibilite.voitTout()) {   // Président, Administrateur — et l'intérimaire du Président (2026-09-21)
             return repository.findParStatutPagine(statut, type, sousType, page);
         }
         if (Visibilite.estPrmp()) {
@@ -307,7 +307,7 @@ public class DossierService {
 
         List<Dossier> trouves;
         ProfilUtilisateur profil = CurrentUser.profil().orElse(null);
-        if (profil == ProfilUtilisateur.PRESIDENT || profil == ProfilUtilisateur.ADMINISTRATEUR) {
+        if (Visibilite.voitTout()) {   // Président, Administrateur — et l'intérimaire du Président (2026-09-21)
             trouves = repository.rechercherParReference(motif, limite);
         } else if (Visibilite.estPrmp()) {
             String idPrmp = CurrentUser.ref().orElse(null);
@@ -361,7 +361,7 @@ public class DossierService {
      */
     private List<Dossier> chargerScopees(String filtre) {
         ProfilUtilisateur profil = CurrentUser.profil().orElse(null);
-        if (profil == ProfilUtilisateur.PRESIDENT || profil == ProfilUtilisateur.ADMINISTRATEUR) {
+        if (Visibilite.voitTout()) {   // Président, Administrateur — et l'intérimaire du Président (2026-09-21)
             return repository.findParStatut(filtre);
         }
         if (Visibilite.estPrmp()) {
@@ -431,7 +431,7 @@ public class DossierService {
     @Transactional(readOnly = true)
     public List<DossierDto> aReceptionner() {
         ProfilUtilisateur profil = CurrentUser.profil().orElse(null);
-        if (profil == ProfilUtilisateur.PRESIDENT || profil == ProfilUtilisateur.ADMINISTRATEUR) {
+        if (Visibilite.voitTout()) {   // Président, Administrateur — et l'intérimaire du Président (2026-09-21)
             return enrichir(repository.findAReceptionner().stream().map(DossierMapper::toDto).toList());
         }
         String localite = CurrentUser.localite().filter(s -> !s.isBlank()).orElse(null);
@@ -704,7 +704,7 @@ public class DossierService {
      */
     public void controlerVisibilite(Integer idDossier) {
         ProfilUtilisateur profil = CurrentUser.profil().orElse(null);
-        if (profil == ProfilUtilisateur.PRESIDENT || profil == ProfilUtilisateur.ADMINISTRATEUR) {
+        if (Visibilite.voitTout()) {   // Président, Administrateur — et l'intérimaire du Président (2026-09-21)
             return;
         }
         if (Visibilite.estPrmp()) {

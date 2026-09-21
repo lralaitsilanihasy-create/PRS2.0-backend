@@ -76,6 +76,16 @@ public class Notification {
     @Column(name = "TYPE_OBJET", length = 20)
     private String typeObjet;
 
+    /**
+     * ⚠️ Intérim désigné (V34, arbitrage Q6) — <strong>copie</strong> adressée à l'intérimaire actif du
+     * titulaire nommé ici ; la ligne du titulaire, elle, ne porte rien. Une copie n'est jamais recopiée.
+     */
+    @Column(name = "INTERIM_DE", length = 10)
+    private String interimDe;
+
+    @Column(name = "ID_INTERIM")
+    private Integer idInterim;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "DESTINATAIRE_IM", insertable = false, updatable = false)
     @JsonIgnore

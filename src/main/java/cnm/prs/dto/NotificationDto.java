@@ -53,4 +53,14 @@ public class NotificationDto {
 
     @Size(max = 20)
     private String typeObjet;
+
+    /**
+     * ⚠️ Intérim désigné (2026-09-21, §B4.7) — sur une <strong>copie</strong> adressée à l'intérimaire :
+     * matricule du titulaire dont c'est la notification, et identifiant de l'intérim. {@code null} sur la
+     * ligne du titulaire et sur toute notification ordinaire.
+     */
+    @Size(max = 10)
+    private String interimDe;
+
+    private Integer idInterim;
 }

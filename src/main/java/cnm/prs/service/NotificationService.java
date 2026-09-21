@@ -34,13 +34,16 @@ public class NotificationService {
     private final PrmpRepository prmpRepository;
     private final EmailService emailService;
     private final NotificationStreamRegistry streamRegistry;
+    /** ⚠️ Intérim désigné (2026-09-21, §B4.7) — le suppléant actif d'un titulaire notifié reçoit une copie. */
+    private final InterimService interimService;
 
     public NotificationService(NotificationRepository repository, PrmpRepository prmpRepository,
-            EmailService emailService, NotificationStreamRegistry streamRegistry) {
+            EmailService emailService, NotificationStreamRegistry streamRegistry, InterimService interimService) {
         this.repository = repository;
         this.prmpRepository = prmpRepository;
         this.emailService = emailService;
         this.streamRegistry = streamRegistry;
+        this.interimService = interimService;
     }
 
     /**
@@ -164,7 +167,47 @@ public class NotificationService {
         // ⚠️ Temps réel (2026-08-02) — pousse « maj » aux flux SSE du destinataire (badge incrémenté
         // sans action de l'utilisateur ; les onglets sans flux se rattrapent au polling).
         streamRegistry.push(ref);
+        copierALInterimaire(saved);
         return saved;
+    }
+
+    /**
+     * ⚠️ <strong>Intérim désigné</strong> (arbitrage Q6 du pilote, 2026-09-21) — toute notification adressée à un
+     * <strong>contrôleur</strong> est <strong>copiée</strong> à son intérimaire actif au moment de l'émission :
+     * ligne propre à l'intérimaire ({@code destinataireRef} = lui), {@code interimDe} renseigné, même objet
+     * cible. Copie, jamais redirection : le titulaire garde son historique et découvre à son retour ce qui
+     * s'est passé. Rien n'est rejoué pour les notifications antérieures à la désignation, et une copie n'est
+     * jamais recopiée (intérim non transitif : l'intérimaire de l'intérimaire n'est pas concerné).
+     *
+     * <p>Un seul point d'émission ({@code creer}) : les trente-huit appelants n'ont rien à savoir.</p>
+     */
+    private void copierALInterimaire(Notification origine) {
+        if (origine.getInterimDe() != null || origine.getDestinataireRef() == null
+                || !TypeActeur.CONTROLEUR.name().equals(origine.getDestinataireType())) {
+            return;
+        }
+        interimService.suppleantActifDe(origine.getDestinataireRef()).ifPresent(s -> {
+            Notification copie = new Notification();
+            copie.setIdNotification(ClePrimaire.allouerLibre(repository::existsById, repository::nextIdNotification));
+            copie.setIdDossier(origine.getIdDossier());
+            copie.setTypeNotif(origine.getTypeNotif());
+            copie.setDestinataireRef(s.imInterimaire());
+            copie.setDestinataireType(TypeActeur.CONTROLEUR.name());
+            copie.setDestinataireIm(s.imInterimaire());
+            copie.setDestinataireEmail(s.emailInterimaire());
+            copie.setIdObjet(origine.getIdObjet());
+            copie.setTypeObjet(origine.getTypeObjet());
+            copie.setTitre(origine.getTitre());
+            copie.setCorps(origine.getCorps());
+            copie.setDateEnvoi(origine.getDateEnvoi());
+            copie.setLu(false);
+            copie.setCanal(origine.getCanal());
+            copie.setInterimDe(origine.getDestinataireRef());
+            copie.setIdInterim(s.idInterim());
+            repository.save(copie);
+            emailService.envoyer(s.emailInterimaire(), origine.getTitre(), origine.getCorps());
+            streamRegistry.push(s.imInterimaire());
+        });
     }
 
     // ------------------------------------------------------------------

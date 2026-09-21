@@ -44,7 +44,9 @@ import cnm.prs.repository.PvExamenRepository;
 import cnm.prs.repository.PvNavetteRepository;
 import cnm.prs.repository.TransmissionSigmpRepository;
 import cnm.prs.security.CurrentUser;
+import cnm.prs.security.InterimContexte;
 import cnm.prs.security.PermissionService;
+import cnm.prs.security.Visibilite;
 import cnm.prs.service.ReglesAFaire.Acteur;
 import cnm.prs.service.ReglesAFaire.EtatDossier;
 import cnm.prs.service.ReglesAFaire.LettreEnCours;
@@ -71,7 +73,9 @@ import cnm.prs.service.ReglesAFaire.PvEnCours;
  * agrégats, réceptions et circuits, états des PV, passages, attentes, délais standards, lettres, retraits,
  * retours de navette ; examinateurs et transmissions pour le seul Vérificateur ou Assistant, dont le titre
  * dépend du rattachement. La PRMP et l'UGPM n'en déclenchent que sept : rien d'interne à la CNM n'est lu
- * pour elles.</p>
+ * pour elles. ⚠️ 2026-09-21 — le Chef de commission et le Membre en comptent un de plus (le contexte d'intérim,
+ * posé par l'intercepteur avant le contrôleur), et {@link #candidatsParInterim} rejoue le chargement une fois par
+ * suppléance active ; sans intérim, rien.</p>
  *
  * <h2>Règle C2</h2>
  *
@@ -206,8 +210,10 @@ public class AFaireService {
         List<Ligne> lignes = ReglesAFaire.lignes(acteur, etat);
         List<Candidat> candidats = new ArrayList<>();
         if (!lignes.isEmpty()) {
-            candidats.addAll(taches(lot, cnm, d, etat, lignes, chrono, maintenant, idDossier));
+            candidats.addAll(taches(lot, cnm, d, etat, lignes, chrono, maintenant, idDossier, null));
         }
+        // ⚠️ Intérim désigné (2026-09-21, §B4.6) — les tâches de chaque titulaire suppléé, sur ce dossier.
+        candidats.addAll(candidatsParInterim(lignesDossiers, candidats, maintenant));
         candidats.sort(ORDRE);
         List<Candidat> titulairesPuisAutres = new ArrayList<>(candidats.size());
         candidats.stream().filter(c -> c.mode() == ModeTache.TITULAIRE).forEach(titulairesPuisAutres::add);
@@ -227,6 +233,63 @@ public class AFaireService {
         Set<ProfilUtilisateur> exercables = profil == null ? Set.of()
                 : partieControlee ? EnumSet.of(profil) : permissionService.profilsExercables(profil);
         return new Acteur(profil, im, localite, exercables);
+    }
+
+    /**
+     * ⚠️ <strong>Intérim désigné</strong> (lot 1, 2026-09-21, §B4.6) — les tâches du <strong>titulaire</strong> servies
+     * à son intérimaire dans le bloc délégation, {@code mode = INTERIM}, {@code interimDe} et {@code idInterim}
+     * renseignés. Le titulaire continue de les voir dans ses propres lignes : rien ne lui est retiré.
+     *
+     * <p><strong>Aucune règle n'est réécrite</strong> : pour chaque suppléance du connecté ({@link InterimContexte},
+     * posé une fois par requête), le calcul est <em>rejoué en se plaçant dans la peau du titulaire</em> — son
+     * profil, son matricule, sa localité, ses profils exerçables — sur <em>son</em> périmètre ; seules ses lignes
+     * {@code TITULAIRE} sont retenues (les tâches qu'il tient par délégation ou suppléance ne sont pas les
+     * siennes). Une ligne que le connecté a déjà en son nom pour le même dossier et la même section n'est pas
+     * dédoublée ; à deux suppléances pour la même ligne, la première désignée l'emporte. Sans suppléance,
+     * aucune requête.</p>
+     *
+     * @param lignesDossiers la page dossier passe sa ligne unique (le périmètre du titulaire est alors vérifié
+     *                       sur elle) ; l'accueil passe {@code null} et lit le périmètre du titulaire
+     */
+    private List<Candidat> candidatsParInterim(List<Object[]> lignesDossiers, List<Candidat> dejaServis,
+            LocalDateTime maintenant) {
+        List<cnm.prs.security.Suppleance> suppleances = InterimContexte.suppleances();
+        if (suppleances.isEmpty()) {
+            return List.of();
+        }
+        Set<String> cles = new java.util.HashSet<>();
+        for (Candidat c : dejaServis) {
+            cles.add(c.idDossier() + "/" + c.section().name());
+        }
+        List<Candidat> resultat = new ArrayList<>();
+        for (cnm.prs.security.Suppleance s : suppleances) {
+            Acteur titulaire = new Acteur(s.profilTitulaire(), s.imTitulaire(), s.localiteTitulaire(),
+                    permissionService.profilsExercables(s.profilTitulaire()));
+            List<Object[]> lignes = lignesDossiers != null ? lignesDossiers : perimetre(titulaire);
+            if (lignes.isEmpty()) {
+                continue;
+            }
+            Lot lot = charger(titulaire, true, lignes);
+            for (Object[] d : lignes) {
+                Integer idDossier = (Integer) d[0];
+                EtatDossier etat = etat(lot, d);
+                if (lignesDossiers != null
+                        && !Visibilite.localiteAdmise(titulaire.profil(), titulaire.localite(), etat.localiteDossier())) {
+                    continue;   // page dossier : le dossier n'est pas dans le périmètre du titulaire
+                }
+                List<Ligne> siennes = ReglesAFaire.lignes(titulaire, etat).stream()
+                        .filter(l -> l.mode() == ModeTache.TITULAIRE)
+                        .filter(l -> cles.add(idDossier + "/" + l.section().name()))
+                        .map(l -> new Ligne(l.section(), l.geste(), l.gestesSecondaires(), ModeTache.INTERIM))
+                        .toList();
+                if (siennes.isEmpty()) {
+                    continue;
+                }
+                resultat.addAll(taches(lot, true, d, etat, siennes, chrono(lot, d, etat, maintenant), maintenant,
+                        idDossier, s));
+            }
+        }
+        return resultat;
     }
 
     // ------------------------------------------------------------------ calcul
@@ -252,8 +315,10 @@ public class AFaireService {
                 continue;
             }
             candidats.addAll(taches(lot, cnm, d, etat, lignes, chrono(lot, d, etat, maintenant), maintenant,
-                    idDossier));
+                    idDossier, null));
         }
+        // ⚠️ Intérim désigné (2026-09-21, §B4.6) — les tâches de chaque titulaire suppléé, dans son périmètre.
+        candidats.addAll(candidatsParInterim(null, candidats, maintenant));
 
         candidats.sort(ORDRE);
 
@@ -468,7 +533,8 @@ public class AFaireService {
     }
 
     private List<Candidat> taches(Lot lot, boolean cnm, Object[] d, EtatDossier etat,
-            List<Ligne> lignes, Chrono chrono, LocalDateTime maintenant, Integer idDossier) {
+            List<Ligne> lignes, Chrono chrono, LocalDateTime maintenant, Integer idDossier,
+            cnm.prs.security.Suppleance parInterimDe) {
         String statut = (String) d[9];
         LocalDateTime depot = (LocalDateTime) d[2];
         Object[] pvLigne = lot.pvs().get(idDossier);
@@ -504,7 +570,9 @@ public class AFaireService {
                     retrait == null ? null : retrait.getIdDemandeRetrait());
             AFaireDto.Tache tache = new AFaireDto.Tache(section.name(), ligne.geste().name(),
                     ligne.gestesSecondaires().stream().map(Enum::name).toList(), ligne.mode().name(), urgence.name(),
-                    0, dossier, delai, faits, refs);
+                    0, dossier, delai, faits, refs,
+                    parInterimDe == null ? null : parInterimDe.imTitulaire(),
+                    parInterimDe == null ? null : parInterimDe.idInterim());
             candidats.add(new Candidat(tache, urgence, section, ligne.mode(), idDossier,
                     cleIntraUrgence(urgence, delai, d)));
         }
@@ -617,7 +685,7 @@ public class AFaireService {
         for (Candidat c : candidats) {
             AFaireDto.Tache t = c.tache();
             classees.add(new AFaireDto.Tache(t.section(), t.geste(), t.gestesSecondaires(), t.mode(), t.urgence(),
-                    rang++, t.dossier(), t.delai(), t.faits(), t.refs()));
+                    rang++, t.dossier(), t.delai(), t.faits(), t.refs(), t.interimDe(), t.idInterim()));
         }
         return classees;
     }

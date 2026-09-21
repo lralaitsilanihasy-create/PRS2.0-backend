@@ -98,6 +98,15 @@ public interface DispatchRepository extends JpaRepository<Dispatch, Integer> {
     /** Vrai si un dispatch existe déjà pour cette réception (anti-doublon, §3.2). */
     boolean existsByIdReception(Integer idReception);
 
+    /**
+     * ⚠️ Intérim désigné (2026-09-21, §B3) — dossiers dont {@code im} est l'attributaire courant et dont le
+     * traitement est en cours (statuts fournis) : le cumul « déjà attributaire de dossiers » est signalé à la
+     * désignation d'un intérimaire, jamais interdit.
+     */
+    @Query("select count(d) from Dispatch d, Dossier dos where dos.idDossier = d.reception.idDossier "
+            + "and d.imCtrlMembre = :im and dos.statut in :statuts")
+    long countAttributionsEnCours(@Param("im") String im, @Param("statuts") java.util.Collection<String> statuts);
+
     /** Ce contrôleur figure-t-il sur un dispatch (dispatcheur / CC / membre) ? (garde de suppression) */
     @Query("select (count(d) > 0) from Dispatch d "
             + "where d.imCtrlDispatch = :im or d.imCtrlCc = :im or d.imCtrlMembre = :im")

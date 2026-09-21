@@ -307,6 +307,86 @@ comptage des non-lues, marquer lu) ; la **liste globale** est réservée à l'**
 > **tous** les porteurs du rôle dans la localité, exactement comme avant. Un rattachement manquant ne
 > fait **jamais** disparaître une notification.
 
+### L'intérim DÉSIGNÉ dans le circuit de contrôle — lot 1 : Président et Chef de commission (règle du pilote, 2026-09-21)
+
+⚠️ **Demande front du 2026-09-21** (`frontend/docs/demande-backend-2026-09-21-gestion-interim.md`, issue de la
+proposition du 2026-09-13), **arbitrée par le pilote le 2026-09-21** (« On veut insérer la gestion d'intérim »).
+Ressource `/api/interims` (V34, ADR-0008) ; contrat dans `docs/api-endpoints.md`, section « Intérims ».
+
+**Le trou que la règle ferme.** L'intérim n'existait que comme exception ponctuelle, auto-déclarée **au moment de
+l'acte** : `INTERIM_DISPATCH` (un CC dispatche hors de sa localité) et le visa par intérim (note PDF, règle du
+2026-09-01). Personne ne savait à l'avance qui supplée qui, et **le Président n'était suppléé par personne** — visa
+de ses dispatchs, pré-dispatch central, part Président : un point unique de défaillance.
+
+**Énoncé.** « X (titulaire) est absent du D1 au D2 ; Y (intérimaire) agit à sa place, dans SON périmètre, sous sa
+PROPRE identité. » Un intérim est un **acte daté avec pièce** (note de service ou décision, PDF obligatoire —
+arbitrage Q4), jamais modifié ni effacé : une prolongation est un nouvel intérim, une fin avant terme une révocation.
+Son statut se **déduit des dates** à la date du jour (`A_VENIR`, `ACTIF`, `ACHEVE`, `REVOQUE`) ; seul `ACTIF` ouvre
+des droits.
+
+**Ce que l'intérim n'est pas.** La délégation ascendante ouvre une *tâche de profil* à un supérieur, jamais une
+identité (invariant du 2026-08-15) ; l'intérim ouvre les **actes d'identité** du titulaire à une personne nommée,
+pour une période. Et il **descend** : un Membre peut suppléer un CC — c'est le sens inverse de la délégation, qui
+reste inchangée. Les deux se complètent dans une seule garde : **titulaire OU délégation OU intérimaire actif**.
+
+| Titulaire absent | Qui désigne (Q1) | Intérimaires admissibles (Q2) |
+|---|---|---|
+| **Président** | le Président lui-même | tout **Chef de commission**, de n'importe quelle localité |
+| **CC de la Centrale** | ce CC | un **autre CC de la Centrale**, ou un **Membre de sa localité** |
+| **CC régional** | ce CC | un **Membre de sa localité** (il n'y a pas d'autre CC) |
+
+- **Chacun déclare sa propre absence** ; l'Administrateur peut désigner et révoquer **en repli** (quand l'absent n'a
+  rien déclaré), comme pour les mandats — ⚠️ point à confirmer par le pilote, le front le suppose vrai. Les autres
+  profils (Secrétaire, Membre, Vérificateur, Assistant) **ne déclarent pas d'absence** dans ce lot : la réattribution
+  et la délégation les couvrent ; lot 2 sur demande.
+- **Un seul intérim ACTIF ou A_VENIR par titulaire à une date donnée** (409). Le **cumul** côté intérimaire (déjà
+  intérimaire d'un autre, déjà attributaire de dossiers) est **signalé, pas interdit**.
+- **Non transitif** (Q3) : le CC intérimaire du Président désigne, s'il s'absente, un intérimaire pour son **propre**
+  rôle de CC — jamais pour le Président. Chaque intérim porte son seul titulaire.
+- **Révocation** par le titulaire, le désignateur ou l'Administrateur, à effet à sa date (au plus tôt aujourd'hui) :
+  les droits tombent à la requête suivante, **rien ne se défait** — les actes posés restent ceux de l'intérimaire.
+
+**Effets d'un intérim ACTIF** (résolus par le serveur ; le front ne rejoue pas la règle) :
+
+1. **Le périmètre est celui du titulaire.** Le CC intérimaire du Président voit et agit sur toutes les localités ;
+   le Membre intérimaire d'un CC agit dans la localité de ce CC, avec les **capacités du CC** (dispatch, visa,
+   retraits, et les tâches que le CC tient par délégation).
+2. **Les contrôles d'identité admettent l'intérimaire actif** : « le dispatcheur » (visa, retour, retrait,
+   réattribution, reprise, annulation, décision de retrait), « le Président » (pré-dispatch central, visa à deux
+   niveaux et part Président, dispatch au CC), « le CC du circuit » (acceptation, retour au Membre), « le CC désigné
+   co-signataire » (part CC). ⚠️ **Pas étendus, hors lot** : l'examen et la soumission du PV (actes de
+   l'attributaire), la part Membre, les lettres de renvoi.
+3. ⚠️ **Le dispatcheur enregistré est le TITULAIRE** (`IM_CTRL_DISPATCH`), l'auteur réel étant tracé sur l'intérim
+   (ADR-0008). C'est ce que tout l'aval lit — « le dispatcheur vise », le discriminant de la navette à deux niveaux
+   (profil du dispatcheur), le retrait — et qui permet au CC de retour de viser le PV que son intérimaire a
+   dispatché. `INTERIM_DISPATCH` reste le repli ponctuel, forcé à `false` sous désignation.
+4. **Le visa par un intérimaire désigné se pose sans note** : la désignation est la justification. Il est qualifié
+   comme le visa par intérim de 2026-09-01 (`VISE_PAR_INTERIM`, mention « — par intérim » sur les PV **régionaux**
+   seulement, Centrale sans mention — arbitrage Q5), et l'intérim est tracé sur le PV. La part signée est celle du
+   **profil du titulaire**, sous le nom de l'intérimaire. Le chemin ponctuel (note PDF) reste, en repli (Q4).
+5. **Une personne, un rôle par PV.** L'intérimaire d'un CC qui est l'attributaire d'un dossier ne vise pas le PV de
+   son propre examen (409 nominatif — il peut se dispatcher un dossier par intérim, ce PV sera visé par le CC de
+   retour ou par le Président). **Une part par personne et par PV** : l'intérimaire qui a déjà signé une autre part
+   ne signe pas celle de son titulaire — elle attend le titulaire, ou un autre intérimaire (cas résiduel de la
+   chaîne Q3).
+6. **Files.** Les tâches du titulaire sont servies à l'intérimaire dans le bloc délégation de l'accueil « À faire »
+   (`mode = INTERIM`, titulaire nommé), en rejouant le calcul dans la peau du titulaire ; **le titulaire continue de
+   les voir** — rien ne lui est retiré.
+7. **Notifications : copie, jamais redirection** (Q6). Toute notification adressée à un contrôleur est copiée à son
+   intérimaire actif au moment de l'émission ; le titulaire garde son historique et découvre à son retour ce qui
+   s'est passé. Rien n'est rejoué pour l'antérieur, et une copie n'est jamais recopiée.
+8. **Trace.** Journal et chronométrage portent « par intérim de X » : l'acteur reste celui qui a agi (l'intérimaire,
+   sous sa propre identité), le profil de l'étape est celui du titulaire. La ressource `interims` est son propre
+   historique : aucune entrée de journal hors dossier.
+9. **Acte vers un titulaire absent** (Q7) : accepté — l'attribution reste au titulaire, son intérimaire agit ; le
+   front avertit avant l'envoi grâce à l'annuaire (`interimEnCours`). ⚠️ L'avertissement dans la réponse du dispatch
+   n'est pas servi dans ce lot : le front dispose de l'annuaire.
+
+**Le contexte d'intérim.** Les suppléances actives du connecté sont lues **une fois par requête**, après
+l'authentification, pour les seuls profils qui peuvent être intérimaires (CC, Membre), et posées dans un contexte
+que toutes les gardes lisent — c'est ce qui donne la même réponse au périmètre de visibilité (77 points d'appel), à
+la garde centrale des permissions et aux gardes d'identité, sans requête par garde ni oubli.
+
 ### Le Secrétaire de séance est retiré du cycle du PV (règle du pilote, 2026-09-02)
 
 ⚠️ **La notion disparaît, désignation comprise.** Depuis les **rattachements Membre → Vérificateur →
@@ -754,6 +834,12 @@ de retrait (déjà badgées), brouillon de lettre du Membre.
 **repliées** : servies seulement sur `?delegations=true`, jamais dans `compteurs` ni dans le badge. Sans ce repli, le
 Président verrait toutes les réceptions et vérifications du pays.
 
+⚠️ **Intérim désigné (2026-09-21).** Les tâches `TITULAIRE` de chaque titulaire que le connecté supplée aujourd'hui
+lui sont servies dans ce bloc, `mode = INTERIM`, `interimDe` et `idInterim` renseignés — le calcul est rejoué dans la
+peau du titulaire, sur son périmètre, sans réécrire une règle. La ligne « `PV_A_VISER`, deux niveaux, étage
+PRESIDENT — (pas d'intérim) » du tableau vaut pour l'intérim *ponctuel* (note PDF) ; le CC **intérimaire désigné**
+du Président y reçoit bien la ligne, comme lui. Le titulaire garde les siennes.
+
 **Urgence et seuils (arbitrage 4).** Étape chronométrée : reste < 0 → `EN_RETARD` ; **0 ≤ reste ≤ max(2 h, ⌈35 % du
 délai standard⌉)** → `BIENTOT` (3 h pour 8 h, 6 h pour 16 h ; constantes `ReglesAFaire.SEUIL_BIENTOT_*`) ; au-delà →
 `DANS_LES_DELAIS`. **Entrée inconnue** (dossier antérieur au chronométrage : écoulé 0, pas d'échéance) → `SANS_DELAI` :
@@ -766,7 +852,8 @@ de dispatch, ni retour de navette, ni parts attendues, ni identifiant de dispatc
 pas même chargé. Leur périmètre est celui de leur tutelle.
 
 **Performance.** Nombre de requêtes constant (12 pour un profil CNM, 13 pour le Vérificateur, 14 pour l'Assistant, 7 pour la PRMP et l'UGPM), vérifié au compteur
-Hibernate de 1 à 40 dossiers.
+Hibernate de 1 à 40 dossiers. ⚠️ 2026-09-21 : +1 pour le Chef de commission et le Membre (contexte d'intérim, lu une
+fois par requête), et autant de relectures que de suppléances actives (aucune sans intérim).
 
 **Page dossier — `GET /api/dossiers/{id}/gestes` (⚠️ règle ajoutée, refonte ergonomique lot L4-B1, 2026-09-15).**
 Même calcul que l'accueil, rejoué sur un lot d'un seul dossier (`AFaireService.gestesDossier`) : aucune règle de
@@ -795,7 +882,8 @@ acteur.
 **Performance.** Même ordre de grandeur que l'accueil, garde de visibilité comprise et constant d'un dossier à
 l'autre : 12 pour le Président, 13 pour le Chef de commission, le Secrétaire et le Membre, 14 pour le Vérificateur,
 15 pour l'Assistant, 8 pour la PRMP et l'UGPM (compteur Hibernate). Sur un statut hors des statuts actifs, rien n'est
-calculé : deux requêtes au plus.
+calculé : deux requêtes au plus. ⚠️ 2026-09-21 : le Chef de commission et le Membre comptent une requête de plus
+(contexte d'intérim) — 14, et trois au plus sur un statut terminal.
 
 ### Actualités à l'ouverture de session (transversal)
 

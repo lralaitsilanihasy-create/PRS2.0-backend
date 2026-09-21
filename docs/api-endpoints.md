@@ -1053,6 +1053,8 @@ si aucun résultat (pas de 404). `{nom}` est un fragment (URL-encoder si espaces
 | idLocalite | string | Non | max 5 (`null` = toutes, cas Président) |
 | idSuperieur | string | Non | max 7 |
 | transversal | boolean | Oui | @NotNull |
+| interimEnCours | objet \| null | — (réponse) | ⚠️ **intérim désigné (2026-09-21, §B5)** — titulaire absent : `{ idInterim, imInterimaire, nomInterimaire, dateFin }` (intérim ACTIF du jour), sinon `null` ; ignoré en écriture ; **`null` pour la PRMP et l'UGPM** (règle C2) |
+| interimPour | objet[] | — (réponse) | intérims ACTIFS que ce contrôleur exerce : `[{ idInterim, imTitulaire, nomTitulaire, dateFin }]`, vide sinon ; `null` pour la PRMP et l'UGPM |
 
 **Endpoints**
 
@@ -1624,7 +1626,14 @@ Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `
 | datePredispatch | string (date-heure) | — (réponse) | **`yyyy-MM-dd HH:mm`** — date/heure de réception du dossier par le secrétaire (`t_reception.DATE_RECEPTION` la plus récente du dossier) ; lecture seule, **`null`** si aucune réception |
 | dateCtrlAssigne | string (date) | Non | |
 | instructions | string | Non | max 500 |
-| interimDispatch | boolean | Oui | @NotNull (voir règle) |
+| interimDispatch | boolean | Oui | @NotNull (voir règle) — **forcé à `false`** quand le dispatch est posé par un intérimaire **désigné** |
+| idInterim | number | — (réponse) | ⚠️ **intérim désigné (2026-09-21)** — identifiant de l'intérim quand le dispatch (ou la réattribution) a été posé par un intérimaire désigné ; `null` sinon |
+| interimDe | string | — (réponse) | le titulaire suppléé — **égal à `imCtrlDispatch`** : le dispatcheur enregistré est le titulaire, l'auteur réel se lit sur l'intérim (ADR-0008) |
+
+> ⚠️ **Intérim désigné (2026-09-21, section « Intérims »).** Le Membre intérimaire d'un CC dispatche dans la localité
+> de ce CC ; le CC intérimaire du Président pré-dispatche la centrale et dispatche partout. Le dispatcheur enregistré
+> est le **titulaire** (le CC de retour vise le PV dispatché par son intérimaire). « Le dispatcheur » des gardes
+> (`PUT`, `annuler`) inclut son intérimaire actif ; l'auto-retrait se juge sur la personne.
 
 **Endpoints**
 
@@ -1809,7 +1818,10 @@ Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `
 > | `GET /api/dossiers/{id}/journal` | **403** |
 > | `GET /api/dossiers/{id}/chronometrage` | servi **sans identités** : `etapes[].imActeur`, `etapes[].nomActeur` et `attributaire` à `null` ; étapes, dates, durées, `profil`, compteurs, `attentePrmp` et `datePrevisionnelleFin` conservés |
 > | `DossierDto` (unitaire, listes, pages) | `imVerificateurCible`, `nomVerificateurCible`, `imAssistantCible`, `nomAssistantCible` et `acteursEtapes` à `null` ; `datesEtapes`, `dateEnregistrement`, `dateSoumission`, `datePrevisionnelleFin` et `attentePrmp` conservés |
-> | `PvExamenDto` (`/definitifs`, `/{id}`) | `viseParInterim`, `noteInterimNom`, `noteInterimDisponible`, `imDispatcheur` et `nomDispatcheur` à `null` ; les signataires officiels du PV signé restent servis (ils figurent sur l'acte) |
+> | `PvExamenDto` (`/definitifs`, `/{id}`) | `viseParInterim`, `noteInterimNom`, `noteInterimDisponible`, `idInterim`, `interimDe` (⚠️ 2026-09-21), `imDispatcheur` et `nomDispatcheur` à `null` ; les signataires officiels du PV signé restent servis (ils figurent sur l'acte) |
+> | `GET /api/interims`, `/mes`, `/{id}`, `/{id}/piece` (⚠️ 2026-09-21) | **403** — qui supplée qui à la Commission est une organisation interne |
+> | `ControleurDto` (⚠️ 2026-09-21) | `interimEnCours` et `interimPour` à `null` |
+> | `GET /api/dossiers/{id}/chronometrage` (⚠️ 2026-09-21) | `etapes[].interimDe` et `etapes[].idInterim` à `null`, comme l'acteur |
 > | `GET /api/observations-pv?dossier=` (⚠️ revue du 2026-09-14) | `historique[].imVerificateur` (auteur de chaque décision de vérification, seul matricule du DTO) à `null` ; `libelle`, `statut`, `precision`, `iteration`, `leveePossible` et, dans l'historique, `iteration`, `decision`, `precision`, `dateDecision` conservés |
 > | `GET /api/dossiers/{id}/historique-echanges` (⚠️ revue du 2026-09-14) | `acteur` des entrées `OBSERVATION` (matricule du vérificateur, seule identité de contrôleur du DTO) à `null` ; l'`acteur` des `RECTIFICATION` (identifiant de la PRMP) et `type`, `date`, `texte`, `obsLevees` conservés. L'UGPM est de toute façon refusée (**403**) par la garde du contrôleur (`hasRole('PRMP')`) |
 > | `DemandeRetraitDto` — `GET /api/demande-retraits`, `/{id}`, `/mes-demandes` (⚠️ recette Q2 du 2026-09-16) | `imCtrlCc` (matricule du Chef de commission — ou du Président — qui a **décidé** de la demande, seule identité de contrôleur du DTO) à `null` ; `idPrmp` (identité de la PRMP elle-même), `statut`, `motifRetrait`, `dateDemande`, `dateDecision`, `obsDecision` (le motif de la décision, qui leur est destiné), `nomFichier` et `tailleFichier` conservés. Les files du CC (`/a-valider`, `/historique`) sont hors de portée : `@perm.peutExercer('CHEF_COMMISSION')` |
@@ -1834,7 +1846,12 @@ Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `
 >
 > **`ActionDossierDto`** = `{ idAction (number), idDossier (number), dateAction (date-time),
 > typeAction (string), idPrmpOperateur (string), nomOperateur (string), auteur (string),
-> idMandatOperateur (number|null), detail (string) }`.
+> idMandatOperateur (number|null), detail (string), interimDe (string|null), idInterim (number|null) }`.
+> ⚠️ **Intérim désigné (2026-09-21)** — `interimDe` / `idInterim` : geste posé **par intérim** de ce titulaire
+> (`DISPATCH`, `REATTRIBUTION`, `REPRISE`, `RETRAIT_DISPATCH`, le `VISA` dérivé et la `SIGNATURE` de la part que ce
+> visa a posée) ; l'auteur et le nom de la ligne restent ceux de l'intérimaire, qui a agi, et le détail s'achève par
+> « — par intérim de NOM ». Le serveur ne filtre pas le journal par rang : la visibilité hiérarchique (§B6 de la
+> demande) est une règle d'affichage du front.
 > `typeAction` ∈ `CREATION`, `SOUMISSION`, `RESOUMISSION`, `TRANSMISSION_COMPLEMENTS`,
 > `TRANSMISSION_COMPLEMENTS_DEPOT`, `SUPPRESSION`, `MISE_A_JOUR` — et, ⚠️ **depuis le 2026-09-04**, les
 > gestes du **circuit de dispatch** : `DISPATCH`, `REATTRIBUTION`, `REPRISE`, `RETRAIT_DISPATCH`,
@@ -2118,13 +2135,15 @@ de l'étape de la section ; `null` pour un geste non chronométré (lettres, ret
 | section | string | code de section |
 | geste | string | geste principal |
 | gestesSecondaires | string[] | gestes secondaires (ex. `["RETOURNER"]` avec `VISER`) ; `[]` sinon |
-| mode | string | `TITULAIRE` dans `taches` ; `DELEGATION`, `INTERIM`, `COLLEGUE` ou `SUPPLEANCE` dans `delegations.taches` |
+| mode | string | `TITULAIRE` dans `taches` ; `DELEGATION`, `INTERIM`, `COLLEGUE` ou `SUPPLEANCE` dans `delegations.taches` — ⚠️ `INTERIM` avec `idInterim` **non nul** = tâche du titulaire servie à son intérimaire **désigné** (2026-09-21) ; `idInterim` nul = visa par intérim ponctuel |
 | urgence | string | voir énumération |
 | rang | number | position dans sa liste, à partir de 1 |
 | dossier | `Dossier` | `{ idDossier, refeDossier, dateSoumission, idTypeDossier, idSousType, idEntiteContract, libelleEntite, idLocalite, libelleLocalite, statut, statutPv, niveauNavette, datesEtapes, acteursEtapes }` — `datesEtapes` / `acteursEtapes` : mêmes sept clés et mêmes règles que `DossierDto` |
 | delai | `Delai` | `{ etape, entree, standardHeures, ecouleHeures, restantHeures, echeance, pauseDepuis, pauseHeures, datePrevisionnelleFin }` — lu dans `ChronometrageService.delaiCourant` ; `ecouleHeures` = `dureeHeuresOuvrees` du passage `enCours` de `GET /{id}/chronometrage` |
 | faits | `Faits` | `{ nbLignes, montantTotal, nbPieces, idAvis, nbObservations, consigneDispatch, dernierRetourNavette, motifRetrait, examenEntame, partsAttendues }` |
 | refs | `Refs` | `{ idReception, idDispatch, idExamen, idPv, idLettre, idDemandeRetrait }` |
+| interimDe | string \| null | ⚠️ **intérim désigné (2026-09-21)** — matricule du titulaire dont c'est la tâche, sur une ligne `mode = INTERIM` servie à son intérimaire ; `null` sinon |
+| idInterim | number \| null | identifiant de l'intérim ; `null` sinon |
 
 Précisions sur `delai`, `faits` et `refs` :
 - `delai.etape` est **toujours l'étape courante** du dossier ; nulle pendant une attente PRMP autre que la
@@ -4132,6 +4151,145 @@ active (`t_prmp_entite.ACTIF`) sur l'entité contractante du dossier. C'est ce s
 
 ---
 
+## Intérims
+**Ressource** `/api/interims` (tables `t_interim`, `t_interim_piece` — V34) — ⚠️ **règle ajoutée (demande front du
+2026-09-21, « Gestion de l'INTÉRIM dans le circuit de contrôle », lot 1 : Président et Chef de commission ;
+arbitrages du pilote du 2026-09-21 ; ADR-0008)**. **Le titulaire désigne lui-même** son intérimaire
+(`PRESIDENT`, `CHEF_COMMISSION`) ; l'`ADMINISTRATEUR` peut le faire **en repli** (§B3 de la demande, à confirmer
+par le pilote). **Lecture ouverte aux contrôleurs et à l'Administrateur** ; **403 pour la PRMP et l'UGPM** (vue
+interne à la Commission, comme la note d'intérim au visa).
+
+> **Un intérim est un acte daté, jamais modifié ni effacé** : ni `PUT` ni `DELETE`. Une prolongation est un
+> **nouvel** intérim (comme la reconduction d'un mandat), une fin avant terme une **révocation**. « X (titulaire)
+> est absent du D1 au D2 ; Y (intérimaire) agit à sa place, dans SON périmètre, sous sa PROPRE identité. »
+>
+> **Ce que l'intérim n'est pas.** La délégation ascendante (`t_delegation_profil`) ouvre une *tâche de profil* à un
+> supérieur, jamais une identité (invariant du 2026-08-15) ; l'intérim ouvre les **actes d'identité** du titulaire
+> (dispatch, visa, réattribution, retrait, part de signature) à une personne nommée, pour une période, avec une
+> pièce — et il **descend** : un Membre peut suppléer un CC (arbitrage Q1). La délégation reste inchangée.
+
+**Champs `InterimDto`** *(lecture)*
+
+| Champ (JSON) | Type | Contraintes |
+|---|---|---|
+| idInterim | number | PK serveur (IDENTITY) |
+| imTitulaire, nomTitulaire, profilTitulaire, idLocaliteTitulaire | string | le contrôleur absent ; profil `PRESIDENT` ou `CHEF_COMMISSION` ; nom **figé** à la désignation (« NOM Prénoms ») ; localité `null` pour le Président |
+| imInterimaire, nomInterimaire, profilInterimaire, idLocaliteInterimaire | string | le désigné (≠ titulaire) |
+| dateDebut, dateFin | string (date) | période **inclusive** ; `dateFin` **obligatoire** sauf `motif = VACANCE_POSTE` (`null` admis) |
+| motif | string | `CONGE` · `MISSION` · `MALADIE` · `VACANCE_POSTE` · `AUTRE` |
+| reference | string | max 100 — note de service / décision de désignation |
+| pieceNom, pieceDisponible | string, boolean | la pièce PDF, **obligatoire** (Q4) — `GET /{id}/piece` |
+| designePar, nomDesignePar, dateDesignation | string, string, string (date-time) | qui a créé : le titulaire, ou l'Administrateur |
+| statut | string | `A_VENIR` / `ACTIF` / `ACHEVE` / `REVOQUE` — **dérivé à la date du jour, jamais reçu ni stocké** |
+| dateRevocation, motifRevocation, revoquePar | string (date), string, string | fin avant terme |
+| avertissements | string[] | **réponse du `POST` seulement** : cumuls signalés (déjà intérimaire d'un autre titulaire sur la période, déjà attributaire de dossiers en cours) ; `null` en lecture |
+
+**Statuts** — `REVOQUE` prime dès la date d'effet de la révocation ; sinon la période décide : avant `dateDebut` →
+`A_VENIR` (n'ouvre aucun droit), pendant → `ACTIF` (seul statut qui ouvre les droits), après `dateFin` → `ACHEVE`.
+Contrairement au mandat, **aucune colonne-cache** : un intérim ne périme pas en base, il périme dans le temps.
+
+**Endpoints**
+
+| Méthode | URL | Corps | Réponse | Statuts | Rôle |
+|---|---|---|---|---|---|
+| GET | /api/interims | — | `InterimDto[]` | 200, 403 | contrôleurs + Administrateur — `?titulaire=`, `?interimaire=`, `?actifs=true` (ACTIF **et** A_VENIR) ; chronologique |
+| GET | /api/interims/mes | — | `MesInterimsDto` | 200, 403 | contrôleur de session — **le signal du front** |
+| GET | /api/interims/{id} | — | `InterimDto` | 200, 403, 404 | contrôleurs + Administrateur |
+| GET | /api/interims/{id}/piece | — | `application/pdf` | 200, 403, 404 | contrôleurs + Administrateur — **403 PRMP/UGPM** |
+| POST | /api/interims | `multipart/form-data` : **`data`** = `CreerInterimRequest` (JSON) + **`piece`** = PDF | `InterimDto` | 201, 400, 403, 404, **409** | `PRESIDENT` / `CHEF_COMMISSION` (pour soi) / `ADMINISTRATEUR` (repli) |
+| POST | /api/interims/{id}/revoquer | `RevoquerInterimRequest` | `InterimDto` | 200, 400, 403, 404, 409 | le titulaire, le désignateur, ou l'Administrateur |
+
+`{id}` = idInterim (number).
+**`CreerInterimRequest`** = `{ imTitulaire (@NotBlank, max 10), imInterimaire (@NotBlank, max 10), dateDebut (@NotNull),
+dateFin (obligatoire sauf VACANCE_POSTE → 400), motif (@NotNull), reference (@NotBlank, max 100) }`. **Pièce** : PDF
+reconnu sur les **octets d'en-tête** (jamais le nom ni le `Content-Type`), 10 Mo au plus ; absente, non PDF ou trop
+volumineuse → **400** (la partie est déclarée facultative côté Spring pour que l'absence produise un 400 métier).
+**`RevoquerInterimRequest`** = `{ motif (@NotBlank, max 255), dateRevocation (optionnel, défaut aujourd'hui, jamais
+antérieure à aujourd'hui → 400, jamais après `dateFin` → 400) }`.
+**`MesInterimsDto`** = `{ exerces: InterimDto[] (ACTIF, je suis l'intérimaire), subi: InterimDto|null (ACTIF, je suis
+le titulaire), aVenir: InterimDto[] (A_VENIR, titulaire ou intérimaire) }`.
+
+**Qui désigne, qui supplée (§B3) — gardes de `POST`, dans l'ordre**
+
+| Titulaire | Désignateur | Intérimaires admissibles |
+|---|---|---|
+| Président | le Président | tout **CC**, toute localité |
+| CC de la Centrale (`ANT`) | ce CC | un **autre CC de la Centrale**, ou un **Membre de sa localité** |
+| CC régional | ce CC | un **Membre de sa localité** |
+
+- `imTitulaire` ≠ utilisateur de session, hors Administrateur → **403 nominatif** (« Seul NOM Prénoms désigne son intérimaire… ») ;
+- titulaire d'un autre profil (un Membre…) → **409** (« ne déclare pas d'absence dans ce lot ») ;
+- titulaire = intérimaire → **409** ; intérimaire non admissible (profil, localité) → **409 nominatif** ;
+- dates : `dateFin` absente hors `VACANCE_POSTE`, ou avant `dateDebut` → **400** ;
+- **un seul intérim ACTIF ou A_VENIR par titulaire à une date donnée** : chevauchement → **409** (l'intérim en conflit est nommé) ;
+- cumul côté intérimaire : **signalé** dans `avertissements`, jamais refusé.
+
+> 📌 **La révocation prend effet à sa date, au plus tôt aujourd'hui** : les droits tombent **à la requête suivante**
+> (le contexte d'intérim est relu à chaque requête), les actes déjà posés restent ceux de l'intérimaire, tracés
+> comme tels. Déjà `ACHEVE` ou `REVOQUE` → **409**.
+
+### Effets d'un intérim ACTIF — résolus côté serveur, le front ne rejoue pas la règle
+
+> **Le contexte d'intérim.** Les suppléances actives du connecté sont lues **une fois par requête** (intercepteur,
+> après l'authentification ; une requête SQL, et seulement pour un `CHEF_COMMISSION` ou un `MEMBRE`, les deux seuls
+> profils qui peuvent être intérimaires) et posées dans `InterimContexte`, que lisent toutes les gardes. Elles ne sont
+> **pas transitives** : les suppléances d'un titulaire n'entrent jamais en compte.
+
+1. **Garde centrale étendue** — `@perm.peutExercer(cible)` = titulaire OU délégation OU **intérimaire actif d'un
+   titulaire qui peut exercer la cible** : le Membre intérimaire d'un CC reçoit les capacités du CC (dispatch, visa,
+   retraits, et les tâches que le CC tient par délégation). Les **contrôles d'identité** aussi : « le dispatcheur »
+   devient « le dispatcheur ou son intérimaire actif » (visa, retour, retrait, réattribution, reprise, annulation du
+   dispatch, réponse à une demande de retrait) ; « le Président » idem (pré-dispatch central, VISA#2 et part
+   Président, dispatch au CC) ; « le CC du circuit » idem (VISA#1, retour au Membre) ; « le CC désigné
+   co-signataire » idem (part CC). **Le périmètre est celui du titulaire** : le CC intérimaire du Président **voit et
+   agit sur toutes les localités** (`Visibilite.voitTout()` le sait) ; le Membre intérimaire d'un CC agit dans la
+   localité de ce CC. ⚠️ Non étendu, hors lot : l'examen et la soumission du PV (actes de l'attributaire), la part
+   Membre, les lettres de renvoi.
+2. **Dispatch par un intérimaire** (`POST`/`PUT /api/dispatchs`, `POST /{id}/annuler`) — ⚠️ **`imCtrlDispatch` porte le
+   TITULAIRE, pas l'intérimaire** (ADR-0008) : c'est le dispatcheur que l'aval reconnaît — visa, retrait, discriminant
+   de la navette à deux niveaux (profil du dispatcheur). L'auteur réel se lit sur `idInterim` (→ `t_interim`), au
+   journal et au chronométrage. `DispatchDto.interimDe` = le titulaire (donc = `imCtrlDispatch`), `idInterim` non nul.
+   `interimDispatch` est **forcé à `false`** : la désignation est la justification, le drapeau reste le repli ponctuel
+   sans désignation. Au titre de qui : en son nom s'il le peut (Président ; CC de la localité hors centrale), sinon
+   par intérim du CC de la localité (jamais un dossier central), sinon du Président. Un intérimaire qui ne supplée
+   ici personne qui le puisse → **403**.
+3. **Visa par un intérimaire désigné** (`POST /api/pv-examens/{id}/viser`, JSON, **sans note**) — réponse
+   `viseParInterim = true`, **`idInterim`** et **`interimDe`** renseignés, `noteInterim*` à `null` ; la part signée est
+   celle du **profil du titulaire** (le Membre intérimaire d'un CC signe la part CC, sous son propre nom :
+   `imCtrlCc` = lui). Le chemin ponctuel (note PDF, P/CC du périmètre non désigné) reste tel quel (Q4). Mention
+   « — par intérim » sur les PV **régionaux** seulement, Centrale sans mention (Q5, règle du 01/09 inchangée).
+4. **Une personne, un rôle par PV** — l'intérimaire d'un CC qui est l'**attributaire** du dossier ne vise ni ne
+   retourne le PV de son propre examen → **409 nominatif** (« Vous êtes l'attributaire de ce dossier… »), avant le
+   403 général de l'examinateur. **Une part par personne et par PV** : l'intérimaire qui a déjà signé une autre part
+   ne signe pas celle de son titulaire → **409 nominatif** (« vous avez déjà signé une autre part de ce PV… elle
+   attend NOM à son retour, ou un autre intérimaire ») — cas résiduel de la chaîne Q3.
+5. **Part CC signée par l'intérimaire du CC désigné** (`POST /{id}/signer`, `role = CC`) : `imCtrlCc` = l'intérimaire ;
+   trace au chronométrage (`COSIGNATURE`, `interimDe`).
+6. **Files** — `GET /api/dossiers/a-faire` et `GET /api/dossiers/{id}/gestes` : les tâches **`TITULAIRE`** de chaque
+   titulaire suppléé sont servies à l'intérimaire dans **`delegations.taches`**, `mode = INTERIM`, `interimDe` et
+   `idInterim` renseignés (le calcul est rejoué dans la peau du titulaire, sur son périmètre) ; une ligne que le
+   connecté a déjà en son nom pour le même dossier et la même section n'est pas dédoublée. Le **titulaire continue de
+   les voir** dans `taches`. ⚠️ `mode = INTERIM` avec `idInterim` **nul** = le visa par intérim ponctuel, sens
+   d'origine.
+7. **Notifications** (Q6) — toute notification adressée à un **contrôleur** est **copiée** à son intérimaire actif au
+   moment de l'émission : ligne propre (`destinataireRef` = l'intérimaire), `NotificationDto.interimDe` = le
+   titulaire, `idInterim`, même objet cible ; courriel à l'intérimaire ; flux SSE poussé. Jamais rejouée pour les
+   notifications antérieures, jamais recopiée (non transitif).
+8. **Trace** — journal `ActionDossierDto.interimDe` + `idInterim` sur `DISPATCH`, `REATTRIBUTION`, `REPRISE`,
+   `RETRAIT_DISPATCH` (détail suffixé « — par intérim de NOM »), sur le `VISA` dérivé et sur la `SIGNATURE` de la
+   part que ce visa a posée ; chronométrage `PassageEtapeDto.interimDe` + `idInterim` (acteur = l'intérimaire, profil
+   = celui du titulaire) ; `acteursEtapes` nomme celui qui a agi. **Aucun filtrage par rang côté serveur** (§B6 est
+   une règle d'affichage du front).
+9. **Annuaire** — `ControleurDto.interimEnCours` (titulaire absent : `{ idInterim, imInterimaire, nomInterimaire,
+   dateFin }` ou `null`) et `interimPour` (intérimaire : `[{ idInterim, imTitulaire, nomTitulaire, dateFin }]`),
+   ACTIFS du jour, une requête pour toute la liste ; **`null` pour la PRMP et l'UGPM** (règle C2).
+10. **Fin** — automatique à `dateFin` (statut dérivé) ou révocation. **Rien à défaire.**
+
+> ⚠️ **Coût mesuré** : +1 ordre SQL par requête d'un Chef de commission ou d'un Membre (le contexte), aucun pour les
+> autres profils ; `GET /a-faire` et `/{id}/gestes` restent constants (14 pour le CC et le Membre, ex-13).
+
+---
+
 ## Marchés
 **Ressource** `/api/marches` — Lecture **scopée au périmètre de l'appelant** (⚠️ changement de portée, voir note). **Écriture (POST/PUT/DELETE) réservée `PRMP`** : édition des lignes d'un dossier **PPM en BROUILLON** dont elle est propriétaire (sinon 403/409). Le **mode** est **saisi** (plus de détermination auto, cf. note). ⚠️ **Règle ajoutée** : à la **suppression** (`DELETE`), **tous les enregistrements liés** au marché sont supprimés **en cascade applicative** (même transaction, ordre FK-safe) : **tranches** de ses lots → **lots** (`t_lot`), **bénéficiaires** (`t_service_beneficiaire`) et **dates prévisionnelles** (`t_marche_prevision`). *(Un marché supprimable est BROUILLON → jamais dispatché : ni anomalie ni échéance possibles.)* Même cascade réutilisée par `DELETE /api/ppms/{id}` pour chacun de ses marchés.
 
@@ -4684,7 +4842,14 @@ immuable). `sens` ∈ {`SOUMISSION`, `RETOUR_RECTIF`, `ACCEPTATION`} (sinon **40
 >   par type, « Charger plus » (défilement progressif), clic = lu + ouverture de l'objet, badge cloche
 >   plafonné « 99+ » (`NotificationsStore` : SSE + BroadcastChannel + polling).
 
-**Champs `NotificationDto`**
+> ⚠️ **Intérim désigné (2026-09-21, arbitrage Q6 — copie, jamais redirection).** Toute notification adressée à un
+> **contrôleur** est **copiée** à son intérimaire actif au moment de l'émission : ligne propre à l'intérimaire
+> (`destinataireRef` / `destinataireIm` = lui, son courriel, flux SSE poussé), **`interimDe`** = le titulaire,
+> **`idInterim`** ; même objet cible, même type. La ligne du titulaire ne porte rien (il garde son historique). Rien
+> n'est rejoué pour les notifications antérieures à la désignation ; une copie n'est jamais recopiée (non transitif).
+> Un seul point d'émission, les trente-huit appelants n'ont rien à savoir.
+
+**Champs `NotificationDto`** *(⚠️ 2026-09-21 : + `interimDe` (string, max 10, `null` hors copie), `idInterim` (number))*
 
 | Champ (JSON) | Type | Obligatoire | Contraintes |
 |---|---|---|---|
@@ -5608,6 +5773,15 @@ qu'elles n'existent pas, alors qu'elles attendent peut-être leur premier plan.
 >
 > La note est un document d'organisation **interne** : l'ouvrir à la PRMP rétablirait par une autre porte
 > ce que l'arbitrage 4 retire du PV central. 404 si le PV n'a pas été visé par intérim.
+>
+> ⚠️ **Intérim DÉSIGNÉ (2026-09-21, section « Intérims »).** L'intérimaire actif du dispatcheur (navette simple) ou
+> du Président (deux niveaux) vise **en JSON, sans note** : la désignation est la justification. Réponse
+> `viseParInterim = true`, **`idInterim`** et **`interimDe`** (le titulaire) renseignés, `noteInterim*` à `null` ; la
+> part signée est celle du **profil du titulaire**, sous le nom de l'intérimaire (`imCtrlCc` / `imCtrlPresident` =
+> lui). Le chemin ponctuel ci-dessous (note PDF, P/CC du périmètre non désigné) reste tel quel, en repli (Q4). Deux
+> 409 nominatifs : l'intérimaire **attributaire** du dossier ne vise pas (« Vous êtes l'attributaire… »), et celui qui
+> a **déjà signé une autre part** de ce PV ne signe pas celle de son titulaire (« elle attend NOM… »). `signer`
+> (`role = CC`) admet l'intérimaire actif du CC désigné.
 >
 > **Champs `PvExamenDto` ajoutés** : `viseParInterim` (booléen), `noteInterimNom`, `noteInterimDisponible`
 > — ce dernier distinct du premier : le drapeau dit « ce visa était un intérim », l'autre dit « le document
@@ -6611,6 +6785,11 @@ toujours **huit** lignes. Ce qui ne s'y règle pas ne s'y lit pas non plus.
 > normalement — le passage manque alors à la chaîne. Une violation imprévisible (panne de base) fait en
 > revanche échouer le geste : l'écriture rejoint sa transaction. `imActeur` admet un identifiant PRMP de
 > 10 caractères (`V29`).
+
+> ⚠️ **Intérim désigné (2026-09-21)** — chaque passage porte `interimDe` (matricule du titulaire au nom duquel
+> l'acteur a tenu l'étape) et `idInterim`, `null` hors intérim ; `imActeur` reste l'intérimaire (celui qui a agi),
+> `profil` le profil du **titulaire** (celui sous lequel l'étape a été tenue). Masqués pour la PRMP et l'UGPM, comme
+> l'acteur. L'étape en cours n'en porte jamais.
 
 **`PassageEtapeDto`** = `{etape, occurrence, imActeur, nomActeur, profil, entree, fin,
 dureeHeuresOuvrees, enCours}`. `entree`/`fin` sont horodatés **à la seconde** ; `dureeHeuresOuvrees` est

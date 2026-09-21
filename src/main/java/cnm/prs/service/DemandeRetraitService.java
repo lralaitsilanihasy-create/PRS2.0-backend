@@ -395,13 +395,21 @@ public class DemandeRetraitService {
     /** Décision réservée au CC de la localité du dossier OU au Président (rôle↔localité dans le service). */
     private void exigerDecideur(DemandeRetrait demande) {
         ProfilUtilisateur profil = CurrentUser.profil().orElse(null);
-        // La localité du dossier n'est lue que pour le CC, seul profil qu'elle départage.
-        String localiteDossier = profil != ProfilUtilisateur.CHEF_COMMISSION ? null
+        // La localité du dossier n'est lue que si un CC — le connecté ou un titulaire qu'il supplée — la départage.
+        boolean ccEnJeu = profil == ProfilUtilisateur.CHEF_COMMISSION || cnm.prs.security.InterimContexte.suppleances()
+                .stream().anyMatch(s -> s.profilTitulaire() == ProfilUtilisateur.CHEF_COMMISSION);
+        String localiteDossier = !ccEnJeu ? null
                 : dossierRepository.findById(demande.getIdDossier()).map(Dossier::getIdLocalite).orElse(null);
         String localiteActeur = CurrentUser.localite().filter(s -> !s.isBlank()).orElse(null);
         // ⚠️ 2026-09-14 — la condition est un prédicat partagé (PredicatsIdentite).
         if (PredicatsIdentite.peutDeciderRetrait(profil, localiteActeur, localiteDossier)) {
             return;
+        }
+        // ⚠️ 2026-09-21 — ou son intérimaire actif, au profil et sur le périmètre du titulaire (§B4.1).
+        for (cnm.prs.security.Suppleance s : cnm.prs.security.InterimContexte.suppleances()) {
+            if (PredicatsIdentite.peutDeciderRetrait(s.profilTitulaire(), s.localiteTitulaire(), localiteDossier)) {
+                return;
+            }
         }
         throw new AccessDeniedException("Décision réservée au CC de la localité du dossier ou au Président (§3.3).");
     }

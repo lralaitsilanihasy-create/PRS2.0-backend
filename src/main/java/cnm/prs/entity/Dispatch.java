@@ -56,6 +56,15 @@ public class Dispatch {
     @Column(name = "INTERIM_DISPATCH", nullable = false)
     private Boolean interimDispatch;
 
+    /**
+     * ⚠️ Intérim désigné (V34, 2026-09-21) — non nul quand le dispatch (ou la réattribution) a été posé par
+     * un intérimaire désigné ({@code t_interim}). {@code imCtrlDispatch} porte alors le <strong>titulaire</strong>,
+     * pas l'intérimaire (ADR-0008) : c'est le dispatcheur que l'aval reconnaît — visa, retrait, discriminant
+     * de la navette à deux niveaux. Distinct d'{@code interimDispatch}, le repli ponctuel sans désignation.
+     */
+    @Column(name = "ID_INTERIM")
+    private Integer idInterim;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ID_RECEPTION", insertable = false, updatable = false)
     @JsonIgnore

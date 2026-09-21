@@ -114,6 +114,18 @@ public class JournalDossierService {
      */
     @Transactional
     public void tracerControleur(Integer idDossier, String typeAction, String detail) {
+        tracerControleur(idDossier, typeAction, detail, null);
+    }
+
+    /**
+     * ⚠️ Intérim désigné (2026-09-21, §B4.8) — même consignation, le geste étant posé <strong>par intérim</strong>
+     * d'un titulaire : l'auteur et le nom restent ceux de l'intérimaire (celui qui a agi), la ligne porte
+     * {@code interimDe} / {@code idInterim}, et le détail s'achève par « — par intérim de NOM » pour rester
+     * lisible tel quel (« Dispatché par Y, par intérim de X »). {@code null} = pas d'intérim.
+     */
+    @Transactional
+    public void tracerControleur(Integer idDossier, String typeAction, String detail,
+            cnm.prs.security.Suppleance suppleance) {
         String im = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
         ActionDossier action = new ActionDossier();
         action.setIdDossier(idDossier);
@@ -123,7 +135,13 @@ public class JournalDossierService {
         action.setIdMandatOperateur(null);
         action.setNomOperateur(nomControleur(im));
         action.setAuteur(CurrentUser.login().orElse(im));
-        action.setDetail(tronquer(detail, 500));
+        String texte = detail;
+        if (suppleance != null) {
+            texte = (detail == null ? "" : detail) + " — par intérim de " + suppleance.nomTitulaire();
+            action.setInterimDe(suppleance.imTitulaire());
+            action.setIdInterim(suppleance.idInterim());
+        }
+        action.setDetail(tronquer(texte, 500));
         repository.save(action);
     }
 
@@ -262,6 +280,8 @@ public class JournalDossierService {
             action.setNomOperateur(e.getNomOperateur());
             action.setAuteur(e.getAuteur());
             action.setDetail(tronquer(e.getDetail(), 500));
+            action.setInterimDe(e.getInterimDe());
+            action.setIdInterim(e.getIdInterim());
             repository.save(action);
         }
     }
@@ -297,6 +317,8 @@ public class JournalDossierService {
         dto.setAuteur(entity.getAuteur());
         dto.setIdMandatOperateur(entity.getIdMandatOperateur());
         dto.setDetail(entity.getDetail());
+        dto.setInterimDe(entity.getInterimDe());
+        dto.setIdInterim(entity.getIdInterim());
         return dto;
     }
 }

@@ -405,8 +405,10 @@ class GestesDossierIntegrationTest extends CnmIntegrationTestSupport {
         // Valeurs mesurées (2026-09-15) : celles de l'accueil (12 CNM, 13 Vérificateur, 14 Assistant, 7 PRMP), plus
         // la garde de visibilité (aucune requête pour le Président) ; la ligne du dossier remplace la lecture du
         // périmètre et sert de test d'existence. Une hausse n'est pas une faute en soi, mais elle doit être voulue.
-        assertThat(mesures).containsExactly(Map.entry("PRESIDENT", 12L), Map.entry("CHEF_COMMISSION", 13L),
-                Map.entry("SECRETAIRE", 13L), Map.entry("MEMBRE", 13L), Map.entry("VERIFICATEUR", 14L),
+        // ⚠️ 2026-09-21 (intérim désigné) : +1 pour le Chef de commission et le Membre, les deux seuls profils qui
+        // peuvent être intérimaires — leurs suppléances actives sont lues une fois par requête (contexte d'intérim).
+        assertThat(mesures).containsExactly(Map.entry("PRESIDENT", 12L), Map.entry("CHEF_COMMISSION", 14L),
+                Map.entry("SECRETAIRE", 13L), Map.entry("MEMBRE", 14L), Map.entry("VERIFICATEUR", 14L),
                 Map.entry("ASSISTANT_CONTROLEUR", 15L), Map.entry("PRMP", 8L), Map.entry("UGPM", 8L));
 
         // Et le calcul a bien porté sur des dossiers qui servent des lignes.
@@ -414,11 +416,12 @@ class GestesDossierIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(JsonPath.<List<String>>read(gestes(tokenAss, 7602), "$.taches[*].geste"))
                 .containsExactly("ARCHIVER_PV", "ARCHIVER_LETTRE");
 
-        // Statut terminal : rien n'est calculé — la ligne du dossier et la garde de visibilité (aucune pour le Président).
+        // Statut terminal : rien n'est calculé — la ligne du dossier et la garde de visibilité (aucune pour le Président),
+        // plus le contexte d'intérim pour le Chef de commission et le Membre (2026-09-21) : trois au plus.
         circuitDispatche(7610, "CLOTURE", "ANT", "CTRPRE", "CTRMEM");
         assertThat(ordresSql(tokenPresident, 7610)).isEqualTo(1);
         for (String jeton : jetons.values()) {
-            assertThat(ordresSql(jeton, 7610)).isLessThanOrEqualTo(2);
+            assertThat(ordresSql(jeton, 7610)).isLessThanOrEqualTo(3);
         }
     }
 

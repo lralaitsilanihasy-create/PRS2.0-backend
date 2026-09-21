@@ -56,6 +56,11 @@ public record AFaireDto(
     /**
      * Une ligne : clé ({@code dossier.idDossier}, {@code section}). Un même dossier peut produire deux lignes pour
      * une même personne (un retrait et un visa, par exemple).
+     *
+     * <p>⚠️ Intérim désigné (2026-09-21, §B4.6) — sur une ligne {@code mode = INTERIM} servie à un intérimaire
+     * désigné : {@code interimDe} (matricule du titulaire dont c'est la tâche) et {@code idInterim} sont
+     * renseignés ; {@code idInterim} nul avec {@code mode = INTERIM} désigne le visa par intérim
+     * <em>ponctuel</em> (note PDF), qui portait déjà ce mode. {@code null} sur toute autre ligne.</p>
      */
     public record Tache(
             String section,
@@ -67,7 +72,9 @@ public record AFaireDto(
             Dossier dossier,
             Delai delai,
             Faits faits,
-            Refs refs) {
+            Refs refs,
+            String interimDe,
+            Integer idInterim) {
     }
 
     /**

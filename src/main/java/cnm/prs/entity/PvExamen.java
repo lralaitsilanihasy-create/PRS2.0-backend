@@ -126,6 +126,18 @@ public class PvExamen {
     private Long noteInterimTaille;
 
     /**
+     * ⚠️ Intérim désigné (V34, 2026-09-21) — visa posé par un intérimaire <strong>désigné</strong>
+     * ({@code t_interim}) : {@code viseParInterim} est alors vrai et la note reste nulle, la désignation
+     * étant la justification. Nul pour le visa par intérim ponctuel de V11 comme pour un visa normal.
+     */
+    @Column(name = "ID_INTERIM")
+    private Integer idInterim;
+
+    /** Le titulaire suppléé au visa (dispatcheur, ou Président sur deux niveaux) ; nul hors intérim désigné. */
+    @Column(name = "INTERIM_DE", length = 10)
+    private String interimDe;
+
+    /**
      * ⚠️ <strong>Navette à deux niveaux</strong> (spec pilote du 2026-09-04) — étage courant du projet
      * dans la navette Président ↔ CC ↔ Membre : {@code CC}, {@code PRESIDENT}, ou {@code null}.
      *

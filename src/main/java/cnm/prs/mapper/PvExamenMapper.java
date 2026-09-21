@@ -46,6 +46,9 @@ public final class PvExamenMapper {
         dto.setViseParInterim(Boolean.TRUE.equals(entity.getViseParInterim()));
         dto.setNoteInterimNom(entity.getNoteInterimNom());
         dto.setNoteInterimDisponible(entity.getNoteInterim() != null && entity.getNoteInterim().length > 0);
+        // ⚠️ Intérim désigné (2026-09-21) — l'intérim et le titulaire suppléé, lecture seule.
+        dto.setIdInterim(entity.getIdInterim());
+        dto.setInterimDe(entity.getInterimDe());
         dto.setDateArchivage(entity.getDateArchivage());
         dto.setImArchiveur(entity.getImArchiveur());
         dto.setVersion(entity.getVersion());   // ⚠️ verrou optimiste (docs/plan-conflit-version.md)

@@ -27,6 +27,9 @@ import java.time.LocalDateTime;
  * @param fin                fin de l'etape ; null pour l'etape EN COURS
  * @param dureeHeuresOuvrees fin − entree en heures ouvrees ; pour l'etape en cours, le temps deja ecoule
  * @param enCours            vrai pour l'etape ouverte du dossier (la seule sans fin)
+ * @param interimDe          ⚠️ interim designe (2026-09-21) : titulaire au nom duquel l'acteur a tenu
+ *                           l'etape ; null hors interim. Masque pour la PRMP et l'UGPM, comme l'acteur
+ * @param idInterim          identifiant de l'interim ; null hors interim
  */
 public record PassageEtapeDto(
         String etape,
@@ -37,5 +40,7 @@ public record PassageEtapeDto(
         LocalDateTime entree,
         LocalDateTime fin,
         long dureeHeuresOuvrees,
-        boolean enCours) {
+        boolean enCours,
+        String interimDe,
+        Integer idInterim) {
 }
