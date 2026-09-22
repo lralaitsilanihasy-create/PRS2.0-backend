@@ -52,6 +52,9 @@ class SchemaIndexFkIntegrationTest extends CnmIntegrationTestSupport {
             new IndexAttendu("t_echeance", "\"ID_DETAIL\""),
             new IndexAttendu("t_marche_prevision", "\"ID_DETAIL\""),
             new IndexAttendu("t_service_beneficiaire", "\"ID_DETAIL\""),
+            // ⚠️ Fiche marché DAO (2026-09-22, V35) : la fiche par DMC, ses valeurs par fiche.
+            new IndexAttendu("t_fiche_marche", "\"ID_DMC\""),
+            new IndexAttendu("t_fiche_marche_valeur", "\"ID_FICHE\""),
             // Destinataires.
             new IndexAttendu("t_notification", "\"DESTINATAIRE_REF\", \"DESTINATAIRE_TYPE\""),
             new IndexAttendu("t_message", "\"DESTINATAIRE_IM\""));

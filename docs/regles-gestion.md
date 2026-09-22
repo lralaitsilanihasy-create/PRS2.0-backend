@@ -414,6 +414,50 @@ Au-delà, **409** : on passe par « Modifier l'examen » ou par la navette.
 - Hors lot (Q2) : le réexamen après lettre de renvoi (`A_REEXAMINER`, PV `EN_RECTIFICATION`), scopé et lié à un PV
   existant.
 
+### Fiche marché d'un appel d'offres (DAO), lot 1 (demande front du 2026-09-22, esquisse du pilote)
+
+⚠️ **Le DAO se prépare dans PRS, il ne s'y importe pas.** L'esquisse du pilote (appel d'offres, fournitures,
+quantité fixe) décrit ~130 informations réparties en dix blocs, dont **22 viennent du PPM** et ne se ressaisissent
+jamais ; le fichier de correspondance est encore en évolution. D'où trois partis : un **référentiel serveur**
+dessine l'écran (comme la grille de contrôle depuis `points-ctrl`), la fiche est **une par DMC** et **versionnée**,
+et les informations du plan sont **relues à chaque lecture** (H7) — elles se corrigent dans le PPM, jamais dans la
+fiche. Contrat : `docs/api-endpoints.md`, § *Fiche marché d'un appel d'offres*.
+
+- **Qui prépare.** La création du DMC d'une ligne (`POST /api/dmcs/par-marche/{idDetail}`) s'ouvre à la **PRMP
+  propriétaire du plan et à son UGPM** (l'Administrateur garde son geste). Gardes **dans l'ordre, sans fuite** :
+  ligne inconnue (404) ; **périmètre** (403, *avant tout 409* — une PRMP étrangère n'apprend jamais si une ligne
+  porte déjà un DAO) ; **vacance de mandat** (409 `VACANCE_PRMP`, comme partout) ; puis **H4** en 409 à code stable :
+  ligne retirée, version du plan dépassée, mode non rattaché au type `DAO` (« à faire par l'Administrateur »), plan
+  sans PV signé favorable (`FAV`, ou `FAVR` une fois les réserves levées), DAO déjà existant sur la filiation.
+  `GET /api/dmcs/eligibles` liste les lignes qui passent ces gardes (les « déjà DAO » y restent, `dejaDao = true`).
+- **Le type `DAO`** est semé par migration (V35) ; **rattacher un mode de passation à ce type reste l'acte de
+  l'Administrateur** (Types de DMC). Sans rattachement, aucune ligne n'est éligible — c'est voulu.
+- **La ligne à travers les versions du plan (filiation).** Le DMC reste lié à l'`ID_DETAIL` de la ligne à sa
+  création. La **ligne courante** est celle de même `ID_LIGNE_ORIGINE` dans la **dernière version signée** de la
+  chaîne `REMPLACE` (même prédicat que H4 ; une mise à jour encore en instruction ne devient pas courante : les 22
+  informations ne changent pas sous les pieds de la fiche). Le `GET` sert les valeurs de cette ligne, son
+  identifiant, et signale une filiation **retirée** dans la version courante (avertissement, pas de blocage au lot
+  1). Préparer depuis une ligne d'une version dépassée est refusé ; `dejaDao` compte un DMC lié à un ancêtre.
+- **Le cadrage ferme des rubriques.** Dix questions (type de marché, allotissement, variantes, groupement,
+  provenance, type de prix, révision, garantie de soumission, avance, pénalités) ; chaque champ du référentiel peut
+  porter une **condition** sur ces réponses (`garantieSoumission = OUI`, `et`, `ou`). Condition fausse — ou clé sans
+  réponse — : le champ est **ignoré** à l'enregistrement et **absent du bilan**. Les réponses sont des codes
+  (`OUI`/`NON`, options) ; lot 1 : seul `QUANTITE_FIXE` est servi.
+- **Enregistrer n'est pas valider.** Un `PUT` de bloc remplace les valeurs du bloc, refuse en **400 nominatif** ce qui
+  est illisible (type, option, montant négatif, champ dérivé ou d'un autre bloc), mais **accepte un brouillon
+  incomplet** : l'obligatoire manquant est **bloquant au bilan**, pas à l'écriture. Le bilan (`OBLIGATOIRE`,
+  `MONTANT_POSITIF`, `DATES_ORDRE` avec repli sur les dates du plan, `VALIDITE_GARANTIE_SUP_OFFRE`, `AVANCE_MAX_20`
+  sur le **taux** — PRS n'a aucun montant TTC —, `AVANCE_SUP_5_GARANTIE`, `FORFAIT_60_40`, et trois avertissements)
+  se recalcule à chaque lecture. Une règle trouve ses champs par leur attribut `controle` (`REGLE:ROLE`) : tant que le
+  fichier de correspondance n'a pas livré un rôle, la règle **attend** (ni bloquante, ni satisfaite).
+- **Valider engage, réviser ouvre.** La **PRMP seule** valide (l'UGPM prépare, l'Administrateur administre) ; un
+  bloquant → 409. La version validée est **figée** (409 sur tout `PUT`) et relisible ; `reviser` ouvre la version
+  suivante en brouillon, copie de la validée. Journal du **dossier de planification** : `FICHE_MARCHE_VALIDEE`
+  (« DAO, version n, N information(s) »), rang d'un acte PRMP. Aucune notification, pas de chronométrage : le geste
+  précède la soumission (lot 2 : documents et jointure au dossier DMC).
+- **Montants en toutes lettres** : le convertisseur du dépôt plafonnait à 999 999 (et écrivait « quatre cents
+  mille ») ; étendu aux millions et milliards, pour la fiche comme pour les PV et lettres.
+
 ### Le Secrétaire de séance est retiré du cycle du PV (règle du pilote, 2026-09-02)
 
 ⚠️ **La notion disparaît, désignation comprise.** Depuis les **rattachements Membre → Vérificateur →

@@ -639,7 +639,7 @@ class ReferentielAdminIntegrationTest extends CnmIntegrationTestSupport {
     void changement_mode_redérive_type_si_a_preparer() throws Exception {
         Long idBc = typeDmcRepository.save(new cnm.prs.entity.TypeDmc(null, "BC", "Bon de Commande", true))
                 .getIdTypeDmc();
-        Long idDao = typeDmcRepository.save(new cnm.prs.entity.TypeDmc(null, "DAO", "Dossier d'Appel d'Offres", true))
+        Long idDao = typeDmcRepository.findByCode("DAO").orElseThrow()   // semé par V35 (fiche marché DAO)
                 .getIdTypeDmc();
         ModePassation m90 = new ModePassation(90, "Achat Direct", null, null, null, null);
         m90.setIdTypeDmc(idBc); modePassationRepository.save(m90);
@@ -688,7 +688,7 @@ class ReferentielAdminIntegrationTest extends CnmIntegrationTestSupport {
     @Test
     @DisplayName("DMC : POST /api/mode-passations dérive automatiquement le type de DMC du libellé (sinon fourni conservé / sinon null)")
     void mode_create_autoMap_typeDmc() throws Exception {
-        Long dao = typeDmcRepository.save(new cnm.prs.entity.TypeDmc(null, "DAO", "Dossier d'Appel d'Offres", true))
+        Long dao = typeDmcRepository.findByCode("DAO").orElseThrow()   // semé par V35 (fiche marché DAO)
                 .getIdTypeDmc();
         Long dc = typeDmcRepository.save(new cnm.prs.entity.TypeDmc(null, "DC", "Dossier de Consultation", true))
                 .getIdTypeDmc();

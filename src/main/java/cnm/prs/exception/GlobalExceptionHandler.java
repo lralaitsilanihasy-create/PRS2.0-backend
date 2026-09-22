@@ -60,7 +60,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(BusinessRuleException.class)
     public ResponseEntity<ErrorResponse> handleBusinessRule(BusinessRuleException ex, WebRequest request) {
-        return build(HttpStatus.CONFLICT, ex.getMessage(), request, null);
+        return build(HttpStatus.CONFLICT, ex.getMessage(), request, null, ex.getCode());
     }
 
     /**

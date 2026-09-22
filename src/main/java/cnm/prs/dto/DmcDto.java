@@ -23,4 +23,13 @@ public class DmcDto {
     private String reference;
     private String statut;
     private LocalDateTime dateCreation;
+
+    /**
+     * ⚠️ Fiche marché (2026-09-22, §B2) — sur la réponse de {@code POST /par-marche/{idDetail}} : les informations
+     * reprises de la ligne du PPM, clé = code du champ de source {@code PPM} (B01, B02), valeur telle qu'affichée,
+     * et {@code versionPpm} le numéro de version du plan lu. Relues, jamais stockées (H7). {@code null} ailleurs.
+     */
+    private java.util.Map<String, String> valeursPpm;
+
+    private Integer versionPpm;
 }

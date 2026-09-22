@@ -55,6 +55,12 @@ public class JournalDossierService {
      * détail = ce qui a été effacé. Aucune ligne si rien ne l'a été.
      */
     public static final String REINITIALISATION_EXAMEN = "REINITIALISATION_EXAMEN";
+    /**
+     * ⚠️ Fiche marché DAO (demande front du 2026-09-22, §B5) — la PRMP valide la fiche marché d'un appel d'offres
+     * préparé sur une ligne de ce dossier de planification : fiche figée et versionnée. Acte PRMP (opérateur =
+     * la PRMP en fonction), détail « DAO, version n, N informations ».
+     */
+    public static final String FICHE_MARCHE_VALIDEE = "FICHE_MARCHE_VALIDEE";
 
     private final ActionDossierRepository repository;
     private final PrmpRepository prmpRepository;

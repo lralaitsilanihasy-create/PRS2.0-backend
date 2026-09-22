@@ -6,7 +6,7 @@ import java.util.Locale;
 
 /**
  * Conversion de nombres entiers en toutes lettres (français) et d'une date en toutes lettres.
- * Couvre 0 à 999 999 (suffisant pour les jours de mois et les millésimes). Règles d'accord
+ * Couvre 0 aux milliards (⚠️ 2026-09-22 : étendu au-delà de 999 999 pour les montants). Règles d'accord
  * appliquées : « vingt et un », « quatre-vingts » (s seulement si exact), « cent(s) », « mille »
  * invariable.
  */
@@ -47,22 +47,54 @@ public final class NombreEnLettres {
         return jour + " " + mois;
     }
 
-    /** Entier en toutes lettres (0 à 999 999). */
+    /**
+     * Entier en toutes lettres.
+     *
+     * <p>⚠️ Fiche marché DAO (demande front du 2026-09-22, §B3) — étendu de 999 999 aux <strong>millions et
+     * milliards</strong> (les montants de marché en Ariary dépassent couramment le milliard) : « huit millions quatre
+     * cent mille », « un milliard deux cents millions ». Million et milliard sont des noms : ils s'accordent
+     * (« deux millions ») et le multiplicateur garde son « s » (« deux cents millions ») ; « mille » reste invariable.
+     * L'extension vaut pour tous les consommateurs (PV, lettres).</p>
+     */
     public static String cardinal(long n) {
         if (n < 0) {
             return "moins " + cardinal(-n);
+        }
+        if (n >= 1_000_000L) {
+            long milliards = n / 1_000_000_000L;
+            long millions = (n / 1_000_000L) % 1000;
+            long reste = n % 1_000_000L;
+            StringBuilder sb = new StringBuilder();
+            if (milliards > 0) {
+                sb.append(cardinal(milliards)).append(milliards > 1 ? " milliards" : " milliard");
+            }
+            if (millions > 0) {
+                if (sb.length() > 0) {
+                    sb.append(' ');
+                }
+                sb.append(centaines((int) millions)).append(millions > 1 ? " millions" : " million");
+            }
+            if (reste > 0) {
+                sb.append(' ').append(cardinal(reste));
+            }
+            return sb.toString();
         }
         if (n < 1000) {
             return centaines((int) n);
         }
         int milliers = (int) (n / 1000);
         int reste = (int) (n % 1000);
-        String tete = milliers == 1 ? "mille" : centaines(milliers) + " mille";
+        String tete = milliers == 1 ? "mille" : centaines(milliers, false) + " mille";   // « quatre cent mille » : pas de « s » devant mille
         return reste == 0 ? tete : tete + " " + centaines(reste);
     }
 
     /** 0 à 999. */
     private static String centaines(int n) {
+        return centaines(n, true);
+    }
+
+    /** 0 à 999 ; {@code terminal} faux quand un multiplicateur suit (« quatre cent mille », sans « s »). */
+    private static String centaines(int n, boolean terminal) {
         int c = n / 100;
         int r = n % 100;
         if (c == 0) {
@@ -70,9 +102,10 @@ public final class NombreEnLettres {
         }
         String tete = c == 1 ? "cent" : UNITES[c] + " cent";
         if (r == 0) {
-            return c > 1 ? tete + "s" : tete;   // « deux cents », mais « cent »
+            return c > 1 && terminal ? tete + "s" : tete;   // « deux cents », mais « cent » et « deux cent mille »
         }
-        return tete + " " + deux(r);
+        String texte = tete + " " + deux(r);
+        return !terminal && texte.endsWith("vingts") ? texte.substring(0, texte.length() - 1) : texte;   // « quatre-vingt mille »
     }
 
     /** 0 à 99. */

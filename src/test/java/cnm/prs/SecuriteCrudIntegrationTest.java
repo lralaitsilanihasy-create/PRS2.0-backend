@@ -648,9 +648,10 @@ class SecuriteCrudIntegrationTest extends AbstractIntegrationTest {
     // ------------------------------------------------------------------
 
     @Test
-    @DisplayName("DMC §1/§3.1 — création réservée à l'Administrateur ; lecture scopée au dossier de la ligne de marché")
+    @DisplayName("DMC §1/§3.1 — création : Administrateur, PRMP propriétaire (sous H4) ; PRMP étrangère et contrôleur 403 ; "
+            + "lecture scopée au dossier de la ligne de marché")
     void dmc_creationAdminEtLectureScopee() throws Exception {
-        TypeDmc type = typeDmcRepository.save(new TypeDmc(null, "DAO", "Dossier d'appel d'offres", true));
+        TypeDmc type = typeDmcRepository.findByCode("DAO").orElseThrow();   // semé par V35 (fiche marché DAO)
         DossierMec dmc = new DossierMec();
         dmc.setIdDetail(5101);   // ligne de marché du dossier 5001 (PRMP001)
         dmc.setIdTypeDmc(type.getIdTypeDmc());
@@ -658,8 +659,14 @@ class SecuriteCrudIntegrationTest extends AbstractIntegrationTest {
         dmc.setDateCreation(LocalDateTime.of(2026, 6, 1, 8, 0));
         dossierMecRepository.save(dmc);
 
-        // Création : Administrateur seul.
+        // ⚠️ Fiche marché DAO (demande front du 2026-09-22, §B2) — la création s'ouvre à la PRMP propriétaire et à
+        // son UGPM : le test change de sens, c'est la demande, pas une régression. La ligne 5102 est celle de
+        // PRMP002 (dossier 5002) : propriétaire → passe la garde de périmètre puis bute sur H4 (409 nominatif,
+        // ligne sans mode rattaché au type DAO) ; PRMP étrangère (PRMP001) → 403 AVANT tout 409 ; contrôleur → 403 (rôle).
         mvc.perform(post("/api/dmcs/par-marche/5102").header("Authorization", tokenPrmp2))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("MODE_NON_DAO"));
+        mvc.perform(post("/api/dmcs/par-marche/5102").header("Authorization", tokenPrmp1))
                 .andExpect(status().isForbidden());
         mvc.perform(post("/api/dmcs/par-marche/5102").header("Authorization", tokenMembre))
                 .andExpect(status().isForbidden());
