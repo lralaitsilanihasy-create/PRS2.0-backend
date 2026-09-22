@@ -458,6 +458,35 @@ fiche. Contrat : `docs/api-endpoints.md`, § *Fiche marché d'un appel d'offres*
 - **Montants en toutes lettres** : le convertisseur du dépôt plafonnait à 999 999 (et écrivait « quatre cents
   mille ») ; étendu aux millions et milliards, pour la fiche comme pour les PV et lettres.
 
+#### Le dossier soumis (lot 1b, demande front du 2026-09-23, arbitrage du pilote)
+
+⚠️ **La fiche produit le dossier.** Le dossier n° 100332 (DAO, six PDF joints à la main) ne disait rien de sa fiche
+et ne pouvait rien en dire : aucune colonne ne reliait les deux objets. Le lien est porté par le **dossier**
+(`t_dossier.ID_DMC`, V36) — objet du circuit, qui gagne un attribut comme il en a un pour son PPM — et non par le
+DMC, objet de préparation. **Unique** dans les deux sens ; **sous-type `DAO` seulement** (contrainte en base et garde
+de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM — lot 1b*.
+
+- **Un dossier ne naît que d'un contenu figé.** La PRMP — celle qui valide, pas l'UGPM — produit le dossier depuis une
+  fiche dont la **dernière version est validée** ; une révision ouverte bloque (`FICHE_NON_VALIDEE`) jusqu'à sa
+  validation. Une fiche qui a déjà produit un dossier le dit (`DOSSIER_EXISTANT`, avec son numéro, **avant** le statut
+  de la fiche : une révision ne cache pas le dossier existant). Créer le dossier dès la création de la fiche a été
+  écarté : une fiche abandonnée laisserait un brouillon vide.
+- **Rien n'est redemandé.** Entité contractante et localité viennent de la ligne courante du plan (mêmes règles que
+  les informations reprises du PPM) ; le dossier appartient à la **PRMP qui le produit** et fige son mandat
+  d'attribution, comme toute saisie — c'est aussi le titulaire du plan tant qu'aucun changement de PRMP n'a eu lieu.
+  Il naît en **brouillon**, journal `CREATION` puis `DOSSIER_CREE_DEPUIS_FICHE`. Ses pièces restent celles du
+  sous-type `DAO`, jointes à la main (lot 2 : le dossier d'appel d'offres complet généré depuis la fiche).
+- **Le rattachement est un secours**, pour les dossiers `DAO` créés à la main avant ce lot : PRMP ou UGPM
+  propriétaires, dossier **brouillon** (`DOSSIER_NON_BROUILLON` sinon : on ne change pas ce que la CNM a reçu), fiche
+  validée non liée. Il se défait tant que le dossier est brouillon (erreur de manipulation), journal
+  `FICHE_MARCHE_RATTACHEE` / `FICHE_MARCHE_DETACHEE`. La liste des fiches rattachables ne propose que les fiches
+  validées, non liées, du périmètre — vide pour une PRMP étrangère, jamais un 403.
+- **Ordre des gardes** : celui du lot 1 — inconnu (404), hors périmètre (403, avant tout 409), vacance de mandat, puis
+  les 409 à code stable.
+- **La Commission lit la fiche avec le dossier.** Le dossier lu à l'unité porte l'état réduit de sa fiche (version,
+  statut, informations saisies / attendues) ; le contrôleur qui lit le dossier lit sa fiche. **L'examen porte toujours
+  sur les pièces** ; les points de contrôle sur la fiche sont un lot ultérieur.
+
 ### Le Secrétaire de séance est retiré du cycle du PV (règle du pilote, 2026-09-02)
 
 ⚠️ **La notion disparaît, désignation comprise.** Depuis les **rattachements Membre → Vérificateur →

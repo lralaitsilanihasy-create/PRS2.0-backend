@@ -140,11 +140,10 @@ public class ValeursPpmService {
         v.put("ENTITE", entite == null ? null : entite.getLibelleEntite());
         v.put("ADRESSE", entite == null ? null : entite.getAdresse());
         v.put("MINISTERE", ministere(entite));
-        String idLocalite = dossier != null && dossier.getIdLocalite() != null ? dossier.getIdLocalite()
-                : ppm != null ? ppm.getIdLocalite() : null;
+        String idLocalite = localiteDe(dossier, ppm);
         v.put("LOCALITE", idLocalite == null ? null
                 : localiteRepository.findById(idLocalite).map(l -> l.getLibelleLocalite()).orElse(idLocalite));
-        String idPrmp = ppm != null && ppm.getIdPrmp() != null ? ppm.getIdPrmp() : dossier == null ? null : dossier.getIdPrmp();
+        String idPrmp = prmpDe(dossier, ppm);
         Prmp prmp = idPrmp == null ? null : prmpRepository.findById(idPrmp).orElse(null);
         v.put("PRMP", prmp == null ? idPrmp : nomComplet(prmp.getNomPrmp(), prmp.getPrenomsPrmp()));
         v.put("PRMP_EMAIL", prmp == null ? null : prmp.getEmailPrmp());
@@ -173,6 +172,37 @@ public class ValeursPpmService {
                 .map(l -> (l.getDesignationLot() == null ? "Lot " + l.getIdLot() : l.getDesignationLot())
                         + " : " + montant(l.getMontLot())).toList()));
         return new ValeursPpm(ligne, versionPpm, v, dates);
+    }
+
+    /**
+     * ⚠️ Fiche marché, lot 1b (2026-09-23, §B2) — l'en-tête d'un dossier produit depuis la fiche, <strong>en
+     * identifiants</strong> : entité contractante et localité de la ligne en vigueur, dérivées par les mêmes règles
+     * que {@code ENTITE} et {@code LOCALITE} de {@link #lire} (une seule définition). La PRMP n'y est pas : le
+     * dossier appartient à la PRMP qui le crée, comme toute saisie (mandat d'attribution figé à la création).
+     */
+    public record EnTete(Integer idEntiteContract, String idLocalite) {
+    }
+
+    public EnTete enTete(Integer idDetailDmc) {
+        Marche origine = marcheRepository.findById(idDetailDmc).orElse(null);
+        if (origine == null) {
+            return new EnTete(null, null);
+        }
+        Marche ligne = ligneEnVigueur(origine);
+        Dossier dossier = ligne.getIdDossier() == null ? null : dossierRepository.findById(ligne.getIdDossier()).orElse(null);
+        Ppm ppm = ligne.getIdPpm() == null ? null : ppmRepository.findById(ligne.getIdPpm()).orElse(null);
+        return new EnTete(dossier == null ? null : dossier.getIdEntiteContract(), localiteDe(dossier, ppm));
+    }
+
+    /** Localité de la ligne : celle de son dossier, à défaut celle du PPM. */
+    private static String localiteDe(Dossier dossier, Ppm ppm) {
+        return dossier != null && dossier.getIdLocalite() != null ? dossier.getIdLocalite()
+                : ppm != null ? ppm.getIdLocalite() : null;
+    }
+
+    /** PRMP de la ligne : celle du PPM, à défaut celle du dossier. */
+    private static String prmpDe(Dossier dossier, Ppm ppm) {
+        return ppm != null && ppm.getIdPrmp() != null ? ppm.getIdPrmp() : dossier == null ? null : dossier.getIdPrmp();
     }
 
     /** La ligne homologue de la dernière version effective du plan (voir l'en-tête). */

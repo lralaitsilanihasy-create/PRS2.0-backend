@@ -309,6 +309,13 @@ public interface DossierRepository extends JpaRepository<Dossier, Integer> {
     boolean existsVisiblePourPrmp(@Param("idDossier") Integer idDossier, @Param("idPrmp") String idPrmp);
 
     /**
+     * ⚠️ Fiche marché, lot 1b (2026-09-23, V36) — le dossier soumis que porte un DMC ({@code t_dossier.ID_DMC},
+     * unique) : vide tant que la fiche n'a produit ni rattaché aucun dossier.
+     */
+    @Query("select d.idDossier from Dossier d where d.idDmc = :idDmc")
+    Optional<Integer> findIdDossierByIdDmc(@Param("idDmc") Long idDmc);
+
+    /**
      * ⚠️ LOT 3a (2026-08-26) — §1 : identifiants des dossiers visibles d'une localité, projection de
      * {@link #findVisiblesParLocalite} sur la seule PK. Sert à scoper les ressources
      * <strong>enfants</strong> d'un dossier (lots, prévisions, échéances…) dont la table ne porte pas

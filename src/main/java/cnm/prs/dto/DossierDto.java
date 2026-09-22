@@ -174,6 +174,23 @@ public class DossierDto {
      */
     private Boolean attentePrmp = Boolean.FALSE;
 
+    /**
+     * ⚠️ Fiche marché (demande front du 2026-09-23, lot 1b, §B1) — le DMC dont la fiche marché a produit ce
+     * dossier, ou auquel il a été rattaché ; {@code null} sinon. Servi sur toutes les lectures (colonne de
+     * l'entité). Lecture seule : il ne s'écrit que par {@code POST /api/fiches-marche/{idDmc}/dossier} et
+     * {@code PUT|DELETE /api/dossiers/{id}/fiche-marche}.
+     */
+    private Long idDmc;
+
+    /**
+     * ⚠️ Fiche marché (2026-09-23, §B1) — l'état de la fiche liée, de quoi l'afficher sans second appel.
+     * Servi sur la <strong>lecture unitaire</strong> ({@code GET /api/dossiers/{id}} et les réponses des gestes
+     * sur un dossier) ; absent si {@link #idDmc} est nul, et sur les listes (qui portent {@code idDmc} seul :
+     * le résumé relit le plan et recalcule le bilan, ce qu'une liste ne paie pas).
+     */
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    private FicheMarcheResumeDto ficheMarche;
+
     /** ⚠️ Chronométrage (2026-09-01) — étape ouverte du circuit ; {@code null} si aucune tâche CNM ne court. */
     @Size(max = 30)
     private String etapeCourante;

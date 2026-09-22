@@ -55,6 +55,8 @@ class SchemaIndexFkIntegrationTest extends CnmIntegrationTestSupport {
             // ⚠️ Fiche marché DAO (2026-09-22, V35) : la fiche par DMC, ses valeurs par fiche.
             new IndexAttendu("t_fiche_marche", "\"ID_DMC\""),
             new IndexAttendu("t_fiche_marche_valeur", "\"ID_FICHE\""),
+            // ⚠️ Lot 1b (2026-09-23, V36) : le dossier soumis d'un DMC (index de l'unicité).
+            new IndexAttendu("t_dossier", "\"ID_DMC\""),
             // Destinataires.
             new IndexAttendu("t_notification", "\"DESTINATAIRE_REF\", \"DESTINATAIRE_TYPE\""),
             new IndexAttendu("t_message", "\"DESTINATAIRE_IM\""));

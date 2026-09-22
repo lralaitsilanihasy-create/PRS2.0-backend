@@ -2,19 +2,26 @@ package cnm.prs.controller;
 
 import java.util.List;
 
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import cnm.prs.dto.BilanControlesDto;
 import cnm.prs.dto.BlocValeursRequest;
 import cnm.prs.dto.CadrageRequest;
+import cnm.prs.dto.DossierDto;
 import cnm.prs.dto.FicheMarcheDto;
+import cnm.prs.dto.FicheRattachableDto;
 import cnm.prs.dto.VersionFicheDto;
+import cnm.prs.service.FicheMarcheDossierService;
 import cnm.prs.service.FicheMarcheService;
 import jakarta.validation.Valid;
 
@@ -22,15 +29,31 @@ import jakarta.validation.Valid;
  * ⚠️ Fiche marché d'un appel d'offres (demande front du 2026-09-22, §B3 à §B5) — ressource {@code fiches-marche},
  * adressée par le <strong>DMC</strong>. Lecture au périmètre du dossier ; écriture PRMP / UGPM propriétaires et
  * Administrateur ; validation PRMP seule (gardes dans {@link FicheMarcheService}).
+ *
+ * <p>⚠️ Lot 1b (demande front du 2026-09-23) — la fiche <strong>produit le dossier</strong> soumis à la CNM
+ * ({@code POST /{idDmc}/dossier}, PRMP seule) ; {@code GET /rattachables} sert les fiches validées sans dossier, pour
+ * le rattachement de secours ({@code PUT /api/dossiers/{id}/fiche-marche}). Gardes dans {@link FicheMarcheDossierService}.</p>
  */
 @RestController
 @RequestMapping("/api/fiches-marche")
 public class FicheMarcheController {
 
     private final FicheMarcheService service;
+    private final FicheMarcheDossierService dossiers;
 
-    public FicheMarcheController(FicheMarcheService service) {
+    public FicheMarcheController(FicheMarcheService service, FicheMarcheDossierService dossiers) {
         this.service = service;
+        this.dossiers = dossiers;
+    }
+
+    /**
+     * Les fiches rattachables (dernière version validée, DMC sans dossier) du périmètre de l'appelant ; avec
+     * {@code idDossier}, liste vide si ce dossier ne lui est pas visible. Chemin littéral déclaré avant {@code /{idDmc}}.
+     */
+    @PreAuthorize("hasAnyRole('PRMP', 'UGPM')")
+    @GetMapping("/rattachables")
+    public List<FicheRattachableDto> rattachables(@RequestParam(required = false) Integer idDossier) {
+        return dossiers.rattachables(idDossier);
     }
 
     /** La dernière version (virtuelle avant le premier enregistrement). */
@@ -68,6 +91,17 @@ public class FicheMarcheController {
     @PostMapping("/{idDmc}/reviser")
     public FicheMarcheDto reviser(@PathVariable Long idDmc) {
         return service.reviser(idDmc);
+    }
+
+    /**
+     * Produit le dossier {@code DMC} / {@code DAO} soumis à la CNM depuis la fiche validée (PRMP seule) : 201 et le
+     * {@code DossierDto} créé, en brouillon ; 409 {@code FICHE_NON_VALIDEE}, {@code DOSSIER_EXISTANT} (avec
+     * {@code idDossier}), {@code DMC_NON_DAO}.
+     */
+    @PreAuthorize("hasRole('PRMP')")
+    @PostMapping("/{idDmc}/dossier")
+    public ResponseEntity<DossierDto> creerDossier(@PathVariable Long idDmc) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(dossiers.creerDossier(idDmc));
     }
 
     /** Les versions validées, de la première à la dernière. */

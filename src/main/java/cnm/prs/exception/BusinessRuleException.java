@@ -20,11 +20,27 @@ public class BusinessRuleException extends RuntimeException {
      * demande, sans introduire une seconde forme de corps d'erreur ({@code erreurs[]} reste réservé au 400).
      */
     public BusinessRuleException(String message, String code) {
+        this(message, code, null);
+    }
+
+    /**
+     * ⚠️ Fiche marché, lot 1b (2026-09-23) — 409 à code stable qui <strong>désigne un dossier</strong>
+     * ({@code DOSSIER_EXISTANT}, {@code FICHE_DEJA_LIEE}) : {@code idDossier} passe dans le corps d'erreur.
+     */
+    public BusinessRuleException(String message, String code, Integer idDossier) {
         super(message);
         this.code = code;
+        this.idDossier = idDossier;
     }
+
+    /** Dossier en cause, ou {@code null}. */
+    private final Integer idDossier;
 
     public String getCode() {
         return code;
+    }
+
+    public Integer getIdDossier() {
+        return idDossier;
     }
 }

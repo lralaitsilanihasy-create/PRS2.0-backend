@@ -71,4 +71,11 @@ public class FicheMarcheDto {
     private LocalDateTime dateValidation;
 
     private String validePar;
+
+    /**
+     * ⚠️ Fiche marché, lot 1b (2026-09-23, §B1) — le dossier <strong>soumis à la CNM</strong> que cette fiche a
+     * produit ou auquel elle est rattachée ({@code t_dossier.ID_DMC}) ; {@code null} tant qu'il n'existe pas.
+     * Distinct de {@link #idDossier}, qui reste le dossier de <em>planification</em> de la ligne (contrat du 22/09).
+     */
+    private Integer idDossierSoumis;
 }

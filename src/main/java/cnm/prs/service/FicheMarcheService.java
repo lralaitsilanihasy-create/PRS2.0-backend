@@ -18,6 +18,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import cnm.prs.dto.BilanControlesDto;
 import cnm.prs.dto.FicheMarcheDto;
+import cnm.prs.dto.FicheMarcheResumeDto;
+import cnm.prs.dto.FicheRattachableDto;
 import cnm.prs.dto.VersionFicheDto;
 import cnm.prs.entity.ChampFicheMarche;
 import cnm.prs.entity.DossierMec;
@@ -75,6 +77,8 @@ public class FicheMarcheService {
     private final ChampFicheMarcheRepository champRepository;
     private final BlocFicheMarcheRepository blocRepository;
     private final DossierMecRepository dmcRepository;
+    /** ⚠️ Lot 1b (2026-09-23) — le dossier soumis que porte le DMC ({@code t_dossier.ID_DMC}). */
+    private final cnm.prs.repository.DossierRepository dossierRepository;
     private final MarcheRepository marcheRepository;
     private final TypeDmcRepository typeDmcRepository;
     private final PerimetreDossier perimetre;
@@ -87,7 +91,9 @@ public class FicheMarcheService {
             ChampFicheMarcheRepository champRepository, BlocFicheMarcheRepository blocRepository,
             DossierMecRepository dmcRepository, MarcheRepository marcheRepository, TypeDmcRepository typeDmcRepository,
             PerimetreDossier perimetre, ValeursPpmService valeursPpm, DossierIntegriteService dossierIntegrite,
-            JournalDossierService journal, ObjectMapper mapper) {
+            JournalDossierService journal, ObjectMapper mapper,
+            cnm.prs.repository.DossierRepository dossierRepository) {
+        this.dossierRepository = dossierRepository;
         this.ficheRepository = ficheRepository;
         this.valeurRepository = valeurRepository;
         this.champRepository = champRepository;
@@ -133,6 +139,46 @@ public class FicheMarcheService {
         FicheMarche fiche = ficheRepository.findByIdDmcAndNumeroVersion(idDmc, numero)
                 .orElseThrow(() -> new ResourceNotFoundException("Version " + numero + " introuvable pour le DMC " + idDmc + "."));
         return toDto(ctx, fiche);
+    }
+
+    /**
+     * ⚠️ Lot 1b (2026-09-23, §B1) — l'état réduit de la fiche d'un DMC, pour le bloc {@code ficheMarche} du dossier
+     * qui la porte. <strong>Sans contrôle de périmètre</strong> : n'est appelé que sur un dossier déjà lu par son
+     * lecteur, et la fiche se lit « au périmètre du dossier » (B4) — le contrôleur qui lit le dossier voit sa fiche.
+     */
+    @Transactional(readOnly = true)
+    public FicheMarcheResumeDto resume(Long idDmc) {
+        Contexte ctx = contexte(idDmc, false);
+        FicheMarche fiche = ficheRepository.findFirstByIdDmcOrderByNumeroVersionDesc(idDmc).orElseGet(() -> virtuelle(idDmc));
+        FicheMarcheDto d = toDto(ctx, fiche);
+        return new FicheMarcheResumeDto(idDmc, d.getIdDetail(), d.getRefeDossier(), d.getDesignationMarche(),
+                d.getTypeMarche(), d.getStatut(), d.getVersion(), d.getBilanControles().nbSaisis(),
+                d.getBilanControles().nbAttendus());
+    }
+
+    /**
+     * ⚠️ Lot 1b (2026-09-23, §B3) — les fiches que l'utilisateur courant peut rattacher à un dossier : dernière version
+     * {@code VALIDEE}, DMC sans dossier, ligne dans un plan de son périmètre. Le plus récent d'abord.
+     */
+    @Transactional(readOnly = true)
+    public List<FicheRattachableDto> rattachables() {
+        List<FicheRattachableDto> out = new ArrayList<>();
+        for (FicheMarche f : ficheRepository.findDernieresValideesSansDossier()) {
+            DossierMec dmc = dmcRepository.findById(f.getIdDmc()).orElse(null);
+            if (dmc == null) {
+                continue;
+            }
+            Integer idDossierPpm = marcheRepository.findIdDossierByIdDetail(dmc.getIdDetail()).orElse(null);
+            if (idDossierPpm == null || !perimetre.estVisible(idDossierPpm)) {
+                continue;
+            }
+            cnm.prs.entity.Marche ligne = marcheRepository.findById(dmc.getIdDetail()).map(valeursPpm::ligneEnVigueur).orElse(null);
+            String refe = ligne == null || ligne.getIdDossier() == null ? null
+                    : dossierRepository.findById(ligne.getIdDossier()).map(cnm.prs.entity.Dossier::getRefeDossier).orElse(null);
+            out.add(new FicheRattachableDto(f.getIdDmc(), dmc.getIdDetail(), refe,
+                    ligne == null ? null : ligne.getDesignationMarche(), f.getNumeroVersion(), f.getDateValidation()));
+        }
+        return out;
     }
 
     // ------------------------------------------------------------------ écritures
@@ -266,10 +312,17 @@ public class FicheMarcheService {
     }
 
     private Contexte contexte(Long idDmc) {
+        return contexte(idDmc, true);
+    }
+
+    /** {@code controlerPerimetre = false} : l'appelant a déjà vérifié un périmètre qui l'englobe (lot 1b). */
+    private Contexte contexte(Long idDmc, boolean controlerPerimetre) {
         DossierMec dmc = dmcRepository.findById(idDmc)
                 .orElseThrow(() -> new ResourceNotFoundException("DMC introuvable : " + idDmc));
         Integer idDossier = marcheRepository.findIdDossierByIdDetail(dmc.getIdDetail()).orElse(null);
-        perimetre.controler(idDossier);
+        if (controlerPerimetre) {
+            perimetre.controler(idDossier);
+        }
         TypeDmc type = typeDmcRepository.findById(dmc.getIdTypeDmc()).orElse(null);
         if (type == null || !"DAO".equalsIgnoreCase(type.getCode())) {
             throw new BusinessRuleException("Le DMC " + idDmc + " n'est pas un dossier d'appel d'offres ("
@@ -485,7 +538,8 @@ public class FicheMarcheService {
                 ppm.valeurs().get("DOSSIER_REFERENCE"), ppm.ligne() == null ? null : ppm.ligne().getDesignationMarche(),
                 fiche.getNumeroVersion(), fiche.getStatut(), typeMarche, cadrage, valeurs, enLettres, valeursCadrage,
                 valeursPpmParCode, ppm.versionPpm(), bilan, fiche.getDateCreation(), fiche.getDateMaj(),
-                fiche.getDateValidation(), fiche.getValidePar());
+                fiche.getDateValidation(), fiche.getValidePar(),
+                dossierRepository.findIdDossierByIdDmc(fiche.getIdDmc()).orElse(null));
     }
 
     private Map<String, Object> lireJson(String json) {

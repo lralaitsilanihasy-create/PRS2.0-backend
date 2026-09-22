@@ -32,4 +32,10 @@ public class DmcDto {
     private java.util.Map<String, String> valeursPpm;
 
     private Integer versionPpm;
+
+    /**
+     * ⚠️ Fiche marché, lot 1b (2026-09-23, §B1) — le dossier soumis à la CNM produit par la fiche de ce DMC, ou
+     * rattaché à elle ({@code t_dossier.ID_DMC}) ; {@code null} tant qu'il n'existe pas.
+     */
+    private Integer idDossierSoumis;
 }

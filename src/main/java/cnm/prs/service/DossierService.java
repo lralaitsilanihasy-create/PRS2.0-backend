@@ -151,6 +151,8 @@ public class DossierService {
     private final ChronometrageService chronometrage;
     /** ⚠️ Chronométrage des délais (2026-09-01) — référentiel lu une fois par liste. */
     private final DelaiStandardService delaiStandardService;
+    /** ⚠️ Fiche marché, lot 1b (2026-09-23) — le bloc {@code ficheMarche} de la lecture unitaire. */
+    private final FicheMarcheService ficheMarcheService;
 
     public DossierService(DossierRepository repository, PpmRepository ppmRepository,
             ControleurDirectory controleurDirectory, NotificationService notificationService,
@@ -173,7 +175,9 @@ public class DossierService {
             PieceDemandeRetraitRepository pieceDemandeRetraitRepository,
             ChronometrageService chronometrage, DelaiStandardService delaiStandardService,
             FicheJustificationsService ficheJustifications, RattachementService rattachementService,
-            ReceptionRepository receptionRepository, PreControlePpmService preControle) {
+            ReceptionRepository receptionRepository, PreControlePpmService preControle,
+            FicheMarcheService ficheMarcheService) {
+        this.ficheMarcheService = ficheMarcheService;
         this.preControle = preControle;
         this.receptionRepository = receptionRepository;
         this.rattachementService = rattachementService;
@@ -527,7 +531,15 @@ public class DossierService {
      */
     private DossierDto dto(Dossier entity) {
         DossierDto dto = DossierMapper.toDto(entity);
-        return dto == null ? null : enrichir(List.of(dto)).get(0);
+        if (dto == null) {
+            return null;
+        }
+        // ⚠️ Fiche marché, lot 1b (2026-09-23, §B1) — l'état de la fiche liée, sur la lecture unitaire seulement
+        // (le résumé relit le plan et recalcule le bilan) ; aucune requête pour un dossier sans ID_DMC.
+        if (entity.getIdDmc() != null) {
+            dto.setFicheMarche(ficheMarcheService.resume(entity.getIdDmc()));
+        }
+        return enrichir(List.of(dto)).get(0);
     }
 
     /**

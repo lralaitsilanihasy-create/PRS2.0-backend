@@ -115,6 +115,9 @@ public class JournalTraitementService {
     public static int rang(String typeAction) {
         return switch (typeAction == null ? "" : typeAction) {
             case JournalDossierService.CREATION -> 10;
+            // ⚠️ 2026-09-23 (fiche marché, lot 1b) — suit la CREATION du même instant, précède toute mise à jour.
+            case JournalDossierService.DOSSIER_CREE_DEPUIS_FICHE -> 11;
+            case JournalDossierService.FICHE_MARCHE_RATTACHEE, JournalDossierService.FICHE_MARCHE_DETACHEE -> 12;
             case JournalDossierService.MISE_A_JOUR -> 15;
             case JournalDossierService.SOUMISSION, JournalDossierService.RESOUMISSION -> 20;
             case DEMANDE_RETRAIT -> 22;

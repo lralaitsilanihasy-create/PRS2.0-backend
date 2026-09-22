@@ -167,7 +167,12 @@ cf. *Verrou optimiste — champ `version`* ci-dessous) et, ⚠️ 2026-09-22 (fi
 stable** de la création d'un DMC par la PRMP (`LIGNE_RETIREE`, `VERSION_DEPASSEE`, `MODE_NON_DAO`, `PV_NON_SIGNE`,
 `DAO_EXISTANT`) et de la fiche marché (`DMC_NON_DAO`, `FICHE_VIDE`, `FICHE_VALIDEE`, `BROUILLON_EN_COURS`,
 `CONTROLES_BLOQUANTS`, `CHAMP_EXISTANT`) — c'est la forme du « 409 nominatif » : un code, jamais un tableau
-`erreurs` (réservé au 400).
+`erreurs` (réservé au 400). ⚠️ 2026-09-23 (fiche marché, lot 1b) : `FICHE_NON_VALIDEE`, `DOSSIER_EXISTANT`,
+`DOSSIER_NON_BROUILLON`, `DOSSIER_NON_DAO`, `DOSSIER_DEJA_LIE`, `FICHE_DEJA_LIEE`.
+
+Un champ **`idDossier`** (number) s'ajoute enfin, ⚠️ 2026-09-23, aux 409 qui **désignent un dossier** vers lequel
+naviguer — `DOSSIER_EXISTANT` (le dossier déjà produit par la fiche) et `FICHE_DEJA_LIEE` (le dossier qui la porte) ;
+**omis** partout ailleurs.
 
 ### Détail des erreurs 400 / 403 / 409
 Récapitulatif des trois codes d'erreur « métier » les plus fréquents, leur signification et
@@ -1759,6 +1764,8 @@ Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `
 | imAssistantCible | string | — (réponse) | ⚠️ 2026-09-01 — matricule de l'**Assistant cible** pour l'archivage : le rattaché du Vérificateur ayant **effectivement transmis** à SIGMP, à défaut celui du Vérificateur cible. `null` en repli ; ⚠️ **2026-09-14 : `null` pour la PRMP et l'UGPM** (vues internes CNM) |
 | nomAssistantCible | string | — (réponse) | Nom lisible de l'Assistant cible ; `null` en repli |
 | version | number | Non | verrou optimiste (`@Version` JPA, ⚠️ 2026-08-27) — toujours renseigné en sortie ; en entrée de `PUT`, absent = comportement historique, périmé = **409** `CONFLIT_VERSION` (détail en tête de document, *Verrou optimiste — champ `version`*) |
+| idDmc | number | — (réponse) | ⚠️ **2026-09-23 (fiche marché, lot 1b)** — le DMC dont la fiche marché a **produit** ce dossier ou lui a été **rattachée** (`t_dossier.ID_DMC`, V36, unique, sous-type `DAO` seulement) ; `null` sinon. Servi **partout** (colonne de l'entité). Lecture seule : ignoré en entrée, il ne s'écrit que par les gestes de la section *Fiche marché → Le dossier soumis* |
+| ficheMarche | object | — (réponse) | ⚠️ **2026-09-23** — `FicheMarcheResumeDto` `{ idDmc, idDetail, refeDossierPpm, designationMarche, typeMarche, statut, version, nbSaisis, nbAttendus }` : l'état de la **dernière version** de la fiche liée, sans second appel. **Absent** du JSON si `idDmc` est nul, et **sur les listes** (servi par `GET /api/dossiers/{id}` et les réponses des gestes sur un dossier : le résumé relit le plan et recalcule le bilan, ce qu'une liste ne paie pas) |
 
 > ⚠️ **Auteur de la saisie (`creePar` / `soumisPar`) — ajouté 2026-08-19 (demande front).** Les deux colonnes
 > existaient en base (`t_dossier.CREE_PAR` / `SOUMIS_PAR`) mais n'étaient pas exposées. Elles portent un
@@ -1930,6 +1937,8 @@ Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `
 > | `ARCHIVAGE` | l'assistant clôt | — |
 > | `REINITIALISATION_EXAMEN` | ⚠️ **2026-09-21** — l'attributaire efface tout son brouillon d'examen (`POST /api/examens/{id}/reinitialiser`) ; ligne **consignée** (pas dérivée), rang 49 | « N point(s) et M pièce(s) effacés (K observation(s)) » |
 > | `FICHE_MARCHE_VALIDEE` | ⚠️ **2026-09-22** — la PRMP valide la fiche marché d'un appel d'offres préparé sur une ligne de ce **dossier de planification** (`POST /api/fiches-marche/{idDmc}/valider`) ; acte PRMP (opérateur = la PRMP en fonction), rang 27 | « DAO, version n, N information(s) » |
+> | `DOSSIER_CREE_DEPUIS_FICHE` | ⚠️ **2026-09-23** — sur le **dossier soumis** : il est né d'une fiche validée (`POST /api/fiches-marche/{idDmc}/dossier`), à la suite de sa `CREATION` du même instant ; rang 11 | « Fiche marché version n, N information(s) » |
+> | `FICHE_MARCHE_RATTACHEE` / `FICHE_MARCHE_DETACHEE` | ⚠️ **2026-09-23** — une fiche validée est rattachée en secours à ce dossier `DAO` brouillon, ou en est détachée (`PUT` / `DELETE /api/dossiers/{id}/fiche-marche`) ; actes PRMP / UGPM, rang 12 | « Fiche marché version n, N information(s) » / « Fiche marché du DMC n (ligne x) détachée » |
 > | `DEMANDE_RETRAIT` | ⚠️ **2026-09-07 (T1)** — la PRMP demande le retrait (à `dateDemande`, opérateur = la PRMP, `idPrmpOperateur` posé) | « Demande de retrait — motif : … » |
 > | `RETRAIT_ACCEPTE` | le CC / Président accepte (à `dateDecision`) — le dossier recule en BROUILLON | « Retrait accepté — {état d'avant} -> BROUILLON » (état relu dans le journal ; « retour en BROUILLON » s'il est inconnu) |
 > | `RETRAIT_REFUSE` | le CC / Président refuse (à `dateDecision`) | « Retrait refusé — {obsDecision} » |
@@ -4516,6 +4525,8 @@ pour le même marché → **409** `DAO_EXISTANT`. Au **changement de mode** d'un
 `reference` (nullable), `statut` (`A_PREPARER`/`ENGAGE`), `dateCreation` ; ⚠️ 2026-09-22 sur la réponse du `POST`
 seulement : `valeursPpm` (`{ code du champ PPM: texte }`, les 22 informations reprises de la ligne, mêmes clés que sur
 la fiche, cf. *Fiche marché*) et `versionPpm` (`t_ppm.NUM_MAJ`, **0** pour un plan initial) — `null` ailleurs.
+⚠️ 2026-09-23 (lot 1b) sur `GET /{id}` et `GET /par-marche/{idDetail}` : `idDossierSoumis`, le dossier soumis à la CNM
+que porte ce DMC (`t_dossier.ID_DMC`), `null` tant qu'il n'existe pas.
 
 **`LigneEligibleDto`** (⚠️ 2026-09-22) : `idDetail`, `idDossier`, `refeDossier`, `designationMarche`, `idMode`,
 `libelleMode`, `montEstim`, `dejaDao` (boolean, calculé **sur la filiation** : un DMC lié à un ancêtre compte),
@@ -4603,6 +4614,7 @@ l'Administrateur). Avant le premier enregistrement la fiche est **virtuelle** : 
 | valeursPpm, versionPpm | `{ code: string }` des champs `PPM` ouverts (22 clés : `ENTITE`, `ADRESSE`, `MINISTERE`, `LOCALITE`, `PRMP`, `PRMP_EMAIL`, `PRMP_TEL`, `PPM_REFERENCE`, `PPM_EXERCICE`, `PPM_VERSION`, `DOSSIER_REFERENCE`, `NATURE`, `MODE`, `MONTANT_ESTIMATIF`, `FINANCEMENT`, `BENEFICIAIRES`, `COMPTES`, `DATES_PREVISIONNELLES`, `OBJET`, `NB_LOTS_PPM`, `LOTS_DESIGNATION`, `LOTS_MONTANTS`), **relus à chaque lecture sur la ligne courante**, jamais stockés (H7) ; `versionPpm` = `NUM_MAJ` du plan lu, 0 pour un plan initial |
 | bilanControles | `BilanControlesDto`, recalculé à chaque lecture et à chaque `PUT` |
 | dateCreation, dateMaj, dateValidation, validePar | date-heures ISO ; `validePar` = `ID_PRMP` |
+| idDossierSoumis | ⚠️ **2026-09-23 (lot 1b)** — le dossier **soumis à la CNM** que la fiche a produit ou auquel elle est rattachée (`t_dossier.ID_DMC`) ; `null` tant qu'il n'existe pas. **Distinct de `idDossier`**, qui reste le dossier de *planification* de la ligne (contrat du 22/09) |
 
 **`BilanControlesDto`** : `{ bloquants, avertissements, ok: Controle[], nbSaisis, nbAttendus }`,
 `Controle = { regle, champs: code[], bloc, message }` — `nbAttendus` = champs `SAISIE` des rubriques **ouvertes**
@@ -4640,6 +4652,35 @@ erreur — et absent du bilan ; un obligatoire manquant n'est **pas** un 400 : i
 enregistre un brouillon incomplet, on ne le valide pas). Une version `VALIDEE` est **figée** (409 sur tout `PUT`) :
 `reviser` ouvre la suivante. Journal du dossier de planification à la validation : `FICHE_MARCHE_VALIDEE` ; aucune
 notification, pas de chronométrage (geste propre à la PRMP, avant soumission).
+
+### Le dossier soumis à la CNM — lot 1b ⚠️ 2026-09-23
+
+Demande front `frontend/docs/demande-backend-2026-09-23-fiche-marche-dossier.md` (constat du pilote sur le dossier
+n° 100332 ; arbitrage : **la fiche produit le dossier**, le rattachement d'un dossier existant reste un secours).
+Liaison : **`t_dossier.ID_DMC`** (V36) — nullable, **unique** (un DMC produit au plus un dossier, un dossier porte au
+plus une fiche), clé étrangère vers `t_dossier_mec`, `CHECK` : non nul ⇒ sous-type `DAO`. Lue sur le dossier
+(`DossierDto.idDmc`, `DossierDto.ficheMarche`), sur la fiche et sur le DMC (`idDossierSoumis`). Règles :
+`docs/regles-gestion.md`, § *Fiche marché → le dossier soumis*.
+
+**Gardes, dans l'ordre** (celui du lot 1) : 404 → **403** périmètre (*avant tout 409*) → **409 `VACANCE_PRMP`** → 409
+à code stable. « Fiche validée » = **dernière version `VALIDEE`** : une révision ouverte bloque la production et le
+rattachement jusqu'à sa validation.
+
+| Méthode | URL | Corps | Réponse | Statuts | Rôle |
+|---|---|---|---|---|---|
+| POST | /api/fiches-marche/{idDmc}/dossier | — | `DossierDto` créé (`BROUILLON`, famille `DMC`, sous-type `DAO`, `idDmc` et bloc `ficheMarche` posés) | 201 ; 403 (plan d'autrui, profil) ; 404 (DMC inconnu) ; 409 `VACANCE_PRMP`, `DMC_NON_DAO`, `DOSSIER_EXISTANT` (corps : **`idDossier`** du dossier déjà produit — testé *avant* le statut de la fiche), `FICHE_NON_VALIDEE` | **PRMP** (celle qui valide) |
+| GET | /api/fiches-marche/rattachables?idDossier= | — | `FicheRattachableDto[]` = `{ idDmc, idDetail, refeDossierPpm, designationMarche, version, dateValidation }` — dernière version `VALIDEE`, DMC sans dossier, plan du périmètre ; plus récente d'abord. `idDossier` (facultatif) : liste **vide** (200) si ce dossier n'existe pas ou n'est pas visible de l'appelant | 200, 403 (autres profils) | **PRMP**, **UGPM** |
+| PUT | /api/dossiers/{idDossier}/fiche-marche | `{ idDmc }` (`@NotNull`, 400 sinon) | `DossierDto` (bloc `ficheMarche`) | 200 (même fiche déjà liée : rien ne change) ; 403 (dossier d'autrui, plan hors périmètre) ; 404 ; 409 `VACANCE_PRMP`, `DOSSIER_NON_BROUILLON`, `DOSSIER_NON_DAO`, `DMC_NON_DAO`, `DOSSIER_DEJA_LIE`, `FICHE_DEJA_LIEE` (corps : **`idDossier`** qui la porte), `FICHE_NON_VALIDEE` | **PRMP**, **UGPM** propriétaires |
+| DELETE | /api/dossiers/{idDossier}/fiche-marche | — | `DossierDto` (sans `idDmc`) | 200 (dossier sans fiche : rien à faire, pas de journal) ; 403 ; 404 ; 409 `VACANCE_PRMP`, `DOSSIER_NON_BROUILLON` | **PRMP**, **UGPM** propriétaires |
+
+**En-tête du dossier produit** : entité contractante et localité **de la ligne courante du plan** (mêmes règles que
+`ENTITE` et `LOCALITE` de `valeursPpm` : l'entité du dossier de planification, la localité de ce dossier à défaut de
+celle du PPM) ; **PRMP = la PRMP qui produit** (propriétaire du dossier, mandat d'attribution figé à la création,
+comme toute saisie) ; pas d'exercice (`t_dossier` n'en porte pas). **Pièces attendues** : celles du sous-type `DAO`,
+inchangées, toutes à joindre à la main au lot 1b. **Journal** du nouveau dossier : `CREATION` puis
+`DOSSIER_CREE_DEPUIS_FICHE`. La **soumission** ne change pas. Un dossier soumis se lit par les contrôleurs de sa
+localité, bloc `ficheMarche` compris, et sa fiche par `GET /api/fiches-marche/{idDmc}` (périmètre du plan, déjà
+ouvert aux contrôleurs) ; l'examen porte toujours sur les pièces.
 
 ---
 

@@ -242,7 +242,7 @@ public class DmcService {
         DossierMec dmc = repository.findByIdDetail(idDetail)
                 .orElseThrow(() -> new ResourceNotFoundException("Aucun DMC pour la ligne de marché : " + idDetail));
         controlerVisibilite(dmc);
-        return DmcMapper.toDto(dmc);
+        return avecDossierSoumis(DmcMapper.toDto(dmc));
     }
 
     @Transactional(readOnly = true)
@@ -250,7 +250,13 @@ public class DmcService {
         DossierMec dmc = repository.findById(idDmc)
                 .orElseThrow(() -> new ResourceNotFoundException("DMC introuvable : " + idDmc));
         controlerVisibilite(dmc);
-        return DmcMapper.toDto(dmc);
+        return avecDossierSoumis(DmcMapper.toDto(dmc));
+    }
+
+    /** ⚠️ Lot 1b (2026-09-23, §B1) — le dossier soumis que porte ce DMC ({@code t_dossier.ID_DMC}), nul sinon. */
+    private DmcDto avecDossierSoumis(DmcDto dto) {
+        dto.setIdDossierSoumis(dossierRepository.findIdDossierByIdDmc(dto.getIdDmc()).orElse(null));
+        return dto;
     }
 
     /**

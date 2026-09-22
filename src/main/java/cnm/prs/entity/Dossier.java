@@ -107,6 +107,15 @@ public class Dossier {
     @Column(name = "ID_ENTITE_CONTRACT")
     private Integer idEntiteContract;
 
+    /**
+     * ⚠️ Fiche marché (demande front du 2026-09-23, lot 1b, V36) — le DMC dont la fiche marché a
+     * <strong>produit</strong> ce dossier ({@code POST /api/fiches-marche/{idDmc}/dossier}), ou auquel il a été
+     * <strong>rattaché</strong> en secours ({@code PUT /api/dossiers/{id}/fiche-marche}). Unique ; sous-type
+     * {@code DAO} seulement ; {@code null} pour tout autre dossier. Ne s'écrit que par ces deux gestes.
+     */
+    @Column(name = "ID_DMC", unique = true)
+    private Long idDmc;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ID_TYPE_DOSSIER", insertable = false, updatable = false)
     @JsonIgnore

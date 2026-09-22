@@ -61,6 +61,15 @@ public class JournalDossierService {
      * la PRMP en fonction), détail « DAO, version n, N informations ».
      */
     public static final String FICHE_MARCHE_VALIDEE = "FICHE_MARCHE_VALIDEE";
+    /**
+     * ⚠️ Fiche marché, lot 1b (demande front du 2026-09-23, §B2/§B3) — sur le <strong>dossier soumis</strong> (pas sur
+     * le plan) : il est né d'une fiche validée ({@code DOSSIER_CREE_DEPUIS_FICHE}, détail « fiche marché version n,
+     * N information(s) », à la suite de sa {@code CREATION}), une fiche lui a été rattachée en secours, ou détachée
+     * tant qu'il était brouillon. Actes PRMP / UGPM.
+     */
+    public static final String DOSSIER_CREE_DEPUIS_FICHE = "DOSSIER_CREE_DEPUIS_FICHE";
+    public static final String FICHE_MARCHE_RATTACHEE = "FICHE_MARCHE_RATTACHEE";
+    public static final String FICHE_MARCHE_DETACHEE = "FICHE_MARCHE_DETACHEE";
 
     private final ActionDossierRepository repository;
     private final PrmpRepository prmpRepository;

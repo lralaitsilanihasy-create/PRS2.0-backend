@@ -35,6 +35,9 @@ public final class DossierMapper {
         // ⚠️ 2026-09-06 (« Suivi des dossiers CNM ») — date de dépôt : une colonne de l'entité, donc servie
         // sur les listes sans aucune requête de plus. Lecture seule : toEntity ne la reprend jamais du DTO.
         dto.setDateSoumission(entity.getDateSoumission());
+        // ⚠️ 2026-09-23 (fiche marché, lot 1b) — colonne de l'entité, servie partout ; le bloc ficheMarche, lui,
+        // n'est résolu que sur la lecture unitaire (DossierService). Lecture seule : toEntity ne la reprend pas.
+        dto.setIdDmc(entity.getIdDmc());
         dto.setVersion(entity.getVersion());   // ⚠️ verrou optimiste (docs/plan-conflit-version.md)
         return dto;
     }

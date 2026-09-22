@@ -889,6 +889,25 @@ public class SaisieService {
      */
     private Dossier creerDossier(String famille, String sousType, String idLocalite, String idPrmp,
             Integer idEntiteContract) {
+        return creerDossier(famille, sousType, idLocalite, idPrmp, idEntiteContract, null);
+    }
+
+    /**
+     * ⚠️ Fiche marché, lot 1b (demande front du 2026-09-23, §B2) — le dossier {@code DMC} / {@code DAO} que produit
+     * une fiche marché <strong>validée</strong> : même création que « Créer dossier » (brouillon, PRMP courante,
+     * mandat d'attribution figé, journal {@code CREATION}), en-tête fourni par l'appelant (dérivé de la ligne du PPM)
+     * et {@code ID_DMC} posé dès l'insertion. Les gardes de la fiche sont à la charge de l'appelant.
+     */
+    public Dossier creerDossierDao(String idLocalite, Integer idEntiteContract, Long idDmc) {
+        SousTypeDossier sousType = sousTypeDossierRepository.findById(DmcService.TYPE_DAO)
+                .orElseThrow(() -> new BusinessRuleException("Sous-type de dossier « DAO » absent du référentiel "
+                        + "(/api/sous-type-dossiers) : aucun dossier ne peut être produit."));
+        return creerDossier(sousType.getIdTypeDossier(), sousType.getIdSousType(), idLocalite, prmpCourante(),
+                idEntiteContract, idDmc);
+    }
+
+    private Dossier creerDossier(String famille, String sousType, String idLocalite, String idPrmp,
+            Integer idEntiteContract, Long idDmc) {
         dossierIntegrite.exigerMandatActif();   // même garde (et même filtre de profil) que les éditions
         Dossier d = new Dossier();
         d.setIdDossier(dossierRepository.nextIdDossier().intValue());   // PK serveur (séquence)
@@ -898,6 +917,7 @@ public class SaisieService {
         d.setIdPrmp(idPrmp);   // périmètre = PRMP (pour une UGPM, sa PRMP de tutelle via CurrentUser.ref())
         d.setIdMandatAttrib(mandatService.idMandatCourant(idPrmp));   // figé une fois pour toutes
         d.setIdEntiteContract(idEntiteContract);
+        d.setIdDmc(idDmc);   // fiche marché (lot 1b) : null hors dossier produit par une fiche
         d.setStatut(StatutDossier.BROUILLON.name());
         // ⚠️ 2026-09-06 (V20, « Suivi des dossiers CNM ») — DATE_SOUMISSION n'est PLUS posée ici : elle
         // était écrite à la création du brouillon et servait donc une date de saisie sous un nom de
