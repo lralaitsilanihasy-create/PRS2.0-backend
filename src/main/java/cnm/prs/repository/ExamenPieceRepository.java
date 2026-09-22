@@ -43,6 +43,13 @@ public interface ExamenPieceRepository extends JpaRepository<ExamenPiece, Intege
     long compterDoublon(@Param("idExamen") Integer idExamen, @Param("idPiece") Integer idPiece,
             @Param("selfId") Integer selfId);
 
+    /** ⚠️ Réinitialisation d'un examen (2026-09-21) — tous les résultats de pièces d'UN examen, en un ordre SQL. */
+    @Modifying
+    @Query("delete from ExamenPiece ep where ep.idExamen = :idExamen")
+    int deleteParExamen(@Param("idExamen") Integer idExamen);
+
+    long countByIdExamen(Integer idExamen);
+
     /**
      * Purge (⚠️ règle ajoutée §3.3) — supprime les examens de pièces du circuit d'un dossier retiré
      * (via examen → dispatch → réception → dossier). À appeler <strong>avant</strong> les examens.

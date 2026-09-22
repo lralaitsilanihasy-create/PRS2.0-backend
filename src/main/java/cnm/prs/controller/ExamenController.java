@@ -73,4 +73,16 @@ public class ExamenController {
             @Valid @RequestBody ExamenSoumissionRequest req) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.soumettre(id, req));
     }
+
+    /**
+     * ⚠️ Règle ajoutée (demande front du 2026-09-21) — <strong>réinitialisation</strong> d'un examen en cours par
+     * son <strong>attributaire</strong> : tous les points, observations et pièces effacés d'un geste, la ligne
+     * d'examen conservée, le chronométrage intact. Sans corps. Réservé au brouillon jamais soumis (dossier
+     * {@code DISPATCHE}, aucun projet de PV) — 409 sinon ; 403 nominatif pour tout autre que l'attributaire.
+     */
+    @PreAuthorize("@perm.peutExercer('MEMBRE')")
+    @PostMapping("/{id}/reinitialiser")
+    public ExamenDto reinitialiser(@PathVariable Integer id) {
+        return service.reinitialiser(id);
+    }
 }

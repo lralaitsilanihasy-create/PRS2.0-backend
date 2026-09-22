@@ -49,6 +49,12 @@ public class JournalDossierService {
     public static final String RETRAIT_DISPATCH = "RETRAIT_DISPATCH";
     /** Réception enregistrée COMPLET : le dossier devient prêt à dispatcher. */
     public static final String RECEPTION = "RECEPTION";
+    /**
+     * ⚠️ Réinitialisation d'un examen en cours (demande front du 2026-09-21) — l'attributaire efface tous les
+     * points, observations et pièces de son brouillon d'examen, et recommence. Auteur = l'attributaire ;
+     * détail = ce qui a été effacé. Aucune ligne si rien ne l'a été.
+     */
+    public static final String REINITIALISATION_EXAMEN = "REINITIALISATION_EXAMEN";
 
     private final ActionDossierRepository repository;
     private final PrmpRepository prmpRepository;

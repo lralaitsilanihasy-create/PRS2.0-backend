@@ -1923,6 +1923,7 @@ Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `
 > | `DECISION_VERIFICATION` | passage de vérification | observations levées ou maintenues |
 > | `TRANSMISSION_SIGMP` | transmission de la décision | sens |
 > | `ARCHIVAGE` | l'assistant clôt | — |
+> | `REINITIALISATION_EXAMEN` | ⚠️ **2026-09-21** — l'attributaire efface tout son brouillon d'examen (`POST /api/examens/{id}/reinitialiser`) ; ligne **consignée** (pas dérivée), rang 49 | « N point(s) et M pièce(s) effacés (K observation(s)) » |
 > | `DEMANDE_RETRAIT` | ⚠️ **2026-09-07 (T1)** — la PRMP demande le retrait (à `dateDemande`, opérateur = la PRMP, `idPrmpOperateur` posé) | « Demande de retrait — motif : … » |
 > | `RETRAIT_ACCEPTE` | le CC / Président accepte (à `dateDecision`) — le dossier recule en BROUILLON | « Retrait accepté — {état d'avant} -> BROUILLON » (état relu dans le journal ; « retour en BROUILLON » s'il est inconnu) |
 > | `RETRAIT_REFUSE` | le CC / Président refuse (à `dateDecision`) | « Retrait refusé — {obsDecision} » |
@@ -3308,8 +3309,32 @@ les jalons naissent des flux internes (alertes J-7 / J-1), aucun profil métier 
 | PUT | /api/examens/{id} | `ExamenDto` | `ExamenDto` | 200, 400, 403, 404, 409 | MEMBRE (titulaire/délégué) |
 | DELETE | /api/examens/{id} | — | — | 204, 404 | ADMINISTRATEUR |
 | POST | /api/examens/{id}/soumettre | `ExamenSoumissionRequest` | `PvExamenDto` | 201, 400, 403, 404 | MEMBRE (titulaire/délégué) |
+| POST | /api/examens/{id}/reinitialiser | — | `ExamenDto` (examen vidé, `avisSuggere` nul) | 200, 401, 403, 404, 409 | ⚠️ **2026-09-21** — l'**attributaire courant** du dispatch, et lui seul |
 
 `{id}` = idExamen (number).
+
+> ⚠️ **Réinitialiser un examen en cours (demande front du 2026-09-21, question du pilote sur le dossier 00002).**
+> L'examen est un brouillon serveur que le Membre ne pouvait rien effacer d'un geste (les `DELETE` sont
+> réservés à l'Administrateur) ; la seule remise à zéro était le retrait du dispatch — geste d'un autre profil,
+> notification, redispatch, compteur d'étape remis à zéro. `POST /api/examens/{id}/reinitialiser`, sans corps :
+>
+> - **Accès** : l'**attributaire courant** du dispatch (`imCtrlMembre`, réattributions comprises), même règle que
+>   « seul l'assignataire examine » ; le P/CC attributaire par délégation (dispatché à lui-même) l'est ; le
+>   dispatcheur non attributaire et le CC en copie reçoivent un **403 nominatif** (« Réinitialisation réservée à
+>   l'attributaire (NOM Prénoms)… »). Anonyme → **401**, examen inexistant → **404**.
+> - **Préconditions** : dossier **`DISPATCHE`** (brouillon jamais soumis) **et** aucun projet de PV lié à l'examen
+>   — sinon **409 nominatif** (« L'examen a été soumis… passez par « Modifier l'examen » ou par la navette »).
+> - **Effet, en UNE transaction** : tous les `t_examen_detail` de l'examen (leurs `t_observation_controle` avec,
+>   cellules cibles V30 comprises) et tous les `t_examen_piece` sont supprimés — **trois ordres SQL bornés à
+>   l'examen**, jamais ligne à ligne (testé : le nombre d'ordres ne dépend pas du volume). La ligne `t_examen`
+>   est **conservée** (identifiant stable : le front la retrouve par `idDispatch` et repart à la première étape) ;
+>   `avisSuggere` redevient `null`.
+> - **Chronométrage inchangé** : l'occurrence `EXAMEN` en cours reste ouverte — on recommence l'examen, on ne
+>   revient pas au dispatch, le temps écoulé compte. **Pré-contrôle intact** : signalements et écartements portent
+>   sur le plan, pas sur l'examen (Q1). **Aucune notification** (Q3).
+> - **Journal** : une ligne `REINITIALISATION_EXAMEN` au nom de l'attributaire, détail « N point(s) et M pièce(s)
+>   effacés (K observation(s)) » ; rang de départage **49** (juste avant `SOUMISSION_EXAMEN`). **Aucune ligne si
+>   rien n'a été effacé** : un second appel sur un examen déjà vide rend 200, sans trace.
 
 > ⚠️ **Soumission de l'examen (règle MODIFIÉE 2026-08-01).** `POST /api/examens/{id}/soumettre` produit
 > **toujours un Projet de PV** (`PvExamenService`, `idPv` alloué serveur). Corps `ExamenSoumissionRequest`

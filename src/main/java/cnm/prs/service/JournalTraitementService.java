@@ -125,6 +125,8 @@ public class JournalTraitementService {
             case JournalDossierService.DISPATCH -> 40;
             case JournalDossierService.REATTRIBUTION, JournalDossierService.REPRISE -> 45;
             case JournalDossierService.RETRAIT_DISPATCH -> 47;
+            // ⚠️ 2026-09-21 — la réinitialisation précède la soumission qu'elle rend possible : juste avant elle.
+            case JournalDossierService.REINITIALISATION_EXAMEN -> 49;
             case SOUMISSION_EXAMEN -> 50;
             case RETOUR_RECTIFICATION -> 55;
             case TRANSMISSION_PRESIDENT -> 60;

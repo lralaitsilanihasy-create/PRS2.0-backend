@@ -387,6 +387,33 @@ l'authentification, pour les seuls profils qui peuvent être intérimaires (CC, 
 que toutes les gardes lisent — c'est ce qui donne la même réponse au périmètre de visibilité (77 points d'appel), à
 la garde centrale des permissions et aux gardes d'identité, sans requête par garde ni oubli.
 
+### Réinitialiser un examen en cours (demande front du 2026-09-21, question du pilote sur le dossier 00002)
+
+⚠️ **Le retour en arrière existait, la réinitialisation non.** L'examen est un **brouillon serveur** (un
+`t_examen` à la première validation, puis un `t_examen_detail` par ligne × point avec ses observations, un
+`t_examen_piece` par pièce) que le Membre **ne pouvait rien effacer d'un geste** : les suppressions sont réservées
+à l'Administrateur. Un examen entamé sur une mauvaise base se corrigeait ligne à ligne — ou par le **retrait du
+dispatch**, geste d'un autre profil, disproportionné, qui remet le compteur d'étape à zéro alors que le temps a
+réellement couru.
+
+**Règle.** L'**attributaire courant** du dispatch — et lui seul, comme pour l'examen lui-même (règle du
+2026-09-03 : ni le dispatcheur, ni le CC en copie ; le P/CC dispatché à lui-même l'est) — peut **réinitialiser**
+son examen tant que le dossier est **`DISPATCHE`** et qu'**aucun projet de PV** n'existe : brouillon jamais soumis.
+Au-delà, **409** : on passe par « Modifier l'examen » ou par la navette.
+
+- **En une transaction**, tous les points de contrôle, leurs observations (cellules cibles comprises) et tous les
+  résultats de pièces sont effacés ; la **ligne d'examen est conservée** (le front la retrouve par son dispatch et
+  repart à la première étape), l'avis suggéré redevient nul.
+- **Le chronométrage ne bouge pas** : l'occurrence `EXAMEN` en cours reste ouverte — on recommence l'examen, on
+  ne revient pas au dispatch, le temps déjà écoulé compte.
+- **Le pré-contrôle est intact** (Q1) : ses signalements et leurs écartements portent sur le plan, pas sur
+  l'examen, et se reprennent déjà un à un.
+- **Personne n'est notifié** (Q3) : geste propre à l'attributaire ; la **trace au journal**
+  (`REINITIALISATION_EXAMEN`, au nom de l'attributaire, avec ce qui a été effacé) suffit, le dispatcheur la lit
+  dans la consultation. **Aucune ligne si rien n'a été effacé.**
+- Hors lot (Q2) : le réexamen après lettre de renvoi (`A_REEXAMINER`, PV `EN_RECTIFICATION`), scopé et lié à un PV
+  existant.
+
 ### Le Secrétaire de séance est retiré du cycle du PV (règle du pilote, 2026-09-02)
 
 ⚠️ **La notion disparaît, désignation comprise.** Depuis les **rattachements Membre → Vérificateur →

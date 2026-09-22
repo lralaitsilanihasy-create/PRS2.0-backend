@@ -53,6 +53,16 @@ public interface ExamenDetailRepository extends JpaRepository<ExamenDetail, Inte
     List<Object[]> couplesEvalues(@Param("idExamen") Integer idExamen);
 
     /**
+     * ⚠️ Réinitialisation d'un examen (demande front du 2026-09-21) — toutes les lignes de grille d'UN examen,
+     * en un ordre SQL. À appeler <strong>après</strong> leurs observations, l'examen lui-même étant conservé.
+     */
+    @Modifying
+    @Query("delete from ExamenDetail ed where ed.idExamen = :idExamen")
+    int deleteParExamen(@Param("idExamen") Integer idExamen);
+
+    long countByIdExamen(Integer idExamen);
+
+    /**
      * Purge (⚠️ règle ajoutée §3.3) — supprime les lignes de grille des examens du circuit d'un dossier
      * retiré (via examen → dispatch → réception → dossier). À appeler <strong>avant</strong> les examens.
      */

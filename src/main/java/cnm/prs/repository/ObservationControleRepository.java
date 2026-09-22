@@ -40,6 +40,21 @@ public interface ObservationControleRepository extends JpaRepository<Observation
     void deleteByIdDetail(Integer idDetail);
 
     /**
+     * ⚠️ Réinitialisation d'un examen (demande front du 2026-09-21) — toutes les lignes d'observation de tous
+     * les points d'UN examen, en un ordre SQL (cellules cibles V30 comprises : ce sont des colonnes de la
+     * ligne). Feuille : à appeler avant {@code ExamenDetailRepository.deleteParExamen}.
+     */
+    @Modifying
+    @Query("delete from ObservationControle o where o.idDetail in "
+            + "(select ed.idDetailExamen from ExamenDetail ed where ed.idExamen = :idExamen)")
+    int deleteParExamen(@Param("idExamen") Integer idExamen);
+
+    /** Nombre de lignes d'observation d'un examen (annoncé au front avant la réinitialisation, et au journal). */
+    @Query("select count(o) from ObservationControle o where o.idDetail in "
+            + "(select ed.idDetailExamen from ExamenDetail ed where ed.idExamen = :idExamen)")
+    long countParExamen(@Param("idExamen") Integer idExamen);
+
+    /**
      * Purge (⚠️ règle ajoutée §3.3) — supprime les observations des lignes de grille d'un dossier retiré
      * (observation → détail d'examen → examen → dispatch → réception → dossier). Feuille : à appeler en
      * <strong>tout premier</strong>, avant les détails d'examen.

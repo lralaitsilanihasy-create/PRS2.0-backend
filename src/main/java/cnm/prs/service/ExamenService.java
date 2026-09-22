@@ -61,13 +61,28 @@ public class ExamenService {
     private final FicheJustificationsService ficheJustifications;
     /** ⚠️ 2026-09-10 — le périmètre d'examen : sur une mise à jour, seules les lignes changées. */
     private final PerimetreExamenService perimetreExamen;
+    /** ⚠️ 2026-09-21 — réinitialisation d'un examen : ce qu'elle efface, et la trace qu'elle laisse. */
+    private final cnm.prs.repository.ObservationControleRepository observationControleRepository;
+    private final cnm.prs.repository.ExamenPieceRepository examenPieceRepository;
+    private final cnm.prs.repository.PvExamenRepository pvExamenRepository;
+    private final cnm.prs.repository.ControleurRepository controleurRepository;
+    private final JournalDossierService journalDossier;
 
     public ExamenService(ExamenRepository repository, DispatchRepository dispatchRepository,
             DossierRepository dossierRepository, PvExamenService pvExamenService,
             ControleurDirectory controleurDirectory, PointsCtrlRepository pointsCtrlRepository,
             MarcheRepository marcheRepository, ExamenDetailRepository examenDetailRepository,
             ExamenGarde examenGarde, FicheJustificationsService ficheJustifications,
-            AgpmService agpmService, PerimetreExamenService perimetreExamen) {
+            AgpmService agpmService, PerimetreExamenService perimetreExamen,
+            cnm.prs.repository.ObservationControleRepository observationControleRepository,
+            cnm.prs.repository.ExamenPieceRepository examenPieceRepository,
+            cnm.prs.repository.PvExamenRepository pvExamenRepository,
+            cnm.prs.repository.ControleurRepository controleurRepository, JournalDossierService journalDossier) {
+        this.observationControleRepository = observationControleRepository;
+        this.examenPieceRepository = examenPieceRepository;
+        this.pvExamenRepository = pvExamenRepository;
+        this.controleurRepository = controleurRepository;
+        this.journalDossier = journalDossier;
         this.perimetreExamen = perimetreExamen;
         this.agpmService = agpmService;
         this.examenGarde = examenGarde;
@@ -418,6 +433,85 @@ public class ExamenService {
             throw new ResourceNotFoundException("Examen introuvable : " + id);
         }
         repository.deleteById(id);
+    }
+
+    /**
+     * ⚠️ <strong>Réinitialiser un examen en cours</strong> (demande front du 2026-09-21, question du pilote sur le
+     * dossier 00002 : « comment faire un retour en arrière ou une réinitialisation du contrôle »).
+     *
+     * <p><strong>Le constat.</strong> L'examen est un brouillon serveur que le Membre ne peut rien effacer d'un
+     * geste : les {@code DELETE} sont réservés à l'Administrateur, et la seule remise à zéro était le retrait du
+     * dispatch — geste d'un autre profil, notification, redispatch, et un compteur d'étape remis à zéro alors
+     * que le temps a couru. Un examen entamé sur une mauvaise base se corrigeait ligne à ligne.</p>
+     *
+     * <p><strong>Ce que le geste fait, en une transaction.</strong> Efface <em>tous</em> les points de contrôle
+     * de l'examen (leurs observations « Au lieu de / Lire » avec, cellules cibles comprises) et <em>tous</em> les
+     * résultats de pièces — trois ordres SQL bornés à l'examen, jamais ligne à ligne. <strong>Conserve</strong>
+     * la ligne {@code t_examen} : l'identifiant reste stable, le front la retrouve par {@code idDispatch} et
+     * repart à la première étape ; {@code avisSuggere} redevient nul de lui-même (plus rien à suggérer).</p>
+     *
+     * <p><strong>Ce qu'il ne touche pas.</strong> Le <strong>chronométrage</strong> : l'occurrence {@code EXAMEN}
+     * en cours reste ouverte — on recommence l'examen, on ne revient pas au dispatch, le temps déjà écoulé
+     * compte. Le <strong>pré-contrôle</strong> : ses signalements et leurs écartements portent sur le plan, pas
+     * sur l'examen, et se reprennent déjà un à un (arbitrage Q1). Personne n'est <strong>notifié</strong> : geste
+     * propre à l'attributaire, la trace au journal suffit (Q3).</p>
+     *
+     * <p><strong>Gardes, dans l'ordre.</strong> Examen inexistant → 404 ; localité ; <strong>attributaire
+     * courant</strong> du dispatch et lui seul (même règle que « seul l'assignataire examine », 2026-09-03 ; le
+     * P/CC attributaire par délégation l'est ; le dispatcheur non attributaire et le CC en copie reçoivent un
+     * <strong>403 nominatif</strong>) ; dossier {@code DISPATCHE} et aucun projet de PV lié → sinon
+     * <strong>409 nominatif</strong> (« L'examen a été soumis… »). Le journal reçoit une ligne
+     * {@code REINITIALISATION_EXAMEN} au nom de l'attributaire, avec ce qui a été effacé — <strong>aucune</strong>
+     * si rien ne l'a été (un second appel sur un examen vide rend 200, sans trace).</p>
+     */
+    public ExamenDto reinitialiser(Integer id) {
+        Examen examen = repository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Examen introuvable : " + id));
+        Visibilite.exigerLocalite(dispatchRepository.findLocaliteById(examen.getIdDispatch()));
+        String attributaire = dispatchRepository.findImCtrlMembreById(examen.getIdDispatch()).orElse(null);
+        String moi = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
+        if (!PredicatsIdentite.estAttributaire(moi, attributaire)) {
+            throw new AccessDeniedException("Réinitialisation réservée à l'attributaire (" + nomControleur(attributaire)
+                    + ") : c'est son brouillon d'examen — ni le dispatcheur, ni le Chef de commission en copie "
+                    + "ne le recommencent à sa place. Pour reprendre le dossier, retirez le dispatch.");
+        }
+        String statut = dossierRepository.findStatutByDispatch(examen.getIdDispatch()).orElse(null);
+        boolean projetDePv = pvExamenRepository.findFirstByIdExamenOrderByIdPvDesc(id).isPresent();
+        if (!StatutDossier.DISPATCHE.name().equals(statut) || projetDePv) {
+            throw new BusinessRuleException("L'examen a été soumis (dossier « " + statut + " »"
+                    + (projetDePv ? ", projet de PV créé" : "") + ") : la réinitialisation ne vaut que pour un brouillon "
+                    + "jamais soumis. Passez par « Modifier l'examen » ou par la navette.");
+        }
+
+        // Ce qui va être effacé, compté AVANT (pour le journal), puis trois ordres SQL bornés à l'examen, dans
+        // l'ordre des clés étrangères : observations (enfants des points), points, pièces.
+        long observations = observationControleRepository.countParExamen(id);
+        observationControleRepository.deleteParExamen(id);
+        int points = examenDetailRepository.deleteParExamen(id);
+        int pieces = examenPieceRepository.deleteParExamen(id);
+        if (points + pieces + observations > 0) {
+            Integer idDossier = dossierRepository.findIdDossierByDispatch(examen.getIdDispatch()).orElse(null);
+            if (idDossier != null) {
+                journalDossier.tracerControleur(idDossier, JournalDossierService.REINITIALISATION_EXAMEN,
+                        points + " point(s) et " + pieces + " pièce(s) effacés"
+                                + (observations > 0 ? " (" + observations + " observation(s))" : ""));
+            }
+            log.info("[CIRCUIT] examen reinitialise examen={} acteur={} points={} pieces={} observations={}",
+                    id, CurrentUser.login().orElse(null), points, pieces, observations);
+        }
+        ExamenDto dto = ExamenMapper.toDto(examen);
+        dto.setAvisSuggere(null);   // plus rien à suggérer : l'examen est vierge
+        return dto;
+    }
+
+    /** « NOM Prénoms » d'un contrôleur pour un refus nominatif ; repli sur le matricule. */
+    private String nomControleur(String im) {
+        if (im == null || im.isBlank()) {
+            return "non identifié";
+        }
+        return controleurRepository.findById(im)
+                .map(c -> ActeurDirectory.nomCanonique(c.getNomCont(), c.getPrenomsCont()))
+                .filter(n -> !n.isBlank()).orElse(im);
     }
 
     /**
