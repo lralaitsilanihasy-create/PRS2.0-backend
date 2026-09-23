@@ -16,11 +16,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import cnm.prs.dto.BilanControlesDto;
+import cnm.prs.dto.DocumentFicheDto;
 import cnm.prs.dto.FicheMarcheDto;
 import cnm.prs.dto.FicheMarcheResumeDto;
 import cnm.prs.dto.FicheRattachableDto;
 import cnm.prs.dto.VersionFicheDto;
 import cnm.prs.entity.ChampFicheMarche;
+import cnm.prs.entity.DocumentFicheMarche;
 import cnm.prs.entity.DossierMec;
 import cnm.prs.entity.FicheMarche;
 import cnm.prs.entity.FicheMarcheValeur;
@@ -88,6 +90,9 @@ public class FicheMarcheService {
     private final DossierMecRepository dmcRepository;
     /** ⚠️ Lot 1b (2026-09-23) — le dossier soumis que porte le DMC ({@code t_dossier.ID_DMC}). */
     private final cnm.prs.repository.DossierRepository dossierRepository;
+    /** ⚠️ Lot 2a (2026-09-23) — production, lecture et jointure des documents générés. */
+    private final DocumentsFicheMarcheService documents;
+    private final cnm.prs.repository.DocumentFicheMarcheRepository documentRepository;
     private final MarcheRepository marcheRepository;
     private final TypeDmcRepository typeDmcRepository;
     private final PerimetreDossier perimetre;
@@ -101,7 +106,10 @@ public class FicheMarcheService {
             DossierMecRepository dmcRepository, MarcheRepository marcheRepository, TypeDmcRepository typeDmcRepository,
             PerimetreDossier perimetre, ValeursPpmService valeursPpm, DossierIntegriteService dossierIntegrite,
             JournalDossierService journal, ObjectMapper mapper,
-            cnm.prs.repository.DossierRepository dossierRepository) {
+            cnm.prs.repository.DossierRepository dossierRepository, DocumentsFicheMarcheService documents,
+            cnm.prs.repository.DocumentFicheMarcheRepository documentRepository) {
+        this.documents = documents;
+        this.documentRepository = documentRepository;
         this.dossierRepository = dossierRepository;
         this.ficheRepository = ficheRepository;
         this.valeurRepository = valeurRepository;
@@ -188,6 +196,31 @@ public class FicheMarcheService {
                     ligne == null ? null : ligne.getDesignationMarche(), f.getNumeroVersion(), f.getDateValidation()));
         }
         return out;
+    }
+
+    /**
+     * ⚠️ Lot 2a (2026-09-23, §B2) — les documents de la version courante (sans {@code version}) ou d'une version donnée,
+     * au périmètre de lecture de la fiche. Version non validée : liste vide, jamais 404 ; version inconnue : 404.
+     */
+    @Transactional(readOnly = true)
+    public List<DocumentFicheDto> documents(Long idDmc, Integer version) {
+        contexte(idDmc);
+        FicheMarche fiche = version == null
+                ? ficheRepository.findFirstByIdDmcOrderByNumeroVersionDesc(idDmc).orElse(null)
+                : ficheRepository.findByIdDmcAndNumeroVersion(idDmc, version).orElseThrow(
+                        () -> new ResourceNotFoundException("Version " + version + " introuvable pour le DMC " + idDmc + "."));
+        return documents.lister(fiche);
+    }
+
+    /** ⚠️ Lot 2a — un document à télécharger, au périmètre de lecture de sa fiche (404 inconnu, 403 hors périmètre). */
+    @Transactional(readOnly = true)
+    public DocumentFicheMarche document(Integer idDocument) {
+        DocumentFicheMarche d = documentRepository.findById(idDocument)
+                .orElseThrow(() -> new ResourceNotFoundException("Document introuvable : " + idDocument + "."));
+        FicheMarche fiche = ficheRepository.findById(d.getIdFiche())
+                .orElseThrow(() -> new ResourceNotFoundException("Document introuvable : " + idDocument + "."));
+        contexte(fiche.getIdDmc());
+        return d;
     }
 
     // ------------------------------------------------------------------ écritures
@@ -281,12 +314,20 @@ public class FicheMarcheService {
             throw new BusinessRuleException(bilan.bloquants().size() + " contrôle(s) bloquant(s) : "
                     + bilan.bloquants().get(0).message(), "CONTROLES_BLOQUANTS");
         }
+        // ⚠️ Lot 2a (2026-09-23, §B1) — les documents de la version sont produits AVANT qu'elle ne soit figée : un échec
+        // (GenerationDocumentsException, 500 nommé) laisse la fiche en brouillon et annule la transaction.
+        LocalDateTime maintenant = LocalDateTime.now();
+        List<DocumentsFicheMarcheService.Produit> produits = documents.produire(etat, maintenant);
         fiche.setStatut(StatutFicheMarche.VALIDEE.name());
-        fiche.setDateValidation(LocalDateTime.now());
+        fiche.setDateValidation(maintenant);
         fiche.setValidePar(CurrentUser.ref().orElse(null));
         fiche = ficheRepository.save(fiche);
+        documents.enregistrer(fiche.getIdFiche(), produits, maintenant);
         journal.tracer(ctx.idDossier(), JournalDossierService.FICHE_MARCHE_VALIDEE,
                 "DAO, version " + fiche.getNumeroVersion() + ", " + bilan.nbSaisis() + " information(s)");
+        // Le dossier soumis que porte déjà la fiche reçoit les documents de cette version (lot 2a, §B3/§B4).
+        Long idDmcValide = idDmc;
+        dossierRepository.findIdDossierByIdDmc(idDmc).ifPresent(id -> documents.joindre(id, idDmcValide));
         return toDto(ctx, fiche);
     }
 

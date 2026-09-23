@@ -458,6 +458,32 @@ fiche. Contrat : `docs/api-endpoints.md`, § *Fiche marché d'un appel d'offres*
 - **Montants en toutes lettres** : le convertisseur du dépôt plafonnait à 999 999 (et écrivait « quatre cents
   mille ») ; étendu aux millions et milliards, pour la fiche comme pour les PV et lettres.
 
+#### Les documents générés (lot 2a, demande front du 2026-09-23)
+
+⚠️ **Une version validée porte ses documents, et le dossier les reçoit sans geste humain.** La fiche savait déjà quel
+document porte chaque information (document maître, reprises) ; il manquait la fabrication. Contrat :
+`docs/api-endpoints.md`, § *Les documents générés — lot 2a*.
+
+- **Produits à la validation, jamais sur un brouillon** (H8) : c'est la version figée et datée qui rend un document
+  opposable. La production a lieu **avant** de figer : si elle échoue, la validation est annulée (500 nommé) — mieux
+  vaut une fiche restée en brouillon qu'une version figée sans ses documents.
+- **Ce qui entre dans un document** : les informations dont il est le document maître ou qui y sont reprises,
+  ouvertes par le type de marché et le cadrage, et renseignées. Une information sans valeur est omise ; une information
+  fermée par le cadrage n'apparaît pas, même si elle avait été saisie avant. Word pour le travail, PDF pour la
+  publication (H9) — le PDF est produit sans Word.
+- **Une nouvelle version régénère sans effacer** : les documents d'une version restent lisibles par son numéro ; c'est
+  ce que la Commission a examiné.
+- **Le dossier reçoit les PDF de la dernière version validée** comme « Dossier d'appel d'offres complet » (lecture 1 de
+  la demande : DPAO + CCAP + AE forment ensemble ce type ; le CCAG, type 7, reste le texte réglementaire joint tel quel).
+  Pendant la constitution du dossier, une nouvelle version **remplace** les pièces de la précédente ; pendant la
+  rectification, elle s'**ajoute** en version corrigée ; en examen, **rien ne change** sous les yeux de la Commission.
+- **On corrige la fiche, pas son produit** (H10) : une pièce produite ne se supprime pas à la main — Administrateur
+  compris — et ne se double pas d'une pièce manuelle du même type. Les autres pièces (CCAG, CCTP, avis d'appel
+  d'offres, estimation, garantie de soumission) restent téléversées (H11, H12).
+- Une version validée **avant** ce lot n'a pas de documents (pas de reprise : les informations du plan sont relues à
+  chaque lecture, un document produit après coup ne dirait pas forcément ce qui a été validé) ; la version suivante
+  les produira.
+
 #### Le type de marché vient du plan (lot 1c, demande front du 2026-09-23, décision du pilote)
 
 ⚠️ **« Le type de marché doit être déduit du plan »** (pilote). La ligne du PPM porte déjà sa forme

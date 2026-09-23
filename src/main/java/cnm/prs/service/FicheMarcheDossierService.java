@@ -56,12 +56,16 @@ public class FicheMarcheDossierService {
     private final ValeursPpmService valeursPpm;
     private final FicheMarcheService ficheMarcheService;
     private final JournalDossierService journal;
+    /** ⚠️ Lot 2a (2026-09-23, §B3) — les documents de la fiche rejoignent le dossier qu'elle porte. */
+    private final DocumentsFicheMarcheService documents;
 
     public FicheMarcheDossierService(DossierMecRepository dmcRepository, TypeDmcRepository typeDmcRepository,
             MarcheRepository marcheRepository, DossierRepository dossierRepository,
             FicheMarcheRepository ficheRepository, PerimetreDossier perimetre,
             DossierIntegriteService dossierIntegrite, SaisieService saisieService, DossierService dossierService,
-            ValeursPpmService valeursPpm, FicheMarcheService ficheMarcheService, JournalDossierService journal) {
+            ValeursPpmService valeursPpm, FicheMarcheService ficheMarcheService, JournalDossierService journal,
+            DocumentsFicheMarcheService documents) {
+        this.documents = documents;
         this.dmcRepository = dmcRepository;
         this.typeDmcRepository = typeDmcRepository;
         this.marcheRepository = marcheRepository;
@@ -95,6 +99,7 @@ public class FicheMarcheDossierService {
         ValeursPpmService.EnTete enTete = valeursPpm.enTete(dmc.getIdDetail());
         Dossier dossier = saisieService.creerDossierDao(enTete.idLocalite(), enTete.idEntiteContract(), idDmc);
         journal.tracer(dossier, JournalDossierService.DOSSIER_CREE_DEPUIS_FICHE, detail(fiche, idDmc));
+        documents.joindre(dossier.getIdDossier(), idDmc);   // lot 2a : sans geste humain
         return dossierService.findById(dossier.getIdDossier());
     }
 
@@ -127,6 +132,7 @@ public class FicheMarcheDossierService {
         dossier.setIdDmc(idDmc);
         dossierRepository.saveAndFlush(dossier);
         journal.tracer(dossier, JournalDossierService.FICHE_MARCHE_RATTACHEE, detail(fiche, idDmc));
+        documents.joindre(idDossier, idDmc);   // lot 2a
         return dossierService.findById(idDossier);
     }
 
@@ -143,6 +149,7 @@ public class FicheMarcheDossierService {
         if (idDmc == null) {
             return dossierService.findById(idDossier);
         }
+        documents.detacher(idDossier);   // lot 2a : les pièces produites par la fiche partent avec elle
         dossier.setIdDmc(null);
         dossierRepository.saveAndFlush(dossier);
         journal.tracer(dossier, JournalDossierService.FICHE_MARCHE_DETACHEE, "Fiche marché du DMC " + idDmc

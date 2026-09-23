@@ -15,4 +15,7 @@ public interface TypePieceJointeRepository extends JpaRepository<TypePieceJointe
 
     /** Types de pièces obligatoires d'un type de dossier (contrôle à la soumission). */
     List<TypePieceJointe> findByIdTypeDossierAndObligatoireTrue(String idTypeDossier);
+
+    /** Le type de pièce d'un code stable ({@code AGPM}, {@code DAO_COMPLET}…). */
+    java.util.Optional<TypePieceJointe> findFirstByCode(String code);
 }

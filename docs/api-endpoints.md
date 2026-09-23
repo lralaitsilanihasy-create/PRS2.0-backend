@@ -169,7 +169,8 @@ stable** de la création d'un DMC par la PRMP (`LIGNE_RETIREE`, `VERSION_DEPASSE
 `CONTROLES_BLOQUANTS`, `CHAMP_EXISTANT`) — c'est la forme du « 409 nominatif » : un code, jamais un tableau
 `erreurs` (réservé au 400). ⚠️ 2026-09-23 (fiche marché, lot 1b) : `FICHE_NON_VALIDEE`, `DOSSIER_EXISTANT`,
 `DOSSIER_NON_BROUILLON`, `DOSSIER_NON_DAO`, `DOSSIER_DEJA_LIE`, `FICHE_DEJA_LIEE`. ⚠️ 2026-09-23 (lot 1c) :
-`FORME_NON_OUTILLEE`.
+`FORME_NON_OUTILLEE`. ⚠️ 2026-09-23 (lot 2a) : `PIECE_PRODUITE_PAR_FICHE` (409) et
+`GENERATION_DOCUMENTS` (**500**, validation annulée).
 
 Un champ **`idDossier`** (number) s'ajoute enfin, ⚠️ 2026-09-23, aux 409 qui **désignent un dossier** vers lequel
 naviguer — `DOSSIER_EXISTANT` (le dossier déjà produit par la fiche) et `FICHE_DEJA_LIEE` (le dossier qui la porte) ;
@@ -4650,7 +4651,7 @@ Une règle dont un rôle n'a pas encore de champ (référentiel incomplet) **n'e
 | PUT | /api/fiches-marche/{idDmc}/cadrage | `{ cadrage }` | `FicheMarcheDto` | 200, 400 (nominatifs par clé : clé inconnue, `OUI`/`NON`, nombre, option ; ⚠️ lot 1c : `typeMarche` **ignoré**, plus de 400), 403, 404, 409 `FICHE_VALIDEE` / `VACANCE_PRMP` / `FORME_NON_OUTILLEE` | écriture |
 | PUT | /api/fiches-marche/{idDmc}/blocs/{bloc} | `{ valeurs }` | `FicheMarcheDto` | 200, 400 (nominatifs `{ champ: code, message }` : champ inconnu / inactif, champ d'un autre bloc, champ `PPM` ou `CADRAGE`, valeur mal typée, `MONTANT` négatif, `POURCENTAGE` hors 0–100, option hors liste, `PIECE`), 403, 404 (bloc inconnu), 409 `FICHE_VALIDEE` / `VACANCE_PRMP` | écriture |
 | POST | /api/fiches-marche/{idDmc}/controler | — | `BilanControlesDto` (sans écrire) | 200, 403, 404 | lecture |
-| POST | /api/fiches-marche/{idDmc}/valider | — | `FicheMarcheDto` (`VALIDEE`, version n) | 200, 403, 404, 409 `CONTROLES_BLOQUANTS` / `FICHE_VIDE` / `FICHE_VALIDEE` / `VACANCE_PRMP` | **PRMP seule** |
+| POST | /api/fiches-marche/{idDmc}/valider | — | `FicheMarcheDto` (`VALIDEE`, version n) | 200, 403, 404, 409 `CONTROLES_BLOQUANTS` / `FICHE_VIDE` / `FICHE_VALIDEE` / `VACANCE_PRMP`, ⚠️ lot 2a : **500 `GENERATION_DOCUMENTS`** (documents non produits, version non validée) | **PRMP seule** |
 | POST | /api/fiches-marche/{idDmc}/reviser | — | `FicheMarcheDto` (version n+1 `BROUILLON`, copie de la validée) | 200, 403, 404, 409 `FICHE_VIDE` / `BROUILLON_EN_COURS` / `VACANCE_PRMP` | écriture |
 | GET | /api/fiches-marche/{idDmc}/versions | — | `VersionFicheDto[]` = `{ idFiche, version, statut, typeMarche, dateCreation, dateValidation, validePar, nbValeurs }` — les versions **validées** | 200, 403, 404 | lecture |
 | GET | /api/fiches-marche/{idDmc}/versions/{numero} | — | `FicheMarcheDto` de cette version | 200, 403, 404 | lecture |
@@ -4667,6 +4668,49 @@ notification, pas de chronométrage (geste propre à la PRMP, avant soumission).
 > forme de la ligne courante n'est pas outillée ou manque au plan — même message que la création du DMC. La lecture
 > reste ouverte. Le type sous lequel une version est saisie est figé à sa création (`VersionFicheDto.typeMarche`
 > garde celui de chaque version validée) ; `FicheMarcheDto.typeMarche` est toujours celui du plan.
+
+### Les documents générés — lot 2a ⚠️ 2026-09-23
+
+Demande front `frontend/docs/demande-backend-2026-09-23-documents-fiche-marche.md`. **La validation d'une version
+produit ses documents**, dans la même transaction : un document par type ouvert par le référentiel (`DPAO`, `DPAC`,
+`CCAP`, `AE` — en quantité fixe : DPAO, CCAP, AE), chacun en **`docx`** (Apache POI) et en **`pdf`** (OpenPDF, sans
+Word). Table `t_document_fiche_marche` (V38), clé **`idFiche`** : la version porte ses documents, ceux des versions
+précédentes restent lisibles. Production **avant** que la version ne soit figée : un échec répond **500**
+`code: "GENERATION_DOCUMENTS"` (message qui nomme le document) et la fiche reste en brouillon.
+
+**Contenu (mise en page provisoire, remplacée au lot 2b par les modèles Word officiels)** : titre du document, objet
+du marché, un titre par **bloc** (rang), un sous-titre par **rubrique** (rang), une ligne « **libellé : valeur** » par
+champ **ouvert** (type de marché, condition de cadrage) dont le document est **maître** ou qui y est **repris** ; un
+champ **sans valeur est omis** (jamais « null »). Montants « 8 400 000 Ariary (huit millions quatre cent mille
+ariary) », dates `JJ/MM/AAAA`, `OUI`/`NON` → « Oui »/« Non ». Pied de page : « Plan {référence} · ligne {idDetail} ·
+fiche marché version n validée le JJ/MM/AAAA ». La **sélection** (`SelectionDocumentsFiche`) est séparée de la **mise
+en page** (`GenerateurDocumentsFiche`) : seule la seconde change au lot 2b.
+
+**`DocumentFicheDto`** : `{ idDocument, type, libelle, extension, nomFichier, tailleOctets, dateGeneration, version }`
+— `libelle` : « Données particulières de l'appel d'offres », « Données particulières du cahier des clauses
+administratives », « Cahier des clauses administratives particulières », « Acte d'engagement ». **Nom de fichier**
+(servi tel quel, le front n'en compose aucun) : `{TYPE}_{référence du plan, hors [A-Za-z0-9-] → tirets}_{idDetail}_v{n}.{ext}`,
+ex. `DPAO_00001-PPM-AGPM-CNM-2026_302873_v2.docx`.
+
+| Méthode | URL | Réponse | Statuts | Accès |
+|---|---|---|---|---|
+| GET | /api/fiches-marche/{idDmc}/documents?version= | `DocumentFicheDto[]` de la **dernière version** (ou de `version`), dans l'ordre DPAO, DPAC, CCAP, AE puis docx, pdf. Version **non validée** (virtuelle, brouillon, révision ouverte) : **200 `[]`**, jamais 404 | 200, 403, 404 (DMC ou `version` inconnus), 409 `DMC_NON_DAO` | lecture de la fiche (PRMP / UGPM propriétaires, contrôleurs de la localité — la Commission lit donc les documents du dossier qu'elle examine —, Président / Admin) |
+| GET | /api/fiches-marche/documents/{idDocument}/contenu | binaire, `Content-Disposition: attachment; filename="{nomFichier}"`, `Content-Type` `application/pdf` ou `application/vnd.openxmlformats-officedocument.wordprocessingml.document` | 200, 403, 404 | idem |
+
+**Jointure au dossier soumis (§B3/§B4).** À la création du dossier par la fiche, au rattachement, et à chaque
+validation d'une version d'une fiche déjà liée, les **PDF** de la **dernière version validée** deviennent des pièces
+du dossier, type de pièce de **code `DAO_COMPLET`** (« Dossier d'appel d'offres complet », code posé par V38 ; sans lui,
+rien n'est joint — journal applicatif), marquées **`idDocumentFiche`** (`PieceJointeDossierDto`, lecture seule). Selon
+le statut du dossier : `BROUILLON`, `SOUMIS`, `EN_ATTENTE_COMPLEMENTS_DEPOT`, `EN_ATTENTE_PIECES` → les pièces de la
+version précédente sont **détachées** (retirées du dossier ; le document reste lisible par `?version=`) et les nouvelles
+jointes ; `EN_ATTENTE_DECISION_PRMP` (rectification) → les nouvelles sont jointes en **`versionCorrigee`**, les
+précédentes conservées ; dossier en examen ou au-delà → rien ne change. Détacher la fiche (`DELETE
+/api/dossiers/{id}/fiche-marche`) retire ses pièces.
+
+**Pièces produites par la fiche** : `DELETE /api/piece-jointe-dossiers/{id}` → **409 `PIECE_PRODUITE_PAR_FICHE`**
+(Administrateur compris ; message qui renvoie à la fiche) ; `POST /api/piece-jointe-dossiers` d'une pièce du **même
+type** sur un dossier qui porte déjà des pièces produites → même 409. Une version validée **avant le lot 2** n'a pas de
+documents (pas de reprise) : elle n'en joint aucun, et le dépôt manuel reste possible tant que la fiche n'en a produit.
 
 ### Le dossier soumis à la CNM — lot 1b ⚠️ 2026-09-23
 

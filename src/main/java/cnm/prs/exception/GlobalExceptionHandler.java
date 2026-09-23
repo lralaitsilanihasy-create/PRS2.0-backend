@@ -461,6 +461,16 @@ public class GlobalExceptionHandler {
      * est <strong>journalisé avec sa pile</strong> (seule trace exploitable pour le diagnostic,
      * puisque le client ne reçoit plus qu'un message générique).
      */
+    /**
+     * ⚠️ Fiche marché, lot 2a (2026-09-23) — échec de production des documents d'une version : 500 <strong>nommé</strong>
+     * (code {@code GENERATION_DOCUMENTS}, message qui dit quel document), la validation étant annulée.
+     */
+    @ExceptionHandler(GenerationDocumentsException.class)
+    public ResponseEntity<ErrorResponse> handleGenerationDocuments(GenerationDocumentsException ex, WebRequest request) {
+        log.error("Generation des documents de la fiche marche en echec sur {} : ", uri(request), ex);
+        return build(HttpStatus.INTERNAL_SERVER_ERROR, ex.getMessage(), request, null, "GENERATION_DOCUMENTS");
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneric(Exception ex, WebRequest request) {
         log.error("Erreur non prevue sur {} : ", uri(request), ex);

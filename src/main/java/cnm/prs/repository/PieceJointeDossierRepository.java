@@ -13,6 +13,9 @@ public interface PieceJointeDossierRepository extends JpaRepository<PieceJointeD
     /** Pièces d'un dossier. */
     List<PieceJointeDossier> findByIdDossier(Integer idDossier);
 
+    /** ⚠️ Fiche marché, lot 2a (2026-09-23) — les pièces d'un dossier produites par sa fiche marché. */
+    List<PieceJointeDossier> findByIdDossierAndIdDocumentFicheIsNotNull(Integer idDossier);
+
     /** Vrai si une pièce du type donné est déjà attachée au dossier (contrôle des obligatoires). */
     boolean existsByIdDossierAndIdTypePiece(Integer idDossier, Integer idTypePiece);
 

@@ -57,6 +57,9 @@ class SchemaIndexFkIntegrationTest extends CnmIntegrationTestSupport {
             new IndexAttendu("t_fiche_marche_valeur", "\"ID_FICHE\""),
             // ⚠️ Lot 1b (2026-09-23, V36) : le dossier soumis d'un DMC (index de l'unicité).
             new IndexAttendu("t_dossier", "\"ID_DMC\""),
+            // ⚠️ Lot 2a (2026-09-23, V38) : les documents d'une version, la pièce copie d'un document.
+            new IndexAttendu("t_document_fiche_marche", "\"ID_FICHE\""),
+            new IndexAttendu("t_piece_jointe_dossier", "\"ID_DOCUMENT_FICHE\""),
             // Destinataires.
             new IndexAttendu("t_notification", "\"DESTINATAIRE_REF\", \"DESTINATAIRE_TYPE\""),
             new IndexAttendu("t_message", "\"DESTINATAIRE_IM\""));

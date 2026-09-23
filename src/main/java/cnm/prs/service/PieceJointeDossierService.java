@@ -105,6 +105,7 @@ public class PieceJointeDossierService {
                 .orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable : " + meta.getIdDossier()));
         exigerProprietaire(dossier);
         exigerDepotPossible(dossier, meta.getIdLettre() != null);
+        exigerPasDeSubstitution(dossier, meta.getIdTypePiece());
         boolean apres = false;
         Integer idLettre = null;
         if (meta.getIdLettre() != null
@@ -204,6 +205,25 @@ public class PieceJointeDossierService {
                 + "complément (lettre de renvoi ou recevabilité au dépôt), ou pendant la rectification.");
     }
 
+    /**
+     * ⚠️ Fiche marché, lot 2a (2026-09-23, §B3, H10) — un dossier qui porte déjà les documents de sa fiche marché ne reçoit
+     * pas, à la main, une autre pièce du même type (« Dossier d'appel d'offres complet ») : ce serait les remplacer.
+     * Un dossier dont la fiche n'a encore produit aucun document (version validée avant le lot 2) reste libre.
+     *
+     * @throws BusinessRuleException 409 {@code PIECE_PRODUITE_PAR_FICHE}
+     */
+    private void exigerPasDeSubstitution(Dossier dossier, Integer idTypePiece) {
+        if (dossier.getIdDmc() == null || idTypePiece == null) {
+            return;
+        }
+        List<PieceJointeDossier> produites = repository.findByIdDossierAndIdDocumentFicheIsNotNull(dossier.getIdDossier());
+        if (produites.stream().anyMatch(p -> idTypePiece.equals(p.getIdTypePiece()))) {
+            throw new BusinessRuleException("Les pièces de ce type sont produites par la fiche marché du dossier : elles ne "
+                    + "se remplacent pas à la main. Corrigez la fiche (révision puis validation).",
+                    "PIECE_PRODUITE_PAR_FICHE");
+        }
+    }
+
     /** Enregistrement d'une pièce initiale (à la saisie) : {@code apresLettreRenvoi=false}. */
     public PieceJointeDossier enregistrerInitiale(Integer idDossier, Integer idTypePiece, MultipartFile fichier) {
         return enregistrer(idDossier, idTypePiece, fichier, false, null);
@@ -235,6 +255,13 @@ public class PieceJointeDossierService {
     /** Suppression : Administrateur, ou PRMP propriétaire d'un dossier encore BROUILLON. */
     public void delete(Integer id) {
         PieceJointeDossier piece = exigerExistante(id);
+        // ⚠️ Fiche marché, lot 2a (2026-09-23, §B3, H10) — une pièce produite par la fiche ne se supprime pas à la main,
+        // pas même par l'Administrateur : on corrige la fiche, pas son produit.
+        if (piece.getIdDocumentFiche() != null) {
+            throw new BusinessRuleException("Cette pièce est produite par la fiche marché du dossier : elle ne se supprime "
+                    + "pas à la main. Corrigez la fiche (révision puis validation) : ses documents remplaceront celui-ci.",
+                    "PIECE_PRODUITE_PAR_FICHE");
+        }
         if (CurrentUser.profil().orElse(null) == ProfilUtilisateur.ADMINISTRATEUR) {
             repository.deleteById(id);
             return;

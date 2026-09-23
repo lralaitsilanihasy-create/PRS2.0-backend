@@ -2,6 +2,7 @@ package cnm.prs.controller;
 
 import java.util.List;
 
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -17,10 +18,12 @@ import org.springframework.web.bind.annotation.RestController;
 import cnm.prs.dto.BilanControlesDto;
 import cnm.prs.dto.BlocValeursRequest;
 import cnm.prs.dto.CadrageRequest;
+import cnm.prs.dto.DocumentFicheDto;
 import cnm.prs.dto.DossierDto;
 import cnm.prs.dto.FicheMarcheDto;
 import cnm.prs.dto.FicheRattachableDto;
 import cnm.prs.dto.VersionFicheDto;
+import cnm.prs.entity.DocumentFicheMarche;
 import cnm.prs.service.FicheMarcheDossierService;
 import cnm.prs.service.FicheMarcheService;
 import jakarta.validation.Valid;
@@ -54,6 +57,28 @@ public class FicheMarcheController {
     @GetMapping("/rattachables")
     public List<FicheRattachableDto> rattachables(@RequestParam(required = false) Integer idDossier) {
         return dossiers.rattachables(idDossier);
+    }
+
+    /**
+     * ⚠️ Lot 2a (2026-09-23) — le binaire d'un document généré, `attachment` sous son nom de fichier (le front ne
+     * compose aucun nom). Périmètre de lecture de la fiche.
+     */
+    @GetMapping("/documents/{idDocument}/contenu")
+    public ResponseEntity<byte[]> contenuDocument(@PathVariable Integer idDocument) {
+        DocumentFicheMarche d = service.document(idDocument);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, Telechargements.disposition(d.getNomFichier()))
+                .contentType(Telechargements.typeAutorise(d.getExtension()))
+                .body(d.getContenu());
+    }
+
+    /**
+     * ⚠️ Lot 2a (2026-09-23) — les documents générés de la version courante, ou de {@code version} : liste vide (200)
+     * pour une version non validée ; 404 pour une version inconnue.
+     */
+    @GetMapping("/{idDmc}/documents")
+    public List<DocumentFicheDto> documents(@PathVariable Long idDmc, @RequestParam(required = false) Integer version) {
+        return service.documents(idDmc, version);
     }
 
     /** La dernière version (virtuelle avant le premier enregistrement). */

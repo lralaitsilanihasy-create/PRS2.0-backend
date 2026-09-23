@@ -41,4 +41,11 @@ public class PieceJointeDossierDto {
 
     /** ⚠️ 2026-08-03 — version CORRIGÉE déposée pendant la rectification (observations du PV). */
     private Boolean versionCorrigee;
+
+    /**
+     * ⚠️ Fiche marché, lot 2a (2026-09-23) — le document de fiche marché dont la pièce est la copie ({@code null} pour une
+     * pièce téléversée). Lecture seule : une pièce produite par la fiche ne se supprime pas à la main (409
+     * {@code PIECE_PRODUITE_PAR_FICHE}).
+     */
+    private Integer idDocumentFiche;
 }

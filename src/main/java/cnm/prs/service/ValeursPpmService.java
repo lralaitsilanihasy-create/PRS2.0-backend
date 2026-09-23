@@ -171,9 +171,11 @@ public class ValeursPpmService {
         v.put("NB_LOTS_PPM", String.valueOf(lots.size()));
         v.put("LOTS_DESIGNATION", lots.isEmpty() ? null : String.join(" ; ", lots.stream()
                 .map(l -> (l.getDesignationLot() == null ? "Lot " + l.getIdLot() : l.getDesignationLot())).toList()));
-        v.put("LOTS_MONTANTS", lots.isEmpty() ? null : String.join(" ; ", lots.stream()
+        // ⚠️ Lot 2a (2026-09-23) — un lot sans montant écrivait « Lot 1 : null » : la mention est désormais explicite, et
+        // l'information est absente quand aucun lot du plan n'a de montant.
+        v.put("LOTS_MONTANTS", lots.stream().allMatch(l -> l.getMontLot() == null) ? null : String.join(" ; ", lots.stream()
                 .map(l -> (l.getDesignationLot() == null ? "Lot " + l.getIdLot() : l.getDesignationLot())
-                        + " : " + montant(l.getMontLot())).toList()));
+                        + " : " + (l.getMontLot() == null ? "montant non renseigné" : montant(l.getMontLot()))).toList()));
         return new ValeursPpm(ligne, versionPpm, v, dates);
     }
 

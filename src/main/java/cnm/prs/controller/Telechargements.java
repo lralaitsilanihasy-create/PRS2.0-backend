@@ -22,6 +22,10 @@ final class Telechargements {
     private Telechargements() {
     }
 
+    /** Type MIME d'un document Word produit par le serveur. */
+    static final MediaType DOCX =
+            MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+
     /** Liste blanche de sortie — accepte les libellés courts stockés (PDF/JPEG/PNG) et les types MIME. */
     static MediaType typeAutorise(String format) {
         if (format == null || format.isBlank()) {
@@ -31,6 +35,8 @@ final class Telechargements {
             case "PDF", "APPLICATION/PDF" -> MediaType.APPLICATION_PDF;
             case "JPEG", "JPG", "IMAGE/JPEG", "IMAGE/JPG" -> MediaType.IMAGE_JPEG;
             case "PNG", "IMAGE/PNG" -> MediaType.IMAGE_PNG;
+            // ⚠️ Lot 2a (2026-09-23) — documents générés par la fiche marché (jamais un fichier téléversé).
+            case "DOCX" -> DOCX;
             default -> MediaType.APPLICATION_OCTET_STREAM;
         };
     }

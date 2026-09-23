@@ -27,6 +27,7 @@ public final class PieceJointeDossierMapper {
         dto.setApresLettreRenvoi(entity.getApresLettreRenvoi());
         dto.setIdLettre(entity.getIdLettre());
         dto.setVersionCorrigee(entity.getVersionCorrigee());
+        dto.setIdDocumentFiche(entity.getIdDocumentFiche());
         return dto;
     }
 }
