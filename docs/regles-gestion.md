@@ -458,6 +458,28 @@ fiche. Contrat : `docs/api-endpoints.md`, § *Fiche marché d'un appel d'offres*
 - **Montants en toutes lettres** : le convertisseur du dépôt plafonnait à 999 999 (et écrivait « quatre cents
   mille ») ; étendu aux millions et milliards, pour la fiche comme pour les PV et lettres.
 
+#### Le type de marché vient du plan (lot 1c, demande front du 2026-09-23, décision du pilote)
+
+⚠️ **« Le type de marché doit être déduit du plan »** (pilote). La ligne du PPM porte déjà sa forme
+(`t_marche.FORME_MARCHE` : à quantité fixe, à commande, contrat-cadre), saisie avec le plan ; la redemander au cadrage
+faisait préparer des contrats-cadres sous le type « quantité fixe ». Contrat : `docs/api-endpoints.md`, § *Fiche
+marché* et § *DMC*.
+
+- **Une donnée reprise, plus une réponse.** Le type de la fiche est la forme de la **ligne courante** (même lecture
+  que les autres informations reprises, filiation comprise), relue à chaque lecture ; il figure parmi elles
+  (« Forme du marché », 23e information). Le cadrage perd la question : la clé est **ignorée** si elle arrive encore
+  (tolérance, pas de 400) et retirée des cadrages enregistrés avant.
+- **Ce qui n'est pas outillé ne se prépare pas, et le dit tôt.** Seule la quantité fixe est outillée (liste tenue
+  dans le service, elle s'allongera aux lots 3 et 4). Une ligne à commande ou contrat-cadre **reste listée** parmi les
+  éligibles, avec sa forme et « non outillée » ; sa création est refusée (`FORME_NON_OUTILLEE`, après le mode et avant
+  le PV), et une fiche déjà ouverte sur une telle ligne se lit mais ne s'écrit, ne se valide ni ne se révise plus.
+- **Ligne sans forme** (plan ancien jamais repris) : pas de type, fiche lisible, création et écriture refusées avec un
+  message qui nomme le champ « Forme du marché » à compléter dans le plan. Le défaut « quantité fixe » du modèle ne
+  décide jamais à la place du plan.
+- **Fiches saisies sous un autre type** : une fiche **brouillon** dont le type d'origine n'est plus celui du plan est
+  servie telle quelle, marquée `typeChange` ; une version **validée** ne change ni de version ni de contenu (signalée
+  au journal applicatif). Chaque version garde le type sous lequel elle a été saisie.
+
 #### Le dossier soumis (lot 1b, demande front du 2026-09-23, arbitrage du pilote)
 
 ⚠️ **La fiche produit le dossier.** Le dossier n° 100332 (DAO, six PDF joints à la main) ne disait rien de sa fiche

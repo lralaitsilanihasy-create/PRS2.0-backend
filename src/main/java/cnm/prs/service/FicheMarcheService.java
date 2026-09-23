@@ -5,7 +5,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -25,7 +24,9 @@ import cnm.prs.entity.ChampFicheMarche;
 import cnm.prs.entity.DossierMec;
 import cnm.prs.entity.FicheMarche;
 import cnm.prs.entity.FicheMarcheValeur;
+import cnm.prs.entity.Marche;
 import cnm.prs.entity.TypeDmc;
+import cnm.prs.enums.FormeMarche;
 import cnm.prs.enums.ProfilUtilisateur;
 import cnm.prs.enums.SourceChampFiche;
 import cnm.prs.enums.StatutFicheMarche;
@@ -69,8 +70,16 @@ import tools.jackson.databind.ObjectMapper;
 @Transactional
 public class FicheMarcheService {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(FicheMarcheService.class);
+
     /** Clés admises du cadrage sans champ reflet (les autres viennent des champs de source CADRAGE). */
-    private static final Set<String> CLES_CADRAGE_LIBRES = Set.of("typeMarche", "attributaires");
+    private static final Set<String> CLES_CADRAGE_LIBRES = Set.of("attributaires");
+
+    /**
+     * ⚠️ Lot 1c (2026-09-23) — ancienne clé du cadrage : le type de marché se déduit désormais de la forme du marché au
+     * plan. Ignorée à l'écriture et retirée à la lecture des cadrages enregistrés avant.
+     */
+    private static final String CLE_TYPE_MARCHE = "typeMarche";
 
     private final FicheMarcheRepository ficheRepository;
     private final FicheMarcheValeurRepository valeurRepository;
@@ -186,9 +195,8 @@ public class FicheMarcheService {
     public FicheMarcheDto ecrireCadrage(Long idDmc, Map<String, Object> cadrage) {
         Contexte ctx = contexteEcriture(idDmc);
         Map<String, Object> propre = validerCadrage(cadrage == null ? Map.of() : cadrage);
-        FicheMarche fiche = brouillonOuNouvelle(idDmc);
+        FicheMarche fiche = brouillonOuNouvelle(ctx);
         fiche.setCadrage(ecrireJson(propre));
-        fiche.setTypeMarche(String.valueOf(propre.getOrDefault("typeMarche", TypeMarcheDao.QUANTITE_FIXE.name())));
         fiche.setDateMaj(LocalDateTime.now());
         fiche = ficheRepository.save(fiche);
         return toDto(ctx, fiche);
@@ -200,9 +208,9 @@ public class FicheMarcheService {
         if (!blocRepository.existsById(codeBloc)) {
             throw new ResourceNotFoundException("Bloc introuvable : " + bloc + ".");
         }
-        FicheMarche fiche = brouillonOuNouvelle(idDmc);
+        FicheMarche fiche = brouillonOuNouvelle(ctx);
         Map<String, Object> cadrage = lireJson(fiche.getCadrage());
-        String typeMarche = fiche.getTypeMarche() == null ? TypeMarcheDao.QUANTITE_FIXE.name() : fiche.getTypeMarche();
+        String typeMarche = ctx.forme().name();   // outillée : contexteEcriture l'a exigé
         Map<String, ChampFicheMarche> champs = new LinkedHashMap<>();
         champRepository.findAllByOrderByCodeRubriqueAscRangAsc().forEach(c -> champs.put(c.getCode(), c));
 
@@ -260,6 +268,7 @@ public class FicheMarcheService {
             throw new AccessDeniedException("Seule la PRMP valide la fiche marché.");
         }
         dossierIntegrite.exigerMandatActif();
+        exigerFormeOutillee(ctx);
         FicheMarche fiche = ficheRepository.findFirstByIdDmcOrderByNumeroVersionDesc(idDmc)
                 .orElseThrow(() -> new BusinessRuleException("La fiche n'a jamais été enregistrée : rien à valider.", "FICHE_VIDE"));
         if (StatutFicheMarche.VALIDEE.name().equals(fiche.getStatut())) {
@@ -294,7 +303,7 @@ public class FicheMarcheService {
         suivante.setIdDmc(idDmc);
         suivante.setNumeroVersion(derniere.getNumeroVersion() + 1);
         suivante.setStatut(StatutFicheMarche.BROUILLON.name());
-        suivante.setTypeMarche(derniere.getTypeMarche());
+        suivante.setTypeMarche(ctx.forme().name());   // lot 1c : le type dérivé au moment de la révision
         suivante.setCadrage(derniere.getCadrage());
         suivante.setDateCreation(LocalDateTime.now());
         suivante.setCreePar(CurrentUser.ref().orElse(null));
@@ -307,8 +316,12 @@ public class FicheMarcheService {
 
     // ------------------------------------------------------------------ contexte et gardes
 
-    /** Le DMC, sa ligne et son dossier — 404 si absent, 403 hors périmètre, 409 si le DMC n'est pas un DAO. */
-    private record Contexte(DossierMec dmc, Integer idDetail, Integer idDossier) {
+    /**
+     * Le DMC, sa ligne et son dossier — 404 si absent, 403 hors périmètre, 409 si le DMC n'est pas un DAO. ⚠️ Lot 1c :
+     * {@code forme} = la forme saisie de la <strong>ligne courante</strong> de la filiation (même lecture que
+     * {@code valeursPpm}), d'où se déduit le type de marché ; {@code null} si le plan ne la porte pas.
+     */
+    private record Contexte(DossierMec dmc, Integer idDetail, Integer idDossier, FormeMarche forme) {
     }
 
     private Contexte contexte(Long idDmc) {
@@ -328,7 +341,9 @@ public class FicheMarcheService {
             throw new BusinessRuleException("Le DMC " + idDmc + " n'est pas un dossier d'appel d'offres ("
                     + (type == null ? "type inconnu" : type.getCode()) + ") : pas de fiche marché.", "DMC_NON_DAO");
         }
-        return new Contexte(dmc, dmc.getIdDetail(), idDossier);
+        FormeMarche forme = marcheRepository.findById(dmc.getIdDetail())
+                .map(valeursPpm::ligneEnVigueur).map(Marche::formeMarcheSaisie).orElse(null);
+        return new Contexte(dmc, dmc.getIdDetail(), idDossier, forme);
     }
 
     private Contexte contexteEcriture(Long idDmc) {
@@ -339,13 +354,27 @@ public class FicheMarcheService {
         }
         Contexte ctx = contexte(idDmc);
         dossierIntegrite.exigerMandatActif();
+        exigerFormeOutillee(ctx);
         return ctx;
     }
 
-    private FicheMarche brouillonOuNouvelle(Long idDmc) {
+    /**
+     * ⚠️ Lot 1c (2026-09-23, §B2) — une fiche ne s'écrit, ne se valide ni ne se révise que si la forme du marché de sa
+     * ligne courante est outillée : 409 {@code FORME_NON_OUTILLEE} (forme absente du plan, ou contrat-cadre / à commande).
+     * La lecture reste ouverte.
+     */
+    private static void exigerFormeOutillee(Contexte ctx) {
+        DmcService.motifForme(ctx.forme()).ifPresent(m -> {
+            throw new BusinessRuleException(m.message(), m.code());
+        });
+    }
+
+    private FicheMarche brouillonOuNouvelle(Contexte ctx) {
+        Long idDmc = ctx.dmc().getIdDmc();
         FicheMarche derniere = ficheRepository.findFirstByIdDmcOrderByNumeroVersionDesc(idDmc).orElse(null);
         if (derniere == null) {
             FicheMarche f = virtuelle(idDmc);
+            f.setTypeMarche(ctx.forme().name());   // le type sous lequel la fiche est saisie (lot 1c : typeChange)
             f.setCreePar(CurrentUser.ref().orElse(null));
             return ficheRepository.save(f);
         }
@@ -369,9 +398,9 @@ public class FicheMarcheService {
     // ------------------------------------------------------------------ cadrage
 
     /**
-     * Valide les réponses : clés connues (les clés de cadrage des champs de source CADRAGE, plus {@code typeMarche}
-     * et {@code attributaires}), valeur typée selon le champ reflet (OUI/NON, nombre, pourcentage, option de liste).
-     * Lot 1 : seul {@code QUANTITE_FIXE} est servi — un autre type est un 400 nominatif.
+     * Valide les réponses : clés connues (les clés de cadrage des champs de source CADRAGE, plus {@code attributaires}),
+     * valeur typée selon le champ reflet (OUI/NON, nombre, pourcentage, option de liste). ⚠️ Lot 1c : {@code typeMarche}
+     * n'est plus une réponse (dérivé de la forme du marché au plan) — la clé est ignorée si elle est encore envoyée.
      */
     private Map<String, Object> validerCadrage(Map<String, Object> cadrage) {
         List<ErrorResponse.FieldError> erreurs = new ArrayList<>();
@@ -389,17 +418,8 @@ public class FicheMarcheService {
                 continue;
             }
             String texte = String.valueOf(valeur).trim();
-            if ("typeMarche".equals(cle)) {
-                String t = texte.toUpperCase();
-                if (Arrays.stream(TypeMarcheDao.values()).noneMatch(x -> x.name().equals(t))) {
-                    erreurs.add(new ErrorResponse.FieldError(cle, "Type de marché inconnu : " + texte + "."));
-                } else if (!TypeMarcheDao.QUANTITE_FIXE.name().equals(t)) {
-                    erreurs.add(new ErrorResponse.FieldError(cle, "Lot 1 : seul le marché à quantité fixe est servi ("
-                            + t + " : lot suivant)."));
-                } else {
-                    propre.put(cle, t);
-                }
-                continue;
+            if (CLE_TYPE_MARCHE.equals(cle)) {
+                continue;   // lot 1c : dérivé du plan, plus une réponse — ignoré (tolérance d'une version), jamais un 400
             }
             if ("attributaires".equals(cle)) {
                 BigDecimal n = ControlesFicheMarche.nombre(texte);
@@ -503,7 +523,17 @@ public class FicheMarcheService {
 
     private FicheMarcheDto toDto(Contexte ctx, FicheMarche fiche) {
         Map<String, Object> cadrage = lireJson(fiche.getCadrage());
-        String typeMarche = fiche.getTypeMarche() == null ? TypeMarcheDao.QUANTITE_FIXE.name() : fiche.getTypeMarche();
+        // ⚠️ Lot 1c — le type de marché servi est DÉRIVÉ de la forme de la ligne courante (nul si le plan ne la porte
+        // pas) ; les rubriques s'ouvrent selon lui, à défaut selon le type sous lequel la fiche a été saisie.
+        String typeMarche = ctx.forme() == null ? null : ctx.forme().name();
+        String typeOuverture = typeMarche != null ? typeMarche
+                : fiche.getTypeMarche() != null ? fiche.getTypeMarche() : TypeMarcheDao.QUANTITE_FIXE.name();
+        boolean typeChange = fiche.getIdFiche() != null && typeMarche != null && fiche.getTypeMarche() != null
+                && !typeMarche.equals(fiche.getTypeMarche());
+        if (typeChange && StatutFicheMarche.VALIDEE.name().equals(fiche.getStatut())) {
+            log.warn("[FICHE_MARCHE] version validée sous un type qui n'est plus celui du plan : dmc={} version={} "
+                    + "saisie={} plan={}", fiche.getIdDmc(), fiche.getNumeroVersion(), fiche.getTypeMarche(), typeMarche);
+        }
         Map<String, String> valeurs = new TreeMap<>();
         if (fiche.getIdFiche() != null) {
             valeurRepository.findByIdFiche(fiche.getIdFiche()).forEach(v -> valeurs.put(v.getCodeChamp(), v.getValeur()));
@@ -515,7 +545,7 @@ public class FicheMarcheService {
         Map<String, String> valeursCadrage = new TreeMap<>();
         Map<String, String> valeursPpmParCode = new TreeMap<>();
         for (ChampFicheMarche c : champRepository.findByActifTrueOrderByCodeRubriqueAscRangAsc()) {
-            if (!c.pourTypeMarche(typeMarche) || !ConditionCadrage.vraie(c.getCondition(), cadrage)) {
+            if (!c.pourTypeMarche(typeOuverture) || !ConditionCadrage.vraie(c.getCondition(), cadrage)) {
                 continue;
             }
             ouverts.add(c);
@@ -539,15 +569,19 @@ public class FicheMarcheService {
                 fiche.getNumeroVersion(), fiche.getStatut(), typeMarche, cadrage, valeurs, enLettres, valeursCadrage,
                 valeursPpmParCode, ppm.versionPpm(), bilan, fiche.getDateCreation(), fiche.getDateMaj(),
                 fiche.getDateValidation(), fiche.getValidePar(),
-                dossierRepository.findIdDossierByIdDmc(fiche.getIdDmc()).orElse(null));
+                dossierRepository.findIdDossierByIdDmc(fiche.getIdDmc()).orElse(null),
+                fiche.getIdFiche() != null && StatutFicheMarche.BROUILLON.name().equals(fiche.getStatut()) && typeChange);
     }
 
+    /** Le cadrage enregistré, sans l'ancienne clé {@code typeMarche} (lot 1c : elle n'est plus une réponse). */
     private Map<String, Object> lireJson(String json) {
         if (json == null || json.isBlank()) {
             return new LinkedHashMap<>();
         }
-        return mapper.readValue(json, new TypeReference<LinkedHashMap<String, Object>>() {
+        LinkedHashMap<String, Object> cadrage = mapper.readValue(json, new TypeReference<LinkedHashMap<String, Object>>() {
         });
+        cadrage.remove(CLE_TYPE_MARCHE);
+        return cadrage;
     }
 
     private String ecrireJson(Map<String, Object> cadrage) {

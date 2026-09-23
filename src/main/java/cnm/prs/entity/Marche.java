@@ -170,6 +170,15 @@ public class Marche {
     }
 
     /**
+     * ⚠️ Fiche marché, lot 1c (2026-09-23) — la forme <strong>telle qu'en base</strong>, sans le défaut du getter :
+     * le type de marché de la fiche s'en déduit, et une ligne sans forme ({@code null}) ne se prépare pas — le défaut
+     * {@code QUANTITE_FIXE} y décidérait à la place du plan. Nom hors convention de getter, à dessein.
+     */
+    public FormeMarche formeMarcheSaisie() {
+        return formeMarche;
+    }
+
+    /**
      * Jamais {@code null} : une ligne jamais versionnée est <strong>sa propre origine</strong>. Ce repli
      * dispense de reprendre les lignes historiques — colonne ajoutée par {@code ddl-auto=update} donc
      * {@code null} sur l'existant — tout en gardant la clé stable dès la première mise à jour.

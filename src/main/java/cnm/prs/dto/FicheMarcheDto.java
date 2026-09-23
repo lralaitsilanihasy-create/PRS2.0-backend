@@ -78,4 +78,12 @@ public class FicheMarcheDto {
      * Distinct de {@link #idDossier}, qui reste le dossier de <em>planification</em> de la ligne (contrat du 22/09).
      */
     private Integer idDossierSoumis;
+
+    /**
+     * ⚠️ Lot 1c (2026-09-23, §B3) — vrai quand une fiche <strong>brouillon</strong> a été saisie sous un type de marché
+     * qui n'est plus celui que le plan donne aujourd'hui ({@link #typeMarche}, dérivé de la forme de la ligne courante).
+     * Toujours faux pour une fiche virtuelle ou validée (une version validée dans ce cas est signalée au journal
+     * applicatif).
+     */
+    private Boolean typeChange;
 }

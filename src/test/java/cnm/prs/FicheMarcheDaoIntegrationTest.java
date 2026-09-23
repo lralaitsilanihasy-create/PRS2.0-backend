@@ -180,7 +180,7 @@ class FicheMarcheDaoIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$.valeursPpm.B01-AC-05").value("NOM Prenoms"))
                 .andExpect(jsonPath("$.valeursPpm.B01-AC-11").value("DOS-9900"))
                 .andReturn().getResponse().getContentAsString();
-        assertThat(JsonPath.<java.util.Map<String, Object>>read(corps, "$.valeursPpm")).hasSize(22);
+        assertThat(JsonPath.<java.util.Map<String, Object>>read(corps, "$.valeursPpm")).hasSize(23);   // lot 1c : + B01-AC-19 « Forme du marché »
 
         mvc.perform(post("/api/dmcs/par-marche/9903").header("Authorization", tokenPrmp))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("PV_NON_SIGNE"));
@@ -235,7 +235,7 @@ class FicheMarcheDaoIntegrationTest extends CnmIntegrationTestSupport {
 
     @Test
     @DisplayName("4 — Cadrage garantieSoumission = NON : les champs GS sont ignorés au PUT et absents du bilan ; = OUI : "
-            + "obligatoires bloquants ; fiche virtuelle avant le premier PUT ; clé inconnue / type A_COMMANDE → 400")
+            + "obligatoires bloquants ; fiche virtuelle avant le premier PUT ; clé inconnue → 400, typeMarche ignoré (lot 1c)")
     void cadrageEtRubriquesFermees() throws Exception {
         Long idDmc = creerDmc(tokenPrmp, 9901);
         mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp))
@@ -250,7 +250,9 @@ class FicheMarcheDaoIntegrationTest extends CnmIntegrationTestSupport {
 
         mvc.perform(put("/api/fiches-marche/" + idDmc + "/cadrage").header("Authorization", tokenPrmp).contentType(JSON)
                 .content("{\"cadrage\":{\"typeMarche\":\"A_COMMANDE\"}}"))
-                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.erreurs[0].champ").value("typeMarche"));
+                .andExpect(status().isOk())   // lot 1c : la clé est ignorée, le type vient du plan
+                .andExpect(jsonPath("$.typeMarche").value("QUANTITE_FIXE"))
+                .andExpect(jsonPath("$.cadrage.typeMarche").doesNotExist());
         mvc.perform(put("/api/fiches-marche/" + idDmc + "/cadrage").header("Authorization", tokenPrmp).contentType(JSON)
                 .content("{\"cadrage\":{\"inconnue\":\"OUI\",\"alloti\":\"PEUT-ETRE\"}}"))
                 .andExpect(status().isBadRequest())

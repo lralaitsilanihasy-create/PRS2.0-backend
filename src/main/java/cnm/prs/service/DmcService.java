@@ -18,6 +18,7 @@ import cnm.prs.entity.DossierMec;
 import cnm.prs.entity.Marche;
 import cnm.prs.entity.ModePassation;
 import cnm.prs.entity.TypeDmc;
+import cnm.prs.enums.FormeMarche;
 import cnm.prs.enums.StatutDmc;
 import cnm.prs.enums.StatutDossier;
 import cnm.prs.exception.BadRequestException;
@@ -49,6 +50,30 @@ public class DmcService {
 
     /** Code du type de DMC d'un appel d'offres (H4 : « mode mappé au type DAO »). */
     public static final String TYPE_DAO = "DAO";
+
+    /**
+     * ⚠️ Lot 1c (2026-09-23, §B2) — les formes de marché que la fiche marché sait préparer. Constante et non colonne :
+     * elle s'allonge au lot 3 (à commande) puis au lot 4 (contrat-cadre), sans migration.
+     */
+    public static final java.util.Set<FormeMarche> FORMES_OUTILLEES = java.util.EnumSet.of(FormeMarche.QUANTITE_FIXE);
+
+    /**
+     * ⚠️ Lot 1c — le refus {@code FORME_NON_OUTILLEE} d'une ligne : forme absente du plan (message qui nomme le champ
+     * à compléter) ou non outillée (message qui la nomme). Vide si la forme est outillée. Partagé par la création du
+     * DMC, la liste des éligibles et les écritures de la fiche.
+     */
+    public static Optional<Motif> motifForme(FormeMarche forme) {
+        if (forme == null) {
+            return Optional.of(new Motif("FORME_NON_OUTILLEE", "La forme du marché n'est pas renseignée dans le plan : "
+                    + "complétez le champ « Forme du marché » de la ligne avant de préparer l'appel d'offres."));
+        }
+        if (!FORMES_OUTILLEES.contains(forme)) {
+            String nom = forme == FormeMarche.CONTRAT_CADRE ? "un contrat-cadre" : "un marché à commande";
+            return Optional.of(new Motif("FORME_NON_OUTILLEE", "Cette ligne est " + nom + " ; la fiche marché ne prend en "
+                    + "charge que les marchés à quantité fixe pour le moment."));
+        }
+        return Optional.empty();
+    }
 
     private final DossierMecRepository repository;
     private final MarcheRepository marcheRepository;
@@ -98,7 +123,7 @@ public class DmcService {
             }
             dossierIntegrite.exigerMandatActif();
             Dossier dossier = dossierRepository.findById(marche.getIdDossier()).orElse(null);
-            motifInegibilite(marche, dossier, new Caches(null)).ifPresent(m -> {
+            motifInegibilite(marche, dossier, new Caches(null), true).ifPresent(m -> {
                 throw new BusinessRuleException(m.message(), m.code());
             });
             type = typeDmcRepository.findByCode(TYPE_DAO).orElseThrow();
@@ -156,7 +181,7 @@ public class DmcService {
         for (Marche m : lignes) {
             Dossier d = m.getIdDossier() == null ? null
                     : dossiers.computeIfAbsent(m.getIdDossier(), id -> dossierRepository.findById(id).orElse(null));
-            Optional<Motif> motif = motifInegibilite(m, d, caches);
+            Optional<Motif> motif = motifInegibilite(m, d, caches, false);
             if (motif.isPresent() && !"DAO_EXISTANT".equals(motif.get().code())) {
                 continue;
             }
@@ -164,7 +189,9 @@ public class DmcService {
             DossierMec dmc = dmcParOrigine.get(m.getIdLigneOrigine());
             out.add(new LigneEligibleDto(m.getIdDetail(), m.getIdDossier(), d == null ? null : d.getRefeDossier(),
                     m.getDesignationMarche(), m.getIdMode(), mode == null ? null : mode.getLibelle(), m.getMontEstim(),
-                    dmc != null, dmc == null ? null : dmc.getIdDmc()));
+                    dmc != null, dmc == null ? null : dmc.getIdDmc(),
+                    m.formeMarcheSaisie() == null ? null : m.formeMarcheSaisie().name(),
+                    motifForme(m.formeMarcheSaisie()).isEmpty()));
         }
         return out;
     }
@@ -175,13 +202,14 @@ public class DmcService {
 
     /**
      * H4, dans l'ordre : ligne retirée ({@code LIGNE_RETIREE}) ; mode non mappé au type {@code DAO} actif
-     * ({@code MODE_NON_DAO}) ; plan sans PV signé favorable — avis {@code FAV} au PV signé, ou {@code FAVR} une fois les
+     * ({@code MODE_NON_DAO}) ; ⚠️ lot 1c : forme de marché non outillée ou absente ({@code FORME_NON_OUTILLEE},
+     * si {@code verifierForme} — la liste des éligibles la garde et la montre, {@code formeOutillee = false}) ; plan sans PV signé favorable — avis {@code FAV} au PV signé, ou {@code FAVR} une fois les
      * réserves levées ({@code PV_NON_SIGNE}) ; DMC déjà créé ({@code DAO_EXISTANT}). Le PV pris en compte est le
      * plus récent des PV signés du dossier.
      *
      * @param caches modes, types, PV par dossier et DMC par filiation partagés par une liste d'éligibles
      */
-    private Optional<Motif> motifInegibilite(Marche marche, Dossier dossier, Caches caches) {
+    private Optional<Motif> motifInegibilite(Marche marche, Dossier dossier, Caches caches, boolean verifierForme) {
         if (Boolean.TRUE.equals(marche.getSupprimee())) {
             return Optional.of(new Motif("LIGNE_RETIREE", "La ligne " + marche.getIdDetail() + " a été retirée du plan."));
         }
@@ -199,6 +227,12 @@ public class DmcService {
         if (!type.isActif() || !TYPE_DAO.equalsIgnoreCase(type.getCode())) {
             return Optional.of(new Motif("MODE_NON_DAO", "Le mode « " + libelleMode + " » n'est pas un appel d'offres "
                     + "(type de DMC « " + type.getCode() + (type.isActif() ? "" : ", inactif") + " »)."));
+        }
+        if (verifierForme) {
+            Optional<Motif> forme = motifForme(marche.formeMarcheSaisie());
+            if (forme.isPresent()) {
+                return forme;
+            }
         }
         if (dossier == null || !caches.pv.computeIfAbsent(dossier.getIdDossier(), id -> valeursPpm.pvSigneFavorable(dossier))) {
             return Optional.of(new Motif("PV_NON_SIGNE", "Le plan " + (dossier == null ? "" : dossier.getRefeDossier() + " ")

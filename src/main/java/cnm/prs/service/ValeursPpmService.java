@@ -164,6 +164,9 @@ public class ValeursPpmService {
         v.put("COMPTES", comptes(ligne, benefs));
         v.put("DATES_PREVISIONNELLES", datesPrevisionnelles(ligne, dates));
         v.put("OBJET", ligne.getDesignationMarche());
+        // ⚠️ Lot 1c (2026-09-23) — la forme telle que saisie au plan (jamais le défaut du getter) : d'elle se déduit le
+        // type de marché de la fiche. Servie en libellé ; le code est FicheMarcheDto.typeMarche.
+        v.put("FORME_MARCHE", ligne.formeMarcheSaisie() == null ? null : ligne.formeMarcheSaisie().libelle());
         List<Lot> lots = lotRepository.findByIdDetail(ligne.getIdDetail());
         v.put("NB_LOTS_PPM", String.valueOf(lots.size()));
         v.put("LOTS_DESIGNATION", lots.isEmpty() ? null : String.join(" ; ", lots.stream()

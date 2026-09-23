@@ -168,7 +168,8 @@ stable** de la création d'un DMC par la PRMP (`LIGNE_RETIREE`, `VERSION_DEPASSE
 `DAO_EXISTANT`) et de la fiche marché (`DMC_NON_DAO`, `FICHE_VIDE`, `FICHE_VALIDEE`, `BROUILLON_EN_COURS`,
 `CONTROLES_BLOQUANTS`, `CHAMP_EXISTANT`) — c'est la forme du « 409 nominatif » : un code, jamais un tableau
 `erreurs` (réservé au 400). ⚠️ 2026-09-23 (fiche marché, lot 1b) : `FICHE_NON_VALIDEE`, `DOSSIER_EXISTANT`,
-`DOSSIER_NON_BROUILLON`, `DOSSIER_NON_DAO`, `DOSSIER_DEJA_LIE`, `FICHE_DEJA_LIEE`.
+`DOSSIER_NON_BROUILLON`, `DOSSIER_NON_DAO`, `DOSSIER_DEJA_LIE`, `FICHE_DEJA_LIEE`. ⚠️ 2026-09-23 (lot 1c) :
+`FORME_NON_OUTILLEE`.
 
 Un champ **`idDossier`** (number) s'ajoute enfin, ⚠️ 2026-09-23, aux 409 qui **désignent un dossier** vers lequel
 naviguer — `DOSSIER_EXISTANT` (le dossier déjà produit par la fiche) et `FICHE_DEJA_LIEE` (le dossier qui la porte) ;
@@ -4513,7 +4514,10 @@ pour le même marché → **409** `DAO_EXISTANT`. Au **changement de mode** d'un
 > porte déjà un DAO ; (3) **vacance** → **409 `VACANCE_PRMP`** (même garde que la saisie) ; (4) **H4**, 409 à code
 > stable, dans l'ordre : `LIGNE_RETIREE` (ligne supprimée du plan), `VERSION_DEPASSEE` (le dossier de la ligne est
 > `REMPLACE` : « préparer l'appel d'offres depuis la version courante »), `MODE_NON_DAO` (mode rattaché à aucun type
-> — message qui nomme l'Administrateur — ou à un type autre que `DAO` / inactif), `PV_NON_SIGNE` (plan sans PV signé
+> — message qui nomme l'Administrateur — ou à un type autre que `DAO` / inactif), ⚠️ **2026-09-23 (lot 1c)**
+> `FORME_NON_OUTILLEE` (forme du marché de la ligne — `t_marche.FORME_MARCHE` — que la fiche ne sait pas encore
+> préparer : seule `QUANTITE_FIXE` l'est ; message qui nomme la forme, « Cette ligne est un contrat-cadre ; … », ou, forme
+> absente du plan, le champ « Forme du marché » à compléter), `PV_NON_SIGNE` (plan sans PV signé
 > favorable : statut ∈ {`PV_SIGNE`, `EN_VERIFICATION`, `OBSERVATIONS_LEVEES`, `DECISION_TRANSMISE_SIGMP`, `CLOTURE`}
 > et dernier PV signé d'avis `FAV`, ou `FAVR` avec statut ∈ {`OBSERVATIONS_LEVEES`, `DECISION_TRANSMISE_SIGMP`,
 > `CLOTURE`}), `DAO_EXISTANT` (un DMC existe déjà sur la **filiation** de la ligne — `ID_LIGNE_ORIGINE` — sur cette
@@ -4530,7 +4534,11 @@ que porte ce DMC (`t_dossier.ID_DMC`), `null` tant qu'il n'existe pas.
 
 **`LigneEligibleDto`** (⚠️ 2026-09-22) : `idDetail`, `idDossier`, `refeDossier`, `designationMarche`, `idMode`,
 `libelleMode`, `montEstim`, `dejaDao` (boolean, calculé **sur la filiation** : un DMC lié à un ancêtre compte),
-`idDmc` (quand `dejaDao`, pour rouvrir la fiche ; absent sinon).
+`idDmc` (quand `dejaDao`, pour rouvrir la fiche ; absent sinon) ; ⚠️ 2026-09-23 (lot 1c) : `formeMarche` (`A_COMMANDE` ·
+`CONTRAT_CADRE` · `QUANTITE_FIXE`, `null` si le plan ne la porte pas) et `formeOutillee` (boolean). Une ligne **non outillée
+reste listée** — la PRMP voit qu'elle existe et pourquoi elle attend ; le front l'affiche désactivée — si elle passe
+toutes les autres gardes ; sa création répond 409 `FORME_NON_OUTILLEE`. Formes outillées : constante du service
+(`DmcService.FORMES_OUTILLEES`), elle s'allongera aux lots 3 (à commande) et 4 (contrat-cadre) sans migration.
 
 **Endpoints**
 
@@ -4606,12 +4614,13 @@ l'Administrateur). Avant le premier enregistrement la fiche est **virtuelle** : 
 | idDmc, idDetail, idDossier | le DMC, la ligne à laquelle il est **lié** (à sa création), le dossier de planification |
 | idDetailCourant, ligneSupprimee, refeDossier, designationMarche | ⚠️ **filiation** : la ligne **courante** de la même filiation (`ID_LIGNE_ORIGINE`) dans la **dernière version signée** du plan — la chaîne `REMPLACE` est suivie tant que la version suivante est signée (même prédicat que H4) ou elle-même remplacée ; une mise à jour en instruction arrête la marche. `= idDetail` tant que le plan n'a pas été mis à jour. `ligneSupprimee` : la filiation est retirée dans la version courante (le front avertit, ne bloque pas) |
 | version, statut | 1, 2… ; `BROUILLON` · `VALIDEE` |
-| typeMarche | fixé par le cadrage (`QUANTITE_FIXE` par défaut) |
-| cadrage | `{ clé: réponse }` — `typeMarche`, `alloti`, `nbLots`, `variantes`, `groupement`, `formeGroupement`, `provenance`, `typePrix`, `prixRevisable`, `garantieSoumission`, `avance`, `tauxAvance`, `penalites`, `attributaires` |
+| typeMarche | ⚠️ **2026-09-23 (lot 1c) — dérivé du plan**, plus une réponse : `t_marche.FORME_MARCHE` de la **ligne courante** (même lecture que `valeursPpm`), à chaque lecture ; `null` si le plan ne la porte pas (fiche lisible, écritures refusées). Les rubriques s'ouvrent selon lui |
+| typeChange | ⚠️ **2026-09-23 (lot 1c)** — `true` quand une fiche **brouillon** a été saisie sous un type qui n'est plus celui du plan (`t_fiche_marche.TYPE_MARCHE`, figé à la création de la version, ≠ `typeMarche`) ; le front prévient. Toujours `false` pour une fiche virtuelle ou validée (une version validée dans ce cas est signalée au journal applicatif, `[FICHE_MARCHE]`) |
+| cadrage | `{ clé: réponse }` — ⚠️ lot 1c : **plus de `typeMarche`** (ignoré s'il est envoyé, retiré des cadrages enregistrés avant) ; `alloti`, `nbLots`, `variantes`, `groupement`, `formeGroupement`, `provenance`, `typePrix`, `prixRevisable`, `garantieSoumission`, `avance`, `tauxAvance`, `penalites`, `attributaires` |
 | valeurs | `{ code: string }` des champs `SAISIE` renseignés (nombres normalisés en chiffres, dates ISO) |
 | enLettres | `{ code: texte }` pour chaque `MONTANT` saisi (« huit millions quatre cent mille ariary ») |
 | valeursCadrage | `{ code: string }` des champs `CADRAGE` ouverts, reflets des réponses |
-| valeursPpm, versionPpm | `{ code: string }` des champs `PPM` ouverts (22 clés : `ENTITE`, `ADRESSE`, `MINISTERE`, `LOCALITE`, `PRMP`, `PRMP_EMAIL`, `PRMP_TEL`, `PPM_REFERENCE`, `PPM_EXERCICE`, `PPM_VERSION`, `DOSSIER_REFERENCE`, `NATURE`, `MODE`, `MONTANT_ESTIMATIF`, `FINANCEMENT`, `BENEFICIAIRES`, `COMPTES`, `DATES_PREVISIONNELLES`, `OBJET`, `NB_LOTS_PPM`, `LOTS_DESIGNATION`, `LOTS_MONTANTS`), **relus à chaque lecture sur la ligne courante**, jamais stockés (H7) ; `versionPpm` = `NUM_MAJ` du plan lu, 0 pour un plan initial |
+| valeursPpm, versionPpm | `{ code: string }` des champs `PPM` ouverts (⚠️ lot 1c : **23** clés : `ENTITE`, `ADRESSE`, `MINISTERE`, `LOCALITE`, `PRMP`, `PRMP_EMAIL`, `PRMP_TEL`, `PPM_REFERENCE`, `PPM_EXERCICE`, `PPM_VERSION`, `DOSSIER_REFERENCE`, `NATURE`, `MODE`, `MONTANT_ESTIMATIF`, `FINANCEMENT`, `BENEFICIAIRES`, `COMPTES`, `DATES_PREVISIONNELLES`, `OBJET`, `NB_LOTS_PPM`, `LOTS_DESIGNATION`, `LOTS_MONTANTS`, `FORME_MARCHE` — champ `B01-AC-19` « Forme du marché », libellé « À quantité fixe » / « Contrat cadre » / « Marché à commande », absent si le plan ne la porte pas), **relus à chaque lecture sur la ligne courante**, jamais stockés (H7) ; `versionPpm` = `NUM_MAJ` du plan lu, 0 pour un plan initial |
 | bilanControles | `BilanControlesDto`, recalculé à chaque lecture et à chaque `PUT` |
 | dateCreation, dateMaj, dateValidation, validePar | date-heures ISO ; `validePar` = `ID_PRMP` |
 | idDossierSoumis | ⚠️ **2026-09-23 (lot 1b)** — le dossier **soumis à la CNM** que la fiche a produit ou auquel elle est rattachée (`t_dossier.ID_DMC`) ; `null` tant qu'il n'existe pas. **Distinct de `idDossier`**, qui reste le dossier de *planification* de la ligne (contrat du 22/09) |
@@ -4638,7 +4647,7 @@ Une règle dont un rôle n'a pas encore de champ (référentiel incomplet) **n'e
 | Méthode | URL | Corps | Réponse | Statuts | Accès |
 |---|---|---|---|---|---|
 | GET | /api/fiches-marche/{idDmc} | — | `FicheMarcheDto` (dernière version, virtuelle avant le premier `PUT`) | 200, 403, 404, 409 `DMC_NON_DAO` | lecture (périmètre) |
-| PUT | /api/fiches-marche/{idDmc}/cadrage | `{ cadrage }` | `FicheMarcheDto` | 200, 400 (nominatifs par clé : clé inconnue, `OUI`/`NON`, nombre, option ; **lot 1 : `typeMarche` ≠ `QUANTITE_FIXE` → 400**), 403, 404, 409 `FICHE_VALIDEE` / `VACANCE_PRMP` | écriture |
+| PUT | /api/fiches-marche/{idDmc}/cadrage | `{ cadrage }` | `FicheMarcheDto` | 200, 400 (nominatifs par clé : clé inconnue, `OUI`/`NON`, nombre, option ; ⚠️ lot 1c : `typeMarche` **ignoré**, plus de 400), 403, 404, 409 `FICHE_VALIDEE` / `VACANCE_PRMP` / `FORME_NON_OUTILLEE` | écriture |
 | PUT | /api/fiches-marche/{idDmc}/blocs/{bloc} | `{ valeurs }` | `FicheMarcheDto` | 200, 400 (nominatifs `{ champ: code, message }` : champ inconnu / inactif, champ d'un autre bloc, champ `PPM` ou `CADRAGE`, valeur mal typée, `MONTANT` négatif, `POURCENTAGE` hors 0–100, option hors liste, `PIECE`), 403, 404 (bloc inconnu), 409 `FICHE_VALIDEE` / `VACANCE_PRMP` | écriture |
 | POST | /api/fiches-marche/{idDmc}/controler | — | `BilanControlesDto` (sans écrire) | 200, 403, 404 | lecture |
 | POST | /api/fiches-marche/{idDmc}/valider | — | `FicheMarcheDto` (`VALIDEE`, version n) | 200, 403, 404, 409 `CONTROLES_BLOQUANTS` / `FICHE_VIDE` / `FICHE_VALIDEE` / `VACANCE_PRMP` | **PRMP seule** |
@@ -4652,6 +4661,12 @@ erreur — et absent du bilan ; un obligatoire manquant n'est **pas** un 400 : i
 enregistre un brouillon incomplet, on ne le valide pas). Une version `VALIDEE` est **figée** (409 sur tout `PUT`) :
 `reviser` ouvre la suivante. Journal du dossier de planification à la validation : `FICHE_MARCHE_VALIDEE` ; aucune
 notification, pas de chronométrage (geste propre à la PRMP, avant soumission).
+
+> ⚠️ **2026-09-23 (lot 1c) — la forme du plan gouverne l'écriture.** `PUT …/cadrage`, `PUT …/blocs/{bloc}`,
+> `POST …/valider` et `POST …/reviser` répondent **409 `FORME_NON_OUTILLEE`** (après le 403 et la vacance) quand la
+> forme de la ligne courante n'est pas outillée ou manque au plan — même message que la création du DMC. La lecture
+> reste ouverte. Le type sous lequel une version est saisie est figé à sa création (`VersionFicheDto.typeMarche`
+> garde celui de chaque version validée) ; `FicheMarcheDto.typeMarche` est toujours celui du plan.
 
 ### Le dossier soumis à la CNM — lot 1b ⚠️ 2026-09-23
 

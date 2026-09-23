@@ -19,13 +19,24 @@ import cnm.prs.exception.BadRequestException;
 public enum FormeMarche {
 
     /** « Marché à commande » — motif « à commande » / « marché à commande » dans l'objet. */
-    A_COMMANDE,
+    A_COMMANDE("Marché à commande"),
 
     /** « Contrat cadre » — motif « contrat cadre » (avec/sans parenthèses) dans l'objet. */
-    CONTRAT_CADRE,
+    CONTRAT_CADRE("Contrat cadre"),
 
     /** « À quantité fixe » — défaut quand l'objet ne mentionne aucune forme. */
-    QUANTITE_FIXE;
+    QUANTITE_FIXE("À quantité fixe");
+
+    private final String libelle;
+
+    FormeMarche(String libelle) {
+        this.libelle = libelle;
+    }
+
+    /** ⚠️ Lot 1c (2026-09-23) — libellé d'affichage, celui du front, repris dans la fiche marché (B01-AC-19). */
+    public String libelle() {
+        return libelle;
+    }
 
     /**
      * Motifs de détection sur la désignation <strong>normalisée</strong> (accents/casse neutralisés,
