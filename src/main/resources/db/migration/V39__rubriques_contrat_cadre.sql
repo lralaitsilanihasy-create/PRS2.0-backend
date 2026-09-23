@@ -2,8 +2,8 @@
 -- V39 — Les rubriques du contrat-cadre (demande front du 2026-09-23, lot 4, §B1)
 --
 -- Blocs et rubriques de la fiche marché sont figés par migration (V35) ; les champs, eux, se chargent par l'import
--- du fichier de correspondance (docs/referentiel-champs-fiche-marche-contrat-cadre.csv du front, 118 champs). Ce
--- fichier range ses champs dans 38 rubriques qui n'existent pas encore : elles sont créées ici, réservées au
+-- du fichier de correspondance (docs/referentiel-champs-fiche-marche-contrat-cadre.csv du front, 114 champs). Ce
+-- fichier range ses champs dans 37 rubriques qui n'existent pas encore : elles sont créées ici, réservées au
 -- contrat-cadre (TYPES_MARCHE = 'CONTRAT_CADRE'), avec pour document maître celui de la majorité de leurs champs et
 -- pour compte attendu le nombre de champs du fichier. Les rangs 51 et suivants les placent après les rubriques
 -- partagées d'un même bloc ; B07, réservé au contrat-cadre, reçoit enfin ses huit rubriques (rangs 1 à 8).
@@ -17,12 +17,11 @@ INSERT INTO public.tr_rubrique_fiche_marche
     ('B02-OE', 'B02', 'OE', 'Objet et étendue du contrat-cadre', 51, 'DPAC', 1, 'CONTRAT_CADRE'),
     ('B02-SG', 'B02', 'SG', 'Personne responsable et délégation', 52, 'AE', 3, 'CONTRAT_CADRE'),
     ('B02-PC', 'B02', 'PC', 'Procédure de passation', 53, 'DPAC', 3, 'CONTRAT_CADRE'),
-    ('B02-FC', 'B02', 'FC', 'Forme du contrat-cadre', 54, 'DPAC', 1, 'CONTRAT_CADRE'),
     ('B02-DC', 'B02', 'DC', 'Durée du contrat-cadre', 55, 'AE', 4, 'CONTRAT_CADRE'),
-    ('B02-AL', 'B02', 'AL', 'Allotissement et attributaires', 56, 'DPAC', 3, 'CONTRAT_CADRE'),
+    ('B02-AL', 'B02', 'AL', 'Allotissement et attributaires', 56, 'DPAC', 2, 'CONTRAT_CADRE'),
     -- B03 Candidats
     ('B03-TI', 'B03', 'TI', 'Titulaire', 51, 'AE', 5, 'CONTRAT_CADRE'),
-    ('B03-GC', 'B03', 'GC', 'Groupement', 52, 'AE', 6, 'CONTRAT_CADRE'),
+    ('B03-GC', 'B03', 'GC', 'Groupement', 52, 'AE', 5, 'CONTRAT_CADRE'),
     ('B03-SS', 'B03', 'SS', 'Sous-traitance', 53, 'AE', 2, 'CONTRAT_CADRE'),
     -- B04 Dossier, remise & ouverture des offres
     ('B04-DS', 'B04', 'DS', 'Dossier de consultation', 51, 'DPAC', 6, 'CONTRAT_CADRE'),
@@ -49,7 +48,7 @@ INSERT INTO public.tr_rubrique_fiche_marche
     ('B07-DE', 'B07', 'DE', 'Délais d''exécution', 7, 'AE', 4, 'CONTRAT_CADRE'),
     ('B07-PE', 'B07', 'PE', 'Pénalités', 8, 'AE', 3, 'CONTRAT_CADRE'),
     -- B08 Paiements, avances & garanties
-    ('B08-FI', 'B08', 'FI', 'Financement et sûretés', 51, 'AE', 5, 'CONTRAT_CADRE'),
+    ('B08-FI', 'B08', 'FI', 'Financement et sûretés', 51, 'AE', 4, 'CONTRAT_CADRE'),
     ('B08-FP', 'B08', 'FP', 'Facturation et paiement', 52, 'AE', 9, 'CONTRAT_CADRE'),
     -- B09 Exécution du marché
     ('B09-EA', 'B09', 'EA', 'Exécution administrative', 51, 'AE', 3, 'CONTRAT_CADRE'),

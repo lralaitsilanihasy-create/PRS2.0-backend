@@ -6,12 +6,10 @@ B02-SG-03;Nature, numéro et date de l'acte de nomination;TEXTE;SAISIE;AE;;CONTR
 B02-PC-01;Référence de l'article du code des marchés publics de la procédure choisie;TEXTE;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;;;;;oui
 B02-PC-02;Rythme de passation des marchés subséquents;LISTE;SAISIE;DPAC;AE;CONTRAT_CADRE;;oui;;;Au fur et à mesure des besoins,Selon le calendrier fixé ci-après;;;oui
 B02-PC-03;Calendrier de remise en concurrence des titulaires;TEXTE_LONG;SAISIE;DPAC;AE;CONTRAT_CADRE;;non;;;;;;oui
-B02-FC-01;Forme de prix du contrat-cadre;LISTE;CADRAGE;DPAC;AE;CONTRAT_CADRE;;non;;;;typePrix;;oui
 B02-DC-01;Durée maximale du contrat-cadre (mois);NOMBRE;SAISIE;AE;DPAC;CONTRAT_CADRE;;oui;;;;;;oui
 B02-DC-02;Durée de validité du contrat-cadre (mois);NOMBRE;SAISIE;AE;DPAC;CONTRAT_CADRE;;oui;;;;;;oui
 B02-DC-03;Contrat-cadre reconductible;OUI_NON;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;oui
 B02-DC-04;Conditions de reconduction de la période de validité;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui
-B02-AL-01;Contrat-cadre alloti;OUI_NON;CADRAGE;DPAC;AE;CONTRAT_CADRE;;non;;;;alloti;;oui
 B02-AL-02;Numéro et désignation des lots;TEXTE_LONG;SAISIE;DPAC;AE;CONTRAT_CADRE;alloti = OUI;oui;;;;;;oui
 B02-AL-03;Contrat-cadre mono ou multi-attributaire;LISTE;CADRAGE;AE;DPAC;CONTRAT_CADRE;;non;;;;attributaires;;oui
 B03-TI-01;Dénomination sociale du titulaire;TEXTE;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;oui
@@ -19,7 +17,6 @@ B03-TI-02;Siège social du titulaire;TEXTE;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;ou
 B03-TI-03;Numéro d'identification fiscale (NIF) du titulaire;TEXTE;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;oui
 B03-TI-04;Nom du représentant du titulaire;TEXTE;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;oui
 B03-TI-05;Qualité du représentant du titulaire;LISTE;SAISIE;AE;;CONTRAT_CADRE;;oui;;;Représentant légal de l'entreprise,Ayant reçu pouvoir du représentant légal;;;oui
-B03-GC-01;Forme du groupement;LISTE;CADRAGE;AE;;CONTRAT_CADRE;groupement = OUI;non;;;;formeGroupement;;oui
 B03-GC-02;Dénomination sociale du membre du groupement;TEXTE;SAISIE;AE;;CONTRAT_CADRE;groupement = OUI;oui;;;;;;oui
 B03-GC-03;Siège social du membre du groupement;TEXTE;SAISIE;AE;;CONTRAT_CADRE;groupement = OUI;oui;;;;;;oui
 B03-GC-04;Numéro d'identification fiscale (NIF) du membre du groupement;TEXTE;SAISIE;AE;;CONTRAT_CADRE;groupement = OUI;oui;;;;;;oui
@@ -89,7 +86,6 @@ B07-DE-04;Délais d'exécution des marchés fractionnés par bons de commande;TE
 B07-PE-01;Pénalités de retard des marchés subséquents;LISTE;SAISIE;AE;;CONTRAT_CADRE;;oui;;PENALITES_PLAFOND_15:TAUX;Non applicables,Fixées dans le contrat-cadre,Fixées dans les marchés subséquents;;;oui
 B07-PE-02;Régime des pénalités fixées dans le contrat-cadre;LISTE;SAISIE;AE;;CONTRAT_CADRE;;non;;;Conformément à l'article 12 du CCAG,Dérogation au CCAG;;;oui
 B07-PE-03;Pénalités dérogeant au CCAG : rédaction libre;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;;non;;PENALITES_PLAFOND_15:DEROGATION;;;;oui
-B08-FI-01;Avance versée aux titulaires des marchés subséquents;OUI_NON;CADRAGE;AE;DPAC;CONTRAT_CADRE;;non;;;;avance;;oui
 B08-FI-02;Modalités de versement de l'avance (délai de paiement en jours calendaires);NOMBRE;SAISIE;AE;;CONTRAT_CADRE;avance = OUI;oui;;;;;;oui
 B08-FI-03;Montant de l'avance (% du montant TTC du marché subséquent, maximum 20 %);POURCENTAGE;SAISIE;AE;;CONTRAT_CADRE;avance = OUI;oui;;AVANCE_SUP_5_GARANTIE:TAUX;;;;oui
 B08-FI-04;Remboursement de l'avance (article 72.III du code des marchés publics);TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;avance = OUI;non;;;;;;oui
