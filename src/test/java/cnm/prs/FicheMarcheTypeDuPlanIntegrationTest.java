@@ -90,30 +90,19 @@ class FicheMarcheTypeDuPlanIntegrationTest extends CnmIntegrationTestSupport {
     // ------------------------------------------------------------------ 2. forme non outillée
 
     @Test
-    @DisplayName("2 — Ligne CONTRAT_CADRE : POST par-marche → 409 FORME_NON_OUTILLEE nommant le contrat-cadre ; à commande "
-            + "idem ; eligibles les liste avec leur forme et formeOutillee = false ; plan non signé : toujours absent")
-    void formeNonOutillee() throws Exception {
-        mvc.perform(post("/api/dmcs/par-marche/9902").header("Authorization", tokenPrmp))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("FORME_NON_OUTILLEE"))
-                .andExpect(jsonPath("$.message", containsString("contrat-cadre")))
-                .andExpect(jsonPath("$.message", containsString("quantité fixe")));
-        mvc.perform(post("/api/dmcs/par-marche/9903").header("Authorization", tokenPrmp))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("FORME_NON_OUTILLEE"))
-                .andExpect(jsonPath("$.message", containsString("marché à commande")));
-        // Garde placée avant PV_NON_SIGNE : c'est la forme qui répond sur le plan non signé.
+    @DisplayName("2 — ⚠️ Lots 3 et 4 : les trois formes sont outillées — contrat-cadre et à commande → 201 ; eligibles les "
+            + "liste avec leur forme et formeOutillee = true ; plan non signé : PV_NON_SIGNE, plus FORME_NON_OUTILLEE")
+    void formesOuvertes() throws Exception {
+        mvc.perform(post("/api/dmcs/par-marche/9902").header("Authorization", tokenPrmp)).andExpect(status().isCreated());
+        mvc.perform(post("/api/dmcs/par-marche/9903").header("Authorization", tokenPrmp)).andExpect(status().isCreated());
         mvc.perform(post("/api/dmcs/par-marche/9904").header("Authorization", tokenPrmp))
-                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("FORME_NON_OUTILLEE"));
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("PV_NON_SIGNE"));
 
         String corps = mvc.perform(get("/api/dmcs/eligibles").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<List<Integer>>read(corps, "$[*].idDetail")).containsExactlyInAnyOrder(9901, 9902, 9903);
         assertThat(JsonPath.<List<String>>read(corps, "$[?(@.idDetail==9902)].formeMarche")).containsExactly("CONTRAT_CADRE");
-        assertThat(JsonPath.<List<Boolean>>read(corps, "$[?(@.idDetail==9902)].formeOutillee")).containsExactly(false);
-        assertThat(JsonPath.<List<Boolean>>read(corps, "$[?(@.idDetail==9903)].formeOutillee")).containsExactly(false);
-        assertThat(JsonPath.<List<String>>read(corps, "$[?(@.idDetail==9901)].formeMarche")).containsExactly("QUANTITE_FIXE");
-        assertThat(JsonPath.<List<Boolean>>read(corps, "$[?(@.idDetail==9901)].formeOutillee")).containsExactly(true);
+        assertThat(JsonPath.<List<Boolean>>read(corps, "$[*].formeOutillee")).containsOnly(true);
     }
 
     // ------------------------------------------------------------------ 3. ligne sans forme
@@ -174,7 +163,7 @@ class FicheMarcheTypeDuPlanIntegrationTest extends CnmIntegrationTestSupport {
 
     @Test
     @DisplayName("5 — Mise à jour du plan qui passe la ligne en contrat-cadre : typeMarche = CONTRAT_CADRE, typeChange sur la "
-            + "fiche brouillon, écritures refusées (FORME_NON_OUTILLEE), lecture ouverte")
+            + "fiche brouillon ; ⚠️ lot 4 : écriture permise, et reprendre le cadrage éteint typeChange")
     void filiation() throws Exception {
         Long idDmc = creerDmc(9901);
         cadrage(idDmc);
@@ -202,10 +191,12 @@ class FicheMarcheTypeDuPlanIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$.typeChange").value(true))
                 .andExpect(jsonPath("$.valeursPpm.B01-AC-19").value("Contrat cadre"));
         mvc.perform(put("/api/fiches-marche/" + idDmc + "/cadrage").header("Authorization", tokenPrmp).contentType(JSON)
-                .content("{\"cadrage\":{\"garantieSoumission\":\"OUI\"}}"))
-                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("FORME_NON_OUTILLEE"));
-        mvc.perform(post("/api/fiches-marche/" + idDmc + "/valider").header("Authorization", tokenPrmp))
-                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("FORME_NON_OUTILLEE"));
+                .content("{\"cadrage\":{\"garantieSoumission\":\"OUI\",\"attributaires\":\"MULTI\"}}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.typeMarche").value("CONTRAT_CADRE"))
+                .andExpect(jsonPath("$.typeChange").value(false))
+                .andExpect(jsonPath("$.typeOutille").value(true))
+                .andExpect(jsonPath("$.cadrage.attributaires").value("MULTI"));
     }
 
     // ------------------------------------------------------------------ 6. fiches validées

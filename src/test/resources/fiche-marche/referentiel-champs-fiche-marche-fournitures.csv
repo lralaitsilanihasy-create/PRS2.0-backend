@@ -1,0 +1,117 @@
+code;libelle;type;source;documentMaitre;reprises;typesMarche;condition;obligatoire;texteType;controle;options;cleCadrage;clePpm;actif
+B02-OB-02;Type de fournitures à livrer et services connexes à réaliser;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B02-AU-01;Description du projet global (marché non alloti);TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;alloti = NON;oui;;;;;;oui
+B02-AU-02;Attribution des lots;LISTE;SAISIE;DPAO;AE;QUANTITE_FIXE,A_COMMANDE;alloti = OUI;oui;;;Lot par lot (attribution divisible),Totalité des lots à un seul attributaire;;;oui
+B02-AU-03;Quantités minimum et maximum;TEXTE_LONG;SAISIE;DPAO;AE;A_COMMANDE;;oui;;;;;;oui
+B02-AU-04;Durée de validité du marché à commande (mois);NOMBRE;SAISIE;DPAO;AE;A_COMMANDE;;oui;;;;;;oui
+B02-AU-05;Date d'effet du marché à commande;DATE;SAISIE;AE;;A_COMMANDE;;oui;;;;;;oui
+B02-AU-06;Rythme de commande (bons de commande);TEXTE_LONG;SAISIE;AUCUN;;A_COMMANDE;;non;;;;;;non
+B03-ST-01;Sous-traitance autorisée;OUI_NON;SAISIE;AE;CCAP;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B03-ST-02;Conditions de la sous-traitance;TEXTE_LONG;SAISIE;AE;CCAP;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
+B03-NA-01;Nantissement autorisé;OUI_NON;SAISIE;AE;CCAP;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B03-NA-02;Conditions du nantissement;TEXTE_LONG;SAISIE;AE;CCAP;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
+B03-CQ-01;Identification et situation juridique : pièces exigées;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B03-CQ-02;Capacité technique exigée;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B03-CQ-03;Capacité financière exigée;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B03-CQ-04;Marchés similaires : certificats de bonne fin ou PV de réception exigés;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B03-CQ-05;Autorisation du fabricant exigée;OUI_NON;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B03-CQ-06;Qualifications particulières exigées;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
+B03-CQ-07;Communautés locales et ONG admises à candidater;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
+B03-CQ-08;Préférence nationale accordée;OUI_NON;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B04-DE-01;Adresse pour les demandes d'éclaircissement;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B04-DE-02;Délai d'envoi des demandes par les candidats (jours avant la date limite);NOMBRE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B04-DE-03;Délai de réponse du représentant de la PRMP (jours);NOMBRE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B04-CO-01;Documents et pièces constituant l'offre;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B04-VO-01;Délai de validité des offres (jours);NOMBRE;SAISIE;DPAO;CCAP;QUANTITE_FIXE,A_COMMANDE;;oui;Les offres restent valables {B04-VO-01} jours à compter de la date limite de remise des offres.;VALIDITE_GARANTIE_SUP_OFFRE:OFFRE;;;;oui
+B04-LA-01;Langue de l'offre autre que le français admise;OUI_NON;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B04-LA-02;Langue admise en plus du français;TEXTE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
+B04-RO-01;Nombre de copies de l'offre;NOMBRE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B04-RO-02;Mention et numéro à porter sur les plis;TEXTE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B04-LR-01;Nom complet de la PRMP destinataire des offres;TEXTE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B04-LR-02;Adresse de remise des offres;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B04-LR-03;Date limite de remise des offres;DATE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;DATES_ORDRE:REMISE;;;;oui
+B04-LR-04;Heure limite de remise des offres;TEXTE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B04-OP-01;Lieu de l'ouverture des plis;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B04-OP-02;Date de l'ouverture des plis;DATE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;DATES_ORDRE:OUVERTURE;;;;oui
+B04-OP-03;Heure de l'ouverture des plis;TEXTE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B05-CP-01;Incoterm des fournitures importées;LISTE;SAISIE;DPAO;AE,CCAP;QUANTITE_FIXE,A_COMMANDE;provenance = IMPORTEES;oui;;;CIP,CIF;;;oui
+B05-CP-02;Décomposition des prix des fournitures nationales (EXW hors TVA, transports intérieurs, assurance, services);TEXTE_LONG;SAISIE;DPAO;AE,CCAP;QUANTITE_FIXE,A_COMMANDE;provenance = NATIONAL;non;;;;;;oui
+B05-CP-03;Part en devises des fournitures importées;TEXTE;SAISIE;DPAO;AE,CCAP;QUANTITE_FIXE,A_COMMANDE;provenance = IMPORTEES;non;;;;;;oui
+B05-VP-02;Formule de révision des prix;TEXTE_LONG;SAISIE;DPAO;CCAP;QUANTITE_FIXE,A_COMMANDE;prixRevisable = OUI;oui;;;;;;oui
+B05-MO-01;Monnaie de l'offre;LISTE;SAISIE;DPAO;CCAP;QUANTITE_FIXE,A_COMMANDE;;oui;;;Ariary,Ariary et devise pour la part importée;;;oui
+B05-MO-02;Devise admise pour la part importée;TEXTE;SAISIE;DPAO;CCAP;QUANTITE_FIXE,A_COMMANDE;provenance = IMPORTEES;non;;;;;;oui
+B05-GS-02;Forme de la garantie de soumission;LISTE;SAISIE;DPAO;AE,CCAP;QUANTITE_FIXE,A_COMMANDE;garantieSoumission = OUI;oui;;;Dépôt en numéraire au Trésor,Caution personnelle et solidaire d'un organisme agréé par le MEF,Garantie bancaire,Chèque de banque;;;oui
+B05-GS-03;Montant de la garantie de soumission (Ariary);MONTANT;SAISIE;DPAO;AE,CCAP;QUANTITE_FIXE,A_COMMANDE;garantieSoumission = OUI;oui;La garantie de soumission est fixée à {B05-GS-03} ariary.;MONTANT_POSITIF;;;;oui
+B05-GS-04;Durée de validité de la garantie de soumission (jours);NOMBRE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;garantieSoumission = OUI;oui;;VALIDITE_GARANTIE_SUP_OFFRE:GARANTIE;;;;oui
+B05-TP-02;Montant minimum annuel du marché (Ariary);MONTANT;SAISIE;AE;;A_COMMANDE;;oui;;MONTANT_POSITIF;;;;oui
+B05-TP-03;Montant maximum annuel du marché (Ariary);MONTANT;SAISIE;AE;;A_COMMANDE;;oui;;MONTANT_POSITIF;;;;oui
+B06-EP-01;Délai de réponse des candidats aux demandes de la PRMP (jours);NOMBRE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B06-EO-01;Évaluation des offres portant sur plusieurs lots;LISTE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;alloti = OUI;oui;;;Par lot,Sur l'ensemble des lots;;;oui
+B06-EO-02;Critères additionnels d'évaluation;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
+B06-EO-03;Conversion en Ariary des offres en devise;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;provenance = IMPORTEES;non;;;;;;oui
+B06-EO-04;Impôts, droits et taxes pris en compte dans l'évaluation;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B06-EO-05;Détermination du montant évalué de l'offre;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B06-EO-06;Comparaison des offres;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B06-EO-07;Traitement des offres anormalement hautes ou basses;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
+B06-EO-08;Vérification a posteriori de la qualification du candidat moins-disant;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
+B06-EO-09;Marge de préférence nationale (%);POURCENTAGE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
+B06-EO-10;Variation maximale des quantités à l'attribution (%);POURCENTAGE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
+B06-EO-11;Délai de livraison (jours);NOMBRE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B06-EO-12;Délai maximum de livraison (jours);NOMBRE;SAISIE;DPAO;;A_COMMANDE;;oui;;;;;;oui
+B06-AN-01;Forme de la garantie de bonne exécution exigée à la notification;LISTE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;non;;;Cautionnement,Garantie bancaire;;;oui
+B06-AN-02;Recours gracieux et recours en attribution;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
+B06-SD-01;Attribution du marché;TEXTE_LONG;SAISIE;AUCUN;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;non
+B06-SD-02;Appel d'offres infructueux;TEXTE_LONG;SAISIE;AUCUN;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;non
+B06-SD-03;Notification du marché;TEXTE_LONG;SAISIE;AUCUN;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;non
+B08-PA-01;Domiciliation bancaire du fournisseur;TEXTE_LONG;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B08-PA-02;Domiciliation bancaire de chaque membre du groupement;TEXTE_LONG;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;groupement = OUI;non;;;;;;oui
+B08-PA-03;Établissement des décomptes, factures ou mémoires;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B08-PA-04;Termes de paiement;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B08-PA-05;Périodicité des paiements (prix unitaires);LISTE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;typePrix = UNITAIRES;oui;;;À la livraison,Mensuelle,Trimestrielle;;;oui
+B08-PA-06;Part réglée à la réception des fournitures (%);POURCENTAGE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;typePrix = FORFAITAIRE;oui;Le marché est réglé à concurrence de {B08-PA-06} % à la réception des fournitures, contre remise des documents mentionnés au CCAP.;FORFAIT_60_40:RECEPTION;;;;oui
+B08-PA-07;Part réglée sur présentation du PV de réception (%);POURCENTAGE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;typePrix = FORFAITAIRE;oui;Le solde, soit {B08-PA-07} %, est réglé sur présentation du procès-verbal de réception.;FORFAIT_60_40:PV;;;;oui
+B08-PA-08;Délai de paiement (jours);NOMBRE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;oui;;DELAI_PAIEMENT_75:DELAI;;;;oui
+B08-SD-01;Périodicité trimestrielle des paiements (sans document);TEXTE;SAISIE;AUCUN;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;non
+B08-AV-03;Modalités de l'avance en cas de groupement;TEXTE_LONG;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;avance = OUI et groupement = OUI;non;;;;;;oui
+B08-AV-04;Forme de la garantie de restitution d'avance;LISTE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;avance = OUI;non;;AVANCE_SUP_5_GARANTIE:GARANTIE;Garantie bancaire,Caution personnelle et solidaire;;;oui
+B08-AV-05;Modalités de remboursement de l'avance;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;avance = OUI;oui;;;;;;oui
+B08-AV-06;Précompte sur les sommes dues (%);POURCENTAGE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;avance = OUI;non;;;;;;oui
+B08-AC-01;Acomptes prévus;OUI_NON;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B08-AC-02;Modalités des acomptes;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
+B08-IM-01;Taux des intérêts moratoires dus au fournisseur (%);POURCENTAGE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;oui;;INTERETS_MORATOIRES_TAUX:TAUX;;;;oui
+B08-GB-01;Garantie de bonne exécution exigée;OUI_NON;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B08-GB-02;Montant de la garantie de bonne exécution (% du marché);POURCENTAGE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
+B08-RG-01;Retenue de garantie pratiquée;OUI_NON;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B08-RG-02;Taux de la retenue de garantie (%);POURCENTAGE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
+B09-LL-01;Lieu de livraison;TEXTE_LONG;SAISIE;DPAO;AE,CCAP;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B09-PC-01;Pièces contractuelles supplémentaires;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
+B09-OM-01;Délai de communication par le fournisseur sur l'ajustement de prix ou de délai (jours);NOMBRE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
+B09-OM-02;Variation maximale des volumes ou quantités (%);POURCENTAGE;SAISIE;AE;CCAP;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
+B09-OM-03;Délai de validité du marché (mois);NOMBRE;SAISIE;CCAP;;A_COMMANDE;;non;;;;;;oui
+B09-PS-01;Mesures de sécurité applicables;OUI_NON;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B09-PS-02;Mesures communiquées par l'Autorité contractante;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
+B09-PS-03;Mesures mentionnées en annexe du CCAP;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
+B09-DX-01;Délai d'exécution (jours);NOMBRE;SAISIE;CCAP;AE;QUANTITE_FIXE,A_COMMANDE;;oui;Le délai d'exécution est de {B09-DX-01} jours à compter de la notification du marché.;;;;;oui
+B09-DX-02;Point de départ du délai s'il diffère de la date de notification;TEXTE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
+B09-DX-03;Modalités et période de passation des commandes;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
+B09-PR-02;Plafond des pénalités de retard (%);POURCENTAGE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;penalites = PLAFOND_DIFFERENT;oui;;PENALITES_PLAFOND_15:TAUX;;;;oui
+B09-PR-03;Dérogation au CCAG justifiant le plafond des pénalités;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;penalites = PLAFOND_DIFFERENT;oui;;PENALITES_PLAFOND_15:DEROGATION;;;;oui
+B09-MC-01;Matériels, objets et approvisionnements confiés au fournisseur;OUI_NON;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B09-SK-01;Stockage des fournitures à la charge du fournisseur;OUI_NON;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B09-EM-01;Marquage requis sur les emballages;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
+B09-EM-02;Documents requis dans les emballages;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
+B09-RT-01;Responsabilité du transport;LISTE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;oui;;;Selon l'incoterm,Transport par le fournisseur jusqu'à la destination finale,Responsabilités partagées;;;oui
+B09-RT-02;Responsabilités respectives de l'Autorité contractante et du fournisseur;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
+B09-LF-01;Modalités de livraison des fournitures;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B09-LF-02;Documents à fournir par le fournisseur à la livraison;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B09-AS-01;Assurance des fournitures;LISTE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;oui;;;Selon l'incoterm,À la charge du fournisseur jusqu'à la livraison,À la charge de l'Autorité contractante;;;oui
+B09-AS-02;Terme de la responsabilité d'assurance du fournisseur;TEXTE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
+B09-CR-01;Contrôle des prix de revient applicable;OUI_NON;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B09-IV-01;Inspections, vérifications et essais;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B09-DI-01;Décision après inspection et essais;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B09-DG-01;Délai de garantie (mois);NOMBRE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B09-DG-02;Étendue de la garantie;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
+B10-IR-01;Indemnité de résiliation prévue;OUI_NON;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B10-IR-02;Modalités de l'indemnité de résiliation;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
+B10-AR-01;Arbitrage et règlement des litiges;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B10-DD-01;Dérogations aux documents généraux;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui

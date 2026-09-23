@@ -126,8 +126,9 @@ public final class ControlesFicheMarche {
         if (r == null) {
             return;
         }
-        List<String> etapes = List.of("LANCEMENT", "REMISE", "OUVERTURE", "ATTRIBUTION");
-        List<String> libelles = List.of("lancement", "remise des offres", "ouverture des plis", "attribution");
+        // ⚠️ Lot 4 (2026-09-23) — la notification, cinquième date du calendrier du contrat-cadre (rôle NOTIFICATION).
+        List<String> etapes = List.of("LANCEMENT", "REMISE", "OUVERTURE", "ATTRIBUTION", "NOTIFICATION");
+        List<String> libelles = List.of("lancement", "remise des offres", "ouverture des plis", "attribution", "notification");
         List<LocalDate> dates = new ArrayList<>();
         List<String> noms = new ArrayList<>();
         List<String> champs = new ArrayList<>();
@@ -156,7 +157,7 @@ public final class ControlesFicheMarche {
             if (dates.get(i).isBefore(dates.get(i - 1))) {
                 bloquants.add(new Controle(DATES_ORDRE, champs, bloc, "Dates dans l'ordre : " + noms.get(i) + " ("
                         + dates.get(i) + ") précède " + noms.get(i - 1) + " (" + dates.get(i - 1)
-                        + ") — lancement < remise des offres < ouverture < attribution."));
+                        + ") — lancement < remise des offres < ouverture < attribution < notification."));
                 return;
             }
         }

@@ -86,4 +86,11 @@ public class FicheMarcheDto {
      * applicatif).
      */
     private Boolean typeChange;
+
+    /**
+     * ⚠️ Lot 3 (2026-09-23, §B2) — la fiche sait préparer le type de marché servi ({@link #typeMarche}) : la réponse du
+     * serveur ({@code DmcService.FORMES_OUTILLEES}), même rôle que {@code LigneEligibleDto.formeOutillee}. Le front n'a
+     * plus de liste à lui : ouvrir un type est une livraison backend seule. {@code false} si le plan ne porte pas la forme.
+     */
+    private Boolean typeOutille;
 }

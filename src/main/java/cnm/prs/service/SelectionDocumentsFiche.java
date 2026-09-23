@@ -35,6 +35,15 @@ public final class SelectionDocumentsFiche {
             "CCAP", "Cahier des clauses administratives particulières",
             "AE", "Acte d'engagement");
 
+    /**
+     * ⚠️ Lot 4 (2026-09-23) — le jeu documentaire d'un type de marché. En contrat-cadre, le deuxième document est le
+     * {@code DPAC} et il n'y a pas de CCAP : l'acte d'engagement est le contrat. Les champs partagés par les trois types
+     * (repris du plan, reflets du cadrage), dont le maître est le DPAO et qui sont repris au CCAP, y suivent la règle de
+     * répartition du fichier de correspondance : clause de consultation → DPAC, clause contractuelle → AE.
+     */
+    private static final Map<String, Map<String, String>> SUBSTITUTIONS = Map.of(
+            "CONTRAT_CADRE", Map.of("DPAO", "DPAC", "CCAP", "AE"));
+
     private static final DateTimeFormatter JOUR = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     private SelectionDocumentsFiche() {
@@ -70,7 +79,7 @@ public final class SelectionDocumentsFiche {
                 List<DocumentFicheModele.Rubrique> rubriquesDoc = new ArrayList<>();
                 Map<String, List<DocumentFicheModele.Ligne>> lignesParRubrique = new LinkedHashMap<>();
                 for (ChampFicheMarche c : champs) {
-                    if (!bloc.getCode().equals(c.codeBloc()) || !pourDocument(c, type)
+                    if (!bloc.getCode().equals(c.codeBloc()) || !pourDocument(c, type, typeOuverture)
                             || !c.pourTypeMarche(typeOuverture) || !ConditionCadrage.vraie(c.getCondition(), cadrage)) {
                         continue;
                     }
@@ -102,9 +111,13 @@ public final class SelectionDocumentsFiche {
         return r == null || r.getRang() == null ? Integer.MAX_VALUE : r.getRang();
     }
 
-    /** Le document est le maître du champ, ou le champ y est repris. */
-    static boolean pourDocument(ChampFicheMarche c, String type) {
-        return type.equals(c.getDocumentMaitre()) || ChampFicheMarche.liste(c.getReprises()).contains(type);
+    /** Le document est le maître du champ, ou le champ y est repris — après substitution propre au type de marché. */
+    static boolean pourDocument(ChampFicheMarche c, String type, String typeMarche) {
+        Map<String, String> sub = SUBSTITUTIONS.getOrDefault(typeMarche, Map.of());
+        if (type.equals(sub.getOrDefault(c.getDocumentMaitre(), c.getDocumentMaitre()))) {
+            return true;
+        }
+        return ChampFicheMarche.liste(c.getReprises()).stream().anyMatch(d -> type.equals(sub.getOrDefault(d, d)));
     }
 
     /** La valeur prête à imprimer, ou {@code null} (le champ est alors omis). */

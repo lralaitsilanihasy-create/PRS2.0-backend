@@ -68,8 +68,22 @@ public class ChampFicheMarcheService {
             throw new ChampsInvalidesException(List.of(new ErrorResponse.FieldError("typeMarche",
                     "Type de marché inconnu : " + typeMarche + " (QUANTITE_FIXE, A_COMMANDE, CONTRAT_CADRE).")));
         }
+        // ⚠️ Lot 4 (2026-09-23, §B4) — une rubrique est servie pour un type si elle en relève ET si au moins un de ses
+        // champs vaut pour ce type ; une rubrique qui n'a encore AUCUN champ (référentiel à compléter) reste servie, c'est
+        // ainsi que l'écran le signale. Sans cela, les rubriques partagées d'un modèle s'affichaient vides dans l'autre.
+        java.util.Set<String> avecChamps = new java.util.HashSet<>();
+        java.util.Set<String> avecChampsDuType = new java.util.HashSet<>();
+        if (type != null) {
+            for (ChampFicheMarche c : champRepository.findAllByOrderByCodeRubriqueAscRangAsc()) {
+                avecChamps.add(c.getCodeRubrique());
+                if (c.pourTypeMarche(type)) {
+                    avecChampsDuType.add(c.getCodeRubrique());
+                }
+            }
+        }
         Map<String, List<RubriqueFicheMarche>> rubriquesParBloc = rubriqueRepository.findAllByOrderByCodeBlocAscRangAsc()
-                .stream().filter(r -> type == null || ChampFicheMarche.liste(r.getTypesMarche()).contains(type))
+                .stream().filter(r -> type == null || (ChampFicheMarche.liste(r.getTypesMarche()).contains(type)
+                        && (avecChampsDuType.contains(r.getCode()) || !avecChamps.contains(r.getCode()))))
                 .collect(Collectors.groupingBy(RubriqueFicheMarche::getCodeBloc));
         List<ReferentielFicheMarcheDto.BlocDto> blocs = new ArrayList<>();
         for (BlocFicheMarche b : blocRepository.findAllByOrderByRangAsc()) {
@@ -164,7 +178,10 @@ public class ChampFicheMarcheService {
                 && !dto.getControle().trim().toUpperCase().matches("[A-Z0-9_]+(:[A-Z0-9_]+)?")) {
             erreurs.add(new ErrorResponse.FieldError("controle", "Contrôle attendu sous la forme REGLE ou REGLE:ROLE."));
         }
-        if (TypeChampFiche.LISTE.name().equals(type) && (dto.getOptions() == null || dto.getOptions().isEmpty())) {
+        // ⚠️ Lot 4 (2026-09-23) — une LISTE de source CADRAGE est un reflet : ses options sont celles de la question de
+        // cadrage (le fichier du contrat-cadre en charge trois ainsi, comme les reflets semés par V35).
+        if (TypeChampFiche.LISTE.name().equals(type) && !SourceChampFiche.CADRAGE.name().equals(source)
+                && (dto.getOptions() == null || dto.getOptions().isEmpty())) {
             erreurs.add(new ErrorResponse.FieldError("options", "Un champ LISTE déclare ses options."));
         }
         if (!erreurs.isEmpty()) {

@@ -53,9 +53,11 @@ public class DmcService {
 
     /**
      * ⚠️ Lot 1c (2026-09-23, §B2) — les formes de marché que la fiche marché sait préparer. Constante et non colonne :
-     * elle s'allonge au lot 3 (à commande) puis au lot 4 (contrat-cadre), sans migration.
+     * elle s'allonge sans migration. ⚠️ Lots 3 et 4 (2026-09-23) : à commande et contrat-cadre ouverts — les trois
+     * formes le sont ; la garde {@code FORME_NON_OUTILLEE} ne répond plus que pour une ligne sans forme.
      */
-    public static final java.util.Set<FormeMarche> FORMES_OUTILLEES = java.util.EnumSet.of(FormeMarche.QUANTITE_FIXE);
+    public static final java.util.Set<FormeMarche> FORMES_OUTILLEES = java.util.EnumSet.of(FormeMarche.QUANTITE_FIXE,
+            FormeMarche.A_COMMANDE, FormeMarche.CONTRAT_CADRE);
 
     /**
      * ⚠️ Lot 1c — le refus {@code FORME_NON_OUTILLEE} d'une ligne : forme absente du plan (message qui nomme le champ

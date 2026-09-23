@@ -484,6 +484,22 @@ document porte chaque information (document maître, reprises) ; il manquait la 
   chaque lecture, un document produit après coup ne dirait pas forcément ce qui a été validé) ; la version suivante
   les produira.
 
+#### Marché à commande et contrat-cadre (lots 3 et 4, demandes front du 2026-09-23)
+
+- **Les trois formes de marché se préparent.** Le marché à commande avait déjà sa matière (huit informations propres,
+  B07 lui reste fermé) ; le contrat-cadre la reçoit du fichier de correspondance du pilote (118 informations, 38
+  rubriques, B07 « Marchés subséquents »). Ouvrir un type est une décision du serveur, que la fiche annonce
+  (`typeOutille`) : l'écran n'en tient pas de liste.
+- **Un contrat-cadre produit le DPAC et l'acte d'engagement, jamais de DPAO ni de CCAP** : l'acte d'engagement y est le
+  contrat. Les informations communes aux trois modèles suivent la règle du fichier : clause de consultation au DPAC,
+  clause contractuelle à l'AE.
+- **Mono ou multi-attributaire** est une réponse de cadrage du contrat-cadre (`MONO` / `MULTI`) : elle ouvre ou ferme
+  les rubriques de remise en concurrence.
+- **Chaque modèle ne montre que ses rubriques** : une rubrique partagée sans information pour le type choisi n'est pas
+  servie ; une rubrique encore vide pour tous les types l'est, pour signaler le référentiel à compléter.
+- Une fiche ouverte sous un autre type (lot 1c) redevient écrivable ; **reprendre son cadrage** l'aligne sur le type
+  du plan.
+
 #### Le type de marché vient du plan (lot 1c, demande front du 2026-09-23, décision du pilote)
 
 ⚠️ **« Le type de marché doit être déduit du plan »** (pilote). La ligne du PPM porte déjà sa forme

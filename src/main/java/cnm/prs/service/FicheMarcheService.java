@@ -230,6 +230,9 @@ public class FicheMarcheService {
         Map<String, Object> propre = validerCadrage(cadrage == null ? Map.of() : cadrage);
         FicheMarche fiche = brouillonOuNouvelle(ctx);
         fiche.setCadrage(ecrireJson(propre));
+        // ⚠️ Lot 4 (2026-09-23, §B5) — reprendre le cadrage, c'est reprendre la fiche sous le type du plan : le type de
+        // saisie suit, et typeChange s'éteint.
+        fiche.setTypeMarche(ctx.forme().name());
         fiche.setDateMaj(LocalDateTime.now());
         fiche = ficheRepository.save(fiche);
         return toDto(ctx, fiche);
@@ -463,11 +466,13 @@ public class FicheMarcheService {
                 continue;   // lot 1c : dérivé du plan, plus une réponse — ignoré (tolérance d'une version), jamais un 400
             }
             if ("attributaires".equals(cle)) {
-                BigDecimal n = ControlesFicheMarche.nombre(texte);
-                if (n == null || n.signum() < 0 || n.scale() > 0) {
-                    erreurs.add(new ErrorResponse.FieldError(cle, "Nombre d'attributaires attendu (entier)."));
+                // ⚠️ Lot 4 (2026-09-23) — contrat-cadre mono ou multi-attributaire (conditions « attributaires = MONO |
+                // MULTI » du référentiel), et non plus un nombre d'attributaires.
+                String a = texte.toUpperCase();
+                if (!a.equals("MONO") && !a.equals("MULTI")) {
+                    erreurs.add(new ErrorResponse.FieldError(cle, "« attributaires » attend MONO ou MULTI."));
                 } else {
-                    propre.put(cle, n.intValue());
+                    propre.put(cle, a);
                 }
                 continue;
             }
@@ -611,7 +616,8 @@ public class FicheMarcheService {
                 valeursPpmParCode, ppm.versionPpm(), bilan, fiche.getDateCreation(), fiche.getDateMaj(),
                 fiche.getDateValidation(), fiche.getValidePar(),
                 dossierRepository.findIdDossierByIdDmc(fiche.getIdDmc()).orElse(null),
-                fiche.getIdFiche() != null && StatutFicheMarche.BROUILLON.name().equals(fiche.getStatut()) && typeChange);
+                fiche.getIdFiche() != null && StatutFicheMarche.BROUILLON.name().equals(fiche.getStatut()) && typeChange,
+                DmcService.motifForme(ctx.forme()).isEmpty());
     }
 
     /** Le cadrage enregistré, sans l'ancienne clé {@code typeMarche} (lot 1c : elle n'est plus une réponse). */

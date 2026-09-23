@@ -4539,7 +4539,8 @@ que porte ce DMC (`t_dossier.ID_DMC`), `null` tant qu'il n'existe pas.
 `CONTRAT_CADRE` · `QUANTITE_FIXE`, `null` si le plan ne la porte pas) et `formeOutillee` (boolean). Une ligne **non outillée
 reste listée** — la PRMP voit qu'elle existe et pourquoi elle attend ; le front l'affiche désactivée — si elle passe
 toutes les autres gardes ; sa création répond 409 `FORME_NON_OUTILLEE`. Formes outillées : constante du service
-(`DmcService.FORMES_OUTILLEES`), elle s'allongera aux lots 3 (à commande) et 4 (contrat-cadre) sans migration.
+(`DmcService.FORMES_OUTILLEES`). ⚠️ **2026-09-23 (lots 3 et 4)** : les **trois** formes sont outillées ; `formeOutillee`
+ne vaut plus `false` que pour une ligne sans forme au plan.
 
 **Endpoints**
 
@@ -4616,8 +4617,9 @@ l'Administrateur). Avant le premier enregistrement la fiche est **virtuelle** : 
 | idDetailCourant, ligneSupprimee, refeDossier, designationMarche | ⚠️ **filiation** : la ligne **courante** de la même filiation (`ID_LIGNE_ORIGINE`) dans la **dernière version signée** du plan — la chaîne `REMPLACE` est suivie tant que la version suivante est signée (même prédicat que H4) ou elle-même remplacée ; une mise à jour en instruction arrête la marche. `= idDetail` tant que le plan n'a pas été mis à jour. `ligneSupprimee` : la filiation est retirée dans la version courante (le front avertit, ne bloque pas) |
 | version, statut | 1, 2… ; `BROUILLON` · `VALIDEE` |
 | typeMarche | ⚠️ **2026-09-23 (lot 1c) — dérivé du plan**, plus une réponse : `t_marche.FORME_MARCHE` de la **ligne courante** (même lecture que `valeursPpm`), à chaque lecture ; `null` si le plan ne la porte pas (fiche lisible, écritures refusées). Les rubriques s'ouvrent selon lui |
-| typeChange | ⚠️ **2026-09-23 (lot 1c)** — `true` quand une fiche **brouillon** a été saisie sous un type qui n'est plus celui du plan (`t_fiche_marche.TYPE_MARCHE`, figé à la création de la version, ≠ `typeMarche`) ; le front prévient. Toujours `false` pour une fiche virtuelle ou validée (une version validée dans ce cas est signalée au journal applicatif, `[FICHE_MARCHE]`) |
-| cadrage | `{ clé: réponse }` — ⚠️ lot 1c : **plus de `typeMarche`** (ignoré s'il est envoyé, retiré des cadrages enregistrés avant) ; `alloti`, `nbLots`, `variantes`, `groupement`, `formeGroupement`, `provenance`, `typePrix`, `prixRevisable`, `garantieSoumission`, `avance`, `tauxAvance`, `penalites`, `attributaires` |
+| typeChange | ⚠️ **2026-09-23 (lot 1c)** — `true` quand une fiche **brouillon** a été saisie sous un type qui n'est plus celui du plan (`t_fiche_marche.TYPE_MARCHE`, figé à la création de la version, ≠ `typeMarche`) ; le front prévient. ⚠️ lot 4 : **reprendre le cadrage** (`PUT …/cadrage`) aligne le type de saisie sur le plan et l'éteint. Toujours `false` pour une fiche virtuelle ou validée (une version validée dans ce cas est signalée au journal applicatif, `[FICHE_MARCHE]`) |
+| typeOutille | ⚠️ **2026-09-23 (lot 3)** — la fiche sait préparer le type servi (réponse de `DmcService.FORMES_OUTILLEES`, même rôle que `LigneEligibleDto.formeOutillee`) : le front n'a plus de liste à lui. `false` seulement si le plan ne porte pas la forme |
+| cadrage | `{ clé: réponse }` — ⚠️ lot 1c : **plus de `typeMarche`** (ignoré s'il est envoyé, retiré des cadrages enregistrés avant) ; `alloti`, `nbLots`, `variantes`, `groupement`, `formeGroupement`, `provenance`, `typePrix`, `prixRevisable`, `garantieSoumission`, `avance`, `tauxAvance`, `penalites`, `attributaires` (⚠️ lot 4 : **`MONO`** ou **`MULTI`**, contrat-cadre mono ou multi-attributaire ; 400 sinon — ce n'est plus un nombre) |
 | valeurs | `{ code: string }` des champs `SAISIE` renseignés (nombres normalisés en chiffres, dates ISO) |
 | enLettres | `{ code: texte }` pour chaque `MONTANT` saisi (« huit millions quatre cent mille ariary ») |
 | valeursCadrage | `{ code: string }` des champs `CADRAGE` ouverts, reflets des réponses |
@@ -4634,7 +4636,7 @@ l'Administrateur). Avant le premier enregistrement la fiche est **virtuelle** : 
 |---|---|---|
 | `OBLIGATOIRE` | — (tout champ obligatoire d'une rubrique ouverte, vide) | bloquant |
 | `MONTANT_POSITIF` | — (tout `MONTANT` saisi ≤ 0) | bloquant |
-| `DATES_ORDRE` | `LANCEMENT` (à défaut : date du plan), `REMISE`, `OUVERTURE`, `ATTRIBUTION` (à défaut : date du plan) — lancement < remise < ouverture < attribution | bloquant |
+| `DATES_ORDRE` | `LANCEMENT` (à défaut : date du plan), `REMISE`, `OUVERTURE`, `ATTRIBUTION` (à défaut : date du plan), ⚠️ lot 4 `NOTIFICATION` — lancement < remise < ouverture < attribution < notification | bloquant |
 | `VALIDITE_GARANTIE_SUP_OFFRE` | `GARANTIE`, `OFFRE` (jours) | bloquant |
 | `AVANCE_MAX_20` | `TAUX` (à défaut : cadrage `tauxAvance`), si `avance = OUI` — taux ≤ 20 % (aucun montant TTC dans PRS : la règle porte sur le taux) | bloquant |
 | `AVANCE_SUP_5_GARANTIE` | `TAUX` (idem), `GARANTIE` — taux > 5 ⇒ garantie de restitution renseignée | bloquant |
@@ -4663,6 +4665,9 @@ enregistre un brouillon incomplet, on ne le valide pas). Une version `VALIDEE` e
 `reviser` ouvre la suivante. Journal du dossier de planification à la validation : `FICHE_MARCHE_VALIDEE` ; aucune
 notification, pas de chronométrage (geste propre à la PRMP, avant soumission).
 
+> ⚠️ **2026-09-23 (lots 3 et 4) — les trois formes sont outillées** : le 409 ci-dessous ne répond plus que pour une ligne
+> sans forme au plan.
+>
 > ⚠️ **2026-09-23 (lot 1c) — la forme du plan gouverne l'écriture.** `PUT …/cadrage`, `PUT …/blocs/{bloc}`,
 > `POST …/valider` et `POST …/reviser` répondent **409 `FORME_NON_OUTILLEE`** (après le 403 et la vacance) quand la
 > forme de la ligne courante n'est pas outillée ou manque au plan — même message que la création du DMC. La lecture
@@ -4711,6 +4716,24 @@ précédentes conservées ; dossier en examen ou au-delà → rien ne change. D�
 (Administrateur compris ; message qui renvoie à la fiche) ; `POST /api/piece-jointe-dossiers` d'une pièce du **même
 type** sur un dossier qui porte déjà des pièces produites → même 409. Une version validée **avant le lot 2** n'a pas de
 documents (pas de reprise) : elle n'en joint aucun, et le dépôt manuel reste possible tant que la fiche n'en a produit.
+
+### Marché à commande et contrat-cadre — lots 3 et 4 ⚠️ 2026-09-23
+
+Demandes front `frontend/docs/demande-backend-2026-09-23-marche-a-commande.md` et `-contrat-cadre.md`.
+
+- **Les trois formes sont outillées** (`DmcService.FORMES_OUTILLEES`) : plus de 409 `FORME_NON_OUTILLEE` qu'une ligne
+  sans forme au plan. `FicheMarcheDto.typeOutille` sert la même réponse sur la fiche.
+- **Rubriques du contrat-cadre (V39)** : 38 rubriques réservées au contrat-cadre (`typesMarche = CONTRAT_CADRE`,
+  rangs 51+ dans les blocs partagés, 1 à 8 dans **B07**, renommé « Marchés subséquents »). Les **champs** se chargent
+  par l'import du fichier de correspondance (`referentiel-champs-fiche-marche-contrat-cadre.csv` du front, 118 champs)
+  — au démarrage (`app.fiche-marche.import-csv`) ou par l'API Administrateur. Une `LISTE` de source **`CADRAGE`** n'a
+  plus à déclarer ses options (ce sont celles de la question de cadrage).
+- **`GET /api/champs-fiche-marche?typeMarche=`** — une rubrique est servie si elle relève du type (`typesMarche`) **et**
+  si au moins un de ses champs vaut pour ce type ; une rubrique qui n'a encore **aucun** champ reste servie (signal
+  d'un référentiel à compléter). Les rubriques partagées d'un modèle ne s'affichent plus vides dans l'autre.
+- **Jeu documentaire** (lot 2a) par type : quantité fixe et à commande → DPAO, CCAP, AE ; **contrat-cadre → DPAC et AE
+  seulement** — les champs partagés (repris du plan, reflets du cadrage de V35) dont le maître est le DPAO vont au
+  **DPAC**, leurs reprises au CCAP vont à l'**AE** (règle de répartition du fichier de correspondance).
 
 ### Le dossier soumis à la CNM — lot 1b ⚠️ 2026-09-23
 
