@@ -71,7 +71,7 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
 
     @Test
     @DisplayName("1 — Import : 116 champs des fournitures et 114 du contrat-cadre, aucun rejet ; champs actifs servis : 139 en "
-            + "quantité fixe, 146 à commande, 152 en contrat-cadre (35 repris et reflets + 117)")
+            + "quantité fixe, 146 à commande, 148 en contrat-cadre (35 repris et reflets + 113)")
     void chargementDesReferentiels() throws Exception {
         ChampFicheMarcheService.BilanImport f = importer("referentiel-champs-fiche-marche-fournitures.csv");
         assertThat(f.rejets()).isEmpty();
@@ -82,7 +82,7 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
 
         assertThat(champs("QUANTITE_FIXE")).hasSize(139);
         assertThat(champs("A_COMMANDE")).hasSize(146);
-        assertThat(champs("CONTRAT_CADRE")).hasSize(152);
+        assertThat(champs("CONTRAT_CADRE")).hasSize(148);
     }
 
     // ------------------------------------------------------------------ 2. rubriques servies par type (B4)
