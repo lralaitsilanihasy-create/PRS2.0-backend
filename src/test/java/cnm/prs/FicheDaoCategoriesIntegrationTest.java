@@ -36,7 +36,7 @@ import cnm.prs.service.ChampFicheMarcheService;
  * {@code tr_nature.CATEGORIE_DAO}, refus des catégories non outillées, question des tranches réservée aux travaux.
  *
  * <p>Jeu : plan 9900 (PRMP001, ANT, CLOTURE, PV signé FAV), lignes en appel d'offres ouvert à quantité fixe : 9901
- * Fournitures (nature 92), 9902 Prestations intellectuelles (nature 91, catégorie non outillée), 9903 nature sans catégorie (93), 9904 sans nature.</p>
+ * Fournitures (nature 92), 9902 Prestations intellectuelles (nature 91), 9903 nature sans catégorie (93), 9904 sans nature.</p>
  */
 class FicheDaoCategoriesIntegrationTest extends CnmIntegrationTestSupport {
 
@@ -103,17 +103,18 @@ class FicheDaoCategoriesIntegrationTest extends CnmIntegrationTestSupport {
     // ------------------------------------------------------------------ 3-6. la catégorie de la ligne
 
     @Test
-    @DisplayName("3-6 — Éligibles : catégorie et catégorie outillée par ligne ; fournitures préparable ; prestations intellectuelles, nature "
-            + "sans catégorie et ligne sans nature → 409 FORME_NON_OUTILLEE nommant ce qui manque ; fiche d'une ligne de "
-            + "prestations intellectuelles : categorie PRESTATIONS_INTELLECTUELLES, typeOutille faux, écritures refusées")
+    @DisplayName("3-6 — Éligibles : catégorie et catégorie outillée par ligne ; fournitures et prestations intellectuelles "
+            + "préparables ; nature sans catégorie et ligne sans nature → 409 FORME_NON_OUTILLEE nommant ce qui manque ; "
+            + "fiche d'une ligne sans catégorie : categorie nulle, typeOutille faux, écritures refusées")
     void categorieDeLaLigne() throws Exception {
         String eligibles = mvc.perform(get("/api/dmcs/eligibles").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<List<String>>read(eligibles, "$[?(@.idDetail==9901)].categorie")).containsExactly("FOURNITURES_SERVICES");
         assertThat(JsonPath.<List<Boolean>>read(eligibles, "$[?(@.idDetail==9901)].categorieOutillee")).containsExactly(true);
         assertThat(JsonPath.<List<String>>read(eligibles, "$[?(@.idDetail==9902)].categorie")).containsExactly("PRESTATIONS_INTELLECTUELLES");
-        assertThat(JsonPath.<List<Boolean>>read(eligibles, "$[?(@.idDetail==9902)].categorieOutillee")).containsExactly(false);
+        assertThat(JsonPath.<List<Boolean>>read(eligibles, "$[?(@.idDetail==9902)].categorieOutillee")).containsExactly(true);
         assertThat(JsonPath.<List<Object>>read(eligibles, "$[?(@.idDetail==9903)].categorie")).containsExactly((Object) null);
+        assertThat(JsonPath.<List<Boolean>>read(eligibles, "$[?(@.idDetail==9903)].categorieOutillee")).containsExactly(false);
         assertThat(JsonPath.<List<Boolean>>read(eligibles, "$[?(@.idDetail==9904)].categorieOutillee")).containsExactly(false);
 
         String dmc = mvc.perform(post("/api/dmcs/par-marche/9901").header("Authorization", tokenPrmp))
@@ -123,11 +124,14 @@ class FicheDaoCategoriesIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.categorie").value("FOURNITURES_SERVICES"))
                 .andExpect(jsonPath("$.typeOutille").value(true));
+        String dmcPi = mvc.perform(post("/api/dmcs/par-marche/9902").header("Authorization", tokenPrmp))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        mvc.perform(get("/api/fiches-marche/" + ((Number) JsonPath.read(dmcPi, "$.idDmc")).longValue())
+                .header("Authorization", tokenPrmp))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.categorie").value("PRESTATIONS_INTELLECTUELLES"))
+                .andExpect(jsonPath("$.typeOutille").value(true));
 
-        mvc.perform(post("/api/dmcs/par-marche/9902").header("Authorization", tokenPrmp))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("FORME_NON_OUTILLEE"))
-                .andExpect(jsonPath("$.message", containsString("Prestations intellectuelles")));
         mvc.perform(post("/api/dmcs/par-marche/9903").header("Authorization", tokenPrmp))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("FORME_NON_OUTILLEE"))
@@ -136,18 +140,16 @@ class FicheDaoCategoriesIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.message", containsString("« Nature »")));
 
-        // Un DMC de prestations intellectuelles créé par l'Administrateur (geste sans garde H4) : la fiche se lit, ne s'écrit pas.
-        String dmcTravaux = mvc.perform(post("/api/dmcs/par-marche/9902").header("Authorization", tokenAdmin))
+        // Un DMC sur la ligne sans catégorie, créé par l'Administrateur (geste sans garde H4) : lu, pas écrit.
+        String dmcSans = mvc.perform(post("/api/dmcs/par-marche/9903").header("Authorization", tokenAdmin))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
-        long idTravaux = ((Number) JsonPath.read(dmcTravaux, "$.idDmc")).longValue();
-        mvc.perform(get("/api/fiches-marche/" + idTravaux).header("Authorization", tokenPrmp))
+        long idSans = ((Number) JsonPath.read(dmcSans, "$.idDmc")).longValue();
+        mvc.perform(get("/api/fiches-marche/" + idSans).header("Authorization", tokenPrmp))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.categorie").value("PRESTATIONS_INTELLECTUELLES"))
-                .andExpect(jsonPath("$.typeMarche").value("QUANTITE_FIXE"))
-                .andExpect(jsonPath("$.typeOutille").value(false))
-                .andExpect(jsonPath("$.bilanControles.nbAttendus").value(0));
-        mvc.perform(put("/api/fiches-marche/" + idTravaux + "/cadrage").header("Authorization", tokenPrmp).contentType(JSON)
-                .content("{\"cadrage\":{\"tranches\":\"OUI\"}}"))
+                .andExpect(jsonPath("$.categorie").doesNotExist())
+                .andExpect(jsonPath("$.typeOutille").value(false));
+        mvc.perform(put("/api/fiches-marche/" + idSans + "/cadrage").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"cadrage\":{\"garantieSoumission\":\"NON\"}}"))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("FORME_NON_OUTILLEE"));
     }
 

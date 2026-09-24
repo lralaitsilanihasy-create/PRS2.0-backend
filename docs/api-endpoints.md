@@ -4717,6 +4717,19 @@ précédentes conservées ; dossier en examen ou au-delà → rien ne change. D�
 type** sur un dossier qui porte déjà des pièces produites → même 409. Une version validée **avant le lot 2** n'a pas de
 documents (pas de reprise) : elle n'en joint aucun, et le dépôt manuel reste possible tant que la fiche n'en a produit.
 
+### La fiche DAO des prestations intellectuelles ⚠️ 2026-09-24
+
+Référentiel converti par le front (`referentiel-champs-fiche-dao-prestations-intellectuelles.csv`, 90 champs, quantité
+fixe et à commande ; conversion dans le `.md` du même nom). Les trois catégories sont désormais outillées.
+
+- **V42** : un document de plus, le **`DPIC`** (« Données particulières des instructions aux consultants ») — admis
+  comme document maître d'un champ ou d'une rubrique, et comme type de document généré (`DocumentFicheDto.type`) — et
+  **44 rubriques** de catégorie `PRESTATIONS_INTELLECTUELLES` (rangs 121+, aucun bloc neuf).
+- `PRESTATIONS_INTELLECTUELLES` est outillée. Une fiche de cette catégorie produit **DPIC, CCAP et AE**, jamais de DPAO :
+  les champs partagés dont le maître est le DPAO (repris du plan) vont au DPIC — substitution **par catégorie**, appliquée
+  avant celle du contrat-cadre (DPAO → DPAC, CCAP → AE).
+- Ordre des documents listés : DPAO, DPAC, DPIC, CCAP, AE (docx puis pdf).
+
 ### La fiche DAO des travaux ⚠️ 2026-09-24
 
 Référentiel converti par le front (`referentiel-champs-fiche-dao-travaux.csv`, 140 champs, quantité fixe et à

@@ -27,11 +27,12 @@ import cnm.prs.enums.TypeChampFiche;
 public final class SelectionDocumentsFiche {
 
     /** Les documents produisibles, dans l'ordre de production (le référentiel autorise aussi {@code AUCUN}). */
-    public static final List<String> TYPES = List.of("DPAO", "DPAC", "CCAP", "AE");
+    public static final List<String> TYPES = List.of("DPAO", "DPAC", "DPIC", "CCAP", "AE");
 
     private static final Map<String, String> TITRES = Map.of(
             "DPAO", "Données particulières de l'appel d'offres",
             "DPAC", "Données particulières du cahier des clauses administratives",
+            "DPIC", "Données particulières des instructions aux consultants",
             "CCAP", "Cahier des clauses administratives particulières",
             "AE", "Acte d'engagement");
 
@@ -43,6 +44,14 @@ public final class SelectionDocumentsFiche {
      */
     private static final Map<String, Map<String, String>> SUBSTITUTIONS = Map.of(
             "CONTRAT_CADRE", Map.of("DPAO", "DPAC", "CCAP", "AE"));
+
+    /**
+     * ⚠️ 2026-09-24 (prestations intellectuelles) — le jeu documentaire d'une catégorie : le document de consultation des
+     * prestations intellectuelles est le DPIC. Les champs partagés dont le maître est le DPAO (repris du plan) y vont.
+     * Appliquée avant la substitution du type de marché.
+     */
+    private static final Map<String, Map<String, String>> SUBSTITUTIONS_CATEGORIE = Map.of(
+            "PRESTATIONS_INTELLECTUELLES", Map.of("DPAO", "DPIC"));
 
     private static final DateTimeFormatter JOUR = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
@@ -81,7 +90,7 @@ public final class SelectionDocumentsFiche {
                 List<DocumentFicheModele.Rubrique> rubriquesDoc = new ArrayList<>();
                 Map<String, List<DocumentFicheModele.Ligne>> lignesParRubrique = new LinkedHashMap<>();
                 for (ChampFicheMarche c : champs) {
-                    if (!bloc.getCode().equals(c.codeBloc()) || !pourDocument(c, type, typeOuverture)
+                    if (!bloc.getCode().equals(c.codeBloc()) || !pourDocument(c, type, typeOuverture, categorieOuverture)
                             || !c.pourTypeMarche(typeOuverture)
                             || !c.pourCategorie(categorieOuverture) || !ConditionCadrage.vraie(c.getCondition(), cadrage)) {
                         continue;
@@ -115,12 +124,17 @@ public final class SelectionDocumentsFiche {
     }
 
     /** Le document est le maître du champ, ou le champ y est repris — après substitution propre au type de marché. */
-    static boolean pourDocument(ChampFicheMarche c, String type, String typeMarche) {
-        Map<String, String> sub = SUBSTITUTIONS.getOrDefault(typeMarche, Map.of());
-        if (type.equals(sub.getOrDefault(c.getDocumentMaitre(), c.getDocumentMaitre()))) {
+    static boolean pourDocument(ChampFicheMarche c, String type, String typeMarche, String categorie) {
+        if (type.equals(document(c.getDocumentMaitre(), typeMarche, categorie))) {
             return true;
         }
-        return ChampFicheMarche.liste(c.getReprises()).stream().anyMatch(d -> type.equals(sub.getOrDefault(d, d)));
+        return ChampFicheMarche.liste(c.getReprises()).stream().anyMatch(d -> type.equals(document(d, typeMarche, categorie)));
+    }
+
+    /** Le document effectif : substitution de la catégorie, puis du type de marché. */
+    private static String document(String doc, String typeMarche, String categorie) {
+        String d = SUBSTITUTIONS_CATEGORIE.getOrDefault(categorie, Map.of()).getOrDefault(doc, doc);
+        return SUBSTITUTIONS.getOrDefault(typeMarche, Map.of()).getOrDefault(d, d);
     }
 
     /** La valeur prête à imprimer, ou {@code null} (le champ est alors omis). */

@@ -1,0 +1,91 @@
+code;libelle;type;source;documentMaitre;reprises;typesMarche;categories;condition;obligatoire;texteType;controle;options;cleCadrage;clePpm;actif
+B02-CL-01;Dénomination et adresse du client;TEXTE_LONG;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
+B02-CL-02;Personne responsable des marchés passés sur la base du marché;TEXTE;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
+B02-CL-03;Délégation de la personne responsable (décision et date);TEXTE;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;non;;;;;;oui
+B02-CL-04;Nature, numéro et date de l'acte de nomination;TEXTE;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;non;;;;;;non
+B02-OP-01;Projet ou opération plus vaste dont le marché fait partie;TEXTE_LONG;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;non;;;;;;oui
+B02-OP-02;Objet principal du marché;TEXTE_LONG;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
+B02-OP-03;Date de début des prestations;DATE;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
+B02-MS-01;Mode de sélection du consultant;LISTE;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;Qualité technique, expérience et proposition financière,Budget prédéterminé dont le candidat propose la meilleure utilisation,Meilleure proposition financière parmi les candidats ayant obtenu la note technique minimale,Qualité technique exclusivement;;;oui
+B02-SP-01;Délai accordé au candidat pour renvoyer l'acte d'engagement signé (jours);NOMBRE;SAISIE;DPIC;AE,CCAP;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
+B03-TP-01;Dénomination sociale du titulaire;TEXTE;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
+B03-TP-02;Siège social du titulaire;TEXTE;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
+B03-TP-03;Numéro d'identification fiscale (NIF) du titulaire;TEXTE;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
+B03-TP-04;Nom du représentant du titulaire;TEXTE;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
+B03-TP-05;Qualité du représentant du titulaire;LISTE;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;Représentant légal de l'entreprise,Ayant reçu pouvoir du représentant légal;;;oui
+B03-GP-01;Forme du groupement de consultants;LISTE;CADRAGE;CCAP;DPIC,AE;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;groupement = OUI;non;;;;formeGroupement;;oui
+B03-SP-01;Sous-traitance autorisée;OUI_NON;SAISIE;DPIC;AE;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
+B03-SP-02;Numéro de l'annexe indiquant la nature et le montant des prestations sous-traitées;TEXTE;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;non;;;;;;oui
+B03-SP-03;Montant des prestations sous-traitées, TVA incluse (Ariary);MONTANT;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;non;;MONTANT_POSITIF;;;;oui
+B03-SP-04;Numéro de l'annexe de demande d'acceptation des sous-traitants;TEXTE;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;non;;;;;;oui
+B03-NP-01;Montant maximum nanti, en chiffres et en lettres (Ariary);MONTANT;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;non;;MONTANT_POSITIF;;;;oui
+B04-EP-01;Adresse de la PRMP pour les demandes d'éclaircissement;TEXTE_LONG;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
+B04-EP-02;Adresse électronique pour les demandes d'éclaircissement;TEXTE;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
+B04-EP-03;Délai d'envoi des demandes par les candidats (jours);NOMBRE;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
+B04-AI-01;Intrants à fournir par le client pendant la consultation;TEXTE_LONG;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
+B04-NP-01;Contenu des propositions;LISTE;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;Une proposition technique et une proposition financière sous enveloppes distinctes,Uniquement une proposition technique;;;oui
+B04-QT-01;Qualifications exigées du consultant;TEXTE_LONG;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
+B04-QT-02;Description attendue de la proposition technique;TEXTE_LONG;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
+B04-QT-03;Points sur lesquels le client attend une attention particulière;TEXTE_LONG;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;non;;;;;;oui
+B04-LP-01;Langue de la proposition;LISTE;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;Français,Français et une seconde langue;;;oui
+B04-LP-02;Seconde langue admise pour la proposition;TEXTE;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;non;;;;;;oui
+B04-DP-01;Délai de validité des propositions (jours);NOMBRE;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
+B04-RU-01;Réunion préparatoire prévue;OUI_NON;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
+B04-RU-02;Adresse et date de la réunion préparatoire (au moins 21 jours avant la remise);TEXTE_LONG;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;non;;;;;;oui
+B04-FL-01;Nombre de copies de la proposition;NOMBRE;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
+B04-FL-02;Nom et numéro à porter sur l'enveloppe de la proposition;TEXTE;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
+B04-FL-03;Adresse du client à porter sur l'enveloppe;TEXTE_LONG;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
+B04-LH-01;Adresse de l'autorité contractante pour la remise des propositions;TEXTE_LONG;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
+B04-LH-02;Date et heure limites de remise des propositions;DATE;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;DATES_ORDRE:REMISE;;;;oui
+B04-VE-01;Remise des propositions par voie électronique admise;OUI_NON;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
+B04-VE-02;Conditions et modalités de transmission électronique des propositions;TEXTE_LONG;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;non;;;;;;oui
+B05-PF-01;Mode de rémunération;LISTE;SAISIE;DPIC;AE;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;Prix forfaitaire,Temps passé,Résultat,Lié au coût estimatif ou effectif de travaux;;;oui
+B05-PF-02;Montant du forfait (Ariary);MONTANT;SAISIE;DPIC;AE;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;non;;MONTANT_POSITIF;;;;oui
+B05-PF-03;Durée prévisionnelle des prestations rémunérées au temps passé;TEXTE;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;non;;;;;;oui
+B05-PF-04;Montant global maximum des prestations au temps passé (Ariary);MONTANT;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;non;;MONTANT_POSITIF;;;;oui
+B05-PF-05;Montant supplémentaire pour aléa d'exécution, sur accord écrit du client (Ariary);MONTANT;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;non;;MONTANT_POSITIF;;;;oui
+B05-PF-06;Rémunération au résultat : montant ou mode de calcul;TEXTE_LONG;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;non;;;;;;oui
+B05-PF-07;Événement déclenchant la rémunération finale;TEXTE_LONG;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;non;;;;;;oui
+B05-PF-08;Nature des montants servant de base à la rémunération et pourcentage;TEXTE_LONG;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;non;;;;;;oui
+B05-PF-09;Barème dégressif en fonction du volume des montants;TEXTE_LONG;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;non;;;;;;oui
+B05-PF-10;Profession et références du barème applicable;TEXTE_LONG;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;non;;;;;;oui
+B05-PF-11;Frais remboursables : liste des dépenses admises;TEXTE_LONG;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;non;;;;;;oui
+B05-PF-12;Frais divers : liste des frais de fonctionnement;TEXTE_LONG;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;non;;;;;;oui
+B05-RP-01;Prix fermes ou révisables;OUI_NON;CADRAGE;DPIC;AE,CCAP;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;non;;;;prixRevisable;;oui
+B05-MP-01;Monnaie autre que l'Ariary admise, et conditions;TEXTE_LONG;SAISIE;DPIC;CCAP;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;non;;;;;;oui
+B06-TP-01;Total des points de l'évaluation technique;NOMBRE;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
+B06-TP-02;Points : expérience des candidats pertinente pour la mission;NOMBRE;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
+B06-TP-03;Points : conformité du plan de travail et de la méthode aux termes de référence;NOMBRE;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
+B06-TP-04;Points : qualifications et compétence du personnel clé;NOMBRE;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
+B06-TP-05;Points : adéquation du programme de transfert de connaissances;NOMBRE;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
+B06-TP-06;Points : participation de ressortissants nationaux au personnel clé;NOMBRE;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
+B06-OF-01;Modalités d'ouverture des propositions financières;TEXTE_LONG;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
+B06-CS-01;Modalités de classement des propositions;TEXTE_LONG;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
+B06-NG-01;Adresse des négociations;TEXTE_LONG;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
+B08-DP-01;Titulaire du paiement;LISTE;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;Consultant unique,Groupement de consultants solidaires,Groupement de consultants conjoints;;;oui
+B08-AI-01;Avance forfaitaire prévue au cahier des clauses;OUI_NON;CADRAGE;AE;CCAP;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;non;;;;avance;;oui
+B08-AI-02;Le consultant renonce à percevoir l'avance forfaitaire;OUI_NON;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;avance = OUI;non;;;;;;oui
+B08-RP-01;Règlement des prestations d'une durée inférieure à trois mois;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
+B08-RP-02;Règlement des prestations rémunérées au temps passé;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;non;;;;;;oui
+B08-RP-03;Règlement des prestations par étapes ou remise de documents;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;non;;;;;;oui
+B08-IP-01;Taux des intérêts moratoires dus au consultant (%);POURCENTAGE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;INTERETS_MORATOIRES_TAUX:TAUX;;;;oui
+B09-DP-01;Point de départ du marché;TEXTE_LONG;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
+B09-DP-02;Délai d'exécution des prestations;TEXTE_LONG;SAISIE;AE;CCAP;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
+B09-DP-03;Durée globale du marché;LISTE;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;Nombre de mois,Date de fin de marché;;;oui
+B09-DP-04;Durée en mois ou date de fin du marché;TEXTE;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
+B09-NC-01;Adresse détaillée du consultant pour les notifications;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
+B09-DK-01;Documents rendus contractuels;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
+B09-MV-01;Délai des demandes d'ajustement du prix ou des délais d'achèvement (jours);NOMBRE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
+B09-MS-01;Mesures de sécurité ou de protection du secret applicables;OUI_NON;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
+B09-AI-01;Assistance du client pendant l'exécution;OUI_NON;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
+B09-AI-02;Intrants à fournir par le client pendant l'exécution;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;non;;;;;;oui
+B09-AP-01;Montant de l'assurance exigée du consultant (Ariary);MONTANT;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;MONTANT_POSITIF;;;;oui
+B09-MF-01;Matériel confié par le client au consultant;OUI_NON;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
+B09-MF-02;Forme de la garantie de restitution du matériel confié;LISTE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;non;;;Garantie bancaire,Engagement de caution personnelle et solidaire,Cautionnement en numéraire par chèque de banque;;;oui
+B09-FC-01;Documents à fournir par le consultant pour le matériel qu'il fournit;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;non;;;;;;non
+B09-PP-01;Pénalités et retenues applicables;OUI_NON;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;PENALITES_PLAFOND_15:TAUX;;;;oui
+B09-UR-01;Dispositions sur l'utilisation des résultats des prestations;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
+B09-OP-01;Modalités de vérification et d'agrément des résultats;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
+B10-IN-01;Taux d'indemnisation en cas de résiliation du fait du client (%);POURCENTAGE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;non;;;;;;oui
+B10-PP-01;Procédure contentieuse et juridiction compétente;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
+B10-DP-01;Dérogations aux documents généraux;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;non;;;;;;oui

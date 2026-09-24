@@ -491,7 +491,10 @@ document porte chaque information (document maître, reprises) ; il manquait la 
   masse des travaux. Un contrat-cadre de travaux produit, comme en fournitures, le DPAC et l'acte d'engagement.
 - **Chaque fiche se valide avec ses propres règles** : quand deux catégories posent la même question de cadrage
   (l'allotissement, la forme de prix…), c'est la définition de la catégorie de la fiche qui s'applique.
-- Les prestations intellectuelles attendent leur référentiel.
+- ⚠️ **2026-09-24 — les prestations intellectuelles aussi** : 90 informations au vocabulaire du conseil (client et
+  consultant, propositions technique et financière, mode de sélection et de rémunération, évaluation par points,
+  négociations). Leur document de consultation est le **DPIC**, données particulières des instructions aux
+  consultants : une fiche produit le DPIC, le CCAP et l'acte d'engagement. Les trois catégories se préparent.
 
 #### Les trois catégories de fiche DAO (lot 5, demande front du 2026-09-24, pilote)
 

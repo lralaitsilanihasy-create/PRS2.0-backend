@@ -45,7 +45,7 @@ import cnm.prs.repository.RubriqueFicheMarcheRepository;
 @Transactional
 public class ChampFicheMarcheService {
 
-    private static final List<String> DOCUMENTS = List.of("DPAO", "DPAC", "AE", "CCAP", "AUCUN");
+    private static final List<String> DOCUMENTS = List.of("DPAO", "DPAC", "DPIC", "AE", "CCAP", "AUCUN");   // DPIC : V42
 
     private final BlocFicheMarcheRepository blocRepository;
     private final RubriqueFicheMarcheRepository rubriqueRepository;
