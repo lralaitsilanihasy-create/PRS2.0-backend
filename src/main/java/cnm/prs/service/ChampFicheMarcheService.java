@@ -63,7 +63,7 @@ public class ChampFicheMarcheService {
      * deux nuls = tout, y compris les champs inactifs — la vue d'administration).
      *
      * <p>⚠️ Lots 4 et 5 — une rubrique (un bloc) est servie si elle relève du type et de la catégorie demandés ET si au
-     * moins un de ses champs vaut pour les deux ; une rubrique qui n'a encore AUCUN champ (référentiel à compléter)
+     * moins un de ses champs ACTIFS vaut pour les deux ; une rubrique qui n'a encore AUCUN champ (référentiel à compléter)
      * reste servie, c'est ainsi que l'écran le signale.</p>
      */
     @Transactional(readOnly = true)
@@ -84,7 +84,9 @@ public class ChampFicheMarcheService {
         if (filtre) {
             for (ChampFicheMarche c : champRepository.findAllByOrderByCodeRubriqueAscRangAsc()) {
                 avecChamps.add(c.getCodeRubrique());
-                if (c.pourTypeMarche(type) && c.pourCategorie(cat)) {
+                // ⚠️ 2026-09-24 — un champ inactif ne fait pas servir sa rubrique : une rubrique dont tous les champs sont
+                // inactifs n'affichait qu'un titre (B09-FC des prestations intellectuelles) ; elle revient si l'un est réactivé.
+                if (Boolean.TRUE.equals(c.getActif()) && c.pourTypeMarche(type) && c.pourCategorie(cat)) {
                     avecChampsVoulus.add(c.getCodeRubrique());
                 }
             }

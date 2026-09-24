@@ -4758,7 +4758,8 @@ côté du type de marché : la **catégorie** — `FOURNITURES_SERVICES`, `TRAVA
   **inchangées** à la modification ; inconnue → 400 `categories`. Import CSV : colonne `categories` (même règle).
 - **`GET /api/champs-fiche-marche?typeMarche=&categorie=`** — chaque filtre est facultatif ; sans aucun : tout,
   inactifs compris (inchangé). Catégorie inconnue → 400 `categorie`. Une rubrique (un bloc) est servie si elle relève du
-  type et de la catégorie **et** si un de ses champs vaut pour les deux (rubrique sans aucun champ : servie).
+  type et de la catégorie **et** si un de ses champs **actifs** vaut pour les deux (rubrique sans aucun champ : servie ; ⚠️ rubrique dont tous les
+  champs sont inactifs : non servie, depuis le 24/09 — elle revient si l'un d'eux est réactivé).
 - **Catégorie d'une ligne = celle de sa nature** : `tr_nature.CATEGORIE_DAO`, administrable
   (`NatureDto.categorieDao`, 400 si inconnue ; absente d'un `PUT` = inchangée, vide = retirée). V40 la sème par
   libellé : *Travaux* → `TRAVAUX`, *Prestations intellectuelles* → `PRESTATIONS_INTELLECTUELLES`, *Fournitures*,

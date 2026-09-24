@@ -72,7 +72,7 @@ class FicheDaoPrestationsIntellectuellesIntegrationTest extends CnmIntegrationTe
 
     @Test
     @DisplayName("1 — Import : 90 champs, aucun rejet (DPIC admis) ; référentiel des prestations intellectuelles : 23 "
-            + "informations du plan + 88 actives, ses rubriques seulement, pas de B07 ni de B11 ; DPIC refusé nulle part")
+            + "informations du plan + 88 actives, ses rubriques seulement (pas B09-FC, dont le seul champ est inactif), pas de B07 ni de B11")
     void chargement() throws Exception {
         assertThat(bilan.rejets()).isEmpty();
         assertThat(bilan.crees()).hasSize(90);
@@ -83,7 +83,7 @@ class FicheDaoPrestationsIntellectuellesIntegrationTest extends CnmIntegrationTe
         assertThat(JsonPath.<List<String>>read(ref, "$.champs[?(@.documentMaitre=='DPIC')].code")).isNotEmpty();
         assertThat(JsonPath.<List<String>>read(ref, "$.blocs[*].code")).doesNotContain("B07", "B11");
         assertThat(JsonPath.<List<String>>read(ref, "$.blocs[*].rubriques[*].code")).contains("B02-CL", "B02-MS", "B01-AC")
-                .doesNotContain("B02-AU", "B02-LT");
+                .doesNotContain("B02-AU", "B02-LT", "B09-FC");   // B09-FC : son seul champ est inactif
     }
 
     @Test
