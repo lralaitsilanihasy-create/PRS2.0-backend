@@ -14,5 +14,9 @@ import java.math.BigDecimal;
  */
 public record LigneEligibleDto(Integer idDetail, Integer idDossier, String refeDossier, String designationMarche,
         Integer idMode, String libelleMode, BigDecimal montEstim, boolean dejaDao, Long idDmc, String formeMarche,
-        boolean formeOutillee) {
+        boolean formeOutillee,
+        /** ⚠️ Lot 5 (2026-09-24) — catégorie de fiche DAO lue sur la nature de la ligne ; {@code null} si inconnue. */
+        String categorie,
+        /** ⚠️ Lot 5 — la fiche sait préparer cette catégorie (jumeau de {@code formeOutillee}). */
+        boolean categorieOutillee) {
 }

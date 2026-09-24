@@ -34,4 +34,8 @@ public class BlocFicheMarche {
     /** Types de marché où le bloc existe, séparés par des virgules ({@link cnm.prs.enums.TypeMarcheDao}). */
     @Column(name = "TYPES_MARCHE", nullable = false, length = 60)
     private String typesMarche;
+
+    /** ⚠️ Lot 5 (2026-09-24, V40) — catégories de fiche DAO où le bloc existe ({@link cnm.prs.enums.CategorieDao}). */
+    @Column(name = "CATEGORIES", nullable = false, length = 80)
+    private String categories = cnm.prs.enums.CategorieDao.toutes();
 }

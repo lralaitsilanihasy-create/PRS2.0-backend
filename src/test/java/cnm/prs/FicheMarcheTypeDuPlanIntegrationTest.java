@@ -240,7 +240,7 @@ class FicheMarcheTypeDuPlanIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     private Marche ligne(int idDetail, int idDossier, FormeMarche forme) {
-        Marche l = marche(idDetail, idDossier, idDossier);
+        Marche l = marcheDao(idDetail, idDossier, idDossier);
         l.setIdMode(92);
         l.setFormeMarche(forme);
         return marcheRepository.save(l);

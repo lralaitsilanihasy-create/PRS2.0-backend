@@ -48,6 +48,11 @@ public class NatureService {
                 .orElseThrow(() -> new ResourceNotFoundException("Nature introuvable : " + id));
         existing.setLibelle(dto.getLibelle());
         existing.setDescription(dto.getDescription());
+        // ⚠️ Lot 5 (2026-09-24) — absente : inchangée (écrans qui ne la connaissent pas) ; vide : retirée.
+        if (dto.getCategorieDao() != null) {
+            cnm.prs.enums.CategorieDao c = cnm.prs.enums.CategorieDao.depuisCode(dto.getCategorieDao());
+            existing.setCategorieDao(c == null ? null : c.name());
+        }
         return NatureMapper.toDto(repository.save(existing));
     }
 

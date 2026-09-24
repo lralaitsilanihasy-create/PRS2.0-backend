@@ -21,6 +21,7 @@ import cnm.prs.entity.ChampFicheMarche;
 import cnm.prs.entity.RubriqueFicheMarche;
 import cnm.prs.enums.SourceChampFiche;
 import cnm.prs.enums.TypeChampFiche;
+import cnm.prs.enums.CategorieDao;
 import cnm.prs.enums.TypeMarcheDao;
 import cnm.prs.exception.BusinessRuleException;
 import cnm.prs.exception.ChampsInvalidesException;
@@ -58,36 +59,43 @@ public class ChampFicheMarcheService {
     }
 
     /**
-     * Structure et champs actifs d'un type de marché ({@code null} = tout, y compris les champs inactifs — la vue
-     * d'administration).
+     * Structure et champs actifs d'un type de marché et d'une catégorie ({@code null} = pas de filtre sur cet axe ; les
+     * deux nuls = tout, y compris les champs inactifs — la vue d'administration).
+     *
+     * <p>⚠️ Lots 4 et 5 — une rubrique (un bloc) est servie si elle relève du type et de la catégorie demandés ET si au
+     * moins un de ses champs vaut pour les deux ; une rubrique qui n'a encore AUCUN champ (référentiel à compléter)
+     * reste servie, c'est ainsi que l'écran le signale.</p>
      */
     @Transactional(readOnly = true)
-    public ReferentielFicheMarcheDto referentiel(String typeMarche) {
+    public ReferentielFicheMarcheDto referentiel(String typeMarche, String categorie) {
         String type = typeMarche == null || typeMarche.isBlank() ? null : typeMarche.trim().toUpperCase();
         if (type != null && Arrays.stream(TypeMarcheDao.values()).noneMatch(t -> t.name().equals(type))) {
             throw new ChampsInvalidesException(List.of(new ErrorResponse.FieldError("typeMarche",
                     "Type de marché inconnu : " + typeMarche + " (QUANTITE_FIXE, A_COMMANDE, CONTRAT_CADRE).")));
         }
-        // ⚠️ Lot 4 (2026-09-23, §B4) — une rubrique est servie pour un type si elle en relève ET si au moins un de ses
-        // champs vaut pour ce type ; une rubrique qui n'a encore AUCUN champ (référentiel à compléter) reste servie, c'est
-        // ainsi que l'écran le signale. Sans cela, les rubriques partagées d'un modèle s'affichaient vides dans l'autre.
+        String cat = categorie == null || categorie.isBlank() ? null : categorie.trim().toUpperCase();
+        if (cat != null && Arrays.stream(CategorieDao.values()).noneMatch(t -> t.name().equals(cat))) {
+            throw new ChampsInvalidesException(List.of(new ErrorResponse.FieldError("categorie",
+                    "Catégorie inconnue : " + categorie + " (" + CategorieDao.toutes().replace(",", ", ") + ").")));
+        }
+        boolean filtre = type != null || cat != null;
         java.util.Set<String> avecChamps = new java.util.HashSet<>();
-        java.util.Set<String> avecChampsDuType = new java.util.HashSet<>();
-        if (type != null) {
+        java.util.Set<String> avecChampsVoulus = new java.util.HashSet<>();
+        if (filtre) {
             for (ChampFicheMarche c : champRepository.findAllByOrderByCodeRubriqueAscRangAsc()) {
                 avecChamps.add(c.getCodeRubrique());
-                if (c.pourTypeMarche(type)) {
-                    avecChampsDuType.add(c.getCodeRubrique());
+                if (c.pourTypeMarche(type) && c.pourCategorie(cat)) {
+                    avecChampsVoulus.add(c.getCodeRubrique());
                 }
             }
         }
         Map<String, List<RubriqueFicheMarche>> rubriquesParBloc = rubriqueRepository.findAllByOrderByCodeBlocAscRangAsc()
-                .stream().filter(r -> type == null || (ChampFicheMarche.liste(r.getTypesMarche()).contains(type)
-                        && (avecChampsDuType.contains(r.getCode()) || !avecChamps.contains(r.getCode()))))
+                .stream().filter(r -> !filtre || (admet(r.getTypesMarche(), type) && admet(r.getCategories(), cat)
+                        && (avecChampsVoulus.contains(r.getCode()) || !avecChamps.contains(r.getCode()))))
                 .collect(Collectors.groupingBy(RubriqueFicheMarche::getCodeBloc));
         List<ReferentielFicheMarcheDto.BlocDto> blocs = new ArrayList<>();
         for (BlocFicheMarche b : blocRepository.findAllByOrderByRangAsc()) {
-            if (type != null && !ChampFicheMarche.liste(b.getTypesMarche()).contains(type)) {
+            if (!admet(b.getTypesMarche(), type) || !admet(b.getCategories(), cat)) {
                 continue;
             }
             List<ReferentielFicheMarcheDto.RubriqueDto> rubriques = rubriquesParBloc.getOrDefault(b.getCode(), List.of())
@@ -95,10 +103,15 @@ public class ChampFicheMarcheService {
                             r.getDocumentMaitre(), r.getNbAttendu())).toList();
             blocs.add(new ReferentielFicheMarcheDto.BlocDto(b.getCode(), b.getLibelle(), b.getRang(), rubriques));
         }
-        List<ChampFicheMarche> champs = type == null ? champRepository.findAllByOrderByCodeRubriqueAscRangAsc()
+        List<ChampFicheMarche> champs = !filtre ? champRepository.findAllByOrderByCodeRubriqueAscRangAsc()
                 : champRepository.findByActifTrueOrderByCodeRubriqueAscRangAsc().stream()
-                        .filter(c -> c.pourTypeMarche(type)).toList();
+                        .filter(c -> c.pourTypeMarche(type) && c.pourCategorie(cat)).toList();
         return new ReferentielFicheMarcheDto(blocs, champs.stream().map(ChampFicheMarcheService::toDto).toList());
+    }
+
+    /** La liste {@code csv} contient la valeur ({@code null} : pas de filtre). */
+    private static boolean admet(String csv, String valeur) {
+        return valeur == null || ChampFicheMarche.liste(csv).contains(valeur);
     }
 
     /** Champs actifs d'un type de marché, dans l'ordre d'affichage — ce que la fiche évalue. */
@@ -169,6 +182,16 @@ public class ChampFicheMarcheService {
                 erreurs.add(new ErrorResponse.FieldError("typesMarche", "Type de marché inconnu : " + t + "."));
             }
         }
+        // ⚠️ Lot 5 (2026-09-24) — catégories : absentes = défaut de l'entité (FOURNITURES_SERVICES à la création, inchangées
+        // à la modification) ; présentes = validées.
+        List<String> categories = dto.getCategories() == null ? List.of()
+                : dto.getCategories().stream().map(x -> x.trim().toUpperCase()).filter(x -> !x.isEmpty()).toList();
+        for (String x : categories) {
+            if (Arrays.stream(CategorieDao.values()).noneMatch(v -> v.name().equals(x))) {
+                erreurs.add(new ErrorResponse.FieldError("categories", "Catégorie inconnue : " + x + " ("
+                        + CategorieDao.toutes().replace(",", ", ") + ")."));
+            }
+        }
         if (!ConditionCadrage.lisible(dto.getCondition())) {
             erreurs.add(new ErrorResponse.FieldError("condition", "Condition illisible : attendu « cle = VALEUR » ou "
                     + "« cle != VALEUR » (valeur en lettres, chiffres ou _), combinés par « et » / « ou » "
@@ -195,6 +218,9 @@ public class ChampFicheMarcheService {
         c.setDocumentMaitre(doc);
         c.setReprises(csv(dto.getReprises()));
         c.setTypesMarche(String.join(",", types));
+        if (!categories.isEmpty()) {
+            c.setCategories(String.join(",", categories));
+        }
         c.setCondition(vide(dto.getCondition()) ? null : dto.getCondition().trim());
         c.setObligatoire(Boolean.TRUE.equals(dto.getObligatoire()));
         c.setTexteType(vide(dto.getTexteType()) ? null : dto.getTexteType().trim());
@@ -229,7 +255,8 @@ public class ChampFicheMarcheService {
         return new ChampFicheMarcheDto(c.getCode(), c.codeBloc(), c.getCodeRubrique(), c.getRang(), c.getLibelle(),
                 c.getType(), c.getSource(), c.getDocumentMaitre(), ChampFicheMarche.liste(c.getReprises()),
                 ChampFicheMarche.liste(c.getTypesMarche()), c.getCondition(), c.getObligatoire(), c.getTexteType(),
-                c.getControle(), ChampFicheMarche.liste(c.getOptions()), c.getCleCadrage(), c.getClePpm(), c.getActif());
+                c.getControle(), ChampFicheMarche.liste(c.getOptions()), c.getCleCadrage(), c.getClePpm(), c.getActif(),
+                ChampFicheMarche.liste(c.getCategories()));
     }
 
     // ------------------------------------------------------------------ import CSV (hors API)
@@ -243,7 +270,8 @@ public class ChampFicheMarcheService {
      * nom d'en-tête, dans n'importe quel ordre : {@code code}, {@code libelle}, {@code type}, {@code source},
      * {@code documentMaitre}, {@code reprises}, {@code typesMarche}, {@code condition}, {@code obligatoire}
      * ({@code oui}/{@code non}), {@code texteType}, {@code controle}, {@code options}, {@code cleCadrage},
-     * {@code clePpm}, {@code rang}, {@code actif}. Les listes sont séparées par des virgules dans la cellule.
+     * {@code clePpm}, {@code rang}, {@code actif}, ⚠️ lot 5 {@code categories} (absente : {@code FOURNITURES_SERVICES}
+     * pour un champ créé, inchangée pour un champ mis à jour). Les listes sont séparées par des virgules dans la cellule.
      */
     public BilanImport importerCsv(Path fichier) throws IOException {
         List<String> lignes = Files.readAllLines(fichier, StandardCharsets.UTF_8);
@@ -281,6 +309,7 @@ public class ChampFicheMarcheService {
                 dto.setOptions(ChampFicheMarche.liste(l.get("options")));
                 dto.setCleCadrage(l.get("cleCadrage"));
                 dto.setClePpm(l.get("clePpm"));
+                dto.setCategories(ChampFicheMarche.liste(l.get("categories")));   // lot 5 : absente = défaut
                 dto.setRang(vide(l.get("rang")) ? null : Integer.valueOf(l.get("rang")));
                 dto.setActif(vide(l.get("actif")) ? Boolean.TRUE : ouiNon(l.get("actif")));
                 if (vide(code) || !code.matches("B\\d{2}-[A-Z0-9]{1,6}-\\d{2}")) {

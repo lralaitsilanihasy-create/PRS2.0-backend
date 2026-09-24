@@ -68,4 +68,11 @@ public class ChampFicheMarcheDto {
     private String clePpm;
 
     private Boolean actif;
+
+    /**
+     * ⚠️ Lot 5 (2026-09-24) — catégories de fiche DAO où le champ vaut ({@code FOURNITURES_SERVICES}, {@code TRAVAUX},
+     * {@code PRESTATIONS_INTELLECTUELLES}). Absentes : {@code FOURNITURES_SERVICES} à la création, inchangées à la
+     * modification (un écran ou un fichier qui ne les connaît pas ne les efface pas).
+     */
+    private List<String> categories;
 }

@@ -52,7 +52,7 @@ class FicheMarcheDocumentsEchecIntegrationTest extends CnmIntegrationTestSupport
         dispatchRepository.save(dispatch(9900, 9900, "CTRCC1", "CTRMEM", "CTRPRE"));
         examenRepository.save(examen(9900, 9900, "CTRMEM"));
         seedPvSigne(9900, 9900);
-        Marche l = marche(9901, 9900, 9900);
+        Marche l = marcheDao(9901, 9900, 9900);
         l.setIdMode(92);
         marcheRepository.save(l);
 

@@ -77,6 +77,46 @@ public class DmcService {
         return Optional.empty();
     }
 
+    /**
+     * ⚠️ Lot 5 (2026-09-24) — les catégories de fiche DAO que la fiche sait préparer. Constante, comme
+     * {@link #FORMES_OUTILLEES} : elle s'allongera avec le contenu des travaux, puis des prestations intellectuelles.
+     */
+    public static final java.util.Set<cnm.prs.enums.CategorieDao> CATEGORIES_OUTILLEES =
+            java.util.EnumSet.of(cnm.prs.enums.CategorieDao.FOURNITURES_SERVICES);
+
+    /** La catégorie d'une ligne (nulle si le plan ou le référentiel ne la donne pas) et le refus qu'elle vaut, s'il y a lieu. */
+    public record CategorieLigne(cnm.prs.enums.CategorieDao categorie, Optional<Motif> motif) {
+    }
+
+    /**
+     * ⚠️ Lot 5 — la catégorie de la ligne, lue sur sa nature. Refus {@code FORME_NON_OUTILLEE} (même code que la forme,
+     * §B2 test 6) : nature absente de la ligne, nature sans catégorie au référentiel (à compléter par l'Administrateur),
+     * ou catégorie non outillée.
+     */
+    public CategorieLigne categorie(Marche ligne) {
+        return categorie(ligne, new HashMap<>());
+    }
+
+    private CategorieLigne categorie(Marche ligne, Map<Integer, java.util.Optional<cnm.prs.entity.Nature>> cache) {
+        if (ligne == null || ligne.getIdNature() == null) {
+            return new CategorieLigne(null, Optional.of(new Motif("FORME_NON_OUTILLEE", "La nature du marché n'est pas "
+                    + "renseignée dans le plan : complétez le champ « Nature » de la ligne avant de préparer l'appel d'offres.")));
+        }
+        cnm.prs.entity.Nature nature = cache.computeIfAbsent(ligne.getIdNature(), natureRepository::findById).orElse(null);
+        cnm.prs.enums.CategorieDao cat = nature == null || nature.getCategorieDao() == null ? null
+                : cnm.prs.enums.CategorieDao.valueOf(nature.getCategorieDao());
+        if (cat == null) {
+            String nom = nature == null ? String.valueOf(ligne.getIdNature()) : nature.getLibelle();
+            return new CategorieLigne(null, Optional.of(new Motif("FORME_NON_OUTILLEE", "La nature « " + nom + " » n'a "
+                    + "pas de catégorie de fiche DAO : à compléter par l'Administrateur (référentiel des natures).")));
+        }
+        if (!CATEGORIES_OUTILLEES.contains(cat)) {
+            return new CategorieLigne(cat, Optional.of(new Motif("FORME_NON_OUTILLEE", "Cette ligne est de catégorie « "
+                    + cat.libelle() + " » ; la fiche DAO ne prend en charge que les fournitures et services pour le moment.")));
+        }
+        return new CategorieLigne(cat, Optional.empty());
+    }
+
     private final DossierMecRepository repository;
     private final MarcheRepository marcheRepository;
     private final ModePassationRepository modeRepository;
@@ -86,12 +126,15 @@ public class DmcService {
     private final DossierIntegriteService dossierIntegrite;
     private final ValeursPpmService valeursPpm;
     private final ChampFicheMarcheRepository champRepository;
+    /** ⚠️ Lot 5 (2026-09-24) — la catégorie d'une ligne se lit sur sa nature ({@code tr_nature.CATEGORIE_DAO}). */
+    private final cnm.prs.repository.NatureRepository natureRepository;
 
     public DmcService(DossierMecRepository repository, MarcheRepository marcheRepository,
             ModePassationRepository modeRepository, TypeDmcRepository typeDmcRepository,
             PerimetreDossier perimetre, DossierRepository dossierRepository,
             DossierIntegriteService dossierIntegrite, ValeursPpmService valeursPpm,
-            ChampFicheMarcheRepository champRepository) {
+            ChampFicheMarcheRepository champRepository, cnm.prs.repository.NatureRepository natureRepository) {
+        this.natureRepository = natureRepository;
         this.repository = repository;
         this.marcheRepository = marcheRepository;
         this.modeRepository = modeRepository;
@@ -189,11 +232,13 @@ public class DmcService {
             }
             ModePassation mode = caches.mode(m.getIdMode());
             DossierMec dmc = dmcParOrigine.get(m.getIdLigneOrigine());
+            CategorieLigne cat = categorie(m, caches.natures);
             out.add(new LigneEligibleDto(m.getIdDetail(), m.getIdDossier(), d == null ? null : d.getRefeDossier(),
                     m.getDesignationMarche(), m.getIdMode(), mode == null ? null : mode.getLibelle(), m.getMontEstim(),
                     dmc != null, dmc == null ? null : dmc.getIdDmc(),
                     m.formeMarcheSaisie() == null ? null : m.formeMarcheSaisie().name(),
-                    motifForme(m.formeMarcheSaisie()).isEmpty()));
+                    motifForme(m.formeMarcheSaisie()).isEmpty(), cat.categorie() == null ? null : cat.categorie().name(),
+                    cat.motif().isEmpty()));
         }
         return out;
     }
@@ -235,6 +280,10 @@ public class DmcService {
             if (forme.isPresent()) {
                 return forme;
             }
+            Optional<Motif> categorie = categorie(marche).motif();
+            if (categorie.isPresent()) {
+                return categorie;
+            }
         }
         if (dossier == null || !caches.pv.computeIfAbsent(dossier.getIdDossier(), id -> valeursPpm.pvSigneFavorable(dossier))) {
             return Optional.of(new Motif("PV_NON_SIGNE", "Le plan " + (dossier == null ? "" : dossier.getRefeDossier() + " ")
@@ -252,6 +301,7 @@ public class DmcService {
         private final Map<Integer, ModePassation> modes = new HashMap<>();
         private final Map<Long, TypeDmc> types = new HashMap<>();
         private final Map<Integer, Boolean> pv = new HashMap<>();
+        private final Map<Integer, java.util.Optional<cnm.prs.entity.Nature>> natures = new HashMap<>();
         private final Map<Integer, DossierMec> dmcParOrigine;
 
         Caches(Map<Integer, DossierMec> dmcParOrigine) {

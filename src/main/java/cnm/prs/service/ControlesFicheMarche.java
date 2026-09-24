@@ -77,7 +77,10 @@ public final class ControlesFicheMarche {
         int nbAttendus = 0;
 
         for (ChampFicheMarche c : champsOuverts) {
-            boolean saisie = SourceChampFiche.SAISIE.name().equals(c.getSource());
+            // ⚠️ Lot 5 (2026-09-24) — un champ PIECE (formulaire à remplir, joint au dossier) ne se saisit pas dans la fiche :
+            // ni attendu, ni obligatoire au bilan — sinon il bloquerait la validation et fausserait le compte.
+            boolean saisie = SourceChampFiche.SAISIE.name().equals(c.getSource())
+                    && !TypeChampFiche.PIECE.name().equals(c.getType());
             String v = valeurs.get(c.getCode());
             boolean vide = v == null || v.isBlank();
             if (saisie) {

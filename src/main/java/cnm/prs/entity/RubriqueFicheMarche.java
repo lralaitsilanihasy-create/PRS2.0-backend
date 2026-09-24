@@ -49,4 +49,8 @@ public class RubriqueFicheMarche {
 
     @Column(name = "TYPES_MARCHE", nullable = false, length = 60)
     private String typesMarche;
+
+    /** ⚠️ Lot 5 (2026-09-24, V40) — catégories de fiche DAO où la rubrique existe ({@link cnm.prs.enums.CategorieDao}). */
+    @Column(name = "CATEGORIES", nullable = false, length = 80)
+    private String categories = cnm.prs.enums.CategorieDao.FOURNITURES_SERVICES.name();
 }

@@ -73,15 +73,15 @@ class FicheMarcheDaoIntegrationTest extends CnmIntegrationTestSupport {
 
         // Plan signé (FAV) de PRMP001, clôturé.
         planSigne(9900, "PRMP001", "CLOTURE", "FAV");
-        Marche l = marche(9901, 9900, 9900);
+        Marche l = marcheDao(9901, 9900, 9900);
         l.setIdMode(92);
         l.setMontEstim(new BigDecimal("8400000"));
         l.setFinancement("RPI");
         marcheRepository.save(l);
-        Marche bcLigne = marche(9902, 9900, 9900);
+        Marche bcLigne = marcheDao(9902, 9900, 9900);
         bcLigne.setIdMode(90);
         marcheRepository.save(bcLigne);
-        Marche nonRattachee = marche(9904, 9900, 9900);
+        Marche nonRattachee = marcheDao(9904, 9900, 9900);
         nonRattachee.setIdMode(93);
         marcheRepository.save(nonRattachee);
         // Dates prévisionnelles de la ligne 9901 : lancement 2026-03-02, attribution 2026-06-15.
@@ -93,7 +93,7 @@ class FicheMarcheDaoIntegrationTest extends CnmIntegrationTestSupport {
         // Plan non signé de PRMP001.
         dossierRepository.save(dossierLoc(9905, "EXAMINE", "ANT", "PRMP001"));
         ppmRepository.save(ppm(9905, 9905, "PRMP001"));
-        Marche sansPv = marche(9903, 9905, 9905);
+        Marche sansPv = marcheDao(9903, 9905, 9905);
         sansPv.setIdMode(92);
         marcheRepository.save(sansPv);
 
@@ -197,7 +197,7 @@ class FicheMarcheDaoIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isNotFound());
 
         // UGPM de la PRMP, sur une seconde ligne éligible.
-        Marche autre = marche(9906, 9900, 9900);
+        Marche autre = marcheDao(9906, 9900, 9900);
         autre.setIdMode(92);
         marcheRepository.save(autre);
         mvc.perform(post("/api/dmcs/par-marche/9906").header("Authorization", tokenUgpm))
@@ -461,7 +461,7 @@ class FicheMarcheDaoIntegrationTest extends CnmIntegrationTestSupport {
         Dossier v1 = dossierRepository.findById(9900).orElseThrow();
         v1.setStatut("REMPLACE");
         dossierRepository.save(v1);
-        Marche lPrime = marche(9911, 9910, 9910);
+        Marche lPrime = marcheDao(9911, 9910, 9910);
         lPrime.setIdMode(92);
         lPrime.setIdLigneOrigine(9901);
         lPrime.setMontEstim(new BigDecimal("9100000"));
@@ -506,7 +506,7 @@ class FicheMarcheDaoIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isForbidden());
 
         planSigne(9920, "PRMP003", "CLOTURE", "FAV");
-        Marche l = marche(9921, 9920, 9920);
+        Marche l = marcheDao(9921, 9920, 9920);
         l.setIdMode(92);
         marcheRepository.save(l);
         mvc.perform(post("/api/dmcs/par-marche/9921").header("Authorization", tokenPrmp3))

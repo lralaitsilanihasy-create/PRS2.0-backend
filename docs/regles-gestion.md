@@ -484,6 +484,19 @@ document porte chaque information (document maître, reprises) ; il manquait la 
   chaque lecture, un document produit après coup ne dirait pas forcément ce qui a été validé) ; la version suivante
   les produira.
 
+#### Les trois catégories de fiche DAO (lot 5, demande front du 2026-09-24, pilote)
+
+⚠️ **« Il y a trois catégories de fiches DAO : Fournitures et Services, Travaux et Réhabilitation, Prestations
+intellectuelles »** (pilote). La catégorie est un second axe, à côté du type de marché.
+
+- **Elle vient du plan** : c'est la nature de la ligne, traduite par une correspondance que l'Administrateur tient à
+  jour dans le référentiel des natures. Jamais une réponse de cadrage.
+- **Ce qui ne se prépare pas le dit** : ligne sans nature, nature sans catégorie (à compléter par l'Administrateur),
+  catégorie pas encore outillée — même refus que pour une forme de marché. Aujourd'hui, seule la catégorie
+  Fournitures et Services est outillée ; les travaux attendent leur référentiel.
+- **Chaque catégorie a ses informations** ; celles qui viennent du plan (entité, montant, nature, calendrier…) valent
+  pour toutes. Les travaux ajoutent une question de cadrage : le marché comporte-t-il des tranches ?
+
 #### Marché à commande et contrat-cadre (lots 3 et 4, demandes front du 2026-09-23)
 
 - **Les trois formes de marché se préparent.** Le marché à commande avait déjà sa matière (huit informations propres,

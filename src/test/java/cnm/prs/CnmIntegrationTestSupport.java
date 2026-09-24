@@ -652,6 +652,24 @@ abstract class CnmIntegrationTestSupport extends AbstractIntegrationTest {
         return m;
     }
 
+    /**
+     * ⚠️ Fiche DAO, lot 5 (2026-09-24) — une ligne de marché préparable par la fiche : {@link #marche} avec une nature
+     * de catégorie {@code FOURNITURES_SERVICES} (sans nature, une ligne ne se prépare plus).
+     */
+    protected Marche marcheDao(int idDetail, int dossier, int ppm) {
+        Marche m = marche(idDetail, dossier, ppm);
+        m.setIdNature(natureFournitures());
+        return m;
+    }
+
+    /** Nature 92 « Fournitures », catégorie de fiche DAO {@code FOURNITURES_SERVICES} (créée au besoin). */
+    protected int natureFournitures() {
+        if (!natureRepository.existsById(92)) {
+            natureRepository.save(new cnm.prs.entity.Nature(92, "Fournitures", null, "FOURNITURES_SERVICES"));
+        }
+        return 92;
+    }
+
     protected Ministere ministere(int id) {
         Ministere m = new Ministere();
         m.setIdMinistere(id);

@@ -28,6 +28,7 @@ import cnm.prs.entity.FicheMarche;
 import cnm.prs.entity.FicheMarcheValeur;
 import cnm.prs.entity.Marche;
 import cnm.prs.entity.TypeDmc;
+import cnm.prs.enums.CategorieDao;
 import cnm.prs.enums.FormeMarche;
 import cnm.prs.enums.ProfilUtilisateur;
 import cnm.prs.enums.SourceChampFiche;
@@ -83,6 +84,9 @@ public class FicheMarcheService {
      */
     private static final String CLE_TYPE_MARCHE = "typeMarche";
 
+    /** ⚠️ Lot 5 (2026-09-24, §B5) — clé de cadrage des travaux : le marché comporte-t-il des tranches ? */
+    private static final String CLE_TRANCHES = "tranches";
+
     private final FicheMarcheRepository ficheRepository;
     private final FicheMarcheValeurRepository valeurRepository;
     private final ChampFicheMarcheRepository champRepository;
@@ -92,6 +96,8 @@ public class FicheMarcheService {
     private final cnm.prs.repository.DossierRepository dossierRepository;
     /** ⚠️ Lot 2a (2026-09-23) — production, lecture et jointure des documents générés. */
     private final DocumentsFicheMarcheService documents;
+    /** ⚠️ Lot 5 (2026-09-24) — la catégorie de la ligne (nature → catégorie) et son refus. */
+    private final DmcService dmcService;
     private final cnm.prs.repository.DocumentFicheMarcheRepository documentRepository;
     private final MarcheRepository marcheRepository;
     private final TypeDmcRepository typeDmcRepository;
@@ -107,7 +113,8 @@ public class FicheMarcheService {
             PerimetreDossier perimetre, ValeursPpmService valeursPpm, DossierIntegriteService dossierIntegrite,
             JournalDossierService journal, ObjectMapper mapper,
             cnm.prs.repository.DossierRepository dossierRepository, DocumentsFicheMarcheService documents,
-            cnm.prs.repository.DocumentFicheMarcheRepository documentRepository) {
+            cnm.prs.repository.DocumentFicheMarcheRepository documentRepository, DmcService dmcService) {
+        this.dmcService = dmcService;
         this.documents = documents;
         this.documentRepository = documentRepository;
         this.dossierRepository = dossierRepository;
@@ -227,7 +234,7 @@ public class FicheMarcheService {
 
     public FicheMarcheDto ecrireCadrage(Long idDmc, Map<String, Object> cadrage) {
         Contexte ctx = contexteEcriture(idDmc);
-        Map<String, Object> propre = validerCadrage(cadrage == null ? Map.of() : cadrage);
+        Map<String, Object> propre = validerCadrage(cadrage == null ? Map.of() : cadrage, ctx.codeCategorie());
         FicheMarche fiche = brouillonOuNouvelle(ctx);
         fiche.setCadrage(ecrireJson(propre));
         // ⚠️ Lot 4 (2026-09-23, §B5) — reprendre le cadrage, c'est reprendre la fiche sous le type du plan : le type de
@@ -269,7 +276,7 @@ public class FicheMarcheService {
                         + " : il ne se saisit pas."));
                 continue;
             }
-            if (!c.pourTypeMarche(typeMarche) || !ConditionCadrage.vraie(c.getCondition(), cadrage)) {
+            if (!c.pourTypeMarche(typeMarche) || !c.pourCategorie(ctx.codeCategorie()) || !ConditionCadrage.vraie(c.getCondition(), cadrage)) {
                 continue;   // rubrique fermée : ignoré, pas une erreur
             }
             String brut = e.getValue() == null ? null : String.valueOf(e.getValue()).trim();
@@ -365,7 +372,18 @@ public class FicheMarcheService {
      * {@code forme} = la forme saisie de la <strong>ligne courante</strong> de la filiation (même lecture que
      * {@code valeursPpm}), d'où se déduit le type de marché ; {@code null} si le plan ne la porte pas.
      */
-    private record Contexte(DossierMec dmc, Integer idDetail, Integer idDossier, FormeMarche forme) {
+    private record Contexte(DossierMec dmc, Integer idDetail, Integer idDossier, FormeMarche forme,
+            DmcService.CategorieLigne categorie) {
+
+        /** ⚠️ Lot 5 — code de la catégorie ({@code null} si le plan ou le référentiel ne la donne pas). */
+        String codeCategorie() {
+            return categorie.categorie() == null ? null : categorie.categorie().name();
+        }
+
+        /** La forme et la catégorie sont outillées. */
+        boolean outille() {
+            return DmcService.motifForme(forme).isEmpty() && categorie.motif().isEmpty();
+        }
     }
 
     private Contexte contexte(Long idDmc) {
@@ -385,9 +403,10 @@ public class FicheMarcheService {
             throw new BusinessRuleException("Le DMC " + idDmc + " n'est pas un dossier d'appel d'offres ("
                     + (type == null ? "type inconnu" : type.getCode()) + ") : pas de fiche marché.", "DMC_NON_DAO");
         }
-        FormeMarche forme = marcheRepository.findById(dmc.getIdDetail())
-                .map(valeursPpm::ligneEnVigueur).map(Marche::formeMarcheSaisie).orElse(null);
-        return new Contexte(dmc, dmc.getIdDetail(), idDossier, forme);
+        Marche ligne = marcheRepository.findById(dmc.getIdDetail()).map(valeursPpm::ligneEnVigueur).orElse(null);
+        FormeMarche forme = ligne == null ? null : ligne.formeMarcheSaisie();
+        // ⚠️ Lot 5 (2026-09-24) — la catégorie se lit sur la nature de la même ligne courante, comme la forme.
+        return new Contexte(dmc, dmc.getIdDetail(), idDossier, forme, dmcService.categorie(ligne));
     }
 
     private Contexte contexteEcriture(Long idDmc) {
@@ -409,6 +428,10 @@ public class FicheMarcheService {
      */
     private static void exigerFormeOutillee(Contexte ctx) {
         DmcService.motifForme(ctx.forme()).ifPresent(m -> {
+            throw new BusinessRuleException(m.message(), m.code());
+        });
+        // ⚠️ Lot 5 (2026-09-24) — même refus, même code, pour une catégorie non outillée ou absente.
+        ctx.categorie().motif().ifPresent(m -> {
             throw new BusinessRuleException(m.message(), m.code());
         });
     }
@@ -446,7 +469,7 @@ public class FicheMarcheService {
      * valeur typée selon le champ reflet (OUI/NON, nombre, pourcentage, option de liste). ⚠️ Lot 1c : {@code typeMarche}
      * n'est plus une réponse (dérivé de la forme du marché au plan) — la clé est ignorée si elle est encore envoyée.
      */
-    private Map<String, Object> validerCadrage(Map<String, Object> cadrage) {
+    private Map<String, Object> validerCadrage(Map<String, Object> cadrage, String categorie) {
         List<ErrorResponse.FieldError> erreurs = new ArrayList<>();
         Map<String, ChampFicheMarche> reflets = new LinkedHashMap<>();
         for (ChampFicheMarche c : champRepository.findAllByOrderByCodeRubriqueAscRangAsc()) {
@@ -464,6 +487,18 @@ public class FicheMarcheService {
             String texte = String.valueOf(valeur).trim();
             if (CLE_TYPE_MARCHE.equals(cle)) {
                 continue;   // lot 1c : dérivé du plan, plus une réponse — ignoré (tolérance d'une version), jamais un 400
+            }
+            if (CLE_TRANCHES.equals(cle) && !reflets.containsKey(cle)) {
+                // ⚠️ Lot 5 (2026-09-24, §B5) — « Le marché comporte-t-il des tranches ? » : question des travaux seulement.
+                String t = texte.toUpperCase();
+                if (!CategorieDao.TRAVAUX.name().equals(categorie)) {
+                    erreurs.add(new ErrorResponse.FieldError(cle, "La question des tranches ne vaut que pour les travaux."));
+                } else if (!t.equals("OUI") && !t.equals("NON")) {
+                    erreurs.add(new ErrorResponse.FieldError(cle, "« tranches » attend OUI ou NON."));
+                } else {
+                    propre.put(cle, t);
+                }
+                continue;
             }
             if ("attributaires".equals(cle)) {
                 // ⚠️ Lot 4 (2026-09-23) — contrat-cadre mono ou multi-attributaire (conditions « attributaires = MONO |
@@ -574,6 +609,8 @@ public class FicheMarcheService {
         String typeMarche = ctx.forme() == null ? null : ctx.forme().name();
         String typeOuverture = typeMarche != null ? typeMarche
                 : fiche.getTypeMarche() != null ? fiche.getTypeMarche() : TypeMarcheDao.QUANTITE_FIXE.name();
+        // ⚠️ Lot 5 — les champs s'ouvrent aussi selon la catégorie (à défaut : fournitures et services).
+        String categorieOuverture = ctx.codeCategorie() != null ? ctx.codeCategorie() : CategorieDao.FOURNITURES_SERVICES.name();
         boolean typeChange = fiche.getIdFiche() != null && typeMarche != null && fiche.getTypeMarche() != null
                 && !typeMarche.equals(fiche.getTypeMarche());
         if (typeChange && StatutFicheMarche.VALIDEE.name().equals(fiche.getStatut())) {
@@ -591,7 +628,7 @@ public class FicheMarcheService {
         Map<String, String> valeursCadrage = new TreeMap<>();
         Map<String, String> valeursPpmParCode = new TreeMap<>();
         for (ChampFicheMarche c : champRepository.findByActifTrueOrderByCodeRubriqueAscRangAsc()) {
-            if (!c.pourTypeMarche(typeOuverture) || !ConditionCadrage.vraie(c.getCondition(), cadrage)) {
+            if (!c.pourTypeMarche(typeOuverture) || !c.pourCategorie(categorieOuverture) || !ConditionCadrage.vraie(c.getCondition(), cadrage)) {
                 continue;
             }
             ouverts.add(c);
@@ -617,7 +654,7 @@ public class FicheMarcheService {
                 fiche.getDateValidation(), fiche.getValidePar(),
                 dossierRepository.findIdDossierByIdDmc(fiche.getIdDmc()).orElse(null),
                 fiche.getIdFiche() != null && StatutFicheMarche.BROUILLON.name().equals(fiche.getStatut()) && typeChange,
-                DmcService.motifForme(ctx.forme()).isEmpty());
+                ctx.outille(), ctx.codeCategorie());
     }
 
     /** Le cadrage enregistré, sans l'ancienne clé {@code typeMarche} (lot 1c : elle n'est plus une réponse). */

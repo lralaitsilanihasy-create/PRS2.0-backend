@@ -20,4 +20,10 @@ public class NatureDto {
 
     @Size(max = 500)
     private String description;
+
+    /**
+     * ⚠️ Fiche DAO, lot 5 (2026-09-24) — catégorie de fiche DAO des lignes de cette nature : {@code FOURNITURES_SERVICES},
+     * {@code TRAVAUX}, {@code PRESTATIONS_INTELLECTUELLES} ; 400 sinon. En {@code PUT}, absente = inchangée, vide = retirée.
+     */
+    private String categorieDao;
 }

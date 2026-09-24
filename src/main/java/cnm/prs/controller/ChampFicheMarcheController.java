@@ -31,10 +31,14 @@ public class ChampFicheMarcheController {
         this.service = service;
     }
 
-    /** Structure et champs actifs d'un type de marché ; sans {@code typeMarche}, tout (vue d'administration). */
+    /**
+     * Structure et champs actifs d'un type de marché et, ⚠️ lot 5, d'une catégorie ({@code categorie}) ; sans
+     * paramètre, tout (vue d'administration). Chaque filtre est facultatif et s'ajoute à l'autre.
+     */
     @GetMapping
-    public ReferentielFicheMarcheDto referentiel(@RequestParam(required = false) String typeMarche) {
-        return service.referentiel(typeMarche);
+    public ReferentielFicheMarcheDto referentiel(@RequestParam(required = false) String typeMarche,
+            @RequestParam(required = false) String categorie) {
+        return service.referentiel(typeMarche, categorie);
     }
 
     @PostMapping

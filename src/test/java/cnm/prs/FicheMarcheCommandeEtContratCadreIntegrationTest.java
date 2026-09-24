@@ -299,7 +299,7 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
     }
 
     private void ligne(int idDetail, FormeMarche forme) {
-        Marche l = marche(idDetail, 9900, 9900);
+        Marche l = marcheDao(idDetail, 9900, 9900);
         l.setIdMode(92);
         l.setFormeMarche(forme);
         l.setDesignationMarche("Marché " + idDetail);

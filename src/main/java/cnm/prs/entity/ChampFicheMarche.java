@@ -66,6 +66,13 @@ public class ChampFicheMarche {
     @Column(name = "TYPES_MARCHE", nullable = false, length = 60)
     private String typesMarche;
 
+    /**
+     * ⚠️ Lot 5 (2026-09-24, V40) — catégories de fiche DAO où le champ vaut ({@link cnm.prs.enums.CategorieDao}), séparées
+     * par des virgules, comme {@link #typesMarche}. Les informations reprises du plan valent pour les trois.
+     */
+    @Column(name = "CATEGORIES", nullable = false, length = 80)
+    private String categories = cnm.prs.enums.CategorieDao.FOURNITURES_SERVICES.name();
+
     @Column(name = "CONDITION", length = 300)
     private String condition;
 
@@ -107,5 +114,10 @@ public class ChampFicheMarche {
 
     public boolean pourTypeMarche(String typeMarche) {
         return typeMarche == null || liste(typesMarche).contains(typeMarche);
+    }
+
+    /** ⚠️ Lot 5 — le champ vaut pour la catégorie ({@code null} : toutes). */
+    public boolean pourCategorie(String categorie) {
+        return categorie == null || liste(categories).contains(categorie);
     }
 }

@@ -93,4 +93,12 @@ public class FicheMarcheDto {
      * plus de liste à lui : ouvrir un type est une livraison backend seule. {@code false} si le plan ne porte pas la forme.
      */
     private Boolean typeOutille;
+
+    /**
+     * ⚠️ Lot 5 (2026-09-24, §B2) — catégorie de la fiche ({@code FOURNITURES_SERVICES}, {@code TRAVAUX},
+     * {@code PRESTATIONS_INTELLECTUELLES}), dérivée de la nature de la ligne courante, relue à chaque lecture, comme
+     * {@link #typeMarche} l'est de la forme ; jamais une réponse de cadrage. {@code null} si la ligne n'a pas de nature
+     * ou si la nature n'a pas de catégorie. {@link #typeOutille} n'est vrai que si la forme ET la catégorie le sont.
+     */
+    private String categorie;
 }

@@ -64,6 +64,8 @@ public final class SelectionDocumentsFiche {
     public static List<DocumentFicheModele> selectionner(FicheMarcheDto fiche, List<ChampFicheMarche> champs,
             List<BlocFicheMarche> blocs, List<RubriqueFicheMarche> rubriques, LocalDateTime validation) {
         String typeOuverture = fiche.getTypeMarche();
+        // ⚠️ Lot 5 (2026-09-24) — et la catégorie de la fiche (à défaut : fournitures et services).
+        String categorieOuverture = fiche.getCategorie() != null ? fiche.getCategorie() : "FOURNITURES_SERVICES";
         Map<String, Object> cadrage = fiche.getCadrage() == null ? Map.of() : fiche.getCadrage();
         Map<String, RubriqueFicheMarche> rubriqueParCode = new LinkedHashMap<>();
         rubriques.forEach(r -> rubriqueParCode.put(r.getCode(), r));
@@ -80,7 +82,8 @@ public final class SelectionDocumentsFiche {
                 Map<String, List<DocumentFicheModele.Ligne>> lignesParRubrique = new LinkedHashMap<>();
                 for (ChampFicheMarche c : champs) {
                     if (!bloc.getCode().equals(c.codeBloc()) || !pourDocument(c, type, typeOuverture)
-                            || !c.pourTypeMarche(typeOuverture) || !ConditionCadrage.vraie(c.getCondition(), cadrage)) {
+                            || !c.pourTypeMarche(typeOuverture)
+                            || !c.pourCategorie(categorieOuverture) || !ConditionCadrage.vraie(c.getCondition(), cadrage)) {
                         continue;
                     }
                     String valeur = valeurAffichee(c, fiche);

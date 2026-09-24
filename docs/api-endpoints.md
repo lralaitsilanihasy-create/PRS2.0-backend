@@ -4717,6 +4717,33 @@ précédentes conservées ; dossier en examen ou au-delà → rien ne change. D�
 type** sur un dossier qui porte déjà des pièces produites → même 409. Une version validée **avant le lot 2** n'a pas de
 documents (pas de reprise) : elle n'en joint aucun, et le dépôt manuel reste possible tant que la fiche n'en a produit.
 
+### Les trois catégories de fiche DAO — lot 5 ⚠️ 2026-09-24
+
+Demande front `frontend/docs/demande-backend-2026-09-24-categories-de-fiche-dao.md`. Second axe du référentiel, à
+côté du type de marché : la **catégorie** — `FOURNITURES_SERVICES`, `TRAVAUX`, `PRESTATIONS_INTELLECTUELLES`.
+
+- **Référentiel (V40)** : blocs, rubriques et champs portent `CATEGORIES` (liste, comme `TYPES_MARCHE`). Les blocs
+  valent pour les trois ; tout ce qui était chargé est `FOURNITURES_SERVICES`, **sauf les 23 informations reprises du
+  plan** (source `PPM`, rubriques `B01-AC`, `B02-OB`, `B02-LV`), qui valent pour les trois : une fiche de travaux relit
+  aussi sa ligne. `ChampFicheMarcheDto.categories` ; `POST`/`PUT` : absentes = `FOURNITURES_SERVICES` à la création,
+  **inchangées** à la modification ; inconnue → 400 `categories`. Import CSV : colonne `categories` (même règle).
+- **`GET /api/champs-fiche-marche?typeMarche=&categorie=`** — chaque filtre est facultatif ; sans aucun : tout,
+  inactifs compris (inchangé). Catégorie inconnue → 400 `categorie`. Une rubrique (un bloc) est servie si elle relève du
+  type et de la catégorie **et** si un de ses champs vaut pour les deux (rubrique sans aucun champ : servie).
+- **Catégorie d'une ligne = celle de sa nature** : `tr_nature.CATEGORIE_DAO`, administrable
+  (`NatureDto.categorieDao`, 400 si inconnue ; absente d'un `PUT` = inchangée, vide = retirée). V40 la sème par
+  libellé : *Travaux* → `TRAVAUX`, *Prestations intellectuelles* → `PRESTATIONS_INTELLECTUELLES`, *Fournitures*,
+  *Services*, *Fournitures et services*, *PRESTATIONS DE SERVICE*, *Prestations* → `FOURNITURES_SERVICES`.
+- **Catégories outillées** : `FOURNITURES_SERVICES` seule (`DmcService.CATEGORIES_OUTILLEES`). Création du DMC et
+  écritures de la fiche : 409 **`FORME_NON_OUTILLEE`** (même code que la forme) si la ligne n'a pas de nature, si sa
+  nature n'a pas de catégorie (« à compléter par l'Administrateur ») ou si la catégorie n'est pas outillée.
+- **`FicheMarcheDto.categorie`** (dérivée, relue à chaque lecture, `null` si inconnue) ; **`typeOutille`** n'est vrai
+  que si la forme **et** la catégorie le sont. **`LigneEligibleDto.categorie`** et **`categorieOutillee`**.
+- **Cadrage** : clé **`tranches`** (`OUI`/`NON`), acceptée pour une fiche de **travaux** seulement (400 sinon).
+- Les documents générés et le bilan ne retiennent que les champs de la catégorie de la fiche.
+- Un champ de type **`PIECE`** (formulaire à remplir, joint au dossier — les six « FAR » des travaux) n'est **ni attendu
+  ni bloquant** au bilan : il ne se saisit pas dans la fiche (sa valeur reste refusée en 400).
+
 ### Marché à commande et contrat-cadre — lots 3 et 4 ⚠️ 2026-09-23
 
 Demandes front `frontend/docs/demande-backend-2026-09-23-marche-a-commande.md` et `-contrat-cadre.md`.

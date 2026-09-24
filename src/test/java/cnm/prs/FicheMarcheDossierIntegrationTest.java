@@ -67,7 +67,7 @@ class FicheMarcheDossierIntegrationTest extends CnmIntegrationTestSupport {
 
         planSigne(9900, "PRMP001");
         for (int idDetail : new int[] {9901, 9906, 9907}) {
-            Marche l = marche(idDetail, 9900, 9900);
+            Marche l = marcheDao(idDetail, 9900, 9900);
             l.setIdMode(92);
             l.setDesignationMarche("Marché " + idDetail);
             marcheRepository.save(l);
@@ -327,7 +327,7 @@ class FicheMarcheDossierIntegrationTest extends CnmIntegrationTestSupport {
 
         // PRMP003 : plan signé à elle, fiche validée, mandat expiré.
         planSigne(9920, "PRMP003");
-        Marche l = marche(9921, 9920, 9920);
+        Marche l = marcheDao(9921, 9920, 9920);
         l.setIdMode(92);
         marcheRepository.save(l);
         DossierMec dmc = new DossierMec();

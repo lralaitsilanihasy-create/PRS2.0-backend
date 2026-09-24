@@ -19,6 +19,7 @@ public final class NatureMapper {
         dto.setIdNature(entity.getIdNature());
         dto.setLibelle(entity.getLibelle());
         dto.setDescription(entity.getDescription());
+        dto.setCategorieDao(entity.getCategorieDao());
         return dto;
     }
 
@@ -30,6 +31,8 @@ public final class NatureMapper {
         entity.setIdNature(dto.getIdNature());
         entity.setLibelle(dto.getLibelle());
         entity.setDescription(dto.getDescription());
+        cnm.prs.enums.CategorieDao c = cnm.prs.enums.CategorieDao.depuisCode(dto.getCategorieDao());
+        entity.setCategorieDao(c == null ? null : c.name());
         return entity;
     }
 }
