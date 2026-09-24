@@ -18,7 +18,7 @@ import cnm.prs.service.ChampFicheMarcheService;
  * reste passe). Le bilan est écrit dans le journal applicatif. Sans la propriété, rien ne se passe.
  *
  * <p>Format : voir {@link ChampFicheMarcheService#importerCsv(Path)}. Usage :
- * {@code java -jar prs.jar --app.fiche-marche.import-csv=C:/chemin/correspondance.csv}.</p>
+ * {@code java -jar prs.jar --app.fiche-marche.import-csv=C:/chemin/correspondance.csv}. Plusieurs fichiers : séparés par « ; ».</p>
  */
 @Component
 @ConditionalOnProperty(name = "app.fiche-marche.import-csv")
@@ -40,9 +40,15 @@ public class ChampsFicheMarcheImport implements CommandLineRunner {
         if (chemin == null || chemin.isBlank()) {
             return;
         }
-        ChampFicheMarcheService.BilanImport bilan = service.importerCsv(Path.of(chemin));
-        log.info("Import du fichier de correspondance {} : {} champ(s) créé(s), {} mis à jour, {} rejet(s).", chemin,
-                bilan.crees().size(), bilan.misAJour().size(), bilan.rejets().size());
-        bilan.rejets().forEach(r -> log.warn("  rejeté — {}", r));
+        // ⚠️ 2026-09-24 (travaux) — plusieurs fichiers, séparés par « ; », chargés dans l'ordre.
+        for (String un : chemin.split(";")) {
+            if (un.isBlank()) {
+                continue;
+            }
+            ChampFicheMarcheService.BilanImport bilan = service.importerCsv(Path.of(un.trim()));
+            log.info("Import du fichier de correspondance {} : {} champ(s) créé(s), {} mis à jour, {} rejet(s).", un.trim(),
+                    bilan.crees().size(), bilan.misAJour().size(), bilan.rejets().size());
+            bilan.rejets().forEach(r -> log.warn("  rejeté — {}", r));
+        }
     }
 }

@@ -36,7 +36,7 @@ import cnm.prs.service.ChampFicheMarcheService;
  * {@code tr_nature.CATEGORIE_DAO}, refus des catégories non outillées, question des tranches réservée aux travaux.
  *
  * <p>Jeu : plan 9900 (PRMP001, ANT, CLOTURE, PV signé FAV), lignes en appel d'offres ouvert à quantité fixe : 9901
- * Fournitures (nature 92), 9902 Travaux (nature 91), 9903 nature sans catégorie (93), 9904 sans nature.</p>
+ * Fournitures (nature 92), 9902 Prestations intellectuelles (nature 91, catégorie non outillée), 9903 nature sans catégorie (93), 9904 sans nature.</p>
  */
 class FicheDaoCategoriesIntegrationTest extends CnmIntegrationTestSupport {
 
@@ -61,7 +61,7 @@ class FicheDaoCategoriesIntegrationTest extends CnmIntegrationTestSupport {
         examenRepository.save(examen(9900, 9900, "CTRMEM"));
         seedPvSigne(9900, 9900);
 
-        natureRepository.save(new Nature(91, "Travaux", null, "TRAVAUX"));
+        natureRepository.save(new Nature(91, "Prestations intellectuelles", null, "PRESTATIONS_INTELLECTUELLES"));
         natureRepository.save(new Nature(93, "Nature à classer", null, null));
         ligne(9901, natureFournitures());
         ligne(9902, 91);
@@ -83,8 +83,10 @@ class FicheDaoCategoriesIntegrationTest extends CnmIntegrationTestSupport {
 
         String travaux = ref("typeMarche=QUANTITE_FIXE&categorie=TRAVAUX");
         assertThat(JsonPath.<List<String>>read(travaux, "$.champs[*].source")).hasSize(23).containsOnly("PPM");
+        // Rubriques : celles du plan, plus celles des travaux (V41) encore sans champ dans ce jeu — servies « à compléter » ;
+        // aucune des fournitures.
         assertThat(JsonPath.<List<String>>read(travaux, "$.blocs[*].rubriques[*].code"))
-                .containsExactlyInAnyOrder("B01-AC", "B02-OB", "B02-LV");
+                .contains("B01-AC", "B02-OB", "B02-LV", "B02-LT").doesNotContain("B02-AU", "B04-RO", "B05-GS");
         assertThat(JsonPath.<List<String>>read(ref("categorie=PRESTATIONS_INTELLECTUELLES"), "$.champs[*].source"))
                 .containsOnly("PPM");
 
@@ -101,15 +103,15 @@ class FicheDaoCategoriesIntegrationTest extends CnmIntegrationTestSupport {
     // ------------------------------------------------------------------ 3-6. la catégorie de la ligne
 
     @Test
-    @DisplayName("3-6 — Éligibles : catégorie et catégorie outillée par ligne ; fournitures préparable ; travaux, nature "
+    @DisplayName("3-6 — Éligibles : catégorie et catégorie outillée par ligne ; fournitures préparable ; prestations intellectuelles, nature "
             + "sans catégorie et ligne sans nature → 409 FORME_NON_OUTILLEE nommant ce qui manque ; fiche d'une ligne de "
-            + "travaux : categorie TRAVAUX, typeOutille faux, écritures refusées")
+            + "prestations intellectuelles : categorie PRESTATIONS_INTELLECTUELLES, typeOutille faux, écritures refusées")
     void categorieDeLaLigne() throws Exception {
         String eligibles = mvc.perform(get("/api/dmcs/eligibles").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<List<String>>read(eligibles, "$[?(@.idDetail==9901)].categorie")).containsExactly("FOURNITURES_SERVICES");
         assertThat(JsonPath.<List<Boolean>>read(eligibles, "$[?(@.idDetail==9901)].categorieOutillee")).containsExactly(true);
-        assertThat(JsonPath.<List<String>>read(eligibles, "$[?(@.idDetail==9902)].categorie")).containsExactly("TRAVAUX");
+        assertThat(JsonPath.<List<String>>read(eligibles, "$[?(@.idDetail==9902)].categorie")).containsExactly("PRESTATIONS_INTELLECTUELLES");
         assertThat(JsonPath.<List<Boolean>>read(eligibles, "$[?(@.idDetail==9902)].categorieOutillee")).containsExactly(false);
         assertThat(JsonPath.<List<Object>>read(eligibles, "$[?(@.idDetail==9903)].categorie")).containsExactly((Object) null);
         assertThat(JsonPath.<List<Boolean>>read(eligibles, "$[?(@.idDetail==9904)].categorieOutillee")).containsExactly(false);
@@ -125,7 +127,7 @@ class FicheDaoCategoriesIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(post("/api/dmcs/par-marche/9902").header("Authorization", tokenPrmp))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("FORME_NON_OUTILLEE"))
-                .andExpect(jsonPath("$.message", containsString("Travaux et réhabilitation")));
+                .andExpect(jsonPath("$.message", containsString("Prestations intellectuelles")));
         mvc.perform(post("/api/dmcs/par-marche/9903").header("Authorization", tokenPrmp))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("FORME_NON_OUTILLEE"))
@@ -134,13 +136,13 @@ class FicheDaoCategoriesIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.message", containsString("« Nature »")));
 
-        // Un DMC de travaux créé par l'Administrateur (geste sans garde H4) : la fiche se lit, ne s'écrit pas.
+        // Un DMC de prestations intellectuelles créé par l'Administrateur (geste sans garde H4) : la fiche se lit, ne s'écrit pas.
         String dmcTravaux = mvc.perform(post("/api/dmcs/par-marche/9902").header("Authorization", tokenAdmin))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         long idTravaux = ((Number) JsonPath.read(dmcTravaux, "$.idDmc")).longValue();
         mvc.perform(get("/api/fiches-marche/" + idTravaux).header("Authorization", tokenPrmp))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.categorie").value("TRAVAUX"))
+                .andExpect(jsonPath("$.categorie").value("PRESTATIONS_INTELLECTUELLES"))
                 .andExpect(jsonPath("$.typeMarche").value("QUANTITE_FIXE"))
                 .andExpect(jsonPath("$.typeOutille").value(false))
                 .andExpect(jsonPath("$.bilanControles.nbAttendus").value(0));

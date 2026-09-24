@@ -4717,6 +4717,22 @@ précédentes conservées ; dossier en examen ou au-delà → rien ne change. D�
 type** sur un dossier qui porte déjà des pièces produites → même 409. Une version validée **avant le lot 2** n'a pas de
 documents (pas de reprise) : elle n'en joint aucun, et le dépôt manuel reste possible tant que la fiche n'en a produit.
 
+### La fiche DAO des travaux ⚠️ 2026-09-24
+
+Référentiel converti par le front (`referentiel-champs-fiche-dao-travaux.csv`, 140 champs, quantité fixe et à
+commande ; `…-travaux-contrat-cadre.csv`, 117 champs ; conversion dans `referentiel-champs-fiche-dao-travaux.md`).
+
+- **V41** : bloc **`B11` « Annexes et formulaires »** (rang 11, catégorie `TRAVAUX`, trois types) et **96 rubriques**
+  de catégorie `TRAVAUX` (rangs 61+), reprises du tableau de la conversion. Les 257 champs se chargent par l'import
+  (`app.fiche-marche.import-csv`, qui accepte désormais **plusieurs fichiers séparés par `;`**) ou l'API Administrateur.
+- **`TRAVAUX` est outillée** (`DmcService.CATEGORIES_OUTILLEES`) : une ligne de nature *Travaux* se prépare ; la
+  question `tranches` ouvre la tranche ferme et les conditionnelles. Documents : DPAO, CCAP, AE ; en contrat-cadre, DPAC
+  et AE (même substitution qu'en fournitures). Les six formulaires `PIECE` (B11-FR) ne comptent pas au bilan.
+- **Cadrage** : pour chaque clé, le reflet qui valide la réponse est d'abord celui de la **catégorie et du type de la
+  fiche** (plusieurs référentiels reflètent `alloti`, `typePrix`, `formeGroupement`, `avance`…) ; `tranches` reste
+  refusée hors travaux, qu'un reflet existe ou non.
+- `PRESTATIONS_INTELLECTUELLES` reste fermée.
+
 ### Les trois catégories de fiche DAO — lot 5 ⚠️ 2026-09-24
 
 Demande front `frontend/docs/demande-backend-2026-09-24-categories-de-fiche-dao.md`. Second axe du référentiel, à

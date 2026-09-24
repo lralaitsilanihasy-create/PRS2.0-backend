@@ -82,7 +82,8 @@ public class DmcService {
      * {@link #FORMES_OUTILLEES} : elle s'allongera avec le contenu des travaux, puis des prestations intellectuelles.
      */
     public static final java.util.Set<cnm.prs.enums.CategorieDao> CATEGORIES_OUTILLEES =
-            java.util.EnumSet.of(cnm.prs.enums.CategorieDao.FOURNITURES_SERVICES);
+            java.util.EnumSet.of(cnm.prs.enums.CategorieDao.FOURNITURES_SERVICES,
+            cnm.prs.enums.CategorieDao.TRAVAUX);   // ⚠️ 2026-09-24 : travaux ouverts (référentiel V41 + import)
 
     /** La catégorie d'une ligne (nulle si le plan ou le référentiel ne la donne pas) et le refus qu'elle vaut, s'il y a lieu. */
     public record CategorieLigne(cnm.prs.enums.CategorieDao categorie, Optional<Motif> motif) {

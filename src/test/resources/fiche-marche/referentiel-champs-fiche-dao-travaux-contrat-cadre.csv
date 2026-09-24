@@ -1,0 +1,118 @@
+code;libelle;type;source;documentMaitre;reprises;typesMarche;categories;condition;obligatoire;texteType;controle;options;cleCadrage;clePpm;actif
+B02-SW-01;Personne responsable des marchés passés sur la base du contrat-cadre;TEXTE;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
+B02-SW-02;Délégation de la personne responsable (décision et date);TEXTE;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;non;;;;;;oui
+B02-SW-03;Nature, numéro et date de l'acte de nomination;TEXTE;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;non;;;;;;non
+B02-OC-01;Objet du contrat-cadre;TEXTE_LONG;SAISIE;DPAC;AE;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
+B02-OC-02;Localité dans laquelle les travaux seront exécutés;TEXTE_LONG;SAISIE;DPAC;AE;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
+B02-DK-01;Décomposition de la consultation;LISTE;CADRAGE;DPAC;AE;CONTRAT_CADRE;TRAVAUX;;non;;;;alloti;;oui
+B02-DK-02;Énumération des lots concernés;TEXTE_LONG;SAISIE;DPAC;AE;CONTRAT_CADRE;TRAVAUX;alloti = OUI;oui;;;;;;oui
+B02-DK-03;Durée maximale de validité du contrat-cadre (mois);NOMBRE;SAISIE;DPAC;AE;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
+B02-DK-04;Durée du contrat fixée au cahier des clauses;OUI_NON;SAISIE;DPAC;AE;CONTRAT_CADRE;TRAVAUX;;non;;;;;;oui
+B02-DK-05;Modalités de financement et de paiement;TEXTE_LONG;SAISIE;DPAC;AE;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
+B02-MC-01;Maîtrise d'œuvre : dénomination et adresse;TEXTE_LONG;SAISIE;DPAC;AE;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
+B02-MC-02;Maîtrise d'œuvre : nom et prénoms du représentant;TEXTE;SAISIE;DPAC;AE;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
+B02-CT-01;Contrôle technique prévu pour l'opération;OUI_NON;SAISIE;DPAC;AE;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
+B02-CT-02;Personne chargée du contrôle technique;TEXTE_LONG;SAISIE;DPAC;AE;CONTRAT_CADRE;TRAVAUX;;non;;;;;;oui
+B02-SN-01;Signature du titulaire : lieu, date, nom et prénoms;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
+B02-SN-02;Mise au point du contrat-cadre;LISTE;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;oui;;;A fait l'objet d'une mise au point jointe en annexe,N'a pas fait l'objet d'une mise au point;;;oui
+B02-SN-03;Signature de l'autorité contractante : lieu, date, nom et prénoms;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
+B03-TT-01;Dénomination sociale du titulaire;TEXTE;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
+B03-TT-02;Siège social du titulaire;TEXTE;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
+B03-TT-03;Numéro d'identification fiscale (NIF) du titulaire;TEXTE;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
+B03-TT-04;Nom du représentant du titulaire;TEXTE;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
+B03-TT-05;Qualité du représentant du titulaire;LISTE;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;oui;;;Représentant légal de l'entreprise,Ayant reçu pouvoir du représentant légal;;;oui
+B03-GM-01;Forme du groupement d'entrepreneurs;LISTE;CADRAGE;AE;DPAC;CONTRAT_CADRE;TRAVAUX;groupement = OUI;non;;;;formeGroupement;;oui
+B03-GM-02;Dénomination sociale de l'entreprise membre;TEXTE;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;groupement = OUI;oui;;;;;;oui
+B03-GM-03;Adresse du siège social de l'entreprise membre;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;groupement = OUI;oui;;;;;;oui
+B03-GM-04;Numéro d'identification de l'entreprise membre;TEXTE;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;groupement = OUI;oui;;;;;;oui
+B03-GM-05;Nom du représentant de l'entreprise membre;TEXTE;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;groupement = OUI;oui;;;;;;oui
+B03-GM-06;Qualité du représentant de l'entreprise membre;LISTE;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;groupement = OUI;oui;;;Représentant légal de l'entreprise,Ayant reçu pouvoir du représentant légal;;;oui
+B03-SM-01;Désignation des sous-traitants des marchés subséquents;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;non;;;;;;oui
+B03-SM-02;Modalités de paiement direct des sous-traitants;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;non;;;;;;oui
+B04-VT-01;Délai de validité des offres (jours);NOMBRE;SAISIE;DPAC;;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
+B04-DK-01;Pièces ajoutées au dossier de consultation;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;TRAVAUX;;non;;;;;;oui
+B04-DK-02;Responsable du dossier : nom, fonction, bureau et localité;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
+B04-DK-03;Adresse de retrait du dossier de consultation;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
+B04-DK-04;Montant à payer pour le dossier de consultation (Ariary);MONTANT;SAISIE;DPAC;;CONTRAT_CADRE;TRAVAUX;;non;;MONTANT_POSITIF;;;;oui
+B04-PT-01;Documents à produire à l'appui de l'offre;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
+B04-VS-01;Visite des lieux prévue;OUI_NON;SAISIE;DPAC;;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
+B04-VS-02;Modalités de la visite des lieux;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;TRAVAUX;;non;;;;;;oui
+B04-RT-01;Modalités de remise des offres sous support papier;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
+B04-RT-02;Transmission électronique des offres admise;OUI_NON;SAISIE;DPAC;;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
+B04-RT-03;Modalités d'envoi des dossiers par voie électronique;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;TRAVAUX;;non;;;;;;oui
+B04-RN-01;Adresse à laquelle adresser les demandes d'informations complémentaires;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
+B04-CT-01;Date de lancement de la mise en concurrence;DATE;SAISIE;DPAC;;CONTRAT_CADRE;TRAVAUX;;oui;;DATES_ORDRE:LANCEMENT;;;;oui
+B04-CT-02;Date et heure limites de remise des offres;DATE;SAISIE;DPAC;;CONTRAT_CADRE;TRAVAUX;;oui;;DATES_ORDRE:REMISE;;;;oui
+B04-CT-03;Date de début de la séance d'évaluation des offres et candidatures;DATE;SAISIE;DPAC;;CONTRAT_CADRE;TRAVAUX;;oui;;DATES_ORDRE:OUVERTURE;;;;oui
+B04-CT-04;Date d'attribution du contrat-cadre;DATE;SAISIE;DPAC;;CONTRAT_CADRE;TRAVAUX;;oui;;DATES_ORDRE:ATTRIBUTION;;;;oui
+B04-CT-05;Date de notification du contrat-cadre au titulaire;DATE;SAISIE;DPAC;;CONTRAT_CADRE;TRAVAUX;;non;;DATES_ORDRE:NOTIFICATION;;;;oui
+B05-UT-01;Monnaie en devise (appel d'offres international);TEXTE;SAISIE;DPAC;AE;CONTRAT_CADRE;TRAVAUX;;non;;;;;;oui
+B05-MC-01;Montant indicatif du contrat-cadre hors taxes (Ariary);MONTANT;SAISIE;AE;DPAC;CONTRAT_CADRE;TRAVAUX;;oui;;MONTANT_POSITIF;;;;oui
+B05-MC-02;Montant indicatif du contrat-cadre toutes taxes comprises (Ariary);MONTANT;SAISIE;AE;DPAC;CONTRAT_CADRE;TRAVAUX;;oui;;MONTANT_POSITIF;;;;oui
+B05-PX-01;Forme de prix des marchés subséquents (mono-attributaire);LISTE;SAISIE;AE;DPAC;CONTRAT_CADRE;TRAVAUX;attributaires = MONO;oui;;;Prix unitaires,Prix forfaitaires,Prix mixtes;;;oui
+B05-PX-02;Le prix est un critère d'attribution du contrat-cadre (multi-attributaire);OUI_NON;SAISIE;AE;DPAC;CONTRAT_CADRE;TRAVAUX;attributaires = MULTI;oui;;;;;;oui
+B05-PX-03;Contenu des prix;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
+B06-ET-01;Délai accordé aux candidats pour compléter leur candidature (jours);NOMBRE;SAISIE;DPAC;;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
+B06-ET-02;Critères d'attribution du contrat-cadre et modalités d'appréciation;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
+B06-ET-03;Formule de classement du critère prix;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;TRAVAUX;;non;;;;;;oui
+B06-ET-04;Délai accordé aux candidats pour produire les certificats (jours);NOMBRE;SAISIE;DPAC;;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
+B07-PT-01;Fait générateur de la passation des marchés subséquents;LISTE;SAISIE;DPAC;AE;CONTRAT_CADRE;TRAVAUX;;oui;;;Lors de la survenance du besoin,Selon le calendrier fixé à l'article premier du contrat-cadre;;;oui
+B07-PT-02;Adresse d'envoi des demandes aux titulaires;TEXTE_LONG;SAISIE;DPAC;AE;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
+B07-PT-03;Délai de réponse des titulaires (heures);NOMBRE;SAISIE;DPAC;AE;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
+B07-OM-01;Objet des marchés subséquents;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
+B07-OM-02;Contrat-cadre mono ou multi-attributaire;LISTE;CADRAGE;AE;DPAC;CONTRAT_CADRE;TRAVAUX;;non;;;;attributaires;;oui
+B07-FT-01;Forme des marchés subséquents;LISTE;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;oui;;;Marchés uniques non fractionnés,Marchés fractionnés par bons de commande successifs;;;oui
+B07-FT-02;Interlocuteur du titulaire (service, direction, coordonnées);TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
+B07-AT-01;Délai de complétude de l'offre initiale (mono-attributaire);NOMBRE;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;attributaires = MONO;oui;;;;;;oui
+B07-AT-02;Point de départ du délai de complétude;LISTE;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;attributaires = MONO;oui;;;À compter de la notification de la demande de complétude,Lors de la demande de complétude;;;oui
+B07-AT-03;Attribution après remise en concurrence (non alloti, multi-attributaire);TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;attributaires = MULTI;oui;;;;;;oui
+B07-AT-04;Modalités d'attribution en cas d'allotissement;LISTE;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;attributaires = MULTI;non;;;Option 1,Option 2;;;oui
+B07-AT-05;Modalités d'attribution lorsque le contrat-cadre est alloti et non alloti;LISTE;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;attributaires = MULTI;non;;;Option 1,Option 2;;;oui
+B07-NC-01;Termes non couverts par le contrat-cadre (mono-attributaire);TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;attributaires = MONO;non;;;;;;oui
+B07-NC-02;Termes non couverts par le contrat-cadre (multi-attributaire);TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;attributaires = MULTI;non;;;;;;oui
+B07-PJ-01;Pièces contractuelles du contrat-cadre et des marchés subséquents;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
+B07-DT-01;Entrée en vigueur du contrat-cadre;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
+B07-DT-02;Durée des marchés subséquents fixée dans le contrat-cadre;OUI_NON;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
+B07-DT-03;Durée des marchés subséquents (mois);NOMBRE;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;non;;;;;;oui
+B07-DT-04;Contrat-cadre reconductible;OUI_NON;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
+B07-DT-05;Nombre de reconductions;NOMBRE;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;non;;;;;;oui
+B07-DT-06;Nombre d'années maximum du contrat-cadre, reconductions comprises;NOMBRE;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;non;;;;;;oui
+B07-DT-07;Durée totale du contrat-cadre, reconduit ou non (mois);NOMBRE;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
+B07-XE-01;Délais d'exécution des marchés subséquents uniques ou non fractionnés;LISTE;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;oui;;;Fixés par l'autorité contractante,À l'initiative des candidats,Fixés dans les marchés subséquents;;;oui
+B07-XE-02;Délai d'exécution fixé par l'autorité contractante;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;non;;;;;;oui
+B07-XE-03;Délai d'exécution à l'initiative des candidats;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;non;;;;;;oui
+B07-XE-04;Délais d'exécution des marchés fractionnés par bons de commande;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;non;;;;;;oui
+B07-PY-01;Pénalités de retard des marchés subséquents;LISTE;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;oui;;PENALITES_PLAFOND_15:TAUX;Non applicables,Fixées dans le contrat-cadre,Fixées dans les marchés subséquents;;;oui
+B07-PY-02;Régime des pénalités fixées dans le contrat-cadre;LISTE;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;non;;;Conformément à l'article 12 du CCAG,Dérogation au CCAG;;;oui
+B07-PY-03;Pénalités dérogeant au CCAG : rédaction libre;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;non;;PENALITES_PLAFOND_15:DEROGATION;;;;oui
+B08-AT-01;Avance versée aux titulaires des marchés subséquents;OUI_NON;CADRAGE;AE;DPAC;CONTRAT_CADRE;TRAVAUX;;non;;;;avance;;oui
+B08-AT-02;Modalités de versement de l'avance (délai en jours calendaires);NOMBRE;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;avance = OUI;oui;;;;;;oui
+B08-AT-03;Montant de l'avance (% du montant TTC du marché subséquent, au plus 20 %);POURCENTAGE;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;avance = OUI;oui;;AVANCE_SUP_5_GARANTIE:TAUX;;;;oui
+B08-AT-04;Remboursement de l'avance (article 72.III du code des marchés publics);TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;avance = OUI;non;;;;;;oui
+B08-AT-05;Avance versée au sous-traitant du titulaire;OUI_NON;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;non;;;;;;oui
+B08-FT-01;Présentation des demandes de paiement;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
+B08-FT-02;Adresse de facturation (service chargé de la vérification des demandes);TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
+B08-FT-03;Délai de paiement (jours);NOMBRE;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;oui;;DELAI_PAIEMENT_75:DELAI;;;;oui
+B08-FT-04;Taux des intérêts moratoires (%, au moins un point);POURCENTAGE;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;oui;;INTERETS_MORATOIRES_TAUX:TAUX;;;;oui
+B08-FT-05;Règlement des prestations;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;non;;;;;;oui
+B08-FT-06;Nom et adresse de la banque;TEXTE;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
+B08-FT-07;Titulaire du compte;TEXTE;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
+B08-FT-08;Code banque, code guichet et numéro de compte;TEXTE;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
+B08-FT-09;Clé du relevé d'identité bancaire (RIB);TEXTE;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
+B09-XM-01;Modalités générales d'exécution communes aux marchés subséquents;OUI_NON;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
+B09-XM-02;Contenu des modalités générales d'exécution communes;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;non;;;;;;oui
+B09-XM-03;Modalités particulières à fixer dans les marchés subséquents;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;non;;;;;;oui
+B09-VT-01;Vérification et admission des prestations;LISTE;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;oui;;;Dispositions du CCAG applicables,Clause libre;;;oui
+B09-VT-02;Clause libre de vérification et d'admission;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;non;;;;;;oui
+B09-GQ-01;Garanties contractuelles particulières fournies par le titulaire;OUI_NON;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
+B09-GQ-02;Nature des garanties particulières;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;non;;;;;;oui
+B09-AT-01;Assurance exigée du titulaire;OUI_NON;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
+B09-AT-02;Attestation d'assurance à justifier;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;non;;;;;;oui
+B09-AT-03;Délai de remise de l'attestation d'assurance (jours);NOMBRE;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;non;;;;;;oui
+B10-MC-01;Changement de dénomination sociale du titulaire : service acheteur;TEXTE;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;non;;;;;;oui
+B10-MC-02;Changement de contractant en cours d'exécution : service acheteur;TEXTE;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;non;;;;;;oui
+B10-RT-01;Résiliation sans faute du contrat-cadre;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
+B10-RT-02;Résiliation du contrat-cadre et des marchés subséquents;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
+B10-LT-01;Juridiction compétente pour les litiges nés du contrat-cadre;TEXTE;SAISIE;DPAC;AE;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
+B11-AT-01;Annexe I;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;non;;;;;;oui
+B11-AT-02;Annexe II;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;non;;;;;;oui

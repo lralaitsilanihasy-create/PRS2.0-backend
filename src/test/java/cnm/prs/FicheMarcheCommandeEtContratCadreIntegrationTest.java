@@ -131,7 +131,7 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
         propres.put("B02-AU-03", "100 à 500 unités");
         propres.put("B05-TP-02", "10000000");
         propres.put("B05-TP-03", "50000000");
-        remplirEtValider(idDmc, "A_COMMANDE", propres);
+        remplirObligatoiresEtValider(idDmc, "A_COMMANDE", null, propres);
 
         List<String> types = JsonPath.read(documents(idDmc), "$[*].type");
         assertThat(types).containsExactly("DPAO", "DPAO", "CCAP", "CCAP", "AE", "AE");
@@ -172,7 +172,7 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
                 .andExpect(jsonPath("$.valeurs.B07-MA-03").value("Après remise en concurrence"))
                 .andExpect(jsonPath("$.valeurs.B07-MA-01").doesNotExist());
 
-        remplirEtValider(idDmc, "CONTRAT_CADRE", Map.of("B05-MT-01", "250000000"));
+        remplirObligatoiresEtValider(idDmc, "CONTRAT_CADRE", null, Map.of("B05-MT-01", "250000000"));
         List<String> types = JsonPath.read(documents(idDmc), "$[*].type");
         assertThat(types).containsExactly("DPAC", "DPAC", "AE", "AE");
         assertThat(texte(idDmc, "DPAC")).contains("Données particulières du cahier des clauses administratives",
@@ -203,72 +203,13 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
     }
 
     private String referentiel(String type) throws Exception {
-        return mvc.perform(get("/api/champs-fiche-marche").param("typeMarche", type).header("Authorization", tokenPrmp))
+        return mvc.perform(get("/api/champs-fiche-marche").param("typeMarche", type)
+                .param("categorie", "FOURNITURES_SERVICES").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
     }
 
     private List<String> champs(String type) throws Exception {
         return JsonPath.read(referentiel(type), "$.champs[*].code");
-    }
-
-    /**
-     * Renseigne les valeurs données, puis tout champ obligatoire que le bilan déclare manquant (valeur typée, dates
-     * croissantes dans l'ordre des codes), jusqu'à ce que la fiche se valide.
-     */
-    private void remplirEtValider(Long idDmc, String type, Map<String, String> donnees) throws Exception {
-        String ref = referentiel(type);
-        Map<String, String> types = new TreeMap<>();
-        Map<String, List<String>> options = new TreeMap<>();
-        Map<String, String> controles = new TreeMap<>();
-        List<Map<String, Object>> champs = JsonPath.read(ref, "$.champs[?(@.source=='SAISIE')]");
-        for (Map<String, Object> c : champs) {
-            types.put((String) c.get("code"), (String) c.get("type"));
-            @SuppressWarnings("unchecked")
-            List<String> o = (List<String>) c.get("options");
-            options.put((String) c.get("code"), o);
-            controles.put((String) c.get("code"), (String) c.get("controle"));
-        }
-        Map<String, Map<String, Object>> parBloc = new TreeMap<>();
-        donnees.forEach((code, v) -> parBloc.computeIfAbsent(code.substring(0, 3), k -> new LinkedHashMap<>()).put(code, v));
-        for (int tour = 0; tour < 3; tour++) {
-            for (Map.Entry<String, Map<String, Object>> e : parBloc.entrySet()) {
-                mvc.perform(put("/api/fiches-marche/" + idDmc + "/blocs/" + e.getKey()).header("Authorization", tokenPrmp)
-                        .contentType(JSON).content("{\"valeurs\":" + new tools.jackson.databind.ObjectMapper()
-                                .writeValueAsString(e.getValue()) + "}"))
-                        .andExpect(status().isOk());
-            }
-            String fiche = mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp))
-                    .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-            List<String> manquants = JsonPath.read(fiche, "$.bilanControles.bloquants[?(@.regle=='OBLIGATOIRE')].champs[0]");
-            if (manquants.isEmpty()) {
-                break;
-            }
-            for (String code : manquants) {
-                parBloc.computeIfAbsent(code.substring(0, 3), k -> new LinkedHashMap<>())
-                        .put(code, valeurPour(types.get(code), options.get(code), controles.get(code)));
-            }
-        }
-        mvc.perform(post("/api/fiches-marche/" + idDmc + "/valider").header("Authorization", tokenPrmp))
-                .andExpect(status().isOk());
-    }
-
-    private static Object valeurPour(String type, List<String> options, String controle) {
-        return switch (type == null ? "TEXTE" : type) {
-            case "DATE" -> LocalDate.of(2026, 1, 1).plusDays(10L * rangCalendrier(controle)).toString();
-            case "NOMBRE" -> 30;
-            case "MONTANT" -> 1000000;
-            case "POURCENTAGE" -> 10;
-            case "OUI_NON" -> "NON";
-            case "LISTE" -> options == null || options.isEmpty() ? "x" : options.get(0);
-            default -> "Clause type";
-        };
-    }
-
-    /** Rang de l'étape dans le calendrier (DATES_ORDRE:ROLE) : les dates saisies sont croissantes, les autres au début. */
-    private static int rangCalendrier(String controle) {
-        List<String> etapes = List.of("LANCEMENT", "REMISE", "OUVERTURE", "ATTRIBUTION", "NOTIFICATION");
-        return controle == null || !controle.startsWith("DATES_ORDRE:") ? 0
-                : etapes.indexOf(controle.substring("DATES_ORDRE:".length())) + 1;
     }
 
     private String documents(Long idDmc) throws Exception {

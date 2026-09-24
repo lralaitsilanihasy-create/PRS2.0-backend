@@ -484,6 +484,15 @@ document porte chaque information (document maître, reprises) ; il manquait la 
   chaque lecture, un document produit après coup ne dirait pas forcément ce qui a été validé) ; la version suivante
   les produira.
 
+#### La fiche DAO des travaux (référentiel remis le 2026-09-24)
+
+- **Les travaux se préparent** : 257 informations (dont un bloc d'annexes et de formulaires), avec leur vocabulaire —
+  maîtrise d'ouvrage et d'œuvre, tranche ferme et tranches conditionnelles, visite des lieux, réception provisoire,
+  masse des travaux. Un contrat-cadre de travaux produit, comme en fournitures, le DPAC et l'acte d'engagement.
+- **Chaque fiche se valide avec ses propres règles** : quand deux catégories posent la même question de cadrage
+  (l'allotissement, la forme de prix…), c'est la définition de la catégorie de la fiche qui s'applique.
+- Les prestations intellectuelles attendent leur référentiel.
+
 #### Les trois catégories de fiche DAO (lot 5, demande front du 2026-09-24, pilote)
 
 ⚠️ **« Il y a trois catégories de fiches DAO : Fournitures et Services, Travaux et Réhabilitation, Prestations

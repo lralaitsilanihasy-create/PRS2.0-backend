@@ -123,7 +123,7 @@ class FicheMarcheDaoIntegrationTest extends CnmIntegrationTestSupport {
     @DisplayName("1 — Référentiel : QUANTITE_FIXE sert 9 blocs (B01-B06, B08-B10) avec leurs rubriques et les champs "
             + "chargés ; CONTRAT_CADRE ajoute B07 ; type inconnu → 400")
     void referentiel() throws Exception {
-        String corps = mvc.perform(get("/api/champs-fiche-marche").param("typeMarche", "QUANTITE_FIXE")
+        String corps = mvc.perform(get("/api/champs-fiche-marche").param("typeMarche", "QUANTITE_FIXE").param("categorie", "FOURNITURES_SERVICES")
                 .header("Authorization", tokenPrmp))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.blocs", hasSize(9)))
@@ -137,7 +137,7 @@ class FicheMarcheDaoIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(JsonPath.<List<String>>read(corps, "$.champs[?(@.code=='B01-AC-14')].source")).containsExactly("PPM");
         assertThat(JsonPath.<List<String>>read(corps, "$.champs[?(@.code=='B02-LV-05')].condition")).containsExactly("alloti = OUI");
 
-        mvc.perform(get("/api/champs-fiche-marche").param("typeMarche", "CONTRAT_CADRE").header("Authorization", tokenPrmp))
+        mvc.perform(get("/api/champs-fiche-marche").param("typeMarche", "CONTRAT_CADRE").param("categorie", "FOURNITURES_SERVICES").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.blocs", hasSize(10)))
                 .andExpect(jsonPath("$.blocs[6].code").value("B07"));

@@ -234,7 +234,8 @@ public class FicheMarcheService {
 
     public FicheMarcheDto ecrireCadrage(Long idDmc, Map<String, Object> cadrage) {
         Contexte ctx = contexteEcriture(idDmc);
-        Map<String, Object> propre = validerCadrage(cadrage == null ? Map.of() : cadrage, ctx.codeCategorie());
+        Map<String, Object> propre = validerCadrage(cadrage == null ? Map.of() : cadrage, ctx.codeCategorie(),
+                ctx.forme() == null ? null : ctx.forme().name());
         FicheMarche fiche = brouillonOuNouvelle(ctx);
         fiche.setCadrage(ecrireJson(propre));
         // ⚠️ Lot 4 (2026-09-23, §B5) — reprendre le cadrage, c'est reprendre la fiche sous le type du plan : le type de
@@ -469,14 +470,22 @@ public class FicheMarcheService {
      * valeur typée selon le champ reflet (OUI/NON, nombre, pourcentage, option de liste). ⚠️ Lot 1c : {@code typeMarche}
      * n'est plus une réponse (dérivé de la forme du marché au plan) — la clé est ignorée si elle est encore envoyée.
      */
-    private Map<String, Object> validerCadrage(Map<String, Object> cadrage, String categorie) {
+    private Map<String, Object> validerCadrage(Map<String, Object> cadrage, String categorie, String typeMarche) {
         List<ErrorResponse.FieldError> erreurs = new ArrayList<>();
+        // ⚠️ Lot 5 bis (2026-09-24, travaux) — le reflet qui valide une clé est d'abord celui de la catégorie et du type de
+        // la fiche : plusieurs référentiels reflètent la même clé (alloti, typePrix, formeGroupement…), chacun à sa façon ;
+        // le premier par code, toutes catégories confondues, aurait fait valider une fiche de fournitures par un reflet des
+        // travaux. À défaut, un reflet quelconque de la clé.
         Map<String, ChampFicheMarche> reflets = new LinkedHashMap<>();
+        Map<String, ChampFicheMarche> autres = new LinkedHashMap<>();
         for (ChampFicheMarche c : champRepository.findAllByOrderByCodeRubriqueAscRangAsc()) {
             if (SourceChampFiche.CADRAGE.name().equals(c.getSource()) && c.getCleCadrage() != null) {
-                reflets.putIfAbsent(c.getCleCadrage(), c);
+                boolean dela = c.pourCategorie(categorie != null ? categorie : CategorieDao.FOURNITURES_SERVICES.name())
+                        && c.pourTypeMarche(typeMarche);
+                (dela ? reflets : autres).putIfAbsent(c.getCleCadrage(), c);
             }
         }
+        autres.forEach(reflets::putIfAbsent);
         Map<String, Object> propre = new LinkedHashMap<>();
         for (Map.Entry<String, Object> e : cadrage.entrySet()) {
             String cle = e.getKey();
@@ -488,7 +497,7 @@ public class FicheMarcheService {
             if (CLE_TYPE_MARCHE.equals(cle)) {
                 continue;   // lot 1c : dérivé du plan, plus une réponse — ignoré (tolérance d'une version), jamais un 400
             }
-            if (CLE_TRANCHES.equals(cle) && !reflets.containsKey(cle)) {
+            if (CLE_TRANCHES.equals(cle)) {
                 // ⚠️ Lot 5 (2026-09-24, §B5) — « Le marché comporte-t-il des tranches ? » : question des travaux seulement.
                 String t = texte.toUpperCase();
                 if (!CategorieDao.TRAVAUX.name().equals(categorie)) {

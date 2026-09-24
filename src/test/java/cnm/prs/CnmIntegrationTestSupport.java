@@ -670,6 +670,70 @@ abstract class CnmIntegrationTestSupport extends AbstractIntegrationTest {
         return 92;
     }
 
+    /**
+     * Fiche DAO (lots 3 à 5) — renseigne les valeurs données, puis tout champ obligatoire que le bilan déclare manquant
+     * (valeur typée, dates croissantes selon leur rôle {@code DATES_ORDRE}), et valide la fiche. {@code categorie} nulle :
+     * le référentiel sans filtre de catégorie.
+     */
+    protected void remplirObligatoiresEtValider(Long idDmc, String typeMarche, String categorie,
+            java.util.Map<String, String> donnees) throws Exception {
+        String ref = mvc.perform(get("/api/champs-fiche-marche").param("typeMarche", typeMarche)
+                .param("categorie", categorie == null ? "" : categorie).header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        java.util.Map<String, String> types = new java.util.TreeMap<>();
+        java.util.Map<String, java.util.List<String>> options = new java.util.TreeMap<>();
+        java.util.Map<String, String> controles = new java.util.TreeMap<>();
+        java.util.List<java.util.Map<String, Object>> champs =
+                com.jayway.jsonpath.JsonPath.read(ref, "$.champs[?(@.source=='SAISIE')]");
+        for (java.util.Map<String, Object> c : champs) {
+            types.put((String) c.get("code"), (String) c.get("type"));
+            @SuppressWarnings("unchecked")
+            java.util.List<String> o = (java.util.List<String>) c.get("options");
+            options.put((String) c.get("code"), o);
+            controles.put((String) c.get("code"), (String) c.get("controle"));
+        }
+        java.util.Map<String, java.util.Map<String, Object>> parBloc = new java.util.TreeMap<>();
+        donnees.forEach((code, v) -> parBloc.computeIfAbsent(code.substring(0, 3), k -> new java.util.LinkedHashMap<>())
+                .put(code, v));
+        for (int tour = 0; tour < 3; tour++) {
+            for (java.util.Map.Entry<String, java.util.Map<String, Object>> e : parBloc.entrySet()) {
+                mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .put("/api/fiches-marche/" + idDmc + "/blocs/" + e.getKey()).header("Authorization", tokenPrmp)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"valeurs\":"
+                                + new tools.jackson.databind.ObjectMapper().writeValueAsString(e.getValue()) + "}"))
+                        .andExpect(status().isOk());
+            }
+            String fiche = mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp))
+                    .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+            java.util.List<String> manquants = com.jayway.jsonpath.JsonPath.read(fiche,
+                    "$.bilanControles.bloquants[?(@.regle=='OBLIGATOIRE')].champs[0]");
+            if (manquants.isEmpty()) {
+                break;
+            }
+            for (String code : manquants) {
+                parBloc.computeIfAbsent(code.substring(0, 3), k -> new java.util.LinkedHashMap<>())
+                        .put(code, valeurObligatoire(types.get(code), options.get(code), controles.get(code)));
+            }
+        }
+        mvc.perform(post("/api/fiches-marche/" + idDmc + "/valider").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk());
+    }
+
+    private static Object valeurObligatoire(String type, java.util.List<String> options, String controle) {
+        java.util.List<String> etapes = java.util.List.of("LANCEMENT", "REMISE", "OUVERTURE", "ATTRIBUTION", "NOTIFICATION");
+        int rang = controle == null || !controle.startsWith("DATES_ORDRE:") ? 0
+                : etapes.indexOf(controle.substring("DATES_ORDRE:".length())) + 1;
+        return switch (type == null ? "TEXTE" : type) {
+            case "DATE" -> LocalDate.of(2026, 1, 1).plusDays(10L * rang).toString();
+            case "NOMBRE" -> 30;
+            case "MONTANT" -> 1000000;
+            case "POURCENTAGE" -> 10;
+            case "OUI_NON" -> "NON";
+            case "LISTE" -> options == null || options.isEmpty() ? "x" : options.get(0);
+            default -> "Clause type";
+        };
+    }
+
     protected Ministere ministere(int id) {
         Ministere m = new Ministere();
         m.setIdMinistere(id);
