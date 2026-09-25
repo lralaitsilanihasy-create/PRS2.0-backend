@@ -23,6 +23,7 @@ import cnm.prs.repository.ControleurRepository;
 import cnm.prs.repository.DossierRepository;
 import cnm.prs.repository.PpmRepository;
 import cnm.prs.repository.ReceptionRepository;
+import cnm.prs.security.CurrentUser;
 import cnm.prs.security.Visibilite;
 
 /**
@@ -149,6 +150,12 @@ public class ReceptionService {
         validatePassage(dto);
         interdireDoublonPassageInitial(dto);
         exigerControleCompletude(dto);
+        // ⚠️ 2026-09-25 (signalement front) — le réceptionnaire est celui qui enregistre la réception quand le corps ne
+        // le nomme pas : une réception sans réceptionnaire n'a pas de localité, et tout le circuit qui la lit (périmètres,
+        // co-signataires du PV §3.3) la perd — le visa refusait alors tous les Membres de la localité.
+        if (dto.getImCtrlRecept() == null || dto.getImCtrlRecept().isBlank()) {
+            dto.setImCtrlRecept(CurrentUser.ref().filter(r -> !r.isBlank()).orElse(null));
+        }
         Reception entity = ReceptionMapper.toEntity(dto);
         entity.setIdReception(repository.nextIdReception().intValue());   // PK serveur (sequence), id client ignore (Voie B)
         Reception saved = repository.save(entity);
