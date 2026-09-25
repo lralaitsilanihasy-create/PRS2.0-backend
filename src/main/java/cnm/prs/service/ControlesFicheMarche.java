@@ -53,6 +53,12 @@ public final class ControlesFicheMarche {
     public static final String PENALITES_PLAFOND_15 = "PENALITES_PLAFOND_15";
     public static final String INTERETS_MORATOIRES_TAUX = "INTERETS_MORATOIRES_TAUX";
     public static final String DELAI_PAIEMENT_75 = "DELAI_PAIEMENT_75";
+    /** ⚠️ V45 (2026-09-25) — le besoin et les garanties générées. */
+    public static final String BESOIN_INCOMPLET = "BESOIN_INCOMPLET";
+    public static final String QUANTITES_ORDRE = "QUANTITES_ORDRE";
+    public static final String GARANTIE_MANQUANTE = "GARANTIE_MANQUANTE";
+    public static final String GARANTIE_TAUX = "GARANTIE_TAUX";
+    private static final String BLOC_BESOIN = "B12";
 
     /** Libellés CAPM du plan dont les dates entrent dans {@code DATES_ORDRE} à défaut de champ. */
     public static final String PPM_LANCEMENT = "LANCEMENT";
@@ -79,6 +85,24 @@ public final class ControlesFicheMarche {
      */
     public static BilanControlesDto bilan(List<ChampFicheMarche> champsOuverts, Map<String, String> valeurs,
             Map<String, ?> cadrage, Map<String, LocalDate> datesPpm, int nbLots) {
+        return bilan(champsOuverts, valeurs, cadrage, datesPpm, nbLots, null, null);
+    }
+
+    /**
+     * ⚠️ V45 (2026-09-25, formulaires du candidat, §B4) — le besoin d'une fiche de fournitures ({@code articles}), et si
+     * le marché est à commande (quantités minimum et maximum).
+     */
+    public record Besoin(List<BesoinFiche.Article> articles, boolean aCommande) {
+    }
+
+    /**
+     * ⚠️ V45 — {@code besoin} : celui d'une fiche de fournitures, {@code null} hors du périmètre du besoin (pas de
+     * contrôle {@code BESOIN_INCOMPLET} / {@code QUANTITES_ORDRE}) ; {@code taux} : paramètres administrables du contrôle
+     * {@code GARANTIE_TAUX} ({@code null} : non évalué).
+     */
+    public static BilanControlesDto bilan(List<ChampFicheMarche> champsOuverts, Map<String, String> valeurs,
+            Map<String, ?> cadrage, Map<String, LocalDate> datesPpm, int nbLots, Besoin besoin,
+            ParametreService.TauxGarantie taux) {
         List<Controle> bloquants = new ArrayList<>();
         List<Controle> avertissements = new ArrayList<>();
         List<Controle> ok = new ArrayList<>();
@@ -134,8 +158,118 @@ public final class ControlesFicheMarche {
         penalites(roles.get(PENALITES_PLAFOND_15), valeurs, avertissements, ok);
         interetsMoratoires(roles.get(INTERETS_MORATOIRES_TAUX), valeurs, avertissements, ok);
         delaiPaiement(roles.get(DELAI_PAIEMENT_75), valeurs, avertissements, ok);
+        // ⚠️ V45 (2026-09-25, §B4) — le besoin, la garantie générée et son taux.
+        besoin(besoin, nbLots, bloquants, ok);
+        garantieManquante(roles.get(GARANTIE_MANQUANTE), valeurs, cadrage, bloquants, ok);
+        garantieTaux(roles.get(GARANTIE_TAUX), valeurs, nbLots, taux, avertissements, ok);
 
         return new BilanControlesDto(bloquants, avertissements, ok, nbSaisis, nbAttendus);
+    }
+
+    // ------------------------------------------------------------------ règles V45
+
+    /**
+     * {@code BESOIN_INCOMPLET} : chaque lot (le lot unique d'une ligne non allotie) a au moins un article, chaque article
+     * au moins une caractéristique ; {@code QUANTITES_ORDRE} : à commande, quantité minimum ≤ maximum. Bloquants.
+     */
+    private static void besoin(Besoin besoin, int nbLots, List<Controle> bloquants, List<Controle> ok) {
+        if (besoin == null) {
+            return;
+        }
+        List<Integer> lots = new ArrayList<>();
+        if (LotsFiche.alloti(nbLots)) {
+            for (int n = 1; n <= nbLots; n++) {
+                lots.add(n);
+            }
+        } else {
+            lots.add(null);
+        }
+        boolean complet = true;
+        for (Integer lot : lots) {
+            List<BesoinFiche.Article> duLot = besoin.articles().stream()
+                    .filter(a -> java.util.Objects.equals(a.lot(), lot)).toList();
+            String nomLot = lot == null ? "Le besoin" : "Le lot " + lot;
+            if (duLot.isEmpty()) {
+                complet = false;
+                bloquants.add(new Controle(BESOIN_INCOMPLET, List.of(), BLOC_BESOIN, nomLot + " n'a aucun article."));
+            }
+            for (BesoinFiche.Article a : duLot) {
+                String nom = "L'article " + a.ordre() + (lot == null ? "" : " du lot " + lot) + " (« " + a.designation() + " »)";
+                if (a.caracteristiques() == null || a.caracteristiques().isEmpty()) {
+                    complet = false;
+                    bloquants.add(new Controle(BESOIN_INCOMPLET, List.of(), BLOC_BESOIN,
+                            nom + " n'a aucune caractéristique exigée."));
+                }
+                if (besoin.aCommande() && a.quantiteMin() != null && a.quantiteMax() != null
+                        && a.quantiteMin() > a.quantiteMax()) {
+                    bloquants.add(new Controle(QUANTITES_ORDRE, List.of(), BLOC_BESOIN, nom + " : la quantité minimum ("
+                            + a.quantiteMin() + ") dépasse la quantité maximum (" + a.quantiteMax() + ")."));
+                }
+            }
+        }
+        if (complet) {
+            ok.add(new Controle(BESOIN_INCOMPLET, List.of(), BLOC_BESOIN,
+                    "Besoin complet : chaque lot a ses articles, chaque article ses caractéristiques."));
+        }
+    }
+
+    /**
+     * {@code GARANTIE_MANQUANTE} (rôle {@code FORME}, le champ qui dit quel modèle de garantie est joint) : une garantie
+     * de soumission exigée ({@code garantieSoumission = OUI}) se génère par lot, au montant du lot — il faut donc sa
+     * forme (C1, C2). Bloquant. Les montants par lot sont, eux, exigés par leur caractère obligatoire.
+     */
+    private static void garantieManquante(Map<String, ChampFicheMarche> r, Map<String, String> valeurs, Map<String, ?> cadrage,
+            List<Controle> bloquants, List<Controle> ok) {
+        ChampFicheMarche forme = r == null ? null : r.get("FORME");
+        if (forme == null || cadrage == null || !"OUI".equalsIgnoreCase(String.valueOf(cadrage.get("garantieSoumission")))) {
+            return;
+        }
+        String v = valeurs.get(forme.getCode());
+        if (v == null || v.isBlank()) {
+            bloquants.add(new Controle(GARANTIE_MANQUANTE, List.of(forme.getCode()), forme.codeBloc(),
+                    "Une garantie de soumission est exigée : choisissez le modèle joint (« " + forme.getLibelle()
+                            + " »), qui sera produit pour chaque lot à son montant."));
+        } else {
+            ok.add(new Controle(GARANTIE_MANQUANTE, List.of(forme.getCode()), forme.codeBloc(),
+                    "Modèle de garantie de soumission retenu : " + v + "."));
+        }
+    }
+
+    /**
+     * {@code GARANTIE_TAUX} (rôles {@code GARANTIE} et {@code MAXIMUM}, par lot) : la garantie rapportée au montant
+     * maximum du lot, comparée aux bornes administrables ({@link ParametreService.TauxGarantie}). <strong>Avertissement,
+     * jamais bloquant</strong> ; sans borne, le taux est seulement constaté.
+     */
+    private static void garantieTaux(Map<String, ChampFicheMarche> r, Map<String, String> valeurs, int nbLots,
+            ParametreService.TauxGarantie taux, List<Controle> avertissements, List<Controle> ok) {
+        ChampFicheMarche garantie = r == null ? null : r.get("GARANTIE");
+        ChampFicheMarche maximum = r == null ? null : r.get("MAXIMUM");
+        if (garantie == null || maximum == null || taux == null) {
+            return;
+        }
+        List<String> clesG = LotsFiche.cles(garantie, nbLots);
+        List<String> clesM = LotsFiche.cles(maximum, nbLots);
+        for (int i = 0; i < Math.min(clesG.size(), clesM.size()); i++) {
+            BigDecimal g = nombre(valeurs.get(clesG.get(i)));
+            BigDecimal m = nombre(valeurs.get(clesM.get(i)));
+            if (g == null || m == null || m.signum() <= 0) {
+                continue;
+            }
+            BigDecimal t = g.multiply(new BigDecimal("100")).divide(m, 2, java.math.RoundingMode.HALF_UP).stripTrailingZeros();
+            String lot = LotsFiche.alloti(nbLots) ? " du lot " + (i + 1) : "";
+            String reference = taux.reference() == null ? "" : " (référence " + taux.reference().toPlainString() + " %)";
+            List<String> champs = List.of(clesG.get(i), clesM.get(i));
+            boolean horsBornes = (taux.borneBasse() != null && t.compareTo(taux.borneBasse()) < 0)
+                    || (taux.borneHaute() != null && t.compareTo(taux.borneHaute()) > 0);
+            String constat = "Garantie de soumission" + lot + " : " + t.toPlainString() + " % du montant maximum" + reference;
+            if (horsBornes) {
+                avertissements.add(new Controle(GARANTIE_TAUX, champs, garantie.codeBloc(), constat + ", hors des bornes "
+                        + (taux.borneBasse() == null ? "—" : taux.borneBasse().toPlainString() + " %") + " à "
+                        + (taux.borneHaute() == null ? "—" : taux.borneHaute().toPlainString() + " %") + "."));
+            } else {
+                ok.add(new Controle(GARANTIE_TAUX, champs, garantie.codeBloc(), constat + "."));
+            }
+        }
     }
 
     // ------------------------------------------------------------------ règles

@@ -106,6 +106,9 @@ public class FicheMarcheService {
     private final DossierIntegriteService dossierIntegrite;
     private final JournalDossierService journal;
     private final ObjectMapper mapper;
+    /** ⚠️ V45 (2026-09-25) — le besoin par lot (fournitures) et les paramètres du contrôle du taux de garantie. */
+    private final BesoinFiche besoin;
+    private final ParametreService parametres;
 
     public FicheMarcheService(FicheMarcheRepository ficheRepository, FicheMarcheValeurRepository valeurRepository,
             ChampFicheMarcheRepository champRepository, BlocFicheMarcheRepository blocRepository,
@@ -113,7 +116,10 @@ public class FicheMarcheService {
             PerimetreDossier perimetre, ValeursPpmService valeursPpm, DossierIntegriteService dossierIntegrite,
             JournalDossierService journal, ObjectMapper mapper,
             cnm.prs.repository.DossierRepository dossierRepository, DocumentsFicheMarcheService documents,
-            cnm.prs.repository.DocumentFicheMarcheRepository documentRepository, DmcService dmcService) {
+            cnm.prs.repository.DocumentFicheMarcheRepository documentRepository, DmcService dmcService,
+            BesoinFiche besoin, ParametreService parametres) {
+        this.besoin = besoin;
+        this.parametres = parametres;
         this.dmcService = dmcService;
         this.documents = documents;
         this.documentRepository = documentRepository;
@@ -272,6 +278,87 @@ public class FicheMarcheService {
         return d;
     }
 
+    // ------------------------------------------------------------------ besoin (V45)
+
+    /** ⚠️ V45 (2026-09-25, §B1) — le besoin de la version courante ; vide pour une fiche virtuelle. */
+    @Transactional(readOnly = true)
+    public List<cnm.prs.dto.ArticleBesoinDto> articles(Long idDmc) {
+        contexte(idDmc);
+        return besoin.lister(ficheRepository.findFirstByIdDmcOrderByNumeroVersionDesc(idDmc)
+                .map(FicheMarche::getIdFiche).orElse(null));
+    }
+
+    /**
+     * ⚠️ V45 (2026-09-25, §B1) — remplacement en bloc du besoin d'un lot ({@code lot}) ou de toute la fiche
+     * ({@code lot} nul). Gardes, dans l'ordre : écriture de la fiche (profil, mandat, forme et catégorie outillées) ;
+     * catégorie hors fournitures → 409 {@code BESOIN_HORS_PERIMETRE} ; rang de lot (400 {@code lot} ou
+     * {@code articles[i].lot}) ; fiche validée → 409 {@code FICHE_VALIDEE} ; articles (400 nominatif).
+     */
+    public List<cnm.prs.dto.ArticleBesoinDto> remplacerArticles(Long idDmc, Integer lot,
+            List<cnm.prs.dto.ArticleBesoinDto> articles) {
+        Contexte ctx = contexteEcriture(idDmc);
+        exigerBesoinDansLePerimetre(ctx);
+        List<cnm.prs.dto.ArticleBesoinDto> recus = articles == null ? List.of() : articles;
+        int nbLots = LotsFiche.nbLots(valeursPpm.lire(ctx.idDetail()).valeurs());
+        boolean alloti = LotsFiche.alloti(nbLots);
+        List<ErrorResponse.FieldError> erreurs = new ArrayList<>();
+        if (lot != null && !alloti) {
+            erreurs.add(new ErrorResponse.FieldError("lot", "La ligne n'est pas allotie : le besoin s'écrit sans lot."));
+        } else if (lot != null && (lot < 1 || lot > nbLots)) {
+            erreurs.add(new ErrorResponse.FieldError("lot", "Lot " + lot + " hors du plan : la ligne compte " + nbLots
+                    + " lots (1 à " + nbLots + ")."));
+        }
+        for (int i = 0; erreurs.isEmpty() && i < recus.size(); i++) {
+            cnm.prs.dto.ArticleBesoinDto a = recus.get(i);
+            if (a == null) {
+                continue;
+            }
+            String champ = "articles[" + i + "].lot";
+            if (!alloti && a.getLot() != null) {
+                erreurs.add(new ErrorResponse.FieldError(champ, "La ligne n'est pas allotie : un article n'a pas de lot."));
+            } else if (alloti && lot != null && a.getLot() != null && !a.getLot().equals(lot)) {
+                erreurs.add(new ErrorResponse.FieldError(champ, "Le besoin du lot " + lot + " ne reçoit pas d'article du lot "
+                        + a.getLot() + "."));
+            } else if (alloti && lot == null && (a.getLot() == null || a.getLot() < 1 || a.getLot() > nbLots)) {
+                erreurs.add(new ErrorResponse.FieldError(champ, "La ligne compte " + nbLots + " lots : chaque article "
+                        + "porte son lot (1 à " + nbLots + ")."));
+            } else if (alloti && lot != null) {
+                a.setLot(lot);
+            }
+        }
+        if (!erreurs.isEmpty()) {
+            throw new ChampsInvalidesException(erreurs);
+        }
+        FicheMarche fiche = brouillonOuNouvelle(ctx);
+        BesoinFiche.valider(recus, ctx.forme().name());
+        besoin.remplacer(fiche.getIdFiche(), lot == null, lot, recus, ctx.forme().name(),
+                CurrentUser.ref().or(CurrentUser::login).orElse(null),
+                CurrentUser.profil().map(Enum::name).orElse(null));
+        fiche.setDateMaj(LocalDateTime.now());
+        ficheRepository.save(fiche);
+        return besoin.lister(fiche.getIdFiche());
+    }
+
+    /** ⚠️ V45 — retire un article de la version courante (brouillon) ; 404 s'il n'en fait pas partie. */
+    public void supprimerArticle(Long idDmc, Integer idArticle) {
+        Contexte ctx = contexteEcriture(idDmc);
+        exigerBesoinDansLePerimetre(ctx);
+        FicheMarche fiche = brouillonOuNouvelle(ctx);
+        if (!besoin.supprimer(fiche.getIdFiche(), idArticle)) {
+            throw new ResourceNotFoundException("Article " + idArticle + " introuvable dans la fiche du DMC " + idDmc + ".");
+        }
+        fiche.setDateMaj(LocalDateTime.now());
+        ficheRepository.save(fiche);
+    }
+
+    /** Le besoin ne vaut, en V1, que pour les fournitures et services (travaux : DQE ; prestations intellectuelles : rien). */
+    private static void exigerBesoinDansLePerimetre(Contexte ctx) {
+        if (!CategorieDao.FOURNITURES_SERVICES.name().equals(ctx.codeCategorie())) {
+            throw new BusinessRuleException("Le besoin par article ne vaut que pour les fournitures et services (catégorie "
+                    + "de la fiche : " + ctx.codeCategorie() + ").", "BESOIN_HORS_PERIMETRE");
+        }
+    }
+
     // ------------------------------------------------------------------ écritures
 
     public FicheMarcheDto ecrireCadrage(Long idDmc, Map<String, Object> cadrage) {
@@ -379,7 +466,8 @@ public class FicheMarcheService {
         // ⚠️ Lot 2a (2026-09-23, §B1) — les documents de la version sont produits AVANT qu'elle ne soit figée : un échec
         // (GenerationDocumentsException, 500 nommé) laisse la fiche en brouillon et annule la transaction.
         LocalDateTime maintenant = LocalDateTime.now();
-        List<DocumentsFicheMarcheService.Produit> produits = documents.produire(etat, maintenant);
+        List<DocumentsFicheMarcheService.Produit> produits = documents.produire(etat,
+                besoinApplicable(ctx) ? besoin.articles(fiche.getIdFiche()) : List.of(), maintenant);
         fiche.setStatut(StatutFicheMarche.VALIDEE.name());
         fiche.setDateValidation(maintenant);
         fiche.setValidePar(CurrentUser.ref().orElse(null));
@@ -414,6 +502,7 @@ public class FicheMarcheService {
         for (FicheMarcheValeur v : valeurRepository.findByIdFiche(derniere.getIdFiche())) {
             valeurRepository.save(new FicheMarcheValeur(null, suivante.getIdFiche(), v.getCodeChamp(), v.getValeur()));
         }
+        besoin.copier(derniere.getIdFiche(), suivante.getIdFiche());   // ⚠️ V45 — le besoin suit, comme les valeurs
         return toDto(ctx, suivante);
     }
 
@@ -642,6 +731,22 @@ public class FicheMarcheService {
                 }
                 return v == null ? brut : v;
             }
+            case LISTE_MULTIPLE -> {
+                // ⚠️ V45 — plusieurs options : tableau JSON (servi par String.valueOf en « [A1, A2] ») ou chaîne séparée
+                // par des virgules ; rangées dans l'ordre des options, sans doublon.
+                List<String> options = ChampFicheMarche.liste(c.getOptions());
+                List<String> recues = ChampFicheMarche.liste(brut.replaceAll("^\\[|\\]$", "").replace(';', ','));
+                List<String> inconnues = recues.stream()
+                        .filter(r -> options.stream().noneMatch(o -> o.equalsIgnoreCase(r))).toList();
+                if (!inconnues.isEmpty()) {
+                    erreurs.add(new ErrorResponse.FieldError(champ, "« " + c.getLibelle() + " » : option(s) inconnue(s) "
+                            + String.join(", ", inconnues) + " (attendu : " + String.join(", ", options) + ")."));
+                    return null;
+                }
+                String v = options.stream().filter(o -> recues.stream().anyMatch(r -> r.equalsIgnoreCase(o)))
+                        .collect(java.util.stream.Collectors.joining(","));
+                return v.isEmpty() ? null : v;
+            }
             case PIECE -> {
                 erreurs.add(new ErrorResponse.FieldError(champ, "« " + c.getLibelle() + " » est une pièce : hors lot 1."));
                 return null;
@@ -703,7 +808,13 @@ public class FicheMarcheService {
                 }
             }
         }
-        BilanControlesDto bilan = ControlesFicheMarche.bilan(ouverts, valeurs, cadrage, ppm.dates(), nbLots);
+        // ⚠️ V45 (2026-09-25, §B4) — le besoin (fournitures) et le taux de garantie administrable entrent au bilan.
+        ControlesFicheMarche.Besoin besoinBilan = besoinApplicable(ctx)
+                ? new ControlesFicheMarche.Besoin(besoin.articles(fiche.getIdFiche()),
+                        TypeMarcheDao.A_COMMANDE.name().equals(typeOuverture))
+                : null;
+        BilanControlesDto bilan = ControlesFicheMarche.bilan(ouverts, valeurs, cadrage, ppm.dates(), nbLots, besoinBilan,
+                parametres.tauxGarantie());
         return new FicheMarcheDto(fiche.getIdFiche(), fiche.getIdDmc(), ctx.idDetail(), ctx.idDossier(),
                 ppm.ligne() == null ? ctx.idDetail() : ppm.ligne().getIdDetail(),
                 ppm.ligne() != null && Boolean.TRUE.equals(ppm.ligne().getSupprimee()),
@@ -714,6 +825,11 @@ public class FicheMarcheService {
                 dossierRepository.findIdDossierByIdDmc(fiche.getIdDmc()).orElse(null),
                 fiche.getIdFiche() != null && StatutFicheMarche.BROUILLON.name().equals(fiche.getStatut()) && typeChange,
                 ctx.outille(), ctx.codeCategorie(), nbLots, LotsFiche.alloti(nbLots));
+    }
+
+    /** ⚠️ V45 — le besoin par article vaut pour une fiche de fournitures et services (catégorie connue). */
+    private static boolean besoinApplicable(Contexte ctx) {
+        return CategorieDao.FOURNITURES_SERVICES.name().equals(ctx.codeCategorie());
     }
 
     /** Le cadrage enregistré, sans l'ancienne clé {@code typeMarche} (lot 1c : elle n'est plus une réponse). */

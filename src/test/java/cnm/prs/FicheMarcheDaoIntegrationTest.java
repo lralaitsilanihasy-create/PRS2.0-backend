@@ -120,13 +120,13 @@ class FicheMarcheDaoIntegrationTest extends CnmIntegrationTestSupport {
     // ------------------------------------------------------------------ 1. référentiel
 
     @Test
-    @DisplayName("1 — Référentiel : QUANTITE_FIXE sert 9 blocs (B01-B06, B08-B10) avec leurs rubriques et les champs "
+    @DisplayName("1 — Référentiel : QUANTITE_FIXE sert 10 blocs (B01-B06, B08-B10, B12 — V45) avec leurs rubriques et les champs "
             + "chargés ; CONTRAT_CADRE ajoute B07 ; type inconnu → 400")
     void referentiel() throws Exception {
         String corps = mvc.perform(get("/api/champs-fiche-marche").param("typeMarche", "QUANTITE_FIXE").param("categorie", "FOURNITURES_SERVICES")
                 .header("Authorization", tokenPrmp))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.blocs", hasSize(9)))
+                .andExpect(jsonPath("$.blocs", hasSize(10)))
                 .andExpect(jsonPath("$.blocs[0].code").value("B01"))
                 .andExpect(jsonPath("$.blocs[6].code").value("B08"))
                 .andExpect(jsonPath("$.blocs[4].rubriques[?(@.code=='B05-GS')].nbAttendu").value(6))
@@ -139,7 +139,7 @@ class FicheMarcheDaoIntegrationTest extends CnmIntegrationTestSupport {
 
         mvc.perform(get("/api/champs-fiche-marche").param("typeMarche", "CONTRAT_CADRE").param("categorie", "FOURNITURES_SERVICES").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.blocs", hasSize(10)))
+                .andExpect(jsonPath("$.blocs", hasSize(11)))
                 .andExpect(jsonPath("$.blocs[6].code").value("B07"));
         mvc.perform(get("/api/champs-fiche-marche").param("typeMarche", "INCONNU").header("Authorization", tokenPrmp))
                 .andExpect(status().isBadRequest())
@@ -335,6 +335,7 @@ class FicheMarcheDaoIntegrationTest extends CnmIntegrationTestSupport {
     void bilanEtValidation() throws Exception {
         Long idDmc = creerDmc(tokenPrmp, 9901);
         cadrage(idDmc, "{\"garantieSoumission\":\"OUI\"}");
+        besoinDeTest(idDmc);   // V45 : une fiche de fournitures exige son besoin
         bloc(idDmc, "B05", "{\"B05-GS-02\":8400000,\"B05-GS-03\":60}");
         // Remise des offres AVANT le lancement du PPM (2026-03-02) ; validité des offres 90 > garantie 60.
         mvc.perform(put("/api/fiches-marche/" + idDmc + "/blocs/B04").header("Authorization", tokenPrmp).contentType(JSON)
@@ -389,6 +390,7 @@ class FicheMarcheDaoIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("BROUILLON_EN_COURS"));
         bloc(idDmc, "B04", "{\"B04-LR-02\":\"2026-04-10\",\"B04-VO-01\":90}");
         bloc(idDmc, "B02", "{\"B02-AU-01\":\"Direction des achats\"}");
+        besoinDeTest(idDmc);
         mvc.perform(post("/api/fiches-marche/" + idDmc + "/valider").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.version").value(1));
 

@@ -207,6 +207,7 @@ class FicheMarcheTypeDuPlanIntegrationTest extends CnmIntegrationTestSupport {
     void fichesValidees() throws Exception {
         Long idDmc = creerDmc(9901);
         cadrage(idDmc);
+        besoinDeTest(idDmc);
         mvc.perform(post("/api/fiches-marche/" + idDmc + "/valider").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.version").value(1));
 

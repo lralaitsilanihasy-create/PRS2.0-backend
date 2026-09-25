@@ -56,4 +56,20 @@ public class ParametreController {
     public SeuilAgpmDto fixerSeuilAgpm(@Valid @RequestBody SeuilAgpmDto corps) {
         return new SeuilAgpmDto(service.fixerSeuilAgpmMontant(corps.seuil()));
     }
+
+    /**
+     * ⚠️ V45 (2026-09-25, formulaires du candidat, §B4) — le contrôle du taux de la garantie de soumission : taux de
+     * référence et bornes (en %), {@code null} si non fixés. Lecture ouverte à tout authentifié.
+     */
+    @GetMapping("/fiche-garantie-taux")
+    public ParametreService.TauxGarantie tauxGarantie() {
+        return service.tauxGarantie();
+    }
+
+    /** Réglage (Administrateur) : l'état complet ; une valeur nulle efface le paramètre. */
+    @PreAuthorize("hasRole('ADMINISTRATEUR')")
+    @PutMapping("/fiche-garantie-taux")
+    public ParametreService.TauxGarantie fixerTauxGarantie(@RequestBody ParametreService.TauxGarantie corps) {
+        return service.fixerTauxGarantie(corps);
+    }
 }

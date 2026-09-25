@@ -514,6 +514,27 @@ document porte chaque information (document maître, reprises) ; il manquait la 
   assignataire, la présentation des plis et les annexes de l'acte d'engagement — dont la **déclaration des
   bénéficiaires effectifs** — se renseignent désormais.
 
+#### Le besoin et les formulaires du candidat (demande front du 2026-09-25, pilote)
+
+- **Le besoin se décrit article par article, lot par lot** (fournitures et services) : désignation, unité, quantités
+  (minimum et maximum pour un marché à commande, quantité sinon) et caractéristiques exigées. Il suit la fiche : figé à
+  la validation, recopié à la révision. En travaux, le détail quantitatif et estimatif reste celui d'aujourd'hui ; en
+  prestations intellectuelles, il n'y a pas de besoin par article.
+- **Une fiche de fournitures ne se valide pas sans besoin complet** : chaque lot a au moins un article, chaque article
+  au moins une caractéristique, et la quantité minimum ne dépasse pas la maximum.
+- **Qui écrit le besoin** : en V1, la PRMP et son UGPM, comme le reste de la fiche. La cible (le service bénéficiaire
+  rédige, la PRMP valide) est **à confirmer** par le pilote ; le rédacteur est déjà noté sur chaque article.
+- **Ce que le candidat reçoit, généré depuis la fiche** : la liste des fournitures et le calendrier de livraison
+  (lieu et délai par lot), et pour chaque lot un **bordereau des prix** où il ne saisit que ses prix unitaires hors
+  taxe — montants, totaux, TVA et TTC sont calculés — et un **tableau de conformité** face aux caractéristiques
+  exigées. Ces fichiers sont faits pour être remplis, imprimés et signés : la remise électronique n'est pas admise, et
+  le papier signé fait foi.
+- **La garantie de soumission** : quand elle est exigée, le modèle joint (C1, C2 ou les deux) doit être choisi ; son
+  taux rapporté au montant maximum de chaque lot est comparé à des bornes que l'Administrateur fixe (référence 2 %) —
+  un **avertissement**, jamais un blocage.
+- Les fiches de renseignements A1 à A4 et les garanties C1/C2 générées **attendent les modèles officiels** du pilote :
+  ils seront remplis tels quels, seuls les blancs étant des champs.
+
 #### Les trois catégories de fiche DAO (lot 5, demande front du 2026-09-24, pilote)
 
 ⚠️ **« Il y a trois catégories de fiches DAO : Fournitures et Services, Travaux et Réhabilitation, Prestations

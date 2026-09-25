@@ -70,6 +70,25 @@ public class GenerateurDocumentsFiche {
                     }
                 }
             }
+            // ⚠️ V45 (2026-09-25) — les tableaux (liste des fournitures : un par lot).
+            for (DocumentFicheModele.Tableau t : m.tableaux() == null ? List.<DocumentFicheModele.Tableau>of() : m.tableaux()) {
+                paragraphe(doc, t.titre(), 12, true, ParagraphAlignment.LEFT, 80);
+                org.apache.poi.xwpf.usermodel.XWPFTable table = doc.createTable(t.lignes().size() + 1, t.entetes().size());
+                table.setWidth("100%");
+                for (int c = 0; c < t.entetes().size(); c++) {
+                    cellule(table.getRow(0).getCell(c), t.entetes().get(c), true);
+                }
+                for (int l = 0; l < t.lignes().size(); l++) {
+                    List<String> ligne = t.lignes().get(l);
+                    for (int c = 0; c < t.entetes().size(); c++) {
+                        cellule(table.getRow(l + 1).getCell(c), c < ligne.size() ? ligne.get(c) : "", false);
+                    }
+                }
+                for (String mention : t.mentions()) {
+                    paragraphe(doc, mention, 10, false, ParagraphAlignment.LEFT, 40);
+                }
+                paragraphe(doc, "", 6, false, ParagraphAlignment.LEFT, 120);
+            }
             XWPFFooter pied = doc.createFooter(HeaderFooterType.DEFAULT);
             XWPFParagraph pp = pied.createParagraph();
             pp.setAlignment(ParagraphAlignment.CENTER);
@@ -81,6 +100,14 @@ public class GenerateurDocumentsFiche {
         } catch (IOException e) {
             throw new IllegalStateException("Génération du " + m.type() + " (docx) impossible : " + e.getMessage(), e);
         }
+    }
+
+    private static void cellule(org.apache.poi.xwpf.usermodel.XWPFTableCell cellule, String texte, boolean gras) {
+        XWPFParagraph p = cellule.getParagraphs().get(0);
+        XWPFRun r = p.createRun();
+        r.setBold(gras);
+        r.setFontSize(9);
+        r.setText(texte == null ? "" : texte);
     }
 
     private static void paragraphe(XWPFDocument doc, String texte, int taille, boolean gras, ParagraphAlignment align,
@@ -140,6 +167,29 @@ public class GenerateurDocumentsFiche {
                         pl.setSpacingAfter(2);
                         document.add(pl);
                     }
+                }
+            }
+            for (DocumentFicheModele.Tableau tab : m.tableaux() == null ? List.<DocumentFicheModele.Tableau>of() : m.tableaux()) {
+                Paragraph pt = new Paragraph(tab.titre(), bloc);
+                pt.setSpacingBefore(10);
+                pt.setSpacingAfter(4);
+                document.add(pt);
+                com.lowagie.text.pdf.PdfPTable table = new com.lowagie.text.pdf.PdfPTable(tab.entetes().size());
+                table.setWidthPercentage(100);
+                table.setHeaderRows(1);
+                for (String e : tab.entetes()) {
+                    table.addCell(new Phrase(e, libelle));
+                }
+                for (List<String> ligne : tab.lignes()) {
+                    for (int c = 0; c < tab.entetes().size(); c++) {
+                        table.addCell(new Phrase(c < ligne.size() && ligne.get(c) != null ? ligne.get(c) : "", valeur));
+                    }
+                }
+                document.add(table);
+                for (String mention : tab.mentions()) {
+                    Paragraph pm = new Paragraph(mention, valeur);
+                    pm.setSpacingBefore(2);
+                    document.add(pm);
                 }
             }
             document.close();

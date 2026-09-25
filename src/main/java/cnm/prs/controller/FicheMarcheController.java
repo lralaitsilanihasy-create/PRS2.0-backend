@@ -100,6 +100,33 @@ public class FicheMarcheController {
         return service.ecrireBloc(idDmc, bloc, corps.valeurs());
     }
 
+    /**
+     * ⚠️ V45 (2026-09-25, formulaires du candidat, §B1) — le besoin de la version courante (fournitures), trié par lot
+     * puis ordre, avec les caractéristiques de chaque article. Même lecture que la fiche.
+     */
+    @GetMapping("/{idDmc}/articles")
+    public List<cnm.prs.dto.ArticleBesoinDto> articles(@PathVariable Long idDmc) {
+        return service.articles(idDmc);
+    }
+
+    /**
+     * ⚠️ V45 — remplacement en bloc du besoin d'un lot ({@code ?lot=n}) ou de toute la fiche, corps
+     * {@code {"articles":[…]}} ; renvoie tout le besoin. 400 nominatif ({@code articles[i].…}, {@code lot}), 409
+     * {@code FICHE_VALIDEE} / {@code BESOIN_HORS_PERIMETRE}. Mêmes profils que l'écriture de la fiche.
+     */
+    @PutMapping("/{idDmc}/articles")
+    public List<cnm.prs.dto.ArticleBesoinDto> remplacerArticles(@PathVariable Long idDmc,
+            @RequestParam(required = false) Integer lot, @RequestBody cnm.prs.dto.ArticleBesoinDto.Remplacement corps) {
+        return service.remplacerArticles(idDmc, lot, corps == null ? null : corps.getArticles());
+    }
+
+    /** ⚠️ V45 — retire un article (et ses caractéristiques) ; 404 s'il n'appartient pas à la version courante. */
+    @org.springframework.web.bind.annotation.DeleteMapping("/{idDmc}/articles/{idArticle}")
+    public ResponseEntity<Void> supprimerArticle(@PathVariable Long idDmc, @PathVariable Integer idArticle) {
+        service.supprimerArticle(idDmc, idArticle);
+        return ResponseEntity.noContent().build();
+    }
+
     /** Recalcule le bilan des contrôles sans écrire. */
     @PostMapping("/{idDmc}/controler")
     public BilanControlesDto controler(@PathVariable Long idDmc) {

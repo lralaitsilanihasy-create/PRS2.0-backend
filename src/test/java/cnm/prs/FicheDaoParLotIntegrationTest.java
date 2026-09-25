@@ -79,13 +79,13 @@ class FicheDaoParLotIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("1 — Référentiel à commande : parLot servi, vrai pour les quatre champs seulement ; B02-AU-04 repris dans "
+    @DisplayName("1 — Référentiel à commande : parLot servi, vrai pour les quatre champs et, depuis V45, le lieu de livraison ; B02-AU-04 repris dans "
             + "l'AE ; B06-EO-11 réservé à la quantité fixe ; les cinq informations créées sont servies")
     void referentiel() throws Exception {
         String ref = referentiel("A_COMMANDE");
         assertThat(JsonPath.<List<String>>read(ref, "$.champs[?(@.parLot==true)].code"))
-                .containsExactlyInAnyOrder("B05-GS-03", "B05-TP-02", "B05-TP-03", "B06-EO-12");
-        assertThat(JsonPath.<List<Boolean>>read(ref, "$.champs[?(@.code=='B02-AU-03')].parLot")).containsExactly(false);
+                .containsExactlyInAnyOrder("B05-GS-03", "B05-TP-02", "B05-TP-03", "B06-EO-12", "B09-LL-01");
+        assertThat(JsonPath.<List<Boolean>>read(ref, "$.champs[?(@.code=='B02-AU-04')].parLot")).containsExactly(false);
         assertThat(JsonPath.<List<List<String>>>read(ref, "$.champs[?(@.code=='B02-AU-04')].reprises"))
                 .containsExactly(List.of("AE"));
         assertThat(JsonPath.<List<String>>read(ref, "$.champs[*].code"))
@@ -140,7 +140,7 @@ class FicheDaoParLotIntegrationTest extends CnmIntegrationTestSupport {
         cadrageCommande(idDmc, "NON");
         remplirObligatoiresEtValider(idDmc, "A_COMMANDE", "FOURNITURES_SERVICES", Map.of());
         assertThat(JsonPath.<List<String>>read(documents(idDmc), "$[*].type"))
-                .containsExactly("DPAO", "DPAO", "CCAP", "CCAP", "AE", "AE");
+                .containsExactly("DPAO", "DPAO", "CCAP", "CCAP", "AE", "AE", "LF", "LF", "BP", "TC");
         assertThat(JsonPath.<List<Object>>read(documents(idDmc), "$[?(@.lot != null)]")).isEmpty();
     }
 
@@ -160,7 +160,7 @@ class FicheDaoParLotIntegrationTest extends CnmIntegrationTestSupport {
 
         String documents = documents(idDmc);
         assertThat(JsonPath.<List<String>>read(documents, "$[*].type"))
-                .containsExactly("DPAO", "DPAO", "CCAP", "CCAP", "AE", "AE", "AE", "AE", "AE", "AE");
+                .containsExactly("DPAO", "DPAO", "CCAP", "CCAP", "AE", "AE", "AE", "AE", "AE", "AE", "LF", "LF", "BP", "BP", "BP", "TC", "TC", "TC");
         assertThat(JsonPath.<List<Integer>>read(documents, "$[?(@.type=='AE')].lot")).containsExactly(1, 1, 2, 2, 3, 3);
         assertThat(JsonPath.<List<String>>read(documents, "$[?(@.type=='AE')].libelle"))
                 .contains("Acte d'engagement — lot 1", "Acte d'engagement — lot 3");

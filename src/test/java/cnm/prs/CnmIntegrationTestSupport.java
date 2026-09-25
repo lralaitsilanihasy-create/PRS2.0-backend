@@ -707,6 +707,13 @@ abstract class CnmIntegrationTestSupport extends AbstractIntegrationTest {
                     .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
             java.util.List<String> manquants = com.jayway.jsonpath.JsonPath.read(fiche,
                     "$.bilanControles.bloquants[?(@.regle=='OBLIGATOIRE')].champs[0]");
+            // ⚠️ V45 (2026-09-25) — une fiche de fournitures exige son besoin : un article par lot, une caractéristique,
+            // semés s'il manque (un test qui veut un besoin précis l'écrit lui-même avant).
+            java.util.List<Object> besoinIncomplet = com.jayway.jsonpath.JsonPath.read(fiche,
+                    "$.bilanControles.bloquants[?(@.regle=='BESOIN_INCOMPLET')]");
+            if (!besoinIncomplet.isEmpty()) {
+                semerBesoin(idDmc, fiche);
+            }
             if (manquants.isEmpty()) {
                 break;
             }
@@ -724,6 +731,37 @@ abstract class CnmIntegrationTestSupport extends AbstractIntegrationTest {
         return cle.contains("#") ? cle.substring(0, cle.indexOf('#')) : cle;
     }
 
+    /**
+     * ⚠️ V45 (2026-09-25) — sème un besoin minimal si la fiche est de fournitures et n'en a pas encore : une fiche de
+     * fournitures sans besoin ne se valide plus ({@code BESOIN_INCOMPLET}). À appeler avant {@code /valider} dans les
+     * tests qui valident sans passer par {@link #remplirObligatoiresEtValider}.
+     */
+    protected void besoinDeTest(Long idDmc) throws Exception {
+        String fiche = mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        java.util.List<Object> incomplet = com.jayway.jsonpath.JsonPath.read(fiche,
+                "$.bilanControles.bloquants[?(@.regle=='BESOIN_INCOMPLET')]");
+        if (!incomplet.isEmpty()) {
+            semerBesoin(idDmc, fiche);
+        }
+    }
+
+    /** ⚠️ V45 — un besoin minimal : un article par lot (le lot unique d'une ligne non allotie), une caractéristique. */
+    protected void semerBesoin(Long idDmc, String fiche) throws Exception {
+        boolean parLot = Boolean.TRUE.equals(com.jayway.jsonpath.JsonPath.read(fiche, "$.saisieParLot"));
+        int nbLots = ((Number) com.jayway.jsonpath.JsonPath.read(fiche, "$.nbLots")).intValue();
+        StringBuilder articles = new StringBuilder();
+        for (int n = 1; n <= (parLot ? nbLots : 1); n++) {
+            articles.append(articles.length() == 0 ? "" : ",").append("{").append(parLot ? "\"lot\":" + n + "," : "")
+                    .append("\"designation\":\"Article de test\",\"unite\":\"U\",\"quantiteMin\":1,\"quantiteMax\":2,")
+                    .append("\"quantite\":1,\"caracteristiques\":[{\"libelle\":\"Caractéristique\",\"exigence\":\"Exigée\"}]}");
+        }
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .put("/api/fiches-marche/" + idDmc + "/articles").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"articles\":[" + articles + "]}"))
+                .andExpect(status().isOk());
+    }
+
     private static Object valeurObligatoire(String type, java.util.List<String> options, String controle) {
         java.util.List<String> etapes = java.util.List.of("LANCEMENT", "REMISE", "OUVERTURE", "ATTRIBUTION", "NOTIFICATION");
         int rang = controle == null || !controle.startsWith("DATES_ORDRE:") ? 0
@@ -734,7 +772,7 @@ abstract class CnmIntegrationTestSupport extends AbstractIntegrationTest {
             case "MONTANT" -> 1000000;
             case "POURCENTAGE" -> 10;
             case "OUI_NON" -> "NON";
-            case "LISTE" -> options == null || options.isEmpty() ? "x" : options.get(0);
+            case "LISTE", "LISTE_MULTIPLE" -> options == null || options.isEmpty() ? "x" : options.get(0);
             default -> "Clause type";
         };
     }

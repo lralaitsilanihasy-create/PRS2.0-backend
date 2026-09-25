@@ -15,11 +15,24 @@ import java.util.List;
  *                 {@code null} : document commun
  */
 public record DocumentFicheModele(String type, String titre, String sousTitre, List<Bloc> blocs, String piedDePage,
-        Integer lot) {
+        Integer lot, List<Tableau> tableaux) {
 
     /** Un document commun (sans lot). */
     public DocumentFicheModele(String type, String titre, String sousTitre, List<Bloc> blocs, String piedDePage) {
-        this(type, titre, sousTitre, blocs, piedDePage, null);
+        this(type, titre, sousTitre, blocs, piedDePage, null, List.of());
+    }
+
+    /** Un document de lignes « libellé : valeur », commun ou d'un lot. */
+    public DocumentFicheModele(String type, String titre, String sousTitre, List<Bloc> blocs, String piedDePage,
+            Integer lot) {
+        this(type, titre, sousTitre, blocs, piedDePage, lot, List.of());
+    }
+
+    /**
+     * ⚠️ V45 (2026-09-25) — un tableau, après les blocs (liste des fournitures : un par lot) : titre, en-têtes, lignes
+     * de cellules, et des mentions sous le tableau (lieu et délai de livraison).
+     */
+    public record Tableau(String titre, List<String> entetes, List<List<String>> lignes, List<String> mentions) {
     }
 
     /** Un bloc de la fiche (titre) et ses rubriques non vides. */

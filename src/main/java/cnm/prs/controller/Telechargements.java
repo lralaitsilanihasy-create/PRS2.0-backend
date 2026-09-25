@@ -26,6 +26,10 @@ final class Telechargements {
     static final MediaType DOCX =
             MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
 
+    /** Type MIME d'un classeur Excel produit par le serveur. */
+    static final MediaType XLSX =
+            MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+
     /** Liste blanche de sortie — accepte les libellés courts stockés (PDF/JPEG/PNG) et les types MIME. */
     static MediaType typeAutorise(String format) {
         if (format == null || format.isBlank()) {
@@ -37,6 +41,8 @@ final class Telechargements {
             case "PNG", "IMAGE/PNG" -> MediaType.IMAGE_PNG;
             // ⚠️ Lot 2a (2026-09-23) — documents générés par la fiche marché (jamais un fichier téléversé).
             case "DOCX" -> DOCX;
+            // ⚠️ V45 (2026-09-25) — classeurs du candidat produits par la fiche (bordereau, conformité).
+            case "XLSX" -> XLSX;
             default -> MediaType.APPLICATION_OCTET_STREAM;
         };
     }

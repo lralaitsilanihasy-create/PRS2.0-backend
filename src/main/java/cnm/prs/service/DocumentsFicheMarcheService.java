@@ -67,12 +67,18 @@ public class DocumentsFicheMarcheService {
     private final DossierRepository dossierRepository;
     private final PieceJointeDossierRepository pieceRepository;
     private final TypePieceJointeRepository typePieceRepository;
+    /** ⚠️ V45 (2026-09-25) — classeurs du candidat et taux de TVA administrable. */
+    private final GenerateurClasseursFiche classeurs;
+    private final ParametreService parametres;
 
     public DocumentsFicheMarcheService(DocumentFicheMarcheRepository documentRepository,
             GenerateurDocumentsFiche generateur, ChampFicheMarcheRepository champRepository,
             BlocFicheMarcheRepository blocRepository, RubriqueFicheMarcheRepository rubriqueRepository,
             FicheMarcheRepository ficheRepository, DossierRepository dossierRepository,
-            PieceJointeDossierRepository pieceRepository, TypePieceJointeRepository typePieceRepository) {
+            PieceJointeDossierRepository pieceRepository, TypePieceJointeRepository typePieceRepository,
+            GenerateurClasseursFiche classeurs, ParametreService parametres) {
+        this.classeurs = classeurs;
+        this.parametres = parametres;
         this.documentRepository = documentRepository;
         this.generateur = generateur;
         this.champRepository = champRepository;
@@ -95,9 +101,22 @@ public class DocumentsFicheMarcheService {
      * @throws GenerationDocumentsException si un document ne se produit pas
      */
     public List<Produit> produire(FicheMarcheDto etat, LocalDateTime validation) {
-        List<DocumentFicheModele> modeles = SelectionDocumentsFiche.selectionner(etat,
+        return produire(etat, List.of(), validation);
+    }
+
+    /**
+     * ⚠️ V45 (2026-09-25, formulaires du candidat, §B3) — avec le besoin d'une fiche de fournitures ({@code articles},
+     * vide sinon) : la liste des fournitures et calendrier ({@code LF}, docx et pdf) et, par lot, le bordereau des prix
+     * ({@code BP}) et le tableau de conformité ({@code TC}) en classeurs {@code xlsx}.
+     */
+    public List<Produit> produire(FicheMarcheDto etat, List<BesoinFiche.Article> articles, LocalDateTime validation) {
+        List<DocumentFicheModele> modeles = new ArrayList<>(SelectionDocumentsFiche.selectionner(etat,
                 champRepository.findByActifTrueOrderByCodeRubriqueAscRangAsc(), blocRepository.findAllByOrderByRangAsc(),
-                rubriqueRepository.findAllByOrderByCodeBlocAscRangAsc(), validation);
+                rubriqueRepository.findAllByOrderByCodeBlocAscRangAsc(), validation));
+        DocumentFicheModele liste = SelectionDocumentsFiche.listeFournitures(etat, articles, validation);
+        if (liste != null) {
+            modeles.add(liste);
+        }
         List<Produit> produits = new ArrayList<>();
         for (DocumentFicheModele modele : modeles) {
             List<GenerateurDocumentsFiche.Fichier> fichiers;
@@ -110,6 +129,47 @@ public class DocumentsFicheMarcheService {
             for (GenerateurDocumentsFiche.Fichier f : fichiers) {
                 produits.add(new Produit(modele.type(), f.extension(), nomFichier(modele.type(), etat.getRefeDossier(),
                         etat.getIdDetail(), modele.lot(), etat.getVersion(), f.extension()), f.contenu(), modele.lot()));
+            }
+        }
+        produits.addAll(classeurs(etat, articles));
+        return produits;
+    }
+
+    /** ⚠️ V45 — bordereau des prix et tableau de conformité de chaque lot qui a des articles. */
+    private List<Produit> classeurs(FicheMarcheDto etat, List<BesoinFiche.Article> articles) {
+        List<Produit> produits = new ArrayList<>();
+        if (articles == null || articles.isEmpty()) {
+            return produits;
+        }
+        boolean aCommande = "A_COMMANDE".equals(etat.getTypeMarche());
+        int nbLots = Boolean.TRUE.equals(etat.getSaisieParLot()) && etat.getNbLots() != null ? etat.getNbLots() : 0;
+        java.math.BigDecimal tva = parametres.tauxTva();
+        List<Integer> lots = new ArrayList<>();
+        if (LotsFiche.alloti(nbLots)) {
+            for (int n = 1; n <= nbLots; n++) {
+                lots.add(n);
+            }
+        } else {
+            lots.add(null);
+        }
+        for (String type : List.of("BP", "TC")) {
+            for (Integer lot : lots) {
+                List<BesoinFiche.Article> duLot = articles.stream().filter(a -> java.util.Objects.equals(a.lot(), lot)).toList();
+                if (duLot.isEmpty()) {
+                    continue;
+                }
+                byte[] contenu;
+                try {
+                    contenu = "BP".equals(type)
+                            ? classeurs.bordereau(etat.getRefeDossier(), etat.getDesignationMarche(), lot, duLot, aCommande, tva)
+                            : classeurs.conformite(etat.getRefeDossier(), etat.getDesignationMarche(), lot, duLot);
+                } catch (RuntimeException e) {
+                    throw new GenerationDocumentsException("La génération du document « "
+                            + SelectionDocumentsFiche.titre(type, lot) + " » a échoué : la version n'est pas validée. "
+                            + e.getMessage(), e);
+                }
+                produits.add(new Produit(type, "xlsx", nomFichier(type, etat.getRefeDossier(), etat.getIdDetail(), lot,
+                        etat.getVersion(), "xlsx"), contenu, lot));
             }
         }
         return produits;

@@ -416,6 +416,7 @@ class FicheMarcheDossierIntegrationTest extends CnmIntegrationTestSupport {
     private Long ficheValidee(int idDetail) throws Exception {
         Long idDmc = creerDmc(idDetail);
         cadrage(idDmc);
+        besoinDeTest(idDmc);
         mvc.perform(post("/api/fiches-marche/" + idDmc + "/valider").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk());
         return idDmc;

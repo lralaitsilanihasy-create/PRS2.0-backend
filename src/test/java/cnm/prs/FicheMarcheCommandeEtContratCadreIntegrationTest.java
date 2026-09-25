@@ -71,7 +71,7 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
 
     @Test
     @DisplayName("1 — Import : 121 champs des fournitures et 114 du contrat-cadre, aucun rejet ; champs actifs servis : 144 en "
-            + "quantité fixe, 150 à commande, 148 en contrat-cadre (35 repris et reflets + 113) — 2026-09-25 : cinq créations, "
+            + "quantité fixe, 149 à commande, 148 en contrat-cadre (35 repris et reflets + 113) — 2026-09-25 : cinq créations, "
             + "B06-EO-11 réservé à la quantité fixe")
     void chargementDesReferentiels() throws Exception {
         ChampFicheMarcheService.BilanImport f = importer("referentiel-champs-fiche-marche-fournitures.csv");
@@ -82,7 +82,7 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
         assertThat(cc.crees()).hasSize(114);
 
         assertThat(champs("QUANTITE_FIXE")).hasSize(144);
-        assertThat(champs("A_COMMANDE")).hasSize(150);
+        assertThat(champs("A_COMMANDE")).hasSize(149);
         assertThat(champs("CONTRAT_CADRE")).hasSize(148);
     }
 
@@ -129,14 +129,13 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
                 .andExpect(jsonPath("$.typeOutille").value(true));
 
         Map<String, String> propres = new LinkedHashMap<>();
-        propres.put("B02-AU-03", "100 à 500 unités");
         propres.put("B05-TP-02", "10000000");
         propres.put("B05-TP-03", "50000000");
         remplirObligatoiresEtValider(idDmc, "A_COMMANDE", null, propres);
 
         List<String> types = JsonPath.read(documents(idDmc), "$[*].type");
-        assertThat(types).containsExactly("DPAO", "DPAO", "CCAP", "CCAP", "AE", "AE");
-        assertThat(texte(idDmc, "DPAO")).contains("Quantités minimum et maximum : 100 à 500 unités");
+        assertThat(types).containsExactly("DPAO", "DPAO", "CCAP", "CCAP", "AE", "AE", "LF", "LF", "BP", "TC");
+        assertThat(texte(idDmc, "DPAO")).doesNotContain("Quantités minimum et maximum");
         assertThat(texte(idDmc, "AE")).contains("Montant minimum annuel", "10 000 000 Ariary", "Montant maximum annuel");
     }
 
@@ -175,7 +174,7 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
 
         remplirObligatoiresEtValider(idDmc, "CONTRAT_CADRE", null, Map.of("B05-MT-01", "250000000"));
         List<String> types = JsonPath.read(documents(idDmc), "$[*].type");
-        assertThat(types).containsExactly("DPAC", "DPAC", "AE", "AE");
+        assertThat(types).containsExactly("DPAC", "DPAC", "AE", "AE", "LF", "LF", "BP", "TC");
         assertThat(texte(idDmc, "DPAC")).contains("Données particulières du cahier des clauses administratives",
                 "Calendrier prévisionnel");
         assertThat(texte(idDmc, "AE")).contains("Marchés subséquents", "Attribution des marchés subséquents",

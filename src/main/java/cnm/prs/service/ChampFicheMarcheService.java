@@ -205,7 +205,8 @@ public class ChampFicheMarcheService {
         }
         // ⚠️ Lot 4 (2026-09-23) — une LISTE de source CADRAGE est un reflet : ses options sont celles de la question de
         // cadrage (le fichier du contrat-cadre en charge trois ainsi, comme les reflets semés par V35).
-        if (TypeChampFiche.LISTE.name().equals(type) && !SourceChampFiche.CADRAGE.name().equals(source)
+        if ((TypeChampFiche.LISTE.name().equals(type) && !SourceChampFiche.CADRAGE.name().equals(source)
+                || TypeChampFiche.LISTE_MULTIPLE.name().equals(type))
                 && (dto.getOptions() == null || dto.getOptions().isEmpty())) {
             erreurs.add(new ErrorResponse.FieldError("options", "Un champ LISTE déclare ses options."));
         }

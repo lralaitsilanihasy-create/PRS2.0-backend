@@ -4751,6 +4751,57 @@ précédentes conservées ; dossier en examen ou au-delà → rien ne change. D�
 type** sur un dossier qui porte déjà des pièces produites → même 409. Une version validée **avant le lot 2** n'a pas de
 documents (pas de reprise) : elle n'en joint aucun, et le dépôt manuel reste possible tant que la fiche n'en a produit.
 
+### Le besoin par lot et les formulaires du candidat ⚠️ 2026-09-25 (V45)
+
+Demande front `frontend/docs/demande-backend-2026-09-25-formulaires-du-candidat.md`. Livré : §B1, §B2, §B4, et au §B3
+la liste des fournitures, le bordereau des prix et le tableau de conformité. **Non livré** : la génération des fiches
+A1 à A4 et des garanties C1/C2, qui attend les modèles officiels du pilote (les remplir tels quels, sans réécrire une
+phrase).
+
+- **Le besoin** (fournitures et services seulement) — une ressource de la version de fiche, figée à la validation,
+  copiée à la révision : `t_fiche_article` (lot, ordre, désignation ≤ 500, unité ≤ 20, `quantiteMin`/`quantiteMax` à
+  commande, `quantite` en quantité fixe et contrat-cadre, `redigePar`/`profilRedacteur` posés par le serveur, jamais
+  exigés) et `t_fiche_caracteristique` (ordre, libellé ≤ 300, exigence ≤ 500). Bloc **`B12` « Besoin »** (rubrique
+  `B12-BE`, sans champ) servi au référentiel des fournitures.
+
+| Méthode | URL | Corps | Réponse | Statuts | Rôle |
+|---|---|---|---|---|---|
+| GET | /api/fiches-marche/{idDmc}/articles | — | `ArticleBesoinDto[]` de la version courante, triés par lot puis ordre, caractéristiques comprises ; `[]` pour une fiche virtuelle | 200, 403, 404, 409 `DMC_NON_DAO` | lecture de la fiche |
+| PUT | /api/fiches-marche/{idDmc}/articles?lot= | `{ "articles": [ArticleBesoinDto…] }` | tout le besoin | 200, 400, 403, 409 | écriture de la fiche (PRMP, UGPM, Administrateur) |
+| DELETE | /api/fiches-marche/{idDmc}/articles/{idArticle} | — | — | 204, 403, 404, 409 | idem |
+
+  Le `PUT` **remplace** les articles du lot `lot` (ou toute la fiche sans `lot`) ; l'ordre est la **position dans la
+  liste** (1, 2… par lot), les caractéristiques aussi. Ligne allotie : avec `lot`, chaque article prend ce lot (un
+  autre → 400 `articles[i].lot`) ; sans `lot`, chaque article porte le sien (1 à `nbLots`). Ligne non allotie : ni
+  `lot` (400 `lot`) ni lot d'article (400 `articles[i].lot`). `lot` hors du plan → 400 `lot`. Champs manquants ou trop
+  longs, quantité négative → 400 `articles[i].…` / `articles[i].caracteristiques[j].…`. Catégorie autre que
+  fournitures → 409 **`BESOIN_HORS_PERIMETRE`** ; version validée → 409 `FICHE_VALIDEE`. « Dupliquer depuis le lot n »
+  est un geste d'écran : relire le lot n, le renvoyer par `PUT ?lot=m`.
+- **Champs** (fichiers de correspondance et `docs/referentiel/2026-09-25-formulaires-du-candidat.sql`) : `B04-CD-01`
+  devient **`LISTE_MULTIPLE`** (A1, A2, A3, A4), `B04-CD-02` une `LISTE` (C1, C2, C1 et C2), tous deux des trois
+  catégories (rubrique `B04-CD` ouverte aux prestations intellectuelles, V45) ; `B09-LL-01` **par lot** ; `B02-AU-03`
+  **désactivé** (le besoin porte les quantités). Nouveau type **`LISTE_MULTIPLE`** : reçu en tableau JSON ou en chaîne
+  « A1,A3 », enregistré dans l'ordre des options (« A1,A3 »), option inconnue → 400 nominatif ; options obligatoires
+  à l'administration.
+- **Contrôles** (bilan) : **`BESOIN_INCOMPLET`** (bloquant — chaque lot a un article, chaque article une
+  caractéristique ; bloc `B12`), **`QUANTITES_ORDRE`** (bloquant — minimum ≤ maximum), **`GARANTIE_MANQUANTE`**
+  (bloquant — garantie de soumission exigée sans modèle retenu à `B04-CD-02`, rôle `GARANTIE_MANQUANTE:FORME`),
+  **`GARANTIE_TAUX`** (**avertissement**, jamais bloquant — garantie du lot / montant maximum du lot, rôles
+  `GARANTIE_TAUX:GARANTIE` = `B05-GS-03`, `:MAXIMUM` = `B05-TP-03` ; hors bornes → avertissement, sinon constat en `ok`).
+- **Paramètres administrables** : `GET /api/parametres/fiche-garantie-taux` (tout authentifié) et `PUT` (Administrateur)
+  `{ reference, borneBasse, borneHaute }` en %, `null` = non fixé (400 hors 0–100 ou borne basse > haute) ; départ :
+  référence 2, bornes non fixées (le taux est alors seulement constaté). TVA des bordereaux : paramètre `FICHE_TAUX_TVA`
+  (20 au départ ; absent → pas de ligne TVA).
+- **Documents** (validation d'une fiche de fournitures qui a un besoin) : **`LF`** « Liste des fournitures et calendrier
+  de livraison » (docx et pdf — un tableau par lot : n°, désignation, unité, quantités ; lieu `B09-LL-01#n` et délai
+  `B06-EO-12#n` à commande / `B06-EO-11` en quantité fixe ; joint au dossier comme les autres PDF) ; par lot,
+  **`BP`** « Bordereau des prix » et **`TC`** « Spécifications techniques — tableau de conformité » en **`xlsx`**
+  (`DocumentFicheDto.lot`, fichier `BP_<plan>_<ligne>_lot2_v1.xlsx`, non joints au dossier). Bordereau : feuille
+  protégée, **seule la colonne « Prix unitaire HT » déverrouillée**, montants, total HT, TVA et TTC en formules.
+  Conformité : colonnes du candidat (proposée, marque, modèle, conforme) déverrouillées, liste OUI/NON. Ordre :
+  DPAO, DPAC, DPIC, CCAP, AE, LF, puis BP et TC par lot. Téléchargement xlsx :
+  `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`.
+
 ### Les valeurs par lot de la fiche DAO ⚠️ 2026-09-25
 
 Demande front `frontend/docs/demande-backend-2026-09-25-dao-a-commande-par-lot.md`, tirée d'un DAO réel à commande en

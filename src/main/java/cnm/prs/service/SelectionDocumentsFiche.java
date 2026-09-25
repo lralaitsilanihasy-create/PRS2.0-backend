@@ -34,7 +34,10 @@ public final class SelectionDocumentsFiche {
             "DPAC", "Données particulières du cahier des clauses administratives",
             "DPIC", "Données particulières des instructions aux consultants",
             "CCAP", "Cahier des clauses administratives particulières",
-            "AE", "Acte d'engagement");
+            "AE", "Acte d'engagement",
+            "LF", "Liste des fournitures et calendrier de livraison",
+            "BP", "Bordereau des prix",
+            "TC", "Spécifications techniques — tableau de conformité");
 
     /**
      * ⚠️ Lot 4 (2026-09-23) — le jeu documentaire d'un type de marché. En contrat-cadre, le deuxième document est le
@@ -172,6 +175,77 @@ public final class SelectionDocumentsFiche {
         }
     }
 
+    /** ⚠️ V45 — champs lus par la liste des fournitures : lieu de livraison (par lot) et délai (à commande / quantité fixe). */
+    static final String CHAMP_LIEU_LIVRAISON = "B09-LL-01";
+    static final String CHAMP_DELAI_MAXIMUM = "B06-EO-12";
+    static final String CHAMP_DELAI = "B06-EO-11";
+
+    /**
+     * ⚠️ V45 (2026-09-25, formulaires du candidat, §B3) — la <strong>liste des fournitures et calendrier de
+     * livraison</strong> ({@code LF}), entièrement générée depuis le besoin : un tableau par lot (n°, désignation, unité,
+     * quantités), suivi du lieu et du délai de livraison du lot. {@code null} sans article.
+     */
+    public static DocumentFicheModele listeFournitures(FicheMarcheDto fiche, List<BesoinFiche.Article> articles,
+            LocalDateTime validation) {
+        if (articles == null || articles.isEmpty()) {
+            return null;
+        }
+        boolean aCommande = "A_COMMANDE".equals(fiche.getTypeMarche());
+        int nbLots = Boolean.TRUE.equals(fiche.getSaisieParLot()) && fiche.getNbLots() != null ? fiche.getNbLots() : 0;
+        List<String> entetes = aCommande ? List.of("N°", "Désignation", "Unité", "Quantité minimum", "Quantité maximum")
+                : List.of("N°", "Désignation", "Unité", "Quantité");
+        List<DocumentFicheModele.Tableau> tableaux = new ArrayList<>();
+        List<Integer> lots = new ArrayList<>();
+        if (LotsFiche.alloti(nbLots)) {
+            for (int n = 1; n <= nbLots; n++) {
+                lots.add(n);
+            }
+        } else {
+            lots.add(null);
+        }
+        for (Integer lot : lots) {
+            List<List<String>> lignes = new ArrayList<>();
+            for (BesoinFiche.Article a : articles) {
+                if (!java.util.Objects.equals(a.lot(), lot)) {
+                    continue;
+                }
+                lignes.add(aCommande
+                        ? List.of(String.valueOf(a.ordre()), a.designation(), a.unite(), entier(a.quantiteMin()), entier(a.quantiteMax()))
+                        : List.of(String.valueOf(a.ordre()), a.designation(), a.unite(), entier(a.quantite())));
+            }
+            if (lignes.isEmpty()) {
+                continue;
+            }
+            List<String> mentions = new ArrayList<>();
+            String lieu = valeurDeLot(fiche, CHAMP_LIEU_LIVRAISON, lot);
+            if (lieu != null) {
+                mentions.add("Lieu de livraison : " + lieu);
+            }
+            String delai = aCommande ? valeurDeLot(fiche, CHAMP_DELAI_MAXIMUM, lot) : valeurDeLot(fiche, CHAMP_DELAI, lot);
+            if (delai != null) {
+                mentions.add((aCommande ? "Délai maximum de livraison de chaque commande : " : "Délai de livraison : ")
+                        + delai + " jours");
+            }
+            tableaux.add(new DocumentFicheModele.Tableau(lot == null ? "Fournitures" : "Lot " + lot, entetes, lignes, mentions));
+        }
+        String pied = "Plan " + (fiche.getRefeDossier() == null ? "—" : fiche.getRefeDossier())
+                + " · ligne " + fiche.getIdDetail() + " · fiche marché version " + fiche.getVersion()
+                + (validation == null ? "" : " validée le " + validation.toLocalDate().format(JOUR));
+        return new DocumentFicheModele("LF", titre("LF"), fiche.getDesignationMarche(), List.of(), pied, null, tableaux);
+    }
+
+    /** La valeur saisie d'un champ pour un lot : {@code CODE#n}, à défaut le code nu. */
+    private static String valeurDeLot(FicheMarcheDto fiche, String code, Integer lot) {
+        Map<String, String> v = fiche.getValeurs() == null ? Map.of() : fiche.getValeurs();
+        String x = lot == null ? null : v.get(LotsFiche.cle(code, lot));
+        x = x != null ? x : v.get(code);
+        return x == null || x.isBlank() ? null : x.trim();
+    }
+
+    private static String entier(Integer n) {
+        return n == null ? "" : ValeursPpmService.montant(BigDecimal.valueOf(n));
+    }
+
     private static int rang(RubriqueFicheMarche r) {
         return r == null || r.getRang() == null ? Integer.MAX_VALUE : r.getRang();
     }
@@ -232,6 +306,9 @@ public final class SelectionDocumentsFiche {
             }
             case POURCENTAGE -> {
                 return v.endsWith("%") ? v : v + " %";
+            }
+            case LISTE_MULTIPLE -> {
+                return String.join(", ", ChampFicheMarche.liste(v));   // ⚠️ V45
             }
             default -> {
                 return v;

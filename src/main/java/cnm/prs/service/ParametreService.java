@@ -81,6 +81,72 @@ public class ParametreService {
         return seuil;
     }
 
+    /**
+     * ⚠️ V45 (2026-09-25, formulaires du candidat, §B4) — contrôle du taux de la garantie de soumission rapportée au
+     * montant maximum du lot : taux de référence (2 % au départ) et bornes basse et haute, à fixer par le pilote. Un
+     * avertissement, jamais bloquant ; sans borne, le taux est seulement constaté. Aucune valeur dans le code.
+     */
+    public static final String FICHE_GARANTIE_TAUX_REFERENCE = "FICHE_GARANTIE_TAUX_REFERENCE";
+    public static final String FICHE_GARANTIE_TAUX_BORNE_BASSE = "FICHE_GARANTIE_TAUX_BORNE_BASSE";
+    public static final String FICHE_GARANTIE_TAUX_BORNE_HAUTE = "FICHE_GARANTIE_TAUX_BORNE_HAUTE";
+
+    /** ⚠️ V45 — taux de TVA des bordereaux des prix générés (20 % au départ). */
+    public static final String FICHE_TAUX_TVA = "FICHE_TAUX_TVA";
+
+    /** Les trois paramètres du contrôle du taux de garantie ; {@code null} : non fixé. */
+    public record TauxGarantie(java.math.BigDecimal reference, java.math.BigDecimal borneBasse,
+            java.math.BigDecimal borneHaute) {
+    }
+
+    @Transactional(readOnly = true)
+    public TauxGarantie tauxGarantie() {
+        return new TauxGarantie(nombre(FICHE_GARANTIE_TAUX_REFERENCE), nombre(FICHE_GARANTIE_TAUX_BORNE_BASSE),
+                nombre(FICHE_GARANTIE_TAUX_BORNE_HAUTE));
+    }
+
+    /**
+     * Fixe les trois paramètres (Administrateur) ; une valeur nulle efface le paramètre. 400 : taux négatif ou au-delà
+     * de 100 %, borne basse au-dessus de la borne haute.
+     */
+    public TauxGarantie fixerTauxGarantie(TauxGarantie t) {
+        for (java.math.BigDecimal v : java.util.Arrays.asList(t.reference(), t.borneBasse(), t.borneHaute())) {
+            if (v != null && (v.signum() < 0 || v.compareTo(new java.math.BigDecimal("100")) > 0)) {
+                throw new cnm.prs.exception.BadRequestException("Un taux de garantie va de 0 à 100 %.");
+            }
+        }
+        if (t.borneBasse() != null && t.borneHaute() != null && t.borneBasse().compareTo(t.borneHaute()) > 0) {
+            throw new cnm.prs.exception.BadRequestException("La borne basse dépasse la borne haute.");
+        }
+        ecrire(FICHE_GARANTIE_TAUX_REFERENCE, t.reference());
+        ecrire(FICHE_GARANTIE_TAUX_BORNE_BASSE, t.borneBasse());
+        ecrire(FICHE_GARANTIE_TAUX_BORNE_HAUTE, t.borneHaute());
+        return tauxGarantie();
+    }
+
+    /** Taux de TVA des bordereaux ; {@code null} si non fixé (le bordereau n'a alors pas de ligne TVA). */
+    @Transactional(readOnly = true)
+    public java.math.BigDecimal tauxTva() {
+        return nombre(FICHE_TAUX_TVA);
+    }
+
+    private java.math.BigDecimal nombre(String cle) {
+        return repository.findById(cle).map(Parametre::getValeur).filter(v -> v != null && !v.isBlank()).map(v -> {
+            try {
+                return new java.math.BigDecimal(v.trim().replace(',', '.'));
+            } catch (RuntimeException e) {
+                return null;
+            }
+        }).orElse(null);
+    }
+
+    private void ecrire(String cle, java.math.BigDecimal valeur) {
+        Parametre p = repository.findById(cle).orElseGet(() -> new Parametre(cle, null, null, null));
+        p.setValeur(valeur == null ? null : valeur.stripTrailingZeros().toPlainString());
+        p.setDateMaj(LocalDateTime.now());
+        p.setImActeur(CurrentUser.ref().or(CurrentUser::login).orElse(null));
+        repository.save(p);
+    }
+
     /** Bascule l'interrupteur (Administrateur) — upsert horodaté avec l'identité JWT. */
     public boolean basculerActualites(boolean actif) {
         Parametre p = repository.findById(ACTUALITES_ACTIVES)

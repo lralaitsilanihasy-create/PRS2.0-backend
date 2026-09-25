@@ -12,6 +12,11 @@ public enum TypeChampFiche {
     DATE,
     /** Une valeur parmi {@code OPTIONS}. */
     LISTE,
+    /**
+     * ⚠️ V45 (2026-09-25) — plusieurs valeurs parmi {@code OPTIONS}, enregistrées séparées par des virgules dans l'ordre
+     * des options (« A1,A2,A4 ») ; reçues en tableau ou en chaîne.
+     */
+    LISTE_MULTIPLE,
     OUI_NON,
     /** Référence d'une pièce (nom ou identifiant), texte libre. */
     PIECE

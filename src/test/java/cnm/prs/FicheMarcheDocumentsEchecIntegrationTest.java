@@ -63,6 +63,7 @@ class FicheMarcheDocumentsEchecIntegrationTest extends CnmIntegrationTestSupport
                 .contentType(MediaType.APPLICATION_JSON).content("{\"cadrage\":{\"garantieSoumission\":\"NON\"}}"))
                 .andExpect(status().isOk());
 
+        besoinDeTest(idDmc);
         mvc.perform(post("/api/fiches-marche/" + idDmc + "/valider").header("Authorization", tokenPrmp))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.code").value("GENERATION_DOCUMENTS"))
