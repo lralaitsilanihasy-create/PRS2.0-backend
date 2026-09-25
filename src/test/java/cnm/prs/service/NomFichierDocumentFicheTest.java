@@ -21,5 +21,7 @@ class NomFichierDocumentFicheTest {
         assertThat(DocumentsFicheMarcheService.nomFichier("AE", " /00002 // MTP / 2026/ ", 7, 1, "pdf"))
                 .isEqualTo("AE_00002-MTP-2026_7_v1.pdf");
         assertThat(DocumentsFicheMarcheService.nomFichier("CCAP", null, 7, 3, "pdf")).isEqualTo("CCAP_sans-reference_7_v3.pdf");
+        // ⚠️ 2026-09-25 — un document établi par lot porte son rang.
+        assertThat(DocumentsFicheMarcheService.nomFichier("AE", "DOS-9900", 9902, 2, 1, "pdf")).isEqualTo("AE_DOS-9900_9902_lot2_v1.pdf");
     }
 }

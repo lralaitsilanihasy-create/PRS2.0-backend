@@ -11,7 +11,9 @@ import java.time.LocalDateTime;
  * @param libelle intitulé du document (« Acte d'engagement »…)
  * @param extension {@code docx} ou {@code pdf}
  * @param version numéro de la version de la fiche qui porte le document
+ * @param lot     ⚠️ 2026-09-25 — rang du lot d'un document établi par lot (acte d'engagement d'une ligne allotie,
+ *                {@code libelle} « Acte d'engagement — lot 2 ») ; {@code null} : document commun
  */
 public record DocumentFicheDto(Integer idDocument, String type, String libelle, String extension, String nomFichier,
-        Long tailleOctets, LocalDateTime dateGeneration, Integer version) {
+        Long tailleOctets, LocalDateTime dateGeneration, Integer version, Integer lot) {
 }

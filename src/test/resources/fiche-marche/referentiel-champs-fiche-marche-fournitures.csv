@@ -1,15 +1,18 @@
-code;libelle;type;source;documentMaitre;reprises;typesMarche;condition;obligatoire;texteType;controle;options;cleCadrage;clePpm;actif
+code;libelle;type;source;documentMaitre;reprises;typesMarche;condition;obligatoire;texteType;controle;options;cleCadrage;clePpm;actif;parLot
 B02-OB-02;Type de fournitures à livrer et services connexes à réaliser;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B02-OB-03;Numéro du dossier d'appel d'offres;TEXTE;SAISIE;DPAO;AE;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
 B02-AU-01;Description du projet global (marché non alloti);TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;alloti = NON;oui;;;;;;oui
 B02-AU-02;Attribution des lots;LISTE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;alloti = OUI;oui;;;Lot par lot (attribution divisible),Totalité des lots à un seul attributaire;;;oui
 B02-AU-03;Quantités minimum et maximum;TEXTE_LONG;SAISIE;DPAO;;A_COMMANDE;;oui;;;;;;oui
-B02-AU-04;Durée de validité du marché à commande (mois);NOMBRE;SAISIE;DPAO;;A_COMMANDE;;oui;;;;;;oui
+B02-AU-04;Durée de validité du marché à commande (mois);NOMBRE;SAISIE;DPAO;AE;A_COMMANDE;;oui;;;;;;oui
 B02-AU-05;Date d'effet du marché à commande;DATE;SAISIE;AE;;A_COMMANDE;;oui;;;;;;oui
 B02-AU-06;Rythme de commande (bons de commande);TEXTE_LONG;SAISIE;AUCUN;;A_COMMANDE;;non;;;;;;non
+B02-AU-07;Nombre maximum de lots attribuables à un même candidat;NOMBRE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;alloti = OUI;non;;;;;;oui
 B03-ST-01;Sous-traitance autorisée;OUI_NON;SAISIE;AE;CCAP;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
 B03-ST-02;Conditions de la sous-traitance;TEXTE_LONG;SAISIE;AE;CCAP;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
 B03-NA-01;Nantissement autorisé;OUI_NON;SAISIE;AE;CCAP;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
 B03-NA-02;Conditions du nantissement;TEXTE_LONG;SAISIE;AE;CCAP;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
+B03-NA-03;Comptable assignataire des paiements;TEXTE;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
 B03-CQ-01;Identification et situation juridique : pièces exigées;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
 B03-CQ-02;Capacité technique exigée;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
 B03-CQ-03;Capacité financière exigée;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
@@ -27,6 +30,7 @@ B04-LA-01;Langue de l'offre autre que le français admise;OUI_NON;SAISIE;DPAO;;Q
 B04-LA-02;Langue admise en plus du français;TEXTE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
 B04-RO-01;Nombre de copies de l'offre;NOMBRE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
 B04-RO-02;Mention et numéro à porter sur les plis;TEXTE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B04-RO-03;Présentation des plis (plis séparés par lot, enveloppes intérieures originale et copie);TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
 B04-LR-01;Nom complet de la PRMP destinataire des offres;TEXTE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
 B04-LR-02;Adresse de remise des offres;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
 B04-LR-03;Date limite de remise des offres;DATE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;DATES_ORDRE:REMISE;;;;oui
@@ -41,10 +45,10 @@ B05-VP-02;Formule de révision des prix;TEXTE_LONG;SAISIE;DPAO;CCAP;QUANTITE_FIX
 B05-MO-01;Monnaie de l'offre;LISTE;SAISIE;DPAO;CCAP;QUANTITE_FIXE,A_COMMANDE;;oui;;;Ariary,Ariary et devise pour la part importée;;;oui
 B05-MO-02;Devise admise pour la part importée;TEXTE;SAISIE;DPAO;CCAP;QUANTITE_FIXE,A_COMMANDE;provenance = IMPORTEES;non;;;;;;oui
 B05-GS-02;Forme de la garantie de soumission;LISTE;SAISIE;DPAO;AE,CCAP;QUANTITE_FIXE,A_COMMANDE;garantieSoumission = OUI;oui;;;Dépôt en numéraire au Trésor,Caution personnelle et solidaire d'un organisme agréé par le MEF,Garantie bancaire,Chèque de banque;;;oui
-B05-GS-03;Montant de la garantie de soumission (Ariary);MONTANT;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;garantieSoumission = OUI;oui;La garantie de soumission est fixée à {B05-GS-03} ariary.;MONTANT_POSITIF;;;;oui
+B05-GS-03;Montant de la garantie de soumission (Ariary);MONTANT;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;garantieSoumission = OUI;oui;La garantie de soumission est fixée à {B05-GS-03} ariary.;MONTANT_POSITIF;;;;oui;oui
 B05-GS-04;Durée de validité de la garantie de soumission (jours);NOMBRE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;garantieSoumission = OUI;oui;;VALIDITE_GARANTIE_SUP_OFFRE:GARANTIE;;;;oui
-B05-TP-02;Montant minimum annuel du marché (Ariary);MONTANT;SAISIE;AE;;A_COMMANDE;;oui;;MONTANT_POSITIF;;;;oui
-B05-TP-03;Montant maximum annuel du marché (Ariary);MONTANT;SAISIE;AE;;A_COMMANDE;;oui;;MONTANT_POSITIF;;;;oui
+B05-TP-02;Montant minimum annuel du marché (Ariary);MONTANT;SAISIE;AE;;A_COMMANDE;;oui;;MONTANT_POSITIF;;;;oui;oui
+B05-TP-03;Montant maximum annuel du marché (Ariary);MONTANT;SAISIE;AE;;A_COMMANDE;;oui;;MONTANT_POSITIF;;;;oui;oui
 B06-EP-01;Délai de réponse des candidats aux demandes de la PRMP (jours);NOMBRE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
 B06-EO-01;Évaluation des offres portant sur plusieurs lots;LISTE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;alloti = OUI;oui;;;Par lot,Sur l'ensemble des lots;;;oui
 B06-EO-02;Critères additionnels d'évaluation;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
@@ -56,8 +60,8 @@ B06-EO-07;Traitement des offres anormalement hautes ou basses;TEXTE_LONG;SAISIE;
 B06-EO-08;Vérification a posteriori de la qualification du candidat moins-disant;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
 B06-EO-09;Marge de préférence nationale (%);POURCENTAGE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
 B06-EO-10;Variation maximale des quantités à l'attribution (%);POURCENTAGE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
-B06-EO-11;Délai de livraison (jours);NOMBRE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
-B06-EO-12;Délai maximum de livraison (jours);NOMBRE;SAISIE;DPAO;;A_COMMANDE;;oui;;;;;;oui
+B06-EO-11;Délai de livraison (jours);NOMBRE;SAISIE;DPAO;;QUANTITE_FIXE;;oui;;;;;;oui
+B06-EO-12;Délai maximum de livraison (jours);NOMBRE;SAISIE;DPAO;;A_COMMANDE;;oui;;;;;;oui;oui
 B06-AN-01;Forme de la garantie de bonne exécution exigée à la notification;LISTE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;non;;;Cautionnement,Garantie bancaire;;;oui
 B06-AN-02;Recours gracieux et recours en attribution;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
 B06-SD-01;Attribution du marché;TEXTE_LONG;SAISIE;AUCUN;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;non
@@ -85,6 +89,7 @@ B08-RG-01;Retenue de garantie pratiquée;OUI_NON;SAISIE;CCAP;;QUANTITE_FIXE,A_CO
 B08-RG-02;Taux de la retenue de garantie (%);POURCENTAGE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
 B09-LL-01;Lieu de livraison;TEXTE_LONG;SAISIE;DPAO;AE,CCAP;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
 B09-PC-01;Pièces contractuelles supplémentaires;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
+B09-PC-02;Annexes de l'acte d'engagement (cadre du bordereau de prix, état des sommes versées à des tiers, déclaration des bénéficiaires effectifs);TEXTE_LONG;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
 B09-OM-01;Délai de communication par le fournisseur sur l'ajustement de prix ou de délai (jours);NOMBRE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
 B09-OM-02;Variation maximale des volumes ou quantités (%);POURCENTAGE;SAISIE;AE;CCAP;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
 B09-OM-03;Délai de validité du marché (mois);NOMBRE;SAISIE;CCAP;;A_COMMANDE;;non;;;;;;oui

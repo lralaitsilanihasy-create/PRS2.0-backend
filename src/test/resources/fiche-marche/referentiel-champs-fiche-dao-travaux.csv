@@ -28,8 +28,8 @@ B03-QT-11;Préférence nationale accordée aux candidats;OUI_NON;SAISIE;DPAO;;QU
 B03-SU-01;Sous-traitance envisagée;OUI_NON;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
 B03-SU-02;Parts sous-traitées et sous-traitants proposés;TEXTE_LONG;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui
 B03-NT-01;Comptable assignataire et montant maximal nanti;TEXTE_LONG;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui
-B04-CD-01;Modèles de fiches de renseignements joints au dossier (A1, A2…);TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
-B04-CD-02;Modèle de garantie de soumission joint au dossier;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui
+B04-CD-01;Modèles de fiches de renseignements joints au dossier (A1, A2…);TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX,FOURNITURES_SERVICES;;oui;;;;;;oui
+B04-CD-02;Modèle de garantie de soumission joint au dossier;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX,FOURNITURES_SERVICES;;non;;;;;;oui
 B04-CD-03;Plans joints au dossier;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
 B04-EQ-01;Délai d'envoi des demandes d'éclaircissement par les candidats (jours);NOMBRE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
 B04-EQ-02;Délai de réponse du représentant de la PRMP (jours);NOMBRE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui

@@ -257,22 +257,27 @@ public class FicheMarcheService {
         String typeMarche = ctx.forme().name();   // outillée : contexteEcriture l'a exigé
         Map<String, ChampFicheMarche> champs = new LinkedHashMap<>();
         champRepository.findAllByOrderByCodeRubriqueAscRangAsc().forEach(c -> champs.put(c.getCode(), c));
+        // ⚠️ 2026-09-25 (§B2) — le nombre de lots du plan (ligne courante) : un champ « par lot » d'une ligne allotie se
+        // saisit sous CODE#n, n de 1 à ce nombre.
+        int nbLots = LotsFiche.nbLots(valeursPpm.lire(ctx.idDetail()).valeurs());
 
         List<ErrorResponse.FieldError> erreurs = new ArrayList<>();
         Map<String, String> aEcrire = new TreeMap<>();
         for (Map.Entry<String, Object> e : (valeurs == null ? Map.<String, Object>of() : valeurs).entrySet()) {
-            String code = e.getKey() == null ? "" : e.getKey().trim().toUpperCase();
+            String cle = e.getKey() == null ? "" : e.getKey().trim().toUpperCase();
+            int diese = cle.indexOf(LotsFiche.SEPARATEUR);
+            String code = diese < 0 ? cle : cle.substring(0, diese);
             ChampFicheMarche c = champs.get(code);
             if (c == null || !Boolean.TRUE.equals(c.getActif())) {
-                erreurs.add(new ErrorResponse.FieldError(code, "Champ inconnu ou inactif : " + code + "."));
+                erreurs.add(new ErrorResponse.FieldError(cle, "Champ inconnu ou inactif : " + code + "."));
                 continue;
             }
             if (!codeBloc.equals(c.codeBloc())) {
-                erreurs.add(new ErrorResponse.FieldError(code, "Le champ " + code + " n'appartient pas au bloc " + codeBloc + "."));
+                erreurs.add(new ErrorResponse.FieldError(cle, "Le champ " + code + " n'appartient pas au bloc " + codeBloc + "."));
                 continue;
             }
             if (!SourceChampFiche.SAISIE.name().equals(c.getSource())) {
-                erreurs.add(new ErrorResponse.FieldError(code, "« " + c.getLibelle() + " » est "
+                erreurs.add(new ErrorResponse.FieldError(cle, "« " + c.getLibelle() + " » est "
                         + (SourceChampFiche.PPM.name().equals(c.getSource()) ? "repris du PPM" : "dérivé du cadrage")
                         + " : il ne se saisit pas."));
                 continue;
@@ -284,9 +289,13 @@ public class FicheMarcheService {
             if (brut == null || brut.isEmpty()) {
                 continue;   // vide = effacé
             }
-            String normalisee = normaliser(c, brut, erreurs);
+            String cible = LotsFiche.cleSaisie(c, cle, diese < 0 ? null : cle.substring(diese + 1), nbLots, erreurs);
+            if (cible == null) {
+                continue;
+            }
+            String normalisee = normaliser(c, brut, erreurs, cle);
             if (normalisee != null) {
-                aEcrire.put(code, normalisee);
+                aEcrire.put(cible, normalisee);
             }
         }
         if (!erreurs.isEmpty()) {
@@ -542,10 +551,6 @@ public class FicheMarcheService {
 
     // ------------------------------------------------------------------ valeurs
 
-    private static String normaliser(ChampFicheMarche c, String brut, List<ErrorResponse.FieldError> erreurs) {
-        return normaliser(c, brut, erreurs, c.getCode());
-    }
-
     /** Valeur normalisée selon le type du champ ; {@code null} et une erreur nominative si elle ne se lit pas. */
     private static String normaliser(ChampFicheMarche c, String brut, List<ErrorResponse.FieldError> erreurs, String champ) {
         TypeChampFiche type = TypeChampFiche.valueOf(c.getType());
@@ -631,6 +636,7 @@ public class FicheMarcheService {
             valeurRepository.findByIdFiche(fiche.getIdFiche()).forEach(v -> valeurs.put(v.getCodeChamp(), v.getValeur()));
         }
         ValeursPpmService.ValeursPpm ppm = valeursPpm.lire(ctx.idDetail());
+        int nbLots = LotsFiche.nbLots(ppm.valeurs());   // 2026-09-25 (§B2) : les champs par lot d'une ligne allotie
 
         List<ChampFicheMarche> ouverts = new ArrayList<>();
         Map<String, String> enLettres = new TreeMap<>();
@@ -646,14 +652,16 @@ public class FicheMarcheService {
             } else if (SourceChampFiche.CADRAGE.name().equals(c.getSource()) && c.getCleCadrage() != null) {
                 Object r = cadrage.get(c.getCleCadrage());
                 valeursCadrage.put(c.getCode(), r == null ? null : String.valueOf(r));
-            } else if (TypeChampFiche.MONTANT.name().equals(c.getType()) && valeurs.get(c.getCode()) != null) {
-                BigDecimal m = ControlesFicheMarche.nombre(valeurs.get(c.getCode()));
-                if (m != null) {
-                    enLettres.put(c.getCode(), MontantEnLettres.ariary(m));
+            } else if (TypeChampFiche.MONTANT.name().equals(c.getType())) {
+                for (String cle : LotsFiche.cles(c, nbLots)) {
+                    BigDecimal m = ControlesFicheMarche.nombre(valeurs.get(cle));
+                    if (m != null) {
+                        enLettres.put(cle, MontantEnLettres.ariary(m));
+                    }
                 }
             }
         }
-        BilanControlesDto bilan = ControlesFicheMarche.bilan(ouverts, valeurs, cadrage, ppm.dates());
+        BilanControlesDto bilan = ControlesFicheMarche.bilan(ouverts, valeurs, cadrage, ppm.dates(), nbLots);
         return new FicheMarcheDto(fiche.getIdFiche(), fiche.getIdDmc(), ctx.idDetail(), ctx.idDossier(),
                 ppm.ligne() == null ? ctx.idDetail() : ppm.ligne().getIdDetail(),
                 ppm.ligne() != null && Boolean.TRUE.equals(ppm.ligne().getSupprimee()),
@@ -663,7 +671,7 @@ public class FicheMarcheService {
                 fiche.getDateValidation(), fiche.getValidePar(),
                 dossierRepository.findIdDossierByIdDmc(fiche.getIdDmc()).orElse(null),
                 fiche.getIdFiche() != null && StatutFicheMarche.BROUILLON.name().equals(fiche.getStatut()) && typeChange,
-                ctx.outille(), ctx.codeCategorie());
+                ctx.outille(), ctx.codeCategorie(), nbLots, LotsFiche.alloti(nbLots));
     }
 
     /** Le cadrage enregistré, sans l'ancienne clé {@code typeMarche} (lot 1c : elle n'est plus une réponse). */

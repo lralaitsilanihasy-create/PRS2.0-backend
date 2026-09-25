@@ -4620,7 +4620,9 @@ l'Administrateur). Avant le premier enregistrement la fiche est **virtuelle** : 
 | typeChange | ⚠️ **2026-09-23 (lot 1c)** — `true` quand une fiche **brouillon** a été saisie sous un type qui n'est plus celui du plan (`t_fiche_marche.TYPE_MARCHE`, figé à la création de la version, ≠ `typeMarche`) ; le front prévient. ⚠️ lot 4 : **reprendre le cadrage** (`PUT …/cadrage`) aligne le type de saisie sur le plan et l'éteint. Toujours `false` pour une fiche virtuelle ou validée (une version validée dans ce cas est signalée au journal applicatif, `[FICHE_MARCHE]`) |
 | typeOutille | ⚠️ **2026-09-23 (lot 3)** — la fiche sait préparer le type servi (réponse de `DmcService.FORMES_OUTILLEES`, même rôle que `LigneEligibleDto.formeOutillee`) : le front n'a plus de liste à lui. `false` seulement si le plan ne porte pas la forme |
 | cadrage | `{ clé: réponse }` — ⚠️ lot 1c : **plus de `typeMarche`** (ignoré s'il est envoyé, retiré des cadrages enregistrés avant) ; `alloti`, `nbLots`, `variantes`, `groupement`, `formeGroupement`, `provenance`, `typePrix`, `prixRevisable`, `garantieSoumission`, `avance`, `tauxAvance`, `penalites`, `attributaires` (⚠️ lot 4 : **`MONO`** ou **`MULTI`**, contrat-cadre mono ou multi-attributaire ; 400 sinon — ce n'est plus un nombre) |
-| valeurs | `{ code: string }` des champs `SAISIE` renseignés (nombres normalisés en chiffres, dates ISO) |
+| valeurs | `{ code: string }` des champs `SAISIE` renseignés (nombres normalisés en chiffres, dates ISO) ; ⚠️ 2026-09-25 : clé `CODE#n` pour un champ `parLot` d'une ligne allotie |
+| nbLots | ⚠️ **2026-09-25** — lots de la ligne courante au plan (0 : non allotie) |
+| saisieParLot | ⚠️ **2026-09-25** — `nbLots > 1` : les champs `parLot` se saisissent sous `CODE#n` et l'acte d'engagement est produit par lot ([valeurs par lot](#les-valeurs-par-lot-de-la-fiche-dao-️-2026-09-25)) |
 | enLettres | `{ code: texte }` pour chaque `MONTANT` saisi (« huit millions quatre cent mille ariary ») |
 | valeursCadrage | `{ code: string }` des champs `CADRAGE` ouverts, reflets des réponses |
 | valeursPpm, versionPpm | `{ code: string }` des champs `PPM` ouverts (⚠️ lot 1c : **23** clés : `ENTITE`, `ADRESSE`, `MINISTERE`, `LOCALITE`, `PRMP`, `PRMP_EMAIL`, `PRMP_TEL`, `PPM_REFERENCE`, `PPM_EXERCICE`, `PPM_VERSION`, `DOSSIER_REFERENCE`, `NATURE`, `MODE`, `MONTANT_ESTIMATIF`, `FINANCEMENT`, `BENEFICIAIRES`, `COMPTES`, `DATES_PREVISIONNELLES`, `OBJET`, `NB_LOTS_PPM`, `LOTS_DESIGNATION`, `LOTS_MONTANTS`, `FORME_MARCHE` — champ `B01-AC-19` « Forme du marché », libellé « À quantité fixe » / « Contrat cadre » / « Marché à commande », absent si le plan ne la porte pas), **relus à chaque lecture sur la ligne courante**, jamais stockés (H7) ; `versionPpm` = `NUM_MAJ` du plan lu, 0 pour un plan initial |
@@ -4691,7 +4693,7 @@ ariary) », dates `JJ/MM/AAAA`, `OUI`/`NON` → « Oui »/« Non ». Pied de pag
 fiche marché version n validée le JJ/MM/AAAA ». La **sélection** (`SelectionDocumentsFiche`) est séparée de la **mise
 en page** (`GenerateurDocumentsFiche`) : seule la seconde change au lot 2b.
 
-**`DocumentFicheDto`** : `{ idDocument, type, libelle, extension, nomFichier, tailleOctets, dateGeneration, version }`
+**`DocumentFicheDto`** : `{ idDocument, type, libelle, extension, nomFichier, tailleOctets, dateGeneration, version, lot }` (⚠️ 2026-09-25 : `lot` = rang d'un acte d'engagement établi par lot, `null` sinon)
 — `libelle` : « Données particulières de l'appel d'offres », « Données particulières du cahier des clauses
 administratives », « Cahier des clauses administratives particulières », « Acte d'engagement ». **Nom de fichier**
 (servi tel quel, le front n'en compose aucun) : `{TYPE}_{référence du plan, hors [A-Za-z0-9-] → tirets}_{idDetail}_v{n}.{ext}`,
@@ -4716,6 +4718,37 @@ précédentes conservées ; dossier en examen ou au-delà → rien ne change. D�
 (Administrateur compris ; message qui renvoie à la fiche) ; `POST /api/piece-jointe-dossiers` d'une pièce du **même
 type** sur un dossier qui porte déjà des pièces produites → même 409. Une version validée **avant le lot 2** n'a pas de
 documents (pas de reprise) : elle n'en joint aucun, et le dépôt manuel reste possible tant que la fiche n'en a produit.
+
+### Les valeurs par lot de la fiche DAO ⚠️ 2026-09-25
+
+Demande front `frontend/docs/demande-backend-2026-09-25-dao-a-commande-par-lot.md`, tirée d'un DAO réel à commande en
+cinq lots (garantie de soumission, montants minimum et maximum, délai de livraison propres à chaque lot, un acte
+d'engagement par lot).
+
+- **V43** : `tr_champ_fiche_marche.PAR_LOT` et **`ChampFicheMarcheDto.parLot`** (servi par `GET /api/champs-fiche-marche`,
+  accepté en écriture Administrateur ; absent : `false` à la création, **inchangé** à la modification ; `true` refusé —
+  400 `parLot` — hors source `SAISIE` ou sur une `PIECE`). Colonne `parLot` (`oui`/`non`, facultative, même règle) à
+  l'import CSV. Quatre champs des fournitures : `B05-GS-03`, `B05-TP-02`, `B05-TP-03`, `B06-EO-12`.
+- **`FicheMarcheDto.nbLots`** (lots de la ligne courante au plan, `NB_LOTS_PPM` ; 0 : non allotie) et
+  **`saisieParLot`** (vrai si `nbLots > 1`), relus à chaque lecture.
+- **Saisie** (`PUT /api/fiches-marche/{idDmc}/blocs/{bloc}`) — ligne allotie : un champ `parLot` s'écrit sous
+  **`CODE#n`**, `n` de 1 à `nbLots` (rang dans l'ordre des lots du plan). 400 nominatif (champ = la clé reçue) : clé
+  nue d'un champ par lot, rang hors du plan ou illisible, `#n` sur un champ qui n'est pas par lot. Ligne non allotie :
+  clé nue ; `CODE#1` est admis et **enregistré sous la clé nue**, un autre rang est refusé. `valeurs` et `enLettres`
+  servent les clés telles qu'enregistrées.
+- **Bilan** : un champ par lot est attendu (et exigé s'il est obligatoire) **pour chaque lot** — une ligne par lot
+  manquant, `champs: ["B05-TP-02#3"]`, message « … (lot 3) est obligatoire. » ; `MONTANT_POSITIF` de même. Valeurs de
+  l'autre forme (clé nue d'une ligne devenue allotie, rang au-delà d'un plan réduit) : conservées, ignorées.
+- **Documents** : ligne allotie → l'**acte d'engagement** est produit **une fois par lot** (y compris en contrat-cadre),
+  avec pour chaque champ par lot la valeur de son lot ; les autres documents sont communs et portent une ligne par lot
+  (« Délai maximum de livraison (jours) — lot 2 : 20 »). **`DocumentFicheDto.lot`** (`null` : document commun),
+  `libelle` « Acte d'engagement — lot 2 », `nomFichier` `AE_<plan>_<ligne>_lot2_v1.pdf` ; `t_document_fiche_marche.LOT`,
+  unicité (fiche, type, extension, lot). Ordre : DPAO, DPAC, DPIC, CCAP, puis AE lot 1, lot 2… (docx puis pdf). Tous les
+  PDF sont joints au dossier soumis.
+- Référentiel (même livraison, sans code) : `B02-AU-04` repris dans l'AE ; `B06-EO-11` réservé à la quantité fixe ;
+  `B04-CD-01`, `-02` (V43 : rubrique `B04-CD`) et `B04-VE-01`, `-02` (rubrique `B04-VE`, maître DPAO) ouverts aux
+  fournitures et services ; créations `B02-AU-07`, `B02-OB-03`, `B03-NA-03`, `B04-RO-03`, `B09-PC-02`. Base déjà
+  chargée : `docs/referentiel/2026-09-25-dao-a-commande-par-lot.sql`.
 
 ### La fiche DAO des prestations intellectuelles ⚠️ 2026-09-24
 

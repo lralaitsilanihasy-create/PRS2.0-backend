@@ -85,14 +85,19 @@ class FicheDaoTravauxIntegrationTest extends CnmIntegrationTestSupport {
                 .containsExactly("B11-AN", "B11-FR");
         List<String> rubriquesQf = JsonPath.read(qf, "$.blocs[*].rubriques[*].code");
         assertThat(rubriquesQf).contains("B02-LT", "B09-RP", "B01-AC").doesNotContain("B02-AU", "B04-RO", "B02-DK");
-        assertThat(JsonPath.<List<String>>read(qf, "$.champs[?(@.source=='SAISIE')].categories[*]")).containsOnly("TRAVAUX");
+        assertThat(JsonPath.<List<List<String>>>read(qf, "$.champs[?(@.source=='SAISIE')].categories")).allMatch(c -> c.contains("TRAVAUX"));
+        // 2026-09-25 (§B3) — la composition du dossier est réemployée par les fournitures, les plans restent aux travaux.
+        assertThat(JsonPath.<List<java.util.Map<String, Object>>>read(qf, "$.champs[?(@.source=='SAISIE')]").stream()
+                .filter(c -> ((List<?>) c.get("categories")).contains("FOURNITURES_SERVICES")).map(c -> c.get("code")))
+                .containsExactlyInAnyOrder("B04-CD-01", "B04-CD-02");
 
         String cc = ref("typeMarche=CONTRAT_CADRE&categorie=TRAVAUX");
         assertThat(JsonPath.<List<String>>read(cc, "$.blocs[?(@.code=='B07')].rubriques[*].code")).contains("B07-AT", "B07-DT")
                 .doesNotContain("B07-PS");
         String fs = ref("typeMarche=QUANTITE_FIXE&categorie=FOURNITURES_SERVICES");
         assertThat(JsonPath.<List<String>>read(fs, "$.blocs[*].code")).doesNotContain("B11");
-        assertThat(JsonPath.<List<String>>read(fs, "$.champs[*].code")).hasSize(139);
+        assertThat(JsonPath.<List<String>>read(fs, "$.champs[*].code")).hasSize(146)   // 144 des fournitures + B04-CD-01, -02 (2026-09-25)
+                .contains("B04-CD-01", "B04-CD-02").doesNotContain("B04-CD-03");
     }
 
     @Test

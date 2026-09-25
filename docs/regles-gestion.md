@@ -496,6 +496,24 @@ document porte chaque information (document maître, reprises) ; il manquait la 
   négociations). Leur document de consultation est le **DPIC**, données particulières des instructions aux
   consultants : une fiche produit le DPIC, le CCAP et l'acte d'engagement. Les trois catégories se préparent.
 
+#### Un marché alloti : ce qui varie par lot (demande front du 2026-09-25, dossier réel à commande)
+
+- **Le DAO est commun aux lots, sauf quatre informations** : le montant de la garantie de soumission, les montants
+  minimum et maximum annuels et le délai maximum de livraison se fixent **lot par lot** (un DAO réel en cinq lots en
+  porte cinq de chaque). Le nombre de lots est celui du **plan** : la fiche n'en invente pas et refuse un lot qu'il ne
+  compte pas.
+- Une information par lot **obligatoire l'est pour chaque lot** : la fiche ne se valide pas tant qu'un lot en manque, et
+  le bilan dit lequel.
+- **Un acte d'engagement par lot** : chacun porte les montants de son lot et le reste du DAO commun ; les autres
+  documents (DPAO, CCAP…) sont communs et reprennent la valeur de chaque lot. Un marché non alloti ne change pas : une
+  valeur par information, un acte d'engagement.
+- Même livraison, référentiel des fournitures aligné sur le dossier réel : la durée de validité d'un marché à commande
+  est reprise dans l'acte d'engagement ; à commande, seul le **plafond** du délai de livraison se fixe au DAO (le délai
+  de chaque commande est dans le bon de commande) ; la composition du dossier (fiches de renseignements, modèle de
+  garantie), la remise électronique, le nombre maximum de lots par candidat, le numéro du DAO, le comptable
+  assignataire, la présentation des plis et les annexes de l'acte d'engagement — dont la **déclaration des
+  bénéficiaires effectifs** — se renseignent désormais.
+
 #### Les trois catégories de fiche DAO (lot 5, demande front du 2026-09-24, pilote)
 
 ⚠️ **« Il y a trois catégories de fiches DAO : Fournitures et Services, Travaux et Réhabilitation, Prestations

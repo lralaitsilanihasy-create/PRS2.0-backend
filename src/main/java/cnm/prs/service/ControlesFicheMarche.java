@@ -69,6 +69,16 @@ public final class ControlesFicheMarche {
      */
     public static BilanControlesDto bilan(List<ChampFicheMarche> champsOuverts, Map<String, String> valeurs,
             Map<String, ?> cadrage, Map<String, LocalDate> datesPpm) {
+        return bilan(champsOuverts, valeurs, cadrage, datesPpm, 0);
+    }
+
+    /**
+     * ⚠️ 2026-09-25 (§B2) — {@code nbLots} : lots de la ligne au plan. Sur une ligne allotie, un champ {@code parLot} est
+     * attendu (et, s'il est obligatoire, exigé) <strong>pour chaque lot</strong>, sous {@code CODE#n} : une ligne du
+     * bilan par lot manquant, le rang dans le message ({@link LotsFiche}).
+     */
+    public static BilanControlesDto bilan(List<ChampFicheMarche> champsOuverts, Map<String, String> valeurs,
+            Map<String, ?> cadrage, Map<String, LocalDate> datesPpm, int nbLots) {
         List<Controle> bloquants = new ArrayList<>();
         List<Controle> avertissements = new ArrayList<>();
         List<Controle> ok = new ArrayList<>();
@@ -81,25 +91,31 @@ public final class ControlesFicheMarche {
             // ni attendu, ni obligatoire au bilan — sinon il bloquerait la validation et fausserait le compte.
             boolean saisie = SourceChampFiche.SAISIE.name().equals(c.getSource())
                     && !TypeChampFiche.PIECE.name().equals(c.getType());
-            String v = valeurs.get(c.getCode());
-            boolean vide = v == null || v.isBlank();
             if (saisie) {
-                nbAttendus++;
-                if (!vide) {
-                    nbSaisis++;
-                }
-                if (Boolean.TRUE.equals(c.getObligatoire()) && vide) {
-                    bloquants.add(new Controle(OBLIGATOIRE, List.of(c.getCode()), c.codeBloc(),
-                            "« " + c.getLibelle() + " » est obligatoire."));
-                }
-                if (TypeChampFiche.MONTANT.name().equals(c.getType()) && !vide) {
-                    BigDecimal montant = nombre(v);
-                    if (montant != null && montant.signum() <= 0) {
-                        bloquants.add(new Controle(MONTANT_POSITIF, List.of(c.getCode()), c.codeBloc(),
-                                "« " + c.getLibelle() + " » doit être un montant strictement positif."));
-                    } else if (montant != null) {
-                        ok.add(new Controle(MONTANT_POSITIF, List.of(c.getCode()), c.codeBloc(),
-                                "« " + c.getLibelle() + " » : montant positif."));
+                boolean parLot = LotsFiche.parLot(c, nbLots);
+                List<String> cles = LotsFiche.cles(c, nbLots);
+                for (int i = 0; i < cles.size(); i++) {
+                    String cle = cles.get(i);
+                    String lot = parLot ? " (lot " + (i + 1) + ")" : "";
+                    String v = valeurs.get(cle);
+                    boolean vide = v == null || v.isBlank();
+                    nbAttendus++;
+                    if (!vide) {
+                        nbSaisis++;
+                    }
+                    if (Boolean.TRUE.equals(c.getObligatoire()) && vide) {
+                        bloquants.add(new Controle(OBLIGATOIRE, List.of(cle), c.codeBloc(),
+                                "« " + c.getLibelle() + " »" + lot + " est obligatoire."));
+                    }
+                    if (TypeChampFiche.MONTANT.name().equals(c.getType()) && !vide) {
+                        BigDecimal montant = nombre(v);
+                        if (montant != null && montant.signum() <= 0) {
+                            bloquants.add(new Controle(MONTANT_POSITIF, List.of(cle), c.codeBloc(),
+                                    "« " + c.getLibelle() + " »" + lot + " doit être un montant strictement positif."));
+                        } else if (montant != null) {
+                            ok.add(new Controle(MONTANT_POSITIF, List.of(cle), c.codeBloc(),
+                                    "« " + c.getLibelle() + " »" + lot + " : montant positif."));
+                        }
                     }
                 }
             }

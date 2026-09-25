@@ -712,11 +712,16 @@ abstract class CnmIntegrationTestSupport extends AbstractIntegrationTest {
             }
             for (String code : manquants) {
                 parBloc.computeIfAbsent(code.substring(0, 3), k -> new java.util.LinkedHashMap<>())
-                        .put(code, valeurObligatoire(types.get(code), options.get(code), controles.get(code)));
+                        .put(code, valeurObligatoire(types.get(base(code)), options.get(base(code)), controles.get(base(code))));
             }
         }
         mvc.perform(post("/api/fiches-marche/" + idDmc + "/valider").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk());
+    }
+
+    /** Le code d'un champ saisi par lot ({@code B05-TP-02#2} → {@code B05-TP-02}). */
+    private static String base(String cle) {
+        return cle.contains("#") ? cle.substring(0, cle.indexOf('#')) : cle;
     }
 
     private static Object valeurObligatoire(String type, java.util.List<String> options, String controle) {

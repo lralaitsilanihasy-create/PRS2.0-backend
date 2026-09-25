@@ -11,8 +11,16 @@ import java.util.List;
  * @param titre    intitulé du document
  * @param blocs    un bloc de la fiche par titre, dans l'ordre des rangs ; aucun bloc vide
  * @param piedDePage référence du plan, ligne, version de la fiche, date de validation
+ * @param lot      ⚠️ 2026-09-25 — rang du lot d'un document établi par lot (acte d'engagement d'une ligne allotie) ;
+ *                 {@code null} : document commun
  */
-public record DocumentFicheModele(String type, String titre, String sousTitre, List<Bloc> blocs, String piedDePage) {
+public record DocumentFicheModele(String type, String titre, String sousTitre, List<Bloc> blocs, String piedDePage,
+        Integer lot) {
+
+    /** Un document commun (sans lot). */
+    public DocumentFicheModele(String type, String titre, String sousTitre, List<Bloc> blocs, String piedDePage) {
+        this(type, titre, sousTitre, blocs, piedDePage, null);
+    }
 
     /** Un bloc de la fiche (titre) et ses rubriques non vides. */
     public record Bloc(String titre, List<Rubrique> rubriques) {

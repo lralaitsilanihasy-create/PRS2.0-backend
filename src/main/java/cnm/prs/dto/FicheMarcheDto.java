@@ -101,4 +101,16 @@ public class FicheMarcheDto {
      * ou si la nature n'a pas de catégorie. {@link #typeOutille} n'est vrai que si la forme ET la catégorie le sont.
      */
     private String categorie;
+
+    /**
+     * ⚠️ 2026-09-25 (§B2) — le nombre de lots de la ligne courante au plan (0 : non allotie), relu à chaque lecture.
+     */
+    private Integer nbLots;
+
+    /**
+     * ⚠️ 2026-09-25 (§B2) — vrai quand la ligne compte plus d'un lot : les champs {@code parLot} du référentiel se
+     * saisissent et se lisent alors sous {@code CODE#n} ({@code n} de 1 à {@link #nbLots}), et l'acte d'engagement est
+     * produit une fois par lot. Faux : clé nue, comme tout champ.
+     */
+    private Boolean saisieParLot;
 }

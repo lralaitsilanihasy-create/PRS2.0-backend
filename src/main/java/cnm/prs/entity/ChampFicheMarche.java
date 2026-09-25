@@ -96,6 +96,14 @@ public class ChampFicheMarche {
     @Column(name = "CLE_PPM", length = 40)
     private String clePpm;
 
+    /**
+     * ⚠️ 2026-09-25 (V43, dossier réel à commande) — une valeur <strong>par lot</strong> : quand la ligne est allotie
+     * (plus d'un lot au plan), la valeur s'enregistre sous {@code CODE#n}, {@code n} = rang du lot ; sinon sous le code
+     * nu. Source {@code SAISIE} seulement.
+     */
+    @Column(name = "PAR_LOT", nullable = false)
+    private Boolean parLot = Boolean.FALSE;
+
     @Column(name = "ACTIF", nullable = false)
     private Boolean actif = Boolean.TRUE;
 

@@ -85,7 +85,7 @@ public class DocumentsFicheMarcheService {
     }
 
     /** Un document prêt à enregistrer, produit avant que la version ne soit figée. */
-    public record Produit(String type, String extension, String nomFichier, byte[] contenu) {
+    public record Produit(String type, String extension, String nomFichier, byte[] contenu, Integer lot) {
     }
 
     /**
@@ -108,9 +108,8 @@ public class DocumentsFicheMarcheService {
                         + modele.type() + ") a échoué : la version n'est pas validée. " + e.getMessage(), e);
             }
             for (GenerateurDocumentsFiche.Fichier f : fichiers) {
-                produits.add(new Produit(modele.type(), f.extension(),
-                        nomFichier(modele.type(), etat.getRefeDossier(), etat.getIdDetail(), etat.getVersion(), f.extension()),
-                        f.contenu()));
+                produits.add(new Produit(modele.type(), f.extension(), nomFichier(modele.type(), etat.getRefeDossier(),
+                        etat.getIdDetail(), modele.lot(), etat.getVersion(), f.extension()), f.contenu(), modele.lot()));
             }
         }
         return produits;
@@ -120,7 +119,7 @@ public class DocumentsFicheMarcheService {
     public void enregistrer(Integer idFiche, List<Produit> produits, LocalDateTime date) {
         for (Produit p : produits) {
             documentRepository.save(new DocumentFicheMarche(null, idFiche, p.type(), p.extension(), p.nomFichier(),
-                    (long) p.contenu().length, empreinte(p.contenu()), date, p.contenu()));
+                    (long) p.contenu().length, empreinte(p.contenu()), date, p.contenu(), p.lot()));
         }
     }
 
@@ -131,9 +130,9 @@ public class DocumentsFicheMarcheService {
             return List.of();
         }
         return documentRepository.findByIdFicheOrderByIdDocumentAsc(fiche.getIdFiche()).stream()
-                .map(d -> new DocumentFicheDto(d.getIdDocument(), d.getType(), SelectionDocumentsFiche.titre(d.getType()),
-                        d.getExtension(), d.getNomFichier(), d.getTailleOctets(), d.getDateGeneration(),
-                        fiche.getNumeroVersion()))
+                .map(d -> new DocumentFicheDto(d.getIdDocument(), d.getType(),
+                        SelectionDocumentsFiche.titre(d.getType(), d.getLot()), d.getExtension(), d.getNomFichier(),
+                        d.getTailleOctets(), d.getDateGeneration(), fiche.getNumeroVersion(), d.getLot()))
                 .toList();
     }
 
@@ -219,9 +218,14 @@ public class DocumentsFicheMarcheService {
      * {@code [A-Za-z0-9-]} remplacés par des tirets), ligne, version.
      */
     static String nomFichier(String type, String refePlan, Integer idDetail, Integer version, String extension) {
+        return nomFichier(type, refePlan, idDetail, null, version, extension);
+    }
+
+    /** ⚠️ 2026-09-25 — un document établi par lot porte son rang : {@code AE_<plan>_302873_lot2_v1.pdf}. */
+    static String nomFichier(String type, String refePlan, Integer idDetail, Integer lot, Integer version, String extension) {
         String refe = refePlan == null || refePlan.isBlank() ? "sans-reference"
                 : refePlan.trim().replaceAll("[^A-Za-z0-9-]+", "-").replaceAll("-{2,}", "-").replaceAll("^-|-$", "");
-        return type + "_" + refe + "_" + idDetail + "_v" + version + "." + extension;
+        return type + "_" + refe + "_" + idDetail + (lot == null ? "" : "_lot" + lot) + "_v" + version + "." + extension;
     }
 
     private static String empreinte(byte[] contenu) {

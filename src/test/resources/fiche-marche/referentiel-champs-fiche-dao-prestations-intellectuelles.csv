@@ -37,8 +37,8 @@ B04-FL-02;Nom et numéro à porter sur l'enveloppe de la proposition;TEXTE;SAISI
 B04-FL-03;Adresse du client à porter sur l'enveloppe;TEXTE_LONG;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
 B04-LH-01;Adresse de l'autorité contractante pour la remise des propositions;TEXTE_LONG;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
 B04-LH-02;Date et heure limites de remise des propositions;DATE;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;DATES_ORDRE:REMISE;;;;oui
-B04-VE-01;Remise des propositions par voie électronique admise;OUI_NON;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
-B04-VE-02;Conditions et modalités de transmission électronique des propositions;TEXTE_LONG;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;non;;;;;;oui
+B04-VE-01;Remise des offres ou propositions par voie électronique admise;OUI_NON;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES,FOURNITURES_SERVICES;;oui;;;;;;oui
+B04-VE-02;Conditions et modalités de transmission électronique des offres ou propositions;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES,FOURNITURES_SERVICES;;non;;;;;;oui
 B05-PF-01;Mode de rémunération;LISTE;SAISIE;DPIC;AE;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;Prix forfaitaire,Temps passé,Résultat,Lié au coût estimatif ou effectif de travaux;;;oui
 B05-PF-02;Montant du forfait (Ariary);MONTANT;SAISIE;DPIC;AE;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;non;;MONTANT_POSITIF;;;;oui
 B05-PF-03;Durée prévisionnelle des prestations rémunérées au temps passé;TEXTE;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;non;;;;;;oui

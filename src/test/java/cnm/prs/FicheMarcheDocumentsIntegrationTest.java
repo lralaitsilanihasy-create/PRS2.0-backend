@@ -78,8 +78,6 @@ class FicheMarcheDocumentsIntegrationTest extends CnmIntegrationTestSupport {
         l.setDesignationMarche("Fourniture de mobilier de bureau");
         l.setMontEstim(new BigDecimal("8400000"));
         marcheRepository.save(l);
-        lotRepository.save(lot(99011, "Lot A", null));
-        lotRepository.save(lot(99012, "Lot B", new BigDecimal("5000000")));
 
         champ("B02-AU-01", "Autorité contractante (précisions)", "TEXTE", "DPAO", null, null);
         champ("B04-LR-02", "Date limite de remise des offres", "DATE", "DPAO", null, null);
@@ -172,8 +170,12 @@ class FicheMarcheDocumentsIntegrationTest extends CnmIntegrationTestSupport {
 
     @Test
     @DisplayName("4 — Champ ouvert non saisi : ligne omise ; le mot « null » n'apparaît dans aucun document ; montant par "
-            + "lot sans montant : mention explicite")
+            + "lot sans montant : mention explicite (ligne en deux lots : un acte d'engagement par lot, 2026-09-25)")
     void champVideOmis() throws Exception {
+        // ⚠️ 2026-09-25 — les lots ne sont posés qu'ici : une ligne allotie produit un acte d'engagement par lot, les autres
+        // cas gardent une ligne non allotie.
+        lotRepository.save(lot(99011, "Lot A", null));
+        lotRepository.save(lot(99012, "Lot B", new BigDecimal("5000000")));
         mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.valeursPpm.B02-LV-03").value("Lot A : montant non renseigné ; Lot B : 5 000 000"));

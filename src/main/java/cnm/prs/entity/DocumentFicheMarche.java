@@ -61,4 +61,8 @@ public class DocumentFicheMarche {
     @Column(name = "CONTENU", nullable = false)
     @JsonIgnore
     private byte[] contenu;
+
+    /** ⚠️ 2026-09-25 (V43) — rang du lot d'un document établi par lot ; {@code null} : document commun. */
+    @Column(name = "LOT")
+    private Integer lot;
 }

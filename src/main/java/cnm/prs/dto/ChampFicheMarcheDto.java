@@ -75,4 +75,10 @@ public class ChampFicheMarcheDto {
      * modification (un écran ou un fichier qui ne les connaît pas ne les efface pas).
      */
     private List<String> categories;
+
+    /**
+     * ⚠️ 2026-09-25 — une valeur par lot (clé {@code CODE#n} quand la ligne est allotie). Absent : {@code false} à la
+     * création, inchangé à la modification (un écran ou un fichier qui ne le connaît pas ne l'efface pas).
+     */
+    private Boolean parLot;
 }

@@ -36,7 +36,7 @@ import cnm.prs.service.ChampFicheMarcheService;
 /**
  * ⚠️ <strong>Marché à commande (lot 3) et contrat-cadre (lot 4)</strong> — demandes front du 2026-09-23. Le référentiel
  * est celui des fichiers de correspondance du front, chargés par l'import ({@code src/test/resources/fiche-marche},
- * copies de {@code frontendprs2/docs}) : 116 champs des fournitures, 114 du contrat-cadre.
+ * copies de {@code frontendprs2/docs}) : 121 champs des fournitures (116 avant le 2026-09-25), 114 du contrat-cadre.
  *
  * <p>Jeu : plan 9900 (PRMP001, ANT, CLOTURE, PV signé FAV), lignes en appel d'offres ouvert : 9901 à quantité fixe, 9902
  * à commande, 9903 contrat-cadre.</p>
@@ -70,18 +70,19 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
     // ------------------------------------------------------------------ 1. chargement des référentiels
 
     @Test
-    @DisplayName("1 — Import : 116 champs des fournitures et 114 du contrat-cadre, aucun rejet ; champs actifs servis : 139 en "
-            + "quantité fixe, 146 à commande, 148 en contrat-cadre (35 repris et reflets + 113)")
+    @DisplayName("1 — Import : 121 champs des fournitures et 114 du contrat-cadre, aucun rejet ; champs actifs servis : 144 en "
+            + "quantité fixe, 150 à commande, 148 en contrat-cadre (35 repris et reflets + 113) — 2026-09-25 : cinq créations, "
+            + "B06-EO-11 réservé à la quantité fixe")
     void chargementDesReferentiels() throws Exception {
         ChampFicheMarcheService.BilanImport f = importer("referentiel-champs-fiche-marche-fournitures.csv");
         assertThat(f.rejets()).isEmpty();
-        assertThat(f.crees()).hasSize(116);
+        assertThat(f.crees()).hasSize(121);
         ChampFicheMarcheService.BilanImport cc = importer("referentiel-champs-fiche-marche-contrat-cadre.csv");
         assertThat(cc.rejets()).isEmpty();
         assertThat(cc.crees()).hasSize(114);
 
-        assertThat(champs("QUANTITE_FIXE")).hasSize(139);
-        assertThat(champs("A_COMMANDE")).hasSize(146);
+        assertThat(champs("QUANTITE_FIXE")).hasSize(144);
+        assertThat(champs("A_COMMANDE")).hasSize(150);
         assertThat(champs("CONTRAT_CADRE")).hasSize(148);
     }
 

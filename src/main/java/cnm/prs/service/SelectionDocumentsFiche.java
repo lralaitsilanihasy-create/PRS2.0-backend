@@ -53,6 +53,12 @@ public final class SelectionDocumentsFiche {
     private static final Map<String, Map<String, String>> SUBSTITUTIONS_CATEGORIE = Map.of(
             "PRESTATIONS_INTELLECTUELLES", Map.of("DPAO", "DPIC"));
 
+    /**
+     * ⚠️ 2026-09-25 (§B2, dossier réel à commande) — les documents établis <strong>par lot</strong> sur une ligne allotie :
+     * l'acte d'engagement (un par lot, avec son montant minimum et maximum) — le reste du DAO est commun aux lots.
+     */
+    private static final java.util.Set<String> PAR_LOT = java.util.Set.of("AE");
+
     private static final DateTimeFormatter JOUR = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     private SelectionDocumentsFiche() {
@@ -61,6 +67,11 @@ public final class SelectionDocumentsFiche {
     /** Intitulé d'un type de document ({@code DPAO} → « Données particulières de l'appel d'offres »). */
     public static String titre(String type) {
         return TITRES.getOrDefault(type, type);
+    }
+
+    /** Intitulé d'un document, suivi de son lot s'il est établi par lot (« Acte d'engagement — lot 2 »). */
+    public static String titre(String type, Integer lot) {
+        return titre(type) + (lot == null ? "" : " — lot " + lot);
     }
 
     /**
@@ -82,41 +93,83 @@ public final class SelectionDocumentsFiche {
                 + " · ligne " + fiche.getIdDetail() + " · fiche marché version " + fiche.getVersion()
                 + (validation == null ? "" : " validée le " + validation.toLocalDate().format(JOUR));
         String sousTitre = fiche.getDesignationMarche();
+        // ⚠️ 2026-09-25 (§B2) — ligne allotie : les champs par lot se lisent sous CODE#n, et les documents établis par lot
+        // (l'acte d'engagement) sont produits une fois par lot.
+        int nbLots = Boolean.TRUE.equals(fiche.getSaisieParLot()) && fiche.getNbLots() != null ? fiche.getNbLots() : 0;
 
         List<DocumentFicheModele> documents = new ArrayList<>();
         for (String type : TYPES) {
-            List<DocumentFicheModele.Bloc> blocsDoc = new ArrayList<>();
-            for (BlocFicheMarche bloc : blocs) {
-                List<DocumentFicheModele.Rubrique> rubriquesDoc = new ArrayList<>();
-                Map<String, List<DocumentFicheModele.Ligne>> lignesParRubrique = new LinkedHashMap<>();
-                for (ChampFicheMarche c : champs) {
-                    if (!bloc.getCode().equals(c.codeBloc()) || !pourDocument(c, type, typeOuverture, categorieOuverture)
-                            || !c.pourTypeMarche(typeOuverture)
-                            || !c.pourCategorie(categorieOuverture) || !ConditionCadrage.vraie(c.getCondition(), cadrage)) {
-                        continue;
+            if (LotsFiche.alloti(nbLots) && PAR_LOT.contains(type)) {
+                for (int lot = 1; lot <= nbLots; lot++) {
+                    DocumentFicheModele m = modele(type, lot, fiche, champs, blocs, rubriqueParCode, typeOuverture,
+                            categorieOuverture, cadrage, nbLots, sousTitre, pied);
+                    if (m != null) {
+                        documents.add(m);
                     }
-                    String valeur = valeurAffichee(c, fiche);
-                    if (valeur == null) {
-                        continue;
-                    }
-                    lignesParRubrique.computeIfAbsent(c.getCodeRubrique(), k -> new ArrayList<>())
-                            .add(new DocumentFicheModele.Ligne(c.getLibelle(), valeur));
                 }
-                lignesParRubrique.entrySet().stream()
-                        .sorted((a, b) -> Integer.compare(rang(rubriqueParCode.get(a.getKey())), rang(rubriqueParCode.get(b.getKey()))))
-                        .forEach(e -> {
-                            RubriqueFicheMarche r = rubriqueParCode.get(e.getKey());
-                            rubriquesDoc.add(new DocumentFicheModele.Rubrique(r == null ? e.getKey() : r.getLibelle(), e.getValue()));
-                        });
-                if (!rubriquesDoc.isEmpty()) {
-                    blocsDoc.add(new DocumentFicheModele.Bloc(bloc.getLibelle(), rubriquesDoc));
-                }
+                continue;
             }
-            if (!blocsDoc.isEmpty()) {
-                documents.add(new DocumentFicheModele(type, titre(type), sousTitre, blocsDoc, pied));
+            DocumentFicheModele m = modele(type, null, fiche, champs, blocs, rubriqueParCode, typeOuverture,
+                    categorieOuverture, cadrage, nbLots, sousTitre, pied);
+            if (m != null) {
+                documents.add(m);
             }
         }
         return documents;
+    }
+
+    /**
+     * Un document ({@code lot} : son rang s'il est établi par lot, {@code null} s'il est commun) ; {@code null} s'il n'a
+     * aucune ligne. Un champ par lot y figure pour son lot seulement dans un document de lot, une ligne par lot dans un
+     * document commun.
+     */
+    private static DocumentFicheModele modele(String type, Integer lot, FicheMarcheDto fiche, List<ChampFicheMarche> champs,
+            List<BlocFicheMarche> blocs, Map<String, RubriqueFicheMarche> rubriqueParCode, String typeOuverture,
+            String categorieOuverture, Map<String, Object> cadrage, int nbLots, String sousTitre, String pied) {
+        List<DocumentFicheModele.Bloc> blocsDoc = new ArrayList<>();
+        for (BlocFicheMarche bloc : blocs) {
+            List<DocumentFicheModele.Rubrique> rubriquesDoc = new ArrayList<>();
+            Map<String, List<DocumentFicheModele.Ligne>> lignesParRubrique = new LinkedHashMap<>();
+            for (ChampFicheMarche c : champs) {
+                if (!bloc.getCode().equals(c.codeBloc()) || !pourDocument(c, type, typeOuverture, categorieOuverture)
+                        || !c.pourTypeMarche(typeOuverture)
+                        || !c.pourCategorie(categorieOuverture) || !ConditionCadrage.vraie(c.getCondition(), cadrage)) {
+                    continue;
+                }
+                List<DocumentFicheModele.Ligne> lignes = lignesParRubrique.computeIfAbsent(c.getCodeRubrique(),
+                        k -> new ArrayList<>());
+                if (!LotsFiche.parLot(c, nbLots)) {
+                    ajouter(lignes, c.getLibelle(), valeurAffichee(c, c.getCode(), fiche));
+                } else if (lot != null) {
+                    ajouter(lignes, c.getLibelle(), valeurAffichee(c, LotsFiche.cle(c.getCode(), lot), fiche));
+                } else {
+                    for (int n = 1; n <= nbLots; n++) {
+                        ajouter(lignes, c.getLibelle() + " — lot " + n, valeurAffichee(c, LotsFiche.cle(c.getCode(), n), fiche));
+                    }
+                }
+            }
+            lignesParRubrique.values().removeIf(List::isEmpty);
+            lignesParRubrique.entrySet().stream()
+                    .sorted((a, b) -> Integer.compare(rang(rubriqueParCode.get(a.getKey())), rang(rubriqueParCode.get(b.getKey()))))
+                    .forEach(e -> {
+                        RubriqueFicheMarche r = rubriqueParCode.get(e.getKey());
+                        rubriquesDoc.add(new DocumentFicheModele.Rubrique(r == null ? e.getKey() : r.getLibelle(), e.getValue()));
+                    });
+            if (!rubriquesDoc.isEmpty()) {
+                blocsDoc.add(new DocumentFicheModele.Bloc(bloc.getLibelle(), rubriquesDoc));
+            }
+        }
+        if (blocsDoc.isEmpty()) {
+            return null;
+        }
+        return new DocumentFicheModele(type, titre(type, lot), sousTitre, blocsDoc, pied, lot);
+    }
+
+    /** Une ligne « libellé : valeur », omise sans valeur. */
+    private static void ajouter(List<DocumentFicheModele.Ligne> lignes, String libelle, String valeur) {
+        if (valeur != null) {
+            lignes.add(new DocumentFicheModele.Ligne(libelle, valeur));
+        }
     }
 
     private static int rang(RubriqueFicheMarche r) {
@@ -139,7 +192,12 @@ public final class SelectionDocumentsFiche {
 
     /** La valeur prête à imprimer, ou {@code null} (le champ est alors omis). */
     static String valeurAffichee(ChampFicheMarche c, FicheMarcheDto fiche) {
-        String brute = premiere(fiche.getValeurs(), fiche.getValeursPpm(), fiche.getValeursCadrage(), c.getCode());
+        return valeurAffichee(c, c.getCode(), fiche);
+    }
+
+    /** La valeur du champ lue sous {@code cle} ({@code CODE#n} pour un lot), prête à imprimer, ou {@code null}. */
+    static String valeurAffichee(ChampFicheMarche c, String cle, FicheMarcheDto fiche) {
+        String brute = premiere(fiche.getValeurs(), fiche.getValeursPpm(), fiche.getValeursCadrage(), cle);
         if (brute == null || brute.isBlank() || "null".equalsIgnoreCase(brute.trim())) {
             return null;
         }
@@ -166,7 +224,7 @@ public final class SelectionDocumentsFiche {
                 if (m == null) {
                     return v;
                 }
-                String lettres = fiche.getEnLettres() == null ? null : fiche.getEnLettres().get(c.getCode());
+                String lettres = fiche.getEnLettres() == null ? null : fiche.getEnLettres().get(cle);
                 if (lettres == null) {
                     lettres = MontantEnLettres.ariary(m);
                 }
