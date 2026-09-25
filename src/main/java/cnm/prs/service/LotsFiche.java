@@ -49,6 +49,19 @@ public final class LotsFiche {
         return Boolean.TRUE.equals(c.getParLot()) && alloti(nbLots);
     }
 
+    /** Le rang de lot d'une clé ({@code B05-GS-03#2} → 2) ; {@code null} pour une clé nue ou illisible. */
+    public static Integer lotDe(String cle) {
+        int i = cle == null ? -1 : cle.indexOf(SEPARATEUR);
+        if (i < 0) {
+            return null;
+        }
+        try {
+            return Integer.valueOf(cle.substring(i + 1).trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
     /** {@code B05-GS-03#2}. */
     public static String cle(String code, int lot) {
         return code + SEPARATEUR + lot;

@@ -1503,6 +1503,11 @@ Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `
 | champ | string \| null | Non | ⚠️ **V30** — code de la **cellule** visée, liste fermée ci-dessous ; absent, vide ou blanc = `null` |
 | idMarcheCible | number \| null | Non | ⚠️ **V30** — ligne de marché visée (`t_marche.ID_DETAIL`) |
 | idBenefCible | number \| null | Non | ⚠️ **V30** — bénéficiaire visé (`t_service_beneficiaire.ID_BENEF`), colonnes par bénéficiaire seulement |
+| idDmc | number \| null | Non | ⚠️ **V44 (2026-09-25)** — fiche marché visée : celle du dossier examiné (sinon 409 `FICHE_HORS_DOSSIER`) |
+| champFiche | string \| null | Non | ⚠️ **V44** — information de la fiche visée (`B04-VO-01`, `B05-GS-03#2`) ; exige `idDmc` ; exclusif de `champ` |
+| libelleChampFiche | string \| null | lecture seule | ⚠️ **V44** — libellé du champ, figé à l'observation |
+| valeurChampFiche | string \| null | lecture seule | ⚠️ **V44** — valeur observée, telle qu'imprimée, figée à l'observation |
+| lot | number \| null | lecture seule | ⚠️ **V44** — rang du lot de l'information (`null` : commune) |
 
 > ⚠️ **Cellule visée par une observation (V30, demande front du 2026-09-14).** Une ligne « Au lieu de / Lire »
 > peut désigner la **cellule** du document officiel qu'elle corrige (ex. « MODE DE PASSATION » de la ligne 6) :
@@ -1538,6 +1543,33 @@ Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `
 > validateur, comme sur `PUT /api/examen-details`. Un tiers ne reçoit donc jamais le diagnostic d'une cellule,
 > et un `idDetail` introuvable n'atteint pas la validation de cellule (403 ou 409, voir plus haut). La V30 ne
 > change ni les verrous ni les profils.
+
+> ⚠️ **Information de la fiche DAO visée (V44, demande front du 2026-09-25).** Une ligne peut aussi pointer une
+> information de la **fiche marché du dossier examiné** : `idDmc` (la fiche) et `champFiche` (la clé : `B04-VO-01`,
+> ou `B05-GS-03#2` pour le lot 2 d'un champ par lot). En réponse, **lecture seule** : `libelleChampFiche` (libellé
+> au référentiel), `valeurChampFiche` (valeur **telle que les documents l'impriment** — « 4 000 000 Ariary (quatre
+> millions ariary) » —, lue sur la dernière version **validée** de la fiche, `null` si non renseignée) et `lot`
+> (rang, `null` : information commune). Libellé et valeur sont **figés quand la ligne est posée** : un
+> réenregistrement (`PUT` de la ligne, ou remplacement des lignes par `/api/examen-details`) qui vise la même
+> information de la même fiche les **conserve**, même après révision de la fiche ; une ligne nouvelle, ou qui change
+> d'information, fige la valeur du moment. Ce que le client envoie dans ces trois champs est ignoré. Règles (même
+> validateur pour les deux portes, après les gardes et la cellule V30 ; erreurs ciblées `observations[i].…` sur
+> `/api/examen-details`) :
+> 1. `champFiche` sans `idDmc` → **400 `idDmc`** ;
+> 2. `champFiche` avec une cellule (`champ`) → **400 `champFiche`** (une ligne vise un seul endroit) ; sur un point
+>    `SUPPRESSION` → **400 `champFiche`** ;
+> 3. `idDmc` qui n'est pas `t_dossier.ID_DMC` du dossier examiné (ou dossier sans fiche) → **409
+>    `FICHE_HORS_DOSSIER`** — `idDmc` seul (sans `champFiche`) est admis s'il est celui du dossier ;
+> 4. `champFiche` hors du référentiel de la fiche (champ actif de sa forme et de sa catégorie ; la clé est
+>    normalisée en majuscules) → **400 `champFiche`** nominatif ;
+> 5. rang de lot jugé comme à la saisie de la fiche : exigé sur un champ `parLot` d'une ligne allotie, refusé
+>    au-delà du nombre de lots du plan ou sur un champ commun ; `CODE#1` d'une ligne non allotie vaut la clé nue →
+>    **400 `champFiche`**.
+>
+> **Habilitation inchangée** : les profils qui écrivent une ligne d'observation aujourd'hui (Membre attributaire,
+> CC/Président par délégation). À la signature d'un PV FAVR, les quatre champs sont **recopiés** dans le périmètre
+> figé (`GET /api/observations-pv` : `idDmc`, `champFiche`, `libelleChampFiche`, `valeurChampFiche`, `lot`), servis à
+> tous, PRMP comprise. Le libellé figé de l'observation et le PV Word ne changent pas.
 
 **Exemple — requête** (point FICHE : la ligne est portée par le corps)
 ```json

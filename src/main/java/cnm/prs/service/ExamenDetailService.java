@@ -51,10 +51,14 @@ public class ExamenDetailService {
     private final ExamenGarde garde;
     /** ⚠️ V30 (2026-09-14) — cellule visée par chaque ligne d'observation : même validateur que la ressource fille. */
     private final ObservationCibleValidateur cibleValidateur;
+    /** ⚠️ V44 (2026-09-25) — information de la fiche visée par chaque ligne : même validateur que la ressource fille. */
+    private final ObservationFicheValidateur ficheValidateur;
 
     public ExamenDetailService(ExamenDetailRepository repository, ExamenRepository examenRepository,
             ObservationControleRepository observationRepository, PointsCtrlRepository pointsCtrlRepository,
-            MarcheRepository marcheRepository, ExamenGarde garde, ObservationCibleValidateur cibleValidateur) {
+            MarcheRepository marcheRepository, ExamenGarde garde, ObservationCibleValidateur cibleValidateur,
+            ObservationFicheValidateur ficheValidateur) {
+        this.ficheValidateur = ficheValidateur;
         this.garde = garde;
         this.cibleValidateur = cibleValidateur;
         this.repository = repository;
@@ -88,6 +92,7 @@ public class ExamenDetailService {
         validerObservations(dto);
         validerLigneEtUnicite(dto, null);
         cibleValidateur.validerResultat(dto);   // ⚠️ V30 — après la ligne du résultat, qui sert de contexte
+        ficheValidateur.validerResultat(dto);   // ⚠️ V44 — information de la fiche visée, après la cellule
         ExamenDetail entity = ExamenDetailMapper.toEntity(dto);
         // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
         entity.setIdDetailExamen(ClePrimaire.reallouer(dto.getIdDetailExamen(),
@@ -108,6 +113,7 @@ public class ExamenDetailService {
         validerObservations(dto);
         validerLigneEtUnicite(dto, id);
         cibleValidateur.validerResultat(dto);   // ⚠️ V30 — après la ligne du résultat, qui sert de contexte
+        ficheValidateur.validerResultat(dto);   // ⚠️ V44 — information de la fiche visée, après la cellule
         existing.setIdExamen(dto.getIdExamen());
         existing.setIdDetail(dto.getIdDetail());
         existing.setIdPtControle(dto.getIdPtControle());
@@ -183,11 +189,19 @@ public class ExamenDetailService {
 
     /** Remplace les lignes d'observation du point de contrôle par celles fournies (replace-on-save). */
     private void remplacerObservations(Integer idDetail, List<ObservationControleDto> observations) {
+        // ⚠️ V44 (2026-09-25) — une ligne qui vise toujours la même information de la même fiche garde le libellé et la
+        // valeur figés quand elle a été posée : le remplacement des lignes ne doit pas re-figer la valeur d'aujourd'hui.
+        List<ObservationControle> anciennes = observationRepository.findByIdDetailOrderByOrdreAsc(idDetail);
         observationRepository.deleteByIdDetail(idDetail);
         if (observations == null) {
             return;
         }
         for (ObservationControleDto ligne : observations) {
+            ObservationControle memeAncrage = anciennes.stream()
+                    .filter(a -> a.getChampFiche() != null && a.getChampFiche().equals(ligne.getChampFiche())
+                            && java.util.Objects.equals(a.getIdDmcFiche(), ligne.getIdDmc()))
+                    .findFirst().orElse(null);
+            ObservationFicheValidateur.conserver(ligne, memeAncrage);
             ObservationControle entity = ObservationControleMapper.toEntity(ligne);
             entity.setIdObservation(null);   // PK auto (IDENTITY)
             entity.setIdDetail(idDetail);

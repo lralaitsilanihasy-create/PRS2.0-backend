@@ -159,6 +159,11 @@ public class ObservationPvService {
                     row.setChampCible(oc.getChampCible());
                     row.setIdMarcheCible(oc.getIdMarcheCible());
                     row.setIdBenefCible(oc.getIdBenefCible());
+                    // ⚠️ V44 (2026-09-25) — l'information de la fiche visée, libellé et valeur figés, recopiés tels quels.
+                    row.setIdDmcFiche(oc.getIdDmcFiche());
+                    row.setChampFiche(oc.getChampFiche());
+                    row.setLibelleChampFiche(oc.getLibelleChampFiche());
+                    row.setValeurChampFiche(oc.getValeurChampFiche());
                     rows.add(row);
                 }
             }
@@ -453,6 +458,12 @@ public class ObservationPvService {
             dto.setIdBenefCible(o.getIdBenefCible());
             cnm.prs.enums.ChampCible.DocumentCible document = cnm.prs.enums.ChampCible.documentDuCode(o.getChampCible());
             dto.setDocumentCible(document == null ? null : document.name());
+            // ⚠️ V44 (2026-09-25) — l'information de la fiche visée, telle qu'observée.
+            dto.setIdDmc(o.getIdDmcFiche());
+            dto.setChampFiche(o.getChampFiche());
+            dto.setLibelleChampFiche(o.getLibelleChampFiche());
+            dto.setValeurChampFiche(o.getValeurChampFiche());
+            dto.setLot(LotsFiche.lotDe(o.getChampFiche()));
             dto.setOrdre(o.getOrdre());
             dto.setStatut(dernier == null ? "EMISE" : dernier.getDecision());
             dto.setPrecision(dernier == null ? null : dernier.getPrecision());

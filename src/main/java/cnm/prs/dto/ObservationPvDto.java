@@ -38,6 +38,16 @@ public class ObservationPvDto {
     private Integer idBenefCible;
     /** ⚠️ V30 — document déduit du code : {@code PPM}, {@code FICHE}, {@code AGPM} ou {@code null}. */
     private String documentCible;
+    /** ⚠️ V44 (2026-09-25) — fiche marché visée, recopiée de l'observation d'examen à la signature. */
+    private Long idDmc;
+    /** ⚠️ V44 — clé de l'information de la fiche visée ({@code CODE} ou {@code CODE#n}). */
+    private String champFiche;
+    /** ⚠️ V44 — libellé du champ, figé à l'observation. */
+    private String libelleChampFiche;
+    /** ⚠️ V44 — valeur observée, figée à l'observation. */
+    private String valeurChampFiche;
+    /** ⚠️ V44 — rang du lot de l'information ({@code null} : commune). */
+    private Integer lot;
     private Integer ordre;
 
     /** Statut courant : {@code EMISE} / {@code LEVEE} / {@code MAINTENUE}. */

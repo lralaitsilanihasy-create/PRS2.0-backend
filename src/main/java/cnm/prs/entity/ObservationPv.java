@@ -79,6 +79,22 @@ public class ObservationPv {
     @Column(name = "ID_BENEF_CIBLE")
     private Integer idBenefCible;
 
+    /** ⚠️ V44 (2026-09-25) — fiche marché visée, recopiée de la ligne d'observation au snapshot. */
+    @Column(name = "ID_DMC_FICHE")
+    private Long idDmcFiche;
+
+    /** ⚠️ V44 — clé de l'information de la fiche visée ({@code CODE} ou {@code CODE#n}), recopiée. */
+    @Column(name = "CHAMP_FICHE", length = 24)
+    private String champFiche;
+
+    /** ⚠️ V44 — libellé du champ, figé à l'observation et recopié. */
+    @Column(name = "LIBELLE_CHAMP_FICHE", length = 200)
+    private String libelleChampFiche;
+
+    /** ⚠️ V44 — valeur observée, figée à l'observation et recopiée. */
+    @Column(name = "VALEUR_CHAMP_FICHE", length = 4000)
+    private String valeurChampFiche;
+
     /** Libellé FIGÉ de l'observation (contexte + demande), tel qu'arrêté au PV. */
     @Column(name = "LIBELLE", length = 1000, nullable = false)
     private String libelle;

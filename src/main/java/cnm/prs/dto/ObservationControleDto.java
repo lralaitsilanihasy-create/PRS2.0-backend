@@ -44,4 +44,25 @@ public class ObservationControleDto {
 
     /** ⚠️ V30 — bénéficiaire visé ({@code t_service_beneficiaire.ID_BENEF}), colonnes par bénéficiaire seulement. */
     private Integer idBenefCible;
+
+    /**
+     * ⚠️ V44 (2026-09-25) — fiche marché visée : celle du dossier examiné (409 {@code FICHE_HORS_DOSSIER} sinon).
+     * Facultative.
+     */
+    private Long idDmc;
+
+    /**
+     * ⚠️ V44 — information de la fiche visée : {@code B04-VO-01}, ou {@code B05-GS-03#2} pour celle d'un lot (mêmes
+     * règles de rang qu'à la saisie de la fiche). Exige {@code idDmc}. Exclusif de {@link #champ}.
+     */
+    private String champFiche;
+
+    /** ⚠️ V44 — lecture seule : libellé du champ au référentiel, figé quand l'observation est posée. */
+    private String libelleChampFiche;
+
+    /** ⚠️ V44 — lecture seule : valeur observée (telle que les documents l'impriment), figée à l'observation. */
+    private String valeurChampFiche;
+
+    /** ⚠️ V44 — lecture seule : rang du lot de l'information ({@code null} : commune). */
+    private Integer lot;
 }

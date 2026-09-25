@@ -2258,6 +2258,16 @@ Subordonné direct du Chef de commission. Voit tous les dossiers de sa localité
     verrous ne changent pas (examen modifiable jusqu'à `PV_SIGNE`). À la signature d'un PV FAVR, la cible est
     **recopiée** dans le périmètre figé (`t_observation_pv`) et servie à la PRMP — ce n'est pas une identité ;
     le **libellé figé et le PV Word sont inchangés**. Aucune reprise : l'existant reste sans cible.
+  - ⚠️ **Règle ajoutée (2026-09-25, V44) — une observation peut pointer une INFORMATION de la fiche DAO du dossier
+    examiné** (demande front du 2026-09-25) : un dossier d'appel d'offres se discute information par information
+    (« le délai de validité des offres est de 75 jours, le code en exige 90 »). La ligne porte la fiche et le code
+    de l'information — avec son lot si elle varie par lot. On n'observe **que la fiche du dossier examiné** (409
+    sinon), et qu'une information de son référentiel (forme et catégorie de la fiche). Le libellé et la **valeur
+    observée sont figés** quand l'observation est posée : si la PRMP révise la fiche ensuite, l'observation garde ce
+    qui a été observé — c'est ce que vérifie la contre-visite. Une ligne vise une cellule du plan **ou** une
+    information de la fiche, pas les deux. **Qui observe ne change pas** : les mêmes profils qu'une observation
+    d'examen (Membre attributaire, CC ou Président par délégation) ; le Vérificateur ne l'est pas. Recopié au
+    périmètre du PV FAVR, servi à la PRMP.
 - Rédaction du projet de PV [Écriture]
   - Le Membre rédige le projet de PV dans t_pv_examen (STATUT_PV = BROUILLON) : synthèse des observations non conformes de t_examen_detail.OBS_SI_NON_CONFORME, avis ID_AVIS. Le projet est modifiable librement tant qu'il n'a pas été soumis.
   - ⚠️ **Règle ajoutée** : l'attributaire `IM_CTRL_MEMBRE` du PV est **dérivé de l'attribution** (Examen→Dispatch.imCtrlMembre), **jamais saisi** dans le corps — c'est la source de vérité de la signature Membre. Un examen sans attributaire → création/MAJ refusée (409).

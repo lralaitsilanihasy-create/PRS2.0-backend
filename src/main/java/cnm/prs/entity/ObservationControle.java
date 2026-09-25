@@ -63,6 +63,25 @@ public class ObservationControle {
     @Column(name = "ID_BENEF_CIBLE")
     private Integer idBenefCible;
 
+    /**
+     * ⚠️ V44 (2026-09-25) — fiche marché visée ({@code t_dossier_mec.ID_DMC}) : celle du dossier examiné, validée par
+     * {@code ObservationFicheValidateur}.
+     */
+    @Column(name = "ID_DMC_FICHE")
+    private Long idDmcFiche;
+
+    /** ⚠️ V44 — clé de l'information visée : {@code B04-VO-01}, ou {@code B05-GS-03#2} pour le lot 2. */
+    @Column(name = "CHAMP_FICHE", length = 24)
+    private String champFiche;
+
+    /** ⚠️ V44 — libellé du champ au référentiel, figé quand l'observation est posée. */
+    @Column(name = "LIBELLE_CHAMP_FICHE", length = 200)
+    private String libelleChampFiche;
+
+    /** ⚠️ V44 — valeur observée, figée quand l'observation est posée (la fiche peut être révisée ensuite). */
+    @Column(name = "VALEUR_CHAMP_FICHE", length = 4000)
+    private String valeurChampFiche;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ID_DETAIL", insertable = false, updatable = false)
     @JsonIgnore

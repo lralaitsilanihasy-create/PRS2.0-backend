@@ -40,10 +40,13 @@ public class ObservationControleService {
     private final ExamenGarde garde;
     /** ⚠️ V30 (2026-09-14) — cellule visée : le même validateur que {@code /api/examen-details}. */
     private final ObservationCibleValidateur cibleValidateur;
+    /** ⚠️ V44 (2026-09-25) — information de la fiche visée : le même validateur que {@code /api/examen-details}. */
+    private final ObservationFicheValidateur ficheValidateur;
 
     public ObservationControleService(ObservationControleRepository repository,
             ExamenDetailRepository examenDetailRepository, ExamenGarde garde,
-            ObservationCibleValidateur cibleValidateur) {
+            ObservationCibleValidateur cibleValidateur, ObservationFicheValidateur ficheValidateur) {
+        this.ficheValidateur = ficheValidateur;
         this.repository = repository;
         this.examenDetailRepository = examenDetailRepository;
         this.garde = garde;
@@ -62,6 +65,7 @@ public class ObservationControleService {
     public ObservationControleDto create(ObservationControleDto dto) {
         exigerEcritureDesResultats(dto.getIdDetail());   // ⚠️ revue 2026-09-14 — 403/409 avant tout 400
         cibleValidateur.validerLigne(dto);               // ⚠️ V30 — cellule visée, après les gardes
+        ficheValidateur.validerLigne(dto);               // ⚠️ V44 — information de la fiche visée, après la cellule
         ObservationControle entity = ObservationControleMapper.toEntity(dto);
         entity.setIdObservation(null);   // PK auto (IDENTITY) ; tout id fourni est ignoré
         return ObservationControleMapper.toDto(repository.save(entity));
@@ -79,6 +83,12 @@ public class ObservationControleService {
         // ⚠️ V30 — cellule visée, après les gardes : même ordre que PUT /api/examen-details (identité, verrou,
         // règle « non conforme », puis validateur de cellule).
         cibleValidateur.validerLigne(dto);
+        ficheValidateur.validerLigne(dto);               // ⚠️ V44 — puis la valeur figée conservée si l'ancrage tient
+        ObservationFicheValidateur.conserver(dto, existing);
+        existing.setIdDmcFiche(dto.getIdDmc());
+        existing.setChampFiche(dto.getChampFiche());
+        existing.setLibelleChampFiche(dto.getLibelleChampFiche());
+        existing.setValeurChampFiche(dto.getValeurChampFiche());
         existing.setIdDetail(dto.getIdDetail());
         existing.setAuLieuDe(dto.getAuLieuDe());
         existing.setLire(dto.getLire());

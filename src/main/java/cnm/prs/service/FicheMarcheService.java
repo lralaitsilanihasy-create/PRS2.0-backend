@@ -219,6 +219,48 @@ public class FicheMarcheService {
         return documents.lister(fiche);
     }
 
+    /** ⚠️ V44 (2026-09-25) — une information de la fiche, telle qu'une observation d'examen la vise et la fige. */
+    public record AncrageChamp(String cle, String libelle, String valeur) {
+    }
+
+    /**
+     * ⚠️ V44 (2026-09-25, observation sur la fiche) — résout la clé {@code cle} ({@code CODE} ou {@code CODE#n}) dans le
+     * référentiel de la fiche du DMC — champ actif de sa forme et de sa catégorie, rang de lot jugé comme à la saisie
+     * ({@link LotsFiche}) — et lit sa valeur telle que les documents l'impriment, sur la <strong>dernière version
+     * validée</strong> (celle dont le dossier porte les documents ; à défaut la dernière version). {@code valeur} nulle
+     * si l'information n'est pas renseignée. 400 nominatif sur {@code nomChamp} sinon.
+     *
+     * <p>Sans contrôle de périmètre : l'appelant (l'examen du dossier qui porte la fiche) a déjà vérifié le sien.</p>
+     */
+    @Transactional(readOnly = true)
+    public AncrageChamp ancrer(Long idDmc, String cleBrute, String nomChamp) {
+        Contexte ctx = contexte(idDmc, false);
+        FicheMarche fiche = ficheRepository.findByIdDmcOrderByNumeroVersionAsc(idDmc).stream()
+                .filter(f -> StatutFicheMarche.VALIDEE.name().equals(f.getStatut())).reduce((a, b) -> b)
+                .or(() -> ficheRepository.findFirstByIdDmcOrderByNumeroVersionDesc(idDmc))
+                .orElseGet(() -> virtuelle(idDmc));
+        FicheMarcheDto etat = toDto(ctx, fiche);
+        String type = etat.getTypeMarche() != null ? etat.getTypeMarche()
+                : fiche.getTypeMarche() != null ? fiche.getTypeMarche() : TypeMarcheDao.QUANTITE_FIXE.name();
+        String categorie = etat.getCategorie() != null ? etat.getCategorie() : CategorieDao.FOURNITURES_SERVICES.name();
+        String cle = cleBrute.trim().toUpperCase();
+        int diese = cle.indexOf(LotsFiche.SEPARATEUR);
+        String code = diese < 0 ? cle : cle.substring(0, diese);
+        ChampFicheMarche c = champRepository.findById(code)
+                .filter(x -> Boolean.TRUE.equals(x.getActif()) && x.pourTypeMarche(type) && x.pourCategorie(categorie))
+                .orElseThrow(() -> new ChampsInvalidesException(List.of(new ErrorResponse.FieldError(nomChamp,
+                        "« " + code + " » n'est pas une information de cette fiche (marché " + type + ", catégorie "
+                                + categorie + ")."))));
+        List<ErrorResponse.FieldError> erreurs = new ArrayList<>();
+        String cible = LotsFiche.cleSaisie(c, cle, diese < 0 ? null : cle.substring(diese + 1),
+                etat.getNbLots() == null ? 0 : etat.getNbLots(), erreurs);
+        if (cible == null) {
+            throw new ChampsInvalidesException(erreurs.stream()
+                    .map(e -> new ErrorResponse.FieldError(nomChamp, e.message())).toList());
+        }
+        return new AncrageChamp(cible, c.getLibelle(), SelectionDocumentsFiche.valeurAffichee(c, cible, etat));
+    }
+
     /** ⚠️ Lot 2a — un document à télécharger, au périmètre de lecture de sa fiche (404 inconnu, 403 hors périmètre). */
     @Transactional(readOnly = true)
     public DocumentFicheMarche document(Integer idDocument) {

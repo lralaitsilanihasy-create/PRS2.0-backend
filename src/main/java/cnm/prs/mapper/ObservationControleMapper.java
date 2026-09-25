@@ -24,6 +24,12 @@ public final class ObservationControleMapper {
         dto.setChamp(entity.getChampCible());
         dto.setIdMarcheCible(entity.getIdMarcheCible());
         dto.setIdBenefCible(entity.getIdBenefCible());
+        // ⚠️ V44 (2026-09-25) — l'information de la fiche visée, libellé et valeur figés.
+        dto.setIdDmc(entity.getIdDmcFiche());
+        dto.setChampFiche(entity.getChampFiche());
+        dto.setLibelleChampFiche(entity.getLibelleChampFiche());
+        dto.setValeurChampFiche(entity.getValeurChampFiche());
+        dto.setLot(cnm.prs.service.LotsFiche.lotDe(entity.getChampFiche()));
         return dto;
     }
 
@@ -40,6 +46,11 @@ public final class ObservationControleMapper {
         entity.setChampCible(dto.getChamp());
         entity.setIdMarcheCible(dto.getIdMarcheCible());
         entity.setIdBenefCible(dto.getIdBenefCible());
+        // ⚠️ V44 — libellé et valeur viennent du validateur (jamais du client), qui les a posés dans le DTO.
+        entity.setIdDmcFiche(dto.getIdDmc());
+        entity.setChampFiche(dto.getChampFiche());
+        entity.setLibelleChampFiche(dto.getLibelleChampFiche());
+        entity.setValeurChampFiche(dto.getValeurChampFiche());
         return entity;
     }
 }
