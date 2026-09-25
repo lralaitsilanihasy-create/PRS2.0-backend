@@ -499,11 +499,45 @@ public class FicheMarcheService {
         suivante.setDateCreation(LocalDateTime.now());
         suivante.setCreePar(CurrentUser.ref().orElse(null));
         suivante = ficheRepository.save(suivante);
+        // ⚠️ 2026-09-25 (arbitrage du pilote, formulaires du candidat §B2) — une version validée n'est jamais convertie ;
+        // la révision ne reprend que les valeurs que le référentiel d'aujourd'hui admet encore (voir valeurReprise) : les
+        // autres restent lisibles dans la version précédente et se ressaisissent.
+        Map<String, ChampFicheMarche> referentiel = new LinkedHashMap<>();
+        champRepository.findAllByOrderByCodeRubriqueAscRangAsc().forEach(c -> referentiel.put(c.getCode(), c));
+        int nbLots = LotsFiche.nbLots(valeursPpm.lire(ctx.idDetail()).valeurs());
         for (FicheMarcheValeur v : valeurRepository.findByIdFiche(derniere.getIdFiche())) {
-            valeurRepository.save(new FicheMarcheValeur(null, suivante.getIdFiche(), v.getCodeChamp(), v.getValeur()));
+            if (valeurReprise(referentiel, v.getCodeChamp(), v.getValeur(), nbLots)) {
+                valeurRepository.save(new FicheMarcheValeur(null, suivante.getIdFiche(), v.getCodeChamp(), v.getValeur()));
+            }
         }
         besoin.copier(derniere.getIdFiche(), suivante.getIdFiche());   // ⚠️ V45 — le besoin suit, comme les valeurs
         return toDto(ctx, suivante);
+    }
+
+    /**
+     * ⚠️ 2026-09-25 — une valeur passe à la révision si le référentiel l'admet encore : champ connu et actif (sinon valeur
+     * orpheline : {@code B02-AU-03}), clé de la forme que le champ attend sur cette ligne (une clé nue sur un champ devenu
+     * par lot d'une ligne allotie ne se répartit pas toute seule : {@code B09-LL-01}), valeur parmi les options d'une liste
+     * (un texte libre dans une liste serait un contresens : {@code B04-CD-01}, {@code B04-CD-02}). Aucune conversion.
+     */
+    static boolean valeurReprise(Map<String, ChampFicheMarche> referentiel, String cle, String valeur, int nbLots) {
+        int diese = cle.indexOf(LotsFiche.SEPARATEUR);
+        ChampFicheMarche c = referentiel.get(diese < 0 ? cle : cle.substring(0, diese));
+        if (c == null || !Boolean.TRUE.equals(c.getActif())) {
+            return false;
+        }
+        if ((diese >= 0) != LotsFiche.parLot(c, nbLots)) {
+            return false;
+        }
+        List<String> options = ChampFicheMarche.liste(c.getOptions());
+        if (TypeChampFiche.LISTE.name().equals(c.getType()) && !options.isEmpty()) {
+            return valeur != null && options.stream().anyMatch(o -> o.equalsIgnoreCase(valeur.trim()));
+        }
+        if (TypeChampFiche.LISTE_MULTIPLE.name().equals(c.getType())) {
+            List<String> choix = ChampFicheMarche.liste(valeur);
+            return !choix.isEmpty() && choix.stream().allMatch(x -> options.stream().anyMatch(o -> o.equalsIgnoreCase(x)));
+        }
+        return true;
     }
 
     // ------------------------------------------------------------------ contexte et gardes

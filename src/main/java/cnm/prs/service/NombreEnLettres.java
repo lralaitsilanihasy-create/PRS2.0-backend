@@ -88,6 +88,32 @@ public final class NombreEnLettres {
         return reste == 0 ? tete : tete + " " + centaines(reste);
     }
 
+    /**
+     * ⚠️ 2026-09-25 (formulaires du candidat, §B8) — l'ordinal en lettres : 1 → « premier », 105 → « cent cinquième »,
+     * 21 → « vingt et unième », 80 → « quatre-vingtième », 200 → « deux centième ». Le dernier mot du cardinal prend
+     * « ième » (e muet élidé, « cinq » → « cinqu », « neuf » → « neuv », pluriel de vingt et cent retiré).
+     */
+    public static String ordinal(long n) {
+        if (n == 1) {
+            return "premier";
+        }
+        String c = cardinal(n);
+        int i = Math.max(c.lastIndexOf(' '), c.lastIndexOf('-'));
+        String tete = c.substring(0, i + 1);
+        String mot = c.substring(i + 1);
+        if (mot.equals("vingts") || mot.equals("cents")) {
+            mot = mot.substring(0, mot.length() - 1);
+        }
+        if (mot.equals("cinq")) {
+            mot = "cinqu";
+        } else if (mot.equals("neuf")) {
+            mot = "neuv";
+        } else if (mot.endsWith("e")) {
+            mot = mot.substring(0, mot.length() - 1);
+        }
+        return tete + mot + "ième";
+    }
+
     /** 0 à 999. */
     private static String centaines(int n) {
         return centaines(n, true);

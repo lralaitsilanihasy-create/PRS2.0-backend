@@ -103,7 +103,7 @@ public class ChampFicheMarcheService {
             List<ReferentielFicheMarcheDto.RubriqueDto> rubriques = rubriquesParBloc.getOrDefault(b.getCode(), List.of())
                     .stream().map(r -> new ReferentielFicheMarcheDto.RubriqueDto(r.getCode(), r.getLibelle(), r.getRang(),
                             r.getDocumentMaitre(), r.getNbAttendu())).toList();
-            blocs.add(new ReferentielFicheMarcheDto.BlocDto(b.getCode(), b.getLibelle(), b.getRang(), rubriques));
+            blocs.add(new ReferentielFicheMarcheDto.BlocDto(b.getCode(), b.getLibelle(), b.getRang(), rubriques, b.getRendu()));
         }
         List<ChampFicheMarche> champs = !filtre ? champRepository.findAllByOrderByCodeRubriqueAscRangAsc()
                 : champRepository.findByActifTrueOrderByCodeRubriqueAscRangAsc().stream()

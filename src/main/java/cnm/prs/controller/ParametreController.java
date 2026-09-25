@@ -72,4 +72,20 @@ public class ParametreController {
     public ParametreService.TauxGarantie fixerTauxGarantie(@RequestBody ParametreService.TauxGarantie corps) {
         return service.fixerTauxGarantie(corps);
     }
+
+    /**
+     * ⚠️ V46 (2026-09-25, §B7) — le taux de TVA des bordereaux des prix générés, {@code {"taux": 20}} en %, {@code null}
+     * si non fixé (le bordereau n'a alors pas de ligne TVA). Lecture ouverte à tout authentifié.
+     */
+    @GetMapping("/fiche-taux-tva")
+    public ParametreService.TauxTva tauxTva() {
+        return new ParametreService.TauxTva(service.tauxTva());
+    }
+
+    /** Réglage (Administrateur) ; {@code null} efface le taux. */
+    @PreAuthorize("hasRole('ADMINISTRATEUR')")
+    @PutMapping("/fiche-taux-tva")
+    public ParametreService.TauxTva fixerTauxTva(@RequestBody ParametreService.TauxTva corps) {
+        return service.fixerTauxTva(corps);
+    }
 }

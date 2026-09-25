@@ -123,6 +123,20 @@ public class ParametreService {
         return tauxGarantie();
     }
 
+    /** ⚠️ V46 (2026-09-25, §B7) — le taux de TVA des bordereaux, en % ; {@code null} : non fixé. */
+    public record TauxTva(java.math.BigDecimal taux) {
+    }
+
+    /** Fixe le taux de TVA (Administrateur) ; {@code null} l'efface. 400 hors 0–100. */
+    public TauxTva fixerTauxTva(TauxTva t) {
+        java.math.BigDecimal v = t == null ? null : t.taux();
+        if (v != null && (v.signum() < 0 || v.compareTo(new java.math.BigDecimal("100")) > 0)) {
+            throw new cnm.prs.exception.BadRequestException("Un taux de TVA va de 0 à 100 %.");
+        }
+        ecrire(FICHE_TAUX_TVA, v);
+        return new TauxTva(tauxTva());
+    }
+
     /** Taux de TVA des bordereaux ; {@code null} si non fixé (le bordereau n'a alors pas de ligne TVA). */
     @Transactional(readOnly = true)
     public java.math.BigDecimal tauxTva() {

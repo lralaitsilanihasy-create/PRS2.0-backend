@@ -4754,9 +4754,9 @@ documents (pas de reprise) : elle n'en joint aucun, et le dépôt manuel reste p
 ### Le besoin par lot et les formulaires du candidat ⚠️ 2026-09-25 (V45)
 
 Demande front `frontend/docs/demande-backend-2026-09-25-formulaires-du-candidat.md`. Livré : §B1, §B2, §B4, et au §B3
-la liste des fournitures, le bordereau des prix et le tableau de conformité. **Non livré** : la génération des fiches
-A1 à A4 et des garanties C1/C2, qui attend les modèles officiels du pilote (les remplir tels quels, sans réécrire une
-phrase).
+la liste des fournitures, le bordereau des prix et le tableau de conformité. Les fiches A1 à A4 et les garanties C1/C2
+sont produites **sur gabarit provisoire filigrané** depuis V46 (second tour ci-dessous), en attendant les modèles
+officiels du pilote, qui seront remplis tels quels.
 
 - **Le besoin** (fournitures et services seulement) — une ressource de la version de fiche, figée à la validation,
   copiée à la révision : `t_fiche_article` (lot, ordre, désignation ≤ 500, unité ≤ 20, `quantiteMin`/`quantiteMax` à
@@ -4801,6 +4801,31 @@ phrase).
   Conformité : colonnes du candidat (proposée, marque, modèle, conforme) déverrouillées, liste OUI/NON. Ordre :
   DPAO, DPAC, DPIC, CCAP, AE, LF, puis BP et TC par lot. Téléchargement xlsx :
   `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`.
+
+#### Second tour (V46, 2026-09-25)
+
+- **Rendu d'un bloc** : `ReferentielFicheMarcheDto.BlocDto.rendu` (`GET /api/champs-fiche-marche`) — `null` = la liste
+  des champs du bloc (tous les blocs d'avant) ; **`"BESOIN"`** = la grille du besoin (`/articles`). `B12` porte
+  `BESOIN` (`tr_bloc_fiche_marche.RENDU`, CHECK : `NULL` ou `BESOIN`).
+- **Taux de TVA** : **`GET /api/parametres/fiche-taux-tva`** (tout authentifié) → `{ "taux": 20 }` (`null` si non fixé)
+  ; **`PUT /api/parametres/fiche-taux-tva`** (Administrateur), même corps, `null` efface, 400 hors 0–100. Même forme que
+  `/api/parametres/fiche-garantie-taux`.
+- **Révision** : une version validée n'est jamais convertie ; la version suivante **ne reprend pas** une valeur que le
+  référentiel n'admet plus — champ désactivé ou inconnu (valeur orpheline, `B02-AU-03`), texte hors des options d'une
+  liste (`B04-CD-01`, `B04-CD-02`), clé nue d'un champ devenu par lot sur une ligne allotie (`B09-LL-01`) ou clé `#n`
+  d'un champ qui ne l'est pas. Elle reste lisible dans la version précédente (`GET …/versions/{n}`) ; la ressaisie des
+  obligatoires est exigée par le bilan.
+- **Fiches A1 à A4, garanties C1 / C2 — gabarit provisoire** (toutes catégories, en attendant les modèles officiels du
+  pilote) : types de document `A1`…`A4`, `C1`, `C2`, docx et pdf, **filigrane « MODÈLE PROVISOIRE – NON OFFICIEL »**
+  sur chaque page, « Page n de N pages ». A1-A4 : une pièce par fiche cochée à `B04-CD-01` et **par lot** si la ligne
+  est allotie — en-tête : référence (`B02-OB-03`) et objet (`B02-OB-01`), autorité contractante, lot visé (rang et
+  désignation du lot au plan) ; A1 porte A1-b (groupement), « non applicable » si le cadrage ne l'admet pas. C1 / C2 :
+  une pièce **par forme retenue** à `B04-CD-02` (« C1 et C2 » → les deux) et **par lot** — acheteur et adresse,
+  titre du marché et lot, montant `B05-GS-03#n` en chiffres et en lettres, validité `B05-GS-04` en ordinal (« jusqu'au
+  cent cinquième (105ème) jour ») ; C2 ajoute la référence de l'AOO, la remise des offres (`B04-LR-03`) et la fin de
+  validité des offres calculée (`B04-LR-03` + `B04-VO-01` jours). Le gabarit **liste les blancs** (ceux de la fiche,
+  remplis ; ceux du candidat, en pointillés) : il n'écrit aucune phrase réglementaire. Ordre : …, LF, A1…A4, C1, C2,
+  puis BP et TC. Les PDF sont joints au dossier soumis comme les autres.
 
 ### Les valeurs par lot de la fiche DAO ⚠️ 2026-09-25
 

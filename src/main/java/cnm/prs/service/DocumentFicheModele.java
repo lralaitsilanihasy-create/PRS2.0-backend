@@ -13,19 +13,27 @@ import java.util.List;
  * @param piedDePage référence du plan, ligne, version de la fiche, date de validation
  * @param lot      ⚠️ 2026-09-25 — rang du lot d'un document établi par lot (acte d'engagement d'une ligne allotie) ;
  *                 {@code null} : document commun
+ * @param filigrane ⚠️ V46 — texte en filigrane sur chaque page (gabarits provisoires des formulaires du candidat :
+ *                 « MODÈLE PROVISOIRE – NON OFFICIEL ») et pagination « Page n de N » ; {@code null} : ni l'un ni l'autre
  */
 public record DocumentFicheModele(String type, String titre, String sousTitre, List<Bloc> blocs, String piedDePage,
-        Integer lot, List<Tableau> tableaux) {
+        Integer lot, List<Tableau> tableaux, String filigrane) {
 
     /** Un document commun (sans lot). */
     public DocumentFicheModele(String type, String titre, String sousTitre, List<Bloc> blocs, String piedDePage) {
-        this(type, titre, sousTitre, blocs, piedDePage, null, List.of());
+        this(type, titre, sousTitre, blocs, piedDePage, null, List.of(), null);
     }
 
     /** Un document de lignes « libellé : valeur », commun ou d'un lot. */
     public DocumentFicheModele(String type, String titre, String sousTitre, List<Bloc> blocs, String piedDePage,
             Integer lot) {
-        this(type, titre, sousTitre, blocs, piedDePage, lot, List.of());
+        this(type, titre, sousTitre, blocs, piedDePage, lot, List.of(), null);
+    }
+
+    /** Un document avec des tableaux (liste des fournitures). */
+    public DocumentFicheModele(String type, String titre, String sousTitre, List<Bloc> blocs, String piedDePage,
+            Integer lot, List<Tableau> tableaux) {
+        this(type, titre, sousTitre, blocs, piedDePage, lot, tableaux, null);
     }
 
     /**

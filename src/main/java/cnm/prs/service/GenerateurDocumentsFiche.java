@@ -95,6 +95,17 @@ public class GenerateurDocumentsFiche {
             XWPFRun r = pp.createRun();
             r.setFontSize(8);
             r.setText(m.piedDePage());
+            if (m.filigrane() != null) {
+                // ⚠️ V46 — gabarit provisoire : filigrane sur chaque page et « Page n de N » (champs Word).
+                new org.apache.poi.xwpf.model.XWPFHeaderFooterPolicy(doc).createWatermark(m.filigrane());
+                XWPFParagraph pages = pied.createParagraph();
+                pages.setAlignment(ParagraphAlignment.CENTER);
+                pages.createRun().setText("Page ");
+                pages.getCTP().addNewFldSimple().setInstr("PAGE");
+                pages.createRun().setText(" de ");
+                pages.getCTP().addNewFldSimple().setInstr("NUMPAGES");
+                pages.createRun().setText(" pages");
+            }
             doc.write(out);
             return out.toByteArray();
         } catch (IOException e) {
@@ -123,6 +134,67 @@ public class GenerateurDocumentsFiche {
 
     // ------------------------------------------------------------------ pdf
 
+    /**
+     * ⚠️ V46 (2026-09-25, §B8) — gabarit provisoire : le filigrane en diagonale sur chaque page, et « Page n de N » en
+     * haut de page (le total s'écrit à la fermeture, dans un gabarit réservé sur chaque page).
+     */
+    private static final class FiligraneEtPagination extends com.lowagie.text.pdf.PdfPageEventHelper {
+        private final String texte;
+        private com.lowagie.text.pdf.PdfTemplate total;
+        private com.lowagie.text.pdf.BaseFont police;
+
+        FiligraneEtPagination(String texte) {
+            this.texte = texte;
+        }
+
+        @Override
+        public void onOpenDocument(PdfWriter writer, Document document) {
+            total = writer.getDirectContent().createTemplate(40, 12);
+            try {
+                police = com.lowagie.text.pdf.BaseFont.createFont(com.lowagie.text.pdf.BaseFont.HELVETICA,
+                        com.lowagie.text.pdf.BaseFont.WINANSI, false);
+            } catch (DocumentException | IOException e) {
+                throw new IllegalStateException(e);
+            }
+        }
+
+        @Override
+        public void onEndPage(PdfWriter writer, Document document) {
+            com.lowagie.text.pdf.PdfContentByte fond = writer.getDirectContentUnder();
+            fond.saveState();
+            com.lowagie.text.pdf.PdfGState g = new com.lowagie.text.pdf.PdfGState();
+            g.setFillOpacity(0.18f);
+            fond.setGState(g);
+            fond.beginText();
+            fond.setFontAndSize(police, 42);
+            fond.setColorFill(java.awt.Color.GRAY);
+            fond.showTextAligned(Element.ALIGN_CENTER, texte, document.getPageSize().getWidth() / 2,
+                    document.getPageSize().getHeight() / 2, 45);
+            fond.endText();
+            fond.restoreState();
+
+            com.lowagie.text.pdf.PdfContentByte dessus = writer.getDirectContent();
+            String debut = "Page " + writer.getPageNumber() + " de ";
+            float x = document.getPageSize().getWidth() - 50 - police.getWidthPoint(debut, 8) - 24;
+            float y = document.getPageSize().getHeight() - 30;
+            dessus.beginText();
+            dessus.setFontAndSize(police, 8);
+            dessus.setTextMatrix(x, y);
+            dessus.showText(debut);
+            dessus.endText();
+            dessus.addTemplate(total, x + police.getWidthPoint(debut, 8), y);
+        }
+
+        @Override
+        public void onCloseDocument(PdfWriter writer, Document document) {
+            total.beginText();
+            total.setFontAndSize(police, 8);
+            total.setTextMatrix(0, 0);
+            total.showText((writer.getPageNumber() - 1) + " pages");
+            total.endText();
+        }
+    }
+
     private static byte[] pdf(DocumentFicheModele m) {
         Font titre = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 16);
         Font sousTitre = FontFactory.getFont(FontFactory.HELVETICA, 12);
@@ -134,11 +206,14 @@ public class GenerateurDocumentsFiche {
         Document document = new Document(PageSize.A4, 50, 50, 50, 60);
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         try {
-            PdfWriter.getInstance(document, out);
+            PdfWriter writer = PdfWriter.getInstance(document, out);
             HeaderFooter footer = new HeaderFooter(new Phrase(m.piedDePage(), pied), false);
             footer.setAlignment(Element.ALIGN_CENTER);
             footer.setBorder(0);
             document.setFooter(footer);
+            if (m.filigrane() != null) {
+                writer.setPageEvent(new FiligraneEtPagination(m.filigrane()));
+            }
             document.open();
             Paragraph t = new Paragraph(m.titre(), titre);
             t.setAlignment(Element.ALIGN_CENTER);

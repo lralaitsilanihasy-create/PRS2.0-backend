@@ -124,7 +124,7 @@ class FicheDaoTravauxIntegrationTest extends CnmIntegrationTestSupport {
 
         remplirObligatoiresEtValider(idDmc, "QUANTITE_FIXE", "TRAVAUX", Map.of("B02-LT-03", "Tranche ferme : gros œuvre"));
         List<String> types = JsonPath.read(documents(idDmc), "$[*].type");
-        assertThat(types).containsExactly("DPAO", "DPAO", "CCAP", "CCAP", "AE", "AE");
+        assertThat(types).containsExactly("DPAO", "DPAO", "CCAP", "CCAP", "AE", "AE", "A1", "A1");   // V46 : fiche A1 exigée (B04-CD-01), gabarit provisoire
     }
 
     @Test

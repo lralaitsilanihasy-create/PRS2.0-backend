@@ -70,13 +70,16 @@ public class DocumentsFicheMarcheService {
     /** ⚠️ V45 (2026-09-25) — classeurs du candidat et taux de TVA administrable. */
     private final GenerateurClasseursFiche classeurs;
     private final ParametreService parametres;
+    /** ⚠️ V46 — les désignations des lots du plan (lot visé des formulaires du candidat). */
+    private final cnm.prs.repository.LotRepository lotRepository;
 
     public DocumentsFicheMarcheService(DocumentFicheMarcheRepository documentRepository,
             GenerateurDocumentsFiche generateur, ChampFicheMarcheRepository champRepository,
             BlocFicheMarcheRepository blocRepository, RubriqueFicheMarcheRepository rubriqueRepository,
             FicheMarcheRepository ficheRepository, DossierRepository dossierRepository,
             PieceJointeDossierRepository pieceRepository, TypePieceJointeRepository typePieceRepository,
-            GenerateurClasseursFiche classeurs, ParametreService parametres) {
+            GenerateurClasseursFiche classeurs, ParametreService parametres, cnm.prs.repository.LotRepository lotRepository) {
+        this.lotRepository = lotRepository;
         this.classeurs = classeurs;
         this.parametres = parametres;
         this.documentRepository = documentRepository;
@@ -117,6 +120,12 @@ public class DocumentsFicheMarcheService {
         if (liste != null) {
             modeles.add(liste);
         }
+        // ⚠️ V46 (2026-09-25, §B8) — fiches A1 à A4 et garanties C1/C2, sur gabarit provisoire filigrané, toutes catégories.
+        List<String> lots = lotRepository.findByIdDetail(etat.getIdDetailCourant() == null ? etat.getIdDetail()
+                : etat.getIdDetailCourant()).stream()
+                .sorted(java.util.Comparator.comparing(cnm.prs.entity.Lot::getIdLot))
+                .map(l -> l.getDesignationLot()).toList();
+        modeles.addAll(FormulairesCandidat.generer(etat, lots, validation));
         List<Produit> produits = new ArrayList<>();
         for (DocumentFicheModele modele : modeles) {
             List<GenerateurDocumentsFiche.Fichier> fichiers;

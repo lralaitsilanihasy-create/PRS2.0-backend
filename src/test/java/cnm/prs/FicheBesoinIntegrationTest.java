@@ -221,6 +221,71 @@ class FicheBesoinIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(JsonPath.<List<Object>>read(copie, "$[*].caracteristiques[*]")).hasSize(6);
     }
 
+    @Test
+    @DisplayName("4 — V46 : le bloc déclare son rendu (B12 → BESOIN, les autres null) ; le taux de TVA est exposé en lecture "
+            + "et en administration (403 hors Administrateur, 400 hors 0–100)")
+    void renduEtTva() throws Exception {
+        String ref = mvc.perform(get("/api/champs-fiche-marche").param("typeMarche", "A_COMMANDE")
+                .param("categorie", "FOURNITURES_SERVICES").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(ref, "$.blocs[?(@.code=='B12')].rendu")).containsExactly("BESOIN");
+        assertThat(JsonPath.<List<Object>>read(ref, "$.blocs[?(@.code=='B05')].rendu")).containsExactly((Object) null);
+
+        mvc.perform(get("/api/parametres/fiche-taux-tva").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.taux").value(20));
+        mvc.perform(put("/api/parametres/fiche-taux-tva").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"taux\":18}")).andExpect(status().isForbidden());
+        mvc.perform(put("/api/parametres/fiche-taux-tva").header("Authorization", tokenAdmin).contentType(JSON)
+                .content("{\"taux\":120}")).andExpect(status().isBadRequest());
+        mvc.perform(put("/api/parametres/fiche-taux-tva").header("Authorization", tokenAdmin).contentType(JSON)
+                .content("{\"taux\":18}")).andExpect(status().isOk()).andExpect(jsonPath("$.taux").value(18));
+    }
+
+    @Test
+    @DisplayName("5 — V46 : fiches A1, A2 par lot et garanties C1, C2 par lot sur gabarit provisoire filigrané ; C1 porte le "
+            + "montant du lot en chiffres et en lettres et la validité en ordinal ; C2 la fin de validité des offres calculée")
+    void formulairesProvisoires() throws Exception {
+        Long idDmc = creerDmc(9902);
+        cadrage(idDmc, "OUI");
+        for (int n = 1; n <= 3; n++) {
+            articles(idDmc, n, article(null, "Ordinateur lot " + n, 10, 20, "Mémoire vive", "8 Go")).andExpect(status().isOk());
+        }
+        Map<String, String> donnees = new LinkedHashMap<>();
+        donnees.put("B02-OB-03", "AOO 2461/MT/2026");
+        donnees.put("B04-CD-01", "A1,A2");
+        donnees.put("B04-CD-02", "C1 et C2");
+        donnees.put("B05-GS-04", "105");
+        donnees.put("B04-VO-01", "75");
+        for (int n = 1; n <= 3; n++) {
+            donnees.put("B05-GS-03#" + n, String.valueOf(1600000 * n));
+            donnees.put("B05-TP-03#" + n, String.valueOf(80000000 * n));
+        }
+        remplirObligatoiresEtValider(idDmc, "A_COMMANDE", "FOURNITURES_SERVICES", donnees);
+
+        String documents = mvc.perform(get("/api/fiches-marche/" + idDmc + "/documents").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        for (String type : List.of("A1", "A2", "C1", "C2")) {
+            assertThat(JsonPath.<List<Integer>>read(documents, "$[?(@.type=='" + type + "' && @.extension=='pdf')].lot"))
+                    .as(type).containsExactly(1, 2, 3);
+        }
+        assertThat(JsonPath.<List<String>>read(documents, "$[?(@.type=='C1')].libelle"))
+                .contains("Garantie bancaire de soumission (C1) — lot 2");
+
+        byte[] c1 = contenu(documents, "C1", "docx", 2);
+        String texte = texteDocx(c1);
+        assertThat(texte).contains("Lot 2 : Lot 2",
+                "3 200 000 Ariary (trois millions deux cent mille ariary)",
+                "jusqu'au cent cinquième (105ème) jour");
+        try (XWPFDocument doc = new XWPFDocument(new ByteArrayInputStream(c1))) {
+            assertThat(doc.getHeaderList()).anyMatch(h -> h._getHdrFtr().xmlText().contains("MODÈLE PROVISOIRE – NON OFFICIEL"));
+        }
+        String pdf = texteDuPdf(contenu(documents, "C2", "pdf", 1));
+        assertThat(pdf.replace(" ", "")).contains("MODÈLEPROVISOIRE–NONOFFICIEL");   // texte en diagonale : PDFBox le découpe
+        assertThat(pdf).contains("Page 1 de", "Validité de l'offre expirant le", "appel d'offres AOO 2461/MT/2026");
+        assertThat(texteDocx(contenu(documents, "A1", "docx", 3)))
+                .contains("A1-b", "Non applicable", "Lot visé : Lot 3");
+    }
+
     // ------------------------------------------------------------------ outils
 
     private static String article(Integer lot, String designation, int min, int max, String libelle, String exigence) {

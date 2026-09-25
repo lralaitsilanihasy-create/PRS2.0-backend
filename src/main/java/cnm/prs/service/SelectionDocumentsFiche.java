@@ -69,7 +69,11 @@ public final class SelectionDocumentsFiche {
 
     /** Intitulé d'un type de document ({@code DPAO} → « Données particulières de l'appel d'offres »). */
     public static String titre(String type) {
-        return TITRES.getOrDefault(type, type);
+        String t = TITRES.get(type);
+        if (t == null) {
+            t = FormulairesCandidat.titre(type);   // ⚠️ V46 — A1 à A4, C1, C2
+        }
+        return t == null ? type : t;
     }
 
     /** Intitulé d'un document, suivi de son lot s'il est établi par lot (« Acte d'engagement — lot 2 »). */

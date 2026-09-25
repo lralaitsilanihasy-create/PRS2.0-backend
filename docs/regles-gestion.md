@@ -522,8 +522,9 @@ document porte chaque information (document maître, reprises) ; il manquait la 
   prestations intellectuelles, il n'y a pas de besoin par article.
 - **Une fiche de fournitures ne se valide pas sans besoin complet** : chaque lot a au moins un article, chaque article
   au moins une caractéristique, et la quantité minimum ne dépasse pas la maximum.
-- **Qui écrit le besoin** : en V1, la PRMP et son UGPM, comme le reste de la fiche. La cible (le service bénéficiaire
-  rédige, la PRMP valide) est **à confirmer** par le pilote ; le rédacteur est déjà noté sur chaque article.
+- **Qui écrit le besoin** : la PRMP (et son UGPM), comme le reste de la fiche — **tranché par le pilote le 25/09** : pas
+  de rôle « service bénéficiaire », mêmes droits et même validation que la fiche. Le rédacteur noté sur chaque article
+  est une trace, il ne commande aucun droit.
 - **Ce que le candidat reçoit, généré depuis la fiche** : la liste des fournitures et le calendrier de livraison
   (lieu et délai par lot), et pour chaque lot un **bordereau des prix** où il ne saisit que ses prix unitaires hors
   taxe — montants, totaux, TVA et TTC sont calculés — et un **tableau de conformité** face aux caractéristiques
@@ -532,8 +533,13 @@ document porte chaque information (document maître, reprises) ; il manquait la 
 - **La garantie de soumission** : quand elle est exigée, le modèle joint (C1, C2 ou les deux) doit être choisi ; son
   taux rapporté au montant maximum de chaque lot est comparé à des bornes que l'Administrateur fixe (référence 2 %) —
   un **avertissement**, jamais un blocage.
-- Les fiches de renseignements A1 à A4 et les garanties C1/C2 générées **attendent les modèles officiels** du pilote :
-  ils seront remplis tels quels, seuls les blancs étant des champs.
+- Les fiches de renseignements A1 à A4 (une par lot) et les garanties C1/C2 (une par lot, au montant du lot, en
+  chiffres et en lettres) sont produites **sur un gabarit provisoire filigrané « MODÈLE PROVISOIRE – NON OFFICIEL »**,
+  qui liste les blancs sans écrire de phrase réglementaire. Les **modèles officiels** du pilote les remplaceront : ils
+  seront remplis tels quels, seuls les blancs étant des champs.
+- **Une version validée n'est jamais convertie** (arbitrage du 25/09) : si le référentiel a changé depuis (une liste à
+  la place d'un texte, un lieu par lot à la place d'un lieu unique, une information retirée), l'ancienne valeur reste
+  lisible dans cette version, **n'est pas reprise** à la révision suivante, et se ressaisit.
 
 #### Les trois catégories de fiche DAO (lot 5, demande front du 2026-09-24, pilote)
 

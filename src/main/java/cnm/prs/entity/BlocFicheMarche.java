@@ -38,4 +38,11 @@ public class BlocFicheMarche {
     /** ⚠️ Lot 5 (2026-09-24, V40) — catégories de fiche DAO où le bloc existe ({@link cnm.prs.enums.CategorieDao}). */
     @Column(name = "CATEGORIES", nullable = false, length = 80)
     private String categories = cnm.prs.enums.CategorieDao.toutes();
+
+    /**
+     * ⚠️ V46 (2026-09-25, §B6) — rendu du bloc à l'écran : {@code null}, la liste de ses champs ; {@code BESOIN}, la
+     * grille du besoin ({@code /articles}). Le bloc le déclare, l'écran ne le devine pas à son code.
+     */
+    @Column(name = "RENDU", length = 20)
+    private String rendu;
 }

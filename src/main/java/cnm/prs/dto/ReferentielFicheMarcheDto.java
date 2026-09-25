@@ -11,8 +11,11 @@ import java.util.List;
  */
 public record ReferentielFicheMarcheDto(List<BlocDto> blocs, List<ChampFicheMarcheDto> champs) {
 
-    /** Un bloc et ses rubriques. */
-    public record BlocDto(String code, String libelle, Integer rang, List<RubriqueDto> rubriques) {
+    /**
+     * Un bloc et ses rubriques. ⚠️ V46 (2026-09-25, §B6) — {@code rendu} : {@code null} = la liste des champs du bloc ;
+     * {@code "BESOIN"} = la grille du besoin ({@code GET/PUT /api/fiches-marche/{idDmc}/articles}).
+     */
+    public record BlocDto(String code, String libelle, Integer rang, List<RubriqueDto> rubriques, String rendu) {
     }
 
     /**
