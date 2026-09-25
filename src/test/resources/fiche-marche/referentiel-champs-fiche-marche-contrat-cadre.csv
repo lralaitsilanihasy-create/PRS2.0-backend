@@ -7,9 +7,9 @@ B02-PC-01;Référence de l'article du code des marchés publics de la procédure
 B02-PC-02;Rythme de passation des marchés subséquents;LISTE;SAISIE;DPAC;AE;CONTRAT_CADRE;;oui;;;Au fur et à mesure des besoins,Selon le calendrier fixé ci-après;;;oui
 B02-PC-03;Calendrier de remise en concurrence des titulaires;TEXTE_LONG;SAISIE;DPAC;AE;CONTRAT_CADRE;;non;;;;;;oui
 B02-DC-01;Durée maximale du contrat-cadre (mois);NOMBRE;SAISIE;AE;DPAC;CONTRAT_CADRE;;oui;;;;;;oui
-B02-DC-02;Durée de validité du contrat-cadre (mois);NOMBRE;SAISIE;AE;DPAC;CONTRAT_CADRE;;oui;;;;;;oui
+B02-DC-02;Durée de validité du contrat-cadre (mois);NOMBRE;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;;;;;oui
 B02-DC-03;Contrat-cadre reconductible;OUI_NON;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;oui
-B02-DC-04;Conditions de reconduction de la période de validité;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui
+B02-DC-04;Conditions de reconduction de la période de validité;TEXTE_LONG;SAISIE;DPAC;AE;CONTRAT_CADRE;;non;;;;;;oui
 B02-AL-02;Numéro et désignation des lots;TEXTE_LONG;SAISIE;DPAC;AE;CONTRAT_CADRE;alloti = OUI;oui;;;;;;oui
 B02-AL-03;Contrat-cadre mono ou multi-attributaire;LISTE;CADRAGE;AE;DPAC;CONTRAT_CADRE;;non;;;;attributaires;;oui
 B03-TI-01;Dénomination sociale du titulaire;TEXTE;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;oui
@@ -44,11 +44,11 @@ B04-CP-02;Date et heure limites de remise des offres;DATE;SAISIE;DPAC;;CONTRAT_C
 B04-CP-03;Date de début de la séance d'évaluation des offres et candidatures;DATE;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;DATES_ORDRE:OUVERTURE;;;;oui
 B04-CP-04;Date d'attribution du contrat-cadre;DATE;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;DATES_ORDRE:ATTRIBUTION;;;;oui
 B04-CP-05;Date de notification du contrat-cadre au(x) titulaire(s);DATE;SAISIE;DPAC;;CONTRAT_CADRE;;non;;DATES_ORDRE:NOTIFICATION;;;;oui
-B05-UM-01;Monnaie en devise (appel d'offres international);TEXTE;SAISIE;DPAC;AE;CONTRAT_CADRE;;non;;;;;;oui
+B05-UM-01;Monnaie en devise (appel d'offres international);TEXTE;SAISIE;DPAC;;CONTRAT_CADRE;;non;;;;;;oui
 B05-MT-01;Montant indicatif du contrat-cadre hors taxes (Ariary);MONTANT;SAISIE;AE;DPAC;CONTRAT_CADRE;;oui;;MONTANT_POSITIF;;;;oui
 B05-MT-02;Montant indicatif du contrat-cadre toutes taxes comprises (Ariary);MONTANT;SAISIE;AE;DPAC;CONTRAT_CADRE;;oui;;MONTANT_POSITIF;;;;oui
 B05-PM-01;Forme de prix des marchés subséquents (mono-attributaire);LISTE;SAISIE;AE;DPAC;CONTRAT_CADRE;attributaires = MONO;oui;;;Prix unitaires,Prix forfaitaires,Prix mixtes;;;oui
-B05-PM-02;Le prix est un critère d'attribution du contrat-cadre (multi-attributaire);OUI_NON;SAISIE;AE;DPAC;CONTRAT_CADRE;attributaires = MULTI;oui;;;;;;oui
+B05-PM-02;Le prix est un critère d'attribution du contrat-cadre (multi-attributaire);OUI_NON;SAISIE;AE;;CONTRAT_CADRE;attributaires = MULTI;oui;;;;;;oui
 B05-PM-03;Contenu des prix;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;oui
 B06-SC-01;Modalités d'ouverture des plis par le représentant de l'autorité contractante;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;;;;;oui
 B06-SC-02;Critères d'élimination des candidatures;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;;;;;oui
@@ -58,8 +58,8 @@ B06-SO-03;Rejet des offres non recevables;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;
 B06-SO-04;Comparaison des offres pour la sélection de l'offre économiquement la plus avantageuse;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;;;;;oui
 B06-SO-05;Critères et mécanisme de jugement des offres;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;;;;;oui
 B06-CA-01;Critères d'attribution du contrat-cadre et modalités d'appréciation;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;;;;;oui
-B06-NO-01;Date de réception portée sur l'accusé de réception;DATE;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui
-B06-NO-02;Date de remise en main propre au titulaire;DATE;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui
+B06-NO-01;Date de réception portée sur l'accusé de réception;DATE;SAISIE;DPAC;AE;CONTRAT_CADRE;;non;;;;;;oui
+B06-NO-02;Date de remise en main propre au titulaire;DATE;SAISIE;DPAC;AE;CONTRAT_CADRE;;non;;;;;;oui
 B07-PS-01;Fait générateur de la passation des marchés subséquents;LISTE;SAISIE;AE;DPAC;CONTRAT_CADRE;;oui;;;Lors de la survenance du besoin,Selon le calendrier fixé à l'article premier du contrat-cadre;;;oui
 B07-PS-02;Adresse d'envoi des demandes aux titulaires;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;oui
 B07-PS-03;Délai de réponse des titulaires (heures);NOMBRE;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;oui
