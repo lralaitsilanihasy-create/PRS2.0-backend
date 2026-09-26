@@ -487,8 +487,8 @@ document porte chaque information (document maître, reprises) ; il manquait la 
   document, rattachée à aucun dossier. La PRMP propriétaire ou son UGPM la supprime ; la ligne du plan redevient
   préparable, et le journal du plan le dit. Une fiche **qui a de l'histoire** (une version validée) ne se supprime
   pas et ne s'abandonne pas : une version validée est un acte, et la **révision** est le geste prévu pour la
-  corriger — position du backend, **à confirmer par le pilote** (l'alternative serait un statut « abandonnée » qui
-  rouvrirait la ligne en gardant l'historique).
+  corriger — **arbitré par le pilote le 26/09** (piste 2 ; l'abandon, un statut « abandonnée » qui rouvrirait la
+  ligne, n'est pas retenu).
 
 #### La fiche DAO des travaux (référentiel remis le 2026-09-24)
 

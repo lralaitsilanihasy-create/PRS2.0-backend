@@ -489,7 +489,8 @@ public class FicheMarcheService {
      * {@code FICHE_VALIDEE} ; une version validée dans l'historique (révision ouverte) → 409
      * {@code FICHE_AVEC_HISTORIQUE} ; un document produit → 409 {@code FICHE_AVEC_DOCUMENTS} ; rattachée à un dossier
      * → 409 {@code FICHE_AVEC_DOSSIER} avec {@code idDossier}. La forme et la catégorie de la ligne n'importent pas :
-     * une fiche devenue non outillée se supprime aussi. Journal du plan : {@code FICHE_MARCHE_SUPPRIMEE}.
+     * une fiche devenue non outillée se supprime aussi. Journal du plan : {@code FICHE_MARCHE_SUPPRIMEE}. Une fiche qui a
+     * de l'histoire ne se supprime ni ne s'abandonne : la révision la corrige (§B2, arbitré par le pilote le 26/09).
      */
     public void supprimer(Long idDmc) {
         ProfilUtilisateur profil = CurrentUser.profil().orElse(null);

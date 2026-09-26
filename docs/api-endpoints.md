@@ -4767,7 +4767,7 @@ version validée plus tôt, révision ouverte) ; 409 **`FICHE_AVEC_DOCUMENTS`** 
 `idDossier` dans le corps. La forme et la catégorie de la ligne n'importent pas (une fiche devenue non outillée se
 supprime aussi). Journal du plan : **`FICHE_MARCHE_SUPPRIMEE`**, « DAO de la ligne n (DMC m) supprimé, sans
 historique ». `DELETE /api/dmcs/{id}` reste non servi (405). Une fiche **qui a de l'histoire** ne se supprime pas et
-ne s'abandonne pas : la révision est le geste prévu (§B2, à confirmer par le pilote).
+ne s'abandonne pas : la révision est le geste prévu (§B2, arbitré par le pilote le 26/09 ; pas de statut abandonné).
 
 ### Le besoin par lot et les formulaires du candidat ⚠️ 2026-09-25 (V45)
 
