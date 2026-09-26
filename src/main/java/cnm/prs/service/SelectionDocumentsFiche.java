@@ -62,6 +62,23 @@ public final class SelectionDocumentsFiche {
      */
     private static final java.util.Set<String> PAR_LOT = java.util.Set.of("AE");
 
+    /**
+     * ⚠️ 2026-09-26 (demande front « forme de la garantie de soumission : plusieurs formes admises », §B2) — la forme de
+     * la garantie de soumission est une liste à <strong>choix multiples</strong> : l'acheteur admet plusieurs formes, le
+     * candidat choisit. Plusieurs formes retenues s'impriment avec la tournure du dossier réel (DPAO, clause 6.6) :
+     * « Une garantie de soumission doit être fournie dans l'une des formes suivantes : – soit … – soit … », une forme
+     * par ligne ; une seule forme retenue : la ligne ordinaire « libellé : valeur ».
+     */
+    static final String FORME_GARANTIE_SOUMISSION = "B05-GS-02";
+
+    /** Les quatre formes du CMP avec leur article ; une option qui n'y est pas s'imprime telle quelle. */
+    private static final Map<String, String> FORMES_AVEC_ARTICLE = Map.of(
+            "Dépôt en numéraire au Trésor", "un dépôt en numéraire au Trésor",
+            "Caution personnelle et solidaire d'un organisme agréé par le MEF",
+            "une caution personnelle et solidaire d'un organisme agréé par le MEF",
+            "Garantie bancaire", "une garantie bancaire",
+            "Chèque de banque", "un chèque de banque");
+
     private static final DateTimeFormatter JOUR = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     private SelectionDocumentsFiche() {
@@ -146,12 +163,12 @@ public final class SelectionDocumentsFiche {
                 List<DocumentFicheModele.Ligne> lignes = lignesParRubrique.computeIfAbsent(c.getCodeRubrique(),
                         k -> new ArrayList<>());
                 if (!LotsFiche.parLot(c, nbLots)) {
-                    ajouter(lignes, c.getLibelle(), valeurAffichee(c, c.getCode(), fiche));
+                    ajouter(lignes, c.getLibelle(), valeurDocument(c, c.getCode(), fiche));
                 } else if (lot != null) {
-                    ajouter(lignes, c.getLibelle(), valeurAffichee(c, LotsFiche.cle(c.getCode(), lot), fiche));
+                    ajouter(lignes, c.getLibelle(), valeurDocument(c, LotsFiche.cle(c.getCode(), lot), fiche));
                 } else {
                     for (int n = 1; n <= nbLots; n++) {
-                        ajouter(lignes, c.getLibelle() + " — lot " + n, valeurAffichee(c, LotsFiche.cle(c.getCode(), n), fiche));
+                        ajouter(lignes, c.getLibelle() + " — lot " + n, valeurDocument(c, LotsFiche.cle(c.getCode(), n), fiche));
                     }
                 }
             }
@@ -177,6 +194,40 @@ public final class SelectionDocumentsFiche {
         if (valeur != null) {
             lignes.add(new DocumentFicheModele.Ligne(libelle, valeur));
         }
+    }
+
+    /**
+     * ⚠️ 2026-09-26 — la valeur telle qu'un document l'imprime : la valeur affichée, sauf la forme de la garantie de
+     * soumission à plusieurs formes, rendue par la tournure des formes admises (les lignes sont séparées par {@code \n},
+     * que le générateur traduit en sauts de ligne).
+     */
+    static String valeurDocument(ChampFicheMarche c, String cle, FicheMarcheDto fiche) {
+        if (FORME_GARANTIE_SOUMISSION.equals(c.getCode()) && TypeChampFiche.LISTE_MULTIPLE.name().equals(c.getType())) {
+            List<String> formes = ChampFicheMarche.liste(
+                    premiere(fiche.getValeurs(), fiche.getValeursPpm(), fiche.getValeursCadrage(), cle));
+            if (formes.size() > 1) {
+                return formesAdmises(formes);
+            }
+        }
+        return valeurAffichee(c, cle, fiche);
+    }
+
+    /**
+     * Plusieurs formes admises : « Une garantie de soumission doit être fournie dans l'une des formes suivantes : », puis
+     * « – soit … » par forme, une par ligne, dans l'ordre reçu (celui du référentiel, tel que la valeur est enregistrée).
+     * Une seule forme : elle-même ; aucune : {@code null}.
+     */
+    static String formesAdmises(List<String> formes) {
+        if (formes.size() < 2) {
+            return formes.isEmpty() ? null : formes.get(0);
+        }
+        StringBuilder sb = new StringBuilder("Une garantie de soumission doit être fournie dans l'une des formes suivantes :");
+        for (String f : formes) {
+            String avecArticle = FORMES_AVEC_ARTICLE.entrySet().stream().filter(e -> e.getKey().equalsIgnoreCase(f))
+                    .map(Map.Entry::getValue).findFirst().orElse(f);
+            sb.append("\n– soit ").append(avecArticle);
+        }
+        return sb.toString();
     }
 
     /** ⚠️ V45 — champs lus par la liste des fournitures : lieu de livraison (par lot) et délai (à commande / quantité fixe). */

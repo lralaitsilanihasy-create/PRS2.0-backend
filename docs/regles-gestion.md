@@ -489,6 +489,14 @@ document porte chaque information (document maître, reprises) ; il manquait la 
   pas et ne s'abandonne pas : une version validée est un acte, et la **révision** est le geste prévu pour la
   corriger — **arbitré par le pilote le 26/09** (piste 2 ; l'abandon, un statut « abandonnée » qui rouvrirait la
   ligne, n'est pas retenu).
+- ⚠️ **2026-09-26 — L'acheteur admet plusieurs formes de garantie de soumission, le candidat choisit** (arbitrage du
+  pilote sur le dossier réel 2463, DPAO clause 6.6 : garantie bancaire, caution personnelle et solidaire ou chèque de
+  banque). La forme de la garantie (`B05-GS-02`) est donc une **liste à choix multiples** : au moins une forme quand la
+  garantie est exigée (bloquant), options du CMP seulement. Les documents reprennent la tournure du dossier réel dès
+  que plusieurs formes sont retenues — « Une garantie de soumission doit être fournie dans l'une des formes
+  suivantes : – soit … – soit … », une forme par ligne, dans l'ordre du référentiel — et gardent la ligne ordinaire pour
+  une forme unique. Une fiche qui n'en retenait qu'une reste juste : rien à ressaisir. Les modèles de garantie C1 / C2
+  restent commandés par le modèle joint (`B04-CD-02`).
 
 #### La fiche DAO des travaux (référentiel remis le 2026-09-24)
 

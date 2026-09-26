@@ -2,6 +2,8 @@ package cnm.prs;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.hasItem;
+import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -45,8 +47,9 @@ import cnm.prs.repository.ChampFicheMarcheRepository;
  *
  * <p>Jeu : plan 9900 (PRMP001, ANT, entité 1, CLOTURE, PV signé FAV), ligne 9901 à quantité fixe (mode 92 → DAO), deux
  * lots dont un sans montant ; champs de recette B02-AU-01 (DPAO), B04-LR-02 et B04-OP-02 (dates, DPAO), B05-GS-02
- * (montant, garantie de soumission = OUI, DPAO), B08-PA-50 (CCAP, repris AE). Type de pièce « Dossier d'appel d'offres
- * complet » de code DAO_COMPLET.</p>
+ * (forme de la garantie de soumission, liste à choix multiples depuis le 2026-09-26, DPAO repris AE et CCAP) et B05-GS-03
+ * (montant), tous deux sous garantie de soumission = OUI, B08-PA-50 (CCAP, repris AE). Type de pièce « Dossier d'appel
+ * d'offres complet » de code DAO_COMPLET.</p>
  */
 class FicheMarcheDocumentsIntegrationTest extends CnmIntegrationTestSupport {
 
@@ -82,7 +85,12 @@ class FicheMarcheDocumentsIntegrationTest extends CnmIntegrationTestSupport {
         champ("B02-AU-01", "Autorité contractante (précisions)", "TEXTE", "DPAO", null, null);
         champ("B04-LR-02", "Date limite de remise des offres", "DATE", "DPAO", null, null);
         champ("B04-OP-02", "Date d'ouverture des plis", "DATE", "DPAO", null, null);
-        champ("B05-GS-02", "Montant de la garantie de soumission (Ariary)", "MONTANT", "DPAO", null, "garantieSoumission = OUI");
+        // ⚠️ 2026-09-26 — la forme de la garantie est une liste à choix multiples (les quatre formes du CMP), comme au
+        // référentiel des fournitures ; le montant est B05-GS-03.
+        champ("B05-GS-02", "Forme de la garantie de soumission", "LISTE_MULTIPLE", "DPAO", "AE,CCAP", "garantieSoumission = OUI",
+                "Dépôt en numéraire au Trésor,Caution personnelle et solidaire d'un organisme agréé par le MEF,"
+                        + "Garantie bancaire,Chèque de banque", true);
+        champ("B05-GS-03", "Montant de la garantie de soumission (Ariary)", "MONTANT", "DPAO", null, "garantieSoumission = OUI");
         champ("B08-PA-50", "Délai de paiement (jours)", "NOMBRE", "CCAP", "AE", null);
 
         typeDao = seedTypePiece("Dossier d'appel d'offres complet", true, "DMC", 1);
@@ -157,7 +165,7 @@ class FicheMarcheDocumentsIntegrationTest extends CnmIntegrationTestSupport {
             + "dans le DPAO")
     void champFermeAbsent() throws Exception {
         cadrage("{\"garantieSoumission\":\"OUI\"}");
-        bloc("B05", "{\"B05-GS-02\":1250000}");
+        bloc("B05", "{\"B05-GS-03\":1250000}");
         cadrage("{\"garantieSoumission\":\"NON\"}");
         bloc("B04", "{\"B04-LR-02\":\"2026-04-10\"}");
         valider();
@@ -286,6 +294,64 @@ class FicheMarcheDocumentsIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isForbidden());
     }
 
+    // ------------------------------------------------------------------ 8. plusieurs formes de garantie admises
+
+    @Test
+    @DisplayName("8 — Forme de la garantie de soumission à choix multiples (2026-09-26) : trois formes → enregistrées dans "
+            + "l'ordre du référentiel, imprimées « l'une des formes suivantes : – soit … » (une par ligne) dans le DPAO et "
+            + "l'acte d'engagement, docx et pdf ; une seule forme → ligne ordinaire ; aucune → bloquant OBLIGATOIRE")
+    void formesDeGarantieAdmises() throws Exception {
+        cadrage("{\"garantieSoumission\":\"OUI\"}");
+        bloc("B02", "{\"B02-AU-01\":\"Direction des achats\"}");
+        bloc("B04", "{\"B04-LR-02\":\"2026-04-10\"}");
+        bloc("B08", "{\"B08-PA-50\":60}");
+        mvc.perform(put("/api/fiches-marche/" + idDmc + "/blocs/B05").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"valeurs\":{\"B05-GS-02\":[\"Chèque de banque\",\"garantie bancaire\","
+                        + "\"Caution personnelle et solidaire d'un organisme agréé par le MEF\"],\"B05-GS-03\":1250000}}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.valeurs.B05-GS-02").value(
+                        "Caution personnelle et solidaire d'un organisme agréé par le MEF,Garantie bancaire,Chèque de banque"))
+                .andExpect(jsonPath("$.bilanControles.bloquants[?(@.champs[0]=='B05-GS-02')]", hasSize(0)));
+        valider();
+        String tournure = "Forme de la garantie de soumission : Une garantie de soumission doit être fournie dans l'une des "
+                + "formes suivantes :";
+        String caution = "– soit une caution personnelle et solidaire d'un organisme agréé par le MEF";
+        String bancaire = "– soit une garantie bancaire";
+        String cheque = "– soit un chèque de banque";
+        for (String type : List.of("DPAO", "AE")) {
+            String docx = texteDuDocx(contenu(type, "docx"));
+            assertThat(docx).as(type + " docx").contains(tournure, caution, bancaire, cheque);
+            assertThat(docx.indexOf(caution)).as(type + " : ordre du référentiel").isGreaterThan(docx.indexOf(tournure))
+                    .isLessThan(docx.indexOf(bancaire));
+            assertThat(docx.indexOf(bancaire)).isLessThan(docx.indexOf(cheque));
+            assertThat(docx.lines()).as(type + " : une forme par ligne").contains(caution, bancaire, cheque);
+            String pdf = texteDuPdf(contenu(type, "pdf"));
+            assertThat(pdf).as(type + " pdf").contains("l'une des formes suivantes :", caution, bancaire, cheque);
+            assertThat(pdf.indexOf(caution)).as(type + " pdf : ordre du référentiel").isLessThan(pdf.indexOf(bancaire));
+            assertThat(pdf.indexOf(bancaire)).isLessThan(pdf.indexOf(cheque));
+        }
+
+        // une seule forme retenue : la ligne ordinaire, comme avant
+        mvc.perform(post("/api/fiches-marche/" + idDmc + "/reviser").header("Authorization", tokenPrmp)).andExpect(status().isOk());
+        bloc("B05", "{\"B05-GS-02\":\"Garantie bancaire\",\"B05-GS-03\":1250000}");
+        valider();
+        String dpao = texteDuDocx(contenu("DPAO", "docx"));
+        assertThat(dpao).contains("Forme de la garantie de soumission : Garantie bancaire")
+                .doesNotContain("– soit").doesNotContain("formes suivantes");
+
+        // aucune forme quand la garantie est exigée : le bloquant OBLIGATOIRE, comme pour une valeur vide
+        mvc.perform(post("/api/fiches-marche/" + idDmc + "/reviser").header("Authorization", tokenPrmp)).andExpect(status().isOk());
+        mvc.perform(put("/api/fiches-marche/" + idDmc + "/blocs/B05").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"valeurs\":{\"B05-GS-02\":[],\"B05-GS-03\":1250000}}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.valeurs.B05-GS-02").doesNotExist())
+                .andExpect(jsonPath("$.bilanControles.bloquants[?(@.regle=='OBLIGATOIRE' && @.champs[0]=='B05-GS-02')]", hasSize(1)));
+        mvc.perform(put("/api/fiches-marche/" + idDmc + "/blocs/B05").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"valeurs\":{\"B05-GS-02\":[\"Garantie bancaire\",\"Lettre de crédit\"],\"B05-GS-03\":1250000}}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[?(@.champ=='B05-GS-02')].message").value(hasItem(containsString("Lettre de crédit"))));
+    }
+
     // ------------------------------------------------------------------ outils
 
     private void remplirEtValider() throws Exception {
@@ -351,6 +417,11 @@ class FicheMarcheDocumentsIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     private void champ(String code, String libelle, String type, String document, String reprises, String condition) {
+        champ(code, libelle, type, document, reprises, condition, null, false);
+    }
+
+    private void champ(String code, String libelle, String type, String document, String reprises, String condition,
+            String options, boolean obligatoire) {
         ChampFicheMarche c = new ChampFicheMarche();
         c.setCode(code);
         c.setCodeRubrique(code.substring(0, code.lastIndexOf('-')));
@@ -361,8 +432,9 @@ class FicheMarcheDocumentsIntegrationTest extends CnmIntegrationTestSupport {
         c.setDocumentMaitre(document);
         c.setReprises(reprises);
         c.setTypesMarche("QUANTITE_FIXE,A_COMMANDE,CONTRAT_CADRE");
-        c.setObligatoire(false);
+        c.setObligatoire(obligatoire);
         c.setCondition(condition);
+        c.setOptions(options);
         c.setActif(true);
         champRepository.save(c);
     }

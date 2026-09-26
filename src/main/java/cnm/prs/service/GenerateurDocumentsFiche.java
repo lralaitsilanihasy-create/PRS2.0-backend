@@ -12,6 +12,7 @@ import org.apache.poi.xwpf.usermodel.XWPFParagraph;
 import org.apache.poi.xwpf.usermodel.XWPFRun;
 import org.springframework.stereotype.Component;
 
+import com.lowagie.text.Chunk;
 import com.lowagie.text.Document;
 import com.lowagie.text.DocumentException;
 import com.lowagie.text.Element;
@@ -203,7 +204,7 @@ public class GenerateurDocumentsFiche {
                         l.setText(ligne.libelle() + " : ");
                         XWPFRun v = p.createRun();
                         v.setFontSize(10);
-                        v.setText(ligne.valeur());
+                        texte(v, ligne.valeur());
                     }
                 }
             }
@@ -267,6 +268,33 @@ public class GenerateurDocumentsFiche {
         r.setBold(gras);
         r.setFontSize(taille);
         r.setText(texte);
+    }
+
+    /**
+     * ⚠️ 2026-09-26 — la valeur d'une ligne, sur plusieurs lignes si elle en porte (formes de garantie admises : une
+     * forme par ligne) : un saut de ligne par {@code \n}.
+     */
+    private static void texte(XWPFRun run, String valeur) {
+        String[] lignes = valeur.split("\n", -1);
+        for (int i = 0; i < lignes.length; i++) {
+            if (i > 0) {
+                run.addBreak();
+            }
+            run.setText(lignes[i]);
+        }
+    }
+
+    /** ⚠️ 2026-09-26 — même chose en PDF : un {@link Chunk#NEWLINE} par {@code \n}. */
+    private static Phrase phrase(String valeur, Font police) {
+        Phrase ph = new Phrase();
+        String[] lignes = valeur.split("\n", -1);
+        for (int i = 0; i < lignes.length; i++) {
+            if (i > 0) {
+                ph.add(Chunk.NEWLINE);
+            }
+            ph.add(new Chunk(lignes[i], police));
+        }
+        return ph;
     }
 
     // ------------------------------------------------------------------ pdf
@@ -375,7 +403,8 @@ public class GenerateurDocumentsFiche {
                     for (DocumentFicheModele.Ligne l : r.lignes()) {
                         Paragraph pl = new Paragraph();
                         pl.add(new Phrase(l.libelle() + " : ", libelle));
-                        pl.add(new Phrase(l.valeur(), valeur));
+                        pl.add(phrase(l.valeur(), valeur));
+                        pl.setKeepTogether(l.valeur().indexOf('\n') >= 0);   // ⚠️ 2026-09-26 — l'énumération reste avec sa tête
                         pl.setSpacingAfter(2);
                         document.add(pl);
                     }

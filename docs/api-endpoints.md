@@ -4877,6 +4877,28 @@ officiels du pilote, qui seront remplis tels quels.
   jetons ne lisent pas : C1 / C2 y impriment des **pointillés** pour le montant, les délais et la remise des offres,
   tant qu'un alias de jeton par catégorie n'est pas contractualisé.
 
+#### Forme de la garantie de soumission : plusieurs formes admises (2026-09-26, demande front, arbitrage du pilote sur le dossier réel 2463)
+
+- **`B05-GS-02`** « Forme de la garantie de soumission » passe de `LISTE` à **`LISTE_MULTIPLE`** (fichier de
+  correspondance des fournitures, et `docs/referentiel/2026-09-26-forme-garantie-soumission-choix-multiple.sql` pour une
+  base déjà chargée) : options (les quatre formes du CMP), condition `garantieSoumission = OUI`, obligatoire, documents
+  (DPAO, repris AE et CCAP) inchangés. Même contrat que `B04-CD-01` : reçu en tableau JSON ou en chaîne, **enregistré
+  dans l'ordre des options, séparé par des virgules** (« Caution personnelle et solidaire d'un organisme agréé par le
+  MEF,Garantie bancaire,Chèque de banque »), option inconnue → 400 `B05-GS-02` nominatif, liste vide = valeur absente
+  → bloquant `OBLIGATOIRE` quand la garantie est exigée. Une valeur à une seule forme est une liste valide : **aucune
+  reprise de données**, les versions validées gardent leurs valeurs et leurs documents.
+- **Rendu dans les documents** (`SelectionDocumentsFiche.valeurDocument`) : **plusieurs formes** retenues → la ligne
+  « Forme de la garantie de soumission : Une garantie de soumission doit être fournie dans l'une des formes
+  suivantes : » suivie d'une ligne **« – soit … »** par forme, dans l'ordre du référentiel, avec l'article des formes du
+  CMP (« – soit une garantie bancaire », « – soit un chèque de banque » ; une option hors des quatre s'imprime telle
+  quelle) — en docx (saut de ligne) comme en pdf (l'énumération reste sur une même page). **Une seule forme** → la ligne
+  ordinaire « Forme de la garantie de soumission : Garantie bancaire », comme avant. La tournure vaut partout où le champ
+  s'imprime : **DPAO, CCAP et acte d'engagement** (chaque AE d'une ligne allotie). Pas de DPAC : le champ n'est pas
+  ouvert au contrat-cadre (`typesMarche`). C1 / C2 restent régis par `B04-CD-02` ; `B04-CD-01` (fiches exigées) garde sa
+  liste jointe par « , » (des fiches cumulées, pas des alternatives).
+- **`valeurChampFiche`** d'une observation d'examen sur `B05-GS-02` reste la liste jointe (« Garantie bancaire, Chèque
+  de banque ») : la tournure est celle du document, l'observation montre les formes retenues.
+
 ### Les valeurs par lot de la fiche DAO ⚠️ 2026-09-25
 
 Demande front `frontend/docs/demande-backend-2026-09-25-dao-a-commande-par-lot.md`, tirée d'un DAO réel à commande en
