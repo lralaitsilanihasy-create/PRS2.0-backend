@@ -104,6 +104,13 @@ public class ChampFicheMarche {
     @Column(name = "PAR_LOT", nullable = false)
     private Boolean parLot = Boolean.FALSE;
 
+    /**
+     * ⚠️ V47 (2026-09-26, formulaires du candidat, R6) — valeur <strong>recopiée dans la fiche à sa création</strong>
+     * (source {@code SAISIE}) ; administrable ; un changement de défaut ne touche pas les fiches existantes.
+     */
+    @Column(name = "VALEUR_DEFAUT", length = 200)
+    private String valeurDefaut;
+
     @Column(name = "ACTIF", nullable = false)
     private Boolean actif = Boolean.TRUE;
 

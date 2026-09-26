@@ -665,7 +665,18 @@ public class FicheMarcheService {
             FicheMarche f = virtuelle(idDmc);
             f.setTypeMarche(ctx.forme().name());   // le type sous lequel la fiche est saisie (lot 1c : typeChange)
             f.setCreePar(CurrentUser.ref().orElse(null));
-            return ficheRepository.save(f);
+            f = ficheRepository.save(f);
+            // ⚠️ V47 (2026-09-26, formulaires du candidat, R6) — les valeurs par défaut du référentiel sont RECOPIÉES à la
+            // création de la fiche (champs saisis, actifs, de sa forme et de sa catégorie) : la fiche les porte ensuite comme
+            // toute saisie, et un changement de défaut ne la touche plus.
+            for (ChampFicheMarche c : champRepository.findByActifTrueOrderByCodeRubriqueAscRangAsc()) {
+                if (c.getValeurDefaut() != null && SourceChampFiche.SAISIE.name().equals(c.getSource())
+                        && c.pourTypeMarche(ctx.forme().name())
+                        && c.pourCategorie(ctx.codeCategorie() != null ? ctx.codeCategorie() : CategorieDao.FOURNITURES_SERVICES.name())) {
+                    valeurRepository.save(new FicheMarcheValeur(null, f.getIdFiche(), c.getCode(), c.getValeurDefaut()));
+                }
+            }
+            return f;
         }
         if (StatutFicheMarche.VALIDEE.name().equals(derniere.getStatut())) {
             throw new BusinessRuleException("La version " + derniere.getNumeroVersion() + " est validée, donc figée : "

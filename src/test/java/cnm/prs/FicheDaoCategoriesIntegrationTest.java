@@ -74,21 +74,25 @@ class FicheDaoCategoriesIntegrationTest extends CnmIntegrationTestSupport {
     // ------------------------------------------------------------------ 1-2. le référentiel sur deux axes
 
     @Test
-    @DisplayName("1-2 — Référentiel : quantité fixe + fournitures et services = ses 144 champs (139 avant le 2026-09-25 ; avec ou sans le "
+    @DisplayName("1-2 — Référentiel : quantité fixe + fournitures et services = ses 146 champs (139 avant le 2026-09-25, 144 avant le 26 ; avec ou sans le "
             + "filtre) ; travaux : aucun champ saisi ni rubrique des fournitures, seules les 23 informations du plan ; "
             + "catégorie inconnue → 400")
     void referentielSurDeuxAxes() throws Exception {
-        assertThat(champs("typeMarche=QUANTITE_FIXE&categorie=FOURNITURES_SERVICES")).hasSize(144);
-        assertThat(champs("typeMarche=QUANTITE_FIXE")).hasSize(144);
+        assertThat(champs("typeMarche=QUANTITE_FIXE&categorie=FOURNITURES_SERVICES")).hasSize(146);
+        assertThat(champs("typeMarche=QUANTITE_FIXE")).hasSize(146);
 
         String travaux = ref("typeMarche=QUANTITE_FIXE&categorie=TRAVAUX");
-        assertThat(JsonPath.<List<String>>read(travaux, "$.champs[*].source")).hasSize(23).containsOnly("PPM");
+        assertThat(JsonPath.<List<String>>read(travaux, "$.champs[?(@.source=='PPM')].code")).hasSize(23);
+        // V47 (2026-09-26) — les quatre champs des formulaires du candidat valent pour les trois catégories.
+        assertThat(JsonPath.<List<String>>read(travaux, "$.champs[?(@.source=='SAISIE')].code"))
+                .containsExactlyInAnyOrder("B02-OB-03", "B03-CQ-01", "B03-CQ-09", "B03-CQ-10");
         // Rubriques : celles du plan, plus celles des travaux (V41) encore sans champ dans ce jeu — servies « à compléter » ;
         // aucune des fournitures.
         assertThat(JsonPath.<List<String>>read(travaux, "$.blocs[*].rubriques[*].code"))
                 .contains("B01-AC", "B02-OB", "B02-LV", "B02-LT").doesNotContain("B02-AU", "B04-RO", "B05-GS");
-        assertThat(JsonPath.<List<String>>read(ref("categorie=PRESTATIONS_INTELLECTUELLES"), "$.champs[*].source"))
-                .containsOnly("PPM");
+        assertThat(JsonPath.<List<String>>read(ref("categorie=PRESTATIONS_INTELLECTUELLES"), "$.champs[?(@.source=='PPM')].code")).hasSize(23);
+        assertThat(JsonPath.<List<String>>read(ref("categorie=PRESTATIONS_INTELLECTUELLES"), "$.champs[?(@.source=='SAISIE')].code"))
+                .containsExactlyInAnyOrder("B02-OB-03", "B03-CQ-01", "B03-CQ-09", "B03-CQ-10");
 
         mvc.perform(get("/api/champs-fiche-marche?categorie=MOBILIER").header("Authorization", tokenPrmp))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.erreurs[0].champ").value("categorie"));

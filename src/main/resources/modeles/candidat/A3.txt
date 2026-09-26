@@ -1,0 +1,55 @@
+FICHIER	A3.docx
+TITRE	A3 : CAPACITES FINANCIERES
+SOUS_TITRE	A3 - a) SITUATION FINANCIERE ET PATRIMONIALE
+PARA	[Chaque Candidat doit compléter le formulaire ci-dessous]
+DROITE	Nom ou raison sociale du candidat : _____________________
+DROITE	Date : ______________________
+DROITE	No. d'appel d'offres et titre : {{B02-OB-03}} — {{B02-OB-01}}
+DROITE	Page [numéro de la page] de [nombre total de pages] pages
+SOUS_TITRE	1. Renseignements financiers
+TABLE	4
+LIGNE	Renseignements financiers équivalent en AriaryAntécédents pour les {{B03-CQ-10.lettres}} dernières années (équivalent en Ariary)
+LIGNE	Année 1Année 2Année 3
+LIGNE	Information du bilan
+LIGNE	Total actif
+LIGNE	Total passif
+LIGNE	Patrimoine net
+LIGNE	Disponibilités actuelles
+LIGNE	Engagements actuels
+LIGNE	Information des comptes de résultats
+LIGNE	Recettes totales
+LIGNE	Bénéfices avant impôts
+FIN_TABLE	
+VIDE	
+SOUS_TITRE	2. Documents financiers
+PARA	Le Candidat doit présenter des copies des états financiers et /ou des bilans des {{B03-CQ-10.lettres}} années. Les états financiers doivent :
+PARA	a) Refléter la situation financière du Candidat
+PARA	b) Avoir été vérifiés par un expert-comptable agréé
+PARA	c) Etre complets et inclure toutes les notes qui leur ont été ajoutées
+PARA	d) Correspondre aux périodes comptables déjà terminées et vérifiées (les états financiers de périodes partielles ne sont ni demandés ni acceptés)
+VIDE	
+SOUS_TITRE	A3 - b) CHIFFRE D'AFFAIRES
+PARA	[Chaque Candidat doit compléter le formulaire ci-dessous]
+DROITE	Nom ou raison social du candidat : _____________________
+DROITE	Date : _____________________
+DROITE	No. d'appel d'offres et titre : {{B02-OB-03}} — {{B02-OB-01}}
+DROITE	Page [numéro de la page] de [nombre total de pages] pages
+TABLE	4
+LIGNE	Chiffre d'affaires hors taxes (général)
+LIGNE	Exercice du………au……...Exercice du………au……...Exercice du………au……...
+LIGNE	Travaux
+LIGNE	Fournitures
+LIGNE	Services
+LIGNE	Prestations intellectuelles
+LIGNE	TOTAL (en Ariary)
+FIN_TABLE	
+TABLE	4
+LIGNE	Chiffre d'affaires hors taxes (prestations similaires à celles objet du marché)
+LIGNE	Exercice du………au……...Exercice du………au……...Exercice du………au……...
+LIGNE	{{SI:A3B-NATURES}}Fournitures
+LIGNE	Services{{FINSI:A3B-NATURES}}
+LIGNE	TOTAL (en Ariary)
+FIN_TABLE	
+VIDE	
+SOUS_TITRE	A3 – c) JUSTIFICATION DE LA CAPACITE DU CANDIDAT A DISPOSER DES RESSOURCES FINANCIERES PERMETTANT DE REALISER LE MARCHE
+PARA	[Fournir une note explicative ou tout autre document validé par le commissaire aux comptes ou à défaut par un expert comptable ou tout autre personne qualifiée]

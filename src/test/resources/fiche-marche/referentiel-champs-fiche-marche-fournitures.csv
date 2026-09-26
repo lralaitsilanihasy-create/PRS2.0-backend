@@ -1,6 +1,6 @@
-code;libelle;type;source;documentMaitre;reprises;typesMarche;condition;obligatoire;texteType;controle;options;cleCadrage;clePpm;actif;parLot
+code;libelle;type;source;documentMaitre;reprises;typesMarche;condition;obligatoire;texteType;controle;options;cleCadrage;clePpm;actif;parLot;categories;valeurDefaut
 B02-OB-02;Type de fournitures à livrer et services connexes à réaliser;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
-B02-OB-03;Numéro du dossier d'appel d'offres;TEXTE;SAISIE;DPAO;AE;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
+B02-OB-03;Numéro du dossier d'appel d'offres;TEXTE;SAISIE;DPAO;AE;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui;;FOURNITURES_SERVICES,TRAVAUX,PRESTATIONS_INTELLECTUELLES;
 B02-AU-01;Description du projet global (marché non alloti);TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;alloti = NON;oui;;;;;;oui
 B02-AU-02;Attribution des lots;LISTE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;alloti = OUI;oui;;;Lot par lot (attribution divisible),Totalité des lots à un seul attributaire;;;oui
 B02-AU-03;Quantités minimum et maximum;TEXTE_LONG;SAISIE;DPAO;;A_COMMANDE;;oui;;;;;;non
@@ -13,7 +13,7 @@ B03-ST-02;Conditions de la sous-traitance;TEXTE_LONG;SAISIE;AE;CCAP;QUANTITE_FIX
 B03-NA-01;Nantissement autorisé;OUI_NON;SAISIE;AE;CCAP;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
 B03-NA-02;Conditions du nantissement;TEXTE_LONG;SAISIE;AE;CCAP;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
 B03-NA-03;Comptable assignataire des paiements;TEXTE;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
-B03-CQ-01;Identification et situation juridique : pièces exigées;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B03-CQ-01;Identification et situation juridique : pièces exigées;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui;;FOURNITURES_SERVICES,TRAVAUX,PRESTATIONS_INTELLECTUELLES;
 B03-CQ-02;Capacité technique exigée;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
 B03-CQ-03;Capacité financière exigée;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
 B03-CQ-04;Marchés similaires : certificats de bonne fin ou PV de réception exigés;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
@@ -21,6 +21,8 @@ B03-CQ-05;Autorisation du fabricant exigée;OUI_NON;SAISIE;DPAO;;QUANTITE_FIXE,A
 B03-CQ-06;Qualifications particulières exigées;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
 B03-CQ-07;Communautés locales et ONG admises à candidater;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
 B03-CQ-08;Préférence nationale accordée;OUI_NON;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B03-CQ-09;Durée des antécédents juridiques (années);NOMBRE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE,CONTRAT_CADRE;;oui;;;;;;oui;;FOURNITURES_SERVICES,TRAVAUX,PRESTATIONS_INTELLECTUELLES;5
+B03-CQ-10;Durée des antécédents financiers (années);NOMBRE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE,CONTRAT_CADRE;;oui;;;;;;oui;;FOURNITURES_SERVICES,TRAVAUX,PRESTATIONS_INTELLECTUELLES;3
 B04-DE-01;Adresse pour les demandes d'éclaircissement;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
 B04-DE-02;Délai d'envoi des demandes par les candidats (jours avant la date limite);NOMBRE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
 B04-DE-03;Délai de réponse du représentant de la PRMP (jours);NOMBRE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui

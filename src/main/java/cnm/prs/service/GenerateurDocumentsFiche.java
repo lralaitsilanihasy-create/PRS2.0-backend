@@ -45,6 +45,143 @@ public class GenerateurDocumentsFiche {
         return List.of(new Fichier("docx", docx(modele)), new Fichier("pdf", pdf(modele)));
     }
 
+    /**
+     * ⚠️ V47 (formulaires du candidat, R12 (c)) — les deux fichiers d'un {@link DocumentLibre} : paragraphes alignés
+     * (titre centré gras, sous-titre gras, justifié, centré, à droite, vide) et tableaux à cellules multi-paragraphes,
+     * dans l'ordre des éléments ; pied de page de la version. Ni filigrane ni numérotation : ce sont les modèles
+     * officiels, leur texte est décalqué au caractère près.
+     */
+    public List<Fichier> generer(DocumentLibre modele) {
+        return List.of(new Fichier("docx", docxLibre(modele)), new Fichier("pdf", pdfLibre(modele)));
+    }
+
+    // ------------------------------------------------------------------ document libre : docx
+
+    private static byte[] docxLibre(DocumentLibre m) {
+        try (XWPFDocument doc = new XWPFDocument(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            for (DocumentLibre.Element e : m.elements()) {
+                if (e instanceof DocumentLibre.Paragraphe p) {
+                    paragrapheLibre(doc.createParagraph(), p);
+                } else if (e instanceof DocumentLibre.Tableau t) {
+                    org.apache.poi.xwpf.usermodel.XWPFTable table = doc.createTable(Math.max(1, t.lignes().size()), t.colonnes());
+                    table.setWidth("100%");
+                    for (int l = 0; l < t.lignes().size(); l++) {
+                        List<List<String>> ligne = t.lignes().get(l);
+                        for (int c = 0; c < t.colonnes(); c++) {
+                            org.apache.poi.xwpf.usermodel.XWPFTableCell cellule = table.getRow(l).getCell(c);
+                            List<String> paragraphes = c < ligne.size() ? ligne.get(c) : List.of("");
+                            for (int i = 0; i < paragraphes.size(); i++) {
+                                XWPFParagraph p = i == 0 ? cellule.getParagraphs().get(0) : cellule.addParagraph();
+                                XWPFRun r = p.createRun();
+                                r.setFontSize(9);
+                                r.setText(paragraphes.get(i));
+                            }
+                        }
+                    }
+                }
+            }
+            XWPFFooter pied = doc.createFooter(HeaderFooterType.DEFAULT);
+            XWPFParagraph pp = pied.createParagraph();
+            pp.setAlignment(ParagraphAlignment.CENTER);
+            XWPFRun r = pp.createRun();
+            r.setFontSize(8);
+            r.setText(m.piedDePage());
+            doc.write(out);
+            return out.toByteArray();
+        } catch (IOException e) {
+            throw new IllegalStateException("Génération du " + m.type() + " (docx) impossible : " + e.getMessage(), e);
+        }
+    }
+
+    private static void paragrapheLibre(XWPFParagraph p, DocumentLibre.Paragraphe modele) {
+        p.setSpacingAfter(60);
+        XWPFRun r = p.createRun();
+        switch (modele.style()) {
+            case TITRE -> {
+                p.setAlignment(ParagraphAlignment.CENTER);
+                r.setBold(true);
+                r.setFontSize(13);
+            }
+            case SOUS_TITRE -> {
+                p.setAlignment(ParagraphAlignment.LEFT);
+                r.setBold(true);
+                r.setFontSize(11);
+            }
+            case PARA -> {
+                p.setAlignment(ParagraphAlignment.BOTH);
+                r.setFontSize(10);
+            }
+            case CENTRE -> {
+                p.setAlignment(ParagraphAlignment.CENTER);
+                r.setFontSize(10);
+            }
+            case DROITE -> {
+                p.setAlignment(ParagraphAlignment.RIGHT);
+                r.setFontSize(10);
+            }
+            case VIDE -> r.setFontSize(10);
+        }
+        r.setText(modele.texte());
+    }
+
+    // ------------------------------------------------------------------ document libre : pdf
+
+    private static byte[] pdfLibre(DocumentLibre m) {
+        Font titre = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 13);
+        Font sousTitre = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 11);
+        Font texte = FontFactory.getFont(FontFactory.HELVETICA, 10);
+        Font cellule = FontFactory.getFont(FontFactory.HELVETICA, 9);
+        Font pied = FontFactory.getFont(FontFactory.HELVETICA, 8);
+        Document document = new Document(PageSize.A4, 50, 50, 50, 60);
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        try {
+            PdfWriter.getInstance(document, out);
+            HeaderFooter footer = new HeaderFooter(new Phrase(m.piedDePage(), pied), false);
+            footer.setAlignment(Element.ALIGN_CENTER);
+            footer.setBorder(0);
+            document.setFooter(footer);
+            document.open();
+            for (DocumentLibre.Element e : m.elements()) {
+                if (e instanceof DocumentLibre.Paragraphe p) {
+                    Paragraph par = switch (p.style()) {
+                        case TITRE -> aligne(new Paragraph(p.texte(), titre), Element.ALIGN_CENTER);
+                        case SOUS_TITRE -> aligne(new Paragraph(p.texte(), sousTitre), Element.ALIGN_LEFT);
+                        case PARA -> aligne(new Paragraph(p.texte(), texte), Element.ALIGN_JUSTIFIED);
+                        case CENTRE -> aligne(new Paragraph(p.texte(), texte), Element.ALIGN_CENTER);
+                        case DROITE -> aligne(new Paragraph(p.texte(), texte), Element.ALIGN_RIGHT);
+                        case VIDE -> new Paragraph(" ", texte);
+                    };
+                    par.setSpacingAfter(3);
+                    document.add(par);
+                } else if (e instanceof DocumentLibre.Tableau t) {
+                    com.lowagie.text.pdf.PdfPTable table = new com.lowagie.text.pdf.PdfPTable(t.colonnes());
+                    table.setWidthPercentage(100);
+                    table.setSpacingBefore(4);
+                    table.setSpacingAfter(6);
+                    for (List<List<String>> ligne : t.lignes()) {
+                        for (int c = 0; c < t.colonnes(); c++) {
+                            com.lowagie.text.pdf.PdfPCell cell = new com.lowagie.text.pdf.PdfPCell();
+                            for (String paragraphe : c < ligne.size() ? ligne.get(c) : List.of("")) {
+                                cell.addElement(new Paragraph(paragraphe.isEmpty() ? " " : paragraphe, cellule));
+                            }
+                            table.addCell(cell);
+                        }
+                    }
+                    document.add(table);
+                }
+            }
+            document.close();
+            return out.toByteArray();
+        } catch (DocumentException e) {
+            throw new IllegalStateException("Génération du " + m.type() + " (pdf) impossible : " + e.getMessage(), e);
+        }
+    }
+
+    private static Paragraph aligne(Paragraph p, int alignement) {
+        p.setAlignment(alignement);
+        return p;
+    }
+
     // ------------------------------------------------------------------ docx
 
     private static byte[] docx(DocumentFicheModele m) {

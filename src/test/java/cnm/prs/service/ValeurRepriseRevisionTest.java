@@ -64,4 +64,24 @@ class ValeurRepriseRevisionTest {
         assertThat(NombreEnLettres.ordinal(200)).isEqualTo("deux centième");
         assertThat(NombreEnLettres.ordinal(90)).isEqualTo("quatre-vingt-dixième");
     }
+
+    @Test
+    @DisplayName("N1 — le doublet des modèles officiels, les 14 vecteurs de la demande (abrégé « ème », « 1er » / « 1re »)")
+    void doublet() {
+        assertThat(NombreEnLettres.doublet(1, false)).isEqualTo("premier (1er)");
+        assertThat(NombreEnLettres.doublet(1, true)).isEqualTo("première (1re)");
+        assertThat(NombreEnLettres.doublet(2, false)).isEqualTo("deuxième (2ème)");
+        assertThat(NombreEnLettres.doublet(4, false)).isEqualTo("quatrième (4ème)");
+        assertThat(NombreEnLettres.doublet(5, false)).isEqualTo("cinquième (5ème)");
+        assertThat(NombreEnLettres.doublet(9, false)).isEqualTo("neuvième (9ème)");
+        assertThat(NombreEnLettres.doublet(15, false)).isEqualTo("quinzième (15ème)");
+        assertThat(NombreEnLettres.doublet(21, false)).isEqualTo("vingt et unième (21ème)");
+        assertThat(NombreEnLettres.doublet(30, false)).isEqualTo("trentième (30ème)");
+        assertThat(NombreEnLettres.doublet(71, false)).isEqualTo("soixante et onzième (71ème)");
+        assertThat(NombreEnLettres.doublet(75, false)).isEqualTo("soixante-quinzième (75ème)");
+        assertThat(NombreEnLettres.doublet(80, false)).isEqualTo("quatre-vingtième (80ème)");
+        assertThat(NombreEnLettres.doublet(100, false)).isEqualTo("centième (100ème)");
+        assertThat(NombreEnLettres.doublet(105, false)).isEqualTo("cent cinquième (105ème)");
+        assertThat(NombreEnLettres.doublet(1000, false)).isEqualTo("millième (1000ème)");
+    }
 }

@@ -5,8 +5,12 @@ import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HexFormat;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+
+import cnm.prs.entity.ChampFicheMarche;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -70,16 +74,16 @@ public class DocumentsFicheMarcheService {
     /** ⚠️ V45 (2026-09-25) — classeurs du candidat et taux de TVA administrable. */
     private final GenerateurClasseursFiche classeurs;
     private final ParametreService parametres;
-    /** ⚠️ V46 — les désignations des lots du plan (lot visé des formulaires du candidat). */
-    private final cnm.prs.repository.LotRepository lotRepository;
+    /** ⚠️ V47 (2026-09-26) — les modèles officiels des formulaires du candidat, lus au démarrage. */
+    private final ModelesCandidat modelesCandidat;
 
     public DocumentsFicheMarcheService(DocumentFicheMarcheRepository documentRepository,
             GenerateurDocumentsFiche generateur, ChampFicheMarcheRepository champRepository,
             BlocFicheMarcheRepository blocRepository, RubriqueFicheMarcheRepository rubriqueRepository,
             FicheMarcheRepository ficheRepository, DossierRepository dossierRepository,
             PieceJointeDossierRepository pieceRepository, TypePieceJointeRepository typePieceRepository,
-            GenerateurClasseursFiche classeurs, ParametreService parametres, cnm.prs.repository.LotRepository lotRepository) {
-        this.lotRepository = lotRepository;
+            GenerateurClasseursFiche classeurs, ParametreService parametres, ModelesCandidat modelesCandidat) {
+        this.modelesCandidat = modelesCandidat;
         this.classeurs = classeurs;
         this.parametres = parametres;
         this.documentRepository = documentRepository;
@@ -113,19 +117,13 @@ public class DocumentsFicheMarcheService {
      * ({@code BP}) et le tableau de conformité ({@code TC}) en classeurs {@code xlsx}.
      */
     public List<Produit> produire(FicheMarcheDto etat, List<BesoinFiche.Article> articles, LocalDateTime validation) {
-        List<DocumentFicheModele> modeles = new ArrayList<>(SelectionDocumentsFiche.selectionner(etat,
-                champRepository.findByActifTrueOrderByCodeRubriqueAscRangAsc(), blocRepository.findAllByOrderByRangAsc(),
-                rubriqueRepository.findAllByOrderByCodeBlocAscRangAsc(), validation));
+        List<ChampFicheMarche> champs = champRepository.findByActifTrueOrderByCodeRubriqueAscRangAsc();
+        List<DocumentFicheModele> modeles = new ArrayList<>(SelectionDocumentsFiche.selectionner(etat, champs,
+                blocRepository.findAllByOrderByRangAsc(), rubriqueRepository.findAllByOrderByCodeBlocAscRangAsc(), validation));
         DocumentFicheModele liste = SelectionDocumentsFiche.listeFournitures(etat, articles, validation);
         if (liste != null) {
             modeles.add(liste);
         }
-        // ⚠️ V46 (2026-09-25, §B8) — fiches A1 à A4 et garanties C1/C2, sur gabarit provisoire filigrané, toutes catégories.
-        List<String> lots = lotRepository.findByIdDetail(etat.getIdDetailCourant() == null ? etat.getIdDetail()
-                : etat.getIdDetailCourant()).stream()
-                .sorted(java.util.Comparator.comparing(cnm.prs.entity.Lot::getIdLot))
-                .map(l -> l.getDesignationLot()).toList();
-        modeles.addAll(FormulairesCandidat.generer(etat, lots, validation));
         List<Produit> produits = new ArrayList<>();
         for (DocumentFicheModele modele : modeles) {
             List<GenerateurDocumentsFiche.Fichier> fichiers;
@@ -134,6 +132,24 @@ public class DocumentsFicheMarcheService {
             } catch (RuntimeException e) {
                 throw new GenerationDocumentsException("La génération du document « " + modele.titre() + " » ("
                         + modele.type() + ") a échoué : la version n'est pas validée. " + e.getMessage(), e);
+            }
+            for (GenerateurDocumentsFiche.Fichier f : fichiers) {
+                produits.add(new Produit(modele.type(), f.extension(), nomFichier(modele.type(), etat.getRefeDossier(),
+                        etat.getIdDetail(), modele.lot(), etat.getVersion(), f.extension()), f.contenu(), modele.lot()));
+            }
+        }
+        // ⚠️ V47 (2026-09-26, §B8, R12 (c)) — fiches A1 à A4 (une fois pour le dossier) et garanties C1/C2 (par lot), sur
+        // les modèles officiels décalqués, toutes catégories.
+        Map<String, ChampFicheMarche> parCode = new LinkedHashMap<>();
+        champs.forEach(c -> parCode.put(c.getCode(), c));
+        for (DocumentLibre modele : FormulairesCandidat.generer(etat, parCode, modelesCandidat.modeles(), validation)) {
+            List<GenerateurDocumentsFiche.Fichier> fichiers;
+            try {
+                fichiers = generateur.generer(modele);
+            } catch (RuntimeException e) {
+                throw new GenerationDocumentsException("La génération du document « "
+                        + SelectionDocumentsFiche.titre(modele.type(), modele.lot()) + " » a échoué : la version n'est pas "
+                        + "validée. " + e.getMessage(), e);
             }
             for (GenerateurDocumentsFiche.Fichier f : fichiers) {
                 produits.add(new Produit(modele.type(), f.extension(), nomFichier(modele.type(), etat.getRefeDossier(),

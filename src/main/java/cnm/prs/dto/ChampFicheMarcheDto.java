@@ -81,4 +81,11 @@ public class ChampFicheMarcheDto {
      * création, inchangé à la modification (un écran ou un fichier qui ne le connaît pas ne l'efface pas).
      */
     private Boolean parLot;
+
+    /**
+     * ⚠️ V47 (2026-09-26) — valeur par défaut, recopiée dans la fiche à sa création (source {@code SAISIE} seulement).
+     * Absente : inchangée à la modification ; vide : effacée.
+     */
+    @Size(max = 200)
+    private String valeurDefaut;
 }

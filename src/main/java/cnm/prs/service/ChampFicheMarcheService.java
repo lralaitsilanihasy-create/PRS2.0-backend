@@ -216,8 +216,16 @@ public class ChampFicheMarcheService {
         if (parLot && (!SourceChampFiche.SAISIE.name().equals(source) || TypeChampFiche.PIECE.name().equals(type))) {
             erreurs.add(new ErrorResponse.FieldError("parLot", "Seul un champ saisi (source SAISIE, hors pièce) vaut par lot."));
         }
+        // ⚠️ V47 (2026-09-26, R6) — la valeur par défaut ne vaut que pour une saisie ; absente : inchangée, vide : effacée.
+        if (dto.getValeurDefaut() != null && !dto.getValeurDefaut().isBlank()
+                && !SourceChampFiche.SAISIE.name().equals(source)) {
+            erreurs.add(new ErrorResponse.FieldError("valeurDefaut", "Seul un champ saisi (source SAISIE) porte une valeur par défaut."));
+        }
         if (!erreurs.isEmpty()) {
             throw new ChampsInvalidesException(erreurs);
+        }
+        if (dto.getValeurDefaut() != null) {
+            c.setValeurDefaut(dto.getValeurDefaut().isBlank() ? null : dto.getValeurDefaut().trim());
         }
         c.setParLot(parLot);
         c.setCodeRubrique(r.get().getCode());
@@ -266,7 +274,7 @@ public class ChampFicheMarcheService {
                 c.getType(), c.getSource(), c.getDocumentMaitre(), ChampFicheMarche.liste(c.getReprises()),
                 ChampFicheMarche.liste(c.getTypesMarche()), c.getCondition(), c.getObligatoire(), c.getTexteType(),
                 c.getControle(), ChampFicheMarche.liste(c.getOptions()), c.getCleCadrage(), c.getClePpm(), c.getActif(),
-                ChampFicheMarche.liste(c.getCategories()), Boolean.TRUE.equals(c.getParLot()));
+                ChampFicheMarche.liste(c.getCategories()), Boolean.TRUE.equals(c.getParLot()), c.getValeurDefaut());
     }
 
     // ------------------------------------------------------------------ import CSV (hors API)
@@ -282,8 +290,8 @@ public class ChampFicheMarcheService {
      * ({@code oui}/{@code non}), {@code texteType}, {@code controle}, {@code options}, {@code cleCadrage},
      * {@code clePpm}, {@code rang}, {@code actif}, ⚠️ lot 5 {@code categories} (absente : {@code FOURNITURES_SERVICES}
      * pour un champ créé, inchangée pour un champ mis à jour), ⚠️ 2026-09-25 {@code parLot} ({@code oui}/{@code non} ;
-     * absente ou vide : {@code non} pour un champ créé, inchangée pour un champ mis à jour). Les listes sont séparées par
-     * des virgules dans la cellule.
+     * absente ou vide : {@code non} pour un champ créé, inchangée pour un champ mis à jour), ⚠️ V47 {@code valeurDefaut}
+     * (absente ou vide : inchangée). Les listes sont séparées par des virgules dans la cellule.
      */
     public BilanImport importerCsv(Path fichier) throws IOException {
         List<String> lignes = Files.readAllLines(fichier, StandardCharsets.UTF_8);
@@ -323,6 +331,7 @@ public class ChampFicheMarcheService {
                 dto.setClePpm(l.get("clePpm"));
                 dto.setCategories(ChampFicheMarche.liste(l.get("categories")));   // lot 5 : absente = défaut
                 dto.setParLot(vide(l.get("parLot")) ? null : ouiNon(l.get("parLot")));   // 2026-09-25 : absente = inchangé
+                dto.setValeurDefaut(vide(l.get("valeurDefaut")) ? null : l.get("valeurDefaut"));   // V47 : absente = inchangée
                 dto.setRang(vide(l.get("rang")) ? null : Integer.valueOf(l.get("rang")));
                 dto.setActif(vide(l.get("actif")) ? Boolean.TRUE : ouiNon(l.get("actif")));
                 if (vide(code) || !code.matches("B\\d{2}-[A-Z0-9]{1,6}-\\d{2}")) {

@@ -7,48 +7,59 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import cnm.prs.dto.FicheMarcheDto;
+import cnm.prs.entity.ChampFicheMarche;
+import cnm.prs.enums.CategorieDao;
+import cnm.prs.enums.TypeChampFiche;
 
 /**
- * ⚠️ <strong>Les formulaires administratifs du candidat — gabarit provisoire</strong> (V46, demande front du 2026-09-25,
- * §B8) : fiches de renseignements A1 à A4 et garanties de soumission C1 (bancaire) et C2 (caution personnelle et
- * solidaire), toutes catégories.
+ * ⚠️ <strong>Les formulaires du candidat sur les modèles officiels</strong> (demande front du 2026-09-25, §B8 ; arbitrages du
+ * pilote du 26/09, R1-R12) — fiches de renseignements A1 à A4 (une fois pour le dossier) et garanties de soumission C1 /
+ * C2 (une par lot), toutes catégories, rendus depuis les <strong>fichiers de commande du décalque</strong>
+ * ({@code modeles/candidat/<sigle>.txt}, copiés tels quels du dépôt front — le texte du dossier 2463 au caractère près).
  *
- * <p><strong>Ce ne sont pas les modèles officiels.</strong> Le pilote les fournira ; ils seront remplis tels quels, seuls
- * les blancs étant des champs. En attendant, chaque pièce est un gabarit filigrané « MODÈLE PROVISOIRE – NON OFFICIEL »
- * qui <em>liste</em> les blancs — ceux que la fiche remplit, avec leur valeur, et ceux que le candidat complète — sans
- * écrire aucune phrase réglementaire. Il sert à éprouver le pré-remplissage.</p>
- *
+ * <p><strong>Le contrat des jetons</strong>, tous de la forme {@code {{…}}}, traités <em>avant</em> le rendu :</p>
  * <ul>
- *   <li>A1 à A4 : une pièce par fiche exigée ({@code B04-CD-01}) et par lot si la ligne est allotie. A1 porte la
- *       rubrique A1-b (groupement), « non applicable » si le cadrage n'admet pas le groupement.</li>
- *   <li>C1 / C2 : une pièce par forme retenue ({@code B04-CD-02}) et par lot, au montant du lot ({@code B05-GS-03#n}) en
- *       chiffres et en lettres ; validité de la garantie ({@code B05-GS-04}) en nombre et en ordinal (« cent cinquième
- *       (105ème) jour »). C2 : remise des offres ({@code B04-LR-03}) et fin de validité des offres, calculée
- *       ({@code B04-LR-03} + {@code B04-VO-01} jours).</li>
+ *   <li>{@code {{CODE}}} : la valeur de la fiche (saisie, reprise du plan ou reflet), pour le lot du document si le champ
+ *       est par lot — montant « 1 600 000 Ariary », date « JJ/MM/AAAA », liste à choix multiples jointe par des virgules ;</li>
+ *   <li>{@code {{CODE.lettres}}} : un montant en toutes lettres ({@code MontantEnLettres.ariary}), un nombre en lettres
+ *       ({@code NombreEnLettres.cardinal}) ;</li>
+ *   <li>{@code {{CODE.doublet}}} : l'ordinal et son abrégé (« cent cinquième (105ème) ») ;</li>
+ *   <li>{@code {{DERIVE.delai-garantie.doublet}}} : idem sur {@code B05-GS-04 − B04-VO-01} (« trentième (30ème) »),
+ *       protégé par le contrôle {@code VALIDITE_GARANTIE_SUP_OFFRE} ; {@code {{DERIVE.fin-validite-offre}}} :
+ *       {@code B04-LR-03 + B04-VO-01} jours, en date — calculés, jamais stockés ;</li>
+ *   <li>{@code {{A1B.mention}}} : « (non applicable) » quand le cadrage n'autorise pas le groupement, rien sinon — et le
+ *       paragraphe est retiré (R9) ;</li>
+ *   <li>marqueurs {@code {{SI:A1B}}}…{@code {{FINSI:A1B}}} : les paragraphes entre les deux sont omis sans groupement ;
+ *       {@code {{SI:A3B-NATURES}}}…{@code {{FINSI:A3B-NATURES}}} : les lignes de tableau de la plage (de la ligne qui
+ *       contient SI à celle qui contient FINSI, R7) sont régénérées, une par nature du marché, déduites de la catégorie
+ *       (R8) ; les marqueurs sont toujours retirés ;</li>
+ *   <li>un jeton dont la valeur manque s'imprime en <strong>pointillés</strong> « ……… » (R2), pour que le papier reste
+ *       remplissable ; un jeton inconnu du contrat est laissé tel quel.</li>
  * </ul>
  *
- * <p>Classe pure : la fiche figée et les désignations des lots du plan en entrée, des modèles de document en sortie.</p>
+ * <p>Classe pure : la fiche figée, le référentiel des champs et les modèles lus en entrée, des {@link DocumentLibre} en
+ * sortie. Le rendu sans substitution ({@link #brut}) sert au comparateur de fidélité du front.</p>
  */
 public final class FormulairesCandidat {
 
-    public static final String FILIGRANE = "MODÈLE PROVISOIRE – NON OFFICIEL";
+    public static final List<String> FICHES = List.of("A1", "A2", "A3", "A4");
+    public static final List<String> GARANTIES = List.of("C1", "C2");
+    public static final String POINTILLES = "………";
 
-    /** Les champs qui commandent ou alimentent les formulaires (§B8). */
+    /** Les champs qui commandent les formulaires ou alimentent les dérivés (§B8). */
     static final String FICHES_EXIGEES = "B04-CD-01";
     static final String FORME_GARANTIE = "B04-CD-02";
-    static final String REFERENCE_AOO = "B02-OB-03";
-    static final String OBJET = "B02-OB-01";
-    static final String AUTORITE = "B01-AC-01";
-    static final String ADRESSE = "B01-AC-02";
-    static final String MONTANT_GARANTIE = "B05-GS-03";
     static final String VALIDITE_GARANTIE = "B05-GS-04";
     static final String REMISE_OFFRES = "B04-LR-03";
     static final String VALIDITE_OFFRES = "B04-VO-01";
 
-    private static final String A_COMPLETER = "……………… (à compléter par le candidat)";
-    private static final String NON_RENSEIGNE = "— (non renseigné dans la fiche)";
+    private static final Pattern JETON = Pattern.compile("\\{\\{([^{}]+)}}");
+    private static final Pattern MARQUEUR = Pattern.compile("\\{\\{(SI|FINSI):([A-Z0-9-]+)}}");
     private static final DateTimeFormatter JOUR = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     private static final Map<String, String> TITRES = Map.of(
@@ -67,111 +78,273 @@ public final class FormulairesCandidat {
     }
 
     /**
-     * @param lots désignations des lots du plan, dans l'ordre des rangs (vide : ligne non allotie)
+     * @param fiche      l'état figé de la version
+     * @param champs     le référentiel des champs, par code (types, par lot)
+     * @param modeles    les éléments de chaque modèle, par sigle ({@link ModelesCandidat})
+     * @param validation date de validation (pied de page)
      */
-    public static List<DocumentFicheModele> generer(FicheMarcheDto fiche, List<String> lots, LocalDateTime validation) {
-        List<DocumentFicheModele> documents = new ArrayList<>();
-        List<Integer> rangs = new ArrayList<>();
-        boolean alloti = Boolean.TRUE.equals(fiche.getSaisieParLot()) && lots.size() > 1;
-        if (alloti) {
-            for (int n = 1; n <= lots.size(); n++) {
-                rangs.add(n);
-            }
-        } else {
-            rangs.add(null);
-        }
-        String pied = "Plan " + (fiche.getRefeDossier() == null ? "—" : fiche.getRefeDossier()) + " · ligne "
-                + fiche.getIdDetail() + " · fiche marché version " + fiche.getVersion()
-                + (validation == null ? "" : " validée le " + validation.toLocalDate().format(JOUR))
-                + " · gabarit provisoire, en attente du modèle officiel";
-
-        for (String a : ChampFicheMarcheListe.valeurs(valeur(fiche, FICHES_EXIGEES, null))) {
-            if (!TITRES.containsKey(a) || !a.startsWith("A")) {
-                continue;
-            }
-            for (Integer lot : rangs) {
-                List<DocumentFicheModele.Rubrique> rubriques = new ArrayList<>();
-                rubriques.add(new DocumentFicheModele.Rubrique("En-tête pré-rempli par la fiche", entete(fiche, lot, lots)));
-                rubriques.add(new DocumentFicheModele.Rubrique("À compléter par le candidat", List.of(
-                        new DocumentFicheModele.Ligne("Date", A_COMPLETER),
-                        new DocumentFicheModele.Ligne("Identité, capacités, références", A_COMPLETER))));
-                if ("A1".equals(a)) {
-                    boolean groupement = fiche.getCadrage() != null
-                            && "OUI".equalsIgnoreCase(String.valueOf(fiche.getCadrage().get("groupement")));
-                    rubriques.add(new DocumentFicheModele.Rubrique(
-                            "A1-b — Renseignements additionnels lorsque le candidat est un groupement",
-                            List.of(new DocumentFicheModele.Ligne("A1-b", groupement ? A_COMPLETER
-                                    : "Non applicable : le cadrage n'admet pas le groupement."))));
-                }
-                documents.add(modele(a, lot, fiche, rubriques, pied));
+    public static List<DocumentLibre> generer(FicheMarcheDto fiche, Map<String, ChampFicheMarche> champs,
+            Map<String, List<DocumentLibre.Element>> modeles, LocalDateTime validation) {
+        List<DocumentLibre> documents = new ArrayList<>();
+        String pied = pied(fiche, validation);
+        Contexte ctx = new Contexte(fiche, champs);
+        for (String a : ChampFicheMarche.liste(valeur(fiche, FICHES_EXIGEES, null))) {
+            if (FICHES.contains(a) && modeles.containsKey(a)) {
+                documents.add(new DocumentLibre(a, null, ctx.rendre(modeles.get(a), null), pied));   // R11 : une fois pour le dossier
             }
         }
-
         String forme = valeur(fiche, FORME_GARANTIE, null);
         List<String> garanties = forme == null ? List.of()
-                : forme.contains("C1") && forme.contains("C2") ? List.of("C1", "C2") : List.of(forme.trim().toUpperCase());
+                : forme.contains("C1") && forme.contains("C2") ? GARANTIES : List.of(forme.trim().toUpperCase());
+        int nbLots = Boolean.TRUE.equals(fiche.getSaisieParLot()) && fiche.getNbLots() != null ? fiche.getNbLots() : 0;
         for (String c : garanties) {
-            if (!TITRES.containsKey(c)) {
+            if (!GARANTIES.contains(c) || !modeles.containsKey(c)) {
                 continue;
             }
-            for (Integer lot : rangs) {
-                documents.add(modele(c, lot, fiche, "C1".equals(c) ? c1(fiche, lot, lots) : c2(fiche, lot, lots), pied));
+            if (LotsFiche.alloti(nbLots)) {
+                for (int lot = 1; lot <= nbLots; lot++) {
+                    documents.add(new DocumentLibre(c, lot, ctx.rendre(modeles.get(c), lot), pied));
+                }
+            } else {
+                documents.add(new DocumentLibre(c, null, ctx.rendre(modeles.get(c), null), pied));
             }
         }
         return documents;
     }
 
-    private static DocumentFicheModele modele(String type, Integer lot, FicheMarcheDto fiche,
-            List<DocumentFicheModele.Rubrique> rubriques, String pied) {
-        return new DocumentFicheModele(type, titre(type) + (lot == null ? "" : " — lot " + lot), fiche.getDesignationMarche(),
-                List.of(new DocumentFicheModele.Bloc(titre(type), rubriques)), pied, lot, List.of(), FILIGRANE);
+    /** Le modèle tel quel, jetons non substitués : ce que le comparateur de fidélité du front relit. */
+    public static DocumentLibre brut(String sigle, List<DocumentLibre.Element> modele) {
+        return new DocumentLibre(sigle, null, modele, "Modèle " + sigle + " — rendu brut, jetons non substitués");
     }
 
-    private static List<DocumentFicheModele.Ligne> entete(FicheMarcheDto fiche, Integer lot, List<String> lots) {
-        return List.of(
-                new DocumentFicheModele.Ligne("N° d'appel d'offres et titre", referenceEtTitre(fiche)),
-                new DocumentFicheModele.Ligne("Autorité contractante", ou(valeur(fiche, AUTORITE, null))),
-                new DocumentFicheModele.Ligne("Lot visé", lotVise(lot, lots)));
+    private static String pied(FicheMarcheDto fiche, LocalDateTime validation) {
+        return "Plan " + (fiche.getRefeDossier() == null ? "—" : fiche.getRefeDossier()) + " · ligne "
+                + fiche.getIdDetail() + " · fiche marché version " + fiche.getVersion()
+                + (validation == null ? "" : " validée le " + validation.toLocalDate().format(JOUR));
     }
 
-    private static List<DocumentFicheModele.Rubrique> c1(FicheMarcheDto fiche, Integer lot, List<String> lots) {
-        String montant = montant(valeur(fiche, MONTANT_GARANTIE, lot));
-        return List.of(
-                new DocumentFicheModele.Rubrique("Blancs pré-remplis par la fiche", List.of(
-                        new DocumentFicheModele.Ligne("A : (nom et adresse de l'Acheteur)", acheteur(fiche)),
-                        new DocumentFicheModele.Ligne("Titre du marché", titreMarche(fiche, lot, lots)),
-                        new DocumentFicheModele.Ligne("Au profit de", ou(valeur(fiche, AUTORITE, null))),
-                        new DocumentFicheModele.Ligne("À concurrence d'un montant de (chiffres et lettres)", montant),
-                        new DocumentFicheModele.Ligne("Validité de la garantie", validiteGarantie(fiche)))),
-                new DocumentFicheModele.Rubrique("Laissés au candidat et à son garant", List.of(
-                        new DocumentFicheModele.Ligne("Nom du candidat, date, signature", A_COMPLETER),
-                        new DocumentFicheModele.Ligne("Banque, adresse, cachet", A_COMPLETER))));
-    }
+    // ------------------------------------------------------------------ substitution et marqueurs
 
-    private static List<DocumentFicheModele.Rubrique> c2(FicheMarcheDto fiche, Integer lot, List<String> lots) {
-        LocalDate remise = ControlesFicheMarche.date(valeur(fiche, REMISE_OFFRES, null));
-        BigDecimal jours = ControlesFicheMarche.nombre(valeur(fiche, VALIDITE_OFFRES, null));
-        String expiration = remise == null || jours == null ? NON_RENSEIGNE
-                : remise.plusDays(jours.longValue()).format(JOUR) + " (remise des offres + " + jours.toPlainString() + " jours)";
-        String reference = valeur(fiche, REFERENCE_AOO, null);
-        return List.of(
-                new DocumentFicheModele.Rubrique("Blancs pré-remplis par la fiche", List.of(
-                        new DocumentFicheModele.Ligne("Pour (dénomination et adresse de l'Autorité contractante)", acheteur(fiche)),
-                        new DocumentFicheModele.Ligne("Sur (objet du marché et références de l'appel d'offres)",
-                                titreMarche(fiche, lot, lots) + (reference == null ? "" : " — appel d'offres " + reference)),
-                        new DocumentFicheModele.Ligne("Au plus tard le (remise des offres)",
-                                remise == null ? NON_RENSEIGNE : remise.format(JOUR)),
-                        new DocumentFicheModele.Ligne("Validité de l'offre expirant le", expiration),
-                        new DocumentFicheModele.Ligne("Ladite caution s'élève à (chiffres et lettres)",
-                                montant(valeur(fiche, MONTANT_GARANTIE, lot))),
-                        new DocumentFicheModele.Ligne("Validité de la caution", validiteGarantie(fiche)))),
-                new DocumentFicheModele.Rubrique("Laissés au candidat et à la caution", List.of(
-                        new DocumentFicheModele.Ligne("Organisme de caution, siège social", A_COMPLETER),
-                        new DocumentFicheModele.Ligne("Nom et adresse du candidat", A_COMPLETER),
-                        new DocumentFicheModele.Ligne("Lieu, date, signature, cachet", A_COMPLETER))));
-    }
+    /** Le contexte d'une fiche : ce que valent les conditions, les répétitions et les jetons. */
+    private record Contexte(FicheMarcheDto fiche, Map<String, ChampFicheMarche> champs) {
 
-    // ------------------------------------------------------------------ valeurs
+        boolean groupement() {
+            return fiche.getCadrage() != null && "OUI".equalsIgnoreCase(String.valueOf(fiche.getCadrage().get("groupement")));
+        }
+
+        /** Une condition de section par son nom ; inconnue : vraie (le texte est gardé, les marqueurs retirés). */
+        boolean condition(String nom) {
+            return !"A1B".equals(nom) || groupement();
+        }
+
+        /** Les valeurs d'une plage régénérée par son nom ; {@code null} si ce n'est pas une répétition. */
+        List<String> repetition(String nom) {
+            if (!"A3B-NATURES".equals(nom)) {
+                return null;
+            }
+            String categorie = fiche.getCategorie();
+            if (CategorieDao.TRAVAUX.name().equals(categorie)) {
+                return List.of("Travaux");
+            }
+            if (CategorieDao.PRESTATIONS_INTELLECTUELLES.name().equals(categorie)) {
+                return List.of("Prestations intellectuelles");
+            }
+            return List.of("Fournitures", "Services");
+        }
+
+        List<DocumentLibre.Element> rendre(List<DocumentLibre.Element> modele, Integer lot) {
+            List<DocumentLibre.Element> out = new ArrayList<>();
+            String sectionOmise = null;   // nom de la section SI:… en cours d'omission
+            for (DocumentLibre.Element e : modele) {
+                if (e instanceof DocumentLibre.Paragraphe p) {
+                    Matcher m = MARQUEUR.matcher(p.texte().trim());
+                    if (m.matches() && m.group(0).equals(p.texte().trim())) {
+                        String nom = m.group(2);
+                        if ("SI".equals(m.group(1))) {
+                            if (sectionOmise == null && !condition(nom)) {
+                                sectionOmise = nom;
+                            }
+                        } else if (nom.equals(sectionOmise)) {
+                            sectionOmise = null;
+                        }
+                        continue;   // un marqueur n'est jamais imprimé
+                    }
+                    if (sectionOmise != null) {
+                        continue;
+                    }
+                    String texte = substituer(p.texte(), lot);
+                    if (texte == null) {
+                        continue;   // R9 : un paragraphe fait d'une seule mention vide est retiré
+                    }
+                    out.add(new DocumentLibre.Paragraphe(p.style(), texte));
+                } else if (e instanceof DocumentLibre.Tableau t) {
+                    if (sectionOmise != null) {
+                        continue;
+                    }
+                    out.add(new DocumentLibre.Tableau(t.colonnes(), lignes(t, lot)));
+                }
+            }
+            return out;
+        }
+
+        /** Les lignes d'un tableau : plages régénérées ou conditionnelles, puis substitution cellule par cellule. */
+        private List<List<List<String>>> lignes(DocumentLibre.Tableau t, Integer lot) {
+            List<List<List<String>>> out = new ArrayList<>();
+            int i = 0;
+            while (i < t.lignes().size()) {
+                List<List<String>> ligne = t.lignes().get(i);
+                String nom = marqueur(ligne, "SI");
+                if (nom == null) {
+                    out.add(substituer(ligne, lot));
+                    i++;
+                    continue;
+                }
+                int fin = i;
+                while (fin < t.lignes().size() && !nom.equals(marqueur(t.lignes().get(fin), "FINSI"))) {
+                    fin++;
+                }
+                fin = Math.min(fin, t.lignes().size() - 1);
+                List<String> valeurs = repetition(nom);
+                if (valeurs != null) {
+                    List<List<String>> gabarit = sansMarqueurs(t.lignes().get(i));
+                    for (String v : valeurs) {
+                        List<List<String>> copie = new ArrayList<>();
+                        for (int c = 0; c < gabarit.size(); c++) {
+                            copie.add(new ArrayList<>(gabarit.get(c)));
+                        }
+                        if (!copie.isEmpty() && !copie.get(0).isEmpty()) {
+                            copie.get(0).set(0, v);
+                        }
+                        out.add(substituer(copie, lot));
+                    }
+                } else if (condition(nom)) {
+                    for (int k = i; k <= fin; k++) {
+                        out.add(substituer(sansMarqueurs(t.lignes().get(k)), lot));
+                    }
+                }
+                i = fin + 1;
+            }
+            return out;
+        }
+
+        private static String marqueur(List<List<String>> ligne, String sorte) {
+            for (List<String> cellule : ligne) {
+                for (String paragraphe : cellule) {
+                    Matcher m = MARQUEUR.matcher(paragraphe);
+                    while (m.find()) {
+                        if (sorte.equals(m.group(1))) {
+                            return m.group(2);
+                        }
+                    }
+                }
+            }
+            return null;
+        }
+
+        private static List<List<String>> sansMarqueurs(List<List<String>> ligne) {
+            List<List<String>> out = new ArrayList<>();
+            for (List<String> cellule : ligne) {
+                List<String> c = new ArrayList<>();
+                for (String paragraphe : cellule) {
+                    c.add(MARQUEUR.matcher(paragraphe).replaceAll(""));
+                }
+                out.add(c);
+            }
+            return out;
+        }
+
+        private List<List<String>> substituer(List<List<String>> ligne, Integer lot) {
+            List<List<String>> out = new ArrayList<>();
+            for (List<String> cellule : ligne) {
+                List<String> c = new ArrayList<>();
+                for (String paragraphe : cellule) {
+                    String s = substituer(paragraphe, lot);
+                    c.add(s == null ? "" : s);
+                }
+                out.add(c);
+            }
+            return out;
+        }
+
+        /** Le texte substitué ; {@code null} si le texte n'était qu'un jeton qui vaut la chaîne vide (mention). */
+        private String substituer(String texte, Integer lot) {
+            Matcher m = JETON.matcher(texte);
+            StringBuilder sb = new StringBuilder();
+            boolean seul = m.matches();
+            m.reset();
+            while (m.find()) {
+                String v = jeton(m.group(1).trim(), lot);
+                if (seul && v != null && v.isEmpty()) {
+                    return null;
+                }
+                m.appendReplacement(sb, Matcher.quoteReplacement(v == null ? m.group(0) : v));
+            }
+            m.appendTail(sb);
+            return sb.toString();
+        }
+
+        /** La valeur d'un jeton ; {@code null} : jeton inconnu du contrat (laissé tel quel). */
+        private String jeton(String nom, Integer lot) {
+            if ("A1B.mention".equals(nom)) {
+                return groupement() ? "" : "(non applicable)";
+            }
+            if ("DERIVE.delai-garantie.doublet".equals(nom)) {
+                BigDecimal g = ControlesFicheMarche.nombre(valeur(fiche, VALIDITE_GARANTIE, null));
+                BigDecimal o = ControlesFicheMarche.nombre(valeur(fiche, VALIDITE_OFFRES, null));
+                return g == null || o == null || g.subtract(o).signum() <= 0 ? POINTILLES
+                        : NombreEnLettres.doublet(g.subtract(o).longValue(), false);
+            }
+            if ("DERIVE.fin-validite-offre".equals(nom)) {
+                LocalDate remise = ControlesFicheMarche.date(valeur(fiche, REMISE_OFFRES, null));
+                BigDecimal jours = ControlesFicheMarche.nombre(valeur(fiche, VALIDITE_OFFRES, null));
+                return remise == null || jours == null ? POINTILLES : remise.plusDays(jours.longValue()).format(JOUR);
+            }
+            if (nom.startsWith("DERIVE.") || nom.startsWith("SI:") || nom.startsWith("FINSI:")) {
+                return null;
+            }
+            int point = nom.indexOf('.');
+            String code = point < 0 ? nom : nom.substring(0, point);
+            String suffixe = point < 0 ? "" : nom.substring(point + 1);
+            ChampFicheMarche c = champs.get(code);
+            if (c == null && !code.matches("B\\d{2}-[A-Z0-9]{1,6}-\\d{2}")) {
+                return null;
+            }
+            String brut = valeur(fiche, code, c != null && Boolean.TRUE.equals(c.getParLot()) ? lot : null);
+            if (brut == null) {
+                return POINTILLES;
+            }
+            String type = c == null ? TypeChampFiche.TEXTE.name() : c.getType();
+            BigDecimal n = ControlesFicheMarche.nombre(brut);
+            return switch (suffixe) {
+                case "lettres" -> TypeChampFiche.MONTANT.name().equals(type) && n != null ? MontantEnLettres.ariary(n)
+                        : n != null && n.stripTrailingZeros().scale() <= 0 ? NombreEnLettres.cardinal(n.longValue()) : brut;
+                case "doublet" -> n != null && n.signum() > 0 ? NombreEnLettres.doublet(n.longValue(), false) : POINTILLES;
+                case "" -> affichage(type, brut, n);
+                default -> null;
+            };
+        }
+
+        /** La valeur d'un champ, selon son type : montant en chiffres avec l'unité, date JJ/MM/AAAA, Oui/Non, listes. */
+        private static String affichage(String type, String brut, BigDecimal n) {
+            if (TypeChampFiche.MONTANT.name().equals(type) && n != null) {
+                return ValeursPpmService.montant(n) + " Ariary";
+            }
+            if (TypeChampFiche.DATE.name().equals(type)) {
+                LocalDate d = ControlesFicheMarche.date(brut);
+                return d == null ? brut : d.format(JOUR);
+            }
+            if (TypeChampFiche.OUI_NON.name().equals(type)) {
+                return "OUI".equalsIgnoreCase(brut) ? "Oui" : "NON".equalsIgnoreCase(brut) ? "Non" : brut;
+            }
+            if (TypeChampFiche.LISTE_MULTIPLE.name().equals(type)) {
+                return String.join(", ", ChampFicheMarche.liste(brut));
+            }
+            if (TypeChampFiche.POURCENTAGE.name().equals(type)) {
+                return brut.endsWith("%") ? brut : brut + " %";
+            }
+            return brut;
+        }
+    }
 
     /** La valeur d'un champ (saisie, reprise du plan, reflet) ; pour un lot, {@code CODE#n} puis le code nu. */
     static String valeur(FicheMarcheDto fiche, String code, Integer lot) {
@@ -188,55 +361,9 @@ public final class FormulairesCandidat {
         return null;
     }
 
-    private static String referenceEtTitre(FicheMarcheDto fiche) {
-        String ref = valeur(fiche, REFERENCE_AOO, null);
-        String objet = valeur(fiche, OBJET, null);
-        return (ref == null ? "N° non renseigné" : ref) + " — " + (objet == null ? fiche.getDesignationMarche() : objet);
-    }
-
-    private static String acheteur(FicheMarcheDto fiche) {
-        String nom = valeur(fiche, AUTORITE, null);
-        String adresse = valeur(fiche, ADRESSE, null);
-        return nom == null ? NON_RENSEIGNE : nom + (adresse == null ? "" : ", " + adresse);
-    }
-
-    private static String titreMarche(FicheMarcheDto fiche, Integer lot, List<String> lots) {
-        String objet = valeur(fiche, OBJET, null);
-        String titre = objet == null ? ou(fiche.getDesignationMarche()) : objet;
-        return lot == null ? titre : titre + " — " + lotVise(lot, lots);
-    }
-
-    private static String lotVise(Integer lot, List<String> lots) {
-        if (lot == null) {
-            return "Marché non alloti";
-        }
-        String d = lot - 1 < lots.size() ? lots.get(lot - 1) : null;
-        return "Lot " + lot + (d == null || d.isBlank() ? "" : " : " + d);
-    }
-
-    private static String montant(String brut) {
-        BigDecimal m = ControlesFicheMarche.nombre(brut);
-        return m == null ? NON_RENSEIGNE : ValeursPpmService.montant(m) + " Ariary (" + MontantEnLettres.ariary(m) + ")";
-    }
-
-    /** « jusqu'au cent cinquième (105ème) jour » après la date limite de remise des offres. */
-    private static String validiteGarantie(FicheMarcheDto fiche) {
-        BigDecimal n = ControlesFicheMarche.nombre(valeur(fiche, VALIDITE_GARANTIE, null));
-        if (n == null || n.signum() <= 0) {
-            return NON_RENSEIGNE;
-        }
-        long j = n.longValue();
-        return "jusqu'au " + NombreEnLettres.ordinal(j) + " (" + j + (j == 1 ? "er" : "ème") + ") jour";
-    }
-
-    private static String ou(String v) {
-        return v == null ? NON_RENSEIGNE : v;
-    }
-
-    /** Lecture d'une valeur de liste à choix multiples (« A1,A3 »). */
-    private static final class ChampFicheMarcheListe {
-        static List<String> valeurs(String v) {
-            return cnm.prs.entity.ChampFicheMarche.liste(v);
-        }
+    /** Fabrique de résolveurs pour les tests : inutilisée en production. */
+    static Function<String, String> resolveur(FicheMarcheDto fiche, Map<String, ChampFicheMarche> champs, Integer lot) {
+        Contexte ctx = new Contexte(fiche, champs);
+        return nom -> ctx.jeton(nom, lot);
     }
 }

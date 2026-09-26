@@ -1,0 +1,16 @@
+FICHIER	A2.docx
+TITRE	A2 : CAPACITES TECHNIQUES
+SOUS_TITRE	A2 - a) MATERIEL, EQUIPEMENT ET OUTILLAGE APPARTENANT AU CANDIDAT OU A SA DISPOSITION PERMANENTE
+TABLE	4
+LIGNE	NATUREDESCRIPTIONDATE D’ACQUISITIONSTATUT
+LIGNE	
+LIGNE	
+LIGNE	
+LIGNE	
+LIGNE	
+LIGNE	
+FIN_TABLE	
+VIDE	
+SOUS_TITRE	A2 - b) CAPACITE TECHNIQUE A EXECUTER LE MARCHE
+PARA	Décrire ci-après les éléments principaux justifiant de la capacité technique à exécuter le marché
+PARA	[Note : cette preuve peut-être apportée par tout moyen et notamment par des références à toutes fournitures ou services attestant de la compétence du candidat à réaliser les prestations objet du marché

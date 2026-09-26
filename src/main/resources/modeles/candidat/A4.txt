@@ -1,0 +1,8 @@
+FICHIER	A4.docx
+TITRE	A4 – ANTECEDENTS DU CANDIDAT POUR DES MARCHES DE MEME NATURE1
+TABLE	2
+LIGNE	Identification du marché :(indiquer les références et l'objet principal du marché, le cas échéant le projet dans le cadre duquel il a été passé, l'objet du ou des lots exécutés)
+LIGNE	Valeur approximative du marché réalisé (en Ariary):(indiquer le montant total du marché en Ariary)_______ %
+LIGNE	Nom et coordonnées de l'Acheteur:
+LIGNE	Lieu d'exécutionDate de début:Date de fin:_____________
+FIN_TABLE	

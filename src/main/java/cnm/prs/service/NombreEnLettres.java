@@ -94,8 +94,23 @@ public final class NombreEnLettres {
      * « ième » (e muet élidé, « cinq » → « cinqu », « neuf » → « neuv », pluriel de vingt et cent retiré).
      */
     public static String ordinal(long n) {
+        return ordinal(n, false);
+    }
+
+    /**
+     * ⚠️ 2026-09-26 (formulaires du candidat, N1) — le <strong>doublet</strong> des modèles officiels : l'ordinal en
+     * lettres suivi de son abrégé entre parenthèses, écrit « ème » comme la source — « cent cinquième (105ème) »,
+     * « premier (1er) », au féminin « première (1re) ».
+     */
+    public static String doublet(long n, boolean feminin) {
+        String abrege = n == 1 ? (feminin ? "1re" : "1er") : n + "ème";
+        return ordinal(n, feminin) + " (" + abrege + ")";
+    }
+
+    /** L'ordinal, au féminin si demandé : 1 → « première », sinon la forme est la même (« cinquième »). */
+    public static String ordinal(long n, boolean feminin) {
         if (n == 1) {
-            return "premier";
+            return feminin ? "première" : "premier";
         }
         String c = cardinal(n);
         int i = Math.max(c.lastIndexOf(' '), c.lastIndexOf('-'));

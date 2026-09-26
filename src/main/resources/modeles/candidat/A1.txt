@@ -1,0 +1,58 @@
+FICHIER	A1.docx
+TITRE	A1 : IDENTIFICATION DU CANDIDAT
+SOUS_TITRE	A1 - a) FICHE DE RENSEIGNEMENTS RELATIFS AU CANDIDAT
+DROITE	Date: ________________
+DROITE	N° D'appel d'offre et titre: {{B02-OB-03}} — {{B02-OB-01}}
+DROITE	Page [numéro de la page] de [nombre total de pages] pages
+PARA	Nom ou raison sociale du candidat :
+PARA	Forme juridique :
+PARA	Numéro d’immatriculation :
+PARA	Numéro de compte bancaire, nom et adresse de la banque:
+PARA	Personne habilitée à représenter le candidat :
+PARA	Nom :
+PARA	Adresse :
+PARA	Adresse électronique :
+PARA	Copies certifiées conformes des documents originaux annexés :
+PARA	{{B03-CQ-01}}
+PARA	Description de procédure de redressement judiciaire ou équivalent au cours des {{B03-CQ-09.lettres}} dernières années et situation actuelle, incluant situation active et passive :
+VIDE	
+SOUS_TITRE	A1 - b) RENSEIGNEMENTS ADDITIONNELS LORSQUE LE CANDIDAT EST UN GROUPEMENT
+CENTRE	{{A1B.mention}}
+PARA	{{SI:A1B}}
+PARA	Nom ou raison sociale de chaque membre du groupement d'entreprises :
+PARA	[rappel : chaque membre du groupement doit remplir à titre individuel la fiche de renseignement a) ci-dessus]
+PARA	Nature du groupement :
+PARA	Date de constitution du groupement :
+PARA	Adresse du groupement :
+PARA	Désignation et coordonnées du chef de file :
+PARA	Nom :
+PARA	Adresse :
+PARA	N° télécopie :
+PARA	Adresse électronique :
+PARA	Les copies des documents originaux annexés :
+PARA	Statuts ou Documents constitutifs et documents d’enregistrement du groupement :
+PARA	_________________
+PARA	_________________
+PARA	{{FINSI:A1B}}
+VIDE	
+SOUS_TITRE	A1 – c) LITIGES INTERVENUS EN MATIERE DE MARCHES PUBLICS OU EN RAPPORT AVEC L’OBJET DU MARCHE
+PARA	[Le formulaire ci-dessous doit être rempli par le]
+DROITE	Nom ou raison sociale légal du candidat : ____________________
+DROITE	Date : ____________________
+DROITE	No d'appel d'offres et titre : {{B02-OB-03}} — {{B02-OB-01}}
+DROITE	Page [numéro de la page] de [nombre total de pages] pages
+CENTRE	Marchés non exécutés au cours des {{B03-CQ-09.lettres}} dernières années
+PARA	Il n’y a pas eu de non-exécution de marché pendant la période de {{B03-CQ-09}} ans
+PARA	Marché(s) non exécuté(s) pendant la période de {{B03-CQ-09}} années.
+TABLE	4
+LIGNE	AnnéeFraction non exécutée du marchéIdentification du marchéMontant total du marché (valeur actuelle équivalent en Ariary)
+LIGNE	______[indiquer le montant et pourcentage]Identification du marché :Nom et adresse de l’Autorité contractante :Raisons de non exécution :__________
+FIN_TABLE	
+CENTRE	Litiges au cours des {{B03-CQ-09.lettres}} dernières années
+PARA	Pas de litige en instance
+PARA	Litige(s) en instance:
+TABLE	4
+LIGNE	AnnéeRèglement en pourcentage du patrimoine totalIdentification du marchéMontant total du marché (valeur actuelle, équivalent en Ariary)
+LIGNE	_____________Identification du marché :Nom et adresse de l’Autorité contractante :Objet du litige :_________
+LIGNE	____________Identification du marché :Nom et adresse de l’Autorité contractante :Objet du litige :_________
+FIN_TABLE	

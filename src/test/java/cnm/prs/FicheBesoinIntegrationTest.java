@@ -242,9 +242,10 @@ class FicheBesoinIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("5 — V46 : fiches A1, A2 par lot et garanties C1, C2 par lot sur gabarit provisoire filigrané ; C1 porte le "
-            + "montant du lot en chiffres et en lettres et la validité en ordinal ; C2 la fin de validité des offres calculée")
-    void formulairesProvisoires() throws Exception {
+    @DisplayName("5 — V47 : fiches A1, A2, A3 une fois pour le dossier et garanties C1, C2 par lot sur les modèles officiels ; "
+            + "C1 porte le montant du lot en chiffres et en lettres, le trentième dérivé et le cent cinquième ; A1 sans "
+            + "groupement omet A1-b et dit « (non applicable) » ; A3-b porte les natures du marché ; aucun jeton ne subsiste")
+    void formulairesOfficiels() throws Exception {
         Long idDmc = creerDmc(9902);
         cadrage(idDmc, "OUI");
         for (int n = 1; n <= 3; n++) {
@@ -252,7 +253,7 @@ class FicheBesoinIntegrationTest extends CnmIntegrationTestSupport {
         }
         Map<String, String> donnees = new LinkedHashMap<>();
         donnees.put("B02-OB-03", "AOO 2461/MT/2026");
-        donnees.put("B04-CD-01", "A1,A2");
+        donnees.put("B04-CD-01", "A1,A2,A3");
         donnees.put("B04-CD-02", "C1 et C2");
         donnees.put("B05-GS-04", "105");
         donnees.put("B04-VO-01", "75");
@@ -261,29 +262,64 @@ class FicheBesoinIntegrationTest extends CnmIntegrationTestSupport {
             donnees.put("B05-TP-03#" + n, String.valueOf(80000000 * n));
         }
         remplirObligatoiresEtValider(idDmc, "A_COMMANDE", "FOURNITURES_SERVICES", donnees);
+        String fiche = mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        java.time.LocalDate remise = java.time.LocalDate.parse(JsonPath.<String>read(fiche, "$.valeurs['B04-LR-03']"));
+        String expiration = remise.plusDays(75).format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy"));
 
         String documents = mvc.perform(get("/api/fiches-marche/" + idDmc + "/documents").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        for (String type : List.of("A1", "A2", "C1", "C2")) {
+        for (String type : List.of("A1", "A2", "A3")) {
+            assertThat(JsonPath.<List<Object>>read(documents, "$[?(@.type=='" + type + "' && @.extension=='pdf')]")).as(type).hasSize(1);
+            assertThat(JsonPath.<List<Object>>read(documents, "$[?(@.type=='" + type + "' && @.lot != null)]")).as(type).isEmpty();
+        }
+        for (String type : List.of("C1", "C2")) {
             assertThat(JsonPath.<List<Integer>>read(documents, "$[?(@.type=='" + type + "' && @.extension=='pdf')].lot"))
                     .as(type).containsExactly(1, 2, 3);
         }
         assertThat(JsonPath.<List<String>>read(documents, "$[?(@.type=='C1')].libelle"))
                 .contains("Garantie bancaire de soumission (C1) — lot 2");
 
-        byte[] c1 = contenu(documents, "C1", "docx", 2);
-        String texte = texteDocx(c1);
-        assertThat(texte).contains("Lot 2 : Lot 2",
-                "3 200 000 Ariary (trois millions deux cent mille ariary)",
-                "jusqu'au cent cinquième (105ème) jour");
-        try (XWPFDocument doc = new XWPFDocument(new ByteArrayInputStream(c1))) {
-            assertThat(doc.getHeaderList()).anyMatch(h -> h._getHdrFtr().xmlText().contains("MODÈLE PROVISOIRE – NON OFFICIEL"));
-        }
-        String pdf = texteDuPdf(contenu(documents, "C2", "pdf", 1));
-        assertThat(pdf.replace(" ", "")).contains("MODÈLEPROVISOIRE–NONOFFICIEL");   // texte en diagonale : PDFBox le découpe
-        assertThat(pdf).contains("Page 1 de", "Validité de l'offre expirant le", "appel d'offres AOO 2461/MT/2026");
-        assertThat(texteDocx(contenu(documents, "A1", "docx", 3)))
-                .contains("A1-b", "Non applicable", "Lot visé : Lot 3");
+        String c1 = texteDocx(contenu(documents, "C1", "docx", 2));
+        assertThat(c1).contains("A : Entite 1, Adresse",
+                "la fourniture de AOO 2461/MT/2026 — Acquisition de matériels informatiques 9902",
+                "à concurrence d’un montant de 3 200 000 Ariary (trois millions deux cent mille ariary)",
+                "jusqu’au trentième (30ème) jour suivant l’expiration de la période de validité des offres, soit jusqu’au "
+                        + "cent cinquième (105ème) jour")
+                .doesNotContain("{{", "1 600 000");
+        String c2 = texteDuPdf(contenu(documents, "C2", "pdf", 1));
+        assertThat(c2).contains("au plus tard le " + remise.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")),
+                "dont la validité expire le " + expiration, "s’élève à 1 600 000 Ariary (un million six cent mille ariary)")
+                .doesNotContain("{{");
+        String a1 = texteDocx(contenu(documents, "A1", "docx", null));
+        assertThat(a1).contains("N° D'appel d'offre et titre: AOO 2461/MT/2026 — Acquisition de matériels informatiques 9902",
+                "(non applicable)", "au cours des cinq dernières années", "pendant la période de 5 ans")
+                .doesNotContain("Nature du groupement", "{{");
+        String a3 = texteDocx(contenu(documents, "A3", "docx", null));
+        assertThat(a3).contains("Antécédents pour les trois dernières années", "des bilans des trois années")
+                .doesNotContain("{{");
+    }
+
+    @Test
+    @DisplayName("6 — V47 : valeurDefaut servi au référentiel et recopié dans la fiche à sa création (B03-CQ-09 = 5, B03-CQ-10 = 3) ; "
+            + "refusé hors d'une saisie ; B02-OB-03 obligatoire")
+    void valeurParDefaut() throws Exception {
+        String ref = mvc.perform(get("/api/champs-fiche-marche").param("typeMarche", "A_COMMANDE")
+                .param("categorie", "FOURNITURES_SERVICES").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(ref, "$.champs[?(@.code=='B03-CQ-09')].valeurDefaut")).containsExactly("5");
+        assertThat(JsonPath.<List<Boolean>>read(ref, "$.champs[?(@.code=='B02-OB-03')].obligatoire")).containsExactly(true);
+        assertThat(JsonPath.<List<List<String>>>read(ref, "$.champs[?(@.code=='B03-CQ-01')].categories").get(0))
+                .containsExactlyInAnyOrder("FOURNITURES_SERVICES", "TRAVAUX", "PRESTATIONS_INTELLECTUELLES");
+
+        Long idDmc = creerDmc(9901);
+        String fiche = bloc(idDmc, "B02", "{}").andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<Map<String, String>>read(fiche, "$.valeurs")).containsEntry("B03-CQ-09", "5").containsEntry("B03-CQ-10", "3");
+
+        mvc.perform(put("/api/champs-fiche-marche/B02-OB-01").header("Authorization", tokenAdmin).contentType(JSON)
+                .content("{\"code\":\"B02-OB-01\",\"libelle\":\"Objet de l'appel d'offres\",\"type\":\"TEXTE_LONG\","
+                        + "\"source\":\"PPM\",\"clePpm\":\"OBJET\",\"documentMaitre\":\"DPAO\",\"valeurDefaut\":\"x\"}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.erreurs[0].champ").value("valeurDefaut"));
     }
 
     // ------------------------------------------------------------------ outils

@@ -539,10 +539,17 @@ document porte chaque information (document maître, reprises) ; il manquait la 
 - **La garantie de soumission** : quand elle est exigée, le modèle joint (C1, C2 ou les deux) doit être choisi ; son
   taux rapporté au montant maximum de chaque lot est comparé à des bornes que l'Administrateur fixe (référence 2 %) —
   un **avertissement**, jamais un blocage.
-- Les fiches de renseignements A1 à A4 (une par lot) et les garanties C1/C2 (une par lot, au montant du lot, en
-  chiffres et en lettres) sont produites **sur un gabarit provisoire filigrané « MODÈLE PROVISOIRE – NON OFFICIEL »**,
-  qui liste les blancs sans écrire de phrase réglementaire. Les **modèles officiels** du pilote les remplaceront : ils
-  seront remplis tels quels, seuls les blancs étant des champs.
+- ⚠️ **26/09 — les fiches de renseignements A1 à A4 et les garanties C1/C2 sont produites sur les modèles officiels**
+  (décalqués du dossier type au caractère près), et non plus sur un gabarit provisoire : seuls les blancs sont remplis,
+  aucune phrase n'est réécrite. A1 à A4 s'impriment **une fois pour le dossier** (un candidat qui vise deux lots ne
+  remplit qu'une fiche d'identification) ; C1 et C2 **une fois par lot**, au montant du lot, en chiffres et en lettres.
+  Un blanc que la fiche ne sait pas remplir reste un blanc (pointillés). La validité de la garantie est **saisie**
+  (105 jours) ; le délai après la validité des offres (30 jours) en est **déduit**, et le contrôle bloquant qui exige que
+  la garantie dure plus que les offres le protège.
+- **Deux durées d'antécédents** demandées au candidat — juridiques (cinq ans) et financiers (trois ans) — sont des
+  informations de la fiche, avec une **valeur par défaut administrable** recopiée dans la fiche à sa création : changer
+  le défaut ne change pas les fiches déjà ouvertes. Le numéro de l'appel d'offres devient obligatoire, et les pièces
+  d'identification exigées valent pour les trois catégories : les fiches du candidat s'impriment pour tout appel d'offres.
 - **Une version validée n'est jamais convertie** (arbitrage du 25/09) : si le référentiel a changé depuis (une liste à
   la place d'un texte, un lieu par lot à la place d'un lieu unique, une information retirée), l'ancienne valeur reste
   lisible dans cette version, **n'est pas reprise** à la révision suivante, et se ressaisit.

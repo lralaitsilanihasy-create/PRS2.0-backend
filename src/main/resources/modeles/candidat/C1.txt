@@ -1,0 +1,15 @@
+FICHIER	C1.docx
+TITRE	C 1. Modèle de garantie bancaire de soumission
+PARA	A : {{B01-AC-01}}, {{B01-AC-02}}
+PARA	ATTENDU QUE [nom du candidat ] (ci- après dénommé “le Candidat”) a remis une Offre, en date du [date] pour l’exécution, ou la fourniture de {{B02-OB-03}} — {{B02-OB-01}} (ci- après dénommée “l’Offre”) au profit de {{B01-AC-01}} (ci-après dénommée “l’Autorité Contractante”) prévoyant la délivrance d’une garantie bancaire de soumission.
+PARA	ATTENDU QUE vous avez stipulé dans le Dossier d’Appel d’Offres que le Candidat vous remettre une garantie bancaire d’une banque de renom pour le montant spécifié ici comme garantie bancaire de soumission
+PARA	ATTENDU QUE NOUS AVONS CONVENU DE FOURNIR AU CANDIDAT CETTE GARANTIE BANCAIRE
+PARA	EN CONSEQUENCE, nous affirmons par les présentes que nous nous portons garants et responsables à votre égard, au nom du Candidat à concurrence d’un montant de {{B05-GS-03}} ({{B05-GS-03.lettres}}) et nous nous engageons à vous payer, dès réception de votre demande écrite, sans discussion, toute(s) sommes(s), dans les limites de {{B05-GS-03}} ({{B05-GS-03.lettres}}), ci-dessus stipulées, sans que vous ayez à prouver ou à donner les raisons ni justifier de votre demande.
+PARA	Nous renonçons formellement à ce que vous réclamiez ladite dette au Candidat avant de nous présenter la demande
+PARA	La présente garantie demeurera valable jusqu’au {{DERIVE.delai-garantie.doublet}} jour suivant l’expiration de la période de validité des offres, soit jusqu’au {{B05-GS-04.doublet}} jour à compter de la date limite fixée pour la remise des offres. Cette date peut être reportée par l'Autorité Contractante par notification écrite au Candidat et au Garant. Toute demande relative à cette garantie devra parvenir au Garant au plus tard à la date d’expiration faute de quoi la présente garantie expire de plein droit.
+PARA	Nous convenons également qu’aucun changement ou addition ou aucune autre modification du Marché devant être réalisés entre vous et le Candidat ne nous libérera d’une obligation nous incombant au titre de la présente garantie.
+PARA	SIGNATURE et authentification du signataire
+PARA	Nom de la Banque
+PARA	Adresse
+PARA	Date
+PARA	Cachet de la Banque

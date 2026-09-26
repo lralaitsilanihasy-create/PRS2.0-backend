@@ -4833,17 +4833,49 @@ officiels du pilote, qui seront remplis tels quels.
   liste (`B04-CD-01`, `B04-CD-02`), clé nue d'un champ devenu par lot sur une ligne allotie (`B09-LL-01`) ou clé `#n`
   d'un champ qui ne l'est pas. Elle reste lisible dans la version précédente (`GET …/versions/{n}`) ; la ressaisie des
   obligatoires est exigée par le bilan.
-- **Fiches A1 à A4, garanties C1 / C2 — gabarit provisoire** (toutes catégories, en attendant les modèles officiels du
-  pilote) : types de document `A1`…`A4`, `C1`, `C2`, docx et pdf, **filigrane « MODÈLE PROVISOIRE – NON OFFICIEL »**
-  sur chaque page, « Page n de N pages ». A1-A4 : une pièce par fiche cochée à `B04-CD-01` et **par lot** si la ligne
-  est allotie — en-tête : référence (`B02-OB-03`) et objet (`B02-OB-01`), autorité contractante, lot visé (rang et
-  désignation du lot au plan) ; A1 porte A1-b (groupement), « non applicable » si le cadrage ne l'admet pas. C1 / C2 :
-  une pièce **par forme retenue** à `B04-CD-02` (« C1 et C2 » → les deux) et **par lot** — acheteur et adresse,
-  titre du marché et lot, montant `B05-GS-03#n` en chiffres et en lettres, validité `B05-GS-04` en ordinal (« jusqu'au
-  cent cinquième (105ème) jour ») ; C2 ajoute la référence de l'AOO, la remise des offres (`B04-LR-03`) et la fin de
-  validité des offres calculée (`B04-LR-03` + `B04-VO-01` jours). Le gabarit **liste les blancs** (ceux de la fiche,
-  remplis ; ceux du candidat, en pointillés) : il n'écrit aucune phrase réglementaire. Ordre : …, LF, A1…A4, C1, C2,
-  puis BP et TC. Les PDF sont joints au dossier soumis comme les autres.
+- **Fiches A1 à A4, garanties C1 / C2** — du 25 au 26/09, un gabarit provisoire filigrané ; **remplacé par les modèles
+  officiels** au troisième tour ci-dessous (V47). Types de document `A1`…`A4`, `C1`, `C2`, docx et pdf ; les PDF sont
+  joints au dossier soumis comme les autres.
+
+#### Troisième tour — les modèles officiels (V47, 2026-09-26, arbitrages « oui à tout » du pilote, §B8 R1-R12)
+
+- **Source du rendu** : les six **fichiers de commande du décalque** du front (`scripts/modeles-candidat/modeles/<sigle>.txt`,
+  commit front `59eb30c`), copiés tels quels dans `src/main/resources/modeles/candidat/` et lus au démarrage
+  (`ModelesCandidat` ; un fichier absent empêche le démarrage). Le moteur les rend par une **liste ordonnée
+  d'éléments** (`DocumentLibre`, lue par `FichierCommande`) : paragraphes `TITRE` / `SOUS_TITRE` / `PARA` (justifié) /
+  `CENTRE` / `DROITE` / `VIDE`, tableaux à *n* colonnes à cellules multi-paragraphes — POI pour le docx, OpenPDF pour le
+  pdf, aucune dépendance nouvelle. **Fidélité** : le texte au caractère près (rendu brut, jetons non substitués, jugé
+  « identique » six fois par `verifier.mjs --docx=` du front, test `ModelesCandidatRenduTest` qui écrit les docx dans
+  `target/modeles-candidat/`) ; la mise en forme est celle du moteur.
+- **Jetons** (`FormulairesCandidat`), traités **avant** le rendu : `{{CODE}}` = la valeur de la fiche pour le lot du
+  document si le champ est par lot (montant « 1 600 000 Ariary », date « JJ/MM/AAAA », Oui/Non, liste à choix multiples
+  jointe) ; `{{CODE.lettres}}` = montant en toutes lettres (`MontantEnLettres.ariary`) ou nombre en lettres
+  (`NombreEnLettres.cardinal`) ; `{{CODE.doublet}}` = ordinal et abrégé (`NombreEnLettres.doublet` : « cent cinquième
+  (105ème) », « premier (1er) », « première (1re) » au féminin) ; **`{{DERIVE.delai-garantie.doublet}}`** =
+  `B05-GS-04 − B04-VO-01` (« trentième (30ème) », protégé par `VALIDITE_GARANTIE_SUP_OFFRE` ; 105 reste saisi) ;
+  **`{{DERIVE.fin-validite-offre}}`** = `B04-LR-03 + B04-VO-01` jours ; `{{A1B.mention}}` = « (non applicable) » sans
+  groupement, sinon vide et le **paragraphe est retiré** (R9). Jeton dont la valeur manque → **pointillés « ……… »**
+  (R2) ; jeton inconnu du contrat → laissé tel quel.
+- **Marqueurs** : `{{SI:A1B}}`…`{{FINSI:A1B}}` (paragraphes seuls) — la section est omise quand le cadrage
+  `groupement` n'est pas `OUI` ; `{{SI:A3B-NATURES}}`…`{{FINSI:A3B-NATURES}}` (dans la première et la dernière
+  cellule de la plage, R7) — les lignes de la plage sont **régénérées**, une par nature déduite de la catégorie (R8 :
+  fournitures et services → « Fournitures », « Services » ; travaux → « Travaux » ; prestations intellectuelles →
+  « Prestations intellectuelles »). Les marqueurs ne sont jamais imprimés.
+- **Combien de pièces** (R11) : A1 à A4 **une fois pour le dossier** (une par fiche cochée à `B04-CD-01`, `lot` nul) ;
+  C1 / C2 **par lot** (une par forme retenue à `B04-CD-02`, « C1 et C2 » → les deux). Toutes catégories.
+- **Référentiel** (R1, R4, R5/R6 ; fichier des fournitures et `docs/referentiel/2026-09-26-modeles-officiels-candidat.sql`,
+  à lancer après V47) : `B02-OB-03` **obligatoire** et des trois catégories ; `B03-CQ-01` des trois catégories (rubrique
+  `B03-CQ` ouverte, V47) ; **`B03-CQ-09`** « Durée des antécédents juridiques (années) » et **`B03-CQ-10`** « Durée des
+  antécédents financiers (années) », NOMBRE, obligatoires, trois catégories, trois formes, **`valeurDefaut`** 5 et 3.
+- **`valeurDefaut`** (R6) : attribut du champ (`ChampFicheMarcheDto.valeurDefaut`, colonne `valeurDefaut` à l'import ;
+  absent = inchangé, vide = effacé ; refusé hors source `SAISIE`, 400 `valeurDefaut`), **recopié dans la fiche à sa
+  création** (premier enregistrement : champs saisis, actifs, de la forme et de la catégorie de la ligne). Une fiche déjà
+  créée ne le reçoit pas : le champ obligatoire se saisit. La fiche virtuelle (avant tout enregistrement) ne le montre
+  pas encore.
+- ⚠️ **Limite connue, à décider** : les jetons portent les codes du référentiel des **fournitures**. En travaux et en
+  prestations intellectuelles, la garantie de soumission a d'autres codes (`B05-GQ-03`, `B04-DV-01`, `B04-OV-02`) que les
+  jetons ne lisent pas : C1 / C2 y impriment des **pointillés** pour le montant, les délais et la remise des offres,
+  tant qu'un alias de jeton par catégorie n'est pas contractualisé.
 
 ### Les valeurs par lot de la fiche DAO ⚠️ 2026-09-25
 

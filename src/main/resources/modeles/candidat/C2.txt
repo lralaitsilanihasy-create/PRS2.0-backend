@@ -1,0 +1,16 @@
+FICHIER	C2.docx
+TITRE	C 2. Modèle de caution personnelle et solidaire de soumission
+PARA	Nous soussignés [indiquer la dénomination sociale dénomination sociale de la banque ou de l’organisme de caution, et le siège social] agissant en qualité d’organisme de caution, organisme agréé par le Ministère chargé des Finances, déclarons nous porter caution personnelle et solidaire de [indiquer le nom et l’adresse complète du Candidat], ci-après dénommé « le Candidat », pour le montant de la caution à laquelle le Candidat est assujetti au titre de la remise d’une offre au plus tard le {{B04-LR-03}} dont la validité expire le {{DERIVE.fin-validite-offre}} pour l’exécution d’un marché portant sur {{B02-OB-03}} — {{B02-OB-01}}, ci-après dénommée « l’Offre » pour {{B01-AC-01}}, {{B01-AC-02}}, ci-après dénommée « le Bénéficiaire », ladite caution s’élève à {{B05-GS-03}} ({{B05-GS-03.lettres}}).
+PARA	Nous engageons à effectuer tous versements, dans la limite du montant indiqué ci-dessus, sur demande de paiement du Bénéficiaire adressée par courrier avec accusé de réception, reçue au plus tard à la date d’expiration mentionnée ci-après, sans pouvoir différer le paiement ou soulever de contestation pour quelque motif que ce soit, jusqu’à concurrence de la somme garantie ci-dessus, dans le cas où le Candidat n’aurait pas rempli l’une des obligations auxquelles il est tenu en vertu de l’Offre, à savoir :
+PARA	a) que son Offre a été retirée pendant sa période de validité fixée dans le Dossier d’Appel d’Offres (DAO), ou
+PARA	b) qu’il n’a pas accepté les corrections des erreurs de calcul de son Offres, alors que cette Offre serait acceptée par le bénéficiaire sur la base de ces corrections, ou
+PARA	c) que s’étant vu notifier l’acceptation de l’offre par le Bénéficiaire pendant sa période de validité :
+PARA	- il n’a pas fourni la garantie de bonne exécution du marché, alors qu’il était tenu de le faire ainsi qu’il est prévu dans les documents d’appel d’offres, ou
+PARA	- il a refusé de signer le document l’engageant contractuellement à exécuter le marché.
+PARA	Le présent engagement expire le {{DERIVE.delai-garantie.doublet}} jour suivant l’expiration de la période de validité des offres telle que stipulée ci-dessus soit le {{B05-GS-04.doublet}} jour à compter de la date limite fixée pour la remise des offres. Cette date peut être reportée par l’Autorité Contractante par notification écrite au Candidat et à nous même. Toute demande relative au présent engagement devra nous parvenir au plus tard à la date d’expiration, faute de quoi le présent engagement expire de plein droit.
+PARA	Fait à [Lieu d’établissement de l’engagement], le [date d’établissement de l’engagement]
+PARA	SIGNATURE et authentification du signataire
+PARA	Nom de la Banque
+PARA	Adresse________________________________________________________________________
+PARA	Date
+PARA	Cachet de la Banque

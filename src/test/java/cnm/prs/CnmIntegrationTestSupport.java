@@ -696,6 +696,17 @@ abstract class CnmIntegrationTestSupport extends AbstractIntegrationTest {
         donnees.forEach((code, v) -> parBloc.computeIfAbsent(code.substring(0, 3), k -> new java.util.LinkedHashMap<>())
                 .put(code, v));
         for (int tour = 0; tour < 3; tour++) {
+            // ⚠️ V47 (2026-09-26) — comme l'écran, un enregistrement de bloc renvoie TOUTES les valeurs du bloc (le PUT
+            // remplace) : les valeurs déjà portées — dont les valeurs par défaut recopiées à la création — sont reprises.
+            java.util.Map<String, String> portees = com.jayway.jsonpath.JsonPath.read(
+                    mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp))
+                            .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), "$.valeurs");
+            for (java.util.Map.Entry<String, String> v : portees.entrySet()) {
+                java.util.Map<String, Object> bloc = parBloc.get(v.getKey().substring(0, 3));
+                if (bloc != null) {
+                    bloc.putIfAbsent(v.getKey(), v.getValue());
+                }
+            }
             for (java.util.Map.Entry<String, java.util.Map<String, Object>> e : parBloc.entrySet()) {
                 mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
                         .put("/api/fiches-marche/" + idDmc + "/blocs/" + e.getKey()).header("Authorization", tokenPrmp)
