@@ -1299,6 +1299,28 @@
         "categorie": "FOURNITURES_SERVICES",
         "categorieOutillee": true
       }
+    },
+    "etape2": {
+      "date": "2026-09-26",
+      "serveur": {
+        "agpmRequis": true,
+        "idSousType": "PPM-AGPM",
+        "refeDossier": "00001/PPM-AGPM/CNM/2026",
+        "referencePpm": "00001/MLSRS/PPM-AGPM/2026"
+      },
+      "controle": {
+        "ligne2463Presente": true,
+        "objet": true,
+        "mode": "Appel d'offres ouvert",
+        "montant": 457000000,
+        "dateDao": "2026-10-09",
+        "dateDaoAttendue": "2026-10-09"
+      },
+      "nbLignes": 1,
+      "fichiers": [
+        "agpm-2026.json",
+        "agpm-2026.html"
+      ]
     }
   }
 }

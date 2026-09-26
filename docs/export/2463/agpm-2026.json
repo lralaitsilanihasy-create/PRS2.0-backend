@@ -1,0 +1,52 @@
+{
+  "_": "Projet d'AGPM dérivé du plan, tel que le front le calcule (shared/prmp/agpm.ts : marchés dont le mode déclenche l'AGPM ; date du DAO = début de l'étape prévisionnelle « lancement »). Le serveur n'a pas de rendu : il sert agpmRequis, le sous-type PPM-AGPM et la grille d'examen (points 8, 12, 13, 14).",
+  "lu": "2026-09-26",
+  "sources": [
+    "/api/ppms/200337",
+    "/api/dossiers/100351",
+    "/api/marches?dossier=100351",
+    "/api/marche-previsions?marche=…",
+    "/api/mode-passations",
+    "/api/natures",
+    "/api/capm"
+  ],
+  "serveur": {
+    "agpmRequis": true,
+    "idSousType": "PPM-AGPM",
+    "refeDossier": "00001/PPM-AGPM/CNM/2026",
+    "referencePpm": "00001/MLSRS/PPM-AGPM/2026"
+  },
+  "entete": {
+    "exercice": 2026,
+    "entite": "MINISTERE DE L'ENSEIGNEMENT SUPERIEUR ET DE LA RECHERCHE SCIENTIFIQUE",
+    "signataire": "Norbert Fidelys LERAVO",
+    "dateInitiale": "2026-06-30",
+    "numMajPrec": 0,
+    "dateMajPrec": null,
+    "numMaj": 0
+  },
+  "lignes": [
+    {
+      "idDetail": 303091,
+      "compte": "2463",
+      "nature": "Fournitures",
+      "objet": "Fourniture et livraison des matériels informatiques répartis en cinq (5) lots (à commande)",
+      "montant": 457000000,
+      "financement": "RPI",
+      "modeLibelle": "Appel d'offres ouvert",
+      "dateDao": "2026-10-09",
+      "etapeLancement": {
+        "idCapm": 111,
+        "libelle": "Lancement du DAO/DC : avis spécifique d'appel public à la concurrence"
+      }
+    }
+  ],
+  "controle": {
+    "ligne2463Presente": true,
+    "objet": true,
+    "mode": "Appel d'offres ouvert",
+    "montant": 457000000,
+    "dateDao": "2026-10-09",
+    "dateDaoAttendue": "2026-10-09"
+  }
+}
