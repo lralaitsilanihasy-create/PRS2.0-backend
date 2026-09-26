@@ -2955,9 +2955,10 @@ volumineux → **400** (annule la création si multipart) ; **404** si l'UGPM ou
 
 > ⚠️ **Référence & signataire auto-générés (règle ajoutée).** `signataire` et `reference` ne sont **plus saisis**
 > (retirés de l'entrée). Le serveur les génère à la création du brouillon et les expose dans `PpmDto` (sortie) :
-> - **`reference`** = `<séquence>/<acronyme entité>/PPM/<année>` (ex. `00001/DGB/PPM/2026`), compteur **par
->   (entité, année)** ; l'**acronyme** est dérivé du `LIBELLE_ENTITE` (initiales des mots significatifs :
->   « Direction Générale du Budget » → `DGB`).
+> - **`reference`** = `<séquence>/<sigle ou acronyme entité>/PPM/<année>` (ex. `00001/DGB/PPM/2026`), compteur **par
+>   (segment entité, année)** ; ⚠️ **V48 (2026-09-26)** : le segment est le **`sigle`** de l'entité s'il est renseigné
+>   (`00001/MESupReS/PPM-AGPM/2026`), sinon l'**acronyme** dérivé du `LIBELLE_ENTITE` (initiales des mots
+>   significatifs : « Direction Générale du Budget » → `DGB`) — voir *Entités contractantes*.
 > - **`signataire`** = « prénoms + nom » de la **PRMP connectée** (`t_prmp`), repli sur l'identifiant PRMP.
 >
 > Modifiables ensuite via la **rectification** (en attente de décision PRMP), pas à la création.
@@ -3234,6 +3235,7 @@ les jalons naissent des flux internes (alertes J-7 / J-1), aucun profil métier 
 | idEntiteParent | number | Non | |
 | niveauHierarchique | number | **Dérivé (lecture seule)** | ⚠️ **DÉRIVÉ** de `categorieEntite` au POST/PUT (source unique) — la valeur envoyée par le client est **ignorée** |
 | idLocalite | string | Non | max 5 — **localité de l'entité** (FK `tr_localite`) ; détermine la localité des dossiers la concernant |
+| sigle | string | Non | ⚠️ **V48 (2026-09-26)** — max 20, lettres, chiffres, tirets et points seulement, sans espace (sinon **400** `sigle`) ; casse conservée (« MESupReS »), vide = absent, **pas d'unicité** ; servi par toutes les lectures (liste, unitaire, `GET /api/auth/entites`) ; **segment « entité » des références** quand il est renseigné |
 
 **Endpoints**
 
@@ -3260,6 +3262,19 @@ les jalons naissent des flux internes (alertes J-7 / J-1), aucun profil métier 
 > (`tr_categorie_entite`) — **source unique**, l'entité et sa catégorie ne peuvent plus diverger. Catégorie
 > **inconnue** du référentiel → **400** ; catégorie absente/vide → `categorieEntite`=`null` et `niveauHierarchique`=`null`.
 > La valeur `niveauHierarchique` du corps est **ignorée** en écriture (elle reste renseignée en lecture).
+
+> ⚠️ **Le sigle de l'entité (V48, demande front du 2026-09-26, arbitrage du pilote).** Le dossier réel 2463 nomme son
+> autorité contractante « MESupReS » ; le référentiel n'avait pas de sigle et la référence du plan portait un acronyme
+> dérivé du libellé (`00001/MLSRS/PPM-AGPM/2026`). Colonne `tr_entite_contract.SIGLE`, **facultative**, acceptée au
+> `POST` (PRMP, UGPM, Administrateur) et au `PUT`, servie partout où une entité se lit. **Règle de référence**
+> (`ReferenceService.genererPpm`) : le segment « entité » est le **sigle s'il est renseigné**, l'acronyme dérivé sinon —
+> pour la référence initiale du PPM (`<séq>/<sigle|acronyme>/PPM[-AGPM]/<année>`) et tout ce qui la reprend (le
+> dossier avant réception, le retrait accepté qui la restaure, la bascule de sous-type qui ne touche pas ce segment).
+> **Compteur** : `t_sequence_reference` est clé par ce segment et l'année — une entité qui reçoit un sigle ouvre une
+> **nouvelle ligne à 0** (`(PPM_REF, MESupReS, 2026)`), sa série `MLSRS` s'arrête où elle est ; **aucune référence déjà
+> attribuée ne change** (elle est imprimée sur des documents officiels). Pas de reprise de données : les entités
+> existantes restent sans sigle jusqu'à ce que l'Administrateur le pose ; l'entité 11 du jeu 2463 le reçoit par le
+> script de rejeu (`docs/export/2463/rejouer-2463.mjs`, étape 0) ou `docs/referentiel/2026-09-26-sigle-entite-11.sql`.
 
 **Exemple — requête**
 ```json

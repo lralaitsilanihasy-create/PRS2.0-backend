@@ -489,6 +489,49 @@ class ReferentielAdminIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("Entité contractante — sigle (V48, 2026-09-26) : accepté au POST et au PUT, servi par les lectures, "
+            + "casse conservée, vide = absent ; espace, caractère interdit ou 21 caractères → 400 champ sigle")
+    void entiteContract_sigle() throws Exception {
+        String post = "{\"idEntiteContract\":260,\"libelleEntite\":\"Ministère de l'Enseignement Supérieur\",\"adresse\":\"Fiadanana\","
+                + "\"idOrganigramme\":1,\"idLocalite\":\"ANT\",\"sigle\":\"MESupReS\"}";
+        mvc.perform(post("/api/entite-contracts").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content(post))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.sigle").value("MESupReS"));
+        mvc.perform(get("/api/entite-contracts/260").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.sigle").value("MESupReS"));
+        mvc.perform(get("/api/entite-contracts").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andExpect(jsonPath("$[?(@.idEntiteContract==260)].sigle").value("MESupReS"));
+        mvc.perform(get("/api/auth/entites"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$[?(@.idEntiteContract==260)].sigle").value("MESupReS"));
+
+        // PUT : changé, puis effacé (vide = absent).
+        String put = "{\"idEntiteContract\":260,\"libelleEntite\":\"Ministère de l'Enseignement Supérieur\",\"adresse\":\"Fiadanana\","
+                + "\"idOrganigramme\":1,\"idLocalite\":\"ANT\",\"sigle\":\"MESR-2026\"}";
+        mvc.perform(put("/api/entite-contracts/260").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content(put))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.sigle").value("MESR-2026"));
+        mvc.perform(put("/api/entite-contracts/260").header("Authorization", tokenAdmin)
+                .contentType(MediaType.APPLICATION_JSON).content(put.replace("\"MESR-2026\"", "\"\"")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.sigle").value(nullValue()));
+
+        // Refus nominatifs : espace, caractère hors [A-Za-z0-9.-], plus de 20 caractères.
+        for (String mauvais : java.util.List.of("ME SUP", "MES/UP", "MESUPRES-2026-XXXXXXX")) {
+            String bad = "{\"idEntiteContract\":261,\"libelleEntite\":\"Z\",\"adresse\":\"W\",\"idOrganigramme\":1,\"sigle\":\"" + mauvais + "\"}";
+            mvc.perform(post("/api/entite-contracts").header("Authorization", tokenAdmin)
+                    .contentType(MediaType.APPLICATION_JSON).content(bad))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.erreurs[0].champ").value("sigle"));
+        }
+        // La PRMP aussi peut poser le sigle à la création (import d'un PPM).
+        String parPrmp = "{\"idEntiteContract\":262,\"libelleEntite\":\"Jiro sy Rano Malagasy\",\"adresse\":\"Antananarivo\","
+                + "\"idOrganigramme\":1,\"sigle\":\"JIRAMA\"}";
+        mvc.perform(post("/api/entite-contracts").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content(parPrmp))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.sigle").value("JIRAMA"));
+    }
+
+    @Test
     @DisplayName("Publication : workflow EN_ATTENTE → PUBLIE → RETIRE + compteur de consultations")
     void publication_workflow() throws Exception {
         // Création : statut/consultations envoyés ignorés → EN_ATTENTE / 0.

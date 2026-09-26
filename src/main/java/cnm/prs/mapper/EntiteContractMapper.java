@@ -24,6 +24,7 @@ public final class EntiteContractMapper {
         dto.setIdEntiteParent(entity.getIdEntiteParent());
         dto.setNiveauHierarchique(entity.getNiveauHierarchique());
         dto.setIdLocalite(entity.getIdLocalite());
+        dto.setSigle(entity.getSigle());
         return dto;
     }
 
@@ -40,6 +41,7 @@ public final class EntiteContractMapper {
         entity.setIdEntiteParent(dto.getIdEntiteParent());
         entity.setNiveauHierarchique(dto.getNiveauHierarchique());
         entity.setIdLocalite(dto.getIdLocalite());
+        entity.setSigle(dto.getSigle());
         return entity;
     }
 }

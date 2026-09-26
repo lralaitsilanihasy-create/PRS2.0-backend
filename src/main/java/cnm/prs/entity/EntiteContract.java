@@ -51,6 +51,13 @@ public class EntiteContract {
     @Column(name = "ID_LOCALITE", length = 5)
     private String idLocalite;
 
+    /**
+     * ⚠️ V48 (2026-09-26) — sigle tel qu'il figure dans les références (« MESupReS », « JIRAMA ») ; facultatif, sans
+     * unicité. S'il est renseigné, la référence du PPM l'emploie à la place de l'acronyme dérivé du libellé.
+     */
+    @Column(name = "SIGLE", length = 20)
+    private String sigle;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ID_LOCALITE", insertable = false, updatable = false)
     @JsonIgnore

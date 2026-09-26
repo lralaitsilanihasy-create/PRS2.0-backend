@@ -283,6 +283,33 @@ class ReferencePpmAgpmIntegrationTest extends CnmIntegrationTestSupport {
     // ------------------------------------------------------------------ helpers
 
     /** Crée un PPM par la façade, avec une ligne portant le mode donné (fragment JSON). */
+    // ------------------------------------------------------------------ V48 — le sigle dans la référence
+
+    @Test
+    @DisplayName("V48 (2026-09-26) — le segment « entité » de la référence est le SIGLE s'il est renseigné (série propre "
+            + "au sigle, à partir de 00001), l'acronyme dérivé du libellé sinon ; une référence attribuée ne change pas")
+    void sigleDansLaReference() throws Exception {
+        cnm.prs.entity.EntiteContract e = entiteContractRepository.findById(1).orElseThrow();
+        e.setLibelleEntite("Ministère de l'Enseignement Supérieur et de la Recherche Scientifique");
+        e.setSigle(null);
+        entiteContractRepository.save(e);
+        String sansSigle = referenceDuPpm(creerPpm("\"idMode\":" + MODE_AO_OUVERT));
+        assertThat(sansSigle).as("acronyme dérivé : « L'ENSEIGNEMENT » compte pour L").contains("/MLSRS/PPM-AGPM/2026");
+
+        e.setSigle("MESupReS");
+        entiteContractRepository.save(e);
+        String avecSigle = referenceDuPpm(creerPpm("\"idMode\":" + MODE_AO_OUVERT));
+        String encore = referenceDuPpm(creerPpm("\"idMode\":" + MODE_AO_OUVERT));
+        assertThat(avecSigle).isEqualTo("00001/MESupReS/PPM-AGPM/2026");   // nouvelle série, casse conservée
+        assertThat(encore).isEqualTo("00002/MESupReS/PPM-AGPM/2026");
+        assertThat(ppmRepository.findAll()).extracting(Ppm::getReference).contains(sansSigle);   // l'ancienne ne bouge pas
+    }
+
+    private String referenceDuPpm(String reponseSaisie) {
+        int idDossier = JsonPath.read(reponseSaisie, "$.idDossier");
+        return ppmRepository.findByIdDossier(idDossier).stream().findFirst().orElseThrow().getReference();
+    }
+
     private String creerPpm(String fragmentMode) throws Exception {
         String body = "{\"idEntiteContract\":1,\"exercice\":2026,\"signataire\":\"RABE\",\"dateSignature\":\"2026-01-10\","
                 + "\"reference\":\"PPM-AGPM-TEST\",\"marches\":[{\"designationMarche\":\"Travaux\","

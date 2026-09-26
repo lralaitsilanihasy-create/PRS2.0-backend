@@ -16,6 +16,6 @@ public final class EntitePubliqueMapper {
             return null;
         }
         return new EntitePubliqueDto(e.getIdEntiteContract(), e.getLibelleEntite(),
-                e.getAdresse(), e.getCategorieEntite(), e.getIdLocalite());
+                e.getAdresse(), e.getCategorieEntite(), e.getIdLocalite(), e.getSigle());
     }
 }

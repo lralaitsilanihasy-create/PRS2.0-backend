@@ -10,5 +10,7 @@ public record EntitePubliqueDto(
         String libelleEntite,
         String adresse,
         String categorieEntite,
-        String idLocalite) {
+        String idLocalite,
+        /** ⚠️ V48 (2026-09-26) — sigle de l'entité, {@code null} s'il n'est pas renseigné. */
+        String sigle) {
 }

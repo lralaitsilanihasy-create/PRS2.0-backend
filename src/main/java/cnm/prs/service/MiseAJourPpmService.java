@@ -1173,9 +1173,9 @@ public class MiseAJourPpmService {
     private void rendreEffective(Dossier dossier) {
         ppmRepository.findByIdDossier(dossier.getIdDossier()).stream().findFirst().ifPresent(ppm -> {
             if (REFERENCE_PROVISOIRE.equals(ppm.getReference())) {
-                ppm.setReference(referenceService.genererPpm(
-                        entiteContractRepository.findById(dossier.getIdEntiteContract())
-                                .map(e -> e.getLibelleEntite()).orElse(null),
+                cnm.prs.entity.EntiteContract entite = entiteContractRepository.findById(dossier.getIdEntiteContract()).orElse(null);
+                ppm.setReference(referenceService.genererPpm(   // ⚠️ V48 — sigle de l'entité s'il existe, acronyme sinon
+                        entite == null ? null : entite.getSigle(), entite == null ? null : entite.getLibelleEntite(),
                         ppm.getExercice()));
                 ppmRepository.save(ppm);
             }

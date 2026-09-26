@@ -54,6 +54,7 @@ public class EntiteContractService {
 
     public EntiteContractDto create(EntiteContractDto dto) {
         EntiteContract entity = EntiteContractMapper.toEntity(dto);
+        entity.setSigle(sigle(dto.getSigle()));
         // ⚠️ LOT 3b (2026-08-26) — un POST ne peut pas écraser un enregistrement existant.
         entity.setIdEntiteContract(ClePrimaire.reallouer(dto.getIdEntiteContract(), repository::existsById, repository::nextIdEntiteContract));
         deriverNiveau(entity);
@@ -73,8 +74,14 @@ public class EntiteContractService {
         existing.setIdOrganigramme(dto.getIdOrganigramme());
         existing.setIdEntiteParent(dto.getIdEntiteParent());
         existing.setIdLocalite(dto.getIdLocalite());   // ⚠️ correctif 2026-07-26 : le PUT ignorait idLocalite (aligné sur le POST/mapper)
+        existing.setSigle(sigle(dto.getSigle()));      // ⚠️ V48 — sigle facultatif, vide = effacé
         deriverNiveau(existing);   // niveauHierarchique DÉRIVÉ de la catégorie (source unique) — valeur client ignorée
         return EntiteContractMapper.toDto(repository.save(existing));
+    }
+
+    /** ⚠️ V48 — le sigle est stocké tel que saisi (casse comprise : « MESupReS »), ébarbé ; vide → absent. */
+    private static String sigle(String s) {
+        return s == null || s.isBlank() ? null : s.trim();
     }
 
     /**

@@ -83,7 +83,18 @@ public class ReferenceService {
      */
     @Transactional
     public String genererPpm(String libelleEntite, int annee) {
-        String code = acronymeEntite(libelleEntite);
+        return genererPpm(null, libelleEntite, annee);
+    }
+
+    /**
+     * ⚠️ V48 (2026-09-26, demande front « le sigle de l'entité ») — le segment « entité » de la référence est le
+     * <strong>sigle</strong> de l'entité s'il est renseigné (« MESupReS »), l'acronyme dérivé du libellé sinon (« MLSRS »).
+     * Le compteur est clé par ce segment et l'année : une entité qui reçoit un sigle ouvre une <strong>nouvelle série</strong>
+     * (ligne {@code (PPM_REF, sigle, année)} à 0) ; les références déjà attribuées ne changent jamais.
+     */
+    @Transactional
+    public String genererPpm(String sigle, String libelleEntite, int annee) {
+        String code = sigle != null && !sigle.isBlank() ? sigle.trim() : acronymeEntite(libelleEntite);
         if (repository.incrementerExistant("PPM_REF", code, annee) == 0) {
             repository.creer("PPM_REF", code, annee);
         }

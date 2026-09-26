@@ -189,7 +189,7 @@ public class SaisieService {
         // ⚠️ Règle ajoutée — signataire auto (profil PRMP) + référence auto (acronyme entité), non saisis.
         ppm.setSignataire(signataireDeLaPrmp(idPrmp));
         ppm.setDateSignature(req.dateSignature());
-        ppm.setReference(referenceService.genererPpm(libelleEntite(req.idEntiteContract()), req.exercice()));
+        ppm.setReference(referenceService.genererPpm(sigleEntite(req.idEntiteContract()), libelleEntite(req.idEntiteContract()), req.exercice()));   // ⚠️ V48 — sigle s'il existe
         ppm.setIdLocalite(localite);
         // ⚠️ Fiche de présentation (2026-09-01) — justification globale de la fiche (arbitrage 2).
         ppm.setJustificationFiche(req.justificationFiche());
@@ -941,6 +941,11 @@ public class SaisieService {
     /** Libellé de l'entité contractante (source de l'acronyme de la référence PPM). */
     private String libelleEntite(Integer idEntiteContract) {
         return entiteContractRepository.findById(idEntiteContract).map(e -> e.getLibelleEntite()).orElse(null);
+    }
+
+    /** ⚠️ V48 — le sigle de l'entité (segment de référence), {@code null} s'il n'est pas renseigné. */
+    private String sigleEntite(Integer idEntiteContract) {
+        return entiteContractRepository.findById(idEntiteContract).map(e -> e.getSigle()).orElse(null);
     }
 
     /** Signataire = « prénoms nom » de la PRMP (équivalent de t_prmp.signataire, absent) ; repli sur idPrmp. */

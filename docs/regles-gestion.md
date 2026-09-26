@@ -1880,6 +1880,18 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
   références déjà émises sont conservées ; la référence initiale PPM (`xxxxx/<acronyme>/PPM/<année>`)
   garde son segment `PPM` (nom du document). Migration : `2026-07-17_familles_sous_types.sql`.
 
+- ⚠️ **L'entité se nomme par son sigle dans les références (V48, demande front du 2026-09-26, arbitrage du pilote)**
+  [Écriture]
+  - Le dossier réel 2463 s'intitule `2463-MI/MESupReS/PRMP/UGPM.2026` : l'autorité contractante y est son **sigle**.
+    Le référentiel des entités porte désormais un sigle **facultatif** (20 caractères, lettres, chiffres, tirets,
+    points ; pas d'unicité — deux directions régionales peuvent partager un sigle), que l'Administrateur ou la PRMP
+    (création à l'import d'un plan) renseignent.
+  - **La référence du PPM emploie le sigle s'il existe**, et garde l'acronyme dérivé du libellé sinon (« MLSRS » pour
+    le ministère de l'Enseignement supérieur : personne ne l'emploie, mais il reste le repli des entités sans sigle).
+    Une référence déjà attribuée **ne change jamais** : elle est imprimée sur le PPM, la fiche de présentation,
+    l'AGPM et les PV. Le compteur suit le segment : une entité qui reçoit un sigle repart à `00001` sous ce sigle.
+  - Rien ne change aux documents : ils impriment la référence, mieux alimentée.
+
 - ⚠️ **La fiche de présentation et l'AGPM entrent dans l'examen (règle du pilote, 2026-09-02)** [Écriture]
   - Deux **portées** de plus dans `tr_points_ctrl` : **`FICHE`** (fiche de présentation) et **`AGPM`**
     (projet d'AGPM), à côté de `LIGNE` et `DOSSIER`. Chacun de ces deux documents dérivés a **sa propre
