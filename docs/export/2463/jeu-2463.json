@@ -18,7 +18,7 @@
       },
       "sources": {
         "libelleEntite": "[R] p.1, p.17",
-        "sigle": "[R] p.1, p.17 — non stockable (pas de champ sigle sur tr_entite_contract)",
+        "sigle": "[R] p.1, p.17 — colonne SIGLE (V48, 2026-09-26) posée par l'étape 0 ; ne sert qu'aux prochaines références (celle du plan, 00001/MLSRS/PPM-AGPM/2026, est acquise)",
         "adresse": "[R] p.17, p.49"
       }
     },
@@ -768,7 +768,9 @@
         "idLocalite": "ANT",
         "libelleConforme": true,
         "adresseConforme": true,
-        "sigleStockable": false
+        "sigleStockable": true,
+        "sigle": "MESupReS",
+        "siglePose": "2026-09-26"
       },
       "prmp": {
         "idPrmp": "LERAVO01",
@@ -2260,7 +2262,8 @@
         "idOrganigramme": 1,
         "idEntiteParent": null,
         "niveauHierarchique": 1,
-        "idLocalite": "ANT"
+        "idLocalite": "ANT",
+        "sigle": "MESupReS"
       },
       "prmp": {
         "idPrmp": "LERAVO01",

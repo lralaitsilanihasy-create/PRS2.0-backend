@@ -121,7 +121,23 @@ async function etape0() {
   };
   ok('entité ' + ent.corps.idEntiteContract + ' · « ' + ent.corps.libelleEntite + ' » · libellé ' + (r0.entite.libelleConforme ? 'conforme (majuscules sans accents)' : 'DIFFÉRENT')
     + ' · adresse ' + (r0.entite.adresseConforme ? 'conforme' : 'DIFFÉRENTE'));
-  info("pas de champ sigle sur l'entité : « MESupReS » n'est pas stockable");
+  // ⚠️ V48 (2026-09-26) — le sigle de l'entité existe : posé par la PRMP-Admin s'il manque (la seule reprise admise par la
+  // demande front « sigle de l'entité », §B1). Ne sert qu'aux prochaines références : celle du plan déjà créé ne bouge pas.
+  if ('sigle' in ent.corps) {
+    r0.entite.sigleStockable = true;
+    if (ent.corps.sigle !== E.entite.attendu.sigle) {
+      const s = await appel(E.comptes.admin, 'PUT', '/api/entite-contracts/' + E.entite.id, { ...ent.corps, sigle: E.entite.attendu.sigle });
+      if (!s.ok) echec("pose du sigle de l'entité", s);
+      r0.entite.sigle = s.corps.sigle;
+      r0.entite.siglePose = AUJOURDHUI;
+      ok('sigle « ' + s.corps.sigle + ' » posé sur l’entité ' + E.entite.id);
+    } else {
+      r0.entite.sigle = ent.corps.sigle;
+      ok('sigle « ' + ent.corps.sigle + ' » déjà posé');
+    }
+  } else {
+    info("pas de champ sigle servi par l'entité (serveur antérieur à V48) : « MESupReS » n'est pas stockable");
+  }
 
   // PRMP : créée avec son compte si absente.
   const p = E.prmp;
@@ -587,7 +603,7 @@ function ecrireVerification(x) {
   L.push('| Fait | Stockage | Valeur en base | Nature |');
   L.push('|---|---|---|---|');
   L.push('| Autorité contractante | `tr_entite_contract.LIBELLE_ENTITE` (id ' + x.entite.idEntiteContract + ') | ' + cell(x.entite.libelleEntite) + ' | ' + E.entite.sources.libelleEntite + ' |');
-  L.push('| Sigle MESupReS | *(aucune colonne)* | — | ' + E.entite.sources.sigle + ' |');
+  L.push('| Sigle MESupReS | `tr_entite_contract.SIGLE` (V48) | ' + cell(x.entite.sigle) + ' | ' + E.entite.sources.sigle + ' |');
   L.push('| Adresse | `tr_entite_contract.ADRESSE` | ' + cell(x.entite.adresse) + ' | ' + E.entite.sources.adresse + ' |');
   for (const [k, s] of Object.entries(E.prmp.sources)) {
     L.push('| PRMP · ' + k + ' | `t_prmp.' + k.replace(/([A-Z])/g, '_$1').toUpperCase() + '`' + (k === 'login' ? ' → `t_compte_auth.LOGIN`' : '') + ' | ' + cell(k === 'login' ? E.prmp.login : x.prmp?.[k]) + ' | ' + s + ' |');

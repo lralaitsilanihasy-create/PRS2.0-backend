@@ -29,7 +29,8 @@ Repris du dossier, sans hypothèse : nom `LERAVO`, prénoms `Norbert Fidelys`, e
 
 Non créés, faute de personne nommée par le dossier : **le compte UGPM** (`t_ugpm` attend nom, prénoms, CIN, dates —
 le dossier ne dit que « UGPM ») et **le comptable assignataire** (aucun modèle : il ne vit que dans la fiche,
-`B03-NA-02` / `B03-NA-03`). Le sigle « MESupReS » n'a pas de colonne sur `tr_entite_contract`.
+`B03-NA-02` / `B03-NA-03`). Le sigle « MESupReS » n'avait pas de colonne sur `tr_entite_contract` au rejeu ; depuis
+V48 (26/09, demande front « sigle de l'entité »), l'étape 0 le pose — il ne vaut que pour les prochaines références.
 
 ## Étape 1 — plan de passation et circuit CNM
 

@@ -29,9 +29,12 @@ min ≤ max (le contrôle ne produit qu'un bloquant en cas de violation) : l'abs
 
 ## 2. Informations que le modèle ne sait pas stocker, et règles rencontrées
 
-1. **Sigle de l'entité** (« MESupReS ») : pas de colonne sur `tr_entite_contract`. La référence du PPM porte
-   l'acronyme que le serveur dérive du libellé : `MLSRS` (`ReferenceService`, mots vides retirés, apostrophe non
-   coupée : « L'ENSEIGNEMENT » → L).
+1. **Sigle de l'entité** (« MESupReS ») : pas de colonne sur `tr_entite_contract` au moment du rejeu. La référence
+   du PPM porte l'acronyme que le serveur dérive du libellé : `MLSRS` (`ReferenceService`, mots vides retirés,
+   apostrophe non coupée : « L'ENSEIGNEMENT » → L). ⚠️ **Résolu le 26/09 (V48, demande front « sigle de l'entité ») :**
+   la colonne `SIGLE` existe, l'étape 0 la pose à « MESupReS », et les **prochaines** références de l'entité 11
+   s'écriront `…/MESupReS/…` (nouvelle série à 00001). La référence déjà attribuée au plan du jeu ne change pas :
+   pour qu'elle porte le sigle, rejouer le jeu après remise à zéro.
 2. **Destination de chaque lot** : `t_lot` n'a que désignation, montant, quantité, unité. Portée par la fiche,
    `B09-LL-01#n`, et par la liste des fournitures.
 3. **Montant minimum de chaque lot** : `t_lot.MONT_LOT` est unique (le maximum). Porté par la fiche, `B05-TP-02#n`.

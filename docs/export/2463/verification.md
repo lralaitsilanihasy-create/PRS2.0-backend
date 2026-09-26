@@ -7,7 +7,7 @@ Généré par `rejouer-2463.mjs --etape 5` le 2026-09-26 depuis l'API (valeurs e
 | Fait | Stockage | Valeur en base | Nature |
 |---|---|---|---|
 | Autorité contractante | `tr_entite_contract.LIBELLE_ENTITE` (id 11) | MINISTERE DE L'ENSEIGNEMENT SUPERIEUR ET DE LA RECHERCHE SCIENTIFIQUE | [R] p.1, p.17 |
-| Sigle MESupReS | *(aucune colonne)* | — | [R] p.1, p.17 — non stockable (pas de champ sigle sur tr_entite_contract) |
+| Sigle MESupReS | `tr_entite_contract.SIGLE` (V48) | MESupReS | [R] p.1, p.17 — colonne SIGLE (V48, 2026-09-26) posée par l'étape 0 ; ne sert qu'aux prochaines références (celle du plan, 00001/MLSRS/PPM-AGPM/2026, est acquise) |
 | Adresse | `tr_entite_contract.ADRESSE` | Fiadanana, 2ème étage porte 204 — Antananarivo 101 | [R] p.17, p.49 |
 | PRMP · nomPrmp | `t_prmp.NOM_PRMP` | LERAVO | [R] p.17, p.36 |
 | PRMP · prenomsPrmp | `t_prmp.PRENOMS_PRMP` | Norbert Fidelys | [R] p.17, p.36 |
