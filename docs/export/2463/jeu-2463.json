@@ -1321,6 +1321,374 @@
         "agpm-2026.json",
         "agpm-2026.html"
       ]
+    },
+    "etape3": {
+      "date": "2026-09-26",
+      "idDmc": 15,
+      "dmc": {
+        "idDmc": 15,
+        "idDetail": 303091,
+        "idTypeDmc": 1,
+        "typeDmcCode": "DAO",
+        "typeDmcLibelle": "Dossier d'Appel d'Offres",
+        "reference": null,
+        "statut": "A_PREPARER",
+        "dateCreation": "2026-09-26T17:34:42.9382273",
+        "valeursPpm": {
+          "B01-AC-01": "MINISTERE DE L'ENSEIGNEMENT SUPERIEUR ET DE LA RECHERCHE SCIENTIFIQUE",
+          "B01-AC-02": "Fiadanana, 2ème étage porte 204 — Antananarivo 101",
+          "B01-AC-03": "Ministère de l'Économie et des Finances",
+          "B01-AC-04": "Centrale",
+          "B01-AC-05": "LERAVO Norbert Fidelys",
+          "B01-AC-06": "prmp.mesupres@gmail.com",
+          "B01-AC-07": "[H] non fourni",
+          "B01-AC-08": "00001/MLSRS/PPM-AGPM/2026",
+          "B01-AC-09": "2026",
+          "B01-AC-10": "0",
+          "B01-AC-11": "00001/PPM-AGPM/CNM/2026",
+          "B01-AC-12": "Fournitures",
+          "B01-AC-13": "Appel d'offres ouvert",
+          "B01-AC-14": "457 000 000",
+          "B01-AC-15": "RPI",
+          "B01-AC-16": null,
+          "B01-AC-17": "2463",
+          "B01-AC-18": "Détermination des besoins : recueil et centralisation des besoins en travaux, prestations de services, fournitures… : 2026-06-01 → 2026-06-15 ; Élaboration et publication de l'avis général de passation des marchés et du calendrier annuel de passation des marchés : 2026-06-16 → 2026-06-30 ; Choix de la procédure : allotissement éventuel — forme du marché : 2026-07-01 → 2026-07-07 ; Établissement du DAO/DC : sur la base du « cahier de charges » et spécifications particulières/TDR et autres annexes ou note d'information aux consultants/lettre d'invitation/CCAG/CCAP… : 2026-07-08 → 2026-08-28 ; Transmission du DAO/DC à la CNM pour examen et avis : 2026-08-31 → 2026-09-02 ; Examen et avis de la CNM : 2026-09-03 → 2026-09-17 ; Établissement du PV de la CNM : 2026-09-18 → 2026-09-22 ; Signature du PV de la CNM : 2026-09-23 → 2026-09-25 ; Remise en forme du DAO/DC : 2026-09-28 → 2026-10-08 ; Lancement du DAO/DC : avis spécifique d'appel public à la concurrence : 2026-10-09 → 2026-10-12 ; Remise des offres : propositions : 2026-10-12 → 2026-11-09 ; Ouverture des plis : 2026-11-09 → 2026-11-10 ; Évaluation et classement des offres : 2026-11-10 → 2026-11-18 ; Rédaction et signature des PV d'ouverture des plis et d'évaluation techniques des offres : 2026-11-19 → 2026-11-20 ; Établissement du projet de marché : 2026-11-23 → 2026-11-25 ; Transmission du projet de marché (avec note de présentation, PV d'ouverture des plis et évaluation des offres) à la CNM : 2026-11-26 → 2026-11-27 ; Examen des dossiers par la CNM : 2026-11-30 → 2026-12-04 ; Établissement du PV de la CNM : 2026-12-07 → 2026-12-08 ; Signature du PV de la CNM : 2026-12-08 → 2026-12-09 ; Remise en forme du projet de marché : 2026-12-09 → 2026-12-10 ; Décision d'attribution de marché : 2026-12-10 → 2026-12-11 ; Information des candidats non retenus : 2026-12-14 → 2026-12-15 ; Mise au point des composants du marché et signature du marché : 2026-12-16 → 2027-01-08 ; Visa du marché par le Contrôleur financier : 2027-01-11 → 2027-01-15 ; Approbation du marché : 2027-01-18 → 2027-01-22 ; Enregistrement : 2027-01-25 → 2027-01-27 ; Notification du marché au titulaire : 2027-01-28 → 2027-01-29 ; Exécution du marché : 2027-02-01 → 2028-01-31",
+          "B01-AC-19": "Marché à commande",
+          "B02-LV-01": "5",
+          "B02-LV-02": "ORDINATEURS ET DIVERS POUR LE MINISTERE ; ORDINATEUR POUR AMBATONDRAZAKA ; DIVERS MATERIELS POUR AMBATONDRAZAKA ; ORDINATEUR POUR FORT DAUPHIN ; DIVERS MATERIELS POUR FORT DAUPHIN",
+          "B02-LV-03": "ORDINATEURS ET DIVERS POUR LE MINISTERE : 80 000 000 ; ORDINATEUR POUR AMBATONDRAZAKA : 108 500 000 ; DIVERS MATERIELS POUR AMBATONDRAZAKA : 80 000 000 ; ORDINATEUR POUR FORT DAUPHIN : 108 500 000 ; DIVERS MATERIELS POUR FORT DAUPHIN : 80 000 000",
+          "B02-OB-01": "Fourniture et livraison des matériels informatiques répartis en cinq (5) lots (à commande)"
+        },
+        "versionPpm": 0,
+        "idDossierSoumis": null
+      },
+      "importees": {
+        "nombre": 23,
+        "cles": [
+          "B01-AC-01",
+          "B01-AC-02",
+          "B01-AC-03",
+          "B01-AC-04",
+          "B01-AC-05",
+          "B01-AC-06",
+          "B01-AC-07",
+          "B01-AC-08",
+          "B01-AC-09",
+          "B01-AC-10",
+          "B01-AC-11",
+          "B01-AC-12",
+          "B01-AC-13",
+          "B01-AC-14",
+          "B01-AC-15",
+          "B01-AC-16",
+          "B01-AC-17",
+          "B01-AC-18",
+          "B01-AC-19",
+          "B02-LV-01",
+          "B02-LV-02",
+          "B02-LV-03",
+          "B02-OB-01"
+        ]
+      },
+      "valeursSansChamp": [],
+      "blocs": {
+        "B02": 6,
+        "B03": 14,
+        "B04": 19,
+        "B05": 19,
+        "B06": 14,
+        "B08": 12,
+        "B09": 29,
+        "B10": 4
+      },
+      "duplications": [
+        {
+          "cible": 4,
+          "source": 2,
+          "articles": 2
+        },
+        {
+          "cible": 5,
+          "source": 3,
+          "articles": 3
+        }
+      ],
+      "identiques": {
+        "lot4=lot2": true,
+        "lot5=lot3": true
+      },
+      "articles": {
+        "total": 12,
+        "parLot": {
+          "1": 2,
+          "2": 2,
+          "3": 3,
+          "4": 2,
+          "5": 3
+        },
+        "caracteristiques": 58
+      },
+      "bilan": {
+        "bloquants": [],
+        "avertissements": [],
+        "ok": [
+          {
+            "regle": "MONTANT_POSITIF",
+            "champs": [
+              "B05-GS-03#1"
+            ],
+            "lot": null,
+            "message": "« Montant de la garantie de soumission (Ariary) » (lot 1) : montant positif."
+          },
+          {
+            "regle": "MONTANT_POSITIF",
+            "champs": [
+              "B05-GS-03#2"
+            ],
+            "lot": null,
+            "message": "« Montant de la garantie de soumission (Ariary) » (lot 2) : montant positif."
+          },
+          {
+            "regle": "MONTANT_POSITIF",
+            "champs": [
+              "B05-GS-03#3"
+            ],
+            "lot": null,
+            "message": "« Montant de la garantie de soumission (Ariary) » (lot 3) : montant positif."
+          },
+          {
+            "regle": "MONTANT_POSITIF",
+            "champs": [
+              "B05-GS-03#4"
+            ],
+            "lot": null,
+            "message": "« Montant de la garantie de soumission (Ariary) » (lot 4) : montant positif."
+          },
+          {
+            "regle": "MONTANT_POSITIF",
+            "champs": [
+              "B05-GS-03#5"
+            ],
+            "lot": null,
+            "message": "« Montant de la garantie de soumission (Ariary) » (lot 5) : montant positif."
+          },
+          {
+            "regle": "MONTANT_POSITIF",
+            "champs": [
+              "B05-TP-02#1"
+            ],
+            "lot": null,
+            "message": "« Montant minimum annuel du marché (Ariary) » (lot 1) : montant positif."
+          },
+          {
+            "regle": "MONTANT_POSITIF",
+            "champs": [
+              "B05-TP-02#2"
+            ],
+            "lot": null,
+            "message": "« Montant minimum annuel du marché (Ariary) » (lot 2) : montant positif."
+          },
+          {
+            "regle": "MONTANT_POSITIF",
+            "champs": [
+              "B05-TP-02#3"
+            ],
+            "lot": null,
+            "message": "« Montant minimum annuel du marché (Ariary) » (lot 3) : montant positif."
+          },
+          {
+            "regle": "MONTANT_POSITIF",
+            "champs": [
+              "B05-TP-02#4"
+            ],
+            "lot": null,
+            "message": "« Montant minimum annuel du marché (Ariary) » (lot 4) : montant positif."
+          },
+          {
+            "regle": "MONTANT_POSITIF",
+            "champs": [
+              "B05-TP-02#5"
+            ],
+            "lot": null,
+            "message": "« Montant minimum annuel du marché (Ariary) » (lot 5) : montant positif."
+          },
+          {
+            "regle": "MONTANT_POSITIF",
+            "champs": [
+              "B05-TP-03#1"
+            ],
+            "lot": null,
+            "message": "« Montant maximum annuel du marché (Ariary) » (lot 1) : montant positif."
+          },
+          {
+            "regle": "MONTANT_POSITIF",
+            "champs": [
+              "B05-TP-03#2"
+            ],
+            "lot": null,
+            "message": "« Montant maximum annuel du marché (Ariary) » (lot 2) : montant positif."
+          },
+          {
+            "regle": "MONTANT_POSITIF",
+            "champs": [
+              "B05-TP-03#3"
+            ],
+            "lot": null,
+            "message": "« Montant maximum annuel du marché (Ariary) » (lot 3) : montant positif."
+          },
+          {
+            "regle": "MONTANT_POSITIF",
+            "champs": [
+              "B05-TP-03#4"
+            ],
+            "lot": null,
+            "message": "« Montant maximum annuel du marché (Ariary) » (lot 4) : montant positif."
+          },
+          {
+            "regle": "MONTANT_POSITIF",
+            "champs": [
+              "B05-TP-03#5"
+            ],
+            "lot": null,
+            "message": "« Montant maximum annuel du marché (Ariary) » (lot 5) : montant positif."
+          },
+          {
+            "regle": "DATES_ORDRE",
+            "champs": [
+              "B04-LR-03",
+              "B04-OP-02"
+            ],
+            "lot": null,
+            "message": "Dates dans l'ordre (lancement < remise des offres < ouverture des plis < attribution)."
+          },
+          {
+            "regle": "VALIDITE_GARANTIE_SUP_OFFRE",
+            "champs": [
+              "B05-GS-04",
+              "B04-VO-01"
+            ],
+            "lot": null,
+            "message": "Validité de la garantie supérieure à celle des offres."
+          },
+          {
+            "regle": "AVANCE_MAX_20",
+            "champs": [],
+            "lot": null,
+            "message": "Avance ≤ 20 %."
+          },
+          {
+            "regle": "AVANCE_SUP_5_GARANTIE",
+            "champs": [
+              "B08-AV-04"
+            ],
+            "lot": null,
+            "message": "Garantie de restitution d'avance renseignée."
+          },
+          {
+            "regle": "PENALITES_PLAFOND_15",
+            "champs": [
+              "B09-PR-02"
+            ],
+            "lot": null,
+            "message": "Pénalités dans le plafond du CCAG."
+          },
+          {
+            "regle": "DELAI_PAIEMENT_75",
+            "champs": [
+              "B08-PA-08"
+            ],
+            "lot": null,
+            "message": "Délai de paiement ≤ 75 jours."
+          },
+          {
+            "regle": "BESOIN_INCOMPLET",
+            "champs": [],
+            "lot": null,
+            "message": "Besoin complet : chaque lot a ses articles, chaque article ses caractéristiques."
+          },
+          {
+            "regle": "GARANTIE_MANQUANTE",
+            "champs": [
+              "B04-CD-02"
+            ],
+            "lot": null,
+            "message": "Modèle de garantie de soumission retenu : C1 et C2."
+          },
+          {
+            "regle": "GARANTIE_TAUX",
+            "champs": [
+              "B05-GS-03#1",
+              "B05-TP-03#1"
+            ],
+            "lot": null,
+            "message": "Garantie de soumission du lot 1 : 2 % du montant maximum (référence 2 %)."
+          },
+          {
+            "regle": "GARANTIE_TAUX",
+            "champs": [
+              "B05-GS-03#2",
+              "B05-TP-03#2"
+            ],
+            "lot": null,
+            "message": "Garantie de soumission du lot 2 : 2 % du montant maximum (référence 2 %)."
+          },
+          {
+            "regle": "GARANTIE_TAUX",
+            "champs": [
+              "B05-GS-03#3",
+              "B05-TP-03#3"
+            ],
+            "lot": null,
+            "message": "Garantie de soumission du lot 3 : 2 % du montant maximum (référence 2 %)."
+          },
+          {
+            "regle": "GARANTIE_TAUX",
+            "champs": [
+              "B05-GS-03#4",
+              "B05-TP-03#4"
+            ],
+            "lot": null,
+            "message": "Garantie de soumission du lot 4 : 2 % du montant maximum (référence 2 %)."
+          },
+          {
+            "regle": "GARANTIE_TAUX",
+            "champs": [
+              "B05-GS-03#5",
+              "B05-TP-03#5"
+            ],
+            "lot": null,
+            "message": "Garantie de soumission du lot 5 : 2 % du montant maximum (référence 2 %)."
+          }
+        ]
+      },
+      "controlesAttendus": {
+        "DATES_ORDRE": {
+          "bloquant": 0,
+          "avertissement": 0,
+          "ok": 1
+        },
+        "QUANTITES_ORDRE": {
+          "bloquant": 0,
+          "avertissement": 0,
+          "ok": 0
+        },
+        "GARANTIE_TAUX": {
+          "bloquant": 0,
+          "avertissement": 0,
+          "ok": 5
+        },
+        "AVANCE_SUP_5_GARANTIE": {
+          "bloquant": 0,
+          "avertissement": 0,
+          "ok": 1
+        }
+      },
+      "validation": {
+        "version": 1,
+        "statut": "VALIDEE",
+        "dateValidation": "2026-09-26T17:34:43.6410218",
+        "nbValeurs": 117
+      }
     }
   }
 }
