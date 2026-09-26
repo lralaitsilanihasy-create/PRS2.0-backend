@@ -62,6 +62,12 @@ public class JournalDossierService {
      */
     public static final String FICHE_MARCHE_VALIDEE = "FICHE_MARCHE_VALIDEE";
     /**
+     * ⚠️ 2026-09-26 (demande front du 2026-09-25, supprimer une fiche sans historique) — la PRMP ou son UGPM a supprimé
+     * une fiche marché ouverte par erreur, jamais validée : la ligne redevient préparable. Sur le plan, détail « DAO de
+     * la ligne n (DMC m) supprimé, sans historique ».
+     */
+    public static final String FICHE_MARCHE_SUPPRIMEE = "FICHE_MARCHE_SUPPRIMEE";
+    /**
      * ⚠️ Fiche marché, lot 1b (demande front du 2026-09-23, §B2/§B3) — sur le <strong>dossier soumis</strong> (pas sur
      * le plan) : il est né d'une fiche validée ({@code DOSSIER_CREE_DEPUIS_FICHE}, détail « fiche marché version n,
      * N information(s) », à la suite de sa {@code CREATION}), une fiche lui a été rattachée en secours, ou détachée

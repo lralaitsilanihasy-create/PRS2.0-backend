@@ -127,6 +127,18 @@ public class FicheMarcheController {
         return ResponseEntity.noContent().build();
     }
 
+    /**
+     * ⚠️ 2026-09-26 (demande front du 2026-09-25, « défaire une fiche marché ouverte par erreur ») — supprime une fiche
+     * sans historique et son DMC : la ligne redevient préparable. 204 ; 403 hors PRMP / UGPM propriétaires ; 404 ; 409
+     * {@code FICHE_VALIDEE}, {@code FICHE_AVEC_HISTORIQUE}, {@code FICHE_AVEC_DOCUMENTS}, {@code FICHE_AVEC_DOSSIER}
+     * (avec {@code idDossier}).
+     */
+    @org.springframework.web.bind.annotation.DeleteMapping("/{idDmc}")
+    public ResponseEntity<Void> supprimer(@PathVariable Long idDmc) {
+        service.supprimer(idDmc);
+        return ResponseEntity.noContent().build();
+    }
+
     /** Recalcule le bilan des contrôles sans écrire. */
     @PostMapping("/{idDmc}/controler")
     public BilanControlesDto controler(@PathVariable Long idDmc) {

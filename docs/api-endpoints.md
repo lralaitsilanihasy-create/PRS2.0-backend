@@ -4751,6 +4751,24 @@ précédentes conservées ; dossier en examen ou au-delà → rien ne change. D�
 type** sur un dossier qui porte déjà des pièces produites → même 409. Une version validée **avant le lot 2** n'a pas de
 documents (pas de reprise) : elle n'en joint aucun, et le dépôt manuel reste possible tant que la fiche n'en a produit.
 
+### Défaire une fiche marché ouverte par erreur ⚠️ 2026-09-26
+
+Demande front `frontend/docs/demande-backend-2026-09-25-supprimer-une-fiche-sans-historique.md`.
+
+| Méthode | URL | Corps | Réponse | Statuts | Rôle |
+|---|---|---|---|---|---|
+| DELETE | /api/fiches-marche/{idDmc} | — | — | 204, 403, 404, 409 | **PRMP** propriétaire ou son **UGPM** (Administrateur et contrôleurs : 403) |
+
+Supprime une fiche **sans historique** — le DMC, ses versions (brouillon), leurs valeurs et leur besoin — et la ligne
+du plan **redevient préparable** (`dejaDao = false` sur `GET /api/dmcs/eligibles`). Une fiche jamais enregistrée (DMC
+seul) se supprime de même. Refus, dans l'ordre : 403 profil ou hors périmètre ; 404 DMC inconnu ; 409 `DMC_NON_DAO` ;
+409 `VACANCE_PRMP` (mandat) ; 409 **`FICHE_VALIDEE`** (dernière version validée) ; 409 **`FICHE_AVEC_HISTORIQUE`** (une
+version validée plus tôt, révision ouverte) ; 409 **`FICHE_AVEC_DOCUMENTS`** ; 409 **`FICHE_AVEC_DOSSIER`** avec
+`idDossier` dans le corps. La forme et la catégorie de la ligne n'importent pas (une fiche devenue non outillée se
+supprime aussi). Journal du plan : **`FICHE_MARCHE_SUPPRIMEE`**, « DAO de la ligne n (DMC m) supprimé, sans
+historique ». `DELETE /api/dmcs/{id}` reste non servi (405). Une fiche **qui a de l'histoire** ne se supprime pas et
+ne s'abandonne pas : la révision est le geste prévu (§B2, à confirmer par le pilote).
+
 ### Le besoin par lot et les formulaires du candidat ⚠️ 2026-09-25 (V45)
 
 Demande front `frontend/docs/demande-backend-2026-09-25-formulaires-du-candidat.md`. Livré : §B1, §B2, §B4, et au §B3

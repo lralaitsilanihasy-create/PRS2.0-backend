@@ -481,6 +481,52 @@ public class FicheMarcheService {
         return toDto(ctx, fiche);
     }
 
+    /**
+     * ⚠️ 2026-09-26 (demande front du 2026-09-25, « défaire une fiche marché ouverte par erreur », §B1) — supprime une
+     * fiche <strong>sans historique</strong> : son DMC, ses versions (brouillon), ses valeurs et son besoin ; la ligne
+     * du plan redevient préparable. Refus, dans l'ordre : profil autre que PRMP / UGPM → 403 ; DMC inconnu → 404, hors
+     * périmètre → 403, pas un DAO → 409 {@code DMC_NON_DAO} ; mandat inactif → 409 ; dernière version validée → 409
+     * {@code FICHE_VALIDEE} ; une version validée dans l'historique (révision ouverte) → 409
+     * {@code FICHE_AVEC_HISTORIQUE} ; un document produit → 409 {@code FICHE_AVEC_DOCUMENTS} ; rattachée à un dossier
+     * → 409 {@code FICHE_AVEC_DOSSIER} avec {@code idDossier}. La forme et la catégorie de la ligne n'importent pas :
+     * une fiche devenue non outillée se supprime aussi. Journal du plan : {@code FICHE_MARCHE_SUPPRIMEE}.
+     */
+    public void supprimer(Long idDmc) {
+        ProfilUtilisateur profil = CurrentUser.profil().orElse(null);
+        if (profil != ProfilUtilisateur.PRMP && profil != ProfilUtilisateur.UGPM) {
+            throw new AccessDeniedException("Une fiche marché se supprime par la PRMP propriétaire ou son UGPM.");
+        }
+        Contexte ctx = contexte(idDmc);
+        dossierIntegrite.exigerMandatActif();
+        List<FicheMarche> versions = ficheRepository.findByIdDmcOrderByNumeroVersionAsc(idDmc);
+        FicheMarche derniere = versions.isEmpty() ? null : versions.get(versions.size() - 1);
+        if (derniere != null && StatutFicheMarche.VALIDEE.name().equals(derniere.getStatut())) {
+            throw new BusinessRuleException("La version " + derniere.getNumeroVersion() + " de cette fiche est validée : "
+                    + "elle ne se supprime pas (la révision est le geste prévu).", "FICHE_VALIDEE");
+        }
+        if (versions.stream().anyMatch(f -> StatutFicheMarche.VALIDEE.name().equals(f.getStatut()))) {
+            throw new BusinessRuleException("Cette fiche a déjà une version validée : son historique se conserve, elle ne "
+                    + "se supprime pas.", "FICHE_AVEC_HISTORIQUE");
+        }
+        if (versions.stream().anyMatch(f -> !documentRepository.findByIdFicheOrderByIdDocumentAsc(f.getIdFiche()).isEmpty())) {
+            throw new BusinessRuleException("Cette fiche a déjà produit des documents : elle ne se supprime plus.",
+                    "FICHE_AVEC_DOCUMENTS");
+        }
+        Integer idDossierSoumis = dossierRepository.findIdDossierByIdDmc(idDmc).orElse(null);
+        if (idDossierSoumis != null) {
+            throw new BusinessRuleException("Cette fiche est rattachée au dossier " + idDossierSoumis + " : détachez-la "
+                    + "d'abord.", "FICHE_AVEC_DOSSIER", idDossierSoumis);
+        }
+        for (FicheMarche f : versions) {
+            valeurRepository.deleteAll(valeurRepository.findByIdFiche(f.getIdFiche()));
+        }
+        ficheRepository.deleteAll(versions);   // le besoin suit (ON DELETE CASCADE, V45)
+        ficheRepository.flush();
+        dmcRepository.delete(ctx.dmc());
+        journal.tracer(ctx.idDossier(), JournalDossierService.FICHE_MARCHE_SUPPRIMEE,
+                "DAO de la ligne " + ctx.idDetail() + " (DMC " + idDmc + ") supprimé, sans historique");
+    }
+
     /** Ouvre la version suivante en brouillon, copie de la dernière validée. */
     public FicheMarcheDto reviser(Long idDmc) {
         Contexte ctx = contexteEcriture(idDmc);

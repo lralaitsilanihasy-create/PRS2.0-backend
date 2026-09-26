@@ -483,6 +483,12 @@ document porte chaque information (document maître, reprises) ; il manquait la 
 - Une version validée **avant** ce lot n'a pas de documents (pas de reprise : les informations du plan sont relues à
   chaque lecture, un document produit après coup ne dirait pas forcément ce qui a été validé) ; la version suivante
   les produira.
+- ⚠️ **2026-09-26 — Une fiche ouverte par erreur se défait**, tant qu'elle n'a pas d'histoire : jamais validée, sans
+  document, rattachée à aucun dossier. La PRMP propriétaire ou son UGPM la supprime ; la ligne du plan redevient
+  préparable, et le journal du plan le dit. Une fiche **qui a de l'histoire** (une version validée) ne se supprime
+  pas et ne s'abandonne pas : une version validée est un acte, et la **révision** est le geste prévu pour la
+  corriger — position du backend, **à confirmer par le pilote** (l'alternative serait un statut « abandonnée » qui
+  rouvrirait la ligne en gardant l'historique).
 
 #### La fiche DAO des travaux (référentiel remis le 2026-09-24)
 

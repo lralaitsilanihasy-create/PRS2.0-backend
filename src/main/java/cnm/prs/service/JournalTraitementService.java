@@ -125,7 +125,7 @@ public class JournalTraitementService {
             case JournalDossierService.TRANSMISSION_COMPLEMENTS,
                  JournalDossierService.TRANSMISSION_COMPLEMENTS_DEPOT -> 25;
             // ⚠️ 2026-09-22 — acte PRMP sur un plan déjà contrôlé : rang d'un acte PRMP, après ses transmissions.
-            case JournalDossierService.FICHE_MARCHE_VALIDEE -> 27;
+            case JournalDossierService.FICHE_MARCHE_VALIDEE, JournalDossierService.FICHE_MARCHE_SUPPRIMEE -> 27;
             case JournalDossierService.RECEPTION -> 30;
             case JournalDossierService.DISPATCH -> 40;
             case JournalDossierService.REATTRIBUTION, JournalDossierService.REPRISE -> 45;
