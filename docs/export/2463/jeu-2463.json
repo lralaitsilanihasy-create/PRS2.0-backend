@@ -150,11 +150,11 @@
         {
           "idCapm": 111,
           "dateDebut": "2026-10-09",
-          "dateFin": "2026-10-09"
+          "dateFin": "2026-10-12"
         },
         {
           "idCapm": 112,
-          "dateDebut": "2026-10-09",
+          "dateDebut": "2026-10-12",
           "dateFin": "2026-11-09"
         },
         {
@@ -190,17 +190,17 @@
         {
           "idCapm": 119,
           "dateDebut": "2026-12-07",
-          "dateFin": "2026-12-07"
+          "dateFin": "2026-12-08"
         },
         {
           "idCapm": 120,
           "dateDebut": "2026-12-08",
-          "dateFin": "2026-12-08"
+          "dateFin": "2026-12-09"
         },
         {
           "idCapm": 121,
           "dateDebut": "2026-12-09",
-          "dateFin": "2026-12-09"
+          "dateFin": "2026-12-10"
         },
         {
           "idCapm": 123,
@@ -257,7 +257,7 @@
         "lots[].montLot": "[D] §5 — maximum = garantie ÷ 2 %",
         "lots[].montMin": "[D] §5 — non stockable au plan (t_lot n'a qu'un montant) ; porté par la fiche B05-TP-02",
         "lots[].destination": "[R] p.49, p.51 (§3) — non stockable au plan ; portée par la fiche B09-LL-01",
-        "processus": "[H] §8 (lancement 09/10/2026, remise/ouverture 09/11/2026, attribution 10/12/2026, notification 28/01/2027) et §10 dernier alinéa (étapes intermédiaires en jours ouvrés)",
+        "processus": "[H] §8 (lancement 09/10/2026, remise/ouverture 09/11/2026, attribution 10/12/2026, notification 28/01/2027) et §10 dernier alinéa (étapes intermédiaires en jours ouvrés) ; ⚠️ arbitrage du 26/09 : les étapes d'un jour (111, 119, 120, 121) finissent le jour ouvré suivant et 112 débute le 12/10, le serveur exigeant dateFin > dateDebut (ProcessusChronologie) — ancres du §8 intactes",
         "imputation": "00 84 0 100 00000 [R] p.1 — non stockable (le plan n'a pas de champ d'imputation, §10)",
         "articlesCmp": "articles 30, 35 et 63 du CMP [R] p.36 — non stockable"
       }
@@ -804,6 +804,501 @@
         }
       },
       "entiteVisible": true
+    },
+    "etape1": {
+      "date": "2026-09-26",
+      "idDossier": 100351,
+      "creation": {
+        "statut": "BROUILLON",
+        "refeDossier": null,
+        "idSousType": "PPM-AGPM"
+      },
+      "idDetail": 303091,
+      "idPpm": 200337,
+      "ligne": {
+        "idDetail": 303091,
+        "idLigneOrigine": 303091,
+        "supprimee": false,
+        "idDossier": 100351,
+        "idPpm": 200337,
+        "designationMarche": "Fourniture et livraison des matériels informatiques répartis en cinq (5) lots (à commande)",
+        "numCompte": "2463",
+        "montEstim": 457000000,
+        "ancienMontEstim": null,
+        "nouvMontEstim": null,
+        "financement": "RPI",
+        "statut": "PREVU",
+        "idNature": 2,
+        "idMode": 1,
+        "formeMarche": "A_COMMANDE",
+        "justifModeDerogatoire": null,
+        "justifDelaiAmenage": null,
+        "version": 0
+      },
+      "lots": [
+        {
+          "idLot": 2133,
+          "idDossier": 100351,
+          "idDetail": 303091,
+          "designationLot": "ORDINATEURS ET DIVERS POUR LE MINISTERE",
+          "montLot": 80000000,
+          "qteLot": null,
+          "uniteLot": null
+        },
+        {
+          "idLot": 2134,
+          "idDossier": 100351,
+          "idDetail": 303091,
+          "designationLot": "ORDINATEUR POUR AMBATONDRAZAKA",
+          "montLot": 108500000,
+          "qteLot": null,
+          "uniteLot": null
+        },
+        {
+          "idLot": 2135,
+          "idDossier": 100351,
+          "idDetail": 303091,
+          "designationLot": "DIVERS MATERIELS POUR AMBATONDRAZAKA",
+          "montLot": 80000000,
+          "qteLot": null,
+          "uniteLot": null
+        },
+        {
+          "idLot": 2136,
+          "idDossier": 100351,
+          "idDetail": 303091,
+          "designationLot": "ORDINATEUR POUR FORT DAUPHIN",
+          "montLot": 108500000,
+          "qteLot": null,
+          "uniteLot": null
+        },
+        {
+          "idLot": 2137,
+          "idDossier": 100351,
+          "idDetail": 303091,
+          "designationLot": "DIVERS MATERIELS POUR FORT DAUPHIN",
+          "montLot": 80000000,
+          "qteLot": null,
+          "uniteLot": null
+        }
+      ],
+      "previsions": [
+        {
+          "idPrevision": 4271,
+          "idDetail": 303091,
+          "idCapm": 101,
+          "dateDebut": "2026-06-01",
+          "dateFin": "2026-06-15",
+          "ordre": 101
+        },
+        {
+          "idPrevision": 4272,
+          "idDetail": 303091,
+          "idCapm": 102,
+          "dateDebut": "2026-06-16",
+          "dateFin": "2026-06-30",
+          "ordre": 102
+        },
+        {
+          "idPrevision": 4273,
+          "idDetail": 303091,
+          "idCapm": 103,
+          "dateDebut": "2026-07-01",
+          "dateFin": "2026-07-07",
+          "ordre": 103
+        },
+        {
+          "idPrevision": 4274,
+          "idDetail": 303091,
+          "idCapm": 104,
+          "dateDebut": "2026-07-08",
+          "dateFin": "2026-08-28",
+          "ordre": 104
+        },
+        {
+          "idPrevision": 4275,
+          "idDetail": 303091,
+          "idCapm": 106,
+          "dateDebut": "2026-08-31",
+          "dateFin": "2026-09-02",
+          "ordre": 106
+        },
+        {
+          "idPrevision": 4276,
+          "idDetail": 303091,
+          "idCapm": 107,
+          "dateDebut": "2026-09-03",
+          "dateFin": "2026-09-17",
+          "ordre": 107
+        },
+        {
+          "idPrevision": 4277,
+          "idDetail": 303091,
+          "idCapm": 108,
+          "dateDebut": "2026-09-18",
+          "dateFin": "2026-09-22",
+          "ordre": 108
+        },
+        {
+          "idPrevision": 4278,
+          "idDetail": 303091,
+          "idCapm": 109,
+          "dateDebut": "2026-09-23",
+          "dateFin": "2026-09-25",
+          "ordre": 109
+        },
+        {
+          "idPrevision": 4279,
+          "idDetail": 303091,
+          "idCapm": 110,
+          "dateDebut": "2026-09-28",
+          "dateFin": "2026-10-08",
+          "ordre": 110
+        },
+        {
+          "idPrevision": 4280,
+          "idDetail": 303091,
+          "idCapm": 111,
+          "dateDebut": "2026-10-09",
+          "dateFin": "2026-10-12",
+          "ordre": 111
+        },
+        {
+          "idPrevision": 4281,
+          "idDetail": 303091,
+          "idCapm": 112,
+          "dateDebut": "2026-10-12",
+          "dateFin": "2026-11-09",
+          "ordre": 112
+        },
+        {
+          "idPrevision": 4282,
+          "idDetail": 303091,
+          "idCapm": 113,
+          "dateDebut": "2026-11-09",
+          "dateFin": "2026-11-10",
+          "ordre": 113
+        },
+        {
+          "idPrevision": 4283,
+          "idDetail": 303091,
+          "idCapm": 114,
+          "dateDebut": "2026-11-10",
+          "dateFin": "2026-11-18",
+          "ordre": 114
+        },
+        {
+          "idPrevision": 4284,
+          "idDetail": 303091,
+          "idCapm": 115,
+          "dateDebut": "2026-11-19",
+          "dateFin": "2026-11-20",
+          "ordre": 115
+        },
+        {
+          "idPrevision": 4285,
+          "idDetail": 303091,
+          "idCapm": 116,
+          "dateDebut": "2026-11-23",
+          "dateFin": "2026-11-25",
+          "ordre": 116
+        },
+        {
+          "idPrevision": 4286,
+          "idDetail": 303091,
+          "idCapm": 117,
+          "dateDebut": "2026-11-26",
+          "dateFin": "2026-11-27",
+          "ordre": 117
+        },
+        {
+          "idPrevision": 4287,
+          "idDetail": 303091,
+          "idCapm": 118,
+          "dateDebut": "2026-11-30",
+          "dateFin": "2026-12-04",
+          "ordre": 118
+        },
+        {
+          "idPrevision": 4288,
+          "idDetail": 303091,
+          "idCapm": 119,
+          "dateDebut": "2026-12-07",
+          "dateFin": "2026-12-08",
+          "ordre": 119
+        },
+        {
+          "idPrevision": 4289,
+          "idDetail": 303091,
+          "idCapm": 120,
+          "dateDebut": "2026-12-08",
+          "dateFin": "2026-12-09",
+          "ordre": 120
+        },
+        {
+          "idPrevision": 4290,
+          "idDetail": 303091,
+          "idCapm": 121,
+          "dateDebut": "2026-12-09",
+          "dateFin": "2026-12-10",
+          "ordre": 121
+        },
+        {
+          "idPrevision": 4291,
+          "idDetail": 303091,
+          "idCapm": 123,
+          "dateDebut": "2026-12-10",
+          "dateFin": "2026-12-11",
+          "ordre": 123
+        },
+        {
+          "idPrevision": 4292,
+          "idDetail": 303091,
+          "idCapm": 124,
+          "dateDebut": "2026-12-14",
+          "dateFin": "2026-12-15",
+          "ordre": 124
+        },
+        {
+          "idPrevision": 4293,
+          "idDetail": 303091,
+          "idCapm": 125,
+          "dateDebut": "2026-12-16",
+          "dateFin": "2027-01-08",
+          "ordre": 125
+        },
+        {
+          "idPrevision": 4294,
+          "idDetail": 303091,
+          "idCapm": 126,
+          "dateDebut": "2027-01-11",
+          "dateFin": "2027-01-15",
+          "ordre": 126
+        },
+        {
+          "idPrevision": 4295,
+          "idDetail": 303091,
+          "idCapm": 127,
+          "dateDebut": "2027-01-18",
+          "dateFin": "2027-01-22",
+          "ordre": 127
+        },
+        {
+          "idPrevision": 4296,
+          "idDetail": 303091,
+          "idCapm": 128,
+          "dateDebut": "2027-01-25",
+          "dateFin": "2027-01-27",
+          "ordre": 128
+        },
+        {
+          "idPrevision": 4297,
+          "idDetail": 303091,
+          "idCapm": 129,
+          "dateDebut": "2027-01-28",
+          "dateFin": "2027-01-29",
+          "ordre": 129
+        },
+        {
+          "idPrevision": 4298,
+          "idDetail": 303091,
+          "idCapm": 130,
+          "dateDebut": "2027-02-01",
+          "dateFin": "2028-01-31",
+          "ordre": 130
+        }
+      ],
+      "idReception": 1100078,
+      "reception": {
+        "idReception": 1100078,
+        "idDossier": 100351,
+        "numPassage": 1,
+        "typePassage": "INITIAL",
+        "imCtrlRecept": "SECANT1",
+        "dateReception": "2026-09-26 17:33",
+        "dateSoumission": "2026-09-26 17:33",
+        "observation": "Dossier complet : plan de passation 2026 du MESupReS et fiche de présentation.",
+        "complet": true,
+        "idReceptionPrec": null,
+        "reference": "00001/PPM-AGPM/CNM/2026"
+      },
+      "idDispatch": 28,
+      "dispatch": {
+        "idDispatch": 28,
+        "idReception": 1100078,
+        "imCtrlDispatch": "PRES001",
+        "imCtrlCc": "CCANT01",
+        "imCtrlMembre": "MEMANT1",
+        "dateDispatch": "2026-09-26 17:33",
+        "datePredispatch": "2026-09-26 17:33",
+        "dateCtrlAssigne": null,
+        "instructions": "Examen du plan de passation 2026 du MESupReS : ligne unique de matériels informatiques à commande, allotie en cinq lots.",
+        "interimDispatch": false,
+        "idInterim": null,
+        "interimDe": null
+      },
+      "idExamen": 1,
+      "grille": [
+        {
+          "idPointCtrl": 1,
+          "libelle": "Forme",
+          "portee": "LIGNE",
+          "statut": 201
+        },
+        {
+          "idPointCtrl": 2,
+          "libelle": "Cohérence",
+          "portee": "DOSSIER",
+          "statut": 201
+        },
+        {
+          "idPointCtrl": 3,
+          "libelle": "fractionnement illicite",
+          "portee": "DOSSIER",
+          "statut": 201
+        },
+        {
+          "idPointCtrl": 6,
+          "libelle": "Objet",
+          "portee": "LIGNE",
+          "statut": 201
+        },
+        {
+          "idPointCtrl": 7,
+          "libelle": "Nature",
+          "portee": "LIGNE",
+          "statut": 201
+        },
+        {
+          "idPointCtrl": 8,
+          "libelle": "Avis Général de Passation de Marché joint et conforme",
+          "portee": "LIGNE",
+          "statut": 201
+        },
+        {
+          "idPointCtrl": 9,
+          "libelle": "Listes de la fiche cohérentes avec le plan",
+          "portee": "FICHE",
+          "statut": 201
+        },
+        {
+          "idPointCtrl": 10,
+          "libelle": "Justifications par marché renseignées et recevables",
+          "portee": "FICHE",
+          "statut": 201
+        },
+        {
+          "idPointCtrl": 11,
+          "libelle": "Justification globale de la fiche recevable",
+          "portee": "FICHE",
+          "statut": 201
+        },
+        {
+          "idPointCtrl": 12,
+          "libelle": "AGPM cohérent avec le PPM",
+          "portee": "AGPM",
+          "statut": 201
+        },
+        {
+          "idPointCtrl": 13,
+          "libelle": "Dates du DAO = dates prévisionnelles de lancement",
+          "portee": "AGPM",
+          "statut": 201
+        },
+        {
+          "idPointCtrl": 14,
+          "libelle": "Forme conforme au modèle officiel",
+          "portee": "AGPM",
+          "statut": 201
+        }
+      ],
+      "idPv": 39,
+      "examenSoumis": {
+        "statutPv": "BROUILLON",
+        "idAvis": "FAV"
+      },
+      "pv": {
+        "idPv": 39,
+        "refePv": "00001/PPM-AGPM/CNM/PV/2026",
+        "statutPv": "SIGNE",
+        "idAvis": "FAV",
+        "imMembreCoSignataire": "MEMANT2"
+      },
+      "dossier": {
+        "idDossier": 100351,
+        "idTypeDossier": "DDP",
+        "idSousType": "PPM-AGPM",
+        "idDossierParent": null,
+        "refeDossier": "00001/PPM-AGPM/CNM/2026",
+        "dateRef": "2026-09-26",
+        "statut": "EN_VERIFICATION",
+        "idLocalite": "ANT",
+        "idPrmp": "LERAVO01",
+        "idMandatAttrib": null,
+        "idEntiteContract": 11,
+        "creePar": "LERAVO",
+        "soumisPar": "LERAVO",
+        "creeParNom": "LERAVO Norbert Fidelys",
+        "soumisParNom": "LERAVO Norbert Fidelys",
+        "imVerificateurCible": null,
+        "nomVerificateurCible": null,
+        "imAssistantCible": null,
+        "nomAssistantCible": null,
+        "datePrevisionnelleFin": "2026-10-01",
+        "dateEnregistrement": "2026-09-26T17:33:40.766347",
+        "dateSoumission": "2026-09-26T17:33:40.527765",
+        "datesEtapes": {
+          "RECEPTION": "2026-09-26T17:33:40.766347",
+          "DISPATCH": "2026-09-26T17:33:40.883332",
+          "EXAMEN": "2026-09-26T17:33:41.314731",
+          "PROJET_PV": "2026-09-26T17:33:41.314731",
+          "PV_SIGNE": "2026-09-26T17:33:41.447975",
+          "VERIFICATION": null,
+          "CLOTURE": null
+        },
+        "acteursEtapes": null,
+        "attentePrmp": false,
+        "idDmc": null,
+        "etapeCourante": "VERIFICATION",
+        "version": 6
+      },
+      "ppm": {
+        "idPpm": 200337,
+        "idDossier": 100351,
+        "exercice": 2026,
+        "signataire": "Norbert Fidelys LERAVO",
+        "dateSignature": "2026-06-30",
+        "datePpmInit": null,
+        "numMajPrec": null,
+        "dateMajPrec": null,
+        "numMaj": null,
+        "dateMaj": null,
+        "reference": "00001/MLSRS/PPM-AGPM/2026",
+        "libelle": null,
+        "dateReceptionCnm": null,
+        "idLocalite": "ANT",
+        "vu": null,
+        "idPrmp": "LERAVO01",
+        "motifMaj": null,
+        "justificationFiche": null,
+        "agpmRequis": true,
+        "version": 1
+      },
+      "eligible": {
+        "idDetail": 303091,
+        "idDossier": 100351,
+        "refeDossier": "00001/PPM-AGPM/CNM/2026",
+        "designationMarche": "Fourniture et livraison des matériels informatiques répartis en cinq (5) lots (à commande)",
+        "idMode": 1,
+        "libelleMode": "Appel d'offres ouvert",
+        "montEstim": 457000000,
+        "dejaDao": false,
+        "idDmc": null,
+        "formeMarche": "A_COMMANDE",
+        "formeOutillee": true,
+        "categorie": "FOURNITURES_SERVICES",
+        "categorieOutillee": true
+      }
     }
   }
 }

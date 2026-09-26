@@ -38,6 +38,7 @@ le dossier ne dit que « UGPM ») et **le comptable assignataire** (aucun modèl
 | H1-1 | `t_ppm.DATE_SIGNATURE` | `2026-06-30` | déjà [H] §10 de la fiche des faits (rappel) |
 | H1-2 | `t_marche.MONT_ESTIM` | `457 000 000` | déjà [H] §5 (= total maximum des lots) |
 | H1-3 | `t_marche_prevision` (28 étapes) | dates de `jeu-2463.json › entree.plan.processus` | §8 fait foi pour 111 / 112-113 / 123 / 129 ; les étapes intermédiaires en jours ouvrés (§10, dernier alinéa) |
+| H1-3b | étapes 111, 119, 120, 121 (un jour) et début de 112 | fin au **jour ouvré suivant** : 111 = 09/10→12/10, 112 débute le 12/10 (fin 09/11 inchangée), 119 = 07/12→08/12, 120 = 08/12→09/12, 121 = 09/12→10/12 | le serveur exige `dateFin > dateDebut` puis `dateDebut[n] ≥ dateFin[n-1]` (`ProcessusChronologie`) : **une étape d'un jour est impossible** — écart du modèle à porter au pilote ; ancres du §8 (09/10, 09/11, 10/12, 28/01) intactes — arbitrage du 26/09 |
 | H1-4 | `t_lot.QTE_LOT`, `UNITE_LOT` | **vides** | absents de la fiche des faits (la quantité d'un lot n'y est qu'article par article) |
 | H1-5 | réception `t_reception` | `SECANT1` (Rasoa, Secrétaire ANT), date du jour, complet, « Dossier complet : plan de passation 2026 du MESupReS et fiche de présentation. » | le circuit exige un réceptionnaire, une date et une observation |
 | H1-6 | dispatch `t_dispatch` | `PRES001` (RANDRIANARISON) → `MEMANT1` (RAFIDIMANANA Rina), date du jour, instructions | le circuit exige un dispatcheur, un examinateur et des instructions |
