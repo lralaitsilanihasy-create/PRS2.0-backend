@@ -1,0 +1,809 @@
+{
+  "_": "Jeu de données du dossier réel 2463 (MESupReS, AOO n° 2463-MI/MESupReS/PRMP/UGPM.2026). « entree » = transcription de frontendprs2/docs/jeu-donnees-2463-faits.md (seule source ; [R] repris, [D] déduit, [H] hypothèse) ; « resultat » = ce que l'API a constaté à chaque étape. Rejeu sur une base vide : node rejouer-2463.mjs --etape 0 … 5 (voir README.md).",
+  "entree": {
+    "comptes": {
+      "admin": "ADMIN01",
+      "secretaire": "SECANT1",
+      "president": "PRES001",
+      "membre": "MEMANT1",
+      "coSignataire": "MEMANT2",
+      "_": "[H] comptes de contrôle existants sur la base (référentiel conservé à la remise à zéro) ; mot de passe commun de développement, passé par --mdp ou PRS_MDP"
+    },
+    "entite": {
+      "id": 11,
+      "attendu": {
+        "libelleEntite": "Ministère de l'Enseignement Supérieur et de la Recherche Scientifique",
+        "sigle": "MESupReS",
+        "adresse": "2ème étage, porte 204, Fiadanana – Antananarivo 101"
+      },
+      "sources": {
+        "libelleEntite": "[R] p.1, p.17",
+        "sigle": "[R] p.1, p.17 — non stockable (pas de champ sigle sur tr_entite_contract)",
+        "adresse": "[R] p.17, p.49"
+      }
+    },
+    "prmp": {
+      "idPrmp": "LERAVO01",
+      "nomPrmp": "LERAVO",
+      "prenomsPrmp": "Norbert Fidelys",
+      "emailPrmp": "prmp.mesupres@gmail.com",
+      "arreteNomin": "[H] non fourni par le dossier",
+      "dateNomin": "2026-01-01",
+      "cin": "NON FOURNI",
+      "dateCin": "2026-01-01",
+      "lieuCin": "[H] non fourni",
+      "telPrmp": "[H] non fourni",
+      "login": "LERAVO",
+      "sources": {
+        "nomPrmp": "[R] p.17, p.36",
+        "prenomsPrmp": "[R] p.17, p.36",
+        "emailPrmp": "[R] p.17",
+        "idPrmp": "[H] matricule (identifiant technique, non donné par le dossier)",
+        "arreteNomin": "[H] champ obligatoire du modèle, non donné par le dossier",
+        "dateNomin": "[H] idem (date de convention)",
+        "cin": "[H] idem",
+        "dateCin": "[H] idem (date de convention)",
+        "lieuCin": "[H] idem",
+        "telPrmp": "[H] idem",
+        "login": "[H] compte de saisie ; mot de passe = mot de passe commun de développement"
+      },
+      "unite": {
+        "ugpm": "UGPM (Unité de Gestion de la Passation des Marchés) [R] p.1 — aucun compte créé : le modèle attend une personne (nom, CIN…) que le dossier ne nomme pas",
+        "comptable": "Trésorier ministériel chargé de l'Enseignement [R] p.38 — aucun modèle en dehors du texte de la fiche (B03-NA-02 / B03-NA-03)"
+      }
+    },
+    "plan": {
+      "exercice": 2026,
+      "dateSignature": "2026-06-30",
+      "ligne": {
+        "designationMarche": "Fourniture et livraison des matériels informatiques répartis en cinq (5) lots (à commande)",
+        "numCompte": "2463",
+        "montEstim": 457000000,
+        "financement": "RPI",
+        "idNature": 2,
+        "idMode": 1,
+        "formeMarche": "A_COMMANDE"
+      },
+      "lots": [
+        {
+          "rang": 1,
+          "designationLot": "ORDINATEURS ET DIVERS POUR LE MINISTERE",
+          "destination": "MINISTERE FIADANANA",
+          "montLot": 80000000,
+          "montMin": 40000000
+        },
+        {
+          "rang": 2,
+          "designationLot": "ORDINATEUR POUR AMBATONDRAZAKA",
+          "destination": "AMBATONDRAZAKA",
+          "montLot": 108500000,
+          "montMin": 54250000
+        },
+        {
+          "rang": 3,
+          "designationLot": "DIVERS MATERIELS POUR AMBATONDRAZAKA",
+          "destination": "AMBATONDRAZAKA",
+          "montLot": 80000000,
+          "montMin": 40000000
+        },
+        {
+          "rang": 4,
+          "designationLot": "ORDINATEUR POUR FORT DAUPHIN",
+          "destination": "FORT DAUPHIN",
+          "montLot": 108500000,
+          "montMin": 54250000
+        },
+        {
+          "rang": 5,
+          "designationLot": "DIVERS MATERIELS POUR FORT DAUPHIN",
+          "destination": "FORT DAUPHIN",
+          "montLot": 80000000,
+          "montMin": 40000000
+        }
+      ],
+      "processus": [
+        {
+          "idCapm": 101,
+          "dateDebut": "2026-06-01",
+          "dateFin": "2026-06-15"
+        },
+        {
+          "idCapm": 102,
+          "dateDebut": "2026-06-16",
+          "dateFin": "2026-06-30"
+        },
+        {
+          "idCapm": 103,
+          "dateDebut": "2026-07-01",
+          "dateFin": "2026-07-07"
+        },
+        {
+          "idCapm": 104,
+          "dateDebut": "2026-07-08",
+          "dateFin": "2026-08-28"
+        },
+        {
+          "idCapm": 106,
+          "dateDebut": "2026-08-31",
+          "dateFin": "2026-09-02"
+        },
+        {
+          "idCapm": 107,
+          "dateDebut": "2026-09-03",
+          "dateFin": "2026-09-17"
+        },
+        {
+          "idCapm": 108,
+          "dateDebut": "2026-09-18",
+          "dateFin": "2026-09-22"
+        },
+        {
+          "idCapm": 109,
+          "dateDebut": "2026-09-23",
+          "dateFin": "2026-09-25"
+        },
+        {
+          "idCapm": 110,
+          "dateDebut": "2026-09-28",
+          "dateFin": "2026-10-08"
+        },
+        {
+          "idCapm": 111,
+          "dateDebut": "2026-10-09",
+          "dateFin": "2026-10-09"
+        },
+        {
+          "idCapm": 112,
+          "dateDebut": "2026-10-09",
+          "dateFin": "2026-11-09"
+        },
+        {
+          "idCapm": 113,
+          "dateDebut": "2026-11-09",
+          "dateFin": "2026-11-10"
+        },
+        {
+          "idCapm": 114,
+          "dateDebut": "2026-11-10",
+          "dateFin": "2026-11-18"
+        },
+        {
+          "idCapm": 115,
+          "dateDebut": "2026-11-19",
+          "dateFin": "2026-11-20"
+        },
+        {
+          "idCapm": 116,
+          "dateDebut": "2026-11-23",
+          "dateFin": "2026-11-25"
+        },
+        {
+          "idCapm": 117,
+          "dateDebut": "2026-11-26",
+          "dateFin": "2026-11-27"
+        },
+        {
+          "idCapm": 118,
+          "dateDebut": "2026-11-30",
+          "dateFin": "2026-12-04"
+        },
+        {
+          "idCapm": 119,
+          "dateDebut": "2026-12-07",
+          "dateFin": "2026-12-07"
+        },
+        {
+          "idCapm": 120,
+          "dateDebut": "2026-12-08",
+          "dateFin": "2026-12-08"
+        },
+        {
+          "idCapm": 121,
+          "dateDebut": "2026-12-09",
+          "dateFin": "2026-12-09"
+        },
+        {
+          "idCapm": 123,
+          "dateDebut": "2026-12-10",
+          "dateFin": "2026-12-11"
+        },
+        {
+          "idCapm": 124,
+          "dateDebut": "2026-12-14",
+          "dateFin": "2026-12-15"
+        },
+        {
+          "idCapm": 125,
+          "dateDebut": "2026-12-16",
+          "dateFin": "2027-01-08"
+        },
+        {
+          "idCapm": 126,
+          "dateDebut": "2027-01-11",
+          "dateFin": "2027-01-15"
+        },
+        {
+          "idCapm": 127,
+          "dateDebut": "2027-01-18",
+          "dateFin": "2027-01-22"
+        },
+        {
+          "idCapm": 128,
+          "dateDebut": "2027-01-25",
+          "dateFin": "2027-01-27"
+        },
+        {
+          "idCapm": 129,
+          "dateDebut": "2027-01-28",
+          "dateFin": "2027-01-29"
+        },
+        {
+          "idCapm": 130,
+          "dateDebut": "2027-02-01",
+          "dateFin": "2028-01-31"
+        }
+      ],
+      "sources": {
+        "exercice": "[D] de la référence (§2)",
+        "dateSignature": "[H] §10 — date de signature du PPM",
+        "designationMarche": "[R] p.1 (§2, objet)",
+        "numCompte": "[R] p.1, p.36 (§2)",
+        "montEstim": "[H] §5 — total maximum des cinq lots",
+        "financement": "[R] p.1, p.36 (§2)",
+        "idNature": "[R] p.36, p.67 (§2, catégorie fournitures → nature 2 « Fournitures »)",
+        "idMode": "[R] p.36 (§2, appel d'offres ouvert → mode 1)",
+        "formeMarche": "[R] p.17, p.50 (§2, marché à commande)",
+        "lots[].designationLot": "[R] p.40-44, p.49 (§3, intitulé exact)",
+        "lots[].montLot": "[D] §5 — maximum = garantie ÷ 2 %",
+        "lots[].montMin": "[D] §5 — non stockable au plan (t_lot n'a qu'un montant) ; porté par la fiche B05-TP-02",
+        "lots[].destination": "[R] p.49, p.51 (§3) — non stockable au plan ; portée par la fiche B09-LL-01",
+        "processus": "[H] §8 (lancement 09/10/2026, remise/ouverture 09/11/2026, attribution 10/12/2026, notification 28/01/2027) et §10 dernier alinéa (étapes intermédiaires en jours ouvrés)",
+        "imputation": "00 84 0 100 00000 [R] p.1 — non stockable (le plan n'a pas de champ d'imputation, §10)",
+        "articlesCmp": "articles 30, 35 et 63 du CMP [R] p.36 — non stockable"
+      }
+    },
+    "circuit": {
+      "dateActes": "2026-09-26",
+      "reception": {
+        "observation": "Dossier complet : plan de passation 2026 du MESupReS et fiche de présentation."
+      },
+      "dispatch": {
+        "instructions": "Examen du plan de passation 2026 du MESupReS : ligne unique de matériels informatiques à commande, allotie en cinq lots."
+      },
+      "examen": {
+        "avis": "FAV"
+      },
+      "visa": {
+        "commentaire": "Plan de passation conforme : avis favorable."
+      },
+      "_": "[H] tout le circuit CNM (acteurs, dates du jour, textes, avis favorable et grille entièrement conforme) — le dossier ne dit rien de l'examen de son plan"
+    },
+    "fiche": {
+      "cadrage": {
+        "alloti": "OUI",
+        "nbLots": "5",
+        "variantes": "NON",
+        "groupement": "NON",
+        "provenance": "NATIONAL",
+        "typePrix": "UNITAIRES",
+        "prixRevisable": "NON",
+        "garantieSoumission": "OUI",
+        "avance": "OUI",
+        "tauxAvance": "20",
+        "penalites": "PLAFOND_DIFFERENT"
+      },
+      "cadrageSources": {
+        "alloti": "[R] p.17 (§2)",
+        "nbLots": "[R] p.17 (§2)",
+        "variantes": "[R] p.17 (§2)",
+        "groupement": "[R] p.17, p.49 (§2)",
+        "provenance": "[R] p.18 (§6, fournitures nationales)",
+        "typePrix": "[R] p.40-44 (§6, prix unitaires)",
+        "prixRevisable": "[R] p.18, p.50 (§6, fermes et non révisables)",
+        "garantieSoumission": "[R] p.18 (§4)",
+        "avance": "[H] §7",
+        "tauxAvance": "[H] §7 — 20 %",
+        "penalites": "[R] p.50 (§7, plafond 10 % ≠ CCAG)"
+      },
+      "valeurs": {
+        "B02-AU-02": "Lot par lot (attribution divisible)",
+        "B02-AU-04": "12",
+        "B02-AU-05": "2027-01-28",
+        "B02-AU-07": "2",
+        "B02-OB-02": "L'appel d'offres porte sur un marché à commandes des matériels et mobiliers de logements dont les quantités minimales et maximales sont spécifiées au Cahier des Prescriptions Spéciales, et pour une durée de validité de douze (12) mois.",
+        "B02-OB-03": "AOO n° 2463-MI/MESupReS/PRMP/UGPM.2026",
+        "B03-CQ-01": "Photocopie certifiée conforme à l'original de la Carte d'Immatriculation Fiscale 2026 ou 2025 validée, datée de moins de 3 mois ; photocopie certifiée conforme à l'original de l'Extrait du Registre de Commerce daté de moins de 3 mois ; carte statistique, photocopie certifiée conforme à l'original, datée de moins de 3 mois ; certificat de non faillite daté de moins de 3 mois.",
+        "B03-CQ-02": "Une fiche de renseignements relative à sa capacité technique (modèle A2), signée avec la mention « certifiée exacte et sincère ».",
+        "B03-CQ-03": "Une fiche de renseignements relative à sa capacité financière (modèle A3), signée avec la mention « certifiée exacte et sincère ».",
+        "B03-CQ-04": "Non exigé : la clause 6.3 du DPAO ne demande que les fiches d'identification, de capacité technique et de capacité financière.",
+        "B03-CQ-05": "NON",
+        "B03-CQ-06": "Aucune qualification particulière au-delà des pièces de la clause 6.1 et des fiches de la clause 6.3 du DPAO.",
+        "B03-CQ-07": "Non prévu par le DPAO.",
+        "B03-CQ-08": "NON",
+        "B03-NA-01": "OUI",
+        "B03-NA-02": "Est désigné comme comptable assignataire des paiements le Trésorier ministériel chargé de l'Enseignement ; le montant maximal de la créance qui pourra être nantie par le fournisseur est à compléter par le candidat, en lettres et en chiffres, à l'acte d'engagement.",
+        "B03-NA-03": "Trésorier ministériel chargé de l’Enseignement",
+        "B03-ST-01": "NON",
+        "B04-CD-01": "A1,A2,A3,A4",
+        "B04-CD-02": "C1 et C2",
+        "B04-CO-01": "Documents ou pièces à remettre en sus de ceux mentionnés à la clause 6.2 des IC : photocopie certifiée conforme à l'original de la Carte d'Immatriculation Fiscale 2026 ou 2025 validée, datée de moins de 3 mois ; photocopie certifiée conforme à l'original de l'Extrait du Registre de Commerce daté de moins de 3 mois ; carte statistique (photocopie certifiée conforme à l'original) datée de moins de 3 mois ; certificat de non faillite daté de moins de 3 mois ; garantie de soumission.",
+        "B04-DE-01": "Personne Responsable des Marchés Publics — Attention de : Monsieur LERAVO Norbert Fidelys — Porte 204, 2ème Etage - MESupReS — Fiadanana - Antananarivo, code postal 101 — E-mail : prmp.mesupres@gmail.com",
+        "B04-DE-02": "10",
+        "B04-DE-03": "5",
+        "B04-LA-01": "NON",
+        "B04-LR-01": "Monsieur LERAVO Norbert Fidelys, Personne Responsable des Marchés Publics",
+        "B04-LR-02": "Porte 204, 2ème Etage - MESupReS, Fiadanana - Antananarivo, code postal 101.",
+        "B04-LR-03": "2026-11-09",
+        "B04-LR-04": "Dix (10) heures",
+        "B04-OP-01": "Bureau : Porte 204, 2ème Etage - MESupReS",
+        "B04-OP-02": "2026-11-09",
+        "B04-OP-03": "DIX HEURES (10H)",
+        "B04-RO-01": "1",
+        "B04-RO-02": "AOO N° 2461/MT /MESupReS/PRMP/UGPM.2026 — Offre relative à « FOURNITURE ET LIVRAISON DES MATERIELS INFORMATIQUES REPARTIS EN CINQ (5) LOTS (A COMMANDE) » — « Ne pas ouvrir avant la date et l’heure d’ouverture des plis »",
+        "B04-RO-03": "Les offres devront être dans des plis séparés présentées pour chacun des lots. Outre l'original de l'offre, le pli doit comprendre UNE (01) copie. Les enveloppes comportent la mention de l'appel d'offres, l'objet de l'offre, le numéro et l'intitulé du lot auquel se rapporte l'offre, « Attention de : Monsieur LERAVO Norbert Fidelys, Porte 204, 2ème Etage - MESupReS » et « Ne pas ouvrir avant la date et l'heure d'ouverture des plis », à l'exclusion de l'indication permettant d'identifier le candidat. Cette enveloppe extérieure contient deux enveloppes intérieures fermées, scellées à la cire, comportant les mêmes mentions ainsi que le nom et l’adresse du candidat : l’une portant la mention ORIGINALE, l’autre la mention COPIE.",
+        "B04-VE-01": "NON",
+        "B04-VO-01": "75",
+        "B05-CP-02": "Pour les Fournitures acquises sur le territoire national, le prix comprend : i) le prix des fournitures EXW, (magasin de ventes) ; ii) le prix des transports intérieurs, assurance et autres services locaux afférents à la livraison des fournitures jusqu’à leur destination finale.",
+        "B05-GS-02": "Caution personnelle et solidaire d'un organisme agréé par le MEF,Garantie bancaire,Chèque de banque",
+        "B05-GS-04": "105",
+        "B05-MO-01": "Ariary",
+        "B06-AN-02": "Tout candidat écarté peut demander par écrit les motifs du rejet de sa candidature ou de son offre ; la Personne Responsable des Marchés Publics répond dans les vingt jours. Le recours gracieux puis le recours devant l'organe de régulation s'exercent dans les conditions du Code des marchés publics.",
+        "B06-EO-01": "Par lot",
+        "B06-EO-02": "Non applicable.",
+        "B06-EO-04": "Le prix du Marché est supposé comprendre l'ensemble des impôts, droits et taxes de toute nature dus par le Fournisseur au titre de la signature et de l'exécution du Marché.",
+        "B06-EO-05": "Les offres seront évaluées par lot et le marché portera sur le lot ou les lots attribués au candidat qualifié ayant proposé l’offre conforme pour l’essentiel et évaluée économiquement avantageuse pour le lot ou les lots considérés.",
+        "B06-EO-06": "Après évaluation, la Personne Responsable des Marchés Publics compare toutes les offres substantiellement conformes pour déterminer l'offre évaluée la moins-disante, lot par lot.",
+        "B06-EO-07": "Afin d'identifier le caractère anormalement bas ou haut d'une offre, la CAO effectuera les calculs suivants : calcul d'une 1ère moyenne des offres soumises sur la base de l'évaluation réalisée en termes monétaires ; identification des offres se situant à un pourcentage supérieur à 20 % — toutes les offres dont l’évaluation excède la moyenne augmentée de ce pourcentage seront déclarées offres anormalement hautes ; calcul d’une 2nde moyenne après neutralisation des offres anormalement hautes ; identification des offres se situant à un pourcentage inférieur à 10 % — toutes les offres dont l’évaluation est inférieure à cette 2nde moyenne diminuée de ce pourcentage seront déclarées offres anormalement basses.",
+        "B06-EO-08": "La Personne Responsable des Marchés Publics vérifie, avant attribution, que le candidat ayant présenté l'offre évaluée la moins-disante possède bien les qualifications requises et n'est frappé d'aucune exclusion.",
+        "B06-EP-01": "3",
+        "B08-AC-01": "NON",
+        "B08-AV-04": "Garantie bancaire",
+        "B08-AV-05": "L'avance forfaitaire est remboursée par précompte sur les sommes dues au titulaire, au fur et à mesure des livraisons, de sorte qu'elle soit entièrement remboursée lorsque le montant des paiements atteint 80 % du montant du marché.",
+        "B08-AV-06": "20",
+        "B08-GB-01": "NON",
+        "B08-IM-01": "9",
+        "B08-PA-01": "L'Acheteur se libérera des sommes dues au titre du présent marché en en faisant porter le montant au crédit du compte bancaire indiqué par le fournisseur à l'acte d'engagement : titulaire du compte, établissement bancaire, agence, numéro de compte, code.",
+        "B08-PA-03": "Les factures seront établies en quatre (04) exemplaires : un original et 3 copies portant, outre les mentions légales, les indications suivantes : le nom et adresse du Fournisseur ; le numéro du compte bancaire tel qu’il est précisé sur l’Acte d’Engagement ; les références du Marché ; le montant hors taxe des fournitures livrées ; le montant dû en Ariary ; la date de facturation.",
+        "B08-PA-04": "Les factures seront établies à la livraison.",
+        "B08-PA-05": "À la livraison",
+        "B08-PA-08": "30",
+        "B08-RG-01": "NON",
+        "B09-AS-01": "À la charge du fournisseur jusqu'à la livraison",
+        "B09-CR-01": "NON",
+        "B09-DG-01": "2",
+        "B09-DG-02": "Les fournitures doivent être garanties contre tout risque de fabrication ou de matière pendant DEUX (02) MOIS à compter de la date de réception provisoire. Durant ce délai de garantie, le Fournisseur se conforme aux garanties de performance spécifiées en vertu du Marché ; si, pour des raisons imputables au Fournisseur, ces garanties ne sont pas atteintes, il apporte aux fournitures, à ses frais, les changements, modifications et/ou adjonctions nécessaires pour atteindre les garanties contractuelles.",
+        "B09-DI-01": "Sur demande du fournisseur, pour chaque commande, la réception prononcée à la livraison par une commission de réception désignée par une décision de l'Acheteur vaudra réception provisoire de la commande. La réception définitive de la commande sera prononcée dans les mêmes formes à l'issue du délai de garantie ; la réception définitive de la dernière commande vaudra réception définitive du marché. À l'issue des opérations d'inspection, la commission de réception prend sa décision de réception, d'ajournement, de réfaction ou de rejet dans un délai de deux (2) jours.",
+        "B09-DX-01": "30",
+        "B09-DX-02": "À compter du lendemain de la date de notification de chaque bon de commande.",
+        "B09-DX-03": "Le délai de livraison est fixé dans le bon de commande sans toutefois dépasser TRENTE (30) JOURS à compter du lendemain de la date de notification dudit bon de commande. Chaque bon de commande précisera : la nature et la description des prestations à réaliser ; les délais d'exécution ; les lieux d'exécution ; le montant du bon de commande ; les délais laissés le cas échéant aux Fournisseurs pour formuler leurs observations. Seuls les bons de commande signés par l'Ordonnateur Secondaire pourront être honorés. La durée de validité est de 12 mois à compter de la date d'effet.",
+        "B09-EM-01": "Emballage d’origine.",
+        "B09-EM-02": "Aucun document particulier n'est exigé dans les emballages (CCAP art. 15 : emballage d'origine).",
+        "B09-IV-01": "Les vérifications et inspections des fournitures sont effectuées au lieu de destination finale, au moment de la livraison. Tous les frais y afférents sont à la charge totale du fournisseur.",
+        "B09-LF-01": "Les fournitures seront livrées au : lot n° 1 : MINISTERE FIADANANA ; lot n° 2 : AMBATONDRAZAKA ; lot n° 3 : AMBATONDRAZAKA ; lot n° 4 : FORT DAUPHIN ; lot n° 5 : FORT DAUPHIN. Les documents de livraison doivent être reçus par la Personne Responsable des Marchés Publics avant l'arrivée des fournitures, faute de quoi le Fournisseur est responsable de toute dépense subséquente. La livraison est constatée par la délivrance d'un récépissé au Fournisseur ou par la signature d'un double du bulletin de livraison ou de l'état.",
+        "B09-LF-02": "Cinq (05) exemplaires de la facture du Fournisseur indiquant la description des Fournitures, leurs quantités, leurs prix unitaires, le montant total, la date de l'expédition, la référence à la commande ou au Marché, l'identification du Fournisseur, l'identification des fournitures livrées et, quand il y a lieu, leur répartition par colis ; le bon de livraison, ou le récépissé du transporteur.",
+        "B09-MC-01": "NON",
+        "B09-OM-01": "10",
+        "B09-OM-02": "20",
+        "B09-OM-03": "12",
+        "B09-PC-01": "Aucune pièce supplémentaire : l'ordre de priorité des pièces contractuelles est celui fixé par l'article 6 du CCAG (CCAP art. 5).",
+        "B09-PC-02": "Annexe n° 1 : cadre du bordereau de prix. Annexe n° 2 : état des sommes versées à des tiers. Annexe n° 3 : formulaire de déclaration des bénéficiaires effectifs.",
+        "B09-PS-01": "NON",
+        "B09-RT-01": "Transport par le fournisseur jusqu'à la destination finale",
+        "B09-SK-01": "OUI",
+        "B10-AR-01": "Aucune clause particulière au CCAP : le règlement des différends suit le CCAG.",
+        "B10-IR-01": "OUI",
+        "B10-IR-02": "Les dispositions de l'article 32 du CCAG s'appliquent.",
+        "B09-PR-02": "10",
+        "B09-PR-03": "CCAP art. 11 : « En cas de retard dans l'exécution de chaque commande, il est appliqué une pénalité journalière de 1/1000 du montant de la commande. Le montant des pénalités est plafonné à dix pour cent (10 %) du montant du Marché, y compris le montant de ses avenants. » — dérogation au plafond de 15 % du CCAG (art. 12), que le tableau des dérogations de l'article 24 du CCAP ne récapitule pas.",
+        "B10-DD-01": "Article 22 du CCAP (délai de garantie de deux mois) dérogeant à l'article 23 du CCAG — seule dérogation récapitulée à l'article 24 du CCAP."
+      },
+      "sources": {
+        "B05-GS-03": "[R] DPAO 6.6 p.18 : les montants EXACTS de la garantie de soumission.",
+        "B05-TP-02": "[D] §5 : montant minimum = maximum ÷ 2 (les quantités min valent la moitié des max sur tous les bordereaux).",
+        "B05-TP-03": "[D] §5 : montant maximum = garantie ÷ 2 % (le dossier laisse les montants en blanc, AE p.38).",
+        "B06-EO-12": "[R] DPAO 12 p.19, CCAP 10.a p.50 : « fixé dans le bon de commande, sans toutefois dépasser TRENTE (30) JOURS ».",
+        "B09-LL-01": "[R] CCAP art. 1 et 17 p.49, 51 — les destinations finales, dans les mots du dossier. par lot (VALEURS_2463_PAR_LOT)",
+        "B02-AU-03": "⚠️ B02-AU-03 (« Quantités minimum et maximum ») est DÉSACTIVÉ depuis le 25/09 : le besoin (B12) le porte.",
+        "B02-OB-02": "[R] DPAO 1.2 p.17 — anomalie §9 conservée (« matériels et mobiliers de logements »)",
+        "B02-OB-03": "[R] p.1, AE p.36",
+        "B02-AU-02": "[R] DPAO 1.1 p.17 : « Chaque lot est indivisible. Toute offre partielle est irrecevable. »",
+        "B02-AU-04": "[R] DPAO 1.2 p.17, CCAP 10.b p.50",
+        "B02-AU-05": "[H] §8 : notification / date d'effet",
+        "B02-AU-07": "[R] DPAO 1.1 p.17 : « ne peut prétendre qu'à deux lots au maximum »",
+        "B03-CQ-01": "[R] DPAO 6.1 p.17 (§6)",
+        "B03-CQ-02": "[R] DPAO 6.3",
+        "B03-CQ-03": "[R] DPAO 6.3",
+        "B03-CQ-04": "[D] §10",
+        "B03-CQ-05": "[R] sommaire p.2 : « Modèle d'attestation du fabricant – Non utilisé »",
+        "B03-CQ-06": "[D] §10",
+        "B03-CQ-07": "[D] §10",
+        "B03-CQ-08": "[R] DPAO 9.5 p.19",
+        "B03-NA-01": "[R] AE art. 4 p.38",
+        "B03-NA-02": "[R] AE art. 4 p.38",
+        "B03-NA-03": "[R] AE art. 4 p.38",
+        "B03-ST-01": "[R] AE art. 3 p.38",
+        "B04-CD-01": "[R] sommaire p.2, DPAO 5.1 : modèles de fiches de renseignements joints",
+        "B04-CD-02": "[R] DPAO 5.1 : modèles de garantie de soumission joints (p.33-34)",
+        "B04-CO-01": "[R] DPAO 6.1",
+        "B04-DE-01": "[R] DPAO 5.2",
+        "B04-DE-02": "[R] DPAO 5.2",
+        "B04-DE-03": "[R] DPAO 5.2",
+        "B04-LA-01": "[D] §10 : le DPAO ne prévoit aucune langue en plus du français",
+        "B04-LR-01": "[R] DPAO 7.2",
+        "B04-LR-02": "[R] DPAO 7.2",
+        "B04-LR-03": "[H] §8 (le dossier laisse la date en pointillés — anomalie §9)",
+        "B04-LR-04": "[R] DPAO 7.2",
+        "B04-OP-01": "[R] DPAO 8",
+        "B04-OP-02": "[R] DPAO 8 : « le même jour que la date limite fixée pour la remise des offres »",
+        "B04-OP-03": "[R] DPAO 8",
+        "B04-RO-01": "[R] DPAO 7.1 : « UNE (01) copie »",
+        "B04-RO-02": "[R] DPAO 7.1 p.18, tel quel — ⚠️ anomalie §9 conservée : la mention cite « AOO N° 2461/MT » pour le dossier 2463-MI.",
+        "B04-RO-03": "[R] DPAO 7.1",
+        "B04-VE-01": "[R] DPAO 7.3",
+        "B04-VO-01": "[R] DPAO 6.4",
+        "B05-CP-02": "[R] DPAO 6.5.1 p.18 (§6)",
+        "B05-GS-02": "[R] DPAO 6.6 p.18 : « dans l'une des formes suivantes : soit une garantie bancaire, soit une caution personnelle et solidaire, soit un chèque de banque libellé au nom du Receveur Général d'Antananarivo ». Liste à choix multiples depuis le 26/09 (demande-backend-2026-09-26-forme-garantie-soumission-choix-multiple.md) : options dans l'ordre du référentiel, séparées par des virgules — le serveur les range de toute façon.",
+        "B05-GS-04": "[R] modèles C1/C2 p.33-34 : « jusqu'au 105ème jour »",
+        "B05-MO-01": "[R] CCAP 9.3, AE art. 2",
+        "B06-EO-01": "[R] DPAO 9.4",
+        "B06-EO-02": "[R] DPAO 9.4 : « Critère additionnel : non applicable »",
+        "B06-EO-04": "[R] CCAP 8.1 p.50 — HORS fiche des faits (transcription du front reprise, arbitrage du 26/09)",
+        "B06-EO-05": "[R] DPAO 9.4",
+        "B06-EO-07": "[R] DPAO 9.4.5",
+        "B06-EP-01": "[R] DPAO 9.1",
+        "B08-AC-01": "[R] CCAP 9.1.b",
+        "B06-AN-01": "aucune garantie de bonne exécution exigée : pas de forme à déclarer (CCAP 12.1)",
+        "B08-GB-02": "idem",
+        "B08-GB-01": "[R] CCAP 12.1 : « Non applicable »",
+        "B08-RG-01": "[R] CCAP 12.2 : « Aucune retenue de garantie ne sera pratiquée »",
+        "B08-IM-01": "[H] §10 : le CCAP 9.4 dit « taux directeur de la BCM … augmenté d'un (01) point » ; le référentiel veut un nombre.",
+        "B08-PA-01": "[R] AE art. 6.1 p.38 — HORS fiche des faits (transcription du front reprise, arbitrage du 26/09)",
+        "B08-PA-03": "[R] CCAP 9.2",
+        "B08-PA-04": "[R] CCAP 9.2",
+        "B08-PA-05": "[R] CCAP 9.2",
+        "B08-PA-08": "[H] §10",
+        "B09-AS-01": "[R] §7 p.51 — transport et assurance par le fournisseur (arbitrage du 26/09 ; le front avait « Selon l'incoterm », CCAP art. 18)",
+        "B09-CR-01": "[R] CCAP art. 19",
+        "B09-DG-01": "[R] CCAP art. 22 : DEUX (02) MOIS — dérogation à l'article 23 du CCAG (CCAP art. 24)",
+        "B09-DG-02": "[R] CCAP art. 22",
+        "B09-DI-01": "[R] CCAP art. 21",
+        "B09-DX-01": "[R] CCAP 10.a",
+        "B09-DX-02": "[R] CCAP 10.a",
+        "B09-DX-03": "[R] CCAP 10.a et 10.b",
+        "B09-EM-01": "[R] CCAP art. 15",
+        "B09-EM-02": "[D] §10",
+        "B09-IV-01": "[R] CCAP art. 20",
+        "B09-LF-01": "[R] CCAP art. 17",
+        "B09-LF-02": "[R] CCAP art. 17",
+        "B09-MC-01": "[R] CCAP art. 13 : « Sans objet »",
+        "B09-OM-01": "[R] CCAP art. 6",
+        "B09-OM-02": "[R] CCAP art. 6",
+        "B09-OM-03": "[R] CCAP art. 6 et 10.b",
+        "B09-PC-01": "[D] §10",
+        "B09-PC-02": "[R] AE p.38 — HORS fiche des faits (transcription du front reprise, arbitrage du 26/09)",
+        "B09-PS-01": "[R] CCAP art. 7",
+        "B09-RT-01": "[R] CCAP art. 16",
+        "B09-SK-01": "[R] CCAP art. 14 : « Quantité minimale prévue dans le bordereau de prix »",
+        "B09-PR-02": "[R] CCAP art. 11 p.50 (§7 : plafond 10 %)",
+        "B09-PR-03": "[R] + constat §9",
+        "B10-AR-01": "[D] §10",
+        "B10-IR-02": "[R] CCAP art. 23",
+        "B10-DD-01": "[R] CCAP art. 24",
+        "B06-AN-02": "[H] §10 — paraphrase des IC (recours), DPAO muet",
+        "B06-EO-06": "[H] §10 — paraphrase des IC (comparaison des offres), DPAO muet",
+        "B06-EO-08": "[H] §10 — paraphrase des IC (vérification a posteriori), DPAO muet",
+        "B08-AV-04": "[H] §7 — garantie de restitution bancaire (CCAP 9.1.a en blanc)",
+        "B08-AV-05": "[H] §10 — remboursement intégral quand les paiements atteignent 80 %",
+        "B08-AV-06": "[H] §10 — précompte 20 %",
+        "B10-IR-01": "[R] CCAP art. 23 p.52 (§7 : indemnité de résiliation, CCAG art. 32)"
+      },
+      "parLot": {
+        "B05-GS-03": {
+          "1": "1600000",
+          "2": "2170000",
+          "3": "1600000",
+          "4": "2170000",
+          "5": "1600000"
+        },
+        "B05-TP-02": {
+          "1": "40000000",
+          "2": "54250000",
+          "3": "40000000",
+          "4": "54250000",
+          "5": "40000000"
+        },
+        "B05-TP-03": {
+          "1": "80000000",
+          "2": "108500000",
+          "3": "80000000",
+          "4": "108500000",
+          "5": "80000000"
+        },
+        "B06-EO-12": {
+          "1": "30",
+          "2": "30",
+          "3": "30",
+          "4": "30",
+          "5": "30"
+        },
+        "B09-LL-01": {
+          "1": "MINISTERE FIADANANA",
+          "2": "AMBATONDRAZAKA",
+          "3": "AMBATONDRAZAKA",
+          "4": "FORT DAUPHIN",
+          "5": "FORT DAUPHIN"
+        }
+      },
+      "sourcesParLot": {
+        "B05-GS-03": "[R] DPAO 6.6 p.18 (§4) — montants exacts de la garantie de soumission",
+        "B05-TP-02": "[D] §5 — minimum = maximum ÷ 2",
+        "B05-TP-03": "[D] §5 — maximum = garantie ÷ 2 %",
+        "B06-EO-12": "[R] p.19, p.38, p.50 (§3) — 30 jours au plus par bon de commande",
+        "B09-LL-01": "[R] CCAP art. 1 et 17 p.49, 51 (§3) — destination de chaque lot"
+      },
+      "articles": [
+        {
+          "lot": 1,
+          "designation": "Ordinateur de bureau complet Core i5",
+          "unite": "U",
+          "quantiteMin": 15,
+          "quantiteMax": 30,
+          "caracteristiques": [
+            {
+              "libelle": "Processeur",
+              "exigence": "Core i5"
+            },
+            {
+              "libelle": "Mémoire vive",
+              "exigence": "8 Go"
+            },
+            {
+              "libelle": "Stockage",
+              "exigence": "SSD 500 Go"
+            },
+            {
+              "libelle": "Moniteur",
+              "exigence": "LCD 22 pouces au minimum"
+            },
+            {
+              "libelle": "Clavier",
+              "exigence": "AZERTY"
+            },
+            {
+              "libelle": "Souris",
+              "exigence": "Souris optique USB"
+            },
+            {
+              "libelle": "Lecteur optique",
+              "exigence": "Lecteur / graveur DVD"
+            },
+            {
+              "libelle": "Système d'exploitation",
+              "exigence": "Windows 10 ou supérieur, édition Professional 64 bits, français installé"
+            }
+          ]
+        },
+        {
+          "lot": 1,
+          "designation": "Onduleur",
+          "unite": "U",
+          "quantiteMin": 10,
+          "quantiteMax": 20,
+          "caracteristiques": [
+            {
+              "libelle": "État",
+              "exigence": "Matériel neuf sous emballage"
+            },
+            {
+              "libelle": "Capacité d'alimentation en sortie",
+              "exigence": "390 Watts / 1200 VA au minimum"
+            }
+          ]
+        },
+        {
+          "lot": 2,
+          "designation": "Kit de matériels informatiques : ordinateur de bureau complet Core i3 + onduleur + imprimante jet d'encre",
+          "unite": "U",
+          "quantiteMin": 8,
+          "quantiteMax": 16,
+          "caracteristiques": [
+            {
+              "libelle": "Processeur",
+              "exigence": "Core i3"
+            },
+            {
+              "libelle": "Mémoire vive",
+              "exigence": "8 Go"
+            },
+            {
+              "libelle": "Stockage",
+              "exigence": "SSD 500 Go"
+            },
+            {
+              "libelle": "Moniteur",
+              "exigence": "LCD 19 pouces au minimum"
+            },
+            {
+              "libelle": "Système d'exploitation",
+              "exigence": "Windows 10 ou supérieur, édition Professional 64 bits, français installé"
+            },
+            {
+              "libelle": "Onduleur",
+              "exigence": "Matériel neuf sous emballage, 390 Watts / 700 VA au minimum"
+            },
+            {
+              "libelle": "Imprimante",
+              "exigence": "Couleur 4-en-1 : impression, numérisation, copie, télécopie — depuis PC, MAC et USB"
+            }
+          ]
+        },
+        {
+          "lot": 2,
+          "designation": "Kit de matériels informatiques : ordinateur de bureau complet Core i5 + onduleur",
+          "unite": "U",
+          "quantiteMin": 13,
+          "quantiteMax": 26,
+          "caracteristiques": [
+            {
+              "libelle": "Processeur",
+              "exigence": "Core i5"
+            },
+            {
+              "libelle": "Mémoire vive",
+              "exigence": "16 Go"
+            },
+            {
+              "libelle": "Stockage",
+              "exigence": "SSD 1 000 Go"
+            },
+            {
+              "libelle": "Moniteur",
+              "exigence": "LCD 22 pouces au minimum"
+            },
+            {
+              "libelle": "Système d'exploitation",
+              "exigence": "Windows 10 ou supérieur, édition Professional 64 bits, français installé"
+            },
+            {
+              "libelle": "Onduleur",
+              "exigence": "Matériel neuf sous emballage, 390 Watts / 700 VA au minimum"
+            }
+          ]
+        },
+        {
+          "lot": 3,
+          "designation": "Imprimante laser noir multifonction A4",
+          "unite": "U",
+          "quantiteMin": 3,
+          "quantiteMax": 6,
+          "caracteristiques": [
+            {
+              "libelle": "Couleur",
+              "exigence": "Noir et blanc"
+            },
+            {
+              "libelle": "Fonctions",
+              "exigence": "Impression, copie, scan"
+            },
+            {
+              "libelle": "Format",
+              "exigence": "A4"
+            },
+            {
+              "libelle": "État",
+              "exigence": "Matériel neuf sous emballage"
+            }
+          ]
+        },
+        {
+          "lot": 3,
+          "designation": "Photocopieuse noir A4 et A3",
+          "unite": "U",
+          "quantiteMin": 1,
+          "quantiteMax": 2,
+          "caracteristiques": [
+            {
+              "libelle": "Fonctions",
+              "exigence": "Impression, copie, scan"
+            },
+            {
+              "libelle": "Format",
+              "exigence": "A4 et A3"
+            },
+            {
+              "libelle": "Accessoire",
+              "exigence": "Stand avec roulettes"
+            },
+            {
+              "libelle": "État",
+              "exigence": "Matériel neuf sous emballage"
+            }
+          ]
+        },
+        {
+          "lot": 3,
+          "designation": "Duplicopieur noir et blanc A4",
+          "unite": "U",
+          "quantiteMin": 1,
+          "quantiteMax": 2,
+          "caracteristiques": [
+            {
+              "libelle": "Dimension",
+              "exigence": "A4"
+            },
+            {
+              "libelle": "Accessoires",
+              "exigence": "Interface USB 2.0"
+            },
+            {
+              "libelle": "État",
+              "exigence": "Matériel neuf sous emballage"
+            }
+          ]
+        }
+      ],
+      "articlesSources": "[R] p.40-44 (quantités), p.57-61 (spécifications), p.62-66 (calendrier) — §3",
+      "duplications": {
+        "4": 2,
+        "5": 3
+      },
+      "duplicationsSources": "[R] p.43-44, p.60-61 (§3) — lots 4 et 5 identiques aux lots 2 et 3, par relecture/renvoi (geste « Dupliquer »)",
+      "defautsReferentiel": {
+        "B03-CQ-09": "5 — valeur par défaut du référentiel (V47, formulaire A1 p.23-25 du dossier) ; absente de la fiche des faits",
+        "B03-CQ-10": "3 — valeur par défaut du référentiel (V47, formulaire A3 p.28-30 du dossier) ; absente de la fiche des faits"
+      }
+    },
+    "parametres": {
+      "FICHE_TAUX_TVA": "20 — paramètre administré (V46), pas une donnée du dossier ; gardé (arbitrage du 26/09)"
+    }
+  },
+  "resultat": {
+    "etape0": {
+      "date": "2026-09-26",
+      "entite": {
+        "idEntiteContract": 11,
+        "libelleEntite": "MINISTERE DE L'ENSEIGNEMENT SUPERIEUR ET DE LA RECHERCHE SCIENTIFIQUE",
+        "adresse": "Fiadanana, 2ème étage porte 204 — Antananarivo 101",
+        "categorieEntite": "MINISTERE",
+        "idLocalite": "ANT",
+        "libelleConforme": true,
+        "adresseConforme": true,
+        "sigleStockable": false
+      },
+      "prmp": {
+        "idPrmp": "LERAVO01",
+        "nomPrmp": "LERAVO",
+        "prenomsPrmp": "Norbert Fidelys",
+        "arreteNomin": "[H] non fourni par le dossier",
+        "dateNomin": "2026-01-01",
+        "cin": "NON FOURNI",
+        "dateCin": "2026-01-01",
+        "lieuCin": "[H] non fourni",
+        "emailPrmp": "prmp.mesupres@gmail.com",
+        "telPrmp": "[H] non fourni",
+        "creee": false
+      },
+      "liensDesactives": [],
+      "lien": {
+        "idPrmpEntite": 10,
+        "idPrmp": "LERAVO01",
+        "idEntiteContract": 11,
+        "dateAffectation": "2026-09-26",
+        "actif": true
+      },
+      "compte": {
+        "login": "LERAVO",
+        "moi": {
+          "login": "LERAVO",
+          "role": "PRMP",
+          "typeActeur": "PRMP",
+          "ref": "LERAVO01",
+          "nomAffichage": "LERAVO Norbert Fidelys",
+          "localite": null,
+          "expiresIn": 28800
+        }
+      },
+      "entiteVisible": true
+    }
+  }
+}
