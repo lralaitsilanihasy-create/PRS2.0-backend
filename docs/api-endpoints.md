@@ -4904,6 +4904,16 @@ officiels du pilote, qui seront remplis tels quels.
   prestations intellectuelles, la garantie de soumission a d'autres codes (`B05-GQ-03`, `B04-DV-01`, `B04-OV-02`) que les
   jetons ne lisent pas : C1 / C2 y impriment des **pointillés** pour le montant, les délais et la remise des offres,
   tant qu'un alias de jeton par catégorie n'est pas contractualisé.
+- ⚠️ **2026-09-27 — les documents types officiels (ARMP) remplacent les décalques du 2463** (demande front
+  `demande-backend-2026-09-27-formulaires-officiels-armp.md`, arbitrage du pilote « ajuster par rapport aux
+  officiels »). Les fichiers de commande sont récrits par le front depuis le gabarit ARMP
+  (`scripts/modeles-candidat/modeles-armp/`) et recopiés **tels quels** dans `modeles/candidat/` à leur livraison, sans
+  autre changement du moteur : **C1** ce jour (rendu du serveur identique paragraphe par paragraphe au rendu de
+  relecture du front, 15/15), A1-A4 et C2 à suivre. Nouveau suffixe de jeton **`.chiffres`** : le nombre en chiffres
+  **sans l'unité** (« 1 600 000 »), pour un gabarit qui écrit lui-même « Ariary » après le montant — `{{CODE}}` d'un
+  montant garde « 1 600 000 Ariary ». ⚠️ Le C1 ARMP livré écrit `({{B05-GS-03}} Ariary)` et imprime donc
+  « (… Ariary Ariary) » jusqu'à ce que le front passe le jeton en `{{B05-GS-03.chiffres}}` (signalé, recopie à
+  suivre). Le 2463 verra ses formulaires produits sur les officiels : errata E8 côté front.
 
 #### Forme de la garantie de soumission : plusieurs formes admises (2026-09-26, demande front, arbitrage du pilote sur le dossier réel 2463)
 

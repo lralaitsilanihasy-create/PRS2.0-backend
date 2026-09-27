@@ -319,6 +319,9 @@ public final class FormulairesCandidat {
                 case "lettres" -> TypeChampFiche.MONTANT.name().equals(type) && n != null ? MontantEnLettres.ariary(n)
                         : n != null && n.stripTrailingZeros().scale() <= 0 ? NombreEnLettres.cardinal(n.longValue()) : brut;
                 case "doublet" -> n != null && n.signum() > 0 ? NombreEnLettres.doublet(n.longValue(), false) : POINTILLES;
+                // ⚠️ 2026-09-27 (documents types ARMP) — le nombre en chiffres SANS l'unité, pour un gabarit qui écrit lui-même
+                // « Ariary » après le montant (« pour la somme de … ({{B05-GS-03.chiffres}} Ariary) »).
+                case "chiffres" -> n != null ? ValeursPpmService.montant(n) : brut;
                 case "" -> affichage(type, brut, n);
                 default -> null;
             };

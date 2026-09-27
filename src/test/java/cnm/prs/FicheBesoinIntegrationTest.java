@@ -243,7 +243,7 @@ class FicheBesoinIntegrationTest extends CnmIntegrationTestSupport {
 
     @Test
     @DisplayName("5 — V47 : fiches A1, A2, A3 une fois pour le dossier et garanties C1, C2 par lot sur les modèles officiels ; "
-            + "C1 porte le montant du lot en chiffres et en lettres, le trentième dérivé et le cent cinquième ; A1 sans "
+            + "C1 (gabarit ARMP depuis le 27/09) porte le montant du lot en lettres et en chiffres et la validité en nombre nu ; A1 sans "
             + "groupement omet A1-b et dit « (non applicable) » ; A3-b porte les natures du marché ; aucun jeton ne subsiste")
     void formulairesOfficiels() throws Exception {
         Long idDmc = creerDmc(9902);
@@ -280,12 +280,15 @@ class FicheBesoinIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(JsonPath.<List<String>>read(documents, "$[?(@.type=='C1')].libelle"))
                 .contains("Garantie bancaire de soumission (C1) — lot 2");
 
+        // ⚠️ 2026-09-27 — C1 est le gabarit ARMP (fichier de commande du front, recopié tel quel) : autorité contractante
+        // nommée, montant en lettres puis en chiffres, « trentième (30ème) jour » fixe et B05-GS-04 en nombre nu.
         String c1 = texteDocx(contenu(documents, "C1", "docx", 2));
-        assertThat(c1).contains("A : Entite 1, Adresse",
+        assertThat(c1).contains("C 1 - Modèle de garantie bancaire de soumission",
                 "la fourniture de AOO 2461/MT/2026 — Acquisition de matériels informatiques 9902",
-                "à concurrence d’un montant de 3 200 000 Ariary (trois millions deux cent mille ariary)",
-                "jusqu’au trentième (30ème) jour suivant l’expiration de la période de validité des offres, soit jusqu’au "
-                        + "cent cinquième (105ème) jour")
+                "au profit de Entite 1 (ci-après dénommée \"l'Autorité Contractante\")",
+                "pour la somme de trois millions deux cent mille ariary (3 200 000 Ariary",
+                "jusqu'au trentième (30ème) jour suivant l'expiration de la période de validité des offres, soit jusqu'au "
+                        + "105 ème jour")
                 .doesNotContain("{{", "1 600 000");
         String c2 = texteDuPdf(contenu(documents, "C2", "pdf", 1));
         assertThat(c2).contains("au plus tard le " + remise.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")),

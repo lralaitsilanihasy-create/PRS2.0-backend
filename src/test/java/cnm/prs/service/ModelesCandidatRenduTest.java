@@ -78,13 +78,34 @@ class ModelesCandidatRenduTest {
         String a3 = docs.get(1).texte();
         assertThat(a3).contains("Travaux\t\t\t").doesNotContain("{{");
         assertThat(a3.lines().filter(l -> l.startsWith("Fournitures")).count()).isEqualTo(1);   // le premier tableau seul
-        assertThat(docs.get(3).texte()).contains("2 170 000 Ariary (deux millions cent soixante-dix mille ariary)")
-                .contains("jusqu’au ……… jour suivant")   // B05-GS-04 et B04-VO-01 absents → pointillés
+        // ⚠️ 2026-09-27 — C1 est le gabarit ARMP : montant en lettres puis en chiffres, « 30ème jour » fixe, B05-GS-04 nu.
+        assertThat(docs.get(3).texte()).contains("pour la somme de deux millions cent soixante-dix mille ariary (2 170 000 Ariary")
+                .contains("soit jusqu'au ……… ème jour")   // B05-GS-04 absent → pointillés
                 .doesNotContain("1 600 000");
 
         fiche.getCadrage().put("groupement", "NON");
         String sans = FormulairesCandidat.generer(fiche, champs, modeles, null).get(0).texte();
         assertThat(sans).contains("(non applicable)").doesNotContain("Nature du groupement", "{{SI", "{{FINSI");
+    }
+
+    @Test
+    @DisplayName("Jeton .chiffres (2026-09-27, gabarits ARMP) : le nombre en chiffres sans l'unité ; {{CODE}} d'un montant garde "
+            + "« Ariary » ; valeur absente → pointillés")
+    void suffixeChiffres() {
+        Map<String, cnm.prs.entity.ChampFicheMarche> champs = new java.util.LinkedHashMap<>();
+        champs.put("B05-GS-03", champ("B05-GS-03", "MONTANT", false));
+        champs.put("B05-GS-04", champ("B05-GS-04", "NOMBRE", false));
+        Map<String, List<DocumentLibre.Element>> modeles = Map.of("C1", FichierCommande.lire(
+                "TITRE\tEssai\nPARA\tsomme de {{B05-GS-03.lettres}} ({{B05-GS-03.chiffres}} Ariary) soit {{B05-GS-03}}, "
+                        + "au {{B05-GS-04.chiffres}} ème jour ; absent : {{B04-VO-01.chiffres}}"));
+        cnm.prs.dto.FicheMarcheDto fiche = new cnm.prs.dto.FicheMarcheDto();
+        fiche.setIdDetail(1);
+        fiche.setVersion(1);
+        fiche.setCategorie("FOURNITURES_SERVICES");
+        fiche.setValeurs(new java.util.HashMap<>(Map.of("B04-CD-02", "C1", "B05-GS-03", "1600000", "B05-GS-04", "105")));
+        String texte = FormulairesCandidat.generer(fiche, champs, modeles, null).get(0).texte();
+        assertThat(texte).contains("somme de un million six cent mille ariary (1 600 000 Ariary) soit 1 600 000 Ariary, "
+                + "au 105 ème jour ; absent : ………");
     }
 
     private static cnm.prs.entity.ChampFicheMarche champ(String code, String type, boolean parLot) {
