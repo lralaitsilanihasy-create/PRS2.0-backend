@@ -283,11 +283,11 @@ class FicheBesoinIntegrationTest extends CnmIntegrationTestSupport {
         // ⚠️ 2026-09-27 — C1 est le gabarit ARMP (fichier de commande du front, recopié tel quel) : autorité contractante
         // nommée, montant en lettres puis en chiffres, « trentième (30ème) jour » fixe et B05-GS-04 en nombre nu.
         String c1 = texteDocx(contenu(documents, "C1", "docx", 2));
-        assertThat(c1).contains("C 1 - Modèle de garantie bancaire de soumission",
+        assertThat(c1).contains("C 1 – Modèle de garantie bancaire de soumission",
                 "la fourniture de AOO 2461/MT/2026 — Acquisition de matériels informatiques 9902",
-                "au profit de Entite 1 (ci-après dénommée \"l'Autorité Contractante\")",
+                "au profit de Entite 1 (ci-après dénommée",
                 "pour la somme de trois millions deux cent mille ariary (3 200 000 Ariary), que",
-                "jusqu'au trentième (30ème) jour suivant l'expiration de la période de validité des offres, soit jusqu'au "
+                "jusqu’au trentième (30ème) jour suivant l’expiration de la période de validité des offres, soit jusqu’au "
                         + "105 ème jour")
                 .doesNotContain("{{", "1 600 000");
         String c2 = texteDuPdf(contenu(documents, "C2", "pdf", 1));
@@ -295,7 +295,7 @@ class FicheBesoinIntegrationTest extends CnmIntegrationTestSupport {
                 "dont la validité expire le " + expiration, "s’élève à 1 600 000 Ariary (un million six cent mille ariary)")
                 .doesNotContain("{{");
         String a1 = texteDocx(contenu(documents, "A1", "docx", null));
-        assertThat(a1).contains("N° D'appel d'offre et titre: AOO 2461/MT/2026 — Acquisition de matériels informatiques 9902",
+        assertThat(a1).contains("N°. d'appel d'offre et titre: AOO 2461/MT/2026 — Acquisition de matériels informatiques 9902",
                 "(non applicable)", "au cours des cinq dernières années", "pendant la période de 5 ans")
                 .doesNotContain("Nature du groupement", "{{");
         String a3 = texteDocx(contenu(documents, "A3", "docx", null));

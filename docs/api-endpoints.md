@@ -4908,8 +4908,10 @@ officiels du pilote, qui seront remplis tels quels.
   `demande-backend-2026-09-27-formulaires-officiels-armp.md`, arbitrage du pilote « ajuster par rapport aux
   officiels »). Les fichiers de commande sont récrits par le front depuis le gabarit ARMP
   (`scripts/modeles-candidat/modeles-armp/`) et recopiés **tels quels** dans `modeles/candidat/` à leur livraison, sans
-  autre changement du moteur : **C1** ce jour (rendu du serveur identique paragraphe par paragraphe au rendu de
-  relecture du front, 15/15), A1-A4 et C2 à suivre. Nouveau suffixe de jeton **`.chiffres`** : le nombre en chiffres
+  autre changement du moteur : C1 le matin, puis **les six** (commits front `622608b`, `86b787e`) — chaque rendu brut
+  du serveur « conforme au document type » dans les deux sens par `verifier-armp.mjs` (A1 35/37, A2 7/7, A3 48/48,
+  A4 7/7, C1 13/13, C2 16/15 fragments). L'omission R9 (`{{SI:A1B}}`) retire aussi un **tableau** placé entre ses
+  marqueurs : A1-b, désormais un tableau, disparaît sans groupement. Nouveau suffixe de jeton **`.chiffres`** : le nombre en chiffres
   **sans l'unité** (« 1 600 000 »), pour un gabarit qui écrit lui-même « Ariary » après le montant — `{{CODE}}` d'un
   montant garde « 1 600 000 Ariary ». Le premier C1 ARMP écrivait `({{B05-GS-03}} Ariary)` (double « Ariary »,
   signalé) ; le front l'a passé en `{{B05-GS-03.chiffres}}` le jour même (commit front `f05b0c5`), recopié tel quel.

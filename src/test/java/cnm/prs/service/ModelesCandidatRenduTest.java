@@ -73,14 +73,14 @@ class ModelesCandidatRenduTest {
         assertThat(docs).extracting(DocumentLibre::lot).containsExactly(null, null, 1, 2);
         String a1 = docs.get(0).texte();
         assertThat(a1).contains("Nature du groupement", "au cours des cinq dernières années", "pendant la période de 5 ans",
-                "N° D'appel d'offre et titre: ……… — Réhabilitation d'une route")   // B02-OB-03 absent → pointillés (R2)
+                "N°. d'appel d'offre et titre: ……… — Réhabilitation d'une route")   // B02-OB-03 absent → pointillés (R2)
                 .doesNotContain("(non applicable)", "{{");
         String a3 = docs.get(1).texte();
         assertThat(a3).contains("Travaux\t\t\t").doesNotContain("{{");
         assertThat(a3.lines().filter(l -> l.startsWith("Fournitures")).count()).isEqualTo(1);   // le premier tableau seul
         // ⚠️ 2026-09-27 — C1 est le gabarit ARMP : montant en lettres puis en chiffres, « 30ème jour » fixe, B05-GS-04 nu.
         assertThat(docs.get(3).texte()).contains("pour la somme de deux millions cent soixante-dix mille ariary (2 170 000 Ariary), que")
-                .contains("soit jusqu'au ……… ème jour")   // B05-GS-04 absent → pointillés
+                .contains("soit jusqu’au ……… ème jour")   // B05-GS-04 absent → pointillés ; apostrophe typographique du gabarit
                 .doesNotContain("1 600 000");
 
         fiche.getCadrage().put("groupement", "NON");
