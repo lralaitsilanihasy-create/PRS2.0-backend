@@ -2,9 +2,9 @@
   "_": "Projet d'AGPM dérivé du plan, tel que le front le calcule (shared/prmp/agpm.ts : marchés dont le mode déclenche l'AGPM ; date du DAO = début de l'étape prévisionnelle « lancement »). Le serveur n'a pas de rendu : il sert agpmRequis, le sous-type PPM-AGPM et la grille d'examen (points 8, 12, 13, 14).",
   "lu": "2026-09-26",
   "sources": [
-    "/api/ppms/200337",
-    "/api/dossiers/100351",
-    "/api/marches?dossier=100351",
+    "/api/ppms/200338",
+    "/api/dossiers/100352",
+    "/api/marches?dossier=100352",
     "/api/marche-previsions?marche=…",
     "/api/mode-passations",
     "/api/natures",
@@ -14,7 +14,7 @@
     "agpmRequis": true,
     "idSousType": "PPM-AGPM",
     "refeDossier": "00001/PPM-AGPM/CNM/2026",
-    "referencePpm": "00001/MLSRS/PPM-AGPM/2026"
+    "referencePpm": "00001/MESupReS/PPM-AGPM/2026"
   },
   "entete": {
     "exercice": 2026,
@@ -27,7 +27,7 @@
   },
   "lignes": [
     {
-      "idDetail": 303091,
+      "idDetail": 303092,
       "compte": "2463",
       "nature": "Fournitures",
       "objet": "Fourniture et livraison des matériels informatiques répartis en cinq (5) lots (à commande)",

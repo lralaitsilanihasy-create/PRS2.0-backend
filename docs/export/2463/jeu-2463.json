@@ -769,8 +769,7 @@
         "libelleConforme": true,
         "adresseConforme": true,
         "sigleStockable": true,
-        "sigle": "MESupReS",
-        "siglePose": "2026-09-26"
+        "sigle": "MESupReS"
       },
       "prmp": {
         "idPrmp": "LERAVO01",
@@ -809,20 +808,20 @@
     },
     "etape1": {
       "date": "2026-09-26",
-      "idDossier": 100351,
+      "idDossier": 100352,
       "creation": {
         "statut": "BROUILLON",
         "refeDossier": null,
         "idSousType": "PPM-AGPM"
       },
-      "idDetail": 303091,
-      "idPpm": 200337,
+      "idDetail": 303092,
+      "idPpm": 200338,
       "ligne": {
-        "idDetail": 303091,
-        "idLigneOrigine": 303091,
+        "idDetail": 303092,
+        "idLigneOrigine": 303092,
         "supprimee": false,
-        "idDossier": 100351,
-        "idPpm": 200337,
+        "idDossier": 100352,
+        "idPpm": 200338,
         "designationMarche": "Fourniture et livraison des matériels informatiques répartis en cinq (5) lots (à commande)",
         "numCompte": "2463",
         "montEstim": 457000000,
@@ -839,45 +838,45 @@
       },
       "lots": [
         {
-          "idLot": 2133,
-          "idDossier": 100351,
-          "idDetail": 303091,
+          "idLot": 2138,
+          "idDossier": 100352,
+          "idDetail": 303092,
           "designationLot": "ORDINATEURS ET DIVERS POUR LE MINISTERE",
           "montLot": 80000000,
           "qteLot": null,
           "uniteLot": null
         },
         {
-          "idLot": 2134,
-          "idDossier": 100351,
-          "idDetail": 303091,
+          "idLot": 2139,
+          "idDossier": 100352,
+          "idDetail": 303092,
           "designationLot": "ORDINATEUR POUR AMBATONDRAZAKA",
           "montLot": 108500000,
           "qteLot": null,
           "uniteLot": null
         },
         {
-          "idLot": 2135,
-          "idDossier": 100351,
-          "idDetail": 303091,
+          "idLot": 2140,
+          "idDossier": 100352,
+          "idDetail": 303092,
           "designationLot": "DIVERS MATERIELS POUR AMBATONDRAZAKA",
           "montLot": 80000000,
           "qteLot": null,
           "uniteLot": null
         },
         {
-          "idLot": 2136,
-          "idDossier": 100351,
-          "idDetail": 303091,
+          "idLot": 2141,
+          "idDossier": 100352,
+          "idDetail": 303092,
           "designationLot": "ORDINATEUR POUR FORT DAUPHIN",
           "montLot": 108500000,
           "qteLot": null,
           "uniteLot": null
         },
         {
-          "idLot": 2137,
-          "idDossier": 100351,
-          "idDetail": 303091,
+          "idLot": 2142,
+          "idDossier": 100352,
+          "idDetail": 303092,
           "designationLot": "DIVERS MATERIELS POUR FORT DAUPHIN",
           "montLot": 80000000,
           "qteLot": null,
@@ -886,253 +885,253 @@
       ],
       "previsions": [
         {
-          "idPrevision": 4271,
-          "idDetail": 303091,
+          "idPrevision": 4299,
+          "idDetail": 303092,
           "idCapm": 101,
           "dateDebut": "2026-06-01",
           "dateFin": "2026-06-15",
           "ordre": 101
         },
         {
-          "idPrevision": 4272,
-          "idDetail": 303091,
+          "idPrevision": 4300,
+          "idDetail": 303092,
           "idCapm": 102,
           "dateDebut": "2026-06-16",
           "dateFin": "2026-06-30",
           "ordre": 102
         },
         {
-          "idPrevision": 4273,
-          "idDetail": 303091,
+          "idPrevision": 4301,
+          "idDetail": 303092,
           "idCapm": 103,
           "dateDebut": "2026-07-01",
           "dateFin": "2026-07-07",
           "ordre": 103
         },
         {
-          "idPrevision": 4274,
-          "idDetail": 303091,
+          "idPrevision": 4302,
+          "idDetail": 303092,
           "idCapm": 104,
           "dateDebut": "2026-07-08",
           "dateFin": "2026-08-28",
           "ordre": 104
         },
         {
-          "idPrevision": 4275,
-          "idDetail": 303091,
+          "idPrevision": 4303,
+          "idDetail": 303092,
           "idCapm": 106,
           "dateDebut": "2026-08-31",
           "dateFin": "2026-09-02",
           "ordre": 106
         },
         {
-          "idPrevision": 4276,
-          "idDetail": 303091,
+          "idPrevision": 4304,
+          "idDetail": 303092,
           "idCapm": 107,
           "dateDebut": "2026-09-03",
           "dateFin": "2026-09-17",
           "ordre": 107
         },
         {
-          "idPrevision": 4277,
-          "idDetail": 303091,
+          "idPrevision": 4305,
+          "idDetail": 303092,
           "idCapm": 108,
           "dateDebut": "2026-09-18",
           "dateFin": "2026-09-22",
           "ordre": 108
         },
         {
-          "idPrevision": 4278,
-          "idDetail": 303091,
+          "idPrevision": 4306,
+          "idDetail": 303092,
           "idCapm": 109,
           "dateDebut": "2026-09-23",
           "dateFin": "2026-09-25",
           "ordre": 109
         },
         {
-          "idPrevision": 4279,
-          "idDetail": 303091,
+          "idPrevision": 4307,
+          "idDetail": 303092,
           "idCapm": 110,
           "dateDebut": "2026-09-28",
           "dateFin": "2026-10-08",
           "ordre": 110
         },
         {
-          "idPrevision": 4280,
-          "idDetail": 303091,
+          "idPrevision": 4308,
+          "idDetail": 303092,
           "idCapm": 111,
           "dateDebut": "2026-10-09",
           "dateFin": "2026-10-12",
           "ordre": 111
         },
         {
-          "idPrevision": 4281,
-          "idDetail": 303091,
+          "idPrevision": 4309,
+          "idDetail": 303092,
           "idCapm": 112,
           "dateDebut": "2026-10-12",
           "dateFin": "2026-11-09",
           "ordre": 112
         },
         {
-          "idPrevision": 4282,
-          "idDetail": 303091,
+          "idPrevision": 4310,
+          "idDetail": 303092,
           "idCapm": 113,
           "dateDebut": "2026-11-09",
           "dateFin": "2026-11-10",
           "ordre": 113
         },
         {
-          "idPrevision": 4283,
-          "idDetail": 303091,
+          "idPrevision": 4311,
+          "idDetail": 303092,
           "idCapm": 114,
           "dateDebut": "2026-11-10",
           "dateFin": "2026-11-18",
           "ordre": 114
         },
         {
-          "idPrevision": 4284,
-          "idDetail": 303091,
+          "idPrevision": 4312,
+          "idDetail": 303092,
           "idCapm": 115,
           "dateDebut": "2026-11-19",
           "dateFin": "2026-11-20",
           "ordre": 115
         },
         {
-          "idPrevision": 4285,
-          "idDetail": 303091,
+          "idPrevision": 4313,
+          "idDetail": 303092,
           "idCapm": 116,
           "dateDebut": "2026-11-23",
           "dateFin": "2026-11-25",
           "ordre": 116
         },
         {
-          "idPrevision": 4286,
-          "idDetail": 303091,
+          "idPrevision": 4314,
+          "idDetail": 303092,
           "idCapm": 117,
           "dateDebut": "2026-11-26",
           "dateFin": "2026-11-27",
           "ordre": 117
         },
         {
-          "idPrevision": 4287,
-          "idDetail": 303091,
+          "idPrevision": 4315,
+          "idDetail": 303092,
           "idCapm": 118,
           "dateDebut": "2026-11-30",
           "dateFin": "2026-12-04",
           "ordre": 118
         },
         {
-          "idPrevision": 4288,
-          "idDetail": 303091,
+          "idPrevision": 4316,
+          "idDetail": 303092,
           "idCapm": 119,
           "dateDebut": "2026-12-07",
           "dateFin": "2026-12-08",
           "ordre": 119
         },
         {
-          "idPrevision": 4289,
-          "idDetail": 303091,
+          "idPrevision": 4317,
+          "idDetail": 303092,
           "idCapm": 120,
           "dateDebut": "2026-12-08",
           "dateFin": "2026-12-09",
           "ordre": 120
         },
         {
-          "idPrevision": 4290,
-          "idDetail": 303091,
+          "idPrevision": 4318,
+          "idDetail": 303092,
           "idCapm": 121,
           "dateDebut": "2026-12-09",
           "dateFin": "2026-12-10",
           "ordre": 121
         },
         {
-          "idPrevision": 4291,
-          "idDetail": 303091,
+          "idPrevision": 4319,
+          "idDetail": 303092,
           "idCapm": 123,
           "dateDebut": "2026-12-10",
           "dateFin": "2026-12-11",
           "ordre": 123
         },
         {
-          "idPrevision": 4292,
-          "idDetail": 303091,
+          "idPrevision": 4320,
+          "idDetail": 303092,
           "idCapm": 124,
           "dateDebut": "2026-12-14",
           "dateFin": "2026-12-15",
           "ordre": 124
         },
         {
-          "idPrevision": 4293,
-          "idDetail": 303091,
+          "idPrevision": 4321,
+          "idDetail": 303092,
           "idCapm": 125,
           "dateDebut": "2026-12-16",
           "dateFin": "2027-01-08",
           "ordre": 125
         },
         {
-          "idPrevision": 4294,
-          "idDetail": 303091,
+          "idPrevision": 4322,
+          "idDetail": 303092,
           "idCapm": 126,
           "dateDebut": "2027-01-11",
           "dateFin": "2027-01-15",
           "ordre": 126
         },
         {
-          "idPrevision": 4295,
-          "idDetail": 303091,
+          "idPrevision": 4323,
+          "idDetail": 303092,
           "idCapm": 127,
           "dateDebut": "2027-01-18",
           "dateFin": "2027-01-22",
           "ordre": 127
         },
         {
-          "idPrevision": 4296,
-          "idDetail": 303091,
+          "idPrevision": 4324,
+          "idDetail": 303092,
           "idCapm": 128,
           "dateDebut": "2027-01-25",
           "dateFin": "2027-01-27",
           "ordre": 128
         },
         {
-          "idPrevision": 4297,
-          "idDetail": 303091,
+          "idPrevision": 4325,
+          "idDetail": 303092,
           "idCapm": 129,
           "dateDebut": "2027-01-28",
           "dateFin": "2027-01-29",
           "ordre": 129
         },
         {
-          "idPrevision": 4298,
-          "idDetail": 303091,
+          "idPrevision": 4326,
+          "idDetail": 303092,
           "idCapm": 130,
           "dateDebut": "2027-02-01",
           "dateFin": "2028-01-31",
           "ordre": 130
         }
       ],
-      "idReception": 1100078,
+      "idReception": 1100079,
       "reception": {
-        "idReception": 1100078,
-        "idDossier": 100351,
+        "idReception": 1100079,
+        "idDossier": 100352,
         "numPassage": 1,
         "typePassage": "INITIAL",
         "imCtrlRecept": "SECANT1",
-        "dateReception": "2026-09-26 17:33",
-        "dateSoumission": "2026-09-26 17:33",
+        "dateReception": "2026-09-26 18:43",
+        "dateSoumission": "2026-09-26 18:43",
         "observation": "Dossier complet : plan de passation 2026 du MESupReS et fiche de présentation.",
         "complet": true,
         "idReceptionPrec": null,
         "reference": "00001/PPM-AGPM/CNM/2026"
       },
-      "idDispatch": 28,
+      "idDispatch": 29,
       "dispatch": {
-        "idDispatch": 28,
-        "idReception": 1100078,
+        "idDispatch": 29,
+        "idReception": 1100079,
         "imCtrlDispatch": "PRES001",
         "imCtrlCc": "CCANT01",
         "imCtrlMembre": "MEMANT1",
-        "dateDispatch": "2026-09-26 17:33",
-        "datePredispatch": "2026-09-26 17:33",
+        "dateDispatch": "2026-09-26 18:43",
+        "datePredispatch": "2026-09-26 18:43",
         "dateCtrlAssigne": null,
         "instructions": "Examen du plan de passation 2026 du MESupReS : ligne unique de matériels informatiques à commande, allotie en cinq lots.",
         "interimDispatch": false,
@@ -1214,20 +1213,20 @@
           "statut": 201
         }
       ],
-      "idPv": 39,
+      "idPv": 40,
       "examenSoumis": {
         "statutPv": "BROUILLON",
         "idAvis": "FAV"
       },
       "pv": {
-        "idPv": 39,
+        "idPv": 40,
         "refePv": "00001/PPM-AGPM/CNM/PV/2026",
         "statutPv": "SIGNE",
         "idAvis": "FAV",
         "imMembreCoSignataire": "MEMANT2"
       },
       "dossier": {
-        "idDossier": 100351,
+        "idDossier": 100352,
         "idTypeDossier": "DDP",
         "idSousType": "PPM-AGPM",
         "idDossierParent": null,
@@ -1247,14 +1246,14 @@
         "imAssistantCible": null,
         "nomAssistantCible": null,
         "datePrevisionnelleFin": "2026-10-01",
-        "dateEnregistrement": "2026-09-26T17:33:40.766347",
-        "dateSoumission": "2026-09-26T17:33:40.527765",
+        "dateEnregistrement": "2026-09-26T18:43:33.953811",
+        "dateSoumission": "2026-09-26T18:43:33.229879",
         "datesEtapes": {
-          "RECEPTION": "2026-09-26T17:33:40.766347",
-          "DISPATCH": "2026-09-26T17:33:40.883332",
-          "EXAMEN": "2026-09-26T17:33:41.314731",
-          "PROJET_PV": "2026-09-26T17:33:41.314731",
-          "PV_SIGNE": "2026-09-26T17:33:41.447975",
+          "RECEPTION": "2026-09-26T18:43:33.953811",
+          "DISPATCH": "2026-09-26T18:43:34.248191",
+          "EXAMEN": "2026-09-26T18:43:35.365991",
+          "PROJET_PV": "2026-09-26T18:43:35.365991",
+          "PV_SIGNE": "2026-09-26T18:43:35.716517",
           "VERIFICATION": null,
           "CLOTURE": null
         },
@@ -1265,8 +1264,8 @@
         "version": 6
       },
       "ppm": {
-        "idPpm": 200337,
-        "idDossier": 100351,
+        "idPpm": 200338,
+        "idDossier": 100352,
         "exercice": 2026,
         "signataire": "Norbert Fidelys LERAVO",
         "dateSignature": "2026-06-30",
@@ -1275,7 +1274,7 @@
         "dateMajPrec": null,
         "numMaj": null,
         "dateMaj": null,
-        "reference": "00001/MLSRS/PPM-AGPM/2026",
+        "reference": "00001/MESupReS/PPM-AGPM/2026",
         "libelle": null,
         "dateReceptionCnm": null,
         "idLocalite": "ANT",
@@ -1287,8 +1286,8 @@
         "version": 1
       },
       "eligible": {
-        "idDetail": 303091,
-        "idDossier": 100351,
+        "idDetail": 303092,
+        "idDossier": 100352,
         "refeDossier": "00001/PPM-AGPM/CNM/2026",
         "designationMarche": "Fourniture et livraison des matériels informatiques répartis en cinq (5) lots (à commande)",
         "idMode": 1,
@@ -1308,7 +1307,7 @@
         "agpmRequis": true,
         "idSousType": "PPM-AGPM",
         "refeDossier": "00001/PPM-AGPM/CNM/2026",
-        "referencePpm": "00001/MLSRS/PPM-AGPM/2026"
+        "referencePpm": "00001/MESupReS/PPM-AGPM/2026"
       },
       "controle": {
         "ligne2463Presente": true,
@@ -1326,16 +1325,16 @@
     },
     "etape3": {
       "date": "2026-09-26",
-      "idDmc": 15,
+      "idDmc": 16,
       "dmc": {
-        "idDmc": 15,
-        "idDetail": 303091,
+        "idDmc": 16,
+        "idDetail": 303092,
         "idTypeDmc": 1,
         "typeDmcCode": "DAO",
         "typeDmcLibelle": "Dossier d'Appel d'Offres",
         "reference": null,
         "statut": "A_PREPARER",
-        "dateCreation": "2026-09-26T17:34:42.9382273",
+        "dateCreation": "2026-09-26T18:43:36.046899",
         "valeursPpm": {
           "B01-AC-01": "MINISTERE DE L'ENSEIGNEMENT SUPERIEUR ET DE LA RECHERCHE SCIENTIFIQUE",
           "B01-AC-02": "Fiadanana, 2ème étage porte 204 — Antananarivo 101",
@@ -1344,7 +1343,7 @@
           "B01-AC-05": "LERAVO Norbert Fidelys",
           "B01-AC-06": "prmp.mesupres@gmail.com",
           "B01-AC-07": "[H] non fourni",
-          "B01-AC-08": "00001/MLSRS/PPM-AGPM/2026",
+          "B01-AC-08": "00001/MESupReS/PPM-AGPM/2026",
           "B01-AC-09": "2026",
           "B01-AC-10": "0",
           "B01-AC-11": "00001/PPM-AGPM/CNM/2026",
@@ -1688,7 +1687,7 @@
       "validation": {
         "version": 1,
         "statut": "VALIDEE",
-        "dateValidation": "2026-09-26T17:34:43.6410218",
+        "dateValidation": "2026-09-26T18:43:38.4424014",
         "nbValeurs": 117
       }
     },
@@ -1711,542 +1710,542 @@
       },
       "fichiers": [
         {
-          "idDocument": 423,
+          "idDocument": 477,
           "type": "DPAO",
           "lot": null,
           "extension": "docx",
-          "nomFichier": "DPAO_00001-PPM-AGPM-CNM-2026_303091_v1.docx",
-          "tailleOctets": 7947,
+          "nomFichier": "DPAO_00001-PPM-AGPM-CNM-2026_303092_v1.docx",
+          "tailleOctets": 7944,
           "libelle": "Données particulières de l'appel d'offres",
           "version": 1
         },
         {
-          "idDocument": 424,
+          "idDocument": 478,
           "type": "DPAO",
           "lot": null,
           "extension": "pdf",
-          "nomFichier": "DPAO_00001-PPM-AGPM-CNM-2026_303091_v1.pdf",
-          "tailleOctets": 9592,
+          "nomFichier": "DPAO_00001-PPM-AGPM-CNM-2026_303092_v1.pdf",
+          "tailleOctets": 9594,
           "libelle": "Données particulières de l'appel d'offres",
           "version": 1
         },
         {
-          "idDocument": 425,
+          "idDocument": 479,
           "type": "CCAP",
           "lot": null,
           "extension": "docx",
-          "nomFichier": "CCAP_00001-PPM-AGPM-CNM-2026_303091_v1.docx",
-          "tailleOctets": 7104,
+          "nomFichier": "CCAP_00001-PPM-AGPM-CNM-2026_303092_v1.docx",
+          "tailleOctets": 7103,
           "libelle": "Cahier des clauses administratives particulières",
           "version": 1
         },
         {
-          "idDocument": 426,
+          "idDocument": 480,
           "type": "CCAP",
           "lot": null,
           "extension": "pdf",
-          "nomFichier": "CCAP_00001-PPM-AGPM-CNM-2026_303091_v1.pdf",
+          "nomFichier": "CCAP_00001-PPM-AGPM-CNM-2026_303092_v1.pdf",
           "tailleOctets": 7889,
           "libelle": "Cahier des clauses administratives particulières",
           "version": 1
         },
         {
-          "idDocument": 427,
+          "idDocument": 481,
           "type": "AE",
           "lot": 1,
           "extension": "docx",
-          "nomFichier": "AE_00001-PPM-AGPM-CNM-2026_303091_lot1_v1.docx",
-          "tailleOctets": 4915,
+          "nomFichier": "AE_00001-PPM-AGPM-CNM-2026_303092_lot1_v1.docx",
+          "tailleOctets": 4914,
           "libelle": "Acte d'engagement — lot 1",
           "version": 1
         },
         {
-          "idDocument": 428,
+          "idDocument": 482,
           "type": "AE",
           "lot": 1,
           "extension": "pdf",
-          "nomFichier": "AE_00001-PPM-AGPM-CNM-2026_303091_lot1_v1.pdf",
+          "nomFichier": "AE_00001-PPM-AGPM-CNM-2026_303092_lot1_v1.pdf",
           "tailleOctets": 4303,
           "libelle": "Acte d'engagement — lot 1",
           "version": 1
         },
         {
-          "idDocument": 429,
+          "idDocument": 483,
           "type": "AE",
           "lot": 2,
           "extension": "docx",
-          "nomFichier": "AE_00001-PPM-AGPM-CNM-2026_303091_lot2_v1.docx",
-          "tailleOctets": 4932,
+          "nomFichier": "AE_00001-PPM-AGPM-CNM-2026_303092_lot2_v1.docx",
+          "tailleOctets": 4931,
           "libelle": "Acte d'engagement — lot 2",
           "version": 1
         },
         {
-          "idDocument": 430,
+          "idDocument": 484,
           "type": "AE",
           "lot": 2,
           "extension": "pdf",
-          "nomFichier": "AE_00001-PPM-AGPM-CNM-2026_303091_lot2_v1.pdf",
+          "nomFichier": "AE_00001-PPM-AGPM-CNM-2026_303092_lot2_v1.pdf",
           "tailleOctets": 4338,
           "libelle": "Acte d'engagement — lot 2",
           "version": 1
         },
         {
-          "idDocument": 431,
+          "idDocument": 485,
           "type": "AE",
           "lot": 3,
           "extension": "docx",
-          "nomFichier": "AE_00001-PPM-AGPM-CNM-2026_303091_lot3_v1.docx",
-          "tailleOctets": 4911,
+          "nomFichier": "AE_00001-PPM-AGPM-CNM-2026_303092_lot3_v1.docx",
+          "tailleOctets": 4910,
           "libelle": "Acte d'engagement — lot 3",
           "version": 1
         },
         {
-          "idDocument": 432,
+          "idDocument": 486,
           "type": "AE",
           "lot": 3,
           "extension": "pdf",
-          "nomFichier": "AE_00001-PPM-AGPM-CNM-2026_303091_lot3_v1.pdf",
+          "nomFichier": "AE_00001-PPM-AGPM-CNM-2026_303092_lot3_v1.pdf",
           "tailleOctets": 4299,
           "libelle": "Acte d'engagement — lot 3",
           "version": 1
         },
         {
-          "idDocument": 433,
+          "idDocument": 487,
           "type": "AE",
           "lot": 4,
           "extension": "docx",
-          "nomFichier": "AE_00001-PPM-AGPM-CNM-2026_303091_lot4_v1.docx",
-          "tailleOctets": 4930,
+          "nomFichier": "AE_00001-PPM-AGPM-CNM-2026_303092_lot4_v1.docx",
+          "tailleOctets": 4929,
           "libelle": "Acte d'engagement — lot 4",
           "version": 1
         },
         {
-          "idDocument": 434,
+          "idDocument": 488,
           "type": "AE",
           "lot": 4,
           "extension": "pdf",
-          "nomFichier": "AE_00001-PPM-AGPM-CNM-2026_303091_lot4_v1.pdf",
+          "nomFichier": "AE_00001-PPM-AGPM-CNM-2026_303092_lot4_v1.pdf",
           "tailleOctets": 4336,
           "libelle": "Acte d'engagement — lot 4",
           "version": 1
         },
         {
-          "idDocument": 435,
+          "idDocument": 489,
           "type": "AE",
           "lot": 5,
           "extension": "docx",
-          "nomFichier": "AE_00001-PPM-AGPM-CNM-2026_303091_lot5_v1.docx",
+          "nomFichier": "AE_00001-PPM-AGPM-CNM-2026_303092_lot5_v1.docx",
           "tailleOctets": 4910,
           "libelle": "Acte d'engagement — lot 5",
           "version": 1
         },
         {
-          "idDocument": 436,
+          "idDocument": 490,
           "type": "AE",
           "lot": 5,
           "extension": "pdf",
-          "nomFichier": "AE_00001-PPM-AGPM-CNM-2026_303091_lot5_v1.pdf",
+          "nomFichier": "AE_00001-PPM-AGPM-CNM-2026_303092_lot5_v1.pdf",
           "tailleOctets": 4297,
           "libelle": "Acte d'engagement — lot 5",
           "version": 1
         },
         {
-          "idDocument": 437,
+          "idDocument": 491,
           "type": "LF",
           "lot": null,
           "extension": "docx",
-          "nomFichier": "LF_00001-PPM-AGPM-CNM-2026_303091_v1.docx",
+          "nomFichier": "LF_00001-PPM-AGPM-CNM-2026_303092_v1.docx",
           "tailleOctets": 3505,
           "libelle": "Liste des fournitures et calendrier de livraison",
           "version": 1
         },
         {
-          "idDocument": 438,
+          "idDocument": 492,
           "type": "LF",
           "lot": null,
           "extension": "pdf",
-          "nomFichier": "LF_00001-PPM-AGPM-CNM-2026_303091_v1.pdf",
+          "nomFichier": "LF_00001-PPM-AGPM-CNM-2026_303092_v1.pdf",
           "tailleOctets": 3170,
           "libelle": "Liste des fournitures et calendrier de livraison",
           "version": 1
         },
         {
-          "idDocument": 439,
+          "idDocument": 493,
           "type": "A1",
           "lot": null,
           "extension": "docx",
-          "nomFichier": "A1_00001-PPM-AGPM-CNM-2026_303091_v1.docx",
+          "nomFichier": "A1_00001-PPM-AGPM-CNM-2026_303092_v1.docx",
           "tailleOctets": 4106,
           "libelle": "Fiche de renseignements A1",
           "version": 1
         },
         {
-          "idDocument": 440,
+          "idDocument": 494,
           "type": "A1",
           "lot": null,
           "extension": "pdf",
-          "nomFichier": "A1_00001-PPM-AGPM-CNM-2026_303091_v1.pdf",
+          "nomFichier": "A1_00001-PPM-AGPM-CNM-2026_303092_v1.pdf",
           "tailleOctets": 3347,
           "libelle": "Fiche de renseignements A1",
           "version": 1
         },
         {
-          "idDocument": 441,
+          "idDocument": 495,
           "type": "A2",
           "lot": null,
           "extension": "docx",
-          "nomFichier": "A2_00001-PPM-AGPM-CNM-2026_303091_v1.docx",
+          "nomFichier": "A2_00001-PPM-AGPM-CNM-2026_303092_v1.docx",
           "tailleOctets": 3316,
           "libelle": "Fiche de renseignements A2",
           "version": 1
         },
         {
-          "idDocument": 442,
+          "idDocument": 496,
           "type": "A2",
           "lot": null,
           "extension": "pdf",
-          "nomFichier": "A2_00001-PPM-AGPM-CNM-2026_303091_v1.pdf",
+          "nomFichier": "A2_00001-PPM-AGPM-CNM-2026_303092_v1.pdf",
           "tailleOctets": 1762,
           "libelle": "Fiche de renseignements A2",
           "version": 1
         },
         {
-          "idDocument": 443,
+          "idDocument": 497,
           "type": "A3",
           "lot": null,
           "extension": "docx",
-          "nomFichier": "A3_00001-PPM-AGPM-CNM-2026_303091_v1.docx",
+          "nomFichier": "A3_00001-PPM-AGPM-CNM-2026_303092_v1.docx",
           "tailleOctets": 4163,
           "libelle": "Fiche de renseignements A3",
           "version": 1
         },
         {
-          "idDocument": 444,
+          "idDocument": 498,
           "type": "A3",
           "lot": null,
           "extension": "pdf",
-          "nomFichier": "A3_00001-PPM-AGPM-CNM-2026_303091_v1.pdf",
-          "tailleOctets": 3826,
+          "nomFichier": "A3_00001-PPM-AGPM-CNM-2026_303092_v1.pdf",
+          "tailleOctets": 3827,
           "libelle": "Fiche de renseignements A3",
           "version": 1
         },
         {
-          "idDocument": 445,
+          "idDocument": 499,
           "type": "A4",
           "lot": null,
           "extension": "docx",
-          "nomFichier": "A4_00001-PPM-AGPM-CNM-2026_303091_v1.docx",
+          "nomFichier": "A4_00001-PPM-AGPM-CNM-2026_303092_v1.docx",
           "tailleOctets": 3192,
           "libelle": "Fiche de renseignements A4",
           "version": 1
         },
         {
-          "idDocument": 446,
+          "idDocument": 500,
           "type": "A4",
           "lot": null,
           "extension": "pdf",
-          "nomFichier": "A4_00001-PPM-AGPM-CNM-2026_303091_v1.pdf",
+          "nomFichier": "A4_00001-PPM-AGPM-CNM-2026_303092_v1.pdf",
           "tailleOctets": 1497,
           "libelle": "Fiche de renseignements A4",
           "version": 1
         },
         {
-          "idDocument": 447,
+          "idDocument": 501,
           "type": "C1",
           "lot": 1,
           "extension": "docx",
-          "nomFichier": "C1_00001-PPM-AGPM-CNM-2026_303091_lot1_v1.docx",
+          "nomFichier": "C1_00001-PPM-AGPM-CNM-2026_303092_lot1_v1.docx",
           "tailleOctets": 4017,
           "libelle": "Garantie bancaire de soumission (C1) — lot 1",
           "version": 1
         },
         {
-          "idDocument": 448,
+          "idDocument": 502,
           "type": "C1",
           "lot": 1,
           "extension": "pdf",
-          "nomFichier": "C1_00001-PPM-AGPM-CNM-2026_303091_lot1_v1.pdf",
+          "nomFichier": "C1_00001-PPM-AGPM-CNM-2026_303092_lot1_v1.pdf",
           "tailleOctets": 2536,
           "libelle": "Garantie bancaire de soumission (C1) — lot 1",
           "version": 1
         },
         {
-          "idDocument": 449,
+          "idDocument": 503,
           "type": "C1",
           "lot": 2,
           "extension": "docx",
-          "nomFichier": "C1_00001-PPM-AGPM-CNM-2026_303091_lot2_v1.docx",
+          "nomFichier": "C1_00001-PPM-AGPM-CNM-2026_303092_lot2_v1.docx",
           "tailleOctets": 4026,
           "libelle": "Garantie bancaire de soumission (C1) — lot 2",
           "version": 1
         },
         {
-          "idDocument": 450,
+          "idDocument": 504,
           "type": "C1",
           "lot": 2,
           "extension": "pdf",
-          "nomFichier": "C1_00001-PPM-AGPM-CNM-2026_303091_lot2_v1.pdf",
+          "nomFichier": "C1_00001-PPM-AGPM-CNM-2026_303092_lot2_v1.pdf",
           "tailleOctets": 2542,
           "libelle": "Garantie bancaire de soumission (C1) — lot 2",
           "version": 1
         },
         {
-          "idDocument": 451,
+          "idDocument": 505,
           "type": "C1",
           "lot": 3,
           "extension": "docx",
-          "nomFichier": "C1_00001-PPM-AGPM-CNM-2026_303091_lot3_v1.docx",
+          "nomFichier": "C1_00001-PPM-AGPM-CNM-2026_303092_lot3_v1.docx",
           "tailleOctets": 4017,
           "libelle": "Garantie bancaire de soumission (C1) — lot 3",
           "version": 1
         },
         {
-          "idDocument": 452,
+          "idDocument": 506,
           "type": "C1",
           "lot": 3,
           "extension": "pdf",
-          "nomFichier": "C1_00001-PPM-AGPM-CNM-2026_303091_lot3_v1.pdf",
+          "nomFichier": "C1_00001-PPM-AGPM-CNM-2026_303092_lot3_v1.pdf",
           "tailleOctets": 2536,
           "libelle": "Garantie bancaire de soumission (C1) — lot 3",
           "version": 1
         },
         {
-          "idDocument": 453,
+          "idDocument": 507,
           "type": "C1",
           "lot": 4,
           "extension": "docx",
-          "nomFichier": "C1_00001-PPM-AGPM-CNM-2026_303091_lot4_v1.docx",
+          "nomFichier": "C1_00001-PPM-AGPM-CNM-2026_303092_lot4_v1.docx",
           "tailleOctets": 4026,
           "libelle": "Garantie bancaire de soumission (C1) — lot 4",
           "version": 1
         },
         {
-          "idDocument": 454,
+          "idDocument": 508,
           "type": "C1",
           "lot": 4,
           "extension": "pdf",
-          "nomFichier": "C1_00001-PPM-AGPM-CNM-2026_303091_lot4_v1.pdf",
+          "nomFichier": "C1_00001-PPM-AGPM-CNM-2026_303092_lot4_v1.pdf",
           "tailleOctets": 2542,
           "libelle": "Garantie bancaire de soumission (C1) — lot 4",
           "version": 1
         },
         {
-          "idDocument": 455,
+          "idDocument": 509,
           "type": "C1",
           "lot": 5,
           "extension": "docx",
-          "nomFichier": "C1_00001-PPM-AGPM-CNM-2026_303091_lot5_v1.docx",
+          "nomFichier": "C1_00001-PPM-AGPM-CNM-2026_303092_lot5_v1.docx",
           "tailleOctets": 4017,
           "libelle": "Garantie bancaire de soumission (C1) — lot 5",
           "version": 1
         },
         {
-          "idDocument": 456,
+          "idDocument": 510,
           "type": "C1",
           "lot": 5,
           "extension": "pdf",
-          "nomFichier": "C1_00001-PPM-AGPM-CNM-2026_303091_lot5_v1.pdf",
+          "nomFichier": "C1_00001-PPM-AGPM-CNM-2026_303092_lot5_v1.pdf",
           "tailleOctets": 2536,
           "libelle": "Garantie bancaire de soumission (C1) — lot 5",
           "version": 1
         },
         {
-          "idDocument": 457,
+          "idDocument": 511,
           "type": "C2",
           "lot": 1,
           "extension": "docx",
-          "nomFichier": "C2_00001-PPM-AGPM-CNM-2026_303091_lot1_v1.docx",
+          "nomFichier": "C2_00001-PPM-AGPM-CNM-2026_303092_lot1_v1.docx",
           "tailleOctets": 4264,
           "libelle": "Caution personnelle et solidaire de soumission (C2) — lot 1",
           "version": 1
         },
         {
-          "idDocument": 458,
+          "idDocument": 512,
           "type": "C2",
           "lot": 1,
           "extension": "pdf",
-          "nomFichier": "C2_00001-PPM-AGPM-CNM-2026_303091_lot1_v1.pdf",
+          "nomFichier": "C2_00001-PPM-AGPM-CNM-2026_303092_lot1_v1.pdf",
           "tailleOctets": 2786,
           "libelle": "Caution personnelle et solidaire de soumission (C2) — lot 1",
           "version": 1
         },
         {
-          "idDocument": 459,
+          "idDocument": 513,
           "type": "C2",
           "lot": 2,
           "extension": "docx",
-          "nomFichier": "C2_00001-PPM-AGPM-CNM-2026_303091_lot2_v1.docx",
+          "nomFichier": "C2_00001-PPM-AGPM-CNM-2026_303092_lot2_v1.docx",
           "tailleOctets": 4278,
           "libelle": "Caution personnelle et solidaire de soumission (C2) — lot 2",
           "version": 1
         },
         {
-          "idDocument": 460,
+          "idDocument": 514,
           "type": "C2",
           "lot": 2,
           "extension": "pdf",
-          "nomFichier": "C2_00001-PPM-AGPM-CNM-2026_303091_lot2_v1.pdf",
+          "nomFichier": "C2_00001-PPM-AGPM-CNM-2026_303092_lot2_v1.pdf",
           "tailleOctets": 2795,
           "libelle": "Caution personnelle et solidaire de soumission (C2) — lot 2",
           "version": 1
         },
         {
-          "idDocument": 461,
+          "idDocument": 515,
           "type": "C2",
           "lot": 3,
           "extension": "docx",
-          "nomFichier": "C2_00001-PPM-AGPM-CNM-2026_303091_lot3_v1.docx",
+          "nomFichier": "C2_00001-PPM-AGPM-CNM-2026_303092_lot3_v1.docx",
           "tailleOctets": 4264,
           "libelle": "Caution personnelle et solidaire de soumission (C2) — lot 3",
           "version": 1
         },
         {
-          "idDocument": 462,
+          "idDocument": 516,
           "type": "C2",
           "lot": 3,
           "extension": "pdf",
-          "nomFichier": "C2_00001-PPM-AGPM-CNM-2026_303091_lot3_v1.pdf",
+          "nomFichier": "C2_00001-PPM-AGPM-CNM-2026_303092_lot3_v1.pdf",
           "tailleOctets": 2786,
           "libelle": "Caution personnelle et solidaire de soumission (C2) — lot 3",
           "version": 1
         },
         {
-          "idDocument": 463,
+          "idDocument": 517,
           "type": "C2",
           "lot": 4,
           "extension": "docx",
-          "nomFichier": "C2_00001-PPM-AGPM-CNM-2026_303091_lot4_v1.docx",
+          "nomFichier": "C2_00001-PPM-AGPM-CNM-2026_303092_lot4_v1.docx",
           "tailleOctets": 4278,
           "libelle": "Caution personnelle et solidaire de soumission (C2) — lot 4",
           "version": 1
         },
         {
-          "idDocument": 464,
+          "idDocument": 518,
           "type": "C2",
           "lot": 4,
           "extension": "pdf",
-          "nomFichier": "C2_00001-PPM-AGPM-CNM-2026_303091_lot4_v1.pdf",
+          "nomFichier": "C2_00001-PPM-AGPM-CNM-2026_303092_lot4_v1.pdf",
           "tailleOctets": 2795,
           "libelle": "Caution personnelle et solidaire de soumission (C2) — lot 4",
           "version": 1
         },
         {
-          "idDocument": 465,
+          "idDocument": 519,
           "type": "C2",
           "lot": 5,
           "extension": "docx",
-          "nomFichier": "C2_00001-PPM-AGPM-CNM-2026_303091_lot5_v1.docx",
+          "nomFichier": "C2_00001-PPM-AGPM-CNM-2026_303092_lot5_v1.docx",
           "tailleOctets": 4264,
           "libelle": "Caution personnelle et solidaire de soumission (C2) — lot 5",
           "version": 1
         },
         {
-          "idDocument": 466,
+          "idDocument": 520,
           "type": "C2",
           "lot": 5,
           "extension": "pdf",
-          "nomFichier": "C2_00001-PPM-AGPM-CNM-2026_303091_lot5_v1.pdf",
+          "nomFichier": "C2_00001-PPM-AGPM-CNM-2026_303092_lot5_v1.pdf",
           "tailleOctets": 2786,
           "libelle": "Caution personnelle et solidaire de soumission (C2) — lot 5",
           "version": 1
         },
         {
-          "idDocument": 467,
+          "idDocument": 521,
           "type": "BP",
           "lot": 1,
           "extension": "xlsx",
-          "nomFichier": "BP_00001-PPM-AGPM-CNM-2026_303091_lot1_v1.xlsx",
+          "nomFichier": "BP_00001-PPM-AGPM-CNM-2026_303092_lot1_v1.xlsx",
           "tailleOctets": 4152,
           "libelle": "Bordereau des prix — lot 1",
           "version": 1
         },
         {
-          "idDocument": 468,
+          "idDocument": 522,
           "type": "BP",
           "lot": 2,
           "extension": "xlsx",
-          "nomFichier": "BP_00001-PPM-AGPM-CNM-2026_303091_lot2_v1.xlsx",
-          "tailleOctets": 4186,
+          "nomFichier": "BP_00001-PPM-AGPM-CNM-2026_303092_lot2_v1.xlsx",
+          "tailleOctets": 4187,
           "libelle": "Bordereau des prix — lot 2",
           "version": 1
         },
         {
-          "idDocument": 469,
+          "idDocument": 523,
           "type": "BP",
           "lot": 3,
           "extension": "xlsx",
-          "nomFichier": "BP_00001-PPM-AGPM-CNM-2026_303091_lot3_v1.xlsx",
-          "tailleOctets": 4225,
+          "nomFichier": "BP_00001-PPM-AGPM-CNM-2026_303092_lot3_v1.xlsx",
+          "tailleOctets": 4226,
           "libelle": "Bordereau des prix — lot 3",
           "version": 1
         },
         {
-          "idDocument": 470,
+          "idDocument": 524,
           "type": "BP",
           "lot": 4,
           "extension": "xlsx",
-          "nomFichier": "BP_00001-PPM-AGPM-CNM-2026_303091_lot4_v1.xlsx",
-          "tailleOctets": 4184,
+          "nomFichier": "BP_00001-PPM-AGPM-CNM-2026_303092_lot4_v1.xlsx",
+          "tailleOctets": 4185,
           "libelle": "Bordereau des prix — lot 4",
           "version": 1
         },
         {
-          "idDocument": 471,
+          "idDocument": 525,
           "type": "BP",
           "lot": 5,
           "extension": "xlsx",
-          "nomFichier": "BP_00001-PPM-AGPM-CNM-2026_303091_lot5_v1.xlsx",
-          "tailleOctets": 4225,
+          "nomFichier": "BP_00001-PPM-AGPM-CNM-2026_303092_lot5_v1.xlsx",
+          "tailleOctets": 4226,
           "libelle": "Bordereau des prix — lot 5",
           "version": 1
         },
         {
-          "idDocument": 472,
+          "idDocument": 526,
           "type": "TC",
           "lot": 1,
           "extension": "xlsx",
-          "nomFichier": "TC_00001-PPM-AGPM-CNM-2026_303091_lot1_v1.xlsx",
-          "tailleOctets": 4615,
+          "nomFichier": "TC_00001-PPM-AGPM-CNM-2026_303092_lot1_v1.xlsx",
+          "tailleOctets": 4616,
           "libelle": "Spécifications techniques — tableau de conformité — lot 1",
           "version": 1
         },
         {
-          "idDocument": 473,
+          "idDocument": 527,
           "type": "TC",
           "lot": 2,
           "extension": "xlsx",
-          "nomFichier": "TC_00001-PPM-AGPM-CNM-2026_303091_lot2_v1.xlsx",
-          "tailleOctets": 4755,
+          "nomFichier": "TC_00001-PPM-AGPM-CNM-2026_303092_lot2_v1.xlsx",
+          "tailleOctets": 4756,
           "libelle": "Spécifications techniques — tableau de conformité — lot 2",
           "version": 1
         },
         {
-          "idDocument": 474,
+          "idDocument": 528,
           "type": "TC",
           "lot": 3,
           "extension": "xlsx",
-          "nomFichier": "TC_00001-PPM-AGPM-CNM-2026_303091_lot3_v1.xlsx",
-          "tailleOctets": 4540,
+          "nomFichier": "TC_00001-PPM-AGPM-CNM-2026_303092_lot3_v1.xlsx",
+          "tailleOctets": 4541,
           "libelle": "Spécifications techniques — tableau de conformité — lot 3",
           "version": 1
         },
         {
-          "idDocument": 475,
+          "idDocument": 529,
           "type": "TC",
           "lot": 4,
           "extension": "xlsx",
-          "nomFichier": "TC_00001-PPM-AGPM-CNM-2026_303091_lot4_v1.xlsx",
-          "tailleOctets": 4754,
+          "nomFichier": "TC_00001-PPM-AGPM-CNM-2026_303092_lot4_v1.xlsx",
+          "tailleOctets": 4755,
           "libelle": "Spécifications techniques — tableau de conformité — lot 4",
           "version": 1
         },
         {
-          "idDocument": 476,
+          "idDocument": 530,
           "type": "TC",
           "lot": 5,
           "extension": "xlsx",
-          "nomFichier": "TC_00001-PPM-AGPM-CNM-2026_303091_lot5_v1.xlsx",
-          "tailleOctets": 4543,
+          "nomFichier": "TC_00001-PPM-AGPM-CNM-2026_303092_lot5_v1.xlsx",
+          "tailleOctets": 4544,
           "libelle": "Spécifications techniques — tableau de conformité — lot 5",
           "version": 1
         }
@@ -2278,7 +2277,7 @@
         "telPrmp": "[H] non fourni"
       },
       "dossier": {
-        "idDossier": 100351,
+        "idDossier": 100352,
         "idTypeDossier": "DDP",
         "idSousType": "PPM-AGPM",
         "idDossierParent": null,
@@ -2298,14 +2297,14 @@
         "imAssistantCible": null,
         "nomAssistantCible": null,
         "datePrevisionnelleFin": "2026-10-01",
-        "dateEnregistrement": "2026-09-26T17:33:40.766347",
-        "dateSoumission": "2026-09-26T17:33:40.527765",
+        "dateEnregistrement": "2026-09-26T18:43:33.953811",
+        "dateSoumission": "2026-09-26T18:43:33.229879",
         "datesEtapes": {
-          "RECEPTION": "2026-09-26T17:33:40.766347",
-          "DISPATCH": "2026-09-26T17:33:40.883332",
-          "EXAMEN": "2026-09-26T17:33:41.314731",
-          "PROJET_PV": "2026-09-26T17:33:41.314731",
-          "PV_SIGNE": "2026-09-26T17:33:41.447975",
+          "RECEPTION": "2026-09-26T18:43:33.953811",
+          "DISPATCH": "2026-09-26T18:43:34.248191",
+          "EXAMEN": "2026-09-26T18:43:35.365991",
+          "PROJET_PV": "2026-09-26T18:43:35.365991",
+          "PV_SIGNE": "2026-09-26T18:43:35.716517",
           "VERIFICATION": null,
           "CLOTURE": null
         },
@@ -2316,8 +2315,8 @@
         "version": 6
       },
       "ppm": {
-        "idPpm": 200337,
-        "idDossier": 100351,
+        "idPpm": 200338,
+        "idDossier": 100352,
         "exercice": 2026,
         "signataire": "Norbert Fidelys LERAVO",
         "dateSignature": "2026-06-30",
@@ -2326,7 +2325,7 @@
         "dateMajPrec": null,
         "numMaj": null,
         "dateMaj": null,
-        "reference": "00001/MLSRS/PPM-AGPM/2026",
+        "reference": "00001/MESupReS/PPM-AGPM/2026",
         "libelle": null,
         "dateReceptionCnm": null,
         "idLocalite": "ANT",
@@ -2338,11 +2337,11 @@
         "version": 1
       },
       "marche": {
-        "idDetail": 303091,
-        "idLigneOrigine": 303091,
+        "idDetail": 303092,
+        "idLigneOrigine": 303092,
         "supprimee": false,
-        "idDossier": 100351,
-        "idPpm": 200337,
+        "idDossier": 100352,
+        "idPpm": 200338,
         "designationMarche": "Fourniture et livraison des matériels informatiques répartis en cinq (5) lots (à commande)",
         "numCompte": "2463",
         "montEstim": 457000000,
@@ -2359,45 +2358,45 @@
       },
       "lots": [
         {
-          "idLot": 2133,
-          "idDossier": 100351,
-          "idDetail": 303091,
+          "idLot": 2138,
+          "idDossier": 100352,
+          "idDetail": 303092,
           "designationLot": "ORDINATEURS ET DIVERS POUR LE MINISTERE",
           "montLot": 80000000,
           "qteLot": null,
           "uniteLot": null
         },
         {
-          "idLot": 2134,
-          "idDossier": 100351,
-          "idDetail": 303091,
+          "idLot": 2139,
+          "idDossier": 100352,
+          "idDetail": 303092,
           "designationLot": "ORDINATEUR POUR AMBATONDRAZAKA",
           "montLot": 108500000,
           "qteLot": null,
           "uniteLot": null
         },
         {
-          "idLot": 2135,
-          "idDossier": 100351,
-          "idDetail": 303091,
+          "idLot": 2140,
+          "idDossier": 100352,
+          "idDetail": 303092,
           "designationLot": "DIVERS MATERIELS POUR AMBATONDRAZAKA",
           "montLot": 80000000,
           "qteLot": null,
           "uniteLot": null
         },
         {
-          "idLot": 2136,
-          "idDossier": 100351,
-          "idDetail": 303091,
+          "idLot": 2141,
+          "idDossier": 100352,
+          "idDetail": 303092,
           "designationLot": "ORDINATEUR POUR FORT DAUPHIN",
           "montLot": 108500000,
           "qteLot": null,
           "uniteLot": null
         },
         {
-          "idLot": 2137,
-          "idDossier": 100351,
-          "idDetail": 303091,
+          "idLot": 2142,
+          "idDossier": 100352,
+          "idDetail": 303092,
           "designationLot": "DIVERS MATERIELS POUR FORT DAUPHIN",
           "montLot": 80000000,
           "qteLot": null,
@@ -2406,224 +2405,224 @@
       ],
       "previsions": [
         {
-          "idPrevision": 4271,
-          "idDetail": 303091,
+          "idPrevision": 4299,
+          "idDetail": 303092,
           "idCapm": 101,
           "dateDebut": "2026-06-01",
           "dateFin": "2026-06-15",
           "ordre": 101
         },
         {
-          "idPrevision": 4272,
-          "idDetail": 303091,
+          "idPrevision": 4300,
+          "idDetail": 303092,
           "idCapm": 102,
           "dateDebut": "2026-06-16",
           "dateFin": "2026-06-30",
           "ordre": 102
         },
         {
-          "idPrevision": 4273,
-          "idDetail": 303091,
+          "idPrevision": 4301,
+          "idDetail": 303092,
           "idCapm": 103,
           "dateDebut": "2026-07-01",
           "dateFin": "2026-07-07",
           "ordre": 103
         },
         {
-          "idPrevision": 4274,
-          "idDetail": 303091,
+          "idPrevision": 4302,
+          "idDetail": 303092,
           "idCapm": 104,
           "dateDebut": "2026-07-08",
           "dateFin": "2026-08-28",
           "ordre": 104
         },
         {
-          "idPrevision": 4275,
-          "idDetail": 303091,
+          "idPrevision": 4303,
+          "idDetail": 303092,
           "idCapm": 106,
           "dateDebut": "2026-08-31",
           "dateFin": "2026-09-02",
           "ordre": 106
         },
         {
-          "idPrevision": 4276,
-          "idDetail": 303091,
+          "idPrevision": 4304,
+          "idDetail": 303092,
           "idCapm": 107,
           "dateDebut": "2026-09-03",
           "dateFin": "2026-09-17",
           "ordre": 107
         },
         {
-          "idPrevision": 4277,
-          "idDetail": 303091,
+          "idPrevision": 4305,
+          "idDetail": 303092,
           "idCapm": 108,
           "dateDebut": "2026-09-18",
           "dateFin": "2026-09-22",
           "ordre": 108
         },
         {
-          "idPrevision": 4278,
-          "idDetail": 303091,
+          "idPrevision": 4306,
+          "idDetail": 303092,
           "idCapm": 109,
           "dateDebut": "2026-09-23",
           "dateFin": "2026-09-25",
           "ordre": 109
         },
         {
-          "idPrevision": 4279,
-          "idDetail": 303091,
+          "idPrevision": 4307,
+          "idDetail": 303092,
           "idCapm": 110,
           "dateDebut": "2026-09-28",
           "dateFin": "2026-10-08",
           "ordre": 110
         },
         {
-          "idPrevision": 4280,
-          "idDetail": 303091,
+          "idPrevision": 4308,
+          "idDetail": 303092,
           "idCapm": 111,
           "dateDebut": "2026-10-09",
           "dateFin": "2026-10-12",
           "ordre": 111
         },
         {
-          "idPrevision": 4281,
-          "idDetail": 303091,
+          "idPrevision": 4309,
+          "idDetail": 303092,
           "idCapm": 112,
           "dateDebut": "2026-10-12",
           "dateFin": "2026-11-09",
           "ordre": 112
         },
         {
-          "idPrevision": 4282,
-          "idDetail": 303091,
+          "idPrevision": 4310,
+          "idDetail": 303092,
           "idCapm": 113,
           "dateDebut": "2026-11-09",
           "dateFin": "2026-11-10",
           "ordre": 113
         },
         {
-          "idPrevision": 4283,
-          "idDetail": 303091,
+          "idPrevision": 4311,
+          "idDetail": 303092,
           "idCapm": 114,
           "dateDebut": "2026-11-10",
           "dateFin": "2026-11-18",
           "ordre": 114
         },
         {
-          "idPrevision": 4284,
-          "idDetail": 303091,
+          "idPrevision": 4312,
+          "idDetail": 303092,
           "idCapm": 115,
           "dateDebut": "2026-11-19",
           "dateFin": "2026-11-20",
           "ordre": 115
         },
         {
-          "idPrevision": 4285,
-          "idDetail": 303091,
+          "idPrevision": 4313,
+          "idDetail": 303092,
           "idCapm": 116,
           "dateDebut": "2026-11-23",
           "dateFin": "2026-11-25",
           "ordre": 116
         },
         {
-          "idPrevision": 4286,
-          "idDetail": 303091,
+          "idPrevision": 4314,
+          "idDetail": 303092,
           "idCapm": 117,
           "dateDebut": "2026-11-26",
           "dateFin": "2026-11-27",
           "ordre": 117
         },
         {
-          "idPrevision": 4287,
-          "idDetail": 303091,
+          "idPrevision": 4315,
+          "idDetail": 303092,
           "idCapm": 118,
           "dateDebut": "2026-11-30",
           "dateFin": "2026-12-04",
           "ordre": 118
         },
         {
-          "idPrevision": 4288,
-          "idDetail": 303091,
+          "idPrevision": 4316,
+          "idDetail": 303092,
           "idCapm": 119,
           "dateDebut": "2026-12-07",
           "dateFin": "2026-12-08",
           "ordre": 119
         },
         {
-          "idPrevision": 4289,
-          "idDetail": 303091,
+          "idPrevision": 4317,
+          "idDetail": 303092,
           "idCapm": 120,
           "dateDebut": "2026-12-08",
           "dateFin": "2026-12-09",
           "ordre": 120
         },
         {
-          "idPrevision": 4290,
-          "idDetail": 303091,
+          "idPrevision": 4318,
+          "idDetail": 303092,
           "idCapm": 121,
           "dateDebut": "2026-12-09",
           "dateFin": "2026-12-10",
           "ordre": 121
         },
         {
-          "idPrevision": 4291,
-          "idDetail": 303091,
+          "idPrevision": 4319,
+          "idDetail": 303092,
           "idCapm": 123,
           "dateDebut": "2026-12-10",
           "dateFin": "2026-12-11",
           "ordre": 123
         },
         {
-          "idPrevision": 4292,
-          "idDetail": 303091,
+          "idPrevision": 4320,
+          "idDetail": 303092,
           "idCapm": 124,
           "dateDebut": "2026-12-14",
           "dateFin": "2026-12-15",
           "ordre": 124
         },
         {
-          "idPrevision": 4293,
-          "idDetail": 303091,
+          "idPrevision": 4321,
+          "idDetail": 303092,
           "idCapm": 125,
           "dateDebut": "2026-12-16",
           "dateFin": "2027-01-08",
           "ordre": 125
         },
         {
-          "idPrevision": 4294,
-          "idDetail": 303091,
+          "idPrevision": 4322,
+          "idDetail": 303092,
           "idCapm": 126,
           "dateDebut": "2027-01-11",
           "dateFin": "2027-01-15",
           "ordre": 126
         },
         {
-          "idPrevision": 4295,
-          "idDetail": 303091,
+          "idPrevision": 4323,
+          "idDetail": 303092,
           "idCapm": 127,
           "dateDebut": "2027-01-18",
           "dateFin": "2027-01-22",
           "ordre": 127
         },
         {
-          "idPrevision": 4296,
-          "idDetail": 303091,
+          "idPrevision": 4324,
+          "idDetail": 303092,
           "idCapm": 128,
           "dateDebut": "2027-01-25",
           "dateFin": "2027-01-27",
           "ordre": 128
         },
         {
-          "idPrevision": 4297,
-          "idDetail": 303091,
+          "idPrevision": 4325,
+          "idDetail": 303092,
           "idCapm": 129,
           "dateDebut": "2027-01-28",
           "dateFin": "2027-01-29",
           "ordre": 129
         },
         {
-          "idPrevision": 4298,
-          "idDetail": 303091,
+          "idPrevision": 4326,
+          "idDetail": 303092,
           "idCapm": 130,
           "dateDebut": "2027-02-01",
           "dateFin": "2028-01-31",
@@ -2634,9 +2633,9 @@
         "_": "Projet d'AGPM dérivé du plan, tel que le front le calcule (shared/prmp/agpm.ts : marchés dont le mode déclenche l'AGPM ; date du DAO = début de l'étape prévisionnelle « lancement »). Le serveur n'a pas de rendu : il sert agpmRequis, le sous-type PPM-AGPM et la grille d'examen (points 8, 12, 13, 14).",
         "lu": "2026-09-26",
         "sources": [
-          "/api/ppms/200337",
-          "/api/dossiers/100351",
-          "/api/marches?dossier=100351",
+          "/api/ppms/200338",
+          "/api/dossiers/100352",
+          "/api/marches?dossier=100352",
           "/api/marche-previsions?marche=…",
           "/api/mode-passations",
           "/api/natures",
@@ -2646,7 +2645,7 @@
           "agpmRequis": true,
           "idSousType": "PPM-AGPM",
           "refeDossier": "00001/PPM-AGPM/CNM/2026",
-          "referencePpm": "00001/MLSRS/PPM-AGPM/2026"
+          "referencePpm": "00001/MESupReS/PPM-AGPM/2026"
         },
         "entete": {
           "exercice": 2026,
@@ -2659,7 +2658,7 @@
         },
         "lignes": [
           {
-            "idDetail": 303091,
+            "idDetail": 303092,
             "compte": "2463",
             "nature": "Fournitures",
             "objet": "Fourniture et livraison des matériels informatiques répartis en cinq (5) lots (à commande)",
@@ -2683,24 +2682,24 @@
         }
       },
       "dmc": {
-        "idDmc": 15,
-        "idDetail": 303091,
+        "idDmc": 16,
+        "idDetail": 303092,
         "idTypeDmc": 1,
         "typeDmcCode": "DAO",
         "typeDmcLibelle": "Dossier d'Appel d'Offres",
         "reference": null,
         "statut": "A_PREPARER",
-        "dateCreation": "2026-09-26T17:34:42.938227",
+        "dateCreation": "2026-09-26T18:43:36.046899",
         "valeursPpm": null,
         "versionPpm": null,
         "idDossierSoumis": null
       },
       "fiche": {
-        "idFiche": 26,
-        "idDmc": 15,
-        "idDetail": 303091,
-        "idDossier": 100351,
-        "idDetailCourant": 303091,
+        "idFiche": 27,
+        "idDmc": 16,
+        "idDetail": 303092,
+        "idDossier": 100352,
+        "idDetailCourant": 303092,
         "ligneSupprimee": false,
         "refeDossier": "00001/PPM-AGPM/CNM/2026",
         "designationMarche": "Fourniture et livraison des matériels informatiques répartis en cinq (5) lots (à commande)",
@@ -2877,7 +2876,7 @@
           "B01-AC-05": "LERAVO Norbert Fidelys",
           "B01-AC-06": "prmp.mesupres@gmail.com",
           "B01-AC-07": "[H] non fourni",
-          "B01-AC-08": "00001/MLSRS/PPM-AGPM/2026",
+          "B01-AC-08": "00001/MESupReS/PPM-AGPM/2026",
           "B01-AC-09": "2026",
           "B01-AC-10": "0",
           "B01-AC-11": "00001/PPM-AGPM/CNM/2026",
@@ -3130,9 +3129,9 @@
           "nbSaisis": 117,
           "nbAttendus": 130
         },
-        "dateCreation": "2026-09-26T17:34:43.035038",
-        "dateMaj": "2026-09-26T17:34:43.589501",
-        "dateValidation": "2026-09-26T17:34:43.641022",
+        "dateCreation": "2026-09-26T18:43:36.387084",
+        "dateMaj": "2026-09-26T18:43:38.287413",
+        "dateValidation": "2026-09-26T18:43:38.442401",
         "validePar": "LERAVO01",
         "idDossierSoumis": null,
         "typeChange": false,
@@ -3143,23 +3142,23 @@
       },
       "versions": [
         {
-          "idFiche": 26,
+          "idFiche": 27,
           "version": 1,
           "statut": "VALIDEE",
           "typeMarche": "A_COMMANDE",
-          "dateCreation": "2026-09-26T17:34:43.035038",
-          "dateValidation": "2026-09-26T17:34:43.641022",
+          "dateCreation": "2026-09-26T18:43:36.387084",
+          "dateValidation": "2026-09-26T18:43:38.442401",
           "validePar": "LERAVO01",
           "nbValeurs": 117
         }
       ],
       "fichesParVersion": {
         "1": {
-          "idFiche": 26,
-          "idDmc": 15,
-          "idDetail": 303091,
-          "idDossier": 100351,
-          "idDetailCourant": 303091,
+          "idFiche": 27,
+          "idDmc": 16,
+          "idDetail": 303092,
+          "idDossier": 100352,
+          "idDetailCourant": 303092,
           "ligneSupprimee": false,
           "refeDossier": "00001/PPM-AGPM/CNM/2026",
           "designationMarche": "Fourniture et livraison des matériels informatiques répartis en cinq (5) lots (à commande)",
@@ -3336,7 +3335,7 @@
             "B01-AC-05": "LERAVO Norbert Fidelys",
             "B01-AC-06": "prmp.mesupres@gmail.com",
             "B01-AC-07": "[H] non fourni",
-            "B01-AC-08": "00001/MLSRS/PPM-AGPM/2026",
+            "B01-AC-08": "00001/MESupReS/PPM-AGPM/2026",
             "B01-AC-09": "2026",
             "B01-AC-10": "0",
             "B01-AC-11": "00001/PPM-AGPM/CNM/2026",
@@ -3589,9 +3588,9 @@
             "nbSaisis": 117,
             "nbAttendus": 130
           },
-          "dateCreation": "2026-09-26T17:34:43.035038",
-          "dateMaj": "2026-09-26T17:34:43.589501",
-          "dateValidation": "2026-09-26T17:34:43.641022",
+          "dateCreation": "2026-09-26T18:43:36.387084",
+          "dateMaj": "2026-09-26T18:43:38.287413",
+          "dateValidation": "2026-09-26T18:43:38.442401",
           "validePar": "LERAVO01",
           "idDossierSoumis": null,
           "typeChange": false,
@@ -3603,7 +3602,7 @@
       },
       "articles": [
         {
-          "idArticle": 54,
+          "idArticle": 66,
           "lot": 1,
           "ordre": 1,
           "designation": "Ordinateur de bureau complet Core i5",
@@ -3615,49 +3614,49 @@
           "profilRedacteur": "PRMP",
           "caracteristiques": [
             {
-              "idCaracteristique": 254,
+              "idCaracteristique": 312,
               "ordre": 1,
               "libelle": "Processeur",
               "exigence": "Core i5"
             },
             {
-              "idCaracteristique": 255,
+              "idCaracteristique": 313,
               "ordre": 2,
               "libelle": "Mémoire vive",
               "exigence": "8 Go"
             },
             {
-              "idCaracteristique": 256,
+              "idCaracteristique": 314,
               "ordre": 3,
               "libelle": "Stockage",
               "exigence": "SSD 500 Go"
             },
             {
-              "idCaracteristique": 257,
+              "idCaracteristique": 315,
               "ordre": 4,
               "libelle": "Moniteur",
               "exigence": "LCD 22 pouces au minimum"
             },
             {
-              "idCaracteristique": 258,
+              "idCaracteristique": 316,
               "ordre": 5,
               "libelle": "Clavier",
               "exigence": "AZERTY"
             },
             {
-              "idCaracteristique": 259,
+              "idCaracteristique": 317,
               "ordre": 6,
               "libelle": "Souris",
               "exigence": "Souris optique USB"
             },
             {
-              "idCaracteristique": 260,
+              "idCaracteristique": 318,
               "ordre": 7,
               "libelle": "Lecteur optique",
               "exigence": "Lecteur / graveur DVD"
             },
             {
-              "idCaracteristique": 261,
+              "idCaracteristique": 319,
               "ordre": 8,
               "libelle": "Système d'exploitation",
               "exigence": "Windows 10 ou supérieur, édition Professional 64 bits, français installé"
@@ -3665,7 +3664,7 @@
           ]
         },
         {
-          "idArticle": 55,
+          "idArticle": 67,
           "lot": 1,
           "ordre": 2,
           "designation": "Onduleur",
@@ -3677,13 +3676,13 @@
           "profilRedacteur": "PRMP",
           "caracteristiques": [
             {
-              "idCaracteristique": 262,
+              "idCaracteristique": 320,
               "ordre": 1,
               "libelle": "État",
               "exigence": "Matériel neuf sous emballage"
             },
             {
-              "idCaracteristique": 263,
+              "idCaracteristique": 321,
               "ordre": 2,
               "libelle": "Capacité d'alimentation en sortie",
               "exigence": "390 Watts / 1200 VA au minimum"
@@ -3691,7 +3690,7 @@
           ]
         },
         {
-          "idArticle": 56,
+          "idArticle": 68,
           "lot": 2,
           "ordre": 1,
           "designation": "Kit de matériels informatiques : ordinateur de bureau complet Core i3 + onduleur + imprimante jet d'encre",
@@ -3703,43 +3702,43 @@
           "profilRedacteur": "PRMP",
           "caracteristiques": [
             {
-              "idCaracteristique": 264,
+              "idCaracteristique": 322,
               "ordre": 1,
               "libelle": "Processeur",
               "exigence": "Core i3"
             },
             {
-              "idCaracteristique": 265,
+              "idCaracteristique": 323,
               "ordre": 2,
               "libelle": "Mémoire vive",
               "exigence": "8 Go"
             },
             {
-              "idCaracteristique": 266,
+              "idCaracteristique": 324,
               "ordre": 3,
               "libelle": "Stockage",
               "exigence": "SSD 500 Go"
             },
             {
-              "idCaracteristique": 267,
+              "idCaracteristique": 325,
               "ordre": 4,
               "libelle": "Moniteur",
               "exigence": "LCD 19 pouces au minimum"
             },
             {
-              "idCaracteristique": 268,
+              "idCaracteristique": 326,
               "ordre": 5,
               "libelle": "Système d'exploitation",
               "exigence": "Windows 10 ou supérieur, édition Professional 64 bits, français installé"
             },
             {
-              "idCaracteristique": 269,
+              "idCaracteristique": 327,
               "ordre": 6,
               "libelle": "Onduleur",
               "exigence": "Matériel neuf sous emballage, 390 Watts / 700 VA au minimum"
             },
             {
-              "idCaracteristique": 270,
+              "idCaracteristique": 328,
               "ordre": 7,
               "libelle": "Imprimante",
               "exigence": "Couleur 4-en-1 : impression, numérisation, copie, télécopie — depuis PC, MAC et USB"
@@ -3747,7 +3746,7 @@
           ]
         },
         {
-          "idArticle": 57,
+          "idArticle": 69,
           "lot": 2,
           "ordre": 2,
           "designation": "Kit de matériels informatiques : ordinateur de bureau complet Core i5 + onduleur",
@@ -3759,37 +3758,37 @@
           "profilRedacteur": "PRMP",
           "caracteristiques": [
             {
-              "idCaracteristique": 271,
+              "idCaracteristique": 329,
               "ordre": 1,
               "libelle": "Processeur",
               "exigence": "Core i5"
             },
             {
-              "idCaracteristique": 272,
+              "idCaracteristique": 330,
               "ordre": 2,
               "libelle": "Mémoire vive",
               "exigence": "16 Go"
             },
             {
-              "idCaracteristique": 273,
+              "idCaracteristique": 331,
               "ordre": 3,
               "libelle": "Stockage",
               "exigence": "SSD 1 000 Go"
             },
             {
-              "idCaracteristique": 274,
+              "idCaracteristique": 332,
               "ordre": 4,
               "libelle": "Moniteur",
               "exigence": "LCD 22 pouces au minimum"
             },
             {
-              "idCaracteristique": 275,
+              "idCaracteristique": 333,
               "ordre": 5,
               "libelle": "Système d'exploitation",
               "exigence": "Windows 10 ou supérieur, édition Professional 64 bits, français installé"
             },
             {
-              "idCaracteristique": 276,
+              "idCaracteristique": 334,
               "ordre": 6,
               "libelle": "Onduleur",
               "exigence": "Matériel neuf sous emballage, 390 Watts / 700 VA au minimum"
@@ -3797,7 +3796,7 @@
           ]
         },
         {
-          "idArticle": 58,
+          "idArticle": 70,
           "lot": 3,
           "ordre": 1,
           "designation": "Imprimante laser noir multifonction A4",
@@ -3809,25 +3808,25 @@
           "profilRedacteur": "PRMP",
           "caracteristiques": [
             {
-              "idCaracteristique": 277,
+              "idCaracteristique": 335,
               "ordre": 1,
               "libelle": "Couleur",
               "exigence": "Noir et blanc"
             },
             {
-              "idCaracteristique": 278,
+              "idCaracteristique": 336,
               "ordre": 2,
               "libelle": "Fonctions",
               "exigence": "Impression, copie, scan"
             },
             {
-              "idCaracteristique": 279,
+              "idCaracteristique": 337,
               "ordre": 3,
               "libelle": "Format",
               "exigence": "A4"
             },
             {
-              "idCaracteristique": 280,
+              "idCaracteristique": 338,
               "ordre": 4,
               "libelle": "État",
               "exigence": "Matériel neuf sous emballage"
@@ -3835,7 +3834,7 @@
           ]
         },
         {
-          "idArticle": 59,
+          "idArticle": 71,
           "lot": 3,
           "ordre": 2,
           "designation": "Photocopieuse noir A4 et A3",
@@ -3847,25 +3846,25 @@
           "profilRedacteur": "PRMP",
           "caracteristiques": [
             {
-              "idCaracteristique": 281,
+              "idCaracteristique": 339,
               "ordre": 1,
               "libelle": "Fonctions",
               "exigence": "Impression, copie, scan"
             },
             {
-              "idCaracteristique": 282,
+              "idCaracteristique": 340,
               "ordre": 2,
               "libelle": "Format",
               "exigence": "A4 et A3"
             },
             {
-              "idCaracteristique": 283,
+              "idCaracteristique": 341,
               "ordre": 3,
               "libelle": "Accessoire",
               "exigence": "Stand avec roulettes"
             },
             {
-              "idCaracteristique": 284,
+              "idCaracteristique": 342,
               "ordre": 4,
               "libelle": "État",
               "exigence": "Matériel neuf sous emballage"
@@ -3873,7 +3872,7 @@
           ]
         },
         {
-          "idArticle": 60,
+          "idArticle": 72,
           "lot": 3,
           "ordre": 3,
           "designation": "Duplicopieur noir et blanc A4",
@@ -3885,19 +3884,19 @@
           "profilRedacteur": "PRMP",
           "caracteristiques": [
             {
-              "idCaracteristique": 285,
+              "idCaracteristique": 343,
               "ordre": 1,
               "libelle": "Dimension",
               "exigence": "A4"
             },
             {
-              "idCaracteristique": 286,
+              "idCaracteristique": 344,
               "ordre": 2,
               "libelle": "Accessoires",
               "exigence": "Interface USB 2.0"
             },
             {
-              "idCaracteristique": 287,
+              "idCaracteristique": 345,
               "ordre": 3,
               "libelle": "État",
               "exigence": "Matériel neuf sous emballage"
@@ -3905,7 +3904,7 @@
           ]
         },
         {
-          "idArticle": 61,
+          "idArticle": 73,
           "lot": 4,
           "ordre": 1,
           "designation": "Kit de matériels informatiques : ordinateur de bureau complet Core i3 + onduleur + imprimante jet d'encre",
@@ -3917,43 +3916,43 @@
           "profilRedacteur": "PRMP",
           "caracteristiques": [
             {
-              "idCaracteristique": 288,
+              "idCaracteristique": 346,
               "ordre": 1,
               "libelle": "Processeur",
               "exigence": "Core i3"
             },
             {
-              "idCaracteristique": 289,
+              "idCaracteristique": 347,
               "ordre": 2,
               "libelle": "Mémoire vive",
               "exigence": "8 Go"
             },
             {
-              "idCaracteristique": 290,
+              "idCaracteristique": 348,
               "ordre": 3,
               "libelle": "Stockage",
               "exigence": "SSD 500 Go"
             },
             {
-              "idCaracteristique": 291,
+              "idCaracteristique": 349,
               "ordre": 4,
               "libelle": "Moniteur",
               "exigence": "LCD 19 pouces au minimum"
             },
             {
-              "idCaracteristique": 292,
+              "idCaracteristique": 350,
               "ordre": 5,
               "libelle": "Système d'exploitation",
               "exigence": "Windows 10 ou supérieur, édition Professional 64 bits, français installé"
             },
             {
-              "idCaracteristique": 293,
+              "idCaracteristique": 351,
               "ordre": 6,
               "libelle": "Onduleur",
               "exigence": "Matériel neuf sous emballage, 390 Watts / 700 VA au minimum"
             },
             {
-              "idCaracteristique": 294,
+              "idCaracteristique": 352,
               "ordre": 7,
               "libelle": "Imprimante",
               "exigence": "Couleur 4-en-1 : impression, numérisation, copie, télécopie — depuis PC, MAC et USB"
@@ -3961,7 +3960,7 @@
           ]
         },
         {
-          "idArticle": 62,
+          "idArticle": 74,
           "lot": 4,
           "ordre": 2,
           "designation": "Kit de matériels informatiques : ordinateur de bureau complet Core i5 + onduleur",
@@ -3973,37 +3972,37 @@
           "profilRedacteur": "PRMP",
           "caracteristiques": [
             {
-              "idCaracteristique": 295,
+              "idCaracteristique": 353,
               "ordre": 1,
               "libelle": "Processeur",
               "exigence": "Core i5"
             },
             {
-              "idCaracteristique": 296,
+              "idCaracteristique": 354,
               "ordre": 2,
               "libelle": "Mémoire vive",
               "exigence": "16 Go"
             },
             {
-              "idCaracteristique": 297,
+              "idCaracteristique": 355,
               "ordre": 3,
               "libelle": "Stockage",
               "exigence": "SSD 1 000 Go"
             },
             {
-              "idCaracteristique": 298,
+              "idCaracteristique": 356,
               "ordre": 4,
               "libelle": "Moniteur",
               "exigence": "LCD 22 pouces au minimum"
             },
             {
-              "idCaracteristique": 299,
+              "idCaracteristique": 357,
               "ordre": 5,
               "libelle": "Système d'exploitation",
               "exigence": "Windows 10 ou supérieur, édition Professional 64 bits, français installé"
             },
             {
-              "idCaracteristique": 300,
+              "idCaracteristique": 358,
               "ordre": 6,
               "libelle": "Onduleur",
               "exigence": "Matériel neuf sous emballage, 390 Watts / 700 VA au minimum"
@@ -4011,7 +4010,7 @@
           ]
         },
         {
-          "idArticle": 63,
+          "idArticle": 75,
           "lot": 5,
           "ordre": 1,
           "designation": "Imprimante laser noir multifonction A4",
@@ -4023,25 +4022,25 @@
           "profilRedacteur": "PRMP",
           "caracteristiques": [
             {
-              "idCaracteristique": 301,
+              "idCaracteristique": 359,
               "ordre": 1,
               "libelle": "Couleur",
               "exigence": "Noir et blanc"
             },
             {
-              "idCaracteristique": 302,
+              "idCaracteristique": 360,
               "ordre": 2,
               "libelle": "Fonctions",
               "exigence": "Impression, copie, scan"
             },
             {
-              "idCaracteristique": 303,
+              "idCaracteristique": 361,
               "ordre": 3,
               "libelle": "Format",
               "exigence": "A4"
             },
             {
-              "idCaracteristique": 304,
+              "idCaracteristique": 362,
               "ordre": 4,
               "libelle": "État",
               "exigence": "Matériel neuf sous emballage"
@@ -4049,7 +4048,7 @@
           ]
         },
         {
-          "idArticle": 64,
+          "idArticle": 76,
           "lot": 5,
           "ordre": 2,
           "designation": "Photocopieuse noir A4 et A3",
@@ -4061,25 +4060,25 @@
           "profilRedacteur": "PRMP",
           "caracteristiques": [
             {
-              "idCaracteristique": 305,
+              "idCaracteristique": 363,
               "ordre": 1,
               "libelle": "Fonctions",
               "exigence": "Impression, copie, scan"
             },
             {
-              "idCaracteristique": 306,
+              "idCaracteristique": 364,
               "ordre": 2,
               "libelle": "Format",
               "exigence": "A4 et A3"
             },
             {
-              "idCaracteristique": 307,
+              "idCaracteristique": 365,
               "ordre": 3,
               "libelle": "Accessoire",
               "exigence": "Stand avec roulettes"
             },
             {
-              "idCaracteristique": 308,
+              "idCaracteristique": 366,
               "ordre": 4,
               "libelle": "État",
               "exigence": "Matériel neuf sous emballage"
@@ -4087,7 +4086,7 @@
           ]
         },
         {
-          "idArticle": 65,
+          "idArticle": 77,
           "lot": 5,
           "ordre": 3,
           "designation": "Duplicopieur noir et blanc A4",
@@ -4099,19 +4098,19 @@
           "profilRedacteur": "PRMP",
           "caracteristiques": [
             {
-              "idCaracteristique": 309,
+              "idCaracteristique": 367,
               "ordre": 1,
               "libelle": "Dimension",
               "exigence": "A4"
             },
             {
-              "idCaracteristique": 310,
+              "idCaracteristique": 368,
               "ordre": 2,
               "libelle": "Accessoires",
               "exigence": "Interface USB 2.0"
             },
             {
-              "idCaracteristique": 311,
+              "idCaracteristique": 369,
               "ordre": 3,
               "libelle": "État",
               "exigence": "Matériel neuf sous emballage"
@@ -4121,596 +4120,596 @@
       ],
       "documents": [
         {
-          "idDocument": 423,
+          "idDocument": 477,
           "type": "DPAO",
           "libelle": "Données particulières de l'appel d'offres",
           "extension": "docx",
-          "nomFichier": "DPAO_00001-PPM-AGPM-CNM-2026_303091_v1.docx",
-          "tailleOctets": 7947,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "nomFichier": "DPAO_00001-PPM-AGPM-CNM-2026_303092_v1.docx",
+          "tailleOctets": 7944,
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": null
         },
         {
-          "idDocument": 424,
+          "idDocument": 478,
           "type": "DPAO",
           "libelle": "Données particulières de l'appel d'offres",
           "extension": "pdf",
-          "nomFichier": "DPAO_00001-PPM-AGPM-CNM-2026_303091_v1.pdf",
-          "tailleOctets": 9592,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "nomFichier": "DPAO_00001-PPM-AGPM-CNM-2026_303092_v1.pdf",
+          "tailleOctets": 9594,
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": null
         },
         {
-          "idDocument": 425,
+          "idDocument": 479,
           "type": "CCAP",
           "libelle": "Cahier des clauses administratives particulières",
           "extension": "docx",
-          "nomFichier": "CCAP_00001-PPM-AGPM-CNM-2026_303091_v1.docx",
-          "tailleOctets": 7104,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "nomFichier": "CCAP_00001-PPM-AGPM-CNM-2026_303092_v1.docx",
+          "tailleOctets": 7103,
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": null
         },
         {
-          "idDocument": 426,
+          "idDocument": 480,
           "type": "CCAP",
           "libelle": "Cahier des clauses administratives particulières",
           "extension": "pdf",
-          "nomFichier": "CCAP_00001-PPM-AGPM-CNM-2026_303091_v1.pdf",
+          "nomFichier": "CCAP_00001-PPM-AGPM-CNM-2026_303092_v1.pdf",
           "tailleOctets": 7889,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": null
         },
         {
-          "idDocument": 427,
+          "idDocument": 481,
           "type": "AE",
           "libelle": "Acte d'engagement — lot 1",
           "extension": "docx",
-          "nomFichier": "AE_00001-PPM-AGPM-CNM-2026_303091_lot1_v1.docx",
-          "tailleOctets": 4915,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "nomFichier": "AE_00001-PPM-AGPM-CNM-2026_303092_lot1_v1.docx",
+          "tailleOctets": 4914,
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": 1
         },
         {
-          "idDocument": 428,
+          "idDocument": 482,
           "type": "AE",
           "libelle": "Acte d'engagement — lot 1",
           "extension": "pdf",
-          "nomFichier": "AE_00001-PPM-AGPM-CNM-2026_303091_lot1_v1.pdf",
+          "nomFichier": "AE_00001-PPM-AGPM-CNM-2026_303092_lot1_v1.pdf",
           "tailleOctets": 4303,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": 1
         },
         {
-          "idDocument": 429,
+          "idDocument": 483,
           "type": "AE",
           "libelle": "Acte d'engagement — lot 2",
           "extension": "docx",
-          "nomFichier": "AE_00001-PPM-AGPM-CNM-2026_303091_lot2_v1.docx",
-          "tailleOctets": 4932,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "nomFichier": "AE_00001-PPM-AGPM-CNM-2026_303092_lot2_v1.docx",
+          "tailleOctets": 4931,
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": 2
         },
         {
-          "idDocument": 430,
+          "idDocument": 484,
           "type": "AE",
           "libelle": "Acte d'engagement — lot 2",
           "extension": "pdf",
-          "nomFichier": "AE_00001-PPM-AGPM-CNM-2026_303091_lot2_v1.pdf",
+          "nomFichier": "AE_00001-PPM-AGPM-CNM-2026_303092_lot2_v1.pdf",
           "tailleOctets": 4338,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": 2
         },
         {
-          "idDocument": 431,
+          "idDocument": 485,
           "type": "AE",
           "libelle": "Acte d'engagement — lot 3",
           "extension": "docx",
-          "nomFichier": "AE_00001-PPM-AGPM-CNM-2026_303091_lot3_v1.docx",
-          "tailleOctets": 4911,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
-          "version": 1,
-          "lot": 3
-        },
-        {
-          "idDocument": 432,
-          "type": "AE",
-          "libelle": "Acte d'engagement — lot 3",
-          "extension": "pdf",
-          "nomFichier": "AE_00001-PPM-AGPM-CNM-2026_303091_lot3_v1.pdf",
-          "tailleOctets": 4299,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
-          "version": 1,
-          "lot": 3
-        },
-        {
-          "idDocument": 433,
-          "type": "AE",
-          "libelle": "Acte d'engagement — lot 4",
-          "extension": "docx",
-          "nomFichier": "AE_00001-PPM-AGPM-CNM-2026_303091_lot4_v1.docx",
-          "tailleOctets": 4930,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
-          "version": 1,
-          "lot": 4
-        },
-        {
-          "idDocument": 434,
-          "type": "AE",
-          "libelle": "Acte d'engagement — lot 4",
-          "extension": "pdf",
-          "nomFichier": "AE_00001-PPM-AGPM-CNM-2026_303091_lot4_v1.pdf",
-          "tailleOctets": 4336,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
-          "version": 1,
-          "lot": 4
-        },
-        {
-          "idDocument": 435,
-          "type": "AE",
-          "libelle": "Acte d'engagement — lot 5",
-          "extension": "docx",
-          "nomFichier": "AE_00001-PPM-AGPM-CNM-2026_303091_lot5_v1.docx",
+          "nomFichier": "AE_00001-PPM-AGPM-CNM-2026_303092_lot3_v1.docx",
           "tailleOctets": 4910,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "dateGeneration": "2026-09-26T18:43:38.442401",
+          "version": 1,
+          "lot": 3
+        },
+        {
+          "idDocument": 486,
+          "type": "AE",
+          "libelle": "Acte d'engagement — lot 3",
+          "extension": "pdf",
+          "nomFichier": "AE_00001-PPM-AGPM-CNM-2026_303092_lot3_v1.pdf",
+          "tailleOctets": 4299,
+          "dateGeneration": "2026-09-26T18:43:38.442401",
+          "version": 1,
+          "lot": 3
+        },
+        {
+          "idDocument": 487,
+          "type": "AE",
+          "libelle": "Acte d'engagement — lot 4",
+          "extension": "docx",
+          "nomFichier": "AE_00001-PPM-AGPM-CNM-2026_303092_lot4_v1.docx",
+          "tailleOctets": 4929,
+          "dateGeneration": "2026-09-26T18:43:38.442401",
+          "version": 1,
+          "lot": 4
+        },
+        {
+          "idDocument": 488,
+          "type": "AE",
+          "libelle": "Acte d'engagement — lot 4",
+          "extension": "pdf",
+          "nomFichier": "AE_00001-PPM-AGPM-CNM-2026_303092_lot4_v1.pdf",
+          "tailleOctets": 4336,
+          "dateGeneration": "2026-09-26T18:43:38.442401",
+          "version": 1,
+          "lot": 4
+        },
+        {
+          "idDocument": 489,
+          "type": "AE",
+          "libelle": "Acte d'engagement — lot 5",
+          "extension": "docx",
+          "nomFichier": "AE_00001-PPM-AGPM-CNM-2026_303092_lot5_v1.docx",
+          "tailleOctets": 4910,
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": 5
         },
         {
-          "idDocument": 436,
+          "idDocument": 490,
           "type": "AE",
           "libelle": "Acte d'engagement — lot 5",
           "extension": "pdf",
-          "nomFichier": "AE_00001-PPM-AGPM-CNM-2026_303091_lot5_v1.pdf",
+          "nomFichier": "AE_00001-PPM-AGPM-CNM-2026_303092_lot5_v1.pdf",
           "tailleOctets": 4297,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": 5
         },
         {
-          "idDocument": 437,
+          "idDocument": 491,
           "type": "LF",
           "libelle": "Liste des fournitures et calendrier de livraison",
           "extension": "docx",
-          "nomFichier": "LF_00001-PPM-AGPM-CNM-2026_303091_v1.docx",
+          "nomFichier": "LF_00001-PPM-AGPM-CNM-2026_303092_v1.docx",
           "tailleOctets": 3505,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": null
         },
         {
-          "idDocument": 438,
+          "idDocument": 492,
           "type": "LF",
           "libelle": "Liste des fournitures et calendrier de livraison",
           "extension": "pdf",
-          "nomFichier": "LF_00001-PPM-AGPM-CNM-2026_303091_v1.pdf",
+          "nomFichier": "LF_00001-PPM-AGPM-CNM-2026_303092_v1.pdf",
           "tailleOctets": 3170,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": null
         },
         {
-          "idDocument": 439,
+          "idDocument": 493,
           "type": "A1",
           "libelle": "Fiche de renseignements A1",
           "extension": "docx",
-          "nomFichier": "A1_00001-PPM-AGPM-CNM-2026_303091_v1.docx",
+          "nomFichier": "A1_00001-PPM-AGPM-CNM-2026_303092_v1.docx",
           "tailleOctets": 4106,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": null
         },
         {
-          "idDocument": 440,
+          "idDocument": 494,
           "type": "A1",
           "libelle": "Fiche de renseignements A1",
           "extension": "pdf",
-          "nomFichier": "A1_00001-PPM-AGPM-CNM-2026_303091_v1.pdf",
+          "nomFichier": "A1_00001-PPM-AGPM-CNM-2026_303092_v1.pdf",
           "tailleOctets": 3347,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": null
         },
         {
-          "idDocument": 441,
+          "idDocument": 495,
           "type": "A2",
           "libelle": "Fiche de renseignements A2",
           "extension": "docx",
-          "nomFichier": "A2_00001-PPM-AGPM-CNM-2026_303091_v1.docx",
+          "nomFichier": "A2_00001-PPM-AGPM-CNM-2026_303092_v1.docx",
           "tailleOctets": 3316,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": null
         },
         {
-          "idDocument": 442,
+          "idDocument": 496,
           "type": "A2",
           "libelle": "Fiche de renseignements A2",
           "extension": "pdf",
-          "nomFichier": "A2_00001-PPM-AGPM-CNM-2026_303091_v1.pdf",
+          "nomFichier": "A2_00001-PPM-AGPM-CNM-2026_303092_v1.pdf",
           "tailleOctets": 1762,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": null
         },
         {
-          "idDocument": 443,
+          "idDocument": 497,
           "type": "A3",
           "libelle": "Fiche de renseignements A3",
           "extension": "docx",
-          "nomFichier": "A3_00001-PPM-AGPM-CNM-2026_303091_v1.docx",
+          "nomFichier": "A3_00001-PPM-AGPM-CNM-2026_303092_v1.docx",
           "tailleOctets": 4163,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": null
         },
         {
-          "idDocument": 444,
+          "idDocument": 498,
           "type": "A3",
           "libelle": "Fiche de renseignements A3",
           "extension": "pdf",
-          "nomFichier": "A3_00001-PPM-AGPM-CNM-2026_303091_v1.pdf",
-          "tailleOctets": 3826,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "nomFichier": "A3_00001-PPM-AGPM-CNM-2026_303092_v1.pdf",
+          "tailleOctets": 3827,
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": null
         },
         {
-          "idDocument": 445,
+          "idDocument": 499,
           "type": "A4",
           "libelle": "Fiche de renseignements A4",
           "extension": "docx",
-          "nomFichier": "A4_00001-PPM-AGPM-CNM-2026_303091_v1.docx",
+          "nomFichier": "A4_00001-PPM-AGPM-CNM-2026_303092_v1.docx",
           "tailleOctets": 3192,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": null
         },
         {
-          "idDocument": 446,
+          "idDocument": 500,
           "type": "A4",
           "libelle": "Fiche de renseignements A4",
           "extension": "pdf",
-          "nomFichier": "A4_00001-PPM-AGPM-CNM-2026_303091_v1.pdf",
+          "nomFichier": "A4_00001-PPM-AGPM-CNM-2026_303092_v1.pdf",
           "tailleOctets": 1497,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": null
         },
         {
-          "idDocument": 447,
+          "idDocument": 501,
           "type": "C1",
           "libelle": "Garantie bancaire de soumission (C1) — lot 1",
           "extension": "docx",
-          "nomFichier": "C1_00001-PPM-AGPM-CNM-2026_303091_lot1_v1.docx",
+          "nomFichier": "C1_00001-PPM-AGPM-CNM-2026_303092_lot1_v1.docx",
           "tailleOctets": 4017,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": 1
         },
         {
-          "idDocument": 448,
+          "idDocument": 502,
           "type": "C1",
           "libelle": "Garantie bancaire de soumission (C1) — lot 1",
           "extension": "pdf",
-          "nomFichier": "C1_00001-PPM-AGPM-CNM-2026_303091_lot1_v1.pdf",
+          "nomFichier": "C1_00001-PPM-AGPM-CNM-2026_303092_lot1_v1.pdf",
           "tailleOctets": 2536,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": 1
         },
         {
-          "idDocument": 449,
+          "idDocument": 503,
           "type": "C1",
           "libelle": "Garantie bancaire de soumission (C1) — lot 2",
           "extension": "docx",
-          "nomFichier": "C1_00001-PPM-AGPM-CNM-2026_303091_lot2_v1.docx",
+          "nomFichier": "C1_00001-PPM-AGPM-CNM-2026_303092_lot2_v1.docx",
           "tailleOctets": 4026,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": 2
         },
         {
-          "idDocument": 450,
+          "idDocument": 504,
           "type": "C1",
           "libelle": "Garantie bancaire de soumission (C1) — lot 2",
           "extension": "pdf",
-          "nomFichier": "C1_00001-PPM-AGPM-CNM-2026_303091_lot2_v1.pdf",
+          "nomFichier": "C1_00001-PPM-AGPM-CNM-2026_303092_lot2_v1.pdf",
           "tailleOctets": 2542,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": 2
         },
         {
-          "idDocument": 451,
+          "idDocument": 505,
           "type": "C1",
           "libelle": "Garantie bancaire de soumission (C1) — lot 3",
           "extension": "docx",
-          "nomFichier": "C1_00001-PPM-AGPM-CNM-2026_303091_lot3_v1.docx",
+          "nomFichier": "C1_00001-PPM-AGPM-CNM-2026_303092_lot3_v1.docx",
           "tailleOctets": 4017,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": 3
         },
         {
-          "idDocument": 452,
+          "idDocument": 506,
           "type": "C1",
           "libelle": "Garantie bancaire de soumission (C1) — lot 3",
           "extension": "pdf",
-          "nomFichier": "C1_00001-PPM-AGPM-CNM-2026_303091_lot3_v1.pdf",
+          "nomFichier": "C1_00001-PPM-AGPM-CNM-2026_303092_lot3_v1.pdf",
           "tailleOctets": 2536,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": 3
         },
         {
-          "idDocument": 453,
+          "idDocument": 507,
           "type": "C1",
           "libelle": "Garantie bancaire de soumission (C1) — lot 4",
           "extension": "docx",
-          "nomFichier": "C1_00001-PPM-AGPM-CNM-2026_303091_lot4_v1.docx",
+          "nomFichier": "C1_00001-PPM-AGPM-CNM-2026_303092_lot4_v1.docx",
           "tailleOctets": 4026,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": 4
         },
         {
-          "idDocument": 454,
+          "idDocument": 508,
           "type": "C1",
           "libelle": "Garantie bancaire de soumission (C1) — lot 4",
           "extension": "pdf",
-          "nomFichier": "C1_00001-PPM-AGPM-CNM-2026_303091_lot4_v1.pdf",
+          "nomFichier": "C1_00001-PPM-AGPM-CNM-2026_303092_lot4_v1.pdf",
           "tailleOctets": 2542,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": 4
         },
         {
-          "idDocument": 455,
+          "idDocument": 509,
           "type": "C1",
           "libelle": "Garantie bancaire de soumission (C1) — lot 5",
           "extension": "docx",
-          "nomFichier": "C1_00001-PPM-AGPM-CNM-2026_303091_lot5_v1.docx",
+          "nomFichier": "C1_00001-PPM-AGPM-CNM-2026_303092_lot5_v1.docx",
           "tailleOctets": 4017,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": 5
         },
         {
-          "idDocument": 456,
+          "idDocument": 510,
           "type": "C1",
           "libelle": "Garantie bancaire de soumission (C1) — lot 5",
           "extension": "pdf",
-          "nomFichier": "C1_00001-PPM-AGPM-CNM-2026_303091_lot5_v1.pdf",
+          "nomFichier": "C1_00001-PPM-AGPM-CNM-2026_303092_lot5_v1.pdf",
           "tailleOctets": 2536,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": 5
         },
         {
-          "idDocument": 457,
+          "idDocument": 511,
           "type": "C2",
           "libelle": "Caution personnelle et solidaire de soumission (C2) — lot 1",
           "extension": "docx",
-          "nomFichier": "C2_00001-PPM-AGPM-CNM-2026_303091_lot1_v1.docx",
+          "nomFichier": "C2_00001-PPM-AGPM-CNM-2026_303092_lot1_v1.docx",
           "tailleOctets": 4264,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": 1
         },
         {
-          "idDocument": 458,
+          "idDocument": 512,
           "type": "C2",
           "libelle": "Caution personnelle et solidaire de soumission (C2) — lot 1",
           "extension": "pdf",
-          "nomFichier": "C2_00001-PPM-AGPM-CNM-2026_303091_lot1_v1.pdf",
+          "nomFichier": "C2_00001-PPM-AGPM-CNM-2026_303092_lot1_v1.pdf",
           "tailleOctets": 2786,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": 1
         },
         {
-          "idDocument": 459,
+          "idDocument": 513,
           "type": "C2",
           "libelle": "Caution personnelle et solidaire de soumission (C2) — lot 2",
           "extension": "docx",
-          "nomFichier": "C2_00001-PPM-AGPM-CNM-2026_303091_lot2_v1.docx",
+          "nomFichier": "C2_00001-PPM-AGPM-CNM-2026_303092_lot2_v1.docx",
           "tailleOctets": 4278,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": 2
         },
         {
-          "idDocument": 460,
+          "idDocument": 514,
           "type": "C2",
           "libelle": "Caution personnelle et solidaire de soumission (C2) — lot 2",
           "extension": "pdf",
-          "nomFichier": "C2_00001-PPM-AGPM-CNM-2026_303091_lot2_v1.pdf",
+          "nomFichier": "C2_00001-PPM-AGPM-CNM-2026_303092_lot2_v1.pdf",
           "tailleOctets": 2795,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": 2
         },
         {
-          "idDocument": 461,
+          "idDocument": 515,
           "type": "C2",
           "libelle": "Caution personnelle et solidaire de soumission (C2) — lot 3",
           "extension": "docx",
-          "nomFichier": "C2_00001-PPM-AGPM-CNM-2026_303091_lot3_v1.docx",
+          "nomFichier": "C2_00001-PPM-AGPM-CNM-2026_303092_lot3_v1.docx",
           "tailleOctets": 4264,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": 3
         },
         {
-          "idDocument": 462,
+          "idDocument": 516,
           "type": "C2",
           "libelle": "Caution personnelle et solidaire de soumission (C2) — lot 3",
           "extension": "pdf",
-          "nomFichier": "C2_00001-PPM-AGPM-CNM-2026_303091_lot3_v1.pdf",
+          "nomFichier": "C2_00001-PPM-AGPM-CNM-2026_303092_lot3_v1.pdf",
           "tailleOctets": 2786,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": 3
         },
         {
-          "idDocument": 463,
+          "idDocument": 517,
           "type": "C2",
           "libelle": "Caution personnelle et solidaire de soumission (C2) — lot 4",
           "extension": "docx",
-          "nomFichier": "C2_00001-PPM-AGPM-CNM-2026_303091_lot4_v1.docx",
+          "nomFichier": "C2_00001-PPM-AGPM-CNM-2026_303092_lot4_v1.docx",
           "tailleOctets": 4278,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": 4
         },
         {
-          "idDocument": 464,
+          "idDocument": 518,
           "type": "C2",
           "libelle": "Caution personnelle et solidaire de soumission (C2) — lot 4",
           "extension": "pdf",
-          "nomFichier": "C2_00001-PPM-AGPM-CNM-2026_303091_lot4_v1.pdf",
+          "nomFichier": "C2_00001-PPM-AGPM-CNM-2026_303092_lot4_v1.pdf",
           "tailleOctets": 2795,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": 4
         },
         {
-          "idDocument": 465,
+          "idDocument": 519,
           "type": "C2",
           "libelle": "Caution personnelle et solidaire de soumission (C2) — lot 5",
           "extension": "docx",
-          "nomFichier": "C2_00001-PPM-AGPM-CNM-2026_303091_lot5_v1.docx",
+          "nomFichier": "C2_00001-PPM-AGPM-CNM-2026_303092_lot5_v1.docx",
           "tailleOctets": 4264,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": 5
         },
         {
-          "idDocument": 466,
+          "idDocument": 520,
           "type": "C2",
           "libelle": "Caution personnelle et solidaire de soumission (C2) — lot 5",
           "extension": "pdf",
-          "nomFichier": "C2_00001-PPM-AGPM-CNM-2026_303091_lot5_v1.pdf",
+          "nomFichier": "C2_00001-PPM-AGPM-CNM-2026_303092_lot5_v1.pdf",
           "tailleOctets": 2786,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": 5
         },
         {
-          "idDocument": 467,
+          "idDocument": 521,
           "type": "BP",
           "libelle": "Bordereau des prix — lot 1",
           "extension": "xlsx",
-          "nomFichier": "BP_00001-PPM-AGPM-CNM-2026_303091_lot1_v1.xlsx",
+          "nomFichier": "BP_00001-PPM-AGPM-CNM-2026_303092_lot1_v1.xlsx",
           "tailleOctets": 4152,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": 1
         },
         {
-          "idDocument": 468,
+          "idDocument": 522,
           "type": "BP",
           "libelle": "Bordereau des prix — lot 2",
           "extension": "xlsx",
-          "nomFichier": "BP_00001-PPM-AGPM-CNM-2026_303091_lot2_v1.xlsx",
-          "tailleOctets": 4186,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "nomFichier": "BP_00001-PPM-AGPM-CNM-2026_303092_lot2_v1.xlsx",
+          "tailleOctets": 4187,
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": 2
         },
         {
-          "idDocument": 469,
+          "idDocument": 523,
           "type": "BP",
           "libelle": "Bordereau des prix — lot 3",
           "extension": "xlsx",
-          "nomFichier": "BP_00001-PPM-AGPM-CNM-2026_303091_lot3_v1.xlsx",
-          "tailleOctets": 4225,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "nomFichier": "BP_00001-PPM-AGPM-CNM-2026_303092_lot3_v1.xlsx",
+          "tailleOctets": 4226,
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": 3
         },
         {
-          "idDocument": 470,
+          "idDocument": 524,
           "type": "BP",
           "libelle": "Bordereau des prix — lot 4",
           "extension": "xlsx",
-          "nomFichier": "BP_00001-PPM-AGPM-CNM-2026_303091_lot4_v1.xlsx",
-          "tailleOctets": 4184,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "nomFichier": "BP_00001-PPM-AGPM-CNM-2026_303092_lot4_v1.xlsx",
+          "tailleOctets": 4185,
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": 4
         },
         {
-          "idDocument": 471,
+          "idDocument": 525,
           "type": "BP",
           "libelle": "Bordereau des prix — lot 5",
           "extension": "xlsx",
-          "nomFichier": "BP_00001-PPM-AGPM-CNM-2026_303091_lot5_v1.xlsx",
-          "tailleOctets": 4225,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "nomFichier": "BP_00001-PPM-AGPM-CNM-2026_303092_lot5_v1.xlsx",
+          "tailleOctets": 4226,
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": 5
         },
         {
-          "idDocument": 472,
+          "idDocument": 526,
           "type": "TC",
           "libelle": "Spécifications techniques — tableau de conformité — lot 1",
           "extension": "xlsx",
-          "nomFichier": "TC_00001-PPM-AGPM-CNM-2026_303091_lot1_v1.xlsx",
-          "tailleOctets": 4615,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "nomFichier": "TC_00001-PPM-AGPM-CNM-2026_303092_lot1_v1.xlsx",
+          "tailleOctets": 4616,
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": 1
         },
         {
-          "idDocument": 473,
+          "idDocument": 527,
           "type": "TC",
           "libelle": "Spécifications techniques — tableau de conformité — lot 2",
           "extension": "xlsx",
-          "nomFichier": "TC_00001-PPM-AGPM-CNM-2026_303091_lot2_v1.xlsx",
-          "tailleOctets": 4755,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "nomFichier": "TC_00001-PPM-AGPM-CNM-2026_303092_lot2_v1.xlsx",
+          "tailleOctets": 4756,
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": 2
         },
         {
-          "idDocument": 474,
+          "idDocument": 528,
           "type": "TC",
           "libelle": "Spécifications techniques — tableau de conformité — lot 3",
           "extension": "xlsx",
-          "nomFichier": "TC_00001-PPM-AGPM-CNM-2026_303091_lot3_v1.xlsx",
-          "tailleOctets": 4540,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "nomFichier": "TC_00001-PPM-AGPM-CNM-2026_303092_lot3_v1.xlsx",
+          "tailleOctets": 4541,
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": 3
         },
         {
-          "idDocument": 475,
+          "idDocument": 529,
           "type": "TC",
           "libelle": "Spécifications techniques — tableau de conformité — lot 4",
           "extension": "xlsx",
-          "nomFichier": "TC_00001-PPM-AGPM-CNM-2026_303091_lot4_v1.xlsx",
-          "tailleOctets": 4754,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "nomFichier": "TC_00001-PPM-AGPM-CNM-2026_303092_lot4_v1.xlsx",
+          "tailleOctets": 4755,
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": 4
         },
         {
-          "idDocument": 476,
+          "idDocument": 530,
           "type": "TC",
           "libelle": "Spécifications techniques — tableau de conformité — lot 5",
           "extension": "xlsx",
-          "nomFichier": "TC_00001-PPM-AGPM-CNM-2026_303091_lot5_v1.xlsx",
-          "tailleOctets": 4543,
-          "dateGeneration": "2026-09-26T17:34:43.641022",
+          "nomFichier": "TC_00001-PPM-AGPM-CNM-2026_303092_lot5_v1.xlsx",
+          "tailleOctets": 4544,
+          "dateGeneration": "2026-09-26T18:43:38.442401",
           "version": 1,
           "lot": 5
         }

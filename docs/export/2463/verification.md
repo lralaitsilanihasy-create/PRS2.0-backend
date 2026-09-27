@@ -28,13 +28,13 @@ Généré par `rejouer-2463.mjs --etape 5` le 2026-09-26 depuis l'API (valeurs e
 
 | Fait | Stockage | Valeur en base | Nature |
 |---|---|---|---|
-| Référence du dossier | `t_dossier.REFE_DOSSIER` (id 100351) | 00001/PPM-AGPM/CNM/2026 | serveur (compteur `t_sequence_reference`) |
+| Référence du dossier | `t_dossier.REFE_DOSSIER` (id 100352) | 00001/PPM-AGPM/CNM/2026 | serveur (compteur `t_sequence_reference`) |
 | Statut / sous-type | `t_dossier.STATUT` / `ID_SOUS_TYPE` | EN_VERIFICATION / PPM-AGPM | serveur |
-| Exercice | `t_ppm.EXERCICE` (id 200337) | 2026 | [D] de la référence (§2) |
+| Exercice | `t_ppm.EXERCICE` (id 200338) | 2026 | [D] de la référence (§2) |
 | Date de signature du PPM | `t_ppm.DATE_SIGNATURE` | 2026-06-30 | [H] §10 — date de signature du PPM |
 | Signataire du PPM | `t_ppm.SIGNATAIRE` | Norbert Fidelys LERAVO | serveur (prénoms + nom de la PRMP) |
-| Référence du PPM / n° de mise à jour | `t_ppm.REFERENCE` / `NUM_MAJ` | 00001/MLSRS/PPM-AGPM/2026 / 0 | serveur |
-| Objet | `t_marche.DESIGNATION_MARCHE` (id 303091) | Fourniture et livraison des matériels informatiques répartis en cinq (5) lots (à commande) | [R] p.1 (§2, objet) |
+| Référence du PPM / n° de mise à jour | `t_ppm.REFERENCE` / `NUM_MAJ` | 00001/MESupReS/PPM-AGPM/2026 / 0 | serveur |
+| Objet | `t_marche.DESIGNATION_MARCHE` (id 303092) | Fourniture et livraison des matériels informatiques répartis en cinq (5) lots (à commande) | [R] p.1 (§2, objet) |
 | Mode AOO | `t_marche.ID_MODE` | 1 (Appel d'offres ouvert) | [R] p.36 (§2, appel d'offres ouvert → mode 1) |
 | Catégorie fournitures | `t_marche.ID_NATURE` | 2 (Fournitures) | [R] p.36, p.67 (§2, catégorie fournitures → nature 2 « Fournitures ») |
 | Marché à commande | `t_marche.FORME_MARCHE` | A_COMMANDE | [R] p.17, p.50 (§2, marché à commande) |
@@ -48,54 +48,54 @@ Généré par `rejouer-2463.mjs --etape 5` le 2026-09-26 depuis l'API (valeurs e
 
 | Lot | `DESIGNATION_LOT` | `MONT_LOT` (max) | Minimum (fiche `B05-TP-02#n`) | Destination (fiche `B09-LL-01#n`) | Nature |
 |---|---|---|---|---|---|
-| 1 (id 2133) | ORDINATEURS ET DIVERS POUR LE MINISTERE | 80 000 000 | 40 000 000 | MINISTERE FIADANANA | intitulé [R] p.40-44, p.49 (§3, intitulé exact) ; max [D] §5 — maximum = garantie ÷ 2 % ; min [D] §5 — non stockable au plan (t_lot n'a qu'un montant) ; porté par la fiche B05-TP-02 ; destination [R] p.49, p.51 (§3) — non stockable au plan ; portée par la fiche B09-LL-01 |
-| 2 (id 2134) | ORDINATEUR POUR AMBATONDRAZAKA | 108 500 000 | 54 250 000 | AMBATONDRAZAKA | intitulé [R] p.40-44, p.49 (§3, intitulé exact) ; max [D] §5 — maximum = garantie ÷ 2 % ; min [D] §5 — non stockable au plan (t_lot n'a qu'un montant) ; porté par la fiche B05-TP-02 ; destination [R] p.49, p.51 (§3) — non stockable au plan ; portée par la fiche B09-LL-01 |
-| 3 (id 2135) | DIVERS MATERIELS POUR AMBATONDRAZAKA | 80 000 000 | 40 000 000 | AMBATONDRAZAKA | intitulé [R] p.40-44, p.49 (§3, intitulé exact) ; max [D] §5 — maximum = garantie ÷ 2 % ; min [D] §5 — non stockable au plan (t_lot n'a qu'un montant) ; porté par la fiche B05-TP-02 ; destination [R] p.49, p.51 (§3) — non stockable au plan ; portée par la fiche B09-LL-01 |
-| 4 (id 2136) | ORDINATEUR POUR FORT DAUPHIN | 108 500 000 | 54 250 000 | FORT DAUPHIN | intitulé [R] p.40-44, p.49 (§3, intitulé exact) ; max [D] §5 — maximum = garantie ÷ 2 % ; min [D] §5 — non stockable au plan (t_lot n'a qu'un montant) ; porté par la fiche B05-TP-02 ; destination [R] p.49, p.51 (§3) — non stockable au plan ; portée par la fiche B09-LL-01 |
-| 5 (id 2137) | DIVERS MATERIELS POUR FORT DAUPHIN | 80 000 000 | 40 000 000 | FORT DAUPHIN | intitulé [R] p.40-44, p.49 (§3, intitulé exact) ; max [D] §5 — maximum = garantie ÷ 2 % ; min [D] §5 — non stockable au plan (t_lot n'a qu'un montant) ; porté par la fiche B05-TP-02 ; destination [R] p.49, p.51 (§3) — non stockable au plan ; portée par la fiche B09-LL-01 |
+| 1 (id 2138) | ORDINATEURS ET DIVERS POUR LE MINISTERE | 80 000 000 | 40 000 000 | MINISTERE FIADANANA | intitulé [R] p.40-44, p.49 (§3, intitulé exact) ; max [D] §5 — maximum = garantie ÷ 2 % ; min [D] §5 — non stockable au plan (t_lot n'a qu'un montant) ; porté par la fiche B05-TP-02 ; destination [R] p.49, p.51 (§3) — non stockable au plan ; portée par la fiche B09-LL-01 |
+| 2 (id 2139) | ORDINATEUR POUR AMBATONDRAZAKA | 108 500 000 | 54 250 000 | AMBATONDRAZAKA | intitulé [R] p.40-44, p.49 (§3, intitulé exact) ; max [D] §5 — maximum = garantie ÷ 2 % ; min [D] §5 — non stockable au plan (t_lot n'a qu'un montant) ; porté par la fiche B05-TP-02 ; destination [R] p.49, p.51 (§3) — non stockable au plan ; portée par la fiche B09-LL-01 |
+| 3 (id 2140) | DIVERS MATERIELS POUR AMBATONDRAZAKA | 80 000 000 | 40 000 000 | AMBATONDRAZAKA | intitulé [R] p.40-44, p.49 (§3, intitulé exact) ; max [D] §5 — maximum = garantie ÷ 2 % ; min [D] §5 — non stockable au plan (t_lot n'a qu'un montant) ; porté par la fiche B05-TP-02 ; destination [R] p.49, p.51 (§3) — non stockable au plan ; portée par la fiche B09-LL-01 |
+| 4 (id 2141) | ORDINATEUR POUR FORT DAUPHIN | 108 500 000 | 54 250 000 | FORT DAUPHIN | intitulé [R] p.40-44, p.49 (§3, intitulé exact) ; max [D] §5 — maximum = garantie ÷ 2 % ; min [D] §5 — non stockable au plan (t_lot n'a qu'un montant) ; porté par la fiche B05-TP-02 ; destination [R] p.49, p.51 (§3) — non stockable au plan ; portée par la fiche B09-LL-01 |
+| 5 (id 2142) | DIVERS MATERIELS POUR FORT DAUPHIN | 80 000 000 | 40 000 000 | FORT DAUPHIN | intitulé [R] p.40-44, p.49 (§3, intitulé exact) ; max [D] §5 — maximum = garantie ÷ 2 % ; min [D] §5 — non stockable au plan (t_lot n'a qu'un montant) ; porté par la fiche B05-TP-02 ; destination [R] p.49, p.51 (§3) — non stockable au plan ; portée par la fiche B09-LL-01 |
 
 ### Calendrier prévisionnel (`t_marche_prevision`) — [H] §8 (lancement 09/10/2026, remise/ouverture 09/11/2026, attribution 10/12/2026, notification 28/01/2027) et §10 dernier alinéa (étapes intermédiaires en jours ouvrés) ; ⚠️ arbitrage du 26/09 : les étapes d'un jour (111, 119, 120, 121) finissent le jour ouvré suivant et 112 débute le 12/10, le serveur exigeant dateFin > dateDebut (ProcessusChronologie) — ancres du §8 intactes
 
 | Étape CAPM | Début | Fin | En base (id) |
 |---|---|---|---|
-| 101 | 2026-06-01 | 2026-06-15 | identique (4271) |
-| 102 | 2026-06-16 | 2026-06-30 | identique (4272) |
-| 103 | 2026-07-01 | 2026-07-07 | identique (4273) |
-| 104 | 2026-07-08 | 2026-08-28 | identique (4274) |
-| 106 | 2026-08-31 | 2026-09-02 | identique (4275) |
-| 107 | 2026-09-03 | 2026-09-17 | identique (4276) |
-| 108 | 2026-09-18 | 2026-09-22 | identique (4277) |
-| 109 | 2026-09-23 | 2026-09-25 | identique (4278) |
-| 110 | 2026-09-28 | 2026-10-08 | identique (4279) |
-| 111 | 2026-10-09 | 2026-10-12 | identique (4280) |
-| 112 | 2026-10-12 | 2026-11-09 | identique (4281) |
-| 113 | 2026-11-09 | 2026-11-10 | identique (4282) |
-| 114 | 2026-11-10 | 2026-11-18 | identique (4283) |
-| 115 | 2026-11-19 | 2026-11-20 | identique (4284) |
-| 116 | 2026-11-23 | 2026-11-25 | identique (4285) |
-| 117 | 2026-11-26 | 2026-11-27 | identique (4286) |
-| 118 | 2026-11-30 | 2026-12-04 | identique (4287) |
-| 119 | 2026-12-07 | 2026-12-08 | identique (4288) |
-| 120 | 2026-12-08 | 2026-12-09 | identique (4289) |
-| 121 | 2026-12-09 | 2026-12-10 | identique (4290) |
-| 123 | 2026-12-10 | 2026-12-11 | identique (4291) |
-| 124 | 2026-12-14 | 2026-12-15 | identique (4292) |
-| 125 | 2026-12-16 | 2027-01-08 | identique (4293) |
-| 126 | 2027-01-11 | 2027-01-15 | identique (4294) |
-| 127 | 2027-01-18 | 2027-01-22 | identique (4295) |
-| 128 | 2027-01-25 | 2027-01-27 | identique (4296) |
-| 129 | 2027-01-28 | 2027-01-29 | identique (4297) |
-| 130 | 2027-02-01 | 2028-01-31 | identique (4298) |
+| 101 | 2026-06-01 | 2026-06-15 | identique (4299) |
+| 102 | 2026-06-16 | 2026-06-30 | identique (4300) |
+| 103 | 2026-07-01 | 2026-07-07 | identique (4301) |
+| 104 | 2026-07-08 | 2026-08-28 | identique (4302) |
+| 106 | 2026-08-31 | 2026-09-02 | identique (4303) |
+| 107 | 2026-09-03 | 2026-09-17 | identique (4304) |
+| 108 | 2026-09-18 | 2026-09-22 | identique (4305) |
+| 109 | 2026-09-23 | 2026-09-25 | identique (4306) |
+| 110 | 2026-09-28 | 2026-10-08 | identique (4307) |
+| 111 | 2026-10-09 | 2026-10-12 | identique (4308) |
+| 112 | 2026-10-12 | 2026-11-09 | identique (4309) |
+| 113 | 2026-11-09 | 2026-11-10 | identique (4310) |
+| 114 | 2026-11-10 | 2026-11-18 | identique (4311) |
+| 115 | 2026-11-19 | 2026-11-20 | identique (4312) |
+| 116 | 2026-11-23 | 2026-11-25 | identique (4313) |
+| 117 | 2026-11-26 | 2026-11-27 | identique (4314) |
+| 118 | 2026-11-30 | 2026-12-04 | identique (4315) |
+| 119 | 2026-12-07 | 2026-12-08 | identique (4316) |
+| 120 | 2026-12-08 | 2026-12-09 | identique (4317) |
+| 121 | 2026-12-09 | 2026-12-10 | identique (4318) |
+| 123 | 2026-12-10 | 2026-12-11 | identique (4319) |
+| 124 | 2026-12-14 | 2026-12-15 | identique (4320) |
+| 125 | 2026-12-16 | 2027-01-08 | identique (4321) |
+| 126 | 2027-01-11 | 2027-01-15 | identique (4322) |
+| 127 | 2027-01-18 | 2027-01-22 | identique (4323) |
+| 128 | 2027-01-25 | 2027-01-27 | identique (4324) |
+| 129 | 2027-01-28 | 2027-01-29 | identique (4325) |
+| 130 | 2027-02-01 | 2028-01-31 | identique (4326) |
 
 ## 3. Circuit CNM du plan — [H] tout le circuit CNM (acteurs, dates du jour, textes, avis favorable et grille entièrement conforme) — le dossier ne dit rien de l'examen de son plan
 
 | Acte | Stockage | Valeur |
 |---|---|---|
-| Soumission | `t_dossier.DATE_SOUMISSION`, `SOUMIS_PAR` | 2026-09-26T17:33:40.527765 · LERAVO |
-| Réception | `t_reception` (id 1100078) | SECANT1 · 2026-09-26 · complet · « Dossier complet : plan de passation 2026 du MESupReS et fiche de présentation. » |
-| Dispatch | `t_dispatch` (id 28) | PRES001 → MEMANT1 · « Examen du plan de passation 2026 du MESupReS : ligne unique de matériels informatiques à commande, allotie en cinq lots. » |
+| Soumission | `t_dossier.DATE_SOUMISSION`, `SOUMIS_PAR` | 2026-09-26T18:43:33.229879 · LERAVO |
+| Réception | `t_reception` (id 1100079) | SECANT1 · 2026-09-26 · complet · « Dossier complet : plan de passation 2026 du MESupReS et fiche de présentation. » |
+| Dispatch | `t_dispatch` (id 29) | PRES001 → MEMANT1 · « Examen du plan de passation 2026 du MESupReS : ligne unique de matériels informatiques à commande, allotie en cinq lots. » |
 | Examen | `t_examen` (id 1), `t_examen_detail` | MEMANT1 · 12 points conformes · avis FAV |
-| PV | `t_pv_examen` (id 39) | 00001/PPM-AGPM/CNM/PV/2026 · SIGNE · visa PRES001 « Plan de passation conforme : avis favorable. » · co-signataire MEMANT2 |
+| PV | `t_pv_examen` (id 40) | 00001/PPM-AGPM/CNM/PV/2026 · SIGNE · visa PRES001 « Plan de passation conforme : avis favorable. » · co-signataire MEMANT2 |
 
 ## 4. Projet d'AGPM (dérivé, non persisté)
 
@@ -114,8 +114,8 @@ Généré par `rejouer-2463.mjs --etape 5` le 2026-09-26 depuis l'API (valeurs e
 
 | Fait | Stockage | Valeur en base | Nature |
 |---|---|---|---|
-| Référence du DAO | `t_dossier_mec.REFERENCE` (id 15) | — | serveur (compteur DMC) |
-| Version validée | `t_fiche_marche` (versions 1) | statut VALIDEE, version 1, validée le 2026-09-26T17:34:43.641022 | serveur |
+| Référence du DAO | `t_dossier_mec.REFERENCE` (id 16) | — | serveur (compteur DMC) |
+| Version validée | `t_fiche_marche` (versions 1) | statut VALIDEE, version 1, validée le 2026-09-26T18:43:38.442401 | serveur |
 | Informations importées du plan | `FicheMarcheDto.valeursPpm` | 23 clés : B01-AC-01, B01-AC-02, B01-AC-03, B01-AC-04, B01-AC-05, B01-AC-06, B01-AC-07, B01-AC-08, B01-AC-09, B01-AC-10, B01-AC-11, B01-AC-12, B01-AC-13, B01-AC-14, B01-AC-15, B01-AC-16, B01-AC-17, B01-AC-18, B01-AC-19, B02-LV-01, B02-LV-02, B02-LV-03, B02-OB-01 | [R] via le plan |
 
 ### Cadrage (`t_fiche_marche.CADRAGE`)
@@ -295,60 +295,60 @@ Bloquants : 0 · avertissements : 0 · ok : 28.
 
 | Type | Lot | Extension | Fichier | Octets |
 |---|---|---|---|---|
-| DPAO | — | docx | `DPAO_00001-PPM-AGPM-CNM-2026_303091_v1.docx` | 7947 |
-| DPAO | — | pdf | `DPAO_00001-PPM-AGPM-CNM-2026_303091_v1.pdf` | 9592 |
-| CCAP | — | docx | `CCAP_00001-PPM-AGPM-CNM-2026_303091_v1.docx` | 7104 |
-| CCAP | — | pdf | `CCAP_00001-PPM-AGPM-CNM-2026_303091_v1.pdf` | 7889 |
-| AE | 1 | docx | `AE_00001-PPM-AGPM-CNM-2026_303091_lot1_v1.docx` | 4915 |
-| AE | 1 | pdf | `AE_00001-PPM-AGPM-CNM-2026_303091_lot1_v1.pdf` | 4303 |
-| AE | 2 | docx | `AE_00001-PPM-AGPM-CNM-2026_303091_lot2_v1.docx` | 4932 |
-| AE | 2 | pdf | `AE_00001-PPM-AGPM-CNM-2026_303091_lot2_v1.pdf` | 4338 |
-| AE | 3 | docx | `AE_00001-PPM-AGPM-CNM-2026_303091_lot3_v1.docx` | 4911 |
-| AE | 3 | pdf | `AE_00001-PPM-AGPM-CNM-2026_303091_lot3_v1.pdf` | 4299 |
-| AE | 4 | docx | `AE_00001-PPM-AGPM-CNM-2026_303091_lot4_v1.docx` | 4930 |
-| AE | 4 | pdf | `AE_00001-PPM-AGPM-CNM-2026_303091_lot4_v1.pdf` | 4336 |
-| AE | 5 | docx | `AE_00001-PPM-AGPM-CNM-2026_303091_lot5_v1.docx` | 4910 |
-| AE | 5 | pdf | `AE_00001-PPM-AGPM-CNM-2026_303091_lot5_v1.pdf` | 4297 |
-| LF | — | docx | `LF_00001-PPM-AGPM-CNM-2026_303091_v1.docx` | 3505 |
-| LF | — | pdf | `LF_00001-PPM-AGPM-CNM-2026_303091_v1.pdf` | 3170 |
-| A1 | — | docx | `A1_00001-PPM-AGPM-CNM-2026_303091_v1.docx` | 4106 |
-| A1 | — | pdf | `A1_00001-PPM-AGPM-CNM-2026_303091_v1.pdf` | 3347 |
-| A2 | — | docx | `A2_00001-PPM-AGPM-CNM-2026_303091_v1.docx` | 3316 |
-| A2 | — | pdf | `A2_00001-PPM-AGPM-CNM-2026_303091_v1.pdf` | 1762 |
-| A3 | — | docx | `A3_00001-PPM-AGPM-CNM-2026_303091_v1.docx` | 4163 |
-| A3 | — | pdf | `A3_00001-PPM-AGPM-CNM-2026_303091_v1.pdf` | 3826 |
-| A4 | — | docx | `A4_00001-PPM-AGPM-CNM-2026_303091_v1.docx` | 3192 |
-| A4 | — | pdf | `A4_00001-PPM-AGPM-CNM-2026_303091_v1.pdf` | 1497 |
-| C1 | 1 | docx | `C1_00001-PPM-AGPM-CNM-2026_303091_lot1_v1.docx` | 4017 |
-| C1 | 1 | pdf | `C1_00001-PPM-AGPM-CNM-2026_303091_lot1_v1.pdf` | 2536 |
-| C1 | 2 | docx | `C1_00001-PPM-AGPM-CNM-2026_303091_lot2_v1.docx` | 4026 |
-| C1 | 2 | pdf | `C1_00001-PPM-AGPM-CNM-2026_303091_lot2_v1.pdf` | 2542 |
-| C1 | 3 | docx | `C1_00001-PPM-AGPM-CNM-2026_303091_lot3_v1.docx` | 4017 |
-| C1 | 3 | pdf | `C1_00001-PPM-AGPM-CNM-2026_303091_lot3_v1.pdf` | 2536 |
-| C1 | 4 | docx | `C1_00001-PPM-AGPM-CNM-2026_303091_lot4_v1.docx` | 4026 |
-| C1 | 4 | pdf | `C1_00001-PPM-AGPM-CNM-2026_303091_lot4_v1.pdf` | 2542 |
-| C1 | 5 | docx | `C1_00001-PPM-AGPM-CNM-2026_303091_lot5_v1.docx` | 4017 |
-| C1 | 5 | pdf | `C1_00001-PPM-AGPM-CNM-2026_303091_lot5_v1.pdf` | 2536 |
-| C2 | 1 | docx | `C2_00001-PPM-AGPM-CNM-2026_303091_lot1_v1.docx` | 4264 |
-| C2 | 1 | pdf | `C2_00001-PPM-AGPM-CNM-2026_303091_lot1_v1.pdf` | 2786 |
-| C2 | 2 | docx | `C2_00001-PPM-AGPM-CNM-2026_303091_lot2_v1.docx` | 4278 |
-| C2 | 2 | pdf | `C2_00001-PPM-AGPM-CNM-2026_303091_lot2_v1.pdf` | 2795 |
-| C2 | 3 | docx | `C2_00001-PPM-AGPM-CNM-2026_303091_lot3_v1.docx` | 4264 |
-| C2 | 3 | pdf | `C2_00001-PPM-AGPM-CNM-2026_303091_lot3_v1.pdf` | 2786 |
-| C2 | 4 | docx | `C2_00001-PPM-AGPM-CNM-2026_303091_lot4_v1.docx` | 4278 |
-| C2 | 4 | pdf | `C2_00001-PPM-AGPM-CNM-2026_303091_lot4_v1.pdf` | 2795 |
-| C2 | 5 | docx | `C2_00001-PPM-AGPM-CNM-2026_303091_lot5_v1.docx` | 4264 |
-| C2 | 5 | pdf | `C2_00001-PPM-AGPM-CNM-2026_303091_lot5_v1.pdf` | 2786 |
-| BP | 1 | xlsx | `BP_00001-PPM-AGPM-CNM-2026_303091_lot1_v1.xlsx` | 4152 |
-| BP | 2 | xlsx | `BP_00001-PPM-AGPM-CNM-2026_303091_lot2_v1.xlsx` | 4186 |
-| BP | 3 | xlsx | `BP_00001-PPM-AGPM-CNM-2026_303091_lot3_v1.xlsx` | 4225 |
-| BP | 4 | xlsx | `BP_00001-PPM-AGPM-CNM-2026_303091_lot4_v1.xlsx` | 4184 |
-| BP | 5 | xlsx | `BP_00001-PPM-AGPM-CNM-2026_303091_lot5_v1.xlsx` | 4225 |
-| TC | 1 | xlsx | `TC_00001-PPM-AGPM-CNM-2026_303091_lot1_v1.xlsx` | 4615 |
-| TC | 2 | xlsx | `TC_00001-PPM-AGPM-CNM-2026_303091_lot2_v1.xlsx` | 4755 |
-| TC | 3 | xlsx | `TC_00001-PPM-AGPM-CNM-2026_303091_lot3_v1.xlsx` | 4540 |
-| TC | 4 | xlsx | `TC_00001-PPM-AGPM-CNM-2026_303091_lot4_v1.xlsx` | 4754 |
-| TC | 5 | xlsx | `TC_00001-PPM-AGPM-CNM-2026_303091_lot5_v1.xlsx` | 4543 |
+| DPAO | — | docx | `DPAO_00001-PPM-AGPM-CNM-2026_303092_v1.docx` | 7944 |
+| DPAO | — | pdf | `DPAO_00001-PPM-AGPM-CNM-2026_303092_v1.pdf` | 9594 |
+| CCAP | — | docx | `CCAP_00001-PPM-AGPM-CNM-2026_303092_v1.docx` | 7103 |
+| CCAP | — | pdf | `CCAP_00001-PPM-AGPM-CNM-2026_303092_v1.pdf` | 7889 |
+| AE | 1 | docx | `AE_00001-PPM-AGPM-CNM-2026_303092_lot1_v1.docx` | 4914 |
+| AE | 1 | pdf | `AE_00001-PPM-AGPM-CNM-2026_303092_lot1_v1.pdf` | 4303 |
+| AE | 2 | docx | `AE_00001-PPM-AGPM-CNM-2026_303092_lot2_v1.docx` | 4931 |
+| AE | 2 | pdf | `AE_00001-PPM-AGPM-CNM-2026_303092_lot2_v1.pdf` | 4338 |
+| AE | 3 | docx | `AE_00001-PPM-AGPM-CNM-2026_303092_lot3_v1.docx` | 4910 |
+| AE | 3 | pdf | `AE_00001-PPM-AGPM-CNM-2026_303092_lot3_v1.pdf` | 4299 |
+| AE | 4 | docx | `AE_00001-PPM-AGPM-CNM-2026_303092_lot4_v1.docx` | 4929 |
+| AE | 4 | pdf | `AE_00001-PPM-AGPM-CNM-2026_303092_lot4_v1.pdf` | 4336 |
+| AE | 5 | docx | `AE_00001-PPM-AGPM-CNM-2026_303092_lot5_v1.docx` | 4910 |
+| AE | 5 | pdf | `AE_00001-PPM-AGPM-CNM-2026_303092_lot5_v1.pdf` | 4297 |
+| LF | — | docx | `LF_00001-PPM-AGPM-CNM-2026_303092_v1.docx` | 3505 |
+| LF | — | pdf | `LF_00001-PPM-AGPM-CNM-2026_303092_v1.pdf` | 3170 |
+| A1 | — | docx | `A1_00001-PPM-AGPM-CNM-2026_303092_v1.docx` | 4106 |
+| A1 | — | pdf | `A1_00001-PPM-AGPM-CNM-2026_303092_v1.pdf` | 3347 |
+| A2 | — | docx | `A2_00001-PPM-AGPM-CNM-2026_303092_v1.docx` | 3316 |
+| A2 | — | pdf | `A2_00001-PPM-AGPM-CNM-2026_303092_v1.pdf` | 1762 |
+| A3 | — | docx | `A3_00001-PPM-AGPM-CNM-2026_303092_v1.docx` | 4163 |
+| A3 | — | pdf | `A3_00001-PPM-AGPM-CNM-2026_303092_v1.pdf` | 3827 |
+| A4 | — | docx | `A4_00001-PPM-AGPM-CNM-2026_303092_v1.docx` | 3192 |
+| A4 | — | pdf | `A4_00001-PPM-AGPM-CNM-2026_303092_v1.pdf` | 1497 |
+| C1 | 1 | docx | `C1_00001-PPM-AGPM-CNM-2026_303092_lot1_v1.docx` | 4017 |
+| C1 | 1 | pdf | `C1_00001-PPM-AGPM-CNM-2026_303092_lot1_v1.pdf` | 2536 |
+| C1 | 2 | docx | `C1_00001-PPM-AGPM-CNM-2026_303092_lot2_v1.docx` | 4026 |
+| C1 | 2 | pdf | `C1_00001-PPM-AGPM-CNM-2026_303092_lot2_v1.pdf` | 2542 |
+| C1 | 3 | docx | `C1_00001-PPM-AGPM-CNM-2026_303092_lot3_v1.docx` | 4017 |
+| C1 | 3 | pdf | `C1_00001-PPM-AGPM-CNM-2026_303092_lot3_v1.pdf` | 2536 |
+| C1 | 4 | docx | `C1_00001-PPM-AGPM-CNM-2026_303092_lot4_v1.docx` | 4026 |
+| C1 | 4 | pdf | `C1_00001-PPM-AGPM-CNM-2026_303092_lot4_v1.pdf` | 2542 |
+| C1 | 5 | docx | `C1_00001-PPM-AGPM-CNM-2026_303092_lot5_v1.docx` | 4017 |
+| C1 | 5 | pdf | `C1_00001-PPM-AGPM-CNM-2026_303092_lot5_v1.pdf` | 2536 |
+| C2 | 1 | docx | `C2_00001-PPM-AGPM-CNM-2026_303092_lot1_v1.docx` | 4264 |
+| C2 | 1 | pdf | `C2_00001-PPM-AGPM-CNM-2026_303092_lot1_v1.pdf` | 2786 |
+| C2 | 2 | docx | `C2_00001-PPM-AGPM-CNM-2026_303092_lot2_v1.docx` | 4278 |
+| C2 | 2 | pdf | `C2_00001-PPM-AGPM-CNM-2026_303092_lot2_v1.pdf` | 2795 |
+| C2 | 3 | docx | `C2_00001-PPM-AGPM-CNM-2026_303092_lot3_v1.docx` | 4264 |
+| C2 | 3 | pdf | `C2_00001-PPM-AGPM-CNM-2026_303092_lot3_v1.pdf` | 2786 |
+| C2 | 4 | docx | `C2_00001-PPM-AGPM-CNM-2026_303092_lot4_v1.docx` | 4278 |
+| C2 | 4 | pdf | `C2_00001-PPM-AGPM-CNM-2026_303092_lot4_v1.pdf` | 2795 |
+| C2 | 5 | docx | `C2_00001-PPM-AGPM-CNM-2026_303092_lot5_v1.docx` | 4264 |
+| C2 | 5 | pdf | `C2_00001-PPM-AGPM-CNM-2026_303092_lot5_v1.pdf` | 2786 |
+| BP | 1 | xlsx | `BP_00001-PPM-AGPM-CNM-2026_303092_lot1_v1.xlsx` | 4152 |
+| BP | 2 | xlsx | `BP_00001-PPM-AGPM-CNM-2026_303092_lot2_v1.xlsx` | 4187 |
+| BP | 3 | xlsx | `BP_00001-PPM-AGPM-CNM-2026_303092_lot3_v1.xlsx` | 4226 |
+| BP | 4 | xlsx | `BP_00001-PPM-AGPM-CNM-2026_303092_lot4_v1.xlsx` | 4185 |
+| BP | 5 | xlsx | `BP_00001-PPM-AGPM-CNM-2026_303092_lot5_v1.xlsx` | 4226 |
+| TC | 1 | xlsx | `TC_00001-PPM-AGPM-CNM-2026_303092_lot1_v1.xlsx` | 4616 |
+| TC | 2 | xlsx | `TC_00001-PPM-AGPM-CNM-2026_303092_lot2_v1.xlsx` | 4756 |
+| TC | 3 | xlsx | `TC_00001-PPM-AGPM-CNM-2026_303092_lot3_v1.xlsx` | 4541 |
+| TC | 4 | xlsx | `TC_00001-PPM-AGPM-CNM-2026_303092_lot4_v1.xlsx` | 4755 |
+| TC | 5 | xlsx | `TC_00001-PPM-AGPM-CNM-2026_303092_lot5_v1.xlsx` | 4544 |
 
 ## 7. Paramètres
 
