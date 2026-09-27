@@ -96,22 +96,23 @@ public class MarcheService {
             scopees = localite == null ? org.springframework.data.domain.Page.empty(page)
                     : repository.findVisiblesParLocalitePagine(localite, page);
         }
-        return scopees.map(MarcheMapper::toDto);
+        java.util.Map<Integer, Long> dmcs = dmcService.dmcParOrigine();
+        return scopees.map(m -> avecDmc(m, dmcs));
     }
 
     @Transactional(readOnly = true)
     public List<MarcheDto> findAll() {
+        List<Marche> scopees;
         if (Visibilite.voitTout()) {
-            return repository.findAll().stream().map(MarcheMapper::toDto).toList();
-        }
-        if (Visibilite.estPrmp()) {
+            scopees = repository.findAll();
+        } else if (Visibilite.estPrmp()) {
             String idPrmp = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
-            return idPrmp == null ? List.of()
-                    : repository.findVisiblesPourPrmp(idPrmp).stream().map(MarcheMapper::toDto).toList();
+            scopees = idPrmp == null ? List.of() : repository.findVisiblesPourPrmp(idPrmp);
+        } else {
+            scopees = Visibilite.localite().map(repository::findVisiblesParLocalite).orElseGet(List::of);
         }
-        return Visibilite.localite()
-                .map(loc -> repository.findVisiblesParLocalite(loc).stream().map(MarcheMapper::toDto).toList())
-                .orElseGet(List::of);
+        java.util.Map<Integer, Long> dmcs = dmcService.dmcParOrigine();
+        return scopees.stream().map(m -> avecDmc(m, dmcs)).toList();
     }
 
     @Transactional(readOnly = true)
@@ -119,7 +120,49 @@ public class MarcheService {
         Marche entity = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Marche introuvable : " + id));
         controlerVisibilite(entity);
-        return MarcheMapper.toDto(entity);
+        return avecDmc(entity);
+    }
+
+    /** ⚠️ 2026-09-27 (statut « Lancé », §B4) — le DTO d'une ligne avec son DMC vivant ({@code idDmc}, nul sans DAO). */
+    private MarcheDto avecDmc(Marche entity) {
+        MarcheDto dto = MarcheMapper.toDto(entity);
+        dto.setIdDmc(dmcService.idDmcVivant(entity));
+        return dto;
+    }
+
+    private static MarcheDto avecDmc(Marche entity, java.util.Map<Integer, Long> dmcParOrigine) {
+        MarcheDto dto = MarcheMapper.toDto(entity);
+        dto.setIdDmc(dmcParOrigine.get(entity.getIdLigneOrigine()));
+        return dto;
+    }
+
+    /**
+     * ⚠️ 2026-09-27 (règle du pilote, demande front « statut Lancé », §B3) — le statut demandé, validé par le
+     * référentiel, puis confronté au dossier de mise en concurrence <strong>vivant</strong> de la ligne : une ligne en
+     * mise en concurrence <strong>ne redevient pas « Prévu » à la main</strong> (400 nominatif {@code statut}) ; un
+     * statut absent la laisse telle qu'elle est (un réimport du plan ne la ramène pas à « Prévu ») ; une ligne restée
+     * « Prévu » d'avant la règle se ré-enregistre telle quelle (on ne cache jamais la valeur affichée). {@code CHDP} et
+     * {@code DSS} restent libres.
+     */
+    private String statutCompatibleAvecDmc(Marche existing, String demande) {
+        String code = statutMarcheService.normaliser(demande);
+        if (!StatutMarcheService.CODE_DEFAUT.equalsIgnoreCase(code)) {
+            return code;
+        }
+        Long idDmc = dmcService.idDmcVivant(existing);
+        if (idDmc == null) {
+            return code;
+        }
+        String actuel = existing.getStatut() == null ? "" : existing.getStatut().trim();
+        if (demande == null || demande.isBlank()) {
+            return actuel.isEmpty() ? StatutMarcheService.CODE_LANCE : actuel;   // absent = inchangé sur une ligne lancée
+        }
+        if (StatutMarcheService.CODE_DEFAUT.equalsIgnoreCase(actuel)) {
+            return code;   // restée « Prévu » avant la règle (ou avant le rattrapage) : se ré-enregistre
+        }
+        throw new cnm.prs.exception.ChampsInvalidesException(List.of(new cnm.prs.exception.ErrorResponse.FieldError("statut",
+                "La ligne est en mise en concurrence (dossier de mise en concurrence n° " + idDmc + ") : elle ne redevient pas "
+                        + "« Prévu ». Supprimez la fiche DAO pour la rendre préparable.")));
     }
 
     /**
@@ -155,7 +198,7 @@ public class MarcheService {
         entity.setStatut(statutMarcheService.normaliser(dto.getStatut()));
         entity.setIdDetail(repository.nextIdMarche().intValue());   // PK serveur (séquence) ; id client ignoré
         // Mode = celui saisi (PRMP/import) ; plus de détermination automatique (t_situation/t_regle/t_seuil retirés).
-        MarcheDto resultat = MarcheMapper.toDto(repository.save(entity));
+        MarcheDto resultat = avecDmc(repository.save(entity));
         dossierIntegrite.recalculerSousTypeDdp(dto.getIdDossier());   // sous-type PPM / PPM-AGPM (dérivé des marchés)
         return resultat;
     }
@@ -167,6 +210,8 @@ public class MarcheService {
         dossierIntegrite.exigerModifiablePourEditionPpm(existing.getIdDossier());
         // ⚠️ Verrou optimiste HTTP (plan §3) : version périmée → 409 CONFLIT_VERSION, avant toute écriture.
         VerrouOptimiste.exigerVersionCourante(dto.getVersion(), existing.getVersion());
+        // ⚠️ 2026-09-27 (statut « Lancé », §B3) — validé AVANT toute mutation : un 400 ne laisse pas d'entité sale.
+        String statut = statutCompatibleAvecDmc(existing, dto.getStatut());
 
         existing.setIdDossier(dto.getIdDossier());
         existing.setIdPpm(dto.getIdPpm());
@@ -176,7 +221,7 @@ public class MarcheService {
         existing.setAncienMontEstim(dto.getAncienMontEstim());
         existing.setNouvMontEstim(dto.getNouvMontEstim());
         existing.setFinancement(dto.getFinancement());
-        existing.setStatut(statutMarcheService.normaliser(dto.getStatut()));
+        existing.setStatut(statut);   // ⚠️ 2026-09-27 — pas de retour à « Prévu » en mise en concurrence
         existing.setIdNature(dto.getIdNature());
         existing.setIdMode(dto.getIdMode());   // mode choisi (saisie manuelle)
         existing.setFormeMarche(FormeMarche.depuisCodeOuDefaut(dto.getFormeMarche()));
@@ -194,7 +239,7 @@ public class MarcheService {
         }
         // ⚠️ saveAndFlush : l'incrément de @Version se fait au flush — sans lui la réponse rendrait
         // l'ancienne version et le client re-conflicterait au PUT suivant (cf. plan §4).
-        MarcheDto resultat = MarcheMapper.toDto(repository.saveAndFlush(existing));
+        MarcheDto resultat = avecDmc(repository.saveAndFlush(existing));   // V50 bis : idDmc servi aussi en réponse d'écriture
         // Si le mode a changé et qu'un DMC A_PREPARER existe, re-dériver son type.
         dmcService.reAffecterTypeSiApreparer(id);
         dossierIntegrite.recalculerSousTypeDdp(existing.getIdDossier());   // le mode a pu (dé)clencher l'AGPM
@@ -211,6 +256,7 @@ public class MarcheService {
         Marche existing = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Marche introuvable : " + id));
         dossierIntegrite.exigerEnAttenteDecisionPrmpModifiable(existing.getIdDossier());
+        String statut = statutCompatibleAvecDmc(existing, dto.getStatut());   // ⚠️ 2026-09-27 — validé avant toute mutation
         // Identité figée : idDossier, idPpm conservés ; seul le contenu est modifié.
         existing.setDesignationMarche(dto.getDesignationMarche());
         existing.setNumCompte(dto.getNumCompte());
@@ -218,7 +264,7 @@ public class MarcheService {
         existing.setAncienMontEstim(dto.getAncienMontEstim());
         existing.setNouvMontEstim(dto.getNouvMontEstim());
         existing.setFinancement(dto.getFinancement());
-        existing.setStatut(statutMarcheService.normaliser(dto.getStatut()));
+        existing.setStatut(statut);   // ⚠️ 2026-09-27 — pas de retour à « Prévu » en mise en concurrence
         existing.setIdNature(dto.getIdNature());
         existing.setIdMode(dto.getIdMode());   // mode choisi (saisie manuelle)
         existing.setFormeMarche(FormeMarche.depuisCodeOuDefaut(dto.getFormeMarche()));
@@ -238,7 +284,7 @@ public class MarcheService {
         auditLogService.enregistrer(CurrentUser.ref().orElse(null), "t_marche",
                 String.valueOf(id), "MODIFICATION_RECTIFICATION", null);
         dossierIntegrite.recalculerSousTypeDdp(saved.getIdDossier());   // le mode a pu (dé)clencher l'AGPM
-        return MarcheMapper.toDto(saved);
+        return avecDmc(saved);
     }
 
     public void delete(Integer id) {
@@ -265,7 +311,7 @@ public class MarcheService {
         Marche entity = MarcheMapper.toEntity(dto);
         entity.setStatut(statutMarcheService.normaliser(dto.getStatut()));   // ⚠️ 2026-09-09 — code du référentiel
         entity.setIdDetail(repository.nextIdMarche().intValue());   // PK serveur (séquence) ; id client ignoré
-        MarcheDto resultat = MarcheMapper.toDto(repository.save(entity));
+        MarcheDto resultat = avecDmc(repository.save(entity));
         auditLogService.enregistrer(CurrentUser.ref().orElse(null), "t_marche",
                 String.valueOf(resultat.getIdDetail()), "CREATION_RECTIFICATION", null);
         dossierIntegrite.recalculerSousTypeDdp(dto.getIdDossier());   // le mode a pu (dé)clencher l'AGPM

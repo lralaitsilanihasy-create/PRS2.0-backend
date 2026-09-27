@@ -68,6 +68,13 @@ public class JournalDossierService {
      */
     public static final String FICHE_MARCHE_SUPPRIMEE = "FICHE_MARCHE_SUPPRIMEE";
     /**
+     * ⚠️ 2026-09-27 (règle du pilote, demande front « statut Lancé », §B1) — sur le plan : le dossier de mise en
+     * concurrence d'une ligne a été créé ; la ligne restée « Prévu » passe « Lancé », un statut manuel (changement de
+     * projet, déclaré sans suite) est conservé et la ligne du journal le dit. Détail « Ligne n : DMC m créé, statut
+     * PREVU → LANCE » ou « … statut CHDP conservé (statut manuel) ». Acte PRMP / UGPM, ou Administrateur.
+     */
+    public static final String LIGNE_LANCEE = "LIGNE_LANCEE";
+    /**
      * ⚠️ Fiche marché, lot 1b (demande front du 2026-09-23, §B2/§B3) — sur le <strong>dossier soumis</strong> (pas sur
      * le plan) : il est né d'une fiche validée ({@code DOSSIER_CREE_DEPUIS_FICHE}, détail « fiche marché version n,
      * N information(s) », à la suite de sa {@code CREATION}), une fiche lui a été rattachée en secours, ou détachée

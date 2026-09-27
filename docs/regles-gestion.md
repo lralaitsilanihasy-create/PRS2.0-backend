@@ -2628,6 +2628,21 @@ Accès complet aux référentiels, comptes utilisateurs, journal d'audit, hiéra
   - **Pas de clé étrangère** sur `t_marche.STATUT`, volontairement : la validation est applicative pour
     que le refus soit un message lisible, et non une violation de contrainte remontée telle quelle. La
     donnée s'y prêterait (seul `PREVU` est présent) ; le verrou SGBD reste posable si le pilote le veut.
+  - ⚠️ **Le statut suit le fait (règle du pilote du 2026-09-27 : « lorsque la ligne du PPM est en phase de
+    création de dossier de mise en concurrence, son statut doit être en lancé »).** Le geste qui ouvre la mise
+    en concurrence — la création du dossier de mise en concurrence, par la PRMP, son UGPM ou l'Administrateur —
+    pose **`LANCE`** sur la ligne restée « Prévu » ; le geste qui la referme — la suppression de la fiche et de
+    son DMC, qui rend la ligne préparable — rend **`PREVU`**, sur toute la filiation de la ligne. Les deux statuts
+    manuels (changement de projet, déclaré sans suite) restent à la main de la PRMP dans les deux états et ne
+    sont jamais écrasés : la création du DMC sur une ligne « changement de projet » reste possible (relancer un
+    projet changé), le statut est conservé et la réponse comme le journal le disent. **Une ligne en mise en
+    concurrence ne redevient pas « Prévu » à la main** (400 nominatif, en saisie comme en rectification, la façade
+    comprise) ; un statut absent la laisse telle qu'elle est — un réimport du plan ne la ramène pas à « Prévu » ;
+    une ligne restée « Prévu » d'avant la règle se ré-enregistre telle quelle, parce qu'on ne cache jamais la valeur
+    affichée. La mise à jour du plan recopie « Lancé » sur la ligne recopiée : la nouvelle version ne fait pas
+    oublier la mise en concurrence. La ligne dit au front son dossier de mise en concurrence vivant (`idDmc`) ; la
+    grille n'a rien à déduire. Journal du plan : `LIGNE_LANCEE`. Contrat : `docs/api-endpoints.md`, § *Marchés* et
+    § *Dossiers de mise en concurrence*.
 - Grilles de contrôle & règles d'anomalie [Écriture]
   - Configuration de tr_points_ctrl et t_regle_anomalie.
 - Comptes budgétaires & entités contractantes [Écriture]

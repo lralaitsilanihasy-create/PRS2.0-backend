@@ -4425,7 +4425,8 @@ le titulaire), aVenir: InterimDto[] (A_VENIR, titulaire ou intérimaire) }`.
 | ancienMontEstim | number | Non | mêmes bornes que `montEstim` — **400** sinon |
 | nouvMontEstim | number | Non | mêmes bornes que `montEstim` — **400** sinon |
 | financement | string | Non | max 20 |
-| statut | string | Non | max 20 |
+| statut | string | Non | max 20 — code de `tr_statut_marche` (absent → `PREVU`) ; ⚠️ **2026-09-27 (règle du pilote, statut « Lancé »)** : posé **`LANCE` par le serveur** à la création du dossier de mise en concurrence de la ligne, rendu `PREVU` à la suppression de sa fiche ; sur une ligne dont la filiation porte un DMC vivant, **`PREVU` envoyé → 400 nominatif** `[{ champ: "statut", message: "La ligne est en mise en concurrence (dossier de mise en concurrence n° m) : elle ne redevient pas « Prévu ». Supprimez la fiche DAO pour la rendre préparable." }]` (`PUT` et `PATCH …/rectifier`, la façade `PUT /api/saisies/ppm/{id}` comprise) ; **absent** sur une telle ligne = **inchangé** (un réimport ne la ramène pas à « Prévu ») ; une ligne restée `PREVU` d'avant la règle se ré-enregistre telle quelle ; `CHDP` / `DSS` libres |
+| idDmc | number \| null | — (lecture seule) | ⚠️ **2026-09-27** — le dossier de mise en concurrence **vivant** de la ligne, porté par sa **filiation** (`ID_LIGNE_ORIGINE`, sur cette version du plan ou une précédente) ; `null` sans DAO. Servi en liste (une requête), en page et à l'unité ; ignoré en entrée |
 | idNature | number | Non | nature du marché |
 | idMode | number | Non | mode de passation **saisi** (PRMP/import), conservé tel quel — FK `tr_mode` |
 | version | number | Non | verrou optimiste (`@Version` JPA, ⚠️ 2026-08-27) — toujours renseigné en sortie ; en entrée de `PUT`, absent = comportement historique, périmé = **409** `CONFLIT_VERSION` (détail en tête de document, *Verrou optimiste — champ `version`*) |
@@ -4597,6 +4598,17 @@ pour le même marché → **409** `DAO_EXISTANT`. Au **changement de mode** d'un
 > version du plan ou une précédente). Le type posé est `DAO` (semé par **V35**, `INSERT … WHERE NOT EXISTS` ; le
 > rattachement des modes de passation à ce type reste l'acte de l'Administrateur). La réponse porte **`valeursPpm`**
 > et **`versionPpm`** (voir *Fiche marché*).
+
+> ⚠️ **2026-09-27 — la ligne passe à « Lancé »** (règle du pilote, demande front
+> `frontend/docs/demande-backend-2026-09-27-statut-lance-dmc.md`). Dans la même transaction que la création du DMC,
+> **quel que soit le créateur** (PRMP, UGPM, Administrateur) : la ligne `PREVU` (ou sans statut) passe **`LANCE`** ; un
+> statut manuel (`CHDP`, `DSS`) **n'est pas écrasé** — la création reste possible (relancer un projet changé). La réponse
+> le dit : **`DmcDto.statutLigne`** = le statut de la ligne après la création. Journal du plan : **`LIGNE_LANCEE`**,
+> « Ligne n : DMC m créé, statut PREVU → LANCE » ou « … statut CHDP conservé (statut manuel) » (acte PRMP / UGPM, ou
+> contrôleur pour l'Administrateur). Si le code `LANCE` avait disparu du référentiel (seul `PREVU` est indestructible),
+> il est **remis** (« Lancé », ordre 11, actif) pour que la ligne se ré-enregistre ensuite. Le geste inverse — la
+> suppression de la fiche et de son DMC — rend `PREVU` à toute la filiation `LANCE` (§ *Défaire une fiche marché*).
+> Rattrapage des lignes d'avant la règle : `docs/referentiel/2026-09-27-statut-lance-dmc.sql`.
 
 **Champs `DmcDto`** : `idDmc`, `idDetail`, `idTypeDmc`, `typeDmcCode`/`typeDmcLibelle` (dérivés, lecture seule),
 `reference` (nullable), `statut` (`A_PREPARER`/`ENGAGE`), `dateCreation` ; ⚠️ 2026-09-22 sur la réponse du `POST`
@@ -4808,6 +4820,9 @@ version validée plus tôt, révision ouverte) ; 409 **`FICHE_AVEC_DOCUMENTS`** 
 supprime aussi). Journal du plan : **`FICHE_MARCHE_SUPPRIMEE`**, « DAO de la ligne n (DMC m) supprimé, sans
 historique ». `DELETE /api/dmcs/{id}` reste non servi (405). Une fiche **qui a de l'histoire** ne se supprime pas et
 ne s'abandonne pas : la révision est le geste prévu (§B2, arbitré par le pilote le 26/09 ; pas de statut abandonné).
+⚠️ **2026-09-27 (statut « Lancé », §B2)** : la suppression rend **`PREVU`** à toute ligne **`LANCE`** de la filiation de
+la ligne du DMC (la copie d'une version en cours aussi) ; un statut manuel (`CHDP`, `DSS`) reste tel quel ; le détail du
+journal s'achève alors par « ; statut rendu à PREVU (ligne n) ».
 
 ### Le besoin par lot et les formulaires du candidat ⚠️ 2026-09-25 (V45)
 
@@ -5541,6 +5556,11 @@ Liste triée par `ordre` puis `code` ; `ordre` absent se range en dernier ; `act
 >   est présent) — à poser si le pilote veut le verrou au niveau du SGBD.
 > - Effet de bord assumé : une écriture sans statut ne laisse plus la colonne à `null`. Les deux lignes
 >   nulles en base prendront `PREVU` à leur prochaine édition.
+> - ⚠️ **2026-09-27 — `LANCE` est posé par le serveur**, jamais à la main : à la création du dossier de mise en
+>   concurrence de la ligne (§ *Dossiers de mise en concurrence*), et `PREVU` est rendu à la suppression de la fiche.
+>   Une ligne dont la filiation porte un DMC vivant **ne redevient pas `PREVU`** par `PUT` / `PATCH` (400 nominatif
+>   `statut`, § *Marchés*) ; `CHDP` et `DSS` restent à la main de la PRMP. Si `LANCE` est retiré du référentiel, la
+>   prochaine création de DMC le remet.
 
 ---
 

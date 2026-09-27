@@ -38,6 +38,12 @@ public class StatutMarcheService {
      * qu'il désigne toujours une valeur du référentiel.</p>
      */
     public static final String CODE_DEFAUT = "PREVU";
+    /**
+     * ⚠️ 2026-09-27 (règle du pilote, demande front « statut Lancé ») — le statut que le serveur pose à la création du
+     * dossier de mise en concurrence d'une ligne restée {@code PREVU} : « lorsque la ligne du PPM est en phase de
+     * création de dossier de mise en concurrence, son statut doit être en lancé ». Semé par V24, jamais posé à la main.
+     */
+    public static final String CODE_LANCE = "LANCE";
 
     private final StatutMarcheRepository repository;
 

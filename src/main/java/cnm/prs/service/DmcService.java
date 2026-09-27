@@ -131,11 +131,19 @@ public class DmcService {
     /** ⚠️ Lot 5 (2026-09-24) — la catégorie d'une ligne se lit sur sa nature ({@code tr_nature.CATEGORIE_DAO}). */
     private final cnm.prs.repository.NatureRepository natureRepository;
 
+    /** ⚠️ 2026-09-27 (statut « Lancé ») — le journal du plan reçoit la création du DMC et le statut de la ligne. */
+    private final JournalDossierService journal;
+    /** ⚠️ 2026-09-27 — le référentiel des statuts : LANCE y est remis s'il en avait disparu (seul PREVU est indestructible). */
+    private final cnm.prs.repository.StatutMarcheRepository statutMarcheRepository;
+
     public DmcService(DossierMecRepository repository, MarcheRepository marcheRepository,
             ModePassationRepository modeRepository, TypeDmcRepository typeDmcRepository,
             PerimetreDossier perimetre, DossierRepository dossierRepository,
             DossierIntegriteService dossierIntegrite, ValeursPpmService valeursPpm,
-            ChampFicheMarcheRepository champRepository, cnm.prs.repository.NatureRepository natureRepository) {
+            ChampFicheMarcheRepository champRepository, cnm.prs.repository.NatureRepository natureRepository,
+            JournalDossierService journal, cnm.prs.repository.StatutMarcheRepository statutMarcheRepository) {
+        this.journal = journal;
+        this.statutMarcheRepository = statutMarcheRepository;
         this.natureRepository = natureRepository;
         this.repository = repository;
         this.marcheRepository = marcheRepository;
@@ -188,7 +196,32 @@ public class DmcService {
         dmc.setDateCreation(LocalDateTime.now());
         DossierMec saved = repository.save(dmc);
         saved.setTypeDmc(type);   // pour l'affichage code/libellé (association lecture seule)
+        // ⚠️ 2026-09-27 (règle du pilote, demande front « statut Lancé », §B1) — le statut suit le fait : la ligne
+        // restée « Prévu » (ou sans statut) passe LANCE dans la même transaction ; un statut manuel (CHDP, DSS) n'est
+        // pas écrasé — la création reste possible (relancer un projet changé), la réponse et le journal le disent.
+        String avant = marche.getStatut() == null ? "" : marche.getStatut().trim();
+        boolean prevu = avant.isEmpty() || StatutMarcheService.CODE_DEFAUT.equalsIgnoreCase(avant);
+        if (prevu) {
+            if (!statutMarcheRepository.existsById(StatutMarcheService.CODE_LANCE)) {
+                // Le code doit exister pour que la ligne se ré-enregistre ensuite (normaliser refuse un code inconnu) :
+                // remis tel que V24 / le référentiel de recette le portent.
+                statutMarcheRepository.save(new cnm.prs.entity.StatutMarche(StatutMarcheService.CODE_LANCE, "Lancé", 11, true));
+            }
+            marche.setStatut(StatutMarcheService.CODE_LANCE);
+            marcheRepository.save(marche);
+        }
+        if (marche.getIdDossier() != null) {
+            String detail = "Ligne " + idDetail + " : DMC " + saved.getIdDmc() + " créé, statut "
+                    + (prevu ? (avant.isEmpty() ? "(vide)" : avant) + " → " + StatutMarcheService.CODE_LANCE
+                            : avant + " conservé (statut manuel)");
+            if (Visibilite.estPrmp()) {
+                journal.tracer(marche.getIdDossier(), JournalDossierService.LIGNE_LANCEE, detail);
+            } else {
+                journal.tracerControleur(marche.getIdDossier(), JournalDossierService.LIGNE_LANCEE, detail);
+            }
+        }
         DmcDto dto = DmcMapper.toDto(saved);
+        dto.setStatutLigne(marche.getStatut());
         ValeursPpmService.ValeursPpm ppm = valeursPpm.lire(idDetail);
         // Clé = code du champ de source PPM (comme sur la fiche), valeur telle qu'affichée.
         Map<String, String> parCode = new java.util.TreeMap<>();
@@ -384,6 +417,32 @@ public class DmcService {
     /** Supprime le DMC d'un marché (cascade applicative à la suppression du marché). */
     public void supprimerPourMarche(Integer idDetail) {
         repository.deleteByIdDetail(idDetail);
+    }
+
+    /**
+     * ⚠️ 2026-09-27 (statut « Lancé », §B3 / §B4) — le dossier de mise en concurrence <strong>vivant</strong> d'une
+     * ligne : celui que porte sa filiation ({@code ID_LIGNE_ORIGINE}, sur cette version du plan ou une précédente),
+     * le plus ancien s'il y en avait plusieurs ; {@code null} sans DMC. C'est lui qui interdit le retour à « Prévu » et
+     * que {@code MarcheDto.idDmc} sert au front.
+     */
+    @Transactional(readOnly = true)
+    public Long idDmcVivant(Marche ligne) {
+        if (ligne == null) {
+            return null;
+        }
+        return repository.findParFiliation(ligne.getIdLigneOrigine()).stream().map(DossierMec::getIdDmc).findFirst().orElse(null);
+    }
+
+    /** Le DMC vivant de chaque filiation ({@code origine → idDmc}), en une requête, pour une liste de lignes. */
+    @Transactional(readOnly = true)
+    public Map<Integer, Long> dmcParOrigine() {
+        Map<Integer, Long> out = new HashMap<>();
+        for (Object[] ligne : repository.findAvecOrigine()) {
+            Integer origine = (Integer) ligne[0];
+            DossierMec d = (DossierMec) ligne[1];
+            out.putIfAbsent(origine, d.getIdDmc());   // le plus ancien d'abord (ordre de la requête)
+        }
+        return out;
     }
 
     private TypeDmc resoudreType(Marche marche) {

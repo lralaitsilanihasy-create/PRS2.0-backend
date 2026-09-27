@@ -38,4 +38,11 @@ public class DmcDto {
      * rattaché à elle ({@code t_dossier.ID_DMC}) ; {@code null} tant qu'il n'existe pas.
      */
     private Integer idDossierSoumis;
+
+    /**
+     * ⚠️ 2026-09-27 (règle du pilote, statut « Lancé », §B1) — sur la réponse de {@code POST /par-marche/{idDetail}} : le
+     * statut de la ligne du plan <strong>après</strong> la création — {@code LANCE} posé par le serveur, ou le statut
+     * manuel conservé ({@code CHDP}, {@code DSS}). {@code null} ailleurs.
+     */
+    private String statutLigne;
 }

@@ -18,6 +18,16 @@ public interface MarcheRepository extends JpaRepository<Marche, Integer> {
     /** Lignes de marché d'un dossier (réconciliation à l'édition d'un brouillon). */
     List<Marche> findByIdDossier(Integer idDossier);
 
+    /**
+     * ⚠️ 2026-09-27 (statut « Lancé ») — la <strong>filiation</strong> d'une ligne : la ligne d'origine et toutes ses
+     * copies de version ({@code ID_LIGNE_ORIGINE}), de la plus ancienne à la plus récente. Le statut « Lancé » se rend
+     * à « Prévu » sur toute la filiation quand le dossier de mise en concurrence disparaît.
+     */
+    @org.springframework.data.jpa.repository.Query("""
+            select m from Marche m where m.idLigneOrigine = :origine or m.idDetail = :origine order by m.idDetail asc
+            """)
+    List<Marche> findFiliation(@org.springframework.data.repository.query.Param("origine") Integer origine);
+
     /** Lignes de marché d'un PPM (cascade applicative à la suppression du PPM). */
     List<Marche> findByIdPpm(Integer idPpm);
 

@@ -678,8 +678,23 @@ public class FicheMarcheService {
         ficheRepository.deleteAll(versions);   // le besoin suit (ON DELETE CASCADE, V45)
         ficheRepository.flush();
         dmcRepository.delete(ctx.dmc());
+        // ⚠️ 2026-09-27 (règle du pilote, demande front « statut Lancé », §B2) — le geste qui referme la mise en
+        // concurrence rend « Prévu » à la ligne « Lancé » (toute sa filiation : la copie d'une version en cours aussi) ;
+        // un statut manuel (CHDP, DSS) reste tel quel.
+        List<Integer> renduesPrevues = new ArrayList<>();
+        Marche ligneDmc = marcheRepository.findById(ctx.idDetail()).orElse(null);
+        for (Marche m : ligneDmc == null ? List.<Marche>of() : marcheRepository.findFiliation(ligneDmc.getIdLigneOrigine())) {
+            if (m.getStatut() != null && StatutMarcheService.CODE_LANCE.equalsIgnoreCase(m.getStatut().trim())) {
+                m.setStatut(StatutMarcheService.CODE_DEFAUT);
+                marcheRepository.save(m);
+                renduesPrevues.add(m.getIdDetail());
+            }
+        }
         journal.tracer(ctx.idDossier(), JournalDossierService.FICHE_MARCHE_SUPPRIMEE,
-                "DAO de la ligne " + ctx.idDetail() + " (DMC " + idDmc + ") supprimé, sans historique");
+                "DAO de la ligne " + ctx.idDetail() + " (DMC " + idDmc + ") supprimé, sans historique"
+                        + (renduesPrevues.isEmpty() ? "" : " ; statut rendu à " + StatutMarcheService.CODE_DEFAUT
+                                + " (ligne" + (renduesPrevues.size() > 1 ? "s " : " ")
+                                + renduesPrevues.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(", ")) + ")"));
     }
 
     /**

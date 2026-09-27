@@ -79,6 +79,13 @@ public class MarcheDto {
     @Size(max = 20, groups = { Default.class, GroupeRectification.class })
     private String statut;
 
+    /**
+     * ⚠️ 2026-09-27 (règle du pilote, demande front « statut Lancé », §B4) — le dossier de mise en concurrence
+     * <strong>vivant</strong> de la ligne (porté par sa filiation), {@code null} sans DAO. Lecture seule, posé par le
+     * serveur : la grille s'en sert pour ne plus proposer « Prévu » à une ligne lancée et le dire.
+     */
+    private Long idDmc;
+
     private Integer idNature;
 
     private Integer idMode;
