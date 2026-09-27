@@ -1,0 +1,435 @@
+package cnm.prs.service;
+
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import cnm.prs.dto.CompteDesignableDto;
+import cnm.prs.dto.ParametresInternesDto;
+import cnm.prs.dto.ParametresInternesRequest;
+import cnm.prs.dto.ResponsableProcedureDto;
+import cnm.prs.entity.ChampFicheMarche;
+import cnm.prs.entity.Controleur;
+import cnm.prs.entity.FicheMarche;
+import cnm.prs.entity.ParametreInterneJournal;
+import cnm.prs.entity.ParametreInterneProcedure;
+import cnm.prs.entity.Profile;
+import cnm.prs.entity.ResponsableProcedure;
+import cnm.prs.enums.ProfilUtilisateur;
+import cnm.prs.enums.StatutFicheMarche;
+import cnm.prs.exception.BusinessRuleException;
+import cnm.prs.exception.ChampsInvalidesException;
+import cnm.prs.exception.ErrorResponse;
+import cnm.prs.exception.ResourceNotFoundException;
+import cnm.prs.repository.ChampFicheMarcheRepository;
+import cnm.prs.repository.ControleurRepository;
+import cnm.prs.repository.DossierMecRepository;
+import cnm.prs.repository.FicheMarcheRepository;
+import cnm.prs.repository.FicheMarcheValeurRepository;
+import cnm.prs.repository.ParametreInterneJournalRepository;
+import cnm.prs.repository.ParametreInterneProcedureRepository;
+import cnm.prs.repository.ProfileRepository;
+import cnm.prs.repository.ResponsableProcedureRepository;
+import cnm.prs.security.CurrentUser;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
+
+/**
+ * ⚠️ <strong>Les paramètres internes d'une procédure et le rôle « Responsable de la procédure »</strong> (demande front du
+ * 2026-09-27, remise électronique, §B4 et §B5 ; ADR-0010).
+ *
+ * <ul>
+ *   <li><strong>Paramètres internes</strong> ({@code t_parametre_interne_procedure}) : membres détenteurs d'une part de clé,
+ *       quorum, cérémonie des clés. <strong>Réservés au titulaire du rôle</strong> pour cette fiche — 403 pour tout
+ *       autre, Administrateur et PRMP compris. Ordre des gardes : profil authentifié → identité (prédicat pur
+ *       {@link PredicatsIdentite#estResponsableProcedure}) → corps. Modifiables tant que la fiche n'est pas validée en mode
+ *       électronique ; après, lecture seule (409 {@code FICHE_VALIDEE}). Un membre ne peut pas être le responsable
+ *       (409 {@code MEMBRE_COMMISSION}, dans les deux sens).</li>
+ *   <li><strong>Journal</strong> : le journal dédié ({@code t_parametre_interne_journal}) porte ancienne et nouvelle valeur
+ *       et n'est servi qu'au titulaire (Q7) ; le journal global {@code t_audit_log} reçoit la route par l'intercepteur,
+ *       sans valeurs.</li>
+ *   <li><strong>Responsable</strong> ({@code t_responsable_procedure}) : désigné et retiré par l'Administrateur, un seul actif
+ *       par DMC (409 {@code RESPONSABLE_EXISTANT}), jamais un membre de la commission de la fiche. Désignables : les
+ *       contrôleurs de la localité de la fiche et ceux sans localité (compétents partout), hors membres.</li>
+ *   <li>L'<strong>état</strong> seul ({@code COMPLETS} / {@code INCOMPLETS} / {@code ABSENTS}) et le titulaire sont exposés sur
+ *       la fiche à tous ceux qui la lisent ({@link #contexteBilan}).</li>
+ * </ul>
+ */
+@Service
+@Transactional
+public class ParametresInternesService {
+
+    static final String CHAMP_MEMBRES = "membresCommission";
+    static final String CHAMP_QUORUM = "quorum";
+    static final String CHAMP_CEREMONIE = "dateCeremonie";
+    static final String CHAMP_RESPONSABLE = "responsable";
+
+    private final ParametreInterneProcedureRepository internesRepository;
+    private final ParametreInterneJournalRepository journalRepository;
+    private final ResponsableProcedureRepository responsableRepository;
+    private final DossierMecRepository dmcRepository;
+    private final FicheMarcheRepository ficheRepository;
+    private final FicheMarcheValeurRepository valeurRepository;
+    private final ChampFicheMarcheRepository champRepository;
+    private final ControleurRepository controleurRepository;
+    private final ProfileRepository profileRepository;
+    private final ValeursPpmService valeursPpm;
+    private final ActeurDirectory acteurs;
+    private final ParametreService parametres;
+    private final ObjectMapper mapper;
+
+    public ParametresInternesService(ParametreInterneProcedureRepository internesRepository,
+            ParametreInterneJournalRepository journalRepository, ResponsableProcedureRepository responsableRepository,
+            DossierMecRepository dmcRepository, FicheMarcheRepository ficheRepository,
+            FicheMarcheValeurRepository valeurRepository, ChampFicheMarcheRepository champRepository,
+            ControleurRepository controleurRepository, ProfileRepository profileRepository, ValeursPpmService valeursPpm,
+            ActeurDirectory acteurs, ParametreService parametres, ObjectMapper mapper) {
+        this.internesRepository = internesRepository;
+        this.journalRepository = journalRepository;
+        this.responsableRepository = responsableRepository;
+        this.dmcRepository = dmcRepository;
+        this.ficheRepository = ficheRepository;
+        this.valeurRepository = valeurRepository;
+        this.champRepository = champRepository;
+        this.controleurRepository = controleurRepository;
+        this.profileRepository = profileRepository;
+        this.valeursPpm = valeursPpm;
+        this.acteurs = acteurs;
+        this.parametres = parametres;
+        this.mapper = mapper;
+    }
+
+    // ------------------------------------------------------------------ ce que la fiche dit à tous (§B5.1)
+
+    /** Le titulaire actif du rôle pour ce DMC, s'il y en a un. */
+    @Transactional(readOnly = true)
+    public Optional<ResponsableProcedure> responsable(Long idDmc) {
+        return responsableRepository.findFirstByIdDmcAndDateRetraitIsNull(idDmc);
+    }
+
+    /** Le titulaire en DTO, {@code null} sans titulaire. */
+    @Transactional(readOnly = true)
+    public ResponsableProcedureDto responsableDto(Long idDmc) {
+        return responsable(idDmc).map(r -> new ResponsableProcedureDto(r.getImResponsable(), r.getNomResponsable())).orElse(null);
+    }
+
+    /** L'utilisateur courant est-il le titulaire du rôle pour ce DMC ? */
+    @Transactional(readOnly = true)
+    public boolean estTitulaire(Long idDmc) {
+        String acteur = CurrentUser.ref().orElse(null);
+        return responsable(idDmc).map(r -> PredicatsIdentite.estResponsableProcedure(acteur, r.getImResponsable())).orElse(false);
+    }
+
+    /** Les paramètres internes en lecture pure ({@code null} : jamais enregistrés). */
+    @Transactional(readOnly = true)
+    public RemiseElectronique.Internes internes(Long idDmc) {
+        ParametreInterneProcedure p = internesRepository.findById(idDmc).orElse(null);
+        if (p == null) {
+            return null;
+        }
+        return new RemiseElectronique.Internes(ChampFicheMarche.liste(p.getMembresCle()), p.getQuorum(), p.getDateCeremonie(),
+                responsable(idDmc).map(ResponsableProcedure::getImResponsable).orElse(null));
+    }
+
+    /**
+     * Le contexte que le bilan lit hors de la fiche (règles 6, 8, 10, 11) : le mode du cadrage, les paramètres
+     * administrables, les paramètres internes, la présence d'un responsable.
+     */
+    @Transactional(readOnly = true)
+    public ControlesFicheMarche.RemiseElectroniqueBilan contexteBilan(Long idDmc, Map<String, ?> cadrage) {
+        boolean electronique = RemiseElectronique.electronique(cadrage);
+        return new ControlesFicheMarche.RemiseElectroniqueBilan(electronique,
+                electronique ? parametres.remiseElectronique() : null, electronique ? internes(idDmc) : null,
+                responsable(idDmc).isPresent());
+    }
+
+    /** L'état servi sur la fiche : {@code COMPLETS}, {@code INCOMPLETS} ou {@code ABSENTS}. */
+    @Transactional(readOnly = true)
+    public RemiseElectronique.Etat etat(Long idDmc) {
+        return RemiseElectronique.etat(internes(idDmc), datePublication(idDmc));
+    }
+
+    // ------------------------------------------------------------------ paramètres internes (§B4)
+
+    @Transactional(readOnly = true)
+    public ParametresInternesDto lire(Long idDmc) {
+        exigerTitulaire(idDmc);
+        return dto(idDmc);
+    }
+
+    /**
+     * Remplace les paramètres internes. Gardes, dans l'ordre : titulaire (403) ; fiche validée en mode électronique
+     * (409 {@code FICHE_VALIDEE}) ; corps (400 nominatifs) ; un membre est le responsable (409 {@code MEMBRE_COMMISSION}).
+     * Journal dédié : une entrée par champ changé, ancienne → nouvelle valeur.
+     */
+    public ParametresInternesDto ecrire(Long idDmc, ParametresInternesRequest corps) {
+        exigerTitulaire(idDmc);
+        exigerFicheModifiable(idDmc);
+        ParametresInternesRequest c = corps == null ? new ParametresInternesRequest(null, null, null) : corps;
+        List<ErrorResponse.FieldError> erreurs = new ArrayList<>();
+        Set<String> membres = new LinkedHashSet<>();
+        for (String im : c.membresCommission() == null ? List.<String>of() : c.membresCommission()) {
+            if (im == null || im.isBlank()) {
+                continue;
+            }
+            String m = im.trim();
+            if (!controleurRepository.existsById(m)) {
+                erreurs.add(new ErrorResponse.FieldError(CHAMP_MEMBRES, "Compte inconnu : " + m + "."));
+            } else {
+                membres.add(m);
+            }
+        }
+        if (c.quorum() != null && c.quorum() < 1) {
+            erreurs.add(new ErrorResponse.FieldError(CHAMP_QUORUM, "Le quorum de déchiffrement est un nombre de membres, 1 au moins."));
+        }
+        LocalDateTime ceremonie = null;
+        if (c.dateCeremonie() != null && !c.dateCeremonie().isBlank()) {
+            ceremonie = RemiseElectronique.dateHeure(c.dateCeremonie());
+            if (ceremonie == null) {
+                erreurs.add(new ErrorResponse.FieldError(CHAMP_CEREMONIE,
+                        "La cérémonie des clés attend une date et une heure AAAA-MM-JJTHH:MM."));
+            }
+        }
+        if (!erreurs.isEmpty()) {
+            throw new ChampsInvalidesException(erreurs);
+        }
+        String titulaire = responsable(idDmc).map(ResponsableProcedure::getImResponsable).orElse(null);
+        if (titulaire != null && membres.stream().anyMatch(m -> m.equalsIgnoreCase(titulaire))) {
+            throw new BusinessRuleException("Le responsable de la procédure (" + titulaire + ") ne peut pas détenir une part de clé : "
+                    + "retirez-le des membres ou changez de responsable.", "MEMBRE_COMMISSION");
+        }
+
+        ParametreInterneProcedure p = internesRepository.findById(idDmc).orElse(null);
+        String avantMembres = p == null ? null : p.getMembresCle();
+        Integer avantQuorum = p == null ? null : p.getQuorum();
+        LocalDateTime avantCeremonie = p == null ? null : p.getDateCeremonie();
+        if (p == null) {
+            p = new ParametreInterneProcedure();
+            p.setIdDmc(idDmc);
+        }
+        String apresMembres = membres.isEmpty() ? null : String.join(",", membres);
+        p.setMembresCle(apresMembres);
+        p.setQuorum(c.quorum());
+        p.setDateCeremonie(ceremonie);
+        p.setDateMaj(LocalDateTime.now());
+        p.setImMaj(CurrentUser.ref().orElse(null));
+        internesRepository.save(p);
+
+        journaliser(idDmc, CHAMP_MEMBRES, avantMembres, apresMembres);
+        journaliser(idDmc, CHAMP_QUORUM, avantQuorum == null ? null : String.valueOf(avantQuorum),
+                c.quorum() == null ? null : String.valueOf(c.quorum()));
+        journaliser(idDmc, CHAMP_CEREMONIE, avantCeremonie == null ? null : RemiseElectronique.isoMinute(avantCeremonie),
+                ceremonie == null ? null : RemiseElectronique.isoMinute(ceremonie));
+        return dto(idDmc);
+    }
+
+    /** Les comptes désignables comme membres : Présidents, Chefs de commission et Membres de la localité de la fiche. */
+    @Transactional(readOnly = true)
+    public List<CompteDesignableDto> candidatsMembres(Long idDmc) {
+        exigerTitulaire(idDmc);
+        String localite = localite(idDmc);
+        Map<Integer, ProfilUtilisateur> profils = profils();
+        List<CompteDesignableDto> out = new ArrayList<>();
+        for (Controleur c : controleurRepository.findAll()) {
+            ProfilUtilisateur profil = profils.get(c.getIdProfile());
+            boolean retenu = profil == ProfilUtilisateur.PRESIDENT
+                    || (profil == ProfilUtilisateur.CHEF_COMMISSION || profil == ProfilUtilisateur.MEMBRE)
+                            && localite != null && localite.equals(c.getIdLocalite());
+            if (retenu) {
+                out.add(designable(c, profil));
+            }
+        }
+        out.sort(java.util.Comparator.comparing(CompteDesignableDto::nom, String.CASE_INSENSITIVE_ORDER));
+        return out;
+    }
+
+    // ------------------------------------------------------------------ responsable (§B5)
+
+    /**
+     * Désigne le titulaire (Administrateur, contrôlé par le contrôleur). 404 compte inconnu ; 409 {@code RESPONSABLE_EXISTANT}
+     * s'il y a déjà un titulaire actif ; 409 {@code MEMBRE_COMMISSION} si le compte détient une part de clé de cette fiche.
+     */
+    public ResponsableProcedureDto designer(Long idDmc, String im) {
+        exigerDmc(idDmc);
+        String m = im == null ? "" : im.trim();
+        Controleur c = controleurRepository.findById(m)
+                .orElseThrow(() -> new ResourceNotFoundException("Compte inconnu : " + m + "."));
+        responsable(idDmc).ifPresent(r -> {
+            throw new BusinessRuleException("Un responsable de la procédure est déjà désigné (" + r.getImResponsable()
+                    + ") : retirez-le d'abord.", "RESPONSABLE_EXISTANT");
+        });
+        RemiseElectronique.Internes i = internes(idDmc);
+        if (i != null && i.membres().stream().anyMatch(x -> x.equalsIgnoreCase(m))) {
+            throw new BusinessRuleException("Le compte " + m + " détient une part de clé de cette procédure : un membre de la "
+                    + "commission ne peut pas en être le responsable.", "MEMBRE_COMMISSION");
+        }
+        ResponsableProcedure r = new ResponsableProcedure();
+        r.setIdDmc(idDmc);
+        r.setImResponsable(m);
+        r.setNomResponsable(ActeurDirectory.nomCanonique(c.getNomCont(), c.getPrenomsCont()));
+        r.setDesignePar(CurrentUser.ref().orElse(null));
+        r.setDateDesignation(LocalDateTime.now());
+        responsableRepository.save(r);
+        journaliser(idDmc, CHAMP_RESPONSABLE, null, m);
+        return new ResponsableProcedureDto(r.getImResponsable(), r.getNomResponsable());
+    }
+
+    /** Retire le titulaire actif (Administrateur) ; 404 s'il n'y en a pas. */
+    public void retirer(Long idDmc) {
+        exigerDmc(idDmc);
+        ResponsableProcedure r = responsable(idDmc)
+                .orElseThrow(() -> new ResourceNotFoundException("Aucun responsable de la procédure n'est désigné pour le DMC " + idDmc + "."));
+        r.setRetirePar(CurrentUser.ref().orElse(null));
+        r.setDateRetrait(LocalDateTime.now());
+        responsableRepository.save(r);
+        journaliser(idDmc, CHAMP_RESPONSABLE, r.getImResponsable(), null);
+    }
+
+    /**
+     * Les comptes désignables comme responsable (Administrateur) : les contrôleurs de la localité de la fiche et ceux
+     * sans localité (compétents partout), hors membres détenteurs d'une part de clé de cette fiche.
+     */
+    @Transactional(readOnly = true)
+    public List<CompteDesignableDto> candidatsResponsable(Long idDmc) {
+        exigerDmc(idDmc);
+        String localite = localite(idDmc);
+        RemiseElectronique.Internes i = internes(idDmc);
+        Set<String> membres = new LinkedHashSet<>(i == null ? List.of() : i.membres());
+        Map<Integer, ProfilUtilisateur> profils = profils();
+        List<CompteDesignableDto> out = new ArrayList<>();
+        for (Controleur c : controleurRepository.findAll()) {
+            boolean competent = c.getIdLocalite() == null || localite == null || localite.equals(c.getIdLocalite());
+            if (competent && membres.stream().noneMatch(m -> m.equalsIgnoreCase(c.getImControleur()))) {
+                out.add(designable(c, profils.get(c.getIdProfile())));
+            }
+        }
+        out.sort(java.util.Comparator.comparing(CompteDesignableDto::nom, String.CASE_INSENSITIVE_ORDER));
+        return out;
+    }
+
+    // ------------------------------------------------------------------ gardes et lectures
+
+    /** Profil authentifié, puis identité : seul le titulaire du rôle pour ce DMC passe (Administrateur et PRMP compris : 403). */
+    private void exigerTitulaire(Long idDmc) {
+        if (CurrentUser.profil().isEmpty()) {
+            throw new AccessDeniedException("Les paramètres internes de la procédure sont réservés à son responsable.");
+        }
+        exigerDmc(idDmc);
+        if (!estTitulaire(idDmc)) {
+            throw new AccessDeniedException("Les paramètres internes de la procédure " + idDmc
+                    + " sont réservés au responsable de la procédure désigné pour cette fiche.");
+        }
+    }
+
+    private void exigerDmc(Long idDmc) {
+        if (idDmc == null || !dmcRepository.existsById(idDmc)) {
+            throw new ResourceNotFoundException("DMC introuvable : " + idDmc);
+        }
+    }
+
+    /** Après validation en mode électronique, les paramètres internes sont en lecture seule (409 {@code FICHE_VALIDEE}). */
+    private void exigerFicheModifiable(Long idDmc) {
+        FicheMarche f = ficheRepository.findFirstByIdDmcOrderByNumeroVersionDesc(idDmc).orElse(null);
+        if (f != null && StatutFicheMarche.VALIDEE.name().equals(f.getStatut()) && RemiseElectronique.electronique(cadrage(f))) {
+            throw new BusinessRuleException("La fiche marché est validée en remise électronique (version " + f.getNumeroVersion()
+                    + ") : ses paramètres internes sont en lecture seule ; ouvrez une révision pour les modifier.", "FICHE_VALIDEE");
+        }
+    }
+
+    private Map<String, Object> cadrage(FicheMarche f) {
+        if (f == null || f.getCadrage() == null || f.getCadrage().isBlank()) {
+            return Map.of();
+        }
+        return mapper.readValue(f.getCadrage(), new TypeReference<LinkedHashMap<String, Object>>() {
+        });
+    }
+
+    /** La date de publication de l'avis de la version courante (rôle {@code SE_CEREMONIE:PUBLICATION}) ; {@code null} sans elle. */
+    private LocalDateTime datePublication(Long idDmc) {
+        FicheMarche f = ficheRepository.findFirstByIdDmcOrderByNumeroVersionDesc(idDmc).orElse(null);
+        if (f == null || f.getIdFiche() == null) {
+            return null;
+        }
+        String code = null;
+        for (ChampFicheMarche c : champRepository.findByActifTrueOrderByCodeRubriqueAscRangAsc()) {
+            for (String[] rr : ControlesFicheMarche.controles(c)) {
+                if (ControlesFicheMarche.SE_CEREMONIE.equals(rr[0]) && RemiseElectronique.ROLE_PUBLICATION.equals(rr[1])) {
+                    code = c.getCode();
+                }
+            }
+        }
+        if (code == null) {
+            return null;
+        }
+        String cible = code;
+        return valeurRepository.findByIdFiche(f.getIdFiche()).stream().filter(v -> cible.equals(v.getCodeChamp()))
+                .map(v -> RemiseElectronique.dateHeure(v.getValeur())).filter(Objects::nonNull).findFirst().orElse(null);
+    }
+
+    private String localite(Long idDmc) {
+        return dmcRepository.findById(idDmc).map(d -> valeursPpm.enTete(d.getIdDetail()).idLocalite()).orElse(null);
+    }
+
+    private Map<Integer, ProfilUtilisateur> profils() {
+        Map<Integer, ProfilUtilisateur> out = new LinkedHashMap<>();
+        for (Profile p : profileRepository.findAll()) {
+            out.put(p.getIdProfile(), ProfilUtilisateur.resolve(p.getProfile()));
+        }
+        return out;
+    }
+
+    private static CompteDesignableDto designable(Controleur c, ProfilUtilisateur profil) {
+        return new CompteDesignableDto(c.getImControleur(), ActeurDirectory.nomCanonique(c.getNomCont(), c.getPrenomsCont()),
+                profil == null ? null : profil.name());
+    }
+
+    private ParametresInternesDto dto(Long idDmc) {
+        RemiseElectronique.Internes i = internes(idDmc);
+        LocalDateTime publication = datePublication(idDmc);
+        Map<Integer, ProfilUtilisateur> profils = profils();
+        List<CompteDesignableDto> membres = new ArrayList<>();
+        if (i != null) {
+            for (String im : i.membres()) {
+                Controleur c = controleurRepository.findById(im).orElse(null);
+                membres.add(c == null ? new CompteDesignableDto(im, im, null) : designable(c, profils.get(c.getIdProfile())));
+            }
+        }
+        Integer quorum = i != null ? i.quorum() : parametres.remiseElectronique().quorumPropose();
+        List<ParametresInternesDto.Anomalie> anomalies = RemiseElectronique.anomalies(i, publication).stream()
+                .map(a -> new ParametresInternesDto.Anomalie(a.regle(), a.message())).toList();
+        List<ParametresInternesDto.EntreeJournal> journal = journalRepository.findByIdDmcOrderByDateAscIdAsc(idDmc).stream()
+                .map(j -> new ParametresInternesDto.EntreeJournal(j.getDate(), j.getImActeur(), j.getNomActeur(), j.getChamp(),
+                        j.getAncienneValeur(), j.getNouvelleValeur()))
+                .toList();
+        return new ParametresInternesDto(idDmc, membres, membres.size(), quorum, i == null ? null : i.dateCeremonie(),
+                responsableDto(idDmc), RemiseElectronique.etat(i, publication).name(), anomalies, journal);
+    }
+
+    /** Une entrée du journal dédié si la valeur change (valeurs en clair : le journal n'est servi qu'au titulaire). */
+    private void journaliser(Long idDmc, String champ, String avant, String apres) {
+        if (Objects.equals(avant, apres)) {
+            return;
+        }
+        String acteur = CurrentUser.ref().orElse(null);
+        String login = CurrentUser.login().orElse(null);
+        ParametreInterneJournal j = new ParametreInterneJournal();
+        j.setIdDmc(idDmc);
+        j.setDate(LocalDateTime.now());
+        j.setImActeur(acteur != null && acteur.length() <= 10 ? acteur : null);
+        j.setNomActeur(login == null ? null : acteurs.nom(login));
+        j.setChamp(champ);
+        j.setAncienneValeur(avant);
+        j.setNouvelleValeur(apres);
+        journalRepository.save(j);
+    }
+}

@@ -132,9 +132,23 @@ public final class FormulairesCandidat {
             return fiche.getCadrage() != null && "OUI".equalsIgnoreCase(String.valueOf(fiche.getCadrage().get("groupement")));
         }
 
-        /** Une condition de section par son nom ; inconnue : vraie (le texte est gardé, les marqueurs retirés). */
+        /** ⚠️ V50 (2026-09-27) — le cadrage dit que les offres sont remises par voie électronique ({@code modeRemise}). */
+        boolean remiseElectronique() {
+            return RemiseElectronique.electronique(fiche.getCadrage());
+        }
+
+        /**
+         * Une condition de section par son nom ; inconnue : vraie (le texte est gardé, les marqueurs retirés).
+         * {@code A1B} : le groupement est autorisé ; ⚠️ V50 {@code B04-SE} : la remise est électronique (la clause de C1 / C2).
+         */
         boolean condition(String nom) {
-            return !"A1B".equals(nom) || groupement();
+            if ("A1B".equals(nom)) {
+                return groupement();
+            }
+            if (RemiseElectronique.SECTION.equals(nom)) {
+                return remiseElectronique();
+            }
+            return true;
         }
 
         /** Les valeurs d'une plage régénérée par son nom ; {@code null} si ce n'est pas une répétition. */
@@ -285,6 +299,9 @@ public final class FormulairesCandidat {
 
         /** La valeur d'un jeton ; {@code null} : jeton inconnu du contrat (laissé tel quel). */
         private String jeton(String nom, Integer lot) {
+            if (nom.startsWith(RemiseElectronique.PREFIXE_JETON_INTERNE)) {
+                return null;   // ⚠️ V50 (§B2.2) — un paramètre interne de la procédure n'entre dans aucun document : laissé tel quel
+            }
             if ("A1B.mention".equals(nom)) {
                 return groupement() ? "" : "(non applicable)";
             }
@@ -314,6 +331,10 @@ public final class FormulairesCandidat {
                 return POINTILLES;
             }
             String type = c == null ? TypeChampFiche.TEXTE.name() : c.getType();
+            if (suffixe.isEmpty() && (RemiseElectronique.CHAMP_MODE.equals(code)
+                    || c != null && RemiseElectronique.CLE_CADRAGE.equals(c.getCleCadrage()))) {
+                return RemiseElectronique.libelleMode(brut);   // ⚠️ V50 (§B2.3) — « Papier » / « Électronique »
+            }
             BigDecimal n = ControlesFicheMarche.nombre(brut);
             return switch (suffixe) {
                 case "lettres" -> TypeChampFiche.MONTANT.name().equals(type) && n != null ? MontantEnLettres.ariary(n)
@@ -335,6 +356,10 @@ public final class FormulairesCandidat {
             if (TypeChampFiche.DATE.name().equals(type)) {
                 LocalDate d = ControlesFicheMarche.date(brut);
                 return d == null ? brut : d.format(JOUR);
+            }
+            if (TypeChampFiche.DATE_HEURE.name().equals(type)) {   // ⚠️ V50 (§B2.3) — JJ/MM/AAAA HH:MM
+                LocalDateTime d = RemiseElectronique.dateHeure(brut);
+                return d == null ? brut : d.format(RemiseElectronique.AFFICHAGE);
             }
             if (TypeChampFiche.OUI_NON.name().equals(type)) {
                 return "OUI".equalsIgnoreCase(brut) ? "Oui" : "NON".equalsIgnoreCase(brut) ? "Non" : brut;

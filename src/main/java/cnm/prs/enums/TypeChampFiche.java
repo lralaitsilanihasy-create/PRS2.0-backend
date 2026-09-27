@@ -10,6 +10,13 @@ public enum TypeChampFiche {
     POURCENTAGE,
     /** ISO {@code yyyy-MM-dd}. */
     DATE,
+    /**
+     * ⚠️ V50 (2026-09-27, remise électronique, §B1.2) — date et heure locales ISO {@code yyyy-MM-dd'T'HH:mm} (la valeur
+     * d'un {@code datetime-local}) ; imprimée {@code JJ/MM/AAAA HH:MM}.
+     */
+    DATE_HEURE,
+    /** ⚠️ V50 — adresse absolue {@code http} / {@code https}, 500 caractères au plus ; imprimée telle quelle. */
+    URL,
     /** Une valeur parmi {@code OPTIONS}. */
     LISTE,
     /**

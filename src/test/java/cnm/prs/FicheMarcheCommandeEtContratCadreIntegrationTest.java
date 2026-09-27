@@ -70,20 +70,20 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
     // ------------------------------------------------------------------ 1. chargement des référentiels
 
     @Test
-    @DisplayName("1 — Import : 123 champs des fournitures et 114 du contrat-cadre, aucun rejet ; champs actifs servis : 146 en "
-            + "quantité fixe, 151 à commande, 150 en contrat-cadre (35 repris et reflets + 113 + B03-CQ-09, -10) — 2026-09-25 : cinq créations, "
+    @DisplayName("1 — Import : 149 champs des fournitures (123 avant V50) et 114 du contrat-cadre, aucun rejet ; champs actifs servis : 172 en "
+            + "quantité fixe, 177 à commande, 176 en contrat-cadre (V50 : + 26 champs de la remise électronique) — 2026-09-25 : cinq créations, "
             + "B06-EO-11 réservé à la quantité fixe")
     void chargementDesReferentiels() throws Exception {
         ChampFicheMarcheService.BilanImport f = importer("referentiel-champs-fiche-marche-fournitures.csv");
         assertThat(f.rejets()).isEmpty();
-        assertThat(f.crees()).hasSize(123);
+        assertThat(f.crees()).hasSize(149);   // V50 : + 26 champs de la remise électronique
         ChampFicheMarcheService.BilanImport cc = importer("referentiel-champs-fiche-marche-contrat-cadre.csv");
         assertThat(cc.rejets()).isEmpty();
         assertThat(cc.crees()).hasSize(114);
 
-        assertThat(champs("QUANTITE_FIXE")).hasSize(146);
-        assertThat(champs("A_COMMANDE")).hasSize(151);
-        assertThat(champs("CONTRAT_CADRE")).hasSize(150);
+        assertThat(champs("QUANTITE_FIXE")).hasSize(172);
+        assertThat(champs("A_COMMANDE")).hasSize(177);
+        assertThat(champs("CONTRAT_CADRE")).hasSize(176);
     }
 
     // ------------------------------------------------------------------ 2. rubriques servies par type (B4)

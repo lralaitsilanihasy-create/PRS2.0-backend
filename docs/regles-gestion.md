@@ -521,6 +521,45 @@ version. Contrat : `docs/api-endpoints.md`, § *La rectification d'un dossier DA
   point de portée DOSSIER juge l'ensemble, et douze points se relisent en quelques minutes.
 - **La lettre de renvoi nomme l'information** de la fiche que chaque observation ancrée vise, comme le PV.
 
+#### La remise électronique des offres (demande front du 2026-09-27, cahier des charges du pilote du 27/09)
+
+⚠️ **La fiche DAO se prépare à la remise électronique : papier ou électronique, jamais mixte.** Le mode est une réponse
+du cadrage (`modeRemise`) ; une fiche qui ne la porte pas — toute fiche d'avant V50 — est papier, et le DAO papier
+reste identique texte pour texte, à la seule ligne « Mode de remise des offres : Papier » près. Contrat :
+`docs/api-endpoints.md`, § *La remise électronique des offres — V50* ; décision : ADR-0010.
+
+- **Ce qui entre dans le DAO se saisit dans la fiche**, dans une rubrique « Remise électronique » commune aux trois
+  catégories (plateforme, dates, signature, formats, tailles, prorogation, assistance) ; les conditions propres à la
+  garantie de soumission et à l'ouverture des plis en remise électronique vivent dans les rubriques des fournitures
+  — travaux et prestations intellectuelles ont leurs propres rubriques de garantie et d'ouverture, à étendre le jour
+  où le pilote y ouvrira la remise électronique.
+- **Le serveur calcule ce qui se déduit** (publication de l'avis depuis le plan, ouverture des dépôts, date limite
+  d'assistance, dépôt de l'original de la garantie, date et heure d'ouverture des plis = date limite + délai) et le
+  dit au front, qui l'affiche en lecture seule « calculée » et ne pré-remplit jamais. Une valeur déduite « si vide »
+  cède à la saisie ; l'ouverture des plis est toujours recalculée.
+- **Onze règles bloquantes, en mode électronique seulement** : heure limite au format et jour ouvrable (lundi à
+  vendredi — aucune liste de jours fériés n'est administrée aujourd'hui), publication au moins *n* jours avant la
+  remise (*n* administrable, 30 proposé, **à faire fixer par le pilote**), tailles cohérentes avec la plateforme,
+  niveau de signature au moins égal au minimum administré, prestataires exigés dès que la signature n'est pas
+  simple, original papier de la garantie localisé et daté s'il est exigé, quorum de déchiffrement entre 2 et le
+  nombre de membres, cérémonie des clés avant la publication, paramètres internes complets, responsable désigné.
+  En mode papier, aucune n'existe : la fiche se valide comme avant.
+- **Les paramètres internes de la procédure ne sortent jamais.** Membres détenteurs d'une part de clé, quorum,
+  cérémonie : hors référentiel, hors documents (un modèle qui tenterait de les imprimer est refusé au démarrage),
+  hors journal d'audit global (qui ne garde que la route et l'acteur), lisibles et modifiables par le **seul
+  responsable de la procédure**, l'Administrateur et la PRMP compris dans le refus. La fiche n'en dit à tous que
+  l'état : complets, incomplets, absents. Après validation en mode électronique, ils sont figés jusqu'à la révision.
+- **Le responsable de la procédure est une personne désignée pour cette procédure** par l'Administrateur, une à la
+  fois, jamais un membre détenteur d'une part (ni l'inverse) : ce n'est pas un profil, pas une délégation, pas un
+  intérim — c'est un droit exclusif sur un objet (ADR-0010). La désignation et le retrait sont journalisés avec les
+  paramètres internes.
+- **Le texte officiel ne se modifie jamais** : la clause de remise électronique des garanties C1 / C2 est une
+  section conditionnelle balisée `[[CLAUSE À FOURNIR PAR LE JURISTE : …]]`, imprimée en mode électronique seulement.
+  Les listes officielles des prestataires de certification et des garants habilités ne sont pas fournies : une option
+  provisoire nominative tient la place jusqu'à ce que l'Administrateur les charge.
+- **Les classeurs Excel du candidat restent provisoires** (décision du pilote, Q14) : les formulaires deviendront des
+  formulaires en ligne de la plateforme ; rien n'est retiré aujourd'hui.
+
 #### La fiche DAO des travaux (référentiel remis le 2026-09-24)
 
 - **Les travaux se préparent** : 257 informations (dont un bloc d'annexes et de formulaires), avec leur vocabulaire —

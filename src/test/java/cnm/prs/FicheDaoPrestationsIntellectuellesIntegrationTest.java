@@ -71,15 +71,15 @@ class FicheDaoPrestationsIntellectuellesIntegrationTest extends CnmIntegrationTe
     }
 
     @Test
-    @DisplayName("1 — Import : 90 champs, aucun rejet (DPIC admis) ; référentiel des prestations intellectuelles : 23 "
-            + "informations du plan + 88 actives, ses rubriques seulement (pas B09-FC, dont le seul champ est inactif), pas de B07 ni de B11")
+    @DisplayName("1 — Import : 107 champs (90 avant V50), aucun rejet (DPIC admis) ; référentiel des prestations intellectuelles : 23 "
+            + "informations du plan + 103 actives, ses rubriques seulement (pas B09-FC, dont le seul champ est inactif), pas de B07 ni de B11")
     void chargement() throws Exception {
         assertThat(bilan.rejets()).isEmpty();
-        assertThat(bilan.crees()).hasSize(90);
+        assertThat(bilan.crees()).hasSize(107);   // V50 : + 17 champs B04-SE (trois catégories)
         String ref = mvc.perform(get("/api/champs-fiche-marche?typeMarche=QUANTITE_FIXE&categorie=PRESTATIONS_INTELLECTUELLES")
                 .header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertThat(JsonPath.<List<String>>read(ref, "$.champs[*].code")).hasSize(23 + 88);
+        assertThat(JsonPath.<List<String>>read(ref, "$.champs[*].code")).hasSize(23 + 103);   // V50 : 88 + 17 B04-SE − B04-VE-01/02 inactifs
         assertThat(JsonPath.<List<String>>read(ref, "$.champs[?(@.documentMaitre=='DPIC')].code")).isNotEmpty();
         assertThat(JsonPath.<List<String>>read(ref, "$.blocs[*].code")).doesNotContain("B07", "B11");
         assertThat(JsonPath.<List<String>>read(ref, "$.blocs[*].rubriques[*].code")).contains("B02-CL", "B02-MS", "B01-AC")

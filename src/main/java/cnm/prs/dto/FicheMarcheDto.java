@@ -113,4 +113,23 @@ public class FicheMarcheDto {
      * produit une fois par lot. Faux : clé nue, comme tout champ.
      */
     private Boolean saisieParLot;
+
+    /**
+     * ⚠️ V50 (2026-09-27, remise électronique, §B5.1) — le titulaire du rôle « Responsable de la procédure » pour ce DMC
+     * ({@code { im, nom }}), {@code null} sans titulaire. Dit par le serveur, jamais déduit par l'écran.
+     */
+    private ResponsableProcedureDto responsableProcedure;
+
+    /** ⚠️ V50 (§B5.1) — vrai pour le titulaire connecté : lui seul lit et écrit les paramètres internes de la procédure. */
+    private Boolean peutModifierParametresInternes;
+
+    /** ⚠️ V50 (§B5.1) — l'état des paramètres internes, exposé à tous ceux qui lisent la fiche : {@code COMPLETS}, {@code INCOMPLETS}, {@code ABSENTS}. */
+    private String parametresInternes;
+
+    /**
+     * ⚠️ V50 (§B1.4, Q11) — les clés ({@code CODE} ou {@code CODE#n}) dont la valeur a été <strong>posée par le serveur</strong>
+     * à l'enregistrement d'un bloc en mode électronique (échéances dérivées, date et heure d'ouverture des plis) : le
+     * front les affiche en lecture seule avec la mention « calculée ».
+     */
+    private java.util.List<String> champsCalcules;
 }

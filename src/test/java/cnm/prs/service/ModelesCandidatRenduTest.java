@@ -1,6 +1,7 @@
 package cnm.prs.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.ByteArrayInputStream;
 import java.nio.file.Files;
@@ -106,6 +107,60 @@ class ModelesCandidatRenduTest {
         String texte = FormulairesCandidat.generer(fiche, champs, modeles, null).get(0).texte();
         assertThat(texte).contains("somme de un million six cent mille ariary (1 600 000 Ariary) soit 1 600 000 Ariary, "
                 + "au 105 ème jour ; absent : ………");
+    }
+
+    /** ⚠️ V50 (2026-09-27, remise électronique, §B2.2) — un jeton INT-… n'est jamais substitué (laissé tel quel, jamais en pointillés). */
+    @Test
+    @DisplayName("V50 — {{INT-SE-03}} n'est jamais substitué : le jeton reste tel quel dans le rendu")
+    void jetonInterneJamaisSubstitue() {
+        Map<String, cnm.prs.entity.ChampFicheMarche> champs = new java.util.LinkedHashMap<>();
+        champs.put("B05-GS-03", champ("B05-GS-03", "MONTANT", false));
+        Map<String, List<DocumentLibre.Element>> modeles = Map.of("C1", FichierCommande.lire(
+                "TITRE\tEssai\nPARA\tquorum {{INT-SE-03}} et {{INT-SE-01}} ; montant {{B05-GS-03}}"));
+        cnm.prs.dto.FicheMarcheDto fiche = new cnm.prs.dto.FicheMarcheDto();
+        fiche.setIdDetail(1);
+        fiche.setVersion(1);
+        fiche.setCategorie("FOURNITURES_SERVICES");
+        fiche.setValeurs(new java.util.HashMap<>(Map.of("B04-CD-02", "C1", "B05-GS-03", "1600000")));
+        String texte = FormulairesCandidat.generer(fiche, champs, modeles, null).get(0).texte();
+        assertThat(texte).contains("quorum {{INT-SE-03}} et {{INT-SE-01}} ; montant 1 600 000 Ariary");
+    }
+
+    /** ⚠️ V50 (§B2.2) — le chargeur refuse un fichier de commande qui porte un tel jeton, fichier et ligne nommés. */
+    @Test
+    @DisplayName("V50 — ModelesCandidat lève au chargement d'un fichier de commande portant {{INT-…}}, fichier et ligne nommés")
+    void modeleAvecJetonInterneRefuse() {
+        String texte = "TITRE\tEssai\nPARA\tsans jeton\nPARA\tquorum {{ INT-SE-03 }}";
+        assertThatThrownBy(() -> ModelesCandidat.verifierJetonsInternes("/modeles/candidat/C1.txt", texte))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("/modeles/candidat/C1.txt, ligne 3").hasMessageContaining("{{INT-SE-03}}")
+                .hasMessageContaining("paramètre interne");
+        ModelesCandidat.verifierJetonsInternes("/modeles/candidat/A1.txt", "PARA\t{{B05-GS-03}} et {{SI:B04-SE}}");
+        // Les six modèles embarqués passent le contrôle (le composant se construit).
+        assertThat(new ModelesCandidat().modeles()).containsKeys("A1", "A2", "A3", "A4", "C1", "C2");
+    }
+
+    /** ⚠️ V50 (§B2.1) — la section {{SI:B04-SE}} … {{FINSI:B04-SE}} suit le mode de remise du cadrage. */
+    @Test
+    @DisplayName("V50 — la section SI:B04-SE de C1 / C2 s'imprime en mode électronique et disparaît en mode papier")
+    void sectionRemiseElectronique() {
+        Map<String, cnm.prs.entity.ChampFicheMarche> champs = new java.util.LinkedHashMap<>();
+        Map<String, List<DocumentLibre.Element>> modeles = Map.of("C1", FichierCommande.lire(
+                "TITRE\tEssai\nPARA\tavant\nPARA\t{{SI:B04-SE}}\nPARA\t[[CLAUSE À FOURNIR PAR LE JURISTE : remise électronique]]\n"
+                        + "PARA\t{{FINSI:B04-SE}}\nPARA\taprès"));
+        cnm.prs.dto.FicheMarcheDto fiche = new cnm.prs.dto.FicheMarcheDto();
+        fiche.setIdDetail(1);
+        fiche.setVersion(1);
+        fiche.setCategorie("FOURNITURES_SERVICES");
+        fiche.setValeurs(new java.util.HashMap<>(Map.of("B04-CD-02", "C1")));
+        fiche.setCadrage(new java.util.HashMap<>(Map.of("modeRemise", "ELECTRONIQUE")));
+        String electronique = FormulairesCandidat.generer(fiche, champs, modeles, null).get(0).texte();
+        assertThat(electronique).contains("avant", "CLAUSE À FOURNIR PAR LE JURISTE", "après").doesNotContain("{{");
+        fiche.setCadrage(new java.util.HashMap<>(Map.of("modeRemise", "PAPIER")));
+        String papier = FormulairesCandidat.generer(fiche, champs, modeles, null).get(0).texte();
+        assertThat(papier).contains("avant", "après").doesNotContain("CLAUSE", "{{");
+        fiche.setCadrage(null);   // une fiche d'avant V50 : papier
+        assertThat(FormulairesCandidat.generer(fiche, champs, modeles, null).get(0).texte()).doesNotContain("CLAUSE");
     }
 
     private static cnm.prs.entity.ChampFicheMarche champ(String code, String type, boolean parLot) {

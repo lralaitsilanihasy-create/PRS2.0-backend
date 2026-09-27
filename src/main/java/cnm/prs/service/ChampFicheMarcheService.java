@@ -91,7 +91,7 @@ public class ChampFicheMarcheService {
                 }
             }
         }
-        Map<String, List<RubriqueFicheMarche>> rubriquesParBloc = rubriqueRepository.findAllByOrderByCodeBlocAscRangAsc()
+        Map<String, List<RubriqueFicheMarche>> rubriquesParBloc = rubriqueRepository.findAllByOrderByCodeBlocAscRangAscCodeAsc()
                 .stream().filter(r -> !filtre || (admet(r.getTypesMarche(), type) && admet(r.getCategories(), cat)
                         && (avecChampsVoulus.contains(r.getCode()) || !avecChamps.contains(r.getCode()))))
                 .collect(Collectors.groupingBy(RubriqueFicheMarche::getCodeBloc));
@@ -200,8 +200,10 @@ public class ChampFicheMarcheService {
                     + "(ex. « garantieSoumission = OUI et avance = OUI »)."));
         }
         if (dto.getControle() != null && !dto.getControle().isBlank()
-                && !dto.getControle().trim().toUpperCase().matches("[A-Z0-9_]+(:[A-Z0-9_]+)?")) {
-            erreurs.add(new ErrorResponse.FieldError("controle", "Contrôle attendu sous la forme REGLE ou REGLE:ROLE."));
+                && !dto.getControle().trim().toUpperCase().matches("[A-Z0-9_]+(:[A-Z0-9_]+)?(\\s*,\\s*[A-Z0-9_]+(:[A-Z0-9_]+)?)*")) {
+            // ⚠️ V50 (2026-09-27) — plusieurs contrôles par champ, séparés par des virgules (DATES_ORDRE:REMISE,SE_HEURE_LIMITE:DATE).
+            erreurs.add(new ErrorResponse.FieldError("controle", "Contrôle attendu sous la forme REGLE ou REGLE:ROLE "
+                    + "(plusieurs séparés par des virgules)."));
         }
         // ⚠️ Lot 4 (2026-09-23) — une LISTE de source CADRAGE est un reflet : ses options sont celles de la question de
         // cadrage (le fichier du contrat-cadre en charge trois ainsi, comme les reflets semés par V35).

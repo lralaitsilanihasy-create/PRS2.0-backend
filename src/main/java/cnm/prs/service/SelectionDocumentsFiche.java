@@ -348,6 +348,13 @@ public final class SelectionDocumentsFiche {
                     return v;
                 }
             }
+            case DATE_HEURE -> {   // ⚠️ V50 (2026-09-27, §B2.3) — JJ/MM/AAAA HH:MM
+                java.time.LocalDateTime d = RemiseElectronique.dateHeure(v);
+                return d == null ? v : d.format(RemiseElectronique.AFFICHAGE);
+            }
+            case LISTE -> {   // ⚠️ V50 — le reflet du mode de remise s'imprime « Papier » / « Électronique »
+                return RemiseElectronique.CLE_CADRAGE.equals(c.getCleCadrage()) ? RemiseElectronique.libelleMode(v) : v;
+            }
             case MONTANT -> {
                 BigDecimal m = ControlesFicheMarche.nombre(v);
                 if (m == null) {

@@ -38,4 +38,16 @@ public class FicheMarcheValeur {
     /** Valeur telle que normalisée à l'enregistrement (nombre en chiffres, date ISO, code de liste, OUI/NON, texte). */
     @Column(name = "VALEUR", length = 4000)
     private String valeur;
+
+    /**
+     * ⚠️ V50 (2026-09-27, remise électronique, §B1.4 / Q11) — posée par le serveur à l'enregistrement du bloc (échéance
+     * calculée, date d'ouverture des plis…) : servie dans {@code champsCalcules}, affichée « calculée » en lecture seule.
+     */
+    @Column(name = "CALCULEE", nullable = false)
+    private Boolean calculee = Boolean.FALSE;
+
+    /** Une valeur saisie (non calculée). */
+    public FicheMarcheValeur(Integer idValeur, Integer idFiche, String codeChamp, String valeur) {
+        this(idValeur, idFiche, codeChamp, valeur, Boolean.FALSE);
+    }
 }

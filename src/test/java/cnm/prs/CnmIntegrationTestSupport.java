@@ -677,6 +677,14 @@ abstract class CnmIntegrationTestSupport extends AbstractIntegrationTest {
      */
     protected void remplirObligatoiresEtValider(Long idDmc, String typeMarche, String categorie,
             java.util.Map<String, String> donnees) throws Exception {
+        remplirObligatoires(idDmc, typeMarche, categorie, donnees);
+        mvc.perform(post("/api/fiches-marche/" + idDmc + "/valider").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk());
+    }
+
+    /** ⚠️ V50 (2026-09-27) — la même boucle de remplissage, sans valider (un test qui attend un refus de validation). */
+    protected void remplirObligatoires(Long idDmc, String typeMarche, String categorie,
+            java.util.Map<String, String> donnees) throws Exception {
         String ref = mvc.perform(get("/api/champs-fiche-marche").param("typeMarche", typeMarche)
                 .param("categorie", categorie == null ? "" : categorie).header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
@@ -708,11 +716,15 @@ abstract class CnmIntegrationTestSupport extends AbstractIntegrationTest {
                 }
             }
             for (java.util.Map.Entry<String, java.util.Map<String, Object>> e : parBloc.entrySet()) {
-                mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                org.springframework.test.web.servlet.MvcResult r = mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
                         .put("/api/fiches-marche/" + idDmc + "/blocs/" + e.getKey()).header("Authorization", tokenPrmp)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"valeurs\":"
                                 + new tools.jackson.databind.ObjectMapper().writeValueAsString(e.getValue()) + "}"))
-                        .andExpect(status().isOk());
+                        .andReturn();
+                if (r.getResponse().getStatus() != 200) {   // V50 : le refus nommé plutôt qu'un « 400 » muet
+                    throw new AssertionError("PUT blocs/" + e.getKey() + " → " + r.getResponse().getStatus() + " "
+                            + r.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
+                }
             }
             String fiche = mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp))
                     .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
@@ -733,8 +745,6 @@ abstract class CnmIntegrationTestSupport extends AbstractIntegrationTest {
                         .put(code, valeurObligatoire(types.get(base(code)), options.get(base(code)), controles.get(base(code))));
             }
         }
-        mvc.perform(post("/api/fiches-marche/" + idDmc + "/valider").header("Authorization", tokenPrmp))
-                .andExpect(status().isOk());
     }
 
     /** Le code d'un champ saisi par lot ({@code B05-TP-02#2} → {@code B05-TP-02}). */
@@ -775,10 +785,17 @@ abstract class CnmIntegrationTestSupport extends AbstractIntegrationTest {
 
     private static Object valeurObligatoire(String type, java.util.List<String> options, String controle) {
         java.util.List<String> etapes = java.util.List.of("LANCEMENT", "REMISE", "OUVERTURE", "ATTRIBUTION", "NOTIFICATION");
-        int rang = controle == null || !controle.startsWith("DATES_ORDRE:") ? 0
-                : etapes.indexOf(controle.substring("DATES_ORDRE:".length())) + 1;
+        // ⚠️ V50 (2026-09-27) — un champ porte plusieurs contrôles séparés par des virgules : le rôle DATES_ORDRE se lit parmi eux.
+        int rang = 0;
+        for (String un : controle == null ? new String[0] : controle.split(",")) {
+            if (un.trim().startsWith("DATES_ORDRE:")) {
+                rang = etapes.indexOf(un.trim().substring("DATES_ORDRE:".length())) + 1;
+            }
+        }
         return switch (type == null ? "TEXTE" : type) {
             case "DATE" -> LocalDate.of(2026, 1, 1).plusDays(10L * rang).toString();
+            case "DATE_HEURE" -> LocalDate.of(2026, 1, 1).plusDays(10L * rang).toString() + "T10:00";   // V50
+            case "URL" -> "https://exemple.mg/depot";   // V50
             case "NOMBRE" -> 30;
             case "MONTANT" -> 1000000;
             case "POURCENTAGE" -> 10;

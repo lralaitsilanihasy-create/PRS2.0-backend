@@ -328,6 +328,18 @@ actif** : c'est un coupe-circuit, pas une seconde activation (chaque actualité 
 | PUT | /api/parametres/actualites-actives | `{ "actif": boolean }` | `{ "actif": boolean }` | 200, 400, 403 | ADMINISTRATEUR |
 | GET | /api/parametres/agpm-seuil-montant | — | `{ "seuil": number }` | 200 | Authentifié |
 | PUT | /api/parametres/agpm-seuil-montant | `{ "seuil": number }` | `{ "seuil": number }` | 200, 400, 403 | ADMINISTRATEUR |
+| GET | /api/parametres/fiche-remise-electronique | — | `{ plateformeUrl, fuseau, signatureMin, tailleMaxPlateformeMo, delaiMinRemiseJours, assistance, quorumDefaut }` | 200 | Authentifié |
+| PUT | /api/parametres/fiche-remise-electronique | même forme (état complet, `null` efface) | idem | 200, 400 (nominatif), 403 | ADMINISTRATEUR |
+
+> ⚠️ **`FICHE_SE_*` (2026-09-27, remise électronique, V50 — §B1.4 de la demande).** Sept clés : `FICHE_SE_PLATEFORME_URL`
+> (adresse `http`/`https`, ≤ 500), `FICHE_SE_FUSEAU` (défaut `Indian/Antananarivo`), `FICHE_SE_SIGNATURE_MIN` (`Qualifiée` /
+> `Avancée` / `Simple`, défaut `Avancée`), `FICHE_SE_TAILLE_MAX_PLATEFORME_MO` (défaut `500`),
+> `FICHE_SE_DELAI_MIN_REMISE_JOURS` (défaut **`30`, proposé — à faire fixer par le pilote**), `FICHE_SE_ASSISTANCE` (texte
+> libre), `FICHE_SE_QUORUM_DEFAUT` (`n/m`, défaut `3/5` : le numérateur est le quorum **proposé** à l'écran des paramètres
+> internes tant que rien n'est enregistré). Un défaut « = paramètre » d'un champ du référentiel s'écrit
+> `valeurDefaut = PARAM:<CLE>` et se recopie à la **création** de la fiche depuis le paramètre du moment. `VALEUR` de
+> `t_parametre` passe à 1000 caractères. Il n'existe **pas** de paramètre de jours fériés : la règle 1 juge « jour
+> ouvrable » = lundi à vendredi (`JoursOuvres`).
 
 > ⚠️ **`AGPM_SEUIL_MONTANT` (arbitrage pilote 2026-09-07, « suite »).** Seuil de montant au-delà duquel un
 > marché passé selon un mode à déclenchement **conditionnel** (`agpmSiSeuil` — l'**appel à manifestation
@@ -5124,6 +5136,111 @@ de version.
   lire « … » » puis « Information de la fiche DAO : *libellé* — lot *n* ». Le corps reste libre (le front ne
   structure pas ses observations) : le bloc s'ajoute à la suite, il ne s'insère pas ligne à ligne. Les sauts de ligne
   du corps sont désormais rendus dans le document Word.
+
+### La remise électronique des offres — V50 ⚠️ 2026-09-27
+
+Demande front `frontend/docs/demande-backend-2026-09-27-remise-electronique.md` (cahier des charges du pilote du 27/09,
+plan `docs/plan-2026-09-27-remise-electronique.md`, arbitrage « selon les recommandations ») ; décision :
+`docs/adr/ADR-0010-responsable-de-procedure-et-parametres-internes.md` ; migration **V50** ; référentiel : les cinq CSV
+du front (`frontend/docs/referentiel-champs-fiche-*.csv`) et, pour une base déjà chargée,
+`docs/referentiel/2026-09-27-remise-electronique.sql` (après V50). Règles : `docs/regles-gestion.md`, § *La remise
+électronique des offres*. **Papier ou électronique, jamais mixte** : clé de cadrage **`modeRemise`** (`PAPIER` /
+`ELECTRONIQUE`, validée par le reflet `B04-SE-01` ; **clé absente = `PAPIER`**, une fiche d'avant V50 est papier), servie
+dans `valeursCadrage['B04-SE-01']` (`PAPIER` à défaut) et imprimée « Papier » / « Électronique ». En mode papier, rien ne
+change au DAO produit, à la ligne « Mode de remise des offres : Papier » près (elle remplace `B04-VE-01`, désactivé).
+
+- **Deux types de champ** (`TypeChampFiche`, contrainte `ck_champ_fiche_marche_type`, colonne `type` de l'import) :
+  **`DATE_HEURE`** — valeur `AAAA-MM-JJTHH:MM` (celle d'un `datetime-local`, secondes tolérées et tronquées), 400
+  nominatif « *libellé* attend une date et une heure AAAA-MM-JJTHH:MM. », imprimé `JJ/MM/AAAA HH:MM` ; **`URL`** —
+  adresse absolue `http`/`https`, 500 caractères au plus, 400 « attend une adresse http ou https », imprimée telle quelle.
+- **Référentiel** : rubrique **`B04-SE`** « Remise électronique » (bloc B04, rang 61 comme B04-CD — l'ordre de lecture des
+  rubriques est désormais (bloc, rang, **code**) —, trois formes, trois catégories), champs `B04-SE-01` à `B04-SE-17`
+  (trois catégories) ; `B05-GS-10` à `B05-GS-14` (condition `modeRemise = ELECTRONIQUE et garantieSoumission = OUI`) et
+  `B04-OP-10` à `B04-OP-13`, dans les rubriques **des fournitures** (`FOURNITURES_SERVICES`) ; `B04-VE-01` / `B04-VE-02`
+  **inactifs** (jamais supprimés : une fiche validée garde sa valeur, non reprise à la révision). Tous conditionnés par
+  `modeRemise = ELECTRONIQUE` sauf `B04-SE-01`. **`controle` accepte plusieurs contrôles** séparés par des virgules
+  (`DATES_ORDRE:REMISE,SE_HEURE_LIMITE:DATE` sur `B04-LR-03` ; `SE_SIGNATURE_MIN:NIVEAU,SE_PRESTATAIRES:NIVEAU` sur
+  `B04-SE-05`) — le motif validé devient `REGLE[:ROLE](,REGLE[:ROLE])*`. Rôles posés sur des champs existants des
+  fournitures : `B04-LR-03` `SE_HEURE_LIMITE:DATE`, `B04-LR-04` `SE_HEURE_LIMITE:HEURE`, `B04-OP-02`
+  `SE_OUVERTURE_PLIS:DATE`, `B04-OP-03` `SE_OUVERTURE_PLIS:HEURE`, `B04-LR-02` `SE_ORIGINAL_GARANTIE:LIEU_REMISE` (entrée
+  du calcul de `B05-GS-12`). Options de `B04-SE-06` (prestataires de certification) et `B05-GS-13` (garants habilités) :
+  **une option provisoire nominative** « À définir par l'Administrateur (liste officielle …) » tant que la liste
+  officielle n'est pas fournie (administrable par `PUT /api/champs-fiche-marche/{code}`), sans défaut.
+- **Valeurs calculées** — `FicheMarcheDto.champsCalcules` / `FicheMarcheResumeDto.champsCalcules` (`string[]`, clés `CODE` ou
+  `CODE#n` ; persisté : `t_fiche_marche_valeur.CALCULEE`, donc servi aussi en `GET` et repris à la révision). En mode
+  électronique, à l'enregistrement d'un bloc (`PUT …/blocs/{bloc}`, qui renvoie la fiche entière), le serveur **pose**
+  pour les cibles ouvertes du bloc : `B04-SE-17` = date prévisionnelle « Lancement » du plan à 00:00, `B04-SE-03` =
+  publication, `B04-SE-15` = échéance de remise − 48 h, `B05-GS-12` = adresse de remise, `B05-GS-14` = échéance —
+  **si la cellule est vide** (une valeur renvoyée identique reste « calculée », une valeur différente est une
+  saisie) ; `B04-OP-02` / `B04-OP-03` = échéance + `B04-OP-12` minutes — **toujours** (Q11). Les entrées se lisent par
+  **rôles** (`SE_HEURE_LIMITE:DATE` + `:HEURE`, `SE_OUVERTURE_PLIS:DELAI`, `SE_ORIGINAL_GARANTIE:LIEU_REMISE`), jamais par
+  code : aujourd'hui seules les fournitures portent une heure de remise séparée (`B04-LR-04`), travaux et prestations
+  intellectuelles ont une `DATE` « date et heure limites » — là, les calculs d'échéance et les règles 1, 2, 7 attendent
+  leurs champs. Le front ne pré-remplit jamais.
+- **Règles de bilan** (`ControlesFicheMarche`, **toutes bloquantes, mode électronique seulement** ; messages servis tels quels) :
+
+| # | Règle | Rôles | Condition | Message |
+|---|---|---|---|---|
+| 1 | `SE_HEURE_LIMITE` | `DATE`, `HEURE` | heure `HH:MM` et date lundi–vendredi (pas de paramètre de jours fériés) | En remise électronique, la date limite doit porter une heure (HH:MM) et tomber un jour ouvrable. |
+| 2 | `SE_OUVERTURE_DEPOTS` | `DEPOTS`, `PUBLICATION` (+ échéance) | dépôts < échéance ; date limite − publication ≥ `FICHE_SE_DELAI_MIN_REMISE_JOURS` | L'ouverture des dépôts doit précéder la date limite, et la publication la précéder d'au moins *n* jours. |
+| 3 | `SE_TAILLES` | `FICHIER`, `OFFRE` | fichier ≤ offre ≤ `FICHE_SE_TAILLE_MAX_PLATEFORME_MO` | La taille par fichier doit être inférieure ou égale à la taille par offre, elle-même limitée à *n* Mo par la plateforme. |
+| 4 | `SE_SIGNATURE_MIN` | `NIVEAU` | rang ≥ rang(`FICHE_SE_SIGNATURE_MIN`), Qualifiée > Avancée > Simple | Le niveau de signature exigé ne peut pas être inférieur au niveau minimal fixé par l'administrateur (*n*). |
+| 5 | `SE_ORIGINAL_GARANTIE` | `EXIGE`, `LIEU`, `LIMITE` | `EXIGE = OUI` ⇒ lieu et limite renseignés | L'original papier étant exigé, indiquez le lieu et la date limite de son dépôt. |
+| 6 | `SE_QUORUM` | paramètres internes (bloc `B04`, `champs: []`) | 2 ≤ quorum ≤ membres ; responsable ∉ membres | Le quorum de déchiffrement doit être compris entre 2 et le nombre de membres, et le responsable ne peut pas détenir une part de clé. |
+| 7 | `SE_OUVERTURE_PLIS` | `DELAI`, `DATE`, `HEURE` (+ échéance) | ouverture = échéance + *n* minutes | La date et l'heure d'ouverture des plis sont calculées : date limite plus *n* minutes. |
+| 8 | `SE_CEREMONIE` | `PUBLICATION` + paramètres internes | cérémonie < publication | La cérémonie des clés doit précéder la publication de l'avis. |
+| 9 | `SE_PRESTATAIRES` | `PRESTATAIRES`, `NIVEAU` | niveau ∈ {Qualifiée, Avancée} ⇒ prestataires non vide | Pour une signature qualifiée ou avancée, indiquez au moins un prestataire de certification accepté. |
+| 10 | `PARAMETRES_INTERNES_INCOMPLETS` | — (bloc `B04`) | état ≠ `COMPLETS` | Les paramètres internes de la procédure sont incomplets : à compléter par le responsable de la procédure. |
+| 11 | `RESPONSABLE_NON_DESIGNE` | — (bloc `B04`) | aucun titulaire actif | Aucun responsable de la procédure n'est désigné : la fiche ne peut pas être validée en remise électronique. |
+
+  Une règle dont un rôle manque n'est pas évaluée (convention du catalogue) ; `POST …/valider` refuse par **409
+  `CONTROLES_BLOQUANTS`** comme aujourd'hui ; en mode papier aucune des onze n'apparaît, ni en `ok` ni en `bloquants`.
+- **Paramètres administrables** : `GET`/`PUT /api/parametres/fiche-remise-electronique` (§ *Paramètres système*).
+- **Moteur de rendu** : la section `{{SI:B04-SE}}` … `{{FINSI:B04-SE}}` des formulaires C1 / C2 s'imprime en mode
+  électronique et s'omet (paragraphes et tableaux) en mode papier ; un jeton `{{INT-…}}` n'est jamais substitué et
+  **`ModelesCandidat` refuse au démarrage** un fichier de commande qui en porte un (fichier, ligne, jeton nommés). Les
+  Données particulières impriment les nouveaux champs comme les autres (« libellé : valeur »), `DATE_HEURE` en
+  `JJ/MM/AAAA HH:MM`.
+
+**Paramètres internes de la procédure** (`t_parametre_interne_procedure`, journal `t_parametre_interne_journal`) —
+**réservés au titulaire du rôle « Responsable de la procédure » pour cette fiche** : 403 pour tout autre, Administrateur
+et PRMP compris, et pour le responsable d'une autre procédure (garde par identité, `PredicatsIdentite.estResponsableProcedure`,
+ordre profil authentifié → identité → corps). 404 DMC inconnu.
+
+| Méthode | URL | Corps | Réponse | Statuts |
+|---|---|---|---|---|
+| GET | /api/fiches-marche/{idDmc}/parametres-internes | — | `ParametresInternesDto` | 200, 403, 404 |
+| PUT | /api/fiches-marche/{idDmc}/parametres-internes | `{ membresCommission: [im…], quorum, dateCeremonie: "AAAA-MM-JJTHH:MM" }` | `ParametresInternesDto` | 200, 400 (`membresCommission` compte inconnu, `quorum` < 1, `dateCeremonie` illisible), 403, 404, 409 `MEMBRE_COMMISSION` (un membre est le responsable actif), 409 `FICHE_VALIDEE` (dernière version validée **en mode électronique** : lecture seule jusqu'à la révision) |
+| GET | /api/fiches-marche/{idDmc}/parametres-internes/candidats | — | `[{ im, nom, profil }]` : Présidents, Chefs de commission et Membres de la localité de la fiche | 200, 403, 404 |
+
+`ParametresInternesDto` = `{ idDmc, membresCommission: [{ im, nom, profil }], nombreParts, quorum, dateCeremonie,
+responsable: { im, nom } | null, etat: 'COMPLETS' | 'INCOMPLETS' | 'ABSENTS', anomalies: [{ regle, message }],
+journal: [{ date, acteur, nomActeur, champ, ancienneValeur, nouvelleValeur }] }` — `nombreParts` = taille de la liste
+(INT-SE-02) ; `responsable` = le titulaire (INT-SE-05) ; `quorum` = le quorum **proposé** (`FICHE_SE_QUORUM_DEFAUT`) tant
+que rien n'est enregistré ; `etat = COMPLETS` quand membres ≥ 2, quorum et date renseignés et règles 6 et 8 satisfaites ;
+`anomalies` : ce qui manque et ce que les règles 6 et 8 refusent ; `journal` : le journal **dédié**, avec les valeurs
+(Q7), du plus ancien au plus récent, champs `membresCommission`, `quorum`, `dateCeremonie`, `responsable`. Le journal
+global `t_audit_log` reçoit la route et l'acteur (`PARAMETRES-INTERNES`, `RESPONSABLE`), **sans valeurs**.
+
+**Rôle « Responsable de la procédure »** (`t_responsable_procedure`, un seul actif par DMC — ADR-0010) :
+
+| Méthode | URL | Corps | Réponse | Statuts | Rôle |
+|---|---|---|---|---|---|
+| POST | /api/fiches-marche/{idDmc}/responsable | `{ im }` | **201** `{ im, nom }` (la fiche n'est pas relue) | 201, 400, 403, 404 (DMC ou compte inconnu), 409 `RESPONSABLE_EXISTANT` (retirer d'abord), 409 `MEMBRE_COMMISSION` (le compte détient une part de clé de cette fiche) | ADMINISTRATEUR |
+| DELETE | /api/fiches-marche/{idDmc}/responsable | — | — | 204, 403, 404 (pas de titulaire) | ADMINISTRATEUR |
+| GET | /api/fiches-marche/{idDmc}/responsable/candidats | — | `[{ im, nom, profil }]` : contrôleurs de la localité de la fiche et sans localité (compétents partout), hors membres détenteurs d'une part | 200, 403, 404 | ADMINISTRATEUR |
+
+L'Administrateur ne lit ni ne modifie les paramètres internes (403), sauf s'il est lui-même titulaire. Journal dédié :
+champ `responsable`, ancienne → nouvelle valeur (matricules).
+
+**`FicheMarcheDto` et `FicheMarcheResumeDto` gagnent** :
+
+| Champ | Sens |
+|---|---|
+| responsableProcedure | `{ im, nom }` du titulaire, `null` sans titulaire |
+| peutModifierParametresInternes | vrai pour le titulaire connecté (lui seul lit et écrit les paramètres internes) |
+| parametresInternes | `COMPLETS` · `INCOMPLETS` · `ABSENTS` — l'état seul, exposé à tous ceux qui lisent la fiche |
+| champsCalcules | les clés posées par le serveur (ci-dessus), à afficher en lecture seule « calculée » |
 
 ---
 

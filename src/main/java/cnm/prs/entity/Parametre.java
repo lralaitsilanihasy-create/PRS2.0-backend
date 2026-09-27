@@ -29,7 +29,7 @@ public class Parametre {
     @Column(name = "CLE", nullable = false, length = 50)
     private String cle;
 
-    @Column(name = "VALEUR", length = 200)
+    @Column(name = "VALEUR", length = 1000)
     private String valeur;
 
     @Column(name = "DATE_MAJ")

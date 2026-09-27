@@ -10,6 +10,9 @@ PARA	c) que s’étant vu notifier l’acceptation de l’offre par le Bénéfic
 PARA	- il n’a pas fourni la garantie de bonne exécution du marché, alors qu’il était tenu de le faire ainsi qu’il est prévu dans les documents d’appel d’offres, ou
 PARA	- il a refusé de signer le document l’engageant contractuellement à exécuter le marché.
 PARA	Le présent engagement expire le trentième (30ème) jour suivant l’expiration de la période de validité des offres telle que stipulée ci-dessus. Cette date peut être reportée par l’Autorité Contractante par notification écrite au Candidat et à nous même. Toute demande relative au présent engagement devra nous parvenir au plus tard à la date d’expiration, faute de quoi le présent engagement expire de plein droit.
+PARA	{{SI:B04-SE}}
+PARA	[[CLAUSE À FOURNIR PAR LE JURISTE : remise électronique — voie de remise de la garantie ({{B05-GS-10}}) et code de vérification]]
+PARA	{{FINSI:B04-SE}}
 PARA	Fait à [Lieu d’établissement de l’engagement], le [date d’établissement de l’engagement]
 PARA	SIGNATURE et authentification du signataire
 PARA	Nom de la Banque

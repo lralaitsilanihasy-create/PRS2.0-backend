@@ -143,6 +143,108 @@ public class ParametreService {
         return nombre(FICHE_TAUX_TVA);
     }
 
+    /**
+     * ⚠️ V50 (2026-09-27, remise électronique, §B1.4) — les sept paramètres administrables de la remise électronique,
+     * servis par {@code GET/PUT /api/parametres/fiche-remise-electronique} ({@link RemiseElectronique.Parametres}). Les
+     * défauts « = paramètre » du référentiel ({@code valeurDefaut = PARAM:<CLE>}) se recopient à la création d'une fiche
+     * depuis le paramètre du moment. {@code FICHE_SE_DELAI_MIN_REMISE_JOURS} : 30 proposé, à faire fixer par le pilote.
+     */
+    public static final String FICHE_SE_PLATEFORME_URL = "FICHE_SE_PLATEFORME_URL";
+    public static final String FICHE_SE_FUSEAU = "FICHE_SE_FUSEAU";
+    public static final String FICHE_SE_SIGNATURE_MIN = "FICHE_SE_SIGNATURE_MIN";
+    public static final String FICHE_SE_TAILLE_MAX_PLATEFORME_MO = "FICHE_SE_TAILLE_MAX_PLATEFORME_MO";
+    public static final String FICHE_SE_DELAI_MIN_REMISE_JOURS = "FICHE_SE_DELAI_MIN_REMISE_JOURS";
+    public static final String FICHE_SE_ASSISTANCE = "FICHE_SE_ASSISTANCE";
+    public static final String FICHE_SE_QUORUM_DEFAUT = "FICHE_SE_QUORUM_DEFAUT";
+    /** Préfixe d'une valeur par défaut de champ qui se lit dans un paramètre ({@code PARAM:FICHE_SE_PLATEFORME_URL}). */
+    public static final String PREFIXE_DEFAUT_PARAMETRE = "PARAM:";
+
+    @Transactional(readOnly = true)
+    public RemiseElectronique.Parametres remiseElectronique() {
+        java.math.BigDecimal taille = nombre(FICHE_SE_TAILLE_MAX_PLATEFORME_MO);
+        java.math.BigDecimal delai = nombre(FICHE_SE_DELAI_MIN_REMISE_JOURS);
+        return new RemiseElectronique.Parametres(texte(FICHE_SE_PLATEFORME_URL), texte(FICHE_SE_FUSEAU),
+                texte(FICHE_SE_SIGNATURE_MIN), taille == null ? null : taille.intValue(),
+                delai == null ? null : delai.intValue(), texte(FICHE_SE_ASSISTANCE), texte(FICHE_SE_QUORUM_DEFAUT));
+    }
+
+    /**
+     * Fixe les sept paramètres (Administrateur) : l'état complet, {@code null} efface. 400 nominatif : adresse non
+     * {@code http}/{@code https}, niveau hors Qualifiée / Avancée / Simple, taille ou délai négatifs, quorum hors « n/m ».
+     */
+    public RemiseElectronique.Parametres fixerRemiseElectronique(RemiseElectronique.Parametres p) {
+        if (p == null) {
+            p = new RemiseElectronique.Parametres(null, null, null, null, null, null, null);
+        }
+        java.util.List<cnm.prs.exception.ErrorResponse.FieldError> erreurs = new java.util.ArrayList<>();
+        if (p.plateformeUrl() != null && !p.plateformeUrl().isBlank() && !RemiseElectronique.urlValide(p.plateformeUrl().trim())) {
+            erreurs.add(new cnm.prs.exception.ErrorResponse.FieldError("plateformeUrl",
+                    "L'adresse de la plateforme attend une adresse http ou https (500 caractères au plus)."));
+        }
+        if (p.signatureMin() != null && !p.signatureMin().isBlank() && RemiseElectronique.rangNiveau(p.signatureMin()) < 0) {
+            erreurs.add(new cnm.prs.exception.ErrorResponse.FieldError("signatureMin",
+                    "Le niveau minimal de signature est Qualifiée, Avancée ou Simple."));
+        }
+        if (p.tailleMaxPlateformeMo() != null && p.tailleMaxPlateformeMo() <= 0) {
+            erreurs.add(new cnm.prs.exception.ErrorResponse.FieldError("tailleMaxPlateformeMo",
+                    "La taille maximale de la plateforme est un nombre de Mo strictement positif."));
+        }
+        if (p.delaiMinRemiseJours() != null && p.delaiMinRemiseJours() < 0) {
+            erreurs.add(new cnm.prs.exception.ErrorResponse.FieldError("delaiMinRemiseJours",
+                    "Le délai minimal entre publication et remise est un nombre de jours positif ou nul."));
+        }
+        if (p.quorumDefaut() != null && !p.quorumDefaut().isBlank() && !p.quorumDefaut().trim().matches("\\d+\\s*/\\s*\\d+")) {
+            erreurs.add(new cnm.prs.exception.ErrorResponse.FieldError("quorumDefaut",
+                    "Le quorum par défaut s'écrit « n/m » (par exemple 3/5)."));
+        }
+        if (!erreurs.isEmpty()) {
+            throw new cnm.prs.exception.ChampsInvalidesException(erreurs);
+        }
+        ecrireTexte(FICHE_SE_PLATEFORME_URL, p.plateformeUrl());
+        ecrireTexte(FICHE_SE_FUSEAU, p.fuseau());
+        ecrireTexte(FICHE_SE_SIGNATURE_MIN, p.signatureMin() == null ? null
+                : RemiseElectronique.NIVEAUX.get(RemiseElectronique.rangNiveau(p.signatureMin())));
+        ecrireTexte(FICHE_SE_TAILLE_MAX_PLATEFORME_MO, p.tailleMaxPlateformeMo() == null ? null : String.valueOf(p.tailleMaxPlateformeMo()));
+        ecrireTexte(FICHE_SE_DELAI_MIN_REMISE_JOURS, p.delaiMinRemiseJours() == null ? null : String.valueOf(p.delaiMinRemiseJours()));
+        ecrireTexte(FICHE_SE_ASSISTANCE, p.assistance());
+        ecrireTexte(FICHE_SE_QUORUM_DEFAUT, p.quorumDefaut() == null ? null : p.quorumDefaut().replace(" ", ""));
+        return remiseElectronique();
+    }
+
+    /** La valeur texte d'un paramètre ; {@code null} si absent ou vide. */
+    @Transactional(readOnly = true)
+    public String texte(String cle) {
+        return repository.findById(cle).map(Parametre::getValeur).filter(v -> v != null && !v.isBlank()).map(String::trim)
+                .orElse(null);
+    }
+
+    /**
+     * ⚠️ V50 — la valeur par défaut d'un champ du référentiel : telle quelle, ou lue dans le paramètre qu'elle nomme
+     * ({@code PARAM:<CLE>}, {@code null} si le paramètre n'est pas fixé).
+     */
+    @Transactional(readOnly = true)
+    public String valeurDefaut(String valeurDefaut) {
+        if (valeurDefaut == null) {
+            return null;
+        }
+        if (valeurDefaut.startsWith(PREFIXE_DEFAUT_PARAMETRE)) {
+            return texte(valeurDefaut.substring(PREFIXE_DEFAUT_PARAMETRE.length()).trim());
+        }
+        return valeurDefaut;
+    }
+
+    private void ecrireTexte(String cle, String valeur) {
+        if (valeur == null || valeur.isBlank()) {
+            repository.deleteById(cle);
+            return;
+        }
+        Parametre p = repository.findById(cle).orElseGet(() -> new Parametre(cle, null, null, null));
+        p.setValeur(valeur.trim());
+        p.setDateMaj(LocalDateTime.now());
+        p.setImActeur(CurrentUser.ref().or(CurrentUser::login).orElse(null));
+        repository.save(p);
+    }
+
     private java.math.BigDecimal nombre(String cle) {
         return repository.findById(cle).map(Parametre::getValeur).filter(v -> v != null && !v.isBlank()).map(v -> {
             try {

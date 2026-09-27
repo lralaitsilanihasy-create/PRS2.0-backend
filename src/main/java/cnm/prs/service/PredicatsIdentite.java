@@ -61,6 +61,15 @@ public final class PredicatsIdentite {
         return memePersonne(acteur, designe);
     }
 
+    /**
+     * ⚠️ V50 (2026-09-27, remise électronique, §B5 ; ADR-0010) — l'acteur est-il le <strong>responsable de la
+     * procédure</strong> (titulaire actif de {@code t_responsable_procedure} pour ce DMC) ? Faux sans acteur ou sans
+     * titulaire. Garde exclusive des paramètres internes : aucun profil — Administrateur et PRMP compris — ne la lève.
+     */
+    public static boolean estResponsableProcedure(String acteur, String responsable) {
+        return memePersonne(acteur, responsable);
+    }
+
     /** Une désignation est-elle posée (matricule non vide) ? Sans elle, la part n'est pas encore ouverte (409). */
     public static boolean designationFaite(String designe) {
         return designe != null && !designe.isBlank();

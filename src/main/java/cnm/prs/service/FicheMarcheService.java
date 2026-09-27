@@ -109,6 +109,8 @@ public class FicheMarcheService {
     /** ⚠️ V45 (2026-09-25) — le besoin par lot (fournitures) et les paramètres du contrôle du taux de garantie. */
     private final BesoinFiche besoin;
     private final ParametreService parametres;
+    /** ⚠️ V50 (2026-09-27, remise électronique) — paramètres internes et responsable de la procédure (état, contexte du bilan). */
+    private final ParametresInternesService internes;
 
     public FicheMarcheService(FicheMarcheRepository ficheRepository, FicheMarcheValeurRepository valeurRepository,
             ChampFicheMarcheRepository champRepository, BlocFicheMarcheRepository blocRepository,
@@ -117,9 +119,10 @@ public class FicheMarcheService {
             JournalDossierService journal, ObjectMapper mapper,
             cnm.prs.repository.DossierRepository dossierRepository, DocumentsFicheMarcheService documents,
             cnm.prs.repository.DocumentFicheMarcheRepository documentRepository, DmcService dmcService,
-            BesoinFiche besoin, ParametreService parametres) {
+            BesoinFiche besoin, ParametreService parametres, ParametresInternesService internes) {
         this.besoin = besoin;
         this.parametres = parametres;
+        this.internes = internes;
         this.dmcService = dmcService;
         this.documents = documents;
         this.documentRepository = documentRepository;
@@ -189,7 +192,8 @@ public class FicheMarcheService {
         FicheMarcheDto d = toDto(ctx, fiche);
         return new FicheMarcheResumeDto(idDmc, d.getIdDetail(), d.getRefeDossier(), d.getDesignationMarche(),
                 d.getTypeMarche(), d.getStatut(), d.getVersion(), d.getBilanControles().nbSaisis(),
-                d.getBilanControles().nbAttendus(), versionSoumise);
+                d.getBilanControles().nbAttendus(), versionSoumise, d.getResponsableProcedure(),
+                d.getPeutModifierParametresInternes(), d.getParametresInternes(), d.getChampsCalcules());   // V50
     }
 
     /**
@@ -496,7 +500,8 @@ public class FicheMarcheService {
         champRepository.findAllByOrderByCodeRubriqueAscRangAsc().forEach(c -> champs.put(c.getCode(), c));
         // ⚠️ 2026-09-25 (§B2) — le nombre de lots du plan (ligne courante) : un champ « par lot » d'une ligne allotie se
         // saisit sous CODE#n, n de 1 à ce nombre.
-        int nbLots = LotsFiche.nbLots(valeursPpm.lire(ctx.idDetail()).valeurs());
+        ValeursPpmService.ValeursPpm ppm = valeursPpm.lire(ctx.idDetail());
+        int nbLots = LotsFiche.nbLots(ppm.valeurs());
 
         List<ErrorResponse.FieldError> erreurs = new ArrayList<>();
         Map<String, String> aEcrire = new TreeMap<>();
@@ -538,9 +543,36 @@ public class FicheMarcheService {
         if (!erreurs.isEmpty()) {
             throw new ChampsInvalidesException(erreurs);
         }
+        // ⚠️ V50 (2026-09-27, remise électronique, §B1.4 et Q11) — en mode électronique, le serveur POSE les valeurs
+        // calculées du bloc : les cibles « si vide » quand la cellule est vide (ou renvoyée telle que calculée), la date et
+        // l'heure d'ouverture des plis toujours. Les entrées se lisent sur toute la fiche (les autres blocs en base).
+        Set<String> calculees = new java.util.HashSet<>();
+        if (RemiseElectronique.electronique(cadrage)) {
+            Map<String, String> toutes = new TreeMap<>();
+            valeurRepository.findByIdFiche(fiche.getIdFiche()).stream()
+                    .filter(v -> !v.getCodeChamp().startsWith(codeBloc + "-"))
+                    .forEach(v -> toutes.put(v.getCodeChamp(), v.getValeur()));
+            toutes.putAll(aEcrire);
+            List<ChampFicheMarche> ouverts = champs.values().stream()
+                    .filter(c -> Boolean.TRUE.equals(c.getActif()) && c.pourTypeMarche(typeMarche)
+                            && c.pourCategorie(ctx.codeCategorie()) && ConditionCadrage.vraie(c.getCondition(), cadrage))
+                    .toList();
+            for (Map.Entry<String, String> calc : RemiseElectronique.calculs(ouverts, toutes, ppm.dates()).entrySet()) {
+                String cible = calc.getKey();
+                if (!cible.startsWith(codeBloc + "-")) {
+                    continue;
+                }
+                String recue = aEcrire.get(cible);
+                if (RemiseElectronique.TOUJOURS_CALCULES.contains(cible) || recue == null || recue.equals(calc.getValue())) {
+                    aEcrire.put(cible, calc.getValue());
+                    calculees.add(cible);
+                }
+            }
+        }
         valeurRepository.deleteParBloc(fiche.getIdFiche(), codeBloc + "-%");
         for (Map.Entry<String, String> e : aEcrire.entrySet()) {
-            valeurRepository.save(new FicheMarcheValeur(null, fiche.getIdFiche(), e.getKey(), e.getValue()));
+            valeurRepository.save(new FicheMarcheValeur(null, fiche.getIdFiche(), e.getKey(), e.getValue(),
+                    calculees.contains(e.getKey())));
         }
         fiche.setDateMaj(LocalDateTime.now());
         fiche = ficheRepository.save(fiche);
@@ -700,7 +732,8 @@ public class FicheMarcheService {
         int nbLots = LotsFiche.nbLots(valeursPpm.lire(ctx.idDetail()).valeurs());
         for (FicheMarcheValeur v : valeurRepository.findByIdFiche(derniere.getIdFiche())) {
             if (valeurReprise(referentiel, v.getCodeChamp(), v.getValeur(), nbLots)) {
-                valeurRepository.save(new FicheMarcheValeur(null, suivante.getIdFiche(), v.getCodeChamp(), v.getValeur()));
+                valeurRepository.save(new FicheMarcheValeur(null, suivante.getIdFiche(), v.getCodeChamp(), v.getValeur(),
+                        Boolean.TRUE.equals(v.getCalculee())));   // V50 : la mention « calculée » suit la valeur
             }
         }
         besoin.copier(derniere.getIdFiche(), suivante.getIdFiche());   // ⚠️ V45 — le besoin suit, comme les valeurs
@@ -819,7 +852,11 @@ public class FicheMarcheService {
                 if (c.getValeurDefaut() != null && SourceChampFiche.SAISIE.name().equals(c.getSource())
                         && c.pourTypeMarche(ctx.forme().name())
                         && c.pourCategorie(ctx.codeCategorie() != null ? ctx.codeCategorie() : CategorieDao.FOURNITURES_SERVICES.name())) {
-                    valeurRepository.save(new FicheMarcheValeur(null, f.getIdFiche(), c.getCode(), c.getValeurDefaut()));
+                    // ⚠️ V50 (2026-09-27, §B1.4) — un défaut « PARAM:<CLE> » se lit dans le paramètre du moment (rien s'il est vide).
+                    String defaut = parametres.valeurDefaut(c.getValeurDefaut());
+                    if (defaut != null && !defaut.isBlank()) {
+                        valeurRepository.save(new FicheMarcheValeur(null, f.getIdFiche(), c.getCode(), defaut));
+                    }
                 }
             }
             return f;
@@ -959,6 +996,22 @@ public class FicheMarcheService {
                     return null;
                 }
             }
+            case DATE_HEURE -> {   // ⚠️ V50 (2026-09-27, §B1.2) — ISO local à la minute
+                LocalDateTime d = RemiseElectronique.dateHeure(brut);
+                if (d == null) {
+                    erreurs.add(new ErrorResponse.FieldError(champ, "« " + c.getLibelle() + " » attend une date et une heure AAAA-MM-JJTHH:MM."));
+                    return null;
+                }
+                return RemiseElectronique.isoMinute(d);
+            }
+            case URL -> {   // ⚠️ V50 (§B1.2) — adresse absolue http / https, 500 caractères au plus
+                if (!RemiseElectronique.urlValide(brut)) {
+                    erreurs.add(new ErrorResponse.FieldError(champ, "« " + c.getLibelle() + " » attend une adresse http ou https"
+                            + (brut.length() > RemiseElectronique.URL_LONGUEUR_MAX ? " (500 caractères au plus)" : "") + "."));
+                    return null;
+                }
+                return brut;
+            }
             case LISTE -> {
                 List<String> options = ChampFicheMarche.liste(c.getOptions());
                 String v = options.stream().filter(o -> o.equalsIgnoreCase(brut)).findFirst().orElse(null);
@@ -1017,8 +1070,15 @@ public class FicheMarcheService {
                     + "saisie={} plan={}", fiche.getIdDmc(), fiche.getNumeroVersion(), fiche.getTypeMarche(), typeMarche);
         }
         Map<String, String> valeurs = new TreeMap<>();
+        List<String> champsCalcules = new ArrayList<>();   // V50 : les clés posées par le serveur
         if (fiche.getIdFiche() != null) {
-            valeurRepository.findByIdFiche(fiche.getIdFiche()).forEach(v -> valeurs.put(v.getCodeChamp(), v.getValeur()));
+            for (FicheMarcheValeur v : valeurRepository.findByIdFiche(fiche.getIdFiche())) {
+                valeurs.put(v.getCodeChamp(), v.getValeur());
+                if (Boolean.TRUE.equals(v.getCalculee())) {
+                    champsCalcules.add(v.getCodeChamp());
+                }
+            }
+            java.util.Collections.sort(champsCalcules);
         }
         ValeursPpmService.ValeursPpm ppm = valeursPpm.lire(ctx.idDetail());
         int nbLots = LotsFiche.nbLots(ppm.valeurs());   // 2026-09-25 (§B2) : les champs par lot d'une ligne allotie
@@ -1036,6 +1096,9 @@ public class FicheMarcheService {
                 valeursPpmParCode.put(c.getCode(), ppm.valeurs().get(c.getClePpm()));
             } else if (SourceChampFiche.CADRAGE.name().equals(c.getSource()) && c.getCleCadrage() != null) {
                 Object r = cadrage.get(c.getCleCadrage());
+                if (r == null && RemiseElectronique.CLE_CADRAGE.equals(c.getCleCadrage())) {
+                    r = RemiseElectronique.PAPIER;   // ⚠️ V50 (§B1.1) — une fiche sans clé modeRemise est lue comme PAPIER
+                }
                 valeursCadrage.put(c.getCode(), r == null ? null : String.valueOf(r));
             } else if (TypeChampFiche.MONTANT.name().equals(c.getType())) {
                 for (String cle : LotsFiche.cles(c, nbLots)) {
@@ -1051,8 +1114,11 @@ public class FicheMarcheService {
                 ? new ControlesFicheMarche.Besoin(besoin.articles(fiche.getIdFiche()),
                         TypeMarcheDao.A_COMMANDE.name().equals(typeOuverture))
                 : null;
+        // ⚠️ V50 (2026-09-27, remise électronique) — le bilan lit aussi le mode, les paramètres administrables, les
+        // paramètres internes et le responsable de la procédure (règles 1 à 11, mode électronique seulement).
+        Long idDmc = fiche.getIdDmc();
         BilanControlesDto bilan = ControlesFicheMarche.bilan(ouverts, valeurs, cadrage, ppm.dates(), nbLots, besoinBilan,
-                parametres.tauxGarantie());
+                parametres.tauxGarantie(), internes.contexteBilan(idDmc, cadrage));
         return new FicheMarcheDto(fiche.getIdFiche(), fiche.getIdDmc(), ctx.idDetail(), ctx.idDossier(),
                 ppm.ligne() == null ? ctx.idDetail() : ppm.ligne().getIdDetail(),
                 ppm.ligne() != null && Boolean.TRUE.equals(ppm.ligne().getSupprimee()),
@@ -1062,7 +1128,8 @@ public class FicheMarcheService {
                 fiche.getDateValidation(), fiche.getValidePar(),
                 dossierRepository.findIdDossierByIdDmc(fiche.getIdDmc()).orElse(null),
                 fiche.getIdFiche() != null && StatutFicheMarche.BROUILLON.name().equals(fiche.getStatut()) && typeChange,
-                ctx.outille(), ctx.codeCategorie(), nbLots, LotsFiche.alloti(nbLots));
+                ctx.outille(), ctx.codeCategorie(), nbLots, LotsFiche.alloti(nbLots),
+                internes.responsableDto(idDmc), internes.estTitulaire(idDmc), internes.etat(idDmc).name(), champsCalcules);
     }
 
     /** ⚠️ V45 — le besoin par article vaut pour une fiche de fournitures et services (catégorie connue). */

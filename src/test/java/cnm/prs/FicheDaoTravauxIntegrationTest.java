@@ -87,16 +87,19 @@ class FicheDaoTravauxIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(rubriquesQf).contains("B02-LT", "B09-RP", "B01-AC").doesNotContain("B02-AU", "B04-RO", "B02-DK");
         assertThat(JsonPath.<List<List<String>>>read(qf, "$.champs[?(@.source=='SAISIE')].categories")).allMatch(c -> c.contains("TRAVAUX"));
         // 2026-09-25 (§B3) — la composition du dossier est réemployée par les fournitures, les plans restent aux travaux.
+        // + V47 : les champs des formulaires du candidat, trois catégories ; + V50 : les seize saisis de la remise électronique.
+        List<String> partages = new java.util.ArrayList<>(List.of("B04-CD-01", "B04-CD-02", "B02-OB-03", "B03-CQ-01", "B03-CQ-09", "B03-CQ-10"));
+        java.util.stream.IntStream.rangeClosed(2, 17).forEach(i -> partages.add(String.format("B04-SE-%02d", i)));
         assertThat(JsonPath.<List<java.util.Map<String, Object>>>read(qf, "$.champs[?(@.source=='SAISIE')]").stream()
                 .filter(c -> ((List<?>) c.get("categories")).contains("FOURNITURES_SERVICES")).map(c -> c.get("code")))
-                .containsExactlyInAnyOrder("B04-CD-01", "B04-CD-02", "B02-OB-03", "B03-CQ-01", "B03-CQ-09", "B03-CQ-10");   // + V47 : les champs des formulaires du candidat, trois catégories
+                .containsExactlyInAnyOrderElementsOf(partages);
 
         String cc = ref("typeMarche=CONTRAT_CADRE&categorie=TRAVAUX");
         assertThat(JsonPath.<List<String>>read(cc, "$.blocs[?(@.code=='B07')].rubriques[*].code")).contains("B07-AT", "B07-DT")
                 .doesNotContain("B07-PS");
         String fs = ref("typeMarche=QUANTITE_FIXE&categorie=FOURNITURES_SERVICES");
         assertThat(JsonPath.<List<String>>read(fs, "$.blocs[*].code")).doesNotContain("B11");
-        assertThat(JsonPath.<List<String>>read(fs, "$.champs[*].code")).hasSize(148)   // 146 des fournitures + B04-CD-01, -02 (2026-09-25)
+        assertThat(JsonPath.<List<String>>read(fs, "$.champs[*].code")).hasSize(174)   // 172 des fournitures (V50) + B04-CD-01, -02 (2026-09-25)
                 .contains("B04-CD-01", "B04-CD-02").doesNotContain("B04-CD-03");
     }
 

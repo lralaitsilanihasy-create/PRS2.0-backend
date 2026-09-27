@@ -131,7 +131,7 @@ public class DocumentsFicheMarcheService {
     public List<Produit> produire(FicheMarcheDto etat, List<BesoinFiche.Article> articles, LocalDateTime validation) {
         List<ChampFicheMarche> champs = champRepository.findByActifTrueOrderByCodeRubriqueAscRangAsc();
         List<DocumentFicheModele> modeles = new ArrayList<>(SelectionDocumentsFiche.selectionner(etat, champs,
-                blocRepository.findAllByOrderByRangAsc(), rubriqueRepository.findAllByOrderByCodeBlocAscRangAsc(), validation));
+                blocRepository.findAllByOrderByRangAsc(), rubriqueRepository.findAllByOrderByCodeBlocAscRangAscCodeAsc(), validation));
         DocumentFicheModele liste = SelectionDocumentsFiche.listeFournitures(etat, articles, validation);
         if (liste != null) {
             modeles.add(liste);

@@ -10,5 +10,5 @@ import cnm.prs.entity.RubriqueFicheMarche;
 @Repository
 public interface RubriqueFicheMarcheRepository extends JpaRepository<RubriqueFicheMarche, String> {
 
-    List<RubriqueFicheMarche> findAllByOrderByCodeBlocAscRangAsc();
+    List<RubriqueFicheMarche> findAllByOrderByCodeBlocAscRangAscCodeAsc();
 }

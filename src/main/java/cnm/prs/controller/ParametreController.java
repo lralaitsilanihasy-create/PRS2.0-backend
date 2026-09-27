@@ -88,4 +88,22 @@ public class ParametreController {
     public ParametreService.TauxTva fixerTauxTva(@RequestBody ParametreService.TauxTva corps) {
         return service.fixerTauxTva(corps);
     }
+
+    /**
+     * ⚠️ V50 (2026-09-27, remise électronique, §B1.4) — les sept paramètres de la remise électronique :
+     * {@code { plateformeUrl, fuseau, signatureMin, tailleMaxPlateformeMo, delaiMinRemiseJours, assistance, quorumDefaut }}
+     * ↔ {@code FICHE_SE_*}. Lecture ouverte à tout authentifié (l'écran d'administration et les défauts de la fiche).
+     */
+    @GetMapping("/fiche-remise-electronique")
+    public cnm.prs.service.RemiseElectronique.Parametres remiseElectronique() {
+        return service.remiseElectronique();
+    }
+
+    /** Réglage (Administrateur) : l'état complet, {@code null} efface ; 400 nominatif par attribut fautif. */
+    @PreAuthorize("hasRole('ADMINISTRATEUR')")
+    @PutMapping("/fiche-remise-electronique")
+    public cnm.prs.service.RemiseElectronique.Parametres fixerRemiseElectronique(
+            @RequestBody cnm.prs.service.RemiseElectronique.Parametres corps) {
+        return service.fixerRemiseElectronique(corps);
+    }
 }
