@@ -79,7 +79,7 @@ class ModelesCandidatRenduTest {
         assertThat(a3).contains("Travaux\t\t\t").doesNotContain("{{");
         assertThat(a3.lines().filter(l -> l.startsWith("Fournitures")).count()).isEqualTo(1);   // le premier tableau seul
         // ⚠️ 2026-09-27 — C1 est le gabarit ARMP : montant en lettres puis en chiffres, « 30ème jour » fixe, B05-GS-04 nu.
-        assertThat(docs.get(3).texte()).contains("pour la somme de deux millions cent soixante-dix mille ariary (2 170 000 Ariary")
+        assertThat(docs.get(3).texte()).contains("pour la somme de deux millions cent soixante-dix mille ariary (2 170 000 Ariary), que")
                 .contains("soit jusqu'au ……… ème jour")   // B05-GS-04 absent → pointillés
                 .doesNotContain("1 600 000");
 

@@ -1,7 +1,7 @@
 FICHIER	C1.docx
 TITRE	C 1 - Modèle de garantie bancaire de soumission
 PARA	ATTENDU QUE [nom du candidat ou, s'il s'agit d'un groupement d'entreprises, indiquer le nom de chacun des membres du groupement suivi de "conjointement et solidairement"] (ci-après dénommé "le Candidat") a remis une Offre, en date du [date] pour l'exécution, ou la fourniture de {{B02-OB-03}} — {{B02-OB-01}} (ci-après dénommée "l'Offre") au profit de {{B01-AC-01}} (ci-après dénommée "l'Autorité Contractante") prévoyant la délivrance d'une garantie bancaire de soumission.
-PARA	EN CONSEQUENCE, Nous, [nom de la banque], ayant notre siège à [adresse du siège] (ci-après dénommée "le Garant"), avons accepté de nous porter garant du Candidat pour la somme de {{B05-GS-03.lettres}} ({{B05-GS-03}} Ariary), que nous nous engageons à régler intégralement à l'Autorité Contractante dans les conditions suivantes :
+PARA	EN CONSEQUENCE, Nous, [nom de la banque], ayant notre siège à [adresse du siège] (ci-après dénommée "le Garant"), avons accepté de nous porter garant du Candidat pour la somme de {{B05-GS-03.lettres}} ({{B05-GS-03.chiffres}} Ariary), que nous nous engageons à régler intégralement à l'Autorité Contractante dans les conditions suivantes :
 PARA	Si le Candidat retire son Offre pendant la période de validité spécifiée dans les Instructions aux candidats du Dossier d'Appel d'Offres, ou
 PARA	Si le Candidat n'accepte pas la correction du montant de son offre, conformément à la clause 6.8 (fournitures) des Instructions aux candidats, ou
 PARA	Si le Candidat s'étant vu notifier l'acceptation de son Offre par l'Autorité Contractante pendant la période de validité :

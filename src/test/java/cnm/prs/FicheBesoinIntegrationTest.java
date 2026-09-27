@@ -286,7 +286,7 @@ class FicheBesoinIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(c1).contains("C 1 - Modèle de garantie bancaire de soumission",
                 "la fourniture de AOO 2461/MT/2026 — Acquisition de matériels informatiques 9902",
                 "au profit de Entite 1 (ci-après dénommée \"l'Autorité Contractante\")",
-                "pour la somme de trois millions deux cent mille ariary (3 200 000 Ariary",
+                "pour la somme de trois millions deux cent mille ariary (3 200 000 Ariary), que",
                 "jusqu'au trentième (30ème) jour suivant l'expiration de la période de validité des offres, soit jusqu'au "
                         + "105 ème jour")
                 .doesNotContain("{{", "1 600 000");

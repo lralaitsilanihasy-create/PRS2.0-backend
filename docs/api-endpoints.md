@@ -4911,9 +4911,9 @@ officiels du pilote, qui seront remplis tels quels.
   autre changement du moteur : **C1** ce jour (rendu du serveur identique paragraphe par paragraphe au rendu de
   relecture du front, 15/15), A1-A4 et C2 à suivre. Nouveau suffixe de jeton **`.chiffres`** : le nombre en chiffres
   **sans l'unité** (« 1 600 000 »), pour un gabarit qui écrit lui-même « Ariary » après le montant — `{{CODE}}` d'un
-  montant garde « 1 600 000 Ariary ». ⚠️ Le C1 ARMP livré écrit `({{B05-GS-03}} Ariary)` et imprime donc
-  « (… Ariary Ariary) » jusqu'à ce que le front passe le jeton en `{{B05-GS-03.chiffres}}` (signalé, recopie à
-  suivre). Le 2463 verra ses formulaires produits sur les officiels : errata E8 côté front.
+  montant garde « 1 600 000 Ariary ». Le premier C1 ARMP écrivait `({{B05-GS-03}} Ariary)` (double « Ariary »,
+  signalé) ; le front l'a passé en `{{B05-GS-03.chiffres}}` le jour même (commit front `f05b0c5`), recopié tel quel.
+  Le 2463 verra ses formulaires produits sur les officiels : errata E8 côté front.
 
 #### Forme de la garantie de soumission : plusieurs formes admises (2026-09-26, demande front, arbitrage du pilote sur le dossier réel 2463)
 
