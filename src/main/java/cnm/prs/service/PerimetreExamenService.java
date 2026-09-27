@@ -63,15 +63,18 @@ public class PerimetreExamenService {
     private final ChangementLigneRepository changementLigneRepository;
     private final FicheJustificationsService ficheJustifications;
     private final AgpmService agpmService;
+    /** ⚠️ Lot C (2026-09-27, §B5) — le diff de la fiche DAO d'un dossier en réexamen. */
+    private final FicheMarcheService ficheMarcheService;
 
     public PerimetreExamenService(DossierRepository dossierRepository, MarcheRepository marcheRepository,
             ChangementLigneRepository changementLigneRepository, FicheJustificationsService ficheJustifications,
-            AgpmService agpmService) {
+            AgpmService agpmService, FicheMarcheService ficheMarcheService) {
         this.dossierRepository = dossierRepository;
         this.marcheRepository = marcheRepository;
         this.changementLigneRepository = changementLigneRepository;
         this.ficheJustifications = ficheJustifications;
         this.agpmService = agpmService;
+        this.ficheMarcheService = ficheMarcheService;
     }
 
     /**
@@ -116,8 +119,23 @@ public class PerimetreExamenService {
         boolean agpmAExaminer = agpmService.requisPourDossier(idDossier)
                 && (!miseAJour || uneLigneDAgpmAChange);
 
+        // ⚠️ Lot C (2026-09-27, §B5) — un dossier DAO en RÉEXAMEN : les informations de la fiche qui diffèrent entre la
+        // version que la Commission a examinée et la version validée courante. Les points du sous-type restent tous à
+        // réévaluer (Q4) : ce volet dit ce que le front met en évidence, il ne réduit pas la complétude.
+        PerimetreExamenDto.FicheDao ficheDao = null;
+        if (dossier.getIdDmc() != null && cnm.prs.enums.StatutDossier.A_REEXAMINER.name().equals(dossier.getStatut())) {
+            Integer examinee = dossier.getVersionFicheExaminee() != null ? dossier.getVersionFicheExaminee()
+                    : dossier.getVersionFicheSoumise();
+            Integer courante = ficheMarcheService.versionValideeCourante(dossier.getIdDmc());
+            List<PerimetreExamenDto.InformationFiche> informations = examinee == null || courante == null
+                    || examinee.equals(courante) ? List.of()
+                    : ficheMarcheService.differences(dossier.getIdDmc(), examinee, courante);
+            ficheDao = new PerimetreExamenDto.FicheDao(examinee, courante, informations);
+        }
+
         return new PerimetreExamenDto(idDossier, dossier.getIdDossierParent(), miseAJour,
-                ficheAExaminer, agpmAExaminer, true, lignes);
+                ficheAExaminer, agpmAExaminer, true, lignes,
+                ficheDao != null && !ficheDao.informations().isEmpty(), ficheDao);
     }
 
     /**

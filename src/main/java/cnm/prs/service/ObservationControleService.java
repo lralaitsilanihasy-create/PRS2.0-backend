@@ -89,6 +89,7 @@ public class ObservationControleService {
         existing.setChampFiche(dto.getChampFiche());
         existing.setLibelleChampFiche(dto.getLibelleChampFiche());
         existing.setValeurChampFiche(dto.getValeurChampFiche());
+        existing.setVersionFiche(dto.getVersionFiche());   // ⚠️ lot C (V49) — la version figée suit la valeur
         existing.setIdDetail(dto.getIdDetail());
         existing.setAuLieuDe(dto.getAuLieuDe());
         existing.setLire(dto.getLire());

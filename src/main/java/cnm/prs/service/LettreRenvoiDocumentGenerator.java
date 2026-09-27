@@ -175,9 +175,17 @@ public class LettreRenvoiDocumentGenerator {
         for (Map.Entry<String, String> e : rempl.entrySet()) {
             remplace = remplace.replace(e.getKey(), e.getValue() == null ? "" : e.getValue());
         }
-        runs.get(0).setText(remplace, 0);
         for (int i = runs.size() - 1; i >= 1; i--) {
             paragraphe.removeRun(i);
+        }
+        // ⚠️ Lot C (2026-09-27, §B6) — une valeur sur plusieurs lignes (corps de la lettre, informations de la fiche DAO
+        // visées) : un saut de ligne Word par « \n », au lieu d'un retour chariot que Word ignore.
+        XWPFRun run = runs.get(0);
+        String[] lignes = remplace.split("\n", -1);
+        run.setText(lignes[0], 0);
+        for (int i = 1; i < lignes.length; i++) {
+            run.addBreak();
+            run.setText(lignes[i]);
         }
     }
 

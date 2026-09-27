@@ -70,6 +70,8 @@ public class ObservationPvService {
     private final SuiviObservationRepository suiviRepository;
     private final DossierRepository dossierRepository;
     private final ExamenDetailRepository examenDetailRepository;
+    /** ⚠️ Lot C (2026-09-27, §B4) — la valeur actuelle d'une information de la fiche visée. */
+    private final FicheMarcheService ficheMarcheService;
     private final ObservationControleRepository observationControleRepository;
     private final ExamenPieceRepository examenPieceRepository;
     private final MarcheRepository marcheRepository;
@@ -92,7 +94,8 @@ public class ObservationPvService {
             ReceptionRepository receptionRepository, VerificationService verificationService,
             DossierIntegriteService dossierIntegrite,
             cnm.prs.security.PermissionService permissionService,
-            ActionDossierRepository actionDossierRepository) {
+            ActionDossierRepository actionDossierRepository, FicheMarcheService ficheMarcheService) {
+        this.ficheMarcheService = ficheMarcheService;
         this.permissionService = permissionService;
         this.actionDossierRepository = actionDossierRepository;
         this.repository = repository;
@@ -164,6 +167,7 @@ public class ObservationPvService {
                     row.setChampFiche(oc.getChampFiche());
                     row.setLibelleChampFiche(oc.getLibelleChampFiche());
                     row.setValeurChampFiche(oc.getValeurChampFiche());
+                    row.setVersionFiche(oc.getVersionFiche());   // ⚠️ lot C (V49) — la version figée suit
                     rows.add(row);
                 }
             }
@@ -441,6 +445,8 @@ public class ObservationPvService {
             historiques.computeIfAbsent(s.getIdObservationPv(), k -> new ArrayList<>()).add(s);
         }
         boolean leveePossible = leveePossible(idDossier, pvSigneFavr(idDossier));
+        // ⚠️ Lot C (2026-09-27, §B4) — la version validée courante de chaque fiche visée, lue une fois.
+        Map<Long, java.util.Optional<FicheMarcheService.EtatVersion>> etats = new HashMap<>();
         List<ObservationPvDto> dtos = new ArrayList<>();
         for (ObservationPv o : obs) {
             List<SuiviObservation> h = historiques.getOrDefault(o.getIdObservationPv(), List.of());
@@ -464,6 +470,14 @@ public class ObservationPvService {
             dto.setLibelleChampFiche(o.getLibelleChampFiche());
             dto.setValeurChampFiche(o.getValeurChampFiche());
             dto.setLot(LotsFiche.lotDe(o.getChampFiche()));
+            // ⚠️ Lot C (§B4) — la valeur ACTUELLE de l'information (version validée courante), face à la valeur observée.
+            if (o.getChampFiche() != null && o.getIdDmcFiche() != null) {
+                dto.setVersionFicheObservee(o.getVersionFiche());
+                etats.computeIfAbsent(o.getIdDmcFiche(), ficheMarcheService::etatValide).ifPresent(e -> {
+                    dto.setVersionFicheActuelle(e.version());
+                    dto.setValeurChampFicheActuelle(e.valeur(o.getChampFiche()));
+                });
+            }
             dto.setOrdre(o.getOrdre());
             dto.setStatut(dernier == null ? "EMISE" : dernier.getDecision());
             dto.setPrecision(dernier == null ? null : dernier.getPrecision());

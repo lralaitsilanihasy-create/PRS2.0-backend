@@ -12,7 +12,10 @@ package cnm.prs.dto;
  * @param version           numéro de la dernière version
  * @param nbSaisis          champs de saisie renseignés (bilan des contrôles)
  * @param nbAttendus        champs de saisie attendus (bilan des contrôles)
+ * @param versionSoumise    ⚠️ lot C (2026-09-27, §B1) — la version de la fiche que le dossier a soumise (posée à la
+ *                          soumission, avancée à chaque resoumission / transmission de compléments) : celle que la
+ *                          Commission a examinée ; {@code null} tant que le dossier est brouillon
  */
 public record FicheMarcheResumeDto(Long idDmc, Integer idDetail, String refeDossierPpm, String designationMarche,
-        String typeMarche, String statut, Integer version, int nbSaisis, int nbAttendus) {
+        String typeMarche, String statut, Integer version, int nbSaisis, int nbAttendus, Integer versionSoumise) {
 }

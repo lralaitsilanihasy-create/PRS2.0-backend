@@ -48,6 +48,15 @@ public class ObservationPvDto {
     private String valeurChampFiche;
     /** ⚠️ V44 — rang du lot de l'information ({@code null} : commune). */
     private Integer lot;
+    /**
+     * ⚠️ Lot C (2026-09-27, §B4) — pour une observation ancrée : la version de la fiche dont la valeur a été figée
+     * ({@code null} pour une observation antérieure à V49), la dernière version validée aujourd'hui, et la valeur de
+     * l'information dans cette version, formatée comme {@code valeurChampFiche} ({@code null} si l'information n'y est
+     * plus : champ fermé par le cadrage, ou non renseignée). Identiques tant que la fiche n'a pas été revalidée.
+     */
+    private Integer versionFicheObservee;
+    private Integer versionFicheActuelle;
+    private String valeurChampFicheActuelle;
     private Integer ordre;
 
     /** Statut courant : {@code EMISE} / {@code LEVEE} / {@code MAINTENUE}. */

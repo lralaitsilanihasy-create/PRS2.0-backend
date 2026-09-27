@@ -116,6 +116,21 @@ public class Dossier {
     @Column(name = "ID_DMC", unique = true)
     private Long idDmc;
 
+    /**
+     * ⚠️ Lot C (V49, 2026-09-27, §B1) — la version de la fiche marché que ce dossier a <strong>soumise</strong> : posée à
+     * la soumission, avancée à chaque resoumission / transmission de compléments. C'est la référence de la garde
+     * {@code FICHE_NON_REVISEE} ; {@code null} tant que le dossier est brouillon, ou sans fiche.
+     */
+    @Column(name = "VERSION_FICHE_SOUMISE")
+    private Integer versionFicheSoumise;
+
+    /**
+     * ⚠️ Lot C (V49, §B5) — la version de la fiche que la <strong>Commission a examinée</strong> : celle de la soumission,
+     * puis l'ancienne version soumise quand les compléments sont transmis (le réexamen compare à elle).
+     */
+    @Column(name = "VERSION_FICHE_EXAMINEE")
+    private Integer versionFicheExaminee;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ID_TYPE_DOSSIER", insertable = false, updatable = false)
     @JsonIgnore

@@ -59,7 +59,15 @@ public class DocumentsFicheMarcheService {
 
     /** Statuts où le dossier reçoit les documents d'une nouvelle version à la place des précédents (ceux du dépôt). */
     private static final Set<String> STATUTS_REMPLACEMENT = Set.of(StatutDossier.BROUILLON.name(),
-            StatutDossier.SOUMIS.name(), StatutDossier.EN_ATTENTE_COMPLEMENTS_DEPOT.name(),
+            StatutDossier.SOUMIS.name(), StatutDossier.EN_ATTENTE_COMPLEMENTS_DEPOT.name());
+
+    /**
+     * ⚠️ Lot C (2026-09-27, §B2) — statuts où le dossier est <strong>rendu à la PRMP</strong> après examen : les documents
+     * de la révision s'ajoutent en <em>version corrigée</em>, la version précédente de chaque pièce conservée (comme les
+     * pièces corrigées d'un plan). En attente de pièces, ils sont en outre rattachés à la dernière lettre de renvoi : ce
+     * sont les compléments du dossier DAO.
+     */
+    private static final Set<String> STATUTS_RECTIFICATION = Set.of(StatutDossier.EN_ATTENTE_DECISION_PRMP.name(),
             StatutDossier.EN_ATTENTE_PIECES.name());
 
     private final DocumentFicheMarcheRepository documentRepository;
@@ -76,13 +84,17 @@ public class DocumentsFicheMarcheService {
     private final ParametreService parametres;
     /** ⚠️ V47 (2026-09-26) — les modèles officiels des formulaires du candidat, lus au démarrage. */
     private final ModelesCandidat modelesCandidat;
+    /** ⚠️ Lot C (2026-09-27) — la lettre de renvoi à laquelle rattacher les documents d'une révision (compléments). */
+    private final cnm.prs.repository.LettreRenvoiRepository lettreRenvoiRepository;
 
     public DocumentsFicheMarcheService(DocumentFicheMarcheRepository documentRepository,
             GenerateurDocumentsFiche generateur, ChampFicheMarcheRepository champRepository,
             BlocFicheMarcheRepository blocRepository, RubriqueFicheMarcheRepository rubriqueRepository,
             FicheMarcheRepository ficheRepository, DossierRepository dossierRepository,
             PieceJointeDossierRepository pieceRepository, TypePieceJointeRepository typePieceRepository,
-            GenerateurClasseursFiche classeurs, ParametreService parametres, ModelesCandidat modelesCandidat) {
+            GenerateurClasseursFiche classeurs, ParametreService parametres, ModelesCandidat modelesCandidat,
+            cnm.prs.repository.LettreRenvoiRepository lettreRenvoiRepository) {
+        this.lettreRenvoiRepository = lettreRenvoiRepository;
         this.modelesCandidat = modelesCandidat;
         this.classeurs = classeurs;
         this.parametres = parametres;
@@ -226,17 +238,20 @@ public class DocumentsFicheMarcheService {
      * <ul>
      *   <li>constitution ou attente de pièces ({@code BROUILLON}, {@code SOUMIS}, {@code EN_ATTENTE_COMPLEMENTS_DEPOT},
      *       {@code EN_ATTENTE_PIECES}) : les pièces d'une version précédente sont détachées, les nouvelles jointes ;</li>
-     *   <li>rectification ({@code EN_ATTENTE_DECISION_PRMP}) : les nouvelles sont jointes en <em>version corrigée</em>, les
-     *       précédentes conservées — comme toute pièce déposée pendant la rectification ;</li>
+     *   <li>rectification ({@code EN_ATTENTE_DECISION_PRMP}, et ⚠️ lot C : {@code EN_ATTENTE_PIECES}) : les nouvelles sont
+     *       jointes en <em>version corrigée</em>, les précédentes conservées — comme toute pièce déposée pendant la
+     *       rectification ; en attente de pièces, rattachées à la dernière lettre de renvoi signée (compléments) ;</li>
      *   <li>dossier en examen ou au-delà : rien ne change sous les yeux de la Commission.</li>
      * </ul>
      * Sans type de pièce {@code DAO_COMPLET} au référentiel : rien n'est joint (journal applicatif).
+     *
+     * @return le nombre de pièces jointes par cet appel (⚠️ lot C : « P pièce(s) remplacée(s) » du journal)
      */
-    public void joindre(Integer idDossier, Long idDmc) {
+    public int joindre(Integer idDossier, Long idDmc) {
         Dossier dossier = dossierRepository.findById(idDossier).orElse(null);
         FicheMarche fiche = ficheRepository.findFirstByIdDmcOrderByNumeroVersionDesc(idDmc).orElse(null);
         if (dossier == null || fiche == null) {
-            return;
+            return 0;
         }
         // La dernière version VALIDÉE (une révision ouverte n'a pas de documents).
         FicheMarche validee = StatutFicheMarche.VALIDEE.name().equals(fiche.getStatut()) ? fiche
@@ -244,36 +259,43 @@ public class DocumentsFicheMarcheService {
                         .filter(f -> StatutFicheMarche.VALIDEE.name().equals(f.getStatut()))
                         .reduce((a, b) -> b).orElse(null);
         if (validee == null) {
-            return;
+            return 0;
         }
         List<DocumentFicheMarche> pdfs = documentRepository.findByIdFicheOrderByIdDocumentAsc(validee.getIdFiche()).stream()
                 .filter(d -> "pdf".equals(d.getExtension())).toList();
         if (pdfs.isEmpty()) {
-            return;   // version validée avant le lot 2 : aucun document à joindre
+            return 0;   // version validée avant le lot 2 : aucun document à joindre
         }
         TypePieceJointe type = typePieceRepository.findFirstByCode(CODE_TYPE_PIECE).orElse(null);
         if (type == null) {
             log.warn("[FICHE_MARCHE] aucun type de pièce de code {} : documents non joints au dossier {}",
                     CODE_TYPE_PIECE, idDossier);
-            return;
+            return 0;
         }
         List<PieceJointeDossier> actuelles = pieceRepository.findByIdDossierAndIdDocumentFicheIsNotNull(idDossier);
         Set<Integer> dejaJoints = new java.util.HashSet<>();
         actuelles.forEach(p -> dejaJoints.add(p.getIdDocumentFiche()));
         if (pdfs.stream().allMatch(d -> dejaJoints.contains(d.getIdDocument()))) {
-            return;
+            return 0;
         }
         String statut = dossier.getStatut();
-        boolean rectification = StatutDossier.EN_ATTENTE_DECISION_PRMP.name().equals(statut);
+        boolean rectification = STATUTS_RECTIFICATION.contains(statut);
         if (!rectification && !STATUTS_REMPLACEMENT.contains(statut)) {
             log.info("[FICHE_MARCHE] dossier {} au statut {} : documents de la version {} non joints (dossier en examen)",
                     idDossier, statut, validee.getNumeroVersion());
-            return;
+            return 0;
         }
         if (!rectification) {
             pieceRepository.deleteAll(actuelles);
         }
+        // ⚠️ Lot C (§B2/§B3) — en attente de pièces, les documents de la révision SONT les compléments : rattachés à la
+        // dernière lettre de renvoi signée, comme une pièce déposée après renvoi.
+        boolean attentePieces = StatutDossier.EN_ATTENTE_PIECES.name().equals(statut);
+        Integer idLettre = !attentePieces ? null : lettreRenvoiRepository
+                .findFirstByIdDossierAndStatutOrderByIdLettreDesc(idDossier, cnm.prs.enums.StatutLettreRenvoi.SIGNE.name())
+                .map(cnm.prs.entity.LettreRenvoi::getIdLettre).orElse(null);
         LocalDateTime maintenant = LocalDateTime.now();
+        int jointes = 0;
         for (DocumentFicheMarche d : pdfs) {
             if (dejaJoints.contains(d.getIdDocument())) {
                 continue;
@@ -286,11 +308,14 @@ public class DocumentsFicheMarcheService {
             p.setFormat("PDF");
             p.setTaille(d.getTailleOctets());
             p.setDateUpload(maintenant);
-            p.setApresLettreRenvoi(false);
+            p.setApresLettreRenvoi(attentePieces);
+            p.setIdLettre(idLettre);
             p.setVersionCorrigee(rectification ? Boolean.TRUE : null);
             p.setIdDocumentFiche(d.getIdDocument());
             pieceRepository.save(p);
+            jointes++;
         }
+        return jointes;
     }
 
     /** Détache du dossier les pièces produites par sa fiche (la fiche en est détachée). */

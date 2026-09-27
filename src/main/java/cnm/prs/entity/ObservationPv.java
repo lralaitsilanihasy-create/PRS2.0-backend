@@ -95,6 +95,10 @@ public class ObservationPv {
     @Column(name = "VALEUR_CHAMP_FICHE", length = 4000)
     private String valeurChampFiche;
 
+    /** ⚠️ V49 (lot C, 2026-09-27) — la version de la fiche dont la valeur a été figée, recopiée ; {@code null} si inconnue. */
+    @Column(name = "VERSION_FICHE")
+    private Integer versionFiche;
+
     /** Libellé FIGÉ de l'observation (contexte + demande), tel qu'arrêté au PV. */
     @Column(name = "LIBELLE", length = 1000, nullable = false)
     private String libelle;

@@ -35,7 +35,42 @@ public record PerimetreExamenDto(
         boolean ficheAExaminer,
         boolean agpmAExaminer,
         boolean dossierAExaminer,
-        List<LignePerimetre> lignes) {
+        List<LignePerimetre> lignes,
+        /**
+         * ⚠️ Lot C (2026-09-27, §B5) — dossier DAO en réexamen : au moins une information de la fiche a changé entre la
+         * version examinée et la version courante. Faux pour un plan, hors réexamen, ou si rien n'a changé.
+         */
+        boolean ficheDaoAExaminer,
+        /**
+         * ⚠️ Lot C (§B5) — les informations changées de la fiche DAO, pour un dossier DMC en {@code A_REEXAMINER} ;
+         * {@code null} hors réexamen et pour un plan. Les points du sous-type restent tous à réévaluer (Q4) : la liste
+         * dit ce que le front met en évidence, pas ce que la complétude exige.
+         */
+        FicheDao ficheDao) {
+
+    /** Compatibilité : un périmètre sans volet « fiche DAO » (dossier de planification). */
+    public PerimetreExamenDto(Integer idDossier, Integer idDossierParent, boolean miseAJour, boolean ficheAExaminer,
+            boolean agpmAExaminer, boolean dossierAExaminer, List<LignePerimetre> lignes) {
+        this(idDossier, idDossierParent, miseAJour, ficheAExaminer, agpmAExaminer, dossierAExaminer, lignes, false, null);
+    }
+
+    /**
+     * ⚠️ Lot C (§B5) — le diff de la fiche DAO entre la version que la Commission a examinée ({@code versionSoumise} au
+     * moment du PV) et la version validée courante.
+     *
+     * @param versionExaminee version examinée (celle du PV)
+     * @param versionCourante dernière version validée
+     * @param informations    informations dont la valeur diffère, valeurs formatées comme dans les documents
+     */
+    public record FicheDao(Integer versionExaminee, Integer versionCourante, List<InformationFiche> informations) {
+    }
+
+    /**
+     * Une information de la fiche dont la valeur a changé : {@code avant} nul si elle n'existait pas dans la version
+     * examinée (champ ouvert par la révision), {@code apres} nul si elle a disparu (champ fermé par le cadrage).
+     */
+    public record InformationFiche(String champFiche, Integer lot, String libelle, String avant, String apres) {
+    }
 
     /**
      * Le sort d'une ligne de marché.

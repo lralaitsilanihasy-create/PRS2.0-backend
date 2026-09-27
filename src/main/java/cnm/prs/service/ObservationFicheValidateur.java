@@ -94,12 +94,14 @@ public class ObservationFicheValidateur {
                 && Objects.equals(existante.getIdDmcFiche(), ligne.getIdDmc())) {
             ligne.setLibelleChampFiche(existante.getLibelleChampFiche());
             ligne.setValeurChampFiche(existante.getValeurChampFiche());
+            ligne.setVersionFiche(existante.getVersionFiche());   // ⚠️ lot C (V49) — la version figée aussi
         }
     }
 
     private void valider(ObservationControleDto ligne, Integer idExamen, Integer idPtControle, String prefixe) {
         ligne.setLibelleChampFiche(null);   // lecture seule : jamais repris du client
         ligne.setValeurChampFiche(null);
+        ligne.setVersionFiche(null);
         ligne.setLot(null);
         String cle = ligne.getChampFiche() == null || ligne.getChampFiche().isBlank() ? null
                 : ligne.getChampFiche().trim().toUpperCase();
@@ -136,6 +138,7 @@ public class ObservationFicheValidateur {
         ligne.setLibelleChampFiche(a.libelle());
         ligne.setValeurChampFiche(a.valeur() != null && a.valeur().length() > 4000 ? a.valeur().substring(0, 4000)
                 : a.valeur());
+        ligne.setVersionFiche(a.version());   // ⚠️ lot C (V49, §B4) — la version dont la valeur est figée
         ligne.setLot(LotsFiche.lotDe(a.cle()));
     }
 

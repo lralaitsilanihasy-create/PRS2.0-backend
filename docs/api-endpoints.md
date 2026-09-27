@@ -174,7 +174,11 @@ stable** de la création d'un DMC par la PRMP (`LIGNE_RETIREE`, `VERSION_DEPASSE
 
 Un champ **`idDossier`** (number) s'ajoute enfin, ⚠️ 2026-09-23, aux 409 qui **désignent un dossier** vers lequel
 naviguer — `DOSSIER_EXISTANT` (le dossier déjà produit par la fiche) et `FICHE_DEJA_LIEE` (le dossier qui la porte) ;
-**omis** partout ailleurs.
+**omis** partout ailleurs. ⚠️ **2026-09-27 (lot C, rectification d'un dossier DAO)** : `DOSSIER_EN_EXAMEN` et
+`FICHE_NON_REVISEE` le portent aussi, et un champ **`details`** (objet à clés nommées, **omis** partout ailleurs) donne
+ce qu'il faut pour rédiger le message : `{ "statut": "EXAMINE" }` pour `DOSSIER_EN_EXAMEN`,
+`{ "versionSoumise": 1, "versionCourante": 2, "statutFiche": "BROUILLON" }` pour `FICHE_NON_REVISEE` (valeurs nulles
+possibles). Ce n'est pas une seconde forme d'erreur : `erreurs[]` reste réservé au 400.
 
 ### Détail des erreurs 400 / 403 / 409
 Récapitulatif des trois codes d'erreur « métier » les plus fréquents, leur signification et
@@ -1852,6 +1856,9 @@ Pas d'accès unitaire `GET /{id}` — uniquement `?detail=`, contrairement aux `
 | GET | /api/dossiers/{id}/journal | — | `ActionDossierDto[]` | 200, 403, 404 | Authentifié (périmètre de visibilité du dossier) — ⚠️ **2026-09-14 : 403 pour la PRMP et l'UGPM** (vue interne CNM) |
 
 `{id}` = idDossier (number). **`DossierResoumissionRequest`** = `{ motifRectification }` (String, **@NotBlank**, max 255).
+⚠️ **2026-09-27 (lot C)** — sur un dossier qui porte une fiche marché (`idDmc`), `POST …/resoumettre` et
+`POST …/transmettre-complements` répondent **409 `FICHE_NON_REVISEE`** tant que la fiche n'a pas une version **validée
+postérieure** à `ficheMarche.versionSoumise` ; voir *La rectification d'un dossier DAO — lot C*.
 
 > ⚠️ **Vues internes CNM — ce que reçoivent la PRMP et l'UGPM (2026-09-14, audit C2).** La règle pilote du
 > 2026-09-06 réserve à la Commission le journal et le chronométrage nominatifs, et le secret de l'intérim
@@ -3515,6 +3522,12 @@ de renvoi est une action de la **clôture de la navette du projet de PV**, rése
 Commission** (auparavant : Membre pendant l'examen). N lettres possibles par examen (indépendamment du Projet
 de PV). Lecture filtrée par profil/localité. Cycle : `BROUILLON → SOUMIS → SIGNE` (signature CC ou Président).
 
+> ⚠️ **2026-09-27 (lot C, §B6) — le PDF nomme les informations de la fiche DAO.** Après le corps de la lettre, le
+> document imprime un bloc « Informations de la fiche du dossier d'appel d'offres visées par les observations » : pour
+> chaque ligne d'observation de l'examen ancrée sur une information de la fiche (`champFiche`), « Au lieu de « … »,
+> lire « … » » puis « Information de la fiche DAO : *libellé* — lot *n* ». Sans observation ancrée, rien ne change.
+> Les sauts de ligne du corps sont rendus (auparavant perdus à la conversion Word).
+
 **Champs `LettreRenvoiDto`**
 
 | Champ (JSON) | Type | Obligatoire | Contraintes |
@@ -5048,6 +5061,57 @@ inchangées, toutes à joindre à la main au lot 1b. **Journal** du nouveau doss
 `DOSSIER_CREE_DEPUIS_FICHE`. La **soumission** ne change pas. Un dossier soumis se lit par les contrôleurs de sa
 localité, bloc `ficheMarche` compris, et sa fiche par `GET /api/fiches-marche/{idDmc}` (périmètre du plan, déjà
 ouvert aux contrôleurs) ; l'examen porte toujours sur les pièces.
+
+### La rectification d'un dossier DAO — lot C ⚠️ 2026-09-27
+
+Demande front `frontend/docs/demande-backend-2026-09-26-rectification-dossier-dao.md` (plan du lot C, arbitrages
+Q2/Q3/Q4 du pilote le 26/09) ; décision : `docs/adr/ADR-0009-rectification-dossier-dao-par-revision.md` ; migration
+**V49**. **Principe : la rectification d'un dossier DAO est une révision validée de sa fiche marché** — jamais un
+nouveau dossier, jamais un ré-import ; le dossier garde sa référence, son circuit et son PV, c'est la fiche qui change
+de version.
+
+- **B1 — la fiche est verrouillée tant que la Commission tient le dossier.** `POST /api/fiches-marche/{idDmc}/reviser`
+  → **409 `DOSSIER_EN_EXAMEN`** (corps : `idDossier`, `details.statut`) quand le dossier soumis est `SOUMIS`,
+  `PRET_DISPATCH`, `DISPATCHE`, `EXAMINE`, `A_REEXAMINER`, `PV_SIGNE`, `EN_VERIFICATION`, `OBSERVATIONS_LEVEES`,
+  `DECISION_TRANSMISE_SIGMP` ou `CLOTURE`. Elle se révise dossier **rendu à la PRMP** (`EN_ATTENTE_DECISION_PRMP`,
+  `EN_ATTENTE_PIECES`, `EN_ATTENTE_COMPLEMENTS_DEPOT`) ou encore `BROUILLON` ; une fiche sans dossier soumis se révise
+  comme avant. **`DossierDto.ficheMarche.versionSoumise`** (`t_dossier.VERSION_FICHE_SOUMISE`) : la version que le
+  dossier a soumise — posée par `soumettre`, avancée par `resoumettre` et `transmettre-complements` ; `null` en
+  brouillon. C'est la version que la Commission a examinée.
+- **B2 — la validation de la révision remplace les pièces produites.** `POST …/valider` sur la version n+1 d'une fiche
+  dont le dossier est rendu à la PRMP : les **PDF** régénérés (DPAO, CCAP, AE par lot, LF, A1-A4, C1/C2 par lot — les
+  classeurs `xlsx` BP/TC restent des documents de la fiche, pas des pièces du dossier) sont joints en **version
+  corrigée** (`versionCorrigee = true`), les pièces de la version précédente **conservées** ; en `EN_ATTENTE_PIECES`,
+  ils portent en outre `apresLettreRenvoi = true` et `idLettre` (dernière lettre signée) : ce sont les compléments du
+  dossier DAO. Les pièces déposées à part par la PRMP ne bougent pas. Dossier encore `BROUILLON` : remplacement (les
+  précédentes retirées), comme avant. Journal du dossier soumis : **`FICHE_REVISEE`** — « Fiche marché version n
+  validée, N information(s) modifiée(s), P pièce(s) remplacée(s) » (N = informations dont la valeur imprimée diffère
+  de la version validée précédente, P = PDF joints), après `FICHE_MARCHE_VALIDEE`. `DossierDto.ficheMarche.version`
+  suit la dernière version validée ; `POST …/dossier` répond toujours 409 `DOSSIER_EXISTANT`.
+- **B3 — resoumettre et transmettre les compléments exigent la révision validée.** Dossier qui porte une fiche :
+  **409 `FICHE_NON_REVISEE`** (corps : `idDossier`, `details.versionSoumise`, `details.versionCourante`,
+  `details.statutFiche`) tant que la dernière version n'est pas `VALIDEE` **et** postérieure à `versionSoumise` (une
+  révision ouverte : `statutFiche = BROUILLON`). À l'acceptation, `versionSoumise` avance ; pour les compléments, la
+  garde « au moins une pièce rattachée à la dernière lettre » est **remplacée** par celle-ci, et la version examinée
+  (`t_dossier.VERSION_FICHE_EXAMINEE`) retient l'ancienne version soumise. Un dossier sans fiche : rien ne change.
+- **B4 — `ObservationPvDto`** (`GET /api/observations-pv?dossier=`) : pour une observation ancrée (`champFiche`),
+  **`versionFicheObservee`** (version dont la valeur a été figée — `t_observation_pv.VERSION_FICHE`, recopiée de la
+  ligne d'examen ; `null` pour une observation antérieure à V49), **`versionFicheActuelle`** (dernière version
+  validée) et **`valeurChampFicheActuelle`** (valeur de l'information dans cette version, formatée comme
+  `valeurChampFiche` ; `null` si l'information n'y est plus : champ fermé par le cadrage, ou non renseignée).
+  Identiques tant que la fiche n'a pas été revalidée. `ObservationControleDto.versionFiche` (lecture seule) porte la
+  même version à la pose.
+- **B5 — `PerimetreExamenDto`** (`GET /api/dossiers/{id}/perimetre-examen`) : **`ficheDaoAExaminer`** et
+  **`ficheDao { versionExaminee, versionCourante, informations[{ champFiche, lot, libelle, avant, apres }] }`** pour
+  un dossier DMC en `A_REEXAMINER` (`ficheDao` nul, `ficheDaoAExaminer` faux sinon) : les informations dont la valeur
+  imprimée diffère entre la version examinée et la version validée courante (`avant` nul : information ouverte par la
+  révision ; `apres` nul : fermée). `miseAJour`, `lignes`, `ficheAExaminer`, `agpmAExaminer` gardent leur sens. Les
+  points du sous-type restent **tous** à réévaluer (Q4) : la liste dit ce que le front met en évidence.
+- **B6 — lettre de renvoi** : le PDF imprime, après le corps, un bloc « Informations de la fiche du dossier d'appel
+  d'offres visées par les observations » — pour chaque ligne d'observation ancrée de l'examen, « Au lieu de « … »,
+  lire « … » » puis « Information de la fiche DAO : *libellé* — lot *n* ». Le corps reste libre (le front ne
+  structure pas ses observations) : le bloc s'ajoute à la suite, il ne s'insère pas ligne à ligne. Les sauts de ligne
+  du corps sont désormais rendus dans le document Word.
 
 ---
 
@@ -7004,6 +7068,9 @@ Ouvert Restreint ».
 >   vérification — le vérificateur ne voit que des dossiers **déjà rectifiés** —, donc il dispose des deux
 >   décisions dès son premier passage. Remplace la décision produit du 2026-08-15, qui faisait du premier
 >   passage un « rappel » à `MAINTENUE` forcé).
+> - ⚠️ **2026-09-27 (lot C, §B4)** — une observation **ancrée** sur une information de la fiche DAO sert aussi
+>   `versionFicheObservee`, `versionFicheActuelle` et `valeurChampFicheActuelle` (voir *La rectification d'un dossier
+>   DAO — lot C*) : le vérificateur compare la valeur observée et la valeur actuelle sans ouvrir la fiche.
 >   ⚠️ **V30 (2026-09-14) — cellule visée** : chaque observation porte aussi `champ`, `idMarcheCible`,
 >   `idBenefCible` (**recopiés** de la ligne « Au lieu de / Lire » au snapshot de la signature ; `null` pour
 >   une pièce, un point sans ligne détaillée ou une observation antérieure) et **`documentCible`** déduit du
@@ -7205,7 +7272,7 @@ ferment l'étape en cours de ce qui va disparaître.
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
 | GET | /api/dossiers/{id}/chronometrage | — | `ChronometrageDto` | 200, 403, 404 | même périmètre que le dossier ; PRMP/UGPM : **sans identités** (⚠️ 2026-09-14, encart « Vues internes CNM ») |
-| GET | /api/dossiers/{id}/perimetre-examen | — | `PerimetreExamenDto` | 200, 403, 404 | même périmètre que le dossier |
+| GET | /api/dossiers/{id}/perimetre-examen | — | `PerimetreExamenDto` (⚠️ 2026-09-27, lot C : `ficheDaoAExaminer`, `ficheDao` pour un dossier DAO en `A_REEXAMINER`) | 200, 403, 404 | même périmètre que le dossier |
 | GET | /api/delais-standards | — | `DelaiStandardDto[]` | 200 | Authentifié |
 | PUT | /api/delais-standards/{etape} | `DelaiStandardDto` | `DelaiStandardDto` | 200, 400, 403, 404 | **ADMINISTRATEUR** |
 

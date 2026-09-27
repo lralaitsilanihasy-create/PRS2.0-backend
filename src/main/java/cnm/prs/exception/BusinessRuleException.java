@@ -28,13 +28,26 @@ public class BusinessRuleException extends RuntimeException {
      * ({@code DOSSIER_EXISTANT}, {@code FICHE_DEJA_LIEE}) : {@code idDossier} passe dans le corps d'erreur.
      */
     public BusinessRuleException(String message, String code, Integer idDossier) {
+        this(message, code, idDossier, null);
+    }
+
+    /**
+     * ⚠️ Lot C (2026-09-27, rectification d'un dossier DAO) — 409 à code stable qui porte quelques <strong>détails</strong>
+     * nommés ({@code DOSSIER_EN_EXAMEN} : {@code statut} ; {@code FICHE_NON_REVISEE} : {@code versionSoumise},
+     * {@code versionCourante}, {@code statutFiche}), servis dans {@code details} du corps d'erreur — sans nouvelle forme.
+     */
+    public BusinessRuleException(String message, String code, Integer idDossier, java.util.Map<String, Object> details) {
         super(message);
         this.code = code;
         this.idDossier = idDossier;
+        this.details = details;
     }
 
     /** Dossier en cause, ou {@code null}. */
     private final Integer idDossier;
+
+    /** Détails nommés du 409, ou {@code null}. */
+    private final java.util.Map<String, Object> details;
 
     public String getCode() {
         return code;
@@ -42,5 +55,9 @@ public class BusinessRuleException extends RuntimeException {
 
     public Integer getIdDossier() {
         return idDossier;
+    }
+
+    public java.util.Map<String, Object> getDetails() {
+        return details;
     }
 }

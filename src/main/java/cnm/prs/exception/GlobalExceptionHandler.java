@@ -60,13 +60,14 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(BusinessRuleException.class)
     public ResponseEntity<ErrorResponse> handleBusinessRule(BusinessRuleException ex, WebRequest request) {
-        if (ex.getIdDossier() == null) {
+        if (ex.getIdDossier() == null && ex.getDetails() == null) {
             return build(HttpStatus.CONFLICT, ex.getMessage(), request, null, ex.getCode());
         }
-        // ⚠️ Fiche marché, lot 1b (2026-09-23) — le 409 désigne le dossier vers lequel naviguer.
+        // ⚠️ Fiche marché, lot 1b (2026-09-23) — le 409 désigne le dossier vers lequel naviguer ; lot C (2026-09-27) :
+        // et porte, s'il en a, ses détails nommés.
         ErrorResponse c = corps(HttpStatus.CONFLICT, ex.getMessage(), request, null, ex.getCode());
         return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponse(c.timestamp(), c.status(), c.error(),
-                c.message(), c.path(), c.erreurs(), c.code(), ex.getIdDossier()));
+                c.message(), c.path(), c.erreurs(), c.code(), ex.getIdDossier(), ex.getDetails()));
     }
 
     /**

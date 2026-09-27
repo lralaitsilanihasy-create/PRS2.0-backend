@@ -498,6 +498,29 @@ document porte chaque information (document maître, reprises) ; il manquait la 
   une forme unique. Une fiche qui n'en retenait qu'une reste juste : rien à ressaisir. Les modèles de garantie C1 / C2
   restent commandés par le modèle joint (`B04-CD-02`).
 
+#### La rectification d'un dossier DAO après le PV (lot C, demande front du 2026-09-26, arbitrages du pilote du 26/09)
+
+⚠️ **La rectification d'un dossier d'appel d'offres est une révision validée de sa fiche marché** — jamais un nouveau
+dossier, jamais un ré-import : le dossier garde sa référence, son circuit et son PV, c'est la fiche qui change de
+version. Contrat : `docs/api-endpoints.md`, § *La rectification d'un dossier DAO — lot C* ; décision : ADR-0009.
+
+- **La Commission examine une version stable** (Q3) : tant qu'elle tient le dossier — du dépôt à la clôture, réexamen
+  et vérification compris — la fiche ne se révise pas. Elle se révise quand le dossier **revient à la PRMP** :
+  observations maintenues, lettre de renvoi signée, compléments demandés au dépôt.
+- **Le dossier sait quelle version il a soumise** ; c'est elle que la Commission a examinée et à laquelle le réexamen
+  compare. Elle avance à chaque resoumission ou transmission de compléments.
+- **Les documents régénérés remplacent les pièces produites** (Q2), l'ancienne version conservée pour la traçabilité,
+  comme les pièces corrigées d'un plan : ce sont les documents de la fiche, pas des dépôts. Les pièces déposées à part
+  (CCAG, CCTP, avis, estimation, garantie) restent à la main de la PRMP. Le journal du dossier dit la version, le
+  nombre d'informations changées et le nombre de pièces remplacées.
+- **Resoumettre ou transmettre les compléments sans avoir revalidé la fiche est refusé** : la révision validée *est* la
+  rectification ; une révision ouverte et non validée ne vaut pas correction. Pour un DAO, les documents de la
+  révision sont les compléments de la lettre de renvoi.
+- **Le Vérificateur voit la valeur observée et la valeur actuelle** de l'information visée, et statue en connaissance
+  de cause ; **le réexamen** met en évidence les informations changées mais **réévalue tous les points** (Q4) : un
+  point de portée DOSSIER juge l'ensemble, et douze points se relisent en quelques minutes.
+- **La lettre de renvoi nomme l'information** de la fiche que chaque observation ancrée vise, comme le PV.
+
 #### La fiche DAO des travaux (référentiel remis le 2026-09-24)
 
 - **Les travaux se préparent** : 257 informations (dont un bloc d'annexes et de formulaires), avec leur vocabulaire —

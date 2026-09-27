@@ -63,6 +63,9 @@ public class ObservationControleDto {
     /** ⚠️ V44 — lecture seule : valeur observée (telle que les documents l'impriment), figée à l'observation. */
     private String valeurChampFiche;
 
+    /** ⚠️ Lot C (V49, 2026-09-27) — lecture seule : la version de la fiche dont la valeur a été figée. */
+    private Integer versionFiche;
+
     /** ⚠️ V44 — lecture seule : rang du lot de l'information ({@code null} : commune). */
     private Integer lot;
 }

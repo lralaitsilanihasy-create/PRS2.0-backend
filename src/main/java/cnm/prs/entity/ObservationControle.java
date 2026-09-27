@@ -82,6 +82,10 @@ public class ObservationControle {
     @Column(name = "VALEUR_CHAMP_FICHE", length = 4000)
     private String valeurChampFiche;
 
+    /** ⚠️ V49 (lot C, 2026-09-27) — la version de la fiche dont la valeur a été figée ; {@code null} si inconnue (avant V49). */
+    @Column(name = "VERSION_FICHE")
+    private Integer versionFiche;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ID_DETAIL", insertable = false, updatable = false)
     @JsonIgnore

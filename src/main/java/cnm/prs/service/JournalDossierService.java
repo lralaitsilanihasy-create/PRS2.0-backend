@@ -76,6 +76,12 @@ public class JournalDossierService {
     public static final String DOSSIER_CREE_DEPUIS_FICHE = "DOSSIER_CREE_DEPUIS_FICHE";
     public static final String FICHE_MARCHE_RATTACHEE = "FICHE_MARCHE_RATTACHEE";
     public static final String FICHE_MARCHE_DETACHEE = "FICHE_MARCHE_DETACHEE";
+    /**
+     * ⚠️ Lot C (2026-09-27, demande front du 2026-09-26, §B2) — sur le <strong>dossier soumis</strong> : la fiche qui l'a
+     * produit a été revalidée en version n+1 (rectification d'un dossier DAO = révision validée de la fiche). Détail
+     * « Fiche marché version n validée, N information(s) modifiée(s), P pièce(s) remplacée(s) ». Acte PRMP.
+     */
+    public static final String FICHE_REVISEE = "FICHE_REVISEE";
 
     private final ActionDossierRepository repository;
     private final PrmpRepository prmpRepository;

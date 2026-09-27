@@ -537,7 +537,7 @@ public class DossierService {
         // ⚠️ Fiche marché, lot 1b (2026-09-23, §B1) — l'état de la fiche liée, sur la lecture unitaire seulement
         // (le résumé relit le plan et recalcule le bilan) ; aucune requête pour un dossier sans ID_DMC.
         if (entity.getIdDmc() != null) {
-            dto.setFicheMarche(ficheMarcheService.resume(entity.getIdDmc()));
+            dto.setFicheMarche(ficheMarcheService.resume(entity.getIdDmc(), entity.getVersionFicheSoumise()));   // lot C
         }
         return enrichir(List.of(dto)).get(0);
     }
@@ -915,6 +915,13 @@ public class DossierService {
         dossier.setIdLocalite(localite);             // propage la localité (§C) → visible par le Secrétaire
         dossier.setStatut(StatutDossier.SOUMIS.name());
         dossier.setSoumisPar(CurrentUser.login().orElse(null));   // traçabilité : soumission réservée à la PRMP
+        // ⚠️ Lot C (2026-09-27, §B1) — un dossier DAO mémorise la version de la fiche qu'il soumet : c'est elle que la
+        // Commission examinera, et la référence de la garde FICHE_NON_REVISEE.
+        if (dossier.getIdDmc() != null) {
+            Integer versionFiche = ficheMarcheService.versionValideeCourante(dossier.getIdDmc());
+            dossier.setVersionFicheSoumise(versionFiche);
+            dossier.setVersionFicheExaminee(versionFiche);
+        }
         // ⚠️ 2026-09-06 (V20) — la date de soumission EST la date de dépôt du dossier (pilote) : posée ICI,
         // à l'acte de soumission, et non plus à la création du brouillon. Servie sur DossierDto et sur
         // ReceptionDto (Secrétaire) depuis la même colonne.
@@ -1028,6 +1035,11 @@ public class DossierService {
                     "Resoumission impossible : le dossier n'est pas en attente de décision PRMP (statut « "
                             + dossier.getStatut() + " »).");
         }
+        // ⚠️ Lot C (2026-09-27, §B3) — un dossier DAO se rectifie par une révision VALIDÉE de sa fiche : sans elle, 409.
+        Integer versionRevisee = exigerRevisionValidee(dossier);
+        if (versionRevisee != null) {
+            dossier.setVersionFicheSoumise(versionRevisee);
+        }
         // ⚠️ 2026-09-12 — l'étape RECTIFICATION_PRMP s'achève ici, et sa durée se mesure seule : elle court
         // depuis la vérification qui a maintenu les observations. C'est le SEUL délai imputé à la PRMP, et
         // il reste hors compteur global. Enregistré AVANT le changement de statut, qui la ferme.
@@ -1054,6 +1066,39 @@ public class DossierService {
         tracerRectification(dossier, idPrmp, motifRectification);
         journalDossier.tracer(dossier, JournalDossierService.RESOUMISSION, motifRectification);
         return dto(dossier);
+    }
+
+    /**
+     * ⚠️ Lot C (2026-09-27, §B3) — la rectification d'un dossier DAO est une <strong>révision validée</strong> de sa fiche
+     * marché : la resoumission (chemin FAVR) et la transmission des compléments (chemin lettre de renvoi) exigent une
+     * version validée <em>postérieure</em> à la version soumise. Sinon 409 {@code FICHE_NON_REVISEE} avec
+     * {@code details} : {@code versionSoumise}, {@code versionCourante}, {@code statutFiche} (une révision ouverte et non
+     * validée est un refus, {@code statutFiche = BROUILLON}). Dossier sans fiche : {@code null}, rien n'est exigé.
+     *
+     * @return la version validée qui devient la version soumise
+     */
+    private Integer exigerRevisionValidee(Dossier dossier) {
+        if (dossier.getIdDmc() == null) {
+            return null;
+        }
+        cnm.prs.entity.FicheMarche derniere = ficheMarcheService.derniereVersion(dossier.getIdDmc()).orElse(null);
+        Integer soumise = dossier.getVersionFicheSoumise();
+        Integer courante = derniere == null ? null : derniere.getNumeroVersion();
+        boolean validee = derniere != null && cnm.prs.enums.StatutFicheMarche.VALIDEE.name().equals(derniere.getStatut());
+        boolean posterieure = courante != null && courante > (soumise == null ? 0 : soumise);
+        if (!validee || !posterieure) {
+            Map<String, Object> details = new java.util.LinkedHashMap<>();
+            details.put("versionSoumise", soumise);
+            details.put("versionCourante", courante);
+            details.put("statutFiche", derniere == null ? null : derniere.getStatut());
+            throw new BusinessRuleException("La rectification d'un dossier d'appel d'offres est une révision validée de "
+                    + "sa fiche marché : " + (derniere == null ? "la fiche n'a jamais été enregistrée"
+                            : !validee ? "la version " + courante + " est encore en brouillon, validez-la"
+                            : "aucune version postérieure à la version soumise (" + soumise + ") n'a été validée — "
+                                    + "ouvrez une révision, corrigez, validez") + ".",
+                    "FICHE_NON_REVISEE", dossier.getIdDossier(), details);
+        }
+        return courante;
     }
 
     /**
@@ -1172,7 +1217,14 @@ public class DossierService {
         Integer idLettre = lettreRenvoiRepository
                 .findFirstByIdDossierAndStatutOrderByIdLettreDesc(idDossier, StatutLettreRenvoi.SIGNE.name())
                 .map(LettreRenvoi::getIdLettre).orElse(null);
-        if (idLettre == null || !pieceJointeDossierRepository
+        if (dossier.getIdDmc() != null) {
+            // ⚠️ Lot C (2026-09-27, §B3) — pour un dossier DAO, le complément EST la révision validée de la fiche (ses
+            // documents sont rattachés à la lettre par la validation) : la garde des pièces déposées est remplacée. La
+            // version que la Commission a examinée est retenue : c'est la borne « avant » du réexamen (§B5).
+            Integer versionRevisee = exigerRevisionValidee(dossier);
+            dossier.setVersionFicheExaminee(dossier.getVersionFicheSoumise());
+            dossier.setVersionFicheSoumise(versionRevisee);
+        } else if (idLettre == null || !pieceJointeDossierRepository
                 .existsByIdDossierAndIdLettreAndApresLettreRenvoiTrue(idDossier, idLettre)) {
             throw new BusinessRuleException(
                     "Transmission impossible : aucune pièce complémentaire n'a été déposée pour la lettre de "

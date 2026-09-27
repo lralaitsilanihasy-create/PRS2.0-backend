@@ -85,6 +85,10 @@ public class LettreRenvoiService {
     @Value("${storage.lettre-renvoi.path:${java.io.tmpdir}/prs-fsx/LR}")
     private String cheminStockageLr;
 
+    /** ⚠️ Lot C (2026-09-27, §B6) — les lignes d'observation de l'examen, pour nommer les informations de la fiche DAO. */
+    private final cnm.prs.repository.ExamenDetailRepository examenDetailRepository;
+    private final cnm.prs.repository.ObservationControleRepository observationControleRepository;
+
     public LettreRenvoiService(LettreRenvoiRepository repository, ExamenRepository examenRepository,
             DossierRepository dossierRepository, PpmRepository ppmRepository, PrmpRepository prmpRepository,
             ControleurDirectory controleurDirectory, ControleurRepository controleurRepository,
@@ -93,7 +97,11 @@ public class LettreRenvoiService {
             LettreRenvoiDocumentGenerator documentGenerator, ReferenceService referenceService,
             PvExamenRepository pvExamenRepository,
             org.springframework.context.ApplicationEventPublisher evenements,
-            ChronometrageService chronometrageService) {
+            ChronometrageService chronometrageService,
+            cnm.prs.repository.ExamenDetailRepository examenDetailRepository,
+            cnm.prs.repository.ObservationControleRepository observationControleRepository) {
+        this.examenDetailRepository = examenDetailRepository;
+        this.observationControleRepository = observationControleRepository;
         this.chronometrageService = chronometrageService;
         this.evenements = evenements;
         this.pvExamenRepository = pvExamenRepository;
@@ -545,7 +553,8 @@ public class LettreRenvoiService {
         String entite = dossier == null || dossier.getIdEntiteContract() == null ? ""
                 : entiteContractRepository.findById(dossier.getIdEntiteContract())
                         .map(EntiteContract::getLibelleEntite).orElse("");
-        String corps = lettre.getCorpsLettre() == null ? "" : lettre.getCorpsLettre();
+        // ⚠️ Lot C (2026-09-27, §B6) — les observations qui visent une information de la fiche DAO la nomment.
+        String corps = corpsAvecInformationsFiche(lettre.getCorpsLettre(), lignesAncrees(lettre.getIdExamen()));
         String nom = nomSignataire == null ? "" : nomSignataire;
 
         java.util.Map<String, String> m = new java.util.HashMap<>();
@@ -561,6 +570,52 @@ public class LettreRenvoiService {
             m.put("<NOM ET PRENOMS DU CHEF DE COMMISSION>", nom);
         }
         return m;
+    }
+
+    /** ⚠️ Lot C (§B6) — les lignes d'observation de l'examen qui visent une information de la fiche DAO, dans l'ordre. */
+    private java.util.List<cnm.prs.entity.ObservationControle> lignesAncrees(Integer idExamen) {
+        if (idExamen == null) {
+            return java.util.List.of();
+        }
+        java.util.List<cnm.prs.entity.ObservationControle> out = new java.util.ArrayList<>();
+        for (cnm.prs.entity.ExamenDetail d : examenDetailRepository.findByIdExamen(idExamen)) {
+            for (cnm.prs.entity.ObservationControle o : observationControleRepository.findByIdDetailOrderByOrdreAsc(d.getIdDetailExamen())) {
+                if (o.getChampFiche() != null && !o.getChampFiche().isBlank()) {
+                    out.add(o);
+                }
+            }
+        }
+        return out;
+    }
+
+    /**
+     * ⚠️ Lot C (2026-09-27, §B6) — le corps de la lettre, suivi, pour chaque observation ancrée sur une information de
+     * la fiche DAO, de sa ligne « au lieu de / lire » et de « Information de la fiche DAO : <em>libellé</em> — lot
+     * <em>n</em> » (comme le PV). Sans observation ancrée, le corps est rendu tel quel. Les sauts de ligne sont ceux du
+     * document ({@code \n}, traduits en sauts de ligne Word par le générateur).
+     */
+    public static String corpsAvecInformationsFiche(String corpsLettre, java.util.List<cnm.prs.entity.ObservationControle> ancrees) {
+        String corps = corpsLettre == null ? "" : corpsLettre;
+        if (ancrees == null || ancrees.isEmpty()) {
+            return corps;
+        }
+        StringBuilder sb = new StringBuilder(corps.trim());
+        if (sb.length() > 0) {
+            sb.append("\n\n");
+        }
+        sb.append("Informations de la fiche du dossier d'appel d'offres visées par les observations :");
+        for (cnm.prs.entity.ObservationControle o : ancrees) {
+            sb.append("\n– Au lieu de « ").append(o.getAuLieuDe() == null ? "" : o.getAuLieuDe())
+                    .append(" », lire « ").append(o.getLire() == null ? "" : o.getLire()).append(" »");
+            sb.append("\n   Information de la fiche DAO : ")
+                    .append(o.getLibelleChampFiche() == null || o.getLibelleChampFiche().isBlank() ? o.getChampFiche()
+                            : o.getLibelleChampFiche());
+            Integer lot = LotsFiche.lotDe(o.getChampFiche());
+            if (lot != null) {
+                sb.append(" — lot ").append(lot);
+            }
+        }
+        return sb.toString();
     }
 
     /** « Prénoms Nom » d'un contrôleur (signataire effectif), ou l'IM si introuvable. */

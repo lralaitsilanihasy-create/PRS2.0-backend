@@ -150,6 +150,9 @@ class ObservationChampFicheIntegrationTest extends CnmIntegrationTestSupport {
                 .andReturn().getResponse().getContentAsString();
         int idResultat = JsonPath.read(corps, "$.idDetailExamen");
 
+        // ⚠️ Lot C (2026-09-27, §B1) — la fiche d'un dossier en examen est verrouillée : la révision se joue dossier rendu
+        // à la PRMP, puis le dossier revient en examen pour la suite du test.
+        statutDossier1("EN_ATTENTE_DECISION_PRMP");
         mvc.perform(post("/api/fiches-marche/" + idDmc + "/reviser").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk());
         mvc.perform(put("/api/fiches-marche/" + idDmc + "/blocs/B05").header("Authorization", tokenPrmp).contentType(JSON)
@@ -157,6 +160,7 @@ class ObservationChampFicheIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isOk());
         mvc.perform(post("/api/fiches-marche/" + idDmc + "/valider").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk());
+        statutDossier1("EXAMINE");
 
         mvc.perform(put("/api/examen-details/" + idResultat).header("Authorization", tokenMembre).contentType(JSON)
                 .content(corpsResultat(PT_DOSSIER, ligneFiche(idDmc, "B05-TP-02#2", "{}"))))
@@ -185,6 +189,12 @@ class ObservationChampFicheIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     // ------------------------------------------------------------------ outils
+
+    private void statutDossier1(String statut) {
+        Dossier d = dossierRepository.findById(1).orElseThrow();
+        d.setStatut(statut);
+        dossierRepository.saveAndFlush(d);
+    }
 
     /** Montants et délais des trois lots : minimum {@code base × n}, maximum {@code 5 × base × n}. */
     private static Map<String, String> montants(int base) {

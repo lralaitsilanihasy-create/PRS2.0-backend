@@ -29,6 +29,7 @@ public final class ObservationControleMapper {
         dto.setChampFiche(entity.getChampFiche());
         dto.setLibelleChampFiche(entity.getLibelleChampFiche());
         dto.setValeurChampFiche(entity.getValeurChampFiche());
+        dto.setVersionFiche(entity.getVersionFiche());   // ⚠️ lot C (V49)
         dto.setLot(cnm.prs.service.LotsFiche.lotDe(entity.getChampFiche()));
         return dto;
     }
@@ -51,6 +52,7 @@ public final class ObservationControleMapper {
         entity.setChampFiche(dto.getChampFiche());
         entity.setLibelleChampFiche(dto.getLibelleChampFiche());
         entity.setValeurChampFiche(dto.getValeurChampFiche());
+        entity.setVersionFiche(dto.getVersionFiche());   // ⚠️ lot C (V49) — posée par le validateur
         return entity;
     }
 }

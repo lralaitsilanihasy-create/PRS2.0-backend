@@ -178,12 +178,18 @@ public class FicheMarcheService {
      */
     @Transactional(readOnly = true)
     public FicheMarcheResumeDto resume(Long idDmc) {
+        return resume(idDmc, null);
+    }
+
+    /** ⚠️ Lot C (2026-09-27, §B1) — avec la version que le dossier a soumise ({@code t_dossier.VERSION_FICHE_SOUMISE}). */
+    @Transactional(readOnly = true)
+    public FicheMarcheResumeDto resume(Long idDmc, Integer versionSoumise) {
         Contexte ctx = contexte(idDmc, false);
         FicheMarche fiche = ficheRepository.findFirstByIdDmcOrderByNumeroVersionDesc(idDmc).orElseGet(() -> virtuelle(idDmc));
         FicheMarcheDto d = toDto(ctx, fiche);
         return new FicheMarcheResumeDto(idDmc, d.getIdDetail(), d.getRefeDossier(), d.getDesignationMarche(),
                 d.getTypeMarche(), d.getStatut(), d.getVersion(), d.getBilanControles().nbSaisis(),
-                d.getBilanControles().nbAttendus());
+                d.getBilanControles().nbAttendus(), versionSoumise);
     }
 
     /**
@@ -225,8 +231,11 @@ public class FicheMarcheService {
         return documents.lister(fiche);
     }
 
-    /** ⚠️ V44 (2026-09-25) — une information de la fiche, telle qu'une observation d'examen la vise et la fige. */
-    public record AncrageChamp(String cle, String libelle, String valeur) {
+    /**
+     * ⚠️ V44 (2026-09-25) — une information de la fiche, telle qu'une observation d'examen la vise et la fige ;
+     * {@code version} (lot C, V49) : la version de la fiche dont la valeur est lue.
+     */
+    public record AncrageChamp(String cle, String libelle, String valeur, Integer version) {
     }
 
     /**
@@ -264,7 +273,106 @@ public class FicheMarcheService {
             throw new ChampsInvalidesException(erreurs.stream()
                     .map(e -> new ErrorResponse.FieldError(nomChamp, e.message())).toList());
         }
-        return new AncrageChamp(cible, c.getLibelle(), SelectionDocumentsFiche.valeurAffichee(c, cible, etat));
+        return new AncrageChamp(cible, c.getLibelle(), SelectionDocumentsFiche.valeurAffichee(c, cible, etat),
+                fiche.getNumeroVersion());
+    }
+
+    // ------------------------------------------------------------------ lot C : versions et différences
+
+    /** ⚠️ Lot C (2026-09-27) — la dernière version de la fiche, quel que soit son statut ({@code empty} si jamais enregistrée). */
+    @Transactional(readOnly = true)
+    public java.util.Optional<FicheMarche> derniereVersion(Long idDmc) {
+        return ficheRepository.findFirstByIdDmcOrderByNumeroVersionDesc(idDmc);
+    }
+
+    /** ⚠️ Lot C — le numéro de la dernière version <strong>validée</strong>, {@code null} s'il n'y en a pas. */
+    @Transactional(readOnly = true)
+    public Integer versionValideeCourante(Long idDmc) {
+        return derniereValidee(idDmc).map(FicheMarche::getNumeroVersion).orElse(null);
+    }
+
+    private java.util.Optional<FicheMarche> derniereValidee(Long idDmc) {
+        return ficheRepository.findByIdDmcOrderByNumeroVersionAsc(idDmc).stream()
+                .filter(f -> StatutFicheMarche.VALIDEE.name().equals(f.getStatut())).reduce((a, b) -> b);
+    }
+
+    /**
+     * ⚠️ Lot C (§B4, §B5) — l'état d'une version, de quoi relire une information <strong>telle que les documents
+     * l'impriment</strong> : {@link #valeur(String)} rend {@code null} si l'information n'est pas dans cette version
+     * (champ inconnu, inactif, d'une autre forme ou catégorie, fermé par le cadrage, ou non renseigné).
+     */
+    public record EtatVersion(Integer version, FicheMarcheDto etat, Map<String, ChampFicheMarche> champs, String type,
+            String categorie) {
+
+        public String valeur(String cle) {
+            if (cle == null) {
+                return null;
+            }
+            int diese = cle.indexOf(LotsFiche.SEPARATEUR);
+            ChampFicheMarche c = champs.get(diese < 0 ? cle : cle.substring(0, diese));
+            Map<String, Object> cadrage = etat.getCadrage() == null ? Map.of() : etat.getCadrage();
+            if (c == null || !Boolean.TRUE.equals(c.getActif()) || !c.pourTypeMarche(type) || !c.pourCategorie(categorie)
+                    || !ConditionCadrage.vraie(c.getCondition(), cadrage)) {
+                return null;
+            }
+            return SelectionDocumentsFiche.valeurAffichee(c, cle, etat);
+        }
+
+        /** Le libellé du champ de {@code cle} au référentiel, à défaut la clé elle-même. */
+        public String libelle(String cle) {
+            int diese = cle.indexOf(LotsFiche.SEPARATEUR);
+            ChampFicheMarche c = champs.get(diese < 0 ? cle : cle.substring(0, diese));
+            return c == null ? cle : c.getLibelle();
+        }
+    }
+
+    /** ⚠️ Lot C — l'état de la dernière version validée ({@code empty} si aucune). Sans contrôle de périmètre. */
+    @Transactional(readOnly = true)
+    public java.util.Optional<EtatVersion> etatValide(Long idDmc) {
+        return derniereValidee(idDmc).map(f -> etatVersion(contexte(idDmc, false), f));
+    }
+
+    private EtatVersion etatVersion(Contexte ctx, FicheMarche fiche) {
+        FicheMarcheDto d = toDto(ctx, fiche);
+        Map<String, ChampFicheMarche> champs = new LinkedHashMap<>();
+        champRepository.findAllByOrderByCodeRubriqueAscRangAsc().forEach(c -> champs.put(c.getCode(), c));
+        String type = d.getTypeMarche() != null ? d.getTypeMarche()
+                : fiche.getTypeMarche() != null ? fiche.getTypeMarche() : TypeMarcheDao.QUANTITE_FIXE.name();
+        String categorie = d.getCategorie() != null ? d.getCategorie() : CategorieDao.FOURNITURES_SERVICES.name();
+        return new EtatVersion(fiche.getNumeroVersion(), d, champs, type, categorie);
+    }
+
+    /**
+     * ⚠️ Lot C (§B5) — les informations dont la valeur imprimée diffère entre deux versions de la fiche : {@code avant}
+     * nul si l'information n'est pas dans la version {@code vAvant}, {@code apres} nul si elle n'est plus dans
+     * {@code vApres}. Clés dans l'ordre du référentiel puis du lot. Sans contrôle de périmètre (le dossier lu l'a fait).
+     */
+    @Transactional(readOnly = true)
+    public List<cnm.prs.dto.PerimetreExamenDto.InformationFiche> differences(Long idDmc, Integer vAvant, Integer vApres) {
+        Contexte ctx = contexte(idDmc, false);
+        FicheMarche a = ficheRepository.findByIdDmcAndNumeroVersion(idDmc, vAvant).orElse(null);
+        FicheMarche b = ficheRepository.findByIdDmcAndNumeroVersion(idDmc, vApres).orElse(null);
+        if (a == null || b == null) {
+            return List.of();
+        }
+        EtatVersion avant = etatVersion(ctx, a);
+        EtatVersion apres = etatVersion(ctx, b);
+        java.util.TreeSet<String> cles = new java.util.TreeSet<>();
+        if (avant.etat().getValeurs() != null) {
+            cles.addAll(avant.etat().getValeurs().keySet());
+        }
+        if (apres.etat().getValeurs() != null) {
+            cles.addAll(apres.etat().getValeurs().keySet());
+        }
+        List<cnm.prs.dto.PerimetreExamenDto.InformationFiche> out = new ArrayList<>();
+        for (String cle : cles) {
+            String x = avant.valeur(cle);
+            String y = apres.valeur(cle);
+            if (!java.util.Objects.equals(x, y)) {
+                out.add(new cnm.prs.dto.PerimetreExamenDto.InformationFiche(cle, LotsFiche.lotDe(cle), apres.libelle(cle), x, y));
+            }
+        }
+        return out;
     }
 
     /** ⚠️ Lot 2a — un document à télécharger, au périmètre de lecture de sa fiche (404 inconnu, 403 hors périmètre). */
@@ -476,8 +584,22 @@ public class FicheMarcheService {
         journal.tracer(ctx.idDossier(), JournalDossierService.FICHE_MARCHE_VALIDEE,
                 "DAO, version " + fiche.getNumeroVersion() + ", " + bilan.nbSaisis() + " information(s)");
         // Le dossier soumis que porte déjà la fiche reçoit les documents de cette version (lot 2a, §B3/§B4).
-        Long idDmcValide = idDmc;
-        dossierRepository.findIdDossierByIdDmc(idDmc).ifPresent(id -> documents.joindre(id, idDmcValide));
+        Integer idDossierSoumis = dossierRepository.findIdDossierByIdDmc(idDmc).orElse(null);
+        if (idDossierSoumis != null) {
+            int remplacees = documents.joindre(idDossierSoumis, idDmc);
+            // ⚠️ Lot C (2026-09-27, §B2) — la révision validée d'une fiche dont le dossier existe : le journal du dossier
+            // soumis dit la version, ce qui a changé et ce qui a été remplacé.
+            Integer n = fiche.getNumeroVersion();
+            FicheMarche precedente = n == null ? null : ficheRepository.findByIdDmcOrderByNumeroVersionAsc(idDmc).stream()
+                    .filter(f -> StatutFicheMarche.VALIDEE.name().equals(f.getStatut()) && f.getNumeroVersion() != null
+                            && f.getNumeroVersion() < n)
+                    .reduce((a, b) -> b).orElse(null);
+            if (precedente != null) {
+                int modifiees = differences(idDmc, precedente.getNumeroVersion(), n).size();
+                journal.tracer(idDossierSoumis, JournalDossierService.FICHE_REVISEE, "Fiche marché version " + n
+                        + " validée, " + modifiees + " information(s) modifiée(s), " + remplacees + " pièce(s) remplacée(s)");
+            }
+        }
         return toDto(ctx, fiche);
     }
 
@@ -528,9 +650,33 @@ public class FicheMarcheService {
                 "DAO de la ligne " + ctx.idDetail() + " (DMC " + idDmc + ") supprimé, sans historique");
     }
 
-    /** Ouvre la version suivante en brouillon, copie de la dernière validée. */
+    /**
+     * ⚠️ Lot C (2026-09-27, §B1, Q3 arbitrée par le pilote) — les statuts où la Commission <strong>tient</strong> la
+     * version examinée : la fiche du dossier ne se révise pas. Elle se révise quand le dossier revient à la PRMP
+     * ({@code EN_ATTENTE_DECISION_PRMP}, {@code EN_ATTENTE_PIECES}, {@code EN_ATTENTE_COMPLEMENTS_DEPOT}) ou n'est pas
+     * encore parti ({@code BROUILLON}).
+     */
+    static final Set<String> STATUTS_TENUS_PAR_LA_COMMISSION = Set.of(cnm.prs.enums.StatutDossier.SOUMIS.name(),
+            cnm.prs.enums.StatutDossier.PRET_DISPATCH.name(), cnm.prs.enums.StatutDossier.DISPATCHE.name(),
+            cnm.prs.enums.StatutDossier.EXAMINE.name(), cnm.prs.enums.StatutDossier.A_REEXAMINER.name(),
+            cnm.prs.enums.StatutDossier.PV_SIGNE.name(), cnm.prs.enums.StatutDossier.EN_VERIFICATION.name(),
+            cnm.prs.enums.StatutDossier.OBSERVATIONS_LEVEES.name(), cnm.prs.enums.StatutDossier.DECISION_TRANSMISE_SIGMP.name(),
+            cnm.prs.enums.StatutDossier.CLOTURE.name());
+
+    /**
+     * Ouvre la version suivante en brouillon, copie de la dernière validée. ⚠️ Lot C : 409 {@code DOSSIER_EN_EXAMEN}
+     * ({@code idDossier}, {@code details.statut}) tant que le dossier soumis est entre les mains de la Commission.
+     */
     public FicheMarcheDto reviser(Long idDmc) {
         Contexte ctx = contexteEcriture(idDmc);
+        dossierRepository.findIdDossierByIdDmc(idDmc).flatMap(dossierRepository::findById).ifPresent(d -> {
+            if (STATUTS_TENUS_PAR_LA_COMMISSION.contains(d.getStatut())) {
+                throw new BusinessRuleException("Le dossier " + d.getIdDossier() + " est entre les mains de la Commission "
+                        + "(statut « " + d.getStatut() + " ») : la fiche marché se révise quand il revient à la PRMP "
+                        + "(observations maintenues ou lettre de renvoi).", "DOSSIER_EN_EXAMEN", d.getIdDossier(),
+                        Map.of("statut", d.getStatut()));
+            }
+        });
         FicheMarche derniere = ficheRepository.findFirstByIdDmcOrderByNumeroVersionDesc(idDmc)
                 .orElseThrow(() -> new BusinessRuleException("La fiche n'a jamais été enregistrée : rien à réviser.", "FICHE_VIDE"));
         if (!StatutFicheMarche.VALIDEE.name().equals(derniere.getStatut())) {
