@@ -586,8 +586,14 @@ public final class ControlesFicheMarche {
             return;
         }
         // ⚠️ Lot 4 (2026-09-23) — la notification, cinquième date du calendrier du contrat-cadre (rôle NOTIFICATION).
-        List<String> etapes = List.of("LANCEMENT", "REMISE", "OUVERTURE", "ATTRIBUTION", "NOTIFICATION");
-        List<String> libelles = List.of("lancement", "remise des offres", "ouverture des plis", "attribution", "notification");
+        // ⚠️ 2026-09-28 (modèle officiel du contrat-cadre, §B2) — trois étapes propres au contrat-cadre (DPAC art. 2) :
+        // demandes d'offres optimisées et leur réception (après la séance d'évaluation, avant l'attribution), courriers de
+        // rejet (après l'attribution, avant la notification). Une étape sans champ n'est pas comptée.
+        List<String> etapes = List.of("LANCEMENT", "REMISE", "OUVERTURE", "OPTIMISEES_DEMANDE", "OPTIMISEES_RECEPTION",
+                "ATTRIBUTION", "REJET", "NOTIFICATION");
+        List<String> libelles = List.of("lancement", "remise des offres", "ouverture des plis",
+                "demandes d'offres optimisées", "réception des offres optimisées", "attribution", "courriers de rejet",
+                "notification");
         List<LocalDate> dates = new ArrayList<>();
         List<String> noms = new ArrayList<>();
         List<String> champs = new ArrayList<>();
@@ -596,13 +602,13 @@ public final class ControlesFicheMarche {
             ChampFicheMarche c = r.get(etapes.get(i));
             LocalDate d = null;
             if (c != null) {
-                d = date(valeurs.get(c.getCode()));
+                d = date(valeurs.get(c.getCode()));   // 2026-09-28 : une date-heure compte pour sa date
                 if (d != null) {
                     champs.add(c.getCode());
                     bloc = bloc == null ? c.codeBloc() : bloc;
                 }
-            } else if (datesPpm != null && (i == 0 || i == 3)) {
-                d = datesPpm.get(i == 0 ? PPM_LANCEMENT : PPM_ATTRIBUTION);
+            } else if (datesPpm != null && (PPM_LANCEMENT.equals(etapes.get(i)) || PPM_ATTRIBUTION.equals(etapes.get(i)))) {
+                d = datesPpm.get(etapes.get(i));
             }
             if (d != null) {
                 dates.add(d);
@@ -616,7 +622,7 @@ public final class ControlesFicheMarche {
             if (dates.get(i).isBefore(dates.get(i - 1))) {
                 bloquants.add(new Controle(DATES_ORDRE, champs, bloc, "Dates dans l'ordre : " + noms.get(i) + " ("
                         + dates.get(i) + ") précède " + noms.get(i - 1) + " (" + dates.get(i - 1)
-                        + ") — lancement < remise des offres < ouverture < attribution < notification."));
+                        + ") — " + String.join(" < ", noms) + "."));   // 2026-09-28 : l'ordre des étapes présentes
                 return;
             }
         }
@@ -778,7 +784,11 @@ public final class ControlesFicheMarche {
         }
     }
 
-    /** Une date ISO ({@code yyyy-MM-dd}) ; {@code null} si absente ou illisible. */
+    /**
+     * Une date ISO ({@code yyyy-MM-dd}) ; {@code null} si absente ou illisible. ⚠️ 2026-09-28 — une date-heure
+     * ({@code yyyy-MM-ddTHH:mm}, type {@code DATE_HEURE}) vaut sa date : {@code DATES_ORDRE} compare la date limite du
+     * contrat-cadre, désormais date et heure, aux autres dates du calendrier sur la date seule.
+     */
     public static LocalDate date(String v) {
         if (v == null || v.isBlank()) {
             return null;
@@ -786,7 +796,8 @@ public final class ControlesFicheMarche {
         try {
             return LocalDate.parse(v.trim());
         } catch (java.time.format.DateTimeParseException e) {
-            return null;
+            LocalDateTime dh = RemiseElectronique.dateHeure(v);
+            return dh == null ? null : dh.toLocalDate();
         }
     }
 }

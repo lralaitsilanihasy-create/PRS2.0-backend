@@ -70,8 +70,8 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
     // ------------------------------------------------------------------ 1. chargement des référentiels
 
     @Test
-    @DisplayName("1 — Import : 149 champs des fournitures (123 avant V50) et 114 du contrat-cadre, aucun rejet ; champs actifs servis : 172 en "
-            + "quantité fixe, 177 à commande, 176 en contrat-cadre (V50 : + 26 champs de la remise électronique) — 2026-09-25 : cinq créations, "
+    @DisplayName("1 — Import : 149 champs des fournitures (123 avant V50) et 123 du contrat-cadre (114 avant le 28/09), aucun rejet ; champs actifs servis : 172 en "
+            + "quantité fixe, 177 à commande, 167 en contrat-cadre (V50 : + 26 ; modèle officiel du 28/09 : − 20 + 11) — 2026-09-25 : cinq créations, "
             + "B06-EO-11 réservé à la quantité fixe")
     void chargementDesReferentiels() throws Exception {
         ChampFicheMarcheService.BilanImport f = importer("referentiel-champs-fiche-marche-fournitures.csv");
@@ -79,11 +79,11 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
         assertThat(f.crees()).hasSize(149);   // V50 : + 26 champs de la remise électronique
         ChampFicheMarcheService.BilanImport cc = importer("referentiel-champs-fiche-marche-contrat-cadre.csv");
         assertThat(cc.rejets()).isEmpty();
-        assertThat(cc.crees()).hasSize(114);
+        assertThat(cc.crees()).hasSize(123);   // 2026-09-28 : + 9 champs du modèle officiel
 
         assertThat(champs("QUANTITE_FIXE")).hasSize(172);
         assertThat(champs("A_COMMANDE")).hasSize(177);
-        assertThat(champs("CONTRAT_CADRE")).hasSize(176);
+        assertThat(champs("CONTRAT_CADRE")).hasSize(167);   // 2026-09-28 : 176 − 20 retirés + 11 ajoutés ou ouverts (modèle officiel)
     }
 
     // ------------------------------------------------------------------ 2. rubriques servies par type (B4)
@@ -193,6 +193,88 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
                 .andExpect(jsonPath("$.typeOutille").value(true))
                 .andExpect(jsonPath("$.bilanControles.nbAttendus").value(0));
         assertThat(champs("QUANTITE_FIXE")).noneMatch(c -> c.startsWith("B07-") || c.startsWith("B02-OE"));
+    }
+
+    // ------------------------------------------------------------------ 6. modèle officiel du contrat-cadre (2026-09-28)
+
+    @Autowired private cnm.prs.repository.MandatRepository mandatRepository;
+
+    @Test
+    @DisplayName("6 — Modèle officiel ARMP (2026-09-28, B1-B10) : référentiel du contrat-cadre aligné (date-heure, offres optimisées, "
+            + "signataire, acte de nomination depuis le mandat, informations du candidat et doublons retirés) ; quantité fixe "
+            + "et à commande inchangées ; DATES_ORDRE ordonne les offres optimisées ; validation sans information du candidat")
+    void modeleOfficielDuContratCadre() throws Exception {
+        importer("referentiel-champs-fiche-marche-fournitures.csv");
+        importer("referentiel-champs-fiche-marche-contrat-cadre.csv");
+        String ref = referentiel("CONTRAT_CADRE");
+        List<String> cc = JsonPath.read(ref, "$.champs[*].code");
+        assertThat(cc).contains("B04-CP-06", "B04-CP-07", "B04-CP-08", "B02-SG-03", "B02-SG-04", "B07-MA-06", "B05-PM-04",
+                "B05-PM-05", "B07-DU-07", "B04-VO-01", "B06-AN-03")
+                .doesNotContain("B04-RQ-04", "B04-RQ-05", "B07-PS-01", "B07-MA-05", "B03-TI-01", "B03-TI-05", "B03-GC-02",
+                        "B03-GC-06", "B08-FP-06", "B08-FP-09", "B08-FI-03", "B09-PR-01", "B06-AN-02");
+        assertThat(JsonPath.<List<String>>read(ref, "$.champs[?(@.code=='B04-CP-02')].type")).containsExactly("DATE_HEURE");
+        assertThat(JsonPath.<List<String>>read(ref, "$.champs[?(@.code=='B07-DU-03')].libelle"))
+                .containsExactly("Durée des marchés subséquents (jours)");
+        assertThat(JsonPath.<List<List<String>>>read(ref, "$.champs[?(@.code=='B07-MA-04')].options").get(0))
+                .containsExactly("Titulaires des lots correspondant à l'objet du marché", "Titulaires de tous les lots");
+        for (String type : List.of("QUANTITE_FIXE", "A_COMMANDE")) {
+            assertThat(champs(type)).as(type).contains("B04-VO-01", "B09-PR-01", "B06-AN-02").doesNotContain("B06-AN-03");
+        }
+
+        // B7 — l'acte de nomination se recopie depuis le mandat en vigueur de la PRMP, à la création de la fiche.
+        cnm.prs.entity.Mandat m = new cnm.prs.entity.Mandat();
+        m.setIdPrmp("PRMP001");
+        m.setTitulaire("Titulaire test");
+        m.setDateDebut(LocalDate.of(2025, 1, 15));
+        m.setDateFin(LocalDate.now().plusYears(2));
+        m.setRefArrete("Arrêté n° 1234/2025");
+        m.setStatut("ACTIF");
+        m.setNumeroMandat(1);
+        mandatRepository.save(m);
+        Long idDmc = creerDmc(9903);
+        cadrage(idDmc, "{\"alloti\":\"NON\",\"groupement\":\"NON\",\"avance\":\"NON\",\"typePrix\":\"UNITAIRES\","
+                + "\"attributaires\":\"MULTI\"}");
+        String fiche = mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<String>read(fiche, "$.valeurs['B02-SG-03']")).isEqualTo("Arrêté n° 1234/2025 du 15/01/2025");
+
+        // B1 — la date limite porte son heure (une date seule → 400) ; B2 — DATES_ORDRE refuse la réception des offres
+        // optimisées avant leur demande, et compare la date-heure sur sa date.
+        mvc.perform(put("/api/fiches-marche/" + idDmc + "/blocs/B04").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"valeurs\":{\"B04-CP-02\":\"2026-04-10\"}}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.erreurs[0].champ").value("B04-CP-02"));
+        String b04 = mvc.perform(put("/api/fiches-marche/" + idDmc + "/blocs/B04").header("Authorization", tokenPrmp)
+                .contentType(JSON).content("{\"valeurs\":{\"B04-CP-02\":\"2026-04-10T10:00\",\"B04-CP-06\":\"2026-04-20\","
+                        + "\"B04-CP-07\":\"2026-04-15\"}}"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(b04, "$.bilanControles.bloquants[?(@.regle=='DATES_ORDRE')].message"))
+                .singleElement().asString().contains("réception des offres optimisées (2026-04-15) précède demandes d'offres "
+                        + "optimisées (2026-04-20)");
+
+        // B5 — une fiche de contrat-cadre se valide sans aucune information du candidat.
+        Map<String, String> donnees = new LinkedHashMap<>();
+        donnees.put("B05-MT-01", "250000000");
+        donnees.put("B04-CP-01", "2026-03-02");
+        donnees.put("B04-CP-02", "2026-04-10T10:00");
+        donnees.put("B04-CP-03", "2026-04-13");
+        donnees.put("B04-CP-06", "2026-04-20");
+        donnees.put("B04-CP-07", "2026-04-27");
+        donnees.put("B04-CP-04", "2026-05-04");
+        donnees.put("B04-CP-08", "2026-05-06");
+        donnees.put("B04-CP-05", "2026-05-11");
+        remplirObligatoiresEtValider(idDmc, "CONTRAT_CADRE", "FOURNITURES_SERVICES", donnees);
+        fiche = mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.statut").value("VALIDEE"))
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<Map<String, String>>read(fiche, "$.valeurs").keySet())
+                .noneMatch(k -> k.startsWith("B03-TI") || k.startsWith("B03-GC") || k.matches("B08-FP-0[6-9]"));
+        assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.ok[?(@.regle=='DATES_ORDRE')].message"))
+                .singleElement().asString().contains("remise des offres < ouverture des plis < demandes d'offres optimisées < "
+                        + "réception des offres optimisées < attribution < courriers de rejet < notification");
+        assertThat(texte(idDmc, "DPAC")).contains("Date et heure limites de remise des offres : 10/04/2026 10:00",
+                "Envoi des demandes d'offres optimisées : 20/04/2026");
+        assertThat(texte(idDmc, "AE")).contains("Acte de nomination de la PRMP (nature, numéro, date) : Arrêté n° 1234/2025 du 15/01/2025")
+                .doesNotContain("Régime des pénalités de retard");
     }
 
     // ------------------------------------------------------------------ outils

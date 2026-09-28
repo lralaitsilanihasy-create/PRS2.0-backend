@@ -111,6 +111,20 @@ public final class RemiseElectronique {
         }
     }
 
+    /**
+     * ⚠️ 2026-09-28 (contrat-cadre, §B1) — la <strong>lecture</strong> d'une valeur d'un champ {@code DATE_HEURE} : une
+     * date-heure, ou une date seule ({@code AAAA-MM-JJ}, saisie quand le champ était encore {@code DATE}) lue comme
+     * {@code AAAA-MM-JJT00:00}. L'écriture, elle, reste stricte ({@link #dateHeure}) : 400 si la date seule est renvoyée.
+     */
+    public static LocalDateTime dateHeureLue(String v) {
+        LocalDateTime d = dateHeure(v);
+        if (d != null || v == null || v.isBlank()) {
+            return d;
+        }
+        LocalDate jour = ControlesFicheMarche.date(v);
+        return jour == null ? null : jour.atStartOfDay();
+    }
+
     /** La valeur enregistrée d'un {@code DATE_HEURE}. */
     public static String isoMinute(LocalDateTime d) {
         return d == null ? null : d.format(ISO_MINUTE);

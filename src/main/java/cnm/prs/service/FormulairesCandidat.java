@@ -358,7 +358,7 @@ public final class FormulairesCandidat {
                 return d == null ? brut : d.format(JOUR);
             }
             if (TypeChampFiche.DATE_HEURE.name().equals(type)) {   // ⚠️ V50 (§B2.3) — JJ/MM/AAAA HH:MM
-                LocalDateTime d = RemiseElectronique.dateHeure(brut);
+                LocalDateTime d = RemiseElectronique.dateHeureLue(brut);
                 return d == null ? brut : d.format(RemiseElectronique.AFFICHAGE);
             }
             if (TypeChampFiche.OUI_NON.name().equals(type)) {

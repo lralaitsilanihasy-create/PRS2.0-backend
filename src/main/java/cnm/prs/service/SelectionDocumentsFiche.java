@@ -349,7 +349,7 @@ public final class SelectionDocumentsFiche {
                 }
             }
             case DATE_HEURE -> {   // ⚠️ V50 (2026-09-27, §B2.3) — JJ/MM/AAAA HH:MM
-                java.time.LocalDateTime d = RemiseElectronique.dateHeure(v);
+                java.time.LocalDateTime d = RemiseElectronique.dateHeureLue(v);
                 return d == null ? v : d.format(RemiseElectronique.AFFICHAGE);
             }
             case LISTE -> {   // ⚠️ V50 — le reflet du mode de remise s'imprime « Papier » / « Électronique »

@@ -1,8 +1,8 @@
-code;libelle;type;source;documentMaitre;reprises;typesMarche;condition;obligatoire;texteType;controle;options;cleCadrage;clePpm;actif
+code;libelle;type;source;documentMaitre;reprises;typesMarche;condition;obligatoire;texteType;controle;options;cleCadrage;clePpm;actif;categories;parLot;valeurDefaut
 B02-OE-01;Numéro de l'appel d'offres, de la consultation ou du contrat-cadre;TEXTE;SAISIE;DPAC;AE;CONTRAT_CADRE;;oui;;;;;;oui
 B02-SG-01;Personne responsable des marchés passés sur la base du contrat-cadre;TEXTE;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;oui
 B02-SG-02;Délégation de la personne responsable (décision et date);TEXTE;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui
-B02-SG-03;Nature, numéro et date de l'acte de nomination;TEXTE;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;non
+B02-SG-03;Acte de nomination de la PRMP (nature, numéro, date);TEXTE;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;oui;;;MANDAT:ACTE_NOMINATION
 B02-PC-01;Référence de l'article du code des marchés publics de la procédure choisie;TEXTE;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;;;;;oui
 B02-PC-02;Rythme de passation des marchés subséquents;LISTE;SAISIE;DPAC;AE;CONTRAT_CADRE;;oui;;;Au fur et à mesure des besoins,Selon le calendrier fixé ci-après;;;oui
 B02-PC-03;Calendrier de remise en concurrence des titulaires;TEXTE_LONG;SAISIE;DPAC;AE;CONTRAT_CADRE;;non;;;;;;oui
@@ -12,16 +12,16 @@ B02-DC-03;Contrat-cadre reconductible;OUI_NON;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;
 B02-DC-04;Conditions de reconduction de la période de validité;TEXTE_LONG;SAISIE;DPAC;AE;CONTRAT_CADRE;;non;;;;;;oui
 B02-AL-02;Numéro et désignation des lots;TEXTE_LONG;SAISIE;DPAC;AE;CONTRAT_CADRE;alloti = OUI;oui;;;;;;oui
 B02-AL-03;Contrat-cadre mono ou multi-attributaire;LISTE;CADRAGE;AE;DPAC;CONTRAT_CADRE;;non;;;;attributaires;;oui
-B03-TI-01;Dénomination sociale du titulaire;TEXTE;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;oui
-B03-TI-02;Siège social du titulaire;TEXTE;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;oui
-B03-TI-03;Numéro d'identification fiscale (NIF) du titulaire;TEXTE;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;oui
-B03-TI-04;Nom du représentant du titulaire;TEXTE;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;oui
-B03-TI-05;Qualité du représentant du titulaire;LISTE;SAISIE;AE;;CONTRAT_CADRE;;oui;;;Représentant légal de l'entreprise,Ayant reçu pouvoir du représentant légal;;;oui
-B03-GC-02;Dénomination sociale du membre du groupement;TEXTE;SAISIE;AE;;CONTRAT_CADRE;groupement = OUI;oui;;;;;;oui
-B03-GC-03;Siège social du membre du groupement;TEXTE;SAISIE;AE;;CONTRAT_CADRE;groupement = OUI;oui;;;;;;oui
-B03-GC-04;Numéro d'identification fiscale (NIF) du membre du groupement;TEXTE;SAISIE;AE;;CONTRAT_CADRE;groupement = OUI;oui;;;;;;oui
-B03-GC-05;Nom du représentant du membre du groupement;TEXTE;SAISIE;AE;;CONTRAT_CADRE;groupement = OUI;oui;;;;;;oui
-B03-GC-06;Qualité du représentant du membre du groupement;LISTE;SAISIE;AE;;CONTRAT_CADRE;groupement = OUI;oui;;;Représentant légal de l'entreprise,Ayant reçu pouvoir du représentant légal;;;oui
+B03-TI-01;Dénomination sociale du titulaire;TEXTE;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;non
+B03-TI-02;Siège social du titulaire;TEXTE;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;non
+B03-TI-03;Numéro d'identification fiscale (NIF) du titulaire;TEXTE;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;non
+B03-TI-04;Nom du représentant du titulaire;TEXTE;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;non
+B03-TI-05;Qualité du représentant du titulaire;LISTE;SAISIE;AE;;CONTRAT_CADRE;;oui;;;Représentant légal de l'entreprise,Ayant reçu pouvoir du représentant légal;;;non
+B03-GC-02;Dénomination sociale du membre du groupement;TEXTE;SAISIE;AE;;CONTRAT_CADRE;groupement = OUI;oui;;;;;;non
+B03-GC-03;Siège social du membre du groupement;TEXTE;SAISIE;AE;;CONTRAT_CADRE;groupement = OUI;oui;;;;;;non
+B03-GC-04;Numéro d'identification fiscale (NIF) du membre du groupement;TEXTE;SAISIE;AE;;CONTRAT_CADRE;groupement = OUI;oui;;;;;;non
+B03-GC-05;Nom du représentant du membre du groupement;TEXTE;SAISIE;AE;;CONTRAT_CADRE;groupement = OUI;oui;;;;;;non
+B03-GC-06;Qualité du représentant du membre du groupement;LISTE;SAISIE;AE;;CONTRAT_CADRE;groupement = OUI;oui;;;Représentant légal de l'entreprise,Ayant reçu pouvoir du représentant légal;;;non
 B03-SS-01;Désignation des sous-traitants des marchés subséquents;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui
 B03-SS-02;Modalités de paiement direct des sous-traitants;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui
 B04-DS-01;Contenu du dossier de consultation;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;;;;;oui
@@ -35,12 +35,12 @@ B04-PO-02;Pièces constitutives de l'offre;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE
 B04-RQ-01;Modalités de remise des offres sous support papier;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;;;;;oui
 B04-RQ-02;Objet du contrat-cadre à porter sur le pli;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;;;;;oui
 B04-RQ-03;Adresse exacte de remise des offres;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;;;;;oui
-B04-RQ-04;Transmission électronique des offres admise;OUI_NON;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;;;;;oui
-B04-RQ-05;Modalités d'envoi des dossiers par voie électronique;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;;non;;;;;;oui
+B04-RQ-04;Transmission électronique des offres admise;OUI_NON;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;;;;;non
+B04-RQ-05;Modalités d'envoi des dossiers par voie électronique;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;;non;;;;;;non
 B04-RC-01;Adresse à laquelle adresser les demandes d'informations;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;;;;;oui
 B04-RC-02;Délai de réponse aux demandes d'informations (jours);NOMBRE;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;;;;;oui
 B04-CP-01;Date de lancement de la mise en concurrence;DATE;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;DATES_ORDRE:LANCEMENT;;;;oui
-B04-CP-02;Date et heure limites de remise des offres;DATE;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;DATES_ORDRE:REMISE;;;;oui
+B04-CP-02;Date et heure limites de remise des offres;DATE_HEURE;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;DATES_ORDRE:REMISE;;;;oui
 B04-CP-03;Date de début de la séance d'évaluation des offres et candidatures;DATE;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;DATES_ORDRE:OUVERTURE;;;;oui
 B04-CP-04;Date d'attribution du contrat-cadre;DATE;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;DATES_ORDRE:ATTRIBUTION;;;;oui
 B04-CP-05;Date de notification du contrat-cadre au(x) titulaire(s);DATE;SAISIE;DPAC;;CONTRAT_CADRE;;non;;DATES_ORDRE:NOTIFICATION;;;;oui
@@ -60,7 +60,7 @@ B06-SO-05;Critères et mécanisme de jugement des offres;TEXTE_LONG;SAISIE;DPAC;
 B06-CA-01;Critères d'attribution du contrat-cadre et modalités d'appréciation;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;;;;;oui
 B06-NO-01;Date de réception portée sur l'accusé de réception;DATE;SAISIE;DPAC;AE;CONTRAT_CADRE;;non;;;;;;oui
 B06-NO-02;Date de remise en main propre au titulaire;DATE;SAISIE;DPAC;AE;CONTRAT_CADRE;;non;;;;;;oui
-B07-PS-01;Fait générateur de la passation des marchés subséquents;LISTE;SAISIE;AE;DPAC;CONTRAT_CADRE;;oui;;;Lors de la survenance du besoin,Selon le calendrier fixé à l'article premier du contrat-cadre;;;oui
+B07-PS-01;Fait générateur de la passation des marchés subséquents;LISTE;SAISIE;AE;DPAC;CONTRAT_CADRE;;oui;;;Lors de la survenance du besoin,Selon le calendrier fixé à l'article premier du contrat-cadre;;;non
 B07-PS-02;Adresse d'envoi des demandes aux titulaires;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;oui
 B07-PS-03;Délai de réponse des titulaires (heures);NOMBRE;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;oui
 B07-FS-01;Forme des marchés subséquents;LISTE;SAISIE;AE;DPAC;CONTRAT_CADRE;;oui;;;Marchés uniques non fractionnés,Marchés fractionnés par bons de commande successifs;;;oui
@@ -68,14 +68,14 @@ B07-FS-02;Interlocuteur du titulaire (service, direction, coordonnées);TEXTE_LO
 B07-MA-01;Délai de complétude de l'offre initiale (mono-attributaire);NOMBRE;SAISIE;AE;;CONTRAT_CADRE;attributaires = MONO;oui;;;;;;oui
 B07-MA-02;Point de départ du délai de complétude;LISTE;SAISIE;AE;;CONTRAT_CADRE;attributaires = MONO;oui;;;À compter de la notification de la demande de complétude,Lors de la demande de complétude;;;oui
 B07-MA-03;Attribution des marchés subséquents après remise en concurrence (non alloti);TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;attributaires = MULTI;oui;;;;;;oui
-B07-MA-04;Modalités d'attribution des marchés subséquents en cas d'allotissement;LISTE;SAISIE;AE;;CONTRAT_CADRE;attributaires = MULTI;non;;;Option 1,Option 2;;;oui
-B07-MA-05;Modalités d'attribution lorsque le contrat-cadre est à la fois alloti et non alloti;LISTE;SAISIE;AE;;CONTRAT_CADRE;attributaires = MULTI;non;;;Option 1,Option 2;;;oui
+B07-MA-04;Modalités d'attribution des marchés subséquents en cas d'allotissement;LISTE;SAISIE;AE;;CONTRAT_CADRE;attributaires = MULTI;non;;;Titulaires des lots correspondant à l'objet du marché,Titulaires de tous les lots;;;oui
+B07-MA-05;Modalités d'attribution lorsque le contrat-cadre est à la fois alloti et non alloti;LISTE;SAISIE;AE;;CONTRAT_CADRE;attributaires = MULTI;non;;;Option 1,Option 2;;;non
 B07-TN-01;Termes non couverts par le contrat-cadre (mono-attributaire);TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;attributaires = MONO;non;;;;;;oui
 B07-TN-02;Termes non couverts par le contrat-cadre (multi-attributaire);TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;attributaires = MULTI;non;;;;;;oui
 B07-PI-01;Pièces contractuelles du contrat-cadre et des marchés subséquents;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;oui
 B07-DU-01;Entrée en vigueur du contrat-cadre;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;oui
 B07-DU-02;Durée des marchés subséquents fixée dans le contrat-cadre;OUI_NON;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;oui
-B07-DU-03;Durée des marchés subséquents (mois);NOMBRE;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui
+B07-DU-03;Durée des marchés subséquents (jours);NOMBRE;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui
 B07-DU-04;Nombre de reconductions du contrat-cadre;NOMBRE;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui
 B07-DU-05;Nombre d'années maximum du contrat-cadre, reconductions comprises;NOMBRE;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui
 B07-DU-06;Durée totale du contrat-cadre, reconduit ou non (mois);NOMBRE;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;oui
@@ -87,7 +87,7 @@ B07-PE-01;Pénalités de retard des marchés subséquents;LISTE;SAISIE;AE;;CONTR
 B07-PE-02;Régime des pénalités fixées dans le contrat-cadre;LISTE;SAISIE;AE;;CONTRAT_CADRE;;non;;;Conformément à l'article 12 du CCAG,Dérogation au CCAG;;;oui
 B07-PE-03;Pénalités dérogeant au CCAG : rédaction libre;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;;non;;PENALITES_PLAFOND_15:DEROGATION;;;;oui
 B08-FI-02;Modalités de versement de l'avance (délai de paiement en jours calendaires);NOMBRE;SAISIE;AE;;CONTRAT_CADRE;avance = OUI;oui;;;;;;oui
-B08-FI-03;Montant de l'avance (% du montant TTC du marché subséquent, maximum 20 %);POURCENTAGE;SAISIE;AE;;CONTRAT_CADRE;avance = OUI;oui;;AVANCE_SUP_5_GARANTIE:TAUX;;;;oui
+B08-FI-03;Montant de l'avance (% du montant TTC du marché subséquent, maximum 20 %);POURCENTAGE;SAISIE;AE;;CONTRAT_CADRE;avance = OUI;oui;;AVANCE_SUP_5_GARANTIE:TAUX;;;;non
 B08-FI-04;Remboursement de l'avance (article 72.III du code des marchés publics);TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;avance = OUI;non;;;;;;oui
 B08-FI-05;Avance versée au sous-traitant du titulaire;OUI_NON;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui
 B08-FP-01;Présentation des demandes de paiement;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;oui
@@ -95,10 +95,10 @@ B08-FP-02;Adresse de facturation (service responsable de la vérification des de
 B08-FP-03;Délai de paiement (jours);NOMBRE;SAISIE;AE;;CONTRAT_CADRE;;oui;;DELAI_PAIEMENT_75:DELAI;;;;oui
 B08-FP-04;Taux des intérêts moratoires (%, au moins un point);POURCENTAGE;SAISIE;AE;;CONTRAT_CADRE;;oui;;INTERETS_MORATOIRES_TAUX:TAUX;;;;oui
 B08-FP-05;Règlement des prestations;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui
-B08-FP-06;Nom et adresse de la banque;TEXTE;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;oui
-B08-FP-07;Titulaire du compte;TEXTE;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;oui
-B08-FP-08;Code banque, code guichet et numéro de compte;TEXTE;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;oui
-B08-FP-09;Clé du relevé d'identité bancaire (RIB);TEXTE;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;oui
+B08-FP-06;Nom et adresse de la banque;TEXTE;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;non
+B08-FP-07;Titulaire du compte;TEXTE;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;non
+B08-FP-08;Code banque, code guichet et numéro de compte;TEXTE;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;non
+B08-FP-09;Clé du relevé d'identité bancaire (RIB);TEXTE;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;non
 B09-EA-01;Modalités générales d'exécution communes aux marchés subséquents;OUI_NON;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;oui
 B09-EA-02;Contenu des modalités générales d'exécution communes;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui
 B09-EA-03;Modalités particulières à fixer dans les marchés subséquents;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui
@@ -130,3 +130,12 @@ B04-SE-14;Assistance aux candidats (contact, horaires);TEXTE_LONG;SAISIE;DPAO;;Q
 B04-SE-15;Date limite des demandes d'assistance;DATE_HEURE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE,CONTRAT_CADRE;modeRemise = ELECTRONIQUE;non;;;;;;oui
 B04-SE-16;Fenêtre avant l'échéance où le seuil s'applique (heures);NOMBRE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE,CONTRAT_CADRE;modeRemise = ELECTRONIQUE;oui;;;;;;oui
 B04-SE-17;Date de publication de l'avis;DATE_HEURE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE,CONTRAT_CADRE;modeRemise = ELECTRONIQUE;oui;;SE_OUVERTURE_DEPOTS:PUBLICATION,SE_CEREMONIE:PUBLICATION;;;;oui
+B04-CP-06;Envoi des demandes d'offres optimisées;DATE;SAISIE;DPAC;;CONTRAT_CADRE;;non;;DATES_ORDRE:OPTIMISEES_DEMANDE;;;;oui;FOURNITURES_SERVICES;non;
+B04-CP-07;Date limite de réception des offres optimisées;DATE;SAISIE;DPAC;;CONTRAT_CADRE;;non;;DATES_ORDRE:OPTIMISEES_RECEPTION;;;;oui;FOURNITURES_SERVICES;non;
+B04-CP-08;Envoi des courriers de rejet aux candidats non retenus;DATE;SAISIE;DPAC;;CONTRAT_CADRE;;non;;DATES_ORDRE:REJET;;;;oui;FOURNITURES_SERVICES;non;
+B06-AN-03;Voies et délais de recours (instance chargée des recours);TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;;non;;;;;;oui;FOURNITURES_SERVICES;non;
+B02-SG-04;Personne habilitée à signer le contrat-cadre (nom, délégation, date de la décision);TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;oui;FOURNITURES_SERVICES;non;
+B07-MA-06;Critères et sous-critères pondérés de la remise en concurrence;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;attributaires = MULTI;oui;;;;;;oui;FOURNITURES_SERVICES;non;
+B05-PM-04;Plafond d'augmentation des prix à chaque complétude ou remise en concurrence (%);POURCENTAGE;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui;FOURNITURES_SERVICES;non;
+B05-PM-05;Catalogue joint au contrat-cadre;OUI_NON;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui;FOURNITURES_SERVICES;non;
+B07-DU-07;Préavis de la décision de reconduction (mois);NOMBRE;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui;FOURNITURES_SERVICES;non;

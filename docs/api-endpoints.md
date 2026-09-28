@@ -340,6 +340,12 @@ actif** : c'est un coupe-circuit, pas une seconde activation (chaque actualité 
 > `valeurDefaut = PARAM:<CLE>` et se recopie à la **création** de la fiche depuis le paramètre du moment. `VALEUR` de
 > `t_parametre` passe à 1000 caractères. Il n'existe **pas** de paramètre de jours fériés : la règle 1 juge « jour
 > ouvrable » = lundi à vendredi (`JoursOuvres`).
+>
+> ⚠️ **2026-09-28 (contrat-cadre aligné sur le modèle officiel, §B7)** — un second défaut calculé :
+> `valeurDefaut = MANDAT:ACTE_NOMINATION` se recopie à la création de la fiche depuis le **mandat PRMP déclaré en
+> vigueur** (« référence de l'arrêté du JJ/MM/AAAA ») — celui de la PRMP courante (ou de la tutelle d'une UGPM), à défaut
+> (Administrateur) de la PRMP du plan. Sans mandat déclaré (mandat implicite), rien n'est recopié : le champ se saisit.
+> Porté par `B02-SG-03` « Acte de nomination de la PRMP (nature, numéro, date) » du contrat-cadre.
 
 > ⚠️ **`AGPM_SEUIL_MONTANT` (arbitrage pilote 2026-09-07, « suite »).** Seuil de montant au-delà duquel un
 > marché passé selon un mode à déclenchement **conditionnel** (`agpmSiSeuil` — l'**appel à manifestation
@@ -4722,7 +4728,7 @@ l'Administrateur). Avant le premier enregistrement la fiche est **virtuelle** : 
 |---|---|---|
 | `OBLIGATOIRE` | — (tout champ obligatoire d'une rubrique ouverte, vide) | bloquant |
 | `MONTANT_POSITIF` | — (tout `MONTANT` saisi ≤ 0) | bloquant |
-| `DATES_ORDRE` | `LANCEMENT` (à défaut : date du plan), `REMISE`, `OUVERTURE`, `ATTRIBUTION` (à défaut : date du plan), ⚠️ lot 4 `NOTIFICATION` — lancement < remise < ouverture < attribution < notification | bloquant |
+| `DATES_ORDRE` | `LANCEMENT` (à défaut : date du plan), `REMISE`, `OUVERTURE`, ⚠️ 2026-09-28 `OPTIMISEES_DEMANDE`, `OPTIMISEES_RECEPTION`, `ATTRIBUTION` (à défaut : date du plan), ⚠️ 2026-09-28 `REJET`, ⚠️ lot 4 `NOTIFICATION` — lancement ≤ remise ≤ ouverture ≤ demandes d'offres optimisées ≤ réception des offres optimisées ≤ attribution ≤ courriers de rejet ≤ notification ; seules les étapes saisies comptent ; une `DATE_HEURE` (date limite du contrat-cadre `B04-CP-02`) compte pour sa date ; le message nomme les étapes présentes | bloquant |
 | `VALIDITE_GARANTIE_SUP_OFFRE` | `GARANTIE`, `OFFRE` (jours) | bloquant |
 | `AVANCE_MAX_20` | `TAUX` (à défaut : cadrage `tauxAvance`), si `avance = OUI` — taux ≤ 20 % (aucun montant TTC dans PRS : la règle porte sur le taux) | bloquant |
 | `AVANCE_SUP_5_GARANTIE` | `TAUX` (idem), `GARANTIE` — taux > 5 ⇒ garantie de restitution renseignée | bloquant |

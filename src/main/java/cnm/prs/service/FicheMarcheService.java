@@ -111,6 +111,8 @@ public class FicheMarcheService {
     private final ParametreService parametres;
     /** ⚠️ V50 (2026-09-27, remise électronique) — paramètres internes et responsable de la procédure (état, contexte du bilan). */
     private final ParametresInternesService internes;
+    /** ⚠️ 2026-09-28 (contrat-cadre, §B7) — le mandat en vigueur, source du défaut de l'acte de nomination. */
+    private final MandatService mandats;
 
     public FicheMarcheService(FicheMarcheRepository ficheRepository, FicheMarcheValeurRepository valeurRepository,
             ChampFicheMarcheRepository champRepository, BlocFicheMarcheRepository blocRepository,
@@ -119,7 +121,8 @@ public class FicheMarcheService {
             JournalDossierService journal, ObjectMapper mapper,
             cnm.prs.repository.DossierRepository dossierRepository, DocumentsFicheMarcheService documents,
             cnm.prs.repository.DocumentFicheMarcheRepository documentRepository, DmcService dmcService,
-            BesoinFiche besoin, ParametreService parametres, ParametresInternesService internes) {
+            BesoinFiche besoin, ParametreService parametres, ParametresInternesService internes, MandatService mandats) {
+        this.mandats = mandats;
         this.besoin = besoin;
         this.parametres = parametres;
         this.internes = internes;
@@ -868,7 +871,9 @@ public class FicheMarcheService {
                         && c.pourTypeMarche(ctx.forme().name())
                         && c.pourCategorie(ctx.codeCategorie() != null ? ctx.codeCategorie() : CategorieDao.FOURNITURES_SERVICES.name())) {
                     // ⚠️ V50 (2026-09-27, §B1.4) — un défaut « PARAM:<CLE> » se lit dans le paramètre du moment (rien s'il est vide).
-                    String defaut = parametres.valeurDefaut(c.getValeurDefaut());
+                    // ⚠️ 2026-09-28 (contrat-cadre, §B7) — « MANDAT:ACTE_NOMINATION » se lit dans le mandat en vigueur.
+                    String defaut = DEFAUT_ACTE_NOMINATION.equals(c.getValeurDefaut()) ? acteDeNomination(ctx)
+                            : parametres.valeurDefaut(c.getValeurDefaut());
                     if (defaut != null && !defaut.isBlank()) {
                         valeurRepository.save(new FicheMarcheValeur(null, f.getIdFiche(), c.getCode(), defaut));
                     }
@@ -881,6 +886,28 @@ public class FicheMarcheService {
                     + "ouvrez une révision (POST /reviser) pour la modifier.", "FICHE_VALIDEE");
         }
         return derniere;
+    }
+
+    /**
+     * ⚠️ 2026-09-28 (demande front « contrat-cadre aligné sur le modèle officiel », §B7) — la valeur par défaut qui se lit
+     * dans le <strong>mandat PRMP en vigueur</strong> : « acte de nomination de la PRMP (nature, numéro, date) ».
+     */
+    static final String DEFAUT_ACTE_NOMINATION = "MANDAT:ACTE_NOMINATION";
+
+    /**
+     * L'acte de nomination de la PRMP qui prépare la fiche, lu dans son mandat déclaré en vigueur aujourd'hui :
+     * « référence de l'arrêté du JJ/MM/AAAA ». La PRMP est l'utilisateur courant (PRMP, ou la tutelle d'une UGPM), à défaut
+     * (Administrateur) celle du plan. {@code null} sans mandat déclaré (mandat implicite) : le champ reste à saisir.
+     */
+    private String acteDeNomination(Contexte ctx) {
+        ProfilUtilisateur profil = CurrentUser.profil().orElse(null);
+        String idPrmp = profil == ProfilUtilisateur.PRMP || profil == ProfilUtilisateur.UGPM
+                ? CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null)
+                : ctx.idDossier() == null ? null
+                        : dossierRepository.findById(ctx.idDossier()).map(cnm.prs.entity.Dossier::getIdPrmp).orElse(null);
+        return mandats.mandatEnVigueur(idPrmp, LocalDate.now())
+                .map(m -> m.getRefArrete() + " du " + m.getDateDebut().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")))
+                .orElse(null);
     }
 
     private static FicheMarche virtuelle(Long idDmc) {

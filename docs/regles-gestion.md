@@ -652,6 +652,20 @@ intellectuelles »** (pilote). La catégorie est un second axe, à côté du typ
   servie ; une rubrique encore vide pour tous les types l'est, pour signaler le référentiel à compléter.
 - Une fiche ouverte sous un autre type (lot 1c) redevient écrivable ; **reprendre son cadrage** l'aligne sur le type
   du plan.
+- ⚠️ **Le contrat-cadre suit le modèle officiel ARMP 2019** (demande front du 2026-09-28, remis par le pilote ; analyse
+  écart par écart côté front). **La fiche ne demande que ce que la PRMP sait** quand elle prépare le dossier : les
+  informations du titulaire, du groupement et ses coordonnées bancaires appartiennent à l'offre du candidat et sortent
+  de la fiche — leur caractère obligatoire bloquait jusqu'ici toute validation. **Une question, une réponse** : la voie
+  électronique se dit par le mode de remise (commun aux trois formes), le rythme de remise en concurrence par une seule
+  information, l'avance par la réponse de cadrage (son taux compris), les pénalités par la rubrique propre au
+  contrat-cadre, qui sait dire « fixées dans les marchés subséquents » — la question de cadrage des pénalités n'est
+  plus posée pour cette forme. **Le calendrier est celui du modèle** : la date limite porte son heure, et les étapes
+  propres au contrat-cadre (demandes et réception des offres optimisées, courriers de rejet) s'ordonnent avec les
+  autres. **L'acte de nomination de la PRMP se reprend de son mandat en vigueur**, modifiable ; le signataire du
+  contrat-cadre, les critères pondérés de la remise en concurrence, le plafond d'augmentation des prix, le catalogue
+  et le préavis de reconduction se saisissent. Rien n'est supprimé : une information retirée est désactivée, jamais
+  effacée. **Le plafond de durée du contrat-cadre attend le juriste** (le modèle dit deux ans dans le contrat et trente-six
+  mois dans l'exemple des données particulières) ; la production du DPAC et de l'AE au format du modèle, le lot D.
 
 #### Le type de marché vient du plan (lot 1c, demande front du 2026-09-23, décision du pilote)
 
