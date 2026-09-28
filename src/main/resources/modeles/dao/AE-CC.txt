@@ -245,17 +245,17 @@ SOUS_TITRE	ARTICLE 9 – Prix - Contenu – Variation des marchés conclus sur l
 SOUS_TITRE	9.1 – Prix des marchés
 PARA	{{SI:MONO-PU-BORDEREAU}}
 PARA	Les marchés subséquents conclus sur la base du présent accord seront traités à prix unitaires appliqués aux prestations réellement exécutées et dont le libellé est détaillé dans le bordereau de prix unitaires joint au présent contrat-cadre.
-PARA	A chaque complétude de l’offre, l’augmentation des prix détaillés dans le bordereau de prix unitaires joint au présent accord sera limitée à {{B05-PM-04}} %.
+PARA	A chaque complétude de l’offre, l’augmentation des prix détaillés dans le bordereau de prix unitaires joint au présent accord sera limitée à {{B05-PM-04.chiffres}} %.
 PARA	{{FINSI:MONO-PU-BORDEREAU}}
 PARA	{{SI:MONO-PU-CATALOGUE}}
 PARA	Les marchés subséquents conclus sur la base du présent accord seront traités à prix unitaires appliqués aux prestations réellement exécutées et dont le libellé est détaillé dans le catalogue joint au présent contrat-cadre.
-PARA	A chaque complétude de l’offre, l’augmentation des prix détaillés dans le catalogue joint au présent accord sera limitée à {{B05-PM-04}} %.
+PARA	A chaque complétude de l’offre, l’augmentation des prix détaillés dans le catalogue joint au présent accord sera limitée à {{B05-PM-04.chiffres}} %.
 PARA	Le titulaire s’engage à remettre à la personne publique tout nouveau catalogue édité et distribué auprès du public dès sa sortie officielle au plus tard dans un délai de 15 jours à compter de sa date de diffusion. Le nouveau catalogue annule et remplace le précédent.
 PARA	{{FINSI:MONO-PU-CATALOGUE}}
 PARA	{{SI:MONO-PF}}
 PARA	Les prestations faisant l’objet des marchés subséquents conclus sur la base du contrat-cadre seront rémunérées par application du montant global et forfaitaire précisé ci-dessous :
 PARA	– Prix hors T.V.A. : …………………………………ariary (en chiffres) – T.V.A. au taux de………….. % soit : ………… ariary (en chiffres) – Montant T.V.A. incluse : ………………………… ariary (en chiffres) – Montant T.T.C. (en lettres) : ……………………………………………
-PARA	A chaque complétude de l’offre, l’augmentation de ce montant sera limitée à {{B05-PM-04}} %.
+PARA	A chaque complétude de l’offre, l’augmentation de ce montant sera limitée à {{B05-PM-04.chiffres}} %.
 PARA	{{FINSI:MONO-PF}}
 PARA	{{SI:MULTI-REFERENCEMENT-BORDEREAU}}
 PARA	Les marchés conclus sur la base du présent contrat-cadre seront traités à prix unitaires appliqués aux prestations réellement exécutées et dont le libellé est détaillé au bordereau de prix unitaires joint aux marchés passés sur la base du contrat-cadre.
@@ -266,7 +266,7 @@ PARA	A chaque remise en concurrence, il sera proposé une remise sur les prix «
 PARA	{{FINSI:MULTI-REFERENCEMENT-CATALOGUE}}
 PARA	{{SI:MULTI-PRIX-BORDEREAU}}
 PARA	Les marchés conclus sur la base du présent accord seront traités à prix unitaires appliqués aux prestations réellement exécutées et dont le libellé est détaillé dans le bordereau de prix unitaires joint au présent accord et dans le bordereau de prix unitaires complémentaires joint aux marchés passés sur la base du contrat-cadre.
-PARA	A chaque remise en concurrence l’augmentation des prix détaillés dans le bordereau de prix joint au présent accord sera limitée à {{B05-PM-04}} %.
+PARA	A chaque remise en concurrence l’augmentation des prix détaillés dans le bordereau de prix joint au présent accord sera limitée à {{B05-PM-04.chiffres}} %.
 PARA	{{FINSI:MULTI-PRIX-BORDEREAU}}
 PARA	{{SI:MULTI-PRIX-CATALOGUE}}
 PARA	Les marchés conclus sur la base du présent accord seront traités à prix unitaires appliqués aux prestations réellement exécutées et dont le libellé est détaillé dans le catalogue joint au présent accord et dans le nouveau catalogue fournisseur joint aux marchés passés sur la base du contrat-cadre.
@@ -291,7 +291,7 @@ PARA	❏ Renoncer à percevoir une avance pour chacun des marchés subséquents.
 SOUS_TITRE	10.2 – Modalités de versement de l’avance
 PARA	Le règlement de l’avance pour chacun des marchés subséquents interviendra dans les {{B08-FI-02}} jours calendaires.
 SOUS_TITRE	10.3 – Montant de l’avance
-PARA	Le montant de l’avance des marchés conclus sur la base du contrat-cadre est fixé à {{B08-AV-02}} % du montant TTC du marché subséquent.
+PARA	Le montant de l’avance des marchés conclus sur la base du contrat-cadre est fixé à {{B08-AV-02.chiffres}} % du montant TTC du marché subséquent.
 SOUS_TITRE	10.4 – Remboursement de l’avance
 PARA	Les modalités de remboursement de l’avance s’effectueront conformément aux dispositions de l’article 72.III du Code des Marchés Publics.
 PARA	{{FINSI:AVANCE}}
@@ -351,7 +351,7 @@ PARA	• les prestations exécutées et livrées;
 PARA	• le montant H.T. et T.T.C. des prestations exécutées, éventuellement actualisé;
 PARA	• le taux et le montant de la T.V.A.
 SOUS_TITRE	15.3 – Délai de paiement
-PARA	Le délai de paiement est de 75 jours à compter de la réception de la demande de paiement. Aucune demande de paiement ne peut être transmise avant réalisation des prestations. Le taux applicable en cas de retard de paiement est le taux d’intérêt de la Banque Centrale de Madagascar en vigueur, à la date à laquelle les intérêts moratoires ont commencé à courir, augmenté de {{B08-FP-04}} point(s).
+PARA	Le délai de paiement est de 75 jours à compter de la réception de la demande de paiement. Aucune demande de paiement ne peut être transmise avant réalisation des prestations. Le taux applicable en cas de retard de paiement est le taux d’intérêt de la Banque Centrale de Madagascar en vigueur, à la date à laquelle les intérêts moratoires ont commencé à courir, augmenté de {{B08-FP-04.chiffres}} point(s).
 SOUS_TITRE	15.4 – Règlement des prestations
 PARA	Les sommes dues en exécution des marchés conclus sur la base du présent contrat-cadre seront réglées par virement bancaire établi à l’ordre du titulaire en faisant porter au crédit du compte ouvert au nom de (9)
 PARA	Nom et adresse de la Banque :………………………………………………

@@ -179,10 +179,10 @@ class ModelesDaoTest {
                     "Le contrat-cadre est alloti et multi-attributaire.", "Le présent contrat-cadre est passé pour le lot n° " + lot + ".",
                     "réparties en 2 lots", "Appel d’offres restreint", "des titulaires de tous les lots",
                     "selon la périodicité suivante : chaque trimestre", "reconductible 2 fois", "excéder 4 ans",
-                    "catalogue joint au présent accord", "remise sur les prix « catalogue »", "fixé à 15 %",   // ⚠️ « 15 % % » tant que le modèle écrit {{B08-AV-02}} % (encadré de la demande)
+                    "catalogue joint au présent accord", "remise sur les prix « catalogue »", "fixé à 15 % du montant TTC",   // AE-CC corrigé (front e0be911) : .chiffres
                     "12 mois à partir de la date de mise en service", "Le groupement d’entrepreneurs solidaire/ conjoint")
                     .contains("notifiée dans un délai")   // PRIX-CRITERE : multi et le prix est un critère (B05-PM-02 = OUI)
-                    .doesNotContain("CCAP UNIQUE", "n’est pas alloti", "de l’admission de la prestation", "{{");
+                    .doesNotContain("CCAP UNIQUE", "n’est pas alloti", "de l’admission de la prestation", "{{", "% %");
         }
     }
 
