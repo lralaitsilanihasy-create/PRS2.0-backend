@@ -212,6 +212,9 @@ class ModelesDaoTest {
         List<GenerateurDocumentsFiche.Fichier> fichiers = new GenerateurDocumentsFiche()
                 .generer(FormulairesCandidat.brut("AE-CC", dao.modele("AE-CC").elements()));
         assertThat(new String(fichiers.get(1).contenu(), java.nio.charset.StandardCharsets.ISO_8859_1)).contains("/ZapfDingbats");
+        // ⚠️ 2026-09-28 (contre-recette du front) — le CODE écrit dans le flux, pas seulement la police : dans la police
+        // ZapfDingbats (sans /Encoding, encodage intégré), 111 = a74 = ❏ et 226 = a173 = ➢.
+        assertThat(octetsZapf(fichiers.get(1).contenu())).isEqualTo(Map.of(111, 15, 226, 2));
         try (org.apache.poi.xwpf.usermodel.XWPFDocument doc = new org.apache.poi.xwpf.usermodel.XWPFDocument(
                 new java.io.ByteArrayInputStream(fichiers.get(0).contenu()));
                 org.apache.poi.xwpf.extractor.XWPFWordExtractor ex = new org.apache.poi.xwpf.extractor.XWPFWordExtractor(doc)) {
@@ -220,6 +223,45 @@ class ModelesDaoTest {
     }
 
     // ------------------------------------------------------------------ outils
+
+    /**
+     * Les octets écrits en ZapfDingbats dans un PDF, avec leur nombre : pour chaque page, la police ZapfDingbats de ses
+     * ressources (on vérifie qu'elle ne déclare aucun /Encoding), puis les chaînes des opérateurs de texte qui la suivent.
+     */
+    private static Map<Integer, Integer> octetsZapf(byte[] pdf) throws Exception {
+        Map<Integer, Integer> compte = new java.util.TreeMap<>();
+        com.lowagie.text.pdf.PdfReader r = new com.lowagie.text.pdf.PdfReader(pdf);
+        for (int p = 1; p <= r.getNumberOfPages(); p++) {
+            com.lowagie.text.pdf.PdfDictionary polices = r.getPageN(p).getAsDict(com.lowagie.text.pdf.PdfName.RESOURCES)
+                    .getAsDict(com.lowagie.text.pdf.PdfName.FONT);
+            String zapf = null;
+            for (com.lowagie.text.pdf.PdfName n : polices.getKeys()) {
+                com.lowagie.text.pdf.PdfDictionary f = (com.lowagie.text.pdf.PdfDictionary)
+                        com.lowagie.text.pdf.PdfReader.getPdfObject(polices.get(n));
+                if (f.get(com.lowagie.text.pdf.PdfName.BASEFONT).toString().contains("ZapfDingbats")) {
+                    assertThat(f.get(com.lowagie.text.pdf.PdfName.ENCODING)).as("ZapfDingbats sans /Encoding").isNull();
+                    zapf = n.toString();
+                }
+            }
+            if (zapf == null) {
+                continue;
+            }
+            String flux = new String(r.getPageContent(p), java.nio.charset.StandardCharsets.ISO_8859_1);
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile(java.util.regex.Pattern.quote(zapf)
+                    + " [0-9.]+ Tf(.*?)(?=/F\\d+ [0-9.]+ Tf|ET)", java.util.regex.Pattern.DOTALL).matcher(flux);
+            while (m.find()) {
+                java.util.regex.Matcher t = java.util.regex.Pattern.compile("\\(((?:\\\\.|[^\\\\)])*)\\)").matcher(m.group(1));
+                while (t.find()) {
+                    for (char ch : t.group(1).toCharArray()) {
+                        if (ch != '\\') {
+                            compte.merge((int) ch, 1, Integer::sum);
+                        }
+                    }
+                }
+            }
+        }
+        return compte;
+    }
 
     private static FicheMarcheDto fiche(Map<String, String> cadrage) {
         FicheMarcheDto f = new FicheMarcheDto();
