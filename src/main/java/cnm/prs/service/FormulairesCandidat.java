@@ -57,6 +57,27 @@ public final class FormulairesCandidat {
     static final String VALIDITE_GARANTIE = "B05-GS-04";
     static final String REMISE_OFFRES = "B04-LR-03";
     static final String VALIDITE_OFFRES = "B04-VO-01";
+    /** ⚠️ Lot D (2026-09-28) — la date limite de remise du contrat-cadre (date-heure), à défaut de {@link #REMISE_OFFRES}. */
+    static final String REMISE_OFFRES_CONTRAT_CADRE = "B04-CP-02";
+    /** ⚠️ Lot D (2026-09-28, §B2) — le numéro du lot du document ({@code {{LOT}}}). */
+    static final String JETON_LOT = "LOT";
+
+    /** Les noms de section historiques des formulaires du candidat, admis sans déclaration. */
+    public static final java.util.Set<String> SECTIONS_HISTORIQUES = java.util.Set.of("A1B", "A3B-NATURES",
+            RemiseElectronique.SECTION);
+
+    /**
+     * ⚠️ Lot D (2026-09-28, §B3) — un document type rempli depuis un fichier de commande à <strong>conditions déclarées</strong>
+     * ({@link FichierCommande.Modele}) : sections retenues selon la fiche (et le lot), jetons substitués, marqueurs retirés.
+     *
+     * @param type  type du document ({@code DPAC}, {@code AE})
+     * @param lot   rang du lot d'un document établi par lot ; {@code null} : une fois pour le dossier
+     */
+    public static DocumentLibre rendreModele(String type, Integer lot, FicheMarcheDto fiche, Map<String, ChampFicheMarche> champs,
+            FichierCommande.Modele modele, LocalDateTime validation) {
+        Contexte ctx = new Contexte(fiche, champs, modele.conditions());
+        return new DocumentLibre(type, lot, ctx.rendre(modele.elements(), lot), pied(fiche, validation));
+    }
 
     private static final Pattern JETON = Pattern.compile("\\{\\{([^{}]+)}}");
     private static final Pattern MARQUEUR = Pattern.compile("\\{\\{(SI|FINSI):([A-Z0-9-]+)}}");
@@ -126,7 +147,27 @@ public final class FormulairesCandidat {
     // ------------------------------------------------------------------ substitution et marqueurs
 
     /** Le contexte d'une fiche : ce que valent les conditions, les répétitions et les jetons. */
-    private record Contexte(FicheMarcheDto fiche, Map<String, ChampFicheMarche> champs) {
+    private record Contexte(FicheMarcheDto fiche, Map<String, ChampFicheMarche> champs, Map<String, String> conditions) {
+
+        Contexte(FicheMarcheDto fiche, Map<String, ChampFicheMarche> champs) {
+            this(fiche, champs, Map.of());
+        }
+
+        /**
+         * ⚠️ Lot D (2026-09-28, §B1) — la valeur d'une clé de condition : un code de champ (valeur de la fiche figée, celle du
+         * lot pour un document de lot) ou une clé de cadrage, lue avec sa réponse par défaut ({@code modeRemise} absent =
+         * {@code PAPIER}).
+         */
+        String lire(String cle, Integer lot) {
+            if (cle.matches("B\\d{2}-[A-Z0-9]{1,6}-\\d{2}")) {
+                return valeur(fiche, cle, lot);
+            }
+            Object v = fiche.getCadrage() == null ? null : fiche.getCadrage().get(cle);
+            if (v == null && RemiseElectronique.CLE_CADRAGE.equals(cle)) {
+                return RemiseElectronique.PAPIER;
+            }
+            return v == null ? null : String.valueOf(v);
+        }
 
         boolean groupement() {
             return fiche.getCadrage() != null && "OUI".equalsIgnoreCase(String.valueOf(fiche.getCadrage().get("groupement")));
@@ -141,7 +182,11 @@ public final class FormulairesCandidat {
          * Une condition de section par son nom ; inconnue : vraie (le texte est gardé, les marqueurs retirés).
          * {@code A1B} : le groupement est autorisé ; ⚠️ V50 {@code B04-SE} : la remise est électronique (la clause de C1 / C2).
          */
-        boolean condition(String nom) {
+        boolean condition(String nom, Integer lot) {
+            // ⚠️ Lot D (2026-09-28, §B1) — une condition déclarée dans le fichier l'emporte : son expression est évaluée.
+            if (conditions.containsKey(nom)) {
+                return ConditionsModele.vraie(conditions.get(nom), cle -> lire(cle, lot));
+            }
             if ("A1B".equals(nom)) {
                 return groupement();
             }
@@ -168,22 +213,25 @@ public final class FormulairesCandidat {
 
         List<DocumentLibre.Element> rendre(List<DocumentLibre.Element> modele, Integer lot) {
             List<DocumentLibre.Element> out = new ArrayList<>();
-            String sectionOmise = null;   // nom de la section SI:… en cours d'omission
+            // ⚠️ Lot D (2026-09-28, §B1) — une PILE de sections : une section fausse omet tout jusqu'à son FINSI, sections
+            // internes comprises (elles ne sont pas même évaluées).
+            java.util.Deque<Boolean> pile = new java.util.ArrayDeque<>();
+            int omises = 0;
             for (DocumentLibre.Element e : modele) {
                 if (e instanceof DocumentLibre.Paragraphe p) {
                     Matcher m = MARQUEUR.matcher(p.texte().trim());
                     if (m.matches() && m.group(0).equals(p.texte().trim())) {
                         String nom = m.group(2);
                         if ("SI".equals(m.group(1))) {
-                            if (sectionOmise == null && !condition(nom)) {
-                                sectionOmise = nom;
-                            }
-                        } else if (nom.equals(sectionOmise)) {
-                            sectionOmise = null;
+                            boolean vraie = omises == 0 && condition(nom, lot);
+                            pile.push(vraie);
+                            omises += vraie ? 0 : 1;
+                        } else if (!pile.isEmpty()) {
+                            omises -= pile.pop() ? 0 : 1;
                         }
                         continue;   // un marqueur n'est jamais imprimé
                     }
-                    if (sectionOmise != null) {
+                    if (omises > 0) {
                         continue;
                     }
                     String texte = substituer(p.texte(), lot);
@@ -192,7 +240,7 @@ public final class FormulairesCandidat {
                     }
                     out.add(new DocumentLibre.Paragraphe(p.style(), texte));
                 } else if (e instanceof DocumentLibre.Tableau t) {
-                    if (sectionOmise != null) {
+                    if (omises > 0) {
                         continue;
                     }
                     out.add(new DocumentLibre.Tableau(t.colonnes(), lignes(t, lot)));
@@ -231,7 +279,7 @@ public final class FormulairesCandidat {
                         }
                         out.add(substituer(copie, lot));
                     }
-                } else if (condition(nom)) {
+                } else if (condition(nom, lot)) {
                     for (int k = i; k <= fin; k++) {
                         out.add(substituer(sansMarqueurs(t.lignes().get(k)), lot));
                     }
@@ -302,6 +350,9 @@ public final class FormulairesCandidat {
             if (nom.startsWith(RemiseElectronique.PREFIXE_JETON_INTERNE)) {
                 return null;   // ⚠️ V50 (§B2.2) — un paramètre interne de la procédure n'entre dans aucun document : laissé tel quel
             }
+            if (JETON_LOT.equals(nom)) {
+                return lot == null ? "" : String.valueOf(lot);   // ⚠️ Lot D (2026-09-28, §B2) — le numéro du lot, vide hors lot
+            }
             if ("A1B.mention".equals(nom)) {
                 return groupement() ? "" : "(non applicable)";
             }
@@ -313,6 +364,10 @@ public final class FormulairesCandidat {
             }
             if ("DERIVE.fin-validite-offre".equals(nom)) {
                 LocalDate remise = ControlesFicheMarche.date(valeur(fiche, REMISE_OFFRES, null));
+                if (remise == null) {
+                    // ⚠️ Lot D (2026-09-28, §B2) — le contrat-cadre porte sa date limite sur B04-CP-02 (date-heure : sa date).
+                    remise = ControlesFicheMarche.date(valeur(fiche, REMISE_OFFRES_CONTRAT_CADRE, null));
+                }
                 BigDecimal jours = ControlesFicheMarche.nombre(valeur(fiche, VALIDITE_OFFRES, null));
                 return remise == null || jours == null ? POINTILLES : remise.plusDays(jours.longValue()).format(JOUR);
             }

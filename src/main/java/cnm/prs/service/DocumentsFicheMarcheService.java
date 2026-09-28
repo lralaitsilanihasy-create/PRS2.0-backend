@@ -84,6 +84,8 @@ public class DocumentsFicheMarcheService {
     private final ParametreService parametres;
     /** ⚠️ V47 (2026-09-26) — les modèles officiels des formulaires du candidat, lus au démarrage. */
     private final ModelesCandidat modelesCandidat;
+    /** ⚠️ Lot D (2026-09-28) — les documents types officiels du DAO (contrat-cadre : DPAC, AE), lus au démarrage. */
+    private final ModelesDao modelesDao;
     /** ⚠️ Lot C (2026-09-27) — la lettre de renvoi à laquelle rattacher les documents d'une révision (compléments). */
     private final cnm.prs.repository.LettreRenvoiRepository lettreRenvoiRepository;
 
@@ -93,7 +95,8 @@ public class DocumentsFicheMarcheService {
             FicheMarcheRepository ficheRepository, DossierRepository dossierRepository,
             PieceJointeDossierRepository pieceRepository, TypePieceJointeRepository typePieceRepository,
             GenerateurClasseursFiche classeurs, ParametreService parametres, ModelesCandidat modelesCandidat,
-            cnm.prs.repository.LettreRenvoiRepository lettreRenvoiRepository) {
+            cnm.prs.repository.LettreRenvoiRepository lettreRenvoiRepository, ModelesDao modelesDao) {
+        this.modelesDao = modelesDao;
         this.lettreRenvoiRepository = lettreRenvoiRepository;
         this.modelesCandidat = modelesCandidat;
         this.classeurs = classeurs;
@@ -132,11 +135,47 @@ public class DocumentsFicheMarcheService {
         List<ChampFicheMarche> champs = champRepository.findByActifTrueOrderByCodeRubriqueAscRangAsc();
         List<DocumentFicheModele> modeles = new ArrayList<>(SelectionDocumentsFiche.selectionner(etat, champs,
                 blocRepository.findAllByOrderByRangAsc(), rubriqueRepository.findAllByOrderByCodeBlocAscRangAscCodeAsc(), validation));
+        Map<String, ChampFicheMarche> parCode = new LinkedHashMap<>();
+        champs.forEach(c -> parCode.put(c.getCode(), c));
+        List<Produit> produits = new ArrayList<>();
+        // ⚠️ Lot D (2026-09-28, §B3) — les documents décrits sur le document type officiel (contrat-cadre, fournitures et
+        // services : DPAC, AE par lot) sont rendus depuis leur fichier de commande, À LA PLACE de la liste « libellé :
+        // valeur » du lot 2a pour ces types ; les autres formes gardent le lot 2a (repli par type).
+        List<ModelesDao.Couverture> couvertes = ModelesDao.couvertures(etat.getTypeMarche(), etat.getCategorie());
+        java.util.Set<String> remplaces = new java.util.HashSet<>();
+        int nbLots = Boolean.TRUE.equals(etat.getSaisieParLot()) && etat.getNbLots() != null ? etat.getNbLots() : 0;
+        for (ModelesDao.Couverture c : couvertes) {
+            remplaces.add(c.typeDocument());
+            List<Integer> lots = new ArrayList<>();
+            if (SelectionDocumentsFiche.parLot(c.typeDocument()) && LotsFiche.alloti(nbLots)) {
+                for (int n = 1; n <= nbLots; n++) {
+                    lots.add(n);
+                }
+            } else {
+                lots.add(null);
+            }
+            for (Integer lot : lots) {
+                DocumentLibre doc;
+                List<GenerateurDocumentsFiche.Fichier> fichiers;
+                try {
+                    doc = FormulairesCandidat.rendreModele(c.typeDocument(), lot, etat, parCode, modelesDao.modele(c.sigle()), validation);
+                    fichiers = generateur.generer(doc);
+                } catch (RuntimeException e) {
+                    throw new GenerationDocumentsException("La génération du document « "
+                            + SelectionDocumentsFiche.titre(c.typeDocument(), lot, etat.getTypeMarche()) + " » a échoué : la "
+                            + "version n'est pas validée. " + e.getMessage(), e);
+                }
+                for (GenerateurDocumentsFiche.Fichier f : fichiers) {
+                    produits.add(new Produit(doc.type(), f.extension(), nomFichier(doc.type(), etat.getRefeDossier(),
+                            etat.getIdDetail(), lot, etat.getVersion(), f.extension()), f.contenu(), lot));
+                }
+            }
+        }
+        modeles.removeIf(m -> remplaces.contains(m.type()));
         DocumentFicheModele liste = SelectionDocumentsFiche.listeFournitures(etat, articles, validation);
         if (liste != null) {
             modeles.add(liste);
         }
-        List<Produit> produits = new ArrayList<>();
         for (DocumentFicheModele modele : modeles) {
             List<GenerateurDocumentsFiche.Fichier> fichiers;
             try {
@@ -152,8 +191,6 @@ public class DocumentsFicheMarcheService {
         }
         // ⚠️ V47 (2026-09-26, §B8, R12 (c)) — fiches A1 à A4 (une fois pour le dossier) et garanties C1/C2 (par lot), sur
         // les modèles officiels décalqués, toutes catégories.
-        Map<String, ChampFicheMarche> parCode = new LinkedHashMap<>();
-        champs.forEach(c -> parCode.put(c.getCode(), c));
         for (DocumentLibre modele : FormulairesCandidat.generer(etat, parCode, modelesCandidat.modeles(), validation)) {
             List<GenerateurDocumentsFiche.Fichier> fichiers;
             try {
@@ -228,7 +265,7 @@ public class DocumentsFicheMarcheService {
         }
         return documentRepository.findByIdFicheOrderByIdDocumentAsc(fiche.getIdFiche()).stream()
                 .map(d -> new DocumentFicheDto(d.getIdDocument(), d.getType(),
-                        SelectionDocumentsFiche.titre(d.getType(), d.getLot()), d.getExtension(), d.getNomFichier(),
+                        SelectionDocumentsFiche.titre(d.getType(), d.getLot(), fiche.getTypeMarche()), d.getExtension(), d.getNomFichier(),
                         d.getTailleOctets(), d.getDateGeneration(), fiche.getNumeroVersion(), d.getLot()))
                 .toList();
     }

@@ -70,8 +70,8 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
     // ------------------------------------------------------------------ 1. chargement des référentiels
 
     @Test
-    @DisplayName("1 — Import : 149 champs des fournitures (123 avant V50) et 123 du contrat-cadre (114 avant le 28/09), aucun rejet ; champs actifs servis : 172 en "
-            + "quantité fixe, 177 à commande, 167 en contrat-cadre (V50 : + 26 ; modèle officiel du 28/09 : − 20 + 11) — 2026-09-25 : cinq créations, "
+    @DisplayName("1 — Import : 149 champs des fournitures (123 avant V50) et 132 du contrat-cadre (114 avant le 28/09), aucun rejet ; champs actifs servis : 172 en "
+            + "quantité fixe, 177 à commande, 176 en contrat-cadre (V50 : + 26 ; modèle officiel du 28/09 : − 20 + 11 ; lot D : + 9) — 2026-09-25 : cinq créations, "
             + "B06-EO-11 réservé à la quantité fixe")
     void chargementDesReferentiels() throws Exception {
         ChampFicheMarcheService.BilanImport f = importer("referentiel-champs-fiche-marche-fournitures.csv");
@@ -79,11 +79,11 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
         assertThat(f.crees()).hasSize(149);   // V50 : + 26 champs de la remise électronique
         ChampFicheMarcheService.BilanImport cc = importer("referentiel-champs-fiche-marche-contrat-cadre.csv");
         assertThat(cc.rejets()).isEmpty();
-        assertThat(cc.crees()).hasSize(123);   // 2026-09-28 : + 9 champs du modèle officiel
+        assertThat(cc.crees()).hasSize(132);   // 2026-09-28 : + 9 champs du modèle officiel, + 9 du lot D
 
         assertThat(champs("QUANTITE_FIXE")).hasSize(172);
         assertThat(champs("A_COMMANDE")).hasSize(177);
-        assertThat(champs("CONTRAT_CADRE")).hasSize(167);   // 2026-09-28 : 176 − 20 retirés + 11 ajoutés ou ouverts (modèle officiel)
+        assertThat(champs("CONTRAT_CADRE")).hasSize(176);   // 2026-09-28 : 176 − 20 retirés + 11 ajoutés ou ouverts (modèle officiel) + 9 (lot D)
     }
 
     // ------------------------------------------------------------------ 2. rubriques servies par type (B4)
@@ -175,10 +175,16 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
         remplirObligatoiresEtValider(idDmc, "CONTRAT_CADRE", null, Map.of("B05-MT-01", "250000000"));
         List<String> types = JsonPath.read(documents(idDmc), "$[*].type");
         assertThat(types).containsExactly("DPAC", "DPAC", "AE", "AE", "LF", "LF", "BP", "TC");
-        assertThat(texte(idDmc, "DPAC")).contains("Données particulières du cahier des clauses administratives",
-                "Calendrier prévisionnel");
-        assertThat(texte(idDmc, "AE")).contains("Marchés subséquents", "Attribution des marchés subséquents",
-                "Montant indicatif du contrat-cadre hors taxes (Ariary) : 250 000 000 Ariary");
+        // ⚠️ Lot D (2026-09-28) — le DPAC et l'AE du contrat-cadre sont le document type officiel rempli, plus des listes.
+        assertThat(texte(idDmc, "DPAC")).contains("DONNEES PARTICULIERES D’APPEL A CONCURRENCE",
+                "Calendrier prévisionnel de la consultation").doesNotContain("{{");
+        assertThat(texte(idDmc, "AE")).contains("ACTE D’ENGAGEMENT ET CAHIER DES CLAUSES ADMINISTRATIVES PARTICULIERES",
+                "ARTICLE 4 – Modalités d’attribution des marchés subséquents",
+                "est estimé à : 250 000 000 Ariary H.T.").doesNotContain("{{");
+        assertThat(JsonPath.<List<String>>read(documents(idDmc), "$[?(@.type=='AE')].libelle"))
+                .containsOnly("Contrat-cadre valant acte d'engagement et CCAP");
+        assertThat(JsonPath.<List<String>>read(documents(idDmc), "$[?(@.type=='DPAC')].libelle"))
+                .containsOnly("Données particulières d'appel à concurrence");
     }
 
     // ------------------------------------------------------------------ 5. quantité fixe inchangée
@@ -271,10 +277,61 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
         assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.ok[?(@.regle=='DATES_ORDRE')].message"))
                 .singleElement().asString().contains("remise des offres < ouverture des plis < demandes d'offres optimisées < "
                         + "réception des offres optimisées < attribution < courriers de rejet < notification");
-        assertThat(texte(idDmc, "DPAC")).contains("Date et heure limites de remise des offres : 10/04/2026 10:00",
-                "Envoi des demandes d'offres optimisées : 20/04/2026");
-        assertThat(texte(idDmc, "AE")).contains("Acte de nomination de la PRMP (nature, numéro, date) : Arrêté n° 1234/2025 du 15/01/2025")
+        // Lot D : le document type rempli (date-heure imprimée, calendrier en tableau, acte de nomination après « nommée par »).
+        assertThat(texte(idDmc, "DPAC")).contains("DATE ET HEURE LIMITES DE REMISE DES OFFRES : 10/04/2026 10:00",
+                "20/04/2026\tEnvoi des demandes d’offres optimisées");
+        assertThat(texte(idDmc, "AE")).contains("nommée par Arrêté n° 1234/2025 du 15/01/2025.")
                 .doesNotContain("Régime des pénalités de retard");
+    }
+
+    // ------------------------------------------------------------------ 7. lot D : un AE par lot, les autres formes au lot 2a
+
+    @Autowired private cnm.prs.service.DocumentsFicheMarcheService documentsService;
+
+    @Test
+    @DisplayName("7 — Lot D : contrat-cadre alloti en 2 lots → un DPAC et deux AE « LOT n° 1 / 2 » rendus du document type ; "
+            + "à commande → DPAO, CCAP et AE du lot 2a inchangés")
+    void lotDProductionParForme() throws Exception {
+        importer("referentiel-champs-fiche-marche-fournitures.csv");
+        importer("referentiel-champs-fiche-marche-contrat-cadre.csv");
+        cnm.prs.dto.FicheMarcheDto cc = new cnm.prs.dto.FicheMarcheDto();
+        cc.setIdDetail(9903);
+        cc.setVersion(1);
+        cc.setRefeDossier("DOS-9900");
+        cc.setTypeMarche("CONTRAT_CADRE");
+        cc.setCategorie("FOURNITURES_SERVICES");
+        cc.setNbLots(2);
+        cc.setSaisieParLot(true);
+        cc.setCadrage(new java.util.LinkedHashMap<>(Map.of("attributaires", "MULTI", "alloti", "OUI")));
+        cc.setValeurs(new java.util.HashMap<>());
+        List<cnm.prs.service.DocumentsFicheMarcheService.Produit> produits = documentsService.produire(cc, java.time.LocalDateTime.now());
+        assertThat(produits.stream().filter(p -> "docx".equals(p.extension())).map(p -> p.type() + ":" + p.lot()))
+                .containsExactly("DPAC:null", "AE:1", "AE:2");
+        for (cnm.prs.service.DocumentsFicheMarcheService.Produit p : produits) {
+            if ("AE".equals(p.type()) && "docx".equals(p.extension())) {
+                assertThat(texteDocx(p.contenu())).contains("CCAP LOT n°" + p.lot(), "passé pour le lot n° " + p.lot() + ".");
+            }
+        }
+
+        cnm.prs.dto.FicheMarcheDto ac = new cnm.prs.dto.FicheMarcheDto();
+        ac.setIdDetail(9902);
+        ac.setVersion(1);
+        ac.setTypeMarche("A_COMMANDE");
+        ac.setCategorie("FOURNITURES_SERVICES");
+        ac.setCadrage(new java.util.LinkedHashMap<>(Map.of("alloti", "NON")));
+        ac.setValeurs(new java.util.HashMap<>(Map.of("B02-OB-03", "AOO 1/2026", "B04-VO-01", "90")));
+        List<cnm.prs.service.DocumentsFicheMarcheService.Produit> lot2a = documentsService.produire(ac, java.time.LocalDateTime.now());
+        assertThat(lot2a.stream().filter(p -> "docx".equals(p.extension())).map(cnm.prs.service.DocumentsFicheMarcheService.Produit::type))
+                .contains("DPAO").doesNotContain("DPAC");
+        byte[] dpao = lot2a.stream().filter(p -> "DPAO".equals(p.type()) && "docx".equals(p.extension())).findFirst().orElseThrow().contenu();
+        assertThat(texteDocx(dpao)).contains("Données particulières de l'appel d'offres", "Délai de validité des offres (jours) : 90");
+    }
+
+    private static String texteDocx(byte[] docx) throws Exception {
+        try (XWPFDocument doc = new XWPFDocument(new ByteArrayInputStream(docx));
+                XWPFWordExtractor ex = new XWPFWordExtractor(doc)) {
+            return ex.getText();
+        }
     }
 
     // ------------------------------------------------------------------ outils

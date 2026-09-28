@@ -31,7 +31,7 @@ public final class SelectionDocumentsFiche {
 
     private static final Map<String, String> TITRES = Map.of(
             "DPAO", "Données particulières de l'appel d'offres",
-            "DPAC", "Données particulières du cahier des clauses administratives",
+            "DPAC", "Données particulières d'appel à concurrence",   // ⚠️ 2026-09-28 (B12) : le titre du modèle officiel
             "DPIC", "Données particulières des instructions aux consultants",
             "CCAP", "Cahier des clauses administratives particulières",
             "AE", "Acte d'engagement",
@@ -96,6 +96,21 @@ public final class SelectionDocumentsFiche {
     /** Intitulé d'un document, suivi de son lot s'il est établi par lot (« Acte d'engagement — lot 2 »). */
     public static String titre(String type, Integer lot) {
         return titre(type) + (lot == null ? "" : " — lot " + lot);
+    }
+
+    /**
+     * ⚠️ Lot D (2026-09-28, §B3) — l'intitulé selon la forme du marché : en contrat-cadre, l'acte d'engagement est le
+     * « Contrat-cadre valant acte d'engagement et CCAP » (titre du document type officiel).
+     */
+    public static String titre(String type, Integer lot, String typeMarche) {
+        String t = "AE".equals(type) && "CONTRAT_CADRE".equals(typeMarche) ? "Contrat-cadre valant acte d'engagement et CCAP"
+                : titre(type);
+        return t + (lot == null ? "" : " — lot " + lot);
+    }
+
+    /** Le document est-il établi par lot sur une ligne allotie (l'acte d'engagement) ? */
+    public static boolean parLot(String type) {
+        return PAR_LOT.contains(type);
     }
 
     /**

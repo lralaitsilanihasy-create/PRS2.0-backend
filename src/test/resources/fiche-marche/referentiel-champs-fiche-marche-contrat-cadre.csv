@@ -139,3 +139,12 @@ B07-MA-06;Critères et sous-critères pondérés de la remise en concurrence;TEX
 B05-PM-04;Plafond d'augmentation des prix à chaque complétude ou remise en concurrence (%);POURCENTAGE;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui;FOURNITURES_SERVICES;non;
 B05-PM-05;Catalogue joint au contrat-cadre;OUI_NON;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui;FOURNITURES_SERVICES;non;
 B07-DU-07;Préavis de la décision de reconduction (mois);NOMBRE;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui;FOURNITURES_SERVICES;non;
+B04-DS-07;Adresse de consultation du dossier : nom du responsable;TEXTE;SAISIE;DPAC;;CONTRAT_CADRE;;non;;;;;;oui;FOURNITURES_SERVICES;non;
+B04-DS-08;Adresse de consultation du dossier : fonction;TEXTE;SAISIE;DPAC;;CONTRAT_CADRE;;non;;;;;;oui;FOURNITURES_SERVICES;non;
+B04-DS-09;Adresse de consultation du dossier : bureau, n° de porte, étage;TEXTE;SAISIE;DPAC;;CONTRAT_CADRE;;non;;;;;;oui;FOURNITURES_SERVICES;non;
+B04-DS-10;Adresse de consultation du dossier : localité;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;;non;;;;;;oui;FOURNITURES_SERVICES;non;
+B09-GP-03;Délai de garantie des prestations (mois);NOMBRE;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui;FOURNITURES_SERVICES;non;
+B09-GP-04;Point de départ du délai de garantie;LISTE;SAISIE;AE;;CONTRAT_CADRE;;non;;;À partir de l'admission,À partir de la date de mise en service;;;oui;FOURNITURES_SERVICES;non;
+B09-GP-05;Garantie exécutée conformément au CCAG;OUI_NON;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui;FOURNITURES_SERVICES;non;
+B10-RS-02;Préavis de résiliation sans faute (mois avant la date anniversaire);NOMBRE;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui;FOURNITURES_SERVICES;non;
+B10-RS-03;Fautes du titulaire ouvrant la résiliation du contrat-cadre;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui;FOURNITURES_SERVICES;non;

@@ -34,7 +34,13 @@ public class ModelesCandidat {
                 }
                 String texte = new String(in.readAllBytes(), StandardCharsets.UTF_8);
                 verifierJetonsInternes(chemin, texte);
-                modeles.put(sigle, List.copyOf(FichierCommande.lire(texte)));
+                FichierCommande.Modele m = FichierCommande.lireModele(texte);
+                // ⚠️ Lot D (2026-09-28) — même garde que les modèles du DAO ; les trois noms historiques restent admis.
+                List<String> defauts = ConditionsModele.defauts(m.elements(), m.conditions(), FormulairesCandidat.SECTIONS_HISTORIQUES);
+                if (!defauts.isEmpty()) {
+                    throw new IllegalStateException("Modèle du candidat refusé : " + chemin + " — " + String.join(" ; ", defauts));
+                }
+                modeles.put(sigle, List.copyOf(m.elements()));
             } catch (IOException | IllegalArgumentException e) {
                 throw new IllegalStateException("Modèle du candidat illisible : " + chemin + " — " + e.getMessage(), e);
             }

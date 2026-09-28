@@ -458,6 +458,27 @@ fiche. Contrat : `docs/api-endpoints.md`, § *Fiche marché d'un appel d'offres*
 - **Montants en toutes lettres** : le convertisseur du dépôt plafonnait à 999 999 (et écrivait « quatre cents
   mille ») ; étendu aux millions et milliards, pour la fiche comme pour les PV et lettres.
 
+#### Le DAO complet sur les documents types officiels (lot D, demande front du 2026-09-28, feu vert du pilote)
+
+⚠️ **Le dossier d'appel d'offres produit est le document type de l'ARMP, rempli** — plus une liste « libellé : valeur ».
+Son texte fixe est repris tel quel, jamais retapé ; ses trous sont remplis par la fiche ; parmi les rédactions que le
+modèle propose, seule celle qui correspond à la fiche est gardée ; ses instructions et exemples sont retirés. Ce qui se
+remplit après le DAO — par le candidat, ou à la notification — reste entre chevrons. Décision : ADR-0011 ; contrat :
+`docs/api-endpoints.md`, § *Le DAO complet sur les documents types officiels — lot D*.
+
+- **Premier périmètre : le contrat-cadre, fournitures et services** — les données particulières d'appel à concurrence et
+  le contrat-cadre valant acte d'engagement et CCAP, **un par lot** quand le contrat-cadre est alloti. Les autres formes
+  gardent leurs listes jusqu'à ce que leur document type soit décrit : pas de bascule générale.
+- **Les rédactions se choisissent par des conditions écrites dans le modèle**, sur les réponses de la fiche (mono ou
+  multi-attributaire, alloti, reconductible, mode de remise…), jamais dans le code. Un modèle dont une condition est
+  illisible, ou qui emploie une rédaction sans dire quand la garder, **empêche le démarrage** : le document ne sort
+  jamais faux en silence.
+- **La fidélité se prouve** : le rendu brut du serveur est confronté au document type, dans les deux sens, par le
+  comparateur du front. La fiche reste consultable à l'écran telle quelle ; c'est elle que la Commission contrôle.
+- **Ce qui manquait à la fiche s'y ajoute** : l'adresse de consultation du dossier, le délai de garantie et son point de
+  départ, le préavis et les fautes ouvrant la résiliation — facultatifs, puisque le modèle les laisse vides si l'acheteur
+  ne les précise pas.
+
 #### Les documents générés (lot 2a, demande front du 2026-09-23)
 
 ⚠️ **Une version validée porte ses documents, et le dossier les reçoit sans geste humain.** La fiche savait déjà quel

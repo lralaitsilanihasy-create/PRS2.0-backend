@@ -1,0 +1,432 @@
+FICHIER	AE-CC.docx
+TITRE	ACTE D’ENGAGEMENT ET CAHIER DES CLAUSES ADMINISTRATIVES PARTICULIERES
+CONDITION	AOOB01-AC-13 contient ouvert
+CONDITION	AORB01-AC-13 contient restreint
+CONDITION	CONSULTATIONB01-AC-13 contient consultation
+CONDITION	GROUPEMENTgroupement = OUI
+CONDITION	ALLOTIalloti = OUI
+CONDITION	NON-ALLOTIalloti = NON
+CONDITION	NA-MONOalloti = NON et attributaires = MONO
+CONDITION	NA-MULTIalloti = NON et attributaires = MULTI
+CONDITION	A-MONOalloti = OUI et attributaires = MONO
+CONDITION	A-MULTIalloti = OUI et attributaires = MULTI
+CONDITION	FS-UNIQUEB07-FS-01 = Marchés uniques non fractionnés
+CONDITION	FS-FRACTIONNEB07-FS-01 = Marchés fractionnés par bons de commande successifs
+CONDITION	MONOattributaires = MONO
+CONDITION	MULTIattributaires = MULTI
+CONDITION	COMPLETUDE-DELAIattributaires = MONO et B07-MA-02 = À compter de la notification de la demande de complétude
+CONDITION	COMPLETUDE-DEMANDEattributaires = MONO et B07-MA-02 = Lors de la demande de complétude
+CONDITION	MULTI-NON-ALLOTIattributaires = MULTI et alloti = NON
+CONDITION	LOTS-CORRESPONDANTSattributaires = MULTI et alloti = OUI et B07-MA-04 = Titulaires des lots correspondant à l'objet du marché
+CONDITION	LOTS-TOUSattributaires = MULTI et alloti = OUI et B07-MA-04 = Titulaires de tous les lots
+CONDITION	RC-BESOINattributaires = MULTI et B02-PC-02 = Au fur et à mesure des besoins
+CONDITION	RC-CALENDRIERattributaires = MULTI et B02-PC-02 = Selon le calendrier fixé ci-après
+CONDITION	DUREE-FIXEEB07-DU-02 = OUI
+CONDITION	DUREE-LIBREB07-DU-02 = NON
+CONDITION	RECONDUCTIBLEB02-DC-03 = OUI
+CONDITION	NON-RECONDUCTIBLEB02-DC-03 = NON
+CONDITION	DELAI-ACB07-FS-01 = Marchés uniques non fractionnés et B07-DE-01 = Fixés par l'autorité contractante
+CONDITION	DELAI-CANDIDATSB07-FS-01 = Marchés uniques non fractionnés et B07-DE-01 = À l'initiative des candidats
+CONDITION	DELAI-SUBSEQUENTSB07-FS-01 = Marchés uniques non fractionnés et B07-DE-01 = Fixés dans les marchés subséquents
+CONDITION	PENALITES-NONB07-PE-01 = Non applicables
+CONDITION	PENALITES-CCAGB07-PE-01 = Fixées dans le contrat-cadre et B07-PE-02 = Conformément à l'article 12 du CCAG
+CONDITION	PENALITES-DEROGATIONB07-PE-01 = Fixées dans le contrat-cadre et B07-PE-02 = Dérogation au CCAG
+CONDITION	PENALITES-SUBSEQUENTSB07-PE-01 = Fixées dans les marchés subséquents
+CONDITION	MONO-PU-BORDEREAUattributaires = MONO et B05-PM-01 = Prix unitaires et B05-PM-05 != OUI ou attributaires = MONO et B05-PM-01 = Prix mixtes et B05-PM-05 != OUI
+CONDITION	MONO-PU-CATALOGUEattributaires = MONO et B05-PM-01 = Prix unitaires et B05-PM-05 = OUI ou attributaires = MONO et B05-PM-01 = Prix mixtes et B05-PM-05 = OUI
+CONDITION	MONO-PFattributaires = MONO et B05-PM-01 = Prix forfaitaires ou attributaires = MONO et B05-PM-01 = Prix mixtes
+CONDITION	MULTI-REFERENCEMENT-BORDEREAUattributaires = MULTI et B05-PM-02 = NON et B05-PM-05 != OUI
+CONDITION	MULTI-REFERENCEMENT-CATALOGUEattributaires = MULTI et B05-PM-02 = NON et B05-PM-05 = OUI
+CONDITION	MULTI-PRIX-BORDEREAUattributaires = MULTI et B05-PM-02 = OUI et B05-PM-05 != OUI
+CONDITION	MULTI-PRIX-CATALOGUEattributaires = MULTI et B05-PM-02 = OUI et B05-PM-05 = OUI
+CONDITION	AVANCEavance = OUI
+CONDITION	AVANCE-SOUS-TRAITANTB08-FI-05 = OUI
+CONDITION	EXECUTION-COMMUNEB09-EA-01 = OUI
+CONDITION	EXECUTION-SANSB09-EA-01 = NON
+CONDITION	VERIFICATION-CCAGB09-VA-01 = Dispositions du CCAG applicables
+CONDITION	VERIFICATION-LIBREB09-VA-01 = Clause libre
+CONDITION	GARANTIE-NONB09-GP-01 = NON
+CONDITION	GARANTIE-OUIB09-GP-01 = OUI
+CONDITION	GARANTIE-ADMISSIONB09-GP-01 = OUI et B09-GP-04 = À partir de l'admission
+CONDITION	GARANTIE-MISE-EN-SERVICEB09-GP-01 = OUI et B09-GP-04 = À partir de la date de mise en service
+CONDITION	GARANTIE-CCAGB09-GP-01 = OUI et B09-GP-05 = OUI
+CONDITION	ASSURANCE-NONB09-AU-01 = NON
+CONDITION	ASSURANCE-OUIB09-AU-01 = OUI
+CONDITION	PRIX-CRITEREattributaires = MONO ou B05-PM-02 = OUI
+CENTRE	{{B01-AC-01}}
+CENTRE	{{B02-OB-01}}
+PARA	{{SI:NON-ALLOTI}}
+CENTRE	CONTRAT-CADRE Valant acte d’engagement et CCAP UNIQUE
+PARA	{{FINSI:NON-ALLOTI}}
+PARA	{{SI:ALLOTI}}
+CENTRE	CONTRAT-CADRE Valant acte d’engagement et CCAP LOT n°{{LOT}}
+PARA	{{FINSI:ALLOTI}}
+CENTRE	Code des marchés publics (Article 67)
+PARA	Cadre réservé à l’autorité contractante Numéro du contrat-cadre <indiquer le numéro du contrat-cadre>
+PARA	Cadre réservé à l’autorité contractante Date de notification <à compléter obligatoirement sur l’original par le signataire après la notification du contrat-cadre>: ❏ Date de réception indiquée sur l’accusé de réception : <indiquer la date> ❏ Date de remise en main propre au titulaire : <indiquer la date> Reçu, à titre de notification, une copie du contrat-cadre. Signature du titulaire :
+PARA	Ce document comporte <préciser le nombre de pages> pages y compris la page de garde.
+SOUS_TITRE	PREAMBULE – DISPOSITIONS GENERALES
+PARA	Personne Publique contractante : {{B01-AC-01}}, {{B01-AC-02}}
+PARA	Personne habilitée à signer le contrat-cadre : {{B02-SG-04}}.
+PARA	Personne responsable des marchés passés sur la base du présent contrat-cadre : {{B02-SG-01}} ({{B02-SG-02}}).
+PARA	Procédure de passation du contrat-cadre :
+PARA	{{SI:AOO}}
+PARA	Appel d’offres ouvert, en application des articles 35 à 37 du Code des Marchés Publics.
+PARA	{{FINSI:AOO}}
+PARA	{{SI:AOR}}
+PARA	Appel d’offres restreint, en application de l’article 38 du Code des Marchés Publics.
+PARA	{{FINSI:AOR}}
+PARA	{{SI:CONSULTATION}}
+PARA	Consultation d’entreprises ou de fournisseurs ou de prestataires de service, en application de l’article 41 du Code des Marchés Publics.
+PARA	{{FINSI:CONSULTATION}}
+SOUS_TITRE	ARTICLE 1er – Contractants (1)
+PARA	Le contrat-cadre est conclu entre :
+PARA	- D’une part, {{B01-AC-01}}, ci-après dénommée « l’autorité contractante »,
+PARA	Représentée par : {{B01-AC-05}}, nommée par {{B02-SG-03}}.
+PARA	– Et d’autre part,(2)
+PARA	❏ Le co-contractant, ci-après dénommé « le titulaire » :
+PARA	Dénomination sociale : <préciser la dénomination sociale de l’entreprise>
+PARA	Ayant son siège social à <indiquer l’adresse du siège social de l’entreprise>
+PARA	Ayant pour numéro d’identification fiscale NIF (3) <indiquer le numéro d’identification>
+PARA	Représentée par :
+PARA	Nom : <indiquer le nom du représentant>
+PARA	Qualité (4) : <cocher la case correspondante>
+PARA	❏ Représentant légal de l’entreprise.
+PARA	❏ Ayant reçu pouvoir du représentant légal de l’entreprise
+PARA	{{SI:GROUPEMENT}}
+PARA	OU
+PARA	Le groupement d’entrepreneurs solidaire/ conjoint (4), ci-après dénommé « le titulaire » :
+PARA	❏ 1er co-traitant mandataire du Groupement :
+PARA	Dénomination sociale : <préciser la dénomination sociale de l’entreprise>
+PARA	Ayant son siège social à <indiquer l’adresse du siège social de l’entreprise>
+PARA	Ayant pour numéro d’identification fiscale NIF (3) : <indiquer le numéro d’identification>
+PARA	Représentée par :
+PARA	Nom : <indiquer le nom du représentant>
+PARA	Qualité(5) : <cocher la case correspondante>
+PARA	❏ Représentant légal de l’entreprise.
+PARA	❏ Ayant reçu pouvoir du représentant légal de l’entreprise.
+PARA	En cas de groupement conjoint, le mandataire déclare être solidaire de tous les membres du groupement.
+PARA	❏2e co-traitant (6) :
+PARA	Dénomination sociale : <préciser la dénomination sociale de l’entreprise>
+PARA	Ayant son siège social à <indiquer l’adresse du siège social de l’entreprise>
+PARA	Ayant pour numéro d’identification fiscale NIF (3) : <indiquer le numéro>
+PARA	Représenté par :
+PARA	Nom : <indiquer le nom du représentant>
+PARA	Qualité (7) : <cocher la case correspondante>
+PARA	❏ Représentant légal de l’entreprise.
+PARA	❏ Ayant reçu pouvoir du représentant légal de l’entreprise.
+PARA	{{FINSI:GROUPEMENT}}
+SOUS_TITRE	ARTICLE 2 – Objet du contrat-cadre et des marchés subséquents conclus sur sa base
+PARA	Le présent contrat-cadre a pour objet de définir les termes régissant les marchés à passer au cours de la période fixée à l’article 7.
+PARA	L’objet de cet accord et des marchés subséquents qui seront conclus sur son fondement est {{B02-OB-01}}.
+PARA	{{SI:NA-MONO}}
+PARA	Le contrat-cadre n’est pas alloti. Il est mono-attributaire.
+PARA	{{FINSI:NA-MONO}}
+PARA	{{SI:NA-MULTI}}
+PARA	Le contrat-cadre n’est pas alloti. Il est multi-attributaire.
+PARA	{{FINSI:NA-MULTI}}
+PARA	{{SI:A-MONO}}
+PARA	Le contrat-cadre est alloti et mono-attributaire.
+PARA	{{FINSI:A-MONO}}
+PARA	{{SI:A-MULTI}}
+PARA	Le contrat-cadre est alloti et multi-attributaire.
+PARA	{{FINSI:A-MULTI}}
+PARA	{{SI:ALLOTI}}
+PARA	Les prestations sont réparties en {{B02-LV-05}} lots faisant chacun l’objet d’un contrat-cadre distinct, comme suit :
+PARA	{{B02-AL-02}}
+PARA	Le présent contrat-cadre est passé pour le lot n° {{LOT}}.
+PARA	{{FINSI:ALLOTI}}
+SOUS_TITRE	ARTICLE 3 – Forme des marchés subséquents conclus sur la base du présent contrat-cadre
+PARA	{{SI:FS-UNIQUE}}
+PARA	Marchés uniques non fractionnés.
+PARA	{{FINSI:FS-UNIQUE}}
+PARA	{{SI:FS-FRACTIONNE}}
+PARA	Marchés fractionnés par émission de bons de commande successifs en application de l’article 77 du Code des Marchés Publics.
+PARA	{{FINSI:FS-FRACTIONNE}}
+PARA	{{B07-FS-02}} de l’autorité contractante est l’interlocuteur du titulaire pour la réalisation des prestations faisant l’objet du présent contrat-cadre.
+PARA	Il communiquera au titulaire le nom de la personne chargée du suivi de l’exécution des prestations lors de la notification du contrat-cadre.
+SOUS_TITRE	ARTICLE 4 – Modalités d’attribution des marchés subséquents conclus sur la base du présent contrat-cadre
+PARA	{{SI:COMPLETUDE-DELAI}}
+PARA	A la survenance du besoin, le titulaire pourra être invité à compléter son offre initiale par écrit dans un délai de {{B07-MA-01}} jours à compter de la notification de la demande de complétude
+PARA	{{FINSI:COMPLETUDE-DELAI}}
+PARA	{{SI:COMPLETUDE-DEMANDE}}
+PARA	A la survenance du besoin, le titulaire pourra être invité à compléter son offre initiale par écrit dans un délai précisé lors de la demande de complétude.
+PARA	{{FINSI:COMPLETUDE-DEMANDE}}
+PARA	{{SI:MULTI-NON-ALLOTI}}
+PARA	Pendant la durée de validité du contrat-cadre, les marchés publics conclus sur la base de cet accord seront attribués après remise en concurrence de tous les titulaires du contrat-cadre.
+PARA	{{FINSI:MULTI-NON-ALLOTI}}
+PARA	{{SI:LOTS-CORRESPONDANTS}}
+PARA	Pendant la durée de validité du contrat-cadre, les marchés publics conclus sur la base de cet accord seront attribués après remise en concurrence des titulaires des lots correspondant à l’objet du marché fondé sur le contrat-cadre
+PARA	{{FINSI:LOTS-CORRESPONDANTS}}
+PARA	{{SI:LOTS-TOUS}}
+PARA	Pendant la durée de validité du contrat-cadre, les marchés publics conclus sur la base de cet accord seront attribués après remise en concurrence des titulaires de tous les lots
+PARA	{{FINSI:LOTS-TOUS}}
+PARA	{{SI:RC-BESOIN}}
+PARA	Cette remise en concurrence interviendra lors de la survenance du besoin.
+PARA	{{FINSI:RC-BESOIN}}
+PARA	{{SI:RC-CALENDRIER}}
+PARA	Cette remise en concurrence interviendra selon la périodicité suivante : {{B02-PC-03}}.
+PARA	{{FINSI:RC-CALENDRIER}}
+PARA	{{SI:MULTI}}
+PARA	Elle se fera dans les conditions précisées dans le règlement de la consultation propre à chaque marché à lancer, et sur la base des critères et sous-critères pondérés suivants: {{B07-MA-06}}
+PARA	Les titulaires du contrat-cadre devront déposer une offre à chaque remise en concurrence des marchés subséquents fondés sur le contrat-cadre.
+PARA	{{FINSI:MULTI}}
+SOUS_TITRE	ARTICLE 5 – Les termes non couverts par le contrat-cadre
+PARA	{{SI:MONO}}
+PARA	Les termes non couverts par le contrat-cadre qui pourront faire l’objet d’une complétude de l’offre sont: {{B07-TN-01}}.
+PARA	{{FINSI:MONO}}
+PARA	{{SI:MULTI}}
+PARA	Les termes non couverts par le contrat-cadre qui feront l’objet d’une mise en concurrence sont : {{B07-TN-02}}
+PARA	{{FINSI:MULTI}}
+SOUS_TITRE	ARTICLE 6 – Pièces contractuelles du contrat-cadre et des marchés subséquents conclus sur sa base
+PARA	Les pièces contractuelles du contrat-cadre et des marchés conclus sur la base du contrat-cadre sont les suivantes par ordre de priorité :
+PARA	➢ Pièces particulières (jointes) :
+PARA	• Le présent contrat-cadre valant acte d’engagement et CCAP,
+PARA	• Les marchés conclus sur la base du contrat-cadre,
+PARA	• Les clauses techniques ou les spécifications techniques détaillées,
+PARA	• Le bordereau de prix unitaires portant sur les termes définis dans le présent contrat-cadre,
+PARA	• Le bordereau de prix unitaires complémentaires joint aux marchés passés sur la base du contrat-cadre,
+PARA	• Le catalogue joint aux marchés passés sur la base du contrat-cadre. Tout nouveau catalogue remplace et annule le précédent.
+PARA	• Toutes autres pièces contractuelles réclamées au stade des marchés subséquents.
+PARA	➢ Pièces générales (non jointes) auxquelles feront référence les marchés passés sur la base du présent contrat-cadre :
+PARA	• Le cahier des clauses administratives générales applicables aux marchés publics de Fournitures courantes et services.
+SOUS_TITRE	ARTICLE 7 – Durée – Délais d’exécution - Pénalités
+SOUS_TITRE	7.1– Durée du contrat-cadre - entrée en vigueur
+PARA	La durée du contrat-cadre est de {{B02-DC-02}} mois à compter de sa notification.
+PARA	La conclusion des marchés subséquents passés sur la base du présent contrat-cadre ne peut se faire que pendant la durée de validité du contrat-cadre.
+SOUS_TITRE	7.2 –Durée des marchés subséquents conclus sur la base du présent accord
+PARA	Il est précisé que la durée d’exécution des marchés subséquents conclus sur la base du présent contrat-cadre ne peut se prolonger au-delà de la date limite de validité de cet contrat-cadre qu’à condition de ne pas méconnaître l’obligation d’une remise en concurrence périodique des opérateurs économiques.
+PARA	{{SI:DUREE-FIXEE}}
+PARA	La durée des marchés subséquents passés sur la base du contrat-cadre est de {{B07-DU-03}} jours à compter de leur notification.
+PARA	{{FINSI:DUREE-FIXEE}}
+PARA	{{SI:DUREE-LIBRE}}
+PARA	La durée sera fixée dans les marchés subséquents conclus sur la base du contrat-cadre.
+PARA	{{FINSI:DUREE-LIBRE}}
+SOUS_TITRE	7.3 – Reconductions du contrat-cadre
+PARA	{{SI:NON-RECONDUCTIBLE}}
+PARA	Le contrat-cadre n’est pas reconductible.
+PARA	{{FINSI:NON-RECONDUCTIBLE}}
+PARA	{{SI:RECONDUCTIBLE}}
+PARA	Le contrat-cadre est reconductible {{B07-DU-04}} fois par décision expresse prise par l’autorité contractante sans que sa durée totale ne puisse excéder {{B07-DU-05}} ans.
+PARA	L’autorité contractante prend par écrit la décision de reconduire ou non le contrat-cadre {{B07-DU-07}} mois au moins avant la fin de la durée du contrat-cadre définie à l’article 7.1 ci-dessus.
+PARA	Le titulaire du contrat-cadre ne peut refuser la reconduction.
+PARA	La période de reconduction commence à la date anniversaire de la notification du contrat-cadre.
+PARA	{{FINSI:RECONDUCTIBLE}}
+SOUS_TITRE	7.4 –Délais d’exécution des marchés subséquents conclus sur la base du présent accord
+PARA	{{SI:DELAI-AC}}
+PARA	{{B07-DE-02}}
+PARA	{{FINSI:DELAI-AC}}
+PARA	{{SI:DELAI-CANDIDATS}}
+PARA	{{B07-DE-03}}
+PARA	{{FINSI:DELAI-CANDIDATS}}
+PARA	{{SI:DELAI-SUBSEQUENTS}}
+PARA	Les délais d’exécution seront fixés dans les marchés subséquents conclus sur la base du présent contrat-cadre.
+PARA	{{FINSI:DELAI-SUBSEQUENTS}}
+PARA	{{SI:FS-FRACTIONNE}}
+PARA	La durée maximale d’exécution des bons de commande sera précisée dans les marchés conclus sur la base du présent contrat-cadre.
+PARA	Les bons de commande successifs définiront précisément les délais de réalisation des différentes prestations.
+PARA	{{FINSI:FS-FRACTIONNE}}
+SOUS_TITRE	7.5 – Pénalités pour retard dans l’exécution des marchés conclus sur la base du contrat-cadre
+PARA	{{SI:PENALITES-NON}}
+PARA	Les pénalités de retard ne s’appliquent pas.
+PARA	{{FINSI:PENALITES-NON}}
+PARA	{{SI:PENALITES-CCAG}}
+PARA	Conformément à l’article 12 du CCAG Fournitures et Services il sera appliqué sans mise en demeure préalable, des pénalités en cas de retard dans l’exécution des marchés passés sur la base du présent contrat.
+PARA	{{FINSI:PENALITES-CCAG}}
+PARA	{{SI:PENALITES-DEROGATION}}
+PARA	{{B07-PE-03}}
+PARA	{{FINSI:PENALITES-DEROGATION}}
+PARA	{{SI:PENALITES-SUBSEQUENTS}}
+PARA	Les pénalités de retard seront fixées dans les marchés conclus sur la base du contrat-cadre.
+PARA	{{FINSI:PENALITES-SUBSEQUENTS}}
+SOUS_TITRE	ARTICLE 8 – Montant du contrat-cadre
+PARA	Le montant du contrat-cadre, conclu sans minimum ni maximum, est estimé à : {{B05-MT-01}} H.T. et {{B05-MT-02}} T.T.C..
+SOUS_TITRE	ARTICLE 9 – Prix - Contenu – Variation des marchés conclus sur la base du présent contrat-cadre
+SOUS_TITRE	9.1 – Prix des marchés
+PARA	{{SI:MONO-PU-BORDEREAU}}
+PARA	Les marchés subséquents conclus sur la base du présent accord seront traités à prix unitaires appliqués aux prestations réellement exécutées et dont le libellé est détaillé dans le bordereau de prix unitaires joint au présent contrat-cadre.
+PARA	A chaque complétude de l’offre, l’augmentation des prix détaillés dans le bordereau de prix unitaires joint au présent accord sera limitée à {{B05-PM-04}} %.
+PARA	{{FINSI:MONO-PU-BORDEREAU}}
+PARA	{{SI:MONO-PU-CATALOGUE}}
+PARA	Les marchés subséquents conclus sur la base du présent accord seront traités à prix unitaires appliqués aux prestations réellement exécutées et dont le libellé est détaillé dans le catalogue joint au présent contrat-cadre.
+PARA	A chaque complétude de l’offre, l’augmentation des prix détaillés dans le catalogue joint au présent accord sera limitée à {{B05-PM-04}} %.
+PARA	Le titulaire s’engage à remettre à la personne publique tout nouveau catalogue édité et distribué auprès du public dès sa sortie officielle au plus tard dans un délai de 15 jours à compter de sa date de diffusion. Le nouveau catalogue annule et remplace le précédent.
+PARA	{{FINSI:MONO-PU-CATALOGUE}}
+PARA	{{SI:MONO-PF}}
+PARA	Les prestations faisant l’objet des marchés subséquents conclus sur la base du contrat-cadre seront rémunérées par application du montant global et forfaitaire précisé ci-dessous :
+PARA	– Prix hors T.V.A. : …………………………………ariary (en chiffres) – T.V.A. au taux de………….. % soit : ………… ariary (en chiffres) – Montant T.V.A. incluse : ………………………… ariary (en chiffres) – Montant T.T.C. (en lettres) : ……………………………………………
+PARA	A chaque complétude de l’offre, l’augmentation de ce montant sera limitée à {{B05-PM-04}} %.
+PARA	{{FINSI:MONO-PF}}
+PARA	{{SI:MULTI-REFERENCEMENT-BORDEREAU}}
+PARA	Les marchés conclus sur la base du présent contrat-cadre seront traités à prix unitaires appliqués aux prestations réellement exécutées et dont le libellé est détaillé au bordereau de prix unitaires joint aux marchés passés sur la base du contrat-cadre.
+PARA	{{FINSI:MULTI-REFERENCEMENT-BORDEREAU}}
+PARA	{{SI:MULTI-REFERENCEMENT-CATALOGUE}}
+PARA	Les marchés conclus sur la base du présent contrat-cadre seront traités à prix unitaires appliqués aux prestations réellement exécutées et dont le libellé est détaillé dans le catalogue joint aux marchés passés sur la base du contrat-cadre.
+PARA	A chaque remise en concurrence, il sera proposé une remise sur les prix « catalogue », ou des prix catalogue déjà remisés.
+PARA	{{FINSI:MULTI-REFERENCEMENT-CATALOGUE}}
+PARA	{{SI:MULTI-PRIX-BORDEREAU}}
+PARA	Les marchés conclus sur la base du présent accord seront traités à prix unitaires appliqués aux prestations réellement exécutées et dont le libellé est détaillé dans le bordereau de prix unitaires joint au présent accord et dans le bordereau de prix unitaires complémentaires joint aux marchés passés sur la base du contrat-cadre.
+PARA	A chaque remise en concurrence l’augmentation des prix détaillés dans le bordereau de prix joint au présent accord sera limitée à {{B05-PM-04}} %.
+PARA	{{FINSI:MULTI-PRIX-BORDEREAU}}
+PARA	{{SI:MULTI-PRIX-CATALOGUE}}
+PARA	Les marchés conclus sur la base du présent accord seront traités à prix unitaires appliqués aux prestations réellement exécutées et dont le libellé est détaillé dans le catalogue joint au présent accord et dans le nouveau catalogue fournisseur joint aux marchés passés sur la base du contrat-cadre.
+PARA	A chaque remise en concurrence, il sera proposé une remise sur les prix « catalogue » ou des prix catalogue déjà remisés.
+PARA	{{FINSI:MULTI-PRIX-CATALOGUE}}
+SOUS_TITRE	9.2 – Contenu des prix
+PARA	Les prix sont réputés comprendre toutes les dépenses résultant de l’exécution des prestations, incluant tous les frais, charges, fournitures, matériels et sujétions du titulaire ({{B05-PM-03}}).
+SOUS_TITRE	9.3 – Variation des prix des marchés conclus sur la base du présent accord
+PARA	Les offres seront établies sur la base des conditions économiques en vigueur au mois correspondant au mois de remise des offres des marchés subséquents.
+PARA	Les prix des marchés sont fermes.
+PARA	Si le bon de commande ou l’ordre de commencer les prestations intervient après l’expiration du délai de validité de l’offre du titulaire, les prix peuvent être actualisés au moyen de la formule suivante :
+PARA	Indice n P n = Po () Indice o
+PARA	Où Pn est le prix actualisé,
+PARA	Po est le prix des prestations au moment de la remise de l’offre, Indice n est le dernier indice connu au moment de l’actualisation, Indice o est le dernier indice connu au moment de la remise de l’offre.
+SOUS_TITRE	ARTICLE 10 – Clauses de financement et de sureté des marchés subséquents conclus sur la base du présent contrat-cadre
+PARA	{{SI:AVANCE}}
+SOUS_TITRE	10.1 – Versement d’une avance au(x) titulaire(s) des marchés conclus sur la base du présent accord
+PARA	Une avance sera accordée au(x) titulaire(s) des marchés conclus sur la base du contrat-cadre dans les conditions prévues à l’article 72 du code des marchés publics, sauf renonciation expresse de sa part figurant ci-dessous :
+PARA	L’ (es) entreprise(s) déclare (nt) (8) :
+PARA	❏ Souhaite percevoir une avance pour chacun des marchés subséquents
+PARA	❏ Renoncer à percevoir une avance pour chacun des marchés subséquents.
+SOUS_TITRE	10.2 – Modalités de versement de l’avance
+PARA	Le règlement de l’avance pour chacun des marchés subséquents interviendra dans les {{B08-FI-02}} jours calendaires.
+SOUS_TITRE	10.3 – Montant de l’avance
+PARA	Le montant de l’avance des marchés conclus sur la base du contrat-cadre est fixé à {{B08-AV-02}} % du montant TTC du marché subséquent.
+SOUS_TITRE	10.4 – Remboursement de l’avance
+PARA	Les modalités de remboursement de l’avance s’effectueront conformément aux dispositions de l’article 72.III du Code des Marchés Publics.
+PARA	{{FINSI:AVANCE}}
+PARA	{{SI:AVANCE-SOUS-TRAITANT}}
+SOUS_TITRE	10.5 – Versement d’une avance au sous-traitant du titulaire du présent accord
+PARA	Une avance sera accordée au sous-traitant dans les conditions fixées par le code des marchés publics, sauf renonciation expresse par ce dernier dans l’acte spécial de sous-traitance. Dans le cas où le titulaire sous-traite une part du marché postérieurement à la notification de celui-ci, il doit rembourser la partie de l’avance correspondant au montant des prestations sous-traitées, même si le sous-traitant ne souhaite pas bénéficier de l’avance.
+PARA	{{FINSI:AVANCE-SOUS-TRAITANT}}
+SOUS_TITRE	ARTICLE 11 – Sous-traitance des marchés conclus sur la base du présent contrat-cadre
+SOUS_TITRE	11.1 – Désignation des sous-traitants
+PARA	Le titulaire pourra sous-traiter une partie de l’exécution des prestations faisant l’objet des marchés subséquents dans les conditions prévues par l’article 5.2 du CCAG Fournitures
+PARA	Les sous-traitants peuvent être présentés à l’autorité contractante pour acceptation lors de la soumission au contrat-cadre, ou lors de la remise des offres dans le cadre des marchés subséquents conclus sur la base du présent contrat-cadre.
+SOUS_TITRE	11.2 – Modalités de paiement direct des sous-traitants
+PARA	Le sous-traitant adresse à l’autorité contractante sa facture ainsi que l’accusé de réception ou le récépissé attestant que le titulaire a par ailleurs reçu sa demande de paiement ou l’avis postal attestant que le pli a été refusé ou n’a pas été réclamé. La somme à régler tient compte d’une éventuelle actualisation des prix et inclut les taxes applicables.
+SOUS_TITRE	ARTICLE 12 – Modalités d’exécution administrative des prestations des marchés conclus sur la base du présent contrat-cadre
+PARA	{{SI:EXECUTION-COMMUNE}}
+PARA	{{B09-EA-02}}
+PARA	{{FINSI:EXECUTION-COMMUNE}}
+PARA	{{SI:EXECUTION-SANS}}
+PARA	Sans objet.
+PARA	{{FINSI:EXECUTION-SANS}}
+PARA	Dans les deux cas, les modalités particulières devront être fixées dans les marchés conclus sur la base du contrat-cadre.
+SOUS_TITRE	ARTICLE 13 – Opération de vérification – Admission des prestations des marchés conclus sur la base du présent contrat-cadre
+PARA	La réception est l’acte par lequel l’autorité contractante accepte avec ou sans réserve, les prestations exécutées.
+PARA	{{SI:VERIFICATION-CCAG}}
+PARA	Les opérations de vérification s’effectueront conformément aux articles 21 et 22 du CCAG Fournitures
+PARA	{{FINSI:VERIFICATION-CCAG}}
+PARA	{{SI:VERIFICATION-LIBRE}}
+PARA	{{B09-VA-02}}
+PARA	{{FINSI:VERIFICATION-LIBRE}}
+SOUS_TITRE	ARTICLE 14 – Garanties contractuelles particulières prévues dans les marchés conclus sur la base du présent contrat-cadre
+PARA	{{SI:GARANTIE-NON}}
+PARA	Aucune garantie contractuelle particulière ne sera demandée.
+PARA	{{FINSI:GARANTIE-NON}}
+PARA	{{SI:GARANTIE-OUI}}
+PARA	{{B09-GP-02}}
+PARA	{{FINSI:GARANTIE-OUI}}
+PARA	{{SI:GARANTIE-ADMISSION}}
+PARA	Le délai de garantie est fixé à {{B09-GP-03}} mois à partir de l’admission de la prestation objet du marché.
+PARA	{{FINSI:GARANTIE-ADMISSION}}
+PARA	{{SI:GARANTIE-MISE-EN-SERVICE}}
+PARA	Le délai de garantie est fixé à {{B09-GP-03}} mois à partir de la date de mise en service de la prestation objet du marché.
+PARA	{{FINSI:GARANTIE-MISE-EN-SERVICE}}
+PARA	{{SI:GARANTIE-CCAG}}
+PARA	La garantie sera exécutée conformément aux articles 13 et 23 du CCAG Fournitures
+PARA	{{FINSI:GARANTIE-CCAG}}
+SOUS_TITRE	ARTICLE 15 – Modalités de facturation et de paiement des prestations objet des marchés subséquents conclus sur la base du présent contrat-cadre
+PARA	Si la durée ou les délais d’exécution des marchés subséquents conclus sur la base du présent contrat-cadre sont inférieurs à trois mois, les prestations seront réglées en une seule fois.
+SOUS_TITRE	15.1– Présentation des demandes de paiement
+PARA	Les prestations qui ont données lieu à un commencement d’exécution du marché ouvrent droit à des acomptes.
+PARA	Le règlement des prestations se fera {{B08-FP-01}}.
+SOUS_TITRE	15.2 – Adresse de facturation
+PARA	Les demandes de paiement seront adressées par lettre recommandée avec accusé de réception à l’adresse suivante : {{B08-FP-02}}
+PARA	Outre les mentions légales, le décompte ou la facture est établi en un original et deux copies et devra comporter les mentions suivantes :
+PARA	• Le numéro du marché subséquent indiqué sur la page de garde de l’acte d’engagement;
+PARA	• la date du ou des bons de commande correspondants,
+PARA	• les prestations exécutées et livrées;
+PARA	• le montant H.T. et T.T.C. des prestations exécutées, éventuellement actualisé;
+PARA	• le taux et le montant de la T.V.A.
+SOUS_TITRE	15.3 – Délai de paiement
+PARA	Le délai de paiement est de 75 jours à compter de la réception de la demande de paiement. Aucune demande de paiement ne peut être transmise avant réalisation des prestations. Le taux applicable en cas de retard de paiement est le taux d’intérêt de la Banque Centrale de Madagascar en vigueur, à la date à laquelle les intérêts moratoires ont commencé à courir, augmenté de {{B08-FP-04}} point(s).
+SOUS_TITRE	15.4 – Règlement des prestations
+PARA	Les sommes dues en exécution des marchés conclus sur la base du présent contrat-cadre seront réglées par virement bancaire établi à l’ordre du titulaire en faisant porter au crédit du compte ouvert au nom de (9)
+PARA	Nom et adresse de la Banque :………………………………………………
+PARA	Titulaire du compte :…………………………………………………………..
+PARA	Code banque ……… Code guichet ……… N° compte ……….................
+PARA	Clé Relevé d’identité bancaire (RIB) ……………… < Joindre un RIB>
+PARA	Les avis de virement sont adressés à l’établissement réalisant les prestations mentionnées à l’article 1.
+PARA	L’autorité contractante se libérera des sommes dues aux sous-traitants payés directement en faisant porter les montants aux crédits des comptes désignés dans les actes spéciaux.
+PARA	En cas de modification des coordonnées bancaires du titulaire en cours d’exécution des marchés subséquents, celui-ci doit impérativement, dans les plus brefs délais, notifier ce changement à {{B10-MT-01}} et fournir le relevé d’identité bancaire correspondant.
+SOUS_TITRE	ARTICLE 16 – Assurance
+PARA	{{SI:ASSURANCE-NON}}
+PARA	Sans objet
+PARA	{{FINSI:ASSURANCE-NON}}
+PARA	{{SI:ASSURANCE-OUI}}
+PARA	Le(s) titulaire(s) des marchés conclus sur la base du contrat-cadre et leurs sous-traitants agréés par l’autorité contractante devra(ont) justifier au moyen d’une attestation portant mention de l’étendue de la garantie, au moment de la constitution, puis en cours d’exécution d’une assurance couvrant les conséquences pécuniaires de responsabilité civile (RC) qu’il(s) encoure(ent) vis-à-vis des tiers et de l’autorité contractante en cas d’accident ou de tous dommages causés à l’occasion de l’exécution des marchés conclus sur la base du présent contrat-cadre.
+PARA	L’attestation devra être remise dans le délai de {{B09-AU-03}} jours francs à compter de la notification du contrat-cadre au(x) titulaire(s)/ des marchés subséquents.
+PARA	{{FINSI:ASSURANCE-OUI}}
+SOUS_TITRE	ARTICLE 17 – Modifications relatives au titulaire du présent contrat-cadre
+SOUS_TITRE	17.1– Changement de dénomination sociale du titulaire
+PARA	En cas de modification de sa dénomination sociale, le titulaire doit impérativement en informer {{B10-MT-01}} par écrit et communiquer un document attestant ce changement, dans les plus brefs délais.
+SOUS_TITRE	17.2– Changement de contractant en cours d’exécution du présent contrat-cadre
+PARA	Le titulaire doit informer {{B10-MT-02}} de tout projet de fusion ou d’absorption de l’entreprise titulaire et de tout projet de cession du contrat-cadre dans les plus brefs délais et produire les documents et renseignements utiles qui lui seront notifiés concernant le nouvel opérateur économique à qui le contrat-cadre est transféré ou cédé.
+PARA	En cas d’acceptation de la cession du contrat-cadre par l’autorité contractante, elle fera l’objet d’un avenant constatant le transfert du contrat-cadre au nouveau titulaire.
+SOUS_TITRE	ARTICLE 18 – Résiliations du contrat-cadre et des marchés subséquents conclus sur sa base
+SOUS_TITRE	18.1 - Résiliation sans faute (contrat-cadre)
+PARA	{{SI:NON-RECONDUCTIBLE}}
+PARA	La résiliation du contrat-cadre pourra être prononcée sans faute du titulaire :
+PARA	– {{B10-RS-02}} mois avant la date anniversaire de la notification du contrat-cadre – pour un motif d’intérêt général.
+PARA	{{FINSI:NON-RECONDUCTIBLE}}
+PARA	La résiliation n’ouvrira droit au profit du titulaire à aucune indemnité.
+SOUS_TITRE	18.2 - Résiliation du contrat-cadre et des marchés subséquents conclus sur la base du présent contrat-cadre
+PARA	La résiliation pourra être prononcée dans l’exécution des prestations des marchés subséquents conformément aux articles 24 à 33 du CCAG Fournitures
+PARA	L’autorité contractante se réserve le droit de résilier le contrat-cadre dans les hypothèses où une (des) faute(s) du titulaire rendrait (rendraient) impossible la poursuite des relations contractuelles. {{B10-RS-03}}
+SOUS_TITRE	ARTICLE 19 – Litiges
+PARA	En cas de litiges entre les parties au contrat, la juridiction compétente est {{B10-VR-01}}.
+SOUS_TITRE	ARTICLE 20 – Signature et engagement des parties au contrat
+SOUS_TITRE	20.1 – Signature du titulaire
+PARA	Je, soussigné <indiquer le nom du signataire>, sous peine de résiliation du contrat-cadre, après avoir pris connaissance de toutes les pièces du présent contrat-cadre et apprécié sous ma seule responsabilité la nature et la difficulté des prestations à effectuer,
+PARA	ATTESTE SUR L'HONNEUR, sous peine de résiliation de plein droit du marché ou de sa mise en régie, à mes torts exclusifs ou, selon le cas, aux torts exclusifs de la personne morale que je représente, que je ne tombe pas ou, selon le cas, que ladite personne morale ne tombe pas sous le coup d'un cas d'exclusion visé par l'article 21 du Code des Marchés Publics.
+PARA	ATTESTE SUR L’HONNEUR QUE le travail sera réalisé avec des salariés employés régulièrement au regard du code du travail applicable à Madagascar et M’ENGAGE sans réserve, à exécuter les prestations dans les conditions déterminées ci-dessus;
+PARA	{{SI:PRIX-CRITERE}}
+PARA	L’offre ainsi présentée ne me lie toutefois que si son acceptation m’est notifiée dans un délai de {{B04-VO-01}} jours calendaires à compter de la date limite de remise des offres.
+PARA	{{FINSI:PRIX-CRITERE}}
+PARA	ATTESTE SUR L’HONNEUR QUE j’ai pris connaissance du contenu du code d’éthique des marchés publics et M’ENGAGE SANS RESERVE EN MON NOM [ou en mon nom et au nom du Candidat que je représente, selon le cas] à respecter et à faire respecter l’intégralité de ses dispositions, et en particulier à m'abstenir de toute pratique consistant dans l'octroi ou la promesse d'octroyer un avantage indu, pécuniaire ou autre, directement ou par des intermédiaires, en vue d'obtenir le marché objet du présent Acte d'Engagement,
+PARA	M'ENGAGE SANS RESERVE et conformément aux clauses et conditions du présent document, à présenter une offre à chaque consultation en vue des marchés subséquents,
+PARA	M'ENGAGE SANS RESERVE, conformément aux stipulations des documents visés ci-dessus, à exécuter le marché dans les conditions précisées par le CPS y compris notamment les spécifications techniques, par le CCAG applicable et par le présent Acte d'Engagement.
+PARA	L'offre ainsi présentée me lie conformément à la durée de validité des offres fixée dans les Données Particulières de l'Appel d'Offres, jusqu'au {{DERIVE.fin-validite-offre}}.
+PARA	Le présent contrat-cadre comporte <indiquer le nombre des annexes> annexe(s) énumérée(s) (10) ci-après :<énumérer les annexes dans l’ordre>
+PARA	Fait en un seul original,
+PARA	Fait à <indiquer le lieu de la signature>, le <indiquer la date de signature>
+PARA	Signature du titulaire (11)
+PARA	Nom et qualité du signataire :
+PARA	<insérer le nom, prénom(s) et la qualité du signataire>
+PARA	Cachet
+PARA	ATTENTION : Si le présent contrat-cadre n’est pas signé par le représentant légal du candidat, le signataire doit obligatoirement produire avec le contrat-cadre, un pouvoir daté et signé en original par le représentant légal l’autorisant à signer tous les documents relatifs à l’offre.
+SOUS_TITRE	20.2 – Mise au point du contrat-cadre (en cas d’appel d’offres)
+PARA	Le présent contrat-cadre (12)
+PARA	<Cocher l’option choisie>
+PARA	❏ A fait l’objet d’une mise au point jointe en annexe
+PARA	❏ N’a pas fait l’objet d’une mise au point
+SOUS_TITRE	20.3 – Signature de l’autorité contractante
+PARA	Est acceptée le présent contrat-cadre valant acte d’engagement et CCAP
+PARA	Fait à <indiquer le lieu de la signature>, le <indiquer la date de signature>
+PARA	Pour l’autorité contractante,
+PARA	Représenté par : {{B02-SG-04}}
+SOUS_TITRE	Liste des renvois :
+PARA	(1) Les intéressés disposent d’un droit d’accès aux informations les concernant, ainsi qu’un droit de modification, de rectification et de suppression.
+PARA	(2) Le candidat doit cocher la situation concernée
+PARA	(3) Les entreprises étrangères indiquent, s’il en existe un, leur numéro d’inscription dans le registre public concerné.
+PARA	(4) Le candidat indique la forme du groupement en barrant la mention inutile.
+PARA	(5) La personne physique représentant le candidat doit cocher la situation concernée.
+PARA	(6) En cas de groupement composé de plus de deux co-traitants, l’identification exacte des autres co-traitants doit être annexée au présent contrat-cadre.
+PARA	(7) Cocher la situation concernée.
+PARA	(8) Cocher la situation concernée.
+PARA	(9) En cas de groupement solidaire, indiquer les références du compte bancaire du mandataire et le cas échéant, indiquer en annexe au présent acte d’engagement les références du compte bancaire des autres membres du groupement en cas de demande de paiement sur des comptes séparés.
+PARA	(10) Le candidat doit indiquer ici le nombre d’annexes en précisant chaque numéro et chaque intitulé d’annexe.
+PARA	(11) En cas de groupement, tous les membres du groupement doivent signer le contrat-cadre, sauf si le mandataire a été habilité par les autres membres du groupement à signer seul le contrat-cadre. Dans ce dernier cas, la signature doit être celle du mandataire habilité (le mandataire doit l’indiquer et fournir le document l’habilitant à signer au nom et pour le compte des autres entreprises membres du groupement).
+PARA	(12) Le choix des coches dépend de la procédure choisie pour la passation du présent contrat-cadre.

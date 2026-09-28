@@ -1,0 +1,186 @@
+FICHIER	DPAC-CC.docx
+TITRE	DONNEES PARTICULIERES D’APPEL A CONCURRENCE
+CONDITION	MONOattributaires = MONO
+CONDITION	MULTIattributaires = MULTI
+CONDITION	RC-BESOINB02-PC-02 = Au fur et à mesure des besoins
+CONDITION	RC-CALENDRIERB02-PC-02 = Selon le calendrier fixé ci-après
+CONDITION	PRIX-UNITAIREStypePrix = UNITAIRES
+CONDITION	PRIX-FORFAITAIREtypePrix = FORFAITAIRE
+CONDITION	RECONDUCTIBLEB02-DC-03 = OUI
+CONDITION	NON-RECONDUCTIBLEB02-DC-03 = NON
+CONDITION	ALLOTIalloti = OUI
+CONDITION	NON-ALLOTIalloti = NON
+CONDITION	PAPIERmodeRemise = PAPIER
+CONDITION	B04-SEmodeRemise = ELECTRONIQUE
+CONDITION	DEVISEB05-UM-01 renseigne
+CONDITION	SANS-DEVISEB05-UM-01 vide
+CENTRE	{{B01-AC-01}}
+PARA	MARCHE DE : {{B01-AC-12}}
+PARA	NUMÉRO : {{B02-OE-01}}
+PARA	OBJET DU CONTRAT-CADRE: {{B02-OB-01}}
+CENTRE	REGLEMENT DE LA CONSULTATION(1) (contrat-cadre marché de fournitures et services)
+PARA	PROCEDURE DE CONSULTATION (1) : {{B01-AC-13}}
+PARA	REPRESENTANT DE L’AUTORITÉ CONTRACTANTE : {{B01-AC-05}}
+PARA	DATE ET HEURE LIMITES DE REMISE DES OFFRES : {{B04-CP-02}}
+SOUS_TITRE	ARTICLE 1 : OBJET ET ETENDUE DU CONTRAT-CADRE
+SOUS_TITRE	Objet du contrat-cadre
+PARA	Le présent contrat-cadre a pour objet de définir les termes régissant les marchés à passer pendant la période précisée à l’article suivant.
+PARA	Il porte sur: {{B02-OB-01}}. Les détails des besoins à couvrir sont présentés dans le cahier des charges (annexe 1 au contrat-cadre).
+SOUS_TITRE	Procédure de mise en concurrence
+PARA	{{SI:MONO}}
+PARA	La présente consultation en vue de l’attribution du contrat-cadre à un seul titulaire (mono-attributaire) est passée selon la procédure {{B01-AC-13}} en application de l’article {{B02-PC-01}} du code des marchés publics.
+PARA	{{FINSI:MONO}}
+PARA	{{SI:MULTI}}
+PARA	La présente consultation en vue de l’attribution du contrat-cadre à plusieurs titulaires (multi attributaire) est passée selon la procédure {{B01-AC-13}} en application de l’article {{B02-PC-01}} du code des marchés publics.
+PARA	{{FINSI:MULTI}}
+PARA	{{SI:RC-BESOIN}}
+PARA	Les attributaires issus de la présente procédure deviennent titulaires du contrat-cadre et seront remis en compétition au fur et à mesure des besoins, pour l’attribution des marchés subséquents au contrat-cadre.
+PARA	{{FINSI:RC-BESOIN}}
+PARA	{{SI:RC-CALENDRIER}}
+PARA	Les attributaires issus de la présente procédure deviennent titulaires du contrat-cadre et seront remis en compétition selon le calendrier fixé ci-après, pour l’attribution des marchés subséquents au contrat-cadre.
+PARA	{{B02-PC-03}}
+PARA	{{FINSI:RC-CALENDRIER}}
+PARA	Les marchés subséquents issus du présent contrat-cadre seront attribués dans les conditions du présent document.
+SOUS_TITRE	ARTICLE 2 : DISPOSITIONS GENERALES
+SOUS_TITRE	Forme du contrat
+PARA	{{SI:PRIX-UNITAIRES}}
+PARA	Le contrat-cadre est conclu à prix unitaires.
+PARA	{{FINSI:PRIX-UNITAIRES}}
+PARA	{{SI:PRIX-FORFAITAIRE}}
+PARA	Le contrat-cadre est conclu à prix forfaitaires.
+PARA	{{FINSI:PRIX-FORFAITAIRE}}
+SOUS_TITRE	Montant du contrat
+PARA	Le montant du Contrat est estimé à {{B05-MT-01.chiffres}} Ariary HT (hors taxes) sur la durée totale du contrat (reconductions comprises).
+SOUS_TITRE	Durée du contrat
+PARA	La durée de validité du Contrat est de {{B02-DC-01}} mois (maximum reconductions comprises) à compter de sa date de notification. Le contrat est conclu pour une première période de validité de {{B02-DC-02}} mois à compter de sa date de notification.
+PARA	{{SI:RECONDUCTIBLE}}
+PARA	Cette période de validité peut être reconduite {{B02-DC-04}}
+PARA	{{FINSI:RECONDUCTIBLE}}
+PARA	{{SI:NON-RECONDUCTIBLE}}
+PARA	La période de validité du contrat n’est pas reconductible.
+PARA	{{FINSI:NON-RECONDUCTIBLE}}
+SOUS_TITRE	Allotissement
+PARA	{{SI:ALLOTI}}
+PARA	{{B02-AL-02}}
+PARA	{{FINSI:ALLOTI}}
+PARA	{{SI:NON-ALLOTI}}
+PARA	Sans objet.
+PARA	{{FINSI:NON-ALLOTI}}
+SOUS_TITRE	Calendrier prévisionnel de la consultation (1) (à titre indicatif)
+TABLE	2
+LIGNE	Date estimativeEtape
+LIGNE	{{B04-CP-02}}Date limite de réception des offres
+LIGNE	{{B04-CP-06}}Envoi des demandes d’offres optimisées
+LIGNE	{{B04-CP-07}}Date limite de réception des offres optimisées
+LIGNE	{{B04-CP-08}}Envoi des courriers de rejet aux candidats non retenus
+FIN_TABLE	
+PARA	La date prévisionnelle de notification du contrat-cadre est fixée à {{B04-CP-05}}.
+SOUS_TITRE	ARTICLE 3 : DOSSIER DE CONSULTATION (1)
+SOUS_TITRE	3.1.Contenu du dossier de consultation (1)
+PARA	Le dossier de consultation(1) contient les pièces suivantes :
+PARA	-L'avis d'appel public à la concurrence
+PARA	-Le présent Règlement de la consultation (1) et (éventuellement) son annexe;
+PARA	- La lettre de soumission du candidat
+PARA	-Le projet de contrat-cadre et ses annexes, notamment :
+PARA	les actes d'engagement (AE) et leurs annexes
+PARA	le cahier des clauses administratives particulières (CCAP)
+PARA	le document portant clauses techniques particulières ou son équivalent, et ses annexes
+PARA	{{B04-DS-01}}
+SOUS_TITRE	3.2.Langue de rédaction du dossier de consultation (1)
+PARA	Le Dossier complet, rédigé en langue française, peut être consulté par tout candidat désirant prendre connaissance ou obtenir des informations à l’adresse ci-après :
+PARA	Nom du Responsable : {{B04-DS-07}}
+PARA	Fonction : {{B04-DS-08}}
+PARA	Bureau, N° porte, étage : {{B04-DS-09}}
+PARA	Localité : {{B04-DS-10}}
+SOUS_TITRE	3. 3.Modalités d’acquisition du dossier de consultation (1)
+PARA	Pour tout candidat désirant soumissionner, le règlement de la consultation (1) est retiré auprès de {{B04-DS-04}} moyennant le paiement d’un montant non remboursable de {{B04-DS-05.lettres}} ({{B04-DS-05}}) libellé au nom de l’Agent comptable de l’ARMP ou au nom du régisseur de recettes de l’ARMP.
+SOUS_TITRE	3.4.Modification du dossier de consultation (1)
+PARA	L’Autorité contractante se réserve le droit d'apporter des modifications de détail au dossier de consultation(1) au plus tard 6 jours avant la date limite de réception des offres. Ce délai est décompté à partir de la date d'envoi par l’Autorité contractante des modifications aux candidats ayant retiré le dossier initial. Les candidats devront alors répondre sur la base du dossier modifié sans pouvoir élever de réclamation à ce sujet.
+PARA	Si la date limite de réception des offres est reportée, la disposition précédente est applicable en fonction de cette nouvelle date.
+SOUS_TITRE	ARTICLE 4 : PRESENTATION DES OFFRES
+PARA	Les soumissionnaires remettent un dossier complet comprenant les pièces mentionnées ci-après. Les documents demandés doivent être signés par le soumissionnaire, le mandataire du groupement momentané d'entreprise ou chacun des membres de ce même groupement.
+SOUS_TITRE	4.1.Pièces constitutives de la candidature (capacités technique et professionnelle) :
+PARA	{{B04-PO-01}}
+SOUS_TITRE	4.2.Pièces constitutives de l’offre :
+PARA	{{B04-PO-02}}
+SOUS_TITRE	ARTICLE 5 : MODALITES DE REMISE DES OFFRES
+SOUS_TITRE	5.1 - Transmission sous support papier
+PARA	{{B04-RQ-01}}
+PARA	Les candidats transmettent leur offre sous pli cacheté portant les mentions :
+PARA	Offre pour : {{B04-RQ-02}}
+CENTRE	NE PAS OUVRIR QU’EN SEANCE D’OUVERTURE DES PLIS
+PARA	Ce pli doit contenir les pièces de la candidature et les pièces de l'offre définies au présent règlement de la consultation. Il devra être remis contre récépissé ou envoyé par pli recommandé avec avis de réception, à l'adresse suivante : {{B04-RQ-03}}
+PARA	Les plis qui seraient remis ou dont l'avis de réception serait délivré après la date et l'heure limites précitées ainsi que remis sous enveloppe non cachetée, ne seront pas retenus.
+SOUS_TITRE	5.2 - Transmission électronique
+PARA	{{SI:PAPIER}}
+PARA	La transmission de dossiers par voie électronique n’est pas admise
+PARA	{{FINSI:PAPIER}}
+PARA	{{SI:B04-SE}}
+PARA	La transmission par voie électronique est admise dans les conditions suivantes
+PARA	[[CLAUSE À FOURNIR PAR LE JURISTE : conditions de la transmission électronique — plateforme ({{B04-SE-02}}), heure de référence ({{B04-SE-04}}), signature exigée ({{B04-SE-05}}), formats ({{B04-SE-07}}) et tailles admis ({{B04-SE-08}} Mo par fichier, {{B04-SE-09}} Mo par offre), assistance ({{B04-SE-14}}), indisponibilité et prorogation ({{B04-SE-12}} h, {{B04-SE-13}} jours ouvrables)]]
+PARA	Même si l’offre du candidat à la présente procédure a fait l'objet d'une transmission électronique, le candidat s'engage, notamment dans le cas où son offre est retenue, à accepter la re-matérialisation conforme, sous forme papier, de tous les documents constitutifs à valeur contractuelle. A ce titre, il s'engage également à ce que la personne physique auteur de leur signature électronique procède à leur signature manuscrite sans procéder à la moindre modification de ceux-ci et les renvoie à l’Autorité contractante sous cette forme. Il s'engage enfin à en accepter la notification, selon les procédés habituellement en cours, sous forme papier.
+PARA	{{FINSI:B04-SE}}
+SOUS_TITRE	ARTICLE 6 : EXAMEN DES CANDIDATURES ET DES OFFRES
+SOUS_TITRE	6.1 - Sélection des candidatures
+PARA	6.1.1. Les plis seront ouverts par le Représentant de l’Autorité contractante.
+PARA	La séance d'ouverture des plis est publique, les candidats ou leurs représentants sont admis à y assister. Seuls peuvent être ouverts les plis qui ont été reçus dans les conditions prévues ci-dessus au plus tard à la date et à l’heure qui a été fixées pour la réception des offres.
+PARA	Avant de procéder à l'examen des candidatures, si l'on constate que des pièces du dossier de candidature sont manquantes ou incomplètes, l’Autorité contractante peut décider de demander à tous les candidats concernés de produire ou compléter ces pièces dans un délai maximum de 10 jours. Les autres candidats, qui ont la possibilité de compléter leur candidature, en seront informés dans le même délai.
+PARA	Les candidatures conformes et recevables seront examinées, à partir des seuls renseignements et documents exigés dans le cadre de cette consultation(1), pour évaluer leur situation juridique ainsi que leurs capacités professionnelles, techniques et financières.
+SOUS_TITRE	6.1.2. Critères d’élimination des candidatures :
+PARA	{{B06-SC-02}}
+SOUS_TITRE	6.2. La procédure de sélection des offres
+PARA	La procédure de sélection des offres se déroule selon les modalités suivantes:
+SOUS_TITRE	1. Rejet des offres hors-délais - Ouverture des offres
+PARA	Le représentant de l’autorité contractante écarte les offres reçues hors délai.
+SOUS_TITRE	2. Analyse des offres
+PARA	Le comité d’évaluation procède à l'analyse des offres des soumissionnaires retenus.
+SOUS_TITRE	3. Rejet des offres non recevables.
+PARA	Le comité d’évaluation rejette les offres inappropriées, inacceptables ou irrégulières.
+SOUS_TITRE	4. Comparaison des offres pour la sélection de l’offre économiquement la plus avantageuse
+PARA	{{B06-SO-05}}
+SOUS_TITRE	ARTICLE 7 : CRITÈRES D’ATTRIBUTION DU CONTRAT-CADRE
+PARA	{{B06-CA-01}}
+PARA	L’Autorité contractante peut ne pas donner suite à la consultation(1) pour tout motif d'intérêt général.
+SOUS_TITRE	ARTICLE 8 : LANGUE DE LA CONSULTATION (1) – UNITE MONETAIRE
+PARA	{{SI:SANS-DEVISE}}
+PARA	L’offre des candidats ainsi que l’ensemble des documents de la présente consultation(1) doivent être rédigés en langue française et exprimées en Ariary. Si les offres des candidats sont rédigées dans une autre langue, elles doivent être accompagnées d'une traduction en français. Cette traduction doit concerner l'ensemble des documents remis dans l'offre. L’Autorité contractante conclura les marchés en Ariary.
+PARA	{{FINSI:SANS-DEVISE}}
+PARA	{{SI:DEVISE}}
+PARA	L’offre des candidats ainsi que l’ensemble des documents de la présente consultation(1) doivent être rédigés en langue française et exprimées en Ariary (ou en {{B05-UM-01}}). Si les offres des candidats sont rédigées dans une autre langue, elles doivent être accompagnées d'une traduction en français. Cette traduction doit concerner l'ensemble des documents remis dans l'offre. L’Autorité contractante conclura les marchés en Ariary (ou en {{B05-UM-01}}).
+PARA	{{FINSI:DEVISE}}
+SOUS_TITRE	ARTICLE 9 : PASSATION DES MARCHÉS SUBSÉQUENTS
+PARA	{{SI:RC-BESOIN}}
+PARA	Pendant la durée du contrat-cadre, les marchés subséquents sont attribués après mise en concurrence de tous les titulaires du contrat-cadre lors de la survenance du besoin.
+PARA	{{FINSI:RC-BESOIN}}
+PARA	{{SI:RC-CALENDRIER}}
+PARA	Pendant la durée du contrat-cadre, les marchés subséquents sont attribués après mise en concurrence de tous les titulaires du contrat-cadre selon le calendrier fixé à l'article premier du présent contrat-cadre.
+PARA	{{FINSI:RC-CALENDRIER}}
+PARA	La mise en compétition des titulaires du contrat-cadre se feront par le biais d’une lettre d’invitation, sous forme de demande de devis ou de facture pro-forma, adressée par l’Autorité contractante. Le devis ou la facture pro-forma devra parvenir à {{B07-PS-02}} dans un délai de {{B07-PS-03}} heures ouvrées, par courrier postal ou remis en main propre contre récépissé.
+PARA	A défaut, le titulaire du contrat-cadre sera réputé ne pas avoir répondu. En l’absence de trois réponses consécutives et sauf cas de force majeure dûment justifiée, le titulaire sera exclu du contrat-cadre.
+PARA	La demande de devis ou de facture pro-forma précisera :
+PARA	La nature et la quantité du besoin
+PARA	L’adresse du site de livraison
+PARA	Le(s) critère(s) pondéré(s) de jugement choisis dans la liste suivante : prix, qualité de la fourniture, réduction du délai de livraison, caractère innovant)
+PARA	Le cas échéant d’autres documents techniques
+PARA	Critère(s) pondéré(s) de jugement: ceux indiqués sur la demande devis ou de facture pro-forma
+PARA	Le devis ou la facture pro-forma précisera :
+PARA	La référence du chaque produit
+PARA	Le type de matériel
+PARA	Les quantités
+PARA	Le prix unitaire et le prix total pour chaque produit HT
+PARA	Le montant total remisé HT de la commande
+PARA	Le montant TTC de la commande
+PARA	Le devis ou la facture pro-forma devra répondre strictement aux renseignements sollicités dans la demande de devis. Pour les devis ou factures pro-forma incomplets, le candidat devra les compléter dans les 24 heures ouvrées. A défaut son offre sera rejetée.
+SOUS_TITRE	ARTICLE 10 : AUTRES RENSEIGNEMENTS ET INFORMATIONS COMPLEMENTAIRES
+PARA	Toute demande d’informations complémentaires sur des points techniques ou administratifs du dossier devra être adressée à {{B04-RC-01}} au plus tard {{B04-RC-02}} jours avant la date limite de remise des offres.
+PARA	Si une question est posée par un candidat, les autres candidats sont destinataires des éléments en réponse à la question posée par un candidat.
+SOUS_TITRE	ARTICLE 11 : VOIES ET DÉLAIS DE RECOURS
+PARA	L'instance chargée des procédures de recours est {{B06-AN-03}}
+SOUS_TITRE	ARTICLE 12 : CALENDRIER PRÉVISIONNEL
+PARA	Avis Spécifique d’Appel Public à Concurrence : {{B04-CP-01}}
+PARA	Date et heure limites de réception des offres : {{B04-CP-02}}
+PARA	Séance de la Commission d’Appel d’Offres : {{B04-CP-03}}
+PARA	Attribution du contrat-cadre : {{B04-CP-04}}
+PARA	Notification du contrat-cadre : {{B04-CP-05}}
+PARA	(1) Le terme «consultation» utilisé dans le présent document doit être compris dans le sens de «mise en concurrence» (à ne pas confondre avec la procédure de consultation restreinte d’entrepreneurs, de fournisseurs ou de prestataires de service).
+PARA	Ainsi, le présent document est valable aussi bien pour la procédure d’appel d’offres que pour celle de consultation restreinte.

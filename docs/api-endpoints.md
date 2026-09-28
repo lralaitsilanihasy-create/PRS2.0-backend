@@ -4830,6 +4830,43 @@ ne s'abandonne pas : la révision est le geste prévu (§B2, arbitré par le pil
 la ligne du DMC (la copie d'une version en cours aussi) ; un statut manuel (`CHDP`, `DSS`) reste tel quel ; le détail du
 journal s'achève alors par « ; statut rendu à PREVU (ligne n) ».
 
+### Le DAO complet sur les documents types officiels — lot D ⚠️ 2026-09-28
+
+Demande front `frontend/docs/demande-backend-2026-09-28-lot-d-dao-complet.md` ; décision :
+`docs/adr/ADR-0011-conditions-declarees-des-documents-types.md`. **Aucune route nouvelle** : ce sont les documents produits
+à la validation (`GET /api/fiches-marche/{idDmc}/documents`) qui changent de forme.
+
+- **Formes couvertes** (`ModelesDao.COUVERTURES`) : **contrat-cadre, fournitures et services** — `DPAC` rendu depuis
+  `classpath:modeles/dao/DPAC-CC.txt`, `AE` depuis `AE-CC.txt` (**un par lot** si la ligne est allotie, `lot` = 1…n),
+  copies telles quelles de `frontend/scripts/modeles-dao/modeles/`. Ces deux types ne sont plus produits par le lot 2a pour
+  cette forme ; les autres formes et catégories restent au lot 2a (repli par type). Ordre des documents inchangé (`DPAC`,
+  `AE`, puis `LF`, formulaires du candidat, `BP`, `TC`). Libellés (`DocumentFicheDto.libelle`) : « Données particulières
+  d'appel à concurrence » (⚠️ **toutes formes**, B12 de la demande du contrat-cadre : l'ancien « … du cahier des clauses
+  administratives » est retiré) et, **en contrat-cadre**, « Contrat-cadre valant acte d'engagement et CCAP » (— lot n).
+- **Contrat des fichiers de commande** (lecteur `FichierCommande`) : un enregistrement de plus, en tête,
+  `CONDITION<TAB>NOM<US>expression` (US = 0x1F), qui ne s'imprime jamais. **Grammaire** (`ConditionsModele`) : termes
+  `cle = valeur`, `cle != valeur`, `cle contient texte`, `cle renseigne`, `cle vide` ; `et` prioritaire sur `ou`, sans
+  parenthèses ; un `et` / `ou` ne sépare que s'il précède un terme complet (clé puis opérateur) — une valeur peut contenir
+  « et » ; comparaisons sans casse, blancs réduits, apostrophes droites et courbes confondues ; `=` faux sur une valeur
+  absente, `!=` vrai. **`cle`** : un code de champ (valeur de la version figée — pour un document de lot, `CODE#n` d'abord —
+  saisie, reprise du plan ou reflet) ou une clé de cadrage, lue avec sa réponse par défaut (`modeRemise` absent = `PAPIER`).
+  Une valeur de liste se compare à l'option telle que le référentiel la sert ; un `OUI_NON` vaut `OUI` / `NON`.
+- **Sections** `{{SI:NOM}}` … `{{FINSI:NOM}}` : une **pile** — une section fausse omet tout jusqu'à son `FINSI`, sections
+  internes comprises (paragraphes et tableaux). Une condition déclarée l'emporte ; les trois noms historiques des
+  formulaires du candidat (`A1B`, `B04-SE`, `A3B-NATURES`) restent reconnus sans déclaration.
+- **Refus au démarrage**, fichier nommé (`ModelesDao`, et désormais `ModelesCandidat`) : condition illisible ou déclarée
+  deux fois, section utilisée sans être déclarée (hors noms historiques pour le candidat), `FINSI` qui ne ferme pas la
+  dernière section ouverte, section non refermée, jeton `{{INT-…}}`.
+- **Jetons** : `{{LOT}}` — le numéro du lot du document, vide hors lot ; `{{DERIVE.fin-validite-offre}}` — date limite de
+  remise (`B04-LR-03`, **à défaut `B04-CP-02`**, date-heure du contrat-cadre, sa date) + `B04-VO-01` jours. Le reste du
+  contrat est inchangé : `{{CODE}}` imprime l'unité d'un `MONTANT` (« Ariary ») et d'un `POURCENTAGE` (« % ») ; un modèle
+  qui écrit lui-même l'unité emploie `{{CODE.chiffres}}`. Un jeton sans valeur s'imprime en pointillés.
+- **Référentiel** (§B4) : neuf champs du contrat-cadre, saisie, facultatifs — `B04-DS-07` à `-10` (adresse de consultation
+  du dossier, DPAC), `B09-GP-03` (délai de garantie, mois), `B09-GP-04` (point de départ : « À partir de l'admission » /
+  « À partir de la date de mise en service »), `B09-GP-05` (garantie exécutée conformément au CCAG), `B10-RS-02` (préavis
+  de résiliation, mois), `B10-RS-03` (fautes ouvrant la résiliation) — fichier de correspondance du contrat-cadre et
+  `docs/referentiel/2026-09-28-lot-d-champs-contrat-cadre.sql`.
+
 ### Le besoin par lot et les formulaires du candidat ⚠️ 2026-09-25 (V45)
 
 Demande front `frontend/docs/demande-backend-2026-09-25-formulaires-du-candidat.md`. Livré : §B1, §B2, §B4, et au §B3
