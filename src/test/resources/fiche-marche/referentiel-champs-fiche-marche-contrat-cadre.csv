@@ -25,8 +25,8 @@ B03-GC-06;Qualité du représentant du membre du groupement;LISTE;SAISIE;AE;;CON
 B03-SS-01;Désignation des sous-traitants des marchés subséquents;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui
 B03-SS-02;Modalités de paiement direct des sous-traitants;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui
 B04-DS-01;Contenu du dossier de consultation;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;;;;;oui
-B04-DS-02;Langue du dossier de consultation et des offres;TEXTE;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;;;;;oui
-B04-DS-03;Modalités d'acquisition du dossier de consultation;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;;;;;oui
+B04-DS-02;Langue du dossier de consultation et des offres;TEXTE;SAISIE;DPAC;;CONTRAT_CADRE;;non;;;;;;oui
+B04-DS-03;Modalités d'acquisition du dossier de consultation;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;;non;;;;;;oui
 B04-DS-04;Adresse de retrait du dossier de consultation;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;;;;;oui
 B04-DS-05;Montant à payer pour le dossier de consultation (Ariary);MONTANT;SAISIE;DPAC;;CONTRAT_CADRE;;non;;MONTANT_POSITIF;;;;oui
 B04-DS-06;Modification du dossier de consultation;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;;non;;;;;;oui
@@ -50,12 +50,12 @@ B05-MT-02;Montant indicatif du contrat-cadre toutes taxes comprises (Ariary);MON
 B05-PM-01;Forme de prix des marchés subséquents (mono-attributaire);LISTE;SAISIE;AE;DPAC;CONTRAT_CADRE;attributaires = MONO;oui;;;Prix unitaires,Prix forfaitaires,Prix mixtes;;;oui
 B05-PM-02;Le prix est un critère d'attribution du contrat-cadre (multi-attributaire);OUI_NON;SAISIE;AE;;CONTRAT_CADRE;attributaires = MULTI;oui;;;;;;oui
 B05-PM-03;Contenu des prix;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;oui
-B06-SC-01;Modalités d'ouverture des plis par le représentant de l'autorité contractante;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;;;;;oui
+B06-SC-01;Modalités d'ouverture des plis par le représentant de l'autorité contractante;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;;non;;;;;;oui
 B06-SC-02;Critères d'élimination des candidatures;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;;;;;oui
 B06-SO-01;Rejet des offres hors délais et ouverture des offres;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;;non;;;;;;oui
 B06-SO-02;Analyse des offres;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;;non;;;;;;oui
 B06-SO-03;Rejet des offres non recevables;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;;non;;;;;;oui
-B06-SO-04;Comparaison des offres pour la sélection de l'offre économiquement la plus avantageuse;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;;;;;oui
+B06-SO-04;Comparaison des offres pour la sélection de l'offre économiquement la plus avantageuse;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;;non;;;;;;oui
 B06-SO-05;Critères et mécanisme de jugement des offres;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;;;;;oui
 B06-CA-01;Critères d'attribution du contrat-cadre et modalités d'appréciation;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;;;;;oui
 B06-NO-01;Date de réception portée sur l'accusé de réception;DATE;SAISIE;DPAC;AE;CONTRAT_CADRE;;non;;;;;;oui
@@ -67,18 +67,18 @@ B07-FS-01;Forme des marchés subséquents;LISTE;SAISIE;AE;DPAC;CONTRAT_CADRE;;ou
 B07-FS-02;Interlocuteur du titulaire (service, direction, coordonnées);TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;oui
 B07-MA-01;Délai de complétude de l'offre initiale (mono-attributaire);NOMBRE;SAISIE;AE;;CONTRAT_CADRE;attributaires = MONO;oui;;;;;;oui
 B07-MA-02;Point de départ du délai de complétude;LISTE;SAISIE;AE;;CONTRAT_CADRE;attributaires = MONO;oui;;;À compter de la notification de la demande de complétude,Lors de la demande de complétude;;;oui
-B07-MA-03;Attribution des marchés subséquents après remise en concurrence (non alloti);TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;attributaires = MULTI;oui;;;;;;oui
+B07-MA-03;Attribution des marchés subséquents après remise en concurrence (non alloti);TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;attributaires = MULTI;non;;;;;;oui
 B07-MA-04;Modalités d'attribution des marchés subséquents en cas d'allotissement;LISTE;SAISIE;AE;;CONTRAT_CADRE;attributaires = MULTI;non;;;Titulaires des lots correspondant à l'objet du marché,Titulaires de tous les lots;;;oui
 B07-MA-05;Modalités d'attribution lorsque le contrat-cadre est à la fois alloti et non alloti;LISTE;SAISIE;AE;;CONTRAT_CADRE;attributaires = MULTI;non;;;Option 1,Option 2;;;non
 B07-TN-01;Termes non couverts par le contrat-cadre (mono-attributaire);TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;attributaires = MONO;non;;;;;;oui
 B07-TN-02;Termes non couverts par le contrat-cadre (multi-attributaire);TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;attributaires = MULTI;non;;;;;;oui
-B07-PI-01;Pièces contractuelles du contrat-cadre et des marchés subséquents;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;oui
-B07-DU-01;Entrée en vigueur du contrat-cadre;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;oui
+B07-PI-01;Pièces contractuelles du contrat-cadre et des marchés subséquents;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui
+B07-DU-01;Entrée en vigueur du contrat-cadre;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui
 B07-DU-02;Durée des marchés subséquents fixée dans le contrat-cadre;OUI_NON;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;oui
 B07-DU-03;Durée des marchés subséquents (jours);NOMBRE;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui
 B07-DU-04;Nombre de reconductions du contrat-cadre;NOMBRE;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui
 B07-DU-05;Nombre d'années maximum du contrat-cadre, reconductions comprises;NOMBRE;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui
-B07-DU-06;Durée totale du contrat-cadre, reconduit ou non (mois);NOMBRE;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;oui
+B07-DU-06;Durée totale du contrat-cadre, reconduit ou non (mois);NOMBRE;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;non
 B07-DE-01;Délais d'exécution des marchés subséquents uniques ou non fractionnés;LISTE;SAISIE;AE;;CONTRAT_CADRE;;oui;;;Fixés par l'autorité contractante,À l'initiative des candidats,Fixés dans les marchés subséquents;;;oui
 B07-DE-02;Délai d'exécution fixé par l'autorité contractante;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui
 B07-DE-03;Délai d'exécution à l'initiative des candidats;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui
@@ -92,7 +92,7 @@ B08-FI-04;Remboursement de l'avance (article 72.III du code des marchés publics
 B08-FI-05;Avance versée au sous-traitant du titulaire;OUI_NON;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui
 B08-FP-01;Présentation des demandes de paiement;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;oui
 B08-FP-02;Adresse de facturation (service responsable de la vérification des demandes de paiement);TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;oui
-B08-FP-03;Délai de paiement (jours);NOMBRE;SAISIE;AE;;CONTRAT_CADRE;;oui;;DELAI_PAIEMENT_75:DELAI;;;;oui
+B08-FP-03;Délai de paiement (jours);NOMBRE;SAISIE;AE;;CONTRAT_CADRE;;non;;DELAI_PAIEMENT_75:DELAI;;;;oui
 B08-FP-04;Taux des intérêts moratoires (%, au moins un point);POURCENTAGE;SAISIE;AE;;CONTRAT_CADRE;;oui;;INTERETS_MORATOIRES_TAUX:TAUX;;;;oui
 B08-FP-05;Règlement des prestations;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui
 B08-FP-06;Nom et adresse de la banque;TEXTE;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;non
@@ -112,7 +112,7 @@ B09-AU-03;Délai de remise de l'attestation d'assurance (jours);NOMBRE;SAISIE;AE
 B10-VR-01;Juridiction compétente pour les litiges nés du contrat-cadre;TEXTE;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;oui
 B10-MT-01;Changement de dénomination sociale du titulaire : service acheteur;TEXTE;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui
 B10-MT-02;Changement de contractant en cours d'exécution : service acheteur;TEXTE;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui
-B10-RS-01;Résiliation sans faute du contrat-cadre;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;;oui;;;;;;oui
+B10-RS-01;Résiliation sans faute du contrat-cadre;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;;non;;;;;;oui
 B04-SE-01;Mode de remise des offres;LISTE;CADRAGE;DPAO;;QUANTITE_FIXE,A_COMMANDE,CONTRAT_CADRE;;oui;;;PAPIER,ELECTRONIQUE;modeRemise;;oui
 B04-SE-02;Adresse de la plateforme de dépôt;URL;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE,CONTRAT_CADRE;modeRemise = ELECTRONIQUE;oui;;;;;;oui
 B04-SE-03;Date d'ouverture des dépôts;DATE_HEURE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE,CONTRAT_CADRE;modeRemise = ELECTRONIQUE;non;;SE_OUVERTURE_DEPOTS:DEPOTS;;;;oui

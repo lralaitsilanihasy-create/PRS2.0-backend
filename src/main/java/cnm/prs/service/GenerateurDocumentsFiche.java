@@ -3,6 +3,7 @@ package cnm.prs.service;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.poi.wp.usermodel.HeaderFooterType;
 import org.apache.poi.xwpf.usermodel.ParagraphAlignment;
@@ -127,6 +128,43 @@ public class GenerateurDocumentsFiche {
 
     // ------------------------------------------------------------------ document libre : pdf
 
+    /**
+     * ⚠️ Lot D (2026-09-28, recette réelle du front) — les caractères du bloc Unicode <strong>Dingbats</strong> que les
+     * documents types emploient, et leur code dans la police standard PDF <strong>ZapfDingbats</strong> (l'une des 14
+     * polices de base : présente dans tout lecteur, rien à embarquer, rien à installer sur le serveur). Helvetica en WinAnsi
+     * ne les porte pas : ils disparaissaient du PDF (les cases à cocher de l'AE du contrat-cadre). Correspondance vérifiée
+     * sur la métrique AFM de la police fournie par OpenPDF ({@code C 111 … N a74}, {@code C 226 … N a173}) et la table de
+     * correspondance Unicode de la police : U+274F ❏ = {@code o} (0x6F), U+27A2 ➢ = 0xE2. Le docx garde le caractère Unicode.
+     */
+    static final Map<Character, Character> DINGBATS = Map.of('❏', (char) 0x6F, '➢', (char) 0xE2);
+
+    /**
+     * Un paragraphe PDF : le texte dans sa police, et chaque caractère de {@link #DINGBATS} dans ZapfDingbats à la même
+     * taille — substitution au rendu PDF seulement, le fichier de commande reste celui du document type.
+     */
+    static Paragraph paragraphePdf(String texte, Font police) {
+        Paragraph par = new Paragraph();
+        par.setFont(police);
+        StringBuilder courant = new StringBuilder();
+        for (char ch : texte.toCharArray()) {
+            Character code = DINGBATS.get(ch);
+            if (code == null) {
+                courant.append(ch);
+                continue;
+            }
+            if (courant.length() > 0) {
+                par.add(new com.lowagie.text.Chunk(courant.toString(), police));
+                courant.setLength(0);
+            }
+            par.add(new com.lowagie.text.Chunk(String.valueOf(code),
+                    FontFactory.getFont(FontFactory.ZAPFDINGBATS, police.getSize())));
+        }
+        if (courant.length() > 0 || par.isEmpty()) {
+            par.add(new com.lowagie.text.Chunk(courant.toString(), police));
+        }
+        return par;
+    }
+
     private static byte[] pdfLibre(DocumentLibre m) {
         Font titre = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 13);
         Font sousTitre = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 11);
@@ -145,11 +183,11 @@ public class GenerateurDocumentsFiche {
             for (DocumentLibre.Element e : m.elements()) {
                 if (e instanceof DocumentLibre.Paragraphe p) {
                     Paragraph par = switch (p.style()) {
-                        case TITRE -> aligne(new Paragraph(p.texte(), titre), Element.ALIGN_CENTER);
-                        case SOUS_TITRE -> aligne(new Paragraph(p.texte(), sousTitre), Element.ALIGN_LEFT);
-                        case PARA -> aligne(new Paragraph(p.texte(), texte), Element.ALIGN_JUSTIFIED);
-                        case CENTRE -> aligne(new Paragraph(p.texte(), texte), Element.ALIGN_CENTER);
-                        case DROITE -> aligne(new Paragraph(p.texte(), texte), Element.ALIGN_RIGHT);
+                        case TITRE -> aligne(paragraphePdf(p.texte(), titre), Element.ALIGN_CENTER);
+                        case SOUS_TITRE -> aligne(paragraphePdf(p.texte(), sousTitre), Element.ALIGN_LEFT);
+                        case PARA -> aligne(paragraphePdf(p.texte(), texte), Element.ALIGN_JUSTIFIED);
+                        case CENTRE -> aligne(paragraphePdf(p.texte(), texte), Element.ALIGN_CENTER);
+                        case DROITE -> aligne(paragraphePdf(p.texte(), texte), Element.ALIGN_RIGHT);
                         case VIDE -> new Paragraph(" ", texte);
                     };
                     par.setSpacingAfter(3);
@@ -163,7 +201,7 @@ public class GenerateurDocumentsFiche {
                         for (int c = 0; c < t.colonnes(); c++) {
                             com.lowagie.text.pdf.PdfPCell cell = new com.lowagie.text.pdf.PdfPCell();
                             for (String paragraphe : c < ligne.size() ? ligne.get(c) : List.of("")) {
-                                cell.addElement(new Paragraph(paragraphe.isEmpty() ? " " : paragraphe, cellule));
+                                cell.addElement(paragraphePdf(paragraphe.isEmpty() ? " " : paragraphe, cellule));
                             }
                             table.addCell(cell);
                         }

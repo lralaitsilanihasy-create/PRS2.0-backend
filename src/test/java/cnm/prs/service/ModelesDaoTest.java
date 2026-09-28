@@ -186,6 +186,39 @@ class ModelesDaoTest {
         }
     }
 
+    @Test
+    @DisplayName("PDF : les 15 cases « ❏ » et les 2 flèches « ➢ » de l'AE s'impriment en ZapfDingbats (Helvetica ne les porte "
+            + "pas) ; le docx garde le caractère Unicode ; le texte autour reste en Helvetica")
+    void dingbatsAuPdf() throws Exception {
+        com.lowagie.text.Font helvetica = com.lowagie.text.FontFactory.getFont(com.lowagie.text.FontFactory.HELVETICA, 10);
+        com.lowagie.text.Paragraph p = GenerateurDocumentsFiche.paragraphePdf("❏ Représentant légal ➢ fin", helvetica);
+        List<String> morceaux = ((List<?>) p.getChunks()).stream()
+                .map(o -> (com.lowagie.text.Chunk) o).map(c -> c.getFont().getFamilyname() + ":" + c.getContent()).toList();
+        assertThat(morceaux).containsExactly("ZapfDingbats:o", "Helvetica: Représentant légal ", "ZapfDingbats:â",
+                "Helvetica: fin");
+        assertThat(GenerateurDocumentsFiche.paragraphePdf("sans case", helvetica).getChunks()).hasSize(1);
+
+        ModelesDao dao = new ModelesDao();
+        long cases = 0;
+        long fleches = 0;
+        for (DocumentLibre.Element e : dao.modele("AE-CC").elements()) {
+            if (e instanceof DocumentLibre.Paragraphe par) {
+                cases += par.texte().chars().filter(c -> c == '❏').count();
+                fleches += par.texte().chars().filter(c -> c == '➢').count();
+            }
+        }
+        assertThat(cases).isEqualTo(15);
+        assertThat(fleches).isEqualTo(2);
+        List<GenerateurDocumentsFiche.Fichier> fichiers = new GenerateurDocumentsFiche()
+                .generer(FormulairesCandidat.brut("AE-CC", dao.modele("AE-CC").elements()));
+        assertThat(new String(fichiers.get(1).contenu(), java.nio.charset.StandardCharsets.ISO_8859_1)).contains("/ZapfDingbats");
+        try (org.apache.poi.xwpf.usermodel.XWPFDocument doc = new org.apache.poi.xwpf.usermodel.XWPFDocument(
+                new java.io.ByteArrayInputStream(fichiers.get(0).contenu()));
+                org.apache.poi.xwpf.extractor.XWPFWordExtractor ex = new org.apache.poi.xwpf.extractor.XWPFWordExtractor(doc)) {
+            assertThat(ex.getText().chars().filter(c -> c == '❏').count()).isEqualTo(15);
+        }
+    }
+
     // ------------------------------------------------------------------ outils
 
     private static FicheMarcheDto fiche(Map<String, String> cadrage) {

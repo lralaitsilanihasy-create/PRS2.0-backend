@@ -71,7 +71,7 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
 
     @Test
     @DisplayName("1 — Import : 149 champs des fournitures (123 avant V50) et 132 du contrat-cadre (114 avant le 28/09), aucun rejet ; champs actifs servis : 172 en "
-            + "quantité fixe, 177 à commande, 176 en contrat-cadre (V50 : + 26 ; modèle officiel du 28/09 : − 20 + 11 ; lot D : + 9) — 2026-09-25 : cinq créations, "
+            + "quantité fixe, 177 à commande, 175 en contrat-cadre (V50 : + 26 ; modèle officiel du 28/09 : − 20 + 11 ; lot D : + 9 ; Q2 : − 1) — 2026-09-25 : cinq créations, "
             + "B06-EO-11 réservé à la quantité fixe")
     void chargementDesReferentiels() throws Exception {
         ChampFicheMarcheService.BilanImport f = importer("referentiel-champs-fiche-marche-fournitures.csv");
@@ -83,7 +83,7 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
 
         assertThat(champs("QUANTITE_FIXE")).hasSize(172);
         assertThat(champs("A_COMMANDE")).hasSize(177);
-        assertThat(champs("CONTRAT_CADRE")).hasSize(176);   // 2026-09-28 : 176 − 20 retirés + 11 ajoutés ou ouverts (modèle officiel) + 9 (lot D)
+        assertThat(champs("CONTRAT_CADRE")).hasSize(175);   // 2026-09-28 : 176 − 20 + 11 (modèle officiel) + 9 (lot D) − 1 (B07-DU-06, Q2)
     }
 
     // ------------------------------------------------------------------ 2. rubriques servies par type (B4)
@@ -325,6 +325,40 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
                 .contains("DPAO").doesNotContain("DPAC");
         byte[] dpao = lot2a.stream().filter(p -> "DPAO".equals(p.type()) && "docx".equals(p.extension())).findFirst().orElseThrow().contenu();
         assertThat(texteDocx(dpao)).contains("Données particulières de l'appel d'offres", "Délai de validité des offres (jours) : 90");
+    }
+
+    // ------------------------------------------------------------------ 8. Q2 : les informations sans trou
+
+    @Test
+    @DisplayName("8 — Q2 (2026-09-28) : neuf informations sans trou servies facultatives, B07-DU-06 absent ; une fiche de "
+            + "contrat-cadre se valide sans aucune des dix ; un délai de paiement saisi au-delà de 75 jours reste signalé")
+    void informationsSansTrou() throws Exception {
+        importer("referentiel-champs-fiche-marche-fournitures.csv");
+        importer("referentiel-champs-fiche-marche-contrat-cadre.csv");
+        String ref = referentiel("CONTRAT_CADRE");
+        List<String> facultatifs = List.of("B04-DS-02", "B04-DS-03", "B06-SC-01", "B06-SO-04", "B07-DU-01", "B07-MA-03",
+                "B07-PI-01", "B08-FP-03", "B10-RS-01");
+        for (String code : facultatifs) {
+            assertThat(JsonPath.<List<Boolean>>read(ref, "$.champs[?(@.code=='" + code + "')].obligatoire")).as(code)
+                    .containsExactly(false);
+        }
+        assertThat(JsonPath.<List<String>>read(ref, "$.champs[*].code")).doesNotContain("B07-DU-06").contains("B02-DC-01");
+
+        Long idDmc = creerDmc(9903);
+        cadrage(idDmc, "{\"alloti\":\"NON\",\"groupement\":\"NON\",\"avance\":\"NON\",\"typePrix\":\"UNITAIRES\","
+                + "\"attributaires\":\"MULTI\"}");
+        String b08 = mvc.perform(put("/api/fiches-marche/" + idDmc + "/blocs/B08").header("Authorization", tokenPrmp)
+                .contentType(JSON).content("{\"valeurs\":{\"B08-FP-03\":90}}"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(b08, "$.bilanControles.avertissements[*].regle")).contains("DELAI_PAIEMENT_75");
+        mvc.perform(put("/api/fiches-marche/" + idDmc + "/blocs/B08").header("Authorization", tokenPrmp)
+                .contentType(JSON).content("{\"valeurs\":{}}")).andExpect(status().isOk());
+        remplirObligatoiresEtValider(idDmc, "CONTRAT_CADRE", "FOURNITURES_SERVICES", Map.of("B05-MT-01", "250000000"));
+        String fiche = mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.statut").value("VALIDEE"))
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<Map<String, String>>read(fiche, "$.valeurs").keySet())
+                .doesNotContainAnyElementsOf(facultatifs).doesNotContain("B07-DU-06");
     }
 
     private static String texteDocx(byte[] docx) throws Exception {

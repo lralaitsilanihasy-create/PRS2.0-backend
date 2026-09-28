@@ -4861,6 +4861,10 @@ Demande front `frontend/docs/demande-backend-2026-09-28-lot-d-dao-complet.md` ; 
   remise (`B04-LR-03`, **à défaut `B04-CP-02`**, date-heure du contrat-cadre, sa date) + `B04-VO-01` jours. Le reste du
   contrat est inchangé : `{{CODE}}` imprime l'unité d'un `MONTANT` (« Ariary ») et d'un `POURCENTAGE` (« % ») ; un modèle
   qui écrit lui-même l'unité emploie `{{CODE.chiffres}}`. Un jeton sans valeur s'imprime en pointillés.
+- ⚠️ **PDF, caractères Dingbats** (recette réelle du 28/09) : Helvetica (WinAnsi) ne porte ni « ❏ » (U+274F, les quinze
+  cases à cocher de l'AE du contrat-cadre) ni « ➢ » (U+27A2, deux dans l'AE) ; au rendu **PDF seulement**, ils
+  s'impriment dans la police standard **ZapfDingbats** (codes 0x6F et 0xE2 — aucune police embarquée, rien d'installé sur
+  le serveur). Le docx et le fichier de commande gardent le caractère Unicode.
 - **Référentiel** (§B4) : neuf champs du contrat-cadre, saisie, facultatifs — `B04-DS-07` à `-10` (adresse de consultation
   du dossier, DPAC), `B09-GP-03` (délai de garantie, mois), `B09-GP-04` (point de départ : « À partir de l'admission » /
   « À partir de la date de mise en service »), `B09-GP-05` (garantie exécutée conformément au CCAG), `B10-RS-02` (préavis

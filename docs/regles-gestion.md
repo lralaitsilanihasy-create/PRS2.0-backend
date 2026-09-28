@@ -687,6 +687,12 @@ intellectuelles »** (pilote). La catégorie est un second axe, à côté du typ
   et le préavis de reconduction se saisissent. Rien n'est supprimé : une information retirée est désactivée, jamais
   effacée. **Le plafond de durée du contrat-cadre attend le juriste** (le modèle dit deux ans dans le contrat et trente-six
   mois dans l'exemple des données particulières) ; la production du DPAC et de l'AE au format du modèle, le lot D.
+- ⚠️ **Rien n'est exigé que le document n'imprime** (décision Q2 du pilote, 2026-09-28). Depuis que le DPAC et l'AE sont
+  le document type rempli, neuf informations du contrat-cadre ne remplissaient aucun trou — le modèle écrit la chose en
+  dur (« en langue française », « 75 jours », « à compter de sa notification »…) : elles restent saisissables mais
+  deviennent facultatives. Le délai de paiement saisi au-delà de 75 jours reste signalé. La durée totale du
+  contrat-cadre est retirée : elle redisait la durée maximale, reconductions comprises, qui seule s'imprime, et deux
+  saisies de la même durée pouvaient se contredire.
 
 #### Le type de marché vient du plan (lot 1c, demande front du 2026-09-23, décision du pilote)
 
