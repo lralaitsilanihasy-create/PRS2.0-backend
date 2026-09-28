@@ -109,6 +109,12 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.PAYLOAD_TOO_LARGE, ex.getMessage(), request, null);
     }
 
+    /** ⚠️ 2026-09-28 (import du DAO) — 415 {@code FORMAT_NON_SUPPORTE} ou 422 {@code MODELE_ABSENT}, code stable. */
+    @ExceptionHandler(ImportRefuseException.class)
+    public ResponseEntity<ErrorResponse> handleImportRefuse(ImportRefuseException ex, WebRequest request) {
+        return build(ex.getStatus(), ex.getMessage(), request, null, ex.getCode());
+    }
+
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<ErrorResponse> handleBadCredentials(BadCredentialsException ex, WebRequest request) {
         return build(HttpStatus.UNAUTHORIZED, ex.getMessage(), request, null);

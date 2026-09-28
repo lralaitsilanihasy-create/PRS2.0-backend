@@ -582,6 +582,192 @@ public class FicheMarcheService {
         return toDto(ctx, fiche);
     }
 
+    // ------------------------------------------------------------------ import du DAO (2026-09-28, ADR-0012)
+
+    /**
+     * ⚠️ Import du DAO (demande front du 2026-09-28, §B1) — l'état d'une fiche où l'on peut importer, gardes comprises :
+     * PRMP propriétaire ou son UGPM seulement (403, l'Administrateur n'importe pas), DMC inconnu → 404, hors périmètre →
+     * 403, pas un DAO → 409 {@code DMC_NON_DAO}, mandat inactif → 409, forme ou catégorie non outillée → 409
+     * {@code FORME_NON_OUTILLEE}, dernière version validée → 409 {@code FICHE_VALIDEE}. Une fiche jamais enregistrée est
+     * servie virtuelle (brouillon vide) : rien n'est écrit.
+     */
+    @Transactional(readOnly = true)
+    public FicheMarcheDto etatImportable(Long idDmc) {
+        Contexte ctx = contexteImport(idDmc);
+        FicheMarche fiche = ficheRepository.findFirstByIdDmcOrderByNumeroVersionDesc(idDmc).orElseGet(() -> virtuelle(idDmc));
+        return toDto(ctx, fiche);
+    }
+
+    /** Les réponses de cadrage validées comme par {@code PUT …/cadrage} ; {@link ChampsInvalidesException} sinon. */
+    @Transactional(readOnly = true)
+    public Map<String, Object> cadrageValide(Map<String, Object> reponses, String categorie, String typeMarche) {
+        return validerCadrage(reponses, categorie, typeMarche);
+    }
+
+    private Contexte contexteImport(Long idDmc) {
+        ProfilUtilisateur profil = CurrentUser.profil().orElse(null);
+        if (profil != ProfilUtilisateur.PRMP && profil != ProfilUtilisateur.UGPM) {
+            throw new AccessDeniedException("L'import du DAO se fait par la PRMP propriétaire ou son UGPM.");
+        }
+        Contexte ctx = contexte(idDmc);
+        dossierIntegrite.exigerMandatActif();
+        exigerFormeOutillee(ctx);
+        FicheMarche derniere = ficheRepository.findFirstByIdDmcOrderByNumeroVersionDesc(idDmc).orElse(null);
+        if (derniere != null && StatutFicheMarche.VALIDEE.name().equals(derniere.getStatut())) {
+            throw new BusinessRuleException("La version " + derniere.getNumeroVersion() + " est validée, donc figée : "
+                    + "ouvrez une révision pour y importer un DAO.", "FICHE_VALIDEE");
+        }
+        return ctx;
+    }
+
+    /**
+     * ⚠️ Import du DAO (demande front du 2026-09-28, §B2) — écrit, <strong>d'un seul coup</strong>, ce que la PRMP a retenu
+     * de la lecture : le cadrage reçoit les clés envoyées (les autres restent), les valeurs s'écrivent champ par champ, tous
+     * blocs confondus, et un code absent n'est pas effacé. Tout est validé d'abord — même {@link #normaliser}, mêmes clés de
+     * cadrage que {@code PUT …/cadrage}, mêmes conditions d'affichage évaluées sur le cadrage fusionné — et un refus rend la
+     * liste nominative (400) sans rien écrire. À la différence d'un bloc enregistré, un champ fermé n'est pas ignoré en
+     * silence : la PRMP l'a coché, le refus le lui dit. Journal du dossier de planification : {@code FICHE_IMPORTEE}.
+     */
+    public FicheMarcheDto appliquerImport(Long idDmc, Map<String, Object> cadrageRecu, Map<String, Object> valeursRecues,
+            String fichier, String empreinte) {
+        Contexte ctx = contexteImport(idDmc);
+        String typeMarche = ctx.forme().name();
+        List<ErrorResponse.FieldError> erreurs = new ArrayList<>();
+        if (fichier == null || fichier.isBlank()) {
+            erreurs.add(new ErrorResponse.FieldError("fichier", "Le nom du fichier importé est exigé (il va au journal)."));
+        }
+        String emp = empreinte == null ? "" : empreinte.trim().toLowerCase(java.util.Locale.ROOT);
+        if (!emp.matches("[0-9a-f]{64}")) {
+            erreurs.add(new ErrorResponse.FieldError("empreinte",
+                    "L'empreinte SHA-256 du fichier importé est exigée (64 caractères hexadécimaux, celle de la lecture)."));
+        }
+        Map<String, Object> cadrageEnvoye = cadrageRecu == null ? Map.of() : cadrageRecu;
+        Map<String, Object> valeursEnvoyees = valeursRecues == null ? Map.of() : valeursRecues;
+        if (cadrageEnvoye.isEmpty() && valeursEnvoyees.isEmpty()) {
+            erreurs.add(new ErrorResponse.FieldError("valeurs", "Rien à appliquer : aucune valeur ni réponse de cadrage retenue."));
+        }
+
+        // Le cadrage : seules les clés envoyées sont validées (celles de la fiche l'ont été à leur écriture), puis fusionnées.
+        FicheMarche existante = ficheRepository.findFirstByIdDmcOrderByNumeroVersionDesc(idDmc).orElse(null);
+        Map<String, Object> fusion = existante == null ? new LinkedHashMap<>() : new LinkedHashMap<>(lireJson(existante.getCadrage()));
+        Map<String, Object> aValider = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> e : cadrageEnvoye.entrySet()) {
+            if (e.getValue() == null || String.valueOf(e.getValue()).isBlank()) {
+                erreurs.add(new ErrorResponse.FieldError(String.valueOf(e.getKey()), "Réponse vide : l'import n'efface rien."));
+            } else {
+                aValider.put(e.getKey(), e.getValue());
+            }
+        }
+        Map<String, Object> cadrageValide = Map.of();
+        try {
+            cadrageValide = validerCadrage(aValider, ctx.codeCategorie(), typeMarche);
+        } catch (ChampsInvalidesException ex) {
+            erreurs.addAll(ex.getErreurs());
+        }
+        fusion.putAll(cadrageValide);
+
+        // Les valeurs : mêmes refus que la saisie d'un bloc, le bloc en moins.
+        Map<String, ChampFicheMarche> champs = new LinkedHashMap<>();
+        champRepository.findAllByOrderByCodeRubriqueAscRangAsc().forEach(c -> champs.put(c.getCode(), c));
+        ValeursPpmService.ValeursPpm ppm = valeursPpm.lire(ctx.idDetail());
+        int nbLots = LotsFiche.nbLots(ppm.valeurs());
+        Map<String, String> aEcrire = new TreeMap<>();
+        for (Map.Entry<String, Object> e : valeursEnvoyees.entrySet()) {
+            String cle = e.getKey() == null ? "" : e.getKey().trim().toUpperCase();
+            int diese = cle.indexOf(LotsFiche.SEPARATEUR);
+            String code = diese < 0 ? cle : cle.substring(0, diese);
+            ChampFicheMarche c = champs.get(code);
+            if (c == null || !Boolean.TRUE.equals(c.getActif())) {
+                erreurs.add(new ErrorResponse.FieldError(cle, "Champ inconnu ou inactif : " + code + "."));
+                continue;
+            }
+            if (!SourceChampFiche.SAISIE.name().equals(c.getSource())) {
+                erreurs.add(new ErrorResponse.FieldError(cle, "« " + c.getLibelle() + " » est "
+                        + (SourceChampFiche.PPM.name().equals(c.getSource()) ? "repris du PPM (le plan fait foi)" : "dérivé du cadrage")
+                        + " : il ne s'importe pas."));
+                continue;
+            }
+            if (!c.pourTypeMarche(typeMarche) || !c.pourCategorie(ctx.codeCategorie())) {
+                erreurs.add(new ErrorResponse.FieldError(cle, "« " + c.getLibelle() + " » ne vaut pas pour cette forme de marché."));
+                continue;
+            }
+            if (!ConditionCadrage.vraie(c.getCondition(), fusion)) {
+                erreurs.add(new ErrorResponse.FieldError(cle, "« " + c.getLibelle() + " » ne s'applique pas à cette fiche "
+                        + "(condition : " + c.getCondition() + ")."));
+                continue;
+            }
+            String brut = e.getValue() == null ? null : String.valueOf(e.getValue()).trim();
+            if (brut == null || brut.isEmpty()) {
+                erreurs.add(new ErrorResponse.FieldError(cle, "Valeur vide : l'import n'efface rien."));
+                continue;
+            }
+            String cible = LotsFiche.cleSaisie(c, cle, diese < 0 ? null : cle.substring(diese + 1), nbLots, erreurs);
+            if (cible == null) {
+                continue;
+            }
+            String normalisee = normaliser(c, brut, erreurs, cle);
+            if (normalisee != null) {
+                aEcrire.put(cible, normalisee);
+            }
+        }
+        if (!erreurs.isEmpty()) {
+            throw new ChampsInvalidesException(erreurs);
+        }
+
+        // Écriture : rien n'a été refusé.
+        FicheMarche fiche = brouillonOuNouvelle(ctx);
+        if (!cadrageValide.isEmpty()) {
+            Map<String, Object> cadrageFiche = new LinkedHashMap<>(lireJson(fiche.getCadrage()));
+            cadrageFiche.putAll(cadrageValide);
+            fiche.setCadrage(ecrireJson(cadrageFiche));
+            fiche.setTypeMarche(typeMarche);   // comme PUT …/cadrage : la fiche est reprise sous le type du plan
+        }
+        Map<String, FicheMarcheValeur> enBase = new LinkedHashMap<>();
+        valeurRepository.findByIdFiche(fiche.getIdFiche()).forEach(v -> enBase.put(v.getCodeChamp(), v));
+        for (Map.Entry<String, String> e : aEcrire.entrySet()) {
+            FicheMarcheValeur v = enBase.get(e.getKey());
+            if (v == null) {
+                v = new FicheMarcheValeur(null, fiche.getIdFiche(), e.getKey(), e.getValue());
+            } else {
+                v.setValeur(e.getValue());
+                v.setCalculee(Boolean.FALSE);
+            }
+            enBase.put(e.getKey(), valeurRepository.save(v));
+        }
+        // ⚠️ V50 (remise électronique) — comme à l'enregistrement d'un bloc : les cibles calculées se reposent, les
+        // « toujours calculées » toujours, les « si vide » quand elles sont vides ou encore calculées et non importées.
+        Map<String, Object> cadrageFinal = lireJson(fiche.getCadrage());
+        if (RemiseElectronique.electronique(cadrageFinal)) {
+            Map<String, String> toutes = new TreeMap<>();
+            enBase.forEach((k, v) -> toutes.put(k, v.getValeur()));
+            List<ChampFicheMarche> ouverts = champs.values().stream()
+                    .filter(c -> Boolean.TRUE.equals(c.getActif()) && c.pourTypeMarche(typeMarche)
+                            && c.pourCategorie(ctx.codeCategorie()) && ConditionCadrage.vraie(c.getCondition(), cadrageFinal))
+                    .toList();
+            for (Map.Entry<String, String> calc : RemiseElectronique.calculs(ouverts, toutes, ppm.dates()).entrySet()) {
+                FicheMarcheValeur v = enBase.get(calc.getKey());
+                boolean poser = RemiseElectronique.TOUJOURS_CALCULES.contains(calc.getKey()) || v == null
+                        || Boolean.TRUE.equals(v.getCalculee()) && !aEcrire.containsKey(calc.getKey());
+                if (!poser) {
+                    continue;
+                }
+                if (v == null) {
+                    v = new FicheMarcheValeur(null, fiche.getIdFiche(), calc.getKey(), calc.getValue(), true);
+                } else {
+                    v.setValeur(calc.getValue());
+                    v.setCalculee(Boolean.TRUE);
+                }
+                enBase.put(calc.getKey(), valeurRepository.save(v));
+            }
+        }
+        fiche.setDateMaj(LocalDateTime.now());
+        fiche = ficheRepository.save(fiche);
+        journal.tracer(ctx.idDossier(), JournalDossierService.FICHE_IMPORTEE, "fiche pré-remplie par import de "
+                + fichier.trim() + " (" + emp.substring(0, 12) + ") : " + aEcrire.size() + " valeurs, "
+                + cadrageValide.size() + " réponses de cadrage");
+        return toDto(ctx, fiche);
+    }
+
     /**
      * La PRMP <strong>seule</strong> valide (403 pour l'UGPM et l'Administrateur : c'est l'acte qui engage). 409
      * {@code CONTROLES_BLOQUANTS} si le bilan en porte ; {@code FICHE_VIDE} sans brouillon ; {@code FICHE_VALIDEE} si la
@@ -927,7 +1113,7 @@ public class FicheMarcheService {
      * valeur typée selon le champ reflet (OUI/NON, nombre, pourcentage, option de liste). ⚠️ Lot 1c : {@code typeMarche}
      * n'est plus une réponse (dérivé de la forme du marché au plan) — la clé est ignorée si elle est encore envoyée.
      */
-    private Map<String, Object> validerCadrage(Map<String, Object> cadrage, String categorie, String typeMarche) {
+    Map<String, Object> validerCadrage(Map<String, Object> cadrage, String categorie, String typeMarche) {
         List<ErrorResponse.FieldError> erreurs = new ArrayList<>();
         // ⚠️ Lot 5 bis (2026-09-24, travaux) — le reflet qui valide une clé est d'abord celui de la catégorie et du type de
         // la fiche : plusieurs référentiels reflètent la même clé (alloti, typePrix, formeGroupement…), chacun à sa façon ;
@@ -1000,7 +1186,7 @@ public class FicheMarcheService {
     // ------------------------------------------------------------------ valeurs
 
     /** Valeur normalisée selon le type du champ ; {@code null} et une erreur nominative si elle ne se lit pas. */
-    private static String normaliser(ChampFicheMarche c, String brut, List<ErrorResponse.FieldError> erreurs, String champ) {
+    static String normaliser(ChampFicheMarche c, String brut, List<ErrorResponse.FieldError> erreurs, String champ) {
         TypeChampFiche type = TypeChampFiche.valueOf(c.getType());
         switch (type) {
             case OUI_NON -> {

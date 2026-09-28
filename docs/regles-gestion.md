@@ -479,6 +479,31 @@ remplit après le DAO — par le candidat, ou à la notification — reste entre
   départ, le préavis et les fautes ouvrant la résiliation — facultatifs, puisque le modèle les laisse vides si l'acheteur
   ne les précise pas.
 
+#### L'import du DAO : l'import propose, la PRMP décide (demande front du 2026-09-28, décisions du pilote)
+
+⚠️ **Une PRMP qui a déjà rédigé son DAO sur le document type peut en pré-remplir la fiche.** Elle n'a plus à tout
+ressaisir. Cela renverse en partie la décision du 22/09 (« le DAO est un formulaire, jamais un import »). **La fiche reste
+le formulaire et la seule source de vérité.** L'import **propose**, la PRMP **retient**, et rien n'est écrit sans elle.
+Décision : ADR-0012. Contrat : `docs/api-endpoints.md`, § *L'import du DAO*.
+
+- **Le document se lit « à l'envers »** avec les modèles du lot D. Le texte fixe du document type s'y retrouve. Ce qui
+  occupe la place d'un trou est une valeur de la fiche. La rédaction retenue d'une section dit une réponse du cadrage
+  (mono ou multi-attributaire, reconductible, mode de remise…). Seules les formes dont le document type est décrit
+  s'importent : aujourd'hui le contrat-cadre en fournitures et services. Les autres formes se saisissent.
+- **Chaque proposition dit sa confiance** : haute, moyenne ou basse. Elle montre le passage du document où elle a été
+  lue, et la valeur déjà saisie. L'écran ne coche jamais d'office une case qui écraserait une saisie.
+- **Le plan fait foi.** Une information reprise du plan n'est jamais importée. Si le document la dit autrement, c'est
+  une divergence à signaler, pas une valeur. Les valeurs calculées et les pièces ne s'importent pas non plus.
+- **Rien ne contourne la saisie.** Une valeur que la saisie refuserait est signalée comme anomalie. Une information que
+  le cadrage ferme l'est aussi. Deux lectures possibles d'un même passage sont montrées, jamais tranchées : c'est le cas
+  du délai d'exécution fixé par l'autorité ou proposé par les candidats. Un champ lu deux fois différemment ne l'est pas
+  davantage.
+- **L'écriture est d'un seul tenant.** Elle ajoute sans effacer : une information non retenue garde sa valeur. Un seul
+  refus et rien n'est écrit. La fiche reste un brouillon, que la PRMP relit, complète et valide comme toute fiche.
+- **Le fichier n'est pas conservé.** Seuls son nom et son empreinte figurent au journal du dossier de planification.
+  L'import se fait par la PRMP propriétaire ou son UGPM, sur un brouillon seulement. Au premier lot, seul un fichier
+  Word est accepté : ni PDF, ni images, ni champs par lot.
+
 #### Les documents générés (lot 2a, demande front du 2026-09-23)
 
 ⚠️ **Une version validée porte ses documents, et le dossier les reçoit sans geste humain.** La fiche savait déjà quel

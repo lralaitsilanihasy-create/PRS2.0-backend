@@ -68,6 +68,13 @@ public class JournalDossierService {
      */
     public static final String FICHE_MARCHE_SUPPRIMEE = "FICHE_MARCHE_SUPPRIMEE";
     /**
+     * ⚠️ 2026-09-28 (demande front « import du DAO », §B2) — sur le plan : la PRMP ou son UGPM a pré-rempli la fiche marché
+     * en important un DAO ({@code PUT /api/fiches-marche/{idDmc}/import/appliquer}). Le fichier n'est pas conservé : seuls
+     * son nom et le début de son empreinte figurent au détail, « fiche pré-remplie par import de &lt;fichier&gt;
+     * (&lt;empreinte courte&gt;) : n valeurs, m réponses de cadrage ».
+     */
+    public static final String FICHE_IMPORTEE = "FICHE_IMPORTEE";
+    /**
      * ⚠️ 2026-09-27 (règle du pilote, demande front « statut Lancé », §B1) — sur le plan : le dossier de mise en
      * concurrence d'une ligne a été créé ; la ligne restée « Prévu » passe « Lancé », un statut manuel (changement de
      * projet, déclaré sans suite) est conservé et la ligne du journal le dit. Détail « Ligne n : DMC m créé, statut

@@ -43,8 +43,11 @@ public class FicheMarcheController {
 
     private final FicheMarcheService service;
     private final FicheMarcheDossierService dossiers;
+    private final cnm.prs.service.ImportDaoService importDao;
 
-    public FicheMarcheController(FicheMarcheService service, FicheMarcheDossierService dossiers) {
+    public FicheMarcheController(FicheMarcheService service, FicheMarcheDossierService dossiers,
+            cnm.prs.service.ImportDaoService importDao) {
+        this.importDao = importDao;
         this.service = service;
         this.dossiers = dossiers;
     }
@@ -91,6 +94,28 @@ public class FicheMarcheController {
     @PutMapping("/{idDmc}/cadrage")
     public FicheMarcheDto cadrage(@PathVariable Long idDmc, @Valid @RequestBody CadrageRequest corps) {
         return service.ecrireCadrage(idDmc, corps.cadrage());
+    }
+
+    /**
+     * ⚠️ Import du DAO (demande front du 2026-09-28, §B1 ; ADR-0012) — lit un DAO Word (part multipart {@code fichier})
+     * et propose de quoi pré-remplir la fiche, sans rien écrire. 415 {@code FORMAT_NON_SUPPORTE} hors {@code .docx} ;
+     * 409 {@code FICHE_VALIDEE} ; 422 {@code MODELE_ABSENT} ; 403 hors PRMP propriétaire et UGPM.
+     */
+    @PreAuthorize("hasAnyRole('PRMP', 'UGPM')")
+    @PostMapping(path = "/{idDmc}/import", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    public cnm.prs.dto.ImportDaoResult importer(@PathVariable Long idDmc,
+            @RequestParam("fichier") org.springframework.web.multipart.MultipartFile fichier) throws java.io.IOException {
+        return importDao.lire(idDmc, fichier.getOriginalFilename(), fichier.getBytes());
+    }
+
+    /**
+     * ⚠️ Import du DAO (§B2) — écrit d'un seul coup les lignes retenues : fusion (rien n'est effacé), atomique (400
+     * nominatif et rien d'écrit au premier refus), journal {@code FICHE_IMPORTEE}. Rend la fiche.
+     */
+    @PreAuthorize("hasAnyRole('PRMP', 'UGPM')")
+    @PutMapping("/{idDmc}/import/appliquer")
+    public FicheMarcheDto appliquerImport(@PathVariable Long idDmc, @RequestBody cnm.prs.dto.ImportDaoAppliquerRequest corps) {
+        return service.appliquerImport(idDmc, corps.cadrage(), corps.valeurs(), corps.fichier(), corps.empreinte());
     }
 
     /** Les valeurs d'un bloc — remplace celles du bloc ; 400 nominatif par champ fautif. */

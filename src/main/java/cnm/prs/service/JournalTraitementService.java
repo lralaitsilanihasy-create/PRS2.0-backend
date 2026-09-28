@@ -125,6 +125,8 @@ public class JournalTraitementService {
             case JournalDossierService.TRANSMISSION_COMPLEMENTS,
                  JournalDossierService.TRANSMISSION_COMPLEMENTS_DEPOT -> 25;
             // ⚠️ 2026-09-22 — acte PRMP sur un plan déjà contrôlé : rang d'un acte PRMP, après ses transmissions.
+            // ⚠️ 2026-09-28 — l'import du DAO pré-remplit un brouillon : il précède la validation du même instant.
+            case JournalDossierService.FICHE_IMPORTEE -> 26;
             case JournalDossierService.FICHE_MARCHE_VALIDEE, JournalDossierService.FICHE_MARCHE_SUPPRIMEE -> 27;
             // ⚠️ Lot C (2026-09-27) — la révision validée d'une fiche dont le dossier est en circuit : acte PRMP, après
             // la validation qui la porte, avant toute réception.

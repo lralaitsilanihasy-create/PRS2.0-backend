@@ -1996,6 +1996,7 @@ postérieure** à `ficheMarche.versionSoumise` ; voir *La rectification d'un dos
 > | `ARCHIVAGE` | l'assistant clôt | — |
 > | `REINITIALISATION_EXAMEN` | ⚠️ **2026-09-21** — l'attributaire efface tout son brouillon d'examen (`POST /api/examens/{id}/reinitialiser`) ; ligne **consignée** (pas dérivée), rang 49 | « N point(s) et M pièce(s) effacés (K observation(s)) » |
 > | `FICHE_MARCHE_VALIDEE` | ⚠️ **2026-09-22** — la PRMP valide la fiche marché d'un appel d'offres préparé sur une ligne de ce **dossier de planification** (`POST /api/fiches-marche/{idDmc}/valider`) ; acte PRMP (opérateur = la PRMP en fonction), rang 27 | « DAO, version n, N information(s) » |
+> | `FICHE_IMPORTEE` | ⚠️ **2026-09-28** — la PRMP ou son UGPM a pré-rempli la fiche marché d'une ligne de ce **dossier de planification** en important un DAO (`PUT /api/fiches-marche/{idDmc}/import/appliquer`) ; le fichier n'est pas conservé ; rang 26 | « fiche pré-remplie par import de <fichier> (<empreinte courte>) : n valeurs, m réponses de cadrage » |
 > | `DOSSIER_CREE_DEPUIS_FICHE` | ⚠️ **2026-09-23** — sur le **dossier soumis** : il est né d'une fiche validée (`POST /api/fiches-marche/{idDmc}/dossier`), à la suite de sa `CREATION` du même instant ; rang 11 | « Fiche marché version n, N information(s) » |
 > | `FICHE_MARCHE_RATTACHEE` / `FICHE_MARCHE_DETACHEE` | ⚠️ **2026-09-23** — une fiche validée est rattachée en secours à ce dossier `DAO` brouillon, ou en est détachée (`PUT` / `DELETE /api/dossiers/{id}/fiche-marche`) ; actes PRMP / UGPM, rang 12 | « Fiche marché version n, N information(s) » / « Fiche marché du DMC n (ligne x) détachée » |
 > | `DEMANDE_RETRAIT` | ⚠️ **2026-09-07 (T1)** — la PRMP demande le retrait (à `dateDemande`, opérateur = la PRMP, `idPrmpOperateur` posé) | « Demande de retrait — motif : … » |
@@ -4870,6 +4871,119 @@ Demande front `frontend/docs/demande-backend-2026-09-28-lot-d-dao-complet.md` ; 
   « À partir de la date de mise en service »), `B09-GP-05` (garantie exécutée conformément au CCAG), `B10-RS-02` (préavis
   de résiliation, mois), `B10-RS-03` (fautes ouvrant la résiliation) — fichier de correspondance du contrat-cadre et
   `docs/referentiel/2026-09-28-lot-d-champs-contrat-cadre.sql`.
+
+### L'import du DAO : pré-remplir la fiche en lisant le document « à l'envers » ⚠️ 2026-09-28
+
+Demande front `frontend/docs/demande-backend-2026-09-28-import-dao.md`. Décision :
+`docs/adr/ADR-0012-import-dao-par-modele-inverse.md`. **L'import propose, la PRMP retient, et rien n'est écrit sans
+elle.** La lecture est celle de `frontend/scripts/import-dao/lire.mjs`, portée telle quelle (`LectureDao`). Sa parité est
+vérifiée sur les documents de la fiche 27.
+
+**Gardes communes aux deux routes**, dans l'ordre :
+- profil autre que PRMP ou UGPM → 403 (l'Administrateur n'importe pas) ;
+- DMC inconnu → 404, hors périmètre → 403, pas un DAO → 409 `DMC_NON_DAO` ;
+- mandat inactif → 409 ;
+- forme ou catégorie non outillée → 409 `FORME_NON_OUTILLEE` ;
+- dernière version validée → 409 `FICHE_VALIDEE`.
+
+Une fiche jamais enregistrée est lue comme un brouillon vide.
+
+#### `POST /api/fiches-marche/{idDmc}/import` : lire, ne rien écrire
+
+- **Entrée** : `multipart/form-data`, part `fichier`, **`.docx` seulement**, 10 Mo au plus (limite multipart existante).
+- **415 `FORMAT_NON_SUPPORTE`** : « Seul un fichier Word (.docx) peut être importé pour l'instant. » Ce refus vaut pour :
+  - un autre nom de fichier, dont `.pdf` et `.docm` ;
+  - un fichier vide ;
+  - un fichier qui ne s'ouvre pas comme un document Word ;
+  - un paquet qui porte des macros (`vbaProject.bin`, ou un type de contenu autre que celui d'un document) ;
+  - une archive piégée (ratio de décompression de POI).
+- **422 `MODELE_ABSENT`** : « L'import n'est pas encore possible pour ce type de marché : saisissez la fiche. » Il répond
+  quand aucun modèle du lot D ne couvre la forme et la catégorie de la fiche. Aujourd'hui, seul le contrat-cadre en
+  fournitures et services est couvert, par `DPAC-CC` et `AE-CC`. Les gardes de la fiche passent avant celles du fichier.
+- **Lecture** : chaque modèle cherche sa partie dans le même fichier (avis, DPAC, AE à la suite). Un paragraphe et une
+  cellule de tableau sont chacun une unité. Le fichier est lu en mémoire puis oublié. Rien n'est journalisé à la lecture.
+- **Réponse 200 `ImportDaoResult`** :
+
+```json
+{
+  "fichier": "DAO-contrat-cadre.docx", "empreinte": "<sha256 hexadécimal minuscule>",
+  "modeles": [{ "sigle": "DPAC-CC", "unites": 141, "reconnues": 118 }, { "sigle": "AE-CC", "unites": 263, "reconnues": 214 }],
+  "cadrage": [{ "cle": "attributaires", "valeur": "MULTI", "section": "MULTI", "actuelle": null }],
+  "propositions": [{ "code": "B04-CP-02", "lot": null, "valeur": "2026-11-20T10:00", "brut": "20/11/2026 10:00",
+                     "confiance": "haute", "extrait": "DATE ET HEURE LIMITES DE REMISE DES OFFRES : 20/11/2026 10:00",
+                     "actuelle": null, "anomalies": [] }],
+  "ambigus": [{ "candidats": ["B07-DE-02", "B07-DE-03"], "texte": "Le délai de livraison …" }],
+  "divergences": [{ "code": "B02-OB-01", "document": "…", "plan": "…" }],
+  "conflits": [{ "code": "B05-MT-01", "valeurs": ["…", "…"] }],
+  "nonTrouves": ["B04-DS-07"],
+  "avertissements": ["AE-CC : peu de texte du modèle reconnu (12 %) : ce document ne suit pas le document type"]
+}
+```
+
+- **`propositions`** :
+  - `valeur` est dans la forme de saisie, déjà passée par `normaliser` : dates ISO, montants et pourcentages en nombre,
+    options de liste telles que le référentiel les sert, `OUI` / `NON`.
+  - `brut` est le texte lu. `extrait` est le paragraphe du document où il a été lu. `actuelle` est la valeur déjà saisie.
+  - `anomalies` porte les messages du 400 de la saisie : valeur refusée, condition d'affichage fausse sur le cadrage de
+    la fiche complété des réponses déduites, champ par lot d'une ligne allotie. Une proposition qui en porte n'est pas
+    applicable telle quelle.
+  - `lot` est toujours `null` : aucun champ par lot n'est lu au premier lot.
+  - Une réponse déduite dont la clé est un **code de champ** est une proposition de confiance `moyenne`. Son `extrait`
+    vaut « rédaction retenue (section NOM de SIGLE) ». Exemple : `B07-FS-01 = Marchés uniques non fractionnés`.
+- **`confiance`** :
+  - `haute` : bornée par le texte fixe, dans un paragraphe reconnu tel quel. Une valeur ouverte à droite ne reste haute
+    que si son type la contraint (nombre, montant, pourcentage, date, date-heure).
+  - `moyenne` : valeur ouverte à droite (texte), paragraphe redécoupé, ou jeton seul d'une section attestée sur un seul
+    paragraphe.
+  - `basse` : jeton seul d'une section non attestée, intervalle de plusieurs paragraphes, ou valeur coupée.
+- **Jamais proposés** :
+  - un champ repris du plan (`source = PPM`) : une valeur lue qui en diffère est rendue dans `divergences` (le plan fait
+    foi) ;
+  - un reflet du cadrage : il devient une entrée de `cadrage`, sans `section` ;
+  - un champ calculé de la remise électronique ;
+  - une pièce, un champ inactif ou hors de la forme et de la catégorie.
+- **`cadrage`** : les réponses que disent les sections dont un paragraphe **à texte fixe** a été reconnu. Seuls comptent
+  les termes `cle = valeur` d'une conjonction : pas de `ou`, pas de `!=`. Chaque réponse est validée comme par
+  `PUT …/cadrage`. Une réponse refusée va aux `avertissements`. `actuelle` est la réponse déjà portée par la fiche.
+- **`ambigus`** : plusieurs jetons seuls dans le même intervalle. Ils sont signalés, jamais choisis.
+- **`conflits`** : un champ ou une clé lu deux fois différemment, dans un modèle ou d'un modèle à l'autre. Il n'est pas
+  proposé.
+- **`nonTrouves`** : les champs **saisissables** attendus par les modèles et non proposés. Les reprises du plan, les
+  reflets et les calculés n'y figurent pas.
+- **`avertissements`** : « hors gabarit » quand moins de 30 % des unités d'un modèle sont reconnues. Un `.docx` fait
+  d'images ne donne rien, faute d'OCR.
+
+#### `PUT /api/fiches-marche/{idDmc}/import/appliquer` : écrire ce que la PRMP a retenu, d'un seul coup
+
+- **Corps** : uniquement les lignes cochées.
+
+```json
+{ "cadrage": { "attributaires": "MULTI" }, "valeurs": { "B04-CP-02": "2026-11-20T10:00" },
+  "fichier": "DAO-contrat-cadre.docx", "empreinte": "<sha256 de la lecture>" }
+```
+
+- **Fusion, pas remplacement.** Le cadrage reçoit les clés envoyées, et les autres restent. Les valeurs s'écrivent champ
+  par champ, tous blocs confondus. Un code absent n'est pas effacé, contrairement à `PUT …/blocs/{bloc}`. Une valeur
+  écrite par l'import est une saisie ordinaire : elle perd la marque « calculée ».
+- **Atomique.** Tout est validé avant toute écriture. Un refus rend le 400 nominatif habituel, `erreurs: [{champ,
+  message}]`, et **rien** n'est écrit. Les motifs de refus sont :
+  - `fichier` vide, ou `empreinte` qui n'est pas 64 caractères hexadécimaux ;
+  - rien à appliquer ;
+  - une réponse de cadrage vide ou refusée ;
+  - un champ inconnu ou inactif ;
+  - un champ repris du plan (« le plan fait foi ») ou dérivé du cadrage ;
+  - un champ hors de la forme ou de la catégorie ;
+  - un champ **fermé par sa condition** sur le cadrage fusionné. C'est un 400, pas un silence : la PRMP l'a coché.
+    `PUT …/blocs` l'ignore, lui.
+  - une valeur vide (l'import n'efface rien) ;
+  - une valeur que `normaliser` refuse ;
+  - une clé de lot fautive.
+- En mode de remise électronique, les cibles calculées se reposent comme à l'enregistrement d'un bloc. Les « toujours
+  calculées » sont toujours reposées. Les « si vide » le sont quand elles sont vides, ou encore calculées et non importées.
+- Une fiche jamais enregistrée est créée, avec ses défauts recopiés, puis reçoit l'import. La fiche reste en brouillon.
+- **Journal** du dossier de planification : `FICHE_IMPORTEE`, rang 26, détail « fiche pré-remplie par import de
+  <fichier> (<12 premiers caractères de l'empreinte>) : n valeurs, m réponses de cadrage ».
+- **Réponse** : `FicheMarcheDto`, comme après une saisie.
 
 ### Le besoin par lot et les formulaires du candidat ⚠️ 2026-09-25 (V45)
 

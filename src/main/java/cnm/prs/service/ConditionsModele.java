@@ -85,6 +85,30 @@ public final class ConditionsModele {
         return false;
     }
 
+    /**
+     * ⚠️ Import du DAO (2026-09-28, §B1, ADR-0012) — les réponses qu'<strong>implique</strong> une section retenue : chaque
+     * terme {@code cle = valeur} d'une conjonction, dans l'ordre. Rien pour une expression à alternatives ({@code ou}), et
+     * les termes {@code !=}, {@code contient}, {@code renseigne}, {@code vide} n'impliquent rien. Même découpage que
+     * {@link #vraie} : un « et » dans une valeur n'est pas un séparateur.
+     */
+    public static List<Map.Entry<String, String>> implications(String expression) {
+        if (expression == null || expression.isBlank()) {
+            return List.of();
+        }
+        String[] alternatives = OU.split(expression.trim());
+        if (alternatives.length != 1) {
+            return List.of();
+        }
+        List<Map.Entry<String, String>> out = new java.util.ArrayList<>();
+        for (String terme : ET.split(alternatives[0].trim())) {
+            Matcher m = EGAL.matcher(terme.trim());
+            if (m.matches() && "=".equals(m.group(2))) {
+                out.add(Map.entry(m.group(1), m.group(3).trim()));
+            }
+        }
+        return out;
+    }
+
     private static boolean terme(String terme, Function<String, String> lecteur) {
         Matcher m = EGAL.matcher(terme);
         if (m.matches()) {
