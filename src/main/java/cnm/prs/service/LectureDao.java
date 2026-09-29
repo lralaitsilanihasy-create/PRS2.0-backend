@@ -37,7 +37,8 @@ public final class LectureDao {
     private static final String BLANCS_SOUPLES = BLANC + "*";
     private static final Pattern BLANCS = Pattern.compile(BLANC + "+");
     private static final Pattern JETON = Pattern.compile("\\{\\{([^{}]+)}}");
-    private static final Pattern SEUL_JETON = Pattern.compile("^\\{\\{([^{}]+)}}$");
+    private static final Pattern MARQUEUR = Pattern.compile("^\\{\\{(SI|FINSI):([A-Z0-9-]+)}}$");
+    private static final Pattern LOT_ENUMERE = Pattern.compile("lot\\s*n\\s*°?\\s*(\\d+)\\s*:\\s*", Pattern.CASE_INSENSITIVE);
     private static final Pattern SI = Pattern.compile("^\\{\\{SI:([A-Z0-9-]+)}}$");
     private static final Pattern FINSI = Pattern.compile("^\\{\\{FINSI:([A-Z0-9-]+)}}$");
     private static final Pattern POINTILLES = Pattern.compile("^[.…_" + BLANC.substring(1, BLANC.length() - 1) + "]*$");
@@ -61,6 +62,10 @@ public final class LectureDao {
     static final int DEBUT_RESSEMBLANCE = 12;
     /** Un intervalle plus long n'est pas lu. */
     static final int INTERVALLE_MAX = 6;
+    /** ⚠️ B5 règle 2 (2026-09-29) — lettres de texte fixe en deçà desquelles une ancre ne donne jamais la confiance haute. */
+    static final int ANCRE_HAUTE = 8;
+    /** ⚠️ B5 règle 3 (2026-09-29) — lettres de texte fixe qu'il faut à un paragraphe pour attester ses sections. */
+    static final int LETTRES_ATTESTATION = 20;
 
     public enum Confiance {
         BASSE(1), MOYENNE(2), HAUTE(3);
@@ -134,7 +139,7 @@ public final class LectureDao {
         List<String> out = new ArrayList<>();
         for (String ligne : lignes) {
             for (String l : ligne.replace("\r\n", "\n").replace('\r', '\n').split("\n", -1)) {
-                for (String c : l.split("\t", -1)) {
+                for (String c : l.split("[\t\u001E]", -1)) {
                     String n = norm(c);
                     if (!n.isEmpty()) {
                         out.add(n);
@@ -202,17 +207,128 @@ public final class LectureDao {
                 }
                 out.add(new Unite(p.texte(), List.copyOf(pile)));
             } else if (e instanceof DocumentLibre.Tableau t) {
+                // ⚠️ Lot D2 (2026-09-29) — une rangée-marqueur (première cellule {{SI:X}} / {{FINSI:X}}, les autres vides) ouvre
+                // ou ferme une section de rangées ; un paragraphe de cellule qui n'est que le marqueur, une section interne à
+                // la cellule. Chaque paragraphe de cellule est une unité (le DPAO enchaîne des rédactions dans une cellule).
                 for (List<List<String>> ligne : t.lignes()) {
+                    Matcher rangee = marqueurDeRangee(ligne);
+                    if (rangee != null) {
+                        if ("SI".equals(rangee.group(1))) {
+                            pile.addLast(rangee.group(2));
+                        } else {
+                            pile.pollLast();
+                        }
+                        continue;
+                    }
                     for (List<String> cellule : ligne) {
-                        String texte = String.join(" ", cellule);
-                        if (!texte.isBlank()) {
-                            out.add(new Unite(texte, List.copyOf(pile)));
+                        Deque<String> locale = new ArrayDeque<>();
+                        for (String texte : cellule) {
+                            Matcher mc = MARQUEUR.matcher(texte.trim());
+                            if (mc.matches()) {
+                                if ("SI".equals(mc.group(1))) {
+                                    locale.addLast(mc.group(2));
+                                } else {
+                                    locale.pollLast();
+                                }
+                                continue;
+                            }
+                            if (!texte.isBlank()) {
+                                List<String> sections = new ArrayList<>(pile);
+                                sections.addAll(locale);
+                                out.add(new Unite(texte, List.copyOf(sections)));
+                            }
                         }
                     }
                 }
             }
         }
         return out;
+    }
+
+    /** Même règle qu'au rendu : première cellule exactement le marqueur, les autres vides. */
+    private static Matcher marqueurDeRangee(List<List<String>> ligne) {
+        if (ligne.isEmpty() || ligne.get(0).isEmpty()) {
+            return null;
+        }
+        Matcher m = MARQUEUR.matcher(String.join("\u001E", ligne.get(0)).trim());
+        if (!m.matches()) {
+            return null;
+        }
+        for (int c = 1; c < ligne.size(); c++) {
+            for (String p : ligne.get(c)) {
+                if (!p.isBlank()) {
+                    return null;
+                }
+            }
+        }
+        return m;
+    }
+
+    /** Les lettres du texte fixe d'un paragraphe du modèle (jetons retirés). */
+    static int lettresFixes(String texte) {
+        String t = Normalizer.normalize(JETON.matcher(texte).replaceAll(" "), Normalizer.Form.NFKC).toLowerCase(Locale.ROOT);
+        int n = 0;
+        for (int i = 0; i < t.length(); ) {
+            int cp = t.codePointAt(i);
+            i += Character.charCount(cp);
+            if (Character.isLetter(cp)) {
+                n++;
+            }
+        }
+        return n;
+    }
+
+    /**
+     * ⚠️ B5 règle 1 (2026-09-29) — un paragraphe du modèle dont le texte fixe n'a AUCUNE lettre (« {{B05-MO-02}}. ») est un
+     * jeton seul, lu entre ses voisins : en motif, il reconnaîtrait presque tout paragraphe finissant par un point.
+     */
+    private static boolean seulJeton(Unite u) {
+        return u.texte().contains("{{") && lettresFixes(u.texte()) == 0;
+    }
+
+    /**
+     * ⚠️ B5 règle 3 (2026-09-29) — un paragraphe reconnu n'atteste ses sections que s'il a au moins 20 lettres de texte fixe
+     * et qu'aucun paragraphe de même texte n'existe hors de ces sections : un libellé présent dans plusieurs rédactions
+     * (« forfaitaire », « importées », « groupement autorisé ») ne dit pas laquelle a été retenue.
+     */
+    private static boolean distinctif(Unite u, List<Unite> us) {
+        if (u.sections().isEmpty() || lettresFixes(u.texte()) < LETTRES_ATTESTATION) {
+            return false;
+        }
+        String cle = cleTexte(u);
+        String sections = String.join("|", u.sections());
+        for (Unite v : us) {
+            if (v != u && cleTexte(v).equals(cle) && !String.join("|", v.sections()).equals(sections)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static String cleTexte(Unite u) {
+        return norm(JETON.matcher(u.texte()).replaceAll("{}")).toLowerCase(Locale.ROOT);
+    }
+
+    /** Retire d'une valeur lue le texte fixe qui entoure le jeton dans le modèle (ponctuation d'un jeton seul). */
+    static String sansTexteFixe(String brut, String modele) {
+        Matcher m = JETON.matcher(modele);
+        if (!m.find()) {
+            return brut;
+        }
+        String avant = norm(modele.substring(0, m.start()));
+        int fin = m.end();
+        while (m.find()) {
+            fin = m.end();
+        }
+        String apres = norm(modele.substring(fin));
+        String v = norm(brut);
+        if (!apres.isEmpty() && v.endsWith(apres) && v.length() > apres.length()) {
+            v = trim(v.substring(0, v.length() - apres.length()));
+        }
+        if (!avant.isEmpty() && v.startsWith(avant) && v.length() > avant.length()) {
+            v = trim(v.substring(avant.length()));
+        }
+        return v;
     }
 
     private record Motif(Pattern entier, Pattern tete, List<String> jetons, boolean finitParFixe) {
@@ -295,7 +411,7 @@ public final class LectureDao {
         int curseur = 0;
         for (int k = 0; k < us.size(); k++) {
             Unite u = us.get(k);
-            if (SEUL_JETON.matcher(u.texte().trim()).matches()) {
+            if (seulJeton(u)) {
                 continue;   // un jeton seul : borné par ses voisins, étape 2
             }
             Motif mo = motifParagraphe(u.texte());
@@ -303,7 +419,8 @@ public final class LectureDao {
             for (int j = curseur; j < borne; j++) {
                 Matcher x = mo.entier().matcher(doc.get(j));
                 boolean ok = x.find();
-                Confiance confiance = Confiance.HAUTE;
+                // B5 règle 2 — une ancre de moins de 8 lettres de texte fixe ne donne jamais la confiance haute.
+                Confiance confiance = lettresFixes(u.texte()) >= ANCRE_HAUTE ? Confiance.HAUTE : Confiance.MOYENNE;
                 if (!ok && mo.tete() != null) {
                     x = mo.tete().matcher(doc.get(j));
                     ok = x.find();
@@ -321,7 +438,9 @@ public final class LectureDao {
                 }
                 trouves.put(k, j);
                 curseur = j + 1;
-                sectionsVues.addAll(u.sections());
+                if (distinctif(u, us)) {
+                    sectionsVues.addAll(u.sections());   // B5 règle 3
+                }
                 String extrait = doc.get(j);
                 for (int n = 0; n < mo.jetons().size(); n++) {
                     String brut = x.group(n + 1);
@@ -347,8 +466,8 @@ public final class LectureDao {
         Map<String, List<Jeton>> intervalles = new LinkedHashMap<>();
         Map<String, int[]> bornes = new LinkedHashMap<>();
         for (int k = 0; k < us.size(); k++) {
-            Matcher seul = SEUL_JETON.matcher(us.get(k).texte().trim());
-            if (!seul.matches()) {
+            Matcher seul = JETON.matcher(us.get(k).texte());
+            if (!seulJeton(us.get(k)) || !seul.find()) {
                 continue;
             }
             int a = k - 1;
@@ -389,6 +508,10 @@ public final class LectureDao {
             if (cp != null) {
                 brut = cp[0];
             }
+            // ⚠️ Écart au portage (2026-09-29) : le texte fixe sans lettre d'un jeton seul (« {{CODE}}. », « ({{CODE}}) »)
+            // n'est pas la valeur. Sans cela, le point final du modèle restait collé à la dernière valeur (« Lot n° 2 : 500 000
+            // Ariary. » ne se lisait plus comme un montant).
+            brut = sansTexteFixe(brut, us.get(j.k()).texte());
             Confiance confiance = atteste && entre.size() == 1 && cp == null ? Confiance.MOYENNE : Confiance.BASSE;
             lues.add(new Lue(j.nom(), brut, confiance, String.join("\n", entre), false));
         }
@@ -413,9 +536,10 @@ public final class LectureDao {
 
         // 4. Valeurs dans la forme de saisie ; un même champ lu deux fois différemment est un conflit, pas un choix.
         Map<String, Proposition> parCode = new LinkedHashMap<>();
-        for (Lue p : lues) {
+        for (Lue p : etendre(lues)) {
             String[] parts = p.jeton().split("\\.", -1);
-            String code = parts[0];
+            String jeton = parts[0];
+            String code = jeton.split("#", -1)[0];
             String suffixe = parts.length > 1 ? parts[1] : null;
             if (!CODE.matcher(code).matches() || "lettres".equals(suffixe)) {
                 continue;   // LOT, DERIVE, montant en lettres : contrôles, pas des valeurs
@@ -434,14 +558,14 @@ public final class LectureDao {
                 cadrage.putIfAbsent(info.cleCadrage(), new Reponse(info.cleCadrage(), valeur, null));
                 continue;   // un reflet du cadrage se propose comme réponse de cadrage
             }
-            Proposition deja = parCode.get(code);
+            Proposition deja = parCode.get(jeton);
             if (deja != null && !deja.valeur().equals(valeur)) {
-                conflits.add(new Conflit(code, List.of(deja.valeur(), valeur)));
-                enConflit.add(code);
+                conflits.add(new Conflit(jeton, List.of(deja.valeur(), valeur)));
+                enConflit.add(jeton);
                 continue;
             }
             if (deja == null || c.rang > deja.confiance().rang) {
-                parCode.put(code, new Proposition(code, valeur, norm(p.brut()), c, p.extrait()));
+                parCode.put(jeton, new Proposition(jeton, valeur, norm(p.brut()), c, p.extrait()));
             }
         }
         List<Proposition> finales = parCode.values().stream().filter(p -> !enConflit.contains(p.code())).toList();
@@ -455,11 +579,45 @@ public final class LectureDao {
                 }
             }
         }
-        List<String> nonTrouves = attendus.stream().filter(c -> !parCode.containsKey(c)).toList();
+        List<String> nonTrouves = attendus.stream()
+                .filter(c -> parCode.keySet().stream().noneMatch(k -> k.split("#", -1)[0].equals(c))).toList();
         return new Resultat(sigle, us.size(), trouves.size(), finales,
                 cadrage.values().stream().filter(r -> !enConflit.contains(r.cle())).toList(),
                 reponsesChamps.values().stream().filter(r -> !enConflit.contains(r.cle())).toList(),
                 ambigus, conflits, nonTrouves);
+    }
+
+    /**
+     * ⚠️ Lot D2 (2026-09-29, §B1) — une valeur « par lot » d'un document commun ({@code {{CODE.parLot}}}) : « Lot n° 1 : v1 ;
+     * Lot n° 2 : v2 » devient {@code CODE#1}, {@code CODE#2} ; sans mention de lot, la valeur seule sous {@code CODE}.
+     */
+    private static List<Lue> etendre(List<Lue> lues) {
+        List<Lue> out = new ArrayList<>();
+        for (Lue p : lues) {
+            String[] parts = p.jeton().split("\\.", -1);
+            if (parts.length < 2 || !FormulairesCandidat.SUFFIXE_PAR_LOT.equals(parts[1])) {
+                out.add(p);
+                continue;
+            }
+            String texte = norm(p.brut());
+            Matcher m = LOT_ENUMERE.matcher(texte);
+            List<int[]> reperes = new ArrayList<>();
+            List<String> numeros = new ArrayList<>();
+            while (m.find()) {
+                reperes.add(new int[] { m.start(), m.end() });
+                numeros.add(m.group(1));
+            }
+            if (reperes.isEmpty()) {
+                out.add(new Lue(parts[0], p.brut(), p.confiance(), p.extrait(), p.finOuverte()));
+                continue;
+            }
+            for (int i = 0; i < reperes.size(); i++) {
+                int fin = i + 1 < reperes.size() ? reperes.get(i + 1)[0] : texte.length();
+                String valeur = texte.substring(reperes.get(i)[1], fin).replaceAll("\\s*;\\s*$", "");
+                out.add(new Lue(parts[0] + "#" + numeros.get(i), valeur, p.confiance(), p.extrait(), p.finOuverte()));
+            }
+        }
+        return out;
     }
 
     /** Coupe un texte au premier début d'un paragraphe SUIVANT du modèle (k + 1 … k + 40) ; {@code null} s'il n'y en a pas. */

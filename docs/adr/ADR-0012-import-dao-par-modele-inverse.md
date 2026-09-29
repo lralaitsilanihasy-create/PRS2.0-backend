@@ -70,3 +70,35 @@ toutes en basse.
 
 Retirer les deux routes et `LectureDao` / `ImportDaoService`. Aucune donnée ne dépend de l'import : les valeurs écrites
 sont des valeurs de saisie ordinaires, et le journal garde la trace des imports passés.
+
+## Complément du 2026-09-29 — fournitures, PDF et trois règles de prudence
+
+Demande front `frontend/docs/demande-backend-2026-09-29-lot-d2-fournitures.md`, §B1 et §B5. La lecture a été mesurée
+sur le vrai dossier 2463, adapté du document type. Le front n'y a trouvé que 2 valeurs sur 62, mais aucune fausse en
+confiance haute et 6 réponses de cadrage toutes justes.
+
+- **Les fournitures s'importent.** Les trois modèles du lot D2 (DPAO, CCAP, AE) sont lus comme ceux du contrat-cadre.
+  Leurs marqueurs de cellule et de rangée délimitent les sections comme au rendu. Chaque paragraphe de cellule est une
+  unité, et une tabulation dans un paragraphe n'y coupe rien.
+- **`{{CODE.parLot}}` se lit à l'envers.** L'énumération « Lot n° k : valeur » devient la proposition du champ pour le
+  lot k.
+- **Trois règles de prudence**, portées telles quelles :
+  - un paragraphe dont le texte fixe n'a aucune lettre (« {{CODE}}. ») est un jeton seul, jamais un motif ;
+  - une ancre de moins de 8 lettres ne donne jamais la confiance haute ;
+  - un paragraphe n'atteste ses sections que s'il a au moins 20 lettres de texte fixe et qu'aucun paragraphe de même texte
+    n'existe hors de ces sections.
+- **Le PDF « texte » est lu** avec PDFBox, déjà une dépendance : texte horizontal dans le cadre de la page, filigrane
+  écarté, colonnes séparées, paragraphes refaits par l'interligne, en-têtes, pieds et numéros de page écartés. Un PDF sans
+  texte est refusé : il n'y a pas d'OCR.
+- **La parité est vérifiée de nouveau** sur trois entrées : les DPAC et AE `.docx` de la fiche 27, le PDF réel du 2463 et
+  le rendu brut des trois modèles D2. L'extraction est identique, et la lecture aussi aux écarts documentés près.
+- **La forme et la catégorie restent au plan.** Une rédaction qui les dit autrement est une divergence, jamais une réponse
+  de cadrage.
+
+Deux limites sont mesurées ici et signalées au front :
+- Sur les PDF que le serveur produit lui-même (OpenPDF), la lecture du front détache la première lettre de chaque ligne
+  (« A ttestations… ») et ne rejoint pas les lignes d'un paragraphe. Elle ne reconnaît que 31 unités du DPAC, contre 118
+  sur le `.docx`, et peut garder la lettre détachée dans une valeur de confiance moyenne. Aucune valeur n'est fausse en
+  confiance haute.
+- La lecture « par clause » des DAO adaptés, recommandée par le front, attend la décision du pilote. Elle n'est pas
+  livrée.

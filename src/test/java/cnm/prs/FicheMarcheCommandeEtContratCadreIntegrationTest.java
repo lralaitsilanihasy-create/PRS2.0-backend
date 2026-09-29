@@ -70,19 +70,19 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
     // ------------------------------------------------------------------ 1. chargement des référentiels
 
     @Test
-    @DisplayName("1 — Import : 149 champs des fournitures (123 avant V50) et 132 du contrat-cadre (114 avant le 28/09), aucun rejet ; champs actifs servis : 172 en "
-            + "quantité fixe, 177 à commande, 175 en contrat-cadre (V50 : + 26 ; modèle officiel du 28/09 : − 20 + 11 ; lot D : + 9 ; Q2 : − 1) — 2026-09-25 : cinq créations, "
+    @DisplayName("1 — Import : 156 champs des fournitures (149 avant le lot D2, 123 avant V50) et 132 du contrat-cadre (114 avant le 28/09), aucun rejet ; champs actifs servis : 179 en "
+            + "quantité fixe, 184 à commande (lot D2 : + 7), 175 en contrat-cadre (V50 : + 26 ; modèle officiel du 28/09 : − 20 + 11 ; lot D : + 9 ; Q2 : − 1) — 2026-09-25 : cinq créations, "
             + "B06-EO-11 réservé à la quantité fixe")
     void chargementDesReferentiels() throws Exception {
         ChampFicheMarcheService.BilanImport f = importer("referentiel-champs-fiche-marche-fournitures.csv");
         assertThat(f.rejets()).isEmpty();
-        assertThat(f.crees()).hasSize(149);   // V50 : + 26 champs de la remise électronique
+        assertThat(f.crees()).hasSize(156);   // V50 : + 26 champs de la remise électronique ; lot D2 (2026-09-29) : + 7
         ChampFicheMarcheService.BilanImport cc = importer("referentiel-champs-fiche-marche-contrat-cadre.csv");
         assertThat(cc.rejets()).isEmpty();
         assertThat(cc.crees()).hasSize(132);   // 2026-09-28 : + 9 champs du modèle officiel, + 9 du lot D
 
-        assertThat(champs("QUANTITE_FIXE")).hasSize(172);
-        assertThat(champs("A_COMMANDE")).hasSize(177);
+        assertThat(champs("QUANTITE_FIXE")).hasSize(179);
+        assertThat(champs("A_COMMANDE")).hasSize(184);
         assertThat(champs("CONTRAT_CADRE")).hasSize(175);   // 2026-09-28 : 176 − 20 + 11 (modèle officiel) + 9 (lot D) − 1 (B07-DU-06, Q2)
     }
 
@@ -113,7 +113,8 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
 
     @Test
     @DisplayName("3 — À commande : éligible et outillé, DMC créé, cadrage des neuf questions sans attributaires, typeOutille ; "
-            + "validation → DPAO, CCAP et AE, le DPAO porte les quantités minimum et maximum, l'AE les montants annuels")
+            + "validation → DPAO, CCAP et AE rendus depuis les documents types des fournitures (lot D2, 2026-09-29) : rangée « 1.2 "
+            + "Marché à commandes », délai fixé dans le bon de commande")
     void marcheACommande() throws Exception {
         importer("referentiel-champs-fiche-marche-fournitures.csv");
         String eligibles = mvc.perform(get("/api/dmcs/eligibles").header("Authorization", tokenPrmp))
@@ -135,8 +136,11 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
 
         List<String> types = JsonPath.read(documents(idDmc), "$[*].type");
         assertThat(types).containsExactly("DPAO", "DPAO", "CCAP", "CCAP", "AE", "AE", "LF", "LF", "BP", "TC");
-        assertThat(texte(idDmc, "DPAO")).doesNotContain("Quantités minimum et maximum");
-        assertThat(texte(idDmc, "AE")).contains("Montant minimum annuel", "10 000 000 Ariary", "Montant maximum annuel");
+        assertThat(texte(idDmc, "DPAO")).contains("1.2. - DONNEES PARTICULIERES DE L’APPEL D’OFFRES", "1.2 Marché à commandes");
+        assertThat(texte(idDmc, "CCAP")).contains("CAHIER DES PRESCRIPTIONS SPECIALES", "fixé dans le bon de commande");
+        assertThat(texte(idDmc, "AE")).contains("ACTE D'ENGAGEMENT (A.E)", "Le délai d'exécution est fixé dans le bon de commande");
+        assertThat(JsonPath.<List<String>>read(documents(idDmc), "$[?(@.type=='CCAP')].libelle"))
+                .containsOnly("Cahier des prescriptions spéciales");
     }
 
     // ------------------------------------------------------------------ 4. contrat-cadre (lot 4)
@@ -290,7 +294,7 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
 
     @Test
     @DisplayName("7 — Lot D : contrat-cadre alloti en 2 lots → un DPAC et deux AE « LOT n° 1 / 2 » rendus du document type ; "
-            + "à commande → DPAO, CCAP et AE du lot 2a inchangés")
+            + "à commande → DPAO, CCAP et AE rendus des documents types des fournitures (lot D2, 2026-09-29)")
     void lotDProductionParForme() throws Exception {
         importer("referentiel-champs-fiche-marche-fournitures.csv");
         importer("referentiel-champs-fiche-marche-contrat-cadre.csv");
@@ -322,9 +326,10 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
         ac.setValeurs(new java.util.HashMap<>(Map.of("B02-OB-03", "AOO 1/2026", "B04-VO-01", "90")));
         List<cnm.prs.service.DocumentsFicheMarcheService.Produit> lot2a = documentsService.produire(ac, java.time.LocalDateTime.now());
         assertThat(lot2a.stream().filter(p -> "docx".equals(p.extension())).map(cnm.prs.service.DocumentsFicheMarcheService.Produit::type))
-                .contains("DPAO").doesNotContain("DPAC");
+                .containsSubsequence("DPAO", "CCAP", "AE").doesNotContain("DPAC");
         byte[] dpao = lot2a.stream().filter(p -> "DPAO".equals(p.type()) && "docx".equals(p.extension())).findFirst().orElseThrow().contenu();
-        assertThat(texteDocx(dpao)).contains("Données particulières de l'appel d'offres", "Délai de validité des offres (jours) : 90");
+        assertThat(texteDocx(dpao)).contains("DONNEES PARTICULIERES DE L’APPEL D’OFFRES", "Le délai de validité de l’offre sera de 90 jours.")
+                .doesNotContain("Délai de validité des offres (jours) : 90");   // plus la liste « libellé : valeur » du lot 2a
     }
 
     // ------------------------------------------------------------------ 8. Q2 : les informations sans trou

@@ -1,4 +1,5 @@
 code;libelle;type;source;documentMaitre;reprises;typesMarche;condition;obligatoire;texteType;controle;options;cleCadrage;clePpm;actif;parLot;categories;valeurDefaut
+B02-VA-01;Offres variantes prises en considération;LISTE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;variantes = OUI;non;;;Offre de base évaluée la moins-disante,Toutes les offres conformes aux spécifications;;;oui
 B02-OB-02;Type de fournitures à livrer et services connexes à réaliser;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
 B02-OB-03;Numéro du dossier d'appel d'offres;TEXTE;SAISIE;DPAO;AE;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui;;FOURNITURES_SERVICES,TRAVAUX,PRESTATIONS_INTELLECTUELLES;
 B02-AU-01;Description du projet global (marché non alloti);TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;alloti = NON;oui;;;;;;oui
@@ -43,7 +44,10 @@ B04-OP-03;Heure de l'ouverture des plis;TEXTE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMA
 B05-CP-01;Incoterm des fournitures importées;LISTE;SAISIE;DPAO;AE,CCAP;QUANTITE_FIXE,A_COMMANDE;provenance = IMPORTEES;oui;;;CIP,CIF;;;oui
 B05-CP-02;Décomposition des prix des fournitures nationales (EXW hors TVA, transports intérieurs, assurance, services);TEXTE_LONG;SAISIE;DPAO;AE,CCAP;QUANTITE_FIXE,A_COMMANDE;provenance = NATIONAL;non;;;;;;oui
 B05-CP-03;Part en devises des fournitures importées;TEXTE;SAISIE;DPAO;AE,CCAP;QUANTITE_FIXE,A_COMMANDE;provenance = IMPORTEES;non;;;;;;oui
+B05-CP-04;Transport intérieur jusqu'à la destination finale à la charge du fournisseur (fournitures importées);OUI_NON;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;provenance = IMPORTEES;non;;;;;;oui
+B05-CP-05;Lieu (CIP) ou port (CIF) de destination des fournitures importées;TEXTE;SAISIE;DPAO;CCAP;QUANTITE_FIXE,A_COMMANDE;provenance = IMPORTEES;non;;;;;;oui
 B05-VP-02;Formule de révision des prix;TEXTE_LONG;SAISIE;DPAO;CCAP;QUANTITE_FIXE,A_COMMANDE;prixRevisable = OUI;oui;;;;;;oui
+B05-VP-03;Indices d'actualisation des prix fermes (nature et sources);TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;prixRevisable = NON;non;;;;;;oui
 B05-MO-01;Monnaie de l'offre;LISTE;SAISIE;DPAO;CCAP;QUANTITE_FIXE,A_COMMANDE;;oui;;;Ariary,Ariary et devise pour la part importée;;;oui
 B05-MO-02;Devise admise pour la part importée;TEXTE;SAISIE;DPAO;CCAP;QUANTITE_FIXE,A_COMMANDE;provenance = IMPORTEES;non;;;;;;oui
 B05-GS-02;Forme de la garantie de soumission;LISTE_MULTIPLE;SAISIE;DPAO;AE,CCAP;QUANTITE_FIXE,A_COMMANDE;garantieSoumission = OUI;oui;;;Dépôt en numéraire au Trésor,Caution personnelle et solidaire d'un organisme agréé par le MEF,Garantie bancaire,Chèque de banque;;;oui
@@ -118,8 +122,11 @@ B09-IV-01;Inspections, vérifications et essais;TEXTE_LONG;SAISIE;CCAP;;QUANTITE
 B09-DI-01;Décision après inspection et essais;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
 B09-DG-01;Délai de garantie (mois);NOMBRE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
 B09-DG-02;Étendue de la garantie;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
+B09-DG-03;Pénalité pour non-respect des garanties contractuelles (% du prix initial);POURCENTAGE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
+B09-DG-04;Délai accordé pour remédier aux défauts pendant la garantie;TEXTE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
 B10-IR-01;Indemnité de résiliation prévue;OUI_NON;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
 B10-IR-02;Modalités de l'indemnité de résiliation;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
+B10-IR-03;Taux de l'indemnité de résiliation (%, si différent des 4 % du CCAG);POURCENTAGE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
 B10-AR-01;Arbitrage et règlement des litiges;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
 B10-DD-01;Dérogations aux documents généraux;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
 B04-SE-01;Mode de remise des offres;LISTE;CADRAGE;DPAO;;QUANTITE_FIXE,A_COMMANDE,CONTRAT_CADRE;;oui;;;PAPIER,ELECTRONIQUE;modeRemise;;oui;non;FOURNITURES_SERVICES,TRAVAUX,PRESTATIONS_INTELLECTUELLES;

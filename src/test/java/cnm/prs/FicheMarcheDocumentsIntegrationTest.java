@@ -76,7 +76,12 @@ class FicheMarcheDocumentsIntegrationTest extends CnmIntegrationTestSupport {
         dispatchRepository.save(dispatch(9900, 9900, "CTRCC1", "CTRMEM", "CTRPRE"));
         examenRepository.save(examen(9900, 9900, "CTRMEM"));
         seedPvSigne(9900, 9900);
+        // ⚠️ Lot D2 (2026-09-29) — les fournitures (quantité fixe, à commande) sont rendues depuis leurs documents types
+        // officiels : ce qui est vérifié ici, le rendu « libellé : valeur » du lot 2a, reste celui des TRAVAUX (et des
+        // prestations intellectuelles). La ligne est donc de travaux (nature 91) ; les champs de test valent pour eux.
+        natureRepository.save(new cnm.prs.entity.Nature(91, "Travaux", null, "TRAVAUX"));
         Marche l = marcheDao(9901, 9900, 9900);
+        l.setIdNature(91);
         l.setIdMode(92);
         l.setDesignationMarche("Fourniture de mobilier de bureau");
         l.setMontEstim(new BigDecimal("8400000"));
@@ -110,8 +115,8 @@ class FicheMarcheDocumentsIntegrationTest extends CnmIntegrationTestSupport {
         remplirEtValider();
         String corps = mvc.perform(get("/api/fiches-marche/" + idDmc + "/documents").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertThat(JsonPath.<List<String>>read(corps, "$[*].type")).containsExactly("DPAO", "DPAO", "CCAP", "CCAP", "AE", "AE", "LF", "LF", "BP", "TC");   // V45 : liste des fournitures, bordereau, conformité
-        assertThat(JsonPath.<List<String>>read(corps, "$[*].extension")).containsExactly("docx", "pdf", "docx", "pdf", "docx", "pdf", "docx", "pdf", "xlsx", "xlsx");
+        assertThat(JsonPath.<List<String>>read(corps, "$[*].type")).containsExactly("DPAO", "DPAO", "CCAP", "CCAP", "AE", "AE");   // travaux : ni liste des fournitures, ni bordereau, ni conformité
+        assertThat(JsonPath.<List<String>>read(corps, "$[*].extension")).containsExactly("docx", "pdf", "docx", "pdf", "docx", "pdf");
         assertThat(JsonPath.<List<Integer>>read(corps, "$[*].version")).containsOnly(1);
         assertThat(JsonPath.<List<String>>read(corps, "$[?(@.type=='AE')].libelle")).containsOnly("Acte d'engagement");
         assertThat(JsonPath.<List<String>>read(corps, "$[*].nomFichier")).contains("DPAO_DOS-9900_9901_v1.docx",
@@ -209,12 +214,12 @@ class FicheMarcheDocumentsIntegrationTest extends CnmIntegrationTestSupport {
         valider();
         String v2 = mvc.perform(get("/api/fiches-marche/" + idDmc + "/documents").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertThat(JsonPath.<List<Integer>>read(v2, "$[*].version")).hasSize(10).containsOnly(2);
+        assertThat(JsonPath.<List<Integer>>read(v2, "$[*].version")).hasSize(6).containsOnly(2);
         assertThat(JsonPath.<List<String>>read(v2, "$[*].nomFichier")).contains("DPAO_DOS-9900_9901_v2.docx");
         String v1 = mvc.perform(get("/api/fiches-marche/" + idDmc + "/documents").param("version", "1")
                 .header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertThat(JsonPath.<List<Integer>>read(v1, "$[*].version")).hasSize(10).containsOnly(1);
+        assertThat(JsonPath.<List<Integer>>read(v1, "$[*].version")).hasSize(6).containsOnly(1);
         int idV1 = JsonPath.<List<Integer>>read(v1, "$[?(@.type=='DPAO' && @.extension=='docx')].idDocument").get(0);
         byte[] ancien = mvc.perform(get("/api/fiches-marche/documents/" + idV1 + "/contenu").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
@@ -233,11 +238,10 @@ class FicheMarcheDocumentsIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         int idDossier = JsonPath.read(dossier, "$.idDossier");
         String pieces = pieces(idDossier);
-        assertThat(JsonPath.<List<Integer>>read(pieces, "$[*].idTypePiece")).hasSize(4).containsOnly(typeDao);
+        assertThat(JsonPath.<List<Integer>>read(pieces, "$[*].idTypePiece")).hasSize(3).containsOnly(typeDao);
         assertThat(JsonPath.<List<String>>read(pieces, "$[*].format")).containsOnly("PDF");
         assertThat(JsonPath.<List<String>>read(pieces, "$[*].nomFichier"))
-                .containsExactlyInAnyOrder("DPAO_DOS-9900_9901_v1.pdf", "CCAP_DOS-9900_9901_v1.pdf", "AE_DOS-9900_9901_v1.pdf",
-                        "LF_DOS-9900_9901_v1.pdf");
+                .containsExactlyInAnyOrder("DPAO_DOS-9900_9901_v1.pdf", "CCAP_DOS-9900_9901_v1.pdf", "AE_DOS-9900_9901_v1.pdf");
         assertThat(JsonPath.<List<Object>>read(pieces, "$[*].idDocumentFiche")).doesNotContainNull();
 
         int idPiece = JsonPath.<List<Integer>>read(pieces, "$[*].idPiece").get(0);
@@ -256,8 +260,7 @@ class FicheMarcheDocumentsIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(post("/api/fiches-marche/" + idDmc + "/reviser").header("Authorization", tokenPrmp)).andExpect(status().isOk());
         valider();
         assertThat(JsonPath.<List<String>>read(pieces(idDossier), "$[*].nomFichier"))
-                .containsExactlyInAnyOrder("DPAO_DOS-9900_9901_v2.pdf", "CCAP_DOS-9900_9901_v2.pdf", "AE_DOS-9900_9901_v2.pdf",
-                        "LF_DOS-9900_9901_v2.pdf");
+                .containsExactlyInAnyOrder("DPAO_DOS-9900_9901_v2.pdf", "CCAP_DOS-9900_9901_v2.pdf", "AE_DOS-9900_9901_v2.pdf");
 
         mvc.perform(delete("/api/dossiers/" + idDossier + "/fiche-marche").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk());
@@ -265,7 +268,7 @@ class FicheMarcheDocumentsIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(put("/api/dossiers/" + idDossier + "/fiche-marche").header("Authorization", tokenPrmp).contentType(JSON)
                 .content("{\"idDmc\":" + idDmc + "}"))
                 .andExpect(status().isOk());
-        assertThat(JsonPath.<List<Object>>read(pieces(idDossier), "$")).hasSize(4);
+        assertThat(JsonPath.<List<Object>>read(pieces(idDossier), "$")).hasSize(3);
     }
 
     // ------------------------------------------------------------------ 7. la Commission
@@ -432,6 +435,7 @@ class FicheMarcheDocumentsIntegrationTest extends CnmIntegrationTestSupport {
         c.setDocumentMaitre(document);
         c.setReprises(reprises);
         c.setTypesMarche("QUANTITE_FIXE,A_COMMANDE,CONTRAT_CADRE");
+        c.setCategories("FOURNITURES_SERVICES,TRAVAUX");
         c.setObligatoire(obligatoire);
         c.setCondition(condition);
         c.setOptions(options);

@@ -1,0 +1,522 @@
+FICHIER	CCAP-F.docx
+TITRE	CAHIER DES PRESCRIPTIONS SPECIALES
+CONDITION	AOOB01-AC-13 = Appel d'offres ouvert
+CONDITION	PREQUALIFICATIONB01-AC-13 contient qualification
+CONDITION	DEUX-ETAPESB01-AC-13 contient deux étapes
+CONDITION	RESTREINTB01-AC-13 contient restreint
+CONDITION	PROJETB02-AU-01 renseigne
+CONDITION	ALLOTIalloti = OUI
+CONDITION	GROUPEMENT-SOLIDAIREgroupement = OUI et formeGroupement = SOLIDAIRE_OBLIGATOIRE
+CONDITION	GROUPEMENT-LIBREgroupement = OUI et formeGroupement = CONJOINT_OU_SOLIDAIRE
+CONDITION	PIECES-SUPPLEMENTAIRESB09-PC-01 renseigne
+CONDITION	DELAI-AJUSTEMENTB09-OM-01 renseigne
+CONDITION	VARIATION-QUANTITEStypeMarche = QUANTITE_FIXE et B09-OM-02 renseigne
+CONDITION	COMMANDEtypeMarche = A_COMMANDE
+CONDITION	QUANTITE-FIXEtypeMarche = QUANTITE_FIXE
+CONDITION	SECURITE-NONB09-PS-01 = NON
+CONDITION	SECURITE-OUIB09-PS-01 = OUI
+CONDITION	SECURITE-NOTIFICATIONB09-PS-01 = OUI et B09-PS-02 renseigne
+CONDITION	SECURITE-ANNEXEB09-PS-01 = OUI et B09-PS-03 renseigne
+CONDITION	FERMEprixRevisable = NON
+CONDITION	REVISABLEprixRevisable = OUI
+CONDITION	SANS-AVANCEavance = NON
+CONDITION	AVANCEavance = OUI
+CONDITION	GARANTIE-AVANCEavance = OUI et B08-AV-04 renseigne
+CONDITION	AVANCE-GARANTIE-BANCAIREavance = OUI et B08-AV-04 = Garantie bancaire
+CONDITION	AVANCE-CAUTIONavance = OUI et B08-AV-04 = Caution personnelle et solidaire
+CONDITION	PAIEMENT-LIVRAISONtypePrix = UNITAIRES et B08-PA-05 = À la livraison
+CONDITION	PAIEMENT-MENSUELtypePrix = UNITAIRES et B08-PA-05 = Mensuelle
+CONDITION	PAIEMENT-TRIMESTRIELtypePrix = UNITAIRES et B08-PA-05 = Trimestrielle
+CONDITION	FORFAITtypePrix = FORFAITAIRE
+CONDITION	DEVISEB05-MO-01 contient devise
+CONDITION	DEPART-DIFFEREB09-DX-02 renseigne
+CONDITION	PENALITES-NONpenalites = NON
+CONDITION	PENALITES-CCAGpenalites = CCAG
+CONDITION	PENALITES-PLAFONDpenalites = PLAFOND_DIFFERENT
+CONDITION	BONNE-EXECUTION-NONB08-GB-01 = NON
+CONDITION	BONNE-EXECUTIONB08-GB-01 = OUI
+CONDITION	BONNE-EXECUTION-BANCAIREB08-GB-01 = OUI et B06-AN-01 = Garantie bancaire
+CONDITION	BONNE-EXECUTION-CAUTIONB08-GB-01 = OUI et B06-AN-01 = Cautionnement
+CONDITION	BONNE-EXECUTION-MOITIEB08-GB-01 = OUI et B08-RG-01 = OUI
+CONDITION	BANCAIRE-MOITIEB08-GB-01 = OUI et B06-AN-01 = Garantie bancaire et B08-RG-01 = OUI
+CONDITION	BANCAIRE-ENTIEREB08-GB-01 = OUI et B06-AN-01 = Garantie bancaire et B08-RG-01 = NON
+CONDITION	CAUTION-MOITIEB08-GB-01 = OUI et B06-AN-01 = Cautionnement et B08-RG-01 = OUI
+CONDITION	CAUTION-ENTIEREB08-GB-01 = OUI et B06-AN-01 = Cautionnement et B08-RG-01 = NON
+CONDITION	RETENUE-NONB08-RG-01 = NON
+CONDITION	RETENUE-OUIB08-RG-01 = OUI
+CONDITION	MATERIELS-NONB09-MC-01 = NON
+CONDITION	MATERIELS-OUIB09-MC-01 = OUI
+CONDITION	STOCKAGE-NONB09-SK-01 = NON
+CONDITION	STOCKAGE-QUANTITE-FIXEB09-SK-01 = OUI et typeMarche = QUANTITE_FIXE
+CONDITION	STOCKAGE-COMMANDEB09-SK-01 = OUI et typeMarche = A_COMMANDE
+CONDITION	MARQUAGEB09-EM-01 renseigne
+CONDITION	DOCUMENTS-EMBALLAGEB09-EM-02 renseigne
+CONDITION	TRANSPORT-INCOTERMB09-RT-01 = Selon l'incoterm
+CONDITION	TRANSPORT-FOURNISSEURB09-RT-01 = Transport par le fournisseur jusqu'à la destination finale
+CONDITION	TRANSPORT-PARTAGEB09-RT-01 = Responsabilités partagées
+CONDITION	NATIONALprovenance = NATIONAL
+CONDITION	IMPORTEESprovenance = IMPORTEES
+CONDITION	CIPprovenance = IMPORTEES et B05-CP-01 = CIP
+CONDITION	CIFprovenance = IMPORTEES et B05-CP-01 = CIF
+CONDITION	ASSURANCE-INCOTERMB09-AS-01 = Selon l'incoterm
+CONDITION	ASSURANCE-AUTREB09-AS-01 != Selon l'incoterm
+CONDITION	CONTROLE-PRIX-NONB09-CR-01 = NON
+CONDITION	CONTROLE-PRIX-OUIB09-CR-01 = OUI
+CONDITION	GARANTIEB09-DG-01 renseigne
+CONDITION	SANS-GARANTIEB09-DG-01 vide
+CONDITION	INDEMNITEB10-IR-01 = OUI
+CENTRE	MARCHÉ PUBLIC DE FOURNITURES
+PARA	AUTORITE CONTRACTANTE :
+PARA	{{B01-AC-01}}
+PARA	MARCHÉ :
+PARA	{{B02-OB-03}} — {{B02-OB-01}}
+PARA	Marché passé selon la procédure
+PARA	{{SI:AOO}}
+PARA	d'appel d'offres ouvert régie par l'article 18 du Code des Marchés Publics
+PARA	{{FINSI:AOO}}
+PARA	{{SI:PREQUALIFICATION}}
+PARA	d'appel d'offres ouvert avec pré - qualification régie par l'article 19 du Code des Marchés Publics
+PARA	{{FINSI:PREQUALIFICATION}}
+PARA	{{SI:DEUX-ETAPES}}
+PARA	d'appel d'offres en deux étapes régie par l'article 20 du Code des Marchés Publics
+PARA	{{FINSI:DEUX-ETAPES}}
+PARA	{{SI:RESTREINT}}
+PARA	d'appel d'offres restreint régie par l'article 21 du Code des Marchés Publics
+PARA	{{FINSI:RESTREINT}}
+PARA	PERSONNE RESPONSABLE DES MARCHES PUBLICS (PRMP) OU SON DELEGUE:
+PARA	{{B01-AC-05}}
+PARA	Le présent Cahier des Prescriptions Spéciales comprend :
+PARA	Le Cahier des Clauses Administratives Particulières (CCAP),
+PARA	Annexe : Exemple de formule de révision de prix
+PARA	Annexe : Modèle de garantie bancaire de bonne exécution
+PARA	Annexe : Modèle de caution de bonne exécution
+PARA	Annexe : Modèle de garantie bancaire de restitution d'avance
+PARA	Annexe : Modèle de caution de restitution d'avance
+PARA	Les Spécifications Techniques.
+PARA	Annexe : Liste des services connexes et calendrier de réalisation
+PARA	Annexe : Liste des Fournitures et calendrier de réalisation
+PARA	Le Cahier des Prescriptions Spéciales ne peut être ni modifié ni complété par les Candidats qui doivent souscrire à ses dispositions.
+SOUS_TITRE	CAHIER DES CLAUSES ADMINISTRATIVES PARTICULIERES (CCAP):
+PARA	Le CCAP est destiné à compléter les dispositions du Cahier des Clauses Administratives Générales (CCAG) afin de préciser les obligations contractuelles reflétant les circonstances auxquelles sont assujettis l'Acheteur et les Fournitures concernés. Les candidats au Marché doivent souscrire à ses dispositions sans le modifier ni le compléter[note:1].
+PARA	Les dispositions du présent Cahier des Clauses Administratives Particulières (CCAP) précisent le CCAG en le complétant ou en dérogeant à ses dispositions. Les candidats au Marché doivent souscrire à ses dispositions sans le modifier ni le compléter. Les clauses du CCAP suivent l'ordre et la numérotation des articles du CCAG. En cas de contradiction entre les deux documents, les clauses ci-après prévalent sur celles du CCAG.
+SOUS_TITRE	Article 1. - Objet du Marché
+PARA	{{SI:PROJET}}
+PARA	Les stipulations du présent CCAP concernent les fournitures à effectuer dans le cadre de
+PARA	{{B02-AU-01}}.
+PARA	{{FINSI:PROJET}}
+PARA	Le Marché a pour objet la fourniture de…..:
+PARA	{{B02-OB-01}}.
+PARA	Le(s) lieu(x) de destination finale des marchandises est (sont) :
+PARA	{{B09-LL-01.parLot}}
+PARA	{{SI:ALLOTI}}
+PARA	Les fournitures comprennent {{B02-LV-05}} lots :
+PARA	{{B02-LV-02}}
+PARA	{{FINSI:ALLOTI}}
+PARA	La description des fournitures et leurs spécifications sont indiquées dans les Spécifications Techniques du présent Cahier des Prescriptions Spéciales (CPS).
+SOUS_TITRE	Article 2. - Acheteur (CCAG Article 2.1)
+PARA	{{B01-AC-01}}.
+SOUS_TITRE	Article 3. -Communication à la Personne Responsable des Marchés Publics, et notification au fournisseur (CCAG Article 4.1.)
+PARA	Aux fins de (notifications et) de communications, les coordonnées de la Personne Responsable des Marchés Publics sont les suivantes :
+PARA	A l’attention de {{B01-AC-05}}
+PARA	n° et rue : {{B01-AC-02}}
+PARA	Etage et bureau :
+PARA	Code Postal :
+PARA	Télécopie : <insérer le n° >1
+PARA	Adresse électronique : {{B01-AC-06}}
+PARA	Aux fins de notification, les coordonnées du Fournisseur sont les suivantes :
+PARA	A l’attention de {{B01-AC-05}}
+PARA	n° et rue : {{B01-AC-02}}
+PARA	Etage et bureau :
+PARA	Code Postal :
+PARA	Télécopie : <insérer le n° >
+PARA	Adresse électronique : {{B01-AC-06}}
+SOUS_TITRE	Article 4. - Groupements (CCAG Article 5)
+PARA	{{SI:GROUPEMENT-SOLIDAIRE}}
+PARA	Les Fournisseurs groupés seront considérés comme solidaires, chacun des membres du groupement étant engagé pour la totalité du Marché.
+PARA	{{FINSI:GROUPEMENT-SOLIDAIRE}}
+PARA	{{SI:GROUPEMENT-LIBRE}}
+PARA	Les Fournisseurs groupés seront considérés comme solidaires, chacun des membres du groupement étant engagé pour la totalité du Marché.
+PARA	Les Fournisseurs groupés seront considérés comme conjoints chacun des Fournisseurs étant responsable de la réalisation du ou des lots qui lui sont assignés. Le mandataire des membres du groupement désigné dans l'Acte d'Engagement est solidaire de chacun des Fournisseurs groupés dans les obligations contractuelles de ceux-ci à l'égard de l’Autorité Contractante.
+PARA	{{FINSI:GROUPEMENT-LIBRE}}
+SOUS_TITRE	Article 5. - Pièces contractuelles (CCAG Article 6)
+PARA	{{SI:PIECES-SUPPLEMENTAIRES}}
+PARA	Constituent des documents contractuels en sus des documents prévus par les CCAG les pièces suivantes:
+PARA	{{B09-PC-01}}
+PARA	{{FINSI:PIECES-SUPPLEMENTAIRES}}
+PARA	L’ordre de priorité des pièces contractuelles est celui fixé par l’article 6 des CCAG
+SOUS_TITRE	Article 6. - Ordres de modification et avenants (CCAG Article 6.2)
+PARA	Ordres de modifications
+PARA	{{SI:DELAI-AJUSTEMENT}}
+PARA	Le délai de communication par le Fournisseur des demandes d'ajustement de prix ou de délai est fixé à {{B09-OM-01}} jours suivant la date de réception des modifications.
+PARA	{{FINSI:DELAI-AJUSTEMENT}}
+PARA	Variations maximales des volumes ou quantités
+PARA	{{SI:VARIATION-QUANTITES}}
+PARA	Variations maximales, augmentation ou réduction, du volume ou des quantités des Fournitures, qui peuvent être exécutées sans avenant : {{B09-OM-02.chiffres}} %
+PARA	{{FINSI:VARIATION-QUANTITES}}
+PARA	{{SI:COMMANDE}}
+PARA	Les dispositions du présent Marché sont applicables à toutes les commandes passées pour le compte de l’Autorité Contractante dans un délai de{{B09-OM-03}} mois à compter de la notification de son approbation au Fournisseur
+PARA	Le Minimum et le Maximum des quantités susceptibles d’être commandées pour chacun des articles entrant dans la composition de la fourniture sont précisés dans le Bordereau de Prix donné en Annexe à l’Acte d’Engagement, étant entendu que ces quantités sont susceptibles de varier pour chaque article dans la limite de ………..% en sus de maximum ou en dessous du minimum, sans que la valeur totale des commandes puisse être inférieure à la valeur minimale ni supérieure à la valeur maximale prévue dans le présent CPS.
+PARA	{{FINSI:COMMANDE}}
+SOUS_TITRE	Article 7. - Protection du secret – Mesure de sécurité (CCAG Article 7)
+PARA	{{SI:SECURITE-NON}}
+PARA	Non applicable
+PARA	{{FINSI:SECURITE-NON}}
+PARA	{{SI:SECURITE-OUI}}
+PARA	Les fournitures, objet du présent Marché, sont à exécuter dans un lieu où des mesures de sécurité ou de protection du secret s'appliquent. Le Fournisseur doit en conséquence observer les dispositions :
+PARA	{{FINSI:SECURITE-OUI}}
+PARA	{{SI:SECURITE-NOTIFICATION}}
+PARA	que l’Autorité Contractante communiquera lors de la notification de l'attribution du Marché,
+PARA	{{FINSI:SECURITE-NOTIFICATION}}
+PARA	{{SI:SECURITE-ANNEXE}}
+PARA	mentionnées en Annexes au présent CCAP.
+PARA	{{FINSI:SECURITE-ANNEXE}}
+SOUS_TITRE	Article 8. - Contenu et caractère des prix (CCAG article 8)
+SOUS_TITRE	8.1. - Contenu des prix (CCAG article 8.1.)
+PARA	Les prix du Marché sont supposés comprendre l'ensemble des impôts, droits et taxes de toute nature dus par le Fournisseur au titre de la signature et de l'exécution du Marché (à l'exception de la TVA.)
+PARA	Les prix proposés sont supposés établis conformément aux dispositions applicables à l'Incoterm (visé à l’article 17 du présent CCAP.)
+SOUS_TITRE	8.2. - Variations dans les prix (CCAG article 8.2.)
+PARA	{{SI:FERME}}
+PARA	Les prix sont fermes et non révisables.
+PARA	Ils sont actualisés pour tenir compte du délai entre la date limite de remise des offres et la date de notification du Marché, selon la formule suivante :
+PARA	PI = Po (In / Io)
+PARA	Formule selon laquelle :
+PARA	PI est le nouveau prix actualisé ;
+PARA	Po est le prix de base du règlement des prestations figurant à l'acte d'engagement.
+PARA	In est la valeur de l'indice, défini pour chaque lot, de la date de la notification du Marché ou de l'acte portant début d'exécution des prestations.
+PARA	Io est la valeur de ce même indice correspondant à la date d'établissement des prix fixés dans l'acte d'engagement.
+PARA	Le (les) indice(s) applicables sont:
+PARA	{{B05-VP-03}}
+PARA	Les coefficients d’actualisation seront arrondis au millième supérieur.
+PARA	{{FINSI:FERME}}
+PARA	{{SI:REVISABLE}}
+PARA	Les prix seront révisables conformément aux dispositions de l’Annexe au présent CCAP "Formule de révision de prix".
+PARA	{{B05-VP-02}}
+PARA	{{FINSI:REVISABLE}}
+SOUS_TITRE	Article 9. - Modalités de règlement du Marché (CCAG ARTICLE 9)
+SOUS_TITRE	9.1a. - Avance (CCAG Article 9.1.)
+PARA	{{SI:SANS-AVANCE}}
+PARA	Non applicable
+PARA	{{FINSI:SANS-AVANCE}}
+PARA	{{SI:AVANCE}}
+PARA	Une avance de {{B08-AV-02.chiffres}} % du montant total des prestations à exécuter est accordée au Fournisseur sur présentation d'une demande de paiement.
+PARA	{{FINSI:AVANCE}}
+PARA	{{SI:GARANTIE-AVANCE}}
+PARA	La demande d’avance doit être accompagnée d'une garantie de restitution de l'avance sous forme de :
+PARA	{{FINSI:GARANTIE-AVANCE}}
+PARA	{{SI:AVANCE-GARANTIE-BANCAIRE}}
+PARA	garantie bancaire à première demande conforme au modèle annexé au présent CCAP.
+PARA	{{FINSI:AVANCE-GARANTIE-BANCAIRE}}
+PARA	{{SI:AVANCE-CAUTION}}
+PARA	De caution personnelle et solidaire remplaçant le cautionnement conforme au modèle annexé au présent CCAP
+PARA	{{FINSI:AVANCE-CAUTION}}
+PARA	{{SI:AVANCE}}
+PARA	Le remboursement de l’avance sera effectué par précompte sur les sommes dues ultérieurement dans le cadre de l’exécution de la prestation, dès que les montants déjà mandatés au titre du Marché atteignent ou dépassent soixante pour cent (60 %) du montant total du Marché.
+PARA	Le remboursement doit être terminé lorsque le pourcentage atteint quatre vingt pour cent (80 %) du montant du Marché.
+PARA	Le montant de l’avance ne sera pas affecté par la mise en œuvre de modifications du Marché.
+PARA	Le Fournisseur peut refuser le bénéfice de cette avance et doit préciser son choix sur l’Acte d'Engagement.
+PARA	{{FINSI:AVANCE}}
+SOUS_TITRE	9.1b. - Acompte
+PARA	Le règlement des sommes dues au Fournisseur sera effectué par application des prix unitaires du Bordereau des prix aux quantités réellement livrées et admises en recettes.
+SOUS_TITRE	9.2. - Présentation des décomptes, factures ou mémoires (CCAG Article 9.2.)
+PARA	Mentions à porter
+PARA	{{B08-PA-03}}
+SOUS_TITRE	Termes de paiement
+PARA	{{SI:PAIEMENT-LIVRAISON}}
+PARA	Les décomptes, factures ou mémoires seront établis à la livraison.
+PARA	{{FINSI:PAIEMENT-LIVRAISON}}
+PARA	{{SI:PAIEMENT-MENSUEL}}
+PARA	Les décomptes, factures ou mémoires seront établis mensuellement.
+PARA	{{FINSI:PAIEMENT-MENSUEL}}
+PARA	{{SI:PAIEMENT-TRIMESTRIEL}}
+PARA	Les décomptes, factures ou mémoires seront établis trimestriellement.
+PARA	{{FINSI:PAIEMENT-TRIMESTRIEL}}
+PARA	{{SI:FORFAIT}}
+PARA	Le solde, après règlement de l'avance, des Fournitures et Services connexes fournis en République de Madagascar sera réglé :
+PARA	à concurrence de {{B08-PA-06.chiffres}} % à la réception des Fournitures contre remise des documents mentionnés par le présente CCAP;
+PARA	à concurrence de {{B08-PA-07.chiffres}} % sur présentation du procès verbal de réception.
+PARA	{{FINSI:FORFAIT}}
+SOUS_TITRE	9.3. - Monnaie de compte et de paiement (CCAG Article 9.4.)
+PARA	{{SI:DEVISE}}
+PARA	Les prix correspondants à des Fournitures étrangères ou à des Services connexes réalisés en tout ou en partie hors de Madagascar peuvent être exprimés en {{B05-MO-02}}.
+PARA	Les prix exprimés en devises dus à des Fournisseurs étrangers sont réglés dans la devise prévue sur présentation des documents requis conformément à la réglementation des changes, y compris la convention de paiement entre le Fournisseur et Monsieur le Ministre chargé des Finances.
+PARA	Le taux de change applicable est le taux publié par la Banque Centrale de Madagascar, applicable le quinzième jour précédant la date limite fixée pour la remise des offres.
+PARA	{{FINSI:DEVISE}}
+SOUS_TITRE	9.4. - Intérêts moratoires dus au Fournisseur (CCAG Article 9.7.)
+PARA	Le taux des intérêts moratoires sera le taux directeur de la Banque Centrale de Madagascar en vigueur à la date à laquelle les intérêts moratoires auront commencé à courir, augmenté de {{B08-IM-01.chiffres}} point(s).
+SOUS_TITRE	Article 10. - Délai d'exécution (CCAG Article 11.1.)
+PARA	{{SI:QUANTITE-FIXE}}
+PARA	Le délai de livraison est fixé à {{B09-DX-01}} jours, à compter du lendemain de la date de notification de l’Ordre de Service de commencer les prestations qui interviendra après la notification du marché approuvé.
+PARA	{{FINSI:QUANTITE-FIXE}}
+PARA	{{SI:COMMANDE}}
+PARA	Le délai d'exécution est fixé dans le bon de commande sans toutefois dépasser{{B06-EO-12.parLot}} jours, à compter du lendemain de la date de notification au fournisseur dudit bon de commande.
+PARA	{{FINSI:COMMANDE}}
+PARA	Les Fournitures et services connexes, objet du Marché seront livrés conformément au calendrier de livraison et d’achèvement annexé aux Spécifications Techniques du CPS.
+PARA	{{SI:DEPART-DIFFERE}}
+PARA	Le point de départ des délais est : {{B09-DX-02}}
+PARA	{{FINSI:DEPART-DIFFERE}}
+PARA	{{SI:COMMANDE}}
+PARA	Les prestations feront l’objet de bons de commande notifiés par la Personne Responsable des Marchés Publics au fur et à mesure des besoins, pendant une durée de {{B09-OM-03}} mois.
+PARA	{{B09-DX-03}}
+PARA	Chaque bon de commande précisera :
+PARA	la nature et la description des prestations à réaliser ;
+PARA	les délais d’exécution (date de début et de fin) ;
+PARA	les lieux d’exécution des prestations ;
+PARA	le montant du bon de commande ;
+PARA	les délais laissés le cas échéant aux Fournisseurs pour formuler leurs observations.
+PARA	Seuls les bons de commande signés par l’ l’Ordonnateur Secondaire pourront être honorés par le ou les Fournisseurs.
+PARA	{{FINSI:COMMANDE}}
+SOUS_TITRE	Article 11. - Pénalités de retard (CCAG Article 12)
+PARA	{{SI:PENALITES-NON}}
+PARA	Les pénalités journalières prévues par l'article 12.1 du CCAG ne s'appliquent pas.
+PARA	{{FINSI:PENALITES-NON}}
+PARA	{{SI:PENALITES-CCAG}}
+PARA	Les stipulations de l’article 12.1 du CCAG s'appliquent
+PARA	{{FINSI:PENALITES-CCAG}}
+PARA	{{SI:PENALITES-PLAFOND}}
+PARA	Les stipulations de l’article 12.1 du CCAG s'appliquent
+PARA	Le montant des pénalités est limité à {{B09-PR-02.chiffres}} % du montant global du Marché, y compris le montant de ses avenants.
+PARA	{{B09-PR-03}}
+PARA	{{FINSI:PENALITES-PLAFOND}}
+SOUS_TITRE	Article 12. - Garantie de bonne exécution (CCAG Article 13)
+SOUS_TITRE	12.1. - Cautionnement et Garantie Bancaire (CCAG Article 13.1.)
+PARA	{{SI:BONNE-EXECUTION-NON}}
+PARA	Aucune garantie d'exécution n'est requise.
+PARA	{{FINSI:BONNE-EXECUTION-NON}}
+PARA	{{SI:BONNE-EXECUTION}}
+PARA	Le montant de la garantie de bonne exécution, est fixé à {{B08-GB-02.chiffres}} % du Montant du Marché.
+PARA	La garantie de bonne exécution sera fournie sous forme :
+PARA	{{FINSI:BONNE-EXECUTION}}
+PARA	{{SI:BONNE-EXECUTION-BANCAIRE}}
+PARA	- d'une garantie bancaire conformément au modèle figurant en Annexe au présent CCAP;
+PARA	{{FINSI:BONNE-EXECUTION-BANCAIRE}}
+PARA	{{SI:BONNE-EXECUTION-CAUTION}}
+PARA	- d’une caution personnelle et solidaire conforme au modèle figurant en Annexe au présent CCAP.
+PARA	{{FINSI:BONNE-EXECUTION-CAUTION}}
+PARA	{{SI:BONNE-EXECUTION}}
+PARA	La garantie de bonne exécution sera libellée dans la ou les monnaie(s) de règlement du Marché.
+PARA	{{FINSI:BONNE-EXECUTION}}
+PARA	{{SI:BONNE-EXECUTION-MOITIE}}
+PARA	La garantie de bonne exécution est libérée de 50% dans les trente (30) jours de la délivrance du certificat de réception provisoire, le solde étant libéré dans les trente (30) jours de la délivrance du certificat de réception définitive.
+PARA	{{FINSI:BONNE-EXECUTION-MOITIE}}
+SOUS_TITRE	12.2. - Retenue de garantie (CCAG article 13.3).
+PARA	{{SI:RETENUE-NON}}
+PARA	Aucune retenue de garantie ne sera pratiquée.
+PARA	{{FINSI:RETENUE-NON}}
+PARA	{{SI:RETENUE-OUI}}
+PARA	Une retenue de garantie égale à {{B08-RG-02.chiffres}} % de chaque acompte sera prélevée au moment de leur règlement.
+PARA	{{FINSI:RETENUE-OUI}}
+SOUS_TITRE	Article 13. - Matériels, objets et approvisionnements confiés au Fournisseur (CCAG Article 14)
+PARA	{{SI:MATERIELS-NON}}
+PARA	Sans objet
+PARA	{{FINSI:MATERIELS-NON}}
+PARA	{{SI:MATERIELS-OUI}}
+PARA	La liste des matériels, objets et approvisionnements mis par l'Autorité Contractante à la disposition du Fournisseur est donnée en Annexe aux Spécifications Techniques du CPS.
+PARA	{{FINSI:MATERIELS-OUI}}
+SOUS_TITRE	Article 14. - Stockage des fournitures (CCAG Article 15.1.)
+PARA	{{SI:STOCKAGE-NON}}
+PARA	Non applicable
+PARA	{{FINSI:STOCKAGE-NON}}
+PARA	{{SI:STOCKAGE-QUANTITE-FIXE}}
+PARA	Les dispositions de l'article 15.1 du CCAG s'appliquent.
+PARA	{{FINSI:STOCKAGE-QUANTITE-FIXE}}
+PARA	{{SI:STOCKAGE-COMMANDE}}
+PARA	Le fournisseur est tenu de constituer un stock correspondant aux quantités minimales prévues dans le Bordereau de prix.
+PARA	{{FINSI:STOCKAGE-COMMANDE}}
+SOUS_TITRE	Article 15. - Emballage (CCAG Article 15.2.)
+PARA	{{SI:MARQUAGE}}
+PARA	Le marquage des emballages sera le suivant :
+PARA	{{B09-EM-01}}
+PARA	{{FINSI:MARQUAGE}}
+PARA	{{SI:DOCUMENTS-EMBALLAGE}}
+PARA	Les documents placés à l'intérieur des caisses comprendront :
+PARA	{{B09-EM-02}}
+PARA	{{FINSI:DOCUMENTS-EMBALLAGE}}
+SOUS_TITRE	Article 16. - Responsabilité du transport (CCAG Article 16)
+PARA	{{SI:TRANSPORT-INCOTERM}}
+PARA	La responsabilité du transport des Fournitures sera celle indiquée dans l'Incoterm applicable à leur livraison.
+PARA	{{FINSI:TRANSPORT-INCOTERM}}
+PARA	{{SI:TRANSPORT-FOURNISSEUR}}
+PARA	Le Fournisseur est tenu contractuellement de transporter les Fournitures jusqu'à leur destination finale mentionnée à l’Article 1 du présent CCAP. Les coûts correspondants à ce transport seront inclus dans le Prix du Marché.
+PARA	{{FINSI:TRANSPORT-FOURNISSEUR}}
+PARA	{{SI:TRANSPORT-PARTAGE}}
+PARA	Les responsabilités respectives de l’Autorité contractante et du Fournisseur en matière de transport sont les suivantes : {{B09-RT-02}}
+PARA	{{FINSI:TRANSPORT-PARTAGE}}
+SOUS_TITRE	Article 17. - Livraison des fournitures (CCAG Article 16)
+PARA	{{SI:NATIONAL}}
+PARA	Les Fournitures fabriquées ou achetées en République de Madagascar seront livrées EXW sortie usine, fabrique, magasin d’exposition, entrepôt ou magasin de ventes.
+PARA	{{FINSI:NATIONAL}}
+PARA	{{SI:IMPORTEES}}
+PARA	Les Fournitures importées seront livrées :
+PARA	{{FINSI:IMPORTEES}}
+PARA	{{SI:CIP}}
+PARA	CIP {{B05-CP-05}},
+PARA	{{FINSI:CIP}}
+PARA	{{SI:CIF}}
+PARA	CIF port de {{B05-CP-05}};
+PARA	{{FINSI:CIF}}
+PARA	{{B09-LF-01}}
+PARA	Le Fournisseur doit fournir les documents suivants :
+PARA	{{B09-LF-02}}
+PARA	Les documents ci-dessus doivent être reçus par la Personne Responsable des Marchés Publics avant l’arrivée des fournitures, faute de quoi le Fournisseur est responsable de toute dépense subséquente.
+PARA	La livraison des fournitures est constatée par la délivrance d'un récépissé au Fournisseur ou par la signature d'un double du bulletin de livraison ou de l'état.
+SOUS_TITRE	Article 18. - Assurance (CCAG Article 17)
+PARA	{{SI:ASSURANCE-INCOTERM}}
+PARA	Les obligations en matière d'assurance des Fournitures sont assumées conformément aux dispositions de l'Incoterms stipulé à l'Article 17 du présent CCAP.
+PARA	{{FINSI:ASSURANCE-INCOTERM}}
+PARA	{{SI:ASSURANCE-AUTRE}}
+PARA	Les obligations en matière d'assurance sont les suivantes :
+PARA	{{B09-AS-02}}.
+PARA	{{FINSI:ASSURANCE-AUTRE}}
+SOUS_TITRE	Article 19. - Contrôle des prix de revient (CCAG Article 19)
+PARA	{{SI:CONTROLE-PRIX-NON}}
+PARA	Non applicable.
+PARA	{{FINSI:CONTROLE-PRIX-NON}}
+PARA	{{SI:CONTROLE-PRIX-OUI}}
+PARA	Les dispositions de l'Article 20 du CCAG relatives au contrôle des prix de revient s'appliquent..
+PARA	{{FINSI:CONTROLE-PRIX-OUI}}
+SOUS_TITRE	Article 20. - Inspections, vérifcations et essais (CCAG Article 21)
+PARA	Les modalités de réalisation des vérifications, inspections et essais des fournitures sont les suivantes :
+PARA	{{B09-IV-01}}
+SOUS_TITRE	Article 21. - Décisions après inspection et essais (CCAG Article 22)
+PARA	{{SI:QUANTITE-FIXE}}
+PARA	Sur demande du fournisseur, la réception prononcée par une commission désignée par une décision de l’Acheteur vaudra réception provisoire.
+PARA	La réception définitive sera prononcée dans les mêmes formes à l’issue du délai de garantie.
+PARA	{{FINSI:QUANTITE-FIXE}}
+PARA	{{SI:COMMANDE}}
+PARA	Pour chaque commande, la réception prononcée par une commission de réception désignée par une décision de l’Acheteur vaudra réception provisoire.
+PARA	La réception définitive sera prononcée dans les mêmes formes à la dernière livraison.
+PARA	{{FINSI:COMMANDE}}
+PARA	{{B09-DI-01}}
+SOUS_TITRE	Article 22. - Délai de garantie (CCAG Article 23)
+PARA	{{SI:SANS-GARANTIE}}
+PARA	Non applicable
+PARA	{{FINSI:SANS-GARANTIE}}
+PARA	{{SI:GARANTIE}}
+PARA	a) Les fournitures doivent être garanties contre tout risque de fabrication ou de matière pendant {{B09-DG-01}} mois à compter du jour de la date de réception.
+PARA	Le Fournisseur se conforme aux garanties de performance et/ou de consommation spécifiées en vertu du Marché. Si, pour des raisons imputables au Fournisseur ces garanties ne sont pas atteintes, en totalité ou en partie, le Fournisseur à sa discrétion :
+PARA	apporte aux fournitures ou à toute partie desdites fournitures, à ses frais, les changements, modifications et/ou adjonctions qui pourront être nécessaires pour atteindre les garanties contractuelles spécifiées dans le Marché.
+PARA	paye à l’Autorité Contractante une pénalité pour non-respect des garanties contractuelles. Le taux de cette pénalité est de {{B09-DG-03.chiffres}} % du prix initial des Fournitures non conformes.
+PARA	Le délai accordé au Fournisseur pour remédier aux défauts durant la période de garantie est de {{B09-DG-04}}.
+PARA	{{FINSI:GARANTIE}}
+SOUS_TITRE	Article 23. - Indemnité de résiliation (CCAG Article 32)
+PARA	{{SI:INDEMNITE}}
+PARA	Le montant de l'indemnisation éventuelle prévue à l'article 32 du CCAG est obtenu en appliquant un pourcentage de {{B10-IR-03.chiffres}} % au montant indiqué à l'article 32.
+PARA	{{FINSI:INDEMNITE}}
+SOUS_TITRE	Article 24. -Arbitrage (CCAG Article 36.3)
+PARA	{{B10-AR-01}}
+SOUS_TITRE	Article 25 - Dérogations aux documents généraux
+PARA	Les articles désignées ci-après du CCAP qui dérogent aux dispositions des CCAG et les articles du CCAG auxquels il est dérogé sont indiqués dans le tableau ci-après. Lorsque le CCAG permet explicitement les précisions et dérogations par le CCAP, les articles correspondants ne sont pas mentionnés ici.
+TABLE	2
+LIGNE	Article des CCAG auquelil est dérogéArticle des CCAP
+FIN_TABLE	
+PARA	{{B10-DD-01}}
+PARA	{{SI:REVISABLE}}
+SOUS_TITRE	Annexe au CCAP
+PARA	Modèle de formule de révision des prix
+PARA	Les montants payables au Fournisseur, conformément aux dispositions du Marché, seront sujets à révision pendant l’exécution du Marché pour prendre en compte les changements intervenus dans le coût de la main-d’œuvre et des composants matériels, en faisant application de la formule suivante :
+PARA	où :
+PARA	ΔP = montant de l’ajustement payable au Fournisseur..
+PARA	P0 = Prix du Marché (prix de base).
+PARA	a = élément fixe représentant le bénéfice et les frais généraux inclus dans le Prix du Marché, généralement au moins quinze pour cent (15 %).
+PARA	b = pourcentage estimé de l’élément main-d’œuvre dans le Prix du Marché.
+PARA	c = pourcentage estimé de l’élément matériels et équipements dans le Prix du Marché.
+PARA	L0, L1 = indices du coût de la main-d’œuvre applicables à l’industrie concernée dans le pays d’origine, respectivement à la date de référence et à la date de révision des prix.
+PARA	M0, M1 = indices du coût des matières premières applicables dans le pays d’origine, respectivement à la date de référence et à la date de révision des prix.
+PARA	Les coefficients a, b, et c doivent être spécifiés par l’Acheteur dans le Dossier d’appel d’offres. La somme de ces trois coefficients doit être égale à un (1) dans toute application de la formule.
+PARA	Le Soumissionnaire indiquera dans son offre les origines des indices et la valeur des indices à la date de référence.
+PARA	Date de référence : Quinzième jour précédant la date limite de remise des offres.
+PARA	Date de révision : _____ semaines avant la date d’expédition (représentant le milieu de la période de fabrication).
+PARA	La formule de révision des prix ci-dessus sera invoquée par l’une ou l’autre des parties, sous réserve des conditions supplémentaires ci-après :
+PARA	a) La formule de révision des prix sera appliquée seulement dans les cas pour lesquels elle entraîne une augmentation ou une diminution de plus de _____ % du Prix du Marché.
+PARA	b) Aucune révision de prix ne sera admise au-delà des dates originales de livraison, sauf si cela est spécifié dans l’avenant prolongeant les délais. En principe, aucune révision de prix ne sera autorisée pour les retards entièrement imputables au Fournisseur. L’Acheteur aura cependant droit à bénéficier de toute diminution des prix des Fournitures et des Services soumis à révision.
+PARA	c) Les révisions de prix effectuées au titre de la clause de révision seront sujettes à un plafond égal à plus ou moins _____ % du Prix du Marché.
+PARA	d) Si la monnaie dans laquelle le Prix du Marché, P0, est exprimé est différente de la monnaie du pays d’origine des indices de la main-d’œuvre et des matériaux, un facteur de correction sera appliqué pour éviter des révisions incorrectes du Prix du Marché. Le facteur de correction correspondra au rapport de parités entre les deux monnaies à la date de référence et à la date de révision des prix définies ci-dessus.
+PARA	e) Aucune révision de prix ne sera applicable sur la part du Prix du Marché ayant fait l’objet du paiement d’une avance au Fournisseur.
+PARA	{{FINSI:REVISABLE}}
+PARA	{{SI:BONNE-EXECUTION-BANCAIRE}}
+SOUS_TITRE	Annexe au CCAP
+PARA	Modèle de garantie bancaire de bonne exécution
+PARA	ATTENDU QUE <nom du Fournisseur >
+PARA	ayant son siège <adresse complète du Fournisseur >
+PARA	(ci-après dénommé « le Fournisseur ») a conclu un marché n° <intitulé ou objet résumé du marché> (ci-après dénommé « le Marché ») avec {{B01-AC-01}} (ci-après dénommée « le Bénéficiaire »).
+PARA	ATTENDU QUE En vertu des dispositions du Marché, le Fournisseur doit remettre au Bénéficiaire une garantie bancaire de bonne exécution.
+PARA	ATTENDU QUE nous avons convenu de fournir au Fournisseur cette garantie bancaire;
+PARA	EN CONSEQUENCE, Nous <nom de la Banque>, ayant notre siège social à <adresse du siège social> (ci-après dénommée « le Garant »),
+PARA	Nous engageons par la présente, sans réserve et irrévocablement, à payer au Bénéficiaire, à la première demande écrite du Bénéficiaire adressée par courrier avec accusé de réception, reçue au plus tard à la date d’expiration mentionnée ci-après, toutes sommes d’argent dans la limite de <insérer le montant en chiffres et en lettres de la garantie>.
+PARA	<Le Garant doit insérer un montant représentant le montant de la garantie prévue par le Marché le cas échéant dans la devise de règlement mentionnée au marché>
+PARA	Toute demande en paiement du Bénéficiaire doit être accompagnée d’une déclaration attestant que le Fournisseur ne se conforme pas aux conditions du Marché, sans que le Bénéficiaire ait à prouver ou à donner les raisons ou le motif de la demande du Bénéficiaire ou du montant indiqué dans la demande du Bénéficiaire.
+PARA	Nous convenons également qu’aucun changement ou additif ou aucune autre modification du Marché ou Travaux devant être effectués au titre de l’un des documents du Marché qui a été établi entre vous et le Fournisseur ne nous libérera d’une obligation nous incombant au titre de la présente garantie, et nous ne sommes pas tenus par la présente à donner notification dudit changement, additif ou modification.
+PARA	{{FINSI:BONNE-EXECUTION-BANCAIRE}}
+PARA	{{SI:BANCAIRE-MOITIE}}
+PARA	La présente garantie sera réduite de moitié sur présentation du certificat de réception provisoire et demeurera valable jusqu’au trentième (30éme) jour suivant la date de délivrance du certificat de réception définitive.
+PARA	{{FINSI:BANCAIRE-MOITIE}}
+PARA	{{SI:BANCAIRE-ENTIERE}}
+PARA	La présente garantie demeurera valable jusqu’au trentième (30éme) jour suivant la date de délivrance du certificat de réception définitive.
+PARA	{{FINSI:BANCAIRE-ENTIERE}}
+PARA	{{SI:BONNE-EXECUTION-BANCAIRE}}
+PARA	La présente garantie est régie par la loi malgache. Tout différend relatif à son interprétation ou à son exécution sera soumis aux tribunaux compétents de la République de Madagascar.
+PARA	SIGNATURE et authentification du signataire __________________________________________
+PARA	Nom de la Banque _________________________________________________________________
+PARA	Adresse _________________________________________________________________________
+PARA	Date _____________________________________________________________________________
+PARA	Cachet
+PARA	{{FINSI:BONNE-EXECUTION-BANCAIRE}}
+PARA	{{SI:BONNE-EXECUTION-CAUTION}}
+SOUS_TITRE	Annexe au CCAP
+PARA	Modèle de Caution Personnelle et solidaire de bonne exécution
+PARA	Nous soussignés < indiquer la dénomination sociale de l’organisme de caution, le siège social >
+PARA	déclarons nous porter caution personnelle et solidaire de <indiquer le nom et l’adresse complète du Fournisseur du Marché> (ci-après dénommé « le Fournisseur ») pour le montant du cautionnement auquel le Fournisseur est assujetti, en qualité de Fournisseur du Marché n° <indiquer le numéro du Marché> (ci-après dénommé « le Marché ») conclu avec <dénomination de l’autorité contractante> ( ci-après dénommée « le Bénéficiaire ») en date du <indiquer la date de conclusion du Marché> et portant sur l’exécution de <intitulé ou objet résumé du marché>,
+PARA	ledit cautionnement s’élève à <indiquer le montant en chiffre et en lettres de la garantie de bonne exécution prévue par le Marché>,
+PARA	nous engageons à effectuer, sur demande de paiement du Bénéficiaire adressée par courrier avec accusé de réception, reçue au plus tard à la date d’expiration mentionnée ci-après, sans pouvoir différer le paiement ou soulever de contestation pour quelque motif que ce soit, jusqu’à concurrence de la somme garantie ci-dessus, le versement des sommes dont le Fournisseur serait reconnu débiteur au titre du marché du fait de la non exécution de ses obligations contractuelles.
+PARA	{{FINSI:BONNE-EXECUTION-CAUTION}}
+PARA	{{SI:CAUTION-MOITIE}}
+PARA	Le présent engagement sera réduit de moitié sur présentation du certificat de réception provisoire et demeurera valable jusqu’au trentième (30éme) jour suivant la date de délivrance du certificat de réception définitive.
+PARA	{{FINSI:CAUTION-MOITIE}}
+PARA	{{SI:CAUTION-ENTIERE}}
+PARA	Le présent engagement demeurera valable jusqu’au trentième (30éme) jour suivant la date de délivrance du certificat de réception définitive.
+PARA	{{FINSI:CAUTION-ENTIERE}}
+PARA	{{SI:BONNE-EXECUTION-CAUTION}}
+PARA	Le présent engagement est régi par la loi malgache. Tout différend relatif à son interprétation ou à son exécution sera soumis aux tribunaux compétents de la République de Madagascar.
+PARA	Fait à _________ le __________
+PARA	SIGNATURE et authentification du signataire __________________________________________
+PARA	Nom de l’organisme _______________________________________________________________
+PARA	Adresse _________________________________________________________________________
+PARA	Date _____________________________________________________________________________
+PARA	Cachet
+PARA	{{FINSI:BONNE-EXECUTION-CAUTION}}
+PARA	{{SI:AVANCE-GARANTIE-BANCAIRE}}
+SOUS_TITRE	Annexe au CCAP
+PARA	Modèle de garantie bancaire de restitution d'avance
+PARA	ATTENDU QUE
+PARA	<nom du Fournisseur >
+PARA	ayant son siège <adresse complète du Fournisseur >
+PARA	(ci-après dénommé « le Fournisseur ») a conclu un marché n° <intitulé ou objet résumé du marché> (ci-après dénommé « le Marché ») avec {{B01-AC-01}} (ci-après dénommée « le Bénéficiaire »).
+PARA	En vertu des dispositions du Marché, le Fournisseur doit remettre au Bénéficiaire une garantie de restitution d’avance.
+PARA	EN CONSEQUENCE, Nous <nom de la Banque>, ayant notre siège social à <adresse du siège social> (ci-après dénommée « le Garant »),
+PARA	Nous nous engageons par la présente, sans réserve et irrévocablement, à payer au Bénéficiaire, à la première demande écrite du Bénéficiaire adressée par courrier avec accusé de réception, reçue au plus tard à la date d’expiration mentionnée ci-après, toutes sommes d’argent dans la limite de <insérer le montant en chiffres et en lettres de la garantie> correspondant au montant de l’avance devant être réglé au Fournisseur diminué du montant remboursé par le Fournisseur <Le Garant doit insérer un montant représentant le montant de l’avance prévue par le Marché, le cas échéant dans la devise de règlement mentionnée au marché>.
+PARA	Toute demande en paiement du Bénéficiaire doit être accompagnée d’une déclaration attestant que le Fournisseur ne se conforme pas aux conditions du Marché concernant l’utilisation de l’avance.
+PARA	Toute demande et paiement au titre de la présente garantie est conditionnelle à la réception par le Fournisseur de l’avance mentionnée plus haut à son compte portant le numéro <insérer le numéro du compte bancaire> ouvert auprès de <insérer les noms et adresse de la banque>.
+PARA	La présente garantie sera automatiquement réduite à due concurrence au fur et à mesure de l’imputation de l’avance sur les acomptes et restera valable à partir de la date de réception de l’avance jusqu’à ce que le Bénéficiaire reçoive du Fournisseur la totalité du remboursement du même montant.
+PARA	La présente garantie est régie par la loi malgache. Tout différend relatif à son interprétation ou à son exécution sera soumis aux tribunaux compétents de la République de Madagascar.
+PARA	SIGNATURE et authentification du signataire __________________________________________
+PARA	Nom de la Banque _________________________________________________________________
+PARA	Adresse _________________________________________________________________________
+PARA	Date _____________________________________________________________________________
+PARA	Cachet
+PARA	{{FINSI:AVANCE-GARANTIE-BANCAIRE}}
+PARA	{{SI:AVANCE-CAUTION}}
+SOUS_TITRE	Annexe au CCAP
+PARA	Modèle de Caution Personnelle et solidaire de restitution d’avance
+PARA	Nous soussignés < indiquer la dénomination sociale de l’organisme de caution, le siège social >
+PARA	déclarons nous porter caution personnelle et solidaire de <indiquer le nom et l’adresse complète du Fournisseur du Marché> (ci-après dénommé « le Fournisseur ») pour le montant du cautionnement auquel le Fournisseur est assujetti, en qualité de Fournisseur du Marché n° <indiquer le numéro du Marché> (ci-après dénommé « le Marché ») conclu avec <dénomination de l’autorité contractante> ( ci-après dénommée « le Bénéficiaire ») en date du <indiquer la date de conclusion du Marché> et portant sur l’exécution de <intitulé ou objet résumé du marché>,
+PARA	ledit cautionnement s’élève à <indiquer le montant en chiffres et en lettres de l’avance prévue par le marché>,
+PARA	nous engageons à effectuer, sur demande de paiement du Bénéficiaire adressée par courrier avec accusé de réception, reçue au plus tard à la date d’expiration mentionnée ci-après, sans pouvoir différer le paiement ou soulever de contestation pour quelque motif que ce soit, jusqu’à concurrence de la somme garantie ci-dessus, le versement des sommes dont le Fournisseur serait reconnu débiteur au du fait d'une utilisation de l'avance non conforme aux dispositions du Marché.
+PARA	Le présent engagement sera automatiquement réduit à due concurrence au fur et à mesure de l’imputation de l’avance sur les acomptes et restera valable à partir de la date de réception de l’avance jusqu’à ce que le Bénéficiaire reçoive du Fournisseur la totalité du remboursement du même montant.
+PARA	Le présent engagement est régie par la loi malgache. Tout différend relatif à son interprétation ou à son exécution sera soumis aux tribunaux compétents de la République de Madagascar.
+PARA	Fait à _________ le __________
+PARA	SIGNATURE et authentification du signataire __________________________________________
+PARA	Nom de l’organisme _______________________________________________________________
+PARA	Adresse _________________________________________________________________________
+PARA	Date _____________________________________________________________________________
+PARA	Cachet
+PARA	{{FINSI:AVANCE-CAUTION}}

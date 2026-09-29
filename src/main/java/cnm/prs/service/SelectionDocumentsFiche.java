@@ -103,8 +103,19 @@ public final class SelectionDocumentsFiche {
      * « Contrat-cadre valant acte d'engagement et CCAP » (titre du document type officiel).
      */
     public static String titre(String type, Integer lot, String typeMarche) {
+        return titre(type, lot, typeMarche, null);
+    }
+
+    /**
+     * ⚠️ Lot D2 (2026-09-29, §B3) — et selon la catégorie : le CCAP des fournitures (quantité fixe, à commande) est le
+     * « Cahier des prescriptions spéciales » du document type officiel. Catégorie inconnue : fournitures et services.
+     */
+    public static String titre(String type, Integer lot, String typeMarche, String categorie) {
+        String cat = categorie == null ? "FOURNITURES_SERVICES" : categorie;
         String t = "AE".equals(type) && "CONTRAT_CADRE".equals(typeMarche) ? "Contrat-cadre valant acte d'engagement et CCAP"
-                : titre(type);
+                : "CCAP".equals(type) && ModelesDao.couvertures(typeMarche, cat).stream().anyMatch(c -> "CCAP".equals(c.typeDocument()))
+                        ? "Cahier des prescriptions spéciales"
+                        : titre(type);
         return t + (lot == null ? "" : " — lot " + lot);
     }
 

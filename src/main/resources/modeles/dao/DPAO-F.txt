@@ -1,0 +1,92 @@
+FICHIER	DPAO-F.docx
+TITRE	1.2. - DONNEES PARTICULIERES DE L’APPEL D’OFFRES
+CONDITION	PROJETB02-AU-01 renseigne
+CONDITION	ALLOTIalloti = OUI
+CONDITION	LOTS-DIVISIBLESalloti = OUI et B02-AU-02 = Lot par lot (attribution divisible)
+CONDITION	LOTS-TOTALITEalloti = OUI et B02-AU-02 = Totalité des lots à un seul attributaire
+CONDITION	VARIANTES-NONvariantes = NON
+CONDITION	VARIANTES-OUIvariantes = OUI
+CONDITION	VARIANTES-MOINS-DISANTEvariantes = OUI et B02-VA-01 = Offre de base évaluée la moins-disante
+CONDITION	VARIANTES-TOUTESvariantes = OUI et B02-VA-01 = Toutes les offres conformes aux spécifications
+CONDITION	COMMANDEtypeMarche = A_COMMANDE
+CONDITION	QUANTITE-FIXEtypeMarche = QUANTITE_FIXE
+CONDITION	QUANTITE-FIXE-ALLOTItypeMarche = QUANTITE_FIXE et alloti = OUI
+CONDITION	GROUPEMENTgroupement = OUI
+CONDITION	GROUPEMENT-LIBREgroupement = OUI et formeGroupement = CONJOINT_OU_SOLIDAIRE
+CONDITION	GROUPEMENT-SOLIDAIREgroupement = OUI et formeGroupement = SOLIDAIRE_OBLIGATOIRE
+CONDITION	FABRICANTB03-CQ-05 = OUI
+CONDITION	QUALIFICATIONSB03-CQ-06 renseigne
+CONDITION	ONGB03-CQ-07 renseigne
+CONDITION	PREFERENCEB03-CQ-08 = OUI
+CONDITION	SANS-PREFERENCEB03-CQ-08 = NON
+CONDITION	NATIONALprovenance = NATIONAL
+CONDITION	NATIONAL-SAISIprovenance = NATIONAL et B05-CP-02 renseigne
+CONDITION	NATIONAL-TYPEprovenance = NATIONAL et B05-CP-02 vide
+CONDITION	IMPORTEESprovenance = IMPORTEES
+CONDITION	CIPprovenance = IMPORTEES et B05-CP-01 = CIP
+CONDITION	CIFprovenance = IMPORTEES et B05-CP-01 = CIF
+CONDITION	TRANSPORT-INTERIEURprovenance = IMPORTEES et B05-CP-04 = OUI
+CONDITION	FERMEprixRevisable = NON
+CONDITION	REVISABLEprixRevisable = OUI
+CONDITION	ARIARYB05-MO-01 = Ariary
+CONDITION	DEVISEB05-MO-01 contient devise
+CONDITION	SANS-GARANTIEgarantieSoumission = NON
+CONDITION	GARANTIEgarantieSoumission = OUI
+CONDITION	CHEQUEgarantieSoumission = OUI et B05-GS-02 contient Chèque
+CONDITION	GARANTIE-LOTSgarantieSoumission = OUI et alloti = OUI
+CONDITION	GARANTIE-UNIQUEgarantieSoumission = OUI et alloti = NON
+CONDITION	LANGUEB04-LA-01 = OUI
+CONDITION	PAPIERmodeRemise = PAPIER
+CONDITION	B04-SEmodeRemise = ELECTRONIQUE
+CONDITION	EVALUATION-PAR-LOTalloti = OUI et B06-EO-01 = Par lot
+CONDITION	EVALUATION-ENSEMBLEalloti = OUI et B06-EO-01 = Sur l'ensemble des lots
+CONDITION	CRITERESB06-EO-02 renseigne
+CONDITION	QUANTITESB06-EO-10 renseigne
+PARA	Les données particulières ci - après complètent, précisent ou modifient les clauses des Instructions aux Candidats (IC). En cas de conflit, les clauses ci-dessous prévalent sur celles des IC.
+TABLE	2
+LIGNE	Clause des Instructions aux Candidats (IC)Données particulières
+LIGNE	1. Acheteur et objet de l’appel d’offresAcheteur{{B01-AC-01}}Objet de l'appel d'offres{{SI:PROJET}}Le présent appel d'offres, s'inscrit dans:{{B02-AU-01}}.{{FINSI:PROJET}}L’appel d’offres a pour objet :{{B02-OB-02}}
+LIGNE	{{SI:ALLOTI}}
+LIGNE	1.1 Lots et variantes{{SI:ALLOTI}}LotsL’appel d’offres porte sur les lots suivants faisant partie de {{B02-OB-01}} :{{B02-LV-02}}{{SI:LOTS-DIVISIBLES}}Chaque lot est indivisible. Toute offre partielle est irrecevableLes candidats peuvent soumissionner pour un ou plusieurs lots{{FINSI:LOTS-DIVISIBLES}}{{SI:LOTS-TOTALITE}}Les candidats ne peuvent soumissionner que pour la totalité des lots{{FINSI:LOTS-TOTALITE}}{{FINSI:ALLOTI}}
+LIGNE	{{FINSI:ALLOTI}}
+LIGNE	Variantes{{SI:VARIANTES-NON}}Les variantes ne sont pas prises en considération{{FINSI:VARIANTES-NON}}{{SI:VARIANTES-OUI}}Les variantes sont autorisées{{FINSI:VARIANTES-OUI}}{{SI:VARIANTES-MOINS-DISANTE}}L’Acheteur ne considèrera que les variantes offertes par le Candidat ayant soumis l’offre de base évaluée la moins disante.{{FINSI:VARIANTES-MOINS-DISANTE}}{{SI:VARIANTES-TOUTES}}L’Acheteur considérera les offres variantes satisfaisant aux Spécifications Techniques. Toutes les offres reçues pour la solution de base ou comme variantes satisfaisant aux conditions requises, seront évaluées selon leurs valeurs intrinsèques, en conformité avec les mêmes procédures, comme indiquées à la clause 9.4 des Instructions.{{FINSI:VARIANTES-TOUTES}}
+LIGNE	{{SI:COMMANDE}}
+LIGNE	1.2 Marché à commandesL’appel d’offre porte sur un marché à commande de :{{B02-OB-02}}pour les quantités minimales et maximales spécifiées au Cahier des Prescriptions Spéciales, etpour une durée de:{{B02-AU-04}} mois.
+LIGNE	{{FINSI:COMMANDE}}
+LIGNE	{{SI:GROUPEMENT}}
+LIGNE	2. Groupements{{SI:GROUPEMENT-LIBRE}}Les groupements entre Candidats soumissionnant pour des lots distincts peuvent être conjoint ou solidaire{{FINSI:GROUPEMENT-LIBRE}}{{SI:GROUPEMENT-SOLIDAIRE}}Les groupements entre Candidats soumissionnant pour des lots distincts doivent être obligatoirement solidaire.{{FINSI:GROUPEMENT-SOLIDAIRE}}
+LIGNE	{{FINSI:GROUPEMENT}}
+LIGNE	5. – Composition du DAO – Demandes d'éclaircissements – Modifications
+LIGNE	5.1Composiition du DAO1.3 : - Modèles de fiches de renseignements- Modèles de garantie de soumission2.5 : - Plans, schémas, photos, échantillons …
+LIGNE	5.2. Demandes d’éclaircissementsAdresseAfin d’obtenir des éclaircissements, l’adresse de la Personne Responsable des Marchés Publics est la suivante :{{B04-DE-01}}Délai pour l'envoi des demandes par les Candidats{{B04-DE-02}} jours avant la date limite fixée pour la remise des offres figurant à la clause 7.2 ci-dessous.Délai pour la réponse du représentant de la PRMP{{B04-DE-03}} jours avant la date limite fixée pour la remise des offres figurant à la clause 7.2 ci-dessous.
+LIGNE	6. – Préparation des offres
+LIGNE	6.2. Contenu des offresDocuments ou pièces à remettre en sus de ceux mentionnés à la clause 6.2. des IC :{{B04-CO-01}}
+LIGNE	6.3. Capacités et qualifications des candidatsChaque Candidat complète les fiches de renseignements suivantes, selon les modèles figurant à la section 1.3 Formulaire de Soumission et les signe en portant la mention "certifiées exactes et sincères" :1°Une fiche de renseignements relative à son identification et à sa situation juridique;2°Une fiche de renseignements relative à ses capacités techniques à réaliser le Marché,3° Une fiche de renseignements relative à sa capacité financière;4° la liste des principaux marchés portant sur des fournitures de même type ou d'un type similaire réalisés au cours des trois dernières années, appuyée des certificats de bonne fin ou PV de réception{{SI:FABRICANT}}5° Le Candidat qui ne fabrique ou ne produit pas les fournitures qu’il offre, soumettra une Autorisation du Fabriquant{{FINSI:FABRICANT}}{{SI:QUALIFICATIONS}}Les qualifications particulières suivantes sont requises des Candidats : {{B03-CQ-06}}{{FINSI:QUALIFICATIONS}}
+LIGNE	{{SI:ONG}}Les communautés locales et/ou les ONG sont admises à participer à l'appel d'offres. Par dérogation aux obligations de fournir les renseignements sus -mentionnés ces communautés n'ont pas à produire:{{B03-CQ-07}}{{FINSI:ONG}}{{SI:PREFERENCE}}Les Candidats susceptibles de bénéficier de la préférence nationale prévue à l'article 9.5 des IC et des Présentes DPAO doivent produire les pièces justifiant leur éligibilité à cette préférence, prévues à l'article précité.{{FINSI:PREFERENCE}}
+LIGNE	6.5. Délai de validité des offresLe délai de validité de l’offre sera de {{B04-VO-01}} jours.
+LIGNE	6.6. Contenu et décomposition des prixLa destination finale des Fournitures est :{{B09-LL-01.parLot}}.Terme commercial de livraison (selon les Incoterms 2000){{SI:NATIONAL}}a) Pour les Fournitures acquises sur le territoire nationale, le prix comprend:{{FINSI:NATIONAL}}{{SI:NATIONAL-TYPE}}i) le prix des fournitures EXW, hors TVA, (sortie usine, fabrique, magasin d’exposition, entrepôt ou magasin de ventes, suivant le cas);ii) le prix des transports intérieurs, assurance et autres services locaux afférents à la livraison des fournitures jusqu’à leur destination finale.{{FINSI:NATIONAL-TYPE}}{{SI:NATIONAL-SAISI}}{{B05-CP-02}}{{FINSI:NATIONAL-SAISI}}{{SI:IMPORTEES}}b) Pour les Fournitures à importer, le prix comprend :le prix des fournitures correspond à une livraison{{FINSI:IMPORTEES}}{{SI:CIP}}CIP {{B05-CP-05}},{{FINSI:CIP}}{{SI:CIF}}CIF {{B05-CP-05}}{{FINSI:CIF}}{{SI:TRANSPORT-INTERIEUR}}le prix des transports intérieurs, assurance et autres services locaux afférents à la livraison des fournitures du lieu de destination indiqué (CIP) à leur destination finale.{{FINSI:TRANSPORT-INTERIEUR}}
+LIGNE	6.6.3. Caractère ferme ou révisable des prix{{SI:FERME}}Les prix sont fermes et non révisables{{FINSI:FERME}}{{SI:REVISABLE}}Les prix sont révisables{{FINSI:REVISABLE}}
+LIGNE	6.7. Monnaie{{SI:ARIARY}}tous les prix sont exprimés en Ariary{{FINSI:ARIARY}}{{SI:DEVISE}}Les prix des fournitures importées et dépenses encourues hors de la République de Madagascar sont exprimés en:{{B05-MO-02}}.{{FINSI:DEVISE}}
+LIGNE	6.8. Garantie de soumission{{SI:SANS-GARANTIE}}Il n’est pas demandé de garantie de soumission{{FINSI:SANS-GARANTIE}}{{SI:GARANTIE}}Une garantie de soumission doit être fournie dans l’une des formes prévues à la clause 6.8. des IC et conformément aux modèles figurant dans les Formulaires de soumission{{FINSI:GARANTIE}}{{SI:CHEQUE}}Un chèque de banque libellé au nom de …{{FINSI:CHEQUE}}{{SI:GARANTIE}}Le montant de la garantie de soumission est de:{{FINSI:GARANTIE}}{{SI:GARANTIE-LOTS}}{{B05-GS-03.parLot}}.{{FINSI:GARANTIE-LOTS}}{{SI:GARANTIE-UNIQUE}}{{B05-GS-03.lettres}} ({{B05-GS-03}}).{{FINSI:GARANTIE-UNIQUE}}
+LIGNE	{{SI:LANGUE}}
+LIGNE	6.9. LangueLa langue de l'offre est le français ou {{B04-LA-02}}
+LIGNE	{{FINSI:LANGUE}}
+LIGNE	7. – Remise des offres
+LIGNE	7.1. Forme des plis{{SI:ALLOTI}}les offres devront être présentées séparément pour chacun des lots{{FINSI:ALLOTI}}Outre l’original de l’offre, les plis doivent comprendre:{{B04-RO-01}} copiesLes enveloppes devront comporter les autres identifications suivantes :{{B04-RO-02}}{{SI:ALLOTI}}numéro du lot auquel se rapporte l'offre{{FINSI:ALLOTI}}
+LIGNE	7.2. Lieu, date et heure de la remise des offresAux fins de remise des offres l’adresse de l’Autorité Contractante est la suivante :Attention : {{B04-LR-01}}Adresse: {{B04-LR-02}}Les date et heure limites fixées pour la remise des offres sont les suivantes :Date : {{B04-LR-03}}Heure : {{B04-LR-04}}
+LIGNE	7.3. Remise des offres par voie électronique{{SI:PAPIER}}Le mode de remise des offres par voie électronique n'est pas possible dans le cadre du présent Appel d'Offres.{{FINSI:PAPIER}}{{SI:B04-SE}}[[CLAUSE À FOURNIR PAR LE JURISTE : conditions et modalités de la remise électronique — plateforme ({{B04-SE-02}}), heure de référence ({{B04-SE-04}}), signature exigée ({{B04-SE-05}}), formats ({{B04-SE-07}}) et tailles admis ({{B04-SE-08}} Mo par fichier, {{B04-SE-09}} Mo par offre), ouverture électronique en séance seulement, assistance ({{B04-SE-14}}), indisponibilité et prorogation ({{B04-SE-12}} h, {{B04-SE-13}} jours ouvrables)]]{{FINSI:B04-SE}}
+LIGNE	8. Ouverture des plisLieu : {{B04-OP-01}}Date et heure : les mêmes que la date et l’heure limites fixées pour la remise des offres
+LIGNE	9. Evaluation et comparaison des offres
+LIGNE	9.1. - Relations entre les Candidats et l'Acheteur ou la PRMPLes Candidats devront répondre aux demandes d'éclaircissements de la PRMP dans un délai de:{{B06-EP-01}} jours
+LIGNE	{{SI:ALLOTI}}
+LIGNE	9.4. Evaluation des offres9.4.3. Détermination du montant évalué de l'offreEvaluation des offres portant sur plusieurs lots{{SI:EVALUATION-PAR-LOT}}Les offres seront évaluées par lot et le Marché portera sur le lot ou les lots attribués au Candidat proposant la meilleure offre pour le lot ou les lots considérés.{{FINSI:EVALUATION-PAR-LOT}}{{SI:EVALUATION-ENSEMBLE}}Le Marché portera sur l'ensemble des lots. Les offres seront évaluées par lot. Le prix offert pour l’ensemble des lots par les candidats dont les offres sont conformes sera utilisé aux fins de comparaison des offres.{{FINSI:EVALUATION-ENSEMBLE}}
+LIGNE	{{FINSI:ALLOTI}}
+LIGNE	{{SI:CRITERES}}
+LIGNE	Critères additionnels d’évaluation :L’évaluation d’une offre par l’Acheteur pourra prendre en compte, en plus du prix de l’offre remise, les facteurs décrits ci-après en application des dispositions de l'Article 9.4 des IC,:{{B06-EO-02}}
+LIGNE	{{FINSI:CRITERES}}
+LIGNE	9.5. Préférence nationale{{SI:SANS-PREFERENCE}}Il n’est pas accordé de préférence aux candidatsnationaux.{{FINSI:SANS-PREFERENCE}}{{SI:PREFERENCE}}Il est accordé une préférence aux candidats nationaux conformément à la clause 9.5. des IC dans les conditions suivantes.{{B06-EO-09.chiffres}} %{{FINSI:PREFERENCE}}
+LIGNE	{{SI:QUANTITES}}
+LIGNE	11. Modification des quantitésL’autorité contractante, au moment de l’attribution du marché, se réserve le droit de modifier les quantités prévues au bordereau des prix, sans modification du prix unitaire, de plus ou moins de {{B06-EO-10.chiffres}}% en fonction des crédits disponibles
+LIGNE	{{FINSI:QUANTITES}}
+LIGNE	12. Délai de livraison{{SI:QUANTITE-FIXE}}Le délai de livraison est fixé à {{B06-EO-11}} jours, à compter du lendemain de la date de notification de l’Ordre de Service de commencer les prestations{{FINSI:QUANTITE-FIXE}}{{SI:QUANTITE-FIXE-ALLOTI}}En cas d’attribution de deux ou plusieurs lots à un candidat, les délais ne sont pas cumulables{{FINSI:QUANTITE-FIXE-ALLOTI}}{{SI:COMMANDE}}Le délai de livraison est fixé dans le bon de commande sans toutefois dépasser {{B06-EO-12.parLot}} jours à compter du lendemain de la notification dudit bon de commande{{FINSI:COMMANDE}}
+FIN_TABLE	

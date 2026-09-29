@@ -38,6 +38,9 @@ class FicheMarcheDocumentsEchecIntegrationTest extends CnmIntegrationTestSupport
             + "document")
     void echecAnnuleLaValidation() throws Exception {
         when(generateur.generer(any(DocumentFicheModele.class))).thenThrow(new IllegalStateException("gabarit illisible"));
+        // ⚠️ Lot D2 (2026-09-29) — les documents des fournitures sont rendus depuis leurs documents types (DocumentLibre) :
+        // le premier produit, le DPAO, échoue de même.
+        when(generateur.generer(any(cnm.prs.service.DocumentLibre.class))).thenThrow(new IllegalStateException("gabarit illisible"));
 
         TypeDmc dao = typeDmcRepository.findByCode("DAO").orElseThrow();
         ModePassation m92 = new ModePassation(92, "Appel d'offres ouvert", null, null, null, null);

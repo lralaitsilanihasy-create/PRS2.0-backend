@@ -1,0 +1,383 @@
+FICHIER	AE-F.docx
+TITRE	MARCHÉ PUBLIC DE FOURNITURES
+CONDITION	ALLOTIalloti = OUI
+CONDITION	NON-ALLOTIalloti = NON
+CONDITION	AOOB01-AC-13 = Appel d'offres ouvert
+CONDITION	PREQUALIFICATIONB01-AC-13 contient qualification
+CONDITION	DEUX-ETAPESB01-AC-13 contient deux étapes
+CONDITION	RESTREINTB01-AC-13 contient restreint
+CONDITION	GROUPEMENTgroupement = OUI
+CONDITION	GROUPEMENT-CONJOINTgroupement = OUI et formeGroupement = CONJOINT_OU_SOLIDAIRE
+CONDITION	PRIX-UNITAIREStypeMarche = QUANTITE_FIXE et typePrix = UNITAIRES
+CONDITION	PRIX-FORFAITAIREtypeMarche = QUANTITE_FIXE et typePrix = FORFAITAIRE
+CONDITION	COMMANDEtypeMarche = A_COMMANDE
+CONDITION	QUANTITE-FIXEtypeMarche = QUANTITE_FIXE
+CONDITION	SANS-SOUS-TRAITANCEB03-ST-01 = NON
+CONDITION	SOUS-TRAITANCEB03-ST-01 = OUI
+CONDITION	DEPART-DIFFEREtypeMarche = QUANTITE_FIXE et B09-DX-02 renseigne
+CONDITION	SANS-AVANCEavance = NON
+CONDITION	AVANCEavance = OUI
+CONDITION	ANNEXE-FORFAITtypePrix = FORFAITAIRE
+CONDITION	ANNEXE-UNITAIREStypePrix = UNITAIRES
+CONDITION	IMPORTEESprovenance = IMPORTEES
+CONDITION	NATIONAL-QUANTITE-FIXEprovenance = NATIONAL et typeMarche = QUANTITE_FIXE
+CONDITION	NATIONAL-COMMANDEprovenance = NATIONAL et typeMarche = A_COMMANDE
+CENTRE	ACTE D'ENGAGEMENT (A.E)
+PARA	AUTORITE CONTRACTANTE :
+PARA	{{B01-AC-01}}
+PARA	MARCHÉ :
+PARA	{{SI:NON-ALLOTI}}
+PARA	{{B02-OB-01}}
+PARA	{{FINSI:NON-ALLOTI}}
+PARA	{{SI:ALLOTI}}
+PARA	{{B02-OB-01}} — lot n° {{LOT}}
+PARA	{{FINSI:ALLOTI}}
+PARA	Marché passé selon la procédure
+PARA	{{SI:AOO}}
+PARA	d'appel d'offres ouvert régie par l'article 18 du Code des Marchés Publics
+PARA	{{FINSI:AOO}}
+PARA	{{SI:PREQUALIFICATION}}
+PARA	d'appel d'offres ouvert avec pré - qualification régie par l'article 19 du Code des Marchés Publics
+PARA	{{FINSI:PREQUALIFICATION}}
+PARA	{{SI:DEUX-ETAPES}}
+PARA	d'appel d'offres en deux étapes régie par l'article 20 du Code des Marchés Publics
+PARA	{{FINSI:DEUX-ETAPES}}
+PARA	{{SI:RESTREINT}}
+PARA	d'appel d'offres restreint régie par l'article 21 du Code des Marchés Publics
+PARA	{{FINSI:RESTREINT}}
+PARA	Imputation budgétaire : {{B01-AC-17}}
+PARA	PERSONNE RESPONSABLE DES MARCHES PUBLICS (PRMP) ou son Délégué :
+PARA	{{B01-AC-05}}
+TABLE	2
+LIGNE	Date de notification du Marché:<date de notification à compléterlors de la notification><cadre réservé à la mention "exemplaire unique" lors de la notification>
+FIN_TABLE	
+SOUS_TITRE	A. - ENGAGEMENT DU CANDIDAT
+SOUS_TITRE	ARTICLE 1 - CONTRACTANT(S)
+PARA	Engagement à remplir par le CANDIDAT INDIVIDUEL
+PARA	Je soussigné :
+PARA	- Nom :
+PARA	- Prénom :
+PARA	Agissant pour mon propre compte :
+PARA	domicilié à
+PARA	N° de Registre de Commerce
+PARA	N° statistique:
+PARA	Identification fiscale
+PARA	Télécopieur :
+PARA	Adresse e-Mail :
+PARA	OU :
+PARA	Agissant pour le compte de la personne morale dont les coordonnées sont données ci-après :
+PARA	Dénomination :
+PARA	forme juridique :
+PARA	adresse du siège :
+PARA	N° de Registre de Commerce :
+PARA	N° statistique :
+PARA	Identification fiscale :
+PARA	N° Télécopieur :
+PARA	Adresse e-Mail :
+PARA	Après avoir pris connaissance du Dossier d'Appel d'Offres N° {{B02-OB-03}} du <date> et, en particulier, des documents composant le Cahier des Prescriptions Spéciales :
+PARA	Atteste sur l'honneur, sous peine de résiliation de plein droit du marché ou de sa mise en régie, à mes torts exclusifs ou, selon le cas, aux torts exclusifs de la personne morale que je représente, que je ne tombe pas ou, selon le cas, que ladite personne morale ne tombe pas sous le coup d'un cas d'exclusion visé par l'article 9 du Code des Marchés Publics reproduit ci-après.
+PARA	"Art. 9 - Exclusion des marchés publics:
+PARA	Ne sont pas admis à concourir aux marchés publics :
+PARA	Les personnes physiques ou morales en état de liquidation judiciaire et les personnes physiques dont la faillite personnelle a été prononcée ;
+PARA	Les personnes physiques ou morales admises en règlement judiciaire qui ne peuvent justifier qu'elles ont été habilitées à poursuivre leur activité.
+PARA	Les personnes physiques ou morales qui n’ont pas souscrit à leurs obligations fiscales ou para fiscales à la date limite fixée pour le dépôt des offres.
+PARA	Les entreprises dans lesquelles la Personne Responsable des Marchés Publics ou les membres de la Commission d’Appel Offres possèdent des intérêts financiers ou personnels directs de quelque nature que ce soit.
+PARA	Les entreprises affiliées aux prestataires de service ayant contribué à préparer tout ou partie des Dossiers d’Appel d’Offres ou de consultation.
+PARA	les personnes physiques ou morales qui ont fait l’objet d’exclusion temporaire ou définitive résultant d’une infraction au Code Pénal ou prononcée par l’Autorité de Régulation des Marchés Publics pour atteinte à la réglementation des marchés publics."
+PARA	M'engage en mon nom ou en mon nom et au nom du Candidat que je représente, selon le cas, à m'abstenir de toute pratique consistant dans l'octroi ou la promesse d'octroyer un avantage indu, pécuniaire ou autre, directement ou par des intermédiaires, en vue d'obtenir le marché objet du présent Acte d'Engagement, et en général à respecter les dispositions du Code d'Ethique des Marchés Publics adopté par décret n° 2006-343 du 30 mai 2006.
+PARA	M'engage sans réserve, conformément aux stipulations des documents visés ci-dessus, à exécuter le marché portant sur les fournitures définies par les Spécifications Techniques du CPS, dans les conditions précisées par le CPS, le CCAG applicable et par le présent Acte d'Engagement.
+PARA	L'offre ainsi présentée me lie conformément à la durée de validité des offres fixée dans les Données Particulières de l'Appel d'Offres, jusqu'au {{DERIVE.fin-validite-offre}}.
+PARA	{{SI:GROUPEMENT}}
+PARA	Engagement à remplir par les MEMBRES D'UN :
+PARA	GROUPEMENT D'ENTREPRISES CONJOINTES
+PARA	OU :
+PARA	GROUPEMENTS D'ENTREPRISES SOLIDAIRES
+PARA	(cocher la case correspondante)
+SOUS_TITRE	ARTICLE 1. - CONTRACTANTS :
+PARA	Nous :
+PARA	1.
+PARA	Nom :
+PARA	Prénoms :
+PARA	Agissant pour mon compte / pour le compte de la personne morale ci-après :
+PARA	Dénomination :
+PARA	Forme juridique :
+PARA	Adresse du siège :
+PARA	N° de Registre de Commerce :
+PARA	N° statistique :
+PARA	Identification fiscale :
+PARA	N° Télécopieur :
+PARA	Adresse e-Mail :
+PARA	2.
+PARA	Nom :
+PARA	Prénoms :
+PARA	Agissant pour mon compte / pour le compte de la personne morale ci-après :
+PARA	Dénomination :
+PARA	Forme juridique :
+PARA	Adresse du siège :
+PARA	N° de Registre de Commerce :
+PARA	N° statistique :
+PARA	Identification fiscale :
+PARA	N° Télécopieur :
+PARA	Adresse e-Mail :
+PARA	(Compléter pour chacun des membres du groupement en ajoutant autant de pages que nécessaire)
+PARA	Représentés par (en cas de pouvoir donné à un mandataire)
+PARA	Nom :
+PARA	Prénoms :
+PARA	Agissant pour le compte de :
+PARA	Dénomination :
+PARA	Forme juridique :
+PARA	adresse du siège :
+PARA	N° de Registre de Commerce :
+PARA	N° statistique :
+PARA	Identification fiscale :
+PARA	N° Télécopieur :
+PARA	Adresse e-Mail :
+PARA	Après avoir pris connaissance du Dossier d'Appel d'Offres N° {{B02-OB-03}} du <date> et, en particulier, des documents composant le Cahier des Prescriptions Spéciales :
+PARA	Attestons sur l'honneur, sous peine de résiliation de plein droit du marché ou de sa mise en régie, à nos torts exclusifs ou, selon le cas, aux torts exclusifs des personnes morales que nous représentons, que nous ne tombons pas ou, selon le cas, que lesdites personnes morales ne tombent pas sous le coup d'un cas d'exclusion visé par l'article 9 du Code des Marchés Publics reproduit ci-après.
+PARA	"Art. 9 - Exclusion des marchés publics:
+PARA	Ne sont pas admis à concourir aux marchés publics :
+PARA	Les personnes physiques ou morales en état de liquidation judiciaire et les personnes physiques dont la faillite personnelle a été prononcée ;
+PARA	Les personnes physiques ou morales admises en règlement judiciaire qui ne peuvent justifier qu'elles ont été habilitées à poursuivre leur activité.
+PARA	Les personnes physiques ou morales qui n’ont pas souscrit à leurs obligations fiscales ou para fiscales à la date limite fixée pour le dépôt des offres.
+PARA	Les entreprises dans lesquelles la Personne Responsable des Marchés Publics ou les membres de la Commission d’Appel Offres possèdent des intérêts financiers ou personnels directs de quelque nature que ce soit.
+PARA	Les entreprises affiliées aux prestataires de service ayant contribué à préparer tout ou partie des Dossiers d’Appel d’Offres ou de consultation.
+PARA	les personnes physiques ou morales qui ont fait l’objet d’exclusion temporaire ou définitive résultant d’une infraction au Code Pénal ou prononcée par l’Autorité de Régulation des Marchés Publics pour atteinte à la réglementation des marchés publics."
+PARA	Nous engageons en notre nom, au nom du Candidat que nous représentons, à nous abstenir de toute pratique consistant dans l'octroi ou la promesse d'octroyer un avantage indu, pécuniaire ou autre, directement ou par des intermédiaires, en vue d'obtenir le marché objet du présent Acte d'Engagement, et en général à respecter les dispositions du Code d'Ethique des Marchés Publics adopté par 2006-343 du 30 mai 2006.
+PARA	Nous engageons sans réserve, conformément aux stipulations des documents visés ci-dessus, à exécuter le marché portant sur les fournitures définies par les Spécifications Techniques du CPS, dans les conditions précisées par le CPS, le CCAG applicable et par le présent Acte d'Engagement.
+PARA	L'offre ainsi présentée nous lie pour la durée de validité des offres fixée dans les Données Particulières de l'Appel d'Offres, jusqu'au {{DERIVE.fin-validite-offre}}.
+PARA	{{FINSI:GROUPEMENT}}
+SOUS_TITRE	ARTICLE 2 - PRIX
+PARA	Les conditions d'établissement des prix sont celles existant le quinzième jour précédant la date limite fixée pour la remise des offres, soit le….
+PARA	Tous les paiements à réaliser en monnaie différente de l'Ariary seront effectués sur la base du cours publié par la Banque Centrale de Madagascar en vigueur le quinzième jour précédant la date limite fixée pour le remise des offres.
+PARA	Les modalités éventuelles de variation des prix sont fixées en Annexe au Cahier des Clauses Administratives Particulières du CPS.
+PARA	{{SI:PRIX-UNITAIRES}}
+PARA	Les fournitures, objet du présent marché, sont rémunérées, par application du ou des prix unitaire(s) qui figurent dans le Bordereau de Prix en Annexe au présent Acte d'Engagement, à la ou aux quantité(s) réellement livrée(s) et admise(s) en recettes.
+PARA	Le montant du marché est estimé à :
+PARA	montant hors taxes :(en lettres et en chiffres)
+PARA	TVA : (en lettres et en chiffres)
+PARA	Soit un montant total TTC de (en lettres et en chiffres)
+PARA	{{FINSI:PRIX-UNITAIRES}}
+PARA	{{SI:PRIX-FORFAITAIRE}}
+PARA	Les fournitures, objet du présent marché, sont rémunérées, par application du prix global forfaitaire résultant du bordereau des prix et du détail quantitatif et estimatif, récapitulé en Annexe au présent Acte d'Engagement, fixé à :
+PARA	montant hors taxes :(en lettres et en chiffres)
+PARA	TVA :(en lettres et en chiffres)
+PARA	Soit un montant total TTC de (en lettres et en chiffres):
+PARA	{{FINSI:PRIX-FORFAITAIRE}}
+PARA	{{SI:COMMANDE}}
+PARA	Le montant du marché est fixé à :
+PARA	Montant minimum (annuel, le cas échéant) du marché hors TVA : (montant) (en lettres et en chiffres)
+PARA	Montant de la TVA au taux de %: (montant) (en lettres et en chiffres)
+PARA	Montant minimum (annuel, le cas échéant) du marché, TVA comprise : (montant en chiffres) soit, en toutes lettres et toutes taxes comprises : (montant)
+PARA	Montant maximum (annuel, le cas échéant) du marché hors TVA : (montant) (en lettres et en chiffres)
+PARA	Montant de la TVA au taux de %: (montant) (en lettres et en chiffres)
+PARA	Montant maximum (annuel, le cas échéant) du marché, TVA comprise : (montant en chiffres), soit, en toutes lettres et toutes taxes comprises : (montant)
+PARA	{{FINSI:COMMANDE}}
+SOUS_TITRE	ARTICLE 3 - SOUS-TRAITANCE
+PARA	{{SI:SANS-SOUS-TRAITANCE}}
+PARA	Il n'est pas envisagé de sous-traiter l'exécution de prestations objet du marché.
+PARA	{{FINSI:SANS-SOUS-TRAITANCE}}
+PARA	{{SI:SOUS-TRAITANCE}}
+PARA	l’Annexe n° <préciser n°> au présent acte d'engagement indique la nature et le montant des prestations qu'il est envisagé de faire exécuter par des sous-traitants payés directement, les noms de ces sous-traitants et les conditions de paiement des contrats de sous-traitance.
+PARA	Le montant des prestations sous-traitées indiqué dans l’annexe constitue le montant maximal de la créance que le(s) sous-traitant(s) concerné(s) pourra(ont) céder ou présenter en nantissement. Le montant total des prestations qu'il est envisagé de sous-traiter conformément à cette annexe est de (montant en chiffres et en lettres) TVA incluse.
+PARA	L’Annexe n° <préciser n°> constitue une demande d'acceptation des sous-traitants concernés et d'agrément des conditions de paiement du contrat de sous-traitance qui est réputée prendre effet à la date de notification du marché. Cette notification sera réputée emporter acceptation du sous-traitant et agrément des conditions de paiement du contrat de sous-traitance.
+PARA	{{FINSI:SOUS-TRAITANCE}}
+SOUS_TITRE	ARTICLE 4 - NANTISSEMENT
+PARA	Est désigné comme Comptable Assignataire de paiement, le {{B03-NA-03}}.
+PARA	Le montant maximal de la créance qui pourra être nantie par notre entreprise en tant que titulaire du marché est de :
+PARA	(en lettres et en chiffres, montant maximum du marché diminué du montant de la sous-traitance envisagée) :
+SOUS_TITRE	ARTICLE 5 - DURÉE - DELAI
+SOUS_TITRE	5.1 Date d'effet
+PARA	Le marché prend effet à compter de la notification au Fournisseur de son approbation.
+PARA	{{SI:DEPART-DIFFERE}}
+PARA	Le délai de réalisation des prestations suivantes du marché prend effet à compter du lendemain de la date de notification de l'ordre de service de réalisation de celle(s)-ci :
+PARA	{{B09-DX-02}}
+PARA	{{FINSI:DEPART-DIFFERE}}
+PARA	{{SI:COMMANDE}}
+PARA	Le délai de réalisation des prestations prend effet à compter du lendemain de la date de notification du bon de commande (cas d’un marché à commande)
+PARA	{{FINSI:COMMANDE}}
+SOUS_TITRE	5.2. Délai d'exécution
+PARA	{{SI:QUANTITE-FIXE}}
+PARA	Le délai d'exécution est fixé à {{B09-DX-01}} jours, à compter du lendemain de la date de notification de l’Ordre de Service de commencer les prestations.
+PARA	{{FINSI:QUANTITE-FIXE}}
+PARA	{{SI:COMMANDE}}
+PARA	Le délai d'exécution est fixé dans le bon de commande sans toutefois dépasser{{B06-EO-12}} jours, à compter du lendemain de la date de notification dudit bon de commande
+PARA	{{FINSI:COMMANDE}}
+PARA	Les calendriers proposés pour la livraison des fournitures et la réalisation des prestations connexes sont donnés dans les bordereau de prix figurant en Annexe au présent Acte d'Engagement.
+SOUS_TITRE	ARTICLE 6 - PAIEMENTS
+SOUS_TITRE	6.1. Domiciliation bancaire
+PARA	Dans le cas d'un Fournisseur unique
+PARA	L'Acheteur se libérera des sommes dues au titre du présent marché en en faisant porter le montant au crédit du compte bancaire suivant:
+PARA	- titulaire du compte:
+PARA	- établissement bancaire:
+PARA	- agence :
+PARA	- numéro de compte :
+PARA	- code :
+PARA	Toutefois, l'Acheteur se libérera des sommes dues aux sous-traitants payés directement en en faisant porter les montants au crédit des comptes desdits sous-traitants.
+PARA	{{SI:GROUPEMENT}}
+PARA	Dans le cas d'un groupement de Fournisseurs solidaires
+PARA	L'Acheteur se libérera des sommes dues au titre du présent marché en en faisant porter le montant au crédit du compte bancaire suivant, ouvert au nom des membres du groupement à l'effet de percevoir pour le compte des membres du groupement les sommes qui leurs sont dues en exécution du marché.
+PARA	- titulaire du compte:
+PARA	- établissement bancaire:
+PARA	- agence :
+PARA	- numéro de compte :
+PARA	- code :
+PARA	Ces paiements seront libératoires vis-à-vis des fournisseurs groupés solidaires. Toutefois, l'Acheteur se libérera des sommes dues aux sous-traitants payés directement en en faisant porter les montants au crédit des comptes désignés dans les avenants concernant les sous-traitants.
+PARA	{{FINSI:GROUPEMENT}}
+PARA	{{SI:GROUPEMENT-CONJOINT}}
+PARA	Dans le cas d'un groupement de Fournisseurs conjoints
+PARA	L'Acheteur se libérera des sommes dues au titre du présent marché en en faisant porter le montant au crédit des comptes bancaires suivants, ouvert aux de chacun des membres du groupement:
+PARA	- titulaire du compte:
+PARA	- établissement bancaire:
+PARA	- agence :
+PARA	- numéro de compte :
+PARA	(indiquer les comptes de chacun des membres)
+PARA	{{FINSI:GROUPEMENT-CONJOINT}}
+SOUS_TITRE	6.2 Avance forfaitaire
+PARA	{{SI:SANS-AVANCE}}
+PARA	Le CCAP ne prévoit pas d'avance forfaitaire.
+PARA	{{FINSI:SANS-AVANCE}}
+PARA	{{SI:AVANCE}}
+PARA	Le Fournisseur désigné ci-avant :
+PARA	refuse de percevoir l'avance forfaitaire prévue par le Cahier des Clauses Administratives
+PARA	Particulières du CPS.
+PARA	Ou
+PARA	ne refuse pas de percevoir l'avance forfaitaire prévue par le CCAP.
+PARA	En cas de groupement :
+PARA	Les fournisseurs groupés désignés ci- avant :
+PARA	refusent de percevoir l'avance forfaitaire prévue par le Cahier des Clauses Administratives
+PARA	Particulières du CPS.
+PARA	Ou
+PARA	ne refusent pas de percevoir l'avance forfaitaire prévue par le CCAP.
+PARA	{{FINSI:AVANCE}}
+PARA	Fait en un seul original
+PARA	à : le :
+PARA	Signature(s) du/des Candidats ou du mandataire du groupement précédée(s) de la mention(s) manuscrite(s) "lu et accepté"
+PARA	Le présent acte d'engagement comporte les annexes énumérées ci-après :
+PARA	{{SI:ANNEXE-FORFAIT}}
+PARA	Annexe n° 1 : bordereau de prix unitaires et décomposition du prix forfaitaire
+PARA	{{FINSI:ANNEXE-FORFAIT}}
+PARA	{{SI:ANNEXE-UNITAIRES}}
+PARA	Annexe n° 2 : bordereau de prix
+PARA	{{FINSI:ANNEXE-UNITAIRES}}
+PARA	Annexe n° < > : demande d'acceptation des sous-traitants;
+PARA	Annexe n° < > : état des sommes versées à des tiers
+PARA	Autres pièces contractuelles : {{B09-PC-02}}
+SOUS_TITRE	B. - ACCEPTATION ET NOTIFICATION PAR L'AUTORITE CONTRACTANTE
+PARA	Acceptation de l'offre
+PARA	Est acceptée la présente offre pour valoir acte d'engagement.
+PARA	Pour l'autorité contractante, la Personne Responsable des marchés publics ou son délégué :
+PARA	à : le :
+TABLE	2
+LIGNE	Approbation par l'autorité compétenteVisa de l'autorité de contrôle financier
+LIGNE	à :le :à :le :
+FIN_TABLE	
+PARA	Notification
+PARA	Reçu notification du marché le :
+PARA	Le Fournisseur / Mandataire du groupement :
+PARA	Reçu l'avis de réception de la notification du marché le :
+PARA	par le Fournisseur / mandataire du groupement.
+PARA	La Personne Responsable des Marchés Publics.
+PARA	à : le :
+PARA	Annexe
+PARA	Bordereaux des prix
+PARA	(Le Candidat doit remplir les formulaires de Bordereau des prix selon les instructions figurant ci-après. La liste des articles dans la colonne 1 du Bordereau des prix doit être identique à la liste des Fournitures et Services connexes annexée au Spécifications Techniques du CPS)
+PARA	{{SI:IMPORTEES}}
+PARA	Bordereau des prix des Fournitures à importer
+TABLE	2
+LIGNE	Monnaie de l’offre en conformité avec l'Article 6.7. des IC et des DPAODate (insérer la date (jour, mois, année) de remise de l’offre)Marché : (insérer la référence du Marché)Lot : (insérer le numéro du lot)Variante No. : (insérer le numéro d’identification si cette offre est proposée pour une variante)
+FIN_TABLE	
+TABLE	9
+LIGNE	123456789
+LIGNE	Article No.Description des FournituresPays d’origineDate de livraison CIP<lieu><ou>CIF<port>Quantité (Nb. d’unités)Prix unitaire CIP___<ou>CIF<port>Prix CIP <ou>CIF<port>par article (col 5x6)Prix par article du transport terrestre et autres services requis pour acheminer les fournitures jusqu’à destination finalePrix total par article (col 7+8)
+LIGNE	(insérer le No de l’article)(Insérer l’identification de la fourniture)(insérer le pays d’origine)(insérer la date de livraison offerte)(insérer la quantité et l’identification de l’unité de mesure)(insérer le prix unitaire CIP pour l’article)(insérer le prix total CIP pour l’article)(insérer le prix correspondant pour l’article)(insérer le prix total pour l’article)
+FIN_TABLE	
+TABLE	3
+LIGNE	Prix total (insérer le prix total)
+FIN_TABLE	
+PARA	Arrêté le montant estimé du marché à la somme de……………..(en lettres et en chiffres) y compris la Taxe sur la valeur ajoutée (TVA) au taux de ……………..(en lettres et en chiffres)
+PARA	A (insérer le lieu d’établissement de l’acte)
+PARA	Date (insérer la date)
+PARA	[Nom du Candidat (insérer le nom du Candidat)
+PARA	Signature (insérer signature)
+PARA	{{FINSI:IMPORTEES}}
+PARA	{{SI:NATIONAL-QUANTITE-FIXE}}
+PARA	Bordereau des prix pour les fournitures locales
+TABLE	3
+LIGNE	Monnaie : AriaryDate (insérer la date (jour, mois, année) de remise de l’offre)Marché : ( insérer la référence du Marché)Lot No : ( insérer le numéro du lot)Variante No. : ( insérer le numéro d’identification si cette offre est proposée pour une variante)
+FIN_TABLE	
+TABLE	6
+LIGNE	123456
+LIGNE	ArticleDescriptionDate de livraisonselon EXWQuantité (Nb. d’unités)Prix unitaireEXW + Frais de transport jusqu’au lieu de destination finalePrix total EXWpar article(cols.4 x 5)
+LIGNE	( insérer le No de l’article)( Insérer l’identification de la fourniture)( insérer la datede livraison offerte)( insérer la quantité et l’identification de l’unité de mesure)( insérer le prix unitaire EXW pour l’article)se référer auDPAO( insérer le prix total EXW pour l’article)se référer au DPAO
+FIN_TABLE	
+TABLE	3
+LIGNE	Montant HTVA
+LIGNE	TVA
+LIGNE	Montant TTC
+FIN_TABLE	
+PARA	Arrêté le montant estimé du marché à la somme de……………..(en lettres et en chiffres) y compris la Taxe sur la valeur ajoutée (TVA) au taux de ……………..(en lettres et en chiffres)
+PARA	A (insérer le lieu d’établissement de l’acte)
+PARA	Date (insérer la date)
+PARA	[Nom du Candidat (insérer le nom du Candidat)
+PARA	Signature (insérer signature)
+PARA	{{FINSI:NATIONAL-QUANTITE-FIXE}}
+PARA	{{SI:NATIONAL-COMMANDE}}
+PARA	Bordereau des prix pour les fournitures locales
+TABLE	3
+LIGNE	Monnaie : AriaryDate (insérer la date (jour, mois, année) de remise de l’offre)Marché : ( insérer la référence du Marché)Lot No : ( insérer le numéro du lot)Variante No. : ( insérer le numéro d’identification si cette offre est proposée pour une variante)
+FIN_TABLE	
+TABLE	8
+LIGNE	12345678
+LIGNE	ArticleDescriptionDate de livraisonselon EXWPrix unitaireEXW + Frais de transport jusqu’au lieu de destination finaleQuantité (Nb. d’unités) minimaleQuantité (Nb. d’unités) maximaleMontant minimalMontant maximale
+LIGNE	( insérer le No de l’article)( Insérer l’identification de la fourniture)( insérer la datede livraison offerte)( insérer le prix unitaire EXW pour l’article)se référer auDPAO( insérer la quantité et l’identification de l’unité de mesure)( insérer le prix total EXW pour l’article)se référer au DPAO
+FIN_TABLE	
+TABLE	4
+LIGNE	Montant HTVA
+LIGNE	TVA
+LIGNE	Montant TTC
+FIN_TABLE	
+PARA	Arrêté le montant minimal du marché à la somme de……………..(en lettres et en chiffres) y compris la Taxe sur la valeur ajoutée (TVA) au taux de ……………..(en lettres et en chiffres) pour un montant de……………..(en lettres et en chiffres)
+PARA	Et le montant maximal du marché à la somme de……………..(en lettres et en chiffres) y compris la Taxe sur la valeur ajoutée (TVA) au taux de ……………..(en lettres et en chiffres) pour un montant de……………..(en lettres et en chiffres)
+PARA	{{FINSI:NATIONAL-COMMANDE}}
+PARA	Bordereau des prix et calendrier d’exécution des Services connexes
+TABLE	3
+LIGNE	Monnaie de l’offre en conformité avec la clause 6.7. des IC et des DPAODate( insérer la date (jour, mois, année) de remise de l’offre)AOI No.: ( insérer le numéro de l’Appel d’Offres)Avis d’appel d’offres No.: ( insérer le numéro de l’avis d’Appel d’Offres)Variante No. : ( insérer le numéro d’identification si cette offre est proposée pour une variante)
+FIN_TABLE	
+TABLE	6
+LIGNE	123456
+LIGNE	ArticleDescription des Services (à l’exclusion du transport terrestre et autres services requis dans le pays de l’Acheteur pour acheminer les fournitures jusqu’à destination finale)Date de réalisation au lieu de destination finaleQuantité (Nb. d’unités)Prix unitairePrix total par article(Col.4X5)
+LIGNE	( insérer le No de l’article)( Insérer l’identification du service)( insérer la date de réalisation offerte)( insérer la quantité et l’identification de l’unité de mesure)( insérer le prix unitaire pour l’article)( insérer le prix total pour l’article)
+FIN_TABLE	
+TABLE	3
+LIGNE	Montant HTVA
+LIGNE	TVA
+LIGNE	Montant TTC
+FIN_TABLE	
+PARA	Arrêté le montant estimé du marché à la somme de……………..(en lettres et en chiffres) y compris la Taxe sur la valeur ajoutée (TVA) au taux de ……………..(en lettres et en chiffres)
+PARA	A (insérer le lieu d’établissement de l’acte)
+PARA	Date (insérer la date)
+PARA	[Nom du Candidat (insérer le nom du Candidat)
+PARA	Signature (insérer signature)
+PARA	{{SI:ANNEXE-FORFAIT}}
+PARA	ANNEXE
+PARA	DECOMPOSITION DU PRIX FORFAITAIRE
+PARA	(A compléter par le Candidat)
+PARA	{{FINSI:ANNEXE-FORFAIT}}
+PARA	{{SI:SOUS-TRAITANCE}}
+PARA	ANNEXE
+PARA	DEMANDE D'ACCEPTATION DU OU DES SOUS-TRAITANTS ET
+PARA	D'AGRÉMENT DES CONDITIONS DE PAIEMENT DU OU
+PARA	DES CONTRAT(S) DE SOUS-TRAITANCE
+PARA	(A compléter par le Candidat)
+PARA	{{FINSI:SOUS-TRAITANCE}}
+PARA	ANNEXE
+PARA	ETAT DES SOMMES VERSEES AUX TIERS
+PARA	(article 19 du Code d'éthique des marchés publics)
+PARA	Les rémunérations commissions que nous avons versées ou que nous comptons verser, le cas échéant, en relation avec la préparation ou la présentation de cette offre ou avec l’exécution du Marché, si nous en sommes attributaires, figurent ci-après :
+TABLE	3
+LIGNE	Nom etadresse du bénéficiaireMontant etmonnaieObjet de larémunération
+LIGNE	----------------------------------------------------------------------------
+FIN_TABLE	
+PARA	(si aucune rémunération n’a été ou ne doit être versée, indiquer “aucune”.)
+PARA	Fait à ……………………, le…………….
+PARA	Le fournisseur

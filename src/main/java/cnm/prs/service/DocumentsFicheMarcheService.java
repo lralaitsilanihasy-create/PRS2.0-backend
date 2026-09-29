@@ -162,7 +162,7 @@ public class DocumentsFicheMarcheService {
                     fichiers = generateur.generer(doc);
                 } catch (RuntimeException e) {
                     throw new GenerationDocumentsException("La génération du document « "
-                            + SelectionDocumentsFiche.titre(c.typeDocument(), lot, etat.getTypeMarche()) + " » a échoué : la "
+                            + SelectionDocumentsFiche.titre(c.typeDocument(), lot, etat.getTypeMarche(), etat.getCategorie()) + " » a échoué : la "
                             + "version n'est pas validée. " + e.getMessage(), e);
                 }
                 for (GenerateurDocumentsFiche.Fichier f : fichiers) {
@@ -260,12 +260,18 @@ public class DocumentsFicheMarcheService {
     /** Les documents d'une version (fiche). */
     @Transactional(readOnly = true)
     public List<DocumentFicheDto> lister(FicheMarche fiche) {
+        return lister(fiche, null);
+    }
+
+    /** ⚠️ Lot D2 (2026-09-29) — avec la catégorie de la fiche, qui fait le titre du CCAP des fournitures. */
+    @Transactional(readOnly = true)
+    public List<DocumentFicheDto> lister(FicheMarche fiche, String categorie) {
         if (fiche == null || fiche.getIdFiche() == null || !StatutFicheMarche.VALIDEE.name().equals(fiche.getStatut())) {
             return List.of();
         }
         return documentRepository.findByIdFicheOrderByIdDocumentAsc(fiche.getIdFiche()).stream()
                 .map(d -> new DocumentFicheDto(d.getIdDocument(), d.getType(),
-                        SelectionDocumentsFiche.titre(d.getType(), d.getLot(), fiche.getTypeMarche()), d.getExtension(), d.getNomFichier(),
+                        SelectionDocumentsFiche.titre(d.getType(), d.getLot(), fiche.getTypeMarche(), categorie), d.getExtension(), d.getNomFichier(),
                         d.getTailleOctets(), d.getDateGeneration(), fiche.getNumeroVersion(), d.getLot()))
                 .toList();
     }

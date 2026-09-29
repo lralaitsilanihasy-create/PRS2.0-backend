@@ -167,13 +167,14 @@ class FicheDaoParLotIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(JsonPath.<List<String>>read(documents, "$[?(@.type=='AE')].nomFichier"))
                 .allMatch(n -> n.matches("AE_.*_9902_lot[123]_v1\\.(docx|pdf)"));
 
+        // ⚠️ Lot D2 (2026-09-29) — l'AE et le DPAO des fournitures sont les documents types officiels remplis : l'AE d'un lot
+        // porte la valeur de SON lot ({{CODE}}), le DPAO et le CCAP, communs, l'énumèrent lot par lot ({{CODE.parLot}}).
         String ae2 = texte(documents, "AE", 2);
-        assertThat(ae2).contains("Acte d'engagement — lot 2", "Montant minimum annuel du marché (Ariary) : 2 000 000 Ariary",
-                "Montant maximum annuel du marché (Ariary) : 10 000 000 Ariary")
-                .doesNotContain("(Ariary) : 1 000 000 Ariary", "(Ariary) : 3 000 000 Ariary", "15 000 000", "— lot 1", "— lot 3");
-        String dpao = texte(documents, "DPAO", null);
-        assertThat(dpao).contains("Délai maximum de livraison (jours) — lot 1 : 10",
-                "Délai maximum de livraison (jours) — lot 3 : 30");
+        assertThat(ae2).contains("— lot n° 2", "sans toutefois dépasser20 jours")
+                .doesNotContain("dépasser10 jours", "dépasser30 jours", "— lot n° 1", "— lot n° 3");
+        String dpao = texte(documents, "DPAO", null).replace(' ', ' ');
+        assertThat(dpao).contains("sans toutefois dépasser Lot n° 1 : 10 ; Lot n° 2 : 20 ; Lot n° 3 : 30 jours");
+        assertThat(texte(documents, "CCAP", null)).contains("Lot n° 1 : 10 ; Lot n° 2 : 20 ; Lot n° 3 : 30 jours");
     }
 
     @Test

@@ -74,12 +74,12 @@ class FicheDaoCategoriesIntegrationTest extends CnmIntegrationTestSupport {
     // ------------------------------------------------------------------ 1-2. le référentiel sur deux axes
 
     @Test
-    @DisplayName("1-2 — Référentiel : quantité fixe + fournitures et services = ses 172 champs (146 avant V50 le 2026-09-27, 139 avant le 25 ; avec ou sans le "
+    @DisplayName("1-2 — Référentiel : quantité fixe + fournitures et services = ses 179 champs (172 avant le lot D2 le 2026-09-29, 146 avant V50 le 2026-09-27, 139 avant le 25 ; avec ou sans le "
             + "filtre) ; travaux : aucun champ saisi ni rubrique des fournitures, seules les 23 informations du plan ; "
             + "catégorie inconnue → 400")
     void referentielSurDeuxAxes() throws Exception {
-        assertThat(champs("typeMarche=QUANTITE_FIXE&categorie=FOURNITURES_SERVICES")).hasSize(172);
-        assertThat(champs("typeMarche=QUANTITE_FIXE")).hasSize(172);
+        assertThat(champs("typeMarche=QUANTITE_FIXE&categorie=FOURNITURES_SERVICES")).hasSize(179);
+        assertThat(champs("typeMarche=QUANTITE_FIXE")).hasSize(179);
 
         String travaux = ref("typeMarche=QUANTITE_FIXE&categorie=TRAVAUX");
         assertThat(JsonPath.<List<String>>read(travaux, "$.champs[?(@.source=='PPM')].code")).hasSize(23);

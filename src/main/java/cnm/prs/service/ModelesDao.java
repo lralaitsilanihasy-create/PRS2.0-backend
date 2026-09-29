@@ -31,12 +31,23 @@ public class ModelesDao {
     /** Les modèles décrits, dans l'ordre de production. Les autres formes restent au lot 2a (liste « libellé : valeur »). */
     public static final List<Couverture> COUVERTURES = List.of(
             new Couverture("DPAC-CC", "DPAC", "CONTRAT_CADRE", "FOURNITURES_SERVICES"),
-            new Couverture("AE-CC", "AE", "CONTRAT_CADRE", "FOURNITURES_SERVICES"));
+            new Couverture("AE-CC", "AE", "CONTRAT_CADRE", "FOURNITURES_SERVICES"),
+            // ⚠️ Lot D2 (2026-09-29, §B3) — fournitures et services, quantité fixe et à commande : un modèle par document,
+            // les passages propres à une forme sous condition typeMarche.
+            new Couverture("DPAO-F", "DPAO", "QUANTITE_FIXE", "FOURNITURES_SERVICES"),
+            new Couverture("CCAP-F", "CCAP", "QUANTITE_FIXE", "FOURNITURES_SERVICES"),
+            new Couverture("AE-F", "AE", "QUANTITE_FIXE", "FOURNITURES_SERVICES"),
+            new Couverture("DPAO-F", "DPAO", "A_COMMANDE", "FOURNITURES_SERVICES"),
+            new Couverture("CCAP-F", "CCAP", "A_COMMANDE", "FOURNITURES_SERVICES"),
+            new Couverture("AE-F", "AE", "A_COMMANDE", "FOURNITURES_SERVICES"));
 
     private final Map<String, FichierCommande.Modele> modeles = new LinkedHashMap<>();
 
     public ModelesDao() {
         for (Couverture c : COUVERTURES) {
+            if (modeles.containsKey(c.sigle())) {
+                continue;   // un modèle sert plusieurs formes (lot D2)
+            }
             String chemin = "/modeles/dao/" + c.sigle() + ".txt";
             modeles.put(c.sigle(), charger(chemin, lireRessource(chemin)));
         }

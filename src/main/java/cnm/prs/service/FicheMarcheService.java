@@ -230,12 +230,12 @@ public class FicheMarcheService {
      */
     @Transactional(readOnly = true)
     public List<DocumentFicheDto> documents(Long idDmc, Integer version) {
-        contexte(idDmc);
+        Contexte ctx = contexte(idDmc);
         FicheMarche fiche = version == null
                 ? ficheRepository.findFirstByIdDmcOrderByNumeroVersionDesc(idDmc).orElse(null)
                 : ficheRepository.findByIdDmcAndNumeroVersion(idDmc, version).orElseThrow(
                         () -> new ResourceNotFoundException("Version " + version + " introuvable pour le DMC " + idDmc + "."));
-        return documents.lister(fiche);
+        return documents.lister(fiche, ctx.codeCategorie());
     }
 
     /**

@@ -12,6 +12,7 @@ public class ImportRefuseException extends RuntimeException {
 
     public static final String FORMAT_NON_SUPPORTE = "FORMAT_NON_SUPPORTE";
     public static final String MODELE_ABSENT = "MODELE_ABSENT";
+    public static final String DOCUMENT_SANS_TEXTE = "DOCUMENT_SANS_TEXTE";
 
     private final HttpStatus status;
     private final String code;
@@ -29,6 +30,15 @@ public class ImportRefuseException extends RuntimeException {
     public static ImportRefuseException modeleAbsent() {
         return new ImportRefuseException(HttpStatus.UNPROCESSABLE_ENTITY,
                 "L'import n'est pas encore possible pour ce type de marché : saisissez la fiche.", MODELE_ABSENT);
+    }
+
+    /**
+     * ⚠️ Lot D2 (2026-09-29, §B5 règle 4) — un PDF sans texte (scanné) : pas d'OCR, rien à lire. 422
+     * {@code DOCUMENT_SANS_TEXTE}.
+     */
+    public static ImportRefuseException sansTexte() {
+        return new ImportRefuseException(HttpStatus.UNPROCESSABLE_ENTITY, "Document sans texte : saisissez la fiche.",
+                DOCUMENT_SANS_TEXTE);
     }
 
     public HttpStatus getStatus() {

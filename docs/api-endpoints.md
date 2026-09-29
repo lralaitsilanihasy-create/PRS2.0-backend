@@ -4872,6 +4872,46 @@ Demande front `frontend/docs/demande-backend-2026-09-28-lot-d-dao-complet.md` ; 
   de résiliation, mois), `B10-RS-03` (fautes ouvrant la résiliation) — fichier de correspondance du contrat-cadre et
   `docs/referentiel/2026-09-28-lot-d-champs-contrat-cadre.sql`.
 
+### Les documents des fournitures sur leurs documents types officiels — lot D2 ⚠️ 2026-09-29
+
+Demande front `frontend/docs/demande-backend-2026-09-29-lot-d2-fournitures.md` ; décision : ADR-0011, complément du
+29/09. **Aucune route nouvelle** : ce sont les documents produits à la validation qui changent de forme.
+
+- **Formes couvertes** : fournitures et services, **quantité fixe et à commande**, avec un seul modèle par document pour
+  les deux formes. Les passages propres à une forme sont sous condition `typeMarche`.
+  - `DPAO` est rendu depuis `classpath:modeles/dao/DPAO-F.txt` (42 conditions), une fois.
+  - `CCAP` est rendu depuis `CCAP-F.txt` (65 conditions), une fois. Son libellé est « Cahier des prescriptions
+    spéciales » ; il reste « Cahier des clauses administratives particulières » pour les autres catégories.
+  - `AE` est rendu depuis `AE-F.txt` (22 conditions), **un par lot** sur une ligne allotie.
+  - Ces trois types ne sont plus produits par le lot 2a pour ces formes. Les pièces du besoin (liste des fournitures,
+    bordereau, tableau de conformité) sont inchangées. Les travaux et les prestations intellectuelles restent au lot 2a.
+- **Marqueurs dans une cellule** : un paragraphe de cellule (séparé par RS, 0x1E) qui n'est que `{{SI:NOM}}` /
+  `{{FINSI:NOM}}` ouvre et ferme une section **interne à la cellule**. Il suit la même évaluation et ne s'imprime jamais.
+  Une cellule dont tout est omis garde sa place, vide.
+- **Marqueurs de rangée** : une ligne de tableau dont la première cellule est exactement `{{SI:NOM}}` (resp.
+  `{{FINSI:NOM}}`) et les autres vides ouvre (ferme) une section de **rangées**. La rangée-marqueur ne s'imprime jamais.
+  Elle partage la pile des sections : une section fausse omet ses rangées, sections internes comprises. La plage
+  historique `A3B-NATURES`, dont le marqueur est collé au texte, garde sa lecture.
+- **`{{CODE.parLot}}`** : dans un document commun, la valeur d'un champ saisi par lot sur une ligne allotie s'énumère
+  « Lot n° 1 : v1 ; Lot n° 2 : v2 ». Chaque valeur est formatée comme `{{CODE}}`, et un lot sans valeur s'imprime en
+  pointillés. Sur une ligne non allotie, pour un champ qui n'est pas par lot, ou dans un document de lot (AE), c'est la
+  valeur seule.
+- **Clés des conditions** : `typeMarche` et `categorie` (catégorie absente = `FOURNITURES_SERVICES`) se lisent comme les
+  clés de cadrage.
+- **Référentiel** (§B2) : sept champs des fournitures, saisie, facultatifs, portés par le fichier de correspondance des
+  fournitures et par `docs/referentiel/2026-09-29-lot-d2-champs-fournitures.sql`. La rubrique `B02-VA` « Offres
+  variantes » est créée par la migration **V52**.
+
+| code | libellé | type | condition |
+|---|---|---|---|
+| `B02-VA-01` | Offres variantes prises en considération | LISTE « Offre de base évaluée la moins-disante » / « Toutes les offres conformes aux spécifications » | `variantes = OUI` |
+| `B05-CP-04` | Transport intérieur à la charge du fournisseur (importées) | OUI_NON | `provenance = IMPORTEES` |
+| `B05-CP-05` | Lieu (CIP) ou port (CIF) de destination (importées) | TEXTE | `provenance = IMPORTEES` |
+| `B05-VP-03` | Indices d'actualisation des prix fermes | TEXTE_LONG | `prixRevisable = NON` |
+| `B09-DG-03` | Pénalité pour non-respect des garanties contractuelles (%) | POURCENTAGE | — |
+| `B09-DG-04` | Délai accordé pour remédier aux défauts pendant la garantie | TEXTE | — |
+| `B10-IR-03` | Taux de l'indemnité de résiliation (%, si différent des 4 % du CCAG) | POURCENTAGE | — |
+
 ### L'import du DAO : pré-remplir la fiche en lisant le document « à l'envers » ⚠️ 2026-09-28
 
 Demande front `frontend/docs/demande-backend-2026-09-28-import-dao.md`. Décision :
@@ -4890,18 +4930,33 @@ Une fiche jamais enregistrée est lue comme un brouillon vide.
 
 #### `POST /api/fiches-marche/{idDmc}/import` : lire, ne rien écrire
 
-- **Entrée** : `multipart/form-data`, part `fichier`, **`.docx` seulement**, 10 Mo au plus (limite multipart existante).
-- **415 `FORMAT_NON_SUPPORTE`** : « Seul un fichier Word (.docx) peut être importé pour l'instant. » Ce refus vaut pour :
-  - un autre nom de fichier, dont `.pdf` et `.docm` ;
+- **Entrée** : `multipart/form-data`, part `fichier`, **`.docx` ou `.pdf`** (⚠️ PDF depuis le 2026-09-29, lot D2 §B5),
+  10 Mo au plus (limite multipart existante).
+- **415 `FORMAT_NON_SUPPORTE`** : « Seul un fichier Word (.docx) ou PDF (.pdf) peut être importé. » Ce refus vaut pour :
+  - un autre nom de fichier, dont `.docm` et `.odt` ;
   - un fichier vide ;
-  - un fichier qui ne s'ouvre pas comme un document Word ;
+  - un `.docx` qui ne s'ouvre pas comme un document Word, ou un `.pdf` qui ne s'ouvre pas comme un PDF (chiffré,
+    endommagé) ;
   - un paquet qui porte des macros (`vbaProject.bin`, ou un type de contenu autre que celui d'un document) ;
   - une archive piégée (ratio de décompression de POI).
+- **422 `DOCUMENT_SANS_TEXTE`** ⚠️ 2026-09-29 : « Document sans texte : saisissez la fiche. » Il répond pour un PDF qui ne
+  porte aucun texte lisible, typiquement un scan. Il n'y a pas d'OCR.
 - **422 `MODELE_ABSENT`** : « L'import n'est pas encore possible pour ce type de marché : saisissez la fiche. » Il répond
-  quand aucun modèle du lot D ne couvre la forme et la catégorie de la fiche. Aujourd'hui, seul le contrat-cadre en
-  fournitures et services est couvert, par `DPAC-CC` et `AE-CC`. Les gardes de la fiche passent avant celles du fichier.
-- **Lecture** : chaque modèle cherche sa partie dans le même fichier (avis, DPAC, AE à la suite). Un paragraphe et une
-  cellule de tableau sont chacun une unité. Le fichier est lu en mémoire puis oublié. Rien n'est journalisé à la lecture.
+  quand aucun modèle du lot D ne couvre la forme et la catégorie de la fiche. Sont couverts, en fournitures et services,
+  le contrat-cadre (`DPAC-CC`, `AE-CC`) et ⚠️ depuis le 2026-09-29 la quantité fixe et le marché à commande (`DPAO-F`,
+  `CCAP-F`, `AE-F`). Les gardes de la fiche passent avant celles du fichier.
+- **Lecture** : chaque modèle cherche sa partie dans le même fichier (avis, DPAO, CCAP, AE à la suite). Le fichier est lu
+  en mémoire puis oublié. Rien n'est journalisé à la lecture.
+  - **Word** : un paragraphe est une unité, et chaque paragraphe d'une cellule de tableau aussi (⚠️ 2026-09-29). Une
+    tabulation dans un paragraphe n'y coupe rien.
+  - **PDF** (⚠️ 2026-09-29) : seul le texte horizontal, non incliné et dans le cadre de la page est gardé, ce qui écarte
+    le filigrane. Une ligne est coupée en deux colonnes sur un saut d'abscisse, puis les paragraphes sont refaits par
+    l'interligne. Les en-têtes, pieds de page (même texte au même endroit sur trois pages au moins) et numéros de page
+    sont écartés.
+  - **Règles de prudence** (⚠️ 2026-09-29, mesurées sur le 2463) : un paragraphe du modèle dont le texte fixe n'a aucune
+    lettre (« {{CODE}}. ») est un jeton seul. Une ancre de moins de 8 lettres ne donne jamais la confiance `haute`. Un
+    paragraphe n'atteste ses sections que s'il a au moins 20 lettres de texte fixe et qu'aucun paragraphe de même texte
+    n'existe hors de ces sections.
 - **Réponse 200 `ImportDaoResult`** :
 
 ```json
@@ -4927,7 +4982,11 @@ Une fiche jamais enregistrée est lue comme un brouillon vide.
   - `anomalies` porte les messages du 400 de la saisie : valeur refusée, condition d'affichage fausse sur le cadrage de
     la fiche complété des réponses déduites, champ par lot d'une ligne allotie. Une proposition qui en porte n'est pas
     applicable telle quelle.
-  - `lot` est toujours `null` : aucun champ par lot n'est lu au premier lot.
+  - ⚠️ **`lot`** (2026-09-29, lot D2) : le numéro du lot quand la valeur vient d'une énumération `{{CODE.parLot}}` (« Lot
+    n° k : valeur », dans le DPAO et le CCAP des fournitures) ; `code` reste le code nu, et l'application l'écrit sous
+    `CODE#lot`. `null` sinon. Une valeur par lot lue sur une ligne non allotie, un lot hors du plan, ou une valeur sans lot
+    pour un champ que la ligne saisit par lot portent une anomalie.
+  - ⚠️ Le texte fixe sans lettre d'un jeton seul (le point de « {{CODE}}. ») est retiré de la valeur lue (2026-09-29).
   - Une réponse déduite dont la clé est un **code de champ** est une proposition de confiance `moyenne`. Son `extrait`
     vaut « rédaction retenue (section NOM de SIGLE) ». Exemple : `B07-FS-01 = Marchés uniques non fractionnés`.
 - **`confiance`** :
@@ -4941,7 +5000,9 @@ Une fiche jamais enregistrée est lue comme un brouillon vide.
     foi) ;
   - un reflet du cadrage : il devient une entrée de `cadrage`, sans `section` ;
   - un champ calculé de la remise électronique ;
-  - une pièce, un champ inactif ou hors de la forme et de la catégorie.
+  - une pièce, un champ inactif ou hors de la forme et de la catégorie ;
+  - ⚠️ la forme et la catégorie (`typeMarche`, `categorie`, 2026-09-29) : elles se lisent au plan. Une rédaction qui les
+    dit autrement est rendue dans `divergences`, avec `code` = la clé.
 - **`cadrage`** : les réponses que disent les sections dont un paragraphe **à texte fixe** a été reconnu. Seuls comptent
   les termes `cle = valeur` d'une conjonction : pas de `ou`, pas de `!=`. Chaque réponse est validée comme par
   `PUT …/cadrage`. Une réponse refusée va aux `avertissements`. `actuelle` est la réponse déjà portée par la fiche.

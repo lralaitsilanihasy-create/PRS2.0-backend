@@ -62,7 +62,7 @@ import cnm.prs.repository.ChampFicheMarcheRepository;
 @Service
 public class ImportDaoService {
 
-    static final String MESSAGE_FORMAT = "Seul un fichier Word (.docx) peut être importé pour l'instant.";
+    static final String MESSAGE_FORMAT = "Seul un fichier Word (.docx) ou PDF (.pdf) peut être importé.";
     /** Seuil de l'avertissement « hors gabarit » : part des unités d'un modèle reconnues dans le document. */
     static final int SEUIL_GABARIT = 30;
     private static final Pattern VBA = Pattern.compile("(?i)/word/vbaProject\\.bin");
@@ -100,18 +100,41 @@ public class ImportDaoService {
     }
 
     /**
-     * Le texte d'un {@code .docx} dans l'ordre du document — paragraphes et tableaux entrelacés, une ligne de tableau par
-     * ligne, cellules séparées par une tabulation, les paragraphes d'une cellule joints par une espace — puis découpé en
-     * unités ({@link LectureDao#unitesDocument}). Même extraction que le {@code LireDocx} du front : run par run, le trait
-     * d'union insécable rendu, l'appel de note {@code [note:n]} et la note sur la ligne suivante.
+     * Les unités de lecture d'un {@code .docx} ou, ⚠️ depuis le lot D2 (2026-09-29, §B5 règle 4), d'un {@code .pdf}
+     * « texte » ({@link LecturePdf}). Un PDF sans texte (scanné) → 422 {@code DOCUMENT_SANS_TEXTE}.
      */
     public static List<String> paragraphes(String nomFichier, byte[] contenu) {
-        if (nomFichier == null || !nomFichier.toLowerCase(Locale.ROOT).endsWith(".docx")) {
+        String nom = nomFichier == null ? "" : nomFichier.toLowerCase(Locale.ROOT);
+        if (!nom.endsWith(".docx") && !nom.endsWith(".pdf")) {
             throw ImportRefuseException.format(MESSAGE_FORMAT);
         }
         if (contenu == null || contenu.length == 0) {
             throw ImportRefuseException.format(MESSAGE_FORMAT + " Le fichier reçu est vide.");
         }
+        if (nom.endsWith(".pdf")) {
+            List<String> pdf;
+            try {
+                pdf = LecturePdf.paragraphes(contenu);
+            } catch (Exception | LinkageError e) {
+                // pas un PDF, PDF chiffré ou endommagé
+                throw ImportRefuseException.format(MESSAGE_FORMAT + " Ce fichier ne se lit pas comme un document PDF.");
+            }
+            if (pdf.isEmpty()) {
+                throw ImportRefuseException.sansTexte();
+            }
+            return pdf;
+        }
+        return paragraphesDocx(contenu);
+    }
+
+    /**
+     * Le texte d'un {@code .docx} dans l'ordre du document — paragraphes et tableaux entrelacés, une ligne de tableau par
+     * ligne, cellules séparées par une tabulation, ⚠️ lot D2 : les paragraphes d'une cellule séparés (RS), une tabulation
+     * dans un paragraphe rendue par une espace — puis découpé en unités ({@link LectureDao#unitesDocument}). Même
+     * extraction que {@code LireDocx --paragraphes} du front : run par run, le trait d'union insécable rendu, l'appel de
+     * note {@code [note:n]} et la note sur la ligne suivante.
+     */
+    static List<String> paragraphesDocx(byte[] contenu) {
         List<String> lignes = new ArrayList<>();
         try (OPCPackage pkg = OPCPackage.open(new ByteArrayInputStream(contenu))) {
             if (!pkg.getPartsByName(VBA).isEmpty()) {
@@ -138,7 +161,7 @@ public class ImportDaoService {
                                 StringBuilder cellule = new StringBuilder();
                                 for (XWPFParagraph p : c.getParagraphs()) {
                                     if (cellule.length() > 0) {
-                                        cellule.append(' ');
+                                        cellule.append('\u001E');   // lot D2 : un paragraphe de cellule est une unité
                                     }
                                     cellule.append(texte(doc, p, notes));
                                 }
@@ -173,7 +196,7 @@ public class ImportDaoService {
                 String nom = n.getLocalName() == null ? "" : n.getLocalName();
                 switch (nom) {
                     case "t" -> sb.append(capitales ? texteDe(n).toUpperCase(Locale.FRENCH) : texteDe(n));
-                    case "tab" -> sb.append('\t');
+                    case "tab" -> sb.append(' ');   // lot D2 : une tabulation dans un paragraphe n'y coupe rien
                     case "br", "cr" -> sb.append('\n');
                     case "noBreakHyphen" -> sb.append('‑');
                     case "footnoteReference" -> {
@@ -258,7 +281,7 @@ public class ImportDaoService {
                 enConflit.add(k.code());
             });
             attendus.addAll(r.nonTrouves());
-            r.propositions().forEach(p -> attendus.add(p.code()));
+            r.propositions().forEach(p -> attendus.add(p.code().split("#", -1)[0]));
             // un même champ lu par deux modèles : la même valeur garde la meilleure confiance, deux valeurs sont un conflit
             for (LectureDao.Proposition p : r.propositions()) {
                 fusionner(propositions, p, conflits, enConflit);
@@ -283,8 +306,18 @@ public class ImportDaoService {
         Map<String, Object> cadrageFiche = fiche.getCadrage() == null ? Map.of() : fiche.getCadrage();
         Map<String, Object> cadrageLu = new LinkedHashMap<>(cadrageFiche);
         List<ImportDaoResult.Cadrage> cadrage = new ArrayList<>();
+        List<ImportDaoResult.Divergence> divergences = new ArrayList<>();
         for (LectureDao.Reponse rc : reponses.values()) {
             if (enConflit.contains(rc.cle())) {
+                continue;
+            }
+            // ⚠️ Lot D2 (2026-09-29) — la forme et la catégorie se lisent au plan, pas au cadrage : une rédaction qui les dit
+            // autrement est une divergence (le plan fait foi), jamais une réponse.
+            if (FormulairesCandidat.CLE_TYPE_MARCHE.equals(rc.cle()) || FormulairesCandidat.CLE_CATEGORIE.equals(rc.cle())) {
+                String plan = FormulairesCandidat.CLE_TYPE_MARCHE.equals(rc.cle()) ? typeMarche : categorie;
+                if (!rc.valeur().equalsIgnoreCase(plan)) {
+                    divergences.add(new ImportDaoResult.Divergence(rc.cle(), rc.valeur(), plan));
+                }
                 continue;
             }
             try {
@@ -306,7 +339,6 @@ public class ImportDaoService {
         Map<String, String> valeursPlan = fiche.getValeursPpm() == null ? Map.of() : fiche.getValeursPpm();
         boolean alloti = fiche.getNbLots() != null && LotsFiche.alloti(fiche.getNbLots());
         List<ImportDaoResult.Proposition> sortie = new ArrayList<>();
-        List<ImportDaoResult.Divergence> divergences = new ArrayList<>();
         Set<String> proposables = new LinkedHashSet<>();
         for (String code : attendus) {
             ChampFicheMarche c = champs.get(code);
@@ -318,14 +350,26 @@ public class ImportDaoService {
             if (enConflit.contains(p.code())) {
                 continue;
             }
-            ChampFicheMarche c = champs.get(p.code());
+            // ⚠️ Lot D2 (2026-09-29) — une valeur énumérée par lot ({{CODE.parLot}}) arrive sous CODE#n : le champ est CODE,
+            // le lot n.
+            int diese = p.code().indexOf(LotsFiche.SEPARATEUR);
+            String code = diese < 0 ? p.code() : p.code().substring(0, diese);
+            Integer lot = null;
+            if (diese >= 0) {
+                try {
+                    lot = Integer.valueOf(p.code().substring(diese + 1));
+                } catch (NumberFormatException e) {
+                    continue;   // « Lot n° 99999999999 » : pas un lot
+                }
+            }
+            ChampFicheMarche c = champs.get(code);
             if (c == null || !Boolean.TRUE.equals(c.getActif())) {
                 continue;
             }
             if (SourceChampFiche.PPM.name().equals(c.getSource())) {
-                String plan = valeursPlan.get(p.code());
+                String plan = valeursPlan.get(code);
                 if (plan == null || !LectureDao.norm(plan).equalsIgnoreCase(LectureDao.norm(p.valeur()))) {
-                    divergences.add(new ImportDaoResult.Divergence(p.code(), p.brut(), plan));
+                    divergences.add(new ImportDaoResult.Divergence(code, p.brut(), plan));
                 }
                 continue;
             }
@@ -338,10 +382,17 @@ public class ImportDaoService {
             if (c.getCondition() != null && !c.getCondition().isBlank() && !ConditionCadrage.vraie(c.getCondition(), cadrageLu)) {
                 anomalies.add("« " + c.getLibelle() + " » ne s'applique pas avec ce cadrage (condition : " + c.getCondition() + ").");
             }
-            if (alloti && Boolean.TRUE.equals(c.getParLot())) {
-                anomalies.add("« " + c.getLibelle() + " » se saisit par lot : l'import ne lit pas encore le lot.");
+            boolean parLot = alloti && Boolean.TRUE.equals(c.getParLot());
+            if (parLot && lot == null) {
+                anomalies.add("« " + c.getLibelle() + " » se saisit par lot : le document ne dit pas de quel lot il s'agit.");
+            } else if (lot != null && !parLot) {
+                anomalies.add("« " + c.getLibelle() + " » est lu pour le lot " + lot + ", mais la ligne ne se saisit pas par lot "
+                        + "pour ce champ.");
+            } else if (lot != null && lot > fiche.getNbLots()) {
+                anomalies.add("« " + c.getLibelle() + " » est lu pour le lot " + lot + ", hors du plan (" + fiche.getNbLots()
+                        + " lots).");
             }
-            sortie.add(new ImportDaoResult.Proposition(p.code(), null, normalisee != null ? normalisee : p.valeur(), p.brut(),
+            sortie.add(new ImportDaoResult.Proposition(code, lot, normalisee != null ? normalisee : p.valeur(), p.brut(),
                     p.confiance().libelle(), p.extrait(), valeursFiche.get(p.code()), anomalies));
         }
         Set<String> proposes = new LinkedHashSet<>();

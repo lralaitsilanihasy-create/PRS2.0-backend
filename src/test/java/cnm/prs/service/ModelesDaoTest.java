@@ -70,6 +70,11 @@ class ModelesDaoTest {
         ModelesDao dao = new ModelesDao();
         assertThat(dao.modele("DPAC-CC").conditions()).hasSize(14);
         assertThat(dao.modele("AE-CC").conditions()).hasSize(53);
+        // ⚠️ Lot D2 (2026-09-29) — les trois documents des fournitures, un modèle pour la quantité fixe et à commande.
+        assertThat(dao.modele("DPAO-F").conditions()).hasSize(42);
+        assertThat(dao.modele("AE-F").conditions()).hasSize(22);
+        assertThat(dao.modele("CCAP-F").conditions()).hasSize(65);
+        assertThat(dao.modeles()).hasSize(5);
         assertThatThrownBy(() -> ModelesDao.charger("/modeles/dao/X.txt", "CONDITION\tA\u001Fattributaires = MONO\n"
                 + "PARA\t{{SI:A}}\nPARA\t{{SI:B}}\nPARA\ttexte\nPARA\t{{FINSI:B}}\nPARA\t{{FINSI:A}}"))
                 .isInstanceOf(IllegalStateException.class).hasMessageContaining("/modeles/dao/X.txt")
@@ -110,7 +115,9 @@ class ModelesDaoTest {
         Files.createDirectories(dossier);
         for (Map.Entry<String, FichierCommande.Modele> e : dao.modeles().entrySet()) {
             DocumentLibre brut = FormulairesCandidat.brut(e.getKey(), e.getValue().elements());
-            assertThat(brut.texte()).doesNotContain("CONDITION").contains("{{SI:");
+            assertThat(brut.texte()).contains("{{SI:");
+            // les déclarations CONDITION ne s'impriment pas (le mot peut, lui, figurer dans le texte du document type)
+            e.getValue().conditions().values().forEach(x -> assertThat(brut.texte()).as(e.getKey()).doesNotContain(x));
             List<GenerateurDocumentsFiche.Fichier> fichiers = generateur.generer(brut);
             for (GenerateurDocumentsFiche.Fichier f : fichiers) {
                 Files.write(dossier.resolve(e.getKey() + "." + f.extension()), f.contenu());
@@ -118,6 +125,9 @@ class ModelesDaoTest {
         }
         assertThat(dossier.resolve("DPAC-CC.docx")).exists();
         assertThat(dossier.resolve("AE-CC.docx")).exists();
+        assertThat(dossier.resolve("DPAO-F.docx")).exists();
+        assertThat(dossier.resolve("AE-F.docx")).exists();
+        assertThat(dossier.resolve("CCAP-F.docx")).exists();
     }
 
     @Test

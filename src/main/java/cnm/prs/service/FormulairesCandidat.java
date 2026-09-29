@@ -61,6 +61,11 @@ public final class FormulairesCandidat {
     static final String REMISE_OFFRES_CONTRAT_CADRE = "B04-CP-02";
     /** ⚠️ Lot D (2026-09-28, §B2) — le numéro du lot du document ({@code {{LOT}}}). */
     static final String JETON_LOT = "LOT";
+    /** ⚠️ Lot D2 (2026-09-29, §B1) — clés lisibles par les conditions : la forme et la catégorie de la fiche. */
+    static final String CLE_TYPE_MARCHE = "typeMarche";
+    static final String CLE_CATEGORIE = "categorie";
+    /** ⚠️ Lot D2 (§B1) — suffixe d'un champ par lot énuméré dans un document commun : « Lot n° 1 : v1 ; Lot n° 2 : v2 ». */
+    static final String SUFFIXE_PAR_LOT = "parLot";
 
     /** Les noms de section historiques des formulaires du candidat, admis sans déclaration. */
     public static final java.util.Set<String> SECTIONS_HISTORIQUES = java.util.Set.of("A1B", "A3B-NATURES",
@@ -162,6 +167,13 @@ public final class FormulairesCandidat {
             if (cle.matches("B\\d{2}-[A-Z0-9]{1,6}-\\d{2}")) {
                 return valeur(fiche, cle, lot);
             }
+            // ⚠️ Lot D2 (2026-09-29, §B1) — la forme et la catégorie de la fiche se lisent comme des clés de cadrage.
+            if (CLE_TYPE_MARCHE.equals(cle)) {
+                return fiche.getTypeMarche();
+            }
+            if (CLE_CATEGORIE.equals(cle)) {
+                return fiche.getCategorie() != null ? fiche.getCategorie() : CategorieDao.FOURNITURES_SERVICES.name();
+            }
             Object v = fiche.getCadrage() == null ? null : fiche.getCadrage().get(cle);
             if (v == null && RemiseElectronique.CLE_CADRAGE.equals(cle)) {
                 return RemiseElectronique.PAPIER;
@@ -252,9 +264,30 @@ public final class FormulairesCandidat {
         /** Les lignes d'un tableau : plages régénérées ou conditionnelles, puis substitution cellule par cellule. */
         private List<List<List<String>>> lignes(DocumentLibre.Tableau t, Integer lot) {
             List<List<List<String>>> out = new ArrayList<>();
+            // ⚠️ Lot D2 (2026-09-29, §B1.2) — une rangée-marqueur (première cellule exactement {{SI:X}} / {{FINSI:X}}, les
+            // autres vides) ouvre ou ferme une section de RANGÉES ; elle ne s'imprime jamais. Même pile que les paragraphes :
+            // une section fausse omet ses rangées, sections internes comprises.
+            java.util.Deque<Boolean> pile = new java.util.ArrayDeque<>();
+            int omises = 0;
             int i = 0;
             while (i < t.lignes().size()) {
                 List<List<String>> ligne = t.lignes().get(i);
+                Matcher rangee = marqueurDeRangee(ligne);
+                if (rangee != null) {
+                    if ("SI".equals(rangee.group(1))) {
+                        boolean vraie = omises == 0 && condition(rangee.group(2), lot);
+                        pile.push(vraie);
+                        omises += vraie ? 0 : 1;
+                    } else if (!pile.isEmpty()) {
+                        omises -= pile.pop() ? 0 : 1;
+                    }
+                    i++;
+                    continue;
+                }
+                if (omises > 0) {
+                    i++;
+                    continue;
+                }
                 String nom = marqueur(ligne, "SI");
                 if (nom == null) {
                     out.add(substituer(ligne, lot));
@@ -289,9 +322,36 @@ public final class FormulairesCandidat {
             return out;
         }
 
+        /** ⚠️ Lot D2 — la rangée est-elle un marqueur de rangée ? Le marqueur, ou {@code null}. */
+        static Matcher marqueurDeRangee(List<List<String>> ligne) {
+            if (ligne.isEmpty() || ligne.get(0).size() != 1) {
+                return null;
+            }
+            Matcher m = MARQUEUR.matcher(ligne.get(0).get(0).trim());
+            if (!m.matches()) {
+                return null;
+            }
+            for (int c = 1; c < ligne.size(); c++) {
+                for (String p : ligne.get(c)) {
+                    if (!p.isBlank()) {
+                        return null;
+                    }
+                }
+            }
+            return m;
+        }
+
+        /**
+         * Un marqueur de plage historique ({@code A3B-NATURES}) : collé au texte d'une cellule. ⚠️ Lot D2 — un paragraphe de
+         * cellule qui n'est QUE le marqueur est une section interne à la cellule ({@link #substituer(List, Integer)}), pas
+         * une plage de rangées.
+         */
         private static String marqueur(List<List<String>> ligne, String sorte) {
             for (List<String> cellule : ligne) {
                 for (String paragraphe : cellule) {
+                    if (MARQUEUR.matcher(paragraphe.trim()).matches()) {
+                        continue;
+                    }
                     Matcher m = MARQUEUR.matcher(paragraphe);
                     while (m.find()) {
                         if (sorte.equals(m.group(1))) {
@@ -319,9 +379,32 @@ public final class FormulairesCandidat {
             List<List<String>> out = new ArrayList<>();
             for (List<String> cellule : ligne) {
                 List<String> c = new ArrayList<>();
+                // ⚠️ Lot D2 (2026-09-29, §B1.1) — un paragraphe de cellule qui n'est QUE {{SI:X}} / {{FINSI:X}} ouvre ou ferme
+                // une section interne à la cellule : même évaluation, jamais imprimé.
+                java.util.Deque<Boolean> pile = new java.util.ArrayDeque<>();
+                int omises = 0;
+                boolean marques = false;
                 for (String paragraphe : cellule) {
+                    Matcher m = MARQUEUR.matcher(paragraphe.trim());
+                    if (m.matches()) {
+                        marques = true;
+                        if ("SI".equals(m.group(1))) {
+                            boolean vraie = omises == 0 && condition(m.group(2), lot);
+                            pile.push(vraie);
+                            omises += vraie ? 0 : 1;
+                        } else if (!pile.isEmpty()) {
+                            omises -= pile.pop() ? 0 : 1;
+                        }
+                        continue;
+                    }
+                    if (omises > 0) {
+                        continue;
+                    }
                     String s = substituer(paragraphe, lot);
                     c.add(s == null ? "" : s);
+                }
+                if (c.isEmpty() && marques) {
+                    c.add("");   // la cellule garde sa place dans la rangée
                 }
                 out.add(c);
             }
@@ -381,6 +464,9 @@ public final class FormulairesCandidat {
             if (c == null && !code.matches("B\\d{2}-[A-Z0-9]{1,6}-\\d{2}")) {
                 return null;
             }
+            if (SUFFIXE_PAR_LOT.equals(suffixe)) {
+                return parLot(code, c, lot);
+            }
             String brut = valeur(fiche, code, c != null && Boolean.TRUE.equals(c.getParLot()) ? lot : null);
             if (brut == null) {
                 return POINTILLES;
@@ -401,6 +487,24 @@ public final class FormulairesCandidat {
                 case "" -> affichage(type, brut, n);
                 default -> null;
             };
+        }
+
+        /**
+         * ⚠️ Lot D2 (2026-09-29, §B1.3) — {@code {{CODE.parLot}}} : dans un document COMMUN d'une ligne allotie, la valeur
+         * de chaque lot formatée comme {@code {{CODE}}}, énumérée « Lot n° 1 : v1 ; Lot n° 2 : v2 » (pointillés pour un lot
+         * sans valeur) ; sur une ligne non allotie, un champ qui n'est pas par lot, ou dans un document de lot : la valeur
+         * seule, comme {@code {{CODE}}}.
+         */
+        private String parLot(String code, ChampFicheMarche c, Integer lot) {
+            int nbLots = Boolean.TRUE.equals(fiche.getSaisieParLot()) && fiche.getNbLots() != null ? fiche.getNbLots() : 0;
+            if (lot != null || c == null || !LotsFiche.parLot(c, nbLots)) {
+                return jeton(code, lot);
+            }
+            List<String> parts = new ArrayList<>();
+            for (int n = 1; n <= nbLots; n++) {
+                parts.add("Lot n° " + n + " : " + jeton(code, n));
+            }
+            return String.join(" ; ", parts);
         }
 
         /** La valeur d'un champ, selon son type : montant en chiffres avec l'unité, date JJ/MM/AAAA, Oui/Non, listes. */

@@ -70,6 +70,14 @@ class ImportDaoIntegrationTest extends CnmIntegrationTestSupport {
         ligne(9911, FormeMarche.QUANTITE_FIXE);
         ligne(9913, FormeMarche.CONTRAT_CADRE);
         ligne(9914, FormeMarche.CONTRAT_CADRE);
+        ligne(9915, FormeMarche.QUANTITE_FIXE);
+        natureRepository.save(new cnm.prs.entity.Nature(91, "Travaux", null, "TRAVAUX"));
+        Marche travaux = marcheDao(9912, 9900, 9900);
+        travaux.setIdMode(92);
+        travaux.setIdNature(91);
+        travaux.setFormeMarche(FormeMarche.QUANTITE_FIXE);
+        travaux.setDesignationMarche("Marché 9912");
+        marcheRepository.save(travaux);
         importer("referentiel-champs-fiche-marche-fournitures.csv");
         importer("referentiel-champs-fiche-marche-contrat-cadre.csv");
     }
@@ -181,21 +189,28 @@ class ImportDaoIntegrationTest extends CnmIntegrationTestSupport {
     // ------------------------------------------------------------------ B4 — refus
 
     @Test
-    @DisplayName("B4 refus — .pdf et .docm → 415 FORMAT_NON_SUPPORTE ; fiche validée → 409 FICHE_VALIDEE ; quantité fixe → 422 "
+    @DisplayName("B4 refus — .odt, faux .pdf et .docm → 415 FORMAT_NON_SUPPORTE ; PDF scanné → 422 DOCUMENT_SANS_TEXTE ; fiche "
+            + "validée → 409 FICHE_VALIDEE ; travaux (sans modèle) → 422 "
             + "MODELE_ABSENT ; Administrateur → 403 ; document hors gabarit → 200, avertissement et presque rien de proposé")
     void refus() throws Exception {
         Long cible = creerDmc(9914);
-        importer(cible, "DAO.pdf", "%PDF-1.4".getBytes()).andExpect(status().isUnsupportedMediaType())
+        importer(cible, "DAO.odt", "contenu".getBytes()).andExpect(status().isUnsupportedMediaType())
                 .andExpect(jsonPath("$.code").value("FORMAT_NON_SUPPORTE"))
-                .andExpect(jsonPath("$.message").value("Seul un fichier Word (.docx) peut être importé pour l'instant."));
+                .andExpect(jsonPath("$.message").value("Seul un fichier Word (.docx) ou PDF (.pdf) peut être importé."));
+        // ⚠️ Lot D2 (2026-09-29, §B5) — le PDF est admis : un faux PDF est refusé comme illisible, un PDF scanné en 422.
+        importer(cible, "DAO.pdf", "%PDF-1.4".getBytes()).andExpect(status().isUnsupportedMediaType())
+                .andExpect(jsonPath("$.code").value("FORMAT_NON_SUPPORTE"));
+        importer(cible, "scan.pdf", pdfImage()).andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("DOCUMENT_SANS_TEXTE"))
+                .andExpect(jsonPath("$.message").value("Document sans texte : saisissez la fiche."));
         importer(cible, "DAO.docm", docx(List.of("Texte"))).andExpect(status().isUnsupportedMediaType());
         importer(cible, "faux.docx", "pas une archive".getBytes()).andExpect(status().isUnsupportedMediaType())
                 .andExpect(jsonPath("$.code").value("FORMAT_NON_SUPPORTE"));
         mvc.perform(multipart("/api/fiches-marche/" + cible + "/import").file(fichier("DAO.docx", docx(List.of("x"))))
                 .header("Authorization", tokenAdmin)).andExpect(status().isForbidden());
 
-        Long qf = creerDmc(9911);
-        importer(qf, "DAO.docx", docx(List.of("Texte"))).andExpect(status().isUnprocessableEntity())
+        Long travaux = creerDmc(9912);   // lot D2 : les fournitures ont leurs modèles ; les travaux, pas encore
+        importer(travaux, "DAO.docx", docx(List.of("Texte"))).andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.code").value("MODELE_ABSENT"))
                 .andExpect(jsonPath("$.message").value("L'import n'est pas encore possible pour ce type de marché : saisissez la fiche."));
 
@@ -274,6 +289,83 @@ class ImportDaoIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(JsonPath.<Integer>read(apres, "$.version")).isEqualTo(1);
     }
 
+    // ------------------------------------------------------------------ lot D2 (2026-09-29) — PDF et fournitures
+
+    @Test
+    @DisplayName("B5 — PDF « texte » : le DPAC en PDF tel que le serveur le produit se lit (lignes, colonnes, paragraphes) ; "
+            + "aucune valeur fausse en haute ; la date limite revient en forme de saisie")
+    void lectureDuPdf() throws Exception {
+        Source s = sourceValidee();
+        Long cible = creerDmc(9914);
+        String docs = mvc.perform(get("/api/fiches-marche/" + s.idDmc() + "/documents").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        byte[] pdf = contenu(docs, "DPAC", "pdf");
+        String r = importer(cible, "DPAC.pdf", pdf).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        // 31 unités reconnues le 29/09 (118 sur le .docx) : sur le PDF du serveur (OpenPDF), la lecture du front sépare la
+        // première lettre de chaque ligne et ne rejoint pas les lignes d'un paragraphe — ses seuils sont réglés sur le 2463.
+        assertThat(JsonPath.<List<Integer>>read(r, "$.modeles[?(@.sigle=='DPAC-CC')].reconnues").get(0)).isGreaterThan(20);
+        List<Map<String, Object>> sures = JsonPath.read(r, "$.propositions[?(@.confiance != 'basse')]");
+        assertThat(sures).isNotEmpty();
+        // Critère du front (Q10) : aucune valeur fausse en HAUTE. En moyenne, le texte peut garder la lettre détachée
+        // (« A ttestations… », constat du 29/09 signalé au front) : c'est pourquoi une valeur moyenne se revoit.
+        for (Map<String, Object> p : JsonPath.<List<Map<String, Object>>>read(r, "$.propositions[?(@.confiance == 'haute')]")) {
+            String saisie = s.valeurs().get((String) p.get("code"));
+            if (saisie != null) {
+                assertThat(p.get("valeur")).as((String) p.get("code")).isEqualTo(saisie);
+            }
+        }
+        assertThat(JsonPath.<List<String>>read(r, "$.propositions[?(@.code=='B04-CP-02')].valeur")).containsExactly("2026-04-10T10:00");
+    }
+
+    @Test
+    @DisplayName("Lot D2 — fournitures à quantité fixe : DPAO, CCAP et AE d'une fiche validée, en un seul fichier, lus pour une "
+            + "fiche vierge : trois modèles cherchés, aucune valeur fausse en haute ni en moyenne, le cadrage déduit juste")
+    void allerRetourFournitures() throws Exception {
+        Long source = creerDmc(9911);
+        cadrage(source, "{\"alloti\":\"NON\",\"variantes\":\"NON\",\"groupement\":\"NON\",\"provenance\":\"NATIONAL\","
+                + "\"typePrix\":\"UNITAIRES\",\"prixRevisable\":\"NON\",\"garantieSoumission\":\"NON\",\"avance\":\"NON\","
+                + "\"penalites\":\"CCAG\"}");
+        Map<String, String> donnees = new LinkedHashMap<>();
+        donnees.put("B04-VO-01", "90");
+        donnees.put("B06-EO-11", "45");
+        donnees.put("B09-DX-01", "45");
+        donnees.put("B09-LL-01", "Antananarivo, magasin central du ministère");
+        remplirObligatoiresEtValider(source, "QUANTITE_FIXE", "FOURNITURES_SERVICES", donnees);
+        String fiche = lire(source);
+        Map<String, String> valeurs = JsonPath.read(fiche, "$.valeurs");
+        Map<String, Object> cadrageSource = JsonPath.read(fiche, "$.cadrage");
+        String docs = mvc.perform(get("/api/fiches-marche/" + source + "/documents").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        List<String> unites = new ArrayList<>();
+        for (String type : List.of("DPAO", "CCAP", "AE")) {
+            unites.addAll(ImportDaoService.paragraphes(type + ".docx", contenu(docs, type, "docx")));
+        }
+
+        Long cible = creerDmc(9915);
+        String r = importer(cible, "DAO-fournitures.docx", docx(unites)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(r, "$.modeles[*].sigle")).containsExactly("DPAO-F", "CCAP-F", "AE-F");
+        assertThat(JsonPath.<List<String>>read(r, "$.avertissements")).isEmpty();
+        List<Map<String, Object>> propositions = JsonPath.read(r, "$.propositions");
+        int justes = 0;
+        for (Map<String, Object> p : propositions) {
+            String saisie = valeurs.get((String) p.get("code"));
+            if (saisie != null && !"basse".equals(p.get("confiance"))) {
+                assertThat(p.get("valeur")).as(p.get("code") + " (" + p.get("confiance") + ")").isEqualTo(saisie);
+                justes++;
+            }
+        }
+        assertThat(justes).isGreaterThanOrEqualTo(10);
+        assertThat(JsonPath.<List<String>>read(r, "$.propositions[?(@.code=='B04-VO-01')].valeur")).containsExactly("90");
+        for (Map<String, Object> c : JsonPath.<List<Map<String, Object>>>read(r, "$.cadrage")) {
+            Object attendu = "modeRemise".equals(c.get("cle")) ? cadrageSource.getOrDefault("modeRemise", "PAPIER")
+                    : cadrageSource.get(c.get("cle"));
+            assertThat(String.valueOf(c.get("valeur"))).as((String) c.get("cle")).isEqualTo(String.valueOf(attendu));
+        }
+        // la forme se lit au plan : une rédaction « quantité fixe » sur une fiche à quantité fixe ne dit rien de plus
+        assertThat(JsonPath.<List<String>>read(r, "$.divergences[*].code")).doesNotContain("typeMarche");
+    }
+
     // ------------------------------------------------------------------ outils
 
     private record Source(Long idDmc, String fiche, Map<String, String> valeurs, Map<String, String> ppm, byte[] dpac, byte[] ae) {
@@ -310,9 +402,31 @@ class ImportDaoIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     private byte[] contenu(String docs, String type) throws Exception {
-        int id = JsonPath.<List<Integer>>read(docs, "$[?(@.type=='" + type + "' && @.extension=='docx')].idDocument").get(0);
+        return contenu(docs, type, "docx");
+    }
+
+    private byte[] contenu(String docs, String type, String extension) throws Exception {
+        int id = JsonPath.<List<Integer>>read(docs,
+                "$[?(@.type=='" + type + "' && @.extension=='" + extension + "' && @.lot == null)].idDocument").get(0);
         return mvc.perform(get("/api/fiches-marche/documents/" + id + "/contenu").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+    }
+
+    /** Un PDF « scanné » : une page faite d'une image, sans texte. */
+    private static byte[] pdfImage() throws Exception {
+        java.awt.image.BufferedImage img = new java.awt.image.BufferedImage(200, 100, java.awt.image.BufferedImage.TYPE_INT_RGB);
+        java.awt.Graphics2D g = img.createGraphics();
+        g.fillRect(10, 10, 180, 80);
+        g.dispose();
+        ByteArrayOutputStream png = new ByteArrayOutputStream();
+        javax.imageio.ImageIO.write(img, "png", png);
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        com.lowagie.text.Document d = new com.lowagie.text.Document();
+        com.lowagie.text.pdf.PdfWriter.getInstance(d, out);
+        d.open();
+        d.add(com.lowagie.text.Image.getInstance(png.toByteArray()));
+        d.close();
+        return out.toByteArray();
     }
 
     /** DPAC et AE « bout à bout » : leurs unités de lecture, dans l'ordre. */

@@ -99,7 +99,7 @@ class FicheDaoTravauxIntegrationTest extends CnmIntegrationTestSupport {
                 .doesNotContain("B07-PS");
         String fs = ref("typeMarche=QUANTITE_FIXE&categorie=FOURNITURES_SERVICES");
         assertThat(JsonPath.<List<String>>read(fs, "$.blocs[*].code")).doesNotContain("B11");
-        assertThat(JsonPath.<List<String>>read(fs, "$.champs[*].code")).hasSize(174)   // 172 des fournitures (V50) + B04-CD-01, -02 (2026-09-25)
+        assertThat(JsonPath.<List<String>>read(fs, "$.champs[*].code")).hasSize(181)   // 179 des fournitures (V50, lot D2 : + 7) + B04-CD-01, -02 (2026-09-25)
                 .contains("B04-CD-01", "B04-CD-02").doesNotContain("B04-CD-03");
     }
 

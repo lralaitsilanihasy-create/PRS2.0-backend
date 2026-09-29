@@ -183,7 +183,7 @@ class RemiseElectroniqueIntegrationTest extends CnmIntegrationTestSupport {
     @DisplayName("2 — Électronique : la validation est refusée sans responsable ni paramètres internes (messages exacts), puis "
             + "acceptée ; les Données particulières impriment « Électronique » et la plateforme, C1 porte la clause balisée ; "
             + "après validation les paramètres internes sont en lecture seule (FICHE_VALIDEE). Papier : validée sans rien, "
-            + "« Mode de remise des offres : Papier », pas de clause")
+            + "la clause 7.3 du DPAO dit que la voie électronique n'est pas possible, pas de clause")
     void validationEtDocuments() throws Exception {
         Long idDmc = creerDmc(9901);
         cadrage(idDmc, "\"modeRemise\":\"ELECTRONIQUE\",\"garantieSoumission\":\"OUI\"");
@@ -245,9 +245,11 @@ class RemiseElectroniqueIntegrationTest extends CnmIntegrationTestSupport {
         String documents = mvc.perform(get("/api/fiches-marche/" + idDmc + "/documents").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         String dpao = texteDocx(contenu(documents, "DPAO", "docx"));
-        assertThat(dpao).contains("Mode de remise des offres : Électronique", "Adresse de la plateforme de dépôt : https://depot.cnm.mg",
-                "Date de publication de l'avis : 02/03/2026 08:00", "Formats de fichiers acceptés : PDF, PDF/A")
-                .doesNotContain("INT-SE", "CTRMEM", "quorum");
+        // ⚠️ Lot D2 (2026-09-29) — le DPAO des fournitures est le document type rempli : la clause 7.3 porte la remise
+        // électronique (clause du juriste et ses valeurs), plus la liste « libellé : valeur » du lot 2a.
+        assertThat(dpao).contains("7.3. Remise des offres par voie électronique",
+                "CLAUSE À FOURNIR PAR LE JURISTE : conditions et modalités de la remise électronique — plateforme (https://depot.cnm.mg)")
+                .doesNotContain("n'est pas possible dans le cadre du présent Appel d'Offres", "INT-SE", "CTRMEM", "quorum", "{{");
         String c1 = texteDocx(contenu(documents, "C1", "docx"));
         assertThat(c1).contains("CLAUSE À FOURNIR PAR LE JURISTE : remise électronique",
                 "Téléversement avec code de vérification (voie B)").doesNotContain("{{");
@@ -268,8 +270,8 @@ class RemiseElectroniqueIntegrationTest extends CnmIntegrationTestSupport {
         remplirObligatoiresEtValider(papier, "QUANTITE_FIXE", "FOURNITURES_SERVICES", d2);
         String docsPapier = mvc.perform(get("/api/fiches-marche/" + papier + "/documents").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertThat(texteDocx(contenu(docsPapier, "DPAO", "docx"))).contains("Mode de remise des offres : Papier")
-                .doesNotContain("plateforme", "Remise des offres ou propositions par voie électronique");
+        assertThat(texteDocx(contenu(docsPapier, "DPAO", "docx"))).contains("Le mode de remise des offres par voie électronique n'est pas possible dans le cadre du présent Appel d'Offres.")   // lot D2
+                .doesNotContain("plateforme", "CLAUSE À FOURNIR");
         assertThat(texteDocx(contenu(docsPapier, "C1", "docx"))).doesNotContain("CLAUSE À FOURNIR", "{{");
     }
 

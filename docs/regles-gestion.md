@@ -479,6 +479,25 @@ remplit après le DAO — par le candidat, ou à la notification — reste entre
   départ, le préavis et les fautes ouvrant la résiliation — facultatifs, puisque le modèle les laisse vides si l'acheteur
   ne les précise pas.
 
+#### Les documents des fournitures sur leurs documents types (lot D2, demande front du 2026-09-29)
+
+⚠️ **Un marché de fournitures, à quantité fixe ou à commande, produit à son tour les documents types de l'ARMP
+remplis** : les données particulières de l'appel d'offres, le cahier des prescriptions spéciales (CCAP et annexes de
+garanties) et l'acte d'engagement, un par lot quand la ligne est allotie. Contrat : `docs/api-endpoints.md`, § *Les
+documents des fournitures — lot D2*.
+
+- **Un modèle sert les deux formes.** Ce qui n'appartient qu'au marché à commande (sa rangée « 1.2 », le délai fixé dans
+  le bon de commande, le stockage) n'apparaît que pour lui.
+- **Les choix se font dans les cellules du tableau et par rangées entières**, toujours par les réponses de la fiche. Une
+  information saisie par lot s'écrit lot par lot dans les documents communs : « Lot n° 1 : … ; Lot n° 2 : … ».
+- **Sept informations que les documents types demandaient s'ajoutent à la fiche**, facultatives. Ce sont l'offre variante
+  prise en considération, le transport intérieur et la destination des fournitures importées, les indices
+  d'actualisation des prix fermes, la pénalité et le délai de remise en conformité pendant la garantie, et le taux de
+  l'indemnité de résiliation.
+- **Ce que le candidat, la banque ou la notification remplissent reste entre chevrons.** Les spécifications techniques
+  restent produites depuis le besoin. Les travaux et les prestations intellectuelles gardent leurs listes jusqu'à ce que
+  leurs documents types soient décrits.
+
 #### L'import du DAO : l'import propose, la PRMP décide (demande front du 2026-09-28, décisions du pilote)
 
 ⚠️ **Une PRMP qui a déjà rédigé son DAO sur le document type peut en pré-remplir la fiche.** Elle n'a plus à tout
@@ -501,8 +520,12 @@ Décision : ADR-0012. Contrat : `docs/api-endpoints.md`, § *L'import du DAO*.
 - **L'écriture est d'un seul tenant.** Elle ajoute sans effacer : une information non retenue garde sa valeur. Un seul
   refus et rien n'est écrit. La fiche reste un brouillon, que la PRMP relit, complète et valide comme toute fiche.
 - **Le fichier n'est pas conservé.** Seuls son nom et son empreinte figurent au journal du dossier de planification.
-  L'import se fait par la PRMP propriétaire ou son UGPM, sur un brouillon seulement. Au premier lot, seul un fichier
-  Word est accepté : ni PDF, ni images, ni champs par lot.
+  L'import se fait par la PRMP propriétaire ou son UGPM, sur un brouillon seulement.
+- ⚠️ **Depuis le 29/09 : les fournitures, le PDF et la prudence.** Un DAO de fournitures s'importe comme celui du
+  contrat-cadre, et une valeur écrite lot par lot revient à chaque lot. Un PDF « texte » est accepté : le filigrane
+  nominatif est écarté. Un PDF scanné est refusé, faute d'OCR, et la PRMP saisit sa fiche. Trois règles, tirées du vrai
+  dossier 2463, évitent qu'un libellé trop court ou présent dans plusieurs rédactions fasse croire à une valeur sûre. Un
+  DAO fortement adapté du document type donne peu de propositions, jamais de fausses valeurs présentées comme sûres.
 
 #### Les documents générés (lot 2a, demande front du 2026-09-23)
 

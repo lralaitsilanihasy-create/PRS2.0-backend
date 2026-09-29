@@ -59,3 +59,25 @@ de rédaction du modèle, et chaque nouveau document type une livraison backend.
   fichiers qui ne demandent que des égalités de réponses.
 - **Des parenthèses** : aucune condition du contrat-cadre n'en a besoin ; `et` prioritaire suffit, et l'imbrication des
   sections couvre le reste.
+
+## Complément du 2026-09-29 — lot D2, les fournitures
+
+Demande front `frontend/docs/demande-backend-2026-09-29-lot-d2-fournitures.md`. Le DPAO des fournitures est un tableau
+« clause des IC | données particulières », et ses rédactions au choix sont dans les cellules. La décision s'étend sans
+changer de nature : le moteur évalue toujours, le fichier décide toujours.
+
+1. **Marqueurs dans une cellule.** Un paragraphe de cellule qui n'est que `{{SI:NOM}}` / `{{FINSI:NOM}}` ouvre et ferme
+   une section interne à la cellule. Il suit la même évaluation et ne s'imprime jamais.
+2. **Marqueurs de rangée.** Une rangée dont la première cellule est exactement `{{SI:NOM}}` / `{{FINSI:NOM}}`, les autres
+   étant vides, ouvre et ferme une section de rangées. La rangée-marqueur ne s'imprime jamais. La plage historique
+   `A3B-NATURES`, dont le marqueur est collé au texte d'une cellule, garde sa lecture.
+3. **`{{CODE.parLot}}`.** Dans un document commun, la valeur d'un champ saisi par lot s'énumère « Lot n° 1 : v1 ; Lot n° 2 :
+   v2 », chaque valeur formatée comme `{{CODE}}`. Sur une ligne non allotie, ou dans un document de lot, c'est la valeur
+   seule.
+4. **`typeMarche` et `categorie`** se lisent comme des clés. Un seul modèle par document sert ainsi la quantité fixe et le
+   marché à commande.
+5. **Un modèle peut couvrir plusieurs formes.** `ModelesDao.COUVERTURES` associe un sigle à chaque couple forme et
+   catégorie, et le fichier n'est chargé qu'une fois.
+
+La preuve reste externe. Le rendu brut des trois fichiers est jugé fidèle par le comparateur du front : 234/234, 455/455
+et 456/456. Le contrat-cadre est inchangé, à 174/174 et 378/378.
