@@ -81,6 +81,39 @@ class LectureDaoTest {
     }
 
     @Test
+    @DisplayName("Lot D3 (§B4, 2026-09-29) : un jumeau n'est jamais haut ; la coupe vaut après un texte fixe final (la valeur "
+            + "n'avale plus la phrase suivante) ; plusieurs jetons séparés de ponctuation seule : rien n'est proposé")
+    void reglesDuLotD3() {
+        FichierCommande.Modele modele = FichierCommande.lireModele(String.join("\n",
+                "PARA\tDemandes d'éclaircissement : délais de la procédure de consultation",
+                "PARA\t{{B04-EP-03}} jours avant la date limite fixée pour la remise des propositions.",
+                "PARA\t{{B04-EP-04}} jours avant la date limite fixée pour la remise des propositions.",
+                "PARA\tL'objet du marché est {{B02-OB-02}}.",
+                "PARA\tLe délai d'exécution est fixé à {{B09-DX-01}} jours calendaires.",
+                "PARA\tIntitulé de la consultation et référence du marché",
+                "PARA\t{{B02-OB-03}} — {{B02-OB-04}}",
+                "PARA\tFin de la section des données particulières"));
+        Map<String, LectureDao.InfoChamp> champs = Map.of("B04-EP-03", new LectureDao.InfoChamp("NOMBRE", "SAISIE", null),
+                "B04-EP-04", new LectureDao.InfoChamp("NOMBRE", "SAISIE", null),
+                "B09-DX-01", new LectureDao.InfoChamp("NOMBRE", "SAISIE", null));
+        // Le jumeau B04-EP-04 est absent du document : B04-EP-03 est lu, mais seulement en moyenne (l'ordre, pas le texte,
+        // les distingue).
+        List<String> doc = LectureDao.unitesDocument(List.of(
+                "Demandes d'éclaircissement : délais de la procédure de consultation",
+                "15 jours avant la date limite fixée pour la remise des propositions.",
+                "L'objet du marché est Étude de faisabilité. Le délai d'exécution est fixé à 90 jours calendaires.",
+                "Intitulé de la consultation et référence du marché",
+                "AOO-12/2026 — Étude de faisabilité du barrage",
+                "Fin de la section des données particulières"));
+        LectureDao.Resultat r = LectureDao.lire("T", modele, doc, champs::get);
+        assertThat(r.propositions()).noneMatch(p -> p.confiance() == LectureDao.Confiance.HAUTE && p.code().startsWith("B04-EP"));
+        assertThat(r.propositions()).extracting(p -> p.code() + "=" + p.valeur() + ":" + p.confiance().libelle())
+                .contains("B02-OB-02=Étude de faisabilité:moyenne", "B09-DX-01=90:haute")
+                .noneMatch(s -> s.contains("Le délai d'exécution"));
+        assertThat(r.propositions()).extracting(LectureDao.Proposition::code).doesNotContain("B02-OB-03", "B02-OB-04");
+    }
+
+    @Test
     @DisplayName("Lot D2 (B5, 2026-09-29) : « {{CODE}}. » est un jeton seul, jamais un motif ; un libellé présent dans deux "
             + "rédactions n'atteste aucune section ; marqueurs de cellule et de rangée ; {{CODE.parLot}} → CODE#1, CODE#2")
     void reglesDuLotD2() {

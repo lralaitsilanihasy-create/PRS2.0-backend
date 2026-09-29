@@ -1,0 +1,270 @@
+FICHIER	CPS-PI.docx
+TITRE	MARCHÉ PUBLIC DE PRESTATIONS INTELLECTUELLES
+CONDITION	PROJETB02-OP-01 renseigne
+CONDITION	SANS-PROJETB02-OP-01 vide
+CONDITION	GROUPEMENT-SOLIDAIREgroupement = OUI et formeGroupement = SOLIDAIRE_OBLIGATOIRE
+CONDITION	GROUPEMENT-LIBREgroupement = OUI et formeGroupement = CONJOINT_OU_SOLIDAIRE
+CONDITION	SECURITE-NONB09-MS-01 != OUI
+CONDITION	SECURITE-OUIB09-MS-01 = OUI
+CONDITION	ASSISTANCE-NONB09-AI-01 != OUI
+CONDITION	ASSISTANCE-OUIB09-AI-01 = OUI
+CONDITION	DEVISEB05-MP-01 renseigne
+CONDITION	FERMEprixRevisable = NON
+CONDITION	REVISABLEprixRevisable = OUI
+CONDITION	SANS-AVANCEavance = NON
+CONDITION	AVANCEavance = OUI
+CONDITION	AVANCE-ARIARYavance = OUI et B05-MP-01 vide
+CONDITION	AVANCE-DEVISESavance = OUI et B05-MP-01 renseigne
+CONDITION	REGLEMENT-COURTB08-RP-01 renseigne
+CONDITION	REGLEMENT-TEMPSB08-RP-02 renseigne
+CONDITION	REGLEMENT-ETAPESB08-RP-03 renseigne
+CONDITION	MATERIEL-NONB09-MF-01 != OUI
+CONDITION	MATERIEL-OUIB09-MF-01 = OUI
+CONDITION	RESTITUTION-BANCAIREB09-MF-01 = OUI et B09-MF-02 = Garantie bancaire
+CONDITION	RESTITUTION-CAUTIONB09-MF-01 = OUI et B09-MF-02 contient caution
+CONDITION	RESTITUTION-CHEQUEB09-MF-01 = OUI et B09-MF-02 contient chèque
+CONDITION	FOURNITURE-MATERIELB09-FC-01 renseigne
+CONDITION	DEPART-OSB09-DP-01 renseigne
+CONDITION	PENALITES-NONpenalites = NON
+CONDITION	PENALITES-OUIpenalites != NON
+CONDITION	PENALITES-PLAFONDpenalites = PLAFOND_DIFFERENT
+CONDITION	VERIFICATION-DELAIB09-OP-02 renseigne
+CONDITION	INDEMNITEB10-IN-01 renseigne
+CENTRE	MARCHÉ PUBLIC
+CENTRE	DE PRESTATIONS INTELLECTUELLES
+CENTRE	CAHIER DES PRESCRIPTIONS SPECIALES
+PARA	AUTORITE CONTRACTANTE :
+PARA	{{B02-CL-01}}
+PARA	MARCHÉ :
+PARA	{{B02-OB-03}} — {{B02-OB-01}}
+PARA	Marché passé selon la procédure
+PARA	spéciale régie par l'article 26 du Code des Marchés Publics
+PARA	PERSONNE RESPONSABLE DES MARCHES PUBLICS (PRMP) ou son DELEGUE:
+PARA	{{B02-CL-02}}
+PARA	Le présent Cahier des Prescriptions Spéciales comprend :
+PARA	Le Cahier des Clauses Administratives Particulières (CCAP),
+PARA	Annexe : Exemple de formule de révision de prix
+PARA	Annexe : Modèle de garantie bancaire de restitution d'avance
+PARA	Annexe : Modèle de caution de restitution d'avance
+PARA	Les Termes de Références.
+PARA	Le Cahier des Prescriptions Spéciales ne peut être ni modifié ni complété par les candidats qui doivent souscrire à ses dispositions.
+SOUS_TITRE	CAHIER DES CLAUSES ADMINISTRATIVES PARTICULIERES (CCAP):
+PARA	Le CCAP est destiné à compléter les dispositions du Cahier des Clauses Administratives Générales (CCAG) afin de préciser les obligations contractuelles reflétant les circonstances auxquelles sont assujettis le Client et les prestations concernés. Les candidats aux marchés doivent souscrire à ses dispositions sans le modifier ni le compléter.
+PARA	Les dispositions du présent Cahier des Clauses Administratives Particulières (CCAP) précisent le CCAG en le complétant ou en dérogeant à ses dispositions. Elles suivent l'ordre et la numérotation des articles du CCAG. En cas de contradiction entre les deux documents, les clauses ci-après prévalent sur celles du CCAG.
+SOUS_TITRE	Article 1 - Objet du marché - Intervenants - langue (CCAG Article 2)
+SOUS_TITRE	1.1 Objet du marché -
+PARA	{{SI:PROJET}}
+PARA	Les stipulations du présent Cahier des Clauses Administratives Particulières (CCAP) concernent les prestations à effectuer dans le cadre de {{B02-OP-01}}.
+PARA	{{FINSI:PROJET}}
+PARA	{{SI:SANS-PROJET}}
+PARA	Les stipulations du présent Cahier des Clauses Administratives Particulières (CCAP) concernent les prestations à effectuer.
+PARA	{{FINSI:SANS-PROJET}}
+PARA	L'objet du présent marché de prestations intellectuelles porte sur:
+PARA	{{B02-OP-02}}.
+PARA	La description détaillée des prestations attendues du Consultant est donnée dans les Termes de Référence inclus dans le Cahier des Prescriptions Spéciales (CPS).
+SOUS_TITRE	1.2.- Client
+PARA	{{B02-CL-01}}.
+PARA	Représentant de la PRMP:
+PARA	{{B02-CL-02}}.
+SOUS_TITRE	Article 2 - Notifications au Consultant (CCAG Article 4.3)
+PARA	Aux fins d'envoi ou de remise des notifications du client, le Consultant, s'il n'est pas déjà domicilié, devra élire domicile à :
+PARA	<mentionner la ville ou le lieu choisi par le Client, tel que la ville où les prestations sont principalement exécutées. Si le Consultant ne dispose pas d'une adresse dans la ville ou le lieu précités les notifications seront valablement effectuées à la mairie du lieu principal d'exécute° des prestations >
+PARA	A défaut pour le Consultant d'élire domicile à proximité du lieu d’exécution des prestations et de faire connaître l'adresse de ce domicile à la Personne Responsable des Marchés Publics et/ou au maître d'œuvre, toutes les notifications qui se rapportent au marché seront valablement effectuées à l'adresse mentionnée ci-après:
+PARA	{{B09-NC-01}}
+SOUS_TITRE	Article 3 - Groupements (CCAG Article 5.1)
+PARA	{{SI:GROUPEMENT-SOLIDAIRE}}
+PARA	Les Consultants groupés seront considérés comme solidaires, chacun des membres du groupement étant engagé pour la totalité du marché.
+PARA	{{FINSI:GROUPEMENT-SOLIDAIRE}}
+PARA	{{SI:GROUPEMENT-LIBRE}}
+PARA	Les Consultants groupés seront considérés comme solidaires, chacun des membres du groupement étant engagé pour la totalité du marché.
+PARA	Les Consultants groupés seront considérés comme conjoints chacun des Consultants étant responsable de la réalisation du ou des lots qui lui sont assignés. Le mandataire des membres du groupement désigné dans l'Acte d'Engagement est solidaire de chacun des Consultants groupés dans les obligations contractuelles de ceux-ci à l'égard du Client.
+PARA	{{FINSI:GROUPEMENT-LIBRE}}
+SOUS_TITRE	Article 4 - Documents contractuels (CCAG Article 6.1)
+PARA	Constituent des documents contractuels en sus des documents prévus par les CCAG :
+PARA	{{B09-DK-01}}
+SOUS_TITRE	Article 5 - Modifications et avenants (CCAG Article6.2.2)
+PARA	Les éventuelles demandes d'ajustement du prix ou des délais d'achèvement du Consultant à la suite d'un ordre de modification du Client doivent être notifiés au client dans un délai de {{B09-MV-01}} jours suivants la date de réception de l'ordre de notification.
+SOUS_TITRE	Article 6 - Mesures de sécurité ou de protection du secret (CCAG Article 7.2)
+PARA	{{SI:SECURITE-NON}}
+PARA	Non applicable
+PARA	{{FINSI:SECURITE-NON}}
+PARA	{{SI:SECURITE-OUI}}
+PARA	Les travaux, objet du présent Marché, sont à exécuter dans un lieu où des mesures de sécurité ou de protection du secret s'appliquent. Le Consultant doit en conséquence observer les dispositions :
+PARA	Soit : que le Maître d'œuvre communiquera lors de la notification de l'attribution du Marché,
+PARA	Soit : mentionnées en Annexe <n°> au présent CCAP.
+PARA	{{FINSI:SECURITE-OUI}}
+SOUS_TITRE	Article 7 : Assistance du client ( CCAG article 8)
+PARA	{{SI:ASSISTANCE-NON}}
+PARA	Non applicable
+PARA	{{FINSI:ASSISTANCE-NON}}
+PARA	{{SI:ASSISTANCE-OUI}}
+PARA	Le Client fournit les intrants suivants : {{B09-AI-02}}
+PARA	{{FINSI:ASSISTANCE-OUI}}
+SOUS_TITRE	Article 8 - Prix du Marché (CCAG article 9)
+SOUS_TITRE	8.1. Monnaie (CCAG article 10.1)
+PARA	{{SI:DEVISE}}
+PARA	Les prix du Marché peuvent comporter un part exprimé et payable en devises convertibles, correspondant à des dépenses que le Consultant justifie engager hors de la République de Madagascar. Les prix en devises seront exprimés en {{B05-MP-01}}. Ils seront réglés en utilisant le taux de change utilisé sera le taux publié par la Banque Centrale de Madagascar le quinzième jour précédant la date limite de remise des offres.
+PARA	Les montants payés en devises devront être justifiés sur les formulaires de présentations des honoraires, frais remboursables et frais divers selon le cas. Ces montants devront faire l'objet d'une convention de paiement signé entre le Ministre chargé des finances et le Consultant à laquelle les tableaux justificatifs des sommes dues en devises seront joints.
+PARA	{{FINSI:DEVISE}}
+SOUS_TITRE	8.2. Variations dans les prix (CCAG article 10.4)
+PARA	{{SI:FERME}}
+PARA	Les prix sont fermes et non révisables.
+PARA	Ils sont actualisés pour tenir compte du délai entre la date limite de remise des propositions et la date de notification du marché, selon la formule suivante :
+PARA	PI = Po (In / Io)
+PARA	Formule selon laquelle :
+PARA	PI est le nouveau prix actualisé ;
+PARA	Po est le prix de base du règlement des prestations figurant à l'acte d'engagement.
+PARA	In est la valeur de l'indice, défini pour chaque lot, du mois de la date de la notification du marché l'acte portant début d'exécution des prestations.
+PARA	Io est la valeur de ce même indice correspondant au quinzième (15ème) jour précédent la date limite de la remise des propositions
+PARA	.
+PARA	Le (les) indice(s) applicables sont:
+PARA	<indiquer la nature des indices et les sources où ils peuvent être trouvés>
+PARA	Les coefficients d’actualisation seront arrondis au millième supérieur.
+PARA	{{FINSI:FERME}}
+PARA	{{SI:REVISABLE}}
+PARA	Les prix seront révisés conformément aux dispositions de l’Annexe du présent CCAP "Formule de révision de prix".
+PARA	{{FINSI:REVISABLE}}
+SOUS_TITRE	Article 9. - Avance forfaitaire (CCAG Article 10.1)
+PARA	{{SI:SANS-AVANCE}}
+PARA	Non applicable
+PARA	{{FINSI:SANS-AVANCE}}
+PARA	{{SI:AVANCE}}
+PARA	Le montant de l'avance forfaitaire est de:
+PARA	{{FINSI:AVANCE}}
+PARA	{{SI:AVANCE-ARIARY}}
+PARA	{{B08-AI-03.chiffres}} % du montant total des travaux à exécuter
+PARA	{{FINSI:AVANCE-ARIARY}}
+PARA	{{SI:AVANCE-DEVISES}}
+PARA	{{B08-AI-03.chiffres}} % du montant en monnaie nationale des prestations à exécuter, et
+PARA	<pourcentage> du montant en devises des prestations à exécuter.
+PARA	{{FINSI:AVANCE-DEVISES}}
+PARA	{{SI:AVANCE}}
+PARA	Si le Consultant choisit de recevoir l'avance forfaitaire il doit joindre à la demande de paiement de cette avance une garantie bancaire à première demande ou une caution conforme au modèle annexé au présent CCAP.
+PARA	{{FINSI:AVANCE}}
+SOUS_TITRE	Article 10 - Modalités de règlement des comptes (CCAG Article 10.2)
+PARA	{{SI:REGLEMENT-COURT}}
+PARA	{{B08-RP-01}}
+PARA	{{FINSI:REGLEMENT-COURT}}
+PARA	{{SI:REGLEMENT-TEMPS}}
+PARA	{{B08-RP-02}}
+PARA	{{FINSI:REGLEMENT-TEMPS}}
+PARA	{{SI:REGLEMENT-ETAPES}}
+PARA	{{B08-RP-03}}
+PARA	{{FINSI:REGLEMENT-ETAPES}}
+SOUS_TITRE	Article 11 - Intérêts moratoires dus au Consultant (CCAG Article 10.7)
+PARA	Taux des intérêts moratoires: taux directeur de la Banque Centrale de Madagascar en vigueur à la date à laquelle les intérêts moratoires auront commencé à courir, augmenté de {{B08-IP-01.chiffres}} point(s).
+SOUS_TITRE	Article 12 – Assurance (CCAG Article 12)
+PARA	Les polices d'assurance suivantes sont requises au titre du présent Marché pour les montants minimum indiqués ci-après :
+PARA	Assurance automobile au tiers pour les véhicules utilisés par le Consultant ou son personnel ou par les sous-traitants et leur personnel, pour une couverture minimum de {{B09-AP-01}};
+PARA	Assurance des risques causés au tiers pour une couverture minimum de <insérer le montant> ;
+PARA	Assurance professionnelle, pour une couverture minimum de <insérer le montant> par sinistre et une couverture annuelle de <insérer le montant> ;
+PARA	Assurance patronale et contre les accidents du travail couvrant le personnel du Consultant et de tous les sous-traitants, conformément aux dispositions légales en vigueur ainsi que, pour le personnel, toute autre assurance, notamment assurance vie, maladie, accident, voyage; et
+PARA	Assurance contre les pertes ou dommages subis par (i) les équipements financés en totalité ou en partie au titre du présent Contrat, (ii) les biens utilisés par le Consultant pour la fourniture des prestations, et (iii) les documents préparés par le Consultant pour l'exécution des prestations.
+SOUS_TITRE	Article 13 –Matériel confié par le Client au Consultant (CCAG Article 13)
+PARA	{{SI:MATERIEL-NON}}
+PARA	Non applicable.
+PARA	{{FINSI:MATERIEL-NON}}
+PARA	{{SI:MATERIEL-OUI}}
+PARA	Au titre de garantie de restitution du matériel confié par le Client au Consultant, conformément aux Termes de Référence, le Consultant devra produire::
+PARA	{{FINSI:MATERIEL-OUI}}
+PARA	{{SI:RESTITUTION-BANCAIRE}}
+PARA	- une garantie bancaire à première demande émanant d'une banque établie en République de Madagascar conformément au modèle figurant en Annexe au présent CCAP;
+PARA	{{FINSI:RESTITUTION-BANCAIRE}}
+PARA	{{SI:RESTITUTION-CAUTION}}
+PARA	-un engagement de caution personnelle et solidaire conforme au modèle figurant en Annexe au présent CCAP.
+PARA	{{FINSI:RESTITUTION-CAUTION}}
+PARA	{{SI:RESTITUTION-CHEQUE}}
+PARA	- un cautionnement en numéraire sous forme d'un chèque de banque établi à l'ordre de <à préciser>.
+PARA	{{FINSI:RESTITUTION-CHEQUE}}
+SOUS_TITRE	Article 14 – Fourniture de matériel par le Consultant (CCAG Article 14)
+PARA	{{SI:FOURNITURE-MATERIEL}}
+PARA	Les frais de stockage chez le Consultant et de livraison des matériels cédés par le Consultant au client sont compris dans les prix.
+PARA	<soit> :
+PARA	Les éventuels frais de stockage chez le Consultant des matériels cédés par le Consultant sont à la charge du client.
+PARA	Les matériels fabriquées ou achetées en République de Madagascar seront livrées EXW, CIF … <préciser suivant le cas soit:> sortie usine, fabrique, magasin d’exposition, entrepôt ou magasin de ventes.
+PARA	Les matériels importés seront livrés :
+PARA	<soit> CIP <insérer le lieu de destination finale>,
+PARA	<soit> CIF port de <insérer le nom du port>;
+PARA	Le Consultant doit fournir les documents suivants :
+PARA	{{B09-FC-01}}
+PARA	{{FINSI:FOURNITURE-MATERIEL}}
+SOUS_TITRE	Article 15 – Délai d'exécution (CCAG Article 15)
+PARA	{{SI:DEPART-OS}}
+PARA	Le délai d'exécution du Marché fixé par les Termes de Références part de l'ordre de service de commencement des prestations>.
+PARA	{{FINSI:DEPART-OS}}
+SOUS_TITRE	Article 16 – Pénalités et retenues (CCAG Article 16)
+PARA	{{SI:PENALITES-NON}}
+PARA	Les pénalités journalières prévues par l'article 16 du CCAG ne s'appliquent pas.
+PARA	{{FINSI:PENALITES-NON}}
+PARA	{{SI:PENALITES-OUI}}
+PARA	Les pénalités journalières applicables sont fixées à :
+PARA	<millièmes> du montant du Marché ou de la tranche considérée dans la limite de <pourcentage> du montant global du Marché ou de la tranche considérée.
+PARA	{{FINSI:PENALITES-OUI}}
+PARA	{{SI:PENALITES-PLAFOND}}
+PARA	Le montant des pénalités est limité à <pourcentage> du prix global du marché, y compris ses avenants éventuels.
+PARA	{{FINSI:PENALITES-PLAFOND}}
+SOUS_TITRE	Article 17 – Utilisation des résultats (CCAG Article 19 à 26)
+PARA	{{B09-UR-01}}
+SOUS_TITRE	Article 18– Opération de vérification (CCAG Article 27)
+PARA	{{B09-OP-01}}
+PARA	{{SI:VERIFICATION-DELAI}}
+PARA	La commission de réception effectuera les opérations de vérification mentionnées ci-dessus dans un délai de {{B09-OP-02}} jours.
+PARA	{{FINSI:VERIFICATION-DELAI}}
+SOUS_TITRE	Article 19– Indemnisation en cas de résiliation du fait du client (CCAG Article 30.2)
+PARA	{{SI:INDEMNITE}}
+PARA	L'indemnité forfaitaire éventuellement applicable en cas de résiliation du marché du fait du client s'élèvera à {{B10-IN-01.chiffres}} % du montant hors TVA et non révisé de la partie non exécutée du marché.
+PARA	{{FINSI:INDEMNITE}}
+SOUS_TITRE	Article 20 - Procédure contentieuse (CCAG Article 34.4)
+PARA	{{B10-PP-01}}
+SOUS_TITRE	Article 21 - Dérogations aux documents généraux
+PARA	Les dérogations explicitées dans les articles désignées ci-après du CCAP et de ses annexes sont apportées aux articles suivants du Cahier des Clauses Administratives Générales (CCAG).
+TABLE	2
+LIGNE	Article des CCAG auquelil est dérogéArticle du CCAP
+FIN_TABLE	
+PARA	{{B10-DP-01}}
+PARA	{{SI:REVISABLE}}
+SOUS_TITRE	Annexe au CCAP
+PARA	Exemple de formule de révision des prix
+PARA	[Les paiements des rémunérations effectuées en [devises et/ou] en [monnaie locale] seront révisé de la manière indiquée ci-après :
+PARA	La rémunération payée en devises aux taux indiqués à l’Annexe < > à l'Acte d'Engagement sera ajustée tous les douze mois (le premier ajustement s’appliquant à la rémunération du treizième mois de l’année suivant la date du Contrat) par la formule ci-après :
+PARA	{ou Rf= Rfo X [ 0,15+0,85 If/Ifo] }
+PARA	Dans laquelle Rf est la rémunération ajustée, Rfo est la rémunération payable sur la base des taux indiqués à l’Annexe susvisée pour la rémunération payable en devises, If est la valeur de l’indice officiel des salaires dans le pays dont la devise est la monnaie pour le mois considéré, et Ifo la valeur du même indice pour le mois de la date du Contrat.
+PARA	La rémunération payée en Ariary aux taux indiqués à l’Annexe < > à l'Acte d'Engagement sera ajustée tous les (nombre) mois (le premier ajustement s’appliquant à la rémunération du trezième (13ème) mois de l’année civile suivant la date du Marché) par la formule ci-après :
+PARA	{ou Rl= Rlo X [ 0,15+0,85 Il/Ilo] }}
+PARA	Dans laquelle Rl est la rémunération ajustée, Rlo la rémunération payable sur la base des taux indiqués à l’Annexe susvisée pour la rémunération payable en monnaie locale, Il est l’indice de variation des salaires à Madagascar pour le premier mois de la période pour laquelle l’ajustement est censé être effectué, et Ilo ce même indice officiel de variation des salaires à Madagascar pour le mois de la date d'établissement des prix, soit le quinzième jour précédant la date fixée pour la remise des propositions.
+PARA	{{FINSI:REVISABLE}}
+PARA	{{SI:AVANCE}}
+SOUS_TITRE	Annexe au CCAP
+PARA	Modèle de garantie bancaire de restitution d'avance
+PARA	ATTENDU QUE
+PARA	<nom du Titulaire>
+PARA	ayant son siège <adresse complète du Titulaire>
+PARA	(ci-après dénommé « le Titulaire ») a conclu un marché n° <intitulé ou objet résumé du marché> (ci-après dénommé « le Marché ») avec <dénomination de l’autorité contractante> ( ci-après dénommée « le Bénéficiaire »).
+PARA	En vertu des dispositions du Marché, le Titulaire doit remettre au Bénéficiaire une garantie de restitution d’avance.
+PARA	EN CONSEQUENCE, Nous <nom de la Banque>, ayant notre siège social à <adresse du siège social> (ci-après dénommée « le Garant »),
+PARA	Nous nous engageons par la présente, sans réserve et irrévocablement, à payer au Bénéficiaire, à la première demande écrite du Bénéficiaire adressée par courrier avec accusé de réception, reçue au plus tard à la date d’expiration mentionnée ci-après, toutes sommes d’argent dans la limite de <insérer le montant en chiffres et en lettres de la garantie> correspondant au montant de l’avance devant être réglé au Titulaire diminué du montant remboursé par le Titulaire <Le Garant doit insérer un montant représentant le montant de l’avance prévue par le Marché, le cas échéant dans la devise de règlement mentionnée au marché>.
+PARA	Toute demande en paiement du Bénéficiaire doit être accompagnée d’une déclaration attestant que le Titulaire ne se conforme pas aux conditions du Marché concernant l’utilisation de l’avance.
+PARA	Toute demande et paiement au titre de la présente garantie est conditionnelle à la réception par le Titulaire de l’avance mentionnée plus haut à son compte portant le numéro <insérer le numéro du compte bancaire> ouvert auprès de <insérer les noms et adresse de la banque>.
+PARA	La présente garantie sera automatiquement réduite à due concurrence au fur et à mesure de l’imputation de l’avance sur les acomptes et restera valable à partir de la date de réception de l’avance jusqu’à ce que le Bénéficiaire reçoive du Titulaire la totalité du remboursement du même montant.
+PARA	La présente garantie est régie par la loi malgache. Tout différend relatif à son interprétation ou à son exécution sera soumis aux tribunaux compétents de la République de Madagascar.
+PARA	SIGNATURE et authentification du signataire __________________________________________
+PARA	Nom de la Banque _________________________________________________________________
+PARA	Adresse _________________________________________________________________________
+PARA	Date _____________________________________________________________________________
+PARA	Cachet
+SOUS_TITRE	Annexe au CCAP
+PARA	Modèle de Caution Personnelle et solidaire de restitution d’avance
+PARA	Nous soussignés < indiquer la dénomination sociale de l’organisme de caution, le siège social >
+PARA	déclarons nous porter caution personnelle et solidaire de <indiquer le nom et l’adresse complète du Titulaire du Marché> (ci-après dénommé « le Titulaire ») pour le montant du cautionnement auquel le Titulaire est assujetti, en qualité de Titulaire du Marché n° <indiquer le numéro du Marché> (ci-après dénommé « le Marché ») conclu avec <dénomination de l’autorité contractante> ( ci-après dénommée « le Bénéficiaire ») en date du <indiquer la date de conclusion du Marché> et portant sur l’exécution de <intitulé ou objet résumé du marché>,
+PARA	ledit cautionnement s’élève à <indiquer le montant en chiffres et en lettres de l’avance prévue par le marché>,
+PARA	nous engageons à effectuer, sur demande de paiement du Bénéficiaire adressée par courrier avec accusé de réception, reçue au plus tard à la date d’expiration mentionnée ci-après, sans pouvoir différer le paiement ou soulever de contestation pour quelque motif que ce soit, jusqu’à concurrence de la somme garantie ci-dessus, le versement des sommes dont le Titulaire serait reconnu débiteur au du fait d'une utilisation de l'avance non conforme aux dispositions du Marché.
+PARA	Le présent engagement sera automatiquement réduit à due concurrence au fur et à mesure de l’imputation de l’avance sur les acomptes et restera valable à partir de la date de réception de l’avance jusqu’à ce que le Bénéficiaire reçoive du Titulaire la totalité du remboursement du même montant.
+PARA	Le présent engagement est régie par la loi malgache. Tout différend relatif à son interprétation ou à son exécution sera soumis aux tribunaux compétents de la République de Madagascar.
+PARA	Fait à _________ le __________
+PARA	SIGNATURE et authentification du signataire __________________________________________
+PARA	Nom de l’organisme _______________________________________________________________
+PARA	Adresse _________________________________________________________________________
+PARA	Date _____________________________________________________________________________
+PARA	Cachet
+PARA	{{FINSI:AVANCE}}
+SOUS_TITRE	Termes de référence

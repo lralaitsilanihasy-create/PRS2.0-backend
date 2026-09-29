@@ -1,0 +1,313 @@
+FICHIER	AE-PI.docx
+TITRE	MARCHÉ PUBLIC DE PRESTATIONS INTELLECTUELLES
+CONDITION	GROUPEMENTgroupement = OUI
+CONDITION	GROUPEMENT-CONJOINTgroupement = OUI et formeGroupement = CONJOINT_OU_SOLIDAIRE
+CONDITION	REVISABLEprixRevisable = OUI
+CONDITION	TEMPS-PASSEB05-PF-01 = Temps passé
+CONDITION	FORFAITB05-PF-01 = Prix forfaitaire
+CONDITION	RESULTATB05-PF-01 = Résultat
+CONDITION	POURCENTAGE-PROFESSIONB05-PF-01 contient coût estimatif et B05-PF-10 renseigne
+CONDITION	POURCENTAGE-DPICB05-PF-01 contient coût estimatif et B05-PF-10 vide
+CONDITION	SANS-SOUS-TRAITANCEB03-SP-01 != OUI
+CONDITION	SOUS-TRAITANCEB03-SP-01 = OUI
+CONDITION	DEPART-OSB09-DP-01 renseigne
+CONDITION	DUREE-MOISB09-DP-03 = Nombre de mois
+CONDITION	DUREE-DATEB09-DP-03 = Date de fin de marché
+CONDITION	SANS-AVANCEavance = NON
+CONDITION	AVANCEavance = OUI
+CONDITION	ANNEXE-FORFAITB05-PF-01 != Temps passé
+CONDITION	ANNEXE-TEMPSB05-PF-01 = Temps passé
+CENTRE	ACTE D'ENGAGEMENT (A.E)
+PARA	AUTORITE CONTRACTANTE :
+PARA	{{B01-AC-01}}
+PARA	MARCHÉ :
+PARA	{{B02-OB-01}}
+PARA	Marché passé selon la procédure spécifique
+PARA	Aux prestations intellectuelles régie par l'article 26 du Code des Marchés Publics
+PARA	Imputation budgétaire : {{B01-AC-17}}
+PARA	PERSONNE RESPONSABLE DES MARCHES PUBLICS (PRMP) ou son Délégué :
+PARA	{{B02-CL-02}}
+TABLE	2
+LIGNE	Date du Marché:<date de notification à compléterlors de la notification><cadre réservé à la mention "exemplaire unique" lors de la notification>
+FIN_TABLE	
+SOUS_TITRE	A. - ENGAGEMENT DU CANDIDAT
+SOUS_TITRE	ARTICLE 1 - CONTRACTANT(S)
+PARA	Engagement à remplir par le CANDIDAT INDIVIDUEL
+PARA	Je soussigné :
+PARA	- Nom :
+PARA	- Prénom :
+PARA	Agissant pour mon propre compte :
+PARA	domicilié à
+PARA	N° de Registre de Commerce
+PARA	N° statistique:
+PARA	Identification fiscale
+PARA	Télécopieur :
+PARA	Adresse e-Mail :
+PARA	OU :
+PARA	Agissant pour le compte de la personne morale dont les coordonnées sont données ci-après :
+PARA	Dénomination :
+PARA	forme juridique :
+PARA	adresse du siège :
+PARA	N° de Registre de Commerce :
+PARA	N° statistique :
+PARA	Identification fiscale :
+PARA	N° Télécopieur :
+PARA	Adresse e-Mail :
+PARA	Atteste sur l'honneur, sous peine de résiliation de plein droit du marché ou de sa mise en régie, à mes torts exclusifs ou, selon le cas, aux torts exclusifs de la personne morale que je représente, que je ne tombe pas ou, selon le cas, que ladite personne morale ne tombe pas sous le coup d'un cas d'exclusion visé par l'article 9 du Code des Marchés Publics reproduit ci-après.
+PARA	"Art. 9 - Exclusion des marchés publics:
+PARA	Ne sont pas admis à concourir aux marchés publics :
+PARA	Les personnes physiques ou morales en état de liquidation judiciaire et les personnes physiques dont la faillite personnelle a été prononcée ;
+PARA	Les personnes physiques ou morales admises en règlement judiciaire qui ne peuvent justifier qu'elles ont été habilitées à poursuivre leur activité.
+PARA	Les personnes physiques ou morales qui n’ont pas souscrit à leurs obligations fiscales ou para fiscales à la date limite fixée pour le dépôt des offres.
+PARA	Les entreprises dans lesquelles la Personne Responsable des Marchés Publics ou les membres de la Commission d’Appel Offres possèdent des intérêts financiers ou personnels directs de quelque nature que ce soit.
+PARA	Les entreprises affiliées aux prestataires de service ayant contribué à préparer tout ou partie des Dossiers d’Appel d’Offres ou de consultation.
+PARA	les personnes physiques ou morales qui ont fait l’objet d’exclusion temporaire ou définitive résultant d’une infraction au Code Pénal ou prononcée par l’Autorité de Régulation des Marchés Publics pour atteinte à la réglementation des marchés publics."
+PARA	M'engage en mon nom ou en mon nom et au nom du candidat que je représente, selon le cas, à m'abstenir de toute pratique consistant dans l'octroi ou la promesse d'octroyer un avantage indu, pécuniaire ou autre, directement ou par des intermédiaires, en vue d'obtenir le marché objet du présent Acte d'Engagement, et en général à respecter les dispositions du Code d'Ethique des Marchés Publics adopté par décret n°2006-343 du 30 mai 2006.
+PARA	M'engage sans réserve, conformément aux stipulations des documents visés ci-dessus, à exécuter le marché portant sur les Prestations définies dans les Termes de Références, dans les conditions précisées par le CCAP, par le CCAG applicable et par le présent Acte d'Engagement.
+PARA	La proposition technique et la proposition financière présentées en Annexes reflètent l'accord des parties après évaluation et négociation des propositions soumises conformément à l'Invitation à soumettre une proposition datée du <date> et constituent un engagement qui nous lie conformément à la durée de validité des Propositions fixée dans les Données Particulières des Instructions aux Candidats.
+PARA	{{SI:GROUPEMENT}}
+PARA	Engagement à remplir par les MEMBRES D'UN :
+PARA	GROUPEMENT D'ENTREPRISES CONJOINTES
+PARA	OU :
+PARA	GROUPEMENTS D'ENTREPRISES SOLIDAIRES
+PARA	(cocher la case correspondante)
+SOUS_TITRE	ARTICLE 1. - CONTRACTANTS :
+PARA	Nous :
+PARA	1.
+PARA	Nom :
+PARA	Prénoms :
+PARA	Agissant pour mon compte / pour le compte de la personne morale ci-après :
+PARA	Dénomination :
+PARA	Forme juridique :
+PARA	Adresse du siège :
+PARA	N° de Registre de Commerce :
+PARA	N° statistique :
+PARA	Identification fiscale :
+PARA	N° Télécopieur :
+PARA	Adresse e-Mail :
+PARA	2.
+PARA	Nom :
+PARA	Prénoms :
+PARA	Agissant pour mon compte / pour le compte de la personne morale ci-après :
+PARA	Dénomination :
+PARA	Forme juridique :
+PARA	Adresse du siège :
+PARA	N° de Registre de Commerce :
+PARA	N° statistique :
+PARA	Identification fiscale :
+PARA	N° Télécopieur :
+PARA	Adresse e-Mail :
+PARA	(Compléter pour chacun des membres du groupement en ajoutant autant de pages que nécessaire)
+PARA	Représentés par (en cas de pouvoir donné à un mandataire)
+PARA	Nom :
+PARA	Prénoms :
+PARA	Agissant pour le compte de :
+PARA	Dénomination :
+PARA	Forme juridique :
+PARA	adresse du siège :
+PARA	N° de Registre de Commerce :
+PARA	N° statistique :
+PARA	Identification fiscale :
+PARA	N° Télécopieur :
+PARA	Adresse e-Mail :
+PARA	Attestons sur l'honneur, sous peine de résiliation de plein droit du marché ou de sa mise en régie, à nos torts exclusifs ou, selon le cas, aux torts exclusifs des personnes morales que nous représentons, que nous ne tombons pas ou, selon le cas, que lesdites personnes morales ne tombent pas sous le coup d'un cas d'exclusion visé par l'article 9 du Code des Marchés Publics reproduit ci-après.
+PARA	"Art. 9 - Exclusion des marchés publics:
+PARA	Ne sont pas admis à concourir aux marchés publics :
+PARA	Les personnes physiques ou morales en état de liquidation judiciaire et les personnes physiques dont la faillite personnelle a été prononcée ;
+PARA	Les personnes physiques ou morales admises en règlement judiciaire qui ne peuvent justifier qu'elles ont été habilitées à poursuivre leur activité.
+PARA	Les personnes physiques ou morales qui n’ont pas souscrit à leurs obligations fiscales ou para fiscales à la date limite fixée pour le dépôt des offres.
+PARA	Les entreprises dans lesquelles la Personne Responsable des Marchés Publics ou les membres de la Commission d’Appel Offres possèdent des intérêts financiers ou personnels directs de quelque nature que ce soit.
+PARA	Les entreprises affiliées aux prestataires de service ayant contribué à préparer tout ou partie des Dossiers d’Appel d’Offres ou de consultation.
+PARA	les personnes physiques ou morales qui ont fait l’objet d’exclusion temporaire ou définitive résultant d’une infraction au Code Pénal ou prononcée par l’Autorité de Régulation des Marchés Publics pour atteinte à la réglementation des marchés publics."
+PARA	Nous engageons en notre nom, au nom du candidat que nous représentons, à nous abstenir de toute pratique consistant dans l'octroi ou la promesse d'octroyer un avantage indu, pécuniaire ou autre, directement ou par des intermédiaires, en vue d'obtenir le marché objet du présent Acte d'Engagement, et en général à respecter les dispositions du Code d'Ethique des Marchés Publics adopté par décret n° 2006-343 du 30 mai 2006.
+PARA	Nous engageons sans réserve, conformément aux stipulations des documents visés ci-dessus, à exécuter le marché portant sur les Prestations définies dans les Termes de Référence, dans les conditions précisées par le CCAP, le CCAG applicable et par le présent Acte d'Engagement.
+PARA	La proposition technique et la proposition financière présentées en Annexes reflètent l'accord des parties après évaluation et négociation des propositions soumises conformément à l'Invitation à soumettre une proposition datée du <date> et constituent un engagement qui nous lie conformément à la durée de validité des offres fixée dans les Données Particulières des Instructions aux Candidats.
+PARA	{{FINSI:GROUPEMENT}}
+SOUS_TITRE	ARTICLE 2 - PRIX
+PARA	Les conditions d'établissement des prix sont celles existant le quinzième jour précédant la date limite fixée pour la remise des Propositions.
+PARA	Tous les paiements à réaliser en monnaie différente de l'Ariary seront effectués sur la base du cours publié par la Banque Centrale de Madagascar en vigueur le quinzième jour précédant la date limite fixée pour le remise des Propositions.
+PARA	{{SI:REVISABLE}}
+PARA	Les modalités de variation des prix sont fixées en Annexe au Cahier des Clauses Administratives Particulières du CPS. Les valeurs de pondération des paramètres variables de la formule de révision sont donnés en Annexe au présent Acte d'Engagement.
+PARA	{{FINSI:REVISABLE}}
+PARA	{{SI:TEMPS-PASSE}}
+PARA	Les Prestations, objet du présent marché, sont rémunérées, par application des taux mentionnés dans la ventilation de la rémunération au temps passé figurant en Annexe <N° de l'Annexe> au présent Acte d'Engagement, aux temps requis par l'exécution du marché.
+PARA	Le montant total estimé du Marché est de :
+PARA	montant hors taxes :
+PARA	TVA :
+PARA	Soit un montant total TTC de (en chiffre et en lettres) :
+PARA	La décomposition de ce montant figure en annexe au présent Acte d'Engagement
+PARA	{{FINSI:TEMPS-PASSE}}
+PARA	{{SI:FORFAIT}}
+PARA	Les Prestations, objet du présent marché, sont rémunérées par application du prix global forfaitaire résultant de l'Etat récapitulatif figurant en Annexe <N° de l'Annexe> au présent Acte d'Engagement. Le montant global de la Proposition est fixé à:
+PARA	montant hors taxes :
+PARA	TVA :
+PARA	Soit un montant total TTC de (en chiffre et en lettres) :
+PARA	La décomposition de ce montant figure dans les annexes au présent Acte d'Engagement
+PARA	{{FINSI:FORFAIT}}
+PARA	{{SI:RESULTAT}}
+PARA	(le Consultant indique ici la rémunération de base forfaitaire et la rémunération conditionnelle:)
+PARA	Les Prestations, objet du présent marché, sont rémunérées:
+PARA	a) par un prix global forfaitaire résultant de l'Etat récapitulatif figurant en Annexe <N° de l'Annexe> au présent Acte d'Engagement fixée à:
+PARA	montant hors taxes :
+PARA	TVA :
+PARA	Soit un montant total TTC de (en chiffre et en lettres) :
+PARA	La décomposition de ce montant figure dans les annexes au présent Acte d'Engagement
+PARA	b) en cas de réalisation de l'événement décrit à la clause 6.2.1 des DPIC par une rémunération égale à (préciser le mode de calcul de la rémunération conditionnelle)
+PARA	{{FINSI:RESULTAT}}
+PARA	{{SI:POURCENTAGE-PROFESSION}}
+PARA	(le Consultant indique ici la rémunération proportionnelle estimée sur la base du barème en usage dans la profession)
+PARA	{{FINSI:POURCENTAGE-PROFESSION}}
+PARA	{{SI:POURCENTAGE-DPIC}}
+PARA	(le Consultant indique ici la rémunération proportionnelle estimée sur la base du barème indiqué à la clause 6.2.1 des DPIC)
+PARA	{{FINSI:POURCENTAGE-DPIC}}
+SOUS_TITRE	ARTICLE 3 - SOUS-TRAITANCE
+PARA	{{SI:SANS-SOUS-TRAITANCE}}
+PARA	Il n'est pas envisagé de sous-traiter l'exécution de prestations objet du marché.
+PARA	{{FINSI:SANS-SOUS-TRAITANCE}}
+PARA	{{SI:SOUS-TRAITANCE}}
+PARA	l’Annexe n° {{B03-SP-02}} au présent acte d'engagement indique la nature et le montant des prestations qu'il est envisagé de faire exécuter par des sous-traitants payés directement, les noms de ces sous-traitants et les conditions de paiement des contrats de sous-traitance.
+PARA	Le montant des prestations sous-traitées indiqué dans l’annexe constitue le montant maximal de la créance que le(s) sous-traitant(s) concerné(s) pourra(ont) céder ou présenter en nantissement. Le montant total des prestations qu'il est envisagé de sous-traiter conformément à cette annexe est de (montant en chiffres et en lettres) TVA incluse.
+PARA	L’Annexe n° {{B03-SP-04}} constitue une demande d'acceptation des sous-traitants concernés et d'agrément des conditions de paiement du contrat de sous-traitance qui est réputée prendre effet à la date de notification du marché. Cette notification sera réputée emporter acceptation du sous-traitant et agrément des conditions de paiement du contrat de sous-traitance.
+PARA	{{FINSI:SOUS-TRAITANCE}}
+SOUS_TITRE	ARTICLE 4 - NANTISSEMENT
+PARA	Le montant maximal de la créance qui pourra être nantie par notre entreprise en tant que titulaire du marché est de :
+PARA	(en lettres et en chiffres, montant maximum du marché diminué du montant de la sous-traitance envisagée) :
+SOUS_TITRE	ARTICLE 5 - DURÉE - DELAIS
+SOUS_TITRE	5.1 Date d'effet
+PARA	Le marché prend effet à compter de sa notification au titulaire.
+PARA	{{SI:DEPART-OS}}
+PARA	Le délai de réalisation des Prestations prend effet à compter du lendemain de la notification de l'ordre de service de commencer les prestations qui intervient après la notification du marché approuvé:
+PARA	{{FINSI:DEPART-OS}}
+SOUS_TITRE	5.2. Délai d'exécution
+PARA	{{SI:DUREE-MOIS}}
+PARA	La durée globale du marché est de {{B09-DP-04}} mois.
+PARA	{{FINSI:DUREE-MOIS}}
+PARA	{{SI:DUREE-DATE}}
+PARA	Le marché prendra fin {{B09-DP-04}}.
+PARA	{{FINSI:DUREE-DATE}}
+PARA	Le calendrier de réalisation des Prestations est donné en annexe à la proposition technique jointe au présent Acte d'Engagement.
+SOUS_TITRE	ARTICLE 6 - PAIEMENTS
+SOUS_TITRE	6.1. Domiciliation bancaire
+PARA	Dans le cas d'un Consultant unique
+PARA	Le Client se libérera des sommes dues au titre du présent marché en en faisant porter le montant au crédit du compte bancaire suivant:
+PARA	- titulaire du compte:
+PARA	- établissement bancaire:
+PARA	- agence :
+PARA	- numéro de compte :
+PARA	- code :
+PARA	Toutefois, le Client se libérera des sommes dues aux sous-traitants payés directement en en faisant porter les montants au crédit des comptes desdits sous-traitants.
+PARA	{{SI:GROUPEMENT}}
+PARA	Dans le cas d'un groupement de Consultants solidaires
+PARA	Le Client se libérera des sommes dues au titre du présent marché en en faisant porter le montant au crédit du compte bancaire suivant, ouvert au nom du mandataire qui a reçu pouvoir au nom des membres du groupement à l'effet de percevoir pour le compte des membres du groupement les sommes qui leurs sont dues en exécution du marché.
+PARA	- titulaire du compte:
+PARA	- établissement bancaire:
+PARA	- agence :
+PARA	- numéro de compte :
+PARA	- code :
+PARA	Ces paiements seront libératoires vis-à-vis des consultants groupés solidaires. Toutefois, le Client se libérera des sommes dues aux sous-traitants payés directement en en faisant porter les montants au crédit des comptes desdits sous-traitants.
+PARA	{{FINSI:GROUPEMENT}}
+PARA	{{SI:GROUPEMENT-CONJOINT}}
+PARA	Dans le cas d'un groupement de Consultants conjoints
+PARA	Le Client se libérera des sommes dues au titre du présent marché en en faisant porter le montant au crédit des comptes bancaires suivants, ouvert aux de chacun des membres du groupement:
+PARA	- titulaire du compte:
+PARA	- établissement bancaire:
+PARA	- agence :
+PARA	- numéro de compte :
+PARA	(indiquer les comptes de chacun des membres)
+PARA	{{FINSI:GROUPEMENT-CONJOINT}}
+SOUS_TITRE	6.2 Avance forfaitaire
+PARA	{{SI:SANS-AVANCE}}
+PARA	Le CCAP ne prévoit pas d'avance forfaitaire.
+PARA	{{FINSI:SANS-AVANCE}}
+PARA	{{SI:AVANCE}}
+PARA	Le Consultant désigné ci-avant :
+PARA	refuse de percevoir l'avance forfaitaire prévue par le Cahier des Clauses Administratives Particulières du CPS.
+PARA	Ou
+PARA	ne refuse pas de percevoir l'avance forfaitaire prévue par le CCAP.
+PARA	En cas de groupement :
+PARA	Les Consultants groupés désignés ci- avant :
+PARA	refusent de percevoir l'avance forfaitaire prévue par le Cahier des Clauses Administratives Pariculières du CPS
+PARA	Ou
+PARA	ne refusent pas de percevoir l'avance forfaitaire prévue par le CCAP
+PARA	{{FINSI:AVANCE}}
+PARA	Fait en un seul original
+PARA	à : le :
+PARA	Signature(s) du/des candidats ou du mandataire du groupement précédée(s) de la mention(s) manuscrite(s) "lu et approuvé"
+PARA	Le présent acte d'engagement comporte les annexes énumérées ci-après :
+PARA	{{SI:ANNEXE-FORFAIT}}
+PARA	Annexe n° 1 : rémunération globale et ventilation par étape ou phases de réalisation.
+PARA	{{FINSI:ANNEXE-FORFAIT}}
+PARA	{{SI:ANNEXE-TEMPS}}
+PARA	Annexe n° 1 : ventilation de la rémunération au temps passé.
+PARA	{{FINSI:ANNEXE-TEMPS}}
+PARA	Annexe n° < > : ventilation des frais remboursables ;
+PARA	Annexe n° < > : ventilation des frais divers
+PARA	Annexe n° < > : proposition technique ;
+PARA	Annexe n° < > : <en cas de prix révisables>: formule de révision des prix
+PARA	{{SI:REVISABLE}}
+PARA	Annexe n° < > : formule de révision des prix
+PARA	{{FINSI:REVISABLE}}
+PARA	{{SI:SOUS-TRAITANCE}}
+PARA	Annexe n° < > : demande d'acceptation des sous-traitants;
+PARA	{{FINSI:SOUS-TRAITANCE}}
+PARA	Annexe n° < > : état des sommes versées à des tiers ;
+PARA	Autres pièces contractuelles : {{B09-DK-01}}
+PARA	En sus de l'Acte d'Engagement et de ses Annexes, les documents contractuels constitutifs du marché comprennent :
+PARA	Le Cahier des clauses administratives particulières ;
+PARA	Les Termes de Références et méthodologie du consultant dans sa proposition ;
+PARA	Le Cahier des clauses administratives générales applicables aux marchés de prestations intellectuelles.
+SOUS_TITRE	B. - ACCEPTATION ET NOTIFICATION PAR L'AUTORITE CONTRACTANTE
+PARA	Acceptation de la Proposition
+PARA	Est acceptée la présente Proposition pour valoir acte d'engagement.
+PARA	Pour l'autorité contractante, la Personne Responsable des marchés publics ou son délégué :
+PARA	à : le :
+TABLE	2
+LIGNE	Approbation par l'autorité compétenteVisa de l'autorité de contrôle financier
+LIGNE	à :le :à :le :
+FIN_TABLE	
+PARA	Notification
+PARA	Reçu notification du marché le :
+PARA	Le Consultant / Le Mandataire du groupement :
+PARA	Reçu l'avis de réception de la notification du marché le :
+PARA	par le Consultant / mandataire du groupement.
+PARA	La Personne Responsable des Marchés Publics.
+PARA	à : le :
+PARA	{{SI:ANNEXE-FORFAIT}}
+PARA	ANNEXE
+PARA	REMUNERATION GLOBALE
+PARA	VENTILATION PAR ETAPE OU PHASES DE REALISATION
+PARA	Dépenses remboursables :
+PARA	Au vu des pièces justificatives dûment acquittées
+PARA	{{FINSI:ANNEXE-FORFAIT}}
+PARA	{{SI:ANNEXE-TEMPS}}
+PARA	ANNEXE
+PARA	VENTILATION DE LA REMUNERATION AU TEMPS PASSE
+PARA	Dépenses remboursables :
+PARA	Au vu des pièces justificatives dûment acquittées
+PARA	{{FINSI:ANNEXE-TEMPS}}
+PARA	ANNEXE
+PARA	VENTILATION DES FRAIS REMBOURSABLES
+PARA	ANNEXE
+PARA	VENTILATION DES FRAIS DIVERS
+PARA	ANNEXE
+PARA	PROPOSITION TECHNIQUE
+PARA	{{SI:REVISABLE}}
+PARA	ANNEXE
+PARA	FORMULE DE REVISION DES PRIX
+PARA	{{FINSI:REVISABLE}}
+PARA	{{SI:SOUS-TRAITANCE}}
+PARA	ANNEXE
+PARA	DEMANDE D'ACCEPTATION DU OU DES SOUS-TRAITANTS ET
+PARA	D'AGRÉMENT DES CONDITIONS DE PAIEMENT DU OU
+PARA	DES CONTRAT(S) DE SOUS-TRAITANCE
+PARA	(A compléter par le Candidat)
+PARA	{{FINSI:SOUS-TRAITANCE}}
+PARA	ANNEXE
+PARA	ETAT DES SOMMES VERSEES AUX TIERS
+PARA	(article 19 du Code d'éthique des marchés publics)
+PARA	Les rémunérations commissions que nous avons versées ou que nous comptons verser, le cas échéant, en relation avec la préparation ou la présentation de cette Proposition ou avec l’exécution du Marché, si nous en sommes attributaires, figurent ci-après :
+TABLE	3
+LIGNE	Nom etadresse du bénéficiaireMontant etmonnaieObjet de larémunération
+LIGNE	----------------------------------------------------------------------------
+FIN_TABLE	
+PARA	(si aucune rémunération n’a été ou ne doit être versée, indiquer “aucune”.)

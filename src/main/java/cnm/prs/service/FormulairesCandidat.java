@@ -529,6 +529,10 @@ public final class FormulairesCandidat {
             if (TypeChampFiche.POURCENTAGE.name().equals(type)) {
                 return brut.endsWith("%") ? brut : brut + " %";
             }
+            // ⚠️ Lot D3 (2026-09-29, §B2.1) — un nombre décimal s'imprime avec la virgule (« 0,8 », poids T et F).
+            if (TypeChampFiche.NOMBRE.name().equals(type) && brut.matches("-?\\d+\\.\\d+")) {
+                return brut.replace('.', ',');
+            }
             return brut;
         }
     }

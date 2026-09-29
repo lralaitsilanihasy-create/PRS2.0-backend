@@ -972,7 +972,7 @@ public class FicheMarcheService {
         if ((diese >= 0) != LotsFiche.parLot(c, nbLots)) {
             return false;
         }
-        List<String> options = ChampFicheMarche.liste(c.getOptions());
+        List<String> options = ChampFicheMarche.options(c.getOptions());
         if (TypeChampFiche.LISTE.name().equals(c.getType()) && !options.isEmpty()) {
             return valeur != null && options.stream().anyMatch(o -> o.equalsIgnoreCase(valeur.trim()));
         }
@@ -1254,7 +1254,7 @@ public class FicheMarcheService {
                 return brut;
             }
             case LISTE -> {
-                List<String> options = ChampFicheMarche.liste(c.getOptions());
+                List<String> options = ChampFicheMarche.options(c.getOptions());
                 String v = options.stream().filter(o -> o.equalsIgnoreCase(brut)).findFirst().orElse(null);
                 if (v == null && !options.isEmpty()) {
                     erreurs.add(new ErrorResponse.FieldError(champ, "« " + c.getLibelle() + " » attend une des options : "
@@ -1266,7 +1266,7 @@ public class FicheMarcheService {
             case LISTE_MULTIPLE -> {
                 // ⚠️ V45 — plusieurs options : tableau JSON (servi par String.valueOf en « [A1, A2] ») ou chaîne séparée
                 // par des virgules ; rangées dans l'ordre des options, sans doublon.
-                List<String> options = ChampFicheMarche.liste(c.getOptions());
+                List<String> options = ChampFicheMarche.options(c.getOptions());
                 List<String> recues = ChampFicheMarche.liste(brut.replaceAll("^\\[|\\]$", "").replace(';', ','));
                 List<String> inconnues = recues.stream()
                         .filter(r -> options.stream().noneMatch(o -> o.equalsIgnoreCase(r))).toList();
@@ -1359,7 +1359,7 @@ public class FicheMarcheService {
         // paramètres internes et le responsable de la procédure (règles 1 à 11, mode électronique seulement).
         Long idDmc = fiche.getIdDmc();
         BilanControlesDto bilan = ControlesFicheMarche.bilan(ouverts, valeurs, cadrage, ppm.dates(), nbLots, besoinBilan,
-                parametres.tauxGarantie(), internes.contexteBilan(idDmc, cadrage));
+                parametres.tauxGarantie(), internes.contexteBilan(idDmc, cadrage), categorieOuverture);
         return new FicheMarcheDto(fiche.getIdFiche(), fiche.getIdDmc(), ctx.idDetail(), ctx.idDossier(),
                 ppm.ligne() == null ? ctx.idDetail() : ppm.ligne().getIdDetail(),
                 ppm.ligne() != null && Boolean.TRUE.equals(ppm.ligne().getSupprimee()),

@@ -71,19 +71,38 @@ class FicheDaoPrestationsIntellectuellesIntegrationTest extends CnmIntegrationTe
     }
 
     @Test
-    @DisplayName("1 — Import : 107 champs (90 avant V50), aucun rejet (DPIC admis) ; référentiel des prestations intellectuelles : 23 "
-            + "informations du plan + 103 actives, ses rubriques seulement (pas B09-FC, dont le seul champ est inactif), pas de B07 ni de B11")
+    @DisplayName("1 — Import : 114 champs (107 avant le lot D3, 90 avant V50), aucun rejet (DPIC admis) ; référentiel des prestations "
+            + "intellectuelles : 23 informations du plan + 111 actives, ses rubriques seulement, pas de B07 ni de B11 — lot D3 (29/09) : "
+            + "sept champs créés, B02-MS-01 à quatre options, B04-LH-02 date-heure, B08-IP-01 en points, B09-DP-01 oui/non, "
+            + "B09-PP-01 retiré, B09-FC-01 réactivé, la question des pénalités (B09-PR-01, V53) posée")
     void chargement() throws Exception {
         assertThat(bilan.rejets()).isEmpty();
-        assertThat(bilan.crees()).hasSize(107);   // V50 : + 17 champs B04-SE (trois catégories)
+        assertThat(bilan.crees()).hasSize(114);   // V50 : + 17 champs B04-SE (trois catégories) ; lot D3 : + 7
         String ref = mvc.perform(get("/api/champs-fiche-marche?typeMarche=QUANTITE_FIXE&categorie=PRESTATIONS_INTELLECTUELLES")
                 .header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertThat(JsonPath.<List<String>>read(ref, "$.champs[*].code")).hasSize(23 + 103);   // V50 : 88 + 17 B04-SE − B04-VE-01/02 inactifs
+        // V50 : 88 + 17 B04-SE − B04-VE-01/02 inactifs = 103 ; lot D3 : + 7 créés − B09-PP-01 + B09-FC-01 + B09-PR-01 = 111
+        assertThat(JsonPath.<List<String>>read(ref, "$.champs[*].code")).hasSize(23 + 111);
         assertThat(JsonPath.<List<String>>read(ref, "$.champs[?(@.documentMaitre=='DPIC')].code")).isNotEmpty();
         assertThat(JsonPath.<List<String>>read(ref, "$.blocs[*].code")).doesNotContain("B07", "B11");
-        assertThat(JsonPath.<List<String>>read(ref, "$.blocs[*].rubriques[*].code")).contains("B02-CL", "B02-MS", "B01-AC")
-                .doesNotContain("B02-AU", "B02-LT", "B09-FC");   // B09-FC : son seul champ est inactif
+        assertThat(JsonPath.<List<String>>read(ref, "$.blocs[*].rubriques[*].code")).contains("B02-CL", "B02-MS", "B01-AC", "B09-FC")
+                .doesNotContain("B02-AU", "B02-LT");
+
+        // ⚠️ Lot D3 (2026-09-29, §B2)
+        assertThat(JsonPath.<List<String>>read(ref, "$.champs[*].code"))
+                .contains("B04-EP-04", "B05-PF-13", "B06-TP-07", "B06-CS-02", "B06-CS-03", "B08-AI-03", "B09-OP-02", "B09-FC-01", "B09-PR-01")
+                .doesNotContain("B09-PP-01");
+        assertThat(JsonPath.<List<List<String>>>read(ref, "$.champs[?(@.code=='B02-MS-01')].options").get(0)).containsExactly(
+                "Qualité technique, expérience et proposition financière",
+                "Budget prédéterminé dont le candidat propose la meilleure utilisation",
+                "Meilleure proposition financière parmi les candidats ayant obtenu la note technique minimale",
+                "Qualité technique exclusivement");
+        assertThat(JsonPath.<List<List<String>>>read(ref, "$.champs[?(@.code=='B04-LP-01')].options").get(0))
+                .containsExactly("Français", "Français et une seconde langue", "Une autre langue que le français");
+        assertThat(JsonPath.<List<String>>read(ref, "$.champs[?(@.code=='B04-LH-02')].type")).containsExactly("DATE_HEURE");
+        assertThat(JsonPath.<List<String>>read(ref, "$.champs[?(@.code=='B08-IP-01')].type")).containsExactly("NOMBRE");
+        assertThat(JsonPath.<List<String>>read(ref, "$.champs[?(@.code=='B09-DP-01')].type")).containsExactly("OUI_NON");
+        assertThat(JsonPath.<List<String>>read(ref, "$.champs[?(@.code=='B08-AI-03')].controle")).containsExactly("AVANCE_MAX_20:TAUX");
     }
 
     @Test
@@ -108,5 +127,21 @@ class FicheDaoPrestationsIntellectuellesIntegrationTest extends CnmIntegrationTe
         assertThat(JsonPath.<List<String>>read(documents, "$[?(@.type=='DPIC')].libelle"))
                 .containsOnly("Données particulières des instructions aux consultants");
         assertThat(JsonPath.<List<String>>read(documents, "$[*].nomFichier")).contains("DPIC_DOS-9900_9901_v1.docx");
+        // ⚠️ Lot D3 (2026-09-29, §B3) — les trois documents sont rendus des documents types : le CPS tient le rôle du CCAP.
+        assertThat(JsonPath.<List<String>>read(documents, "$[?(@.type=='CCAP')].libelle")).containsOnly("Cahier des prescriptions spéciales");
+        assertThat(texte(documents, "DPIC")).contains("1.3. DONNEES PARTICULIERES DES INSTRUCTIONS AUX CANDIDATS").doesNotContain("{{");
+        assertThat(texte(documents, "AE")).contains("ACTE D'ENGAGEMENT (A.E)").doesNotContain("{{");
+        assertThat(texte(documents, "CCAP")).contains("MARCHÉ PUBLIC DE PRESTATIONS INTELLECTUELLES");   // prix fermes : pas d'annexe de révision
+    }
+
+    private String texte(String documents, String type) throws Exception {
+        int id = JsonPath.<List<Integer>>read(documents, "$[?(@.type=='" + type + "' && @.extension=='docx')].idDocument").get(0);
+        byte[] docx = mvc.perform(get("/api/fiches-marche/documents/" + id + "/contenu").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        try (org.apache.poi.xwpf.usermodel.XWPFDocument doc = new org.apache.poi.xwpf.usermodel.XWPFDocument(
+                new java.io.ByteArrayInputStream(docx));
+                org.apache.poi.xwpf.extractor.XWPFWordExtractor ex = new org.apache.poi.xwpf.extractor.XWPFWordExtractor(doc)) {
+            return ex.getText();
+        }
     }
 }

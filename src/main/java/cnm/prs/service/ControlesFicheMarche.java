@@ -156,6 +156,16 @@ public final class ControlesFicheMarche {
     public static BilanControlesDto bilan(List<ChampFicheMarche> champsOuverts, Map<String, String> valeurs,
             Map<String, ?> cadrage, Map<String, LocalDate> datesPpm, int nbLots, Besoin besoin,
             ParametreService.TauxGarantie taux, RemiseElectroniqueBilan se) {
+        return bilan(champsOuverts, valeurs, cadrage, datesPpm, nbLots, besoin, taux, se, null);
+    }
+
+    /**
+     * ⚠️ Lot D3 (2026-09-29, §B2.2.5) — et la catégorie de la fiche ({@code null} : fournitures et services), qui règle le
+     * plafond des pénalités du CCAG : 10 % pour les prestations intellectuelles, 15 % sinon.
+     */
+    public static BilanControlesDto bilan(List<ChampFicheMarche> champsOuverts, Map<String, String> valeurs,
+            Map<String, ?> cadrage, Map<String, LocalDate> datesPpm, int nbLots, Besoin besoin,
+            ParametreService.TauxGarantie taux, RemiseElectroniqueBilan se, String categorie) {
         List<Controle> bloquants = new ArrayList<>();
         List<Controle> avertissements = new ArrayList<>();
         List<Controle> ok = new ArrayList<>();
@@ -205,7 +215,7 @@ public final class ControlesFicheMarche {
         validiteGarantie(roles.get(VALIDITE_GARANTIE_SUP_OFFRE), valeurs, bloquants, ok);
         avance(roles.get(AVANCE_MAX_20), roles.get(AVANCE_SUP_5_GARANTIE), valeurs, cadrage, bloquants, ok);
         forfait(roles.get(FORFAIT_60_40), valeurs, cadrage, bloquants, ok);
-        penalites(roles.get(PENALITES_PLAFOND_15), valeurs, avertissements, ok);
+        penalites(roles.get(PENALITES_PLAFOND_15), valeurs, plafondPenalites(categorie), avertissements, ok);
         interetsMoratoires(roles.get(INTERETS_MORATOIRES_TAUX), valeurs, avertissements, ok);
         delaiPaiement(roles.get(DELAI_PAIEMENT_75), valeurs, avertissements, ok);
         // ⚠️ V45 (2026-09-25, §B4) — le besoin, la garantie générée et son taux.
@@ -713,22 +723,33 @@ public final class ControlesFicheMarche {
         }
     }
 
-    private static void penalites(Map<String, ChampFicheMarche> r, Map<String, String> valeurs,
+    /**
+     * ⚠️ Lot D3 (2026-09-29, §B2.2.5) — le plafond des pénalités du CCAG de la catégorie : 10 % pour les prestations
+     * intellectuelles, 15 % pour les fournitures et services et les travaux. Le code de la règle reste
+     * {@code PENALITES_PLAFOND_15} (code stable), le message dit le plafond appliqué.
+     */
+    static BigDecimal plafondPenalites(String categorie) {
+        return "PRESTATIONS_INTELLECTUELLES".equals(categorie) ? new BigDecimal("10") : new BigDecimal("15");
+    }
+
+    private static void penalites(Map<String, ChampFicheMarche> r, Map<String, String> valeurs, BigDecimal plafond,
             List<Controle> avertissements, List<Controle> ok) {
         ChampFicheMarche taux = r == null ? null : r.get("TAUX");
         BigDecimal t = taux == null ? null : nombre(valeurs.get(taux.getCode()));
         if (t == null) {
             return;
         }
+        String p = plafond.toPlainString();
         ChampFicheMarche derogation = r.get("DEROGATION");
         String d = derogation == null ? null : valeurs.get(derogation.getCode());
-        if (t.compareTo(new BigDecimal("15")) > 0 && (d == null || d.isBlank())) {
+        if (t.compareTo(plafond) > 0 && (d == null || d.isBlank())) {
             avertissements.add(new Controle(PENALITES_PLAFOND_15, List.of(taux.getCode()), taux.codeBloc(),
-                    "Pénalités de " + t.stripTrailingZeros().toPlainString() + " % : au-delà du plafond de 15 % du CCAG, "
+                    "Pénalités de " + t.stripTrailingZeros().toPlainString() + " % : au-delà du plafond de " + p + " % du CCAG, "
                             + "la dérogation doit être précisée."));
         } else {
             ok.add(new Controle(PENALITES_PLAFOND_15, List.of(taux.getCode()), taux.codeBloc(),
-                    t.compareTo(new BigDecimal("15")) > 0 ? "Pénalités au-delà de 15 %, dérogation précisée." : "Pénalités dans le plafond du CCAG."));
+                    t.compareTo(plafond) > 0 ? "Pénalités au-delà de " + p + " %, dérogation précisée."
+                            : "Pénalités dans le plafond de " + p + " % du CCAG."));
         }
     }
 
@@ -737,6 +758,21 @@ public final class ControlesFicheMarche {
         ChampFicheMarche taux = r == null ? null : r.get("TAUX");
         ChampFicheMarche banque = r == null ? null : r.get("BANQUE");
         BigDecimal t = taux == null ? null : nombre(valeurs.get(taux.getCode()));
+        // ⚠️ Lot D3 (2026-09-29, §B2.2.4) — un TAUX de type NOMBRE est une MAJORATION en points du taux directeur (le CPS
+        // des prestations intellectuelles : « taux directeur … augmenté de n point(s) ») : il suffit qu'elle soit d'au moins
+        // un point, sans taux de la Banque centrale à comparer.
+        if (t != null && TypeChampFiche.NOMBRE.name().equals(taux.getType())) {
+            List<String> champs = List.of(taux.getCode());
+            if (t.compareTo(BigDecimal.ONE) < 0) {
+                avertissements.add(new Controle(INTERETS_MORATOIRES_TAUX, champs, taux.codeBloc(),
+                        "Intérêts moratoires : taux directeur majoré de " + t.stripTrailingZeros().toPlainString()
+                                + " point(s) ; la majoration attendue est d'au moins un point."));
+            } else {
+                ok.add(new Controle(INTERETS_MORATOIRES_TAUX, champs, taux.codeBloc(),
+                        "Intérêts moratoires : taux directeur majoré d'au moins un point."));
+            }
+            return;
+        }
         BigDecimal b = banque == null ? null : nombre(valeurs.get(banque.getCode()));
         if (t == null || b == null) {
             return;

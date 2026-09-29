@@ -114,3 +114,18 @@ Le front a de son côté repris l'écart du backend sur la ponctuation d'un jeto
 sur quatre entrées : les `.docx` de la fiche 27, le PDF réel du 2463, le rendu brut des modèles D2 et le PDF du DPAC de
 la fiche 27 produit par le serveur. L'extraction est identique, la lecture aussi aux conflits de cadrage près. Le PDF du
 serveur donne 117 unités reconnues sur 141, contre 31 avant, et aucune valeur fausse en confiance haute ni moyenne.
+
+## Complément du 2026-09-29 (lot D3) — trois règles de prudence de plus
+
+Le front les a mesurées sur un banc synthétique (`scripts/import-dao/banc.mjs`) : huit modèles, sans bruit et sur douze
+graines de bruit. Ce banc remplace les fiches 27 et 16 disparues avec le vidage de DBPRS20. Les règles sont portées dans
+`LectureDao` telles quelles :
+- **un jumeau n'est jamais haut** : un paragraphe dont un autre paragraphe du modèle a le même texte fixe peut prendre sa
+  place ;
+- **la coupe vaut après un texte fixe final** : une valeur fusionnée n'avale plus la phrase suivante, et le texte fixe
+  revient au reste relu ;
+- **plusieurs jetons séparés de ponctuation seule** ne donnent rien.
+
+La parité avec `lire.mjs` (522ed99) est vérifiée sur cinq entrées : les `.docx` et le PDF du contrat-cadre de la fiche 27,
+le PDF réel du 2463, et le rendu brut des modèles D2 et PI. L'extraction est identique, et la lecture aussi aux conflits
+de cadrage près. Un test rejoue chaque règle sur un cas qui échouait avant, vérifié sur la version précédente du lecteur.

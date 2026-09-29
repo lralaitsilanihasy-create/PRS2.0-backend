@@ -245,7 +245,7 @@ public class ChampFicheMarcheService {
         c.setObligatoire(Boolean.TRUE.equals(dto.getObligatoire()));
         c.setTexteType(vide(dto.getTexteType()) ? null : dto.getTexteType().trim());
         c.setControle(vide(dto.getControle()) ? null : dto.getControle().trim().toUpperCase());
-        c.setOptions(csv(dto.getOptions()));
+        c.setOptions(ChampFicheMarche.optionsTexte(dto.getOptions()));   // 29/09 : « | » si une option a une virgule
         c.setCleCadrage(vide(dto.getCleCadrage()) ? null : dto.getCleCadrage().trim());
         c.setClePpm(vide(dto.getClePpm()) ? null : dto.getClePpm().trim().toUpperCase());
         c.setActif(dto.getActif() == null || dto.getActif());
@@ -275,7 +275,7 @@ public class ChampFicheMarcheService {
         return new ChampFicheMarcheDto(c.getCode(), c.codeBloc(), c.getCodeRubrique(), c.getRang(), c.getLibelle(),
                 c.getType(), c.getSource(), c.getDocumentMaitre(), ChampFicheMarche.liste(c.getReprises()),
                 ChampFicheMarche.liste(c.getTypesMarche()), c.getCondition(), c.getObligatoire(), c.getTexteType(),
-                c.getControle(), ChampFicheMarche.liste(c.getOptions()), c.getCleCadrage(), c.getClePpm(), c.getActif(),
+                c.getControle(), ChampFicheMarche.options(c.getOptions()), c.getCleCadrage(), c.getClePpm(), c.getActif(),
                 ChampFicheMarche.liste(c.getCategories()), Boolean.TRUE.equals(c.getParLot()), c.getValeurDefaut());
     }
 
@@ -328,7 +328,7 @@ public class ChampFicheMarcheService {
                 dto.setObligatoire(ouiNon(l.get("obligatoire")));
                 dto.setTexteType(l.get("texteType"));
                 dto.setControle(l.get("controle"));
-                dto.setOptions(ChampFicheMarche.liste(l.get("options")));
+                dto.setOptions(ChampFicheMarche.options(l.get("options")));   // 29/09 : « | » admis
                 dto.setCleCadrage(l.get("cleCadrage"));
                 dto.setClePpm(l.get("clePpm"));
                 dto.setCategories(ChampFicheMarche.liste(l.get("categories")));   // lot 5 : absente = défaut

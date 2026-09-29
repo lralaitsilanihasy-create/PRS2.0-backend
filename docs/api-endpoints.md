@@ -4952,6 +4952,49 @@ Demande front `frontend/docs/demande-backend-2026-09-29-champs-non-imprimes-four
   l'interligne se mesure sur chaque page. Le DPAC en PDF que produit le serveur se lit maintenant presque comme le
   `.docx`.
 
+### Les DAO de prestations intellectuelles sur leurs documents types — lot D3 ⚠️ 2026-09-29
+
+Demande front `frontend/docs/demande-backend-2026-09-29-lot-d3-prestations-intellectuelles.md`. **Aucune route nouvelle,
+aucune extension du moteur** (ADR-0011).
+
+- **Production** : une fiche de prestations intellectuelles, quantité fixe ou à commande, produit à sa validation trois
+  documents rendus depuis `classpath:modeles/dao/`, à la place des listes du lot 2a. Le **DPIC** vient de `DPIC-PI.txt`
+  (33 conditions), le tableau 1.3 seul. Le **CPS** vient de `CPS-PI.txt` (30 conditions) ; de type `CCAP`, il porte le
+  libellé « Cahier des prescriptions spéciales ». L'**AE** vient de `AE-PI.txt` (17 conditions), un par lot sur une
+  ligne allotie. Fidélité : 230/230, 238/238 et 300/300.
+- **La formule de révision du CPS** qui finit par `}}` (« {ou Rl= Rlo X [ 0,15+0,85 Il/Ilo] }} ») n'est pas un jeton,
+  puisqu'un jeton commence par `{{`. Elle est imprimée telle quelle.
+- **Options d'une liste** (tous référentiels) : elles sont séparées par des virgules, sauf quand l'une contient une
+  virgule. Le séparateur est alors `|`, au fichier de correspondance comme en base. `B02-MS-01` sert ainsi quatre
+  options, et non plus cinq.
+- **Un nombre décimal s'imprime avec la virgule** (« 0,8 ») ; il se saisit avec la virgule ou le point.
+- **Référentiel des prestations intellectuelles**, au fichier de correspondance et dans
+  `docs/referentiel/2026-09-29-lot-d3-prestations-intellectuelles.sql` :
+  - sept champs créés :
+    - `B04-EP-04` (délai de réponse de la PRMP, obligatoire) ;
+    - `B05-PF-13` (budget disponible) ;
+    - `B06-TP-07` (score technique minimum) ;
+    - `B06-CS-02` et `B06-CS-03` (poids T et F) ;
+    - `B08-AI-03` (taux de l'avance, `avance = OUI`, rôle `AVANCE_MAX_20:TAUX`) ;
+    - `B09-OP-02` (délai des vérifications, facultatif) ;
+  - `B04-LP-01` gagne l'option « Une autre langue que le français » ;
+  - `B04-LH-02` passe en `DATE_HEURE` ;
+  - `B08-IP-01` devient un `NOMBRE` de points ajoutés au taux directeur ;
+  - `B09-PP-01` est retiré, `B09-FC-01` réactivé (facultatif) ;
+  - `B09-DP-01` devient un `OUI_NON` facultatif, « Le délai court de l'ordre de service de commencer ».
+- **La question de cadrage `penalites`** (reflet `B09-PR-01`) vaut désormais aussi pour les prestations intellectuelles
+  (**V53**).
+- **Règles** :
+  - `PENALITES_PLAFOND_15` compare au plafond du CCAG de la catégorie : 10 % pour les prestations intellectuelles,
+    15 % ailleurs. Le code reste stable et le message dit le plafond.
+  - `INTERETS_MORATOIRES_TAUX` lit un rôle `TAUX` de type `NOMBRE` comme une majoration en points, qui doit être
+    d'au moins un point.
+- Le référentiel sert **134** champs à une fiche de prestations intellectuelles à quantité fixe (126 avant).
+- **Import** : les trois modèles se lisent comme les autres (Word et PDF). Trois règles de prudence sont ajoutées :
+  - un paragraphe dont un autre paragraphe du modèle a le même texte fixe (jumeau) n'est jamais haut ;
+  - la coupe d'une valeur vaut aussi après un texte fixe final, qui revient au reste relu ;
+  - plusieurs jetons séparés de ponctuation seule ne donnent aucune proposition.
+
 ### L'import du DAO : pré-remplir la fiche en lisant le document « à l'envers » ⚠️ 2026-09-28
 
 Demande front `frontend/docs/demande-backend-2026-09-28-import-dao.md`. Décision :

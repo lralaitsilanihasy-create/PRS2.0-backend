@@ -516,6 +516,21 @@ champs non imprimés retirés*.
   marché à commande dit, s'il y a lieu, la variation admise au-delà des bornes de quantités. Le DPAO dit les niveaux de
   qualification exigés. Un CCAP déjà produit se corrige en reproduisant les documents par une révision.
 
+#### Les DAO de prestations intellectuelles sur leurs documents types (lot D3, arbitrages du pilote du 2026-09-29)
+
+⚠️ **Une fiche de prestations intellectuelles produit à son tour les documents types de l'ARMP remplis** : les données
+particulières des instructions aux candidats (le tableau seul), l'acte d'engagement et le cahier des prescriptions
+spéciales. Les instructions aux candidats et le CCAG se joignent tels quels. Les termes de référence sont une pièce
+téléversée par l'acheteur. Contrat : `docs/api-endpoints.md`, § *Les DAO de prestations intellectuelles — lot D3*.
+
+- **Le mode de sélection choisit les rédactions** : qualité-coût (avec les poids de la proposition technique et de la
+  proposition financière, dont la somme fait 1), budget prédéterminé (avec le budget disponible, au-delà duquel une
+  proposition est rejetée), moindre coût (avec la note technique minimale), qualité seule. Le mode de rémunération
+  choisit de même : forfait, temps passé, résultat ou pourcentage.
+- **Les pénalités suivent le cadrage**, comme pour les fournitures. Le plafond du CCAG des prestations intellectuelles
+  est de 10 %, et non de 15 %. Les intérêts moratoires s'expriment en points ajoutés au taux directeur, au moins un.
+- **Le document type est reproduit tel quel**, coquilles comprises. Celles-ci sont soumises au juriste.
+
 #### L'import du DAO : l'import propose, la PRMP décide (demande front du 2026-09-28, décisions du pilote)
 
 ⚠️ **Une PRMP qui a déjà rédigé son DAO sur le document type peut en pré-remplir la fiche.** Elle n'a plus à tout

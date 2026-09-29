@@ -39,7 +39,15 @@ public class ModelesDao {
             new Couverture("AE-F", "AE", "QUANTITE_FIXE", "FOURNITURES_SERVICES"),
             new Couverture("DPAO-F", "DPAO", "A_COMMANDE", "FOURNITURES_SERVICES"),
             new Couverture("CCAP-F", "CCAP", "A_COMMANDE", "FOURNITURES_SERVICES"),
-            new Couverture("AE-F", "AE", "A_COMMANDE", "FOURNITURES_SERVICES"));
+            new Couverture("AE-F", "AE", "A_COMMANDE", "FOURNITURES_SERVICES"),
+            // ⚠️ Lot D3 (2026-09-29, §B1) — prestations intellectuelles, quantité fixe et à commande : le DPIC (le tableau
+            // 1.3 seul, à la place du DPAO — remappage V42), l'AE, et le CPS qui tient le rôle du CCAP.
+            new Couverture("DPIC-PI", "DPIC", "QUANTITE_FIXE", "PRESTATIONS_INTELLECTUELLES"),
+            new Couverture("CPS-PI", "CCAP", "QUANTITE_FIXE", "PRESTATIONS_INTELLECTUELLES"),
+            new Couverture("AE-PI", "AE", "QUANTITE_FIXE", "PRESTATIONS_INTELLECTUELLES"),
+            new Couverture("DPIC-PI", "DPIC", "A_COMMANDE", "PRESTATIONS_INTELLECTUELLES"),
+            new Couverture("CPS-PI", "CCAP", "A_COMMANDE", "PRESTATIONS_INTELLECTUELLES"),
+            new Couverture("AE-PI", "AE", "A_COMMANDE", "PRESTATIONS_INTELLECTUELLES"));
 
     private final Map<String, FichierCommande.Modele> modeles = new LinkedHashMap<>();
 

@@ -305,6 +305,20 @@ public final class LectureDao {
         return true;
     }
 
+    /** ⚠️ Lot D3 (§B4.1) — un paragraphe à jeton dont un autre paragraphe du modèle a le même texte fixe. */
+    private static boolean jumeau(Unite u, List<Unite> us) {
+        if (!u.texte().contains("{{")) {
+            return false;
+        }
+        String cle = cleTexte(u);
+        for (Unite v : us) {
+            if (v != u && cleTexte(v).equals(cle)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static String cleTexte(Unite u) {
         return norm(JETON.matcher(u.texte()).replaceAll("{}")).toLowerCase(Locale.ROOT);
     }
@@ -420,7 +434,10 @@ public final class LectureDao {
                 Matcher x = mo.entier().matcher(doc.get(j));
                 boolean ok = x.find();
                 // B5 règle 2 — une ancre de moins de 8 lettres de texte fixe ne donne jamais la confiance haute.
-                Confiance confiance = lettresFixes(u.texte()) >= ANCRE_HAUTE ? Confiance.HAUTE : Confiance.MOYENNE;
+                // ⚠️ Lot D3 (2026-09-29, §B4.1) — un JUMEAU (un autre paragraphe du modèle a le même texte fixe : « {{B04-EP-03}}
+                // jours avant la date limite… » / « {{B04-EP-04}} … ») peut prendre la place de l'autre quand celui-ci n'est
+                // pas reconnu : c'est l'ordre, pas le texte, qui les distingue — jamais la confiance haute.
+                Confiance confiance = lettresFixes(u.texte()) >= ANCRE_HAUTE && !jumeau(u, us) ? Confiance.HAUTE : Confiance.MOYENNE;
                 if (!ok && mo.tete() != null) {
                     x = mo.tete().matcher(doc.get(j));
                     ok = x.find();
@@ -446,12 +463,20 @@ public final class LectureDao {
                     String brut = x.group(n + 1);
                     Confiance c = confiance;
                     boolean dernierOuvert = n == mo.jetons().size() - 1 && !mo.finitParFixe();
-                    if (dernierOuvert) {
+                    // ⚠️ Lot D3 (2026-09-29, §B4.2) — la coupe vaut aussi quand le paragraphe finit par du texte fixe
+                    // (« … est {{B02-OB-01}}. ») : fusionné avec les suivants, il se termine encore par ce texte, et la
+                    // valeur les avalait en confiance haute. Le texte fixe final revient alors au reste relu.
+                    if (n == mo.jetons().size() - 1) {
                         String[] cp = couper(brut, k, us.size(), debuts);
                         if (cp != null) {
                             brut = cp[0];
                             c = Confiance.MOYENNE;
-                            doc.add(j + 1, cp[1]);
+                            String t = u.texte();
+                            String fin = mo.finitParFixe() ? norm(t.substring(t.lastIndexOf("}}") + 2)) : "";
+                            if (!fin.isEmpty() && brut.endsWith(fin)) {
+                                brut = brut.substring(0, brut.length() - fin.length()).replaceAll(BLANC + "+$", "");
+                            }
+                            doc.add(j + 1, cp[1] + fin);
                             extrait = doc.get(j);
                         }
                     }
@@ -513,6 +538,16 @@ public final class LectureDao {
             // Ariary. » ne se lisait plus comme un montant).
             brut = sansTexteFixe(brut, us.get(j.k()).texte());
             Confiance confiance = atteste && entre.size() == 1 && cp == null ? Confiance.MOYENNE : Confiance.BASSE;
+            // ⚠️ Lot D3 (2026-09-29, §B4.3) — plusieurs jetons séparés de ponctuation seule (« {{B02-OB-03}} — {{B02-OB-01}} ») :
+            // rien n'est proposé. Tout donner au premier est une fausse valeur, et le séparateur ne découpe pas sûrement.
+            Matcher nb = JETON.matcher(us.get(j.k()).texte());
+            int nbJetons = 0;
+            while (nb.find()) {
+                nbJetons++;
+            }
+            if (nbJetons > 1) {
+                continue;
+            }
             lues.add(new Lue(j.nom(), brut, confiance, String.join("\n", entre), false));
         }
 

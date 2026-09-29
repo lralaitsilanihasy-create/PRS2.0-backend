@@ -120,6 +120,31 @@ public class ChampFicheMarche {
     }
 
     /** Une liste séparée par des virgules, nettoyée ; vide si nulle. */
+    /**
+     * ⚠️ 2026-09-29 (lot D3, §B2.2.1) — les options d'une liste. Elles sont séparées par des virgules, sauf quand l'une
+     * d'elles en contient une (« Qualité technique, expérience et proposition financière ») : le séparateur est alors
+     * « | ». Une chaîne sans « | » se lit comme avant.
+     */
+    public static List<String> options(String texte) {
+        if (texte != null && texte.contains("|")) {
+            return Arrays.stream(texte.split("\\|")).map(String::trim).filter(s -> !s.isEmpty()).toList();
+        }
+        return liste(texte);
+    }
+
+    /** L'inverse de {@link #options} : « | » si une option contient une virgule, « , » sinon ; {@code null} si vide. */
+    public static String optionsTexte(List<String> options) {
+        if (options == null) {
+            return null;
+        }
+        List<String> propres = options.stream().filter(java.util.Objects::nonNull).map(String::trim)
+                .filter(s -> !s.isEmpty()).toList();
+        if (propres.isEmpty()) {
+            return null;
+        }
+        return String.join(propres.stream().anyMatch(s -> s.contains(",")) ? "|" : ",", propres);
+    }
+
     public static List<String> liste(String csv) {
         if (csv == null || csv.isBlank()) {
             return List.of();

@@ -74,7 +74,11 @@ class ModelesDaoTest {
         assertThat(dao.modele("DPAO-F").conditions()).hasSize(42);
         assertThat(dao.modele("AE-F").conditions()).hasSize(22);
         assertThat(dao.modele("CCAP-F").conditions()).hasSize(67);   // 29/09 : + VARIATION-COMMANDE, SANS-VARIATION-COMMANDE
-        assertThat(dao.modeles()).hasSize(5);
+        // ⚠️ Lot D3 (2026-09-29) — les trois documents des prestations intellectuelles.
+        assertThat(dao.modele("DPIC-PI").conditions()).hasSize(33);
+        assertThat(dao.modele("AE-PI").conditions()).hasSize(17);
+        assertThat(dao.modele("CPS-PI").conditions()).hasSize(30);
+        assertThat(dao.modeles()).hasSize(8);
         assertThatThrownBy(() -> ModelesDao.charger("/modeles/dao/X.txt", "CONDITION\tA\u001Fattributaires = MONO\n"
                 + "PARA\t{{SI:A}}\nPARA\t{{SI:B}}\nPARA\ttexte\nPARA\t{{FINSI:B}}\nPARA\t{{FINSI:A}}"))
                 .isInstanceOf(IllegalStateException.class).hasMessageContaining("/modeles/dao/X.txt")
@@ -128,6 +132,9 @@ class ModelesDaoTest {
         assertThat(dossier.resolve("DPAO-F.docx")).exists();
         assertThat(dossier.resolve("AE-F.docx")).exists();
         assertThat(dossier.resolve("CCAP-F.docx")).exists();
+        assertThat(dossier.resolve("DPIC-PI.docx")).exists();
+        assertThat(dossier.resolve("AE-PI.docx")).exists();
+        assertThat(dossier.resolve("CPS-PI.docx")).exists();
     }
 
     @Test
