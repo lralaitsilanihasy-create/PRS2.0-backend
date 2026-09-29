@@ -4633,6 +4633,12 @@ toutes les autres gardes ; sa création répond 409 `FORME_NON_OUTILLEE`. Formes
 (`DmcService.FORMES_OUTILLEES`). ⚠️ **2026-09-23 (lots 3 et 4)** : les **trois** formes sont outillées ; `formeOutillee`
 ne vaut plus `false` que pour une ligne sans forme au plan.
 
+⚠️ **2026-09-29** (demande front `demande-backend-2026-09-29-nature-lignes-eligibles.md`) — **`idNature`** (`Integer`,
+`t_marche.ID_NATURE`) et **`libelleNature`** (`String`, `t_nature.LIBELLE`), tous deux `null` si la ligne n'a pas de
+nature. C'est la nature du plan que la PRMP lit : « Services » et « Fournitures » sont deux natures d'une même catégorie
+(`categorie = FOURNITURES_SERVICES`). Ils viennent de la lecture qui donne déjà `categorie`, un cache par nature pour
+toute la liste, sans requête de plus par ligne. La clé étrangère `t_marche → t_nature` exclut une nature inconnue.
+
 **Endpoints**
 
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |

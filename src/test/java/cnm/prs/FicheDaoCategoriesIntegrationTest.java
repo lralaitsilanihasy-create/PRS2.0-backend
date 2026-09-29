@@ -255,6 +255,25 @@ class FicheDaoCategoriesIntegrationTest extends CnmIntegrationTestSupport {
         marcheRepository.save(l);
     }
 
+    // ------------------------------------------------------------------ 29/09 — la nature dans les lignes éligibles
+
+    @Test
+    @DisplayName("29/09 — GET /api/dmcs/eligibles sert idNature et libelleNature : une ligne « Services » rend « Services » "
+            + "(catégorie fournitures et services, comme « Fournitures ») ; une ligne sans nature rend null (la clé étrangère "
+            + "t_marche → t_nature exclut une nature inconnue)")
+    void natureDesLignesEligibles() throws Exception {
+        natureRepository.save(new Nature(94, "Services", null, "FOURNITURES_SERVICES"));
+        ligne(9905, 94);
+        String eligibles = mvc.perform(get("/api/dmcs/eligibles").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(eligibles, "$[?(@.idDetail==9905)].libelleNature")).containsExactly("Services");
+        assertThat(JsonPath.<List<Integer>>read(eligibles, "$[?(@.idDetail==9905)].idNature")).containsExactly(94);
+        assertThat(JsonPath.<List<String>>read(eligibles, "$[?(@.idDetail==9905)].categorie")).containsExactly("FOURNITURES_SERVICES");
+        assertThat(JsonPath.<List<String>>read(eligibles, "$[?(@.idDetail==9901)].libelleNature")).containsExactly("Fournitures");
+        assertThat(JsonPath.<List<Object>>read(eligibles, "$[?(@.idDetail==9904)].libelleNature")).containsExactly((Object) null);
+        assertThat(JsonPath.<List<Object>>read(eligibles, "$[?(@.idDetail==9904)].idNature")).containsExactly((Object) null);
+    }
+
     // ------------------------------------------------------------------ 29/09 — champs non imprimés retirés
 
     @Autowired private cnm.prs.repository.FicheMarcheValeurRepository valeurRepository;

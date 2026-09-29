@@ -18,5 +18,12 @@ public record LigneEligibleDto(Integer idDetail, Integer idDossier, String refeD
         /** ⚠️ Lot 5 (2026-09-24) — catégorie de fiche DAO lue sur la nature de la ligne ; {@code null} si inconnue. */
         String categorie,
         /** ⚠️ Lot 5 — la fiche sait préparer cette catégorie (jumeau de {@code formeOutillee}). */
-        boolean categorieOutillee) {
+        boolean categorieOutillee,
+        /** ⚠️ 2026-09-29 — la nature de la ligne au plan ({@code t_marche.ID_NATURE}) ; {@code null} si la ligne n'en a pas. */
+        Integer idNature,
+        /**
+         * ⚠️ 2026-09-29 — son libellé ({@code t_nature.LIBELLE}), ce que la PRMP lit (« Services » et « Fournitures » sont
+         * deux natures d'une même catégorie) ; {@code null} si la ligne n'a pas de nature.
+         */
+        String libelleNature) {
 }

@@ -268,12 +268,15 @@ public class DmcService {
             ModePassation mode = caches.mode(m.getIdMode());
             DossierMec dmc = dmcParOrigine.get(m.getIdLigneOrigine());
             CategorieLigne cat = categorie(m, caches.natures);
+            // ⚠️ 2026-09-29 — la nature vient du cache que categorie() vient de remplir : aucune requête de plus.
+            cnm.prs.entity.Nature nature = m.getIdNature() == null ? null
+                    : caches.natures.getOrDefault(m.getIdNature(), Optional.empty()).orElse(null);
             out.add(new LigneEligibleDto(m.getIdDetail(), m.getIdDossier(), d == null ? null : d.getRefeDossier(),
                     m.getDesignationMarche(), m.getIdMode(), mode == null ? null : mode.getLibelle(), m.getMontEstim(),
                     dmc != null, dmc == null ? null : dmc.getIdDmc(),
                     m.formeMarcheSaisie() == null ? null : m.formeMarcheSaisie().name(),
                     motifForme(m.formeMarcheSaisie()).isEmpty(), cat.categorie() == null ? null : cat.categorie().name(),
-                    cat.motif().isEmpty()));
+                    cat.motif().isEmpty(), m.getIdNature(), nature == null ? null : nature.getLibelle()));
         }
         return out;
     }
