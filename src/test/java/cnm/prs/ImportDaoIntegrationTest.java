@@ -301,17 +301,15 @@ class ImportDaoIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         byte[] pdf = contenu(docs, "DPAC", "pdf");
         String r = importer(cible, "DPAC.pdf", pdf).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        // 31 unités reconnues le 29/09 (118 sur le .docx) : sur le PDF du serveur (OpenPDF), la lecture du front sépare la
-        // première lettre de chaque ligne et ne rejoint pas les lignes d'un paragraphe — ses seuils sont réglés sur le 2463.
-        assertThat(JsonPath.<List<Integer>>read(r, "$.modeles[?(@.sigle=='DPAC-CC')].reconnues").get(0)).isGreaterThan(20);
+        // ⚠️ 29/09 (front a3217b3, porté) : l'espace posée sous la première lettre ignorée, l'interligne mesuré par page — le
+        // PDF du serveur se lit presque comme le .docx (117 unités reconnues sur 141 pour la fiche 27, 31 avant).
+        assertThat(JsonPath.<List<Integer>>read(r, "$.modeles[?(@.sigle=='DPAC-CC')].reconnues").get(0)).isGreaterThan(100);
         List<Map<String, Object>> sures = JsonPath.read(r, "$.propositions[?(@.confiance != 'basse')]");
-        assertThat(sures).isNotEmpty();
-        // Critère du front (Q10) : aucune valeur fausse en HAUTE. En moyenne, le texte peut garder la lettre détachée
-        // (« A ttestations… », constat du 29/09 signalé au front) : c'est pourquoi une valeur moyenne se revoit.
-        for (Map<String, Object> p : JsonPath.<List<Map<String, Object>>>read(r, "$.propositions[?(@.confiance == 'haute')]")) {
+        assertThat(sures).hasSizeGreaterThan(20);
+        for (Map<String, Object> p : sures) {   // aucune valeur fausse en haute ni en moyenne
             String saisie = s.valeurs().get((String) p.get("code"));
             if (saisie != null) {
-                assertThat(p.get("valeur")).as((String) p.get("code")).isEqualTo(saisie);
+                assertThat(p.get("valeur")).as(p.get("code") + " (" + p.get("confiance") + ")").isEqualTo(saisie);
             }
         }
         assertThat(JsonPath.<List<String>>read(r, "$.propositions[?(@.code=='B04-CP-02')].valeur")).containsExactly("2026-04-10T10:00");

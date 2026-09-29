@@ -572,7 +572,20 @@ public class FicheMarcheService {
                 }
             }
         }
-        valeurRepository.deleteParBloc(fiche.getIdFiche(), codeBloc + "-%");
+        // ⚠️ 2026-09-29 (demande front « champs non imprimés », §B1.2) — le bloc est remplacé, SAUF les valeurs des champs
+        // retirés (inactifs) : l'écran ne les renvoie plus, et un retrait ne perd rien de ce qui a été saisi.
+        for (FicheMarcheValeur v : valeurRepository.findByIdFiche(fiche.getIdFiche())) {
+            String cle = v.getCodeChamp();
+            if (!cle.startsWith(codeBloc + "-")) {
+                continue;
+            }
+            int d = cle.indexOf(LotsFiche.SEPARATEUR);
+            ChampFicheMarche c = champs.get(d < 0 ? cle : cle.substring(0, d));
+            if (c == null || Boolean.TRUE.equals(c.getActif())) {
+                valeurRepository.delete(v);
+            }
+        }
+        valeurRepository.flush();
         for (Map.Entry<String, String> e : aEcrire.entrySet()) {
             valeurRepository.save(new FicheMarcheValeur(null, fiche.getIdFiche(), e.getKey(), e.getValue(),
                     calculees.contains(e.getKey())));

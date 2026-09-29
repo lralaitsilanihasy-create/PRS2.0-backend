@@ -70,8 +70,8 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
     // ------------------------------------------------------------------ 1. chargement des référentiels
 
     @Test
-    @DisplayName("1 — Import : 156 champs des fournitures (149 avant le lot D2, 123 avant V50) et 132 du contrat-cadre (114 avant le 28/09), aucun rejet ; champs actifs servis : 179 en "
-            + "quantité fixe, 184 à commande (lot D2 : + 7), 175 en contrat-cadre (V50 : + 26 ; modèle officiel du 28/09 : − 20 + 11 ; lot D : + 9 ; Q2 : − 1) — 2026-09-25 : cinq créations, "
+    @DisplayName("1 — Import : 156 champs des fournitures (149 avant le lot D2, 123 avant V50) et 132 du contrat-cadre (114 avant le 28/09), aucun rejet ; champs actifs servis : 156 en "
+            + "quantité fixe, 159 à commande (lot D2 : + 7 ; 29/09 : − 23 / − 25 non imprimés), 175 en contrat-cadre (V50 : + 26 ; modèle officiel du 28/09 : − 20 + 11 ; lot D : + 9 ; Q2 : − 1) — 2026-09-25 : cinq créations, "
             + "B06-EO-11 réservé à la quantité fixe")
     void chargementDesReferentiels() throws Exception {
         ChampFicheMarcheService.BilanImport f = importer("referentiel-champs-fiche-marche-fournitures.csv");
@@ -81,8 +81,8 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
         assertThat(cc.rejets()).isEmpty();
         assertThat(cc.crees()).hasSize(132);   // 2026-09-28 : + 9 champs du modèle officiel, + 9 du lot D
 
-        assertThat(champs("QUANTITE_FIXE")).hasSize(179);
-        assertThat(champs("A_COMMANDE")).hasSize(184);
+        assertThat(champs("QUANTITE_FIXE")).hasSize(156);   // 29/09 : − 23 champs non imprimés retirés
+        assertThat(champs("A_COMMANDE")).hasSize(159);   // 29/09 : − 25
         assertThat(champs("CONTRAT_CADRE")).hasSize(175);   // 2026-09-28 : 176 − 20 + 11 (modèle officiel) + 9 (lot D) − 1 (B07-DU-06, Q2)
     }
 
@@ -130,7 +130,6 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
                 .andExpect(jsonPath("$.typeOutille").value(true));
 
         Map<String, String> propres = new LinkedHashMap<>();
-        propres.put("B05-TP-02", "10000000");
         propres.put("B05-TP-03", "50000000");
         remplirObligatoiresEtValider(idDmc, "A_COMMANDE", null, propres);
 
@@ -228,7 +227,7 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
         assertThat(JsonPath.<List<List<String>>>read(ref, "$.champs[?(@.code=='B07-MA-04')].options").get(0))
                 .containsExactly("Titulaires des lots correspondant à l'objet du marché", "Titulaires de tous les lots");
         for (String type : List.of("QUANTITE_FIXE", "A_COMMANDE")) {
-            assertThat(champs(type)).as(type).contains("B04-VO-01", "B09-PR-01", "B06-AN-02").doesNotContain("B06-AN-03");
+            assertThat(champs(type)).as(type).contains("B04-VO-01", "B09-PR-01").doesNotContain("B06-AN-03", "B06-AN-02");   // B06-AN-02 retiré des fournitures le 29/09
         }
 
         // B7 — l'acte de nomination se recopie depuis le mandat en vigueur de la PRMP, à la création de la fiche.

@@ -73,7 +73,7 @@ class ModelesDaoTest {
         // ⚠️ Lot D2 (2026-09-29) — les trois documents des fournitures, un modèle pour la quantité fixe et à commande.
         assertThat(dao.modele("DPAO-F").conditions()).hasSize(42);
         assertThat(dao.modele("AE-F").conditions()).hasSize(22);
-        assertThat(dao.modele("CCAP-F").conditions()).hasSize(65);
+        assertThat(dao.modele("CCAP-F").conditions()).hasSize(67);   // 29/09 : + VARIATION-COMMANDE, SANS-VARIATION-COMMANDE
         assertThat(dao.modeles()).hasSize(5);
         assertThatThrownBy(() -> ModelesDao.charger("/modeles/dao/X.txt", "CONDITION\tA\u001Fattributaires = MONO\n"
                 + "PARA\t{{SI:A}}\nPARA\t{{SI:B}}\nPARA\ttexte\nPARA\t{{FINSI:B}}\nPARA\t{{FINSI:A}}"))

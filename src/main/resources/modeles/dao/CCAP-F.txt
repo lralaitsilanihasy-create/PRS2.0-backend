@@ -12,6 +12,8 @@ CONDITION	PIECES-SUPPLEMENTAIRESB09-PC-01 renseigne
 CONDITION	DELAI-AJUSTEMENTB09-OM-01 renseigne
 CONDITION	VARIATION-QUANTITEStypeMarche = QUANTITE_FIXE et B09-OM-02 renseigne
 CONDITION	COMMANDEtypeMarche = A_COMMANDE
+CONDITION	VARIATION-COMMANDEtypeMarche = A_COMMANDE et B09-OM-02 renseigne
+CONDITION	SANS-VARIATION-COMMANDEtypeMarche = A_COMMANDE et B09-OM-02 vide
 CONDITION	QUANTITE-FIXEtypeMarche = QUANTITE_FIXE
 CONDITION	SECURITE-NONB09-PS-01 = NON
 CONDITION	SECURITE-OUIB09-PS-01 = OUI
@@ -121,15 +123,14 @@ PARA	A l’attention de {{B01-AC-05}}
 PARA	n° et rue : {{B01-AC-02}}
 PARA	Etage et bureau :
 PARA	Code Postal :
-PARA	Télécopie : <insérer le n° >1
 PARA	Adresse électronique : {{B01-AC-06}}
 PARA	Aux fins de notification, les coordonnées du Fournisseur sont les suivantes :
-PARA	A l’attention de {{B01-AC-05}}
-PARA	n° et rue : {{B01-AC-02}}
+PARA	A l’attention de <insérer le nom>
+PARA	n° et rue :
 PARA	Etage et bureau :
 PARA	Code Postal :
 PARA	Télécopie : <insérer le n° >
-PARA	Adresse électronique : {{B01-AC-06}}
+PARA	Adresse électronique : <insérer l’adresse complète>
 SOUS_TITRE	Article 4. - Groupements (CCAG Article 5)
 PARA	{{SI:GROUPEMENT-SOLIDAIRE}}
 PARA	Les Fournisseurs groupés seront considérés comme solidaires, chacun des membres du groupement étant engagé pour la totalité du Marché.
@@ -155,8 +156,13 @@ PARA	Variations maximales, augmentation ou réduction, du volume ou des quantit�
 PARA	{{FINSI:VARIATION-QUANTITES}}
 PARA	{{SI:COMMANDE}}
 PARA	Les dispositions du présent Marché sont applicables à toutes les commandes passées pour le compte de l’Autorité Contractante dans un délai de{{B09-OM-03}} mois à compter de la notification de son approbation au Fournisseur
-PARA	Le Minimum et le Maximum des quantités susceptibles d’être commandées pour chacun des articles entrant dans la composition de la fourniture sont précisés dans le Bordereau de Prix donné en Annexe à l’Acte d’Engagement, étant entendu que ces quantités sont susceptibles de varier pour chaque article dans la limite de ………..% en sus de maximum ou en dessous du minimum, sans que la valeur totale des commandes puisse être inférieure à la valeur minimale ni supérieure à la valeur maximale prévue dans le présent CPS.
 PARA	{{FINSI:COMMANDE}}
+PARA	{{SI:VARIATION-COMMANDE}}
+PARA	Le Minimum et le Maximum des quantités susceptibles d’être commandées pour chacun des articles entrant dans la composition de la fourniture sont précisés dans le Bordereau de Prix donné en Annexe à l’Acte d’Engagement, étant entendu que ces quantités sont susceptibles de varier pour chaque article dans la limite de {{B09-OM-02.chiffres}} % en sus de maximum ou en dessous du minimum, sans que la valeur totale des commandes puisse être inférieure à la valeur minimale ni supérieure à la valeur maximale prévue dans le présent CPS.
+PARA	{{FINSI:VARIATION-COMMANDE}}
+PARA	{{SI:SANS-VARIATION-COMMANDE}}
+PARA	Le Minimum et le Maximum des quantités susceptibles d’être commandées pour chacun des articles entrant dans la composition de la fourniture sont précisés dans le Bordereau de Prix donné en Annexe à l’Acte d’Engagement.
+PARA	{{FINSI:SANS-VARIATION-COMMANDE}}
 SOUS_TITRE	Article 7. - Protection du secret – Mesure de sécurité (CCAG Article 7)
 PARA	{{SI:SECURITE-NON}}
 PARA	Non applicable

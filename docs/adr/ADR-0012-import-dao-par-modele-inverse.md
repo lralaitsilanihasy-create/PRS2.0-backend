@@ -95,10 +95,22 @@ confiance haute et 6 réponses de cadrage toutes justes.
 - **La forme et la catégorie restent au plan.** Une rédaction qui les dit autrement est une divergence, jamais une réponse
   de cadrage.
 
-Deux limites sont mesurées ici et signalées au front :
+Deux limites sont mesurées ici et signalées au front (la première est levée le soir même, voir plus bas) :
 - Sur les PDF que le serveur produit lui-même (OpenPDF), la lecture du front détache la première lettre de chaque ligne
   (« A ttestations… ») et ne rejoint pas les lignes d'un paragraphe. Elle ne reconnaît que 31 unités du DPAC, contre 118
   sur le `.docx`, et peut garder la lettre détachée dans une valeur de confiance moyenne. Aucune valeur n'est fausse en
   confiance haute.
 - La lecture « par clause » des DAO adaptés, recommandée par le front, attend la décision du pilote. Elle n'est pas
   livrée.
+
+## Complément du 2026-09-29 (soir) — nos propres PDF
+
+Le front a reporté deux corrections de la lecture PDF (`a3217b3`), portées ici telles quelles :
+- une espace qui commence à l'intérieur de la lettre précédente est ignorée, puisqu'OpenPDF la pose sous la première lettre
+  de chaque ligne ;
+- l'interligne se mesure sur chaque page : c'est le plus petit écart fréquent entre deux lignes d'une même colonne.
+
+Le front a de son côté repris l'écart du backend sur la ponctuation d'un jeton seul. La parité est de nouveau vérifiée
+sur quatre entrées : les `.docx` de la fiche 27, le PDF réel du 2463, le rendu brut des modèles D2 et le PDF du DPAC de
+la fiche 27 produit par le serveur. L'extraction est identique, la lecture aussi aux conflits de cadrage près. Le PDF du
+serveur donne 117 unités reconnues sur 141, contre 31 avant, et aucune valeur fausse en confiance haute ni moyenne.

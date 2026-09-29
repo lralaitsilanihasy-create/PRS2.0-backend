@@ -498,6 +498,24 @@ documents des fournitures — lot D2*.
   restent produites depuis le besoin. Les travaux et les prestations intellectuelles gardent leurs listes jusqu'à ce que
   leurs documents types soient décrits.
 
+#### Fournitures : ce que la fiche demande, le DAO l'imprime (arbitrage du pilote du 2026-09-29)
+
+⚠️ **Une information de la fiche des fournitures qu'aucun document produit n'imprime n'est plus demandée.** 25 champs
+sortent de la fiche des fournitures. Ce sont des données du candidat ou de la notification, des choses que le document
+type dit déjà, ou des informations sans place dans le DAO officiel. Les travaux et les prestations intellectuelles, dont
+les documents types ne sont pas encore décrits, gardent les leurs. Contrat : `docs/api-endpoints.md`, § *Fournitures :
+champs non imprimés retirés*.
+
+- **Rien de ce qui a été saisi n'est perdu.** La valeur reste enregistrée. Elle n'est plus proposée à la saisie, ne
+  compte plus dans l'avancement et ne bloque plus la validation.
+- **Une information lue par une règle de contrôle reste demandée**, même non imprimée. C'est le cas de la date et de
+  l'heure d'ouverture des plis, liées à la remise électronique en attente du juriste, du montant maximum annuel d'un
+  marché à commande, qui sert à juger le taux de la garantie de soumission, et du délai de paiement, jugé au regard des
+  75 jours.
+- **Le CCAP ne prête plus au Fournisseur les coordonnées de la PRMP** : son bloc d'adresse reste à remplir par lui. Un
+  marché à commande dit, s'il y a lieu, la variation admise au-delà des bornes de quantités. Le DPAO dit les niveaux de
+  qualification exigés. Un CCAP déjà produit se corrige en reproduisant les documents par une révision.
+
 #### L'import du DAO : l'import propose, la PRMP décide (demande front du 2026-09-28, décisions du pilote)
 
 ⚠️ **Une PRMP qui a déjà rédigé son DAO sur le document type peut en pré-remplir la fiche.** Elle n'a plus à tout

@@ -4752,7 +4752,8 @@ Une règle dont un rôle n'a pas encore de champ (référentiel incomplet) **n'e
 | GET | /api/fiches-marche/{idDmc}/versions/{numero} | — | `FicheMarcheDto` de cette version | 200, 403, 404 | lecture |
 
 Le corps d'un `PUT …/blocs/{bloc}` **remplace** les valeurs `SAISIE` du bloc : un code absent ou une valeur vide est
-effacé. Un champ dont la **condition de cadrage est fausse** (ou hors type de marché) est **ignoré** — pas une
+effacé. ⚠️ **Sauf les valeurs des champs retirés** (inactifs, 2026-09-29) : l'écran ne les renvoie plus, et elles sont
+conservées telles qu'elles avaient été saisies. Un champ dont la **condition de cadrage est fausse** (ou hors type de marché) est **ignoré** — pas une
 erreur — et absent du bilan ; un obligatoire manquant n'est **pas** un 400 : il est **bloquant au bilan** (on
 enregistre un brouillon incomplet, on ne le valide pas). Une version `VALIDEE` est **figée** (409 sur tout `PUT`) :
 `reviser` ouvre la suivante. Journal du dossier de planification à la validation : `FICHE_MARCHE_VALIDEE` ; aucune
@@ -4911,6 +4912,39 @@ Demande front `frontend/docs/demande-backend-2026-09-29-lot-d2-fournitures.md` ;
 | `B09-DG-03` | Pénalité pour non-respect des garanties contractuelles (%) | POURCENTAGE | — |
 | `B09-DG-04` | Délai accordé pour remédier aux défauts pendant la garantie | TEXTE | — |
 | `B10-IR-03` | Taux de l'indemnité de résiliation (%, si différent des 4 % du CCAG) | POURCENTAGE | — |
+
+### Fournitures : champs non imprimés retirés, modèles CCAP-F et DPAO-F corrigés ⚠️ 2026-09-29
+
+Demande front `frontend/docs/demande-backend-2026-09-29-champs-non-imprimes-fournitures.md` (arbitrage du pilote du
+29/09). **Aucune route nouvelle.**
+
+- **25 champs retirés de la fiche des fournitures** (quantité fixe et à commande) : `actif = non` au fichier de
+  correspondance et `docs/referentiel/2026-09-29-fournitures-champs-non-imprimes.sql` pour DBPRS20. Ils n'existent que
+  pour les fournitures, donc les travaux et les prestations intellectuelles sont inchangés. Ils ne sont plus servis par
+  `GET /api/champs-fiche-marche`, ne se saisissent plus (400 « Champ inconnu ou inactif ») et ne comptent plus dans
+  l'avancement ni au bilan : un obligatoire retiré ne bloque plus la validation.
+  - `B02-AU-05`, `B02-AU-07` ; `B03-NA-01`, `-02`, `B03-ST-02` ; `B04-RO-03` ; `B05-CP-03`, `B05-TP-02` ;
+  - `B06-AN-02`, `B06-EO-03` à `-08` ;
+  - `B08-AC-01`, `-02`, `B08-AV-03`, `-05`, `-06`, `B08-PA-01`, `-02`, `-04` ; `B09-DG-02` ; `B10-IR-02`.
+- **Valeurs conservées.** Une valeur saisie avant le retrait reste en base et dans `valeurs` de la fiche. L'enregistrement
+  d'un bloc ne l'efface plus. Une révision ne la reprend pas : c'est la règle existante d'une valeur orpheline.
+- **Quatre des 29 codes demandés restent actifs**, parce qu'une règle du serveur les lit :
+  - `B04-OP-02` et `B04-OP-03`, date et heure d'ouverture des plis : calculées en remise électronique (V50, Q11) et lues
+    par `SE_OUVERTURE_PLIS` et `DATES_ORDRE`, en attente de la réponse du juriste sur la clause 7.3 ;
+  - `B05-TP-03`, montant maximum annuel à commande : rôle `MAXIMUM` de l'avertissement `GARANTIE_TAUX` ;
+  - `B08-PA-08`, délai de paiement : rôle `DELAI` de l'avertissement `DELAI_PAIEMENT_75`.
+- Le référentiel sert désormais **156** champs en quantité fixe et **159** à commande.
+- **CCAP-F** (67 conditions, 460/460) :
+  - article 3 : le bloc du Fournisseur reste en blanc, il ne reçoit plus les coordonnées de la PRMP ; la télécopie de la
+    PRMP est retirée ;
+  - article 6, à commande : `VARIATION-COMMANDE` (`B09-OM-02` renseigné) imprime « dans la limite de n % » ;
+    `SANS-VARIATION-COMMANDE` arrête la phrase au Bordereau.
+  Les CCAP produits depuis la livraison D2 se corrigent en les reproduisant, par une révision validée.
+- **DPAO-F** (237/237) : le 6.3 porte les niveaux exigés `B03-CQ-02`, `B03-CQ-03` et les pièces `B03-CQ-04`, chacun
+  sous la fiche qu'il précise.
+- **Import, PDF** (report du front `a3217b3`) : une espace posée à l'intérieur de la lettre précédente est ignorée, et
+  l'interligne se mesure sur chaque page. Le DPAC en PDF que produit le serveur se lit maintenant presque comme le
+  `.docx`.
 
 ### L'import du DAO : pré-remplir la fiche en lisant le document « à l'envers » ⚠️ 2026-09-28
 

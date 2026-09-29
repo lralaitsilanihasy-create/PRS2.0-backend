@@ -76,6 +76,9 @@ class FicheDaoParLotIntegrationTest extends CnmIntegrationTestSupport {
         }
         assertThat(champService.importerCsv(new ClassPathResource(
                 "fiche-marche/referentiel-champs-fiche-marche-fournitures.csv").getFile().toPath()).rejets()).isEmpty();
+        // ⚠️ 2026-09-29 — B05-TP-02 est retiré de la fiche des fournitures (demande front « champs non imprimés ») ; ce test
+        // l'emploie comme exemple de champ par lot du mécanisme éprouvé ici, pas du référentiel : il le réactive.
+        reactiverMontantMinimum();
     }
 
     @Test
@@ -89,7 +92,8 @@ class FicheDaoParLotIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(JsonPath.<List<List<String>>>read(ref, "$.champs[?(@.code=='B02-AU-04')].reprises"))
                 .containsExactly(List.of("AE"));
         assertThat(JsonPath.<List<String>>read(ref, "$.champs[*].code"))
-                .contains("B02-AU-07", "B02-OB-03", "B03-NA-03", "B04-RO-03", "B09-PC-02", "B06-EO-12")
+                .contains("B02-OB-03", "B03-NA-03", "B09-PC-02", "B06-EO-12")
+                .doesNotContain("B02-AU-07", "B04-RO-03")   // retirés des fournitures le 2026-09-29
                 .doesNotContain("B06-EO-11");
         assertThat(JsonPath.<List<String>>read(referentiel("QUANTITE_FIXE"), "$.champs[*].code"))
                 .contains("B06-EO-11").doesNotContain("B06-EO-12");
@@ -243,5 +247,14 @@ class FicheDaoParLotIntegrationTest extends CnmIntegrationTestSupport {
         l.setFormeMarche(FormeMarche.A_COMMANDE);
         l.setDesignationMarche("Acquisition de matériels informatiques " + idDetail);
         marcheRepository.save(l);
+    }
+
+    @Autowired private cnm.prs.repository.ChampFicheMarcheRepository champsRepo;
+
+    /** ⚠️ 2026-09-29 — le champ par lot de l'exemple (B05-TP-02, retiré des fournitures le 29/09) remis actif pour ce test. */
+    private void reactiverMontantMinimum() {
+        cnm.prs.entity.ChampFicheMarche c = champsRepo.findById("B05-TP-02").orElseThrow();
+        c.setActif(true);
+        champsRepo.save(c);
     }
 }

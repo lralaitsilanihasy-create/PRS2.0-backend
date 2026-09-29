@@ -74,12 +74,12 @@ class FicheDaoCategoriesIntegrationTest extends CnmIntegrationTestSupport {
     // ------------------------------------------------------------------ 1-2. le référentiel sur deux axes
 
     @Test
-    @DisplayName("1-2 — Référentiel : quantité fixe + fournitures et services = ses 179 champs (172 avant le lot D2 le 2026-09-29, 146 avant V50 le 2026-09-27, 139 avant le 25 ; avec ou sans le "
+    @DisplayName("1-2 — Référentiel : quantité fixe + fournitures et services = ses 156 champs (179 avant le retrait des champs non imprimés, 172 avant le lot D2 le 2026-09-29, 146 avant V50 le 2026-09-27, 139 avant le 25 ; avec ou sans le "
             + "filtre) ; travaux : aucun champ saisi ni rubrique des fournitures, seules les 23 informations du plan ; "
             + "catégorie inconnue → 400")
     void referentielSurDeuxAxes() throws Exception {
-        assertThat(champs("typeMarche=QUANTITE_FIXE&categorie=FOURNITURES_SERVICES")).hasSize(179);
-        assertThat(champs("typeMarche=QUANTITE_FIXE")).hasSize(179);
+        assertThat(champs("typeMarche=QUANTITE_FIXE&categorie=FOURNITURES_SERVICES")).hasSize(156);
+        assertThat(champs("typeMarche=QUANTITE_FIXE")).hasSize(156);
 
         String travaux = ref("typeMarche=QUANTITE_FIXE&categorie=TRAVAUX");
         assertThat(JsonPath.<List<String>>read(travaux, "$.champs[?(@.source=='PPM')].code")).hasSize(23);
@@ -253,5 +253,58 @@ class FicheDaoCategoriesIntegrationTest extends CnmIntegrationTestSupport {
         l.setFormeMarche(FormeMarche.QUANTITE_FIXE);
         l.setIdNature(idNature);
         marcheRepository.save(l);
+    }
+
+    // ------------------------------------------------------------------ 29/09 — champs non imprimés retirés
+
+    @Autowired private cnm.prs.repository.FicheMarcheValeurRepository valeurRepository;
+
+    /** Les 25 codes retirés de la fiche des fournitures (demande front du 2026-09-29, §B1). */
+    private static final List<String> RETIRES = List.of("B02-AU-05", "B05-TP-02", "B08-PA-01", "B08-PA-02", "B03-NA-01",
+            "B03-NA-02", "B03-ST-02", "B04-RO-03", "B06-EO-04", "B06-EO-05", "B06-EO-06", "B08-AC-01", "B08-AC-02", "B08-AV-03",
+            "B08-AV-05", "B08-AV-06", "B08-PA-04", "B10-IR-02", "B02-AU-07", "B05-CP-03", "B06-EO-03", "B06-EO-07", "B06-EO-08",
+            "B06-AN-02", "B09-DG-02");
+
+    @Test
+    @DisplayName("29/09 — Champs non imprimés : les 25 retirés ne sont plus servis aux fournitures (quantité fixe, à commande), "
+            + "les 4 lus par une règle restent ; aucun ne sert ailleurs ; une valeur saisie avant le retrait survit à "
+            + "l'enregistrement de son bloc et ne compte ni dans l'avancement ni au bilan")
+    void champsNonImprimesRetires() throws Exception {
+        assertThat(RETIRES).hasSize(25);
+        for (String type : List.of("QUANTITE_FIXE", "A_COMMANDE")) {
+            assertThat(champs("typeMarche=" + type + "&categorie=FOURNITURES_SERVICES")).as(type)
+                    .doesNotContainAnyElementsOf(RETIRES).contains("B08-PA-08", "B04-OP-02", "B04-OP-03");
+        }
+        assertThat(champs("typeMarche=A_COMMANDE&categorie=FOURNITURES_SERVICES")).contains("B05-TP-03");
+        // Aucun des 25 n'appartient à une autre catégorie : « ailleurs » est inchangé (les champs y restent ce qu'ils étaient).
+        for (String code : RETIRES) {
+            cnm.prs.entity.ChampFicheMarche c = champRepository.findById(code).orElseThrow();
+            assertThat(c.getActif()).as(code).isFalse();
+            assertThat(c.getCategories()).as(code).isEqualTo("FOURNITURES_SERVICES");
+        }
+
+        // Une valeur saisie avant le retrait (B08-PA-04, obligatoire) est conservée, hors avancement et hors bilan.
+        String dmc = mvc.perform(post("/api/dmcs/par-marche/9901").header("Authorization", tokenPrmp))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        long idDmc = ((Number) JsonPath.read(dmc, "$.idDmc")).longValue();
+        mvc.perform(put("/api/fiches-marche/" + idDmc + "/cadrage").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"cadrage\":{\"garantieSoumission\":\"NON\"}}"))
+                .andExpect(status().isOk());
+        String fiche = mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        int idFiche = JsonPath.read(fiche, "$.idFiche");
+        valeurRepository.save(new cnm.prs.entity.FicheMarcheValeur(null, idFiche, "B08-PA-04", "30 jours fin de mois"));
+        String apres = mvc.perform(put("/api/fiches-marche/" + idDmc + "/blocs/B08").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"valeurs\":{\"B08-PA-08\":45}}"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<java.util.Map<String, String>>read(apres, "$.valeurs"))
+                .containsEntry("B08-PA-04", "30 jours fin de mois").containsEntry("B08-PA-08", "45");
+        assertThat(JsonPath.<List<String>>read(apres, "$.bilanControles.bloquants[*].champs[*]"))
+                .doesNotContainAnyElementsOf(RETIRES);
+        assertThat(JsonPath.<List<String>>read(apres, "$.bilanControles.ok[*].champs[*]")).doesNotContain("B08-PA-04");
+        // un champ retiré ne se saisit plus
+        mvc.perform(put("/api/fiches-marche/" + idDmc + "/blocs/B08").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"valeurs\":{\"B08-PA-04\":\"60 jours\"}}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.erreurs[0].champ").value("B08-PA-04"));
     }
 }

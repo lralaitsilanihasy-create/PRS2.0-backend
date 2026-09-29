@@ -32,7 +32,7 @@ import org.apache.pdfbox.text.TextPosition;
  *   <li>En-têtes et pieds (même texte au même endroit sur trois pages au moins) et numéros de page écartés.</li>
  *   <li>Morceaux d'une même ligne de base (à 1,5 pt), contigus, recollés.</li>
  *   <li>Paragraphes par colonne (abscisse 240 pt) : une ligne rejoint le paragraphe ouvert de sa colonne si elle le suit à
- *       interligne normal ({@code max(h, 4,7) × 2,3}).</li>
+ *       interligne normal : l'interligne mesuré sur la page, plus un point (⚠️ 2026-09-29).</li>
  *   <li>Ordre de lecture d'une page : hauteur de début de paragraphe, puis colonne ; césure « mot- suite » recollée.</li>
  * </ol>
  */
@@ -95,6 +95,12 @@ public final class LecturePdf {
             if (prec != null) {
                 float espace = p.getXDirAdj() - (prec.getXDirAdj() + prec.getWidthDirAdj());
                 float largeurEspace = Math.max(prec.getWidthOfSpace(), 1f);
+                // ⚠️ 2026-09-29 (front a3217b3) — OpenPDF pose une espace au même endroit que la première lettre de la
+                // ligne : triée par position, elle tombe juste après cette lettre (« M ARCHE DE »). Une espace qui commence
+                // à l'intérieur de la lettre précédente ne sépare rien : ignorée.
+                if (p.getUnicode().isBlank() && espace < -1f) {
+                    continue;
+                }
                 if (espace > 3 * largeurEspace && espace > 12f) {
                     sortir(sb, debut, prec, page, out);
                     sb.setLength(0);
@@ -192,13 +198,32 @@ public final class LecturePdf {
                 }
             }
             lignes.sort(Comparator.<Ligne>comparingDouble(q -> q.y).thenComparingDouble(q -> q.x));
-            // Paragraphes par colonne.
+            // Paragraphes par colonne. ⚠️ 2026-09-29 (front a3217b3) — l'interligne se MESURE sur la page : le plus petit
+            // écart vertical fréquent (au moins deux fois) entre deux lignes successives d'une même colonne, arrondi au
+            // demi-point, 10 à défaut (9,7 pt dans le 2463 ; 15 pt dans nos PDF, où 18 pt sépare deux paragraphes).
+            Map<Double, Integer> ecarts = new LinkedHashMap<>();
+            for (int col = 0; col <= 1; col++) {
+                List<Double> ys = new ArrayList<>();
+                for (Ligne l : lignes) {
+                    if ((l.x >= ABSCISSE_COLONNE ? 1 : 0) == col) {
+                        ys.add(l.y);
+                    }
+                }
+                for (int i = 1; i < ys.size(); i++) {
+                    double e = Math.round((ys.get(i) - ys.get(i - 1)) * 2) / 2.0;
+                    if (e >= 3) {
+                        ecarts.merge(e, 1, Integer::sum);
+                    }
+                }
+            }
+            double interligne = ecarts.entrySet().stream().filter(x -> x.getValue() >= 2).map(Map.Entry::getKey)
+                    .min(Double::compare).orElse(10.0);
             Map<Integer, Paragraphe> ouverts = new LinkedHashMap<>();
             List<Paragraphe> pars = new ArrayList<>();
             for (Ligne l : lignes) {
                 int c = l.x >= ABSCISSE_COLONNE ? 1 : 0;
                 Paragraphe o = ouverts.get(c);
-                double pas = Math.max(l.h, 4.7) * 2.3;
+                double pas = interligne + 1;
                 if (o != null && l.y - o.yDernier > 0 && l.y - o.yDernier <= pas) {
                     o.texte.append(' ').append(l.texte);
                     o.yDernier = l.y;

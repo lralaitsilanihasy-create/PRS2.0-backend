@@ -127,6 +127,61 @@ class ModelesDaoFournituresTest {
         assertThat(ConditionsModele.defauts(m.elements(), m.conditions(), java.util.Set.of())).isEmpty();
     }
 
+    @Test
+    @DisplayName("29/09 (champs non imprimés, §B2) — CCAP à commande : avec B09-OM-02, la variation « dans la limite de 15 % » ; "
+            + "sans, la phrase s'arrête au Bordereau ; la quantité fixe n'a ni l'une ni l'autre")
+    void ccapVariationACommande() {
+        String debut = "Le Minimum et le Maximum des quantités susceptibles d’être commandées";
+        FicheMarcheDto avec = fiche("A_COMMANDE", Map.of("alloti", "NON"));
+        avec.setValeurs(new HashMap<>(Map.of("B09-OM-02", "15")));
+        String ccap = rendre("CCAP", "CCAP-F", null, avec);
+        assertThat(ccap).contains("dans la limite de 15 % en sus de maximum")
+                .doesNotContain("donné en Annexe à l’Acte d’Engagement.\n", "………..%");
+        assertThat(occurrences(ccap, debut)).isEqualTo(1);
+
+        String sans = rendre("CCAP", "CCAP-F", null, fiche("A_COMMANDE", Map.of("alloti", "NON")));
+        assertThat(sans).contains("précisés dans le Bordereau de Prix donné en Annexe à l’Acte d’Engagement.")
+                .doesNotContain("dans la limite de");
+        assertThat(occurrences(sans, debut)).isEqualTo(1);
+
+        assertThat(rendre("CCAP", "CCAP-F", null, fiche("QUANTITE_FIXE", Map.of("alloti", "NON")))).doesNotContain(debut);
+    }
+
+    @Test
+    @DisplayName("29/09 (§B2) — CCAP article 3 : les coordonnées de la PRMP dans son bloc, celui du Fournisseur en blanc ; plus "
+            + "de télécopie de la PRMP")
+    void ccapArticle3() {
+        FicheMarcheDto f = fiche("QUANTITE_FIXE", Map.of("alloti", "NON"));
+        f.setValeursPpm(new HashMap<>(Map.of("B01-AC-05", "RAKOTO Jean, PRMP", "B01-AC-02", "Rue de l'Indépendance",
+                "B01-AC-06", "prmp@ministere.mg", "B01-AC-01", "Ministère X")));
+        String ccap = rendre("CCAP", "CCAP-F", null, f);
+        int prmp = ccap.indexOf("les coordonnées de la Personne Responsable des Marchés Publics sont les suivantes");
+        int fournisseur = ccap.indexOf("les coordonnées du Fournisseur sont les suivantes");
+        int fin = ccap.indexOf("Article 4. - Groupements");
+        assertThat(prmp).isPositive().isLessThan(fournisseur);
+        String blocPrmp = ccap.substring(prmp, fournisseur);
+        String blocFournisseur = ccap.substring(fournisseur, fin);
+        assertThat(blocPrmp).contains("RAKOTO Jean, PRMP", "Rue de l'Indépendance", "prmp@ministere.mg").doesNotContain("Télécopie");
+        assertThat(blocFournisseur).contains("A l’attention de <insérer le nom>", "Télécopie : <insérer le n° >",
+                "Adresse électronique : <insérer l’adresse complète>")
+                .doesNotContain("RAKOTO", "Indépendance", "prmp@ministere.mg");
+    }
+
+    @Test
+    @DisplayName("29/09 (§B3) — DPAO 6.3 : les trois niveaux exigés, chacun sous la fiche qu'il précise")
+    void dpaoNiveauxDeQualification() {
+        FicheMarcheDto f = fiche("QUANTITE_FIXE", Map.of("alloti", "NON"));
+        f.setValeurs(new HashMap<>(Map.of("B03-CQ-02", "Deux véhicules de livraison", "B03-CQ-03",
+                "Chiffre d'affaires moyen de 100 000 000 Ariary", "B03-CQ-04", "Deux attestations de bonne fin")));
+        String dpao = rendre("DPAO", "DPAO-F", null, f);
+        assertThat(dpao).contains("Niveau exigé : Deux véhicules de livraison",
+                "Niveau exigé : Chiffre d'affaires moyen de 100 000 000 Ariary", "Pièces exigées : Deux attestations de bonne fin");
+        assertThat(dpao.indexOf("capacités techniques")).isLessThan(dpao.indexOf("Niveau exigé : Deux véhicules"));
+        assertThat(dpao.indexOf("Niveau exigé : Deux véhicules")).isLessThan(dpao.indexOf("capacité financière"));
+        assertThat(dpao.indexOf("capacité financière")).isLessThan(dpao.indexOf("Niveau exigé : Chiffre"));
+        assertThat(dpao.indexOf("Niveau exigé : Chiffre")).isLessThan(dpao.indexOf("Pièces exigées"));
+    }
+
     // ------------------------------------------------------------------ outils
 
     private String rendre(String type, String sigle, Integer lot, FicheMarcheDto f) {

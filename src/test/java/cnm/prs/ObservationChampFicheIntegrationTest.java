@@ -78,6 +78,9 @@ class ObservationChampFicheIntegrationTest extends CnmIntegrationTestSupport {
         }
         champService.importerCsv(new ClassPathResource("fiche-marche/referentiel-champs-fiche-marche-fournitures.csv")
                 .getFile().toPath());
+        // ⚠️ 2026-09-29 — B05-TP-02 est retiré de la fiche des fournitures (demande front « champs non imprimés ») ; ce test
+        // l'emploie comme exemple de champ par lot du mécanisme éprouvé ici, pas du référentiel : il le réactive.
+        reactiverMontantMinimum();
 
         idDmc = creerDmc(9902);
         cadrage(idDmc, "OUI");
@@ -266,5 +269,14 @@ class ObservationChampFicheIntegrationTest extends CnmIntegrationTestSupport {
         l.setFormeMarche(FormeMarche.A_COMMANDE);
         l.setDesignationMarche("Acquisition de matériels informatiques " + idDetail);
         marcheRepository.save(l);
+    }
+
+    @Autowired private cnm.prs.repository.ChampFicheMarcheRepository champsRepo;
+
+    /** ⚠️ 2026-09-29 — le champ par lot de l'exemple (B05-TP-02, retiré des fournitures le 29/09) remis actif pour ce test. */
+    private void reactiverMontantMinimum() {
+        cnm.prs.entity.ChampFicheMarche c = champsRepo.findById("B05-TP-02").orElseThrow();
+        c.setActif(true);
+        champsRepo.save(c);
     }
 }
