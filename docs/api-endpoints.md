@@ -4616,6 +4616,22 @@ pour le même marché → **409** `DAO_EXISTANT`. Au **changement de mode** d'un
 > il est **remis** (« Lancé », ordre 11, actif) pour que la ligne se ré-enregistre ensuite. Le geste inverse — la
 > suppression de la fiche et de son DMC — rend `PREVU` à toute la filiation `LANCE` (§ *Défaire une fiche marché*).
 > Rattrapage des lignes d'avant la règle : `docs/referentiel/2026-09-27-statut-lance-dmc.sql`.
+>
+> ⚠️ **2026-09-30 — règle revue (décision du pilote, demande `frontend/docs/demande-backend-2026-09-30-statut-lance-avis.md`).**
+> La création du DMC **ne touche plus le statut** ; `DmcDto.statutLigne` est le statut tel quel (en règle générale
+> `PREVU`) et le journal n'écrit plus `LIGNE_LANCEE` ici.
+> - **La ligne passe `LANCE` à la première impression de son avis spécifique** (`POST /api/fiches-marche/{idDmc}/avis-specifique`),
+>   ligne du DMC et filiation, statut manuel conservé. Journal du plan `LIGNE_LANCEE` : « Ligne n : avis spécifique
+>   imprimé (publication du JJ/MM/AAAA), statut PREVU → LANCE » ou « … statut CHDP conservé (statut manuel) ».
+> - **Garde du statut** (`PUT /api/marches/{id}`, `PATCH …/rectifier`), 400 nominatif `statut` :
+>   - `LANCE` sans avis imprimé : refusé (« Le marché passe « Lancé » à l'impression de son avis spécifique. »), sauf
+>     sur une ligne déjà `LANCE` ;
+>   - `PREVU` après l'avis : refusé (« L'avis spécifique de ce marché est imprimé : il ne redevient pas « Prévu ». ») ;
+>   - `CHDP` et `DSS` : libres ;
+>   - statut absent : inchangé, pour toute ligne.
+> - **`MarcheDto.avisImprimeLe`** (`AAAA-MM-JJ` ou `null`) : la première impression de l'avis de la filiation.
+>
+> Rattrapage : `docs/referentiel/2026-09-30-statut-lance-avis.sql`.
 
 **Champs `DmcDto`** : `idDmc`, `idDetail`, `idTypeDmc`, `typeDmcCode`/`typeDmcLibelle` (dérivés, lecture seule),
 `reference` (nullable), `statut` (`A_PREPARER`/`ENGAGE`), `dateCreation` ; ⚠️ 2026-09-22 sur la réponse du `POST`

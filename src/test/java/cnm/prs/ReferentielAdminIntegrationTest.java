@@ -697,12 +697,12 @@ class ReferentielAdminIntegrationTest extends CnmIntegrationTestSupport {
         // DMC créé → BC.
         mvc.perform(post("/api/dmcs/par-marche/9703").header("Authorization", tokenAdmin))
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.typeDmcCode").value("BC"));
-        // Changement de mode du marché → 92 (Appel d'offres ouvert = DAO). ⚠️ 2026-09-27 (statut « Lancé ») : la création du
-        // DMC a posé LANCE sur la ligne ; un retour explicite à PREVU serait refusé (400), le statut est donc omis (inchangé).
+        // Changement de mode du marché → 92 (Appel d'offres ouvert = DAO). ⚠️ 2026-09-30 (statut « Lancé » à l'avis) : la
+        // création du DMC ne touche plus le statut ; omis, il reste inchangé (PREVU).
         mvc.perform(put("/api/marches/9703").header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"idDossier\":9710,\"idPpm\":1,\"designationMarche\":\"M\",\"idMode\":92}"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.statut").value("LANCE"));
+                .andExpect(status().isOk()).andExpect(jsonPath("$.statut").value("PREVU"));
         // DMC re-dérivé → DAO.
         mvc.perform(get("/api/dmcs/par-marche/9703").header("Authorization", tokenAdmin))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.typeDmcCode").value("DAO"));

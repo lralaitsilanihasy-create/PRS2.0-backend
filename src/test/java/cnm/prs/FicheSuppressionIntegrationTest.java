@@ -99,7 +99,7 @@ class FicheSuppressionIntegrationTest extends CnmIntegrationTestSupport {
         String journal = mvc.perform(get("/api/dossiers/9900/journal").header("Authorization", tokenPresident))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<List<String>>read(journal, "$[?(@.typeAction=='FICHE_MARCHE_SUPPRIMEE')].detail"))
-                .containsExactly("DAO de la ligne 9901 (DMC " + idDmc + ") supprimé, sans historique ; statut rendu à PREVU (ligne 9901)");   // 2026-09-27 : statut « Lancé » rendu
+                .containsExactly("DAO de la ligne 9901 (DMC " + idDmc + ") supprimé, sans historique");   // 2026-09-30 : la création du DMC ne lance plus la ligne, rien à rendre
 
         Long vierge = creerDmc(9901);   // la ligne s'est rouverte ; une fiche jamais écrite se supprime aussi
         mvc.perform(delete("/api/fiches-marche/" + vierge).header("Authorization", tokenPrmp)).andExpect(status().isNoContent());

@@ -206,7 +206,50 @@ class AvisSpecifiqueIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(JsonPath.<List<String>>read(v1, "$[*].type")).doesNotContain("AVIS");
     }
 
+    @Test
+    @DisplayName("Statut « Lancé » (décision du 30/09, §B2) — la fiche laisse la ligne PREVU ; la première impression la passe "
+            + "LANCE (journal LIGNE_LANCEE, avisImprimeLe) ; une réimpression ne change rien et n'écrit rien")
+    void premiereImpressionLanceLaLigne() throws Exception {
+        int idDossier = creerDossier();
+        pvSigne(idDossier, "FAV", "PV_SIGNE");
+        mvc.perform(get("/api/marches/9901").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.statut").value("PREVU")).andExpect(jsonPath("$.avisImprimeLe").isEmpty());
+
+        imprimer(idDmc).andExpect(status().isCreated());
+        mvc.perform(get("/api/marches/9901").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.statut").value("LANCE"))
+                .andExpect(jsonPath("$.avisImprimeLe").value(java.time.LocalDate.now().toString()));
+        assertThat(lancements()).containsExactly(
+                "Ligne 9901 : avis spécifique imprimé (publication du 05/10/2026), statut PREVU → LANCE");
+
+        imprimer(idDmc).andExpect(status().isCreated());
+        assertThat(lancements()).hasSize(1);
+        mvc.perform(get("/api/marches/9901").header("Authorization", tokenPrmp)).andExpect(jsonPath("$.statut").value("LANCE"));
+    }
+
+    @Test
+    @DisplayName("Statut « Lancé » (§B2) — un statut manuel (CHDP) n'est pas écrasé ; l'impression reste possible, le journal "
+            + "le dit")
+    void statutManuelConserve() throws Exception {
+        Marche l = marcheRepository.findById(9901).orElseThrow();
+        l.setStatut("CHDP");
+        marcheRepository.saveAndFlush(l);
+        int idDossier = creerDossier();
+        pvSigne(idDossier, "FAV", "PV_SIGNE");
+        imprimer(idDmc).andExpect(status().isCreated());
+        mvc.perform(get("/api/marches/9901").header("Authorization", tokenPrmp)).andExpect(jsonPath("$.statut").value("CHDP"));
+        assertThat(lancements()).containsExactly(
+                "Ligne 9901 : avis spécifique imprimé (publication du 05/10/2026), statut CHDP conservé (statut manuel)");
+    }
+
     // ------------------------------------------------------------------ outils
+
+    /** Les détails du journal LIGNE_LANCEE du plan 9900. */
+    private List<String> lancements() throws Exception {
+        String journal = mvc.perform(get("/api/dossiers/9900/journal").header("Authorization", tokenPresident))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        return JsonPath.read(journal, "$[?(@.typeAction=='LIGNE_LANCEE')].detail");
+    }
 
     private org.springframework.test.web.servlet.ResultActions disponibilite(Long dmc) throws Exception {
         return mvc.perform(get("/api/fiches-marche/" + dmc + "/avis-specifique/disponibilite").header("Authorization", tokenPrmp))

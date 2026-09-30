@@ -136,12 +136,17 @@ public class DmcService {
     /** ⚠️ 2026-09-27 — le référentiel des statuts : LANCE y est remis s'il en avait disparu (seul PREVU est indestructible). */
     private final cnm.prs.repository.StatutMarcheRepository statutMarcheRepository;
 
+    /** ⚠️ 2026-09-30 — les avis spécifiques imprimés (date de lancement d'une ligne). */
+    private final cnm.prs.repository.DocumentFicheMarcheRepository documentRepository;
+
     public DmcService(DossierMecRepository repository, MarcheRepository marcheRepository,
             ModePassationRepository modeRepository, TypeDmcRepository typeDmcRepository,
             PerimetreDossier perimetre, DossierRepository dossierRepository,
             DossierIntegriteService dossierIntegrite, ValeursPpmService valeursPpm,
             ChampFicheMarcheRepository champRepository, cnm.prs.repository.NatureRepository natureRepository,
-            JournalDossierService journal, cnm.prs.repository.StatutMarcheRepository statutMarcheRepository) {
+            JournalDossierService journal, cnm.prs.repository.StatutMarcheRepository statutMarcheRepository,
+            cnm.prs.repository.DocumentFicheMarcheRepository documentRepository) {
+        this.documentRepository = documentRepository;
         this.journal = journal;
         this.statutMarcheRepository = statutMarcheRepository;
         this.natureRepository = natureRepository;
@@ -196,30 +201,10 @@ public class DmcService {
         dmc.setDateCreation(LocalDateTime.now());
         DossierMec saved = repository.save(dmc);
         saved.setTypeDmc(type);   // pour l'affichage code/libellé (association lecture seule)
-        // ⚠️ 2026-09-27 (règle du pilote, demande front « statut Lancé », §B1) — le statut suit le fait : la ligne
-        // restée « Prévu » (ou sans statut) passe LANCE dans la même transaction ; un statut manuel (CHDP, DSS) n'est
-        // pas écrasé — la création reste possible (relancer un projet changé), la réponse et le journal le disent.
-        String avant = marche.getStatut() == null ? "" : marche.getStatut().trim();
-        boolean prevu = avant.isEmpty() || StatutMarcheService.CODE_DEFAUT.equalsIgnoreCase(avant);
-        if (prevu) {
-            if (!statutMarcheRepository.existsById(StatutMarcheService.CODE_LANCE)) {
-                // Le code doit exister pour que la ligne se ré-enregistre ensuite (normaliser refuse un code inconnu) :
-                // remis tel que V24 / le référentiel de recette le portent.
-                statutMarcheRepository.save(new cnm.prs.entity.StatutMarche(StatutMarcheService.CODE_LANCE, "Lancé", 11, true));
-            }
-            marche.setStatut(StatutMarcheService.CODE_LANCE);
-            marcheRepository.save(marche);
-        }
-        if (marche.getIdDossier() != null) {
-            String detail = "Ligne " + idDetail + " : DMC " + saved.getIdDmc() + " créé, statut "
-                    + (prevu ? (avant.isEmpty() ? "(vide)" : avant) + " → " + StatutMarcheService.CODE_LANCE
-                            : avant + " conservé (statut manuel)");
-            if (Visibilite.estPrmp()) {
-                journal.tracer(marche.getIdDossier(), JournalDossierService.LIGNE_LANCEE, detail);
-            } else {
-                journal.tracerControleur(marche.getIdDossier(), JournalDossierService.LIGNE_LANCEE, detail);
-            }
-        }
+        // ⚠️ 2026-09-30 (décision du pilote, demande front « Lancé à l'avis spécifique », §B1) — la création du DMC ne
+        // touche plus le statut : la fiche DAO et son examen sont la PRÉPARATION, la ligne reste « Prévu ». Elle passe
+        // « Lancé » à la première impression de son avis spécifique (AvisSpecifiqueService#lancerLigne). La règle du
+        // 27/09 (LANCE posé ici, journal LIGNE_LANCEE) est retirée.
         DmcDto dto = DmcMapper.toDto(saved);
         dto.setStatutLigne(marche.getStatut());
         ValeursPpmService.ValeursPpm ppm = valeursPpm.lire(idDetail);
@@ -434,6 +419,30 @@ public class DmcService {
             return null;
         }
         return repository.findParFiliation(ligne.getIdLigneOrigine()).stream().map(DossierMec::getIdDmc).findFirst().orElse(null);
+    }
+
+    /**
+     * ⚠️ 2026-09-30 (statut « Lancé » à l'avis, §B3 / §B4) — la date de la première impression de l'avis spécifique de la
+     * filiation de la ligne, {@code null} sans avis.
+     */
+    @Transactional(readOnly = true)
+    public java.time.LocalDate avisImprimeLe(Marche ligne) {
+        if (ligne == null) {
+            return null;
+        }
+        java.time.LocalDateTime d = documentRepository.premierAvisDeLaFiliation(ligne.getIdLigneOrigine() != null
+                ? ligne.getIdLigneOrigine() : ligne.getIdDetail());
+        return d == null ? null : d.toLocalDate();
+    }
+
+    /** La même date pour chaque filiation ({@code origine → date}), en une requête, pour une liste de lignes. */
+    @Transactional(readOnly = true)
+    public Map<Integer, java.time.LocalDate> avisParOrigine() {
+        Map<Integer, java.time.LocalDate> out = new HashMap<>();
+        for (Object[] ligne : documentRepository.premiersAvisParOrigine()) {
+            out.put((Integer) ligne[0], ((java.time.LocalDateTime) ligne[1]).toLocalDate());
+        }
+        return out;
     }
 
     /** Le DMC vivant de chaque filiation ({@code origine → idDmc}), en une requête, pour une liste de lignes. */

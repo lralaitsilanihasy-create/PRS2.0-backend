@@ -86,10 +86,18 @@ public class AvisSpecifiqueService {
     private final DocumentsFicheMarcheService documents;
     private final DossierIntegriteService dossierIntegrite;
     private final JournalDossierService journal;
+    private final cnm.prs.repository.MarcheRepository marcheRepository;
+    private final cnm.prs.repository.StatutMarcheRepository statutMarcheRepository;
+    private final cnm.prs.repository.DocumentFicheMarcheRepository documentRepository;
 
     public AvisSpecifiqueService(FicheMarcheService fiches, FicheMarcheRepository ficheRepository,
             DossierRepository dossierRepository, PvExamenRepository pvRepository, DocumentsFicheMarcheService documents,
-            DossierIntegriteService dossierIntegrite, JournalDossierService journal) {
+            DossierIntegriteService dossierIntegrite, JournalDossierService journal,
+            cnm.prs.repository.MarcheRepository marcheRepository, cnm.prs.repository.StatutMarcheRepository statutMarcheRepository,
+            cnm.prs.repository.DocumentFicheMarcheRepository documentRepository) {
+        this.marcheRepository = marcheRepository;
+        this.statutMarcheRepository = statutMarcheRepository;
+        this.documentRepository = documentRepository;
         this.fiches = fiches;
         this.ficheRepository = ficheRepository;
         this.dossierRepository = dossierRepository;
@@ -125,6 +133,9 @@ public class AvisSpecifiqueService {
         FicheMarche validee = derniereValidee(idDmc);
         FicheMarcheDto etat = fiches.lireVersion(idDmc, validee.getNumeroVersion());
         LocalDateTime maintenant = LocalDateTime.now();
+        cnm.prs.entity.Marche ligne = etat.getIdDetail() == null ? null : marcheRepository.findById(etat.getIdDetail()).orElse(null);
+        Integer origine = ligne == null ? null : ligne.getIdLigneOrigine() != null ? ligne.getIdLigneOrigine() : ligne.getIdDetail();
+        boolean premiereImpression = origine == null || documentRepository.premierAvisDeLaFiliation(origine) == null;
         Map<String, String> trace = new LinkedHashMap<>();
         trace.put("datePublication", corps.datePublication().trim());
         trace.put("jmpNumero", corps.jmpNumero().trim());
@@ -133,12 +144,49 @@ public class AvisSpecifiqueService {
         Set<Integer> ids = documents.enregistrerAvis(validee.getIdFiche(),
                 documents.produireAvis(etat, publication, maintenant), maintenant,
                 DocumentsFicheMarcheService.publicationJson(trace));
+        lancerLigne(ligne, origine, premiereImpression, publication.get("date-publication"));
         journal.tracer(dispo.idDossierSoumis(), JOURNAL_AVIS_IMPRIME, "Avis spécifique d'appel d'offres imprimé (fiche "
                 + "marché version " + validee.getNumeroVersion() + ", publication du " + publication.get("date-publication") + ")");
         List<DocumentFicheDto> produits = new ArrayList<>(documents.listerAvis(List.of(validee)).stream()
                 .filter(d -> ids.contains(d.idDocument())).toList());
         produits.sort(java.util.Comparator.comparing(DocumentFicheDto::idDocument));
         return produits;
+    }
+
+    /**
+     * ⚠️ 2026-09-30 (décision du pilote, demande front « Lancé à l'avis spécifique », §B2) — le statut suit la
+     * <strong>publication</strong> : à l'impression, la ligne du DMC et sa filiation vivante (la copie d'une mise à jour
+     * en cours) passent de {@code PREVU} (ou sans statut) à {@code LANCE}. Un statut manuel ({@code CHDP}, {@code DSS})
+     * n'est pas écrasé. Journal {@code LIGNE_LANCEE} sur le plan à la première impression (ou quand une ligne passe
+     * encore « Lancé ») ; une réimpression d'une ligne déjà lancée ne change rien et n'écrit rien.
+     */
+    private void lancerLigne(cnm.prs.entity.Marche ligne, Integer origine, boolean premiereImpression, String datePublication) {
+        if (ligne == null) {
+            return;
+        }
+        String avant = ligne.getStatut() == null ? "" : ligne.getStatut().trim();
+        boolean lancees = false;
+        for (cnm.prs.entity.Marche m : marcheRepository.findFiliation(origine)) {
+            String s = m.getStatut() == null ? "" : m.getStatut().trim();
+            if (s.isEmpty() || StatutMarcheService.CODE_DEFAUT.equalsIgnoreCase(s)) {
+                if (!statutMarcheRepository.existsById(StatutMarcheService.CODE_LANCE)) {
+                    // Le code doit exister pour que la ligne se ré-enregistre (normaliser refuse un code inconnu).
+                    statutMarcheRepository.save(new cnm.prs.entity.StatutMarche(StatutMarcheService.CODE_LANCE, "Lancé", 11, true));
+                }
+                m.setStatut(StatutMarcheService.CODE_LANCE);
+                marcheRepository.save(m);
+                lancees = true;
+            }
+        }
+        if (ligne.getIdDossier() == null || !premiereImpression && !lancees) {
+            return;
+        }
+        boolean prevu = avant.isEmpty() || StatutMarcheService.CODE_DEFAUT.equalsIgnoreCase(avant);
+        String detail = "Ligne " + ligne.getIdDetail() + " : avis spécifique imprimé (publication du " + datePublication
+                + "), statut " + (prevu ? (avant.isEmpty() ? "(vide)" : avant) + " → " + StatutMarcheService.CODE_LANCE
+                        : StatutMarcheService.CODE_LANCE.equalsIgnoreCase(avant) ? StatutMarcheService.CODE_LANCE + " conservé"
+                                : avant + " conservé (statut manuel)");
+        journal.tracer(ligne.getIdDossier(), JournalDossierService.LIGNE_LANCEE, detail);
     }
 
     private AvisDisponibiliteDto evaluer(Long idDmc, FicheMarcheDto courante) {

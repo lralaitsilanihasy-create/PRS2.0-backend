@@ -97,7 +97,8 @@ public class MarcheService {
                     : repository.findVisiblesParLocalitePagine(localite, page);
         }
         java.util.Map<Integer, Long> dmcs = dmcService.dmcParOrigine();
-        return scopees.map(m -> avecDmc(m, dmcs));
+        java.util.Map<Integer, java.time.LocalDate> avis = dmcService.avisParOrigine();
+        return scopees.map(m -> avecDmc(m, dmcs, avis));
     }
 
     @Transactional(readOnly = true)
@@ -112,7 +113,8 @@ public class MarcheService {
             scopees = Visibilite.localite().map(repository::findVisiblesParLocalite).orElseGet(List::of);
         }
         java.util.Map<Integer, Long> dmcs = dmcService.dmcParOrigine();
-        return scopees.stream().map(m -> avecDmc(m, dmcs)).toList();
+        java.util.Map<Integer, java.time.LocalDate> avis = dmcService.avisParOrigine();
+        return scopees.stream().map(m -> avecDmc(m, dmcs, avis)).toList();
     }
 
     @Transactional(readOnly = true)
@@ -127,42 +129,48 @@ public class MarcheService {
     private MarcheDto avecDmc(Marche entity) {
         MarcheDto dto = MarcheMapper.toDto(entity);
         dto.setIdDmc(dmcService.idDmcVivant(entity));
+        dto.setAvisImprimeLe(dmcService.avisImprimeLe(entity));   // ⚠️ 2026-09-30 (§B4)
         return dto;
     }
 
-    private static MarcheDto avecDmc(Marche entity, java.util.Map<Integer, Long> dmcParOrigine) {
+    private static MarcheDto avecDmc(Marche entity, java.util.Map<Integer, Long> dmcParOrigine,
+            java.util.Map<Integer, java.time.LocalDate> avisParOrigine) {
         MarcheDto dto = MarcheMapper.toDto(entity);
         dto.setIdDmc(dmcParOrigine.get(entity.getIdLigneOrigine()));
+        dto.setAvisImprimeLe(avisParOrigine.get(entity.getIdLigneOrigine()));
         return dto;
     }
 
     /**
-     * ⚠️ 2026-09-27 (règle du pilote, demande front « statut Lancé », §B3) — le statut demandé, validé par le
-     * référentiel, puis confronté au dossier de mise en concurrence <strong>vivant</strong> de la ligne : une ligne en
-     * mise en concurrence <strong>ne redevient pas « Prévu » à la main</strong> (400 nominatif {@code statut}) ; un
-     * statut absent la laisse telle qu'elle est (un réimport du plan ne la ramène pas à « Prévu ») ; une ligne restée
-     * « Prévu » d'avant la règle se ré-enregistre telle quelle (on ne cache jamais la valeur affichée). {@code CHDP} et
-     * {@code DSS} restent libres.
+     * ⚠️ 2026-09-30 (décision du pilote, demande front « Lancé à l'avis spécifique », §B3 ; remplace la règle du 27/09) —
+     * le statut demandé, validé par le référentiel, puis confronté à l'<strong>avis spécifique</strong> de la ligne (de
+     * sa filiation) : « Lancé » ne se choisit qu'une fois l'avis imprimé (sauf une ligne déjà « Lancé », qui se
+     * ré-enregistre telle quelle) ; « Prévu » ne se choisit plus après (400 nominatif {@code statut}, validé avant toute
+     * mutation). Une fiche DAO seule n'empêche plus « Prévu ». Statut absent : inchangé, pour toute ligne (un réimport
+     * ne touche pas le statut). {@code CHDP} et {@code DSS} restent libres.
      */
     private String statutCompatibleAvecDmc(Marche existing, String demande) {
-        String code = statutMarcheService.normaliser(demande);
-        if (!StatutMarcheService.CODE_DEFAUT.equalsIgnoreCase(code)) {
-            return code;
-        }
-        Long idDmc = dmcService.idDmcVivant(existing);
-        if (idDmc == null) {
-            return code;
-        }
         String actuel = existing.getStatut() == null ? "" : existing.getStatut().trim();
         if (demande == null || demande.isBlank()) {
-            return actuel.isEmpty() ? StatutMarcheService.CODE_LANCE : actuel;   // absent = inchangé sur une ligne lancée
+            // ⚠️ 2026-09-30 (§B3) — absent = inchangé, pour toute ligne (un réimport du plan ne touche pas le statut).
+            return actuel.isEmpty() ? StatutMarcheService.CODE_DEFAUT : actuel;
         }
-        if (StatutMarcheService.CODE_DEFAUT.equalsIgnoreCase(actuel)) {
-            return code;   // restée « Prévu » avant la règle (ou avant le rattrapage) : se ré-enregistre
+        String code = statutMarcheService.normaliser(demande);
+        boolean lance = StatutMarcheService.CODE_LANCE.equalsIgnoreCase(code);
+        boolean prevu = StatutMarcheService.CODE_DEFAUT.equalsIgnoreCase(code);
+        if (!lance && !prevu) {
+            return code;   // CHDP, DSS : libres
         }
-        throw new cnm.prs.exception.ChampsInvalidesException(List.of(new cnm.prs.exception.ErrorResponse.FieldError("statut",
-                "La ligne est en mise en concurrence (dossier de mise en concurrence n° " + idDmc + ") : elle ne redevient pas "
-                        + "« Prévu ». Supprimez la fiche DAO pour la rendre préparable.")));
+        boolean avis = dmcService.avisImprimeLe(existing) != null;
+        if (lance && !avis && !StatutMarcheService.CODE_LANCE.equalsIgnoreCase(actuel)) {
+            throw new cnm.prs.exception.ChampsInvalidesException(List.of(new cnm.prs.exception.ErrorResponse.FieldError("statut",
+                    "Le marché passe « Lancé » à l'impression de son avis spécifique.")));
+        }
+        if (prevu && avis) {
+            throw new cnm.prs.exception.ChampsInvalidesException(List.of(new cnm.prs.exception.ErrorResponse.FieldError("statut",
+                    "L'avis spécifique de ce marché est imprimé : il ne redevient pas « Prévu ».")));
+        }
+        return code;
     }
 
     /**

@@ -40,9 +40,10 @@ public class DmcDto {
     private Integer idDossierSoumis;
 
     /**
-     * ⚠️ 2026-09-27 (règle du pilote, statut « Lancé », §B1) — sur la réponse de {@code POST /par-marche/{idDetail}} : le
-     * statut de la ligne du plan <strong>après</strong> la création — {@code LANCE} posé par le serveur, ou le statut
-     * manuel conservé ({@code CHDP}, {@code DSS}). {@code null} ailleurs.
+     * ⚠️ 2026-09-27 (statut « Lancé », §B1) — sur la réponse de {@code POST /par-marche/{idDetail}} : le statut de la ligne
+     * du plan après la création. ⚠️ Depuis le 2026-09-30, la création ne le change plus : c'est le statut de la ligne
+     * tel quel ({@code PREVU} en règle générale) ; elle passe {@code LANCE} à l'impression de son avis spécifique.
+     * {@code null} ailleurs.
      */
     private String statutLigne;
 }

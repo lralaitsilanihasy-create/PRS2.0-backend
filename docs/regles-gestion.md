@@ -2822,6 +2822,17 @@ Accès complet aux référentiels, comptes utilisateurs, journal d'audit, hiéra
     oublier la mise en concurrence. La ligne dit au front son dossier de mise en concurrence vivant (`idDmc`) ; la
     grille n'a rien à déduire. Journal du plan : `LIGNE_LANCEE`. Contrat : `docs/api-endpoints.md`, § *Marchés* et
     § *Dossiers de mise en concurrence*.
+  - ⚠️ **Revue le 2026-09-30 (décision du pilote : « Le statut du marché ne doit être changé en Lancé que lorsque
+    l'avis spécifique est imprimé »).** Le statut suit la **publication**, plus la préparation :
+    - la fiche DAO et son examen font partie de la préparation, et la ligne reste « Prévu » ;
+    - elle passe « Lancé » à la **première impression de son avis spécifique**, sur toute sa filiation ; un statut
+      manuel n'est pas écrasé ;
+    - « Lancé » ne se choisit plus à la main avant l'avis. Une ligne déjà « Lancé » se ré-enregistre telle quelle ;
+    - « Prévu » ne se choisit plus après l'avis. Une fiche DAO seule ne l'empêche plus ;
+    - un statut absent laisse toute ligne telle qu'elle est.
+
+    La ligne dit au front la date de son premier avis imprimé (`avisImprimeLe`). Les lignes lancées à la création
+    de leur DMC sans avis imprimé reviennent à « Prévu » (`docs/referentiel/2026-09-30-statut-lance-avis.sql`).
 - Grilles de contrôle & règles d'anomalie [Écriture]
   - Configuration de tr_points_ctrl et t_regle_anomalie.
 - Comptes budgétaires & entités contractantes [Écriture]

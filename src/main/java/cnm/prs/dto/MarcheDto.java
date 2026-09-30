@@ -86,6 +86,13 @@ public class MarcheDto {
      */
     private Long idDmc;
 
+    /**
+     * ⚠️ 2026-09-30 (décision du pilote, demande front « Lancé à l'avis spécifique », §B4) — la date de la
+     * <strong>première</strong> impression de l'avis spécifique de la ligne (de sa filiation), {@code null} sans avis.
+     * Lecture seule, posée par le serveur : la grille propose « Lancé » seulement après, « Prévu » seulement avant.
+     */
+    private java.time.LocalDate avisImprimeLe;
+
     private Integer idNature;
 
     private Integer idMode;
