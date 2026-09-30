@@ -129,3 +129,21 @@ graines de bruit. Ce banc remplace les fiches 27 et 16 disparues avec le vidage 
 La parité avec `lire.mjs` (522ed99) est vérifiée sur cinq entrées : les `.docx` et le PDF du contrat-cadre de la fiche 27,
 le PDF réel du 2463, et le rendu brut des modèles D2 et PI. L'extraction est identique, et la lecture aussi aux conflits
 de cadrage près. Un test rejoue chaque règle sur un cas qui échouait avant, vérifié sur la version précédente du lecteur.
+
+## Complément du 2026-09-30 (lot D4) — deux règles de plus
+
+Le front les a mesurées sur le banc synthétique, étendu aux travaux (commit d1e3c90). Avec bruit, sur huit graines et
+tous modèles, la lecture donne 144 valeurs justes de plus pour 5 fausses de plus, et aucune en confiance haute. Les deux
+règles sont portées dans `LectureDao` telles quelles :
+- **R-a, texte répété** : un paragraphe dont le texte fixe se répète ailleurs dans le modèle (« Non applicable ») ne se
+  cherche que dans les 3 paragraphes qui suivent le curseur (`FENETRE_REPETE`), et non plus 60. Absent du document, il
+  se raccrochait à la répétition d'un article plus loin, et la lecture sautait tout ce qui les séparait.
+- **R-b, section absente** : une section est absente quand elle a au moins un paragraphe distinctif et qu'aucun de ses
+  paragraphes n'est reconnu. Ses jetons seuls sont écartés d'un intervalle à plusieurs jetons. S'il n'en reste qu'un,
+  il est lu, mais en confiance basse.
+
+Le front a aussi aligné sa lecture des conditions sur `DEBUT_TERME` : « et » et « ou » ne séparent deux termes que
+devant une clé et un opérateur. L'écart « Au fur et à mesure des besoins » est donc résorbé. La parité est vérifiée sur
+sept entrées : les cinq précédentes, plus les rendus bruts des travaux et du contrat-cadre recopié. L'extraction et la
+lecture sont identiques, y compris les conflits. Il ne reste que l'écart de sortie sur une clé de cadrage en conflit :
+le front la garde aussi dans `cadrage`.

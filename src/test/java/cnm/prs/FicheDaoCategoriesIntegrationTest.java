@@ -87,8 +87,11 @@ class FicheDaoCategoriesIntegrationTest extends CnmIntegrationTestSupport {
         // V50 (2026-09-27) — les seize champs saisis de la remise électronique (B04-SE-02 à -17) aussi.
         List<String> troisCategories = new java.util.ArrayList<>(List.of("B02-OB-03", "B03-CQ-01", "B03-CQ-09", "B03-CQ-10"));
         java.util.stream.IntStream.rangeClosed(2, 17).forEach(i -> troisCategories.add(String.format("B04-SE-%02d", i)));
+        // ⚠️ Lot D4 (2026-09-30, V55) — un seul délai de validité des offres, B04-VO-01, pour les fournitures et les travaux.
+        List<String> fournituresEtTravaux = new java.util.ArrayList<>(troisCategories);
+        fournituresEtTravaux.add("B04-VO-01");
         assertThat(JsonPath.<List<String>>read(travaux, "$.champs[?(@.source=='SAISIE')].code"))
-                .containsExactlyInAnyOrderElementsOf(troisCategories);
+                .containsExactlyInAnyOrderElementsOf(fournituresEtTravaux);
         // Rubriques : celles du plan, plus celles des travaux (V41) encore sans champ dans ce jeu — servies « à compléter » ;
         // aucune des fournitures.
         assertThat(JsonPath.<List<String>>read(travaux, "$.blocs[*].rubriques[*].code"))

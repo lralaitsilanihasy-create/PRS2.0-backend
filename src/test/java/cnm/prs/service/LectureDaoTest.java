@@ -114,6 +114,65 @@ class LectureDaoTest {
     }
 
     @Test
+    @DisplayName("Lot D4 (R-a, 2026-09-30) : un texte que le modèle répète (« Non applicable ») ne se cherche qu'à 3 paragraphes "
+            + "du curseur — absent, il ne se raccroche plus à celui d'un article plus loin, et l'article sauté est relu")
+    void regleTexteRepete() {
+        FichierCommande.Modele modele = FichierCommande.lireModele(String.join("\n",
+                "PARA\tArticle 7 - Garanties de bonne exécution du marché",
+                "PARA\tNon applicable",
+                "PARA\tArticle 8 - Assurances des entrepreneurs et des ouvrages",
+                "PARA\t{{B09-AC-01}}",
+                "PARA\tArticle 9 - Obligation de discrétion et mesures de sécurité",
+                "PARA\tNon applicable",
+                "PARA\tArticle 10 - Fin des clauses particulières"));
+        List<String> doc = LectureDao.unitesDocument(List.of(
+                "Article 7 - Garanties de bonne exécution du marché",
+                "Une garantie de bonne exécution de 5 % est exigée.",
+                "Article 8 - Assurances des entrepreneurs et des ouvrages",
+                "Police tous risques chantier souscrite par l'entrepreneur",
+                "Article 9 - Obligation de discrétion et mesures de sécurité",
+                "Non applicable",
+                "Article 10 - Fin des clauses particulières"));
+        LectureDao.Resultat r = LectureDao.lire("T", modele, doc, c -> null);
+        assertThat(r.propositions()).extracting(p -> p.code() + "=" + p.valeur())
+                .contains("B09-AC-01=Police tous risques chantier souscrite par l'entrepreneur");
+        assertThat(r.nonTrouves()).doesNotContain("B09-AC-01");
+    }
+
+    @Test
+    @DisplayName("Lot D4 (R-b, 2026-09-30) : les jetons seuls d'une section absente (aucun de ses paragraphes distinctifs "
+            + "reconnu) ne rendent plus l'intervalle ambigu ; le jeton restant est lu en confiance basse")
+    void regleSectionAbsente() {
+        String modele = String.join("\n",
+                "CONDITION\tALLOTI\u001Falloti = OUI",
+                "PARA\tArticle 2 - Objet du marché et description des travaux",
+                "PARA\t{{B02-OT-02}}.",
+                "PARA\t{{SI:ALLOTI}}",
+                "PARA\tLes travaux sont répartis en lots désignés comme suit dans le présent marché :",
+                "PARA\t{{B02-LV-02}}",
+                "PARA\t{{FINSI:ALLOTI}}",
+                "PARA\tArticle 3 - Pièces constitutives du marché");
+        List<String> nonAlloti = LectureDao.unitesDocument(List.of(
+                "Article 2 - Objet du marché et description des travaux",
+                "Construction d'une école primaire à Antsirabe.",
+                "Article 3 - Pièces constitutives du marché"));
+        LectureDao.Resultat r = LectureDao.lire("T", FichierCommande.lireModele(modele), nonAlloti, c -> null);
+        assertThat(r.ambigus()).isEmpty();
+        assertThat(r.propositions()).extracting(p -> p.code() + "=" + p.valeur() + ":" + p.confiance().libelle())
+                .containsExactly("B02-OT-02=Construction d'une école primaire à Antsirabe:basse");
+
+        // La section présente (son paragraphe distinctif reconnu) : chaque jeton a son propre intervalle, rien n'est écarté.
+        List<String> alloti = LectureDao.unitesDocument(List.of(
+                "Article 2 - Objet du marché et description des travaux",
+                "Construction de deux écoles primaires.",
+                "Les travaux sont répartis en lots désignés comme suit dans le présent marché :",
+                "Lot 1 : Antsirabe ; Lot 2 : Betafo",
+                "Article 3 - Pièces constitutives du marché"));
+        LectureDao.Resultat r2 = LectureDao.lire("T", FichierCommande.lireModele(modele), alloti, c -> null);
+        assertThat(r2.propositions()).extracting(LectureDao.Proposition::code).contains("B02-OT-02", "B02-LV-02");
+    }
+
+    @Test
     @DisplayName("Lot D2 (B5, 2026-09-29) : « {{CODE}}. » est un jeton seul, jamais un motif ; un libellé présent dans deux "
             + "rédactions n'atteste aucune section ; marqueurs de cellule et de rangée ; {{CODE.parLot}} → CODE#1, CODE#2")
     void reglesDuLotD2() {

@@ -4997,14 +4997,19 @@ Migration **V54**. Script `docs/referentiel/2026-09-29-lot-d4-travaux.sql`, à p
 - **Fournitures (§B6 du lot D2)** :
   - `B05-TP-03` devient facultatif, libellé « Montant maximum annuel estimé du marché (Ariary) » ;
   - `B08-PA-08` est retiré. `B08-FP-03` reste servi au contrat-cadre.
-- **Import** : les modèles de travaux se lisent comme les autres (Word et PDF), sans règle nouvelle. `MODELE_ABSENT` ne
-  répond plus pour les travaux.
+- **Import** : les modèles de travaux se lisent comme les autres (Word et PDF). `MODELE_ABSENT` ne répond plus pour les
+  travaux. ⚠️ Le 2026-09-30, deux règles de prudence sont ajoutées, portées du front (ADR-0012, complément D4) :
+  - un paragraphe dont le texte fixe se répète dans le modèle (« Non applicable ») ne se cherche qu'à 3 paragraphes du
+    dernier reconnu ;
+  - les jetons seuls d'une section absente ne rendent plus un intervalle ambigu. Le jeton restant est lu en confiance
+    basse.
 - **Le rendu générique du lot 2a** (liste « libellé : valeur ») ne sert plus qu'au **contrat-cadre de prestations
   intellectuelles** (DPIC et contrat-cadre valant acte d'engagement). Toutes les autres formes outillées sont rendues
   depuis leur document type.
-- ⚠️ **Point ouvert** : `AE-CC` cite `{{B04-VO-01}}` (délai de validité des offres), qui n'est servi qu'aux
-  fournitures. Un contrat-cadre de travaux imprime donc « … » à cet endroit, et sa saisie se fait dans `B04-VT-01`.
-  La proposition au front est de faire citer `B04-VO-01` par DPAO-T, puis de retirer `B04-DV-01` et `B04-VT-01`.
+- ⚠️ **Délai de validité des offres unique** (2026-09-30, **V55**). `B04-VO-01` est servi aux fournitures et aux
+  travaux, dans les trois formes : DPAO-T (recopié) et AE-CC le citent. `B04-DV-01` et `B04-VT-01` sont retirés. La
+  rubrique `B04-VO` est élargie aux travaux. Script : `docs/referentiel/2026-09-30-validite-offres-unique.sql`, après
+  le redémarrage. Avant ce correctif, un contrat-cadre de travaux imprimait « … » à la place du délai.
 
 ### Les DAO de prestations intellectuelles sur leurs documents types — lot D3 ⚠️ 2026-09-29
 

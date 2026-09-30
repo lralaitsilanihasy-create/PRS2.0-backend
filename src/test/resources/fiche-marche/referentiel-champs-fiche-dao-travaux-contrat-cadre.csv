@@ -29,7 +29,7 @@ B03-GM-05;Nom du représentant de l'entreprise membre;TEXTE;SAISIE;AE;;CONTRAT_C
 B03-GM-06;Qualité du représentant de l'entreprise membre;LISTE;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;groupement = OUI;oui;;;Représentant légal de l'entreprise,Ayant reçu pouvoir du représentant légal;;;oui
 B03-SM-01;Désignation des sous-traitants des marchés subséquents;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;non;;;;;;oui
 B03-SM-02;Modalités de paiement direct des sous-traitants;TEXTE_LONG;SAISIE;AE;;CONTRAT_CADRE;TRAVAUX;;non;;;;;;oui
-B04-VT-01;Délai de validité des offres (jours);NOMBRE;SAISIE;DPAC;;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
+B04-VT-01;Délai de validité des offres (jours);NOMBRE;SAISIE;DPAC;;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;non
 B04-DK-01;Pièces ajoutées au dossier de consultation;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;TRAVAUX;;non;;;;;;oui
 B04-DK-02;Responsable du dossier : nom, fonction, bureau et localité;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;oui
 B04-DK-03;Adresse de retrait du dossier de consultation;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;TRAVAUX;;oui;;;;;;non

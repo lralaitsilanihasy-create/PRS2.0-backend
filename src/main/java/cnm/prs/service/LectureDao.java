@@ -54,6 +54,12 @@ public final class LectureDao {
 
     /** Fenêtre de recherche après le dernier paragraphe reconnu. */
     static final int FENETRE = 60;
+    /**
+     * ⚠️ Lot D4 (2026-09-30, règle R-a du front) — fenêtre d'un paragraphe dont le texte fixe se répète ailleurs dans le
+     * modèle (« Non applicable ») : absent du document, il se raccrochait à la répétition d'un article plus loin, et la
+     * lecture sautait tout ce qui les séparait (CCAP-T : les assurances de l'article 8 perdues).
+     */
+    static final int FENETRE_REPETE = 3;
     /** Unités suivantes où chercher un début de paragraphe collé. */
     static final int PORTEE_COUPE = 40;
     /** Longueur minimale d'un début de paragraphe cherché dans une valeur. */
@@ -319,6 +325,39 @@ public final class LectureDao {
         return false;
     }
 
+    /** ⚠️ Lot D4 (R-a) — un autre paragraphe du modèle a le même texte fixe (avec ou sans jeton). */
+    private static boolean repete(Unite u, List<Unite> us) {
+        String cle = cleTexte(u);
+        for (Unite v : us) {
+            if (v != u && cleTexte(v).equals(cle)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * ⚠️ Lot D4 (2026-09-30, règle R-b du front) — une section est ABSENTE du document quand elle a au moins un paragraphe
+     * distinctif et qu'aucun de ses paragraphes n'est reconnu (ni attestée par ailleurs).
+     */
+    private static boolean absente(String s, List<Unite> us, Map<Integer, Integer> trouves, Set<String> sectionsVues) {
+        if (sectionsVues.contains(s)) {
+            return false;
+        }
+        boolean aDistinctif = false;
+        for (int k = 0; k < us.size(); k++) {
+            Unite u = us.get(k);
+            if (!u.sections().contains(s)) {
+                continue;
+            }
+            if (trouves.containsKey(k)) {
+                return false;
+            }
+            aDistinctif |= distinctif(u, us);
+        }
+        return aDistinctif;
+    }
+
     private static String cleTexte(Unite u) {
         return norm(JETON.matcher(u.texte()).replaceAll("{}")).toLowerCase(Locale.ROOT);
     }
@@ -429,7 +468,7 @@ public final class LectureDao {
                 continue;   // un jeton seul : borné par ses voisins, étape 2
             }
             Motif mo = motifParagraphe(u.texte());
-            int borne = trouves.isEmpty() ? doc.size() : Math.min(doc.size(), curseur + FENETRE);
+            int borne = trouves.isEmpty() ? doc.size() : Math.min(doc.size(), curseur + (repete(u, us) ? FENETRE_REPETE : FENETRE));
             for (int j = curseur; j < borne; j++) {
                 Matcher x = mo.entier().matcher(doc.get(j));
                 boolean ok = x.find();
@@ -510,9 +549,22 @@ public final class LectureDao {
             bornes.putIfAbsent(cle, new int[] { a, b });
             intervalles.computeIfAbsent(cle, x -> new ArrayList<>()).add(new Jeton(seul.group(1), us.get(k).sections(), k));
         }
+        // ⚠️ Lot D4 (R-b) — dans un intervalle à plusieurs jetons seuls, les jetons d'une section absente sont écartés ; s'il
+        // n'en reste qu'un, il est lu en confiance basse (CCAP-T : « {{B02-OT-02}}. » suivi de la liste des lots, sous
+        // ALLOTI, sur un marché non alloti).
+        Set<String> filtres = new java.util.HashSet<>();
+        for (Map.Entry<String, List<Jeton>> e : intervalles.entrySet()) {
+            List<Jeton> presents = e.getValue().stream()
+                    .filter(j -> j.sections().stream().noneMatch(s -> absente(s, us, trouves, sectionsVues))).toList();
+            if (presents.size() == 1 && e.getValue().size() > 1) {
+                e.setValue(new ArrayList<>(presents));
+                filtres.add(e.getKey());
+            }
+        }
         for (Map.Entry<String, List<Jeton>> e : intervalles.entrySet()) {
             int[] ab = bornes.get(e.getKey());
             List<Jeton> jetons = e.getValue();
+            boolean filtre = filtres.contains(e.getKey());
             int de = trouves.get(ab[0]) + 1;
             int a = trouves.get(ab[1]);
             if (a <= de || a - de > INTERVALLE_MAX) {
@@ -537,7 +589,7 @@ public final class LectureDao {
             // n'est pas la valeur. Sans cela, le point final du modèle restait collé à la dernière valeur (« Lot n° 2 : 500 000
             // Ariary. » ne se lisait plus comme un montant).
             brut = sansTexteFixe(brut, us.get(j.k()).texte());
-            Confiance confiance = atteste && entre.size() == 1 && cp == null ? Confiance.MOYENNE : Confiance.BASSE;
+            Confiance confiance = atteste && entre.size() == 1 && cp == null && !filtre ? Confiance.MOYENNE : Confiance.BASSE;
             // ⚠️ Lot D3 (2026-09-29, §B4.3) — plusieurs jetons séparés de ponctuation seule (« {{B02-OB-03}} — {{B02-OB-01}} ») :
             // rien n'est proposé. Tout donner au premier est une fausse valeur, et le séparateur ne découpe pas sûrement.
             Matcher nb = JETON.matcher(us.get(j.k()).texte());

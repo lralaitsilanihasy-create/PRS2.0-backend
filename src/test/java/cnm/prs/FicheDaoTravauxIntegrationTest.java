@@ -84,12 +84,16 @@ class FicheDaoTravauxIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(JsonPath.<List<String>>read(qf, "$.blocs[?(@.code=='B11')].rubriques[*].code"))
                 .containsExactly("B11-AN");   // lot D4 : B11-FR-01..06 retirés (annexes imprimées par le CCAP-T), rubrique vide non servie
         List<String> rubriquesQf = JsonPath.read(qf, "$.blocs[*].rubriques[*].code");
-        assertThat(rubriquesQf).contains("B02-LT", "B09-RP", "B01-AC").doesNotContain("B02-AU", "B04-RO", "B02-DK");
+        assertThat(rubriquesQf).contains("B02-LT", "B09-RP", "B01-AC", "B04-VO").doesNotContain("B02-AU", "B04-RO", "B02-DK", "B04-DV");   // V55 : B04-VO
         assertThat(JsonPath.<List<List<String>>>read(qf, "$.champs[?(@.source=='SAISIE')].categories")).allMatch(c -> c.contains("TRAVAUX"));
         // 2026-09-25 (§B3) — la composition du dossier est réemployée par les fournitures, les plans restent aux travaux.
         // + V47 : les champs des formulaires du candidat, trois catégories ; + V50 : les seize saisis de la remise électronique.
         List<String> partages = new java.util.ArrayList<>(List.of("B04-CD-01", "B04-CD-02", "B02-OB-03", "B03-CQ-01", "B03-CQ-09", "B03-CQ-10"));
         java.util.stream.IntStream.rangeClosed(2, 17).forEach(i -> partages.add(String.format("B04-SE-%02d", i)));
+        partages.add("B04-VO-01");   // ⚠️ lot D4 (2026-09-30, V55) : le délai de validité des offres, commun aux deux catégories
+        assertThat(JsonPath.<List<String>>read(qf, "$.champs[*].code")).doesNotContain("B04-DV-01");
+        assertThat(JsonPath.<List<String>>read(ref("typeMarche=CONTRAT_CADRE&categorie=TRAVAUX"), "$.champs[*].code"))
+                .contains("B04-VO-01").doesNotContain("B04-VT-01");
         assertThat(JsonPath.<List<java.util.Map<String, Object>>>read(qf, "$.champs[?(@.source=='SAISIE')]").stream()
                 .filter(c -> ((List<?>) c.get("categories")).contains("FOURNITURES_SERVICES")).map(c -> c.get("code")))
                 .containsExactlyInAnyOrderElementsOf(partages);

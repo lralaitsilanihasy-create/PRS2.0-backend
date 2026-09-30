@@ -37,7 +37,7 @@ B04-CD-03;Plans joints au dossier;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMAN
 B04-EQ-01;Délai d'envoi des demandes d'éclaircissement par les candidats (jours);NOMBRE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
 B04-EQ-02;Délai de réponse du représentant de la PRMP (jours);NOMBRE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
 B04-PI-01;Documents et pièces constitutifs de l'offre;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
-B04-DV-01;Délai de validité des offres (jours);NOMBRE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
+B04-DV-01;Délai de validité des offres (jours);NOMBRE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;non
 B04-LG-01;Langue de l'offre si différente du français;TEXTE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui
 B04-LG-02;Traduction exigée des pièces rédigées dans une autre langue;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui
 B04-RP-01;Réunion préparatoire prévue;OUI_NON;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
