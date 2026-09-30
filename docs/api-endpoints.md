@@ -4971,6 +4971,15 @@ Restent servis mais deviennent **facultatifs** les champs non imprimés qu'une r
 (`DELAI_PAIEMENT_75`). `B03-SP-03`, `B03-NP-01` et `B05-PF-02` (PI) l'étaient déjà. Les champs de la remise
 électronique (`B04-SE-*`, `B04-OP-*`) ne sont pas touchés.
 
+⚠️ **Complément du même jour** (`docs/referentiel/2026-09-30-champs-non-utilises-complement.sql`) :
+- sont aussi retirés, en travaux :
+  - `B03-QT-01..04`, que le DPAO-T écrit en texte fixe à la clause 6.3 (le candidat les remplit dans A1 à A4) ;
+  - `B09-DL-02`, doublon de `B09-PT-02` ;
+  - `B09-DL-03`, que l'AE-T renvoie « en annexe au CCAP » ;
+- deviennent facultatifs :
+  - `B04-CD-03` (plans joints : l'annexe « Liste de plans » du CCAP-T n'a pas de jeton) ;
+  - `B03-CQ-01` (trois catégories, cité nulle part).
+
 Effets sur le référentiel servi :
 - une fiche de PI à quantité fixe reçoit 121 champs, contre 134 avant ;
 - le bloc B11 « Annexes et formulaires » des travaux n'a plus de rubrique ;

@@ -14,7 +14,7 @@ B03-ST-02;Conditions de la sous-traitance;TEXTE_LONG;SAISIE;AE;CCAP;QUANTITE_FIX
 B03-NA-01;Nantissement autorisé;OUI_NON;SAISIE;AE;CCAP;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;non
 B03-NA-02;Conditions du nantissement;TEXTE_LONG;SAISIE;AE;CCAP;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;non
 B03-NA-03;Comptable assignataire des paiements;TEXTE;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
-B03-CQ-01;Identification et situation juridique : pièces exigées;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui;;FOURNITURES_SERVICES,TRAVAUX,PRESTATIONS_INTELLECTUELLES;
+B03-CQ-01;Identification et situation juridique : pièces exigées;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui;;FOURNITURES_SERVICES,TRAVAUX,PRESTATIONS_INTELLECTUELLES;
 B03-CQ-02;Capacité technique exigée;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
 B03-CQ-03;Capacité financière exigée;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
 B03-CQ-04;Marchés similaires : certificats de bonne fin ou PV de réception exigés;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui

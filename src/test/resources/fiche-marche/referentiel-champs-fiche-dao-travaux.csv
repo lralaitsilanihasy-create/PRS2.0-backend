@@ -17,10 +17,10 @@ B03-GT-02;Identification de chacun des membres du groupement;TEXTE_LONG;SAISIE;A
 B03-GT-03;Qualification des membres d'un groupement d'entreprises;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;groupement = OUI;oui;;;;;;oui
 B03-GT-04;Groupement conjoint : conditions particulières;TEXTE_LONG;SAISIE;DPAO;AE;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;groupement = OUI;non;;;;;;oui
 B03-GT-05;Groupement solidaire : conditions particulières;TEXTE_LONG;SAISIE;DPAO;AE;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;groupement = OUI;non;;;;;;oui
-B03-QT-01;Identification et situation juridique;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
-B03-QT-02;Capacité technique;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
-B03-QT-03;Capacité financière;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
-B03-QT-04;Marchés similaires réalisés au cours des trois dernières années;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
+B03-QT-01;Identification et situation juridique;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;non
+B03-QT-02;Capacité technique;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;non
+B03-QT-03;Capacité financière;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;non
+B03-QT-04;Marchés similaires réalisés au cours des trois dernières années;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;non
 B03-QT-05;Communautés locales et organisations non gouvernementales admises;OUI_NON;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui
 B03-QT-06;Qualifications particulières requises;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui
 B03-QT-07;Chiffre d'affaires annuel minimum exigé pour des travaux de construction (Ariary);MONTANT;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;MONTANT_POSITIF;;;;oui
@@ -33,7 +33,7 @@ B03-SU-02;Parts sous-traitées et sous-traitants proposés;TEXTE_LONG;SAISIE;AE;
 B03-NT-01;Comptable assignataire et montant maximal nanti;TEXTE_LONG;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui
 B04-CD-01;Modèles de fiches de renseignements joints au dossier (A1, A2…);LISTE_MULTIPLE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX,FOURNITURES_SERVICES,PRESTATIONS_INTELLECTUELLES;;oui;;;A1,A2,A3,A4;;;oui
 B04-CD-02;Modèle de garantie de soumission joint au dossier;LISTE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX,FOURNITURES_SERVICES,PRESTATIONS_INTELLECTUELLES;;non;;GARANTIE_MANQUANTE:FORME;C1,C2,C1 et C2;;;oui
-B04-CD-03;Plans joints au dossier;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
+B04-CD-03;Plans joints au dossier;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui
 B04-EQ-01;Délai d'envoi des demandes d'éclaircissement par les candidats (jours);NOMBRE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
 B04-EQ-02;Délai de réponse du représentant de la PRMP (jours);NOMBRE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
 B04-PI-01;Documents et pièces constitutifs de l'offre;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
@@ -88,8 +88,8 @@ B08-MR-03;Règlement des comptes d'un marché à prix unitaires;TEXTE_LONG;SAISI
 B08-MR-04;Règlement des comptes d'un marché à prix forfaitaires;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;non
 B09-DT-01;Point de départ du marché;LISTE;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;À la notification de l'approbation à l'entrepreneur,À la notification de la décision d'affermissement de la tranche conditionnelle,À la notification de la tranche ferme au titulaire,À la notification de l'ordre de service de commencer les travaux;;;oui
 B09-DL-01;Délai d'exécution : commencement des travaux et fin du marché;TEXTE_LONG;SAISIE;DPAO;AE,CCAP;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
-B09-DL-02;Période de préparation (jours);NOMBRE;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
-B09-DL-03;Calendrier prévisionnel de réalisation;TEXTE_LONG;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
+B09-DL-02;Période de préparation (jours);NOMBRE;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;non
+B09-DL-03;Calendrier prévisionnel de réalisation;TEXTE_LONG;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;non
 B09-DL-04;Date de réception de l'ouvrage;DATE;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
 B09-DL-05;Délais non cumulables en cas d'allotissement;OUI_NON;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;alloti = OUI;non;;;;;;oui
 B09-MD-01;Conditions de prolongation ou de report du délai d'exécution;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
