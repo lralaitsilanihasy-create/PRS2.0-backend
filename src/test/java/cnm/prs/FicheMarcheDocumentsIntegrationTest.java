@@ -45,7 +45,8 @@ import cnm.prs.repository.ChampFicheMarcheRepository;
  * et six fichiers à la validation, liste vide avant, champ fermé absent, champ vide omis et jamais « null », nouvelle
  * version sans effacer l'ancienne, jointure au dossier produit (pièces non supprimables), lecture par la Commission.
  *
- * <p>Jeu : plan 9900 (PRMP001, ANT, entité 1, CLOTURE, PV signé FAV), ligne 9901 à quantité fixe (mode 92 → DAO), deux
+ * <p>Jeu : plan 9900 (PRMP001, ANT, entité 1, CLOTURE, PV signé FAV), ligne 9901 en contrat-cadre de prestations
+ * intellectuelles (mode 92 → DAO ; lot D4 : seule forme restée au lot 2a), deux
  * lots dont un sans montant ; champs de recette B02-AU-01 (DPAO), B04-LR-02 et B04-OP-02 (dates, DPAO), B05-GS-02
  * (forme de la garantie de soumission, liste à choix multiples depuis le 2026-09-26, DPAO repris AE et CCAP) et B05-GS-03
  * (montant), tous deux sous garantie de soumission = OUI, B08-PA-50 (CCAP, repris AE). Type de pièce « Dossier d'appel
@@ -77,12 +78,16 @@ class FicheMarcheDocumentsIntegrationTest extends CnmIntegrationTestSupport {
         examenRepository.save(examen(9900, 9900, "CTRMEM"));
         seedPvSigne(9900, 9900);
         // ⚠️ Lot D2 (2026-09-29) — les fournitures (quantité fixe, à commande) sont rendues depuis leurs documents types
-        // officiels : ce qui est vérifié ici, le rendu « libellé : valeur » du lot 2a, reste celui des TRAVAUX (et des
-        // prestations intellectuelles). La ligne est donc de travaux (nature 91) ; les champs de test valent pour eux.
-        natureRepository.save(new cnm.prs.entity.Nature(91, "Travaux", null, "TRAVAUX"));
+        // officiels : ce qui est vérifié ici, le rendu « libellé : valeur » du lot 2a, reste celui des autres formes.
+        // ⚠️ Lot D4 (2026-09-29) — les travaux l'ont quitté à leur tour (DPAO-T, CCAP-T, AE-T, DPAC-CC, AE-CC), après les
+        // prestations intellectuelles à quantité fixe et à commande (lot D3) : seul le CONTRAT-CADRE DE PRESTATIONS
+        // INTELLECTUELLES y reste. La ligne en est un (nature 93) : son jeu est le DPIC et le contrat-cadre valant acte
+        // d'engagement (pas de CCAP : un champ du CCAP va à l'AE).
+        natureRepository.save(new cnm.prs.entity.Nature(93, "Prestations intellectuelles", null, "PRESTATIONS_INTELLECTUELLES"));
         Marche l = marcheDao(9901, 9900, 9900);
-        l.setIdNature(91);
+        l.setIdNature(93);
         l.setIdMode(92);
+        l.setFormeMarche(cnm.prs.enums.FormeMarche.CONTRAT_CADRE);
         l.setDesignationMarche("Fourniture de mobilier de bureau");
         l.setMontEstim(new BigDecimal("8400000"));
         marcheRepository.save(l);
@@ -109,40 +114,40 @@ class FicheMarcheDocumentsIntegrationTest extends CnmIntegrationTestSupport {
     // ------------------------------------------------------------------ 1. trois documents, six fichiers
 
     @Test
-    @DisplayName("1 — Valider une fiche quantité fixe → DPAO, CCAP et AE, en docx et pdf, liés à la version ; listés, "
+    @DisplayName("1 — Valider une fiche (contrat-cadre de PI) → DPIC et contrat-cadre valant AE, en docx et pdf, liés à la version ; listés, "
             + "téléchargeables sous leur nom (docx = Word, pdf = PDF)")
     void troisDocumentsSixFichiers() throws Exception {
         remplirEtValider();
         String corps = mvc.perform(get("/api/fiches-marche/" + idDmc + "/documents").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertThat(JsonPath.<List<String>>read(corps, "$[*].type")).containsExactly("DPAO", "DPAO", "CCAP", "CCAP", "AE", "AE");   // travaux : ni liste des fournitures, ni bordereau, ni conformité
-        assertThat(JsonPath.<List<String>>read(corps, "$[*].extension")).containsExactly("docx", "pdf", "docx", "pdf", "docx", "pdf");
+        assertThat(JsonPath.<List<String>>read(corps, "$[*].type")).containsExactly("DPIC", "DPIC", "AE", "AE");   // ni liste des fournitures, ni bordereau, ni conformité
+        assertThat(JsonPath.<List<String>>read(corps, "$[*].extension")).containsExactly("docx", "pdf", "docx", "pdf");
         assertThat(JsonPath.<List<Integer>>read(corps, "$[*].version")).containsOnly(1);
-        assertThat(JsonPath.<List<String>>read(corps, "$[?(@.type=='AE')].libelle")).containsOnly("Acte d'engagement");
-        assertThat(JsonPath.<List<String>>read(corps, "$[*].nomFichier")).contains("DPAO_DOS-9900_9901_v1.docx",
-                "CCAP_DOS-9900_9901_v1.pdf", "AE_DOS-9900_9901_v1.docx");
+        assertThat(JsonPath.<List<String>>read(corps, "$[?(@.type=='AE')].libelle")).containsOnly("Contrat-cadre valant acte d'engagement et CCAP");
+        assertThat(JsonPath.<List<String>>read(corps, "$[*].nomFichier")).contains("DPIC_DOS-9900_9901_v1.docx",
+                "AE_DOS-9900_9901_v1.pdf", "AE_DOS-9900_9901_v1.docx");
         assertThat(JsonPath.<List<Integer>>read(corps, "$[*].tailleOctets")).allMatch(n -> n > 500);
 
-        int idDocx = JsonPath.<List<Integer>>read(corps, "$[?(@.type=='DPAO' && @.extension=='docx')].idDocument").get(0);
+        int idDocx = JsonPath.<List<Integer>>read(corps, "$[?(@.type=='DPIC' && @.extension=='docx')].idDocument").get(0);
         byte[] docx = mvc.perform(get("/api/fiches-marche/documents/" + idDocx + "/contenu").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk())
-                .andExpect(header().string("Content-Disposition", containsString("DPAO_DOS-9900_9901_v1.docx")))
+                .andExpect(header().string("Content-Disposition", containsString("DPIC_DOS-9900_9901_v1.docx")))
                 .andExpect(header().string("Content-Type",
                         containsString("application/vnd.openxmlformats-officedocument.wordprocessingml.document")))
                 .andReturn().getResponse().getContentAsByteArray();
         String texte = texteDuDocx(docx);
-        assertThat(texte).contains("Données particulières de l'appel d'offres", "Fourniture de mobilier de bureau",
+        assertThat(texte).contains("Données particulières des instructions aux consultants", "Fourniture de mobilier de bureau",
                 "Autorité contractante (précisions) : Direction des achats", "Date limite de remise des offres : 10/04/2026",
                 "Montant estimatif (Ariary) : 8 400 000 Ariary (huit millions quatre cent mille ariary)",
                 "Plan DOS-9900 · ligne 9901 · fiche marché version 1 validée le");
 
-        int idPdf = JsonPath.<List<Integer>>read(corps, "$[?(@.type=='CCAP' && @.extension=='pdf')].idDocument").get(0);
+        int idPdf = JsonPath.<List<Integer>>read(corps, "$[?(@.type=='AE' && @.extension=='pdf')].idDocument").get(0);
         byte[] pdf = mvc.perform(get("/api/fiches-marche/documents/" + idPdf + "/contenu").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Content-Type", containsString("application/pdf")))
                 .andReturn().getResponse().getContentAsByteArray();
         assertThat(new String(pdf, 0, 5)).isEqualTo("%PDF-");
-        assertThat(texteDuPdf(pdf)).contains("Cahier des clauses administratives particulières", "Délai de paiement (jours) : 60");
+        assertThat(texteDuPdf(pdf)).contains("Acte d'engagement", "Délai de paiement (jours) : 60");   // lot 2a : le titre court
         mvc.perform(get("/api/fiches-marche/documents/999999/contenu").header("Authorization", tokenPrmp))
                 .andExpect(status().isNotFound());
     }
@@ -167,16 +172,16 @@ class FicheMarcheDocumentsIntegrationTest extends CnmIntegrationTestSupport {
 
     @Test
     @DisplayName("3 — Garantie de soumission saisie puis cadrage passé à NON : le montant de la garantie n'apparaît pas "
-            + "dans le DPAO")
+            + "dans le DPIC")
     void champFermeAbsent() throws Exception {
         cadrage("{\"garantieSoumission\":\"OUI\"}");
         bloc("B05", "{\"B05-GS-03\":1250000}");
         cadrage("{\"garantieSoumission\":\"NON\"}");
         bloc("B04", "{\"B04-LR-02\":\"2026-04-10\"}");
         valider();
-        String dpao = texteDuDocx(contenu("DPAO", "docx"));
+        String dpao = texteDuDocx(contenu("DPIC", "docx"));
         assertThat(dpao).doesNotContain("Montant de la garantie de soumission").doesNotContain("1 250 000");
-        assertThat(texteDuPdf(contenu("DPAO", "pdf"))).doesNotContain("Montant de la garantie de soumission");
+        assertThat(texteDuPdf(contenu("DPIC", "pdf"))).doesNotContain("Montant de la garantie de soumission");
     }
 
     // ------------------------------------------------------------------ 4. champ vide omis, jamais « null »
@@ -193,9 +198,9 @@ class FicheMarcheDocumentsIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.valeursPpm.B02-LV-03").value("Lot A : montant non renseigné ; Lot B : 5 000 000"));
         remplirEtValider();
-        String dpao = texteDuDocx(contenu("DPAO", "docx"));
+        String dpao = texteDuDocx(contenu("DPIC", "docx"));
         assertThat(dpao).doesNotContain("Date d'ouverture des plis").contains("Lot A : montant non renseigné");
-        for (String type : List.of("DPAO", "CCAP", "AE")) {
+        for (String type : List.of("DPIC", "AE")) {
             assertThat(texteDuDocx(contenu(type, "docx")).toLowerCase()).as(type + " docx").doesNotContain("null");
             assertThat(texteDuPdf(contenu(type, "pdf")).toLowerCase()).as(type + " pdf").doesNotContain("null");
         }
@@ -214,23 +219,23 @@ class FicheMarcheDocumentsIntegrationTest extends CnmIntegrationTestSupport {
         valider();
         String v2 = mvc.perform(get("/api/fiches-marche/" + idDmc + "/documents").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertThat(JsonPath.<List<Integer>>read(v2, "$[*].version")).hasSize(6).containsOnly(2);
-        assertThat(JsonPath.<List<String>>read(v2, "$[*].nomFichier")).contains("DPAO_DOS-9900_9901_v2.docx");
+        assertThat(JsonPath.<List<Integer>>read(v2, "$[*].version")).hasSize(4).containsOnly(2);
+        assertThat(JsonPath.<List<String>>read(v2, "$[*].nomFichier")).contains("DPIC_DOS-9900_9901_v2.docx");
         String v1 = mvc.perform(get("/api/fiches-marche/" + idDmc + "/documents").param("version", "1")
                 .header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertThat(JsonPath.<List<Integer>>read(v1, "$[*].version")).hasSize(6).containsOnly(1);
-        int idV1 = JsonPath.<List<Integer>>read(v1, "$[?(@.type=='DPAO' && @.extension=='docx')].idDocument").get(0);
+        assertThat(JsonPath.<List<Integer>>read(v1, "$[*].version")).hasSize(4).containsOnly(1);
+        int idV1 = JsonPath.<List<Integer>>read(v1, "$[?(@.type=='DPIC' && @.extension=='docx')].idDocument").get(0);
         byte[] ancien = mvc.perform(get("/api/fiches-marche/documents/" + idV1 + "/contenu").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
         assertThat(texteDuDocx(ancien)).contains("Direction des achats").doesNotContain("Service des marchés");
-        assertThat(texteDuDocx(contenu("DPAO", "docx"))).contains("Service des marchés");
+        assertThat(texteDuDocx(contenu("DPIC", "docx"))).contains("Service des marchés");
     }
 
     // ------------------------------------------------------------------ 6. jointure au dossier
 
     @Test
-    @DisplayName("6 — Dossier produit par la fiche : les trois PDF en pièces « Dossier d'appel d'offres complet », non "
+    @DisplayName("6 — Dossier produit par la fiche : les deux PDF en pièces « Dossier d'appel d'offres complet », non "
             + "supprimables (409) ni remplaçables à la main ; une nouvelle version les remplace ; détacher les retire")
     void jointureAuDossier() throws Exception {
         remplirEtValider();
@@ -238,10 +243,10 @@ class FicheMarcheDocumentsIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         int idDossier = JsonPath.read(dossier, "$.idDossier");
         String pieces = pieces(idDossier);
-        assertThat(JsonPath.<List<Integer>>read(pieces, "$[*].idTypePiece")).hasSize(3).containsOnly(typeDao);
+        assertThat(JsonPath.<List<Integer>>read(pieces, "$[*].idTypePiece")).hasSize(2).containsOnly(typeDao);
         assertThat(JsonPath.<List<String>>read(pieces, "$[*].format")).containsOnly("PDF");
         assertThat(JsonPath.<List<String>>read(pieces, "$[*].nomFichier"))
-                .containsExactlyInAnyOrder("DPAO_DOS-9900_9901_v1.pdf", "CCAP_DOS-9900_9901_v1.pdf", "AE_DOS-9900_9901_v1.pdf");
+                .containsExactlyInAnyOrder("DPIC_DOS-9900_9901_v1.pdf", "AE_DOS-9900_9901_v1.pdf");
         assertThat(JsonPath.<List<Object>>read(pieces, "$[*].idDocumentFiche")).doesNotContainNull();
 
         int idPiece = JsonPath.<List<Integer>>read(pieces, "$[*].idPiece").get(0);
@@ -260,7 +265,7 @@ class FicheMarcheDocumentsIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(post("/api/fiches-marche/" + idDmc + "/reviser").header("Authorization", tokenPrmp)).andExpect(status().isOk());
         valider();
         assertThat(JsonPath.<List<String>>read(pieces(idDossier), "$[*].nomFichier"))
-                .containsExactlyInAnyOrder("DPAO_DOS-9900_9901_v2.pdf", "CCAP_DOS-9900_9901_v2.pdf", "AE_DOS-9900_9901_v2.pdf");
+                .containsExactlyInAnyOrder("DPIC_DOS-9900_9901_v2.pdf", "AE_DOS-9900_9901_v2.pdf");
 
         mvc.perform(delete("/api/dossiers/" + idDossier + "/fiche-marche").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk());
@@ -268,7 +273,7 @@ class FicheMarcheDocumentsIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(put("/api/dossiers/" + idDossier + "/fiche-marche").header("Authorization", tokenPrmp).contentType(JSON)
                 .content("{\"idDmc\":" + idDmc + "}"))
                 .andExpect(status().isOk());
-        assertThat(JsonPath.<List<Object>>read(pieces(idDossier), "$")).hasSize(3);
+        assertThat(JsonPath.<List<Object>>read(pieces(idDossier), "$")).hasSize(2);
     }
 
     // ------------------------------------------------------------------ 7. la Commission
@@ -301,7 +306,7 @@ class FicheMarcheDocumentsIntegrationTest extends CnmIntegrationTestSupport {
 
     @Test
     @DisplayName("8 — Forme de la garantie de soumission à choix multiples (2026-09-26) : trois formes → enregistrées dans "
-            + "l'ordre du référentiel, imprimées « l'une des formes suivantes : – soit … » (une par ligne) dans le DPAO et "
+            + "l'ordre du référentiel, imprimées « l'une des formes suivantes : – soit … » (une par ligne) dans le DPIC et "
             + "l'acte d'engagement, docx et pdf ; une seule forme → ligne ordinaire ; aucune → bloquant OBLIGATOIRE")
     void formesDeGarantieAdmises() throws Exception {
         cadrage("{\"garantieSoumission\":\"OUI\"}");
@@ -321,7 +326,7 @@ class FicheMarcheDocumentsIntegrationTest extends CnmIntegrationTestSupport {
         String caution = "– soit une caution personnelle et solidaire d'un organisme agréé par le MEF";
         String bancaire = "– soit une garantie bancaire";
         String cheque = "– soit un chèque de banque";
-        for (String type : List.of("DPAO", "AE")) {
+        for (String type : List.of("DPIC", "AE")) {
             String docx = texteDuDocx(contenu(type, "docx"));
             assertThat(docx).as(type + " docx").contains(tournure, caution, bancaire, cheque);
             assertThat(docx.indexOf(caution)).as(type + " : ordre du référentiel").isGreaterThan(docx.indexOf(tournure))
@@ -338,7 +343,7 @@ class FicheMarcheDocumentsIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(post("/api/fiches-marche/" + idDmc + "/reviser").header("Authorization", tokenPrmp)).andExpect(status().isOk());
         bloc("B05", "{\"B05-GS-02\":\"Garantie bancaire\",\"B05-GS-03\":1250000}");
         valider();
-        String dpao = texteDuDocx(contenu("DPAO", "docx"));
+        String dpao = texteDuDocx(contenu("DPIC", "docx"));
         assertThat(dpao).contains("Forme de la garantie de soumission : Garantie bancaire")
                 .doesNotContain("– soit").doesNotContain("formes suivantes");
 
@@ -401,7 +406,8 @@ class FicheMarcheDocumentsIntegrationTest extends CnmIntegrationTestSupport {
 
     private void cadrage(String cadrage) throws Exception {
         mvc.perform(put("/api/fiches-marche/" + idDmc + "/cadrage").header("Authorization", tokenPrmp).contentType(JSON)
-                .content("{\"cadrage\":" + cadrage + "}")).andExpect(status().isOk());
+                .content("{\"cadrage\":" + cadrage.replaceFirst("\\{", "{\"attributaires\":\"MONO\",") + "}"))
+                .andExpect(status().isOk());   // contrat-cadre : la question des attributaires, toujours MONO ici
     }
 
     private void bloc(String bloc, String valeurs) throws Exception {
@@ -435,7 +441,7 @@ class FicheMarcheDocumentsIntegrationTest extends CnmIntegrationTestSupport {
         c.setDocumentMaitre(document);
         c.setReprises(reprises);
         c.setTypesMarche("QUANTITE_FIXE,A_COMMANDE,CONTRAT_CADRE");
-        c.setCategories("FOURNITURES_SERVICES,TRAVAUX");
+        c.setCategories("FOURNITURES_SERVICES,TRAVAUX,PRESTATIONS_INTELLECTUELLES");
         c.setObligatoire(obligatoire);
         c.setCondition(condition);
         c.setOptions(options);

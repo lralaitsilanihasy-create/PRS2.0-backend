@@ -2,13 +2,16 @@ code;libelle;type;source;documentMaitre;reprises;typesMarche;categories;conditio
 B02-MW-01;Maître d'œuvre : nom et coordonnées;TEXTE_LONG;SAISIE;AE;CCAP;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
 B02-MW-02;Références du lien contractuel entre le maître de l'ouvrage et le maître d'œuvre;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui
 B02-MW-03;Imputation budgétaire;TEXTE;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
+B02-MW-04;Maître d'ouvrage délégué : nom et coordonnées;TEXTE_LONG;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui
 B02-OT-01;Projet ou opération plus vaste dont le marché fait partie;TEXTE_LONG;SAISIE;DPAO;CCAP;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui
 B02-OT-02;Consistance des travaux à exécuter;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
-B02-LT-01;Description du projet global;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;alloti = NON;oui;;;;;;oui
+B02-LT-01;Description du projet global;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;alloti = OUI;oui;;;;;;oui
 B02-LT-02;Attribution des lots;LISTE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;alloti = OUI;oui;;;Divisible,Totalité des lots;;;oui
 B02-LT-03;Objet et montant de la tranche ferme;TEXTE_LONG;SAISIE;DPAO;AE,CCAP;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;tranches = OUI;oui;;;;;;oui
 B02-LT-04;Objet et montant de la tranche conditionnelle 1;TEXTE_LONG;SAISIE;DPAO;AE,CCAP;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;tranches = OUI;non;;;;;;oui
 B02-LT-05;Objet et montant de la tranche conditionnelle 2;TEXTE_LONG;SAISIE;DPAO;AE,CCAP;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;tranches = OUI;non;;;;;;oui
+B02-LT-06;Délai d'affermissement de la tranche conditionnelle 1;TEXTE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;tranches = OUI;non;;;;;;oui
+B02-LT-07;Délai d'affermissement de la tranche conditionnelle 2;TEXTE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;tranches = OUI;non;;;;;;oui
 B03-GT-01;Forme du groupement;LISTE;CADRAGE;DPAO;CCAP;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;groupement = OUI;non;;;;formeGroupement;;oui
 B03-GT-02;Identification de chacun des membres du groupement;TEXTE_LONG;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;groupement = OUI;oui;;;;;;oui
 B03-GT-03;Qualification des membres d'un groupement d'entreprises;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;groupement = OUI;oui;;;;;;oui
@@ -40,11 +43,12 @@ B04-LG-02;Traduction exigée des pièces rédigées dans une autre langue;TEXTE_
 B04-RP-01;Réunion préparatoire prévue;OUI_NON;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
 B04-RP-02;Lieu, date et heure de la réunion préparatoire;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui
 B04-VL-01;Modalités d'accès des candidats aux lieux d'exécution des travaux;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
+B04-VL-02;Visite des lieux obligatoire;OUI_NON;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui
 B04-FP-01;Nombre de copies de l'offre;NOMBRE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
 B04-FP-02;Mention et numéro du dossier d'appel d'offres à porter sur les plis;TEXTE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
 B04-FP-03;Référence et numéro du lot à porter sur les plis;TEXTE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;alloti = OUI;non;;;;;;oui
 B04-OV-01;Lieu de l'ouverture des plis;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
-B04-OV-02;Date et heure limites de remise des offres;DATE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;DATES_ORDRE:REMISE;;;;oui
+B04-OV-02;Date et heure limites de remise des offres;DATE_HEURE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;DATES_ORDRE:REMISE;;;;oui
 B05-PT-01;Type de prix du marché;LISTE;CADRAGE;AE;CCAP;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;typePrix;;oui
 B05-VR-01;Prix ferme ou révisable;OUI_NON;CADRAGE;DPAO;AE,CCAP;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;prixRevisable;;oui
 B05-MN-01;Monnaie de l'offre;LISTE;SAISIE;DPAO;AE,CCAP;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;Ariary,Devises;;;oui
@@ -55,6 +59,7 @@ B05-GE-01;Garantie de bonne exécution requise;OUI_NON;SAISIE;CCAP;;QUANTITE_FIX
 B05-GE-02;Part exigée en devises étrangères;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui
 B05-GE-03;Formes admises de la garantie de bonne exécution;LISTE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;Garantie bancaire,Caution personnelle et solidaire,Chèque de banque;;;oui
 B05-GE-04;Libération de la garantie de bonne exécution;LISTE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;Libérée à 50 % puis au terme du délai de garantie,Libérée à 100 % à la réception définitive;;;oui
+B05-GE-05;Taux de la garantie de bonne exécution (%, au plus 5 %);POURCENTAGE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui
 B05-RG-01;Retenue de garantie applicable;OUI_NON;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
 B05-RG-02;Taux de la retenue de garantie (%, au plus 5 %);POURCENTAGE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui
 B05-GA-01;Garantie de restitution d'avance applicable;OUI_NON;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
@@ -81,7 +86,7 @@ B08-MR-01;Règlement en une fois pour un marché de moins de trois mois;OUI_NON;
 B08-MR-02;Modalités d'établissement des décomptes mensuels;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui
 B08-MR-03;Règlement des comptes d'un marché à prix unitaires;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui
 B08-MR-04;Règlement des comptes d'un marché à prix forfaitaires;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui
-B09-DT-01;Point de départ du marché;LISTE;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;À la notification de l'approbation à l'entrepreneur,À la notification de la décision d'affermissement de la tranche conditionnelle,À la notification de la tranche ferme au titulaire;;;oui
+B09-DT-01;Point de départ du marché;LISTE;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;À la notification de l'approbation à l'entrepreneur,À la notification de la décision d'affermissement de la tranche conditionnelle,À la notification de la tranche ferme au titulaire,À la notification de l'ordre de service de commencer les travaux;;;oui
 B09-DL-01;Délai d'exécution : commencement des travaux et fin du marché;TEXTE_LONG;SAISIE;DPAO;AE,CCAP;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
 B09-DL-02;Période de préparation (jours);NOMBRE;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
 B09-DL-03;Calendrier prévisionnel de réalisation;TEXTE_LONG;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
@@ -110,7 +115,7 @@ B09-MA-03;Limite de la diminution ouvrant droit à indemnité;TEXTE_LONG;SAISIE;
 B09-MA-04;Limite du changement dans l'importance des diverses natures d'ouvrage;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
 B09-FM-01;Cas de force majeure retenus;OUI_NON;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
 B09-FM-02;Seuils caractérisant la force majeure (précipitations, vent…);TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui
-B09-PE-01;Pénalités journalières de retard applicables;OUI_NON;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
+B09-PE-01;Pénalités journalières de retard applicables;OUI_NON;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;non
 B09-PE-02;Taux des pénalités journalières (millièmes du montant du marché ou de la tranche);TEXTE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;PENALITES_PLAFOND_15:TAUX;;;;oui
 B09-VQ-01;Modalités de vérification qualitative des matériaux et produits;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
 B09-PM-01;Matériaux et produits fournis par le maître de l'ouvrage, et conditions de prise en charge;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui
@@ -124,6 +129,7 @@ B09-RP-02;Opérations préalables à la réception;TEXTE_LONG;SAISIE;CCAP;;QUANT
 B09-RP-03;Délai de début des opérations préalables (jours);NOMBRE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
 B09-RP-04;Modalités de réception des travaux;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
 B09-GT-01;Délai de garantie (mois);NOMBRE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
+B09-BT-01;Travaux de bâtiment (CPC, TBM, responsabilité décennale);OUI_NON;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui
 B10-RE-01;Conditions de résiliation du marché aux torts de l'entrepreneur;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
 B10-PC-01;Procédure contentieuse et juridiction compétente;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
 B10-DR-01;Dérogations aux documents généraux;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui
@@ -133,12 +139,12 @@ B11-AN-03;Paramètres de la formule de révision des prix;TEXTE_LONG;SAISIE;AE;;
 B11-AN-04;Demande d'acceptation des sous-traitants;TEXTE_LONG;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui
 B11-AN-05;État des sommes versées à des tiers;TEXTE_LONG;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui
 B11-AN-06;Autres pièces contractuelles;TEXTE_LONG;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;non
-B11-FR-01;Modèle de formule de révision de prix;PIECE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;Formulaire à remplir, joint au dossier — modèle attendu;;;;;oui
-B11-FR-02;Modèle de garantie bancaire de bonne exécution;PIECE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;Formulaire à remplir, joint au dossier — modèle attendu;;;;;oui
-B11-FR-03;Modèle de caution personnelle et solidaire de bonne exécution;PIECE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;Formulaire à remplir, joint au dossier — modèle attendu;;;;;oui
-B11-FR-04;Modèle de garantie bancaire de restitution d'avance;PIECE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;Formulaire à remplir, joint au dossier — modèle attendu;;;;;oui
-B11-FR-05;Modèle de caution personnelle et solidaire de restitution d'avance;PIECE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;Formulaire à remplir, joint au dossier — modèle attendu;;;;;oui
-B11-FR-06;Cadre de bordereau de prix et de détail quantitatif et estimatif;PIECE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;Formulaire à remplir, joint au dossier — modèle attendu;;;;;oui
+B11-FR-01;Modèle de formule de révision de prix;PIECE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;Formulaire à remplir, joint au dossier — modèle attendu;;;;;non
+B11-FR-02;Modèle de garantie bancaire de bonne exécution;PIECE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;Formulaire à remplir, joint au dossier — modèle attendu;;;;;non
+B11-FR-03;Modèle de caution personnelle et solidaire de bonne exécution;PIECE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;Formulaire à remplir, joint au dossier — modèle attendu;;;;;non
+B11-FR-04;Modèle de garantie bancaire de restitution d'avance;PIECE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;Formulaire à remplir, joint au dossier — modèle attendu;;;;;non
+B11-FR-05;Modèle de caution personnelle et solidaire de restitution d'avance;PIECE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;Formulaire à remplir, joint au dossier — modèle attendu;;;;;non
+B11-FR-06;Cadre de bordereau de prix et de détail quantitatif et estimatif;PIECE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;Formulaire à remplir, joint au dossier — modèle attendu;;;;;non
 B04-SE-01;Mode de remise des offres;LISTE;CADRAGE;DPAO;;QUANTITE_FIXE,A_COMMANDE,CONTRAT_CADRE;FOURNITURES_SERVICES,TRAVAUX,PRESTATIONS_INTELLECTUELLES;;oui;;;PAPIER,ELECTRONIQUE;modeRemise;;oui
 B04-SE-02;Adresse de la plateforme de dépôt;URL;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE,CONTRAT_CADRE;FOURNITURES_SERVICES,TRAVAUX,PRESTATIONS_INTELLECTUELLES;modeRemise = ELECTRONIQUE;oui;;;;;;oui
 B04-SE-03;Date d'ouverture des dépôts;DATE_HEURE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE,CONTRAT_CADRE;FOURNITURES_SERVICES,TRAVAUX,PRESTATIONS_INTELLECTUELLES;modeRemise = ELECTRONIQUE;non;;SE_OUVERTURE_DEPOTS:DEPOTS;;;;oui

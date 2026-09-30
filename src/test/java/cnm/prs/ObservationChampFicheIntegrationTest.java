@@ -185,7 +185,7 @@ class ObservationChampFicheIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         List<Map<String, Object>> visees = JsonPath.read(corps, "$[?(@.champFiche=='B05-TP-03#3')]");
         assertThat(visees).hasSize(1);
-        assertThat(visees.get(0)).containsEntry("libelleChampFiche", "Montant maximum annuel du marché (Ariary)")
+        assertThat(visees.get(0)).containsEntry("libelleChampFiche", "Montant maximum annuel estimé du marché (Ariary)")
                 .containsEntry("lot", 3);
         assertThat(((Number) visees.get(0).get("idDmc")).longValue()).isEqualTo(idDmc);
         assertThat((String) visees.get(0).get("valeurChampFiche")).startsWith("30 000 000 Ariary");

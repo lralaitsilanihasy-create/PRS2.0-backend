@@ -47,7 +47,19 @@ public class ModelesDao {
             new Couverture("AE-PI", "AE", "QUANTITE_FIXE", "PRESTATIONS_INTELLECTUELLES"),
             new Couverture("DPIC-PI", "DPIC", "A_COMMANDE", "PRESTATIONS_INTELLECTUELLES"),
             new Couverture("CPS-PI", "CCAP", "A_COMMANDE", "PRESTATIONS_INTELLECTUELLES"),
-            new Couverture("AE-PI", "AE", "A_COMMANDE", "PRESTATIONS_INTELLECTUELLES"));
+            new Couverture("AE-PI", "AE", "A_COMMANDE", "PRESTATIONS_INTELLECTUELLES"),
+            // ⚠️ Lot D4 (2026-09-29, §B1) — travaux, quantité fixe et à commande (le document type n'a pas de variante « à
+            // commande ») : DPAO, CCAP et ses six annexes, AE.
+            new Couverture("DPAO-T", "DPAO", "QUANTITE_FIXE", "TRAVAUX"),
+            new Couverture("CCAP-T", "CCAP", "QUANTITE_FIXE", "TRAVAUX"),
+            new Couverture("AE-T", "AE", "QUANTITE_FIXE", "TRAVAUX"),
+            new Couverture("DPAO-T", "DPAO", "A_COMMANDE", "TRAVAUX"),
+            new Couverture("CCAP-T", "CCAP", "A_COMMANDE", "TRAVAUX"),
+            new Couverture("AE-T", "AE", "A_COMMANDE", "TRAVAUX"),
+            // ⚠️ Lot D4 (§B3) — le contrat-cadre de travaux sur le même document type que celui des fournitures : ses choix
+            // « CCAG Fournitures / CCAG Travaux » se font par la catégorie, et ses codes sont ceux du contrat-cadre.
+            new Couverture("DPAC-CC", "DPAC", "CONTRAT_CADRE", "TRAVAUX"),
+            new Couverture("AE-CC", "AE", "CONTRAT_CADRE", "TRAVAUX"));
 
     private final Map<String, FichierCommande.Modele> modeles = new LinkedHashMap<>();
 

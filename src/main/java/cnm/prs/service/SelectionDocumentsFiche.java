@@ -113,7 +113,10 @@ public final class SelectionDocumentsFiche {
     public static String titre(String type, Integer lot, String typeMarche, String categorie) {
         String cat = categorie == null ? "FOURNITURES_SERVICES" : categorie;
         String t = "AE".equals(type) && "CONTRAT_CADRE".equals(typeMarche) ? "Contrat-cadre valant acte d'engagement et CCAP"
-                : "CCAP".equals(type) && ModelesDao.couvertures(typeMarche, cat).stream().anyMatch(c -> "CCAP".equals(c.typeDocument()))
+                // ⚠️ Lot D4 (2026-09-29) — le CCAP des travaux (CCAP-T) reste un cahier des clauses administratives
+                // particulières : seuls les documents types des fournitures et des PI sont des prescriptions spéciales.
+                : "CCAP".equals(type) && !"TRAVAUX".equals(cat)
+                        && ModelesDao.couvertures(typeMarche, cat).stream().anyMatch(c -> "CCAP".equals(c.typeDocument()))
                         ? "Cahier des prescriptions spéciales"
                         : titre(type);
         return t + (lot == null ? "" : " — lot " + lot);

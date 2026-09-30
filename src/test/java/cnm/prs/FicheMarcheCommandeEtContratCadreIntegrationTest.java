@@ -81,9 +81,13 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
         assertThat(cc.rejets()).isEmpty();
         assertThat(cc.crees()).hasSize(132);   // 2026-09-28 : + 9 champs du modèle officiel, + 9 du lot D
 
-        assertThat(champs("QUANTITE_FIXE")).hasSize(156);   // 29/09 : − 23 champs non imprimés retirés
-        assertThat(champs("A_COMMANDE")).hasSize(159);   // 29/09 : − 25
+        assertThat(champs("QUANTITE_FIXE")).hasSize(155);   // 29/09 : − 23 champs non imprimés retirés, − B08-PA-08 (§B6)
+        assertThat(champs("A_COMMANDE")).hasSize(158);   // 29/09 : − 25, − B08-PA-08 (§B6)
         assertThat(champs("CONTRAT_CADRE")).hasSize(175);   // 2026-09-28 : 176 − 20 + 11 (modèle officiel) + 9 (lot D) − 1 (B07-DU-06, Q2)
+        // ⚠️ 2026-09-29 (§B6 des champs non imprimés) — B08-PA-08 retiré des fournitures ; B08-FP-03, même avertissement
+        // DELAI_PAIEMENT_75, reste servi au contrat-cadre.
+        assertThat(champs("A_COMMANDE")).doesNotContain("B08-PA-08").contains("B05-TP-03");
+        assertThat(champs("CONTRAT_CADRE")).contains("B08-FP-03");
     }
 
     // ------------------------------------------------------------------ 2. rubriques servies par type (B4)

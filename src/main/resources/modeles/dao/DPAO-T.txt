@@ -1,0 +1,80 @@
+FICHIER	DPAO-T.docx
+TITRE	1.2. - DONNEES PARTICULIERES DE L’APPEL D‘OFFRES
+CONDITION	PROJETB02-OT-01 renseigne
+CONDITION	ALLOTIalloti = OUI
+CONDITION	LOTS-DIVISIBLESalloti = OUI et B02-LT-02 = Divisible
+CONDITION	LOTS-TOTALITEalloti = OUI et B02-LT-02 = Totalité des lots
+CONDITION	VARIANTES-NONvariantes = NON
+CONDITION	VARIANTES-OUIvariantes = OUI
+CONDITION	TRANCHEStranches = OUI
+CONDITION	TRANCHE-C1tranches = OUI et B02-LT-04 renseigne
+CONDITION	TRANCHE-C2tranches = OUI et B02-LT-05 renseigne
+CONDITION	GROUPEMENTgroupement = OUI
+CONDITION	GROUPEMENT-LIBREgroupement = OUI et formeGroupement = CONJOINT_OU_SOLIDAIRE
+CONDITION	GROUPEMENT-SOLIDAIREgroupement = OUI et formeGroupement = SOLIDAIRE_OBLIGATOIRE
+CONDITION	SANS-GARANTIEgarantieSoumission = NON
+CONDITION	GARANTIEgarantieSoumission = OUI
+CONDITION	GARANTIE-BANCAIREgarantieSoumission = OUI et B05-GQ-02 = Garantie bancaire
+CONDITION	GARANTIE-CAUTIONgarantieSoumission = OUI et B05-GQ-02 = Caution personnelle et solidaire
+CONDITION	GARANTIE-CHEQUEgarantieSoumission = OUI et B05-GQ-02 = Chèque de banque
+CONDITION	VISITE-OBLIGATOIREB04-VL-02 = OUI
+CONDITION	ONGB03-QT-05 = OUI
+CONDITION	QUALIFICATIONSB03-QT-06 renseigne
+CONDITION	PREFERENCEB06-PN-01 = OUI
+CONDITION	SANS-PREFERENCEB06-PN-01 != OUI
+CONDITION	FERMEprixRevisable = NON
+CONDITION	REVISABLEprixRevisable = OUI
+CONDITION	ARIARYB05-MN-01 = Ariary
+CONDITION	DEVISESB05-MN-01 = Devises
+CONDITION	LANGUEB04-LG-01 renseigne
+CONDITION	REUNION-NONB04-RP-01 != OUI
+CONDITION	REUNION-OUIB04-RP-01 = OUI
+CONDITION	PAPIERmodeRemise != ELECTRONIQUE
+CONDITION	B04-SEmodeRemise = ELECTRONIQUE
+CONDITION	EVALUATION-PAR-LOTalloti = OUI et B06-EV-01 = Par lot
+CONDITION	EVALUATION-ENSEMBLEalloti = OUI et B06-EV-01 = Sur l'ensemble des lots
+CONDITION	NON-CUMULalloti = OUI et B09-DL-05 = OUI
+PARA	Les données particulières ci - après complètent, précisent ou modifient les clauses des Instructions aux Candidats (IC). En cas de conflit, les clauses ci-dessous prévalent sur celles des IC.
+TABLE	2
+LIGNE	Clause des Instructions aux Candidats (IC)Données particulières
+LIGNE	1. Maître de l'Ouvrage et objet de l’appel d’offres
+LIGNE	Maître de l'Ouvrage{{B01-AC-01}}Objet de l'appel d'offres{{SI:PROJET}}Le présent appel d'offres, s'inscrit dans:{{B02-OT-01}}.{{FINSI:PROJET}}L’Appel d’offres a pour objet :{{B02-OT-02}}
+LIGNE	1.1 Lots, variantes et tranches{{SI:ALLOTI}}LotsLes lots suivants faisant partie de {{B02-LT-01}} :{{B02-LV-02}}{{SI:LOTS-DIVISIBLES}}Le candidat peut soumissionner pour un ou plusieurs lots{{FINSI:LOTS-DIVISIBLES}}{{SI:LOTS-TOTALITE}}Le candidat ne peut soumissionner que pour la totalité des lots{{FINSI:LOTS-TOTALITE}}{{FINSI:ALLOTI}}
+LIGNE	Variantes{{SI:VARIANTES-NON}}Les variantes ne sont pas prises en considération{{FINSI:VARIANTES-NON}}{{SI:VARIANTES-OUI}}Les variantes sont autorisées.{{FINSI:VARIANTES-OUI}}{{SI:TRANCHES}}TranchesLes travaux sont décomposés en tranches définies comme suit :- tranche ferme: {{B02-LT-03}}{{SI:TRANCHE-C1}}- tranche conditionnelle 1: {{B02-LT-04}}{{FINSI:TRANCHE-C1}}{{SI:TRANCHE-C2}}- tranche conditionnelle 2: {{B02-LT-05}}{{FINSI:TRANCHE-C2}}Les candidats doivent soumissionner pour la totalité des tranches.Les délais d'affermissement de chaque tranche conditionnelle sont fixés par le CCAP{{FINSI:TRANCHES}}
+LIGNE	{{SI:GROUPEMENT}}
+LIGNE	2. Groupements{{SI:GROUPEMENT-LIBRE}}Les groupements entre Candidats soumissionnant pour des lots distincts peuvent être conjoint ou solidaire{{FINSI:GROUPEMENT-LIBRE}}{{SI:GROUPEMENT-SOLIDAIRE}}Les groupements entre Candidats soumissionnant pour des lots distincts doivent être obligatoirement solidaire.{{FINSI:GROUPEMENT-SOLIDAIRE}}
+LIGNE	{{FINSI:GROUPEMENT}}
+LIGNE	5. – Composition du DAO – Demandes d'éclaircissement – Modifications
+LIGNE	5.1 Composition du DAO1.3 - modèles de fiches de renseignements : {{B04-CD-01}}{{SI:GARANTIE}}- modèle de garantie de soumission{{FINSI:GARANTIE}}2.5 - Plan
+LIGNE	5.2. Demandes d’éclaircissementAdresseAfin d’obtenir des éclaircissements, l’adresse de la Personne Responsable des Marchés Publics est la suivante :Attention de : {{B01-AC-05}}Rue : {{B01-AC-02}}Adresse électronique : {{B01-AC-06}}Délai pour l'envoi des demandes par les Candidats{{B04-EQ-01}} jours avant la date limite fixée pour la remise des offres figurant à la clause 7.2 ci-dessous.Délai pour la réponse du représentant de la PRMP{{B04-EQ-02}} jours avant la date limite fixée pour la remise des offres figurant à la clause 7.2 ci-dessous.
+LIGNE	6. – Préparation des offres
+LIGNE	6.2. Contenu des offres1°- Documents ou pièces à remettre en sus de ceux mentionnés à la clause 6.2. des IC :{{B04-PI-01}}2° -une photocopie certifiée de la Carte Professionnelle de l’année en coursune photocopie certifiée de l’Etat 211 bis datée de moins de TROIS (03) moisune photocopie certifiée de l’Extrait du Registre de Commerceun certificat de non faillite datée de moins de 2 moisune photocopie certifiée du Numéro d’Identification Fiscale (NIF) »une photocopie certifiée de la carte statistique{{SI:GARANTIE}}4°- Garantie de soumission{{FINSI:GARANTIE}}{{SI:VISITE-OBLIGATOIRE}}5°- Certificat de visite des lieux{{FINSI:VISITE-OBLIGATOIRE}}
+LIGNE	6.3. Capacités et qualifications des candidatsFiches d'informationChaque Candidat complète les fiches de renseignements suivantes, selon les modèles figurant à la section 1.3 Formulaire de Soumission et les signe en portant la mention "certifiées exactes et sincères" :1°Une fiche de renseignements relative à son identification et à sa situation juridique;2°Une fiche de renseignements relative à ses capacités techniques à réaliser le Marché,3°Une fiche de renseignements relative à sa capacité financière;4°la liste des principaux marchés portant sur des travaux de même type ou d'un type similaire réalisés au cours des trois dernières années{{SI:ONG}}Les communautés locales et/ou les ONG sont admises à participer à l'appel d'offres. Par dérogation aux obligations de fournir les renseignements sus - mentionnés ces communautés n'ont pas à produire:<indiquer les formulaires ou informations que ces communautés et ONG sont dispensés de produire>{{FINSI:ONG}}
+LIGNE	Qualifications particulières requisesAux fins du présent Marché, les Candidats doivent répondre aux critères de sélection minima suivantsa) avoir réalisé un chiffre d’affaires annuel, pour des travaux de construction, d’un montant équivalant à{{B03-QT-07}}b) avoir réalisé avec succès en tant qu’entrepreneur principal au moins un projet de nature et de complexité comparables à celles des Travaux au cours des trois (5) dernières années et comprenant:{{B03-QT-08}}(c) indiquer sous quelle forme (propriété, location, etc.) l'Entrepreneur pourra disposer en temps voulu des gros matériels et équipements essentiels ci-après :{{B03-QT-09}}(d) proposer un directeur de travaux ayant {{B03-QT-10}} ans d’expérience dans la réalisation de travaux de nature et de complexité comparables, y compris au moins < par exemple >ans d’expérience en tant que directeur;{{SI:QUALIFICATIONS}}{{B03-QT-06}}{{FINSI:QUALIFICATIONS}}
+LIGNE	{{SI:PREFERENCE}}
+LIGNE	Les Candidats susceptibles de bénéficier de la préférence nationale prévue à l'article 9.5 des IC et des Présentes DPAO doivent produire les pièces justifiant leur éligibilité à cette préférence, prévues à l'article précité.
+LIGNE	{{FINSI:PREFERENCE}}
+LIGNE	{{SI:GROUPEMENT}}
+LIGNE	Qualification des membres d'un groupement d'entreprises{{SI:GROUPEMENT-LIBRE}}Chacun des membres d'un groupement d'entreprises conjointes doit répondre aux conditions de qualification énoncées à la présente clause concernant le lot pour lequel il soumissionne.Le mandataire doit satisfaire au moins aux conditions de qualifications suivants:{{B03-GT-04}}{{FINSI:GROUPEMENT-LIBRE}}Dans le cas de groupements d'entreprises solidaires:Les qualifications de chacun des membres du groupement sont ajoutées pour déterminer si le groupement de Candidats répond aux critères de qualification énoncés à la présente Clause.de plus, chacun des membres du groupement doit satisfaire au moins aux conditions de qualifications suivants:{{B03-GT-03}}Le mandataire doit satisfaire au moins aux conditions de qualifications suivants:{{B03-GT-05}}
+LIGNE	{{FINSI:GROUPEMENT}}
+LIGNE	6.4. Délai de validité des offresLe délai de validité des offres sera de {{B04-DV-01}} jours.
+LIGNE	6.5.3. Caractère ferme ou révisable des prix{{SI:FERME}}Les prix sont fermes et non révisables{{FINSI:FERME}}{{SI:REVISABLE}}Les prix sont révisables{{FINSI:REVISABLE}}
+LIGNE	6.6. Monnaie{{SI:ARIARY}}a) Les prix seront entièrement libellés dans la monnaie nationale l'Ariary et réglés dans cette monnaie.{{FINSI:ARIARY}}{{SI:DEVISES}}c) Les prix pourront comporter une part libellé en monnaie nationale et une part libellé en monnaies étrangères.La part libellé en monnaies étrangères sera destinée à couvrir les prix des intrants nécessaires aux Travaux que le Candidat compte se procurer en dehors de la République de Madagascar. Ils seront libellés en <préciser la devise convertible>Tous les autres éléments du prix seront libellés et payables en monnaies nationale.Le Maître de l’Ouvrage peut demander aux Candidats d’expliquer leurs besoins en monnaies nationale et étrangères et de justifier les montants en monnaies étrangères. A cette fin, un état détaillé de ses besoins en monnaies étrangères sera fourni par le Candidat.{{FINSI:DEVISES}}
+LIGNE	6.7. Garantie de soumission{{SI:SANS-GARANTIE}}Il n’est pas demandé de garantie de soumission{{FINSI:SANS-GARANTIE}}{{SI:GARANTIE}}Une garantie de soumission doit être fournie dans l’une des formes suivantes :{{SI:GARANTIE-BANCAIRE}}- Soit une garantie bancaire{{FINSI:GARANTIE-BANCAIRE}}{{SI:GARANTIE-CAUTION}}- Soit une caution personnelle et solidaire{{FINSI:GARANTIE-CAUTION}}{{SI:GARANTIE-CHEQUE}}- Soit un chèque de banque libéllé au nom de …..{{FINSI:GARANTIE-CHEQUE}}Le montant de la garantie de soumission est de :{{B05-GQ-03.lettres}} ({{B05-GQ-03}}).{{FINSI:GARANTIE}}
+LIGNE	{{SI:LANGUE}}
+LIGNE	6.8. LangueLa langue de l'offre est le français ou {{B04-LG-01}}
+LIGNE	{{FINSI:LANGUE}}
+LIGNE	6.9. - Réunion préparatoire et visite des lieux6.9.1 Réunion préparatoire6.9.2 Visite des lieux{{SI:REUNION-NON}}Il n'est pas prévue de réunion préparatoire{{FINSI:REUNION-NON}}{{SI:REUNION-OUI}}Les représentants des Candidats sont invités à assister à une réunion préparatoire qui se tiendra aux lieu, date et heures indiqués ci-dessous:{{B04-RP-02}}{{FINSI:REUNION-OUI}}{{B04-VL-01}}{{SI:VISITE-OBLIGATOIRE}}une visite des lieux obligatoire sera organisée sous la conduite de l’Autorité Contractante aux lieux, date et heures indiquées ci-dessus:Les Candidats ou leurs représentants sont tenus d’y participer à leurs propres frais pour leur permettre de se rendre compte sur place de l’importance, ainsi que des conditions d’exécution des travaux.A l’issue de cette visite, un certificat de visite de lieux sera délivré à chaque Candidat présent. Ce certificat sera à joindre dans l’offre{{FINSI:VISITE-OBLIGATOIRE}}
+LIGNE	7. – Remise des offres
+LIGNE	7.1. Forme des plis{{SI:ALLOTI}}les offres devront être présentées séparément pour chacun des lots{{FINSI:ALLOTI}}Outre l’original de l’offre, les plis doivent comprendre:{{B04-FP-01}} copiesLes enveloppes extérieure et intérieure devront comporter les autres identifications suivantes :{{B04-FP-02}}Le nom et l’adresse du Maître de l’ouvrage : {{B01-AC-01}}, {{B01-AC-02}}- La référence du présent Appel d’Offres- La mention « NE PAS OUVRIR AVANT LA DATE ET L’HEURE D’OUVERTURE DES PLIS »,{{SI:ALLOTI}}- la référence et le numéro du lot auquel se rapporte l’offre{{FINSI:ALLOTI}}à l’exclusion de toute mention permettant d’identifier le candidat pour l’enveloppe extérieure
+LIGNE	7.2. Lieu, date et heure, de la remise des offresAux fins de remise des offres l’adresse du Maître de l'Ouvrage est la suivante :Attention : {{B01-AC-05}}Lieu :Adresse: {{B01-AC-02}}Les date et heure limites de remise des offres sont les suivantes :Date : {{B04-OV-02}}
+LIGNE	7.3. Remise des offres par voie électronique{{SI:PAPIER}}Le mode de remise des offres par voie électronique n'est pas possible dans le cadre du présent Appel d'Offres.{{FINSI:PAPIER}}{{SI:B04-SE}}[[CLAUSE À FOURNIR PAR LE JURISTE : conditions et modalités de la remise électronique — plateforme ({{B04-SE-02}}), heure de référence ({{B04-SE-04}}), signature exigée ({{B04-SE-05}}), formats ({{B04-SE-07}}) et tailles admis ({{B04-SE-08}} Mo par fichier, {{B04-SE-09}} Mo par offre), ouverture électronique en séance seulement, assistance ({{B04-SE-14}}), indisponibilité et prorogation ({{B04-SE-12}} h, {{B04-SE-13}} jours ouvrables)]]{{FINSI:B04-SE}}
+LIGNE	8. Ouverture des plisLieu : {{B04-OV-01}}Date : Le même jour que la date limite fixée pour la remise des offres.Heure : (insérer l’heure)
+LIGNE	9. Evaluation et comparaison des offres
+LIGNE	9.1. - Relations entre les Candidats et le Maître de l'Ouvrage ou La PRMPLes Candidats devront répondre aux demandes d'éclaircissements de la PRMP dans un délai de:{{B06-RC-01}} jours
+LIGNE	{{SI:ALLOTI}}
+LIGNE	9.4. Evaluation des offres9.4.3. Détermination du montant évalué de l'offreEvaluation des offres portant sur plusieurs lots{{SI:EVALUATION-PAR-LOT}}Les offres seront évaluées par lot et le Marché portera sur le lot ou les lots attribués au Candidat proposant la meilleure offre pour le lot ou les lots considérés.{{FINSI:EVALUATION-PAR-LOT}}{{SI:EVALUATION-ENSEMBLE}}Le Marché portera sur l'ensemble des lots. Les offres seront évaluées par lot. Le prix offert pour l’ensemble des lots par les candidats dont les offres sont conformes sera utilisé aux fins de comparaison des offres.{{FINSI:EVALUATION-ENSEMBLE}}
+LIGNE	{{FINSI:ALLOTI}}
+LIGNE	9.5. Marge de préférence nationale{{SI:SANS-PREFERENCE}}Il n’est pas accordé de préférence aux candidatsnationaux{{FINSI:SANS-PREFERENCE}}{{SI:PREFERENCE}}Il est accordé aux candidats nationaux une préférence conformément à la clause 9.5. des IC de {{B06-PN-02.chiffres}} %{{FINSI:PREFERENCE}}
+LIGNE	11. Délai d’exécutionLe délai d’exécution proposé ne doit pas dépasser {{B09-DL-01}} à compter du lendemain de la date de notification de l’OS de commencer les travaux{{SI:NON-CUMUL}}En cas d’attribution de deux ou plusieurs lots à un Candidat, les délais ne sont pas cumulables{{FINSI:NON-CUMUL}}
+FIN_TABLE	

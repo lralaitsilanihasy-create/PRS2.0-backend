@@ -81,3 +81,20 @@ changer de nature : le moteur évalue toujours, le fichier décide toujours.
 
 La preuve reste externe. Le rendu brut des trois fichiers est jugé fidèle par le comparateur du front : 234/234, 455/455
 et 456/456. Le contrat-cadre est inchangé, à 174/174 et 378/378.
+
+## Complément du 2026-09-29 — lot D4, les travaux
+
+Aucune extension de la syntaxe. Deux précisions de lecture :
+
+1. **Un modèle commun à deux catégories** se partage par la condition `categorie`. Le contrat-cadre des fournitures et
+   celui des travaux sont un même document type. `DPAC-CC` et `AE-CC` couvrent donc les deux catégories, avec
+   `CCAG-FOURNITURES` (`categorie != TRAVAUX`) et `CCAG-TRAVAUX` (`categorie = TRAVAUX`). Les champs qu'ils citent sont
+   servis aux deux catégories. Leurs doublons propres aux travaux sont retirés, et non fusionnés : les valeurs restent
+   lisibles.
+2. **Un reflet cité hors de sa catégorie** se lit sur sa clé de cadrage. Un jeton `{{CODE}}` dont le champ est un reflet
+   (`cleCadrage` renseignée), et qui n'a pas de valeur servie, prend celle de la clé de cadrage. C'est le cas quand le
+   reflet n'est pas servi à la catégorie de la fiche : `B02-LV-05` = `nbLots` dans `AE-CC` des travaux.
+
+La preuve reste externe et porte sur les onze modèles : DPAO-T 247/247, AE-T 363/363, CCAP-T 570/570, DPAC-CC 179/179,
+AE-CC 408/408. Les six autres sont inchangés ou recopiés (AE-PI 300/300 et CPS-PI 238/238, avec `DEPART-OS` =
+`B09-DP-01 = OUI`).

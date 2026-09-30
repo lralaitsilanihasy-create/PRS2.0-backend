@@ -516,6 +516,26 @@ champs non imprimés retirés*.
   marché à commande dit, s'il y a lieu, la variation admise au-delà des bornes de quantités. Le DPAO dit les niveaux de
   qualification exigés. Un CCAP déjà produit se corrige en reproduisant les documents par une révision.
 
+#### Les DAO de travaux sur leurs documents types (lot D4, demande du 2026-09-29)
+
+⚠️ **Une fiche de travaux produit à son tour les documents types de l'ARMP remplis** : les données particulières de
+l'appel d'offres, le cahier des clauses administratives particulières (avec ses annexes) et l'acte d'engagement.
+Contrat : `docs/api-endpoints.md`, § *Les DAO de travaux — lot D4*.
+
+- **Le type de prix choisit les rédactions** : prix unitaires, forfaitaire ou mixte. Les tranches (une ferme, jusqu'à
+  deux conditionnelles avec leur délai d'affermissement) ont leurs propres rédactions.
+- **Les annexes du CCAP suivent la fiche** : la formule de révision si les prix sont révisables ; le modèle de garantie
+  de bonne exécution dans la forme admise (bancaire ou caution) ; les modèles de restitution d'avance si l'avance est
+  consentie avec garantie. Elles ne sont plus des pièces à joindre.
+- **Les travaux de bâtiment** ajoutent au CCAP les cahiers des prescriptions communes et techniques (CPC, TBM) et
+  l'assurance décennale.
+- **Les pénalités suivent le cadrage**, comme pour les autres catégories. Le plafond du CCAG des travaux reste de 15 %.
+- **Un seul contrat-cadre** : celui des travaux est rédigé sur le même document type que celui des fournitures, avec
+  les mêmes champs. Seules les références au CCAG changent (« CCAG Travaux »). Les champs propres au contrat-cadre de
+  travaux qui doublaient ceux des fournitures sont retirés ; les valeurs déjà saisies sont conservées.
+- **Fournitures** : le montant maximum annuel estimé d'un marché à commande devient facultatif, et le délai de paiement
+  en jours n'est plus demandé.
+
 #### Les DAO de prestations intellectuelles sur leurs documents types (lot D3, arbitrages du pilote du 2026-09-29)
 
 ⚠️ **Une fiche de prestations intellectuelles produit à son tour les documents types de l'ARMP remplis** : les données

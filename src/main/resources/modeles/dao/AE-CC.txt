@@ -1,5 +1,7 @@
 FICHIER	AE-CC.docx
 TITRE	ACTE D’ENGAGEMENT ET CAHIER DES CLAUSES ADMINISTRATIVES PARTICULIERES
+CONDITION	CCAG-FOURNITUREScategorie != TRAVAUX
+CONDITION	CCAG-TRAVAUXcategorie = TRAVAUX
 CONDITION	AOOB01-AC-13 contient ouvert
 CONDITION	AORB01-AC-13 contient restreint
 CONDITION	CONSULTATIONB01-AC-13 contient consultation
@@ -189,7 +191,12 @@ PARA	• Le bordereau de prix unitaires complémentaires joint aux marchés pass
 PARA	• Le catalogue joint aux marchés passés sur la base du contrat-cadre. Tout nouveau catalogue remplace et annule le précédent.
 PARA	• Toutes autres pièces contractuelles réclamées au stade des marchés subséquents.
 PARA	➢ Pièces générales (non jointes) auxquelles feront référence les marchés passés sur la base du présent contrat-cadre :
+PARA	{{SI:CCAG-FOURNITURES}}
 PARA	• Le cahier des clauses administratives générales applicables aux marchés publics de Fournitures courantes et services.
+PARA	{{FINSI:CCAG-FOURNITURES}}
+PARA	{{SI:CCAG-TRAVAUX}}
+PARA	• Le cahier des clauses administratives générales applicables aux marchés de travaux.
+PARA	{{FINSI:CCAG-TRAVAUX}}
 SOUS_TITRE	ARTICLE 7 – Durée – Délais d’exécution - Pénalités
 SOUS_TITRE	7.1– Durée du contrat-cadre - entrée en vigueur
 PARA	La durée du contrat-cadre est de {{B02-DC-02}} mois à compter de sa notification.
@@ -231,7 +238,12 @@ PARA	{{SI:PENALITES-NON}}
 PARA	Les pénalités de retard ne s’appliquent pas.
 PARA	{{FINSI:PENALITES-NON}}
 PARA	{{SI:PENALITES-CCAG}}
+PARA	{{SI:CCAG-FOURNITURES}}
 PARA	Conformément à l’article 12 du CCAG Fournitures et Services il sera appliqué sans mise en demeure préalable, des pénalités en cas de retard dans l’exécution des marchés passés sur la base du présent contrat.
+PARA	{{FINSI:CCAG-FOURNITURES}}
+PARA	{{SI:CCAG-TRAVAUX}}
+PARA	Conformément à l’article 20 du CCAG Travaux il sera appliqué sans mise en demeure préalable, des pénalités en cas de retard dans l’exécution des marchés passés sur la base du présent contrat.
+PARA	{{FINSI:CCAG-TRAVAUX}}
 PARA	{{FINSI:PENALITES-CCAG}}
 PARA	{{SI:PENALITES-DEROGATION}}
 PARA	{{B07-PE-03}}
@@ -301,7 +313,12 @@ PARA	Une avance sera accordée au sous-traitant dans les conditions fixées par 
 PARA	{{FINSI:AVANCE-SOUS-TRAITANT}}
 SOUS_TITRE	ARTICLE 11 – Sous-traitance des marchés conclus sur la base du présent contrat-cadre
 SOUS_TITRE	11.1 – Désignation des sous-traitants
+PARA	{{SI:CCAG-FOURNITURES}}
 PARA	Le titulaire pourra sous-traiter une partie de l’exécution des prestations faisant l’objet des marchés subséquents dans les conditions prévues par l’article 5.2 du CCAG Fournitures
+PARA	{{FINSI:CCAG-FOURNITURES}}
+PARA	{{SI:CCAG-TRAVAUX}}
+PARA	Le titulaire pourra sous-traiter une partie de l’exécution des prestations faisant l’objet des marchés subséquents dans les conditions prévues par l’article 2.4 du CCAG Travaux
+PARA	{{FINSI:CCAG-TRAVAUX}}
 PARA	Les sous-traitants peuvent être présentés à l’autorité contractante pour acceptation lors de la soumission au contrat-cadre, ou lors de la remise des offres dans le cadre des marchés subséquents conclus sur la base du présent contrat-cadre.
 SOUS_TITRE	11.2 – Modalités de paiement direct des sous-traitants
 PARA	Le sous-traitant adresse à l’autorité contractante sa facture ainsi que l’accusé de réception ou le récépissé attestant que le titulaire a par ailleurs reçu sa demande de paiement ou l’avis postal attestant que le pli a été refusé ou n’a pas été réclamé. La somme à régler tient compte d’une éventuelle actualisation des prix et inclut les taxes applicables.
@@ -316,7 +333,12 @@ PARA	Dans les deux cas, les modalités particulières devront être fixées dans
 SOUS_TITRE	ARTICLE 13 – Opération de vérification – Admission des prestations des marchés conclus sur la base du présent contrat-cadre
 PARA	La réception est l’acte par lequel l’autorité contractante accepte avec ou sans réserve, les prestations exécutées.
 PARA	{{SI:VERIFICATION-CCAG}}
+PARA	{{SI:CCAG-FOURNITURES}}
 PARA	Les opérations de vérification s’effectueront conformément aux articles 21 et 22 du CCAG Fournitures
+PARA	{{FINSI:CCAG-FOURNITURES}}
+PARA	{{SI:CCAG-TRAVAUX}}
+PARA	Les opérations de vérification s’effectueront conformément aux articles 41, 42 et 43 du CCAG Travaux
+PARA	{{FINSI:CCAG-TRAVAUX}}
 PARA	{{FINSI:VERIFICATION-CCAG}}
 PARA	{{SI:VERIFICATION-LIBRE}}
 PARA	{{B09-VA-02}}
@@ -335,7 +357,12 @@ PARA	{{SI:GARANTIE-MISE-EN-SERVICE}}
 PARA	Le délai de garantie est fixé à {{B09-GP-03}} mois à partir de la date de mise en service de la prestation objet du marché.
 PARA	{{FINSI:GARANTIE-MISE-EN-SERVICE}}
 PARA	{{SI:GARANTIE-CCAG}}
+PARA	{{SI:CCAG-FOURNITURES}}
 PARA	La garantie sera exécutée conformément aux articles 13 et 23 du CCAG Fournitures
+PARA	{{FINSI:CCAG-FOURNITURES}}
+PARA	{{SI:CCAG-TRAVAUX}}
+PARA	La garantie sera exécutée conformément à l’article 44 du CCAG Travaux
+PARA	{{FINSI:CCAG-TRAVAUX}}
 PARA	{{FINSI:GARANTIE-CCAG}}
 SOUS_TITRE	ARTICLE 15 – Modalités de facturation et de paiement des prestations objet des marchés subséquents conclus sur la base du présent contrat-cadre
 PARA	Si la durée ou les délais d’exécution des marchés subséquents conclus sur la base du présent contrat-cadre sont inférieurs à trois mois, les prestations seront réglées en une seule fois.
@@ -383,7 +410,12 @@ PARA	– {{B10-RS-02}} mois avant la date anniversaire de la notification du con
 PARA	{{FINSI:NON-RECONDUCTIBLE}}
 PARA	La résiliation n’ouvrira droit au profit du titulaire à aucune indemnité.
 SOUS_TITRE	18.2 - Résiliation du contrat-cadre et des marchés subséquents conclus sur la base du présent contrat-cadre
+PARA	{{SI:CCAG-FOURNITURES}}
 PARA	La résiliation pourra être prononcée dans l’exécution des prestations des marchés subséquents conformément aux articles 24 à 33 du CCAG Fournitures
+PARA	{{FINSI:CCAG-FOURNITURES}}
+PARA	{{SI:CCAG-TRAVAUX}}
+PARA	La résiliation pourra être prononcée dans l’exécution des prestations des marchés subséquents conformément aux articles 46 du CCAG Travaux
+PARA	{{FINSI:CCAG-TRAVAUX}}
 PARA	L’autorité contractante se réserve le droit de résilier le contrat-cadre dans les hypothèses où une (des) faute(s) du titulaire rendrait (rendraient) impossible la poursuite des relations contractuelles. {{B10-RS-03}}
 SOUS_TITRE	ARTICLE 19 – Litiges
 PARA	En cas de litiges entre les parties au contrat, la juridiction compétente est {{B10-VR-01}}.

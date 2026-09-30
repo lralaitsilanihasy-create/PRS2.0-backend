@@ -1,0 +1,389 @@
+FICHIER	AE-T.docx
+TITRE	MARCHÉ PUBLIC DE TRAVAUX
+CONDITION	ALLOTIalloti = OUI
+CONDITION	NON-ALLOTIalloti != OUI
+CONDITION	AOOB01-AC-13 = Appel d'offres ouvert
+CONDITION	PREQUALIFICATIONB01-AC-13 contient qualification
+CONDITION	DEUX-ETAPESB01-AC-13 contient deux étapes
+CONDITION	RESTREINTB01-AC-13 contient restreint
+CONDITION	MODB02-MW-04 renseigne
+CONDITION	MOEB02-MW-01 renseigne
+CONDITION	GROUPEMENTgroupement = OUI
+CONDITION	GROUPEMENT-CONJOINTgroupement = OUI et formeGroupement = CONJOINT_OU_SOLIDAIRE
+CONDITION	ARIARYB05-MN-01 != Devises
+CONDITION	DEVISESB05-MN-01 = Devises
+CONDITION	REVISABLEprixRevisable = OUI
+CONDITION	UNITAIREStypePrix = UNITAIRES et tranches != OUI
+CONDITION	FORFAITtypePrix = FORFAITAIRE et tranches != OUI
+CONDITION	UNITAIRES-TRANCHEStypePrix = UNITAIRES et tranches = OUI
+CONDITION	FORFAIT-TRANCHEStypePrix = FORFAITAIRE et tranches = OUI
+CONDITION	TRANCHE-C2tranches = OUI et B02-LT-05 renseigne
+CONDITION	DEPART-OStranches != OUI et B09-DT-01 contient ordre de service
+CONDITION	TRANCHEStranches = OUI
+CONDITION	AFFERMISSEMENT-1tranches = OUI et B02-LT-05 vide
+CONDITION	AFFERMISSEMENT-2tranches = OUI et B02-LT-05 renseigne
+CONDITION	PREPARATIONB09-PT-01 = OUI
+CONDITION	RECEPTIONB09-DL-04 renseigne
+CONDITION	SANS-AVANCEavance = NON
+CONDITION	AVANCEavance = OUI
+CONDITION	AVANCE-GROUPEMENTavance = OUI et groupement = OUI
+CONDITION	ANNEXE-FORFAITtypePrix = FORFAITAIRE
+CONDITION	ANNEXE-UNITAIREStypePrix = UNITAIRES
+CONDITION	ANNEXE-MIXTEtypePrix = MIXTE
+CENTRE	ACTE D'ENGAGEMENT (A.E)
+PARA	AUTORITE CONTRACTANTE :
+PARA	{{B01-AC-01}}
+PARA	MARCHÉ :
+PARA	{{SI:NON-ALLOTI}}
+PARA	{{B02-OB-01}}
+PARA	{{FINSI:NON-ALLOTI}}
+PARA	{{SI:ALLOTI}}
+PARA	{{B02-OB-01}} — lot n° {{LOT}}
+PARA	{{FINSI:ALLOTI}}
+PARA	Marché passé selon la procédure
+PARA	{{SI:AOO}}
+PARA	d'appel d'offres ouvert régie par l'article 18 du Code des Marchés Publics
+PARA	{{FINSI:AOO}}
+PARA	{{SI:PREQUALIFICATION}}
+PARA	d'appel d'offres ouvert avec pré - qualification régie par l'article 19 du Code des Marchés Publics
+PARA	{{FINSI:PREQUALIFICATION}}
+PARA	{{SI:DEUX-ETAPES}}
+PARA	d'appel d'offres en deux étapes régie par l'article 20 du Code des Marchés Publics
+PARA	{{FINSI:DEUX-ETAPES}}
+PARA	{{SI:RESTREINT}}
+PARA	d'appel d'offres restreint régie par l'article 21 du Code des Marchés Publics
+PARA	{{FINSI:RESTREINT}}
+PARA	Imputation budgétaire : {{B01-AC-17}}
+PARA	PERSONNE RESPONSABLE DES MARCHES PUBLICS (PRMP) ou son Délégué :
+PARA	{{B01-AC-05}}
+PARA	{{SI:MOD}}
+PARA	Maître d'Ouvrage Délégué: {{B02-MW-04}}
+PARA	{{FINSI:MOD}}
+PARA	{{SI:MOE}}
+PARA	Maître d'œuvre: {{B02-MW-01}}
+PARA	{{FINSI:MOE}}
+TABLE	2
+LIGNE	Date de notification du Marché:<date de notification à compléterlors de la notification><cadre réservé à la mention "exemplaire unique" lors de la notification>
+FIN_TABLE	
+SOUS_TITRE	A. - ENGAGEMENT DU CANDIDAT
+SOUS_TITRE	ARTICLE 1 - CONTRACTANT(S)
+PARA	Engagement à remplir par le CANDIDAT INDIVIDUEL
+PARA	Je soussigné :
+PARA	- Nom :
+PARA	- Prénom :
+PARA	Agissant pour mon propre compte :
+PARA	domicilié à
+PARA	N° de Registre de Commerce
+PARA	N° statistique:
+PARA	Identification fiscale
+PARA	Télécopieur :
+PARA	Adresse e-Mail :
+PARA	OU :
+PARA	Agissant pour le compte de la personne morale dont les coordonnées sont données ci-après :
+PARA	Dénomination :
+PARA	forme juridique :
+PARA	adresse du siège :
+PARA	N° de Registre de Commerce :
+PARA	N° statistique :
+PARA	Identification fiscale :
+PARA	N° Télécopieur :
+PARA	Adresse e-Mail :
+PARA	Après avoir pris connaissance du Dossier d'Appel d'Offres N° {{B02-OB-03}} du <date> et, en particulier, des documents composant le Cahier des Prescriptions Spéciales :
+PARA	Atteste sur l'honneur, sous peine de résiliation de plein droit du marché ou de sa mise en régie, à mes torts exclusifs ou, selon le cas, aux torts exclusifs de la personne morale que je représente, que je ne tombe pas ou, selon le cas, que ladite personne morale ne tombe pas sous le coup d'un cas d'exclusion visé par l'article 9 du Code des Marchés Publics reproduit ci-après.
+PARA	"Art. 9 - Exclusion des marchés publics:
+PARA	Ne sont pas admis à concourir aux marchés publics :
+PARA	Les personnes physiques ou morales en état de liquidation judiciaire et les personnes physiques dont la faillite personnelle a été prononcée ;
+PARA	Les personnes physiques ou morales admises en règlement judiciaire qui ne peuvent justifier qu'elles ont été habilitées à poursuivre leur activité.
+PARA	Les personnes physiques ou morales qui n’ont pas souscrit à leurs obligations fiscales ou para fiscales à la date limite fixée pour le dépôt des offres.
+PARA	Les entreprises dans lesquelles la Personne Responsable des Marchés Publics ou les membres de la Commission d’Appel Offres possèdent des intérêts financiers ou personnels directs de quelque nature que ce soit.
+PARA	Les entreprises affiliées aux prestataires de service ayant contribué à préparer tout ou partie des Dossiers d’Appel d’Offres ou de consultation.
+PARA	les personnes physiques ou morales qui ont fait l’objet d’exclusion temporaire ou définitive résultant d’une infraction au Code Pénal ou prononcée par l’Autorité de Régulation des Marchés Publics pour atteinte à la réglementation des marchés publics."
+PARA	M'engage en mon nom ou en mon nom et au nom du candidat que je représente, selon le cas, à m'abstenir de toute pratique consistant dans l'octroi ou la promesse d'octroyer un avantage indu, pécuniaire ou autre, directement ou par des intermédiaires, en vue d'obtenir le marché objet du présent Acte d'Engagement, et en général à respecter les dispositions du Code d'Ethique des Marchés Publics adopté par décret n°2006-343 du 30 mai 2006.
+PARA	M'engage sans réserve, conformément aux stipulations des documents visés ci-dessus, à exécuter le marché portant sur les Travaux définis par les Spécifications Techniques du CPS, dans les conditions précisées par le CPS, le CCAG applicable et par le présent Acte d'Engagement.
+PARA	L'offre ainsi présentée me lie conformément à la durée de validité des offres fixée dans les Données Particulières de l'Appel d'Offres, jusqu'au {{DERIVE.fin-validite-offre}}.
+PARA	{{SI:GROUPEMENT}}
+PARA	Engagement à remplir par les MEMBRES D'UN :
+PARA	GROUPEMENT D'ENTREPRISES CONJOINTES
+PARA	OU :
+PARA	GROUPEMENTS D'ENTREPRISES SOLIDAIRES
+PARA	(cocher la case correspondante)
+SOUS_TITRE	ARTICLE 1. - CONTRACTANTS :
+PARA	Nous :
+PARA	1.
+PARA	Nom :
+PARA	Prénoms :
+PARA	Agissant pour mon compte / pour le compte de la personne morale ci-après :
+PARA	Dénomination :
+PARA	Forme juridique :
+PARA	Adresse du siège :
+PARA	N° de Registre de Commerce :
+PARA	N° statistique :
+PARA	Identification fiscale :
+PARA	N° Télécopieur :
+PARA	Adresse e-Mail :
+PARA	2.
+PARA	Nom :
+PARA	Prénoms :
+PARA	Agissant pour mon compte / pour le compte de la personne morale ci-après :
+PARA	Dénomination :
+PARA	Forme juridique :
+PARA	Adresse du siège :
+PARA	N° de Registre de Commerce :
+PARA	N° statistique :
+PARA	Identification fiscale :
+PARA	N° Télécopieur :
+PARA	Adresse e-Mail :
+PARA	(Compléter pour chacun des membres du groupement en ajoutant autant de pages que nécessaire)
+PARA	Représentés par (en cas de pouvoir donné à un mandataire)
+PARA	Nom :
+PARA	Prénoms :
+PARA	Agissant pour le compte de :
+PARA	Dénomination :
+PARA	Forme juridique :
+PARA	adresse du siège :
+PARA	N° de Registre de Commerce :
+PARA	N° statistique :
+PARA	Identification fiscale :
+PARA	N° Télécopieur :
+PARA	Adresse e-Mail :
+PARA	Après avoir pris connaissance du Dossier d'Appel d'Offres N° {{B02-OB-03}} du <date> et, en particulier, des documents composant le Cahier des Prescriptions Spéciales :
+PARA	Attestons sur l'honneur, sous peine de résiliation de plein droit du marché ou de sa mise en régie, à nos torts exclusifs ou, selon le cas, aux torts exclusifs des personnes morales que nous représentons, que nous ne tombons pas ou, selon le cas, que lesdites personnes morales ne tombe pas sous le coup d'un cas d'exclusion visé par l'article 9 du Code des Marchés Publics reproduit ci-après.
+PARA	"Art. 9 - Exclusion des marchés publics:
+PARA	Ne sont pas admis à concourir aux marchés publics :
+PARA	Les personnes physiques ou morales en état de liquidation judiciaire et les personnes physiques dont la faillite personnelle a été prononcée ;
+PARA	Les personnes physiques ou morales admises en règlement judiciaire qui ne peuvent justifier qu'elles ont été habilitées à poursuivre leur activité.
+PARA	Les personnes physiques ou morales qui n’ont pas souscrit à leurs obligations fiscales ou para fiscales à la date limite fixée pour le dépôt des offres.
+PARA	Les entreprises dans lesquelles la Personne Responsable des Marchés Publics ou les membres de la Commission d’Appel Offres possèdent des intérêts financiers ou personnels directs de quelque nature que ce soit.
+PARA	Les entreprises affiliées aux prestataires de service ayant contribué à préparer tout ou partie des Dossiers d’Appel d’Offres ou de consultation.
+PARA	les personnes physiques ou morales qui ont fait l’objet d’exclusion temporaire ou définitive résultant d’une infraction au Code Pénal ou prononcée par l’Autorité de Régulation des Marchés Publics pour atteinte à la réglementation des marchés publics."
+PARA	Nous engageons en notre nom, au nom du candidat que nous représentons, à nous abstenir de toute pratique consistant dans l'octroi ou la promesse d'octroyer un avantage indu, pécuniaire ou autre, directement ou par des intermédiaires, en vue d'obtenir le marché objet du présent Acte d'Engagement, et en général à respecter les dispositions du Code d'Ethique des Marchés Publics adopté par 2006-343 du 30 mai 2006.
+PARA	Nous engageons sans réserve, conformément aux stipulations des documents visés ci-dessus, à exécuter le marché portant sur les Travaux définis par les Spécifications Techniques du CPS, dans les conditions précisées par le CPS, le CCAG applicable et par le présent Acte d'Engagement.
+PARA	L'offre ainsi présentée nous lie conformément à la durée de validité des offres fixée dans les Données Particulières de l'Appel d'Offres, jusqu'au {{DERIVE.fin-validite-offre}}.
+PARA	{{FINSI:GROUPEMENT}}
+SOUS_TITRE	ARTICLE 2 - PRIX
+PARA	Les conditions d'établissement des prix sont celles existant le quinzième jour précédant la date limite fixée pour la remise des offres, soit le…………
+PARA	{{SI:ARIARY}}
+PARA	La monnaie de compte et de paiement est l’Ariary
+PARA	{{FINSI:ARIARY}}
+PARA	{{SI:DEVISES}}
+PARA	Tous les paiements à réaliser en monnaie différente de l'Ariary seront effectués sur la base du cours publié par la Banque Centrale de Madagascar en vigueur le quinzième jour précédant la date limite fixée pour le remise des offres.
+PARA	{{FINSI:DEVISES}}
+PARA	{{SI:REVISABLE}}
+PARA	Les modalités de variation des prix sont fixées en Annexe au Cahier des Clauses Administratives Particulières du CPS. Les valeurs de pondération des paramètres variables de la formule de révision sont donnés en Annexe au présent Acte d'Engagement.
+PARA	{{FINSI:REVISABLE}}
+PARA	{{SI:UNITAIRES}}
+PARA	Les Travaux, objet du présent marché, seront rémunérés, par application des prix unitaires qui résultent du bordereau des prix unitaires et du détail quantitatif et estimatif figurant en Annexe <N° de l'Annexe> au présent Acte d'Engagement, aux quantités réellement exécutées prises en attachement contradictoire.
+PARA	Le montant du marché est estimé à :
+PARA	montant hors taxes : (en chiffre et en lettres)
+PARA	TVA (….%) : (en chiffre et en lettres)
+PARA	Soit un montant total TTC de (en chiffre et en lettres) :
+PARA	{{FINSI:UNITAIRES}}
+PARA	{{SI:FORFAIT}}
+PARA	Les Travaux, objet du présent marché, seront rémunérées par application du prix forfaitaire résultant du détail quantitatif et estimatif figurant en Annexe <N° de l’Annexe> selon le découpage en centième par corps d’état des travaux terminés, prévu à l’article…. du CCAP
+PARA	Le montant du marché est fixé à:
+PARA	montant hors taxes : (en lettres et en chiffre)
+PARA	TVA (….%) : (en lettres et en chiffre)
+PARA	Soit un montant total TTC de (en lettres et en chiffre) :
+PARA	{{FINSI:FORFAIT}}
+PARA	{{SI:UNITAIRES-TRANCHES}}
+PARA	Les Travaux, objet du présent marché, seront rémunérés, par application des prix unitaires résultant du bordereau des prix et du détail quantitatif et estimatif.
+PARA	Le montant du marché est estimé à :
+PARA	montant hors taxes : (en lettres et en chiffre)
+PARA	TVA (….%) : (en lettres et en chiffre)
+PARA	Soit un montant total TTC de (en lettres et en chiffre) :
+PARA	Dont :
+PARA	Tranche ferme
+PARA	montant hors taxes : (en lettres et en chiffre)
+PARA	TVA (…. ;%) : (en lettres et en chiffre)
+PARA	Soit un montant total TTC de (en chiffre et en lettres)
+PARA	Tranche conditionnelle 1:
+PARA	montant hors taxes : (en lettres et en chiffre)
+PARA	TVA (…%): (en chiffre et en lettres)
+PARA	Soit un montant total TTC de (en chiffre et en lettres)
+PARA	{{SI:TRANCHE-C2}}
+PARA	Tranche conditionnelle … :
+PARA	montant hors taxes : (en lettres et en chiffre)
+PARA	TVA (…%): (en chiffre et en lettres)
+PARA	Soit un montant total TTC de (en chiffre et en lettres)
+PARA	{{FINSI:TRANCHE-C2}}
+PARA	{{FINSI:UNITAIRES-TRANCHES}}
+PARA	{{SI:FORFAIT-TRANCHES}}
+PARA	Les Travaux, objet du présent marché, seront rémunérés, par application du prix forfaitaire résultant du détail quantitatif et estimatif selon le découpage en centième par corps d’état des travaux terminés, prévu à l’article…. du CCAP
+PARA	Le montant du marché est fixé à :
+PARA	montant hors taxes : (en lettres et en chiffre)
+PARA	TVA (….%) : (en lettres et en chiffre)
+PARA	Soit un montant total TTC de (en lettres et en chiffre) :
+PARA	Dont :
+PARA	Tranche ferme
+PARA	montant hors taxes : (en lettres et en chiffre)
+PARA	TVA (…. ;%) : (en lettres et en chiffre)
+PARA	Soit un montant total TTC de (en chiffre et en lettres)
+PARA	Tranche conditionnelle 1:
+PARA	montant hors taxes : (en lettres et en chiffre)
+PARA	TVA (…%): (en chiffre et en lettres)
+PARA	Soit un montant total TTC de (en chiffre et en lettres)
+PARA	{{SI:TRANCHE-C2}}
+PARA	Tranche conditionnelle … :
+PARA	montant hors taxes : (en lettres et en chiffre)
+PARA	TVA (…%): (en chiffre et en lettres)
+PARA	Soit un montant total TTC de (en chiffre et en lettres)
+PARA	{{FINSI:TRANCHE-C2}}
+PARA	{{FINSI:FORFAIT-TRANCHES}}
+SOUS_TITRE	ARTICLE 3 - SOUS-TRAITANCE
+PARA	Rayer les dispositions inapplicables parmi les clauses suivantes :
+PARA	Soit :
+PARA	Il n'est pas envisagé de sous-traiter l'exécution de prestations objet du marché.
+PARA	Soit :
+PARA	l’Annexe n° <préciser n°> au présent acte d'engagement indique la nature et le montant des prestations qu'il est envisagé de faire exécuter par des sous-traitants payés directement, les noms de ces sous-traitants et les conditions de paiement des contrats de sous-traitance.
+PARA	Le montant des prestations sous-traitées indiqué dans l’annexe constitue le montant maximal de la créance que le(s) sous-traitant(s) concerné(s) pourra(ont) céder ou présenter en nantissement. Le montant total des prestations qu'il est envisagé de sous-traiter conformément à cette annexe est de (montant en chiffres et en lettres) TVA incluse.
+PARA	L’Annexe n° <préciser n°> constitue une demande d'acceptation des sous-traitants concernés et d'agrément des conditions de paiement du contrat de sous-traitance qui est réputée prendre effet à la date de notification du marché. Cette notification sera réputée emporter acceptation du sous-traitant et agrément des conditions de paiement du contrat de sous-traitance.
+SOUS_TITRE	ARTICLE 4 - NANTISSEMENT
+PARA	Est désigné comme Comptable Assignataire de paiement le {{B03-NT-01}}
+PARA	Le montant maximal de la créance qui pourra être nantie par notre entreprise en tant que titulaire du marché est de :
+PARA	(en lettres et en chiffres, montant maximum du marché diminué du montant de la sous-traitance envisagée) :
+SOUS_TITRE	ARTICLE 5 - DURÉE - DELAIS
+SOUS_TITRE	5.1 Date d'effet
+PARA	Le marché prend effet à compter de la notification à l’entrepreneur de son approbation.
+PARA	{{SI:DEPART-OS}}
+PARA	Le délai de réalisation des Travaux prend effet à compter du lendemain de la date de notification de l'ordre de service de commencer les travaux :
+PARA	{{FINSI:DEPART-OS}}
+PARA	{{SI:TRANCHES}}
+PARA	La tranche ferme prend effet à compter de sa notification au titulaire.
+PARA	La (les) tranche(s) conditionnelle(s) prend (prennent) effet à compter de la notification de la décision d’affermissement de celle(s) - ci, matérialisé par un ordre de service.
+PARA	La (les) date(s) limite ou le délai de notification de la réalisation de la (de chacune des) tranche(s) conditionnelle(s) sont les suivantes:
+PARA	{{FINSI:TRANCHES}}
+PARA	{{SI:AFFERMISSEMENT-1}}
+PARA	{{B02-LT-06}}
+PARA	{{FINSI:AFFERMISSEMENT-1}}
+PARA	{{SI:AFFERMISSEMENT-2}}
+PARA	{{B02-LT-06}}; {{B02-LT-07}}
+PARA	{{FINSI:AFFERMISSEMENT-2}}
+SOUS_TITRE	5.2. Délais d'exécution
+PARA	Le délai d’exécution est fixé à {{B09-DL-01}} à compter du lendemain de la date de notification de l'ordre de service de commencer les travaux.
+PARA	{{SI:PREPARATION}}
+PARA	La période de préparation est comprise dans le délai d’exécution.
+PARA	{{FINSI:PREPARATION}}
+PARA	Le calendrier prévisionnel de réalisation des Travaux est donné en annexe au CCAP.
+PARA	{{SI:RECEPTION}}
+PARA	La réception de l'ouvrage objet du marché doit intervenir le {{B09-DL-04}} au plus tard.
+PARA	{{FINSI:RECEPTION}}
+SOUS_TITRE	ARTICLE 6 - PAIEMENTS
+SOUS_TITRE	6.1. Domiciliation bancaire
+PARA	Dans le cas d'un Entrepreneur unique
+PARA	Le Maître de l'Ouvrage se libérera des sommes dues au titre du présent marché en en faisant porter le montant au crédit du compte bancaire suivant:
+PARA	- titulaire du compte:
+PARA	- établissement bancaire:
+PARA	- agence :
+PARA	- numéro de compte :
+PARA	- code :
+PARA	Toutefois, le Maître de l'Ouvrage se libérera des sommes dues aux sous-traitants payés directement en en faisant porter les montants au crédit des comptes desdits sous-traitants.
+PARA	{{SI:GROUPEMENT}}
+PARA	Dans le cas d'un groupement d'Entrepreneurs solidaires
+PARA	Le Maître de l'Ouvrage se libérera des sommes dues au titre du présent marché en en faisant porter le montant au crédit du compte bancaire suivant, ouvert au nom des membres du groupement:
+PARA	- titulaire du compte:
+PARA	- établissement bancaire:
+PARA	- agence :
+PARA	- numéro de compte :
+PARA	- code :
+PARA	Ces paiements seront libératoires vis-à-vis des Entrepreneurs groupés solidaires. Toutefois, le Maître de l'Ouvrage se libérera des sommes dues aux sous-traitants payés directement en en faisant porter les montants au crédit des comptes desdits sous-traitants.
+PARA	{{FINSI:GROUPEMENT}}
+PARA	{{SI:GROUPEMENT-CONJOINT}}
+PARA	Dans le cas d'un groupement d'Entrepreneurs conjoints
+PARA	Le Maître de l'Ouvrage se libérera des sommes dues au titre du présent marché en en faisant porter le montant au crédit des comptes bancaires suivants, ouvert au nom des membres du groupement:
+PARA	- titulaires du compte:
+PARA	- établissement bancaire:
+PARA	- agence :
+PARA	- numéro de compte :
+PARA	(indiquer les comptes de chacun des membres)
+PARA	{{FINSI:GROUPEMENT-CONJOINT}}
+SOUS_TITRE	6.2 Avance forfaitaire
+PARA	{{SI:SANS-AVANCE}}
+PARA	Le CCAP ne prévoit pas d'avance forfaitaire.
+PARA	{{FINSI:SANS-AVANCE}}
+PARA	{{SI:AVANCE}}
+PARA	L'Entrepreneur désigné ci-avant :
+PARA	refuse de percevoir l'avance forfaitaire prévue par le Cahier des Clauses Administratives Particulières du CPS.
+PARA	Ou
+PARA	ne refuse pas de percevoir l'avance forfaitaire prévue par le CCAP.
+PARA	{{FINSI:AVANCE}}
+PARA	{{SI:AVANCE-GROUPEMENT}}
+PARA	En cas de groupement :
+PARA	Les Entrepreneurs groupés désignés ci- avant :
+PARA	refusent de percevoir l'avance forfaitaire prévue par le Cahier des Clauses Administratives Pariculières du CPS
+PARA	Ou
+PARA	ne refusent pas de percevoir l'avance forfaitaire prévue par le CCAP
+PARA	{{FINSI:AVANCE-GROUPEMENT}}
+PARA	Fait en un seul original
+PARA	à : le :
+PARA	Signature(s) du/des candidats ou du mandataire du groupement précédée(s) de la mention(s) manuscrite(s) "lu et accepté"
+PARA	Le présent acte d'engagement comporte les annexes énumérées ci-après :
+PARA	{{SI:ANNEXE-FORFAIT}}
+PARA	Annexe n° 1 : décomposition du prix forfaitaire
+PARA	{{FINSI:ANNEXE-FORFAIT}}
+PARA	{{SI:ANNEXE-UNITAIRES}}
+PARA	Annexe n° 1 : bordereau de prix unitaires et
+PARA	détail quantitatif et estimatif.
+PARA	{{FINSI:ANNEXE-UNITAIRES}}
+PARA	{{SI:REVISABLE}}
+PARA	Annexe n° < > : paramètres de la formule de révision des prix
+PARA	{{FINSI:REVISABLE}}
+PARA	Annexe n° < > : demande d'acceptation des sous-traitants;
+PARA	Annexe n° < > : état des sommes versées à des tiers
+PARA	Autres pièces contractuelles : <à préciser selon les cas>
+SOUS_TITRE	B. - ACCEPTATION ET NOTIFICATION PAR L'AUTORITE CONTRACTANTE
+PARA	Acceptation de l'offre
+PARA	Est acceptée la présente offre pour valoir acte d'engagement.
+PARA	Pour l'autorité contractante, la Personne Responsable des marchés publics ou son délégué :
+PARA	à : le :
+TABLE	2
+LIGNE	Approbation par l'autorité compétenteVisa de l'autorité de contrôle financier
+LIGNE	à :le :à :le :
+FIN_TABLE	
+PARA	Notification
+PARA	Reçu notification du marché le :
+PARA	L'Entrepreneur / Le mandataire du groupement :
+PARA	Reçu l'avis de réception de la notification du marché le :
+PARA	par l'Entrepreneur / le mandataire du groupement.
+PARA	La Personne Responsable des Marchés Publics.
+PARA	à : le :
+PARA	{{SI:ANNEXE-FORFAIT}}
+PARA	ANNEXE 1
+PARA	MARCHE A PRIX FORFAITAIRE
+PARA	CADRE DU DETAIL QUANTITATIF ET ESTIMATIF
+PARA	(l'Entrepreneur indique le montant de l'offre par section de travaux et en distinguant entre Ariary et autre monnaie, le cas échéant)
+PARA	{{FINSI:ANNEXE-FORFAIT}}
+PARA	{{SI:ANNEXE-UNITAIRES}}
+PARA	ANNEXE 1
+PARA	MARCHE A PRIX UNITAIRES
+PARA	CADRE DU BORDEREAU DES PRIX ET
+PARA	CADRE DU DETAIL QUANTITATIF ET ESTIMATIF
+PARA	(A établir sur la base du bordereau des prix et détail quantitatif et estimatif joint au CPS)
+PARA	{{FINSI:ANNEXE-UNITAIRES}}
+PARA	{{SI:ANNEXE-MIXTE}}
+PARA	ANNEXE 1
+PARA	MARCHE A PRIX UNITAIRES COMPRENANT DES PRIX PARTIELS ET FORFAITAIRES
+PARA	CADRE DU BORDEREAU DES PRIX ET
+PARA	CADRE DU DETAIL QUANTITATIF ET ESTIMATIF
+PARA	CADRE DE LA DECOMPOSITION DES PRIX PARTIELS ET FORFAITAIRES
+PARA	{{FINSI:ANNEXE-MIXTE}}
+PARA	{{SI:REVISABLE}}
+PARA	ANNEXE
+PARA	PARAMETRES DE LA FORMULE DE REVISION DES PRIX
+PARA	(Le candidat complète la formule de révision de prix annexée au CCAP avec la valeur de chaque paramètre à prendre en compte dans la formule et, en cas de prix en devises, avec les indices applicables aux prix en devises)
+PARA	{{FINSI:REVISABLE}}
+PARA	ANNEXE
+PARA	DEMANDE D'ACCEPTATION DU OU DES SOUS-TRAITANTS ET
+PARA	D'AGRÉMENT DES CONDITIONS DE PAIEMENT DU OU
+PARA	DES CONTRAT(S) DE SOUS-TRAITANCE
+PARA	(A compléter par le Candidat)
+PARA	ANNEXE
+PARA	ETAT DES SOMMES VERSEES AUX TIERS
+PARA	(article 19 du Code d'éthique des marchés publics)
+PARA	Les rémunérations commissions que nous avons versées ou que nous comptons verser, le cas échéant, en relation avec la préparation ou la présentation de cette offre ou avec l’exécution du Marché, si nous en sommes attributaires, figurent ci-après :
+TABLE	3
+LIGNE	Nom etadresse du bénéficiaireMontant etMonnaieObjet de larémunération
+LIGNE	----------------------------------------------------------------------------
+FIN_TABLE	
+PARA	(si aucune rémunération n’a été ou ne doit être versée, indiquer “aucune”.)
+PARA	Fait à………………………, le
+PARA	L’entrepreneur

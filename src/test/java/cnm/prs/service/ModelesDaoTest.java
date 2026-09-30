@@ -68,8 +68,8 @@ class ModelesDaoTest {
             + "illisible ou une section mal refermée fait échouer le chargement, nommément")
     void chargement() {
         ModelesDao dao = new ModelesDao();
-        assertThat(dao.modele("DPAC-CC").conditions()).hasSize(14);
-        assertThat(dao.modele("AE-CC").conditions()).hasSize(53);
+        assertThat(dao.modele("DPAC-CC").conditions()).hasSize(16);   // D4 : + CCAG-FOURNITURES, CCAG-TRAVAUX
+        assertThat(dao.modele("AE-CC").conditions()).hasSize(55);
         // ⚠️ Lot D2 (2026-09-29) — les trois documents des fournitures, un modèle pour la quantité fixe et à commande.
         assertThat(dao.modele("DPAO-F").conditions()).hasSize(42);
         assertThat(dao.modele("AE-F").conditions()).hasSize(22);
@@ -78,7 +78,11 @@ class ModelesDaoTest {
         assertThat(dao.modele("DPIC-PI").conditions()).hasSize(33);
         assertThat(dao.modele("AE-PI").conditions()).hasSize(17);
         assertThat(dao.modele("CPS-PI").conditions()).hasSize(30);
-        assertThat(dao.modeles()).hasSize(8);
+        // ⚠️ Lot D4 (2026-09-29) — les trois documents des travaux.
+        assertThat(dao.modele("DPAO-T").conditions()).hasSize(34);
+        assertThat(dao.modele("AE-T").conditions()).hasSize(30);
+        assertThat(dao.modele("CCAP-T").conditions()).hasSize(70);
+        assertThat(dao.modeles()).hasSize(11);
         assertThatThrownBy(() -> ModelesDao.charger("/modeles/dao/X.txt", "CONDITION\tA\u001Fattributaires = MONO\n"
                 + "PARA\t{{SI:A}}\nPARA\t{{SI:B}}\nPARA\ttexte\nPARA\t{{FINSI:B}}\nPARA\t{{FINSI:A}}"))
                 .isInstanceOf(IllegalStateException.class).hasMessageContaining("/modeles/dao/X.txt")

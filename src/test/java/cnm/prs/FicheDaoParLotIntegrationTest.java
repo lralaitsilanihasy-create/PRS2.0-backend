@@ -115,8 +115,9 @@ class FicheDaoParLotIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(JsonPath.<String>read(fiche, "$.valeurs['B05-TP-02#2']")).isEqualTo("2170000");
         assertThat(JsonPath.<String>read(fiche, "$.enLettres['B05-TP-02#2']")).containsIgnoringCase("deux millions");
         List<String> manquants = JsonPath.read(fiche, "$.bilanControles.bloquants[?(@.regle=='OBLIGATOIRE')].champs[0]");
-        assertThat(manquants).contains("B05-TP-02#3", "B05-TP-03#1", "B05-TP-03#2", "B05-TP-03#3")
-                .doesNotContain("B05-TP-02", "B05-TP-02#1", "B05-TP-02#2");
+        // ⚠️ 2026-09-29 (§B6 des champs non imprimés) — B05-TP-03 facultatif : ses lots manquants ne bloquent plus.
+        assertThat(manquants).contains("B05-TP-02#3")
+                .doesNotContain("B05-TP-02", "B05-TP-02#1", "B05-TP-02#2", "B05-TP-03#1", "B05-TP-03#2", "B05-TP-03#3");
         assertThat(JsonPath.<List<String>>read(fiche,
                 "$.bilanControles.bloquants[?(@.champs[0]=='B05-TP-02#3')].message"))
                 .containsExactly("« Montant minimum annuel du marché (Ariary) » (lot 3) est obligatoire.");

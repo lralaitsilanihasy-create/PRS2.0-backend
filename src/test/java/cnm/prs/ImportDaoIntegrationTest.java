@@ -71,13 +71,15 @@ class ImportDaoIntegrationTest extends CnmIntegrationTestSupport {
         ligne(9913, FormeMarche.CONTRAT_CADRE);
         ligne(9914, FormeMarche.CONTRAT_CADRE);
         ligne(9915, FormeMarche.QUANTITE_FIXE);
-        natureRepository.save(new cnm.prs.entity.Nature(91, "Travaux", null, "TRAVAUX"));
-        Marche travaux = marcheDao(9912, 9900, 9900);
-        travaux.setIdMode(92);
-        travaux.setIdNature(91);
-        travaux.setFormeMarche(FormeMarche.QUANTITE_FIXE);
-        travaux.setDesignationMarche("Marché 9912");
-        marcheRepository.save(travaux);
+        // ⚠️ Lot D4 (2026-09-29) — les travaux ont leurs modèles : la seule forme outillée sans modèle, pour MODELE_ABSENT,
+        // est le contrat-cadre de prestations intellectuelles.
+        natureRepository.save(new cnm.prs.entity.Nature(93, "Prestations intellectuelles", null, "PRESTATIONS_INTELLECTUELLES"));
+        Marche sansModele = marcheDao(9912, 9900, 9900);
+        sansModele.setIdMode(92);
+        sansModele.setIdNature(93);
+        sansModele.setFormeMarche(FormeMarche.CONTRAT_CADRE);
+        sansModele.setDesignationMarche("Marché 9912");
+        marcheRepository.save(sansModele);
         importer("referentiel-champs-fiche-marche-fournitures.csv");
         importer("referentiel-champs-fiche-marche-contrat-cadre.csv");
     }
@@ -190,7 +192,7 @@ class ImportDaoIntegrationTest extends CnmIntegrationTestSupport {
 
     @Test
     @DisplayName("B4 refus — .odt, faux .pdf et .docm → 415 FORMAT_NON_SUPPORTE ; PDF scanné → 422 DOCUMENT_SANS_TEXTE ; fiche "
-            + "validée → 409 FICHE_VALIDEE ; travaux (sans modèle) → 422 "
+            + "validée → 409 FICHE_VALIDEE ; contrat-cadre de PI (sans modèle) → 422 "
             + "MODELE_ABSENT ; Administrateur → 403 ; document hors gabarit → 200, avertissement et presque rien de proposé")
     void refus() throws Exception {
         Long cible = creerDmc(9914);
@@ -209,8 +211,8 @@ class ImportDaoIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(multipart("/api/fiches-marche/" + cible + "/import").file(fichier("DAO.docx", docx(List.of("x"))))
                 .header("Authorization", tokenAdmin)).andExpect(status().isForbidden());
 
-        Long travaux = creerDmc(9912);   // lot D2 : les fournitures ont leurs modèles ; les travaux, pas encore
-        importer(travaux, "DAO.docx", docx(List.of("Texte"))).andExpect(status().isUnprocessableEntity())
+        Long sansModele = creerDmc(9912);   // lot D4 : contrat-cadre de prestations intellectuelles, sans modèle
+        importer(sansModele, "DAO.docx", docx(List.of("Texte"))).andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.code").value("MODELE_ABSENT"))
                 .andExpect(jsonPath("$.message").value("L'import n'est pas encore possible pour ce type de marché : saisissez la fiche."));
 

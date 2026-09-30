@@ -4952,6 +4952,60 @@ Demande front `frontend/docs/demande-backend-2026-09-29-champs-non-imprimes-four
   l'interligne se mesure sur chaque page. Le DPAC en PDF que produit le serveur se lit maintenant presque comme le
   `.docx`.
 
+### Les DAO de travaux sur leurs documents types — lot D4 ⚠️ 2026-09-29
+
+Demande front `frontend/docs/demande-backend-2026-09-29-lot-d4-travaux.md`. **Aucune route nouvelle** (ADR-0011).
+Migration **V54**. Script `docs/referentiel/2026-09-29-lot-d4-travaux.sql`, à passer après le redémarrage.
+
+- **Production** : une fiche de travaux, quantité fixe ou à commande, produit à sa validation trois documents rendus
+  depuis `classpath:modeles/dao/`, à la place des listes du lot 2a :
+  - le **DPAO** vient de `DPAO-T.txt` (34 conditions) ;
+  - le **CCAP** vient de `CCAP-T.txt` (70 conditions). Il garde le libellé « Cahier des clauses administratives
+    particulières » et imprime lui-même ses annexes, selon le cadrage : formule de révision, garantie de bonne exécution
+    bancaire ou par caution, restitution d'avance, cadre de bordereau ;
+  - l'**AE** vient de `AE-T.txt` (30 conditions), un par lot sur une ligne allotie. Son annexe 1 suit `typePrix` :
+    forfaitaire, unitaires ou `MIXTE`.
+
+  Fidélité : 247/247, 570/570 et 363/363.
+- **Le contrat-cadre de travaux** est produit sur le document type du contrat-cadre, commun aux deux catégories :
+  `DPAC-CC` et `AE-CC` (16 et 55 conditions, fidélité 179/179 et 408/408). Sept passages se rédigent « CCAG Travaux »
+  au lieu de « CCAG Fournitures » quand `categorie = TRAVAUX`.
+- **Harmonisation des codes du contrat-cadre (§B3)** : le contrat-cadre de travaux emploie désormais les codes du
+  contrat-cadre des fournitures.
+  - Les **89** champs du contrat-cadre des fournitures que citent `DPAC-CC` et `AE-CC` sont servis aussi aux travaux.
+  - Leurs **47** doublons exacts (même libellé) du contrat-cadre de travaux sont retirés (`actif = non`). Les valeurs
+    déjà saisies sont conservées, comme pour tout champ retiré. Exemples : `B02-SW-01` → `B02-SG-01`, `B04-CT-01..04` →
+    `B04-CP-01..04`, `B05-PX-01..03` → `B05-PM-01..03`, `B07-PY-01..03` → `B07-PE-01..03`, `B10-LT-01` → `B10-VR-01`.
+  - **V54** élargit aux travaux les 33 rubriques de ces champs. Sans cela, le champ serait servi hors de toute rubrique.
+  - ⚠️ Un reflet du cadrage que le modèle cite hors de sa catégorie se lit sur la clé de cadrage qu'il reflète. C'est
+    le cas de `B02-LV-05` = `nbLots` et de `B08-AV-02` = `tauxAvance`, réservés aux fournitures et cités par `AE-CC`.
+- **Référentiel des travaux** (fichier de correspondance et script) :
+  - six champs créés, tous facultatifs :
+    - `B02-MW-04` (maître d'ouvrage délégué) ;
+    - `B02-LT-06` et `B02-LT-07` (délais d'affermissement, `tranches = OUI`) ;
+    - `B04-VL-02` (visite des lieux obligatoire) ;
+    - `B05-GE-05` (taux de la garantie de bonne exécution) ;
+    - `B09-BT-01` (travaux de bâtiment : CPC, TBM, décennale), dans la nouvelle rubrique `B09-BT` (V54) ;
+  - `B09-DT-01` gagne l'option « À la notification de l'ordre de service de commencer les travaux » ;
+  - `B02-LT-01` est conditionné à `alloti = OUI` ;
+  - `B04-OV-02` passe en `DATE_HEURE` ;
+  - `B09-PE-01` est retiré, et la question de cadrage `penalites` (`B09-PR-01`) est servie aux travaux (V54) ;
+  - les six pièces `B11-FR-01..06` sont retirées, puisque le CCAP-T imprime ces annexes (réactivables).
+  - `typePrix` accepte déjà `MIXTE` : son reflet n'a pas de liste fermée côté serveur.
+- **Correctif V53** : la rubrique `B09-PR` n'était servie qu'aux fournitures. Le reflet `B09-PR-01`, ouvert aux
+  prestations intellectuelles le 29/09, y était servi sans sa rubrique. Elle vaut désormais pour les trois catégories.
+- **Fournitures (§B6 du lot D2)** :
+  - `B05-TP-03` devient facultatif, libellé « Montant maximum annuel estimé du marché (Ariary) » ;
+  - `B08-PA-08` est retiré. `B08-FP-03` reste servi au contrat-cadre.
+- **Import** : les modèles de travaux se lisent comme les autres (Word et PDF), sans règle nouvelle. `MODELE_ABSENT` ne
+  répond plus pour les travaux.
+- **Le rendu générique du lot 2a** (liste « libellé : valeur ») ne sert plus qu'au **contrat-cadre de prestations
+  intellectuelles** (DPIC et contrat-cadre valant acte d'engagement). Toutes les autres formes outillées sont rendues
+  depuis leur document type.
+- ⚠️ **Point ouvert** : `AE-CC` cite `{{B04-VO-01}}` (délai de validité des offres), qui n'est servi qu'aux
+  fournitures. Un contrat-cadre de travaux imprime donc « … » à cet endroit, et sa saisie se fait dans `B04-VT-01`.
+  La proposition au front est de faire citer `B04-VO-01` par DPAO-T, puis de retirer `B04-DV-01` et `B04-VT-01`.
+
 ### Les DAO de prestations intellectuelles sur leurs documents types — lot D3 ⚠️ 2026-09-29
 
 Demande front `frontend/docs/demande-backend-2026-09-29-lot-d3-prestations-intellectuelles.md`. **Aucune route nouvelle,
@@ -5027,7 +5081,10 @@ Une fiche jamais enregistrée est lue comme un brouillon vide.
 - **422 `MODELE_ABSENT`** : « L'import n'est pas encore possible pour ce type de marché : saisissez la fiche. » Il répond
   quand aucun modèle du lot D ne couvre la forme et la catégorie de la fiche. Sont couverts, en fournitures et services,
   le contrat-cadre (`DPAC-CC`, `AE-CC`) et ⚠️ depuis le 2026-09-29 la quantité fixe et le marché à commande (`DPAO-F`,
-  `CCAP-F`, `AE-F`). Les gardes de la fiche passent avant celles du fichier.
+  `CCAP-F`, `AE-F`). ⚠️ Depuis les lots D3 et D4, sont aussi couverts : les prestations intellectuelles à quantité
+  fixe et à commande (`DPIC-PI`, `AE-PI`, `CPS-PI`) ; les travaux à quantité fixe et à commande (`DPAO-T`, `CCAP-T`,
+  `AE-T`) ; le contrat-cadre de travaux (`DPAC-CC`, `AE-CC`). Toutes les formes outillées sont donc couvertes. Les
+  gardes de la fiche passent avant celles du fichier.
 - **Lecture** : chaque modèle cherche sa partie dans le même fichier (avis, DPAO, CCAP, AE à la suite). Le fichier est lu
   en mémoire puis oublié. Rien n'est journalisé à la lecture.
   - **Word** : un paragraphe est une unité, et chaque paragraphe d'une cellule de tableau aussi (⚠️ 2026-09-29). Une

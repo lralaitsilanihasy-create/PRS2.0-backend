@@ -468,6 +468,11 @@ public final class FormulairesCandidat {
                 return parLot(code, c, lot);
             }
             String brut = valeur(fiche, code, c != null && Boolean.TRUE.equals(c.getParLot()) ? lot : null);
+            if (brut == null && c != null && c.getCleCadrage() != null && !c.getCleCadrage().isBlank()) {
+                // ⚠️ Lot D4 (2026-09-29, §B3) — un reflet que le modèle cite hors de sa catégorie (le contrat-cadre de travaux
+                // cite B02-LV-05, reflet des fournitures) : sa valeur est celle de la clé de cadrage qu'il reflète.
+                brut = lire(c.getCleCadrage(), lot);
+            }
             if (brut == null) {
                 return POINTILLES;
             }
