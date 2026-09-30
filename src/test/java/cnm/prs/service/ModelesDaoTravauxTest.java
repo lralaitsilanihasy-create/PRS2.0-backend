@@ -103,6 +103,18 @@ class ModelesDaoTravauxTest {
     }
 
     @Test
+    @DisplayName("§B6.1 (2026-09-30) — fin de validité de l'offre dans l'AE-T : date de remise lue sur B04-OV-02 (date-heure, "
+            + "sa date) + B04-VO-01 jours ; sans date de remise, les pointillés")
+    void finDeValiditeDesTravaux() {
+        FicheMarcheDto f = fiche(Map.of("typePrix", "UNITAIRES", "tranches", "NON", "prixRevisable", "NON", "avance", "NON"));
+        f.getValeurs().putAll(Map.of("B04-OV-02", "2026-11-16T10:00", "B04-VO-01", "120"));
+        assertThat(rendre("AE", "AE-T", f)).contains("des offres fixée dans les Données Particulières de l'Appel d'Offres, "
+                + "jusqu'au 16/03/2027.");
+        f.getValeurs().remove("B04-OV-02");
+        assertThat(rendre("AE", "AE-T", f)).contains("jusqu'au " + FormulairesCandidat.POINTILLES + ".");
+    }
+
+    @Test
     @DisplayName("Prix mixtes (§B2.1, option MIXTE de typePrix) : l'annexe 1 des prix partiels et forfaitaires, seule")
     void prixMixtes() {
         FicheMarcheDto f = fiche(Map.of("typePrix", "MIXTE", "tranches", "NON", "prixRevisable", "NON", "avance", "NON"));

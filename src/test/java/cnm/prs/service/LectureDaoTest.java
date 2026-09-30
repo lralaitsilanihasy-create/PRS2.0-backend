@@ -2,11 +2,16 @@ package cnm.prs.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Duration;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import cnm.prs.dto.FicheMarcheDto;
 
 /** ⚠️ Import du DAO (2026-09-28, ADR-0012) — la lecture par modèle inversé, sans base ni Spring. */
 class LectureDaoTest {
@@ -111,6 +116,32 @@ class LectureDaoTest {
                 .contains("B02-OB-02=Étude de faisabilité:moyenne", "B09-DX-01=90:haute")
                 .noneMatch(s -> s.contains("Le délai d'exécution"));
         assertThat(r.propositions()).extracting(LectureDao.Proposition::code).doesNotContain("B02-OB-03", "B02-OB-04");
+    }
+
+    @Test
+    @DisplayName("Lot D4 (§B6.2, 2026-09-30) : lire un modèle presque absent du document (le CCAP-T dans un DPAO de travaux) "
+            + "reste rapide — le profil du modèle est calculé une fois, pas à chaque paragraphe du document (13,8 s avant)")
+    void lectureRapideDUnModeleAbsent() {
+        ModelesDao dao = new ModelesDao();
+        FicheMarcheDto f = new FicheMarcheDto();
+        f.setIdDetail(1);
+        f.setVersion(1);
+        f.setTypeMarche("QUANTITE_FIXE");
+        f.setCategorie("TRAVAUX");
+        f.setCadrage(new LinkedHashMap<>(Map.of("typePrix", "UNITAIRES", "tranches", "OUI", "avance", "OUI")));
+        f.setValeurs(new HashMap<>(Map.of("B02-LT-03", "Tranche ferme", "B04-VO-01", "120")));
+        f.setValeursPpm(new HashMap<>(Map.of("B02-OB-01", "Réhabilitation du réseau d'eau potable")));
+        // Le chemin de production : le DPAO-T rendu en .docx, puis extrait comme un fichier importé.
+        DocumentLibre dpao = FormulairesCandidat.rendreModele("DPAO", null, f, Map.of(), dao.modele("DPAO-T"), null);
+        byte[] docx = new GenerateurDocumentsFiche().generer(dpao).stream().filter(x -> "docx".equals(x.extension()))
+                .findFirst().orElseThrow().contenu();
+        List<String> doc = ImportDaoService.paragraphes("DPAO.docx", docx);
+        assertThat(doc).hasSizeGreaterThan(90);
+        org.junit.jupiter.api.Assertions.assertTimeoutPreemptively(Duration.ofSeconds(3), () -> {
+            for (String s : List.of("DPAO-T", "CCAP-T", "AE-T")) {
+                LectureDao.lire(s, dao.modele(s), doc, c -> null);
+            }
+        });
     }
 
     @Test

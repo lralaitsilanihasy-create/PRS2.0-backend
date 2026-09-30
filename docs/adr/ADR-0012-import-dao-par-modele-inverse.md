@@ -147,3 +147,15 @@ devant une clé et un opérateur. L'écart « Au fur et à mesure des besoins »
 sept entrées : les cinq précédentes, plus les rendus bruts des travaux et du contrat-cadre recopié. L'extraction et la
 lecture sont identiques, y compris les conflits. Il ne reste que l'écart de sortie sur une clé de cadrage en conflit :
 le front la garde aussi dans `cadrage`.
+
+## Complément du 2026-09-30 (lot D4 §B6.2) — le profil du modèle
+
+L'import d'un DPAO de travaux de 10 Ko prenait 53 s à l'écran : 13,8 s pour le seul CCAP-T mesurés hors serveur. La
+cause était un coût cubique. Le test « jumeau » était réévalué pour chaque paragraphe du document essayé, et comparait
+chaque fois le paragraphe à tous ceux du modèle en renormalisant les deux textes. Il pèse surtout quand un modèle est
+presque absent du document, puisque chacun de ses paragraphes est alors cherché partout.
+
+Les propriétés qui ne dépendent que du modèle (texte répété, jumeau, distinctif, lettres de texte fixe) sont désormais
+calculées **une fois par lecture** (`LectureDao.Profil`). La lecture est identique : parité avec `lire.mjs` sur huit
+entrées. Elle prend 0,16 s au lieu de 17,4 s pour les trois modèles de travaux. Un test borne la lecture de ces trois
+modèles dans un DPAO-T rendu à 3 s ; l'ancien lecteur y échoue.

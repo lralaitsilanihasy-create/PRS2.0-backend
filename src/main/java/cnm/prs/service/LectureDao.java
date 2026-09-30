@@ -293,54 +293,55 @@ public final class LectureDao {
     }
 
     /**
-     * ⚠️ B5 règle 3 (2026-09-29) — un paragraphe reconnu n'atteste ses sections que s'il a au moins 20 lettres de texte fixe
-     * et qu'aucun paragraphe de même texte n'existe hors de ces sections : un libellé présent dans plusieurs rédactions
-     * (« forfaitaire », « importées », « groupement autorisé ») ne dit pas laquelle a été retenue.
+     * ⚠️ Lot D4 (2026-09-30, §B6.2) — ce qui ne dépend que du modèle, calculé <strong>une fois par lecture</strong>. Chaque
+     * propriété comparait le paragraphe à tous les autres en renormalisant leur texte, et « jumeau » était réévalué pour
+     * chaque paragraphe du document : un coût cubique (13,8 s pour lire le CCAP-T dans un DPAO de 122 paragraphes, 53 s
+     * à l'écran). Le front a fait de même dans {@code lire.mjs} (textes répétés comptés une fois par modèle).
      */
-    private static boolean distinctif(Unite u, List<Unite> us) {
-        if (u.sections().isEmpty() || lettresFixes(u.texte()) < LETTRES_ATTESTATION) {
-            return false;
-        }
-        String cle = cleTexte(u);
-        String sections = String.join("|", u.sections());
-        for (Unite v : us) {
-            if (v != u && cleTexte(v).equals(cle) && !String.join("|", v.sections()).equals(sections)) {
-                return false;
-            }
-        }
-        return true;
-    }
+    private static final class Profil {
+        /** ⚠️ Lot D4 (R-a) — un autre paragraphe du modèle a le même texte fixe (avec ou sans jeton). */
+        final boolean[] repete;
+        /** ⚠️ Lot D3 (§B4.1) — un paragraphe à jeton dont un autre paragraphe du modèle a le même texte fixe. */
+        final boolean[] jumeau;
+        /**
+         * ⚠️ B5 règle 3 (2026-09-29) — un paragraphe reconnu n'atteste ses sections que s'il a au moins 20 lettres de texte
+         * fixe et qu'aucun paragraphe de même texte n'existe hors de ces sections : un libellé présent dans plusieurs
+         * rédactions (« forfaitaire », « importées », « groupement autorisé ») ne dit pas laquelle a été retenue.
+         */
+        final boolean[] distinctif;
+        /** Lettres de texte fixe de chaque paragraphe. */
+        final int[] lettres;
 
-    /** ⚠️ Lot D3 (§B4.1) — un paragraphe à jeton dont un autre paragraphe du modèle a le même texte fixe. */
-    private static boolean jumeau(Unite u, List<Unite> us) {
-        if (!u.texte().contains("{{")) {
-            return false;
-        }
-        String cle = cleTexte(u);
-        for (Unite v : us) {
-            if (v != u && cleTexte(v).equals(cle)) {
-                return true;
+        Profil(List<Unite> us) {
+            int n = us.size();
+            String[] cle = new String[n];
+            Map<String, Integer> occurrences = new java.util.HashMap<>();
+            Map<String, Set<String>> sectionsParCle = new java.util.HashMap<>();
+            for (int k = 0; k < n; k++) {
+                cle[k] = cleTexte(us.get(k));
+                occurrences.merge(cle[k], 1, Integer::sum);
+                sectionsParCle.computeIfAbsent(cle[k], x -> new java.util.HashSet<>()).add(String.join("|", us.get(k).sections()));
+            }
+            repete = new boolean[n];
+            jumeau = new boolean[n];
+            distinctif = new boolean[n];
+            lettres = new int[n];
+            for (int k = 0; k < n; k++) {
+                Unite u = us.get(k);
+                lettres[k] = lettresFixes(u.texte());
+                repete[k] = occurrences.get(cle[k]) > 1;
+                jumeau[k] = repete[k] && u.texte().contains("{{");
+                distinctif[k] = !u.sections().isEmpty() && lettres[k] >= LETTRES_ATTESTATION
+                        && sectionsParCle.get(cle[k]).size() == 1;
             }
         }
-        return false;
-    }
-
-    /** ⚠️ Lot D4 (R-a) — un autre paragraphe du modèle a le même texte fixe (avec ou sans jeton). */
-    private static boolean repete(Unite u, List<Unite> us) {
-        String cle = cleTexte(u);
-        for (Unite v : us) {
-            if (v != u && cleTexte(v).equals(cle)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     /**
      * ⚠️ Lot D4 (2026-09-30, règle R-b du front) — une section est ABSENTE du document quand elle a au moins un paragraphe
      * distinctif et qu'aucun de ses paragraphes n'est reconnu (ni attestée par ailleurs).
      */
-    private static boolean absente(String s, List<Unite> us, Map<Integer, Integer> trouves, Set<String> sectionsVues) {
+    private static boolean absente(String s, List<Unite> us, Profil p, Map<Integer, Integer> trouves, Set<String> sectionsVues) {
         if (sectionsVues.contains(s)) {
             return false;
         }
@@ -353,7 +354,7 @@ public final class LectureDao {
             if (trouves.containsKey(k)) {
                 return false;
             }
-            aDistinctif |= distinctif(u, us);
+            aDistinctif |= p.distinctif[k];
         }
         return aDistinctif;
     }
@@ -447,6 +448,7 @@ public final class LectureDao {
     public static Resultat lire(String sigle, FichierCommande.Modele modele, List<String> docLu,
             Function<String, InfoChamp> champs) {
         List<Unite> us = unites(modele.elements());
+        Profil profil = new Profil(us);
         List<String> doc = new ArrayList<>(docLu);   // copie : un paragraphe fusionné y est redécoupé
         Map<Integer, Integer> trouves = new LinkedHashMap<>();   // unité → paragraphe du document
         List<Lue> lues = new ArrayList<>();
@@ -468,7 +470,7 @@ public final class LectureDao {
                 continue;   // un jeton seul : borné par ses voisins, étape 2
             }
             Motif mo = motifParagraphe(u.texte());
-            int borne = trouves.isEmpty() ? doc.size() : Math.min(doc.size(), curseur + (repete(u, us) ? FENETRE_REPETE : FENETRE));
+            int borne = trouves.isEmpty() ? doc.size() : Math.min(doc.size(), curseur + (profil.repete[k] ? FENETRE_REPETE : FENETRE));
             for (int j = curseur; j < borne; j++) {
                 Matcher x = mo.entier().matcher(doc.get(j));
                 boolean ok = x.find();
@@ -476,7 +478,7 @@ public final class LectureDao {
                 // ⚠️ Lot D3 (2026-09-29, §B4.1) — un JUMEAU (un autre paragraphe du modèle a le même texte fixe : « {{B04-EP-03}}
                 // jours avant la date limite… » / « {{B04-EP-04}} … ») peut prendre la place de l'autre quand celui-ci n'est
                 // pas reconnu : c'est l'ordre, pas le texte, qui les distingue — jamais la confiance haute.
-                Confiance confiance = lettresFixes(u.texte()) >= ANCRE_HAUTE && !jumeau(u, us) ? Confiance.HAUTE : Confiance.MOYENNE;
+                Confiance confiance = profil.lettres[k] >= ANCRE_HAUTE && !profil.jumeau[k] ? Confiance.HAUTE : Confiance.MOYENNE;
                 if (!ok && mo.tete() != null) {
                     x = mo.tete().matcher(doc.get(j));
                     ok = x.find();
@@ -494,7 +496,7 @@ public final class LectureDao {
                 }
                 trouves.put(k, j);
                 curseur = j + 1;
-                if (distinctif(u, us)) {
+                if (profil.distinctif[k]) {
                     sectionsVues.addAll(u.sections());   // B5 règle 3
                 }
                 String extrait = doc.get(j);
@@ -555,7 +557,7 @@ public final class LectureDao {
         Set<String> filtres = new java.util.HashSet<>();
         for (Map.Entry<String, List<Jeton>> e : intervalles.entrySet()) {
             List<Jeton> presents = e.getValue().stream()
-                    .filter(j -> j.sections().stream().noneMatch(s -> absente(s, us, trouves, sectionsVues))).toList();
+                    .filter(j -> j.sections().stream().noneMatch(s -> absente(s, us, profil, trouves, sectionsVues))).toList();
             if (presents.size() == 1 && e.getValue().size() > 1) {
                 e.setValue(new ArrayList<>(presents));
                 filtres.add(e.getKey());

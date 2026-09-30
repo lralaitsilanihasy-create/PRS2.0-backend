@@ -5003,6 +5003,13 @@ Migration **V54**. Script `docs/referentiel/2026-09-29-lot-d4-travaux.sql`, à p
     dernier reconnu ;
   - les jetons seuls d'une section absente ne rendent plus un intervalle ambigu. Le jeton restant est lu en confiance
     basse.
+
+  ⚠️ **Temps de réponse (§B6.2)** : l'import d'un DPAO de travaux prenait 53 s. La lecture seule prend désormais
+  0,16 s, contre 17,4 s avant, pour les trois modèles de travaux sur le même fichier. La cause était un coût cubique du
+  lecteur (ADR-0012, complément §B6.2).
+- ⚠️ **Fin de validité de l'offre (§B6.1)** : `{{DERIVE.fin-validite-offre}}` lit la date de remise dans `B04-LR-03`,
+  à défaut `B04-CP-02` (contrat-cadre), puis `B04-OV-02` (travaux). Des deux derniers, seule la date compte.
+  Avant, l'AE-T imprimait des pointillés.
 - **Le rendu générique du lot 2a** (liste « libellé : valeur ») ne sert plus qu'au **contrat-cadre de prestations
   intellectuelles** (DPIC et contrat-cadre valant acte d'engagement). Toutes les autres formes outillées sont rendues
   depuis leur document type.

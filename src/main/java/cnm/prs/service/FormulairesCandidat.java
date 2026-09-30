@@ -31,7 +31,8 @@ import cnm.prs.enums.TypeChampFiche;
  *   <li>{@code {{CODE.doublet}}} : l'ordinal et son abrégé (« cent cinquième (105ème) ») ;</li>
  *   <li>{@code {{DERIVE.delai-garantie.doublet}}} : idem sur {@code B05-GS-04 − B04-VO-01} (« trentième (30ème) »),
  *       protégé par le contrôle {@code VALIDITE_GARANTIE_SUP_OFFRE} ; {@code {{DERIVE.fin-validite-offre}}} :
- *       {@code B04-LR-03 + B04-VO-01} jours, en date — calculés, jamais stockés ;</li>
+ *       {@code B04-LR-03 + B04-VO-01} jours, en date (date de remise à défaut : B04-CP-02, puis B04-OV-02) — calculés,
+ *       jamais stockés ;</li>
  *   <li>{@code {{A1B.mention}}} : « (non applicable) » quand le cadrage n'autorise pas le groupement, rien sinon — et le
  *       paragraphe est retiré (R9) ;</li>
  *   <li>marqueurs {@code {{SI:A1B}}}…{@code {{FINSI:A1B}}} : les paragraphes entre les deux sont omis sans groupement ;
@@ -59,6 +60,8 @@ public final class FormulairesCandidat {
     static final String VALIDITE_OFFRES = "B04-VO-01";
     /** ⚠️ Lot D (2026-09-28) — la date limite de remise du contrat-cadre (date-heure), à défaut de {@link #REMISE_OFFRES}. */
     static final String REMISE_OFFRES_CONTRAT_CADRE = "B04-CP-02";
+    /** ⚠️ Lot D4 (2026-09-30, §B6.1) — la date limite de remise des travaux (date-heure), quantité fixe et à commande. */
+    static final String REMISE_OFFRES_TRAVAUX = "B04-OV-02";
     /** ⚠️ Lot D (2026-09-28, §B2) — le numéro du lot du document ({@code {{LOT}}}). */
     static final String JETON_LOT = "LOT";
     /** ⚠️ Lot D2 (2026-09-29, §B1) — clés lisibles par les conditions : la forme et la catégorie de la fiche. */
@@ -450,6 +453,11 @@ public final class FormulairesCandidat {
                 if (remise == null) {
                     // ⚠️ Lot D (2026-09-28, §B2) — le contrat-cadre porte sa date limite sur B04-CP-02 (date-heure : sa date).
                     remise = ControlesFicheMarche.date(valeur(fiche, REMISE_OFFRES_CONTRAT_CADRE, null));
+                }
+                if (remise == null) {
+                    // ⚠️ Lot D4 (2026-09-30, §B6.1) — les travaux la portent sur B04-OV-02 (date-heure : sa date) ; sans
+                    // elle, l'AE-T imprimait « jusqu'au ………. ».
+                    remise = ControlesFicheMarche.date(valeur(fiche, REMISE_OFFRES_TRAVAUX, null));
                 }
                 BigDecimal jours = ControlesFicheMarche.nombre(valeur(fiche, VALIDITE_OFFRES, null));
                 return remise == null || jours == null ? POINTILLES : remise.plusDays(jours.longValue()).format(JOUR);
