@@ -1,0 +1,99 @@
+FICHIER	AVIS-T.docx
+TITRE	Avis d’Appel d’Offres Ouvert
+CONDITION	CCtypeMarche = CONTRAT_CADRE
+CONDITION	ORDINAIREtypeMarche != CONTRAT_CADRE
+CONDITION	CC-ALLOTItypeMarche = CONTRAT_CADRE et alloti = OUI
+CONDITION	CC-LOT-UNIQUEtypeMarche = CONTRAT_CADRE et alloti = NON
+CONDITION	ORDINAIRE-ALLOTItypeMarche != CONTRAT_CADRE et alloti = OUI
+CONDITION	ORDINAIRE-LOT-UNIQUEtypeMarche != CONTRAT_CADRE et alloti = NON
+CONDITION	QF-UNITAIREStypeMarche = QUANTITE_FIXE et typePrix = UNITAIRES
+CONDITION	QF-FORFAITAIREtypeMarche = QUANTITE_FIXE et typePrix = FORFAITAIRE
+CONDITION	AC-UNITAIREStypeMarche = A_COMMANDE et typePrix = UNITAIRES
+CONDITION	AC-FORFAITAIREtypeMarche = A_COMMANDE et typePrix = FORFAITAIRE
+CONDITION	CC-UNITAIREStypeMarche = CONTRAT_CADRE et typePrix = UNITAIRES
+CONDITION	CC-FORFAITAIREtypeMarche = CONTRAT_CADRE et typePrix = FORFAITAIRE
+CONDITION	QF-MIXTEtypeMarche = QUANTITE_FIXE et typePrix = MIXTE
+CONDITION	AC-MIXTEtypeMarche = A_COMMANDE et typePrix = MIXTE
+CONDITION	CC-MIXTEtypeMarche = CONTRAT_CADRE et typePrix = MIXTE
+CONDITION	ELECTRONIQUEmodeRemise = ELECTRONIQUE
+CONDITION	PAPIERmodeRemise != ELECTRONIQUE
+CONDITION	GARANTIEgarantieSoumission = OUI
+CONDITION	CONSULTATION-EMAILB04-DS-11 renseigne
+CENTRE	{{B01-AC-01}}
+CENTRE	Avis d’Appel d’Offres Ouvert
+PARA	{{SI:ORDINAIRE}}
+CENTRE	{{B02-OB-03}} — {{B02-OB-01}}
+PARA	{{FINSI:ORDINAIRE}}
+PARA	{{SI:CC}}
+CENTRE	{{B02-OE-01}} — {{B02-OB-01}}
+PARA	{{FINSI:CC}}
+CENTRE	{{AVIS.date-publication}}
+PARA	Cet Avis spécifique d’Appel d’Offres Ouvert fait suite à l’Avis Général de Passation des Marchés publié dans le Journal des Marchés Publics n°{{AVIS.jmp-numero}} en date du {{AVIS.jmp-date}} et dans {{AVIS.supports}}.
+PARA	{{SI:ORDINAIRE-ALLOTI}}
+PARA	Le {{B01-AC-01}} sollicite de la part des candidats intéressés des offres sous plis fermés pour exécuter les travaux suivants : {{B02-OB-01}}. Les travaux sont répartis en {{B02-LV-01}} lots. Le (ou les) candidat(s) peut (ou peuvent) soumissionner pour un ou plusieurs lots.
+PARA	{{FINSI:ORDINAIRE-ALLOTI}}
+PARA	{{SI:ORDINAIRE-LOT-UNIQUE}}
+PARA	Le {{B01-AC-01}} sollicite de la part des candidats intéressés des offres sous plis fermés pour exécuter les travaux suivants : {{B02-OB-01}}. Les travaux constituent un lot unique indivisible. Ainsi, toute offre partielle n’est pas recevable.
+PARA	{{FINSI:ORDINAIRE-LOT-UNIQUE}}
+PARA	{{SI:CC-ALLOTI}}
+PARA	Le {{B01-AC-01}} sollicite de la part des candidats intéressés des offres et des candidatures sous plis fermés pour exécuter les travaux suivants : {{B02-OB-01}}. Les travaux sont répartis en {{B02-LV-01}} lots. Le (ou les) candidat(s) peut (ou peuvent) soumissionner pour un ou plusieurs lots.
+PARA	{{FINSI:CC-ALLOTI}}
+PARA	{{SI:CC-LOT-UNIQUE}}
+PARA	Le {{B01-AC-01}} sollicite de la part des candidats intéressés des offres et des candidatures sous plis fermés pour exécuter les travaux suivants : {{B02-OB-01}}. Les travaux constituent un lot unique indivisible. Ainsi, toute offre partielle n’est pas recevable.
+PARA	{{FINSI:CC-LOT-UNIQUE}}
+PARA	{{SI:QF-UNITAIRES}}
+PARA	La procédure de passation de marché applicable est l’Appel d’Offres Ouvert tel qu’il est défini dans la loi N°2016-055 du 25 Janvier 2017 portant Code des Marchés Publics en ses articles 30, 35 et 67 en vue de la passation de marché à quantités fixes conclu à prix unitaire.
+PARA	{{FINSI:QF-UNITAIRES}}
+PARA	{{SI:QF-FORFAITAIRE}}
+PARA	La procédure de passation de marché applicable est l’Appel d’Offres Ouvert tel qu’il est défini dans la loi N°2016-055 du 25 Janvier 2017 portant Code des Marchés Publics en ses articles 30, 35 et 67 en vue de la passation de marché à quantités fixes conclu à prix forfaitaire.
+PARA	{{FINSI:QF-FORFAITAIRE}}
+PARA	{{SI:QF-MIXTE}}
+PARA	La procédure de passation de marché applicable est l’Appel d’Offres Ouvert tel qu’il est défini dans la loi N°2016-055 du 25 Janvier 2017 portant Code des Marchés Publics en ses articles 30, 35 et 67 en vue de la passation de marché à quantités fixes conclu à prix unitaire et à prix forfaitaire.
+PARA	{{FINSI:QF-MIXTE}}
+PARA	{{SI:AC-UNITAIRES}}
+PARA	La procédure de passation de marché applicable est l’Appel d’Offres Ouvert tel qu’il est défini dans la loi N°2016-055 du 25 Janvier 2017 portant Code des Marchés Publics en ses articles 30, 35 et 67 en vue de la passation de marché à commandes conclu à prix unitaire.
+PARA	{{FINSI:AC-UNITAIRES}}
+PARA	{{SI:AC-FORFAITAIRE}}
+PARA	La procédure de passation de marché applicable est l’Appel d’Offres Ouvert tel qu’il est défini dans la loi N°2016-055 du 25 Janvier 2017 portant Code des Marchés Publics en ses articles 30, 35 et 67 en vue de la passation de marché à commandes conclu à prix forfaitaire.
+PARA	{{FINSI:AC-FORFAITAIRE}}
+PARA	{{SI:AC-MIXTE}}
+PARA	La procédure de passation de marché applicable est l’Appel d’Offres Ouvert tel qu’il est défini dans la loi N°2016-055 du 25 Janvier 2017 portant Code des Marchés Publics en ses articles 30, 35 et 67 en vue de la passation de marché à commandes conclu à prix unitaire et à prix forfaitaire.
+PARA	{{FINSI:AC-MIXTE}}
+PARA	{{SI:CC-UNITAIRES}}
+PARA	La procédure de passation de marché applicable est l’Appel d’Offres Ouvert tel qu’il est défini dans la loi N°2016-055 du 25 Janvier 2017 portant Code des Marchés Publics en ses articles 30, 35 et 67 en vue de la passation de marché contrat-cadre conclu à prix unitaire.
+PARA	{{FINSI:CC-UNITAIRES}}
+PARA	{{SI:CC-FORFAITAIRE}}
+PARA	La procédure de passation de marché applicable est l’Appel d’Offres Ouvert tel qu’il est défini dans la loi N°2016-055 du 25 Janvier 2017 portant Code des Marchés Publics en ses articles 30, 35 et 67 en vue de la passation de marché contrat-cadre conclu à prix forfaitaire.
+PARA	{{FINSI:CC-FORFAITAIRE}}
+PARA	{{SI:CC-MIXTE}}
+PARA	La procédure de passation de marché applicable est l’Appel d’Offres Ouvert tel qu’il est défini dans la loi N°2016-055 du 25 Janvier 2017 portant Code des Marchés Publics en ses articles 30, 35 et 67 en vue de la passation de marché contrat-cadre conclu à prix unitaire et à prix forfaitaire.
+PARA	{{FINSI:CC-MIXTE}}
+PARA	Le Dossier d’Appel d’Offres complet, rédigé en langue française, peut être consulté par tout candidat désirant prendre connaissance ou obtenir des informations à l’adresse ci-après :
+PARA	{{B04-DS-07}}
+PARA	{{B04-DS-08}}
+PARA	{{B04-DS-09}}, {{B04-DS-10}}
+PARA	{{SI:CONSULTATION-EMAIL}}
+PARA	{{B04-DS-11}}
+PARA	{{FINSI:CONSULTATION-EMAIL}}
+PARA	Pour le (ou les) candidat(s) désirant soumissionner, le Dossier d’Appel d’Offres doit être retiré auprès de l’Autorité contractante moyennant le paiement d’un montant non remboursable de :
+PARA	- {{B04-DS-05.lettres}} (Ar {{B04-DS-05.chiffres}}) ou son équivalent en monnaie librement convertible libellé au nom de l’Agent comptable de l’ARMP ou au nom du régisseur de recettes de l’ARMP.
+PARA	{{SI:ORDINAIRE}}
+PARA	Les plis devront parvenir à {{B01-AC-02}} au plus tard le {{B04-OV-02}} et seront ouverts immédiatement après l’heure limite de remise des offres en présence des candidats ou leurs représentants qui souhaitent y assister. Les offres hors délai ne seront pas recevables.
+PARA	{{FINSI:ORDINAIRE}}
+PARA	{{SI:CC}}
+PARA	Les plis devront parvenir à {{B04-RQ-03}} au plus tard le {{B04-CP-02}} et seront ouverts immédiatement après l’heure limite de remise des offres en présence des candidats ou leurs représentants qui souhaitent y assister. Les offres hors délai ne seront pas recevables.
+PARA	{{FINSI:CC}}
+PARA	{{SI:ELECTRONIQUE}}
+PARA	La soumission des offres par voie électronique sera autorisée.
+PARA	{{FINSI:ELECTRONIQUE}}
+PARA	{{SI:PAPIER}}
+PARA	La soumission des offres par voie électronique ne sera pas autorisée.
+PARA	{{FINSI:PAPIER}}
+PARA	{{SI:GARANTIE}}
+PARA	Chaque offre doit être accompagnée d’une garantie de soumission d’un montant de {{B05-GQ-03.lettres}} ({{B05-GQ-03}}), ou son équivalent en monnaie librement convertible, elle doit être présentée sous l’une des formes suivantes : soit par caution personnelle et solidaire d’un organisme agréé par le Ministère chargée des Finances, soit par garantie bancaire, soit par chèque de banque.
+PARA	{{FINSI:GARANTIE}}
+PARA	{{SI:CC}}
+PARA	Les titulaires du contrat-cadre issu du présent appel d’offres seront ultérieurement invités à participer à la passation des marchés subséquents.
+PARA	{{FINSI:CC}}
+PARA	La Personne Responsable des Marchés Publics
+PARA	{{B01-AC-05}}

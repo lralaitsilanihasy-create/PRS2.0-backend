@@ -235,7 +235,12 @@ public class FicheMarcheService {
                 ? ficheRepository.findFirstByIdDmcOrderByNumeroVersionDesc(idDmc).orElse(null)
                 : ficheRepository.findByIdDmcAndNumeroVersion(idDmc, version).orElseThrow(
                         () -> new ResourceNotFoundException("Version " + version + " introuvable pour le DMC " + idDmc + "."));
-        return documents.lister(fiche, ctx.codeCategorie());
+        List<DocumentFicheDto> liste = new java.util.ArrayList<>(documents.lister(fiche, ctx.codeCategorie()));
+        // ⚠️ 2026-09-30 (avis spécifique, §B4) — les avis imprimés, du plus récent au plus ancien : ceux de toutes les
+        // versions sans ?version (ils restent listés pendant une révision ouverte), ceux de la version demandée sinon.
+        liste.addAll(documents.listerAvis(version == null ? ficheRepository.findByIdDmcOrderByNumeroVersionAsc(idDmc)
+                : fiche == null ? List.of() : List.of(fiche)));
+        return liste;
     }
 
     /**

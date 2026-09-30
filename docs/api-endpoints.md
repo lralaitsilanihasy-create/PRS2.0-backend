@@ -4952,6 +4952,82 @@ Demande front `frontend/docs/demande-backend-2026-09-29-champs-non-imprimes-four
   l'interligne se mesure sur chaque page. Le DPAC en PDF que produit le serveur se lit maintenant presque comme le
   `.docx`.
 
+### Avis spécifique d'appel d'offres ⚠️ 2026-09-30
+
+Demande front `frontend/docs/demande-backend-2026-09-30-avis-specifique.md` (arbitrage du pilote Q1 à Q5). Migration
+**V56** ; script `docs/referentiel/2026-09-30-avis-specifique.sql`, après le redémarrage.
+
+Une fois le dossier DAO examiné et le PV signé favorable, la PRMP imprime l'avis spécifique du DAO. Pour un avis `FAV`,
+c'est possible dès la signature du PV. Pour un avis `FAVR`, seulement après la levée des réserves.
+
+**Modèles** : `AVIS-F` (fournitures) et `AVIS-T` (travaux, adapté) ; 17 et 19 conditions, fidélité 73/73 et 79/79.
+Chacun couvre les trois formes. Ils ne sont **pas** produits à la validation et restent hors de `ModelesDao.COUVERTURES`,
+que lisent aussi la production et l'import.
+
+#### `GET /api/fiches-marche/{idDmc}/avis-specifique/disponibilite`
+
+PRMP et UGPM (403 sinon), au périmètre de la fiche. Réponse 200 :
+
+```json
+{ "disponible": false, "raison": "RESERVES_NON_LEVEES", "idAvis": "FAVR", "statutPv": "SIGNE",
+  "statutDossier": "EN_VERIFICATION", "idDossierSoumis": 123 }
+```
+
+`raison` vaut `null` si l'avis est disponible. Sinon, c'est la première qui s'applique, dans cet ordre :
+1. `CATEGORIE_SANS_AVIS` : prestations intellectuelles, en attendant le lot AV-4 ;
+2. `SANS_DOSSIER` : la fiche n'a pas de dossier soumis ;
+3. `PV_NON_SIGNE` : aucun PV signé pour ce dossier ;
+4. `AVIS_NON_FAVORABLE` : PV signé `DEF` ou `NSP` ;
+5. `RESERVES_NON_LEVEES` : PV `FAVR` et dossier ni à `OBSERVATIONS_LEVEES`, ni à `DECISION_TRANSMISE_SIGMP`, ni à
+   `CLOTURE` ;
+6. `FICHE_NON_VALIDEE` : garde-fou, aucune version validée.
+
+Les trois statuts « réserves levées » sont lus sur la navette réelle. Le vérificateur pose `OBSERVATIONS_LEVEES` à la
+levée. Pour un FAVR, la transmission à SIGMP n'est possible qu'après la levée, et l'archivage (`CLOTURE`) qu'après la
+transmission.
+
+#### `POST /api/fiches-marche/{idDmc}/avis-specifique`
+
+PRMP et UGPM. Corps :
+
+```json
+{ "datePublication": "2026-10-05", "jmpNumero": "123", "jmpDate": "2026-01-15", "supports": "le quotidien … du 06/10/2026" }
+```
+
+- **400** `erreurs[{champ, message}]` : une des quatre informations manque, ou une date n'est pas au format `AAAA-MM-JJ`.
+- **409** `AVIS_INDISPONIBLE` : la raison est dans **`details.raison`** (mêmes valeurs que ci-dessus).
+- **201** : la paire produite, `.docx` puis `.pdf`, de type `AVIS` et de libellé « Avis spécifique d'appel d'offres ».
+  Les deux documents portent la version rendue et `publication` (les quatre informations telles que saisies).
+
+Rendu :
+- l'avis se rend sur la **dernière version validée** de la fiche ;
+- les jetons `{{AVIS.date-publication}}`, `{{AVIS.jmp-numero}}`, `{{AVIS.jmp-date}}` et `{{AVIS.supports}}` prennent les
+  informations de publication, les dates au format `JJ/MM/AAAA`. Absentes, elles s'impriment en pointillés.
+
+Ces informations ne sont **jamais écrites dans la fiche**. Elles restent en trace avec le document
+(`t_document_fiche_marche.PUBLICATION`, JSON). Chaque impression ajoute une paire, dont le nom porte l'horodatage
+(`AVIS_<plan>_<ligne>_v2_20261005-143000.pdf`) ; les précédentes restent consultables. L'impression est inscrite au
+journal du dossier (`AVIS_SPECIFIQUE_IMPRIME`).
+
+#### Liste et jointure
+
+- `GET /{idDmc}/documents` ajoute les avis, du plus récent au plus ancien :
+  - sans `?version`, ceux de **toutes** les versions (ils restent listés pendant une révision ouverte) ;
+  - avec `?version`, ceux de la version demandée.
+
+  Chaque avis porte `publication`, qui vaut `null` pour les documents du DAO.
+- L'avis n'est **jamais joint au dossier** comme pièce du DAO (`DAO_COMPLET`).
+- V56 étend la liste fermée des types de document à `AVIS`. L'unicité « type, extension et lot par version » ne vaut
+  plus pour ce type.
+
+#### Référentiel (§B5)
+
+- `B04-DS-05` et `B04-DS-07` à `-10` sont servis aux trois formes, fournitures et travaux, et restent facultatifs.
+- `B04-DS-11` « Adresse de consultation du dossier : e-mail » est nouveau (TEXTE, facultatif).
+- `B05-GS-03` (fournitures) et `B05-GQ-03` (travaux) sont servis aussi au contrat-cadre, avec la condition
+  `garantieSoumission = OUI` et l'obligation qui en découle.
+- V56 élargit les rubriques `B04-DS` (aux trois formes) et `B05-GQ` (au contrat-cadre).
+
 ### Champs qu'aucun document n'utilise : retirés ⚠️ 2026-09-30
 
 Arbitrage du pilote, sur la règle des fournitures du 29/09. Aucune route ni migration nouvelle : les fichiers de

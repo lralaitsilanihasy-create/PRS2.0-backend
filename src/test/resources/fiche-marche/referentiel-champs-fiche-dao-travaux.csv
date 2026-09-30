@@ -54,7 +54,7 @@ B05-VR-01;Prix ferme ou révisable;OUI_NON;CADRAGE;DPAO;AE,CCAP;QUANTITE_FIXE,A_
 B05-MN-01;Monnaie de l'offre;LISTE;SAISIE;DPAO;AE,CCAP;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;Ariary,Devises;;;oui
 B05-GQ-01;Garantie de soumission exigée;OUI_NON;CADRAGE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;garantieSoumission;;oui
 B05-GQ-02;Formes admises de la garantie de soumission;LISTE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;garantieSoumission = OUI;oui;;;Caution personnelle et solidaire,Garantie bancaire,Chèque de banque;;;oui
-B05-GQ-03;Montant de la garantie de soumission (Ariary);MONTANT;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;garantieSoumission = OUI;oui;;MONTANT_POSITIF;;;;oui
+B05-GQ-03;Montant de la garantie de soumission (Ariary);MONTANT;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE,CONTRAT_CADRE;TRAVAUX;garantieSoumission = OUI;oui;;MONTANT_POSITIF;;;;oui
 B05-GE-01;Garantie de bonne exécution requise;OUI_NON;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
 B05-GE-02;Part exigée en devises étrangères;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui
 B05-GE-03;Formes admises de la garantie de bonne exécution;LISTE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;Garantie bancaire,Caution personnelle et solidaire,Chèque de banque;;;oui

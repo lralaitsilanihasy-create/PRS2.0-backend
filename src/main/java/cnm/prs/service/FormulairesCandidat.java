@@ -83,9 +83,23 @@ public final class FormulairesCandidat {
      */
     public static DocumentLibre rendreModele(String type, Integer lot, FicheMarcheDto fiche, Map<String, ChampFicheMarche> champs,
             FichierCommande.Modele modele, LocalDateTime validation) {
-        Contexte ctx = new Contexte(fiche, champs, modele.conditions());
+        return rendreModele(type, lot, fiche, champs, modele, validation, Map.of());
+    }
+
+    /**
+     * ⚠️ Avis spécifique d'appel d'offres (demande front du 2026-09-30, §B2) — avec les <strong>informations de
+     * publication</strong> saisies à l'impression, qui ne sont pas des données de la fiche : les jetons
+     * {@code {{AVIS.date-publication}}}, {@code {{AVIS.jmp-numero}}}, {@code {{AVIS.jmp-date}}}, {@code {{AVIS.supports}}}
+     * se lisent dans {@code publication} (clés sans le préfixe, valeurs déjà mises en forme) ; absents : pointillés.
+     */
+    public static DocumentLibre rendreModele(String type, Integer lot, FicheMarcheDto fiche, Map<String, ChampFicheMarche> champs,
+            FichierCommande.Modele modele, LocalDateTime validation, Map<String, String> publication) {
+        Contexte ctx = new Contexte(fiche, champs, modele.conditions(), publication == null ? Map.of() : publication);
         return new DocumentLibre(type, lot, ctx.rendre(modele.elements(), lot), pied(fiche, validation));
     }
+
+    /** ⚠️ Avis spécifique (§B2) — le préfixe des jetons d'information de publication. */
+    public static final String PREFIXE_AVIS = "AVIS.";
 
     private static final Pattern JETON = Pattern.compile("\\{\\{([^{}]+)}}");
     private static final Pattern MARQUEUR = Pattern.compile("\\{\\{(SI|FINSI):([A-Z0-9-]+)}}");
@@ -155,10 +169,11 @@ public final class FormulairesCandidat {
     // ------------------------------------------------------------------ substitution et marqueurs
 
     /** Le contexte d'une fiche : ce que valent les conditions, les répétitions et les jetons. */
-    private record Contexte(FicheMarcheDto fiche, Map<String, ChampFicheMarche> champs, Map<String, String> conditions) {
+    private record Contexte(FicheMarcheDto fiche, Map<String, ChampFicheMarche> champs, Map<String, String> conditions,
+            Map<String, String> publication) {
 
         Contexte(FicheMarcheDto fiche, Map<String, ChampFicheMarche> champs) {
-            this(fiche, champs, Map.of());
+            this(fiche, champs, Map.of(), Map.of());
         }
 
         /**
@@ -435,6 +450,11 @@ public final class FormulairesCandidat {
         private String jeton(String nom, Integer lot) {
             if (nom.startsWith(RemiseElectronique.PREFIXE_JETON_INTERNE)) {
                 return null;   // ⚠️ V50 (§B2.2) — un paramètre interne de la procédure n'entre dans aucun document : laissé tel quel
+            }
+            if (nom.startsWith(PREFIXE_AVIS)) {
+                // ⚠️ Avis spécifique (§B2) — une information de publication, saisie à l'impression, jamais stockée dans la fiche.
+                String v = publication.get(nom.substring(PREFIXE_AVIS.length()));
+                return v == null || v.isBlank() ? POINTILLES : v;
             }
             if (JETON_LOT.equals(nom)) {
                 return lot == null ? "" : String.valueOf(lot);   // ⚠️ Lot D (2026-09-28, §B2) — le numéro du lot, vide hors lot

@@ -82,7 +82,11 @@ class ModelesDaoTest {
         assertThat(dao.modele("DPAO-T").conditions()).hasSize(34);
         assertThat(dao.modele("AE-T").conditions()).hasSize(30);
         assertThat(dao.modele("CCAP-T").conditions()).hasSize(70);
-        assertThat(dao.modeles()).hasSize(11);
+        // ⚠️ 2026-09-30 — les deux avis spécifiques (fournitures, travaux), imprimés à la demande, hors des couvertures.
+        assertThat(dao.modele("AVIS-F").conditions()).hasSize(17);
+        assertThat(dao.modele("AVIS-T").conditions()).hasSize(19);
+        assertThat(ModelesDao.COUVERTURES).noneMatch(c -> c.sigle().startsWith("AVIS"));
+        assertThat(dao.modeles()).hasSize(13);
         assertThatThrownBy(() -> ModelesDao.charger("/modeles/dao/X.txt", "CONDITION\tA\u001Fattributaires = MONO\n"
                 + "PARA\t{{SI:A}}\nPARA\t{{SI:B}}\nPARA\ttexte\nPARA\t{{FINSI:B}}\nPARA\t{{FINSI:A}}"))
                 .isInstanceOf(IllegalStateException.class).hasMessageContaining("/modeles/dao/X.txt")

@@ -44,9 +44,11 @@ public class FicheMarcheController {
     private final FicheMarcheService service;
     private final FicheMarcheDossierService dossiers;
     private final cnm.prs.service.ImportDaoService importDao;
+    private final cnm.prs.service.AvisSpecifiqueService avis;
 
     public FicheMarcheController(FicheMarcheService service, FicheMarcheDossierService dossiers,
-            cnm.prs.service.ImportDaoService importDao) {
+            cnm.prs.service.ImportDaoService importDao, cnm.prs.service.AvisSpecifiqueService avis) {
+        this.avis = avis;
         this.importDao = importDao;
         this.service = service;
         this.dossiers = dossiers;
@@ -82,6 +84,25 @@ public class FicheMarcheController {
     @GetMapping("/{idDmc}/documents")
     public List<DocumentFicheDto> documents(@PathVariable Long idDmc, @RequestParam(required = false) Integer version) {
         return service.documents(idDmc, version);
+    }
+
+    /**
+     * ⚠️ Avis spécifique d'appel d'offres (demande front du 2026-09-30, §B3) — imprime l'avis sur la dernière version
+     * validée : 201 et la paire .docx / .pdf produite (type {@code AVIS}) ; 400 nominatif ; 409 {@code AVIS_INDISPONIBLE}.
+     * PRMP et UGPM (gardes dans {@link cnm.prs.service.AvisSpecifiqueService}).
+     */
+    @PostMapping("/{idDmc}/avis-specifique")
+    @PreAuthorize("hasAnyRole('PRMP', 'UGPM')")
+    public ResponseEntity<List<DocumentFicheDto>> imprimerAvis(@PathVariable Long idDmc,
+            @RequestBody(required = false) cnm.prs.dto.AvisSpecifiqueRequest corps) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(avis.produire(idDmc, corps));
+    }
+
+    /** ⚠️ Avis spécifique (§B4) — l'avis peut-il être imprimé, et sinon pourquoi. PRMP et UGPM. */
+    @GetMapping("/{idDmc}/avis-specifique/disponibilite")
+    @PreAuthorize("hasAnyRole('PRMP', 'UGPM')")
+    public cnm.prs.dto.AvisDisponibiliteDto disponibiliteAvis(@PathVariable Long idDmc) {
+        return avis.disponibilite(idDmc);
     }
 
     /** La dernière version (virtuelle avant le premier enregistrement). */

@@ -56,6 +56,13 @@ public class DocumentsFicheMarcheService {
 
     /** Code stable du type de pièce « Dossier d'appel d'offres complet » (V38). */
     public static final String CODE_TYPE_PIECE = "DAO_COMPLET";
+    /**
+     * ⚠️ 2026-09-30 — le type des documents de l'avis spécifique d'appel d'offres : imprimés à la demande après le PV,
+     * rattachés à la version validée qu'ils rendent, jamais joints au dossier comme pièce du DAO.
+     */
+    public static final String TYPE_AVIS = "AVIS";
+    private static final java.time.format.DateTimeFormatter HORODATAGE =
+            java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
 
     /** Statuts où le dossier reçoit les documents d'une nouvelle version à la place des précédents (ceux du dépôt). */
     private static final Set<String> STATUTS_REMPLACEMENT = Set.of(StatutDossier.BROUILLON.name(),
@@ -249,11 +256,92 @@ public class DocumentsFicheMarcheService {
         return produits;
     }
 
+    /**
+     * ⚠️ Avis spécifique d'appel d'offres (demande front du 2026-09-30, §B1-§B3) — l'avis rendu depuis le modèle de la
+     * catégorie ({@link ModelesDao#sigleAvis}), sur l'état figé de la version validée, avec les informations de publication
+     * déjà mises en forme ({@code date-publication}, {@code jmp-numero}, {@code jmp-date}, {@code supports}). Un .docx et
+     * un .pdf ; le nom porte l'horodatage d'impression, chaque impression produisant une nouvelle paire.
+     */
+    public List<Produit> produireAvis(FicheMarcheDto etat, Map<String, String> publication, LocalDateTime impression) {
+        FichierCommande.Modele modele = modelesDao.modele(ModelesDao.sigleAvis(etat.getCategorie()));
+        if (modele == null) {
+            throw new GenerationDocumentsException("Aucun modèle d'avis spécifique pour la catégorie " + etat.getCategorie() + ".", null);
+        }
+        Map<String, ChampFicheMarche> parCode = new LinkedHashMap<>();
+        champRepository.findByActifTrueOrderByCodeRubriqueAscRangAsc().forEach(c -> parCode.put(c.getCode(), c));
+        DocumentLibre doc;
+        List<GenerateurDocumentsFiche.Fichier> fichiers;
+        try {
+            doc = FormulairesCandidat.rendreModele(TYPE_AVIS, null, etat, parCode, modele, impression, publication);
+            fichiers = generateur.generer(doc);
+        } catch (RuntimeException e) {
+            throw new GenerationDocumentsException("La génération de l'avis spécifique a échoué : " + e.getMessage(), e);
+        }
+        List<Produit> produits = new ArrayList<>();
+        for (GenerateurDocumentsFiche.Fichier fi : fichiers) {
+            String nom = nomFichier(TYPE_AVIS, etat.getRefeDossier(), etat.getIdDetail(), null, etat.getVersion(), fi.extension());
+            nom = nom.substring(0, nom.length() - fi.extension().length() - 1) + "_" + impression.format(HORODATAGE) + "." + fi.extension();
+            produits.add(new Produit(TYPE_AVIS, fi.extension(), nom, fi.contenu(), null));
+        }
+        return produits;
+    }
+
+    /** ⚠️ Avis spécifique — rattache l'avis à la version validée qu'il rend, avec la trace des informations de publication. */
+    public java.util.Set<Integer> enregistrerAvis(Integer idFiche, List<Produit> produits, LocalDateTime date, String publicationJson) {
+        java.util.Set<Integer> ids = new java.util.HashSet<>();
+        for (Produit p : produits) {
+            ids.add(documentRepository.save(new DocumentFicheMarche(null, idFiche, p.type(), p.extension(), p.nomFichier(),
+                    (long) p.contenu().length, empreinte(p.contenu()), date, p.contenu(), p.lot(), publicationJson)).getIdDocument());
+        }
+        return ids;
+    }
+
+    /**
+     * ⚠️ Avis spécifique — les avis produits sur les versions données, du plus récent au plus ancien, avec leurs
+     * informations de publication.
+     */
+    @Transactional(readOnly = true)
+    public List<DocumentFicheDto> listerAvis(List<FicheMarche> versions) {
+        Map<Integer, Integer> numeros = new LinkedHashMap<>();
+        versions.forEach(v -> numeros.put(v.getIdFiche(), v.getNumeroVersion()));
+        if (numeros.isEmpty()) {
+            return List.of();
+        }
+        return documentRepository.findByIdFicheInAndTypeOrderByIdDocumentDesc(numeros.keySet(), TYPE_AVIS).stream()
+                .map(d -> new DocumentFicheDto(d.getIdDocument(), d.getType(), SelectionDocumentsFiche.titre(TYPE_AVIS),
+                        d.getExtension(), d.getNomFichier(), d.getTailleOctets(), d.getDateGeneration(),
+                        numeros.get(d.getIdFiche()), d.getLot(), publication(d.getPublication())))
+                .toList();
+    }
+
+    private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
+
+    /** La trace JSON d'un avis, relue ; illisible ou absente : {@code null}. */
+    static Map<String, String> publication(String json) {
+        if (json == null || json.isBlank()) {
+            return null;
+        }
+        try {
+            return JSON.readValue(json, new com.fasterxml.jackson.core.type.TypeReference<LinkedHashMap<String, String>>() { });
+        } catch (java.io.IOException e) {
+            return null;
+        }
+    }
+
+    /** La trace JSON des informations de publication d'un avis. */
+    static String publicationJson(Map<String, String> publication) {
+        try {
+            return JSON.writeValueAsString(publication);
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
     /** Rattache les documents produits à la version validée. */
     public void enregistrer(Integer idFiche, List<Produit> produits, LocalDateTime date) {
         for (Produit p : produits) {
             documentRepository.save(new DocumentFicheMarche(null, idFiche, p.type(), p.extension(), p.nomFichier(),
-                    (long) p.contenu().length, empreinte(p.contenu()), date, p.contenu(), p.lot()));
+                    (long) p.contenu().length, empreinte(p.contenu()), date, p.contenu(), p.lot(), null));
         }
     }
 
@@ -270,6 +358,7 @@ public class DocumentsFicheMarcheService {
             return List.of();
         }
         return documentRepository.findByIdFicheOrderByIdDocumentAsc(fiche.getIdFiche()).stream()
+                .filter(d -> !TYPE_AVIS.equals(d.getType()))   // ⚠️ 2026-09-30 — les avis se listent à part (listerAvis)
                 .map(d -> new DocumentFicheDto(d.getIdDocument(), d.getType(),
                         SelectionDocumentsFiche.titre(d.getType(), d.getLot(), fiche.getTypeMarche(), categorie), d.getExtension(), d.getNomFichier(),
                         d.getTailleOctets(), d.getDateGeneration(), fiche.getNumeroVersion(), d.getLot()))
@@ -305,7 +394,9 @@ public class DocumentsFicheMarcheService {
             return 0;
         }
         List<DocumentFicheMarche> pdfs = documentRepository.findByIdFicheOrderByIdDocumentAsc(validee.getIdFiche()).stream()
-                .filter(d -> "pdf".equals(d.getExtension())).toList();
+                .filter(d -> "pdf".equals(d.getExtension()))
+                .filter(d -> !TYPE_AVIS.equals(d.getType()))   // ⚠️ 2026-09-30 — l'avis n'est pas une pièce du DAO
+                .toList();
         if (pdfs.isEmpty()) {
             return 0;   // version validée avant le lot 2 : aucun document à joindre
         }

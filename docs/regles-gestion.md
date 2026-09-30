@@ -516,6 +516,26 @@ champs non imprimés retirés*.
   marché à commande dit, s'il y a lieu, la variation admise au-delà des bornes de quantités. Le DPAO dit les niveaux de
   qualification exigés. Un CCAP déjà produit se corrige en reproduisant les documents par une révision.
 
+#### L'avis spécifique d'appel d'offres (arbitrage du pilote du 2026-09-30)
+
+⚠️ **Quand l'examen est favorable, la PRMP imprime l'avis spécifique de son DAO.** Il fait suite à l'avis général de
+passation publié au Journal des Marchés Publics. Contrat : `docs/api-endpoints.md`, § *Avis spécifique d'appel
+d'offres*.
+
+- **Quand** :
+  - avec un avis **favorable**, dès que le PV est signé ;
+  - avec un avis **favorable avec réserves**, seulement après la levée des réserves par le vérificateur ;
+  - jamais avec un avis défavorable ou « sans objet ».
+- **Sur quoi** : la dernière version validée de la fiche, c'est-à-dire le DAO examiné, ou corrigé à la levée des
+  réserves.
+- **Publication** : la date de publication, le numéro et la date du Journal des Marchés Publics de l'avis général, et
+  les autres supports se saisissent à l'impression. Ce ne sont pas des données du DAO : ils ne modifient pas la fiche et
+  sont gardés avec l'avis produit.
+- **Chaque impression est conservée** : une nouvelle impression ne remplace pas la précédente. L'avis n'est pas une
+  pièce du DAO soumis à la Commission.
+- **Catégories** : les fournitures et les travaux ont chacun leur modèle, pour les trois formes. Les prestations
+  intellectuelles n'ont pas d'avis public ; leur lettre d'invitation fera l'objet d'une demande à part.
+
 #### Un champ qu'aucun document n'utilise n'est pas demandé (arbitrage du pilote du 2026-09-30)
 
 ⚠️ **La fiche ne demande que ce que le dossier imprime ou ce qu'une règle vérifie.** Est retiré, pour les trois

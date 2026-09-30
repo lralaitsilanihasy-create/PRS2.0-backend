@@ -13,4 +13,7 @@ public interface DocumentFicheMarcheRepository extends JpaRepository<DocumentFic
 
     /** Les documents d'une version, dans l'ordre de génération. */
     List<DocumentFicheMarche> findByIdFicheOrderByIdDocumentAsc(Integer idFiche);
+
+    /** ⚠️ 2026-09-30 — les documents d'un type (avis spécifique) de plusieurs versions, du plus récent au plus ancien. */
+    List<DocumentFicheMarche> findByIdFicheInAndTypeOrderByIdDocumentDesc(java.util.Collection<Integer> idFiches, String type);
 }

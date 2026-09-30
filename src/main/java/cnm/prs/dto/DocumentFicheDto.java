@@ -13,7 +13,17 @@ import java.time.LocalDateTime;
  * @param version numéro de la version de la fiche qui porte le document
  * @param lot     ⚠️ 2026-09-25 — rang du lot d'un document établi par lot (acte d'engagement d'une ligne allotie,
  *                {@code libelle} « Acte d'engagement — lot 2 ») ; {@code null} : document commun
+ * @param publication ⚠️ 2026-09-30 — avis spécifique ({@code type = AVIS}) : les informations de publication saisies à
+ *                l'impression ({@code datePublication}, {@code jmpNumero}, {@code jmpDate}, {@code supports}) ;
+ *                {@code null} pour les documents du DAO
  */
 public record DocumentFicheDto(Integer idDocument, String type, String libelle, String extension, String nomFichier,
-        Long tailleOctets, LocalDateTime dateGeneration, Integer version, Integer lot) {
+        Long tailleOctets, LocalDateTime dateGeneration, Integer version, Integer lot,
+        java.util.Map<String, String> publication) {
+
+    /** Un document du DAO (sans information de publication). */
+    public DocumentFicheDto(Integer idDocument, String type, String libelle, String extension, String nomFichier,
+            Long tailleOctets, LocalDateTime dateGeneration, Integer version, Integer lot) {
+        this(idDocument, type, libelle, extension, nomFichier, tailleOctets, dateGeneration, version, lot, null);
+    }
 }

@@ -65,4 +65,12 @@ public class DocumentFicheMarche {
     /** ⚠️ 2026-09-25 (V43) — rang du lot d'un document établi par lot ; {@code null} : document commun. */
     @Column(name = "LOT")
     private Integer lot;
+
+    /**
+     * ⚠️ 2026-09-30 (V56, avis spécifique) — les informations de publication saisies à l'impression de l'avis (JSON :
+     * {@code datePublication}, {@code jmpNumero}, {@code jmpDate}, {@code supports}), conservées en trace avec le
+     * document ; {@code null} pour les documents du DAO.
+     */
+    @Column(name = "PUBLICATION", columnDefinition = "text")
+    private String publication;
 }

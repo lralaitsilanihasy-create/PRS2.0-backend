@@ -79,11 +79,11 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
         assertThat(f.crees()).hasSize(156);   // V50 : + 26 champs de la remise électronique ; lot D2 (2026-09-29) : + 7
         ChampFicheMarcheService.BilanImport cc = importer("referentiel-champs-fiche-marche-contrat-cadre.csv");
         assertThat(cc.rejets()).isEmpty();
-        assertThat(cc.crees()).hasSize(132);   // 2026-09-28 : + 9 champs du modèle officiel, + 9 du lot D
+        assertThat(cc.crees()).hasSize(133);   // 2026-09-28 : + 9 champs du modèle officiel, + 9 du lot D ; 30/09 : + B04-DS-11 (avis spécifique)
 
-        assertThat(champs("QUANTITE_FIXE")).hasSize(155);   // 29/09 : − 23 champs non imprimés retirés, − B08-PA-08 (§B6)
-        assertThat(champs("A_COMMANDE")).hasSize(158);   // 29/09 : − 25, − B08-PA-08 (§B6)
-        assertThat(champs("CONTRAT_CADRE")).hasSize(175);   // 2026-09-28 : 176 − 20 + 11 (modèle officiel) + 9 (lot D) − 1 (B07-DU-06, Q2)
+        assertThat(champs("QUANTITE_FIXE")).hasSize(161);   // 29/09 : − 23 champs non imprimés retirés, − B08-PA-08 (§B6) ; 30/09 : + 6 B04-DS (avis)
+        assertThat(champs("A_COMMANDE")).hasSize(164);   // 29/09 : − 25, − B08-PA-08 (§B6) ; 30/09 : + 6 B04-DS (avis)
+        assertThat(champs("CONTRAT_CADRE")).hasSize(177);   // 2026-09-28 : 176 − 20 + 11 (modèle officiel) + 9 (lot D) − 1 (B07-DU-06, Q2) ; 30/09 : + B04-DS-11, + B05-GS-03 (avis)
         // ⚠️ 2026-09-29 (§B6 des champs non imprimés) — B08-PA-08 retiré des fournitures ; B08-FP-03, même avertissement
         // DELAI_PAIEMENT_75, reste servi au contrat-cadre.
         assertThat(champs("A_COMMANDE")).doesNotContain("B08-PA-08").contains("B05-TP-03");
@@ -204,8 +204,11 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
         mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.typeOutille").value(true))
-                .andExpect(jsonPath("$.bilanControles.nbAttendus").value(0));
-        assertThat(champs("QUANTITE_FIXE")).noneMatch(c -> c.startsWith("B07-") || c.startsWith("B02-OE"));
+                // ⚠️ 2026-09-30 (avis spécifique, §B5) — les six champs de l'adresse de consultation et du montant du dossier
+                // (B04-DS-05, -07 à -11), facultatifs, sont servis aussi à la quantité fixe.
+                .andExpect(jsonPath("$.bilanControles.nbAttendus").value(6));
+        assertThat(champs("QUANTITE_FIXE")).noneMatch(c -> c.startsWith("B07-") || c.startsWith("B02-OE"))
+                .contains("B04-DS-05", "B04-DS-11");
     }
 
     // ------------------------------------------------------------------ 6. modèle officiel du contrat-cadre (2026-09-28)

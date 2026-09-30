@@ -37,7 +37,9 @@ public final class SelectionDocumentsFiche {
             "AE", "Acte d'engagement",
             "LF", "Liste des fournitures et calendrier de livraison",
             "BP", "Bordereau des prix",
-            "TC", "Spécifications techniques — tableau de conformité");
+            "TC", "Spécifications techniques — tableau de conformité",
+            // ⚠️ 2026-09-30 — l'avis spécifique, imprimé à la demande après le PV signé favorable (pas un document du DAO).
+            "AVIS", "Avis spécifique d'appel d'offres");
 
     /**
      * ⚠️ Lot 4 (2026-09-23) — le jeu documentaire d'un type de marché. En contrat-cadre, le deuxième document est le

@@ -61,16 +61,33 @@ public class ModelesDao {
             new Couverture("DPAC-CC", "DPAC", "CONTRAT_CADRE", "TRAVAUX"),
             new Couverture("AE-CC", "AE", "CONTRAT_CADRE", "TRAVAUX"));
 
+    /**
+     * ⚠️ Avis spécifique d'appel d'offres (demande front du 2026-09-30, §B1) — le modèle d'avis par catégorie, pour les
+     * trois formes. Il n'est PAS produit à la validation (hors de {@link #COUVERTURES}, que lisent aussi l'import et la
+     * production) : il s'imprime à la demande, une fois le PV signé favorable ({@code FicheMarcheService#produireAvis}).
+     * Les prestations intellectuelles n'ont pas d'avis public (lettre d'invitation, lot AV-4).
+     */
+    public static final Map<String, String> AVIS = Map.of(
+            "FOURNITURES_SERVICES", "AVIS-F",
+            "TRAVAUX", "AVIS-T");
+
     private final Map<String, FichierCommande.Modele> modeles = new LinkedHashMap<>();
 
     public ModelesDao() {
-        for (Couverture c : COUVERTURES) {
-            if (modeles.containsKey(c.sigle())) {
+        List<String> sigles = new java.util.ArrayList<>(COUVERTURES.stream().map(Couverture::sigle).toList());
+        sigles.addAll(new java.util.TreeSet<>(AVIS.values()));
+        for (String sigle : sigles) {
+            if (modeles.containsKey(sigle)) {
                 continue;   // un modèle sert plusieurs formes (lot D2)
             }
-            String chemin = "/modeles/dao/" + c.sigle() + ".txt";
-            modeles.put(c.sigle(), charger(chemin, lireRessource(chemin)));
+            String chemin = "/modeles/dao/" + sigle + ".txt";
+            modeles.put(sigle, charger(chemin, lireRessource(chemin)));
         }
+    }
+
+    /** ⚠️ Avis spécifique — le sigle du modèle d'avis d'une catégorie (à défaut : fournitures), ou {@code null}. */
+    public static String sigleAvis(String categorie) {
+        return AVIS.get(categorie == null ? "FOURNITURES_SERVICES" : categorie);
     }
 
     private String lireRessource(String chemin) {
