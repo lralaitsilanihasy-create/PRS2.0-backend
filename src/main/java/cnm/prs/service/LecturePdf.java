@@ -55,6 +55,15 @@ public final class LecturePdf {
         return paragraphes(morceaux(pdf));
     }
 
+    /** ⚠️ Lot D4 (2026-09-30, §B6.3) — les mêmes paragraphes TELS QU'ÉCRITS (césures recollées, non normalisés). */
+    public static List<String> paragraphesDOrigine(byte[] pdf) throws IOException {
+        return paragraphesDOrigine(morceaux(pdf));
+    }
+
+    static List<String> paragraphes(List<Morceau> morceaux) {
+        return paragraphesDOrigine(morceaux).stream().map(LectureDao::norm).toList();
+    }
+
     // ------------------------------------------------------------------ PdfLignes
 
     static List<Morceau> morceaux(byte[] pdf) throws IOException {
@@ -163,7 +172,7 @@ public final class LecturePdf {
         }
     }
 
-    static List<String> paragraphes(List<Morceau> morceaux) {
+    static List<String> paragraphesDOrigine(List<Morceau> morceaux) {
         // Les en-têtes et pieds de page (même texte au même endroit sur trois pages au moins) et les numéros de page seuls.
         Map<String, Set<Integer>> hautBas = new HashMap<>();
         for (Morceau m : morceaux) {
@@ -235,8 +244,9 @@ public final class LecturePdf {
             }
             pars.sort(Comparator.<Paragraphe>comparingDouble(p -> p.y).thenComparingInt(p -> p.colonne));
             for (Paragraphe p : pars) {
-                String t = LectureDao.norm(CESURE.matcher(p.texte.toString()).replaceAll("$1$2"));
-                if (!t.isEmpty()) {
+                // ⚠️ §B6.3 — non normalisé : la reconnaissance normalise, une valeur de texte se reprend ici.
+                String t = CESURE.matcher(p.texte.toString()).replaceAll("$1$2");
+                if (!LectureDao.norm(t).isEmpty()) {
                     sortie.add(t);
                 }
             }

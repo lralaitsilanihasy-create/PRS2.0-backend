@@ -84,8 +84,10 @@ public class ImportDaoService {
         if (couvertures.isEmpty()) {
             throw ImportRefuseException.modeleAbsent();
         }
-        List<String> paragraphes = paragraphes(nomFichier, contenu);
-        return lire(fiche, nomFichier, empreinte(contenu), paragraphes, couvertures);
+        // ⚠️ Lot D4 (2026-09-30, §B6.3) — les paragraphes tels qu'écrits ; la lecture travaille sur leur forme normalisée.
+        List<String> origines = paragraphesDOrigine(nomFichier, contenu);
+        List<String> paragraphes = origines.stream().map(LectureDao::norm).toList();
+        return lire(fiche, nomFichier, empreinte(contenu), paragraphes, origines, couvertures);
     }
 
     // ------------------------------------------------------------------ le fichier
@@ -104,6 +106,11 @@ public class ImportDaoService {
      * « texte » ({@link LecturePdf}). Un PDF sans texte (scanné) → 422 {@code DOCUMENT_SANS_TEXTE}.
      */
     public static List<String> paragraphes(String nomFichier, byte[] contenu) {
+        return paragraphesDOrigine(nomFichier, contenu).stream().map(LectureDao::norm).toList();
+    }
+
+    /** ⚠️ Lot D4 (2026-09-30, §B6.3) — les mêmes unités TELLES QU'ÉCRITES (non normalisées), dans le même ordre. */
+    public static List<String> paragraphesDOrigine(String nomFichier, byte[] contenu) {
         String nom = nomFichier == null ? "" : nomFichier.toLowerCase(Locale.ROOT);
         if (!nom.endsWith(".docx") && !nom.endsWith(".pdf")) {
             throw ImportRefuseException.format(MESSAGE_FORMAT);
@@ -114,7 +121,7 @@ public class ImportDaoService {
         if (nom.endsWith(".pdf")) {
             List<String> pdf;
             try {
-                pdf = LecturePdf.paragraphes(contenu);
+                pdf = LecturePdf.paragraphesDOrigine(contenu);
             } catch (Exception | LinkageError e) {
                 // pas un PDF, PDF chiffré ou endommagé
                 throw ImportRefuseException.format(MESSAGE_FORMAT + " Ce fichier ne se lit pas comme un document PDF.");
@@ -124,7 +131,7 @@ public class ImportDaoService {
             }
             return pdf;
         }
-        return paragraphesDocx(contenu);
+        return paragraphesDocxOrigine(contenu);
     }
 
     /**
@@ -135,6 +142,11 @@ public class ImportDaoService {
      * note {@code [note:n]} et la note sur la ligne suivante.
      */
     static List<String> paragraphesDocx(byte[] contenu) {
+        return paragraphesDocxOrigine(contenu).stream().map(LectureDao::norm).toList();
+    }
+
+    /** ⚠️ Lot D4 (§B6.3) — les unités du .docx telles qu'écrites. */
+    static List<String> paragraphesDocxOrigine(byte[] contenu) {
         List<String> lignes = new ArrayList<>();
         try (OPCPackage pkg = OPCPackage.open(new ByteArrayInputStream(contenu))) {
             if (!pkg.getPartsByName(VBA).isEmpty()) {
@@ -180,7 +192,7 @@ public class ImportDaoService {
             // archive illisible, piégée (ratio de décompression de POI), pas un paquet Office…
             throw ImportRefuseException.format(MESSAGE_FORMAT + " Ce fichier ne se lit pas comme un document Word.");
         }
-        return LectureDao.unitesDocument(lignes);
+        return LectureDao.unitesDocumentOrigine(lignes);
     }
 
     private static String texte(XWPFDocument doc, XWPFParagraph p, List<String> notes) {
@@ -249,7 +261,7 @@ public class ImportDaoService {
     // ------------------------------------------------------------------ la lecture et le filtre
 
     private ImportDaoResult lire(FicheMarcheDto fiche, String nomFichier, String empreinte, List<String> paragraphes,
-            List<ModelesDao.Couverture> couvertures) {
+            List<String> origines, List<ModelesDao.Couverture> couvertures) {
         Map<String, ChampFicheMarche> champs = new LinkedHashMap<>();
         champRepository.findAllByOrderByCodeRubriqueAscRangAsc().forEach(c -> champs.putIfAbsent(c.getCode(), c));
         String typeMarche = fiche.getTypeMarche();
@@ -268,7 +280,7 @@ public class ImportDaoService {
             LectureDao.Resultat r = LectureDao.lire(c.sigle(), modeles.modele(c.sigle()), paragraphes, code -> {
                 ChampFicheMarche ch = champs.get(code);
                 return ch == null ? null : new LectureDao.InfoChamp(ch.getType(), ch.getSource(), ch.getCleCadrage());
-            });
+            }, origines);
             lus.add(new ImportDaoResult.Modele(r.sigle(), r.unites(), r.reconnues()));
             int part = r.unites() == 0 ? 0 : (int) Math.round(100.0 * r.reconnues() / r.unites());
             if (part < SEUIL_GABARIT) {

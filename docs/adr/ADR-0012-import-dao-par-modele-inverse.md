@@ -159,3 +159,20 @@ Les propriétés qui ne dépendent que du modèle (texte répété, jumeau, dist
 calculées **une fois par lecture** (`LectureDao.Profil`). La lecture est identique : parité avec `lire.mjs` sur huit
 entrées. Elle prend 0,16 s au lieu de 17,4 s pour les trois modèles de travaux. Un test borne la lecture de ces trois
 modèles dans un DPAO-T rendu à 3 s ; l'ancien lecteur y échoue.
+
+## Complément du 2026-09-30 (lot D4 §B6.3) — la valeur reprise dans le texte d'origine
+
+La lecture reconnaît le texte sous sa forme normalisée (`norm` : NFKC, apostrophes, tirets, guillemets, insécables,
+blancs). Une valeur de **texte** reprise telle quelle perdait donc sa typographie : « m³ » devenait « m3 », « — »
+devenait « - ». Décidé avec le front, et fait à l'identique des deux côtés :
+- l'extraction garde aussi les paragraphes **tels qu'écrits** (`ImportDaoService.paragraphesDOrigine`), dont les
+  paragraphes normalisés sont dérivés ;
+- après la détection des conflits, qui reste sur le texte normalisé pour ne pas créer de faux conflits, chaque ligne
+  d'une valeur de texte est retrouvée dans une **carte** du paragraphe d'origine et en est reprise. La carte associe,
+  graphème par graphème, chaque caractère normalisé à l'étendue d'origine qui l'a produit ;
+- une ligne introuvable, ou une carte qui ne redonne pas `norm`, laisse la valeur normalisée : rien n'est inventé ;
+- les valeurs typées (nombre, montant, pourcentage, date, liste, oui/non) se convertissent toujours depuis le texte
+  normalisé.
+
+Même occasion : la ponctuation de tête (`:`, `;`, `,`, `.`) n'est plus prise dans une valeur de texte. Parité avec
+`lire.mjs` : identique sur huit entrées, valeurs reprises comprises.

@@ -119,6 +119,57 @@ class LectureDaoTest {
     }
 
     @Test
+    @DisplayName("Lot D4 (§B6.3, 2026-09-30) — cas communs avec le front (test_reprojection.mjs) : la typographie d'origine "
+            + "est rendue (m³, ’, « », –, ligature, insécable seule gardée), seule l'étendue de la valeur, blancs multiples → "
+            + "une espace, longueurs changeantes (… , ﬁ) sans décalage, ligne absente → null")
+    void reprojectionCasCommuns() {
+        assertThat(reprise("Réservoir semi-enterré de 500 m³", null)).isEqualTo("Réservoir semi-enterré de 500 m³");
+        assertThat(reprise("Assurance de l’entreprise", null)).isEqualTo("Assurance de l’entreprise");
+        assertThat(reprise("Le « Lot 1 » seul", null)).isEqualTo("Le « Lot 1 » seul");
+        assertThat(reprise("Campagne 2026–2027", null)).isEqualTo("Campagne 2026–2027");
+        assertThat(reprise("Pièces du dossier : ﬁche A1", null)).isEqualTo("Pièces du dossier : ﬁche A1");
+        assertThat(reprise("Montant : 500 Ariary", null)).isEqualTo("Montant : 500 Ariary");
+        assertThat(reprise("Objet : l’aménagement de la RN7 — tranche 1.", "l'aménagement de la RN7 - tranche 1"))
+                .isEqualTo("l’aménagement de la RN7 — tranche 1");
+        assertThat(reprise("A  \t B", null)).isEqualTo("A B");
+        assertThat(LectureDao.Carte.de("autre chose").reprojeter("introuvable")).isNull();
+        assertThat(reprise("Voir… l’annexe ﬁnale, puis « B »", "l'annexe finale, puis \" B \""))
+                .isEqualTo("l’annexe ﬁnale, puis « B »");
+    }
+
+    @Test
+    @DisplayName("Lot D4 (§B6.3, §B6) — lecture avec les paragraphes d'origine : valeur de texte reprise (m³, —), valeur typée "
+            + "jamais reprise, ponctuation de tête retirée (« : » de B02-LT-04) ; sans origines, la valeur reste normalisée")
+    void reprojectionALaLecture() {
+        FichierCommande.Modele modele = FichierCommande.lireModele(String.join("\n",
+                "PARA\tArticle premier - Objet du marché et désignation des travaux",
+                "PARA\tL'objet du présent marché est {{B02-OB-02}}.",
+                "PARA\t- tranche conditionnelle 1 {{B02-LT-04}}",
+                "PARA\tLe montant de la garantie est de {{B05-GQ-03}} Ariary.",
+                "PARA\tArticle 2 - Pièces constitutives du marché"));
+        List<String> origines = LectureDao.unitesDocumentOrigine(List.of(
+                "Article premier – Objet du marché et désignation des travaux",
+                "L’objet du présent marché est la construction d’un réservoir de 500 m³ — lot 2.",
+                "- tranche conditionnelle 1 : Lot 2 — stockage et distribution",
+                "Le montant de la garantie est de 2 000 000 Ariary.",
+                "Article 2 – Pièces constitutives du marché"));
+        List<String> doc = origines.stream().map(LectureDao::norm).toList();
+        Map<String, LectureDao.InfoChamp> champs = Map.of("B05-GQ-03", new LectureDao.InfoChamp("MONTANT", "SAISIE", null));
+        LectureDao.Resultat r = LectureDao.lire("T", modele, doc, champs::get, origines);
+        assertThat(r.propositions()).extracting(p -> p.code() + "=" + p.valeur())
+                .contains("B02-OB-02=la construction d’un réservoir de 500 m³ — lot 2",
+                        "B02-LT-04=Lot 2 — stockage et distribution", "B05-GQ-03=2000000");
+        assertThat(LectureDao.lire("T", modele, doc, champs::get).propositions()).extracting(p -> p.code() + "=" + p.valeur())
+                .contains("B02-OB-02=la construction d'un réservoir de 500 m3 - lot 2", "B02-LT-04=Lot 2 - stockage et distribution");
+    }
+
+    private static String reprise(String origine, String valeurNormalisee) {
+        LectureDao.Carte carte = LectureDao.Carte.de(origine);
+        assertThat(carte).as("carte reconstruite pour « " + origine + " »").isNotNull();
+        return carte.reprojeter(valeurNormalisee == null ? LectureDao.norm(origine) : valeurNormalisee);
+    }
+
+    @Test
     @DisplayName("Lot D4 (§B6.2, 2026-09-30) : lire un modèle presque absent du document (le CCAP-T dans un DPAO de travaux) "
             + "reste rapide — le profil du modèle est calculé une fois, pas à chaque paragraphe du document (13,8 s avant)")
     void lectureRapideDUnModeleAbsent() {

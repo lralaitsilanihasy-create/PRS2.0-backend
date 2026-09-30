@@ -128,16 +128,38 @@ public final class LectureDao {
         if (s == null) {
             return "";
         }
-        String t = Normalizer.normalize(s, Normalizer.Form.NFKC)
+        return trim(BLANCS.matcher(normSansBlancs(s)).replaceAll(" "));
+    }
+
+    /** {@link #norm} sans le resserrement des blancs : ce qui s'applique aussi à un seul graphème (§B6.3). */
+    private static String normSansBlancs(String s) {
+        return Normalizer.normalize(s, Normalizer.Form.NFKC)
                 .replaceAll("[’ʼ‘`]", "'")
                 .replaceAll("[‐‑‒–—]", "-")
                 .replaceAll("[«»]", "\"")
                 .replace(' ', ' ').replace(' ', ' ');
-        return trim(BLANCS.matcher(t).replaceAll(" "));
     }
 
     private static String trim(String s) {
         return s.replaceAll("^" + BLANC + "+|" + BLANC + "+$", "");
+    }
+
+    /**
+     * ⚠️ Lot D4 (2026-09-30, §B6.3) — les mêmes unités que {@link #unitesDocument}, mais TELLES QU'ÉCRITES (non normalisées ;
+     * celles qui seraient vides une fois normalisées sont écartées, comme là) : une valeur de texte y est reprise.
+     */
+    public static List<String> unitesDocumentOrigine(List<String> lignes) {
+        List<String> out = new ArrayList<>();
+        for (String ligne : lignes) {
+            for (String l : ligne.replace("\r\n", "\n").replace('\r', '\n').split("\n", -1)) {
+                for (String c : l.split("[\t\u001E]", -1)) {
+                    if (!norm(c).isEmpty()) {
+                        out.add(c);
+                    }
+                }
+            }
+        }
+        return out;
     }
 
     /** Les paragraphes du document, prêts à lire : chaque ligne et chaque cellule est une unité, normalisée, non vide. */
@@ -375,7 +397,10 @@ public final class LectureDao {
             fin = m.end();
         }
         String apres = norm(modele.substring(fin));
-        String v = norm(brut);
+        // ⚠️ Lot D4 (2026-09-30, §B6.3) — trim et non norm : les lignes du document sont déjà normalisées une à une, et une
+        // valeur de plusieurs paragraphes doit garder ses sauts de ligne pour être reprise, ligne par ligne, dans le texte
+        // d'origine (norm les fondait en espaces : la valeur restait normalisée). La valeur saisie, elle, passe par norm.
+        String v = trim(brut);
         if (!apres.isEmpty() && v.endsWith(apres) && v.length() > apres.length()) {
             v = trim(v.substring(0, v.length() - apres.length()));
         }
@@ -425,8 +450,19 @@ public final class LectureDao {
             Matcher d = DATE_HEURE.matcher(v);
             return d.matches() ? d.group(3) + "-" + d.group(2) + "-" + d.group(1) + "T" + d.group(4) + ":" + d.group(5) : null;
         }
-        return v;
+        // ⚠️ Lot D4 (2026-09-30, §B6) — la ponctuation de tête n'est pas la valeur : « - tranche conditionnelle 1 {{B02-LT-04}} »
+        // lu dans « Tranche conditionnelle 1 : … » rendait « : … », en conflit avec la même valeur lue ailleurs. Les tirets
+        // restent : ils peuvent ouvrir une liste.
+        String sansTete = PONCTUATION_TETE.matcher(v).replaceFirst("");
+        return sansTete.isEmpty() ? null : sansTete;
     }
+
+    /** ⚠️ Lot D4 (§B6) — la ponctuation qui ouvre une valeur de texte et n'en fait pas partie. */
+    private static final Pattern PONCTUATION_TETE = Pattern.compile("^(?:[:;,.]" + BLANC + "*)+");
+
+    /** ⚠️ Lot D4 (§B6.3) — les types dont la valeur se convertit depuis le texte normalisé : jamais reprojetés. */
+    private static final Set<String> TYPES_CONVERTIS = Set.of("NOMBRE", "MONTANT", "POURCENTAGE", "DATE", "DATE_HEURE",
+            "LISTE", "LISTE_MULTIPLE", "OUI_NON");
 
     private static boolean contraint(String type, String suffixe) {
         return "chiffres".equals(suffixe) || type != null && List.of("NOMBRE", "MONTANT", "POURCENTAGE", "DATE", "DATE_HEURE").contains(type);
@@ -434,7 +470,8 @@ public final class LectureDao {
 
     // ------------------------------------------------------------------ la lecture
 
-    private record Lue(String jeton, String brut, Confiance confiance, String extrait, boolean finOuverte) {
+    /** @param paragraphe ⚠️ §B6.3 — rang, dans le document lu, du paragraphe où commence la valeur (reprojection). */
+    private record Lue(String jeton, String brut, Confiance confiance, String extrait, boolean finOuverte, int paragraphe) {
     }
 
     private record Jeton(String nom, List<String> sections, int k) {
@@ -447,6 +484,16 @@ public final class LectureDao {
      */
     public static Resultat lire(String sigle, FichierCommande.Modele modele, List<String> docLu,
             Function<String, InfoChamp> champs) {
+        return lire(sigle, modele, docLu, champs, null);
+    }
+
+    /**
+     * ⚠️ Lot D4 (2026-09-30, §B6.3) — avec {@code origines}, les mêmes paragraphes TELS QU'ÉCRITS
+     * ({@link #unitesDocumentOrigine}) : une valeur de texte y est reprise après la détection des conflits (« m³ », « ’ »,
+     * « — », « « » » conservés). Sans eux, les valeurs restent normalisées.
+     */
+    public static Resultat lire(String sigle, FichierCommande.Modele modele, List<String> docLu,
+            Function<String, InfoChamp> champs, List<String> origines) {
         List<Unite> us = unites(modele.elements());
         Profil profil = new Profil(us);
         List<String> doc = new ArrayList<>(docLu);   // copie : un paragraphe fusionné y est redécoupé
@@ -521,7 +568,7 @@ public final class LectureDao {
                             extrait = doc.get(j);
                         }
                     }
-                    lues.add(new Lue(mo.jetons().get(n), brut, c, extrait, dernierOuvert));
+                    lues.add(new Lue(mo.jetons().get(n), brut, c, extrait, dernierOuvert, j));
                 }
                 break;
             }
@@ -602,7 +649,7 @@ public final class LectureDao {
             if (nbJetons > 1) {
                 continue;
             }
-            lues.add(new Lue(j.nom(), brut, confiance, String.join("\n", entre), false));
+            lues.add(new Lue(j.nom(), brut, confiance, String.join("\n", entre), false, de));
         }
 
         // 3. Les réponses que disent les rédactions retenues.
@@ -625,6 +672,7 @@ public final class LectureDao {
 
         // 4. Valeurs dans la forme de saisie ; un même champ lu deux fois différemment est un conflit, pas un choix.
         Map<String, Proposition> parCode = new LinkedHashMap<>();
+        Map<String, Lue> sources = new LinkedHashMap<>();   // ⚠️ §B6.3 — la lecture retenue d'une valeur de texte
         for (Lue p : etendre(lues)) {
             String[] parts = p.jeton().split("\\.", -1);
             String jeton = parts[0];
@@ -655,9 +703,23 @@ public final class LectureDao {
             }
             if (deja == null || c.rang > deja.confiance().rang) {
                 parCode.put(jeton, new Proposition(jeton, valeur, norm(p.brut()), c, p.extrait()));
+                boolean texte = !"chiffres".equals(suffixe) && (type == null || !TYPES_CONVERTIS.contains(type));
+                if (texte) {
+                    sources.put(jeton, p);
+                } else {
+                    sources.remove(jeton);
+                }
             }
         }
-        List<Proposition> finales = parCode.values().stream().filter(p -> !enConflit.contains(p.code())).toList();
+        // ⚠️ Lot D4 (2026-09-30, §B6.3) — une valeur de texte est reprise dans le texte d'origine, ligne par ligne, APRÈS la
+        // détection des conflits (qui reste sur le texte normalisé : pas de faux conflit). Une ligne introuvable garde la
+        // valeur normalisée.
+        Reprojection reprojection = origines == null ? null : new Reprojection(origines);
+        List<Proposition> finales = parCode.values().stream().filter(p -> !enConflit.contains(p.code()))
+                .map(p -> reprojection == null || !sources.containsKey(p.code()) ? p
+                        : new Proposition(p.code(), reprojection.valeur(p.valeur(), sources.get(p.code())), p.brut(),
+                                p.confiance(), p.extrait()))
+                .toList();
         Set<String> attendus = new LinkedHashSet<>();
         for (Unite u : us) {
             Matcher m = JETON.matcher(u.texte());
@@ -674,6 +736,125 @@ public final class LectureDao {
                 cadrage.values().stream().filter(r -> !enConflit.contains(r.cle())).toList(),
                 reponsesChamps.values().stream().filter(r -> !enConflit.contains(r.cle())).toList(),
                 ambigus, conflits, nonTrouves);
+    }
+
+    /**
+     * ⚠️ Lot D4 (2026-09-30, §B6.3) — le texte normalisé d'un paragraphe et, pour chacune de ses positions, l'étendue du
+     * texte d'origine qui l'a produite (NFKC change des longueurs : « ﬁ » → « fi », « … » → « ... »). Construite graphème par
+     * graphème ({@link java.text.BreakIterator}, pour ne pas séparer une lettre de son accent combinant) ; une suite de
+     * blancs donne une espace qui ne pointe sur rien. Portage de {@code carteNormalisee} de {@code lire.mjs}.
+     */
+    record Carte(String texte, int[] debut, int[] fin, String origine) {
+
+        /** {@code null} si la reconstruction ne redonne pas {@link #norm} du texte d'origine. */
+        static Carte de(String origine) {
+            StringBuilder texte = new StringBuilder();
+            List<Integer> debut = new ArrayList<>();
+            List<Integer> fin = new ArrayList<>();
+            boolean blanc = false;
+            java.text.BreakIterator it = java.text.BreakIterator.getCharacterInstance(Locale.FRENCH);
+            it.setText(origine);
+            int a = it.first();
+            for (int b = it.next(); b != java.text.BreakIterator.DONE; a = b, b = it.next()) {
+                String normalise = normSansBlancs(origine.substring(a, b));
+                for (int i = 0; i < normalise.length(); ) {
+                    String ch = new String(Character.toChars(normalise.codePointAt(i)));
+                    i += ch.length();
+                    if (UN_BLANC.matcher(ch).matches()) {
+                        blanc = true;
+                        continue;
+                    }
+                    if (blanc && texte.length() > 0) {
+                        texte.append(' ');
+                        debut.add(-1);
+                        fin.add(-1);
+                    }
+                    blanc = false;
+                    texte.append(ch);
+                    for (int k = 0; k < ch.length(); k++) {
+                        debut.add(a);
+                        fin.add(b);
+                    }
+                }
+            }
+            if (!texte.toString().equals(norm(origine))) {
+                return null;
+            }
+            return new Carte(texte.toString(), debut.stream().mapToInt(Integer::intValue).toArray(),
+                    fin.stream().mapToInt(Integer::intValue).toArray(), origine);
+        }
+
+        /**
+         * Une ligne de valeur (normalisée) retrouvée dans ce paragraphe : son texte d'origine, les blancs multiples,
+         * tabulations et sauts de ligne ramenés à une espace (une espace insécable seule est gardée) ; {@code null} sinon.
+         */
+        String reprojeter(String ligne) {
+            int i = ligne.isEmpty() ? -1 : texte.indexOf(ligne);
+            if (i < 0) {
+                return null;
+            }
+            return BLANCS_A_RESSERRER.matcher(origine.substring(debut[i], fin[i + ligne.length() - 1])).replaceAll(" ");
+        }
+    }
+
+    private static final Pattern UN_BLANC = Pattern.compile(BLANC);
+    /** Comme {@code /\s{2,}|[\t\r\n]/g} du front : plusieurs blancs, ou une tabulation, un retour, un saut de ligne. */
+    private static final Pattern BLANCS_A_RESSERRER = Pattern.compile(BLANC + "{2,}|[\\t\\r\\n]");
+
+    /** ⚠️ Lot D4 (§B6.3) — les cartes des paragraphes d'origine, construites à la demande, et la reprise d'une valeur. */
+    private static final class Reprojection {
+        private final List<String> origines;
+        private final Carte[] cartes;
+        private final boolean[] faites;
+
+        Reprojection(List<String> origines) {
+            this.origines = origines;
+            this.cartes = new Carte[origines.size()];
+            this.faites = new boolean[origines.size()];
+        }
+
+        private Carte carte(int i) {
+            if (!faites[i]) {
+                cartes[i] = Carte.de(origines.get(i));
+                faites[i] = true;
+            }
+            return cartes[i];
+        }
+
+        /**
+         * La valeur reprise dans le texte d'origine, ou {@code valeur} si l'une de ses lignes est introuvable. La recherche
+         * part de cinq rangs avant le paragraphe lu (un redécoupage de fusion décale les indices), puis couvre le reste.
+         */
+        String valeur(String valeur, Lue lue) {
+            List<String> lignes = new ArrayList<>();
+            for (String l : lue.brut().split("\n", -1)) {
+                String n = norm(l);
+                if (!n.isEmpty()) {
+                    lignes.add(n);
+                }
+            }
+            if (!lignes.isEmpty()) {
+                lignes.set(0, PONCTUATION_TETE.matcher(lignes.get(0)).replaceFirst(""));
+            }
+            if (!String.join(" ", lignes).equals(valeur)) {
+                return valeur;
+            }
+            int n = origines.size();
+            int lo = Math.max(0, Math.min(n, lue.paragraphe() - 5));
+            List<String> reprises = new ArrayList<>();
+            for (String ligne : lignes) {
+                String reprise = null;
+                for (int k = 0; k < n && reprise == null; k++) {
+                    Carte c = carte(k < n - lo ? lo + k : k - (n - lo));
+                    reprise = c == null ? null : c.reprojeter(ligne);
+                }
+                if (reprise == null) {
+                    return valeur;
+                }
+                reprises.add(reprise);
+            }
+            return String.join(" ", reprises);
+        }
     }
 
     /**
@@ -697,13 +878,13 @@ public final class LectureDao {
                 numeros.add(m.group(1));
             }
             if (reperes.isEmpty()) {
-                out.add(new Lue(parts[0], p.brut(), p.confiance(), p.extrait(), p.finOuverte()));
+                out.add(new Lue(parts[0], p.brut(), p.confiance(), p.extrait(), p.finOuverte(), p.paragraphe()));
                 continue;
             }
             for (int i = 0; i < reperes.size(); i++) {
                 int fin = i + 1 < reperes.size() ? reperes.get(i + 1)[0] : texte.length();
                 String valeur = texte.substring(reperes.get(i)[1], fin).replaceAll("\\s*;\\s*$", "");
-                out.add(new Lue(parts[0] + "#" + numeros.get(i), valeur, p.confiance(), p.extrait(), p.finOuverte()));
+                out.add(new Lue(parts[0] + "#" + numeros.get(i), valeur, p.confiance(), p.extrait(), p.finOuverte(), p.paragraphe()));
             }
         }
         return out;
