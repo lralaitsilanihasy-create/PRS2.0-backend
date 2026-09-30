@@ -82,7 +82,7 @@ class FicheDaoTravauxIntegrationTest extends CnmIntegrationTestSupport {
         String qf = ref("typeMarche=QUANTITE_FIXE&categorie=TRAVAUX");
         assertThat(JsonPath.<List<String>>read(qf, "$.blocs[?(@.code=='B11')].libelle")).containsExactly("Annexes et formulaires");
         assertThat(JsonPath.<List<String>>read(qf, "$.blocs[?(@.code=='B11')].rubriques[*].code"))
-                .containsExactly("B11-AN");   // lot D4 : B11-FR-01..06 retirés (annexes imprimées par le CCAP-T), rubrique vide non servie
+                .isEmpty();   // lot D4 : B11-FR-01..06 retirés (annexes du CCAP-T) ; 30/09 : B11-AN-01..05 retirés (§B2.2.6)
         List<String> rubriquesQf = JsonPath.read(qf, "$.blocs[*].rubriques[*].code");
         assertThat(rubriquesQf).contains("B02-LT", "B09-RP", "B01-AC", "B04-VO").doesNotContain("B02-AU", "B04-RO", "B02-DK", "B04-DV");   // V55 : B04-VO
         assertThat(JsonPath.<List<List<String>>>read(qf, "$.champs[?(@.source=='SAISIE')].categories")).allMatch(c -> c.contains("TRAVAUX"));
@@ -99,8 +99,13 @@ class FicheDaoTravauxIntegrationTest extends CnmIntegrationTestSupport {
                 .containsExactlyInAnyOrderElementsOf(partages);
 
         String cc = ref("typeMarche=CONTRAT_CADRE&categorie=TRAVAUX");
-        assertThat(JsonPath.<List<String>>read(cc, "$.blocs[?(@.code=='B07')].rubriques[*].code")).contains("B07-AT", "B07-DT", "B07-PS");
-        // ⚠️ Lot D4 (§B3) — B07-PS du contrat-cadre des fournitures sert aussi les travaux (V54).
+        // ⚠️ Lot D4 (§B3) — les rubriques du contrat-cadre des fournitures servent aussi les travaux (V54) ; 30/09 : les
+        // champs propres au contrat-cadre de travaux qu'aucun document n'utilise sont retirés, leurs rubriques ne sont plus servies.
+        assertThat(JsonPath.<List<String>>read(cc, "$.blocs[?(@.code=='B07')].rubriques[*].code")).contains("B07-PS", "B07-DE", "B07-PE")
+                .doesNotContain("B07-AT", "B07-DT");
+        assertThat(JsonPath.<List<String>>read(cc, "$.champs[*].code")).contains("B08-FT-03", "B08-AT-03")
+                .doesNotContain("B02-OC-01", "B10-RT-01", "B03-TT-01");
+        assertThat(JsonPath.<List<Boolean>>read(cc, "$.champs[?(@.code=='B08-FT-03')].obligatoire")).containsExactly(false);
         String fs = ref("typeMarche=QUANTITE_FIXE&categorie=FOURNITURES_SERVICES");
         assertThat(JsonPath.<List<String>>read(fs, "$.blocs[*].code")).doesNotContain("B11");
         assertThat(JsonPath.<List<String>>read(fs, "$.champs[*].code")).hasSize(157)   // 155 des fournitures (V50, lot D2 : + 7, 29/09 : − 23 non imprimés, − B08-PA-08) + B04-CD-01, -02 (2026-09-25)

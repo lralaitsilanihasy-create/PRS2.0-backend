@@ -4952,6 +4952,30 @@ Demande front `frontend/docs/demande-backend-2026-09-29-champs-non-imprimes-four
   l'interligne se mesure sur chaque page. Le DPAC en PDF que produit le serveur se lit maintenant presque comme le
   `.docx`.
 
+### Champs qu'aucun document n'utilise : retirés ⚠️ 2026-09-30
+
+Arbitrage du pilote, sur la règle des fournitures du 29/09. Aucune route ni migration nouvelle : les fichiers de
+correspondance et le script `docs/referentiel/2026-09-30-champs-non-utilises.sql`. Sont retirés (`actif = non`), valeurs
+conservées, les champs saisis qu'aucun modèle du DAO (jeton ou condition), aucun formulaire du candidat ni aucune règle
+serveur n'utilise :
+- **travaux, quantité fixe et à commande** (demande D4 §B2.2.6), 17 champs : `B03-GT-02`, `B03-SU-01/02`, `B08-DB-01`,
+  `B11-AN-01..05`, `B10-RE-01`, `B05-GA-02`, `B03-QT-11`, `B02-MW-03`, `B08-MR-02..04`, `B09-RP-02` ;
+- **contrat-cadre de travaux**, 61 champs : ceux qui lui étaient propres et que DPAC-CC et AE-CC n'emploient pas
+  (`B02-OC-*`, `B02-DK-*`, `B03-TT-*`, `B03-GM-*`, `B07-AT-*`, `B07-DT-*`, `B08-FT-*`, `B10-RT-*`…). La liste complète
+  est dans le script ;
+- **prestations intellectuelles** (demande D3 §B2.3), 13 champs : `B03-TP-01..05`, `B08-AI-02`, `B02-CL-03`,
+  `B09-DP-02`, `B04-QT-01/02`, `B06-TP-01`, `B06-OF-01`, `B06-CS-01`.
+
+Restent servis mais deviennent **facultatifs** les champs non imprimés qu'une règle lit : `B08-MO-01`
+(`INTERETS_MORATOIRES_TAUX`), `B08-AF-02` (`MONTANT_POSITIF`), `B08-AT-03` (`AVANCE_SUP_5_GARANTIE`), `B08-FT-03`
+(`DELAI_PAIEMENT_75`). `B03-SP-03`, `B03-NP-01` et `B05-PF-02` (PI) l'étaient déjà. Les champs de la remise
+électronique (`B04-SE-*`, `B04-OP-*`) ne sont pas touchés.
+
+Effets sur le référentiel servi :
+- une fiche de PI à quantité fixe reçoit 121 champs, contre 134 avant ;
+- le bloc B11 « Annexes et formulaires » des travaux n'a plus de rubrique ;
+- les rubriques propres au contrat-cadre de travaux (`B07-AT`, `B07-DT`…) ne sont plus servies.
+
 ### Les DAO de travaux sur leurs documents types — lot D4 ⚠️ 2026-09-29
 
 Demande front `frontend/docs/demande-backend-2026-09-29-lot-d4-travaux.md`. **Aucune route nouvelle** (ADR-0011).

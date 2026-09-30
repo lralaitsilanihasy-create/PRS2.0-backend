@@ -516,6 +516,23 @@ champs non imprimés retirés*.
   marché à commande dit, s'il y a lieu, la variation admise au-delà des bornes de quantités. Le DPAO dit les niveaux de
   qualification exigés. Un CCAP déjà produit se corrige en reproduisant les documents par une révision.
 
+#### Un champ qu'aucun document n'utilise n'est pas demandé (arbitrage du pilote du 2026-09-30)
+
+⚠️ **La fiche ne demande que ce que le dossier imprime ou ce qu'une règle vérifie.** Est retiré, pour les trois
+catégories, tout champ qu'aucun document du DAO ne cite et qu'aucun contrôle ne lit :
+- par un jeton ou une condition de ses modèles ;
+- par un formulaire du candidat.
+
+C'est la règle posée pour les fournitures le 29/09, étendue le 30/09 :
+- aux travaux, à quantité fixe et à commande : 17 champs, dont les données du candidat et les clauses que le CCAP écrit
+  en dur ;
+- au contrat-cadre de travaux : 61 champs propres restés après l'harmonisation avec le contrat-cadre des fournitures ;
+- aux prestations intellectuelles : 13 champs, dont les coordonnées du titulaire, inconnues au stade du DAO.
+
+Les valeurs déjà saisies sont conservées, et un champ retiré se réactive en une ligne. Un champ non imprimé mais lu par
+un contrôle reste, facultatif : il ne bloque plus la validation. C'est le cas des intérêts moratoires, du montant et du
+taux de l'avance, et du délai de paiement. Les champs de la remise électronique attendent l'avis du juriste.
+
 #### Les DAO de travaux sur leurs documents types (lot D4, demande du 2026-09-29)
 
 ⚠️ **Une fiche de travaux produit à son tour les documents types de l'ARMP remplis** : les données particulières de

@@ -82,7 +82,9 @@ class FicheDaoPrestationsIntellectuellesIntegrationTest extends CnmIntegrationTe
                 .header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         // V50 : 88 + 17 B04-SE − B04-VE-01/02 inactifs = 103 ; lot D3 : + 7 créés − B09-PP-01 + B09-FC-01 + B09-PR-01 = 111
-        assertThat(JsonPath.<List<String>>read(ref, "$.champs[*].code")).hasSize(23 + 111);
+        // ⚠️ 2026-09-30 (arbitrage du pilote, §B2.3) — − 13 champs qu'aucun document n'utilise = 98
+        assertThat(JsonPath.<List<String>>read(ref, "$.champs[*].code")).hasSize(23 + 98)
+                .doesNotContain("B03-TP-01", "B06-TP-01", "B04-QT-01").contains("B03-SP-03", "B05-PF-02");
         assertThat(JsonPath.<List<String>>read(ref, "$.champs[?(@.documentMaitre=='DPIC')].code")).isNotEmpty();
         assertThat(JsonPath.<List<String>>read(ref, "$.blocs[*].code")).doesNotContain("B07", "B11");
         assertThat(JsonPath.<List<String>>read(ref, "$.blocs[*].rubriques[*].code")).contains("B02-CL", "B02-MS", "B01-AC", "B09-FC")
