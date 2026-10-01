@@ -75,7 +75,8 @@ class FicheDaoTravauxIntegrationTest extends CnmIntegrationTestSupport {
             + "seulement ; aucune rubrique des travaux dans une fiche de fournitures, ni l'inverse")
     void chargement() throws Exception {
         assertThat(travaux.rejets()).isEmpty();
-        assertThat(travaux.crees()).hasSize(146);   // lot D4 : + 6 (B02-MW-04, B02-LT-06/07, B04-VL-02, B05-GE-05, B09-BT-01)
+        assertThat(travaux.crees()).hasSize(151);   // lot D4 : + 6 (B02-MW-04, B02-LT-06/07, B04-VL-02, B05-GE-05, B09-BT-01) ;
+        // 01/10 (DAO du MEN) : + B03-QT-12/13/14, + B02-AU-07 et B06-EO-07 venus du fichier des fournitures
         assertThat(travauxCc.rejets()).isEmpty();
         assertThat(travauxCc.crees()).hasSize(117);
 
@@ -84,7 +85,8 @@ class FicheDaoTravauxIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(JsonPath.<List<String>>read(qf, "$.blocs[?(@.code=='B11')].rubriques[*].code"))
                 .isEmpty();   // lot D4 : B11-FR-01..06 retirés (annexes du CCAP-T) ; 30/09 : B11-AN-01..05 retirés (§B2.2.6)
         List<String> rubriquesQf = JsonPath.read(qf, "$.blocs[*].rubriques[*].code");
-        assertThat(rubriquesQf).contains("B02-LT", "B09-RP", "B01-AC", "B04-VO").doesNotContain("B02-AU", "B04-RO", "B02-DK", "B04-DV");   // V55 : B04-VO
+        assertThat(rubriquesQf).contains("B02-LT", "B09-RP", "B01-AC", "B04-VO", "B02-AU", "B06-EO")   // V55 : B04-VO ; V58 : B02-AU, B06-EO
+                .doesNotContain("B04-RO", "B02-DK", "B04-DV");
         assertThat(JsonPath.<List<List<String>>>read(qf, "$.champs[?(@.source=='SAISIE')].categories")).allMatch(c -> c.contains("TRAVAUX"));
         // 2026-09-25 (§B3) — la composition du dossier est réemployée par les fournitures, les plans restent aux travaux.
         // + V47 : les champs des formulaires du candidat, trois catégories ; + V50 : les seize saisis de la remise électronique.
@@ -160,6 +162,54 @@ class FicheDaoTravauxIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(put("/api/fiches-marche/" + idDmc + "/cadrage").header("Authorization", tokenPrmp).contentType(JSON)
                 .content("{\"cadrage\":{\"alloti\":\"PEUT-ETRE\"}}"))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.erreurs[0].champ").value("alloti"));
+    }
+
+    @Test
+    @DisplayName("2026-10-01 — DAO de travaux du MEN (§B2) : trois champs créés (période 5 par défaut, personnel clé, liquidité "
+            + "par lot), seuil, garantie et délai par lot, formes de garantie à choix multiples, libération à 100 % à la réception "
+            + "provisoire, B02-AU-07 et B06-EO-07 ouverts aux travaux seulement, pièces administratives proposées une par ligne ; "
+            + "le DPAO validé imprime « cinq (5) » et les pièces sur des lignes distinctes")
+    void daoDuMen() throws Exception {
+        String ref = ref("typeMarche=QUANTITE_FIXE&categorie=TRAVAUX");
+        assertThat(JsonPath.<List<String>>read(ref, "$.champs[*].code"))
+                .contains("B03-QT-12", "B03-QT-13", "B03-QT-14", "B02-AU-07", "B06-EO-07");
+        assertThat(JsonPath.<List<String>>read(ref, "$.champs[?(@.parLot==true)].code"))
+                .contains("B05-GQ-03", "B03-QT-08", "B09-DL-01", "B03-QT-14");
+        assertThat(JsonPath.<List<String>>read(ref, "$.champs[?(@.code=='B03-QT-12')].valeurDefaut")).containsExactly("5");
+        assertThat(JsonPath.<List<String>>read(ref, "$.champs[?(@.code=='B03-CQ-01')].valeurDefaut").get(0).split("\n"))
+                .hasSize(6).startsWith("une photocopie certifiée de la Carte Professionnelle de l'année en cours");
+        assertThat(JsonPath.<List<String>>read(ref, "$.champs[?(@.code=='B05-GQ-02' || @.code=='B05-GE-03')].type"))
+                .containsOnly("LISTE_MULTIPLE");
+        assertThat(JsonPath.<List<List<String>>>read(ref, "$.champs[?(@.code=='B05-GE-04')].options").get(0))
+                .contains("Libérée à 100 % à la réception provisoire");
+        assertThat(JsonPath.<List<String>>read(ref("typeMarche=QUANTITE_FIXE&categorie=FOURNITURES_SERVICES"), "$.champs[*].code"))
+                .doesNotContain("B02-AU-07", "B06-EO-07", "B03-QT-12");
+
+        long idDmc = creerDmc(9901);
+        cadrage(idDmc, "{\"tranches\":\"NON\",\"groupement\":\"NON\",\"avance\":\"NON\",\"garantieSoumission\":\"OUI\"}");
+        // Les valeurs par défaut sont recopiées au premier enregistrement de la fiche (V47).
+        String fiche = mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<String>read(fiche, "$.valeurs['B03-QT-12']")).isEqualTo("5");
+        assertThat(JsonPath.<String>read(fiche, "$.valeurs['B03-CQ-01']")).contains("\nun certificat de non faillite");
+        remplirObligatoiresEtValider(idDmc, "QUANTITE_FIXE", "TRAVAUX",
+                Map.of("B05-GQ-02", "Garantie bancaire,Chèque de banque", "B05-GQ-03", "5000000", "B04-CD-02", "C1"));
+        fiche = mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<String>read(fiche, "$.valeurs['B05-GQ-02']")).isEqualTo("Garantie bancaire,Chèque de banque");
+
+        int idDocx = JsonPath.<List<Integer>>read(documents(idDmc), "$[?(@.type=='DPAO' && @.extension=='docx')].idDocument").get(0);
+        byte[] docx = mvc.perform(get("/api/fiches-marche/documents/" + idDocx + "/contenu").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        String texte;
+        try (org.apache.poi.xwpf.usermodel.XWPFDocument d = new org.apache.poi.xwpf.usermodel.XWPFDocument(
+                new java.io.ByteArrayInputStream(docx)); org.apache.poi.xwpf.extractor.XWPFWordExtractor ex =
+                        new org.apache.poi.xwpf.extractor.XWPFWordExtractor(d)) {
+            texte = ex.getText().replace(' ', ' ').replace(' ', ' ');
+        }
+        assertThat(texte).contains("au cours des cinq (5) dernières années",
+                "une photocopie certifiée de la carte statistique", "cinq millions ariary (5 000 000 Ariary)")
+                .contains("de l'Extrait du Registre de Commerce\nun certificat de non faillite");   // un vrai saut de ligne
     }
 
     // ------------------------------------------------------------------ outils

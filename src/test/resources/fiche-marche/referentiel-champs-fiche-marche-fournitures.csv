@@ -8,13 +8,12 @@ B02-AU-03;Quantités minimum et maximum;TEXTE_LONG;SAISIE;DPAO;;A_COMMANDE;;oui;
 B02-AU-04;Durée de validité du marché à commande (mois);NOMBRE;SAISIE;DPAO;AE;A_COMMANDE;;oui;;;;;;oui
 B02-AU-05;Date d'effet du marché à commande;DATE;SAISIE;AE;;A_COMMANDE;;oui;;;;;;non
 B02-AU-06;Rythme de commande (bons de commande);TEXTE_LONG;SAISIE;AUCUN;;A_COMMANDE;;non;;;;;;non
-B02-AU-07;Nombre maximum de lots attribuables à un même candidat;NOMBRE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;alloti = OUI;non;;;;;;non
 B03-ST-01;Sous-traitance autorisée;OUI_NON;SAISIE;AE;CCAP;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
 B03-ST-02;Conditions de la sous-traitance;TEXTE_LONG;SAISIE;AE;CCAP;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;non
 B03-NA-01;Nantissement autorisé;OUI_NON;SAISIE;AE;CCAP;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;non
 B03-NA-02;Conditions du nantissement;TEXTE_LONG;SAISIE;AE;CCAP;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;non
 B03-NA-03;Comptable assignataire des paiements;TEXTE;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
-B03-CQ-01;Identification et situation juridique : pièces exigées;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui;;FOURNITURES_SERVICES,TRAVAUX,PRESTATIONS_INTELLECTUELLES;
+B03-CQ-01;Identification et situation juridique : pièces exigées;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui;;FOURNITURES_SERVICES,TRAVAUX,PRESTATIONS_INTELLECTUELLES;une photocopie certifiée de la Carte Professionnelle de l'année en cours\nune photocopie certifiée de l'Etat 211 bis datée de moins de TROIS (03) mois\nune photocopie certifiée de l'Extrait du Registre de Commerce\nun certificat de non faillite datée de moins de 2 mois\nune photocopie certifiée du Numéro d'Identification Fiscale (NIF)\nune photocopie certifiée de la carte statistique
 B03-CQ-02;Capacité technique exigée;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
 B03-CQ-03;Capacité financière exigée;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
 B03-CQ-04;Marchés similaires : certificats de bonne fin ou PV de réception exigés;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
@@ -62,7 +61,6 @@ B06-EO-03;Conversion en Ariary des offres en devise;TEXTE_LONG;SAISIE;DPAO;;QUAN
 B06-EO-04;Impôts, droits et taxes pris en compte dans l'évaluation;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;non
 B06-EO-05;Détermination du montant évalué de l'offre;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;non
 B06-EO-06;Comparaison des offres;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;non
-B06-EO-07;Traitement des offres anormalement hautes ou basses;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;non
 B06-EO-08;Vérification a posteriori de la qualification du candidat moins-disant;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;non
 B06-EO-09;Marge de préférence nationale (%);POURCENTAGE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui
 B06-EO-10;Variation maximale des quantités à l'attribution (%);POURCENTAGE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui

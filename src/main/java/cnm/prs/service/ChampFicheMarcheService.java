@@ -293,7 +293,8 @@ public class ChampFicheMarcheService {
      * {@code clePpm}, {@code rang}, {@code actif}, ⚠️ lot 5 {@code categories} (absente : {@code FOURNITURES_SERVICES}
      * pour un champ créé, inchangée pour un champ mis à jour), ⚠️ 2026-09-25 {@code parLot} ({@code oui}/{@code non} ;
      * absente ou vide : {@code non} pour un champ créé, inchangée pour un champ mis à jour), ⚠️ V47 {@code valeurDefaut}
-     * (absente ou vide : inchangée). Les listes sont séparées par des virgules dans la cellule.
+     * (absente ou vide : inchangée ; ⚠️ 2026-10-01 : la séquence {@code \n} y vaut un saut de ligne, une cellule tenant sur une
+     * ligne). Les listes sont séparées par des virgules dans la cellule.
      */
     public BilanImport importerCsv(Path fichier) throws IOException {
         List<String> lignes = Files.readAllLines(fichier, StandardCharsets.UTF_8);
@@ -333,7 +334,8 @@ public class ChampFicheMarcheService {
                 dto.setClePpm(l.get("clePpm"));
                 dto.setCategories(ChampFicheMarche.liste(l.get("categories")));   // lot 5 : absente = défaut
                 dto.setParLot(vide(l.get("parLot")) ? null : ouiNon(l.get("parLot")));   // 2026-09-25 : absente = inchangé
-                dto.setValeurDefaut(vide(l.get("valeurDefaut")) ? null : l.get("valeurDefaut"));   // V47 : absente = inchangée
+                dto.setValeurDefaut(vide(l.get("valeurDefaut")) ? null   // V47 : absente = inchangée
+                        : l.get("valeurDefaut").replace("\\n", "\n"));   // ⚠️ 2026-10-01 : « \n » = saut de ligne
                 dto.setRang(vide(l.get("rang")) ? null : Integer.valueOf(l.get("rang")));
                 dto.setActif(vide(l.get("actif")) ? Boolean.TRUE : ouiNon(l.get("actif")));
                 if (vide(code) || !code.matches("B\\d{2}-[A-Z0-9]{1,6}-\\d{2}")) {

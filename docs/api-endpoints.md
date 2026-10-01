@@ -5072,6 +5072,39 @@ journal du dossier (`AVIS_SPECIFIQUE_IMPRIME`).
   `garantieSoumission = OUI` et l'obligation qui en découle.
 - V56 élargit les rubriques `B04-DS` (aux trois formes) et `B05-GQ` (au contrat-cadre).
 
+### Fiche DAO des travaux : ce que le premier DAO réel (MEN) a montré ⚠️ 2026-10-01
+
+Demande front `demande-backend-2026-10-01-dao-travaux-men.md`. Migration **V58** et script
+`docs/referentiel/2026-10-01-dao-travaux-men.sql`, à passer après le redémarrage qui applique V58.
+
+- **DPAO-T** recopié du front (253/253, 38 conditions) :
+  - pièces administratives saisies (`{{B03-CQ-01}}`) ;
+  - période de référence en lettres et en chiffres ;
+  - seuil, garantie et délai par lot ;
+  - personnel clé (e) et liquidité (f), sous condition `renseigne`.
+- **Référentiel des travaux** :
+  - **champs créés** :
+    - `B03-QT-12`, période de référence, `NOMBRE`, obligatoire, **défaut 5** ;
+    - `B03-QT-13`, personnel clé, `TEXTE_LONG` ;
+    - `B03-QT-14`, liquidité minimale, `MONTANT`, par lot ;
+  - **par lot** : `B05-GQ-03`, `B03-QT-08`, `B09-DL-01` ;
+  - **`LISTE_MULTIPLE`** : `B05-GQ-02` et `B05-GE-03`, valeurs séparées par des virgules. Une valeur déjà saisie, à un
+    seul élément, reste valide : rien à migrer (constaté sur DBPRS20 : 7 et 7 valeurs, aucune virgule) ;
+  - **option ajoutée** à `B05-GE-04` : « Libérée à 100 % à la réception provisoire » ;
+  - **`B02-AU-07` et `B06-EO-07`** : actifs, servis aux **travaux seulement** (ils restent retirés des fournitures).
+    V58 ouvre leurs rubriques `B02-AU` et `B06-EO` aux travaux. Aucun modèle ne les imprime encore.
+  - **`B03-CQ-01`** propose par défaut les six pièces du document type, une par ligne. Ce champ est commun aux trois
+    catégories (un seul enregistrement par code) : le défaut vaut donc aussi pour les fournitures et les prestations
+    intellectuelles, dont aucun document ne l'imprime.
+- **Fichier de correspondance** : la valeur par défaut admet la séquence `\n` pour un saut de ligne. V58 élargit
+  `VALEUR_DEFAUT` à 1 000 caractères (contre 200).
+- **Rendu** :
+  - `.lettres` sur un `NOMBRE` entier donne « cinq », en minuscules et sans unité (déjà servi ; un décimal reste la
+    valeur seule) ;
+  - un saut de ligne dans une valeur est un vrai saut de ligne en Word (le PDF le faisait déjà) ;
+  - ⚠️ **dans un document commun d'une ligne allotie, la condition d'un champ saisi par lot lit ses valeurs par lot
+    réunies** : sans cela, `B03-QT-14 renseigne` restait faux, puisque la liquidité est saisie sous `B03-QT-14#n`.
+
 ### Lettres d'invitation des prestations intellectuelles ⚠️ 2026-10-01 (lot AV-4.1)
 
 Le pendant de l'avis spécifique pour les prestations intellectuelles, dont la procédure n'a pas d'avis public : chaque
@@ -5314,6 +5347,22 @@ Une fiche jamais enregistrée est lue comme un brouillon vide.
     tour. Exemple : « … de {{B04-DS-05.parLot}} libellé… » (alloti) cède
     « … de cinquante mille ariary (50 000 Ariary) libellé… » à « … de {{B04-DS-05.lettres}} ({{B04-DS-05}}) libellé… »
     (non alloti), au lieu d'attester `alloti = OUI` à tort. Parité avec `lire.mjs` refaite le 2026-10-01 : identique.
+  - ⚠️ **Premier DAO de travaux réel, MEN** (2026-10-01, front eed6bc4). Toutes ces règles sont reprises à l'identique de
+    `lire.mjs` :
+    - PDF, **frontière des colonnes mesurée par page** : c'est l'abscisse de départ, arrondie, la plus fréquente d'une
+      ligne qui en suit une autre sur la même ligne de base (à 1,5 pt près), avec un saut de plus de 12 pt. Elle n'est
+      retenue que vue au moins 3 fois, moins 2 pt ; sinon 240 pt, comme avant.
+    - PDF, **rangée** : deux paragraphes qui commencent à 1,5 pt près l'un de l'autre se lisent clause d'abord.
+    - PDF, **fin d'un morceau** : celle de sa dernière lettre (une espace finale ne compte plus).
+    - Valeur **« MOTS (n) »** : pour un nombre, un montant ou un pourcentage, « CENT VINGT (120) » vaut 120, si seules
+      des lettres précèdent la parenthèse.
+    - **Point final** du modèle facultatif quand du texte fixe le précède.
+    - **Case en blanc** : des pointillés autour d'une unité seule (« ........ Jours …. ») ne sont pas une valeur ; les
+      caractères d'usage privé U+E000-F8FF sont ignorés pour ce test.
+
+    Parité refaite le 2026-10-01 : **extraction identique** sur 18 documents réels, DAO du MEN compris (3 302
+    paragraphes) ; **lectures identiques** sur 18 documents × 14 modèles, sans types de champ (985 lignes) puis avec les
+    types des référentiels (818 lignes).
 - **Réponse 200 `ImportDaoResult`** :
 
 ```json

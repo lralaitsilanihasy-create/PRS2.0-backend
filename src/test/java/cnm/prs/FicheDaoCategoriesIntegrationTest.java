@@ -286,6 +286,8 @@ class FicheDaoCategoriesIntegrationTest extends CnmIntegrationTestSupport {
             "B03-NA-02", "B03-ST-02", "B04-RO-03", "B06-EO-04", "B06-EO-05", "B06-EO-06", "B08-AC-01", "B08-AC-02", "B08-AV-03",
             "B08-AV-05", "B08-AV-06", "B08-PA-04", "B10-IR-02", "B02-AU-07", "B05-CP-03", "B06-EO-03", "B06-EO-07", "B06-EO-08",
             "B06-AN-02", "B09-DG-02");
+    /** ⚠️ 2026-10-01 (DAO de travaux du MEN, §B2.2) — deux des 25, ouverts aux travaux (DPAO 1.1 et 9.4.5 du MEN). */
+    private static final List<String> OUVERTS_AUX_TRAVAUX = List.of("B02-AU-07", "B06-EO-07");
 
     @Test
     @DisplayName("29/09 — Champs non imprimés : les 25 retirés ne sont plus servis aux fournitures (quantité fixe, à commande), "
@@ -307,6 +309,11 @@ class FicheDaoCategoriesIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(champRepository.findById("B08-PA-08").orElseThrow().getActif()).isFalse();
         // Aucun des 25 n'appartient à une autre catégorie : « ailleurs » est inchangé (les champs y restent ce qu'ils étaient).
         for (String code : RETIRES) {
+            if (OUVERTS_AUX_TRAVAUX.contains(code)) {
+                // ⚠️ 2026-10-01 (DAO de travaux du MEN, §B2.2) — passés au fichier des travaux : plus créés par celui des fournitures.
+                assertThat(champRepository.findById(code)).as(code).isEmpty();
+                continue;
+            }
             cnm.prs.entity.ChampFicheMarche c = champRepository.findById(code).orElseThrow();
             assertThat(c.getActif()).as(code).isFalse();
             assertThat(c.getCategories()).as(code).isEqualTo("FOURNITURES_SERVICES");

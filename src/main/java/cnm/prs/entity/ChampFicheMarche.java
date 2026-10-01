@@ -108,7 +108,7 @@ public class ChampFicheMarche {
      * ⚠️ V47 (2026-09-26, formulaires du candidat, R6) — valeur <strong>recopiée dans la fiche à sa création</strong>
      * (source {@code SAISIE}) ; administrable ; un changement de défaut ne touche pas les fiches existantes.
      */
-    @Column(name = "VALEUR_DEFAUT", length = 200)
+    @Column(name = "VALEUR_DEFAUT", length = 1000)   // ⚠️ V58 : 200 → 1000 (liste des pièces administratives)
     private String valeurDefaut;
 
     @Column(name = "ACTIF", nullable = false)

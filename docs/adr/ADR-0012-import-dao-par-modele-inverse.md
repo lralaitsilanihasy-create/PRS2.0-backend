@@ -208,3 +208,18 @@ le DPAC aussi en PDF) par les 13 modèles. Le résultat, 868 lignes (paragraphes
 contre les modèles commités du front. Refaite le même jour contre `547e48b` (nouveau DPAC-CC, « à verser sur le compte
 bancaire de l'ARMP ») : identique, 926 lignes. Un DAO rédigé avec l'ancienne phrase ne livre plus `B04-DS-04` ni
 `B04-DS-05` : c'est une conséquence du modèle, la même dans les deux lecteurs, pas un écart entre eux.
+
+## Complément du 2026-10-01 — premier DAO de travaux réel (MEN)
+
+Six règles reprises à l'identique de `lire.mjs` (front eed6bc4) :
+- PDF : frontière des colonnes mesurée par page (240 pt à défaut) ;
+- PDF : rangée à 1,5 pt près, la clause avant sa donnée ;
+- PDF : fin d'un morceau à sa dernière lettre ;
+- valeur « MOTS (n) » ;
+- point final facultatif après du texte fixe ;
+- case en blanc (une unité seule entourée de pointillés, caractères d'usage privé ignorés).
+
+**Parité mesurée sur l'extraction elle-même** (et non plus seulement sur la lecture de paragraphes déjà extraits) :
+identique sur 18 documents réels, dont les 3 302 paragraphes du MEN. Les lectures sont identiques sans types de champ
+(985 lignes) puis avec les types des référentiels (818 lignes). Le DAO du MEN, qui porte un filigrane nominatif, reste
+hors dépôt.

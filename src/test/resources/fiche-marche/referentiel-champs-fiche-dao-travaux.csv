@@ -1,4 +1,4 @@
-code;libelle;type;source;documentMaitre;reprises;typesMarche;categories;condition;obligatoire;texteType;controle;options;cleCadrage;clePpm;actif
+code;libelle;type;source;documentMaitre;reprises;typesMarche;categories;condition;obligatoire;texteType;controle;options;cleCadrage;clePpm;actif;parLot;valeurDefaut
 B02-MW-01;Maître d'œuvre : nom et coordonnées;TEXTE_LONG;SAISIE;AE;CCAP;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
 B02-MW-02;Références du lien contractuel entre le maître de l'ouvrage et le maître d'œuvre;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui
 B02-MW-03;Imputation budgétaire;TEXTE;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;non
@@ -12,6 +12,7 @@ B02-LT-04;Objet et montant de la tranche conditionnelle 1;TEXTE_LONG;SAISIE;DPAO
 B02-LT-05;Objet et montant de la tranche conditionnelle 2;TEXTE_LONG;SAISIE;DPAO;AE,CCAP;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;tranches = OUI;non;;;;;;oui
 B02-LT-06;Délai d'affermissement de la tranche conditionnelle 1;TEXTE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;tranches = OUI;non;;;;;;oui
 B02-LT-07;Délai d'affermissement de la tranche conditionnelle 2;TEXTE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;tranches = OUI;non;;;;;;oui
+B02-AU-07;Nombre maximum de lots attribuables à un même candidat;NOMBRE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;alloti = OUI;non;;;;;;oui;;
 B03-GT-01;Forme du groupement;LISTE;CADRAGE;DPAO;CCAP;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;groupement = OUI;non;;;;formeGroupement;;oui
 B03-GT-02;Identification de chacun des membres du groupement;TEXTE_LONG;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;groupement = OUI;oui;;;;;;non
 B03-GT-03;Qualification des membres d'un groupement d'entreprises;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;groupement = OUI;oui;;;;;;oui
@@ -24,10 +25,13 @@ B03-QT-04;Marchés similaires réalisés au cours des trois dernières années;T
 B03-QT-05;Communautés locales et organisations non gouvernementales admises;OUI_NON;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui
 B03-QT-06;Qualifications particulières requises;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui
 B03-QT-07;Chiffre d'affaires annuel minimum exigé pour des travaux de construction (Ariary);MONTANT;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;MONTANT_POSITIF;;;;oui
-B03-QT-08;Projet de nature et de complexité comparables réalisé comme entrepreneur principal;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
+B03-QT-08;Projet de nature et de complexité comparables réalisé comme entrepreneur principal;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui;oui;
 B03-QT-09;Forme sous laquelle l'entrepreneur disposera du matériel (propriété, location…);TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
 B03-QT-10;Années d'expérience exigées du directeur des travaux;NOMBRE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
 B03-QT-11;Préférence nationale accordée aux candidats;OUI_NON;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;non
+B03-QT-12;Période de référence des marchés similaires (années);NOMBRE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui;;5
+B03-QT-13;Personnel clé exigé (fonctions, diplômes, années d'expérience, justificatifs);TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui;;
+B03-QT-14;Liquidité ou ligne de crédit bancaire minimale (Ariary);MONTANT;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;MONTANT_POSITIF;;;;oui;oui;
 B03-SU-01;Sous-traitance envisagée;OUI_NON;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;non
 B03-SU-02;Parts sous-traitées et sous-traitants proposés;TEXTE_LONG;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;non
 B03-NT-01;Comptable assignataire et montant maximal nanti;TEXTE_LONG;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui
@@ -53,12 +57,12 @@ B05-PT-01;Type de prix du marché;LISTE;CADRAGE;AE;CCAP;QUANTITE_FIXE,A_COMMANDE
 B05-VR-01;Prix ferme ou révisable;OUI_NON;CADRAGE;DPAO;AE,CCAP;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;prixRevisable;;oui
 B05-MN-01;Monnaie de l'offre;LISTE;SAISIE;DPAO;AE,CCAP;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;Ariary,Devises;;;oui
 B05-GQ-01;Garantie de soumission exigée;OUI_NON;CADRAGE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;garantieSoumission;;oui
-B05-GQ-02;Formes admises de la garantie de soumission;LISTE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;garantieSoumission = OUI;oui;;;Caution personnelle et solidaire,Garantie bancaire,Chèque de banque;;;oui
-B05-GQ-03;Montant de la garantie de soumission (Ariary);MONTANT;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE,CONTRAT_CADRE;TRAVAUX;garantieSoumission = OUI;oui;;MONTANT_POSITIF;;;;oui
+B05-GQ-02;Formes admises de la garantie de soumission;LISTE_MULTIPLE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;garantieSoumission = OUI;oui;;;Caution personnelle et solidaire,Garantie bancaire,Chèque de banque;;;oui;;
+B05-GQ-03;Montant de la garantie de soumission (Ariary);MONTANT;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE,CONTRAT_CADRE;TRAVAUX;garantieSoumission = OUI;oui;;MONTANT_POSITIF;;;;oui;oui;
 B05-GE-01;Garantie de bonne exécution requise;OUI_NON;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
 B05-GE-02;Part exigée en devises étrangères;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui
-B05-GE-03;Formes admises de la garantie de bonne exécution;LISTE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;Garantie bancaire,Caution personnelle et solidaire,Chèque de banque;;;oui
-B05-GE-04;Libération de la garantie de bonne exécution;LISTE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;Libérée à 50 % puis au terme du délai de garantie,Libérée à 100 % à la réception définitive;;;oui
+B05-GE-03;Formes admises de la garantie de bonne exécution;LISTE_MULTIPLE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;Garantie bancaire,Caution personnelle et solidaire,Chèque de banque;;;oui;;
+B05-GE-04;Libération de la garantie de bonne exécution;LISTE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;Libérée à 50 % puis au terme du délai de garantie,Libérée à 100 % à la réception définitive,Libérée à 100 % à la réception provisoire;;;oui;;
 B05-GE-05;Taux de la garantie de bonne exécution (%, au plus 5 %);POURCENTAGE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui
 B05-RG-01;Retenue de garantie applicable;OUI_NON;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
 B05-RG-02;Taux de la retenue de garantie (%, au plus 5 %);POURCENTAGE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui
@@ -69,6 +73,7 @@ B06-RC-01;Délai de réponse aux candidats pendant l'évaluation (jours);NOMBRE;
 B06-EV-01;Évaluation des offres portant sur plusieurs lots;LISTE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;alloti = OUI;oui;;;Par lot,Sur l'ensemble des lots;;;oui
 B06-PN-01;Marge de préférence nationale accordée;OUI_NON;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
 B06-PN-02;Taux de la marge de préférence nationale (%, au plus 10 %);POURCENTAGE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui
+B06-EO-07;Traitement des offres anormalement hautes ou basses;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui;;
 B08-DB-01;Titulaire du paiement;LISTE;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;Entrepreneur unique,Groupement d'entrepreneurs solidaires,Groupement d'entrepreneurs conjoints;;;non
 B08-EF-01;Délai de remise de l'estimation des engagements financiers du maître de l'ouvrage (jours);NOMBRE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui
 B08-RE-01;Modalités de règlement des comptes;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
@@ -87,7 +92,7 @@ B08-MR-02;Modalités d'établissement des décomptes mensuels;TEXTE_LONG;SAISIE;
 B08-MR-03;Règlement des comptes d'un marché à prix unitaires;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;non
 B08-MR-04;Règlement des comptes d'un marché à prix forfaitaires;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;non
 B09-DT-01;Point de départ du marché;LISTE;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;À la notification de l'approbation à l'entrepreneur,À la notification de la décision d'affermissement de la tranche conditionnelle,À la notification de la tranche ferme au titulaire,À la notification de l'ordre de service de commencer les travaux;;;oui
-B09-DL-01;Délai d'exécution : commencement des travaux et fin du marché;TEXTE_LONG;SAISIE;DPAO;AE,CCAP;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
+B09-DL-01;Délai d'exécution : commencement des travaux et fin du marché;TEXTE_LONG;SAISIE;DPAO;AE,CCAP;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui;oui;
 B09-DL-02;Période de préparation (jours);NOMBRE;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;non
 B09-DL-03;Calendrier prévisionnel de réalisation;TEXTE_LONG;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;non
 B09-DL-04;Date de réception de l'ouvrage;DATE;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui

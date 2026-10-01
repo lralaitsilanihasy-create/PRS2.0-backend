@@ -76,7 +76,8 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
     void chargementDesReferentiels() throws Exception {
         ChampFicheMarcheService.BilanImport f = importer("referentiel-champs-fiche-marche-fournitures.csv");
         assertThat(f.rejets()).isEmpty();
-        assertThat(f.crees()).hasSize(156);   // V50 : + 26 champs de la remise électronique ; lot D2 (2026-09-29) : + 7
+        assertThat(f.crees()).hasSize(154);   // V50 : + 26 champs de la remise électronique ; lot D2 (2026-09-29) : + 7 ;
+        // 01/10 (DAO du MEN) : − 2 (B02-AU-07, B06-EO-07 passés au fichier des travaux)
         ChampFicheMarcheService.BilanImport cc = importer("referentiel-champs-fiche-marche-contrat-cadre.csv");
         assertThat(cc.rejets()).isEmpty();
         assertThat(cc.crees()).hasSize(133);   // 2026-09-28 : + 9 champs du modèle officiel, + 9 du lot D ; 30/09 : + B04-DS-11 (avis spécifique)

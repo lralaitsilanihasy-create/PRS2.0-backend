@@ -148,7 +148,62 @@ class ModelesDaoTravauxTest {
         assertThat(rendre("DPAC", "DPAC-CC", f)).contains("(contrat-cadre marché de fournitures et services)");
     }
 
+    @Test
+    @DisplayName("2026-10-01 (DAO de travaux du MEN, §B1, §B2.3) — alloti en deux lots, garantie : période de référence en "
+            + "lettres (« cinq (5) »), pièces administratives saisies, seuil, garantie, délai et liquidité par lot, personnel clé ; "
+            + "sans personnel clé ni liquidité, les paragraphes (e) et (f) ne s'impriment pas")
+    void daoDuMen() {
+        FicheMarcheDto f = fiche(Map.of("typePrix", "UNITAIRES", "tranches", "NON", "alloti", "OUI", "nbLots", "2",
+                "garantieSoumission", "OUI"));
+        f.setNbLots(2);
+        f.setSaisieParLot(true);
+        f.getValeurs().putAll(Map.of("B03-QT-12", "5", "B03-CQ-01", "une photocopie certifiée de la carte statistique\nun certificat de non faillite",
+                "B03-QT-08#1", "247 500 000 Ariary", "B03-QT-08#2", "180 000 000 Ariary", "B05-GQ-03#1", "9900000",
+                "B05-GQ-03#2", "7200000", "B09-DL-01#1", "six mois", "B09-DL-01#2", "cinq mois"));
+        f.getValeurs().putAll(Map.of("B03-QT-13", "Conducteur de travaux : ingénieur BTP, 3 ans", "B03-QT-14#1", "99000000",
+                "B03-QT-14#2", "72000000"));
+        String dpao = FormulairesCandidat.rendreModele("DPAO", null, f, champsMen(), dao.modele("DPAO-T"), null).texte()
+                .replace(' ', ' ').replace(' ', ' ');
+        assertThat(dpao).contains("réalisés au cours des cinq dernières années", "au cours des cinq (5) dernières années",
+                "une photocopie certifiée de la carte statistique\nun certificat de non faillite",
+                "Lot n° 1 : 247 500 000 Ariary ; Lot n° 2 : 180 000 000 Ariary",
+                "Lot n° 1 : 9 900 000 Ariary ; Lot n° 2 : 7 200 000 Ariary",
+                "ne doit pas dépasser Lot n° 1 : six mois ; Lot n° 2 : cinq mois à compter",
+                "(e) proposer le personnel clé suivant : Conducteur de travaux : ingénieur BTP, 3 ans",
+                "d’un montant minimum de : Lot n° 1 : 99 000 000 Ariary ; Lot n° 2 : 72 000 000 Ariary")
+                .doesNotContain("{{", "trois (5)", "carte professionnelle de l'année", "< par exemple >");
+
+        f.getValeurs().remove("B03-QT-13");
+        f.getValeurs().remove("B03-QT-14#1");
+        f.getValeurs().remove("B03-QT-14#2");
+        f.getCadrage().put("alloti", "NON");
+        f.setNbLots(null);
+        f.setSaisieParLot(false);
+        f.getValeurs().put("B05-GQ-03", "5000000");
+        String unique = FormulairesCandidat.rendreModele("DPAO", null, f, champsMen(), dao.modele("DPAO-T"), null).texte()
+                .replace(' ', ' ').replace(' ', ' ');
+        assertThat(unique).contains("cinq millions ariary (5 000 000 Ariary).")
+                .doesNotContain("(e) proposer le personnel clé", "(f) justifier d’une liquidité");
+    }
+
     // ------------------------------------------------------------------ outils
+
+    /** {@link #champs()} et ⚠️ 2026-10-01 les champs du DAO du MEN : période (NOMBRE), seuil, garantie, délai, liquidité par lot. */
+    private static Map<String, ChampFicheMarche> champsMen() {
+        Map<String, ChampFicheMarche> m = new HashMap<>(champs());
+        for (String[] t : List.of(new String[] {"B03-QT-12", "NOMBRE", "non"}, new String[] {"B03-QT-08", "TEXTE_LONG", "oui"},
+                new String[] {"B05-GQ-03", "MONTANT", "oui"}, new String[] {"B09-DL-01", "TEXTE_LONG", "oui"},
+                new String[] {"B03-QT-14", "MONTANT", "oui"}, new String[] {"B03-QT-13", "TEXTE_LONG", "non"})) {
+            ChampFicheMarche c = new ChampFicheMarche();
+            c.setCode(t[0]);
+            c.setType(t[1]);
+            c.setSource("SAISIE");
+            c.setParLot("oui".equals(t[2]));
+            c.setActif(true);
+            m.put(t[0], c);
+        }
+        return m;
+    }
 
     private String rendre(String type, String sigle, FicheMarcheDto f) {
         return FormulairesCandidat.rendreModele(type, null, f, champs(), dao.modele(sigle), null).texte()

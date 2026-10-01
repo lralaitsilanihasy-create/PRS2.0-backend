@@ -48,6 +48,23 @@ public final class LectureDao {
     private static final Pattern DATE_HEURE = Pattern.compile("^(\\d{2})/(\\d{2})/(\\d{4})" + BLANC + "+(\\d{2}):(\\d{2})$");
     private static final Pattern UNITE_NOMBRE = Pattern.compile("ariary|ar\\.?|%|" + BLANC, Pattern.CASE_INSENSITIVE);
     private static final Pattern NOMBRE = Pattern.compile("^-?\\d+(\\.\\d+)?$");
+    /** ⚠️ 2026-10-01 (front eed6bc4) — des pointillés (deux signes au moins) : une case peut-être laissée en blanc. */
+    private static final Pattern DEUX_POINTILLES = Pattern.compile("[.…_]{2,}");
+    /** ⚠️ 2026-10-01 — les caractères d'usage privé (glyphes de police Symbol : l'astérisque de renvoi « ….* »). */
+    private static final Pattern USAGE_PRIVE = Pattern.compile("[\\uE000-\\uF8FF]");
+    /** ⚠️ 2026-10-01 — une unité seule, qui accompagne une case en blanc (« ........ Jours …. »). */
+    private static final Pattern UNITE_SEULE = Pattern.compile(
+            "(?<![\\p{L}])(?:jours?|mois|ans?|ann[ée]es?|heures?|semaines?|ariary|ar|%)(?![\\p{L}])", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+    /**
+     * ⚠️ 2026-10-01 (front eed6bc4, règle « MOTS (n) ») — « CENT VINGT (120) », « Cinq (05) », « neuf cent mille Ariary
+     * (Ar 9 900 000) » : les chiffres entre parenthèses font foi, si rien d'autre que des lettres ne les précède.
+     */
+    private static final Pattern MOTS_PUIS_CHIFFRES = Pattern.compile("^[\\p{L}" + BLANC.substring(1, BLANC.length() - 1)
+            + "'’.-]+\\(" + BLANC + "*((?:ar\\.?" + BLANC + "*)?[\\d" + BLANC.substring(1, BLANC.length() - 1) + ".,]+(?:" + BLANC
+            + "*(?:ariary|ar\\.?|%))?)" + BLANC + "*\\)$", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+    /** ⚠️ 2026-10-01 — un texte qui finit par du texte fixe puis un point (« … jours. ») : ce point devient facultatif. */
+    private static final Pattern POINT_FINAL_FIXE = Pattern.compile("[^" + BLANC.substring(1, BLANC.length() - 1) + "}]"
+            + BLANC + "*\\." + BLANC + "*$");
     private static final String PONCTUATION = ",;:.!?()[]\"'-/";
     private static final String META = ".*+?^${}()|[]\\";
     private static final int FLAGS = Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE;
@@ -468,6 +485,14 @@ public final class LectureDao {
             i = m.end();
         }
         re.append(motif(texte.substring(i)));
+        // ⚠️ 2026-10-01 (front eed6bc4, DAO travaux du MEN : « …sera de CENT VINGT (120) jours », sans point) — le point
+        // final est facultatif, seulement quand du texte fixe le précède : un jeton qui finirait le paragraphe garderait
+        // son point dans la valeur.
+        String pointFinal = BLANCS_SOUPLES + "\\." + BLANCS_SOUPLES;
+        if (POINT_FINAL_FIXE.matcher(texte).find() && re.toString().endsWith(pointFinal)) {
+            re.setLength(re.length() - pointFinal.length());
+            re.append("(?:").append(BLANCS_SOUPLES).append("\\.)?").append(BLANCS_SOUPLES);
+        }
         boolean finitParFixe = !texte.matches("(?s).*}}\\s*$") && !norm(JETON.matcher(texte).replaceAll("")).isEmpty();
         return new Motif(Pattern.compile("^" + re + "$", FLAGS), finitParFixe ? Pattern.compile("^" + re, FLAGS) : null,
                 jetons, finitParFixe);
@@ -481,8 +506,15 @@ public final class LectureDao {
         if (POINTILLES.matcher(v).matches()) {
             return null;   // un jeton vide s'imprime en pointillés (R2)
         }
+        // ⚠️ 2026-10-01 (front eed6bc4, AE du MEN : « Jours …. ») — une unité seule devant ou derrière des pointillés est une
+        // case laissée en blanc ; les caractères d'usage privé n'y comptent pas.
+        if (DEUX_POINTILLES.matcher(v).find() && POINTILLES.matcher(
+                UNITE_SEULE.matcher(USAGE_PRIVE.matcher(v).replaceAll("")).replaceAll("")).matches()) {
+            return null;
+        }
         if ("chiffres".equals(suffixe) || "NOMBRE".equals(type) || "MONTANT".equals(type) || "POURCENTAGE".equals(type)) {
-            String n = UNITE_NOMBRE.matcher(v).replaceAll("").replaceFirst(",", ".");
+            Matcher mots = MOTS_PUIS_CHIFFRES.matcher(trim(v));
+            String n = UNITE_NOMBRE.matcher(mots.matches() ? mots.group(1) : v).replaceAll("").replaceFirst(",", ".");
             return NOMBRE.matcher(n).matches() ? n : null;
         }
         if ("DATE".equals(type)) {

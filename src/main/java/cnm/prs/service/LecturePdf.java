@@ -31,9 +31,10 @@ import org.apache.pdfbox.text.TextPosition;
  *       Positions arrondies au dixième de point, comme la sortie TSV du front.</li>
  *   <li>En-têtes et pieds (même texte au même endroit sur trois pages au moins) et numéros de page écartés.</li>
  *   <li>Morceaux d'une même ligne de base (à 1,5 pt), contigus, recollés.</li>
- *   <li>Paragraphes par colonne (abscisse 240 pt) : une ligne rejoint le paragraphe ouvert de sa colonne si elle le suit à
+ *   <li>Paragraphes par colonne (frontière mesurée sur la page, ⚠️ 2026-10-01 ; 240 pt à défaut) : une ligne rejoint le paragraphe ouvert de sa colonne si elle le suit à
  *       interligne normal : l'interligne mesuré sur la page, plus un point (⚠️ 2026-09-29).</li>
- *   <li>Ordre de lecture d'une page : hauteur de début de paragraphe, puis colonne ; césure « mot- suite » recollée.</li>
+ *   <li>Ordre de lecture d'une page : hauteur de début de paragraphe, puis colonne au sein d'une rangée (même ligne de
+ *       base à 1,5 pt près, ⚠️ 2026-10-01) ; césure « mot- suite » recollée.</li>
  * </ol>
  */
 public final class LecturePdf {
@@ -100,6 +101,9 @@ public final class LecturePdf {
         StringBuilder sb = new StringBuilder();
         TextPosition debut = ps.get(0);
         TextPosition prec = null;
+        // ⚠️ 2026-10-01 (front eed6bc4, DAO travaux du MEN) — la fin d'un morceau est celle de sa dernière lettre : une
+        // espace finale (retirée du texte) la reculait, et le morceau suivant, posé juste après, semblait collé.
+        TextPosition dernier = null;
         for (TextPosition p : ps) {
             if (prec != null) {
                 float espace = p.getXDirAdj() - (prec.getXDirAdj() + prec.getWidthDirAdj());
@@ -111,17 +115,21 @@ public final class LecturePdf {
                     continue;
                 }
                 if (espace > 3 * largeurEspace && espace > 12f) {
-                    sortir(sb, debut, prec, page, out);
+                    sortir(sb, debut, dernier != null ? dernier : prec, page, out);
                     sb.setLength(0);
                     debut = p;
+                    dernier = null;
                 } else if (espace > largeurEspace * 0.3f && !sb.isEmpty() && sb.charAt(sb.length() - 1) != ' ') {
                     sb.append(' ');
                 }
             }
             sb.append(p.getUnicode());
             prec = p;
+            if (!p.getUnicode().isBlank()) {
+                dernier = p;
+            }
         }
-        sortir(sb, debut, prec, page, out);
+        sortir(sb, debut, dernier != null ? dernier : prec, page, out);
     }
 
     private static void sortir(StringBuilder sb, TextPosition debut, TextPosition fin, int page, List<Morceau> out) {
@@ -207,6 +215,23 @@ public final class LecturePdf {
                 }
             }
             lignes.sort(Comparator.<Ligne>comparingDouble(q -> q.y).thenComparingDouble(q -> q.x));
+            // ⚠️ 2026-10-01 (front eed6bc4, DAO travaux du MEN) — la frontière des colonnes se MESURE : l'abscisse de départ
+            // (arrondie) la plus fréquente d'une ligne qui suit, sur la même ligne de base à 1,5 pt près, une ligne d'une
+            // autre colonne (saut de plus de 12 pt), retenue si vue au moins 3 fois (moins 2 pt) ; sinon 240, comme avant.
+            // Au MEN la colonne des données commence à x ≈ 183 : sous 240, libellés et valeurs se mêlaient.
+            Map<Long, Integer> departs = new HashMap<>();
+            for (Ligne l : lignes) {
+                for (Ligne q : lignes) {
+                    if (q != l && Math.abs(q.y - l.y) <= 1.5 && q.xFin + 12 < l.x) {
+                        departs.merge(Math.round(l.x), 1, Integer::sum);
+                        break;
+                    }
+                }
+            }
+            Map.Entry<Long, Integer> plusFrequent = departs.entrySet().stream()
+                    .min(Comparator.<Map.Entry<Long, Integer>>comparingInt(x -> -x.getValue()).thenComparingLong(Map.Entry::getKey))
+                    .orElse(null);
+            double borne = plusFrequent != null && plusFrequent.getValue() >= 3 ? plusFrequent.getKey() - 2 : ABSCISSE_COLONNE;
             // Paragraphes par colonne. ⚠️ 2026-09-29 (front a3217b3) — l'interligne se MESURE sur la page : le plus petit
             // écart vertical fréquent (au moins deux fois) entre deux lignes successives d'une même colonne, arrondi au
             // demi-point, 10 à défaut (9,7 pt dans le 2463 ; 15 pt dans nos PDF, où 18 pt sépare deux paragraphes).
@@ -214,7 +239,7 @@ public final class LecturePdf {
             for (int col = 0; col <= 1; col++) {
                 List<Double> ys = new ArrayList<>();
                 for (Ligne l : lignes) {
-                    if ((l.x >= ABSCISSE_COLONNE ? 1 : 0) == col) {
+                    if ((l.x >= borne ? 1 : 0) == col) {
                         ys.add(l.y);
                     }
                 }
@@ -230,7 +255,7 @@ public final class LecturePdf {
             Map<Integer, Paragraphe> ouverts = new LinkedHashMap<>();
             List<Paragraphe> pars = new ArrayList<>();
             for (Ligne l : lignes) {
-                int c = l.x >= ABSCISSE_COLONNE ? 1 : 0;
+                int c = l.x >= borne ? 1 : 0;
                 Paragraphe o = ouverts.get(c);
                 double pas = interligne + 1;
                 if (o != null && l.y - o.yDernier > 0 && l.y - o.yDernier <= pas) {
@@ -242,7 +267,23 @@ public final class LecturePdf {
                 pars.add(p);
                 ouverts.put(c, p);
             }
-            pars.sort(Comparator.<Paragraphe>comparingDouble(p -> p.y).thenComparingInt(p -> p.colonne));
+            // ⚠️ 2026-10-01 (front eed6bc4) — deux paragraphes qui commencent sur la même ligne de base À 1,5 PT PRÈS sont
+            // une même rangée : la clause d'abord (au MEN, la valeur est posée 0,5 pt plus haut que son libellé).
+            pars.sort(Comparator.comparingDouble(p -> p.y));
+            List<List<Paragraphe>> rangs = new ArrayList<>();
+            for (Paragraphe p : pars) {
+                List<Paragraphe> r = rangs.isEmpty() ? null : rangs.get(rangs.size() - 1);
+                if (r != null && p.y - r.get(0).y <= 1.5) {
+                    r.add(p);
+                } else {
+                    rangs.add(new ArrayList<>(List.of(p)));
+                }
+            }
+            pars.clear();
+            for (List<Paragraphe> r : rangs) {
+                r.sort(Comparator.<Paragraphe>comparingInt(p -> p.colonne).thenComparingDouble(p -> p.y));
+                pars.addAll(r);
+            }
             for (Paragraphe p : pars) {
                 // ⚠️ §B6.3 — non normalisé : la reconnaissance normalise, une valeur de texte se reprend ici.
                 String t = CESURE.matcher(p.texte.toString()).replaceAll("$1$2");

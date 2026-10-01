@@ -87,7 +87,7 @@ public class GenerateurDocumentsFiche {
                                 XWPFParagraph p = i == 0 ? cellule.getParagraphs().get(0) : cellule.addParagraph();
                                 XWPFRun r = p.createRun();
                                 r.setFontSize(9);
-                                r.setText(paragraphes.get(i));
+                                texte(r, paragraphes.get(i));   // ⚠️ 2026-10-01 : une valeur sur plusieurs lignes (pièces administratives)
                             }
                         }
                     }
@@ -146,7 +146,7 @@ public class GenerateurDocumentsFiche {
             }
             case VIDE -> r.setFontSize(10);
         }
-        r.setText(modele.texte());
+        texte(r, modele.texte());   // ⚠️ 2026-10-01 : sauts de ligne d'une valeur rendus en Word
         if (modele.solidaireDuSuivant()) {   // ⚠️ 2026-10-01 — « paragraphe solidaire du suivant », lignes non séparées
             p.setKeepNext(true);
             p.getCTP().getPPr().addNewKeepLines();

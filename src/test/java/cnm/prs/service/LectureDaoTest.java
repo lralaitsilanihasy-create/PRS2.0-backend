@@ -36,6 +36,31 @@ class LectureDaoTest {
     }
 
     @Test
+    @DisplayName("2026-10-01 (front eed6bc4, DAO travaux du MEN) : « MOTS (n) » vaut n ; des pointillés autour d'une unité "
+            + "seule sont une case en blanc (usage privé ignoré) ; le point final du modèle est facultatif après du texte fixe")
+    void reglesDuDaoDuMen() {
+        assertThat(LectureDao.valeurSaisie("CENT VINGT (120)", "NOMBRE", null)).isEqualTo("120");
+        assertThat(LectureDao.valeurSaisie("Cinq (05)", "NOMBRE", null)).isEqualTo("05");
+        assertThat(LectureDao.valeurSaisie("neuf cent mille Ariary (Ar 9 900 000)", "MONTANT", null)).isEqualTo("9900000");
+        assertThat(LectureDao.valeurSaisie("trois (3) ou cinq (5)", "NOMBRE", null)).as("un autre chiffre précède").isNull();
+        assertThat(LectureDao.valeurSaisie("CENT VINGT (120)", "TEXTE", null)).isEqualTo("CENT VINGT (120)");
+        assertThat(LectureDao.valeurSaisie("........ Jours ….", "NOMBRE", null)).isNull();
+        assertThat(LectureDao.valeurSaisie("Jours …. ", "TEXTE", null)).isNull();
+        assertThat(LectureDao.valeurSaisie("Jours ouvrables", "TEXTE", null)).isEqualTo("Jours ouvrables");
+
+        FichierCommande.Modele modele = FichierCommande.lireModele(String.join("\n",
+                "PARA\tLe délai de validité des offres sera de {{B04-VO-01}} jours.",
+                "PARA\tLe soumissionnaire indique {{B04-LR-01}}."));
+        List<String> doc = LectureDao.unitesDocument(List.of("Le délai de validité des offres sera de CENT VINGT (120) jours",
+                "Le soumissionnaire indique le lieu"));
+        LectureDao.Resultat r = LectureDao.lire("T", modele, doc,
+                c -> "B04-VO-01".equals(c) ? new LectureDao.InfoChamp("NOMBRE", "SAISIE", null) : null);
+        assertThat(r.propositions()).extracting(p -> p.code() + "=" + p.valeur() + ":" + p.confiance().libelle())
+                .contains("B04-VO-01=120:haute")
+                .noneMatch(s -> s.startsWith("B04-LR-01"));   // un jeton qui finit le paragraphe garde son point
+    }
+
+    @Test
     @DisplayName("implications : les termes « = » d'une conjonction ; rien pour « ou » ; « != », contient, renseigne n'impliquent rien")
     void implications() {
         assertThat(ConditionsModele.implications("attributaires = MULTI et B02-PC-02 = Au fur et à mesure des besoins"))

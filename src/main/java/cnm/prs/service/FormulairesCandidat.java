@@ -259,7 +259,23 @@ public final class FormulairesCandidat {
          */
         String lire(String cle, Integer lot) {
             if (cle.matches("B\\d{2}-[A-Z0-9]{1,6}-\\d{2}")) {
-                return valeur(fiche, cle, lot);
+                String v = valeur(fiche, cle, lot);
+                ChampFicheMarche c = champs.get(cle);
+                int nbLots = Boolean.TRUE.equals(fiche.getSaisieParLot()) && fiche.getNbLots() != null ? fiche.getNbLots() : 0;
+                if (lot == null && (v == null || v.isBlank()) && c != null && LotsFiche.parLot(c, nbLots)) {
+                    // ⚠️ 2026-10-01 (DAO de travaux du MEN) — dans un document commun d'une ligne allotie, un champ saisi par
+                    // lot vaut, pour une condition, ses valeurs par lot réunies : « B03-QT-14 renseigne » est vrai dès qu'un
+                    // lot porte une liquidité (sans quoi le paragraphe (f) du DPAO-T ne s'imprimait jamais).
+                    List<String> parLot = new ArrayList<>();
+                    for (int n = 1; n <= nbLots; n++) {
+                        String w = valeur(fiche, cle, n);
+                        if (w != null && !w.isBlank()) {
+                            parLot.add(w);
+                        }
+                    }
+                    return parLot.isEmpty() ? v : String.join(" ; ", parLot);
+                }
+                return v;
             }
             // ⚠️ Lot D2 (2026-09-29, §B1) — la forme et la catégorie de la fiche se lisent comme des clés de cadrage.
             if (CLE_SUPPORTS_PUBLICATION.equals(cle)) {

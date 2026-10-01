@@ -86,6 +86,6 @@ public class ChampFicheMarcheDto {
      * ⚠️ V47 (2026-09-26) — valeur par défaut, recopiée dans la fiche à sa création (source {@code SAISIE} seulement).
      * Absente : inchangée à la modification ; vide : effacée.
      */
-    @Size(max = 200)
+    @Size(max = 1000)   // ⚠️ V58
     private String valeurDefaut;
 }
