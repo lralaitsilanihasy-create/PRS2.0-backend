@@ -61,7 +61,19 @@ public class DocumentsFicheMarcheService {
      * rattachés à la version validée qu'ils rendent, jamais joints au dossier comme pièce du DAO.
      */
     public static final String TYPE_AVIS = "AVIS";
-    /** ⚠️ 2026-10-01 — le bloc de signature de l'avis : ses trois derniers paragraphes (lieu et date, qualité, nom). */
+    /**
+     * ⚠️ 2026-10-01 (lot AV-4.1) — le type des lettres d'invitation des prestations intellectuelles : une paire par candidat
+     * de la liste restreinte, imprimée à la demande comme l'avis, jamais jointe au dossier.
+     */
+    public static final String TYPE_LETTRE = "LETTRE_INVITATION";
+    /** Le début du nom de fichier d'une lettre d'invitation ({@code LETTRE_<plan>_<ligne>_v2_<horodatage>_01.pdf}). */
+    static final String PREFIXE_FICHIER_LETTRE = "LETTRE";
+    /** ⚠️ 2026-10-01 — les publications : imprimées à la demande, listées à part, jamais pièces du DAO, uniques non. */
+    public static final Set<String> TYPES_PUBLICATION = Set.of(TYPE_AVIS, TYPE_LETTRE);
+    /**
+     * ⚠️ 2026-10-01 — le bloc de signature de l'avis et de la lettre : leurs trois derniers paragraphes (lieu et date ou
+     * formule de politesse, qualité, nom).
+     */
     static final int BLOC_SIGNATURE_AVIS = 3;
     private static final java.time.format.DateTimeFormatter HORODATAGE =
             java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
@@ -261,12 +273,6 @@ public class DocumentsFicheMarcheService {
     }
 
     /**
-     * ⚠️ Avis spécifique d'appel d'offres (demande front du 2026-09-30, §B1-§B3) — l'avis rendu depuis le modèle de la
-     * catégorie ({@link ModelesDao#sigleAvis}), sur l'état figé de la version validée, avec les informations de publication
-     * déjà mises en forme ({@code date-publication}, {@code jmp-numero}, {@code jmp-date}, {@code supports}). Un .docx et
-     * un .pdf ; le nom porte l'horodatage d'impression, chaque impression produisant une nouvelle paire.
-     */
-    /**
      * ⚠️ 2026-10-01 (lot AV-4.1 du front, 547e48b) — les jetons {@code {{PARAM.*}}} de tous les documents rendus depuis un
      * modèle : le compte bancaire de l'ARMP ({@code PARAM.compte-dao}), réglé par l'Administrateur. Absent : pointillés.
      * Un document du DAO est figé à la validation de la fiche : il garde le compte réglé à ce moment-là.
@@ -280,6 +286,12 @@ public class DocumentsFicheMarcheService {
         return m;
     }
 
+    /**
+     * ⚠️ Avis spécifique d'appel d'offres (demande front du 2026-09-30, §B1-§B3) — l'avis rendu depuis le modèle de la
+     * catégorie ({@link ModelesDao#sigleAvis}), sur l'état figé de la version validée, avec les informations de publication
+     * déjà mises en forme ({@code date-publication}, {@code jmp-numero}, {@code jmp-date}, {@code supports}). Un .docx et
+     * un .pdf ; le nom porte l'horodatage d'impression, chaque impression produisant une nouvelle paire.
+     */
     public List<Produit> produireAvis(FicheMarcheDto etat, Map<String, String> publication, LocalDateTime impression) {
         FichierCommande.Modele modele = modelesDao.modele(ModelesDao.sigleAvis(etat.getCategorie()));
         if (modele == null) {
@@ -308,7 +320,52 @@ public class DocumentsFicheMarcheService {
         return produits;
     }
 
-    /** ⚠️ Avis spécifique — rattache l'avis à la version validée qu'il rend, avec la trace des informations de publication. */
+    /**
+     * ⚠️ 2026-10-01 (lot AV-4.1, §B3) — les lettres d'invitation : une paire .docx / .pdf par candidat, dans l'ordre saisi
+     * (rang 1, 2…), rendues du modèle de la catégorie ({@link ModelesDao#sigleLettre}) sur l'état figé de la version
+     * validée. {@code commun} porte les jetons partagés ({@code LETTRE.lieu}, {@code LETTRE.date}, {@code LETTRE.candidats}),
+     * {@code destinataires} celui de chaque lettre ({@code LETTRE.destinataire}). Le nom porte l'horodatage et le rang.
+     */
+    public Map<Integer, List<Produit>> produireLettres(FicheMarcheDto etat, Map<String, String> commun, List<String> destinataires,
+            LocalDateTime impression) {
+        FichierCommande.Modele modele = modelesDao.modele(ModelesDao.sigleLettre(etat.getCategorie()));
+        if (modele == null) {
+            throw new GenerationDocumentsException("Aucun modèle de lettre d'invitation pour la catégorie " + etat.getCategorie() + ".", null);
+        }
+        Map<String, ChampFicheMarche> parCode = new LinkedHashMap<>();
+        champRepository.findByActifTrueOrderByCodeRubriqueAscRangAsc().forEach(c -> parCode.put(c.getCode(), c));
+        Map<String, String> parametres = parametresDocuments();
+        Map<Integer, List<Produit>> parRang = new LinkedHashMap<>();
+        for (int i = 0; i < destinataires.size(); i++) {
+            int rang = i + 1;
+            List<GenerateurDocumentsFiche.Fichier> fichiers;
+            try {
+                Map<String, String> jetons = new LinkedHashMap<>(commun);
+                jetons.put(FormulairesCandidat.PREFIXE_LETTRE + "destinataire", destinataires.get(i));
+                jetons.putAll(parametres);
+                fichiers = generateur.generer(FormulairesCandidat.rendreModele(TYPE_LETTRE, null, etat, parCode, modele, impression,
+                        jetons).finGardeeEnsemble(BLOC_SIGNATURE_AVIS));
+            } catch (RuntimeException e) {
+                throw new GenerationDocumentsException("La génération de la lettre d'invitation n° " + rang + " a échoué : "
+                        + e.getMessage(), e);
+            }
+            List<Produit> paire = new ArrayList<>();
+            for (GenerateurDocumentsFiche.Fichier fi : fichiers) {
+                String nom = nomFichier(PREFIXE_FICHIER_LETTRE, etat.getRefeDossier(), etat.getIdDetail(), null, etat.getVersion(),
+                        fi.extension());
+                nom = nom.substring(0, nom.length() - fi.extension().length() - 1) + "_" + impression.format(HORODATAGE)
+                        + String.format("_%02d.", rang) + fi.extension();
+                paire.add(new Produit(TYPE_LETTRE, fi.extension(), nom, fi.contenu(), null));
+            }
+            parRang.put(rang, paire);
+        }
+        return parRang;
+    }
+
+    /**
+     * ⚠️ Avis spécifique (et ⚠️ 2026-10-01 lettre d'invitation) — rattache une publication à la version validée qu'elle
+     * rend, avec la trace de ce qui a été saisi à l'impression.
+     */
     public java.util.Set<Integer> enregistrerAvis(Integer idFiche, List<Produit> produits, LocalDateTime date, String publicationJson) {
         java.util.Set<Integer> ids = new java.util.HashSet<>();
         for (Produit p : produits) {
@@ -319,8 +376,8 @@ public class DocumentsFicheMarcheService {
     }
 
     /**
-     * ⚠️ Avis spécifique — les avis produits sur les versions données, du plus récent au plus ancien, avec leurs
-     * informations de publication.
+     * ⚠️ Avis spécifique — les avis (et ⚠️ 2026-10-01 les lettres d'invitation) produits sur les versions données, du plus
+     * récent au plus ancien, avec ce qui a été saisi à l'impression.
      */
     @Transactional(readOnly = true)
     public List<DocumentFicheDto> listerAvis(List<FicheMarche> versions) {
@@ -329,8 +386,8 @@ public class DocumentsFicheMarcheService {
         if (numeros.isEmpty()) {
             return List.of();
         }
-        return documentRepository.findByIdFicheInAndTypeOrderByIdDocumentDesc(numeros.keySet(), TYPE_AVIS).stream()
-                .map(d -> new DocumentFicheDto(d.getIdDocument(), d.getType(), SelectionDocumentsFiche.titre(TYPE_AVIS),
+        return documentRepository.findByIdFicheInAndTypeInOrderByIdDocumentDesc(numeros.keySet(), TYPES_PUBLICATION).stream()
+                .map(d -> new DocumentFicheDto(d.getIdDocument(), d.getType(), SelectionDocumentsFiche.titre(d.getType()),
                         d.getExtension(), d.getNomFichier(), d.getTailleOctets(), d.getDateGeneration(),
                         numeros.get(d.getIdFiche()), d.getLot(), publication(d.getPublication())))
                 .toList();
@@ -338,20 +395,23 @@ public class DocumentsFicheMarcheService {
 
     private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
 
-    /** La trace JSON d'un avis, relue ; illisible ou absente : {@code null}. */
-    static Map<String, String> publication(String json) {
+    /**
+     * La trace JSON d'une publication, relue ; illisible ou absente : {@code null}. ⚠️ 2026-10-01 — des valeurs qui ne
+     * sont pas toutes du texte (la liste des candidats d'une lettre d'invitation, son rang).
+     */
+    static Map<String, Object> publication(String json) {
         if (json == null || json.isBlank()) {
             return null;
         }
         try {
-            return JSON.readValue(json, new com.fasterxml.jackson.core.type.TypeReference<LinkedHashMap<String, String>>() { });
+            return JSON.readValue(json, new com.fasterxml.jackson.core.type.TypeReference<LinkedHashMap<String, Object>>() { });
         } catch (java.io.IOException e) {
             return null;
         }
     }
 
     /** La trace JSON des informations de publication d'un avis. */
-    static String publicationJson(Map<String, String> publication) {
+    static String publicationJson(Map<String, ?> publication) {
         try {
             return JSON.writeValueAsString(publication);
         } catch (java.io.IOException e) {
@@ -380,7 +440,7 @@ public class DocumentsFicheMarcheService {
             return List.of();
         }
         return documentRepository.findByIdFicheOrderByIdDocumentAsc(fiche.getIdFiche()).stream()
-                .filter(d -> !TYPE_AVIS.equals(d.getType()))   // ⚠️ 2026-09-30 — les avis se listent à part (listerAvis)
+                .filter(d -> !TYPES_PUBLICATION.contains(d.getType()))   // ⚠️ 2026-09-30 — avis et lettres se listent à part (listerAvis)
                 .map(d -> new DocumentFicheDto(d.getIdDocument(), d.getType(),
                         SelectionDocumentsFiche.titre(d.getType(), d.getLot(), fiche.getTypeMarche(), categorie), d.getExtension(), d.getNomFichier(),
                         d.getTailleOctets(), d.getDateGeneration(), fiche.getNumeroVersion(), d.getLot()))
@@ -417,7 +477,7 @@ public class DocumentsFicheMarcheService {
         }
         List<DocumentFicheMarche> pdfs = documentRepository.findByIdFicheOrderByIdDocumentAsc(validee.getIdFiche()).stream()
                 .filter(d -> "pdf".equals(d.getExtension()))
-                .filter(d -> !TYPE_AVIS.equals(d.getType()))   // ⚠️ 2026-09-30 — l'avis n'est pas une pièce du DAO
+                .filter(d -> !TYPES_PUBLICATION.contains(d.getType()))   // ⚠️ 2026-09-30 — ni l'avis ni les lettres ne sont des pièces du DAO
                 .toList();
         if (pdfs.isEmpty()) {
             return 0;   // version validée avant le lot 2 : aucun document à joindre

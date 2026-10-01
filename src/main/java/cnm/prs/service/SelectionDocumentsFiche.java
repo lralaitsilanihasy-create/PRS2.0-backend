@@ -39,7 +39,9 @@ public final class SelectionDocumentsFiche {
             "BP", "Bordereau des prix",
             "TC", "Spécifications techniques — tableau de conformité",
             // ⚠️ 2026-09-30 — l'avis spécifique, imprimé à la demande après le PV signé favorable (pas un document du DAO).
-            "AVIS", "Avis spécifique d'appel d'offres");
+            "AVIS", "Avis spécifique d'appel d'offres",
+            // ⚠️ 2026-10-01 (lot AV-4.1) — la lettre d'invitation d'un candidat de la liste restreinte (prestations intellectuelles).
+            "LETTRE_INVITATION", "Lettre d'invitation");
 
     /**
      * ⚠️ Lot 4 (2026-09-23) — le jeu documentaire d'un type de marché. En contrat-cadre, le deuxième document est le

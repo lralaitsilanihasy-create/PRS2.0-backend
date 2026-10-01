@@ -45,10 +45,13 @@ public class FicheMarcheController {
     private final FicheMarcheDossierService dossiers;
     private final cnm.prs.service.ImportDaoService importDao;
     private final cnm.prs.service.AvisSpecifiqueService avis;
+    private final cnm.prs.service.LettreInvitationService lettres;
 
     public FicheMarcheController(FicheMarcheService service, FicheMarcheDossierService dossiers,
-            cnm.prs.service.ImportDaoService importDao, cnm.prs.service.AvisSpecifiqueService avis) {
+            cnm.prs.service.ImportDaoService importDao, cnm.prs.service.AvisSpecifiqueService avis,
+            cnm.prs.service.LettreInvitationService lettres) {
         this.avis = avis;
+        this.lettres = lettres;
         this.importDao = importDao;
         this.service = service;
         this.dossiers = dossiers;
@@ -103,6 +106,25 @@ public class FicheMarcheController {
     @PreAuthorize("hasAnyRole('PRMP', 'UGPM')")
     public cnm.prs.dto.AvisDisponibiliteDto disponibiliteAvis(@PathVariable Long idDmc) {
         return avis.disponibilite(idDmc);
+    }
+
+    /**
+     * ⚠️ 2026-10-01 (lot AV-4.1, §B3) — imprime une lettre d'invitation par candidat de la liste restreinte (prestations
+     * intellectuelles), sur la dernière version validée : 201 et les paires .docx / .pdf produites (type
+     * {@code LETTRE_INVITATION}) ; 400 nominatif ; 409 {@code LETTRE_INDISPONIBLE}. PRMP et UGPM.
+     */
+    @PostMapping("/{idDmc}/lettres-invitation")
+    @PreAuthorize("hasAnyRole('PRMP', 'UGPM')")
+    public ResponseEntity<List<DocumentFicheDto>> imprimerLettres(@PathVariable Long idDmc,
+            @RequestBody(required = false) cnm.prs.dto.LettreInvitationRequest corps) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(lettres.produire(idDmc, corps));
+    }
+
+    /** ⚠️ 2026-10-01 (lot AV-4.1, §B4) — les lettres peuvent-elles être imprimées, et sinon pourquoi. PRMP et UGPM. */
+    @GetMapping("/{idDmc}/lettres-invitation/disponibilite")
+    @PreAuthorize("hasAnyRole('PRMP', 'UGPM')")
+    public cnm.prs.dto.AvisDisponibiliteDto disponibiliteLettres(@PathVariable Long idDmc) {
+        return lettres.disponibilite(idDmc);
     }
 
     /** La dernière version (virtuelle avant le premier enregistrement). */

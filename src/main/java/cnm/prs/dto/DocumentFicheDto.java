@@ -19,7 +19,7 @@ import java.time.LocalDateTime;
  */
 public record DocumentFicheDto(Integer idDocument, String type, String libelle, String extension, String nomFichier,
         Long tailleOctets, LocalDateTime dateGeneration, Integer version, Integer lot,
-        java.util.Map<String, String> publication) {
+        java.util.Map<String, Object> publication) {
 
     /** Un document du DAO (sans information de publication). */
     public DocumentFicheDto(Integer idDocument, String type, String libelle, String extension, String nomFichier,

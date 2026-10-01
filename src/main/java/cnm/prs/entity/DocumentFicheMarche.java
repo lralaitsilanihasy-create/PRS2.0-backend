@@ -38,7 +38,7 @@ public class DocumentFicheMarche {
     private Integer idFiche;
 
     /** {@code DPAO} · {@code DPAC} · {@code AE} · {@code CCAP}. */
-    @Column(name = "TYPE", nullable = false, length = 10)
+    @Column(name = "TYPE", nullable = false, length = 20)   // ⚠️ V57 : LETTRE_INVITATION
     private String type;
 
     /** {@code docx} ou {@code pdf}. */

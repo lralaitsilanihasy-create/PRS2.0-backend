@@ -5072,6 +5072,50 @@ journal du dossier (`AVIS_SPECIFIQUE_IMPRIME`).
   `garantieSoumission = OUI` et l'obligation qui en découle.
 - V56 élargit les rubriques `B04-DS` (aux trois formes) et `B05-GQ` (au contrat-cadre).
 
+### Lettres d'invitation des prestations intellectuelles ⚠️ 2026-10-01 (lot AV-4.1)
+
+Le pendant de l'avis spécifique pour les prestations intellectuelles, dont la procédure n'a pas d'avis public : chaque
+candidat de la **liste restreinte** reçoit une lettre. Modèle `LETTRE-PI` (`modeles/dao/LETTRE-PI.txt`, recopié du front,
+décalque 43/43), hors des couvertures comme l'avis : ni produit à la validation, ni lu à l'import. Migration **V57** :
+type `LETTRE_INVITATION` (colonne `TYPE` élargie à 20 caractères), hors de l'unicité par version comme l'avis.
+
+#### `GET /api/fiches-marche/{idDmc}/lettres-invitation/disponibilite`
+
+PRMP et UGPM (403 sinon). **Même forme** que la disponibilité de l'avis : `{ disponible, raison, idAvis, statutPv,
+statutDossier, idDossierSoumis }`. Mêmes raisons, dans le même ordre, précédées de `CATEGORIE_SANS_LETTRE` pour les
+fournitures et les travaux (une fiche de prestations intellectuelles répond, à l'inverse, `CATEGORIE_SANS_AVIS` à
+l'avis).
+
+#### `POST /api/fiches-marche/{idDmc}/lettres-invitation`
+
+PRMP et UGPM du périmètre ; mandat actif exigé pour imprimer. Corps :
+
+```json
+{ "dateEnvoi": "2026-10-05", "lieu": "Antananarivo",
+  "candidats": [ { "nom": "Cabinet A", "adresse": "Lot II A 12\nAntananarivo" }, { "nom": "Bureau B", "adresse": "…" } ] }
+```
+
+- **400 nominatif** : `dateEnvoi` (absente ou pas en `AAAA-MM-JJ`), `lieu`, `candidats` (absente ou vide),
+  `candidats[i].nom`, `candidats[i].adresse` (`i` à partir de 0).
+- **409 `LETTRE_INDISPONIBLE`**, `details.raison` : les raisons de la disponibilité.
+- **201** : les documents produits, **une paire .docx / .pdf par candidat**, rendue sur la dernière version validée.
+  - Type `LETTRE_INVITATION`, libellé « Lettre d'invitation ».
+  - Nom : `LETTRE_<plan>_<ligne>_v<n>_<horodatage>_<rang>.<ext>`, le rang sur deux chiffres (`_01`, `_02`…), dans
+    l'ordre saisi.
+  - Chaque lettre a son destinataire : `{{LETTRE.destinataire}}` rend le nom, puis l'adresse, **une ligne par ligne
+    saisie** (lignes vides retirées). Toutes ont la même liste : `{{LETTRE.candidats}}` rend « - Nom », un candidat par
+    ligne. `{{LETTRE.lieu}}` est rendu tel quel, `{{LETTRE.date}}` en JJ/MM/AAAA.
+  - Le bloc de signature (formule de politesse, qualité, nom) est gardé ensemble, comme celui de l'avis.
+- **Trace**, avec chaque document (`publication`) : `{ dateEnvoi, lieu, candidats: [{nom, adresse}], rang }`.
+  ⚠️ `DocumentFicheDto.publication` porte donc désormais des valeurs qui ne sont pas toutes du texte (une liste, un
+  nombre) ; celles de l'avis restent du texte.
+- **Journal** du dossier DAO : `LETTRES_INVITATION_IMPRIMEES` (« 2 lettre(s) d'invitation imprimée(s) pour la liste
+  restreinte… »).
+- **Statut « Lancé »** : la première impression de la filiation (avis ou lettres) passe la ligne de `PREVU` à `LANCE`,
+  journal `LIGNE_LANCEE` sur le plan ; `MarcheDto.avisImprimeLe` en donne la date. Une réimpression ne change rien.
+- Les lettres sont listées dans `GET /{idDmc}/documents` avec les avis, du plus récent au plus ancien, et ne sont
+  jamais jointes au dossier.
+
 ### Champs qu'aucun document n'utilise : retirés ⚠️ 2026-09-30
 
 Arbitrage du pilote, sur la règle des fournitures du 29/09. Aucune route ni migration nouvelle : les fichiers de

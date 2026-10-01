@@ -170,6 +170,12 @@ public final class FormulairesCandidat {
     public static final String PREFIXE_PARAM = "PARAM.";
     /** Le jeton du compte bancaire unique de l'ARMP (§B8). */
     public static final String JETON_COMPTE_DAO = "PARAM.compte-dao";
+    /**
+     * ⚠️ 2026-10-01 (lot AV-4.1, §B2) — le préfixe des jetons de la lettre d'invitation ({@code LETTRE.lieu},
+     * {@code LETTRE.date}, {@code LETTRE.destinataire}, {@code LETTRE.candidats}) : saisis à l'impression, jamais écrits dans
+     * la fiche, rendus par l'appelant (clé complète). Plusieurs lignes : séparées par {@link #SEPARATEUR_LIGNES}.
+     */
+    public static final String PREFIXE_LETTRE = "LETTRE.";
 
     private static final Pattern JETON = Pattern.compile("\\{\\{([^{}]+)}}");
     private static final Pattern MARQUEUR = Pattern.compile("\\{\\{(SI|FINSI):([A-Z0-9-]+)}}");
@@ -525,7 +531,7 @@ public final class FormulairesCandidat {
             if (nom.startsWith(RemiseElectronique.PREFIXE_JETON_INTERNE)) {
                 return null;   // ⚠️ V50 (§B2.2) — un paramètre interne de la procédure n'entre dans aucun document : laissé tel quel
             }
-            if (nom.startsWith(PREFIXE_PARAM)) {
+            if (nom.startsWith(PREFIXE_PARAM) || nom.startsWith(PREFIXE_LETTRE)) {
                 // ⚠️ 2026-10-01 (§B8.3) — un paramètre de l'application rendu par l'appelant ({@code PARAM.compte-dao}).
                 String v = publication.get(nom);
                 return v == null || v.isBlank() ? POINTILLES : v;

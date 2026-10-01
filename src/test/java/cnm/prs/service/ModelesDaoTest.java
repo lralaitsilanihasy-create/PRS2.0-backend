@@ -86,7 +86,8 @@ class ModelesDaoTest {
         assertThat(dao.modele("AVIS-F").conditions()).hasSize(22);   // 01/10 : aligné sur un avis réel (§B7)
         assertThat(dao.modele("AVIS-T").conditions()).hasSize(24);
         assertThat(ModelesDao.COUVERTURES).noneMatch(c -> c.sigle().startsWith("AVIS"));
-        assertThat(dao.modeles()).hasSize(13);
+        assertThat(dao.modeles()).hasSize(14);   // 01/10 : + LETTRE-PI (lot AV-4.1), hors couvertures
+        assertThat(ModelesDao.COUVERTURES).noneMatch(c -> c.sigle().startsWith("LETTRE"));
         assertThatThrownBy(() -> ModelesDao.charger("/modeles/dao/X.txt", "CONDITION\tA\u001Fattributaires = MONO\n"
                 + "PARA\t{{SI:A}}\nPARA\t{{SI:B}}\nPARA\ttexte\nPARA\t{{FINSI:B}}\nPARA\t{{FINSI:A}}"))
                 .isInstanceOf(IllegalStateException.class).hasMessageContaining("/modeles/dao/X.txt")

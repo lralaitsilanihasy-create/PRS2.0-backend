@@ -71,11 +71,19 @@ public class ModelesDao {
             "FOURNITURES_SERVICES", "AVIS-F",
             "TRAVAUX", "AVIS-T");
 
+    /**
+     * ⚠️ 2026-10-01 (lot AV-4.1, demande front « lettres d'invitation ») — la lettre d'invitation des prestations
+     * intellectuelles, envoyée à chaque candidat de la liste restreinte : le pendant de l'avis, hors de
+     * {@link #COUVERTURES} comme lui (ni produite à la validation, ni lue à l'import).
+     */
+    public static final Map<String, String> LETTRES = Map.of("PRESTATIONS_INTELLECTUELLES", "LETTRE-PI");
+
     private final Map<String, FichierCommande.Modele> modeles = new LinkedHashMap<>();
 
     public ModelesDao() {
         List<String> sigles = new java.util.ArrayList<>(COUVERTURES.stream().map(Couverture::sigle).toList());
         sigles.addAll(new java.util.TreeSet<>(AVIS.values()));
+        sigles.addAll(new java.util.TreeSet<>(LETTRES.values()));
         for (String sigle : sigles) {
             if (modeles.containsKey(sigle)) {
                 continue;   // un modèle sert plusieurs formes (lot D2)
@@ -88,6 +96,11 @@ public class ModelesDao {
     /** ⚠️ Avis spécifique — le sigle du modèle d'avis d'une catégorie (à défaut : fournitures), ou {@code null}. */
     public static String sigleAvis(String categorie) {
         return AVIS.get(categorie == null ? "FOURNITURES_SERVICES" : categorie);
+    }
+
+    /** ⚠️ 2026-10-01 (lot AV-4.1) — le sigle du modèle de lettre d'invitation d'une catégorie, ou {@code null}. */
+    public static String sigleLettre(String categorie) {
+        return categorie == null ? null : LETTRES.get(categorie);
     }
 
     private String lireRessource(String chemin) {

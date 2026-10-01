@@ -1,0 +1,48 @@
+FICHIER	LETTRE-PI.docx
+CONDITION	SFQCB02-MS-01 contient expérience
+CONDITION	BUDGETB02-MS-01 contient budget prédéterminé
+CONDITION	MOINDRE-COUTB02-MS-01 contient note technique minimale
+CONDITION	QUALITE-SEULEB02-MS-01 contient exclusivement
+CENTRE	{{IMAGE:embleme}}
+CENTRE	{{B01-AC-01}}
+CENTRE	LA PERSONNE RESPONSABLE DES MARCHES PUBLICS
+CENTRE	UNITE DE GESTION DE PASSATION DES MARCHES PUBLICS
+TITRE	LETTRE D’INVITATION
+PARA	Référence: {{B02-OB-03}} — {{B02-OB-01}}
+PARA	{{LETTRE.lieu}}, {{LETTRE.date}}
+PARA	{{LETTRE.destinataire}}
+PARA	Madame, Monsieur
+PARA	1. Nous avons l’honneur de vous aviser que vous avez été présélectionné, sur la base de la manifestation d'intérêt que vous avez remise, en vue de concourir à l'attribution du marché cité en référence. Vous trouverez dans les Termes de Références inclus dans le Dossier de Consultation ci-joint la description détaillée des prestations attendues.
+PARA	Nous vous invitons en conséquence, par la présente, ainsi que les autres candidats sélectionnés, à présenter une proposition concernant l'exécution de ce marché.
+PARA	2. Une lettre d'invitation accompagnant le présent Dossier de Consultation a été adressée aux candidats dont les noms figurent ci-après :
+PARA	{{LETTRE.candidats}}
+PARA	3. Le Marché sera attribué au candidat choisi, conformément à l'Article 26 du Code des Marchés Publics, sur la base:
+PARA	{{SI:SFQC}}
+PARA	de la qualité technique de la proposition, de l’expérience du candidat, de la qualification des experts et de la méthode de travail proposée ainsi que du montant de la proposition,
+PARA	{{FINSI:SFQC}}
+PARA	{{SI:BUDGET}}
+PARA	d’un budget prédéterminé dont le candidat doit proposer la meilleure utilisation possible,
+PARA	{{FINSI:BUDGET}}
+PARA	{{SI:MOINDRE-COUT}}
+PARA	de la meilleure proposition financière soumise par les candidats ayant obtenu une notation technique minimum.
+PARA	{{FINSI:MOINDRE-COUT}}
+PARA	{{SI:QUALITE-SEULE}}
+PARA	exclusivement de la qualité technique
+PARA	{{FINSI:QUALITE-SEULE}}
+PARA	Les procédures et critères de sélection sont décrits dans les Instructions aux Candidats qui font partie du Dossier de Consultation ci-joint.
+PARA	4. Le Dossier de Consultation comprend les documents suivants :
+PARA	Les documents relatifs à la procédure de passation :
+PARA	La présente Lettre d’invitation;
+PARA	Les instructions aux candidats, y compris les Formulaires types pour présenter la proposition technique, les Formulaires types pour présenter la Proposition financière et les Données Particulières des instructions aux candidats;
+PARA	Les Termes de référence
+PARA	Les documents constituant le marché :
+PARA	L'Acte d'Engagement
+PARA	Le Cahier des Prescriptions Spéciales qui comprend le Cahier des Clauses administratives Particulières et les Termes de références;
+PARA	le Cahier des Clauses administratives Générales applicables au marché de prestations intellectuelles;
+PARA	5. Nous vous serions reconnaissants de nous faire savoir, par écrit, dès réception, à l’adresse suivante:
+PARA	{{B01-AC-02}} ({{B01-AC-06}}):
+PARA	que vous avez reçu cette lettre d’invitation; et
+PARA	que vous soumettrez une proposition, seul ou en association.
+PARA	Veuillez agréer, Madame/Monsieur, l’assurance de ma considération distinguée
+PARA	La Personne Responsable des Marchés Publics
+PARA	{{B01-AC-05}}

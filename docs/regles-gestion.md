@@ -2833,6 +2833,14 @@ Accès complet aux référentiels, comptes utilisateurs, journal d'audit, hiéra
 
     La ligne dit au front la date de son premier avis imprimé (`avisImprimeLe`). Les lignes lancées à la création
     de leur DMC sans avis imprimé reviennent à « Prévu » (`docs/referentiel/2026-09-30-statut-lance-avis.sql`).
+  - ⚠️ **2026-10-01 (lot AV-4.1, décision Q5 du pilote)** — les prestations intellectuelles n'ont pas d'avis public : la
+    **première impression de leurs lettres d'invitation** fait passer la ligne à « Lancé », exactement comme l'avis. La
+    règle porte donc sur la **première publication** de la filiation, avis ou lettres ; `avisImprimeLe` en donne la
+    date, quel que soit le document.
+  - ⚠️ **Lettres d'invitation (2026-10-01, lot AV-4.1)** — une par candidat de la **liste restreinte** (au moins un, pas
+    de nombre imposé), imprimées par la PRMP ou l'UGPM sous la même garde que l'avis (PV signé favorable, ou favorable
+    avec réserves après leur levée), sur la dernière version validée de la fiche. Chacune nomme son destinataire et
+    cite la liste entière. Ni l'avis ni les lettres ne sont des pièces du DAO : ils ne sont jamais joints au dossier.
 - Grilles de contrôle & règles d'anomalie [Écriture]
   - Configuration de tr_points_ctrl et t_regle_anomalie.
 - Comptes budgétaires & entités contractantes [Écriture]

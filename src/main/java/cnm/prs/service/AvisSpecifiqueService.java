@@ -58,6 +58,8 @@ public class AvisSpecifiqueService {
 
     public static final String CODE_INDISPONIBLE = "AVIS_INDISPONIBLE";
     public static final String CATEGORIE_SANS_AVIS = "CATEGORIE_SANS_AVIS";
+    /** ⚠️ 2026-10-01 (lot AV-4.1) — fournitures et travaux : un avis, pas de lettre d'invitation. */
+    public static final String CATEGORIE_SANS_LETTRE = "CATEGORIE_SANS_LETTRE";
     public static final String SANS_DOSSIER = "SANS_DOSSIER";
     public static final String PV_NON_SIGNE = "PV_NON_SIGNE";
     public static final String AVIS_NON_FAVORABLE = "AVIS_NON_FAVORABLE";
@@ -111,7 +113,7 @@ public class AvisSpecifiqueService {
     @Transactional(readOnly = true)
     public AvisDisponibiliteDto disponibilite(Long idDmc) {
         exigerProfil();
-        return evaluer(idDmc, fiches.lire(idDmc));
+        return evaluer(idDmc, fiches.lire(idDmc), false);
     }
 
     /**
@@ -124,18 +126,18 @@ public class AvisSpecifiqueService {
         exigerProfil();
         Map<String, String> publication = publication(corps);
         FicheMarcheDto courante = fiches.lire(idDmc);
-        AvisDisponibiliteDto dispo = evaluer(idDmc, courante);
+        AvisDisponibiliteDto dispo = evaluer(idDmc, courante, false);
         if (!dispo.disponible()) {
-            throw new BusinessRuleException(message(dispo.raison()), CODE_INDISPONIBLE, dispo.idDossierSoumis(),
+            throw new BusinessRuleException(message(dispo.raison(), false), CODE_INDISPONIBLE, dispo.idDossierSoumis(),
                     Map.of("raison", dispo.raison()));
         }
         dossierIntegrite.exigerMandatActif();
-        FicheMarche validee = derniereValidee(idDmc);
+        FicheMarche validee = derniereValidee(idDmc, false);
         FicheMarcheDto etat = fiches.lireVersion(idDmc, validee.getNumeroVersion());
         LocalDateTime maintenant = LocalDateTime.now();
-        cnm.prs.entity.Marche ligne = etat.getIdDetail() == null ? null : marcheRepository.findById(etat.getIdDetail()).orElse(null);
-        Integer origine = ligne == null ? null : ligne.getIdLigneOrigine() != null ? ligne.getIdLigneOrigine() : ligne.getIdDetail();
-        boolean premiereImpression = origine == null || documentRepository.premierAvisDeLaFiliation(origine) == null;
+        cnm.prs.entity.Marche ligne = ligne(etat);
+        Integer origine = origine(ligne);
+        boolean premiereImpression = premiereImpression(origine);
         Map<String, String> trace = new LinkedHashMap<>();
         trace.put("datePublication", corps.datePublication().trim());
         trace.put("jmpNumero", corps.jmpNumero() == null ? "" : corps.jmpNumero().trim());
@@ -145,7 +147,8 @@ public class AvisSpecifiqueService {
         Set<Integer> ids = documents.enregistrerAvis(validee.getIdFiche(),
                 documents.produireAvis(etat, publication, maintenant), maintenant,
                 DocumentsFicheMarcheService.publicationJson(trace));
-        lancerLigne(ligne, origine, premiereImpression, publication.get("date-publication"));
+        lancerLigne(ligne, origine, premiereImpression, "avis spécifique imprimé (publication du "
+                + publication.get("date-publication") + ")");
         journal.tracer(dispo.idDossierSoumis(), JOURNAL_AVIS_IMPRIME, "Avis spécifique d'appel d'offres imprimé (fiche "
                 + "marché version " + validee.getNumeroVersion() + ", publication du " + publication.get("date-publication") + ")");
         List<DocumentFicheDto> produits = new ArrayList<>(documents.listerAvis(List.of(validee)).stream()
@@ -161,7 +164,26 @@ public class AvisSpecifiqueService {
      * n'est pas écrasé. Journal {@code LIGNE_LANCEE} sur le plan à la première impression (ou quand une ligne passe
      * encore « Lancé ») ; une réimpression d'une ligne déjà lancée ne change rien et n'écrit rien.
      */
-    private void lancerLigne(cnm.prs.entity.Marche ligne, Integer origine, boolean premiereImpression, String datePublication) {
+    /** La ligne du DMC de la fiche ; {@code null} sans ligne. */
+    cnm.prs.entity.Marche ligne(FicheMarcheDto etat) {
+        return etat.getIdDetail() == null ? null : marcheRepository.findById(etat.getIdDetail()).orElse(null);
+    }
+
+    /** L'origine de la filiation d'une ligne (elle-même si elle n'est la copie d'aucune). */
+    static Integer origine(cnm.prs.entity.Marche ligne) {
+        return ligne == null ? null : ligne.getIdLigneOrigine() != null ? ligne.getIdLigneOrigine() : ligne.getIdDetail();
+    }
+
+    /**
+     * Aucune publication (avis ou ⚠️ 2026-10-01 lettre d'invitation) n'a encore été imprimée pour cette filiation : la
+     * première fait passer la ligne à « Lancé ».
+     */
+    boolean premiereImpression(Integer origine) {
+        return origine == null || documentRepository.premierAvisDeLaFiliation(origine) == null;
+    }
+
+    /** @param quoi ce que dit le journal de la ligne : « avis spécifique imprimé (publication du …) », « lettres… ». */
+    void lancerLigne(cnm.prs.entity.Marche ligne, Integer origine, boolean premiereImpression, String quoi) {
         if (ligne == null) {
             return;
         }
@@ -183,17 +205,20 @@ public class AvisSpecifiqueService {
             return;
         }
         boolean prevu = avant.isEmpty() || StatutMarcheService.CODE_DEFAUT.equalsIgnoreCase(avant);
-        String detail = "Ligne " + ligne.getIdDetail() + " : avis spécifique imprimé (publication du " + datePublication
-                + "), statut " + (prevu ? (avant.isEmpty() ? "(vide)" : avant) + " → " + StatutMarcheService.CODE_LANCE
+        String detail = "Ligne " + ligne.getIdDetail() + " : " + quoi + ", statut " + (prevu ? (avant.isEmpty() ? "(vide)" : avant) + " → " + StatutMarcheService.CODE_LANCE
                         : StatutMarcheService.CODE_LANCE.equalsIgnoreCase(avant) ? StatutMarcheService.CODE_LANCE + " conservé"
                                 : avant + " conservé (statut manuel)");
         journal.tracer(ligne.getIdDossier(), JournalDossierService.LIGNE_LANCEE, detail);
     }
 
-    private AvisDisponibiliteDto evaluer(Long idDmc, FicheMarcheDto courante) {
+    /**
+     * @param lettre ⚠️ 2026-10-01 (lot AV-4.1) — la lettre d'invitation des prestations intellectuelles : même garde que
+     *               l'avis, la catégorie inversée ({@code CATEGORIE_SANS_LETTRE} pour les fournitures et les travaux)
+     */
+    AvisDisponibiliteDto evaluer(Long idDmc, FicheMarcheDto courante, boolean lettre) {
         Integer idDossier = courante.getIdDossierSoumis();
-        if (ModelesDao.sigleAvis(courante.getCategorie()) == null) {
-            return new AvisDisponibiliteDto(false, CATEGORIE_SANS_AVIS, null, null, null, idDossier);
+        if (lettre ? ModelesDao.sigleLettre(courante.getCategorie()) == null : ModelesDao.sigleAvis(courante.getCategorie()) == null) {
+            return new AvisDisponibiliteDto(false, lettre ? CATEGORIE_SANS_LETTRE : CATEGORIE_SANS_AVIS, null, null, null, idDossier);
         }
         if (idDossier == null) {
             return new AvisDisponibiliteDto(false, SANS_DOSSIER, null, null, null, null);
@@ -222,11 +247,11 @@ public class AvisSpecifiqueService {
                 .reduce((a, b) -> b).orElse(null);
     }
 
-    private FicheMarche derniereValidee(Long idDmc) {
+    FicheMarche derniereValidee(Long idDmc, boolean lettre) {
         FicheMarche f = derniereValideeOuNull(idDmc);
         if (f == null) {
-            throw new BusinessRuleException(message(FICHE_NON_VALIDEE), CODE_INDISPONIBLE, null,
-                    Map.of("raison", FICHE_NON_VALIDEE));
+            throw new BusinessRuleException(message(FICHE_NON_VALIDEE, lettre),
+                    lettre ? LettreInvitationService.CODE_INDISPONIBLE : CODE_INDISPONIBLE, null, Map.of("raison", FICHE_NON_VALIDEE));
         }
         return f;
     }
@@ -255,7 +280,7 @@ public class AvisSpecifiqueService {
         return p;
     }
 
-    private static String texte(String v, String champ, String libelle, List<ErrorResponse.FieldError> erreurs) {
+    static String texte(String v, String champ, String libelle, List<ErrorResponse.FieldError> erreurs) {
         if (v == null || v.isBlank()) {
             erreurs.add(new ErrorResponse.FieldError(champ, libelle + " est obligatoire."));
             return null;
@@ -263,7 +288,7 @@ public class AvisSpecifiqueService {
         return v.trim();
     }
 
-    private static String date(String v, String champ, String libelle, List<ErrorResponse.FieldError> erreurs) {
+    static String date(String v, String champ, String libelle, List<ErrorResponse.FieldError> erreurs) {
         String t = texte(v, champ, libelle, erreurs);
         if (t == null) {
             return null;
@@ -276,23 +301,29 @@ public class AvisSpecifiqueService {
         }
     }
 
-    private static String message(String raison) {
+    static String message(String raison, boolean lettre) {
+        String quoi = lettre ? "Les lettres d'invitation" : "L'avis spécifique";
+        String accord = lettre ? "s'impriment" : "s'imprime";
         return switch (raison) {
-            case CATEGORIE_SANS_AVIS -> "Les prestations intellectuelles n'ont pas d'avis spécifique d'appel d'offres "
-                    + "(lettre d'invitation, à venir).";
-            case SANS_DOSSIER -> "L'avis spécifique ne s'imprime qu'après la soumission du dossier DAO et son examen.";
-            case PV_NON_SIGNE -> "L'avis spécifique ne s'imprime qu'une fois le PV d'examen du dossier signé.";
-            case AVIS_NON_FAVORABLE -> "L'avis de la Commission sur ce dossier n'est pas favorable : pas d'avis spécifique.";
-            case RESERVES_NON_LEVEES -> "Le PV est favorable avec réserves : l'avis spécifique s'imprime après la levée "
-                    + "des réserves.";
-            default -> "La fiche marché n'a aucune version validée : pas d'avis spécifique.";
+            case CATEGORIE_SANS_AVIS -> "Les prestations intellectuelles n'ont pas d'avis spécifique d'appel d'offres : les "
+                    + "candidats de la liste restreinte reçoivent une lettre d'invitation.";
+            case CATEGORIE_SANS_LETTRE -> "Les fournitures et les travaux n'ont pas de lettre d'invitation : leur appel "
+                    + "d'offres se publie par l'avis spécifique.";
+            case SANS_DOSSIER -> quoi + " ne " + accord + " qu'après la soumission du dossier DAO et son examen.";
+            case PV_NON_SIGNE -> quoi + " ne " + accord + " qu'une fois le PV d'examen du dossier signé.";
+            case AVIS_NON_FAVORABLE -> "L'avis de la Commission sur ce dossier n'est pas favorable : "
+                    + (lettre ? "pas de lettre d'invitation." : "pas d'avis spécifique.");
+            case RESERVES_NON_LEVEES -> "Le PV est favorable avec réserves : " + quoi.toLowerCase(java.util.Locale.ROOT) + " "
+                    + accord + " après la levée des réserves.";
+            default -> "La fiche marché n'a aucune version validée : " + (lettre ? "pas de lettre d'invitation." : "pas d'avis spécifique.");
         };
     }
 
-    private static void exigerProfil() {
+    static void exigerProfil() {
         ProfilUtilisateur profil = CurrentUser.profil().orElse(null);
         if (profil != ProfilUtilisateur.PRMP && profil != ProfilUtilisateur.UGPM) {
-            throw new AccessDeniedException("L'avis spécifique s'imprime par la PRMP de la fiche ou son UGPM.");
+            throw new AccessDeniedException("L'avis spécifique et les lettres d'invitation s'impriment par la PRMP de la fiche "
+                    + "ou son UGPM.");
         }
     }
 }
