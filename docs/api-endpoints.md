@@ -5036,6 +5036,24 @@ journal du dossier (`AVIS_SPECIFIQUE_IMPRIME`).
 - V56 étend la liste fermée des types de document à `AVIS`. L'unicité « type, extension et lot par version » ne vaut
   plus pour ce type.
 
+#### ⚠️ 2026-10-01 — l'avis aligné sur un avis réel (§B7) et le compte de l'ARMP (§B8)
+
+- **Modèles** recopiés (22 et 24 conditions, fidélité 90/90 et 96/96) : en-tête avec l'**emblème**, numéro seul
+  « N° … », objet et forme entre guillemets, adresse de consultation avec ses libellés, lieu et date en bas.
+- **Moteur** :
+  - `{{NUM}}` numérote les paragraphes imprimés, sans trou ;
+  - `.heureLocale` rend « 12/10/2026 à 09 h 00 (heure locale) » ;
+  - `.lignesParLot` rend un paragraphe par lot (« - Lot 1 : cent mille ariary (Ar 100 000) ») ;
+  - `{{IMAGE:embleme}}` insère `classpath:modeles/images/embleme.png` (l'image de tête des PV), centrée, 5 cm ; un
+    repère inconnu est omis ;
+  - `{{PARAM.compte-dao}}` rend le compte de l'ARMP.
+- **`POST …/avis-specifique`** : seules `datePublication` et `jmpDate` sont exigées. `jmpNumero` vide s'imprime en
+  pointillés ; des `supports` vides retirent « et dans … » (clé de condition `supportsPublication`).
+- **`B04-DS-05`** est saisi par lot (`docs/referentiel/2026-10-01-avis-montant-dao-par-lot.sql`).
+- **`GET /api/parametres/compte-dao`** (Administrateur, PRMP, UGPM) renvoie `{ banque, titulaire, numeroCompte,
+  misAJourLe, misAJourPar }`. **`PUT /api/parametres/compte-dao`** est réservé à l'Administrateur (403 sinon) ; ses
+  trois informations sont exigées (400 nominatif) ; le réglage est tracé à l'audit.
+
 #### Référentiel (§B5)
 
 - `B04-DS-05` et `B04-DS-07` à `-10` sont servis aux trois formes, fournitures et travaux, et restent facultatifs.

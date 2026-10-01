@@ -84,7 +84,7 @@ class AvisSpecifiqueIntegrationTest extends CnmIntegrationTestSupport {
 
         idDmc = creerDmc(9901);
         mvc.perform(put("/api/fiches-marche/" + idDmc + "/cadrage").header("Authorization", tokenPrmp).contentType(JSON)
-                .content("{\"cadrage\":{\"garantieSoumission\":\"NON\"}}")).andExpect(status().isOk());
+                .content("{\"cadrage\":{\"garantieSoumission\":\"NON\",\"alloti\":\"NON\",\"typePrix\":\"UNITAIRES\"}}")).andExpect(status().isOk());   // alloti : imposé par le plan à l'écran
         valider();
     }
 
@@ -138,7 +138,9 @@ class AvisSpecifiqueIntegrationTest extends CnmIntegrationTestSupport {
                 .content("{\"datePublication\":\"05/10/2026\",\"jmpNumero\":\"123\",\"jmpDate\":\"2026-01-15\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.erreurs[?(@.champ=='datePublication')]").isNotEmpty())
-                .andExpect(jsonPath("$.erreurs[?(@.champ=='supports')]").isNotEmpty());
+                // ⚠️ 2026-10-01 (§B7.5) — le numéro du JMP et les supports sont facultatifs : seules les deux dates sont exigées.
+                .andExpect(jsonPath("$.erreurs[?(@.champ=='supports')]").isEmpty())
+                .andExpect(jsonPath("$.erreurs[?(@.champ=='jmpNumero')]").isEmpty());
 
         String premier = imprimer(idDmc).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<List<String>>read(premier, "$[*].type")).containsExactly("AVIS", "AVIS");
@@ -148,8 +150,12 @@ class AvisSpecifiqueIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(JsonPath.<List<String>>read(premier, "$[*].publication.datePublication")).containsOnly("2026-10-05");
         assertThat(JsonPath.<List<String>>read(premier, "$[*].nomFichier")).allMatch(n -> n.startsWith("AVIS_") && n.contains("_v1_"));
         int idDocx = JsonPath.<List<Integer>>read(premier, "$[?(@.extension=='docx')].idDocument").get(0);
-        String texte = texteDuDocx(mvc.perform(get("/api/fiches-marche/documents/" + idDocx + "/contenu")
-                .header("Authorization", tokenPrmp)).andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray());
+        byte[] docx = mvc.perform(get("/api/fiches-marche/documents/" + idDocx + "/contenu")
+                .header("Authorization", tokenPrmp)).andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        try (XWPFDocument doc = new XWPFDocument(new ByteArrayInputStream(docx))) {
+            assertThat(doc.getAllPictures()).as("l'emblème en tête (§B7.8)").hasSize(1);
+        }
+        String texte = texteDuDocx(docx);
         assertThat(texte).contains("05/10/2026", "Journal des Marchés Publics n°123 en date du 15/01/2026",
                 "le quotidien Midi Madagasikara du 06/10/2026", "Fourniture de mobilier de bureau")
                 .doesNotContain("{{", "2026-10-05");
@@ -240,6 +246,32 @@ class AvisSpecifiqueIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(get("/api/marches/9901").header("Authorization", tokenPrmp)).andExpect(jsonPath("$.statut").value("CHDP"));
         assertThat(lancements()).containsExactly(
                 "Ligne 9901 : avis spécifique imprimé (publication du 05/10/2026), statut CHDP conservé (statut manuel)");
+    }
+
+    @Test
+    @DisplayName("§B7.5 / §B8 (2026-10-01) — impression sans numéro de JMP ni supports : 201, pas de « et dans », pointillés ; "
+            + "le compte bancaire de l'ARMP réglé par l'Administrateur est imprimé, des pointillés tant qu'il ne l'est pas")
+    void publicationMinimaleEtCompte() throws Exception {
+        int idDossier = creerDossier();
+        pvSigne(idDossier, "FAV", "PV_SIGNE");
+        String minimal = "{\"datePublication\":\"2026-10-05\",\"jmpDate\":\"2026-01-15\"}";
+        String r = mvc.perform(post("/api/fiches-marche/" + idDmc + "/avis-specifique").header("Authorization", tokenPrmp)
+                .contentType(JSON).content(minimal)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        String sansCompte = docxTexte(r);
+        assertThat(sansCompte).contains("n°………", "compte bancaire de l’ARMP : ………").doesNotContain("et dans", "{{");
+
+        mvc.perform(put("/api/parametres/compte-dao").header("Authorization", tokenAdmin).contentType(JSON)
+                .content("{\"banque\":\"BNI Madagascar\",\"titulaire\":\"ARMP\",\"numeroCompte\":\"00005 00001 12345678901 23\"}"))
+                .andExpect(status().isOk());
+        r = mvc.perform(post("/api/fiches-marche/" + idDmc + "/avis-specifique").header("Authorization", tokenPrmp)
+                .contentType(JSON).content(minimal)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        assertThat(docxTexte(r)).contains("BNI Madagascar, compte n° 00005 00001 12345678901 23 au nom de ARMP");
+    }
+
+    private String docxTexte(String produits) throws Exception {
+        int id = JsonPath.<List<Integer>>read(produits, "$[?(@.extension=='docx')].idDocument").get(0);
+        return texteDuDocx(mvc.perform(get("/api/fiches-marche/documents/" + id + "/contenu").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray()).replace(' ', ' ').replace(' ', ' ');
     }
 
     // ------------------------------------------------------------------ outils

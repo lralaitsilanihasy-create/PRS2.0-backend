@@ -64,6 +64,17 @@ public class GenerateurDocumentsFiche {
             for (DocumentLibre.Element e : m.elements()) {
                 if (e instanceof DocumentLibre.Paragraphe p) {
                     paragrapheLibre(doc.createParagraph(), p);
+                } else if (e instanceof DocumentLibre.Image im) {
+                    // ⚠️ 2026-10-01 (avis spécifique, §B7.8) — une image centrée, à sa largeur, hauteur proportionnelle.
+                    XWPFParagraph p = doc.createParagraph();
+                    p.setAlignment(ParagraphAlignment.CENTER);
+                    double[] taille = taillePoints(im);
+                    try {
+                        p.createRun().addPicture(new java.io.ByteArrayInputStream(im.contenu()), XWPFDocument.PICTURE_TYPE_PNG,
+                                im.nom() + ".png", org.apache.poi.util.Units.toEMU(taille[0]), org.apache.poi.util.Units.toEMU(taille[1]));
+                    } catch (org.apache.poi.openxml4j.exceptions.InvalidFormatException ex) {
+                        throw new IllegalStateException("Image " + im.nom() + " illisible : " + ex.getMessage(), ex);
+                    }
                 } else if (e instanceof DocumentLibre.Tableau t) {
                     org.apache.poi.xwpf.usermodel.XWPFTable table = doc.createTable(Math.max(1, t.lignes().size()), t.colonnes());
                     table.setWidth("100%");
@@ -92,6 +103,18 @@ public class GenerateurDocumentsFiche {
             return out.toByteArray();
         } catch (IOException e) {
             throw new IllegalStateException("Génération du " + m.type() + " (docx) impossible : " + e.getMessage(), e);
+        }
+    }
+
+    /** ⚠️ 2026-10-01 — largeur et hauteur d'une image en points : sa largeur en mm, la hauteur à ses proportions. */
+    static double[] taillePoints(DocumentLibre.Image im) {
+        double largeur = im.largeurMm() * 72.0 / 25.4;
+        try {
+            java.awt.image.BufferedImage b = javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(im.contenu()));
+            double hauteur = b == null || b.getWidth() == 0 ? largeur : largeur * b.getHeight() / b.getWidth();
+            return new double[] { largeur, hauteur };
+        } catch (IOException ex) {
+            throw new IllegalStateException("Image " + im.nom() + " illisible : " + ex.getMessage(), ex);
         }
     }
 
@@ -192,6 +215,16 @@ public class GenerateurDocumentsFiche {
                     };
                     par.setSpacingAfter(3);
                     document.add(par);
+                } else if (e instanceof DocumentLibre.Image im) {
+                    try {
+                        com.lowagie.text.Image img = com.lowagie.text.Image.getInstance(im.contenu());
+                        double[] taille = taillePoints(im);
+                        img.scaleAbsolute((float) taille[0], (float) taille[1]);
+                        img.setAlignment(com.lowagie.text.Image.ALIGN_CENTER);
+                        document.add(img);
+                    } catch (IOException ex) {
+                        throw new IllegalStateException("Image " + im.nom() + " illisible : " + ex.getMessage(), ex);
+                    }
                 } else if (e instanceof DocumentLibre.Tableau t) {
                     com.lowagie.text.pdf.PdfPTable table = new com.lowagie.text.pdf.PdfPTable(t.colonnes());
                     table.setWidthPercentage(100);

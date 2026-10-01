@@ -28,7 +28,7 @@ B04-DS-01;Contenu du dossier de consultation;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CAD
 B04-DS-02;Langue du dossier de consultation et des offres;TEXTE;SAISIE;DPAC;;CONTRAT_CADRE;;non;;;;;;oui
 B04-DS-03;Modalités d'acquisition du dossier de consultation;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;;non;;;;;;oui
 B04-DS-04;Adresse de retrait du dossier de consultation;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX
-B04-DS-05;Montant à payer pour le dossier de consultation (Ariary);MONTANT;SAISIE;DPAC;;QUANTITE_FIXE,A_COMMANDE,CONTRAT_CADRE;;non;;MONTANT_POSITIF;;;;oui;FOURNITURES_SERVICES,TRAVAUX
+B04-DS-05;Montant à payer pour le dossier de consultation (Ariary);MONTANT;SAISIE;DPAC;;QUANTITE_FIXE,A_COMMANDE,CONTRAT_CADRE;;non;;MONTANT_POSITIF;;;;oui;FOURNITURES_SERVICES,TRAVAUX;oui;
 B04-DS-06;Modification du dossier de consultation;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;;non;;;;;;oui
 B04-PO-01;Pièces constitutives de la candidature (capacités technique et professionnelle);TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX
 B04-PO-02;Pièces constitutives de l'offre;TEXTE_LONG;SAISIE;DPAC;;CONTRAT_CADRE;;oui;;;;;;oui;FOURNITURES_SERVICES,TRAVAUX

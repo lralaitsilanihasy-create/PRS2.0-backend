@@ -32,7 +32,14 @@ public record DocumentLibre(String type, Integer lot, List<Element> elements, St
     }
 
     /** Un élément du document : un paragraphe ou un tableau. */
-    public sealed interface Element permits Paragraphe, Tableau {
+    public sealed interface Element permits Paragraphe, Tableau, Image {
+    }
+
+    /**
+     * ⚠️ 2026-10-01 (avis spécifique, §B7.8) — une image centrée ({@code {{IMAGE:<nom>}}} d'un modèle), PNG, posée à
+     * {@code largeurMm} de large, la hauteur suivant les proportions. Elle n'a pas de texte.
+     */
+    public record Image(String nom, byte[] contenu, int largeurMm) implements Element {
     }
 
     public record Paragraphe(Style style, String texte) implements Element {

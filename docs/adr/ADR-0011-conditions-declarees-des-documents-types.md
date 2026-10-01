@@ -98,3 +98,18 @@ Aucune extension de la syntaxe. Deux précisions de lecture :
 La preuve reste externe et porte sur les onze modèles : DPAO-T 247/247, AE-T 363/363, CCAP-T 570/570, DPAC-CC 179/179,
 AE-CC 408/408. Les six autres sont inchangés ou recopiés (AE-PI 300/300 et CPS-PI 238/238, avec `DEPART-OS` =
 `B09-DP-01 = OUI`).
+
+## Complément du 2026-10-01 — l'avis spécifique : numérotation, image, lignes par lot
+
+Trois extensions du rendu, toutes appliquées par une **passe finale** sur les éléments déjà rendus (sections résolues,
+jetons substitués), sans toucher à la syntaxe des conditions :
+1. **`{{NUM}}`** en tête d'un paragraphe : remplacé par « 1. », « 2. »… dans l'ordre des paragraphes imprimés. Une
+   section omise ne laisse pas de trou.
+2. **`{{IMAGE:<nom>}}`** seul dans un paragraphe : l'image `classpath:modeles/images/<nom>.png`, centrée, 5 cm de large
+   (`DocumentLibre.Image`). Un nom inconnu fait omettre le paragraphe : un repère n'est jamais imprimé tel quel.
+3. **Un jeton qui rend plusieurs lignes** (`.lignesParLot`) : un paragraphe par ligne. Le découpage se fait sur un
+   séparateur interne, pas sur un saut de ligne saisi, pour ne pas toucher aux textes longs.
+
+S'y ajoutent deux familles de jetons fournies par l'appelant, pas par la fiche : `{{AVIS.*}}` (informations de
+publication) et `{{PARAM.*}}` (paramètres de l'application, `PARAM.compte-dao`). Plus une clé de condition,
+`supportsPublication`. La preuve reste externe : AVIS-F 90/90, AVIS-T 96/96.

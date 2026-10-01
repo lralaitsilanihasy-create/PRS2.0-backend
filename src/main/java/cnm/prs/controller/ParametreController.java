@@ -106,4 +106,23 @@ public class ParametreController {
             @RequestBody cnm.prs.service.RemiseElectronique.Parametres corps) {
         return service.fixerRemiseElectronique(corps);
     }
+
+    /**
+     * ⚠️ 2026-10-01 (avis spécifique, §B8.2) — le compte bancaire unique de l'ARMP sur lequel se verse le prix du DAO :
+     * {@code { banque, titulaire, numeroCompte, misAJourLe, misAJourPar }}. Lisible par l'Administrateur, la PRMP et
+     * l'UGPM (la modale d'impression de l'avis prévient s'il n'est pas réglé).
+     */
+    @PreAuthorize("hasAnyRole('ADMINISTRATEUR', 'PRMP', 'UGPM')")
+    @GetMapping("/compte-dao")
+    public ParametreService.CompteDao compteDao() {
+        return service.compteDao();
+    }
+
+    /** Réglage (Administrateur seul, 403 sinon) ; les trois informations exigées (400 nominatif) ; tracé à l'audit. */
+    @PreAuthorize("hasRole('ADMINISTRATEUR')")
+    @PutMapping("/compte-dao")
+    public ParametreService.CompteDao fixerCompteDao(@RequestBody(required = false) ParametreService.CompteDaoRequest corps) {
+        return service.fixerCompteDao(corps);
+    }
+
 }

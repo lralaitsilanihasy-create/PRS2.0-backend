@@ -83,8 +83,8 @@ class ModelesDaoTest {
         assertThat(dao.modele("AE-T").conditions()).hasSize(30);
         assertThat(dao.modele("CCAP-T").conditions()).hasSize(71);   // 30/09 : + PLANS (B04-CD-03)
         // ⚠️ 2026-09-30 — les deux avis spécifiques (fournitures, travaux), imprimés à la demande, hors des couvertures.
-        assertThat(dao.modele("AVIS-F").conditions()).hasSize(17);
-        assertThat(dao.modele("AVIS-T").conditions()).hasSize(19);
+        assertThat(dao.modele("AVIS-F").conditions()).hasSize(22);   // 01/10 : aligné sur un avis réel (§B7)
+        assertThat(dao.modele("AVIS-T").conditions()).hasSize(24);
         assertThat(ModelesDao.COUVERTURES).noneMatch(c -> c.sigle().startsWith("AVIS"));
         assertThat(dao.modeles()).hasSize(13);
         assertThatThrownBy(() -> ModelesDao.charger("/modeles/dao/X.txt", "CONDITION\tA\u001Fattributaires = MONO\n"

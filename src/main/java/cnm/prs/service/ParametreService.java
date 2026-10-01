@@ -273,4 +273,68 @@ public class ParametreService {
         repository.save(p);
         return actif;
     }
+
+    // ------------------------------------------------------------------ compte bancaire de l'ARMP (avis spécifique, §B8)
+
+    /**
+     * ⚠️ 2026-10-01 (décision du pilote, demande front « avis spécifique » §B8) — le prix du DAO se verse sur un
+     * <strong>compte bancaire unique de l'ARMP</strong>, le même pour tous les avis, réglé une fois par l'Administrateur.
+     */
+    public static final String DAO_COMPTE_BANQUE = "DAO_COMPTE_BANQUE";
+    public static final String DAO_COMPTE_TITULAIRE = "DAO_COMPTE_TITULAIRE";
+    public static final String DAO_COMPTE_NUMERO = "DAO_COMPTE_NUMERO";
+
+    /** Le compte, et sa dernière mise à jour (date, acteur) ; champs {@code null} s'il n'est pas réglé. */
+    public record CompteDao(String banque, String titulaire, String numeroCompte, LocalDateTime misAJourLe, String misAJourPar) {
+    }
+
+    /** Le corps d'un réglage du compte : les trois sont exigés. */
+    public record CompteDaoRequest(String banque, String titulaire, String numeroCompte) {
+    }
+
+    @Transactional(readOnly = true)
+    public CompteDao compteDao() {
+        Parametre dernier = java.util.stream.Stream.of(DAO_COMPTE_BANQUE, DAO_COMPTE_TITULAIRE, DAO_COMPTE_NUMERO)
+                .map(repository::findById).flatMap(java.util.Optional::stream)
+                .filter(p -> p.getDateMaj() != null).max(java.util.Comparator.comparing(Parametre::getDateMaj)).orElse(null);
+        return new CompteDao(texte(DAO_COMPTE_BANQUE), texte(DAO_COMPTE_TITULAIRE), texte(DAO_COMPTE_NUMERO),
+                dernier == null ? null : dernier.getDateMaj(), dernier == null ? null : dernier.getImActeur());
+    }
+
+    /** Règle le compte (Administrateur) : les trois informations exigées, 400 nominatif sinon. */
+    @Transactional
+    public CompteDao fixerCompteDao(CompteDaoRequest c) {
+        CompteDaoRequest r = c == null ? new CompteDaoRequest(null, null, null) : c;
+        java.util.List<cnm.prs.exception.ErrorResponse.FieldError> erreurs = new java.util.ArrayList<>();
+        if (r.banque() == null || r.banque().isBlank()) {
+            erreurs.add(new cnm.prs.exception.ErrorResponse.FieldError("banque", "La banque est obligatoire."));
+        }
+        if (r.titulaire() == null || r.titulaire().isBlank()) {
+            erreurs.add(new cnm.prs.exception.ErrorResponse.FieldError("titulaire", "Le titulaire du compte est obligatoire."));
+        }
+        if (r.numeroCompte() == null || r.numeroCompte().isBlank()) {
+            erreurs.add(new cnm.prs.exception.ErrorResponse.FieldError("numeroCompte", "Le numéro de compte est obligatoire."));
+        }
+        if (!erreurs.isEmpty()) {
+            throw new cnm.prs.exception.ChampsInvalidesException(erreurs);
+        }
+        ecrireTexte(DAO_COMPTE_BANQUE, r.banque());
+        ecrireTexte(DAO_COMPTE_TITULAIRE, r.titulaire());
+        ecrireTexte(DAO_COMPTE_NUMERO, r.numeroCompte());
+        return compteDao();
+    }
+
+    /**
+     * Le compte tel que l'avis l'imprime ({@code {{PARAM.compte-dao}}}) : « {banque}, compte n° {numeroCompte} au nom de
+     * {titulaire} » ; {@code null} s'il n'est pas entièrement réglé (l'avis imprime alors des pointillés).
+     */
+    @Transactional(readOnly = true)
+    public String compteDaoTexte() {
+        CompteDao c = compteDao();
+        if (c.banque() == null || c.titulaire() == null || c.numeroCompte() == null) {
+            return null;
+        }
+        return c.banque() + ", compte n° " + c.numeroCompte() + " au nom de " + c.titulaire();
+    }
+
 }

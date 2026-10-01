@@ -66,9 +66,19 @@ public final class FormulairesCandidat {
     static final String JETON_LOT = "LOT";
     /** ⚠️ Lot D2 (2026-09-29, §B1) — clés lisibles par les conditions : la forme et la catégorie de la fiche. */
     static final String CLE_TYPE_MARCHE = "typeMarche";
+    /** ⚠️ 2026-10-01 (avis spécifique, §B7.5) — clé de condition : les autres supports de publication saisis à l'impression. */
+    static final String CLE_SUPPORTS_PUBLICATION = "supportsPublication";
     static final String CLE_CATEGORIE = "categorie";
     /** ⚠️ Lot D2 (§B1) — suffixe d'un champ par lot énuméré dans un document commun : « Lot n° 1 : v1 ; Lot n° 2 : v2 ». */
     static final String SUFFIXE_PAR_LOT = "parLot";
+    /** ⚠️ 2026-10-01 (avis spécifique, §B7.3) — un montant par lot, une ligne (un paragraphe) par lot. */
+    static final String SUFFIXE_LIGNES_PAR_LOT = "lignesParLot";
+
+    /** ⚠️ §B7.3 — une date-heure « 12/10/2026 à 09 h 00 (heure locale) » ; illisible : telle quelle. */
+    static String heureLocale(String brut) {
+        LocalDateTime d = RemiseElectronique.dateHeureLue(brut);
+        return d == null ? brut : d.format(DateTimeFormatter.ofPattern("dd/MM/yyyy 'à' HH 'h' mm")) + " (heure locale)";
+    }
 
     /** Les noms de section historiques des formulaires du candidat, admis sans déclaration. */
     public static final java.util.Set<String> SECTIONS_HISTORIQUES = java.util.Set.of("A1B", "A3B-NATURES",
@@ -95,11 +105,71 @@ public final class FormulairesCandidat {
     public static DocumentLibre rendreModele(String type, Integer lot, FicheMarcheDto fiche, Map<String, ChampFicheMarche> champs,
             FichierCommande.Modele modele, LocalDateTime validation, Map<String, String> publication) {
         Contexte ctx = new Contexte(fiche, champs, modele.conditions(), publication == null ? Map.of() : publication);
-        return new DocumentLibre(type, lot, ctx.rendre(modele.elements(), lot), pied(fiche, validation));
+        return new DocumentLibre(type, lot, finaliser(ctx.rendre(modele.elements(), lot)), pied(fiche, validation));
+    }
+
+    /** ⚠️ 2026-10-01 (avis spécifique, §B7.2) — le repère de numérotation des paragraphes principaux. */
+    static final String JETON_NUM = "{{NUM}}";
+    /** ⚠️ §B7.8 — un paragraphe qui n'est qu'une image : {@code {{IMAGE:<nom>}}}, lue dans {@code modeles/images/<nom>.png}. */
+    private static final Pattern IMAGE = Pattern.compile("^\\{\\{IMAGE:([a-z0-9-]+)}}$");
+    /** ⚠️ §B7.8 — largeur d'une image en tête d'un document (l'emblème de l'avis réel : environ 5 cm). */
+    static final int LARGEUR_IMAGE_MM = 50;
+    /** ⚠️ §B7.3 — séparateur interne d'un jeton qui rend plusieurs lignes ({@code .lignesParLot}) : un paragraphe par ligne. */
+    static final char SEPARATEUR_LIGNES = '\u2029';
+
+    /**
+     * ⚠️ 2026-10-01 (avis spécifique, §B7.2, §B7.3, §B7.8) — la passe finale d'un document rendu : un paragraphe qui n'est
+     * qu'une image devient l'image (repère inconnu : paragraphe omis, jamais imprimé tel quel) ; un paragraphe à plusieurs
+     * lignes devient un paragraphe par ligne ; {@code {{NUM}}} est remplacé par « 1. », « 2. »… dans l'ordre des
+     * paragraphes <strong>imprimés</strong> (une section omise ne laisse pas de trou).
+     */
+    static List<DocumentLibre.Element> finaliser(List<DocumentLibre.Element> elements) {
+        List<DocumentLibre.Element> out = new ArrayList<>();
+        int numero = 0;
+        for (DocumentLibre.Element e : elements) {
+            if (!(e instanceof DocumentLibre.Paragraphe p)) {
+                out.add(e);
+                continue;
+            }
+            Matcher im = IMAGE.matcher(p.texte().trim());
+            if (im.matches()) {
+                byte[] contenu = image(im.group(1));
+                if (contenu != null) {
+                    out.add(new DocumentLibre.Image(im.group(1), contenu, LARGEUR_IMAGE_MM));
+                }
+                continue;
+            }
+            for (String ligne : p.texte().split(String.valueOf(SEPARATEUR_LIGNES), -1)) {
+                String texte = ligne;
+                if (texte.startsWith(JETON_NUM)) {
+                    texte = (++numero) + "." + texte.substring(JETON_NUM.length());
+                }
+                out.add(new DocumentLibre.Paragraphe(p.style(), texte));
+            }
+        }
+        return out;
+    }
+
+    private static final Map<String, byte[]> IMAGES = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** Une image de {@code classpath:modeles/images/<nom>.png}, lue une fois ; {@code null} si elle n'existe pas. */
+    static byte[] image(String nom) {
+        byte[] lu = IMAGES.computeIfAbsent(nom, n -> {
+            try (java.io.InputStream in = FormulairesCandidat.class.getResourceAsStream("/modeles/images/" + n + ".png")) {
+                return in == null ? new byte[0] : in.readAllBytes();
+            } catch (java.io.IOException e) {
+                return new byte[0];
+            }
+        });
+        return lu.length == 0 ? null : lu;
     }
 
     /** ⚠️ Avis spécifique (§B2) — le préfixe des jetons d'information de publication. */
     public static final String PREFIXE_AVIS = "AVIS.";
+    /** ⚠️ 2026-10-01 (avis spécifique, §B8.3) — le préfixe des jetons de paramètres de l'application. */
+    public static final String PREFIXE_PARAM = "PARAM.";
+    /** Le jeton du compte bancaire unique de l'ARMP (§B8). */
+    public static final String JETON_COMPTE_DAO = "PARAM.compte-dao";
 
     private static final Pattern JETON = Pattern.compile("\\{\\{([^{}]+)}}");
     private static final Pattern MARQUEUR = Pattern.compile("\\{\\{(SI|FINSI):([A-Z0-9-]+)}}");
@@ -186,6 +256,10 @@ public final class FormulairesCandidat {
                 return valeur(fiche, cle, lot);
             }
             // ⚠️ Lot D2 (2026-09-29, §B1) — la forme et la catégorie de la fiche se lisent comme des clés de cadrage.
+            if (CLE_SUPPORTS_PUBLICATION.equals(cle)) {
+                String v = publication.get("supports");   // ⚠️ §B7.5 — « et dans … » seulement s'il y a des supports
+                return v == null || v.isBlank() ? null : v;
+            }
             if (CLE_TYPE_MARCHE.equals(cle)) {
                 return fiche.getTypeMarche();
             }
@@ -451,6 +525,11 @@ public final class FormulairesCandidat {
             if (nom.startsWith(RemiseElectronique.PREFIXE_JETON_INTERNE)) {
                 return null;   // ⚠️ V50 (§B2.2) — un paramètre interne de la procédure n'entre dans aucun document : laissé tel quel
             }
+            if (nom.startsWith(PREFIXE_PARAM)) {
+                // ⚠️ 2026-10-01 (§B8.3) — un paramètre de l'application rendu par l'appelant ({@code PARAM.compte-dao}).
+                String v = publication.get(nom);
+                return v == null || v.isBlank() ? POINTILLES : v;
+            }
             if (nom.startsWith(PREFIXE_AVIS)) {
                 // ⚠️ Avis spécifique (§B2) — une information de publication, saisie à l'impression, jamais stockée dans la fiche.
                 String v = publication.get(nom.substring(PREFIXE_AVIS.length()));
@@ -495,6 +574,9 @@ public final class FormulairesCandidat {
             if (SUFFIXE_PAR_LOT.equals(suffixe)) {
                 return parLot(code, c, lot);
             }
+            if (SUFFIXE_LIGNES_PAR_LOT.equals(suffixe)) {
+                return lignesParLot(code, c, lot);
+            }
             String brut = valeur(fiche, code, c != null && Boolean.TRUE.equals(c.getParLot()) ? lot : null);
             if (brut == null && c != null && c.getCleCadrage() != null && !c.getCleCadrage().isBlank()) {
                 // ⚠️ Lot D4 (2026-09-29, §B3) — un reflet que le modèle cite hors de sa catégorie (le contrat-cadre de travaux
@@ -517,6 +599,7 @@ public final class FormulairesCandidat {
                 // ⚠️ 2026-09-27 (documents types ARMP) — le nombre en chiffres SANS l'unité, pour un gabarit qui écrit lui-même
                 // « Ariary » après le montant (« pour la somme de … ({{B05-GS-03.chiffres}} Ariary) »).
                 case "chiffres" -> n != null ? ValeursPpmService.montant(n) : brut;
+                case "heureLocale" -> heureLocale(brut);   // ⚠️ 2026-10-01 (§B7.3)
                 case "" -> affichage(type, brut, n);
                 default -> null;
             };
@@ -528,6 +611,22 @@ public final class FormulairesCandidat {
          * sans valeur) ; sur une ligne non allotie, un champ qui n'est pas par lot, ou dans un document de lot : la valeur
          * seule, comme {@code {{CODE}}}.
          */
+        /**
+         * ⚠️ 2026-10-01 (avis spécifique, §B7.3) — un montant par lot, une ligne par lot : « - Lot 1 : cent mille ariary
+         * (Ar 100 000) » ; hors allotissement (ou dans un document de lot), la ligne seule, sans le lot.
+         */
+        private String lignesParLot(String code, ChampFicheMarche c, Integer lot) {
+            int nbLots = Boolean.TRUE.equals(fiche.getSaisieParLot()) && fiche.getNbLots() != null ? fiche.getNbLots() : 0;
+            if (lot != null || c == null || !LotsFiche.parLot(c, nbLots)) {
+                return "- " + jeton(code + ".lettres", lot) + " (Ar " + jeton(code + ".chiffres", lot) + ")";
+            }
+            List<String> lignes = new ArrayList<>();
+            for (int n = 1; n <= nbLots; n++) {
+                lignes.add("- Lot " + n + " : " + jeton(code + ".lettres", n) + " (Ar " + jeton(code + ".chiffres", n) + ")");
+            }
+            return String.join(String.valueOf(SEPARATEUR_LIGNES), lignes);
+        }
+
         private String parLot(String code, ChampFicheMarche c, Integer lot) {
             int nbLots = Boolean.TRUE.equals(fiche.getSaisieParLot()) && fiche.getNbLots() != null ? fiche.getNbLots() : 0;
             if (lot != null || c == null || !LotsFiche.parLot(c, nbLots)) {

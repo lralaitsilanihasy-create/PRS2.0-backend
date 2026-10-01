@@ -89,12 +89,14 @@ public class AvisSpecifiqueService {
     private final cnm.prs.repository.MarcheRepository marcheRepository;
     private final cnm.prs.repository.StatutMarcheRepository statutMarcheRepository;
     private final cnm.prs.repository.DocumentFicheMarcheRepository documentRepository;
+    private final ParametreService parametres;
 
     public AvisSpecifiqueService(FicheMarcheService fiches, FicheMarcheRepository ficheRepository,
             DossierRepository dossierRepository, PvExamenRepository pvRepository, DocumentsFicheMarcheService documents,
             DossierIntegriteService dossierIntegrite, JournalDossierService journal,
             cnm.prs.repository.MarcheRepository marcheRepository, cnm.prs.repository.StatutMarcheRepository statutMarcheRepository,
-            cnm.prs.repository.DocumentFicheMarcheRepository documentRepository) {
+            cnm.prs.repository.DocumentFicheMarcheRepository documentRepository, ParametreService parametres) {
+        this.parametres = parametres;
         this.marcheRepository = marcheRepository;
         this.statutMarcheRepository = statutMarcheRepository;
         this.documentRepository = documentRepository;
@@ -138,9 +140,14 @@ public class AvisSpecifiqueService {
         boolean premiereImpression = origine == null || documentRepository.premierAvisDeLaFiliation(origine) == null;
         Map<String, String> trace = new LinkedHashMap<>();
         trace.put("datePublication", corps.datePublication().trim());
-        trace.put("jmpNumero", corps.jmpNumero().trim());
+        trace.put("jmpNumero", corps.jmpNumero() == null ? "" : corps.jmpNumero().trim());
         trace.put("jmpDate", corps.jmpDate().trim());
-        trace.put("supports", corps.supports().trim());
+        trace.put("supports", corps.supports() == null ? "" : corps.supports().trim());
+        // ⚠️ 2026-10-01 (§B8.3) — le compte bancaire de l'ARMP, réglé par l'Administrateur ({{PARAM.compte-dao}}).
+        String compte = parametres.compteDaoTexte();
+        if (compte != null) {
+            publication.put(FormulairesCandidat.JETON_COMPTE_DAO, compte);
+        }
         Set<Integer> ids = documents.enregistrerAvis(validee.getIdFiche(),
                 documents.produireAvis(etat, publication, maintenant), maintenant,
                 DocumentsFicheMarcheService.publicationJson(trace));
@@ -235,17 +242,22 @@ public class AvisSpecifiqueService {
         List<ErrorResponse.FieldError> erreurs = new ArrayList<>();
         AvisSpecifiqueRequest c = corps == null ? new AvisSpecifiqueRequest(null, null, null, null) : corps;
         String datePublication = date(c.datePublication(), "datePublication", "La date de publication de l'avis", erreurs);
-        String jmpNumero = texte(c.jmpNumero(), "jmpNumero", "Le numéro du Journal des Marchés Publics de l'avis général", erreurs);
+        // ⚠️ 2026-10-01 (§B7.5) — le numéro du JMP et les supports sont facultatifs : vides, pointillés et « et dans … » retiré.
+        String jmpNumero = c.jmpNumero() == null || c.jmpNumero().isBlank() ? null : c.jmpNumero().trim();
         String jmpDate = date(c.jmpDate(), "jmpDate", "La date du Journal des Marchés Publics de l'avis général", erreurs);
-        String supports = texte(c.supports(), "supports", "Les autres supports de publication", erreurs);
+        String supports = c.supports() == null || c.supports().isBlank() ? null : c.supports().trim();
         if (!erreurs.isEmpty()) {
             throw new ChampsInvalidesException(erreurs);
         }
         Map<String, String> p = new LinkedHashMap<>();
         p.put("date-publication", datePublication);
-        p.put("jmp-numero", jmpNumero);
+        if (jmpNumero != null) {
+            p.put("jmp-numero", jmpNumero);
+        }
         p.put("jmp-date", jmpDate);
-        p.put("supports", supports);
+        if (supports != null) {
+            p.put("supports", supports);
+        }
         return p;
     }
 
