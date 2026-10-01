@@ -152,6 +152,7 @@ public class DocumentsFicheMarcheService {
         // valeur » du lot 2a pour ces types ; les autres formes gardent le lot 2a (repli par type).
         List<ModelesDao.Couverture> couvertes = ModelesDao.couvertures(etat.getTypeMarche(), etat.getCategorie());
         java.util.Set<String> remplaces = new java.util.HashSet<>();
+        Map<String, String> parametresDocuments = parametresDocuments();
         int nbLots = Boolean.TRUE.equals(etat.getSaisieParLot()) && etat.getNbLots() != null ? etat.getNbLots() : 0;
         for (ModelesDao.Couverture c : couvertes) {
             remplaces.add(c.typeDocument());
@@ -167,7 +168,8 @@ public class DocumentsFicheMarcheService {
                 DocumentLibre doc;
                 List<GenerateurDocumentsFiche.Fichier> fichiers;
                 try {
-                    doc = FormulairesCandidat.rendreModele(c.typeDocument(), lot, etat, parCode, modelesDao.modele(c.sigle()), validation);
+                    doc = FormulairesCandidat.rendreModele(c.typeDocument(), lot, etat, parCode, modelesDao.modele(c.sigle()), validation,
+                            parametresDocuments);
                     fichiers = generateur.generer(doc);
                 } catch (RuntimeException e) {
                     throw new GenerationDocumentsException("La génération du document « "
@@ -264,6 +266,20 @@ public class DocumentsFicheMarcheService {
      * déjà mises en forme ({@code date-publication}, {@code jmp-numero}, {@code jmp-date}, {@code supports}). Un .docx et
      * un .pdf ; le nom porte l'horodatage d'impression, chaque impression produisant une nouvelle paire.
      */
+    /**
+     * ⚠️ 2026-10-01 (lot AV-4.1 du front, 547e48b) — les jetons {@code {{PARAM.*}}} de tous les documents rendus depuis un
+     * modèle : le compte bancaire de l'ARMP ({@code PARAM.compte-dao}), réglé par l'Administrateur. Absent : pointillés.
+     * Un document du DAO est figé à la validation de la fiche : il garde le compte réglé à ce moment-là.
+     */
+    Map<String, String> parametresDocuments() {
+        Map<String, String> m = new LinkedHashMap<>();
+        String compte = parametres.compteDaoTexte();
+        if (compte != null) {
+            m.put(FormulairesCandidat.JETON_COMPTE_DAO, compte);
+        }
+        return m;
+    }
+
     public List<Produit> produireAvis(FicheMarcheDto etat, Map<String, String> publication, LocalDateTime impression) {
         FichierCommande.Modele modele = modelesDao.modele(ModelesDao.sigleAvis(etat.getCategorie()));
         if (modele == null) {
@@ -275,7 +291,9 @@ public class DocumentsFicheMarcheService {
         List<GenerateurDocumentsFiche.Fichier> fichiers;
         try {
             // ⚠️ 2026-10-01 (contre-recette du front) — le bloc de signature (« à …, le … », la qualité, le nom) gardé ensemble
-            doc = FormulairesCandidat.rendreModele(TYPE_AVIS, null, etat, parCode, modele, impression, publication)
+            Map<String, String> jetons = new LinkedHashMap<>(publication);
+            jetons.putAll(parametresDocuments());
+            doc = FormulairesCandidat.rendreModele(TYPE_AVIS, null, etat, parCode, modele, impression, jetons)
                     .finGardeeEnsemble(BLOC_SIGNATURE_AVIS);
             fichiers = generateur.generer(doc);
         } catch (RuntimeException e) {

@@ -5046,7 +5046,10 @@ journal du dossier (`AVIS_SPECIFIQUE_IMPRIME`).
   - `.lignesParLot` rend un paragraphe par lot (« - Lot 1 : cent mille ariary (Ar 100 000) ») ;
   - `{{IMAGE:embleme}}` insère `classpath:modeles/images/embleme.png` (l'image de tête des PV), centrée, 5 cm ; un
     repère inconnu est omis ;
-  - `{{PARAM.compte-dao}}` rend le compte de l'ARMP.
+  - `{{PARAM.compte-dao}}` rend le compte de l'ARMP. ⚠️ Même jour (front 547e48b) : il vaut pour **tous** les documents
+    rendus depuis un modèle, dont le DPAC du contrat-cadre (« … à verser sur le compte bancaire de l'ARMP : … »). Un
+    document du DAO est figé à la validation de la fiche et garde le compte réglé à ce moment-là ; tant que le compte
+    n'est pas réglé, il imprime des pointillés.
 - **`POST …/avis-specifique`** : seules `datePublication` et `jmpDate` sont exigées. `jmpNumero` vide s'imprime en
   pointillés ; des `supports` vides retirent « et dans … » (clé de condition `supportsPublication`).
 - ⚠️ **Le bloc de signature est gardé ensemble** (2026-10-01, contre-recette du front) : les trois derniers paragraphes

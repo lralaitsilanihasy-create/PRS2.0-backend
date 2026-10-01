@@ -278,6 +278,10 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
         donnees.put("B04-CP-04", "2026-05-04");
         donnees.put("B04-CP-08", "2026-05-06");
         donnees.put("B04-CP-05", "2026-05-11");
+        // ⚠️ 01/10 (front 547e48b) — le compte de l'ARMP, réglé par l'Administrateur, entre dans le DPAC à la validation.
+        mvc.perform(put("/api/parametres/compte-dao").header("Authorization", tokenAdmin).contentType(JSON)
+                .content("{\"banque\":\"BNI Madagascar\",\"titulaire\":\"ARMP\",\"numeroCompte\":\"00005 00001 12345678901 23\"}"))
+                .andExpect(status().isOk());
         remplirObligatoiresEtValider(idDmc, "CONTRAT_CADRE", "FOURNITURES_SERVICES", donnees);
         fiche = mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.statut").value("VALIDEE"))
@@ -289,7 +293,8 @@ class FicheMarcheCommandeEtContratCadreIntegrationTest extends CnmIntegrationTes
                         + "réception des offres optimisées < attribution < courriers de rejet < notification");
         // Lot D : le document type rempli (date-heure imprimée, calendrier en tableau, acte de nomination après « nommée par »).
         assertThat(texte(idDmc, "DPAC")).contains("DATE ET HEURE LIMITES DE REMISE DES OFFRES : 10/04/2026 10:00",
-                "20/04/2026\tEnvoi des demandes d’offres optimisées");
+                "20/04/2026\tEnvoi des demandes d’offres optimisées",
+                "à verser sur le compte bancaire de l’ARMP : BNI Madagascar, compte n° 00005 00001 12345678901 23 au nom de ARMP.");
         assertThat(texte(idDmc, "AE")).contains("nommée par Arrêté n° 1234/2025 du 15/01/2025.")
                 .doesNotContain("Régime des pénalités de retard");
     }

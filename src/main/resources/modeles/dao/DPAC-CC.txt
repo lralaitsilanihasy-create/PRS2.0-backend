@@ -103,10 +103,10 @@ PARA	Bureau, N° porte, étage : {{B04-DS-09}}
 PARA	Localité : {{B04-DS-10}}
 SOUS_TITRE	3. 3.Modalités d’acquisition du dossier de consultation (1)
 PARA	{{SI:MONTANT-LOTS}}
-PARA	Pour tout candidat désirant soumissionner, le règlement de la consultation (1) est retiré auprès de {{B04-DS-04}} moyennant le paiement d’un montant non remboursable de {{B04-DS-05.parLot}} libellé au nom de l’Agent comptable de l’ARMP ou au nom du régisseur de recettes de l’ARMP.
+PARA	Pour tout candidat désirant soumissionner, le règlement de la consultation (1) est retiré auprès de {{B04-DS-04}} moyennant le paiement d’un montant non remboursable de {{B04-DS-05.parLot}} à verser sur le compte bancaire de l’ARMP : {{PARAM.compte-dao}}.
 PARA	{{FINSI:MONTANT-LOTS}}
 PARA	{{SI:MONTANT-UNIQUE}}
-PARA	Pour tout candidat désirant soumissionner, le règlement de la consultation (1) est retiré auprès de {{B04-DS-04}} moyennant le paiement d’un montant non remboursable de {{B04-DS-05.lettres}} ({{B04-DS-05}}) libellé au nom de l’Agent comptable de l’ARMP ou au nom du régisseur de recettes de l’ARMP.
+PARA	Pour tout candidat désirant soumissionner, le règlement de la consultation (1) est retiré auprès de {{B04-DS-04}} moyennant le paiement d’un montant non remboursable de {{B04-DS-05.lettres}} ({{B04-DS-05}}) à verser sur le compte bancaire de l’ARMP : {{PARAM.compte-dao}}.
 PARA	{{FINSI:MONTANT-UNIQUE}}
 SOUS_TITRE	3.4.Modification du dossier de consultation (1)
 PARA	L’Autorité contractante se réserve le droit d'apporter des modifications de détail au dossier de consultation(1) au plus tard 6 jours avant la date limite de réception des offres. Ce délai est décompté à partir de la date d'envoi par l’Autorité contractante des modifications aux candidats ayant retiré le dossier initial. Les candidats devront alors répondre sur la base du dossier modifié sans pouvoir élever de réclamation à ce sujet.

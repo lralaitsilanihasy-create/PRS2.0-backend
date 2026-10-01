@@ -205,4 +205,6 @@ parce que reprendre les modèles du front cassait l'import. Le front l'a portée
 **Parité refaite le 2026-10-01 : identique.** `LectureDao` et `lire.mjs` lisent les mêmes paragraphes extraits : seize
 documents (le 2463 en PDF, les 11 rendus bruts des modèles, le DPAO de la fiche 38, le DPAC et l'AE de la fiche 27,
 le DPAC aussi en PDF) par les 13 modèles. Le résultat, 868 lignes (paragraphes reconnus, valeurs, confiances), est le même des deux côtés. La comparaison se fait
-contre les modèles commités du front : sa copie de travail portait une modification du DPAC-CC non commitée.
+contre les modèles commités du front. Refaite le même jour contre `547e48b` (nouveau DPAC-CC, « à verser sur le compte
+bancaire de l'ARMP ») : identique, 926 lignes. Un DAO rédigé avec l'ancienne phrase ne livre plus `B04-DS-04` ni
+`B04-DS-05` : c'est une conséquence du modèle, la même dans les deux lecteurs, pas un écart entre eux.

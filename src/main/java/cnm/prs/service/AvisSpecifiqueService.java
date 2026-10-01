@@ -89,14 +89,12 @@ public class AvisSpecifiqueService {
     private final cnm.prs.repository.MarcheRepository marcheRepository;
     private final cnm.prs.repository.StatutMarcheRepository statutMarcheRepository;
     private final cnm.prs.repository.DocumentFicheMarcheRepository documentRepository;
-    private final ParametreService parametres;
 
     public AvisSpecifiqueService(FicheMarcheService fiches, FicheMarcheRepository ficheRepository,
             DossierRepository dossierRepository, PvExamenRepository pvRepository, DocumentsFicheMarcheService documents,
             DossierIntegriteService dossierIntegrite, JournalDossierService journal,
             cnm.prs.repository.MarcheRepository marcheRepository, cnm.prs.repository.StatutMarcheRepository statutMarcheRepository,
-            cnm.prs.repository.DocumentFicheMarcheRepository documentRepository, ParametreService parametres) {
-        this.parametres = parametres;
+            cnm.prs.repository.DocumentFicheMarcheRepository documentRepository) {
         this.marcheRepository = marcheRepository;
         this.statutMarcheRepository = statutMarcheRepository;
         this.documentRepository = documentRepository;
@@ -143,11 +141,7 @@ public class AvisSpecifiqueService {
         trace.put("jmpNumero", corps.jmpNumero() == null ? "" : corps.jmpNumero().trim());
         trace.put("jmpDate", corps.jmpDate().trim());
         trace.put("supports", corps.supports() == null ? "" : corps.supports().trim());
-        // ⚠️ 2026-10-01 (§B8.3) — le compte bancaire de l'ARMP, réglé par l'Administrateur ({{PARAM.compte-dao}}).
-        String compte = parametres.compteDaoTexte();
-        if (compte != null) {
-            publication.put(FormulairesCandidat.JETON_COMPTE_DAO, compte);
-        }
+        // ⚠️ 2026-10-01 (§B8.3) — le compte bancaire de l'ARMP ({{PARAM.compte-dao}}) : DocumentsFicheMarcheService.parametresDocuments.
         Set<Integer> ids = documents.enregistrerAvis(validee.getIdFiche(),
                 documents.produireAvis(etat, publication, maintenant), maintenant,
                 DocumentsFicheMarcheService.publicationJson(trace));

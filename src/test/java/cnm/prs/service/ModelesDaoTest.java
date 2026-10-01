@@ -157,12 +157,15 @@ class ModelesDaoTest {
                 "B10-RS-02", "3", "B04-CP-02", "2026-04-10T10:00", "B04-VO-01", "90", "B02-OB-01", "Fournitures de bureau",
                 "B04-DS-05", "50000")));
         fiche.setValeursPpm(new HashMap<>(v("B01-AC-13", "Appel d'offres ouvert", "B01-AC-01", "Ministère X")));
-        String dpac = FormulairesCandidat.rendreModele("DPAC", null, fiche, champs(), dao.modele("DPAC-CC"), null).texte();
+        // 01/10 (front 547e48b) : le prix du DAO se verse sur le compte de l'ARMP, rendu par l'appelant ({{PARAM.compte-dao}})
+        String dpac = FormulairesCandidat.rendreModele("DPAC", null, fiche, champs(), dao.modele("DPAC-CC"), null,
+                Map.of(FormulairesCandidat.JETON_COMPTE_DAO, "BNI Madagascar, compte n° 123 au nom de ARMP")).texte();
         assertThat(dpac).contains("à un seul titulaire (mono-attributaire)", "remis en compétition au fur et à mesure des besoins",
                 "Le contrat-cadre est conclu à prix unitaires.", "La période de validité du contrat n’est pas reconductible.",
                 "Sans objet.", "La transmission de dossiers par voie électronique n’est pas admise",
                 "DATE ET HEURE LIMITES DE REMISE DES OFFRES : 10/04/2026 10:00", "exprimées en Ariary. Si",
-                "montant non remboursable de cinquante mille ariary (50 000 Ariary) libellé")
+                "montant non remboursable de cinquante mille ariary (50 000 Ariary) à verser sur le compte bancaire de l’ARMP : "
+                        + "BNI Madagascar, compte n° 123 au nom de ARMP.")
                 .doesNotContain("multi attributaire", "selon le calendrier fixé ci-après", "{{", "CLAUSE À FOURNIR",
                         "Cette période de validité peut être reconduite");
         String ae = FormulairesCandidat.rendreModele("AE", null, fiche, champs(), dao.modele("AE-CC"), null).texte();
@@ -200,7 +203,8 @@ class ModelesDaoTest {
                 "La transmission par voie électronique est admise dans les conditions suivantes",
                 "[[CLAUSE À FOURNIR PAR LE JURISTE : conditions de la transmission électronique — plateforme (https://depot.cnm.mg)",
                 // 01/10 : le montant du DAO par lot (DPAC-CC du front, 40f2b4a)
-                "montant non remboursable de Lot n° 1 : 100 000 Ariary ; Lot n° 2 : 150 000 Ariary libellé")
+                "montant non remboursable de Lot n° 1 : 100 000 Ariary ; Lot n° 2 : 150 000 Ariary à verser sur le compte bancaire de "
+                        + "l’ARMP : " + FormulairesCandidat.POINTILLES + ".")   // compte non réglé : pointillés
                 .doesNotContain("n’est pas admise", "mono-attributaire", "Sans objet.", "{{");
         for (int lot = 1; lot <= 2; lot++) {
             String ae = FormulairesCandidat.rendreModele("AE", lot, fiche, champs(), dao.modele("AE-CC"), null).texte();
