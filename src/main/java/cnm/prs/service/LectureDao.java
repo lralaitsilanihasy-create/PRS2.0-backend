@@ -334,12 +334,12 @@ public final class LectureDao {
         /** Lettres de texte fixe de chaque paragraphe. */
         final int[] lettres;
         /**
-         * ⚠️ 2026-10-01 (DPAC-CC, montant du DAO par lot) — les VARIANTES PLUS CONTRAINTES de chaque paragraphe : les
-         * paragraphes à jeton qui le suivent de près ({@value #VOISINAGE_VARIANTE} au plus), rattachés à d'autres sections,
-         * avec plus de texte fixe. « … de {{B04-DS-05.parLot}} libellé… » (alloti) reconnaît aussi « … de cinquante mille
-         * ariary (50 000 Ariary) libellé… », que sa variante « … de {{B04-DS-05.lettres}} ({{B04-DS-05}}) libellé… » (non
-         * alloti) décrit mieux : sans cette règle, la première prenait le paragraphe et attestait alloti = OUI, en conflit
-         * avec le reste du document.
+         * ⚠️ 2026-10-01 (règle R-c de {@code lire.mjs}, d718cae ; DPAC-CC, montant du DAO par lot) — les VARIANTES PLUS
+         * CONTRAINTES de chaque paragraphe : parmi les {@value #VOISINAGE_VARIANTE} paragraphes qui le suivent dans le
+         * modèle, ceux qui ne sont pas un jeton seul, sont rattachés à d'autres sections (liste différente) et ont plus de
+         * texte fixe. « … de {{B04-DS-05.parLot}} libellé… » (alloti) reconnaît aussi « … de cinquante mille ariary (50 000
+         * Ariary) libellé… », que sa variante « … de {{B04-DS-05.lettres}} ({{B04-DS-05}}) libellé… » (non alloti) décrit
+         * mieux : sans cette règle, la première prenait le paragraphe et attestait alloti = OUI contre le reste du document.
          */
         final int[][] variantes;
 
@@ -369,13 +369,11 @@ public final class LectureDao {
             for (int k = 0; k < n; k++) {
                 Unite u = us.get(k);
                 List<Integer> vs = new ArrayList<>();
-                if (u.texte().contains("{{") && !seulJeton(u)) {
-                    for (int v = k + 1; v < Math.min(n, k + 1 + VOISINAGE_VARIANTE); v++) {
-                        Unite w = us.get(v);
-                        if (w.texte().contains("{{") && !seulJeton(w) && !w.sections().equals(u.sections())
-                                && signesFixes(w.texte()) > signesFixes(u.texte())) {
-                            vs.add(v);
-                        }
+                for (int v = k + 1; v < Math.min(n, k + 1 + VOISINAGE_VARIANTE); v++) {
+                    Unite w = us.get(v);
+                    if (!seulJeton(w) && !String.join("|", w.sections()).equals(String.join("|", u.sections()))
+                            && texteFixe(w.texte()) > texteFixe(u.texte())) {
+                        vs.add(v);
                     }
                 }
                 variantes[k] = vs.stream().mapToInt(Integer::intValue).toArray();
@@ -383,21 +381,21 @@ public final class LectureDao {
         }
     }
 
-    /** ⚠️ 2026-10-01 — portée de la recherche d'une variante plus contrainte (paragraphes du modèle qui suivent). */
-    static final int VOISINAGE_VARIANTE = 6;
+    /** ⚠️ 2026-10-01 (R-c) — portée de la recherche d'une variante plus contrainte (paragraphes du modèle qui suivent). */
+    static final int VOISINAGE_VARIANTE = 8;
 
-    /** ⚠️ 2026-10-01 — les signes de texte fixe d'un paragraphe (ponctuation comprise, blancs exclus). */
-    private static int signesFixes(String texte) {
-        return norm(JETON.matcher(texte).replaceAll(" ")).replaceAll("\\s+", "").length();
+    /** ⚠️ 2026-10-01 (R-c, {@code fixe} de {@code lire.mjs}) — caractères de texte fixe, hors blancs, jetons retirés. */
+    private static int texteFixe(String texte) {
+        return BLANCS.matcher(norm(JETON.matcher(texte).replaceAll(""))).replaceAll("").length();
     }
 
     /**
-     * ⚠️ 2026-10-01 — une variante plus contrainte, pas encore reconnue, décrit aussi ce paragraphe du document : c'est
-     * elle qui le prend (la plus contrainte gagne) ; le paragraphe courant poursuit sa recherche plus loin.
+     * ⚠️ 2026-10-01 (R-c) — une variante plus contrainte reconnaît aussi ce paragraphe du document : le paragraphe courant
+     * lui CÈDE (il n'est pas trouvé, le curseur ne bouge pas) et elle le prend à son tour.
      */
-    private static boolean varianteLeDecrit(int k, String paragraphe, List<Unite> us, Profil p, Map<Integer, Integer> trouves) {
+    private static boolean varianteLeDecrit(int k, String paragraphe, List<Unite> us, Profil p) {
         for (int v : p.variantes[k]) {
-            if (!trouves.containsKey(v) && motifParagraphe(us.get(v).texte()).entier().matcher(paragraphe).find()) {
+            if (motifParagraphe(us.get(v).texte()).entier().matcher(paragraphe).find()) {
                 return true;
             }
         }
@@ -566,9 +564,6 @@ public final class LectureDao {
             for (int j = curseur; j < borne; j++) {
                 Matcher x = mo.entier().matcher(doc.get(j));
                 boolean ok = x.find();
-                if (ok && profil.variantes[k].length > 0 && varianteLeDecrit(k, doc.get(j), us, profil, trouves)) {
-                    continue;   // ⚠️ 2026-10-01 — la variante plus contrainte prend ce paragraphe
-                }
                 // B5 règle 2 — une ancre de moins de 8 lettres de texte fixe ne donne jamais la confiance haute.
                 // ⚠️ Lot D3 (2026-09-29, §B4.1) — un JUMEAU (un autre paragraphe du modèle a le même texte fixe : « {{B04-EP-03}}
                 // jours avant la date limite… » / « {{B04-EP-04}} … ») peut prendre la place de l'autre quand celui-ci n'est
@@ -588,6 +583,9 @@ public final class LectureDao {
                 }
                 if (!ok) {
                     continue;
+                }
+                if (profil.variantes[k].length > 0 && varianteLeDecrit(k, doc.get(j), us, profil)) {
+                    break;   // ⚠️ 2026-10-01 (R-c) — le paragraphe revient à la variante plus contrainte
                 }
                 trouves.put(k, j);
                 curseur = j + 1;

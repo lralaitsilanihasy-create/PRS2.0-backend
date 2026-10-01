@@ -5049,6 +5049,10 @@ journal du dossier (`AVIS_SPECIFIQUE_IMPRIME`).
   - `{{PARAM.compte-dao}}` rend le compte de l'ARMP.
 - **`POST …/avis-specifique`** : seules `datePublication` et `jmpDate` sont exigées. `jmpNumero` vide s'imprime en
   pointillés ; des `supports` vides retirent « et dans … » (clé de condition `supportsPublication`).
+- ⚠️ **Le bloc de signature est gardé ensemble** (2026-10-01, contre-recette du front) : les trois derniers paragraphes
+  de l'avis (« à …, le … », la qualité, le nom de la PRMP). En Word, les deux premiers sont « solidaires du suivant »
+  (`keepNext`, avec `keepLines`) ; en PDF, les trois forment un bloc indivisible. Le bloc passe en entier sur la page
+  suivante quand il ne tient pas. Le modèle ne change pas.
 - **`B04-DS-05`** est saisi par lot (`docs/referentiel/2026-10-01-avis-montant-dao-par-lot.sql`, passé sur DBPRS20 le
   2026-10-01). Le DPAC du contrat-cadre l'imprime par lot sur une ligne allotie (`{{B04-DS-05.parLot}}`) ; l'avis le
   donne une ligne par lot. Modèles réalignés sur le front (40f2b4a) : titre sous l'en-tête, emblème en premier
@@ -5255,12 +5259,14 @@ Une fiche jamais enregistrée est lue comme un brouillon vide.
     lettre (« {{CODE}}. ») est un jeton seul. Une ancre de moins de 8 lettres ne donne jamais la confiance `haute`. Un
     paragraphe n'atteste ses sections que s'il a au moins 20 lettres de texte fixe et qu'aucun paragraphe de même texte
     n'existe hors de ces sections.
-  - ⚠️ **La variante la plus contrainte gagne** (2026-10-01, DPAC-CC). Un paragraphe à jeton laisse un paragraphe du
-    document à une variante qui le reconnaît aussi en entier. Une variante est un paragraphe à jeton parmi les 6 qui le
-    suivent dans le modèle, rattaché à d'autres sections, avec plus de signes de texte fixe, et pas encore reconnu. Le
-    paragraphe poursuit alors sa recherche plus loin. Exemple : « … de {{B04-DS-05.parLot}} libellé… » (alloti) cède
+  - ⚠️ **La variante la plus contrainte gagne** (2026-10-01, DPAC-CC ; règle R-c de `lire.mjs`, d718cae). Quand un
+    paragraphe du modèle reconnaît un paragraphe du document, on regarde les **8** paragraphes qui le suivent dans le
+    modèle. Une variante n'est pas un jeton seul, est rattachée à d'autres sections et a plus de texte fixe (caractères
+    hors blancs, jetons retirés ; à égalité, rien ne change). Si une variante reconnaît le **même** paragraphe, le
+    paragraphe courant **cède** : il n'est pas trouvé, le curseur ne bouge pas, et la variante prend le paragraphe à son
+    tour. Exemple : « … de {{B04-DS-05.parLot}} libellé… » (alloti) cède
     « … de cinquante mille ariary (50 000 Ariary) libellé… » à « … de {{B04-DS-05.lettres}} ({{B04-DS-05}}) libellé… »
-    (non alloti), au lieu d'attester `alloti = OUI` à tort. Règle à reporter dans `lire.mjs` (demande avis §B7).
+    (non alloti), au lieu d'attester `alloti = OUI` à tort. Parité avec `lire.mjs` refaite le 2026-10-01 : identique.
 - **Réponse 200 `ImportDaoResult`** :
 
 ```json

@@ -154,6 +154,11 @@ class AvisSpecifiqueIntegrationTest extends CnmIntegrationTestSupport {
                 .header("Authorization", tokenPrmp)).andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
         try (XWPFDocument doc = new XWPFDocument(new ByteArrayInputStream(docx))) {
             assertThat(doc.getAllPictures()).as("l'emblème en tête (§B7.8)").hasSize(1);
+            // ⚠️ 2026-10-01 — le bloc de signature gardé ensemble : « à …, le … » et la qualité solidaires du suivant (le nom)
+            List<org.apache.poi.xwpf.usermodel.XWPFParagraph> ps = doc.getParagraphs();
+            assertThat(ps.subList(ps.size() - 3, ps.size())).extracting(p -> p.getCTP().isSetPPr() && p.getCTP().getPPr().isSetKeepNext())
+                    .containsExactly(true, true, false);
+            assertThat(ps.get(ps.size() - 2).getText()).isEqualTo("La Personne Responsable des Marchés Publics");
         }
         String texte = texteDuDocx(docx);
         assertThat(texte).contains("05/10/2026", "Journal des Marchés Publics n°123 en date du 15/01/2026",

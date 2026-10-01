@@ -42,7 +42,14 @@ public record DocumentLibre(String type, Integer lot, List<Element> elements, St
     public record Image(String nom, byte[] contenu, int largeurMm) implements Element {
     }
 
-    public record Paragraphe(Style style, String texte) implements Element {
+    /**
+     * @param solidaireDuSuivant ⚠️ 2026-10-01 (avis spécifique, contre-recette) — le paragraphe reste sur la même page que
+     *                           le suivant : {@code keepNext} en Word, bloc indivisible en PDF
+     */
+    public record Paragraphe(Style style, String texte, boolean solidaireDuSuivant) implements Element {
+        public Paragraphe(Style style, String texte) {
+            this(style, texte, false);
+        }
     }
 
     /**
@@ -50,6 +57,32 @@ public record DocumentLibre(String type, Integer lot, List<Element> elements, St
      * paragraphes (au moins un, éventuellement vide).
      */
     public record Tableau(int colonnes, List<List<List<String>>> lignes) implements Element {
+    }
+
+    /**
+     * ⚠️ 2026-10-01 (avis spécifique, contre-recette du front) — le même document, ses {@code n} derniers paragraphes
+     * imprimés gardés ensemble (les {@code n - 1} premiers solidaires du suivant) : le bloc de signature de l'avis (« à …,
+     * le … », la qualité, le nom) passe en entier sur la page suivante quand il ne tient pas. Les paragraphes vides de fin
+     * ne comptent pas.
+     */
+    public DocumentLibre finGardeeEnsemble(int n) {
+        List<Element> els = new ArrayList<>(elements);
+        int restants = n;
+        boolean dernier = true;
+        for (int i = els.size() - 1; i >= 0 && restants > 0; i--) {
+            if (!(els.get(i) instanceof Paragraphe p) || p.style() == Style.VIDE) {
+                if (restants < n) {
+                    break;   // un tableau ou une image au milieu : le bloc s'arrête là
+                }
+                continue;
+            }
+            if (!dernier) {
+                els.set(i, new Paragraphe(p.style(), p.texte(), true));
+            }
+            dernier = false;
+            restants--;
+        }
+        return new DocumentLibre(type, lot, List.copyOf(els), piedDePage);
     }
 
     /** Le texte du document dans l'ordre, une ligne par paragraphe et par ligne de tableau (cellules jointes par une tabulation). */

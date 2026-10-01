@@ -184,11 +184,14 @@ Le DPAC du contrat-cadre (front 40f2b4a) écrit la phrase du montant du DAO en d
 première, une capture libre, reconnaissait aussi la phrase non allotie. Elle attestait `alloti = OUI` contre le reste
 du document, qui partait alors en conflit.
 
-**Règle :**
-- les variantes d'un paragraphe à jeton sont les paragraphes à jeton qui le suivent dans le modèle, **6 au plus**,
-  rattachés à d'autres sections et portant plus de signes de texte fixe (ponctuation comprise, blancs exclus) ;
-- quand une variante pas encore reconnue décrit aussi en entier le paragraphe du document, le paragraphe lui laisse la
-  place et poursuit sa recherche plus loin.
+**Règle** (R-c, alignée le jour même sur `lire.mjs` d718cae) :
+- les variantes d'un paragraphe sont les paragraphes qui le suivent dans le modèle, **8 au plus**, qui ne sont pas un
+  jeton seul, sont rattachés à d'autres sections et ont plus de texte fixe (caractères hors blancs, jetons retirés) ;
+- quand une variante reconnaît aussi le paragraphe du document, le paragraphe courant **cède** : il n'est pas trouvé, le
+  curseur ne bouge pas, et la variante le prend à son tour.
+
+⚠️ Ma première version différait : 6 paragraphes, recherche poursuivie plus loin, variante déjà reconnue exclue, jetons
+exigés des deux côtés. Elle a été alignée sur `lire.mjs`, la spécification.
 
 Le profil du modèle (`Profil.variantes`) la calcule une fois par lecture. Le coût reste linéaire : les variantes ne
 sont essayées que sur un paragraphe déjà reconnu.
@@ -196,6 +199,10 @@ sont essayées que sur un paragraphe déjà reconnu.
 **Mesure :** sur les entrées réelles du contrôle de parité, lues par tous les modèles, les lectures sont identiques avec
 et sans la règle. Seules trois lectures du DPAC-CC changent, celles qui étaient visées.
 
-**Exception à l'ordre habituel :** la règle est écrite côté serveur avant `lire.mjs`, avec l'accord donné le 01/10, parce
-que reprendre les modèles du front cassait l'import. Elle est à reporter côté front, puis le diff de parité est à
-refaire.
+**Exception à l'ordre habituel :** la règle a été écrite côté serveur avant `lire.mjs`, avec l'accord donné le 01/10,
+parce que reprendre les modèles du front cassait l'import. Le front l'a portée le même jour (R-c, d718cae).
+
+**Parité refaite le 2026-10-01 : identique.** `LectureDao` et `lire.mjs` lisent les mêmes paragraphes extraits : seize
+documents (le 2463 en PDF, les 11 rendus bruts des modèles, le DPAO de la fiche 38, le DPAC et l'AE de la fiche 27,
+le DPAC aussi en PDF) par les 13 modèles. Le résultat, 868 lignes (paragraphes reconnus, valeurs, confiances), est le même des deux côtés. La comparaison se fait
+contre les modèles commités du front : sa copie de travail portait une modification du DPAC-CC non commitée.

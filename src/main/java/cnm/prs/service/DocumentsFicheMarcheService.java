@@ -61,6 +61,8 @@ public class DocumentsFicheMarcheService {
      * rattachés à la version validée qu'ils rendent, jamais joints au dossier comme pièce du DAO.
      */
     public static final String TYPE_AVIS = "AVIS";
+    /** ⚠️ 2026-10-01 — le bloc de signature de l'avis : ses trois derniers paragraphes (lieu et date, qualité, nom). */
+    static final int BLOC_SIGNATURE_AVIS = 3;
     private static final java.time.format.DateTimeFormatter HORODATAGE =
             java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
 
@@ -272,7 +274,9 @@ public class DocumentsFicheMarcheService {
         DocumentLibre doc;
         List<GenerateurDocumentsFiche.Fichier> fichiers;
         try {
-            doc = FormulairesCandidat.rendreModele(TYPE_AVIS, null, etat, parCode, modele, impression, publication);
+            // ⚠️ 2026-10-01 (contre-recette du front) — le bloc de signature (« à …, le … », la qualité, le nom) gardé ensemble
+            doc = FormulairesCandidat.rendreModele(TYPE_AVIS, null, etat, parCode, modele, impression, publication)
+                    .finGardeeEnsemble(BLOC_SIGNATURE_AVIS);
             fichiers = generateur.generer(doc);
         } catch (RuntimeException e) {
             throw new GenerationDocumentsException("La génération de l'avis spécifique a échoué : " + e.getMessage(), e);

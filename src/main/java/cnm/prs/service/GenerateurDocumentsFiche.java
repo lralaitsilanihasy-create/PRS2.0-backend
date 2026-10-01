@@ -147,6 +147,10 @@ public class GenerateurDocumentsFiche {
             case VIDE -> r.setFontSize(10);
         }
         r.setText(modele.texte());
+        if (modele.solidaireDuSuivant()) {   // ⚠️ 2026-10-01 — « paragraphe solidaire du suivant », lignes non séparées
+            p.setKeepNext(true);
+            p.getCTP().getPPr().addNewKeepLines();
+        }
     }
 
     // ------------------------------------------------------------------ document libre : pdf
@@ -203,18 +207,45 @@ public class GenerateurDocumentsFiche {
             footer.setBorder(0);
             document.setFooter(footer);
             document.open();
+            java.util.function.Function<DocumentLibre.Paragraphe, Paragraph> rendu = p -> {
+                Paragraph par = switch (p.style()) {
+                    case TITRE -> aligne(paragraphePdf(p.texte(), titre), Element.ALIGN_CENTER);
+                    case SOUS_TITRE -> aligne(paragraphePdf(p.texte(), sousTitre), Element.ALIGN_LEFT);
+                    case PARA -> aligne(paragraphePdf(p.texte(), texte), Element.ALIGN_JUSTIFIED);
+                    case CENTRE -> aligne(paragraphePdf(p.texte(), texte), Element.ALIGN_CENTER);
+                    case DROITE -> aligne(paragraphePdf(p.texte(), texte), Element.ALIGN_RIGHT);
+                    case VIDE -> new Paragraph(" ", texte);
+                };
+                par.setSpacingAfter(3);
+                return par;
+            };
+            // ⚠️ 2026-10-01 — des paragraphes solidaires et celui qui les suit : un tableau sans bordure d'une colonne,
+            // indivisible (OpenPDF n'a pas de « solidaire du suivant » par paragraphe) ; il passe en entier à la page suivante.
+            com.lowagie.text.pdf.PdfPTable bloc = null;
             for (DocumentLibre.Element e : m.elements()) {
+                if (e instanceof DocumentLibre.Paragraphe p && (bloc != null || p.solidaireDuSuivant())) {
+                    if (bloc == null) {
+                        bloc = new com.lowagie.text.pdf.PdfPTable(1);
+                        bloc.setWidthPercentage(100);
+                        bloc.setKeepTogether(true);
+                    }
+                    com.lowagie.text.pdf.PdfPCell cell = new com.lowagie.text.pdf.PdfPCell();
+                    cell.setBorder(com.lowagie.text.Rectangle.NO_BORDER);
+                    cell.setPadding(0);
+                    cell.addElement(rendu.apply(p));
+                    bloc.addCell(cell);
+                    if (!p.solidaireDuSuivant()) {
+                        document.add(bloc);
+                        bloc = null;
+                    }
+                    continue;
+                }
+                if (bloc != null) {   // un bloc interrompu par un tableau ou une image : rendu tel quel
+                    document.add(bloc);
+                    bloc = null;
+                }
                 if (e instanceof DocumentLibre.Paragraphe p) {
-                    Paragraph par = switch (p.style()) {
-                        case TITRE -> aligne(paragraphePdf(p.texte(), titre), Element.ALIGN_CENTER);
-                        case SOUS_TITRE -> aligne(paragraphePdf(p.texte(), sousTitre), Element.ALIGN_LEFT);
-                        case PARA -> aligne(paragraphePdf(p.texte(), texte), Element.ALIGN_JUSTIFIED);
-                        case CENTRE -> aligne(paragraphePdf(p.texte(), texte), Element.ALIGN_CENTER);
-                        case DROITE -> aligne(paragraphePdf(p.texte(), texte), Element.ALIGN_RIGHT);
-                        case VIDE -> new Paragraph(" ", texte);
-                    };
-                    par.setSpacingAfter(3);
-                    document.add(par);
+                    document.add(rendu.apply(p));
                 } else if (e instanceof DocumentLibre.Image im) {
                     try {
                         com.lowagie.text.Image img = com.lowagie.text.Image.getInstance(im.contenu());
@@ -241,6 +272,9 @@ public class GenerateurDocumentsFiche {
                     }
                     document.add(table);
                 }
+            }
+            if (bloc != null) {
+                document.add(bloc);
             }
             document.close();
             return out.toByteArray();
