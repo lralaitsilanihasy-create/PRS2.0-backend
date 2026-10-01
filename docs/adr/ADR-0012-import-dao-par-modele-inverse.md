@@ -223,3 +223,8 @@ Six règles reprises à l'identique de `lire.mjs` (front eed6bc4) :
 identique sur 18 documents réels, dont les 3 302 paragraphes du MEN. Les lectures sont identiques sans types de champ
 (985 lignes) puis avec les types des référentiels (818 lignes). Le DAO du MEN, qui porte un filigrane nominatif, reste
 hors dépôt.
+
+Même jour (front 0afc489) — **règle 6, réponse déduite d'un terme `contient`**. `InfoChamp` porte désormais les options
+du référentiel. Une option entière attestée par une section retenue s'ajoute à la liste du champ, dans l'ordre du
+référentiel ; un terme `=` contraire sur le même champ est un conflit. Parité refaite avec les options et les réponses
+déduites : identique.

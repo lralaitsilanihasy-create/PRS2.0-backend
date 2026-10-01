@@ -36,6 +36,55 @@ class LectureDaoTest {
     }
 
     @Test
+    @DisplayName("2026-10-01 (front 0afc489, règle 6) : un terme « contient » d'une section retenue ajoute une option ENTIÈRE à la "
+            + "liste du champ, dans l'ordre du référentiel ; un fragment ne dit rien ; un terme « = » contraire est un conflit")
+    void reponseDeduiteDUnTermeContient() {
+        String modele = String.join("\n",
+                "CONDITION\tGARANTIE-BANCAIRE\u001FgarantieSoumission = OUI et B05-GQ-02 contient Garantie bancaire",
+                "CONDITION\tGARANTIE-CAUTION\u001FgarantieSoumission = OUI et B05-GQ-02 contient Caution personnelle et solidaire",
+                "CONDITION\tGARANTIE-CHEQUE\u001FgarantieSoumission = OUI et B05-GQ-02 contient Chèque de banque",
+                "CONDITION\tFRAGMENT\u001FB05-GE-03 contient bancaire",
+                "PARA\tUne garantie de soumission doit être fournie dans l'une des formes suivantes :",
+                "PARA\t{{SI:GARANTIE-BANCAIRE}}",
+                "PARA\t- Soit une garantie bancaire émise par une banque primaire agréée",
+                "PARA\t{{FINSI:GARANTIE-BANCAIRE}}",
+                "PARA\t{{SI:GARANTIE-CAUTION}}",
+                "PARA\t- Soit une caution personnelle et solidaire d'un organisme agréé",
+                "PARA\t{{FINSI:GARANTIE-CAUTION}}",
+                "PARA\t{{SI:GARANTIE-CHEQUE}}",
+                "PARA\t- Soit un chèque de banque libellé au nom du Trésor public",
+                "PARA\t{{FINSI:GARANTIE-CHEQUE}}",
+                "PARA\t{{SI:FRAGMENT}}",
+                "PARA\tLa garantie de bonne exécution est remise sous forme bancaire auprès du comptable",
+                "PARA\t{{FINSI:FRAGMENT}}",
+                "PARA\tFin de la clause sur les garanties");
+        // L'ordre du référentiel (chèque avant garantie bancaire) n'est pas celui du modèle ni du document.
+        List<String> options = List.of("Caution personnelle et solidaire", "Chèque de banque", "Garantie bancaire");
+        java.util.function.Function<String, LectureDao.InfoChamp> champs = c -> switch (c) {
+            case "B05-GQ-02" -> new LectureDao.InfoChamp("LISTE_MULTIPLE", "SAISIE", null, options);
+            case "B05-GE-03" -> new LectureDao.InfoChamp("LISTE_MULTIPLE", "SAISIE", null, List.of("Garantie bancaire", "Chèque de banque"));
+            default -> null;
+        };
+        List<String> doc = LectureDao.unitesDocument(List.of("Une garantie de soumission doit être fournie dans l'une des formes suivantes :",
+                "- Soit une garantie bancaire émise par une banque primaire agréée",
+                "- Soit un chèque de banque libellé au nom du Trésor public",
+                "La garantie de bonne exécution est remise sous forme bancaire auprès du comptable",
+                "Fin de la clause sur les garanties"));
+        LectureDao.Resultat r = LectureDao.lire("T", FichierCommande.lireModele(modele), doc, champs);
+        assertThat(r.reponsesChamps()).extracting(x -> x.cle() + "=" + x.valeur())
+                .contains("B05-GQ-02=Chèque de banque,Garantie bancaire")   // ordre du référentiel, pas du document
+                .noneMatch(x -> x.startsWith("B05-GE-03"));   // « contient bancaire » : un fragment
+        assertThat(r.cadrage()).extracting(x -> x.cle() + "=" + x.valeur()).contains("garantieSoumission=OUI");
+
+        // Un terme « = » qui dit autre chose : conflit, le champ n'est pas proposé.
+        String contraire = modele.replace("CONDITION\tFRAGMENT\u001FB05-GE-03 contient bancaire",
+                "CONDITION\tFRAGMENT\u001FB05-GQ-02 = Garantie bancaire");
+        LectureDao.Resultat r2 = LectureDao.lire("T", FichierCommande.lireModele(contraire), doc, champs);
+        assertThat(r2.conflits()).extracting(LectureDao.Conflit::code).contains("B05-GQ-02");
+        assertThat(r2.reponsesChamps()).noneMatch(x -> x.cle().equals("B05-GQ-02"));
+    }
+
+    @Test
     @DisplayName("2026-10-01 (front eed6bc4, DAO travaux du MEN) : « MOTS (n) » vaut n ; des pointillés autour d'une unité "
             + "seule sont une case en blanc (usage privé ignoré) ; le point final du modèle est facultatif après du texte fixe")
     void reglesDuDaoDuMen() {

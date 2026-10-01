@@ -279,7 +279,8 @@ public class ImportDaoService {
         for (ModelesDao.Couverture c : couvertures) {
             LectureDao.Resultat r = LectureDao.lire(c.sigle(), modeles.modele(c.sigle()), paragraphes, code -> {
                 ChampFicheMarche ch = champs.get(code);
-                return ch == null ? null : new LectureDao.InfoChamp(ch.getType(), ch.getSource(), ch.getCleCadrage());
+                return ch == null ? null : new LectureDao.InfoChamp(ch.getType(), ch.getSource(), ch.getCleCadrage(),
+                        cnm.prs.entity.ChampFicheMarche.liste(ch.getOptions()));   // ⚠️ 2026-10-01 : réponses d'un terme « contient »
             }, origines);
             lus.add(new ImportDaoResult.Modele(r.sigle(), r.unites(), r.reconnues()));
             int part = r.unites() == 0 ? 0 : (int) Math.round(100.0 * r.reconnues() / r.unites());

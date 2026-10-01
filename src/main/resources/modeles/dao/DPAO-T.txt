@@ -3,6 +3,8 @@ TITRE	1.2. - DONNEES PARTICULIERES DE L’APPEL D‘OFFRES
 CONDITION	PROJETB02-OT-01 renseigne
 CONDITION	ALLOTIalloti = OUI
 CONDITION	LOTS-DIVISIBLESalloti = OUI et B02-LT-02 = Divisible
+CONDITION	LIMITE-LOTSalloti = OUI et B02-LT-02 = Divisible et B02-AU-07 renseigne
+CONDITION	OFFRES-ANORMALESB06-EO-07 renseigne
 CONDITION	LOTS-TOTALITEalloti = OUI et B02-LT-02 = Totalité des lots
 CONDITION	VARIANTES-NONvariantes = NON
 CONDITION	VARIANTES-OUIvariantes = OUI
@@ -16,9 +18,9 @@ CONDITION	SANS-GARANTIEgarantieSoumission = NON
 CONDITION	GARANTIEgarantieSoumission = OUI
 CONDITION	GARANTIE-LOTSgarantieSoumission = OUI et alloti = OUI
 CONDITION	GARANTIE-UNIQUEgarantieSoumission = OUI et alloti != OUI
-CONDITION	GARANTIE-BANCAIREgarantieSoumission = OUI et B05-GQ-02 = Garantie bancaire
-CONDITION	GARANTIE-CAUTIONgarantieSoumission = OUI et B05-GQ-02 = Caution personnelle et solidaire
-CONDITION	GARANTIE-CHEQUEgarantieSoumission = OUI et B05-GQ-02 = Chèque de banque
+CONDITION	GARANTIE-BANCAIREgarantieSoumission = OUI et B05-GQ-02 contient Garantie bancaire
+CONDITION	GARANTIE-CAUTIONgarantieSoumission = OUI et B05-GQ-02 contient Caution personnelle et solidaire
+CONDITION	GARANTIE-CHEQUEgarantieSoumission = OUI et B05-GQ-02 contient Chèque de banque
 CONDITION	VISITE-OBLIGATOIREB04-VL-02 = OUI
 CONDITION	ONGB03-QT-05 = OUI
 CONDITION	QUALIFICATIONSB03-QT-06 renseigne
@@ -43,7 +45,7 @@ TABLE	2
 LIGNE	Clause des Instructions aux Candidats (IC)Données particulières
 LIGNE	1. Maître de l'Ouvrage et objet de l’appel d’offres
 LIGNE	Maître de l'Ouvrage{{B01-AC-01}}Objet de l'appel d'offres{{SI:PROJET}}Le présent appel d'offres, s'inscrit dans:{{B02-OT-01}}.{{FINSI:PROJET}}L’Appel d’offres a pour objet :{{B02-OT-02}}
-LIGNE	1.1 Lots, variantes et tranches{{SI:ALLOTI}}LotsLes lots suivants faisant partie de {{B02-LT-01}} :{{B02-LV-02}}{{SI:LOTS-DIVISIBLES}}Le candidat peut soumissionner pour un ou plusieurs lots{{FINSI:LOTS-DIVISIBLES}}{{SI:LOTS-TOTALITE}}Le candidat ne peut soumissionner que pour la totalité des lots{{FINSI:LOTS-TOTALITE}}{{FINSI:ALLOTI}}
+LIGNE	1.1 Lots, variantes et tranches{{SI:ALLOTI}}LotsLes lots suivants faisant partie de {{B02-LT-01}} :{{B02-LV-02}}{{SI:LOTS-DIVISIBLES}}Le candidat peut soumissionner pour un ou plusieurs lots{{FINSI:LOTS-DIVISIBLES}}{{SI:LIMITE-LOTS}}mais ne peut prétendre qu’à {{B02-AU-07.lettres}} ({{B02-AU-07}}) lots{{FINSI:LIMITE-LOTS}}{{SI:LOTS-TOTALITE}}Le candidat ne peut soumissionner que pour la totalité des lots{{FINSI:LOTS-TOTALITE}}{{FINSI:ALLOTI}}
 LIGNE	Variantes{{SI:VARIANTES-NON}}Les variantes ne sont pas prises en considération{{FINSI:VARIANTES-NON}}{{SI:VARIANTES-OUI}}Les variantes sont autorisées.{{FINSI:VARIANTES-OUI}}{{SI:TRANCHES}}TranchesLes travaux sont décomposés en tranches définies comme suit :- tranche ferme: {{B02-LT-03}}{{SI:TRANCHE-C1}}- tranche conditionnelle 1: {{B02-LT-04}}{{FINSI:TRANCHE-C1}}{{SI:TRANCHE-C2}}- tranche conditionnelle 2: {{B02-LT-05}}{{FINSI:TRANCHE-C2}}Les candidats doivent soumissionner pour la totalité des tranches.Les délais d'affermissement de chaque tranche conditionnelle sont fixés par le CCAP{{FINSI:TRANCHES}}
 LIGNE	{{SI:GROUPEMENT}}
 LIGNE	2. Groupements{{SI:GROUPEMENT-LIBRE}}Les groupements entre Candidats soumissionnant pour des lots distincts peuvent être conjoint ou solidaire{{FINSI:GROUPEMENT-LIBRE}}{{SI:GROUPEMENT-SOLIDAIRE}}Les groupements entre Candidats soumissionnant pour des lots distincts doivent être obligatoirement solidaire.{{FINSI:GROUPEMENT-SOLIDAIRE}}
@@ -79,6 +81,9 @@ LIGNE	9.1. - Relations entre les Candidats et le Maître de l'Ouvrage ou La PRMP
 LIGNE	{{SI:ALLOTI}}
 LIGNE	9.4. Evaluation des offres9.4.3. Détermination du montant évalué de l'offreEvaluation des offres portant sur plusieurs lots{{SI:EVALUATION-PAR-LOT}}Les offres seront évaluées par lot et le Marché portera sur le lot ou les lots attribués au Candidat proposant la meilleure offre pour le lot ou les lots considérés.{{FINSI:EVALUATION-PAR-LOT}}{{SI:EVALUATION-ENSEMBLE}}Le Marché portera sur l'ensemble des lots. Les offres seront évaluées par lot. Le prix offert pour l’ensemble des lots par les candidats dont les offres sont conformes sera utilisé aux fins de comparaison des offres.{{FINSI:EVALUATION-ENSEMBLE}}
 LIGNE	{{FINSI:ALLOTI}}
+LIGNE	{{SI:OFFRES-ANORMALES}}
+LIGNE	9.4.5. Offres anormalement basses ou anormalement hautes{{B06-EO-07}}
+LIGNE	{{FINSI:OFFRES-ANORMALES}}
 LIGNE	9.5. Marge de préférence nationale{{SI:SANS-PREFERENCE}}Il n’est pas accordé de préférence aux candidatsnationaux{{FINSI:SANS-PREFERENCE}}{{SI:PREFERENCE}}Il est accordé aux candidats nationaux une préférence conformément à la clause 9.5. des IC de {{B06-PN-02.chiffres}} %{{FINSI:PREFERENCE}}
 LIGNE	11. Délai d’exécutionLe délai d’exécution proposé ne doit pas dépasser {{B09-DL-01.parLot}} à compter du lendemain de la date de notification de l’OS de commencer les travaux{{SI:NON-CUMUL}}En cas d’attribution de deux ou plusieurs lots à un Candidat, les délais ne sont pas cumulables{{FINSI:NON-CUMUL}}
 FIN_TABLE	

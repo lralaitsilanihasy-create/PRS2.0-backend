@@ -162,6 +162,9 @@ class ModelesDaoTravauxTest {
                 "B05-GQ-03#2", "7200000", "B09-DL-01#1", "six mois", "B09-DL-01#2", "cinq mois"));
         f.getValeurs().putAll(Map.of("B03-QT-13", "Conducteur de travaux : ingénieur BTP, 3 ans", "B03-QT-14#1", "99000000",
                 "B03-QT-14#2", "72000000"));
+        // §B4.1 — limite de lots (lots divisibles), offres anormales, formes de garantie à choix multiples (« contient »).
+        f.getValeurs().putAll(Map.of("B02-LT-02", "Divisible", "B02-AU-07", "2", "B06-EO-07", "Moyenne des offres + 20 %",
+                "B05-GQ-02", "Garantie bancaire,Chèque de banque"));
         String dpao = FormulairesCandidat.rendreModele("DPAO", null, f, champsMen(), dao.modele("DPAO-T"), null).texte()
                 .replace(' ', ' ').replace(' ', ' ');
         assertThat(dpao).contains("réalisés au cours des cinq dernières années", "au cours des cinq (5) dernières années",
@@ -170,7 +173,10 @@ class ModelesDaoTravauxTest {
                 "Lot n° 1 : 9 900 000 Ariary ; Lot n° 2 : 7 200 000 Ariary",
                 "ne doit pas dépasser Lot n° 1 : six mois ; Lot n° 2 : cinq mois à compter",
                 "(e) proposer le personnel clé suivant : Conducteur de travaux : ingénieur BTP, 3 ans",
-                "d’un montant minimum de : Lot n° 1 : 99 000 000 Ariary ; Lot n° 2 : 72 000 000 Ariary")
+                "d’un montant minimum de : Lot n° 1 : 99 000 000 Ariary ; Lot n° 2 : 72 000 000 Ariary",
+                "mais ne peut prétendre qu’à deux (2) lots", "9.4.5. Offres anormalement basses ou anormalement hautes	Moyenne des offres + 20 %",
+                "- Soit une garantie bancaire", "- Soit un chèque de banque")
+                .doesNotContain("- Soit une caution personnelle et solidaire")
                 .doesNotContain("{{", "trois (5)", "carte professionnelle de l'année", "< par exemple >");
 
         f.getValeurs().remove("B03-QT-13");
@@ -183,7 +189,7 @@ class ModelesDaoTravauxTest {
         String unique = FormulairesCandidat.rendreModele("DPAO", null, f, champsMen(), dao.modele("DPAO-T"), null).texte()
                 .replace(' ', ' ').replace(' ', ' ');
         assertThat(unique).contains("cinq millions ariary (5 000 000 Ariary).")
-                .doesNotContain("(e) proposer le personnel clé", "(f) justifier d’une liquidité");
+                .doesNotContain("(e) proposer le personnel clé", "(f) justifier d’une liquidité", "mais ne peut prétendre");   // non alloti
     }
 
     // ------------------------------------------------------------------ outils
@@ -193,7 +199,8 @@ class ModelesDaoTravauxTest {
         Map<String, ChampFicheMarche> m = new HashMap<>(champs());
         for (String[] t : List.of(new String[] {"B03-QT-12", "NOMBRE", "non"}, new String[] {"B03-QT-08", "TEXTE_LONG", "oui"},
                 new String[] {"B05-GQ-03", "MONTANT", "oui"}, new String[] {"B09-DL-01", "TEXTE_LONG", "oui"},
-                new String[] {"B03-QT-14", "MONTANT", "oui"}, new String[] {"B03-QT-13", "TEXTE_LONG", "non"})) {
+                new String[] {"B03-QT-14", "MONTANT", "oui"}, new String[] {"B03-QT-13", "TEXTE_LONG", "non"},
+                new String[] {"B02-AU-07", "NOMBRE", "non"}, new String[] {"B05-GQ-02", "LISTE_MULTIPLE", "non"})) {
             ChampFicheMarche c = new ChampFicheMarche();
             c.setCode(t[0]);
             c.setType(t[1]);

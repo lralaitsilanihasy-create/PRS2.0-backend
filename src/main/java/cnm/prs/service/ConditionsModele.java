@@ -91,6 +91,29 @@ public final class ConditionsModele {
      * les termes {@code !=}, {@code contient}, {@code renseigne}, {@code vide} n'impliquent rien. Même découpage que
      * {@link #vraie} : un « et » dans une valeur n'est pas un séparateur.
      */
+    /**
+     * ⚠️ 2026-10-01 (front 0afc489, règle 6 de l'import) — les termes {@code cle contient valeur} d'une section retenue, dans
+     * l'ordre (rien pour une expression à alternatives). C'est à l'appelant de dire si la valeur est une option entière du
+     * champ (« contient bancaire », un fragment, ne dit rien).
+     */
+    public static List<Map.Entry<String, String>> contenus(String expression) {
+        if (expression == null || expression.isBlank()) {
+            return List.of();
+        }
+        String[] alternatives = OU.split(expression.trim());
+        if (alternatives.length != 1) {
+            return List.of();
+        }
+        List<Map.Entry<String, String>> out = new java.util.ArrayList<>();
+        for (String terme : ET.split(alternatives[0].trim())) {
+            Matcher m = CONTIENT.matcher(terme.trim());
+            if (m.matches()) {
+                out.add(Map.entry(m.group(1), m.group(2).trim()));
+            }
+        }
+        return out;
+    }
+
     public static List<Map.Entry<String, String>> implications(String expression) {
         if (expression == null || expression.isBlank()) {
             return List.of();

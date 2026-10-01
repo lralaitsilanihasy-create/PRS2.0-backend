@@ -105,8 +105,14 @@ public final class LectureDao {
         }
     }
 
-    /** Ce que l'appelant sait d'un champ : son type, sa source, sa clé de cadrage (reflet). */
-    public record InfoChamp(String type, String source, String cleCadrage) {
+    /**
+     * Ce que l'appelant sait d'un champ : son type, sa source, sa clé de cadrage (reflet), et ⚠️ 2026-10-01 ses options
+     * (une liste ou une liste à choix multiples : les réponses déduites d'un terme {@code contient}).
+     */
+    public record InfoChamp(String type, String source, String cleCadrage, List<String> options) {
+        public InfoChamp(String type, String source, String cleCadrage) {
+            this(type, source, cleCadrage, List.of());
+        }
     }
 
     /** Un paragraphe du modèle, avec la pile des sections conditionnelles qui l'entourent. */
@@ -735,7 +741,26 @@ public final class LectureDao {
         Map<String, Reponse> reponsesChamps = new LinkedHashMap<>();
         List<Conflit> conflits = new ArrayList<>();
         Set<String> enConflit = new LinkedHashSet<>();
+        // ⚠️ 2026-10-01 (front 0afc489, règle 6) — un terme `CODE contient Option` d'une section retenue ajoute l'option à la
+        // liste du champ, si c'est une option ENTIÈRE du référentiel (B05-GQ-02, à choix multiples : un DAO qui admet les
+        // trois formes de garantie donne les trois options). Section de la première option attestée.
+        Map<String, List<String>> multiples = new LinkedHashMap<>();
+        Map<String, String> sectionMultiple = new LinkedHashMap<>();
         for (String s : sectionsVues) {
+            for (Map.Entry<String, String> t : ConditionsModele.contenus(modele.conditions().get(s))) {
+                InfoChamp info = champs.apply(t.getKey());
+                if (info == null || info.options() == null) {
+                    continue;
+                }
+                String cherche = norm(t.getValue()).toLowerCase(Locale.ROOT);
+                info.options().stream().filter(o -> norm(o).toLowerCase(Locale.ROOT).equals(cherche)).findFirst().ifPresent(o -> {
+                    List<String> l = multiples.computeIfAbsent(t.getKey(), k -> new ArrayList<>());
+                    if (!l.contains(o)) {
+                        l.add(o);
+                    }
+                    sectionMultiple.putIfAbsent(t.getKey(), s);
+                });
+            }
             for (Map.Entry<String, String> t : ConditionsModele.implications(modele.conditions().get(s))) {
                 Map<String, Reponse> cible = CODE_CHAMP.matcher(t.getKey()).matches() ? reponsesChamps : cadrage;
                 Reponse deja = cible.get(t.getKey());
@@ -745,6 +770,19 @@ public final class LectureDao {
                 } else if (deja == null) {
                     cible.put(t.getKey(), new Reponse(t.getKey(), t.getValue(), s));
                 }
+            }
+        }
+        for (Map.Entry<String, List<String>> e : multiples.entrySet()) {
+            // L'ordre est celui du référentiel, pas celui du document : deux lectures d'un même DAO donnent la même valeur.
+            List<String> ordre = champs.apply(e.getKey()).options();
+            String valeur = String.join(",", e.getValue().stream().sorted(java.util.Comparator.comparingInt(ordre::indexOf)).toList());
+            Map<String, Reponse> cible = CODE_CHAMP.matcher(e.getKey()).matches() ? reponsesChamps : cadrage;
+            Reponse deja = cible.get(e.getKey());
+            if (deja != null && !deja.valeur().equals(valeur)) {
+                conflits.add(new Conflit(e.getKey(), List.of(deja.valeur(), valeur)));
+                enConflit.add(e.getKey());
+            } else if (deja == null) {
+                cible.put(e.getKey(), new Reponse(e.getKey(), valeur, sectionMultiple.get(e.getKey())));
             }
         }
 

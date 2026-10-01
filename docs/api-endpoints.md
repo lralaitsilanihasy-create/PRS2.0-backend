@@ -5077,7 +5077,10 @@ journal du dossier (`AVIS_SPECIFIQUE_IMPRIME`).
 Demande front `demande-backend-2026-10-01-dao-travaux-men.md`. Migration **V58** et script
 `docs/referentiel/2026-10-01-dao-travaux-men.sql`, à passer après le redémarrage qui applique V58.
 
-- **DPAO-T** recopié du front (253/253, 38 conditions) :
+- **DPAO-T** recopié du front (253/253, 38 conditions ; ⚠️ §B4.1, second envoi le même jour : **260/260, 40 conditions**) :
+  - limite de lots en 1.1 (« mais ne peut prétendre qu'à deux (2) lots », condition `LIMITE-LOTS`), offres anormales
+    en 9.4.5 (`OFFRES-ANORMALES`), formes de garantie en `B05-GQ-02 contient …` ; `B02-AU-07` et `B06-EO-07` sont donc
+    désormais imprimés ;
   - pièces administratives saisies (`{{B03-CQ-01}}`) ;
   - période de référence en lettres et en chiffres ;
   - seuil, garantie et délai par lot ;
@@ -5363,6 +5366,12 @@ Une fiche jamais enregistrée est lue comme un brouillon vide.
     Parité refaite le 2026-10-01 : **extraction identique** sur 18 documents réels, DAO du MEN compris (3 302
     paragraphes) ; **lectures identiques** sur 18 documents × 14 modèles, sans types de champ (985 lignes) puis avec les
     types des référentiels (818 lignes).
+  - ⚠️ **Réponse déduite d'un terme `contient`** (2026-10-01, front 0afc489, règle 6). Un terme `CODE contient Option`
+    d'une section retenue ajoute l'option à la liste du champ, si c'est une option **entière** du référentiel (« contient
+    bancaire », un simple fragment, ne dit rien). La valeur est la suite des options dans l'ordre du référentiel, séparées
+    par des virgules, par exemple `B05-GQ-02` = « Caution personnelle et solidaire,Garantie bancaire,Chèque de banque ».
+    Un terme `=` qui dit autre chose sur le même champ est un conflit. Parité refaite avec les options des référentiels
+    et les réponses déduites : identique (1 022 lignes).
 - **Réponse 200 `ImportDaoResult`** :
 
 ```json
