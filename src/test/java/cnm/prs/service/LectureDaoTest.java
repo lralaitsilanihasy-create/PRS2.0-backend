@@ -255,6 +255,53 @@ class LectureDaoTest {
     }
 
     @Test
+    @DisplayName("2026-10-01 (DPAC-CC) : deux rédactions d'une même phrase, la plus contrainte gagne — non alloti : montant "
+            + "lu en lettres et chiffres, alloti = NON sans conflit ; alloti : la rédaction par lot, alloti = OUI")
+    void varianteLaPlusContrainte() {
+        String modele = String.join("\n",
+                "CONDITION\tALLOTI\u001Falloti = OUI",
+                "CONDITION\tNON-ALLOTI\u001Falloti = NON",
+                "CONDITION\tMONTANT-LOTS\u001Falloti = OUI",
+                "CONDITION\tMONTANT-UNIQUE\u001Falloti != OUI",
+                "PARA\tModalités d'acquisition du dossier de consultation",
+                "PARA\t{{SI:MONTANT-LOTS}}",
+                "PARA\tLe dossier est retiré moyennant le paiement d'un montant non remboursable de {{B04-DS-05.parLot}} libellé au nom de l'Agent comptable.",
+                "PARA\t{{FINSI:MONTANT-LOTS}}",
+                "PARA\t{{SI:MONTANT-UNIQUE}}",
+                "PARA\tLe dossier est retiré moyennant le paiement d'un montant non remboursable de {{B04-DS-05.lettres}} ({{B04-DS-05}}) libellé au nom de l'Agent comptable.",
+                "PARA\t{{FINSI:MONTANT-UNIQUE}}",
+                "PARA\t{{SI:NON-ALLOTI}}",
+                "PARA\tLe contrat-cadre n'est pas alloti et forme un ensemble unique.",
+                "PARA\t{{FINSI:NON-ALLOTI}}",
+                "PARA\t{{SI:ALLOTI}}",
+                "PARA\tLe contrat-cadre est alloti et chaque lot fait l'objet d'une offre distincte.",
+                "PARA\t{{FINSI:ALLOTI}}",
+                "PARA\tModification du dossier de consultation");
+        java.util.function.Function<String, LectureDao.InfoChamp> champs =
+                c -> "B04-DS-05".equals(c) ? new LectureDao.InfoChamp("MONTANT", "FICHE", null) : null;
+        List<String> unique = LectureDao.unitesDocument(List.of(
+                "Modalités d'acquisition du dossier de consultation",
+                "Le dossier est retiré moyennant le paiement d'un montant non remboursable de cinquante mille ariary (50 000 Ariary) libellé au nom de l'Agent comptable.",
+                "Le contrat-cadre n'est pas alloti et forme un ensemble unique.",
+                "Modification du dossier de consultation"));
+        LectureDao.Resultat r = LectureDao.lire("T", FichierCommande.lireModele(modele), unique, champs);
+        assertThat(r.conflits()).isEmpty();
+        assertThat(r.cadrage()).extracting(c -> c.cle() + "=" + c.valeur()).containsExactly("alloti=NON");
+        assertThat(r.propositions()).extracting(p -> p.code() + "=" + p.valeur()).containsExactly("B04-DS-05=50000");
+
+        List<String> lots = LectureDao.unitesDocument(List.of(
+                "Modalités d'acquisition du dossier de consultation",
+                "Le dossier est retiré moyennant le paiement d'un montant non remboursable de Lot n° 1 : 100 000 Ariary ; Lot n° 2 : 150 000 Ariary libellé au nom de l'Agent comptable.",
+                "Le contrat-cadre est alloti et chaque lot fait l'objet d'une offre distincte.",
+                "Modification du dossier de consultation"));
+        LectureDao.Resultat r2 = LectureDao.lire("T", FichierCommande.lireModele(modele), lots, champs);
+        assertThat(r2.conflits()).isEmpty();
+        assertThat(r2.cadrage()).extracting(c -> c.cle() + "=" + c.valeur()).containsExactly("alloti=OUI");
+        assertThat(r2.propositions()).extracting(p -> p.code() + "=" + p.valeur())
+                .containsExactlyInAnyOrder("B04-DS-05#1=100000", "B04-DS-05#2=150000");
+    }
+
+    @Test
     @DisplayName("Lot D2 (B5, 2026-09-29) : « {{CODE}}. » est un jeton seul, jamais un motif ; un libellé présent dans deux "
             + "rédactions n'atteste aucune section ; marqueurs de cellule et de rangée ; {{CODE.parLot}} → CODE#1, CODE#2")
     void reglesDuLotD2() {

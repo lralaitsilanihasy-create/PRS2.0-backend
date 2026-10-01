@@ -34,9 +34,9 @@ class ModelesAvisTest {
         f.getValeurs().putAll(Map.of("B02-OB-03", "14-26/AOO/REG", "B04-OV-02", "2026-10-12T09:00", "B05-GQ-03", "2000000",
                 "B04-DS-05", "100000", "B04-DS-10", "Antananarivo"));
         DocumentLibre d = rendre("AVIS-T", f, publication(true));
-        // L'emblème est en tête du corps, juste après le titre du modèle (ligne TITRE), avant l'autorité.
+        // L'emblème est le premier élément du corps (le titre est descendu sous l'en-tête, front 40f2b4a), avant l'autorité.
         int image = d.elements().stream().map(e -> e instanceof DocumentLibre.Image).toList().indexOf(true);
-        assertThat(image).isBetween(0, 1);
+        assertThat(image).isZero();
         assertThat(((DocumentLibre.Paragraphe) d.elements().get(image + 1)).texte()).isEqualTo("Région Analamanga");
         String t = texte(d);
         assertThat(t).contains("N° 14-26/AOO/REG", "« Réhabilitation du réseau d'eau »", "le 12/10/2026 à 09 h 00 (heure locale)",

@@ -606,12 +606,6 @@ public final class FormulairesCandidat {
         }
 
         /**
-         * ⚠️ Lot D2 (2026-09-29, §B1.3) — {@code {{CODE.parLot}}} : dans un document COMMUN d'une ligne allotie, la valeur
-         * de chaque lot formatée comme {@code {{CODE}}}, énumérée « Lot n° 1 : v1 ; Lot n° 2 : v2 » (pointillés pour un lot
-         * sans valeur) ; sur une ligne non allotie, un champ qui n'est pas par lot, ou dans un document de lot : la valeur
-         * seule, comme {@code {{CODE}}}.
-         */
-        /**
          * ⚠️ 2026-10-01 (avis spécifique, §B7.3) — un montant par lot, une ligne par lot : « - Lot 1 : cent mille ariary
          * (Ar 100 000) » ; hors allotissement (ou dans un document de lot), la ligne seule, sans le lot.
          */
@@ -627,6 +621,12 @@ public final class FormulairesCandidat {
             return String.join(String.valueOf(SEPARATEUR_LIGNES), lignes);
         }
 
+        /**
+         * ⚠️ Lot D2 (2026-09-29, §B1.3) — {@code {{CODE.parLot}}} : dans un document COMMUN d'une ligne allotie, la valeur
+         * de chaque lot formatée comme {@code {{CODE}}}, énumérée « Lot n° 1 : v1 ; Lot n° 2 : v2 » (pointillés pour un lot
+         * sans valeur) ; sur une ligne non allotie, un champ qui n'est pas par lot, ou dans un document de lot : la valeur
+         * seule, comme {@code {{CODE}}}.
+         */
         private String parLot(String code, ChampFicheMarche c, Integer lot) {
             int nbLots = Boolean.TRUE.equals(fiche.getSaisieParLot()) && fiche.getNbLots() != null ? fiche.getNbLots() : 0;
             if (lot != null || c == null || !LotsFiche.parLot(c, nbLots)) {

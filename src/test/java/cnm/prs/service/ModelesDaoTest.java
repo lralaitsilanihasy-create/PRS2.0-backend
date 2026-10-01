@@ -68,7 +68,7 @@ class ModelesDaoTest {
             + "illisible ou une section mal refermée fait échouer le chargement, nommément")
     void chargement() {
         ModelesDao dao = new ModelesDao();
-        assertThat(dao.modele("DPAC-CC").conditions()).hasSize(16);   // D4 : + CCAG-FOURNITURES, CCAG-TRAVAUX
+        assertThat(dao.modele("DPAC-CC").conditions()).hasSize(18);   // D4 : + CCAG-FOURNITURES, CCAG-TRAVAUX ; 01/10 : + MONTANT-LOTS/-UNIQUE
         assertThat(dao.modele("AE-CC").conditions()).hasSize(55);
         // ⚠️ Lot D2 (2026-09-29) — les trois documents des fournitures, un modèle pour la quantité fixe et à commande.
         assertThat(dao.modele("DPAO-F").conditions()).hasSize(42);
@@ -154,13 +154,15 @@ class ModelesDaoTest {
         fiche.setValeurs(new HashMap<>(v("B02-DC-03", "NON", "B02-PC-02", "Au fur et à mesure des besoins",
                 "B07-FS-01", "Marchés uniques non fractionnés", "B07-DE-01", "Fixés dans les marchés subséquents",
                 "B07-PE-01", "Fixées dans les marchés subséquents", "B05-PM-01", "Prix unitaires", "B09-GP-01", "NON",
-                "B10-RS-02", "3", "B04-CP-02", "2026-04-10T10:00", "B04-VO-01", "90", "B02-OB-01", "Fournitures de bureau")));
+                "B10-RS-02", "3", "B04-CP-02", "2026-04-10T10:00", "B04-VO-01", "90", "B02-OB-01", "Fournitures de bureau",
+                "B04-DS-05", "50000")));
         fiche.setValeursPpm(new HashMap<>(v("B01-AC-13", "Appel d'offres ouvert", "B01-AC-01", "Ministère X")));
         String dpac = FormulairesCandidat.rendreModele("DPAC", null, fiche, champs(), dao.modele("DPAC-CC"), null).texte();
         assertThat(dpac).contains("à un seul titulaire (mono-attributaire)", "remis en compétition au fur et à mesure des besoins",
                 "Le contrat-cadre est conclu à prix unitaires.", "La période de validité du contrat n’est pas reconductible.",
                 "Sans objet.", "La transmission de dossiers par voie électronique n’est pas admise",
-                "DATE ET HEURE LIMITES DE REMISE DES OFFRES : 10/04/2026 10:00", "exprimées en Ariary. Si")
+                "DATE ET HEURE LIMITES DE REMISE DES OFFRES : 10/04/2026 10:00", "exprimées en Ariary. Si",
+                "montant non remboursable de cinquante mille ariary (50 000 Ariary) libellé")
                 .doesNotContain("multi attributaire", "selon le calendrier fixé ci-après", "{{", "CLAUSE À FOURNIR",
                         "Cette période de validité peut être reconduite");
         String ae = FormulairesCandidat.rendreModele("AE", null, fiche, champs(), dao.modele("AE-CC"), null).texte();
@@ -189,14 +191,16 @@ class ModelesDaoTest {
                 "B02-PC-02", "Selon le calendrier fixé ci-après", "B02-PC-03", "chaque trimestre",
                 "B07-MA-04", "Titulaires de tous les lots", "B05-PM-02", "OUI", "B05-PM-05", "OUI", "B05-PM-04", "5",
                 "B09-GP-01", "OUI", "B09-GP-04", "À partir de la date de mise en service", "B09-GP-03", "12",
-                "B04-SE-02", "https://depot.cnm.mg")));
+                "B04-SE-02", "https://depot.cnm.mg", "B04-DS-05#1", "100000", "B04-DS-05#2", "150000")));
         fiche.setValeursPpm(new HashMap<>(v("B01-AC-13", "Appel d'offres restreint")));
         fiche.setValeursCadrage(new HashMap<>(v("B08-AV-02", "15", "B02-LV-05", "2")));
         String dpac = FormulairesCandidat.rendreModele("DPAC", null, fiche, champs(), dao.modele("DPAC-CC"), null).texte();
         assertThat(dpac).contains("à plusieurs titulaires (multi attributaire)", "selon le calendrier fixé ci-après",
                 "chaque trimestre", "Cette période de validité peut être reconduite",
                 "La transmission par voie électronique est admise dans les conditions suivantes",
-                "[[CLAUSE À FOURNIR PAR LE JURISTE : conditions de la transmission électronique — plateforme (https://depot.cnm.mg)")
+                "[[CLAUSE À FOURNIR PAR LE JURISTE : conditions de la transmission électronique — plateforme (https://depot.cnm.mg)",
+                // 01/10 : le montant du DAO par lot (DPAC-CC du front, 40f2b4a)
+                "montant non remboursable de Lot n° 1 : 100 000 Ariary ; Lot n° 2 : 150 000 Ariary libellé")
                 .doesNotContain("n’est pas admise", "mono-attributaire", "Sans objet.", "{{");
         for (int lot = 1; lot <= 2; lot++) {
             String ae = FormulairesCandidat.rendreModele("AE", lot, fiche, champs(), dao.modele("AE-CC"), null).texte();
@@ -309,6 +313,12 @@ class ModelesDaoTest {
             c.setActif(true);
             m.put(t[0], c);
         }
+        ChampFicheMarche ds05 = new ChampFicheMarche();   // 01/10 : le montant du DAO, saisi par lot (§B7.4)
+        ds05.setCode("B04-DS-05");
+        ds05.setType("MONTANT");
+        ds05.setActif(true);
+        ds05.setParLot(true);
+        m.put("B04-DS-05", ds05);
         return m;
     }
 

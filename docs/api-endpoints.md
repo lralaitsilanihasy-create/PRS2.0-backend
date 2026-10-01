@@ -5049,7 +5049,10 @@ journal du dossier (`AVIS_SPECIFIQUE_IMPRIME`).
   - `{{PARAM.compte-dao}}` rend le compte de l'ARMP.
 - **`POST …/avis-specifique`** : seules `datePublication` et `jmpDate` sont exigées. `jmpNumero` vide s'imprime en
   pointillés ; des `supports` vides retirent « et dans … » (clé de condition `supportsPublication`).
-- **`B04-DS-05`** est saisi par lot (`docs/referentiel/2026-10-01-avis-montant-dao-par-lot.sql`).
+- **`B04-DS-05`** est saisi par lot (`docs/referentiel/2026-10-01-avis-montant-dao-par-lot.sql`, passé sur DBPRS20 le
+  2026-10-01). Le DPAC du contrat-cadre l'imprime par lot sur une ligne allotie (`{{B04-DS-05.parLot}}`) ; l'avis le
+  donne une ligne par lot. Modèles réalignés sur le front (40f2b4a) : titre sous l'en-tête, emblème en premier
+  (89/89, 95/95, DPAC-CC 184/184).
 - **`GET /api/parametres/compte-dao`** (Administrateur, PRMP, UGPM) renvoie `{ banque, titulaire, numeroCompte,
   misAJourLe, misAJourPar }`. **`PUT /api/parametres/compte-dao`** est réservé à l'Administrateur (403 sinon) ; ses
   trois informations sont exigées (400 nominatif) ; le réglage est tracé à l'audit.
@@ -5252,6 +5255,12 @@ Une fiche jamais enregistrée est lue comme un brouillon vide.
     lettre (« {{CODE}}. ») est un jeton seul. Une ancre de moins de 8 lettres ne donne jamais la confiance `haute`. Un
     paragraphe n'atteste ses sections que s'il a au moins 20 lettres de texte fixe et qu'aucun paragraphe de même texte
     n'existe hors de ces sections.
+  - ⚠️ **La variante la plus contrainte gagne** (2026-10-01, DPAC-CC). Un paragraphe à jeton laisse un paragraphe du
+    document à une variante qui le reconnaît aussi en entier. Une variante est un paragraphe à jeton parmi les 6 qui le
+    suivent dans le modèle, rattaché à d'autres sections, avec plus de signes de texte fixe, et pas encore reconnu. Le
+    paragraphe poursuit alors sa recherche plus loin. Exemple : « … de {{B04-DS-05.parLot}} libellé… » (alloti) cède
+    « … de cinquante mille ariary (50 000 Ariary) libellé… » à « … de {{B04-DS-05.lettres}} ({{B04-DS-05}}) libellé… »
+    (non alloti), au lieu d'attester `alloti = OUI` à tort. Règle à reporter dans `lire.mjs` (demande avis §B7).
 - **Réponse 200 `ImportDaoResult`** :
 
 ```json

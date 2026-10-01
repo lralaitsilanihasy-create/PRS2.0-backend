@@ -176,3 +176,26 @@ devenait « - ». Décidé avec le front, et fait à l'identique des deux côté
 
 Même occasion : la ponctuation de tête (`:`, `;`, `,`, `.`) n'est plus prise dans une valeur de texte. Parité avec
 `lire.mjs` : identique sur huit entrées, valeurs reprises comprises.
+
+## Complément du 2026-10-01 — la variante la plus contrainte gagne
+
+Le DPAC du contrat-cadre (front 40f2b4a) écrit la phrase du montant du DAO en deux rédactions : « … de
+{{B04-DS-05.parLot}} libellé… » (alloti) et « … de {{B04-DS-05.lettres}} ({{B04-DS-05}}) libellé… » (non alloti). La
+première, une capture libre, reconnaissait aussi la phrase non allotie. Elle attestait `alloti = OUI` contre le reste
+du document, qui partait alors en conflit.
+
+**Règle :**
+- les variantes d'un paragraphe à jeton sont les paragraphes à jeton qui le suivent dans le modèle, **6 au plus**,
+  rattachés à d'autres sections et portant plus de signes de texte fixe (ponctuation comprise, blancs exclus) ;
+- quand une variante pas encore reconnue décrit aussi en entier le paragraphe du document, le paragraphe lui laisse la
+  place et poursuit sa recherche plus loin.
+
+Le profil du modèle (`Profil.variantes`) la calcule une fois par lecture. Le coût reste linéaire : les variantes ne
+sont essayées que sur un paragraphe déjà reconnu.
+
+**Mesure :** sur les entrées réelles du contrôle de parité, lues par tous les modèles, les lectures sont identiques avec
+et sans la règle. Seules trois lectures du DPAC-CC changent, celles qui étaient visées.
+
+**Exception à l'ordre habituel :** la règle est écrite côté serveur avant `lire.mjs`, avec l'accord donné le 01/10, parce
+que reprendre les modèles du front cassait l'import. Elle est à reporter côté front, puis le diff de parité est à
+refaire.
