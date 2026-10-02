@@ -245,6 +245,55 @@ class FicheDaoTravauxIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), "$.champs[?(@.gabarits)]")).isEmpty();
     }
 
+    @Test
+    @DisplayName("2026-10-02 — DAO routier du MTP (§B1-§B4) : sans maître d'œuvre ni assurance décennale, la fiche se valide "
+            + "et le CCAP imprime SANS-MOE ; un bâtiment exige l'assurance (ASSURANCE_DECENNALE bloquant) ; les garanties de "
+            + "soumission des travaux s'intitulent et se nomment B1 / B2 ; B08-MO-01 n'est plus servi aux travaux")
+    void travauxRoutiers() throws Exception {
+        String ref = ref("typeMarche=QUANTITE_FIXE&categorie=TRAVAUX");
+        assertThat(JsonPath.<List<String>>read(ref, "$.champs[?(@.obligatoire==true)].code")).doesNotContain("B02-MW-01", "B09-AC-03");
+        assertThat(JsonPath.<List<String>>read(ref, "$.champs[*].code")).doesNotContain("B08-MO-01");
+
+        long idDmc = creerDmc(9901);
+        cadrage(idDmc, "{\"tranches\":\"NON\",\"groupement\":\"NON\",\"avance\":\"NON\",\"garantieSoumission\":\"OUI\"}");
+        // Un bâtiment sans assurance décennale : bloquant.
+        remplirObligatoires(idDmc, "QUANTITE_FIXE", "TRAVAUX", Map.of("B09-BT-01", "OUI", "B05-GQ-02", "Garantie bancaire",
+                "B05-GQ-03", "5000000", "B04-CD-02", "C1"));
+        String refus = mvc.perform(post("/api/fiches-marche/" + idDmc + "/valider").header("Authorization", tokenPrmp))
+                .andExpect(status().isConflict()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<String>read(refus, "$.message")).contains("assurance de responsabilité civile décennale");
+        // Une route : ni bâtiment, ni maître d'œuvre, ni assurance — la fiche se valide.
+        mvc.perform(put("/api/fiches-marche/" + idDmc + "/blocs/B09").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"valeurs\":" + new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(
+                        valeursDuBloc(idDmc, "B09", Map.of("B09-BT-01", "NON"))) + "}")).andExpect(status().isOk());
+        mvc.perform(post("/api/fiches-marche/" + idDmc + "/valider").header("Authorization", tokenPrmp)).andExpect(status().isOk());
+        String fiche = mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<Map<String, String>>read(fiche, "$.valeurs")).doesNotContainKeys("B02-MW-01", "B09-AC-03");
+
+        String docs = documents(idDmc);
+        int idCcap = JsonPath.<List<Integer>>read(docs, "$[?(@.type=='CCAP' && @.extension=='docx')].idDocument").get(0);
+        byte[] ccap = mvc.perform(get("/api/fiches-marche/documents/" + idCcap + "/contenu").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        try (org.apache.poi.xwpf.usermodel.XWPFDocument d = new org.apache.poi.xwpf.usermodel.XWPFDocument(
+                new java.io.ByteArrayInputStream(ccap)); org.apache.poi.xwpf.extractor.XWPFWordExtractor ex =
+                        new org.apache.poi.xwpf.extractor.XWPFWordExtractor(d)) {
+            assertThat(ex.getText()).contains("Les tâches du maître d'œuvre sont assurées par");
+        }
+        assertThat(JsonPath.<List<String>>read(docs, "$[?(@.type=='C1')].libelle")).containsOnly("Garantie bancaire de soumission (B1)");
+        assertThat(JsonPath.<List<String>>read(docs, "$[?(@.type=='C1')].nomFichier")).allMatch(n -> n.startsWith("B1_"));
+    }
+
+    /** Les valeurs actuelles d'un bloc, modifiées : un PUT de bloc remplace le bloc entier. */
+    private Map<String, String> valeursDuBloc(long idDmc, String bloc, Map<String, String> modifs) throws Exception {
+        Map<String, String> toutes = JsonPath.read(mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), "$.valeurs");
+        Map<String, String> out = new java.util.TreeMap<>();
+        toutes.forEach((k, v) -> { if (k.startsWith(bloc + "-")) { out.put(k, v); } });
+        out.putAll(modifs);
+        return out;
+    }
+
     // ------------------------------------------------------------------ outils
 
     private ChampFicheMarcheService.BilanImport importer(String fichier) throws Exception {

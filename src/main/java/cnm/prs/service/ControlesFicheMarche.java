@@ -40,6 +40,7 @@ import cnm.prs.enums.TypeChampFiche;
  * <tr><td>PENALITES_PLAFOND_15</td><td>TAUX (%), DEROGATION (texte)</td><td>avertissement</td></tr>
  * <tr><td>INTERETS_MORATOIRES_TAUX</td><td>TAUX (%), BANQUE (%)</td><td>avertissement</td></tr>
  * <tr><td>DELAI_PAIEMENT_75</td><td>DELAI (jours)</td><td>avertissement</td></tr>
+ * <tr><td>ASSURANCE_DECENNALE (⚠️ 2026-10-02)</td><td>BATIMENT (oui/non), ASSURANCE (texte)</td><td>bloquant</td></tr>
  * </table>
  */
 public final class ControlesFicheMarche {
@@ -54,6 +55,11 @@ public final class ControlesFicheMarche {
     public static final String PENALITES_PLAFOND_15 = "PENALITES_PLAFOND_15";
     public static final String INTERETS_MORATOIRES_TAUX = "INTERETS_MORATOIRES_TAUX";
     public static final String DELAI_PAIEMENT_75 = "DELAI_PAIEMENT_75";
+    /**
+     * ⚠️ 2026-10-02 (demande front « référentiel des travaux routiers », §B2) — l'assurance décennale, exigée pour des
+     * travaux de bâtiment seulement : le CCAP-T ne l'imprime que sous {@code BATIMENT}.
+     */
+    public static final String ASSURANCE_DECENNALE = "ASSURANCE_DECENNALE";
     /** ⚠️ V45 (2026-09-25) — le besoin et les garanties générées. */
     public static final String BESOIN_INCOMPLET = "BESOIN_INCOMPLET";
     public static final String QUANTITES_ORDRE = "QUANTITES_ORDRE";
@@ -218,6 +224,7 @@ public final class ControlesFicheMarche {
         penalites(roles.get(PENALITES_PLAFOND_15), valeurs, plafondPenalites(categorie), avertissements, ok);
         interetsMoratoires(roles.get(INTERETS_MORATOIRES_TAUX), valeurs, avertissements, ok);
         delaiPaiement(roles.get(DELAI_PAIEMENT_75), valeurs, avertissements, ok);
+        assuranceDecennale(roles.get(ASSURANCE_DECENNALE), valeurs, bloquants, ok);
         // ⚠️ V45 (2026-09-25, §B4) — le besoin, la garantie générée et son taux.
         besoin(besoin, nbLots, bloquants, ok);
         garantieManquante(roles.get(GARANTIE_MANQUANTE), valeurs, cadrage, bloquants, ok);
@@ -534,6 +541,29 @@ public final class ControlesFicheMarche {
      * de soumission exigée ({@code garantieSoumission = OUI}) se génère par lot, au montant du lot — il faut donc sa
      * forme (C1, C2). Bloquant. Les montants par lot sont, eux, exigés par leur caractère obligatoire.
      */
+    /**
+     * ⚠️ 2026-10-02 — {@code ASSURANCE_DECENNALE} (rôles {@code BATIMENT} et {@code ASSURANCE}) : des travaux de bâtiment
+     * ({@code BATIMENT = OUI}) exigent l'assurance de responsabilité civile décennale, que le CCAP-T imprime alors ; hors
+     * bâtiment, rien n'est exigé ni constaté (une route n'a pas de garantie décennale à imprimer).
+     */
+    private static void assuranceDecennale(Map<String, ChampFicheMarche> r, Map<String, String> valeurs,
+            List<Controle> bloquants, List<Controle> ok) {
+        ChampFicheMarche batiment = r == null ? null : r.get("BATIMENT");
+        ChampFicheMarche assurance = r == null ? null : r.get("ASSURANCE");
+        if (batiment == null || assurance == null || !"OUI".equalsIgnoreCase(valeurs.get(batiment.getCode()))) {
+            return;
+        }
+        String v = valeurs.get(assurance.getCode());
+        if (v == null || v.isBlank()) {
+            bloquants.add(new Controle(ASSURANCE_DECENNALE, List.of(batiment.getCode(), assurance.getCode()), assurance.codeBloc(),
+                    "Des travaux de bâtiment exigent l'assurance de responsabilité civile décennale : renseignez « "
+                            + assurance.getLibelle() + " »."));
+        } else {
+            ok.add(new Controle(ASSURANCE_DECENNALE, List.of(batiment.getCode(), assurance.getCode()), assurance.codeBloc(),
+                    "Travaux de bâtiment : assurance décennale renseignée."));
+        }
+    }
+
     private static void garantieManquante(Map<String, ChampFicheMarche> r, Map<String, String> valeurs, Map<String, ?> cadrage,
             List<Controle> bloquants, List<Controle> ok) {
         ChampFicheMarche forme = r == null ? null : r.get("FORME");

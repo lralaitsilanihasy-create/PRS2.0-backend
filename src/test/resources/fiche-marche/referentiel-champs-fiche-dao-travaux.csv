@@ -1,5 +1,5 @@
 code;libelle;type;source;documentMaitre;reprises;typesMarche;categories;condition;obligatoire;texteType;controle;options;cleCadrage;clePpm;actif;parLot;valeurDefaut
-B02-MW-01;Maître d'œuvre : nom et coordonnées;TEXTE_LONG;SAISIE;AE;CCAP;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
+B02-MW-01;Maître d'œuvre : nom et coordonnées;TEXTE_LONG;SAISIE;AE;CCAP;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui;;
 B02-MW-02;Références du lien contractuel entre le maître de l'ouvrage et le maître d'œuvre;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui
 B02-MW-03;Imputation budgétaire;TEXTE;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;non
 B02-MW-04;Maître d'ouvrage délégué : nom et coordonnées (laisser vide s'il n'y en a pas);TEXTE_LONG;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui;;
@@ -89,7 +89,7 @@ B08-AF-02;Montant de l'avance forfaitaire (Ariary);MONTANT;SAISIE;CCAP;;QUANTITE
 B08-AF-03;Pourcentage du montant total des travaux à exécuter (%);POURCENTAGE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;avance = OUI;oui;;AVANCE_SUP_5_GARANTIE:TAUX;;;;oui
 B08-AF-04;Pourcentage du montant en monnaie nationale (%);POURCENTAGE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;avance = OUI;non;;;;;;oui
 B08-AF-05;Pourcentage du montant en devises (%);POURCENTAGE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;avance = OUI;non;;;;;;oui
-B08-MO-01;Taux des intérêts moratoires dus à l'entrepreneur (%);POURCENTAGE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;INTERETS_MORATOIRES_TAUX:TAUX;;;;oui
+B08-MO-01;Taux des intérêts moratoires dus à l'entrepreneur (%);POURCENTAGE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;INTERETS_MORATOIRES_TAUX:TAUX;;;;non;;
 B08-MR-01;Règlement en une fois pour un marché de moins de trois mois;OUI_NON;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
 B08-MR-02;Modalités d'établissement des décomptes mensuels;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;non
 B08-MR-03;Règlement des comptes d'un marché à prix unitaires;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;non
@@ -108,7 +108,7 @@ B09-NE-01;Modalités de notification à l'entrepreneur;TEXTE_LONG;SAISIE;CCAP;;Q
 B09-DC-01;Documents contractuels et leur ordre de priorité;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
 B09-AC-01;Assurance des installations et engins de chantier;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
 B09-AC-02;Assurance de responsabilité civile en cours de chantier et après travaux;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
-B09-AC-03;Assurance de responsabilité civile décennale;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
+B09-AC-03;Assurance de responsabilité civile décennale;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;ASSURANCE_DECENNALE:ASSURANCE;;;;oui;;
 B09-OD-01;Obligation de discrétion et mesures de sécurité applicables;OUI_NON;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
 B09-OD-02;Mesures de sécurité communiquées à la notification;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui
 B09-OD-03;Mesures de sécurité mentionnées en annexe;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui
@@ -140,7 +140,7 @@ B09-RP-02;Opérations préalables à la réception;TEXTE_LONG;SAISIE;CCAP;;QUANT
 B09-RP-03;Délai de début des opérations préalables (jours);NOMBRE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
 B09-RP-04;Modalités de réception des travaux;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
 B09-GT-01;Délai de garantie (mois);NOMBRE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
-B09-BT-01;Travaux de bâtiment (CPC, TBM, responsabilité décennale);OUI_NON;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui
+B09-BT-01;Travaux de bâtiment (CPC, TBM, responsabilité décennale);OUI_NON;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;ASSURANCE_DECENNALE:BATIMENT;;;;oui;;
 B10-RE-01;Conditions de résiliation du marché aux torts de l'entrepreneur;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;non
 B10-PC-01;Procédure contentieuse et juridiction compétente;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui;;Les différends nés de l'exécution du marché sont réglés selon la procédure prévue à l'article 50 du Cahier des Clauses Administratives Générales applicable aux marchés de travaux.
 B10-DR-01;Dérogations aux documents généraux;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui

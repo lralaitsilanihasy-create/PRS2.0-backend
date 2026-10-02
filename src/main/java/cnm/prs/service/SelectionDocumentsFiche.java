@@ -122,8 +122,24 @@ public final class SelectionDocumentsFiche {
                 : "CCAP".equals(type) && !"TRAVAUX".equals(cat)
                         && ModelesDao.couvertures(typeMarche, cat).stream().anyMatch(c -> "CCAP".equals(c.typeDocument()))
                         ? "Cahier des prescriptions spéciales"
+                        : GARANTIES_TRAVAUX.containsKey(type) && "TRAVAUX".equals(cat) ? GARANTIES_TRAVAUX.get(type)[1]
                         : titre(type);
         return t + (lot == null ? "" : " — lot " + lot);
+    }
+
+    /**
+     * ⚠️ 2026-10-02 (demande front « référentiel des travaux routiers », §B3) — le dossier type des travaux numérote B1
+     * (garantie bancaire) et B2 (caution personnelle et solidaire) les modèles de garantie de soumission que celui des
+     * fournitures numérote C1 et C2. Le type enregistré reste C1 / C2 (il commande la production et GARANTIE_MANQUANTE) ;
+     * pour une fiche de travaux, l'intitulé et le nom de fichier prennent la numérotation des travaux.
+     */
+    static final Map<String, String[]> GARANTIES_TRAVAUX = Map.of(
+            "C1", new String[] { "B1", "Garantie bancaire de soumission (B1)" },
+            "C2", new String[] { "B2", "Caution personnelle et solidaire de soumission (B2)" });
+
+    /** Le préfixe du nom de fichier d'un document : son type, ou ⚠️ 2026-10-02 B1 / B2 pour une garantie des travaux. */
+    public static String prefixeFichier(String type, String categorie) {
+        return GARANTIES_TRAVAUX.containsKey(type) && "TRAVAUX".equals(categorie) ? GARANTIES_TRAVAUX.get(type)[0] : type;
     }
 
     /** Le document est-il établi par lot sur une ligne allotie (l'acte d'engagement) ? */

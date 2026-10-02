@@ -223,8 +223,10 @@ public class DocumentsFicheMarcheService {
                         + SelectionDocumentsFiche.titre(modele.type(), modele.lot()) + " » a échoué : la version n'est pas "
                         + "validée. " + e.getMessage(), e);
             }
+            // ⚠️ 2026-10-02 — une garantie de soumission des travaux se nomme B1 / B2 (dossier type des travaux).
+            String prefixe = SelectionDocumentsFiche.prefixeFichier(modele.type(), etat.getCategorie());
             for (GenerateurDocumentsFiche.Fichier f : fichiers) {
-                produits.add(new Produit(modele.type(), f.extension(), nomFichier(modele.type(), etat.getRefeDossier(),
+                produits.add(new Produit(modele.type(), f.extension(), nomFichier(prefixe, etat.getRefeDossier(),
                         etat.getIdDetail(), modele.lot(), etat.getVersion(), f.extension()), f.contenu(), modele.lot()));
             }
         }

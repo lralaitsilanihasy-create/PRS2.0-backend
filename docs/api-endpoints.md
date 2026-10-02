@@ -4759,6 +4759,7 @@ l'Administrateur). Avant le premier enregistrement la fiche est **virtuelle** : 
 | `PENALITES_PLAFOND_15` | `TAUX`, `DEROGATION` | avertissement |
 | `INTERETS_MORATOIRES_TAUX` | `TAUX`, `BANQUE` | avertissement |
 | `DELAI_PAIEMENT_75` | `DELAI` (jours) | avertissement |
+| ⚠️ 2026-10-02 `ASSURANCE_DECENNALE` | `BATIMENT` (`B09-BT-01`), `ASSURANCE` (`B09-AC-03`) — des travaux de bâtiment exigent l'assurance décennale ; hors bâtiment, rien | bloquant |
 
 Une règle dont un rôle n'a pas encore de champ (référentiel incomplet) **n'est pas évaluée** — ni bloquante, ni « ok ».
 
@@ -5107,6 +5108,20 @@ Demande front `demande-backend-2026-10-01-dao-travaux-men.md`. Migration **V58**
   - un saut de ligne dans une valeur est un vrai saut de ligne en Word (le PDF le faisait déjà) ;
   - ⚠️ **dans un document commun d'une ligne allotie, la condition d'un champ saisi par lot lit ses valeurs par lot
     réunies** : sans cela, `B03-QT-14 renseigne` restait faux, puisque la liquidité est saisie sous `B03-QT-14#n`.
+
+### Référentiel des travaux : DAO routier du MTP ⚠️ 2026-10-02
+
+Demande front `demande-backend-2026-10-02-referentiel-travaux-routiers.md` ; script
+`docs/referentiel/2026-10-02-travaux-routiers.sql` ; pas de migration.
+
+- `B02-MW-01` (maître d'œuvre) **facultatif** : sans lui, le CCAP-T imprime la rédaction `SANS-MOE`.
+- `B09-AC-03` (assurance décennale) **facultatif**, exigé pour un bâtiment par la règle bloquante `ASSURANCE_DECENNALE`.
+- `B08-MO-01` (taux des intérêts moratoires) **retiré** : servi aux seuls travaux et imprimé nulle part. Il est inactif,
+  et ses valeurs restent lisibles.
+- **Garanties de soumission d'une fiche de travaux** : le type reste `C1` / `C2` (production, `GARANTIE_MANQUANTE`).
+  Le libellé et le nom de fichier prennent la numérotation du dossier type des travaux : « Garantie bancaire de
+  soumission (B1) », « Caution personnelle et solidaire de soumission (B2) », `B1_…`, `B2_…`. Le titre imprimé dans le
+  document reste celui du modèle recopié (« C 1 – … »).
 
 ### Gabarits : la phrase du document qui imprime un champ ⚠️ 2026-10-02
 
