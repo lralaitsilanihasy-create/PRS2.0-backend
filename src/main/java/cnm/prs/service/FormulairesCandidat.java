@@ -87,6 +87,8 @@ public final class FormulairesCandidat {
 
     /** ⚠️ 2026-10-02 — « le quinzième jour précédant la date limite fixée pour la remise des offres » (AE-T 3). */
     static final int JOURS_AVANT_REMISE_DATE_PRIX = 15;
+    /** ⚠️ 2026-10-02 — la garantie de soumission des travaux vaut 30 jours au-delà de la validité des offres (B1 / B2). */
+    static final int JOURS_GARANTIE_APRES_OFFRES = 30;
 
     /** ⚠️ §B7.3 — une date-heure « 12/10/2026 à 09 h 00 (heure locale) » ; illisible : telle quelle. */
     static String heureLocale(String brut) {
@@ -605,6 +607,12 @@ public final class FormulairesCandidat {
                 LocalDate remise = dateLimiteRemise();
                 BigDecimal jours = ControlesFicheMarche.nombre(valeur(fiche, VALIDITE_OFFRES, null));
                 return remise == null || jours == null ? POINTILLES : remise.plusDays(jours.longValue()).format(JOUR);
+            }
+            if ("DERIVE.validite-garantie".equals(nom)) {
+                // ⚠️ 2026-10-02 (travaux routiers, §B5, B1 / B2) — « [durée de validité des offres + 30 jours] » : les travaux
+                // n'ont pas de champ de validité de la garantie ; un nombre de jours (« soit jusqu'au 150 ème jour »).
+                BigDecimal jours = ControlesFicheMarche.nombre(valeur(fiche, VALIDITE_OFFRES, null));
+                return jours == null ? POINTILLES : String.valueOf(jours.longValue() + JOURS_GARANTIE_APRES_OFFRES);
             }
             if ("DERIVE.date-prix".equals(nom)) {
                 // ⚠️ 2026-10-02 (recette du DAO du MEN, §B3.1) — « le quinzième jour précédant la date limite fixée pour la

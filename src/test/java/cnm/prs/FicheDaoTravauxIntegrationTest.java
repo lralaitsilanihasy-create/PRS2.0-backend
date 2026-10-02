@@ -258,7 +258,7 @@ class FicheDaoTravauxIntegrationTest extends CnmIntegrationTestSupport {
         cadrage(idDmc, "{\"tranches\":\"NON\",\"groupement\":\"NON\",\"avance\":\"NON\",\"garantieSoumission\":\"OUI\"}");
         // Un bâtiment sans assurance décennale : bloquant.
         remplirObligatoires(idDmc, "QUANTITE_FIXE", "TRAVAUX", Map.of("B09-BT-01", "OUI", "B05-GQ-02", "Garantie bancaire",
-                "B05-GQ-03", "5000000", "B04-CD-02", "C1"));
+                "B05-GQ-03", "5000000", "B04-CD-02", "C1 et C2"));
         String refus = mvc.perform(post("/api/fiches-marche/" + idDmc + "/valider").header("Authorization", tokenPrmp))
                 .andExpect(status().isConflict()).andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<String>read(refus, "$.message")).contains("assurance de responsabilité civile décennale");
@@ -292,6 +292,17 @@ class FicheDaoTravauxIntegrationTest extends CnmIntegrationTestSupport {
                 new java.io.ByteArrayInputStream(b1)); org.apache.poi.xwpf.extractor.XWPFWordExtractor ex =
                         new org.apache.poi.xwpf.extractor.XWPFWordExtractor(d)) {
             assertThat(ex.getText()).contains("(travaux)").doesNotContain("(fournitures)");
+            // §B5 (jetons des travaux) : montant du lot, validité des offres + 30 jours.
+            int validite = Integer.parseInt(JsonPath.<String>read(fiche, "$.valeurs['B04-VO-01']")) + 30;
+            assertThat(ex.getText()).contains("cinq millions ariary (5 000 000 Ariary)", "soit jusqu’au " + validite + " ème jour");
+        }
+        int idB2 = JsonPath.<List<Integer>>read(docs, "$[?(@.type=='C2' && @.extension=='docx')].idDocument").get(0);
+        byte[] b2 = mvc.perform(get("/api/fiches-marche/documents/" + idB2 + "/contenu").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        try (org.apache.poi.xwpf.usermodel.XWPFDocument d = new org.apache.poi.xwpf.usermodel.XWPFDocument(
+                new java.io.ByteArrayInputStream(b2)); org.apache.poi.xwpf.extractor.XWPFWordExtractor ex =
+                        new org.apache.poi.xwpf.extractor.XWPFWordExtractor(d)) {
+            assertThat(ex.getText()).startsWith("B 2").contains("(heure locale)", "5 000 000 Ariary");
         }
     }
 

@@ -53,7 +53,7 @@ class ModelesCandidatRenduTest {
     void jetonsEtMarqueurs() {
         Map<String, List<DocumentLibre.Element>> modeles = new ModelesCandidat().modeles();
         Map<String, cnm.prs.entity.ChampFicheMarche> champs = new java.util.HashMap<>();
-        champs.put("B05-GS-03", champ("B05-GS-03", "MONTANT", true));
+        champs.put("B05-GQ-03", champ("B05-GQ-03", "MONTANT", true));   // 02/10 : la garantie des travaux (B1 / B2)
         champs.put("B03-CQ-09", champ("B03-CQ-09", "NOMBRE", false));
         champs.put("B04-LR-03", champ("B04-LR-03", "DATE", false));
 
@@ -66,7 +66,8 @@ class ModelesCandidatRenduTest {
         fiche.setSaisieParLot(true);
         fiche.setCadrage(new java.util.HashMap<>(Map.of("groupement", "OUI")));
         fiche.setValeurs(new java.util.HashMap<>(Map.of("B04-CD-01", "A1,A3", "B04-CD-02", "C1",
-                "B05-GS-03#1", "1600000", "B05-GS-03#2", "2170000", "B03-CQ-09", "5", "B04-LR-03", "2026-03-02")));
+                "B05-GQ-03#1", "1600000", "B05-GQ-03#2", "2170000", "B03-CQ-09", "5", "B04-LR-03", "2026-03-02",
+                "B04-VO-01", "120")));
         fiche.setValeursPpm(Map.of("B02-OB-01", "Réhabilitation d'une route"));
 
         List<DocumentLibre> docs = FormulairesCandidat.generer(fiche, champs, modeles, null);
@@ -79,10 +80,11 @@ class ModelesCandidatRenduTest {
         String a3 = docs.get(1).texte();
         assertThat(a3).contains("Travaux\t\t\t").doesNotContain("{{");
         assertThat(a3.lines().filter(l -> l.startsWith("Fournitures")).count()).isEqualTo(1);   // le premier tableau seul
-        // ⚠️ 2026-09-27 — C1 est le gabarit ARMP : montant en lettres puis en chiffres, « 30ème jour » fixe, B05-GS-04 nu.
-        assertThat(docs.get(3).texte()).contains("pour la somme de deux millions cent soixante-dix mille ariary (2 170 000 Ariary), que")
-                .contains("soit jusqu’au ……… ème jour")   // B05-GS-04 absent → pointillés ; apostrophe typographique du gabarit
-                .doesNotContain("1 600 000");
+        // ⚠️ 2026-10-02 — une fiche de travaux : la garantie est B1 (dossier type des travaux), montant du lot en lettres
+        // puis en chiffres (B05-GQ-03), validité = validité des offres + 30 jours (DERIVE.validite-garantie).
+        assertThat(docs.get(3).texte()).startsWith("B 1").contains("pour la somme de deux millions cent soixante-dix mille ariary (2 170 000 Ariary), que")
+                .contains("soit jusqu’au 150 ème jour", "clause 6.7 (travaux)")
+                .doesNotContain("1 600 000", "(fournitures)");   // les pointillés restants : B02-OB-03, B01-AC-01 absents du jeu
 
         fiche.getCadrage().put("groupement", "NON");
         String sans = FormulairesCandidat.generer(fiche, champs, modeles, null).get(0).texte();
