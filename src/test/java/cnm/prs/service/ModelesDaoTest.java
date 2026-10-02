@@ -101,7 +101,7 @@ class ModelesDaoTest {
         // Les formulaires du candidat gardent leurs trois noms historiques, sans déclaration.
         assertThat(ConditionsModele.defauts(FichierCommande.lire("PARA\t{{SI:A1B}}\nPARA\tx\nPARA\t{{FINSI:A1B}}"), Map.of(),
                 FormulairesCandidat.SECTIONS_HISTORIQUES)).isEmpty();
-        assertThat(new ModelesCandidat().modeles()).hasSize(6);
+        assertThat(new ModelesCandidat().modeles()).hasSize(8);   // 02/10 : + B1, B2 (garanties du dossier type des travaux)
     }
 
     @Test

@@ -5120,8 +5120,13 @@ Demande front `demande-backend-2026-10-02-referentiel-travaux-routiers.md` ; scr
   et ses valeurs restent lisibles.
 - **Garanties de soumission d'une fiche de travaux** : le type reste `C1` / `C2` (production, `GARANTIE_MANQUANTE`).
   Le libellé et le nom de fichier prennent la numérotation du dossier type des travaux : « Garantie bancaire de
-  soumission (B1) », « Caution personnelle et solidaire de soumission (B2) », `B1_…`, `B2_…`. Le titre imprimé dans le
-  document reste celui du modèle recopié (« C 1 – … »).
+  soumission (B1) », « Caution personnelle et solidaire de soumission (B2) », `B1_…`, `B2_…`.
+- ⚠️ **§B5, même jour** :
+  - le **contenu** d'une garantie de travaux vient désormais des modèles **B1 / B2** du dossier type des travaux
+    (`modeles/candidat/B1.txt`, `B2.txt`), avec leurs renvois aux clauses 6.7 et 10.4 « (travaux) » ;
+  - le CCAP-T est recopié (573/573) : la rédaction `SANS-MOE` n'a plus de trou.
+  - ⚠️ Les jetons de B1 / B2, comme ceux de C1 / C2, sont des champs des fournitures (`B05-GS-03`, `B05-GS-04`,
+    `B04-LR-03`) : sur une fiche de travaux, ils s'impriment en pointillés (voir l'encadré §B5 de la demande).
 
 ### Gabarits : la phrase du document qui imprime un champ ⚠️ 2026-10-02
 

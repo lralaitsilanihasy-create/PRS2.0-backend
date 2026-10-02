@@ -278,10 +278,21 @@ class FicheDaoTravauxIntegrationTest extends CnmIntegrationTestSupport {
         try (org.apache.poi.xwpf.usermodel.XWPFDocument d = new org.apache.poi.xwpf.usermodel.XWPFDocument(
                 new java.io.ByteArrayInputStream(ccap)); org.apache.poi.xwpf.extractor.XWPFWordExtractor ex =
                         new org.apache.poi.xwpf.extractor.XWPFWordExtractor(d)) {
-            assertThat(ex.getText()).contains("Les tâches du maître d'œuvre sont assurées par");
+            // §B5.1 : la rédaction SANS-MOE n'a plus de trou.
+            assertThat(ex.getText()).contains("Le maître d’œuvre sera désigné par une décision du Maître de l’ouvrage ou de la PRMP")
+                    .doesNotContain("<préciser l'autorité désignée par la PRMP>");
         }
         assertThat(JsonPath.<List<String>>read(docs, "$[?(@.type=='C1')].libelle")).containsOnly("Garantie bancaire de soumission (B1)");
         assertThat(JsonPath.<List<String>>read(docs, "$[?(@.type=='C1')].nomFichier")).allMatch(n -> n.startsWith("B1_"));
+        // §B5.2 : le modèle B1 du dossier type des travaux, avec ses renvois aux IC des travaux.
+        int idB1 = JsonPath.<List<Integer>>read(docs, "$[?(@.type=='C1' && @.extension=='docx')].idDocument").get(0);
+        byte[] b1 = mvc.perform(get("/api/fiches-marche/documents/" + idB1 + "/contenu").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        try (org.apache.poi.xwpf.usermodel.XWPFDocument d = new org.apache.poi.xwpf.usermodel.XWPFDocument(
+                new java.io.ByteArrayInputStream(b1)); org.apache.poi.xwpf.extractor.XWPFWordExtractor ex =
+                        new org.apache.poi.xwpf.extractor.XWPFWordExtractor(d)) {
+            assertThat(ex.getText()).contains("(travaux)").doesNotContain("(fournitures)");
+        }
     }
 
     /** Les valeurs actuelles d'un bloc, modifiées : un PUT de bloc remplace le bloc entier. */

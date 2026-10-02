@@ -50,6 +50,11 @@ public final class FormulairesCandidat {
 
     public static final List<String> FICHES = List.of("A1", "A2", "A3", "A4");
     public static final List<String> GARANTIES = List.of("C1", "C2");
+    /**
+     * ⚠️ 2026-10-02 (§B5.2) — le modèle d'une garantie selon la catégorie : pour une fiche de travaux, B1 / B2 du dossier
+     * type des travaux (renvois aux clauses 6.7 et 10.4 des IC des travaux) ; le type du document reste C1 / C2.
+     */
+    static final Map<String, String> GARANTIES_TRAVAUX = Map.of("C1", "B1", "C2", "B2");
     public static final String POINTILLES = "………";
 
     /** Les champs qui commandent les formulaires ou alimentent les dérivés (§B8). */
@@ -225,16 +230,18 @@ public final class FormulairesCandidat {
         List<String> garanties = forme == null ? List.of()
                 : forme.contains("C1") && forme.contains("C2") ? GARANTIES : List.of(forme.trim().toUpperCase());
         int nbLots = Boolean.TRUE.equals(fiche.getSaisieParLot()) && fiche.getNbLots() != null ? fiche.getNbLots() : 0;
+        boolean travaux = CategorieDao.TRAVAUX.name().equals(fiche.getCategorie());
         for (String c : garanties) {
-            if (!GARANTIES.contains(c) || !modeles.containsKey(c)) {
+            String sigle = travaux && modeles.containsKey(GARANTIES_TRAVAUX.get(c)) ? GARANTIES_TRAVAUX.get(c) : c;
+            if (!GARANTIES.contains(c) || !modeles.containsKey(sigle)) {
                 continue;
             }
             if (LotsFiche.alloti(nbLots)) {
                 for (int lot = 1; lot <= nbLots; lot++) {
-                    documents.add(new DocumentLibre(c, lot, ctx.rendre(modeles.get(c), lot), pied));
+                    documents.add(new DocumentLibre(c, lot, ctx.rendre(modeles.get(sigle), lot), pied));
                 }
             } else {
-                documents.add(new DocumentLibre(c, null, ctx.rendre(modeles.get(c), null), pied));
+                documents.add(new DocumentLibre(c, null, ctx.rendre(modeles.get(sigle), null), pied));
             }
         }
         return documents;

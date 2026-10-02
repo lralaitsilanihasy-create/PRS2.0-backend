@@ -26,7 +26,9 @@ public class ModelesCandidat {
     private final Map<String, List<DocumentLibre.Element>> modeles = new LinkedHashMap<>();
 
     public ModelesCandidat() {
-        for (String sigle : List.of("A1", "A2", "A3", "A4", "C1", "C2")) {
+        // ⚠️ 2026-10-02 (demande « référentiel des travaux routiers », §B5.2) — B1 / B2 : les garanties de soumission du
+        // dossier type des travaux, rendues à la place de C1 / C2 pour une fiche de travaux.
+        for (String sigle : List.of("A1", "A2", "A3", "A4", "C1", "C2", "B1", "B2")) {
             String chemin = "/modeles/candidat/" + sigle + ".txt";
             try (InputStream in = getClass().getResourceAsStream(chemin)) {
                 if (in == null) {

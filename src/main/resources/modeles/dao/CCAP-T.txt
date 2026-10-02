@@ -162,8 +162,7 @@ PARA	La maîtrise d'œuvre est assurée conformément au marché {{B02-MW-02}} p
 PARA	{{B02-MW-01}}.
 PARA	{{FINSI:MOE}}
 PARA	{{SI:SANS-MOE}}
-PARA	Les tâches du maître d'œuvre sont assurées par <préciser l'autorité désignée par la PRMP>
-PARA	Dans ce cas, le maître d’œuvre sera désigné par une décision du Maître de l’ouvrage ou de la PRMP
+PARA	Le maître d’œuvre sera désigné par une décision du Maître de l’ouvrage ou de la PRMP
 PARA	{{FINSI:SANS-MOE}}
 SOUS_TITRE	Article 2 - Notifications à l'Entrepreneur (CCAG Article 2.2.2)
 PARA	A défaut pour l'Entrepreneur d'élire domicile à proximité des travaux et de faire connaître l'adresse de ce domicile à la Personne Responsable des Marchés Publics et/ou au maître d'œuvre, toutes les notifications qui se rapportent au marché seront valablement effectuées à l'adresse mentionnée ci-après:
