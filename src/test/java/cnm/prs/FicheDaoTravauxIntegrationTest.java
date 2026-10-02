@@ -234,6 +234,15 @@ class FicheDaoTravauxIntegrationTest extends CnmIntegrationTestSupport {
                 java.util.Map.entry("B08-RE-04", "POURCENTAGE"), java.util.Map.entry("B08-MR-05", "NOMBRE"),
                 java.util.Map.entry("B08-MR-06", "TEXTE_LONG"), java.util.Map.entry("B09-PE-03", "POURCENTAGE"));
         assertThat(JsonPath.<List<String>>read(ref, "$.champs[?(@.obligatoire==true)].code")).doesNotContainAnyElementsOf(crees.keySet());
+
+        // ⚠️ 2026-10-02 (demande « gabarits ») — la phrase du modèle qui imprime le champ ; rien pour un paragraphe fait du
+        // seul jeton ; pas de clé dans la vue d'administration (sans filtre).
+        assertThat(JsonPath.<List<String>>read(ref, "$.champs[?(@.code=='B09-MA-03')].gabarits[*].avant"))
+                .containsExactly("La diminution dans la masse des travaux au delà de ");
+        assertThat(JsonPath.<List<String>>read(ref, "$.champs[?(@.code=='B09-MA-03')].gabarits[*].document")).containsExactly("CCAP");
+        assertThat(JsonPath.<List<Object>>read(ref, "$.champs[?(@.code=='B10-PC-01')].gabarits[*]")).isEmpty();
+        assertThat(JsonPath.<List<Object>>read(mvc.perform(get("/api/champs-fiche-marche").header("Authorization", tokenAdmin))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), "$.champs[?(@.gabarits)]")).isEmpty();
     }
 
     // ------------------------------------------------------------------ outils

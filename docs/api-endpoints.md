@@ -5108,6 +5108,27 @@ Demande front `demande-backend-2026-10-01-dao-travaux-men.md`. Migration **V58**
   - ⚠️ **dans un document commun d'une ligne allotie, la condition d'un champ saisi par lot lit ses valeurs par lot
     réunies** : sans cela, `B03-QT-14 renseigne` restait faux, puisque la liquidité est saisie sous `B03-QT-14#n`.
 
+### Gabarits : la phrase du document qui imprime un champ ⚠️ 2026-10-02
+
+Demande front `demande-backend-2026-10-02-gabarits-champs.md` (question Q1 de la recette du MEN ; accord du pilote).
+
+- **`GET /api/champs-fiche-marche?typeMarche=&categorie=`** : avec au moins un filtre, chaque champ porte **`gabarits`**, une
+  liste de `{ document, avant, apres, suffixe }`. La liste est vide si le champ n'est cité nulle part. La clé est
+  absente de la vue d'administration, sans filtre, et ignorée à l'écriture.
+  - `document` : le sigle du modèle sans sa catégorie (`DPAO`, `DPAC`, `DPIC`, `CCAP`, `CPS`, `AE`, `AVIS`,
+    `LETTRE`).
+  - `avant` et `apres` : le texte du paragraphe (ou du paragraphe de cellule) de part et d'autre du jeton, **tel que dans
+    le modèle**. Les autres jetons sont remplacés par `___` et les balises `{{SI:…}}` / `{{FINSI:…}}` retirées, sans
+    troncature.
+  - `suffixe` : celui du jeton (`lettres`, `chiffres`, `parLot`, `heure`…), ou `null`.
+- **Règles** :
+  - périmètre : les modèles de la catégorie et de la forme demandées (couvertures, avis, lettre d'invitation) ;
+  - un paragraphe fait du seul jeton n'est pas servi ;
+  - doublons fusionnés ;
+  - ordre DPAO, DPAC, DPIC, CCAP, CPS, AE, AVIS, LETTRE, puis celui du modèle ;
+  - un paragraphe sous condition est servi comme les autres.
+- Relevé **une fois**, au premier appel, sur les modèles déjà chargés (`GabaritsDao`) : aucune requête de plus.
+
 ### Recette du DAO du MEN rejoué en fiche 40 ⚠️ 2026-10-02
 
 Demande front `demande-backend-2026-10-02-recette-dao-men.md`. Scripts `docs/referentiel/2026-10-02-recette-dao-men.sql`
@@ -5124,6 +5145,9 @@ Demande front `demande-backend-2026-10-02-recette-dao-men.md`. Scripts `docs/ref
 - ⚠️ **Modèles rebranchés** (§B5.2, même jour) : DPAO-T 262/262, AE-T 363/363, CCAP-T **574/574** (73 conditions,
   `ACTUALISATION` = `prixRevisable = NON et B05-VR-02 renseigne`). Les six champs et les jetons `.heure`,
   `DERIVE.date-prix` et `DERIVE.date-dao` y sont imprimés ; « {{B04-FP-01}} copie(s) ».
+- ⚠️ **§B6** (même jour) : AE-T recopié (363/363 ; renvois « Annexe n° 1 » et « article 16 du CCAP ») ; libellé de
+  `B05-GQ-04` avec un exemple (« Monsieur le Receveur Général d'Antananarivo »),
+  `docs/referentiel/2026-10-02-libelle-beneficiaire-cheques.sql`.
 - **Référentiel des travaux** :
   - **facultatifs** : `B03-QT-07` (chiffre d'affaires), `B03-CQ-10` (antécédents financiers, commun aux trois catégories
     et imprimé nulle part), `B09-DL-04` (date de réception) ;

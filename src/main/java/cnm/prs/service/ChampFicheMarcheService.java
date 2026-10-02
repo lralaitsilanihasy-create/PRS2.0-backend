@@ -50,12 +50,14 @@ public class ChampFicheMarcheService {
     private final BlocFicheMarcheRepository blocRepository;
     private final RubriqueFicheMarcheRepository rubriqueRepository;
     private final ChampFicheMarcheRepository champRepository;
+    private final GabaritsDao gabarits;
 
     public ChampFicheMarcheService(BlocFicheMarcheRepository blocRepository,
-            RubriqueFicheMarcheRepository rubriqueRepository, ChampFicheMarcheRepository champRepository) {
+            RubriqueFicheMarcheRepository rubriqueRepository, ChampFicheMarcheRepository champRepository, GabaritsDao gabarits) {
         this.blocRepository = blocRepository;
         this.rubriqueRepository = rubriqueRepository;
         this.champRepository = champRepository;
+        this.gabarits = gabarits;
     }
 
     /**
@@ -108,7 +110,14 @@ public class ChampFicheMarcheService {
         List<ChampFicheMarche> champs = !filtre ? champRepository.findAllByOrderByCodeRubriqueAscRangAsc()
                 : champRepository.findByActifTrueOrderByCodeRubriqueAscRangAsc().stream()
                         .filter(c -> c.pourTypeMarche(type) && c.pourCategorie(cat)).toList();
-        return new ReferentielFicheMarcheDto(blocs, champs.stream().map(ChampFicheMarcheService::toDto).toList());
+        // ⚠️ 2026-10-02 (demande « gabarits ») — avec un filtre, chaque champ porte les phrases des modèles qui l'impriment.
+        return new ReferentielFicheMarcheDto(blocs, champs.stream().map(ChampFicheMarcheService::toDto)
+                .map(d -> {
+                    if (filtre) {
+                        d.setGabarits(gabarits.gabarits(d.getCode(), type, cat));
+                    }
+                    return d;
+                }).toList());
     }
 
     /** La liste {@code csv} contient la valeur ({@code null} : pas de filtre). */
@@ -276,7 +285,7 @@ public class ChampFicheMarcheService {
                 c.getType(), c.getSource(), c.getDocumentMaitre(), ChampFicheMarche.liste(c.getReprises()),
                 ChampFicheMarche.liste(c.getTypesMarche()), c.getCondition(), c.getObligatoire(), c.getTexteType(),
                 c.getControle(), ChampFicheMarche.options(c.getOptions()), c.getCleCadrage(), c.getClePpm(), c.getActif(),
-                ChampFicheMarche.liste(c.getCategories()), Boolean.TRUE.equals(c.getParLot()), c.getValeurDefaut());
+                ChampFicheMarche.liste(c.getCategories()), Boolean.TRUE.equals(c.getParLot()), c.getValeurDefaut(), null);
     }
 
     // ------------------------------------------------------------------ import CSV (hors API)

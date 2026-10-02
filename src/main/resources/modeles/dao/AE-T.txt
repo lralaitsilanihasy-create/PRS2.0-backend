@@ -172,14 +172,14 @@ PARA	{{SI:REVISABLE}}
 PARA	Les modalités de variation des prix sont fixées en Annexe au Cahier des Clauses Administratives Particulières du CPS. Les valeurs de pondération des paramètres variables de la formule de révision sont donnés en Annexe au présent Acte d'Engagement.
 PARA	{{FINSI:REVISABLE}}
 PARA	{{SI:UNITAIRES}}
-PARA	Les Travaux, objet du présent marché, seront rémunérés, par application des prix unitaires qui résultent du bordereau des prix unitaires et du détail quantitatif et estimatif figurant en Annexe <N° de l'Annexe> au présent Acte d'Engagement, aux quantités réellement exécutées prises en attachement contradictoire.
+PARA	Les Travaux, objet du présent marché, seront rémunérés, par application des prix unitaires qui résultent du bordereau des prix unitaires et du détail quantitatif et estimatif figurant en Annexe n° 1 au présent Acte d'Engagement, aux quantités réellement exécutées prises en attachement contradictoire.
 PARA	Le montant du marché est estimé à :
 PARA	montant hors taxes : (en chiffre et en lettres)
 PARA	TVA (….%) : (en chiffre et en lettres)
 PARA	Soit un montant total TTC de (en chiffre et en lettres) :
 PARA	{{FINSI:UNITAIRES}}
 PARA	{{SI:FORFAIT}}
-PARA	Les Travaux, objet du présent marché, seront rémunérées par application du prix forfaitaire résultant du détail quantitatif et estimatif figurant en Annexe <N° de l’Annexe> selon le découpage en centième par corps d’état des travaux terminés, prévu à l’article…. du CCAP
+PARA	Les Travaux, objet du présent marché, seront rémunérées par application du prix forfaitaire résultant du détail quantitatif et estimatif figurant en Annexe n° 1 selon le découpage en centième par corps d’état des travaux terminés, prévu à l’article 16 du CCAP
 PARA	Le montant du marché est fixé à:
 PARA	montant hors taxes : (en lettres et en chiffre)
 PARA	TVA (….%) : (en lettres et en chiffre)
@@ -208,7 +208,7 @@ PARA	Soit un montant total TTC de (en chiffre et en lettres)
 PARA	{{FINSI:TRANCHE-C2}}
 PARA	{{FINSI:UNITAIRES-TRANCHES}}
 PARA	{{SI:FORFAIT-TRANCHES}}
-PARA	Les Travaux, objet du présent marché, seront rémunérés, par application du prix forfaitaire résultant du détail quantitatif et estimatif selon le découpage en centième par corps d’état des travaux terminés, prévu à l’article…. du CCAP
+PARA	Les Travaux, objet du présent marché, seront rémunérés, par application du prix forfaitaire résultant du détail quantitatif et estimatif selon le découpage en centième par corps d’état des travaux terminés, prévu à l’article 16 du CCAP
 PARA	Le montant du marché est fixé à :
 PARA	montant hors taxes : (en lettres et en chiffre)
 PARA	TVA (….%) : (en lettres et en chiffre)

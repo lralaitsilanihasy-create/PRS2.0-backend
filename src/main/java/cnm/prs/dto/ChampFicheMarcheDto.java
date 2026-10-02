@@ -88,4 +88,12 @@ public class ChampFicheMarcheDto {
      */
     @Size(max = 1000)   // ⚠️ V58
     private String valeurDefaut;
+
+    /**
+     * ⚠️ 2026-10-02 (demande front « gabarits ») — en lecture seule, les phrases des modèles de la forme et de la catégorie
+     * demandées qui impriment ce champ ; servi par {@code GET /api/champs-fiche-marche} filtré (liste vide : cité nulle part),
+     * absent de la vue d'administration et ignoré à l'écriture.
+     */
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    private List<GabaritDto> gabarits;
 }
