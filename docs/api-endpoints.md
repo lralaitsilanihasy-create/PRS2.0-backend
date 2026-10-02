@@ -5372,6 +5372,12 @@ Une fiche jamais enregistrée est lue comme un brouillon vide.
     par des virgules, par exemple `B05-GQ-02` = « Caution personnelle et solidaire,Garantie bancaire,Chèque de banque ».
     Un terme `=` qui dit autre chose sur le même champ est un conflit. Parité refaite avec les options des référentiels
     et les réponses déduites : identique (1 022 lignes).
+  - ⚠️ **Un trou ne rend pas un paragraphe distinctif** (2026-10-02, règle 7, front ec4ad37). Pour compter les 20 lettres
+    qui permettent à un paragraphe d'attester sa section, on retire les jetons **et les trous `<…>`** laissés au
+    candidat. La reconnaissance, les valeurs et leur confiance ne changent pas. Sans cette règle, « ATTENDU QUE » et
+    « <nom du Titulaire> » de l'annexe de restitution d'avance, fusionnés par une autre mise en page, redonnaient
+    l'en-tête de l'annexe bancaire de bonne exécution et faisaient déduire `B05-GE-01 = OUI`. Parité : identique, aucune
+    ligne changée sur les 18 documents.
 - **Réponse 200 `ImportDaoResult`** :
 
 ```json

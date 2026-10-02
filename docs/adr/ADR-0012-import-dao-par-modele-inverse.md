@@ -228,3 +228,7 @@ Même jour (front 0afc489) — **règle 6, réponse déduite d'un terme `contien
 du référentiel. Une option entière attestée par une section retenue s'ajoute à la liste du champ, dans l'ordre du
 référentiel ; un terme `=` contraire sur le même champ est un conflit. Parité refaite avec les options et les réponses
 déduites : identique.
+
+2026-10-02 (front ec4ad37) — **règle 7** : les trous `<…>` ne comptent pas dans les lettres du critère « distinctif ». La
+confiance, elle, compte toujours toutes les lettres fixes. Parité identique ; aucune ligne de lecture ne change sur les
+18 documents.

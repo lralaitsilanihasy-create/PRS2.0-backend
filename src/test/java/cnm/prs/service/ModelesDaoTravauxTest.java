@@ -192,6 +192,27 @@ class ModelesDaoTravauxTest {
                 .doesNotContain("(e) proposer le personnel clé", "(f) justifier d’une liquidité", "mais ne peut prétendre");   // non alloti
     }
 
+    @Test
+    @DisplayName("2026-10-02 (demande « trous et distinctif », règle 7) — CCAP-T avec avance, sans garantie de bonne exécution : "
+            + "« ATTENDU QUE » et « <nom du Titulaire> » de l'annexe de restitution d'avance fusionnés redonnent l'en-tête de "
+            + "l'annexe bancaire de bonne exécution, mais un trou ne rend plus un paragraphe distinctif : B05-GE-01 n'est pas déduit")
+    void fusionAttenduQueNAttestePasLaBonneExecution() {
+        // Prix révisables : l'annexe de révision précède immédiatement les annexes de garantie, la lecture y est à pied d'œuvre
+        // (avec des prix fermes, l'annexe de bonne exécution se cherche trop loin pour que la fusion soit essayée).
+        FicheMarcheDto f = fiche(Map.of("typePrix", "UNITAIRES", "tranches", "NON", "prixRevisable", "OUI", "avance", "OUI"));
+        f.getValeurs().putAll(Map.of("B05-GE-01", "NON", "B05-GA-01", "OUI"));
+        List<String> lignes = new java.util.ArrayList<>(List.of(rendre("CCAP", "CCAP-T", f).split("\n")));
+        int i = lignes.indexOf("ATTENDU QUE");
+        assertThat(i).as("l'en-tête de l'annexe de restitution d'avance").isPositive();
+        assertThat(lignes.get(i + 1)).isEqualTo("<nom du Titulaire>");
+        lignes.set(i, "ATTENDU QUE <nom du Titulaire>");   // une autre mise en page : les deux paragraphes réunis
+        lignes.remove(i + 1);
+
+        LectureDao.Resultat r = LectureDao.lire("CCAP-T", dao.modele("CCAP-T"), LectureDao.unitesDocument(lignes), c -> null);
+        assertThat(r.reponsesChamps()).extracting(LectureDao.Reponse::cle).doesNotContain("B05-GE-01");
+        assertThat(r.cadrage()).extracting(x -> x.cle() + "=" + x.valeur()).contains("avance=OUI");
+    }
+
     // ------------------------------------------------------------------ outils
 
     /** {@link #champs()} et ⚠️ 2026-10-01 les champs du DAO du MEN : période (NOMBRE), seuil, garantie, délai, liquidité par lot. */

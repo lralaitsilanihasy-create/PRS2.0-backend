@@ -48,6 +48,8 @@ public final class LectureDao {
     private static final Pattern DATE_HEURE = Pattern.compile("^(\\d{2})/(\\d{2})/(\\d{4})" + BLANC + "+(\\d{2}):(\\d{2})$");
     private static final Pattern UNITE_NOMBRE = Pattern.compile("ariary|ar\\.?|%|" + BLANC, Pattern.CASE_INSENSITIVE);
     private static final Pattern NOMBRE = Pattern.compile("^-?\\d+(\\.\\d+)?$");
+    /** ⚠️ 2026-10-02 (règle 7) — un trou laissé au candidat dans le texte du modèle : « <nom du Titulaire> ». */
+    private static final Pattern TROU = Pattern.compile("<[^<>]*>");
     /** ⚠️ 2026-10-01 (front eed6bc4) — des pointillés (deux signes au moins) : une case peut-être laissée en blanc. */
     private static final Pattern DEUX_POINTILLES = Pattern.compile("[.…_]{2,}");
     /** ⚠️ 2026-10-01 — les caractères d'usage privé (glyphes de police Symbol : l'astérisque de renvoi « ….* »). */
@@ -385,7 +387,11 @@ public final class LectureDao {
                 lettres[k] = lettresFixes(u.texte());
                 repete[k] = occurrences.get(cle[k]) > 1;
                 jumeau[k] = repete[k] && u.texte().contains("{{");
-                distinctif[k] = !u.sections().isEmpty() && lettres[k] >= LETTRES_ATTESTATION
+                // ⚠️ 2026-10-02 (règle 7, front ec4ad37) — les lettres d'un trou laissé au candidat (« <nom du Titulaire> ») ne
+                // comptent pas : sous bruit, « ATTENDU QUE » + « <nom du Titulaire> » fusionnés (annexe de restitution d'avance)
+                // redonnaient l'en-tête de l'annexe de bonne exécution et attestaient B05-GE-01 = OUI. La confiance, elle, compte
+                // toujours toutes les lettres fixes.
+                distinctif[k] = !u.sections().isEmpty() && lettresFixes(TROU.matcher(JETON.matcher(u.texte()).replaceAll(" ")).replaceAll(" ")) >= LETTRES_ATTESTATION
                         && sectionsParCle.get(cle[k]).size() == 1;
             }
             variantes = new int[n][];
