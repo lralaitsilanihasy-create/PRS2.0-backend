@@ -232,3 +232,9 @@ déduites : identique.
 2026-10-02 (front ec4ad37) — **règle 7** : les trous `<…>` ne comptent pas dans les lettres du critère « distinctif ». La
 confiance, elle, compte toujours toutes les lettres fixes. Parité identique ; aucune ligne de lecture ne change sur les
 18 documents.
+
+2026-10-02 (front f04418a) — **règle 8, réancrage** : 5 paragraphes distinctifs non répétés manqués d'affilée ouvrent la
+recherche du suivant à tout le reste du document. Une première accroche dans un sommaire ne bloque plus la lecture. Au
+passage, un écart ancien est corrigé : Java ignorait **toutes** les lignes `TITRE`, le front seulement celle d'en tête.
+Les avis et la lettre d'invitation, qui ont leur titre dans le corps depuis le 01/10, divergeaient sur le DAO du MTP.
+Parité : 19 documents (MTP compris), extraction identique, 1 118 lignes de lecture identiques.

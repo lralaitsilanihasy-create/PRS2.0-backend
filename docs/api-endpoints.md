@@ -5437,6 +5437,13 @@ Une fiche jamais enregistrée est lue comme un brouillon vide.
     par des virgules, par exemple `B05-GQ-02` = « Caution personnelle et solidaire,Garantie bancaire,Chèque de banque ».
     Un terme `=` qui dit autre chose sur le même champ est un conflit. Parité refaite avec les options des référentiels
     et les réponses déduites : identique (1 022 lignes).
+  - ⚠️ **Réancrage** (2026-10-02, règle 8, front f04418a, DAO routier du MTP). Après **5** paragraphes distinctifs du
+    modèle (non répétés) cherchés en vain d'affilée, le paragraphe distinctif suivant se cherche dans tout le reste du
+    document, et non plus dans la fenêtre de 60. Toute reconnaissance remet le compte à zéro. Sans cette règle, une
+    première accroche tombée dans un **sommaire** bloquait la lecture. Effet sur le CCAP-T : MTP 5 → 65 paragraphes
+    reconnus, MEN 5 → 58 ; sur le CCAP-F du 2463 : 3 → 20.
+    Même jour : seule la ligne `TITRE` **en tête** d'un modèle en est le titre et n'est pas lue ; un `TITRE` dans le corps
+    (avis, lettre d'invitation) est un paragraphe comme un autre, comme chez le front.
   - ⚠️ **Un trou ne rend pas un paragraphe distinctif** (2026-10-02, règle 7, front ec4ad37). Pour compter les 20 lettres
     qui permettent à un paragraphe d'attester sa section, on retire les jetons **et les trous `<…>`** laissés au
     candidat. La reconnaissance, les valeurs et leur confiance ne changent pas. Sans cette règle, « ATTENDU QUE » et

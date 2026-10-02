@@ -291,6 +291,27 @@ class ModelesDaoTravauxTest {
                 .doesNotContain("Indice TP01").contains("Les prix sont fermes et non révisables.");
     }
 
+    @Test
+    @DisplayName("2026-10-02 (règle 8, DAO routier du MTP) — un sommaire avant le texte : la première accroche y tombe, la "
+            + "fenêtre de 60 paragraphes ne rejoint plus le vrai CCAP ; après cinq paragraphes distinctifs manqués, la lecture "
+            + "réancre dans tout le reste et retrouve la suite")
+    void sommaireAvantLeTexte() {
+        FicheMarcheDto f = fiche(Map.of("typePrix", "UNITAIRES", "tranches", "NON", "prixRevisable", "OUI", "avance", "OUI"));
+        f.getValeurs().putAll(Map.of("B05-GE-01", "OUI", "B05-GE-03", "Garantie bancaire", "B05-GA-01", "OUI"));
+        List<String> lignes = List.of(rendre("CCAP", "CCAP-T", f).split("\n"));
+        LectureDao.Resultat propre = LectureDao.lire("CCAP-T", dao.modele("CCAP-T"), LectureDao.unitesDocument(lignes), c -> null);
+
+        List<String> avecSommaire = new java.util.ArrayList<>(lignes.subList(0, 3));   // le sommaire reprend les titres
+        for (int i = 1; i <= 80; i++) {
+            avecSommaire.add("Instructions aux candidats, clause " + i + " : dispositions générales sans rapport avec le CCAP");
+        }
+        avecSommaire.addAll(lignes);
+        LectureDao.Resultat r = LectureDao.lire("CCAP-T", dao.modele("CCAP-T"), LectureDao.unitesDocument(avecSommaire), c -> null);
+        assertThat(propre.reconnues()).isGreaterThan(250);
+        // Sans la règle : 2 paragraphes reconnus ; avec : 265 sur 290 (ceux manqués avant le réancrage sont perdus).
+        assertThat(r.reconnues()).as("reconnus avec le sommaire").isGreaterThan(propre.reconnues() * 8 / 10);
+    }
+
     // ------------------------------------------------------------------ outils
 
     /** {@link #champs()} et ⚠️ 2026-10-01 les champs du DAO du MEN : période (NOMBRE), seuil, garantie, délai, liquidité par lot. */

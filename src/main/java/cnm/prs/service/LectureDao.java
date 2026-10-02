@@ -73,6 +73,8 @@ public final class LectureDao {
 
     /** Fenêtre de recherche après le dernier paragraphe reconnu. */
     static final int FENETRE = 60;
+    /** ⚠️ 2026-10-02 (règle 8) — paragraphes distinctifs manqués d'affilée avant de chercher dans tout le reste du document. */
+    static final int REANCRAGE = 5;
     /**
      * ⚠️ Lot D4 (2026-09-30, règle R-a du front) — fenêtre d'un paragraphe dont le texte fixe se répète ailleurs dans le
      * modèle (« Non applicable ») : absent du document, il se raccrochait à la répétition d'un article plus loin, et la
@@ -254,8 +256,11 @@ public final class LectureDao {
                     pile.pollLast();
                     continue;
                 }
-                // le titre du document est porté à part par le modèle du front (pas un bloc) ; un VIDE n'a pas de texte
-                if (p.style() == DocumentLibre.Style.TITRE || p.style() == DocumentLibre.Style.VIDE || p.texte().isBlank()) {
+                // le titre du document est porté à part par le modèle du front (pas un bloc) ; un VIDE n'a pas de texte.
+                // ⚠️ 2026-10-02 — seulement la ligne TITRE EN TÊTE du modèle : un TITRE dans le corps (avis, lettre d'invitation,
+                // depuis que leur titre est descendu sous l'en-tête) est un bloc du front comme un autre, donc une unité.
+                boolean titreDuDocument = p.style() == DocumentLibre.Style.TITRE && e == elements.get(0);
+                if (titreDuDocument || p.style() == DocumentLibre.Style.VIDE || p.texte().isBlank()) {
                     continue;
                 }
                 out.add(new Unite(p.texte(), List.copyOf(pile)));
@@ -598,13 +603,21 @@ public final class LectureDao {
 
         // 1. Les paragraphes reconnus, dans l'ordre (un curseur empêche un texte répété de se lire deux fois).
         int curseur = 0;
+        // ⚠️ 2026-10-02 (règle 8, front f04418a, DAO routier du MTP) — RÉANCRAGE. La première accroche se cherche dans tout le
+        // document : elle peut tomber sur le SOMMAIRE, et la fenêtre de 60 paragraphes ne rejoignait jamais le vrai texte
+        // (1 paragraphe reconnu sur 161). Après REANCRAGE paragraphes distinctifs (non répétés) manqués d'affilée, un
+        // paragraphe distinctif se cherche dans tout le reste du document ; toute reconnaissance remet le compte à zéro.
+        int manques = 0;
         for (int k = 0; k < us.size(); k++) {
             Unite u = us.get(k);
             if (seulJeton(u)) {
                 continue;   // un jeton seul : borné par ses voisins, étape 2
             }
             Motif mo = motifParagraphe(u.texte());
-            int borne = trouves.isEmpty() ? doc.size() : Math.min(doc.size(), curseur + (profil.repete[k] ? FENETRE_REPETE : FENETRE));
+            boolean reancre = manques >= REANCRAGE && profil.distinctif[k] && !profil.repete[k];
+            int borne = trouves.isEmpty() || reancre ? doc.size()
+                    : Math.min(doc.size(), curseur + (profil.repete[k] ? FENETRE_REPETE : FENETRE));
+            int avant = trouves.size();
             for (int j = curseur; j < borne; j++) {
                 Matcher x = mo.entier().matcher(doc.get(j));
                 boolean ok = x.find();
@@ -661,6 +674,11 @@ public final class LectureDao {
                     lues.add(new Lue(mo.jetons().get(n), brut, c, extrait, dernierOuvert, j));
                 }
                 break;
+            }
+            if (trouves.size() > avant) {
+                manques = 0;
+            } else if (profil.distinctif[k]) {
+                manques++;
             }
         }
 
