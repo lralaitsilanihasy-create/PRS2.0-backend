@@ -213,6 +213,55 @@ class ModelesDaoTravauxTest {
         assertThat(r.cadrage()).extracting(x -> x.cle() + "=" + x.valeur()).contains("avance=OUI");
     }
 
+    @Test
+    @DisplayName("2026-10-02 (recette du DAO du MEN, §B1) — libération à 100 % à la réception provisoire : la rédaction de la "
+            + "provisoire, jamais celle de la définitive ; chiffre d'affaires imprimé seulement renseigné ; délai par lot au CCAP-T")
+    void recetteDuMen() {
+        FicheMarcheDto f = fiche(Map.of("typePrix", "UNITAIRES", "tranches", "NON", "prixRevisable", "NON", "avance", "NON",
+                "alloti", "OUI", "nbLots", "2"));
+        f.setNbLots(2);
+        f.setSaisieParLot(true);
+        f.getValeurs().putAll(Map.of("B05-GE-01", "OUI", "B05-GE-03", "Garantie bancaire",
+                "B05-GE-04", "Libérée à 100 % à la réception provisoire", "B09-DL-01#1", "cent vingt (120) jours",
+                "B09-DL-01#2", "quatre-vingt-dix (90) jours"));
+        String ccap = FormulairesCandidat.rendreModele("CCAP", null, f, champsMen(), dao.modele("CCAP-T"), null).texte()
+                .replace(' ', ' ').replace(' ', ' ');
+        assertThat(ccap).contains("libérée à 100% dans les 30 jours suivant la date de la réception provisoire",
+                "Lot n° 1 : cent vingt (120) jours ; Lot n° 2 : quatre-vingt-dix (90) jours")
+                .doesNotContain("suivant la date de la réception définitive", "Annexe <numéro>", "{{");
+        f.getValeurs().put("B05-GE-04", "Libérée à 100 % à la réception définitive");
+        assertThat(FormulairesCandidat.rendreModele("CCAP", null, f, champsMen(), dao.modele("CCAP-T"), null).texte())
+                .contains("suivant la date de la réception définitive").doesNotContain("suivant la date de la réception provisoire");
+
+        String sansCa = rendre("DPAO", "DPAO-T", f);
+        f.getValeurs().put("B03-QT-07", "500000000");
+        String avecCa = rendre("DPAO", "DPAO-T", f);
+        assertThat(avecCa.length()).isGreaterThan(sansCa.length());
+        assertThat(avecCa).contains("500000000");   // rendre() ne type pas B03-QT-07 : la valeur brute
+        assertThat(sansCa).doesNotContain("500000000");
+    }
+
+    @Test
+    @DisplayName("2026-10-02 (§B3.1) — {{CODE.heure}} « 09 h 30 » ; {{DERIVE.date-prix}} = date limite de remise − 15 jours ; "
+            + "{{DERIVE.date-dao}} = date de validation de la version ; sans date ni validation : pointillés")
+    void heureEtDerivesDuMen() {
+        FichierCommande.Modele m = FichierCommande.lireModele(
+                "PARA\tHeure : {{B04-OV-02.heure}} ; prix au {{DERIVE.date-prix}} ; DAO du {{DERIVE.date-dao}}");
+        FicheMarcheDto f = fiche(Map.of());
+        f.getValeurs().put("B04-OV-02", "2026-11-16T09:30");
+        Map<String, ChampFicheMarche> champs = new HashMap<>(champs());
+        ChampFicheMarche ov = new ChampFicheMarche();
+        ov.setCode("B04-OV-02");
+        ov.setType("DATE_HEURE");
+        ov.setActif(true);
+        champs.put("B04-OV-02", ov);
+        assertThat(FormulairesCandidat.rendreModele("DPAO", null, f, champs, m, java.time.LocalDateTime.of(2026, 10, 2, 11, 0)).texte())
+                .startsWith("Heure : 09 h 30 ; prix au 01/11/2026 ; DAO du 02/10/2026");
+        f.getValeurs().remove("B04-OV-02");
+        assertThat(FormulairesCandidat.rendreModele("DPAO", null, f, champs, m, null).texte())
+                .startsWith("Heure : ……… ; prix au ……… ; DAO du ………");
+    }
+
     // ------------------------------------------------------------------ outils
 
     /** {@link #champs()} et ⚠️ 2026-10-01 les champs du DAO du MEN : période (NOMBRE), seuil, garantie, délai, liquidité par lot. */

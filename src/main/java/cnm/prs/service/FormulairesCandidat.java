@@ -74,6 +74,15 @@ public final class FormulairesCandidat {
     /** ⚠️ 2026-10-01 (avis spécifique, §B7.3) — un montant par lot, une ligne (un paragraphe) par lot. */
     static final String SUFFIXE_LIGNES_PAR_LOT = "lignesParLot";
 
+    /** ⚠️ 2026-10-02 — l'heure seule d'une date-heure : « 09 h 30 » ; illisible : la valeur telle quelle. */
+    static String heure(String brut) {
+        LocalDateTime d = RemiseElectronique.dateHeureLue(brut);
+        return d == null ? brut : d.format(DateTimeFormatter.ofPattern("HH 'h' mm"));
+    }
+
+    /** ⚠️ 2026-10-02 — « le quinzième jour précédant la date limite fixée pour la remise des offres » (AE-T 3). */
+    static final int JOURS_AVANT_REMISE_DATE_PRIX = 15;
+
     /** ⚠️ §B7.3 — une date-heure « 12/10/2026 à 09 h 00 (heure locale) » ; illisible : telle quelle. */
     static String heureLocale(String brut) {
         LocalDateTime d = RemiseElectronique.dateHeureLue(brut);
@@ -104,7 +113,7 @@ public final class FormulairesCandidat {
      */
     public static DocumentLibre rendreModele(String type, Integer lot, FicheMarcheDto fiche, Map<String, ChampFicheMarche> champs,
             FichierCommande.Modele modele, LocalDateTime validation, Map<String, String> publication) {
-        Contexte ctx = new Contexte(fiche, champs, modele.conditions(), publication == null ? Map.of() : publication);
+        Contexte ctx = new Contexte(fiche, champs, modele.conditions(), publication == null ? Map.of() : publication, validation);
         return new DocumentLibre(type, lot, finaliser(ctx.rendre(modele.elements(), lot)), pied(fiche, validation));
     }
 
@@ -245,11 +254,12 @@ public final class FormulairesCandidat {
     // ------------------------------------------------------------------ substitution et marqueurs
 
     /** Le contexte d'une fiche : ce que valent les conditions, les répétitions et les jetons. */
+    /** @param validation ⚠️ 2026-10-02 — la validation de la version rendue ({@code DERIVE.date-dao}) ; {@code null} : rendu brut */
     private record Contexte(FicheMarcheDto fiche, Map<String, ChampFicheMarche> champs, Map<String, String> conditions,
-            Map<String, String> publication) {
+            Map<String, String> publication, LocalDateTime validation) {
 
         Contexte(FicheMarcheDto fiche, Map<String, ChampFicheMarche> champs) {
-            this(fiche, champs, Map.of(), Map.of());
+            this(fiche, champs, Map.of(), Map.of(), null);
         }
 
         /**
@@ -293,6 +303,21 @@ public final class FormulairesCandidat {
                 return RemiseElectronique.PAPIER;
             }
             return v == null ? null : String.valueOf(v);
+        }
+
+        /**
+         * La date limite de remise des offres : B04-LR-03 (fournitures) ; à défaut ⚠️ lot D B04-CP-02 (contrat-cadre,
+         * date-heure : sa date) ; à défaut ⚠️ lot D4 B04-OV-02 (travaux, date-heure : sa date).
+         */
+        LocalDate dateLimiteRemise() {
+            LocalDate remise = ControlesFicheMarche.date(valeur(fiche, REMISE_OFFRES, null));
+            if (remise == null) {
+                remise = ControlesFicheMarche.date(valeur(fiche, REMISE_OFFRES_CONTRAT_CADRE, null));
+            }
+            if (remise == null) {
+                remise = ControlesFicheMarche.date(valeur(fiche, REMISE_OFFRES_TRAVAUX, null));
+            }
+            return remise;
         }
 
         boolean groupement() {
@@ -570,18 +595,20 @@ public final class FormulairesCandidat {
                         : NombreEnLettres.doublet(g.subtract(o).longValue(), false);
             }
             if ("DERIVE.fin-validite-offre".equals(nom)) {
-                LocalDate remise = ControlesFicheMarche.date(valeur(fiche, REMISE_OFFRES, null));
-                if (remise == null) {
-                    // ⚠️ Lot D (2026-09-28, §B2) — le contrat-cadre porte sa date limite sur B04-CP-02 (date-heure : sa date).
-                    remise = ControlesFicheMarche.date(valeur(fiche, REMISE_OFFRES_CONTRAT_CADRE, null));
-                }
-                if (remise == null) {
-                    // ⚠️ Lot D4 (2026-09-30, §B6.1) — les travaux la portent sur B04-OV-02 (date-heure : sa date) ; sans
-                    // elle, l'AE-T imprimait « jusqu'au ………. ».
-                    remise = ControlesFicheMarche.date(valeur(fiche, REMISE_OFFRES_TRAVAUX, null));
-                }
+                LocalDate remise = dateLimiteRemise();
                 BigDecimal jours = ControlesFicheMarche.nombre(valeur(fiche, VALIDITE_OFFRES, null));
                 return remise == null || jours == null ? POINTILLES : remise.plusDays(jours.longValue()).format(JOUR);
+            }
+            if ("DERIVE.date-prix".equals(nom)) {
+                // ⚠️ 2026-10-02 (recette du DAO du MEN, §B3.1) — « le quinzième jour précédant la date limite fixée pour la
+                // remise des offres, soit le … » (AE-T 3).
+                LocalDate remise = dateLimiteRemise();
+                return remise == null ? POINTILLES : remise.minusDays(JOURS_AVANT_REMISE_DATE_PRIX).format(JOUR);
+            }
+            if ("DERIVE.date-dao".equals(nom)) {
+                // ⚠️ 2026-10-02 (§B3.1) — « Dossier d'Appel d'Offres N° … du <date> » : la date de la validation de la
+                // version, celle où le DAO est établi et figé ; rendu brut (sans validation) : pointillés.
+                return validation == null ? POINTILLES : validation.toLocalDate().format(JOUR);
             }
             if (nom.startsWith("DERIVE.") || nom.startsWith("SI:") || nom.startsWith("FINSI:")) {
                 return null;
@@ -622,6 +649,7 @@ public final class FormulairesCandidat {
                 // « Ariary » après le montant (« pour la somme de … ({{B05-GS-03.chiffres}} Ariary) »).
                 case "chiffres" -> n != null ? ValeursPpmService.montant(n) : brut;
                 case "heureLocale" -> heureLocale(brut);   // ⚠️ 2026-10-01 (§B7.3)
+                case "heure" -> heure(brut);   // ⚠️ 2026-10-02 (recette du DAO du MEN, §B3.1) — « 09 h 30 »
                 case "" -> affichage(type, brut, n);
                 default -> null;
             };

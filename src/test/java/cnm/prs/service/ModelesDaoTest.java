@@ -79,9 +79,9 @@ class ModelesDaoTest {
         assertThat(dao.modele("AE-PI").conditions()).hasSize(17);
         assertThat(dao.modele("CPS-PI").conditions()).hasSize(30);
         // ⚠️ Lot D4 (2026-09-29) — les trois documents des travaux.
-        assertThat(dao.modele("DPAO-T").conditions()).hasSize(40);   // 01/10 (DAO du MEN) : + GARANTIE-LOTS/-UNIQUE, PERSONNEL-CLE, LIQUIDITE ; §B4.1 : + LIMITE-LOTS, OFFRES-ANORMALES
+        assertThat(dao.modele("DPAO-T").conditions()).hasSize(41);   // 01/10 (DAO du MEN) : + GARANTIE-LOTS/-UNIQUE, PERSONNEL-CLE, LIQUIDITE ; §B4.1 : + LIMITE-LOTS, OFFRES-ANORMALES ; 02/10 : + CHIFFRE-AFFAIRES
         assertThat(dao.modele("AE-T").conditions()).hasSize(30);
-        assertThat(dao.modele("CCAP-T").conditions()).hasSize(71);   // 30/09 : + PLANS (B04-CD-03)
+        assertThat(dao.modele("CCAP-T").conditions()).hasSize(72);   // 30/09 : + PLANS (B04-CD-03) ; 02/10 : + LIBERATION-PROVISOIRE
         // ⚠️ 2026-09-30 — les deux avis spécifiques (fournitures, travaux), imprimés à la demande, hors des couvertures.
         assertThat(dao.modele("AVIS-F").conditions()).hasSize(22);   // 01/10 : aligné sur un avis réel (§B7)
         assertThat(dao.modele("AVIS-T").conditions()).hasSize(24);

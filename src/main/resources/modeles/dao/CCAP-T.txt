@@ -24,7 +24,8 @@ CONDITION	GBE-BANCAIREB05-GE-01 = OUI et B05-GE-03 contient bancaire
 CONDITION	GBE-CAUTIONB05-GE-01 = OUI et B05-GE-03 contient caution
 CONDITION	GBE-CHEQUEB05-GE-01 = OUI et B05-GE-03 contient chèque
 CONDITION	LIBERATION-MOITIEB05-GE-01 = OUI et B05-GE-04 contient 50
-CONDITION	LIBERATION-TOTALEB05-GE-01 = OUI et B05-GE-04 contient 100
+CONDITION	LIBERATION-TOTALEB05-GE-01 = OUI et B05-GE-04 = Libérée à 100 % à la réception définitive
+CONDITION	LIBERATION-PROVISOIREB05-GE-01 = OUI et B05-GE-04 = Libérée à 100 % à la réception provisoire
 CONDITION	RETENUE-NONB05-RG-01 != OUI
 CONDITION	RETENUE-OUIB05-RG-01 = OUI
 CONDITION	RESTITUTION-NONB05-GA-01 != OUI
@@ -156,7 +157,7 @@ PARA	Les références au Maître de l'ouvrage dans la suite du présent CCAP con
 PARA	{{FINSI:MOD}}
 SOUS_TITRE	1.2.3. Maître d'œuvre
 PARA	{{SI:MOE}}
-PARA	La maîtrise d'œuvre est assurée conformément au marché {{B02-MW-02}} en date <à préciser> par :
+PARA	La maîtrise d'œuvre est assurée conformément au marché {{B02-MW-02}} par :
 PARA	{{B02-MW-01}}.
 PARA	{{FINSI:MOE}}
 PARA	{{SI:SANS-MOE}}
@@ -210,10 +211,10 @@ PARA	{{B05-GE-05.chiffres}} % de la partie exprimée en Ariary du Prix du March�
 PARA	{{FINSI:GBE-DEVISES}}
 PARA	La garantie de bonne exécution devra être fournie sous forme:
 PARA	{{SI:GBE-BANCAIRE}}
-PARA	- soit de garantie bancaire conformément au modèle figurant en Annexe <numéro> au présent CCAP;
+PARA	- soit de garantie bancaire conformément au modèle figurant en Annexe au présent CCAP;
 PARA	{{FINSI:GBE-BANCAIRE}}
 PARA	{{SI:GBE-CAUTION}}
-PARA	- soit une caution personnelle et solidaire conformément au modèle figurant en Annexe <numéro> au présent CCAP;
+PARA	- soit une caution personnelle et solidaire conformément au modèle figurant en Annexe au présent CCAP;
 PARA	{{FINSI:GBE-CAUTION}}
 PARA	{{SI:GBE-CHEQUE}}
 PARA	- soit un chèque de banque établi à l'ordre de <à préciser>.
@@ -224,6 +225,9 @@ PARA	{{FINSI:LIBERATION-MOITIE}}
 PARA	{{SI:LIBERATION-TOTALE}}
 PARA	La garantie de bonne exécution est libérée à 100% dans les 30 jours suivant la date de la réception définitive
 PARA	{{FINSI:LIBERATION-TOTALE}}
+PARA	{{SI:LIBERATION-PROVISOIRE}}
+PARA	La garantie de bonne exécution est libérée à 100% dans les 30 jours suivant la date de la réception provisoire
+PARA	{{FINSI:LIBERATION-PROVISOIRE}}
 PARA	{{FINSI:GBE}}
 SOUS_TITRE	7.2. Retenue de garantie (CCAG Article 4.2)
 PARA	{{SI:RETENUE-NON}}
@@ -393,16 +397,12 @@ SOUS_TITRE	Article 20 - Cas de force majeure (CCAG Article 18.3)
 PARA	{{SI:FORCE-MAJEURE-OUI}}
 PARA	Constitueront des cas de force majeure, les intempéries excédant les seuils suivants :
 PARA	{{B09-FM-02}}
-PARA	En vue de l’application éventuelle du deuxième des articles 18.1 et 19.2 du CCAG, le délai d’exécution des travaux sera prolongé d’un nombre de jours égal à celui pendant lequel un au moins des phénomènes naturels ci-après dépassera les intensités et durées limitées ci-après:
-PARA	précipitations journalières supérieures ou égales à <préciser le niveau>
-PARA	force du vent supérieure à <préciser le niveau>
-PARA	Phénomènes constatés à <préciser le lieu d’observation de ces phénomènes>
 PARA	{{FINSI:FORCE-MAJEURE-OUI}}
 PARA	{{SI:FORCE-MAJEURE-NON}}
 PARA	Non applicable
 PARA	{{FINSI:FORCE-MAJEURE-NON}}
 SOUS_TITRE	Article 21 - Délai d'exécution (CCAG Article 19.1)
-PARA	Le délai d'exécution est fixé à {{B09-DL-01}} à compter du lendemain de la date de notification de l’ordre de service de commencer les travaux qui interviendra après la notification à l’Entrepreneur du marché approuvé
+PARA	Le délai d'exécution est fixé à {{B09-DL-01.parLot}} à compter du lendemain de la date de notification de l’ordre de service de commencer les travaux qui interviendra après la notification à l’Entrepreneur du marché approuvé
 SOUS_TITRE	Article 22 - Modification des délais d'exécution (CCAG Article 19.2)
 PARA	- Prolongation ou report du délai d'exécution par la PRMP (CCAG article 19.2.1)
 PARA	La PRMP peut notifier une prolongation ou un report du délai d'exécution du Marché sans qu'un avenant au Marché soit nécessaire pour une période cumulé de {{B09-MD-01}}

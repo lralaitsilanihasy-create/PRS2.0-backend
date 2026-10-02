@@ -75,7 +75,7 @@ class FicheDaoTravauxIntegrationTest extends CnmIntegrationTestSupport {
             + "seulement ; aucune rubrique des travaux dans une fiche de fournitures, ni l'inverse")
     void chargement() throws Exception {
         assertThat(travaux.rejets()).isEmpty();
-        assertThat(travaux.crees()).hasSize(151);   // lot D4 : + 6 (B02-MW-04, B02-LT-06/07, B04-VL-02, B05-GE-05, B09-BT-01) ;
+        assertThat(travaux.crees()).hasSize(157);   // 02/10 (recette du MEN, §B3.2) : + B05-GQ-04, B05-VR-02, B08-RE-04, B08-MR-05/06, B09-PE-03   // lot D4 : + 6 (B02-MW-04, B02-LT-06/07, B04-VL-02, B05-GE-05, B09-BT-01) ;
         // 01/10 (DAO du MEN) : + B03-QT-12/13/14, + B02-AU-07 et B06-EO-07 venus du fichier des fournitures
         assertThat(travauxCc.rejets()).isEmpty();
         assertThat(travauxCc.crees()).hasSize(117);
@@ -210,6 +210,30 @@ class FicheDaoTravauxIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(texte).contains("au cours des cinq (5) dernières années",
                 "une photocopie certifiée de la carte statistique", "cinq millions ariary (5 000 000 Ariary)")
                 .contains("de l'Extrait du Registre de Commerce\nun certificat de non faillite");   // un vrai saut de ligne
+    }
+
+    @Test
+    @DisplayName("2026-10-02 — recette du DAO du MEN (§B2, §B3.2) : chiffre d'affaires, antécédents financiers et date de "
+            + "réception facultatifs ; procédure contentieuse proposée par défaut ; libellés précisés ; six champs créés")
+    void recetteDuMen() throws Exception {
+        String ref = ref("typeMarche=QUANTITE_FIXE&categorie=TRAVAUX");
+        assertThat(JsonPath.<List<String>>read(ref, "$.champs[?(@.obligatoire==true)].code"))
+                .doesNotContain("B03-QT-07", "B03-CQ-10", "B09-DL-04");
+        assertThat(JsonPath.<List<String>>read(ref, "$.champs[?(@.code=='B10-PC-01')].valeurDefaut").get(0))
+                .startsWith("Les différends nés de l'exécution du marché").contains("article 50 du Cahier des Clauses Administratives Générales");
+        assertThat(JsonPath.<List<String>>read(ref, "$.champs[?(@.code=='B09-MA-03')].libelle").get(0))
+                .endsWith(": pourcentage de la masse initiale (ex. « vingt pour cent (20 %) »)");
+        assertThat(JsonPath.<List<String>>read(ref, "$.champs[?(@.code=='B03-NT-01')].libelle"))
+                .containsExactly("Comptable assignataire des paiements (désignation seule)");
+        assertThat(JsonPath.<List<String>>read(ref, "$.champs[?(@.code=='B02-MW-04')].libelle").get(0)).endsWith("(laisser vide s'il n'y en a pas)");
+        java.util.Map<String, String> crees = new java.util.LinkedHashMap<>();
+        for (String code : List.of("B05-GQ-04", "B05-VR-02", "B08-RE-04", "B08-MR-05", "B08-MR-06", "B09-PE-03")) {
+            crees.put(code, JsonPath.<List<String>>read(ref, "$.champs[?(@.code=='" + code + "')].type").get(0));
+        }
+        assertThat(crees).containsExactly(java.util.Map.entry("B05-GQ-04", "TEXTE"), java.util.Map.entry("B05-VR-02", "TEXTE_LONG"),
+                java.util.Map.entry("B08-RE-04", "POURCENTAGE"), java.util.Map.entry("B08-MR-05", "NOMBRE"),
+                java.util.Map.entry("B08-MR-06", "TEXTE_LONG"), java.util.Map.entry("B09-PE-03", "POURCENTAGE"));
+        assertThat(JsonPath.<List<String>>read(ref, "$.champs[?(@.obligatoire==true)].code")).doesNotContainAnyElementsOf(crees.keySet());
     }
 
     // ------------------------------------------------------------------ outils

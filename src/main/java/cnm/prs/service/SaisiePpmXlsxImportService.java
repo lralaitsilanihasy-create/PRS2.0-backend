@@ -123,7 +123,7 @@ public class SaisiePpmXlsxImportService {
                         marches.add(assembler(objet, montEstim, nouvMontEstim, nature, mode, forme, financement,
                                 benef, dates, lots, avert));
                     }
-                    objet = objetLigne.trim();
+                    objet = SaisiePpmImportService.nettoyerEncodage(objetLigne.trim());   // ⚠️ 2026-10-02 : « d¿aménagement »
                     montEstim = montant(row, col.get("montant"));
                     nouvMontEstim = montant(row, col.get("nouvMontant"));
                     nature = texte(row, col.get("nature"));
@@ -133,7 +133,7 @@ public class SaisiePpmXlsxImportService {
                     benef = new ArrayList<>();
                     dates = List.of(date(row, col.get("dateLancement")), date(row, col.get("dateOuverture")),
                             date(row, col.get("dateAttribution")));
-                    lots = parserLots(texte(row, col.get("lots")));
+                    lots = parserLots(SaisiePpmImportService.nettoyerEncodage(texte(row, col.get("lots"))));
                     if (exercice == null) {
                         exercice = entier(row, col.get("exercice"));
                     }

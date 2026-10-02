@@ -242,13 +242,23 @@ public class SaisiePpmImportService {
      * (« jusqu¿à » = « jusqu'à »). Un remplacement global aveugle serait faux ; on applique donc uniquement des
      * règles <strong>ancrées et non ambiguës</strong>. Tout « ¿ » résiduel est ensuite signalé
      * ({@link TypeAnomalie#ENCODAGE_SUSPECT}) par ligne — jamais deviné en silence.
+     *
+     * <p>⚠️ 2026-10-02 (recette du DAO du MEN, §B4 : 14 lignes du plan 00004, « Travaux d¿aménagement ») — l'élision
+     * d'un mot d'une lettre (d, l, n, s, j, m, t, c) ou de « qu », en début de mot et devant une lettre, est elle aussi
+     * sans ambiguïté : « d¿aménagement » = « d'aménagement ». La règle de l'œ passe avant. Appliqué aussi à l'objet et
+     * aux lots de l'import xlsx ({@link SaisiePpmXlsxImportService}).</p>
      */
-    private static String nettoyerEncodage(String t) {
+    static String nettoyerEncodage(String t) {
+        if (t == null) {
+            return null;
+        }
         return t
                 // Ligature œ (contextes non ambigus : ¿ suivi de uvre/il/ur/ud/uf).
                 .replaceAll("\\u00bf(?=uvre|il|urs?\\b|ud\\b|ufs?\\b)", "œ")
                 // Apostrophe d'élision (mots toujours élidés devant voyelle/h).
-                .replaceAll("(?i)(jusqu|aujourd|lorsqu|puisqu|quelqu)\\u00bf", "$1'");
+                .replaceAll("(?i)(jusqu|aujourd|lorsqu|puisqu|quelqu)\\u00bf", "$1'")
+                // ⚠️ 2026-10-02 — élision d'un mot d'une lettre ou de « qu », devant une lettre.
+                .replaceAll("(?iu)(?<![\\p{L}])([dlnsjmtc]|qu)\\u00bf(?=\\p{L})", "$1'");
     }
 
     /** Vrai si un champ porte encore un caractère de remplacement (¿ / U+FFFD) après nettoyage. */

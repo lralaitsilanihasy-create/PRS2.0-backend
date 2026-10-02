@@ -5108,6 +5108,44 @@ Demande front `demande-backend-2026-10-01-dao-travaux-men.md`. Migration **V58**
   - ⚠️ **dans un document commun d'une ligne allotie, la condition d'un champ saisi par lot lit ses valeurs par lot
     réunies** : sans cela, `B03-QT-14 renseigne` restait faux, puisque la liquidité est saisie sous `B03-QT-14#n`.
 
+### Recette du DAO du MEN rejoué en fiche 40 ⚠️ 2026-10-02
+
+Demande front `demande-backend-2026-10-02-recette-dao-men.md`. Scripts `docs/referentiel/2026-10-02-recette-dao-men.sql`
+(référentiel) et `docs/referentiel/2026-10-02-apostrophes-plan.sql` (données) ; pas de migration.
+
+- **Modèles** recopiés : DPAO-T **262/262** (41 conditions : chiffre d'affaires sous `CHIFFRE-AFFAIRES`) ; CCAP-T
+  **572/572** (72 conditions) :
+  - libération de la garantie de bonne exécution à la réception **provisoire** (`LIBERATION-PROVISOIRE`), distincte de la
+    définitive ;
+  - annexes non numérotées ;
+  - date du marché du maître d'œuvre retirée ;
+  - seconde liste d'intempéries retirée ;
+  - délai d'exécution par lot.
+- **Référentiel des travaux** :
+  - **facultatifs** : `B03-QT-07` (chiffre d'affaires), `B03-CQ-10` (antécédents financiers, commun aux trois catégories
+    et imprimé nulle part), `B09-DL-04` (date de réception) ;
+  - **`B10-PC-01` proposé par défaut** : « Les différends nés de l'exécution du marché sont réglés selon la procédure prévue
+    à l'article 50 du Cahier des Clauses Administratives Générales applicable aux marchés de travaux. » Rédaction à faire
+    valider par le juriste ;
+  - **libellés précisés**, la valeur s'insérant dans une phrase du modèle : `B09-MA-01` à `-04` (pourcentage de la masse
+    initiale), `B09-MD-01` (durée cumulée, le type reste `TEXTE_LONG`), `B03-NT-01` (désignation seule), `B02-MW-04`
+    (« laisser vide s'il n'y en a pas ») ;
+  - **six champs créés, facultatifs** :
+    - `B05-GQ-04` bénéficiaire des chèques de banque (`TEXTE`) ;
+    - `B05-VR-02` indices d'actualisation des prix fermes (`TEXTE_LONG`) ;
+    - `B08-RE-04` plafond de la régie (`POURCENTAGE`) ;
+    - `B08-MR-05` délai du projet de décompte mensuel (`NOMBRE`, jours ouvrables) ;
+    - `B08-MR-06` découpage du forfait par poste (`TEXTE_LONG`, un poste par ligne) ;
+    - `B09-PE-03` plafond des pénalités de retard (`POURCENTAGE`).
+- **Moteur** :
+  - `{{CODE.heure}}` d'une date-heure : « 09 h 30 » ;
+  - `{{DERIVE.date-prix}}` = date limite de remise des offres − 15 jours ;
+  - `{{DERIVE.date-dao}}` = date de **validation** de la version rendue (celle où le DAO est établi et figé ; pointillés sur
+    un rendu brut).
+- **Import du plan** : le nettoyage des `¿` (U+00BF) reconnaît aussi l'élision d'un mot d'une lettre ou de « qu »
+  (« d¿aménagement » → « d'aménagement »). La ligature œ passe avant. Il s'applique désormais aussi à l'objet et aux lots
+  de l'import xlsx. Un `¿` restant est toujours signalé (`ENCODAGE_SUSPECT`), jamais deviné.
+
 ### Lettres d'invitation des prestations intellectuelles ⚠️ 2026-10-01 (lot AV-4.1)
 
 Le pendant de l'avis spécifique pour les prestations intellectuelles, dont la procédure n'a pas d'avis public : chaque
