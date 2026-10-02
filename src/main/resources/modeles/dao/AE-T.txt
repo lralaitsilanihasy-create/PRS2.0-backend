@@ -88,7 +88,7 @@ PARA	N° statistique :
 PARA	Identification fiscale :
 PARA	N° Télécopieur :
 PARA	Adresse e-Mail :
-PARA	Après avoir pris connaissance du Dossier d'Appel d'Offres N° {{B02-OB-03}} du <date> et, en particulier, des documents composant le Cahier des Prescriptions Spéciales :
+PARA	Après avoir pris connaissance du Dossier d'Appel d'Offres N° {{B02-OB-03}} du {{DERIVE.date-dao}} et, en particulier, des documents composant le Cahier des Prescriptions Spéciales :
 PARA	Atteste sur l'honneur, sous peine de résiliation de plein droit du marché ou de sa mise en régie, à mes torts exclusifs ou, selon le cas, aux torts exclusifs de la personne morale que je représente, que je ne tombe pas ou, selon le cas, que ladite personne morale ne tombe pas sous le coup d'un cas d'exclusion visé par l'article 9 du Code des Marchés Publics reproduit ci-après.
 PARA	"Art. 9 - Exclusion des marchés publics:
 PARA	Ne sont pas admis à concourir aux marchés publics :
@@ -146,7 +146,7 @@ PARA	N° statistique :
 PARA	Identification fiscale :
 PARA	N° Télécopieur :
 PARA	Adresse e-Mail :
-PARA	Après avoir pris connaissance du Dossier d'Appel d'Offres N° {{B02-OB-03}} du <date> et, en particulier, des documents composant le Cahier des Prescriptions Spéciales :
+PARA	Après avoir pris connaissance du Dossier d'Appel d'Offres N° {{B02-OB-03}} du {{DERIVE.date-dao}} et, en particulier, des documents composant le Cahier des Prescriptions Spéciales :
 PARA	Attestons sur l'honneur, sous peine de résiliation de plein droit du marché ou de sa mise en régie, à nos torts exclusifs ou, selon le cas, aux torts exclusifs des personnes morales que nous représentons, que nous ne tombons pas ou, selon le cas, que lesdites personnes morales ne tombe pas sous le coup d'un cas d'exclusion visé par l'article 9 du Code des Marchés Publics reproduit ci-après.
 PARA	"Art. 9 - Exclusion des marchés publics:
 PARA	Ne sont pas admis à concourir aux marchés publics :
@@ -161,7 +161,7 @@ PARA	Nous engageons sans réserve, conformément aux stipulations des documents 
 PARA	L'offre ainsi présentée nous lie conformément à la durée de validité des offres fixée dans les Données Particulières de l'Appel d'Offres, jusqu'au {{DERIVE.fin-validite-offre}}.
 PARA	{{FINSI:GROUPEMENT}}
 SOUS_TITRE	ARTICLE 2 - PRIX
-PARA	Les conditions d'établissement des prix sont celles existant le quinzième jour précédant la date limite fixée pour la remise des offres, soit le…………
+PARA	Les conditions d'établissement des prix sont celles existant le quinzième jour précédant la date limite fixée pour la remise des offres, soit le {{DERIVE.date-prix}}
 PARA	{{SI:ARIARY}}
 PARA	La monnaie de compte et de paiement est l’Ariary
 PARA	{{FINSI:ARIARY}}

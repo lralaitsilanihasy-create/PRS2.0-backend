@@ -262,6 +262,35 @@ class ModelesDaoTravauxTest {
                 .startsWith("Heure : ……… ; prix au ……… ; DAO du ………");
     }
 
+    @Test
+    @DisplayName("2026-10-02 (§B5.2, modèles rebranchés) — bénéficiaire des chèques, copie(s), heure d'ouverture, date du DAO "
+            + "et des prix, plafonds de la régie et des pénalités, délai du décompte, découpage du forfait, actualisation "
+            + "sous ACTUALISATION : aucun des blancs de B3 ne reste")
+    void blancsDeB3Remplis() {
+        FicheMarcheDto f = fiche(Map.of("typePrix", "FORFAITAIRE", "tranches", "NON", "prixRevisable", "NON", "avance", "NON",
+                "garantieSoumission", "OUI"));
+        f.getValeurs().putAll(Map.of("B05-GQ-02", "Chèque de banque", "B05-GQ-04", "Receveur Général d'Antananarivo",
+                "B04-FP-01", "1", "B04-OV-02", "2026-11-16T09:30", "B05-GE-01", "OUI", "B05-GE-03", "Chèque de banque"));
+        f.getValeurs().putAll(Map.of("B08-RE-04", "10", "B08-MR-05", "5", "B08-MR-06", "Installation de chantier : 5 %\nTerrassement : 15 %",
+                "B09-PE-02", "un millième", "B09-PE-03", "10", "B09-RP-03", "20", "B05-VR-02", "Indice TP01, Bulletin officiel",
+                "B08-RE-02", "OUI"));   // la clause de la régie (12.2) est sous REGIE-OUI
+        java.time.LocalDateTime validation = java.time.LocalDateTime.of(2026, 10, 2, 11, 0);
+        String dpao = FormulairesCandidat.rendreModele("DPAO", null, f, champsMen(), dao.modele("DPAO-T"), validation).texte();
+        assertThat(dpao).contains("libéllé au nom de Receveur Général d'Antananarivo", "1 copie(s)", "Heure : 09 h 30");
+        String ae = FormulairesCandidat.rendreModele("AE", null, f, champsMen(), dao.modele("AE-T"), validation).texte();
+        assertThat(ae).contains(" du 02/10/2026 et, en particulier", "pour la remise des offres, soit le 01/11/2026");
+        String ccap = FormulairesCandidat.rendreModele("CCAP", null, f, champsMen(), dao.modele("CCAP-T"), validation).texte()
+                .replace(' ', ' ').replace(' ', ' ');
+        assertThat(ccap).contains("établi à l'ordre de Receveur Général d'Antananarivo.", "atteint 10 % du montant du Marché",
+                "au plus tard 5 jours ouvrables", "Installation de chantier : 5 %\nTerrassement : 15 %",
+                "dans la limite de 10 % du montant global", "Indice TP01, Bulletin officiel", "est de 20 jours.")
+                .doesNotContain("<à préciser>", "<pourcentage>", "< nombre de jours>", "<indiquer la nature des indices", "<n°>",
+                        "{{");
+        f.getValeurs().remove("B05-VR-02");   // prix fermes, sans actualisation : le paragraphe disparaît
+        assertThat(FormulairesCandidat.rendreModele("CCAP", null, f, champsMen(), dao.modele("CCAP-T"), validation).texte())
+                .doesNotContain("Indice TP01").contains("Les prix sont fermes et non révisables.");
+    }
+
     // ------------------------------------------------------------------ outils
 
     /** {@link #champs()} et ⚠️ 2026-10-01 les champs du DAO du MEN : période (NOMBRE), seuil, garantie, délai, liquidité par lot. */

@@ -48,6 +48,7 @@ CONDITION	DEVISESB05-MN-01 = Devises
 CONDITION	FORFAITtypePrix = FORFAITAIRE
 CONDITION	UNITAIREStypePrix = UNITAIRES
 CONDITION	FERMEprixRevisable = NON
+CONDITION	ACTUALISATIONprixRevisable = NON et B05-VR-02 renseigne
 CONDITION	REVISABLEprixRevisable = OUI
 CONDITION	REGIE-NONB08-RE-02 != OUI
 CONDITION	REGIE-OUIB08-RE-02 = OUI
@@ -217,7 +218,7 @@ PARA	{{SI:GBE-CAUTION}}
 PARA	- soit une caution personnelle et solidaire conformément au modèle figurant en Annexe au présent CCAP;
 PARA	{{FINSI:GBE-CAUTION}}
 PARA	{{SI:GBE-CHEQUE}}
-PARA	- soit un chèque de banque établi à l'ordre de <à préciser>.
+PARA	- soit un chèque de banque établi à l'ordre de {{B05-GQ-04}}.
 PARA	{{FINSI:GBE-CHEQUE}}
 PARA	{{SI:LIBERATION-MOITIE}}
 PARA	La garantie de bonne exécution est libérée de 50% dans les trente (30) jours de la délivrance du certificat de réception provisoire, le solde étant libéré dans les trente (30) jours de la délivrance du certificat de réception définitive.
@@ -314,6 +315,8 @@ PARA	{{FINSI:UNITAIRES}}
 SOUS_TITRE	11.4. Variations dans les prix (CCAG article 10.4)
 PARA	{{SI:FERME}}
 PARA	Les prix sont fermes et non révisables.
+PARA	{{FINSI:FERME}}
+PARA	{{SI:ACTUALISATION}}
 PARA	Ils sont actualisés pour tenir compte du délai entre la date limite de remise des offres et la date de notification du marché, selon la formule suivante :
 PARA	PI = Po (In / Io)
 PARA	Formule selon laquelle :
@@ -322,9 +325,9 @@ PARA	Po est le prix de base du règlement des prestations figurant à l'acte d'e
 PARA	In est la valeur de l'indice, défini pour chaque lot, du mois de la date de la notification du marché l'acte portant début d'exécution des prestations.
 PARA	Io est la valeur de ce même indice correspondant au mois d'établissement des prix fixés dans l'acte d'engagement.
 PARA	Le (les) indice(s) applicables sont:
-PARA	<indiquer la nature des indices et les sources où ils peuvent être trouvés>
+PARA	{{B05-VR-02}}
 PARA	Les coefficients d’actualisation seront arrondis au millième supérieur.
-PARA	{{FINSI:FERME}}
+PARA	{{FINSI:ACTUALISATION}}
 PARA	{{SI:REVISABLE}}
 PARA	Les prix seront révisés conformément aux dispositions de l’Annexe du présent CCAP "Formule de révision de prix".
 PARA	{{FINSI:REVISABLE}}
@@ -340,7 +343,7 @@ PARA	Coefficient de majoration des salaires et des indemnités passibles des cha
 PARA	{{B08-RE-03}}
 PARA	Coefficient de majoration des autres frais:
 PARA	<Indiquer le taux de frais généraux admis et le taux de marge admis>
-PARA	L'obligation pour l'Entrepreneur d'exécuter des travaux en régie cesse lorsque le montant total des droits à remboursement atteint <pourcentage> du montant du Marché.
+PARA	L'obligation pour l'Entrepreneur d'exécuter des travaux en régie cesse lorsque le montant total des droits à remboursement atteint {{B08-RE-04.chiffres}} % du montant du Marché.
 PARA	{{FINSI:REGIE-OUI}}
 SOUS_TITRE	Article 13 - Acomptes sur approvisionnements (CCAG Article 11.4)
 PARA	{{SI:APPROVISIONNEMENTS-NON}}
@@ -372,18 +375,14 @@ PARA	{{SI:REGLEMENT-UNIQUE}}
 PARA	Les comptes seront réglés en une seule fois.
 PARA	{{FINSI:REGLEMENT-UNIQUE}}
 PARA	{{SI:DECOMPTES-MENSUELS}}
-PARA	Délai de remise du projet de décompte: au plus tard < nombre de jours> jours ouvrables avant la fin du mois suivant le mois de réalisation des prestations considérées, ou à la date qui y sera substituée par l'avis de réunion adressé par le maître d’œuvre.
+PARA	Délai de remise du projet de décompte: au plus tard {{B08-MR-05}} jours ouvrables avant la fin du mois suivant le mois de réalisation des prestations considérées, ou à la date qui y sera substituée par l'avis de réunion adressé par le maître d’œuvre.
 PARA	{{FINSI:DECOMPTES-MENSUELS}}
 PARA	{{SI:UNITAIRES}}
 PARA	Le règlement des sommes dues à l’Entrepreneur s’effectuera par application des prix unitaires qui résultent du bordereau des prix et du détail quantitatif et estimatif aux quantités réellement exécutées prises en attachement contradictoire.
 PARA	{{FINSI:UNITAIRES}}
 PARA	{{SI:FORFAIT}}
 PARA	Le règlement des sommes dues à l’Entrepreneur s’effectuera par application du prix forfaitaire résultant du détail quantitatif et estimatif selon le découpage en centième par corps d’état des travaux terminés comme suit
-PARA	-…………………………………………………%
-PARA	-…………………………………………………%
-PARA	-…………………………………………………%
-PARA	-…………………………………………………%
-PARA	- Réception provisoire…………………… 5%
+PARA	{{B08-MR-06}}
 PARA	- Total………………………………………100% du détail quantitatif et estimatif
 PARA	{{FINSI:FORFAIT}}
 SOUS_TITRE	Article 17 - Augmentation dans la masse des travaux (CCAG Article 15)
@@ -414,7 +413,7 @@ PARA	Les pénalités journalières prévues par l'article 20 du CCAG ne s'appliq
 PARA	{{FINSI:PENALITES-NON}}
 PARA	{{SI:PENALITES-OUI}}
 PARA	Les pénalités journalières applicables sont fixées à :
-PARA	{{B09-PE-02}} du montant du Marché ou de la tranche considérée dans la limite de <pourcentage> du montant global du Marché ou de la tranche considérée.
+PARA	{{B09-PE-02}} du montant du Marché ou de la tranche considérée dans la limite de {{B09-PE-03.chiffres}} % du montant global du Marché ou de la tranche considérée.
 PARA	{{FINSI:PENALITES-OUI}}
 SOUS_TITRE	Article 24 - Vérification qualitative des matériaux et produits (CCAG Article 24.3)
 PARA	{{B09-VQ-01}}
@@ -443,9 +442,9 @@ PARA	Les tranches de travaux comportant des délai d'exécution distincts identi
 PARA	{{FINSI:RECEPTION-TRANCHES}}
 SOUS_TITRE	28.2. Opérations préalables (CCAG Article 41.2.)
 PARA	a) Début des opérations préalables
-PARA	Par dérogation au CCAG, le délai du début des opérations préalables à la réception des ouvrages à compter de la réception de l'avis de l'Entrepreneur est de {{B09-RP-03}}.
+PARA	Par dérogation au CCAG, le délai du début des opérations préalables à la réception des ouvrages à compter de la réception de l'avis de l'Entrepreneur est de {{B09-RP-03}} jours.
 PARA	b) Modalités de réception des travaux
-PARA	Les modalités de réception des travaux sont décrites en annexe <n°> aux Spécifications Techniques :
+PARA	Les modalités de réception des travaux sont décrites en annexe aux Spécifications Techniques :
 PARA	{{B09-RP-04}}
 PARA	La constatation du repliement des installations de chantier et de la remise en état des lieux n'est pas comprise dans les opérations de réception.
 PARA	Sur demande de l’Entrepreneur, la réception prononcée par une Commission de réception désignée par une Décision du Maître de l’ouvrage vaudra Réception provisoire. La réception définitive sera prononcée dans les mêmes formes à l’issue du délai de garantie

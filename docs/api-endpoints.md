@@ -5121,6 +5121,9 @@ Demande front `demande-backend-2026-10-02-recette-dao-men.md`. Scripts `docs/ref
   - date du marché du maître d'œuvre retirée ;
   - seconde liste d'intempéries retirée ;
   - délai d'exécution par lot.
+- ⚠️ **Modèles rebranchés** (§B5.2, même jour) : DPAO-T 262/262, AE-T 363/363, CCAP-T **574/574** (73 conditions,
+  `ACTUALISATION` = `prixRevisable = NON et B05-VR-02 renseigne`). Les six champs et les jetons `.heure`,
+  `DERIVE.date-prix` et `DERIVE.date-dao` y sont imprimés ; « {{B04-FP-01}} copie(s) ».
 - **Référentiel des travaux** :
   - **facultatifs** : `B03-QT-07` (chiffre d'affaires), `B03-CQ-10` (antécédents financiers, commun aux trois catégories
     et imprimé nulle part), `B09-DL-04` (date de réception) ;
