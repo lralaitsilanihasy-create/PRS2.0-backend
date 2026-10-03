@@ -158,6 +158,15 @@ public class DocumentsFicheMarcheService {
      * ({@code BP}) et le tableau de conformité ({@code TC}) en classeurs {@code xlsx}.
      */
     public List<Produit> produire(FicheMarcheDto etat, List<BesoinFiche.Article> articles, LocalDateTime validation) {
+        return produire(etat, articles, validation, Map.of());
+    }
+
+    /**
+     * ⚠️ V60 (2026-10-03, §B2) — et des jetons calculés par l'appelant hors de la fiche : {@code {{MOYENS.materiel}}},
+     * {@code {{MOYENS.personnel}}} (listes de la version, {@link MoyensFiche#jetons}).
+     */
+    public List<Produit> produire(FicheMarcheDto etat, List<BesoinFiche.Article> articles, LocalDateTime validation,
+            Map<String, String> jetons) {
         List<ChampFicheMarche> champs = champRepository.findByActifTrueOrderByCodeRubriqueAscRangAsc();
         List<DocumentFicheModele> modeles = new ArrayList<>(SelectionDocumentsFiche.selectionner(etat, champs,
                 blocRepository.findAllByOrderByRangAsc(), rubriqueRepository.findAllByOrderByCodeBlocAscRangAscCodeAsc(), validation));
@@ -173,6 +182,9 @@ public class DocumentsFicheMarcheService {
         int nbLots = Boolean.TRUE.equals(etat.getSaisieParLot()) && etat.getNbLots() != null ? etat.getNbLots() : 0;
         // ⚠️ V59 (2026-10-02, DQE des travaux, §B1.5) — les séries du DQE, jeton {{BESOIN.series}} (découpage du forfait).
         parametresDocuments.putAll(FormulairesCandidat.seriesDuBesoin(articles, nbLots));
+        if (jetons != null) {
+            parametresDocuments.putAll(jetons);
+        }
         for (ModelesDao.Couverture c : couvertes) {
             remplaces.add(c.typeDocument());
             List<Integer> lots = new ArrayList<>();

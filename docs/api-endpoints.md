@@ -4762,6 +4762,7 @@ l'Administrateur). Avant le premier enregistrement la fiche est **virtuelle** : 
 | ⚠️ 2026-10-02 `ASSURANCE_DECENNALE` | `BATIMENT` (`B09-BT-01`), `ASSURANCE` (`B09-AC-03`) — des travaux de bâtiment exigent l'assurance décennale ; hors bâtiment, rien | bloquant |
 | ⚠️ V59 `LIQUIDITE_DOUBLE` | `MONTANT` (`B03-QT-14`), `POURCENTAGE` (`B03-QT-15`), par lot — la liquidité minimale en montant **ou** en pourcentage de l'offre, pas les deux pour un même lot | bloquant |
 | ⚠️ V59 `CA_MOYENNE` | `CA` (`B03-QT-07`), `MEILLEURES` (`B03-QT-16`), `ANNEES` (`B03-QT-17`) — 16 et 17 vont ensemble, 16 ≤ 17, et seulement avec un chiffre d'affaires renseigné | bloquant |
+| ⚠️ V60 `MATERIEL_EXIGE` | `TEXTE` (`B03-QT-09`) — une fiche de travaux dit son matériel, par la liste `/materiel` **ou** par ce texte ; ne vaut que là où le champ est servi (pas le contrat-cadre de travaux) | bloquant |
 | ⚠️ V59 `REFERENCES_CUMUL` | `NOMBRE` (`B03-QT-19`), `MONTANT` (`B03-QT-20`, par lot) — le nombre de marchés cumulables et le montant cumulé (de chaque lot) vont ensemble | bloquant |
 
 Une règle dont un rôle n'a pas encore de champ (référentiel incomplet) **n'est pas évaluée** — ni bloquante, ni « ok ».
@@ -5210,6 +5211,40 @@ Les règles sont décrites dans le tableau des contrôles (`LIQUIDITE_DOUBLE`, `
 - b) « au plus trois (3) marchés […] d'un montant cumulé d'au moins … » sous `REFERENCES-CUMUL` (`B03-QT-19`
   renseigné). Sinon, « au moins un projet ».
 - (f) « d'un montant minimum égal à 10 % du montant de son offre » sous `LIQUIDITE-POURCENT` (`B03-QT-15` renseigné).
+
+### Matériel et personnel exigés des travaux ⚠️ 2026-10-03 (V60)
+
+Demande front `demande-backend-2026-10-03-materiel-personnel-travaux.md` (lot 3 du plan « fiche travaux structurée »).
+Migration **V60** ; script `docs/referentiel/2026-10-03-materiel-personnel-travaux.sql`.
+
+Deux listes de la version de fiche, **travaux seulement**, comme le besoin : figées à la validation, copiées à la
+révision, supprimées avec la fiche. Une seule liste par fiche ; `parLot` dit qu'une ligne vaut pour chaque lot.
+
+| Méthode | URL | Corps | Réponse | Statuts |
+|---|---|---|---|---|
+| GET | /api/fiches-marche/{idDmc}/materiel | — | `MaterielExigeDto[]` dans l'ordre ; `[]` pour une fiche virtuelle | 200, 403, 404 |
+| PUT | /api/fiches-marche/{idDmc}/materiel | `{ "materiel": [MaterielExigeDto…] }` | toute la liste (remplacée ; l'ordre est la position) | 200, 400, 403, 409 |
+| GET | /api/fiches-marche/{idDmc}/personnel | — | `PersonnelExigeDto[]` | 200, 403, 404 |
+| PUT | /api/fiches-marche/{idDmc}/personnel | `{ "personnel": [PersonnelExigeDto…] }` | toute la liste | 200, 400, 403, 409 |
+
+Les profils sont ceux de la lecture et de l'écriture de la fiche. 409 `MOYENS_HORS_PERIMETRE` hors travaux,
+`FICHE_VALIDEE` sur une version validée.
+
+- **`MaterielExigeDto`** : `idMateriel`, `ordre` (servi), `designation` (≤ 200, obligatoire), `caracteristique` (≤ 200),
+  `nombre` (≥ 1, obligatoire), `minimumEnPropre` (0 à `nombre` ; `null` = propriété ou location indifférente),
+  `parLot`. 400 `materiel[i].designation`, `.caracteristique`, `.nombre`, `.minimumEnPropre`.
+- **`PersonnelExigeDto`** : `idPersonnel`, `ordre`, `poste` (≤ 200, obligatoire), `nombre` (≥ 1, 1 s'il est absent),
+  `diplome` (≤ 500), `experienceAnnees` (≥ 0), `domaineExperience` (≤ 200), `justificatifs` (≤ 500), `parLot`. 400
+  `personnel[i].…`.
+- **Bloc `B13` « Matériel et personnel exigés »**, `rendu = 'MOYENS'`, servi aux travaux dans les trois types de
+  marché. Il a deux rubriques sans champ, `B13-MA` (matériel) et `B13-PE` (personnel).
+- **Jetons** (une ligne par entrée, vrais sauts de ligne ; liste vide : pointillés) :
+  - **`{{MOYENS.materiel}}`** : « - Camions bennes ≥ 10 000 kg : 6, dont au moins 4 en propre » ; « - Niveleuse : 1,
+    en propre » (minimum = nombre) ; « - Bétonnière ≥ 350 l : 1 » (sans minimum, ou 0) ; « … : 1 par lot ».
+  - **`{{MOYENS.personnel}}`** : « - Conducteur de travaux (1) : ingénieur BTP ou génie civil ; au moins 5 ans
+    d'expérience en travaux routiers ; justificatifs : CV et diplôme certifié ». Les morceaux absents disparaissent
+    avec leur séparateur ; par lot : « (1 par lot) » ; le diplôme prend une minuscule initiale, sauf un sigle.
+- **`B03-QT-09`** devient facultatif et porte le rôle `MATERIEL_EXIGE:TEXTE`. `B03-QT-13` et `B03-QT-10` ne changent pas.
 
 ### Gabarits : la phrase du document qui imprime un champ ⚠️ 2026-10-02
 

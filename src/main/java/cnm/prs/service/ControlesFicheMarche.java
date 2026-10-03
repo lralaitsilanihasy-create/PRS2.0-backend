@@ -44,6 +44,7 @@ import cnm.prs.enums.TypeChampFiche;
  * <tr><td>LIQUIDITE_DOUBLE (⚠️ V59)</td><td>MONTANT, POURCENTAGE (par lot)</td><td>bloquant</td></tr>
  * <tr><td>CA_MOYENNE (⚠️ V59)</td><td>CA (montant), MEILLEURES, ANNEES (nombres)</td><td>bloquant</td></tr>
  * <tr><td>REFERENCES_CUMUL (⚠️ V59)</td><td>NOMBRE, MONTANT (par lot)</td><td>bloquant</td></tr>
+ * <tr><td>MATERIEL_EXIGE (⚠️ V60)</td><td>TEXTE (B03-QT-09) — ou la liste du matériel ; travaux seulement</td><td>bloquant</td></tr>
  * </table>
  */
 public final class ControlesFicheMarche {
@@ -67,6 +68,8 @@ public final class ControlesFicheMarche {
     public static final String LIQUIDITE_DOUBLE = "LIQUIDITE_DOUBLE";
     public static final String CA_MOYENNE = "CA_MOYENNE";
     public static final String REFERENCES_CUMUL = "REFERENCES_CUMUL";
+    /** ⚠️ V60 (2026-10-03, matériel et personnel des travaux, §B3) — le matériel exigé, en liste ou en texte. */
+    public static final String MATERIEL_EXIGE = "MATERIEL_EXIGE";
     /** ⚠️ V45 (2026-09-25) — le besoin et les garanties générées. */
     public static final String BESOIN_INCOMPLET = "BESOIN_INCOMPLET";
     public static final String QUANTITES_ORDRE = "QUANTITES_ORDRE";
@@ -501,6 +504,34 @@ public final class ControlesFicheMarche {
         } else {
             bloquants.add(new Controle(RESPONSABLE_NON_DESIGNE, List.of(), BLOC_REMISE, "Aucun responsable de la procédure "
                     + "n'est désigné : la fiche ne peut pas être validée en remise électronique."));
+        }
+    }
+
+    /**
+     * ⚠️ V60 (2026-10-03, §B3) — {@code MATERIEL_EXIGE} (rôle {@code TEXTE}) : une fiche de travaux dit son matériel, par la
+     * liste du matériel ({@code nbMateriel} lignes) <strong>ou</strong> par le texte qui porte le rôle. Bloquant. Appelée
+     * par le service pour une fiche de travaux, après le bilan, qu'elle complète. Elle ne vaut que là où le champ au rôle
+     * est servi, c'est-à-dire là où la clause 6.3 du DPAO-T l'imprime (quantité fixe, à commande) : le contrat-cadre de
+     * travaux n'a pas ce champ, et la règle ne lui dit rien.
+     */
+    public static void materielExige(List<ChampFicheMarche> champsOuverts, Map<String, String> valeurs, int nbMateriel,
+            BilanControlesDto bilan) {
+        ChampFicheMarche texte = champsOuverts.stream()
+                .filter(c -> controles(c).stream().anyMatch(x -> MATERIEL_EXIGE.equals(x[0]) && "TEXTE".equals(x[1])))
+                .findFirst().orElse(null);
+        if (texte == null) {
+            return;
+        }
+        String code = texte.getCode();
+        String bloc = texte.codeBloc();
+        List<String> champs = List.of(code);
+        if (nbMateriel > 0) {
+            bilan.ok().add(new Controle(MATERIEL_EXIGE, champs, "B13", "Matériel exigé : " + nbMateriel + " ligne(s)."));
+        } else if (renseigne(valeurs, code)) {
+            bilan.ok().add(new Controle(MATERIEL_EXIGE, champs, bloc, "Matériel exigé : décrit par « " + texte.getLibelle() + " »."));
+        } else {
+            bilan.bloquants().add(new Controle(MATERIEL_EXIGE, champs, "B13", "Le matériel exigé n'est pas dit : remplissez la "
+                    + "liste du matériel, ou « " + texte.getLibelle() + " »."));
         }
     }
 

@@ -200,6 +200,8 @@ public final class FormulairesCandidat {
      */
     public static final String PREFIXE_BESOIN = "BESOIN.";
     public static final String JETON_SERIES = "BESOIN.series";
+    /** ⚠️ V60 (2026-10-03, §B2) — {@code {{MOYENS.materiel}}}, {@code {{MOYENS.personnel}}} : rendus par l'appelant ({@link MoyensFiche#jetons}). */
+    public static final String PREFIXE_MOYENS = "MOYENS.";
 
     /**
      * Les valeurs du jeton {@code {{BESOIN.series}}} : par lot ({@code BESOIN.series#n}) et pour la ligne
@@ -634,7 +636,7 @@ public final class FormulairesCandidat {
                 String v = publication.get(nom);
                 return v == null || v.isBlank() ? POINTILLES : v;
             }
-            if (nom.startsWith(PREFIXE_BESOIN)) {
+            if (nom.startsWith(PREFIXE_BESOIN) || nom.startsWith(PREFIXE_MOYENS)) {
                 // ⚠️ V59 (§B1.5) — tiré du besoin par l'appelant : celui du lot pour un document par lot, sinon de la ligne.
                 String v = lot == null ? null : publication.get(nom + "#" + lot);
                 v = v != null ? v : publication.get(nom);

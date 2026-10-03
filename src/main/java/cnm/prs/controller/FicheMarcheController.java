@@ -188,6 +188,35 @@ public class FicheMarcheController {
         return service.remplacerArticles(idDmc, lot, corps == null ? null : corps.getArticles());
     }
 
+    /** ⚠️ V60 (2026-10-03, §B1.1) — le matériel exigé de la version courante (travaux), dans l'ordre. */
+    @GetMapping("/{idDmc}/materiel")
+    public List<cnm.prs.dto.MaterielExigeDto> materiel(@PathVariable Long idDmc) {
+        return service.materiel(idDmc);
+    }
+
+    /**
+     * ⚠️ V60 — remplacement de toute la liste du matériel, corps {@code {"materiel":[…]}} ; l'ordre est la position. 400
+     * nominatif ({@code materiel[i].…}), 409 {@code FICHE_VALIDEE} / {@code MOYENS_HORS_PERIMETRE}.
+     */
+    @PutMapping("/{idDmc}/materiel")
+    public List<cnm.prs.dto.MaterielExigeDto> remplacerMateriel(@PathVariable Long idDmc,
+            @RequestBody cnm.prs.dto.MaterielExigeDto.Remplacement corps) {
+        return service.remplacerMateriel(idDmc, corps == null ? null : corps.getMateriel());
+    }
+
+    /** ⚠️ V60 — le personnel clé exigé de la version courante (travaux), dans l'ordre. */
+    @GetMapping("/{idDmc}/personnel")
+    public List<cnm.prs.dto.PersonnelExigeDto> personnel(@PathVariable Long idDmc) {
+        return service.personnel(idDmc);
+    }
+
+    /** ⚠️ V60 — remplacement de toute la liste du personnel, corps {@code {"personnel":[…]}} ; mêmes statuts. */
+    @PutMapping("/{idDmc}/personnel")
+    public List<cnm.prs.dto.PersonnelExigeDto> remplacerPersonnel(@PathVariable Long idDmc,
+            @RequestBody cnm.prs.dto.PersonnelExigeDto.Remplacement corps) {
+        return service.remplacerPersonnel(idDmc, corps == null ? null : corps.getPersonnel());
+    }
+
     /** ⚠️ V45 — retire un article (et ses caractéristiques) ; 404 s'il n'appartient pas à la version courante. */
     @org.springframework.web.bind.annotation.DeleteMapping("/{idDmc}/articles/{idArticle}")
     public ResponseEntity<Void> supprimerArticle(@PathVariable Long idDmc, @PathVariable Integer idArticle) {

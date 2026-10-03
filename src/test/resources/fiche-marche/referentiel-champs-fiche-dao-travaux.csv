@@ -26,7 +26,7 @@ B03-QT-05;Communautés locales et organisations non gouvernementales admises;OUI
 B03-QT-06;Qualifications particulières requises;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui
 B03-QT-07;Chiffre d'affaires minimum exigé (Ariary);MONTANT;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;MONTANT_POSITIF,CA_MOYENNE:CA;;;;oui;;
 B03-QT-08;Projet de nature et de complexité comparables réalisé comme entrepreneur principal;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui;oui;
-B03-QT-09;Forme sous laquelle l'entrepreneur disposera du matériel (propriété, location…);TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
+B03-QT-09;Forme sous laquelle l'entrepreneur disposera du matériel (propriété, location…);TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;MATERIEL_EXIGE:TEXTE;;;;oui
 B03-QT-10;Années d'expérience exigées du directeur des travaux;NOMBRE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
 B03-QT-11;Préférence nationale accordée aux candidats;OUI_NON;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;non
 B03-QT-12;Période de référence des marchés similaires (années);NOMBRE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui;;5

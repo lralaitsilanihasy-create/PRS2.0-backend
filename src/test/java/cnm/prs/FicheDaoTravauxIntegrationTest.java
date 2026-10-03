@@ -533,6 +533,74 @@ class FicheDaoTravauxIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(post("/api/fiches-marche/" + idDmc + "/valider").header("Authorization", tokenPrmp)).andExpect(status().isOk());
     }
 
+    @Test
+    @DisplayName("V60 (03/10, matériel et personnel exigés) — bloc B13 rendu MOYENS ; listes de la version : 400 nominatifs, "
+            + "409 hors travaux ; MATERIEL_EXIGE (liste ou B03-QT-09, devenu facultatif) ; la révision copie les deux listes")
+    void materielEtPersonnel() throws Exception {
+        String ref = ref("typeMarche=QUANTITE_FIXE&categorie=TRAVAUX");
+        assertThat(JsonPath.<List<String>>read(ref, "$.blocs[?(@.code=='B13')].rendu")).containsExactly("MOYENS");
+        assertThat(JsonPath.<List<String>>read(ref, "$.blocs[?(@.code=='B13')].rubriques[*].code")).containsExactly("B13-MA", "B13-PE");
+        assertThat(JsonPath.<List<Boolean>>read(ref, "$.champs[?(@.code=='B03-QT-09')].obligatoire")).containsExactly(false);
+        assertThat(JsonPath.<List<String>>read(ref("typeMarche=QUANTITE_FIXE&categorie=FOURNITURES_SERVICES"), "$.blocs[*].code"))
+                .doesNotContain("B13");
+
+        long fournitures = creerDmc(9903);
+        mvc.perform(put("/api/fiches-marche/" + fournitures + "/materiel").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"materiel\":[]}")).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("MOYENS_HORS_PERIMETRE"));
+
+        // Le MEN : deux lots, cinq engins sans minimum, deux postes par lot.
+        long idDmc = creerDmc(9904);
+        cadrage(idDmc, "{\"tranches\":\"NON\",\"groupement\":\"NON\",\"avance\":\"NON\",\"garantieSoumission\":\"NON\","
+                + "\"typePrix\":\"FORFAITAIRE\"}");
+        mvc.perform(put("/api/fiches-marche/" + idDmc + "/materiel").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"materiel\":[{\"designation\":\"Citerne à eau\",\"caracteristique\":\"≥ 5 000 l\",\"nombre\":2,"
+                        + "\"minimumEnPropre\":3}]}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.erreurs[0].champ").value("materiel[0].minimumEnPropre"));
+        remplirObligatoires(idDmc, "QUANTITE_FIXE", "TRAVAUX", Map.of());
+        mvc.perform(put("/api/fiches-marche/" + idDmc + "/materiel").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"materiel\":[]}")).andExpect(status().isOk());
+        String fiche = mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<Map<String, String>>read(fiche, "$.valeurs")).doesNotContainKey("B03-QT-09");
+        assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.bloquants[?(@.regle=='MATERIEL_EXIGE')].message"))
+                .containsExactly("Le matériel exigé n'est pas dit : remplissez la liste du matériel, ou « Forme sous laquelle "
+                        + "l'entrepreneur disposera du matériel (propriété, location…) ».");
+        mvc.perform(post("/api/fiches-marche/" + idDmc + "/valider").header("Authorization", tokenPrmp)).andExpect(status().isConflict());
+
+        String materiel = mvc.perform(put("/api/fiches-marche/" + idDmc + "/materiel").header("Authorization", tokenPrmp)
+                .contentType(JSON).content("{\"materiel\":[{\"designation\":\"Bétonnière\",\"caracteristique\":\"≥ 350 l\",\"nombre\":1},"
+                        + "{\"designation\":\"Camion ou camionnette\",\"caracteristique\":\"≥ 2,5 t\",\"nombre\":1},"
+                        + "{\"designation\":\"Voiture de liaison 4×4\",\"nombre\":1},{\"designation\":\"Pervibrateur\",\"nombre\":1},"
+                        + "{\"designation\":\"Groupe électrogène\",\"caracteristique\":\"≥ 3 kVA\",\"nombre\":1}]}"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Integer>>read(materiel, "$[*].ordre")).containsExactly(1, 2, 3, 4, 5);
+        assertThat(JsonPath.<List<Object>>read(materiel, "$[*].minimumEnPropre")).containsOnlyNulls();
+        String personnel = mvc.perform(put("/api/fiches-marche/" + idDmc + "/personnel").header("Authorization", tokenPrmp)
+                .contentType(JSON).content("{\"personnel\":[{\"poste\":\"Conducteur de travaux\",\"diplome\":\"Ingénieur BTP ou "
+                        + "équivalent\",\"experienceAnnees\":3,\"justificatifs\":\"CV avec photo, diplôme certifié\",\"parLot\":true},"
+                        + "{\"poste\":\"Chef de chantier\",\"diplome\":\"Technicien supérieur BTP\",\"experienceAnnees\":3,\"parLot\":true}]}"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Integer>>read(personnel, "$[*].nombre")).containsExactly(1, 1);   // défaut 1
+        assertThat(JsonPath.<List<Boolean>>read(personnel, "$[*].parLot")).containsExactly(true, true);
+        fiche = mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.ok[?(@.regle=='MATERIEL_EXIGE')].message"))
+                .containsExactly("Matériel exigé : 5 ligne(s).");
+
+        remplirObligatoiresEtValider(idDmc, "QUANTITE_FIXE", "TRAVAUX", Map.of());
+        mvc.perform(put("/api/fiches-marche/" + idDmc + "/personnel").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"personnel\":[]}")).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("FICHE_VALIDEE"));
+        mvc.perform(post("/api/fiches-marche/" + idDmc + "/reviser").header("Authorization", tokenPrmp)).andExpect(status().isOk());
+        assertThat(JsonPath.<List<String>>read(mvc.perform(get("/api/fiches-marche/" + idDmc + "/materiel")
+                .header("Authorization", tokenPrmp)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString(),
+                "$[*].designation")).containsExactly("Bétonnière", "Camion ou camionnette", "Voiture de liaison 4×4",
+                        "Pervibrateur", "Groupe électrogène");
+        assertThat(JsonPath.<List<String>>read(mvc.perform(get("/api/fiches-marche/" + idDmc + "/personnel")
+                .header("Authorization", tokenPrmp)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString(),
+                "$[*].poste")).containsExactly("Conducteur de travaux", "Chef de chantier");
+    }
+
     /** ⚠️ V59 — un article de travaux en JSON ({@code null} : propriété absente). */
     private static String art(String numero, String serie, String serieLibelle, String designation, String unite,
             String quantite, String libelleBordereau, boolean sousDetail, String plafond) {

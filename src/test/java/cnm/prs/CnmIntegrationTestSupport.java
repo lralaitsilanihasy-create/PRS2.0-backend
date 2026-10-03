@@ -737,7 +737,17 @@ abstract class CnmIntegrationTestSupport extends AbstractIntegrationTest {
             if (!besoinIncomplet.isEmpty()) {
                 semerBesoin(idDmc, fiche);
             }
-            if (manquants.isEmpty()) {
+            // ⚠️ V60 (2026-10-03) — une fiche de travaux dit son matériel (B03-QT-09 est devenu facultatif) : une ligne semée.
+            java.util.List<Object> materiel = com.jayway.jsonpath.JsonPath.read(fiche,
+                    "$.bilanControles.bloquants[?(@.regle=='MATERIEL_EXIGE')]");
+            if (!materiel.isEmpty()) {
+                mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .put("/api/fiches-marche/" + idDmc + "/materiel").header("Authorization", tokenPrmp)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"materiel\":[{\"designation\":\"Bétonnière\",\"caracteristique\":\"≥ 350 l\",\"nombre\":1}]}"))
+                        .andExpect(status().isOk());
+            }
+            if (manquants.isEmpty() && materiel.isEmpty()) {
                 break;
             }
             for (String code : manquants) {
