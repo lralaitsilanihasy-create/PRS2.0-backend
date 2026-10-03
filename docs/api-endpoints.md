@@ -5644,9 +5644,13 @@ Une fiche jamais enregistrée est lue comme un brouillon vide.
     (« {{B02-AU-04}} mois. ») ne se reconnaît, au-delà des **3** paragraphes qui suivent le curseur, que dans un paragraphe
     de **60** caractères au plus. Une unité sans aucune lettre ne se reconnaît que dans ces 3 paragraphes. Le réancrage
     est inchangé.
-    ⚠️ **Défaut connu** : un DPAO-F en quantité fixe, dont `B03-CQ-01` garde son défaut, reste lu à 25 unités sur 142
-    (de même chez le front). La ligne « un certificat de non faillite datée de moins de 2 mois » ne fait que 54
-    caractères, et `B02-AU-04` s'y accroche encore. Le défaut est signalé au front.
+    ⚠️ **Suite** (même jour, front `4d169a8`) : loin du curseur, une unité pauvre ne se reconnaît que si **chaque valeur
+    capturée a la forme de son type** :
+    - `NOMBRE`, `MONTANT`, `POURCENTAGE` ou suffixe `.chiffres` : un nombre ;
+    - `DATE`, `DATE_HEURE` sans suffixe : une année 19xx ou 20xx ;
+    - type inconnu, mais jeton suivi de « mois », « jours », « ans », « % »… : un nombre.
+
+    Un DPAO-F en quantité fixe, dont `B03-CQ-01` garde son défaut, est de nouveau lu à 66 unités sur 142 (25 avant).
   - ⚠️ **Un trou ne rend pas un paragraphe distinctif** (2026-10-02, règle 7, front ec4ad37). Pour compter les 20 lettres
     qui permettent à un paragraphe d'attester sa section, on retire les jetons **et les trous `<…>`** laissés au
     candidat. La reconnaissance, les valeurs et leur confiance ne changent pas. Sans cette règle, « ATTENDU QUE » et

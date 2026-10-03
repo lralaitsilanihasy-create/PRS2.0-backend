@@ -243,3 +243,6 @@ Parité : 19 documents (MTP compris), extraction identique, 1 118 lignes de lect
 suivent le curseur, reconnue seulement dans un paragraphe de 60 caractères au plus ; sans lettre, dans ces 3 seulement.
 Parité : 20 documents (un DPAO-F en quantité fixe dont `B03-CQ-01` garde son défaut, ajouté), extraction identique,
 1 138 lignes de lecture identiques. Défaut restant, des deux côtés : ce DPAO-F reste lu à 25 unités sur 142.
+Suite le même jour (front 4d169a8) : loin du curseur, une unité pauvre ne se reconnaît que si ses valeurs ont la forme de
+leur type (nombre ; année pour une date ; à défaut de type, un jeton suivi d'une unité attend un nombre). Parité : 20
+documents, 1 145 lignes identiques ; ce DPAO-F passe de 25 à 66 unités sur 142.

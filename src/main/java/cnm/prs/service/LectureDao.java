@@ -498,6 +498,45 @@ public final class LectureDao {
     private record Motif(Pattern entier, Pattern tete, List<String> jetons, boolean finitParFixe) {
     }
 
+    /** ⚠️ 2026-10-03 (règle 9, suite) — un jeton suivi d'une unité de quantité attend un nombre. */
+    private static final Pattern UNITE_APRES = Pattern.compile("^\\s*(?:mois|jours?|ans?|ann[ée]es?|semaines?|heures?|%)(?!\\p{L})",
+            Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+    private static final Pattern ANNEE = Pattern.compile("(?<![A-Za-z0-9_])(?:19|20)\\d{2}(?![A-Za-z0-9_])");
+
+    /**
+     * ⚠️ 2026-10-03 (règle 9, suite, portage de {@code lire.mjs} 4d169a8) — chaque valeur capturée a-t-elle la forme de son
+     * type ? {@code NOMBRE}, {@code MONTANT}, {@code POURCENTAGE} (ou suffixe {@code .chiffres}) : un nombre au sens de
+     * {@link #valeurSaisie} ; {@code DATE}, {@code DATE_HEURE} sans suffixe : une année 19xx / 20xx (une date s'écrit aussi
+     * en toutes lettres) ; type inconnu : un jeton suivi d'une unité (« mois », « jours », « % »…) attend un nombre.
+     */
+    private static boolean valeursALaFormeDuType(String texte, List<String> jetons, Matcher x, Function<String, InfoChamp> champs) {
+        for (int n = 0; n < jetons.size(); n++) {
+            String jt = jetons.get(n);
+            String[] parts = jt.split("\\.");
+            String code = parts[0];
+            String suffixe = parts.length > 1 ? parts[1] : null;
+            InfoChamp info = champs == null ? null : champs.apply(code.split("#")[0]);
+            String type = info == null ? null : info.type();
+            int i = texte.indexOf("{{" + jt + "}}");
+            String apres = i < 0 ? "" : texte.substring(i + jt.length() + 4);
+            boolean unite = UNITE_APRES.matcher(apres).find();
+            String valeur = x.group(n + 1);
+            if (("DATE".equals(type) || "DATE_HEURE".equals(type)) && suffixe == null) {
+                if (valeur == null || !ANNEE.matcher(valeur).find()) {
+                    return false;
+                }
+                continue;
+            }
+            boolean numerique = "chiffres".equals(suffixe) || unite
+                    || "NOMBRE".equals(type) || "MONTANT".equals(type) || "POURCENTAGE".equals(type);
+            if (numerique && (valeur == null
+                    || valeurSaisie(valeur, type != null ? type : unite ? "NOMBRE" : null, suffixe) == null)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     private static Motif motifParagraphe(String texte) {
         List<String> jetons = new ArrayList<>();
         StringBuilder re = new StringBuilder();
@@ -654,6 +693,12 @@ public final class LectureDao {
                     }
                 }
                 if (!ok) {
+                    continue;
+                }
+                // ⚠️ 2026-10-03 (règle 9, suite, front 4d169a8) — loin du curseur, une unité pauvre ne se reconnaît que si chaque
+                // valeur capturée a la FORME DE SON TYPE : « {{B02-AU-04}} mois. » s'accrochait encore à « un certificat de non
+                // faillite datée de moins de 2 mois » (54 caractères, sous COURT), et lisait « un certificat … de 2 ».
+                if (pauvre && j >= curseur + PRES && !valeursALaFormeDuType(u.texte(), mo.jetons(), x, champs)) {
                     continue;
                 }
                 if (profil.variantes[k].length > 0 && varianteLeDecrit(k, doc.get(j), us, profil)) {

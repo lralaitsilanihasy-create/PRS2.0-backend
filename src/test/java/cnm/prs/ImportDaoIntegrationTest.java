@@ -330,11 +330,9 @@ class ImportDaoIntegrationTest extends CnmIntegrationTestSupport {
         donnees.put("B06-EO-11", "45");
         donnees.put("B09-DX-01", "45");
         donnees.put("B09-LL-01", "Antananarivo, magasin central du ministère");
-        // ⚠️ 2026-10-03 (V62, DPAO-F) — DÉFAUT CONNU, signalé au front : le défaut de B03-CQ-01, imprimé à la clause 6.2,
-        // contient « un certificat de non faillite datée de moins de 2 mois » (54 caractères) ; l'unité « {{B02-AU-04}} mois. »
-        // (clause 1.2, absente en quantité fixe) s'y accroche encore, la règle 9 (paragraphe court ≤ 60) ne l'en empêchant
-        // pas, et la lecture décroche (25 unités sur 142, lire.mjs compris). Vidé ici en attendant la suite de la règle.
-        donnees.put("B03-CQ-01", "");
+        // ⚠️ 2026-10-03 (V62, DPAO-F) — B03-CQ-01 garde son défaut, imprimé à la clause 6.2 (« … datée de moins de 2 mois ») :
+        // la règle 9 et sa suite (une unité pauvre, loin du curseur, ne se reconnaît que si sa valeur a la forme de son type)
+        // empêchent « {{B02-AU-04}} mois. » (clause 1.2, absente en quantité fixe) de s'y accrocher.
         remplirObligatoiresEtValider(source, "QUANTITE_FIXE", "FOURNITURES_SERVICES", donnees);
         String fiche = lire(source);
         Map<String, String> valeurs = JsonPath.read(fiche, "$.valeurs");
