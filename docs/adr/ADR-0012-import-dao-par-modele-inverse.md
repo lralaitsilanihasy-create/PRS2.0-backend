@@ -238,3 +238,8 @@ recherche du suivant à tout le reste du document. Une première accroche dans u
 passage, un écart ancien est corrigé : Java ignorait **toutes** les lignes `TITRE`, le front seulement celle d'en tête.
 Les avis et la lettre d'invitation, qui ont leur titre dans le corps depuis le 01/10, divergeaient sur le DAO du MTP.
 Parité : 19 documents (MTP compris), extraction identique, 1 118 lignes de lecture identiques.
+
+2026-10-03 (front 961c7c5) — **règle 9, unité pauvre** : moins de 8 lettres de texte fixe → au-delà des 3 paragraphes qui
+suivent le curseur, reconnue seulement dans un paragraphe de 60 caractères au plus ; sans lettre, dans ces 3 seulement.
+Parité : 20 documents (un DPAO-F en quantité fixe dont `B03-CQ-01` garde son défaut, ajouté), extraction identique,
+1 138 lignes de lecture identiques. Défaut restant, des deux côtés : ce DPAO-F reste lu à 25 unités sur 142.

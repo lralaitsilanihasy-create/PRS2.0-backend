@@ -5640,6 +5640,13 @@ Une fiche jamais enregistrée est lue comme un brouillon vide.
     reconnus, MEN 5 → 58 ; sur le CCAP-F du 2463 : 3 → 20.
     Même jour : seule la ligne `TITRE` **en tête** d'un modèle en est le titre et n'est pas lue ; un `TITRE` dans le corps
     (avis, lettre d'invitation) est un paragraphe comme un autre, comme chez le front.
+  - ⚠️ **Unité pauvre** (2026-10-03, règle 9, front `961c7c5`). Une unité de moins de 8 lettres de texte fixe
+    (« {{B02-AU-04}} mois. ») ne se reconnaît, au-delà des **3** paragraphes qui suivent le curseur, que dans un paragraphe
+    de **60** caractères au plus. Une unité sans aucune lettre ne se reconnaît que dans ces 3 paragraphes. Le réancrage
+    est inchangé.
+    ⚠️ **Défaut connu** : un DPAO-F en quantité fixe, dont `B03-CQ-01` garde son défaut, reste lu à 25 unités sur 142
+    (de même chez le front). La ligne « un certificat de non faillite datée de moins de 2 mois » ne fait que 54
+    caractères, et `B02-AU-04` s'y accroche encore. Le défaut est signalé au front.
   - ⚠️ **Un trou ne rend pas un paragraphe distinctif** (2026-10-02, règle 7, front ec4ad37). Pour compter les 20 lettres
     qui permettent à un paragraphe d'attester sa section, on retire les jetons **et les trous `<…>`** laissés au
     candidat. La reconnaissance, les valeurs et leur confiance ne changent pas. Sans cette règle, « ATTENDU QUE » et

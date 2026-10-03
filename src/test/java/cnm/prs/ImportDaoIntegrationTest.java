@@ -330,9 +330,10 @@ class ImportDaoIntegrationTest extends CnmIntegrationTestSupport {
         donnees.put("B06-EO-11", "45");
         donnees.put("B09-DX-01", "45");
         donnees.put("B09-LL-01", "Antananarivo, magasin central du ministère");
-        // ⚠️ 2026-10-03 (V62, DPAO-F) — DÉFAUT CONNU, signalé au front : le défaut de B03-CQ-01, désormais imprimé à la clause
-        // 6.2, contient « … TROIS (03) mois » ; l'unité « {{B02-AU-04}} mois. » (clause 1.2, absente en quantité fixe) s'y
-        // accroche et la lecture décroche (25 unités sur 142 au lieu de 65). Vidé ici en attendant la règle de lire.mjs.
+        // ⚠️ 2026-10-03 (V62, DPAO-F) — DÉFAUT CONNU, signalé au front : le défaut de B03-CQ-01, imprimé à la clause 6.2,
+        // contient « un certificat de non faillite datée de moins de 2 mois » (54 caractères) ; l'unité « {{B02-AU-04}} mois. »
+        // (clause 1.2, absente en quantité fixe) s'y accroche encore, la règle 9 (paragraphe court ≤ 60) ne l'en empêchant
+        // pas, et la lecture décroche (25 unités sur 142, lire.mjs compris). Vidé ici en attendant la suite de la règle.
         donnees.put("B03-CQ-01", "");
         remplirObligatoiresEtValider(source, "QUANTITE_FIXE", "FOURNITURES_SERVICES", donnees);
         String fiche = lire(source);

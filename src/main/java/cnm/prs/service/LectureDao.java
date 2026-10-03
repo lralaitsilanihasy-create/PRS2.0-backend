@@ -76,6 +76,14 @@ public final class LectureDao {
     /** ⚠️ 2026-10-02 (règle 8) — paragraphes distinctifs manqués d'affilée avant de chercher dans tout le reste du document. */
     static final int REANCRAGE = 5;
     /**
+     * ⚠️ 2026-10-03 (règle 9, front 961c7c5, DPAO-F réimporté) — une unité PAUVRE (moins de {@link #ANCRE_HAUTE} lettres de
+     * texte fixe : « {{B02-AU-04}} mois. ») ne se reconnaît, au-delà des {@code PRES} paragraphes qui suivent le curseur, que
+     * dans un paragraphe de {@code COURT} caractères au plus (une étiquette et sa valeur, jamais le bout d'une phrase) ; sans
+     * aucune lettre (« 1 »), que dans ces {@code PRES} paragraphes.
+     */
+    static final int PRES = 3;
+    static final int COURT = 60;
+    /**
      * ⚠️ Lot D4 (2026-09-30, règle R-a du front) — fenêtre d'un paragraphe dont le texte fixe se répète ailleurs dans le
      * modèle (« Non applicable ») : absent du document, il se raccrochait à la répétition d'un article plus loin, et la
      * lecture sautait tout ce qui les séparait (CCAP-T : les assurances de l'article 8 perdues).
@@ -618,7 +626,14 @@ public final class LectureDao {
             int borne = trouves.isEmpty() || reancre ? doc.size()
                     : Math.min(doc.size(), curseur + (profil.repete[k] ? FENETRE_REPETE : FENETRE));
             int avant = trouves.size();
+            // ⚠️ 2026-10-03 (règle 9) — absente du document (clause 1.2 du marché à commande, en quantité fixe), l'unité
+            // « {{B02-AU-04}} mois. » s'accrochait à « … datée de moins de TROIS (03) mois » de la clause 6.2, et le curseur
+            // sautait tout ce qui les séparait (25 unités reconnues sur 142 au lieu de 65).
+            boolean pauvre = profil.lettres[k] < ANCRE_HAUTE;
             for (int j = curseur; j < borne; j++) {
+                if (pauvre && j >= curseur + PRES && (profil.lettres[k] == 0 || doc.get(j).length() > COURT)) {
+                    continue;
+                }
                 Matcher x = mo.entier().matcher(doc.get(j));
                 boolean ok = x.find();
                 // B5 règle 2 — une ancre de moins de 8 lettres de texte fixe ne donne jamais la confiance haute.
