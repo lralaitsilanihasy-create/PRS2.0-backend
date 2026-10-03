@@ -601,6 +601,73 @@ class FicheDaoTravauxIntegrationTest extends CnmIntegrationTestSupport {
                 "$[*].poste")).containsExactly("Conducteur de travaux", "Chef de chantier");
     }
 
+    @Test
+    @DisplayName("V61 (03/10, pièces de l'offre) — bloc B14 rendu PIECES ; liste typée de la version : 400 nominatifs, 409 hors "
+            + "travaux ; PIECES_OFFRE_EXIGEES (liste OFFRE ou B04-PI-01, devenu facultatif) ; PIECES_EN_DOUBLE tant que B03-CQ-01 "
+            + "garde son défaut ; la révision copie la liste")
+    void piecesDeLOffre() throws Exception {
+        String ref = ref("typeMarche=QUANTITE_FIXE&categorie=TRAVAUX");
+        assertThat(JsonPath.<List<String>>read(ref, "$.blocs[?(@.code=='B14')].rendu")).containsExactly("PIECES");
+        assertThat(JsonPath.<List<String>>read(ref, "$.blocs[?(@.code=='B14')].rubriques[*].code")).containsExactly("B14-AD", "B14-OF");
+        assertThat(JsonPath.<List<Boolean>>read(ref, "$.champs[?(@.code=='B04-PI-01')].obligatoire")).containsExactly(false);
+
+        long fournitures = creerDmc(9903);
+        mvc.perform(put("/api/fiches-marche/" + fournitures + "/pieces").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"pieces\":[]}")).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("PIECES_HORS_PERIMETRE"));
+
+        long idDmc = creerDmc(9904);
+        cadrage(idDmc, "{\"tranches\":\"NON\",\"groupement\":\"NON\",\"avance\":\"NON\",\"garantieSoumission\":\"NON\","
+                + "\"typePrix\":\"FORFAITAIRE\"}");
+        mvc.perform(put("/api/fiches-marche/" + idDmc + "/pieces").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"pieces\":[{\"rubrique\":\"AUTRE\",\"libelle\":\"X\"}]}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.erreurs[0].champ").value("pieces[0].rubrique"));
+        remplirObligatoires(idDmc, "QUANTITE_FIXE", "TRAVAUX", Map.of());
+        mvc.perform(put("/api/fiches-marche/" + idDmc + "/pieces").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"pieces\":[]}")).andExpect(status().isOk());
+        String fiche = mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.bloquants[?(@.regle=='PIECES_OFFRE_EXIGEES')].message"))
+                .containsExactly("Les pièces de l'offre ne sont pas dites : remplissez la liste des pièces de l'offre, ou "
+                        + "« Documents et pièces constitutifs de l'offre ».");
+
+        // Le MEN : quatre pièces administratives sans numéro, à 3 mois ; les autres pièces de l'offre.
+        String lues = mvc.perform(put("/api/fiches-marche/" + idDmc + "/pieces").header("Authorization", tokenPrmp)
+                .contentType(JSON).content("{\"pieces\":["
+                        + "{\"rubrique\":\"ADMINISTRATIVE\",\"libelle\":\"Carte d'immatriculation fiscale\",\"forme\":\"copie certifiée\",\"ancienneteMaxMois\":3},"
+                        + "{\"rubrique\":\"ADMINISTRATIVE\",\"libelle\":\"Carte statistique\",\"forme\":\"copie certifiée\",\"ancienneteMaxMois\":3},"
+                        + "{\"rubrique\":\"ADMINISTRATIVE\",\"libelle\":\"Certificat de non-faillite\",\"forme\":\"original\",\"ancienneteMaxMois\":3},"
+                        + "{\"rubrique\":\"ADMINISTRATIVE\",\"libelle\":\"Extrait RCS\",\"forme\":\"original\",\"ancienneteMaxMois\":3},"
+                        + "{\"rubrique\":\"offre\",\"libelle\":\"Garantie de soumission\",\"parLot\":true},"
+                        + "{\"rubrique\":\"OFFRE\",\"libelle\":\"Planning d'exécution\"}]}"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(lues, "$[*].rubrique")).containsExactly("ADMINISTRATIVE", "ADMINISTRATIVE",
+                "ADMINISTRATIVE", "ADMINISTRATIVE", "OFFRE", "OFFRE");
+        assertThat(JsonPath.<List<Integer>>read(lues, "$[*].ordre")).containsExactly(1, 2, 3, 4, 5, 6);
+        fiche = mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.ok[?(@.regle=='PIECES_OFFRE_EXIGEES')].message"))
+                .containsExactly("Pièces de l'offre : 2 pièce(s).");
+        // B03-CQ-01 garde la liste du document type (défaut recopié à la création) : avertissement, jamais bloquant.
+        assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.avertissements[?(@.regle=='PIECES_EN_DOUBLE')].champs[0]"))
+                .containsExactly("B03-CQ-01");
+        Map<String, String> b03 = valeursDuBloc(idDmc, "B03", Map.of());
+        b03.remove("B03-CQ-01");
+        mvc.perform(put("/api/fiches-marche/" + idDmc + "/blocs/B03").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"valeurs\":" + new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(b03) + "}"))
+                .andExpect(status().isOk());
+        fiche = mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Object>>read(fiche, "$.bilanControles.avertissements[?(@.regle=='PIECES_EN_DOUBLE')]")).isEmpty();
+
+        remplirObligatoiresEtValider(idDmc, "QUANTITE_FIXE", "TRAVAUX", Map.of());
+        mvc.perform(post("/api/fiches-marche/" + idDmc + "/reviser").header("Authorization", tokenPrmp)).andExpect(status().isOk());
+        assertThat(JsonPath.<List<String>>read(mvc.perform(get("/api/fiches-marche/" + idDmc + "/pieces")
+                .header("Authorization", tokenPrmp)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString(),
+                "$[*].libelle")).containsExactly("Carte d'immatriculation fiscale", "Carte statistique", "Certificat de non-faillite",
+                        "Extrait RCS", "Garantie de soumission", "Planning d'exécution");
+    }
+
     /** ⚠️ V59 — un article de travaux en JSON ({@code null} : propriété absente). */
     private static String art(String numero, String serie, String serieLibelle, String designation, String unite,
             String quantite, String libelleBordereau, boolean sousDetail, String plafond) {

@@ -747,7 +747,17 @@ abstract class CnmIntegrationTestSupport extends AbstractIntegrationTest {
                         .content("{\"materiel\":[{\"designation\":\"Bétonnière\",\"caracteristique\":\"≥ 350 l\",\"nombre\":1}]}"))
                         .andExpect(status().isOk());
             }
-            if (manquants.isEmpty() && materiel.isEmpty()) {
+            // ⚠️ V61 (2026-10-03) — une fiche de travaux dit les pièces de l'offre (B04-PI-01 est devenu facultatif) : une pièce semée.
+            java.util.List<Object> piecesOffre = com.jayway.jsonpath.JsonPath.read(fiche,
+                    "$.bilanControles.bloquants[?(@.regle=='PIECES_OFFRE_EXIGEES')]");
+            if (!piecesOffre.isEmpty()) {
+                mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .put("/api/fiches-marche/" + idDmc + "/pieces").header("Authorization", tokenPrmp)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"pieces\":[{\"rubrique\":\"OFFRE\",\"libelle\":\"Quittance de l'ARMP\"}]}"))
+                        .andExpect(status().isOk());
+            }
+            if (manquants.isEmpty() && materiel.isEmpty() && piecesOffre.isEmpty()) {
                 break;
             }
             for (String code : manquants) {

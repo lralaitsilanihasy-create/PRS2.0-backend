@@ -115,6 +115,8 @@ public class FicheMarcheService {
     private final MandatService mandats;
     /** ⚠️ V60 (2026-10-03) — le matériel et le personnel exigés d'une fiche de travaux. */
     private final MoyensFiche moyens;
+    /** ⚠️ V61 (2026-10-03) — les pièces de l'offre d'une fiche de travaux. */
+    private final PiecesFiche pieces;
 
     public FicheMarcheService(FicheMarcheRepository ficheRepository, FicheMarcheValeurRepository valeurRepository,
             ChampFicheMarcheRepository champRepository, BlocFicheMarcheRepository blocRepository,
@@ -124,7 +126,8 @@ public class FicheMarcheService {
             cnm.prs.repository.DossierRepository dossierRepository, DocumentsFicheMarcheService documents,
             cnm.prs.repository.DocumentFicheMarcheRepository documentRepository, DmcService dmcService,
             BesoinFiche besoin, ParametreService parametres, ParametresInternesService internes, MandatService mandats,
-            MoyensFiche moyens) {
+            MoyensFiche moyens, PiecesFiche pieces) {
+        this.pieces = pieces;
         this.moyens = moyens;
         this.mandats = mandats;
         this.besoin = besoin;
@@ -533,6 +536,39 @@ public class FicheMarcheService {
         return moyens.personnel(fiche.getIdFiche());
     }
 
+    /** ⚠️ V61 (2026-10-03, §B1.1) — les pièces exigées de la version courante ; vide pour une fiche virtuelle. */
+    @Transactional(readOnly = true)
+    public List<cnm.prs.dto.PieceExigeeDto> pieces(Long idDmc) {
+        contexte(idDmc);
+        return pieces.pieces(idFicheCourante(idDmc));
+    }
+
+    /**
+     * ⚠️ V61 — remplacement de toute la liste des pièces. Gardes : écriture de la fiche ; hors travaux → 409
+     * {@code PIECES_HORS_PERIMETRE} ; fiche validée → 409 {@code FICHE_VALIDEE} ; lignes (400 {@code pieces[i].…}).
+     */
+    public List<cnm.prs.dto.PieceExigeeDto> remplacerPieces(Long idDmc, List<cnm.prs.dto.PieceExigeeDto> lignes) {
+        Contexte ctx = contexteEcriture(idDmc);
+        if (!CategorieDao.TRAVAUX.name().equals(ctx.codeCategorie())) {
+            throw new BusinessRuleException("Les pièces de l'offre, en liste, ne valent que pour les travaux (catégorie de la "
+                    + "fiche : " + ctx.codeCategorie() + ").", "PIECES_HORS_PERIMETRE");
+        }
+        List<cnm.prs.dto.PieceExigeeDto> recues = lignes == null ? List.of() : lignes;
+        FicheMarche fiche = brouillonOuNouvelle(ctx);
+        PiecesFiche.valider(recues);
+        pieces.remplacer(fiche.getIdFiche(), recues);
+        fiche.setDateMaj(LocalDateTime.now());
+        ficheRepository.save(fiche);
+        return pieces.pieces(fiche.getIdFiche());
+    }
+
+    /** ⚠️ V60 / V61 — les jetons des listes de la version (matériel, personnel, pièces), rendus dans les modèles. */
+    private Map<String, String> jetonsDesListes(Integer idFiche) {
+        Map<String, String> m = new LinkedHashMap<>(MoyensFiche.jetons(moyens.materiel(idFiche), moyens.personnel(idFiche)));
+        m.putAll(PiecesFiche.jetons(pieces.pieces(idFiche)));
+        return m;
+    }
+
     private Integer idFicheCourante(Long idDmc) {
         return ficheRepository.findFirstByIdDmcOrderByNumeroVersionDesc(idDmc).map(FicheMarche::getIdFiche).orElse(null);
     }
@@ -881,8 +917,8 @@ public class FicheMarcheService {
         LocalDateTime maintenant = LocalDateTime.now();
         List<DocumentsFicheMarcheService.Produit> produits = documents.produire(etat,
                 besoinApplicable(ctx) ? besoin.articles(fiche.getIdFiche()) : List.of(), maintenant,
-                // ⚠️ V60 (§B2) — les jetons {{MOYENS.materiel}} et {{MOYENS.personnel}}
-                MoyensFiche.jetons(moyens.materiel(fiche.getIdFiche()), moyens.personnel(fiche.getIdFiche())));
+                // ⚠️ V60 (§B2) — les jetons {{MOYENS.materiel}} et {{MOYENS.personnel}} ; ⚠️ V61 — {{PIECES.*}}
+                jetonsDesListes(fiche.getIdFiche()));
         fiche.setStatut(StatutFicheMarche.VALIDEE.name());
         fiche.setDateValidation(maintenant);
         fiche.setValidePar(CurrentUser.ref().orElse(null));
@@ -1028,6 +1064,7 @@ public class FicheMarcheService {
         }
         besoin.copier(derniere.getIdFiche(), suivante.getIdFiche());   // ⚠️ V45 — le besoin suit, comme les valeurs
         moyens.copier(derniere.getIdFiche(), suivante.getIdFiche());   // ⚠️ V60 — le matériel et le personnel aussi
+        pieces.copier(derniere.getIdFiche(), suivante.getIdFiche());   // ⚠️ V61 — les pièces de l'offre aussi
         return toDto(ctx, suivante);
     }
 
@@ -1438,6 +1475,10 @@ public class FicheMarcheService {
         // ⚠️ V60 (2026-10-03, §B3) — une fiche de travaux dit son matériel : la liste, ou le texte B03-QT-09.
         if (CategorieDao.TRAVAUX.name().equals(ctx.codeCategorie())) {
             ControlesFicheMarche.materielExige(ouverts, valeurs, moyens.materiel(fiche.getIdFiche()).size(), bilan);
+            // ⚠️ V61 (2026-10-03, §B3) — les pièces de l'offre (liste OFFRE ou B04-PI-01) ; doublon avec le défaut de B03-CQ-01.
+            List<cnm.prs.dto.PieceExigeeDto> lues = pieces.pieces(fiche.getIdFiche());
+            ControlesFicheMarche.piecesOffreExigees(ouverts, valeurs, PiecesFiche.compter(lues, PiecesFiche.OFFRE), bilan);
+            ControlesFicheMarche.piecesEnDouble(ouverts, valeurs, PiecesFiche.compter(lues, PiecesFiche.ADMINISTRATIVE), bilan);
         }
         return new FicheMarcheDto(fiche.getIdFiche(), fiche.getIdDmc(), ctx.idDetail(), ctx.idDossier(),
                 ppm.ligne() == null ? ctx.idDetail() : ppm.ligne().getIdDetail(),

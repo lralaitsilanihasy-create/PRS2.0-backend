@@ -4762,6 +4762,8 @@ l'Administrateur). Avant le premier enregistrement la fiche est **virtuelle** : 
 | ⚠️ 2026-10-02 `ASSURANCE_DECENNALE` | `BATIMENT` (`B09-BT-01`), `ASSURANCE` (`B09-AC-03`) — des travaux de bâtiment exigent l'assurance décennale ; hors bâtiment, rien | bloquant |
 | ⚠️ V59 `LIQUIDITE_DOUBLE` | `MONTANT` (`B03-QT-14`), `POURCENTAGE` (`B03-QT-15`), par lot — la liquidité minimale en montant **ou** en pourcentage de l'offre, pas les deux pour un même lot | bloquant |
 | ⚠️ V59 `CA_MOYENNE` | `CA` (`B03-QT-07`), `MEILLEURES` (`B03-QT-16`), `ANNEES` (`B03-QT-17`) — 16 et 17 vont ensemble, 16 ≤ 17, et seulement avec un chiffre d'affaires renseigné | bloquant |
+| ⚠️ V61 `PIECES_OFFRE_EXIGEES` | `TEXTE` (`B04-PI-01`) — une fiche de travaux dit les pièces de l'offre, par la liste `/pieces` (rubrique `OFFRE`) **ou** par ce texte ; muette là où le champ n'est pas servi | bloquant |
+| ⚠️ V61 `PIECES_EN_DOUBLE` | `TEXTE` (`B03-CQ-01`) — la liste des pièces `ADMINISTRATIVE` est remplie et le texte vaut encore sa valeur par défaut (le DPAO les imprimerait deux fois) | avertissement |
 | ⚠️ V60 `MATERIEL_EXIGE` | `TEXTE` (`B03-QT-09`) — une fiche de travaux dit son matériel, par la liste `/materiel` **ou** par ce texte ; ne vaut que là où le champ est servi (pas le contrat-cadre de travaux) | bloquant |
 | ⚠️ V59 `REFERENCES_CUMUL` | `NOMBRE` (`B03-QT-19`), `MONTANT` (`B03-QT-20`, par lot) — le nombre de marchés cumulables et le montant cumulé (de chaque lot) vont ensemble | bloquant |
 
@@ -5253,6 +5255,42 @@ Les profils sont ceux de la lecture et de l'écriture de la fiche. 409 `MOYENS_H
     saisi ;
   - au (e) : « (e) proposer le personnel clé suivant : », si l'une des deux est remplie, puis `{{MOYENS.personnel}}`, puis
     `B03-QT-13`.
+
+### Pièces de l'offre des travaux ⚠️ 2026-10-03 (V61)
+
+Demande front `demande-backend-2026-10-03-pieces-offre-travaux.md` (lot 4 du plan « fiche travaux structurée »).
+Migration **V61** ; script `docs/referentiel/2026-10-03-pieces-offre-travaux.sql`.
+
+Une liste de la version de fiche, **travaux seulement**, comme `/materiel` : figée à la validation, copiée à la
+révision, supprimée avec la fiche. Une seule liste ; la rubrique et `parLot` sont portés par chaque pièce.
+
+| Méthode | URL | Corps | Réponse | Statuts |
+|---|---|---|---|---|
+| GET | /api/fiches-marche/{idDmc}/pieces | — | `PieceExigeeDto[]` dans l'ordre ; `[]` pour une fiche virtuelle | 200, 403, 404 |
+| PUT | /api/fiches-marche/{idDmc}/pieces | `{ "pieces": [PieceExigeeDto…] }` | toute la liste (remplacée ; l'ordre est la position) | 200, 400, 403, 409 |
+
+409 `PIECES_HORS_PERIMETRE` hors travaux, `FICHE_VALIDEE` sur une version validée.
+
+- **`PieceExigeeDto`** :
+  - `idPiece`, `ordre` (servi) ;
+  - `rubrique` (obligatoire : `ADMINISTRATIVE` = 2° de la clause 6.2, `OFFRE` = 1° ; reçue sans casse, servie en
+    majuscules) ;
+  - `numero` (≤ 10), `libelle` (≤ 300, obligatoire), `forme` (≤ 200), `ancienneteMaxMois` (≥ 1), `parLot`,
+    `modele` (≤ 200).
+
+  400 `pieces[i].rubrique` (absente ou inconnue), `.libelle`, `.numero`, `.forme`, `.ancienneteMaxMois`, `.modele`.
+- **Bloc `B14` « Pièces de l'offre »**, `rendu = 'PIECES'`, servi aux travaux dans les trois types de marché. Il a deux
+  rubriques sans champ, `B14-AD` « Pièces administratives » et `B14-OF` « Autres pièces de l'offre ».
+- **Jetons `{{PIECES.administratives}}` et `{{PIECES.offre}}`**, une ligne par pièce de la rubrique, dans l'ordre :
+  - « - 01 : Carte professionnelle 2026, copie légalisée par le centre fiscal, datée de moins de 3 mois » ;
+  - puis, s'il y a lieu, « une par lot » et « selon le modèle : … ».
+
+  Les morceaux absents disparaissent avec leur virgule, et une ancienneté d'un mois s'écrit « datée de moins d'un mois ».
+  Une rubrique vide imprime des pointillés. Les deux jetons sont lisibles par une condition
+  (`PIECES.offre renseigne`).
+- **`B04-PI-01`** devient facultatif (rôle `PIECES_OFFRE_EXIGEES:TEXTE`) ; **`B03-CQ-01`** porte le rôle
+  `PIECES_EN_DOUBLE:TEXTE`. L'égalité avec la valeur par défaut se juge sans les blancs de bord, et les fins de ligne
+  Windows y sont confondues avec les autres.
 
 ### Gabarits : la phrase du document qui imprime un champ ⚠️ 2026-10-02
 

@@ -202,6 +202,8 @@ public final class FormulairesCandidat {
     public static final String JETON_SERIES = "BESOIN.series";
     /** ⚠️ V60 (2026-10-03, §B2) — {@code {{MOYENS.materiel}}}, {@code {{MOYENS.personnel}}} : rendus par l'appelant ({@link MoyensFiche#jetons}). */
     public static final String PREFIXE_MOYENS = "MOYENS.";
+    /** ⚠️ V61 (2026-10-03, §B2) — {@code {{PIECES.administratives}}}, {@code {{PIECES.offre}}} : rendus par l'appelant ({@link PiecesFiche#jetons}). */
+    public static final String PREFIXE_PIECES = "PIECES.";
 
     /**
      * Les valeurs du jeton {@code {{BESOIN.series}}} : par lot ({@code BESOIN.series#n}) et pour la ligne
@@ -348,7 +350,7 @@ public final class FormulairesCandidat {
             }
             // ⚠️ 2026-10-03 — une liste de la fiche ({@code MOYENS.materiel}, {@code MOYENS.personnel}, {@code BESOIN.series}) :
             // son texte rendu par l'appelant, celui du lot d'abord ; « renseigne » dès qu'elle a une entrée.
-            if (cle.startsWith(PREFIXE_MOYENS) || cle.startsWith(PREFIXE_BESOIN)) {
+            if (cle.startsWith(PREFIXE_MOYENS) || cle.startsWith(PREFIXE_BESOIN) || cle.startsWith(PREFIXE_PIECES)) {
                 String v = lot == null ? null : publication.get(cle + "#" + lot);
                 v = v != null ? v : publication.get(cle);
                 return v == null || v.isBlank() ? null : v;
@@ -643,7 +645,7 @@ public final class FormulairesCandidat {
                 String v = publication.get(nom);
                 return v == null || v.isBlank() ? POINTILLES : v;
             }
-            if (nom.startsWith(PREFIXE_BESOIN) || nom.startsWith(PREFIXE_MOYENS)) {
+            if (nom.startsWith(PREFIXE_BESOIN) || nom.startsWith(PREFIXE_MOYENS) || nom.startsWith(PREFIXE_PIECES)) {
                 // ⚠️ V59 (§B1.5) — tiré du besoin par l'appelant : celui du lot pour un document par lot, sinon de la ligne.
                 String v = lot == null ? null : publication.get(nom + "#" + lot);
                 v = v != null ? v : publication.get(nom);

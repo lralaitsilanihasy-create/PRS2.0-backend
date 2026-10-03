@@ -217,6 +217,22 @@ public class FicheMarcheController {
         return service.remplacerPersonnel(idDmc, corps == null ? null : corps.getPersonnel());
     }
 
+    /** ⚠️ V61 (2026-10-03, §B1.1) — les pièces exigées de la version courante (travaux), dans l'ordre. */
+    @GetMapping("/{idDmc}/pieces")
+    public List<cnm.prs.dto.PieceExigeeDto> pieces(@PathVariable Long idDmc) {
+        return service.pieces(idDmc);
+    }
+
+    /**
+     * ⚠️ V61 — remplacement de toute la liste des pièces, corps {@code {"pieces":[…]}} ; l'ordre est la position. 400
+     * nominatif ({@code pieces[i].…}), 409 {@code FICHE_VALIDEE} / {@code PIECES_HORS_PERIMETRE}.
+     */
+    @PutMapping("/{idDmc}/pieces")
+    public List<cnm.prs.dto.PieceExigeeDto> remplacerPieces(@PathVariable Long idDmc,
+            @RequestBody cnm.prs.dto.PieceExigeeDto.Remplacement corps) {
+        return service.remplacerPieces(idDmc, corps == null ? null : corps.getPieces());
+    }
+
     /** ⚠️ V45 — retire un article (et ses caractéristiques) ; 404 s'il n'appartient pas à la version courante. */
     @org.springframework.web.bind.annotation.DeleteMapping("/{idDmc}/articles/{idArticle}")
     public ResponseEntity<Void> supprimerArticle(@PathVariable Long idDmc, @PathVariable Integer idArticle) {

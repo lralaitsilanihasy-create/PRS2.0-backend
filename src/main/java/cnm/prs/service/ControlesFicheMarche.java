@@ -44,6 +44,8 @@ import cnm.prs.enums.TypeChampFiche;
  * <tr><td>LIQUIDITE_DOUBLE (⚠️ V59)</td><td>MONTANT, POURCENTAGE (par lot)</td><td>bloquant</td></tr>
  * <tr><td>CA_MOYENNE (⚠️ V59)</td><td>CA (montant), MEILLEURES, ANNEES (nombres)</td><td>bloquant</td></tr>
  * <tr><td>REFERENCES_CUMUL (⚠️ V59)</td><td>NOMBRE, MONTANT (par lot)</td><td>bloquant</td></tr>
+ * <tr><td>PIECES_OFFRE_EXIGEES (⚠️ V61)</td><td>TEXTE (B04-PI-01) — ou la liste des pièces OFFRE ; travaux seulement</td><td>bloquant</td></tr>
+ * <tr><td>PIECES_EN_DOUBLE (⚠️ V61)</td><td>TEXTE (B03-CQ-01) à sa valeur par défaut avec une liste ADMINISTRATIVE remplie</td><td>avertissement</td></tr>
  * <tr><td>MATERIEL_EXIGE (⚠️ V60)</td><td>TEXTE (B03-QT-09) — ou la liste du matériel ; travaux seulement</td><td>bloquant</td></tr>
  * </table>
  */
@@ -70,6 +72,9 @@ public final class ControlesFicheMarche {
     public static final String REFERENCES_CUMUL = "REFERENCES_CUMUL";
     /** ⚠️ V60 (2026-10-03, matériel et personnel des travaux, §B3) — le matériel exigé, en liste ou en texte. */
     public static final String MATERIEL_EXIGE = "MATERIEL_EXIGE";
+    /** ⚠️ V61 (2026-10-03, pièces de l'offre des travaux, §B3) — les pièces de l'offre, en liste ou en texte ; le doublon. */
+    public static final String PIECES_OFFRE_EXIGEES = "PIECES_OFFRE_EXIGEES";
+    public static final String PIECES_EN_DOUBLE = "PIECES_EN_DOUBLE";
     /** ⚠️ V45 (2026-09-25) — le besoin et les garanties générées. */
     public static final String BESOIN_INCOMPLET = "BESOIN_INCOMPLET";
     public static final String QUANTITES_ORDRE = "QUANTITES_ORDRE";
@@ -533,6 +538,59 @@ public final class ControlesFicheMarche {
             bilan.bloquants().add(new Controle(MATERIEL_EXIGE, champs, "B13", "Le matériel exigé n'est pas dit : remplissez la "
                     + "liste du matériel, ou « " + texte.getLibelle() + " »."));
         }
+    }
+
+    /** Le champ ouvert qui porte {@code regle:TEXTE}, ou {@code null}. */
+    private static ChampFicheMarche texteAuRole(List<ChampFicheMarche> champsOuverts, String regle) {
+        return champsOuverts.stream()
+                .filter(c -> controles(c).stream().anyMatch(x -> regle.equals(x[0]) && "TEXTE".equals(x[1])))
+                .findFirst().orElse(null);
+    }
+
+    /**
+     * ⚠️ V61 (2026-10-03, §B3) — {@code PIECES_OFFRE_EXIGEES} (rôle {@code TEXTE}) : une fiche de travaux dit les pièces de
+     * l'offre, par la liste des pièces {@code OFFRE} ({@code nbOffre}) <strong>ou</strong> par le texte au rôle. Bloquant ;
+     * muette là où le champ n'est pas servi (contrat-cadre), comme {@link #materielExige}.
+     */
+    public static void piecesOffreExigees(List<ChampFicheMarche> champsOuverts, Map<String, String> valeurs, long nbOffre,
+            BilanControlesDto bilan) {
+        ChampFicheMarche texte = texteAuRole(champsOuverts, PIECES_OFFRE_EXIGEES);
+        if (texte == null) {
+            return;
+        }
+        List<String> champs = List.of(texte.getCode());
+        if (nbOffre > 0) {
+            bilan.ok().add(new Controle(PIECES_OFFRE_EXIGEES, champs, "B14", "Pièces de l'offre : " + nbOffre + " pièce(s)."));
+        } else if (renseigne(valeurs, texte.getCode())) {
+            bilan.ok().add(new Controle(PIECES_OFFRE_EXIGEES, champs, texte.codeBloc(), "Pièces de l'offre : décrites par « "
+                    + texte.getLibelle() + " »."));
+        } else {
+            bilan.bloquants().add(new Controle(PIECES_OFFRE_EXIGEES, champs, "B14", "Les pièces de l'offre ne sont pas dites : "
+                    + "remplissez la liste des pièces de l'offre, ou « " + texte.getLibelle() + " »."));
+        }
+    }
+
+    /**
+     * ⚠️ V61 (2026-10-03, §B3, H3) — {@code PIECES_EN_DOUBLE} (rôle {@code TEXTE}) : la liste des pièces administratives est
+     * remplie ({@code nbAdministratives}) et le texte au rôle vaut encore sa valeur par défaut — le DPAO imprimerait les
+     * pièces deux fois. Avertissement, jamais bloquant ; égalité jugée blancs de bord et fins de ligne confondus.
+     */
+    public static void piecesEnDouble(List<ChampFicheMarche> champsOuverts, Map<String, String> valeurs, long nbAdministratives,
+            BilanControlesDto bilan) {
+        ChampFicheMarche texte = texteAuRole(champsOuverts, PIECES_EN_DOUBLE);
+        if (texte == null || nbAdministratives == 0 || texte.getValeurDefaut() == null) {
+            return;
+        }
+        String v = valeurs.get(texte.getCode());
+        if (v != null && normaliserTexte(v).equals(normaliserTexte(texte.getValeurDefaut().replace("\\n", "\n")))) {
+            bilan.avertissements().add(new Controle(PIECES_EN_DOUBLE, List.of(texte.getCode()), texte.codeBloc(),
+                    "Les pièces administratives sont en liste, et « " + texte.getLibelle() + " » garde sa valeur par défaut : "
+                            + "le DPAO les imprimera deux fois. Videz ce texte, ou gardez-y ce que la liste ne dit pas."));
+        }
+    }
+
+    private static String normaliserTexte(String s) {
+        return s.replace("\r\n", "\n").strip();
     }
 
     // ------------------------------------------------------------------ règles V59 (seuils de qualification calculés)
