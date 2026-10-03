@@ -349,6 +349,11 @@ class ImportDaoIntegrationTest extends CnmIntegrationTestSupport {
                 .andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<List<String>>read(r, "$.modeles[*].sigle")).containsExactly("DPAO-F", "CCAP-F", "AE-F");
         assertThat(JsonPath.<List<String>>read(r, "$.avertissements")).isEmpty();
+        // ⚠️ 2026-10-03 (lecture par clause) — un DAO conforme au document type : le modèle trouve tout, la passe par clause
+        // n'ajoute aucune valeur ; elle rend le passage des pièces de l'offre (clause 6.2 du DPAO), à coller dans la liste.
+        assertThat(JsonPath.<List<String>>read(r, "$.propositions[*].source")).isNotEmpty().containsOnly("modele");
+        assertThat(JsonPath.<List<String>>read(r, "$.passages[?(@.liste=='PIECES')].texte")).singleElement()
+                .satisfies(t -> assertThat(t).contains("Quittance de l'ARMP"));
         List<Map<String, Object>> propositions = JsonPath.read(r, "$.propositions");
         int justes = 0;
         for (Map<String, Object> p : propositions) {

@@ -276,12 +276,22 @@ public class ImportDaoService {
         Set<String> attendus = new LinkedHashSet<>();
         Set<String> enConflit = new LinkedHashSet<>();
 
+        java.util.function.Function<String, LectureDao.InfoChamp> infos = code -> {
+            ChampFicheMarche ch = champs.get(code);
+            return ch == null ? null : new LectureDao.InfoChamp(ch.getType(), ch.getSource(), ch.getCleCadrage(),
+                    cnm.prs.entity.ChampFicheMarche.liste(ch.getOptions()));   // ⚠️ 2026-10-01 : réponses d'un terme « contient »
+        };
+        // ⚠️ 2026-10-03 (lecture par clause) — les valeurs de la passe par clause, mises de côté : elles ne s'ajoutent qu'après
+        // la lecture de TOUS les modèles, pour un champ qu'aucun n'a proposé (jamais à la place d'une valeur lue dans un
+        // modèle, ni en conflit avec elle) ; et les passages de listes.
+        List<LectureDao.Proposition> parClause = new ArrayList<>();
+        List<ImportDaoResult.Passage> passages = new ArrayList<>();
         for (ModelesDao.Couverture c : couvertures) {
-            LectureDao.Resultat r = LectureDao.lire(c.sigle(), modeles.modele(c.sigle()), paragraphes, code -> {
-                ChampFicheMarche ch = champs.get(code);
-                return ch == null ? null : new LectureDao.InfoChamp(ch.getType(), ch.getSource(), ch.getCleCadrage(),
-                        cnm.prs.entity.ChampFicheMarche.liste(ch.getOptions()));   // ⚠️ 2026-10-01 : réponses d'un terme « contient »
-            }, origines);
+            LectureDao.Resultat lu = LectureDao.lire(c.sigle(), modeles.modele(c.sigle()), paragraphes, infos, origines);
+            LectureDao.Resultat r = LectureDao.completerParClause(lu, paragraphes, c.sigle(), infos);
+            r.propositions().stream().filter(p -> LectureDao.SOURCE_CLAUSE.equals(p.source())).forEach(parClause::add);
+            r.passages().forEach(p -> passages.add(new ImportDaoResult.Passage(p.liste(), p.texte(), p.paragraphe())));
+            r = lu;
             lus.add(new ImportDaoResult.Modele(r.sigle(), r.unites(), r.reconnues()));
             int part = r.unites() == 0 ? 0 : (int) Math.round(100.0 * r.reconnues() / r.unites());
             if (part < SEUIL_GABARIT) {
@@ -312,6 +322,16 @@ public class ImportDaoService {
                     conflits.add(new ImportDaoResult.Conflit(rc.cle(), List.of(deja.valeur(), rc.valeur())));
                     enConflit.add(rc.cle());
                 }
+            }
+        }
+
+        Set<String> lusParModele = new LinkedHashSet<>();
+        propositions.values().forEach(p -> lusParModele.add(p.code().split("#", -1)[0]));
+        for (LectureDao.Proposition p : parClause) {
+            String nu = p.code().split("#", -1)[0];
+            if (!lusParModele.contains(nu) && !enConflit.contains(nu)) {
+                fusionner(propositions, p, conflits, enConflit);
+                attendus.add(nu);
             }
         }
 
@@ -406,7 +426,7 @@ public class ImportDaoService {
                         + " lots).");
             }
             sortie.add(new ImportDaoResult.Proposition(code, lot, normalisee != null ? normalisee : p.valeur(), p.brut(),
-                    p.confiance().libelle(), p.extrait(), valeursFiche.get(p.code()), anomalies));
+                    p.confiance().libelle(), p.extrait(), valeursFiche.get(p.code()), anomalies, p.source()));
         }
         Set<String> proposes = new LinkedHashSet<>();
         sortie.forEach(p -> proposes.add(p.code()));
@@ -414,7 +434,7 @@ public class ImportDaoService {
         List<ImportDaoResult.Ambigu> ambigusSortie = ambigus.stream()
                 .map(a -> new ImportDaoResult.Ambigu(a.candidats(), a.texte())).toList();
         return new ImportDaoResult(nomFichier, empreinte, lus, cadrage, sortie, ambigusSortie, divergences, conflits,
-                nonTrouves, avertissements);
+                nonTrouves, avertissements, passages);
     }
 
     /** Un champ que l'import peut proposer : saisi, actif, de la forme et de la catégorie, ni pièce, ni calculé. */

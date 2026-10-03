@@ -5666,14 +5666,28 @@ Une fiche jamais enregistrée est lue comme un brouillon vide.
   "cadrage": [{ "cle": "attributaires", "valeur": "MULTI", "section": "MULTI", "actuelle": null }],
   "propositions": [{ "code": "B04-CP-02", "lot": null, "valeur": "2026-11-20T10:00", "brut": "20/11/2026 10:00",
                      "confiance": "haute", "extrait": "DATE ET HEURE LIMITES DE REMISE DES OFFRES : 20/11/2026 10:00",
-                     "actuelle": null, "anomalies": [] }],
+                     "actuelle": null, "anomalies": [], "source": "modele" }],
   "ambigus": [{ "candidats": ["B07-DE-02", "B07-DE-03"], "texte": "Le délai de livraison …" }],
   "divergences": [{ "code": "B02-OB-01", "document": "…", "plan": "…" }],
   "conflits": [{ "code": "B05-MT-01", "valeurs": ["…", "…"] }],
   "nonTrouves": ["B04-DS-07"],
-  "avertissements": ["AE-CC : peu de texte du modèle reconnu (12 %) : ce document ne suit pas le document type"]
+  "avertissements": ["AE-CC : peu de texte du modèle reconnu (12 %) : ce document ne suit pas le document type"],
+  "passages": [{ "liste": "PIECES", "texte": "- Quittance de l'ARMP\n- Garantie de soumission", "paragraphe": 63 }]
 }
 ```
+
+- ⚠️ **2026-10-03 — passe par clause** (demande `demande-backend-2026-10-03-lecture-par-clause.md`, option A, portage de
+  `clauses.mjs` et de `completerParClause`, front `444d509`). Après la lecture par le modèle d'un **DPAO** (DPAO-T, DPAO-F),
+  une seconde passe cherche, dans la seule section des données particulières, cinq informations par les mots de leur
+  clause et la forme de leur valeur :
+  - validité des offres, garantie de soumission (par lot), délai d'exécution, liquidité (montant par lot, ou
+    `B03-QT-15` si « % »), lieu d'ouverture des plis.
+  - **`source`** de chaque proposition : `modele` ou `clause`. Une proposition `clause` est toujours en confiance
+    `moyenne`, et passe par la même conversion et la même validation de saisie.
+  - Elle ne s'ajoute **qu'après la lecture de tous les modèles**, pour un champ qu'aucun modèle n'a proposé, ni à la place
+    d'une valeur lue dans un modèle, ni en conflit avec elle.
+  - **`passages`** : les passages de listes repérés (`MATERIEL` et `PERSONNEL` aux travaux, `PIECES` aux deux), lignes
+    séparées par `\n`, à proposer dans « Coller une liste ». `appliquer` ne les reçoit pas. Liste vide par défaut.
 
 - **`propositions`** :
   - `valeur` est dans la forme de saisie, déjà passée par `normaliser` : dates ISO, montants et pourcentages en nombre,

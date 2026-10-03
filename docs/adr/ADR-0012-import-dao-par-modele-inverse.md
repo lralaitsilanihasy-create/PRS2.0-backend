@@ -246,3 +246,10 @@ Parité : 20 documents (un DPAO-F en quantité fixe dont `B03-CQ-01` garde son d
 Suite le même jour (front 4d169a8) : loin du curseur, une unité pauvre ne se reconnaît que si ses valeurs ont la forme de
 leur type (nombre ; année pour une date ; à défaut de type, un jeton suivi d'une unité attend un nombre). Parité : 20
 documents, 1 145 lignes identiques ; ce DPAO-F passe de 25 à 66 unités sur 142.
+
+2026-10-03 (front 444d509, option A de la note de décision « lecture par clause ») — **lecture hybride, premier temps** :
+après la lecture par le modèle d'un DPAO, une passe par clause (`LectureClauses`, `LectureDao.completerParClause`)
+propose en confiance moyenne, source `clause`, cinq informations du catalogue que le modèle n'a pas trouvées, et repère
+les passages de listes. Le service n'ajoute ces valeurs qu'après tous les modèles, pour un champ qu'aucun n'a proposé.
+Parité : 20 documents, 1 185 lignes identiques (23 propositions `clause`, 16 passages) ; MTP, MEN et 2463 donnent les
+ajouts mesurés par le front.

@@ -4,6 +4,7 @@ import java.text.Normalizer;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -33,7 +34,7 @@ import java.util.regex.Pattern;
 public final class LectureDao {
 
     /** Les blancs de JavaScript ({@code \s}), que {@code \s} de Java ne couvre pas (espaces insécables, U+2028…). */
-    private static final String BLANC = "[\\t\\n\\u000B\\f\\r \\u00A0\\u1680\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000\\uFEFF]";
+    static final String BLANC = "[\\t\\n\\u000B\\f\\r \\u00A0\\u1680\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000\\uFEFF]";
     private static final String BLANCS_SOUPLES = BLANC + "*";
     private static final Pattern BLANCS = Pattern.compile(BLANC + "+");
     private static final Pattern JETON = Pattern.compile("\\{\\{([^{}]+)}}");
@@ -131,9 +132,19 @@ public final class LectureDao {
     record Unite(String texte, List<String> sections) {
     }
 
-    /** Une valeur lue, dans la forme de saisie du champ. */
-    public record Proposition(String code, String valeur, String brut, Confiance confiance, String extrait) {
+    /**
+     * Une valeur lue, dans la forme de saisie du champ. ⚠️ 2026-10-03 (lecture par clause) — {@code source} : {@code modele}
+     * (la lecture par le modèle) ou {@code clause} (la passe par clause, {@link LectureClauses}).
+     */
+    public record Proposition(String code, String valeur, String brut, Confiance confiance, String extrait, String source) {
+
+        public Proposition(String code, String valeur, String brut, Confiance confiance, String extrait) {
+            this(code, valeur, brut, confiance, extrait, SOURCE_MODELE);
+        }
     }
+
+    public static final String SOURCE_MODELE = "modele";
+    public static final String SOURCE_CLAUSE = "clause";
 
     /** Plusieurs jetons seuls dans le même intervalle : signalé, jamais choisi. */
     public record Ambigu(List<String> candidats, String texte) {
@@ -147,10 +158,64 @@ public final class LectureDao {
     public record Reponse(String cle, String valeur, String section) {
     }
 
-    /** Le résultat de la lecture d'un modèle. */
+    /**
+     * Le résultat de la lecture d'un modèle. ⚠️ 2026-10-03 — {@code passages} : les passages de listes repérés par la passe
+     * par clause (vide hors DPAO).
+     */
     public record Resultat(String sigle, int unites, int reconnues, List<Proposition> propositions,
             List<Reponse> cadrage, List<Reponse> reponsesChamps, List<Ambigu> ambigus, List<Conflit> conflits,
-            List<String> nonTrouves) {
+            List<String> nonTrouves, List<LectureClauses.Passage> passages) {
+
+        public Resultat(String sigle, int unites, int reconnues, List<Proposition> propositions, List<Reponse> cadrage,
+                List<Reponse> reponsesChamps, List<Ambigu> ambigus, List<Conflit> conflits, List<String> nonTrouves) {
+            this(sigle, unites, reconnues, propositions, cadrage, reponsesChamps, ambigus, conflits, nonTrouves, List.of());
+        }
+    }
+
+    /** ⚠️ 2026-10-03 (lecture par clause) — la catégorie dont un DPAO est le document de consultation. */
+    private static final Map<String, String> CATEGORIE_DU_DPAO = Map.of("DPAO-T", "TRAVAUX", "DPAO-F", "FOURNITURES_SERVICES");
+    private static final Pattern UNITE_DE_DUREE = Pattern.compile(BLANC + "*(?:jours?|mois)"
+            + "(?:(?<=[A-Za-z0-9_])(?![A-Za-z0-9_])|(?<![A-Za-z0-9_])(?=[A-Za-z0-9_])).*$", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+
+    /**
+     * ⚠️ 2026-10-03 (demande front « lecture par clause », option A ; portage de {@code completerParClause}, lire.mjs
+     * 444d509) — après la lecture par le modèle d'un DPAO, la passe PAR CLAUSE ({@link LectureClauses}) propose, en
+     * confiance MOYENNE et source {@code clause}, les informations du catalogue que le modèle n'a pas trouvées — jamais à la
+     * place d'une valeur lue dans le modèle — et rend les PASSAGES de listes. {@code doc} : les paragraphes normalisés lus
+     * par le modèle. Hors DPAO, le résultat est rendu tel quel.
+     */
+    public static Resultat completerParClause(Resultat res, List<String> doc, String sigle, Function<String, InfoChamp> champs) {
+        String categorie = CATEGORIE_DU_DPAO.get(sigle);
+        if (categorie == null) {
+            return res;
+        }
+        Set<String> deja = new HashSet<>();
+        res.propositions().forEach(p -> deja.add(p.code().split("#", -1)[0]));
+        LectureClauses.Lecture clause = LectureClauses.lire(doc, categorie, deja);
+        List<Proposition> ajouts = new ArrayList<>();
+        for (LectureClauses.Trouvee p : clause.propositions()) {
+            String code = p.code().split("#", -1)[0];
+            InfoChamp info = champs == null ? null : champs.apply(code);
+            String type = info == null ? null : info.type();
+            if (type == null) {
+                continue;   // un champ que le référentiel ne sert pas pour ce marché ne se propose pas
+            }
+            // Une durée lue pour un NOMBRE (« CENT VINGT (120) jours ») : l'unité n'est pas la valeur.
+            String brut = "NOMBRE".equals(type) || "MONTANT".equals(type) || "POURCENTAGE".equals(type)
+                    ? UNITE_DE_DUREE.matcher(p.brut()).replaceFirst("") : p.brut();
+            String valeur = valeurSaisie(brut, type, null);
+            if (valeur == null) {
+                continue;
+            }
+            String extrait = p.paragraphe() >= 0 && p.paragraphe() < doc.size() ? doc.get(p.paragraphe()) : p.brut();
+            ajouts.add(new Proposition(p.code(), valeur, p.brut(), Confiance.MOYENNE, extrait, SOURCE_CLAUSE));
+        }
+        List<Proposition> propositions = new ArrayList<>(res.propositions());
+        propositions.addAll(ajouts);
+        List<String> nonTrouves = res.nonTrouves().stream()
+                .filter(c -> ajouts.stream().noneMatch(a -> a.code().split("#", -1)[0].equals(c))).toList();
+        return new Resultat(res.sigle(), res.unites(), res.reconnues(), propositions, res.cadrage(), res.reponsesChamps(),
+                res.ambigus(), res.conflits(), nonTrouves, clause.passages());
     }
 
     private LectureDao() {
@@ -175,7 +240,7 @@ public final class LectureDao {
                 .replace(' ', ' ').replace(' ', ' ');
     }
 
-    private static String trim(String s) {
+    static String trim(String s) {
         return s.replaceAll("^" + BLANC + "+|" + BLANC + "+$", "");
     }
 
