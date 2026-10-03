@@ -253,3 +253,6 @@ propose en confiance moyenne, source `clause`, cinq informations du catalogue qu
 les passages de listes. Le service n'ajoute ces valeurs qu'après tous les modèles, pour un champ qu'aucun n'a proposé.
 Parité : 20 documents, 1 185 lignes identiques (23 propositions `clause`, 16 passages) ; MTP, MEN et 2463 donnent les
 ajouts mesurés par le front.
+Second temps le même jour (front b5373d1) : validité « de l'offre » et « (75j) », fenêtre de la garantie à 4, passage du
+personnel élargi (fermé par « NB : »). Parité : 20 documents, 1 195 lignes identiques ; nouveaux ajouts conformes au front
+(2463 et MTP : validité 75 ; MEN : garantie des 2 lots, passages du personnel du MEN et du MTP).

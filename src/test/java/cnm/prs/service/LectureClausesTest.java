@@ -67,6 +67,27 @@ class LectureClausesTest {
     }
 
     @Test
+    @DisplayName("Second temps (front b5373d1) : validité « de l'offre » et « (75j)jours » (2463) ; garantie à 4 paragraphes "
+            + "de l'ancre (MEN) ; passage du personnel « ci-après (CV…) : », fermé par « NB : » (MTP)")
+    void secondTemps() {
+        List<String> f = List.of("Les données particulières ci-après complètent les IC.",
+                "Le délai de validité de l'offre sera de soixante-quinze (75j)jours.");
+        assertThat(valeurs(LectureDao.completerParClause(vide("DPAO-F", List.of()), f, "DPAO-F", CHAMPS)))
+                .containsExactly(Map.entry("B04-VO-01", "75"));
+        List<String> t = List.of("Les données particulières ci-après complètent les IC.", "6.8 Garantie de soumission",
+                "Formes admises :", "- garantie bancaire ;", "- chèque de banque.",
+                "Montant : 9 900 000 Ar (lot 1) / 7 200 000 Ar (lot 2)",
+                "e) proposer le personnel ci-après (CV et copie certifiée des diplômes à l'appui) :",
+                "- Conducteur de travaux : ingénieur BTP, 5 ans", "- Chef de chantier : technicien supérieur, 3 ans",
+                "NB : les CV sont signés par les intéressés.");
+        LectureDao.Resultat r = LectureDao.completerParClause(vide("DPAO-T", List.of()), t, "DPAO-T", CHAMPS);
+        assertThat(valeurs(r)).containsExactly(Map.entry("B05-GQ-03#1", "9900000"), Map.entry("B05-GQ-03#2", "7200000"));
+        assertThat(r.passages()).filteredOn(p -> "PERSONNEL".equals(p.liste())).singleElement()
+                .satisfies(p -> assertThat(p.texte()).isEqualTo("- Conducteur de travaux : ingénieur BTP, 5 ans\n"
+                        + "- Chef de chantier : technicien supérieur, 3 ans"));
+    }
+
+    @Test
     @DisplayName("Garde-fous : rien sans section ; rien pour un champ déjà lu par le modèle ni pour un champ non servi ; hors DPAO, "
             + "rien ; le passage des pièces jusqu'à la clause 6.3")
     void gardeFous() {

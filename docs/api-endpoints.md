@@ -5688,6 +5688,11 @@ Une fiche jamais enregistrée est lue comme un brouillon vide.
     d'une valeur lue dans un modèle, ni en conflit avec elle.
   - **`passages`** : les passages de listes repérés (`MATERIEL` et `PERSONNEL` aux travaux, `PIECES` aux deux), lignes
     séparées par `\n`, à proposer dans « Coller une liste ». `appliquer` ne les reçoit pas. Liste vide par défaut.
+  - ⚠️ **Second temps** (même jour, front `b5373d1`) :
+    - la validité se lit aussi « de l'offre », et une durée « (75j) » vaut 75 ;
+    - la fenêtre de la garantie passe à 4 paragraphes ;
+    - le passage du personnel s'ouvre aussi sur « personnels répondant aux critères » ou « personnel ci-après », et une
+      note « NB : » le ferme.
 
 - **`propositions`** :
   - `valeur` est dans la forme de saisie, déjà passée par `normaliser` : dates ISO, montants et pourcentages en nombre,

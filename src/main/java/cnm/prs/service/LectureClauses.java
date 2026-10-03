@@ -11,7 +11,7 @@ import java.util.regex.Pattern;
 
 /**
  * ⚠️ 2026-10-03 (demande front « lecture par clause », option A de la note de décision, retenue par le pilote) — la passe
- * <strong>par clause</strong>, portage de {@code scripts/import-dao/clauses.mjs} (front 444d509), premier temps.
+ * <strong>par clause</strong>, portage de {@code scripts/import-dao/clauses.mjs} (front 444d509, premier temps ; b5373d1, second temps).
  *
  * <p>La lecture par le modèle ({@link LectureDao}, règles 1 à 9) reste la source sûre, et la seule à donner la confiance
  * haute. Cette passe la COMPLÈTE quand un DAO s'écarte du document type :</p>
@@ -73,8 +73,9 @@ final class LectureClauses {
     // Devant le nombre entre parenthèses, seulement des MOTS DE NOMBRE (« CENT VINGT (120) », « Six (06) »).
     private static final String MOTS_NOMBRE = "(?:(?:un|une|deux|trois|quatre|cinq|six|sept|huit|neuf|dix|onze|douze|treize|"
             + "quatorze|quinze|seize|vingt|trente|quarante|cinquante|soixante|cent|cents|mille|et)[" + S + "-]+)*";
-    private static final Pattern DUREE = Pattern.compile(B + MOTS_NOMBRE + "(?:\\(" + WS + "*\\d+" + WS + "*\\)|\\d+)" + WS
-            + "*(?:jours?|mois)" + B, I);
+    // ⚠️ Second temps (2026-10-03, front b5373d1) : « soixante-quinze (75j)jours » (2463) — l'abréviation « j » admise.
+    private static final Pattern DUREE = Pattern.compile(B + MOTS_NOMBRE + "(?:\\(" + WS + "*\\d+" + WS + "*j?" + WS
+            + "*\\)|\\d+)" + WS + "*(?:jours?|mois)" + B, I);
     private static final String MONTANT_SOURCE = "\\d{1,3}(?:[" + S + ".]\\d{3})+(?:,\\d+)?|\\d{6,}";
     private static final Pattern MONTANT = Pattern.compile(MONTANT_SOURCE);
     private static final String POURCENT_SOURCE = "\\d+(?:[.,]\\d+)?" + WS + "*%";
@@ -87,9 +88,11 @@ final class LectureClauses {
     /** Le catalogue du premier temps : 5 informations simples (note de décision, §4). */
     static final List<Info> CATALOGUE = List.of(
             new Info("validite", Map.of("TRAVAUX", "B04-VO-01", "FOURNITURES_SERVICES", "B04-VO-01"), Map.of(),
-                    Pattern.compile("validit[ée] des offres", I), DUREE, 3, 0),
+                    // ⚠️ Second temps : « délai de validité DE L'OFFRE » (2463).
+                    Pattern.compile("validit[ée] (?:des offres|de l['’]offre)", I), DUREE, 3, 0),
+            // ⚠️ Second temps : les montants du MEN sont 4 paragraphes après l'ancre (les formes admises s'intercalent).
             new Info("garantie", Map.of("TRAVAUX", "B05-GQ-03", "FOURNITURES_SERVICES", "B05-GS-03"), Map.of(),
-                    Pattern.compile("garantie de soumission", I), MONTANT, 2, 0),
+                    Pattern.compile("garantie de soumission", I), MONTANT, 4, 0),
             new Info("delai", Map.of("TRAVAUX", "B09-DL-01"), Map.of(),
                     Pattern.compile("d[ée]lai d['’]ex[ée]cution", I), DUREE, 3, 0),
             new Info("liquidite", Map.of("TRAVAUX", "B03-QT-14"), Map.of("TRAVAUX", "B03-QT-15"),
@@ -106,9 +109,12 @@ final class LectureClauses {
     static final List<DefPassage> PASSAGES = List.of(
             new DefPassage("MATERIEL", Set.of("TRAVAUX"), Pattern.compile("(?:gros )?mat[ée]riels?[^:]{0,80}:", I),
                     Pattern.compile("^\\(?[d-f]\\)|personnel|directeur de travaux", I)),
+            // ⚠️ Second temps : « listes des personnels répondant aux critères suivants : » (MEN), « le personnel ci-après
+            // (CV…) : » (MTP) ; la note « NB : » qui suit le MTP ferme le passage.
             new DefPassage("PERSONNEL", Set.of("TRAVAUX"),
-                    Pattern.compile("personnel (?:cl[ée]|par lot|minimum|suivant)[^:]{0,60}:", I),
-                    Pattern.compile("^\\(?[e-g]\\)|liquidit|r[ée]f[ée]rence", I)),
+                    Pattern.compile("personnels? (?:cl[ée]|par lot|minimum|suivant|ci-apr[èe]s|r[ée]pondant aux crit[èe]res)"
+                            + "[^:]{0,120}:", I),
+                    Pattern.compile("^\\(?[d-g]\\)|liquidit|r[ée]f[ée]rence|^NB" + B, I)),
             new DefPassage("PIECES", Set.of("TRAVAUX", "FOURNITURES_SERVICES"),
                     Pattern.compile("documents ou pi[èe]ces [àa] remettre en sus[^:]*:", I),
                     Pattern.compile("^6\\.3|capacit[ée]s|^4" + WS + "*°|^\\d+\\.\\d+\\.?" + WS, I)));

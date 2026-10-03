@@ -174,6 +174,9 @@ public final class LectureDao {
 
     /** ⚠️ 2026-10-03 (lecture par clause) — la catégorie dont un DPAO est le document de consultation. */
     private static final Map<String, String> CATEGORIE_DU_DPAO = Map.of("DPAO-T", "TRAVAUX", "DPAO-F", "FOURNITURES_SERVICES");
+    /** ⚠️ Second temps (front b5373d1) : « (75j) » vaut « (75) » pour un nombre (2463). */
+    private static final Pattern PARENTHESE_JOURS = Pattern.compile("\\(" + BLANC + "*(\\d+)" + BLANC + "*j" + BLANC + "*\\)",
+            Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     private static final Pattern UNITE_DE_DUREE = Pattern.compile(BLANC + "*(?:jours?|mois)"
             + "(?:(?<=[A-Za-z0-9_])(?![A-Za-z0-9_])|(?<![A-Za-z0-9_])(?=[A-Za-z0-9_])).*$", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
 
@@ -202,7 +205,7 @@ public final class LectureDao {
             }
             // Une durée lue pour un NOMBRE (« CENT VINGT (120) jours ») : l'unité n'est pas la valeur.
             String brut = "NOMBRE".equals(type) || "MONTANT".equals(type) || "POURCENTAGE".equals(type)
-                    ? UNITE_DE_DUREE.matcher(p.brut()).replaceFirst("") : p.brut();
+                    ? PARENTHESE_JOURS.matcher(UNITE_DE_DUREE.matcher(p.brut()).replaceFirst("")).replaceFirst("($1)") : p.brut();
             String valeur = valeurSaisie(brut, type, null);
             if (valeur == null) {
                 continue;
