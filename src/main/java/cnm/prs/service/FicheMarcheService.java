@@ -544,14 +544,15 @@ public class FicheMarcheService {
     }
 
     /**
-     * ⚠️ V61 — remplacement de toute la liste des pièces. Gardes : écriture de la fiche ; hors travaux → 409
+     * ⚠️ V61 — remplacement de toute la liste des pièces. Gardes : écriture de la fiche ; hors périmètre → 409
      * {@code PIECES_HORS_PERIMETRE} ; fiche validée → 409 {@code FICHE_VALIDEE} ; lignes (400 {@code pieces[i].…}).
      */
     public List<cnm.prs.dto.PieceExigeeDto> remplacerPieces(Long idDmc, List<cnm.prs.dto.PieceExigeeDto> lignes) {
         Contexte ctx = contexteEcriture(idDmc);
-        if (!CategorieDao.TRAVAUX.name().equals(ctx.codeCategorie())) {
-            throw new BusinessRuleException("Les pièces de l'offre, en liste, ne valent que pour les travaux (catégorie de la "
-                    + "fiche : " + ctx.codeCategorie() + ").", "PIECES_HORS_PERIMETRE");
+        if (!piecesApplicables(ctx)) {
+            throw new BusinessRuleException("Les pièces de l'offre, en liste, valent pour les travaux et les fournitures, en "
+                    + "quantité fixe et à commande (fiche : " + ctx.codeCategorie() + ", " + ctx.forme() + ").",
+                    "PIECES_HORS_PERIMETRE");
         }
         List<cnm.prs.dto.PieceExigeeDto> recues = lignes == null ? List.of() : lignes;
         FicheMarche fiche = brouillonOuNouvelle(ctx);
@@ -560,6 +561,16 @@ public class FicheMarcheService {
         fiche.setDateMaj(LocalDateTime.now());
         ficheRepository.save(fiche);
         return pieces.pieces(fiche.getIdFiche());
+    }
+
+    /**
+     * ⚠️ V61 / V62 (2026-10-03, extension aux fournitures, choix A du pilote) — la liste des pièces vaut pour les travaux
+     * et les fournitures et services, en quantité fixe et à commande : aucun DPAC (contrat-cadre) n'a de place pour elle.
+     */
+    private static boolean piecesApplicables(Contexte ctx) {
+        return (CategorieDao.TRAVAUX.name().equals(ctx.codeCategorie())
+                || CategorieDao.FOURNITURES_SERVICES.name().equals(ctx.codeCategorie()))
+                && ctx.forme() != FormeMarche.CONTRAT_CADRE;
     }
 
     /** ⚠️ V60 / V61 — les jetons des listes de la version (matériel, personnel, pièces), rendus dans les modèles. */
@@ -1475,7 +1486,10 @@ public class FicheMarcheService {
         // ⚠️ V60 (2026-10-03, §B3) — une fiche de travaux dit son matériel : la liste, ou le texte B03-QT-09.
         if (CategorieDao.TRAVAUX.name().equals(ctx.codeCategorie())) {
             ControlesFicheMarche.materielExige(ouverts, valeurs, moyens.materiel(fiche.getIdFiche()).size(), bilan);
-            // ⚠️ V61 (2026-10-03, §B3) — les pièces de l'offre (liste OFFRE ou B04-PI-01) ; doublon avec le défaut de B03-CQ-01.
+        }
+        // ⚠️ V61 (2026-10-03, §B3) — les pièces de l'offre (liste OFFRE ou le texte au rôle : B04-PI-01 aux travaux,
+        // ⚠️ V62 B04-CO-01 aux fournitures) ; doublon avec le défaut de B03-CQ-01.
+        if (piecesApplicables(ctx)) {
             List<cnm.prs.dto.PieceExigeeDto> lues = pieces.pieces(fiche.getIdFiche());
             ControlesFicheMarche.piecesOffreExigees(ouverts, valeurs, PiecesFiche.compter(lues, PiecesFiche.OFFRE), bilan);
             ControlesFicheMarche.piecesEnDouble(ouverts, valeurs, PiecesFiche.compter(lues, PiecesFiche.ADMINISTRATIVE), bilan);

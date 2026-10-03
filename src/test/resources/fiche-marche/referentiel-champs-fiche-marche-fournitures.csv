@@ -26,7 +26,7 @@ B03-CQ-10;Durée des antécédents financiers (années);NOMBRE;SAISIE;DPAO;;QUAN
 B04-DE-01;Adresse pour les demandes d'éclaircissement;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
 B04-DE-02;Délai d'envoi des demandes par les candidats (jours avant la date limite);NOMBRE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
 B04-DE-03;Délai de réponse du représentant de la PRMP (jours);NOMBRE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
-B04-CO-01;Documents et pièces constituant l'offre;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
+B04-CO-01;Documents et pièces constituant l'offre;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;non;;PIECES_OFFRE_EXIGEES:TEXTE;;;;oui
 B04-VO-01;Délai de validité des offres (jours);NOMBRE;SAISIE;DPAO;CCAP;QUANTITE_FIXE,A_COMMANDE,CONTRAT_CADRE;;oui;Les offres restent valables {B04-VO-01} jours à compter de la date limite de remise des offres.;VALIDITE_GARANTIE_SUP_OFFRE:OFFRE;;;;oui;;FOURNITURES_SERVICES,TRAVAUX
 B04-LA-01;Langue de l'offre autre que le français admise;OUI_NON;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;oui;;;;;;oui
 B04-LA-02;Langue admise en plus du français;TEXTE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;;non;;;;;;oui

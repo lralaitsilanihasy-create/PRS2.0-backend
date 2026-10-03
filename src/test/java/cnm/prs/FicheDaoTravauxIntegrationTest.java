@@ -611,8 +611,10 @@ class FicheDaoTravauxIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(JsonPath.<List<String>>read(ref, "$.blocs[?(@.code=='B14')].rubriques[*].code")).containsExactly("B14-AD", "B14-OF");
         assertThat(JsonPath.<List<Boolean>>read(ref, "$.champs[?(@.code=='B04-PI-01')].obligatoire")).containsExactly(false);
 
-        long fournitures = creerDmc(9903);
-        mvc.perform(put("/api/fiches-marche/" + fournitures + "/pieces").header("Authorization", tokenPrmp).contentType(JSON)
+        // ⚠️ V62 — hors périmètre : le contrat-cadre (aucun DPAC n'a de place pour ces pièces), travaux compris.
+        assertThat(JsonPath.<List<String>>read(ref("typeMarche=CONTRAT_CADRE&categorie=TRAVAUX"), "$.blocs[*].code")).doesNotContain("B14");
+        long contratCadre = creerDmc(9902);
+        mvc.perform(put("/api/fiches-marche/" + contratCadre + "/pieces").header("Authorization", tokenPrmp).contentType(JSON)
                 .content("{\"pieces\":[]}")).andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("PIECES_HORS_PERIMETRE"));
 
@@ -666,6 +668,57 @@ class FicheDaoTravauxIntegrationTest extends CnmIntegrationTestSupport {
                 .header("Authorization", tokenPrmp)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString(),
                 "$[*].libelle")).containsExactly("Carte d'immatriculation fiscale", "Carte statistique", "Certificat de non-faillite",
                         "Extrait RCS", "Garantie de soumission", "Planning d'exécution");
+    }
+
+    @Test
+    @DisplayName("V62 (03/10, pièces ouvertes aux fournitures, choix A) — B14 servi aux fournitures (quantité fixe) ; "
+            + "PIECES_OFFRE_EXIGEES sur B04-CO-01 devenu facultatif ; PIECES_EN_DOUBLE ; le DPAO-F imprime les deux listes à la "
+            + "clause 6.2, sous « Pièces administratives à joindre à l'offre : »")
+    void piecesDesFournitures() throws Exception {
+        String ref = ref("typeMarche=QUANTITE_FIXE&categorie=FOURNITURES_SERVICES");
+        assertThat(JsonPath.<List<String>>read(ref, "$.blocs[?(@.code=='B14')].rubriques[*].code")).containsExactly("B14-AD", "B14-OF");
+        assertThat(JsonPath.<List<Boolean>>read(ref, "$.champs[?(@.code=='B04-CO-01')].obligatoire")).containsExactly(false);
+        assertThat(JsonPath.<List<String>>read(ref("typeMarche=CONTRAT_CADRE&categorie=FOURNITURES_SERVICES"), "$.blocs[*].code"))
+                .doesNotContain("B14");
+
+        long idDmc = creerDmc(9903);
+        remplirObligatoires(idDmc, "QUANTITE_FIXE", "FOURNITURES_SERVICES", Map.of());
+        mvc.perform(put("/api/fiches-marche/" + idDmc + "/pieces").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"pieces\":[]}")).andExpect(status().isOk());
+        String fiche = mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.bloquants[?(@.regle=='PIECES_OFFRE_EXIGEES')].message"))
+                .containsExactly("Les pièces de l'offre ne sont pas dites : remplissez la liste des pièces de l'offre, ou "
+                        + "« Documents et pièces constituant l'offre ».");
+
+        // Les pièces administratives du 2463, datées ; deux pièces de l'offre.
+        mvc.perform(put("/api/fiches-marche/" + idDmc + "/pieces").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"pieces\":["
+                        + "{\"rubrique\":\"ADMINISTRATIVE\",\"libelle\":\"Carte d'Immatriculation Fiscale 2026 ou 2025 validée\",\"ancienneteMaxMois\":3},"
+                        + "{\"rubrique\":\"ADMINISTRATIVE\",\"libelle\":\"Certificat de non-faillite\",\"forme\":\"original\",\"ancienneteMaxMois\":3},"
+                        + "{\"rubrique\":\"OFFRE\",\"libelle\":\"Bordereau des prix\",\"parLot\":true},"
+                        + "{\"rubrique\":\"OFFRE\",\"libelle\":\"Prospectus des fournitures\"}]}"))
+                .andExpect(status().isOk());
+        fiche = mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Object>>read(fiche, "$.bilanControles.bloquants[?(@.regle=='PIECES_OFFRE_EXIGEES')]")).isEmpty();
+        assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.avertissements[?(@.regle=='PIECES_EN_DOUBLE')].champs[0]"))
+                .containsExactly("B03-CQ-01");   // le défaut du document type, recopié à la création
+
+        remplirObligatoiresEtValider(idDmc, "QUANTITE_FIXE", "FOURNITURES_SERVICES", Map.of());
+        int idDpao = JsonPath.<List<Integer>>read(documents(idDmc), "$[?(@.type=='DPAO' && @.extension=='docx')].idDocument").get(0);
+        byte[] docx = mvc.perform(get("/api/fiches-marche/documents/" + idDpao + "/contenu").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        try (org.apache.poi.xwpf.usermodel.XWPFDocument d = new org.apache.poi.xwpf.usermodel.XWPFDocument(
+                new java.io.ByteArrayInputStream(docx)); org.apache.poi.xwpf.extractor.XWPFWordExtractor ex =
+                        new org.apache.poi.xwpf.extractor.XWPFWordExtractor(d)) {
+            assertThat(ex.getText()).containsSubsequence("Documents ou pièces à remettre en sus",
+                    "- Bordereau des prix, une par lot", "- Prospectus des fournitures",
+                    "Pièces administratives à joindre à l’offre :",
+                    "- Carte d'Immatriculation Fiscale 2026 ou 2025 validée, datée de moins de 3 mois",
+                    "- Certificat de non-faillite, original, datée de moins de 3 mois",
+                    "une photocopie certifiée de la carte statistique");   // B03-CQ-01, son défaut, à la suite
+        }
     }
 
     /** ⚠️ V59 — un article de travaux en JSON ({@code null} : propriété absente). */

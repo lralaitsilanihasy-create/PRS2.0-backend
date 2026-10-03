@@ -71,7 +71,7 @@ class ModelesDaoTest {
         assertThat(dao.modele("DPAC-CC").conditions()).hasSize(18);   // D4 : + CCAG-FOURNITURES, CCAG-TRAVAUX ; 01/10 : + MONTANT-LOTS/-UNIQUE
         assertThat(dao.modele("AE-CC").conditions()).hasSize(55);
         // ⚠️ Lot D2 (2026-09-29) — les trois documents des fournitures, un modèle pour la quantité fixe et à commande.
-        assertThat(dao.modele("DPAO-F").conditions()).hasSize(42);
+        assertThat(dao.modele("DPAO-F").conditions()).hasSize(47);   // 03/10 (V62, pièces des fournitures) : + PIECES-OFFRE-LISTE/-TEXTE, PIECES-ADM, -ADM-LISTE/-TEXTE
         assertThat(dao.modele("AE-F").conditions()).hasSize(22);
         assertThat(dao.modele("CCAP-F").conditions()).hasSize(67);   // 29/09 : + VARIATION-COMMANDE, SANS-VARIATION-COMMANDE
         // ⚠️ Lot D3 (2026-09-29) — les trois documents des prestations intellectuelles.

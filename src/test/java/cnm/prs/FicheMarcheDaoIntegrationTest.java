@@ -120,13 +120,13 @@ class FicheMarcheDaoIntegrationTest extends CnmIntegrationTestSupport {
     // ------------------------------------------------------------------ 1. référentiel
 
     @Test
-    @DisplayName("1 — Référentiel : QUANTITE_FIXE sert 10 blocs (B01-B06, B08-B10, B12 — V45) avec leurs rubriques et les champs "
+    @DisplayName("1 — Référentiel : QUANTITE_FIXE sert 11 blocs (B01-B06, B08-B10, B12 — V45, B14 — V62) avec leurs rubriques et les champs "
             + "chargés ; CONTRAT_CADRE ajoute B07 ; type inconnu → 400")
     void referentiel() throws Exception {
         String corps = mvc.perform(get("/api/champs-fiche-marche").param("typeMarche", "QUANTITE_FIXE").param("categorie", "FOURNITURES_SERVICES")
                 .header("Authorization", tokenPrmp))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.blocs", hasSize(10)))
+                .andExpect(jsonPath("$.blocs", hasSize(11)))
                 .andExpect(jsonPath("$.blocs[0].code").value("B01"))
                 .andExpect(jsonPath("$.blocs[6].code").value("B08"))
                 .andExpect(jsonPath("$.blocs[4].rubriques[?(@.code=='B05-GS')].nbAttendu").value(6))

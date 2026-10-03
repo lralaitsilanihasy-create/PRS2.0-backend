@@ -4762,7 +4762,7 @@ l'Administrateur). Avant le premier enregistrement la fiche est **virtuelle** : 
 | ⚠️ 2026-10-02 `ASSURANCE_DECENNALE` | `BATIMENT` (`B09-BT-01`), `ASSURANCE` (`B09-AC-03`) — des travaux de bâtiment exigent l'assurance décennale ; hors bâtiment, rien | bloquant |
 | ⚠️ V59 `LIQUIDITE_DOUBLE` | `MONTANT` (`B03-QT-14`), `POURCENTAGE` (`B03-QT-15`), par lot — la liquidité minimale en montant **ou** en pourcentage de l'offre, pas les deux pour un même lot | bloquant |
 | ⚠️ V59 `CA_MOYENNE` | `CA` (`B03-QT-07`), `MEILLEURES` (`B03-QT-16`), `ANNEES` (`B03-QT-17`) — 16 et 17 vont ensemble, 16 ≤ 17, et seulement avec un chiffre d'affaires renseigné | bloquant |
-| ⚠️ V61 `PIECES_OFFRE_EXIGEES` | `TEXTE` (`B04-PI-01`) — une fiche de travaux dit les pièces de l'offre, par la liste `/pieces` (rubrique `OFFRE`) **ou** par ce texte ; muette là où le champ n'est pas servi | bloquant |
+| ⚠️ V61 `PIECES_OFFRE_EXIGEES` | `TEXTE` (`B04-PI-01` aux travaux, ⚠️ V62 `B04-CO-01` aux fournitures) — une fiche de travaux dit les pièces de l'offre, par la liste `/pieces` (rubrique `OFFRE`) **ou** par ce texte ; muette là où le champ n'est pas servi | bloquant |
 | ⚠️ V61 `PIECES_EN_DOUBLE` | `TEXTE` (`B03-CQ-01`) — la liste des pièces `ADMINISTRATIVE` est remplie et le texte vaut encore sa valeur par défaut (le DPAO les imprimerait deux fois) | avertissement |
 | ⚠️ V60 `MATERIEL_EXIGE` | `TEXTE` (`B03-QT-09`) — une fiche de travaux dit son matériel, par la liste `/materiel` **ou** par ce texte ; ne vaut que là où le champ est servi (pas le contrat-cadre de travaux) | bloquant |
 | ⚠️ V59 `REFERENCES_CUMUL` | `NOMBRE` (`B03-QT-19`), `MONTANT` (`B03-QT-20`, par lot) — le nombre de marchés cumulables et le montant cumulé (de chaque lot) vont ensemble | bloquant |
@@ -5270,6 +5270,15 @@ révision, supprimée avec la fiche. Une seule liste ; la rubrique et `parLot` s
 | PUT | /api/fiches-marche/{idDmc}/pieces | `{ "pieces": [PieceExigeeDto…] }` | toute la liste (remplacée ; l'ordre est la position) | 200, 400, 403, 409 |
 
 409 `PIECES_HORS_PERIMETRE` hors travaux, `FICHE_VALIDEE` sur une version validée.
+
+⚠️ **2026-10-03 (V62, demande `demande-backend-2026-10-03-pieces-offre-fournitures.md`, choix A du pilote)** — le
+périmètre devient **travaux et fournitures et services, en quantité fixe et à commande**.
+- Le **contrat-cadre en sort**, pour les deux catégories : aucun DPAC n'a de place pour ces pièces. `PUT /pieces` y
+  répond 409 `PIECES_HORS_PERIMETRE`, et le bloc `B14` n'y est plus servi.
+- Aux fournitures, le texte au rôle de `PIECES_OFFRE_EXIGEES` est `B04-CO-01`, devenu facultatif (script
+  `docs/referentiel/2026-10-03-pieces-offre-fournitures.sql`). `PIECES_EN_DOUBLE` y vaut aussi, sur `B03-CQ-01`.
+- Le DPAO-F est recopié (front `ae93f90`). Sa clause 6.2 imprime `{{PIECES.offre}}` puis `B04-CO-01`, puis, si l'une des
+  deux est remplie, « Pièces administratives à joindre à l'offre : », `{{PIECES.administratives}}` et `B03-CQ-01`.
 
 - **`PieceExigeeDto`** :
   - `idPiece`, `ordre` (servi) ;
