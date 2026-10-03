@@ -5288,6 +5288,9 @@ révision, supprimée avec la fiche. Une seule liste ; la rubrique et `parLot` s
   Les morceaux absents disparaissent avec leur virgule, et une ancienneté d'un mois s'écrit « datée de moins d'un mois ».
   Une rubrique vide imprime des pointillés. Les deux jetons sont lisibles par une condition
   (`PIECES.offre renseigne`).
+- ⚠️ 2026-10-03 — **DPAO-T recopié** (front `7af2b34`, texte validé par le pilote). La clause 6.2 imprime :
+  - au 1° : la phrase du document type, puis `{{PIECES.offre}}` si la liste est remplie, puis `B04-PI-01` s'il est saisi ;
+  - au 2° : `{{PIECES.administratives}}`, puis `B03-CQ-01`.
 - **`B04-PI-01`** devient facultatif (rôle `PIECES_OFFRE_EXIGEES:TEXTE`) ; **`B03-CQ-01`** porte le rôle
   `PIECES_EN_DOUBLE:TEXTE`. L'égalité avec la valeur par défaut se juge sans les blancs de bord, et les fins de ligne
   Windows y sont confondues avec les autres.

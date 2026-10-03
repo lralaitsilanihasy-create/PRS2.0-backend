@@ -261,7 +261,7 @@ class LectureDaoTest {
         byte[] docx = new GenerateurDocumentsFiche().generer(dpao).stream().filter(x -> "docx".equals(x.extension()))
                 .findFirst().orElseThrow().contenu();
         List<String> doc = ImportDaoService.paragraphes("DPAO.docx", docx);
-        assertThat(doc).hasSizeGreaterThan(90);
+        assertThat(doc).hasSizeGreaterThan(80);   // 03/10 (V61) : 89 — les 1° et 2° vides de la clause 6.2 ne s'impriment plus
         org.junit.jupiter.api.Assertions.assertTimeoutPreemptively(Duration.ofSeconds(3), () -> {
             for (String s : List.of("DPAO-T", "CCAP-T", "AE-T")) {
                 LectureDao.lire(s, dao.modele(s), doc, c -> null);

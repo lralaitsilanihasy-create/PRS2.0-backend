@@ -384,6 +384,32 @@ class ModelesDaoTravauxTest {
                         + "ans d'expérience en travaux routiers ; justificatifs : CV et diplôme certifié");
     }
 
+    @Test
+    @DisplayName("2026-10-03 (V61, texte validé par le pilote) — clause 6.2 du DPAO-T : 1° la liste OFFRE puis B04-PI-01, 2° la "
+            + "liste ADMINISTRATIVE puis B03-CQ-01 ; une rubrique vide n'imprime pas de pointillés quand le texte la remplace")
+    void piecesDuDpao() {
+        FicheMarcheDto f = fiche(Map.of("typePrix", "UNITAIRES", "tranches", "NON", "avance", "NON", "garantieSoumission", "NON"));
+        f.getValeurs().put("B04-PI-01", "Méthodologie d'exécution");
+        f.getValeurs().put("B03-CQ-01", "une photocopie certifiée de la carte statistique");
+        Map<String, ChampFicheMarche> champs = new HashMap<>(champsMen());
+        String texteSeul = FormulairesCandidat.rendreModele("DPAO", null, f, champs, dao.modele("DPAO-T"), null).texte()
+                .replace(' ', ' ').replace(' ', ' ');
+        assertThat(texteSeul).containsSubsequence("1°- Documents ou pièces à remettre en sus", "Méthodologie d'exécution", "2° -",
+                "une photocopie certifiée de la carte statistique")
+                .doesNotContain("clause 6.2. des IC : " + FormulairesCandidat.POINTILLES, "2° - " + FormulairesCandidat.POINTILLES);
+        Map<String, String> jetons = PiecesFiche.jetons(List.of(
+                new cnm.prs.dto.PieceExigeeDto(null, null, "ADMINISTRATIVE", "01", "Carte professionnelle 2026",
+                        "copie légalisée par le centre fiscal", 3, false, null),
+                new cnm.prs.dto.PieceExigeeDto(null, null, "OFFRE", "09", "Planning général", null, null, false,
+                        "annexe 5, planning 8-a")));
+        String listes = FormulairesCandidat.rendreModele("DPAO", null, f, champs, dao.modele("DPAO-T"), null, jetons).texte()
+                .replace(' ', ' ').replace(' ', ' ');
+        assertThat(listes).containsSubsequence("1°- Documents ou pièces à remettre en sus",
+                "- 09 : Planning général, selon le modèle : annexe 5, planning 8-a", "Méthodologie d'exécution", "2° -",
+                "- 01 : Carte professionnelle 2026, copie légalisée par le centre fiscal, datée de moins de 3 mois",
+                "une photocopie certifiée de la carte statistique");
+    }
+
     private static Map<String, ChampFicheMarche> champsMen() {
         Map<String, ChampFicheMarche> m = new HashMap<>(champs());
         for (String[] t : List.of(new String[] {"B03-QT-12", "NOMBRE", "non"}, new String[] {"B03-QT-08", "TEXTE_LONG", "oui"},

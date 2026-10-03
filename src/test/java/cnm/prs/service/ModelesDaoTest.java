@@ -79,7 +79,7 @@ class ModelesDaoTest {
         assertThat(dao.modele("AE-PI").conditions()).hasSize(17);
         assertThat(dao.modele("CPS-PI").conditions()).hasSize(30);
         // ⚠️ Lot D4 (2026-09-29) — les trois documents des travaux.
-        assertThat(dao.modele("DPAO-T").conditions()).hasSize(49);   // 03/10 (V60, matériel et personnel) : + MATERIEL-LISTE/-TEXTE, PERSONNEL-LISTE/-TEXTE ; 03/10 (seuils calculés, V59) : + CA-MOYENNE, REFERENCES-UN/-CUMUL, LIQUIDITE-POURCENT ; 01/10 (DAO du MEN) : + GARANTIE-LOTS/-UNIQUE, PERSONNEL-CLE, LIQUIDITE ; §B4.1 : + LIMITE-LOTS, OFFRES-ANORMALES ; 02/10 : + CHIFFRE-AFFAIRES
+        assertThat(dao.modele("DPAO-T").conditions()).hasSize(53);   // 03/10 (V61, pièces de l'offre) : + PIECES-OFFRE-LISTE/-TEXTE, PIECES-ADM-LISTE/-TEXTE ; 03/10 (V60, matériel et personnel) : + MATERIEL-LISTE/-TEXTE, PERSONNEL-LISTE/-TEXTE ; 03/10 (seuils calculés, V59) : + CA-MOYENNE, REFERENCES-UN/-CUMUL, LIQUIDITE-POURCENT ; 01/10 (DAO du MEN) : + GARANTIE-LOTS/-UNIQUE, PERSONNEL-CLE, LIQUIDITE ; §B4.1 : + LIMITE-LOTS, OFFRES-ANORMALES ; 02/10 : + CHIFFRE-AFFAIRES
         assertThat(dao.modele("AE-T").conditions()).hasSize(30);
         assertThat(dao.modele("CCAP-T").conditions()).hasSize(73);   // 30/09 : + PLANS (B04-CD-03) ; 02/10 : + LIBERATION-PROVISOIRE, + ACTUALISATION (B5.2)
         // ⚠️ 2026-09-30 — les deux avis spécifiques (fournitures, travaux), imprimés à la demande, hors des couvertures.
