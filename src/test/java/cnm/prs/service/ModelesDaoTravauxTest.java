@@ -271,7 +271,7 @@ class ModelesDaoTravauxTest {
                 "garantieSoumission", "OUI"));
         f.getValeurs().putAll(Map.of("B05-GQ-02", "Chèque de banque", "B05-GQ-04", "Receveur Général d'Antananarivo",
                 "B04-FP-01", "1", "B04-OV-02", "2026-11-16T09:30", "B05-GE-01", "OUI", "B05-GE-03", "Chèque de banque"));
-        f.getValeurs().putAll(Map.of("B08-RE-04", "10", "B08-MR-05", "5", "B08-MR-06", "Installation de chantier : 5 %\nTerrassement : 15 %",
+        f.getValeurs().putAll(Map.of("B08-RE-04", "10", "B08-MR-05", "5",
                 "B09-PE-02", "un millième", "B09-PE-03", "10", "B09-RP-03", "20", "B05-VR-02", "Indice TP01, Bulletin officiel",
                 "B08-RE-02", "OUI"));   // la clause de la régie (12.2) est sous REGIE-OUI
         java.time.LocalDateTime validation = java.time.LocalDateTime.of(2026, 10, 2, 11, 0);
@@ -279,15 +279,17 @@ class ModelesDaoTravauxTest {
         assertThat(dpao).contains("libéllé au nom de Receveur Général d'Antananarivo", "1 copie(s)", "Heure : 09 h 30");
         String ae = FormulairesCandidat.rendreModele("AE", null, f, champsMen(), dao.modele("AE-T"), validation).texte();
         assertThat(ae).contains(" du 02/10/2026 et, en particulier", "pour la remise des offres, soit le 01/11/2026");
-        String ccap = FormulairesCandidat.rendreModele("CCAP", null, f, champsMen(), dao.modele("CCAP-T"), validation).texte()
+        // ⚠️ 03/10 (V59, §B1.5) — l'article 16 imprime les séries du DQE ({{BESOIN.series}}), plus B08-MR-06.
+        Map<String, String> series = Map.of(FormulairesCandidat.JETON_SERIES, "0 — Installation de chantier : ……… %\n1 — Terrassement : ……… %");
+        String ccap = FormulairesCandidat.rendreModele("CCAP", null, f, champsMen(), dao.modele("CCAP-T"), validation, series).texte()
                 .replace(' ', ' ').replace(' ', ' ');
         assertThat(ccap).contains("établi à l'ordre de Receveur Général d'Antananarivo.", "atteint 10 % du montant du Marché",
-                "au plus tard 5 jours ouvrables", "Installation de chantier : 5 %\nTerrassement : 15 %",
+                "au plus tard 5 jours ouvrables", "0 — Installation de chantier : ……… %\n1 — Terrassement : ……… %",
                 "dans la limite de 10 % du montant global", "Indice TP01, Bulletin officiel", "est de 20 jours.")
                 .doesNotContain("<à préciser>", "<pourcentage>", "< nombre de jours>", "<indiquer la nature des indices", "<n°>",
                         "{{");
         f.getValeurs().remove("B05-VR-02");   // prix fermes, sans actualisation : le paragraphe disparaît
-        assertThat(FormulairesCandidat.rendreModele("CCAP", null, f, champsMen(), dao.modele("CCAP-T"), validation).texte())
+        assertThat(FormulairesCandidat.rendreModele("CCAP", null, f, champsMen(), dao.modele("CCAP-T"), validation, series).texte())
                 .doesNotContain("Indice TP01").contains("Les prix sont fermes et non révisables.");
     }
 
@@ -315,6 +317,48 @@ class ModelesDaoTravauxTest {
     // ------------------------------------------------------------------ outils
 
     /** {@link #champs()} et ⚠️ 2026-10-01 les champs du DAO du MEN : période (NOMBRE), seuil, garantie, délai, liquidité par lot. */
+    @Test
+    @DisplayName("2026-10-03 (V59, §B2.4, variantes validées par le pilote) — clause 6.3 du DPAO-T : chiffre d'affaires moyen "
+            + "des meilleures années dans un domaine, références cumulées, liquidité en pourcentage de l'offre ; sans ces "
+            + "seuils, la rédaction d'origine, domaine par défaut compris")
+    void seuilsCalculesDuDpao() {
+        FicheMarcheDto f = fiche(Map.of("typePrix", "UNITAIRES", "tranches", "NON", "avance", "NON", "garantieSoumission", "NON"));
+        Map<String, ChampFicheMarche> champs = new HashMap<>(champsMen());
+        for (String[] t : List.of(new String[] {"B03-QT-07", "MONTANT", "non"}, new String[] {"B03-QT-15", "POURCENTAGE", "oui"},
+                new String[] {"B03-QT-16", "NOMBRE", "non"}, new String[] {"B03-QT-17", "NOMBRE", "non"},
+                new String[] {"B03-QT-18", "TEXTE", "non"}, new String[] {"B03-QT-19", "NOMBRE", "non"},
+                new String[] {"B03-QT-20", "MONTANT", "oui"})) {
+            ChampFicheMarche c = new ChampFicheMarche();
+            c.setCode(t[0]);
+            c.setType(t[1]);
+            c.setSource("SAISIE");
+            c.setParLot("oui".equals(t[2]));
+            c.setActif(true);
+            champs.put(t[0], c);
+        }
+        f.getValeurs().putAll(Map.of("B03-QT-07", "5000000000", "B03-QT-16", "3", "B03-QT-17", "5", "B03-QT-18", "travaux routiers",
+                "B03-QT-12", "10", "B03-QT-19", "3", "B03-QT-20", "2500000000", "B03-QT-15", "10"));
+        String dpao = FormulairesCandidat.rendreModele("DPAO", null, f, champs, dao.modele("DPAO-T"), null).texte()
+                .replace(' ', ' ').replace(' ', ' ');
+        assertThat(dpao).contains("a) avoir réalisé un chiffre d’affaires annuel moyen, calculé sur les trois (3) meilleures des "
+                        + "cinq (5) dernières années, pour des travaux routiers, d’un montant équivalant à 5 000 000 000 Ariary",
+                "au cours des dix (10) dernières années, au plus trois (3) marchés de nature et de complexité comparables à "
+                        + "celles des Travaux, d’un montant cumulé d’au moins 2 500 000 000 Ariary, et comprenant :",
+                "d’un montant minimum égal à 10 % du montant de son offre")
+                .doesNotContain("au moins un projet de nature", "un montant minimum de : ");
+        // Sans les seuils calculés : la rédaction d'origine, avec le domaine par défaut.
+        for (String code : List.of("B03-QT-15", "B03-QT-16", "B03-QT-17", "B03-QT-19", "B03-QT-20")) {
+            f.getValeurs().remove(code);
+        }
+        f.getValeurs().put("B03-QT-18", "travaux de construction");
+        f.getValeurs().put("B03-QT-14", "99000000");
+        String origine = FormulairesCandidat.rendreModele("DPAO", null, f, champs, dao.modele("DPAO-T"), null).texte()
+                .replace(' ', ' ').replace(' ', ' ');
+        assertThat(origine).contains("a) avoir réalisé un chiffre d’affaires annuel, pour des travaux de construction, d’un montant",
+                "au moins un projet de nature et de complexité comparables", "d’un montant minimum de : ")
+                .doesNotContain("annuel moyen", "montant cumulé", "du montant de son offre");
+    }
+
     private static Map<String, ChampFicheMarche> champsMen() {
         Map<String, ChampFicheMarche> m = new HashMap<>(champs());
         for (String[] t : List.of(new String[] {"B03-QT-12", "NOMBRE", "non"}, new String[] {"B03-QT-08", "TEXTE_LONG", "oui"},

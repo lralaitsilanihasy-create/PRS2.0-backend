@@ -236,6 +236,17 @@ public class GenerateurClasseursFiche {
         }
     }
 
+    /**
+     * ⚠️ 2026-10-03 — la ligne « dossier » d'un classeur : « Dossier d'appel d'offres : 001-DAOO/… (plan de passation :
+     * 00004/PPM-…) », ou « Plan de passation : 00004/PPM-… » tant que le numéro du DAO ({@code B02-OB-03}) n'est pas saisi.
+     * La référence du plan n'est pas celle du DAO.
+     */
+    public static String ligneDossier(String numeroDao, String referencePlan) {
+        String plan = referencePlan == null || referencePlan.isBlank() ? "—" : referencePlan;
+        return numeroDao == null || numeroDao.isBlank() ? "Plan de passation : " + plan
+                : "Dossier d'appel d'offres : " + numeroDao.trim() + " (plan de passation : " + plan + ")";
+    }
+
     /** La lettre d'une colonne (0 → A). */
     static String lettre(int colonne) {
         return org.apache.poi.ss.util.CellReference.convertNumToColString(colonne);
@@ -336,10 +347,14 @@ public class GenerateurClasseursFiche {
         }
     }
 
-    /** Titre, référence du dossier, objet ; renvoie la ligne suivante (base 0), après une ligne vide. */
+    /**
+     * Titre, dossier, objet ; renvoie la ligne suivante (base 0), après une ligne vide. ⚠️ 2026-10-03 (contre-recette du
+     * front, fiche 32) — {@code reference} est la ligne du dossier déjà rédigée par l'appelant
+     * ({@link #ligneDossier}) : le numéro du DAO, et la référence du plan de passation dont il relève.
+     */
     private static int entete(XSSFSheet f, Styles s, String titre, String reference, String objet) {
         texte(f.createRow(0), 0, titre, s.titre);
-        texte(f.createRow(1), 0, "Dossier d'appel d'offres : " + (reference == null ? "—" : reference), null);
+        texte(f.createRow(1), 0, reference == null ? "Dossier d'appel d'offres : —" : reference, null);
         texte(f.createRow(2), 0, "Objet : " + (objet == null ? "—" : objet), null);
         return 4;
     }

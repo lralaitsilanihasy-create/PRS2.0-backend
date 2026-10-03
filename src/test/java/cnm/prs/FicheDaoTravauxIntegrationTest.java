@@ -373,6 +373,15 @@ class FicheDaoTravauxIntegrationTest extends CnmIntegrationTestSupport {
                 new java.io.ByteArrayInputStream(xlsx))) {
             org.apache.poi.xssf.usermodel.XSSFSheet f = wb.getSheetAt(0);
             assertThat(f.getProtect()).isTrue();
+            // ⚠️ 03/10 (contre-recette du front) — le numéro du DAO, puis la référence du plan de passation.
+            String valide = mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp))
+                    .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+            String numeroDao = JsonPath.read(valide, "$.valeurs['B02-OB-03']");
+            assertThat(numeroDao).isNotBlank();
+            assertThat(f.getRow(1).getCell(0).getStringCellValue()).isEqualTo("Dossier d'appel d'offres : " + numeroDao
+                    + " (plan de passation : " + JsonPath.read(valide, "$.refeDossier") + ")");
+            assertThat(cnm.prs.service.GenerateurClasseursFiche.ligneDossier(null, "00004/PPM-AGPM/CNM/2026"))
+                    .isEqualTo("Plan de passation : 00004/PPM-AGPM/CNM/2026");
             List<String> entetes = new java.util.ArrayList<>();
             f.getRow(4).forEach(c -> entetes.add(c.getStringCellValue()));
             assertThat(entetes).containsExactly("N° de prix", "Désignation", "Unité", "Quantité", "Libellé du bordereau",

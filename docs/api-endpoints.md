@@ -5181,8 +5181,11 @@ script `docs/referentiel/2026-10-02-dqe-et-seuils-travaux.sql`.
     sous « Lot n : ».
   - Un document établi par lot lit les séries de son lot.
   - Sans DQE : pointillés.
-- `B08-MR-06` est **désactivé** : le découpage du forfait est dérivé du DQE. Ses valeurs restent lisibles. ⚠️ Tant que
-  le CCAP-T n'est pas recopié sur le nouveau jeton, l'article 16 imprime des pointillés à sa place.
+- `B08-MR-06` est **désactivé** : le découpage du forfait est dérivé du DQE. Ses valeurs restent lisibles. ⚠️ 2026-10-03 :
+  le CCAP-T est recopié (front `6118791`), son article 16 imprime `{{BESOIN.series}}`.
+- ⚠️ 2026-10-03 — **en-tête des classeurs** (`BP` et `TC`, toutes catégories) : « Dossier d'appel d'offres : <`B02-OB-03`>
+  (plan de passation : <référence du plan>) », ou « Plan de passation : <référence> » tant que le numéro du DAO n'est
+  pas saisi. Il disait la référence du plan sous le nom de dossier d'appel d'offres.
 
 **§B2 — Seuils de qualification calculés** (DPAO-T, clause 6.3). Tous les champs sont facultatifs et de catégorie
 TRAVAUX ; les règles lisent leurs rôles dans la colonne `controle`.
@@ -5199,6 +5202,14 @@ TRAVAUX ; les règles lisent leurs rôles dans la colonne `controle`.
 | `B03-QT-20` « Montant cumulé minimum des marchés de référence (Ariary) » | MONTANT | oui | `REFERENCES_CUMUL:MONTANT` |
 
 Les règles sont décrites dans le tableau des contrôles (`LIQUIDITE_DOUBLE`, `CA_MOYENNE`, `REFERENCES_CUMUL`).
+
+⚠️ 2026-10-03 — **impression** (DPAO-T recopié, front `6118791`, variantes validées par le pilote), clause 6.3 :
+- a) « chiffre d'affaires annuel moyen, calculé sur les trois (3) meilleures des cinq (5) dernières années, pour des
+  travaux routiers… » sous `CA-MOYENNE` (`B03-QT-07` et `B03-QT-16` renseignés). Sinon, la rédaction d'origine,
+  qui imprime désormais le domaine `B03-QT-18`.
+- b) « au plus trois (3) marchés […] d'un montant cumulé d'au moins … » sous `REFERENCES-CUMUL` (`B03-QT-19`
+  renseigné). Sinon, « au moins un projet ».
+- (f) « d'un montant minimum égal à 10 % du montant de son offre » sous `LIQUIDITE-POURCENT` (`B03-QT-15` renseigné).
 
 ### Gabarits : la phrase du document qui imprime un champ ⚠️ 2026-10-02
 

@@ -381,7 +381,7 @@ PARA	Le règlement des sommes dues à l’Entrepreneur s’effectuera par applic
 PARA	{{FINSI:UNITAIRES}}
 PARA	{{SI:FORFAIT}}
 PARA	Le règlement des sommes dues à l’Entrepreneur s’effectuera par application du prix forfaitaire résultant du détail quantitatif et estimatif selon le découpage en centième par corps d’état des travaux terminés comme suit
-PARA	{{B08-MR-06}}
+PARA	{{BESOIN.series}}
 PARA	- Total………………………………………100% du détail quantitatif et estimatif
 PARA	{{FINSI:FORFAIT}}
 SOUS_TITRE	Article 17 - Augmentation dans la masse des travaux (CCAG Article 15)

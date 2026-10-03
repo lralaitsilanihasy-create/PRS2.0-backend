@@ -56,6 +56,8 @@ public class DocumentsFicheMarcheService {
 
     /** ⚠️ V59 — la catégorie dont le besoin est un DQE (bordereau des prix et DQE, ni LF ni TC). */
     private static final String TRAVAUX = cnm.prs.enums.CategorieDao.TRAVAUX.name();
+    /** ⚠️ 2026-10-03 — le numéro du dossier d'appel d'offres, imprimé en tête des classeurs. */
+    static final String CHAMP_NUMERO_DAO = "B02-OB-03";
 
     /** Code stable du type de pièce « Dossier d'appel d'offres complet » (V38). */
     public static final String CODE_TYPE_PIECE = "DAO_COMPLET";
@@ -261,6 +263,9 @@ public class DocumentsFicheMarcheService {
         // ⚠️ V59 (2026-10-02, §B1.3) — travaux : le bordereau des prix et DQE seul (pas de tableau de conformité).
         boolean travaux = TRAVAUX.equals(etat.getCategorie());
         Object typePrix = etat.getCadrage() == null ? null : etat.getCadrage().get("typePrix");
+        // ⚠️ 2026-10-03 — l'en-tête dit le numéro du DAO (B02-OB-03), pas seulement la référence du plan de passation.
+        String dossier = GenerateurClasseursFiche.ligneDossier(
+                etat.getValeurs() == null ? null : etat.getValeurs().get(CHAMP_NUMERO_DAO), etat.getRefeDossier());
         for (String type : travaux ? List.of("BP") : List.of("BP", "TC")) {
             for (Integer lot : lots) {
                 List<BesoinFiche.Article> duLot = articles.stream().filter(a -> java.util.Objects.equals(a.lot(), lot)).toList();
@@ -270,11 +275,11 @@ public class DocumentsFicheMarcheService {
                 byte[] contenu;
                 try {
                     contenu = travaux
-                            ? classeurs.bordereauTravaux(etat.getRefeDossier(), etat.getDesignationMarche(), lot, duLot,
+                            ? classeurs.bordereauTravaux(dossier, etat.getDesignationMarche(), lot, duLot,
                                     aCommande, typePrix == null ? null : String.valueOf(typePrix), tva)
                             : "BP".equals(type)
-                            ? classeurs.bordereau(etat.getRefeDossier(), etat.getDesignationMarche(), lot, duLot, aCommande, tva)
-                            : classeurs.conformite(etat.getRefeDossier(), etat.getDesignationMarche(), lot, duLot);
+                            ? classeurs.bordereau(dossier, etat.getDesignationMarche(), lot, duLot, aCommande, tva)
+                            : classeurs.conformite(dossier, etat.getDesignationMarche(), lot, duLot);
                 } catch (RuntimeException e) {
                     throw new GenerationDocumentsException("La génération du document « "
                             + SelectionDocumentsFiche.titre(type, lot, etat.getTypeMarche(), etat.getCategorie())
