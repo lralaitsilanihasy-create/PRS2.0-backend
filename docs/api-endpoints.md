@@ -5245,6 +5245,9 @@ Les profils sont ceux de la lecture et de l'écriture de la fiche. 409 `MOYENS_H
     d'expérience en travaux routiers ; justificatifs : CV et diplôme certifié ». Les morceaux absents disparaissent
     avec leur séparateur ; par lot : « (1 par lot) » ; le diplôme prend une minuscule initiale, sauf un sigle.
 - **`B03-QT-09`** devient facultatif et porte le rôle `MATERIEL_EXIGE:TEXTE`. `B03-QT-13` et `B03-QT-10` ne changent pas.
+- ⚠️ 2026-10-03 — **conditions des modèles** : une clé peut être pointée. `MOYENS.materiel`, `MOYENS.personnel` et
+  `BESOIN.series` s'y lisent comme leur jeton : `renseigne` est vrai dès que la liste a une entrée. Exemple :
+  `PERSONNEL-CLE` = `MOYENS.personnel renseigne ou B03-QT-13 renseigne`.
 
 ### Gabarits : la phrase du document qui imprime un champ ⚠️ 2026-10-02
 

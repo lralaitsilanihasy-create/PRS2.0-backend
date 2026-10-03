@@ -58,6 +58,39 @@ class MoyensFicheTest {
     }
 
     @Test
+    @DisplayName("2026-10-03 (réponse du front) — les conditions lisent les listes : MATERIEL-LISTE, PERSONNEL-LISTE, "
+            + "PERSONNEL-CLE ; une fiche qui décrit son matériel en texte seul n'imprime pas de pointillés au-dessus")
+    void conditionsSurLesListes() {
+        String us = "\u001F";
+        cnm.prs.service.FichierCommande.Modele modele = cnm.prs.service.FichierCommande.lireModele(String.join("\n",
+                "CONDITION\tMATERIEL-LISTE" + us + "MOYENS.materiel renseigne",
+                "CONDITION\tMATERIEL-TEXTE" + us + "B03-QT-09 renseigne",
+                "CONDITION\tPERSONNEL-LISTE" + us + "MOYENS.personnel renseigne",
+                "CONDITION\tPERSONNEL-CLE" + us + "MOYENS.personnel renseigne ou B03-QT-13 renseigne",
+                "PARA\t(c) gros matériels :", "PARA\t{{SI:MATERIEL-LISTE}}", "PARA\t{{MOYENS.materiel}}", "PARA\t{{FINSI:MATERIEL-LISTE}}",
+                "PARA\t{{SI:MATERIEL-TEXTE}}", "PARA\t{{B03-QT-09}}", "PARA\t{{FINSI:MATERIEL-TEXTE}}",
+                "PARA\t{{SI:PERSONNEL-CLE}}", "PARA\t(e) proposer le personnel clé suivant :", "PARA\t{{SI:PERSONNEL-LISTE}}",
+                "PARA\t{{MOYENS.personnel}}", "PARA\t{{FINSI:PERSONNEL-LISTE}}", "PARA\t{{FINSI:PERSONNEL-CLE}}", ""));
+        cnm.prs.dto.FicheMarcheDto f = new cnm.prs.dto.FicheMarcheDto();
+        f.setIdDetail(1);
+        f.setVersion(1);
+        f.setTypeMarche("QUANTITE_FIXE");
+        f.setCategorie("TRAVAUX");
+        f.setCadrage(new java.util.LinkedHashMap<>());
+        f.setValeurs(new java.util.HashMap<>(Map.of("B03-QT-09", "Bétonnière, camion")));
+        f.setValeursPpm(new java.util.HashMap<>());
+        String texteSeul = FormulairesCandidat.rendreModele("DPAO", null, f, Map.of(), modele, null, Map.of()).texte();
+        assertThat(texteSeul).contains("Bétonnière, camion").doesNotContain(FormulairesCandidat.POINTILLES, "(e) proposer");
+
+        Map<String, String> jetons = MoyensFiche.jetons(List.of(engin("Niveleuse", null, 1, 1, false)),
+                List.of(new PersonnelExigeDto(null, null, "Chef de chantier", 1, null, 3, null, null, false)));
+        String listes = FormulairesCandidat.rendreModele("DPAO", null, f, Map.of(), modele, null, jetons).texte();
+        assertThat(listes).contains("- Niveleuse : 1, en propre", "Bétonnière, camion", "(e) proposer le personnel clé suivant :",
+                "- Chef de chantier (1) : au moins 3 ans d'expérience");
+        assertThat(ConditionsModele.lisible("MOYENS.personnel renseigne ou B03-QT-13 renseigne")).isTrue();
+    }
+
+    @Test
     @DisplayName("400 nominatifs : désignation manquante, nombre < 1, minimum supérieur au nombre ; poste manquant, "
             + "expérience négative")
     void validation() {

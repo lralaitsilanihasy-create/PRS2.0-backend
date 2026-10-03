@@ -31,12 +31,14 @@ import java.util.regex.Pattern;
  *       valeur absente, {@code !=} vrai.</li>
  * </ul>
  * <p>Une {@code cle} est un <strong>code de champ</strong> ({@code B07-FS-01}) ou une <strong>clé de cadrage</strong>
- * ({@code attributaires}, {@code modeRemise}…) : c'est le lecteur fourni qui la résout (voir {@link FormulairesCandidat}).</p>
+ * ({@code attributaires}, {@code modeRemise}…) : c'est le lecteur fourni qui la résout (voir {@link FormulairesCandidat}).
+ * ⚠️ 2026-10-03 (demande « matériel et personnel des travaux », réponse du front) — un identifiant peut être pointé
+ * ({@code MOYENS.materiel}) : une liste de la fiche, « renseignée » dès qu'elle a une entrée.</p>
  */
 public final class ConditionsModele {
 
-    /** Une clé : un code de champ, ou un identifiant (clé de cadrage). */
-    static final String CLE = "(?:B\\d{2}-[A-Z0-9]{1,6}-\\d{2}|[A-Za-z_][A-Za-z0-9_]*)";
+    /** Une clé : un code de champ, ou un identifiant (clé de cadrage), ⚠️ 2026-10-03 éventuellement pointé (MOYENS.materiel). */
+    static final String CLE = "(?:B\\d{2}-[A-Z0-9]{1,6}-\\d{2}|[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z0-9_]+)*)";
     private static final String DEBUT_TERME = "(?=" + CLE + "(?:\\s*!?=|\\s+contient\\s|\\s+(?:renseigne|vide)(?:\\s|$)))";
     private static final Pattern OU = Pattern.compile("\\s+ou\\s+" + DEBUT_TERME);
     private static final Pattern ET = Pattern.compile("\\s+et\\s+" + DEBUT_TERME);

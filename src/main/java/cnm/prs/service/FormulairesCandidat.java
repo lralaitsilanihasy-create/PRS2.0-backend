@@ -346,6 +346,13 @@ public final class FormulairesCandidat {
                 }
                 return v;
             }
+            // ⚠️ 2026-10-03 — une liste de la fiche ({@code MOYENS.materiel}, {@code MOYENS.personnel}, {@code BESOIN.series}) :
+            // son texte rendu par l'appelant, celui du lot d'abord ; « renseigne » dès qu'elle a une entrée.
+            if (cle.startsWith(PREFIXE_MOYENS) || cle.startsWith(PREFIXE_BESOIN)) {
+                String v = lot == null ? null : publication.get(cle + "#" + lot);
+                v = v != null ? v : publication.get(cle);
+                return v == null || v.isBlank() ? null : v;
+            }
             // ⚠️ Lot D2 (2026-09-29, §B1) — la forme et la catégorie de la fiche se lisent comme des clés de cadrage.
             if (CLE_SUPPORTS_PUBLICATION.equals(cle)) {
                 String v = publication.get("supports");   // ⚠️ §B7.5 — « et dans … » seulement s'il y a des supports
