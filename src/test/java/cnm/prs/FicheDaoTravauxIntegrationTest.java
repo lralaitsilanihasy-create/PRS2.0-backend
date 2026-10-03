@@ -34,7 +34,8 @@ import cnm.prs.service.ChampFicheMarcheService;
  * DPAO, CCAP et AE (DPAC et AE en contrat-cadre). Les fiches de fournitures n'en sont pas changées.
  *
  * <p>Jeu : plan 9900 (PRMP001, ANT, CLOTURE, PV signé FAV), lignes en appel d'offres ouvert : 9901 travaux à quantité
- * fixe, 9902 travaux en contrat-cadre (nature 91 « Travaux »), 9903 fournitures à quantité fixe (nature 92).</p>
+ * fixe, 9902 travaux en contrat-cadre (nature 91 « Travaux »), 9903 fournitures à quantité fixe (nature 92), ⚠️ V59 9904
+ * travaux à quantité fixe en deux lots.</p>
  */
 class FicheDaoTravauxIntegrationTest extends CnmIntegrationTestSupport {
 
@@ -64,6 +65,16 @@ class FicheDaoTravauxIntegrationTest extends CnmIntegrationTestSupport {
         ligne(9901, 91, FormeMarche.QUANTITE_FIXE);
         ligne(9902, 91, FormeMarche.CONTRAT_CADRE);
         ligne(9903, natureFournitures(), FormeMarche.QUANTITE_FIXE);
+        // ⚠️ V59 (02/10, DQE des travaux) — travaux à quantité fixe en deux lots (le MEN).
+        ligne(9904, 91, FormeMarche.QUANTITE_FIXE);
+        for (int n = 1; n <= 2; n++) {
+            cnm.prs.entity.Lot lot = new cnm.prs.entity.Lot();
+            lot.setIdLot(9940 + n);
+            lot.setIdDossier(9900);
+            lot.setIdDetail(9904);
+            lot.setDesignationLot("Lot " + n);
+            lotRepository.save(lot);
+        }
 
         importer("referentiel-champs-fiche-marche-fournitures.csv");
         travaux = importer("referentiel-champs-fiche-dao-travaux.csv");
@@ -75,7 +86,7 @@ class FicheDaoTravauxIntegrationTest extends CnmIntegrationTestSupport {
             + "seulement ; aucune rubrique des travaux dans une fiche de fournitures, ni l'inverse")
     void chargement() throws Exception {
         assertThat(travaux.rejets()).isEmpty();
-        assertThat(travaux.crees()).hasSize(157);   // 02/10 (recette du MEN, §B3.2) : + B05-GQ-04, B05-VR-02, B08-RE-04, B08-MR-05/06, B09-PE-03   // lot D4 : + 6 (B02-MW-04, B02-LT-06/07, B04-VL-02, B05-GE-05, B09-BT-01) ;
+        assertThat(travaux.crees()).hasSize(163);   // V59 (02/10, seuils calculés) : + B03-QT-15 à 20 ;   02/10 (recette du MEN, §B3.2) : + B05-GQ-04, B05-VR-02, B08-RE-04, B08-MR-05/06, B09-PE-03   // lot D4 : + 6 (B02-MW-04, B02-LT-06/07, B04-VL-02, B05-GE-05, B09-BT-01) ;
         // 01/10 (DAO du MEN) : + B03-QT-12/13/14, + B02-AU-07 et B06-EO-07 venus du fichier des fournitures
         assertThat(travauxCc.rejets()).isEmpty();
         assertThat(travauxCc.crees()).hasSize(117);
@@ -138,7 +149,7 @@ class FicheDaoTravauxIntegrationTest extends CnmIntegrationTestSupport {
 
         remplirObligatoiresEtValider(idDmc, "QUANTITE_FIXE", "TRAVAUX", Map.of("B02-LT-03", "Tranche ferme : gros œuvre"));
         List<String> types = JsonPath.read(documents(idDmc), "$[*].type");
-        assertThat(types).containsExactly("DPAO", "DPAO", "CCAP", "CCAP", "AE", "AE", "A1", "A1");   // V46 : fiche A1 exigée (B04-CD-01), gabarit provisoire
+        assertThat(types).containsExactly("DPAO", "DPAO", "CCAP", "CCAP", "AE", "AE", "A1", "A1", "BP");   // V59 : + le bordereau des prix et DQE (xlsx)   // V46 : fiche A1 exigée (B04-CD-01), gabarit provisoire
     }
 
     @Test
@@ -148,7 +159,7 @@ class FicheDaoTravauxIntegrationTest extends CnmIntegrationTestSupport {
         cadrage(idDmc, "{\"attributaires\":\"MONO\",\"groupement\":\"NON\",\"avance\":\"NON\"}");
         remplirObligatoiresEtValider(idDmc, "CONTRAT_CADRE", "TRAVAUX", Map.of());
         List<String> types = JsonPath.read(documents(idDmc), "$[*].type");
-        assertThat(types).containsExactly("DPAC", "DPAC", "AE", "AE");
+        assertThat(types).containsExactly("DPAC", "DPAC", "AE", "AE", "BP");   // V59 : + le bordereau des prix et DQE
     }
 
     @Test
@@ -227,12 +238,14 @@ class FicheDaoTravauxIntegrationTest extends CnmIntegrationTestSupport {
                 .containsExactly("Comptable assignataire des paiements (désignation seule)");
         assertThat(JsonPath.<List<String>>read(ref, "$.champs[?(@.code=='B02-MW-04')].libelle").get(0)).endsWith("(laisser vide s'il n'y en a pas)");
         java.util.Map<String, String> crees = new java.util.LinkedHashMap<>();
-        for (String code : List.of("B05-GQ-04", "B05-VR-02", "B08-RE-04", "B08-MR-05", "B08-MR-06", "B09-PE-03")) {
+        for (String code : List.of("B05-GQ-04", "B05-VR-02", "B08-RE-04", "B08-MR-05", "B09-PE-03")) {
             crees.put(code, JsonPath.<List<String>>read(ref, "$.champs[?(@.code=='" + code + "')].type").get(0));
         }
         assertThat(crees).containsExactly(java.util.Map.entry("B05-GQ-04", "TEXTE"), java.util.Map.entry("B05-VR-02", "TEXTE_LONG"),
                 java.util.Map.entry("B08-RE-04", "POURCENTAGE"), java.util.Map.entry("B08-MR-05", "NOMBRE"),
-                java.util.Map.entry("B08-MR-06", "TEXTE_LONG"), java.util.Map.entry("B09-PE-03", "POURCENTAGE"));
+                java.util.Map.entry("B09-PE-03", "POURCENTAGE"));
+        // ⚠️ V59 (02/10, DQE des travaux, §B1.5) — B08-MR-06 désactivé : le découpage du forfait se dérive des séries du DQE.
+        assertThat(JsonPath.<List<String>>read(ref, "$.champs[*].code")).doesNotContain("B08-MR-06");
         assertThat(JsonPath.<List<String>>read(ref, "$.champs[?(@.obligatoire==true)].code")).doesNotContainAnyElementsOf(crees.keySet());
 
         // ⚠️ 2026-10-02 (demande « gabarits ») — la phrase du modèle qui imprime le champ ; rien pour un paragraphe fait du
@@ -304,6 +317,227 @@ class FicheDaoTravauxIntegrationTest extends CnmIntegrationTestSupport {
                         new org.apache.poi.xwpf.extractor.XWPFWordExtractor(d)) {
             assertThat(ex.getText()).startsWith("B 2").contains("(heure locale)", "5 000 000 Ariary");
         }
+    }
+
+    @Test
+    @DisplayName("V59 (02/10, DQE des travaux, §B1) — prix unitaires (MTP) : le besoin s'ouvre aux travaux ; numéro de prix, "
+            + "série, quantités à deux décimales, 400 nominatifs ; classeur BP : séries, sous-totaux, récapitulation, prix en "
+            + "lettres et HT seuls ouverts, plafond de 001 en formule, liste des sous-détails ; ni LF ni TC ; fournitures inchangées")
+    void dqePrixUnitaires() throws Exception {
+        String ref = ref("typeMarche=QUANTITE_FIXE&categorie=TRAVAUX");
+        assertThat(JsonPath.<List<String>>read(ref, "$.blocs[?(@.code=='B12')].rendu")).containsExactly("BESOIN");
+        assertThat(JsonPath.<List<String>>read(ref, "$.blocs[?(@.code=='B12')].rubriques[*].code")).containsExactly("B12-DQ");
+        assertThat(JsonPath.<List<String>>read(ref, "$.blocs[?(@.code=='B12')].rubriques[*].libelle"))
+                .containsExactly("Détail quantitatif et estimatif, par lot");
+        assertThat(JsonPath.<List<String>>read(ref("typeMarche=QUANTITE_FIXE&categorie=FOURNITURES_SERVICES"),
+                "$.blocs[?(@.code=='B12')].rubriques[*].code")).containsExactly("B12-BE");
+
+        long idDmc = creerDmc(9901);
+        cadrage(idDmc, "{\"tranches\":\"NON\",\"groupement\":\"NON\",\"avance\":\"NON\",\"garantieSoumission\":\"NON\","
+                + "\"typePrix\":\"UNITAIRES\"}");
+        // 400 nominatifs : numéro de prix manquant, en double, série à deux intitulés, trois décimales, plafond hors 0-100.
+        dqe(idDmc, null, "[" + art("", "000", null, "Installation", "fft", "1", null, false, null) + "]")
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.erreurs[0].champ").value("articles[0].numeroPrix"));
+        dqe(idDmc, null, "[" + art("529", "500", "Ouvrages", "Déblais", "m³", "10", null, false, null) + ","
+                + art("529", "500", null, "Remblais", "m³", "10", null, false, null) + "]")
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.erreurs[0].champ").value("articles[1].numeroPrix"));
+        dqe(idDmc, null, "[" + art("529", "500", "Ouvrages", "Déblais", "m³", "10", null, false, null) + ","
+                + art("530", "500", "Ouvrages d'art", "Remblais", "m³", "10", null, false, null) + "]")
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.erreurs[0].champ").value("articles[1].serieLibelle"));
+        dqe(idDmc, null, "[" + art("529", "500", null, "Déblais", "m³", "10.125", null, false, null) + "]")
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.erreurs[0].champ").value("articles[0].quantite"));
+        dqe(idDmc, null, "[" + art("001", "000", null, "Installation", "fft", "1", null, false, "120") + "]")
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.erreurs[0].champ").value("articles[0].plafond"));
+
+        // Le DQE du MTP, en raccourci : trois séries, 001 soumis à sous-détail et plafonné à 10 %.
+        String lu = dqe(idDmc, null, "[" + art("001", "000", "Installation", "Installation de chantier", "fft", "1", null, true, "10") + ","
+                + art("529", "500", "Ouvrages", "Déblais", "m³", "2054.50", "Le mètre cube", false, null) + ","
+                + art("530", "500", null, "Remblais", "m³", "100", "Le mètre cube", false, null) + ","
+                + art("601", "600", "Chaussées", "Couche de base", "m²", "3000", "Le mètre carré", false, null) + "]")
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(lu, "$[*].numeroPrix")).containsExactly("001", "529", "530", "601");
+        assertThat(JsonPath.<List<String>>read(lu, "$[*].serieLibelle")).containsExactly("Installation", "Ouvrages", "Ouvrages", "Chaussées");
+        assertThat(JsonPath.<List<Number>>read(lu, "$[*].quantite")).extracting(Number::doubleValue).containsExactly(1.0, 2054.5, 100.0, 3000.0);
+        assertThat(JsonPath.<List<Boolean>>read(lu, "$[*].sousDetail")).containsExactly(true, false, false, false);
+        assertThat(JsonPath.<List<Object>>read(lu, "$[0].caracteristiques")).isEmpty();
+
+        remplirObligatoiresEtValider(idDmc, "QUANTITE_FIXE", "TRAVAUX", Map.of());
+        String docs = documents(idDmc);
+        assertThat(JsonPath.<List<String>>read(docs, "$[*].type")).contains("BP").doesNotContain("LF", "TC");
+        assertThat(JsonPath.<List<String>>read(docs, "$[?(@.type=='BP')].libelle"))
+                .containsExactly("Bordereau des prix et détail quantitatif et estimatif");
+        int idBp = JsonPath.<List<Integer>>read(docs, "$[?(@.type=='BP')].idDocument").get(0);
+        byte[] xlsx = mvc.perform(get("/api/fiches-marche/documents/" + idBp + "/contenu").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        try (org.apache.poi.xssf.usermodel.XSSFWorkbook wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook(
+                new java.io.ByteArrayInputStream(xlsx))) {
+            org.apache.poi.xssf.usermodel.XSSFSheet f = wb.getSheetAt(0);
+            assertThat(f.getProtect()).isTrue();
+            List<String> entetes = new java.util.ArrayList<>();
+            f.getRow(4).forEach(c -> entetes.add(c.getStringCellValue()));
+            assertThat(entetes).containsExactly("N° de prix", "Désignation", "Unité", "Quantité", "Libellé du bordereau",
+                    "Prix unitaire en toutes lettres", "Prix unitaire HT", "Montant HT");
+            Map<String, Integer> lignes = new java.util.LinkedHashMap<>();
+            for (org.apache.poi.ss.usermodel.Row r : f) {
+                org.apache.poi.ss.usermodel.Cell c0 = r.getCell(0);
+                org.apache.poi.ss.usermodel.Cell c1 = r.getCell(1);
+                String cle = (c0 == null ? "" : c0.toString()) + "|" + (c1 == null || c1.getCellType()
+                        == org.apache.poi.ss.usermodel.CellType.FORMULA ? "" : c1.getStringCellValue());
+                lignes.putIfAbsent(cle, r.getRowNum());
+            }
+            org.apache.poi.ss.usermodel.Row deblais = f.getRow(lignes.get("529|Déblais"));
+            assertThat(deblais.getCell(3).getNumericCellValue()).isEqualTo(2054.5);
+            assertThat(deblais.getCell(4).getStringCellValue()).isEqualTo("Le mètre cube à :");
+            for (int c = 0; c <= 7; c++) {   // seules les colonnes du candidat sont ouvertes
+                assertThat(deblais.getCell(c).getCellStyle().getLocked()).as("colonne " + c).isEqualTo(c != 5 && c != 6);
+            }
+            assertThat(lignes).containsKeys("500|Ouvrages", "|Sous-total série 500 — Ouvrages", "|Récapitulation", "|Total HT");
+            // Des prix posés comme le ferait le candidat : sous-totaux, récapitulation et plafond se calculent.
+            Map<String, Double> prix = Map.of("001", 9_000_000.0, "529", 10_000.0, "530", 8_000.0, "601", 15_000.0);
+            for (org.apache.poi.ss.usermodel.Row r : f) {
+                org.apache.poi.ss.usermodel.Cell c0 = r.getCell(0);
+                if (c0 != null && prix.containsKey(c0.toString()) && r.getCell(3) != null) {
+                    r.getCell(6).setCellValue(prix.get(c0.toString()));
+                }
+            }
+            org.apache.poi.ss.usermodel.FormulaEvaluator ev = wb.getCreationHelper().createFormulaEvaluator();
+            ev.evaluateAll();
+            double ouvrages = 2054.5 * 10_000 + 100 * 8_000;
+            assertThat(f.getRow(lignes.get("|Sous-total série 500 — Ouvrages")).getCell(7).getNumericCellValue()).isEqualTo(ouvrages);
+            double ht = 9_000_000 + ouvrages + 3000 * 15_000;
+            assertThat(f.getRow(lignes.get("|Total HT")).getCell(7).getNumericCellValue()).isEqualTo(ht);
+            String plafond = null;
+            for (org.apache.poi.ss.usermodel.Row r : f) {
+                org.apache.poi.ss.usermodel.Cell c1 = r.getCell(1);
+                if (c1 != null && c1.getCellType() == org.apache.poi.ss.usermodel.CellType.FORMULA) {
+                    plafond = c1.getStringCellValue();
+                }
+            }
+            assertThat(plafond).isEqualTo("001 : 10 % au plus du montant des travaux — dépassé");   // 9 M > 10 % de 75,3 M
+            f.getRow(lignes.get("001|Installation de chantier")).getCell(6).setCellValue(5_000_000);
+            ev.clearAllCachedResultValues();
+            ev.evaluateAll();
+            for (org.apache.poi.ss.usermodel.Row r : f) {
+                org.apache.poi.ss.usermodel.Cell c1 = r.getCell(1);
+                if (c1 != null && c1.getCellType() == org.apache.poi.ss.usermodel.CellType.FORMULA) {
+                    plafond = c1.getStringCellValue();
+                }
+            }
+            assertThat(plafond).endsWith("— respecté");   // 5 M ≤ 10 % de 71,3 M
+            org.apache.poi.xssf.usermodel.XSSFSheet sd = wb.getSheet("Prix soumis à sous-détail");
+            assertThat(sd).isNotNull();
+            assertThat(sd.getRow(5).getCell(0).getStringCellValue()).isEqualTo("001");
+            assertThat(sd.getLastRowNum()).isEqualTo(5);
+        }
+
+        // Fournitures : les propriétés des travaux sont ignorées, la caractéristique reste exigée.
+        long fournitures = creerDmc(9903);
+        String f = dqe(fournitures, null, "[" + art("001", "000", "Installation", "Ordinateur", "U", "2", null, true, "10") + "]")
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Object>>read(f, "$[0].numeroPrix")).isNull();
+        assertThat(JsonPath.<Boolean>read(f, "$[0].sousDetail")).isFalse();
+    }
+
+    @Test
+    @DisplayName("V59 (02/10, DQE des travaux, §B1.4) — prix forfaitaire (MEN), deux lots : BESOIN_INCOMPLET par lot vide et "
+            + "par quantité nulle, sans caractéristique exigée ; un BP par lot, sans colonne des lettres ; la révision copie le DQE")
+    void dqeForfaitParLot() throws Exception {
+        long idDmc = creerDmc(9904);
+        cadrage(idDmc, "{\"tranches\":\"NON\",\"groupement\":\"NON\",\"avance\":\"NON\",\"garantieSoumission\":\"NON\","
+                + "\"typePrix\":\"FORFAITAIRE\"}");
+        String lot1 = "[" + art("0.1", "0", "Installation de chantier", "Installation", "fft", "1", null, false, null) + ","
+                + art("1.1", "1", "Terrassement", "Fouilles", "m³", "332.18", null, false, null) + ","
+                + art("1.2", "1", null, "Remblais", "m³", "0", null, false, null) + "]";
+        dqe(idDmc, 1, lot1).andExpect(status().isOk());
+        String fiche = mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.bloquants[?(@.regle=='BESOIN_INCOMPLET')].message"))
+                .containsExactlyInAnyOrder("L'article n° 1.2 du lot 1 (« Remblais ») n'a pas de quantité positive.",
+                        "Le lot 2 n'a aucun article.");
+        String complet = lot1.replace("\"quantite\":0", "\"quantite\":12.5");
+        dqe(idDmc, 1, complet).andExpect(status().isOk());
+        dqe(idDmc, 2, complet).andExpect(status().isOk());   // le MEN répète le même DQE au lot 2 (H2 : numéros uniques par lot)
+        fiche = mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.ok[?(@.regle=='BESOIN_INCOMPLET')].message").get(0))
+                .startsWith("Détail quantitatif et estimatif complet");
+
+        remplirObligatoiresEtValider(idDmc, "QUANTITE_FIXE", "TRAVAUX", Map.of());
+        String docs = documents(idDmc);
+        assertThat(JsonPath.<List<String>>read(docs, "$[?(@.type=='BP')].libelle")).containsExactly(
+                "Bordereau des prix et détail quantitatif et estimatif — lot 1", "Bordereau des prix et détail quantitatif et estimatif — lot 2");
+        int idBp = JsonPath.<List<Integer>>read(docs, "$[?(@.type=='BP')].idDocument").get(1);
+        byte[] xlsx = mvc.perform(get("/api/fiches-marche/documents/" + idBp + "/contenu").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        try (org.apache.poi.xssf.usermodel.XSSFWorkbook wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook(
+                new java.io.ByteArrayInputStream(xlsx))) {
+            List<String> entetes = new java.util.ArrayList<>();
+            wb.getSheetAt(0).getRow(4).forEach(c -> entetes.add(c.getStringCellValue()));
+            assertThat(entetes).containsExactly("N° de prix", "Désignation", "Unité", "Quantité", "Prix unitaire HT", "Montant HT");
+            assertThat(wb.getNumberOfSheets()).isEqualTo(1);   // aucun prix soumis à sous-détail
+            assertThat(wb.getSheetAt(0).getRow(0).getCell(0).getStringCellValue()).endsWith("— lot 2");
+        }
+
+        mvc.perform(post("/api/fiches-marche/" + idDmc + "/reviser").header("Authorization", tokenPrmp)).andExpect(status().isOk());
+        String copie = mvc.perform(get("/api/fiches-marche/" + idDmc + "/articles").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(copie, "$[*].numeroPrix")).containsExactly("0.1", "1.1", "1.2", "0.1", "1.1", "1.2");
+        assertThat(JsonPath.<List<String>>read(copie, "$[*].serieLibelle")).containsOnly("Installation de chantier", "Terrassement");
+    }
+
+    @Test
+    @DisplayName("V59 (02/10, §B2) — seuils calculés : liquidité en montant ET en pourcentage, moyenne du chiffre d'affaires "
+            + "incomplète, cumul des références sans montant → bloquants ; complétés, la fiche se valide")
+    void seuilsCalcules() throws Exception {
+        String ref = ref("typeMarche=QUANTITE_FIXE&categorie=TRAVAUX");
+        assertThat(JsonPath.<List<String>>read(ref, "$.champs[?(@.code=='B03-QT-07')].libelle"))
+                .containsExactly("Chiffre d'affaires minimum exigé (Ariary)");
+        assertThat(JsonPath.<List<String>>read(ref, "$.champs[?(@.code=~/B03-QT-(1[5-9]|20)/)].type"))
+                .containsExactly("POURCENTAGE", "NOMBRE", "NOMBRE", "TEXTE", "NOMBRE", "MONTANT");
+        assertThat(JsonPath.<List<String>>read(ref, "$.champs[?(@.code=='B03-QT-18')].valeurDefaut"))
+                .containsExactly("travaux de construction");
+
+        long idDmc = creerDmc(9901);
+        cadrage(idDmc, "{\"tranches\":\"NON\",\"groupement\":\"NON\",\"avance\":\"NON\",\"garantieSoumission\":\"NON\"}");
+        remplirObligatoires(idDmc, "QUANTITE_FIXE", "TRAVAUX", Map.of("B03-QT-14", "100000000", "B03-QT-15", "10",
+                "B03-QT-16", "3", "B03-QT-19", "3", "B03-QT-18", "travaux routiers"));
+        String fiche = mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.bloquants[*].regle"))
+                .contains("LIQUIDITE_DOUBLE", "CA_MOYENNE", "REFERENCES_CUMUL");
+        assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.bloquants[?(@.regle=='CA_MOYENNE')].message"))
+                .anyMatch(m -> m.contains("vont ensemble")).anyMatch(m -> m.contains("Chiffre d'affaires minimum exigé"));
+
+        Map<String, String> b03 = valeursDuBloc(idDmc, "B03", Map.of("B03-QT-17", "5", "B03-QT-07", "5000000000",
+                "B03-QT-20", "2500000000"));
+        b03.remove("B03-QT-14");   // la liquidité en pourcentage seule (MTP : 10 % de l'offre)
+        mvc.perform(put("/api/fiches-marche/" + idDmc + "/blocs/B03").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"valeurs\":" + new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(b03) + "}"))
+                .andExpect(status().isOk());
+        fiche = mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.bloquants[*].regle"))
+                .doesNotContain("LIQUIDITE_DOUBLE", "CA_MOYENNE", "REFERENCES_CUMUL");
+        assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.ok[*].regle"))
+                .contains("LIQUIDITE_DOUBLE", "CA_MOYENNE", "REFERENCES_CUMUL");
+        besoinDeTest(idDmc);
+        mvc.perform(post("/api/fiches-marche/" + idDmc + "/valider").header("Authorization", tokenPrmp)).andExpect(status().isOk());
+    }
+
+    /** ⚠️ V59 — un article de travaux en JSON ({@code null} : propriété absente). */
+    private static String art(String numero, String serie, String serieLibelle, String designation, String unite,
+            String quantite, String libelleBordereau, boolean sousDetail, String plafond) {
+        return "{\"numeroPrix\":\"" + numero + "\",\"serie\":\"" + serie + "\""
+                + (serieLibelle == null ? "" : ",\"serieLibelle\":\"" + serieLibelle + "\"")
+                + ",\"designation\":\"" + designation + "\",\"unite\":\"" + unite + "\",\"quantite\":" + quantite
+                + (libelleBordereau == null ? "" : ",\"libelleBordereau\":\"" + libelleBordereau + "\"")
+                + ",\"sousDetail\":" + sousDetail + (plafond == null ? "" : ",\"plafond\":" + plafond)
+                + ",\"caracteristiques\":[]}";
+    }
+
+    private org.springframework.test.web.servlet.ResultActions dqe(long idDmc, Integer lot, String articles) throws Exception {
+        return mvc.perform(put("/api/fiches-marche/" + idDmc + "/articles" + (lot == null ? "" : "?lot=" + lot))
+                .header("Authorization", tokenPrmp).contentType(JSON).content("{\"articles\":" + articles + "}"));
     }
 
     /** Les valeurs actuelles d'un bloc, modifiées : un PUT de bloc remplace le bloc entier. */

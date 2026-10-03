@@ -24,14 +24,20 @@ B03-QT-03;Capacité financière;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE
 B03-QT-04;Marchés similaires réalisés au cours des trois dernières années;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;non
 B03-QT-05;Communautés locales et organisations non gouvernementales admises;OUI_NON;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui
 B03-QT-06;Qualifications particulières requises;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui
-B03-QT-07;Chiffre d'affaires annuel minimum exigé pour des travaux de construction (Ariary);MONTANT;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;MONTANT_POSITIF;;;;oui;;
+B03-QT-07;Chiffre d'affaires minimum exigé (Ariary);MONTANT;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;MONTANT_POSITIF,CA_MOYENNE:CA;;;;oui;;
 B03-QT-08;Projet de nature et de complexité comparables réalisé comme entrepreneur principal;TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui;oui;
 B03-QT-09;Forme sous laquelle l'entrepreneur disposera du matériel (propriété, location…);TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
 B03-QT-10;Années d'expérience exigées du directeur des travaux;NOMBRE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui
 B03-QT-11;Préférence nationale accordée aux candidats;OUI_NON;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;non
 B03-QT-12;Période de référence des marchés similaires (années);NOMBRE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui;;5
 B03-QT-13;Personnel clé exigé (fonctions, diplômes, années d'expérience, justificatifs);TEXTE_LONG;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui;;
-B03-QT-14;Liquidité ou ligne de crédit bancaire minimale (Ariary);MONTANT;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;MONTANT_POSITIF;;;;oui;oui;
+B03-QT-14;Liquidité ou ligne de crédit bancaire minimale (Ariary);MONTANT;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;MONTANT_POSITIF,LIQUIDITE_DOUBLE:MONTANT;;;;oui;oui;
+B03-QT-15;Liquidité minimale en pourcentage du montant de l'offre;POURCENTAGE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;LIQUIDITE_DOUBLE:POURCENTAGE;;;;oui;oui;
+B03-QT-16;Nombre de meilleures années retenues pour le chiffre d'affaires moyen;NOMBRE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;CA_MOYENNE:MEILLEURES;;;;oui;non;
+B03-QT-17;Sur les n dernières années (chiffre d'affaires moyen);NOMBRE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;CA_MOYENNE:ANNEES;;;;oui;non;
+B03-QT-18;Domaine du chiffre d'affaires;TEXTE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui;non;travaux de construction
+B03-QT-19;Nombre maximal de marchés de référence cumulables;NOMBRE;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;REFERENCES_CUMUL:NOMBRE;;;;oui;non;
+B03-QT-20;Montant cumulé minimum des marchés de référence (Ariary);MONTANT;SAISIE;DPAO;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;MONTANT_POSITIF,REFERENCES_CUMUL:MONTANT;;;;oui;oui;
 B03-SU-01;Sous-traitance envisagée;OUI_NON;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;non
 B03-SU-02;Parts sous-traitées et sous-traitants proposés;TEXTE_LONG;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;non
 B03-NT-01;Comptable assignataire des paiements (désignation seule);TEXTE_LONG;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui;;
@@ -95,7 +101,7 @@ B08-MR-02;Modalités d'établissement des décomptes mensuels;TEXTE_LONG;SAISIE;
 B08-MR-03;Règlement des comptes d'un marché à prix unitaires;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;non
 B08-MR-04;Règlement des comptes d'un marché à prix forfaitaires;TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;non
 B08-MR-05;Délai de remise du projet de décompte mensuel (jours ouvrables);NOMBRE;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui;;
-B08-MR-06;Découpage du prix forfaitaire par poste ou corps d'état (un poste par ligne, avec son pourcentage);TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;oui;;
+B08-MR-06;Découpage du prix forfaitaire par poste ou corps d'état (un poste par ligne, avec son pourcentage);TEXTE_LONG;SAISIE;CCAP;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;non;;;;;;non;;
 B09-DT-01;Point de départ du marché;LISTE;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;À la notification de l'approbation à l'entrepreneur,À la notification de la décision d'affermissement de la tranche conditionnelle,À la notification de la tranche ferme au titulaire,À la notification de l'ordre de service de commencer les travaux;;;oui
 B09-DL-01;Délai d'exécution : commencement des travaux et fin du marché;TEXTE_LONG;SAISIE;DPAO;AE,CCAP;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;oui;oui;
 B09-DL-02;Période de préparation (jours);NOMBRE;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;TRAVAUX;;oui;;;;;;non

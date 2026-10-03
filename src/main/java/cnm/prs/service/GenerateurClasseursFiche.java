@@ -3,7 +3,10 @@ package cnm.prs.service;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.poi.ss.usermodel.BorderStyle;
 import org.apache.poi.ss.usermodel.Cell;
@@ -88,6 +91,164 @@ public class GenerateurClasseursFiche {
         }
     }
 
+    /**
+     * ⚠️ V59 (demande front du 2026-10-02, DQE des travaux, §B1.3) — le <strong>bordereau des prix et détail quantitatif
+     * et estimatif</strong> d'un lot de travaux. Les articles sont groupés par série (ordre de première apparition), chaque
+     * série ouverte par son intertitre et close par son sous-total ; une récapitulation par série en pied, puis total HT,
+     * TVA ({@code FICHE_TAUX_TVA}) et TTC — tout en formules. Seules les colonnes du candidat sont ouvertes : le prix
+     * unitaire HT et, à prix unitaires ou mixtes ({@code typePrix}), le prix unitaire en toutes lettres (les lettres font
+     * foi), précédé du libellé du bordereau (« Le mètre cube à : »). Un article plafonné reçoit une cellule de contrôle
+     * en formule (« respecté / dépassé ») : elle informe le candidat sans rien bloquer. Les prix soumis à sous-détail sont
+     * listés sur une seconde feuille.
+     */
+    public byte[] bordereauTravaux(String reference, String objet, Integer lot, List<BesoinFiche.Article> articles,
+            boolean aCommande, String typePrix, BigDecimal tauxTva) {
+        boolean lettres = "UNITAIRES".equalsIgnoreCase(typePrix) || "MIXTE".equalsIgnoreCase(typePrix);
+        try (XSSFWorkbook wb = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            Styles s = new Styles(wb);
+            XSSFSheet f = wb.createSheet(lot == null ? "Bordereau des prix - DQE" : "Bordereau DQE lot " + lot);
+            int r = entete(f, s, "Bordereau des prix et détail quantitatif et estimatif" + (lot == null ? "" : " — lot " + lot),
+                    reference, objet);
+            List<String> colonnes = new ArrayList<>(List.of("N° de prix", "Désignation", "Unité"));
+            colonnes.addAll(aCommande ? List.of("Quantité minimum", "Quantité maximum") : List.of("Quantité"));
+            if (lettres) {
+                colonnes.addAll(List.of("Libellé du bordereau", "Prix unitaire en toutes lettres"));
+            }
+            colonnes.add("Prix unitaire HT");
+            colonnes.addAll(aCommande ? List.of("Montant minimum HT", "Montant maximum HT") : List.of("Montant HT"));
+            ligneEntetes(f, s, r++, colonnes);
+            int colQte = 3;
+            int colPrix = colonnes.indexOf("Prix unitaire HT");
+            List<Integer> colsMontant = aCommande ? List.of(colPrix + 1, colPrix + 2) : List.of(colPrix + 1);
+            String prix = lettre(colPrix);
+            Map<String, List<BesoinFiche.Article>> series = new LinkedHashMap<>();
+            for (BesoinFiche.Article a : articles) {
+                series.computeIfAbsent(a.serie() == null ? "" : a.serie(), k -> new ArrayList<>()).add(a);
+            }
+            Map<String, Integer> sousTotaux = new LinkedHashMap<>();   // série → ligne Excel (base 1) de son sous-total
+            Map<String, String> libelles = new LinkedHashMap<>();
+            List<Map.Entry<BesoinFiche.Article, Integer>> lignes = new ArrayList<>();
+            for (Map.Entry<String, List<BesoinFiche.Article>> e : series.entrySet()) {
+                String libelle = e.getValue().stream().map(BesoinFiche.Article::serieLibelle)
+                        .filter(x -> x != null && !x.isBlank()).findFirst().orElse("");
+                libelles.put(e.getKey(), libelle);
+                Row titre = f.createRow(r++);
+                texte(titre, 0, e.getKey(), s.totalLibelle);
+                texte(titre, 1, libelle, s.totalLibelle);
+                int premiere = r + 1;
+                for (BesoinFiche.Article a : e.getValue()) {
+                    Row row = f.createRow(r);
+                    int ligne = r + 1;
+                    lignes.add(Map.entry(a, ligne));
+                    texte(row, 0, a.numeroPrix(), s.verrouille);
+                    texte(row, 1, a.designation(), s.verrouille);
+                    texte(row, 2, a.unite(), s.verrouille);
+                    if (aCommande) {
+                        decimal(row, colQte, a.quantiteMin(), s.quantite);
+                        decimal(row, colQte + 1, a.quantiteMax(), s.quantite);
+                    } else {
+                        decimal(row, colQte, a.quantite(), s.quantite);
+                    }
+                    if (lettres) {
+                        texte(row, colPrix - 2, a.libelleBordereau() == null ? "" : a.libelleBordereau() + " à :", s.verrouille);
+                        row.createCell(colPrix - 1).setCellStyle(s.saisieTexte);
+                    }
+                    row.createCell(colPrix).setCellStyle(s.saisie);
+                    for (int k = 0; k < colsMontant.size(); k++) {
+                        formule(row, colsMontant.get(k), lettre(colQte + k) + ligne + "*" + prix + ligne, s.montant);
+                    }
+                    r++;
+                }
+                int derniere = r;
+                Row st = f.createRow(r++);
+                texte(st, 1, "Sous-total série " + e.getKey() + (libelle.isEmpty() ? "" : " — " + libelle), s.totalLibelle);
+                for (int c : colsMontant) {
+                    formule(st, c, "SUM(" + lettre(c) + premiere + ":" + lettre(c) + derniere + ")", s.montant);
+                }
+                sousTotaux.put(e.getKey(), r);
+            }
+            r++;
+            texte(f.createRow(r++), 1, "Récapitulation", s.titre);
+            int premiereRecap = r + 1;
+            for (Map.Entry<String, Integer> e : sousTotaux.entrySet()) {
+                Row row = f.createRow(r++);
+                texte(row, 0, e.getKey(), s.verrouille);
+                texte(row, 1, libelles.get(e.getKey()), s.verrouille);
+                for (int c : colsMontant) {
+                    formule(row, c, lettre(c) + e.getValue(), s.montant);
+                }
+            }
+            int derniereRecap = r;
+            List<String> lettresMontant = colsMontant.stream().map(GenerateurClasseursFiche::lettre).toList();
+            r = total(f, s, r, 1, "Total HT", lettresMontant, c -> "SUM(" + c + premiereRecap + ":" + c + derniereRecap + ")");
+            int ligneHt = r;
+            if (tauxTva != null) {
+                String taux = tauxTva.stripTrailingZeros().toPlainString();
+                r = total(f, s, r, 1, "TVA (" + taux + " %)", lettresMontant, c -> c + ligneHt + "*" + taux + "/100");
+                int ligneTva = r;
+                r = total(f, s, r, 1, "Total TTC", lettresMontant, c -> c + ligneHt + "+" + c + ligneTva);
+            }
+            // À commande : le plafond se juge sur les montants maximum.
+            String montantRetenu = lettresMontant.get(lettresMontant.size() - 1);
+            boolean plafonds = false;
+            for (Map.Entry<BesoinFiche.Article, Integer> e : lignes) {
+                BesoinFiche.Article a = e.getKey();
+                if (a.plafond() == null) {
+                    continue;
+                }
+                if (!plafonds) {
+                    r++;
+                    texte(f.createRow(r++), 1, "Contrôle des prix plafonnés (information du candidat)", s.totalLibelle);
+                    plafonds = true;
+                }
+                String p = a.plafond().stripTrailingZeros().toPlainString();
+                Row row = f.createRow(r++);
+                formule(row, 1, "\"" + a.numeroPrix() + " : " + p.replace('.', ',') + " % au plus du montant des travaux — \"&IF("
+                        + montantRetenu + e.getValue() + "<=" + p + "/100*" + montantRetenu + ligneHt
+                        + ",\"respecté\",\"dépassé\")", s.verrouille);
+            }
+            int[] largeurs = new int[colonnes.size()];
+            for (int c = 0; c < colonnes.size(); c++) {
+                String nom = colonnes.get(c);
+                largeurs[c] = c == 1 ? 50 : nom.startsWith("Prix unitaire en") ? 36 : nom.startsWith("Libellé") ? 22
+                        : nom.startsWith("N°") ? 10 : "Unité".equals(nom) ? 8 : 18;
+            }
+            largeurs(f, largeurs);
+            f.protectSheet("");
+            List<BesoinFiche.Article> sousDetail = articles.stream().filter(BesoinFiche.Article::sousDetail).toList();
+            if (!sousDetail.isEmpty()) {
+                XSSFSheet g = wb.createSheet("Prix soumis à sous-détail");
+                int q = entete(g, s, "Liste des prix soumis à sous-détail" + (lot == null ? "" : " — lot " + lot), reference, objet);
+                ligneEntetes(g, s, q++, List.of("N° de prix", "Désignation", "Unité"));
+                for (BesoinFiche.Article a : sousDetail) {
+                    Row row = g.createRow(q++);
+                    texte(row, 0, a.numeroPrix(), s.verrouille);
+                    texte(row, 1, a.designation(), s.verrouille);
+                    texte(row, 2, a.unite(), s.verrouille);
+                }
+                largeurs(g, new int[] { 10, 60, 8 });
+                g.protectSheet("");
+            }
+            wb.write(out);
+            return out.toByteArray();
+        } catch (IOException e) {
+            throw new IllegalStateException("Génération du bordereau des prix et DQE impossible : " + e.getMessage(), e);
+        }
+    }
+
+    /** La lettre d'une colonne (0 → A). */
+    static String lettre(int colonne) {
+        return org.apache.poi.ss.util.CellReference.convertNumToColString(colonne);
+    }
+
+    private static void decimal(Row row, int col, BigDecimal v, CellStyle style) {
+        Cell c = row.createCell(col);
+        if (v != null) {
+            c.setCellValue(v.doubleValue());
+        }
+        c.setCellStyle(style);
+    }
+
     /** Le tableau de conformité d'un lot. */
     public byte[] conformite(String reference, String objet, Integer lot, List<BesoinFiche.Article> articles) {
         try (XSSFWorkbook wb = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
@@ -136,6 +297,8 @@ public class GenerateurClasseursFiche {
         final CellStyle saisie;
         final CellStyle montant;
         final CellStyle totalLibelle;
+        final CellStyle saisieTexte;
+        final CellStyle quantite;
 
         Styles(XSSFWorkbook wb) {
             Font gras = wb.createFont();
@@ -157,6 +320,11 @@ public class GenerateurClasseursFiche {
             montant.setDataFormat(wb.createDataFormat().getFormat("#,##0"));
             totalLibelle = bordure(wb.createCellStyle());
             totalLibelle.setFont(gras);
+            saisieTexte = bordure(wb.createCellStyle());   // ⚠️ V59 — le prix en toutes lettres
+            saisieTexte.setLocked(false);
+            saisieTexte.setWrapText(true);
+            quantite = bordure(wb.createCellStyle());   // ⚠️ V59 — quantités à deux décimales
+            quantite.setDataFormat(wb.createDataFormat().getFormat("#,##0.00"));
         }
 
         private static CellStyle bordure(CellStyle s) {
@@ -201,10 +369,10 @@ public class GenerateurClasseursFiche {
         }
     }
 
-    private static void nombre(Row row, int col, Integer v, CellStyle style) {
+    private static void nombre(Row row, int col, BigDecimal v, CellStyle style) {
         Cell c = row.createCell(col);
         if (v != null) {
-            c.setCellValue(v);
+            c.setCellValue(v.doubleValue());   // ⚠️ V59 — quantités décimales
         }
         c.setCellStyle(style);
     }

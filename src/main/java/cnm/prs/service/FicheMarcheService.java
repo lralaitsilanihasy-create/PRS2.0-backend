@@ -450,10 +450,11 @@ public class FicheMarcheService {
             throw new ChampsInvalidesException(erreurs);
         }
         FicheMarche fiche = brouillonOuNouvelle(ctx);
-        BesoinFiche.valider(recus, ctx.forme().name());
+        boolean travaux = CategorieDao.TRAVAUX.name().equals(ctx.codeCategorie());   // ⚠️ V59 — le DQE des travaux
+        BesoinFiche.valider(recus, ctx.forme().name(), travaux);
         besoin.remplacer(fiche.getIdFiche(), lot == null, lot, recus, ctx.forme().name(),
                 CurrentUser.ref().or(CurrentUser::login).orElse(null),
-                CurrentUser.profil().map(Enum::name).orElse(null));
+                CurrentUser.profil().map(Enum::name).orElse(null), travaux);
         fiche.setDateMaj(LocalDateTime.now());
         ficheRepository.save(fiche);
         return besoin.lister(fiche.getIdFiche());
@@ -471,10 +472,13 @@ public class FicheMarcheService {
         ficheRepository.save(fiche);
     }
 
-    /** Le besoin ne vaut, en V1, que pour les fournitures et services (travaux : DQE ; prestations intellectuelles : rien). */
+    /**
+     * Le besoin vaut pour les fournitures et services et, ⚠️ V59 (2026-10-02), pour les travaux (leur détail quantitatif
+     * et estimatif) ; pas pour les prestations intellectuelles.
+     */
     private static void exigerBesoinDansLePerimetre(Contexte ctx) {
-        if (!CategorieDao.FOURNITURES_SERVICES.name().equals(ctx.codeCategorie())) {
-            throw new BusinessRuleException("Le besoin par article ne vaut que pour les fournitures et services (catégorie "
+        if (!besoinApplicable(ctx)) {
+            throw new BusinessRuleException("Le besoin par article ne vaut que pour les fournitures et services et les travaux (catégorie "
                     + "de la fiche : " + ctx.codeCategorie() + ").", "BESOIN_HORS_PERIMETRE");
         }
     }
@@ -1358,7 +1362,8 @@ public class FicheMarcheService {
         // ⚠️ V45 (2026-09-25, §B4) — le besoin (fournitures) et le taux de garantie administrable entrent au bilan.
         ControlesFicheMarche.Besoin besoinBilan = besoinApplicable(ctx)
                 ? new ControlesFicheMarche.Besoin(besoin.articles(fiche.getIdFiche()),
-                        TypeMarcheDao.A_COMMANDE.name().equals(typeOuverture))
+                        TypeMarcheDao.A_COMMANDE.name().equals(typeOuverture),
+                        CategorieDao.TRAVAUX.name().equals(ctx.codeCategorie()))
                 : null;
         // ⚠️ V50 (2026-09-27, remise électronique) — le bilan lit aussi le mode, les paramètres administrables, les
         // paramètres internes et le responsable de la procédure (règles 1 à 11, mode électronique seulement).
@@ -1378,9 +1383,13 @@ public class FicheMarcheService {
                 internes.responsableDto(idDmc), internes.estTitulaire(idDmc), internes.etat(idDmc).name(), champsCalcules);
     }
 
-    /** ⚠️ V45 — le besoin par article vaut pour une fiche de fournitures et services (catégorie connue). */
+    /**
+     * ⚠️ V45 — le besoin par article vaut pour une fiche de fournitures et services (catégorie connue) ; ⚠️ V59
+     * (2026-10-02, §B1.1) — et pour une fiche de travaux.
+     */
     private static boolean besoinApplicable(Contexte ctx) {
-        return CategorieDao.FOURNITURES_SERVICES.name().equals(ctx.codeCategorie());
+        return CategorieDao.FOURNITURES_SERVICES.name().equals(ctx.codeCategorie())
+                || CategorieDao.TRAVAUX.name().equals(ctx.codeCategorie());
     }
 
     /** Le cadrage enregistré, sans l'ancienne clé {@code typeMarche} (lot 1c : elle n'est plus une réponse). */

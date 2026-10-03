@@ -1,5 +1,7 @@
 package cnm.prs.entity;
 
+import java.math.BigDecimal;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -46,18 +48,38 @@ public class FicheArticle {
     @Column(name = "UNITE", nullable = false, length = 20)
     private String unite;
 
-    @Column(name = "QUANTITE_MIN")
-    private Integer quantiteMin;
+    // ⚠️ V59 (2026-10-02, DQE des travaux) — quantités à deux décimales.
+    @Column(name = "QUANTITE_MIN", precision = 15, scale = 2)
+    private BigDecimal quantiteMin;
 
-    @Column(name = "QUANTITE_MAX")
-    private Integer quantiteMax;
+    @Column(name = "QUANTITE_MAX", precision = 15, scale = 2)
+    private BigDecimal quantiteMax;
 
-    @Column(name = "QUANTITE")
-    private Integer quantite;
+    @Column(name = "QUANTITE", precision = 15, scale = 2)
+    private BigDecimal quantite;
 
     @Column(name = "REDIGE_PAR", length = 50)
     private String redigePar;
 
     @Column(name = "PROFIL_REDACTEUR", length = 30)
     private String profilRedacteur;
+
+    // ⚠️ V59 (2026-10-02, DQE des travaux) — ce qu'un article de travaux porte de plus ; hors travaux : null / false.
+    @Column(name = "NUMERO_PRIX", length = 10)
+    private String numeroPrix;
+
+    @Column(name = "SERIE", length = 10)
+    private String serie;
+
+    @Column(name = "SERIE_LIBELLE", length = 200)
+    private String serieLibelle;
+
+    @Column(name = "LIBELLE_BORDEREAU", length = 200)
+    private String libelleBordereau;
+
+    @Column(name = "SOUS_DETAIL", nullable = false)
+    private boolean sousDetail;
+
+    @Column(name = "PLAFOND", precision = 5, scale = 2)
+    private BigDecimal plafond;
 }

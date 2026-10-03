@@ -1,5 +1,6 @@
 package cnm.prs.dto;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 import lombok.AllArgsConstructor;
@@ -14,6 +15,11 @@ import lombok.NoArgsConstructor;
  * bordereau ; à l'écriture, c'est la <strong>position dans la liste</strong> qui fait foi (1, 2, 3… par lot). Quantités :
  * {@code quantiteMin} et {@code quantiteMax} pour un marché à commande, {@code quantite} pour la quantité fixe et le
  * contrat-cadre. {@code redigePar} / {@code profilRedacteur} : lecture seule, posés par le serveur.</p>
+ *
+ * <p>⚠️ V59 (2026-10-02, DQE des travaux, §B1.2) — quantités à deux décimales ; pour un article de <strong>travaux</strong> :
+ * {@code numeroPrix} (unique dans le lot), {@code serie} et {@code serieLibelle} (le même pour toute la série du lot),
+ * {@code libelleBordereau} (prix unitaires : « Le mètre cube »), {@code sousDetail}, {@code plafond} (au plus n % du
+ * montant des travaux). Hors travaux, ces propriétés sont ignorées à l'écriture et servies vides.</p>
  */
 @Data
 @NoArgsConstructor
@@ -25,12 +31,18 @@ public class ArticleBesoinDto {
     private Integer ordre;
     private String designation;
     private String unite;
-    private Integer quantiteMin;
-    private Integer quantiteMax;
-    private Integer quantite;
+    private BigDecimal quantiteMin;
+    private BigDecimal quantiteMax;
+    private BigDecimal quantite;
     private String redigePar;
     private String profilRedacteur;
     private List<Caracteristique> caracteristiques;
+    private String numeroPrix;
+    private String serie;
+    private String serieLibelle;
+    private String libelleBordereau;
+    private Boolean sousDetail;
+    private BigDecimal plafond;
 
     /** Une exigence technique de l'article (« Mémoire vive » : « 8 Go au minimum »). */
     @Data

@@ -775,6 +775,8 @@ abstract class CnmIntegrationTestSupport extends AbstractIntegrationTest {
         for (int n = 1; n <= (parLot ? nbLots : 1); n++) {
             articles.append(articles.length() == 0 ? "" : ",").append("{").append(parLot ? "\"lot\":" + n + "," : "")
                     .append("\"designation\":\"Article de test\",\"unite\":\"U\",\"quantiteMin\":1,\"quantiteMax\":2,")
+                    // ⚠️ V59 — un article de travaux porte son numéro de prix et sa série (ignorés hors travaux)
+                    .append("\"numeroPrix\":\"001\",\"serie\":\"000\",\"serieLibelle\":\"Installation\",")
                     .append("\"quantite\":1,\"caracteristiques\":[{\"libelle\":\"Caractéristique\",\"exigence\":\"Exigée\"}]}");
         }
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders

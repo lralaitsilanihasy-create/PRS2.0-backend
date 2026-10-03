@@ -41,6 +41,9 @@ import cnm.prs.enums.TypeChampFiche;
  * <tr><td>INTERETS_MORATOIRES_TAUX</td><td>TAUX (%), BANQUE (%)</td><td>avertissement</td></tr>
  * <tr><td>DELAI_PAIEMENT_75</td><td>DELAI (jours)</td><td>avertissement</td></tr>
  * <tr><td>ASSURANCE_DECENNALE (⚠️ 2026-10-02)</td><td>BATIMENT (oui/non), ASSURANCE (texte)</td><td>bloquant</td></tr>
+ * <tr><td>LIQUIDITE_DOUBLE (⚠️ V59)</td><td>MONTANT, POURCENTAGE (par lot)</td><td>bloquant</td></tr>
+ * <tr><td>CA_MOYENNE (⚠️ V59)</td><td>CA (montant), MEILLEURES, ANNEES (nombres)</td><td>bloquant</td></tr>
+ * <tr><td>REFERENCES_CUMUL (⚠️ V59)</td><td>NOMBRE, MONTANT (par lot)</td><td>bloquant</td></tr>
  * </table>
  */
 public final class ControlesFicheMarche {
@@ -60,6 +63,10 @@ public final class ControlesFicheMarche {
      * travaux de bâtiment seulement : le CCAP-T ne l'imprime que sous {@code BATIMENT}.
      */
     public static final String ASSURANCE_DECENNALE = "ASSURANCE_DECENNALE";
+    /** ⚠️ V59 (2026-10-02, §B2) — les seuils de qualification calculés du DPAO-T (clause 6.3). */
+    public static final String LIQUIDITE_DOUBLE = "LIQUIDITE_DOUBLE";
+    public static final String CA_MOYENNE = "CA_MOYENNE";
+    public static final String REFERENCES_CUMUL = "REFERENCES_CUMUL";
     /** ⚠️ V45 (2026-09-25) — le besoin et les garanties générées. */
     public static final String BESOIN_INCOMPLET = "BESOIN_INCOMPLET";
     public static final String QUANTITES_ORDRE = "QUANTITES_ORDRE";
@@ -119,7 +126,12 @@ public final class ControlesFicheMarche {
      * ⚠️ V45 (2026-09-25, formulaires du candidat, §B4) — le besoin d'une fiche de fournitures ({@code articles}), et si
      * le marché est à commande (quantités minimum et maximum).
      */
-    public record Besoin(List<BesoinFiche.Article> articles, boolean aCommande) {
+    public record Besoin(List<BesoinFiche.Article> articles, boolean aCommande, boolean travaux) {
+
+        /** Fournitures et services. */
+        public Besoin(List<BesoinFiche.Article> articles, boolean aCommande) {
+            this(articles, aCommande, false);
+        }
     }
 
     /**
@@ -225,6 +237,9 @@ public final class ControlesFicheMarche {
         interetsMoratoires(roles.get(INTERETS_MORATOIRES_TAUX), valeurs, avertissements, ok);
         delaiPaiement(roles.get(DELAI_PAIEMENT_75), valeurs, avertissements, ok);
         assuranceDecennale(roles.get(ASSURANCE_DECENNALE), valeurs, bloquants, ok);
+        liquiditeDouble(roles.get(LIQUIDITE_DOUBLE), valeurs, nbLots, bloquants, ok);
+        caMoyenne(roles.get(CA_MOYENNE), valeurs, nbLots, bloquants, ok);
+        referencesCumul(roles.get(REFERENCES_CUMUL), valeurs, nbLots, bloquants, ok);
         // ⚠️ V45 (2026-09-25, §B4) — le besoin, la garantie générée et son taux.
         besoin(besoin, nbLots, bloquants, ok);
         garantieManquante(roles.get(GARANTIE_MANQUANTE), valeurs, cadrage, bloquants, ok);
@@ -489,6 +504,126 @@ public final class ControlesFicheMarche {
         }
     }
 
+    // ------------------------------------------------------------------ règles V59 (seuils de qualification calculés)
+
+    /** La clé d'un champ pour le lot {@code n} (1…), ou sa clé nue s'il ne se saisit pas par lot. */
+    private static String cleDuLot(ChampFicheMarche c, int n, int nbLots) {
+        return LotsFiche.parLot(c, nbLots) ? LotsFiche.cle(c.getCode(), n) : c.getCode();
+    }
+
+    private static boolean renseigne(Map<String, String> valeurs, String cle) {
+        String v = valeurs.get(cle);
+        return v != null && !v.isBlank();
+    }
+
+    /**
+     * ⚠️ V59 (2026-10-02, §B2.1) — {@code LIQUIDITE_DOUBLE} (rôles {@code MONTANT}, {@code POURCENTAGE}) : la liquidité
+     * minimale s'exige en montant <strong>ou</strong> en pourcentage du montant de l'offre, pas les deux pour un même lot.
+     * Bloquant.
+     */
+    private static void liquiditeDouble(Map<String, ChampFicheMarche> r, Map<String, String> valeurs, int nbLots,
+            List<Controle> bloquants, List<Controle> ok) {
+        ChampFicheMarche montant = r == null ? null : r.get("MONTANT");
+        ChampFicheMarche pourcentage = r == null ? null : r.get("POURCENTAGE");
+        if (montant == null || pourcentage == null) {
+            return;
+        }
+        boolean evalue = false;
+        boolean double_ = false;
+        for (int n = 1; n <= Math.max(1, nbLots); n++) {
+            String m = cleDuLot(montant, n, nbLots);
+            String p = cleDuLot(pourcentage, n, nbLots);
+            boolean aM = renseigne(valeurs, m);
+            boolean aP = renseigne(valeurs, p);
+            evalue |= aM || aP;
+            if (aM && aP) {
+                double_ = true;
+                bloquants.add(new Controle(LIQUIDITE_DOUBLE, List.of(m, p), pourcentage.codeBloc(),
+                        "La liquidité minimale s'exige en montant ou en pourcentage de l'offre, pas les deux"
+                                + (LotsFiche.alloti(nbLots) ? " (lot " + n + ")" : "") + " : videz « " + montant.getLibelle()
+                                + " » ou « " + pourcentage.getLibelle() + " »."));
+            }
+            if (!LotsFiche.parLot(montant, nbLots) && !LotsFiche.parLot(pourcentage, nbLots)) {
+                break;
+            }
+        }
+        if (evalue && !double_) {
+            ok.add(new Controle(LIQUIDITE_DOUBLE, List.of(montant.getCode(), pourcentage.getCode()), pourcentage.codeBloc(),
+                    "Liquidité minimale exigée sous une seule forme."));
+        }
+    }
+
+    /**
+     * ⚠️ V59 (2026-10-02, §B2.2) — {@code CA_MOYENNE} (rôles {@code CA}, {@code MEILLEURES}, {@code ANNEES}) : le chiffre
+     * d'affaires en moyenne des n meilleures des m dernières années — n et m vont ensemble, n ≤ m, et seulement si le
+     * chiffre d'affaires minimum est renseigné. Bloquant.
+     */
+    private static void caMoyenne(Map<String, ChampFicheMarche> r, Map<String, String> valeurs, int nbLots,
+            List<Controle> bloquants, List<Controle> ok) {
+        ChampFicheMarche ca = r == null ? null : r.get("CA");
+        ChampFicheMarche meilleures = r == null ? null : r.get("MEILLEURES");
+        ChampFicheMarche annees = r == null ? null : r.get("ANNEES");
+        if (ca == null || meilleures == null || annees == null) {
+            return;
+        }
+        BigDecimal n = nombre(valeurs.get(meilleures.getCode()));
+        BigDecimal m = nombre(valeurs.get(annees.getCode()));
+        if (n == null && m == null) {
+            return;
+        }
+        List<String> champs = List.of(meilleures.getCode(), annees.getCode());
+        int avant = bloquants.size();
+        if (n == null || m == null) {
+            bloquants.add(new Controle(CA_MOYENNE, champs, meilleures.codeBloc(), "« " + meilleures.getLibelle() + " » et « "
+                    + annees.getLibelle() + " » vont ensemble : renseignez les deux, ou aucun."));
+        } else if (n.compareTo(m) > 0) {
+            bloquants.add(new Controle(CA_MOYENNE, champs, meilleures.codeBloc(), "Le chiffre d'affaires se calcule sur les "
+                    + n.toPlainString() + " meilleures des " + m.toPlainString() + " dernières années : il ne peut y avoir plus "
+                    + "de meilleures années que d'années."));
+        }
+        boolean caRenseigne = LotsFiche.cles(ca, nbLots).stream().anyMatch(k -> renseigne(valeurs, k));
+        if (!caRenseigne) {
+            bloquants.add(new Controle(CA_MOYENNE, List.of(ca.getCode()), ca.codeBloc(), "Un chiffre d'affaires en moyenne des "
+                    + "meilleures années exige son montant : renseignez « " + ca.getLibelle() + " »."));
+        }
+        if (bloquants.size() == avant) {
+            ok.add(new Controle(CA_MOYENNE, champs, meilleures.codeBloc(), "Chiffre d'affaires moyen : "
+                    + n.toPlainString() + " meilleures des " + m.toPlainString() + " dernières années."));
+        }
+    }
+
+    /**
+     * ⚠️ V59 (2026-10-02, §B2.3) — {@code REFERENCES_CUMUL} (rôles {@code NOMBRE}, {@code MONTANT}) : le nombre maximal de
+     * marchés cumulables et le montant cumulé minimum (par lot) vont ensemble. Bloquant.
+     */
+    private static void referencesCumul(Map<String, ChampFicheMarche> r, Map<String, String> valeurs, int nbLots,
+            List<Controle> bloquants, List<Controle> ok) {
+        ChampFicheMarche nombre = r == null ? null : r.get("NOMBRE");
+        ChampFicheMarche montant = r == null ? null : r.get("MONTANT");
+        if (nombre == null || montant == null) {
+            return;
+        }
+        boolean aNombre = renseigne(valeurs, nombre.getCode());
+        List<String> cles = LotsFiche.cles(montant, nbLots);
+        List<String> manquants = cles.stream().filter(k -> !renseigne(valeurs, k)).toList();
+        if (!aNombre && manquants.size() == cles.size()) {
+            return;
+        }
+        if (!aNombre) {
+            bloquants.add(new Controle(REFERENCES_CUMUL, List.of(nombre.getCode()), nombre.codeBloc(), "Un montant cumulé des "
+                    + "marchés de référence exige le nombre de marchés cumulables : renseignez « " + nombre.getLibelle() + " »."));
+        } else if (!manquants.isEmpty()) {
+            bloquants.add(new Controle(REFERENCES_CUMUL, manquants, montant.codeBloc(), "Un cumul de marchés de référence exige "
+                    + "son montant : renseignez « " + montant.getLibelle() + " »" + (LotsFiche.parLot(montant, nbLots)
+                            ? " pour " + (manquants.size() == 1 ? "le lot " : "les lots ")
+                                    + String.join(", ", manquants.stream().map(k -> String.valueOf(LotsFiche.lotDe(k))).toList())
+                            : "") + "."));
+        } else {
+            ok.add(new Controle(REFERENCES_CUMUL, List.of(nombre.getCode(), montant.getCode()), montant.codeBloc(),
+                    "Références : nombre de marchés cumulables et montant cumulé renseignés."));
+        }
+    }
+
     // ------------------------------------------------------------------ règles V45
 
     /**
@@ -517,22 +652,48 @@ public final class ControlesFicheMarche {
                 bloquants.add(new Controle(BESOIN_INCOMPLET, List.of(), BLOC_BESOIN, nomLot + " n'a aucun article."));
             }
             for (BesoinFiche.Article a : duLot) {
-                String nom = "L'article " + a.ordre() + (lot == null ? "" : " du lot " + lot) + " (« " + a.designation() + " »)";
-                if (a.caracteristiques() == null || a.caracteristiques().isEmpty()) {
+                String nom = "L'article " + (besoin.travaux() && a.numeroPrix() != null ? "n° " + a.numeroPrix() : a.ordre())
+                        + (lot == null ? "" : " du lot " + lot) + " (« " + a.designation() + " »)";
+                if (besoin.travaux()) {
+                    // ⚠️ V59 (2026-10-02, §B1.4) — un article du DQE : numéro de prix, série, unité, quantité positive ; la
+                    // caractéristique n'est pas exigée (les spécifications techniques des travaux sont une pièce rédigée).
+                    List<String> manque = new ArrayList<>();
+                    if (a.numeroPrix() == null || a.numeroPrix().isBlank()) {
+                        manque.add("de numéro de prix");
+                    }
+                    if (a.serie() == null || a.serie().isBlank()) {
+                        manque.add("de série");
+                    }
+                    if (a.unite() == null || a.unite().isBlank()) {
+                        manque.add("d'unité");
+                    }
+                    java.math.BigDecimal q = besoin.aCommande() ? a.quantiteMax() : a.quantite();
+                    if (q == null || q.signum() <= 0) {
+                        manque.add(besoin.aCommande() ? "de quantité maximum positive" : "de quantité positive");
+                    }
+                    if (!manque.isEmpty()) {
+                        complet = false;
+                        bloquants.add(new Controle(BESOIN_INCOMPLET, List.of(), BLOC_BESOIN,
+                                nom + " n'a pas " + String.join(", ", manque) + "."));
+                    }
+                } else if (a.caracteristiques() == null || a.caracteristiques().isEmpty()) {
                     complet = false;
                     bloquants.add(new Controle(BESOIN_INCOMPLET, List.of(), BLOC_BESOIN,
                             nom + " n'a aucune caractéristique exigée."));
                 }
                 if (besoin.aCommande() && a.quantiteMin() != null && a.quantiteMax() != null
-                        && a.quantiteMin() > a.quantiteMax()) {
+                        && a.quantiteMin().compareTo(a.quantiteMax()) > 0) {
                     bloquants.add(new Controle(QUANTITES_ORDRE, List.of(), BLOC_BESOIN, nom + " : la quantité minimum ("
-                            + a.quantiteMin() + ") dépasse la quantité maximum (" + a.quantiteMax() + ")."));
+                            + ValeursPpmService.montant(a.quantiteMin()) + ") dépasse la quantité maximum ("
+                            + ValeursPpmService.montant(a.quantiteMax()) + ")."));
                 }
             }
         }
         if (complet) {
-            ok.add(new Controle(BESOIN_INCOMPLET, List.of(), BLOC_BESOIN,
-                    "Besoin complet : chaque lot a ses articles, chaque article ses caractéristiques."));
+            ok.add(new Controle(BESOIN_INCOMPLET, List.of(), BLOC_BESOIN, besoin.travaux()
+                    ? "Détail quantitatif et estimatif complet : chaque lot a ses articles, chaque article son numéro de prix, "
+                            + "sa série, son unité et sa quantité."
+                    : "Besoin complet : chaque lot a ses articles, chaque article ses caractéristiques."));
         }
     }
 

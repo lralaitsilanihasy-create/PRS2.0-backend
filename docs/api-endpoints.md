@@ -4760,6 +4760,9 @@ l'Administrateur). Avant le premier enregistrement la fiche est **virtuelle** : 
 | `INTERETS_MORATOIRES_TAUX` | `TAUX`, `BANQUE` | avertissement |
 | `DELAI_PAIEMENT_75` | `DELAI` (jours) | avertissement |
 | ⚠️ 2026-10-02 `ASSURANCE_DECENNALE` | `BATIMENT` (`B09-BT-01`), `ASSURANCE` (`B09-AC-03`) — des travaux de bâtiment exigent l'assurance décennale ; hors bâtiment, rien | bloquant |
+| ⚠️ V59 `LIQUIDITE_DOUBLE` | `MONTANT` (`B03-QT-14`), `POURCENTAGE` (`B03-QT-15`), par lot — la liquidité minimale en montant **ou** en pourcentage de l'offre, pas les deux pour un même lot | bloquant |
+| ⚠️ V59 `CA_MOYENNE` | `CA` (`B03-QT-07`), `MEILLEURES` (`B03-QT-16`), `ANNEES` (`B03-QT-17`) — 16 et 17 vont ensemble, 16 ≤ 17, et seulement avec un chiffre d'affaires renseigné | bloquant |
+| ⚠️ V59 `REFERENCES_CUMUL` | `NOMBRE` (`B03-QT-19`), `MONTANT` (`B03-QT-20`, par lot) — le nombre de marchés cumulables et le montant cumulé (de chaque lot) vont ensemble | bloquant |
 
 Une règle dont un rôle n'a pas encore de champ (référentiel incomplet) **n'est pas évaluée** — ni bloquante, ni « ok ».
 
@@ -5128,6 +5131,74 @@ Demande front `demande-backend-2026-10-02-referentiel-travaux-routiers.md` ; scr
   - B1 / B2 sont rebranchés sur les champs des travaux (réponse du front, même jour) : montant `B05-GQ-03` (du lot),
     date limite `{{B04-OV-02.heureLocale}}`, validité **`{{DERIVE.validite-garantie}}`** = `B04-VO-01` + 30 jours (un
     nombre de jours ; pointillés sans validité des offres).
+
+### DQE des travaux et seuils de qualification calculés ⚠️ 2026-10-02 (V59)
+
+Demande front `demande-backend-2026-10-02-dqe-et-seuils-travaux.md` (chantier b, lots 1 et 2). Migration **V59** ;
+script `docs/referentiel/2026-10-02-dqe-et-seuils-travaux.sql`.
+
+**§B1 — Le DQE : le besoin ouvert aux travaux.**
+- `GET|PUT|DELETE /api/fiches-marche/{idDmc}/articles` vaut aussi pour la catégorie **TRAVAUX**, dans les trois types de
+  marché. Le cycle de vie est le même : version de fiche, figée à la validation, copiée à la révision, `PUT ?lot=` qui
+  remplace le lot. `BESOIN_HORS_PERIMETRE` (409) ne vise plus que les prestations intellectuelles.
+- Le bloc `B12` est servi aux travaux avec sa rubrique propre **`B12-DQ`**, « Détail quantitatif et estimatif, par
+  lot ». Les fournitures gardent `B12-BE`.
+- **Quantités à deux décimales** (`numeric(15,2)`), pour toutes les catégories. `quantite`, `quantiteMin` et
+  `quantiteMax` sont servies sans zéro inutile (`5`, `2054.5`). Trois décimales ou plus donnent un 400 nominatif.
+- Ce qu'un article de **travaux** porte en plus, dans `ArticleBesoinDto` :
+
+| propriété | type | règle à l'écriture |
+|---|---|---|
+| `numeroPrix` | texte ≤ 10 | obligatoire ; **unique dans le lot** (400 `articles[i].numeroPrix`) |
+| `serie` | texte ≤ 10 | obligatoire ; regroupe les articles |
+| `serieLibelle` | texte ≤ 200, facultatif | même `serie` ⇒ même intitulé dans le lot (400 `articles[i].serieLibelle`) ; il suffit qu'un seul article de la série le porte, le serveur le recopie sur les autres |
+| `libelleBordereau` | texte ≤ 200, facultatif | « Le mètre cube » ; imprimé au bordereau à prix unitaires ou mixtes |
+| `sousDetail` | booléen, défaut `false` | prix soumis à sous-détail |
+| `plafond` | pourcentage de 0 à 100, facultatif | « au plus n % du montant des travaux » (400 `articles[i].plafond` hors bornes) |
+
+  Hors travaux, ces propriétés sont **ignorées** à l'écriture et servies vides (`null`, `false`).
+- **`BESOIN_INCOMPLET` aux travaux** (bloquant) : chaque lot a au moins un article ; chaque article a un numéro de
+  prix, une série, une unité et une quantité **positive** (à commande : une quantité maximum positive). Message :
+  « L'article n° 1.2 du lot 1 (« Remblais ») n'a pas de quantité positive. » La caractéristique n'est pas exigée.
+- **Documents**, à la validation, par lot ayant des articles :
+  - **`BP` en xlsx**, intitulé « Bordereau des prix et détail quantitatif et estimatif » (« — lot n » sur une ligne
+    allotie). Les articles sont groupés par série, dans l'ordre de première apparition : chaque série a son intertitre
+    et son sous-total, puis viennent une récapitulation par série, le total HT, la TVA (`FICHE_TAUX_TVA`) et le TTC,
+    tous en formules.
+  - Seul le prix unitaire HT est ouvert. À prix unitaires ou mixtes (cadrage `typePrix`), deux colonnes s'y ajoutent :
+    « Libellé du bordereau » (« Le mètre cube à : »), verrouillée, et « Prix unitaire en toutes lettres », ouverte.
+  - Un article plafonné reçoit une ligne de contrôle en formule, sous les totaux : « 001 : 10 % au plus du montant des
+    travaux — respecté / dépassé », jugée sur le total HT (à commande : sur les montants maximum). Elle informe le
+    candidat et ne bloque rien.
+  - Les prix soumis à sous-détail sont listés sur une seconde feuille, « Prix soumis à sous-détail » (n° de prix,
+    désignation, unité). Elle est absente s'il n'y en a pas. La formule « prix = D × K1 / R » n'est pas tenue.
+  - **Ni `LF` ni `TC`** aux travaux.
+- **§B1.5 — `{{BESOIN.series}}`**, une ligne par série, dans l'ordre de première apparition :
+  « `500 — Ouvrages : ……… %` », l'intitulé omis s'il n'y en a pas. Les lignes sont séparées par de vrais sauts de
+  ligne.
+  - Ligne non allotie : les séries du besoin.
+  - Ligne allotie : une seule liste si tous les lots ont les mêmes séries (le MEN) ; sinon, une liste par lot, chacune
+    sous « Lot n : ».
+  - Un document établi par lot lit les séries de son lot.
+  - Sans DQE : pointillés.
+- `B08-MR-06` est **désactivé** : le découpage du forfait est dérivé du DQE. Ses valeurs restent lisibles. ⚠️ Tant que
+  le CCAP-T n'est pas recopié sur le nouveau jeton, l'article 16 imprime des pointillés à sa place.
+
+**§B2 — Seuils de qualification calculés** (DPAO-T, clause 6.3). Tous les champs sont facultatifs et de catégorie
+TRAVAUX ; les règles lisent leurs rôles dans la colonne `controle`.
+
+| champ | type | par lot | rôle |
+|---|---|---|---|
+| `B03-QT-07` « Chiffre d'affaires minimum exigé (Ariary) » (libellé revu) | MONTANT | non | `CA_MOYENNE:CA` |
+| `B03-QT-14` (existant) | MONTANT | oui | `LIQUIDITE_DOUBLE:MONTANT` |
+| `B03-QT-15` « Liquidité minimale en pourcentage du montant de l'offre » | POURCENTAGE | oui | `LIQUIDITE_DOUBLE:POURCENTAGE` |
+| `B03-QT-16` « Nombre de meilleures années retenues pour le chiffre d'affaires moyen » | NOMBRE | non | `CA_MOYENNE:MEILLEURES` |
+| `B03-QT-17` « Sur les n dernières années (chiffre d'affaires moyen) » | NOMBRE | non | `CA_MOYENNE:ANNEES` |
+| `B03-QT-18` « Domaine du chiffre d'affaires », défaut « travaux de construction » | TEXTE | non | — |
+| `B03-QT-19` « Nombre maximal de marchés de référence cumulables » | NOMBRE | non | `REFERENCES_CUMUL:NOMBRE` |
+| `B03-QT-20` « Montant cumulé minimum des marchés de référence (Ariary) » | MONTANT | oui | `REFERENCES_CUMUL:MONTANT` |
+
+Les règles sont décrites dans le tableau des contrôles (`LIQUIDITE_DOUBLE`, `CA_MOYENNE`, `REFERENCES_CUMUL`).
 
 ### Gabarits : la phrase du document qui imprime un champ ⚠️ 2026-10-02
 
@@ -5584,7 +5655,7 @@ officiels du pilote, qui seront remplis tels quels.
   autre → 400 `articles[i].lot`) ; sans `lot`, chaque article porte le sien (1 à `nbLots`). Ligne non allotie : ni
   `lot` (400 `lot`) ni lot d'article (400 `articles[i].lot`). `lot` hors du plan → 400 `lot`. Champs manquants ou trop
   longs, quantité négative → 400 `articles[i].…` / `articles[i].caracteristiques[j].…`. Catégorie autre que
-  fournitures → 409 **`BESOIN_HORS_PERIMETRE`** ; version validée → 409 `FICHE_VALIDEE`. « Dupliquer depuis le lot n »
+  fournitures → 409 **`BESOIN_HORS_PERIMETRE`** (⚠️ V59 : les travaux y sont admis, voir « DQE des travaux ») ; version validée → 409 `FICHE_VALIDEE`. « Dupliquer depuis le lot n »
   est un geste d'écran : relire le lot n, le renvoyer par `PUT ?lot=m`.
 - **Champs** (fichiers de correspondance et `docs/referentiel/2026-09-25-formulaires-du-candidat.sql`) : `B04-CD-01`
   devient **`LISTE_MULTIPLE`** (A1, A2, A3, A4), `B04-CD-02` une `LISTE` (C1, C2, C1 et C2), tous deux des trois

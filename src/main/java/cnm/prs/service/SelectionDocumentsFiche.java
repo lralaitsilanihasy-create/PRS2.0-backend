@@ -123,6 +123,8 @@ public final class SelectionDocumentsFiche {
                         && ModelesDao.couvertures(typeMarche, cat).stream().anyMatch(c -> "CCAP".equals(c.typeDocument()))
                         ? "Cahier des prescriptions spéciales"
                         : GARANTIES_TRAVAUX.containsKey(type) && "TRAVAUX".equals(cat) ? GARANTIES_TRAVAUX.get(type)[1]
+                        // ⚠️ V59 (2026-10-02, §B1.3) — le bordereau des travaux porte leur DQE.
+                        : "BP".equals(type) && "TRAVAUX".equals(cat) ? TITRE_BP_TRAVAUX
                         : titre(type);
         return t + (lot == null ? "" : " — lot " + lot);
     }
@@ -136,6 +138,9 @@ public final class SelectionDocumentsFiche {
     static final Map<String, String[]> GARANTIES_TRAVAUX = Map.of(
             "C1", new String[] { "B1", "Garantie bancaire de soumission (B1)" },
             "C2", new String[] { "B2", "Caution personnelle et solidaire de soumission (B2)" });
+
+    /** ⚠️ V59 (2026-10-02) — l'intitulé du bordereau des prix d'une fiche de travaux. */
+    public static final String TITRE_BP_TRAVAUX = "Bordereau des prix et détail quantitatif et estimatif";
 
     /** Le préfixe du nom de fichier d'un document : son type, ou ⚠️ 2026-10-02 B1 / B2 pour une garantie des travaux. */
     public static String prefixeFichier(String type, String categorie) {
@@ -346,8 +351,8 @@ public final class SelectionDocumentsFiche {
         return x == null || x.isBlank() ? null : x.trim();
     }
 
-    private static String entier(Integer n) {
-        return n == null ? "" : ValeursPpmService.montant(BigDecimal.valueOf(n));
+    private static String entier(BigDecimal n) {
+        return n == null ? "" : ValeursPpmService.montant(n);   // ⚠️ V59 — quantités à deux décimales
     }
 
     private static int rang(RubriqueFicheMarche r) {

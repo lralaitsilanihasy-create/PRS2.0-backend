@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -192,6 +193,53 @@ public final class FormulairesCandidat {
      * la fiche, rendus par l'appelant (clé complète). Plusieurs lignes : séparées par {@link #SEPARATEUR_LIGNES}.
      */
     public static final String PREFIXE_LETTRE = "LETTRE.";
+    /**
+     * ⚠️ V59 (2026-10-02, DQE des travaux, §B1.5) — le préfixe des jetons tirés du besoin : {@code {{BESOIN.series}}}, une
+     * ligne par série du DQE (« 500 — Ouvrages : ……… % »), rendue par l'appelant ({@link #seriesDuBesoin}). Un document
+     * établi par lot lit les séries de son lot ({@code BESOIN.series#n}) ; un document commun, celles de la ligne.
+     */
+    public static final String PREFIXE_BESOIN = "BESOIN.";
+    public static final String JETON_SERIES = "BESOIN.series";
+
+    /**
+     * Les valeurs du jeton {@code {{BESOIN.series}}} : par lot ({@code BESOIN.series#n}) et pour la ligne
+     * ({@code BESOIN.series}). Ligne allotie : la liste commune si tous les lots ont les mêmes séries (le MEN répète le même
+     * DQE), sinon une liste par lot, chacune sous « Lot n : ». Sans article de travaux (pas de série) : rien, le jeton
+     * s'imprime en pointillés.
+     */
+    public static Map<String, String> seriesDuBesoin(List<BesoinFiche.Article> articles, int nbLots) {
+        Map<String, String> m = new LinkedHashMap<>();
+        Map<Integer, List<String>> parLot = new java.util.TreeMap<>(java.util.Comparator.nullsFirst(Integer::compare));
+        Map<Integer, Map<String, String>> series = new LinkedHashMap<>();
+        for (BesoinFiche.Article a : articles == null ? List.<BesoinFiche.Article>of() : articles) {
+            if (a.serie() == null || a.serie().isBlank()) {
+                continue;
+            }
+            Map<String, String> duLot = series.computeIfAbsent(a.lot(), k -> new LinkedHashMap<>());
+            String libelle = a.serieLibelle() == null ? "" : a.serieLibelle();
+            duLot.merge(a.serie(), libelle, (x, y) -> x.isEmpty() ? y : x);
+        }
+        series.forEach((lot, duLot) -> parLot.put(lot, duLot.entrySet().stream()
+                .map(e -> e.getKey() + (e.getValue().isEmpty() ? "" : " — " + e.getValue()) + " : " + POINTILLES + " %")
+                .toList()));
+        if (parLot.isEmpty()) {
+            return m;
+        }
+        parLot.forEach((lot, lignes) -> {
+            if (lot != null) {
+                m.put(JETON_SERIES + "#" + lot, String.join("\n", lignes));
+            }
+        });
+        boolean identiques = parLot.values().stream().distinct().count() == 1;
+        if (!LotsFiche.alloti(nbLots) || identiques) {
+            m.put(JETON_SERIES, String.join("\n", parLot.values().iterator().next()));
+        } else {
+            List<String> blocs = new ArrayList<>();
+            parLot.forEach((lot, lignes) -> blocs.add("Lot " + lot + " :\n" + String.join("\n", lignes)));
+            m.put(JETON_SERIES, String.join("\n", blocs));
+        }
+        return m;
+    }
 
     private static final Pattern JETON = Pattern.compile("\\{\\{([^{}]+)}}");
     private static final Pattern MARQUEUR = Pattern.compile("\\{\\{(SI|FINSI):([A-Z0-9-]+)}}");
@@ -584,6 +632,12 @@ public final class FormulairesCandidat {
             if (nom.startsWith(PREFIXE_PARAM) || nom.startsWith(PREFIXE_LETTRE)) {
                 // ⚠️ 2026-10-01 (§B8.3) — un paramètre de l'application rendu par l'appelant ({@code PARAM.compte-dao}).
                 String v = publication.get(nom);
+                return v == null || v.isBlank() ? POINTILLES : v;
+            }
+            if (nom.startsWith(PREFIXE_BESOIN)) {
+                // ⚠️ V59 (§B1.5) — tiré du besoin par l'appelant : celui du lot pour un document par lot, sinon de la ligne.
+                String v = lot == null ? null : publication.get(nom + "#" + lot);
+                v = v != null ? v : publication.get(nom);
                 return v == null || v.isBlank() ? POINTILLES : v;
             }
             if (nom.startsWith(PREFIXE_AVIS)) {

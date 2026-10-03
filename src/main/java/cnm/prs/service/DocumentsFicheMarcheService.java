@@ -54,6 +54,9 @@ public class DocumentsFicheMarcheService {
 
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(DocumentsFicheMarcheService.class);
 
+    /** ⚠️ V59 — la catégorie dont le besoin est un DQE (bordereau des prix et DQE, ni LF ni TC). */
+    private static final String TRAVAUX = cnm.prs.enums.CategorieDao.TRAVAUX.name();
+
     /** Code stable du type de pièce « Dossier d'appel d'offres complet » (V38). */
     public static final String CODE_TYPE_PIECE = "DAO_COMPLET";
     /**
@@ -166,6 +169,8 @@ public class DocumentsFicheMarcheService {
         java.util.Set<String> remplaces = new java.util.HashSet<>();
         Map<String, String> parametresDocuments = parametresDocuments();
         int nbLots = Boolean.TRUE.equals(etat.getSaisieParLot()) && etat.getNbLots() != null ? etat.getNbLots() : 0;
+        // ⚠️ V59 (2026-10-02, DQE des travaux, §B1.5) — les séries du DQE, jeton {{BESOIN.series}} (découpage du forfait).
+        parametresDocuments.putAll(FormulairesCandidat.seriesDuBesoin(articles, nbLots));
         for (ModelesDao.Couverture c : couvertes) {
             remplaces.add(c.typeDocument());
             List<Integer> lots = new ArrayList<>();
@@ -195,7 +200,9 @@ public class DocumentsFicheMarcheService {
             }
         }
         modeles.removeIf(m -> remplaces.contains(m.type()));
-        DocumentFicheModele liste = SelectionDocumentsFiche.listeFournitures(etat, articles, validation);
+        // ⚠️ V59 — pas de liste des fournitures aux travaux : leur besoin est le DQE, chiffré dans le classeur BP.
+        DocumentFicheModele liste = TRAVAUX.equals(etat.getCategorie()) ? null
+                : SelectionDocumentsFiche.listeFournitures(etat, articles, validation);
         if (liste != null) {
             modeles.add(liste);
         }
@@ -251,7 +258,10 @@ public class DocumentsFicheMarcheService {
         } else {
             lots.add(null);
         }
-        for (String type : List.of("BP", "TC")) {
+        // ⚠️ V59 (2026-10-02, §B1.3) — travaux : le bordereau des prix et DQE seul (pas de tableau de conformité).
+        boolean travaux = TRAVAUX.equals(etat.getCategorie());
+        Object typePrix = etat.getCadrage() == null ? null : etat.getCadrage().get("typePrix");
+        for (String type : travaux ? List.of("BP") : List.of("BP", "TC")) {
             for (Integer lot : lots) {
                 List<BesoinFiche.Article> duLot = articles.stream().filter(a -> java.util.Objects.equals(a.lot(), lot)).toList();
                 if (duLot.isEmpty()) {
@@ -259,12 +269,16 @@ public class DocumentsFicheMarcheService {
                 }
                 byte[] contenu;
                 try {
-                    contenu = "BP".equals(type)
+                    contenu = travaux
+                            ? classeurs.bordereauTravaux(etat.getRefeDossier(), etat.getDesignationMarche(), lot, duLot,
+                                    aCommande, typePrix == null ? null : String.valueOf(typePrix), tva)
+                            : "BP".equals(type)
                             ? classeurs.bordereau(etat.getRefeDossier(), etat.getDesignationMarche(), lot, duLot, aCommande, tva)
                             : classeurs.conformite(etat.getRefeDossier(), etat.getDesignationMarche(), lot, duLot);
                 } catch (RuntimeException e) {
                     throw new GenerationDocumentsException("La génération du document « "
-                            + SelectionDocumentsFiche.titre(type, lot) + " » a échoué : la version n'est pas validée. "
+                            + SelectionDocumentsFiche.titre(type, lot, etat.getTypeMarche(), etat.getCategorie())
+                            + " » a échoué : la version n'est pas validée. "
                             + e.getMessage(), e);
                 }
                 produits.add(new Produit(type, "xlsx", nomFichier(type, etat.getRefeDossier(), etat.getIdDetail(), lot,
