@@ -359,6 +359,31 @@ class ModelesDaoTravauxTest {
                 .doesNotContain("annuel moyen", "montant cumulé", "du montant de son offre");
     }
 
+    @Test
+    @DisplayName("2026-10-03 (V60, texte validé par le pilote) — clause 6.3 (c) et (e) du DPAO-T : les listes du matériel et "
+            + "du personnel, puis le texte de B03-QT-09 / B03-QT-13 s'il est saisi ; texte seul : ni pointillés ni « (e) » vide")
+    void materielEtPersonnelDuDpao() {
+        FicheMarcheDto f = fiche(Map.of("typePrix", "UNITAIRES", "tranches", "NON", "avance", "NON", "garantieSoumission", "NON"));
+        f.getValeurs().put("B03-QT-09", "Propriété ou location justifiée");
+        Map<String, ChampFicheMarche> champs = new HashMap<>(champsMen());
+        String texteSeul = FormulairesCandidat.rendreModele("DPAO", null, f, champs, dao.modele("DPAO-T"), null).texte()
+                .replace(' ', ' ').replace(' ', ' ');
+        assertThat(texteSeul).containsSubsequence("des gros matériels et équipements essentiels ci-après :",
+                "Propriété ou location justifiée", "(d) proposer un directeur")
+                .doesNotContain("(e) proposer le personnel clé suivant", "ci-après : " + FormulairesCandidat.POINTILLES);
+        Map<String, String> jetons = MoyensFiche.jetons(
+                List.of(new cnm.prs.dto.MaterielExigeDto(null, null, "Camions bennes", "≥ 10 000 kg", 6, 4, false),
+                        new cnm.prs.dto.MaterielExigeDto(null, null, "Niveleuse", null, 1, 1, false)),
+                List.of(new cnm.prs.dto.PersonnelExigeDto(null, null, "Conducteur de travaux", 1, "Ingénieur BTP ou génie civil", 5,
+                        "travaux routiers", "CV et diplôme certifié", false)));
+        String listes = FormulairesCandidat.rendreModele("DPAO", null, f, champs, dao.modele("DPAO-T"), null, jetons).texte()
+                .replace(' ', ' ').replace(' ', ' ');
+        assertThat(listes).containsSubsequence("ci-après :", "- Camions bennes ≥ 10 000 kg : 6, dont au moins 4 en propre",
+                "- Niveleuse : 1, en propre", "Propriété ou location justifiée", "(d) proposer un directeur",
+                "(e) proposer le personnel clé suivant :", "- Conducteur de travaux (1) : ingénieur BTP ou génie civil ; au moins 5 "
+                        + "ans d'expérience en travaux routiers ; justificatifs : CV et diplôme certifié");
+    }
+
     private static Map<String, ChampFicheMarche> champsMen() {
         Map<String, ChampFicheMarche> m = new HashMap<>(champs());
         for (String[] t : List.of(new String[] {"B03-QT-12", "NOMBRE", "non"}, new String[] {"B03-QT-08", "TEXTE_LONG", "oui"},

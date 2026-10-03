@@ -5248,6 +5248,11 @@ Les profils sont ceux de la lecture et de l'écriture de la fiche. 409 `MOYENS_H
 - ⚠️ 2026-10-03 — **conditions des modèles** : une clé peut être pointée. `MOYENS.materiel`, `MOYENS.personnel` et
   `BESOIN.series` s'y lisent comme leur jeton : `renseigne` est vrai dès que la liste a une entrée. Exemple :
   `PERSONNEL-CLE` = `MOYENS.personnel renseigne ou B03-QT-13 renseigne`.
+- ⚠️ 2026-10-03 — **DPAO-T recopié** (front `1216dd9`, texte validé par le pilote). La clause 6.3 imprime :
+  - au (c) : la phrase du document type, puis `{{MOYENS.materiel}}` si la liste est remplie, puis `B03-QT-09` s'il est
+    saisi ;
+  - au (e) : « (e) proposer le personnel clé suivant : », si l'une des deux est remplie, puis `{{MOYENS.personnel}}`, puis
+    `B03-QT-13`.
 
 ### Gabarits : la phrase du document qui imprime un champ ⚠️ 2026-10-02
 
