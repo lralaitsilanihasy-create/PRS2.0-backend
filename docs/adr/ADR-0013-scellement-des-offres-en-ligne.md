@@ -141,6 +141,17 @@ offre en clair. Il n'y a pas de clé de procédure, ni de poste de cérémonie q
   `ParametresInternesDto`, `partDeSecours: { depositaire, etat }`, comme le front le propose. Le dépositaire est **à
   désigner** (question au juriste ; l'ARMP est une piste). Tant qu'il ne l'est pas, les lots 2 à 4 ne s'ouvrent pas.
 
+> ⚠️ **2026-10-04, lot 2 (V66).** La structure de la part de secours est fixée sans attendre le choix de l'organisme :
+> `depositaire { nom, organisme, fonction, contact }` sur les paramètres internes, règle 12 `SE_DEPOSITAIRE` bloquante en
+> remise électronique, `partDeSecours.etat` ∈ `A_DESIGNER` · `DESIGNE` · `PUBLIEE` · `VERIFIEE` · `PERDUE`. Seule la
+> **valeur** attend le juriste (question 1). La cérémonie, S1 à S4 et la garde de l'avis (`CEREMONIE_NON_CLOSE`) sont livrées
+> dans `docs/api-endpoints.md`, § *La cérémonie des clés et la procédure de secours S1 à S4 — V66*.
+>
+> **Q11 (décision du pilote du 2026-10-04)** : les détenteurs de parts sont les membres de la **commission d'appel
+> d'offres** désignés par la PRMP, pas les contrôleurs de la CNM de V50 / ADR-0010. Le §6 ci-dessus (« `membresCommission`
+> et `quorum` sont les entrées du partage ») reste vrai, mais `membresCommission` sera **dérivé de la CAO** par le lot 2a
+> (`demande-backend-2026-10-04-commission-appel-offres.md`), qui amendera l'ADR-0010.
+
 ### 7. Le stockage des offres chiffrées (question 6)
 
 - Les conteneurs vont sur **disque**, hors de la base, dans un répertoire configurable (`app.offres.repertoire`). Un

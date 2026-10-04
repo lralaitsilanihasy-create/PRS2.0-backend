@@ -26,9 +26,20 @@ import cnm.prs.service.ProceduresEnLigneService;
 public class ProceduresEnLigneController {
 
     private final ProceduresEnLigneService service;
+    private final cnm.prs.service.CeremonieService ceremonie;
 
-    public ProceduresEnLigneController(ProceduresEnLigneService service) {
+    public ProceduresEnLigneController(ProceduresEnLigneService service, cnm.prs.service.CeremonieService ceremonie) {
         this.service = service;
+        this.ceremonie = ceremonie;
+    }
+
+    /**
+     * ⚠️ Lot 2 (§B2.5) — les clés publiques de la cérémonie close, sans matricule ni nom : l'entrée du scellement (lot 3).
+     * 404 tant que la cérémonie n'est pas close, ou hors des critères de {@code GET /{idDmc}}.
+     */
+    @GetMapping("/{idDmc}/cles")
+    public cnm.prs.dto.CeremonieDto.ClesPubliques cles(@PathVariable Long idDmc) {
+        return ceremonie.clesPubliques(idDmc);
     }
 
     @GetMapping

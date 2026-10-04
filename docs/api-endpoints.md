@@ -6360,6 +6360,109 @@ champ `responsable`, ancienne → nouvelle valeur (matricules).
 | parametresInternes | `COMPLETS` · `INCOMPLETS` · `ABSENTS` — l'état seul, exposé à tous ceux qui lisent la fiche |
 | champsCalcules | les clés posées par le serveur (ci-dessus), à afficher en lecture seule « calculée » |
 
+### La cérémonie des clés et la procédure de secours S1 à S4 — V66 ⚠️ 2026-10-04
+
+Demande front `demande-backend-2026-10-04-ceremonie-des-cles.md` (soumission en ligne, lot 2) ; décision :
+`docs/adr/ADR-0013-scellement-des-offres-en-ligne.md` (§1, §3, §5, §6) ; migration **V66** (`t_ceremonie_cles`,
+`t_cle_detenteur`, `t_defi_cle`, dépositaire sur `t_parametre_interne_procedure`, paramètre
+`FICHE_SE_VERIFICATION_PART_JOURS`). **Le serveur ne fait aucune cryptographie à la main** : lecture SPKI et RSA-OAEP
+par la JCA, aucune dépendance de plus. Il **ne détient jamais une clé privée en clair** : il garde l'enveloppe d'un
+détenteur pour la lui rendre, et ne peut pas la lire.
+
+**Ce que le lot produit** : pour chaque procédure en remise électronique, `n = membres + 1` clés publiques (RSA-OAEP 3072,
+SHA-256), publiées par la procédure une fois la cérémonie **close**. Sans elles, aucun candidat ne pourrait sceller
+(lot 3) : la publication de l'avis l'exige (§B2.6).
+
+| Méthode | URL | Corps | Réponse | Statuts | Accès |
+|---|---|---|---|---|---|
+| GET | /api/fiches-marche/{idDmc}/ceremonie | — | `CeremonieDto` | 200, 403, 404 | responsable de la procédure, membres désignés |
+| POST | /api/fiches-marche/{idDmc}/ceremonie/cles | `CleCorps` | `DetenteurDto` | 201, 400 `CLE_INVALIDE` / `EMPREINTE_INVALIDE` / `ENVELOPPE_INVALIDE`, 403, 404, 409 `CEREMONIE_CLOSE` / `CLE_EXISTANTE` | membre, pour lui-même |
+| PUT | /api/fiches-marche/{idDmc}/ceremonie/cles | `CleCorps` | `DetenteurDto` (`remplacements + 1`) | 200, 400, 403, 404 | membre, pour lui-même |
+| GET | /api/fiches-marche/{idDmc}/ceremonie/cles/mienne | — | `EnveloppeDto` | 200, 403, 404 | le propriétaire seul |
+| POST | /api/fiches-marche/{idDmc}/ceremonie/cles/secours | `CleCorps` | `DetenteurDto` (`role = SECOURS`) | 201, 400, 403, 404, 409 `DEPOSITAIRE_ABSENT` / `CEREMONIE_CLOSE` / `CLE_EXISTANTE` | responsable |
+| PUT | /api/fiches-marche/{idDmc}/ceremonie/cles/secours | `CleCorps` | `DetenteurDto` | 200, 400, 403, 404, 409 `DEPOSITAIRE_ABSENT` | responsable |
+| GET | /api/fiches-marche/{idDmc}/ceremonie/cles/secours | — | `EnveloppeDto` | 200, 403, 404 | responsable |
+| POST | /api/fiches-marche/{idDmc}/ceremonie/cles/perdue[?role=SECOURS] | — | `DetenteurDto` (`etatPart = PERDUE`) | 200, 403, 404, 409 `CLE_ABSENTE` | membre ; responsable pour la part de secours |
+| POST | /api/fiches-marche/{idDmc}/ceremonie/cloturer | — | `CeremonieDto` (`etat = CLOSE`) | 200, 403, 404, 409 `CLES_INCOMPLETES` | responsable |
+| POST | /api/fiches-marche/{idDmc}/ceremonie/rouvrir | — | `CeremonieDto` (`etat = A_REFAIRE`) | 200, 403, 404, 409 `DEPOT_EXISTANT` | responsable |
+| POST | /api/fiches-marche/{idDmc}/ceremonie/defi[?role=SECOURS] | — | `{ idDefi, chiffre, expire }` | 201, 403, 404, 409 `CLE_ABSENTE` | membre ; responsable pour la part de secours |
+| POST | /api/fiches-marche/{idDmc}/ceremonie/defi/{idDefi} | `{ clair }` | `DetenteurDto` (`etatPart = VERIFIEE`) | 200, 403, 404, 409 `DEFI_EXPIRE` / `DEFI_ECHOUE` | le même appelant |
+| GET | /api/procedures-en-ligne/{idDmc}/cles | — | `ClesPubliquesDto` | 200, 404 | public |
+
+- **Le dépositaire de la part de secours** (§B1, ADR S3) n'est pas un compte : une désignation nominative portée par les
+  paramètres internes. `PUT …/parametres-internes` gagne `depositaire: { nom, organisme?, fonction?, contact? } | null`
+  (`nom` obligatoire s'il est donné, 400 sous `depositaire`). `ParametresInternesDto` gagne :
+  - `partDeSecours: { depositaire, etat }`, `etat` ∈ `A_DESIGNER` · `DESIGNE` · `PUBLIEE` · `VERIFIEE` · `PERDUE` — **hors
+    `nombreParts`**, qui reste le nombre de membres ;
+  - `avertissements: [{ regle, message }]`, distincts des `anomalies` (les refus) : `SE_QUORUM_MARGE` (§B3).
+  - Le journal dédié (Q7) reçoit le champ `depositaire` (« nom ; organisme ; fonction ; contact »).
+- **Règle 12, `SE_DEPOSITAIRE`** (bloquante, mode électronique) : « Aucun dépositaire de la part de secours n'est désigné : la
+  fiche ne peut pas être validée en remise électronique. » `etat = COMPLETS` l'exige (une anomalie `SE_DEPOSITAIRE` dans
+  `anomalies`) ; la règle 10 (`PARAMETRES_INTERNES_INCOMPLETS`) ne compte pas ce manque une seconde fois.
+- **S1, `SE_QUORUM_MARGE`** (avertissement, jamais bloquant) : « Le quorum est égal au nombre de membres : la perte d'une seule
+  part rendrait les offres illisibles. » Servi dans `ParametresInternesDto.avertissements` et `bilanControles.avertissements`.
+  La part de secours n'entre pas dans ce calcul.
+- **`CeremonieDto`** = `{ idDmc, etat, dateCeremoniePrevue, dateCloture, quorum, n, premierDepot, detenteurs, avertissements }` :
+  - `etat` ∈ `A_VENIR` (des clés manquent, jamais close) · `CLOSE` · `A_REFAIRE` (rouverte) ; `n = membres + 1` ;
+  - `premierDepot` : posé par le lot 3 à la première offre scellée ; toujours `false` au lot 2 ;
+  - `detenteurs` : les membres désignés dans l'ordre des paramètres internes, puis la part de secours ;
+  - `avertissements` : `SE_MARGE_EPUISEE` quand la cérémonie est **close** et que `disponibles ≤ quorum` (`disponibles` = parts
+    des membres ni `ABSENTE` ni `PERDUE` ; la part de secours n'y compte pas). Avec `quorum = membres`, il paraît dès la
+    clôture : c'est ce que S1 annonçait.
+- **`DetenteurDto`** = `{ role: MEMBRE | SECOURS, im, nom, empreinte, clePublique, datePublication, etatPart, derniereVerification,
+  remplacements }` : `etatPart` ∈ `ABSENTE` · `PUBLIEE` · `VERIFIEE` · `PERDUE` ; `empreinte` = SHA-256 de la forme SPKI de la clé
+  publique, hexadécimal minuscule ; `clePublique` = SPKI en base64 ; pour la part de secours, `im` est `null` et `nom` est
+  celui du dépositaire. **Jamais une enveloppe** dans ce DTO.
+- **Qui lit la cérémonie** : le responsable, et chaque membre désigné — il retrouve **sa** empreinte dans la liste (ADR §1 :
+  son contrôle contre un serveur qui glisserait une clé). Administrateur, PRMP, autres contrôleurs : 403. Pour eux, l'état
+  seul : **`FicheMarcheDto.ceremonie`** ∈ `A_VENIR` · `CLOSE` · `A_REFAIRE` · `null` (mode papier).
+- **`CleCorps`** = `{ clePublique, empreinte, enveloppe: EnveloppeDto }` ; **`EnveloppeDto`** = `{ chiffre, iv, sel, iterations, kdf,
+  algorithme }` — la clé privée PKCS#8 enveloppée (`wrapKey('pkcs8')`, AES-256-GCM, clé dérivée PBKDF2-SHA-256) ; `iv` et `sel`
+  en base64. Contrôles du serveur, dans l'ordre : SPKI lisible, RSA, **module de 3072 bits** (`CLE_INVALIDE`) ; empreinte
+  recalculée identique (`EMPREINTE_INVALIDE`) ; `chiffre`, `iv`, `sel` en base64, `iterations ≥ 600 000`, `kdf = PBKDF2-SHA-256`,
+  `algorithme = AES-256-GCM` (`ENVELOPPE_INVALIDE`). L'enveloppe n'est rendue qu'à son propriétaire (`/mienne` : 403 à tout
+  autre, responsable compris ; `/secours` : responsable seul).
+- **La part de secours** naît sur le poste du responsable, en présence du dépositaire (409 `DEPOSITAIRE_ABSENT` sans dépositaire
+  désigné). Le serveur ne reçoit jamais la phrase : elle est imprimée sur le pli scellé par le front.
+- **Clore** : 409 `CLES_INCOMPLETES` tant que les `n` clés ne sont pas publiées (ou si une part est `PERDUE`) — le message
+  **nomme les manquants** (« NOM Prénoms », « la part de secours ») ; 409 aussi si les paramètres internes n'ont pas deux
+  membres et un quorum. `dateCloture` est la date **effective**. Une cérémonie **close fige** `membresCommission`, `quorum`,
+  `dateCeremonie` et `depositaire` : `PUT …/parametres-internes` répond 409 **`CEREMONIE_CLOSE`** si l'un d'eux change (un
+  envoi à l'identique passe). La règle 8 (`SE_CEREMONIE`) continue de comparer la date **prévue** à la publication.
+- **Rouvrir** (S4) : toutes les parts repassent à `ABSENTE` (les lignes actives sont supprimées, le journal garde les
+  empreintes), `etat = A_REFAIRE`, les paramètres internes **redeviennent modifiables, fiche validée ou non** (⚠️ écart assumé à
+  V50 : c'est là qu'un membre qui quitte la commission se remplace ; le 409 `FICHE_VALIDEE` ne s'applique pas à une cérémonie
+  rouverte). Chaque membre republie, le responsable reclôt. 409 **`DEPOT_EXISTANT`** dès la première offre scellée.
+- **Remplacer sa clé** (S4), cérémonie close ou non : avant le premier dépôt, l'ancienne ligne est **supprimée** ; après, elle
+  est **archivée** (`DATE_ARCHIVAGE`), jamais supprimée — les offres scellées pour son empreinte en dépendent. `etatPart`
+  repasse à `PUBLIEE`, `derniereVerification` est effacée, `remplacements` compte.
+- **Les clés publiées aux candidats** : `ClesPubliquesDto` = `{ idDmc, quorum, n, algorithmes: ['AES-256-GCM',
+  'RSA-OAEP-3072-SHA256', 'SHAMIR-GF256'], dateCloture, detenteurs: [{ role, empreinte, clePublique }] }` — **sans matricule ni
+  nom**. 404 tant que la cérémonie n'est pas `CLOSE`, ou hors des critères de `GET /api/procedures-en-ligne/{idDmc}`. Après un
+  remplacement, la liste sert la nouvelle clé.
+- **§B2.6** : en mode électronique, `GET …/avis-specifique/disponibilite` porte la raison **`CEREMONIE_NON_CLOSE`** et
+  `POST …/avis-specifique` répond 409 `AVIS_INDISPONIBLE` avec `details.raison = CEREMONIE_NON_CLOSE` tant que la cérémonie
+  n'est pas close. Les **lettres d'invitation** (prestations intellectuelles) ont la même garde. La validation de la fiche,
+  elle, n'exige pas la cérémonie (question 2 au pilote).
+- **S2, le défi** : le serveur tire **32 octets**, les chiffre avec la clé publique du détenteur (RSA-OAEP, SHA-256, MGF1-SHA-256,
+  `OAEPParameterSpec` explicite) et garde leur SHA-256, **cinq minutes, à usage unique**. Le détenteur déverrouille sa clé dans son
+  navigateur et renvoie le clair en base64 ; la comparaison est en **temps constant**. Réussi : `VERIFIEE`, `derniereVerification`,
+  journal `defiReussi` ; échoué : 409 `DEFI_ECHOUE`, journal `defiEchoue`, la part ne change pas ; consommé ou périmé : 409
+  `DEFI_EXPIRE`. Un défi ne se répond que par celui qui l'a ouvert (403).
+- **Le rappel** : `FICHE_SE_VERIFICATION_PART_JOURS` (nouveau paramètre de `fiche-remise-electronique`, `verificationPartJours`,
+  défaut **7**, 400 si négatif) : autant de jours avant la date limite de remise (lue sur la fiche validée), chaque membre dont la
+  part n'est pas `VERIFIEE` depuis la clôture reçoit **`PART_A_VERIFIER`**, une fois par clôture. Traitement de nuit
+  (`app.ceremonie.cron-rappel`, 03 h 45).
+- **Déclarer sa part perdue** : `etatPart = PERDUE`, journal `clePerdue`, responsable notifié (`PART_PERDUE`), puis
+  `MARGE_QUORUM` si la marge est épuisée.
+- **Notifications** (`typeObjet = PROCEDURE`, `idObjet = idDmc`) : `CLE_A_PUBLIER` (chaque membre nouvellement désigné, et tous à la
+  réouverture), `CLES_PUBLIEES` (membres et PRMP du plan, à la clôture), `PART_A_VERIFIER`, `MARGE_QUORUM` et `PART_PERDUE`
+  (responsable).
+- **Journal dédié** (`t_parametre_interne_journal`) : `depositaire`, `clePubliee`, `cleRemplacee`, `clePerdue`, `defiReussi`,
+  `defiEchoue`, `ceremonieClose`, `ceremonieRouverte` — avec les **empreintes**, jamais une clé ni une enveloppe.
+
+---
+
 ---
 
 ## Marchés — dates prévisionnelles

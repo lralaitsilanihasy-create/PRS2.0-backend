@@ -51,4 +51,17 @@ public class ParametreInterneProcedure {
     /** Dernier modificateur (matricule du titulaire du rôle). */
     @Column(name = "IM_MAJ", length = 10)
     private String imMaj;
+
+    /** ⚠️ V66 (2026-10-04, soumission en ligne, lot 2, §B1) — le dépositaire de la part de secours (ADR-0013 S3) : une désignation nominative. */
+    @Column(name = "DEPOSITAIRE_NOM", length = 200)
+    private String depositaireNom;
+
+    @Column(name = "DEPOSITAIRE_ORGANISME", length = 200)
+    private String depositaireOrganisme;
+
+    @Column(name = "DEPOSITAIRE_FONCTION", length = 200)
+    private String depositaireFonction;
+
+    @Column(name = "DEPOSITAIRE_CONTACT", length = 300)
+    private String depositaireContact;
 }

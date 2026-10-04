@@ -102,6 +102,12 @@ public final class ControlesFicheMarche {
     public static final String SE_PRESTATAIRES = "SE_PRESTATAIRES";
     public static final String PARAMETRES_INTERNES_INCOMPLETS = "PARAMETRES_INTERNES_INCOMPLETS";
     public static final String RESPONSABLE_NON_DESIGNE = "RESPONSABLE_NON_DESIGNE";
+    /** ⚠️ V66 (2026-10-04, soumission en ligne, lot 2, §B1) — règle 12 : le dépositaire de la part de secours est désigné. */
+    public static final String SE_DEPOSITAIRE = "SE_DEPOSITAIRE";
+    /** ⚠️ V66 (lot 2, §B3, S1) — avertissement : le quorum égale le nombre de membres. */
+    public static final String SE_QUORUM_MARGE = "SE_QUORUM_MARGE";
+    /** ⚠️ V66 (lot 2, §B4) — avertissement de la cérémonie : parts disponibles ≤ quorum. */
+    public static final String SE_MARGE_EPUISEE = "SE_MARGE_EPUISEE";
     private static final String BLOC_REMISE = "B04";
 
     /** Libellés CAPM du plan dont les dates entrent dans {@code DATES_ORDRE} à défaut de champ. */
@@ -271,6 +277,9 @@ public final class ControlesFicheMarche {
             sePrestataires(roles.get(SE_PRESTATAIRES), valeurs, bloquants, ok);
             parametresInternes(se.internes(), publication, bloquants, ok);
             responsable(se.responsableDesigne(), bloquants, ok);
+            // ⚠️ V66 (2026-10-04, soumission en ligne, lot 2) — règle 12 (dépositaire, bloquante) et S1 (marge, avertissement).
+            depositaire(se.internes(), bloquants, ok);
+            quorumMarge(se.internes(), avertissements);
         }
 
         return new BilanControlesDto(bloquants, avertissements, ok, nbSaisis, nbAttendus);
@@ -496,11 +505,30 @@ public final class ControlesFicheMarche {
     /** Règle 10 — {@code PARAMETRES_INTERNES_INCOMPLETS} : l'écran des paramètres internes n'est pas complet ou invalide. */
     private static void parametresInternes(RemiseElectronique.Internes i, LocalDateTime publication,
             List<Controle> bloquants, List<Controle> ok) {
-        if (RemiseElectronique.etat(i, publication) == RemiseElectronique.Etat.COMPLETS) {
+        // ⚠️ V66 — le dépositaire manquant a sa propre règle (12) : il ne compte pas deux fois.
+        boolean complets = RemiseElectronique.anomalies(i, publication).stream().allMatch(a -> SE_DEPOSITAIRE.equals(a.regle()));
+        if (complets) {
             ok.add(new Controle(PARAMETRES_INTERNES_INCOMPLETS, List.of(), BLOC_REMISE, "Paramètres internes de la procédure complets."));
         } else {
             bloquants.add(new Controle(PARAMETRES_INTERNES_INCOMPLETS, List.of(), BLOC_REMISE,
                     "Les paramètres internes de la procédure sont incomplets : à compléter par le responsable de la procédure."));
+        }
+    }
+
+    /** ⚠️ V66 — règle 12, {@code SE_DEPOSITAIRE} : le dépositaire de la part de secours est désigné (ADR-0013 S3). Bloquante. */
+    private static void depositaire(RemiseElectronique.Internes i, List<Controle> bloquants, List<Controle> ok) {
+        if (i != null && i.depositaire() != null) {
+            ok.add(new Controle(SE_DEPOSITAIRE, List.of(), BLOC_REMISE, "Dépositaire de la part de secours désigné : "
+                    + i.depositaire().nom() + (i.depositaire().organisme() == null ? "" : " (" + i.depositaire().organisme() + ")") + "."));
+        } else {
+            bloquants.add(new Controle(SE_DEPOSITAIRE, List.of(), BLOC_REMISE, RemiseElectronique.MESSAGE_DEPOSITAIRE));
+        }
+    }
+
+    /** ⚠️ V66 — S1, {@code SE_QUORUM_MARGE} : le quorum égale le nombre de membres. Avertissement, jamais bloquant. */
+    private static void quorumMarge(RemiseElectronique.Internes i, List<Controle> avertissements) {
+        if (i != null && i.quorumSansMarge() && !RemiseElectronique.quorumInvalide(i)) {
+            avertissements.add(new Controle(SE_QUORUM_MARGE, List.of(), BLOC_REMISE, RemiseElectronique.MESSAGE_QUORUM_MARGE));
         }
     }
 

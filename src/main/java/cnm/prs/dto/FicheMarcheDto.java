@@ -132,4 +132,10 @@ public class FicheMarcheDto {
      * front les affiche en lecture seule avec la mention « calculée ».
      */
     private java.util.List<String> champsCalcules;
+
+    /**
+     * ⚠️ V66 (2026-10-04, soumission en ligne, lot 2, §B2.1) — l'état de la cérémonie des clés, exposé à tous ceux qui lisent la
+     * fiche : {@code A_VENIR}, {@code CLOSE}, {@code A_REFAIRE} ; {@code null} en mode papier.
+     */
+    private String ceremonie;
 }

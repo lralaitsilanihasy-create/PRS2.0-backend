@@ -21,7 +21,11 @@ import java.util.List;
  */
 public record ParametresInternesDto(Long idDmc, List<CompteDesignableDto> membresCommission, int nombreParts,
         Integer quorum, LocalDateTime dateCeremonie, ResponsableProcedureDto responsable, String etat,
-        List<Anomalie> anomalies, List<EntreeJournal> journal) {
+        List<Anomalie> anomalies, List<EntreeJournal> journal,
+        /** ⚠️ V66 (lot 2, §B1) — le dépositaire de la part de secours et l'état de cette part ; hors {@code nombreParts}. */
+        CeremonieDto.PartDeSecours partDeSecours,
+        /** ⚠️ V66 (lot 2, §B3) — les avertissements, distincts des anomalies qui restent les refus : {@code SE_QUORUM_MARGE}. */
+        List<Anomalie> avertissements) {
 
     public record Anomalie(String regle, String message) {
     }

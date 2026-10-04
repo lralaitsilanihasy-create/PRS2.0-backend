@@ -8,5 +8,7 @@ package cnm.prs.enums;
 public enum TypeObjet {
     DOSSIER,
     PV,
-    MESSAGE
+    MESSAGE,
+    /** ⚠️ 2026-10-04 (soumission en ligne, lot 2, §B6) — une procédure (DMC) : {@code idObjet} = {@code idDmc}. */
+    PROCEDURE
 }

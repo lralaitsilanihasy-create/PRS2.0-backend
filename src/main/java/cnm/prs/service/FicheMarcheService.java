@@ -111,6 +111,8 @@ public class FicheMarcheService {
     private final ParametreService parametres;
     /** ⚠️ V50 (2026-09-27, remise électronique) — paramètres internes et responsable de la procédure (état, contexte du bilan). */
     private final ParametresInternesService internes;
+    /** ⚠️ V66 (2026-10-04, lot 2) — la cérémonie des clés, dont la fiche dit l'état. */
+    private final cnm.prs.repository.CeremonieClesRepository ceremonieRepository;
     /** ⚠️ 2026-09-28 (contrat-cadre, §B7) — le mandat en vigueur, source du défaut de l'acte de nomination. */
     private final MandatService mandats;
     /** ⚠️ V60 (2026-10-03) — le matériel et le personnel exigés d'une fiche de travaux. */
@@ -126,7 +128,8 @@ public class FicheMarcheService {
             cnm.prs.repository.DossierRepository dossierRepository, DocumentsFicheMarcheService documents,
             cnm.prs.repository.DocumentFicheMarcheRepository documentRepository, DmcService dmcService,
             BesoinFiche besoin, ParametreService parametres, ParametresInternesService internes, MandatService mandats,
-            MoyensFiche moyens, PiecesFiche pieces) {
+            MoyensFiche moyens, PiecesFiche pieces, cnm.prs.repository.CeremonieClesRepository ceremonieRepository) {
+        this.ceremonieRepository = ceremonieRepository;
         this.pieces = pieces;
         this.moyens = moyens;
         this.mandats = mandats;
@@ -1512,7 +1515,10 @@ public class FicheMarcheService {
                 dossierRepository.findIdDossierByIdDmc(fiche.getIdDmc()).orElse(null),
                 fiche.getIdFiche() != null && StatutFicheMarche.BROUILLON.name().equals(fiche.getStatut()) && typeChange,
                 ctx.outille(), ctx.codeCategorie(), nbLots, LotsFiche.alloti(nbLots),
-                internes.responsableDto(idDmc), internes.estTitulaire(idDmc), internes.etat(idDmc).name(), champsCalcules);
+                internes.responsableDto(idDmc), internes.estTitulaire(idDmc), internes.etat(idDmc).name(), champsCalcules,
+                // ⚠️ V66 (lot 2, §B2.1) — l'état de la cérémonie des clés, null en mode papier.
+                !RemiseElectronique.electronique(cadrage) ? null
+                        : ceremonieRepository.findById(idDmc).map(cnm.prs.entity.CeremonieCles::getEtat).orElse(cnm.prs.entity.CeremonieCles.A_VENIR));
     }
 
     /**

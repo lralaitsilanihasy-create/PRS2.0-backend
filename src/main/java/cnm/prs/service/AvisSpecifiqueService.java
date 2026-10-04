@@ -65,6 +65,8 @@ public class AvisSpecifiqueService {
     public static final String AVIS_NON_FAVORABLE = "AVIS_NON_FAVORABLE";
     public static final String RESERVES_NON_LEVEES = "RESERVES_NON_LEVEES";
     public static final String FICHE_NON_VALIDEE = "FICHE_NON_VALIDEE";
+    /** ⚠️ 2026-10-04 (soumission en ligne, lot 2, §B2.6) — remise électronique : la cérémonie des clés n'est pas close. */
+    public static final String CEREMONIE_NON_CLOSE = "CEREMONIE_NON_CLOSE";
 
     /** Journal du dossier : une impression de l'avis. */
     public static final String JOURNAL_AVIS_IMPRIME = "AVIS_SPECIFIQUE_IMPRIME";
@@ -91,12 +93,15 @@ public class AvisSpecifiqueService {
     private final cnm.prs.repository.MarcheRepository marcheRepository;
     private final cnm.prs.repository.StatutMarcheRepository statutMarcheRepository;
     private final cnm.prs.repository.DocumentFicheMarcheRepository documentRepository;
+    /** ⚠️ 2026-10-04 (soumission en ligne, lot 2, §B2.6) — la cérémonie des clés, que la publication exige close en mode électronique. */
+    private final CeremonieService ceremonie;
 
     public AvisSpecifiqueService(FicheMarcheService fiches, FicheMarcheRepository ficheRepository,
             DossierRepository dossierRepository, PvExamenRepository pvRepository, DocumentsFicheMarcheService documents,
             DossierIntegriteService dossierIntegrite, JournalDossierService journal,
             cnm.prs.repository.MarcheRepository marcheRepository, cnm.prs.repository.StatutMarcheRepository statutMarcheRepository,
-            cnm.prs.repository.DocumentFicheMarcheRepository documentRepository) {
+            cnm.prs.repository.DocumentFicheMarcheRepository documentRepository, CeremonieService ceremonie) {
+        this.ceremonie = ceremonie;
         this.marcheRepository = marcheRepository;
         this.statutMarcheRepository = statutMarcheRepository;
         this.documentRepository = documentRepository;
@@ -238,6 +243,11 @@ public class AvisSpecifiqueService {
         if (raison == null && derniereValideeOuNull(idDmc) == null) {
             raison = FICHE_NON_VALIDEE;
         }
+        // ⚠️ 2026-10-04 (lot 2, §B2.6) — sans clés publiées, un candidat ne pourrait pas sceller : publier serait annoncer
+        // une procédure impraticable. Avis et lettres d'invitation : même garde.
+        if (raison == null && RemiseElectronique.electronique(courante.getCadrage()) && !ceremonie.estClose(idDmc)) {
+            raison = CEREMONIE_NON_CLOSE;
+        }
         return new AvisDisponibiliteDto(raison == null, raison, avis, pv.getStatutPv(), statutDossier, idDossier);
     }
 
@@ -315,6 +325,8 @@ public class AvisSpecifiqueService {
                     + (lettre ? "pas de lettre d'invitation." : "pas d'avis spécifique.");
             case RESERVES_NON_LEVEES -> "Le PV est favorable avec réserves : " + quoi.toLowerCase(java.util.Locale.ROOT) + " "
                     + accord + " après la levée des réserves.";
+            case CEREMONIE_NON_CLOSE -> "La cérémonie des clés n'est pas close : sans clés publiées, aucun candidat ne pourrait sceller "
+                    + "son offre. " + quoi + " " + accord + " une fois la cérémonie close.";
             default -> "La fiche marché n'a aucune version validée : " + (lettre ? "pas de lettre d'invitation." : "pas d'avis spécifique.");
         };
     }

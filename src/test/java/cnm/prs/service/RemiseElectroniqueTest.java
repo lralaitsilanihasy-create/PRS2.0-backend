@@ -86,8 +86,10 @@ class RemiseElectroniqueTest {
         return new Internes(List.of(membres), quorum, ceremonie, responsable);
     }
 
+    /** ⚠️ V66 — avec le dépositaire de la part de secours (règle 12). */
     private static Internes complets() {
-        return internes(2, CEREMONIE, "CTRVER", "CTRMEM", "CTRCC1");
+        return new Internes(List.of("CTRMEM", "CTRCC1"), 2, CEREMONIE, "CTRVER",
+                new cnm.prs.dto.CeremonieDto.Depositaire("Rakoto Jean", "ARMP", null, null));
     }
 
     private static BilanControlesDto bilan(Map<String, String> valeurs, Internes i, boolean responsable) {
@@ -107,7 +109,8 @@ class RemiseElectroniqueTest {
             ControlesFicheMarche.SE_OUVERTURE_DEPOTS, ControlesFicheMarche.SE_TAILLES, ControlesFicheMarche.SE_SIGNATURE_MIN,
             ControlesFicheMarche.SE_ORIGINAL_GARANTIE, ControlesFicheMarche.SE_QUORUM, ControlesFicheMarche.SE_OUVERTURE_PLIS,
             ControlesFicheMarche.SE_CEREMONIE, ControlesFicheMarche.SE_PRESTATAIRES,
-            ControlesFicheMarche.PARAMETRES_INTERNES_INCOMPLETS, ControlesFicheMarche.RESPONSABLE_NON_DESIGNE);
+            ControlesFicheMarche.PARAMETRES_INTERNES_INCOMPLETS, ControlesFicheMarche.RESPONSABLE_NON_DESIGNE,
+            ControlesFicheMarche.SE_DEPOSITAIRE);   // ⚠️ V66 : règle 12
 
     @Test
     @DisplayName("Tout valide en mode électronique : aucun bloquant, les onze règles en « ok » ; en mode papier, aucune n'est évaluée")
@@ -240,7 +243,8 @@ class RemiseElectroniqueTest {
         assertThat(RemiseElectronique.etat(complets(), LocalDateTime.of(2026, 3, 2, 0, 0))).isEqualTo(RemiseElectronique.Etat.COMPLETS);
         assertThat(RemiseElectronique.anomalies(internes(1, null, "CTRVER", "CTRMEM"), null)).extracting(RemiseElectronique.Anomalie::message)
                 .containsExactly("Au moins deux membres détenteurs d'une part de clé sont attendus.",
-                        "La date de la cérémonie des clés est à renseigner.", RemiseElectronique.MESSAGE_QUORUM);
+                        "La date de la cérémonie des clés est à renseigner.", RemiseElectronique.MESSAGE_DEPOSITAIRE,   // ⚠️ V66
+                        RemiseElectronique.MESSAGE_QUORUM);
     }
 
     @Test

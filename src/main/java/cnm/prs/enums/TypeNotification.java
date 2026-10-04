@@ -114,5 +114,20 @@ public enum TypeNotification {
     PIECES_MANQUANTES_DEPOT,
 
     /** Compléments de dépôt transmis par la PRMP : contrôle de complétude à reprendre — vers le(s) Secrétaire(s) de la localité (⚠️ spec recevabilité 2026-08-02). */
-    COMPLEMENTS_DEPOT_TRANSMIS
+    COMPLEMENTS_DEPOT_TRANSMIS,
+
+    /** ⚠️ 2026-10-04 (soumission en ligne, lot 2, §B6) — cérémonie des clés : vers chaque membre désigné, à la désignation et à la réouverture. */
+    CLE_A_PUBLIER,
+
+    /** Cérémonie close, clés publiées — vers la PRMP et les membres. */
+    CLES_PUBLIEES,
+
+    /** Rappel : part non vérifiée depuis la clôture, à J − FICHE_SE_VERIFICATION_PART_JOURS de la date limite — vers le membre. */
+    PART_A_VERIFIER,
+
+    /** Marge du quorum épuisée (parts disponibles ≤ quorum) — vers le responsable de la procédure. */
+    MARGE_QUORUM,
+
+    /** Une part déclarée perdue — vers le responsable de la procédure. */
+    PART_PERDUE
 }

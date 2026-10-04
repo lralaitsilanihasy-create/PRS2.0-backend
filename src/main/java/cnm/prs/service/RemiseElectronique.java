@@ -172,7 +172,13 @@ public final class RemiseElectronique {
      * {@code delaiMinRemiseJours}, {@code assistance}, {@code quorumDefaut} (« 3/5 »).
      */
     public record Parametres(String plateformeUrl, String fuseau, String signatureMin, Integer tailleMaxPlateformeMo,
-            Integer delaiMinRemiseJours, String assistance, String quorumDefaut) {
+            Integer delaiMinRemiseJours, String assistance, String quorumDefaut, Integer verificationPartJours) {
+
+        /** Les sept paramètres de V50, sans le délai du rappel de vérification (⚠️ V66). */
+        public Parametres(String plateformeUrl, String fuseau, String signatureMin, Integer tailleMaxPlateformeMo,
+                Integer delaiMinRemiseJours, String assistance, String quorumDefaut) {
+            this(plateformeUrl, fuseau, signatureMin, tailleMaxPlateformeMo, delaiMinRemiseJours, assistance, quorumDefaut, null);
+        }
 
         /** Le numérateur de {@code quorumDefaut} (« 3/5 » → 3) ; {@code null} s'il ne se lit pas. */
         public Integer quorumPropose() {
@@ -193,9 +199,20 @@ public final class RemiseElectronique {
      * (INT-SE-03), {@code dateCeremonie} (INT-SE-04), {@code responsable} (INT-SE-05, le titulaire du rôle, ou
      * {@code null}). {@code null} tout entier : jamais enregistrés ({@link Etat#ABSENTS}).
      */
-    public record Internes(List<String> membres, Integer quorum, LocalDateTime dateCeremonie, String responsable) {
+    public record Internes(List<String> membres, Integer quorum, LocalDateTime dateCeremonie, String responsable,
+            cnm.prs.dto.CeremonieDto.Depositaire depositaire) {
         public Internes {
             membres = membres == null ? List.of() : List.copyOf(membres);
+        }
+
+        /** Sans dépositaire de la part de secours (⚠️ V66, lot 2, §B1). */
+        public Internes(List<String> membres, Integer quorum, LocalDateTime dateCeremonie, String responsable) {
+            this(membres, quorum, dateCeremonie, responsable, null);
+        }
+
+        /** ⚠️ V66 (S1) — le quorum égale le nombre de membres : la perte d'une seule part rendrait les offres illisibles. */
+        public boolean quorumSansMarge() {
+            return quorum != null && !membres.isEmpty() && quorum == membres.size();
         }
     }
 
@@ -212,6 +229,15 @@ public final class RemiseElectronique {
             + "et le responsable ne peut pas détenir une part de clé.";
     /** Message de la règle 8 (§B3), tel quel. */
     public static final String MESSAGE_CEREMONIE = "La cérémonie des clés doit précéder la publication de l'avis.";
+    /** ⚠️ V66 (lot 2, §B1) — message de la règle 12 ({@code SE_DEPOSITAIRE}), tel quel. */
+    public static final String MESSAGE_DEPOSITAIRE = "Aucun dépositaire de la part de secours n'est désigné : la fiche ne peut pas "
+            + "être validée en remise électronique.";
+    /** ⚠️ V66 (lot 2, §B3, S1) — message de l'avertissement {@code SE_QUORUM_MARGE}, tel quel. */
+    public static final String MESSAGE_QUORUM_MARGE = "Le quorum est égal au nombre de membres : la perte d'une seule part rendrait "
+            + "les offres illisibles.";
+    /** ⚠️ V66 (lot 2, §B4) — message de l'avertissement {@code SE_MARGE_EPUISEE}, tel quel. */
+    public static final String MESSAGE_MARGE_EPUISEE = "La marge du quorum est épuisée : une part de plus perdue rendrait les offres "
+            + "illisibles.";
 
     /** La règle 6 est-elle violée ? (quorum hors de [2, nombre de membres], ou le responsable détient une part). */
     public static boolean quorumInvalide(Internes i) {
@@ -237,6 +263,7 @@ public final class RemiseElectronique {
         if (i == null) {
             out.add(new Anomalie(ControlesFicheMarche.PARAMETRES_INTERNES_INCOMPLETS,
                     "Les paramètres internes de la procédure n'ont pas encore été enregistrés."));
+            out.add(new Anomalie(ControlesFicheMarche.SE_DEPOSITAIRE, MESSAGE_DEPOSITAIRE));   // ⚠️ V66, règle 12
             return out;
         }
         if (i.membres().size() < 2) {
@@ -248,6 +275,10 @@ public final class RemiseElectronique {
         }
         if (i.dateCeremonie() == null) {
             out.add(new Anomalie(ControlesFicheMarche.PARAMETRES_INTERNES_INCOMPLETS, "La date de la cérémonie des clés est à renseigner."));
+        }
+        // ⚠️ V66 (lot 2, §B1) — règle 12 : le dépositaire de la part de secours est désigné (COMPLETS l'exige).
+        if (i.depositaire() == null) {
+            out.add(new Anomalie(ControlesFicheMarche.SE_DEPOSITAIRE, MESSAGE_DEPOSITAIRE));
         }
         if (quorumInvalide(i)) {
             out.add(new Anomalie(ControlesFicheMarche.SE_QUORUM, MESSAGE_QUORUM));

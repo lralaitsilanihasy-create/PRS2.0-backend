@@ -156,6 +156,8 @@ public class ParametreService {
     public static final String FICHE_SE_DELAI_MIN_REMISE_JOURS = "FICHE_SE_DELAI_MIN_REMISE_JOURS";
     public static final String FICHE_SE_ASSISTANCE = "FICHE_SE_ASSISTANCE";
     public static final String FICHE_SE_QUORUM_DEFAUT = "FICHE_SE_QUORUM_DEFAUT";
+    /** ⚠️ V66 (2026-10-04, soumission en ligne, lot 2, §B4) — jours avant la date limite où la part non vérifiée est rappelée (7). */
+    public static final String FICHE_SE_VERIFICATION_PART_JOURS = "FICHE_SE_VERIFICATION_PART_JOURS";
     /** Préfixe d'une valeur par défaut de champ qui se lit dans un paramètre ({@code PARAM:FICHE_SE_PLATEFORME_URL}). */
     public static final String PREFIXE_DEFAUT_PARAMETRE = "PARAM:";
 
@@ -163,9 +165,11 @@ public class ParametreService {
     public RemiseElectronique.Parametres remiseElectronique() {
         java.math.BigDecimal taille = nombre(FICHE_SE_TAILLE_MAX_PLATEFORME_MO);
         java.math.BigDecimal delai = nombre(FICHE_SE_DELAI_MIN_REMISE_JOURS);
+        java.math.BigDecimal rappel = nombre(FICHE_SE_VERIFICATION_PART_JOURS);
         return new RemiseElectronique.Parametres(texte(FICHE_SE_PLATEFORME_URL), texte(FICHE_SE_FUSEAU),
                 texte(FICHE_SE_SIGNATURE_MIN), taille == null ? null : taille.intValue(),
-                delai == null ? null : delai.intValue(), texte(FICHE_SE_ASSISTANCE), texte(FICHE_SE_QUORUM_DEFAUT));
+                delai == null ? null : delai.intValue(), texte(FICHE_SE_ASSISTANCE), texte(FICHE_SE_QUORUM_DEFAUT),
+                rappel == null ? null : rappel.intValue());
     }
 
     /**
@@ -197,6 +201,10 @@ public class ParametreService {
             erreurs.add(new cnm.prs.exception.ErrorResponse.FieldError("quorumDefaut",
                     "Le quorum par défaut s'écrit « n/m » (par exemple 3/5)."));
         }
+        if (p.verificationPartJours() != null && p.verificationPartJours() < 0) {   // ⚠️ V66
+            erreurs.add(new cnm.prs.exception.ErrorResponse.FieldError("verificationPartJours",
+                    "Le délai du rappel de vérification des parts est un nombre de jours positif ou nul."));
+        }
         if (!erreurs.isEmpty()) {
             throw new cnm.prs.exception.ChampsInvalidesException(erreurs);
         }
@@ -208,6 +216,7 @@ public class ParametreService {
         ecrireTexte(FICHE_SE_DELAI_MIN_REMISE_JOURS, p.delaiMinRemiseJours() == null ? null : String.valueOf(p.delaiMinRemiseJours()));
         ecrireTexte(FICHE_SE_ASSISTANCE, p.assistance());
         ecrireTexte(FICHE_SE_QUORUM_DEFAUT, p.quorumDefaut() == null ? null : p.quorumDefaut().replace(" ", ""));
+        ecrireTexte(FICHE_SE_VERIFICATION_PART_JOURS, p.verificationPartJours() == null ? null : String.valueOf(p.verificationPartJours()));
         return remiseElectronique();
     }
 

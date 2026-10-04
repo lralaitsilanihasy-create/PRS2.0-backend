@@ -38,6 +38,7 @@ import cnm.prs.enums.FormeMarche;
 import cnm.prs.enums.ProfilUtilisateur;
 import cnm.prs.enums.TypeActeur;
 import cnm.prs.service.ChampFicheMarcheService;
+import cnm.prs.service.RemiseElectronique;
 
 /**
  * ⚠️ <strong>La remise électronique des offres</strong> (demande front du 2026-09-27, V50, ADR-0010) — §B1 : types
@@ -203,10 +204,11 @@ class RemiseElectroniqueIntegrationTest extends CnmIntegrationTestSupport {
         remplirObligatoires(idDmc, "QUANTITE_FIXE", "FOURNITURES_SERVICES", donnees);
         String fiche = fiche(idDmc);
         assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.bloquants[*].regle"))
-                .containsExactlyInAnyOrder("PARAMETRES_INTERNES_INCOMPLETS", "RESPONSABLE_NON_DESIGNE");
+                .containsExactlyInAnyOrder("PARAMETRES_INTERNES_INCOMPLETS", "RESPONSABLE_NON_DESIGNE", "SE_DEPOSITAIRE");   // ⚠️ V66 : règle 12
         assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.bloquants[*].message")).containsExactlyInAnyOrder(
                 "Les paramètres internes de la procédure sont incomplets : à compléter par le responsable de la procédure.",
-                "Aucun responsable de la procédure n'est désigné : la fiche ne peut pas être validée en remise électronique.");
+                "Aucun responsable de la procédure n'est désigné : la fiche ne peut pas être validée en remise électronique.",
+                RemiseElectronique.MESSAGE_DEPOSITAIRE);
         assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.bloquants[*].bloc")).containsOnly("B04");
         mvc.perform(post("/api/fiches-marche/" + idDmc + "/valider").header("Authorization", tokenPrmp))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("CONTROLES_BLOQUANTS"));
@@ -217,12 +219,12 @@ class RemiseElectroniqueIntegrationTest extends CnmIntegrationTestSupport {
         fiche = fiche(idDmc);
         assertThat(JsonPath.<String>read(fiche, "$.responsableProcedure.im")).isEqualTo("CTRVER");
         assertThat(JsonPath.<String>read(fiche, "$.parametresInternes")).isEqualTo("ABSENTS");
-        assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.bloquants[*].regle")).containsExactly("PARAMETRES_INTERNES_INCOMPLETS");
+        assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.bloquants[*].regle")).containsExactlyInAnyOrder("PARAMETRES_INTERNES_INCOMPLETS", "SE_DEPOSITAIRE");
         String vue = mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenVer))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<Boolean>read(vue, "$.peutModifierParametresInternes")).isTrue();
 
-        String internes = internes(idDmc, tokenVer, "{\"membresCommission\":[\"CTRMEM\",\"CTRCC1\"],\"quorum\":2,"
+        String internes = internes(idDmc, tokenVer, "{\"membresCommission\":[\"CTRMEM\",\"CTRCC1\"],\"quorum\":2,\"depositaire\":{\"nom\":\"Rakoto Jean\",\"organisme\":\"ARMP\"},"
                 + "\"dateCeremonie\":\"2026-03-01T09:00\"}").andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<String>read(internes, "$.etat")).isEqualTo("COMPLETS");
         assertThat(JsonPath.<Integer>read(internes, "$.nombreParts")).isEqualTo(2);
@@ -231,9 +233,9 @@ class RemiseElectroniqueIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(JsonPath.<String>read(internes, "$.responsable.im")).isEqualTo("CTRVER");
         assertThat(JsonPath.<List<Object>>read(internes, "$.anomalies")).isEmpty();
         assertThat(JsonPath.<List<String>>read(internes, "$.journal[*].champ"))
-                .containsExactly("responsable", "membresCommission", "quorum", "dateCeremonie");
+                .containsExactly("responsable", "membresCommission", "quorum", "dateCeremonie", "depositaire");   // ⚠️ V66
         assertThat(JsonPath.<List<String>>read(internes, "$.journal[*].nouvelleValeur"))
-                .containsExactly("CTRVER", "CTRMEM,CTRCC1", "2", "2026-03-01T09:00");
+                .containsExactly("CTRVER", "CTRMEM,CTRCC1", "2", "2026-03-01T09:00", "Rakoto Jean ; ARMP");
         fiche = fiche(idDmc);
         assertThat(JsonPath.<String>read(fiche, "$.parametresInternes")).isEqualTo("COMPLETS");
         assertThat(JsonPath.<List<Object>>read(fiche, "$.bilanControles.bloquants")).isEmpty();
@@ -298,7 +300,7 @@ class RemiseElectroniqueIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(get("/api/fiches-marche/" + idDmc + "/parametres-internes").header("Authorization", tokenVer))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.etat").value("ABSENTS"))
                 .andExpect(jsonPath("$.quorum").value(3))   // proposé depuis FICHE_SE_QUORUM_DEFAUT (3/5)
-                .andExpect(jsonPath("$.anomalies", hasSize(1)));
+                .andExpect(jsonPath("$.anomalies", hasSize(2)));   // ⚠️ V66 : + le dépositaire (règle 12)
         internes(idDmc, tokenVer, corps).andExpect(status().isOk()).andExpect(jsonPath("$.etat").value("INCOMPLETS"))
                 .andExpect(jsonPath("$.anomalies[*].message").value(hasItem("Au moins deux membres détenteurs d'une part de clé sont attendus.")));
         String candidats = mvc.perform(get("/api/fiches-marche/" + idDmc + "/parametres-internes/candidats").header("Authorization", tokenVer))
@@ -334,12 +336,13 @@ class RemiseElectroniqueIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$.code").value("RESPONSABLE_EXISTANT"));
         internes(idDmc, tokenVer, "{\"membresCommission\":[\"CTRVER\",\"CTRMEM\"],\"quorum\":2,\"dateCeremonie\":\"2026-03-01T09:00\"}")
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("MEMBRE_COMMISSION"));
-        internes(idDmc, tokenVer, "{\"membresCommission\":[\"CTRMEM\",\"CTRCC1\"],\"quorum\":2,\"dateCeremonie\":\"2026-03-01T09:00\"}")
+        internes(idDmc, tokenVer, "{\"membresCommission\":[\"CTRMEM\",\"CTRCC1\"],\"quorum\":2,\"dateCeremonie\":\"2026-03-01T09:00\","
+                + "\"depositaire\":{\"nom\":\"Rakoto Jean\"}}")   // ⚠️ V66 : le dépositaire, exigé par COMPLETS (règle 12)
                 .andExpect(status().isOk());
         String journal = mvc.perform(get("/api/fiches-marche/" + idDmc + "/parametres-internes").header("Authorization", tokenVer))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<List<String>>read(journal, "$.journal[*].champ"))
-                .containsExactly("responsable", "membresCommission", "quorum", "dateCeremonie");
+                .containsExactly("responsable", "membresCommission", "quorum", "dateCeremonie", "depositaire");
         assertThat(JsonPath.<String>read(journal, "$.journal[0].acteur")).isEqualTo("CTRADM");
         assertThat(JsonPath.<String>read(journal, "$.journal[1].acteur")).isEqualTo("CTRVER");
         assertThat(JsonPath.<String>read(journal, "$.journal[1].nouvelleValeur")).isEqualTo("CTRMEM,CTRCC1");

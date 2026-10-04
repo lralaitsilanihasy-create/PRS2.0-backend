@@ -230,7 +230,7 @@ class ProceduresEnLigneIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(post("/api/fiches-marche/" + dmc + "/responsable").header("Authorization", tokenAdmin).contentType(JSON)
                 .content("{\"im\":\"CTRVER\"}")).andExpect(status().isCreated());
         mvc.perform(put("/api/fiches-marche/" + dmc + "/parametres-internes").header("Authorization", tokenVer).contentType(JSON)
-                .content("{\"membresCommission\":[\"CTRMEM\",\"CTRCC1\"],\"quorum\":2,\"dateCeremonie\":\""
+                .content("{\"membresCommission\":[\"CTRMEM\",\"CTRCC1\"],\"quorum\":2,\"depositaire\":{\"nom\":\"Rakoto Jean\"},\"dateCeremonie\":\""
                         + aujourdhui.plusDays(9) + "T09:00\"}")).andExpect(status().isOk());
         mvc.perform(post("/api/fiches-marche/" + dmc + "/valider").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.statut").value("VALIDEE"));

@@ -40,6 +40,13 @@ import cnm.prs.repository.ParametreInterneJournalRepository;
 import cnm.prs.repository.ParametreInterneProcedureRepository;
 import cnm.prs.repository.ProfileRepository;
 import cnm.prs.repository.ResponsableProcedureRepository;
+import cnm.prs.dto.CeremonieDto;
+import cnm.prs.entity.CeremonieCles;
+import cnm.prs.entity.CleDetenteur;
+import cnm.prs.enums.TypeNotification;
+import cnm.prs.enums.TypeObjet;
+import cnm.prs.repository.CeremonieClesRepository;
+import cnm.prs.repository.CleDetenteurRepository;
 import cnm.prs.security.CurrentUser;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
@@ -73,8 +80,13 @@ public class ParametresInternesService {
     static final String CHAMP_QUORUM = "quorum";
     static final String CHAMP_CEREMONIE = "dateCeremonie";
     static final String CHAMP_RESPONSABLE = "responsable";
+    /** ⚠️ V66 (lot 2, §B1) — le dépositaire de la part de secours, au journal dédié. */
+    static final String CHAMP_DEPOSITAIRE = "depositaire";
 
     private final ParametreInterneProcedureRepository internesRepository;
+    private final CeremonieClesRepository ceremonieRepository;
+    private final CleDetenteurRepository cleRepository;
+    private final NotificationService notifications;
     private final ParametreInterneJournalRepository journalRepository;
     private final ResponsableProcedureRepository responsableRepository;
     private final DossierMecRepository dmcRepository;
@@ -93,7 +105,11 @@ public class ParametresInternesService {
             DossierMecRepository dmcRepository, FicheMarcheRepository ficheRepository,
             FicheMarcheValeurRepository valeurRepository, ChampFicheMarcheRepository champRepository,
             ControleurRepository controleurRepository, ProfileRepository profileRepository, ValeursPpmService valeursPpm,
-            ActeurDirectory acteurs, ParametreService parametres, ObjectMapper mapper) {
+            ActeurDirectory acteurs, ParametreService parametres, ObjectMapper mapper,
+            CeremonieClesRepository ceremonieRepository, CleDetenteurRepository cleRepository, NotificationService notifications) {
+        this.ceremonieRepository = ceremonieRepository;
+        this.cleRepository = cleRepository;
+        this.notifications = notifications;
         this.internesRepository = internesRepository;
         this.journalRepository = journalRepository;
         this.responsableRepository = responsableRepository;
@@ -138,7 +154,16 @@ public class ParametresInternesService {
             return null;
         }
         return new RemiseElectronique.Internes(ChampFicheMarche.liste(p.getMembresCle()), p.getQuorum(), p.getDateCeremonie(),
-                responsable(idDmc).map(ResponsableProcedure::getImResponsable).orElse(null));
+                responsable(idDmc).map(ResponsableProcedure::getImResponsable).orElse(null), depositaire(p));
+    }
+
+    /** ⚠️ V66 (lot 2, §B1) — le dépositaire de la part de secours, {@code null} tant qu'il n'est pas désigné. */
+    static CeremonieDto.Depositaire depositaire(ParametreInterneProcedure p) {
+        if (p == null || p.getDepositaireNom() == null || p.getDepositaireNom().isBlank()) {
+            return null;
+        }
+        return new CeremonieDto.Depositaire(p.getDepositaireNom(), p.getDepositaireOrganisme(), p.getDepositaireFonction(),
+                p.getDepositaireContact());
     }
 
     /**
@@ -174,9 +199,24 @@ public class ParametresInternesService {
      */
     public ParametresInternesDto ecrire(Long idDmc, ParametresInternesRequest corps) {
         exigerTitulaire(idDmc);
-        exigerFicheModifiable(idDmc);
+        CeremonieCles ceremonie = ceremonieRepository.findById(idDmc).orElse(null);
+        // ⚠️ V66 (lot 2, §B5.2) — une cérémonie rouverte rend les paramètres modifiables, fiche validée ou non : c'est là qu'un
+        // membre qui quitte la commission se remplace.
+        if (ceremonie == null || !CeremonieCles.A_REFAIRE.equals(ceremonie.getEtat())) {
+            exigerFicheModifiable(idDmc);
+        }
         ParametresInternesRequest c = corps == null ? new ParametresInternesRequest(null, null, null) : corps;
         List<ErrorResponse.FieldError> erreurs = new ArrayList<>();
+        // ⚠️ V66 (lot 2, §B1) — le dépositaire : une désignation nominative, le nom obligatoire s'il est donné.
+        CeremonieDto.Depositaire depositaire = null;
+        if (c.depositaire() != null) {
+            CeremonieDto.Depositaire d = c.depositaire();
+            if (d.nom() == null || d.nom().isBlank()) {
+                erreurs.add(new ErrorResponse.FieldError(CHAMP_DEPOSITAIRE, "Le nom du dépositaire de la part de secours est obligatoire."));
+            } else {
+                depositaire = new CeremonieDto.Depositaire(d.nom().trim(), vide(d.organisme()), vide(d.fonction()), vide(d.contact()));
+            }
+        }
         Set<String> membres = new LinkedHashSet<>();
         for (String im : c.membresCommission() == null ? List.<String>of() : c.membresCommission()) {
             if (im == null || im.isBlank()) {
@@ -192,10 +232,10 @@ public class ParametresInternesService {
         if (c.quorum() != null && c.quorum() < 1) {
             erreurs.add(new ErrorResponse.FieldError(CHAMP_QUORUM, "Le quorum de déchiffrement est un nombre de membres, 1 au moins."));
         }
-        LocalDateTime ceremonie = null;
+        LocalDateTime ceremonieDate = null;
         if (c.dateCeremonie() != null && !c.dateCeremonie().isBlank()) {
-            ceremonie = RemiseElectronique.dateHeure(c.dateCeremonie());
-            if (ceremonie == null) {
+            ceremonieDate = RemiseElectronique.dateHeure(c.dateCeremonie());
+            if (ceremonieDate == null) {
                 erreurs.add(new ErrorResponse.FieldError(CHAMP_CEREMONIE,
                         "La cérémonie des clés attend une date et une heure AAAA-MM-JJTHH:MM."));
             }
@@ -213,14 +253,26 @@ public class ParametresInternesService {
         String avantMembres = p == null ? null : p.getMembresCle();
         Integer avantQuorum = p == null ? null : p.getQuorum();
         LocalDateTime avantCeremonie = p == null ? null : p.getDateCeremonie();
+        CeremonieDto.Depositaire avantDepositaire = depositaire(p);
+        String apresMembres = membres.isEmpty() ? null : String.join(",", membres);
+        // ⚠️ V66 (lot 2, §B2.4) — une cérémonie close fige membres, quorum, date et dépositaire : rouvrir d'abord (§B5.2).
+        if (ceremonie != null && CeremonieCles.CLOSE.equals(ceremonie.getEtat())
+                && (!Objects.equals(avantMembres, apresMembres) || !Objects.equals(avantQuorum, c.quorum())
+                        || !Objects.equals(avantCeremonie, ceremonieDate) || !Objects.equals(avantDepositaire, depositaire))) {
+            throw new BusinessRuleException("La cérémonie des clés est close : les membres, le quorum, la date de la cérémonie et "
+                    + "le dépositaire ne se modifient plus. Rouvrez la cérémonie d'abord.", "CEREMONIE_CLOSE");
+        }
         if (p == null) {
             p = new ParametreInterneProcedure();
             p.setIdDmc(idDmc);
         }
-        String apresMembres = membres.isEmpty() ? null : String.join(",", membres);
         p.setMembresCle(apresMembres);
         p.setQuorum(c.quorum());
-        p.setDateCeremonie(ceremonie);
+        p.setDateCeremonie(ceremonieDate);
+        p.setDepositaireNom(depositaire == null ? null : depositaire.nom());
+        p.setDepositaireOrganisme(depositaire == null ? null : depositaire.organisme());
+        p.setDepositaireFonction(depositaire == null ? null : depositaire.fonction());
+        p.setDepositaireContact(depositaire == null ? null : depositaire.contact());
         p.setDateMaj(LocalDateTime.now());
         p.setImMaj(CurrentUser.ref().orElse(null));
         internesRepository.save(p);
@@ -229,8 +281,43 @@ public class ParametresInternesService {
         journaliser(idDmc, CHAMP_QUORUM, avantQuorum == null ? null : String.valueOf(avantQuorum),
                 c.quorum() == null ? null : String.valueOf(c.quorum()));
         journaliser(idDmc, CHAMP_CEREMONIE, avantCeremonie == null ? null : RemiseElectronique.isoMinute(avantCeremonie),
-                ceremonie == null ? null : RemiseElectronique.isoMinute(ceremonie));
+                ceremonieDate == null ? null : RemiseElectronique.isoMinute(ceremonieDate));
+        journaliser(idDmc, CHAMP_DEPOSITAIRE, texte(avantDepositaire), texte(depositaire));
+        // ⚠️ V66 (lot 2, §B6) — chaque membre nouvellement désigné est invité à publier sa clé.
+        Set<String> anciens = new LinkedHashSet<>(ChampFicheMarche.liste(avantMembres));
+        for (String m : membres) {
+            if (anciens.stream().noneMatch(a -> a.equalsIgnoreCase(m))) {
+                notifierMembre(idDmc, m, TypeNotification.CLE_A_PUBLIER, "Cérémonie des clés : votre clé est à publier",
+                        "Vous êtes désigné détenteur d'une part de clé pour la procédure " + idDmc
+                                + ". Générez votre clé dans votre navigateur et publiez-la avant la cérémonie.");
+            }
+        }
         return dto(idDmc);
+    }
+
+    /** Le dépositaire au journal dédié : « nom ; organisme ; fonction ; contact », {@code null} sans dépositaire. */
+    static String texte(CeremonieDto.Depositaire d) {
+        if (d == null) {
+            return null;
+        }
+        StringBuilder sb = new StringBuilder(d.nom());
+        for (String s : List.of(d.organisme() == null ? "" : d.organisme(), d.fonction() == null ? "" : d.fonction(),
+                d.contact() == null ? "" : d.contact())) {
+            if (!s.isBlank()) {
+                sb.append(" ; ").append(s);
+            }
+        }
+        return sb.toString();
+    }
+
+    private static String vide(String s) {
+        return s == null || s.isBlank() ? null : s.trim();
+    }
+
+    /** ⚠️ V66 (lot 2, §B6) — une notification vers un membre (contrôleur), objet {@code PROCEDURE} = le DMC. */
+    void notifierMembre(Long idDmc, String im, TypeNotification type, String titre, String corps) {
+        String email = controleurRepository.findById(im).map(Controleur::getEmailCont).orElse(null);
+        notifications.emettreControleur(type, im, email, idDmc.intValue(), TypeObjet.PROCEDURE, null, titre, corps);
     }
 
     /** Les comptes désignables comme membres : Présidents, Chefs de commission et Membres de la localité de la fiche. */
@@ -411,12 +498,27 @@ public class ParametresInternesService {
                 .map(j -> new ParametresInternesDto.EntreeJournal(j.getDate(), j.getImActeur(), j.getNomActeur(), j.getChamp(),
                         j.getAncienneValeur(), j.getNouvelleValeur()))
                 .toList();
+        // ⚠️ V66 (lot 2) — la part de secours (§B1) et les avertissements (§B3, S1).
+        CeremonieDto.PartDeSecours secours = new CeremonieDto.PartDeSecours(i == null ? null : i.depositaire(), etatPartDeSecours(idDmc, i));
+        List<ParametresInternesDto.Anomalie> avertissements = new ArrayList<>();
+        if (i != null && i.quorumSansMarge() && !RemiseElectronique.quorumInvalide(i)) {
+            avertissements.add(new ParametresInternesDto.Anomalie(ControlesFicheMarche.SE_QUORUM_MARGE, RemiseElectronique.MESSAGE_QUORUM_MARGE));
+        }
         return new ParametresInternesDto(idDmc, membres, membres.size(), quorum, i == null ? null : i.dateCeremonie(),
-                responsableDto(idDmc), RemiseElectronique.etat(i, publication).name(), anomalies, journal);
+                responsableDto(idDmc), RemiseElectronique.etat(i, publication).name(), anomalies, journal, secours, avertissements);
+    }
+
+    /** ⚠️ V66 (lot 2, §B1) — {@code A_DESIGNER}, {@code DESIGNE}, puis l'état de la clé de secours ({@code PUBLIEE}, {@code VERIFIEE}, {@code PERDUE}). */
+    private String etatPartDeSecours(Long idDmc, RemiseElectronique.Internes i) {
+        if (i == null || i.depositaire() == null) {
+            return "A_DESIGNER";
+        }
+        return cleRepository.findFirstByIdDmcAndRoleAndDateArchivageIsNull(idDmc, CleDetenteur.SECOURS)
+                .map(CleDetenteur::getEtatPart).orElse("DESIGNE");
     }
 
     /** Une entrée du journal dédié si la valeur change (valeurs en clair : le journal n'est servi qu'au titulaire). */
-    private void journaliser(Long idDmc, String champ, String avant, String apres) {
+    void journaliser(Long idDmc, String champ, String avant, String apres) {
         if (Objects.equals(avant, apres)) {
             return;
         }
