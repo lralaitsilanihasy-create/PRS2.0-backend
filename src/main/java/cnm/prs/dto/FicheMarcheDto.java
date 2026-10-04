@@ -138,4 +138,10 @@ public class FicheMarcheDto {
      * fiche : {@code A_VENIR}, {@code CLOSE}, {@code A_REFAIRE} ; {@code null} en mode papier.
      */
     private String ceremonie;
+
+    /**
+     * ⚠️ V67 (2026-10-04, soumission en ligne, lot 2a, §B5) — l'état de la commission d'appel d'offres, exposé à tous ceux qui
+     * lisent la fiche : {@code ABSENTE}, {@code INCOMPLETE}, {@code COMPLETE} ; {@code null} en mode papier.
+     */
+    private String cao;
 }

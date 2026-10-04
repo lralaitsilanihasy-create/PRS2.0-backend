@@ -12,6 +12,7 @@ import java.security.KeyPairGenerator;
 import java.security.MessageDigest;
 import java.security.spec.MGF1ParameterSpec;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
@@ -22,6 +23,7 @@ import javax.crypto.Cipher;
 import javax.crypto.spec.OAEPParameterSpec;
 import javax.crypto.spec.PSource;
 
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -34,6 +36,8 @@ import com.jayway.jsonpath.JsonPath;
 
 import cnm.prs.entity.Capm;
 import cnm.prs.entity.CeremonieCles;
+import cnm.prs.entity.CompteAuth;
+import cnm.prs.entity.CompteCao;
 import cnm.prs.entity.Dossier;
 import cnm.prs.entity.DocumentFicheMarche;
 import cnm.prs.entity.Marche;
@@ -48,6 +52,7 @@ import cnm.prs.enums.ProfilUtilisateur;
 import cnm.prs.enums.TypeActeur;
 import cnm.prs.repository.CeremonieClesRepository;
 import cnm.prs.repository.CleDetenteurRepository;
+import cnm.prs.repository.CompteCaoRepository;
 import cnm.prs.repository.DocumentFicheMarcheRepository;
 import cnm.prs.repository.FicheMarcheValeurRepository;
 import cnm.prs.repository.NotificationRepository;
@@ -57,15 +62,16 @@ import cnm.prs.service.ParametreService;
 import cnm.prs.service.RemiseElectronique;
 
 /**
- * ⚠️ 2026-10-04 (demande front « soumission en ligne », lot 2 ; ADR-0013 ; V66) — la cérémonie des clés et la procédure de
- * secours S1 à S4 : dépositaire et règle 12, publication des clés (contrôles SPKI / empreinte / enveloppe), droits de
- * lecture, clôture (clés manquantes nommées, paramètres figés, notifications), clés publiques aux candidats, garde de
- * l'avis (§B2.6), défi S2 (interopérabilité JCA, temps constant), part perdue, remplacement S4 (suppression avant le
- * premier dépôt, archivage après), réouverture, rappel de vérification.
+ * ⚠️ 2026-10-04 (demande front « soumission en ligne », lot 2b ; ADR-0013 ; V66, ⚠️ V67 : les détenteurs sont les membres de la
+ * CAO, comptes {@code MEMBRE_CAO}) — la cérémonie des clés et la procédure de secours S1 à S4 : dépositaire et règle 12,
+ * publication des clés (contrôles SPKI / empreinte / enveloppe), droits de lecture par identité, clôture (clés manquantes
+ * nommées, paramètres et CAO figés, notifications aussi par courriel), clés publiques aux candidats, garde de l'avis (§B2.6),
+ * défi S2 (interopérabilité JCA, temps constant), part perdue, remplacement S4, réouverture (un membre de la CAO remplacé par la
+ * PRMP), rappel de vérification.
  *
- * <p>Jeu : celui de {@code RemiseElectroniqueIntegrationTest} (plan 9900, ligne 9901) ; responsable CTRVER, membres CTRMEM
- * et CTRCC1, quorum 2 (S1 : marge nulle, voulu pour exercer les avertissements). Les paires RSA naissent ici par la JCA,
- * comme WebCrypto les produirait.</p>
+ * <p>Jeu : plan 9900, ligne 9901 (fournitures à quantité fixe) ; responsable CTRVER ; CAO désignée par la PRMP : deux membres
+ * ({@code m1@cao.mg} président, {@code m2@cao.mg}) et un expert adjoint ; quorum 2 (S1 : marge nulle, voulu pour exercer les
+ * avertissements). Les paires RSA naissent ici par la JCA, comme WebCrypto les produirait.</p>
  */
 class CeremonieIntegrationTest extends CnmIntegrationTestSupport {
 
@@ -77,6 +83,7 @@ class CeremonieIntegrationTest extends CnmIntegrationTestSupport {
     @Autowired private ParametreService parametres;
     @Autowired private CeremonieClesRepository ceremonieRepository;
     @Autowired private CleDetenteurRepository cleRepository;
+    @Autowired private CompteCaoRepository comptesCao;
     @Autowired private DocumentFicheMarcheRepository documentRepository;
     @Autowired private FicheMarcheValeurRepository valeurRepository;
     @Autowired private NotificationRepository notificationRepository;
@@ -84,6 +91,10 @@ class CeremonieIntegrationTest extends CnmIntegrationTestSupport {
 
     private final LocalDate aujourdhui = LocalDate.now();
     private String tokenVer;
+    private String tokenM1;
+    private String tokenM2;
+    private String k1;
+    private String k2;
     private Long idDmc;
     private String base;
 
@@ -110,7 +121,7 @@ class CeremonieIntegrationTest extends CnmIntegrationTestSupport {
     /** Les paires de 3072 bits, lentes à produire : tirées une fois pour la classe, en parallèle. */
     private static final java.util.concurrent.ConcurrentLinkedDeque<Paire> POOL = new java.util.concurrent.ConcurrentLinkedDeque<>();
 
-    @org.junit.jupiter.api.BeforeAll
+    @BeforeAll
     static void paires() {
         java.util.stream.IntStream.range(0, 8).parallel().forEach(i -> {
             try {
@@ -175,39 +186,46 @@ class CeremonieIntegrationTest extends CnmIntegrationTestSupport {
                 p.tailleMaxPlateformeMo(), p.delaiMinRemiseJours(), p.assistance(), p.quorumDefaut(), p.verificationPartJours()));
         idDmc = ficheElectronique();
         base = "/api/fiches-marche/" + idDmc + "/ceremonie";
+        // ⚠️ V67 (lot 2a, Q11) — la PRMP désigne la CAO ; les comptes des membres sont activés ici directement.
+        mvc.perform(put("/api/fiches-marche/" + idDmc + "/cao").header("Authorization", tokenPrmp).contentType(JSON)
+                .content(CaoIntegrationTest.corpsCao("m1@cao.mg", "m2@cao.mg"))).andExpect(status().isOk());
+        k1 = activer("m1@cao.mg");
+        k2 = activer("m2@cao.mg");
+        tokenM1 = bearer("m1@cao.mg", ProfilUtilisateur.MEMBRE_CAO, TypeActeur.MEMBRE_CAO, k1, null);
+        tokenM2 = bearer("m2@cao.mg", ProfilUtilisateur.MEMBRE_CAO, TypeActeur.MEMBRE_CAO, k2, null);
     }
 
     @Test
-    @DisplayName("Cérémonie : dépositaire (règle 12, journal, S1), lecture réservée au responsable et aux membres, publication "
-            + "contrôlée (SPKI 3072, empreinte, enveloppe), enveloppe au seul propriétaire, clôture (manquants nommés, paramètres "
-            + "figés, notifications), clés publiques aux candidats après l'avis, état sur la fiche")
+    @DisplayName("Cérémonie : dépositaire (règle 12, journal, S1), lecture réservée au responsable et aux membres de la CAO, publication "
+            + "contrôlée (SPKI 3072, empreinte, enveloppe), enveloppe au seul propriétaire, clôture (manquants nommés, paramètres et "
+            + "CAO figés, notifications), clés publiques aux candidats après l'avis, états sur la fiche, espace du membre")
     void ceremonie() throws Exception {
-        // Règle 12 et S1 au bilan, avant toute désignation du dépositaire.
         String fiche = fiche(tokenPrmp);
-        assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.bloquants[*].regle")).contains("SE_DEPOSITAIRE");
+        assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.bloquants[*].regle")).contains("SE_DEPOSITAIRE").doesNotContain("SE_CAO");
         assertThat(JsonPath.<String>read(fiche, "$.ceremonie")).isEqualTo("A_VENIR");
-        internes(tokenVer, "{\"membresCommission\":[\"CTRMEM\",\"CTRCC1\"],\"quorum\":2,\"dateCeremonie\":\"" + aujourdhui.plusDays(9)
-                + "T09:00\",\"depositaire\":{\"nom\":\"\",\"organisme\":\"ARMP\"}}").andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.erreurs[0].champ").value("depositaire"));
+        assertThat(JsonPath.<String>read(fiche, "$.cao")).isEqualTo("COMPLETE");
+        internes(tokenVer, "{\"quorum\":2,\"dateCeremonie\":\"" + aujourdhui.plusDays(9) + "T09:00\",\"depositaire\":{\"nom\":\"\",\"organisme\":\"ARMP\"}}")
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.erreurs[0].champ").value("depositaire"));
         String internes = internes(tokenVer, corpsInternes(2, "Rakoto Jean")).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<String>read(internes, "$.etat")).isEqualTo("COMPLETS");
         assertThat(JsonPath.<String>read(internes, "$.partDeSecours.etat")).isEqualTo("DESIGNE");
         assertThat(JsonPath.<String>read(internes, "$.partDeSecours.depositaire.nom")).isEqualTo("Rakoto Jean");
         assertThat(JsonPath.<Integer>read(internes, "$.nombreParts")).isEqualTo(2);   // la part de secours n'y compte pas
+        assertThat(JsonPath.<List<String>>read(internes, "$.membresCommission[*].im")).containsExactly(k1, k2);
+        assertThat(JsonPath.<List<String>>read(internes, "$.membresCommission[*].profil")).containsOnly("MEMBRE_CAO");
         assertThat(JsonPath.<List<String>>read(internes, "$.avertissements[*].regle")).containsExactly("SE_QUORUM_MARGE");
-        assertThat(JsonPath.<List<String>>read(internes, "$.journal[*].champ")).contains("depositaire");
+        assertThat(JsonPath.<List<String>>read(internes, "$.journal[*].champ")).contains("depositaire", "membresCommission");
         fiche = fiche(tokenPrmp);
         assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.bloquants[*].regle")).doesNotContain("SE_DEPOSITAIRE", "PARAMETRES_INTERNES_INCOMPLETS");
-        assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.ok[*].regle")).contains("SE_DEPOSITAIRE");
-        assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.avertissements[*].regle")).contains("SE_QUORUM_MARGE");
+        assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.ok[*].regle")).contains("SE_DEPOSITAIRE", "SE_CAO");
         assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.avertissements[?(@.regle=='SE_QUORUM_MARGE')].message"))
                 .containsExactly(RemiseElectronique.MESSAGE_QUORUM_MARGE);
-        // CLE_A_PUBLIER vers les deux membres désignés.
-        assertThat(types("CTRMEM")).contains("CLE_A_PUBLIER");
-        assertThat(types("CTRCC1")).contains("CLE_A_PUBLIER");
+        // CLE_A_PUBLIER vers les deux membres désignés (type MEMBRE_CAO).
+        assertThat(typesCao(k1)).contains("CLE_A_PUBLIER");
+        assertThat(typesCao(k2)).contains("CLE_A_PUBLIER");
 
-        // Lecture : responsable et membres ; Administrateur, PRMP, Président (non membre) : 403.
+        // Lecture : responsable et membres ; Administrateur, PRMP, contrôleurs (non membres) : 403.
         String c = mvc.perform(get(base).header("Authorization", tokenVer)).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<String>read(c, "$.etat")).isEqualTo("A_VENIR");
@@ -216,86 +234,95 @@ class CeremonieIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(JsonPath.<Boolean>read(c, "$.premierDepot")).isFalse();
         assertThat(JsonPath.<List<String>>read(c, "$.detenteurs[*].role")).containsExactly("MEMBRE", "MEMBRE", "SECOURS");
         assertThat(JsonPath.<List<String>>read(c, "$.detenteurs[*].etatPart")).containsOnly("ABSENTE");
+        assertThat(JsonPath.<String>read(c, "$.detenteurs[0].nom")).isEqualTo("RABE Paul");
+        assertThat(JsonPath.<String>read(c, "$.detenteurs[0].im")).isEqualTo(k1);
         assertThat(JsonPath.<String>read(c, "$.detenteurs[2].nom")).isEqualTo("Rakoto Jean");
-        mvc.perform(get(base).header("Authorization", tokenMembre)).andExpect(status().isOk());
-        mvc.perform(get(base).header("Authorization", tokenCc)).andExpect(status().isOk());
-        for (String t : List.of(tokenAdmin, tokenPrmp, tokenPresident)) {
+        mvc.perform(get(base).header("Authorization", tokenM1)).andExpect(status().isOk());
+        mvc.perform(get(base).header("Authorization", tokenM2)).andExpect(status().isOk());
+        for (String t : List.of(tokenAdmin, tokenPrmp, tokenPresident, tokenMembre, tokenCc)) {
             mvc.perform(get(base).header("Authorization", t)).andExpect(status().isForbidden());
         }
         mvc.perform(get("/api/fiches-marche/999999/ceremonie").header("Authorization", tokenVer)).andExpect(status().isNotFound());
 
         // Publication : contrôles du corps, puis 201 ; les non-membres (responsable compris) : 403.
         Paire membre = paire(3072);
-        publier(tokenMembre, "/cles", membre.corps("deadbeef", 600_000)).andExpect(status().isBadRequest())
+        publier(tokenM1, "/cles", membre.corps("deadbeef", 600_000)).andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("EMPREINTE_INVALIDE"));
-        publier(tokenMembre, "/cles", membre.corps(membre.empreinte(), 1000)).andExpect(status().isBadRequest())
+        publier(tokenM1, "/cles", membre.corps(membre.empreinte(), 1000)).andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("ENVELOPPE_INVALIDE"));
-        publier(tokenMembre, "/cles", paire(2048).corps()).andExpect(status().isBadRequest())
+        publier(tokenM1, "/cles", paire(2048).corps()).andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("CLE_INVALIDE"));
-        publier(tokenMembre, "/cles", "{\"clePublique\":\"pas du spki\",\"empreinte\":\"x\",\"enveloppe\":{}}")
+        publier(tokenM1, "/cles", "{\"clePublique\":\"pas du spki\",\"empreinte\":\"x\",\"enveloppe\":{}}")
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("CLE_INVALIDE"));
-        publier(tokenMembre, "/cles", membre.corps()).andExpect(status().isCreated())
-                .andExpect(jsonPath("$.role").value("MEMBRE")).andExpect(jsonPath("$.im").value("CTRMEM"))
+        publier(tokenM1, "/cles", membre.corps()).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.role").value("MEMBRE")).andExpect(jsonPath("$.im").value(k1))
+                .andExpect(jsonPath("$.nom").value("RABE Paul"))
                 .andExpect(jsonPath("$.empreinte").value(membre.empreinte())).andExpect(jsonPath("$.etatPart").value("PUBLIEE"))
                 .andExpect(jsonPath("$.clePublique").value(membre.spki())).andExpect(jsonPath("$.remplacements").value(0));
-        publier(tokenMembre, "/cles", membre.corps()).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("CLE_EXISTANTE"));
+        publier(tokenM1, "/cles", membre.corps()).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("CLE_EXISTANTE"));
         publier(tokenVer, "/cles", membre.corps()).andExpect(status().isForbidden());
-        publier(tokenPresident, "/cles", membre.corps()).andExpect(status().isForbidden());
+        publier(tokenMembre, "/cles", membre.corps()).andExpect(status().isForbidden());
         // L'enveloppe : à son propriétaire seul.
-        mvc.perform(get(base + "/cles/mienne").header("Authorization", tokenMembre)).andExpect(status().isOk())
+        mvc.perform(get(base + "/cles/mienne").header("Authorization", tokenM1)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.iterations").value(600000)).andExpect(jsonPath("$.kdf").value("PBKDF2-SHA-256"))
                 .andExpect(jsonPath("$.chiffre").isNotEmpty());
-        mvc.perform(get(base + "/cles/mienne").header("Authorization", tokenCc)).andExpect(status().isNotFound());
+        mvc.perform(get(base + "/cles/mienne").header("Authorization", tokenM2)).andExpect(status().isNotFound());
         mvc.perform(get(base + "/cles/mienne").header("Authorization", tokenVer)).andExpect(status().isForbidden());
-        // La cérémonie ne se lit pas avec les enveloppes.
-        c = mvc.perform(get(base).header("Authorization", tokenCc)).andReturn().getResponse().getContentAsString();
+        c = mvc.perform(get(base).header("Authorization", tokenM2)).andReturn().getResponse().getContentAsString();
         assertThat(c).doesNotContain("chiffre", "enveloppe");
 
         // Clôture : les manquants sont nommés.
         mvc.perform(post(base + "/cloturer").header("Authorization", tokenVer)).andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("CLES_INCOMPLETES"))
                 .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.allOf(
-                        org.hamcrest.Matchers.containsString("NomCTRCC1 Prenoms"), org.hamcrest.Matchers.containsString("la part de secours"),
-                        org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("NomCTRMEM")))));
+                        org.hamcrest.Matchers.containsString("RASOA Lova"), org.hamcrest.Matchers.containsString("la part de secours"),
+                        org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("RABE")))));
         // La part de secours : le responsable seul.
         Paire secours = paire(3072);
-        publier(tokenMembre, "/cles/secours", secours.corps()).andExpect(status().isForbidden());
+        publier(tokenM1, "/cles/secours", secours.corps()).andExpect(status().isForbidden());
         publier(tokenVer, "/cles/secours", secours.corps()).andExpect(status().isCreated())
                 .andExpect(jsonPath("$.role").value("SECOURS")).andExpect(jsonPath("$.im").isEmpty())
                 .andExpect(jsonPath("$.nom").value("Rakoto Jean"));
         mvc.perform(get(base + "/cles/secours").header("Authorization", tokenVer)).andExpect(status().isOk());
-        mvc.perform(get(base + "/cles/secours").header("Authorization", tokenMembre)).andExpect(status().isForbidden());
+        mvc.perform(get(base + "/cles/secours").header("Authorization", tokenM1)).andExpect(status().isForbidden());
         Paire cc = paire(3072);
-        publier(tokenCc, "/cles", cc.corps()).andExpect(status().isCreated());
+        publier(tokenM2, "/cles", cc.corps()).andExpect(status().isCreated());
         internes = mvc.perform(get("/api/fiches-marche/" + idDmc + "/parametres-internes").header("Authorization", tokenVer))
                 .andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<String>read(internes, "$.partDeSecours.etat")).isEqualTo("PUBLIEE");
 
         // Clés publiques : 404 tant que la cérémonie n'est pas close.
         mvc.perform(get("/api/procedures-en-ligne/" + idDmc + "/cles")).andExpect(status().isNotFound());
-        mvc.perform(post(base + "/cloturer").header("Authorization", tokenMembre)).andExpect(status().isForbidden());
+        mvc.perform(post(base + "/cloturer").header("Authorization", tokenM1)).andExpect(status().isForbidden());
         String close = mvc.perform(post(base + "/cloturer").header("Authorization", tokenVer)).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<String>read(close, "$.etat")).isEqualTo("CLOSE");
         assertThat(JsonPath.<String>read(close, "$.dateCloture")).isNotNull();
         assertThat(JsonPath.<List<String>>read(close, "$.detenteurs[*].etatPart")).containsOnly("PUBLIEE");
         assertThat(JsonPath.<List<String>>read(close, "$.avertissements[*].regle")).containsExactly("SE_MARGE_EPUISEE");   // quorum = membres
-        assertThat(types("CTRMEM")).contains("CLES_PUBLIEES");
-        assertThat(types("CTRCC1")).contains("CLES_PUBLIEES");
+        assertThat(typesCao(k1)).contains("CLES_PUBLIEES");
+        assertThat(typesCao(k2)).contains("CLES_PUBLIEES");
         assertThat(types("CTRVER")).contains("MARGE_QUORUM");
         assertThat(notificationRepository.findPourPrmp("PRMP001", null)).extracting(Notification::getTypeNotif).contains("CLES_PUBLIEES");
         assertThat(JsonPath.<String>read(fiche(tokenPrmp), "$.ceremonie")).isEqualTo("CLOSE");
-        // Close : une clé ne se publie plus ; les paramètres sont figés (sauf à l'identique).
-        publier(tokenMembre, "/cles", membre.corps()).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("CEREMONIE_CLOSE"));
+        // Close : une clé ne se publie plus ; les paramètres et la CAO sont figés (sauf à l'identique).
+        publier(tokenM1, "/cles", membre.corps()).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("CEREMONIE_CLOSE"));
         internes(tokenVer, corpsInternes(2, "Rakoto Jean")).andExpect(status().isOk());
         internes(tokenVer, corpsInternes(2, "Rabe Paul")).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("CEREMONIE_CLOSE"));
-        internes(tokenVer, "{\"membresCommission\":[\"CTRMEM\"],\"quorum\":2,\"depositaire\":{\"nom\":\"Rakoto Jean\"}}")
-                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("CEREMONIE_CLOSE"));
+        mvc.perform(put("/api/fiches-marche/" + idDmc + "/cao").header("Authorization", tokenPrmp).contentType(JSON)
+                .content(CaoIntegrationTest.corpsCao("m1@cao.mg", "m3@cao.mg"))).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CEREMONIE_CLOSE"));
         String journal = mvc.perform(get("/api/fiches-marche/" + idDmc + "/parametres-internes").header("Authorization", tokenVer))
                 .andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<List<String>>read(journal, "$.journal[*].champ")).contains("clePubliee", "ceremonieClose");
         assertThat(JsonPath.<List<String>>read(journal, "$.journal[?(@.champ=='ceremonieClose')].nouvelleValeur").get(0))
                 .contains(membre.empreinte(), secours.empreinte(), cc.empreinte()).doesNotContain(membre.spki());
+
+        // L'espace du membre voit la cérémonie et sa part.
+        String mes = mvc.perform(get("/api/cao/mes-procedures").header("Authorization", tokenM1)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<String>read(mes, "$[0].etatCeremonie")).isEqualTo("CLOSE");
+        assertThat(JsonPath.<String>read(mes, "$[0].etatPart")).isEqualTo("PUBLIEE");
 
         // Les clés publiques aux candidats : une fois la fiche validée et l'avis imprimé (procédure en ligne).
         valider();
@@ -308,46 +335,46 @@ class CeremonieIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(JsonPath.<List<String>>read(cles, "$.algorithmes")).containsExactly("AES-256-GCM", "RSA-OAEP-3072-SHA256", "SHAMIR-GF256");
         assertThat(JsonPath.<List<String>>read(cles, "$.detenteurs[*].empreinte")).containsExactly(membre.empreinte(), secours.empreinte(), cc.empreinte());
         assertThat(JsonPath.<List<String>>read(cles, "$.detenteurs[*].role")).containsExactly("MEMBRE", "SECOURS", "MEMBRE");
-        assertThat(cles).doesNotContain("CTRMEM", "CTRCC1", "Rakoto", "\"im\"", "\"nom\"", "chiffre");
+        assertThat(cles).doesNotContain(k1, k2, "RABE", "Rakoto", "m1@cao.mg", "\"im\"", "\"nom\"", "chiffre");
     }
 
     @Test
     @DisplayName("Secours : défi S2 (déchiffré par la JCA comme WebCrypto le ferait, usage unique, échec journalisé, part de "
-            + "secours par le responsable), part perdue (marge, notification), remplacement S4 (supprimée avant le premier dépôt, "
-            + "archivée après), réouverture (parts absentes, paramètres rouverts, DEPOT_EXISTANT), rappel de vérification, "
-            + "garde de l'avis §B2.6")
+            + "secours par le responsable), rappel de vérification, part perdue (marge, notification), remplacement S4 (supprimée "
+            + "avant le premier dépôt, archivée après), réouverture (parts absentes, un membre de la CAO remplacé par la PRMP, "
+            + "DEPOT_EXISTANT), garde de l'avis §B2.6")
     void secours() throws Exception {
         internes(tokenVer, corpsInternes(2, "Rakoto Jean")).andExpect(status().isOk());
         Paire membre = paire(3072);
         Paire cc = paire(3072);
         Paire secours = paire(3072);
-        publier(tokenMembre, "/cles", membre.corps()).andExpect(status().isCreated());
-        publier(tokenCc, "/cles", cc.corps()).andExpect(status().isCreated());
+        publier(tokenM1, "/cles", membre.corps()).andExpect(status().isCreated());
+        publier(tokenM2, "/cles", cc.corps()).andExpect(status().isCreated());
         publier(tokenVer, "/cles/secours", secours.corps()).andExpect(status().isCreated());
         mvc.perform(post(base + "/cloturer").header("Authorization", tokenVer)).andExpect(status().isOk());
 
         // S2 — le défi.
-        String defi = mvc.perform(post(base + "/defi").header("Authorization", tokenMembre)).andExpect(status().isCreated())
+        String defi = mvc.perform(post(base + "/defi").header("Authorization", tokenM1)).andExpect(status().isCreated())
                 .andExpect(jsonPath("$.expire").isNotEmpty()).andReturn().getResponse().getContentAsString();
         int idDefi = JsonPath.read(defi, "$.idDefi");
         String clair = membre.dechiffrer(JsonPath.read(defi, "$.chiffre"));
         assertThat(Base64.getDecoder().decode(clair)).hasSize(32);
-        mvc.perform(post(base + "/defi/" + idDefi).header("Authorization", tokenCc).contentType(JSON).content("{\"clair\":\"" + clair + "\"}"))
+        mvc.perform(post(base + "/defi/" + idDefi).header("Authorization", tokenM2).contentType(JSON).content("{\"clair\":\"" + clair + "\"}"))
                 .andExpect(status().isForbidden());
-        mvc.perform(post(base + "/defi/" + idDefi).header("Authorization", tokenMembre).contentType(JSON).content("{\"clair\":\"" + clair + "\"}"))
+        mvc.perform(post(base + "/defi/" + idDefi).header("Authorization", tokenM1).contentType(JSON).content("{\"clair\":\"" + clair + "\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.etatPart").value("VERIFIEE"))
                 .andExpect(jsonPath("$.derniereVerification").isNotEmpty());
-        mvc.perform(post(base + "/defi/" + idDefi).header("Authorization", tokenMembre).contentType(JSON).content("{\"clair\":\"" + clair + "\"}"))
+        mvc.perform(post(base + "/defi/" + idDefi).header("Authorization", tokenM1).contentType(JSON).content("{\"clair\":\"" + clair + "\"}"))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("DEFI_EXPIRE"));   // usage unique
-        String defi2 = mvc.perform(post(base + "/defi").header("Authorization", tokenCc)).andExpect(status().isCreated())
+        String defi2 = mvc.perform(post(base + "/defi").header("Authorization", tokenM2)).andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
-        mvc.perform(post(base + "/defi/" + JsonPath.<Integer>read(defi2, "$.idDefi")).header("Authorization", tokenCc).contentType(JSON)
+        mvc.perform(post(base + "/defi/" + JsonPath.<Integer>read(defi2, "$.idDefi")).header("Authorization", tokenM2).contentType(JSON)
                 .content("{\"clair\":\"" + Base64.getEncoder().encodeToString(new byte[32]) + "\"}"))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("DEFI_ECHOUE"));
-        mvc.perform(post(base + "/defi/999999").header("Authorization", tokenCc).contentType(JSON).content("{\"clair\":\"AA==\"}"))
+        mvc.perform(post(base + "/defi/999999").header("Authorization", tokenM2).contentType(JSON).content("{\"clair\":\"AA==\"}"))
                 .andExpect(status().isNotFound());
         // La part de secours : le responsable, avec la phrase du pli.
-        mvc.perform(post(base + "/defi").header("Authorization", tokenMembre).param("role", "SECOURS")).andExpect(status().isForbidden());
+        mvc.perform(post(base + "/defi").header("Authorization", tokenM1).param("role", "SECOURS")).andExpect(status().isForbidden());
         String defiS = mvc.perform(post(base + "/defi").header("Authorization", tokenVer).param("role", "SECOURS")).andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         mvc.perform(post(base + "/defi/" + JsonPath.<Integer>read(defiS, "$.idDefi")).header("Authorization", tokenVer).contentType(JSON)
@@ -359,14 +386,14 @@ class CeremonieIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(JsonPath.<String>read(journal, "$.partDeSecours.etat")).isEqualTo("VERIFIEE");
 
         // Part perdue : la marge, le responsable notifié.
-        mvc.perform(post(base + "/cles/perdue").header("Authorization", tokenCc)).andExpect(status().isOk())
+        mvc.perform(post(base + "/cles/perdue").header("Authorization", tokenM2)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.etatPart").value("PERDUE"));
         String c = mvc.perform(get(base).header("Authorization", tokenVer)).andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<List<String>>read(c, "$.avertissements[*].regle")).containsExactly("SE_MARGE_EPUISEE");
         assertThat(types("CTRVER")).contains("PART_PERDUE");
         // S4 — remplacer avant le premier dépôt : l'ancienne est supprimée.
         Paire cc2 = paire(3072);
-        mvc.perform(put(base + "/cles").header("Authorization", tokenCc).contentType(JSON).content(cc2.corps())).andExpect(status().isOk())
+        mvc.perform(put(base + "/cles").header("Authorization", tokenM2).contentType(JSON).content(cc2.corps())).andExpect(status().isOk())
                 .andExpect(jsonPath("$.etatPart").value("PUBLIEE")).andExpect(jsonPath("$.remplacements").value(1))
                 .andExpect(jsonPath("$.empreinte").value(cc2.empreinte())).andExpect(jsonPath("$.derniereVerification").isEmpty());
         assertThat(cleRepository.findAll().stream().filter(k -> idDmc.equals(k.getIdDmc()))).hasSize(3);
@@ -378,7 +405,7 @@ class CeremonieIntegrationTest extends CnmIntegrationTestSupport {
         ceremonie.setPremierDepot(true);
         ceremonieRepository.save(ceremonie);
         Paire cc3 = paire(3072);
-        mvc.perform(put(base + "/cles").header("Authorization", tokenCc).contentType(JSON).content(cc3.corps())).andExpect(status().isOk())
+        mvc.perform(put(base + "/cles").header("Authorization", tokenM2).contentType(JSON).content(cc3.corps())).andExpect(status().isOk())
                 .andExpect(jsonPath("$.remplacements").value(2));
         assertThat(cleRepository.findAll().stream().filter(k -> idDmc.equals(k.getIdDmc()))).hasSize(4)
                 .filteredOn(k -> k.getDateArchivage() != null).hasSize(1).first().matches(k -> cc2.empreinte().equals(k.getEmpreinte()));
@@ -389,19 +416,19 @@ class CeremonieIntegrationTest extends CnmIntegrationTestSupport {
 
         // §B2.6 — la fiche validée, le dossier soumis, le PV signé : l'avis se publie, cérémonie close…
         valider();
-        // Le rappel : rien à 60 jours de la date limite ; à 3 jours, le seul membre non vérifié (CTRCC1), une fois.
+        // Le rappel : rien à 60 jours de la date limite ; à 3 jours, le seul membre non vérifié depuis la clôture (m2), une fois.
         assertThat(ceremonieService.rappelerVerifications()).isZero();
         changer("B04-LR-03", aujourdhui.plusDays(3).toString());
         assertThat(ceremonieService.rappelerVerifications()).isEqualTo(1);
         assertThat(ceremonieService.rappelerVerifications()).isZero();
-        assertThat(types("CTRCC1")).contains("PART_A_VERIFIER");
-        assertThat(types("CTRMEM")).doesNotContain("PART_A_VERIFIER");
+        assertThat(typesCao(k2)).contains("PART_A_VERIFIER");
+        assertThat(typesCao(k1)).doesNotContain("PART_A_VERIFIER");
         changer("B04-LR-03", aujourdhui.plusDays(60).toString());
         int idDossier = creerDossier();
         pvSigne(idDossier);
         disponibilite().andExpect(jsonPath("$.disponible").value(true));
         // … et plus dès qu'elle est rouverte.
-        mvc.perform(post(base + "/rouvrir").header("Authorization", tokenMembre)).andExpect(status().isForbidden());
+        mvc.perform(post(base + "/rouvrir").header("Authorization", tokenM1)).andExpect(status().isForbidden());
         String rouverte = mvc.perform(post(base + "/rouvrir").header("Authorization", tokenVer)).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<String>read(rouverte, "$.etat")).isEqualTo("A_REFAIRE");
@@ -412,19 +439,23 @@ class CeremonieIntegrationTest extends CnmIntegrationTestSupport {
                 .content("{\"datePublication\":\"" + aujourdhui.plusDays(10) + "\",\"jmpNumero\":\"123\",\"jmpDate\":\"" + aujourdhui + "\"}"))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("AVIS_INDISPONIBLE"))
                 .andExpect(jsonPath("$.details.raison").value("CEREMONIE_NON_CLOSE"));
-        // Rouverte, la fiche validée n'empêche plus de changer la commission : CTRCC1 s'en va, CTRPRE le remplace.
-        internes(tokenVer, "{\"membresCommission\":[\"CTRMEM\",\"CTRPRE\"],\"quorum\":2,\"dateCeremonie\":\"" + aujourdhui.plusDays(9)
-                + "T09:00\",\"depositaire\":{\"nom\":\"Rakoto Jean\"}}").andExpect(status().isOk());
-        assertThat(types("CTRPRE")).contains("CLE_A_PUBLIER");
-        publier(tokenMembre, "/cles", membre.corps()).andExpect(status().isCreated());   // les anciennes lignes sont supprimées : la même paire resert
-        publier(tokenPresident, "/cles", cc.corps()).andExpect(status().isCreated());
-        publier(tokenCc, "/cles", cc.corps()).andExpect(status().isForbidden());   // plus membre
+        // Rouverte : la PRMP remplace m2 par m3 dans la CAO (fiche validée ou non), le responsable peut retoucher les paramètres.
+        mvc.perform(put("/api/fiches-marche/" + idDmc + "/cao").header("Authorization", tokenPrmp).contentType(JSON)
+                .content(CaoIntegrationTest.corpsCao("m1@cao.mg", "m3@cao.mg"))).andExpect(status().isOk());
+        String k3 = activer("m3@cao.mg");
+        String tokenM3 = bearer("m3@cao.mg", ProfilUtilisateur.MEMBRE_CAO, TypeActeur.MEMBRE_CAO, k3, null);
+        assertThat(typesCao(k3)).contains("CLE_A_PUBLIER");
+        internes(tokenVer, corpsInternes(2, "Rakoto Jean")).andExpect(status().isOk());
+        publier(tokenM1, "/cles", membre.corps()).andExpect(status().isCreated());   // les anciennes lignes sont supprimées : la même paire resert
+        publier(tokenM3, "/cles", cc.corps()).andExpect(status().isCreated());
+        publier(tokenM2, "/cles", cc.corps()).andExpect(status().isForbidden());   // plus membre
         publier(tokenVer, "/cles/secours", secours.corps()).andExpect(status().isCreated());
         mvc.perform(post(base + "/cloturer").header("Authorization", tokenVer)).andExpect(status().isOk()).andExpect(jsonPath("$.etat").value("CLOSE"));
         disponibilite().andExpect(jsonPath("$.disponible").value(true));
         journal = mvc.perform(get("/api/fiches-marche/" + idDmc + "/parametres-internes").header("Authorization", tokenVer))
                 .andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<List<String>>read(journal, "$.journal[*].champ")).contains("ceremonieRouverte", "clePerdue");
+        assertThat(JsonPath.<List<String>>read(journal, "$.journal[?(@.champ=='membresCommission')].nouvelleValeur")).hasSize(2);
     }
 
     // ------------------------------------------------------------------ outils
@@ -458,9 +489,22 @@ class CeremonieIntegrationTest extends CnmIntegrationTestSupport {
         return dmc;
     }
 
+    /** Active directement le compte MEMBRE_CAO d'une adresse (l'activation par code a son test, {@code CaoIntegrationTest}). */
+    private String activer(String email) {
+        CompteCao c = comptesCao.findByEmail(email).orElseThrow();
+        c.setEtat(CompteCao.ACTIF);
+        c.setDateActivation(LocalDateTime.now());
+        comptesCao.save(c);
+        CompteAuth a = compteAuthRepository.findByLogin(email).orElseThrow();
+        a.setActif(true);
+        a.setMotDePasse(passwordEncoder.encode("Commission2026"));
+        compteAuthRepository.save(a);
+        return c.getIdCompte();
+    }
+
     private String corpsInternes(int quorum, String depositaire) {
-        return "{\"membresCommission\":[\"CTRMEM\",\"CTRCC1\"],\"quorum\":" + quorum + ",\"dateCeremonie\":\"" + aujourdhui.plusDays(9)
-                + "T09:00\",\"depositaire\":{\"nom\":\"" + depositaire + "\",\"organisme\":\"ARMP\",\"fonction\":\"Directeur\",\"contact\":\"034\"}}";
+        return "{\"quorum\":" + quorum + ",\"dateCeremonie\":\"" + aujourdhui.plusDays(9) + "T09:00\",\"depositaire\":{\"nom\":\"" + depositaire
+                + "\",\"organisme\":\"ARMP\",\"fonction\":\"Directeur\",\"contact\":\"034\"}}";
     }
 
     private ResultActions internes(String token, String corps) throws Exception {
@@ -478,6 +522,10 @@ class CeremonieIntegrationTest extends CnmIntegrationTestSupport {
 
     private List<String> types(String im) {
         return notificationRepository.findPourControleur(im).stream().map(Notification::getTypeNotif).toList();
+    }
+
+    private List<String> typesCao(String idCompte) {
+        return notificationRepository.findPourRefEtType(idCompte, "MEMBRE_CAO").stream().map(Notification::getTypeNotif).toList();
     }
 
     private void valider() throws Exception {
@@ -520,7 +568,7 @@ class CeremonieIntegrationTest extends CnmIntegrationTestSupport {
         d.setNomFichier("AVIS_test_v1_01.pdf");
         d.setTailleOctets(4L);
         d.setEmpreinte("0".repeat(64));
-        d.setDateGeneration(java.time.LocalDateTime.now());
+        d.setDateGeneration(LocalDateTime.now());
         d.setContenu("%PDF".getBytes());
         d.setPublication("{\"datePublication\":\"" + aujourdhui.plusDays(10) + "\"}");
         documentRepository.save(d);

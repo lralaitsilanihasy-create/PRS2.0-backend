@@ -78,3 +78,25 @@ bilan, l'impression dans les documents. Trois besoins n'entrent pas dans ce que 
 - **Les valeurs dans `t_audit_log`** : lisibles par l'Administrateur, ce que Q7 refuse ; d'où le journal dédié.
 - **Les membres détenteurs déduits de l'examen du dossier** (attributaire, co-signataires) : la commission de
   déchiffrement n'est pas la commission d'examen ; c'est un choix du responsable, journalisé.
+
+## Amendement du 2026-10-04 — les détenteurs de parts sont les membres de la CAO (Q11, décision du pilote ; V67)
+
+- **Ce qui change.** Les membres détenteurs d'une part de clé ne sont plus des contrôleurs de la CNM choisis par le
+  responsable (« Présidents, Chefs de commission et Membres de la localité »), mais les **membres de la commission d'appel
+  d'offres** (qualité `MEMBRE`, hors experts adjoints), désignés par la **PRMP** par une décision, une CAO par DAO, un président
+  parmi eux, issus de l'entité contractante ou experts de l'objet du DAO. Ils ont un compte propre, **`MEMBRE_CAO`**, hors
+  coquille interne (comme `CANDIDAT`), créé à la désignation et activé par invitation. Exclus par construction : PRMP, UGPM,
+  contrôleurs de la CNM, candidats inscrits.
+- **Ce qui reste.** Le rôle « Responsable de la procédure » (décision 1), gardien neutre du quorum, de la date de cérémonie et du
+  dépositaire ; il conduit la cérémonie et la séance d'ouverture avec le président de la CAO (à confirmer, question 1 de la
+  demande 2a). La garde par identité (décision 3), les deux journaux (décision 4), l'état sur la fiche (décision 5), le bilan
+  (décision 6). La motivation « commission de déchiffrement ≠ commission d'examen » tient plus encore : les détenteurs ne sont
+  plus des contrôleurs.
+- **Conséquences sur V50.** `membresCommission` est **dérivé** de la CAO (`PUT …/parametres-internes` ne le reçoit plus : 400) ;
+  `GET …/parametres-internes/candidats` répond 410 ; règle 13 `SE_CAO` (la CAO constituée) bloque la validation en mode
+  électronique ; la règle 6 (« le responsable ne détient pas de part ») est vraie par construction, et vérifiée quand même ; le
+  journal dédié garde la trace des détenteurs à chaque désignation (acteur : la PRMP) ; la composition de la CAO est un **acte
+  public** de la PRMP, lisible par qui lit la fiche — le secret (Q7) ne couvre plus que le quorum, la cérémonie, le dépositaire et
+  les parts.
+- **Référence** : `docs/api-endpoints.md`, § *La commission d'appel d'offres (CAO), détentrice des parts de clé — V67*, et
+  `frontend/docs/demande-backend-2026-10-04-commission-appel-offres.md`.

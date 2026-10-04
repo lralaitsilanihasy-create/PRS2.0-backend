@@ -30,7 +30,14 @@ public enum ProfilUtilisateur {
      * interne (garde de {@code SecurityConfig}), seulement son espace {@code /api/candidat/**} et les routes publiques.
      * Sans ligne {@code tr_profile} : le rôle est posé à la connexion, comme pour la PRMP et l'UGPM.
      */
-    CANDIDAT;
+    CANDIDAT,
+
+    /**
+     * ⚠️ 2026-10-04 (soumission en ligne, lot 2a, Q11) — membre de la commission d'appel d'offres désigné par la PRMP, détenteur
+     * d'une part de clé : hors coquille interne comme le candidat, seulement {@code /api/cao/**}, {@code /api/mon-compte/**} et la
+     * cérémonie de ses procédures ({@code /api/fiches-marche/{idDmc}/ceremonie/**}, garde par identité).
+     */
+    MEMBRE_CAO;
 
     /** Autorité Spring Security correspondante (préfixe {@code ROLE_}). */
     public String authority() {

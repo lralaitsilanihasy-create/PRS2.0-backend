@@ -65,13 +65,17 @@ public class AuthService {
     private final UgpmRepository ugpmRepository;
     /** ⚠️ 2026-10-04 — le contrôle des comptes candidats à la connexion. */
     private final CandidatService candidatService;
+    /** ⚠️ 2026-10-04 (lot 2a) — les comptes des membres de CAO. */
+    private final CompteCaoService caoService;
 
     public AuthService(CompteAuthRepository compteRepository, ControleurRepository controleurRepository,
             ProfileRepository profileRepository, PrmpRepository prmpRepository,
             PasswordEncoder passwordEncoder, TokenService tokenService,
             ControleurDirectory controleurDirectory, NotificationService notificationService,
             PrmpEntiteDemandeRepository demandeRepository, EntiteContractRepository entiteContractRepository,
-            PieceJointeService pieceJointeService, UgpmRepository ugpmRepository, CandidatService candidatService) {
+            PieceJointeService pieceJointeService, UgpmRepository ugpmRepository, CandidatService candidatService,
+            CompteCaoService caoService) {
+        this.caoService = caoService;
         this.candidatService = candidatService;
         this.compteRepository = compteRepository;
         this.controleurRepository = controleurRepository;
@@ -99,6 +103,9 @@ public class AuthService {
                 .orElseThrow(() -> new BadCredentialsException("Identifiants invalides."));
         if (TypeActeur.CANDIDAT.name().equals(compte.getTypeActeur())) {
             return loginCandidat(compte, request);
+        }
+        if (TypeActeur.MEMBRE_CAO.name().equals(compte.getTypeActeur())) {   // ⚠️ 2026-10-04 (lot 2a, §B2)
+            return loginMembreCao(compte, request);
         }
         if (!Boolean.TRUE.equals(compte.getActif())) {
             throw new BadCredentialsException("Compte désactivé.");
@@ -157,6 +164,27 @@ public class AuthService {
         String role = ProfilUtilisateur.CANDIDAT.name();
         String token = tokenService.generer(compte.getLogin(), role, TypeActeur.CANDIDAT, compte.getRefActeur(), null);
         return new LoginResponse(token, compte.getLogin(), role, TypeActeur.CANDIDAT.name(), compte.getRefActeur(), nomAffichage,
+                null, tokenService.getExpirationSeconds());
+    }
+
+    /**
+     * ⚠️ 2026-10-04 (soumission en ligne, lot 2a, §B2) — la connexion d'un membre de CAO : un compte encore {@code A_ACTIVER} n'a
+     * pas de mot de passe, il répond 409 {@code COMPTE_A_ACTIVER} (⚠️ avant toute vérification, donc : écart assumé à la
+     * demande, qui voulait le mot de passe vérifié d'abord — il n'existe pas encore) ; sinon le mot de passe, puis l'état
+     * ({@link CompteCaoService#controlerConnexion}) ; rôle {@code MEMBRE_CAO}, {@code ref} = l'identifiant court, sans localité.
+     */
+    private LoginResponse loginMembreCao(CompteAuth compte, LoginRequest request) {
+        if (caoService.compteAActiver(compte)) {
+            throw new cnm.prs.exception.BusinessRuleException("Votre compte n'est pas encore activé : saisissez le code d'activation reçu "
+                    + "par courriel et choisissez votre mot de passe.", "COMPTE_A_ACTIVER");
+        }
+        if (!passwordEncoder.matches(request.motDePasse(), compte.getMotDePasse())) {
+            throw new BadCredentialsException("Identifiants invalides.");
+        }
+        String nomAffichage = caoService.controlerConnexion(compte);
+        String role = ProfilUtilisateur.MEMBRE_CAO.name();
+        String token = tokenService.generer(compte.getLogin(), role, TypeActeur.MEMBRE_CAO, compte.getRefActeur(), null);
+        return new LoginResponse(token, compte.getLogin(), role, TypeActeur.MEMBRE_CAO.name(), compte.getRefActeur(), nomAffichage,
                 null, tokenService.getExpirationSeconds());
     }
 

@@ -204,11 +204,11 @@ class RemiseElectroniqueIntegrationTest extends CnmIntegrationTestSupport {
         remplirObligatoires(idDmc, "QUANTITE_FIXE", "FOURNITURES_SERVICES", donnees);
         String fiche = fiche(idDmc);
         assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.bloquants[*].regle"))
-                .containsExactlyInAnyOrder("PARAMETRES_INTERNES_INCOMPLETS", "RESPONSABLE_NON_DESIGNE", "SE_DEPOSITAIRE");   // ⚠️ V66 : règle 12
+                .containsExactlyInAnyOrder("PARAMETRES_INTERNES_INCOMPLETS", "RESPONSABLE_NON_DESIGNE", "SE_DEPOSITAIRE", "SE_CAO");   // ⚠️ V66 règle 12, V67 règle 13
         assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.bloquants[*].message")).containsExactlyInAnyOrder(
                 "Les paramètres internes de la procédure sont incomplets : à compléter par le responsable de la procédure.",
                 "Aucun responsable de la procédure n'est désigné : la fiche ne peut pas être validée en remise électronique.",
-                RemiseElectronique.MESSAGE_DEPOSITAIRE);
+                RemiseElectronique.MESSAGE_DEPOSITAIRE, RemiseElectronique.MESSAGE_CAO);
         assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.bloquants[*].bloc")).containsOnly("B04");
         mvc.perform(post("/api/fiches-marche/" + idDmc + "/valider").header("Authorization", tokenPrmp))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("CONTROLES_BLOQUANTS"));
@@ -219,23 +219,27 @@ class RemiseElectroniqueIntegrationTest extends CnmIntegrationTestSupport {
         fiche = fiche(idDmc);
         assertThat(JsonPath.<String>read(fiche, "$.responsableProcedure.im")).isEqualTo("CTRVER");
         assertThat(JsonPath.<String>read(fiche, "$.parametresInternes")).isEqualTo("ABSENTS");
-        assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.bloquants[*].regle")).containsExactlyInAnyOrder("PARAMETRES_INTERNES_INCOMPLETS", "SE_DEPOSITAIRE");
+        assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.bloquants[*].regle")).containsExactlyInAnyOrder("PARAMETRES_INTERNES_INCOMPLETS", "SE_DEPOSITAIRE", "SE_CAO");
+        cao(idDmc);   // ⚠️ V67 (lot 2a, Q11) — la PRMP désigne la CAO : les membres en sont dérivés
         String vue = mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenVer))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<Boolean>read(vue, "$.peutModifierParametresInternes")).isTrue();
 
-        String internes = internes(idDmc, tokenVer, "{\"membresCommission\":[\"CTRMEM\",\"CTRCC1\"],\"quorum\":2,\"depositaire\":{\"nom\":\"Rakoto Jean\",\"organisme\":\"ARMP\"},"
+        String internes = internes(idDmc, tokenVer, "{\"quorum\":2,\"depositaire\":{\"nom\":\"Rakoto Jean\",\"organisme\":\"ARMP\"},"
                 + "\"dateCeremonie\":\"2026-03-01T09:00\"}").andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<String>read(internes, "$.etat")).isEqualTo("COMPLETS");
         assertThat(JsonPath.<Integer>read(internes, "$.nombreParts")).isEqualTo(2);
-        assertThat(JsonPath.<List<String>>read(internes, "$.membresCommission[*].im")).containsExactly("CTRMEM", "CTRCC1");
-        assertThat(JsonPath.<List<String>>read(internes, "$.membresCommission[*].profil")).containsExactly("MEMBRE", "CHEF_COMMISSION");
+        assertThat(JsonPath.<List<String>>read(internes, "$.membresCommission[*].im")).hasSize(2).allMatch(im -> im.startsWith("K"));   // ⚠️ V67
+        assertThat(JsonPath.<List<String>>read(internes, "$.membresCommission[*].profil")).containsOnly("MEMBRE_CAO");
         assertThat(JsonPath.<String>read(internes, "$.responsable.im")).isEqualTo("CTRVER");
         assertThat(JsonPath.<List<Object>>read(internes, "$.anomalies")).isEmpty();
         assertThat(JsonPath.<List<String>>read(internes, "$.journal[*].champ"))
                 .containsExactly("responsable", "membresCommission", "quorum", "dateCeremonie", "depositaire");   // ⚠️ V66
-        assertThat(JsonPath.<List<String>>read(internes, "$.journal[*].nouvelleValeur"))
-                .containsExactly("CTRVER", "CTRMEM,CTRCC1", "2", "2026-03-01T09:00", "Rakoto Jean ; ARMP");
+        List<String> valeurs = JsonPath.read(internes, "$.journal[*].nouvelleValeur");
+        assertThat(valeurs).hasSize(5);
+        assertThat(valeurs.get(0)).isEqualTo("CTRVER");
+        assertThat(valeurs.get(1)).startsWith("K");   // ⚠️ V67 : les comptes MEMBRE_CAO, posés par la désignation de la CAO
+        assertThat(valeurs.subList(2, 5)).containsExactly("2", "2026-03-01T09:00", "Rakoto Jean ; ARMP");
         fiche = fiche(idDmc);
         assertThat(JsonPath.<String>read(fiche, "$.parametresInternes")).isEqualTo("COMPLETS");
         assertThat(JsonPath.<List<Object>>read(fiche, "$.bilanControles.bloquants")).isEmpty();
@@ -255,7 +259,7 @@ class RemiseElectroniqueIntegrationTest extends CnmIntegrationTestSupport {
         String c1 = texteDocx(contenu(documents, "C1", "docx"));
         assertThat(c1).contains("CLAUSE À FOURNIR PAR LE JURISTE : remise électronique",
                 "Téléversement avec code de vérification (voie B)").doesNotContain("{{");
-        internes(idDmc, tokenVer, "{\"membresCommission\":[\"CTRMEM\",\"CTRCC1\"],\"quorum\":2,\"dateCeremonie\":\"2026-03-01T09:00\"}")
+        internes(idDmc, tokenVer, "{\"quorum\":2,\"dateCeremonie\":\"2026-03-01T09:00\"}")
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("FICHE_VALIDEE"));
 
         // Papier : rien d'exigé, « Papier » imprimé, pas de clause dans C1.
@@ -289,13 +293,13 @@ class RemiseElectroniqueIntegrationTest extends CnmIntegrationTestSupport {
                 .content("{\"im\":\"CTRVER\"}")).andExpect(status().isCreated());
         mvc.perform(post("/api/fiches-marche/" + autre + "/responsable").header("Authorization", tokenAdmin).contentType(JSON)
                 .content("{\"im\":\"CTRASS\"}")).andExpect(status().isCreated());
-        String corps = "{\"membresCommission\":[\"CTRMEM\"],\"quorum\":2,\"dateCeremonie\":\"2026-03-01T09:00\"}";
+        String corps = "{\"quorum\":2,\"dateCeremonie\":\"2026-03-01T09:00\"}";   // ⚠️ V67 : plus de membres ici
         for (String token : List.of(tokenPrmp, tokenUgpm, tokenMembre, tokenPresident, tokenCc, tokenAdmin, tokenAss)) {
             mvc.perform(get("/api/fiches-marche/" + idDmc + "/parametres-internes").header("Authorization", token))
                     .andExpect(status().isForbidden());
             internes(idDmc, token, corps).andExpect(status().isForbidden());
             mvc.perform(get("/api/fiches-marche/" + idDmc + "/parametres-internes/candidats").header("Authorization", token))
-                    .andExpect(status().isForbidden());
+                    .andExpect(status().isGone());   // ⚠️ V67 : la route est retirée (410) pour tous
         }
         mvc.perform(get("/api/fiches-marche/" + idDmc + "/parametres-internes").header("Authorization", tokenVer))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.etat").value("ABSENTS"))
@@ -303,10 +307,8 @@ class RemiseElectroniqueIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$.anomalies", hasSize(2)));   // ⚠️ V66 : + le dépositaire (règle 12)
         internes(idDmc, tokenVer, corps).andExpect(status().isOk()).andExpect(jsonPath("$.etat").value("INCOMPLETS"))
                 .andExpect(jsonPath("$.anomalies[*].message").value(hasItem("Au moins deux membres détenteurs d'une part de clé sont attendus.")));
-        String candidats = mvc.perform(get("/api/fiches-marche/" + idDmc + "/parametres-internes/candidats").header("Authorization", tokenVer))
-                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertThat(JsonPath.<List<String>>read(candidats, "$[*].im")).contains("CTRPRE", "CTRCC1", "CTRMEM")
-                .doesNotContain("CTRVER", "CTRADM", "CTRSEC", "CTRCC2");
+        mvc.perform(get("/api/fiches-marche/" + idDmc + "/parametres-internes/candidats").header("Authorization", tokenVer))
+                .andExpect(status().isGone());   // ⚠️ V67 (lot 2a) : le responsable ne choisit plus les membres
         mvc.perform(get("/api/fiches-marche/" + autre + "/parametres-internes").header("Authorization", tokenVer))
                 .andExpect(status().isForbidden());
         mvc.perform(get("/api/fiches-marche/999999/parametres-internes").header("Authorization", tokenVer))
@@ -334,9 +336,10 @@ class RemiseElectroniqueIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(post("/api/fiches-marche/" + idDmc + "/responsable").header("Authorization", tokenAdmin).contentType(JSON)
                 .content("{\"im\":\"CTRPRE\"}")).andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("RESPONSABLE_EXISTANT"));
-        internes(idDmc, tokenVer, "{\"membresCommission\":[\"CTRVER\",\"CTRMEM\"],\"quorum\":2,\"dateCeremonie\":\"2026-03-01T09:00\"}")
-                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("MEMBRE_COMMISSION"));
-        internes(idDmc, tokenVer, "{\"membresCommission\":[\"CTRMEM\",\"CTRCC1\"],\"quorum\":2,\"dateCeremonie\":\"2026-03-01T09:00\","
+        internes(idDmc, tokenVer, "{\"membresCommission\":[\"CTRVER\",\"CTRMEM\"],\"quorum\":2,\"dateCeremonie\":\"2026-03-01T09:00\"}")   // ⚠️ V67 : 400, les membres viennent de la CAO
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.erreurs[0].champ").value("membresCommission"));
+        cao(idDmc);
+        internes(idDmc, tokenVer, "{\"quorum\":2,\"dateCeremonie\":\"2026-03-01T09:00\","
                 + "\"depositaire\":{\"nom\":\"Rakoto Jean\"}}")   // ⚠️ V66 : le dépositaire, exigé par COMPLETS (règle 12)
                 .andExpect(status().isOk());
         String journal = mvc.perform(get("/api/fiches-marche/" + idDmc + "/parametres-internes").header("Authorization", tokenVer))
@@ -344,13 +347,13 @@ class RemiseElectroniqueIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(JsonPath.<List<String>>read(journal, "$.journal[*].champ"))
                 .containsExactly("responsable", "membresCommission", "quorum", "dateCeremonie", "depositaire");
         assertThat(JsonPath.<String>read(journal, "$.journal[0].acteur")).isEqualTo("CTRADM");
-        assertThat(JsonPath.<String>read(journal, "$.journal[1].acteur")).isEqualTo("CTRVER");
-        assertThat(JsonPath.<String>read(journal, "$.journal[1].nouvelleValeur")).isEqualTo("CTRMEM,CTRCC1");
+        assertThat(JsonPath.<String>read(journal, "$.journal[1].acteur")).isEqualTo("PRMP001");   // ⚠️ V67 : la CAO, acte de la PRMP
+        assertThat(JsonPath.<String>read(journal, "$.journal[1].nouvelleValeur")).startsWith("K").contains(",K");
 
         String candidats = mvc.perform(get("/api/fiches-marche/" + idDmc + "/responsable/candidats").header("Authorization", tokenAdmin))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<List<String>>read(candidats, "$[*].im")).contains("CTRVER", "CTRPRE", "CTRADM", "CTRSEC")
-                .doesNotContain("CTRMEM", "CTRCC1", "CTRCC2");
+                .contains("CTRMEM", "CTRCC1").doesNotContain("CTRCC2");   // ⚠️ V67 : les contrôleurs ne sont plus jamais membres
         mvc.perform(get("/api/fiches-marche/" + idDmc + "/responsable/candidats").header("Authorization", tokenPrmp))
                 .andExpect(status().isForbidden());
 
@@ -359,8 +362,8 @@ class RemiseElectroniqueIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(get("/api/fiches-marche/" + idDmc + "/parametres-internes").header("Authorization", tokenVer))
                 .andExpect(status().isForbidden());
         mvc.perform(post("/api/fiches-marche/" + idDmc + "/responsable").header("Authorization", tokenAdmin).contentType(JSON)
-                .content("{\"im\":\"CTRMEM\"}")).andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("MEMBRE_COMMISSION"));
+                .content("{\"im\":\"CTRMEM\"}")).andExpect(status().isCreated());   // ⚠️ V67 : un contrôleur n'est plus jamais membre
+        mvc.perform(delete("/api/fiches-marche/" + idDmc + "/responsable").header("Authorization", tokenAdmin)).andExpect(status().isNoContent());
         mvc.perform(delete("/api/fiches-marche/" + idDmc + "/responsable").header("Authorization", tokenAdmin))
                 .andExpect(status().isNotFound());
         String fiche = fiche(idDmc);
@@ -408,6 +411,12 @@ class RemiseElectroniqueIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     // ------------------------------------------------------------------ outils
+
+    /** ⚠️ V67 (lot 2a) — la PRMP désigne la CAO (deux membres, un président, un expert adjoint) : les membres en dérivent. */
+    private void cao(Long idDmc) throws Exception {
+        mvc.perform(put("/api/fiches-marche/" + idDmc + "/cao").header("Authorization", tokenPrmp).contentType(JSON)
+                .content(CaoIntegrationTest.corpsCao("m1@cao.mg", "m2@cao.mg"))).andExpect(status().isOk());
+    }
 
     private String fiche(Long idDmc) throws Exception {
         return mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp))

@@ -41,8 +41,10 @@ import cnm.prs.repository.ParametreInterneProcedureRepository;
 import cnm.prs.repository.ProfileRepository;
 import cnm.prs.repository.ResponsableProcedureRepository;
 import cnm.prs.dto.CeremonieDto;
+import cnm.prs.entity.CaoMembre;
 import cnm.prs.entity.CeremonieCles;
 import cnm.prs.entity.CleDetenteur;
+import cnm.prs.entity.CompteCao;
 import cnm.prs.enums.TypeNotification;
 import cnm.prs.enums.TypeObjet;
 import cnm.prs.repository.CeremonieClesRepository;
@@ -87,6 +89,10 @@ public class ParametresInternesService {
     private final CeremonieClesRepository ceremonieRepository;
     private final CleDetenteurRepository cleRepository;
     private final NotificationService notifications;
+    /** ⚠️ V67 (lot 2a) — la CAO, source des membres détenteurs de parts. */
+    private final cnm.prs.repository.CaoRepository caoRepository;
+    private final cnm.prs.repository.CaoMembreRepository caoMembreRepository;
+    private final cnm.prs.repository.CompteCaoRepository compteCaoRepository;
     private final ParametreInterneJournalRepository journalRepository;
     private final ResponsableProcedureRepository responsableRepository;
     private final DossierMecRepository dmcRepository;
@@ -106,7 +112,12 @@ public class ParametresInternesService {
             FicheMarcheValeurRepository valeurRepository, ChampFicheMarcheRepository champRepository,
             ControleurRepository controleurRepository, ProfileRepository profileRepository, ValeursPpmService valeursPpm,
             ActeurDirectory acteurs, ParametreService parametres, ObjectMapper mapper,
-            CeremonieClesRepository ceremonieRepository, CleDetenteurRepository cleRepository, NotificationService notifications) {
+            CeremonieClesRepository ceremonieRepository, CleDetenteurRepository cleRepository, NotificationService notifications,
+            cnm.prs.repository.CaoRepository caoRepository, cnm.prs.repository.CaoMembreRepository caoMembreRepository,
+            cnm.prs.repository.CompteCaoRepository compteCaoRepository) {
+        this.caoRepository = caoRepository;
+        this.caoMembreRepository = caoMembreRepository;
+        this.compteCaoRepository = compteCaoRepository;
         this.ceremonieRepository = ceremonieRepository;
         this.cleRepository = cleRepository;
         this.notifications = notifications;
@@ -150,10 +161,13 @@ public class ParametresInternesService {
     @Transactional(readOnly = true)
     public RemiseElectronique.Internes internes(Long idDmc) {
         ParametreInterneProcedure p = internesRepository.findById(idDmc).orElse(null);
-        if (p == null) {
+        // ⚠️ V67 (lot 2a, §B3, Q11) — les membres sont DÉRIVÉS de la CAO (qualité MEMBRE, comptes K…) ; une CAO désignée sans
+        // paramètres enregistrés donne des paramètres incomplets (quorum, date), plus « absents ».
+        List<String> membres = membresCao(idDmc);
+        if (p == null && membres.isEmpty()) {
             return null;
         }
-        return new RemiseElectronique.Internes(ChampFicheMarche.liste(p.getMembresCle()), p.getQuorum(), p.getDateCeremonie(),
+        return new RemiseElectronique.Internes(membres, p == null ? null : p.getQuorum(), p == null ? null : p.getDateCeremonie(),
                 responsable(idDmc).map(ResponsableProcedure::getImResponsable).orElse(null), depositaire(p));
     }
 
@@ -175,7 +189,7 @@ public class ParametresInternesService {
         boolean electronique = RemiseElectronique.electronique(cadrage);
         return new ControlesFicheMarche.RemiseElectroniqueBilan(electronique,
                 electronique ? parametres.remiseElectronique() : null, electronique ? internes(idDmc) : null,
-                responsable(idDmc).isPresent());
+                responsable(idDmc).isPresent(), !electronique || caoConstituee(idDmc));   // ⚠️ V67 : règle 13
     }
 
     /** L'état servi sur la fiche : {@code COMPLETS}, {@code INCOMPLETS} ou {@code ABSENTS}. */
@@ -217,18 +231,11 @@ public class ParametresInternesService {
                 depositaire = new CeremonieDto.Depositaire(d.nom().trim(), vide(d.organisme()), vide(d.fonction()), vide(d.contact()));
             }
         }
-        Set<String> membres = new LinkedHashSet<>();
-        for (String im : c.membresCommission() == null ? List.<String>of() : c.membresCommission()) {
-            if (im == null || im.isBlank()) {
-                continue;
-            }
-            String m = im.trim();
-            if (!controleurRepository.existsById(m)) {
-                erreurs.add(new ErrorResponse.FieldError(CHAMP_MEMBRES, "Compte inconnu : " + m + "."));
-            } else {
-                membres.add(m);
-            }
+        // ⚠️ V67 (lot 2a, §B3, Q11) — les membres sont ceux de la CAO, désignée par la PRMP : le corps ne les porte plus.
+        if (c.membresCommission() != null && !c.membresCommission().isEmpty()) {
+            erreurs.add(new ErrorResponse.FieldError(CHAMP_MEMBRES, RemiseElectronique.MESSAGE_MEMBRES_CAO));
         }
+        Set<String> membres = new LinkedHashSet<>(membresCao(idDmc));
         if (c.quorum() != null && c.quorum() < 1) {
             erreurs.add(new ErrorResponse.FieldError(CHAMP_QUORUM, "Le quorum de déchiffrement est un nombre de membres, 1 au moins."));
         }
@@ -250,23 +257,22 @@ public class ParametresInternesService {
         }
 
         ParametreInterneProcedure p = internesRepository.findById(idDmc).orElse(null);
-        String avantMembres = p == null ? null : p.getMembresCle();
         Integer avantQuorum = p == null ? null : p.getQuorum();
         LocalDateTime avantCeremonie = p == null ? null : p.getDateCeremonie();
         CeremonieDto.Depositaire avantDepositaire = depositaire(p);
-        String apresMembres = membres.isEmpty() ? null : String.join(",", membres);
-        // ⚠️ V66 (lot 2, §B2.4) — une cérémonie close fige membres, quorum, date et dépositaire : rouvrir d'abord (§B5.2).
+        // ⚠️ V66 (lot 2, §B2.4) — une cérémonie close fige quorum, date et dépositaire (⚠️ V67 : et la CAO, côté PRMP) :
+        // rouvrir d'abord (§B5.2).
         if (ceremonie != null && CeremonieCles.CLOSE.equals(ceremonie.getEtat())
-                && (!Objects.equals(avantMembres, apresMembres) || !Objects.equals(avantQuorum, c.quorum())
-                        || !Objects.equals(avantCeremonie, ceremonieDate) || !Objects.equals(avantDepositaire, depositaire))) {
-            throw new BusinessRuleException("La cérémonie des clés est close : les membres, le quorum, la date de la cérémonie et "
-                    + "le dépositaire ne se modifient plus. Rouvrez la cérémonie d'abord.", "CEREMONIE_CLOSE");
+                && (!Objects.equals(avantQuorum, c.quorum()) || !Objects.equals(avantCeremonie, ceremonieDate)
+                        || !Objects.equals(avantDepositaire, depositaire))) {
+            throw new BusinessRuleException("La cérémonie des clés est close : le quorum, la date de la cérémonie et le dépositaire "
+                    + "ne se modifient plus. Rouvrez la cérémonie d'abord.", "CEREMONIE_CLOSE");
         }
         if (p == null) {
             p = new ParametreInterneProcedure();
             p.setIdDmc(idDmc);
         }
-        p.setMembresCle(apresMembres);
+        p.setMembresCle(null);   // ⚠️ V67 — dérivés de la CAO, plus jamais écrits ici
         p.setQuorum(c.quorum());
         p.setDateCeremonie(ceremonieDate);
         p.setDepositaireNom(depositaire == null ? null : depositaire.nom());
@@ -277,22 +283,49 @@ public class ParametresInternesService {
         p.setImMaj(CurrentUser.ref().orElse(null));
         internesRepository.save(p);
 
-        journaliser(idDmc, CHAMP_MEMBRES, avantMembres, apresMembres);
         journaliser(idDmc, CHAMP_QUORUM, avantQuorum == null ? null : String.valueOf(avantQuorum),
                 c.quorum() == null ? null : String.valueOf(c.quorum()));
         journaliser(idDmc, CHAMP_CEREMONIE, avantCeremonie == null ? null : RemiseElectronique.isoMinute(avantCeremonie),
                 ceremonieDate == null ? null : RemiseElectronique.isoMinute(ceremonieDate));
         journaliser(idDmc, CHAMP_DEPOSITAIRE, texte(avantDepositaire), texte(depositaire));
-        // ⚠️ V66 (lot 2, §B6) — chaque membre nouvellement désigné est invité à publier sa clé.
-        Set<String> anciens = new LinkedHashSet<>(ChampFicheMarche.liste(avantMembres));
-        for (String m : membres) {
-            if (anciens.stream().noneMatch(a -> a.equalsIgnoreCase(m))) {
-                notifierMembre(idDmc, m, TypeNotification.CLE_A_PUBLIER, "Cérémonie des clés : votre clé est à publier",
-                        "Vous êtes désigné détenteur d'une part de clé pour la procédure " + idDmc
-                                + ". Générez votre clé dans votre navigateur et publiez-la avant la cérémonie.");
-            }
-        }
         return dto(idDmc);
+    }
+
+    // ------------------------------------------------------------------ ⚠️ V67 (lot 2a, §B3) — la CAO, source des membres
+
+    /** Les membres détenteurs d'une part : les identifiants courts ({@code K…}) des membres de qualité {@code MEMBRE} de la CAO. */
+    @Transactional(readOnly = true)
+    public List<String> membresCao(Long idDmc) {
+        return caoMembreRepository.findByIdDmcOrderByRangAscIdMembreAsc(idDmc).stream()
+                .filter(m -> m.estMembre() && m.getIdCompte() != null).map(CaoMembre::getIdCompte).toList();
+    }
+
+    /** La CAO est-elle constituée (règle 13) ? */
+    @Transactional(readOnly = true)
+    public boolean caoConstituee(Long idDmc) {
+        return CaoRegles.constituee(caoRepository.findById(idDmc).orElse(null), caoMembreRepository.findByIdDmcOrderByRangAscIdMembreAsc(idDmc));
+    }
+
+    /** L'état de la CAO servi sur la fiche : {@code null} en mode papier, sinon {@code ABSENTE} / {@code INCOMPLETE} / {@code COMPLETE}. */
+    @Transactional(readOnly = true)
+    public String etatCao(Long idDmc, boolean electronique) {
+        if (!electronique) {
+            return null;
+        }
+        return CaoRegles.etat(caoRepository.findById(idDmc).orElse(null), caoMembreRepository.findByIdDmcOrderByRangAscIdMembreAsc(idDmc));
+    }
+
+    /** « NOM Prénom » d'un détenteur : un membre de CAO ({@code K…}), ou un contrôleur ; le matricule à défaut. */
+    @Transactional(readOnly = true)
+    public String nomMembre(String im) {
+        if (im == null) {
+            return null;
+        }
+        CompteCao cao = compteCaoRepository.findById(im).orElse(null);
+        if (cao != null) {
+            return CompteCaoService.nom(cao);
+        }
+        return controleurRepository.findById(im).map(c -> ActeurDirectory.nomCanonique(c.getNomCont(), c.getPrenomsCont())).orElse(im);
     }
 
     /** Le dépositaire au journal dédié : « nom ; organisme ; fonction ; contact », {@code null} sans dépositaire. */
@@ -316,28 +349,15 @@ public class ParametresInternesService {
 
     /** ⚠️ V66 (lot 2, §B6) — une notification vers un membre (contrôleur), objet {@code PROCEDURE} = le DMC. */
     void notifierMembre(Long idDmc, String im, TypeNotification type, String titre, String corps) {
+        // ⚠️ V67 (lot 2a, §B4) — un membre de CAO : notification de son type, et le courriel part aussi (une personne
+        // extérieure ne vit pas dans l'application) ; sinon, un contrôleur (le responsable).
+        CompteCao cao = compteCaoRepository.findById(im).orElse(null);
+        if (cao != null) {
+            notifications.emettreMembreCao(type, im, cao.getEmail(), idDmc.intValue(), TypeObjet.PROCEDURE, titre, corps);
+            return;
+        }
         String email = controleurRepository.findById(im).map(Controleur::getEmailCont).orElse(null);
         notifications.emettreControleur(type, im, email, idDmc.intValue(), TypeObjet.PROCEDURE, null, titre, corps);
-    }
-
-    /** Les comptes désignables comme membres : Présidents, Chefs de commission et Membres de la localité de la fiche. */
-    @Transactional(readOnly = true)
-    public List<CompteDesignableDto> candidatsMembres(Long idDmc) {
-        exigerTitulaire(idDmc);
-        String localite = localite(idDmc);
-        Map<Integer, ProfilUtilisateur> profils = profils();
-        List<CompteDesignableDto> out = new ArrayList<>();
-        for (Controleur c : controleurRepository.findAll()) {
-            ProfilUtilisateur profil = profils.get(c.getIdProfile());
-            boolean retenu = profil == ProfilUtilisateur.PRESIDENT
-                    || (profil == ProfilUtilisateur.CHEF_COMMISSION || profil == ProfilUtilisateur.MEMBRE)
-                            && localite != null && localite.equals(c.getIdLocalite());
-            if (retenu) {
-                out.add(designable(c, profil));
-            }
-        }
-        out.sort(java.util.Comparator.comparing(CompteDesignableDto::nom, String.CASE_INSENSITIVE_ORDER));
-        return out;
     }
 
     // ------------------------------------------------------------------ responsable (§B5)
@@ -483,12 +503,12 @@ public class ParametresInternesService {
     private ParametresInternesDto dto(Long idDmc) {
         RemiseElectronique.Internes i = internes(idDmc);
         LocalDateTime publication = datePublication(idDmc);
-        Map<Integer, ProfilUtilisateur> profils = profils();
         List<CompteDesignableDto> membres = new ArrayList<>();
         if (i != null) {
+            // ⚠️ V67 (lot 2a) — les membres sont ceux de la CAO (comptes MEMBRE_CAO) : lus, plus choisis.
             for (String im : i.membres()) {
-                Controleur c = controleurRepository.findById(im).orElse(null);
-                membres.add(c == null ? new CompteDesignableDto(im, im, null) : designable(c, profils.get(c.getIdProfile())));
+                membres.add(new CompteDesignableDto(im, nomMembre(im), compteCaoRepository.existsById(im)
+                        ? ProfilUtilisateur.MEMBRE_CAO.name() : null));
             }
         }
         Integer quorum = i != null ? i.quorum() : parametres.remiseElectronique().quorumPropose();

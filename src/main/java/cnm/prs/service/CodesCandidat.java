@@ -72,6 +72,29 @@ public class CodesCandidat {
         }
     }
 
+    /**
+     * ⚠️ V67 (lot 2a, §B2) — l'<strong>invitation</strong> d'un membre de CAO : un code à six chiffres par courriel, valable
+     * {@code heures} heures (72 : une invitation n'est pas une confirmation d'inscription, la personne ne l'attend pas), le
+     * lien de l'espace, le nom de la procédure et de l'autorité contractante. Les codes précédents ne valent plus.
+     */
+    @Transactional
+    public void emettreInvitation(String idCompte, String email, String prenom, String procedure, String autorite, String lien,
+            int heures) {
+        LocalDateTime maintenant = LocalDateTime.now(horloge);
+        repository.findByIdCandidatAndUtiliseFalse(idCompte).forEach(c -> {
+            c.setUtilise(true);
+            repository.save(c);
+        });
+        String code = tirer();
+        repository.save(new CodeCandidat(null, idCompte, CodeCandidat.EMAIL, encodeur.encode(code), maintenant,
+                maintenant.plusHours(heures), 0, false));
+        this.email.envoyer(email, "PRS — vous êtes désigné membre d'une commission d'appel d'offres",
+                "Bonjour " + prenom + ",\n\nVous êtes désigné membre de la commission d'appel d'offres de la procédure « " + procedure
+                        + " » (" + autorite + ").\n\nPour activer votre compte, rendez-vous sur " + lien
+                        + " et saisissez ce code d'activation : " + code + "\nIl est valable " + heures
+                        + " heures et ne sert qu'une fois.\n\nSi vous n'êtes pas concerné, ignorez ce message.");
+    }
+
     /** Vérifie le dernier code du canal ; un essai faux est compté, un code bon est consommé. */
     @Transactional
     public Verdict verifier(String idCandidat, String canal, String saisi) {

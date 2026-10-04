@@ -141,6 +141,17 @@ public class NotificationService {
                 typeObjet != null ? typeObjet.name() : null, idDossier, titre, corps);
     }
 
+    /**
+     * ⚠️ V67 (2026-10-04, soumission en ligne, lot 2a, §B2) — vers un <strong>membre de CAO</strong> (clé {@code ref} = son
+     * identifiant court {@code K…}, type {@code MEMBRE_CAO}) : une personne extérieure ne vit pas dans l'application, le courriel
+     * part aussi, comme pour tout destinataire qui a une adresse.
+     */
+    public Notification emettreMembreCao(TypeNotification type, String idCompte, String email, Integer idObjet, TypeObjet typeObjet,
+            String titre, String corps) {
+        return creer(type, idCompte, TypeActeur.MEMBRE_CAO.name(), null, email, idObjet,
+                typeObjet != null ? typeObjet.name() : null, null, titre, corps);
+    }
+
     private Notification creer(TypeNotification type, String ref, String destType, String im, String email,
             Integer idObjet, String typeObjet, Integer idDossier, String titre, String corps) {
         Notification n = new Notification();
@@ -289,6 +300,9 @@ public class NotificationService {
             String email = prmpRepository.findById(ref).map(Prmp::getEmailPrmp).orElse(null);
             return repository.findPourPrmp(ref, email);
         }
+        if (TypeActeur.MEMBRE_CAO.name().equals(CurrentUser.acteurType().orElse(null))) {   // ⚠️ V67 (lot 2a)
+            return repository.findPourRefEtType(ref, TypeActeur.MEMBRE_CAO.name());
+        }
         return repository.findPourControleur(ref);
     }
 
@@ -302,6 +316,9 @@ public class NotificationService {
             String email = prmpRepository.findById(ref).map(Prmp::getEmailPrmp).orElse(null);
             boolean parEmail = email != null && email.equals(n.getDestinataireEmail());
             return parRef || parEmail;
+        }
+        if (TypeActeur.MEMBRE_CAO.name().equals(CurrentUser.acteurType().orElse(null))) {   // ⚠️ V67 (lot 2a)
+            return ref.equals(n.getDestinataireRef()) && TypeActeur.MEMBRE_CAO.name().equals(n.getDestinataireType());
         }
         return ref.equals(n.getDestinataireRef())
                 && TypeActeur.CONTROLEUR.name().equals(n.getDestinataireType());

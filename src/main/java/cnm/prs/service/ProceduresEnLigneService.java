@@ -193,19 +193,40 @@ public class ProceduresEnLigneService {
         if (fiche == null) {
             return Optional.empty();
         }
+        return Optional.of(new Lue(construire(idDmc, etat, avis, maintenant), fiche, etat));
+    }
+
+    /**
+     * ⚠️ V67 (2026-10-04, lot 2a, §B2) — la <strong>vue d'un membre de CAO</strong> : la même forme que la liste publique, lue
+     * sur la version courante de la fiche (validée ou non), <strong>sans les critères</strong> de la liste — il voit sa
+     * procédure avant son lancement. {@code datePublication} et {@code etat} sont {@code null} tant que rien ne les fonde.
+     * 404 DMC inconnu. Sans contrôle de périmètre : l'appelant a vérifié qu'il siège.
+     */
+    @Transactional(readOnly = true)
+    public ProcedureEnLigneDto vue(Long idDmc) {
+        FicheMarcheService.EtatVersion etat = fiches.etatCourant(idDmc)
+                .orElseThrow(() -> new ResourceNotFoundException("La fiche de la procédure " + idDmc + " n'est pas encore enregistrée."));
+        List<DocumentFicheDto> avis = documents.listerAvis(ficheRepository.findByIdDmcOrderByNumeroVersionAsc(idDmc)).stream()
+                .filter(d -> DocumentsFicheMarcheService.TYPE_AVIS.equals(d.type())).toList();
+        return construire(idDmc, etat, avis, LocalDateTime.now());
+    }
+
+    private ProcedureEnLigneDto construire(Long idDmc, FicheMarcheService.EtatVersion etat, List<DocumentFicheDto> avis,
+            LocalDateTime maintenant) {
         LocalDateTime limite = dateLimite(etat);
         LocalDateTime ouvertureDepots = RemiseElectronique.dateHeureLue(brute(etat, RemiseElectronique.OUVERTURE_DEPOTS));
-        String etatProcedure = limite != null && !maintenant.isBefore(limite) ? CLOSE
+        String etatProcedure = limite == null && ouvertureDepots == null ? null
+                : limite != null && !maintenant.isBefore(limite) ? CLOSE
                 : ouvertureDepots != null && maintenant.isBefore(ouvertureDepots) ? A_VENIR : OUVERTE;
-
         String numeroDao = brute(etat, DocumentsFicheMarcheService.CHAMP_NUMERO_DAO);
-        ProcedureEnLigneDto dto = new ProcedureEnLigneDto(idDmc,
+        return new ProcedureEnLigneDto(idDmc,
                 numeroDao != null ? numeroDao : etat.etat().getRefeDossier(),
                 etat.etat().getDesignationMarche(),
                 etat.valeur(CHAMP_AUTORITE),
                 etat.categorie(),
                 lots(etat),
-                datePublication(avis, etat),
+                avis.isEmpty() ? RemiseElectronique.isoMinute(RemiseElectronique.dateHeureLue(brute(etat, RemiseElectronique.PUBLICATION_AVIS)))
+                        : datePublication(avis, etat),
                 RemiseElectronique.isoMinute(ouvertureDepots),
                 RemiseElectronique.isoMinute(limite),
                 etat.valeur(CHAMP_HEURE_REFERENCE),
@@ -215,7 +236,6 @@ public class ProceduresEnLigneService {
                 entier(brute(etat, CHAMP_TAILLE_OFFRE)),
                 etat.valeur(CHAMP_ASSISTANCE),
                 etatProcedure);
-        return Optional.of(new Lue(dto, fiche, etat));
     }
 
     /**

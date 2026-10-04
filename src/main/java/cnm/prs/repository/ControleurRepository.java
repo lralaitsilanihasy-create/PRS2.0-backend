@@ -11,6 +11,9 @@ import cnm.prs.entity.Controleur;
 @Repository
 public interface ControleurRepository extends JpaRepository<Controleur, String> {
 
+    /** ⚠️ V67 (2026-10-04, lot 2a, §B1) — une adresse est celle d'un contrôleur de la CNM (exclusion de la CAO). */
+    boolean existsByEmailContIgnoreCase(String email);
+
     List<Controleur> findByIdProfileIn(Collection<Integer> idProfiles);
 
     List<Controleur> findByIdProfileInAndIdLocalite(Collection<Integer> idProfiles, String idLocalite);

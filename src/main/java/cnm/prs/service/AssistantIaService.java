@@ -385,6 +385,7 @@ public class AssistantIaService {
             case ADMINISTRATEUR -> "un Administrateur de PRS";
             // ⚠️ 2026-10-04 — l'assistant est une route interne, fermée au candidat : libellé pour l'exhaustivité.
             case CANDIDAT -> "un candidat à la soumission en ligne";
+            case MEMBRE_CAO -> "un membre d'une commission d'appel d'offres";   // ⚠️ lot 2a : route interne fermée, exhaustivité
         };
     }
 

@@ -354,6 +354,15 @@ public class FicheMarcheService {
         return derniereValidee(idDmc).map(f -> etatVersion(contexte(idDmc, false), f));
     }
 
+    /**
+     * ⚠️ V67 (2026-10-04, lot 2a) — l'état de la version <strong>courante</strong>, validée ou non ({@code empty} si jamais
+     * enregistrée). Sans contrôle de périmètre : la vue d'un membre de CAO, qui voit sa procédure avant son lancement.
+     */
+    @Transactional(readOnly = true)
+    public java.util.Optional<EtatVersion> etatCourant(Long idDmc) {
+        return derniereVersion(idDmc).map(f -> etatVersion(contexte(idDmc, false), f));
+    }
+
     private EtatVersion etatVersion(Contexte ctx, FicheMarche fiche) {
         FicheMarcheDto d = toDto(ctx, fiche);
         Map<String, ChampFicheMarche> champs = new LinkedHashMap<>();
@@ -1518,7 +1527,9 @@ public class FicheMarcheService {
                 internes.responsableDto(idDmc), internes.estTitulaire(idDmc), internes.etat(idDmc).name(), champsCalcules,
                 // ⚠️ V66 (lot 2, §B2.1) — l'état de la cérémonie des clés, null en mode papier.
                 !RemiseElectronique.electronique(cadrage) ? null
-                        : ceremonieRepository.findById(idDmc).map(cnm.prs.entity.CeremonieCles::getEtat).orElse(cnm.prs.entity.CeremonieCles.A_VENIR));
+                        : ceremonieRepository.findById(idDmc).map(cnm.prs.entity.CeremonieCles::getEtat).orElse(cnm.prs.entity.CeremonieCles.A_VENIR),
+                // ⚠️ V67 (lot 2a, §B5) — l'état de la commission d'appel d'offres, null en mode papier.
+                internes.etatCao(idDmc, RemiseElectronique.electronique(cadrage)));
     }
 
     /**

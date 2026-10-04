@@ -23,19 +23,30 @@ public class EmailService {
 
     private final ObjectProvider<JavaMailSender> mailSenderProvider;
     private final boolean enabled;
+    private final boolean journaliser;
     private final String from;
 
     public EmailService(ObjectProvider<JavaMailSender> mailSenderProvider,
             @Value("${app.mail.enabled:false}") boolean enabled,
+            @Value("${app.mail.journaliser:false}") boolean journaliser,
             @Value("${app.mail.from:no-reply@cnm.mg}") String from) {
         this.mailSenderProvider = mailSenderProvider;
         this.enabled = enabled;
+        this.journaliser = journaliser;
         this.from = from;
     }
 
     @Async
     public void envoyer(String destinataire, String sujet, String corps) {
-        if (!enabled || destinataire == null || destinataire.isBlank()) {
+        if (destinataire == null || destinataire.isBlank()) {
+            return;
+        }
+        // ⚠️ 2026-10-04 (recette, soumission en ligne) — app.mail.journaliser=true : le courriel entier au journal (codes de
+        // confirmation et d'activation compris). RECETTE SEULEMENT : jamais en production, où l'envoi réel est la règle.
+        if (journaliser) {
+            log.info("COURRIEL{} à {} — {}\n{}", enabled ? "" : " (envoi désactivé)", destinataire, sujet, corps);
+        }
+        if (!enabled) {
             return;
         }
         JavaMailSender sender = mailSenderProvider.getIfAvailable();

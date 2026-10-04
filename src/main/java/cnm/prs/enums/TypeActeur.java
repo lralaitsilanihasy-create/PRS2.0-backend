@@ -15,5 +15,8 @@ public enum TypeActeur {
     UGPM,
 
     /** ⚠️ 2026-10-04 — candidat à la soumission en ligne ({@code t_compte_candidat}), connecté par son adresse électronique. */
-    CANDIDAT
+    CANDIDAT,
+
+    /** ⚠️ 2026-10-04 (lot 2a) — membre d'une commission d'appel d'offres ({@code t_compte_cao}), connecté par son adresse électronique. */
+    MEMBRE_CAO
 }

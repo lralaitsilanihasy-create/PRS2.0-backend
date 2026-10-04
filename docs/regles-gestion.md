@@ -719,6 +719,17 @@ reste identique texte pour texte, à la seule ligne « Mode de remise des offres
 - **Les classeurs Excel du candidat restent provisoires** (décision du pilote, Q14) : les formulaires deviendront des
   formulaires en ligne de la plateforme ; rien n'est retiré aujourd'hui.
 
+⚠️ **2026-10-04, soumission en ligne (lots 2a et 2b, V66-V67) — qui détient les parts de clé, et ce qui bloque la validation.**
+Décision du pilote (Q11) : les détenteurs sont les membres de la **commission d'appel d'offres** (qualité `MEMBRE`), désignés
+par la **PRMP** par une décision, une CAO par DAO, un président parmi eux ; les experts adjoints n'ont pas de part ; exclus par
+construction : PRMP, UGPM, contrôleurs de la CNM, candidats. Le responsable de la procédure (CNM) reste le gardien neutre du
+quorum, de la date de cérémonie et du **dépositaire de la part de secours**. Trois règles s'ajoutent au bilan en mode
+électronique : **règle 12 `SE_DEPOSITAIRE`** (bloquante : un dépositaire désigné), **règle 13 `SE_CAO`** (bloquante : la CAO
+constituée — décision, deux membres, un président), et l'avertissement **S1 `SE_QUORUM_MARGE`** (le quorum égale le nombre de
+membres). La **publication de l'avis** (et des lettres d'invitation) exige la **cérémonie des clés close** (409
+`CEREMONIE_NON_CLOSE`) ; la validation de la fiche, elle, ne l'exige pas. Contrat : `docs/api-endpoints.md`, §§ *La cérémonie des
+clés… — V66* et *La commission d'appel d'offres… — V67* ; décisions : ADR-0013 et ADR-0010 (amendement du 2026-10-04).
+
 #### La fiche DAO des travaux (référentiel remis le 2026-09-24)
 
 - **Les travaux se préparent** : 257 informations (dont un bloc d'annexes et de formulaires), avec leur vocabulaire —

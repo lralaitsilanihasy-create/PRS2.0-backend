@@ -108,6 +108,8 @@ public final class ControlesFicheMarche {
     public static final String SE_QUORUM_MARGE = "SE_QUORUM_MARGE";
     /** ⚠️ V66 (lot 2, §B4) — avertissement de la cérémonie : parts disponibles ≤ quorum. */
     public static final String SE_MARGE_EPUISEE = "SE_MARGE_EPUISEE";
+    /** ⚠️ V67 (2026-10-04, soumission en ligne, lot 2a, §B3) — règle 13 : la commission d'appel d'offres est constituée. */
+    public static final String SE_CAO = "SE_CAO";
     private static final String BLOC_REMISE = "B04";
 
     /** Libellés CAPM du plan dont les dates entrent dans {@code DATES_ORDRE} à défaut de champ. */
@@ -167,7 +169,15 @@ public final class ControlesFicheMarche {
      * responsable désigné. {@code null}, ou {@code electronique = false} : aucune de ces règles n'est évaluée.
      */
     public record RemiseElectroniqueBilan(boolean electronique, RemiseElectronique.Parametres parametres,
-            RemiseElectronique.Internes internes, boolean responsableDesigne) {
+            RemiseElectronique.Internes internes, boolean responsableDesigne,
+            /** ⚠️ V67 (lot 2a, §B3) — la commission d'appel d'offres est constituée (décision, deux membres, un président). */
+            boolean caoConstituee) {
+
+        /** Sans la CAO (V50 ; les tests unitaires et les appels d'avant V67). */
+        public RemiseElectroniqueBilan(boolean electronique, RemiseElectronique.Parametres parametres,
+                RemiseElectronique.Internes internes, boolean responsableDesigne) {
+            this(electronique, parametres, internes, responsableDesigne, true);
+        }
     }
 
     /** Les contrôles d'un champ, {@code {règle, rôle}} par contrôle ({@code REGLE} seule : rôle vide) ; V50 : plusieurs, séparés par des virgules. */
@@ -280,6 +290,8 @@ public final class ControlesFicheMarche {
             // ⚠️ V66 (2026-10-04, soumission en ligne, lot 2) — règle 12 (dépositaire, bloquante) et S1 (marge, avertissement).
             depositaire(se.internes(), bloquants, ok);
             quorumMarge(se.internes(), avertissements);
+            // ⚠️ V67 (2026-10-04, soumission en ligne, lot 2a, §B3) — règle 13 : la CAO est constituée.
+            cao(se.caoConstituee(), bloquants, ok);
         }
 
         return new BilanControlesDto(bloquants, avertissements, ok, nbSaisis, nbAttendus);
@@ -522,6 +534,15 @@ public final class ControlesFicheMarche {
                     + i.depositaire().nom() + (i.depositaire().organisme() == null ? "" : " (" + i.depositaire().organisme() + ")") + "."));
         } else {
             bloquants.add(new Controle(SE_DEPOSITAIRE, List.of(), BLOC_REMISE, RemiseElectronique.MESSAGE_DEPOSITAIRE));
+        }
+    }
+
+    /** ⚠️ V67 — règle 13, {@code SE_CAO} : la commission d'appel d'offres est constituée (décision, deux membres au moins, un président). Bloquante. */
+    private static void cao(boolean constituee, List<Controle> bloquants, List<Controle> ok) {
+        if (constituee) {
+            ok.add(new Controle(SE_CAO, List.of(), BLOC_REMISE, "Commission d'appel d'offres constituée."));
+        } else {
+            bloquants.add(new Controle(SE_CAO, List.of(), BLOC_REMISE, RemiseElectronique.MESSAGE_CAO));
         }
     }
 

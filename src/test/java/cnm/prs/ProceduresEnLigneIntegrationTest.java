@@ -227,10 +227,16 @@ class ProceduresEnLigneIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.avertissements[*].regle")).doesNotContain("SIGNATURE_EN_LIGNE");
         idFiche = JsonPath.read(fiche, "$.idFiche");
 
+        // ⚠️ V67 (lot 2a, Q11) — les membres détenteurs de parts sont ceux de la CAO, désignée par la PRMP.
+        mvc.perform(put("/api/fiches-marche/" + dmc + "/cao").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"decision\":{\"reference\":\"DEC-001/2026\",\"date\":\"2026-09-30\"},\"membres\":["
+                        + "{\"nom\":\"Rabe\",\"prenom\":\"Paul\",\"email\":\"m1@cao.mg\",\"qualite\":\"MEMBRE\",\"origine\":\"ENTITE_CONTRACTANTE\",\"service\":\"DAF\",\"president\":true},"
+                        + "{\"nom\":\"Rasoa\",\"prenom\":\"Lova\",\"email\":\"m2@cao.mg\",\"qualite\":\"MEMBRE\",\"origine\":\"EXPERT_OBJET\",\"organisme\":\"Université\",\"domaine\":\"Informatique\"}]}"))
+                .andExpect(status().isOk());
         mvc.perform(post("/api/fiches-marche/" + dmc + "/responsable").header("Authorization", tokenAdmin).contentType(JSON)
                 .content("{\"im\":\"CTRVER\"}")).andExpect(status().isCreated());
         mvc.perform(put("/api/fiches-marche/" + dmc + "/parametres-internes").header("Authorization", tokenVer).contentType(JSON)
-                .content("{\"membresCommission\":[\"CTRMEM\",\"CTRCC1\"],\"quorum\":2,\"depositaire\":{\"nom\":\"Rakoto Jean\"},\"dateCeremonie\":\""
+                .content("{\"quorum\":2,\"depositaire\":{\"nom\":\"Rakoto Jean\"},\"dateCeremonie\":\""
                         + aujourdhui.plusDays(9) + "T09:00\"}")).andExpect(status().isOk());
         mvc.perform(post("/api/fiches-marche/" + dmc + "/valider").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.statut").value("VALIDEE"));

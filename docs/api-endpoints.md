@@ -6463,6 +6463,88 @@ SHA-256), publiées par la procédure une fois la cérémonie **close**. Sans el
 
 ---
 
+### La commission d'appel d'offres (CAO), détentrice des parts de clé — V67 ⚠️ 2026-10-04
+
+Demande front `demande-backend-2026-10-04-commission-appel-offres.md` (soumission en ligne, lot 2a ; **décision du pilote,
+Q11 du plan**) ; migration **V67** (`t_cao`, `t_cao_membre`, `t_compte_cao`, séquence `seq_compte_cao` ; la clé étrangère de
+`t_code_candidat` vers `t_compte_candidat` est levée : la colonne porte l'identifiant court du compte, `C…` ou `K…`) ;
+ADR-0010 **amendé** (§ *Amendement du 2026-10-04*).
+
+**La décision** : les détenteurs de parts ne sont pas des contrôleurs de la CNM choisis par le responsable (V50), mais les
+**membres de la commission d'appel d'offres**, désignés par la **PRMP** par une décision, une CAO par DAO, un président parmi
+eux. Un membre a une **origine** : agent de l'entité contractante, ou expert de l'objet du DAO ; les deux détiennent une part.
+Les **experts adjoints** évaluent et n'ouvrent pas les plis : pas de part, pas de compte. Exclus par construction : PRMP, UGPM,
+contrôleurs de la CNM (le responsable est un contrôleur), candidats inscrits. `n` = membres de qualité `MEMBRE` + 1 (la part de
+secours).
+
+| Méthode | URL | Corps | Réponse | Statuts | Accès |
+|---|---|---|---|---|---|
+| GET | /api/fiches-marche/{idDmc}/cao | — | `CaoDto` | 200, 403, 404 | qui lit la fiche (PRMP, UGPM, Commission, Administrateur, responsable) |
+| PUT | /api/fiches-marche/{idDmc}/cao | `CaoCorps` | `CaoDto` | 200, 400 par champ, 403, 404, 409 `MEMBRE_EXCLU` / `CEREMONIE_CLOSE` | **PRMP de la fiche seule** |
+| POST | /api/fiches-marche/{idDmc}/cao/decision | multipart `fichier` (PDF) | `CaoDto` | 200, 400 `FORMAT_INVALIDE` / `FICHIER_ABSENT`, 403, 404, 413 | PRMP |
+| POST | /api/fiches-marche/{idDmc}/cao/membres/{id}/inviter | — | `MembreCaoDto` | 200, 403, 404, 409 `COMPTE_ACTIF` | PRMP |
+| POST | /api/cao/activation | `{ email, code, motDePasse }` | `{ etat: 'ACTIF' }` | 200, 400 `CODE_INVALIDE` / `CODE_EXPIRE` / mot de passe, 404, 429 | public |
+| GET | /api/cao/mes-procedures | — | `MaProcedure[]` | 200 | `MEMBRE_CAO` |
+| GET | /api/cao/procedures/{idDmc} | — | `{ procedure: ProcedureEnLigneDto, president, cao: CaoDto }` | 200, 403, 404 | `MEMBRE_CAO` qui y siège |
+| GET | /api/fiches-marche/{idDmc}/parametres-internes/candidats | — | — | **410 Gone** | — |
+
+- **`CaoCorps`** = `{ decision: { reference, date }, membres: [{ id?, nom, prenom, email, telephone?, qualite, origine?, fonction?,
+  service?, organisme?, domaine?, president? }] }` :
+  - `qualite` ∈ `MEMBRE` (siège, détient une part, compte `MEMBRE_CAO`) · `EXPERT_ADJOINT` (évalue, pas de part, pas de compte,
+    jamais président) ;
+  - `origine`, obligatoire pour un `MEMBRE` : `ENTITE_CONTRACTANTE` (avec `service`, obligatoire) · `EXPERT_OBJET` (avec `domaine`,
+    obligatoire ; `organisme` recommandé) ;
+  - un `id` absent crée le membre, présent le met à jour, un membre omis est **retiré** (son compte, lui, reste) ;
+  - 400 par champ (`decision.reference`, `decision.date`, `membres[i].nom`, `….email`, `….qualite`, `….origine`, `….service`,
+    `….domaine`, `….president`, `….id`, et `membres` pour le nombre de membres et le président).
+- **Contrôles** : `reference` et `date` obligatoires ; le PDF est facultatif (anomalie `DECISION_SANS_FICHIER`, non bloquante —
+  question 4) ; **au moins deux `MEMBRE`** et **exactement un président** parmi eux ; une adresse une seule fois dans la CAO.
+- **Exclusions par construction** (409 `MEMBRE_EXCLU`, la raison dite, jamais le compte) : une adresse qui est celle d'un
+  **contrôleur de la CNM**, de la **PRMP** ou d'une **UGPM** de la fiche, d'un **candidat** inscrit, ou d'un **compte interne**.
+- **`CaoDto`** = `{ idDmc, decision: { reference, date, fichier }, membres: MembreCaoDto[], etat, anomalies }` ; `etat` ∈ `ABSENTE` ·
+  `INCOMPLETE` · `COMPLETE` ; `anomalies` = `CAO_INCOMPLETE` (ce qui manque), `DECISION_SANS_FICHIER`, `COMPTES_NON_ACTIVES`
+  (« 2 membres n'ont pas activé leur compte. »).
+- **`MembreCaoDto`** = `{ id, nom, prenom, email, telephone, qualite, origine, fonction, service, organisme, domaine, president,
+  compte: { etat, idCompte, dateInvitation, dateActivation } | null }` ; `compte.etat` ∈ `A_INVITER` · `INVITE` · `ACTIF` · `ARCHIVE`.
+- **Les comptes `MEMBRE_CAO`** (`t_compte_cao`, identifiant `K` + 9 chiffres = `REF_ACTEUR` ; `t_compte_auth` : login = l'adresse en
+  minuscules, type `MEMBRE_CAO`) : créés **à la désignation**, `A_ACTIVER`, avec une **invitation** par courriel — un code à six
+  chiffres valable **72 heures**, le lien de l'espace (`app.cao.lien-activation`, défaut `http://localhost:4200/cao/activation`),
+  l'objet de la procédure et l'autorité contractante ; le compte reçoit aussi la notification `CLE_A_PUBLIER` (courriel compris).
+  Une adresse qui a déjà un compte actif n'est pas réinvitée : seule la notification part. Pas de ménage : une désignation est
+  temporaire, le compte reste pour la CAO suivante.
+- **Activation** (publique) : 404 adresse inconnue ; `CODE_INVALIDE` / `CODE_EXPIRE` (400), 429 après 5 essais ; le mot de passe
+  suit la politique des comptes internes (8 à 72 caractères, une lettre et un chiffre) ; un compte déjà actif répond `ACTIF`
+  sans rien changer.
+- **Connexion** : `POST /api/auth/login`, `login` = l'adresse ; `role` = `typeActeur` = `MEMBRE_CAO`, `ref` = l'identifiant court,
+  `nomAffichage` = « NOM Prénom ». ⚠️ Écart : un compte `A_ACTIVER` **n'a pas de mot de passe** ; la connexion répond 409
+  `COMPTE_A_ACTIVER` **avant** toute vérification (la demande voulait le mot de passe vérifié d'abord — il n'existe pas encore).
+- **`MEMBRE_CAO` n'atteint aucune route interne** (garde `INTERNE` de `SecurityConfig`, comme `CANDIDAT`) : lui restent `/api/cao/**`,
+  `/api/mon-compte/**`, les routes publiques, et **la cérémonie de ses procédures** (`/api/fiches-marche/{idDmc}/ceremonie/**`,
+  lot 2b) par identité : il est membre de qualité `MEMBRE` de la CAO de l'`idDmc`. Ses notifications (`GET /api/notifications/mes`)
+  restent internes : il les reçoit **par courriel**.
+- **`MaProcedure`** = `{ idDmc, reference, objet, autoriteContractante, president, dateLimite, etatCeremonie, etatPart }` ; la vue
+  d'une procédure reprend `ProcedureEnLigneDto` (lot 1c), lue sur la **version courante** de la fiche, validée ou non, sans les
+  critères de la liste publique (`datePublication` et `etat` nuls tant que rien ne les fonde).
+- **V50 corrigé** :
+  - `membresCommission` est **dérivé** de la CAO (les `MEMBRE`, par leur identifiant `K…`) : `PUT …/parametres-internes` répond 400 sous
+    `membresCommission` s'il le porte (« Les membres sont ceux de la commission d'appel d'offres, désignée par la PRMP. ») ; il
+    garde `quorum`, `dateCeremonie`, `depositaire`. `nombreParts` = membres `MEMBRE` ; `n` = `nombreParts + 1`.
+    `ParametresInternesDto.membresCommission[]` = `{ im: K…, nom: « NOM Prénom », profil: MEMBRE_CAO }`. Une CAO désignée sans
+    paramètres enregistrés donne `INCOMPLETS` (quorum, date), plus `ABSENTS`.
+  - `GET …/parametres-internes/candidats` répond **410**.
+  - **Règle 13 `SE_CAO`** (bloquante, mode électronique) : « La commission d'appel d'offres n'est pas constituée (décision, au moins
+    deux membres, un président) : la fiche ne peut pas être validée en remise électronique. » Les comptes activés ne
+    conditionnent pas la validation : ils conditionnent la clôture de la cérémonie.
+  - Règle 6 : le responsable ne détient pas de part — vrai par construction (populations disjointes), vérifié quand même.
+  - Le journal dédié (Q7) reçoit `membresCommission` à chaque changement de la liste des détenteurs, acteur = la PRMP.
+  - Une **cérémonie close fige la composition** : `PUT …/cao` qui change les membres détenteurs → 409 `CEREMONIE_CLOSE`.
+- **`FicheMarcheDto.cao`** ∈ `ABSENTE` · `INCOMPLETE` · `COMPLETE` · `null` (papier), pour tous ceux qui lisent la fiche.
+- **Recette** : `app.mail.journaliser=true` (variable `APP_MAIL_JOURNALISER`) écrit chaque courriel entier au journal, envoyé ou non —
+  codes de confirmation et d'activation lisibles dans `prs-backend.log`. **Recette seulement**, jamais en production. Le lanceur
+  `lancer-backend-jar.cmd` le pose. L'autre voie reste Mailpit (`app.mail.enabled=true`, `spring.mail.host=localhost`, port 1025).
+
+---
+
 ---
 
 ## Marchés — dates prévisionnelles

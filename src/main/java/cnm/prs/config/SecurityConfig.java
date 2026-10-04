@@ -61,7 +61,9 @@ public class SecurityConfig {
                 org.springframework.security.core.Authentication a = authentification.get();
                 boolean interne = a != null && a.isAuthenticated()
                         && !(a instanceof org.springframework.security.authentication.AnonymousAuthenticationToken)
-                        && a.getAuthorities().stream().noneMatch(g -> "ROLE_CANDIDAT".equals(g.getAuthority()));
+                        // ⚠️ 2026-10-04 (lot 2a) — ni MEMBRE_CAO : lui aussi vit hors de la coquille interne.
+                        && a.getAuthorities().stream().noneMatch(g -> "ROLE_CANDIDAT".equals(g.getAuthority())
+                                || "ROLE_MEMBRE_CAO".equals(g.getAuthority()));
                 return new org.springframework.security.authorization.AuthorizationDecision(interne);
             };
 
@@ -177,6 +179,13 @@ public class SecurityConfig {
                     auth.requestMatchers(HttpMethod.POST, CANDIDATS_PUBLIC).permitAll();
                     auth.requestMatchers("/api/candidat/**").hasRole("CANDIDAT");
                     auth.requestMatchers("/api/mon-compte/**").authenticated();
+                    // ⚠️ 2026-10-04 (soumission en ligne, lot 2a, §B2) — les membres de CAO : activation publique, espace
+                    // /api/cao/**, et la cérémonie de leurs procédures (garde par identité dans le service).
+                    auth.requestMatchers(HttpMethod.POST, "/api/cao/activation").permitAll();
+                    auth.requestMatchers("/api/cao/**").hasRole("MEMBRE_CAO");
+                    auth.requestMatchers("/api/fiches-marche/*/ceremonie/**").hasAnyRole("MEMBRE_CAO", "PRMP", "UGPM",
+                            "PRESIDENT", "CHEF_COMMISSION", "SECRETAIRE", "MEMBRE", "VERIFICATEUR", "ASSISTANT_CONTROLEUR",
+                            "CHARGE_PUBLICATION", "ADMINISTRATEUR");
                     // ⚠️ 2026-10-04 (soumission en ligne, lot 1c, §B8) — les procédures ouvertes en ligne se lisent sans
                     // session ; leurs documents (le retrait du DAO, journalisé) se téléchargent par un CANDIDAT connecté.
                     // La règle des documents précède celle du détail (1er match gagne).

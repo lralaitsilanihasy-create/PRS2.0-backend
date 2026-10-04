@@ -20,6 +20,7 @@ import cnm.prs.dto.ParametresInternesRequest;
 import cnm.prs.dto.ResponsableProcedureDto;
 import cnm.prs.dto.ResponsableRequest;
 import cnm.prs.service.ParametresInternesService;
+import cnm.prs.service.RemiseElectronique;
 import jakarta.validation.Valid;
 
 /**
@@ -54,10 +55,16 @@ public class ParametresInternesController {
         return service.ecrire(idDmc, corps);
     }
 
-    /** Les comptes désignables comme membres détenteurs d'une part de clé (titulaire seul). */
+    /**
+     * ⚠️ 2026-10-04 (soumission en ligne, lot 2a, §B3, Q11) — le responsable ne choisit plus les membres : ils sont ceux de la
+     * commission d'appel d'offres, désignée par la PRMP ({@code GET …/cao}). La route répond <strong>410 Gone</strong>.
+     */
     @GetMapping("/parametres-internes/candidats")
-    public List<CompteDesignableDto> candidatsMembres(@PathVariable Long idDmc) {
-        return service.candidatsMembres(idDmc);
+    public ResponseEntity<cnm.prs.exception.ErrorResponse> candidatsMembres(@PathVariable Long idDmc) {
+        return ResponseEntity.status(org.springframework.http.HttpStatus.GONE).body(new cnm.prs.exception.ErrorResponse(
+                java.time.LocalDateTime.now(), org.springframework.http.HttpStatus.GONE.value(), "Gone",
+                RemiseElectronique.MESSAGE_MEMBRES_CAO + " Lisez GET /api/fiches-marche/" + idDmc + "/cao.",
+                "/api/fiches-marche/" + idDmc + "/parametres-internes/candidats", null));
     }
 
     /** Désigne le responsable de la procédure (Administrateur) → 201 sans relecture de la fiche. */

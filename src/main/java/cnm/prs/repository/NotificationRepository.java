@@ -39,6 +39,14 @@ public interface NotificationRepository extends JpaRepository<Notification, Inte
     /** Supprime les notifications d'un dossier (cascade à la suppression du dossier brouillon). */
     void deleteByIdDossier(Integer idDossier);
 
+    /** ⚠️ V67 (2026-10-04, lot 2a) — les notifications d'un destinataire d'un type donné ({@code MEMBRE_CAO}), récentes d'abord. */
+    @Query("""
+            select n from Notification n
+            where n.destinataireRef = :ref and n.destinataireType = :type
+            order by n.dateEnvoi desc
+            """)
+    List<Notification> findPourRefEtType(@Param("ref") String ref, @Param("type") String type);
+
     /** ⚠️ V66 (2026-10-04, lot 2, §B4) — un rappel du même type déjà émis vers ce destinataire pour cet objet depuis une date. */
     boolean existsByTypeNotifAndDestinataireRefAndTypeObjetAndIdObjetAndDateEnvoiGreaterThanEqual(String typeNotif,
             String destinataireRef, String typeObjet, Integer idObjet, java.time.LocalDateTime depuis);

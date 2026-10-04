@@ -449,8 +449,9 @@ public class CeremonieService {
                 c.getDerniereVerification(), c.getRemplacements());
     }
 
+    /** ⚠️ V67 (lot 2a) — un membre de CAO ({@code K…}) ou, à défaut, un contrôleur. */
     private String nomMembre(String im) {
-        return controleurRepository.findById(im).map(c -> ActeurDirectory.nomCanonique(c.getNomCont(), c.getPrenomsCont())).orElse(im);
+        return internes.nomMembre(im);
     }
 
     private static String empreintes(List<CleDetenteur> cles) {
