@@ -43,4 +43,8 @@ public class CeremonieCles {
 
     @Column(name = "DATE_MAJ", nullable = false)
     private LocalDateTime dateMaj;
+
+    /** ⚠️ V68 (lot 3, §B6) — la clôture des dépôts notifiée (DEPOTS_CLOS), une fois. */
+    @Column(name = "DATE_DEPOTS_CLOS")
+    private LocalDateTime dateDepotsClos;
 }

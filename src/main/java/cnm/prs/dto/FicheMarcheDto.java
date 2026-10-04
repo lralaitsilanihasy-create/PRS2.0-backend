@@ -144,4 +144,10 @@ public class FicheMarcheDto {
      * lisent la fiche : {@code ABSENTE}, {@code INCOMPLETE}, {@code COMPLETE} ; {@code null} en mode papier.
      */
     private String cao;
+
+    /**
+     * ⚠️ V68 (2026-10-04, soumission en ligne, lot 3, §B5) — {@code { nombre, clos }} : le nombre d'offres déposées et la clôture des
+     * dépôts (date limite passée) ; {@code null} en mode papier. Qui a déposé ne se lit qu'après la date limite ({@code GET …/depots}).
+     */
+    private OffreDto.Resume depots;
 }

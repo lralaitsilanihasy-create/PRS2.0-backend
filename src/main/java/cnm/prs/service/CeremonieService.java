@@ -119,6 +119,19 @@ public class CeremonieService {
         return ceremonieRepository.findById(idDmc).map(CeremonieCles::getEtat).orElse(CeremonieCles.A_VENIR);
     }
 
+    /**
+     * ⚠️ V68 (lot 3, §B4) — la première offre scellée pose {@code premierDepot} : plus de réouverture, la CAO figée, une clé
+     * remplacée est désormais archivée (S4). Sans effet si déjà posé.
+     */
+    public void poserPremierDepot(Long idDmc) {
+        CeremonieCles c = ceremonie(idDmc);
+        if (!Boolean.TRUE.equals(c.getPremierDepot())) {
+            c.setPremierDepot(true);
+            c.setDateMaj(LocalDateTime.now());
+            ceremonieRepository.save(c);
+        }
+    }
+
     /** ⚠️ §B2.6 — la cérémonie est-elle close ? (ce que la publication de l'avis exige en mode électronique). */
     @Transactional(readOnly = true)
     public boolean estClose(Long idDmc) {
@@ -461,7 +474,7 @@ public class CeremonieService {
     /** La ligne de la cérémonie, créée {@code A_VENIR} au premier geste. */
     private CeremonieCles ceremonie(Long idDmc) {
         return ceremonieRepository.findById(idDmc).orElseGet(() -> {
-            CeremonieCles c = new CeremonieCles(idDmc, CeremonieCles.A_VENIR, null, false, LocalDateTime.now());
+            CeremonieCles c = new CeremonieCles(idDmc, CeremonieCles.A_VENIR, null, false, LocalDateTime.now(), null);
             return ceremonieRepository.save(c);
         });
     }
@@ -582,12 +595,12 @@ public class CeremonieService {
 
     // ------------------------------------------------------------------ notifications
 
-    private void notifierResponsable(Long idDmc, TypeNotification type, String titre, String corps) {
+    void notifierResponsable(Long idDmc, TypeNotification type, String titre, String corps) {
         internes.responsable(idDmc).ifPresent(r -> internes.notifierMembre(idDmc, r.getImResponsable(), type, titre, corps));
     }
 
     /** Vers la PRMP du plan de la ligne du DMC, si elle se retrouve. */
-    private void notifierPrmp(Long idDmc, TypeNotification type, String titre, String corps) {
+    void notifierPrmp(Long idDmc, TypeNotification type, String titre, String corps) {
         DossierMec dmc = dmcRepository.findById(idDmc).orElse(null);
         if (dmc == null) {
             return;

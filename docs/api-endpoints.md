@@ -6545,6 +6545,87 @@ secours).
 
 ---
 
+### Le dépôt scellé d'une offre — V68 ⚠️ 2026-10-04
+
+Demande front `demande-backend-2026-10-04-depot-scelle.md` (soumission en ligne, lot 3) ; décision :
+`docs/adr/ADR-0013-scellement-des-offres-en-ligne.md` (§1 dépôt, §4 conteneur, §7 stockage) ; migration **V68** (`t_offre`,
+`t_offre_morceau`, `t_offre_journal`, `t_ceremonie_cles.DATE_DEPOTS_CLOS`). Le candidat **scelle son offre dans son navigateur** ;
+le serveur reçoit un conteneur qu'il ne peut pas lire, l'horodate à **son** horloge, en recalcule l'empreinte et rend un accusé. Il
+sait qui a déposé, quand, pour quel lot, combien d'octets et pour quelles clés — **jamais le contenu**, ni un prix. Aucune dépendance :
+le serveur ne déchiffre rien.
+
+| Méthode | URL | Corps | Réponse | Statuts | Accès |
+|---|---|---|---|---|---|
+| GET | /api/horloge | — | `{ maintenant: 'AAAA-MM-JJTHH:MM:SS', fuseau }` | 200 | public |
+| GET | /api/procedures-en-ligne/{idDmc}/pieces | — | `PieceAttendueDto[]` | 200, 404 | public |
+| POST | /api/candidat/offres | `{ idDmc, lot, enTete, remplace?, groupementNifs? }` | `OffreDto` (`EN_COURS`) | 201, 400, 409 | CANDIDAT |
+| PUT | /api/candidat/offres/{idOffre}/morceaux/{rang} | octets (`application/octet-stream`), en-tête `X-Empreinte` | `{ rang, taille, recus }` | 200, 400, 403, 404, 409, 413 | CANDIDAT (le sien) |
+| POST | /api/candidat/offres/{idOffre}/sceller | `{ empreinte }` | `AccuseDto` (`DEPOSEE`) | 200, 400, 403, 404, 409 | CANDIDAT (le sien) |
+| GET | /api/candidat/offres | — | `OffreDto[]` (toutes ses offres) | 200 | CANDIDAT |
+| GET | /api/candidat/offres/{idOffre} | — | `OffreDto` | 200, 403, 404 | CANDIDAT (le sien) |
+| GET | /api/candidat/offres/{idOffre}/accuse | — | le PDF de l'accusé | 200, 403, 404, 409 `OFFRE_NON_DEPOSEE` | CANDIDAT (le sien) |
+| DELETE | /api/candidat/offres/{idOffre} | — | `OffreDto` (`RETIREE`) | 200, 403, 404, 409 | CANDIDAT (le sien) |
+| GET | /api/fiches-marche/{idDmc}/depots | — | `DepotsDto` | 200, 403, 404 | PRMP et UGPM de la fiche, responsable de la procédure |
+
+- **Les conditions du dépôt** (§B1), vérifiées dans cet ordre à `POST …/offres` (409 à code) :
+  1. la procédure figure dans la liste publique — sinon `PROCEDURE_FERMEE` ;
+  2. `etat = OUVERTE` à l'horloge du serveur — `PROCEDURE_FERMEE` avant l'ouverture des dépôts, `DELAI_DEPASSE` après la date limite ;
+  3. la cérémonie close et ses clés publiées, et **`parts[].empreinte` de l'en-tête exactement les empreintes publiées, dans l'ordre**
+     — sinon `CLES_INDISPONIBLES` (une clé remplacée entre-temps : le candidat rescelle) ;
+  4. l'entreprise déclarée — sinon `ENTREPRISE_ABSENTE` ;
+  5. ni l'entreprise ni un membre du groupement (`groupementNifs`) exclus au répertoire de l'ARMP du jour — sinon `ENTREPRISE_EXCLUE`,
+     avec le message arrêté (« Votre entreprise (NIF *n*) est exclue des marchés publics par la décision de l'ARMP *réf.* du
+     *JJ/MM/AAAA*, jusqu'au *JJ/MM/AAAA* | sans date de fin. Vous ne pouvez pas déposer d'offre pendant cette période. » ; pour
+     un groupement : « Un membre du groupement (NIF *n*, *raison sociale*) est exclu … ») ;
+  6. un remplacement exige `B04-SE-10 = OUI` — sinon `REMPLACEMENT_INTERDIT`.
+
+  Puis `OFFRE_EXISTANTE` (une offre déjà déposée pour ce lot sans `remplace`, ou l'identifiant déjà pris), `TAILLE_DEPASSEE` (la taille
+  annoncée dépasse `B04-SE-09`), 400 `LOT_INVALIDE`, `REMPLACE_INVALIDE`, `EN_TETE_INVALIDE`. Un dépôt `EN_COURS` de la même entreprise
+  pour le même lot est **abandonné** (purgé) au profit du nouveau.
+- **L'en-tête** (ADR §4) voyage comme une **chaîne JSON** : ses octets UTF-8, tels que le navigateur les a hachés, entrent dans
+  l'empreinte. Contrôles (400 `EN_TETE_INVALIDE`) : `version = 1` ; `idOffre` UUID (c'est l'identifiant de l'offre) ; `idDmc` et `lot`
+  ceux du corps ; `algorithmes = ['AES-256-GCM', 'RSA-OAEP-3072-SHA256', 'SHAMIR-GF256']` ; `tailleMorceau = 4194304` ;
+  `nombreMorceaux = max(1, ⌈tailleContenu / tailleMorceau⌉)` ; `quorum` et `n` ceux de la cérémonie ; chaque `parts[].part` en base64.
+- **Les morceaux** : **rang de 0 à `nombreMorceaux − 1`** ; 4 Mio + 28 octets au plus (413) ; `X-Empreinte` = SHA-256 du morceau en
+  hexadécimal (400 `EMPREINTE_DIFFERENTE`) ; rejouables, dans n'importe quel ordre (un morceau renvoyé remplace le précédent) ; date
+  limite revérifiée (`DELAI_DEPASSE`) ; `OFFRE_SCELLEE` après le scellement ; 400 `MORCEAU_INVALIDE` (rang hors de l'offre, morceau vide).
+- **Sceller** : tous les morceaux (`MORCEAU_MANQUANT`, rangs dans `details.rangs`) ; tous pleins sauf le dernier, et la somme des
+  contenus égale `tailleContenu` (`MORCEAU_INVALIDE`) ; date limite et exclusion revérifiées ; clés toujours publiées
+  (`CLES_INDISPONIBLES`) ; taille ≤ `B04-SE-09` (`TAILLE_DEPASSEE`) ; **empreinte recalculée** = SHA-256(en-tête puis morceaux) identique
+  à `{ empreinte }` (`EMPREINTE_DIFFERENTE`, journalisé, les morceaux restent : renvoyer puis resceller). Alors : `DEPOSEE`, `dateDepot`
+  à l'horloge du serveur, `numero` = rang d'arrivée dans la procédure, l'offre remplacée passe `REMPLACEE` (jamais avant), la cérémonie
+  reçoit **`premierDepot`** (plus de réouverture, CAO figée, une clé remplacée est archivée), accusé par courriel (`ACCUSE_DEPOT`).
+- **Stockage** (ADR §7) : sous `app.offres.repertoire` (défaut `${user.home}/prs-offres`, variable `APP_OFFRES_REPERTOIRE`), pendant le
+  dépôt un fichier par morceau (`<idOffre>/morceaux/<rang>.bin`), au scellement **un fichier par offre** (`<idOffre>.offre`) : la longueur
+  de l'en-tête sur 4 octets gros-boutiste, l'en-tête, puis les morceaux dans l'ordre. La base garde l'en-tête, l'empreinte et le chemin.
+- **`OffreDto`** = `{ idOffre, idDmc, reference, objet, lot, etat, dateCreation, dateDepot, dateRetrait, numero, taille, nombreMorceaux,
+  recus, empreinte, remplace, remplaceePar }` ; `etat` ∈ `EN_COURS` · `DEPOSEE` · `REMPLACEE` · `RETIREE` · `ECARTEE` (lot 4).
+  **`AccuseDto`** = `{ offre: OffreDto, entreprise: { nif, raisonSociale }, n, quorum, empreintesDetenteurs }` ; le PDF dit la même chose.
+- **Retrait** : une offre `DEPOSEE`, avant la date limite, si `B04-SE-10 = OUI` (sinon `REMPLACEMENT_INTERDIT`) ; le conteneur est
+  **conservé, marqué `RETIREE`**, et ne s'ouvre jamais (question 4 au juriste) ; courriel `OFFRE_RETIREE`. Un dépôt `EN_COURS` ne se
+  retire pas (409 `OFFRE_NON_DEPOSEE`) : il se purge seul, ou cède la place au suivant.
+- **Purge** (toutes les 5 minutes, `app.offres.cron-entretien`) : un dépôt `EN_COURS` sans morceau depuis 24 heures, ou dont la date
+  limite est passée, est supprimé, fichiers compris ; le journal reste.
+- **`PieceAttendueDto`** = `{ code, rubrique, numero, libelle, forme, ancienneteMaxMois, parLot, modele, obligatoire }` : en tête de
+  `OFFRE`, `AE` (acte d'engagement signé, par lot si alloti), `RECU-DAO` (reçu des frais de dossier, Q3 — à confirmer par le juriste),
+  `GARANTIE` si le cadrage exige la garantie de soumission ; puis les pièces exigées de la fiche (bloc B14, dernière version validée),
+  `OFFRE` puis `ADMINISTRATIVE`, dans l'ordre du DAO, `code = PIECE-<idPiece>` (stable pour une version de la fiche).
+- **`DepotsDto`** : avant la date limite `{ clos: false, nombre, dateLimite, depots: null }` — **le nombre seul** (question 1) ; après,
+  `{ clos: true, nombre, dateLimite, depots: [{ numero, entreprise, nif, lot, dateDepot, dateRetrait, empreinte, taille, etat }] }`, les
+  `DEPOSEE` par rang d'arrivée puis les `RETIREE`, `REMPLACEE`, `ECARTEE`. L'Administrateur ne lit pas les dépôts.
+  `FicheMarcheDto.depots` = `{ nombre, clos } | null` (mode électronique).
+- **`ProcedureEnLigneDto`** gagne `remplacementAutorise` (`B04-SE-10 = OUI`) et `depotsOuverts` (`etat = OUVERTE`).
+- **Notifications** : `ACCUSE_DEPOT` et `OFFRE_RETIREE` au candidat (trace `CANDIDAT` et courriel) ; `DEPOTS_CLOS` à la PRMP et au
+  responsable de la procédure, **une fois**, à la date limite, avec le nombre ; aucune notification par dépôt avant l'échéance.
+- **Journal** `t_offre_journal` : `CREATION`, `SCELLEMENT`, `SCELLEMENT_REFUSE`, `REMPLACEMENT`, `RETRAIT`, `PURGE` — par compte et par
+  offre, sans contenu ; il survit à la purge.
+
+**Correction de la CAO du 2026-10-04 (précision du pilote, demande 2a §B6)** : « Un expert est suffisant dans la CAO. » `qualite`
+disparaît de `MembreCaoDto` ; dans le corps, `EXPERT_ADJOINT` répond 400 sous `membres[i].qualite` (« Les experts adjoints
+n'existent plus : un expert de l'objet siège comme membre. »), `MEMBRE` est toléré et ignoré ; `origine` est obligatoire pour tous ;
+**au plus un `EXPERT_OBJET`** (400 sous `membres`, « Un expert de l'objet suffit : la commission n'en compte qu'un. ») ; tout membre a
+un compte `MEMBRE_CAO` et détient une part. Pas de migration : `QUALITE` reste en base, posée à `MEMBRE`.
+
 ---
 
 ## Marchés — dates prévisionnelles

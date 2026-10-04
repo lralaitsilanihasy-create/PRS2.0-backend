@@ -113,6 +113,8 @@ public class FicheMarcheService {
     private final ParametresInternesService internes;
     /** ⚠️ V66 (2026-10-04, lot 2) — la cérémonie des clés, dont la fiche dit l'état. */
     private final cnm.prs.repository.CeremonieClesRepository ceremonieRepository;
+    /** ⚠️ V68 (lot 3) — les offres déposées en ligne, dont la fiche dit le nombre. */
+    private final cnm.prs.repository.OffreRepository offreRepository;
     /** ⚠️ 2026-09-28 (contrat-cadre, §B7) — le mandat en vigueur, source du défaut de l'acte de nomination. */
     private final MandatService mandats;
     /** ⚠️ V60 (2026-10-03) — le matériel et le personnel exigés d'une fiche de travaux. */
@@ -128,7 +130,9 @@ public class FicheMarcheService {
             cnm.prs.repository.DossierRepository dossierRepository, DocumentsFicheMarcheService documents,
             cnm.prs.repository.DocumentFicheMarcheRepository documentRepository, DmcService dmcService,
             BesoinFiche besoin, ParametreService parametres, ParametresInternesService internes, MandatService mandats,
-            MoyensFiche moyens, PiecesFiche pieces, cnm.prs.repository.CeremonieClesRepository ceremonieRepository) {
+            MoyensFiche moyens, PiecesFiche pieces, cnm.prs.repository.CeremonieClesRepository ceremonieRepository,
+            cnm.prs.repository.OffreRepository offreRepository) {
+        this.offreRepository = offreRepository;
         this.ceremonieRepository = ceremonieRepository;
         this.pieces = pieces;
         this.moyens = moyens;
@@ -160,7 +164,14 @@ public class FicheMarcheService {
     public FicheMarcheDto lire(Long idDmc) {
         Contexte ctx = contexte(idDmc);
         FicheMarche fiche = ficheRepository.findFirstByIdDmcOrderByNumeroVersionDesc(idDmc).orElseGet(() -> virtuelle(idDmc));
-        return toDto(ctx, fiche);
+        FicheMarcheDto d = toDto(ctx, fiche);
+        // ⚠️ V68 (lot 3, §B5) — le nombre d'offres déposées et la clôture des dépôts, en mode électronique.
+        if (RemiseElectronique.electronique(d.getCadrage())) {
+            java.time.LocalDateTime limite = etatValide(idDmc).map(ProceduresEnLigneService::dateLimite).orElse(null);
+            d.setDepots(new cnm.prs.dto.OffreDto.Resume(offreRepository.countByIdDmcAndEtat(idDmc, cnm.prs.entity.Offre.DEPOSEE),
+                    limite != null && !java.time.LocalDateTime.now().isBefore(limite)));
+        }
+        return d;
     }
 
     @Transactional(readOnly = true)
@@ -1529,7 +1540,7 @@ public class FicheMarcheService {
                 !RemiseElectronique.electronique(cadrage) ? null
                         : ceremonieRepository.findById(idDmc).map(cnm.prs.entity.CeremonieCles::getEtat).orElse(cnm.prs.entity.CeremonieCles.A_VENIR),
                 // ⚠️ V67 (lot 2a, §B5) — l'état de la commission d'appel d'offres, null en mode papier.
-                internes.etatCao(idDmc, RemiseElectronique.electronique(cadrage)));
+                internes.etatCao(idDmc, RemiseElectronique.electronique(cadrage)), null);   // ⚠️ V68 : depots, posé par lire()
     }
 
     /**

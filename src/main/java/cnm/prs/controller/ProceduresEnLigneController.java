@@ -37,6 +37,11 @@ public class ProceduresEnLigneController {
      * ⚠️ Lot 2 (§B2.5) — les clés publiques de la cérémonie close, sans matricule ni nom : l'entrée du scellement (lot 3).
      * 404 tant que la cérémonie n'est pas close, ou hors des critères de {@code GET /{idDmc}}.
      */
+    @GetMapping("/{idDmc}/pieces")
+    public List<cnm.prs.dto.OffreDto.PieceAttendue> pieces(@PathVariable Long idDmc) {   // ⚠️ lot 3, §B2 : public, 404 hors critères
+        return service.piecesAttendues(idDmc);
+    }
+
     @GetMapping("/{idDmc}/cles")
     public cnm.prs.dto.CeremonieDto.ClesPubliques cles(@PathVariable Long idDmc) {
         return ceremonie.clesPubliques(idDmc);

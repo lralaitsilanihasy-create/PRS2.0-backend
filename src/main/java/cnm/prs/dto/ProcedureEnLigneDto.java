@@ -12,7 +12,11 @@ import java.util.List;
 public record ProcedureEnLigneDto(Long idDmc, String reference, String objet, String autoriteContractante, String categorie,
         List<Lot> lots, String datePublication, String dateOuvertureDepots, String dateLimite, String heureReference,
         String signatureExigee, List<String> formatsAcceptes, Integer tailleMaxFichierMo, Integer tailleMaxOffreMo,
-        String assistance, String etat) {
+        String assistance, String etat,
+        /** ⚠️ 2026-10-04 (lot 3, §B1) — {@code B04-SE-10} : remplacer et retirer son offre avant la date limite. */
+        boolean remplacementAutorise,
+        /** ⚠️ 2026-10-04 (lot 3, §B1) — la condition 2 du dépôt : {@code etat = OUVERTE}. */
+        boolean depotsOuverts) {
 
     public record Lot(int numero, String intitule) {
     }

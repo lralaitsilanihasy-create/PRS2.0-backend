@@ -730,6 +730,15 @@ membres). La **publication de l'avis** (et des lettres d'invitation) exige la **
 `CEREMONIE_NON_CLOSE`) ; la validation de la fiche, elle, ne l'exige pas. Contrat : `docs/api-endpoints.md`, §§ *La cérémonie des
 clés… — V66* et *La commission d'appel d'offres… — V67* ; décisions : ADR-0013 et ADR-0010 (amendement du 2026-10-04).
 
+⚠️ **2026-10-04, soumission en ligne (lot 3, V68) — le dépôt d'une offre.** Le candidat scelle son offre dans son navigateur ; le
+serveur ne voit jamais le contenu ni un prix. On dépose si la procédure est en ligne et ses dépôts ouverts (à l'**horloge du
+serveur**), la cérémonie close, l'entreprise déclarée et **non exclue par l'ARMP** (ni aucun membre du groupement), et le
+remplacement permis par la fiche (`B04-SE-10`) s'il s'agit d'un remplacement. **Une offre déposée par entreprise et par lot.** La date
+limite et l'exclusion sont revérifiées au scellement : un dépôt non scellé à l'échéance est refusé. Retirer ou remplacer n'est
+possible qu'avant la date limite et si la fiche l'autorise ; une offre retirée est conservée et ne s'ouvre jamais. Avant la date
+limite, la PRMP ne connaît que **le nombre** de dépôts ; le registre (qui, quand, empreinte) ne se lit qu'après. Contrat :
+`docs/api-endpoints.md`, § *Le dépôt scellé d'une offre — V68*.
+
 #### La fiche DAO des travaux (référentiel remis le 2026-09-24)
 
 - **Les travaux se préparent** : 257 informations (dont un bloc d'annexes et de formulaires), avec leur vocabulaire —

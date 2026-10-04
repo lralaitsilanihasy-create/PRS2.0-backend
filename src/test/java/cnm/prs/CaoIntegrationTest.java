@@ -133,11 +133,16 @@ class CaoIntegrationTest extends CnmIntegrationTestSupport {
         cao(tokenAdmin, corpsCao("m1@cao.mg", "m2@cao.mg")).andExpect(status().isForbidden());
         cao(tokenVer, corpsCao("m1@cao.mg", "m2@cao.mg")).andExpect(status().isForbidden());
         String mauvais = cao(tokenPrmp, "{\"membres\":[{\"nom\":\"Rabe\",\"prenom\":\"Paul\",\"email\":\"m1@cao.mg\",\"qualite\":\"MEMBRE\"},"
-                + "{\"nom\":\"Randria\",\"prenom\":\"Hery\",\"email\":\"exp@cao.mg\",\"qualite\":\"EXPERT_ADJOINT\",\"president\":true},"
-                + "{\"nom\":\"X\",\"prenom\":\"Y\",\"email\":\"pas une adresse\",\"qualite\":\"AUTRE\"}]}")
+                + "{\"nom\":\"Randria\",\"prenom\":\"Hery\",\"email\":\"exp@cao.mg\",\"qualite\":\"EXPERT_ADJOINT\",\"origine\":\"EXPERT_OBJET\","
+                + "\"domaine\":\"Réseaux\"},"
+                + "{\"nom\":\"X\",\"prenom\":\"Y\",\"email\":\"pas une adresse\",\"origine\":\"EXPERT_OBJET\",\"domaine\":\"Génie civil\"}]}")
                 .andExpect(status().isBadRequest()).andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<List<String>>read(mauvais, "$.erreurs[*].champ")).contains("decision.reference", "decision.date",
-                "membres[0].origine", "membres[1].president", "membres[2].email", "membres[2].qualite", "membres");
+                "membres[0].origine", "membres[1].qualite", "membres[2].email", "membres")
+                .doesNotContain("membres[0].qualite");   // MEMBRE toléré et ignoré
+        assertThat(JsonPath.<List<String>>read(mauvais, "$.erreurs[*].message")).contains(
+                "Les experts adjoints n'existent plus : un expert de l'objet siège comme membre.",
+                "Un expert de l'objet suffit : la commission n'en compte qu'un.", "Un président est à désigner parmi les membres.");
 
         // Exclusions par construction.
         Controleur mem = controleurRepository.findById("CTRMEM").orElseThrow();
@@ -157,10 +162,11 @@ class CaoIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(JsonPath.<String>read(cao, "$.etat")).isEqualTo("COMPLETE");
         assertThat(JsonPath.<String>read(cao, "$.decision.reference")).isEqualTo("DEC-001/2026");
         assertThat(JsonPath.<Boolean>read(cao, "$.decision.fichier")).isFalse();
-        assertThat(JsonPath.<List<String>>read(cao, "$.membres[*].qualite")).containsExactly("MEMBRE", "MEMBRE", "EXPERT_ADJOINT");
+        assertThat(JsonPath.<List<String>>read(cao, "$.membres[*].origine")).containsExactly("ENTITE_CONTRACTANTE", "EXPERT_OBJET");
+        assertThat(cao).doesNotContain("qualite");
         assertThat(JsonPath.<String>read(cao, "$.membres[0].compte.etat")).isEqualTo("INVITE");
         assertThat(JsonPath.<String>read(cao, "$.membres[0].compte.idCompte")).startsWith("K").hasSize(10);
-        assertThat(JsonPath.<Object>read(cao, "$.membres[2].compte")).isNull();
+        assertThat(JsonPath.<List<Object>>read(cao, "$.membres[*].compte")).hasSize(2).doesNotContainNull();
         assertThat(JsonPath.<List<String>>read(cao, "$.anomalies[*].regle")).containsExactlyInAnyOrder("DECISION_SANS_FICHIER", "COMPTES_NON_ACTIVES");
         assertThat(JsonPath.<List<String>>read(cao, "$.anomalies[?(@.regle=='COMPTES_NON_ACTIVES')].message")).containsExactly("2 membres n'ont pas activé leur compte.");
         String k1 = JsonPath.read(cao, "$.membres[0].compte.idCompte");
@@ -203,7 +209,7 @@ class CaoIntegrationTest extends CnmIntegrationTestSupport {
 
         // Mise à jour : m2 omis est retiré, m4 entre ; le compte de m2 reste.
         String maj = cao(tokenPrmp, corpsCao("m1@cao.mg", "m4@cao.mg")).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertThat(JsonPath.<List<String>>read(maj, "$.membres[*].email")).containsExactly("m1@cao.mg", "m4@cao.mg", "exp@cao.mg");
+        assertThat(JsonPath.<List<String>>read(maj, "$.membres[*].email")).containsExactly("m1@cao.mg", "m4@cao.mg");
         assertThat(comptesCao.findByEmail("m2@cao.mg")).isPresent();
         internes = mvc.perform(get("/api/fiches-marche/" + idDmc + "/parametres-internes").header("Authorization", tokenVer))
                 .andReturn().getResponse().getContentAsString();
@@ -316,15 +322,16 @@ class CaoIntegrationTest extends CnmIntegrationTestSupport {
         return dmc;
     }
 
-    /** Une CAO : deux membres (le premier président, agent de l'entité ; le second expert de l'objet) et un expert adjoint. */
+    /**
+     * Une CAO : deux membres, le premier président (agent de l'entité), le second l'expert de l'objet (un seul par commission,
+     * précision du pilote du 2026-10-04 ; plus d'expert adjoint, plus de qualité).
+     */
     static String corpsCao(String email1, String email2) {
         return "{\"decision\":{\"reference\":\"DEC-001/2026\",\"date\":\"2026-09-30\"},\"membres\":["
-                + "{\"nom\":\"Rabe\",\"prenom\":\"Paul\",\"email\":\"" + email1 + "\",\"telephone\":\"034 11 111 11\",\"qualite\":\"MEMBRE\","
+                + "{\"nom\":\"Rabe\",\"prenom\":\"Paul\",\"email\":\"" + email1 + "\",\"telephone\":\"034 11 111 11\","
                 + "\"origine\":\"ENTITE_CONTRACTANTE\",\"fonction\":\"Chef de service\",\"service\":\"DAF\",\"president\":true},"
-                + "{\"nom\":\"Rasoa\",\"prenom\":\"Lova\",\"email\":\"" + email2 + "\",\"qualite\":\"MEMBRE\",\"origine\":\"EXPERT_OBJET\","
-                + "\"organisme\":\"Université d'Antananarivo\",\"domaine\":\"Informatique\"},"
-                + "{\"nom\":\"Randria\",\"prenom\":\"Hery\",\"email\":\"exp@cao.mg\",\"qualite\":\"EXPERT_ADJOINT\",\"organisme\":\"Cabinet X\","
-                + "\"domaine\":\"Réseaux\"}]}";
+                + "{\"nom\":\"Rasoa\",\"prenom\":\"Lova\",\"email\":\"" + email2 + "\",\"origine\":\"EXPERT_OBJET\","
+                + "\"organisme\":\"Université d'Antananarivo\",\"domaine\":\"Informatique\"}]}";
     }
 
     private ResultActions cao(String token, String corps) throws Exception {

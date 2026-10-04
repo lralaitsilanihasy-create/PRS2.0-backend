@@ -146,6 +146,7 @@ public class CaoService {
         Set<String> adresses = new LinkedHashSet<>();
         int presidents = 0;
         int membres = 0;
+        int experts = 0;
         for (int i = 0; i < saisis.size(); i++) {
             CaoDto.MembreCorps m = saisis.get(i);
             String p = "membres[" + i + "].";
@@ -165,36 +166,39 @@ public class CaoService {
             } else if (!adresses.add(email)) {
                 erreurs.add(new ErrorResponse.FieldError(p + "email", "Cette adresse figure deux fois dans la commission."));
             }
-            boolean membre = CaoMembre.MEMBRE.equals(m.qualite());
-            if (!membre && !CaoMembre.EXPERT_ADJOINT.equals(m.qualite())) {
-                erreurs.add(new ErrorResponse.FieldError(p + "qualite", "La qualité est MEMBRE ou EXPERT_ADJOINT."));
+            // ⚠️ 2026-10-04 (précision du pilote, demande 2a §B6) — « un expert est suffisant dans la CAO » : tout membre siège et
+            // détient une part ; la qualité EXPERT_ADJOINT n'existe plus (MEMBRE toléré et ignoré).
+            if (m.qualite() != null && !CaoMembre.MEMBRE.equals(m.qualite())) {
+                erreurs.add(new ErrorResponse.FieldError(p + "qualite", CaoMembre.EXPERT_ADJOINT.equals(m.qualite())
+                        ? "Les experts adjoints n'existent plus : un expert de l'objet siège comme membre."
+                        : "La qualité n'est plus à envoyer : tout membre de la commission détient une part."));
             }
-            if (membre) {
-                membres++;
-                if (Boolean.TRUE.equals(m.president())) {
-                    presidents++;
+            membres++;
+            if (Boolean.TRUE.equals(m.president())) {
+                presidents++;
+            }
+            if (CaoMembre.ENTITE_CONTRACTANTE.equals(m.origine())) {
+                if (vide(m.service())) {
+                    erreurs.add(new ErrorResponse.FieldError(p + "service", "Le service d'un agent de l'entité contractante est attendu."));
                 }
-                if (CaoMembre.ENTITE_CONTRACTANTE.equals(m.origine())) {
-                    if (vide(m.service())) {
-                        erreurs.add(new ErrorResponse.FieldError(p + "service", "Le service d'un agent de l'entité contractante est attendu."));
-                    }
-                } else if (CaoMembre.EXPERT_OBJET.equals(m.origine())) {
-                    if (vide(m.domaine())) {
-                        erreurs.add(new ErrorResponse.FieldError(p + "domaine", "Le domaine d'expertise d'un expert de l'objet est attendu."));
-                    }
-                } else {
-                    erreurs.add(new ErrorResponse.FieldError(p + "origine",
-                            "Un membre a une origine : ENTITE_CONTRACTANTE (agent de l'autorité contractante) ou EXPERT_OBJET."));
+            } else if (CaoMembre.EXPERT_OBJET.equals(m.origine())) {
+                experts++;
+                if (vide(m.domaine())) {
+                    erreurs.add(new ErrorResponse.FieldError(p + "domaine", "Le domaine d'expertise d'un expert de l'objet est attendu."));
                 }
-            } else if (Boolean.TRUE.equals(m.president())) {
-                erreurs.add(new ErrorResponse.FieldError(p + "president", "Un expert adjoint ne préside pas : le président est un membre."));
+            } else {
+                erreurs.add(new ErrorResponse.FieldError(p + "origine",
+                        "Un membre a une origine : ENTITE_CONTRACTANTE (agent de l'autorité contractante) ou EXPERT_OBJET."));
             }
             if (m.id() != null && membreRepository.findById(m.id()).filter(x -> idDmc.equals(x.getIdDmc())).isEmpty()) {
                 erreurs.add(new ErrorResponse.FieldError(p + "id", "Membre inconnu dans cette commission : " + m.id() + "."));
             }
         }
         if (membres < 2) {
-            erreurs.add(new ErrorResponse.FieldError("membres", "Au moins deux membres (hors experts adjoints) sont attendus."));
+            erreurs.add(new ErrorResponse.FieldError("membres", "Au moins deux membres sont attendus."));
+        }
+        if (experts > 1) {
+            erreurs.add(new ErrorResponse.FieldError("membres", "Un expert de l'objet suffit : la commission n'en compte qu'un."));
         }
         if (presidents != 1) {
             erreurs.add(new ErrorResponse.FieldError("membres", presidents == 0 ? "Un président est à désigner parmi les membres."
@@ -231,9 +235,9 @@ public class CaoService {
             e.setPrenom(m.prenom().trim());
             e.setEmail(CandidatService.normaliserEmail(m.email()));
             e.setTelephone(vide(m.telephone()) ? null : m.telephone().trim());
-            e.setQualite(m.qualite());
-            boolean membre = CaoMembre.MEMBRE.equals(m.qualite());
-            e.setOrigine(membre ? m.origine() : null);
+            e.setQualite(CaoMembre.MEMBRE);   // ⚠️ 2026-10-04 : tout membre détient une part
+            boolean membre = true;
+            e.setOrigine(m.origine());
             e.setFonction(vide(m.fonction()) ? null : m.fonction().trim());
             e.setService(vide(m.service()) ? null : m.service().trim());
             e.setOrganisme(vide(m.organisme()) ? null : m.organisme().trim());
@@ -395,7 +399,7 @@ public class CaoService {
             compte = new CaoDto.Compte(etat, c == null ? null : c.getIdCompte(), c == null ? null : c.getDateInvitation(),
                     c == null ? null : c.getDateActivation());
         }
-        return new CaoDto.Membre(m.getIdMembre(), m.getNom(), m.getPrenom(), m.getEmail(), m.getTelephone(), m.getQualite(), m.getOrigine(),
+        return new CaoDto.Membre(m.getIdMembre(), m.getNom(), m.getPrenom(), m.getEmail(), m.getTelephone(), m.getOrigine(),
                 m.getFonction(), m.getService(), m.getOrganisme(), m.getDomaine(), Boolean.TRUE.equals(m.getPresident()), compte);
     }
 

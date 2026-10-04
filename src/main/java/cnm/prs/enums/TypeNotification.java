@@ -129,5 +129,14 @@ public enum TypeNotification {
     MARGE_QUORUM,
 
     /** Une part déclarée perdue — vers le responsable de la procédure. */
-    PART_PERDUE
+    PART_PERDUE,
+
+    /** ⚠️ 2026-10-04 (soumission en ligne, lot 3, §B6) — accusé de réception d'une offre scellée — vers le candidat (courriel). */
+    ACCUSE_DEPOT,
+
+    /** Offre retirée par le candidat — vers le candidat (courriel). */
+    OFFRE_RETIREE,
+
+    /** Date limite passée : les dépôts sont clos, avec le nombre — vers la PRMP et le responsable de la procédure. */
+    DEPOTS_CLOS
 }

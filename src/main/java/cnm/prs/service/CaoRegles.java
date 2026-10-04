@@ -62,7 +62,7 @@ final class CaoRegles {
         }
         List<CaoMembre> membres = membres(tous);
         if (membres.size() < 2) {
-            out.add(new CaoDto.Anomalie(CAO_INCOMPLETE, "Au moins deux membres (hors experts adjoints) sont attendus."));
+            out.add(new CaoDto.Anomalie(CAO_INCOMPLETE, "Au moins deux membres sont attendus."));
         }
         long presidents = membres.stream().filter(m -> Boolean.TRUE.equals(m.getPresident())).count();
         if (presidents == 0) {

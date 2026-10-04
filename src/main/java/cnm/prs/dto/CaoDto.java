@@ -20,11 +20,11 @@ public record CaoDto(Long idDmc, Decision decision, List<Membre> membres, String
     }
 
     /**
-     * Un membre : {@code qualite} ∈ {@code MEMBRE} · {@code EXPERT_ADJOINT} ; {@code origine} (pour un {@code MEMBRE}) ∈
-     * {@code ENTITE_CONTRACTANTE} (avec {@code service}) · {@code EXPERT_OBJET} (avec {@code organisme} et {@code domaine}) ;
-     * {@code compte} est {@code null} pour un expert adjoint.
+     * Un membre : tout membre siège et détient une part (⚠️ 2026-10-04, précision du pilote : plus d'expert adjoint) ;
+     * {@code origine} ∈ {@code ENTITE_CONTRACTANTE} (avec {@code service}) · {@code EXPERT_OBJET} (avec {@code organisme} et
+     * {@code domaine}, un seul par commission) ; {@code compte} est toujours servi.
      */
-    public record Membre(Long id, String nom, String prenom, String email, String telephone, String qualite, String origine,
+    public record Membre(Long id, String nom, String prenom, String email, String telephone, String origine,
             String fonction, String service, String organisme, String domaine, boolean president, Compte compte) {
     }
 

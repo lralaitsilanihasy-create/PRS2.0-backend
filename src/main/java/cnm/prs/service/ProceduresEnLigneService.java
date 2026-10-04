@@ -55,6 +55,8 @@ public class ProceduresEnLigneService {
     static final String CHAMP_TAILLE_FICHIER = "B04-SE-08";
     static final String CHAMP_TAILLE_OFFRE = "B04-SE-09";
     static final String CHAMP_ASSISTANCE = "B04-SE-14";
+    /** ⚠️ 2026-10-04 (lot 3) — remplacement et retrait avant la date limite (OUI / NON). */
+    static final String CHAMP_REMPLACEMENT = "B04-SE-10";
 
     public static final String A_VENIR = "A_VENIR";
     public static final String OUVERTE = "OUVERTE";
@@ -68,11 +70,13 @@ public class ProceduresEnLigneService {
     private final RetraitDaoRepository retraitRepository;
     private final CompteCandidatRepository compteRepository;
     private final EntrepriseRepository entrepriseRepository;
+    private final PiecesFiche piecesFiche;
 
     public ProceduresEnLigneService(FicheMarcheRepository ficheRepository, FicheMarcheService fiches,
             DocumentsFicheMarcheService documents, DocumentFicheMarcheRepository documentRepository, LotRepository lotRepository,
             RetraitDaoRepository retraitRepository, CompteCandidatRepository compteRepository,
-            EntrepriseRepository entrepriseRepository) {
+            EntrepriseRepository entrepriseRepository, PiecesFiche piecesFiche) {
+        this.piecesFiche = piecesFiche;
         this.ficheRepository = ficheRepository;
         this.fiches = fiches;
         this.documents = documents;
@@ -84,7 +88,7 @@ public class ProceduresEnLigneService {
     }
 
     /** La procédure lue, et sa fiche validée. */
-    private record Lue(ProcedureEnLigneDto dto, FicheMarche fiche, FicheMarcheService.EtatVersion etat) {
+    record Lue(ProcedureEnLigneDto dto, FicheMarche fiche, FicheMarcheService.EtatVersion etat) {
     }
 
     // ------------------------------------------------------------------ public
@@ -164,7 +168,7 @@ public class ProceduresEnLigneService {
 
     // ------------------------------------------------------------------ lecture
 
-    private Lue exiger(Long idDmc) {
+    Lue exiger(Long idDmc) {
         return lire(idDmc, LocalDateTime.now())
                 .orElseThrow(() -> new ResourceNotFoundException("Procédure en ligne introuvable : " + idDmc + "."));
     }
@@ -235,7 +239,59 @@ public class ProceduresEnLigneService {
                 entier(brute(etat, CHAMP_TAILLE_FICHIER)),
                 entier(brute(etat, CHAMP_TAILLE_OFFRE)),
                 etat.valeur(CHAMP_ASSISTANCE),
-                etatProcedure);
+                etatProcedure,
+                remplacementAutorise(etat),
+                OUVERTE.equals(etatProcedure));
+    }
+
+    /** ⚠️ 2026-10-04 (lot 3, §B1) — {@code B04-SE-10 = OUI} : remplacer et retirer son offre avant la date limite. */
+    static boolean remplacementAutorise(FicheMarcheService.EtatVersion etat) {
+        return "OUI".equalsIgnoreCase(brute(etat, CHAMP_REMPLACEMENT));
+    }
+
+    /** ⚠️ 2026-10-04 (lot 3, §B3) — {@code B04-SE-09} en octets ({@code null} si non renseigné). */
+    static Long tailleMaxOffreOctets(FicheMarcheService.EtatVersion etat) {
+        Integer mo = entier(brute(etat, CHAMP_TAILLE_OFFRE));
+        return mo == null ? null : mo * 1024L * 1024L;
+    }
+
+    /** La procédure si elle remplit les critères de la liste publique (close comprise), vide sinon. */
+    Optional<Lue> trouver(Long idDmc) {
+        return lire(idDmc, LocalDateTime.now());
+    }
+
+    /**
+     * ⚠️ 2026-10-04 (lot 3, §B2) — les <strong>pièces attendues</strong> de l'offre, publiques : 404 hors des critères de la liste.
+     * En tête de la rubrique {@code OFFRE} : l'acte d'engagement signé ({@code AE}, par lot si alloti), le reçu des frais de dossier
+     * ({@code RECU-DAO}, Q3 du plan, à confirmer par le juriste), la garantie de soumission si le cadrage l'exige ({@code GARANTIE},
+     * voie B) ; puis les pièces exigées de la fiche (bloc B14, dernière version validée), {@code OFFRE} puis {@code ADMINISTRATIVE},
+     * dans l'ordre du DAO. {@code code} : {@code PIECE-<idPiece>}, stable pour une version de la fiche.
+     */
+    @Transactional(readOnly = true)
+    public List<cnm.prs.dto.OffreDto.PieceAttendue> piecesAttendues(Long idDmc) {
+        Lue l = exiger(idDmc);
+        boolean alloti = l.dto().lots().size() > 1;
+        List<cnm.prs.dto.OffreDto.PieceAttendue> out = new ArrayList<>();
+        out.add(new cnm.prs.dto.OffreDto.PieceAttendue("AE", PiecesFiche.OFFRE, null, "Acte d'engagement signé", "Original signé",
+                null, alloti, null, true));
+        out.add(new cnm.prs.dto.OffreDto.PieceAttendue("RECU-DAO", PiecesFiche.OFFRE, null, "Reçu du paiement des frais de dossier",
+                "Copie", null, false, null, true));
+        Map<String, Object> cadrage = l.etat().etat().getCadrage();
+        if (cadrage != null && "OUI".equalsIgnoreCase(String.valueOf(cadrage.get("garantieSoumission")))) {
+            out.add(new cnm.prs.dto.OffreDto.PieceAttendue("GARANTIE", PiecesFiche.OFFRE, null,
+                    "Garantie de soumission (document et code de vérification)", "Original", null, alloti, null, true));
+        }
+        List<cnm.prs.dto.PieceExigeeDto> exigees = piecesFiche.pieces(l.fiche().getIdFiche());
+        for (String rubrique : List.of(PiecesFiche.OFFRE, PiecesFiche.ADMINISTRATIVE)) {
+            for (cnm.prs.dto.PieceExigeeDto p : exigees) {
+                if (rubrique.equals(p.getRubrique())) {
+                    out.add(new cnm.prs.dto.OffreDto.PieceAttendue("PIECE-" + p.getIdPiece(), p.getRubrique(), p.getNumero(),
+                            p.getLibelle(), p.getForme(), p.getAncienneteMaxMois(), Boolean.TRUE.equals(p.getParLot()) && alloti,
+                            p.getModele(), true));
+                }
+            }
+        }
+        return out;
     }
 
     /**

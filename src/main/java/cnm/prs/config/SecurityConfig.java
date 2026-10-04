@@ -194,6 +194,8 @@ public class SecurityConfig {
                     auth.requestMatchers(HttpMethod.GET, "/api/procedures-en-ligne", "/api/procedures-en-ligne/*").permitAll();
                     // ⚠️ 2026-10-04 (lot 2, §B2.5) — les clés publiques de la cérémonie close : l'entrée du scellement, publique.
                     auth.requestMatchers(HttpMethod.GET, "/api/procedures-en-ligne/*/cles").permitAll();
+                    // ⚠️ 2026-10-04 (lot 3, §B1, §B2) — l'horloge du serveur et les pièces attendues de l'offre : publiques.
+                    auth.requestMatchers(HttpMethod.GET, "/api/horloge", "/api/procedures-en-ligne/*/pieces").permitAll();
                     // ⚠️ LOT 5 (2026-08-26) — documentation d'API générée (springdoc / Swagger UI) :
                     // purement consultative, servie par l'application elle-même (aucune donnée métier).
                     // ⚠️ Audit 2026-08-27 (lot E) — mais elle décrit TOUTE la surface d'attaque :
