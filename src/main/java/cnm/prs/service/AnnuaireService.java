@@ -235,6 +235,8 @@ public class AnnuaireService {
             case CONTROLEUR -> ficheControleur(cle);
             case PRMP -> fichePrmp(cle);
             case UGPM -> ficheUgpm(cle);
+            // ⚠️ 2026-10-04 — un candidat (soumission en ligne) n'a pas de fiche dans l'annuaire interne.
+            case CANDIDAT -> throw introuvable(TypeActeur.CANDIDAT, cle);
         };
     }
 

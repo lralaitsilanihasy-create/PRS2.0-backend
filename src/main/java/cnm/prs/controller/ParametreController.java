@@ -125,4 +125,18 @@ public class ParametreController {
         return service.fixerCompteDao(corps);
     }
 
+
+    /** ⚠️ V63 (2026-10-04, soumission en ligne, §B7) — les paramètres des comptes candidats ; Administrateur seul. */
+    @PreAuthorize("hasRole('ADMINISTRATEUR')")
+    @GetMapping("/candidats")
+    public ParametreService.ParametresCandidats candidats() {
+        return service.candidats();
+    }
+
+    /** ⚠️ V63 — écriture des paramètres des candidats (un champ absent garde sa valeur) ; 400 nominatif. */
+    @PreAuthorize("hasRole('ADMINISTRATEUR')")
+    @PutMapping("/candidats")
+    public ParametreService.ParametresCandidats fixerCandidats(@RequestBody ParametreService.ParametresCandidats corps) {
+        return service.fixerCandidats(corps);
+    }
 }

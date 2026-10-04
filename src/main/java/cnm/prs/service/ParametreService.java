@@ -211,6 +211,76 @@ public class ParametreService {
         return remiseElectronique();
     }
 
+    // ------------------------------------------------------------------ candidats (⚠️ V63, 2026-10-04)
+
+    public static final String CANDIDAT_VERIFICATION_NIF = "CANDIDAT_VERIFICATION_NIF";
+    public static final String CANDIDAT_CONFIRMATION_TELEPHONE = "CANDIDAT_CONFIRMATION_TELEPHONE";
+    public static final String CANDIDAT_INSCRIPTIONS_PAR_JOUR = "CANDIDAT_INSCRIPTIONS_PAR_JOUR";
+    public static final String CANDIDAT_DELAI_CONFIRMATION_JOURS = "CANDIDAT_DELAI_CONFIRMATION_JOURS";
+    public static final String CANDIDAT_DELAI_INACTIVITE_MOIS = "CANDIDAT_DELAI_INACTIVITE_MOIS";
+    public static final String CANDIDAT_TAILLE_MAX_PIECE_MO = "CANDIDAT_TAILLE_MAX_PIECE_MO";
+    static final java.util.Set<String> VERIFICATIONS_NIF = java.util.Set.of("AUTOMATIQUE", "SUR_PIECES");
+
+    /**
+     * ⚠️ V63 (demande front du 2026-10-04, soumission en ligne, §B7) — les paramètres des comptes candidats
+     * ({@code GET / PUT /api/parametres/candidats}). Absents : leurs valeurs par défaut (SUR_PIECES, NON, 5, 7, 24, 10).
+     */
+    public record ParametresCandidats(String verificationNif, Boolean confirmationTelephone, Integer inscriptionsParJour,
+            Integer delaiConfirmationJours, Integer delaiInactiviteMois, Integer tailleMaxPieceMo) {
+    }
+
+    @Transactional(readOnly = true)
+    public ParametresCandidats candidats() {
+        String nif = texte(CANDIDAT_VERIFICATION_NIF);
+        return new ParametresCandidats(nif != null && VERIFICATIONS_NIF.contains(nif) ? nif : "SUR_PIECES",
+                "OUI".equalsIgnoreCase(texte(CANDIDAT_CONFIRMATION_TELEPHONE)),
+                entier(CANDIDAT_INSCRIPTIONS_PAR_JOUR, 5), entier(CANDIDAT_DELAI_CONFIRMATION_JOURS, 7),
+                entier(CANDIDAT_DELAI_INACTIVITE_MOIS, 24), entier(CANDIDAT_TAILLE_MAX_PIECE_MO, 10));
+    }
+
+    /** Écriture par l'Administrateur ; un champ absent garde sa valeur ; 400 nominatif. */
+    public ParametresCandidats fixerCandidats(ParametresCandidats p) {
+        java.util.List<cnm.prs.exception.ErrorResponse.FieldError> erreurs = new java.util.ArrayList<>();
+        if (p.verificationNif() != null && !VERIFICATIONS_NIF.contains(p.verificationNif())) {
+            erreurs.add(new cnm.prs.exception.ErrorResponse.FieldError("verificationNif", "AUTOMATIQUE ou SUR_PIECES."));
+        }
+        borne(erreurs, "inscriptionsParJour", p.inscriptionsParJour(), 1, 1000);
+        borne(erreurs, "delaiConfirmationJours", p.delaiConfirmationJours(), 1, 365);
+        borne(erreurs, "delaiInactiviteMois", p.delaiInactiviteMois(), 1, 240);
+        borne(erreurs, "tailleMaxPieceMo", p.tailleMaxPieceMo(), 1, 100);
+        if (!erreurs.isEmpty()) {
+            throw new cnm.prs.exception.ChampsInvalidesException(erreurs);
+        }
+        if (p.verificationNif() != null) {
+            ecrireTexte(CANDIDAT_VERIFICATION_NIF, p.verificationNif());
+        }
+        if (p.confirmationTelephone() != null) {
+            ecrireTexte(CANDIDAT_CONFIRMATION_TELEPHONE, p.confirmationTelephone() ? "OUI" : "NON");
+        }
+        ecrireEntier(CANDIDAT_INSCRIPTIONS_PAR_JOUR, p.inscriptionsParJour());
+        ecrireEntier(CANDIDAT_DELAI_CONFIRMATION_JOURS, p.delaiConfirmationJours());
+        ecrireEntier(CANDIDAT_DELAI_INACTIVITE_MOIS, p.delaiInactiviteMois());
+        ecrireEntier(CANDIDAT_TAILLE_MAX_PIECE_MO, p.tailleMaxPieceMo());
+        return candidats();
+    }
+
+    private int entier(String cle, int defaut) {
+        java.math.BigDecimal n = nombre(cle);
+        return n == null || n.signum() <= 0 ? defaut : n.intValue();
+    }
+
+    private void ecrireEntier(String cle, Integer valeur) {
+        if (valeur != null) {
+            ecrireTexte(cle, String.valueOf(valeur));
+        }
+    }
+
+    private static void borne(java.util.List<cnm.prs.exception.ErrorResponse.FieldError> erreurs, String champ, Integer v, int min, int max) {
+        if (v != null && (v < min || v > max)) {
+            erreurs.add(new cnm.prs.exception.ErrorResponse.FieldError(champ, "De " + min + " à " + max + "."));
+        }
+    }
+
     /** La valeur texte d'un paramètre ; {@code null} si absent ou vide. */
     @Transactional(readOnly = true)
     public String texte(String cle) {

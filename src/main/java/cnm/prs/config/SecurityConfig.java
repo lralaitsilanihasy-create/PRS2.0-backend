@@ -49,6 +49,23 @@ import jakarta.servlet.http.Cookie;
 @EnableMethodSecurity
 public class SecurityConfig {
 
+    /** ⚠️ 2026-10-04 (soumission en ligne, lot 1a) — les routes publiques du compte candidat. */
+    static final String[] CANDIDATS_PUBLIC = { "/api/candidats/inscription", "/api/candidats/confirmation",
+        "/api/candidats/codes" };
+
+    /**
+     * ⚠️ 2026-10-04 — la règle de toutes les routes internes : authentifié, et pas {@code CANDIDAT}.
+     */
+    static final org.springframework.security.authorization.AuthorizationManager<
+            org.springframework.security.web.access.intercept.RequestAuthorizationContext> INTERNE = (authentification, contexte) -> {
+                org.springframework.security.core.Authentication a = authentification.get();
+                boolean interne = a != null && a.isAuthenticated()
+                        && !(a instanceof org.springframework.security.authentication.AnonymousAuthenticationToken)
+                        && a.getAuthorities().stream().noneMatch(g -> "ROLE_CANDIDAT".equals(g.getAuthority()));
+                return new org.springframework.security.authorization.AuthorizationDecision(interne);
+            };
+
+
     /**
      * Ressources de référence / paramétrage (§3.8 Module 03 ; §3.2 « pas d'accès aux
      * référentiels ») : chemins de collection. Leurs écritures sont réservées à
@@ -154,6 +171,12 @@ public class SecurityConfig {
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> {
                     auth.requestMatchers("/api/auth/**").permitAll();
+                    // ⚠️ 2026-10-04 (soumission en ligne, lot 1a, §B2) — l'inscription des CANDIDATS est publique (sans
+                    // session) ; leur espace est /api/candidat/** ; « mon compte » (changer son mot de passe) leur reste
+                    // ouvert. Tout le reste leur est fermé par la dernière règle (INTERNE).
+                    auth.requestMatchers(HttpMethod.POST, CANDIDATS_PUBLIC).permitAll();
+                    auth.requestMatchers("/api/candidat/**").hasRole("CANDIDAT");
+                    auth.requestMatchers("/api/mon-compte/**").authenticated();
                     // ⚠️ LOT 5 (2026-08-26) — documentation d'API générée (springdoc / Swagger UI) :
                     // purement consultative, servie par l'application elle-même (aucune donnée métier).
                     // ⚠️ Audit 2026-08-27 (lot E) — mais elle décrit TOUTE la surface d'attaque :
@@ -189,7 +212,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, GESTION_COMPTES).hasRole("ADMINISTRATEUR")
                         .requestMatchers(HttpMethod.PUT, GESTION_COMPTES_ID).hasRole("ADMINISTRATEUR")
                         .requestMatchers(HttpMethod.DELETE, GESTION_COMPTES_ID).hasRole("ADMINISTRATEUR")
-                        .anyRequest().authenticated();
+                        // ⚠️ 2026-10-04 — « authentifié » ne suffit plus : un CANDIDAT n'atteint AUCUNE route interne, même
+                        // celles dont le contrôleur n'a pas de garde par profil (référentiels, annuaires, messages…).
+                        .anyRequest().access(INTERNE);
                 })
                 .oauth2ResourceServer(oauth -> oauth
                         .bearerTokenResolver(bearerTokenResolver)

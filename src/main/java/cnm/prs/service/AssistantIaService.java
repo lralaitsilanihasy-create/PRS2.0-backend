@@ -383,6 +383,8 @@ public class AssistantIaService {
             case ASSISTANT_CONTROLEUR -> "un Assistant contrôleur";
             case CHARGE_PUBLICATION -> "un Chargé de publication";
             case ADMINISTRATEUR -> "un Administrateur de PRS";
+            // ⚠️ 2026-10-04 — l'assistant est une route interne, fermée au candidat : libellé pour l'exhaustivité.
+            case CANDIDAT -> "un candidat à la soumission en ligne";
         };
     }
 

@@ -63,13 +63,16 @@ public class AuthService {
     private final EntiteContractRepository entiteContractRepository;
     private final PieceJointeService pieceJointeService;
     private final UgpmRepository ugpmRepository;
+    /** ⚠️ 2026-10-04 — le contrôle des comptes candidats à la connexion. */
+    private final CandidatService candidatService;
 
     public AuthService(CompteAuthRepository compteRepository, ControleurRepository controleurRepository,
             ProfileRepository profileRepository, PrmpRepository prmpRepository,
             PasswordEncoder passwordEncoder, TokenService tokenService,
             ControleurDirectory controleurDirectory, NotificationService notificationService,
             PrmpEntiteDemandeRepository demandeRepository, EntiteContractRepository entiteContractRepository,
-            PieceJointeService pieceJointeService, UgpmRepository ugpmRepository) {
+            PieceJointeService pieceJointeService, UgpmRepository ugpmRepository, CandidatService candidatService) {
+        this.candidatService = candidatService;
         this.compteRepository = compteRepository;
         this.controleurRepository = controleurRepository;
         this.profileRepository = profileRepository;
@@ -84,9 +87,19 @@ public class AuthService {
         this.ugpmRepository = ugpmRepository;
     }
 
+    // ⚠️ 2026-10-04 — en écriture, et gardée malgré un 409 : la connexion d'un candidat pose sa date de dernière connexion,
+    // ou émet un code de réactivation (compte archivé) avant de répondre 409.
+    @Transactional(noRollbackFor = cnm.prs.exception.BusinessRuleException.class)
     public LoginResponse login(LoginRequest request) {
-        CompteAuth compte = compteRepository.findByLogin(request.login())
+        // ⚠️ 2026-10-04 (soumission en ligne, lot 1a) — un candidat se connecte par son adresse électronique, stockée en
+        // minuscules ; les logins internes (matricules) n'ont pas d'arobase et restent cherchés tels quels.
+        String login = request.login() != null && request.login().contains("@")
+                ? CandidatService.normaliserEmail(request.login()) : request.login();
+        CompteAuth compte = compteRepository.findByLogin(login)
                 .orElseThrow(() -> new BadCredentialsException("Identifiants invalides."));
+        if (TypeActeur.CANDIDAT.name().equals(compte.getTypeActeur())) {
+            return loginCandidat(compte, request);
+        }
         if (!Boolean.TRUE.equals(compte.getActif())) {
             throw new BadCredentialsException("Compte désactivé.");
         }
@@ -129,6 +142,22 @@ public class AuthService {
         String token = tokenService.generer(compte.getLogin(), role, type, ref, localite);
         return new LoginResponse(token, compte.getLogin(), role, type.name(),
                 ref, nomAffichage, localite, tokenService.getExpirationSeconds());
+    }
+
+    /**
+     * ⚠️ 2026-10-04 (soumission en ligne, lot 1a, §B2) — la connexion d'un candidat : le mot de passe d'abord (un compte non
+     * confirmé ou archivé ne se révèle qu'à qui le connaît), puis l'état du compte ({@link CandidatService#controlerConnexion}) ;
+     * rôle {@code CANDIDAT}, {@code ref} = l'identifiant court du candidat, sans localité.
+     */
+    private LoginResponse loginCandidat(CompteAuth compte, LoginRequest request) {
+        if (!passwordEncoder.matches(request.motDePasse(), compte.getMotDePasse())) {
+            throw new BadCredentialsException("Identifiants invalides.");
+        }
+        String nomAffichage = candidatService.controlerConnexion(compte);
+        String role = ProfilUtilisateur.CANDIDAT.name();
+        String token = tokenService.generer(compte.getLogin(), role, TypeActeur.CANDIDAT, compte.getRefActeur(), null);
+        return new LoginResponse(token, compte.getLogin(), role, TypeActeur.CANDIDAT.name(), compte.getRefActeur(), nomAffichage,
+                null, tokenService.getExpirationSeconds());
     }
 
     /**

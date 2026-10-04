@@ -24,7 +24,13 @@ public enum ProfilUtilisateur {
     CHARGE_PUBLICATION,
     ADMINISTRATEUR,
     /** Unité de Gestion de la Passation des Marchés — rattachée à une PRMP de tutelle (crée/édite, ne soumet pas). */
-    UGPM;
+    UGPM,
+    /**
+     * ⚠️ 2026-10-04 (soumission en ligne, lot 1a) — entreprise externe inscrite par elle-même : n'atteint AUCUNE route
+     * interne (garde de {@code SecurityConfig}), seulement son espace {@code /api/candidat/**} et les routes publiques.
+     * Sans ligne {@code tr_profile} : le rôle est posé à la connexion, comme pour la PRMP et l'UGPM.
+     */
+    CANDIDAT;
 
     /** Autorité Spring Security correspondante (préfixe {@code ROLE_}). */
     public String authority() {

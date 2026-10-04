@@ -12,5 +12,8 @@ public enum TypeActeur {
     PRMP,
 
     /** Unité de Gestion de la Passation des Marchés, rattachée à une PRMP de tutelle ({@code t_ugpm}). */
-    UGPM
+    UGPM,
+
+    /** ⚠️ 2026-10-04 — candidat à la soumission en ligne ({@code t_compte_candidat}), connecté par son adresse électronique. */
+    CANDIDAT
 }

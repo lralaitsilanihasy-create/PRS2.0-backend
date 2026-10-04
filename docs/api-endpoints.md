@@ -60,6 +60,10 @@
 Le rôle de l'utilisateur est porté par le jeton (claim `role`). Valeurs possibles :
 `PRMP`, `PRESIDENT`, `CHEF_COMMISSION`, `SECRETAIRE`, `MEMBRE`, `VERIFICATEUR`,
 `ASSISTANT_CONTROLEUR`, `CHARGE_PUBLICATION`, `ADMINISTRATEUR`.
+> ⚠️ 2026-10-04 (V63, soumission en ligne) — et **`CANDIDAT`** : une entreprise externe inscrite par elle-même (voir
+> « Comptes candidats »). Elle n'atteint **aucune** route interne : toute route hors de `/api/candidat/**`, des routes
+> publiques du candidat et de `/api/mon-compte/**` lui répond **403**, y compris celles dont le contrôleur n'a pas de
+> garde de profil (référentiels, annuaire, messages…).
 > `ASSISTANT_CONTROLEUR` : contrôleur **rattaché à une localité** (comme le Vérificateur), compte créé
 > par l'**Administrateur** (`/api/controleurs`). Reçoit en lecture les **copies** des lettres de renvoi
 > signées et des PV définitifs (avis ≠ FAVR immédiatement ; FAVR après clôture du dossier).
@@ -858,6 +862,45 @@ lectures écartées** — la preuve, après coup, que l'assistant n'a lu que ce 
 ```
 
 ---
+
+## Comptes candidats ⚠️ 2026-10-04 (V63)
+
+Demande front `demande-backend-2026-10-04-soumission-en-ligne.md`, lot 1a (§B2, §B7). Migration **V63**.
+
+| Méthode | URL | Corps | Réponse | Statuts | Accès |
+|---|---|---|---|---|---|
+| POST | /api/candidats/inscription | `{ email, telephone, motDePasse, nom, prenom }` | `{ idCompte, etat: "A_CONFIRMER" }` | 201, 400, 409 `EMAIL_EXISTANT`, 429 | public |
+| POST | /api/candidats/confirmation | `{ email, codeEmail, codeTelephone? }` | `{ etat: "CONFIRME" }` | 200, 400 `CODE_INVALIDE` / `CODE_EXPIRE`, 404, 429 | public |
+| POST | /api/candidats/codes | `{ email }` | — | 204, 429 | public |
+| GET / PUT | /api/parametres/candidats | `ParametresCandidats` | idem | 200, 400, 403 | Administrateur |
+
+- **Le compte.**
+  - Le compte de connexion est un compte ordinaire (`t_compte_auth`) : login = l'**adresse électronique** en minuscules,
+    type `CANDIDAT`, `REF_ACTEUR` = l'identifiant court du candidat (`C` + 9 chiffres, `idCompte`).
+  - Le mot de passe suit la politique des comptes internes (8 à 72 caractères, une lettre et un chiffre).
+  - L'adresse est unique parmi tous les comptes, internes compris : sinon 409 `EMAIL_EXISTANT`.
+- **La connexion** passe par `POST /api/auth/login` : `login` = l'adresse électronique, sans tenir compte de la casse.
+  - `LoginResponse.role` = `typeActeur` = `CANDIDAT`, `ref` = `idCompte`, `nomAffichage` = « NOM Prénom », sans localité.
+  - Une fois le mot de passe vérifié, et seulement alors :
+    - 409 `COMPTE_A_CONFIRMER` si l'inscription n'est pas confirmée ;
+    - 409 `COMPTE_ARCHIVE` si le compte est archivé. Un nouveau code part par courriel, et la confirmation le réactive.
+- **Les codes.**
+  - Six chiffres, à usage unique, valables 15 minutes, 5 essais au plus. Au-delà : 429, et il faut un nouveau code.
+  - Ils sont stockés hachés. Un renvoi invalide les codes précédents.
+  - Le renvoi est limité à 5 par heure et par adresse (429), et répond toujours 204, même pour une adresse inconnue.
+  - **Courriel** : par l'envoi SMTP existant (`app.mail.enabled`).
+  - **Téléphone** : exigé seulement si `CANDIDAT_CONFIRMATION_TELEPHONE` vaut `OUI` (défaut `NON`). **Aucune passerelle
+    SMS n'est raccordée** (question 3) : la passerelle actuelle n'envoie rien et le journalise. Le paramètre doit donc
+    rester à `NON`. Le téléphone est alors déclaré sans être confirmé (`telephoneConfirme` = false).
+- **Limites** : `CANDIDAT_INSCRIPTIONS_PAR_JOUR` inscriptions par adresse IP sur 24 heures (défaut 5), 429 avec
+  `Retry-After`. Aucun service d'anti-robot externe.
+- **`ParametresCandidats`** = `{ verificationNif ("AUTOMATIQUE" | "SUR_PIECES"), confirmationTelephone, inscriptionsParJour,
+  delaiConfirmationJours, delaiInactiviteMois, tailleMaxPieceMo }`. Défauts : SUR_PIECES, false, 5, 7, 24, 10. Un champ
+  absent au `PUT` garde sa valeur ; une valeur hors bornes donne un 400 nominatif.
+- **Le ménage**, chaque nuit (`app.candidats.cron-menage`, défaut 3 h 30) :
+  - un compte jamais confirmé est **supprimé** après `delaiConfirmationJours` ;
+  - un compte sans connexion depuis `delaiInactiviteMois` est **archivé**, jamais supprimé.
+- **Erreurs** : un 400 peut porter un `code` (`CODE_INVALIDE`, `CODE_EXPIRE`), comme les 409.
 
 ## Inscriptions PRMP / UGPM (validation Administrateur)
 **Ressource** `/api/inscriptions` — Instruction des inscriptions **PRMP et UGPM** (§3.1). Consultation et écriture réservées à l'**Administrateur** ; le **téléchargement d'une pièce** est ouvert à l'Administrateur **ou** au propriétaire de l'inscription. `GET /en-attente` liste les deux types (champ **`type`** ∈ `PRMP`/`UGPM` sur `InscriptionEnAttenteDto`) : une UGPM a `idPrmpTutelle` renseigné et `entitesDeclarees` vide (pas d'entités propres). `POST /{login}/valider` d'une **UGPM** active directement le compte (aucune entité à instruire — corps `ValidationInscriptionRequest` inutile) ; `refuser` fonctionne à l'identique. **À la validation** (PRMP comme UGPM), les **pièces d'inscription** (stockées sous la clé `login`) sont **ré-affectées sur la clé `id` de l'acteur** (`idPrmp`/`idUgpm`) : elles deviennent accessibles via `GET /api/prmps|ugpms/{id}/pieces/{type}` et sont purgées au `DELETE` de la fiche (unification avec les pièces créées côté Admin). Le téléchargement pendant l'instruction reste `GET /api/inscriptions/{login}/pieces/{type}`.

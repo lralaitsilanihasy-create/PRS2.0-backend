@@ -91,6 +91,15 @@ public class LoginRateLimiter {
     /** Demandes d'inscription par IP. */
     private final Map<String, Deque<Instant>> inscriptions = new ConcurrentHashMap<>();
 
+    /** ⚠️ 2026-10-04 (soumission en ligne, lot 1a) — inscriptions de candidats par IP, sur 24 heures. */
+    static final Duration FENETRE_INSCRIPTION_CANDIDAT = Duration.ofDays(1);
+    private final Map<String, Deque<Instant>> inscriptionsCandidat = new ConcurrentHashMap<>();
+
+    /** ⚠️ 2026-10-04 — renvois de codes de confirmation par adresse électronique, sur une heure. */
+    static final Duration FENETRE_RENVOI_CODES = Duration.ofHours(1);
+    static final int RENVOIS_MAX = 5;
+    private final Map<String, Deque<Instant>> renvoisCodes = new ConcurrentHashMap<>();
+
     public LoginRateLimiter(Clock horloge) {
         this.horloge = horloge;
     }
@@ -154,6 +163,40 @@ public class LoginRateLimiter {
     }
 
     /**
+     * ⚠️ 2026-10-04 (soumission en ligne, lot 1a, §B2) — quota d'inscriptions de CANDIDATS d'une adresse IP sur 24 heures
+     * ({@code max} : le paramètre {@code CANDIDAT_INSCRIPTIONS_PAR_JOUR}) ; vérifie et consomme une unité.
+     *
+     * @throws TropDeRequetesException (→ HTTP 429) si le quota est épuisé
+     */
+    public void consommerInscriptionCandidat(String ip, int max) {
+        Instant maintenant = horloge.instant();
+        long attente = attente(inscriptionsCandidat, ip, FENETRE_INSCRIPTION_CANDIDAT, Math.max(1, max), maintenant);
+        if (attente > 0) {
+            throw new TropDeRequetesException("Trop d'inscriptions depuis cette adresse aujourd'hui. Réessayez dans "
+                    + delai(attente) + ".", attente);
+        }
+        enregistrer(inscriptionsCandidat, ip, FENETRE_INSCRIPTION_CANDIDAT, maintenant);
+        menage(maintenant);
+    }
+
+    /**
+     * ⚠️ 2026-10-04 (§B2) — renvoi des codes de confirmation d'une adresse électronique : {@value #RENVOIS_MAX} par heure ;
+     * vérifie et consomme une unité.
+     *
+     * @throws TropDeRequetesException (→ HTTP 429) si le quota est épuisé
+     */
+    public void consommerRenvoiCodes(String email) {
+        Instant maintenant = horloge.instant();
+        long attente = attente(renvoisCodes, email, FENETRE_RENVOI_CODES, RENVOIS_MAX, maintenant);
+        if (attente > 0) {
+            throw new TropDeRequetesException("Trop de demandes de codes pour cette adresse. Réessayez dans "
+                    + delai(attente) + ".", attente);
+        }
+        enregistrer(renvoisCodes, email, FENETRE_RENVOI_CODES, maintenant);
+        menage(maintenant);
+    }
+
+    /**
      * Vide tous les compteurs. <strong>Réservé aux tests</strong> : l'état de ce bean vit hors
      * transaction, il n'est donc pas annulé entre deux tests d'intégration — sans cette remise à
      * zéro, les échecs de connexion d'une classe (toutes vues de 127.0.0.1) pollueraient les
@@ -163,6 +206,8 @@ public class LoginRateLimiter {
         echecsCompte.clear();
         echecsIp.clear();
         inscriptions.clear();
+        inscriptionsCandidat.clear();
+        renvoisCodes.clear();
     }
 
     // ------------------------------------------------------------------
@@ -231,6 +276,8 @@ public class LoginRateLimiter {
         purgerTable(echecsCompte, maintenant.minus(FENETRE_LOGIN));
         purgerTable(echecsIp, maintenant.minus(FENETRE_LOGIN));
         purgerTable(inscriptions, maintenant.minus(FENETRE_INSCRIPTION));
+        purgerTable(inscriptionsCandidat, maintenant.minus(FENETRE_INSCRIPTION_CANDIDAT));
+        purgerTable(renvoisCodes, maintenant.minus(FENETRE_RENVOI_CODES));
     }
 
     private static void purgerTable(Map<String, Deque<Instant>> compteurs, Instant limite) {

@@ -899,7 +899,9 @@ class AuthentificationHabilitationIntegrationTest extends CnmIntegrationTestSupp
             pointsCtrlRepository.save(pc);
         }
         ExamenDetail nonConforme = new ExamenDetail();
-        nonConforme.setIdDetailExamen(991); nonConforme.setIdExamen(5610); nonConforme.setIdPtControle(990);
+        // ⚠️ 2026-10-04 : PK tirée de la séquence (la valeur posée en dur entrait en collision avec une PK allouée).
+        nonConforme.setIdDetailExamen(examenDetailRepository.nextIdDetailExamen().intValue());
+        nonConforme.setIdExamen(5610); nonConforme.setIdPtControle(990);
         nonConforme.setIdDetail(46100);   // point évalué SUR la ligne de marché (complétude par marché)
         nonConforme.setConforme(false);
         examenDetailRepository.save(nonConforme);

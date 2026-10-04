@@ -394,7 +394,9 @@ abstract class CnmIntegrationTestSupport extends AbstractIntegrationTest {
             pointsCtrlRepository.save(pc);
         }
         ExamenDetail d = new ExamenDetail();
-        d.setIdDetailExamen(990); d.setIdExamen(1); d.setIdPtControle(990); d.setConforme(false);
+        // ⚠️ 2026-10-04 — PK tirée de la séquence, comme le service : la valeur 990 posée en dur entrait en collision avec
+        // une PK allouée par seq_examen_detail le jour où la séquence (jamais annulée par les tests) l'atteignait.
+        d.setIdDetailExamen(examenDetailRepository.nextIdDetailExamen().intValue()); d.setIdExamen(1); d.setIdPtControle(990); d.setConforme(false);
         examenDetailRepository.save(d);
     }
 
