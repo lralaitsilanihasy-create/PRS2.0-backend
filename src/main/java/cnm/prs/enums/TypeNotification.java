@@ -150,5 +150,8 @@ public enum TypeNotification {
     PV_OUVERTURE,
 
     /** S5 : les offres sont illisibles, la procédure est à relancer — vers les soumissionnaires. */
-    OFFRES_ILLISIBLES
+    OFFRES_ILLISIBLES,
+
+    /** ⚠️ 2026-10-04 (arbitrages du pilote, §B2) — le PV d'ouverture est à signer — vers chaque membre présent de la CAO. */
+    PV_A_SIGNER
 }

@@ -132,4 +132,8 @@ public class Offre {
 
     @Column(name = "OUVERTE_LE")
     private LocalDateTime ouverteLe;
+
+    /** ⚠️ V70 (§B4.2) — conteneur et contenu déchiffré supprimés au terme de la conservation. */
+    @Column(name = "PURGEE_LE")
+    private LocalDateTime purgeeLe;
 }

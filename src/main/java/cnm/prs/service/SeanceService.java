@@ -2,6 +2,7 @@ package cnm.prs.service;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.security.GeneralSecurityException;
 import java.time.Clock;
 import java.time.Duration;
@@ -38,10 +39,12 @@ import cnm.prs.entity.RapprochementCandidat;
 import cnm.prs.entity.Seance;
 import cnm.prs.entity.SeanceApport;
 import cnm.prs.entity.SeanceJournal;
+import cnm.prs.entity.SeanceSignature;
 import cnm.prs.enums.ProfilUtilisateur;
 import cnm.prs.enums.TypeActeur;
 import cnm.prs.enums.TypeNotification;
 import cnm.prs.enums.TypeObjet;
+import cnm.prs.exception.AccesReserveException;
 import cnm.prs.exception.BadRequestException;
 import cnm.prs.exception.BusinessRuleException;
 import cnm.prs.exception.ResourceNotFoundException;
@@ -54,6 +57,7 @@ import cnm.prs.repository.OffreRepository;
 import cnm.prs.repository.SeanceApportRepository;
 import cnm.prs.repository.SeanceJournalRepository;
 import cnm.prs.repository.SeanceRepository;
+import cnm.prs.repository.SeanceSignatureRepository;
 import cnm.prs.security.CurrentUser;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.JsonNode;
@@ -92,6 +96,7 @@ public class SeanceService {
     private final SeanceRepository seances;
     private final SeanceApportRepository apports;
     private final SeanceJournalRepository journal;
+    private final SeanceSignatureRepository signatures;
     private final PartsEnSeance memoire;
     private final OffreRepository offres;
     private final StockageOffres stockage;
@@ -117,7 +122,9 @@ public class SeanceService {
             CeremonieService ceremonieService, ParametresInternesService internes, CaoMembreRepository caoMembres, FicheMarcheService fiches,
             ProceduresEnLigneService procedures, ExclusionArmpService exclusions, EntrepriseCandidatService entreprises,
             RapprochementCandidatService rapprochements, CompteCandidatRepository candidats, NotificationService notifications,
-            GenerateurDocumentsFiche generateur, DossierMecRepository dmcRepository, ObjectMapper mapper, Clock horloge) {
+            GenerateurDocumentsFiche generateur, DossierMecRepository dmcRepository, ObjectMapper mapper, Clock horloge,
+            SeanceSignatureRepository signatures) {
+        this.signatures = signatures;
         this.seances = seances;
         this.apports = apports;
         this.journal = journal;
@@ -454,6 +461,9 @@ public class SeanceService {
         }
         Map<String, String> libelles = new LinkedHashMap<>();
         attendues.forEach(a -> libelles.put(a.code(), a.libelle()));
+        Map<String, String> valeurs = valeursFiche(idDmc);
+        java.util.function.Function<Integer, BigDecimal> minimums = lot -> montant(lot != null && valeurs.containsKey(GARANTIE_MINIMUM + "#" + lot)
+                ? valeurs.get(GARANTIE_MINIMUM + "#" + lot) : valeurs.get(GARANTIE_MINIMUM));
         List<Offre> toutes = offres.findByIdDmcOrderByNumeroAscDateCreationAsc(idDmc);
         Map<String, Offre> parCandidat = new LinkedHashMap<>();
         toutes.stream().filter(o -> Offre.DEPOSEE.equals(o.getEtat())).forEach(o -> parCandidat.put(o.getIdCandidat(), o));
@@ -511,15 +521,59 @@ public class SeanceService {
                     alertes.add(new SeanceDto.Alerte("EXCLUSION", "Exclusion de l'ARMP en cours : décision " + e.exclusion().referenceDecision() + "."));
                 }
             }
+            // ⚠️ Arbitrages du pilote (§B3, Q2) : le montant et l'émetteur de la garantie (manifeste v2), null en v1 ; une alerte, pas un refus.
+            SeanceDto.Garantie lue = garantie == null ? null : new SeanceDto.Garantie((String) garantie.get("codeVerification"),
+                    garantie.get("nomFichier") != null, montant(garantie.get("montant")), texte(garantie.get("monnaie")), texte(garantie.get("emetteur")));
+            BigDecimal minimum = minimums.apply(o.getLot());
+            if (minimum != null && lue != null && lue.montant() != null && lue.montant().compareTo(minimum) < 0) {
+                alertes.add(new SeanceDto.Alerte("GARANTIE_INSUFFISANTE", "Garantie de " + montantLisible(lue.montant())
+                        + " pour un minimum de " + montantLisible(minimum) + " fixé par la fiche" + (o.getLot() == null ? "" : " (lot " + o.getLot() + ")")
+                        + "."));
+            }
             @SuppressWarnings("unchecked")
             Map<String, Object> ae = (Map<String, Object>) l.get("acteEngagement");
             lues.add(new SeanceDto.OffreLue(o.getNumero(), o.getIdOffre(), o.getLot(), o.getEtat(), o.getIntegrite(), o.getMotifLecture(),
                     new SeanceDto.EntrepriseLue(o.getNif(), o.getRaisonSociale(), e == null ? null : e.verification(), e == null ? null : e.exclusion()),
-                    l.get("groupement"), ae, garantie == null ? null : new SeanceDto.Garantie((String) garantie.get("codeVerification"),
-                            garantie.get("nomFichier") != null),
-                    piecesLues, manquantes, alertes));
+                    l.get("groupement"), ae, lue, piecesLues, manquantes, alertes));
         }
         return new SeanceDto.Lecture(lues, nonOuvertes);
+    }
+
+    /** Le montant minimal de la garantie de soumission ({@code B05-GS-03}, par lot {@code B05-GS-03#n}). */
+    static final String GARANTIE_MINIMUM = "B05-GS-03";
+
+    private Map<String, String> valeursFiche(Long idDmc) {
+        try {
+            return fiches.etatValide(idDmc).map(e -> e.etat().getValeurs()).filter(Objects::nonNull).orElse(Map.of());
+        } catch (RuntimeException e) {
+            return Map.of();
+        }
+    }
+
+    /** Un montant du manifeste ou de la fiche (nombre, ou chaîne « 1 600 000 » / « 1600000,50 ») ; {@code null} s'il ne se lit pas. */
+    static BigDecimal montant(Object v) {
+        if (v == null) {
+            return null;
+        }
+        if (v instanceof Number n) {
+            return new BigDecimal(n.toString());
+        }
+        String t = v.toString().replaceAll("[\\s\\u00a0\\u202f]", "").replace(',', '.');
+        try {
+            return t.isEmpty() ? null : new BigDecimal(t);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private static String texte(Object v) {
+        return v == null || v.toString().isBlank() ? null : v.toString().trim();
+    }
+
+    private static String montantLisible(BigDecimal m) {
+        java.text.DecimalFormatSymbols sym = new java.text.DecimalFormatSymbols(java.util.Locale.FRANCE);
+        sym.setGroupingSeparator(' ');
+        return new java.text.DecimalFormat("#,##0.##", sym).format(m);
     }
 
     private static String critere(String c) {
@@ -532,16 +586,17 @@ public class SeanceService {
         };
     }
 
-    /** Une pièce d'une offre ouverte : responsable, membres de la CAO, PRMP (pas l'UGPM) ; 404 inconnue ; 409 séance non déchiffrée. */
+    /** Une pièce d'une offre ouverte : ⚠️ les membres de la CAO seulement (403 {@code PIECE_RESERVEE_CAO}) ; 404 inconnue ; 409 séance non déchiffrée. */
     @Transactional(readOnly = true)
     public byte[] piece(Long idDmc, String idOffre, String nomFichier) {
-        exigerLecteur(idDmc, false);
+        exigerMembreCao(idDmc);   // ⚠️ arbitrage du pilote (§B1) : les membres de la CAO seulement
         exigerDechiffree(idDmc);
         Offre o = offres.findById(idOffre).filter(x -> idDmc.equals(x.getIdDmc()))
                 .orElseThrow(() -> new ResourceNotFoundException("Offre introuvable : " + idOffre + "."));
         byte[] clair = stockage.lireClair(o.getIdOffre());
         if (clair == null) {
-            throw new ResourceNotFoundException("L'offre " + idOffre + " n'a pas été ouverte.");
+            throw new ResourceNotFoundException(o.getPurgeeLe() != null ? "Le contenu de l'offre " + idOffre + " a été purgé le "
+                    + o.getPurgeeLe().format(JOUR) + ", au terme de sa conservation." : "L'offre " + idOffre + " n'a pas été ouverte.");
         }
         try {
             byte[] f = dezipper(clair).get(nomFichier);
@@ -564,17 +619,132 @@ public class SeanceService {
             throw new BusinessRuleException("Le PV d'ouverture se produit une fois toutes les offres ouvertes.", "SEANCE_NON_DECHIFFREE");
         }
         s.setObservations(obs == null || obs.observations() == null || obs.observations().isBlank() ? null : obs.observations().trim());
+        s.setEtat(Seance.PV_A_SIGNER);
+        tracer(idDmc, "PV", (deposeesOuOuvertes(idDmc).isEmpty() ? "PV de carence" : "PV d'ouverture") + " produit");
+        appelerSignatures(idDmc, s);
+        return dto(idDmc);
+    }
+
+    /**
+     * ⚠️ Arbitrages du pilote (§B2) : fige les signataires (les membres présents de la CAO), produit le PV à signer et les appelle à
+     * signer ({@code PV_A_SIGNER}) ; sans membre présent, le PV est signé d'office (rien à attendre).
+     */
+    private void appelerSignatures(Long idDmc, Seance s) {
+        List<String> signataires = dto(idDmc).membres().stream().filter(SeanceDto.Membre::present).map(SeanceDto.Membre::im).toList();
+        s.setSignataires(signataires.isEmpty() ? null : String.join(",", signataires));
+        if (signataires.isEmpty()) {
+            finaliser(idDmc, s);
+            return;
+        }
+        s.setPv(pdf(idDmc, s, true));
+        s.setPvPublic(null);
+        s.setPvPublie(false);
+        seances.save(s);
+        String quoi = libellePv(idDmc, s);
+        for (String k : signataires) {
+            internes.notifierMembre(idDmc, k, TypeNotification.PV_A_SIGNER, "Séance d'ouverture : signez le " + quoi,
+                    "Le " + quoi + " de la procédure " + idDmc + " est produit : relisez-le et signez-le sur la plateforme.");
+        }
+    }
+
+    /** Le PV entièrement signé : la séance se clôt, le PV se régénère avec toutes les signatures, se publie et se notifie. */
+    private void finaliser(Long idDmc, Seance s) {
+        LocalDateTime maintenant = maintenant();
+        s.setPvSigneLe(maintenant);
+        if (Seance.PV_A_SIGNER.equals(s.getEtat())) {
+            s.setEtat(Seance.CLOSE);
+            s.setCloseLe(maintenant);
+        }
         boolean publie = publication(idDmc);
         s.setPv(pdf(idDmc, s, true));
         s.setPvPublic(publie ? pdf(idDmc, s, false) : null);
         s.setPvPublie(publie);
-        s.setEtat(Seance.CLOSE);
-        s.setCloseLe(maintenant());
         seances.save(s);
-        tracer(idDmc, "PV", "PV d'ouverture produit" + (publie ? ", publié" : ""));
-        notifierPv(idDmc, publie, TypeNotification.PV_OUVERTURE, "PV d'ouverture des plis",
-                "Le procès-verbal d'ouverture des plis de la procédure " + idDmc + " est produit.");
+        String quoi = libellePv(idDmc, s);
+        tracer(idDmc, "PV_SIGNE", quoi + " signé" + (publie ? ", publié" : ""));
+        notifierPv(idDmc, publie && !Seance.ILLISIBLE.equals(s.getEtat()), TypeNotification.PV_OUVERTURE,
+                Character.toUpperCase(quoi.charAt(0)) + quoi.substring(1), "Le " + quoi + " de la procédure " + idDmc + " est signé.");
+    }
+
+    private String libellePv(Long idDmc, Seance s) {
+        return Seance.ILLISIBLE.equals(s.getEtat()) ? "PV de constat d'illisibilité"
+                : deposeesOuOuvertes(idDmc).isEmpty() ? "PV de carence" : "PV d'ouverture des plis";
+    }
+
+    /** ⚠️ §B2 : la signature électronique simple du PV par un membre présent ; 403 {@code NON_PRESENT}, 409 {@code PV_NON_PRODUIT}, {@code DEJA_SIGNE}. */
+    public SeanceDto signer(Long idDmc) {
+        exigerDmc(idDmc);
+        String k = membreCaoAppelant(idDmc);
+        Seance s = pvASigner(idDmc);
+        if (k == null || !signatairesDe(s).contains(k)) {
+            throw new AccesReserveException("Le PV se signe par les membres de la commission présents à la séance.", "NON_PRESENT");
+        }
+        if (signatures.existsByIdDmcAndIm(idDmc, k)) {
+            throw new BusinessRuleException("Vous avez déjà signé ce PV.", "DEJA_SIGNE");
+        }
+        signatures.save(new SeanceSignature(null, idDmc, k, maintenant(), false, null, null));
+        tracer(idDmc, "SIGNATURE", internes.nomMembre(k) + " a signé le PV");
+        apresSignature(idDmc, s);
         return dto(idDmc);
+    }
+
+    /**
+     * ⚠️ §B2, Q1 : l'empêchement d'un membre présent, constaté par le président de la commission (ou le responsable de la procédure) ;
+     * le motif est porté au PV. 400 {@code MOTIF_ABSENT}, {@code NON_SIGNATAIRE} ; 403 ; 409 {@code PV_NON_PRODUIT}, {@code DEJA_SIGNE}.
+     */
+    public SeanceDto empechement(Long idDmc, SeanceDto.Empechement e) {
+        exigerDmc(idDmc);
+        String k = membreCaoAppelant(idDmc);
+        boolean president = k != null && caoMembres.findByIdDmcOrderByRangAscIdMembreAsc(idDmc).stream()
+                .anyMatch(m -> k.equals(m.getIdCompte()) && Boolean.TRUE.equals(m.getPresident()));
+        boolean responsable = !president && CurrentUser.profil().isPresent() && internes.estTitulaire(idDmc);
+        if (!president && !responsable) {
+            throw new AccessDeniedException("L'empêchement d'un membre se constate par le président de la commission.");
+        }
+        Seance s = pvASigner(idDmc);
+        if (e == null || e.motif() == null || e.motif().isBlank()) {
+            throw new BadRequestException("L'empêchement exige un motif, porté au PV.", "MOTIF_ABSENT");
+        }
+        if (e.im() == null || !signatairesDe(s).contains(e.im())) {
+            throw new BadRequestException("« " + e.im() + " » n'est pas appelé à signer ce PV.", "NON_SIGNATAIRE");
+        }
+        if (signatures.existsByIdDmcAndIm(idDmc, e.im())) {
+            throw new BusinessRuleException("Ce membre a déjà signé le PV (ou son empêchement est déjà constaté).", "DEJA_SIGNE");
+        }
+        String par = president ? internes.nomMembre(k) : internes.responsable(idDmc).map(r -> r.getNomResponsable()).orElse(null);
+        String motif = e.motif().trim();
+        signatures.save(new SeanceSignature(null, idDmc, e.im(), maintenant(), true, motif,
+                par == null ? null : par.length() > 100 ? par.substring(0, 100) : par));
+        tracer(idDmc, "EMPECHEMENT", internes.nomMembre(e.im()) + " empêché de signer : " + motif);
+        apresSignature(idDmc, s);
+        return dto(idDmc);
+    }
+
+    private void apresSignature(Long idDmc, Seance s) {
+        Set<String> faites = new HashSet<>();
+        signatures.findByIdDmcOrderByDateAscIdAsc(idDmc).forEach(x -> faites.add(x.getIm()));
+        if (faites.containsAll(signatairesDe(s))) {
+            finaliser(idDmc, s);
+        } else {
+            s.setPv(pdf(idDmc, s, true));
+            seances.save(s);
+        }
+    }
+
+    /** La séance dont le PV attend ses signatures ; 409 {@code PV_NON_PRODUIT} sinon (pas produit, ou déjà entièrement signé). */
+    private Seance pvASigner(Long idDmc) {
+        Seance s = seances.findById(idDmc).orElse(null);
+        if (s == null || s.getPv() == null || s.getSignataires() == null) {
+            throw new BusinessRuleException("Le PV de la séance n'est pas produit.", "PV_NON_PRODUIT");
+        }
+        if (s.getPvSigneLe() != null) {
+            throw new BusinessRuleException("Le PV est déjà entièrement signé.", "DEJA_SIGNE");
+        }
+        return s;
+    }
+
+    private static List<String> signatairesDe(Seance s) {
+        return cnm.prs.entity.ChampFicheMarche.liste(s.getSignataires());
     }
 
     /** S5 : constater l'illisibilité (responsable) ; 400 sans motif ; 409 tant que le quorum reste possible ({@code QUORUM_POSSIBLE}). */
@@ -594,20 +764,15 @@ public class SeanceService {
         s.setEtat(Seance.ILLISIBLE);
         s.setMotifIllisible(c.motif().trim());
         s.setCloseLe(maintenant());
-        s.setPv(pdf(idDmc, s, true));
-        boolean publie = publication(idDmc);
-        s.setPvPublic(publie ? pdf(idDmc, s, false) : null);
-        s.setPvPublie(publie);
         seances.save(s);
         tracer(idDmc, "CONSTAT", "offres illisibles : " + c.motif().trim());
+        appelerSignatures(idDmc, s);   // ⚠️ §B2 : le PV de constat se signe comme le PV d'ouverture
         for (Offre o : deposees(idDmc)) {
             candidats.findById(o.getIdCandidat()).ifPresent(cc -> notifications.emettreCandidat(TypeNotification.OFFRES_ILLISIBLES,
                     o.getIdCandidat(), cc.getEmail(), idDmc.intValue(), TypeObjet.PROCEDURE, "Offres illisibles : procédure à relancer",
                     "La séance d'ouverture de la procédure " + idDmc + " a constaté que les offres ne peuvent pas être ouvertes (" + c.motif().trim()
                             + "). La procédure sera relancée."));
         }
-        notifierPv(idDmc, false, TypeNotification.PV_OUVERTURE, "PV de constat d'illisibilité",
-                "Le procès-verbal constatant l'illisibilité des offres de la procédure " + idDmc + " est produit.");
         return dto(idDmc);
     }
 
@@ -676,7 +841,10 @@ public class SeanceService {
                     el.add(para("Délai : " + ae.get("delai") + " " + Objects.toString(ae.get("delaiUnite"), "") + " ; validité : " + ae.get("validiteJours")
                             + " jours ; rabais : " + Objects.toString(ae.get("rabais"), "aucun")));
                 }
-                el.add(para("Garantie : " + (o.garantie() == null ? "non fournie" : "fournie, code de vérification " + o.garantie().codeVerification())));
+                SeanceDto.Garantie g = o.garantie();
+                el.add(para("Garantie : " + (g == null ? "non fournie" : "fournie, code de vérification " + g.codeVerification()
+                        + (g.montant() == null ? "" : " ; montant : " + montantLisible(g.montant()) + " " + Objects.toString(g.monnaie(), "MGA"))
+                        + (g.emetteur() == null ? "" : " ; émetteur : " + g.emetteur()))));
                 el.add(para("Intégrité : " + o.integrite() + (o.motif() == null ? "" : " (" + o.motif() + ")")));
                 el.add(para("Pièces manquantes : " + (o.piecesManquantes().isEmpty() ? "aucune" : String.join(", ", o.piecesManquantes()))));
                 if (complet) {
@@ -701,10 +869,20 @@ public class SeanceService {
         }
         el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.VIDE, ""));
         el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.SOUS_TITRE, "Signatures des membres présents"));
+        // ⚠️ Arbitrages du pilote (§B2) : la signature électronique simple de chaque membre présent, ou son empêchement constaté.
+        Map<String, SeanceSignature> signees = new LinkedHashMap<>();
+        signatures.findByIdDmcOrderByDateAscIdAsc(idDmc).forEach(x -> signees.put(x.getIm(), x));
         for (SeanceDto.Membre m : d.membres()) {
-            if (m.present()) {
-                el.add(para(m.nom() + " : ______________________"));
+            boolean appele = s.getSignataires() == null ? m.present() : signatairesDe(s).contains(m.im());
+            if (!appele) {
+                continue;
             }
+            SeanceSignature x = signees.get(m.im());
+            String qui = m.nom() + " (" + (m.president() ? "Président" : "Membre") + " de la commission)";
+            el.add(para(x == null ? qui + " — signature attendue"
+                    : Boolean.TRUE.equals(x.getEmpechement()) ? qui + " — empêché de signer : " + x.getMotif()
+                            + (x.getConstatePar() == null ? "" : " (constaté par " + x.getConstatePar() + " le " + x.getDate().format(HORODATAGE) + ")")
+                    : qui + " — signé électroniquement sur la plateforme le " + x.getDate().format(HORODATAGE)));
         }
         return generateur.generer(new DocumentLibre("PV_OUVERTURE", null, el, "Procédure " + idDmc)).stream()
                 .filter(f -> "pdf".equals(f.extension())).findFirst().orElseThrow().contenu();
@@ -802,7 +980,27 @@ public class SeanceService {
         Long dans = heure == null || !maintenant.isBefore(heure) ? null : Duration.between(maintenant, heure).getSeconds();
         return new SeanceDto(idDmc, s == null ? Seance.A_VENIR : s.getEtat(), heure, s == null ? null : s.getOuverteLe(), dans, quorum(idDmc),
                 membres, autres, s != null && Boolean.TRUE.equals(s.getSecoursEmploye()), os, s == null ? null : s.getDechiffreeLe(),
-                new SeanceDto.Pv(s != null && s.getPv() != null, s != null && Boolean.TRUE.equals(s.getPvPublie())));
+                blocPv(idDmc, s, membres));
+    }
+
+    /** ⚠️ §B2 : le PV, ses signatures posées et celles qui restent attendues. */
+    private SeanceDto.Pv blocPv(Long idDmc, Seance s, List<SeanceDto.Membre> membres) {
+        if (s == null) {
+            return new SeanceDto.Pv(false, false, false, List.of(), List.of());
+        }
+        Map<String, SeanceDto.Membre> parIm = new LinkedHashMap<>();
+        membres.forEach(m -> parIm.put(m.im(), m));
+        List<SeanceDto.Signature> faites = new ArrayList<>();
+        Set<String> deja = new HashSet<>();
+        for (SeanceSignature x : signatures.findByIdDmcOrderByDateAscIdAsc(idDmc)) {
+            SeanceDto.Membre m = parIm.get(x.getIm());
+            deja.add(x.getIm());
+            faites.add(new SeanceDto.Signature(x.getIm(), m == null ? internes.nomMembre(x.getIm()) : m.nom(), m != null && m.president(),
+                    x.getDate(), Boolean.TRUE.equals(x.getEmpechement()), x.getMotif(), x.getConstatePar()));
+        }
+        List<SeanceDto.Attendue> attendues = s.getPvSigneLe() != null ? List.of() : signatairesDe(s).stream().filter(k -> !deja.contains(k))
+                .map(k -> new SeanceDto.Attendue(k, parIm.containsKey(k) ? parIm.get(k).nom() : internes.nomMembre(k))).toList();
+        return new SeanceDto.Pv(s.getPv() != null, Boolean.TRUE.equals(s.getPvPublie()), s.getPvSigneLe() != null, faites, attendues);
     }
 
     /** Les parts chiffrées d'un détenteur, retrouvées dans l'en-tête de chaque offre déposée par l'empreinte de l'une de ses clés. */
@@ -903,7 +1101,7 @@ public class SeanceService {
 
     private Seance seanceModifiable(Long idDmc) {
         Seance s = seances.findById(idDmc).orElseThrow(() -> new BusinessRuleException("La séance n'est pas ouverte.", "SEANCE_NON_OUVERTE"));
-        if (Seance.CLOSE.equals(s.getEtat()) || Seance.ILLISIBLE.equals(s.getEtat())) {
+        if (Seance.CLOSE.equals(s.getEtat()) || Seance.ILLISIBLE.equals(s.getEtat()) || Seance.PV_A_SIGNER.equals(s.getEtat())) {
             throw new BusinessRuleException("La séance est close.", "SEANCE_CLOSE");
         }
         return s;
@@ -911,7 +1109,7 @@ public class SeanceService {
 
     private void exigerDechiffree(Long idDmc) {
         String etat = seances.findById(idDmc).map(Seance::getEtat).orElse(Seance.A_VENIR);
-        if (!Seance.DECHIFFREE.equals(etat) && !Seance.CLOSE.equals(etat)) {
+        if (!Seance.DECHIFFREE.equals(etat) && !Seance.PV_A_SIGNER.equals(etat) && !Seance.CLOSE.equals(etat)) {
             throw new BusinessRuleException("Les offres ne sont pas encore ouvertes.", "SEANCE_NON_DECHIFFREE");
         }
     }
@@ -931,6 +1129,22 @@ public class SeanceService {
             throw new AccessDeniedException("Seuls les membres de la commission d'appel d'offres apportent des parts.");
         }
         return ref;
+    }
+
+    /** ⚠️ Arbitrages du pilote (§B1) : un membre de la CAO de la procédure ; 403 {@code PIECE_RESERVEE_CAO} pour tout autre. */
+    private void exigerMembreCao(Long idDmc) {
+        exigerDmc(idDmc);
+        if (membreCaoAppelant(idDmc) == null) {
+            throw new AccesReserveException("Les pièces des offres se lisent par les membres de la commission d'appel d'offres seulement.",
+                    "PIECE_RESERVEE_CAO");
+        }
+    }
+
+    /** L'identifiant {@code K…} de l'appelant s'il est membre de la CAO de la procédure, {@code null} sinon. */
+    private String membreCaoAppelant(Long idDmc) {
+        String ref = CurrentUser.ref().orElse(null);
+        return ref != null && TypeActeur.MEMBRE_CAO.name().equals(CurrentUser.acteurType().orElse(null))
+                && internes.membresCao(idDmc).contains(ref) ? ref : null;
     }
 
     private void exigerResponsable(Long idDmc) {

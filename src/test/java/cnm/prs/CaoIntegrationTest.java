@@ -107,6 +107,8 @@ class CaoIntegrationTest extends CnmIntegrationTestSupport {
         }
         tokenVer = bearer("CTRVER", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER", "ANT");
         tokenUgpm = bearer("ugpm.hery", ProfilUtilisateur.UGPM, TypeActeur.UGPM, "PRMP001", "ANT");
+        ugpmRepository.save(ugpm("UGPM714", "PRMP001", "RAKOTO", "Hery"));
+        compteAuthRepository.save(new CompteAuth("ugpm.hery", "x", "UGPM", "UGPM714", true));
         RemiseElectronique.Parametres p = parametres.remiseElectronique();
         parametres.fixerRemiseElectronique(new RemiseElectronique.Parametres(p.plateformeUrl(), p.fuseau(), "Simple",
                 p.tailleMaxPlateformeMo(), p.delaiMinRemiseJours(), p.assistance(), p.quorumDefaut(), p.verificationPartJours()));
@@ -129,7 +131,6 @@ class CaoIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.bloquants[?(@.regle=='SE_CAO')].message"))
                 .containsExactly(RemiseElectronique.MESSAGE_CAO);
 
-        cao(tokenUgpm, corpsCao("m1@cao.mg", "m2@cao.mg")).andExpect(status().isForbidden());
         cao(tokenAdmin, corpsCao("m1@cao.mg", "m2@cao.mg")).andExpect(status().isForbidden());
         cao(tokenVer, corpsCao("m1@cao.mg", "m2@cao.mg")).andExpect(status().isForbidden());
         String mauvais = cao(tokenPrmp, "{\"membres\":[{\"nom\":\"Rabe\",\"prenom\":\"Paul\",\"email\":\"m1@cao.mg\",\"qualite\":\"MEMBRE\"},"
@@ -204,23 +205,28 @@ class CaoIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(code("m2@cao.mg")).hasSize(6);
         mvc.perform(post("/api/fiches-marche/" + idDmc + "/cao/membres/" + idM2 + "/inviter").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.compte.etat").value("INVITE"));
+        // ⚠️ Arbitrages du pilote (§B4.1) : l'UGPM écrit aussi la CAO (inviter, décision, composition).
         mvc.perform(post("/api/fiches-marche/" + idDmc + "/cao/membres/" + idM2 + "/inviter").header("Authorization", tokenUgpm))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isOk()).andExpect(jsonPath("$.compte.etat").value("INVITE"));
 
         // Mise à jour : m2 omis est retiré, m4 entre ; le compte de m2 reste.
-        String maj = cao(tokenPrmp, corpsCao("m1@cao.mg", "m4@cao.mg")).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String maj = cao(tokenUgpm, corpsCao("m1@cao.mg", "m4@cao.mg")).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<List<String>>read(maj, "$.membres[*].email")).containsExactly("m1@cao.mg", "m4@cao.mg");
         assertThat(comptesCao.findByEmail("m2@cao.mg")).isPresent();
         internes = mvc.perform(get("/api/fiches-marche/" + idDmc + "/parametres-internes").header("Authorization", tokenVer))
                 .andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<List<String>>read(internes, "$.journal[?(@.champ=='membresCommission')].nouvelleValeur")).hasSize(2);
+        // ⚠️ §B4.1 : la mise à jour par l'UGPM est journalisée à son nom, pas à celui de sa PRMP de tutelle.
+        assertThat(JsonPath.<List<String>>read(internes, "$.journal[?(@.champ=='membresCommission')].nomActeur")).contains("RAKOTO Hery");
+        assertThat(JsonPath.<List<Object>>read(internes, "$.journal[?(@.champ=='membresCommission' && @.nomActeur=='RAKOTO Hery')].acteur"))
+                .containsOnlyNulls();
 
         // La décision signée : un PDF, 10 Mo au plus, par la PRMP.
         mvc.perform(multipart("/api/fiches-marche/" + idDmc + "/cao/decision").file(new MockMultipartFile("fichier", "d.txt", "text/plain",
                 "bonjour".getBytes())).header("Authorization", tokenPrmp)).andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("FORMAT_INVALIDE"));
         mvc.perform(multipart("/api/fiches-marche/" + idDmc + "/cao/decision").file(new MockMultipartFile("fichier", "d.pdf", "application/pdf",
-                "%PDF-1.4 decision".getBytes())).header("Authorization", tokenUgpm)).andExpect(status().isForbidden());
+                "%PDF-1.4 decision".getBytes())).header("Authorization", tokenUgpm)).andExpect(status().isOk());
         String avecPdf = mvc.perform(multipart("/api/fiches-marche/" + idDmc + "/cao/decision").file(new MockMultipartFile("fichier", "d.pdf",
                 "application/pdf", "%PDF-1.4 decision".getBytes())).header("Authorization", tokenPrmp)).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();

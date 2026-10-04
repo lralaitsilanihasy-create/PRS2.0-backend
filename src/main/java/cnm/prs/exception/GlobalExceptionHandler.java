@@ -140,7 +140,9 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException ex, WebRequest request) {
-        return build(HttpStatus.FORBIDDEN, ex.getMessage(), request, null);
+        // ⚠️ 2026-10-04 — un 403 à code nommé (AccesReserveException) garde son code dans le corps.
+        return build(HttpStatus.FORBIDDEN, ex.getMessage(), request, null,
+                ex instanceof AccesReserveException a ? a.getCode() : null);
     }
 
     @ExceptionHandler(ChampsInvalidesException.class)

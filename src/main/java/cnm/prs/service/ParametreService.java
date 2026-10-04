@@ -228,14 +228,17 @@ public class ParametreService {
     public static final String CANDIDAT_DELAI_CONFIRMATION_JOURS = "CANDIDAT_DELAI_CONFIRMATION_JOURS";
     public static final String CANDIDAT_DELAI_INACTIVITE_MOIS = "CANDIDAT_DELAI_INACTIVITE_MOIS";
     public static final String CANDIDAT_TAILLE_MAX_PIECE_MO = "CANDIDAT_TAILLE_MAX_PIECE_MO";
+    /** ⚠️ Arbitrages du pilote (§B4.2) : la durée de conservation des offres, en années depuis la clôture de la séance ; absente = sans limite. */
+    public static final String OFFRE_CONSERVATION_ANNEES = "OFFRE_CONSERVATION_ANNEES";
     static final java.util.Set<String> VERIFICATIONS_NIF = java.util.Set.of("AUTOMATIQUE", "SUR_PIECES");
 
     /**
      * ⚠️ V63 (demande front du 2026-10-04, soumission en ligne, §B7) — les paramètres des comptes candidats
-     * ({@code GET / PUT /api/parametres/candidats}). Absents : leurs valeurs par défaut (SUR_PIECES, NON, 5, 7, 24, 10).
+     * ({@code GET / PUT /api/parametres/candidats}). Absents : leurs valeurs par défaut (SUR_PIECES, NON, 5, 7, 24, 10 ; ⚠️ §B4.2
+     * {@code offreConservationAnnees} nul = sans limite, 0 à l'écriture l'efface).
      */
     public record ParametresCandidats(String verificationNif, Boolean confirmationTelephone, Integer inscriptionsParJour,
-            Integer delaiConfirmationJours, Integer delaiInactiviteMois, Integer tailleMaxPieceMo) {
+            Integer delaiConfirmationJours, Integer delaiInactiviteMois, Integer tailleMaxPieceMo, Integer offreConservationAnnees) {
     }
 
     @Transactional(readOnly = true)
@@ -244,7 +247,7 @@ public class ParametreService {
         return new ParametresCandidats(nif != null && VERIFICATIONS_NIF.contains(nif) ? nif : "SUR_PIECES",
                 "OUI".equalsIgnoreCase(texte(CANDIDAT_CONFIRMATION_TELEPHONE)),
                 entier(CANDIDAT_INSCRIPTIONS_PAR_JOUR, 5), entier(CANDIDAT_DELAI_CONFIRMATION_JOURS, 7),
-                entier(CANDIDAT_DELAI_INACTIVITE_MOIS, 24), entier(CANDIDAT_TAILLE_MAX_PIECE_MO, 10));
+                entier(CANDIDAT_DELAI_INACTIVITE_MOIS, 24), entier(CANDIDAT_TAILLE_MAX_PIECE_MO, 10), offreConservationAnnees());
     }
 
     /** Écriture par l'Administrateur ; un champ absent garde sa valeur ; 400 nominatif. */
@@ -257,6 +260,9 @@ public class ParametreService {
         borne(erreurs, "delaiConfirmationJours", p.delaiConfirmationJours(), 1, 365);
         borne(erreurs, "delaiInactiviteMois", p.delaiInactiviteMois(), 1, 240);
         borne(erreurs, "tailleMaxPieceMo", p.tailleMaxPieceMo(), 1, 100);
+        if (p.offreConservationAnnees() != null && p.offreConservationAnnees() != 0) {
+            borne(erreurs, "offreConservationAnnees", p.offreConservationAnnees(), 1, 100);
+        }
         if (!erreurs.isEmpty()) {
             throw new cnm.prs.exception.ChampsInvalidesException(erreurs);
         }
@@ -270,7 +276,17 @@ public class ParametreService {
         ecrireEntier(CANDIDAT_DELAI_CONFIRMATION_JOURS, p.delaiConfirmationJours());
         ecrireEntier(CANDIDAT_DELAI_INACTIVITE_MOIS, p.delaiInactiviteMois());
         ecrireEntier(CANDIDAT_TAILLE_MAX_PIECE_MO, p.tailleMaxPieceMo());
+        if (p.offreConservationAnnees() != null) {   // 0 efface : retour à « sans limite »
+            ecrireTexte(OFFRE_CONSERVATION_ANNEES, p.offreConservationAnnees() == 0 ? null : String.valueOf(p.offreConservationAnnees()));
+        }
         return candidats();
+    }
+
+    /** ⚠️ §B4.2 : {@code null} = conservation sans limite. */
+    @Transactional(readOnly = true)
+    public Integer offreConservationAnnees() {
+        java.math.BigDecimal n = nombre(OFFRE_CONSERVATION_ANNEES);
+        return n == null || n.signum() <= 0 ? null : n.intValue();
     }
 
     private int entier(String cle, int defaut) {

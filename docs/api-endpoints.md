@@ -895,7 +895,9 @@ Demande front `demande-backend-2026-10-04-soumission-en-ligne.md`, lot 1a (§B2,
 - **Limites** : `CANDIDAT_INSCRIPTIONS_PAR_JOUR` inscriptions par adresse IP sur 24 heures (défaut 5), 429 avec
   `Retry-After`. Aucun service d'anti-robot externe.
 - **`ParametresCandidats`** = `{ verificationNif ("AUTOMATIQUE" | "SUR_PIECES"), confirmationTelephone, inscriptionsParJour,
-  delaiConfirmationJours, delaiInactiviteMois, tailleMaxPieceMo }`. Défauts : SUR_PIECES, false, 5, 7, 24, 10. Un champ
+  delaiConfirmationJours, delaiInactiviteMois, tailleMaxPieceMo, offreConservationAnnees }`. Défauts : SUR_PIECES, false, 5, 7, 24,
+  10 ; ⚠️ V70 (§B4.2) `offreConservationAnnees` nul = conservation sans limite (`0` l'efface ; voir § *Les arbitrages du pilote après
+  le lot 4*). Un champ
   absent au `PUT` garde sa valeur ; une valeur hors bornes donne un 400 nominatif.
 - **Le ménage**, chaque nuit (`app.candidats.cron-menage`, défaut 3 h 30) :
   - un compte jamais confirmé est **supprimé** après `delaiConfirmationJours` ;
@@ -6480,9 +6482,9 @@ secours).
 | Méthode | URL | Corps | Réponse | Statuts | Accès |
 |---|---|---|---|---|---|
 | GET | /api/fiches-marche/{idDmc}/cao | — | `CaoDto` | 200, 403, 404 | qui lit la fiche (PRMP, UGPM, Commission, Administrateur, responsable) |
-| PUT | /api/fiches-marche/{idDmc}/cao | `CaoCorps` | `CaoDto` | 200, 400 par champ, 403, 404, 409 `MEMBRE_EXCLU` / `CEREMONIE_CLOSE` | **PRMP de la fiche seule** |
-| POST | /api/fiches-marche/{idDmc}/cao/decision | multipart `fichier` (PDF) | `CaoDto` | 200, 400 `FORMAT_INVALIDE` / `FICHIER_ABSENT`, 403, 404, 413 | PRMP |
-| POST | /api/fiches-marche/{idDmc}/cao/membres/{id}/inviter | — | `MembreCaoDto` | 200, 403, 404, 409 `COMPTE_ACTIF` | PRMP |
+| PUT | /api/fiches-marche/{idDmc}/cao | `CaoCorps` | `CaoDto` | 200, 400 par champ, 403, 404, 409 `MEMBRE_EXCLU` / `CEREMONIE_CLOSE` | **PRMP de la fiche** — ⚠️ V70 (§B4.1) : **et son UGPM** |
+| POST | /api/fiches-marche/{idDmc}/cao/decision | multipart `fichier` (PDF) | `CaoDto` | 200, 400 `FORMAT_INVALIDE` / `FICHIER_ABSENT`, 403, 404, 413 | PRMP, ⚠️ V70 UGPM |
+| POST | /api/fiches-marche/{idDmc}/cao/membres/{id}/inviter | — | `MembreCaoDto` | 200, 403, 404, 409 `COMPTE_ACTIF` | PRMP, ⚠️ V70 UGPM |
 | POST | /api/cao/activation | `{ email, code, motDePasse }` | `{ etat: 'ACTIF' }` | 200, 400 `CODE_INVALIDE` / `CODE_EXPIRE` / mot de passe, 404, 429 | public |
 | GET | /api/cao/mes-procedures | — | `MaProcedure[]` | 200 | `MEMBRE_CAO` |
 | GET | /api/cao/procedures/{idDmc} | — | `{ procedure: ProcedureEnLigneDto, president, cao: CaoDto }` | 200, 403, 404 | `MEMBRE_CAO` qui y siège |
@@ -6651,11 +6653,13 @@ abscisse non nulle) et sur sa cohérence (deux détenteurs n'apportent pas la m�
 | GET | /api/fiches-marche/{idDmc}/seance/mes-parts[?role=SECOURS] | — | `[{ idOffre, empreinteCle, part, enveloppe }]` | 200, 403, 409 `SEANCE_NON_OUVERTE` | membre de la CAO (les siennes) ; responsable pour le secours |
 | POST | /api/fiches-marche/{idDmc}/seance/parts[?role=SECOURS] | `{ parts: [{ idOffre, partClaire }], motif? }` | `SeanceDto` | 200, 400, 403, 409 | le même |
 | GET | /api/fiches-marche/{idDmc}/seance/lecture | — | `LectureDto` | 200, 403, 409 `SEANCE_NON_DECHIFFREE` | responsable, membres, PRMP, UGPM |
-| GET | /api/fiches-marche/{idDmc}/seance/offres/{idOffre}/pieces/{nomFichier} | — | le fichier | 200, 403, 404, 409 | responsable, membres, PRMP |
-| POST | /api/fiches-marche/{idDmc}/seance/pv | `{ observations }` | `SeanceDto` (`CLOSE`) | 200, 403, 409 `SEANCE_NON_DECHIFFREE` | responsable |
+| GET | /api/fiches-marche/{idDmc}/seance/offres/{idOffre}/pieces/{nomFichier} | — | le fichier | 200, ⚠️ V70 403 `PIECE_RESERVEE_CAO`, 404, 409 | ⚠️ V70 (§B1) : **membres de la CAO seulement** |
+| POST | /api/fiches-marche/{idDmc}/seance/pv | `{ observations }` | `SeanceDto` (⚠️ V70 : `PV_A_SIGNER` ; `CLOSE` sans membre présent) | 200, 403, 409 `SEANCE_NON_DECHIFFREE` | responsable |
+| POST | /api/fiches-marche/{idDmc}/seance/pv/signer | — | `SeanceDto` | 200, 403 `NON_PRESENT`, 409 `PV_NON_PRODUIT` / `DEJA_SIGNE` | ⚠️ V70 : membre présent de la CAO |
+| POST | /api/fiches-marche/{idDmc}/seance/pv/empechement | `{ im, motif }` | `SeanceDto` | 200, 400 `MOTIF_ABSENT` / `NON_SIGNATAIRE`, 403, 409 `PV_NON_PRODUIT` / `DEJA_SIGNE` | ⚠️ V70 : président de la CAO (ou responsable) |
 | GET | /api/fiches-marche/{idDmc}/seance/pv | — | le PDF | 200, 403, 404 | responsable, membres, PRMP, UGPM |
 | POST | /api/fiches-marche/{idDmc}/seance/constater-illisible | `{ motif }` | `SeanceDto` (`ILLISIBLE`) | 200, 400, 403, 409 `QUORUM_POSSIBLE` / `SEANCE_NON_OUVERTE` | responsable |
-| GET | /api/procedures-en-ligne/{idDmc}/pv | — | le PDF publié | 200, 404 | public |
+| GET | /api/procedures-en-ligne/{idDmc}/pv | — | le PDF publié (⚠️ V70 : une fois signé) | 200, 404 | public |
 
 - **`SeanceDto`** = `{ idDmc, etat, heureOuverture, ouverteLe, ouverteDans, quorum, membres: [{ im, nom, president, present,
   partsApportees }], autres: [{ nom, qualite }], secoursEmploye, offres: [{ numero, lot, etat, partsRecues }], dechiffreeLe, pv: {
@@ -6686,11 +6690,14 @@ abscisse non nulle) et sur sa cohérence (deux détenteurs n'apportent pas la m�
   par ordre d'arrivée. `groupement` et `acteEngagement` sont repris du manifeste tels quels ; `piecesManquantes` compare aux pièces attendues
   (lot 3, §B2) ; `alertes` : `RAPPROCHEMENT` (même téléphone, signataire, adresse qu'un autre déposant de la procédure) et `EXCLUSION`.
 - **Les pièces** : le fichier du ZIP par son nom (`manifeste.json` n'est pas servi) ; l'UGPM ne les lit pas (question 4).
+  ⚠️ V70 (§B1) : **les membres de la CAO seulement** (403 `PIECE_RESERVEE_CAO`) — voir § *Les arbitrages du pilote après le lot 4*.
 - **Le PV** (moteur `DocumentLibre`) : la procédure, l'heure d'ouverture, les présents (responsable, membres, autres), l'emploi de la part de
   secours et son motif, puis offre par offre la lecture (montants, délai, validité, rabais, garantie, intégrité, pièces manquantes,
   vérification du NIF, alertes), les offres non ouvertes et pourquoi, les observations, une place pour la signature des membres présents.
   **Publié** si `B04-OP-13 = OUI` : `GET /api/procedures-en-ligne/{idDmc}/pv`, une version **sans les alertes ni la vérification des NIF**
   (question 3). `PV_OUVERTURE` à la PRMP, aux membres, et aux soumissionnaires s'il est publié.
+  ⚠️ V70 (§B2) : le PV est d'abord **signé** par les membres présents (`PV_A_SIGNER`) ; publication et `PV_OUVERTURE` à la dernière
+  signature.
 - **S5** : refusé tant que le quorum reste atteignable (`QUORUM_POSSIBLE` : détenteurs qui ont apporté leurs parts, plus ceux dont la clé
   active n'est pas `PERDUE` ; `details.possibles` et `details.quorum`) ; sinon `ILLISIBLE`, PV de constat, `OFFRES_ILLISIBLES` aux
   soumissionnaires, procédure à relancer.
@@ -6698,6 +6705,87 @@ abscisse non nulle) et sur sa cohérence (deux détenteurs n'apportent pas la m�
   (toutes les 5 minutes, `app.seance.cron-rappel`).
 - **Journal** `t_seance_journal` : `OUVERTURE`, `PRESENCES`, `APPORT` (qui, combien), `SECOURS` (motif), `ECARTEMENT`, `OUVERTURE_OFFRE`
   (intégrité), `DECHIFFREMENT`, `PV`, `CONSTAT` — **jamais une part**.
+
+### Les arbitrages du pilote après le lot 4 — V70 ⚠️ 2026-10-04
+
+Demande front `demande-backend-2026-10-04-arbitrages-soumission-en-ligne.md` ; migration **V70** (`t_seance` : état `PV_A_SIGNER`,
+`SIGNATAIRES`, `PV_SIGNE_LE` ; `t_seance_signature` ; `t_offre.PURGEE_LE`). Aucune dépendance ajoutée. Les paragraphes du lot 4
+ci-dessus valent **sauf** ce qui suit.
+
+**§B1 — Les pièces des offres : les membres de la CAO seulement.** `GET …/seance/offres/{idOffre}/pieces/{nomFichier}` sert le seul
+membre de la CAO de la procédure (compte `MEMBRE_CAO`, identifiant `K…` parmi les membres dérivés de la CAO). Le responsable, la PRMP,
+l'UGPM et tout autre compte reçoivent **403 `PIECE_RESERVEE_CAO`** — un 403 qui porte désormais un `code` (`AccesReserveException`,
+une `AccessDeniedException` nommée ; le `GlobalExceptionHandler` le recopie dans `ErrorResponse.code`). La **lecture** (`…/lecture`) ne
+change pas.
+
+**§B2 — Le PV signé par les membres présents.**
+- `POST …/seance/pv` fige les **signataires** (les membres présents de la CAO, y compris ceux présents d'office pour avoir apporté
+  leurs parts), produit le PV et passe la séance à **`PV_A_SIGNER`** (entre `DECHIFFREE` et `CLOSE`). `PV_A_SIGNER` part à chaque
+  signataire (notification et courriel). **Rien n'est publié ni notifié** au-delà. Les présences ne se modifient plus
+  (`SEANCE_CLOSE`).
+- `POST …/seance/pv/signer` : la **signature électronique simple** de l'appelant — 403 `NON_PRESENT` s'il n'est pas signataire (tout
+  autre compte compris), 409 `DEJA_SIGNE` s'il a signé (ou si le PV est déjà entièrement signé), 409 `PV_NON_PRODUIT` sans PV.
+- `POST …/seance/pv/empechement` `{ im, motif }` (question 1, **retenue**) : le **président** de la CAO — ou, s'il est lui-même
+  empêché, le **responsable de la procédure** — constate qu'un signataire ne signera pas ; le motif est porté au PV avec le nom de
+  qui l'a constaté. 400 `MOTIF_ABSENT`, `NON_SIGNATAIRE` (`im` hors des signataires) ; 403 pour tout autre ; 409 `DEJA_SIGNE` si ce
+  membre a déjà signé.
+- À la **dernière signature** (ou au dernier empêchement constaté) : `pvSigneLe`, la séance passe à **`CLOSE`** (`closeLe`), le PV est
+  régénéré avec toutes les signatures, l'**extrait est publié** si `B04-OP-13 = OUI` (toujours sans les alertes ni la vérification des
+  NIF), et `PV_OUVERTURE` part (PRMP, membres, soumissionnaires si publié). Avant : `GET /api/procedures-en-ligne/{idDmc}/pv` → 404.
+- Sans aucun membre présent (une carence sans membre, par exemple), il n'y a rien à attendre : le PV est **signé d'office** et la
+  séance passe aussitôt à `CLOSE`.
+- **Le PV de carence** suit le même chemin. **Le PV de constat (S5)** aussi, mais la séance **reste `ILLISIBLE`** : seuls `pv.signe`
+  et `pvSigneLe` disent qu'il est signé ; les soumissionnaires reçoivent `OFFRES_ILLISIBLES` dès le constat, comme avant.
+- **Le PDF** : chaque signataire, « NOM (Président | Membre de la commission) — signé électroniquement sur la plateforme le jj/mm/aaaa à
+  hh:mm » ; un empêchement : « — empêché de signer : motif (constaté par X le …) » ; une signature encore attendue : « — signature
+  attendue ». `GET …/seance/pv` sert le PDF avec les signatures déjà posées.
+- **`SeanceDto.pv`** = `{ produit, publie, signe, signatures: [{ im, nom, president, date, empechement, motif, constatePar }],
+  signaturesAttendues: [{ im, nom }] }` ; `etat` ∈ `A_VENIR` · `OUVERTE` · `DECHIFFREE` · **`PV_A_SIGNER`** · `ILLISIBLE` · `CLOSE`.
+  La lecture et les pièces restent ouvertes en `PV_A_SIGNER`.
+- **Journal** : `SIGNATURE`, `EMPECHEMENT` (avec le motif), `PV_SIGNE`.
+
+**§B3 — La garantie lue en séance.**
+- Manifeste (format 2) : `garantie: { codeVerification, nomFichier, montant, monnaie, emetteur } | null`. `montant` se lit nombre ou
+  chaîne (« 1 600 000 », « 1600000,50 ») ; illisible, il vaut `null`.
+- `LectureDto.offres[].garantie` = `{ codeVerification, presente, montant, monnaie, emetteur } | null`. Un manifeste qui ne les porte
+  pas (format 1) les sert `null` : l'offre reste lisible, jamais `LECTURE_IMPOSSIBLE`. Le serveur ne contrôle pas que le montant est
+  présent (le navigateur le fait, rien n'est lisible avant l'ouverture).
+- Le PV imprime, offre par offre : « Garantie : fournie, code de vérification …, montant : 1 500 000 MGA, émetteur : … ».
+- Question 2, **retenue** : l'alerte **`GARANTIE_INSUFFISANTE`** quand le montant lu est **inférieur** au minimum de la fiche —
+  `B05-GS-03#<lot>` pour une offre d'un lot, sinon `B05-GS-03`, lus sur la dernière version validée. Message : « Garantie de 1 500 000
+  pour un minimum de 1 600 000 fixé par la fiche[ (lot n)]. » Une alerte, jamais un refus ; absente du PV publié, comme les autres.
+  Pas d'alerte quand le montant n'est pas déclaré (format 1) ou que la fiche ne fixe pas de minimum.
+
+**§B4.1 — L'UGPM écrit la CAO.** `PUT …/cao`, `POST …/cao/decision` et `POST …/cao/membres/{id}/inviter` acceptent la PRMP **et
+l'UGPM** de la fiche (même périmètre que la lecture de la fiche). Les exclusions ne changent pas : ni l'une ni l'autre ne siège. Au
+journal des paramètres internes (`membresCommission`), l'acte d'une UGPM porte `nomActeur` = son nom (« NOM Prénoms », à défaut son
+login) et **`acteur` vide** — le `ref` d'une UGPM étant celui de sa PRMP de tutelle, l'y écrire aurait imputé l'acte à la PRMP.
+
+**§B4.2 — La conservation des offres.**
+
+| Méthode | URL | Corps | Réponse | Statuts | Accès |
+|---|---|---|---|---|---|
+| GET / PUT | /api/parametres/candidats | `ParametresCandidats` (+ `offreConservationAnnees`) | idem | 200, 400, 403 | Administrateur |
+| GET | /api/admin/offres/conservation | — | `{ annees, echues: [{ idDmc, reference, objet, etatSeance, closeLe, echeance, offresAPurger }] }` | 200, 403 | Administrateur |
+| POST | /api/admin/offres/conservation/{idDmc}/purger | — | `{ idDmc, offresPurgees, purgeeLe }` | 200, 403, 404, 409 `CONSERVATION_NON_FIXEE` / `CONSERVATION_EN_COURS` | Administrateur |
+
+- `offreConservationAnnees` (paramètre `OFFRE_CONSERVATION_ANNEES`) : **nul par défaut = conservation sans limite** ; de 1 à 100
+  (400 nominatif sinon) ; `0` au `PUT` l'efface (retour à « sans limite ») ; absent, il garde sa valeur.
+- Le délai court depuis la **clôture de la séance** (`closeLe` : PV entièrement signé, ou constat S5 — dont le PV doit être signé).
+  `echeance` = `closeLe` + `annees`. La liste ne montre que les procédures échues qui ont encore des offres à purger, la plus
+  ancienne d'abord ; elle est vide tant que la durée n'est pas fixée.
+- Question 3, **un geste de l'Administrateur** (proposé, retenu) : aucune tâche planifiée. La purge vise **toutes** les offres de la
+  procédure (déposées, écartées, remplacées, retirées) : conteneur `.offre`, morceaux et contenu déchiffré `<idOffre>.clair.zip`
+  sont supprimés du disque, `chemin` est vidé, `purgeeLe` posé. La ligne de l'offre, son empreinte, sa lecture, l'accusé, les
+  journaux et le PV **restent**. 409 `CONSERVATION_EN_COURS` avant l'échéance (`details.echeance`) ou séance non close.
+- Après la purge, `GET …/pieces/…` répond 404 (« le contenu de l'offre … a été purgé le … ») ; `GET …/lecture` reste servi.
+- **Journal** : `PURGE_CONSERVATION` à `t_offre_journal` (une ligne par offre) et à `t_seance_journal` (l'Administrateur, le
+  nombre d'offres, la durée).
+
+**§B5 — Confirmations (rien à changer).** Le **dépositaire** de la part de secours est libre, par procédure (aucun organisme
+imposé). Le **reçu des frais de dossier** (`RECU-DAO`) reste une pièce de l'offre, vérifiée par la CAO, le retrait du DAO restant
+libre après inscription (Q3 confirmée). La **signature électronique** reste **Simple** : une fiche qui exige plus est refusée
+(`SIGNATURE_EN_LIGNE`), Avancée et Qualifiée attendant la liste officielle des prestataires de certification.
 
 ---
 

@@ -56,6 +56,7 @@ import cnm.prs.entity.MarchePrevision;
 import cnm.prs.entity.ModePassation;
 import cnm.prs.entity.Notification;
 import cnm.prs.entity.Offre;
+import cnm.prs.entity.Seance;
 import cnm.prs.entity.TypeDmc;
 import cnm.prs.enums.FormeMarche;
 import cnm.prs.enums.ProfilUtilisateur;
@@ -67,8 +68,10 @@ import cnm.prs.repository.DocumentFicheMarcheRepository;
 import cnm.prs.repository.ExclusionArmpRepository;
 import cnm.prs.repository.FicheMarcheValeurRepository;
 import cnm.prs.repository.NotificationRepository;
+import cnm.prs.repository.OffreJournalRepository;
 import cnm.prs.repository.OffreRepository;
 import cnm.prs.repository.SeanceJournalRepository;
+import cnm.prs.repository.SeanceRepository;
 import cnm.prs.service.ChampFicheMarcheService;
 import cnm.prs.service.DechiffrementOffre;
 import cnm.prs.service.ParametreService;
@@ -101,6 +104,8 @@ class SeanceIntegrationTest extends CnmIntegrationTestSupport {
     @Autowired private ExclusionArmpRepository exclusionRepository;
     @Autowired private OffreRepository offreRepository;
     @Autowired private SeanceJournalRepository seanceJournal;
+    @Autowired private SeanceRepository seanceRepository;
+    @Autowired private OffreJournalRepository offreJournal;
 
     private final LocalDate aujourdhui = LocalDate.now();
     private String tokenVer;
@@ -181,10 +186,15 @@ class SeanceIntegrationTest extends CnmIntegrationTestSupport {
             + "toutes les offres s'ouvrent ensemble — l'entreprise exclue depuis son dépôt est écartée sans déchiffrement ; lecture, "
             + "pièces (UGPM 403), PV produit, publié sans alertes, notifié")
     void seance() throws Exception {
-        String offreA = deposer(jetonA, "1111222333", "BTP Alpha", "12500000");
+        String offreA = deposer(jetonA, "1111222333", "BTP Alpha", "12500000", "1500000");
         String offreB = deposer(jetonB, "4444555666", "BTP Beta", "11900000");
+        candidats.save(new CompteCandidat("C900000043", "c@seance.mg", "034 43 433 43", "Rakoto", "Fara", CompteCandidat.CONFIRME, false,
+                LocalDateTime.now(), LocalDateTime.now(), null, null));
+        String jetonC = bearer("c@seance.mg", ProfilUtilisateur.CANDIDAT, TypeActeur.CANDIDAT, "C900000043", null);
+        declarer(jetonC, "7777888999", "BTP Gamma");
+        String offreC = deposer(jetonC, "7777888999", "BTP Gamma", "13100000");   // manifeste v1 : garantie sans montant
         mvc.perform(get(base).header("Authorization", tokenPrmp)).andExpect(status().isOk()).andExpect(jsonPath("$.etat").value("A_VENIR"))
-                .andExpect(jsonPath("$.quorum").value(2)).andExpect(jsonPath("$.offres.length()").value(2));
+                .andExpect(jsonPath("$.quorum").value(2)).andExpect(jsonPath("$.offres.length()").value(3));
         mvc.perform(get(base).header("Authorization", tokenAdmin)).andExpect(status().isForbidden());
         mvc.perform(get(base + "/mes-parts").header("Authorization", jetonM1)).andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("SEANCE_NON_OUVERTE"));
@@ -208,7 +218,7 @@ class SeanceIntegrationTest extends CnmIntegrationTestSupport {
         // Les parts : à chacun les siennes.
         String parts1 = mvc.perform(get(base + "/mes-parts").header("Authorization", jetonM1)).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
-        assertThat(JsonPath.<List<String>>read(parts1, "$[*].idOffre")).containsExactlyInAnyOrder(offreA, offreB);
+        assertThat(JsonPath.<List<String>>read(parts1, "$[*].idOffre")).containsExactlyInAnyOrder(offreA, offreB, offreC);
         mvc.perform(get(base + "/mes-parts").header("Authorization", tokenPrmp)).andExpect(status().isForbidden());
         mvc.perform(get(base + "/mes-parts").header("Authorization", jetonM1).param("role", "SECOURS")).andExpect(status().isForbidden());
         String corps1 = apport(parts1, null);
@@ -229,7 +239,7 @@ class SeanceIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(put(base + "/presences").header("Authorization", tokenVer).contentType(JSON)
                 .content("{\"presents\":[\"INCONNU\"],\"autres\":[]}")).andExpect(status().isBadRequest());
         mvc.perform(put(base + "/presences").header("Authorization", tokenVer).contentType(JSON)
-                .content("{\"presents\":[],\"autres\":[{\"nom\":\"RAKOTO Hery\",\"qualite\":\"PRMP\"}]}")).andExpect(status().isOk())
+                .content("{\"presents\":[\"" + comptes.get(1) + "\"],\"autres\":[{\"nom\":\"RAKOTO Hery\",\"qualite\":\"PRMP\"}]}")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.autres[0].nom").value("RAKOTO Hery")).andExpect(jsonPath("$.membres[0].present").value(true));
         // L'entreprise de B est exclue après son dépôt : son offre sera écartée, non déchiffrée.
         exclusionRepository.save(new ExclusionArmp(null, "4444555666", "BTP Beta", "Fraude", "ARMP-2026-77", aujourdhui, null, LocalDateTime.now()));
@@ -252,39 +262,89 @@ class SeanceIntegrationTest extends CnmIntegrationTestSupport {
         // La lecture.
         String lecture = mvc.perform(get(base + "/lecture").header("Authorization", tokenUgpm)).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
-        assertThat(JsonPath.<List<String>>read(lecture, "$.offres[*].idOffre")).containsExactly(offreA);
+        assertThat(JsonPath.<List<String>>read(lecture, "$.offres[*].idOffre")).containsExactly(offreA, offreC);
         assertThat(JsonPath.<String>read(lecture, "$.offres[0].integrite")).isEqualTo("INTACTE");
         assertThat(JsonPath.<String>read(lecture, "$.offres[0].acteEngagement.montantHt")).isEqualTo("12500000");
         assertThat(JsonPath.<String>read(lecture, "$.offres[0].entreprise.nif")).isEqualTo("1111222333");
         assertThat(JsonPath.<String>read(lecture, "$.offres[0].entreprise.verification.statut")).isEqualTo("NON_VERIFIE");
         assertThat(JsonPath.<List<Boolean>>read(lecture, "$.offres[0].pieces[*].empreinteConforme")).containsOnly(true);
         assertThat(JsonPath.<String>read(lecture, "$.offres[0].garantie.codeVerification")).isEqualTo("GAR-0001");
+        // ⚠️ Arbitrages du pilote (§B3) : manifeste v2, le montant et l'émetteur ; sous le minimum B05-GS-03 (1 600 000), une alerte.
+        assertThat(JsonPath.<Number>read(lecture, "$.offres[0].garantie.montant").longValue()).isEqualTo(1_500_000L);
+        assertThat(JsonPath.<String>read(lecture, "$.offres[0].garantie.monnaie")).isEqualTo("MGA");
+        assertThat(JsonPath.<String>read(lecture, "$.offres[0].garantie.emetteur")).isEqualTo("BNI Madagascar");
+        assertThat(JsonPath.<List<String>>read(lecture, "$.offres[0].alertes[?(@.type=='GARANTIE_INSUFFISANTE')].message"))
+                .containsExactly("Garantie de 1 500 000 pour un minimum de 1 600 000 fixé par la fiche.");
+        // Manifeste v1 : la garantie se lit, sans montant ni émetteur ; l'offre reste lisible, pas d'alerte.
+        assertThat(JsonPath.<Boolean>read(lecture, "$.offres[1].garantie.presente")).isTrue();
+        assertThat(JsonPath.<Object>read(lecture, "$.offres[1].garantie.montant")).isNull();
+        assertThat(JsonPath.<Object>read(lecture, "$.offres[1].garantie.emetteur")).isNull();
+        assertThat(JsonPath.<String>read(lecture, "$.offres[1].integrite")).isEqualTo("INTACTE");
+        assertThat(JsonPath.<List<String>>read(lecture, "$.offres[1].alertes[*].type")).doesNotContain("GARANTIE_INSUFFISANTE");
         assertThat(JsonPath.<List<String>>read(lecture, "$.offres[0].piecesManquantes")).contains("Reçu du paiement des frais de dossier");
         assertThat(JsonPath.<String>read(lecture, "$.nonOuvertes[0].etat")).isEqualTo("ECARTEE");
         assertThat(JsonPath.<String>read(lecture, "$.nonOuvertes[0].motif")).contains("exclue par l'ARMP", "ARMP-2026-77");
-        byte[] ae = mvc.perform(get(base + "/offres/" + offreA + "/pieces/acte-engagement.pdf").header("Authorization", tokenPrmp))
+        // ⚠️ §B1 : les pièces, aux membres de la CAO seulement — la PRMP, l'UGPM et le responsable reçoivent un 403 nommé.
+        byte[] ae = mvc.perform(get(base + "/offres/" + offreA + "/pieces/acte-engagement.pdf").header("Authorization", jetonM1))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
         assertThat(new String(ae, StandardCharsets.UTF_8)).isEqualTo("%PDF-1.4 acte d'engagement de BTP Alpha");
-        mvc.perform(get(base + "/offres/" + offreA + "/pieces/acte-engagement.pdf").header("Authorization", tokenUgpm)).andExpect(status().isForbidden());
-        mvc.perform(get(base + "/offres/" + offreA + "/pieces/manifeste.json").header("Authorization", tokenPrmp)).andExpect(status().isNotFound());
+        for (String jeton : List.of(tokenPrmp, tokenUgpm, tokenVer)) {
+            mvc.perform(get(base + "/offres/" + offreA + "/pieces/acte-engagement.pdf").header("Authorization", jeton))
+                    .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("PIECE_RESERVEE_CAO"));
+        }
+        mvc.perform(get(base + "/offres/" + offreA + "/pieces/manifeste.json").header("Authorization", jetonM2)).andExpect(status().isNotFound());
         mvc.perform(get(base + "/offres/" + offreB + "/pieces/acte-engagement.pdf").header("Authorization", jetonM1)).andExpect(status().isNotFound());
 
-        // Le PV, publié (B04-OP-13 = OUI) sans les alertes.
+        // ⚠️ §B2 : le PV produit attend la signature des membres présents ; ni publié ni notifié avant.
         mvc.perform(get("/api/procedures-en-ligne/" + idDmc + "/pv")).andExpect(status().isNotFound());
+        mvc.perform(post(base + "/pv/signer").header("Authorization", jetonM1)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("PV_NON_PRODUIT"));
         mvc.perform(post(base + "/pv").header("Authorization", jetonM1).contentType(JSON).content("{}")).andExpect(status().isForbidden());
         mvc.perform(post(base + "/pv").header("Authorization", tokenVer).contentType(JSON).content("{\"observations\":\"Séance sans incident.\"}"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.etat").value("CLOSE")).andExpect(jsonPath("$.pv.produit").value(true))
-                .andExpect(jsonPath("$.pv.publie").value(true));
+                .andExpect(status().isOk()).andExpect(jsonPath("$.etat").value("PV_A_SIGNER")).andExpect(jsonPath("$.pv.produit").value(true))
+                .andExpect(jsonPath("$.pv.publie").value(false)).andExpect(jsonPath("$.pv.signe").value(false))
+                .andExpect(jsonPath("$.pv.signatures.length()").value(0)).andExpect(jsonPath("$.pv.signaturesAttendues.length()").value(2));
+        mvc.perform(put(base + "/presences").header("Authorization", tokenVer).contentType(JSON).content("{\"presents\":[]}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("SEANCE_CLOSE"));
+        assertThat(typesCao()).contains("PV_A_SIGNER");
+        assertThat(notificationRepository.findPourPrmp("PRMP001", null)).extracting(Notification::getTypeNotif).doesNotContain("PV_OUVERTURE");
+        mvc.perform(get("/api/procedures-en-ligne/" + idDmc + "/pv")).andExpect(status().isNotFound());
+        mvc.perform(post(base + "/pv/signer").header("Authorization", tokenPrmp)).andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("NON_PRESENT"));
+        mvc.perform(post(base + "/pv/signer").header("Authorization", jetonM1)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.etat").value("PV_A_SIGNER")).andExpect(jsonPath("$.pv.signatures[0].im").value(comptes.get(0)))
+                .andExpect(jsonPath("$.pv.signatures[0].president").value(true)).andExpect(jsonPath("$.pv.signatures[0].empechement").value(false))
+                .andExpect(jsonPath("$.pv.signaturesAttendues[0].im").value(comptes.get(1)));
+        mvc.perform(post(base + "/pv/signer").header("Authorization", jetonM1)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("DEJA_SIGNE"));
+        // Q1 : l'empêchement d'un membre présent, constaté par le président (motif porté au PV).
+        mvc.perform(post(base + "/pv/empechement").header("Authorization", jetonM2).contentType(JSON)
+                .content("{\"im\":\"" + comptes.get(1) + "\",\"motif\":\"Parti\"}")).andExpect(status().isForbidden());
+        mvc.perform(post(base + "/pv/empechement").header("Authorization", jetonM1).contentType(JSON)
+                .content("{\"im\":\"" + comptes.get(1) + "\"}")).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("MOTIF_ABSENT"));
+        mvc.perform(post(base + "/pv/empechement").header("Authorization", jetonM1).contentType(JSON)
+                .content("{\"im\":\"INCONNU\",\"motif\":\"Parti\"}")).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("NON_SIGNATAIRE"));
+        mvc.perform(post(base + "/pv/empechement").header("Authorization", jetonM1).contentType(JSON)
+                .content("{\"im\":\"" + comptes.get(1) + "\",\"motif\":\"Appelé en urgence avant la fin de la séance\"}")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.etat").value("CLOSE")).andExpect(jsonPath("$.pv.signe").value(true)).andExpect(jsonPath("$.pv.publie").value(true))
+                .andExpect(jsonPath("$.pv.signatures[1].empechement").value(true))
+                .andExpect(jsonPath("$.pv.signatures[1].motif").value("Appelé en urgence avant la fin de la séance"))
+                .andExpect(jsonPath("$.pv.signaturesAttendues.length()").value(0));
+        mvc.perform(post(base + "/pv/signer").header("Authorization", jetonM2)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("DEJA_SIGNE"));
         byte[] pv = mvc.perform(get(base + "/pv").header("Authorization", jetonM1)).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsByteArray();
-        assertThat(new String(pv, 0, 4)).isEqualTo("%PDF");
+        assertThat(texteDuPdf(pv)).contains("Président de la commission) — signé électroniquement sur la plateforme le",
+                "empêché de signer : Appelé en urgence avant la fin de la séance (constaté par", "montant : 1 500 000 MGA",
+                "émetteur : BNI Madagascar", "GARANTIE_INSUFFISANTE").doesNotContain("signature attendue");
         byte[] publie = mvc.perform(get("/api/procedures-en-ligne/" + idDmc + "/pv")).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsByteArray();
-        assertThat(new String(publie, 0, 4)).isEqualTo("%PDF");
+        assertThat(texteDuPdf(publie)).contains("signé électroniquement sur la plateforme").doesNotContain("GARANTIE_INSUFFISANTE");
         assertThat(notificationRepository.findPourPrmp("PRMP001", null)).extracting(Notification::getTypeNotif).contains("PV_OUVERTURE");
         assertThat(notificationRepository.findPourRefEtType("C900000041", "CANDIDAT")).extracting(Notification::getTypeNotif).contains("PV_OUVERTURE");
         assertThat(seanceJournal.findByIdDmcOrderByDateAscIdAsc(idDmc)).extracting(j -> j.getAction())
-                .contains("OUVERTURE", "APPORT", "SECOURS", "ECARTEMENT", "OUVERTURE_OFFRE", "DECHIFFREMENT", "PV")
+                .contains("OUVERTURE", "APPORT", "SECOURS", "ECARTEMENT", "OUVERTURE_OFFRE", "DECHIFFREMENT", "PV", "SIGNATURE", "EMPECHEMENT",
+                        "PV_SIGNE")
                 .allSatisfy(a -> assertThat(a).isNotBlank());
         assertThat(seanceJournal.findByIdDmcOrderByDateAscIdAsc(idDmc)).noneMatch(j -> j.getDetail() != null && j.getDetail().contains(unePart));
     }
@@ -300,7 +360,7 @@ class SeanceIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(post(base + "/ouvrir").header("Authorization", tokenVer)).andExpect(status().isOk()).andExpect(jsonPath("$.etat").value("DECHIFFREE"));
         mvc.perform(get(base + "/lecture").header("Authorization", tokenPrmp)).andExpect(jsonPath("$.offres.length()").value(0));
         mvc.perform(post(base + "/pv").header("Authorization", tokenVer).contentType(JSON).content("{}")).andExpect(status().isOk())
-                .andExpect(jsonPath("$.etat").value("CLOSE"));
+                .andExpect(jsonPath("$.etat").value("CLOSE")).andExpect(jsonPath("$.pv.signe").value(true));   // personne de présent : signé d'office
         mvc.perform(post(base + "/ouvrir").header("Authorization", tokenVer)).andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("SEANCE_DEJA_OUVERTE"));
     }
@@ -323,26 +383,79 @@ class SeanceIntegrationTest extends CnmIntegrationTestSupport {
                 cleRepository.save(c);
             }
         }
+        // ⚠️ §B2 : le membre présent signe aussi le PV de constat ; la séance reste ILLISIBLE.
+        mvc.perform(put(base + "/presences").header("Authorization", tokenVer).contentType(JSON)
+                .content("{\"presents\":[\"" + comptes.get(0) + "\"]}")).andExpect(status().isOk());
         mvc.perform(post(base + "/constater-illisible").header("Authorization", tokenVer).contentType(JSON)
                 .content("{\"motif\":\"Deux parts perdues sur trois\"}")).andExpect(status().isOk()).andExpect(jsonPath("$.etat").value("ILLISIBLE"))
-                .andExpect(jsonPath("$.pv.produit").value(true));
+                .andExpect(jsonPath("$.pv.produit").value(true)).andExpect(jsonPath("$.pv.signe").value(false))
+                .andExpect(jsonPath("$.pv.signaturesAttendues[0].im").value(comptes.get(0)));
         assertThat(notificationRepository.findPourRefEtType("C900000041", "CANDIDAT")).extracting(Notification::getTypeNotif)
                 .contains("OFFRES_ILLISIBLES");
         mvc.perform(get(base + "/pv").header("Authorization", tokenPrmp)).andExpect(status().isOk());
+
+        // ⚠️ §B4.2 : la conservation — sans durée fixée, rien ne se purge ; échue, l'Administrateur purge.
+        String idOffre = offreRepository.findByIdDmcOrderByNumeroAscDateCreationAsc(idDmc).get(0).getIdOffre();
+        java.nio.file.Path conteneur = java.nio.file.Path.of(offreRepository.findById(idOffre).orElseThrow().getChemin());
+        assertThat(conteneur).exists();
+        String conservation = "/api/admin/offres/conservation";
+        mvc.perform(get(conservation).header("Authorization", tokenAdmin)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.annees").isEmpty()).andExpect(jsonPath("$.echues.length()").value(0));
+        mvc.perform(post(conservation + "/" + idDmc + "/purger").header("Authorization", tokenAdmin)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CONSERVATION_NON_FIXEE"));
+        mvc.perform(put("/api/parametres/candidats").header("Authorization", tokenAdmin).contentType(JSON)
+                .content("{\"offreConservationAnnees\":101}")).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[0].champ").value("offreConservationAnnees"));
+        mvc.perform(put("/api/parametres/candidats").header("Authorization", tokenAdmin).contentType(JSON)
+                .content("{\"offreConservationAnnees\":5}")).andExpect(status().isOk()).andExpect(jsonPath("$.offreConservationAnnees").value(5))
+                .andExpect(jsonPath("$.tailleMaxPieceMo").value(10));
+        // Le PV de constat n'est pas encore signé : la conservation n'a pas commencé.
+        mvc.perform(post(conservation + "/" + idDmc + "/purger").header("Authorization", tokenAdmin)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CONSERVATION_EN_COURS"));
+        mvc.perform(post(base + "/pv/signer").header("Authorization", jetonM1)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.etat").value("ILLISIBLE")).andExpect(jsonPath("$.pv.signe").value(true));
+        mvc.perform(post(conservation + "/" + idDmc + "/purger").header("Authorization", tokenAdmin)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CONSERVATION_EN_COURS")).andExpect(jsonPath("$.details.echeance").isNotEmpty());
+        Seance s = seanceRepository.findById(idDmc).orElseThrow();
+        s.setCloseLe(s.getCloseLe().minusYears(5).minusDays(1));
+        seanceRepository.save(s);
+        mvc.perform(get(conservation).header("Authorization", tokenPrmp)).andExpect(status().isForbidden());
+        mvc.perform(get(conservation).header("Authorization", tokenAdmin)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.annees").value(5)).andExpect(jsonPath("$.echues[0].idDmc").value(idDmc))
+                .andExpect(jsonPath("$.echues[0].offresAPurger").value(1));
+        mvc.perform(post(conservation + "/" + idDmc + "/purger").header("Authorization", tokenAdmin)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.offresPurgees").value(1));
+        assertThat(conteneur).doesNotExist();
+        Offre purgee = offreRepository.findById(idOffre).orElseThrow();
+        assertThat(purgee.getPurgeeLe()).isNotNull();
+        assertThat(purgee.getChemin()).isNull();
+        assertThat(purgee.getEmpreinte()).isNotBlank();
+        assertThat(offreJournal.findAll()).anyMatch(j -> idOffre.equals(j.getIdOffre()) && "PURGE_CONSERVATION".equals(j.getAction()));
+        assertThat(seanceJournal.findByIdDmcOrderByDateAscIdAsc(idDmc)).extracting(j -> j.getAction()).contains("PURGE_CONSERVATION");
+        mvc.perform(get(base + "/pv").header("Authorization", tokenPrmp)).andExpect(status().isOk());   // le PV reste
+        mvc.perform(get(conservation).header("Authorization", tokenAdmin)).andExpect(jsonPath("$.echues.length()").value(0));
+        mvc.perform(put("/api/parametres/candidats").header("Authorization", tokenAdmin).contentType(JSON)
+                .content("{\"offreConservationAnnees\":0}")).andExpect(status().isOk()).andExpect(jsonPath("$.offreConservationAnnees").isEmpty());
     }
 
     // ------------------------------------------------------------------ le navigateur, simulé
 
     /** Scelle et dépose une offre comme le navigateur : ZIP + manifeste, K, morceau AES-GCM, parts Shamir chiffrées RSA-OAEP. */
     private String deposer(String jeton, String nif, String raison, String montantHt) throws Exception {
+        return deposer(jeton, nif, raison, montantHt, null);
+    }
+
+    /** {@code montantGarantie} non nul : un manifeste v2 (⚠️ §B3), la garantie avec son montant, sa monnaie et son émetteur. */
+    private String deposer(String jeton, String nif, String raison, String montantHt, String montantGarantie) throws Exception {
         String idOffre = UUID.randomUUID().toString();
         byte[] aePdf = ("%PDF-1.4 acte d'engagement de " + raison).getBytes(StandardCharsets.UTF_8);
         byte[] garantie = "%PDF-1.4 garantie".getBytes(StandardCharsets.UTF_8);
-        String manifeste = "{\"version\":1,\"idDmc\":" + idDmc + ",\"lot\":null,\"entreprise\":{\"nif\":\"" + nif + "\",\"raisonSociale\":\"" + raison
+        String manifeste = "{\"version\":" + (montantGarantie == null ? 1 : 2) + ",\"idDmc\":" + idDmc + ",\"lot\":null,\"entreprise\":{\"nif\":\"" + nif + "\",\"raisonSociale\":\"" + raison
                 + "\"},\"groupement\":null,\"acteEngagement\":{\"montantHt\":\"" + montantHt + "\",\"montantTtc\":\"15000000\",\"monnaie\":\"MGA\","
                 + "\"delai\":90,\"delaiUnite\":\"JOURS\",\"validiteJours\":90,\"rabais\":null},\"pieces\":[{\"code\":\"AE\",\"nomFichier\":"
                 + "\"acte-engagement.pdf\",\"taille\":" + aePdf.length + ",\"sha256\":\"" + sha(aePdf) + "\"}],\"garantie\":{\"codeVerification\":"
-                + "\"GAR-0001\",\"nomFichier\":\"garantie.pdf\"},\"dateScellement\":\"" + LocalDateTime.now() + "\"}";
+                + "\"GAR-0001\",\"nomFichier\":\"garantie.pdf\"" + (montantGarantie == null ? "" : ",\"montant\":" + montantGarantie
+                + ",\"monnaie\":\"MGA\",\"emetteur\":\"BNI Madagascar\"") + "},\"dateScellement\":\"" + LocalDateTime.now() + "\"}";
         ByteArrayOutputStream z = new ByteArrayOutputStream();
         try (ZipOutputStream zip = new ZipOutputStream(z)) {
             for (Map.Entry<String, byte[]> e : Map.of("manifeste.json", manifeste.getBytes(StandardCharsets.UTF_8), "acte-engagement.pdf", aePdf,

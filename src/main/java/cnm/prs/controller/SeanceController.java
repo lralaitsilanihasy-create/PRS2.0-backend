@@ -83,6 +83,18 @@ public class SeanceController {
                 .contentType(MediaType.APPLICATION_PDF).body(service.pv(idDmc));
     }
 
+    /** ⚠️ Arbitrages du pilote (§B2) : la signature du PV par un membre présent ; 403 {@code NON_PRESENT} ; 409 {@code PV_NON_PRODUIT}, {@code DEJA_SIGNE}. */
+    @PostMapping("/pv/signer")
+    public SeanceDto signer(@PathVariable Long idDmc) {
+        return service.signer(idDmc);
+    }
+
+    /** ⚠️ §B2, Q1 : l'empêchement d'un membre présent, constaté par le président ; 400 {@code MOTIF_ABSENT}, {@code NON_SIGNATAIRE}. */
+    @PostMapping("/pv/empechement")
+    public SeanceDto empechement(@PathVariable Long idDmc, @RequestBody SeanceDto.Empechement corps) {
+        return service.empechement(idDmc, corps);
+    }
+
     /** S5 : 400 sans motif ; 409 {@code QUORUM_POSSIBLE}, {@code SEANCE_NON_OUVERTE}. */
     @PostMapping("/constater-illisible")
     public SeanceDto constaterIllisible(@PathVariable Long idDmc, @RequestBody SeanceDto.Constat corps) {

@@ -52,7 +52,7 @@ import cnm.prs.security.CurrentUser;
  * ⚠️ <strong>La commission d'appel d'offres (CAO), détentrice des parts de clé</strong> (demande front du 2026-10-04, soumission
  * en ligne, lot 2a ; décision du pilote, Q11 ; V67 ; ADR-0010 amendé).
  * <ul>
- *   <li><strong>La composition est un acte public de la PRMP</strong> (une décision) : {@code PUT} par la PRMP de la fiche seule,
+ *   <li><strong>La composition est un acte public de la PRMP</strong> (une décision) : {@code PUT} par la PRMP de la fiche (⚠️ ou son UGPM, §B4.1),
  *       lecture par qui lit la fiche. Une CAO par DAO. Contrôles : décision (référence, date) ; au moins deux membres de qualité
  *       {@code MEMBRE} et exactement un président parmi eux ; un {@code MEMBRE} a une origine (agent de l'entité contractante
  *       avec son service, expert de l'objet avec son domaine) ; une adresse une seule fois ; <strong>exclusions par
@@ -459,9 +459,11 @@ public class CaoService {
         return new String[] { objet == null ? "procédure " + idDmc : objet, entite == null ? "" : entite };
     }
 
+    /** ⚠️ Arbitrages du pilote (§B4.1) : la PRMP ou l'UGPM de la fiche (l'UGPM prépare la décision) ; le journal nomme l'acteur réel. */
     private static void exigerPrmp() {
-        if (CurrentUser.profil().orElse(null) != ProfilUtilisateur.PRMP) {
-            throw new AccessDeniedException("La commission d'appel d'offres se désigne par la PRMP de la fiche : c'est sa décision.");
+        ProfilUtilisateur p = CurrentUser.profil().orElse(null);
+        if (p != ProfilUtilisateur.PRMP && p != ProfilUtilisateur.UGPM) {
+            throw new AccessDeniedException("La commission d'appel d'offres se désigne par la PRMP de la fiche (ou son UGPM).");
         }
     }
 

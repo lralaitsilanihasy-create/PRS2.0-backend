@@ -547,8 +547,11 @@ public class ParametresInternesService {
         ParametreInterneJournal j = new ParametreInterneJournal();
         j.setIdDmc(idDmc);
         j.setDate(LocalDateTime.now());
-        j.setImActeur(acteur != null && acteur.length() <= 10 ? acteur : null);
-        j.setNomActeur(login == null ? null : acteurs.nom(login));
+        // ⚠️ Arbitrages du pilote (§B4.1) : le « ref » d'une UGPM est celui de sa PRMP de tutelle — l'acteur réel est nommé par son login.
+        boolean ugpm = CurrentUser.profil().filter(p -> p == cnm.prs.enums.ProfilUtilisateur.UGPM).isPresent();
+        j.setImActeur(!ugpm && acteur != null && acteur.length() <= 10 ? acteur : null);
+        String nom = login == null ? null : acteurs.nom(login);
+        j.setNomActeur(nom != null ? nom : ugpm ? login : null);
         j.setChamp(champ);
         j.setAncienneValeur(avant);
         j.setNouvelleValeur(apres);

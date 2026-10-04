@@ -27,6 +27,8 @@ public class Seance {
     public static final String A_VENIR = "A_VENIR";
     public static final String OUVERTE = "OUVERTE";
     public static final String DECHIFFREE = "DECHIFFREE";
+    /** ⚠️ V70 (§B2) — le PV est produit, les membres présents le signent. */
+    public static final String PV_A_SIGNER = "PV_A_SIGNER";
     public static final String ILLISIBLE = "ILLISIBLE";
     public static final String CLOSE = "CLOSE";
 
@@ -77,4 +79,12 @@ public class Seance {
 
     @Column(name = "PV_PUBLIE", nullable = false)
     private Boolean pvPublie = Boolean.FALSE;
+
+    /** ⚠️ V70 (§B2) — les membres présents appelés à signer le PV ({@code K…}), figés à sa production. */
+    @Column(name = "SIGNATAIRES", length = 1000)
+    private String signataires;
+
+    /** ⚠️ V70 (§B2) — le PV entièrement signé (ou les empêchements constatés). */
+    @Column(name = "PV_SIGNE_LE")
+    private LocalDateTime pvSigneLe;
 }

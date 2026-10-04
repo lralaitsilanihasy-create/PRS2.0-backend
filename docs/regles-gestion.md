@@ -749,6 +749,28 @@ manquantes, vérification du NIF, rapprochements entre déposants) est **une inf
 offre : PV de carence. Si le quorum ne peut plus être atteint, part de secours comprise : PV de constat, procédure à relancer (S5).
 Contrat : `docs/api-endpoints.md`, § *L'ouverture des plis en séance — V69*.
 
+⚠️ **2026-10-04, soumission en ligne — les arbitrages du pilote après le lot 4 (V70).**
+- **Les pièces des offres ne s'ouvrent que par les membres de la CAO.** Le responsable de la procédure, la PRMP et l'UGPM lisent ce
+  qui est lu en séance, offre par offre, mais n'ouvrent aucun fichier ; s'il faut montrer une pièce à la salle, un membre l'ouvre.
+- **Le PV d'ouverture est signé par chaque membre présent**, d'une signature électronique simple (l'acte authentifié du membre
+  connecté, horodaté, journalisé), avant d'être publié. Un membre présent qui ne peut pas signer ne bloque pas la séance : le
+  **président** de la commission (ou, à défaut, le responsable) constate son empêchement, avec un motif porté au PV. La séance est
+  close, l'extrait publié (si la fiche le prévoit, sans les alertes ni la vérification des NIF) et les intéressés avertis **à la
+  dernière signature**. Le PV de carence et le PV de constat d'illisibilité suivent la même règle ; sans aucun membre présent, il n'y a
+  rien à signer.
+- **La garantie de soumission est lue en séance** : son montant et son émetteur, imprimés au PV. Un montant inférieur au minimum
+  fixé par la fiche (par lot le cas échéant) donne une **alerte** à la commission, jamais un refus. Une offre déposée avant ce format
+  reste lisible, sans montant ni émetteur.
+- **La CAO se saisit par la PRMP ou par son UGPM** ; la décision reste celle de la PRMP. Le journal nomme qui a agi.
+- **La durée de conservation des offres est fixée par l'Administrateur** ; tant qu'elle ne l'est pas, rien n'est supprimé. Elle court
+  depuis la clôture de la séance. Au terme, **l'Administrateur purge** les procédures échues, une à une (aucune suppression
+  automatique) : les offres chiffrées et leur contenu déchiffré disparaissent, remplacées et retirées comprises ; le journal, les
+  empreintes, la lecture et le PV restent, et la purge est journalisée.
+- **Confirmé sans changement** : le dépositaire de la part de secours est choisi librement, procédure par procédure ; le reçu des
+  frais de dossier reste une pièce de l'offre, vérifiée par la CAO ; la signature électronique exigée reste **Simple** tant que la
+  liste officielle des prestataires de certification n'existe pas.
+Contrat : `docs/api-endpoints.md`, § *Les arbitrages du pilote après le lot 4 — V70*.
+
 #### La fiche DAO des travaux (référentiel remis le 2026-09-24)
 
 - **Les travaux se préparent** : 257 informations (dont un bloc d'annexes et de formulaires), avec leur vocabulaire —

@@ -7,7 +7,7 @@ import java.util.Map;
 /**
  * ⚠️ 2026-10-04 (demande front « soumission en ligne », lot 4 ; ADR-0013 §1, §2, §5) — la <strong>séance d'ouverture des plis</strong>
  * ({@code GET /api/fiches-marche/{idDmc}/seance}). {@code etat} ∈ {@code A_VENIR} · {@code OUVERTE} · {@code DECHIFFREE} ·
- * {@code ILLISIBLE} · {@code CLOSE} ; {@code heureOuverture} = {@code B04-OP-02} + {@code B04-OP-03} ; {@code ouverteDans} : les secondes
+ * ⚠️ V70 {@code PV_A_SIGNER} · {@code ILLISIBLE} · {@code CLOSE} ; {@code heureOuverture} = {@code B04-OP-02} + {@code B04-OP-03} ; {@code ouverteDans} : les secondes
  * avant l'heure d'ouverture, {@code null} une fois l'heure passée.
  */
 public record SeanceDto(Long idDmc, String etat, LocalDateTime heureOuverture, LocalDateTime ouverteLe, Long ouverteDans, Integer quorum,
@@ -24,7 +24,23 @@ public record SeanceDto(Long idDmc, String etat, LocalDateTime heureOuverture, L
     public record OffreSeance(Integer numero, Integer lot, String etat, int partsRecues) {
     }
 
-    public record Pv(boolean produit, boolean publie) {
+    /**
+     * Le PV : ⚠️ 2026-10-04 (arbitrages du pilote, §B2) — {@code signe} quand tous les membres présents ont signé (ou que leur
+     * empêchement est constaté) ; {@code signatures} posées, {@code signaturesAttendues} restantes. Publié seulement une fois signé.
+     */
+    public record Pv(boolean produit, boolean publie, boolean signe, List<Signature> signatures, List<Attendue> signaturesAttendues) {
+    }
+
+    /** Une signature électronique simple, ou un empêchement constaté ({@code empechement}, {@code motif}, {@code constatePar}). */
+    public record Signature(String im, String nom, boolean president, LocalDateTime date, boolean empechement, String motif,
+            String constatePar) {
+    }
+
+    public record Attendue(String im, String nom) {
+    }
+
+    /** {@code POST …/pv/empechement} (le président) : le membre présent empêché de signer, et le motif porté au PV. */
+    public record Empechement(String im, String motif) {
     }
 
     /** {@code PUT …/presences} : les membres présents (identifiants {@code K…}) et les autres présents. */
@@ -70,7 +86,11 @@ public record SeanceDto(Long idDmc, String etat, LocalDateTime heureOuverture, L
             EntrepriseCandidatDto.Exclusion exclusion) {
     }
 
-    public record Garantie(String codeVerification, boolean presente) {
+    /**
+     * La garantie lue : ⚠️ 2026-10-04 (arbitrages du pilote, §B3) — {@code montant}, {@code monnaie}, {@code emetteur} du manifeste
+     * (format 2) ; {@code null} pour un manifeste qui ne les porte pas (format 1), sans rendre l'offre illisible.
+     */
+    public record Garantie(String codeVerification, boolean presente, java.math.BigDecimal montant, String monnaie, String emetteur) {
     }
 
     public record PieceLue(String code, String libelle, boolean presente, String nomFichier, boolean empreinteConforme) {

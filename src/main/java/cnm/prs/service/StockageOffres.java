@@ -150,6 +150,16 @@ public class StockageOffres {
         supprimerConteneur(idOffre);
     }
 
+    /** ⚠️ Arbitrages du pilote (§B4.2) — la purge au terme de la conservation : morceaux, conteneur et contenu déchiffré. */
+    public void purgerTout(String idOffre) {
+        purger(idOffre);
+        try {
+            Files.deleteIfExists(racine.resolve(idOffre + ".clair.zip"));
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
     private static void supprimerArbre(Path p) {
         if (!Files.exists(p)) {
             return;

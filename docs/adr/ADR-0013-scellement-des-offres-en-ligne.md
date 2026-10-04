@@ -198,6 +198,6 @@ offre en clair. Il n'y a pas de clé de procédure, ni de poste de cérémonie q
 
 | # | Question | À qui |
 |---|---|---|
-| 1 | Le dépositaire de la part de secours ; le sort des garanties en S5 | juriste, par le pilote |
-| 2 | La durée de conservation des conteneurs et des contenus déchiffrés | juriste |
+| 1 | Le dépositaire de la part de secours ; le sort des garanties en S5 | juriste, par le pilote — ⚠️ 2026-10-04 : dépositaire **libre**, par procédure (arbitrage du pilote, V70 §B5) ; le sort des garanties en S5 reste ouvert |
+| 2 | ~~La durée de conservation des conteneurs et des contenus déchiffrés~~ — ⚠️ 2026-10-04 : **fixée par l'Administrateur** (`OFFRE_CONSERVATION_ANNEES`, nulle = sans limite), depuis la clôture de la séance ; purge par un geste de l'Administrateur, journalisée (V70 §B4.2) | pilote |
 | 3 | ~~L'interopérabilité `shamir-secret-sharing` / BouncyCastle~~ — ✅ levée le 2026-10-04 (`DechiffrementOffreTest`, BouncyCastle 1.86) | backend |
