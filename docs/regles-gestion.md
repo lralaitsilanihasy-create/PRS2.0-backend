@@ -739,6 +739,16 @@ possible qu'avant la date limite et si la fiche l'autorise ; une offre retirée 
 limite, la PRMP ne connaît que **le nombre** de dépôts ; le registre (qui, quand, empreinte) ne se lit qu'après. Contrat :
 `docs/api-endpoints.md`, § *Le dépôt scellé d'une offre — V68*.
 
+⚠️ **2026-10-04, soumission en ligne (lot 4, V69) — l'ouverture des plis.** La séance s'ouvre, par le responsable de la procédure,
+à l'**heure d'ouverture** de la fiche (`B04-OP-02` + `B04-OP-03`) et une fois la **date limite passée** ; avant, personne ne reçoit
+rien, pas même les parts chiffrées. Chaque membre de la CAO apporte **toutes ses parts en une fois** ; la part de secours s'emploie
+avec un **motif** imprimé au PV. Au **quorum**, **toutes les offres s'ouvrent ensemble** ; une offre dont l'entreprise a été **exclue
+par l'ARMP après son dépôt** est **écartée sans être ouverte** ; une offre altérée est signalée ; une offre qu'on ne peut pas lire ne
+bloque pas les autres. Les offres retirées et remplacées ne s'ouvrent jamais. La lecture (montants, délai, validité, garantie, pièces
+manquantes, vérification du NIF, rapprochements entre déposants) est **une information pour la commission, jamais un refus**. Sans
+offre : PV de carence. Si le quorum ne peut plus être atteint, part de secours comprise : PV de constat, procédure à relancer (S5).
+Contrat : `docs/api-endpoints.md`, § *L'ouverture des plis en séance — V69*.
+
 #### La fiche DAO des travaux (référentiel remis le 2026-09-24)
 
 - **Les travaux se préparent** : 257 informations (dont un bloc d'annexes et de formulaires), avec leur vocabulaire —

@@ -474,7 +474,7 @@ public class CeremonieService {
     /** La ligne de la cérémonie, créée {@code A_VENIR} au premier geste. */
     private CeremonieCles ceremonie(Long idDmc) {
         return ceremonieRepository.findById(idDmc).orElseGet(() -> {
-            CeremonieCles c = new CeremonieCles(idDmc, CeremonieCles.A_VENIR, null, false, LocalDateTime.now(), null);
+            CeremonieCles c = new CeremonieCles(idDmc, CeremonieCles.A_VENIR, null, false, LocalDateTime.now(), null, null, null);
             return ceremonieRepository.save(c);
         });
     }

@@ -6628,6 +6628,79 @@ un compte `MEMBRE_CAO` et détient une part. Pas de migration : `QUALITE` reste 
 
 ---
 
+### L'ouverture des plis en séance — V69 ⚠️ 2026-10-04
+
+Demande front `demande-backend-2026-10-04-ouverture-des-plis.md` (soumission en ligne, lot 4) ; décision :
+`docs/adr/ADR-0013-scellement-des-offres-en-ligne.md` (§1 ouverture, §2 reconstitution au serveur, §5 S3 et S5) ; migration **V69**
+(`t_seance`, `t_seance_apport`, `t_seance_journal`, colonnes d'ouverture de `t_offre`, rappels sur `t_ceremonie_cles`) ;
+**dépendance ajoutée : `org.bouncycastle:bcprov-jdk18on:1.86`** (recombinaison de Shamir).
+
+**La condition de l'ADR est levée (§B0).** `DechiffrementOffreTest`, en CI, recombine par BouncyCastle (GF(256) au polynôme de
+l'AES, `ShamirSplitSecret`) toute paire des parts produites par `shamir-secret-sharing` 0.0.4 — le code du front, vecteurs
+`src/test/resources/scellement/vecteurs-scellement-2026-10-04.json` — puis déchiffre le conteneur du front de bout en bout : deux parts
+RSA-OAEP (SHA-256, MGF1-SHA-256 explicite), `K` recombinée, morceau AES-256-GCM et ses données authentifiées, empreintes de l'accusé
+et du contenu. **Le repli du §B3.4 (recombinaison dans le navigateur) n'est pas construit.** Les abscisses de `shamir-secret-sharing`
+sont **tirées au hasard** (permutation de 1 à 255), pas « rang + 1 » : le serveur contrôle donc une part sur sa forme (33 octets,
+abscisse non nulle) et sur sa cohérence (deux détenteurs n'apportent pas la même abscisse pour une offre).
+
+| Méthode | URL | Corps | Réponse | Statuts | Accès |
+|---|---|---|---|---|---|
+| GET | /api/fiches-marche/{idDmc}/seance | — | `SeanceDto` | 200, 403, 404 | responsable, membres de la CAO, PRMP et UGPM de la fiche |
+| POST | /api/fiches-marche/{idDmc}/seance/ouvrir | — | `SeanceDto` (`OUVERTE`, ou `DECHIFFREE` sans offre) | 200, 403, 404, 409 `SEANCE_PREMATUREE` / `DEPOTS_NON_CLOS` / `SEANCE_DEJA_OUVERTE` | responsable |
+| PUT | /api/fiches-marche/{idDmc}/seance/presences | `{ presents: [K…], autres: [{ nom, qualite }] }` | `SeanceDto` | 200, 400, 403, 409 | responsable |
+| GET | /api/fiches-marche/{idDmc}/seance/mes-parts[?role=SECOURS] | — | `[{ idOffre, empreinteCle, part, enveloppe }]` | 200, 403, 409 `SEANCE_NON_OUVERTE` | membre de la CAO (les siennes) ; responsable pour le secours |
+| POST | /api/fiches-marche/{idDmc}/seance/parts[?role=SECOURS] | `{ parts: [{ idOffre, partClaire }], motif? }` | `SeanceDto` | 200, 400, 403, 409 | le même |
+| GET | /api/fiches-marche/{idDmc}/seance/lecture | — | `LectureDto` | 200, 403, 409 `SEANCE_NON_DECHIFFREE` | responsable, membres, PRMP, UGPM |
+| GET | /api/fiches-marche/{idDmc}/seance/offres/{idOffre}/pieces/{nomFichier} | — | le fichier | 200, 403, 404, 409 | responsable, membres, PRMP |
+| POST | /api/fiches-marche/{idDmc}/seance/pv | `{ observations }` | `SeanceDto` (`CLOSE`) | 200, 403, 409 `SEANCE_NON_DECHIFFREE` | responsable |
+| GET | /api/fiches-marche/{idDmc}/seance/pv | — | le PDF | 200, 403, 404 | responsable, membres, PRMP, UGPM |
+| POST | /api/fiches-marche/{idDmc}/seance/constater-illisible | `{ motif }` | `SeanceDto` (`ILLISIBLE`) | 200, 400, 403, 409 `QUORUM_POSSIBLE` / `SEANCE_NON_OUVERTE` | responsable |
+| GET | /api/procedures-en-ligne/{idDmc}/pv | — | le PDF publié | 200, 404 | public |
+
+- **`SeanceDto`** = `{ idDmc, etat, heureOuverture, ouverteLe, ouverteDans, quorum, membres: [{ im, nom, president, present,
+  partsApportees }], autres: [{ nom, qualite }], secoursEmploye, offres: [{ numero, lot, etat, partsRecues }], dechiffreeLe, pv: {
+  produit, publie } }`. `etat` ∈ `A_VENIR` · `OUVERTE` · `DECHIFFREE` · `ILLISIBLE` · `CLOSE` ; `heureOuverture` = `B04-OP-02` +
+  `B04-OP-03` ; `ouverteDans` en secondes avant l'heure, `null` après. `offres[].etat` : l'intégrité une fois ouverte (`INTACTE`,
+  `ALTEREE`, `LECTURE_IMPOSSIBLE`), sinon l'état de l'offre (`DEPOSEE`, `RETIREE`, `REMPLACEE`, `ECARTEE`).
+- **Ouvrir** : à partir de l'heure d'ouverture (`SEANCE_PREMATUREE`, `details.heureOuverture`), la date limite passée
+  (`DEPOTS_NON_CLOS`). Sans offre déposée, la séance s'ouvre directement `DECHIFFREE` : le PV est alors un **PV de carence**.
+  `PARTS_ATTENDUES` part aux membres.
+- **Les parts** : `mes-parts` sert, pour chaque offre déposée, la part chiffrée retrouvée dans l'en-tête par l'**empreinte d'une clé de
+  l'appelant** — active ou **archivée** (S4) ; dans ce cas `enveloppe` porte l'enveloppe de l'ancienne clé, à déverrouiller avec la phrase
+  de l'époque. Rien avant l'ouverture (`SEANCE_NON_OUVERTE`). L'apport se fait **en une fois** : `PARTS_INCOMPLETES` (offres manquantes
+  dans `details.offres`), `PART_INVALIDE` (pas 33 octets en base64, abscisse nulle, ou abscisse déjà apportée par un autre détenteur pour
+  la même offre), `CLE_ABSENTE` ; la part de secours exige un `motif` (400 `MOTIF_ABSENT`), imprimé au PV. Un membre qui apporte ses parts
+  est présent d'office ; il peut les rapporter (elles remplacent les précédentes).
+- **Les parts claires vivent en mémoire du serveur seulement** : jamais en base, jamais au journal (qui ne garde que qui, combien,
+  quand), effacées au déchiffrement ou au constat S5. **Un redémarrage du serveur pendant la séance les perd** : les membres les
+  rapportent.
+- **Au quorum**, dans un même geste, pour chaque offre `DEPOSEE` : l'offre d'une entreprise (ou d'un membre du groupement) **exclue par
+  l'ARMP depuis son dépôt** passe `ECARTEE`, non déchiffrée ; sinon l'empreinte du conteneur est recalculée (`ALTEREE` signalée), `K` est
+  recombinée par BouncyCastle, les morceaux sont déchiffrés (AES-256-GCM, données authentifiées `idOffre|1|rang|dernier|sha256(en-tête)`),
+  l'archive ZIP relue (entrées stockées ou `deflate`), `manifeste.json` lu, l'empreinte de chaque pièce vérifiée ; le clair est rangé sur
+  disque (`<idOffre>.clair.zip` sous `app.offres.repertoire`), puis `K` et les parts sont oubliées. Un échec sur une offre la marque
+  `LECTURE_IMPOSSIBLE` (raison dans `motif`) sans arrêter les autres.
+- **`LectureDto`** = `{ offres: [{ numero, idOffre, lot, etat, integrite, motif, entreprise: { nif, raisonSociale, verification,
+  exclusion }, groupement, acteEngagement, garantie: { codeVerification, presente } | null, pieces: [{ code, libelle, presente, nomFichier,
+  empreinteConforme }], piecesManquantes: [libellé…], alertes: [{ type, message }] }], nonOuvertes: [{ numero, entreprise, etat, motif }] }`,
+  par ordre d'arrivée. `groupement` et `acteEngagement` sont repris du manifeste tels quels ; `piecesManquantes` compare aux pièces attendues
+  (lot 3, §B2) ; `alertes` : `RAPPROCHEMENT` (même téléphone, signataire, adresse qu'un autre déposant de la procédure) et `EXCLUSION`.
+- **Les pièces** : le fichier du ZIP par son nom (`manifeste.json` n'est pas servi) ; l'UGPM ne les lit pas (question 4).
+- **Le PV** (moteur `DocumentLibre`) : la procédure, l'heure d'ouverture, les présents (responsable, membres, autres), l'emploi de la part de
+  secours et son motif, puis offre par offre la lecture (montants, délai, validité, rabais, garantie, intégrité, pièces manquantes,
+  vérification du NIF, alertes), les offres non ouvertes et pourquoi, les observations, une place pour la signature des membres présents.
+  **Publié** si `B04-OP-13 = OUI` : `GET /api/procedures-en-ligne/{idDmc}/pv`, une version **sans les alertes ni la vérification des NIF**
+  (question 3). `PV_OUVERTURE` à la PRMP, aux membres, et aux soumissionnaires s'il est publié.
+- **S5** : refusé tant que le quorum reste atteignable (`QUORUM_POSSIBLE` : détenteurs qui ont apporté leurs parts, plus ceux dont la clé
+  active n'est pas `PERDUE` ; `details.possibles` et `details.quorum`) ; sinon `ILLISIBLE`, PV de constat, `OFFRES_ILLISIBLES` aux
+  soumissionnaires, procédure à relancer.
+- **Rappels** : `SEANCE_A_VENIR` la veille et une heure avant l'heure d'ouverture, aux membres et au responsable, une fois chacun
+  (toutes les 5 minutes, `app.seance.cron-rappel`).
+- **Journal** `t_seance_journal` : `OUVERTURE`, `PRESENCES`, `APPORT` (qui, combien), `SECOURS` (motif), `ECARTEMENT`, `OUVERTURE_OFFRE`
+  (intégrité), `DECHIFFREMENT`, `PV`, `CONSTAT` — **jamais une part**.
+
+---
+
 ## Marchés — dates prévisionnelles
 **Ressource** `/api/marche-previsions` — ⚠️ LOT 3a (2026-08-26), §1/§3.1, même politique que `/api/lots`
 (CRUD auparavant sans aucune garde). **Lecture** ouverte à tout authentifié mais **scopée au dossier

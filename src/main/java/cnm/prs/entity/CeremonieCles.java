@@ -47,4 +47,12 @@ public class CeremonieCles {
     /** ⚠️ V68 (lot 3, §B6) — la clôture des dépôts notifiée (DEPOTS_CLOS), une fois. */
     @Column(name = "DATE_DEPOTS_CLOS")
     private LocalDateTime dateDepotsClos;
+
+    /** ⚠️ V69 (lot 4, §B7) — le rappel SEANCE_A_VENIR de la veille, envoyé. */
+    @Column(name = "RAPPEL_VEILLE")
+    private LocalDateTime rappelVeille;
+
+    /** ⚠️ V69 — le rappel SEANCE_A_VENIR une heure avant, envoyé. */
+    @Column(name = "RAPPEL_HEURE")
+    private LocalDateTime rappelHeure;
 }

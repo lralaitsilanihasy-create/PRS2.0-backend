@@ -85,6 +85,53 @@ public class StockageOffres {
         }
     }
 
+    /** ⚠️ Lot 4 — un conteneur relu : l'en-tête, les morceaux, et l'empreinte recalculée (SHA-256 de l'en-tête puis des morceaux). */
+    public record Conteneur(String enTete, List<byte[]> morceaux, String empreinte) {
+    }
+
+    /** ⚠️ Lot 4 (§B3) — relit le conteneur scellé : longueur de l'en-tête (4 octets), en-tête, puis morceaux de taille pleine sauf le dernier. */
+    public Conteneur lire(String chemin, int nombreMorceaux, int tailleMorceauChiffre) {
+        try {
+            byte[] tout = Files.readAllBytes(Path.of(chemin));
+            int longueur = ByteBuffer.wrap(tout, 0, 4).getInt();
+            String enTete = new String(tout, 4, longueur, StandardCharsets.UTF_8);
+            List<byte[]> morceaux = new java.util.ArrayList<>();
+            int pos = 4 + longueur;
+            for (int r = 0; r < nombreMorceaux; r++) {
+                int fin = r == nombreMorceaux - 1 ? tout.length : Math.min(tout.length, pos + tailleMorceauChiffre);
+                morceaux.add(java.util.Arrays.copyOfRange(tout, pos, fin));
+                pos = fin;
+            }
+            MessageDigest sha = MessageDigest.getInstance("SHA-256");
+            sha.update(tout, 4, tout.length - 4);
+            return new Conteneur(enTete, morceaux, HexFormat.of().formatHex(sha.digest()));
+        } catch (IOException e) {
+            throw new UncheckedIOException("Lecture du conteneur " + chemin + " impossible.", e);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /** ⚠️ Lot 4 (§B3) — le contenu en clair d'une offre ouverte (l'archive ZIP du candidat), au régime des pièces du dossier. */
+    public void ecrireClair(String idOffre, byte[] zip) {
+        try {
+            Files.createDirectories(racine);
+            Files.write(racine.resolve(idOffre + ".clair.zip"), zip);
+        } catch (IOException e) {
+            throw new UncheckedIOException("Écriture du contenu de l'offre " + idOffre + " impossible.", e);
+        }
+    }
+
+    /** ⚠️ Lot 4 — le contenu en clair d'une offre ouverte, {@code null} s'il n'existe pas. */
+    public byte[] lireClair(String idOffre) {
+        Path p = racine.resolve(idOffre + ".clair.zip");
+        try {
+            return Files.exists(p) ? Files.readAllBytes(p) : null;
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
     public void retirerMorceaux(String idOffre) {
         supprimerArbre(racine.resolve(idOffre));
     }

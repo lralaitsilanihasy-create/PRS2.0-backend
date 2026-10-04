@@ -74,6 +74,14 @@ offre en clair. Il n'y a pas de clé de procédure, ni de poste de cérémonie q
 - **Ajout de dépendance** (`pom.xml`) : `org.bouncycastle:bcprov-jdk18on`, au lot 4 seulement. L'ADR seule n'en ajoute
   aucune.
 
+> ⚠️ **2026-10-04, lot 4 (V69) — la condition est levée.** `DechiffrementOffreTest` (CI) recombine par BouncyCastle
+> **`bcprov-jdk18on` 1.86** (`org.bouncycastle.crypto.threshold`, GF(256) au polynôme de l'AES) toute paire de parts produites par
+> **`shamir-secret-sharing` 0.0.4** (vecteurs du front, `src/test/resources/scellement/`), puis déchiffre le conteneur du front de bout en
+> bout (parts RSA-OAEP SHA-256 / MGF1-SHA-256, `K`, morceau AES-256-GCM et ses données authentifiées, empreintes). La reconstitution se
+> fait donc **au serveur** ; le repli (navigateur du responsable) n'est pas construit. Précision constatée sur les vecteurs : la part fait
+> 33 octets, l'**abscisse en dernier octet**, et les abscisses sont **tirées au hasard** (permutation de 1 à 255), non « rang + 1 ». Si ce
+> test casse un jour (montée de version d'une des deux bibliothèques), la reconstitution au serveur perd son droit d'exister.
+
 ### 3. Les clés des détenteurs : RSA-OAEP 3072, SHA-256
 
 - **RSA-OAEP, module de 3072 bits, SHA-256 avec MGF1-SHA-256.**
@@ -192,4 +200,4 @@ offre en clair. Il n'y a pas de clé de procédure, ni de poste de cérémonie q
 |---|---|---|
 | 1 | Le dépositaire de la part de secours ; le sort des garanties en S5 | juriste, par le pilote |
 | 2 | La durée de conservation des conteneurs et des contenus déchiffrés | juriste |
-| 3 | L'interopérabilité `shamir-secret-sharing` / BouncyCastle (sinon, le repli du §2) | backend, au début du lot 4 |
+| 3 | ~~L'interopérabilité `shamir-secret-sharing` / BouncyCastle~~ — ✅ levée le 2026-10-04 (`DechiffrementOffreTest`, BouncyCastle 1.86) | backend |

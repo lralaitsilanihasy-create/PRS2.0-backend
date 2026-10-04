@@ -113,4 +113,23 @@ public class Offre {
 
     @Column(name = "DERNIER_MORCEAU")
     private LocalDateTime dernierMorceau;
+
+    /** ⚠️ V69 (lot 4, §B3) — {@code INTACTE}, {@code ALTEREE} (empreinte différente), {@code LECTURE_IMPOSSIBLE}. */
+    @Column(name = "INTEGRITE", length = 20)
+    private String integrite;
+
+    /** ⚠️ V69 — la lecture tirée du manifeste à l'ouverture (JSON). */
+    @Column(name = "LECTURE")
+    private String lecture;
+
+    /** ⚠️ V69 — la raison d'une lecture impossible. */
+    @Column(name = "MOTIF_LECTURE")
+    private String motifLecture;
+
+    /** ⚠️ V69 — le motif de l'écartement (entreprise exclue après son dépôt). */
+    @Column(name = "MOTIF_ECARTEMENT")
+    private String motifEcartement;
+
+    @Column(name = "OUVERTE_LE")
+    private LocalDateTime ouverteLe;
 }

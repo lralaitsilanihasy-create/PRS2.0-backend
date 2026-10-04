@@ -183,6 +183,12 @@ public class SecurityConfig {
                     // /api/cao/**, et la cérémonie de leurs procédures (garde par identité dans le service).
                     auth.requestMatchers(HttpMethod.POST, "/api/cao/activation").permitAll();
                     auth.requestMatchers("/api/cao/**").hasRole("MEMBRE_CAO");
+                    // ⚠️ 2026-10-04 (lot 4) — la séance d'ouverture : les membres de la CAO y apportent leurs parts (garde par
+                    // identité dans le service) ; le PV publié se lit sans session.
+                    auth.requestMatchers(HttpMethod.GET, "/api/procedures-en-ligne/*/pv").permitAll();
+                    auth.requestMatchers("/api/fiches-marche/*/seance", "/api/fiches-marche/*/seance/**").hasAnyRole("MEMBRE_CAO", "PRMP",
+                            "UGPM", "PRESIDENT", "CHEF_COMMISSION", "SECRETAIRE", "MEMBRE", "VERIFICATEUR", "ASSISTANT_CONTROLEUR",
+                            "CHARGE_PUBLICATION", "ADMINISTRATEUR");
                     auth.requestMatchers("/api/fiches-marche/*/ceremonie/**").hasAnyRole("MEMBRE_CAO", "PRMP", "UGPM",
                             "PRESIDENT", "CHEF_COMMISSION", "SECRETAIRE", "MEMBRE", "VERIFICATEUR", "ASSISTANT_CONTROLEUR",
                             "CHARGE_PUBLICATION", "ADMINISTRATEUR");

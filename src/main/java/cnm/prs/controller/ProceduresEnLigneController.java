@@ -27,8 +27,11 @@ public class ProceduresEnLigneController {
 
     private final ProceduresEnLigneService service;
     private final cnm.prs.service.CeremonieService ceremonie;
+    private final cnm.prs.service.SeanceService seance;
 
-    public ProceduresEnLigneController(ProceduresEnLigneService service, cnm.prs.service.CeremonieService ceremonie) {
+    public ProceduresEnLigneController(ProceduresEnLigneService service, cnm.prs.service.CeremonieService ceremonie,
+            cnm.prs.service.SeanceService seance) {
+        this.seance = seance;
         this.service = service;
         this.ceremonie = ceremonie;
     }
@@ -40,6 +43,14 @@ public class ProceduresEnLigneController {
     @GetMapping("/{idDmc}/pieces")
     public List<cnm.prs.dto.OffreDto.PieceAttendue> pieces(@PathVariable Long idDmc) {   // ⚠️ lot 3, §B2 : public, 404 hors critères
         return service.piecesAttendues(idDmc);
+    }
+
+    /** ⚠️ Lot 4 (§B5) — le PV d'ouverture publié ({@code B04-OP-13 = OUI}), sans les alertes ni la vérification des NIF ; 404 sinon. */
+    @GetMapping("/{idDmc}/pv")
+    public org.springframework.http.ResponseEntity<byte[]> pv(@PathVariable Long idDmc) {
+        return org.springframework.http.ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, Telechargements.disposition("pv-ouverture-" + idDmc + ".pdf"))
+                .contentType(org.springframework.http.MediaType.APPLICATION_PDF).body(seance.pvPublic(idDmc));
     }
 
     @GetMapping("/{idDmc}/cles")

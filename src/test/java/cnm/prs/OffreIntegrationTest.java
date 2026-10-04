@@ -437,7 +437,7 @@ class OffreIntegrationTest extends CnmIntegrationTestSupport {
             cleRepository.save(cle(dmc, CleDetenteur.MEMBRE, im, i++));
         }
         cleRepository.save(cle(dmc, CleDetenteur.SECOURS, null, i));
-        ceremonieRepository.save(new CeremonieCles(dmc, CeremonieCles.CLOSE, LocalDateTime.now(), false, LocalDateTime.now(), null));
+        ceremonieRepository.save(new CeremonieCles(dmc, CeremonieCles.CLOSE, LocalDateTime.now(), false, LocalDateTime.now(), null, null, null));
         // L'avis posé : la procédure est lancée ; l'ouverture des dépôts passée.
         int idFiche = JsonPath.read(mvc.perform(get("/api/fiches-marche/" + dmc).header("Authorization", tokenPrmp))
                 .andReturn().getResponse().getContentAsString(), "$.idFiche");

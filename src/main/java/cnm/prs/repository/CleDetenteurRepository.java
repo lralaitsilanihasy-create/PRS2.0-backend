@@ -20,4 +20,7 @@ public interface CleDetenteurRepository extends JpaRepository<CleDetenteur, Long
 
     /** La clé active de la part de secours. */
     Optional<CleDetenteur> findFirstByIdDmcAndRoleAndDateArchivageIsNull(Long idDmc, String role);
+
+    /** ⚠️ Lot 4 — toutes les clés d'une procédure, archivées comprises (une offre scellée avant un remplacement désigne l'ancienne). */
+    List<CleDetenteur> findByIdDmcOrderByIdCleAsc(Long idDmc);
 }

@@ -138,5 +138,17 @@ public enum TypeNotification {
     OFFRE_RETIREE,
 
     /** Date limite passée : les dépôts sont clos, avec le nombre — vers la PRMP et le responsable de la procédure. */
-    DEPOTS_CLOS
+    DEPOTS_CLOS,
+
+    /** ⚠️ 2026-10-04 (soumission en ligne, lot 4, §B7) — la séance d'ouverture approche (la veille, une heure avant) — membres et responsable. */
+    SEANCE_A_VENIR,
+
+    /** La séance est ouverte : apportez vos parts — vers les membres de la CAO. */
+    PARTS_ATTENDUES,
+
+    /** Le PV d'ouverture est produit — vers la PRMP, les membres et, s'il est publié, les soumissionnaires. */
+    PV_OUVERTURE,
+
+    /** S5 : les offres sont illisibles, la procédure est à relancer — vers les soumissionnaires. */
+    OFFRES_ILLISIBLES
 }
