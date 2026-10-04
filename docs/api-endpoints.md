@@ -902,6 +902,58 @@ Demande front `demande-backend-2026-10-04-soumission-en-ligne.md`, lot 1a (§B2,
   - un compte sans connexion depuis `delaiInactiviteMois` est **archivé**, jamais supprimé.
 - **Erreurs** : un 400 peut porter un `code` (`CODE_INVALIDE`, `CODE_EXPIRE`), comme les 409.
 
+## Entreprise du candidat, vérification du NIF, exclusions de l'ARMP ⚠️ 2026-10-04 (V64)
+
+Demande front `demande-backend-2026-10-04-soumission-en-ligne.md`, lot 1b (§B3 à §B6). Migration **V64**.
+
+| Méthode | URL | Corps | Réponse | Statuts | Accès |
+|---|---|---|---|---|---|
+| GET | /api/candidat/entreprise | — | `EntrepriseDto` | 200, 404 | CANDIDAT |
+| PUT | /api/candidat/entreprise | `{ raisonSociale, nif, stat?, rcs?, adresse, representant: { nom, prenom, fonction? } }` | `EntrepriseDto` | 200, 400, 409 `NIF_EXISTANT` / `STAT_EXISTANT` / `RCS_EXISTANT` | CANDIDAT |
+| POST | /api/candidat/entreprise/pieces | multipart `type` (CARTE_FISCALE, STATUTS, POUVOIR, AUTRE), `fichier` | `PieceEntrepriseDto` | 201, 400, 409 `ENTREPRISE_ABSENTE`, 413 | CANDIDAT |
+| DELETE | /api/candidat/entreprise/pieces/{id} | — | — | 204, 404 | CANDIDAT |
+| GET | /api/admin/entreprises?verification=NON_VERIFIE | — | `EntrepriseDto[]`, les plus anciennes d'abord | 200, 403 | Administrateur |
+| POST | /api/admin/entreprises/{id}/verification | `{ statut: VERIFIE_SUR_PIECES \| REFUSE_SUR_PIECES, motif }` | `VerificationNifDto` | 200, 400, 403, 404 | Administrateur |
+| GET | /api/admin/entreprises/{id}/pieces/{idPiece}/fichier | — | le fichier | 200, 403, 404 | Administrateur |
+| GET | /api/exclusions-armp | — | `ExclusionDto[]` | 200, 403 | Administrateur |
+| POST | /api/exclusions-armp | `{ nif, raisonSociale, motif, referenceDecision, dateDebut, dateFin? }` | `ExclusionDto` | 201, 400, 403 | Administrateur |
+| PUT | /api/exclusions-armp/{id} | idem | `ExclusionDto` | 200, 400, 403, 404 | Administrateur |
+
+- **L'entreprise** : un compte = une entreprise. Le candidat est celui du jeton : aucune route ne prend d'identifiant de
+  compte.
+  - **NIF, STAT et RCS** sont stockés normalisés, sans blancs et en majuscules, et sont chacun **uniques** sur la
+    plateforme.
+  - Le 409 ne nomme pas l'autre compte : « Ce NIF est déjà déclaré par une entreprise inscrite. Si c'est la vôtre,
+    connectez-vous avec le compte qui l'a déclarée. »
+  - `EntrepriseDto` = `{ id, raisonSociale, nif, stat, rcs, adresse, representant, pieces, verification, exclusion }`.
+- **Les pièces** : PDF, JPEG ou PNG, reconnus à leurs premiers octets. Taille au plus `tailleMaxPieceMo` (413), dans la limite
+  multipart du serveur (10 Mo). Le contenu est en base, avec son empreinte SHA-256.
+  `PieceEntrepriseDto` = `{ id, type, nomFichier, format, taille, dateDepot }`.
+- **La vérification du NIF**, selon le paramètre `verificationNif` (`SUR_PIECES` par défaut) :
+  - `AUTOMATIQUE` interroge le raccordement à la DGI. Il est **vide** (question 4, interface inconnue) et répond
+    « indisponible ». Une réponse indisponible, ou une erreur, retombe sur la voie sur pièces sans rien bloquer.
+  - Un NIF nouveau ou changé remet la vérification à `NON_VERIFIE`.
+  - `VerificationNifDto` = `{ statut, source, date, acteur, motif }` :
+    - `statut` : `VERIFIE_DGI`, `VERIFIE_SUR_PIECES`, `INCONNU_DGI`, `REFUSE_SUR_PIECES` ou `NON_VERIFIE` ;
+    - `source` : `DGI` ou `SUR_PIECES` ;
+    - `acteur` : `DGI`, ou l'Administrateur.
+  - Le motif d'un refus est obligatoire. Tout changement de statut est journalisé (`t_entreprise_journal`). **La
+    vérification ne bloque jamais le dépôt.**
+- **Les exclusions de l'ARMP** ne se suppriment pas (pas de `DELETE`, 405) : on les corrige, ou on avance leur date de fin.
+  - `ExclusionDto` = `{ id, nif, raisonSociale, motif, referenceDecision, dateDebut, dateFin, enCours, journal }`.
+  - `journal` = `[{ date, acteur, anciennes, nouvelles }]`, où `anciennes` vaut `null` à la création.
+  - Le rapprochement se fait **par le NIF normalisé**, sur le répertoire du jour. L'entreprise exclue est **signalée**
+    (`EntrepriseDto.exclusion`), jamais refusée à la déclaration. Le refus au dépôt (409 `ENTREPRISE_EXCLUE`) vient au
+    lot 3.
+- **Les rapprochements** (`t_rapprochement_candidat`) sont recalculés à l'inscription et à chaque déclaration de
+  l'entreprise. Ils ne sont pas servis avant le lot 4, et ne donnent jamais lieu à un refus. Trois critères :
+  - même **téléphone** : chiffres seuls, `+261` ramené au `0` ;
+  - même **signataire** : le représentant, nom et prénom normalisés ;
+  - même **adresse** : casse, blancs et accents ignorés.
+
+  L'adresse électronique d'un compte est unique : ce critère ne servira qu'aux adresses saisies dans les offres. L'adresse
+  IP n'est pas un critère.
+
 ## Inscriptions PRMP / UGPM (validation Administrateur)
 **Ressource** `/api/inscriptions` — Instruction des inscriptions **PRMP et UGPM** (§3.1). Consultation et écriture réservées à l'**Administrateur** ; le **téléchargement d'une pièce** est ouvert à l'Administrateur **ou** au propriétaire de l'inscription. `GET /en-attente` liste les deux types (champ **`type`** ∈ `PRMP`/`UGPM` sur `InscriptionEnAttenteDto`) : une UGPM a `idPrmpTutelle` renseigné et `entitesDeclarees` vide (pas d'entités propres). `POST /{login}/valider` d'une **UGPM** active directement le compte (aucune entité à instruire — corps `ValidationInscriptionRequest` inutile) ; `refuser` fonctionne à l'identique. **À la validation** (PRMP comme UGPM), les **pièces d'inscription** (stockées sous la clé `login`) sont **ré-affectées sur la clé `id` de l'acteur** (`idPrmp`/`idUgpm`) : elles deviennent accessibles via `GET /api/prmps|ugpms/{id}/pieces/{type}` et sont purgées au `DELETE` de la fiche (unification avec les pièces créées côté Admin). Le téléchargement pendant l'instruction reste `GET /api/inscriptions/{login}/pieces/{type}`.
 

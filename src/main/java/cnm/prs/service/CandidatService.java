@@ -46,9 +46,13 @@ public class CandidatService {
     private final LoginRateLimiter limiteur;
     private final PasswordEncoder encodeur;
     private final Clock horloge;
+    /** ⚠️ 2026-10-04 (lot 1b, §B6) — les rapprochements, recalculés dès l'inscription (même téléphone). */
+    private final RapprochementCandidatService rapprochements;
 
     public CandidatService(CompteCandidatRepository candidats, CompteAuthRepository comptes, CodesCandidat codes,
-            ParametreService parametres, LoginRateLimiter limiteur, PasswordEncoder encodeur, Clock horloge) {
+            ParametreService parametres, LoginRateLimiter limiteur, PasswordEncoder encodeur, Clock horloge,
+            RapprochementCandidatService rapprochements) {
+        this.rapprochements = rapprochements;
         this.candidats = candidats;
         this.comptes = comptes;
         this.codes = codes;
@@ -80,6 +84,7 @@ public class CandidatService {
                 demande.prenom().trim(), CompteCandidat.A_CONFIRMER, false, LocalDateTime.now(horloge), null, null, null));
         comptes.save(new CompteAuth(email, encodeur.encode(demande.motDePasse()), TypeActeur.CANDIDAT.name(), id, false));
         codes.emettre(compte, Boolean.TRUE.equals(p.confirmationTelephone()));
+        rapprochements.recalculer(id);
         return new CompteCandidatDto.Inscrit(id, compte.getEtat());
     }
 
