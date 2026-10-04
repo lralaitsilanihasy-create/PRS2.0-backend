@@ -954,6 +954,73 @@ Demande front `demande-backend-2026-10-04-soumission-en-ligne.md`, lot 1b (§B3 
   L'adresse électronique d'un compte est unique : ce critère ne servira qu'aux adresses saisies dans les offres. L'adresse
   IP n'est pas un critère.
 
+## Procédures ouvertes en ligne et retrait du DAO ⚠️ 2026-10-04 (V65)
+
+Demande front `demande-backend-2026-10-04-soumission-en-ligne.md`, lot 1c (§B8). Migration **V65** (`t_retrait_dao`).
+
+| Méthode | URL | Réponse | Statuts | Accès |
+|---|---|---|---|---|
+| GET | /api/procedures-en-ligne | `ProcedureEnLigneDto[]`, la date limite la plus proche d'abord | 200 | public (sans session) |
+| GET | /api/procedures-en-ligne/{idDmc} | `ProcedureEnLigneDto` | 200, 404 | public |
+| GET | /api/procedures-en-ligne/{idDmc}/documents | `[{ code, intitule, version, taille }]` | 200, 401, 403, 404 | CANDIDAT |
+| GET | /api/procedures-en-ligne/{idDmc}/documents/{code} | le fichier (`attachment`) | 200, 401, 403, 404 | CANDIDAT |
+| GET | /api/fiches-marche/{idDmc}/retraits | `[{ date, compte, entreprise, nif, document, version }]`, du plus ancien au plus récent | 200, 403, 404 | PRMP de la fiche |
+
+- **Qui figure dans la liste** : la **dernière version validée** de la fiche (une révision ouverte ne la masque pas) qui
+  remplit toutes ces conditions :
+  - cadrage `modeRemise = ELECTRONIQUE` ;
+  - **lancée** : un avis spécifique (`AVIS`) a été imprimé sur l'une de ses versions. Les lettres d'invitation des
+    prestations intellectuelles (liste restreinte) n'ouvrent rien au public ;
+  - date limite de remise non passée ;
+  - signature `B04-SE-05` **Simple** (Q5). Un champ vide vaut Simple ; Avancée ou Qualifiée écartent la procédure.
+
+  Le détail répond **404** hors de ces conditions, sans dire laquelle manque. Une procédure **close** reste lisible par son
+  identifiant (`etat = CLOSE`), mais sort de la liste.
+- `ProcedureEnLigneDto` = `{ idDmc, reference, objet, autoriteContractante, categorie, lots: [{ numero, intitule }],
+  datePublication, dateOuvertureDepots, dateLimite, heureReference, signatureExigee, formatsAcceptes, tailleMaxFichierMo,
+  tailleMaxOffreMo, assistance, etat }`. Tout est lu sur la version validée, tel que les documents l'impriment : un champ
+  fermé, ou d'une autre forme ou catégorie, vaut `null`. **Aucun paramètre interne** n'est servi (V50, ADR-0010).
+
+  | Champ | Source |
+  |---|---|
+  | `reference` | `B02-OB-03` (numéro du DAO) ; à défaut, la référence du plan |
+  | `objet` | désignation de la ligne courante |
+  | `autoriteContractante` | `B01-AC-01` |
+  | `lots` | lots du plan sur la ligne courante, numérotés de 1 à n ; liste vide si le marché n'est pas alloti |
+  | `datePublication` | date de publication saisie à la **première** impression de l'avis ; à défaut `B04-SE-17` |
+  | `dateOuvertureDepots` | `B04-SE-03` |
+  | `dateLimite` | `B04-LR-03` + `B04-LR-04` ; à défaut `B04-CP-02` (contrat-cadre), puis `B04-OV-02` (travaux) |
+  | `heureReference` | `B04-SE-04` |
+  | `signatureExigee` | `B04-SE-05` |
+  | `formatsAcceptes` | `B04-SE-07`, en liste |
+  | `tailleMaxFichierMo` | `B04-SE-08` |
+  | `tailleMaxOffreMo` | `B04-SE-09` |
+  | `assistance` | `B04-SE-14` |
+
+  Les dates sont en ISO local `AAAA-MM-JJTHH:MM`, sauf `datePublication`, rendue telle qu'elle a été saisie
+  (`AAAA-MM-JJ`).
+- `etat` :
+  - `CLOSE` : la date limite est passée ;
+  - `A_VENIR` : avant l'ouverture des dépôts ;
+  - `OUVERTE` : sinon.
+- **Les documents** : ceux de la dernière version validée, `.docx` et `.pdf`, sans l'avis ni les lettres d'invitation.
+  - `code` est le nom du fichier, unique dans une version.
+  - `intitule` est le libellé servi par `GET /api/fiches-marche/{idDmc}/documents`.
+  - Un agent connecté reçoit 403 ; sans session, 401.
+- **Le retrait est libre** pour tout candidat connecté (Q3). **Chaque téléchargement** inscrit une ligne au registre
+  `t_retrait_dao` : compte, entreprise déclarée au moment du retrait (sinon `null`), document, version de la fiche, date.
+- **Le registre** est réservé à la PRMP de la fiche : 403 pour un autre profil, y compris l'Administrateur et l'UGPM, et
+  pour une PRMP hors périmètre. Dans la réponse :
+  - `compte` est l'adresse électronique du candidat ;
+  - `entreprise` et `nif` sont lus à la consultation.
+- **Avertissement du bilan** `SIGNATURE_EN_LIGNE` (Q5) : il paraît quand le mode est électronique et que `B04-SE-05` vaut
+  Avancée ou Qualifiée. Il n'est jamais bloquant ; il porte sur le champ `B04-SE-05`, bloc `B04`. Message : « La plateforme
+  n'accepte pour l'instant que la signature simple : la procédure ne pourra pas s'ouvrir en ligne. »
+
+  ⚠️ Le niveau minimal fixé par l'Administrateur (`FICHE_SE_SIGNATURE_MIN`, V50) vaut **Avancée** par défaut. La règle
+  `SE_SIGNATURE_MIN` (bloquante) refuse alors toute fiche électronique en Simple. Tant que l'Administrateur ne l'abaisse
+  pas à Simple (`PUT /api/parametres/fiche-remise-electronique`), **aucune procédure ne peut paraître en ligne**.
+
 ## Inscriptions PRMP / UGPM (validation Administrateur)
 **Ressource** `/api/inscriptions` — Instruction des inscriptions **PRMP et UGPM** (§3.1). Consultation et écriture réservées à l'**Administrateur** ; le **téléchargement d'une pièce** est ouvert à l'Administrateur **ou** au propriétaire de l'inscription. `GET /en-attente` liste les deux types (champ **`type`** ∈ `PRMP`/`UGPM` sur `InscriptionEnAttenteDto`) : une UGPM a `idPrmpTutelle` renseigné et `entitesDeclarees` vide (pas d'entités propres). `POST /{login}/valider` d'une **UGPM** active directement le compte (aucune entité à instruire — corps `ValidationInscriptionRequest` inutile) ; `refuser` fonctionne à l'identique. **À la validation** (PRMP comme UGPM), les **pièces d'inscription** (stockées sous la clé `login`) sont **ré-affectées sur la clé `id` de l'acteur** (`idPrmp`/`idUgpm`) : elles deviennent accessibles via `GET /api/prmps|ugpms/{id}/pieces/{type}` et sont purgées au `DELETE` de la fiche (unification avec les pièces créées côté Admin). Le téléchargement pendant l'instruction reste `GET /api/inscriptions/{login}/pieces/{type}`.
 

@@ -32,4 +32,17 @@ public interface FicheMarcheRepository extends JpaRepository<FicheMarche, Intege
              order by f.dateValidation desc, f.idDmc desc
             """)
     List<FicheMarche> findDernieresValideesSansDossier();
+
+    /**
+     * ⚠️ 2026-10-04 (soumission en ligne, lot 1c, §B8) — la dernière version {@code VALIDEE} de chaque DMC qui en a une
+     * (une révision ouverte ne la masque pas), candidates à la liste publique des procédures en ligne.
+     */
+    @org.springframework.data.jpa.repository.Query("""
+            select f from FicheMarche f
+             where f.statut = 'VALIDEE'
+               and f.numeroVersion = (select max(g.numeroVersion) from FicheMarche g
+                                       where g.idDmc = f.idDmc and g.statut = 'VALIDEE')
+             order by f.idDmc desc
+            """)
+    List<FicheMarche> findDernieresValidees();
 }

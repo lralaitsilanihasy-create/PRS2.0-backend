@@ -394,6 +394,12 @@ public class FicheMarcheService {
         return out;
     }
 
+    /** ⚠️ 2026-10-04 (soumission en ligne, lot 1c, §B8) — la garde de lecture de la fiche seule : 404, 403 hors périmètre. */
+    @Transactional(readOnly = true)
+    public void controlerLecture(Long idDmc) {
+        contexte(idDmc);
+    }
+
     /** ⚠️ Lot 2a — un document à télécharger, au périmètre de lecture de sa fiche (404 inconnu, 403 hors périmètre). */
     @Transactional(readOnly = true)
     public DocumentFicheMarche document(Integer idDocument) {
@@ -1483,6 +1489,8 @@ public class FicheMarcheService {
         Long idDmc = fiche.getIdDmc();
         BilanControlesDto bilan = ControlesFicheMarche.bilan(ouverts, valeurs, cadrage, ppm.dates(), nbLots, besoinBilan,
                 parametres.tauxGarantie(), internes.contexteBilan(idDmc, cadrage), categorieOuverture);
+        // ⚠️ 2026-10-04 (soumission en ligne, lot 1c, §B8, Q5) — signature au-dessus de « Simple » : pas en ligne.
+        ControlesFicheMarche.signatureEnLigne(ouverts, valeurs, cadrage, bilan);
         // ⚠️ V60 (2026-10-03, §B3) — une fiche de travaux dit son matériel : la liste, ou le texte B03-QT-09.
         if (CategorieDao.TRAVAUX.name().equals(ctx.codeCategorie())) {
             ControlesFicheMarche.materielExige(ouverts, valeurs, moyens.materiel(fiche.getIdFiche()).size(), bilan);

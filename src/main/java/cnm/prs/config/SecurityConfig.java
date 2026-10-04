@@ -177,6 +177,12 @@ public class SecurityConfig {
                     auth.requestMatchers(HttpMethod.POST, CANDIDATS_PUBLIC).permitAll();
                     auth.requestMatchers("/api/candidat/**").hasRole("CANDIDAT");
                     auth.requestMatchers("/api/mon-compte/**").authenticated();
+                    // ⚠️ 2026-10-04 (soumission en ligne, lot 1c, §B8) — les procédures ouvertes en ligne se lisent sans
+                    // session ; leurs documents (le retrait du DAO, journalisé) se téléchargent par un CANDIDAT connecté.
+                    // La règle des documents précède celle du détail (1er match gagne).
+                    auth.requestMatchers(HttpMethod.GET, "/api/procedures-en-ligne/*/documents/**").hasRole("CANDIDAT");
+                    auth.requestMatchers(HttpMethod.GET, "/api/procedures-en-ligne/*/documents").hasRole("CANDIDAT");
+                    auth.requestMatchers(HttpMethod.GET, "/api/procedures-en-ligne", "/api/procedures-en-ligne/*").permitAll();
                     // ⚠️ LOT 5 (2026-08-26) — documentation d'API générée (springdoc / Swagger UI) :
                     // purement consultative, servie par l'application elle-même (aucune donnée métier).
                     // ⚠️ Audit 2026-08-27 (lot E) — mais elle décrit TOUTE la surface d'attaque :

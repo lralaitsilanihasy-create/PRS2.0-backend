@@ -75,6 +75,8 @@ public final class ControlesFicheMarche {
     /** ⚠️ V61 (2026-10-03, pièces de l'offre des travaux, §B3) — les pièces de l'offre, en liste ou en texte ; le doublon. */
     public static final String PIECES_OFFRE_EXIGEES = "PIECES_OFFRE_EXIGEES";
     public static final String PIECES_EN_DOUBLE = "PIECES_EN_DOUBLE";
+    /** ⚠️ 2026-10-04 (soumission en ligne, lot 1c, §B8, Q5) — la plateforme ne sait faire que la signature simple. */
+    public static final String SIGNATURE_EN_LIGNE = "SIGNATURE_EN_LIGNE";
     /** ⚠️ V45 (2026-09-25) — le besoin et les garanties générées. */
     public static final String BESOIN_INCOMPLET = "BESOIN_INCOMPLET";
     public static final String QUANTITES_ORDRE = "QUANTITES_ORDRE";
@@ -589,6 +591,26 @@ public final class ControlesFicheMarche {
         }
     }
 
+
+    /**
+     * ⚠️ 2026-10-04 (soumission en ligne, lot 1c, §B8, Q5) — {@code SIGNATURE_EN_LIGNE} : le mode est électronique et
+     * {@code B04-SE-05} exige un niveau au-dessus de « Simple ». La plateforme ne sait encore faire que la signature
+     * simple : la procédure n'apparaîtra pas parmi les procédures en ligne. Avertissement, jamais bloquant.
+     */
+    public static void signatureEnLigne(List<ChampFicheMarche> champsOuverts, Map<String, String> valeurs,
+            Map<String, Object> cadrage, BilanControlesDto bilan) {
+        if (!RemiseElectronique.electronique(cadrage)) {
+            return;
+        }
+        ChampFicheMarche niveau = champsOuverts.stream().filter(c -> SIGNATURE_CHAMP.equals(c.getCode())).findFirst().orElse(null);
+        if (niveau != null && RemiseElectronique.rangNiveau(valeurs.get(niveau.getCode())) > 0) {
+            bilan.avertissements().add(new Controle(SIGNATURE_EN_LIGNE, List.of(niveau.getCode()), niveau.codeBloc(),
+                    "La plateforme n'accepte pour l'instant que la signature simple : la procédure ne pourra pas s'ouvrir en ligne."));
+        }
+    }
+
+    /** Le niveau de signature électronique exigé. */
+    static final String SIGNATURE_CHAMP = "B04-SE-05";
     private static String normaliserTexte(String s) {
         return s.replace("\r\n", "\n").strip();
     }

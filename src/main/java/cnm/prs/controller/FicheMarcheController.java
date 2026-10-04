@@ -46,10 +46,12 @@ public class FicheMarcheController {
     private final cnm.prs.service.ImportDaoService importDao;
     private final cnm.prs.service.AvisSpecifiqueService avis;
     private final cnm.prs.service.LettreInvitationService lettres;
+    private final cnm.prs.service.ProceduresEnLigneService enLigne;
 
     public FicheMarcheController(FicheMarcheService service, FicheMarcheDossierService dossiers,
             cnm.prs.service.ImportDaoService importDao, cnm.prs.service.AvisSpecifiqueService avis,
-            cnm.prs.service.LettreInvitationService lettres) {
+            cnm.prs.service.LettreInvitationService lettres, cnm.prs.service.ProceduresEnLigneService enLigne) {
+        this.enLigne = enLigne;
         this.avis = avis;
         this.lettres = lettres;
         this.importDao = importDao;
@@ -87,6 +89,16 @@ public class FicheMarcheController {
     @GetMapping("/{idDmc}/documents")
     public List<DocumentFicheDto> documents(@PathVariable Long idDmc, @RequestParam(required = false) Integer version) {
         return service.documents(idDmc, version);
+    }
+
+    /**
+     * ⚠️ 2026-10-04 (soumission en ligne, lot 1c, §B8) — le registre des retraits du DAO en ligne : PRMP de la fiche seule
+     * (403 autre profil ou hors périmètre), 404 DMC inconnu ; du plus ancien au plus récent.
+     */
+    @PreAuthorize("hasRole('PRMP')")
+    @GetMapping("/{idDmc}/retraits")
+    public List<cnm.prs.dto.ProcedureEnLigneDto.Retrait> retraits(@PathVariable Long idDmc) {
+        return enLigne.retraits(idDmc);
     }
 
     /**
