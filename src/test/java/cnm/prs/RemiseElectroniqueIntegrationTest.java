@@ -225,7 +225,7 @@ class RemiseElectroniqueIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<Boolean>read(vue, "$.peutModifierParametresInternes")).isTrue();
 
-        String internes = internes(idDmc, tokenVer, "{\"quorum\":2,\"depositaire\":{\"nom\":\"Rakoto Jean\",\"organisme\":\"ARMP\"},"
+        String internes = internes(idDmc, tokenVer, "{\"quorum\":2,\"depositaire\":{\"nom\":\"Rakoto Jean\",\"email\":\"rakoto.depositaire@secours.mg\",\"organisme\":\"ARMP\"},"
                 + "\"dateCeremonie\":\"2026-03-01T09:00\"}").andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<String>read(internes, "$.etat")).isEqualTo("COMPLETS");
         assertThat(JsonPath.<Integer>read(internes, "$.nombreParts")).isEqualTo(2);
@@ -239,7 +239,7 @@ class RemiseElectroniqueIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(valeurs).hasSize(5);
         assertThat(valeurs.get(0)).isEqualTo("CTRVER");
         assertThat(valeurs.get(1)).startsWith("K");   // ⚠️ V67 : les comptes MEMBRE_CAO, posés par la désignation de la CAO
-        assertThat(valeurs.subList(2, 5)).containsExactly("2", "2026-03-01T09:00", "Rakoto Jean ; ARMP");
+        assertThat(valeurs.subList(2, 5)).containsExactly("2", "2026-03-01T09:00", "Rakoto Jean ; ARMP ; rakoto.depositaire@secours.mg");   // ⚠️ V71 : l'adresse au journal
         fiche = fiche(idDmc);
         assertThat(JsonPath.<String>read(fiche, "$.parametresInternes")).isEqualTo("COMPLETS");
         assertThat(JsonPath.<List<Object>>read(fiche, "$.bilanControles.bloquants")).isEmpty();
@@ -340,7 +340,7 @@ class RemiseElectroniqueIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.erreurs[0].champ").value("membresCommission"));
         cao(idDmc);
         internes(idDmc, tokenVer, "{\"quorum\":2,\"dateCeremonie\":\"2026-03-01T09:00\","
-                + "\"depositaire\":{\"nom\":\"Rakoto Jean\"}}")   // ⚠️ V66 : le dépositaire, exigé par COMPLETS (règle 12)
+                + "\"depositaire\":{\"nom\":\"Rakoto Jean\",\"email\":\"rakoto.depositaire@secours.mg\"}}")   // ⚠️ V66 : le dépositaire, exigé par COMPLETS (règle 12)
                 .andExpect(status().isOk());
         String journal = mvc.perform(get("/api/fiches-marche/" + idDmc + "/parametres-internes").header("Authorization", tokenVer))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();

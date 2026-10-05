@@ -36,6 +36,7 @@ import com.jayway.jsonpath.JsonPath;
 
 import cnm.prs.entity.Capm;
 import cnm.prs.entity.CeremonieCles;
+import cnm.prs.entity.CleDetenteur;
 import cnm.prs.entity.CompteAuth;
 import cnm.prs.entity.CompteCao;
 import cnm.prs.entity.Dossier;
@@ -83,6 +84,7 @@ class CeremonieIntegrationTest extends CnmIntegrationTestSupport {
     @Autowired private ParametreService parametres;
     @Autowired private CeremonieClesRepository ceremonieRepository;
     @Autowired private CleDetenteurRepository cleRepository;
+    @org.springframework.test.context.bean.override.mockito.MockitoBean private cnm.prs.service.EmailService email;
     @Autowired private CompteCaoRepository comptesCao;
     @Autowired private DocumentFicheMarcheRepository documentRepository;
     @Autowired private FicheMarcheValeurRepository valeurRepository;
@@ -277,13 +279,17 @@ class CeremonieIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.allOf(
                         org.hamcrest.Matchers.containsString("RASOA Lova"), org.hamcrest.Matchers.containsString("la part de secours"),
                         org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("RABE")))));
-        // La part de secours : le responsable seul.
+        // ⚠️ V71 (demande du 05/10) — la part de secours : le dépositaire seul la publie ; le responsable : 403 GESTE_DU_DEPOSITAIRE.
         Paire secours = paire(3072);
+        String tokenD = jetonDepositaire();
         publier(tokenM1, "/cles/secours", secours.corps()).andExpect(status().isForbidden());
-        publier(tokenVer, "/cles/secours", secours.corps()).andExpect(status().isCreated())
+        publier(tokenVer, "/cles/secours", secours.corps()).andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("GESTE_DU_DEPOSITAIRE"));
+        publier(tokenD, "/cles/secours", secours.corps()).andExpect(status().isCreated())
                 .andExpect(jsonPath("$.role").value("SECOURS")).andExpect(jsonPath("$.im").isEmpty())
-                .andExpect(jsonPath("$.nom").value("Rakoto Jean"));
-        mvc.perform(get(base + "/cles/secours").header("Authorization", tokenVer)).andExpect(status().isOk());
+                .andExpect(jsonPath("$.nom").value("Rakoto Jean")).andExpect(jsonPath("$.generePar").value("DEPOSITAIRE"));
+        mvc.perform(get(base + "/cles/secours").header("Authorization", tokenD)).andExpect(status().isOk());
+        mvc.perform(get(base + "/cles/secours").header("Authorization", tokenVer)).andExpect(status().isForbidden());
         mvc.perform(get(base + "/cles/secours").header("Authorization", tokenM1)).andExpect(status().isForbidden());
         Paire cc = paire(3072);
         publier(tokenM2, "/cles", cc.corps()).andExpect(status().isCreated());
@@ -340,17 +346,18 @@ class CeremonieIntegrationTest extends CnmIntegrationTestSupport {
 
     @Test
     @DisplayName("Secours : défi S2 (déchiffré par la JCA comme WebCrypto le ferait, usage unique, échec journalisé, part de "
-            + "secours par le responsable), rappel de vérification, part perdue (marge, notification), remplacement S4 (supprimée "
+            + "secours par son dépositaire), rappel de vérification, part perdue (marge, notification), remplacement S4 (supprimée "
             + "avant le premier dépôt, archivée après), réouverture (parts absentes, un membre de la CAO remplacé par la PRMP, "
             + "DEPOT_EXISTANT), garde de l'avis §B2.6")
     void secours() throws Exception {
         internes(tokenVer, corpsInternes(2, "Rakoto Jean")).andExpect(status().isOk());
+        String tokenD = jetonDepositaire();
         Paire membre = paire(3072);
         Paire cc = paire(3072);
         Paire secours = paire(3072);
         publier(tokenM1, "/cles", membre.corps()).andExpect(status().isCreated());
         publier(tokenM2, "/cles", cc.corps()).andExpect(status().isCreated());
-        publier(tokenVer, "/cles/secours", secours.corps()).andExpect(status().isCreated());
+        publier(tokenD, "/cles/secours", secours.corps()).andExpect(status().isCreated());
         mvc.perform(post(base + "/cloturer").header("Authorization", tokenVer)).andExpect(status().isOk());
 
         // S2 — le défi.
@@ -373,11 +380,12 @@ class CeremonieIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("DEFI_ECHOUE"));
         mvc.perform(post(base + "/defi/999999").header("Authorization", tokenM2).contentType(JSON).content("{\"clair\":\"AA==\"}"))
                 .andExpect(status().isNotFound());
-        // La part de secours : le responsable, avec la phrase du pli.
+        // La part de secours : ⚠️ V71 son dépositaire, avec sa phrase.
         mvc.perform(post(base + "/defi").header("Authorization", tokenM1).param("role", "SECOURS")).andExpect(status().isForbidden());
-        String defiS = mvc.perform(post(base + "/defi").header("Authorization", tokenVer).param("role", "SECOURS")).andExpect(status().isCreated())
+        mvc.perform(post(base + "/defi").header("Authorization", tokenVer).param("role", "SECOURS")).andExpect(status().isForbidden());
+        String defiS = mvc.perform(post(base + "/defi").header("Authorization", tokenD).param("role", "SECOURS")).andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
-        mvc.perform(post(base + "/defi/" + JsonPath.<Integer>read(defiS, "$.idDefi")).header("Authorization", tokenVer).contentType(JSON)
+        mvc.perform(post(base + "/defi/" + JsonPath.<Integer>read(defiS, "$.idDefi")).header("Authorization", tokenD).contentType(JSON)
                 .content("{\"clair\":\"" + secours.dechiffrer(JsonPath.read(defiS, "$.chiffre")) + "\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.role").value("SECOURS")).andExpect(jsonPath("$.etatPart").value("VERIFIEE"));
         String journal = mvc.perform(get("/api/fiches-marche/" + idDmc + "/parametres-internes").header("Authorization", tokenVer))
@@ -449,13 +457,107 @@ class CeremonieIntegrationTest extends CnmIntegrationTestSupport {
         publier(tokenM1, "/cles", membre.corps()).andExpect(status().isCreated());   // les anciennes lignes sont supprimées : la même paire resert
         publier(tokenM3, "/cles", cc.corps()).andExpect(status().isCreated());
         publier(tokenM2, "/cles", cc.corps()).andExpect(status().isForbidden());   // plus membre
-        publier(tokenVer, "/cles/secours", secours.corps()).andExpect(status().isCreated());
+        publier(tokenD, "/cles/secours", secours.corps()).andExpect(status().isCreated());
         mvc.perform(post(base + "/cloturer").header("Authorization", tokenVer)).andExpect(status().isOk()).andExpect(jsonPath("$.etat").value("CLOSE"));
         disponibilite().andExpect(jsonPath("$.disponible").value(true));
         journal = mvc.perform(get("/api/fiches-marche/" + idDmc + "/parametres-internes").header("Authorization", tokenVer))
                 .andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<List<String>>read(journal, "$.journal[*].champ")).contains("ceremonieRouverte", "clePerdue");
         assertThat(JsonPath.<List<String>>read(journal, "$.journal[?(@.champ=='membresCommission')].nouvelleValeur")).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("Dépositaire (V71) : adresse obligatoire, exclusions nommées, compte créé et invité (CLE_A_PUBLIER), connexion refusée "
+            + "avant l'activation, renvoi d'invitation, activation publique, espace /api/depositaire hors coquille interne ; clé de "
+            + "secours publiée par lui seul ; ancien geste (RESPONSABLE) géré par le responsable et remplacé par le dépositaire ; "
+            + "changement de dépositaire (Q2) : le nouveau remplace la clé")
+    void depositaire() throws Exception {
+        String sansAdresse = "{\"quorum\":2,\"dateCeremonie\":\"" + aujourdhui.plusDays(9) + "T09:00\",\"depositaire\":{\"nom\":\"Rakoto Jean\"}}";
+        internes(tokenVer, sansAdresse).andExpect(status().isBadRequest()).andExpect(jsonPath("$.erreurs[0].champ").value("depositaire.email"));
+        internes(tokenVer, sansAdresse.replace("\"nom\":\"Rakoto Jean\"", "\"nom\":\"Rakoto Jean\",\"email\":\"m1@cao.mg\""))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("DEPOSITAIRE_INCOMPATIBLE"))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("membre de la commission")));
+        String internes = internes(tokenVer, corpsInternes(2, "Rakoto Jean")).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String idD = JsonPath.read(internes, "$.partDeSecours.depositaire.compte.idCompte");
+        assertThat(idD).matches("D\\d{9}");
+        assertThat(JsonPath.<String>read(internes, "$.partDeSecours.depositaire.compte.etat")).isEqualTo("INVITE");
+        assertThat(JsonPath.<String>read(internes, "$.partDeSecours.depositaire.email")).isEqualTo("rakoto.jean@secours.mg");
+        assertThat(typesDepositaire(idD)).containsExactly("CLE_A_PUBLIER");
+        // Le même dépositaire, de nouveau enregistré : ni nouveau compte ni nouvelle invitation.
+        internes(tokenVer, corpsInternes(2, "Rakoto Jean")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.partDeSecours.depositaire.compte.idCompte").value(idD));
+        assertThat(typesDepositaire(idD)).hasSize(1);
+        mvc.perform(post("/api/auth/login").contentType(JSON).content("{\"login\":\"rakoto.jean@secours.mg\",\"motDePasse\":\"x\"}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("COMPTE_A_ACTIVER"));
+        String inviter = "/api/fiches-marche/" + idDmc + "/parametres-internes/depositaire/inviter";
+        mvc.perform(post(inviter).header("Authorization", tokenM1)).andExpect(status().isForbidden());
+        mvc.perform(post(inviter).header("Authorization", tokenVer)).andExpect(status().isOk());
+        mvc.perform(post("/api/depositaire/activation").contentType(JSON).content("{\"email\":\"rakoto.jean@secours.mg\",\"code\":\"000000\","
+                + "\"motDePasse\":\"Secours2026\"}")).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("CODE_INVALIDE"));
+        mvc.perform(post("/api/depositaire/activation").contentType(JSON).content("{\"email\":\"rakoto.jean@secours.mg\",\"code\":\""
+                + code("rakoto.jean@secours.mg") + "\",\"motDePasse\":\"Secours2026\"}")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.etat").value("ACTIF"));
+        assertThat(typesDepositaire(idD)).containsExactly("CLE_A_PUBLIER", "CLE_A_PUBLIER");   // après l'activation
+        mvc.perform(post(inviter).header("Authorization", tokenVer)).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("DEJA_ACTIF"));
+        String reponse = mvc.perform(post("/api/auth/login").contentType(JSON)
+                .content("{\"login\":\"rakoto.jean@secours.mg\",\"motDePasse\":\"Secours2026\"}")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.role").value("DEPOSITAIRE")).andExpect(jsonPath("$.ref").value(idD))
+                .andReturn().getResponse().getContentAsString();
+        assertThat(reponse).contains("Rakoto Jean");
+        String tokenD = bearer("rakoto.jean@secours.mg", ProfilUtilisateur.DEPOSITAIRE, TypeActeur.DEPOSITAIRE, idD, null);
+
+        // L'espace : ses procédures ; aucune route interne, ni l'espace CAO, ni la lecture de la séance.
+        mvc.perform(get("/api/depositaire/procedures").header("Authorization", tokenD)).andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].idDmc").value(idDmc)).andExpect(jsonPath("$[0].etatCeremonie").value("A_VENIR"))
+                .andExpect(jsonPath("$[0].etatPart").value("ABSENTE")).andExpect(jsonPath("$[0].generePar").isEmpty())
+                .andExpect(jsonPath("$[0].etatSeance").value("A_VENIR")).andExpect(jsonPath("$[0].secoursDemande").isEmpty());
+        mvc.perform(get("/api/depositaire/procedures").header("Authorization", tokenM1)).andExpect(status().isForbidden());
+        mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenD)).andExpect(status().isForbidden());
+        mvc.perform(get("/api/cao/mes-procedures").header("Authorization", tokenD)).andExpect(status().isForbidden());
+        mvc.perform(get("/api/fiches-marche/" + idDmc + "/seance").header("Authorization", tokenD)).andExpect(status().isForbidden());
+        mvc.perform(get(base).header("Authorization", tokenD)).andExpect(status().isOk());
+        mvc.perform(post(base + "/cloturer").header("Authorization", tokenD)).andExpect(status().isForbidden());
+
+        // Sa clé : publiée par lui seul.
+        Paire secours = paire(3072);
+        publier(tokenVer, "/cles/secours", secours.corps()).andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("GESTE_DU_DEPOSITAIRE"));
+        publier(tokenD, "/cles", secours.corps()).andExpect(status().isForbidden());   // pas membre de la CAO
+        publier(tokenD, "/cles/secours", secours.corps()).andExpect(status().isCreated()).andExpect(jsonPath("$.generePar").value("DEPOSITAIRE"));
+        assertThat(cleRepository.findFirstByIdDmcAndRoleAndDateArchivageIsNull(idDmc, CleDetenteur.SECOURS).orElseThrow().getIdDepositaire())
+                .isEqualTo(idD);
+        mvc.perform(get("/api/depositaire/procedures").header("Authorization", tokenD)).andExpect(jsonPath("$[0].etatPart").value("PUBLIEE"))
+                .andExpect(jsonPath("$[0].generePar").value("DEPOSITAIRE")).andExpect(jsonPath("$[0].cleARemplacer").value(false));
+
+        // L'ancien geste (une clé générée chez le responsable) : elle se gère par lui ; le dépositaire la remplace.
+        CleDetenteur ancienne = cleRepository.findFirstByIdDmcAndRoleAndDateArchivageIsNull(idDmc, CleDetenteur.SECOURS).orElseThrow();
+        ancienne.setGenerePar(CleDetenteur.PAR_RESPONSABLE);
+        ancienne.setIdDepositaire(null);
+        cleRepository.save(ancienne);
+        mvc.perform(get(base).header("Authorization", tokenVer)).andExpect(jsonPath("$.detenteurs[2].generePar").value("RESPONSABLE"));
+        mvc.perform(get(base + "/cles/secours").header("Authorization", tokenVer)).andExpect(status().isOk());
+        mvc.perform(get(base + "/cles/secours").header("Authorization", tokenD)).andExpect(status().isForbidden());
+        mvc.perform(get("/api/depositaire/procedures").header("Authorization", tokenD)).andExpect(jsonPath("$[0].etatPart").value("ABSENTE"))
+                .andExpect(jsonPath("$[0].cleARemplacer").value(true));
+        Paire secours2 = paire(3072);
+        mvc.perform(put(base + "/cles/secours").header("Authorization", tokenVer).contentType(JSON).content(secours2.corps()))
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("GESTE_DU_DEPOSITAIRE"));
+        mvc.perform(put(base + "/cles/secours").header("Authorization", tokenD).contentType(JSON).content(secours2.corps()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.generePar").value("DEPOSITAIRE")).andExpect(jsonPath("$.remplacements").value(1));
+
+        // Q2 — un autre dépositaire : invité, il ne relit pas la clé de l'ancien, il la remplace ; l'ancien ne voit plus la procédure.
+        internes = internes(tokenVer, corpsInternes(2, "Rasoa Hanta")).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String idD2 = JsonPath.read(internes, "$.partDeSecours.depositaire.compte.idCompte");
+        assertThat(idD2).isNotEqualTo(idD);
+        assertThat(typesDepositaire(idD2)).containsExactly("CLE_A_PUBLIER");
+        String tokenD2 = bearer("rasoa.hanta@secours.mg", ProfilUtilisateur.DEPOSITAIRE, TypeActeur.DEPOSITAIRE, idD2, null);
+        mvc.perform(get(base + "/cles/secours").header("Authorization", tokenD2)).andExpect(status().isForbidden());
+        mvc.perform(get(base + "/cles/secours").header("Authorization", tokenD)).andExpect(status().isForbidden());
+        mvc.perform(put(base + "/cles/secours").header("Authorization", tokenD2).contentType(JSON).content(paire(3072).corps()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.remplacements").value(2));
+        mvc.perform(get(base + "/cles/secours").header("Authorization", tokenD2)).andExpect(status().isOk());
+        mvc.perform(get("/api/depositaire/procedures").header("Authorization", tokenD)).andExpect(jsonPath("$.length()").value(0));
+        assertThat(mvc.perform(get("/api/fiches-marche/" + idDmc + "/parametres-internes").header("Authorization", tokenVer))
+                .andReturn().getResponse().getContentAsString()).contains("rasoa.hanta@secours.mg");
     }
 
     // ------------------------------------------------------------------ outils
@@ -504,7 +606,7 @@ class CeremonieIntegrationTest extends CnmIntegrationTestSupport {
 
     private String corpsInternes(int quorum, String depositaire) {
         return "{\"quorum\":" + quorum + ",\"dateCeremonie\":\"" + aujourdhui.plusDays(9) + "T09:00\",\"depositaire\":{\"nom\":\"" + depositaire
-                + "\",\"organisme\":\"ARMP\",\"fonction\":\"Directeur\",\"contact\":\"034\"}}";
+                + "\",\"organisme\":\"ARMP\",\"fonction\":\"Directeur\",\"contact\":\"034\",\"email\":\"" + adresse(depositaire) + "\"}}";
     }
 
     private ResultActions internes(String token, String corps) throws Exception {
@@ -526,6 +628,33 @@ class CeremonieIntegrationTest extends CnmIntegrationTestSupport {
 
     private List<String> typesCao(String idCompte) {
         return notificationRepository.findPourRefEtType(idCompte, "MEMBRE_CAO").stream().map(Notification::getTypeNotif).toList();
+    }
+
+    /** ⚠️ V71 — l'adresse dérivée du nom du dépositaire (« Rakoto Jean » → rakoto.jean@secours.mg). */
+    private static String adresse(String nom) {
+        return nom.toLowerCase(java.util.Locale.ROOT).replace(' ', '.') + "@secours.mg";
+    }
+
+    /** ⚠️ V71 — un jeton pour le dépositaire désigné (son compte lu dans les paramètres internes). */
+    private String jetonDepositaire() throws Exception {
+        String internes = mvc.perform(get("/api/fiches-marche/" + idDmc + "/parametres-internes").header("Authorization", tokenVer))
+                .andReturn().getResponse().getContentAsString();
+        return bearer(JsonPath.read(internes, "$.partDeSecours.depositaire.email"), ProfilUtilisateur.DEPOSITAIRE, TypeActeur.DEPOSITAIRE,
+                JsonPath.read(internes, "$.partDeSecours.depositaire.compte.idCompte"), null);
+    }
+
+    private List<String> typesDepositaire(String idCompte) {
+        return notificationRepository.findPourRefEtType(idCompte, "DEPOSITAIRE").stream().map(Notification::getTypeNotif).toList();
+    }
+
+    private String code(String adresse) {
+        org.mockito.ArgumentCaptor<String> corps = org.mockito.ArgumentCaptor.forClass(String.class);
+        org.mockito.Mockito.verify(email, org.mockito.Mockito.atLeastOnce()).envoyer(org.mockito.ArgumentMatchers.eq(adresse),
+                org.mockito.ArgumentMatchers.anyString(), corps.capture());
+        List<String> codes = corps.getAllValues().stream().map(java.util.regex.Pattern.compile("code d'activation : (\\d{6})")::matcher)
+                .filter(java.util.regex.Matcher::find).map(m -> m.group(1)).toList();
+        assertThat(codes).isNotEmpty();
+        return codes.get(codes.size() - 1);
     }
 
     private void valider() throws Exception {

@@ -386,6 +386,7 @@ public class AssistantIaService {
             // ⚠️ 2026-10-04 — l'assistant est une route interne, fermée au candidat : libellé pour l'exhaustivité.
             case CANDIDAT -> "un candidat à la soumission en ligne";
             case MEMBRE_CAO -> "un membre d'une commission d'appel d'offres";   // ⚠️ lot 2a : route interne fermée, exhaustivité
+            case DEPOSITAIRE -> "le dépositaire d'une part de secours";   // ⚠️ 2026-10-05 : route interne fermée, exhaustivité
         };
     }
 

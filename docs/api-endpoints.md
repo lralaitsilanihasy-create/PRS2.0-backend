@@ -6391,6 +6391,9 @@ SHA-256), publiées par la procédure une fois la cérémonie **close**. Sans el
 | POST | /api/fiches-marche/{idDmc}/ceremonie/defi/{idDefi} | `{ clair }` | `DetenteurDto` (`etatPart = VERIFIEE`) | 200, 403, 404, 409 `DEFI_EXPIRE` / `DEFI_ECHOUE` | le même appelant |
 | GET | /api/procedures-en-ligne/{idDmc}/cles | — | `ClesPubliquesDto` | 200, 404 | public |
 
+- ⚠️ **V71 (2026-10-05)** : le dépositaire **a désormais un compte** et **génère lui-même** la clé de secours — voir § *Le dépositaire
+  génère lui-même la part de secours — V71* ; les lignes `…/cles/secours`, `defi?role=SECOURS` et `cles/perdue?role=SECOURS` du tableau
+  ci-dessus valent pour le dépositaire (le responsable garde l'ancien geste pour une part `generePar = RESPONSABLE`).
 - **Le dépositaire de la part de secours** (§B1, ADR S3) n'est pas un compte : une désignation nominative portée par les
   paramètres internes. `PUT …/parametres-internes` gagne `depositaire: { nom, organisme?, fonction?, contact? } | null`
   (`nom` obligatoire s'il est donné, 400 sous `depositaire`). `ParametresInternesDto` gagne :
@@ -6786,6 +6789,85 @@ login) et **`acteur` vide** — le `ref` d'une UGPM étant celui de sa PRMP de t
 imposé). Le **reçu des frais de dossier** (`RECU-DAO`) reste une pièce de l'offre, vérifiée par la CAO, le retrait du DAO restant
 libre après inscription (Q3 confirmée). La **signature électronique** reste **Simple** : une fiche qui exige plus est refusée
 (`SIGNATURE_EN_LIGNE`), Avancée et Qualifiée attendant la liste officielle des prestataires de certification.
+
+### Le dépositaire génère lui-même la part de secours — V71 ⚠️ 2026-10-05
+
+Demande front `demande-backend-2026-10-05-depositaire-genere-sa-cle.md` (décision du pilote du 05/10) ; migration **V71**
+(`t_compte_depositaire`, `seq_compte_depositaire` ; `t_parametre_interne_procedure` : `DEPOSITAIRE_EMAIL`, `DEPOSITAIRE_TELEPHONE`,
+`ID_COMPTE_DEPOSITAIRE` ; `t_cle_detenteur` : `GENERE_PAR`, `ID_DEPOSITAIRE`, les clés de secours existantes marquées `RESPONSABLE` ;
+`t_seance` : `SECOURS_DEMANDE_MOTIF`, `SECOURS_DEMANDE_LE`). Aucune dépendance ajoutée.
+
+**La décision** : la clé de secours naît sur le poste du **dépositaire**, et lui seul voit sa phrase. Le responsable désigne le
+dépositaire, suit l'état de sa part, et **demande** son emploi en séance avec un motif ; il ne la touche plus.
+
+**§B1 — Un compte pour le dépositaire** (question 1 : **un profil propre, `DEPOSITAIRE`**).
+
+| Méthode | URL | Corps | Réponse | Statuts | Accès |
+|---|---|---|---|---|---|
+| PUT | /api/fiches-marche/{idDmc}/parametres-internes | `depositaire: { nom, email, telephone?, organisme?, fonction?, contact? }` | `ParametresInternesDto` | 200, 400 `depositaire` / `depositaire.email`, 403, 409 `DEPOSITAIRE_INCOMPATIBLE` (+ les 409 existants) | responsable |
+| POST | /api/fiches-marche/{idDmc}/parametres-internes/depositaire/inviter | — | `ParametresInternesDto` | 200, 403, 409 `DEJA_ACTIF` / `DEPOSITAIRE_ABSENT` | responsable |
+| POST | /api/depositaire/activation | `{ email, code, motDePasse }` | `{ etat: 'ACTIF' }` | 200, 400 `CODE_INVALIDE` / `CODE_EXPIRE` / mot de passe, 404, 429 | public |
+| GET | /api/depositaire/procedures | — | `[{ idDmc, reference, objet, etatCeremonie, etatPart, generePar, cleARemplacer, etatSeance, secoursDemande }]` | 200, 403 | `DEPOSITAIRE` |
+
+- Le compte (`t_compte_depositaire`, identifiant `D` + 9 chiffres, login = l'adresse en minuscules) se crée au `PUT` s'il n'existe
+  pas — **un compte par adresse**, plusieurs procédures —, avec un compte d'authentification inactif. Il est **invité** par courriel
+  (code à six chiffres, 72 heures, lien `app.depositaire.lien-activation`, défaut `http://localhost:4200/depositaire/activation`)
+  quand il devient le dépositaire de la procédure et n'est pas encore actif. Le renvoi : `…/depositaire/inviter`.
+- `partDeSecours.depositaire` = `{ nom, organisme, fonction, contact, email, telephone, compte: { idCompte, etat } }`, `etat` ∈
+  `A_INVITER` · `INVITE` · `ACTIF` · `ARCHIVE` ; `compte` est ignoré en écriture et `null` pour un dépositaire désigné avant V71 sans
+  adresse. **`email` est obligatoire** (400 `depositaire.email`) : un `PUT` qui renvoie un ancien dépositaire sans adresse est
+  refusé — renseignez-la.
+- **Exclusions** (409 **`DEPOSITAIRE_INCOMPATIBLE`**, la raison dite, pas le compte) : la PRMP ou une UGPM de la fiche, le
+  responsable de la procédure, un membre de la CAO de la procédure, un candidat inscrit — et **toute adresse déjà prise par un autre
+  compte de PRS** (un login est une adresse, un compte n'a qu'un profil : un membre de CAO d'une autre procédure ne peut pas être
+  dépositaire avec la même adresse ; réciproquement, la CAO refuse l'adresse d'un dépositaire, 409 `MEMBRE_EXCLU`).
+- **Connexion** par `POST /api/auth/login` (l'adresse) : 409 `COMPTE_A_ACTIVER` avant l'activation ; `role` = `typeActeur` =
+  `DEPOSITAIRE`, `ref` = `D…`, `nomAffichage` = son nom. **Hors coquille interne** (garde `INTERNE`) : lui restent
+  `/api/depositaire/**`, `/api/mon-compte/**` (dont ses notifications), et par identité sa clé (`…/ceremonie/**`) et son apport
+  (`…/seance/mes-parts`, `…/seance/parts`). La lecture de la séance, des offres, des pièces et le PV lui sont refusés (403).
+- **Notifications** (trace et courriel, type `DEPOSITAIRE`) : `CLE_A_PUBLIER` à la désignation, de nouveau **après l'activation**
+  pour chaque procédure dont sa clé reste à publier, et à la réouverture de la cérémonie.
+
+**§B2 — Sa clé, dans son navigateur.**
+- `POST` / `PUT …/ceremonie/cles/secours` : **le dépositaire seul** ; le responsable reçoit **403 `GESTE_DU_DEPOSITAIRE`**. La clé
+  enregistrée porte `generePar = DEPOSITAIRE` et le compte qui l'a publiée. Contrôles inchangés (SPKI RSA 3072, empreinte,
+  enveloppe PBKDF2 ≥ 600 000).
+- `GET …/cles/secours`, `POST …/defi?role=SECOURS` (et sa réponse), `POST …/cles/perdue?role=SECOURS` : le **détenteur** de la clé
+  active — le dépositaire qui l'a publiée, ou le responsable pour une clé de l'ancien geste ; 403 pour tout autre.
+- Le dépositaire **lit la cérémonie** (`GET …/ceremonie` : détenteurs, états, empreintes), comme un membre ; la clôture et la
+  réouverture restent au responsable (409 `CLES_INCOMPLETES` tant que la part de secours manque).
+- `DetenteurDto` gagne **`generePar`** : `RESPONSABLE` · `DEPOSITAIRE` pour la part de secours publiée, `null` pour un membre ou une
+  part absente.
+- **Question 2 — retenue** : un **changement de dépositaire** (un autre `email` au `PUT`) crée ou retrouve son compte, l'invite et lui
+  envoie `CLE_A_PUBLIER` ; la clé de l'ancien reste active, mais l'ancien ne la gère plus et ne voit plus la procédure ; **le nouveau la
+  remplace** (`PUT …/cles/secours`, S4 : supprimée avant le premier dépôt, archivée après). L'ancien compte garde son journal. Le
+  changement suit les règles des paramètres internes : fiche validée ou cérémonie close → rouvrir d'abord (et pas après le premier
+  dépôt).
+
+**§B3 — En séance : le responsable demande, le dépositaire apporte.**
+
+| Méthode | URL | Corps | Réponse | Statuts | Accès |
+|---|---|---|---|---|---|
+| POST | /api/fiches-marche/{idDmc}/seance/secours | `{ motif }` | `SeanceDto` (`secoursDemande = { motif, date }`) | 200, 400 `MOTIF_ABSENT`, 403, 409 `SEANCE_NON_OUVERTE` / `SECOURS_INUTILE` / `GESTE_DU_RESPONSABLE` | responsable |
+| GET | /api/fiches-marche/{idDmc}/seance/mes-parts?role=SECOURS | — | `PartChiffree[]` | 200, 403, 409 `SEANCE_NON_OUVERTE` / `SECOURS_NON_DEMANDE` | dépositaire (ancien geste : responsable) |
+| POST | /api/fiches-marche/{idDmc}/seance/parts?role=SECOURS | `{ parts }` (ancien geste : `+ motif`) | `SeanceDto` | 200, 400, 403, 409 `SECOURS_NON_DEMANDE` (+ ceux du lot 4) | dépositaire (ancien geste : responsable) |
+
+- `SeanceDto` gagne **`secoursDemande`** (`{ motif, date }` | `null`) et **`secoursGenerePar`** (`RESPONSABLE` · `DEPOSITAIRE` ·
+  `null`) : l'écran du responsable propose « Demander la part de secours » ou l'ancien geste.
+- La demande : motif obligatoire, séance `OUVERTE` ; **`SECOURS_INUTILE`** si la part de secours est **déjà apportée** — le quorum
+  réuni ouvre aussitôt les offres, la séance n'est alors plus `OUVERTE` (`SEANCE_NON_OUVERTE`) ; **`GESTE_DU_RESPONSABLE`** pour une
+  clé de l'ancien geste. Une nouvelle demande remplace la précédente. `SECOURS_DEMANDE` part au dépositaire (courriel compris) ;
+  journal `SECOURS_DEMANDE`.
+- Le dépositaire apporte depuis n'importe quel poste, **sans motif** : c'est celui de la demande qui est porté au PV
+  (`secoursEmploye`, journal `SECOURS` « apportée par le dépositaire »). S5 est inchangé.
+- `GET /api/depositaire/procedures` lui dit `etatSeance` et `secoursDemande`.
+
+**§B4 — Les procédures déjà en cours.** Une clé de secours publiée selon l'ancien geste (marquée `RESPONSABLE` par V71 : fiches 34 et
+40 en recette) reste valable : le responsable la gère et l'apporte comme avant (motif au corps, `POST …/secours` → 409
+`GESTE_DU_RESPONSABLE`). Une procédure dont la clé de secours n'est pas encore publiée passe au nouveau geste dès la livraison : il
+lui faut un dépositaire **avec adresse** (le `PUT` l'exige), qui publie sa clé ; le responsable ne la génère plus (403
+`GESTE_DU_DEPOSITAIRE`). Un dépositaire peut aussi **remplacer** une clé de l'ancien geste (`PUT …/cles/secours`) : elle passe au
+nouveau.
 
 ---
 

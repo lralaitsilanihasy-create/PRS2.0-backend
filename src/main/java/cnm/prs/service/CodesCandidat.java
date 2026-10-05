@@ -80,6 +80,17 @@ public class CodesCandidat {
     @Transactional
     public void emettreInvitation(String idCompte, String email, String prenom, String procedure, String autorite, String lien,
             int heures) {
+        emettreInvitation(idCompte, email, heures, "PRS — vous êtes désigné membre d'une commission d'appel d'offres",
+                code -> "Bonjour " + prenom + ",\n\nVous êtes désigné membre de la commission d'appel d'offres de la procédure « " + procedure
+                        + " » (" + autorite + ").\n\nPour activer votre compte, rendez-vous sur " + lien
+                        + " et saisissez ce code d'activation : " + code + "\nIl est valable " + heures
+                        + " heures et ne sert qu'une fois.\n\nSi vous n'êtes pas concerné, ignorez ce message.");
+    }
+
+    /** ⚠️ 2026-10-05 (dépositaire, §B1) — une invitation au texte libre : {@code corps} reçoit le code tiré. */
+    @Transactional
+    public void emettreInvitation(String idCompte, String email, int heures, String sujet,
+            java.util.function.Function<String, String> corps) {
         LocalDateTime maintenant = LocalDateTime.now(horloge);
         repository.findByIdCandidatAndUtiliseFalse(idCompte).forEach(c -> {
             c.setUtilise(true);
@@ -88,11 +99,7 @@ public class CodesCandidat {
         String code = tirer();
         repository.save(new CodeCandidat(null, idCompte, CodeCandidat.EMAIL, encodeur.encode(code), maintenant,
                 maintenant.plusHours(heures), 0, false));
-        this.email.envoyer(email, "PRS — vous êtes désigné membre d'une commission d'appel d'offres",
-                "Bonjour " + prenom + ",\n\nVous êtes désigné membre de la commission d'appel d'offres de la procédure « " + procedure
-                        + " » (" + autorite + ").\n\nPour activer votre compte, rendez-vous sur " + lien
-                        + " et saisissez ce code d'activation : " + code + "\nIl est valable " + heures
-                        + " heures et ne sert qu'une fois.\n\nSi vous n'êtes pas concerné, ignorez ce message.");
+        this.email.envoyer(email, sujet, corps.apply(code));
     }
 
     /** Vérifie le dernier code du canal ; un essai faux est compté, un code bon est consommé. */

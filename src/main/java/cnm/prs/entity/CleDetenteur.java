@@ -35,6 +35,9 @@ public class CleDetenteur {
 
     public static final String MEMBRE = "MEMBRE";
     public static final String SECOURS = "SECOURS";
+    /** ⚠️ V71 — qui a généré la part de secours. */
+    public static final String PAR_RESPONSABLE = "RESPONSABLE";
+    public static final String PAR_DEPOSITAIRE = "DEPOSITAIRE";
 
     public static final String PUBLIEE = "PUBLIEE";
     public static final String VERIFIEE = "VERIFIEE";
@@ -89,6 +92,14 @@ public class CleDetenteur {
 
     @Column(name = "REMPLACEMENTS", nullable = false)
     private Integer remplacements = 0;
+
+    /** ⚠️ V71 (§B2, §B4) — part de secours : {@code RESPONSABLE} (ancien geste) ou {@code DEPOSITAIRE} ; nul pour un membre. */
+    @Column(name = "GENERE_PAR", length = 12)
+    private String generePar;
+
+    /** ⚠️ V71 — le compte du dépositaire qui a publié la part de secours ({@code D…}, nouveau geste). */
+    @Column(name = "ID_DEPOSITAIRE", length = 10)
+    private String idDepositaire;
 
     @Column(name = "DATE_ARCHIVAGE")
     private LocalDateTime dateArchivage;

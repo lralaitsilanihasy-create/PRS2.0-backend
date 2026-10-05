@@ -21,10 +21,11 @@ public record CeremonieDto(Long idDmc, String etat, LocalDateTime dateCeremonieP
     /**
      * Un détenteur de part : {@code empreinte} = SHA-256 de la forme SPKI de la clé publique (hexadécimal minuscule),
      * {@code clePublique} = SPKI en base64 ; {@code etatPart} : {@code ABSENTE}, {@code PUBLIEE}, {@code VERIFIEE},
-     * {@code PERDUE}.
+     * {@code PERDUE}. ⚠️ 2026-10-05 (V71, §B4) — {@code generePar} pour la part de secours : {@code RESPONSABLE} (ancien geste, la
+     * part s'apporte par le responsable) ou {@code DEPOSITAIRE} (nouveau geste) ; {@code null} pour un membre ou une part absente.
      */
     public record Detenteur(String role, String im, String nom, String empreinte, String clePublique,
-            LocalDateTime datePublication, String etatPart, LocalDateTime derniereVerification, int remplacements) {
+            LocalDateTime datePublication, String etatPart, LocalDateTime derniereVerification, int remplacements, String generePar) {
     }
 
     public record Avertissement(String regle, String message) {
@@ -61,8 +62,22 @@ public record CeremonieDto(Long idDmc, String etat, LocalDateTime dateCeremonieP
     public record ReponseDefi(String clair) {
     }
 
-    /** Le dépositaire de la part de secours (§B1) : une désignation nominative, pas un compte. */
-    public record Depositaire(String nom, String organisme, String fonction, String contact) {
+    /**
+     * Le dépositaire de la part de secours (§B1). ⚠️ 2026-10-05 (V71) — il a un <strong>compte</strong> : {@code email}
+     * obligatoire au {@code PUT …/parametres-internes}, {@code telephone} facultatif ; {@code compte} en lecture seule (ignoré en
+     * écriture), {@code null} pour un dépositaire désigné avant V71 sans adresse.
+     */
+    public record Depositaire(String nom, String organisme, String fonction, String contact, String email, String telephone,
+            CompteDepositaire compte) {
+
+        /** La même désignation, sans le compte (ce que l'on compare et journalise). */
+        public Depositaire sansCompte() {
+            return new Depositaire(nom, organisme, fonction, contact, email, telephone, null);
+        }
+    }
+
+    /** ⚠️ V71 — le compte du dépositaire : {@code etat} ∈ {@code A_INVITER} · {@code INVITE} · {@code ACTIF} · {@code ARCHIVE}. */
+    public record CompteDepositaire(String idCompte, String etat) {
     }
 
     /**

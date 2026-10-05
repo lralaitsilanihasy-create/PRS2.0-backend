@@ -424,7 +424,7 @@ class OffreIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(put("/api/fiches-marche/" + dmc + "/cao").header("Authorization", tokenPrmp).contentType(JSON)
                 .content(CaoIntegrationTest.corpsCao("m1@cao.mg", "m2@cao.mg"))).andExpect(status().isOk());
         mvc.perform(put("/api/fiches-marche/" + dmc + "/parametres-internes").header("Authorization", tokenVer).contentType(JSON)
-                .content("{\"quorum\":2,\"dateCeremonie\":\"" + aujourdhui.plusDays(9) + "T09:00\",\"depositaire\":{\"nom\":\"Rakoto Jean\"}}"))
+                .content("{\"quorum\":2,\"dateCeremonie\":\"" + aujourdhui.plusDays(9) + "T09:00\",\"depositaire\":{\"nom\":\"Rakoto Jean\",\"email\":\"rakoto.depositaire@secours.mg\"}}"))
                 .andExpect(status().isOk());
         mvc.perform(post("/api/fiches-marche/" + dmc + "/valider").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.statut").value("VALIDEE"));

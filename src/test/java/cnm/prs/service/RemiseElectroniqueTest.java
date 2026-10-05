@@ -89,7 +89,7 @@ class RemiseElectroniqueTest {
     /** ⚠️ V66 — avec le dépositaire de la part de secours (règle 12). */
     private static Internes complets() {
         return new Internes(List.of("CTRMEM", "CTRCC1"), 2, CEREMONIE, "CTRVER",
-                new cnm.prs.dto.CeremonieDto.Depositaire("Rakoto Jean", "ARMP", null, null));
+                new cnm.prs.dto.CeremonieDto.Depositaire("Rakoto Jean", "ARMP", null, null, "depositaire@secours.mg", null, null));
     }
 
     private static BilanControlesDto bilan(Map<String, String> valeurs, Internes i, boolean responsable) {

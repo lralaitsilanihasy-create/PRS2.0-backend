@@ -11,7 +11,20 @@ import java.util.Map;
  * avant l'heure d'ouverture, {@code null} une fois l'heure passée.
  */
 public record SeanceDto(Long idDmc, String etat, LocalDateTime heureOuverture, LocalDateTime ouverteLe, Long ouverteDans, Integer quorum,
-        List<Membre> membres, List<Autre> autres, boolean secoursEmploye, List<OffreSeance> offres, LocalDateTime dechiffreeLe, Pv pv) {
+        List<Membre> membres, List<Autre> autres, boolean secoursEmploye, List<OffreSeance> offres, LocalDateTime dechiffreeLe, Pv pv,
+        SecoursDemande secoursDemande, String secoursGenerePar) {
+
+    /**
+     * ⚠️ 2026-10-05 (dépositaire, §B3) — la part de secours demandée au dépositaire par le responsable ({@code POST …/secours}),
+     * {@code null} sinon. {@code secoursGenerePar} : qui a généré la clé de secours active — {@code DEPOSITAIRE} (il apporte sa part
+     * depuis son espace, une fois demandée) ou {@code RESPONSABLE} (ancien geste : le responsable l'apporte, motif au corps).
+     */
+    public record SecoursDemande(String motif, LocalDateTime date) {
+    }
+
+    /** {@code POST …/secours} : le motif de l'emploi de la part de secours, porté au PV. */
+    public record DemandeSecours(String motif) {
+    }
 
     /** Un membre de la CAO : {@code partsApportees} vrai dès qu'il a apporté toutes ses parts (en mémoire de la séance). */
     public record Membre(String im, String nom, boolean president, boolean present, boolean partsApportees) {

@@ -18,5 +18,8 @@ public enum TypeActeur {
     CANDIDAT,
 
     /** ⚠️ 2026-10-04 (lot 2a) — membre d'une commission d'appel d'offres ({@code t_compte_cao}), connecté par son adresse électronique. */
-    MEMBRE_CAO
+    MEMBRE_CAO,
+
+    /** ⚠️ 2026-10-05 — dépositaire d'une part de secours ({@code t_compte_depositaire}), connecté par son adresse électronique. */
+    DEPOSITAIRE
 }

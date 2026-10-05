@@ -62,6 +62,13 @@ public class Seance {
     @Column(name = "SECOURS_MOTIF")
     private String secoursMotif;
 
+    /** ⚠️ V71 (demande du 05/10, §B3) — la part de secours demandée au dépositaire par le responsable : motif et date. */
+    @Column(name = "SECOURS_DEMANDE_MOTIF")
+    private String secoursDemandeMotif;
+
+    @Column(name = "SECOURS_DEMANDE_LE")
+    private java.time.LocalDateTime secoursDemandeLe;
+
     @Column(name = "MOTIF_ILLISIBLE")
     private String motifIllisible;
 

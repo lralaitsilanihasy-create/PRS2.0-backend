@@ -19,6 +19,7 @@ import cnm.prs.entity.DossierMec;
 import cnm.prs.entity.Prmp;
 import cnm.prs.enums.TypeNotification;
 import cnm.prs.enums.TypeObjet;
+import cnm.prs.exception.AccesReserveException;
 import cnm.prs.exception.BadRequestException;
 import cnm.prs.exception.BusinessRuleException;
 import cnm.prs.exception.ResourceNotFoundException;
@@ -40,7 +41,9 @@ import cnm.prs.security.CurrentUser;
  *   <li><strong>Les clés</strong> ({@code t_cle_detenteur}) : chaque membre désigné publie sa clé publique (SPKI, RSA 3072) et son
  *       empreinte, avec sa clé privée <strong>enveloppée</strong> par sa phrase secrète. Le serveur contrôle la clé et l'empreinte,
  *       garde l'enveloppe et <strong>ne déchiffre rien, ne peut rien déchiffrer</strong> ; il ne la rend qu'à son propriétaire.
- *       La part de secours (S3) naît sur le poste du responsable, en présence du dépositaire désigné (§B1).</li>
+ *       ⚠️ V71 (demande du 2026-10-05) — la part de secours (S3) naît désormais sur le poste du <strong>dépositaire</strong> (compte
+ *       {@code DEPOSITAIRE}), qui seul voit sa phrase ; une part générée chez le responsable (ancien geste, {@code generePar =
+ *       RESPONSABLE}) reste valable et se gère par lui.</li>
  *   <li><strong>La cérémonie</strong> ({@code t_ceremonie_cles}) : {@code A_VENIR} tant que les {@code n} = membres + 1 clés ne sont
  *       pas publiées ; le responsable la <strong>clôt</strong> ({@code CLOSE}, date effective) ; close, elle fige les paramètres
  *       internes et conditionne la publication de l'avis (§B2.6). Il peut la <strong>rouvrir</strong> ({@code A_REFAIRE}) tant
@@ -155,7 +158,7 @@ public class CeremonieService {
      * §B5.1), 409 {@code CLE_EXISTANTE}.
      */
     public CeremonieDto.Detenteur publier(Long idDmc, String role, CeremonieDto.CleCorps corps) {
-        Cible cible = cible(idDmc, role);
+        Cible cible = cible(idDmc, role, true);
         CeremonieCles ceremonie = ceremonie(idDmc);
         if (CeremonieCles.CLOSE.equals(ceremonie.getEtat())) {
             throw new BusinessRuleException("La cérémonie des clés est close : une clé ne se publie plus, elle se remplace.", "CEREMONIE_CLOSE");
@@ -174,7 +177,7 @@ public class CeremonieService {
      * (des offres scellées pour son empreinte en dépendent). La part repasse à {@code PUBLIEE}, la vérification est effacée.
      */
     public CeremonieDto.Detenteur remplacer(Long idDmc, String role, CeremonieDto.CleCorps corps) {
-        Cible cible = cible(idDmc, role);
+        Cible cible = cible(idDmc, role, true);
         CeremonieCles ceremonie = ceremonie(idDmc);
         CleDetenteur ancienne = active(idDmc, cible).orElse(null);
         int remplacements = ancienne == null ? 0 : ancienne.getRemplacements() + 1;
@@ -196,7 +199,7 @@ public class CeremonieService {
     /** L'enveloppe de sa propre clé ({@code /mienne}), ou celle de la part de secours pour le responsable ({@code /secours}). 404 sans clé. */
     @Transactional(readOnly = true)
     public CeremonieDto.Enveloppe enveloppe(Long idDmc, String role) {
-        Cible cible = cible(idDmc, role);
+        Cible cible = cible(idDmc, role, false);
         CleDetenteur c = active(idDmc, cible)
                 .orElseThrow(() -> new ResourceNotFoundException("Aucune clé publiée pour " + cible.libelle() + "."));
         return new CeremonieDto.Enveloppe(c.getEnvChiffre(), c.getEnvIv(), c.getEnvSel(), c.getEnvIterations(), c.getEnvKdf(),
@@ -275,6 +278,9 @@ public class CeremonieService {
                         "La cérémonie des clés de la procédure " + idDmc + " est rouverte : générez une nouvelle clé et publiez-la.");
             }
         }
+        internes.notifierDepositaire(idDmc, TypeNotification.CLE_A_PUBLIER, "Cérémonie des clés à refaire : votre clé de secours est à "
+                + "publier", "La cérémonie des clés de la procédure " + idDmc + " est rouverte : générez une nouvelle clé de secours et "
+                + "publiez-la.");
         return dto(idDmc);
     }
 
@@ -297,7 +303,7 @@ public class CeremonieService {
 
     /** Ouvre un défi (201) sur sa clé (membre) ou sur la part de secours (responsable). 409 {@code CLE_ABSENTE}. */
     public CeremonieDto.Defi defi(Long idDmc, String role) {
-        Cible cible = cible(idDmc, role);
+        Cible cible = cible(idDmc, role, false);
         CleDetenteur c = active(idDmc, cible).orElseThrow(() -> new BusinessRuleException("Aucune clé publiée pour "
                 + cible.libelle() + " : rien à vérifier.", "CLE_ABSENTE"));
         RSAPublicKey cle = ClesRsa.lire(c.getClePublique());
@@ -326,7 +332,7 @@ public class CeremonieService {
                 .orElseThrow(() -> new ResourceNotFoundException("Défi introuvable : " + idDefi + "."));
         CleDetenteur c = cleRepository.findById(defi.getIdCle())
                 .orElseThrow(() -> new ResourceNotFoundException("Défi introuvable : " + idDefi + "."));
-        Cible cible = cible(idDmc, c.getRole());
+        Cible cible = cible(idDmc, c.getRole(), false);
         if (!Objects.equals(cible.im(), c.getIm())) {
             throw new AccessDeniedException("Ce défi ne porte pas sur votre clé.");
         }
@@ -352,7 +358,7 @@ public class CeremonieService {
 
     /** Déclare sa part perdue (membre), ou la part de secours (responsable) : {@code PERDUE}, journal, responsable notifié. */
     public CeremonieDto.Detenteur perdue(Long idDmc, String role) {
-        Cible cible = cible(idDmc, role);
+        Cible cible = cible(idDmc, role, false);
         CleDetenteur c = active(idDmc, cible).orElseThrow(() -> new BusinessRuleException("Aucune clé publiée pour "
                 + cible.libelle() + " : rien à déclarer perdu.", "CLE_ABSENTE"));
         c.setEtatPart(CleDetenteur.PERDUE);
@@ -456,10 +462,11 @@ public class CeremonieService {
 
     private static CeremonieDto.Detenteur detenteur(String role, String im, CleDetenteur c, String nom) {
         if (c == null) {
-            return new CeremonieDto.Detenteur(role, im, nom, null, null, null, ABSENTE, null, 0);
+            return new CeremonieDto.Detenteur(role, im, nom, null, null, null, ABSENTE, null, 0, null);
         }
         return new CeremonieDto.Detenteur(role, im, nom, c.getEmpreinte(), c.getClePublique(), c.getDatePublication(), c.getEtatPart(),
-                c.getDerniereVerification(), c.getRemplacements());
+                c.getDerniereVerification(), c.getRemplacements(),
+                CleDetenteur.SECOURS.equals(role) ? (c.getGenerePar() == null ? CleDetenteur.PAR_RESPONSABLE : c.getGenerePar()) : null);
     }
 
     /** ⚠️ V67 (lot 2a) — un membre de CAO ({@code K…}) ou, à défaut, un contrôleur. */
@@ -520,40 +527,68 @@ public class CeremonieService {
         c.setEtatPart(CleDetenteur.PUBLIEE);
         c.setDatePublication(LocalDateTime.now());
         c.setRemplacements(remplacements);
+        if (CleDetenteur.SECOURS.equals(cible.role())) {   // ⚠️ V71 (§B2) : la clé naît chez le dépositaire
+            c.setGenerePar(CleDetenteur.PAR_DEPOSITAIRE);
+            c.setIdDepositaire(cible.depositaire());
+        }
         return cleRepository.save(c);
     }
 
     // ------------------------------------------------------------------ gardes
 
-    /** Qui est visé par un geste : un membre pour sa propre clé, ou le responsable pour la part de secours. */
-    private record Cible(String role, String im) {
+    /**
+     * Qui est visé par un geste : un membre pour sa propre clé, ou la part de secours ; ⚠️ V71 — {@code depositaire} = le compte
+     * {@code D…} de l'appelant quand c'est le dépositaire qui agit (nouveau geste).
+     */
+    private record Cible(String role, String im, String depositaire) {
         String libelle() {
             return CleDetenteur.SECOURS.equals(role) ? "la part de secours" : "le membre " + im;
         }
     }
 
-    private Cible cible(Long idDmc, String role) {
+    /**
+     * La cible d'un geste et sa garde. ⚠️ V71 (demande du 05/10, §B2, §B4) — la part de secours :
+     * <ul>
+     *   <li>la <strong>publier</strong> ou la <strong>remplacer</strong> ({@code ecriture}) : le dépositaire désigné seul ; le
+     *       responsable reçoit 403 {@code GESTE_DU_DEPOSITAIRE} ;</li>
+     *   <li>relire son enveloppe, ouvrir un défi, la déclarer perdue : son <strong>détenteur</strong> — le responsable pour une
+     *       part générée selon l'ancien geste ({@code generePar = RESPONSABLE}), le dépositaire qui l'a publiée sinon.</li>
+     * </ul>
+     */
+    private Cible cible(Long idDmc, String role, boolean ecriture) {
         exigerDmc(idDmc);
         String acteur = CurrentUser.ref().orElse(null);
         if (acteur == null || CurrentUser.profil().isEmpty()) {
             throw new AccessDeniedException("La cérémonie des clés est réservée au responsable de la procédure et aux membres désignés.");
         }
         if (CleDetenteur.SECOURS.equalsIgnoreCase(role)) {
-            if (!internes.estTitulaire(idDmc)) {
-                throw new AccessDeniedException("La part de secours se gère par le responsable de la procédure.");
+            boolean responsable = internes.estTitulaire(idDmc);
+            boolean depositaire = internes.estDepositaire(idDmc);
+            if (!responsable && !depositaire) {
+                throw new AccessDeniedException("La part de secours se gère par son dépositaire.");
             }
-            RemiseElectronique.Internes i = internes.internes(idDmc);
-            if (i == null || i.depositaire() == null) {
-                throw new BusinessRuleException("Aucun dépositaire de la part de secours n'est désigné : désignez-le dans les paramètres "
-                        + "internes avant de générer sa clé.", "DEPOSITAIRE_ABSENT");
+            if (ecriture) {
+                if (!depositaire) {
+                    throw new AccesReserveException("La clé de secours naît sur le poste du dépositaire : lui seul la génère et la publie, "
+                            + "depuis son espace.", "GESTE_DU_DEPOSITAIRE");
+                }
+                return new Cible(CleDetenteur.SECOURS, null, acteur);
             }
-            return new Cible(CleDetenteur.SECOURS, null);
+            CleDetenteur active = cleRepository.findFirstByIdDmcAndRoleAndDateArchivageIsNull(idDmc, CleDetenteur.SECOURS).orElse(null);
+            boolean ancienGeste = active != null && !CleDetenteur.PAR_DEPOSITAIRE.equals(active.getGenerePar());
+            boolean detenteur = ancienGeste ? responsable
+                    : depositaire && (active == null || acteur.equals(active.getIdDepositaire()));
+            if (!detenteur) {
+                throw new AccessDeniedException(ancienGeste ? "Cette part de secours a été générée chez le responsable de la procédure : "
+                        + "elle se gère par lui." : "La part de secours se gère par le dépositaire qui l'a publiée.");
+            }
+            return new Cible(CleDetenteur.SECOURS, null, depositaire && !ancienGeste ? acteur : null);
         }
         String im = membre(idDmc, acteur);
         if (im == null) {
             throw new AccessDeniedException("Vous n'êtes pas membre désigné de la commission de cette procédure.");
         }
-        return new Cible(CleDetenteur.MEMBRE, im);
+        return new Cible(CleDetenteur.MEMBRE, im, null);
     }
 
     /** Le matricule tel que les paramètres internes l'écrivent, si l'acteur est un membre désigné ; {@code null} sinon. */
@@ -568,9 +603,10 @@ public class CeremonieService {
     private void exigerLecteur(Long idDmc) {
         exigerDmc(idDmc);
         String acteur = CurrentUser.ref().orElse(null);
-        if (acteur == null || CurrentUser.profil().isEmpty() || !internes.estTitulaire(idDmc) && membre(idDmc, acteur) == null) {
+        if (acteur == null || CurrentUser.profil().isEmpty() || !internes.estTitulaire(idDmc) && membre(idDmc, acteur) == null
+                && !internes.estDepositaire(idDmc)) {   // ⚠️ V71 : le dépositaire lit la cérémonie
             throw new AccessDeniedException("La cérémonie des clés de la procédure " + idDmc
-                    + " se lit par son responsable et ses membres désignés.");
+                    + " se lit par son responsable, ses membres désignés et le dépositaire de la part de secours.");
         }
     }
 

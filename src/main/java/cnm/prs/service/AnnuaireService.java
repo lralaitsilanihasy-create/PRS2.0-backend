@@ -238,6 +238,7 @@ public class AnnuaireService {
             // ⚠️ 2026-10-04 — un candidat (soumission en ligne) n'a pas de fiche dans l'annuaire interne.
             case CANDIDAT -> throw introuvable(TypeActeur.CANDIDAT, cle);
             case MEMBRE_CAO -> throw introuvable(TypeActeur.MEMBRE_CAO, cle);   // ⚠️ lot 2a : hors annuaire interne
+            case DEPOSITAIRE -> throw introuvable(TypeActeur.DEPOSITAIRE, cle);   // ⚠️ 2026-10-05 : hors annuaire interne
         };
     }
 

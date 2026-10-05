@@ -61,9 +61,9 @@ public class SecurityConfig {
                 org.springframework.security.core.Authentication a = authentification.get();
                 boolean interne = a != null && a.isAuthenticated()
                         && !(a instanceof org.springframework.security.authentication.AnonymousAuthenticationToken)
-                        // ⚠️ 2026-10-04 (lot 2a) — ni MEMBRE_CAO : lui aussi vit hors de la coquille interne.
+                        // ⚠️ 2026-10-04 (lot 2a) — ni MEMBRE_CAO : lui aussi vit hors de la coquille interne ; ⚠️ 2026-10-05 ni DEPOSITAIRE.
                         && a.getAuthorities().stream().noneMatch(g -> "ROLE_CANDIDAT".equals(g.getAuthority())
-                                || "ROLE_MEMBRE_CAO".equals(g.getAuthority()));
+                                || "ROLE_MEMBRE_CAO".equals(g.getAuthority()) || "ROLE_DEPOSITAIRE".equals(g.getAuthority()));
                 return new org.springframework.security.authorization.AuthorizationDecision(interne);
             };
 
@@ -183,13 +183,17 @@ public class SecurityConfig {
                     // /api/cao/**, et la cérémonie de leurs procédures (garde par identité dans le service).
                     auth.requestMatchers(HttpMethod.POST, "/api/cao/activation").permitAll();
                     auth.requestMatchers("/api/cao/**").hasRole("MEMBRE_CAO");
+                    // ⚠️ 2026-10-05 (dépositaire de la part de secours, §B1) — activation publique, espace /api/depositaire/** ; sa
+                    // clé (cérémonie) et son apport en séance, par identité dans les services.
+                    auth.requestMatchers(HttpMethod.POST, "/api/depositaire/activation").permitAll();
+                    auth.requestMatchers("/api/depositaire/**").hasRole("DEPOSITAIRE");
                     // ⚠️ 2026-10-04 (lot 4) — la séance d'ouverture : les membres de la CAO y apportent leurs parts (garde par
                     // identité dans le service) ; le PV publié se lit sans session.
                     auth.requestMatchers(HttpMethod.GET, "/api/procedures-en-ligne/*/pv").permitAll();
-                    auth.requestMatchers("/api/fiches-marche/*/seance", "/api/fiches-marche/*/seance/**").hasAnyRole("MEMBRE_CAO", "PRMP",
+                    auth.requestMatchers("/api/fiches-marche/*/seance", "/api/fiches-marche/*/seance/**").hasAnyRole("MEMBRE_CAO", "DEPOSITAIRE", "PRMP",
                             "UGPM", "PRESIDENT", "CHEF_COMMISSION", "SECRETAIRE", "MEMBRE", "VERIFICATEUR", "ASSISTANT_CONTROLEUR",
                             "CHARGE_PUBLICATION", "ADMINISTRATEUR");
-                    auth.requestMatchers("/api/fiches-marche/*/ceremonie/**").hasAnyRole("MEMBRE_CAO", "PRMP", "UGPM",
+                    auth.requestMatchers("/api/fiches-marche/*/ceremonie/**").hasAnyRole("MEMBRE_CAO", "DEPOSITAIRE", "PRMP", "UGPM",
                             "PRESIDENT", "CHEF_COMMISSION", "SECRETAIRE", "MEMBRE", "VERIFICATEUR", "ASSISTANT_CONTROLEUR",
                             "CHARGE_PUBLICATION", "ADMINISTRATEUR");
                     // ⚠️ 2026-10-04 (soumission en ligne, lot 1c, §B8) — les procédures ouvertes en ligne se lisent sans

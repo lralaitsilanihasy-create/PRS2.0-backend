@@ -64,4 +64,14 @@ public class ParametreInterneProcedure {
 
     @Column(name = "DEPOSITAIRE_CONTACT", length = 300)
     private String depositaireContact;
+
+    /** ⚠️ V71 (demande du 05/10, §B1) — l'adresse du dépositaire (obligatoire au PUT), son téléphone, son compte {@code D…}. */
+    @Column(name = "DEPOSITAIRE_EMAIL", length = 255)
+    private String depositaireEmail;
+
+    @Column(name = "DEPOSITAIRE_TELEPHONE", length = 50)
+    private String depositaireTelephone;
+
+    @Column(name = "ID_COMPTE_DEPOSITAIRE", length = 10)
+    private String idCompteDepositaire;
 }

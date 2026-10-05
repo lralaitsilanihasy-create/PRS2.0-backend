@@ -67,6 +67,7 @@ public class AuthService {
     private final CandidatService candidatService;
     /** ⚠️ 2026-10-04 (lot 2a) — les comptes des membres de CAO. */
     private final CompteCaoService caoService;
+    private final CompteDepositaireService depositaireService;
 
     public AuthService(CompteAuthRepository compteRepository, ControleurRepository controleurRepository,
             ProfileRepository profileRepository, PrmpRepository prmpRepository,
@@ -74,7 +75,8 @@ public class AuthService {
             ControleurDirectory controleurDirectory, NotificationService notificationService,
             PrmpEntiteDemandeRepository demandeRepository, EntiteContractRepository entiteContractRepository,
             PieceJointeService pieceJointeService, UgpmRepository ugpmRepository, CandidatService candidatService,
-            CompteCaoService caoService) {
+            CompteCaoService caoService, CompteDepositaireService depositaireService) {
+        this.depositaireService = depositaireService;
         this.caoService = caoService;
         this.candidatService = candidatService;
         this.compteRepository = compteRepository;
@@ -106,6 +108,9 @@ public class AuthService {
         }
         if (TypeActeur.MEMBRE_CAO.name().equals(compte.getTypeActeur())) {   // ⚠️ 2026-10-04 (lot 2a, §B2)
             return loginMembreCao(compte, request);
+        }
+        if (TypeActeur.DEPOSITAIRE.name().equals(compte.getTypeActeur())) {   // ⚠️ 2026-10-05 (dépositaire, §B1)
+            return loginDepositaire(compte, request);
         }
         if (!Boolean.TRUE.equals(compte.getActif())) {
             throw new BadCredentialsException("Compte désactivé.");
@@ -185,6 +190,22 @@ public class AuthService {
         String role = ProfilUtilisateur.MEMBRE_CAO.name();
         String token = tokenService.generer(compte.getLogin(), role, TypeActeur.MEMBRE_CAO, compte.getRefActeur(), null);
         return new LoginResponse(token, compte.getLogin(), role, TypeActeur.MEMBRE_CAO.name(), compte.getRefActeur(), nomAffichage,
+                null, tokenService.getExpirationSeconds());
+    }
+
+    /** ⚠️ 2026-10-05 (dépositaire de la part de secours, §B1) — comme un membre de CAO : rôle {@code DEPOSITAIRE}, {@code ref} = {@code D…}. */
+    private LoginResponse loginDepositaire(CompteAuth compte, LoginRequest request) {
+        if (depositaireService.compteAActiver(compte)) {
+            throw new cnm.prs.exception.BusinessRuleException("Votre compte n'est pas encore activé : saisissez le code d'activation reçu "
+                    + "par courriel et choisissez votre mot de passe.", "COMPTE_A_ACTIVER");
+        }
+        if (!passwordEncoder.matches(request.motDePasse(), compte.getMotDePasse())) {
+            throw new BadCredentialsException("Identifiants invalides.");
+        }
+        String nomAffichage = depositaireService.controlerConnexion(compte);
+        String role = ProfilUtilisateur.DEPOSITAIRE.name();
+        String token = tokenService.generer(compte.getLogin(), role, TypeActeur.DEPOSITAIRE, compte.getRefActeur(), null);
+        return new LoginResponse(token, compte.getLogin(), role, TypeActeur.DEPOSITAIRE.name(), compte.getRefActeur(), nomAffichage,
                 null, tokenService.getExpirationSeconds());
     }
 

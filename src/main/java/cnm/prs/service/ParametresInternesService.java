@@ -45,6 +45,7 @@ import cnm.prs.entity.CaoMembre;
 import cnm.prs.entity.CeremonieCles;
 import cnm.prs.entity.CleDetenteur;
 import cnm.prs.entity.CompteCao;
+import cnm.prs.entity.CompteDepositaire;
 import cnm.prs.enums.TypeNotification;
 import cnm.prs.enums.TypeObjet;
 import cnm.prs.repository.CeremonieClesRepository;
@@ -93,6 +94,15 @@ public class ParametresInternesService {
     private final cnm.prs.repository.CaoRepository caoRepository;
     private final cnm.prs.repository.CaoMembreRepository caoMembreRepository;
     private final cnm.prs.repository.CompteCaoRepository compteCaoRepository;
+    /** ⚠️ V71 (dépositaire, §B1) — le compte du dépositaire et ses exclusions. */
+    private final CompteDepositaireService comptesDepositaire;
+    private final cnm.prs.repository.CompteDepositaireRepository compteDepositaireRepository;
+    private final cnm.prs.repository.MarcheRepository marcheRepository;
+    private final cnm.prs.repository.DossierRepository dossierRepository;
+    private final cnm.prs.repository.PrmpRepository prmpRepository;
+    private final cnm.prs.repository.UgpmRepository ugpmRepository;
+    private final cnm.prs.repository.CompteCandidatRepository candidatRepository;
+    private final cnm.prs.repository.CompteAuthRepository compteAuthRepository;
     private final ParametreInterneJournalRepository journalRepository;
     private final ResponsableProcedureRepository responsableRepository;
     private final DossierMecRepository dmcRepository;
@@ -114,7 +124,19 @@ public class ParametresInternesService {
             ActeurDirectory acteurs, ParametreService parametres, ObjectMapper mapper,
             CeremonieClesRepository ceremonieRepository, CleDetenteurRepository cleRepository, NotificationService notifications,
             cnm.prs.repository.CaoRepository caoRepository, cnm.prs.repository.CaoMembreRepository caoMembreRepository,
-            cnm.prs.repository.CompteCaoRepository compteCaoRepository) {
+            cnm.prs.repository.CompteCaoRepository compteCaoRepository, CompteDepositaireService comptesDepositaire,
+            cnm.prs.repository.CompteDepositaireRepository compteDepositaireRepository, cnm.prs.repository.MarcheRepository marcheRepository,
+            cnm.prs.repository.DossierRepository dossierRepository, cnm.prs.repository.PrmpRepository prmpRepository,
+            cnm.prs.repository.UgpmRepository ugpmRepository, cnm.prs.repository.CompteCandidatRepository candidatRepository,
+            cnm.prs.repository.CompteAuthRepository compteAuthRepository) {
+        this.comptesDepositaire = comptesDepositaire;
+        this.compteDepositaireRepository = compteDepositaireRepository;
+        this.marcheRepository = marcheRepository;
+        this.dossierRepository = dossierRepository;
+        this.prmpRepository = prmpRepository;
+        this.ugpmRepository = ugpmRepository;
+        this.candidatRepository = candidatRepository;
+        this.compteAuthRepository = compteAuthRepository;
         this.caoRepository = caoRepository;
         this.caoMembreRepository = caoMembreRepository;
         this.compteCaoRepository = compteCaoRepository;
@@ -177,7 +199,21 @@ public class ParametresInternesService {
             return null;
         }
         return new CeremonieDto.Depositaire(p.getDepositaireNom(), p.getDepositaireOrganisme(), p.getDepositaireFonction(),
-                p.getDepositaireContact());
+                p.getDepositaireContact(), p.getDepositaireEmail(), p.getDepositaireTelephone(), null);
+    }
+
+    /** ⚠️ V71 (§B1) — le compte {@code D…} du dépositaire désigné, {@code null} sans dépositaire ou désigné avant V71 sans adresse. */
+    @Transactional(readOnly = true)
+    public String compteDepositaire(Long idDmc) {
+        return internesRepository.findById(idDmc).map(ParametreInterneProcedure::getIdCompteDepositaire).orElse(null);
+    }
+
+    /** ⚠️ V71 — l'appelant est-il le dépositaire désigné de cette procédure (profil {@code DEPOSITAIRE}, son compte) ? */
+    @Transactional(readOnly = true)
+    public boolean estDepositaire(Long idDmc) {
+        String ref = CurrentUser.ref().orElse(null);
+        return ref != null && cnm.prs.enums.TypeActeur.DEPOSITAIRE.name().equals(CurrentUser.acteurType().orElse(null))
+                && ref.equals(compteDepositaire(idDmc));
     }
 
     /**
@@ -225,10 +261,20 @@ public class ParametresInternesService {
         CeremonieDto.Depositaire depositaire = null;
         if (c.depositaire() != null) {
             CeremonieDto.Depositaire d = c.depositaire();
+            // ⚠️ V71 (demande du 05/10, §B1) — l'adresse est obligatoire : le dépositaire reçoit un compte et génère sa clé.
+            String email = d.email() == null || d.email().isBlank() ? null : CandidatService.normaliserEmail(d.email());
             if (d.nom() == null || d.nom().isBlank()) {
                 erreurs.add(new ErrorResponse.FieldError(CHAMP_DEPOSITAIRE, "Le nom du dépositaire de la part de secours est obligatoire."));
-            } else {
-                depositaire = new CeremonieDto.Depositaire(d.nom().trim(), vide(d.organisme()), vide(d.fonction()), vide(d.contact()));
+            }
+            if (email == null) {
+                erreurs.add(new ErrorResponse.FieldError(CHAMP_DEPOSITAIRE + ".email", "L'adresse électronique du dépositaire est "
+                        + "obligatoire : il reçoit un compte et génère lui-même la clé de secours."));
+            } else if (!email.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
+                erreurs.add(new ErrorResponse.FieldError(CHAMP_DEPOSITAIRE + ".email", "Adresse électronique invalide."));
+            }
+            if (d.nom() != null && !d.nom().isBlank() && email != null) {
+                depositaire = new CeremonieDto.Depositaire(d.nom().trim(), vide(d.organisme()), vide(d.fonction()), vide(d.contact()),
+                        email, vide(d.telephone()), null);
             }
         }
         // ⚠️ V67 (lot 2a, §B3, Q11) — les membres sont ceux de la CAO, désignée par la PRMP : le corps ne les porte plus.
@@ -279,9 +325,29 @@ public class ParametresInternesService {
         p.setDepositaireOrganisme(depositaire == null ? null : depositaire.organisme());
         p.setDepositaireFonction(depositaire == null ? null : depositaire.fonction());
         p.setDepositaireContact(depositaire == null ? null : depositaire.contact());
+        // ⚠️ V71 (§B1) — le compte du dépositaire : exclusions nommées, puis créé ou retrouvé par son adresse ; invité et appelé à
+        // publier sa clé s'il change.
+        String avantCompte = p.getIdCompteDepositaire();
+        CompteDepositaire compte = null;
+        if (depositaire != null) {
+            exclusionsDepositaire(idDmc, depositaire.email());
+            compte = comptesDepositaire.creerOuRetrouver(depositaire.email(), depositaire.nom(), depositaire.telephone());
+        }
+        p.setDepositaireEmail(depositaire == null ? null : depositaire.email());
+        p.setDepositaireTelephone(depositaire == null ? null : depositaire.telephone());
+        p.setIdCompteDepositaire(compte == null ? null : compte.getIdCompte());
         p.setDateMaj(LocalDateTime.now());
         p.setImMaj(CurrentUser.ref().orElse(null));
         internesRepository.save(p);
+        if (compte != null && !compte.getIdCompte().equals(avantCompte)) {
+            String[] pa = procedureEtAutorite(idDmc);
+            if (!CompteDepositaire.ACTIF.equals(compte.getEtat())) {
+                comptesDepositaire.inviter(compte, pa[0], pa[1]);
+            }
+            notifierDepositaire(idDmc, compte, TypeNotification.CLE_A_PUBLIER, "Part de secours : votre clé est à publier",
+                    "Vous êtes désigné dépositaire de la part de secours de la procédure « " + pa[0] + " ». Générez votre clé de secours "
+                            + "sur votre poste et publiez-la depuis votre espace : vous seul verrez votre phrase secrète.");
+        }
 
         journaliser(idDmc, CHAMP_QUORUM, avantQuorum == null ? null : String.valueOf(avantQuorum),
                 c.quorum() == null ? null : String.valueOf(c.quorum()));
@@ -335,7 +401,7 @@ public class ParametresInternesService {
         }
         StringBuilder sb = new StringBuilder(d.nom());
         for (String s : List.of(d.organisme() == null ? "" : d.organisme(), d.fonction() == null ? "" : d.fonction(),
-                d.contact() == null ? "" : d.contact())) {
+                d.contact() == null ? "" : d.contact(), d.email() == null ? "" : d.email(), d.telephone() == null ? "" : d.telephone())) {
             if (!s.isBlank()) {
                 sb.append(" ; ").append(s);
             }
@@ -343,6 +409,81 @@ public class ParametresInternesService {
         return sb.toString();
     }
 
+
+    // ------------------------------------------------------------------ ⚠️ V71 (demande du 05/10) — le compte du dépositaire
+
+    /**
+     * Les exclusions du dépositaire (409 {@code DEPOSITAIRE_INCOMPATIBLE}, la raison dite, pas le compte) : la PRMP ou une UGPM de
+     * la fiche, le responsable de la procédure, un membre de la CAO de la procédure, un candidat inscrit — et toute adresse déjà
+     * prise par un autre compte de PRS (un login est une adresse, un compte n'a qu'un profil).
+     */
+    private void exclusionsDepositaire(Long idDmc, String email) {
+        cnm.prs.entity.DossierMec dmc = dmcRepository.findById(idDmc).orElse(null);
+        String idPrmp = dmc == null ? null : marcheRepository.findIdDossierByIdDetail(dmc.getIdDetail()).flatMap(dossierRepository::findById)
+                .map(cnm.prs.entity.Dossier::getIdPrmp).orElse(null);
+        String raison = null;
+        if (idPrmp != null && prmpRepository.findById(idPrmp).map(cnm.prs.entity.Prmp::getEmailPrmp).map(CandidatService::normaliserEmail)
+                .filter(email::equals).isPresent()) {
+            raison = "la PRMP de la fiche";
+        } else if (idPrmp != null && ugpmRepository.findByIdPrmpTutelle(idPrmp).stream().map(cnm.prs.entity.Ugpm::getEmailUgpm)
+                .filter(Objects::nonNull).map(CandidatService::normaliserEmail).anyMatch(email::equals)) {
+            raison = "une UGPM de la fiche";
+        } else if (responsable(idDmc).flatMap(r -> controleurRepository.findById(r.getImResponsable())).map(Controleur::getEmailCont)
+                .filter(Objects::nonNull).map(CandidatService::normaliserEmail).filter(email::equals).isPresent()) {
+            raison = "le responsable de la procédure";
+        } else if (caoMembreRepository.findByIdDmcOrderByRangAscIdMembreAsc(idDmc).stream().map(CaoMembre::getEmail)
+                .filter(Objects::nonNull).map(CandidatService::normaliserEmail).anyMatch(email::equals)) {
+            raison = "un membre de la commission d'appel d'offres de la procédure";
+        } else if (candidatRepository.existsByEmail(email)) {
+            raison = "un candidat inscrit (conflit d'intérêts)";
+        } else {
+            cnm.prs.entity.CompteAuth a = compteAuthRepository.findByLogin(email).orElse(null);
+            if (a != null && !cnm.prs.enums.TypeActeur.DEPOSITAIRE.name().equals(a.getTypeActeur())) {
+                raison = cnm.prs.enums.TypeActeur.MEMBRE_CAO.name().equals(a.getTypeActeur()) ? "un membre de commission d'appel d'offres"
+                        : "un autre compte de PRS";
+            }
+        }
+        if (raison != null) {
+            throw new BusinessRuleException("L'adresse " + email + " est celle de " + raison + " : cette personne ne peut pas être "
+                    + "dépositaire de la part de secours.", "DEPOSITAIRE_INCOMPATIBLE");
+        }
+    }
+
+    /**
+     * {@code POST …/parametres-internes/depositaire/inviter} (responsable) : renvoie l'invitation ; 409 {@code DEPOSITAIRE_ABSENT}
+     * sans dépositaire à compte, {@code DEJA_ACTIF} si le compte est activé.
+     */
+    public ParametresInternesDto inviterDepositaire(Long idDmc) {
+        exigerTitulaire(idDmc);
+        CompteDepositaire compte = Optional.ofNullable(compteDepositaire(idDmc)).flatMap(compteDepositaireRepository::findById)
+                .orElseThrow(() -> new BusinessRuleException("Aucun dépositaire à compte n'est désigné : renseignez son adresse "
+                        + "électronique dans les paramètres internes.", "DEPOSITAIRE_ABSENT"));
+        String[] pa = procedureEtAutorite(idDmc);
+        comptesDepositaire.inviter(compte, pa[0], pa[1]);
+        return dto(idDmc);
+    }
+
+    /** Une notification vers le dépositaire désigné de la procédure (trace et courriel), s'il a un compte. */
+    void notifierDepositaire(Long idDmc, TypeNotification type, String titre, String corps) {
+        Optional.ofNullable(compteDepositaire(idDmc)).flatMap(compteDepositaireRepository::findById)
+                .ifPresent(c -> notifierDepositaire(idDmc, c, type, titre, corps));
+    }
+
+    private void notifierDepositaire(Long idDmc, CompteDepositaire c, TypeNotification type, String titre, String corps) {
+        notifications.emettreDepositaire(type, c.getIdCompte(), c.getEmail(), idDmc.intValue(), TypeObjet.PROCEDURE, titre, corps);
+    }
+
+    /** L'objet de la procédure et l'autorité contractante, lus sur le plan (pour les courriels). */
+    String[] procedureEtAutorite(Long idDmc) {
+        cnm.prs.entity.DossierMec dmc = dmcRepository.findById(idDmc).orElse(null);
+        if (dmc == null) {
+            return new String[] { "procédure " + idDmc, "" };
+        }
+        Map<String, String> v = valeursPpm.lire(dmc.getIdDetail()).valeurs();
+        String objet = v.get("OBJET");
+        String entite = v.get("ENTITE");
+        return new String[] { objet == null ? "procédure " + idDmc : objet, entite == null ? "" : entite };
+    }
     private static String vide(String s) {
         return s == null || s.isBlank() ? null : s.trim();
     }
@@ -519,7 +660,15 @@ public class ParametresInternesService {
                         j.getAncienneValeur(), j.getNouvelleValeur()))
                 .toList();
         // ⚠️ V66 (lot 2) — la part de secours (§B1) et les avertissements (§B3, S1).
-        CeremonieDto.PartDeSecours secours = new CeremonieDto.PartDeSecours(i == null ? null : i.depositaire(), etatPartDeSecours(idDmc, i));
+        // ⚠️ V71 (§B1) — le dépositaire avec l'état de son compte.
+        CeremonieDto.Depositaire dep = i == null ? null : i.depositaire();
+        if (dep != null) {
+            String idCompte = compteDepositaire(idDmc);
+            CompteDepositaire cd = idCompte == null ? null : compteDepositaireRepository.findById(idCompte).orElse(null);
+            dep = new CeremonieDto.Depositaire(dep.nom(), dep.organisme(), dep.fonction(), dep.contact(), dep.email(), dep.telephone(),
+                    cd == null ? null : new CeremonieDto.CompteDepositaire(cd.getIdCompte(), CompteDepositaireService.etat(cd)));
+        }
+        CeremonieDto.PartDeSecours secours = new CeremonieDto.PartDeSecours(dep, etatPartDeSecours(idDmc, i));
         List<ParametresInternesDto.Anomalie> avertissements = new ArrayList<>();
         if (i != null && i.quorumSansMarge() && !RemiseElectronique.quorumInvalide(i)) {
             avertissements.add(new ParametresInternesDto.Anomalie(ControlesFicheMarche.SE_QUORUM_MARGE, RemiseElectronique.MESSAGE_QUORUM_MARGE));

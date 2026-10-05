@@ -55,6 +55,12 @@ public class ParametresInternesController {
         return service.ecrire(idDmc, corps);
     }
 
+    /** ⚠️ 2026-10-05 (dépositaire, §B1) — renvoyer l'invitation du dépositaire (responsable) : 409 {@code DEJA_ACTIF} / {@code DEPOSITAIRE_ABSENT}. */
+    @PostMapping("/parametres-internes/depositaire/inviter")
+    public ParametresInternesDto inviterDepositaire(@PathVariable Long idDmc) {
+        return service.inviterDepositaire(idDmc);
+    }
+
     /**
      * ⚠️ 2026-10-04 (soumission en ligne, lot 2a, §B3, Q11) — le responsable ne choisit plus les membres : ils sont ceux de la
      * commission d'appel d'offres, désignée par la PRMP ({@code GET …/cao}). La route répond <strong>410 Gone</strong>.

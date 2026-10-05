@@ -131,6 +131,10 @@ offre en clair. Il n'y a pas de clé de procédure, ni de poste de cérémonie q
   - Sa clé privée enveloppée est imprimée et mise sous pli scellé.
   - Il ne compte que pour **une** part : il n'atteint jamais seul le quorum, puisque quorum ≥ 2.
   - Son emploi est consigné au PV, avec le motif.
+  - ⚠️ **2026-10-05 (V71, décision du pilote)** — la paire de secours naît **sur le poste du dépositaire**, qui a un compte
+    (profil `DEPOSITAIRE`) et seul voit sa phrase ; le responsable la demande en séance, le dépositaire l'apporte. Avant V71, elle
+    naissait chez le responsable en présence du dépositaire : le responsable voyait passer la phrase. Une part de l'ancien geste reste
+    valable (`generePar = RESPONSABLE`). Contrat : `docs/api-endpoints.md`, § *Le dépositaire génère lui-même la part de secours — V71*.
 - **S4 — Remplacer une clé.**
   - Avant le premier dépôt : on remplace la clé du seul membre concerné, ou on refait la cérémonie, sans rien perdre.
   - Après le premier dépôt : seules les offres déjà scellées pour l'ancienne clé en dépendent, et S1 et S3 les couvrent.

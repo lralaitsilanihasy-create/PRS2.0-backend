@@ -437,7 +437,9 @@ public class CaoService {
             } else {
                 CompteAuth a = compteAuthRepository.findByLogin(email).orElse(null);
                 if (a != null && !TypeActeur.MEMBRE_CAO.name().equals(a.getTypeActeur())) {
-                    raison = "un compte interne de PRS";
+                    // ⚠️ 2026-10-05 — une adresse de dépositaire : un compte n'a qu'un profil.
+                    raison = TypeActeur.DEPOSITAIRE.name().equals(a.getTypeActeur()) ? "le dépositaire d'une part de secours"
+                            : "un compte interne de PRS";
                 }
             }
             if (raison != null) {

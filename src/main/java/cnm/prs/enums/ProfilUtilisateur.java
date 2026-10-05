@@ -37,7 +37,14 @@ public enum ProfilUtilisateur {
      * d'une part de clé : hors coquille interne comme le candidat, seulement {@code /api/cao/**}, {@code /api/mon-compte/**} et la
      * cérémonie de ses procédures ({@code /api/fiches-marche/{idDmc}/ceremonie/**}, garde par identité).
      */
-    MEMBRE_CAO;
+    MEMBRE_CAO,
+
+    /**
+     * ⚠️ 2026-10-05 (soumission en ligne, dépositaire, Q1) — le dépositaire de la part de secours d'une ou plusieurs procédures :
+     * hors coquille interne, seulement {@code /api/depositaire/**}, {@code /api/mon-compte/**} et, par identité, sa clé de secours
+     * ({@code …/ceremonie/**}) et son apport en séance ({@code …/seance/mes-parts}, {@code …/seance/parts}). Ni offres, ni PV.
+     */
+    DEPOSITAIRE;
 
     /** Autorité Spring Security correspondante (préfixe {@code ROLE_}). */
     public String authority() {

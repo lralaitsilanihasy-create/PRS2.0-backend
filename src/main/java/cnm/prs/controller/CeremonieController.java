@@ -54,25 +54,25 @@ public class CeremonieController {
         return service.enveloppe(idDmc, CleDetenteur.MEMBRE);
     }
 
-    /** §B2.3 — le responsable publie la part de secours, en présence du dépositaire : 409 {@code DEPOSITAIRE_ABSENT}. */
+    /** ⚠️ 2026-10-05 (V71, §B2) — le <strong>dépositaire</strong> publie la part de secours (le responsable : 403 {@code GESTE_DU_DEPOSITAIRE}). */
     @PostMapping("/cles/secours")
     public ResponseEntity<CeremonieDto.Detenteur> publierSecours(@PathVariable Long idDmc, @RequestBody CeremonieDto.CleCorps corps) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.publier(idDmc, CleDetenteur.SECOURS, corps));
     }
 
-    /** §B5.1 — le responsable remplace la part de secours. */
+    /** ⚠️ V71 — le dépositaire remplace la part de secours (S4 ; aussi un nouveau dépositaire, Q2) ; le responsable : 403 {@code GESTE_DU_DEPOSITAIRE}. */
     @PutMapping("/cles/secours")
     public CeremonieDto.Detenteur remplacerSecours(@PathVariable Long idDmc, @RequestBody CeremonieDto.CleCorps corps) {
         return service.remplacer(idDmc, CleDetenteur.SECOURS, corps);
     }
 
-    /** §B2.3 — l'enveloppe de la part de secours (responsable seul). */
+    /** L'enveloppe de la part de secours : son détenteur (⚠️ V71 — le dépositaire qui l'a publiée, ou le responsable pour l'ancien geste). */
     @GetMapping("/cles/secours")
     public CeremonieDto.Enveloppe secours(@PathVariable Long idDmc) {
         return service.enveloppe(idDmc, CleDetenteur.SECOURS);
     }
 
-    /** §B4 — déclarer sa part perdue (membre), ou la part de secours ({@code ?role=SECOURS}, responsable). */
+    /** §B4 — déclarer sa part perdue (membre), ou la part de secours ({@code ?role=SECOURS}, son détenteur : ⚠️ V71 le dépositaire, ou le responsable pour l'ancien geste). */
     @PostMapping("/cles/perdue")
     public CeremonieDto.Detenteur perdue(@PathVariable Long idDmc, @RequestParam(required = false) String role) {
         return service.perdue(idDmc, role);

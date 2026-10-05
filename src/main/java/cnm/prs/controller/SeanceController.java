@@ -60,6 +60,15 @@ public class SeanceController {
         return service.apporter(idDmc, role, corps);
     }
 
+    /**
+     * ⚠️ 2026-10-05 (dépositaire, §B3) — le responsable demande la part de secours au dépositaire : 400 {@code MOTIF_ABSENT} ; 409
+     * {@code SEANCE_NON_OUVERTE} / {@code SECOURS_INUTILE} / {@code GESTE_DU_RESPONSABLE}.
+     */
+    @PostMapping("/secours")
+    public SeanceDto demanderSecours(@PathVariable Long idDmc, @RequestBody(required = false) SeanceDto.DemandeSecours corps) {
+        return service.demanderSecours(idDmc, corps);
+    }
+
     /** 409 {@code SEANCE_NON_DECHIFFREE}. */
     @GetMapping("/lecture")
     public SeanceDto.Lecture lecture(@PathVariable Long idDmc) {

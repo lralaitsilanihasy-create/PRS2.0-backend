@@ -152,6 +152,13 @@ public class NotificationService {
                 typeObjet != null ? typeObjet.name() : null, null, titre, corps);
     }
 
+    /** ⚠️ 2026-10-05 (dépositaire, §B2, §B3) — vers un <strong>dépositaire</strong> ({@code D…}, type {@code DEPOSITAIRE}) : trace et courriel. */
+    public Notification emettreDepositaire(TypeNotification type, String idCompte, String email, Integer idObjet, TypeObjet typeObjet,
+            String titre, String corps) {
+        return creer(type, idCompte, TypeActeur.DEPOSITAIRE.name(), null, email, idObjet,
+                typeObjet != null ? typeObjet.name() : null, null, titre, corps);
+    }
+
     /**
      * ⚠️ V68 (2026-10-04, soumission en ligne, lot 3, §B6) — vers un <strong>candidat</strong> (clé {@code ref} = son identifiant
      * court {@code C…}, type {@code CANDIDAT}) : trace en base, et le courriel, qui est ce qu'il lit (son espace n'a pas de centre de
@@ -311,8 +318,10 @@ public class NotificationService {
             String email = prmpRepository.findById(ref).map(Prmp::getEmailPrmp).orElse(null);
             return repository.findPourPrmp(ref, email);
         }
-        if (TypeActeur.MEMBRE_CAO.name().equals(CurrentUser.acteurType().orElse(null))) {   // ⚠️ V67 (lot 2a)
-            return repository.findPourRefEtType(ref, TypeActeur.MEMBRE_CAO.name());
+        String typeExterne = CurrentUser.acteurType().filter(t -> TypeActeur.MEMBRE_CAO.name().equals(t) || TypeActeur.DEPOSITAIRE.name().equals(t))
+                .orElse(null);
+        if (typeExterne != null) {   // ⚠️ V67 (lot 2a) ; ⚠️ 2026-10-05 : le dépositaire aussi
+            return repository.findPourRefEtType(ref, typeExterne);
         }
         return repository.findPourControleur(ref);
     }
@@ -328,8 +337,10 @@ public class NotificationService {
             boolean parEmail = email != null && email.equals(n.getDestinataireEmail());
             return parRef || parEmail;
         }
-        if (TypeActeur.MEMBRE_CAO.name().equals(CurrentUser.acteurType().orElse(null))) {   // ⚠️ V67 (lot 2a)
-            return ref.equals(n.getDestinataireRef()) && TypeActeur.MEMBRE_CAO.name().equals(n.getDestinataireType());
+        String typeExterne = CurrentUser.acteurType().filter(t -> TypeActeur.MEMBRE_CAO.name().equals(t) || TypeActeur.DEPOSITAIRE.name().equals(t))
+                .orElse(null);
+        if (typeExterne != null) {   // ⚠️ V67 (lot 2a) ; ⚠️ 2026-10-05 : le dépositaire aussi
+            return ref.equals(n.getDestinataireRef()) && typeExterne.equals(n.getDestinataireType());
         }
         return ref.equals(n.getDestinataireRef())
                 && TypeActeur.CONTROLEUR.name().equals(n.getDestinataireType());

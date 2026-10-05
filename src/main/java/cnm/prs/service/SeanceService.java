@@ -232,8 +232,56 @@ public class SeanceService {
     @Transactional(readOnly = true)
     public List<SeanceDto.PartChiffree> mesParts(Long idDmc, String role) {
         String detenteur = detenteur(idDmc, role);
-        exigerOuverte(idDmc);
+        Seance s = exigerOuverte(idDmc);
+        exigerSecoursDemande(idDmc, detenteur, s);
         return partsDe(idDmc, detenteur);
+    }
+
+    /**
+     * ⚠️ 2026-10-05 (dépositaire, §B3) — le responsable <strong>demande</strong> la part de secours, avec le motif porté au PV ;
+     * {@code SECOURS_DEMANDE} part au dépositaire, qui l'apporte depuis son espace. 400 {@code MOTIF_ABSENT} ; 409
+     * {@code SEANCE_NON_OUVERTE}, {@code SECOURS_INUTILE} (la part de secours est déjà apportée, ou le quorum déjà réuni),
+     * {@code GESTE_DU_RESPONSABLE} (clé générée selon l'ancien geste : le responsable apporte lui-même la part). Une nouvelle demande
+     * remplace la précédente.
+     */
+    public SeanceDto demanderSecours(Long idDmc, SeanceDto.DemandeSecours d) {
+        exigerResponsable(idDmc);
+        if (d == null || d.motif() == null || d.motif().isBlank()) {
+            throw new BadRequestException("La demande de la part de secours exige un motif, imprimé au PV.", "MOTIF_ABSENT");
+        }
+        Seance s = exigerOuverte(idDmc);
+        Map<String, Map<String, byte[]>> deja = memoire.de(idDmc);
+        Integer quorum = quorum(idDmc);
+        if (deja.containsKey(SeanceApport.SECOURS) || quorum != null && deja.size() >= quorum) {
+            throw new BusinessRuleException("La part de secours est déjà apportée, ou le quorum déjà réuni : elle ne sert pas.",
+                    "SECOURS_INUTILE");
+        }
+        if (CleDetenteur.PAR_RESPONSABLE.equals(secoursGenerePar(idDmc))) {
+            throw new BusinessRuleException("Cette clé de secours a été générée chez le responsable (ancien geste) : apportez la part "
+                    + "vous-même, avec la phrase du pli et le motif.", "GESTE_DU_RESPONSABLE");
+        }
+        s.setSecoursDemandeMotif(d.motif().trim());
+        s.setSecoursDemandeLe(maintenant());
+        seances.save(s);
+        tracer(idDmc, "SECOURS_DEMANDE", "part de secours demandée au dépositaire : " + d.motif().trim());
+        internes.notifierDepositaire(idDmc, TypeNotification.SECOURS_DEMANDE, "Séance d'ouverture : apportez la part de secours",
+                "Le responsable de la procédure " + idDmc + " demande la part de secours (" + d.motif().trim() + "). Connectez-vous, "
+                        + "déverrouillez votre clé de secours et apportez la part.");
+        return dto(idDmc);
+    }
+
+    /** ⚠️ V71 — qui a généré la clé de secours active : {@code RESPONSABLE}, {@code DEPOSITAIRE}, {@code null} sans clé. */
+    private String secoursGenerePar(Long idDmc) {
+        return cles.findFirstByIdDmcAndRoleAndDateArchivageIsNull(idDmc, CleDetenteur.SECOURS)
+                .map(c -> c.getGenerePar() == null ? CleDetenteur.PAR_RESPONSABLE : c.getGenerePar()).orElse(null);
+    }
+
+    /** ⚠️ V71 (§B3) — le dépositaire n'apporte sa part que demandée : 409 {@code SECOURS_NON_DEMANDE}. */
+    private void exigerSecoursDemande(Long idDmc, String detenteur, Seance s) {
+        if (SeanceApport.SECOURS.equals(detenteur) && !CleDetenteur.PAR_RESPONSABLE.equals(secoursGenerePar(idDmc))
+                && s.getSecoursDemandeLe() == null) {
+            throw new BusinessRuleException("Le responsable de la procédure n'a pas demandé la part de secours.", "SECOURS_NON_DEMANDE");
+        }
     }
 
     /**
@@ -243,9 +291,14 @@ public class SeanceService {
      */
     public SeanceDto apporter(Long idDmc, String role, SeanceDto.Apport a) {
         String detenteur = detenteur(idDmc, role);
-        exigerOuverte(idDmc);
+        Seance seance = exigerOuverte(idDmc);
         boolean secours = SeanceApport.SECOURS.equals(detenteur);
-        if (secours && (a == null || a.motif() == null || a.motif().isBlank())) {
+        // ⚠️ V71 (§B3) — le dépositaire apporte une part demandée, le motif est celui de la demande ; l'ancien geste garde le motif au corps.
+        exigerSecoursDemande(idDmc, detenteur, seance);
+        boolean parDepositaire = secours && !CleDetenteur.PAR_RESPONSABLE.equals(secoursGenerePar(idDmc));
+        String motifSecours = !secours ? null : parDepositaire ? seance.getSecoursDemandeMotif()
+                : a == null || a.motif() == null || a.motif().isBlank() ? null : a.motif().trim();
+        if (secours && motifSecours == null) {
             throw new BadRequestException("L'emploi de la part de secours exige un motif, imprimé au PV.", "MOTIF_ABSENT");
         }
         List<SeanceDto.PartChiffree> attendues = partsDe(idDmc, detenteur);
@@ -290,8 +343,8 @@ public class SeanceService {
         Seance s = seances.findById(idDmc).orElseThrow();
         if (secours) {
             s.setSecoursEmploye(true);
-            s.setSecoursMotif(a.motif().trim());
-            tracer(idDmc, "SECOURS", "part de secours employée : " + a.motif().trim());
+            s.setSecoursMotif(motifSecours);
+            tracer(idDmc, "SECOURS", "part de secours employée" + (parDepositaire ? " (apportée par le dépositaire)" : "") + " : " + motifSecours);
         } else {
             Set<String> presents = new LinkedHashSet<>(cnm.prs.entity.ChampFicheMarche.liste(s.getPresents()));
             presents.add(detenteur);
@@ -980,7 +1033,8 @@ public class SeanceService {
         Long dans = heure == null || !maintenant.isBefore(heure) ? null : Duration.between(maintenant, heure).getSeconds();
         return new SeanceDto(idDmc, s == null ? Seance.A_VENIR : s.getEtat(), heure, s == null ? null : s.getOuverteLe(), dans, quorum(idDmc),
                 membres, autres, s != null && Boolean.TRUE.equals(s.getSecoursEmploye()), os, s == null ? null : s.getDechiffreeLe(),
-                blocPv(idDmc, s, membres));
+                blocPv(idDmc, s, membres), s == null || s.getSecoursDemandeLe() == null ? null
+                        : new SeanceDto.SecoursDemande(s.getSecoursDemandeMotif(), s.getSecoursDemandeLe()), secoursGenerePar(idDmc));
     }
 
     /** ⚠️ §B2 : le PV, ses signatures posées et celles qui restent attendues. */
@@ -1118,8 +1172,12 @@ public class SeanceService {
     private String detenteur(Long idDmc, String role) {
         exigerDmc(idDmc);
         if (SeanceApport.SECOURS.equalsIgnoreCase(role)) {
-            if (!internes.estTitulaire(idDmc)) {
-                throw new AccessDeniedException("La part de secours s'apporte par le responsable de la procédure.");
+            // ⚠️ V71 (§B3, §B4) — la part de secours s'apporte par son détenteur : le dépositaire (nouveau geste), ou le
+            // responsable pour une clé générée chez lui (ancien geste).
+            boolean ancienGeste = CleDetenteur.PAR_RESPONSABLE.equals(secoursGenerePar(idDmc));
+            if (ancienGeste ? !internes.estTitulaire(idDmc) : !internes.estDepositaire(idDmc)) {
+                throw new AccessDeniedException(ancienGeste ? "Cette part de secours a été générée chez le responsable de la procédure : "
+                        + "elle s'apporte par lui." : "La part de secours s'apporte par son dépositaire, depuis son espace.");
             }
             return SeanceApport.SECOURS;
         }

@@ -438,6 +438,63 @@ class SeanceIntegrationTest extends CnmIntegrationTestSupport {
                 .content("{\"offreConservationAnnees\":0}")).andExpect(status().isOk()).andExpect(jsonPath("$.offreConservationAnnees").isEmpty());
     }
 
+    @Test
+    @DisplayName("Part de secours (V71, §B3) : l'ancien geste refuse la demande (GESTE_DU_RESPONSABLE) ; le responsable demande avec un "
+            + "motif, le dépositaire est notifié, n'apporte qu'une part demandée (SECOURS_NON_DEMANDE), depuis son espace ; une fois "
+            + "apportée, une nouvelle demande est inutile ; motif de la demande porté à la séance")
+    void secoursParLeDepositaire() throws Exception {
+        deposer(jetonA, "1111222333", "BTP Alpha", "12500000");
+        changer("B04-LR-03", aujourdhui.minusDays(1).toString());
+        changer("B04-OP-02", aujourdhui.minusDays(1).toString());
+        changer("B04-OP-03", "09:00");
+        String internes = mvc.perform(get("/api/fiches-marche/" + idDmc + "/parametres-internes").header("Authorization", tokenVer))
+                .andReturn().getResponse().getContentAsString();
+        String idD = JsonPath.read(internes, "$.partDeSecours.depositaire.compte.idCompte");
+        String tokenD = bearer("rakoto.depositaire@secours.mg", ProfilUtilisateur.DEPOSITAIRE, TypeActeur.DEPOSITAIRE, idD, null);
+        mvc.perform(post(base + "/secours").header("Authorization", tokenVer).contentType(JSON).content("{\"motif\":\"x\"}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("SEANCE_NON_OUVERTE"));
+        mvc.perform(post(base + "/ouvrir").header("Authorization", tokenVer)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.secoursGenerePar").value("RESPONSABLE")).andExpect(jsonPath("$.secoursDemande").isEmpty());
+        // L'ancien geste : la clé de secours générée chez le responsable, il l'apporte lui-même.
+        mvc.perform(post(base + "/secours").header("Authorization", tokenVer).contentType(JSON).content("{\"motif\":\"Phrase oubliée\"}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("GESTE_DU_RESPONSABLE"));
+        mvc.perform(get(base + "/mes-parts").header("Authorization", tokenD).param("role", "SECOURS")).andExpect(status().isForbidden());
+        // Le nouveau geste : la clé de secours est celle du dépositaire.
+        CleDetenteur cle = cleRepository.findFirstByIdDmcAndRoleAndDateArchivageIsNull(idDmc, CleDetenteur.SECOURS).orElseThrow();
+        cle.setGenerePar(CleDetenteur.PAR_DEPOSITAIRE);
+        cle.setIdDepositaire(idD);
+        cleRepository.save(cle);
+        mvc.perform(get(base + "/mes-parts").header("Authorization", tokenVer).param("role", "SECOURS")).andExpect(status().isForbidden());
+        mvc.perform(get(base + "/mes-parts").header("Authorization", tokenD).param("role", "SECOURS")).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("SECOURS_NON_DEMANDE"));
+        mvc.perform(post(base + "/secours").header("Authorization", tokenVer).contentType(JSON).content("{}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("MOTIF_ABSENT"));
+        mvc.perform(post(base + "/secours").header("Authorization", tokenD).contentType(JSON).content("{\"motif\":\"x\"}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(post(base + "/secours").header("Authorization", tokenVer).contentType(JSON)
+                .content("{\"motif\":\"M. RASOA, membre, a oublié sa phrase secrète\"}")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.secoursDemande.motif").value("M. RASOA, membre, a oublié sa phrase secrète"))
+                .andExpect(jsonPath("$.secoursDemande.date").isNotEmpty()).andExpect(jsonPath("$.secoursGenerePar").value("DEPOSITAIRE"));
+        assertThat(notificationRepository.findPourRefEtType(idD, "DEPOSITAIRE")).extracting(Notification::getTypeNotif).contains("SECOURS_DEMANDE");
+        mvc.perform(get("/api/depositaire/procedures").header("Authorization", tokenD)).andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].etatSeance").value("OUVERTE"))
+                .andExpect(jsonPath("$[0].secoursDemande.motif").value("M. RASOA, membre, a oublié sa phrase secrète"));
+        // Le dépositaire apporte, sans motif (celui de la demande vaut) ; le quorum (2) attend encore un membre.
+        String partsD = mvc.perform(get(base + "/mes-parts").header("Authorization", tokenD).param("role", "SECOURS")).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        mvc.perform(post(base + "/parts").header("Authorization", tokenD).param("role", "SECOURS").contentType(JSON).content(apport(partsD, null)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.etat").value("OUVERTE")).andExpect(jsonPath("$.secoursEmploye").value(true));
+        mvc.perform(post(base + "/secours").header("Authorization", tokenVer).contentType(JSON).content("{\"motif\":\"encore\"}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("SECOURS_INUTILE"));
+        String parts1 = mvc.perform(get(base + "/mes-parts").header("Authorization", jetonM1)).andReturn().getResponse().getContentAsString();
+        mvc.perform(post(base + "/parts").header("Authorization", jetonM1).contentType(JSON).content(apport(parts1, null)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.etat").value("DECHIFFREE"));
+        assertThat(seanceRepository.findById(idDmc).orElseThrow().getSecoursMotif()).isEqualTo("M. RASOA, membre, a oublié sa phrase secrète");
+        assertThat(seanceJournal.findByIdDmcOrderByDateAscIdAsc(idDmc)).extracting(j -> j.getAction()).contains("SECOURS_DEMANDE", "SECOURS");
+        assertThat(seanceJournal.findByIdDmcOrderByDateAscIdAsc(idDmc)).anyMatch(j -> "SECOURS".equals(j.getAction())
+                && j.getDetail().contains("apportée par le dépositaire"));
+    }
+
     // ------------------------------------------------------------------ le navigateur, simulé
 
     /** Scelle et dépose une offre comme le navigateur : ZIP + manifeste, K, morceau AES-GCM, parts Shamir chiffrées RSA-OAEP. */
@@ -582,7 +639,7 @@ class SeanceIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(put("/api/fiches-marche/" + idDmc + "/cao").header("Authorization", tokenPrmp).contentType(JSON)
                 .content(CaoIntegrationTest.corpsCao("m1@seance.mg", "m2@seance.mg"))).andExpect(status().isOk());
         mvc.perform(put("/api/fiches-marche/" + idDmc + "/parametres-internes").header("Authorization", tokenVer).contentType(JSON)
-                .content("{\"quorum\":2,\"dateCeremonie\":\"" + aujourdhui.plusDays(9) + "T09:00\",\"depositaire\":{\"nom\":\"Rakoto Jean\"}}"))
+                .content("{\"quorum\":2,\"dateCeremonie\":\"" + aujourdhui.plusDays(9) + "T09:00\",\"depositaire\":{\"nom\":\"Rakoto Jean\",\"email\":\"rakoto.depositaire@secours.mg\"}}"))
                 .andExpect(status().isOk());
         mvc.perform(post("/api/fiches-marche/" + idDmc + "/valider").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.statut").value("VALIDEE"));

@@ -771,6 +771,16 @@ Contrat : `docs/api-endpoints.md`, § *L'ouverture des plis en séance — V69*.
   liste officielle des prestataires de certification n'existe pas.
 Contrat : `docs/api-endpoints.md`, § *Les arbitrages du pilote après le lot 4 — V70*.
 
+⚠️ **2026-10-05, soumission en ligne — le dépositaire génère lui-même la part de secours (V71).** La clé de secours naît sur le
+poste du **dépositaire**, et lui seul voit sa phrase secrète : personne d'autre — ni le responsable de la procédure, ni la PRMP — ne
+détient la part de secours. Le dépositaire reçoit un **compte** à son adresse électronique, désormais obligatoire, et en reçoit
+l'invitation. Il ne peut être ni la PRMP, ni une UGPM de la fiche, ni le responsable, ni un membre de la CAO de la procédure, ni un
+candidat. Il ne voit ni les offres, ni leurs pièces, ni le PV : sa clé, l'état de la cérémonie et celui de la séance. En séance, le
+responsable **demande** la part de secours avec un motif, porté au PV ; le dépositaire l'apporte depuis son propre poste. Changer de
+dépositaire est possible tant que les paramètres internes sont modifiables : le nouveau remplace la clé. Une part déjà publiée selon
+l'ancien geste (générée chez le responsable) reste valable et s'apporte comme avant.
+Contrat : `docs/api-endpoints.md`, § *Le dépositaire génère lui-même la part de secours — V71*.
+
 #### La fiche DAO des travaux (référentiel remis le 2026-09-24)
 
 - **Les travaux se préparent** : 257 informations (dont un bloc d'annexes et de formulaires), avec leur vocabulaire —

@@ -8,4 +8,7 @@ import cnm.prs.entity.ParametreInterneProcedure;
 /** ⚠️ V50 (2026-09-27, remise électronique, §B4) — une ligne par DMC, clé {@code ID_DMC}. */
 @Repository
 public interface ParametreInterneProcedureRepository extends JpaRepository<ParametreInterneProcedure, Long> {
+
+    /** ⚠️ V71 — les procédures dont ce compte est le dépositaire désigné. */
+    java.util.List<ParametreInterneProcedure> findByIdCompteDepositaireOrderByIdDmcAsc(String idCompteDepositaire);
 }
