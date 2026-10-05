@@ -3,6 +3,7 @@ package cnm.prs.service;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -47,5 +48,29 @@ class LettresEnNombreTest {
         assertThat(FormulairesEnLigne.formulaire("Calcul du coefficient K1", true)).isEqualTo("K1");
         assertThat(FormulairesEnLigne.formulaire("Attestation fiscale", true)).isNull();
         assertThat(FormulairesEnLigne.formulaire("Liste du personnel clé", false)).isNull();   // fournitures : pas de formulaire
+    }
+
+    @Test
+    @DisplayName("§B6 — les libellés de la recette : un planning, un plan, un échéancier (un calendrier aux travaux) restent à joindre")
+    void plannings() {
+        for (String l : List.of("Planning de mobilisation du personnel et du matériel", "Planning général", "Plan de charge",
+                "Planning d’approvisionnement des matériaux", "Planning d’intervention pendant le délai de garantie",
+                "Plannings d’exécution et d’intervention pendant la garantie", "Échéancier de paiement", "Calendrier d'avancement du personnel")) {
+            assertThat(FormulairesEnLigne.formulaire(l, true)).as(l).isNull();
+        }
+        assertThat(FormulairesEnLigne.formulaire("Échéancier de paiement", false)).isNull();
+        assertThat(FormulairesEnLigne.formulaire("Planning de livraison", false)).isNull();
+        // les autres libellés de la recette
+        assertThat(FormulairesEnLigne.formulaire("Liste du personnel", true)).isEqualTo("PERSONNEL");
+        assertThat(FormulairesEnLigne.formulaire("Liste du matériel", true)).isEqualTo("MATERIEL");
+        assertThat(FormulairesEnLigne.formulaire("Bordereau des prix", true)).isEqualTo("DQE");
+        assertThat(FormulairesEnLigne.formulaire("Cadre des spécifications techniques et conformité", false)).isEqualTo("CONFORMITE");
+        assertThat(FormulairesEnLigne.formulaire("Calendrier de livraison", false)).isEqualTo("CALENDRIER");
+        assertThat(FormulairesEnLigne.formulaire("Tableau de conformité technique rempli", false)).isEqualTo("CONFORMITE");
+        for (String l : List.of("Fiches techniques et catalogues des articles proposés", "Quittance ARMP pour l’achat du dossier",
+                "Garantie de soumission (C1 ou C2)", "Attestation fiscale", "Registre du commerce", "Carte statistique")) {
+            assertThat(FormulairesEnLigne.formulaire(l, false)).as(l).isNull();
+            assertThat(FormulairesEnLigne.formulaire(l, true)).as(l).isNull();
+        }
     }
 }

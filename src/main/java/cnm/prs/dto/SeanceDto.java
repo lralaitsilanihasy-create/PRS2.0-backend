@@ -91,11 +91,13 @@ public record SeanceDto(Long idDmc, String etat, LocalDateTime heureOuverture, L
      * {@code acteEngagement} et {@code garantie} sont repris du manifeste tels quels. ⚠️ 2026-10-05 (lot 5, §B3) — {@code formulaires} :
      * l'offre porte des formulaires (manifeste format 3) ; {@code totaux} : recalculés à l'ouverture depuis le bordereau et les
      * quantités de la fiche ({@code ht}, {@code tva}, {@code ttc}, et {@code htMin} / {@code ttcMin} à commande, {@code parSerie}
-     * aux travaux), {@code null} sans formulaires ; leurs alertes rejoignent {@code alertes}.
+     * aux travaux), {@code null} sans formulaires ; leurs alertes rejoignent {@code alertes}. ⚠️ §B5 — {@code partiesFormulaires} :
+     * les documents remplis que l'offre porte, parmi {@code BORDEREAU} · {@code CONFORMITE} · {@code CAPACITES} (ceux dont le PDF
+     * existe), {@code null} sans formulaires.
      */
     public record OffreLue(Integer numero, String idOffre, Integer lot, String etat, String integrite, String motif, EntrepriseLue entreprise,
             Object groupement, Map<String, Object> acteEngagement, Garantie garantie, List<PieceLue> pieces, List<String> piecesManquantes,
-            List<Alerte> alertes, boolean formulaires, Map<String, Object> totaux) {
+            List<Alerte> alertes, boolean formulaires, Map<String, Object> totaux, List<String> partiesFormulaires) {
     }
 
     public record EntrepriseLue(String nif, String raisonSociale, EntrepriseCandidatDto.Verification verification,

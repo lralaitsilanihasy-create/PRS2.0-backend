@@ -448,6 +448,7 @@ public class SeanceService {
                 try {
                     FormulairesEnLigne.Analyse a = formulaires.analyser(o.getIdDmc(), o.getLot(), f, m.path("acteEngagement"),
                             maintenant().toLocalDate());
+                    lus.put("parties", FormulairesEnLigne.parties(f));
                     lus.put("totaux", a.totaux());
                     lus.put("alertes", a.alertes());
                     nbAlertes = a.alertes().size();
@@ -631,11 +632,16 @@ public class SeanceService {
                     }
                 }
             }
+            // ⚠️ 2026-10-05 (§B5) — les documents remplis de l'offre ; une offre ouverte avant cette livraison les relit dans son clair.
+            List<String> parties = null;
+            if (form != null) {
+                parties = form.get("parties") instanceof List<?> p ? p.stream().map(String::valueOf).toList() : partiesRelues(o);
+            }
             @SuppressWarnings("unchecked")
             Map<String, Object> ae = (Map<String, Object>) l.get("acteEngagement");
             lues.add(new SeanceDto.OffreLue(o.getNumero(), o.getIdOffre(), o.getLot(), o.getEtat(), o.getIntegrite(), o.getMotifLecture(),
                     new SeanceDto.EntrepriseLue(o.getNif(), o.getRaisonSociale(), e == null ? null : e.verification(), e == null ? null : e.exclusion()),
-                    l.get("groupement"), ae, lue, piecesLues, manquantes, alertes, form != null, totaux));
+                    l.get("groupement"), ae, lue, piecesLues, manquantes, alertes, form != null, totaux, parties));
         }
         return new SeanceDto.Lecture(lues, nonOuvertes);
     }
@@ -682,6 +688,17 @@ public class SeanceService {
     private static String totalLisible(Object v) {
         BigDecimal m = montant(v);
         return m == null ? "—" : montantLisible(m);
+    }
+
+    /** Les parties relues dans le contenu déchiffré ; {@code null} s'il est purgé ou illisible. */
+    private List<String> partiesRelues(Offre o) {
+        try {
+            byte[] clair = stockage.lireClair(o.getIdOffre());
+            byte[] manifeste = clair == null ? null : dezipper(clair).get(MANIFESTE);
+            return manifeste == null ? null : FormulairesEnLigne.parties(mapper.readTree(manifeste).path("formulaires"));
+        } catch (IOException | RuntimeException e) {
+            return null;
+        }
     }
 
     private static String critere(String c) {

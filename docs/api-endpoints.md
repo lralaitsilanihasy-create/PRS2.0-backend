@@ -6910,6 +6910,9 @@ le **libellé** de la pièce de la fiche (bloc B14, libre) — les codes `PIECE-
   `K1` ; « chiffre d'affaires », « capacité financière », « liquidité », « ligne de crédit », « marchés similaires », « références » →
   `CAPACITES` ; « personnel » → `PERSONNEL` ; « matériel » → `MATERIEL`.
 - `AE`, `RECU-DAO`, `GARANTIE` restent des pièces (`formulaire = null`).
+- ⚠️ **2026-10-05 (recette, §B6)** : un libellé qui contient « planning », « plan de », « échéancier » — et, aux travaux,
+  « calendrier » — ne reçoit **jamais** de formulaire, quoi qu'il contienne d'autre (« Planning de mobilisation du personnel et du
+  matériel » reste une pièce à joindre). Vérifié sur les 25 libellés de pièces présents en recette (DBPRS20, toutes fiches).
 
 **§B2 — Le manifeste format 3** : la partie `formulaires` (`bordereau`, `conformite`, `totaux`, et au lot 5b `k1`, `sousDetails`,
 `capacites`, `personnel`, `materiel`) est lue à l'ouverture ; un champ inconnu est ignoré ; **les formats 1 et 2 restent lus**.
@@ -6931,7 +6934,10 @@ le **libellé** de la pièce de la fiche (bloc B14, libre) — les codes `PIECE-
     (nombre par poste, expérience ≥ celle exigée), `MATERIEL_INCOMPLET` (nombre, et en propre ≥ le minimum), `SOUS_DETAIL_INCOHERENT`
     (`prixCalcule` à plus de 1 % du prix du bordereau) ;
   - une analyse impossible lève `FORMULAIRES_ILLISIBLES` sans rendre l'offre illisible.
-- `LectureDto.offres[]` gagne **`formulaires`** (booléen) et **`totaux`** (les recalculés, `null` sans formulaires) ; les alertes
+- `LectureDto.offres[]` gagne **`formulaires`** (booléen), **`totaux`** (les recalculés, `null` sans formulaires) et, ⚠️ recette §B5,
+  **`partiesFormulaires`** : les documents remplis que l'offre porte, parmi `BORDEREAU` · `CONFORMITE` · `CAPACITES` (ceux dont le
+  PDF existe ; `null` sans formulaires ; une offre ouverte avant cette livraison les relit dans son contenu déchiffré, `null` après la
+  purge) ; les alertes
   rejoignent `alertes` (absentes du PV publié, comme les autres).
 - **Le détail** (`…/formulaires`) : la partie `formulaires` telle que scellée et le besoin du lot ; **le PDF rempli** produit **à la
   volée** (Q2) : `BORDEREAU` (aux travaux, `DQE` est le même document), `CONFORMITE`, `CAPACITES` ; 404 si l'offre ne porte pas la

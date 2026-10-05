@@ -173,6 +173,11 @@ public class FormulairesEnLigne {
             return null;
         }
         String l = java.text.Normalizer.normalize(libelle, java.text.Normalizer.Form.NFD).replaceAll("\\p{M}", "").toLowerCase(Locale.ROOT);
+        // ⚠️ 2026-10-05 (recette du lot 5, §B6) — un planning, un plan, un échéancier (et, aux travaux, un calendrier) n'est jamais un
+        // formulaire : « Planning de mobilisation du personnel et du matériel » n'est pas la liste du personnel.
+        if (l.contains("planning") || l.contains("plan de ") || l.contains("echeancier") || travaux && l.contains("calendrier")) {
+            return null;
+        }
         if (l.contains("sous-detail") || l.contains("sous detail")) {
             return SOUS_DETAIL;
         }
@@ -185,7 +190,7 @@ public class FormulairesEnLigne {
         if (l.contains("conformite") || l.contains("specifications techniques") || l.contains("fiche technique proposee")) {
             return travaux ? null : CONFORMITE;
         }
-        if (l.contains("calendrier") || l.contains("delai de livraison") || l.contains("planning de livraison")) {
+        if (l.contains("calendrier") || l.contains("delai de livraison")) {
             return travaux ? null : CALENDRIER;
         }
         if (!travaux) {
@@ -208,6 +213,24 @@ public class FormulairesEnLigne {
         return null;
     }
 
+
+    /**
+     * ⚠️ 2026-10-05 (recette du lot 5, §B5) — les documents remplis qu'une offre porte : {@code BORDEREAU} (bordereau ou DQE),
+     * {@code CONFORMITE}, {@code CAPACITES} — ceux que {@link #pdf} sait produire pour elle.
+     */
+    public static List<String> parties(JsonNode f) {
+        List<String> out = new ArrayList<>();
+        if (f.path("bordereau").isArray() && !f.path("bordereau").isEmpty()) {
+            out.add(BORDEREAU);
+        }
+        if (f.path("conformite").isArray() && !f.path("conformite").isEmpty()) {
+            out.add(CONFORMITE);
+        }
+        if (f.path("capacites").isObject() && !f.path("capacites").isEmpty()) {
+            out.add(CAPACITES);
+        }
+        return out;
+    }
     /** La fiche validée en vigueur a-t-elle un besoin (dépôt par formulaires) ? */
     boolean formulaires(Long idDmc, Integer idFiche, String categorie) {
         return !CategorieDao.PRESTATIONS_INTELLECTUELLES.name().equals(categorie) && !besoin.lister(idFiche).isEmpty();

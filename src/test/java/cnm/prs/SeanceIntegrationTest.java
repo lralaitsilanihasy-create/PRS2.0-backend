@@ -544,6 +544,16 @@ class SeanceIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(JsonPath.<String>read(lecture, "$.offres[0].integrite")).isEqualTo("INTACTE");
         assertThat(JsonPath.<Boolean>read(lecture, "$.offres[1].formulaires")).isFalse();
         assertThat(JsonPath.<Object>read(lecture, "$.offres[1].totaux")).isNull();
+        // §B5 — les documents remplis que l'offre porte ; une offre ouverte avant la livraison les relit dans son clair.
+        assertThat(JsonPath.<List<String>>read(lecture, "$.offres[0].partiesFormulaires")).containsExactly("BORDEREAU", "CONFORMITE");
+        assertThat(JsonPath.<Object>read(lecture, "$.offres[1].partiesFormulaires")).isNull();
+        Offre ouverteAvant = offreRepository.findById(offreA).orElseThrow();
+        ouverteAvant.setLecture(ouverteAvant.getLecture().replaceAll("\"parties\":\\[[^\\]]*\\],?", ""));
+        offreRepository.save(ouverteAvant);
+        assertThat(ouverteAvant.getLecture()).doesNotContain("parties");
+        mvc.perform(get(base + "/lecture").header("Authorization", tokenPrmp))
+                .andExpect(jsonPath("$.offres[0].partiesFormulaires[0]").value("BORDEREAU"))
+                .andExpect(jsonPath("$.offres[0].partiesFormulaires[1]").value("CONFORMITE"));
         assertThat(seanceJournal.findByIdDmcOrderByDateAscIdAsc(idDmc)).anyMatch(j -> "OUVERTURE_OFFRE".equals(j.getAction())
                 && j.getDetail().contains("formulaires : 3 alerte(s)")).noneMatch(j -> j.getDetail() != null && j.getDetail().contains("2450000"));
 
