@@ -6869,6 +6869,81 @@ lui faut un dépositaire **avec adresse** (le `PUT` l'exige), qui publie sa clé
 `GESTE_DU_DEPOSITAIRE`). Un dépositaire peut aussi **remplacer** une clé de l'ancien geste (`PUT …/cles/secours`) : elle passe au
 nouveau.
 
+### L'offre saisie dans des formulaires — lot 5 ⚠️ 2026-10-05
+
+Demande front `demande-backend-2026-10-05-formulaires-en-ligne.md` (soumission en ligne, lot 5 ; manifeste **format 3**). Aucune
+migration, aucune dépendance ajoutée : le détail des formulaires vit dans le contenu déchiffré (relu à la demande, purgé avec lui, V70) ;
+seuls les **totaux recalculés et les alertes** sont gardés avec la lecture de l'offre. Prestations intellectuelles : hors périmètre
+(dépôt par pièces seules).
+
+| Méthode | URL | Corps | Réponse | Statuts | Accès |
+|---|---|---|---|---|---|
+| GET | /api/procedures-en-ligne/{idDmc}/besoin | — | `BesoinEnLigneDto` | 200, 401, 403, 404 | `CANDIDAT` connecté |
+| GET | /api/procedures-en-ligne/{idDmc}/pieces | — | `PieceAttendue[]` (+ `formulaire`) | 200, 404 | public |
+| GET | /api/fiches-marche/{idDmc}/seance/offres/{idOffre}/formulaires | — | `{ idOffre, numero, lot, formulaires, besoin }` | 200, 403 `PIECE_RESERVEE_CAO`, 404, 409 | membres de la CAO |
+| GET | /api/fiches-marche/{idDmc}/seance/offres/{idOffre}/formulaires/{BORDEREAU\|DQE\|CONFORMITE\|CAPACITES}.pdf | — | le PDF rempli | 200, 400 `FORMULAIRE_INCONNU`, 403, 404, 409 | membres de la CAO |
+
+**§B1 — Le besoin servi au candidat** (`FormulairesEnLigne.besoin`), lu sur la **version validée en vigueur** (jamais un brouillon),
+404 hors des critères de `GET /api/procedures-en-ligne/{idDmc}` :
+- `BesoinEnLigneDto` = `{ idDmc, categorie, typeMarche, formulaires, tauxTva, monnaie, lots, materiel, personnel }`. `categorie` est le
+  nom servi par `ProcedureEnLigneDto` (`FOURNITURES_SERVICES` · `TRAVAUX` · `PRESTATIONS_INTELLECTUELLES`) ; `formulaires` faux sans
+  besoin (prestations intellectuelles, fiche antérieure à V45) ; `tauxTva` = `FICHE_TAUX_TVA` (null s'il n'est pas fixé).
+- `lots[]` = `{ numero (null si non alloti), intitule, articles, lieuLivraison, delaiExecution, garantieSoumission, qualification }`,
+  valeurs résolues **pour le lot** (`CODE#n`, à défaut `CODE`) :
+  - `articles[]` = `{ idArticle, ordre, designation, unite, quantite, quantiteMin, quantiteMax, caracteristiques[{ idCaracteristique,
+    ordre, libelle, exigence }], numeroPrix, serie, serieLibelle, libelleBordereau, sousDetail, plafond }` (le rédacteur n'est pas servi) ;
+  - `lieuLivraison` = `B09-LL-01` (fournitures) ; `garantieSoumission` = `B05-GS-03` (fournitures) / `B05-GQ-03` (travaux) ;
+  - `delaiExecution` = `{ valeur, unite: 'JOURS', texte }` : fournitures `B06-EO-11` (quantité fixe) ou `B06-EO-12` (à commande), à
+    défaut `B09-DX-01` ; travaux `B09-DL-01`, un **texte** (`valeur` lue s'il commence par un nombre) ;
+  - `qualification` (travaux seulement) = `{ liquiditeMontant (QT-14), liquiditePourcentage (QT-15), chiffreAffaires: { montant (QT-07),
+    annees (QT-17), meilleures (QT-16), domaine (QT-18) }, references: { montant (QT-20), nombre (QT-19), annees (QT-12), cumul } }`.
+    Par lot : `QT-14`, `QT-15`, `QT-20` (les autres valent pour toute la fiche, la résolution par lot y retombe d'elle-même).
+- `materiel` et `personnel` : les listes de V60 (`MaterielExigeDto`, `PersonnelExigeDto`), travaux seulement — une liste par fiche,
+  `parLot` = vaut pour chaque lot.
+
+**§B1.3 — Les pièces remplies, plus jointes.** Quand la fiche a un besoin, `PieceAttendue` gagne **`formulaire`** et une pièce marquée
+n'est plus exigée en fichier (`obligatoire = false` ; une pièce justificative peut toujours être jointe). La correspondance se fait sur
+le **libellé** de la pièce de la fiche (bloc B14, libre) — les codes `PIECE-<id>` ne disent rien de leur contenu :
+- fournitures : « bordereau » / « BP » → `BORDEREAU` ; « conformité », « spécifications techniques » → `CONFORMITE` ; « calendrier »,
+  « délai de livraison » → `CALENDRIER` ;
+- travaux : « bordereau », « BPU », « détail quantitatif », « DQE » → `DQE` ; « sous-détail » → `SOUS_DETAIL` ; « coefficient K1 » →
+  `K1` ; « chiffre d'affaires », « capacité financière », « liquidité », « ligne de crédit », « marchés similaires », « références » →
+  `CAPACITES` ; « personnel » → `PERSONNEL` ; « matériel » → `MATERIEL`.
+- `AE`, `RECU-DAO`, `GARANTIE` restent des pièces (`formulaire = null`).
+
+**§B2 — Le manifeste format 3** : la partie `formulaires` (`bordereau`, `conformite`, `totaux`, et au lot 5b `k1`, `sousDetails`,
+`capacites`, `personnel`, `materiel`) est lue à l'ouverture ; un champ inconnu est ignoré ; **les formats 1 et 2 restent lus**.
+
+**§B3 — L'ouverture.** Pour une offre au format 3, à son déchiffrement (`FormulairesEnLigne.analyser`) :
+- **les totaux sont recalculés** depuis le bordereau et les quantités de la fiche du lot de l'offre : `ht` = Σ prix unitaire ×
+  quantité (`quantiteMax` à commande, `quantite` sinon — H1, H2 : le contrat-cadre sur sa quantité indicative), `tva` = `ht` ×
+  `FICHE_TAUX_TVA` arrondi à l'ariary, `ttc` ; à commande, `htMin` / `ttcMin` sur `quantiteMin` ; aux travaux, `parSerie` ;
+- **des alertes, jamais un refus** :
+  - `TOTAL_DIVERGENT` (les `totaux` déclarés), `AE_DIVERGENT` (`acteEngagement.montantHt` / `montantTtc`) — un écart de plus de 1 Ar
+    par ligne du lot ;
+  - `PRIX_MANQUANT` ; `LETTRES_DIVERGENTES` (le prix en lettres relu, à 1 Ar près ; un texte que le serveur ne lit pas ne lève rien) ;
+    `PLAFOND_DEPASSE` (article à `plafond` : son montant au-delà de n % du total HT) ; `NON_CONFORME` (une caractéristique
+    `conforme = false`) ; `LIVRAISON_HORS_DELAI` (une `dateLivraison` au-delà du délai de la fiche **compté depuis l'ouverture des
+    plis** — la date de notification n'est pas connue) ;
+  - lot 5b, quand le manifeste porte la partie : `CA_INSUFFISANT` (moyenne des `meilleures` années parmi les `annees` dernières,
+    contre `QT-07`), `LIQUIDITE_INSUFFISANTE` (contre le plus exigeant de `QT-14` et de `QT-15` % du TTC recalculé),
+    `REFERENCES_INSUFFISANTES` (cumul des `nombre` meilleurs marchés de la période `QT-12`, contre `QT-20`), `PERSONNEL_INCOMPLET`
+    (nombre par poste, expérience ≥ celle exigée), `MATERIEL_INCOMPLET` (nombre, et en propre ≥ le minimum), `SOUS_DETAIL_INCOHERENT`
+    (`prixCalcule` à plus de 1 % du prix du bordereau) ;
+  - une analyse impossible lève `FORMULAIRES_ILLISIBLES` sans rendre l'offre illisible.
+- `LectureDto.offres[]` gagne **`formulaires`** (booléen) et **`totaux`** (les recalculés, `null` sans formulaires) ; les alertes
+  rejoignent `alertes` (absentes du PV publié, comme les autres).
+- **Le détail** (`…/formulaires`) : la partie `formulaires` telle que scellée et le besoin du lot ; **le PDF rempli** produit **à la
+  volée** (Q2) : `BORDEREAU` (aux travaux, `DQE` est le même document), `CONFORMITE`, `CAPACITES` ; 404 si l'offre ne porte pas la
+  partie, si elle a été déposée par pièces, ou après la purge de conservation.
+- **Le PV** imprime pour chaque offre au format 3 « Bordereau (totaux recalculés) : HT … ; TVA … ; TTC … MGA », et à commande le
+  minimum ; ses alertes dans la version complète.
+- **Journal** : `OUVERTURE_OFFRE` mentionne « formulaires : n alerte(s) » ; **aucun prix** au journal.
+- Correctif au passage : l'alerte `GARANTIE_INSUFFISANTE` (V70) lit aussi le minimum des travaux, `B05-GQ-03[#n]`.
+
+**Hypothèses de la demande** : H1 retenue (AE au maximum, minimum lu en plus) ; H2 retenue ; H3 retenue (les taux du K1 restent au
+front ; le serveur ne recalcule pas le K1) ; H4, H5 retenues ; H6 retenue (aucun paramètre de fiche ajouté).
+
 ---
 
 ## Marchés — dates prévisionnelles

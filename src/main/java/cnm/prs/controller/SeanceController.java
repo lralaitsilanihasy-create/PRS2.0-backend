@@ -81,6 +81,19 @@ public class SeanceController {
                 .contentType(MediaType.APPLICATION_OCTET_STREAM).body(service.piece(idDmc, idOffre, nomFichier));
     }
 
+    /** ⚠️ 2026-10-05 (lot 5, §B3.4) — le détail des formulaires d'une offre : la commission seule (403 {@code PIECE_RESERVEE_CAO}). */
+    @GetMapping("/offres/{idOffre}/formulaires")
+    public SeanceDto.Formulaires formulaires(@PathVariable Long idDmc, @PathVariable String idOffre) {
+        return service.formulairesOffre(idDmc, idOffre);
+    }
+
+    /** ⚠️ Lot 5 — le formulaire rempli en PDF : {@code BORDEREAU.pdf}, {@code DQE.pdf}, {@code CONFORMITE.pdf}, {@code CAPACITES.pdf}. */
+    @GetMapping("/offres/{idOffre}/formulaires/{type}.pdf")
+    public ResponseEntity<byte[]> formulairePdf(@PathVariable Long idDmc, @PathVariable String idOffre, @PathVariable String type) {
+        return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION, Telechargements.disposition(type.toLowerCase() + "-" + idOffre + ".pdf"))
+                .contentType(MediaType.APPLICATION_PDF).body(service.formulairePdf(idDmc, idOffre, type));
+    }
+
     @PostMapping("/pv")
     public SeanceDto produirePv(@PathVariable Long idDmc, @RequestBody(required = false) SeanceDto.Observations corps) {
         return service.produirePv(idDmc, corps);

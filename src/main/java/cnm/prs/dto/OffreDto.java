@@ -39,9 +39,15 @@ public record OffreDto(String idOffre, Long idDmc, String reference, String obje
     public record Horloge(String maintenant, String fuseau) {
     }
 
-    /** Une pièce attendue de l'offre ({@code GET /api/procedures-en-ligne/{idDmc}/pieces}) ; {@code code} est la clé du manifeste. */
+    /**
+     * Une pièce attendue de l'offre ({@code GET /api/procedures-en-ligne/{idDmc}/pieces}) ; {@code code} est la clé du manifeste.
+     * ⚠️ 2026-10-05 (lot 5, §B1.3) — {@code formulaire} : {@code null}, ou le formulaire qui la remplace quand la fiche a un besoin
+     * ({@code BORDEREAU}, {@code CONFORMITE}, {@code CALENDRIER}, {@code DQE}, {@code SOUS_DETAIL}, {@code K1}, {@code CAPACITES},
+     * {@code PERSONNEL}, {@code MATERIEL}) ; elle n'est alors plus exigée en fichier ({@code obligatoire = false}), une pièce
+     * justificative peut toujours être jointe.
+     */
     public record PieceAttendue(String code, String rubrique, String numero, String libelle, String forme, Integer ancienneteMaxMois,
-            boolean parLot, String modele, boolean obligatoire) {
+            boolean parLot, String modele, boolean obligatoire, String formulaire) {
     }
 
     /**

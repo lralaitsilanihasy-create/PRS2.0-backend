@@ -88,11 +88,14 @@ public record SeanceDto(Long idDmc, String etat, LocalDateTime heureOuverture, L
 
     /**
      * Une offre lue : {@code integrite} ∈ {@code INTACTE} · {@code ALTEREE} · {@code LECTURE_IMPOSSIBLE} ; {@code groupement},
-     * {@code acteEngagement} et {@code garantie} sont repris du manifeste tels quels.
+     * {@code acteEngagement} et {@code garantie} sont repris du manifeste tels quels. ⚠️ 2026-10-05 (lot 5, §B3) — {@code formulaires} :
+     * l'offre porte des formulaires (manifeste format 3) ; {@code totaux} : recalculés à l'ouverture depuis le bordereau et les
+     * quantités de la fiche ({@code ht}, {@code tva}, {@code ttc}, et {@code htMin} / {@code ttcMin} à commande, {@code parSerie}
+     * aux travaux), {@code null} sans formulaires ; leurs alertes rejoignent {@code alertes}.
      */
     public record OffreLue(Integer numero, String idOffre, Integer lot, String etat, String integrite, String motif, EntrepriseLue entreprise,
             Object groupement, Map<String, Object> acteEngagement, Garantie garantie, List<PieceLue> pieces, List<String> piecesManquantes,
-            List<Alerte> alertes) {
+            List<Alerte> alertes, boolean formulaires, Map<String, Object> totaux) {
     }
 
     public record EntrepriseLue(String nif, String raisonSociale, EntrepriseCandidatDto.Verification verification,
@@ -111,6 +114,13 @@ public record SeanceDto(Long idDmc, String etat, LocalDateTime heureOuverture, L
 
     /** {@code type} ∈ {@code RAPPROCHEMENT} · {@code EXCLUSION} ; une alerte, jamais un refus. */
     public record Alerte(String type, String message) {
+    }
+
+    /**
+     * ⚠️ 2026-10-05 (lot 5, §B3.4) — {@code GET …/seance/offres/{idOffre}/formulaires} : la partie {@code formulaires} du manifeste telle
+     * que scellée, et le besoin du lot (libellés, quantités) pour que l'écran n'ait pas à faire un second appel.
+     */
+    public record Formulaires(String idOffre, Integer numero, Integer lot, Object formulaires, BesoinEnLigneDto.Lot besoin) {
     }
 
     public record NonOuverte(Integer numero, String entreprise, String etat, String motif) {

@@ -28,9 +28,11 @@ public class ProceduresEnLigneController {
     private final ProceduresEnLigneService service;
     private final cnm.prs.service.CeremonieService ceremonie;
     private final cnm.prs.service.SeanceService seance;
+    private final cnm.prs.service.FormulairesEnLigne formulaires;
 
     public ProceduresEnLigneController(ProceduresEnLigneService service, cnm.prs.service.CeremonieService ceremonie,
-            cnm.prs.service.SeanceService seance) {
+            cnm.prs.service.SeanceService seance, cnm.prs.service.FormulairesEnLigne formulaires) {
+        this.formulaires = formulaires;
         this.seance = seance;
         this.service = service;
         this.ceremonie = ceremonie;
@@ -43,6 +45,15 @@ public class ProceduresEnLigneController {
     @GetMapping("/{idDmc}/pieces")
     public List<cnm.prs.dto.OffreDto.PieceAttendue> pieces(@PathVariable Long idDmc) {   // ⚠️ lot 3, §B2 : public, 404 hors critères
         return service.piecesAttendues(idDmc);
+    }
+
+    /**
+     * ⚠️ 2026-10-05 (lot 5, §B1) — le besoin servi au candidat connecté ({@code CANDIDAT}, règle de {@code SecurityConfig}) : de quoi
+     * pré-remplir ses formulaires ; {@code formulaires = false} sans besoin ; 404 hors critères.
+     */
+    @GetMapping("/{idDmc}/besoin")
+    public cnm.prs.dto.BesoinEnLigneDto besoin(@PathVariable Long idDmc) {
+        return formulaires.besoin(idDmc);
     }
 
     /** ⚠️ Lot 4 (§B5) — le PV d'ouverture publié ({@code B04-OP-13 = OUI}), sans les alertes ni la vérification des NIF ; 404 sinon. */

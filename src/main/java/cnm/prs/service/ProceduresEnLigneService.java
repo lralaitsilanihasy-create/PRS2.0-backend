@@ -71,11 +71,14 @@ public class ProceduresEnLigneService {
     private final CompteCandidatRepository compteRepository;
     private final EntrepriseRepository entrepriseRepository;
     private final PiecesFiche piecesFiche;
+    /** ⚠️ 2026-10-05 (lot 5, §B1.3) — le besoin décide si l'offre se dépose par formulaires. */
+    private final BesoinFiche besoin;
 
     public ProceduresEnLigneService(FicheMarcheRepository ficheRepository, FicheMarcheService fiches,
             DocumentsFicheMarcheService documents, DocumentFicheMarcheRepository documentRepository, LotRepository lotRepository,
             RetraitDaoRepository retraitRepository, CompteCandidatRepository compteRepository,
-            EntrepriseRepository entrepriseRepository, PiecesFiche piecesFiche) {
+            EntrepriseRepository entrepriseRepository, PiecesFiche piecesFiche, BesoinFiche besoin) {
+        this.besoin = besoin;
         this.piecesFiche = piecesFiche;
         this.ficheRepository = ficheRepository;
         this.fiches = fiches;
@@ -273,25 +276,35 @@ public class ProceduresEnLigneService {
         boolean alloti = l.dto().lots().size() > 1;
         List<cnm.prs.dto.OffreDto.PieceAttendue> out = new ArrayList<>();
         out.add(new cnm.prs.dto.OffreDto.PieceAttendue("AE", PiecesFiche.OFFRE, null, "Acte d'engagement signé", "Original signé",
-                null, alloti, null, true));
+                null, alloti, null, true, null));
         out.add(new cnm.prs.dto.OffreDto.PieceAttendue("RECU-DAO", PiecesFiche.OFFRE, null, "Reçu du paiement des frais de dossier",
-                "Copie", null, false, null, true));
+                "Copie", null, false, null, true, null));
         Map<String, Object> cadrage = l.etat().etat().getCadrage();
         if (cadrage != null && "OUI".equalsIgnoreCase(String.valueOf(cadrage.get("garantieSoumission")))) {
             out.add(new cnm.prs.dto.OffreDto.PieceAttendue("GARANTIE", PiecesFiche.OFFRE, null,
-                    "Garantie de soumission (document et code de vérification)", "Original", null, alloti, null, true));
+                    "Garantie de soumission (document et code de vérification)", "Original", null, alloti, null, true, null));
         }
+        // ⚠️ 2026-10-05 (lot 5, §B1.3) — avec un besoin, les pièces que remplit un formulaire ne sont plus exigées en fichier.
+        String categorie = l.etat().categorie();
+        boolean travaux = cnm.prs.enums.CategorieDao.TRAVAUX.name().equals(categorie);
+        boolean formulaires = !cnm.prs.enums.CategorieDao.PRESTATIONS_INTELLECTUELLES.name().equals(categorie)
+                && !besoin.lister(l.fiche().getIdFiche()).isEmpty();
         List<cnm.prs.dto.PieceExigeeDto> exigees = piecesFiche.pieces(l.fiche().getIdFiche());
         for (String rubrique : List.of(PiecesFiche.OFFRE, PiecesFiche.ADMINISTRATIVE)) {
             for (cnm.prs.dto.PieceExigeeDto p : exigees) {
                 if (rubrique.equals(p.getRubrique())) {
                     out.add(new cnm.prs.dto.OffreDto.PieceAttendue("PIECE-" + p.getIdPiece(), p.getRubrique(), p.getNumero(),
                             p.getLibelle(), p.getForme(), p.getAncienneteMaxMois(), Boolean.TRUE.equals(p.getParLot()) && alloti,
-                            p.getModele(), true));
+                            p.getModele(), formulaire(p.getLibelle(), travaux, formulaires) == null,
+                            formulaire(p.getLibelle(), travaux, formulaires)));
                 }
             }
         }
         return out;
+    }
+
+    private static String formulaire(String libelle, boolean travaux, boolean formulaires) {
+        return formulaires ? FormulairesEnLigne.formulaire(libelle, travaux) : null;
     }
 
     /**

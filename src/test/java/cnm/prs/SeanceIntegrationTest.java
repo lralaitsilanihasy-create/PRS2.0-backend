@@ -495,6 +495,81 @@ class SeanceIntegrationTest extends CnmIntegrationTestSupport {
                 && j.getDetail().contains("apportée par le dépositaire"));
     }
 
+    @Test
+    @DisplayName("Lot 5 : le besoin servi au candidat connecté ; une offre au format 3 s'ouvre avec ses totaux recalculés et ses alertes "
+            + "(AE_DIVERGENT, LETTRES_DIVERGENTES, NON_CONFORME — jamais un refus) ; détail et PDF remplis pour la commission seule ; "
+            + "totaux au PV ; les formats 1 et 2 restent lus")
+    void formulaires() throws Exception {
+        // §B1 — le besoin : un candidat connecté ; ni anonyme ni compte interne.
+        mvc.perform(get("/api/procedures-en-ligne/" + idDmc + "/besoin")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/procedures-en-ligne/" + idDmc + "/besoin").header("Authorization", tokenVer)).andExpect(status().isForbidden());
+        mvc.perform(get("/api/procedures-en-ligne/999999/besoin").header("Authorization", jetonA)).andExpect(status().isNotFound());
+        String besoin = mvc.perform(get("/api/procedures-en-ligne/" + idDmc + "/besoin").header("Authorization", jetonA)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.formulaires").value(true)).andExpect(jsonPath("$.categorie").value("FOURNITURES_SERVICES"))
+                .andExpect(jsonPath("$.typeMarche").value("QUANTITE_FIXE")).andExpect(jsonPath("$.tauxTva").value(20))
+                .andExpect(jsonPath("$.monnaie").value("MGA")).andExpect(jsonPath("$.lots.length()").value(1))
+                .andExpect(jsonPath("$.lots[0].garantieSoumission").value(1600000))
+                .andExpect(jsonPath("$.lots[0].articles[0].designation").value("Article de test"))
+                .andExpect(jsonPath("$.lots[0].qualification").isEmpty()).andExpect(jsonPath("$.materiel.length()").value(0))
+                .andReturn().getResponse().getContentAsString();
+        int idArticle = JsonPath.read(besoin, "$.lots[0].articles[0].idArticle");
+        int idCaracteristique = JsonPath.read(besoin, "$.lots[0].articles[0].caracteristiques[0].idCaracteristique");
+        assertThat(JsonPath.<List<Object>>read(mvc.perform(get("/api/procedures-en-ligne/" + idDmc + "/pieces")).andReturn().getResponse()
+                .getContentAsString(), "$[?(@.code=='AE')].formulaire")).containsOnlyNulls();
+
+        // §B2 — une offre au format 3 : 1 article × 2 450 000 HT, TVA 20 % ; l'AE déclare 12 500 000 (divergent), les lettres aussi.
+        String formulaires = "{\"bordereau\":[{\"idArticle\":" + idArticle + ",\"prixUnitaireHt\":2450000,"
+                + "\"prixEnLettres\":\"deux millions quatre cent mille\",\"dateLivraison\":null}],"
+                + "\"conformite\":[{\"idArticle\":" + idArticle + ",\"marque\":\"Dell\",\"modele\":\"Latitude\",\"caracteristiques\":["
+                + "{\"idCaracteristique\":" + idCaracteristique + ",\"proposee\":\"4 Go\",\"conforme\":false}]}],"
+                + "\"totaux\":{\"ht\":2450000,\"tva\":490000,\"ttc\":2940000,\"htMin\":null,\"ttcMin\":null,\"parSerie\":null}}";
+        String offreA = deposer(jetonA, "1111222333", "BTP Alpha", "12500000", "1600000", formulaires);
+        String offreB = deposer(jetonB, "4444555666", "BTP Beta", "11900000");   // format 1 : lu comme avant
+        changer("B04-LR-03", aujourdhui.minusDays(1).toString());
+        changer("B04-OP-02", aujourdhui.minusDays(1).toString());
+        changer("B04-OP-03", "09:00");
+        mvc.perform(post(base + "/ouvrir").header("Authorization", tokenVer)).andExpect(status().isOk());
+        for (String jeton : List.of(jetonM1, jetonM2)) {
+            String parts = mvc.perform(get(base + "/mes-parts").header("Authorization", jeton)).andReturn().getResponse().getContentAsString();
+            mvc.perform(post(base + "/parts").header("Authorization", jeton).contentType(JSON).content(apport(parts, null))).andExpect(status().isOk());
+        }
+        String lecture = mvc.perform(get(base + "/lecture").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<Boolean>read(lecture, "$.offres[0].formulaires")).isTrue();
+        assertThat(JsonPath.<Number>read(lecture, "$.offres[0].totaux.ht").longValue()).isEqualTo(2_450_000L);
+        assertThat(JsonPath.<Number>read(lecture, "$.offres[0].totaux.tva").longValue()).isEqualTo(490_000L);
+        assertThat(JsonPath.<Number>read(lecture, "$.offres[0].totaux.ttc").longValue()).isEqualTo(2_940_000L);
+        assertThat(JsonPath.<List<String>>read(lecture, "$.offres[0].alertes[*].type"))
+                .contains("AE_DIVERGENT", "LETTRES_DIVERGENTES", "NON_CONFORME").doesNotContain("TOTAL_DIVERGENT", "PRIX_MANQUANT");
+        assertThat(JsonPath.<String>read(lecture, "$.offres[0].integrite")).isEqualTo("INTACTE");
+        assertThat(JsonPath.<Boolean>read(lecture, "$.offres[1].formulaires")).isFalse();
+        assertThat(JsonPath.<Object>read(lecture, "$.offres[1].totaux")).isNull();
+        assertThat(seanceJournal.findByIdDmcOrderByDateAscIdAsc(idDmc)).anyMatch(j -> "OUVERTURE_OFFRE".equals(j.getAction())
+                && j.getDetail().contains("formulaires : 3 alerte(s)")).noneMatch(j -> j.getDetail() != null && j.getDetail().contains("2450000"));
+
+        // §B3.4 — le détail et le PDF rempli : la commission seule.
+        String f = base + "/offres/" + offreA + "/formulaires";
+        mvc.perform(get(f).header("Authorization", tokenPrmp)).andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("PIECE_RESERVEE_CAO"));
+        mvc.perform(get(f).header("Authorization", jetonM1)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.formulaires.bordereau[0].prixUnitaireHt").value(2450000))
+                .andExpect(jsonPath("$.besoin.articles[0].designation").value("Article de test"));
+        mvc.perform(get(base + "/offres/" + offreB + "/formulaires").header("Authorization", jetonM1)).andExpect(status().isNotFound());
+        byte[] bp = mvc.perform(get(f + "/BORDEREAU.pdf").header("Authorization", jetonM1)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray();
+        assertThat(texteDuPdf(bp)).contains("BORDEREAU DES PRIX", "Article de test", "2 450 000");
+        assertThat(texteDuPdf(mvc.perform(get(f + "/CONFORMITE.pdf").header("Authorization", jetonM1)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray())).contains("Dell", "4 Go", "NON");
+        mvc.perform(get(f + "/CAPACITES.pdf").header("Authorization", jetonM1)).andExpect(status().isNotFound());
+        mvc.perform(get(f + "/AUTRE.pdf").header("Authorization", jetonM1)).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("FORMULAIRE_INCONNU"));
+        mvc.perform(get(f + "/BORDEREAU.pdf").header("Authorization", tokenPrmp)).andExpect(status().isForbidden());
+
+        // §B3.5 — le PV : les totaux recalculés, et les alertes dans la version complète.
+        mvc.perform(post(base + "/pv").header("Authorization", tokenVer).contentType(JSON).content("{}")).andExpect(status().isOk());
+        String pv = texteDuPdf(mvc.perform(get(base + "/pv").header("Authorization", jetonM1)).andReturn().getResponse().getContentAsByteArray());
+        assertThat(pv).contains("Bordereau (totaux recalculés) : HT 2 450 000 ; TVA 490 000 ; TTC 2 940 000 MGA", "AE_DIVERGENT");
+    }
+
     // ------------------------------------------------------------------ le navigateur, simulé
 
     /** Scelle et dépose une offre comme le navigateur : ZIP + manifeste, K, morceau AES-GCM, parts Shamir chiffrées RSA-OAEP. */
@@ -504,15 +579,22 @@ class SeanceIntegrationTest extends CnmIntegrationTestSupport {
 
     /** {@code montantGarantie} non nul : un manifeste v2 (⚠️ §B3), la garantie avec son montant, sa monnaie et son émetteur. */
     private String deposer(String jeton, String nif, String raison, String montantHt, String montantGarantie) throws Exception {
+        return deposer(jeton, nif, raison, montantHt, montantGarantie, null);
+    }
+
+    /** {@code formulaires} non nul : un manifeste v3 (⚠️ lot 5), la partie {@code formulaires} telle quelle (JSON). */
+    private String deposer(String jeton, String nif, String raison, String montantHt, String montantGarantie, String formulaires)
+            throws Exception {
         String idOffre = UUID.randomUUID().toString();
         byte[] aePdf = ("%PDF-1.4 acte d'engagement de " + raison).getBytes(StandardCharsets.UTF_8);
         byte[] garantie = "%PDF-1.4 garantie".getBytes(StandardCharsets.UTF_8);
-        String manifeste = "{\"version\":" + (montantGarantie == null ? 1 : 2) + ",\"idDmc\":" + idDmc + ",\"lot\":null,\"entreprise\":{\"nif\":\"" + nif + "\",\"raisonSociale\":\"" + raison
+        String manifeste = "{\"version\":" + (formulaires != null ? 3 : montantGarantie == null ? 1 : 2) + ",\"idDmc\":" + idDmc + ",\"lot\":null,\"entreprise\":{\"nif\":\"" + nif + "\",\"raisonSociale\":\"" + raison
                 + "\"},\"groupement\":null,\"acteEngagement\":{\"montantHt\":\"" + montantHt + "\",\"montantTtc\":\"15000000\",\"monnaie\":\"MGA\","
                 + "\"delai\":90,\"delaiUnite\":\"JOURS\",\"validiteJours\":90,\"rabais\":null},\"pieces\":[{\"code\":\"AE\",\"nomFichier\":"
                 + "\"acte-engagement.pdf\",\"taille\":" + aePdf.length + ",\"sha256\":\"" + sha(aePdf) + "\"}],\"garantie\":{\"codeVerification\":"
                 + "\"GAR-0001\",\"nomFichier\":\"garantie.pdf\"" + (montantGarantie == null ? "" : ",\"montant\":" + montantGarantie
-                + ",\"monnaie\":\"MGA\",\"emetteur\":\"BNI Madagascar\"") + "},\"dateScellement\":\"" + LocalDateTime.now() + "\"}";
+                + ",\"monnaie\":\"MGA\",\"emetteur\":\"BNI Madagascar\"") + "}" + (formulaires == null ? "" : ",\"formulaires\":" + formulaires)
+                + ",\"dateScellement\":\"" + LocalDateTime.now() + "\"}";
         ByteArrayOutputStream z = new ByteArrayOutputStream();
         try (ZipOutputStream zip = new ZipOutputStream(z)) {
             for (Map.Entry<String, byte[]> e : Map.of("manifeste.json", manifeste.getBytes(StandardCharsets.UTF_8), "acte-engagement.pdf", aePdf,

@@ -97,6 +97,8 @@ public class SeanceService {
     private final SeanceApportRepository apports;
     private final SeanceJournalRepository journal;
     private final SeanceSignatureRepository signatures;
+    /** ⚠️ 2026-10-05 (lot 5) — les formulaires de l'offre (format 3), analysés à l'ouverture. */
+    private final FormulairesEnLigne formulaires;
     private final PartsEnSeance memoire;
     private final OffreRepository offres;
     private final StockageOffres stockage;
@@ -123,7 +125,8 @@ public class SeanceService {
             ProceduresEnLigneService procedures, ExclusionArmpService exclusions, EntrepriseCandidatService entreprises,
             RapprochementCandidatService rapprochements, CompteCandidatRepository candidats, NotificationService notifications,
             GenerateurDocumentsFiche generateur, DossierMecRepository dmcRepository, ObjectMapper mapper, Clock horloge,
-            SeanceSignatureRepository signatures) {
+            SeanceSignatureRepository signatures, FormulairesEnLigne formulaires) {
+        this.formulaires = formulaires;
         this.signatures = signatures;
         this.seances = seances;
         this.apports = apports;
@@ -436,13 +439,34 @@ public class SeanceService {
                 pieces.add(l);
             }
             lecture.put("pieces", pieces);
+            // ⚠️ 2026-10-05 (lot 5, §B3) — le format 3 : les formulaires analysés (totaux recalculés, alertes) ; le détail ligne à
+            // ligne reste dans le contenu déchiffré, jamais en base ni au journal. Une analyse impossible n'empêche pas la lecture.
+            JsonNode f = m.path("formulaires");
+            int nbAlertes = 0;
+            if (f.isObject()) {
+                Map<String, Object> lus = new LinkedHashMap<>();
+                try {
+                    FormulairesEnLigne.Analyse a = formulaires.analyser(o.getIdDmc(), o.getLot(), f, m.path("acteEngagement"),
+                            maintenant().toLocalDate());
+                    lus.put("totaux", a.totaux());
+                    lus.put("alertes", a.alertes());
+                    nbAlertes = a.alertes().size();
+                } catch (RuntimeException e) {
+                    lus.put("totaux", Map.of());
+                    lus.put("alertes", List.of(new SeanceDto.Alerte("FORMULAIRES_ILLISIBLES",
+                            "Les formulaires de l'offre n'ont pas pu être analysés : la commission les lit dans le détail.")));
+                    nbAlertes = 1;
+                }
+                lecture.put("formulaires", lus);
+            }
             stockage.ecrireClair(o.getIdOffre(), clair);
             o.setIntegrite(integrite);
             o.setLecture(mapper.writeValueAsString(lecture));
             o.setMotifLecture(ALTEREE.equals(integrite) ? "l'empreinte du conteneur diffère de celle de l'accusé" : null);
             o.setOuverteLe(maintenant());
             offres.save(o);
-            tracer(o.getIdDmc(), "OUVERTURE_OFFRE", "offre n° " + o.getNumero() + " : " + integrite + ", " + pieces.size() + " pièce(s)");
+            tracer(o.getIdDmc(), "OUVERTURE_OFFRE", "offre n° " + o.getNumero() + " : " + integrite + ", " + pieces.size() + " pièce(s)"
+                    + (f.isObject() ? ", formulaires : " + nbAlertes + " alerte(s)" : ""));
         } catch (GeneralSecurityException e) {
             marquer(o, LECTURE_IMPOSSIBLE, ALTEREE.equals(integrite) ? "conteneur altéré : le déchiffrement est refusé"
                     : "le déchiffrement est refusé (clé ou morceau)");
@@ -515,8 +539,16 @@ public class SeanceService {
         Map<String, String> libelles = new LinkedHashMap<>();
         attendues.forEach(a -> libelles.put(a.code(), a.libelle()));
         Map<String, String> valeurs = valeursFiche(idDmc);
-        java.util.function.Function<Integer, BigDecimal> minimums = lot -> montant(lot != null && valeurs.containsKey(GARANTIE_MINIMUM + "#" + lot)
-                ? valeurs.get(GARANTIE_MINIMUM + "#" + lot) : valeurs.get(GARANTIE_MINIMUM));
+        // ⚠️ 2026-10-05 — le minimum des travaux est B05-GQ-03 (B05-GS-03 aux fournitures) : il n'était pas lu.
+        java.util.function.Function<Integer, BigDecimal> minimums = lot -> {
+            for (String code : List.of(GARANTIE_MINIMUM, GARANTIE_MINIMUM_TRAVAUX)) {
+                String x = lot != null && valeurs.containsKey(code + "#" + lot) ? valeurs.get(code + "#" + lot) : valeurs.get(code);
+                if (x != null && !x.isBlank()) {
+                    return montant(x);
+                }
+            }
+            return null;
+        };
         List<Offre> toutes = offres.findByIdDmcOrderByNumeroAscDateCreationAsc(idDmc);
         Map<String, Offre> parCandidat = new LinkedHashMap<>();
         toutes.stream().filter(o -> Offre.DEPOSEE.equals(o.getEtat())).forEach(o -> parCandidat.put(o.getIdCandidat(), o));
@@ -583,17 +615,35 @@ public class SeanceService {
                         + " pour un minimum de " + montantLisible(minimum) + " fixé par la fiche" + (o.getLot() == null ? "" : " (lot " + o.getLot() + ")")
                         + "."));
             }
+            // ⚠️ 2026-10-05 (lot 5, §B3) — les formulaires (format 3) : totaux recalculés, alertes de l'analyse à l'ouverture.
+            @SuppressWarnings("unchecked")
+            Map<String, Object> form = (Map<String, Object>) l.get("formulaires");
+            Map<String, Object> totaux = null;
+            if (form != null) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> t = (Map<String, Object>) form.get("totaux");
+                totaux = t;
+                if (complete && form.get("alertes") instanceof List<?> liste) {
+                    for (Object x : liste) {
+                        if (x instanceof Map<?, ?> a) {
+                            alertes.add(new SeanceDto.Alerte(String.valueOf(a.get("type")), String.valueOf(a.get("message"))));
+                        }
+                    }
+                }
+            }
             @SuppressWarnings("unchecked")
             Map<String, Object> ae = (Map<String, Object>) l.get("acteEngagement");
             lues.add(new SeanceDto.OffreLue(o.getNumero(), o.getIdOffre(), o.getLot(), o.getEtat(), o.getIntegrite(), o.getMotifLecture(),
                     new SeanceDto.EntrepriseLue(o.getNif(), o.getRaisonSociale(), e == null ? null : e.verification(), e == null ? null : e.exclusion()),
-                    l.get("groupement"), ae, lue, piecesLues, manquantes, alertes));
+                    l.get("groupement"), ae, lue, piecesLues, manquantes, alertes, form != null, totaux));
         }
         return new SeanceDto.Lecture(lues, nonOuvertes);
     }
 
     /** Le montant minimal de la garantie de soumission ({@code B05-GS-03}, par lot {@code B05-GS-03#n}). */
     static final String GARANTIE_MINIMUM = "B05-GS-03";
+    /** ⚠️ 2026-10-05 — le même minimum aux travaux. */
+    static final String GARANTIE_MINIMUM_TRAVAUX = "B05-GQ-03";
 
     private Map<String, String> valeursFiche(Long idDmc) {
         try {
@@ -629,6 +679,11 @@ public class SeanceService {
         return new java.text.DecimalFormat("#,##0.##", sym).format(m);
     }
 
+    private static String totalLisible(Object v) {
+        BigDecimal m = montant(v);
+        return m == null ? "—" : montantLisible(m);
+    }
+
     private static String critere(String c) {
         return switch (c == null ? "" : c) {
             case "TELEPHONE" -> "téléphone";
@@ -637,6 +692,55 @@ public class SeanceService {
             case "EMAIL" -> "adresse électronique";
             default -> c;
         };
+    }
+
+    /**
+     * ⚠️ 2026-10-05 (lot 5, §B3.4) — le <strong>détail des formulaires</strong> d'une offre (la partie {@code formulaires} du manifeste,
+     * relue dans le contenu déchiffré) avec le besoin de son lot : la commission seule (403 {@code PIECE_RESERVEE_CAO}) ; 404 offre
+     * inconnue, purgée, ou sans formulaires ; 409 séance non déchiffrée.
+     */
+    @Transactional(readOnly = true)
+    public SeanceDto.Formulaires formulairesOffre(Long idDmc, String idOffre) {
+        Offre o = offreOuverte(idDmc, idOffre);
+        JsonNode f = formulairesDe(o);
+        return new SeanceDto.Formulaires(o.getIdOffre(), o.getNumero(), o.getLot(), mapper.convertValue(f, Object.class),
+                formulaires.lot(idDmc, o.getLot()).orElse(null));
+    }
+
+    /** §B3.4 — le formulaire rempli en PDF, produit à la volée (Q2) : {@code BORDEREAU} (ou {@code DQE}), {@code CONFORMITE}, {@code CAPACITES}. */
+    @Transactional(readOnly = true)
+    public byte[] formulairePdf(Long idDmc, String idOffre, String type) {
+        Offre o = offreOuverte(idDmc, idOffre);
+        JsonNode f = formulairesDe(o);
+        ProcedureEnLigneDto p = procedure(idDmc);
+        String entete = (p == null ? "Procédure " + idDmc : p.reference() + " — " + p.objet()) + " ; offre n° " + o.getNumero() + " — "
+                + o.getRaisonSociale() + (o.getLot() == null ? "" : ", lot " + o.getLot());
+        return formulaires.pdf(type, formulaires.lot(idDmc, o.getLot()).orElse(null), f, entete, idDmc);
+    }
+
+    private Offre offreOuverte(Long idDmc, String idOffre) {
+        exigerMembreCao(idDmc);
+        exigerDechiffree(idDmc);
+        return offres.findById(idOffre).filter(x -> idDmc.equals(x.getIdDmc()))
+                .orElseThrow(() -> new ResourceNotFoundException("Offre introuvable : " + idOffre + "."));
+    }
+
+    private JsonNode formulairesDe(Offre o) {
+        byte[] clair = stockage.lireClair(o.getIdOffre());
+        if (clair == null) {
+            throw new ResourceNotFoundException(o.getPurgeeLe() != null ? "Le contenu de l'offre " + o.getIdOffre() + " a été purgé le "
+                    + o.getPurgeeLe().format(JOUR) + ", au terme de sa conservation." : "L'offre " + o.getIdOffre() + " n'a pas été ouverte.");
+        }
+        try {
+            byte[] manifeste = dezipper(clair).get(MANIFESTE);
+            JsonNode f = manifeste == null ? null : mapper.readTree(manifeste).path("formulaires");
+            if (f == null || !f.isObject()) {
+                throw new ResourceNotFoundException("L'offre " + o.getIdOffre() + " ne porte pas de formulaires : elle a été déposée par pièces.");
+            }
+            return f;
+        } catch (IOException e) {
+            throw new ResourceNotFoundException("Le contenu de l'offre " + o.getIdOffre() + " ne se relit pas.");
+        }
     }
 
     /** Une pièce d'une offre ouverte : ⚠️ les membres de la CAO seulement (403 {@code PIECE_RESERVEE_CAO}) ; 404 inconnue ; 409 séance non déchiffrée. */
@@ -893,6 +997,12 @@ public class SeanceService {
                     el.add(para("Montant HT : " + ae.get("montantHt") + " ; montant TTC : " + ae.get("montantTtc") + " " + Objects.toString(ae.get("monnaie"), "MGA")));
                     el.add(para("Délai : " + ae.get("delai") + " " + Objects.toString(ae.get("delaiUnite"), "") + " ; validité : " + ae.get("validiteJours")
                             + " jours ; rabais : " + Objects.toString(ae.get("rabais"), "aucun")));
+                }
+                if (o.formulaires() && o.totaux() != null && !o.totaux().isEmpty()) {   // ⚠️ 2026-10-05 (lot 5, §B3.5)
+                    Map<String, Object> t = o.totaux();
+                    el.add(para("Bordereau (totaux recalculés) : HT " + totalLisible(t.get("ht")) + " ; TVA " + totalLisible(t.get("tva"))
+                            + " ; TTC " + totalLisible(t.get("ttc")) + " MGA" + (t.containsKey("htMin") ? " — au maximum des quantités ; au minimum : HT "
+                                    + totalLisible(t.get("htMin")) + ", TTC " + totalLisible(t.get("ttcMin")) + " MGA" : "") + "."));
                 }
                 SeanceDto.Garantie g = o.garantie();
                 el.add(para("Garantie : " + (g == null ? "non fournie" : "fournie, code de vérification " + g.codeVerification()

@@ -781,6 +781,16 @@ dépositaire est possible tant que les paramètres internes sont modifiables : l
 l'ancien geste (générée chez le responsable) reste valable et s'apporte comme avant.
 Contrat : `docs/api-endpoints.md`, § *Le dépositaire génère lui-même la part de secours — V71*.
 
+⚠️ **2026-10-05, soumission en ligne, lot 5 — l'offre saisie dans des formulaires.** Quand la fiche porte un besoin (fournitures,
+travaux), le candidat **remplit** son bordereau (ou son DQE), sa conformité, son calendrier et, au lot 5b, ses capacités, son
+personnel et son matériel, dans des formulaires pré-remplis depuis la fiche ; les pièces correspondantes ne sont plus exigées en fichier.
+Les montants de l'acte d'engagement sont ceux du bordereau. Le tout est scellé dans l'offre : le serveur n'en lit rien avant
+l'ouverture. À l'ouverture, il **recalcule les totaux** et **signale** à la commission — sans jamais écarter une offre — les écarts
+(totaux, acte d'engagement, prix en lettres, qui font foi aux travaux), les prix manquants, les plafonds dépassés, les
+non-conformités, les livraisons hors délai et, au lot 5b, les capacités, le personnel et le matériel insuffisants. Le détail des prix
+n'est lu que par la commission et se purge avec l'offre. Les offres déposées par pièces seules restent lues comme avant.
+Contrat : `docs/api-endpoints.md`, § *L'offre saisie dans des formulaires — lot 5*.
+
 #### La fiche DAO des travaux (référentiel remis le 2026-09-24)
 
 - **Les travaux se préparent** : 257 informations (dont un bloc d'annexes et de formulaires), avec leur vocabulaire —

@@ -201,6 +201,8 @@ public class SecurityConfig {
                     // La règle des documents précède celle du détail (1er match gagne).
                     auth.requestMatchers(HttpMethod.GET, "/api/procedures-en-ligne/*/documents/**").hasRole("CANDIDAT");
                     auth.requestMatchers(HttpMethod.GET, "/api/procedures-en-ligne/*/documents").hasRole("CANDIDAT");
+                    // ⚠️ 2026-10-05 (lot 5, §B1) — le besoin, pour pré-remplir les formulaires : un candidat connecté.
+                    auth.requestMatchers(HttpMethod.GET, "/api/procedures-en-ligne/*/besoin").hasRole("CANDIDAT");
                     auth.requestMatchers(HttpMethod.GET, "/api/procedures-en-ligne", "/api/procedures-en-ligne/*").permitAll();
                     // ⚠️ 2026-10-04 (lot 2, §B2.5) — les clés publiques de la cérémonie close : l'entrée du scellement, publique.
                     auth.requestMatchers(HttpMethod.GET, "/api/procedures-en-ligne/*/cles").permitAll();
