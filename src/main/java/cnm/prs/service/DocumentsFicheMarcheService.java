@@ -595,8 +595,11 @@ public class DocumentsFicheMarcheService {
 
     /** ⚠️ 2026-09-25 — un document établi par lot porte son rang : {@code AE_<plan>_302873_lot2_v1.pdf}. */
     static String nomFichier(String type, String refePlan, Integer idDetail, Integer lot, Integer version, String extension) {
+        // ⚠️ 2026-10-06 (contre-recette du DAO complet) — les lettres accentuées sont translittérées (é → e) avant le remplacement
+        // des autres signes par des tirets : « Numéro » donne « Numero », plus « Num-ro ».
         String refe = refePlan == null || refePlan.isBlank() ? "sans-reference"
-                : refePlan.trim().replaceAll("[^A-Za-z0-9-]+", "-").replaceAll("-{2,}", "-").replaceAll("^-|-$", "");
+                : java.text.Normalizer.normalize(refePlan.trim(), java.text.Normalizer.Form.NFD).replaceAll("\\p{M}", "")
+                        .replaceAll("[^A-Za-z0-9-]+", "-").replaceAll("-{2,}", "-").replaceAll("^-|-$", "");
         return type + "_" + refe + "_" + idDetail + (lot == null ? "" : "_lot" + lot) + "_v" + version + "." + extension;
     }
 

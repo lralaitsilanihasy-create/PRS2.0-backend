@@ -37,6 +37,8 @@ class DaoCompletWordTest {
                         new DaoCompletWord.Partie(List.of(t("1.2. - Données Particulières de l'Appel d'Offres (DPAO)", 2)),
                                 docx("Données particulières d'essai")),
                         new DaoCompletWord.Partie(List.of(), docx("Suite de la section II")),
+                        new DaoCompletWord.Partie(List.of(t("1.3. - Formulaires de soumission", 2), t("A. - Modèles de fiches de renseignements", 3),
+                                t("A1 - Identification du Candidat", 4)), docx("Fiche A1")),
                         new DaoCompletWord.Partie(List.of(t("DEUXIÈME PARTIE : MARCHÉ", 1), t("2.1. - Acte d'Engagement", 2),
                                 t("Lot 1", 3)), null),
                         new DaoCompletWord.Partie(List.of(t("2.3. - Cahier des Clauses Administratives Générales", 2)),
@@ -53,7 +55,7 @@ class DaoCompletWordTest {
             s.setEndPage(2);
             String sommaire = s.getText(pdf).replaceAll("\\s+", " ");
             assertThat(sommaire).contains("SOMMAIRE", "DAO n° 001-2026", "page 2 / " + n, "PREMIÈRE PARTIE", "1.2. - Données",
-                    "DEUXIÈME PARTIE", "Lot 1", "2.3. - Cahier").doesNotContain("Suite de la section II", "DOSSIER TYPE");
+                    "DEUXIÈME PARTIE", "Lot 1", "2.3. - Cahier", "A1 - Identification du Candidat").doesNotContain("Suite de la section II", "DOSSIER TYPE");
             // ⚠️ C2 — les couvertures des documents types ne sont plus recopiées.
             assertThat(new PDFTextStripper().getText(pdf)).doesNotContain("DOSSIER TYPE D'APPEL D'OFFRES", "REPUBLIQUE DE MADAGASCAR");
             s.setStartPage(n);

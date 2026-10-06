@@ -269,7 +269,8 @@ public class DaoCompletService {
         boolean pi = CategorieDao.PRESTATIONS_INTELLECTUELLES.name().equals(categorie(etat));
         List<DaoCompletWord.LigneGarde> l = new ArrayList<>();
         ligne(l, majuscules(p.get("MINISTERE")), 12, true);
-        if (p.get("ENTITE") != null && !p.get("ENTITE").equalsIgnoreCase(Objects.toString(p.get("MINISTERE"), ""))) {
+        // ⚠️ D1 (contre-recette du 06/10) — l'entité n'est imprimée que si elle diffère du ministère hors accents, casse et blancs.
+        if (p.get("ENTITE") != null && !comparable(p.get("ENTITE")).equals(comparable(p.get("MINISTERE")))) {
             ligne(l, majuscules(p.get("ENTITE")), 11, true);
         }
         ligne(l, "PERSONNE RESPONSABLE DES MARCHÉS PUBLICS", 11, true);
@@ -330,6 +331,12 @@ public class DaoCompletService {
     private static String objet(FicheMarcheDto etat) {
         String o = etat.getDesignationMarche();
         return o == null || o.isBlank() ? null : o.trim();
+    }
+
+    /** Sans accents, sans casse, blancs réduits : « Ministère des Travaux publics » = « MINISTERE DES TRAVAUX  PUBLICS ». */
+    static String comparable(String s) {
+        return s == null ? "" : java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFD).replaceAll("\\p{M}", "")
+                .replace('’', '\'').replaceAll("\\s+", " ").trim().toLowerCase(Locale.ROOT);
     }
 
     private static String majuscules(String s) {

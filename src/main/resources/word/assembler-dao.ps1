@@ -110,6 +110,19 @@ try {
     $r.Collapse(0)
     $doc.Fields.Add($r, 26) | Out-Null
 
+    # ⚠️ D2 (contre-recette du 06/10) — un même style pour les quatre niveaux du sommaire : les textes fixes insérés redéfinissent
+    # TM 1 à TM 3 (Times New Roman 10), TM 4 gardait le défaut de Word (Aptos 12, interligne large). Posé après les insertions.
+    foreach ($n in 1..4) {
+        $s = $doc.Styles.Item(-19 - $n)   # wdStyleTOC1 = -20 … wdStyleTOC4 = -23
+        $s.Font.Name = 'Times New Roman'
+        $s.Font.Size = 10
+        $s.Font.Bold = [int]($n -eq 1)
+        $s.ParagraphFormat.SpaceBefore = 0
+        $s.ParagraphFormat.SpaceAfter = 0
+        $s.ParagraphFormat.LineSpacingRule = 0   # simple
+        $s.ParagraphFormat.LeftIndent = 12 * ($n - 1)
+    }
+
     $doc.Repaginate()
     $doc.TablesOfContents.Item(1).Update()
     $doc.Fields.Update() | Out-Null

@@ -105,6 +105,12 @@ class DaoCompletPartiesTest {
         assertThat(DaoCompletService.intitule("Consultation de prix", false)).isEqualTo("DOSSIER D'APPEL D'OFFRES");
         assertThat(DocumentsFicheMarcheService.nomFichier("DAO_COMPLET", "001-DAOO/MEN/PRMP/Tvx-PI-2026", 303279, 1, "pdf"))
                 .isEqualTo("DAO_COMPLET_001-DAOO-MEN-PRMP-Tvx-PI-2026_303279_v1.pdf");
+        // ⚠️ Contre-recette du 06/10 — accents translittérés (é → e) ; D1 : l'entité qui ne diffère que par l'accent n'est pas répétée.
+        assertThat(DocumentsFicheMarcheService.nomFichier("DAO_COMPLET", "Recette D4 Numéro du dossier d’appel", 303121, 7, "pdf"))
+                .isEqualTo("DAO_COMPLET_Recette-D4-Numero-du-dossier-d-appel_303121_v7.pdf");
+        assertThat(new DaoCompletService(null, null, null, null, null).garde(etat, Map.of("MINISTERE", "MINISTÈRE DES TRAVAUX PUBLICS",
+                "ENTITE", "Ministere des  travaux publics")).stream().map(DaoCompletWord.LigneGarde::texte)
+                .filter(t -> t.contains("TRAVAUX"))).containsExactly("MINISTÈRE DES TRAVAUX PUBLICS");
     }
 
     private static String titres(DaoCompletWord.Partie p) {

@@ -7025,6 +7025,16 @@ dossier, le serveur assemble un **`DAO_COMPLET`** en `.docx` et en `.pdf` (deux 
 - **V74** retire les DAO complets produits avant ce correctif (aucun n'était joint à un dossier ; un DAO complet joint comme pièce
   serait gardé) ; le rattrapage les reproduit sur le nouveau gabarit dans les minutes qui suivent le démarrage.
 
+⚠️ **Contre-recette du 06/10 (§D de la demande)** (V75) :
+- **D1** : l'entité n'est imprimée sous le ministère que si elle en diffère **hors accents, casse et blancs**.
+- **D2** : les quatre niveaux du sommaire ont un même style (styles Word « TM 1 » à « TM 4 » : Times New Roman 10, interligne
+  simple, sans espacement, retrait de 12 pt par niveau, niveau 1 en gras), posé après l'insertion des parties.
+- **Noms de fichier** (tous les documents de la fiche) : les lettres accentuées sont translittérées (é → e) avant le
+  remplacement des autres signes par des tirets. Les fichiers déjà produits gardent leur nom.
+- **D3** : le DAO complet assemble les documents **produits à la validation** de la version, jamais régénérés. Une règle de
+  modèle (C4) vaut pour les versions validées après elle ; une version déjà validée la reçoit par une révision.
+- **V75** retire les DAO complets non joints à un dossier, pour que le rattrapage les reproduise sur ce gabarit.
+
 **Où il est servi (§B3).**
 - `GET /api/fiches-marche/{idDmc}/documents` : quand la version porte un `DAO_COMPLET`, la liste ne sert plus que lui (`docx`
   puis `pdf`, `libelle` « Dossier d'appel d'offres complet », « Dossier de consultation complet » en PI) et les `xlsx`, puis les

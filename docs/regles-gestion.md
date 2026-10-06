@@ -479,6 +479,9 @@ en un seul document*.
   - Les prestations intellectuelles suivent la procédure de consultation : la lettre d'invitation (1.1) reste un document à
     part, adressé à chaque candidat.
 - **Il assemble, il ne réécrit rien** : chaque partie est le document que la fiche produisait déjà.
+- **Les documents d'une version validée ne sont jamais régénérés** (⚠️ contre-recette du 06/10) : ils sont ce que la
+  Commission a examiné et ce que les candidats ont retiré. Une règle nouvelle des modèles ne vaut que pour les versions
+  validées après elle ; une version déjà validée la reçoit par une révision. Seul l'assemblage du DAO complet peut être refait.
 - **Une pièce de la clause 6.2 ne s'imprime qu'une fois** (⚠️ recette du 06/10) : quand la liste des pièces de l'offre, ou
   des pièces administratives, est saisie, le texte libre de la même rubrique n'est plus imprimé ; il ne sert qu'à défaut de
   liste.
