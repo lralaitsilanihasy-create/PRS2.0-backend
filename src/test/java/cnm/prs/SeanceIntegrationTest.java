@@ -597,6 +597,39 @@ class SeanceIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(pv).contains("Bordereau (totaux recalculés) : HT 2 450 000 ; TVA 490 000 ; TTC 2 940 000 MGA", "AE_DIVERGENT");
     }
 
+    @Test
+    @DisplayName("Dossier payant (« A ») : sans reçu validé — en attente ne suffit pas —, le besoin et la création d'une offre répondent "
+            + "403 FRAIS_NON_REGLES ; validé, l'un se lit et l'autre se dépose ; un dossier gratuit ne change pas")
+    void gardeFraisDepot() throws Exception {
+        String besoin = "/api/procedures-en-ligne/" + idDmc + "/besoin";
+        mvc.perform(get(besoin).header("Authorization", jetonA)).andExpect(status().isOk());   // gratuit : libre
+        changer("B04-DS-05", "50000");
+        String creation = "{\"idDmc\":" + idDmc + ",\"lot\":null,\"enTete\":\"x\"}";
+        mvc.perform(get(besoin).header("Authorization", jetonA)).andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FRAIS_NON_REGLES"));
+        mvc.perform(post("/api/candidat/offres").header("Authorization", jetonA).contentType(JSON).content(creation))
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("FRAIS_NON_REGLES"));
+        cnm.prs.entity.RecuDao recu = new cnm.prs.entity.RecuDao();
+        recu.setIdDmc(idDmc);
+        recu.setNif("1111222333");
+        recu.setIdCandidat("C900000041");
+        recu.setReferencePaiement("VIR-A-01");
+        recu.setDateDepot(LocalDateTime.now());
+        recu.setEtat(cnm.prs.entity.RecuDao.EN_ATTENTE);
+        recu = recuRepository.save(recu);
+        mvc.perform(get(besoin).header("Authorization", jetonA)).andExpect(status().isForbidden());   // H2 : en attente ne suffit pas
+        mvc.perform(post("/api/candidat/offres").header("Authorization", jetonA).contentType(JSON).content(creation))
+                .andExpect(status().isForbidden());
+        recu.setEtat(cnm.prs.entity.RecuDao.VALIDE);
+        recu.setDateDecision(LocalDateTime.now());
+        recuRepository.save(recu);
+        mvc.perform(get(besoin).header("Authorization", jetonA)).andExpect(status().isOk()).andExpect(jsonPath("$.formulaires").value(true));
+        mvc.perform(get(besoin).header("Authorization", jetonB)).andExpect(status().isForbidden());   // une autre entreprise
+        deposer(jetonA, "1111222333", "BTP Alpha", "12500000");   // la création passe, le dépôt va à son terme
+        mvc.perform(post("/api/candidat/offres").header("Authorization", jetonB).contentType(JSON).content(creation))
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("FRAIS_NON_REGLES"));
+    }
+
     // ------------------------------------------------------------------ le navigateur, simulé
 
     /** Scelle et dépose une offre comme le navigateur : ZIP + manifeste, K, morceau AES-GCM, parts Shamir chiffrées RSA-OAEP. */

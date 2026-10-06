@@ -131,6 +131,12 @@ public class OffreService {
         List<String> groupement = nifsGroupement(c.groupementNifs());
         controlerExclusions(entreprise, groupement);
         Integer lot = controlerLot(lue.dto(), c.lot());
+        // ⚠️ 2026-10-06 (dossier payant, « A ») — le reçu validé de l'entreprise doit couvrir le lot de l'offre ; un reçu en attente ne
+        // suffit pas. Les morceaux et le scellement suivent une création acceptée : ils ne sont pas regardés.
+        if (lue.dto().retraitPayant() && procedures.recuValide(idDmc, entreprise.getNif(), lot).isEmpty()) {
+            throw new cnm.prs.exception.AccesReserveException("Votre offre se dépose une fois le reçu du paiement des frais de dossier "
+                    + "validé par la PRMP" + (lot == null ? "" : " pour le lot " + lot) + ".", "FRAIS_NON_REGLES");
+        }
         Offre remplacee = null;
         if (c.remplace() != null && !c.remplace().isBlank()) {
             if (!ProceduresEnLigneService.remplacementAutorise(lue.etat())) {

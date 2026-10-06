@@ -27,6 +27,7 @@ import cnm.prs.entity.FicheMarche;
 import cnm.prs.enums.CategorieDao;
 import cnm.prs.enums.TypeMarcheDao;
 import cnm.prs.repository.FicheMarcheRepository;
+import cnm.prs.security.CurrentUser;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -82,6 +83,12 @@ public class FormulairesEnLigne {
     /** {@code GET /api/procedures-en-ligne/{idDmc}/besoin} : 404 hors des critères de la liste publique (même règle que la procédure). */
     public BesoinEnLigneDto besoin(Long idDmc) {
         ProceduresEnLigneService.Lue l = procedures.exiger(idDmc);
+        // ⚠️ 2026-10-06 (dossier payant, « A ») — le besoin est une part du dossier : gardé comme les documents (un lot payé ouvre
+        // tout le besoin ; sans entreprise déclarée, la même réponse).
+        if (l.dto().retraitPayant() && procedures.recuValide(idDmc, procedures.nifDe(CurrentUser.ref().orElse(null)), null).isEmpty()) {
+            throw new cnm.prs.exception.AccesReserveException("Le besoin du dossier se lit une fois le reçu du paiement des frais validé "
+                    + "par la PRMP.", "FRAIS_NON_REGLES");
+        }
         return construire(idDmc, l.etat(), l.fiche().getIdFiche(), l.dto());
     }
 

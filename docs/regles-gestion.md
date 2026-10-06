@@ -797,7 +797,9 @@ plateforme) et que la **PRMP ou son UGPM l'a validé** ; un refus porte un motif
 pour l'**entreprise** (son NIF), pour un ou plusieurs lots ; un lot payé ouvre tout le dossier. Une décision ne se reprend pas.
 Le reçu validé est la preuve du paiement : il n'est plus redemandé dans l'offre, et la séance indique, offre par offre, si les frais
 sont réglés — une offre sans reçu validé est **signalée** à la commission, jamais écartée. Un dossier gratuit et une procédure déjà
-lancée avant cette règle gardent le retrait libre. Le fichier du reçu suit la conservation des offres.
+lancée avant cette règle gardent le retrait libre. Le fichier du reçu suit la conservation des offres. ⚠️ 2026-10-06 (« A ») : sans
+reçu validé, le candidat ne lit pas non plus le besoin du dossier (les formulaires pré-remplis), et ne peut pas déposer d'offre
+pour un lot que son reçu ne couvre pas.
 Contrat : `docs/api-endpoints.md`, § *Le retrait du DAO après paiement des frais — V72*.
 
 ⚠️ **2026-10-06 — en remise électronique, les pièces de l'offre se listent une à une.** Une fiche en remise électronique ne se

@@ -6879,7 +6879,7 @@ seuls les **totaux recalculés et les alertes** sont gardés avec la lecture de 
 
 | Méthode | URL | Corps | Réponse | Statuts | Accès |
 |---|---|---|---|---|---|
-| GET | /api/procedures-en-ligne/{idDmc}/besoin | — | `BesoinEnLigneDto` | 200, 401, 403, 404 | `CANDIDAT` connecté |
+| GET | /api/procedures-en-ligne/{idDmc}/besoin | — | `BesoinEnLigneDto` | 200, 401, 403 (⚠️ 06/10 : `FRAIS_NON_REGLES` pour un dossier payant sans reçu validé), 404 | `CANDIDAT` connecté |
 | GET | /api/procedures-en-ligne/{idDmc}/pieces | — | `PieceAttendue[]` (+ `formulaire`) | 200, 404 | public |
 | GET | /api/fiches-marche/{idDmc}/seance/offres/{idOffre}/formulaires | — | `{ idOffre, numero, lot, formulaires, besoin }` | 200, 403 `PIECE_RESERVEE_CAO`, 404, 409 | membres de la CAO |
 | GET | /api/fiches-marche/{idDmc}/seance/offres/{idOffre}/formulaires/{BORDEREAU\|DQE\|CONFORMITE\|CAPACITES}.pdf | — | le PDF rempli | 200, 400 `FORMULAIRE_INCONNU`, 403, 404, 409 | membres de la CAO |
@@ -7014,6 +7014,16 @@ retrait (`null` pour un retrait libre).
 
 **H1** retenue (aucune validation automatique) ; **H3** retenue ; **H4** : la purge de conservation (V70) supprime aussi les fichiers des
 reçus de la procédure (`PURGE_LE`), la ligne et le journal restent.
+
+**⚠️ 2026-10-06 — la garde étendue au besoin et au dépôt** (demande front `demande-backend-2026-10-06-garde-frais-depot.md`, décision
+« A » du pilote ; aucune migration). Pour un retrait payant :
+- `GET /api/procedures-en-ligne/{idDmc}/besoin` répond **403 `FRAIS_NON_REGLES`** sans reçu **validé** de l'entreprise du compte
+  (un lot payé ouvre tout le besoin ; sans entreprise déclarée, la même réponse) ;
+- `POST /api/candidat/offres` (création, remplacement compris) répond **403 `FRAIS_NON_REGLES`** sans reçu validé couvrant **le lot
+  de l'offre** (`lots = null` couvre tout le dossier ; un marché non alloti n'a qu'un « lot ») ; la garde vient après
+  `PROCEDURE_FERMEE`, `CLES_INDISPONIBLES`, `ENTREPRISE_ABSENTE`, `ENTREPRISE_EXCLUE` et le contrôle du lot. Les morceaux et le
+  scellement ne la regardent pas ; les offres déjà déposées ne sont pas touchées, l'alerte de séance reste comme filet.
+- Un reçu `EN_ATTENTE` ne suffit pas (H2) ; aucun délai de grâce (H3) ; `GET …/pieces` reste public (H1).
 
 ---
 
