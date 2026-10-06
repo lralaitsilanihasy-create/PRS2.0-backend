@@ -19,6 +19,7 @@ import cnm.prs.entity.DocumentFicheMarche;
 import cnm.prs.entity.Entreprise;
 import cnm.prs.entity.FicheMarche;
 import cnm.prs.entity.Lot;
+import cnm.prs.entity.RecuDao;
 import cnm.prs.entity.RetraitDao;
 import cnm.prs.enums.ProfilUtilisateur;
 import cnm.prs.exception.ResourceNotFoundException;
@@ -73,11 +74,17 @@ public class ProceduresEnLigneService {
     private final PiecesFiche piecesFiche;
     /** ⚠️ 2026-10-05 (lot 5, §B1.3) — le besoin décide si l'offre se dépose par formulaires. */
     private final BesoinFiche besoin;
+    /** ⚠️ 2026-10-06 — les reçus de frais de dossier (garde du retrait) et le compte de l'ARMP. */
+    private final cnm.prs.repository.RecuDaoRepository recuRepository;
+    private final ParametreService parametres;
 
     public ProceduresEnLigneService(FicheMarcheRepository ficheRepository, FicheMarcheService fiches,
             DocumentsFicheMarcheService documents, DocumentFicheMarcheRepository documentRepository, LotRepository lotRepository,
             RetraitDaoRepository retraitRepository, CompteCandidatRepository compteRepository,
-            EntrepriseRepository entrepriseRepository, PiecesFiche piecesFiche, BesoinFiche besoin) {
+            EntrepriseRepository entrepriseRepository, PiecesFiche piecesFiche, BesoinFiche besoin,
+            cnm.prs.repository.RecuDaoRepository recuRepository, ParametreService parametres) {
+        this.recuRepository = recuRepository;
+        this.parametres = parametres;
         this.besoin = besoin;
         this.piecesFiche = piecesFiche;
         this.ficheRepository = ficheRepository;
@@ -143,9 +150,17 @@ public class ProceduresEnLigneService {
                 .filter(x -> x.getNomFichier() != null && x.getNomFichier().equals(code))
                 .findFirst()
                 .orElseThrow(() -> new ResourceNotFoundException("Document introuvable : " + code + "."));
+        // ⚠️ 2026-10-06 (§B4) — un dossier payant ne se retire qu'avec un reçu validé de l'entreprise (au moins un lot : le dossier
+        // est commun). Rien n'est inscrit au registre en cas de refus.
+        RecuDao recu = null;
+        if (l.dto().retraitPayant()) {
+            recu = recuValide(idDmc, nifDe(idCandidat), null).orElseThrow(() -> new cnm.prs.exception.AccesReserveException(
+                    "Le dossier se retire une fois le reçu du paiement des frais validé par la PRMP : déposez votre reçu, puis attendez "
+                            + "sa validation.", "FRAIS_NON_REGLES"));
+        }
         Integer idEntreprise = entrepriseRepository.findByIdCandidat(idCandidat).map(Entreprise::getIdEntreprise).orElse(null);
         retraitRepository.save(new RetraitDao(null, idDmc, idCandidat, idEntreprise, d.getNomFichier(),
-                l.fiche().getNumeroVersion(), LocalDateTime.now()));
+                l.fiche().getNumeroVersion(), LocalDateTime.now(), recu == null ? null : recu.getIdRecu()));
         return d;
     }
 
@@ -164,7 +179,8 @@ public class ProceduresEnLigneService {
             Entreprise e = r.getIdEntreprise() == null ? null : entrepriseRepository.findById(r.getIdEntreprise()).orElse(null);
             out.add(new ProcedureEnLigneDto.Retrait(r.getDateRetrait(), c == null ? r.getIdCandidat() : c.getEmail(),
                     e == null ? null : e.getRaisonSociale(), e == null ? null : e.getNif(), r.getCodeDocument(),
-                    r.getVersionFiche()));
+                    r.getVersionFiche(), r.getIdRecu() == null ? null : recuRepository.findById(r.getIdRecu())
+                            .map(x -> new ProcedureEnLigneDto.RecuRetrait(x.getEtat(), x.getReferencePaiement())).orElse(null)));
         }
         return out;
     }
@@ -226,12 +242,16 @@ public class ProceduresEnLigneService {
                 : limite != null && !maintenant.isBefore(limite) ? CLOSE
                 : ouvertureDepots != null && maintenant.isBefore(ouvertureDepots) ? A_VENIR : OUVERTE;
         String numeroDao = brute(etat, DocumentsFicheMarcheService.CHAMP_NUMERO_DAO);
+        List<ProcedureEnLigneDto.Lot> lots = lots(etat);
+        List<ProcedureEnLigneDto.Frais> frais = frais(etat, lots);
+        boolean payant = frais != null && !avis.isEmpty() && apresBascule(avis.get(avis.size() - 1).dateGeneration());
+        ParametreService.CompteDao compte = frais == null ? null : parametres.compteDao();
         return new ProcedureEnLigneDto(idDmc,
                 numeroDao != null ? numeroDao : etat.etat().getRefeDossier(),
                 etat.etat().getDesignationMarche(),
                 etat.valeur(CHAMP_AUTORITE),
                 etat.categorie(),
-                lots(etat),
+                lots,
                 avis.isEmpty() ? RemiseElectronique.isoMinute(RemiseElectronique.dateHeureLue(brute(etat, RemiseElectronique.PUBLICATION_AVIS)))
                         : datePublication(avis, etat),
                 RemiseElectronique.isoMinute(ouvertureDepots),
@@ -244,9 +264,78 @@ public class ProceduresEnLigneService {
                 etat.valeur(CHAMP_ASSISTANCE),
                 etatProcedure,
                 remplacementAutorise(etat),
-                OUVERTE.equals(etatProcedure));
+                OUVERTE.equals(etatProcedure),
+                frais,
+                compte == null || compte.numeroCompte() == null ? null
+                        : new ProcedureEnLigneDto.CompteDao(compte.banque(), compte.titulaire(), compte.numeroCompte()),
+                payant);
     }
 
+
+    // ------------------------------------------------------------------ ⚠️ 2026-10-06 — le retrait après paiement des frais
+
+    /** Les frais de dossier : {@code B04-DS-05}, contrat-cadre de travaux {@code B04-DK-04} ; le dossier commun aux lots. */
+    static final List<String> CHAMPS_FRAIS = List.of("B04-DS-05", "B04-DK-04");
+    /** H2 — le retrait est payant pour une procédure dont l'avis est imprimé pour la première fois à partir de ce moment (V72). */
+    static final String RETRAIT_PAYANT_DEPUIS = "RETRAIT_PAYANT_DEPUIS";
+
+    /** Les frais par lot ({@code CODE#n}, à défaut {@code CODE}) ; {@code null} si aucun lot n'a de frais (dossier gratuit). */
+    static List<ProcedureEnLigneDto.Frais> frais(FicheMarcheService.EtatVersion etat, List<ProcedureEnLigneDto.Lot> lots) {
+        Map<String, String> v = etat.etat().getValeurs() == null ? Map.of() : etat.etat().getValeurs();
+        List<Integer> numeros = new ArrayList<>();
+        if (lots.size() > 1) {
+            lots.forEach(l -> numeros.add(l.numero()));
+        } else {
+            numeros.add(null);
+        }
+        List<ProcedureEnLigneDto.Frais> out = new ArrayList<>();
+        boolean payant = false;
+        for (Integer n : numeros) {
+            java.math.BigDecimal montant = null;
+            for (String code : CHAMPS_FRAIS) {
+                String x = n == null ? null : v.get(code + LotsFiche.SEPARATEUR + n);
+                if (x == null || x.isBlank()) {
+                    x = v.get(code);
+                }
+                montant = x == null || x.isBlank() ? null : SeanceService.montant(x);
+                if (montant != null) {
+                    break;
+                }
+            }
+            payant |= montant != null && montant.signum() > 0;
+            out.add(new ProcedureEnLigneDto.Frais(n, montant));
+        }
+        return payant ? out : null;
+    }
+
+    private boolean apresBascule(LocalDateTime premierAvis) {
+        String b = parametres.texte(RETRAIT_PAYANT_DEPUIS);
+        LocalDateTime bascule;
+        try {
+            bascule = b == null ? null : LocalDateTime.parse(b);
+        } catch (java.time.format.DateTimeParseException e) {
+            bascule = RemiseElectronique.dateHeureLue(b);
+        }
+        return bascule == null || premierAvis == null || !premierAvis.isBefore(bascule);
+    }
+
+    /** Le reçu validé de l'entreprise (son NIF) qui couvre le lot ({@code lot = null} : n'importe lequel), le plus ancien d'abord. */
+    @Transactional(readOnly = true)
+    public Optional<RecuDao> recuValide(Long idDmc, String nif, Integer lot) {
+        if (nif == null) {
+            return Optional.empty();
+        }
+        return recuRepository.findByIdDmcAndNifOrderByDateDepotDescIdRecuDesc(idDmc, nif).stream()
+                .filter(r -> RecuDao.VALIDE.equals(r.getEtat()))
+                .filter(r -> lot == null || r.getLots() == null || ChampFicheMarche.liste(r.getLots()).contains(String.valueOf(lot)))
+                .min(Comparator.comparing(RecuDao::getDateDecision, Comparator.nullsLast(Comparator.naturalOrder())));
+    }
+
+    /** Le NIF de l'entreprise déclarée par un compte candidat ; {@code null} sans entreprise. */
+    @Transactional(readOnly = true)
+    public String nifDe(String idCandidat) {
+        return idCandidat == null ? null : entrepriseRepository.findByIdCandidat(idCandidat).map(Entreprise::getNif).orElse(null);
+    }
     /** ⚠️ 2026-10-04 (lot 3, §B1) — {@code B04-SE-10 = OUI} : remplacer et retirer son offre avant la date limite. */
     static boolean remplacementAutorise(FicheMarcheService.EtatVersion etat) {
         return "OUI".equalsIgnoreCase(brute(etat, CHAMP_REMPLACEMENT));
@@ -276,13 +365,18 @@ public class ProceduresEnLigneService {
         boolean alloti = l.dto().lots().size() > 1;
         List<cnm.prs.dto.OffreDto.PieceAttendue> out = new ArrayList<>();
         out.add(new cnm.prs.dto.OffreDto.PieceAttendue("AE", PiecesFiche.OFFRE, null, "Acte d'engagement signé", "Original signé",
-                null, alloti, null, true, null));
+                null, alloti, null, true, null, null));
+        // ⚠️ 2026-10-06 (§B5) — un dossier payant : le reçu validé est la preuve du paiement, il n'est plus redemandé dans l'offre.
+        // Sans frais renseignés, la pièce reste exigée comme avant. Relatif au candidat connecté (sans session : générique).
+        boolean payant = l.dto().retraitPayant();
+        Boolean dejaFourni = payant ? recuValide(idDmc, CurrentUser.ref().filter(x -> cnm.prs.enums.TypeActeur.CANDIDAT.name()
+                .equals(CurrentUser.acteurType().orElse(null))).map(this::nifDe).orElse(null), null).isPresent() : null;
         out.add(new cnm.prs.dto.OffreDto.PieceAttendue("RECU-DAO", PiecesFiche.OFFRE, null, "Reçu du paiement des frais de dossier",
-                "Copie", null, false, null, true, null));
+                "Copie", null, false, null, !payant, null, dejaFourni));
         Map<String, Object> cadrage = l.etat().etat().getCadrage();
         if (cadrage != null && "OUI".equalsIgnoreCase(String.valueOf(cadrage.get("garantieSoumission")))) {
             out.add(new cnm.prs.dto.OffreDto.PieceAttendue("GARANTIE", PiecesFiche.OFFRE, null,
-                    "Garantie de soumission (document et code de vérification)", "Original", null, alloti, null, true, null));
+                    "Garantie de soumission (document et code de vérification)", "Original", null, alloti, null, true, null, null));
         }
         // ⚠️ 2026-10-05 (lot 5, §B1.3) — avec un besoin, les pièces que remplit un formulaire ne sont plus exigées en fichier.
         String categorie = l.etat().categorie();
@@ -296,7 +390,7 @@ public class ProceduresEnLigneService {
                     out.add(new cnm.prs.dto.OffreDto.PieceAttendue("PIECE-" + p.getIdPiece(), p.getRubrique(), p.getNumero(),
                             p.getLibelle(), p.getForme(), p.getAncienneteMaxMois(), Boolean.TRUE.equals(p.getParLot()) && alloti,
                             p.getModele(), formulaire(p.getLibelle(), travaux, formulaires) == null,
-                            formulaire(p.getLibelle(), travaux, formulaires)));
+                            formulaire(p.getLibelle(), travaux, formulaires), null));
                 }
             }
         }

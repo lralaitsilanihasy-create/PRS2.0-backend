@@ -155,5 +155,9 @@ public enum TypeNotification {
     /** ⚠️ 2026-10-04 (arbitrages du pilote, §B2) — le PV d'ouverture est à signer — vers chaque membre présent de la CAO. */
     PV_A_SIGNER,
     /** ⚠️ 2026-10-05 (dépositaire, §B3) — le responsable demande la part de secours au dépositaire. */
-    SECOURS_DEMANDE
+    SECOURS_DEMANDE,
+    /** ⚠️ 2026-10-06 (retrait après paiement, §B3) — un reçu de frais de dossier à valider (PRMP) ; décidé (candidat, par courriel). */
+    RECU_A_VALIDER,
+    RECU_VALIDE,
+    RECU_REFUSE
 }

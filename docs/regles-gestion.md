@@ -791,6 +791,15 @@ non-conformités, les livraisons hors délai et, au lot 5b, les capacités, le p
 n'est lu que par la commission et se purge avec l'offre. Les offres déposées par pièces seules restent lues comme avant.
 Contrat : `docs/api-endpoints.md`, § *L'offre saisie dans des formulaires — lot 5*.
 
+⚠️ **2026-10-06, soumission en ligne — le retrait du DAO après paiement des frais (V72).** Quand la fiche fixe des frais de dossier,
+le candidat ne télécharge le dossier qu'après avoir **déposé le reçu** de son paiement (versé sur le compte de l'ARMP, hors de la
+plateforme) et que la **PRMP ou son UGPM l'a validé** ; un refus porte un motif, et le candidat dépose un nouveau reçu. Le reçu vaut
+pour l'**entreprise** (son NIF), pour un ou plusieurs lots ; un lot payé ouvre tout le dossier. Une décision ne se reprend pas.
+Le reçu validé est la preuve du paiement : il n'est plus redemandé dans l'offre, et la séance indique, offre par offre, si les frais
+sont réglés — une offre sans reçu validé est **signalée** à la commission, jamais écartée. Un dossier gratuit et une procédure déjà
+lancée avant cette règle gardent le retrait libre. Le fichier du reçu suit la conservation des offres.
+Contrat : `docs/api-endpoints.md`, § *Le retrait du DAO après paiement des frais — V72*.
+
 #### La fiche DAO des travaux (référentiel remis le 2026-09-24)
 
 - **Les travaux se préparent** : 257 informations (dont un bloc d'annexes et de formulaires), avec leur vocabulaire —

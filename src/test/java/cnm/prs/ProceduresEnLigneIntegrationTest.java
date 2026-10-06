@@ -31,6 +31,7 @@ import cnm.prs.entity.FicheMarcheValeur;
 import cnm.prs.entity.Marche;
 import cnm.prs.entity.MarchePrevision;
 import cnm.prs.entity.ModePassation;
+import cnm.prs.entity.Notification;
 import cnm.prs.entity.TypeDmc;
 import cnm.prs.enums.FormeMarche;
 import cnm.prs.enums.ProfilUtilisateur;
@@ -64,6 +65,8 @@ class ProceduresEnLigneIntegrationTest extends CnmIntegrationTestSupport {
     @Autowired private DocumentFicheMarcheRepository documentRepository;
     @Autowired private FicheMarcheValeurRepository valeurRepository;
     @Autowired private RetraitDaoRepository retraitRepository;
+    @Autowired private cnm.prs.repository.NotificationRepository notificationRepository;
+    @Autowired private cnm.prs.repository.RecuJournalRepository recuJournal;
 
     private final LocalDate aujourdhui = LocalDate.now();
     private String tokenVer;
@@ -120,7 +123,7 @@ class ProceduresEnLigneIntegrationTest extends CnmIntegrationTestSupport {
         String liste = mvc.perform(get("/api/procedures-en-ligne")).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<List<Integer>>read(liste, "$[*].idDmc")).containsExactly(idDmc.intValue());
-        String limite = aujourdhui.plusDays(60) + "T10:00";
+        String limite = ouvrable(aujourdhui.plusDays(60)) + "T10:00";
         mvc.perform(get("/api/procedures-en-ligne/" + idDmc)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.reference").value("AOO 0001/MESupReS/2026"))
                 .andExpect(jsonPath("$.objet").value("Acquisition de matériels informatiques"))
@@ -144,7 +147,7 @@ class ProceduresEnLigneIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(get("/api/procedures-en-ligne")).andExpect(jsonPath("$.length()").value(0));
         mvc.perform(get("/api/procedures-en-ligne/" + idDmc)).andExpect(status().isOk()).andExpect(jsonPath("$.etat").value("CLOSE"));
 
-        changer("B04-LR-03", aujourdhui.plusDays(60).toString());
+        changer("B04-LR-03", ouvrable(aujourdhui.plusDays(60)).toString());
         changer("B04-SE-05", "Avancée");
         mvc.perform(get("/api/procedures-en-ligne/" + idDmc)).andExpect(status().isNotFound());
         mvc.perform(get("/api/procedures-en-ligne/999999")).andExpect(status().isNotFound());
@@ -187,6 +190,137 @@ class ProceduresEnLigneIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(get("/api/fiches-marche/" + idDmc + "/retraits").header("Authorization", autrePrmp)).andExpect(status().isForbidden());
     }
 
+    @Test
+    @DisplayName("Retrait après paiement (V72) : frais et compte servis ; sans reçu validé, le document répond 403 FRAIS_NON_REGLES "
+            + "(rien au registre) ; le reçu se dépose (entreprise exigée, champs, type réel), attend la PRMP (RECU_EN_ATTENTE), se refuse "
+            + "avec motif, se redépose, se valide par l'UGPM (décision définitive) ; le retrait s'ouvre et le registre dit son reçu ; "
+            + "RECU-DAO déjà fourni ; journal et notifications")
+    void retraitApresPaiement() throws Exception {
+        poserAvis();
+        poser("B04-DS-05", "50000");
+        String procedure = mvc.perform(get("/api/procedures-en-ligne/" + idDmc)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<Boolean>read(procedure, "$.retraitPayant")).isTrue();
+        assertThat(JsonPath.<Number>read(procedure, "$.fraisDossier[0].montant").intValue()).isEqualTo(50000);
+        assertThat(JsonPath.<Object>read(procedure, "$.fraisDossier[0].lot")).isNull();
+        mvc.perform(put("/api/candidat/entreprise").header("Authorization", jetonCandidat).contentType(JSON).content("{\"raisonSociale\":"
+                + "\"Info Plus\",\"nif\":\"3000111222\",\"adresse\":\"Lot 1\",\"representant\":{\"nom\":\"Rabe\",\"prenom\":\"Paul\"}}"))
+                .andExpect(status().isOk());
+
+        // §B4 — sans reçu validé : la liste oui, le document non ; rien au registre.
+        String url = "/api/procedures-en-ligne/" + idDmc + "/documents";
+        String dpao = JsonPath.<List<String>>read(mvc.perform(get(url).header("Authorization", jetonCandidat)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString(), "$[*].code").stream().filter(c -> c.startsWith("DPAO_") && c.endsWith(".pdf"))
+                .findFirst().orElseThrow();
+        mvc.perform(get(url + "/" + dpao).header("Authorization", jetonCandidat)).andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FRAIS_NON_REGLES"));
+        assertThat(retraitRepository.findByIdDmcOrderByDateRetraitAscIdRetraitAsc(idDmc)).isEmpty();
+        assertThat(JsonPath.<List<Boolean>>read(mvc.perform(get("/api/procedures-en-ligne/" + idDmc + "/pieces").header("Authorization",
+                jetonCandidat)).andReturn().getResponse().getContentAsString(), "$[?(@.code=='RECU-DAO')].dejaFourni")).containsExactly(false);
+
+        // §B2 — le dépôt.
+        String recus = "/api/procedures-en-ligne/" + idDmc + "/recus";
+        byte[] pdf = "%PDF-1.4 reçu BNI".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        String data = "{\"montant\":40000,\"referencePaiement\":\"VIR-2026-001\",\"datePaiement\":\"" + aujourdhui + "\",\"banque\":\"BNI\"}";
+        candidats.save(new CompteCandidat("C900000012", "sans@entreprise.mg", "034 22 222 23", "Sans", "Entreprise",
+                CompteCandidat.CONFIRME, false, LocalDateTime.now(), LocalDateTime.now(), null, null));
+        String sansEntreprise = bearer("sans@entreprise.mg", ProfilUtilisateur.CANDIDAT, TypeActeur.CANDIDAT, "C900000012", null);
+        deposer(recus, sansEntreprise, pdf, data).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("ENTREPRISE_ABSENTE"));
+        deposer(recus, jetonCandidat, pdf, "{\"montant\":40000}").andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[*].champ", org.hamcrest.Matchers.hasItems("referencePaiement", "datePaiement")));
+        deposer(recus, jetonCandidat, "bonjour".getBytes(), data).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("FORMAT_INVALIDE"));
+        deposer(recus, tokenPrmp, pdf, data).andExpect(status().isForbidden());
+        String depose = deposer(recus, jetonCandidat, pdf, data).andExpect(status().isCreated()).andExpect(jsonPath("$.etat").value("EN_ATTENTE"))
+                .andExpect(jsonPath("$.lots").isEmpty()).andExpect(jsonPath("$.entreprise").isEmpty())
+                .andReturn().getResponse().getContentAsString();
+        int premier = JsonPath.read(depose, "$.idRecu");
+        deposer(recus, jetonCandidat, pdf, data).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("RECU_EN_ATTENTE"));
+        mvc.perform(get(recus + "/mien").header("Authorization", jetonCandidat)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.referencePaiement").value("VIR-2026-001"));
+        assertThat(new String(mvc.perform(get(recus + "/mien/fichier").header("Authorization", jetonCandidat)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray(), 0, 4)).isEqualTo("%PDF");
+        mvc.perform(get(recus + "/mien").header("Authorization", sansEntreprise)).andExpect(status().isNotFound());
+        assertThat(notificationRepository.findPourPrmp("PRMP001", null)).extracting(Notification::getTypeNotif).contains("RECU_A_VALIDER");
+
+        // §B3 — la PRMP et l'UGPM ; ni l'Administrateur ni le candidat.
+        String prmp = "/api/fiches-marche/" + idDmc + "/recus";
+        mvc.perform(get(prmp).header("Authorization", tokenAdmin)).andExpect(status().isForbidden());
+        mvc.perform(get(prmp).header("Authorization", jetonCandidat)).andExpect(status().isForbidden());
+        mvc.perform(get(prmp).header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].entreprise.nif").value("3000111222")).andExpect(jsonPath("$[0].compte").value("retrait@entreprise.mg"))
+                .andExpect(jsonPath("$[0].fraisAttendus").value(50000)).andExpect(jsonPath("$[0].montantInsuffisant").value(true));
+        mvc.perform(get(prmp + "/" + premier + "/fichier").header("Authorization", tokenPrmp)).andExpect(status().isOk());
+        mvc.perform(post(prmp + "/" + premier + "/refuser").header("Authorization", tokenPrmp).contentType(JSON).content("{}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("MOTIF_ABSENT"));
+        mvc.perform(post(prmp + "/" + premier + "/refuser").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"motif\":\"Montant inférieur aux frais (50 000 Ar)\"}")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.etat").value("REFUSE")).andExpect(jsonPath("$.decidePar").value("PRMP"));
+        mvc.perform(post(prmp + "/" + premier + "/valider").header("Authorization", tokenPrmp)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("RECU_DEJA_DECIDE"));
+        assertThat(notificationRepository.findPourRefEtType("C900000011", "CANDIDAT")).extracting(Notification::getTypeNotif).contains("RECU_REFUSE");
+        mvc.perform(get(url + "/" + dpao).header("Authorization", jetonCandidat)).andExpect(status().isForbidden());
+
+        // Un nouveau reçu, validé par l'UGPM : le retrait s'ouvre, le registre dit le reçu ; un troisième n'est plus utile.
+        String second = deposer(recus, jetonCandidat, pdf, data.replace("40000", "50000").replace("VIR-2026-001", "VIR-2026-002"))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        int idSecond = JsonPath.read(second, "$.idRecu");
+        String ugpm = bearer("ugpm.hery", ProfilUtilisateur.UGPM, TypeActeur.UGPM, "PRMP001", "ANT");
+        mvc.perform(get(prmp).header("Authorization", ugpm)).andExpect(status().isOk()).andExpect(jsonPath("$[0].etat").value("EN_ATTENTE"))
+                .andExpect(jsonPath("$[1].etat").value("REFUSE")).andExpect(jsonPath("$[0].montantInsuffisant").value(false));
+        mvc.perform(post(prmp + "/" + idSecond + "/valider").header("Authorization", ugpm)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.etat").value("VALIDE")).andExpect(jsonPath("$.decidePar").value("UGPM"));
+        deposer(recus, jetonCandidat, pdf, data).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("RECU_DEJA_VALIDE"));
+        assertThat(notificationRepository.findPourRefEtType("C900000011", "CANDIDAT")).extracting(Notification::getTypeNotif).contains("RECU_VALIDE");
+        mvc.perform(get(url + "/" + dpao).header("Authorization", jetonCandidat)).andExpect(status().isOk());
+        String registre = mvc.perform(get("/api/fiches-marche/" + idDmc + "/retraits").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(registre, "$[*].recu.etat")).containsExactly("VALIDE");
+        assertThat(JsonPath.<List<String>>read(registre, "$[*].recu.referencePaiement")).containsExactly("VIR-2026-002");
+        // §B5 — le reçu validé est la preuve du paiement : RECU-DAO n'est plus exigé, déjà fourni pour ce candidat.
+        String pieces = mvc.perform(get("/api/procedures-en-ligne/" + idDmc + "/pieces").header("Authorization", jetonCandidat))
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Boolean>>read(pieces, "$[?(@.code=='RECU-DAO')].obligatoire")).containsExactly(false);
+        assertThat(JsonPath.<List<Boolean>>read(pieces, "$[?(@.code=='RECU-DAO')].dejaFourni")).containsExactly(true);
+        assertThat(recuJournal.findByIdDmcOrderByDateAscIdAsc(idDmc)).extracting(j -> j.getAction())
+                .containsExactly("RECU_DEPOSE", "RECU_REFUSE", "RECU_DEPOSE", "RECU_VALIDE");
+    }
+
+    @Test
+    @DisplayName("Retrait libre : un dossier sans frais, ou une procédure lancée avant la bascule (H2), se retire sans reçu")
+    void retraitLibre() throws Exception {
+        poserAvis();
+        String url = "/api/procedures-en-ligne/" + idDmc + "/documents";
+        String dpao = JsonPath.<List<String>>read(mvc.perform(get(url).header("Authorization", jetonCandidat)).andReturn().getResponse()
+                .getContentAsString(), "$[*].code").stream().filter(c -> c.startsWith("DPAO_") && c.endsWith(".pdf")).findFirst().orElseThrow();
+        mvc.perform(get("/api/procedures-en-ligne/" + idDmc)).andExpect(jsonPath("$.retraitPayant").value(false))
+                .andExpect(jsonPath("$.fraisDossier").isEmpty());
+        mvc.perform(get(url + "/" + dpao).header("Authorization", jetonCandidat)).andExpect(status().isOk());
+        // Des frais, mais l'avis imprimé avant la bascule : la procédure garde le retrait libre.
+        poser("B04-DS-05", "50000");
+        DocumentFicheMarche avis = documentRepository.findByIdFicheOrderByIdDocumentAsc(idFiche).stream().filter(d -> "AVIS".equals(d.getType()))
+                .findFirst().orElseThrow();
+        avis.setDateGeneration(LocalDateTime.of(2026, 1, 1, 0, 0));
+        documentRepository.save(avis);
+        mvc.perform(get("/api/procedures-en-ligne/" + idDmc)).andExpect(jsonPath("$.retraitPayant").value(false))
+                .andExpect(jsonPath("$.fraisDossier[0].montant").value(50000));
+        mvc.perform(get(url + "/" + dpao).header("Authorization", jetonCandidat)).andExpect(status().isOk());
+        deposer("/api/procedures-en-ligne/" + idDmc + "/recus", jetonCandidat, "%PDF".getBytes(), "{}").andExpect(status().isConflict());
+    }
+
+    private org.springframework.test.web.servlet.ResultActions deposer(String url, String jeton, byte[] fichier, String data) throws Exception {
+        return mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart(url)
+                .file(new org.springframework.mock.web.MockMultipartFile("fichier", "recu.pdf", "application/pdf", fichier))
+                .file(new org.springframework.mock.web.MockMultipartFile("data", "", "application/json", data.getBytes(java.nio.charset.StandardCharsets.UTF_8)))
+                .header("Authorization", jeton));
+    }
+
+    /** Pose (ou crée) une valeur de la version validée. */
+    private void poser(String code, String valeur) {
+        FicheMarcheValeur v = valeurRepository.findByIdFiche(idFiche).stream().filter(x -> x.getCodeChamp().equals(code)).findFirst()
+                .orElseGet(() -> new FicheMarcheValeur(null, idFiche, code, null, false));
+        v.setValeur(valeur);
+        valeurRepository.save(v);
+    }
+
     // ------------------------------------------------------------------ outils
 
     /**
@@ -206,7 +340,7 @@ class ProceduresEnLigneIntegrationTest extends CnmIntegrationTestSupport {
         Map<String, String> donnees = new LinkedHashMap<>();
         donnees.put("B02-OB-03", "AOO 0001/MESupReS/2026");
         donnees.put("B04-CD-02", "C1");
-        donnees.put("B04-LR-03", aujourdhui.plusDays(60).toString());
+        donnees.put("B04-LR-03", ouvrable(aujourdhui.plusDays(60)).toString());
         donnees.put("B04-LR-04", "10:00");
         donnees.put("B04-SE-02", "https://depot.cnm.mg");
         donnees.put("B04-SE-03", aujourdhui.plusDays(10) + "T08:00");

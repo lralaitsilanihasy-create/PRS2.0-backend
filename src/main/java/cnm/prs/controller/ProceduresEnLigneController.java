@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -29,9 +30,14 @@ public class ProceduresEnLigneController {
     private final cnm.prs.service.CeremonieService ceremonie;
     private final cnm.prs.service.SeanceService seance;
     private final cnm.prs.service.FormulairesEnLigne formulaires;
+    private final cnm.prs.service.RecusDaoService recus;
+    private final tools.jackson.databind.ObjectMapper mapper;
 
     public ProceduresEnLigneController(ProceduresEnLigneService service, cnm.prs.service.CeremonieService ceremonie,
-            cnm.prs.service.SeanceService seance, cnm.prs.service.FormulairesEnLigne formulaires) {
+            cnm.prs.service.SeanceService seance, cnm.prs.service.FormulairesEnLigne formulaires, cnm.prs.service.RecusDaoService recus,
+            tools.jackson.databind.ObjectMapper mapper) {
+        this.recus = recus;
+        this.mapper = mapper;
         this.formulaires = formulaires;
         this.seance = seance;
         this.service = service;
@@ -54,6 +60,40 @@ public class ProceduresEnLigneController {
     @GetMapping("/{idDmc}/besoin")
     public cnm.prs.dto.BesoinEnLigneDto besoin(@PathVariable Long idDmc) {
         return formulaires.besoin(idDmc);
+    }
+
+    /**
+     * ⚠️ 2026-10-06 (retrait après paiement, §B2) — le candidat dépose le reçu de son entreprise : multipart {@code fichier} +
+     * {@code data} (JSON {@code { lots, montant, referencePaiement, datePaiement, banque }}) ; 201.
+     */
+    @PostMapping(value = "/{idDmc}/recus", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasRole('CANDIDAT')")
+    public ResponseEntity<cnm.prs.dto.RecuDto> deposerRecu(@PathVariable Long idDmc,
+            @org.springframework.web.bind.annotation.RequestPart(value = "fichier", required = false) org.springframework.web.multipart.MultipartFile fichier,
+            @org.springframework.web.bind.annotation.RequestPart(value = "data", required = false) String data) {
+        cnm.prs.dto.RecuDto.Corps corps;
+        try {
+            corps = data == null || data.isBlank() ? null : mapper.readValue(data, cnm.prs.dto.RecuDto.Corps.class);
+        } catch (RuntimeException e) {
+            throw new cnm.prs.exception.BadRequestException("La partie « data » n'est pas un JSON lisible.", "DONNEES_INVALIDES");
+        }
+        return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).body(recus.deposer(idDmc, fichier, corps));
+    }
+
+    /** ⚠️ §B2 — le reçu le plus récent de son entreprise ; 404 sinon. */
+    @GetMapping("/{idDmc}/recus/mien")
+    @PreAuthorize("hasRole('CANDIDAT')")
+    public cnm.prs.dto.RecuDto recuMien(@PathVariable Long idDmc) {
+        return recus.mien(idDmc);
+    }
+
+    /** ⚠️ §B2 — le fichier de ce reçu. */
+    @GetMapping("/{idDmc}/recus/mien/fichier")
+    @PreAuthorize("hasRole('CANDIDAT')")
+    public ResponseEntity<byte[]> recuMienFichier(@PathVariable Long idDmc) {
+        cnm.prs.entity.RecuDao r = recus.fichierMien(idDmc);
+        return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION, Telechargements.disposition(r.getNomFichier() == null ? "recu" : r.getNomFichier()))
+                .contentType(org.springframework.http.MediaType.parseMediaType(r.getFormat())).body(r.getContenu());
     }
 
     /** ⚠️ Lot 4 (§B5) — le PV d'ouverture publié ({@code B04-OP-13 = OUI}), sans les alertes ni la vérification des NIF ; 404 sinon. */

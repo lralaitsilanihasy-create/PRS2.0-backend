@@ -550,6 +550,7 @@ public class SeanceService {
             }
             return null;
         };
+        boolean retraitPayant = procedures.trouver(idDmc).map(x -> x.dto().retraitPayant()).orElse(false);
         List<Offre> toutes = offres.findByIdDmcOrderByNumeroAscDateCreationAsc(idDmc);
         Map<String, Offre> parCandidat = new LinkedHashMap<>();
         toutes.stream().filter(o -> Offre.DEPOSEE.equals(o.getEtat())).forEach(o -> parCandidat.put(o.getIdCandidat(), o));
@@ -632,6 +633,18 @@ public class SeanceService {
                     }
                 }
             }
+            // ⚠️ 2026-10-06 (retrait après paiement, §B5) — le reçu validé de l'entreprise pour le lot de l'offre ; sans lui (dossier
+            // retiré sur papier, par exemple), une alerte — jamais un refus.
+            SeanceDto.FraisDossier frais = null;
+            if (retraitPayant) {
+                Optional<cnm.prs.entity.RecuDao> recu = procedures.recuValide(idDmc, o.getNif(), o.getLot());
+                frais = new SeanceDto.FraisDossier(recu.isPresent(), recu.map(cnm.prs.entity.RecuDao::getDateDecision).orElse(null),
+                        recu.map(cnm.prs.entity.RecuDao::getReferencePaiement).orElse(null));
+                if (complete && recu.isEmpty()) {
+                    alertes.add(new SeanceDto.Alerte("FRAIS_NON_REGLES", "Aucun reçu de frais de dossier validé pour l'entreprise"
+                            + (o.getLot() == null ? "" : " (lot " + o.getLot() + ")") + "."));
+                }
+            }
             // ⚠️ 2026-10-05 (§B5) — les documents remplis de l'offre ; une offre ouverte avant cette livraison les relit dans son clair.
             List<String> parties = null;
             if (form != null) {
@@ -641,7 +654,7 @@ public class SeanceService {
             Map<String, Object> ae = (Map<String, Object>) l.get("acteEngagement");
             lues.add(new SeanceDto.OffreLue(o.getNumero(), o.getIdOffre(), o.getLot(), o.getEtat(), o.getIntegrite(), o.getMotifLecture(),
                     new SeanceDto.EntrepriseLue(o.getNif(), o.getRaisonSociale(), e == null ? null : e.verification(), e == null ? null : e.exclusion()),
-                    l.get("groupement"), ae, lue, piecesLues, manquantes, alertes, form != null, totaux, parties));
+                    l.get("groupement"), ae, lue, piecesLues, manquantes, alertes, form != null, totaux, parties, frais));
         }
         return new SeanceDto.Lecture(lues, nonOuvertes);
     }

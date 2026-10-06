@@ -48,11 +48,14 @@ public class ConservationOffresService {
     private final SeanceJournalRepository journalSeance;
     private final StockageOffres stockage;
     private final ProceduresEnLigneService procedures;
+    /** ⚠️ 2026-10-06 (retrait après paiement, H4) — les fichiers des reçus de frais de dossier suivent la même conservation. */
+    private final cnm.prs.repository.RecuDaoRepository recus;
     private final Clock horloge;
 
     public ConservationOffresService(ParametreService parametres, SeanceRepository seances, OffreRepository offres,
             OffreMorceauRepository morceaux, OffreJournalRepository journalOffres, SeanceJournalRepository journalSeance,
-            StockageOffres stockage, ProceduresEnLigneService procedures, Clock horloge) {
+            StockageOffres stockage, ProceduresEnLigneService procedures, Clock horloge, cnm.prs.repository.RecuDaoRepository recus) {
+        this.recus = recus;
         this.parametres = parametres;
         this.seances = seances;
         this.offres = offres;
@@ -118,8 +121,18 @@ public class ConservationOffresService {
             journalOffres.save(new OffreJournal(null, o.getIdOffre(), idDmc, o.getIdCandidat(), maintenant, PURGE,
                     "conteneur et contenu supprimés au terme de " + annees + " an(s) de conservation"));
         }
+        int recusPurges = 0;
+        for (cnm.prs.entity.RecuDao r : recus.findByIdDmcOrderByDateDepotDescIdRecuDesc(idDmc)) {
+            if (r.getPurgeLe() == null) {
+                r.setContenu(null);
+                r.setPurgeLe(maintenant);
+                recus.save(r);
+                recusPurges++;
+            }
+        }
         journalSeance.save(new SeanceJournal(null, idDmc, maintenant, acteur, PURGE,
-                cibles.size() + " offre(s) purgée(s) au terme de " + annees + " an(s) de conservation"));
+                cibles.size() + " offre(s) et " + recusPurges + " reçu(s) de frais de dossier purgés au terme de " + annees
+                        + " an(s) de conservation"));
         return new ConservationOffresDto.Purge(idDmc, cibles.size(), maintenant);
     }
 

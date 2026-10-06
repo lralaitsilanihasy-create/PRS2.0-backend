@@ -105,6 +105,7 @@ class SeanceIntegrationTest extends CnmIntegrationTestSupport {
     @Autowired private OffreRepository offreRepository;
     @Autowired private SeanceJournalRepository seanceJournal;
     @Autowired private SeanceRepository seanceRepository;
+    @Autowired private cnm.prs.repository.RecuDaoRepository recuRepository;
     @Autowired private OffreJournalRepository offreJournal;
 
     private final LocalDate aujourdhui = LocalDate.now();
@@ -525,6 +526,17 @@ class SeanceIntegrationTest extends CnmIntegrationTestSupport {
                 + "\"totaux\":{\"ht\":2450000,\"tva\":490000,\"ttc\":2940000,\"htMin\":null,\"ttcMin\":null,\"parSerie\":null}}";
         String offreA = deposer(jetonA, "1111222333", "BTP Alpha", "12500000", "1600000", formulaires);
         String offreB = deposer(jetonB, "4444555666", "BTP Beta", "11900000");   // format 1 : lu comme avant
+        // ⚠️ 2026-10-06 (retrait après paiement, §B5) — un dossier payant : l'entreprise B a un reçu validé, A n'en a pas.
+        changer("B04-DS-05", "50000");
+        cnm.prs.entity.RecuDao recu = new cnm.prs.entity.RecuDao();
+        recu.setIdDmc(idDmc);
+        recu.setNif("4444555666");
+        recu.setIdCandidat("C900000042");
+        recu.setReferencePaiement("VIR-B-01");
+        recu.setDateDepot(LocalDateTime.now());
+        recu.setEtat(cnm.prs.entity.RecuDao.VALIDE);
+        recu.setDateDecision(LocalDateTime.now());
+        recuRepository.save(recu);
         changer("B04-LR-03", aujourdhui.minusDays(1).toString());
         changer("B04-OP-02", aujourdhui.minusDays(1).toString());
         changer("B04-OP-03", "09:00");
@@ -544,6 +556,11 @@ class SeanceIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(JsonPath.<String>read(lecture, "$.offres[0].integrite")).isEqualTo("INTACTE");
         assertThat(JsonPath.<Boolean>read(lecture, "$.offres[1].formulaires")).isFalse();
         assertThat(JsonPath.<Object>read(lecture, "$.offres[1].totaux")).isNull();
+        assertThat(JsonPath.<Boolean>read(lecture, "$.offres[0].fraisDossier.regle")).isFalse();
+        assertThat(JsonPath.<List<String>>read(lecture, "$.offres[0].alertes[*].type")).contains("FRAIS_NON_REGLES");
+        assertThat(JsonPath.<Boolean>read(lecture, "$.offres[1].fraisDossier.regle")).isTrue();
+        assertThat(JsonPath.<String>read(lecture, "$.offres[1].fraisDossier.referencePaiement")).isEqualTo("VIR-B-01");
+        assertThat(JsonPath.<List<String>>read(lecture, "$.offres[1].alertes[*].type")).doesNotContain("FRAIS_NON_REGLES");
         // §B5 — les documents remplis que l'offre porte ; une offre ouverte avant la livraison les relit dans son clair.
         assertThat(JsonPath.<List<String>>read(lecture, "$.offres[0].partiesFormulaires")).containsExactly("BORDEREAU", "CONFORMITE");
         assertThat(JsonPath.<Object>read(lecture, "$.offres[1].partiesFormulaires")).isNull();
@@ -713,7 +730,7 @@ class SeanceIntegrationTest extends CnmIntegrationTestSupport {
         Map<String, String> donnees = new LinkedHashMap<>();
         donnees.put("B02-OB-03", "AOO 0004/MESupReS/2026");
         donnees.put("B04-CD-02", "C1");
-        donnees.put("B04-LR-03", aujourdhui.plusDays(60).toString());
+        donnees.put("B04-LR-03", ouvrable(aujourdhui.plusDays(60)).toString());
         donnees.put("B04-LR-04", "10:00");
         donnees.put("B04-SE-02", "https://depot.cnm.mg");
         donnees.put("B04-SE-03", aujourdhui.plusDays(10) + "T08:00");

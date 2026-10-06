@@ -779,6 +779,18 @@ abstract class CnmIntegrationTestSupport extends AbstractIntegrationTest {
      * fournitures sans besoin ne se valide plus ({@code BESOIN_INCOMPLET}). À appeler avant {@code /valider} dans les
      * tests qui valident sans passer par {@link #remplirObligatoiresEtValider}.
      */
+    /**
+     * ⚠️ 2026-10-06 — le jour ouvrable (lundi-vendredi, règle {@code SE_HEURE_LIMITE}) le plus proche à partir de {@code d} : une date
+     * limite « dans 60 jours » tombait un samedi le 06/10 et la validation de la fiche était refusée.
+     */
+    protected static java.time.LocalDate ouvrable(java.time.LocalDate d) {
+        java.time.LocalDate x = d;
+        while (x.getDayOfWeek() == java.time.DayOfWeek.SATURDAY || x.getDayOfWeek() == java.time.DayOfWeek.SUNDAY) {
+            x = x.plusDays(1);
+        }
+        return x;
+    }
+
     protected void besoinDeTest(Long idDmc) throws Exception {
         String fiche = mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();

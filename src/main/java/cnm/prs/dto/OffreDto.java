@@ -44,10 +44,11 @@ public record OffreDto(String idOffre, Long idDmc, String reference, String obje
      * ⚠️ 2026-10-05 (lot 5, §B1.3) — {@code formulaire} : {@code null}, ou le formulaire qui la remplace quand la fiche a un besoin
      * ({@code BORDEREAU}, {@code CONFORMITE}, {@code CALENDRIER}, {@code DQE}, {@code SOUS_DETAIL}, {@code K1}, {@code CAPACITES},
      * {@code PERSONNEL}, {@code MATERIEL}) ; elle n'est alors plus exigée en fichier ({@code obligatoire = false}), une pièce
-     * justificative peut toujours être jointe.
+     * justificative peut toujours être jointe. ⚠️ 2026-10-06 (retrait après paiement, §B5) — {@code dejaFourni} (sur {@code RECU-DAO}
+     * seulement, pour un dossier payant) : l'entreprise du candidat connecté a un reçu validé ; {@code null} ailleurs.
      */
     public record PieceAttendue(String code, String rubrique, String numero, String libelle, String forme, Integer ancienneteMaxMois,
-            boolean parLot, String modele, boolean obligatoire, String formulaire) {
+            boolean parLot, String modele, boolean obligatoire, String formulaire, Boolean dejaFourni) {
     }
 
     /**

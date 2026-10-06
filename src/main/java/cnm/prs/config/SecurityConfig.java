@@ -203,6 +203,8 @@ public class SecurityConfig {
                     auth.requestMatchers(HttpMethod.GET, "/api/procedures-en-ligne/*/documents").hasRole("CANDIDAT");
                     // ⚠️ 2026-10-05 (lot 5, §B1) — le besoin, pour pré-remplir les formulaires : un candidat connecté.
                     auth.requestMatchers(HttpMethod.GET, "/api/procedures-en-ligne/*/besoin").hasRole("CANDIDAT");
+                    // ⚠️ 2026-10-06 (retrait après paiement, §B2) — le reçu des frais de dossier : un candidat connecté.
+                    auth.requestMatchers("/api/procedures-en-ligne/*/recus", "/api/procedures-en-ligne/*/recus/**").hasRole("CANDIDAT");
                     auth.requestMatchers(HttpMethod.GET, "/api/procedures-en-ligne", "/api/procedures-en-ligne/*").permitAll();
                     // ⚠️ 2026-10-04 (lot 2, §B2.5) — les clés publiques de la cérémonie close : l'entrée du scellement, publique.
                     auth.requestMatchers(HttpMethod.GET, "/api/procedures-en-ligne/*/cles").permitAll();

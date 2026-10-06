@@ -6950,6 +6950,70 @@ le **libellé** de la pièce de la fiche (bloc B14, libre) — les codes `PIECE-
 **Hypothèses de la demande** : H1 retenue (AE au maximum, minimum lu en plus) ; H2 retenue ; H3 retenue (les taux du K1 restent au
 front ; le serveur ne recalcule pas le K1) ; H4, H5 retenues ; H6 retenue (aucun paramètre de fiche ajouté).
 
+### Le retrait du DAO après paiement des frais — V72 ⚠️ 2026-10-06
+
+Demande front `demande-backend-2026-10-06-retrait-apres-paiement.md` (décision du pilote du 06/10, « Voie B ») ; migration **V72**
+(`t_recu_dao`, `t_recu_journal`, `t_retrait_dao.ID_RECU`, paramètre `RETRAIT_PAYANT_DEPUIS`). Aucune dépendance ajoutée. La
+plateforme n'encaisse rien : le paiement reste un versement sur le compte de l'ARMP, la vérification est documentaire (H3).
+
+| Méthode | URL | Corps | Réponse | Statuts | Accès |
+|---|---|---|---|---|---|
+| POST | /api/procedures-en-ligne/{idDmc}/recus | multipart `fichier` + `data` `{ lots, montant, referencePaiement, datePaiement, banque }` | 201 `RecuDto` | 400 par champ / `FORMAT_INVALIDE` / `FICHIER_ABSENT` / `DONNEES_INVALIDES`, 403, 404, 409 `PROCEDURE_FERMEE` / `ENTREPRISE_ABSENTE` / `ENTREPRISE_EXCLUE` / `RECU_EN_ATTENTE` / `RECU_DEJA_VALIDE`, 413 | `CANDIDAT` |
+| GET | /api/procedures-en-ligne/{idDmc}/recus/mien | — | `RecuDto` | 200, 404 | `CANDIDAT` |
+| GET | /api/procedures-en-ligne/{idDmc}/recus/mien/fichier | — | le fichier | 200, 404 | `CANDIDAT` |
+| GET | /api/fiches-marche/{idDmc}/recus | — | `RecuDto[]` (les `EN_ATTENTE` d'abord, puis du plus récent au plus ancien) | 200, 403, 404 | PRMP et UGPM de la fiche |
+| GET | /api/fiches-marche/{idDmc}/recus/{idRecu}/fichier | — | le fichier | 200, 403, 404 | idem |
+| POST | /api/fiches-marche/{idDmc}/recus/{idRecu}/valider | — | `RecuDto` | 200, 403, 404, 409 `RECU_DEJA_DECIDE` | idem |
+| POST | /api/fiches-marche/{idDmc}/recus/{idRecu}/refuser | `{ motif }` | `RecuDto` | 200, 400 `MOTIF_ABSENT`, 403, 404, 409 `RECU_DEJA_DECIDE` | idem |
+| GET | /api/procedures-en-ligne/{idDmc}/documents/{code} | — | le document | 200, ⚠️ **403 `FRAIS_NON_REGLES`**, 404 | `CANDIDAT` |
+
+**§B1 — Les frais, servis avec la procédure.** `ProcedureEnLigneDto` gagne :
+- **`fraisDossier`** = `[{ lot, montant }]` : `B04-DS-05#n` (à défaut `B04-DS-05` ; au contrat-cadre de travaux `B04-DK-04`), un lot
+  par entrée (`lot = null` non alloti) ; **`null`** si aucun lot n'a de frais (dossier gratuit : retrait libre) ;
+- **`compteDao`** = `{ banque, titulaire, numeroCompte }` (le paramètre `compte-dao`), `null` pour un dossier gratuit ou un compte non
+  réglé — la route `GET /api/parametres/compte-dao` reste interne ;
+- **`retraitPayant`** : le retrait exige un reçu validé — dossier payant **et** avis imprimé pour la première fois à partir de
+  `RETRAIT_PAYANT_DEPUIS` (posé à l'application de V72 : **H2**, une procédure déjà lancée garde le retrait libre jusqu'à sa
+  clôture, l'indicateur se déduit de la date d'impression du premier avis, figée).
+
+**§B2 — Le reçu, déposé par le candidat** (`RecusDaoService`) :
+- **Par entreprise** (Q1) : la clé est le **NIF** de l'entreprise déclarée par le compte ; deux comptes de la même entreprise le
+  partagent. `lots` : `null` (ou un marché non alloti) = tout le dossier ; des lots inconnus → 400.
+- Champs : `montant` (> 0), `referencePaiement`, `datePaiement` (pas future) exigés (400 par champ) ; `banque` facultative.
+- Fichier : PDF, JPEG ou PNG, **type lu sur le contenu** (400 `FORMAT_INVALIDE`), au plus **`tailleMaxPieceMo`** des paramètres des
+  candidats (Q2 : le même plafond que les pièces de l'entreprise, 413 au-delà).
+- 409 : `PROCEDURE_FERMEE` (date limite passée, ou dossier gratuit), `ENTREPRISE_ABSENTE`, `ENTREPRISE_EXCLUE` (exclusion de l'ARMP
+  en cours ; **409 comme au dépôt de l'offre**, non 403), `RECU_EN_ATTENTE` (un reçu attend la décision), `RECU_DEJA_VALIDE` (un
+  reçu validé couvre déjà les lots demandés ; un nouveau reçu ne vaut que pour des lots non couverts). Après un refus, un nouveau
+  dépôt ; l'ancien reste, en lecture, avec son motif.
+- Un montant inférieur aux frais n'est pas refusé : la PRMP le voit (`montantInsuffisant`).
+- `RecuDto` = `{ idRecu, lots, montant, referencePaiement, datePaiement, banque, nomFichier, dateDepot, etat (EN_ATTENTE · VALIDE ·
+  REFUSE), motifRefus, dateDecision, decidePar (PRMP · UGPM, la fonction), entreprise, compte, fraisAttendus, montantInsuffisant }`
+  — les quatre derniers servis à la PRMP et à l'UGPM seulement (`null` au candidat).
+
+**§B3 — La validation** : la PRMP **ou l'UGPM** de la fiche (pas l'Administrateur) ; une décision **ne se reprend pas**
+(`RECU_DEJA_DECIDE`) ; refus avec motif (`MOTIF_ABSENT`). Journal `t_recu_journal` : `RECU_DEPOSE`, `RECU_VALIDE`, `RECU_REFUSE`
+(motif). Notifications : `RECU_A_VALIDER` à la **PRMP** de la fiche à chaque dépôt (l'UGPM n'a pas de centre de notifications propre :
+elle voit les reçus en attente dans l'écran) ; `RECU_VALIDE` / `RECU_REFUSE` au candidat, **par courriel** (et trace).
+
+**§B4 — La garde** : `GET …/documents` (la liste) reste servie à tout candidat ; `GET …/documents/{code}` répond **403
+`FRAIS_NON_REGLES`** pour un retrait payant sans reçu **validé** de l'entreprise (un lot payé ouvre tout le dossier) ; rien n'est
+inscrit au registre en cas de refus. Un agent : 403 comme avant.
+
+**§B5 — L'offre et la séance** :
+- `PieceAttendue` gagne **`dejaFourni`** (sur `RECU-DAO`, retrait payant seulement ; `null` ailleurs) : vrai si l'entreprise du
+  candidat connecté a un reçu validé. Pour un retrait payant, `RECU-DAO` passe à `obligatoire = false`. `GET …/pieces` reste public
+  et devient relatif au candidat connecté (Q3 : pas de route à part) ; sans session, `dejaFourni = false`. Un dossier **sans frais
+  renseignés** garde `RECU-DAO` obligatoire comme avant : l'absence de `B04-DS-05` ne prouve pas qu'il est gratuit.
+- `LectureDto.offres[]` gagne **`fraisDossier`** = `{ regle, dateValidation, referencePaiement }` (retrait payant ; `null` sinon), lu
+  par le serveur ; **alerte `FRAIS_NON_REGLES`** sans reçu validé couvrant le lot de l'offre — jamais un refus.
+
+**§B6 — Le registre** : chaque ligne de `GET …/retraits` gagne **`recu`** = `{ etat, referencePaiement }` du reçu qui a ouvert le
+retrait (`null` pour un retrait libre).
+
+**H1** retenue (aucune validation automatique) ; **H3** retenue ; **H4** : la purge de conservation (V70) supprime aussi les fichiers des
+reçus de la procédure (`PURGE_LE`), la ligne et le journal restent.
+
 ---
 
 ## Marchés — dates prévisionnelles

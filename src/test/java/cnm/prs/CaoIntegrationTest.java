@@ -279,7 +279,7 @@ class CaoIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(JsonPath.<String>read(mes, "$[0].etatCeremonie")).isEqualTo("A_VENIR");
         assertThat(JsonPath.<String>read(mes, "$[0].etatPart")).isEqualTo("ABSENTE");
         assertThat(JsonPath.<String>read(mes, "$[0].objet")).isEqualTo("Acquisition de matériels informatiques 9901");
-        assertThat(JsonPath.<String>read(mes, "$[0].dateLimite")).isEqualTo(aujourdhui.plusDays(60) + "T10:00");
+        assertThat(JsonPath.<String>read(mes, "$[0].dateLimite")).isEqualTo(ouvrable(aujourdhui.plusDays(60)) + "T10:00");
         mvc.perform(get("/api/cao/procedures/" + idDmc).header("Authorization", jeton)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.president").value(true)).andExpect(jsonPath("$.cao.etat").value("COMPLETE"))
                 .andExpect(jsonPath("$.procedure.objet").value("Acquisition de matériels informatiques 9901"))
@@ -312,7 +312,7 @@ class CaoIntegrationTest extends CnmIntegrationTestSupport {
         Map<String, String> donnees = new LinkedHashMap<>();
         donnees.put("B02-OB-03", "AOO 000" + (idDetail - 9900) + "/MESupReS/2026");
         donnees.put("B04-CD-02", "C1");
-        donnees.put("B04-LR-03", aujourdhui.plusDays(60).toString());
+        donnees.put("B04-LR-03", ouvrable(aujourdhui.plusDays(60)).toString());
         donnees.put("B04-LR-04", "10:00");
         donnees.put("B04-SE-02", "https://depot.cnm.mg");
         donnees.put("B04-SE-03", aujourdhui.plusDays(10) + "T08:00");

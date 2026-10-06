@@ -407,7 +407,7 @@ class OffreIntegrationTest extends CnmIntegrationTestSupport {
         Map<String, String> donnees = new LinkedHashMap<>();
         donnees.put("B02-OB-03", "AOO 0003/MESupReS/2026");
         donnees.put("B04-CD-02", "C1");
-        donnees.put("B04-LR-03", aujourdhui.plusDays(60).toString());
+        donnees.put("B04-LR-03", ouvrable(aujourdhui.plusDays(60)).toString());
         donnees.put("B04-LR-04", "10:00");
         donnees.put("B04-SE-02", "https://depot.cnm.mg");
         donnees.put("B04-SE-03", aujourdhui.plusDays(10) + "T08:00");

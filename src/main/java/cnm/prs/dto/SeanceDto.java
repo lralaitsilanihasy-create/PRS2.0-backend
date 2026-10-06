@@ -97,7 +97,13 @@ public record SeanceDto(Long idDmc, String etat, LocalDateTime heureOuverture, L
      */
     public record OffreLue(Integer numero, String idOffre, Integer lot, String etat, String integrite, String motif, EntrepriseLue entreprise,
             Object groupement, Map<String, Object> acteEngagement, Garantie garantie, List<PieceLue> pieces, List<String> piecesManquantes,
-            List<Alerte> alertes, boolean formulaires, Map<String, Object> totaux, List<String> partiesFormulaires) {
+            List<Alerte> alertes, boolean formulaires, Map<String, Object> totaux, List<String> partiesFormulaires,
+            /** ⚠️ 2026-10-06 (retrait après paiement, §B5) — lu par le serveur, pas scellé ; {@code null} pour un retrait libre. */
+            FraisDossier fraisDossier) {
+    }
+
+    /** Le reçu de frais de dossier de l'entreprise de l'offre, pour son lot : {@code regle} s'il est validé. */
+    public record FraisDossier(boolean regle, LocalDateTime dateValidation, String referencePaiement) {
     }
 
     public record EntrepriseLue(String nif, String raisonSociale, EntrepriseCandidatDto.Verification verification,

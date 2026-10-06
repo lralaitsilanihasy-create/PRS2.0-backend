@@ -47,4 +47,8 @@ public class RetraitDao {
 
     @Column(name = "DATE_RETRAIT", nullable = false)
     private LocalDateTime dateRetrait;
+
+    /** ⚠️ V72 (§B6) — le reçu de frais de dossier qui a ouvert ce retrait ; {@code null} pour un retrait libre. */
+    @Column(name = "ID_RECU")
+    private Integer idRecu;
 }
