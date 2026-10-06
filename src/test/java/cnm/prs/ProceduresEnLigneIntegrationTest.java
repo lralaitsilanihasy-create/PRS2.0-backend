@@ -67,6 +67,7 @@ class ProceduresEnLigneIntegrationTest extends CnmIntegrationTestSupport {
     @Autowired private RetraitDaoRepository retraitRepository;
     @Autowired private cnm.prs.repository.NotificationRepository notificationRepository;
     @Autowired private cnm.prs.repository.RecuJournalRepository recuJournal;
+    @Autowired private cnm.prs.repository.InterimRepository interimRepository;
 
     private final LocalDate aujourdhui = LocalDate.now();
     private String tokenVer;
@@ -319,6 +320,56 @@ class ProceduresEnLigneIntegrationTest extends CnmIntegrationTestSupport {
                 .orElseGet(() -> new FicheMarcheValeur(null, idFiche, code, null, false));
         v.setValeur(valeur);
         valeurRepository.save(v);
+    }
+
+    @Test
+    @DisplayName("Liste des procédures en ligne (06/10) : l'Administrateur voit toutes les fiches électroniques, le responsable les siennes, "
+            + "l'intérimaire celles de son titulaire (signalées) ; un autre compte interne reçoit [] ; un compte externe 403 ; NON_LANCEE "
+            + "avant l'avis, puis l'état de la procédure ; à traiter tant que la cérémonie n'est pas close")
+    void listeDesProceduresEnLigne() throws Exception {
+        String url = "/api/fiches-marche/en-ligne";
+        String admin = mvc.perform(get(url).header("Authorization", tokenAdmin)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        List<Integer> ids = JsonPath.read(admin, "$[*].idDmc");
+        assertThat(ids).contains(idDmc.intValue());
+        String filtre = "$[?(@.idDmc==" + idDmc + ")]";
+        assertThat(JsonPath.<List<String>>read(admin, filtre + ".etat")).containsExactly("NON_LANCEE");
+        assertThat(JsonPath.<List<String>>read(admin, filtre + ".statutFiche")).containsExactly("VALIDEE");
+        assertThat(JsonPath.<List<String>>read(admin, filtre + ".responsable.im")).containsExactly("CTRVER");
+        assertThat(JsonPath.<List<Boolean>>read(admin, filtre + ".aTraiter")).containsExactly(true);   // cérémonie non close
+        assertThat(JsonPath.<List<String>>read(admin, filtre + ".etatCeremonie")).containsExactly("A_VENIR");
+        assertThat(JsonPath.<List<Number>>read(admin, filtre + ".nbOffres")).containsExactly(0);
+        String ver = mvc.perform(get(url).header("Authorization", tokenVer)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Integer>>read(ver, "$[*].idDmc")).containsExactly(idDmc.intValue());
+        assertThat(JsonPath.<List<Boolean>>read(ver, "$[*].parInterim")).containsExactly(false);
+        String membre = bearer("CTRMEM", ProfilUtilisateur.MEMBRE, TypeActeur.CONTROLEUR, "CTRMEM", "ANT");
+        mvc.perform(get(url).header("Authorization", membre)).andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(0));
+        mvc.perform(get(url).header("Authorization", jetonCandidat)).andExpect(status().isForbidden());
+        poserAvis();
+        mvc.perform(get(url).header("Authorization", tokenVer)).andExpect(jsonPath("$[0].etat").value(org.hamcrest.Matchers.oneOf("A_VENIR", "OUVERTE")))
+                .andExpect(jsonPath("$[0].datePublication").isNotEmpty()).andExpect(jsonPath("$[0].dateLimite").isNotEmpty());
+
+        // Un chef de commission responsable, absent : son intérimaire (un membre) voit la procédure, signalée.
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/fiches-marche/" + idDmc + "/responsable")
+                .header("Authorization", tokenAdmin)).andExpect(status().isNoContent());
+        mvc.perform(post("/api/fiches-marche/" + idDmc + "/responsable").header("Authorization", tokenAdmin).contentType(JSON)
+                .content("{\"im\":\"CTRCC1\"}")).andExpect(status().isCreated());
+        cnm.prs.entity.Interim i = new cnm.prs.entity.Interim();
+        i.setImTitulaire("CTRCC1");
+        i.setNomTitulaire("NomCTRCC1 Prenoms");
+        i.setProfilTitulaire("CHEF_COMMISSION");
+        i.setImInterimaire("CTRMEM");
+        i.setNomInterimaire("NomCTRMEM Prenoms");
+        i.setProfilInterimaire("MEMBRE");
+        i.setDateDebut(aujourdhui.minusDays(1));
+        i.setDateFin(aujourdhui.plusDays(10));
+        i.setMotif("CONGE");
+        i.setReference("NOTE-01");
+        i.setDesignePar("CTRPRE");
+        i.setDateDesignation(LocalDateTime.now());
+        interimRepository.save(i);
+        mvc.perform(get(url).header("Authorization", membre)).andExpect(status().isOk()).andExpect(jsonPath("$[0].idDmc").value(idDmc))
+                .andExpect(jsonPath("$[0].parInterim").value(true)).andExpect(jsonPath("$[0].responsable.im").value("CTRCC1"));
+        mvc.perform(get(url).header("Authorization", tokenVer)).andExpect(jsonPath("$.length()").value(0));
     }
 
     // ------------------------------------------------------------------ outils

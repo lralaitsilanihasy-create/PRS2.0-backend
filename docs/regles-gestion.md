@@ -802,6 +802,11 @@ reçu validé, le candidat ne lit pas non plus le besoin du dossier (les formula
 pour un lot que son reçu ne couvre pas.
 Contrat : `docs/api-endpoints.md`, § *Le retrait du DAO après paiement des frais — V72*.
 
+⚠️ **2026-10-06 — la liste des procédures en ligne.** L'Administrateur dispose de la liste de toutes les fiches en remise
+électronique, brouillons compris, pour désigner les responsables et suivre les procédures. Chaque responsable de procédure voit les
+siennes, et celles qu'il exerce par intérim pour un titulaire absent (signalées : les gestes restent au titulaire). Une procédure close
+reste listée jusqu'au terme de la conservation des offres.
+
 ⚠️ **2026-10-06 — en remise électronique, les pièces de l'offre se listent une à une.** Une fiche en remise électronique ne se
 valide pas tant que la liste des pièces de l'offre (bloc B14) est vide : c'est elle qui donne au candidat un emplacement par pièce,
 et à la séance de quoi compter les pièces manquantes. Le texte libre reste permis pour le document imprimé, mais ne la remplace

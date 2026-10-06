@@ -7025,6 +7025,35 @@ reçus de la procédure (`PURGE_LE`), la ligne et le journal restent.
   scellement ne la regardent pas ; les offres déjà déposées ne sont pas touchées, l'alerte de séance reste comme filet.
 - Un reçu `EN_ATTENTE` ne suffit pas (H2) ; aucun délai de grâce (H3) ; `GET …/pieces` reste public (H1).
 
+### La liste des procédures en ligne, pour le responsable et l'Administrateur ⚠️ 2026-10-06
+
+Demande front `demande-backend-2026-10-06-liste-procedures-en-ligne.md` (le pilote, 06/10 : des portes d'entrée aux écrans de la
+soumission en ligne). Aucune migration.
+
+| Méthode | URL | Réponse | Statuts | Accès |
+|---|---|---|---|---|
+| GET | /api/fiches-marche/en-ligne | `ProcedureInterneDto[]` | 200 (`[]` sans procédure), 403 compte externe | comptes internes |
+
+- **Qui voit quoi** : l'**Administrateur**, toutes les fiches dont la **dernière version** porte `modeRemise = ELECTRONIQUE`,
+  brouillons et révisions compris ; tout **autre profil interne**, celles dont il est le **responsable titulaire**, ou qu'il exerce
+  **par intérim** pour ce titulaire (ADR-0008, `parInterim = true`) — la PRMP et l'UGPM n'y trouvent que ce dont elles seraient
+  responsables (H2). Candidat, membre de CAO, dépositaire : 403. Un compte sans procédure : `[]` (le front décide d'afficher l'entrée
+  de menu ; aucune route de comptage).
+- `ProcedureInterneDto` = `{ idDmc, reference, objet, autoriteContractante, categorie, statutFiche (BROUILLON · VALIDEE · REVISION),
+  responsable: { im, nom } | null, parInterim, etatCao, etatCeremonie, datePublication, dateOuvertureDepots, dateLimite,
+  dateOuverturePlis, etat (NON_LANCEE · A_VENIR · OUVERTE · CLOSE), etatSeance, nbOffres, aTraiter }`.
+  - `etat` vaut `NON_LANCEE` tant que la procédure n'entre pas dans la liste publique (avis non imprimé, fiche non validée, signature
+    au-dessus de Simple) ; sinon celui de `ProcedureEnLigneDto`. `datePublication` n'est servie qu'une fois lancée.
+  - `etatSeance` : celui de la séance ; `A_VENIR` l'heure d'ouverture passée sans séance ; `null` avant l'heure.
+  - `nbOffres` : le **nombre** seul des offres déposées (et écartées).
+  - `aTraiter` : sans responsable, cérémonie non close, séance en cours ou du jour.
+- **Tri** : à traiter d'abord, les séances closes en dernier, puis par date limite croissante.
+- **H1** : une procédure close reste dans la liste, en bas ; elle en sort une fois passée la durée de conservation des offres
+  (`OFFRE_CONSERVATION_ANNEES`, V70), comptée depuis la clôture de la séance.
+- ⚠️ **L'intérimaire voit, il n'agit pas encore** : les gestes du responsable (paramètres internes, cérémonie, séance) restent
+  réservés au **titulaire** : l'intérim (ADR-0008) n'est pas étendu à la remise électronique. Une
+  procédure `parInterim` est signalée pour qu'il sache qu'elle attend son titulaire.
+
 ---
 
 ## Marchés — dates prévisionnelles
