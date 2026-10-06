@@ -7025,6 +7025,15 @@ reçus de la procédure (`PURGE_LE`), la ligne et le journal restent.
   scellement ne la regardent pas ; les offres déjà déposées ne sont pas touchées, l'alerte de séance reste comme filet.
 - Un reçu `EN_ATTENTE` ne suffit pas (H2) ; aucun délai de grâce (H3) ; `GET …/pieces` reste public (H1).
 
+**⚠️ 2026-10-06 — les reçus à valider, visibles d'un coup d'œil** (demande front `demande-backend-2026-10-06-recus-a-valider-compteurs.md`
+; aucune migration) :
+- `GET /api/kpis/badges` : pour la **PRMP**, `compteurs.recusAValider` s'ajoute à `CompteursPrmpDto` (les reçus `EN_ATTENTE` des fiches
+  dont le plan est le sien) ; pour l'**UGPM**, qui n'avait pas de compteurs, `compteurs = { recusAValider }` (ceux de sa PRMP de
+  tutelle).
+- `GET /api/dmcs/eligibles` : chaque `LigneEligibleDto` gagne **`recusEnAttente`** et **`nbOffres`** (offres déposées ou écartées, le
+  nombre seul) — `0` sans fiche ou en remise papier ; deux requêtes groupées pour toute la liste, pas une par ligne.
+- H1 : seuls les reçus `EN_ATTENTE` comptent.
+
 ### La liste des procédures en ligne, pour le responsable et l'Administrateur ⚠️ 2026-10-06
 
 Demande front `demande-backend-2026-10-06-liste-procedures-en-ligne.md` (le pilote, 06/10 : des portes d'entrée aux écrans de la

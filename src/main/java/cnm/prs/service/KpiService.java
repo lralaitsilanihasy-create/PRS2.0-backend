@@ -102,6 +102,9 @@ public class KpiService {
     /** ⚠️ 2026-09-15 — le badge « À faire » vient du calcul de l'accueil lui-même, jamais d'un comptage parallèle. */
     private final AFaireService aFaireService;
 
+    /** ⚠️ 2026-10-06 (compteurs, §B1) — les reçus de frais de dossier à valider. */
+    private final cnm.prs.repository.RecuDaoRepository recuRepository;
+
     public KpiService(DossierRepository dossierRepository, VerificationRepository verificationRepository,
             ExamenDetailRepository examenDetailRepository, PvExamenRepository pvExamenRepository,
             LettreRenvoiRepository lettreRenvoiRepository, DemandeRetraitRepository demandeRetraitRepository,
@@ -110,7 +113,8 @@ public class KpiService {
             AuditLogRepository auditLogRepository, DemandeRetraitVueRepository demandeRetraitVueRepository,
             PrmpEntiteDemandeRepository prmpEntiteDemandeRepository,
             MandatRepository mandatRepository, SessionUtilisateurRepository sessionRepository,
-            AFaireService aFaireService) {
+            AFaireService aFaireService, cnm.prs.repository.RecuDaoRepository recuRepository) {
+        this.recuRepository = recuRepository;
         this.aFaireService = aFaireService;
         this.demandeRetraitVueRepository = demandeRetraitVueRepository;
         this.prmpEntiteDemandeRepository = prmpEntiteDemandeRepository;
@@ -159,6 +163,8 @@ public class KpiService {
         }
         Object compteurs = switch (profil) {
             case PRMP -> mesCompteursPrmp();
+            // ⚠️ 2026-10-06 (compteurs, §B1) — l'UGPM : les reçus à valider des fiches de sa PRMP de tutelle (son ref), seuls.
+            case UGPM -> Map.of("recusAValider", CurrentUser.ref().filter(s -> !s.isBlank()).map(recuRepository::compterEnAttentePourPrmp).orElse(0L));
             case PRESIDENT -> compteurs(null);
             case CHEF_COMMISSION -> {
                 String localite = CurrentUser.localite().filter(s -> !s.isBlank()).orElse(null);
@@ -185,7 +191,7 @@ public class KpiService {
     public CompteursPrmpDto mesCompteursPrmp() {
         String idPrmp = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
         if (idPrmp == null) {
-            return new CompteursPrmpDto(0, 0, 0, 0, 0, 0);
+            return new CompteursPrmpDto(0, 0, 0, 0, 0, 0, 0);
         }
         // ⚠️ Décision métier 2026-08-27 — les lettres non lues se comptent par AGENT (login, claim
         // « sub ») et non plus par tutelle : la lecture d'une UGPM ne décrémente plus le badge de sa
@@ -202,7 +208,8 @@ public class KpiService {
                 dossierRepository.countByStatutInAndIdPrmp(
                         List.of(StatutDossier.PV_SIGNE.name(), StatutDossier.CLOTURE.name()), idPrmp),
                 lettreRenvoiRepository.countSigneesNonLuesPourPrmp(idPrmp, login),
-                demandeRetraitRepository.countNouvellesDecisionsPourPrmp(idPrmp, seuil));
+                demandeRetraitRepository.countNouvellesDecisionsPourPrmp(idPrmp, seuil),
+                recuRepository.compterEnAttentePourPrmp(idPrmp));
     }
 
     /**

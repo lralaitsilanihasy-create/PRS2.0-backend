@@ -25,5 +25,9 @@ public record LigneEligibleDto(Integer idDetail, Integer idDossier, String refeD
          * ⚠️ 2026-09-29 — son libellé ({@code t_nature.LIBELLE}), ce que la PRMP lit (« Services » et « Fournitures » sont
          * deux natures d'une même catégorie) ; {@code null} si la ligne n'a pas de nature.
          */
-        String libelleNature) {
+        String libelleNature,
+        /** ⚠️ 2026-10-06 (compteurs, §B2) — les reçus de frais de dossier {@code EN_ATTENTE} de la fiche ; 0 sans fiche ou en papier. */
+        long recusEnAttente,
+        /** ⚠️ §B2 — le nombre seul des offres déposées (ou écartées) ; 0 sans fiche ou en papier. */
+        long nbOffres) {
 }

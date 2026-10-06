@@ -25,6 +25,10 @@ public interface OffreRepository extends JpaRepository<Offre, String> {
 
     long countByIdDmcAndEtatNot(Long idDmc, String etat);
 
+    /** ⚠️ 2026-10-06 (compteurs, §B2) — les offres déposées (ou écartées) par DMC, en une requête : {@code [idDmc, nombre]}. */
+    @org.springframework.data.jpa.repository.Query("select o.idDmc, count(o) from Offre o where o.etat in ('DEPOSEE', 'ECARTEE') group by o.idDmc")
+    java.util.List<Object[]> compterDeposeesParDmc();
+
     List<Offre> findByEtat(String etat);
 
     List<Offre> findByEtatAndDateCreationBefore(String etat, LocalDateTime limite);

@@ -139,13 +139,20 @@ public class DmcService {
     /** ⚠️ 2026-09-30 — les avis spécifiques imprimés (date de lancement d'une ligne). */
     private final cnm.prs.repository.DocumentFicheMarcheRepository documentRepository;
 
+    /** ⚠️ 2026-10-06 (compteurs des reçus et des offres, §B2). */
+    private final cnm.prs.repository.RecuDaoRepository recuRepository;
+    private final cnm.prs.repository.OffreRepository offreRepository;
+
     public DmcService(DossierMecRepository repository, MarcheRepository marcheRepository,
             ModePassationRepository modeRepository, TypeDmcRepository typeDmcRepository,
             PerimetreDossier perimetre, DossierRepository dossierRepository,
             DossierIntegriteService dossierIntegrite, ValeursPpmService valeursPpm,
             ChampFicheMarcheRepository champRepository, cnm.prs.repository.NatureRepository natureRepository,
             JournalDossierService journal, cnm.prs.repository.StatutMarcheRepository statutMarcheRepository,
-            cnm.prs.repository.DocumentFicheMarcheRepository documentRepository) {
+            cnm.prs.repository.DocumentFicheMarcheRepository documentRepository, cnm.prs.repository.RecuDaoRepository recuRepository,
+            cnm.prs.repository.OffreRepository offreRepository) {
+        this.recuRepository = recuRepository;
+        this.offreRepository = offreRepository;
         this.documentRepository = documentRepository;
         this.journal = journal;
         this.statutMarcheRepository = statutMarcheRepository;
@@ -241,6 +248,11 @@ public class DmcService {
             dmcParOrigine.putIfAbsent((Integer) row[0], (DossierMec) row[1]);
         }
         Caches caches = new Caches(dmcParOrigine);
+        // ⚠️ 2026-10-06 (compteurs, §B2) — reçus en attente et offres déposées : une requête chacun pour toute la liste.
+        Map<Long, Long> recusEnAttente = new HashMap<>();
+        recuRepository.compterEnAttenteParDmc().forEach(r -> recusEnAttente.put((Long) r[0], (Long) r[1]));
+        Map<Long, Long> nbOffres = new HashMap<>();
+        offreRepository.compterDeposeesParDmc().forEach(r -> nbOffres.put((Long) r[0], (Long) r[1]));
         Map<Integer, Dossier> dossiers = new HashMap<>();
         List<LigneEligibleDto> out = new ArrayList<>();
         for (Marche m : lignes) {
@@ -261,7 +273,8 @@ public class DmcService {
                     dmc != null, dmc == null ? null : dmc.getIdDmc(),
                     m.formeMarcheSaisie() == null ? null : m.formeMarcheSaisie().name(),
                     motifForme(m.formeMarcheSaisie()).isEmpty(), cat.categorie() == null ? null : cat.categorie().name(),
-                    cat.motif().isEmpty(), m.getIdNature(), nature == null ? null : nature.getLibelle()));
+                    cat.motif().isEmpty(), m.getIdNature(), nature == null ? null : nature.getLibelle(),
+                    dmc == null ? 0 : recusEnAttente.getOrDefault(dmc.getIdDmc(), 0L), dmc == null ? 0 : nbOffres.getOrDefault(dmc.getIdDmc(), 0L)));
         }
         return out;
     }

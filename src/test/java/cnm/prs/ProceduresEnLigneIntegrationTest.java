@@ -241,6 +241,13 @@ class ProceduresEnLigneIntegrationTest extends CnmIntegrationTestSupport {
                 .andReturn().getResponse().getContentAsByteArray(), 0, 4)).isEqualTo("%PDF");
         mvc.perform(get(recus + "/mien").header("Authorization", sansEntreprise)).andExpect(status().isNotFound());
         assertThat(notificationRepository.findPourPrmp("PRMP001", null)).extracting(Notification::getTypeNotif).contains("RECU_A_VALIDER");
+        // ⚠️ Compteurs (06/10) — le badge de la PRMP et de l'UGPM, et la ligne de la liste des appels d'offres.
+        mvc.perform(get("/api/kpis/badges").header("Authorization", tokenPrmp)).andExpect(jsonPath("$.compteurs.recusAValider").value(1));
+        mvc.perform(get("/api/kpis/badges").header("Authorization", bearer("ugpm.hery", ProfilUtilisateur.UGPM, TypeActeur.UGPM, "PRMP001", "ANT")))
+                .andExpect(jsonPath("$.compteurs.recusAValider").value(1));
+        mvc.perform(get("/api/dmcs/eligibles").header("Authorization", tokenPrmp))
+                .andExpect(jsonPath("$[?(@.idDmc==" + idDmc + ")].recusEnAttente", org.hamcrest.Matchers.contains(1)))
+                .andExpect(jsonPath("$[?(@.idDmc==" + idDmc + ")].nbOffres", org.hamcrest.Matchers.contains(0)));
 
         // §B3 — la PRMP et l'UGPM ; ni l'Administrateur ni le candidat.
         String prmp = "/api/fiches-marche/" + idDmc + "/recus";
@@ -258,6 +265,7 @@ class ProceduresEnLigneIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(post(prmp + "/" + premier + "/valider").header("Authorization", tokenPrmp)).andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("RECU_DEJA_DECIDE"));
         assertThat(notificationRepository.findPourRefEtType("C900000011", "CANDIDAT")).extracting(Notification::getTypeNotif).contains("RECU_REFUSE");
+        mvc.perform(get("/api/kpis/badges").header("Authorization", tokenPrmp)).andExpect(jsonPath("$.compteurs.recusAValider").value(0));   // H1
         mvc.perform(get(url + "/" + dpao).header("Authorization", jetonCandidat)).andExpect(status().isForbidden());
 
         // Un nouveau reçu, validé par l'UGPM : le retrait s'ouvre, le registre dit le reçu ; un troisième n'est plus utile.

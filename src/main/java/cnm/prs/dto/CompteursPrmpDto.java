@@ -18,5 +18,7 @@ public record CompteursPrmpDto(
         long dossiersARectifier,
         long dossiersVerifies,
         long lettresRenvoi,
-        long demandesRetraitNouvelles) {
+        long demandesRetraitNouvelles,
+        /** ⚠️ 2026-10-06 (compteurs, §B1) — les reçus de frais de dossier {@code EN_ATTENTE} sur les fiches de la PRMP. */
+        long recusAValider) {
 }
