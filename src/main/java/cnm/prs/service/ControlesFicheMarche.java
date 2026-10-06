@@ -110,6 +110,10 @@ public final class ControlesFicheMarche {
     public static final String SE_MARGE_EPUISEE = "SE_MARGE_EPUISEE";
     /** ⚠️ V67 (2026-10-04, soumission en ligne, lot 2a, §B3) — règle 13 : la commission d'appel d'offres est constituée. */
     public static final String SE_CAO = "SE_CAO";
+    /** ⚠️ 2026-10-06 (décision du pilote, « A ») — en remise électronique, les pièces de l'offre se listent une à une (bloc B14). */
+    public static final String SE_PIECES_LISTEES = "SE_PIECES_LISTEES";
+    public static final String MESSAGE_PIECES_LISTEES = "En remise électronique, listez une à une les pièces de l'offre (bloc B14) : le "
+            + "candidat joint un fichier par pièce de la liste. Le texte « Documents et pièces constituant l'offre » ne suffit pas.";
     private static final String BLOC_REMISE = "B04";
 
     /** Libellés CAPM du plan dont les dates entrent dans {@code DATES_ORDRE} à défaut de champ. */
@@ -618,6 +622,24 @@ public final class ControlesFicheMarche {
         } else {
             bilan.bloquants().add(new Controle(PIECES_OFFRE_EXIGEES, champs, "B14", "Les pièces de l'offre ne sont pas dites : "
                     + "remplissez la liste des pièces de l'offre, ou « " + texte.getLibelle() + " »."));
+        }
+    }
+
+    /**
+     * ⚠️ 2026-10-06 (décision du pilote, « A ») — {@code SE_PIECES_LISTEES} : en remise électronique, la liste des pièces de la
+     * fiche (bloc B14, toutes rubriques confondues, {@code nbPieces}) n'est pas vide ; le texte au rôle {@code PIECES_OFFRE_EXIGEES}
+     * reste permis pour le document imprimé, mais ne la remplace plus. Bloquant ; muette en remise papier. Les pièces de base de la
+     * procédure en ligne ({@code AE}, {@code RECU-DAO}, {@code GARANTIE}) ne comptent pas : elles ne sont pas dans la liste (H2).
+     */
+    public static void piecesListees(Map<String, ?> cadrage, long nbPieces, BilanControlesDto bilan) {
+        if (!RemiseElectronique.electronique(cadrage)) {
+            return;
+        }
+        if (nbPieces > 0) {
+            bilan.ok().add(new Controle(SE_PIECES_LISTEES, List.of(), "B14", "Pièces de l'offre listées pour la remise électronique : "
+                    + nbPieces + " pièce(s)."));
+        } else {
+            bilan.bloquants().add(new Controle(SE_PIECES_LISTEES, List.of(), "B14", MESSAGE_PIECES_LISTEES));
         }
     }
 

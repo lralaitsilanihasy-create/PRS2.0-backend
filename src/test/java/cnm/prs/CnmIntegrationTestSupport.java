@@ -751,7 +751,7 @@ abstract class CnmIntegrationTestSupport extends AbstractIntegrationTest {
             }
             // ⚠️ V61 (2026-10-03) — une fiche de travaux dit les pièces de l'offre (B04-PI-01 est devenu facultatif) : une pièce semée.
             java.util.List<Object> piecesOffre = com.jayway.jsonpath.JsonPath.read(fiche,
-                    "$.bilanControles.bloquants[?(@.regle=='PIECES_OFFRE_EXIGEES')]");
+                    "$.bilanControles.bloquants[?(@.regle=='PIECES_OFFRE_EXIGEES' || @.regle=='SE_PIECES_LISTEES')]");   // ⚠️ 2026-10-06 : la remise électronique exige la liste
             if (!piecesOffre.isEmpty()) {
                 mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
                         .put("/api/fiches-marche/" + idDmc + "/pieces").header("Authorization", tokenPrmp)

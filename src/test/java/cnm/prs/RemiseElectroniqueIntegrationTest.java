@@ -38,6 +38,7 @@ import cnm.prs.enums.FormeMarche;
 import cnm.prs.enums.ProfilUtilisateur;
 import cnm.prs.enums.TypeActeur;
 import cnm.prs.service.ChampFicheMarcheService;
+import cnm.prs.service.ControlesFicheMarche;
 import cnm.prs.service.RemiseElectronique;
 
 /**
@@ -202,6 +203,21 @@ class RemiseElectroniqueIntegrationTest extends CnmIntegrationTestSupport {
         donnees.put("B05-GS-04", "105");
         donnees.put("B04-VO-01", "75");
         remplirObligatoires(idDmc, "QUANTITE_FIXE", "FOURNITURES_SERVICES", donnees);
+        // ⚠️ 2026-10-06 (« A ») — en remise électronique, la liste des pièces (B14) ne se remplace pas : vidée, la règle bloque.
+        String pieces = mvc.perform(get("/api/fiches-marche/" + idDmc + "/pieces").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        mvc.perform(put("/api/fiches-marche/" + idDmc + "/pieces").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"pieces\":[]}")).andExpect(status().isOk());
+        String sansListe = fiche(idDmc);
+        assertThat(JsonPath.<List<String>>read(sansListe, "$.bilanControles.bloquants[?(@.regle=='SE_PIECES_LISTEES')].message"))
+                .containsExactly(ControlesFicheMarche.MESSAGE_PIECES_LISTEES);
+        assertThat(JsonPath.<List<String>>read(sansListe, "$.bilanControles.bloquants[?(@.regle=='SE_PIECES_LISTEES')].bloc"))
+                .containsExactly("B14");
+        mvc.perform(put("/api/fiches-marche/" + idDmc + "/pieces").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"pieces\":[{\"rubrique\":\"ADMINISTRATIVE\",\"libelle\":\"Attestation fiscale\"}]}")).andExpect(status().isOk());
+        assertThat(JsonPath.<List<String>>read(fiche(idDmc), "$.bilanControles.ok[*].regle")).contains("SE_PIECES_LISTEES");   // H1
+        mvc.perform(put("/api/fiches-marche/" + idDmc + "/pieces").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"pieces\":" + pieces + "}")).andExpect(status().isOk());   // la liste semée, rétablie
         String fiche = fiche(idDmc);
         assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.bloquants[*].regle"))
                 .containsExactlyInAnyOrder("PARAMETRES_INTERNES_INCOMPLETS", "RESPONSABLE_NON_DESIGNE", "SE_DEPOSITAIRE", "SE_CAO");   // ⚠️ V66 règle 12, V67 règle 13

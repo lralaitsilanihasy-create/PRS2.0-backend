@@ -800,6 +800,13 @@ sont réglés — une offre sans reçu validé est **signalée** à la commissio
 lancée avant cette règle gardent le retrait libre. Le fichier du reçu suit la conservation des offres.
 Contrat : `docs/api-endpoints.md`, § *Le retrait du DAO après paiement des frais — V72*.
 
+⚠️ **2026-10-06 — en remise électronique, les pièces de l'offre se listent une à une.** Une fiche en remise électronique ne se
+valide pas tant que la liste des pièces de l'offre (bloc B14) est vide : c'est elle qui donne au candidat un emplacement par pièce,
+et à la séance de quoi compter les pièces manquantes. Le texte libre reste permis pour le document imprimé, mais ne la remplace
+plus. Une liste de pièces administratives seule suffit à cette règle (la règle sur les pièces de l'offre continue d'exiger, elle, une
+pièce de l'offre ou le texte). En remise papier, rien ne change. Les versions déjà validées ne sont pas reprises : la règle joue à la
+prochaine validation.
+
 #### La fiche DAO des travaux (référentiel remis le 2026-09-24)
 
 - **Les travaux se préparent** : 257 informations (dont un bloc d'annexes et de formulaires), avec leur vocabulaire —
