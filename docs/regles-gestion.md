@@ -460,22 +460,28 @@ fiche. Contrat : `docs/api-endpoints.md`, § *Fiche marché d'un appel d'offres*
 
 #### Le DAO complet : un seul document (demande front du 2026-10-06, arbitrages du pilote du 06/10)
 
-⚠️ **Le DAO validé se lit comme un DAO réel : un seul document, page de garde, sommaire, six parties.** Il remplace les
-documents séparés partout où le DAO est servi. Décision : ADR-0014 ; contrat : `docs/api-endpoints.md`, § *Le DAO complet en
-un seul document*.
+⚠️ **Le DAO validé se lit comme un DAO réel : un seul document, page de garde, sommaire général, deux parties.** Il remplace
+les documents séparés partout où le DAO est servi. Décision : ADR-0014 ; contrat : `docs/api-endpoints.md`, § *Le DAO complet
+en un seul document*.
 
 - **Quand** : à chaque validation d'une version, en `.docx` et en `.pdf`. Les versions déjà validées l'obtiennent par un
   rattrapage automatique, dans les dix minutes.
-- **Le plan**, celui des documents types de l'ARMP :
-  - page de garde et sommaire ;
-  - I Instructions aux candidats (texte fixe de la catégorie) ;
-  - II données particulières (DPAO, DPAC ou DPIC) ;
-  - III formulaires de soumission ;
-  - IV acte d'engagement, lot par lot ;
-  - V CCAP ou CPS, avec la liste des fournitures ;
-  - spécifications techniques ;
-  - VI CCAG (texte fixe de la catégorie).
+- **La page de garde** (⚠️ revue après la recette du 06/10) : l'emblème de la République, le ministère, la PRMP et l'UGPM,
+  l'intitulé qui porte le mode (« Dossier d'appel d'offres ouvert »), le numéro, l'objet, les lots, « Lancé le » à compléter,
+  le financement, l'imputation administrative et le compte, tels que le plan de passation les porte.
+- **Le plan** est celui que l'ARMP numérote dans le sommaire général de ses documents types (⚠️ revu après la recette du 06/10) :
+  - **première partie, procédure d'appel d'offres** : 1.1 instructions aux candidats (texte fixe de la catégorie, sans sa
+    couverture) ; 1.2 données particulières (DPAO, ou DPAC en contrat-cadre) ; 1.3 formulaires de soumission (fiches de
+    renseignements A1 à A4, modèles de garantie) ;
+  - **deuxième partie, marché** : 2.1 acte d'engagement, lot par lot ; 2.2 cahier des prescriptions spéciales — le CCAP et
+    ses annexes, puis les spécifications techniques et la liste des fournitures ; 2.3 CCAG (texte fixe de la catégorie, sans sa
+    couverture).
+  - Les prestations intellectuelles suivent la procédure de consultation : la lettre d'invitation (1.1) reste un document à
+    part, adressé à chaque candidat.
 - **Il assemble, il ne réécrit rien** : chaque partie est le document que la fiche produisait déjà.
+- **Une pièce de la clause 6.2 ne s'imprime qu'une fois** (⚠️ recette du 06/10) : quand la liste des pièces de l'offre, ou
+  des pièces administratives, est saisie, le texte libre de la même rubrique n'est plus imprimé ; il ne sert qu'à défaut de
+  liste.
 - **Les prestations intellectuelles** le reçoivent sous le titre « Dossier de consultation ».
 - **Où il est servi** :
   - dans les documents de la fiche ;

@@ -385,8 +385,9 @@ class ModelesDaoTravauxTest {
     }
 
     @Test
-    @DisplayName("2026-10-03 (V61, texte validé par le pilote) — clause 6.2 du DPAO-T : 1° la liste OFFRE puis B04-PI-01, 2° la "
-            + "liste ADMINISTRATIVE puis B03-CQ-01 ; une rubrique vide n'imprime pas de pointillés quand le texte la remplace")
+    @DisplayName("2026-10-03 (V61) — clause 6.2 du DPAO-T : 1° la liste OFFRE ou, à défaut, B04-PI-01, 2° la liste ADMINISTRATIVE "
+            + "ou, à défaut, B03-CQ-01 (⚠️ 06/10, C4 : plus les deux) ; une rubrique vide n'imprime pas de pointillés quand le texte "
+            + "la remplace")
     void piecesDuDpao() {
         FicheMarcheDto f = fiche(Map.of("typePrix", "UNITAIRES", "tranches", "NON", "avance", "NON", "garantieSoumission", "NON"));
         f.getValeurs().put("B04-PI-01", "Méthodologie d'exécution");
@@ -404,10 +405,11 @@ class ModelesDaoTravauxTest {
                         "annexe 5, planning 8-a")));
         String listes = FormulairesCandidat.rendreModele("DPAO", null, f, champs, dao.modele("DPAO-T"), null, jetons).texte()
                 .replace(' ', ' ').replace(' ', ' ');
+        // ⚠️ 2026-10-06 (recette du DAO complet, C4) — une liste non vide remplace le texte libre de sa rubrique : plus de doublon.
         assertThat(listes).containsSubsequence("1°- Documents ou pièces à remettre en sus",
-                "- 09 : Planning général, selon le modèle : annexe 5, planning 8-a", "Méthodologie d'exécution", "2° -",
-                "- 01 : Carte professionnelle 2026, copie légalisée par le centre fiscal, datée de moins de 3 mois",
-                "une photocopie certifiée de la carte statistique");
+                "- 09 : Planning général, selon le modèle : annexe 5, planning 8-a", "2° -",
+                "- 01 : Carte professionnelle 2026, copie légalisée par le centre fiscal, datée de moins de 3 mois")
+                .doesNotContain("Méthodologie d'exécution", "une photocopie certifiée de la carte statistique");
     }
 
     private static Map<String, ChampFicheMarche> champsMen() {

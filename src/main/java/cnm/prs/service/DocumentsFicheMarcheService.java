@@ -479,6 +479,8 @@ public class DocumentsFicheMarcheService {
         return tous.stream()
                 .filter(d -> !complet || DaoCompletService.TYPE.equals(d.getType()) || "xlsx".equals(d.getExtension()))
                 .filter(d -> !TYPES_PUBLICATION.contains(d.getType()))   // ⚠️ 2026-09-30 — avis et lettres se listent à part (listerAvis)
+                // ⚠️ 2026-10-06 (recette, C6) — le DAO complet en tête, avant les classeurs ; l'ordre est stable pour le reste.
+                .sorted(java.util.Comparator.comparing((DocumentFicheMarche d) -> !DaoCompletService.TYPE.equals(d.getType())))
                 .map(d -> new DocumentFicheDto(d.getIdDocument(), d.getType(),
                         DaoCompletService.TYPE.equals(d.getType()) ? (cnm.prs.enums.CategorieDao.PRESTATIONS_INTELLECTUELLES.name().equals(categorie)
                                 ? "Dossier de consultation complet" : "Dossier d'appel d'offres complet")

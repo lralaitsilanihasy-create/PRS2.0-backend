@@ -1,8 +1,10 @@
-# ⚠️ 2026-10-06 (DAO complet, demande front du 06/10) — assemble le DAO complet par Word (automation COM).
-# Entrée : un manifeste JSON (UTF-8) { garde: [{ texte, taille, gras }], titreSommaire, entete, parties: [{ titre, fichier }],
-# docx, pdf }. Word crée le document, pose la page de garde et le sommaire, insère chaque partie dans une nouvelle section (titre
-# au style « Titre 1 », pour le sommaire), pose l'en-tête et le pied « page n / N » (numérotation continue), met à jour le sommaire
-# et les champs, puis enregistre en .docx et en .pdf. Lancé dans son propre processus, avec un délai, par DaoCompletWord.
+# ⚠️ 2026-10-06 (DAO complet, demande front du 06/10 ; constats de recette C1-C3 du même jour) — assemble le DAO complet par
+# Word (automation COM). Entrée : un manifeste JSON (UTF-8) { embleme, garde: [{ texte, taille, gras }], titreSommaire, entete,
+# parties: [{ titres: [{ texte, niveau }], fichier }], docx, pdf }. Word crée le document, pose la page de garde (emblème puis
+# lignes centrées) et le sommaire, insère chaque partie dans une nouvelle section, précédée de ses titres (styles « Partie DAO 1 »
+# à « Partie DAO 4 », seuls lus par le sommaire ; une partie sans fichier n'a que ses titres), pose l'en-tête et le pied
+# « page n / N » (numérotation continue), met à jour le sommaire et les champs, puis enregistre en .docx et en .pdf. Lancé dans
+# son propre processus, avec un délai, par DaoCompletWord.
 param([string]$manifeste)
 $ErrorActionPreference = 'Stop'
 $m = Get-Content -Raw -Encoding UTF8 $manifeste | ConvertFrom-Json
@@ -15,23 +17,36 @@ try {
     $doc = $word.Documents.Add()
     function Fin { $r = $doc.Content; $r.Collapse(0); return $r }
 
-    # Le style des titres de partie : seul lui nourrit le sommaire (les titres internes des parties n'y vont pas).
-    $style = $doc.Styles.Add('Partie DAO', 1)
-    $style.Font.Size = 14
-    $style.Font.Bold = 1
-    $style.ParagraphFormat.Alignment = 1
-    $style.ParagraphFormat.SpaceAfter = 18
-    $style.ParagraphFormat.OutlineLevel = 1
-    $style.NextParagraphStyle = $doc.Styles.Item(-1)
+    # Les styles des titres du plan : seuls eux nourrissent le sommaire (les titres internes des parties n'y vont pas).
+    $formes = @{ 1 = @(16, 1, 24); 2 = @(14, 1, 18); 3 = @(12, 0, 12); 4 = @(11, 0, 6) }   # taille, centré (1) ou à gauche (0), espace après
+    foreach ($n in 1..4) {
+        $s = $doc.Styles.Add("Partie DAO $n", 1)
+        $s.Font.Size = $formes[$n][0]
+        $s.Font.Bold = 1
+        $s.ParagraphFormat.Alignment = $formes[$n][1]
+        $s.ParagraphFormat.SpaceBefore = 6
+        $s.ParagraphFormat.SpaceAfter = $formes[$n][2]
+        $s.ParagraphFormat.OutlineLevel = $n
+        $s.ParagraphFormat.KeepWithNext = -1
+        $s.NextParagraphStyle = $doc.Styles.Item(-1)
+    }
 
-    # La page de garde.
+    # La page de garde : l'emblème, puis les lignes centrées.
+    if ([string]$m.embleme -ne '') {
+        $r = Fin
+        $r.ParagraphFormat.Alignment = 1
+        $img = $doc.InlineShapes.AddPicture([string]$m.embleme, $false, $true, $r)
+        if ($img.Height -gt 90) { $img.LockAspectRatio = -1; $img.Height = 90 }
+        $r = Fin
+        $r.InsertParagraphAfter()
+    }
     foreach ($l in $m.garde) {
         $r = Fin
         $r.InsertAfter([string]$l.texte)
         $r.ParagraphFormat.Alignment = 1
         $r.Font.Size = [int]$l.taille
         $r.Font.Bold = [int][bool]$l.gras
-        $r.ParagraphFormat.SpaceAfter = 12
+        $r.ParagraphFormat.SpaceAfter = 8
         $r.InsertParagraphAfter()
     }
     $r = Fin
@@ -45,22 +60,25 @@ try {
     $r.Font.Bold = 1
     $r.InsertParagraphAfter()
     $r = Fin
-    $separateur = [string]$word.International(17)   # wdListSeparator : « ; » en français, « , » en anglais
-    $doc.Fields.Add($r, -1, ('TOC \t "Partie DAO' + $separateur + '1" \h \z'), $false) | Out-Null
+    $sep = [string]$word.International(17)   # wdListSeparator : « ; » en français, « , » en anglais
+    $styles = (1..4 | ForEach-Object { "Partie DAO $_" + $sep + $_ }) -join $sep
+    $doc.Fields.Add($r, -1, ('TOC \t "' + $styles + '" \h \z'), $false) | Out-Null
 
-    # Les parties, chacune dans sa section.
+    # Les parties, chacune dans sa section, précédée de ses titres.
     foreach ($p in $m.parties) {
         $r = Fin
         $r.InsertBreak(2)
-        if ([string]$p.titre -ne '') {
+        foreach ($t in $p.titres) {
             $r = Fin
-            $r.InsertAfter([string]$p.titre)
-            $r.Style = 'Partie DAO'
+            $r.InsertAfter([string]$t.texte)
+            $r.Style = "Partie DAO " + [int]$t.niveau
             $r.InsertParagraphAfter()
         }
-        $r = Fin
-        $r.Style = -1
-        $r.InsertFile([string]$p.fichier)
+        if ([string]$p.fichier -ne '') {
+            $r = Fin
+            $r.Style = -1
+            $r.InsertFile([string]$p.fichier)
+        }
     }
 
     # En-tête et pied de page, communs à toutes les sections ; numérotation continue.

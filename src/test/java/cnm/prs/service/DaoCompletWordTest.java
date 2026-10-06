@@ -28,14 +28,23 @@ class DaoCompletWordTest {
     void assembler() throws Exception {
         DaoCompletWord word = new DaoCompletWord(true, 300, JsonMapper.builder().build());
         DaoCompletWord.Resultat r = word.assembler(
-                List.of(new DaoCompletWord.LigneGarde("MINISTÈRE DE L'ÉDUCATION NATIONALE", 13, true),
-                        new DaoCompletWord.LigneGarde("DOSSIER D'APPEL D'OFFRES", 22, true)),
+                new DaoCompletService(null, null, null, null, null).garde(etat(), java.util.Map.of("MINISTERE",
+                        "Ministère de l'Éducation nationale", "MODE", "Appel d'offres ouvert", "LOTS_DESIGNATION", "Ordinateurs ; Imprimantes",
+                        "FINANCEMENT", "RPI", "COMPTES", "2321")),
                 "SOMMAIRE", "DAO n° 001-2026 — Essai",
-                List.of(new DaoCompletWord.Partie("Section I — Instructions aux candidats", DaoCompletService.fixe("TRAVAUX", "IC")),
-                        new DaoCompletWord.Partie("Section II — Données particulières de l'appel d'offres", docx("Données particulières d'essai")),
-                        new DaoCompletWord.Partie(null, docx("Suite de la section II")),
-                        new DaoCompletWord.Partie("Section VI — Cahier des clauses administratives générales", DaoCompletService.fixe("TRAVAUX", "CCAG"))));
+                List.of(new DaoCompletWord.Partie(List.of(t("PREMIÈRE PARTIE : PROCÉDURE D'APPEL D'OFFRES", 1),
+                        t("1.1. - Instructions aux candidats", 2)), DaoCompletService.fixe("TRAVAUX", "IC")),
+                        new DaoCompletWord.Partie(List.of(t("1.2. - Données Particulières de l'Appel d'Offres (DPAO)", 2)),
+                                docx("Données particulières d'essai")),
+                        new DaoCompletWord.Partie(List.of(), docx("Suite de la section II")),
+                        new DaoCompletWord.Partie(List.of(t("DEUXIÈME PARTIE : MARCHÉ", 1), t("2.1. - Acte d'Engagement", 2),
+                                t("Lot 1", 3)), null),
+                        new DaoCompletWord.Partie(List.of(t("2.3. - Cahier des Clauses Administratives Générales", 2)),
+                                DaoCompletService.fixe("TRAVAUX", "CCAG"))));
         assertThat(new String(r.docx(), 0, 2)).isEqualTo("PK");
+        if (System.getProperty("dao.sortie") != null) {   // relecture à l'œil : -Ddao.sortie=<dossier>
+            java.nio.file.Files.write(java.nio.file.Path.of(System.getProperty("dao.sortie"), "dao-complet.pdf"), r.pdf());
+        }
         try (PDDocument pdf = Loader.loadPDF(r.pdf())) {
             int n = pdf.getNumberOfPages();
             assertThat(n).isGreaterThan(50);
@@ -43,12 +52,26 @@ class DaoCompletWordTest {
             s.setStartPage(2);
             s.setEndPage(2);
             String sommaire = s.getText(pdf).replaceAll("\\s+", " ");
-            assertThat(sommaire).contains("SOMMAIRE", "DAO n° 001-2026", "page 2 / " + n).containsIgnoringCase("Section II")
-                    .containsIgnoringCase("Section VI").doesNotContain("Suite de la section II");
+            assertThat(sommaire).contains("SOMMAIRE", "DAO n° 001-2026", "page 2 / " + n, "PREMIÈRE PARTIE", "1.2. - Données",
+                    "DEUXIÈME PARTIE", "Lot 1", "2.3. - Cahier").doesNotContain("Suite de la section II", "DOSSIER TYPE");
+            // ⚠️ C2 — les couvertures des documents types ne sont plus recopiées.
+            assertThat(new PDFTextStripper().getText(pdf)).doesNotContain("DOSSIER TYPE D'APPEL D'OFFRES", "REPUBLIQUE DE MADAGASCAR");
             s.setStartPage(n);
             s.setEndPage(n);
             assertThat(s.getText(pdf)).contains("page " + n + " / " + n);
         }
+    }
+
+    private static cnm.prs.dto.FicheMarcheDto etat() {
+        cnm.prs.dto.FicheMarcheDto e = new cnm.prs.dto.FicheMarcheDto();
+        e.setCategorie("TRAVAUX");
+        e.setValeurs(java.util.Map.of("B02-OB-03", "001-2026"));
+        e.setDesignationMarche("Essai");
+        return e;
+    }
+
+    private static DaoCompletWord.Titre t(String texte, int niveau) {
+        return new DaoCompletWord.Titre(texte, niveau);
     }
 
     private static byte[] docx(String texte) throws Exception {

@@ -119,6 +119,8 @@ class DaoCompletIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<List<String>>read(documents, "$[?(@.extension!='xlsx')].type")).containsOnly("DAO_COMPLET").hasSize(2);
         assertThat(JsonPath.<List<String>>read(documents, "$[?(@.type=='DAO_COMPLET')].libelle")).containsOnly("Dossier d'appel d'offres complet");
+        // ⚠️ C6 (recette du 06/10) — le DAO complet en tête, avant les classeurs.
+        assertThat(JsonPath.<List<String>>read(documents, "$[*].type")).startsWith("DAO_COMPLET", "DAO_COMPLET");
     }
 
     private ResultActions deposer(String url, String nom, byte[] contenu) throws Exception {

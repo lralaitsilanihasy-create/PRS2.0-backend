@@ -32,8 +32,15 @@ public class DaoCompletWord {
 
     private static final Logger log = LoggerFactory.getLogger(DaoCompletWord.class);
 
-    /** Une partie : son titre au sommaire ({@code null} : pas de titre, suite de la partie précédente) et son fichier Word. */
-    public record Partie(String titre, byte[] docx) {
+    /** Un titre du plan, au niveau 1 (partie du DAO) à 4 (formulaire, annexe) ; seuls ces titres nourrissent le sommaire. */
+    public record Titre(String texte, int niveau) {
+    }
+
+    /**
+     * Une partie : une nouvelle section, ses titres (aucun : suite de la partie précédente), puis son fichier Word ({@code null} :
+     * les titres seuls).
+     */
+    public record Partie(List<Titre> titres, byte[] docx) {
     }
 
     /** Une ligne de la page de garde. */
@@ -74,16 +81,27 @@ public class DaoCompletWord {
             }
             List<Map<String, Object>> lignes = new ArrayList<>();
             for (int i = 0; i < parties.size(); i++) {
-                Path f = dossier.resolve(String.format("partie-%02d.docx", i));
-                Files.write(f, parties.get(i).docx());
                 Map<String, Object> p = new LinkedHashMap<>();
-                p.put("titre", parties.get(i).titre() == null ? "" : parties.get(i).titre());
-                p.put("fichier", f.toAbsolutePath().toString());
+                p.put("titres", parties.get(i).titres() == null ? List.of() : parties.get(i).titres());
+                p.put("fichier", "");
+                if (parties.get(i).docx() != null) {
+                    Path f = dossier.resolve(String.format("partie-%02d.docx", i));
+                    Files.write(f, parties.get(i).docx());
+                    p.put("fichier", f.toAbsolutePath().toString());
+                }
                 lignes.add(p);
+            }
+            // ⚠️ C1 (recette du 06/10) — l'emblème de la République en tête de la page de garde, celui de l'avis spécifique.
+            Path embleme = dossier.resolve("embleme.png");
+            try (InputStream in = DaoCompletWord.class.getResourceAsStream("/modeles/images/embleme.png")) {
+                if (in != null) {
+                    Files.write(embleme, in.readAllBytes());
+                }
             }
             Path docx = dossier.resolve("dao-complet.docx");
             Path pdf = dossier.resolve("dao-complet.pdf");
             Map<String, Object> manifeste = new LinkedHashMap<>();
+            manifeste.put("embleme", Files.exists(embleme) ? embleme.toAbsolutePath().toString() : "");
             manifeste.put("garde", garde);
             manifeste.put("titreSommaire", titreSommaire);
             manifeste.put("entete", entete);

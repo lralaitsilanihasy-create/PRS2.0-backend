@@ -6992,6 +6992,39 @@ dossier, le serveur assemble un **`DAO_COMPLET`** en `.docx` et en `.pdf` (deux 
   version validée** qui a des documents mais pas encore de DAO complet. Il n'est pas « produit à la première demande » : la
   lecture reste immédiate.
 
+⚠️ **Recette du 06/10 (constats C1 à C6 de la demande, §C) — corrige le tableau et les points ci-dessus** (V74) :
+- **Plan de l'ARMP (C3)**, tel que le sommaire général des documents types le numérote, et non plus « Section I à VI » :
+  - **PREMIÈRE PARTIE : PROCÉDURE D'APPEL D'OFFRES** (PI : « … DE CONSULTATION ») — 1.1. Instructions aux candidats ;
+    1.2. Données Particulières de l'Appel d'Offres (DPAO) [contrat-cadre : d'Appel à Concurrence (DPAC)] ; 1.3. Formulaires de
+    soumission, avec « A. - Modèles de fiches de renseignements » (A1 à A4), « B. - Modèle d'attestation du fabricant - Non
+    utilisé » et « C. - Modèles de garantie de soumission » (C1, C2) ; en travaux, « B. - Modèles de garantie de soumission »
+    (B1, B2). PI : 1.1. Lettre d'invitation (titre seul : adressée à chaque candidat, document à part), 1.2. IC, 1.3. DPIC,
+    1.4. Formulaires-types de soumission ;
+  - **DEUXIÈME PARTIE : MARCHÉ** — 2.1. Acte d'Engagement (« Lot n » par lot ; contrat-cadre : contrat-cadre valant AE et CCAP ;
+    PI : modèle d'AE) ; 2.2. Cahier des Prescriptions Spéciales : le CCAP et ses annexes, puis « Spécifications techniques » (PI :
+    « Termes de références ») : le Word joint, puis l'annexe « Liste des fournitures et calendrier de livraison » ; 2.3. CCAG de
+    la catégorie.
+  - Titres sur **quatre niveaux** (styles « Partie DAO 1 » à « 4 »), tous au sommaire (« SOMMAIRE GÉNÉRAL »), avec leurs pages.
+- **Page de garde (C1)** : emblème de la République (celui de l'avis) ; ministère, entité si elle diffère ; « PERSONNE
+  RESPONSABLE DES MARCHÉS PUBLICS » ; « UNITÉ DE GESTION DE LA PASSATION DES MARCHÉS » ; l'intitulé qui porte le mode quand il
+  est un appel d'offres (« DOSSIER D'APPEL D'OFFRES OUVERT », sinon « DOSSIER D'APPEL D'OFFRES » et le mode en dessous ; PI :
+  « DOSSIER DE CONSULTATION ») ; « N° » `B02-OB-03` ; l'objet ; « Lot n : … » si la ligne a plusieurs lots ; « Lancé le
+  ……… » (à compléter) ; « Financement : … », « Imputation administrative : … » (les services bénéficiaires du plan, code et
+  libellé, sans montant), « Compte : … ». Lus sur les valeurs du plan de la ligne ; une valeur absente omet sa ligne. La date de
+  validation n'est plus imprimée.
+- **Textes fixes rognés (C2)** : les six fichiers de `modeles/dao-fixes/` ont perdu leur couverture, le sommaire général de l'ARMP
+  et leur propre table des matières (et, pour les PI, la note aux utilisateurs et le modèle de lettre d'invitation) ; ils
+  commencent à leur texte. Rognage fait une fois par Word, script `docs/referentiel/2026-10-06-rogner-textes-fixes.ps1`.
+- **Clause 6.2 du DPAO (C4)** : `DPAO-F` et `DPAO-T` n'impriment plus le texte libre quand la liste de sa rubrique (bloc B14)
+  n'est pas vide — conditions `PIECES-OFFRE-TEXTE` = `B04-CO-01` (F) / `B04-PI-01` (T) `renseigne et PIECES.offre vide`,
+  `PIECES-ADM-TEXTE` = `B03-CQ-01 renseigne et PIECES.administratives vide`. Vaut pour les documents séparés comme pour le DAO
+  complet.
+- **Nom de fichier (C5)** : `DAO_COMPLET_{B02-OB-03, à défaut la référence du plan}_{idDetail}_v{n}.{ext}`, hors `[A-Za-z0-9-]`
+  remplacé par des tirets (ex. `DAO_COMPLET_001-DAOO-MEN-PRMP-Tvx-PI-2026_303279_v1.pdf`).
+- **Ordre (C6)** : `GET …/documents` (donc le retrait candidat) sert le DAO complet **en tête**, puis les classeurs.
+- **V74** retire les DAO complets produits avant ce correctif (aucun n'était joint à un dossier ; un DAO complet joint comme pièce
+  serait gardé) ; le rattrapage les reproduit sur le nouveau gabarit dans les minutes qui suivent le démarrage.
+
 **Où il est servi (§B3).**
 - `GET /api/fiches-marche/{idDmc}/documents` : quand la version porte un `DAO_COMPLET`, la liste ne sert plus que lui (`docx`
   puis `pdf`, `libelle` « Dossier d'appel d'offres complet », « Dossier de consultation complet » en PI) et les `xlsx`, puis les

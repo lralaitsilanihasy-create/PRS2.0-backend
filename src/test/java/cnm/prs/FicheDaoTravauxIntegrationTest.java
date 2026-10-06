@@ -716,8 +716,9 @@ class FicheDaoTravauxIntegrationTest extends CnmIntegrationTestSupport {
                     "- Bordereau des prix, une par lot", "- Prospectus des fournitures",
                     "Pièces administratives à joindre à l’offre :",
                     "- Carte d'Immatriculation Fiscale 2026 ou 2025 validée, datée de moins de 3 mois",
-                    "- Certificat de non-faillite, original, datée de moins de 3 mois",
-                    "une photocopie certifiée de la carte statistique");   // B03-CQ-01, son défaut, à la suite
+                    "- Certificat de non-faillite, original, datée de moins de 3 mois")
+                    // ⚠️ 2026-10-06 (recette du DAO complet, C4) — la liste saisie remplace le texte B03-CQ-01 (son défaut) : plus de doublon.
+                    .doesNotContain("une photocopie certifiée de la carte statistique");
         }
     }
 
