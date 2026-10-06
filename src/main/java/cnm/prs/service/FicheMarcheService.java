@@ -121,6 +121,9 @@ public class FicheMarcheService {
     private final MoyensFiche moyens;
     /** ⚠️ V61 (2026-10-03) — les pièces de l'offre d'une fiche de travaux. */
     private final PiecesFiche pieces;
+    /** ⚠️ 2026-10-06 (DAO complet) — les spécifications techniques de la version, et l'assemblage du DAO complet. */
+    private final cnm.prs.repository.SpecificationsFicheRepository specificationsRepository;
+    private final DaoCompletService daoComplet;
 
     public FicheMarcheService(FicheMarcheRepository ficheRepository, FicheMarcheValeurRepository valeurRepository,
             ChampFicheMarcheRepository champRepository, BlocFicheMarcheRepository blocRepository,
@@ -131,7 +134,10 @@ public class FicheMarcheService {
             cnm.prs.repository.DocumentFicheMarcheRepository documentRepository, DmcService dmcService,
             BesoinFiche besoin, ParametreService parametres, ParametresInternesService internes, MandatService mandats,
             MoyensFiche moyens, PiecesFiche pieces, cnm.prs.repository.CeremonieClesRepository ceremonieRepository,
-            cnm.prs.repository.OffreRepository offreRepository) {
+            cnm.prs.repository.OffreRepository offreRepository, cnm.prs.repository.SpecificationsFicheRepository specificationsRepository,
+            DaoCompletService daoComplet) {
+        this.specificationsRepository = specificationsRepository;
+        this.daoComplet = daoComplet;
         this.offreRepository = offreRepository;
         this.ceremonieRepository = ceremonieRepository;
         this.pieces = pieces;
@@ -421,6 +427,22 @@ public class FicheMarcheService {
     @Transactional(readOnly = true)
     public void controlerLecture(Long idDmc) {
         contexte(idDmc);
+    }
+
+    /**
+     * ⚠️ 2026-10-06 (DAO complet, §B2) — la version où l'on écrit une ressource de fiche (les spécifications techniques) : la garde
+     * d'écriture (PRMP, UGPM, Administrateur ; forme outillée), puis le brouillon, créé s'il le faut ; 409 {@code FICHE_VALIDEE}.
+     */
+    @Transactional
+    public Integer ficheEcrivable(Long idDmc) {
+        return brouillonOuNouvelle(contexteEcriture(idDmc)).getIdFiche();
+    }
+
+    /** ⚠️ 2026-10-06 — la version courante d'une fiche, au périmètre de lecture ; {@code null} pour une fiche virtuelle. */
+    @Transactional(readOnly = true)
+    public Integer ficheCourante(Long idDmc) {
+        contexte(idDmc);
+        return ficheRepository.findFirstByIdDmcOrderByNumeroVersionDesc(idDmc).map(FicheMarche::getIdFiche).orElse(null);
     }
 
     /** ⚠️ Lot 2a — un document à télécharger, au périmètre de lecture de sa fiche (404 inconnu, 403 hors périmètre). */
@@ -964,6 +986,8 @@ public class FicheMarcheService {
         fiche.setValidePar(CurrentUser.ref().orElse(null));
         fiche = ficheRepository.save(fiche);
         documents.enregistrer(fiche.getIdFiche(), produits, maintenant);
+        // ⚠️ 2026-10-06 — le DAO complet, assemblé par Word ; sans Word (ou en échec), les documents séparés restent servis.
+        daoComplet.assurer(fiche, etat);
         journal.tracer(ctx.idDossier(), JournalDossierService.FICHE_MARCHE_VALIDEE,
                 "DAO, version " + fiche.getNumeroVersion() + ", " + bilan.nbSaisis() + " information(s)");
         // Le dossier soumis que porte déjà la fiche reçoit les documents de cette version (lot 2a, §B3/§B4).
@@ -1105,6 +1129,10 @@ public class FicheMarcheService {
         besoin.copier(derniere.getIdFiche(), suivante.getIdFiche());   // ⚠️ V45 — le besoin suit, comme les valeurs
         moyens.copier(derniere.getIdFiche(), suivante.getIdFiche());   // ⚠️ V60 — le matériel et le personnel aussi
         pieces.copier(derniere.getIdFiche(), suivante.getIdFiche());   // ⚠️ V61 — les pièces de l'offre aussi
+        // ⚠️ 2026-10-06 (DAO complet, §B2) — les spécifications techniques suivent la version, comme le besoin.
+        Integer idSuivante = suivante.getIdFiche();
+        specificationsRepository.findById(derniere.getIdFiche()).ifPresent(s -> specificationsRepository.save(new cnm.prs.entity.SpecificationsFiche(
+                idSuivante, s.getNomFichier(), s.getTailleOctets(), s.getEmpreinte(), s.getContenu(), s.getDeposeLe(), s.getDeposePar())));
         return toDto(ctx, suivante);
     }
 
@@ -1526,6 +1554,13 @@ public class FicheMarcheService {
             ControlesFicheMarche.piecesEnDouble(ouverts, valeurs, PiecesFiche.compter(lues, PiecesFiche.ADMINISTRATIVE), bilan);
             // ⚠️ 2026-10-06 (« A ») — en remise électronique, la liste ne se remplace pas par le texte.
             ControlesFicheMarche.piecesListees(cadrage, lues.size(), bilan);
+        }
+        // ⚠️ 2026-10-06 (DAO complet, §B2) — un DAO de fournitures ou de travaux porte ses spécifications techniques : avertissement.
+        if ((CategorieDao.TRAVAUX.name().equals(ctx.codeCategorie()) || CategorieDao.FOURNITURES_SERVICES.name().equals(ctx.codeCategorie()))
+                && (fiche.getIdFiche() == null || !specificationsRepository.existsById(fiche.getIdFiche()))) {
+            bilan.avertissements().add(new BilanControlesDto.Controle("SPECIFICATIONS_ABSENTES", List.of(), "B14",
+                    "Aucune spécification technique n'est jointe : le DAO complet n'aura pas de partie « Spécifications techniques ». "
+                            + "Joignez le Word du devis descriptif, des prescriptions et des plans."));
         }
         return new FicheMarcheDto(fiche.getIdFiche(), fiche.getIdDmc(), ctx.idDetail(), ctx.idDossier(),
                 ppm.ligne() == null ? ctx.idDetail() : ppm.ligne().getIdDetail(),

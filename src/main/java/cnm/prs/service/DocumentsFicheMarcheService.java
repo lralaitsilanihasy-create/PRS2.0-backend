@@ -472,10 +472,17 @@ public class DocumentsFicheMarcheService {
         if (fiche == null || fiche.getIdFiche() == null || !StatutFicheMarche.VALIDEE.name().equals(fiche.getStatut())) {
             return List.of();
         }
-        return documentRepository.findByIdFicheOrderByIdDocumentAsc(fiche.getIdFiche()).stream()
+        List<DocumentFicheMarche> tous = documentRepository.findByIdFicheOrderByIdDocumentAsc(fiche.getIdFiche());
+        // ⚠️ 2026-10-06 (DAO complet, « le DAO complet seul ») — quand il existe, il remplace les documents séparés ; les classeurs
+        // (xlsx : bordereau, DQE, conformité) restent servis à côté.
+        boolean complet = tous.stream().anyMatch(d -> DaoCompletService.TYPE.equals(d.getType()));
+        return tous.stream()
+                .filter(d -> !complet || DaoCompletService.TYPE.equals(d.getType()) || "xlsx".equals(d.getExtension()))
                 .filter(d -> !TYPES_PUBLICATION.contains(d.getType()))   // ⚠️ 2026-09-30 — avis et lettres se listent à part (listerAvis)
                 .map(d -> new DocumentFicheDto(d.getIdDocument(), d.getType(),
-                        SelectionDocumentsFiche.titre(d.getType(), d.getLot(), fiche.getTypeMarche(), categorie), d.getExtension(), d.getNomFichier(),
+                        DaoCompletService.TYPE.equals(d.getType()) ? (cnm.prs.enums.CategorieDao.PRESTATIONS_INTELLECTUELLES.name().equals(categorie)
+                                ? "Dossier de consultation complet" : "Dossier d'appel d'offres complet")
+                                : SelectionDocumentsFiche.titre(d.getType(), d.getLot(), fiche.getTypeMarche(), categorie), d.getExtension(), d.getNomFichier(),
                         d.getTailleOctets(), d.getDateGeneration(), fiche.getNumeroVersion(), d.getLot()))
                 .toList();
     }
@@ -512,6 +519,10 @@ public class DocumentsFicheMarcheService {
                 .filter(d -> "pdf".equals(d.getExtension()))
                 .filter(d -> !TYPES_PUBLICATION.contains(d.getType()))   // ⚠️ 2026-09-30 — ni l'avis ni les lettres ne sont des pièces du DAO
                 .toList();
+        // ⚠️ 2026-10-06 (DAO complet) — quand il existe, son PDF seul est joint au dossier, à la place des documents séparés.
+        if (pdfs.stream().anyMatch(d -> DaoCompletService.TYPE.equals(d.getType()))) {
+            pdfs = pdfs.stream().filter(d -> DaoCompletService.TYPE.equals(d.getType())).toList();
+        }
         if (pdfs.isEmpty()) {
             return 0;   // version validée avant le lot 2 : aucun document à joindre
         }

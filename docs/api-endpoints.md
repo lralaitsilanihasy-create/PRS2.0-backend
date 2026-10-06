@@ -6951,6 +6951,76 @@ le **libellé** de la pièce de la fiche (bloc B14, libre) — les codes `PIECE-
 **Hypothèses de la demande** : H1 retenue (AE au maximum, minimum lu en plus) ; H2 retenue ; H3 retenue (les taux du K1 restent au
 front ; le serveur ne recalcule pas le K1) ; H4, H5 retenues ; H6 retenue (aucun paramètre de fiche ajouté).
 
+### Le DAO complet en un seul document — V73 ⚠️ 2026-10-06
+
+Demande front `demande-backend-2026-10-06-dao-complet.md` (arbitrages du pilote du 06/10 : un seul document qui remplace les
+documents séparés ; spécifications jointes en Word ; **assemblage par Word sur le serveur**). Décision : `docs/adr/ADR-0014-dao-complet-assemble-par-word.md`.
+Migration **V73** : type de document `DAO_COMPLET` admis par `ck_document_fiche_marche_type`, table `t_specifications_fiche`.
+Aucune dépendance ajoutée (`pom.xml` inchangé).
+
+**Le document (§B1).** À la validation d'une version, après la production des documents du lot D et **avant** la jointure au
+dossier, le serveur assemble un **`DAO_COMPLET`** en `.docx` et en `.pdf` (deux lignes de `t_document_fiche_marche`, nom
+`DAO_COMPLET_{référence}_{idDetail}_v{n}.{ext}`). Il **assemble** les documents déjà produits, sans rien réécrire (H1) :
+
+| Rang | Partie | Source |
+|---|---|---|
+| — | page de garde (ministère, entité, PRMP, « DOSSIER D'APPEL D'OFFRES » ou « DOSSIER DE CONSULTATION » en PI, mode, n° `B02-OB-03`, objet, lots, financement, date de validation), puis **SOMMAIRE** | produits par Word |
+| I | Instructions aux candidats | texte fixe de la catégorie (`modeles/dao-fixes/{CATEGORIE}-IC.docx`) |
+| II | DPAO, DPAC ou DPIC | documents produits |
+| III | formulaires A1-A4, C1, C2 | documents produits |
+| IV | acte(s) d'engagement, **lot par lot** | documents produits |
+| V | CCAP ou CPS, puis la liste des fournitures (LF) | documents produits |
+| 5 bis | Spécifications techniques | le Word joint (§B2), absent sans fichier |
+| VI | CCAG | texte fixe de la catégorie (`{CATEGORIE}-CCAG.docx`) |
+
+- Chaque partie commence dans une **nouvelle section** (nouvelle page) ; le titre de section n'est posé que sur la première pièce
+  de la section. **En-tête** commun : « DAO n° {B02-OB-03, à défaut la référence du plan} — {objet, abrégé à 90 caractères} »
+  (« Dossier de consultation … » en PI). **Pied** : « page n / N », numérotation continue.
+- **Sommaire** : champ table des matières limité aux titres de parties (style « Partie DAO ») ; Word le calcule avant
+  l'enregistrement, le **PDF porte donc les numéros de page** (Q2). Les titres internes des parties et des spécifications n'y
+  entrent pas.
+- Le **contrat-cadre** suit le même plan (son DPAC en section II) avec l'IC et le CCAG de sa catégorie.
+- **Hors du DAO complet** : les classeurs `xlsx` (bordereau des prix, DQE, tableau de conformité), que Word ne sait pas insérer,
+  restent servis à part ; l'avis spécifique et les lettres d'invitation aussi.
+- **Production** : `DaoCompletWord` écrit les parties dans un dossier temporaire et lance `word/assembler-dao.ps1` (Word en
+  automation COM) dans **son propre processus**, avec un délai (`app.dao-complet.delai-secondes`, 300) ; un assemblage à la fois ;
+  environ 30 s pour un DAO de 90 pages. `app.dao-complet.actif` (vrai par défaut ; **faux dans les tests**) et système Windows
+  requis. **Un échec ne bloque pas la validation** : journal applicatif `[DAO_COMPLET]`, les documents séparés restent servis
+  et joints ; le rattrapage réessaie.
+- **Rattrapage (§B3, versions déjà validées)** : une tâche planifiée (premier passage 2 min après le démarrage, puis toutes les
+  10 min : `app.dao-complet.rattrapage-initial-ms`, `app.dao-complet.rattrapage-ms`) produit le DAO complet de toute **dernière
+  version validée** qui a des documents mais pas encore de DAO complet. Il n'est pas « produit à la première demande » : la
+  lecture reste immédiate.
+
+**Où il est servi (§B3).**
+- `GET /api/fiches-marche/{idDmc}/documents` : quand la version porte un `DAO_COMPLET`, la liste ne sert plus que lui (`docx`
+  puis `pdf`, `libelle` « Dossier d'appel d'offres complet », « Dossier de consultation complet » en PI) et les `xlsx`, puis les
+  avis et lettres comme avant. Sans lui (Word absent, version pas encore rattrapée), la liste est inchangée.
+- **Dossier soumis à la Commission** : à la jointure (création par la fiche, rattachement, validation d'une version liée), le
+  **PDF du DAO complet est seul joint** quand il existe (type de pièce `DAO_COMPLET`), sinon les PDF séparés comme avant. Les
+  dossiers **déjà soumis** gardent leurs pièces : le rattrapage ne les rejoint pas.
+- **Retrait par le candidat** (`GET /api/procedures-en-ligne/{idDmc}/documents` et le téléchargement) : la même liste, sous la
+  garde des frais (V72).
+
+**Les spécifications techniques (§B2)** — `t_specifications_fiche`, clé `ID_FICHE` (une par version, supprimée avec elle).
+
+| Méthode | URL | Corps | Réponse | Statuts | Accès |
+|---|---|---|---|---|---|
+| GET | /api/fiches-marche/{idDmc}/specifications | — | `SpecificationsDto { nomFichier, taille, deposeLe, deposePar }` de la dernière version | 200, 403, 404 (DMC inconnu ou **aucun fichier**) | lecture de la fiche |
+| PUT | /api/fiches-marche/{idDmc}/specifications | multipart `fichier` | `SpecificationsDto` (dépôt ou remplacement) | 200, 400 `FICHIER_ABSENT` / `FORMAT_INVALIDE`, 403, 404, 409 `FICHE_VALIDEE` (et les gardes d'écriture de la fiche), 413 | PRMP de la fiche ou son UGPM |
+| DELETE | /api/fiches-marche/{idDmc}/specifications | — | — | 204, 403, 404 (aucun fichier), 409 | idem |
+| GET | /api/fiches-marche/{idDmc}/specifications/fichier | — | le `.docx`, `Content-Disposition: attachment` | 200, 403, 404 | lecture de la fiche |
+
+- **`.docx` seulement**, lu sur le **contenu** (paquet OOXML dont la partie principale est un document Word) ; un document à **macros** (`vbaProject`)
+  est refusé (`FORMAT_INVALIDE`). Taille maximale : **20 Mo** (`spring.servlet.multipart.max-file-size` porté à 20MB ; 413
+  au-delà). Pas de plafond propre au DAO complet (Q3).
+- Écrit sur le **brouillon** (ou la révision ouverte) comme toute valeur de la fiche ; une version validée est figée (409
+  `FICHE_VALIDEE`). La **révision recopie** le fichier dans la nouvelle version.
+- Inséré **tel quel** au rang 5 bis : sa mise en page est gardée (Word fusionne ses styles avec ceux du DAO, ceux du DAO
+  l'emportent en cas de nom commun).
+- **Avertissement** au bilan de la fiche, non bloquant : **`SPECIFICATIONS_ABSENTES`** (bloc B14), en fournitures et services et
+  en travaux, tant que la version n'a pas de fichier. Muet en prestations intellectuelles.
+
 ### Le retrait du DAO après paiement des frais — V72 ⚠️ 2026-10-06
 
 Demande front `demande-backend-2026-10-06-retrait-apres-paiement.md` (décision du pilote du 06/10, « Voie B ») ; migration **V72**

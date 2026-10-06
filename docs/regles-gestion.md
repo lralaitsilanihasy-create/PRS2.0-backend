@@ -458,6 +458,38 @@ fiche. Contrat : `docs/api-endpoints.md`, § *Fiche marché d'un appel d'offres*
 - **Montants en toutes lettres** : le convertisseur du dépôt plafonnait à 999 999 (et écrivait « quatre cents
   mille ») ; étendu aux millions et milliards, pour la fiche comme pour les PV et lettres.
 
+#### Le DAO complet : un seul document (demande front du 2026-10-06, arbitrages du pilote du 06/10)
+
+⚠️ **Le DAO validé se lit comme un DAO réel : un seul document, page de garde, sommaire, six parties.** Il remplace les
+documents séparés partout où le DAO est servi. Décision : ADR-0014 ; contrat : `docs/api-endpoints.md`, § *Le DAO complet en
+un seul document*.
+
+- **Quand** : à chaque validation d'une version, en `.docx` et en `.pdf`. Les versions déjà validées l'obtiennent par un
+  rattrapage automatique, dans les dix minutes.
+- **Le plan**, celui des documents types de l'ARMP :
+  - page de garde et sommaire ;
+  - I Instructions aux candidats (texte fixe de la catégorie) ;
+  - II données particulières (DPAO, DPAC ou DPIC) ;
+  - III formulaires de soumission ;
+  - IV acte d'engagement, lot par lot ;
+  - V CCAP ou CPS, avec la liste des fournitures ;
+  - spécifications techniques ;
+  - VI CCAG (texte fixe de la catégorie).
+- **Il assemble, il ne réécrit rien** : chaque partie est le document que la fiche produisait déjà.
+- **Les prestations intellectuelles** le reçoivent sous le titre « Dossier de consultation ».
+- **Où il est servi** :
+  - dans les documents de la fiche ;
+  - au dossier soumis à la Commission, dont il devient la pièce unique du DAO ;
+  - au retrait par les candidats, sous la garde des frais.
+- **Restent à part** : les classeurs (bordereau des prix, DQE, tableau de conformité), l'avis spécifique, les lettres
+  d'invitation.
+- **Un dossier déjà soumis garde ses pièces** : le rattrapage ne le modifie pas.
+- **Les spécifications techniques** : la PRMP ou son UGPM joint un Word (`.docx`, 20 Mo au plus, sans macros) à la version en
+  préparation. Il est figé à la validation et recopié à la révision. Tant qu'il manque, un **avertissement non bloquant**
+  (`SPECIFICATIONS_ABSENTES`) le rappelle, en fournitures et services et en travaux.
+- **Condition technique** : l'assemblage se fait par Microsoft Word sur le serveur. Sans Word, la validation passe et les
+  documents séparés restent servis comme avant.
+
 #### Le DAO complet sur les documents types officiels (lot D, demande front du 2026-09-28, feu vert du pilote)
 
 ⚠️ **Le dossier d'appel d'offres produit est le document type de l'ARMP, rempli** — plus une liste « libellé : valeur ».
