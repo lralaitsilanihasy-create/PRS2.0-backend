@@ -1762,6 +1762,31 @@ public class EvaluationService {
         return idPrmp == null || idPrmp.isBlank() ? 0 : demandes.compterEnAttentePourPrmp(idPrmp, maintenant());
     }
 
+    // ------------------------------------------------------------------ ⚠️ lot 2 (attribution) : ce que l'attribution lit de l'évaluation
+
+    /** La garde de lecture de l'évaluation (CAO, responsable, PRMP, UGPM), pour l'attribution. */
+    @Transactional(readOnly = true)
+    public void controlerLecture(Long idDmc) {
+        exigerLecteur(idDmc);
+    }
+
+    /** L'évaluation telle que la vue la sert, sans garde ; vide si elle n'est pas ouverte. */
+    @Transactional(readOnly = true)
+    public Optional<EvaluationDto> vueSansGarde(Long idDmc) {
+        return evaluations.findById(idDmc).map(e -> dto(idDmc, e));
+    }
+
+    /** Le rapport d'évaluation signé, en PDF ; nul s'il n'est pas entièrement signé. */
+    @Transactional(readOnly = true)
+    public byte[] rapportSigne(Long idDmc) {
+        return rapports.findById(idDmc).filter(r -> r.getSigneLe() != null).map(cnm.prs.entity.EvaluationRapport::getPdf).orElse(null);
+    }
+
+    /** Une ligne au journal de l'évaluation (même registre pour l'attribution, §B1 du lot 2). */
+    public void tracerAttribution(Long idDmc, String action, String detail) {
+        tracer(idDmc, action, detail);
+    }
+
     // ------------------------------------------------------------------ la vue
 
     private EvaluationDto dto(Long idDmc, Evaluation e) {

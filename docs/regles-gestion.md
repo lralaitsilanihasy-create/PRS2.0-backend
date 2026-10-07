@@ -920,6 +920,18 @@ post-qualification (étape 5), et le rapport d'évaluation. Contrat : `docs/api-
   - il est signé par chaque membre de la commission, hors ceux qui ont déclaré un conflit d'intérêts ; un membre en désaccord joint
     une **observation** à sa signature ; l'empêchement d'un membre est constaté par le président, avec un motif ;
   - à la dernière signature, l'évaluation est close et la PRMP est avertie ; le rapport n'est pas public.
+- ⚠️ **De la proposition à l'attribution : le contrôle de la Commission** (lot 2, demande front du 2026-10-07, arbitrages du pilote
+  du 07/10) :
+  - **chaque marché** issu d'une procédure en ligne passe au contrôle a priori de la Commission, sans seuil ;
+  - la PRMP (ou son UGPM) crée, depuis l'évaluation close, **un dossier de marché par lot** attribuable (famille « Dossier de
+    Marché », sous-type ouvert ou restreint selon le mode) ; un lot que le rapport propose infructueux n'en a pas ;
+  - le dossier reçoit d'office le **projet de marché produit par l'application** à partir de l'offre retenue (parties, objet, pièces
+    constitutives, montant hors taxes en chiffres et en lettres, délai), le dossier d'appel d'offres, le bordereau de l'offre, le PV
+    d'ouverture et le rapport d'évaluation ; il suit ensuite le circuit ordinaire de la Commission ;
+  - la Commission l'examine sur une grille tirée de la check-list du guide (désignation de la CAO, PV, motivation des rejets,
+    montant évalué, offres anormales, classement, post-qualification, signatures du rapport, conformité du projet à l'offre) ;
+  - son avis remonte au lot. Les gestes suivants (choix de l'attributaire, information des candidats, signature, notification) sont
+    livrés par tranches.
 
 #### La fiche DAO des travaux (référentiel remis le 2026-09-24)
 

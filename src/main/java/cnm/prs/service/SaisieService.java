@@ -906,6 +906,18 @@ public class SaisieService {
                 idEntiteContract, idDmc);
     }
 
+    /**
+     * ⚠️ 2026-10-07 (évaluation des offres, lot 2, §B2.1) — le dossier de marché ({@code DDM}, sous-type {@code MAOO} ou {@code MAOR})
+     * d'un lot attribuable : même création que les autres (brouillon, PRMP courante, mandat figé, journal). Il ne porte pas
+     * {@code ID_DMC} (réservé au dossier DAO) : son lien est {@code t_attribution.ID_DOSSIER}. Gardes à la charge de l'appelant.
+     */
+    public Dossier creerDossierMarche(String sousTypeCode, String idLocalite, Integer idEntiteContract) {
+        SousTypeDossier sousType = sousTypeDossierRepository.findById(sousTypeCode)
+                .orElseThrow(() -> new BusinessRuleException("Sous-type de dossier « " + sousTypeCode + " » absent du référentiel "
+                        + "(/api/sous-type-dossiers) : le dossier de marché ne peut être produit.", "SOUS_TYPE_ABSENT"));
+        return creerDossier(sousType.getIdTypeDossier(), sousType.getIdSousType(), idLocalite, prmpCourante(), idEntiteContract, null);
+    }
+
     private Dossier creerDossier(String famille, String sousType, String idLocalite, String idPrmp,
             Integer idEntiteContract, Long idDmc) {
         dossierIntegrite.exigerMandatActif();   // même garde (et même filtre de profil) que les éditions

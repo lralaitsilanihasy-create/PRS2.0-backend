@@ -799,6 +799,33 @@ public class SeanceService {
         }
     }
 
+    /**
+     * ⚠️ 2026-10-07 (évaluation des offres, lot 2, §B2.1) — le bordereau des prix (ou DQE) rempli d'une offre, en PDF, pour le dossier de
+     * marché ; vide pour une offre sans formulaires ou purgée. Sans garde : l'attribution fait les siennes.
+     */
+    @Transactional(readOnly = true)
+    public Optional<byte[]> bordereauPdf(String idOffre) {
+        Offre o = offres.findById(idOffre).orElse(null);
+        if (o == null) {
+            return Optional.empty();
+        }
+        try {
+            JsonNode f = formulairesDe(o);
+            ProcedureEnLigneDto p = procedure(o.getIdDmc());
+            String entete = (p == null ? "Procédure " + o.getIdDmc() : p.reference() + " — " + p.objet()) + " ; offre n° " + o.getNumero()
+                    + " — " + o.getRaisonSociale() + (o.getLot() == null ? "" : ", lot " + o.getLot());
+            return Optional.of(formulaires.pdf("BORDEREAU", formulaires.lot(o.getIdDmc(), o.getLot()).orElse(null), f, entete, o.getIdDmc()));
+        } catch (RuntimeException e) {
+            return Optional.empty();
+        }
+    }
+
+    /** ⚠️ 2026-10-07 (lot 2, §B2.1) — le PV d'ouverture signé (version complète), nul sans PV signé. */
+    @Transactional(readOnly = true)
+    public byte[] pvSigne(Long idDmc) {
+        return seances.findById(idDmc).filter(s -> s.getPvSigneLe() != null).map(Seance::getPv).orElse(null);
+    }
+
     private JsonNode formulairesDe(Offre o) {
         byte[] clair = stockage.lireClair(o.getIdOffre());
         if (clair == null) {

@@ -7007,6 +7007,47 @@ Demande front `demande-backend-2026-10-07-evaluation-des-offres.md` (§B6, §B7)
     rapportsASigner }` — ses procédures dont l'évaluation est `EN_COURS`, et les rapports qu'il doit encore signer.
 - **Journal** : `RAPPORT`, `SIGNATURE`, `EMPECHEMENT`, `RAPPORT_SIGNE`.
 
+### L'attribution, lot 2, tranche 2a : le dossier de marché au contrôle de la Commission — V79 ⚠️ 2026-10-07
+
+Demande front `demande-backend-2026-10-07-attribution-notification.md` (§B1, §B2) ; arbitrages du pilote du 07/10 : **un dossier de
+marché par lot** (Q2), le **projet de marché produit par le serveur** (Q1), **chaque marché en ligne** au contrôle de la Commission,
+sans seuil (Q11) ; après un avis défavorable, la PRMP choisira, avec un motif, entre la reprise de l'évaluation et l'infructuosité (Q3,
+tranche 2d). Migration **V79** (`t_attribution`, codes des types de pièces 14 à 18). Aucune dépendance ajoutée. Les tranches 2b
+(attribution, information, délai d'attente, explications), 2c (mise au point, signature, notification, avis d'attribution, pièces de
+l'attributaire) et 2d (infructuosité, sans suite, reprise, compteurs) suivent.
+
+| Méthode | URL | Réponse | Statuts | Accès |
+|---|---|---|---|---|
+| GET | /api/fiches-marche/{idDmc}/attribution | `AttributionDto` | 200, 403, 404 (évaluation non ouverte) | CAO, responsable, PRMP, UGPM |
+| POST | /api/fiches-marche/{idDmc}/attribution/lots/{lot}/dossier | `AttributionDto` | 201, 403, 404 (lot), 409 `EVALUATION_NON_CLOSE` / `LOT_INFRUCTUEUX` / `DOSSIER_EXISTANT` (avec `idDossier`) | PRMP de la fiche, ou son UGPM |
+| GET | /api/fiches-marche/{idDmc}/attribution/lots/{lot}/projet?format=docx | le projet de marché, PDF (ou Word) | 200, 403, 404 (non produit) | CAO, responsable, PRMP, UGPM |
+
+- **`AttributionDto`** = `{ idDmc, lots[{ lot, etat, proposition, dossierMarche, projetDisponible }] }` ; `proposition` est celle du
+  rapport (`EvaluationDto.Proposition`) ; `dossierMarche` = `{ idDossier, sousType, statut, avis, creeLe, creePar }` ou nul.
+- **États servis dans cette tranche** : `EN_EVALUATION` (rapport pas encore signé), `PROPOSE` (rapport signé), `AU_CONTROLE` (dossier de
+  marché créé), `AVIS_RENDU` (un PV signé du dossier de marché : `avis` ∈ `FAV`, `FAVR`, `DEF`). Les suivants viennent avec leurs
+  gestes.
+- **Créer le dossier** : famille `DDM`, sous-type **`MAOR`** si le mode de passation de la ligne dit « restreint », **`MAOO`** sinon ;
+  brouillon, même création que les autres dossiers (PRMP courante, mandat figé, journal). Il ne porte **pas** `ID_DMC` (réservé au
+  dossier DAO) : son lien est `t_attribution.ID_DOSSIER`. Un lot proposé infructueux n'a pas de dossier (409 `LOT_INFRUCTUEUX`). Le
+  dossier suit ensuite le **circuit existant** (soumission, réception, dispatch, examen, PV, signatures).
+- **Pièces jointes d'office** (type de pièce repéré par son **code**, posé par V79 sur les types existants ; sans le type, la pièce
+  n'est pas jointe, journal applicatif) :
+  - `PROJET_MARCHE` (14) — le **projet de marché produit par le serveur** (Q1) : les parties (autorité contractante, PRMP ; titulaire
+    : raison sociale, NIF, adresse, représentant), l'objet, les pièces constitutives (acte d'engagement, CCAP ou CPS, spécifications,
+    offre retenue, CCAG, sans modification substantielle), le **montant hors taxes** (prix corrigé − rabais) en chiffres et en lettres,
+    le délai de l'acte d'engagement, l'entrée en vigueur, les blocs de signature ; Word et PDF, le PDF joint ;
+  - `CAHIER_CHARGES` (15) — le DAO complet de la dernière version validée, à défaut ses documents séparés (PDF) ;
+  - `DEVIS_ESTIMATIF` (16) — le bordereau des prix (ou DQE) rempli de l'offre proposée (offre en ligne au format 3 ; à défaut, la PRMP
+    le joint) ;
+  - `PV_OUVERTURE` (17) — le PV d'ouverture signé ;
+  - `RAPPORT_ANALYSE` (18) — le rapport d'évaluation signé.
+  - Restent à joindre par la PRMP : 19 (capacité financière) et 20 (non-objection) selon le cas.
+- **La grille d'examen (§B2.3)** : neuf points de portée `DOSSIER`, **communs à la famille `DDM`** (donc à `MAOO` et `MAOR`), semés au
+  démarrage par `PointsCtrlDossierMarcheSeeder` là où la famille existe (même patron que les points FICHE/AGPM : idempotent, un point
+  ajusté par l'Administrateur n'est jamais touché ; désactivable par `app.seed.points-ctrl-dossier-marche.enabled=false`).
+- **Journal de l'évaluation** : `DOSSIER_MARCHE`.
+
 ### Le rabais structuré de l'offre en ligne ⚠️ 2026-10-07
 
 Demande front `demande-backend-2026-10-07-rabais-structure.md` (arbitrage Q4 du pilote : « le rabais est structuré au dépôt »). Aucune

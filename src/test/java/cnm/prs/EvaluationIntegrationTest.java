@@ -75,6 +75,8 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
     @Autowired private EvaluationDemandeRepository demandeRepository;
     @Autowired private EvaluationJournalRepository journalRepository;
     @Autowired private cnm.prs.service.StockageOffres stockage;
+    @Autowired private cnm.prs.repository.PieceJointeDossierRepository pieceJointeDossierRepository;
+    @Autowired private cnm.prs.seed.PointsCtrlDossierMarcheSeeder pointsCtrlSeeder;
 
     private final LocalDate aujourdhui = LocalDate.now();
     private final List<String> comptes = new ArrayList<>();
@@ -580,6 +582,51 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
                 .doesNotContain("signature attendue");
         assertThat(notificationRepository.findPourPrmp("PRMP001", null)).extracting(Notification::getTypeNotif).contains("RAPPORT_EVALUATION");
         mvc.perform(get("/api/kpis/badges").header("Authorization", jetonM2)).andExpect(jsonPath("$.compteurs.rapportsASigner").value(0));
+
+        // ⚠️ Lot 2, tranche 2a (§B1-§B2) — le dossier de marché du lot, au contrôle de la Commission.
+        typeDossierRepository.save(new cnm.prs.entity.TypeDossier("DDM", "Dossier de Marché"));
+        sousTypeDossierRepository.save(new cnm.prs.entity.SousTypeDossier("MAOO", "Marché sur Appel d'Offres Ouvert", "DDM"));
+        for (String[] t : List.of(new String[] { "Projet de marché signé", "PROJET_MARCHE" }, new String[] { "Cahier des charges", "CAHIER_CHARGES" },
+                new String[] { "Devis estimatif détaillé", "DEVIS_ESTIMATIF" }, new String[] { "Procès-verbal d'ouverture des offres", "PV_OUVERTURE" },
+                new String[] { "Rapport d'analyse des offres", "RAPPORT_ANALYSE" })) {
+            cnm.prs.entity.TypePieceJointe tp = typePieceJointeRepository.findById(seedTypePiece(t[0], true, "DDM", 1)).orElseThrow();
+            tp.setCode(t[1]);
+            typePieceJointeRepository.save(tp);
+        }
+        String att = base.replace("/evaluation", "/attribution");
+        mvc.perform(get(att).header("Authorization", jetonM2)).andExpect(status().isOk()).andExpect(jsonPath("$.lots[0].etat").value("PROPOSE"))
+                .andExpect(jsonPath("$.lots[0].proposition.idOffre").value(a)).andExpect(jsonPath("$.lots[0].dossierMarche").isEmpty());
+        mvc.perform(post(att + "/lots/1/dossier").header("Authorization", jetonM1)).andExpect(status().isForbidden());
+        mvc.perform(post(att + "/lots/9/dossier").header("Authorization", tokenPrmp)).andExpect(status().isNotFound());
+        String cree = mvc.perform(post(att + "/lots/1/dossier").header("Authorization", tokenPrmp)).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.lots[0].etat").value("AU_CONTROLE")).andExpect(jsonPath("$.lots[0].dossierMarche.sousType").value("MAOO"))
+                .andExpect(jsonPath("$.lots[0].dossierMarche.statut").value("BROUILLON")).andExpect(jsonPath("$.lots[0].projetDisponible").value(true))
+                .andReturn().getResponse().getContentAsString();
+        int idDossier = JsonPath.read(cree, "$.lots[0].dossierMarche.idDossier");
+        mvc.perform(post(att + "/lots/1/dossier").header("Authorization", tokenPrmp)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("DOSSIER_EXISTANT")).andExpect(jsonPath("$.idDossier").value(idDossier));
+        assertThat(dossierRepository.findById(idDossier).orElseThrow().getIdTypeDossier()).isEqualTo("DDM");
+        assertThat(dossierRepository.findById(idDossier).orElseThrow().getIdDmc()).isNull();   // le lien du DAO reste au dossier DAO
+        List<String> codesPieces = pieceJointeDossierRepository.findAll().stream().filter(x -> x.getIdDossier() == idDossier)
+                .map(x -> typePieceJointeRepository.findById(x.getIdTypePiece()).orElseThrow().getCode()).toList();
+        assertThat(codesPieces).contains("PROJET_MARCHE", "CAHIER_CHARGES", "RAPPORT_ANALYSE");
+        String projet = texteDuPdf(mvc.perform(get(att + "/lots/1/projet").header("Authorization", tokenUgpm)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray()).replaceAll("\\s+", " ");
+        assertThat(projet).contains("PROJET DE MARCHÉ", "BTP Alpha", "NIF 1111222333", "12 500 000 Ariary hors taxes",
+                "douze millions cinq cent mille ariary", "Article 2 — Pièces constitutives");
+        assertThat(new String(mvc.perform(get(att + "/lots/1/projet").param("format", "docx").header("Authorization", tokenPrmp))
+                .andReturn().getResponse().getContentAsByteArray(), 0, 2, StandardCharsets.ISO_8859_1)).isEqualTo("PK");
+        // L'avis de la Commission (PV signé du dossier de marché) remonte au lot.
+        receptionRepository.save(reception(9950, idDossier, "CTRCC1", true));
+        dispatchRepository.save(dispatch(9950, 9950, "CTRCC1", "CTRMEM", "CTRPRE"));
+        examenRepository.save(examen(9950, 9950, "CTRMEM"));
+        seedPvSigne(9950, 9950);
+        mvc.perform(get(att).header("Authorization", tokenPrmp)).andExpect(jsonPath("$.lots[0].etat").value("AVIS_RENDU"))
+                .andExpect(jsonPath("$.lots[0].dossierMarche.avis").value("FAV"));
+        // La grille d'examen du dossier de marché, semée au démarrage là où la famille DDM existe.
+        assertThat(pointsCtrlSeeder.semer()).isEqualTo(9);
+        assertThat(pointsCtrlSeeder.semer()).isZero();
+        assertThat(journalRepository.findByIdDmcOrderByDateAscIdAsc(idDmc)).extracting(j -> j.getAction()).contains("DOSSIER_MARCHE");
     }
 
     @Test
