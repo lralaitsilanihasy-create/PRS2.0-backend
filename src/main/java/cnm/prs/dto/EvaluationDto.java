@@ -20,7 +20,7 @@ public record EvaluationDto(Long idDmc, String etat, LocalDateTime ouverteLe, St
      * Un lot (1 pour une procédure non allotie) : {@code etape} ∈ {@code CONFORMITE} · {@code EVALUATION} · {@code ANORMALES} ·
      * {@code QUALIFICATION} · {@code RAPPORT} (la première étape non arrêtée).
      */
-    public record Lot(Integer lot, String etape, List<EtapeArretee> etapesArretees, List<OffreEvaluee> offres) {
+    public record Lot(Integer lot, String etape, List<EtapeArretee> etapesArretees, List<OffreEvaluee> offres, Proposition proposition) {
     }
 
     public record EtapeArretee(String etape, String par, String nom, LocalDateTime le, String observation) {
@@ -32,7 +32,7 @@ public record EvaluationDto(Long idDmc, String etat, LocalDateTime ouverteLe, St
      * égalité de montant évalué, sans départage), {@code ecartee} : l'étape qui l'a écartée et pourquoi.
      */
     public record OffreEvaluee(String idOffre, Integer numero, Entreprise entreprise, Conformite conformite, Montant evaluation,
-            Object anormale, Object qualification, Integer rang, Boolean exAequo, Ecartement ecartee, int precisionsEnAttente) {
+            Anormale anormale, Qualification qualification, Integer rang, Boolean exAequo, Ecartement ecartee, int precisionsEnAttente) {
     }
 
     public record Entreprise(String nif, String raisonSociale) {
@@ -148,6 +148,65 @@ public record EvaluationDto(Long idDmc, String etat, LocalDateTime ouverteLe, St
     public record LigneTableau(String idOffre, Integer numero, String candidat, BigDecimal prixLu, BigDecimal prixLuTtc, String garantie,
             Boolean conforme, String motifRejet, BigDecimal prixCorrige, BigDecimal rabais, BigDecimal ajustements, BigDecimal montantEvalue,
             Integer rang, Boolean exAequo, Boolean qualifie) {
+    }
+
+    // ------------------------------------------------------------------ ⚠️ tranche 1c (§B4, §B5) : anormales, post-qualification
+
+    /**
+     * Les indicateurs de prix d'un lot (§B4, des indicateurs, jamais des décisions) : la méthode du DAO ({@code B06-EO-07}, nulle sans
+     * méthode), l'estimation du lot, la moyenne des offres retenues, et par offre ses écarts en pour cent.
+     */
+    public record IndicateursPrix(String methodeDao, BigDecimal estimation, BigDecimal moyenne, List<IndicateurPrix> offres) {
+    }
+
+    /** {@code montant} = prix corrigé − rabais (hors taxes) ; écarts arrondis au dixième de point. */
+    public record IndicateurPrix(String idOffre, Integer numero, BigDecimal montant, BigDecimal ecartEstimation, BigDecimal ecartMoyenne,
+            List<String> alertes) {
+    }
+
+    /** {@code POST …/offres/{idOffre}/justification} : les éléments demandés (art. 48) et le délai. */
+    public record JustificationRequest(String elements, Integer delaiJours) {
+    }
+
+    /** {@code PUT …/offres/{idOffre}/anormale}. */
+    public record AnormaleRequest(Boolean suspectee, String decision, String motif) {
+    }
+
+    /**
+     * L'examen d'une offre au regard de son prix (§B4) : {@code decision} ∈ {@code NON_SUSPECTEE} · {@code SUSPECTEE} (en attente de la
+     * justification) · {@code MAINTENUE} · {@code REJETEE} ; {@code justification} : la demande au candidat et sa réponse.
+     */
+    public record Anormale(Boolean suspectee, String decision, String motif, Demande justification, String par, String nom,
+            LocalDateTime le) {
+    }
+
+    /**
+     * Un critère de post-qualification (§B5), dérivé de la fiche (P1 : rien d'autre) : {@code groupe} ∈ {@code JURIDIQUE} ·
+     * {@code FINANCIERE} · {@code TECHNIQUE} ; {@code exigence} : la valeur de la fiche ; {@code constat} et {@code proposee} : le constat
+     * de la séance (faux sur une alerte, nul sinon) ; {@code decision} ∈ {@code SATISFAIT} · {@code NON_SATISFAIT}, et son motif.
+     */
+    public record CritereQualification(String code, String groupe, String libelle, String exigence, String constat, Boolean proposee,
+            String decision, String motif) {
+    }
+
+    /** La post-qualification d'une offre (§B5) : ses critères, et {@code decision} ∈ {@code QUALIFIE} · {@code NON_QUALIFIE}. */
+    public record Qualification(String idOffre, Integer numero, List<CritereQualification> criteres, String decision, String motif,
+            String clause, String par, String nom, LocalDateTime le) {
+    }
+
+    /** {@code PUT …/offres/{idOffre}/qualification}. */
+    public record QualificationRequest(List<CritereSaisi> criteres, String decision, String motif, String clause) {
+    }
+
+    public record CritereSaisi(String code, String decision, String motif) {
+    }
+
+    /**
+     * La proposition d'un lot, une fois la post-qualification arrêtée : l'offre proposée à l'attribution, ou {@code infructueux}
+     * quand aucune offre n'est qualifiée ; {@code montant} = prix corrigé − rabais, hors taxes.
+     */
+    public record Proposition(String idOffre, Integer numero, String candidat, BigDecimal montant, BigDecimal montantTtc, String delai,
+            boolean infructueux) {
     }
 
     /** Une ligne du journal de l'évaluation. */

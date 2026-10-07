@@ -92,6 +92,41 @@ public class EvaluationController {
         return service.tableau(idDmc, lot);
     }
 
+    /** ⚠️ Tranche 1c (§B4) — les indicateurs de prix du lot : écarts à l'estimation et à la moyenne, jamais une décision. */
+    @GetMapping("/lots/{lot}/indicateurs-prix")
+    public EvaluationDto.IndicateursPrix indicateursPrix(@PathVariable Long idDmc, @PathVariable Integer lot) {
+        return service.indicateursPrix(idDmc, lot);
+    }
+
+    /** ⚠️ Tranche 1c (§B4, art. 48) — 201 ; la PRMP demande au candidat de justifier son prix ; 409 {@code DEJA_DEMANDEE}. */
+    @PostMapping("/offres/{idOffre}/justification")
+    public ResponseEntity<EvaluationDto.Demande> demanderJustification(@PathVariable Long idDmc, @PathVariable String idOffre,
+            @RequestBody EvaluationDto.JustificationRequest corps) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(service.demanderJustification(idDmc, idOffre, corps));
+    }
+
+    @GetMapping("/offres/{idOffre}/justification")
+    public List<EvaluationDto.Demande> justifications(@PathVariable Long idDmc, @PathVariable String idOffre) {
+        return service.justifications(idDmc, idOffre);
+    }
+
+    /** ⚠️ Tranche 1c (§B4) — non suspectée, suspectée, maintenue ou rejetée (jamais sans demande écrite). */
+    @PutMapping("/offres/{idOffre}/anormale")
+    public EvaluationDto anormale(@PathVariable Long idDmc, @PathVariable String idOffre, @RequestBody EvaluationDto.AnormaleRequest corps) {
+        return service.anormale(idDmc, idOffre, corps);
+    }
+
+    /** ⚠️ Tranche 1c (§B5) — l'offre dont c'est le tour de post-qualification, et ses critères ; 409 {@code CLASSEMENT_NON_ARRETE}. */
+    @GetMapping("/lots/{lot}/qualification")
+    public EvaluationDto.Qualification qualification(@PathVariable Long idDmc, @PathVariable Integer lot) {
+        return service.qualificationCourante(idDmc, lot);
+    }
+
+    @PutMapping("/offres/{idOffre}/qualification")
+    public EvaluationDto qualifier(@PathVariable Long idDmc, @PathVariable String idOffre, @RequestBody EvaluationDto.QualificationRequest corps) {
+        return service.qualifier(idDmc, idOffre, corps);
+    }
+
     /** 201 ; PRMP de la fiche (art. 35-VI). */
     @PostMapping("/offres/{idOffre}/precisions")
     public ResponseEntity<EvaluationDto.Demande> demanderPrecisions(@PathVariable Long idDmc, @PathVariable String idOffre,

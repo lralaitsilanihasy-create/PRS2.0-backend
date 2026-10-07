@@ -107,6 +107,7 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
         l.setIdNature(natureFournitures());
         l.setFormeMarche(FormeMarche.QUANTITE_FIXE);
         l.setDesignationMarche("Acquisition de matériels informatiques");
+        l.setMontEstim(new java.math.BigDecimal("12000000"));   // ⚠️ tranche 1c : l'estimation des indicateurs de prix
         marcheRepository.save(l);
         capmRepository.save(new cnm.prs.entity.Capm(9901, "Lancement de l'appel d'offres", 1, 92, null));
         marchePrevisionRepository.save(new MarchePrevision(9901, 9901, 9901, aujourdhui.plusDays(10), aujourdhui.plusDays(10), null, null));
@@ -411,7 +412,7 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.lots[0].etape").value("ANORMALES"));
         montant(jetonM1, b, "{}").andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("ETAPE_ARRETEE"));
         mvc.perform(post(base + "/lots/1/etapes/ANORMALES/arreter").header("Authorization", jetonM1).contentType(JSON).content("{}"))
-                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("ETAPE_NON_DISPONIBLE"));
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("ETAPE_INCOMPLETE"));   // ⚠️ tranche 1c : chaque offre classée examinée au regard de son prix
 
         // Le tableau du guide : par rang, l'offre écartée en dernier avec son motif.
         String tableau = mvc.perform(get(base + "/lots/1/tableau").header("Authorization", tokenPrmp)).andExpect(status().isOk())
@@ -426,7 +427,132 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(journalRepository.findByIdDmcOrderByDateAscIdAsc(idDmc)).extracting(j -> j.getAction()).contains("MONTANT", "DEPARTAGE");
     }
 
+    @Test
+    @DisplayName("§B4-§B5 (tranche 1c) : indicateurs de prix, offre suspectée, aucun rejet sans justification demandée puis reçue, "
+            + "reclassement ; post-qualification au tour par tour, critères du DAO tous décidés, le suivant après un échec ; proposition")
+    void anormalesEtQualification() throws Exception {
+        String a = offre("C900000051", "1111222333", "BTP Alpha", 1, "INTACTE", null, "12500000");
+        String b = offre("C900000052", "4444555666", "BTP Beta", 2, "INTACTE", null, "11900000");
+        String c = offre("C900000053", "7777888999", "BTP Gamma", 3, "INTACTE", null, "9000000");
+        String jetonC = bearer("c@eval.mg", ProfilUtilisateur.CANDIDAT, TypeActeur.CANDIDAT, "C900000053", null);
+        seanceClose();
+        mvc.perform(post(base + "/ouvrir").header("Authorization", tokenVer)).andExpect(status().isCreated());
+        mvc.perform(post(base + "/declaration").header("Authorization", jetonM1).contentType(JSON).content("{\"conflit\":false}"))
+                .andExpect(status().isOk());
+        for (String o : List.of(a, b, c)) {
+            conformite(jetonM1, o, "{\"decision\":\"CONFORME\"}").andExpect(status().isOk());
+        }
+        arreter("CONFORMITE").andExpect(status().isOk());
+        for (String o : List.of(a, b, c)) {
+            montant(jetonM1, o, "{\"preference\":{\"eligible\":true,\"motif\":\"Entreprise nationale\"}}").andExpect(status().isOk());
+        }
+        mvc.perform(get(base + "/lots/1/qualification").header("Authorization", tokenPrmp)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CLASSEMENT_NON_ARRETE"));
+        anormale(c, "{\"suspectee\":false}").andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("ETAPE_PRECEDENTE_OUVERTE"));
+        arreter("EVALUATION").andExpect(status().isOk());
+
+        // Les indicateurs : C est à 25 % sous l'estimation.
+        String ind = mvc.perform(get(base + "/lots/1/indicateurs-prix").header("Authorization", tokenUgpm)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<Number>read(ind, "$.estimation").longValue()).isEqualTo(12_000_000L);
+        assertThat(JsonPath.<Number>read(ind, "$.moyenne").longValue()).isEqualTo(11_133_333L);
+        assertThat(JsonPath.<List<Integer>>read(ind, "$.offres[*].numero")).containsExactly(3, 2, 1);
+        assertThat(JsonPath.<Number>read(ind, "$.offres[0].ecartEstimation").doubleValue()).isEqualTo(-25.0);
+        arreter("ANORMALES").andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("ETAPE_INCOMPLETE"))
+                .andExpect(jsonPath("$.details.offres.length()").value(3));
+
+        // C suspectée : pas de rejet sans demande écrite, ni avant la réponse ou l'échéance.
+        anormale(c, "{\"suspectee\":true}").andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("MOTIF_OBLIGATOIRE"));
+        anormale(c, "{\"suspectee\":true,\"motif\":\"25 % sous l'estimation\"}").andExpect(status().isOk())
+                .andExpect(jsonPath("$.lots[0].offres[2].anormale.decision").value("SUSPECTEE"));
+        anormale(c, "{\"suspectee\":true,\"decision\":\"REJETEE\",\"motif\":\"Prix non tenable\"}").andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("JUSTIFICATION_NON_DEMANDEE"));
+        mvc.perform(post(base + "/offres/" + c + "/justification").header("Authorization", jetonM1).contentType(JSON)
+                .content("{\"elements\":\"x\"}")).andExpect(status().isForbidden());
+        mvc.perform(post(base + "/offres/" + c + "/justification").header("Authorization", tokenPrmp).contentType(JSON).content("{}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("ELEMENTS_OBLIGATOIRES"));
+        mvc.perform(post(base + "/offres/" + c + "/justification").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"elements\":\"Sous-détails des prix unitaires des articles 1 et 2\",\"delaiJours\":3}")).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.type").value("JUSTIFICATION")).andExpect(jsonPath("$.delaiJours").value(3));
+        mvc.perform(post(base + "/offres/" + c + "/justification").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"elements\":\"encore\"}")).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("DEJA_DEMANDEE"));
+        assertThat(notificationRepository.findPourRefEtType("C900000053", "CANDIDAT")).extracting(Notification::getTypeNotif)
+                .contains("JUSTIFICATION_DEMANDEE");
+        anormale(c, "{\"suspectee\":true,\"decision\":\"REJETEE\",\"motif\":\"Prix non tenable\"}").andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("DELAI_EN_COURS"));
+        mvc.perform(get("/api/candidat/offres/" + c + "/justification").header("Authorization", jetonA)).andExpect(status().isForbidden());
+        mvc.perform(get("/api/candidat/offres/" + c + "/justification").header("Authorization", jetonC)).andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].question").value("Sous-détails des prix unitaires des articles 1 et 2"));
+        mvc.perform(multipart("/api/candidat/offres/" + c + "/justification/reponse").param("texte", "Stock acquis l'an dernier.")
+                .header("Authorization", jetonC)).andExpect(status().isOk()).andExpect(jsonPath("$.etat").value("REPONDUE"));
+        assertThat(notificationRepository.findPourPrmp("PRMP001", null)).extracting(Notification::getTypeNotif).contains("JUSTIFICATION_RECUE");
+        String ev = anormale(c, "{\"suspectee\":true,\"decision\":\"REJETEE\",\"motif\":\"Justification insuffisante : stock non prouvé\"}")
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<String>read(ev, "$.lots[0].offres[2].ecartee.etape")).isEqualTo("ANORMALES");
+        assertThat(JsonPath.<String>read(ev, "$.lots[0].offres[2].anormale.justification.etat")).isEqualTo("REPONDUE");
+        assertThat(JsonPath.<List<Integer>>read(ev, "$.lots[0].offres[*].rang")).containsExactly(2, 1, null);   // reclassement
+        anormale(a, "{\"suspectee\":false}").andExpect(status().isOk());
+        anormale(b, "{\"suspectee\":false}").andExpect(status().isOk());
+        arreter("ANORMALES").andExpect(status().isOk()).andExpect(jsonPath("$.lots[0].etape").value("QUALIFICATION"));
+
+        // La post-qualification : B (premier classé), puis A après son échec.
+        String q = mvc.perform(get(base + "/lots/1/qualification").header("Authorization", jetonM1)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<String>read(q, "$.idOffre")).isEqualTo(b);
+        List<String> codes = JsonPath.read(q, "$.criteres[*].code");
+        assertThat(codes).startsWith("JURIDIQUE");
+        assertThat(JsonPath.<List<String>>read(q, "$.criteres[*].groupe")).allMatch(g -> List.of("JURIDIQUE", "FINANCIERE", "TECHNIQUE").contains(g));
+        qualifier(a, criteres(codes, null) + ",\"decision\":\"QUALIFIE\"}").andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("PAS_LE_TOUR_DE_CETTE_OFFRE"));
+        qualifier(b, "\"criteres\":[],\"decision\":\"QUALIFIE\"}").andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("CRITERES_INCOMPLETS"));
+        qualifier(b, criteres(codes, "JURIDIQUE") + ",\"decision\":\"NON_QUALIFIE\"}").andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("MOTIF_OBLIGATOIRE"));
+        String echec = criteres(codes, "JURIDIQUE").replace("\"NON_SATISFAIT\"}", "\"NON_SATISFAIT\",\"motif\":\"Attestation fiscale périmée\"}");
+        qualifier(b, echec + ",\"decision\":\"QUALIFIE\"}").andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("QUALIFICATION_INCOHERENTE"));
+        qualifier(b, echec + ",\"decision\":\"NON_QUALIFIE\",\"motif\":\"Situation fiscale non régulière\"}").andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("CLAUSE_OBLIGATOIRE"));
+        qualifier(b, echec + ",\"decision\":\"NON_QUALIFIE\",\"motif\":\"Situation fiscale non régulière\",\"clause\":\"IC 6.3\"}")
+                .andExpect(status().isOk()).andExpect(jsonPath("$.lots[0].offres[1].ecartee.etape").value("QUALIFICATION"));
+        mvc.perform(get(base + "/lots/1/qualification").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.idOffre").value(a));
+        arreter("QUALIFICATION").andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("ETAPE_INCOMPLETE"))
+                .andExpect(jsonPath("$.details.offres[0]").value(1));
+        qualifier(a, criteres(codes, null) + ",\"decision\":\"QUALIFIE\"}").andExpect(status().isOk());
+        String fin = arreter("QUALIFICATION").andExpect(status().isOk()).andExpect(jsonPath("$.lots[0].etape").value("RAPPORT"))
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<String>read(fin, "$.lots[0].proposition.idOffre")).isEqualTo(a);
+        assertThat(JsonPath.<Number>read(fin, "$.lots[0].proposition.montant").longValue()).isEqualTo(12_500_000L);
+        assertThat(JsonPath.<Boolean>read(fin, "$.lots[0].proposition.infructueux")).isFalse();
+        assertThat(JsonPath.<String>read(fin, "$.lots[0].offres[0].qualification.decision")).isEqualTo("QUALIFIE");
+        String tableau = mvc.perform(get(base + "/lots/1/tableau").header("Authorization", tokenPrmp)).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Object>>read(tableau, "$[*].qualifie")).containsExactly(false, true, null);
+        assertThat(journalRepository.findByIdDmcOrderByDateAscIdAsc(idDmc)).extracting(j -> j.getAction())
+                .contains("ANORMALE", "JUSTIFICATION_DEMANDEE", "JUSTIFICATION_RECUE", "QUALIFICATION");
+    }
+
     // ------------------------------------------------------------------ outils
+
+    private ResultActions arreter(String etape) throws Exception {
+        return mvc.perform(post(base + "/lots/1/etapes/" + etape + "/arreter").header("Authorization", jetonM1).contentType(JSON).content("{}"));
+    }
+
+    private ResultActions anormale(String idOffre, String corps) throws Exception {
+        return mvc.perform(put(base + "/offres/" + idOffre + "/anormale").header("Authorization", jetonM1).contentType(JSON).content(corps));
+    }
+
+    /** {@code corps} commence après « { » : les critères puis la décision. */
+    private ResultActions qualifier(String idOffre, String corps) throws Exception {
+        return mvc.perform(put(base + "/offres/" + idOffre + "/qualification").header("Authorization", jetonM1).contentType(JSON)
+                .content("{" + corps));
+    }
+
+    /** Les critères, tous satisfaits sauf {@code echec} (non satisfait, sans motif), au début d'un corps de qualification. */
+    private static String criteres(List<String> codes, String echec) {
+        return "\"criteres\":[" + codes.stream().map(c -> "{\"code\":\"" + c + "\",\"decision\":\"" + (c.equals(echec) ? "NON_SATISFAIT" : "SATISFAIT")
+                + "\"}").collect(java.util.stream.Collectors.joining(",")) + "]";
+    }
 
     private ResultActions montant(String jeton, String idOffre, String corps) throws Exception {
         return mvc.perform(put(base + "/offres/" + idOffre + "/montant").header("Authorization", jeton).contentType(JSON).content(corps));

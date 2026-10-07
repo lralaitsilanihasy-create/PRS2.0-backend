@@ -859,8 +859,8 @@ prochaine validation.
 
 ⚠️ **Après le PV d'ouverture signé, la commission évalue les offres dans l'application, lot par lot, en suivant le guide
 d'évaluation des offres.** Ce qui est livré : l'ouverture de l'évaluation, la déclaration préalable des membres, l'examen
-préliminaire (étape 2 du guide), les demandes de précisions, puis les corrections et le classement (étape 3). Les offres anormales, la
-post-qualification et le rapport suivent. Contrat : `docs/api-endpoints.md`, § *L'évaluation des offres, lot 1, tranche 1a*.
+préliminaire (étape 2 du guide), les demandes de précisions, les corrections et le classement (étape 3), les offres anormales (étape 4) et la
+post-qualification (étape 5). Le rapport suit. Contrat : `docs/api-endpoints.md`, § *L'évaluation des offres*, tranches 1a à 1c.
 
 - **Le périmètre** : les procédures en remise électronique, dont les offres sont dans l'application. Les offres papier n'y entrent
   pas. Les offres écartées au dépôt, retirées ou remplacées ne sont pas évaluées.
@@ -895,6 +895,19 @@ post-qualification et le rapport suivent. Contrat : `docs/api-endpoints.md`, § 
     constate, avec la clause (arbitrage du pilote) ;
   - le classement suit le montant évalué croissant ; deux offres premières **à égalité** sont départagées par la commission, avec un
     motif, avant que l'étape puisse être arrêtée.
+- ⚠️ **Les offres anormalement basses ou hautes** (étape 4 du guide, art. 48, livrée le 07/10) :
+  - l'application donne, pour chaque offre classée, son écart à l'estimation du plan et à la moyenne des offres : ce sont des
+    indicateurs ; la méthode du DAO, s'il en porte une, est rappelée ;
+  - la commission examine chaque offre classée : non suspectée, ou suspectée avec un motif ;
+  - **aucune offre n'est rejetée sans une demande écrite de justification** au candidat, adressée par la PRMP, et sans sa réponse ou
+    l'expiration de son délai ; la commission maintient ou rejette alors l'offre, avec un motif ; une offre rejetée sort du classement.
+- ⚠️ **La post-qualification** (étape 5 du guide, art. 20 et 47-V, livrée le 07/10) :
+  - elle porte sur le premier classé, puis, s'il échoue, sur le suivant, jusqu'à une offre qualifiée ou la fin du classement ;
+  - les critères sont ceux du DAO, et eux seuls : capacité juridique, capacité financière, capacité technique et expérience, matériel et
+    personnel exigés ; chacun est jugé satisfait ou non, un échec se motive ;
+  - une offre non qualifiée est écartée avec un motif et la clause du DAO ;
+  - l'étape arrêtée, le lot porte sa **proposition d'attribution** (l'offre, son montant hors taxes, son délai), ou l'infructuosité si
+    aucune offre n'est qualifiée ; l'attribution elle-même revient à la PRMP (lot suivant).
 
 #### La fiche DAO des travaux (référentiel remis le 2026-09-24)
 

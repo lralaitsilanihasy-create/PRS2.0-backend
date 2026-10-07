@@ -6816,7 +6816,7 @@ la vérification est pré-remplie « non satisfaite » (Q6, Q7). Migration **V76
 | GET | /api/fiches-marche/{idDmc}/evaluation | — | `EvaluationDto` | 200, 403, 404 (DMC inconnu, ou évaluation non ouverte) |
 | POST | /api/fiches-marche/{idDmc}/evaluation/ouvrir | — | `EvaluationDto` | 201, 403, 409 `SEANCE_NON_CLOSE` (PV d'ouverture non signé) / `EVALUATION_DEJA_OUVERTE` |
 | POST | /api/fiches-marche/{idDmc}/evaluation/declaration | `{ conflit, precision? }` | `EvaluationDto` | 200, 403 (pas membre), 404, 409 `DEJA_DECLARE` |
-| POST | /api/fiches-marche/{idDmc}/evaluation/lots/{lot}/etapes/{etape}/arreter | `{ observation? }` | `EvaluationDto` | 200, 400 `ETAPE_INCONNUE`, 403, 404 (lot), 409 `EVALUATION_CLOSE` / `ETAPE_ARRETEE` / `ETAPE_PRECEDENTE_OUVERTE` / `ETAPE_INCOMPLETE` (`details.offres` : numéros des offres sans décision) / `ETAPE_NON_DISPONIBLE` (⚠️ depuis la tranche 1b : étapes 4 et 5) |
+| POST | /api/fiches-marche/{idDmc}/evaluation/lots/{lot}/etapes/{etape}/arreter | `{ observation? }` | `EvaluationDto` | 200, 400 `ETAPE_INCONNUE`, 403, 404 (lot), 409 `EVALUATION_CLOSE` / `ETAPE_ARRETEE` / `ETAPE_PRECEDENTE_OUVERTE` / `ETAPE_INCOMPLETE` (`details.offres` : numéros des offres sans décision) / `ETAPE_NON_DISPONIBLE` (⚠️ plus servi depuis la tranche 1c) |
 | POST | /api/fiches-marche/{idDmc}/evaluation/lots/{lot}/etapes/{etape}/rouvrir | `{ motif }` | `EvaluationDto` | 200, 400 `MOTIF_OBLIGATOIRE` / `ETAPE_INCONNUE`, 403, 409 `RAPPORT_SIGNE` / `ETAPE_NON_ARRETEE` |
 | PUT | /api/fiches-marche/{idDmc}/evaluation/offres/{idOffre}/conformite | `{ verifications[{code, satisfaite, observation?}], decision, qualification?, motif?, clause? }` | `EvaluationDto` | 200, 400 `DECISION_INVALIDE` / `VERIFICATION_INCONNUE` / `MOTIF_OBLIGATOIRE` / `CLAUSE_OBLIGATOIRE` / `QUALIFICATION_OBLIGATOIRE`, 403 / 403 `MEMBRE_EN_CONFLIT`, 404, 409 `DECLARATION_MANQUANTE` / `ETAPE_ARRETEE` / `EVALUATION_CLOSE` |
 | POST | /api/fiches-marche/{idDmc}/evaluation/offres/{idOffre}/precisions | `{ question, delaiJours? }` | `Demande` | 201, 400 `QUESTION_OBLIGATOIRE` / `DELAI_OBLIGATOIRE`, 403 (pas la PRMP), 404, 409 `EVALUATION_CLOSE` |
@@ -6904,13 +6904,73 @@ décision `EVALUEE` ou `ECARTEE`, détail en JSON). Mêmes gardes que la tranche
   (Q5 : la CAO, avec un motif) ne les ordonne pas ; un départage cite au moins deux offres évaluées du lot, chacune une fois ; il remplace
   le précédent du lot. Les offres écartées : `rang` nul.
 - **Arrêter l'étape `EVALUATION`** : l'examen préliminaire arrêté ; chaque offre retenue a son montant (409 `ETAPE_INCOMPLETE`,
-  `details.offres`) ; pas d'égalité **en tête** sans départage (409 `EGALITE_A_DEPARTAGER`, `details.offres`). Les étapes 4 et 5 : 409
-  `ETAPE_NON_DISPONIBLE` jusqu'à la tranche 1c.
+  `details.offres`) ; pas d'égalité **en tête** sans départage (409 `EGALITE_A_DEPARTAGER`, `details.offres`). Les étapes 4 et 5 sont servies
+  par la tranche 1c (section suivante).
 - **`LigneTableau`** (modèle du guide, p. 9) = `{ idOffre, numero, candidat, prixLu, prixLuTtc, garantie (« 1 700 000 MGA », « présente »,
   « absente »), conforme, motifRejet (« motif (clause) »), prixCorrige, rabais, ajustements (préférence + critères), montantEvalue, rang,
   exAequo, qualifie (tranche 1c) }`, toutes les offres évaluées du lot, par rang puis par numéro (les écartées en dernier).
 - **Non servi** : la combinaison la moins disante quand la fiche évalue sur l'ensemble des lots (`B06-EV-01` / `B06-EO-01`, Q5 au
   juriste) ; l'évaluation des variantes (les offres en ligne n'en portent pas). **Journal** : `MONTANT`, `DEPARTAGE`.
+
+### L'évaluation des offres, tranche 1c : offres anormales et post-qualification ⚠️ 2026-10-07
+
+Demande front `demande-backend-2026-10-07-evaluation-des-offres.md` (§B4, §B5). **Aucune migration** : les décisions vivent dans
+`t_evaluation_decision` (étapes `ANORMALES`, `QUALIFICATION`), les justifications dans `t_evaluation_demande` (type `JUSTIFICATION`).
+Mêmes gardes que les tranches 1a et 1b : membre déclaré sans conflit pour décider, président pour arrêter, PRMP pour les demandes.
+
+| Méthode | URL | Corps | Réponse | Statuts |
+|---|---|---|---|---|
+| GET | /api/fiches-marche/{idDmc}/evaluation/lots/{lot}/indicateurs-prix | — | `IndicateursPrix` | 200, 403, 404 |
+| POST | /api/fiches-marche/{idDmc}/evaluation/offres/{idOffre}/justification | `{ elements, delaiJours? }` | `Demande` (type `JUSTIFICATION`) | 201, 400 `ELEMENTS_OBLIGATOIRES` / `DELAI_OBLIGATOIRE`, 403 (pas la PRMP), 404, 409 `DEJA_DEMANDEE` / `ETAPE_PRECEDENTE_OUVERTE` / `ETAPE_ARRETEE` / `OFFRE_ECARTEE` / `EVALUATION_CLOSE` |
+| GET | /api/fiches-marche/{idDmc}/evaluation/offres/{idOffre}/justification | — | `Demande[]` | 200, 403, 404 |
+| PUT | /api/fiches-marche/{idDmc}/evaluation/offres/{idOffre}/anormale | `{ suspectee, decision?, motif? }` | `EvaluationDto` | 200, 400 `DECISION_INVALIDE` / `MOTIF_OBLIGATOIRE`, 403, 404, 409 `JUSTIFICATION_NON_DEMANDEE` / `DELAI_EN_COURS` / `ETAPE_PRECEDENTE_OUVERTE` / `ETAPE_ARRETEE` / `OFFRE_ECARTEE` / `DECLARATION_MANQUANTE` |
+| GET | /api/fiches-marche/{idDmc}/evaluation/lots/{lot}/qualification | — | `Qualification` (l'offre dont c'est le tour) | 200, 403, 404, 409 `CLASSEMENT_NON_ARRETE` |
+| PUT | /api/fiches-marche/{idDmc}/evaluation/offres/{idOffre}/qualification | `{ criteres[{ code, decision, motif? }], decision, motif?, clause? }` | `EvaluationDto` | 200, 400 `DECISION_INVALIDE` / `CRITERE_INCONNU` / `CRITERES_INCOMPLETS` / `MOTIF_OBLIGATOIRE` / `QUALIFICATION_INCOHERENTE` / `CLAUSE_OBLIGATOIRE`, 403, 404, 409 `CLASSEMENT_NON_ARRETE` / `ETAPE_ARRETEE` / `PAS_LE_TOUR_DE_CETTE_OFFRE` |
+| GET | /api/candidat/offres/{idOffre}/justification | — | `Demande[]` (les siennes) | 200, 403, 404 |
+| POST | /api/candidat/offres/{idOffre}/justification/reponse | multipart `texte`, `fichier?` | `Demande` | 200, 400 `TEXTE_OBLIGATOIRE` / `FORMAT_INVALIDE`, 403, 404 (aucune demande), 409 `DEJA_REPONDU` / `DELAI_DEPASSE`, 413 |
+
+**§B4 — offres anormalement basses ou hautes (art. 48).**
+- **`IndicateursPrix`** = `{ methodeDao (B06-EO-07, nul sans méthode), estimation, moyenne, offres[{ idOffre, numero, montant, ecartEstimation,
+  ecartMoyenne, alertes }] }` : les offres **classées à l'étape 3**, par rang ; `montant` = prix corrigé − rabais (HT) ; écarts en pour
+  cent, au dixième ; `estimation` = le montant du lot au plan (ligne allotie, lots dans l'ordre de leur identifiant), sinon le montant
+  estimatif de la ligne, **tel que le plan le porte** ; `moyenne` des offres classées ; `alertes` : les messages
+  `SOUS_DETAIL_INCOHERENT` de la séance. Des indicateurs, jamais une décision.
+- **Le geste** : l'étape 3 arrêtée et l'étape 4 ouverte ; une offre classée à l'étape 3. `suspectee = false` → `NON_SUSPECTEE` ;
+  `suspectee = true` sans `decision` → `SUSPECTEE` (motif obligatoire) ; puis `decision` ∈ `MAINTENUE` · `REJETEE` (motif obligatoire).
+  **Aucun rejet sans demande écrite** : `REJETEE` exige une justification demandée (409 `JUSTIFICATION_NON_DEMANDEE`) **et** reçue ou
+  son échéance passée (409 `DELAI_EN_COURS`). Une offre rejetée est **écartée à l'étape 4** et sort du classement (le lot est
+  reclassé).
+- **La justification** : demandée par la **PRMP** (une par offre, 409 `DEJA_DEMANDEE`), délai saisi ou celui de la fiche ; le candidat
+  y répond comme à une précision ; le fichier joint se lit par `GET …/evaluation/demandes/{idDemande}/fichier`.
+  `OffreEvaluee.anormale` = `{ suspectee, decision, motif, justification (la Demande et sa réponse), par, nom, le }`.
+- **Arrêter `ANORMALES`** : chaque offre classée à l'étape 3 a sa décision, aucune `SUSPECTEE` en suspens (409 `ETAPE_INCOMPLETE`,
+  `details.offres`) ; après le reclassement, pas d'égalité en tête sans départage (409 `EGALITE_A_DEPARTAGER` ; le départage de la
+  tranche 1b reste ouvert jusqu'à l'arrêt de l'étape 3 — rouvrir l'étape 3 pour départager un nouvel ex aequo).
+
+**§B5 — post-qualification (art. 20, 47-V).**
+- **Le tour** : la première offre du classement (rejetées exclues) qui n'est pas « non qualifiée ». `GET …/qualification` la sert avec
+  ses critères ; `idOffre` nul quand toutes ont échoué (proposition d'infructuosité, lot 2). Un `PUT` vise l'offre du tour **ou une
+  offre déjà examinée** (pour corriger) ; une offre plus loin dans le classement : 409 `PAS_LE_TOUR_DE_CETTE_OFFRE`.
+- **Les critères**, dérivés de la version validée de la fiche (P1, art. 20-II : rien d'autre), valeur par lot d'abord :
+  `CritereQualification` = `{ code, groupe, libelle, exigence, constat, proposee, decision, motif }` :
+  - `JURIDIQUE` (toujours) : pièces administratives (`B03-CQ-01`), absence d'exclusion, pouvoirs — proposé non satisfait sur une
+    exclusion ou des pièces manquantes ;
+  - `FINANCIERE` : chaque champ renseigné parmi `B03-QT-07`, `-14` à `-18`, `B03-CQ-03`, `-10` (constat : `CA_INSUFFISANT` ou
+    `LIQUIDITE_INSUFFISANTE`) ;
+  - `TECHNIQUE` : chaque champ renseigné parmi `B03-QT-08`, `-12`, `-19`, `-20`, `B03-CQ-02`, `-04`, `-06` (constat :
+    `REFERENCES_INSUFFISANTES` pour les références) ; `MATERIEL` et `PERSONNEL` quand la fiche les exige (`B03-QT-09`, `B03-QT-13`) ou
+    qu'une alerte `MATERIEL_INCOMPLET` / `PERSONNEL_INCOMPLET` est levée.
+  - `proposee` est faux sur une alerte de séance, nul sinon (« à vérifier sur l'offre ») ; les valeurs déclarées se lisent dans les
+    formulaires de l'offre (`GET …/seance/offres/{idOffre}/formulaires`).
+- **Décider** : chaque critère `SATISFAIT` ou `NON_SATISFAIT` (motif obligatoire pour un échec) ; puis `QUALIFIE` (tous satisfaits, sinon
+  400 `QUALIFICATION_INCOHERENTE`) ou `NON_QUALIFIE` (motif et clause obligatoires) : l'offre est **écartée à l'étape 5** et le tour
+  passe à la suivante. `OffreEvaluee.qualification` = `{ idOffre, numero, criteres, decision, motif, clause, par, nom, le }`.
+- **Arrêter `QUALIFICATION`** : une offre qualifiée, ou toutes non qualifiées (409 `ETAPE_INCOMPLETE` tant que l'offre du tour attend).
+  Le lot passe à l'étape `RAPPORT` et porte **`proposition`** = `{ idOffre, numero, candidat, montant (prix corrigé − rabais, HT),
+  montantTtc (TTC lu), delai (celui de l'acte d'engagement), infructueux }` — `infructueux = true` et le reste nul si aucune offre
+  n'est qualifiée.
+- **Tableau** : `qualifie` vrai, faux ou nul. **Notifications** : `JUSTIFICATION_DEMANDEE` (candidat, et courriel),
+  `JUSTIFICATION_RECUE` (PRMP, membres). **Journal** : `ANORMALE`, `JUSTIFICATION_DEMANDEE`, `JUSTIFICATION_RECUE`, `QUALIFICATION`.
 
 ### Le dépositaire génère lui-même la part de secours — V71 ⚠️ 2026-10-05
 

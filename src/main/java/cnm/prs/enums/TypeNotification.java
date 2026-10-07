@@ -166,5 +166,9 @@ public enum TypeNotification {
     /** ⚠️ 2026-10-07 (§B2, art. 35-VI) — une demande de précisions : vers le candidat (et par courriel). */
     PRECISION_DEMANDEE,
     /** ⚠️ 2026-10-07 (§B2) — la réponse du candidat : vers la PRMP et les membres de la CAO. */
-    PRECISION_RECUE
+    PRECISION_RECUE,
+    /** ⚠️ 2026-10-07 (§B4, art. 48) — une demande de justification d'un prix anormal : vers le candidat (et par courriel). */
+    JUSTIFICATION_DEMANDEE,
+    /** ⚠️ 2026-10-07 (§B4) — la justification du candidat : vers la PRMP et les membres de la CAO. */
+    JUSTIFICATION_RECUE
 }
