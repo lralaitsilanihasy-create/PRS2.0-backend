@@ -6798,7 +6798,7 @@ la CAO saisit, le président arrête** (Q1) ; offres papier hors du module (H1) 
 CAO** (Q2, tranche 1b) ; comparaison **hors taxes** (Q3, tranche 1b) ; offre altérée ou illisible, frais non réglés : **la CAO décide**,
 la vérification est pré-remplie « non satisfaite » (Q6, Q7). Migration **V76** (`t_evaluation`, `t_evaluation_declaration`,
 `t_evaluation_etape`, `t_evaluation_decision`, `t_evaluation_demande`, `t_evaluation_journal`). Aucune dépendance ajoutée. Les étapes 3 à
-5 et le rapport (§B3 à §B6) suivent en tranches 1b à 1d : leurs routes ne sont pas encore servies.
+5 et le rapport (§B3 à §B6) suivent en tranches 1b à 1d (⚠️ 1b livrée le même jour, section suivante).
 
 **Accès** (garde par identité dans le service ; chemin ouvert dans `SecurityConfig` aux mêmes rôles que la séance) :
 
@@ -6816,7 +6816,7 @@ la vérification est pré-remplie « non satisfaite » (Q6, Q7). Migration **V76
 | GET | /api/fiches-marche/{idDmc}/evaluation | — | `EvaluationDto` | 200, 403, 404 (DMC inconnu, ou évaluation non ouverte) |
 | POST | /api/fiches-marche/{idDmc}/evaluation/ouvrir | — | `EvaluationDto` | 201, 403, 409 `SEANCE_NON_CLOSE` (PV d'ouverture non signé) / `EVALUATION_DEJA_OUVERTE` |
 | POST | /api/fiches-marche/{idDmc}/evaluation/declaration | `{ conflit, precision? }` | `EvaluationDto` | 200, 403 (pas membre), 404, 409 `DEJA_DECLARE` |
-| POST | /api/fiches-marche/{idDmc}/evaluation/lots/{lot}/etapes/{etape}/arreter | `{ observation? }` | `EvaluationDto` | 200, 400 `ETAPE_INCONNUE`, 403, 404 (lot), 409 `EVALUATION_CLOSE` / `ETAPE_ARRETEE` / `ETAPE_PRECEDENTE_OUVERTE` / `ETAPE_INCOMPLETE` (`details.offres` : numéros des offres sans décision) / `ETAPE_NON_DISPONIBLE` (étapes 3 à 5 : tranche suivante) |
+| POST | /api/fiches-marche/{idDmc}/evaluation/lots/{lot}/etapes/{etape}/arreter | `{ observation? }` | `EvaluationDto` | 200, 400 `ETAPE_INCONNUE`, 403, 404 (lot), 409 `EVALUATION_CLOSE` / `ETAPE_ARRETEE` / `ETAPE_PRECEDENTE_OUVERTE` / `ETAPE_INCOMPLETE` (`details.offres` : numéros des offres sans décision) / `ETAPE_NON_DISPONIBLE` (⚠️ depuis la tranche 1b : étapes 4 et 5) |
 | POST | /api/fiches-marche/{idDmc}/evaluation/lots/{lot}/etapes/{etape}/rouvrir | `{ motif }` | `EvaluationDto` | 200, 400 `MOTIF_OBLIGATOIRE` / `ETAPE_INCONNUE`, 403, 409 `RAPPORT_SIGNE` / `ETAPE_NON_ARRETEE` |
 | PUT | /api/fiches-marche/{idDmc}/evaluation/offres/{idOffre}/conformite | `{ verifications[{code, satisfaite, observation?}], decision, qualification?, motif?, clause? }` | `EvaluationDto` | 200, 400 `DECISION_INVALIDE` / `VERIFICATION_INCONNUE` / `MOTIF_OBLIGATOIRE` / `CLAUSE_OBLIGATOIRE` / `QUALIFICATION_OBLIGATOIRE`, 403 / 403 `MEMBRE_EN_CONFLIT`, 404, 409 `DECLARATION_MANQUANTE` / `ETAPE_ARRETEE` / `EVALUATION_CLOSE` |
 | POST | /api/fiches-marche/{idDmc}/evaluation/offres/{idOffre}/precisions | `{ question, delaiJours? }` | `Demande` | 201, 400 `QUESTION_OBLIGATOIRE` / `DELAI_OBLIGATOIRE`, 403 (pas la PRMP), 404, 409 `EVALUATION_CLOSE` |
@@ -6857,6 +6857,60 @@ la vérification est pré-remplie « non satisfaite » (Q6, Q7). Migration **V76
 - **Notifications** : `EVALUATION_OUVERTE` (membres de la CAO, PRMP), `PRECISION_DEMANDEE` (candidat, et courriel), `PRECISION_RECUE`
   (PRMP, membres). **Journal** : `OUVERTURE`, `DECLARATION`, `CONFORMITE`, `ARRET`, `REOUVERTURE`, `PRECISION_DEMANDEE`,
   `PRECISION_RECUE`. Les compteurs de `/api/kpis/badges` (§B7) viendront avec la tranche du rapport.
+
+### L'évaluation des offres, tranche 1b : corrections, montant évalué, classement — V77 ⚠️ 2026-10-07
+
+Demande front `demande-backend-2026-10-07-evaluation-des-offres.md` (§B3) ; arbitrages du pilote du 07/10 : comparaison **hors taxes**
+(Q3), refus d'une correction **constaté par la CAO** (Q2) ; Q4, Q5, Q8 non tranchées, la livraison suit les propositions de la demande.
+Migration **V77** (`t_evaluation_departage`). Le montant et les corrections vivent dans `t_evaluation_decision` (étape `EVALUATION`,
+décision `EVALUEE` ou `ECARTEE`, détail en JSON). Mêmes gardes que la tranche 1a : membre déclaré sans conflit pour écrire.
+
+| Méthode | URL | Corps | Réponse | Statuts |
+|---|---|---|---|---|
+| GET | /api/fiches-marche/{idDmc}/evaluation/offres/{idOffre}/corrections-proposees | — | `[{ ligne, libelle, avant, apres, regle }]` | 200, 403, 404, 409 `OFFRE_ECARTEE` |
+| PUT | /api/fiches-marche/{idDmc}/evaluation/offres/{idOffre}/montant | `MontantRequest` | `EvaluationDto` | 200, 400 (ci-dessous), 403 / 403 `MEMBRE_EN_CONFLIT`, 404, 409 `ETAPE_PRECEDENTE_OUVERTE` / `ETAPE_ARRETEE` / `OFFRE_ECARTEE` / `DECLARATION_MANQUANTE` / `EVALUATION_CLOSE` |
+| POST | /api/fiches-marche/{idDmc}/evaluation/lots/{lot}/departage | `{ ordre: [idOffre…], motif }` | `EvaluationDto` | 200, 400 `ORDRE_INVALIDE` / `MOTIF_OBLIGATOIRE`, 403, 404, 409 `ETAPE_PRECEDENTE_OUVERTE` / `ETAPE_ARRETEE` |
+| GET | /api/fiches-marche/{idDmc}/evaluation/lots/{lot}/tableau | — | `LigneTableau[]` | 200, 403, 404 |
+
+- **Corrections proposées** (lecture : CAO, responsable, PRMP, UGPM), depuis le bordereau **scellé** de l'offre (relu dans son contenu
+  déchiffré, jamais stocké en base) et les quantités de la fiche (`quantiteMax` à commande) :
+  - `LETTRES_PREVALENT`, par article : le prix en lettres relu diffère des chiffres d'au moins 1 Ar ; `avant` = chiffres × quantité,
+    `apres` = lettres × quantité ;
+  - `PU_PREVAUT` (`ligne` nulle) : le montant HT de l'acte d'engagement diffère de Σ prix unitaire × quantité (tolérance : 1 Ar par
+    article) ; `avant` = l'acte, `apres` = la somme.
+  - Les corrections se cumulent : retenues ensemble, elles mènent de l'acte au total recalculé sur les lettres. Une offre sans bordereau
+    (déposée par pièces) ou purgée : `[]`.
+- **`MontantRequest`** = `{ prixLu?, corrections[{ ligne?, libelle, avant, apres, regle, retenue }], refusCandidat?{ motif, clause },
+  rabais?{ montant, lecture? }, preference?{ eligible, motif? }, criteres?[{ libelle, montant, justification }] }` :
+  - `prixLu` seulement si l'acte d'engagement ne porte pas de montant HT (400 `PRIX_LU_OBLIGATOIRE`) ; sinon le HT lu fait foi ;
+  - `regle` ∈ `PU_PREVAUT` · `LETTRES_PREVALENT` · `REPORT` · `AUTRE` (400 `REGLE_INCONNUE`) ; libellé, avant et après obligatoires
+    (400 `CORRECTION_INVALIDE`) ; seules les corrections `retenue` comptent ; la CAO peut en saisir (offre sans formulaire) ;
+  - `refusCandidat` (Q2) : motif et clause des IC obligatoires (400 `MOTIF_OBLIGATOIRE`, `CLAUSE_OBLIGATOIRE`) ; l'offre est **écartée à
+    l'étape 3** (`ecartee.etape = EVALUATION`), sans montant évalué ;
+  - `rabais.montant` ≥ 0, hors taxes (400 `RABAIS_INVALIDE`) — Q4 : la CAO en saisit la valeur, le dépôt n'est pas changé ;
+  - `preference.eligible` : seulement si la fiche prévoit la préférence (`B06-PN-01` travaux, `B03-CQ-08` fournitures = `OUI` ; sinon
+    400 `PREFERENCE_NON_PREVUE`), avec un motif (400 `MOTIF_OBLIGATOIRE`) — Q8 : la CAO la marque ;
+  - `criteres` : seulement si la fiche porte des critères additionnels (`B06-EO-02` ; sinon 400 `CRITERE_HORS_DAO`, règle d'or), chacun
+    avec libellé, montant et justification (400 `CRITERE_INVALIDE`).
+- **Le calcul (serveur, hors taxes)** : `prixCorrige` = prix lu + Σ (après − avant) des corrections retenues ; `ajustement` de
+  préférence = taux de la fiche (`B06-PN-02` / `B06-EO-09`, plafonné à **15 %**) × (prix corrigé − rabais), pour une offre **non
+  éligible** quand la fiche prévoit la préférence, 0 sinon ; `montantEvalue` = prix corrigé − rabais + ajustement + Σ critères. La
+  préférence sert à comparer, jamais au prix du marché.
+- **`OffreEvaluee.evaluation`** = `Montant` `{ prixLu, prixLuTtc, corrections[], refusCandidat, rabais{ montant, lecture },
+  preference{ eligible, motif, taux, ajustement }, criteres[], prixCorrige, montantEvalue, par, nom, le }` ; nul tant que rien n'est
+  saisi. Une nouvelle saisie remplace la précédente, qui reste au registre.
+- **Classement (§B3.6)** : `OffreEvaluee.rang` et `exAequo`, pour les offres retenues à l'examen préliminaire et évaluées (non écartées à
+  l'étape 3), par montant évalué croissant ; à **égalité**, les offres partagent leur rang (`exAequo = true`) tant qu'un **départage**
+  (Q5 : la CAO, avec un motif) ne les ordonne pas ; un départage cite au moins deux offres évaluées du lot, chacune une fois ; il remplace
+  le précédent du lot. Les offres écartées : `rang` nul.
+- **Arrêter l'étape `EVALUATION`** : l'examen préliminaire arrêté ; chaque offre retenue a son montant (409 `ETAPE_INCOMPLETE`,
+  `details.offres`) ; pas d'égalité **en tête** sans départage (409 `EGALITE_A_DEPARTAGER`, `details.offres`). Les étapes 4 et 5 : 409
+  `ETAPE_NON_DISPONIBLE` jusqu'à la tranche 1c.
+- **`LigneTableau`** (modèle du guide, p. 9) = `{ idOffre, numero, candidat, prixLu, prixLuTtc, garantie (« 1 700 000 MGA », « présente »,
+  « absente »), conforme, motifRejet (« motif (clause) »), prixCorrige, rabais, ajustements (préférence + critères), montantEvalue, rang,
+  exAequo, qualifie (tranche 1c) }`, toutes les offres évaluées du lot, par rang puis par numéro (les écartées en dernier).
+- **Non servi** : la combinaison la moins disante quand la fiche évalue sur l'ensemble des lots (`B06-EV-01` / `B06-EO-01`, Q5 au
+  juriste) ; l'évaluation des variantes (les offres en ligne n'en portent pas). **Journal** : `MONTANT`, `DEPARTAGE`.
 
 ### Le dépositaire génère lui-même la part de secours — V71 ⚠️ 2026-10-05
 

@@ -74,6 +74,7 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
     @Autowired private EvaluationDecisionRepository decisionRepository;
     @Autowired private EvaluationDemandeRepository demandeRepository;
     @Autowired private EvaluationJournalRepository journalRepository;
+    @Autowired private cnm.prs.service.StockageOffres stockage;
 
     private final LocalDate aujourdhui = LocalDate.now();
     private final List<String> comptes = new ArrayList<>();
@@ -234,8 +235,12 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("ETAPE_ARRETEE"));
         mvc.perform(post(base + "/lots/1/etapes/CONFORMITE/arreter").header("Authorization", jetonM1).contentType(JSON).content("{}"))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("ETAPE_ARRETEE"));
+        // ⚠️ Tranche 1b — l'étape 3 s'arrête une fois chaque offre retenue évaluée (ici la n° 1, seule retenue) ; l'étape 4 attend la 3.
         mvc.perform(post(base + "/lots/1/etapes/EVALUATION/arreter").header("Authorization", jetonM1).contentType(JSON).content("{}"))
-                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("ETAPE_NON_DISPONIBLE"));
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("ETAPE_INCOMPLETE"))
+                .andExpect(jsonPath("$.details.offres[0]").value(1)).andExpect(jsonPath("$.details.offres.length()").value(1));
+        mvc.perform(post(base + "/lots/1/etapes/ANORMALES/arreter").header("Authorization", jetonM1).contentType(JSON).content("{}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("ETAPE_PRECEDENTE_OUVERTE"));
         mvc.perform(post(base + "/lots/1/etapes/AUTRE/arreter").header("Authorization", jetonM1).contentType(JSON).content("{}"))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("ETAPE_INCONNUE"));
         mvc.perform(post(base + "/lots/2/etapes/CONFORMITE/arreter").header("Authorization", jetonM1).contentType(JSON).content("{}"))
@@ -319,7 +324,136 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
                 .contains("PRECISION_DEMANDEE", "PRECISION_RECUE");
     }
 
+    @Test
+    @DisplayName("§B3 (tranche 1b) : corrections proposées depuis le bordereau scellé (lettres, prix unitaire), montant évalué hors taxes "
+            + "(corrections retenues, rabais, préférence de la fiche, critère du DAO), refus du candidat constaté, classement, égalité en tête "
+            + "à départager avant l'arrêt, tableau du guide")
+    void evaluationDetaillee() throws Exception {
+        String a = offre("C900000051", "1111222333", "BTP Alpha", 1, "INTACTE", null, "12600000");
+        String b = offre("C900000052", "4444555666", "BTP Beta", 2, "INTACTE", null, "11900000");
+        String c = offre("C900000053", "7777888999", "BTP Gamma", 3, "INTACTE", null, "9000000");
+        List<Integer> articles = JsonPath.read(mvc.perform(get("/api/fiches-marche/" + idDmc + "/articles").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), "$[*].idArticle");
+        // Le bordereau de A : 10 × 1 000 000 (en lettres « un million cent mille ») + 5 × 500 000 = 12 500 000, l'acte dit 12 600 000.
+        clair(a, "{\"acteEngagement\":{\"montantHt\":\"12600000\"},\"formulaires\":{\"bordereau\":[{\"idArticle\":" + articles.get(0)
+                + ",\"prixUnitaireHt\":\"1000000\",\"prixEnLettres\":\"un million cent mille\"},{\"idArticle\":" + articles.get(1)
+                + ",\"prixUnitaireHt\":\"500000\"}]}}");
+        seanceClose();
+        mvc.perform(post(base + "/ouvrir").header("Authorization", tokenVer)).andExpect(status().isCreated());
+        mvc.perform(post(base + "/declaration").header("Authorization", jetonM1).contentType(JSON).content("{\"conflit\":false}"))
+                .andExpect(status().isOk());
+        conformite(jetonM1, a, "{\"decision\":\"CONFORME\"}").andExpect(status().isOk());
+        conformite(jetonM1, b, "{\"decision\":\"CONFORME\"}").andExpect(status().isOk());
+        conformite(jetonM1, c, "{\"decision\":\"ECARTEE\",\"qualification\":\"NON_CONFORME\",\"motif\":\"Spécifications non respectées\","
+                + "\"clause\":\"CCAP 3\"}").andExpect(status().isOk());
+        montant(jetonM1, a, "{\"corrections\":[]}").andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("ETAPE_PRECEDENTE_OUVERTE"));
+        mvc.perform(post(base + "/lots/1/etapes/CONFORMITE/arreter").header("Authorization", jetonM1).contentType(JSON).content("{}"))
+                .andExpect(status().isOk());
+
+        // Les corrections proposées.
+        String proposees = mvc.perform(get(base + "/offres/" + a + "/corrections-proposees").header("Authorization", tokenUgpm))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(proposees, "$[*].regle")).containsExactly("LETTRES_PREVALENT", "PU_PREVAUT");
+        assertThat(JsonPath.<Number>read(proposees, "$[0].avant").longValue()).isEqualTo(10_000_000L);
+        assertThat(JsonPath.<Number>read(proposees, "$[0].apres").longValue()).isEqualTo(11_000_000L);
+        assertThat(JsonPath.<Number>read(proposees, "$[1].avant").longValue()).isEqualTo(12_600_000L);
+        assertThat(JsonPath.<Number>read(proposees, "$[1].apres").longValue()).isEqualTo(12_500_000L);
+        mvc.perform(get(base + "/offres/" + b + "/corrections-proposees").header("Authorization", jetonM1)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));   // sans bordereau scellé
+        mvc.perform(get(base + "/offres/" + c + "/corrections-proposees").header("Authorization", jetonM1)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("OFFRE_ECARTEE"));
+
+        // Les refus nommés.
+        montant(jetonM1, c, "{}").andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("OFFRE_ECARTEE"));
+        montant(jetonM1, a, "{\"corrections\":[{\"libelle\":\"x\",\"avant\":1,\"apres\":2,\"regle\":\"AU_JUGE\",\"retenue\":true}]}")
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("REGLE_INCONNUE"));
+        montant(jetonM1, a, "{\"rabais\":{\"montant\":-1}}").andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("RABAIS_INVALIDE"));
+        montant(jetonM1, a, "{\"preference\":{\"eligible\":true}}").andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("MOTIF_OBLIGATOIRE"));
+        montant(jetonM1, b, "{\"criteres\":[{\"libelle\":\"Délai\",\"montant\":310000}]}").andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("CRITERE_INVALIDE"));
+        montant(jetonM1, a, "{\"refusCandidat\":{\"motif\":\"Refuse la correction\"}}").andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("CLAUSE_OBLIGATOIRE"));
+
+        // Q2 : le refus du candidat, constaté par la CAO, écarte l'offre à l'étape 3 ; une nouvelle saisie le remplace.
+        String refus = montant(jetonM1, a, "{\"refusCandidat\":{\"motif\":\"Le candidat refuse la correction des lettres\",\"clause\":\"IC 28.2\"}}")
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<String>read(refus, "$.lots[0].offres[0].ecartee.etape")).isEqualTo("EVALUATION");
+        assertThat(JsonPath.<Object>read(refus, "$.lots[0].offres[0].evaluation.montantEvalue")).isNull();
+        // A : 12 600 000 + 1 000 000 (lettres) − 100 000 (report) = 13 500 000, rabais 100 000, éligible : 13 400 000.
+        String ev = montant(jetonM1, a, "{\"corrections\":" + retenues(proposees) + ",\"rabais\":{\"montant\":100000,\"lecture\":\"Rabais de "
+                + "100 000 sur le total\"},\"preference\":{\"eligible\":true,\"motif\":\"Entreprise de droit malgache\"}}").andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<Number>read(ev, "$.lots[0].offres[0].evaluation.prixCorrige").longValue()).isEqualTo(13_500_000L);
+        assertThat(JsonPath.<Number>read(ev, "$.lots[0].offres[0].evaluation.montantEvalue").longValue()).isEqualTo(13_400_000L);
+        assertThat(JsonPath.<Object>read(ev, "$.lots[0].offres[0].ecartee")).isNull();
+        // B : 11 900 000, non éligible : + 10 % (1 190 000), critère du DAO + 310 000 = 13 400 000 — égalité avec A.
+        ev = montant(jetonM1, b, "{\"criteres\":[{\"libelle\":\"Délai de livraison\",\"montant\":310000,\"justification\":\"Six semaines "
+                + "au lieu de quatre\"}]}").andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<Number>read(ev, "$.lots[0].offres[1].evaluation.preference.ajustement").longValue()).isEqualTo(1_190_000L);
+        assertThat(JsonPath.<Number>read(ev, "$.lots[0].offres[1].evaluation.montantEvalue").longValue()).isEqualTo(13_400_000L);
+        assertThat(JsonPath.<List<Integer>>read(ev, "$.lots[0].offres[*].rang")).containsExactly(1, 1, null);
+        assertThat(JsonPath.<List<Boolean>>read(ev, "$.lots[0].offres[*].exAequo")).containsExactly(true, true, null);
+        mvc.perform(post(base + "/lots/1/etapes/EVALUATION/arreter").header("Authorization", jetonM1).contentType(JSON).content("{}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("EGALITE_A_DEPARTAGER"))
+                .andExpect(jsonPath("$.details.offres[0]").value(1)).andExpect(jsonPath("$.details.offres[1]").value(2));
+        mvc.perform(post(base + "/lots/1/departage").header("Authorization", jetonM1).contentType(JSON)
+                .content("{\"ordre\":[\"" + b + "\",\"" + c + "\"],\"motif\":\"x\"}")).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("ORDRE_INVALIDE"));
+        mvc.perform(post(base + "/lots/1/departage").header("Authorization", jetonM1).contentType(JSON)
+                .content("{\"ordre\":[\"" + b + "\",\"" + a + "\"]}")).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("MOTIF_OBLIGATOIRE"));
+        mvc.perform(post(base + "/lots/1/departage").header("Authorization", jetonM1).contentType(JSON)
+                .content("{\"ordre\":[\"" + b + "\",\"" + a + "\"],\"motif\":\"Délai d'exécution plus court\"}")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.lots[0].offres[0].rang").value(2)).andExpect(jsonPath("$.lots[0].offres[1].rang").value(1))
+                .andExpect(jsonPath("$.lots[0].offres[1].exAequo").value(false));
+        mvc.perform(post(base + "/lots/1/etapes/EVALUATION/arreter").header("Authorization", jetonM1).contentType(JSON).content("{}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.lots[0].etape").value("ANORMALES"));
+        montant(jetonM1, b, "{}").andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("ETAPE_ARRETEE"));
+        mvc.perform(post(base + "/lots/1/etapes/ANORMALES/arreter").header("Authorization", jetonM1).contentType(JSON).content("{}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("ETAPE_NON_DISPONIBLE"));
+
+        // Le tableau du guide : par rang, l'offre écartée en dernier avec son motif.
+        String tableau = mvc.perform(get(base + "/lots/1/tableau").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Integer>>read(tableau, "$[*].numero")).containsExactly(2, 1, 3);
+        assertThat(JsonPath.<List<Integer>>read(tableau, "$[*].rang")).containsExactly(1, 2, null);
+        assertThat(JsonPath.<Number>read(tableau, "$[1].rabais").longValue()).isEqualTo(100_000L);
+        assertThat(JsonPath.<Number>read(tableau, "$[0].ajustements").longValue()).isEqualTo(1_500_000L);
+        assertThat(JsonPath.<String>read(tableau, "$[0].garantie")).isEqualTo("1 700 000 MGA");
+        assertThat(JsonPath.<String>read(tableau, "$[2].motifRejet")).isEqualTo("Spécifications non respectées (CCAP 3)");
+        assertThat(JsonPath.<Boolean>read(tableau, "$[2].conforme")).isFalse();
+        assertThat(journalRepository.findByIdDmcOrderByDateAscIdAsc(idDmc)).extracting(j -> j.getAction()).contains("MONTANT", "DEPARTAGE");
+    }
+
     // ------------------------------------------------------------------ outils
+
+    private ResultActions montant(String jeton, String idOffre, String corps) throws Exception {
+        return mvc.perform(put(base + "/offres/" + idOffre + "/montant").header("Authorization", jeton).contentType(JSON).content(corps));
+    }
+
+    /** Le contenu déchiffré d'une offre, comme la séance le range : une archive portant le manifeste. */
+    private void clair(String idOffre, String manifeste) throws Exception {
+        java.io.ByteArrayOutputStream o = new java.io.ByteArrayOutputStream();
+        try (java.util.zip.ZipOutputStream z = new java.util.zip.ZipOutputStream(o)) {
+            z.putNextEntry(new java.util.zip.ZipEntry("manifeste.json"));
+            z.write(manifeste.getBytes(StandardCharsets.UTF_8));
+            z.closeEntry();
+        }
+        stockage.ecrireClair(idOffre, o.toByteArray());
+    }
+
+    /** Les corrections proposées, toutes retenues. */
+    private static String retenues(String proposees) {
+        List<Map<String, Object>> l = JsonPath.read(proposees, "$");
+        StringBuilder s = new StringBuilder("[");
+        for (Map<String, Object> c : l) {
+            s.append(s.length() == 1 ? "" : ",").append("{\"ligne\":").append(c.get("ligne")).append(",\"libelle\":\"")
+                    .append(String.valueOf(c.get("libelle")).replace("\"", "\\\"")).append("\",\"avant\":").append(c.get("avant"))
+                    .append(",\"apres\":").append(c.get("apres")).append(",\"regle\":\"").append(c.get("regle")).append("\",\"retenue\":true}");
+        }
+        return s.append("]").toString();
+    }
 
     private ResultActions conformite(String jeton, String idOffre, String corps) throws Exception {
         return mvc.perform(put(base + "/offres/" + idOffre + "/conformite").header("Authorization", jeton).contentType(JSON).content(corps));
@@ -387,7 +521,12 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
                         + "\"variantes\":\"NON\",\"groupement\":\"NON\",\"provenance\":\"NATIONAL\",\"typePrix\":\"UNITAIRES\","
                         + "\"prixRevisable\":\"NON\",\"avance\":\"NON\",\"penalites\":\"CCAG\"}}"))
                 .andExpect(status().isOk());
-        besoinDeTest(idDmc);
+        // ⚠️ Tranche 1b — deux articles (quantités 10 et 5), pour les corrections proposées depuis le bordereau.
+        mvc.perform(put("/api/fiches-marche/" + idDmc + "/articles").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"articles\":[{\"designation\":\"Ordinateur portable\",\"unite\":\"U\",\"quantite\":10,\"caracteristiques\":"
+                        + "[{\"libelle\":\"Mémoire\",\"exigence\":\"16 Go\"}]},{\"designation\":\"Onduleur\",\"unite\":\"U\",\"quantite\":5,"
+                        + "\"caracteristiques\":[{\"libelle\":\"Puissance\",\"exigence\":\"1500 VA\"}]}]}"))
+                .andExpect(status().isOk());
         Map<String, String> donnees = new LinkedHashMap<>();
         donnees.put("B02-OB-03", "AOO 0007/MESupReS/2026");
         donnees.put("B04-CD-02", "C1");
@@ -404,6 +543,9 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
         donnees.put("B05-GS-04", "105");
         donnees.put("B04-VO-01", "75");
         donnees.put("B06-EP-01", "5");
+        donnees.put("B03-CQ-08", "OUI");
+        donnees.put("B06-EO-09", "10");
+        donnees.put("B06-EO-02", "Délai de livraison : pénalité d'évaluation au-delà de quatre semaines");
         remplirObligatoires(idDmc, "QUANTITE_FIXE", "FOURNITURES_SERVICES", donnees);
         mvc.perform(post("/api/fiches-marche/" + idDmc + "/responsable").header("Authorization", tokenAdmin).contentType(JSON)
                 .content("{\"im\":\"CTRVER\"}")).andExpect(status().isCreated());

@@ -1,5 +1,6 @@
 package cnm.prs.dto;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -26,11 +27,12 @@ public record EvaluationDto(Long idDmc, String etat, LocalDateTime ouverteLe, St
     }
 
     /**
-     * Une offre évaluée : une section par étape ({@code null} tant qu'elle n'est pas atteinte ; dans cette tranche, seule
-     * {@code conformite} est servie), {@code rang} (tranche suivante), {@code ecartee} : l'étape qui l'a écartée et pourquoi.
+     * Une offre évaluée : une section par étape ({@code null} tant qu'elle n'est pas atteinte ; ⚠️ tranche 1b :
+     * {@code conformite} et {@code evaluation} sont servies), {@code rang} (classement du lot, offres retenues seules), {@code exAequo} (à
+     * égalité de montant évalué, sans départage), {@code ecartee} : l'étape qui l'a écartée et pourquoi.
      */
-    public record OffreEvaluee(String idOffre, Integer numero, Entreprise entreprise, Conformite conformite, Object evaluation,
-            Object anormale, Object qualification, Integer rang, Ecartement ecartee, int precisionsEnAttente) {
+    public record OffreEvaluee(String idOffre, Integer numero, Entreprise entreprise, Conformite conformite, Montant evaluation,
+            Object anormale, Object qualification, Integer rang, Boolean exAequo, Ecartement ecartee, int precisionsEnAttente) {
     }
 
     public record Entreprise(String nif, String raisonSociale) {
@@ -88,6 +90,64 @@ public record EvaluationDto(Long idDmc, String etat, LocalDateTime ouverteLe, St
     public record Demande(Long idDemande, String idOffre, Integer numero, String type, String question, Integer delaiJours,
             LocalDateTime echeance, LocalDateTime demandeeLe, String etat, String reponse, String fichier, Long tailleFichier,
             LocalDateTime reponduLe) {
+    }
+
+    // ------------------------------------------------------------------ ⚠️ tranche 1b (§B3) : corrections, montant évalué, classement
+
+    /** Une correction arithmétique proposée par le serveur depuis le bordereau scellé ({@code ligne} nulle : le total). */
+    public record CorrectionProposee(Integer ligne, String libelle, BigDecimal avant, BigDecimal apres, String regle) {
+    }
+
+    /**
+     * Une correction, proposée ou saisie par la CAO : {@code regle} ∈ {@code PU_PREVAUT} · {@code LETTRES_PREVALENT} · {@code REPORT} ·
+     * {@code AUTRE} ; seules les {@code retenue} comptent, pour {@code apres − avant}.
+     */
+    public record Correction(Integer ligne, String libelle, BigDecimal avant, BigDecimal apres, String regle, Boolean retenue) {
+    }
+
+    /** Le refus d'une correction par le candidat, constaté par la CAO (arbitrage Q2) : l'offre est écartée à cette étape. */
+    public record Refus(String motif, String clause) {
+    }
+
+    /** Le rabais, saisi par la CAO en valeur monétaire hors taxes, et la lecture qu'elle en fait (Q4). */
+    public record Rabais(BigDecimal montant, String lecture) {
+    }
+
+    /** La marge de préférence : {@code taux} (de la fiche) et {@code ajustement} sont calculés par le serveur. */
+    public record Preference(Boolean eligible, String motif, BigDecimal taux, BigDecimal ajustement) {
+    }
+
+    /** Un critère additionnel monétisé (seulement si la fiche en porte, {@code B06-EO-02}). */
+    public record Critere(String libelle, BigDecimal montant, String justification) {
+    }
+
+    /**
+     * L'évaluation détaillée d'une offre (étape 3), hors taxes (arbitrage Q3) : {@code prixLu} (HT de l'acte d'engagement),
+     * {@code prixCorrige} = prix lu + Σ (après − avant) des corrections retenues, {@code montantEvalue} = prix corrigé − rabais +
+     * ajustement de préférence + critères ; le montant du marché, lui, ne compte pas la préférence. Nul au refus du candidat.
+     */
+    public record Montant(BigDecimal prixLu, BigDecimal prixLuTtc, List<Correction> corrections, Refus refusCandidat, Rabais rabais,
+            Preference preference, List<Critere> criteres, BigDecimal prixCorrige, BigDecimal montantEvalue, String par, String nom,
+            LocalDateTime le) {
+    }
+
+    /** {@code PUT …/offres/{idOffre}/montant} ; {@code prixLu} seulement si l'acte d'engagement ne porte pas de montant HT. */
+    public record MontantRequest(BigDecimal prixLu, List<Correction> corrections, Refus refusCandidat, Rabais rabais, Preference preference,
+            List<Critere> criteres) {
+    }
+
+    /** {@code POST …/lots/{lot}/departage} : l'ordre retenu des offres à égalité, du premier au dernier, et son motif. */
+    public record DepartageRequest(List<String> ordre, String motif) {
+    }
+
+    /**
+     * Une ligne du tableau d'évaluation (modèle du guide, p. 9) : toutes les offres évaluées du lot ; {@code conforme} à l'examen
+     * préliminaire ; {@code motifRejet} pour une offre écartée (à l'étape qui l'a écartée) ; {@code ajustements} = préférence +
+     * critères ; {@code qualifie} : tranche 1c.
+     */
+    public record LigneTableau(String idOffre, Integer numero, String candidat, BigDecimal prixLu, BigDecimal prixLuTtc, String garantie,
+            Boolean conforme, String motifRejet, BigDecimal prixCorrige, BigDecimal rabais, BigDecimal ajustements, BigDecimal montantEvalue,
+            Integer rang, Boolean exAequo, Boolean qualifie) {
     }
 
     /** Une ligne du journal de l'évaluation. */

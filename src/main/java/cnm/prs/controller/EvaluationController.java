@@ -68,6 +68,30 @@ public class EvaluationController {
         return service.conformite(idDmc, idOffre, corps);
     }
 
+    /** ⚠️ Tranche 1b (§B3.1) — les corrections arithmétiques proposées depuis le bordereau scellé ; 409 {@code OFFRE_ECARTEE}. */
+    @GetMapping("/offres/{idOffre}/corrections-proposees")
+    public List<EvaluationDto.CorrectionProposee> correctionsProposees(@PathVariable Long idDmc, @PathVariable String idOffre) {
+        return service.correctionsProposees(idDmc, idOffre);
+    }
+
+    /** ⚠️ Tranche 1b (§B3.2) — corrections retenues, refus du candidat, rabais, préférence, critères ; le montant évalué est calculé. */
+    @PutMapping("/offres/{idOffre}/montant")
+    public EvaluationDto montant(@PathVariable Long idDmc, @PathVariable String idOffre, @RequestBody EvaluationDto.MontantRequest corps) {
+        return service.montant(idDmc, idOffre, corps);
+    }
+
+    /** ⚠️ Tranche 1b (§B3.6, Q5) — le départage d'offres classées à égalité, avec un motif. */
+    @PostMapping("/lots/{lot}/departage")
+    public EvaluationDto departager(@PathVariable Long idDmc, @PathVariable Integer lot, @RequestBody EvaluationDto.DepartageRequest corps) {
+        return service.departager(idDmc, lot, corps);
+    }
+
+    /** ⚠️ Tranche 1b (§B3) — le tableau d'évaluation du lot (modèle du guide, p. 9), par rang puis par numéro. */
+    @GetMapping("/lots/{lot}/tableau")
+    public List<EvaluationDto.LigneTableau> tableau(@PathVariable Long idDmc, @PathVariable Integer lot) {
+        return service.tableau(idDmc, lot);
+    }
+
     /** 201 ; PRMP de la fiche (art. 35-VI). */
     @PostMapping("/offres/{idOffre}/precisions")
     public ResponseEntity<EvaluationDto.Demande> demanderPrecisions(@PathVariable Long idDmc, @PathVariable String idOffre,

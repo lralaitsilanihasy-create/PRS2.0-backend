@@ -250,6 +250,61 @@ public class FormulairesEnLigne {
     }
 
     /**
+     * ⚠️ 2026-10-07 (évaluation des offres, §B3.1) — une correction arithmétique proposée : {@code ligne} (l'article, nul pour le
+     * total), {@code avant} / {@code apres} en montants hors taxes, {@code regle} ∈ {@code LETTRES_PREVALENT} · {@code PU_PREVAUT}.
+     */
+    public record Correction(Integer ligne, String libelle, BigDecimal avant, BigDecimal apres, String regle) {
+    }
+
+    /**
+     * ⚠️ 2026-10-07 (évaluation des offres, §B3.1) — les corrections que le bordereau scellé appelle, proposées à la CAO (elle les
+     * retient ou non) : par article, le prix en lettres qui diffère des chiffres (les lettres font foi, montant de la ligne = lettres ×
+     * quantité) ; puis le montant HT de l'acte d'engagement qui diffère de Σ prix unitaire × quantité (le prix unitaire prévaut).
+     * Corrections cumulables : leur somme mène de l'acte d'engagement au total recalculé sur les lettres. Vide sans bordereau.
+     */
+    public List<Correction> corrections(Long idDmc, Integer lot, JsonNode f, JsonNode acteEngagement) {
+        List<Correction> out = new ArrayList<>();
+        Contexte c = contexte(idDmc).orElse(null);
+        if (c == null || f == null || !f.isObject()) {
+            return out;
+        }
+        BesoinEnLigneDto b = construire(idDmc, c.etat(), c.idFiche(), null);
+        BesoinEnLigneDto.Lot l = b.lots().stream().filter(x -> Objects.equals(x.numero(), lot) || b.lots().size() == 1).findFirst().orElse(null);
+        if (l == null) {
+            return out;
+        }
+        boolean aCommande = TypeMarcheDao.A_COMMANDE.name().equals(b.typeMarche());
+        Map<Integer, JsonNode> lignes = new HashMap<>();
+        for (JsonNode x : f.path("bordereau")) {
+            lignes.put(x.path("idArticle").asInt(), x);
+        }
+        BigDecimal total = BigDecimal.ZERO;
+        for (BesoinEnLigneDto.Article a : l.articles()) {
+            JsonNode x = lignes.get(a.idArticle());
+            BigDecimal pu = x == null ? null : SeanceService.montant(valeur(x.path("prixUnitaireHt")));
+            if (pu == null) {
+                continue;
+            }
+            BigDecimal q = aCommande ? a.quantiteMax() : a.quantite();
+            q = q == null ? BigDecimal.ZERO : q;
+            total = total.add(pu.multiply(q));
+            String enLettres = x.path("prixEnLettres").asString(null);
+            BigDecimal lu = LettresEnNombre.lire(enLettres);
+            if (enLettres != null && !enLettres.isBlank() && lu != null && lu.subtract(pu).abs().compareTo(BigDecimal.ONE) >= 0) {
+                out.add(new Correction(a.idArticle(), nom(a) + " : prix en lettres « " + enLettres.trim() + " » (" + lisible(lu) + ") au lieu de "
+                        + lisible(pu), arrondi(pu.multiply(q)), arrondi(lu.multiply(q)), "LETTRES_PREVALENT"));
+            }
+        }
+        BigDecimal ae = acteEngagement == null ? null : SeanceService.montant(valeur(acteEngagement.path("montantHt")));
+        BigDecimal tolerance = BigDecimal.valueOf(Math.max(1, l.articles().size()));
+        if (ae != null && ae.subtract(total).abs().compareTo(tolerance) > 0) {
+            out.add(new Correction(null, "Montant HT de l'acte d'engagement ramené à la somme des prix unitaires × quantités", arrondi(ae),
+                    arrondi(total), "PU_PREVAUT"));
+        }
+        return out;
+    }
+
+    /**
      * Analyse la partie {@code formulaires} d'un manifeste (format 3) : totaux recalculés depuis le bordereau et les quantités de la
      * fiche, comparés aux totaux déclarés ({@code TOTAL_DIVERGENT}) et à l'acte d'engagement ({@code AE_DIVERGENT}) — un écart de plus
      * de 1 Ar par ligne ; puis {@code PRIX_MANQUANT}, {@code LETTRES_DIVERGENTES}, {@code PLAFOND_DEPASSE}, {@code NON_CONFORME},

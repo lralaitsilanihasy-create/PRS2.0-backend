@@ -66,7 +66,12 @@ import tools.jackson.databind.ObjectMapper;
  * candidat y répond en ligne. Chaque décision est motivée, tracée, jamais effacée (P3).
  * <p>
  * Arbitrages du 07/10 : la CAO décide toujours, même d'une offre altérée ou sans frais de dossier réglés (Q6, Q7) — la vérification est
- * pré-remplie « non satisfaite » ; la comparaison des prix se fera hors taxes (Q3, tranche suivante).
+ * pré-remplie « non satisfaite ».
+ * <p>
+ * ⚠️ <strong>Tranche 1b</strong> (§B3 ; V77) : les corrections arithmétiques proposées depuis le bordereau scellé, que la CAO retient ou
+ * non ; le montant évalué <strong>hors taxes</strong> (Q3) = prix lu + corrections retenues − rabais + ajustement de préférence +
+ * critères du DAO ; le refus d'une correction par le candidat, constaté par la CAO (Q2), écarte l'offre ; le classement par montant
+ * évalué croissant, l'égalité en tête départagée par la CAO avec un motif (Q5) avant l'arrêt de l'étape.
  */
 @Service
 @Transactional
@@ -94,6 +99,7 @@ public class EvaluationService {
     private final EvaluationDecisionRepository decisions;
     private final EvaluationDemandeRepository demandes;
     private final EvaluationJournalRepository journal;
+    private final cnm.prs.repository.EvaluationDepartageRepository departages;
     private final SeanceService seance;
     private final ParametresInternesService internes;
     private final CaoMembreRepository caoMembres;
@@ -110,7 +116,7 @@ public class EvaluationService {
 
     public EvaluationService(EvaluationRepository evaluations, EvaluationDeclarationRepository declarations, EvaluationEtapeRepository etapes,
             EvaluationDecisionRepository decisions, EvaluationDemandeRepository demandes, EvaluationJournalRepository journal,
-            SeanceService seance, ParametresInternesService internes, CaoMembreRepository caoMembres, FicheMarcheService fiches,
+            cnm.prs.repository.EvaluationDepartageRepository departages, SeanceService seance, ParametresInternesService internes, CaoMembreRepository caoMembres, FicheMarcheService fiches,
             ProceduresEnLigneService procedures, CeremonieService ceremonies, NotificationService notifications, CompteCandidatRepository candidats, OffreRepository offres,
             DossierMecRepository dmcRepository, ParametreService parametres, ObjectMapper mapper, Clock horloge) {
         this.evaluations = evaluations;
@@ -119,6 +125,7 @@ public class EvaluationService {
         this.decisions = decisions;
         this.demandes = demandes;
         this.journal = journal;
+        this.departages = departages;
         this.seance = seance;
         this.internes = internes;
         this.caoMembres = caoMembres;
@@ -207,14 +214,19 @@ public class EvaluationService {
                         "ETAPE_PRECEDENTE_OUVERTE");
             }
         }
-        if (!EvaluationEtape.CONFORMITE.equals(et)) {
+        if (EvaluationEtape.CONFORMITE.equals(et)) {
+            exigerDecisions(idDmc, parLot.get(lot), et);
+        } else if (EvaluationEtape.EVALUATION.equals(et)) {
+            // ⚠️ Tranche 1b — chaque offre retenue à l'examen préliminaire a son montant évalué ; pas d'égalité en tête sans départage.
+            exigerDecisions(idDmc, retenuesConformite(idDmc, parLot.get(lot)), et);
+            List<Integer> egales = classer(idDmc, lot, parLot.get(lot)).entrySet().stream()
+                    .filter(x -> x.getValue().rang() == 1 && x.getValue().exAequo()).map(x -> numero(parLot.get(lot), x.getKey())).sorted().toList();
+            if (!egales.isEmpty()) {
+                throw new BusinessRuleException("Des offres sont classées premières à égalité de montant évalué : départagez-les avec un motif.",
+                        "EGALITE_A_DEPARTAGER", null, Map.of("offres", egales));
+            }
+        } else {
             throw new BusinessRuleException("Cette étape sera servie par la tranche suivante de l'évaluation.", "ETAPE_NON_DISPONIBLE");
-        }
-        Map<String, EvaluationDecision> enVigueur = enVigueur(idDmc, et);
-        List<Integer> sans = parLot.get(lot).stream().filter(o -> !enVigueur.containsKey(o.idOffre())).map(SeanceDto.OffreLue::numero).toList();
-        if (!sans.isEmpty()) {
-            throw new BusinessRuleException("Des offres du lot n'ont pas de décision : " + sans.stream().map(n -> "n° " + n)
-                    .collect(Collectors.joining(", ")) + ".", "ETAPE_INCOMPLETE", null, Map.of("offres", sans));
         }
         String observation = a == null ? null : nettoyer(a.observation());
         etapes.save(new EvaluationEtape(null, idDmc, lot, et, maintenant(), k, observation, null, null, null));
@@ -525,6 +537,326 @@ public class EvaluationService {
         return demandeDto(x, o.getNumero());
     }
 
+    // ------------------------------------------------------------------ ⚠️ tranche 1b (§B3) : corrections, montant évalué, classement
+
+    /** Les règles d'une correction : proposées par le serveur ({@code PU_PREVAUT}, {@code LETTRES_PREVALENT}) ou saisies par la CAO. */
+    public static final Set<String> REGLES_CORRECTION = Set.of("PU_PREVAUT", "LETTRES_PREVALENT", "REPORT", "AUTRE");
+    /** La décision de l'étape 3 pour une offre évaluée (l'autre est {@code ECARTEE}, au refus d'une correction par le candidat). */
+    public static final String EVALUEE = "EVALUEE";
+    /** Le plafond de la marge de préférence retenu par le guide (§3.4). */
+    static final java.math.BigDecimal PLAFOND_PREFERENCE = new java.math.BigDecimal("15");
+
+    /** Les corrections arithmétiques proposées d'une offre (§B3.1) : CAO, responsable, PRMP, UGPM ; 409 {@code OFFRE_ECARTEE}. */
+    @Transactional(readOnly = true)
+    public List<EvaluationDto.CorrectionProposee> correctionsProposees(Long idDmc, String idOffre) {
+        exigerLecteur(idDmc);
+        exigerEvaluation(idDmc);
+        offreEvaluee(idDmc, idOffre);
+        EvaluationDecision conf = enVigueur(idDmc, EvaluationEtape.CONFORMITE).get(idOffre);
+        if (conf != null && EvaluationDecision.ECARTEE.equals(conf.getDecision())) {
+            throw new BusinessRuleException("Cette offre est écartée à l'examen préliminaire : elle n'est pas évaluée.", "OFFRE_ECARTEE");
+        }
+        return seance.correctionsProposees(idOffre).stream()
+                .map(c -> new EvaluationDto.CorrectionProposee(c.ligne(), c.libelle(), c.avant(), c.apres(), c.regle())).toList();
+    }
+
+    /**
+     * L'évaluation détaillée d'une offre (§B3.2) : membre déclaré sans conflit ; l'examen préliminaire du lot arrêté (409
+     * {@code ETAPE_PRECEDENTE_OUVERTE}), l'offre retenue (409 {@code OFFRE_ECARTEE}), l'étape non arrêtée (409 {@code ETAPE_ARRETEE}) ;
+     * 400 {@code PRIX_LU_OBLIGATOIRE}, {@code CORRECTION_INVALIDE}, {@code REGLE_INCONNUE}, {@code RABAIS_INVALIDE},
+     * {@code PREFERENCE_NON_PREVUE}, {@code MOTIF_OBLIGATOIRE}, {@code CLAUSE_OBLIGATOIRE}, {@code CRITERE_HORS_DAO},
+     * {@code CRITERE_INVALIDE}. Le montant évalué est calculé par le serveur, hors taxes (arbitrage Q3).
+     */
+    public EvaluationDto montant(Long idDmc, String idOffre, EvaluationDto.MontantRequest m) {
+        Evaluation e = exigerEnCours(idDmc);
+        String k = exigerDecideur(idDmc);
+        SeanceDto.OffreLue o = offreEvaluee(idDmc, idOffre);
+        Integer lot = lotDe(o);
+        Map<String, EvaluationEtape> arr = arretees(idDmc, lot);
+        if (!arr.containsKey(EvaluationEtape.CONFORMITE)) {
+            throw new BusinessRuleException("L'examen préliminaire du lot " + lot + " n'est pas arrêté.", "ETAPE_PRECEDENTE_OUVERTE");
+        }
+        if (arr.containsKey(EvaluationEtape.EVALUATION)) {
+            throw new BusinessRuleException("L'évaluation détaillée de ce lot est arrêtée : rouvrez-la pour changer un montant.", "ETAPE_ARRETEE");
+        }
+        EvaluationDecision conf = enVigueur(idDmc, EvaluationEtape.CONFORMITE).get(idOffre);
+        if (conf == null || !EvaluationDecision.CONFORME.equals(conf.getDecision())) {
+            throw new BusinessRuleException("Cette offre est écartée à l'examen préliminaire : elle n'est pas évaluée.", "OFFRE_ECARTEE");
+        }
+        if (m == null) {
+            throw new BadRequestException("Le corps de l'évaluation est attendu.", "CORRECTION_INVALIDE");
+        }
+        java.math.BigDecimal lu = o.acteEngagement() == null ? null : SeanceService.montant(o.acteEngagement().get("montantHt"));
+        java.math.BigDecimal prixLu = lu != null ? lu : m.prixLu();
+        if (prixLu == null || prixLu.signum() < 0) {
+            throw new BadRequestException("L'acte d'engagement ne porte pas de montant HT : saisissez le prix lu hors taxes.", "PRIX_LU_OBLIGATOIRE");
+        }
+        java.math.BigDecimal prixLuTtc = o.acteEngagement() == null ? null : SeanceService.montant(o.acteEngagement().get("montantTtc"));
+        List<EvaluationDto.Correction> corrections = new ArrayList<>();
+        java.math.BigDecimal prixCorrige = prixLu;
+        for (EvaluationDto.Correction c : m.corrections() == null ? List.<EvaluationDto.Correction>of() : m.corrections()) {
+            if (c == null || c.avant() == null || c.apres() == null || nettoyer(c.libelle()) == null) {
+                throw new BadRequestException("Une correction porte un libellé, un montant avant et un montant après.", "CORRECTION_INVALIDE");
+            }
+            String regle = c.regle() == null ? null : c.regle().trim().toUpperCase(Locale.ROOT);
+            if (!REGLES_CORRECTION.contains(regle)) {
+                throw new BadRequestException("Règle de correction inconnue : " + c.regle() + " (PU_PREVAUT, LETTRES_PREVALENT, REPORT, AUTRE).",
+                        "REGLE_INCONNUE");
+            }
+            boolean retenue = Boolean.TRUE.equals(c.retenue());
+            corrections.add(new EvaluationDto.Correction(c.ligne(), c.libelle().trim(), c.avant(), c.apres(), regle, retenue));
+            if (retenue) {
+                prixCorrige = prixCorrige.add(c.apres().subtract(c.avant()));
+            }
+        }
+        EvaluationDto.Refus refus = null;
+        if (m.refusCandidat() != null) {
+            String motif = nettoyer(m.refusCandidat().motif());
+            String clause = nettoyer(m.refusCandidat().clause());
+            if (motif == null) {
+                throw new BadRequestException("Le refus d'une correction par le candidat exige un motif.", "MOTIF_OBLIGATOIRE");
+            }
+            if (clause == null) {
+                throw new BadRequestException("Le refus d'une correction écarte l'offre si les IC le prévoient : citez la clause.", "CLAUSE_OBLIGATOIRE");
+            }
+            refus = new EvaluationDto.Refus(motif, clause);
+        }
+        java.math.BigDecimal rabais = m.rabais() == null || m.rabais().montant() == null ? java.math.BigDecimal.ZERO : m.rabais().montant();
+        if (rabais.signum() < 0) {
+            throw new BadRequestException("Le rabais est un montant positif, hors taxes.", "RABAIS_INVALIDE");
+        }
+        Map<String, String> v = valeursFiche(idDmc);
+        boolean prevue = "OUI".equals(v.get("B06-PN-01")) || "OUI".equals(v.get("B03-CQ-08"));
+        boolean eligible = m.preference() != null && Boolean.TRUE.equals(m.preference().eligible());
+        String motifPreference = m.preference() == null ? null : nettoyer(m.preference().motif());
+        if (eligible && !prevue) {
+            throw new BadRequestException("Le DAO ne prévoit pas de marge de préférence.", "PREFERENCE_NON_PREVUE");
+        }
+        if (eligible && motifPreference == null) {
+            throw new BadRequestException("L'éligibilité à la marge de préférence se motive.", "MOTIF_OBLIGATOIRE");
+        }
+        List<EvaluationDto.Critere> criteres = new ArrayList<>();
+        for (EvaluationDto.Critere c : m.criteres() == null ? List.<EvaluationDto.Critere>of() : m.criteres()) {
+            if (nettoyer(v.get("B06-EO-02")) == null) {
+                throw new BadRequestException("Le DAO ne porte pas de critère additionnel d'évaluation (règle d'or : rien hors du DAO).",
+                        "CRITERE_HORS_DAO");
+            }
+            if (c == null || nettoyer(c.libelle()) == null || c.montant() == null || nettoyer(c.justification()) == null) {
+                throw new BadRequestException("Un critère monétisé porte son libellé, son montant et sa justification.", "CRITERE_INVALIDE");
+            }
+            criteres.add(new EvaluationDto.Critere(c.libelle().trim(), c.montant(), c.justification().trim()));
+        }
+        java.math.BigDecimal net = prixCorrige.subtract(rabais);
+        java.math.BigDecimal taux = prevue ? tauxPreference(v) : null;
+        java.math.BigDecimal ajustement = prevue && !eligible && taux != null
+                ? net.multiply(taux).divide(java.math.BigDecimal.valueOf(100), 0, java.math.RoundingMode.HALF_UP) : java.math.BigDecimal.ZERO;
+        java.math.BigDecimal montantEvalue = refus != null ? null
+                : net.add(ajustement).add(criteres.stream().map(EvaluationDto.Critere::montant).reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add));
+        EvaluationDto.Montant saisi = new EvaluationDto.Montant(prixLu, prixLuTtc, corrections, refus,
+                new EvaluationDto.Rabais(rabais, m.rabais() == null ? null : nettoyer(m.rabais().lecture())),
+                new EvaluationDto.Preference(prevue ? eligible : null, motifPreference, taux, ajustement), criteres, prixCorrige, montantEvalue,
+                null, null, null);
+        LocalDateTime maintenant = maintenant();
+        EvaluationDecision avant = remplacer(idOffre, EvaluationEtape.EVALUATION, maintenant);
+        String decision = refus != null ? EvaluationDecision.ECARTEE : EVALUEE;
+        decisions.save(new EvaluationDecision(null, idDmc, idOffre, lot, EvaluationEtape.EVALUATION, decision, null,
+                refus == null ? null : refus.motif(), refus == null ? null : refus.clause(), ecrire(saisi), k, maintenant, null));
+        tracer(idDmc, "MONTANT", "Offre n° " + o.numero() + " (" + o.entreprise().raisonSociale() + ") : "
+                + (refus != null ? "écartée, le candidat refuse la correction : " + refus.motif() + " (" + refus.clause() + ")"
+                        : "prix lu " + FormulairesEnLigne.lisible(prixLu) + ", corrigé " + FormulairesEnLigne.lisible(prixCorrige)
+                                + ", montant évalué " + FormulairesEnLigne.lisible(montantEvalue))
+                + (avant == null ? "" : " (remplace la saisie précédente)"));
+        return dto(idDmc, e);
+    }
+
+    /**
+     * Départage des offres classées à égalité (§B3.6, Q5 : la CAO départage, avec un motif) : membre déclaré sans conflit ; 400
+     * {@code ORDRE_INVALIDE}, {@code MOTIF_OBLIGATOIRE} ; 409 {@code ETAPE_ARRETEE}, {@code ETAPE_PRECEDENTE_OUVERTE}.
+     */
+    public EvaluationDto departager(Long idDmc, Integer lot, EvaluationDto.DepartageRequest d) {
+        Evaluation e = exigerEnCours(idDmc);
+        String k = exigerDecideur(idDmc);
+        List<SeanceDto.OffreLue> liste = parLot(idDmc).get(lot);
+        if (liste == null) {
+            throw new ResourceNotFoundException("Lot introuvable dans l'évaluation : " + lot + ".");
+        }
+        Map<String, EvaluationEtape> arr = arretees(idDmc, lot);
+        if (!arr.containsKey(EvaluationEtape.CONFORMITE)) {
+            throw new BusinessRuleException("L'examen préliminaire du lot " + lot + " n'est pas arrêté.", "ETAPE_PRECEDENTE_OUVERTE");
+        }
+        if (arr.containsKey(EvaluationEtape.EVALUATION)) {
+            throw new BusinessRuleException("L'évaluation détaillée de ce lot est arrêtée.", "ETAPE_ARRETEE");
+        }
+        String motif = d == null ? null : nettoyer(d.motif());
+        if (motif == null) {
+            throw new BadRequestException("Le départage exige un motif.", "MOTIF_OBLIGATOIRE");
+        }
+        List<String> ordre = d.ordre() == null ? List.of() : d.ordre();
+        Set<String> classees = classer(idDmc, lot, liste).keySet();
+        if (ordre.size() < 2 || new java.util.HashSet<>(ordre).size() != ordre.size() || !classees.containsAll(ordre)) {
+            throw new BadRequestException("L'ordre cite au moins deux offres évaluées du lot, chacune une fois.", "ORDRE_INVALIDE");
+        }
+        LocalDateTime maintenant = maintenant();
+        for (cnm.prs.entity.EvaluationDepartage x : departages.findByIdDmcAndRemplaceLeIsNull(idDmc)) {
+            if (Objects.equals(x.getLot(), lot)) {
+                x.setRemplaceLe(maintenant);
+                departages.saveAndFlush(x);
+            }
+        }
+        departages.save(new cnm.prs.entity.EvaluationDepartage(null, idDmc, lot, String.join(",", ordre), motif, k, maintenant, null));
+        tracer(idDmc, "DEPARTAGE", "Lot " + lot + " : " + ordre.stream().map(id -> "n° " + numero(liste, id)).collect(Collectors.joining(" puis "))
+                + " — " + motif);
+        return dto(idDmc, e);
+    }
+
+    /** Le tableau d'évaluation du lot (modèle du guide, p. 9) : CAO, responsable, PRMP, UGPM. */
+    @Transactional(readOnly = true)
+    public List<EvaluationDto.LigneTableau> tableau(Long idDmc, Integer lot) {
+        exigerLecteur(idDmc);
+        exigerEvaluation(idDmc);
+        List<SeanceDto.OffreLue> liste = parLot(idDmc).get(lot);
+        if (liste == null) {
+            throw new ResourceNotFoundException("Lot introuvable dans l'évaluation : " + lot + ".");
+        }
+        Map<String, EvaluationDecision> conformites = enVigueur(idDmc, EvaluationEtape.CONFORMITE);
+        Map<String, EvaluationDecision> montants = enVigueur(idDmc, EvaluationEtape.EVALUATION);
+        Map<String, Classe> classement = classer(idDmc, lot, liste);
+        List<EvaluationDto.LigneTableau> out = new ArrayList<>();
+        for (SeanceDto.OffreLue o : liste) {
+            EvaluationDecision c = conformites.get(o.idOffre());
+            EvaluationDto.Montant mt = montantDto(montants.get(o.idOffre()));
+            EvaluationDto.Ecartement ec = ecartement(c, montants.get(o.idOffre()));
+            Classe cl = classement.get(o.idOffre());
+            java.math.BigDecimal ajustements = mt == null ? null : (mt.preference() == null || mt.preference().ajustement() == null
+                    ? java.math.BigDecimal.ZERO : mt.preference().ajustement())
+                    .add(mt.criteres() == null ? java.math.BigDecimal.ZERO : mt.criteres().stream().map(EvaluationDto.Critere::montant)
+                            .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add));
+            out.add(new EvaluationDto.LigneTableau(o.idOffre(), o.numero(), o.entreprise().raisonSociale(),
+                    mt != null ? mt.prixLu() : o.acteEngagement() == null ? null : SeanceService.montant(o.acteEngagement().get("montantHt")),
+                    mt != null ? mt.prixLuTtc() : o.acteEngagement() == null ? null : SeanceService.montant(o.acteEngagement().get("montantTtc")),
+                    garantieLue(o), c == null ? null : EvaluationDecision.CONFORME.equals(c.getDecision()),
+                    ec == null ? null : ec.motif() + (ec.clause() == null ? "" : " (" + ec.clause() + ")"),
+                    mt == null ? null : mt.prixCorrige(), mt == null || mt.rabais() == null ? null : mt.rabais().montant(), ajustements,
+                    mt == null ? null : mt.montantEvalue(), cl == null ? null : cl.rang(), cl == null ? null : cl.exAequo(), null));
+        }
+        out.sort(java.util.Comparator.comparing((EvaluationDto.LigneTableau x) -> x.rang() == null ? Integer.MAX_VALUE : x.rang())
+                .thenComparing(EvaluationDto.LigneTableau::numero));
+        return out;
+    }
+
+    /** Le rang d'une offre dans son lot ; {@code exAequo} : à égalité de montant évalué, sans départage. */
+    record Classe(int rang, boolean exAequo) {
+    }
+
+    /**
+     * Le classement d'un lot (§B3.6) : les offres retenues à l'examen préliminaire et évaluées (non écartées à l'étape 3), par montant
+     * évalué croissant ; à égalité, le départage en vigueur ordonne les offres qu'il cite toutes, sinon elles partagent leur rang.
+     */
+    Map<String, Classe> classer(Long idDmc, Integer lot, List<SeanceDto.OffreLue> liste) {
+        Map<String, EvaluationDecision> conformites = enVigueur(idDmc, EvaluationEtape.CONFORMITE);
+        Map<String, EvaluationDecision> montants = enVigueur(idDmc, EvaluationEtape.EVALUATION);
+        List<Map.Entry<String, java.math.BigDecimal>> evaluees = new ArrayList<>();
+        for (SeanceDto.OffreLue o : liste) {
+            EvaluationDecision c = conformites.get(o.idOffre());
+            EvaluationDecision m = montants.get(o.idOffre());
+            EvaluationDto.Montant mt = montantDto(m);
+            if (c != null && EvaluationDecision.CONFORME.equals(c.getDecision()) && m != null && EVALUEE.equals(m.getDecision())
+                    && mt != null && mt.montantEvalue() != null) {
+                evaluees.add(Map.entry(o.idOffre(), mt.montantEvalue()));
+            }
+        }
+        evaluees.sort(Map.Entry.comparingByValue());
+        List<String> ordre = departages.findByIdDmcAndRemplaceLeIsNull(idDmc).stream().filter(x -> Objects.equals(x.getLot(), lot))
+                .findFirst().map(x -> ChampFicheMarche.liste(x.getOrdre())).orElse(List.of());
+        Map<String, Classe> out = new LinkedHashMap<>();
+        int rang = 1;
+        int i = 0;
+        while (i < evaluees.size()) {
+            int j = i;
+            while (j + 1 < evaluees.size() && evaluees.get(j + 1).getValue().compareTo(evaluees.get(i).getValue()) == 0) {
+                j++;
+            }
+            List<String> groupe = new ArrayList<>(evaluees.subList(i, j + 1).stream().map(Map.Entry::getKey).toList());
+            if (groupe.size() == 1) {
+                out.put(groupe.get(0), new Classe(rang, false));
+            } else if (ordre.containsAll(groupe)) {
+                groupe.sort(java.util.Comparator.comparingInt(ordre::indexOf));
+                for (int n = 0; n < groupe.size(); n++) {
+                    out.put(groupe.get(n), new Classe(rang + n, false));
+                }
+            } else {
+                for (String id : groupe) {
+                    out.put(id, new Classe(rang, true));
+                }
+            }
+            rang += groupe.size();
+            i = j + 1;
+        }
+        return out;
+    }
+
+    /** Les offres du lot retenues à l'examen préliminaire. */
+    private List<SeanceDto.OffreLue> retenuesConformite(Long idDmc, List<SeanceDto.OffreLue> liste) {
+        Map<String, EvaluationDecision> conformites = enVigueur(idDmc, EvaluationEtape.CONFORMITE);
+        return liste.stream().filter(o -> conformites.get(o.idOffre()) != null
+                && EvaluationDecision.CONFORME.equals(conformites.get(o.idOffre()).getDecision())).toList();
+    }
+
+    /** 409 {@code ETAPE_INCOMPLETE} (détails : les numéros) si une offre de la liste n'a pas de décision en vigueur à l'étape. */
+    private void exigerDecisions(Long idDmc, List<SeanceDto.OffreLue> liste, String etape) {
+        Map<String, EvaluationDecision> enVigueur = enVigueur(idDmc, etape);
+        List<Integer> sans = liste.stream().filter(o -> !enVigueur.containsKey(o.idOffre())).map(SeanceDto.OffreLue::numero).toList();
+        if (!sans.isEmpty()) {
+            throw new BusinessRuleException("Des offres du lot n'ont pas de décision : " + sans.stream().map(n -> "n° " + n)
+                    .collect(Collectors.joining(", ")) + ".", "ETAPE_INCOMPLETE", null, Map.of("offres", sans));
+        }
+    }
+
+    private EvaluationDto.Montant montantDto(EvaluationDecision d) {
+        if (d == null || d.getContenu() == null) {
+            return null;
+        }
+        EvaluationDto.Montant m = mapper.readValue(d.getContenu(), EvaluationDto.Montant.class);
+        return new EvaluationDto.Montant(m.prixLu(), m.prixLuTtc(), m.corrections(), m.refusCandidat(), m.rabais(), m.preference(), m.criteres(),
+                m.prixCorrige(), m.montantEvalue(), d.getPar(), internes.nomMembre(d.getPar()), d.getLe());
+    }
+
+    /** L'étape qui a écarté l'offre : l'examen préliminaire, ou l'évaluation détaillée (refus d'une correction). */
+    private EvaluationDto.Ecartement ecartement(EvaluationDecision conformite, EvaluationDecision evaluation) {
+        EvaluationDecision d = conformite != null && EvaluationDecision.ECARTEE.equals(conformite.getDecision()) ? conformite
+                : evaluation != null && EvaluationDecision.ECARTEE.equals(evaluation.getDecision()) ? evaluation : null;
+        return d == null ? null : new EvaluationDto.Ecartement(d.getEtape(), d.getQualification(), d.getMotif(), d.getClause(), d.getPar(),
+                internes.nomMembre(d.getPar()), d.getLe());
+    }
+
+    private static String garantieLue(SeanceDto.OffreLue o) {
+        if (o.garantie() == null || !o.garantie().presente()) {
+            return "absente";
+        }
+        return o.garantie().montant() == null ? "présente" : FormulairesEnLigne.lisible(o.garantie().montant())
+                + (o.garantie().monnaie() == null ? "" : " " + o.garantie().monnaie());
+    }
+
+    private Map<String, String> valeursFiche(Long idDmc) {
+        Map<String, String> v = fiches.etatValide(idDmc).map(x -> x.etat().getValeurs()).orElse(null);
+        return v == null ? Map.of() : v;
+    }
+
+    /** Le taux de la marge de préférence de la fiche ({@code B06-PN-02} travaux, {@code B06-EO-09} fournitures), plafonné à 15 %. */
+    private static java.math.BigDecimal tauxPreference(Map<String, String> v) {
+        for (String code : List.of("B06-PN-02", "B06-EO-09")) {
+            java.math.BigDecimal t = SeanceService.montant(v.get(code) == null ? null : v.get(code).replace("%", "").trim());
+            if (t != null) {
+                return t.min(PLAFOND_PREFERENCE);
+            }
+        }
+        return null;
+    }
+
+    private static Integer numero(List<SeanceDto.OffreLue> liste, String idOffre) {
+        return liste.stream().filter(o -> o.idOffre().equals(idOffre)).map(SeanceDto.OffreLue::numero).findFirst().orElse(null);
+    }
+
     // ------------------------------------------------------------------ la vue
 
     private EvaluationDto dto(Long idDmc, Evaluation e) {
@@ -542,6 +874,7 @@ public class EvaluationService {
         SeanceDto.Lecture lecture = seance.lecturePourEvaluation(idDmc);
         Map<Integer, List<SeanceDto.OffreLue>> parLot = parLot(lecture);
         Map<String, EvaluationDecision> conformites = enVigueur(idDmc, EvaluationEtape.CONFORMITE);
+        Map<String, EvaluationDecision> montants = enVigueur(idDmc, EvaluationEtape.EVALUATION);
         List<OffreDto.PieceAttendue> attendues = attendues(idDmc);
         boolean garantie = garantieExigee(idDmc);
         Map<String, Set<String>> nifs = nifsParOffre(idDmc);
@@ -553,6 +886,7 @@ public class EvaluationService {
                 .forEach(a -> arretsParLot.computeIfAbsent(a.getLot(), x -> new LinkedHashMap<>()).put(a.getEtape(), a));
         List<EvaluationDto.Lot> lots = new ArrayList<>();
         parLot.forEach((lot, liste) -> {
+            Map<String, Classe> classement = classer(idDmc, lot, liste);
             Map<String, EvaluationEtape> arrets = arretsParLot.getOrDefault(lot, Map.of());
             String courante = EvaluationEtape.ORDRE.stream().filter(x -> !arrets.containsKey(x)).findFirst().orElse(EvaluationEtape.RAPPORT);
             List<EvaluationDto.EtapeArretee> arretees = EvaluationEtape.ORDRE.stream().filter(arrets::containsKey).map(arrets::get)
@@ -580,13 +914,12 @@ public class EvaluationService {
                 EvaluationDto.Conformite conf = new EvaluationDto.Conformite(verifs, d == null ? null : d.getDecision(),
                         d == null ? null : d.getQualification(), d == null ? null : d.getMotif(), d == null ? null : d.getClause(),
                         d == null ? null : d.getPar(), d == null ? null : internes.nomMembre(d.getPar()), d == null ? null : d.getLe());
-                EvaluationDto.Ecartement ecartee = d != null && EvaluationDecision.ECARTEE.equals(d.getDecision())
-                        ? new EvaluationDto.Ecartement(EvaluationEtape.CONFORMITE, d.getQualification(), d.getMotif(), d.getClause(), d.getPar(),
-                                internes.nomMembre(d.getPar()), d.getLe())
-                        : null;
+                EvaluationDecision ev = montants.get(o.idOffre());
+                EvaluationDto.Ecartement ecartee = ecartement(d, ev);
+                Classe cl = classement.get(o.idOffre());
                 evaluees.add(new EvaluationDto.OffreEvaluee(o.idOffre(), o.numero(), new EvaluationDto.Entreprise(o.entreprise().nif(),
-                        o.entreprise().raisonSociale()), conf, null, null, null, null, ecartee,
-                        enAttente.getOrDefault(o.idOffre(), 0L).intValue()));
+                        o.entreprise().raisonSociale()), conf, montantDto(ev), null, null, cl == null ? null : cl.rang(),
+                        cl == null ? null : cl.exAequo(), ecartee, enAttente.getOrDefault(o.idOffre(), 0L).intValue()));
             }
             lots.add(new EvaluationDto.Lot(lot, courante, arretees, evaluees));
         });

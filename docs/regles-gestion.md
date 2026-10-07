@@ -859,7 +859,7 @@ prochaine validation.
 
 ⚠️ **Après le PV d'ouverture signé, la commission évalue les offres dans l'application, lot par lot, en suivant le guide
 d'évaluation des offres.** Ce qui est livré : l'ouverture de l'évaluation, la déclaration préalable des membres, l'examen
-préliminaire (étape 2 du guide) et les demandes de précisions. Les corrections, le classement, les offres anormales, la
+préliminaire (étape 2 du guide), les demandes de précisions, puis les corrections et le classement (étape 3). Les offres anormales, la
 post-qualification et le rapport suivent. Contrat : `docs/api-endpoints.md`, § *L'évaluation des offres, lot 1, tranche 1a*.
 
 - **Le périmètre** : les procédures en remise électronique, dont les offres sont dans l'application. Les offres papier n'y entrent
@@ -884,6 +884,17 @@ post-qualification et le rapport suivent. Contrat : `docs/api-endpoints.md`, § 
 - **Les précisions** (art. 35-VI) : la PRMP pose une question au candidat d'une offre, avec un délai (celui de la fiche par défaut). Le
   candidat répond une fois, dans le délai, par un texte et, s'il le veut, un fichier. Une précision ne peut changer ni le prix ni la
   substance de l'offre : l'application ne le contrôle pas, la demande et la réponse iront au rapport.
+- ⚠️ **L'évaluation détaillée et le classement** (étape 3 du guide, livrée le 07/10) :
+  - l'application **propose** les corrections arithmétiques que le bordereau appelle — le prix en lettres prévaut sur les chiffres, le
+    prix unitaire sur le total — ; la commission les retient ou non, et peut en saisir d'autres ;
+  - les montants se comparent **hors taxes** (arbitrage du pilote) : le montant évalué est le prix lu, corrigé, diminué du rabais, plus
+    la marge de préférence appliquée aux offres qui n'y ont pas droit, plus les critères monétisés du DAO ;
+  - la marge de préférence et les critères additionnels ne s'appliquent que si le DAO les prévoit ; la commission marque, avec un motif,
+    les offres éligibles à la préférence ; la préférence sert à comparer, jamais au prix du marché ;
+  - un candidat qui **refuse une correction** voit son offre écartée si les instructions aux candidats le prévoient : la commission le
+    constate, avec la clause (arbitrage du pilote) ;
+  - le classement suit le montant évalué croissant ; deux offres premières **à égalité** sont départagées par la commission, avec un
+    motif, avant que l'étape puisse être arrêtée.
 
 #### La fiche DAO des travaux (référentiel remis le 2026-09-24)
 

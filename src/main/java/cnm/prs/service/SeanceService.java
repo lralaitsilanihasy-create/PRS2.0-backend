@@ -770,6 +770,29 @@ public class SeanceService {
                 .orElseThrow(() -> new ResourceNotFoundException("Offre introuvable : " + idOffre + "."));
     }
 
+    /**
+     * ⚠️ 2026-10-07 (évaluation des offres, §B3.1) — les corrections arithmétiques proposées d'une offre ouverte, depuis son bordereau
+     * scellé ; vide pour une offre sans formulaires ou dont le contenu est purgé. Sans garde : l'évaluation fait les siennes.
+     */
+    @Transactional(readOnly = true)
+    public List<FormulairesEnLigne.Correction> correctionsProposees(String idOffre) {
+        Offre o = offres.findById(idOffre).orElse(null);
+        byte[] clair = o == null ? null : stockage.lireClair(idOffre);
+        if (clair == null) {
+            return List.of();
+        }
+        try {
+            byte[] manifeste = dezipper(clair).get(MANIFESTE);
+            if (manifeste == null) {
+                return List.of();
+            }
+            JsonNode m = mapper.readTree(manifeste);
+            return formulaires.corrections(o.getIdDmc(), o.getLot(), m.path("formulaires"), m.path("acteEngagement"));
+        } catch (IOException | RuntimeException e) {
+            return List.of();
+        }
+    }
+
     private JsonNode formulairesDe(Offre o) {
         byte[] clair = stockage.lireClair(o.getIdOffre());
         if (clair == null) {
