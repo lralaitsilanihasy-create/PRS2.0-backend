@@ -22,7 +22,10 @@ public record AttributionDto(Long idDmc, List<LotAttribution> lots) {
      */
     public record LotAttribution(Integer lot, String etat, EvaluationDto.Proposition proposition, DossierMarche dossierMarche,
             boolean projetDisponible, Attributaire attributaire, Information information, DelaiAttente delaiAttente,
-            List<Explication> explications) {
+            List<Explication> explications,
+            /** ⚠️ 2c (§B4.3, §B4.4, §B5) — nuls (ou liste vide) avant leur geste. */
+            MiseAuPoint miseAuPoint, List<Recours> recours, Signature signature, Enregistrement enregistrement, NotificationMarche notification,
+            AvisAttribution avisAttribution, PiecesAttributaire piecesAttributaire, Retrait retrait) {
     }
 
     /** Le dossier de marché du lot : {@code avis} ∈ {@code FAV} · {@code FAVR} · {@code DEF}, nul tant que le PV n'est pas signé. */
@@ -62,6 +65,82 @@ public record AttributionDto(Long idDmc, List<LotAttribution> lots) {
             String reponse, String reponseNom, Long reponseTaille, LocalDateTime reponduLe) {
     }
 
+    // ------------------------------------------------------------------ ⚠️ tranche 2c (§B4.3, §B4.4, §B5)
+
+    /** Un fichier de l'attribution, téléchargeable par {@code GET …/attribution/pieces/{id}/fichier}. */
+    public record Fichier(Long id, String nature, String nom, String format, Long taille, LocalDateTime deposeLe) {
+    }
+
+    /** La mise au point (art. 35-VIII) : le rapport, et son fichier s'il y en a un. */
+    public record MiseAuPoint(String rapport, LocalDateTime le, String par, Fichier fichier) {
+    }
+
+    /**
+     * Un recours (Q5, titre VIII) : {@code type} ∈ {@code REEXAMEN} (non suspensif ; {@code echeanceReponse} = réception + 10 jours) ·
+     * {@code REVISION_ARMP} · {@code REFERE} (suspensifs ; {@code finSuspension} = réception + 20 jours) ; {@code bloquant} : il ferme
+     * la signature aujourd'hui (suspensif, sans décision, suspension en cours).
+     */
+    public record Recours(Long id, String type, LocalDate dateReception, String requerant, String objet, LocalDateTime declareLe,
+            String declarePar, List<Fichier> fichiers, boolean suspensif, LocalDate finSuspension, LocalDate echeanceReponse, boolean bloquant,
+            DecisionRecours decision) {
+    }
+
+    /** La décision d'un recours : {@code issue} ∈ {@code REJETE} · {@code ACCUEILLI} · {@code AUTRE}. */
+    public record DecisionRecours(LocalDate date, String issue, String motif, LocalDateTime le, String par, List<Fichier> fichiers) {
+    }
+
+    /** La signature du marché : la date déclarée, le marché signé déposé. */
+    public record Signature(LocalDate dateSignature, LocalDateTime le, String par, Fichier fichier) {
+    }
+
+    /** L'enregistrement du marché (art. 54, Q6) : la date, la référence, le justificatif. */
+    public record Enregistrement(LocalDate date, String reference, LocalDateTime le, Fichier fichier) {
+    }
+
+    /**
+     * La notification (art. 54) : {@code recueLe} = la réception par l'attributaire, date d'effet du marché — accusé de lecture de la
+     * plateforme ({@code receptionDeclaree} faux) ou date déclarée par la PRMP (vrai).
+     */
+    public record NotificationMarche(LocalDate date, LocalDateTime le, String par, LocalDateTime recueLe, Boolean receptionDeclaree) {
+    }
+
+    /** L'avis d'attribution (art. 53) : {@code echeance} = notification + 30 jours ; {@code disponible} une fois publié. */
+    public record AvisAttribution(LocalDate echeance, LocalDate datePublication, LocalDateTime publieLe, String par, boolean disponible) {
+    }
+
+    /**
+     * Les pièces fiscales et sociales de l'attributaire (art. 20-I) : {@code echeance} = information + 15 jours ; les dernières pièces
+     * de chaque type, et si elles sont reconnues conformes.
+     */
+    public record PiecesAttributaire(LocalDate echeance, boolean delaiDepasse, boolean fiscaleConforme, boolean socialeConforme,
+            List<PieceAttributaire> pieces) {
+    }
+
+    /** Une pièce de l'attributaire : {@code type} ∈ {@code FISCALE} · {@code SOCIALE} ; {@code conforme} nul tant qu'elle n'est pas vérifiée. */
+    public record PieceAttributaire(Long id, String type, LocalDate dateDelivrance, String nom, Long taille, LocalDateTime deposeLe,
+            Boolean conforme, String motif, LocalDateTime verifieeLe) {
+    }
+
+    /** Le retrait du marché faute de pièces fiscales et sociales (art. 20-I). */
+    public record Retrait(LocalDateTime le, String par, String motif) {
+    }
+
+    /** {@code POST …/lots/{lot}/notification}. */
+    public record NotificationRequest(LocalDate dateNotification, LocalDate dateReception) {
+    }
+
+    /** {@code POST …/lots/{lot}/avis}. */
+    public record AvisRequest(LocalDate datePublication) {
+    }
+
+    /** {@code POST …/lots/{lot}/pieces/{id}/verifier}. */
+    public record VerificationRequest(Boolean conforme, String motif) {
+    }
+
+    /** {@code POST …/lots/{lot}/retirer}. */
+    public record RetraitRequest(String motif) {
+    }
+
     // ------------------------------------------------------------------ corps des requêtes
 
     /** {@code POST …/lots/{lot}/attribuer} : {@code idOffre} facultatif (l'offre proposée), {@code motif} facultatif. */
@@ -84,10 +163,15 @@ public record AttributionDto(Long idDmc, List<LotAttribution> lots) {
      */
     public record Resultat(String idOffre, Integer numero, Integer lot, boolean retenu, String motifRejet, String attributaire,
             BigDecimal montant, BigDecimal montantTtc, String delai, boolean lettreDisponible, LocalDateTime dateInformation,
-            LocalDate dateAffichage, LocalDate finDelai, LocalDate signableLe) {
+            LocalDate dateAffichage, LocalDate finDelai, LocalDate signableLe,
+            /** ⚠️ 2c — la signature, la notification et sa réception, le marché signé ; l'attributaire seul : ses pièces, le retrait. */
+            LocalDate dateSignature, LocalDate dateNotification, LocalDateTime notificationRecueLe, boolean marcheDisponible,
+            PiecesAttributaire piecesAttributaire, boolean retire) {
     }
 
     /** ⚠️ 2b (§B4.1) — le résultat publié sur la page publique de la procédure, lot par lot, après l'information. */
-    public record ResultatPublic(Integer lot, String attributaire, BigDecimal montant, LocalDateTime dateInformation, LocalDate dateAffichage) {
+    public record ResultatPublic(Integer lot, String attributaire, BigDecimal montant, LocalDateTime dateInformation, LocalDate dateAffichage,
+            /** ⚠️ 2c (§B4.4) — l'avis d'attribution publié : {@code GET /api/procedures-en-ligne/{idDmc}/avis-attribution/{lot}}. */
+            LocalDate datePublicationAvis, boolean avisDisponible) {
     }
 }

@@ -18,9 +18,19 @@ import cnm.prs.service.AttributionService;
 public class ResultatsPublicsController {
 
     private final AttributionService service;
+    private final cnm.prs.service.AttributionExecutionService execution;
 
-    public ResultatsPublicsController(AttributionService service) {
+    public ResultatsPublicsController(AttributionService service, cnm.prs.service.AttributionExecutionService execution) {
         this.service = service;
+        this.execution = execution;
+    }
+
+    /** ⚠️ 2c (§B4.4) — l'avis d'attribution publié du lot, en PDF ou en Word ({@code ?format=docx}) ; 404 avant la publication. */
+    @GetMapping("/api/procedures-en-ligne/{idDmc}/avis-attribution/{lot}")
+    public org.springframework.http.ResponseEntity<byte[]> avis(@PathVariable Long idDmc, @PathVariable Integer lot,
+            @org.springframework.web.bind.annotation.RequestParam(required = false) String format) {
+        boolean docx = "docx".equalsIgnoreCase(format);
+        return AttributionExecutionController.avisReponse(idDmc, lot, docx, execution.avisPublie(idDmc, lot, docx));
     }
 
     @GetMapping("/api/procedures-en-ligne/{idDmc}/resultats")

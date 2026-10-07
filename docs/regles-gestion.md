@@ -947,6 +947,22 @@ post-qualification (étape 5), et le rapport d'évaluation. Contrat : `docs/api-
     l'information et de l'affichage : ni ce jour, ni le dixième ne comptent ; la signature est possible le lendemain du dixième jour ;
   - un candidat non retenu peut demander **par écrit des explications** sur le rejet de son offre ; la PRMP y répond par écrit ;
   - tant que les modèles officiels ne sont pas remis, les lettres suivent un **modèle provisoire** de l'application.
+- ⚠️ **De la mise au point à l'avis d'attribution** (lot 2, tranche 2c, 2026-10-07 ; arbitrages du pilote Q5, Q6, Q7, Q9 ; loi
+  n° 2016-055, art. 20-I, 35-VIII, 53, 54, 78 à 80) — chaque geste est fait par la PRMP, et elle seule :
+  - la **mise au point** avec l'attributaire fait l'objet d'un rapport ; elle ne peut changer les caractéristiques substantielles du
+    marché (l'application ne le contrôle pas) ;
+  - la PRMP **déclare les recours** reçus : une demande de **réexamen** ne suspend rien, mais elle doit y répondre sous dix jours ; une
+    demande de **révision** à l'ARMP ou un **référé** suspend la signature jusqu'à la décision, vingt jours au plus ;
+  - l'attributaire produit, dans les **quinze jours** de la lettre d'attribution, une attestation de **situation fiscale** de moins de six
+    mois et une de **situation sociale** de moins de trois mois ; la PRMP les vérifie. Faute de pièces conformes à l'échéance, elle
+    **retire** le marché (la réattribution au candidat suivant est livrée ensuite) ;
+  - le marché n'est **signé** qu'après le délai d'attente, sans recours suspensif en cours, et une fois les deux pièces reconnues
+    conformes ; le marché signé est déposé ;
+  - il est **enregistré** (une date et le justificatif) avant d'être **notifié** : aucune notification sans enregistrement ;
+  - le marché prend effet à sa **réception** par l'attributaire : la date déclarée par la PRMP, ou sa première consultation sur la
+    plateforme ;
+  - l'**avis d'attribution** est publié dans les **trente jours** de la notification, sur la page publique de la procédure ; il suit un
+    modèle provisoire de l'application tant que le modèle officiel n'est pas remis.
 - ⚠️ **Le DAO complet dispense du CCAG et du CCTP** (2026-10-07) : un dossier d'appel d'offres qui porte le DAO complet produit par la
   fiche n'a plus à joindre à part le **cahier des clauses administratives générales**, qu'il contient toujours, ni le **cahier des
   clauses techniques particulières** quand la fiche porte ses spécifications techniques ; sans spécifications, le CCTP reste exigé.

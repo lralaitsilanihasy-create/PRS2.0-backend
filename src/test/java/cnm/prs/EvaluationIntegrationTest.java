@@ -709,6 +709,105 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$.lots[0].delaiAttente.ecoule").value(true));
         assertThat(journalRepository.findByIdDmcOrderByDateAscIdAsc(idDmc)).extracting(j -> j.getAction())
                 .contains("ATTRIBUTION", "INFORMATION", "LETTRE_LUE", "EXPLICATION_DEMANDEE", "EXPLICATION_REPONDUE");
+
+        // ⚠️ Tranche 2c (§B4.3) — la mise au point, les recours (Q5), les pièces de l'attributaire (§B5), la signature.
+        MockMultipartFile piece = new MockMultipartFile("fichier", "piece.pdf", "application/pdf", "%PDF-1.4 x".getBytes(StandardCharsets.ISO_8859_1));
+        mvc.perform(multipart(att + "/lots/1/mise-au-point").file(piece).header("Authorization", tokenPrmp)).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("RAPPORT_OBLIGATOIRE"));
+        mvc.perform(multipart(att + "/lots/1/mise-au-point").file(piece).param("rapport", "Calendrier de livraison précisé.")
+                .header("Authorization", tokenUgpm)).andExpect(status().isForbidden());
+        mvc.perform(multipart(att + "/lots/1/mise-au-point").file(piece).param("rapport", "Calendrier de livraison précisé.")
+                .header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.lots[0].miseAuPoint.rapport").value("Calendrier de livraison précisé."))
+                .andExpect(jsonPath("$.lots[0].miseAuPoint.fichier.nom").value("piece.pdf"));
+        mvc.perform(multipart(att + "/lots/1/recours").param("type", "AUTRE").param("dateReception", aujourdhui.toString())
+                .param("requerant", "BTP Beta").param("objet", "x").header("Authorization", tokenPrmp)).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("TYPE_INVALIDE"));
+        String rec = mvc.perform(multipart(att + "/lots/1/recours").file(piece).param("type", "REVISION_ARMP").param("dateReception", aujourdhui.toString())
+                .param("requerant", "BTP Beta").param("objet", "Contestation du rejet fiscal").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.lots[0].recours[0].bloquant").value(true))
+                .andExpect(jsonPath("$.lots[0].recours[0].finSuspension").value(aujourdhui.plusDays(20).toString()))
+                .andReturn().getResponse().getContentAsString();
+        long idRecours = JsonPath.<Number>read(rec, "$.lots[0].recours[0].id").longValue();
+        mvc.perform(multipart(att + "/lots/1/recours").param("type", "REEXAMEN").param("dateReception", aujourdhui.toString())
+                .param("requerant", "BTP Gamma").param("objet", "Réexamen").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.lots[0].recours[1].bloquant").value(false))
+                .andExpect(jsonPath("$.lots[0].recours[1].echeanceReponse").value(aujourdhui.plusDays(10).toString()));
+        mvc.perform(multipart(att + "/lots/1/signature").file(piece).param("dateSignature", aujourdhui.toString()).header("Authorization", tokenPrmp))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("RECOURS_EN_COURS"));
+        mvc.perform(multipart(att + "/recours/" + idRecours + "/decision").param("date", aujourdhui.toString()).param("issue", "REJETE")
+                .header("Authorization", tokenPrmp)).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("MOTIF_OBLIGATOIRE"));
+        mvc.perform(multipart(att + "/recours/" + idRecours + "/decision").param("date", aujourdhui.toString()).param("issue", "REJETE")
+                .param("motif", "Rejet confirmé par le CRD").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.lots[0].recours[0].bloquant").value(false))
+                .andExpect(jsonPath("$.lots[0].recours[0].decision.issue").value("REJETE"));
+        mvc.perform(multipart(att + "/lots/1/signature").file(piece).param("dateSignature", aujourdhui.toString()).header("Authorization", tokenPrmp))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("PIECES_NON_CONFORMES"));
+
+        // §B5 — les pièces fiscales et sociales : sous 15 jours de la lettre d'attribution, fiscale < 6 mois, sociale < 3 mois.
+        LocalDate informeLe = aujourdhui.minusDays(11);
+        mvc.perform(multipart("/api/candidat/offres/" + b + "/pieces-attributaire").file(piece).param("type", "FISCALE")
+                .param("dateDelivrance", aujourdhui.toString()).header("Authorization", jetonB)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("NON_ATTRIBUTAIRE"));
+        mvc.perform(multipart("/api/candidat/offres/" + a + "/pieces-attributaire").file(piece).param("type", "FISCALE")
+                .param("dateDelivrance", informeLe.minusMonths(7).toString()).header("Authorization", jetonA)).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("PIECE_PERIMEE"));
+        mvc.perform(multipart("/api/candidat/offres/" + a + "/pieces-attributaire").file(piece).param("type", "FISCALE")
+                .param("dateDelivrance", informeLe.minusMonths(5).toString()).header("Authorization", jetonA)).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.echeance").value(informeLe.plusDays(15).toString()));
+        mvc.perform(multipart("/api/candidat/offres/" + a + "/pieces-attributaire").file(piece).param("type", "SOCIALE")
+                .param("dateDelivrance", aujourdhui.toString()).header("Authorization", jetonA)).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.pieces.length()").value(2));
+        assertThat(notificationRepository.findPourPrmp("PRMP001", null)).extracting(Notification::getTypeNotif).contains("PIECES_ATTRIBUTAIRE_DEPOSEES");
+        mvc.perform(post(att + "/lots/1/retirer").header("Authorization", tokenPrmp).contentType(JSON).content("{\"motif\":\"Pièces absentes\"}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("DELAI_EN_COURS"));
+        String vue = mvc.perform(get(att).header("Authorization", tokenPrmp)).andReturn().getResponse().getContentAsString();
+        List<Number> idsPieces = JsonPath.read(vue, "$.lots[0].piecesAttributaire.pieces[*].id");
+        mvc.perform(post(att + "/lots/1/pieces/" + idsPieces.get(0).longValue() + "/verifier").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"conforme\":false}")).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("MOTIF_OBLIGATOIRE"));
+        for (Number id : idsPieces) {
+            mvc.perform(post(att + "/lots/1/pieces/" + id.longValue() + "/verifier").header("Authorization", tokenPrmp).contentType(JSON)
+                    .content("{\"conforme\":true}")).andExpect(status().isOk());
+        }
+        mvc.perform(get(att).header("Authorization", tokenPrmp)).andExpect(jsonPath("$.lots[0].piecesAttributaire.fiscaleConforme").value(true))
+                .andExpect(jsonPath("$.lots[0].piecesAttributaire.socialeConforme").value(true));
+
+        // La signature, l'enregistrement (Q6), la notification et sa réception, l'avis d'attribution.
+        mvc.perform(multipart(att + "/lots/1/signature").param("dateSignature", aujourdhui.toString()).header("Authorization", tokenPrmp))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("FICHIER_OBLIGATOIRE"));
+        mvc.perform(post(att + "/lots/1/notification").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"dateNotification\":\"" + aujourdhui + "\"}")).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("NON_SIGNE"));
+        mvc.perform(multipart(att + "/lots/1/signature").file(piece).param("dateSignature", aujourdhui.toString()).header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.lots[0].etat").value("SIGNE"))
+                .andExpect(jsonPath("$.lots[0].signature.dateSignature").value(aujourdhui.toString()));
+        mvc.perform(post(att + "/lots/1/notification").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"dateNotification\":\"" + aujourdhui + "\"}")).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("NON_ENREGISTRE"));
+        mvc.perform(multipart(att + "/lots/1/enregistrement").file(piece).param("dateEnregistrement", aujourdhui.toString())
+                .param("reference", "ENR-2026-0042").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.lots[0].enregistrement.reference").value("ENR-2026-0042"));
+        mvc.perform(post(att + "/lots/1/avis").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"datePublication\":\"" + aujourdhui + "\"}")).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("NON_NOTIFIE"));
+        mvc.perform(post(att + "/lots/1/notification").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"dateNotification\":\"" + aujourdhui + "\"}")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.lots[0].etat").value("NOTIFIE")).andExpect(jsonPath("$.lots[0].notification.recueLe").isEmpty())
+                .andExpect(jsonPath("$.lots[0].avisAttribution.echeance").value(aujourdhui.plusDays(30).toString()));
+        mvc.perform(get("/api/candidat/offres/" + a + "/resultat").header("Authorization", jetonA)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.retenu").value(true)).andExpect(jsonPath("$.marcheDisponible").value(true))
+                .andExpect(jsonPath("$.notificationRecueLe").isNotEmpty());
+        mvc.perform(get("/api/candidat/offres/" + a + "/marche").header("Authorization", jetonA)).andExpect(status().isOk());
+        mvc.perform(get(att).header("Authorization", tokenPrmp)).andExpect(jsonPath("$.lots[0].notification.receptionDeclaree").value(false));
+        mvc.perform(post(att + "/lots/1/avis").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"datePublication\":\"" + aujourdhui + "\"}")).andExpect(status().isOk()).andExpect(jsonPath("$.lots[0].etat").value("PUBLIE"));
+        String avis = texteDuPdf(mvc.perform(get("/api/procedures-en-ligne/" + idDmc + "/avis-attribution/1")).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray()).replaceAll("\\s+", " ");
+        assertThat(avis).contains("AVIS D'ATTRIBUTION DE MARCHÉ", "BTP Alpha", "12 500 000 Ariary hors taxes", "modèle provisoire");
+        mvc.perform(get("/api/procedures-en-ligne/" + idDmc + "/resultats")).andExpect(jsonPath("$[0].avisDisponible").value(true));
+        mvc.perform(post(att + "/lots/1/retirer").header("Authorization", tokenPrmp).contentType(JSON).content("{\"motif\":\"x\"}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("DEJA_SIGNE"));
+        assertThat(journalRepository.findByIdDmcOrderByDateAscIdAsc(idDmc)).extracting(j -> j.getAction()).contains("MISE_AU_POINT", "RECOURS",
+                "DECISION_RECOURS", "PIECE_ATTRIBUTAIRE", "PIECE_VERIFIEE", "SIGNATURE_MARCHE", "ENREGISTREMENT", "NOTIFICATION",
+                "NOTIFICATION_RECUE", "AVIS_ATTRIBUTION");
         // La grille d'examen du dossier de marché, semée au démarrage là où la famille DDM existe.
         assertThat(pointsCtrlSeeder.semer()).isEqualTo(9);
         assertThat(pointsCtrlSeeder.semer()).isZero();

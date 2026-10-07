@@ -7117,6 +7117,75 @@ tardive** de l'information des candidats et de l'affichage du résultat. Migrati
   le **CCTP** (code `CCTP`) quand la fiche a ses spécifications techniques ; à la soumission comme au contrôle des pièces par le
   Secrétaire. Le référentiel (`GET /api/type-piece-jointes`) les garde obligatoires : l'exemption tient au dossier.
 
+### L'attribution, lot 2, tranche 2c : mise au point, recours, pièces de l'attributaire, signature, notification, avis — V81 ⚠️ 2026-10-07
+
+Demande front `demande-backend-2026-10-07-attribution-notification.md` (§B4.3, §B4.4, §B5) ; arbitrages du pilote du 07/10 : **Q5**
+recours déclarés et typés (titre VIII de la loi n° 2016-055), **Q6** enregistrement = une date et une pièce, aucune notification sans
+lui, **Q7** avis d'attribution sur un modèle provisoire, **Q9** signature électronique simple de la PRMP. Migration **V81** ;
+`AttributionExecutionService`, `AttributionExecutionController`. Aucune dépendance ajoutée. Tous les gestes sont réservés à la **PRMP de
+la fiche** (403 pour l'UGPM) et répondent l'`AttributionDto` à jour.
+
+| Méthode | URL | Corps | Statuts |
+|---|---|---|---|
+| POST | /api/fiches-marche/{idDmc}/attribution/lots/{lot}/mise-au-point | multipart `rapport`, `fichier?` | 400 `RAPPORT_OBLIGATOIRE` ; 409 `NON_ATTRIBUE`, `DEJA_SIGNE`, `LOT_RETIRE` |
+| POST | …/lots/{lot}/recours | multipart `type`, `dateReception`, `requerant`, `objet`, `fichier?` | 400 `TYPE_INVALIDE`, `CHAMP_OBLIGATOIRE`, `DATE_INVALIDE` ; 409 `NON_ATTRIBUE`, `LOT_RETIRE` |
+| POST | …/recours/{id}/decision | multipart `date`, `issue`, `motif`, `fichier?` | 400 `ISSUE_INVALIDE`, `DATE_INVALIDE`, `MOTIF_OBLIGATOIRE` ; 404 ; 409 `DEJA_DECIDE` |
+| POST | …/lots/{lot}/pieces/{id}/verifier | `{ conforme, motif? }` | 400 `CONFORME_OBLIGATOIRE`, `MOTIF_OBLIGATOIRE` ; 404 ; 409 `DEJA_VERIFIEE` |
+| POST | …/lots/{lot}/retirer | `{ motif }` | 400 `MOTIF_OBLIGATOIRE` ; 409 `NON_INFORME`, `LOT_RETIRE`, `DEJA_SIGNE`, `PIECES_CONFORMES`, `DELAI_EN_COURS` |
+| POST | …/lots/{lot}/signature | multipart `dateSignature`, `fichier` (le marché signé) | 400 `DATE_INVALIDE`, `FICHIER_OBLIGATOIRE` ; 409 `NON_INFORME`, `LOT_RETIRE`, `DEJA_SIGNE`, `DELAI_ATTENTE`, `RECOURS_EN_COURS`, `PIECES_NON_CONFORMES` |
+| POST | …/lots/{lot}/enregistrement | multipart `dateEnregistrement`, `reference?`, `fichier` (le justificatif) | 400 `DATE_INVALIDE`, `FICHIER_OBLIGATOIRE` ; 409 `NON_SIGNE`, `DEJA_ENREGISTRE` |
+| POST | …/lots/{lot}/notification | `{ dateNotification, dateReception? }` | 400 `DATE_INVALIDE` ; 409 `NON_SIGNE`, `NON_ENREGISTRE`, `DEJA_NOTIFIE` |
+| POST | …/lots/{lot}/avis | `{ datePublication }` | 400 `DATE_INVALIDE` ; 409 `NON_NOTIFIE`, `DEJA_PUBLIE` |
+| GET | …/lots/{lot}/avis?format=docx | l'avis d'attribution, PDF (ou Word) | 404 avant la publication ; lecteurs de l'attribution |
+| GET | …/attribution/pieces/{id}/fichier | un fichier de l'attribution | 404 ; lecteurs de l'attribution |
+| POST | /api/candidat/offres/{idOffre}/pieces-attributaire | multipart `type` (`FISCALE` \| `SOCIALE`), `dateDelivrance`, `fichier` → `PiecesAttributaire` (201) | 400 `TYPE_INVALIDE`, `DATE_DELIVRANCE_OBLIGATOIRE`, `PIECE_PERIMEE`, `FICHIER_OBLIGATOIRE`, `FORMAT_INVALIDE` ; 409 `NON_ATTRIBUTAIRE`, `DELAI_DEPASSE`, `DEJA_SIGNE`, `LOT_RETIRE` |
+| GET | /api/candidat/offres/{idOffre}/pieces-attributaire | `PiecesAttributaire` | 409 `NON_ATTRIBUTAIRE` |
+| GET | /api/candidat/offres/{idOffre}/pieces-attributaire/{id}/fichier | sa pièce | 404 |
+| GET | /api/candidat/offres/{idOffre}/marche | le marché signé (le lire après la notification vaut réception) | 404 avant la signature |
+| GET | /api/procedures-en-ligne/{idDmc}/avis-attribution/{lot}?format=docx | l'avis publié, sans session | 404 avant la publication |
+
+- **`AttributionDto.lots[]`** gagne `miseAuPoint`, `recours[]`, `signature`, `enregistrement`, `notification`, `avisAttribution`,
+  `piecesAttributaire`, `retrait` (nuls ou liste vide avant leur geste) :
+  - `miseAuPoint` = `{ rapport, le, par, fichier }` ; un fichier = `{ id, nature, nom, format, taille, deposeLe }`, téléchargé par
+    `GET …/attribution/pieces/{id}/fichier` ; refaire la mise au point avant la signature remplace le rapport ;
+  - `recours[]` = `{ id, type, dateReception, requerant, objet, declareLe, declarePar, fichiers, suspensif, finSuspension,
+    echeanceReponse, bloquant, decision{ date, issue, motif, le, par, fichiers } }` ;
+  - `signature` = `{ dateSignature, le, par, fichier }` ; `enregistrement` = `{ date, reference, le, fichier }` ;
+  - `notification` = `{ date, le, par, recueLe, receptionDeclaree }` ;
+  - `avisAttribution` = `{ echeance, datePublication, publieLe, par, disponible }` (servi dès la notification) ;
+  - `piecesAttributaire` = `{ echeance, delaiDepasse, fiscaleConforme, socialeConforme, pieces[{ id, type, dateDelivrance, nom, taille,
+    deposeLe, conforme, motif, verifieeLe }] }` (servi dès l'information) ; `retrait` = `{ le, par, motif }`.
+- **États ajoutés** : `SIGNE`, `NOTIFIE`, `PUBLIE`, et l'issue `RETIRE`.
+- **Les recours (Q5)** : `REEXAMEN` (art. 79) n'arrête rien ; sa réponse est due sous **10 jours** (`echeanceReponse`). `REVISION_ARMP`
+  (art. 80) et `REFERE` (art. 78) **suspendent la signature** (409 `RECOURS_EN_COURS`) jusqu'à leur décision, et au plus **20 jours**
+  après leur réception (`finSuspension`) ; `bloquant` dit si la signature est fermée aujourd'hui. La décision : `REJETE`, `ACCUEILLI`
+  ou `AUTRE`, avec un motif. L'application ne tire aucune conséquence d'un recours accueilli : la PRMP agit (sans suite, tranche 2d).
+- **Les pièces fiscales et sociales (art. 20-I)** : à déposer par l'attributaire dans les **15 jours** de la **notification de
+  l'attribution**, c'est-à-dire de la lettre d'attribution (l'information des candidats) ; la pièce fiscale doit dater de **moins de six
+  mois**, la sociale de **moins de trois mois**, à cette même date. La PRMP vérifie chaque pièce (motif si non conforme) ; l'attributaire
+  peut redéposer jusqu'à l'échéance ; la dernière pièce de chaque type fait foi.
+- **La signature** exige : les candidats informés, le délai d'attente écoulé (`dateSignature` ≥ `signableLe`), aucun recours suspensif
+  en cours, et les **deux pièces reconnues conformes** (409 `PIECES_NON_CONFORMES`). Le marché signé est déposé (PDF, JPEG, PNG).
+- **Le retrait** (art. 20-I) : possible seulement après l'échéance des pièces, si elles ne sont pas toutes deux conformes, et avant la
+  signature. Notification `MARCHE_RETIRE`. La **réattribution** au candidat suivant (Q8) vient en tranche 2d ; l'infructuosité n'est
+  jamais proposée après l'attribution (art. 56-VI).
+- **L'enregistrement (Q6)** : une date (entre la signature et aujourd'hui), une référence facultative, le justificatif obligatoire.
+  Aucune notification sans lui.
+- **La notification (art. 54)** : la date déclarée ; la **réception**, date d'effet du marché, est soit déclarée par la PRMP
+  (`dateReception`, `receptionDeclaree: true`), soit l'**accusé de lecture de la plateforme** : la première consultation, par
+  l'attributaire, de son résultat ou du marché signé (`receptionDeclaree: false`). Notification `MARCHE_NOTIFIE` avec courriel.
+- **L'avis d'attribution (art. 53)** : à publier sous **30 jours** de la notification (`echeance` ; une publication tardive est
+  acceptée et journalisée). Le serveur le produit en PDF et Word (**modèle provisoire**, Q7 ; les mentions fixées par arrêté du Ministre
+  des Finances restent à reprendre) et la PRMP le signe électroniquement. Publié : `ResultatPublic` gagne `datePublicationAvis` et
+  `avisDisponible`, et l'avis se télécharge sans session.
+- **Côté candidat**, `Resultat` gagne `dateSignature`, `dateNotification`, `notificationRecueLe` (attributaire), `marcheDisponible`,
+  `piecesAttributaire` (attributaire seul, nul sinon) et `retire`.
+- **Notifications** : `MARCHE_NOTIFIE`, `PIECE_ATTRIBUTAIRE_VERIFIEE`, `MARCHE_RETIRE` (attributaire, avec courriel),
+  `PIECES_ATTRIBUTAIRE_DEPOSEES` (PRMP). Les échéances alertées (avis à J-5, réponse au réexamen, délai écoulé) et les compteurs
+  viennent en tranche 2d.
+- **Journal de l'évaluation** : `MISE_AU_POINT`, `RECOURS`, `DECISION_RECOURS`, `PIECE_ATTRIBUTAIRE`, `PIECE_VERIFIEE`, `RETRAIT`,
+  `SIGNATURE_MARCHE`, `ENREGISTREMENT`, `NOTIFICATION`, `NOTIFICATION_RECUE`, `AVIS_ATTRIBUTION`.
+
 ### Le rabais structuré de l'offre en ligne ⚠️ 2026-10-07
 
 Demande front `demande-backend-2026-10-07-rabais-structure.md` (arbitrage Q4 du pilote : « le rabais est structuré au dépôt »). Aucune

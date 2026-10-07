@@ -30,9 +30,11 @@ import cnm.prs.service.AttributionService;
 public class CandidatResultatController {
 
     private final AttributionService service;
+    private final cnm.prs.service.AttributionExecutionService execution;
 
-    public CandidatResultatController(AttributionService service) {
+    public CandidatResultatController(AttributionService service, cnm.prs.service.AttributionExecutionService execution) {
         this.service = service;
+        this.execution = execution;
     }
 
     /** 404 avant l'information des candidats. */
@@ -63,6 +65,36 @@ public class CandidatResultatController {
     public ResponseEntity<byte[]> fichier(@PathVariable String idOffre, @PathVariable Long id) {
         AttributionExplication e = service.fichierExplicationDuCandidat(moi(), idOffre, id);
         return Telechargements.fichier(e.getReponseNom(), e.getReponseFormat(), e.getReponseContenu());
+    }
+
+    /**
+     * ⚠️ 2c (§B5, art. 20-I) — l'attributaire dépose sa pièce fiscale ou sociale : multipart {@code type} (FISCALE | SOCIALE),
+     * {@code dateDelivrance}, {@code fichier} ; 201 ; 400 {@code PIECE_PERIMEE} ; 409 {@code NON_ATTRIBUTAIRE}, {@code DELAI_DEPASSE}.
+     */
+    @PostMapping(value = "/pieces-attributaire", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<AttributionDto.PiecesAttributaire> deposerPiece(@PathVariable String idOffre,
+            @RequestParam(value = "type", required = false) String type,
+            @RequestParam(value = "dateDelivrance", required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate dateDelivrance,
+            @org.springframework.web.bind.annotation.RequestPart(value = "fichier", required = false) org.springframework.web.multipart.MultipartFile fichier) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(execution.deposerPiece(moi(), idOffre, type, dateDelivrance, fichier));
+    }
+
+    @GetMapping("/pieces-attributaire")
+    public AttributionDto.PiecesAttributaire pieces(@PathVariable String idOffre) {
+        return execution.piecesDuCandidat(moi(), idOffre);
+    }
+
+    @GetMapping("/pieces-attributaire/{id}/fichier")
+    public ResponseEntity<byte[]> fichierPiece(@PathVariable String idOffre, @PathVariable Long id) {
+        cnm.prs.entity.AttributionPiece p = execution.fichierDuCandidat(moi(), idOffre, id);
+        return Telechargements.fichier(p.getNom(), p.getFormat(), p.getContenu());
+    }
+
+    /** ⚠️ 2c — le marché signé ; le lire après la notification vaut accusé de réception (date d'effet). 404 avant la signature. */
+    @GetMapping("/marche")
+    public ResponseEntity<byte[]> marche(@PathVariable String idOffre) {
+        cnm.prs.entity.AttributionPiece p = execution.marcheDuCandidat(moi(), idOffre);
+        return Telechargements.fichier(p.getNom(), p.getFormat(), p.getContenu());
     }
 
     private static String moi() {

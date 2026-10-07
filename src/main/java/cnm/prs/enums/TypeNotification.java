@@ -182,5 +182,13 @@ public enum TypeNotification {
     /** ⚠️ 2026-10-07 (§B4.2, art. 52-II) — une demande d'explication d'un candidat non retenu : vers la PRMP. */
     EXPLICATION_DEMANDEE,
     /** ⚠️ 2026-10-07 (§B4.2) — la réponse écrite de la PRMP : vers le candidat (et par courriel). */
-    EXPLICATION_REPONDUE
+    EXPLICATION_REPONDUE,
+    /** ⚠️ 2026-10-07 (lot 2, tranche 2c, §B4.3, art. 54) — le marché signé, enregistré, est notifié : vers l'attributaire (et par courriel). */
+    MARCHE_NOTIFIE,
+    /** ⚠️ 2026-10-07 (§B5, art. 20-I) — une pièce fiscale ou sociale déposée par l'attributaire : vers la PRMP. */
+    PIECES_ATTRIBUTAIRE_DEPOSEES,
+    /** ⚠️ 2026-10-07 (§B5) — la vérification d'une pièce par la PRMP : vers l'attributaire (et par courriel). */
+    PIECE_ATTRIBUTAIRE_VERIFIEE,
+    /** ⚠️ 2026-10-07 (§B5) — le retrait du marché faute de pièces : vers l'attributaire (et par courriel). */
+    MARCHE_RETIRE
 }

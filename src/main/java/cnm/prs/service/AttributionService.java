@@ -100,6 +100,8 @@ public class AttributionService {
     private final CeremonieService ceremonies;
     private final ParametreService parametres;
     private final java.time.Clock horloge;
+    // ⚠️ Tranche 2c
+    private final AttributionExecutionService execution;
 
     public AttributionService(AttributionRepository attributions, EvaluationService evaluation, SeanceService seance, SaisieService saisie,
             ValeursPpmService valeursPpm, FicheMarcheService fiches, EntrepriseCandidatService entreprises, GenerateurDocumentsFiche generateur,
@@ -108,7 +110,8 @@ public class AttributionService {
             DocumentFicheMarcheRepository documentRepository, cnm.prs.repository.AttributionLettreRepository lettres,
             cnm.prs.repository.AttributionExplicationRepository explications, cnm.prs.repository.CompteCandidatRepository candidats,
             cnm.prs.repository.PrmpRepository prmpRepository, NotificationService notifications, CeremonieService ceremonies,
-            ParametreService parametres, java.time.Clock horloge) {
+            ParametreService parametres, java.time.Clock horloge, AttributionExecutionService execution) {
+        this.execution = execution;
         this.attributions = attributions;
         this.evaluation = evaluation;
         this.seance = seance;
@@ -146,7 +149,8 @@ public class AttributionService {
         List<AttributionDto.LotAttribution> lots = new ArrayList<>();
         for (EvaluationDto.Lot l : ev.lots()) {
             if (!Evaluation.CLOSE.equals(ev.etat())) {
-                lots.add(new AttributionDto.LotAttribution(l.lot(), EN_EVALUATION, null, null, false, null, null, null, List.of()));
+                lots.add(new AttributionDto.LotAttribution(l.lot(), EN_EVALUATION, null, null, false, null, null, null, List.of(), null, List.of(),
+                        null, null, null, null, null, null));
                 continue;
             }
             Attribution a = attributions.findById(new Attribution.Cle(idDmc, l.lot())).orElse(null);
@@ -156,8 +160,14 @@ public class AttributionService {
                     : delai != null ? (delai.ecoule() ? SIGNABLE : Attribution.INFORME)
                     : a.getAttribueLe() != null ? Attribution.ATTRIBUE
                     : dm != null && dm.avis() != null ? AVIS_RENDU : a.getEtat();
+            // ⚠️ Tranche 2c — la suite du lot : signé, notifié, avis publié, ou retiré.
+            AttributionExecutionService.Suite s = a == null ? AttributionExecutionService.Suite.VIDE : execution.suite(a);
+            if (a != null) {
+                etat = AttributionExecutionService.etat(a, etat);
+            }
             lots.add(new AttributionDto.LotAttribution(l.lot(), etat, l.proposition(), dm, a != null && a.getProjetPdf() != null,
-                    a == null ? null : attributaire(a), a == null ? null : information(a), delai, explicationsDto(idDmc, l.lot())));
+                    a == null ? null : attributaire(a), a == null ? null : information(a), delai, explicationsDto(idDmc, l.lot()), s.miseAuPoint(),
+                    s.recours(), s.signature(), s.enregistrement(), s.notification(), s.avis(), s.pieces(), s.retrait()));
         }
         return new AttributionDto(idDmc, lots);
     }
@@ -311,10 +321,15 @@ public class AttributionService {
         Attribution a = attributions.findById(new Attribution.Cle(x.getIdDmc(), x.getLot())).orElseThrow();
         accuser(x);
         Offre retenue = offres.findById(a.getIdOffreAttribuee()).orElse(null);
+        // ⚠️ 2c — consulter son résultat après la notification vaut accusé de réception du marché (date d'effet).
+        boolean retenueParMoi = idOffre.equals(a.getIdOffreAttribuee());
+        execution.accuserNotification(a, idOffre);
         AttributionDto.DelaiAttente d = delaiAttente(a);
         return new AttributionDto.Resultat(idOffre, o.getNumero(), x.getLot(), AttributionLettre.ATTRIBUTION.equals(x.getType()), x.getMotif(),
                 retenue == null ? null : retenue.getRaisonSociale(), a.getMontant(), a.getMontantTtc(), a.getDelai(), x.getPdf() != null,
-                a.getInformeLe(), a.getDateAffichage(), d == null ? null : d.fin(), d == null ? null : d.signableLe());
+                a.getInformeLe(), a.getDateAffichage(), d == null ? null : d.fin(), d == null ? null : d.signableLe(), a.getDateSignature(),
+                a.getDateNotification(), retenueParMoi ? a.getNotificationRecueLe() : null, retenueParMoi && a.getSigneLe() != null,
+                execution.piecesPourCandidat(a, idOffre), retenueParMoi && a.getRetireLe() != null);
     }
 
     /** La lettre du candidat (PDF, ou Word) ; la lire vaut aussi accusé de lecture. 404 avant l'information. */
@@ -331,7 +346,7 @@ public class AttributionService {
         return attributions.findByIdDmcOrderByLotAsc(idDmc).stream().filter(a -> a.getInformeLe() != null).map(a -> {
             Offre o = offres.findById(a.getIdOffreAttribuee()).orElse(null);
             return new AttributionDto.ResultatPublic(a.getLot(), o == null ? null : o.getRaisonSociale(), a.getMontant(), a.getInformeLe(),
-                    a.getDateAffichage());
+                    a.getDateAffichage(), a.getDatePublicationAvis(), a.getAvisPublieLe() != null);
         }).toList();
     }
 
@@ -626,6 +641,11 @@ public class AttributionService {
 
     /** Le délai d'attente du lot, une fois les candidats informés : nul avant. */
     private AttributionDto.DelaiAttente delaiAttente(Attribution a) {
+        return delai(a, LocalDate.now(horloge));
+    }
+
+    /** Le délai d'attente à une date donnée (⚠️ 2c : la signature le relit) ; nul avant l'information. */
+    static AttributionDto.DelaiAttente delai(Attribution a, LocalDate aujourdhui) {
         if (a.getInformeLe() == null) {
             return null;
         }
@@ -636,7 +656,7 @@ public class AttributionService {
         // Jours francs : ni le jour du point de départ, ni celui de l'échéance ne comptent — la signature vient le lendemain du dixième.
         LocalDate fin = debut.plusDays(JOURS_FRANCS);
         LocalDate signable = fin.plusDays(1);
-        return new AttributionDto.DelaiAttente(debut, fin, signable, JOURS_FRANCS, !LocalDate.now(horloge).isBefore(signable));
+        return new AttributionDto.DelaiAttente(debut, fin, signable, JOURS_FRANCS, !aujourdhui.isBefore(signable));
     }
 
     private AttributionDto.Attributaire attributaire(Attribution a) {

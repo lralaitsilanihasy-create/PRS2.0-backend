@@ -33,6 +33,10 @@ public class Attribution {
     public static final String AU_CONTROLE = "AU_CONTROLE";
     public static final String ATTRIBUE = "ATTRIBUE";
     public static final String INFORME = "INFORME";
+    public static final String SIGNE = "SIGNE";
+    public static final String NOTIFIE = "NOTIFIE";
+    public static final String PUBLIE = "PUBLIE";
+    public static final String RETIRE = "RETIRE";
 
     @Id
     @Column(name = "ID_DMC", nullable = false)
@@ -93,6 +97,78 @@ public class Attribution {
 
     @Column(name = "DATE_AFFICHAGE")
     private java.time.LocalDate dateAffichage;
+
+    // ⚠️ V81 (tranche 2c, §B4.3, §B4.4, §B5) — mise au point, signature, enregistrement, notification, avis d'attribution, retrait.
+
+    @Column(name = "RAPPORT_MISE_AU_POINT")
+    private String rapportMiseAuPoint;
+
+    @Column(name = "MISE_AU_POINT_LE")
+    private LocalDateTime miseAuPointLe;
+
+    @Column(name = "MISE_AU_POINT_PAR", length = 100)
+    private String miseAuPointPar;
+
+    @Column(name = "DATE_SIGNATURE")
+    private java.time.LocalDate dateSignature;
+
+    @Column(name = "SIGNE_LE")
+    private LocalDateTime signeLe;
+
+    @Column(name = "SIGNE_PAR", length = 100)
+    private String signePar;
+
+    @Column(name = "DATE_ENREGISTREMENT")
+    private java.time.LocalDate dateEnregistrement;
+
+    @Column(name = "REFERENCE_ENREGISTREMENT", length = 100)
+    private String referenceEnregistrement;
+
+    @Column(name = "ENREGISTRE_LE")
+    private LocalDateTime enregistreLe;
+
+    @Column(name = "DATE_NOTIFICATION")
+    private java.time.LocalDate dateNotification;
+
+    @Column(name = "NOTIFIE_LE")
+    private LocalDateTime notifieLe;
+
+    @Column(name = "NOTIFIE_PAR", length = 100)
+    private String notifiePar;
+
+    /** La réception de la notification par l'attributaire : la date d'effet du marché (art. 54). */
+    @Column(name = "NOTIFICATION_RECUE_LE")
+    private LocalDateTime notificationRecueLe;
+
+    /** Vrai : réception déclarée par la PRMP ; faux : accusé de lecture de la plateforme. */
+    @Column(name = "RECEPTION_DECLAREE")
+    private Boolean receptionDeclaree;
+
+    @Column(name = "DATE_PUBLICATION_AVIS")
+    private java.time.LocalDate datePublicationAvis;
+
+    @Column(name = "AVIS_PUBLIE_LE")
+    private LocalDateTime avisPublieLe;
+
+    @Column(name = "AVIS_PUBLIE_PAR", length = 100)
+    private String avisPubliePar;
+
+    @Basic(fetch = FetchType.LAZY)
+    @Column(name = "AVIS_PDF")
+    private byte[] avisPdf;
+
+    @Basic(fetch = FetchType.LAZY)
+    @Column(name = "AVIS_DOCX")
+    private byte[] avisDocx;
+
+    @Column(name = "RETIRE_LE")
+    private LocalDateTime retireLe;
+
+    @Column(name = "RETIRE_PAR", length = 100)
+    private String retirePar;
+
+    @Column(name = "MOTIF_RETRAIT")
+    private String motifRetrait;
 
     @Basic(fetch = FetchType.LAZY)
     @Column(name = "PROJET_PDF")
