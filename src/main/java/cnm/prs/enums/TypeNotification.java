@@ -159,5 +159,12 @@ public enum TypeNotification {
     /** ⚠️ 2026-10-06 (retrait après paiement, §B3) — un reçu de frais de dossier à valider (PRMP) ; décidé (candidat, par courriel). */
     RECU_A_VALIDER,
     RECU_VALIDE,
-    RECU_REFUSE
+    RECU_REFUSE,
+
+    /** ⚠️ 2026-10-07 (évaluation des offres, §B7) — l'évaluation est ouverte : vers chaque membre de la CAO et la PRMP. */
+    EVALUATION_OUVERTE,
+    /** ⚠️ 2026-10-07 (§B2, art. 35-VI) — une demande de précisions : vers le candidat (et par courriel). */
+    PRECISION_DEMANDEE,
+    /** ⚠️ 2026-10-07 (§B2) — la réponse du candidat : vers la PRMP et les membres de la CAO. */
+    PRECISION_RECUE
 }

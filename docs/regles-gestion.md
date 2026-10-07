@@ -855,6 +855,36 @@ plus. Une liste de pièces administratives seule suffit à cette règle (la règ
 pièce de l'offre ou le texte). En remise papier, rien ne change. Les versions déjà validées ne sont pas reprises : la règle joue à la
 prochaine validation.
 
+#### L'évaluation des offres : l'examen préliminaire (demande front du 2026-10-07, arbitrages du pilote du 07/10)
+
+⚠️ **Après le PV d'ouverture signé, la commission évalue les offres dans l'application, lot par lot, en suivant le guide
+d'évaluation des offres.** Ce qui est livré : l'ouverture de l'évaluation, la déclaration préalable des membres, l'examen
+préliminaire (étape 2 du guide) et les demandes de précisions. Les corrections, le classement, les offres anormales, la
+post-qualification et le rapport suivent. Contrat : `docs/api-endpoints.md`, § *L'évaluation des offres, lot 1, tranche 1a*.
+
+- **Le périmètre** : les procédures en remise électronique, dont les offres sont dans l'application. Les offres papier n'y entrent
+  pas. Les offres écartées au dépôt, retirées ou remplacées ne sont pas évaluées.
+- **Qui fait quoi** :
+  - le responsable de la procédure ouvre l'évaluation, une fois le PV d'ouverture signé ;
+  - chaque membre de la CAO signe d'abord une **déclaration d'absence de conflit d'intérêts et de confidentialité** ; un membre qui
+    déclare un conflit lit tout mais ne décide rien ;
+  - **tout membre** déclaré sans conflit enregistre les décisions ; elles sont visibles des autres ;
+  - le **président** de la commission **arrête** l'étape d'un lot, ce qui fige ses décisions, et la **rouvre** au besoin, avec un
+    motif ;
+  - la PRMP demande les précisions aux candidats ; la PRMP et l'UGPM lisent.
+- **Les alertes de la séance sont des constats, jamais des décisions.** L'application pré-remplit, pour chaque offre, une grille de
+  neuf vérifications (acte d'engagement et prix, garantie, offre unique par candidat et par lot, exclusion, pouvoirs, pièces,
+  conformité technique, intégrité, frais de dossier). La commission confirme ou corrige chacune, puis décide. Une offre altérée ou
+  illisible, une offre sans frais de dossier réglés, n'est **jamais écartée d'office** : la vérification est proposée « non
+  satisfaite », la commission tranche.
+- **Écarter une offre** exige un motif, la **clause du DAO** visée et une qualification : irrecevable, non conforme, inappropriée ou
+  inacceptable. Une étape ne s'arrête que lorsque chaque offre du lot a sa décision.
+- **Rien ne s'efface** : une décision corrigée laisse la précédente au registre, une étape rouverte garde la trace de son arrêt, et le
+  journal dit qui a décidé quoi, quand, et pourquoi.
+- **Les précisions** (art. 35-VI) : la PRMP pose une question au candidat d'une offre, avec un délai (celui de la fiche par défaut). Le
+  candidat répond une fois, dans le délai, par un texte et, s'il le veut, un fichier. Une précision ne peut changer ni le prix ni la
+  substance de l'offre : l'application ne le contrôle pas, la demande et la réponse iront au rapport.
+
 #### La fiche DAO des travaux (référentiel remis le 2026-09-24)
 
 - **Les travaux se préparent** : 257 informations (dont un bloc d'annexes et de formulaires), avec leur vocabulaire —

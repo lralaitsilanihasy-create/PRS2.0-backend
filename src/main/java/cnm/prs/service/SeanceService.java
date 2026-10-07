@@ -530,6 +530,21 @@ public class SeanceService {
         return construireLecture(idDmc, true);
     }
 
+    /**
+     * ⚠️ V76 (évaluation des offres, §B2) — la lecture complète (alertes comprises) pour l'évaluation, qui fait ses propres gardes
+     * d'accès ; l'état de la séance (CLOSE) est vérifié par elle à l'ouverture.
+     */
+    @Transactional(readOnly = true)
+    public SeanceDto.Lecture lecturePourEvaluation(Long idDmc) {
+        return construireLecture(idDmc, true);
+    }
+
+    /** ⚠️ V76 — l'état de la séance, {@code A_VENIR} sans séance. */
+    @Transactional(readOnly = true)
+    public String etat(Long idDmc) {
+        return seances.findById(idDmc).map(Seance::getEtat).orElse(Seance.A_VENIR);
+    }
+
     private SeanceDto.Lecture construireLecture(Long idDmc, boolean complete) {
         List<OffreDto.PieceAttendue> attendues;
         try {

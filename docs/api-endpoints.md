@@ -6791,6 +6791,73 @@ imposé). Le **reçu des frais de dossier** (`RECU-DAO`) reste une pièce de l'o
 libre après inscription (Q3 confirmée). La **signature électronique** reste **Simple** : une fiche qui exige plus est refusée
 (`SIGNATURE_EN_LIGNE`), Avancée et Qualifiée attendant la liste officielle des prestataires de certification.
 
+### L'évaluation des offres, lot 1, tranche 1a : examen préliminaire et précisions — V76 ⚠️ 2026-10-07
+
+Demande front `demande-backend-2026-10-07-evaluation-des-offres.md` (§B1, §B2, §B7) ; arbitrages du pilote du 07/10 : **tout membre de
+la CAO saisit, le président arrête** (Q1) ; offres papier hors du module (H1) ; refus d'une correction arithmétique **constaté par la
+CAO** (Q2, tranche 1b) ; comparaison **hors taxes** (Q3, tranche 1b) ; offre altérée ou illisible, frais non réglés : **la CAO décide**,
+la vérification est pré-remplie « non satisfaite » (Q6, Q7). Migration **V76** (`t_evaluation`, `t_evaluation_declaration`,
+`t_evaluation_etape`, `t_evaluation_decision`, `t_evaluation_demande`, `t_evaluation_journal`). Aucune dépendance ajoutée. Les étapes 3 à
+5 et le rapport (§B3 à §B6) suivent en tranches 1b à 1d : leurs routes ne sont pas encore servies.
+
+**Accès** (garde par identité dans le service ; chemin ouvert dans `SecurityConfig` aux mêmes rôles que la séance) :
+
+| Acteur | Lit | Fait |
+|---|---|---|
+| Membre de la CAO | tout | signe sa déclaration ; s'il l'a signée **sans conflit** : décide de l'examen préliminaire |
+| Président de la CAO (même condition) | tout | en plus : arrête et rouvre les étapes |
+| Responsable de la procédure (titulaire) | tout | ouvre l'évaluation |
+| PRMP de la fiche | tout | demande des précisions (art. 35-VI) |
+| UGPM de la fiche | tout (hors journal) | rien |
+| Candidat | ses demandes de précisions | y répond |
+
+| Méthode | URL | Corps | Réponse | Statuts |
+|---|---|---|---|---|
+| GET | /api/fiches-marche/{idDmc}/evaluation | — | `EvaluationDto` | 200, 403, 404 (DMC inconnu, ou évaluation non ouverte) |
+| POST | /api/fiches-marche/{idDmc}/evaluation/ouvrir | — | `EvaluationDto` | 201, 403, 409 `SEANCE_NON_CLOSE` (PV d'ouverture non signé) / `EVALUATION_DEJA_OUVERTE` |
+| POST | /api/fiches-marche/{idDmc}/evaluation/declaration | `{ conflit, precision? }` | `EvaluationDto` | 200, 403 (pas membre), 404, 409 `DEJA_DECLARE` |
+| POST | /api/fiches-marche/{idDmc}/evaluation/lots/{lot}/etapes/{etape}/arreter | `{ observation? }` | `EvaluationDto` | 200, 400 `ETAPE_INCONNUE`, 403, 404 (lot), 409 `EVALUATION_CLOSE` / `ETAPE_ARRETEE` / `ETAPE_PRECEDENTE_OUVERTE` / `ETAPE_INCOMPLETE` (`details.offres` : numéros des offres sans décision) / `ETAPE_NON_DISPONIBLE` (étapes 3 à 5 : tranche suivante) |
+| POST | /api/fiches-marche/{idDmc}/evaluation/lots/{lot}/etapes/{etape}/rouvrir | `{ motif }` | `EvaluationDto` | 200, 400 `MOTIF_OBLIGATOIRE` / `ETAPE_INCONNUE`, 403, 409 `RAPPORT_SIGNE` / `ETAPE_NON_ARRETEE` |
+| PUT | /api/fiches-marche/{idDmc}/evaluation/offres/{idOffre}/conformite | `{ verifications[{code, satisfaite, observation?}], decision, qualification?, motif?, clause? }` | `EvaluationDto` | 200, 400 `DECISION_INVALIDE` / `VERIFICATION_INCONNUE` / `MOTIF_OBLIGATOIRE` / `CLAUSE_OBLIGATOIRE` / `QUALIFICATION_OBLIGATOIRE`, 403 / 403 `MEMBRE_EN_CONFLIT`, 404, 409 `DECLARATION_MANQUANTE` / `ETAPE_ARRETEE` / `EVALUATION_CLOSE` |
+| POST | /api/fiches-marche/{idDmc}/evaluation/offres/{idOffre}/precisions | `{ question, delaiJours? }` | `Demande` | 201, 400 `QUESTION_OBLIGATOIRE` / `DELAI_OBLIGATOIRE`, 403 (pas la PRMP), 404, 409 `EVALUATION_CLOSE` |
+| GET | /api/fiches-marche/{idDmc}/evaluation/offres/{idOffre}/precisions | — | `Demande[]` | 200, 403, 404 |
+| GET | /api/fiches-marche/{idDmc}/evaluation/demandes/{idDemande}/fichier | — | le fichier joint à la réponse | 200, 403, 404 |
+| GET | /api/fiches-marche/{idDmc}/evaluation/journal | — | `[{ date, acteur, action, detail }]` | 200, 403 (UGPM compris), 404 |
+| GET | /api/candidat/offres/{idOffre}/precisions | — | `Demande[]` (les siennes) | 200, 403 (offre d'un autre), 404 |
+| POST | /api/candidat/offres/{idOffre}/precisions/{idDemande}/reponse | multipart `texte`, `fichier?` (PDF, JPEG, PNG) | `Demande` | 200, 400 `TEXTE_OBLIGATOIRE` / `FORMAT_INVALIDE`, 403, 404, 409 `DEJA_REPONDU` / `DELAI_DEPASSE`, 413 |
+
+- **`EvaluationDto`** : `{ idDmc, etat (EN_COURS | RAPPORT_A_SIGNER | CLOSE), ouverteLe, ouvertePar, declarations[{ membre, nom, president,
+  signeeLe, conflit, precision }] (un par membre de la CAO, signeeLe nul tant qu'il n'a pas signé), lots[{ lot, etape, etapesArretees[{
+  etape, par, nom, le, observation }], offres[OffreEvaluee] }], nonEvaluees[{ numero, entreprise, etat, motif }] }`. Une procédure non
+  allotie a un **lot 1**. `etape` : la première non arrêtée parmi `CONFORMITE`, `EVALUATION`, `ANORMALES`, `QUALIFICATION`, puis
+  `RAPPORT`. `nonEvaluees` : les offres écartées au dépôt, retirées ou remplacées (H3).
+- **`OffreEvaluee`** : `{ idOffre, numero, entreprise{ nif, raisonSociale }, conformite, evaluation, anormale, qualification, rang, ecartee,
+  precisionsEnAttente }` ; `evaluation`, `anormale`, `qualification`, `rang` restent **nuls** dans cette tranche ; `ecartee` = `{ etape,
+  qualification, motif, clause, par, nom, le }` ou nul ; `precisionsEnAttente` : demandes sans réponse dont le délai court.
+- **`conformite`** = `{ verifications[{ code, libelle, proposee, constat, satisfaite, observation }], decision, qualification, motif,
+  clause, par, nom, le }` ; `decision` nulle tant qu'aucun membre n'a décidé. **La grille** (neuf vérifications, dans cet ordre) :
+  `AE_PRIX`, `GARANTIE` (sans objet si le cadrage ne l'exige pas), `OFFRE_UNIQUE` (le serveur croise le NIF de l'entreprise et les NIF du
+  groupement déclarés au dépôt, sur les offres du lot), `EXCLUSION`, `POUVOIRS` (une pièce attendue dont le libellé dit « pouvoir » ; sans
+  objet sinon), `PIECES` (`piecesManquantes`), `CONFORMITE_TECHNIQUE` (alertes `NON_CONFORME`, `LIVRAISON_HORS_DELAI`, `PLAFOND_DEPASSE` ;
+  à examiner sans formulaire en ligne), `INTEGRITE`, `FRAIS_DOSSIER` (sans objet pour un retrait libre). `proposee` : vrai, faux, ou nul
+  (sans objet, à examiner) ; `constat` : ce que la lecture de la séance établit ; `satisfaite` : la valeur de la CAO si elle a décidé, la
+  proposée sinon. **Une proposition n'est jamais une décision** : la CAO peut retenir une offre malgré une vérification non satisfaite.
+- **Décider** : `decision` ∈ `CONFORME` · `ECARTEE` ; pour `ECARTEE`, `motif`, `clause` (clause du DAO visée) et `qualification` ∈
+  `IRRECEVABLE` · `NON_CONFORME` · `INAPPROPRIEE` · `INACCEPTABLE` sont obligatoires. Les vérifications omises gardent la proposition.
+  Une nouvelle décision **remplace** la précédente, qui reste au registre (`t_evaluation_decision`, P3) ; le journal dit « avant → après ».
+- **Déclaration préalable (P6)** : une par membre, qui ne se reprend pas ; un membre qui déclare un conflit lit tout mais ne décide rien
+  (403 `MEMBRE_EN_CONFLIT`) ; un membre qui ne l'a pas signée reçoit 409 `DECLARATION_MANQUANTE`. Le président y est soumis aussi.
+- **Arrêter** fige les décisions de l'étape du lot (409 `ETAPE_ARRETEE` sur une décision) ; l'arrêt exige une décision pour **chaque**
+  offre du lot. **Rouvrir** (motif obligatoire) rouvre l'étape et les suivantes du lot ; l'arrêt rouvert reste au registre.
+- **Précisions (art. 35-VI)** : délai par défaut lu sur la fiche (`B06-EP-01` en fournitures, `B06-RC-01` en travaux), sinon
+  `delaiJours` obligatoire ; échéance = demande + délai. `Demande` = `{ idDemande, idOffre, numero, type (PRECISION), question,
+  delaiJours, echeance, demandeeLe, etat (EN_ATTENTE | REPONDUE | EXPIREE), reponse, fichier, tailleFichier, reponduLe }`. Une seule
+  réponse par demande, dans le délai ; fichier lu sur son contenu, `tailleMaxPieceMo`. **Le serveur ne contrôle pas** qu'une précision ne
+  change ni le prix ni la substance (guide §2.4) : la demande et la réponse iront au rapport.
+- **Notifications** : `EVALUATION_OUVERTE` (membres de la CAO, PRMP), `PRECISION_DEMANDEE` (candidat, et courriel), `PRECISION_RECUE`
+  (PRMP, membres). **Journal** : `OUVERTURE`, `DECLARATION`, `CONFORMITE`, `ARRET`, `REOUVERTURE`, `PRECISION_DEMANDEE`,
+  `PRECISION_RECUE`. Les compteurs de `/api/kpis/badges` (§B7) viendront avec la tranche du rapport.
+
 ### Le dépositaire génère lui-même la part de secours — V71 ⚠️ 2026-10-05
 
 Demande front `demande-backend-2026-10-05-depositaire-genere-sa-cle.md` (décision du pilote du 05/10) ; migration **V71**
