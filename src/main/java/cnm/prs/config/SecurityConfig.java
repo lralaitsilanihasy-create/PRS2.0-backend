@@ -194,6 +194,8 @@ public class SecurityConfig {
                     auth.requestMatchers(HttpMethod.GET, "/api/procedures-en-ligne/*/resultats").permitAll();
                     // ⚠️ 2026-10-07 (attribution, tranche 2c, §B4.4) — l'avis d'attribution publié, sans session.
                     auth.requestMatchers(HttpMethod.GET, "/api/procedures-en-ligne/*/avis-attribution/*").permitAll();
+                    // ⚠️ 2026-10-07 (AMI en ligne, §B1) — les AMI publiés et leur avis se lisent sans session.
+                    auth.requestMatchers(HttpMethod.GET, "/api/amis-en-ligne", "/api/amis-en-ligne/*", "/api/amis-en-ligne/*/avis").permitAll();
                     auth.requestMatchers("/api/fiches-marche/*/seance", "/api/fiches-marche/*/seance/**").hasAnyRole("MEMBRE_CAO", "DEPOSITAIRE", "PRMP",
                             "UGPM", "PRESIDENT", "CHEF_COMMISSION", "SECRETAIRE", "MEMBRE", "VERIFICATEUR", "ASSISTANT_CONTROLEUR",
                             "CHARGE_PUBLICATION", "ADMINISTRATEUR");
@@ -208,7 +210,7 @@ public class SecurityConfig {
                     // identité dans le service : déclaration préalable, président), le responsable l'ouvre, la PRMP et l'UGPM lisent.
                     // ⚠️ 2026-10-07 (lot 2, §B7) — l'attribution aussi : les membres de la CAO y lisent l'état de leurs lots.
                     auth.requestMatchers("/api/fiches-marche/*/evaluation", "/api/fiches-marche/*/evaluation/**", "/api/fiches-marche/*/attribution",
-                            "/api/fiches-marche/*/attribution/**").hasAnyRole("MEMBRE_CAO", "PRMP",
+                            "/api/fiches-marche/*/attribution/**", "/api/fiches-marche/*/ami", "/api/fiches-marche/*/ami/**").hasAnyRole("MEMBRE_CAO", "PRMP",
                             "UGPM", "PRESIDENT", "CHEF_COMMISSION", "SECRETAIRE", "MEMBRE", "VERIFICATEUR", "ASSISTANT_CONTROLEUR",
                             "CHARGE_PUBLICATION", "ADMINISTRATEUR");
                     auth.requestMatchers("/api/fiches-marche/*/ceremonie/**").hasAnyRole("MEMBRE_CAO", "DEPOSITAIRE", "PRMP", "UGPM",

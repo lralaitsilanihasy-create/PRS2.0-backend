@@ -81,6 +81,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(BadRequestException.class)
     public ResponseEntity<ErrorResponse> handleBadRequest(BadRequestException ex, WebRequest request) {
+        if (ex.getDetails() != null) {
+            ErrorResponse c = corps(HttpStatus.BAD_REQUEST, ex.getMessage(), request, null, ex.getCode());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse(c.timestamp(), c.status(), c.error(), c.message(),
+                    c.path(), c.erreurs(), c.code(), null, ex.getDetails()));
+        }
         return build(HttpStatus.BAD_REQUEST, ex.getMessage(), request, null, ex.getCode());
     }
 

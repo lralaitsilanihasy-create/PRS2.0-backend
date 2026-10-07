@@ -190,5 +190,7 @@ public enum TypeNotification {
     /** ⚠️ 2026-10-07 (§B5) — la vérification d'une pièce par la PRMP : vers l'attributaire (et par courriel). */
     PIECE_ATTRIBUTAIRE_VERIFIEE,
     /** ⚠️ 2026-10-07 (§B5) — le retrait du marché faute de pièces : vers l'attributaire (et par courriel). */
-    MARCHE_RETIRE
+    MARCHE_RETIRE,
+    /** ⚠️ 2026-10-07 (AMI en ligne, §B2) — l'accusé de dépôt d'une expression d'intérêt : vers le candidat (et par courriel). */
+    AMI_EXPRESSION_DEPOSEE
 }

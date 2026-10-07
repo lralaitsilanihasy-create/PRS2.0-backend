@@ -7186,6 +7186,61 @@ la fiche** (403 pour l'UGPM) et répondent l'`AttributionDto` à jour.
 - **Journal de l'évaluation** : `MISE_AU_POINT`, `RECOURS`, `DECISION_RECOURS`, `PIECE_ATTRIBUTAIRE`, `PIECE_VERIFIEE`, `RETRAIT`,
   `SIGNATURE_MARCHE`, `ENREGISTREMENT`, `NOTIFICATION`, `NOTIFICATION_RECUE`, `AVIS_ATTRIBUTION`.
 
+### L'appel à manifestation d'intérêt en ligne, tranche AMI-a : avis, publication, dépôt des expressions — V82 ⚠️ 2026-10-07
+
+Demande front `demande-backend-2026-10-07-ami-pi.md` (§B1, §B2) ; loi n° 2016-055, art. 32 et 42-II ; arbitrages du pilote du 07/10 :
+**Q2** les expressions d'intérêt ne se lisent **qu'après la date limite** ; **Q3** moins de six qualifiés : la liste s'arrête avec eux,
+motif exigé (ou relance) ; **Q4** le rapport de présélection est **joint au dossier de la demande de propositions** ; **Q5** la liste
+restreinte est **publiée et notifiée**. **Q1** (le seuil de dispense) reste au juriste : la PRMP **déclare** la dispense, avec son
+motif. Q3 à Q5 s'appliquent en tranche **AMI-b** (évaluation, liste restreinte, rapport, invitations). Migration **V82**. Aucune
+dépendance ajoutée.
+
+| Méthode | URL | Réponse | Statuts | Accès |
+|---|---|---|---|---|
+| GET | /api/fiches-marche/{idDmc}/ami | `AmiDto` | 200, 403, 404 (pas d'AMI) | PRMP, UGPM, membres de la CAO |
+| PUT | /api/fiches-marche/{idDmc}/ami | `AmiDto` | 200, 400 `CRITERES_OBLIGATOIRES` / `PONDERATION_INVALIDE` / `NOTE_MINIMALE_INVALIDE` / `DATE_LIMITE_INVALIDE` / `NOMBRE_RETENUS_INVALIDE`, 403, 409 `CATEGORIE_SANS_AMI` / `AMI_PUBLIE` / `AMI_DISPENSE` | PRMP, UGPM |
+| GET | /api/fiches-marche/{idDmc}/ami/avis?format=docx | l'avis (le **projet** tant que l'AMI n'est pas publié) | 200, 404, 409 `AMI_DISPENSE` | PRMP, UGPM, CAO |
+| POST | /api/fiches-marche/{idDmc}/ami/publier | `AmiDto` | 200, 400 `PUBLICATION_OBLIGATOIRE` / `CRITERES_OBLIGATOIRES` / `DATE_LIMITE_INVALIDE`, 403, 409 `AMI_PUBLIE` / `AMI_DISPENSE` | PRMP seule |
+| POST | /api/fiches-marche/{idDmc}/ami/dispense | `AmiDto` | 200, 400 `MOTIF_OBLIGATOIRE`, 403, 409 `CATEGORIE_SANS_AMI` / `AMI_PUBLIE` / `AMI_DISPENSE` | PRMP seule |
+| GET | /api/fiches-marche/{idDmc}/ami/expressions | `Expression[]` (déposées, par numéro) | 200, 403, 404, 409 `LECTURE_FERMEE` (avant la date limite) | PRMP, UGPM, CAO |
+| GET | /api/fiches-marche/{idDmc}/ami/expressions/{id}/pieces/{idPiece} | la pièce | 200, 404, 409 `LECTURE_FERMEE` | PRMP, UGPM, CAO |
+| GET | /api/amis-en-ligne | `AmiPublic[]` (publiés et ouverts, date limite la plus proche d'abord) | 200 | public, sans session |
+| GET | /api/amis-en-ligne/{idDmc} | `AmiPublic` (ouvert ou clos) | 200, 404 | public |
+| GET | /api/amis-en-ligne/{idDmc}/avis?format=docx | l'avis publié | 200, 404 | public |
+| POST | /api/candidat/amis/{idDmc}/expression | `Expression` (201) | 400 `EXPRESSION_ILLISIBLE` / `LETTRE_OBLIGATOIRE` / `FICHIER_INCONNU` / `PIECES_MANQUANTES` (`details.pieces`) / `FORMAT_INVALIDE`, 404 (AMI non publié), 409 `DATE_LIMITE_DEPASSEE` / `ENTREPRISE_NON_DECLAREE`, 413 | candidat |
+| GET | /api/candidat/amis/{idDmc}/expression | `Expression` (la sienne, déposée) | 200, 404 | candidat |
+| DELETE | /api/candidat/amis/{idDmc}/expression | — | 204, 404, 409 `DATE_LIMITE_DEPASSEE` | candidat |
+| GET | /api/candidat/amis/{idDmc}/expression/pieces/{idPiece} | sa pièce | 200, 404 | candidat |
+
+- **`AmiDto`** = `{ idDmc, etat (BROUILLON | PUBLIE | DISPENSE), objet, autoriteContractante, reference, dateLimite, criteres[{ code,
+  libelle, poids, description }], pieces[], noteMinimale, nombreRetenus, motifDispense, publications[{ support, date, reference }],
+  avisDisponible, publieLe, publiePar, lectureOuverte, nombreExpressions }`. `nombreExpressions` (déposées) se lit à tout moment ;
+  `lectureOuverte` passe à vrai à la date limite.
+- **Préparer** (`PUT`, corps `{ dateLimite, criteres, pieces, noteMinimale, nombreRetenus }`) : sur une fiche de **prestations
+  intellectuelles** seulement (la catégorie de la fiche, comme la lettre d'invitation) ; l'objet est repris de la fiche ; les
+  **critères** (aptitude, références, expérience… art. 42-II) portent chacun un **poids positif**, et les poids **totalisent 100** ; le
+  code `C1`, `C2`… est donné s'il manque ; `noteMinimale` sur 100 (facultative) ; `nombreRetenus` = **6** par défaut (1 à 20) ; la date
+  limite, à venir. Modifiable tant que l'AMI n'est pas publié.
+- **Les critères vivent sur l'AMI, pas dans la fiche** (écart à la demande) : l'AMI précède la demande de propositions et ne suit pas
+  les versions de la fiche ; il se fige à la publication.
+- **Publier** (`{ publications[{ support, date, reference? }] }`, au moins un support daté) : critères et date limite à venir exigés ;
+  l'AMI est figé, l'**avis** produit en PDF et Word (**modèle provisoire**, sur celui de l'avis spécifique : autorité, objet, critères
+  et points, note minimale, pièces, liste restreinte de six, dépôt en ligne, date limite) et **signé électroniquement** par la PRMP ;
+  il paraît dans **`/api/amis-en-ligne`** (liste distincte des procédures en ligne : une fiche PI n'y apparaît pas, cf. lot 3 §B1).
+- **Dispense de publicité** (`{ motif }`) : l'AMI passe `DISPENSE`, sans avis ni dépôt ; la liste restreinte se saisit alors comme
+  avant, aux lettres d'invitation.
+- **Le dépôt** (multipart : partie **`expression`** en JSON `{ lettre, qualifications, references[{ intitule, client, annee, montant,
+  description }], groupement[{ nif, raisonSociale, role }], pieces[{ libelle, fichier }] }`, et parties **`fichiers`**, chaque pièce
+  attendue portée par le fichier de ce nom) : avant la date limite, par un candidat dont l'entreprise est déclarée ; la lettre est
+  obligatoire ; chaque pièce attendue a son fichier (PDF, JPEG, PNG, taille des pièces du candidat). **Pas de scellement**, mais le
+  contenu est **illisible de l'administration avant la date limite** (Q2). Un nouveau dépôt **remplace** le précédent (numéro nouveau),
+  le retrait est possible jusqu'à la date limite. L'accusé : le numéro, la date, et l'**empreinte** SHA-256 du contenu et des pièces,
+  envoyés en notification `AMI_EXPRESSION_DEPOSEE` (et par courriel).
+- **`Expression`** = `{ id, numero, nif, raisonSociale, etat (DEPOSEE | REMPLACEE | RETIREE), deposeeLe, empreinte, lettre,
+  qualifications, references[], groupement[], pieces[{ id, libelle, nom, format, taille, empreinte }] }`.
+- **Journal de la procédure** (registre de l'évaluation) : `AMI_PREPARE`, `AMI_PUBLIE`, `AMI_DISPENSE`, `AMI_EXPRESSION`, `AMI_RETRAIT`.
+- ⚠️ `BadRequestException` porte désormais des `details` facultatifs, servis dans `ErrorResponse.details` comme ceux d'un 409.
+
 ### Le rabais structuré de l'offre en ligne ⚠️ 2026-10-07
 
 Demande front `demande-backend-2026-10-07-rabais-structure.md` (arbitrage Q4 du pilote : « le rabais est structuré au dépôt »). Aucune

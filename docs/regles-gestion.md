@@ -3089,6 +3089,21 @@ Accès complet aux référentiels, comptes utilisateurs, journal d'audit, hiéra
     de nombre imposé), imprimées par la PRMP ou l'UGPM sous la même garde que l'avis (PV signé favorable, ou favorable
     avec réserves après leur levée), sur la dernière version validée de la fiche. Chacune nomme son destinataire et
     cite la liste entière. Ni l'avis ni les lettres ne sont des pièces du DAO : ils ne sont jamais joints au dossier.
+  - ⚠️ **L'appel à manifestation d'intérêt en ligne (2026-10-07, tranche AMI-a ; loi n° 2016-055, art. 32 et 42-II)** — la
+    liste restreinte des prestations intellectuelles naît d'un AMI mené dans l'application :
+    - la PRMP (ou son UGPM) prépare l'AMI de la procédure : ses **critères de sélection** (aptitude, références, expérience…),
+      chacun avec ses points, qui **totalisent 100**, une note minimale de qualification facultative, les pièces attendues, le
+      nombre de candidats à retenir (**six**), la date limite ; tant qu'il n'est pas publié, il se modifie et son avis se lit en
+      projet ;
+    - la **PRMP** le **publie** en déclarant ses supports (journal des marchés de l'ARMP, journal national…) : l'AMI est figé,
+      l'avis, signé électroniquement par elle, paraît sur la liste publique des AMI ; ou elle **déclare la dispense de
+      publicité**, avec son motif (le seuil réglementaire reste à préciser par le juriste), et la liste restreinte se saisit
+      comme avant ;
+    - tout candidat qui a déclaré son entreprise dépose en ligne son **expression d'intérêt** (lettre, qualifications,
+      références, groupement, une pièce par pièce attendue) avant la date limite ; il peut la remplacer ou la retirer
+      jusque-là ; il reçoit un accusé portant l'empreinte de son dépôt ;
+    - les expressions ne sont pas scellées, mais **personne ne les lit avant la date limite** : l'administration en voit
+      seulement le nombre.
 - Grilles de contrôle & règles d'anomalie [Écriture]
   - Configuration de tr_points_ctrl et t_regle_anomalie.
 - Comptes budgétaires & entités contractantes [Écriture]
