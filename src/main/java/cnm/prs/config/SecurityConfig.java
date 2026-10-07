@@ -190,6 +190,8 @@ public class SecurityConfig {
                     // ⚠️ 2026-10-04 (lot 4) — la séance d'ouverture : les membres de la CAO y apportent leurs parts (garde par
                     // identité dans le service) ; le PV publié se lit sans session.
                     auth.requestMatchers(HttpMethod.GET, "/api/procedures-en-ligne/*/pv").permitAll();
+                    // ⚠️ 2026-10-07 (attribution, tranche 2b, §B4.1) — le résultat publié sur la page publique de la procédure.
+                    auth.requestMatchers(HttpMethod.GET, "/api/procedures-en-ligne/*/resultats").permitAll();
                     auth.requestMatchers("/api/fiches-marche/*/seance", "/api/fiches-marche/*/seance/**").hasAnyRole("MEMBRE_CAO", "DEPOSITAIRE", "PRMP",
                             "UGPM", "PRESIDENT", "CHEF_COMMISSION", "SECRETAIRE", "MEMBRE", "VERIFICATEUR", "ASSISTANT_CONTROLEUR",
                             "CHARGE_PUBLICATION", "ADMINISTRATEUR");

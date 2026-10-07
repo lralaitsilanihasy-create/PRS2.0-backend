@@ -45,7 +45,7 @@ import cnm.prs.enums.TypeChampFiche;
  * <tr><td>CA_MOYENNE (⚠️ V59)</td><td>CA (montant), MEILLEURES, ANNEES (nombres)</td><td>bloquant</td></tr>
  * <tr><td>REFERENCES_CUMUL (⚠️ V59)</td><td>NOMBRE, MONTANT (par lot)</td><td>bloquant</td></tr>
  * <tr><td>PIECES_OFFRE_EXIGEES (⚠️ V61)</td><td>TEXTE (B04-PI-01) — ou la liste des pièces OFFRE ; travaux seulement</td><td>bloquant</td></tr>
- * <tr><td>PIECES_EN_DOUBLE (⚠️ V61)</td><td>TEXTE (B03-CQ-01) à sa valeur par défaut avec une liste ADMINISTRATIVE remplie</td><td>avertissement</td></tr>
+ * <tr><td>PIECES_EN_DOUBLE (⚠️ V61, retiré le 2026-10-07 : constat E1)</td><td>—</td><td>—</td></tr>
  * <tr><td>MATERIEL_EXIGE (⚠️ V60)</td><td>TEXTE (B03-QT-09) — ou la liste du matériel ; travaux seulement</td><td>bloquant</td></tr>
  * </table>
  */
@@ -643,25 +643,9 @@ public final class ControlesFicheMarche {
         }
     }
 
-    /**
-     * ⚠️ V61 (2026-10-03, §B3, H3) — {@code PIECES_EN_DOUBLE} (rôle {@code TEXTE}) : la liste des pièces administratives est
-     * remplie ({@code nbAdministratives}) et le texte au rôle vaut encore sa valeur par défaut — le DPAO imprimerait les
-     * pièces deux fois. Avertissement, jamais bloquant ; égalité jugée blancs de bord et fins de ligne confondus.
-     */
-    public static void piecesEnDouble(List<ChampFicheMarche> champsOuverts, Map<String, String> valeurs, long nbAdministratives,
-            BilanControlesDto bilan) {
-        ChampFicheMarche texte = texteAuRole(champsOuverts, PIECES_EN_DOUBLE);
-        if (texte == null || nbAdministratives == 0 || texte.getValeurDefaut() == null) {
-            return;
-        }
-        String v = valeurs.get(texte.getCode());
-        if (v != null && normaliserTexte(v).equals(normaliserTexte(texte.getValeurDefaut().replace("\\n", "\n")))) {
-            bilan.avertissements().add(new Controle(PIECES_EN_DOUBLE, List.of(texte.getCode()), texte.codeBloc(),
-                    "Les pièces administratives sont en liste, et « " + texte.getLibelle() + " » garde sa valeur par défaut : "
-                            + "le DPAO les imprimera deux fois. Videz ce texte, ou gardez-y ce que la liste ne dit pas."));
-        }
-    }
-
+    // ⚠️ 2026-10-07 (constat E1 de la recette du DAO complet) — l'avertissement PIECES_EN_DOUBLE (V61) est retiré : depuis C4
+    // (V74), le DPAO n'imprime plus B03-CQ-01 quand la liste des pièces administratives est remplie ; il n'y a plus de double
+    // impression. Le rôle {@code PIECES_EN_DOUBLE:TEXTE} reste lu du référentiel sans effet.
 
     /**
      * ⚠️ 2026-10-04 (soumission en ligne, lot 1c, §B8, Q5) — {@code SIGNATURE_EN_LIGNE} : le mode est électronique et

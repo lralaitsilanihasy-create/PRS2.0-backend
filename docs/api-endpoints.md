@@ -7048,6 +7048,75 @@ l'attributaire) et 2d (infructuosité, sans suite, reprise, compteurs) suivent.
   ajusté par l'Administrateur n'est jamais touché ; désactivable par `app.seed.points-ctrl-dossier-marche.enabled=false`).
 - **Journal de l'évaluation** : `DOSSIER_MARCHE`.
 
+### L'attribution, lot 2, tranche 2b : attribuer, informer, délai d'attente, explications — V80 ⚠️ 2026-10-07
+
+Demande front `demande-backend-2026-10-07-attribution-notification.md` (§B3, §B4.1, §B4.2) ; arbitrages du pilote du 07/10 : **Q4**
+l'attribution se fait à l'offre **proposée par la CAO, et à elle seule** ; **Q7** les lettres suivent un **modèle provisoire**,
+remplacé à l'arrivée des modèles officiels Word ; **Q9** la PRMP **signe électroniquement** (signature simple, horodatée, journalisée,
+imprimée sur la lettre, comme le PV d'ouverture). Loi n° 2016-055, **art. 78** : le délai de dix jours francs court de la **plus
+tardive** de l'information des candidats et de l'affichage du résultat. Migration **V80**. Aucune dépendance ajoutée.
+
+| Méthode | URL | Réponse | Statuts | Accès |
+|---|---|---|---|---|
+| POST | /api/fiches-marche/{idDmc}/attribution/lots/{lot}/attribuer | `AttributionDto` | 200, 403, 404, 409 `LOT_INFRUCTUEUX` / `AVIS_NON_RENDU` / `AVIS_DEFAVORABLE` / `OFFRE_NON_PROPOSEE` / `DEJA_ATTRIBUE` | PRMP de la fiche |
+| POST | /api/fiches-marche/{idDmc}/attribution/lots/{lot}/informer | `AttributionDto` | 200, 400 `DATE_AFFICHAGE_OBLIGATOIRE` / `DATE_AFFICHAGE_INVALIDE`, 403, 404, 409 `NON_ATTRIBUE` / `DEJA_INFORME` | PRMP de la fiche |
+| GET | /api/fiches-marche/{idDmc}/attribution/lots/{lot}/lettres/{idOffre}?format=docx | la lettre, PDF (ou Word) | 200, 403, 404 | CAO, responsable, PRMP, UGPM |
+| POST | /api/fiches-marche/{idDmc}/attribution/explications/{id}/reponse | `Explication` | 200, 400 `TEXTE_OBLIGATOIRE` / `FORMAT_INVALIDE`, 403, 404, 409 `DEJA_REPONDU`, 413 | PRMP de la fiche |
+| GET | /api/fiches-marche/{idDmc}/attribution/explications/{id}/fichier | le fichier joint à la réponse | 200, 403, 404 | CAO, responsable, PRMP, UGPM |
+| GET | /api/candidat/offres/{idOffre}/resultat | `Resultat` | 200, 403, 404 (avant l'information) | le candidat de l'offre |
+| GET | /api/candidat/offres/{idOffre}/resultat/lettre?format=docx | sa lettre, PDF (ou Word) | 200, 403, 404 | le candidat de l'offre |
+| POST | /api/candidat/offres/{idOffre}/explication | `Explication` | 201, 400 `QUESTION_OBLIGATOIRE`, 403, 409 `NON_INFORME` / `OFFRE_RETENUE` | le candidat non retenu |
+| GET | /api/candidat/offres/{idOffre}/explications | `Explication[]` | 200, 403 | le candidat de l'offre |
+| GET | /api/candidat/offres/{idOffre}/explications/{id}/fichier | le fichier joint à la réponse | 200, 403, 404 | le candidat de l'offre |
+| GET | /api/procedures-en-ligne/{idDmc}/resultats | `ResultatPublic[]` | 200 (liste vide avant l'information) | public, sans session |
+
+- **`AttributionDto.lots[]`** gagne `attributaire`, `information`, `delaiAttente`, `explications` (nuls, ou liste vide, avant leur geste) :
+  - `attributaire` = `{ idOffre, numero, candidat, nif, montant, montantTtc, delai, motif, le, par }` — `montant` hors taxes (prix
+    corrigé − rabais), `montantTtc` le prix lu, `delai` avec son unité, **figés au choix** ;
+  - `information` = `{ le, par, signataire, dateAffichage, lettres[{ id, idOffre, numero, candidat, type, motif, envoyeeLe, lueLe }] }` —
+    `type` ∈ `ATTRIBUTION` · `NON_RETENU` ; `envoyeeLe` la date d'envoi du courriel (nulle sans adresse) ; `lueLe` **l'accusé de lecture
+    de la plateforme** (la première consultation du résultat ou de la lettre par le candidat) ;
+  - `delaiAttente` = `{ debut, fin, signableLe, jours, ecoule }` — `debut` la plus tardive de l'information et de l'affichage (ce jour ne
+    compte pas), `fin` le dixième jour franc, `signableLe` le lendemain, premier jour où la signature est possible ;
+  - `explications[]` = `{ id, idOffre, numero, candidat, question, demandeeLe, etat (EN_ATTENTE | REPONDUE), reponse, reponseNom,
+    reponseTaille, reponduLe }`.
+- **États ajoutés** : `ATTRIBUE` (choix de la PRMP), `INFORME` (candidats informés, délai en cours), `SIGNABLE` (délai écoulé, calculé
+  à la lecture).
+- **Attribuer** (`{ idOffre?, motif? }`) : après l'avis **favorable** de la Commission (`FAV` ou `FAVR`) sur le dossier de marché ;
+  `idOffre` peut être omis, et une autre offre que la proposée répond 409 `OFFRE_NON_PROPOSEE`. En désaccord avec la CAO, la PRMP ne
+  peut que déclarer le lot infructueux ou la procédure sans suite (tranche 2d). Réservé à la **PRMP** (ni l'UGPM, ni la CAO).
+- **Informer** (`{ dateAffichage }`) : la date d'affichage du résultat au siège est **déclarée**, entre la date de l'attribution et le
+  jour même. Une lettre par offre évaluée du lot, produite en PDF et en Word, **signée électroniquement par la PRMP** (son nom et
+  l'horodatage imprimés) : la lettre d'attribution à l'attributaire ; aux autres, le rejet et **ses motifs tirés du rapport** (l'étape
+  qui a écarté l'offre, sa qualification, son motif, sa clause ; à défaut, son rang), l'attributaire, le montant, le délai d'attente et
+  le droit de demander des explications. Les offres non ouvertes en séance (hors délai, retirées, remplacées) n'ont pas de lettre.
+  Notification et courriel : `ATTRIBUTION` à l'attributaire, `RESULTAT_DISPONIBLE` aux autres. **Modèle provisoire** (Q7), à remplacer.
+- **Le délai d'attente** : `JOURS_FRANCS = 10` ; le report d'une échéance tombant un jour férié ou un week-end n'est **pas** appliqué
+  (la loi ne le prévoit pas dans le texte relu ; à confirmer par le juriste). La signature (tranche 2c) sera refusée avant
+  `signableLe` (409 `DELAI_ATTENTE`).
+- **Les explications** : un candidat **non retenu**, une fois informé, pose sa question par écrit ; la PRMP répond par un texte et un
+  fichier facultatif (PDF, JPEG ou PNG, taille des pièces du candidat). Notifications `EXPLICATION_DEMANDEE` (PRMP),
+  `EXPLICATION_REPONDUE` (candidat, et courriel). Aucun délai n'est imposé à la demande ni à la réponse.
+- **`Resultat`** (candidat) = `{ idOffre, numero, lot, retenu, motifRejet, attributaire, montant, montantTtc, delai, lettreDisponible,
+  dateInformation, dateAffichage, finDelai, signableLe }`. **`ResultatPublic`** = `{ lot, attributaire, montant, dateInformation,
+  dateAffichage }`.
+- **Journal de l'évaluation** : `ATTRIBUTION`, `INFORMATION` (avec le signataire et l'horodatage), `LETTRE_LUE`, `EXPLICATION_DEMANDEE`,
+  `EXPLICATION_REPONDUE`.
+
+**Corrections livrées avec la tranche (constats des recettes du 06 et du 07/10)** :
+- **C1** — rapport d'évaluation, §4 : la correction s'imprime « de 2 500 000 à 2 400 000 » (la flèche manquait à la police du PDF).
+- **C2, D2** — le délai porte son unité (`delaiUnite` de l'acte d'engagement) : `Proposition.delai` = « 6 mois », repris au rapport (§8),
+  au projet de marché (article 4) et aux lettres. Les projets et rapports déjà produits gardent leur texte.
+- **C3** — une offre remplacée se désigne par le numéro de celle qui la remplace (« remplacée par l'offre n° 4 »), au PV et dans
+  `nonEvaluees[].motif`.
+- **D1** — le PV d'ouverture d'une séance close **avant V70** (sans date de signature : fiche 40) est joint au dossier de marché ;
+  V80 rattrape le dossier 100371.
+- **E1** — l'avertissement `PIECES_EN_DOUBLE` est **retiré** (depuis C4, le DPAO n'imprime plus `B03-CQ-01` quand la liste
+  administrative est remplie).
+- **E2** — un dossier qui porte le **DAO complet** joint depuis la fiche n'a plus à joindre le **CCAG** (code `CCAG`, posé par V80), ni
+  le **CCTP** (code `CCTP`) quand la fiche a ses spécifications techniques ; à la soumission comme au contrôle des pièces par le
+  Secrétaire. Le référentiel (`GET /api/type-piece-jointes`) les garde obligatoires : l'exemption tient au dossier.
+
 ### Le rabais structuré de l'offre en ligne ⚠️ 2026-10-07
 
 Demande front `demande-backend-2026-10-07-rabais-structure.md` (arbitrage Q4 du pilote : « le rabais est structuré au dépôt »). Aucune

@@ -932,6 +932,24 @@ post-qualification (étape 5), et le rapport d'évaluation. Contrat : `docs/api-
     montant évalué, offres anormales, classement, post-qualification, signatures du rapport, conformité du projet à l'offre) ;
   - son avis remonte au lot. Les gestes suivants (choix de l'attributaire, information des candidats, signature, notification) sont
     livrés par tranches.
+- ⚠️ **L'attribution et l'information des candidats** (lot 2, tranche 2b, 2026-10-07 ; arbitrages du pilote Q4, Q7, Q9 ; loi
+  n° 2016-055, art. 35-VII, 52, 78) :
+  - après l'avis **favorable** de la Commission (avec ou sans réserves) sur le dossier de marché, la **PRMP**, et elle seule,
+    attribue le lot à l'offre **proposée par la commission d'appel d'offres** : jamais à une autre ; en désaccord, elle ne peut que
+    déclarer le lot infructueux ou la procédure sans suite ;
+  - elle **informe** ensuite tous les candidats dont l'offre a été évaluée : une lettre d'attribution à l'attributaire, une lettre de
+    rejet aux autres, avec les **motifs tirés du rapport**, le nom de l'attributaire et le montant du marché. Elle signe ces lettres
+    **électroniquement** (son nom et l'heure sont imprimés et journalisés) ; elles sont envoyées sur la plateforme et par courriel ;
+    la première lecture par le candidat sur la plateforme vaut **accusé de réception** ;
+  - elle **déclare la date d'affichage** du résultat à son siège ; le résultat (attributaire, montant) est publié sur la page publique
+    de la procédure ;
+  - le marché ne peut être signé qu'après un **délai d'attente de dix jours francs**, compté à partir de la **plus tardive** de
+    l'information et de l'affichage : ni ce jour, ni le dixième ne comptent ; la signature est possible le lendemain du dixième jour ;
+  - un candidat non retenu peut demander **par écrit des explications** sur le rejet de son offre ; la PRMP y répond par écrit ;
+  - tant que les modèles officiels ne sont pas remis, les lettres suivent un **modèle provisoire** de l'application.
+- ⚠️ **Le DAO complet dispense du CCAG et du CCTP** (2026-10-07) : un dossier d'appel d'offres qui porte le DAO complet produit par la
+  fiche n'a plus à joindre à part le **cahier des clauses administratives générales**, qu'il contient toujours, ni le **cahier des
+  clauses techniques particulières** quand la fiche porte ses spécifications techniques ; sans spécifications, le CCTP reste exigé.
 
 #### La fiche DAO des travaux (référentiel remis le 2026-09-24)
 

@@ -988,8 +988,11 @@ public class DossierService {
      * obligation portée par la donnée, et non par du code.</p>
      */
     private void validerPiecesObligatoires(Dossier dossier) {
+        // ⚠️ 2026-10-07 (constat E2) — le CCAG, et le CCTP avec des spécifications, sont dans le DAO complet joint.
+        java.util.Set<Integer> exemptes = verificationPieceDepotService.exemptees(dossier.getIdDossier());
         List<ErrorResponse.FieldError> manquantes = new ArrayList<>(typePieceJointeRepository
                 .findByIdTypeDossierAndObligatoireTrue(dossier.getIdTypeDossier()).stream()
+                .filter(t -> !exemptes.contains(t.getIdTypePiece()))
                 .filter(t -> !pieceJointeDossierRepository
                         .existsByIdDossierAndIdTypePiece(dossier.getIdDossier(), t.getIdTypePiece()))
                 .map(t -> new ErrorResponse.FieldError("piecesJointes",

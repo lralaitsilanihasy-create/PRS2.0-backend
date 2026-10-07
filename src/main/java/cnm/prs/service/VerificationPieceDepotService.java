@@ -44,16 +44,25 @@ public class VerificationPieceDepotService {
     private final TypePieceJointeRepository typePieceJointeRepository;
     private final PieceJointeDossierRepository pieceJointeDossierRepository;
     private final cnm.prs.security.PermissionService permissionService;
+    /** ⚠️ 2026-10-07 (constat E2) — le CCAG et le CCTP contenus dans le DAO complet joint. */
+    private final PiecesExemptees piecesExemptees;
 
     public VerificationPieceDepotService(VerificationPieceDepotRepository repository,
             DossierRepository dossierRepository, TypePieceJointeRepository typePieceJointeRepository,
             PieceJointeDossierRepository pieceJointeDossierRepository,
-            cnm.prs.security.PermissionService permissionService) {
+            cnm.prs.security.PermissionService permissionService, PiecesExemptees piecesExemptees) {
+        this.piecesExemptees = piecesExemptees;
         this.repository = repository;
         this.dossierRepository = dossierRepository;
         this.typePieceJointeRepository = typePieceJointeRepository;
         this.pieceJointeDossierRepository = pieceJointeDossierRepository;
         this.permissionService = permissionService;
+    }
+
+    /** ⚠️ 2026-10-07 (constat E2) — les types de pièces obligatoires que le DAO complet joint dispense de porter à part. */
+    @Transactional(readOnly = true)
+    public Set<Integer> exemptees(Integer idDossier) {
+        return piecesExemptees.de(idDossier);
     }
 
     /** Historique complet des vérifications du dossier (ASC — traçabilité §6). */
@@ -119,6 +128,7 @@ public class VerificationPieceDepotService {
                 .filter(p -> idDossier.equals(p.getIdDossier()) && p.getIdTypePiece() != null)
                 .map(p -> p.getIdTypePiece())
                 .collect(java.util.stream.Collectors.toSet());
+        Set<Integer> exemptes = piecesExemptees.de(idDossier);
         Map<Integer, VerificationPieceDepot> etat = etatCourant(idDossier);
 
         List<String> defauts = new java.util.ArrayList<>();
@@ -128,7 +138,8 @@ public class VerificationPieceDepotService {
                 defauts.add(t.getLibellePiece()
                         + (v.getObservation() != null && !v.getObservation().isBlank() ? " — " + v.getObservation() : "")
                         + (DECISION_MANQUANTE.equals(v.getDecision()) ? " (manquante)" : " (non conforme)"));
-            } else if (v == null && Boolean.TRUE.equals(t.getObligatoire()) && !deposes.contains(t.getIdTypePiece())) {
+            } else if (v == null && Boolean.TRUE.equals(t.getObligatoire()) && !deposes.contains(t.getIdTypePiece())
+                    && !exemptes.contains(t.getIdTypePiece())) {
                 defauts.add(t.getLibellePiece() + " (manquante)");
             }
         }
@@ -143,10 +154,12 @@ public class VerificationPieceDepotService {
     public List<String> obligatoiresNonConformes(Integer idDossier) {
         Dossier dossier = dossierRepository.findById(idDossier)
                 .orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable : " + idDossier));
+        Set<Integer> exemptes = piecesExemptees.de(idDossier);
         Map<Integer, VerificationPieceDepot> etat = etatCourant(idDossier);
         return typePieceJointeRepository.findAll().stream()
                 .filter(t -> t.getIdTypeDossier() != null && t.getIdTypeDossier().equals(dossier.getIdTypeDossier())
                         && Boolean.TRUE.equals(t.getObligatoire()))
+                .filter(t -> !exemptes.contains(t.getIdTypePiece()))
                 .filter(t -> {
                     VerificationPieceDepot v = etat.get(t.getIdTypePiece());
                     return v == null || !DECISION_CONFORME.equals(v.getDecision());

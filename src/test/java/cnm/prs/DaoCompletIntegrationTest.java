@@ -47,6 +47,9 @@ class DaoCompletIntegrationTest extends CnmIntegrationTestSupport {
 
     @Autowired private ChampFicheMarcheService champService;
     @Autowired private DocumentFicheMarcheRepository documentRepository;
+    @Autowired private cnm.prs.service.PiecesExemptees piecesExemptees;
+    @Autowired private cnm.prs.repository.PieceJointeDossierRepository pieceJointeDossierRepository;
+    @Autowired private cnm.prs.repository.SpecificationsFicheRepository specificationsRepository;
 
     @BeforeEach
     void jeu() throws Exception {
@@ -121,6 +124,39 @@ class DaoCompletIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(JsonPath.<List<String>>read(documents, "$[?(@.type=='DAO_COMPLET')].libelle")).containsOnly("Dossier d'appel d'offres complet");
         // ⚠️ C6 (recette du 06/10) — le DAO complet en tête, avant les classeurs.
         assertThat(JsonPath.<List<String>>read(documents, "$[*].type")).startsWith("DAO_COMPLET", "DAO_COMPLET");
+    }
+
+    @Test
+    @DisplayName("⚠️ E2 (07/10) : un dossier qui porte le DAO complet n'a plus à joindre le CCAG, ni le CCTP quand la fiche a ses "
+            + "spécifications techniques ; sans DAO complet, rien n'est exempté")
+    void ccagEtCctpDansLeDaoComplet() throws Exception {
+        Long idDmc = creerDmc();
+        deposer("/api/fiches-marche/" + idDmc + "/specifications", "specs.docx", docx("Devis descriptif")).andExpect(status().isOk());
+        remplirObligatoiresEtValider(idDmc, "QUANTITE_FIXE", "FOURNITURES_SERVICES", new LinkedHashMap<>());
+        int idFiche = JsonPath.read(fiche(idDmc), "$.idFiche");
+        int ccag = seedTypePiece("Cahier des clauses administratives générales", true, "DMC", 7);
+        int cctp = seedTypePiece("Cahier des clauses techniques particulières", true, "DMC", 8);
+        for (int[] t : new int[][] { { ccag, 0 }, { cctp, 1 } }) {
+            cnm.prs.entity.TypePieceJointe tp = typePieceJointeRepository.findById(t[0]).orElseThrow();
+            tp.setCode(t[1] == 0 ? "CCAG" : "CCTP");
+            typePieceJointeRepository.save(tp);
+        }
+        dossierRepository.save(dossierLoc(9910, "BROUILLON", "ANT", "PRMP001"));
+        assertThat(piecesExemptees.de(9910)).isEmpty();
+        DocumentFicheMarche dao = documentRepository.save(new DocumentFicheMarche(null, idFiche, "DAO_COMPLET", "pdf", "DAO_COMPLET_test_v1.pdf", 4L,
+                "0".repeat(64), LocalDateTime.now(), "%PDF".getBytes(), null, null));
+        cnm.prs.entity.PieceJointeDossier p = new cnm.prs.entity.PieceJointeDossier();
+        p.setIdDossier(9910);
+        p.setIdTypePiece(seedTypePiece("Dossier d'appel d'offres complet", true, "DMC", 6));
+        p.setNomFichier(dao.getNomFichier());
+        p.setFormat("PDF");
+        p.setApresLettreRenvoi(false);
+        p.setIdDocumentFiche(dao.getIdDocument());
+        pieceJointeDossierRepository.save(p);
+        assertThat(piecesExemptees.de(9910)).containsExactlyInAnyOrder(ccag, cctp);
+        specificationsRepository.deleteById(idFiche);
+        specificationsRepository.flush();
+        assertThat(piecesExemptees.de(9910)).containsExactly(ccag);
     }
 
     private ResultActions deposer(String url, String nom, byte[] contenu) throws Exception {

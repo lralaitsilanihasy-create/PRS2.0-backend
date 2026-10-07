@@ -52,4 +52,18 @@ final class Telechargements {
         String sain = (nom == null || nom.isBlank() ? "document" : nom).replaceAll("[\\r\\n\"\\\\]", "_");
         return "attachment; filename=\"" + sain + "\"";
     }
+
+    /** ⚠️ 2026-10-07 (attribution, tranche 2b) — un fichier téléversé (réponse, pièce), typé par la liste blanche. */
+    static org.springframework.http.ResponseEntity<byte[]> fichier(String nom, String format, byte[] contenu) {
+        return org.springframework.http.ResponseEntity.ok().header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, disposition(nom))
+                .contentType(typeAutorise(format)).body(contenu);
+    }
+
+    /** ⚠️ 2026-10-07 (attribution, tranche 2b) — une lettre produite par le serveur, en PDF ou en Word. */
+    static org.springframework.http.ResponseEntity<byte[]> lettre(cnm.prs.entity.AttributionLettre x, boolean docx) {
+        String nom = (cnm.prs.entity.AttributionLettre.ATTRIBUTION.equals(x.getType()) ? "lettre-attribution-" : "lettre-resultat-") + x.getIdDmc()
+                + "-lot" + x.getLot() + (docx ? ".docx" : ".pdf");
+        return org.springframework.http.ResponseEntity.ok().header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, disposition(nom))
+                .contentType(docx ? DOCX : MediaType.APPLICATION_PDF).body(docx ? x.getDocx() : x.getPdf());
+    }
 }

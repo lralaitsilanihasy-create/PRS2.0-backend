@@ -174,5 +174,13 @@ public enum TypeNotification {
     /** ⚠️ 2026-10-07 (§B6) — le rapport d'évaluation est produit : vers chaque membre appelé à le signer. */
     RAPPORT_A_SIGNER,
     /** ⚠️ 2026-10-07 (§B6) — le rapport d'évaluation est signé : vers la PRMP et les membres de la CAO. */
-    RAPPORT_EVALUATION
+    RAPPORT_EVALUATION,
+    /** ⚠️ 2026-10-07 (lot 2, tranche 2b, §B4.1) — le résultat de la procédure : vers chaque candidat non retenu du lot (et par courriel). */
+    RESULTAT_DISPONIBLE,
+    /** ⚠️ 2026-10-07 (§B4.1) — la lettre d'attribution : vers l'attributaire (et par courriel). */
+    ATTRIBUTION,
+    /** ⚠️ 2026-10-07 (§B4.2, art. 52-II) — une demande d'explication d'un candidat non retenu : vers la PRMP. */
+    EXPLICATION_DEMANDEE,
+    /** ⚠️ 2026-10-07 (§B4.2) — la réponse écrite de la PRMP : vers le candidat (et par courriel). */
+    EXPLICATION_REPONDUE
 }

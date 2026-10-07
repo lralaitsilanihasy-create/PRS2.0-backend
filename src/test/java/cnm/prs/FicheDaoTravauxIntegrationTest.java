@@ -650,9 +650,8 @@ class FicheDaoTravauxIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.ok[?(@.regle=='PIECES_OFFRE_EXIGEES')].message"))
                 .containsExactly("Pièces de l'offre : 2 pièce(s).");
-        // B03-CQ-01 garde la liste du document type (défaut recopié à la création) : avertissement, jamais bloquant.
-        assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.avertissements[?(@.regle=='PIECES_EN_DOUBLE')].champs[0]"))
-                .containsExactly("B03-CQ-01");
+        // ⚠️ 2026-10-07 (constat E1) — B03-CQ-01 garde le défaut du document type, mais le DPAO ne l'imprime plus (C4) : plus d'avertissement.
+        assertThat(JsonPath.<List<Object>>read(fiche, "$.bilanControles.avertissements[?(@.regle=='PIECES_EN_DOUBLE')]")).isEmpty();
         Map<String, String> b03 = valeursDuBloc(idDmc, "B03", Map.of());
         b03.remove("B03-CQ-01");
         mvc.perform(put("/api/fiches-marche/" + idDmc + "/blocs/B03").header("Authorization", tokenPrmp).contentType(JSON)
@@ -702,8 +701,7 @@ class FicheDaoTravauxIntegrationTest extends CnmIntegrationTestSupport {
         fiche = mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<List<Object>>read(fiche, "$.bilanControles.bloquants[?(@.regle=='PIECES_OFFRE_EXIGEES')]")).isEmpty();
-        assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.avertissements[?(@.regle=='PIECES_EN_DOUBLE')].champs[0]"))
-                .containsExactly("B03-CQ-01");   // le défaut du document type, recopié à la création
+        assertThat(JsonPath.<List<Object>>read(fiche, "$.bilanControles.avertissements[?(@.regle=='PIECES_EN_DOUBLE')]")).isEmpty();   // E1 : retiré
 
         remplirObligatoiresEtValider(idDmc, "QUANTITE_FIXE", "FOURNITURES_SERVICES", Map.of());
         int idDpao = JsonPath.<List<Integer>>read(documents(idDmc), "$[?(@.type=='DPAO' && @.extension=='docx')].idDocument").get(0);

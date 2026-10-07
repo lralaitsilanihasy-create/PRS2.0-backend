@@ -77,6 +77,7 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
     @Autowired private cnm.prs.service.StockageOffres stockage;
     @Autowired private cnm.prs.repository.PieceJointeDossierRepository pieceJointeDossierRepository;
     @Autowired private cnm.prs.seed.PointsCtrlDossierMarcheSeeder pointsCtrlSeeder;
+    @Autowired private cnm.prs.repository.AttributionRepository attributionRepository;
 
     private final LocalDate aujourdhui = LocalDate.now();
     private final List<String> comptes = new ArrayList<>();
@@ -623,6 +624,91 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
         seedPvSigne(9950, 9950);
         mvc.perform(get(att).header("Authorization", tokenPrmp)).andExpect(jsonPath("$.lots[0].etat").value("AVIS_RENDU"))
                 .andExpect(jsonPath("$.lots[0].dossierMarche.avis").value("FAV"));
+
+        // ⚠️ Tranche 2b (§B3) — l'attribution, à l'offre proposée par la CAO seule (Q4).
+        mvc.perform(post(att + "/lots/1/informer").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"dateAffichage\":\"" + aujourdhui + "\"}")).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("NON_ATTRIBUE"));
+        mvc.perform(post(att + "/lots/1/attribuer").header("Authorization", tokenUgpm).contentType(JSON).content("{}")).andExpect(status().isForbidden());
+        mvc.perform(post(att + "/lots/1/attribuer").header("Authorization", tokenPrmp).contentType(JSON).content("{\"idOffre\":\"" + b + "\"}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("OFFRE_NON_PROPOSEE"));
+        mvc.perform(post(att + "/lots/1/attribuer").header("Authorization", tokenPrmp).contentType(JSON).content("{}")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.lots[0].etat").value("ATTRIBUE")).andExpect(jsonPath("$.lots[0].attributaire.idOffre").value(a))
+                .andExpect(jsonPath("$.lots[0].attributaire.candidat").value("BTP Alpha"))
+                .andExpect(jsonPath("$.lots[0].attributaire.montant").value(12500000));
+        mvc.perform(post(att + "/lots/1/attribuer").header("Authorization", tokenPrmp).contentType(JSON).content("{}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("DEJA_ATTRIBUE"));
+        mvc.perform(get("/api/candidat/offres/" + b + "/resultat").header("Authorization", jetonB)).andExpect(status().isNotFound());
+
+        // §B4.1 — l'information : une lettre par candidat, signée de la PRMP ; le délai court de la plus tardive des deux dates (art. 78).
+        mvc.perform(post(att + "/lots/1/informer").header("Authorization", tokenPrmp).contentType(JSON).content("{}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("DATE_AFFICHAGE_OBLIGATOIRE"));
+        mvc.perform(post(att + "/lots/1/informer").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"dateAffichage\":\"" + aujourdhui.plusDays(1) + "\"}")).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("DATE_AFFICHAGE_INVALIDE"));
+        mvc.perform(post(att + "/lots/1/informer").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"dateAffichage\":\"" + aujourdhui + "\"}")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.lots[0].etat").value("INFORME")).andExpect(jsonPath("$.lots[0].information.lettres.length()").value(3))
+                .andExpect(jsonPath("$.lots[0].delaiAttente.debut").value(aujourdhui.toString()))
+                .andExpect(jsonPath("$.lots[0].delaiAttente.fin").value(aujourdhui.plusDays(10).toString()))
+                .andExpect(jsonPath("$.lots[0].delaiAttente.signableLe").value(aujourdhui.plusDays(11).toString()))
+                .andExpect(jsonPath("$.lots[0].delaiAttente.ecoule").value(false));
+        mvc.perform(post(att + "/lots/1/informer").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"dateAffichage\":\"" + aujourdhui + "\"}")).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("DEJA_INFORME"));
+        assertThat(notificationRepository.findAll()).filteredOn(n -> "C900000052".equals(n.getDestinataireRef()))
+                .extracting(Notification::getTypeNotif).contains("RESULTAT_DISPONIBLE");
+        assertThat(notificationRepository.findAll()).filteredOn(n -> "C900000051".equals(n.getDestinataireRef()))
+                .extracting(Notification::getTypeNotif).contains("ATTRIBUTION");
+        mvc.perform(get("/api/candidat/offres/" + b + "/resultat").header("Authorization", jetonA)).andExpect(status().isForbidden());
+        String resB = mvc.perform(get("/api/candidat/offres/" + b + "/resultat").header("Authorization", jetonB)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.retenu").value(false)).andExpect(jsonPath("$.attributaire").value("BTP Alpha"))
+                .andExpect(jsonPath("$.signableLe").value(aujourdhui.plusDays(11).toString())).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<String>read(resB, "$.motifRejet")).contains("Situation fiscale non régulière");
+        String lettreB = texteDuPdf(mvc.perform(get("/api/candidat/offres/" + b + "/resultat/lettre").header("Authorization", jetonB))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray()).replaceAll("\\s+", " ");
+        assertThat(lettreB).contains("LETTRE D'INFORMATION DU REJET DE L'OFFRE", "BTP Alpha", "12 500 000 Ariary hors taxes",
+                "Situation fiscale non régulière", "signé électroniquement sur la plateforme le", "art. 52-II", "modèle provisoire");
+        String lettreA = texteDuPdf(mvc.perform(get(att + "/lots/1/lettres/" + a).header("Authorization", tokenUgpm)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray()).replaceAll("\\s+", " ");
+        assertThat(lettreA).contains("LETTRE D'ATTRIBUTION", "votre offre est retenue");
+        mvc.perform(get(att).header("Authorization", tokenPrmp))
+                .andExpect(jsonPath("$.lots[0].information.lettres[?(@.idOffre == '" + b + "')].lueLe").isNotEmpty())
+                .andExpect(jsonPath("$.lots[0].information.lettres[?(@.idOffre == '" + c + "')].lueLe").value(org.hamcrest.Matchers.contains(
+                        org.hamcrest.Matchers.nullValue())));
+        mvc.perform(get("/api/procedures-en-ligne/" + idDmc + "/resultats")).andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].attributaire").value("BTP Alpha")).andExpect(jsonPath("$[0].montant").value(12500000));
+
+        // §B4.2 — les explications : le candidat non retenu demande, la PRMP répond par écrit.
+        mvc.perform(post("/api/candidat/offres/" + a + "/explication").header("Authorization", jetonA).contentType(JSON)
+                .content("{\"question\":\"?\"}")).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("OFFRE_RETENUE"));
+        mvc.perform(post("/api/candidat/offres/" + b + "/explication").header("Authorization", jetonB).contentType(JSON).content("{}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("QUESTION_OBLIGATOIRE"));
+        String ex = mvc.perform(post("/api/candidat/offres/" + b + "/explication").header("Authorization", jetonB).contentType(JSON)
+                .content("{\"question\":\"Quelle pièce fiscale manquait ?\"}")).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.etat").value("EN_ATTENTE")).andReturn().getResponse().getContentAsString();
+        long idEx = JsonPath.<Number>read(ex, "$.id").longValue();
+        assertThat(notificationRepository.findPourPrmp("PRMP001", null)).extracting(Notification::getTypeNotif).contains("EXPLICATION_DEMANDEE");
+        mvc.perform(multipart(att + "/explications/" + idEx + "/reponse").param("texte", "x").header("Authorization", tokenUgpm))
+                .andExpect(status().isForbidden());
+        mvc.perform(multipart(att + "/explications/" + idEx + "/reponse").file(new MockMultipartFile("fichier", "attestation.pdf",
+                "application/pdf", "%PDF-1.4 x".getBytes(StandardCharsets.ISO_8859_1))).param("texte", "L'attestation fiscale datait de plus de six mois.")
+                .header("Authorization", tokenPrmp)).andExpect(status().isOk()).andExpect(jsonPath("$.etat").value("REPONDUE"));
+        mvc.perform(multipart(att + "/explications/" + idEx + "/reponse").param("texte", "x").header("Authorization", tokenPrmp))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("DEJA_REPONDU"));
+        mvc.perform(get("/api/candidat/offres/" + b + "/explications").header("Authorization", jetonB))
+                .andExpect(jsonPath("$[0].reponse").value("L'attestation fiscale datait de plus de six mois."));
+        mvc.perform(get("/api/candidat/offres/" + b + "/explications/" + idEx + "/fichier").header("Authorization", jetonB)).andExpect(status().isOk());
+        mvc.perform(get(att).header("Authorization", jetonM2)).andExpect(jsonPath("$.lots[0].explications[0].etat").value("REPONDUE"));
+
+        // Le délai écoulé : le lot devient signable le lendemain du dixième jour franc.
+        cnm.prs.entity.Attribution attr = attributionRepository.findById(new cnm.prs.entity.Attribution.Cle(idDmc, 1)).orElseThrow();
+        attr.setInformeLe(attr.getInformeLe().minusDays(11));
+        attr.setDateAffichage(attr.getDateAffichage().minusDays(12));
+        attributionRepository.save(attr);
+        mvc.perform(get(att).header("Authorization", tokenPrmp)).andExpect(jsonPath("$.lots[0].etat").value("SIGNABLE"))
+                .andExpect(jsonPath("$.lots[0].delaiAttente.debut").value(aujourdhui.minusDays(11).toString()))
+                .andExpect(jsonPath("$.lots[0].delaiAttente.ecoule").value(true));
+        assertThat(journalRepository.findByIdDmcOrderByDateAscIdAsc(idDmc)).extracting(j -> j.getAction())
+                .contains("ATTRIBUTION", "INFORMATION", "LETTRE_LUE", "EXPLICATION_DEMANDEE", "EXPLICATION_REPONDUE");
         // La grille d'examen du dossier de marché, semée au démarrage là où la famille DDM existe.
         assertThat(pointsCtrlSeeder.semer()).isEqualTo(9);
         assertThat(pointsCtrlSeeder.semer()).isZero();

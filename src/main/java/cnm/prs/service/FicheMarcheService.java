@@ -1551,7 +1551,6 @@ public class FicheMarcheService {
         if (piecesApplicables(ctx)) {
             List<cnm.prs.dto.PieceExigeeDto> lues = pieces.pieces(fiche.getIdFiche());
             ControlesFicheMarche.piecesOffreExigees(ouverts, valeurs, PiecesFiche.compter(lues, PiecesFiche.OFFRE), bilan);
-            ControlesFicheMarche.piecesEnDouble(ouverts, valeurs, PiecesFiche.compter(lues, PiecesFiche.ADMINISTRATIVE), bilan);
             // ⚠️ 2026-10-06 (« A ») — en remise électronique, la liste ne se remplace pas par le texte.
             ControlesFicheMarche.piecesListees(cadrage, lues.size(), bilan);
         }

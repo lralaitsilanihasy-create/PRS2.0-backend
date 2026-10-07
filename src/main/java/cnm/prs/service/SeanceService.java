@@ -580,7 +580,7 @@ public class SeanceService {
                 nonOuvertes.add(new SeanceDto.NonOuverte(o.getNumero(), o.getRaisonSociale(), o.getEtat(),
                         Offre.ECARTEE.equals(o.getEtat()) ? o.getMotifEcartement() : Offre.RETIREE.equals(o.getEtat())
                                 ? "retirée par le soumissionnaire" + (o.getDateRetrait() == null ? "" : " le " + o.getDateRetrait().format(HORODATAGE))
-                                : "remplacée par l'offre " + o.getRemplaceePar()));
+                                : remplacement(toutes, o.getRemplaceePar())));
                 continue;
             }
             Map<String, Object> l = o.getLecture() == null ? Map.of() : mapper.readValue(o.getLecture(), new TypeReference<Map<String, Object>>() {
@@ -823,7 +823,9 @@ public class SeanceService {
     /** ⚠️ 2026-10-07 (lot 2, §B2.1) — le PV d'ouverture signé (version complète), nul sans PV signé. */
     @Transactional(readOnly = true)
     public byte[] pvSigne(Long idDmc) {
-        return seances.findById(idDmc).filter(s -> s.getPvSigneLe() != null).map(Seance::getPv).orElse(null);
+        // ⚠️ 2026-10-07 (constat D1 de la recette) — une séance close avant les signatures électroniques (V70) n'a pas de date de
+        // signature : son PV, figé à la clôture, est le PV définitif.
+        return seances.findById(idDmc).filter(s -> s.getPvSigneLe() != null || Seance.CLOSE.equals(s.getEtat())).map(Seance::getPv).orElse(null);
     }
 
     private JsonNode formulairesDe(Offre o) {
@@ -922,6 +924,16 @@ public class SeanceService {
         tracer(idDmc, "PV_SIGNE", quoi + " signé" + (publie ? ", publié" : ""));
         notifierPv(idDmc, publie && !Seance.ILLISIBLE.equals(s.getEtat()), TypeNotification.PV_OUVERTURE,
                 Character.toUpperCase(quoi.charAt(0)) + quoi.substring(1), "Le " + quoi + " de la procédure " + idDmc + " est signé.");
+    }
+
+    /**
+     * ⚠️ 2026-10-07 (constat C3 de la recette) — une offre remplacée se désigne par le numéro de l'offre qui la remplace, jamais par
+     * son identifiant technique : « remplacée par l'offre n° 4 ».
+     */
+    private static String remplacement(List<Offre> toutes, String idRemplacante) {
+        Integer numero = toutes.stream().filter(x -> x.getIdOffre().equals(idRemplacante)).map(Offre::getNumero).filter(java.util.Objects::nonNull)
+                .findFirst().orElse(null);
+        return numero == null ? "remplacée par une offre ultérieure du même candidat" : "remplacée par l'offre n° " + numero;
     }
 
     private String libellePv(Long idDmc, Seance s) {

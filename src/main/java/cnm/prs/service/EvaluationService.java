@@ -1332,9 +1332,22 @@ public class EvaluationService {
         }
         SeanceDto.OffreLue o = liste.stream().filter(x -> x.idOffre().equals(t.courante())).findFirst().orElseThrow();
         EvaluationDto.Montant m = montantDto(enVigueur(idDmc, EvaluationEtape.EVALUATION).get(o.idOffre()));
-        Object delai = o.acteEngagement() == null ? null : o.acteEngagement().get("delai");
         return new EvaluationDto.Proposition(o.idOffre(), o.numero(), o.entreprise().raisonSociale(), montantDuMarche(m),
-                m == null ? null : m.prixLuTtc(), delai == null ? null : String.valueOf(delai), false);
+                m == null ? null : m.prixLuTtc(), delaiLu(o.acteEngagement()), false);
+    }
+
+    /**
+     * ⚠️ 2026-10-07 (constats C2 et D2 de la recette) — le délai d'exécution de l'acte d'engagement avec son unité ({@code delaiUnite} :
+     * {@code JOURS}, {@code MOIS}…, en minuscules) : « 6 mois » ; nul sans délai.
+     */
+    static String delaiLu(Map<String, Object> acteEngagement) {
+        Object delai = acteEngagement == null ? null : acteEngagement.get("delai");
+        if (delai == null || String.valueOf(delai).isBlank()) {
+            return null;
+        }
+        Object unite = acteEngagement.get("delaiUnite");
+        return unite == null || String.valueOf(unite).isBlank() ? String.valueOf(delai)
+                : delai + " " + String.valueOf(unite).trim().toLowerCase(Locale.FRENCH);
     }
 
     private static Boolean qualifie(EvaluationDecision d) {
@@ -1594,7 +1607,7 @@ public class EvaluationService {
                         : o.evaluation().corrections().stream().filter(x -> Boolean.TRUE.equals(x.retenue())).toList();
                 for (EvaluationDto.Correction x : retenues) {
                     aucune = false;
-                    para(el, nom(o) + " : " + x.libelle() + " — " + lisible(x.avant()) + " → " + lisible(x.apres()) + " (" + x.regle() + ")");
+                    para(el, nom(o) + " : " + x.libelle() + " — de " + lisible(x.avant()) + " à " + lisible(x.apres()) + " (" + x.regle() + ")");
                 }
                 if (o.evaluation().refusCandidat() != null) {
                     aucune = false;

@@ -31,6 +31,8 @@ import lombok.Setter;
 public class Attribution {
 
     public static final String AU_CONTROLE = "AU_CONTROLE";
+    public static final String ATTRIBUE = "ATTRIBUE";
+    public static final String INFORME = "INFORME";
 
     @Id
     @Column(name = "ID_DMC", nullable = false)
@@ -54,6 +56,43 @@ public class Attribution {
 
     @Column(name = "DOSSIER_CREE_PAR", length = 100)
     private String dossierCreePar;
+
+    // ⚠️ V80 (tranche 2b, §B3, §B4.1) — le choix de l'attributaire et l'information des candidats.
+
+    @Column(name = "ID_OFFRE_ATTRIBUEE", length = 36)
+    private String idOffreAttribuee;
+
+    @Column(name = "ATTRIBUE_LE")
+    private LocalDateTime attribueLe;
+
+    @Column(name = "ATTRIBUE_PAR", length = 100)
+    private String attribuePar;
+
+    @Column(name = "MOTIF_ATTRIBUTION")
+    private String motifAttribution;
+
+    /** Le montant hors taxes du marché (prix corrigé − rabais), le TTC lu et le délai de l'offre attribuée, figés au choix. */
+    @Column(name = "MONTANT", precision = 18, scale = 2)
+    private java.math.BigDecimal montant;
+
+    @Column(name = "MONTANT_TTC", precision = 18, scale = 2)
+    private java.math.BigDecimal montantTtc;
+
+    @Column(name = "DELAI", length = 50)
+    private String delai;
+
+    @Column(name = "INFORME_LE")
+    private LocalDateTime informeLe;
+
+    @Column(name = "INFORME_PAR", length = 100)
+    private String informePar;
+
+    /** Le nom de la PRMP qui a signé les lettres (signature électronique simple, Q9). */
+    @Column(name = "SIGNATAIRE", length = 200)
+    private String signataire;
+
+    @Column(name = "DATE_AFFICHAGE")
+    private java.time.LocalDate dateAffichage;
 
     @Basic(fetch = FetchType.LAZY)
     @Column(name = "PROJET_PDF")
