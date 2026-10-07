@@ -76,6 +76,9 @@ import tools.jackson.databind.ObjectMapper;
  * ⚠️ <strong>Tranche 1c</strong> (§B4, §B5) : les indicateurs de prix (écarts à l'estimation et à la moyenne) ; aucune offre rejetée
  * pour prix anormal sans justification demandée par la PRMP, puis reçue ou expirée (art. 48) ; la post-qualification du premier classé,
  * puis du suivant s'il échoue, sur les seuls critères de la fiche (art. 20-II) ; la proposition d'attribution du lot, ou l'infructuosité.
+ * <p>
+ * ⚠️ <strong>Tranche 1d</strong> (§B6, §B7 ; V78) : le rapport d'évaluation (PDF et Word, plan du guide), signé par les membres hors
+ * conflit, avec leurs observations ; l'évaluation close à la dernière signature ; les compteurs de la PRMP et du membre de la CAO.
  */
 @Service
 @Transactional
@@ -119,13 +122,18 @@ public class EvaluationService {
     private final Clock horloge;
     private final cnm.prs.repository.LotRepository lotRepository;
     private final ValeursPpmService valeursPpm;
+    private final cnm.prs.repository.EvaluationRapportRepository rapports;
+    private final cnm.prs.repository.EvaluationSignatureRepository signatures;
+    private final GenerateurDocumentsFiche generateur;
+    private final cnm.prs.repository.CaoRepository caoRepository;
 
     public EvaluationService(EvaluationRepository evaluations, EvaluationDeclarationRepository declarations, EvaluationEtapeRepository etapes,
             EvaluationDecisionRepository decisions, EvaluationDemandeRepository demandes, EvaluationJournalRepository journal,
             cnm.prs.repository.EvaluationDepartageRepository departages, SeanceService seance, ParametresInternesService internes, CaoMembreRepository caoMembres, FicheMarcheService fiches,
             ProceduresEnLigneService procedures, CeremonieService ceremonies, NotificationService notifications, CompteCandidatRepository candidats, OffreRepository offres,
             DossierMecRepository dmcRepository, ParametreService parametres, ObjectMapper mapper, Clock horloge,
-            cnm.prs.repository.LotRepository lotRepository, ValeursPpmService valeursPpm) {
+            cnm.prs.repository.LotRepository lotRepository, ValeursPpmService valeursPpm, cnm.prs.repository.EvaluationRapportRepository rapports,
+            cnm.prs.repository.EvaluationSignatureRepository signatures, GenerateurDocumentsFiche generateur, cnm.prs.repository.CaoRepository caoRepository) {
         this.evaluations = evaluations;
         this.declarations = declarations;
         this.etapes = etapes;
@@ -148,6 +156,10 @@ public class EvaluationService {
         this.horloge = horloge;
         this.lotRepository = lotRepository;
         this.valeursPpm = valeursPpm;
+        this.rapports = rapports;
+        this.signatures = signatures;
+        this.generateur = generateur;
+        this.caoRepository = caoRepository;
     }
 
     // ------------------------------------------------------------------ §B1 l'évaluation
@@ -751,10 +763,10 @@ public class EvaluationService {
     public List<EvaluationDto.LigneTableau> tableau(Long idDmc, Integer lot) {
         exigerLecteur(idDmc);
         exigerEvaluation(idDmc);
-        List<SeanceDto.OffreLue> liste = parLot(idDmc).get(lot);
-        if (liste == null) {
-            throw new ResourceNotFoundException("Lot introuvable dans l'évaluation : " + lot + ".");
-        }
+        return tableauDe(idDmc, lot, exigerLot(idDmc, lot));
+    }
+
+    private List<EvaluationDto.LigneTableau> tableauDe(Long idDmc, Integer lot, List<SeanceDto.OffreLue> liste) {
         Map<String, EvaluationDecision> conformites = enVigueur(idDmc, EvaluationEtape.CONFORMITE);
         Map<String, EvaluationDecision> montants = enVigueur(idDmc, EvaluationEtape.EVALUATION);
         Map<String, EvaluationDecision> anormalesEnVigueur = enVigueur(idDmc, EvaluationEtape.ANORMALES);
@@ -1347,6 +1359,373 @@ public class EvaluationService {
         return liste;
     }
 
+    // ------------------------------------------------------------------ ⚠️ tranche 1d (§B6) : le rapport d'évaluation
+
+    private static final java.time.format.DateTimeFormatter HORODATAGE = java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy à HH:mm");
+
+    /**
+     * Produit le rapport (PDF et Word) : responsable de la procédure ; 409 {@code RAPPORT_DEJA_PRODUIT}, {@code ETAPES_INCOMPLETES}
+     * (détails : les lots dont une étape n'est pas arrêtée). Appelle à signer les membres de la CAO, hors ceux qui ont déclaré un conflit ;
+     * sans signataire, le rapport est signé d'office.
+     */
+    public EvaluationDto produireRapport(Long idDmc, EvaluationDto.RapportRequest r) {
+        exigerDmc(idDmc);
+        if (CurrentUser.profil().isEmpty() || !internes.estTitulaire(idDmc)) {
+            throw new AccessDeniedException("Le rapport d'évaluation se produit par le responsable de la procédure.");
+        }
+        Evaluation e = exigerEvaluation(idDmc);
+        if (!Evaluation.EN_COURS.equals(e.getEtat())) {
+            throw new BusinessRuleException("Le rapport d'évaluation est déjà produit.", "RAPPORT_DEJA_PRODUIT");
+        }
+        Map<Integer, List<SeanceDto.OffreLue>> parLot = parLot(idDmc);
+        List<Integer> incomplets = parLot.keySet().stream().filter(lot -> !arretees(idDmc, lot).keySet().containsAll(EvaluationEtape.ORDRE)).toList();
+        if (!incomplets.isEmpty()) {
+            throw new BusinessRuleException("Toutes les étapes de tous les lots ne sont pas arrêtées : lot(s) " + incomplets.stream().map(String::valueOf)
+                    .collect(Collectors.joining(", ")) + ".", "ETAPES_INCOMPLETES", null, Map.of("lots", incomplets));
+        }
+        Set<String> enConflit = declarations.findByIdDmcOrderBySigneeLeAscIdAsc(idDmc).stream().filter(d -> Boolean.TRUE.equals(d.getConflit()))
+                .map(EvaluationDeclaration::getIm).collect(Collectors.toSet());
+        List<String> signataires = internes.membresCao(idDmc).stream().filter(k -> !enConflit.contains(k)).toList();
+        cnm.prs.entity.EvaluationRapport rapport = new cnm.prs.entity.EvaluationRapport(idDmc, maintenant(), acteur(),
+                r == null ? null : nettoyer(r.observations()), signataires.isEmpty() ? null : String.join(",", signataires), null, null, null);
+        e.setEtat(Evaluation.RAPPORT_A_SIGNER);
+        evaluations.save(e);
+        generer(idDmc, e, rapport);
+        tracer(idDmc, "RAPPORT", "Rapport d'évaluation produit ; " + signataires.size() + " signature(s) attendue(s)");
+        if (signataires.isEmpty()) {
+            finaliser(idDmc, e, rapport);
+        } else {
+            for (String k : signataires) {
+                internes.notifierMembre(idDmc, k, TypeNotification.RAPPORT_A_SIGNER, "Rapport d'évaluation à signer", "Le rapport d'évaluation "
+                        + "des offres de la procédure " + idDmc + " est produit : relisez-le et signez-le sur la plateforme.");
+            }
+        }
+        return dto(idDmc, e);
+    }
+
+    /** Le rapport en PDF (ou en Word, {@code docx}) : CAO, responsable, PRMP, UGPM ; 404 tant qu'il n'est pas produit. */
+    @Transactional(readOnly = true)
+    public byte[] rapport(Long idDmc, boolean docx) {
+        exigerLecteur(idDmc);
+        cnm.prs.entity.EvaluationRapport r = rapports.findById(idDmc)
+                .orElseThrow(() -> new ResourceNotFoundException("Le rapport d'évaluation n'est pas produit."));
+        byte[] b = docx ? r.getDocx() : r.getPdf();
+        if (b == null) {
+            throw new ResourceNotFoundException("Le rapport d'évaluation n'est pas produit.");
+        }
+        return b;
+    }
+
+    /**
+     * La signature du rapport par un membre appelé (signature électronique simple), avec son observation (désaccord) : 403
+     * {@code NON_SIGNATAIRE} ; 409 {@code RAPPORT_NON_PRODUIT}, {@code DEJA_SIGNE}.
+     */
+    public EvaluationDto signerRapport(Long idDmc, EvaluationDto.SignatureRequest s) {
+        Evaluation e = exigerEvaluation(idDmc);
+        String k = membreAppelant(idDmc);
+        cnm.prs.entity.EvaluationRapport r = rapportASigner(idDmc);
+        if (k == null || !ChampFicheMarche.liste(r.getSignataires()).contains(k)) {
+            throw new AccesReserveException("Le rapport se signe par les membres de la commission appelés à le signer.", "NON_SIGNATAIRE");
+        }
+        if (signatures.existsByIdDmcAndIm(idDmc, k)) {
+            throw new BusinessRuleException("Vous avez déjà signé ce rapport.", "DEJA_SIGNE");
+        }
+        String observation = s == null ? null : nettoyer(s.observation());
+        signatures.save(new cnm.prs.entity.EvaluationSignature(null, idDmc, k, maintenant(), false, null, null, observation));
+        tracer(idDmc, "SIGNATURE", internes.nomMembre(k) + " a signé le rapport" + (observation == null ? "" : ", avec une observation : "
+                + observation));
+        apresSignature(idDmc, e, r);
+        return dto(idDmc, e);
+    }
+
+    /**
+     * L'empêchement d'un membre appelé, constaté par le président de la commission (ou le responsable), avec un motif porté au rapport :
+     * 400 {@code MOTIF_ABSENT}, {@code NON_SIGNATAIRE} ; 403 ; 409 {@code RAPPORT_NON_PRODUIT}, {@code DEJA_SIGNE}.
+     */
+    public EvaluationDto empechement(Long idDmc, EvaluationDto.EmpechementRequest x) {
+        Evaluation e = exigerEvaluation(idDmc);
+        String k = membreAppelant(idDmc);
+        boolean president = k != null && caoMembres.findByIdDmcOrderByRangAscIdMembreAsc(idDmc).stream()
+                .anyMatch(m -> k.equals(m.getIdCompte()) && Boolean.TRUE.equals(m.getPresident()));
+        boolean responsable = !president && CurrentUser.profil().isPresent() && internes.estTitulaire(idDmc);
+        if (!president && !responsable) {
+            throw new AccessDeniedException("L'empêchement d'un membre se constate par le président de la commission.");
+        }
+        cnm.prs.entity.EvaluationRapport r = rapportASigner(idDmc);
+        String motif = x == null ? null : nettoyer(x.motif());
+        if (motif == null) {
+            throw new BadRequestException("L'empêchement exige un motif, porté au rapport.", "MOTIF_ABSENT");
+        }
+        if (x.im() == null || !ChampFicheMarche.liste(r.getSignataires()).contains(x.im())) {
+            throw new BadRequestException("« " + x.im() + " » n'est pas appelé à signer ce rapport.", "NON_SIGNATAIRE");
+        }
+        if (signatures.existsByIdDmcAndIm(idDmc, x.im())) {
+            throw new BusinessRuleException("Ce membre a déjà signé le rapport (ou son empêchement est déjà constaté).", "DEJA_SIGNE");
+        }
+        String par = president ? internes.nomMembre(k) : internes.responsable(idDmc).map(rp -> rp.getNomResponsable()).orElse(null);
+        signatures.save(new cnm.prs.entity.EvaluationSignature(null, idDmc, x.im(), maintenant(), true, motif,
+                par == null ? null : par.length() > 100 ? par.substring(0, 100) : par, null));
+        tracer(idDmc, "EMPECHEMENT", internes.nomMembre(x.im()) + " empêché de signer le rapport : " + motif);
+        apresSignature(idDmc, e, r);
+        return dto(idDmc, e);
+    }
+
+    private cnm.prs.entity.EvaluationRapport rapportASigner(Long idDmc) {
+        cnm.prs.entity.EvaluationRapport r = rapports.findById(idDmc)
+                .orElseThrow(() -> new BusinessRuleException("Le rapport d'évaluation n'est pas produit.", "RAPPORT_NON_PRODUIT"));
+        if (r.getSigneLe() != null) {
+            throw new BusinessRuleException("Le rapport est déjà entièrement signé.", "DEJA_SIGNE");
+        }
+        return r;
+    }
+
+    private void apresSignature(Long idDmc, Evaluation e, cnm.prs.entity.EvaluationRapport r) {
+        Set<String> faites = signatures.findByIdDmcOrderByDateAscIdAsc(idDmc).stream().map(cnm.prs.entity.EvaluationSignature::getIm)
+                .collect(Collectors.toSet());
+        if (faites.containsAll(ChampFicheMarche.liste(r.getSignataires()))) {
+            finaliser(idDmc, e, r);
+        } else {
+            generer(idDmc, e, r);
+        }
+    }
+
+    /** La dernière signature : l'évaluation se clôt, le rapport se régénère avec toutes les signatures et se notifie. */
+    private void finaliser(Long idDmc, Evaluation e, cnm.prs.entity.EvaluationRapport r) {
+        r.setSigneLe(maintenant());
+        e.setEtat(Evaluation.CLOSE);
+        evaluations.save(e);
+        generer(idDmc, e, r);
+        tracer(idDmc, "RAPPORT_SIGNE", "Rapport d'évaluation signé : l'évaluation est close");
+        String titre = "Rapport d'évaluation signé";
+        String corps = "Le rapport d'évaluation des offres de la procédure " + idDmc + " est signé par la commission : il porte la proposition "
+                + "d'attribution.";
+        ceremonies.notifierPrmp(idDmc, TypeNotification.RAPPORT_EVALUATION, titre, corps);
+        internes.membresCao(idDmc).forEach(k -> internes.notifierMembre(idDmc, k, TypeNotification.RAPPORT_EVALUATION, titre, corps));
+    }
+
+    private void generer(Long idDmc, Evaluation e, cnm.prs.entity.EvaluationRapport r) {
+        rapports.saveAndFlush(r);
+        for (GenerateurDocumentsFiche.Fichier f : generateur.generer(document(idDmc, e, r))) {
+            if ("pdf".equals(f.extension())) {
+                r.setPdf(f.contenu());
+            } else if ("docx".equals(f.extension())) {
+                r.setDocx(f.contenu());
+            }
+        }
+        rapports.save(r);
+    }
+
+    /** Le rapport, sur le plan du guide (§B6) : références, plis, étapes 2 à 5 lot par lot, proposition, signatures, annexes. */
+    private DocumentLibre document(Long idDmc, Evaluation e, cnm.prs.entity.EvaluationRapport r) {
+        EvaluationDto ev = dto(idDmc, e);
+        List<DocumentLibre.Element> el = new ArrayList<>();
+        el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.TITRE, "RAPPORT D'ÉVALUATION DES OFFRES"));
+        el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.CENTRE, "(offres remises en ligne)"));
+        el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.VIDE, ""));
+        FicheMarcheService.EtatVersion v = fiches.etatValide(idDmc).orElse(null);
+        sous(el, "1. Références du marché et de la commission");
+        if (v != null) {
+            String numero = v.etat().getValeurs() == null ? null : nettoyer(v.etat().getValeurs().get("B02-OB-03"));
+            para(el, "Dossier d'appel d'offres" + (numero == null ? "" : " n° " + numero) + " — " + Objects.toString(v.etat().getDesignationMarche(), ""));
+            try {
+                String entite = valeursPpm.lire(v.etat().getIdDetail()).valeurs().get("ENTITE");
+                if (entite != null) {
+                    para(el, "Autorité contractante : " + entite);
+                }
+            } catch (RuntimeException ignore) {
+                // l'autorité contractante est facultative au rapport
+            }
+        }
+        caoRepository.findById(idDmc).filter(c -> c.getDecisionReference() != null).ifPresent(c -> para(el, "Commission d'appel d'offres désignée "
+                + "par la décision n° " + c.getDecisionReference() + (c.getDecisionDate() == null ? "" : " du "
+                        + c.getDecisionDate().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy"))) + "."));
+        for (EvaluationDto.Declaration d : ev.declarations()) {
+            para(el, (d.president() ? "Président : " : "Membre : ") + d.nom());
+        }
+        sous(el, "2. Plis reçus");
+        int ouvertes = ev.lots().stream().mapToInt(l -> l.offres().size()).sum();
+        para(el, (ouvertes + ev.nonEvaluees().size()) + " offre(s) reçue(s), dont " + ouvertes + " ouverte(s) et évaluée(s) ; le détail de "
+                + "l'ouverture figure au procès-verbal d'ouverture des plis.");
+        for (EvaluationDto.NonEvaluee n : ev.nonEvaluees()) {
+            para(el, "Offre n° " + n.numero() + " — " + n.entreprise() + " : non évaluée (" + n.etat() + (n.motif() == null ? "" : ", " + n.motif()) + ").");
+        }
+        boolean plusieurs = ev.lots().size() > 1;
+        for (EvaluationDto.Lot l : ev.lots()) {
+            String p = plusieurs ? " — lot " + l.lot() : "";
+            sous(el, "3. Examen préliminaire" + p);
+            for (EvaluationDto.OffreEvaluee o : l.offres()) {
+                EvaluationDto.Conformite c = o.conformite();
+                para(el, nom(o) + " : " + (EvaluationDecision.CONFORME.equals(c.decision()) ? "conforme pour l'essentiel"
+                        : "écartée, " + Objects.toString(c.qualification(), "").toLowerCase(Locale.FRENCH).replace('_', ' ') + " — " + c.motif()
+                                + " (" + c.clause() + ")"));
+            }
+            sous(el, "4. Corrections arithmétiques" + p);
+            boolean aucune = true;
+            for (EvaluationDto.OffreEvaluee o : l.offres()) {
+                if (o.evaluation() == null) {
+                    continue;
+                }
+                List<EvaluationDto.Correction> retenues = o.evaluation().corrections() == null ? List.of()
+                        : o.evaluation().corrections().stream().filter(x -> Boolean.TRUE.equals(x.retenue())).toList();
+                for (EvaluationDto.Correction x : retenues) {
+                    aucune = false;
+                    para(el, nom(o) + " : " + x.libelle() + " — " + lisible(x.avant()) + " → " + lisible(x.apres()) + " (" + x.regle() + ")");
+                }
+                if (o.evaluation().refusCandidat() != null) {
+                    aucune = false;
+                    para(el, nom(o) + " : le candidat refuse la correction — " + o.evaluation().refusCandidat().motif() + " ("
+                            + o.evaluation().refusCandidat().clause() + "). L'offre est écartée.");
+                }
+            }
+            if (aucune) {
+                para(el, "Aucune correction retenue.");
+            }
+            sous(el, "5. Montant évalué et classement (hors taxes)" + p);
+            for (EvaluationDto.LigneTableau t : tableauSansGarde(idDmc, l.lot())) {
+                para(el, (t.rang() == null ? "Non classée" : "Rang " + t.rang()) + " — offre n° " + t.numero() + " (" + t.candidat() + ") : prix lu "
+                        + lisible(t.prixLu()) + (t.prixCorrige() == null ? "" : ", corrigé " + lisible(t.prixCorrige()) + ", rabais " + lisible(t.rabais())
+                                + ", ajustements " + lisible(t.ajustements()) + ", montant évalué " + lisible(t.montantEvalue()))
+                        + (t.motifRejet() == null ? "" : " — écartée : " + t.motifRejet()));
+            }
+            sous(el, "6. Offres anormalement basses ou hautes" + p);
+            boolean suspectes = false;
+            for (EvaluationDto.OffreEvaluee o : l.offres()) {
+                EvaluationDto.Anormale a = o.anormale();
+                if (a == null || !Boolean.TRUE.equals(a.suspectee())) {
+                    continue;
+                }
+                suspectes = true;
+                para(el, nom(o) + " : suspectée (" + a.motif() + ") ; décision : " + a.decision().toLowerCase(Locale.FRENCH)
+                        + (a.justification() == null ? "" : " ; justification demandée le " + a.justification().demandeeLe().format(HORODATAGE)
+                                + (a.justification().reponse() == null ? ", sans réponse" : ", réponse : « " + a.justification().reponse() + " »")));
+            }
+            if (!suspectes) {
+                para(el, "Aucune offre n'a été suspectée.");
+            }
+            sous(el, "7. Post-qualification" + p);
+            for (EvaluationDto.OffreEvaluee o : l.offres()) {
+                EvaluationDto.Qualification q = o.qualification();
+                if (q == null || q.decision() == null) {
+                    continue;
+                }
+                List<String> echecs = q.criteres().stream().filter(c -> NON_SATISFAIT.equals(c.decision()))
+                        .map(c -> c.libelle() + " : " + c.motif()).toList();
+                para(el, nom(o) + " : " + (QUALIFIE.equals(q.decision()) ? "qualifiée" : "non qualifiée — " + q.motif() + " (" + q.clause() + ")")
+                        + (echecs.isEmpty() ? "" : " ; critères non satisfaits : " + String.join(" ; ", echecs)));
+            }
+            sous(el, "8. Proposition d'attribution" + p);
+            EvaluationDto.Proposition pr = l.proposition();
+            para(el, pr == null || pr.infructueux() ? "Aucune offre n'est qualifiée : la commission propose de déclarer le lot infructueux."
+                    : "La commission propose d'attribuer le marché à " + pr.candidat() + " (offre n° " + pr.numero() + "), pour un montant de "
+                            + lisible(pr.montant()) + " Ariary hors taxes" + (pr.delai() == null ? "" : ", délai : " + pr.delai()) + ".");
+        }
+        if (r.getObservations() != null) {
+            sous(el, "Observations");
+            para(el, r.getObservations());
+        }
+        sous(el, "9. Signatures des membres de la commission");
+        Map<String, cnm.prs.entity.EvaluationSignature> signees = new LinkedHashMap<>();
+        signatures.findByIdDmcOrderByDateAscIdAsc(idDmc).forEach(x -> signees.put(x.getIm(), x));
+        for (EvaluationDto.Declaration d : ev.declarations()) {
+            if (!ChampFicheMarche.liste(r.getSignataires()).contains(d.membre())) {
+                continue;
+            }
+            cnm.prs.entity.EvaluationSignature x = signees.get(d.membre());
+            String qui = d.nom() + " (" + (d.president() ? "Président" : "Membre") + " de la commission)";
+            para(el, x == null ? qui + " — signature attendue"
+                    : Boolean.TRUE.equals(x.getEmpechement()) ? qui + " — empêché de signer : " + x.getMotif()
+                            + (x.getConstatePar() == null ? "" : " (constaté par " + x.getConstatePar() + " le " + x.getDate().format(HORODATAGE) + ")")
+                    : qui + " — signé électroniquement sur la plateforme le " + x.getDate().format(HORODATAGE)
+                            + (x.getObservation() == null ? "" : ". Observation : " + x.getObservation()));
+        }
+        sous(el, "Annexe 1 — Déclarations d'absence de conflit d'intérêts et de confidentialité");
+        for (EvaluationDto.Declaration d : ev.declarations()) {
+            para(el, d.nom() + " : " + (d.signeeLe() == null ? "non signée" : "signée le " + d.signeeLe().format(HORODATAGE)
+                    + (Boolean.TRUE.equals(d.conflit()) ? ", conflit d'intérêts déclaré" + (d.precision() == null ? "" : " (" + d.precision() + ")")
+                            + " : n'a pris part à aucune décision" : ", absence de conflit d'intérêts")));
+        }
+        sous(el, "Annexe 2 — Demandes de précisions et de justification, et réponses");
+        List<EvaluationDemande> toutes = demandes.findByIdDmcOrderByDemandeeLeAscIdAsc(idDmc);
+        if (toutes.isEmpty()) {
+            para(el, "Aucune demande n'a été adressée aux candidats.");
+        }
+        Map<String, Integer> numeros = new HashMap<>();
+        ev.lots().forEach(l -> l.offres().forEach(o -> numeros.put(o.idOffre(), o.numero())));
+        for (EvaluationDemande x : toutes) {
+            para(el, (EvaluationDemande.JUSTIFICATION.equals(x.getType()) ? "Justification du prix" : "Précisions") + ", offre n° "
+                    + numeros.get(x.getIdOffre()) + ", demandée le " + x.getDemandeeLe().format(HORODATAGE) + " : « " + x.getQuestion() + " » — "
+                    + (x.getReponduLe() == null ? "sans réponse" : "réponse du " + x.getReponduLe().format(HORODATAGE) + " : « " + x.getReponse() + " »"
+                            + (x.getReponseNom() == null ? "" : " (pièce jointe : " + x.getReponseNom() + ")")));
+        }
+        return new DocumentLibre("RAPPORT_EVALUATION", null, el, "Procédure " + idDmc + " — rapport d'évaluation des offres");
+    }
+
+    /** Le tableau du lot sans garde d'accès (le rapport l'imprime). */
+    private List<EvaluationDto.LigneTableau> tableauSansGarde(Long idDmc, Integer lot) {
+        return tableauDe(idDmc, lot, exigerLot(idDmc, lot));
+    }
+
+    private static String nom(EvaluationDto.OffreEvaluee o) {
+        return "Offre n° " + o.numero() + " (" + o.entreprise().raisonSociale() + ")";
+    }
+
+    private static String lisible(java.math.BigDecimal m) {
+        return m == null ? "—" : FormulairesEnLigne.lisible(m);
+    }
+
+    private static void sous(List<DocumentLibre.Element> el, String t) {
+        el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.SOUS_TITRE, t));
+    }
+
+    private static void para(List<DocumentLibre.Element> el, String t) {
+        el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.PARA, t));
+    }
+
+    private EvaluationDto.Rapport rapportDto(Long idDmc) {
+        cnm.prs.entity.EvaluationRapport r = rapports.findById(idDmc).orElse(null);
+        if (r == null) {
+            return null;
+        }
+        Set<String> presidents = caoMembres.findByIdDmcOrderByRangAscIdMembreAsc(idDmc).stream().filter(m -> Boolean.TRUE.equals(m.getPresident()))
+                .map(CaoMembre::getIdCompte).filter(Objects::nonNull).collect(Collectors.toSet());
+        List<EvaluationDto.SignatureRapport> faites = new ArrayList<>();
+        Set<String> deja = new java.util.HashSet<>();
+        for (cnm.prs.entity.EvaluationSignature x : signatures.findByIdDmcOrderByDateAscIdAsc(idDmc)) {
+            deja.add(x.getIm());
+            faites.add(new EvaluationDto.SignatureRapport(x.getIm(), internes.nomMembre(x.getIm()), presidents.contains(x.getIm()), x.getDate(),
+                    Boolean.TRUE.equals(x.getEmpechement()), x.getMotif(), x.getConstatePar(), x.getObservation()));
+        }
+        List<EvaluationDto.Attendue> attendues = ChampFicheMarche.liste(r.getSignataires()).stream().filter(k -> !deja.contains(k))
+                .map(k -> new EvaluationDto.Attendue(k, internes.nomMembre(k))).toList();
+        return new EvaluationDto.Rapport(r.getProduitLe(), r.getObservations(), r.getSigneLe() != null, r.getSigneLe(), faites, attendues);
+    }
+
+    // ------------------------------------------------------------------ ⚠️ tranche 1d (§B7) : les compteurs
+
+    /**
+     * Les compteurs d'un membre de la CAO pour {@code /api/kpis/badges} : {@code evaluationsEnCours} (ses procédures dont l'évaluation
+     * est en cours) et {@code rapportsASigner} (les rapports produits qu'il doit encore signer).
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Long> compteursMembre(String im) {
+        if (im == null || im.isBlank()) {
+            return Map.of("evaluationsEnCours", 0L, "rapportsASigner", 0L);
+        }
+        List<Long> procedures = caoMembres.findByIdCompteOrderByIdDmcDesc(im).stream().filter(CaoMembre::estMembre).map(CaoMembre::getIdDmc)
+                .distinct().toList();
+        long enCours = procedures.stream().map(evaluations::findById).filter(x -> x.isPresent() && Evaluation.EN_COURS.equals(x.get().getEtat()))
+                .count();
+        long aSigner = rapports.findBySigneLeIsNull().stream().filter(r -> ChampFicheMarche.liste(r.getSignataires()).contains(im))
+                .filter(r -> !signatures.existsByIdDmcAndIm(r.getIdDmc(), im)).count();
+        return Map.of("evaluationsEnCours", enCours, "rapportsASigner", aSigner);
+    }
+
+    /** Les demandes d'évaluation sans réponse dont le délai court, sur les fiches de la PRMP (compteur de la PRMP). */
+    @Transactional(readOnly = true)
+    public long demandesEnAttentePourPrmp(String idPrmp) {
+        return idPrmp == null || idPrmp.isBlank() ? 0 : demandes.compterEnAttentePourPrmp(idPrmp, maintenant());
+    }
+
     // ------------------------------------------------------------------ la vue
 
     private EvaluationDto dto(Long idDmc, Evaluation e) {
@@ -1419,7 +1798,7 @@ public class EvaluationService {
         });
         List<EvaluationDto.NonEvaluee> non = lecture.nonOuvertes().stream()
                 .map(n -> new EvaluationDto.NonEvaluee(n.numero(), n.entreprise(), n.etat(), n.motif())).toList();
-        return new EvaluationDto(idDmc, e.getEtat(), e.getOuverteLe(), e.getOuvertePar(), decl, lots, non);
+        return new EvaluationDto(idDmc, e.getEtat(), e.getOuverteLe(), e.getOuvertePar(), decl, lots, non, rapportDto(idDmc));
     }
 
     private EvaluationDto.Demande demandeDto(EvaluationDemande x, Integer numero) {

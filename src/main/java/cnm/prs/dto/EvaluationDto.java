@@ -10,7 +10,7 @@ import java.util.List;
  * dépôt, retirées, remplacées) figurent à part, sans être évaluées (H3).
  */
 public record EvaluationDto(Long idDmc, String etat, LocalDateTime ouverteLe, String ouvertePar, List<Declaration> declarations,
-        List<Lot> lots, List<NonEvaluee> nonEvaluees) {
+        List<Lot> lots, List<NonEvaluee> nonEvaluees, Rapport rapport) {
 
     /** Un membre de la CAO et sa déclaration préalable ({@code signeeLe} nul : pas encore signée). */
     public record Declaration(String membre, String nom, boolean president, LocalDateTime signeeLe, Boolean conflit, String precision) {
@@ -207,6 +207,35 @@ public record EvaluationDto(Long idDmc, String etat, LocalDateTime ouverteLe, St
      */
     public record Proposition(String idOffre, Integer numero, String candidat, BigDecimal montant, BigDecimal montantTtc, String delai,
             boolean infructueux) {
+    }
+
+    // ------------------------------------------------------------------ ⚠️ tranche 1d (§B6) : le rapport d'évaluation
+
+    /**
+     * Le rapport d'évaluation : nul tant qu'il n'est pas produit ; {@code signe} à la dernière signature (l'évaluation est alors
+     * {@code CLOSE}) ; {@code signatures} faites (ou empêchements constatés) et {@code signaturesAttendues}.
+     */
+    public record Rapport(LocalDateTime produitLe, String observations, boolean signe, LocalDateTime signeLe, List<SignatureRapport> signatures,
+            List<Attendue> signaturesAttendues) {
+    }
+
+    public record SignatureRapport(String im, String nom, boolean president, LocalDateTime date, boolean empechement, String motif,
+            String constatePar, String observation) {
+    }
+
+    public record Attendue(String im, String nom) {
+    }
+
+    /** {@code POST …/rapport} : les observations du responsable. */
+    public record RapportRequest(String observations) {
+    }
+
+    /** {@code POST …/rapport/signer} : l'observation du membre (désaccord), facultative. */
+    public record SignatureRequest(String observation) {
+    }
+
+    /** {@code POST …/rapport/empechement}. */
+    public record EmpechementRequest(String im, String motif) {
     }
 
     /** Une ligne du journal de l'évaluation. */

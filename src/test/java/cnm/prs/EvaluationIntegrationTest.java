@@ -530,6 +530,56 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(JsonPath.<List<Object>>read(tableau, "$[*].qualifie")).containsExactly(false, true, null);
         assertThat(journalRepository.findByIdDmcOrderByDateAscIdAsc(idDmc)).extracting(j -> j.getAction())
                 .contains("ANORMALE", "JUSTIFICATION_DEMANDEE", "JUSTIFICATION_RECUE", "QUALIFICATION");
+
+        // ⚠️ Tranche 1d (§B6) — le rapport : produit par le responsable, signé par les membres appelés (observation, empêchement).
+        mvc.perform(get(base + "/rapport").header("Authorization", tokenPrmp)).andExpect(status().isNotFound());
+        mvc.perform(post(base + "/rapport").header("Authorization", jetonM1).contentType(JSON).content("{}")).andExpect(status().isForbidden());
+        mvc.perform(post(base + "/rapport/signer").header("Authorization", jetonM1).contentType(JSON).content("{}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("RAPPORT_NON_PRODUIT"));
+        String r = mvc.perform(post(base + "/rapport").header("Authorization", tokenVer).contentType(JSON)
+                .content("{\"observations\":\"Évaluation conduite sans incident.\"}")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.etat").value("RAPPORT_A_SIGNER")).andExpect(jsonPath("$.rapport.signe").value(false))
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(r, "$.rapport.signaturesAttendues[*].im")).containsExactly(comptes.get(0), comptes.get(1));
+        mvc.perform(post(base + "/rapport").header("Authorization", tokenVer).contentType(JSON).content("{}")).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("RAPPORT_DEJA_PRODUIT"));
+        anormale(a, "{\"suspectee\":false}").andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("EVALUATION_CLOSE"));
+        mvc.perform(post(base + "/lots/1/etapes/QUALIFICATION/rouvrir").header("Authorization", jetonM1).contentType(JSON)
+                .content("{\"motif\":\"x\"}")).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("RAPPORT_SIGNE"));
+        assertThat(notificationRepository.findPourRefEtType(comptes.get(1), "MEMBRE_CAO")).extracting(Notification::getTypeNotif)
+                .contains("RAPPORT_A_SIGNER");
+        mvc.perform(get("/api/kpis/badges").header("Authorization", jetonM2)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.compteurs.rapportsASigner").value(1)).andExpect(jsonPath("$.compteurs.evaluationsEnCours").value(0));
+        mvc.perform(get("/api/kpis/badges").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.compteurs.demandesEvaluationEnAttente").value(0));
+        String pdf = texteDuPdf(mvc.perform(get(base + "/rapport").header("Authorization", tokenUgpm)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray());
+        assertThat(pdf.replaceAll("\\s+", " ")).contains("RAPPORT D'ÉVALUATION DES OFFRES", "3. Examen préliminaire", "Rang 1 — offre n° 2",
+                "Justification du prix", "Stock acquis l'an dernier.", "non qualifiée — Situation fiscale non régulière (IC 6.3)",
+                "La commission propose d'attribuer le marché à BTP Alpha (offre n° 1), pour un montant de 12 500 000 Ariary hors taxes",
+                "Évaluation conduite sans incident.", "signature attendue", "absence de conflit d'intérêts");
+        byte[] docx = mvc.perform(get(base + "/rapport").param("format", "docx").header("Authorization", jetonM2)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray();
+        assertThat(new String(docx, 0, 2, StandardCharsets.ISO_8859_1)).isEqualTo("PK");
+        mvc.perform(post(base + "/rapport/signer").header("Authorization", tokenPrmp).contentType(JSON).content("{}")).andExpect(status().isForbidden());
+        mvc.perform(post(base + "/rapport/signer").header("Authorization", jetonM1).contentType(JSON)
+                .content("{\"observation\":\"Réserve sur le délai d'exécution proposé.\"}")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.rapport.signatures[0].observation").value("Réserve sur le délai d'exécution proposé."));
+        mvc.perform(post(base + "/rapport/signer").header("Authorization", jetonM1).contentType(JSON).content("{}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("DEJA_SIGNE"));
+        mvc.perform(post(base + "/rapport/empechement").header("Authorization", jetonM2).contentType(JSON)
+                .content("{\"im\":\"" + comptes.get(1) + "\",\"motif\":\"x\"}")).andExpect(status().isForbidden());
+        mvc.perform(post(base + "/rapport/empechement").header("Authorization", jetonM1).contentType(JSON)
+                .content("{\"im\":\"" + comptes.get(1) + "\"}")).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("MOTIF_ABSENT"));
+        mvc.perform(post(base + "/rapport/empechement").header("Authorization", jetonM1).contentType(JSON)
+                .content("{\"im\":\"" + comptes.get(1) + "\",\"motif\":\"En mission\"}")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.etat").value("CLOSE")).andExpect(jsonPath("$.rapport.signe").value(true))
+                .andExpect(jsonPath("$.rapport.signaturesAttendues.length()").value(0));
+        assertThat(texteDuPdf(mvc.perform(get(base + "/rapport").header("Authorization", tokenPrmp)).andReturn().getResponse().getContentAsByteArray())
+                .replaceAll("\\s+", " ")).contains("Observation : Réserve sur le délai d'exécution proposé.", "empêché de signer : En mission")
+                .doesNotContain("signature attendue");
+        assertThat(notificationRepository.findPourPrmp("PRMP001", null)).extracting(Notification::getTypeNotif).contains("RAPPORT_EVALUATION");
+        mvc.perform(get("/api/kpis/badges").header("Authorization", jetonM2)).andExpect(jsonPath("$.compteurs.rapportsASigner").value(0));
     }
 
     // ------------------------------------------------------------------ outils

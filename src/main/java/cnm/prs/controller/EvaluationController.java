@@ -127,6 +127,35 @@ public class EvaluationController {
         return service.qualifier(idDmc, idOffre, corps);
     }
 
+    /** ⚠️ Tranche 1d (§B6) — le responsable produit le rapport ; 409 {@code ETAPES_INCOMPLETES}, {@code RAPPORT_DEJA_PRODUIT}. */
+    @PostMapping("/rapport")
+    public EvaluationDto produireRapport(@PathVariable Long idDmc, @RequestBody(required = false) EvaluationDto.RapportRequest corps) {
+        return service.produireRapport(idDmc, corps);
+    }
+
+    /** Le rapport en PDF, ou en Word ({@code ?format=docx}) ; 404 tant qu'il n'est pas produit. */
+    @GetMapping("/rapport")
+    public ResponseEntity<byte[]> rapport(@PathVariable Long idDmc, @org.springframework.web.bind.annotation.RequestParam(required = false) String format) {
+        boolean docx = "docx".equalsIgnoreCase(format);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, Telechargements.disposition("rapport-evaluation-" + idDmc + (docx ? ".docx" : ".pdf")))
+                .contentType(docx ? MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+                        : MediaType.APPLICATION_PDF)
+                .body(service.rapport(idDmc, docx));
+    }
+
+    /** La signature d'un membre appelé, avec son observation ; 403 {@code NON_SIGNATAIRE} ; 409 {@code RAPPORT_NON_PRODUIT}, {@code DEJA_SIGNE}. */
+    @PostMapping("/rapport/signer")
+    public EvaluationDto signerRapport(@PathVariable Long idDmc, @RequestBody(required = false) EvaluationDto.SignatureRequest corps) {
+        return service.signerRapport(idDmc, corps);
+    }
+
+    /** L'empêchement d'un membre, constaté par le président ; 400 {@code MOTIF_ABSENT}, {@code NON_SIGNATAIRE}. */
+    @PostMapping("/rapport/empechement")
+    public EvaluationDto empechement(@PathVariable Long idDmc, @RequestBody EvaluationDto.EmpechementRequest corps) {
+        return service.empechement(idDmc, corps);
+    }
+
     /** 201 ; PRMP de la fiche (art. 35-VI). */
     @PostMapping("/offres/{idOffre}/precisions")
     public ResponseEntity<EvaluationDto.Demande> demanderPrecisions(@PathVariable Long idDmc, @PathVariable String idOffre,

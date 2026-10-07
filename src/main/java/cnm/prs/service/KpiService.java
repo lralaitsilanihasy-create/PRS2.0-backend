@@ -104,6 +104,8 @@ public class KpiService {
 
     /** ⚠️ 2026-10-06 (compteurs, §B1) — les reçus de frais de dossier à valider. */
     private final cnm.prs.repository.RecuDaoRepository recuRepository;
+    /** ⚠️ 2026-10-07 (évaluation des offres, §B7) — les compteurs de l'évaluation (PRMP, membre de la CAO), à la demande. */
+    private final org.springframework.beans.factory.ObjectProvider<EvaluationService> evaluation;
 
     public KpiService(DossierRepository dossierRepository, VerificationRepository verificationRepository,
             ExamenDetailRepository examenDetailRepository, PvExamenRepository pvExamenRepository,
@@ -113,8 +115,10 @@ public class KpiService {
             AuditLogRepository auditLogRepository, DemandeRetraitVueRepository demandeRetraitVueRepository,
             PrmpEntiteDemandeRepository prmpEntiteDemandeRepository,
             MandatRepository mandatRepository, SessionUtilisateurRepository sessionRepository,
-            AFaireService aFaireService, cnm.prs.repository.RecuDaoRepository recuRepository) {
+            AFaireService aFaireService, cnm.prs.repository.RecuDaoRepository recuRepository,
+            org.springframework.beans.factory.ObjectProvider<EvaluationService> evaluation) {
         this.recuRepository = recuRepository;
+        this.evaluation = evaluation;
         this.aFaireService = aFaireService;
         this.demandeRetraitVueRepository = demandeRetraitVueRepository;
         this.prmpEntiteDemandeRepository = prmpEntiteDemandeRepository;
@@ -176,6 +180,8 @@ public class KpiService {
             case ASSISTANT_CONTROLEUR -> mesCompteursAssistant();
             case CHARGE_PUBLICATION -> mesCompteursPublication();
             case ADMINISTRATEUR -> mesCompteursAdmin();
+            // ⚠️ 2026-10-07 (évaluation des offres, §B7) — le membre de la CAO : ses évaluations en cours et ses rapports à signer.
+            case MEMBRE_CAO -> evaluation.getObject().compteursMembre(CurrentUser.ref().orElse(null));
             default -> Map.of();
         };
         // ⚠️ 2026-09-15 — badge de l'accueil « À faire » : compteurs.aFaire du même calcul (lignes titulaires, hors
@@ -191,7 +197,7 @@ public class KpiService {
     public CompteursPrmpDto mesCompteursPrmp() {
         String idPrmp = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
         if (idPrmp == null) {
-            return new CompteursPrmpDto(0, 0, 0, 0, 0, 0, 0);
+            return new CompteursPrmpDto(0, 0, 0, 0, 0, 0, 0, 0);
         }
         // ⚠️ Décision métier 2026-08-27 — les lettres non lues se comptent par AGENT (login, claim
         // « sub ») et non plus par tutelle : la lecture d'une UGPM ne décrémente plus le badge de sa
@@ -209,7 +215,8 @@ public class KpiService {
                         List.of(StatutDossier.PV_SIGNE.name(), StatutDossier.CLOTURE.name()), idPrmp),
                 lettreRenvoiRepository.countSigneesNonLuesPourPrmp(idPrmp, login),
                 demandeRetraitRepository.countNouvellesDecisionsPourPrmp(idPrmp, seuil),
-                recuRepository.compterEnAttentePourPrmp(idPrmp));
+                recuRepository.compterEnAttentePourPrmp(idPrmp),
+                evaluation.getObject().demandesEnAttentePourPrmp(idPrmp));
     }
 
     /**

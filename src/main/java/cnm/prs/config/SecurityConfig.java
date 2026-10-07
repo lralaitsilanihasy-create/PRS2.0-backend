@@ -193,6 +193,13 @@ public class SecurityConfig {
                     auth.requestMatchers("/api/fiches-marche/*/seance", "/api/fiches-marche/*/seance/**").hasAnyRole("MEMBRE_CAO", "DEPOSITAIRE", "PRMP",
                             "UGPM", "PRESIDENT", "CHEF_COMMISSION", "SECRETAIRE", "MEMBRE", "VERIFICATEUR", "ASSISTANT_CONTROLEUR",
                             "CHARGE_PUBLICATION", "ADMINISTRATEUR");
+                    // ⚠️ 2026-10-07 (évaluation des offres, §B7) — les badges servent aussi le membre de la CAO (ses évaluations en
+                    // cours, ses rapports à signer) ; la réponse ne porte que les compteurs du rôle appelant. Les autres comptes
+                    // internes y gardent leur accès (règle INTERNE).
+                    auth.requestMatchers(HttpMethod.GET, "/api/kpis/badges").access((authentification, contexte) ->
+                            new org.springframework.security.authorization.AuthorizationDecision(
+                                    INTERNE.authorize(authentification, contexte).isGranted() || authentification.get().getAuthorities().stream()
+                                            .anyMatch(g -> "ROLE_MEMBRE_CAO".equals(g.getAuthority()))));
                     // ⚠️ 2026-10-07 (évaluation des offres, §B7) — l'évaluation : les membres de la CAO y décident (garde par
                     // identité dans le service : déclaration préalable, président), le responsable l'ouvre, la PRMP et l'UGPM lisent.
                     auth.requestMatchers("/api/fiches-marche/*/evaluation", "/api/fiches-marche/*/evaluation/**").hasAnyRole("MEMBRE_CAO", "PRMP",

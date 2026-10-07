@@ -170,5 +170,9 @@ public enum TypeNotification {
     /** ⚠️ 2026-10-07 (§B4, art. 48) — une demande de justification d'un prix anormal : vers le candidat (et par courriel). */
     JUSTIFICATION_DEMANDEE,
     /** ⚠️ 2026-10-07 (§B4) — la justification du candidat : vers la PRMP et les membres de la CAO. */
-    JUSTIFICATION_RECUE
+    JUSTIFICATION_RECUE,
+    /** ⚠️ 2026-10-07 (§B6) — le rapport d'évaluation est produit : vers chaque membre appelé à le signer. */
+    RAPPORT_A_SIGNER,
+    /** ⚠️ 2026-10-07 (§B6) — le rapport d'évaluation est signé : vers la PRMP et les membres de la CAO. */
+    RAPPORT_EVALUATION
 }

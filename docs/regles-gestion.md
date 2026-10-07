@@ -860,7 +860,7 @@ prochaine validation.
 ⚠️ **Après le PV d'ouverture signé, la commission évalue les offres dans l'application, lot par lot, en suivant le guide
 d'évaluation des offres.** Ce qui est livré : l'ouverture de l'évaluation, la déclaration préalable des membres, l'examen
 préliminaire (étape 2 du guide), les demandes de précisions, les corrections et le classement (étape 3), les offres anormales (étape 4) et la
-post-qualification (étape 5). Le rapport suit. Contrat : `docs/api-endpoints.md`, § *L'évaluation des offres*, tranches 1a à 1c.
+post-qualification (étape 5), et le rapport d'évaluation. Contrat : `docs/api-endpoints.md`, § *L'évaluation des offres*, tranches 1a à 1d.
 
 - **Le périmètre** : les procédures en remise électronique, dont les offres sont dans l'application. Les offres papier n'y entrent
   pas. Les offres écartées au dépôt, retirées ou remplacées ne sont pas évaluées.
@@ -908,6 +908,14 @@ post-qualification (étape 5). Le rapport suit. Contrat : `docs/api-endpoints.md
   - une offre non qualifiée est écartée avec un motif et la clause du DAO ;
   - l'étape arrêtée, le lot porte sa **proposition d'attribution** (l'offre, son montant hors taxes, son délai), ou l'infructuosité si
     aucune offre n'est qualifiée ; l'attribution elle-même revient à la PRMP (lot suivant).
+- ⚠️ **Le rapport d'évaluation** (livré le 07/10) :
+  - le responsable de la procédure le produit quand toutes les étapes de tous les lots sont arrêtées ; dès lors, plus aucune décision
+    ne change ;
+  - il suit le plan du guide : références, plis reçus, chaque étape lot par lot, proposition d'attribution, signatures ; en annexe, les
+    déclarations des membres et les échanges avec les candidats ;
+  - il est signé par chaque membre de la commission, hors ceux qui ont déclaré un conflit d'intérêts ; un membre en désaccord joint
+    une **observation** à sa signature ; l'empêchement d'un membre est constaté par le président, avec un motif ;
+  - à la dernière signature, l'évaluation est close et la PRMP est avertie ; le rapport n'est pas public.
 
 #### La fiche DAO des travaux (référentiel remis le 2026-09-24)
 

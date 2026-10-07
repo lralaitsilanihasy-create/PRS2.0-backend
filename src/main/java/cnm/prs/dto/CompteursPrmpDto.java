@@ -20,5 +20,8 @@ public record CompteursPrmpDto(
         long lettresRenvoi,
         long demandesRetraitNouvelles,
         /** ⚠️ 2026-10-06 (compteurs, §B1) — les reçus de frais de dossier {@code EN_ATTENTE} sur les fiches de la PRMP. */
-        long recusAValider) {
+        long recusAValider,
+        /** ⚠️ 2026-10-07 (évaluation des offres, §B7) — les demandes aux candidats (précisions, justifications) sans réponse dont le délai
+         * court, sur les fiches de la PRMP. */
+        long demandesEvaluationEnAttente) {
 }

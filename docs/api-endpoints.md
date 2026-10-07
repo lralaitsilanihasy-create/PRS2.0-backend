@@ -6856,7 +6856,7 @@ la vérification est pré-remplie « non satisfaite » (Q6, Q7). Migration **V76
   change ni le prix ni la substance (guide §2.4) : la demande et la réponse iront au rapport.
 - **Notifications** : `EVALUATION_OUVERTE` (membres de la CAO, PRMP), `PRECISION_DEMANDEE` (candidat, et courriel), `PRECISION_RECUE`
   (PRMP, membres). **Journal** : `OUVERTURE`, `DECLARATION`, `CONFORMITE`, `ARRET`, `REOUVERTURE`, `PRECISION_DEMANDEE`,
-  `PRECISION_RECUE`. Les compteurs de `/api/kpis/badges` (§B7) viendront avec la tranche du rapport.
+  `PRECISION_RECUE`. Les compteurs de `/api/kpis/badges` (§B7) : tranche 1d.
 
 ### L'évaluation des offres, tranche 1b : corrections, montant évalué, classement — V77 ⚠️ 2026-10-07
 
@@ -6971,6 +6971,41 @@ Mêmes gardes que les tranches 1a et 1b : membre déclaré sans conflit pour dé
   n'est qualifiée.
 - **Tableau** : `qualifie` vrai, faux ou nul. **Notifications** : `JUSTIFICATION_DEMANDEE` (candidat, et courriel),
   `JUSTIFICATION_RECUE` (PRMP, membres). **Journal** : `ANORMALE`, `JUSTIFICATION_DEMANDEE`, `JUSTIFICATION_RECUE`, `QUALIFICATION`.
+
+### L'évaluation des offres, tranche 1d : le rapport d'évaluation et les compteurs — V78 ⚠️ 2026-10-07
+
+Demande front `demande-backend-2026-10-07-evaluation-des-offres.md` (§B6, §B7). Migration **V78** (`t_evaluation_rapport`,
+`t_evaluation_signature`). Aucune dépendance ajoutée. Sur le modèle du PV d'ouverture (V70).
+
+| Méthode | URL | Corps | Réponse | Statuts | Accès |
+|---|---|---|---|---|---|
+| POST | /api/fiches-marche/{idDmc}/evaluation/rapport | `{ observations? }` | `EvaluationDto` (`etat` = `RAPPORT_A_SIGNER`) | 200, 403, 404, 409 `ETAPES_INCOMPLETES` (`details.lots`) / `RAPPORT_DEJA_PRODUIT` | responsable de la procédure |
+| GET | /api/fiches-marche/{idDmc}/evaluation/rapport?format=docx | — | le PDF (ou le Word) | 200, 403, 404 (non produit) | CAO, responsable, PRMP, UGPM |
+| POST | /api/fiches-marche/{idDmc}/evaluation/rapport/signer | `{ observation? }` | `EvaluationDto` | 200, 403 `NON_SIGNATAIRE`, 409 `RAPPORT_NON_PRODUIT` / `DEJA_SIGNE` | membre appelé à signer |
+| POST | /api/fiches-marche/{idDmc}/evaluation/rapport/empechement | `{ im, motif }` | `EvaluationDto` | 200, 400 `MOTIF_ABSENT` / `NON_SIGNATAIRE`, 403, 409 `RAPPORT_NON_PRODUIT` / `DEJA_SIGNE` | président de la CAO (à défaut, le responsable) |
+
+- **Produire** : toutes les étapes de tous les lots arrêtées. L'évaluation passe à **`RAPPORT_A_SIGNER`** : plus aucune décision ni
+  réouverture (409 `EVALUATION_CLOSE`, `RAPPORT_SIGNE`). **Signataires appelés** : les membres de la CAO, **hors ceux qui ont déclaré
+  un conflit d'intérêts** ; un membre qui n'a pas signé sa déclaration est appelé. Sans signataire, le rapport est signé d'office.
+  Notification `RAPPORT_A_SIGNER` à chacun.
+- **Le document** (PDF et Word, régénéré à chaque signature), sur le plan du guide : 1. références (numéro du DAO, objet, autorité
+  contractante, décision de désignation de la CAO, membres) ; 2. plis reçus (et les offres non évaluées) ; puis, **lot par lot** :
+  3. examen préliminaire, 4. corrections arithmétiques retenues (et refus du candidat), 5. montant évalué et classement (hors
+  taxes), 6. offres suspectées, décisions, justification et réponse, 7. post-qualification (critères non satisfaits), 8. proposition
+  d'attribution ou infructuosité ; observations du responsable ; 9. signatures (observation du membre, empêchement et son motif) ;
+  annexe 1, les déclarations ; annexe 2, les demandes de précisions et de justification et leurs réponses (texte, nom de la pièce
+  jointe). Le rapport **n'est pas public**.
+- **Signer** : signature électronique simple de l'appelant, une fois, avec une **observation** facultative (désaccord) portée au
+  rapport. **Empêchement** : constaté par le président (ou le responsable), motif obligatoire. **À la dernière signature** :
+  l'évaluation passe à **`CLOSE`**, le rapport se régénère, notification **`RAPPORT_EVALUATION`** à la PRMP et aux membres de la CAO.
+- **`EvaluationDto.rapport`** (nouveau) = `{ produitLe, observations, signe, signeLe, signatures[{ im, nom, president, date,
+  empechement, motif, constatePar, observation }], signaturesAttendues[{ im, nom }] }`, nul tant que le rapport n'est pas produit.
+- **Compteurs (§B7)**, `GET /api/kpis/badges` :
+  - PRMP : `compteurs.demandesEvaluationEnAttente` (nouveau champ de `CompteursPrmpDto`) — les demandes de précisions et de
+    justification de ses fiches sans réponse dont le délai court ;
+  - **membre de la CAO** (profil `MEMBRE_CAO`, désormais admis sur cette seule route) : `compteurs` = `{ evaluationsEnCours,
+    rapportsASigner }` — ses procédures dont l'évaluation est `EN_COURS`, et les rapports qu'il doit encore signer.
+- **Journal** : `RAPPORT`, `SIGNATURE`, `EMPECHEMENT`, `RAPPORT_SIGNE`.
 
 ### Le dépositaire génère lui-même la part de secours — V71 ⚠️ 2026-10-05
 
