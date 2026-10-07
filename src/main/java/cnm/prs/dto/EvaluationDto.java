@@ -32,7 +32,9 @@ public record EvaluationDto(Long idDmc, String etat, LocalDateTime ouverteLe, St
      * égalité de montant évalué, sans départage), {@code ecartee} : l'étape qui l'a écartée et pourquoi.
      */
     public record OffreEvaluee(String idOffre, Integer numero, Entreprise entreprise, Conformite conformite, Montant evaluation,
-            Anormale anormale, Qualification qualification, Integer rang, Boolean exAequo, Ecartement ecartee, int precisionsEnAttente) {
+            Anormale anormale, Qualification qualification, Integer rang, Boolean exAequo, Ecartement ecartee, int precisionsEnAttente,
+            /** ⚠️ 2026-10-07 (rabais structuré) — le rabais déclaré par le candidat, tel que la séance le lit (pré-remplissage). */
+            SeanceDto.RabaisLu rabaisDeclare) {
     }
 
     public record Entreprise(String nif, String raisonSociale) {
@@ -109,8 +111,14 @@ public record EvaluationDto(Long idDmc, String etat, LocalDateTime ouverteLe, St
     public record Refus(String motif, String clause) {
     }
 
-    /** Le rabais, saisi par la CAO en valeur monétaire hors taxes, et la lecture qu'elle en fait (Q4). */
-    public record Rabais(BigDecimal montant, String lecture) {
+    /**
+     * Le rabais retenu, hors taxes, et la lecture qu'en fait la CAO. ⚠️ 2026-10-07 (rabais structuré, §B3) — pour un rabais déclaré au
+     * format 4 : {@code propose} (le montant proposé par le serveur : pourcentage × prix corrigé, ou le montant déclaré ; nul pour un
+     * rabais conditionnel, non appliqué), {@code nature}, {@code valeur}, {@code condition}, {@code lots} ; {@code motif} : celui de la
+     * CAO quand elle s'écarte de la proposition. En requête, seuls {@code montant}, {@code lecture} et {@code motif} comptent.
+     */
+    public record Rabais(BigDecimal montant, String lecture, BigDecimal propose, String nature, BigDecimal valeur, String condition,
+            List<Integer> lots, String motif) {
     }
 
     /** La marge de préférence : {@code taux} (de la fiche) et {@code ajustement} sont calculés par le serveur. */

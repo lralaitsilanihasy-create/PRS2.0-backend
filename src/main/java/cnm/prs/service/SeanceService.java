@@ -566,6 +566,7 @@ public class SeanceService {
             return null;
         };
         boolean retraitPayant = procedures.trouver(idDmc).map(x -> x.dto().retraitPayant()).orElse(false);
+        int nbLots = fiches.etatValide(idDmc).map(v -> v.etat().getNbLots()).filter(java.util.Objects::nonNull).orElse(1);
         List<Offre> toutes = offres.findByIdDmcOrderByNumeroAscDateCreationAsc(idDmc);
         Map<String, Offre> parCandidat = new LinkedHashMap<>();
         toutes.stream().filter(o -> Offre.DEPOSEE.equals(o.getEtat())).forEach(o -> parCandidat.put(o.getIdCandidat(), o));
@@ -667,9 +668,14 @@ public class SeanceService {
             }
             @SuppressWarnings("unchecked")
             Map<String, Object> ae = (Map<String, Object>) l.get("acteEngagement");
+            // ⚠️ 2026-10-07 (rabais structuré, §B1-§B2) — le rabais lu et ses contrôles, en alertes (le dépôt ne le voit pas, scellé).
+            SeanceDto.RabaisLu rabais = RabaisOffre.lire(ae);
+            if (complete) {
+                alertes.addAll(RabaisOffre.controler(rabais, ae == null ? null : montant(ae.get("montantHt")), o.getLot(), nbLots));
+            }
             lues.add(new SeanceDto.OffreLue(o.getNumero(), o.getIdOffre(), o.getLot(), o.getEtat(), o.getIntegrite(), o.getMotifLecture(),
                     new SeanceDto.EntrepriseLue(o.getNif(), o.getRaisonSociale(), e == null ? null : e.verification(), e == null ? null : e.exclusion()),
-                    l.get("groupement"), ae, lue, piecesLues, manquantes, alertes, form != null, totaux, parties, frais));
+                    l.get("groupement"), ae, lue, piecesLues, manquantes, alertes, form != null, totaux, parties, frais, rabais));
         }
         return new SeanceDto.Lecture(lues, nonOuvertes);
     }
@@ -1064,7 +1070,7 @@ public class SeanceService {
                     Map<String, Object> ae = o.acteEngagement();
                     el.add(para("Montant HT : " + ae.get("montantHt") + " ; montant TTC : " + ae.get("montantTtc") + " " + Objects.toString(ae.get("monnaie"), "MGA")));
                     el.add(para("Délai : " + ae.get("delai") + " " + Objects.toString(ae.get("delaiUnite"), "") + " ; validité : " + ae.get("validiteJours")
-                            + " jours ; rabais : " + Objects.toString(ae.get("rabais"), "aucun")));
+                            + " jours ; rabais : " + (o.rabais() == null ? "aucun" : o.rabais().lecture())));   // ⚠️ 2026-10-07 : rabais structuré, chiffré
                 }
                 if (o.formulaires() && o.totaux() != null && !o.totaux().isEmpty()) {   // ⚠️ 2026-10-05 (lot 5, §B3.5)
                     Map<String, Object> t = o.totaux();

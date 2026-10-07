@@ -670,9 +670,32 @@ public class EvaluationService {
             }
             refus = new EvaluationDto.Refus(motif, clause);
         }
-        java.math.BigDecimal rabais = m.rabais() == null || m.rabais().montant() == null ? java.math.BigDecimal.ZERO : m.rabais().montant();
-        if (rabais.signum() < 0) {
+        java.math.BigDecimal saisiRabais = m.rabais() == null ? null : m.rabais().montant();
+        if (saisiRabais != null && saisiRabais.signum() < 0) {
             throw new BadRequestException("Le rabais est un montant positif, hors taxes.", "RABAIS_INVALIDE");
+        }
+        // ⚠️ 2026-10-07 (rabais structuré, §B3) — un rabais déclaré au format 4 : inconditionnel, le serveur le propose (pourcentage ×
+        // prix corrigé, Q3, ou le montant déclaré) et la CAO le corrige avec un motif ; conditionnel (LOTS), il n'est pas appliqué à
+        // l'évaluation lot par lot (la combinaison de lots n'est pas servie). Les formats 2 et 3 gardent la saisie de la CAO.
+        SeanceDto.RabaisLu declare = o.rabais();
+        boolean structure = declare != null && declare.nature() != null;
+        String motifRabais = m.rabais() == null ? null : nettoyer(m.rabais().motif());
+        java.math.BigDecimal propose = null;
+        java.math.BigDecimal rabais;
+        if (structure && RabaisOffre.LOTS.equals(declare.condition())) {
+            if (saisiRabais != null && saisiRabais.signum() > 0) {
+                throw new BadRequestException("Le rabais déclaré est subordonné à l'attribution de plusieurs lots : il n'est pas appliqué à "
+                        + "l'évaluation lot par lot.", "RABAIS_CONDITIONNEL");
+            }
+            rabais = java.math.BigDecimal.ZERO;
+        } else if (structure) {
+            propose = RabaisOffre.montant(declare.nature(), declare.valeur(), prixCorrige);
+            rabais = saisiRabais != null ? saisiRabais : propose == null ? java.math.BigDecimal.ZERO : propose;
+            if (propose != null && saisiRabais != null && saisiRabais.compareTo(propose) != 0 && motifRabais == null) {
+                throw new BadRequestException("Corriger le rabais déclaré par le candidat se motive.", "MOTIF_OBLIGATOIRE");
+            }
+        } else {
+            rabais = saisiRabais == null ? java.math.BigDecimal.ZERO : saisiRabais;
         }
         Map<String, String> v = valeursFiche(idDmc);
         boolean prevue = "OUI".equals(v.get("B06-PN-01")) || "OUI".equals(v.get("B03-CQ-08"));
@@ -702,7 +725,9 @@ public class EvaluationService {
         java.math.BigDecimal montantEvalue = refus != null ? null
                 : net.add(ajustement).add(criteres.stream().map(EvaluationDto.Critere::montant).reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add));
         EvaluationDto.Montant saisi = new EvaluationDto.Montant(prixLu, prixLuTtc, corrections, refus,
-                new EvaluationDto.Rabais(rabais, m.rabais() == null ? null : nettoyer(m.rabais().lecture())),
+                new EvaluationDto.Rabais(rabais, m.rabais() != null && nettoyer(m.rabais().lecture()) != null ? nettoyer(m.rabais().lecture())
+                        : declare == null ? null : declare.lecture(), propose, structure ? declare.nature() : null, structure ? declare.valeur() : null,
+                        structure ? declare.condition() : null, structure ? declare.lots() : null, motifRabais),
                 new EvaluationDto.Preference(prevue ? eligible : null, motifPreference, taux, ajustement), criteres, prixCorrige, montantEvalue,
                 null, null, null);
         LocalDateTime maintenant = maintenant();
@@ -1587,6 +1612,17 @@ public class EvaluationService {
                                 + ", ajustements " + lisible(t.ajustements()) + ", montant évalué " + lisible(t.montantEvalue()))
                         + (t.motifRejet() == null ? "" : " — écartée : " + t.motifRejet()));
             }
+            // ⚠️ 2026-10-07 (rabais structuré, §B3) — le rabais conditionnel affiché, non appliqué ; le rabais déclaré corrigé, avec son motif.
+            for (EvaluationDto.OffreEvaluee o : l.offres()) {
+                SeanceDto.RabaisLu rd = o.rabaisDeclare();
+                if (rd != null && RabaisOffre.LOTS.equals(rd.condition())) {
+                    para(el, nom(o) + " : rabais conditionnel déclaré (" + rd.lecture() + "), non appliqué à l'évaluation lot par lot.");
+                }
+                EvaluationDto.Rabais ra = o.evaluation() == null ? null : o.evaluation().rabais();
+                if (ra != null && ra.motif() != null && ra.propose() != null) {
+                    para(el, nom(o) + " : rabais déclaré de " + lisible(ra.propose()) + " corrigé à " + lisible(ra.montant()) + " — " + ra.motif() + ".");
+                }
+            }
             sous(el, "6. Offres anormalement basses ou hautes" + p);
             boolean suspectes = false;
             for (EvaluationDto.OffreEvaluee o : l.offres()) {
@@ -1791,7 +1827,7 @@ public class EvaluationService {
                 evaluees.add(new EvaluationDto.OffreEvaluee(o.idOffre(), o.numero(), new EvaluationDto.Entreprise(o.entreprise().nif(),
                         o.entreprise().raisonSociale()), conf, montantDto(ev), anormaleDto(anormalesEnVigueur.get(o.idOffre()), o),
                         qualificationDto(qualifications.get(o.idOffre()), o), cl == null ? null : cl.rang(),
-                        cl == null ? null : cl.exAequo(), ecartee, enAttente.getOrDefault(o.idOffre(), 0L).intValue()));
+                        cl == null ? null : cl.exAequo(), ecartee, enAttente.getOrDefault(o.idOffre(), 0L).intValue(), o.rabais()));
             }
             lots.add(new EvaluationDto.Lot(lot, courante, arretees, evaluees, arrets.containsKey(EvaluationEtape.QUALIFICATION)
                     ? proposition(idDmc, lot, liste) : null));

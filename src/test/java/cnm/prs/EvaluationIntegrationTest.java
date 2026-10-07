@@ -582,6 +582,56 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(get("/api/kpis/badges").header("Authorization", jetonM2)).andExpect(jsonPath("$.compteurs.rapportsASigner").value(0));
     }
 
+    @Test
+    @DisplayName("Rabais structuré (07/10, Q4) : la séance le chiffre et le contrôle en alertes ; l'étape 3 propose le rabais inconditionnel "
+            + "sur le prix corrigé, sa correction se motive ; le rabais conditionnel n'est pas appliqué lot par lot")
+    void rabaisStructure() throws Exception {
+        String a = offre("C900000051", "1111222333", "BTP Alpha", 1, "INTACTE", null, "12500000",
+                "{\"nature\":\"POURCENTAGE\",\"valeur\":2,\"condition\":\"AUCUNE\",\"libelle\":\"Rabais de 2 %\"}");
+        String b = offre("C900000052", "4444555666", "BTP Beta", 2, "INTACTE", null, "11900000",
+                "{\"nature\":\"MONTANT\",\"valeur\":100000,\"condition\":\"LOTS\",\"lots\":[1,2]}");
+        seanceClose();
+        String lecture = mvc.perform(get("/api/fiches-marche/" + idDmc + "/seance/lecture").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<Number>read(lecture, "$.offres[0].rabais.montant").longValue()).isEqualTo(250_000L);
+        assertThat(JsonPath.<String>read(lecture, "$.offres[0].rabais.lecture")).isEqualTo("2 % du montant hors taxes, soit 250 000 Ariary");
+        assertThat(JsonPath.<String>read(lecture, "$.offres[1].rabais.lecture"))
+                .isEqualTo("100 000 Ariary hors taxes, si les lots 1, 2 sont attribués au candidat");
+        assertThat(JsonPath.<Object>read(lecture, "$.offres[1].rabais.montant")).isNull();
+        // La procédure n'a qu'un lot : le lot 2 est inconnu de la fiche — une alerte, jamais un refus.
+        assertThat(JsonPath.<List<String>>read(lecture, "$.offres[1].alertes[*].type")).contains("RABAIS_LOTS");
+        assertThat(JsonPath.<List<String>>read(lecture, "$.offres[0].alertes[*].type")).doesNotContain("RABAIS_LOTS", "RABAIS_INVALIDE");
+
+        mvc.perform(post(base + "/ouvrir").header("Authorization", tokenVer)).andExpect(status().isCreated());
+        mvc.perform(post(base + "/declaration").header("Authorization", jetonM1).contentType(JSON).content("{\"conflit\":false}"))
+                .andExpect(status().isOk());
+        conformite(jetonM1, a, "{\"decision\":\"CONFORME\"}").andExpect(status().isOk());
+        String ev = conformite(jetonM1, b, "{\"decision\":\"CONFORME\"}").andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<String>read(ev, "$.lots[0].offres[0].rabaisDeclare.nature")).isEqualTo("POURCENTAGE");
+        assertThat(JsonPath.<String>read(ev, "$.lots[0].offres[1].rabaisDeclare.condition")).isEqualTo("LOTS");
+        arreter("CONFORMITE").andExpect(status().isOk());
+        String eligible = "\"preference\":{\"eligible\":true,\"motif\":\"Entreprise nationale\"}";
+        // Inconditionnel : proposé sur le prix corrigé (Q3), retenu tel quel sans saisie.
+        ev = montant(jetonM1, a, "{" + eligible + "}").andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<Number>read(ev, "$.lots[0].offres[0].evaluation.rabais.propose").longValue()).isEqualTo(250_000L);
+        assertThat(JsonPath.<Number>read(ev, "$.lots[0].offres[0].evaluation.rabais.montant").longValue()).isEqualTo(250_000L);
+        assertThat(JsonPath.<Number>read(ev, "$.lots[0].offres[0].evaluation.montantEvalue").longValue()).isEqualTo(12_250_000L);
+        assertThat(JsonPath.<String>read(ev, "$.lots[0].offres[0].evaluation.rabais.lecture")).isEqualTo("2 % du montant hors taxes, soit 250 000 Ariary");
+        montant(jetonM1, a, "{" + eligible + ",\"rabais\":{\"montant\":200000}}").andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("MOTIF_OBLIGATOIRE"));
+        ev = montant(jetonM1, a, "{" + eligible + ",\"rabais\":{\"montant\":200000,\"motif\":\"Le rabais ne porte que sur les fournitures\"}}")
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<String>read(ev, "$.lots[0].offres[0].evaluation.rabais.motif")).isEqualTo("Le rabais ne porte que sur les fournitures");
+        assertThat(JsonPath.<Number>read(ev, "$.lots[0].offres[0].evaluation.montantEvalue").longValue()).isEqualTo(12_300_000L);
+        // Conditionnel : pas appliqué lot par lot.
+        montant(jetonM1, b, "{" + eligible + ",\"rabais\":{\"montant\":100000}}").andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("RABAIS_CONDITIONNEL"));
+        ev = montant(jetonM1, b, "{" + eligible + "}").andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<Number>read(ev, "$.lots[0].offres[1].evaluation.rabais.montant").longValue()).isZero();
+        assertThat(JsonPath.<Object>read(ev, "$.lots[0].offres[1].evaluation.rabais.propose")).isNull();
+        assertThat(JsonPath.<List<Integer>>read(ev, "$.lots[0].offres[1].evaluation.rabais.lots")).containsExactly(1, 2);
+    }
+
     // ------------------------------------------------------------------ outils
 
     private ResultActions arreter(String etape) throws Exception {
@@ -643,6 +693,12 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
 
     /** Une offre ouverte, posée en base avec sa lecture : acte d'engagement, garantie (1 700 000 MGA, au-dessus du minimum). */
     private String offre(String idCandidat, String nif, String raison, int numero, String integrite, String groupement, String montantHt) {
+        return offre(idCandidat, nif, raison, numero, integrite, groupement, montantHt, null);
+    }
+
+    /** ⚠️ Rabais structuré — {@code rabais} : le JSON de l'objet du manifeste format 4 (ou nul). */
+    private String offre(String idCandidat, String nif, String raison, int numero, String integrite, String groupement, String montantHt,
+            String rabais) {
         Offre o = new Offre();
         o.setIdOffre(UUID.randomUUID().toString());
         o.setIdDmc(idDmc);
@@ -664,7 +720,8 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
         o.setIntegrite(integrite);
         o.setMotifLecture("ALTEREE".equals(integrite) ? "empreinte du conteneur différente" : null);
         o.setOuverteLe(LocalDateTime.now().minusDays(1));
-        o.setLecture("{\"acteEngagement\":{\"montantHt\":\"" + montantHt + "\",\"montantTtc\":\"" + montantHt + "0\",\"delai\":\"60 jours\"},"
+        o.setLecture("{\"acteEngagement\":{\"montantHt\":\"" + montantHt + "\",\"montantTtc\":\"" + montantHt + "0\",\"delai\":\"60 jours\""
+                + (rabais == null ? "" : ",\"rabais\":" + rabais) + "},"
                 + "\"garantie\":{\"codeVerification\":\"GAR-" + numero + "\",\"nomFichier\":\"garantie.pdf\",\"montant\":\"1700000\","
                 + "\"monnaie\":\"MGA\",\"emetteur\":\"BNI Madagascar\"},\"pieces\":[]}");
         offreRepository.save(o);

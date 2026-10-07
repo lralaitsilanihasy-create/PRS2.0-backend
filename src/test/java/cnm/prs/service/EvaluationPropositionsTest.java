@@ -28,7 +28,7 @@ class EvaluationPropositionsTest {
                 null, Map.of(), new SeanceDto.Garantie("G1", true, new BigDecimal("100"), "MGA", null), List.of(),
                 List.of("Pouvoir du signataire", "Quittance"), List.of(new SeanceDto.Alerte("GARANTIE_INSUFFISANTE", "Garantie de 100 pour 200."),
                         new SeanceDto.Alerte("NON_CONFORME", "Article 2 non conforme."), new SeanceDto.Alerte("EXCLUSION", "Exclusion en cours.")),
-                true, null, null, new SeanceDto.FraisDossier(false, null, null));
+                true, null, null, new SeanceDto.FraisDossier(false, null, null), null);
         Map<String, EvaluationService.Proposition> p = EvaluationService.proposer(1L, o, List.of(o), Map.of("o1", Set.of("111")),
                 List.of(new OffreDto.PieceAttendue("POUVOIR", "ADMINISTRATIVE", null, "Pouvoir du signataire", null, null, false, null, true, null, null)), true);
         assertThat(p.get("AE_PRIX").valeur()).isFalse();

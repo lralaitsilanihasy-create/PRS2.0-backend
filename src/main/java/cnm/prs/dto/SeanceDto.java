@@ -99,7 +99,20 @@ public record SeanceDto(Long idDmc, String etat, LocalDateTime heureOuverture, L
             Object groupement, Map<String, Object> acteEngagement, Garantie garantie, List<PieceLue> pieces, List<String> piecesManquantes,
             List<Alerte> alertes, boolean formulaires, Map<String, Object> totaux, List<String> partiesFormulaires,
             /** ⚠️ 2026-10-06 (retrait après paiement, §B5) — lu par le serveur, pas scellé ; {@code null} pour un retrait libre. */
-            FraisDossier fraisDossier) {
+            FraisDossier fraisDossier,
+            /** ⚠️ 2026-10-07 (rabais structuré, §B2) — le rabais lu : l'objet du manifeste format 4, chiffré sur le HT lu s'il est
+             * inconditionnel, et la phrase lue en séance ; un texte libre (formats 2 et 3) dans {@code libelle} et {@code lecture} ; nul sans
+             * rabais. */
+            RabaisLu rabais) {
+    }
+
+    /**
+     * ⚠️ 2026-10-07 (rabais structuré) — {@code nature} ∈ {@code POURCENTAGE} · {@code MONTANT} ; {@code condition} ∈ {@code AUCUNE} ·
+     * {@code LOTS} ({@code lots} : les lots dont l'attribution conjointe le déclenche) ; {@code montant} hors taxes, sur le HT lu,
+     * nul pour un rabais conditionnel ; {@code lecture} : la phrase lue en séance et portée au PV.
+     */
+    public record RabaisLu(String nature, java.math.BigDecimal valeur, String condition, List<Integer> lots, String libelle,
+            java.math.BigDecimal montant, String lecture) {
     }
 
     /** Le reçu de frais de dossier de l'entreprise de l'offre, pour son lot : {@code regle} s'il est validé. */

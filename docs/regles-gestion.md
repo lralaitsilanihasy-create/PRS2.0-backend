@@ -891,6 +891,10 @@ post-qualification (étape 5), et le rapport d'évaluation. Contrat : `docs/api-
     la marge de préférence appliquée aux offres qui n'y ont pas droit, plus les critères monétisés du DAO ;
   - la marge de préférence et les critères additionnels ne s'appliquent que si le DAO les prévoit ; la commission marque, avec un motif,
     les offres éligibles à la préférence ; la préférence sert à comparer, jamais au prix du marché ;
+  - ⚠️ **le rabais est déclaré structuré** par le candidat (arbitrage du pilote du 07/10) : un pourcentage ou un montant hors taxes,
+    sans condition ou subordonné à l'attribution de plusieurs lots. La séance le lit chiffré ; à l'évaluation, l'application propose
+    le rabais sans condition sur le prix corrigé, et la commission ne s'en écarte qu'avec un motif ; un rabais lié à plusieurs lots
+    n'est pas appliqué à l'évaluation lot par lot, il est seulement rapporté ;
   - un candidat qui **refuse une correction** voit son offre écartée si les instructions aux candidats le prévoient : la commission le
     constate, avec la clause (arbitrage du pilote) ;
   - le classement suit le montant évalué croissant ; deux offres premières **à égalité** sont départagées par la commission, avec un

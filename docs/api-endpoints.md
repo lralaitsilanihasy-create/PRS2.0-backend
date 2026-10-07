@@ -7007,6 +7007,37 @@ Demande front `demande-backend-2026-10-07-evaluation-des-offres.md` (§B6, §B7)
     rapportsASigner }` — ses procédures dont l'évaluation est `EN_COURS`, et les rapports qu'il doit encore signer.
 - **Journal** : `RAPPORT`, `SIGNATURE`, `EMPECHEMENT`, `RAPPORT_SIGNE`.
 
+### Le rabais structuré de l'offre en ligne ⚠️ 2026-10-07
+
+Demande front `demande-backend-2026-10-07-rabais-structure.md` (arbitrage Q4 du pilote : « le rabais est structuré au dépôt »). Aucune
+migration, aucune route nouvelle ; aucune dépendance ajoutée.
+
+- **Le manifeste format 4** : `acteEngagement.rabais` = `{ nature: POURCENTAGE | MONTANT, valeur, condition: AUCUNE | LOTS, lots, libelle }`
+  ou nul. Le serveur reconnaît le format à la **forme** du champ (un objet) : un texte libre (formats 2 et 3) reste lu tel quel.
+- ⚠️ **Le serveur ne contrôle pas le rabais au dépôt** : le manifeste est scellé dans le navigateur et ne se lit qu'à l'ouverture des
+  plis (ADR-0013). Les contrôles proposés (`RABAIS_INVALIDE`, `RABAIS_LOTS`) sont faits **avant le scellement par le front**, et
+  **rejoués à l'ouverture en alertes de séance** (jamais un refus) :
+  - `RABAIS_INVALIDE` : nature ou condition inconnue, valeur ≤ 0, pourcentage ≥ 100, montant supérieur au HT de l'acte ;
+  - `RABAIS_LOTS` : condition `LOTS` avec moins de deux lots, sans le lot de l'offre (lot 1 pour une procédure non allotie), ou avec
+    un lot inconnu de la fiche.
+  - `RABAIS_NON_ADMIS` n'est pas servi : aucun champ de la fiche ne dit si les rabais sont admis (Q1, au pilote).
+- **La séance (§B2)** : `OffreLue.rabais` (nouveau) = `RabaisLu { nature, valeur, condition, lots, libelle, montant, lecture }` — `montant`
+  hors taxes chiffré sur le **HT lu** pour un rabais inconditionnel (pourcentage × HT, arrondi à l'ariary ; le montant déclaré sinon),
+  nul pour un rabais conditionnel ; `lecture` : la phrase lue (« 2 % du montant hors taxes, soit 250 000 Ariary », « 100 000 Ariary
+  hors taxes, si les lots 1, 2 sont attribués au candidat ») ; un texte libre dans `libelle` et `lecture`. `acteEngagement.rabais` reste
+  servi tel que scellé. Le **PV d'ouverture et son extrait public** impriment la phrase `lecture`.
+- **L'évaluation (§B3)** :
+  - `OffreEvaluee.rabaisDeclare` (nouveau) : le `RabaisLu` de l'offre, pour pré-remplir l'étape 3 ;
+  - `Rabais` (dans `evaluation`) devient `{ montant, lecture, propose, nature, valeur, condition, lots, motif }` ; en requête
+    `PUT …/montant`, seuls `montant`, `lecture` et `motif` comptent ;
+  - **inconditionnel** : le serveur **propose** le rabais sur le **prix corrigé** (Q3, proposition de la demande : pourcentage × prix
+    corrigé HT, ou le montant déclaré) ; sans `rabais.montant` saisi, la proposition est retenue ; un montant différent exige
+    `rabais.motif` (400 `MOTIF_OBLIGATOIRE`) ;
+  - **conditionnel (`LOTS`)** : **non appliqué** (rabais 0) à l'évaluation lot par lot ; un montant saisi > 0 : 400
+    **`RABAIS_CONDITIONNEL`** ; il est affiché et repris au rapport (Q2, au juriste) ;
+  - offres au format 2 ou 3 : la saisie de la CAO, comme avant.
+- **Le rapport** reprend, au §5, les rabais conditionnels non appliqués et les rabais déclarés corrigés (avant → après, motif).
+
 ### Le dépositaire génère lui-même la part de secours — V71 ⚠️ 2026-10-05
 
 Demande front `demande-backend-2026-10-05-depositaire-genere-sa-cle.md` (décision du pilote du 05/10) ; migration **V71**
