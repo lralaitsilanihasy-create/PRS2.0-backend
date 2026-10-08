@@ -43,6 +43,12 @@ public class SeanceFinanciereController {
         return service.ouvrir(idDmc);
     }
 
+    /** ⚠️ PI-d2a — {@code { lot, motif }} : la séance complémentaire du suivant après l'échec d'une négociation ; responsable. */
+    @PostMapping("/complementaire")
+    public SeanceFinanciereDto complementaire(@PathVariable Long idDmc, @RequestBody(required = false) SeanceFinanciereDto.Complementaire corps) {
+        return service.complementaire(idDmc, corps);
+    }
+
     /** Ses parts chiffrées des enveloppes à ouvrir (membre ; responsable avec {@code ?role=SECOURS}). */
     @GetMapping("/mes-parts")
     public List<SeanceDto.PartChiffree> mesParts(@PathVariable Long idDmc, @RequestParam(required = false) String role) {
@@ -61,14 +67,15 @@ public class SeanceFinanciereController {
         return service.cloturer(idDmc, corps);
     }
 
-    /** Le PV (PDF ; {@code ?format=docx} pour la version Word). */
+    /** Le PV (PDF ; {@code ?format=docx} pour la version Word ; {@code ?ronde=n} pour une séance précédente, défaut : la courante). */
     @GetMapping("/pv")
-    public ResponseEntity<byte[]> pv(@PathVariable Long idDmc, @RequestParam(required = false) String format) {
+    public ResponseEntity<byte[]> pv(@PathVariable Long idDmc, @RequestParam(required = false) String format,
+            @RequestParam(required = false) Integer ronde) {
         boolean docx = "docx".equalsIgnoreCase(format);
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, Telechargements.disposition("pv-ouverture-financiere-" + idDmc + (docx ? ".docx" : ".pdf")))
                 .contentType(docx ? MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.wordprocessingml.document")
                         : MediaType.APPLICATION_PDF)
-                .body(service.pv(idDmc, docx));
+                .body(service.pv(idDmc, docx, ronde));
     }
 }

@@ -214,7 +214,7 @@ public class EvaluationTechniqueService {
             throw new BadRequestException("La réouverture exige son motif.", "MOTIF_OBLIGATOIRE");
         }
         // ⚠️ PI-d1 — les montants connus, les notes techniques ne se reprennent plus.
-        if (financieres.existsById(idDmc)) {
+        if (financieres.existsByIdDmc(idDmc)) {
             throw new BusinessRuleException("La seconde séance est ouverte : l'évaluation technique ne se rouvre plus.", "SEANCE_FINANCIERE_OUVERTE");
         }
         EvaluationTechnique e = etapes.findById(new EvaluationTechnique.Cle(idDmc, lot)).filter(x -> x.getArreteeLe() != null)
@@ -387,7 +387,7 @@ public class EvaluationTechniqueService {
 
     // ------------------------------------------------------------------ gardes
 
-    private void exigerEnCours(Long idDmc) {
+    void exigerEnCours(Long idDmc) {
         Evaluation e = evaluations.findById(idDmc).orElseThrow(() -> new ResourceNotFoundException("L'évaluation de cette procédure n'est pas ouverte."));
         if (Evaluation.CLOSE.equals(e.getEtat())) {
             throw new BusinessRuleException("L'évaluation est close.", "EVALUATION_CLOSE");
@@ -406,10 +406,10 @@ public class EvaluationTechniqueService {
                 ? ref : null;
     }
 
-    private String exigerDecideur(Long idDmc) {
+    String exigerDecideur(Long idDmc) {
         String k = membreAppelant(idDmc);
         if (k == null) {
-            throw new AccessDeniedException("La notation technique se fait par les membres de la commission d'appel d'offres.");
+            throw new AccessDeniedException("L'évaluation se fait par les membres de la commission d'appel d'offres.");
         }
         EvaluationDeclaration d = declarations.findByIdDmcAndIm(idDmc, k).orElseThrow(() -> new BusinessRuleException(
                 "Signez d'abord votre déclaration d'absence de conflit d'intérêts et de confidentialité.", "DECLARATION_MANQUANTE"));
@@ -419,12 +419,12 @@ public class EvaluationTechniqueService {
         return k;
     }
 
-    private String exigerPresident(Long idDmc) {
+    String exigerPresident(Long idDmc) {
         String k = exigerDecideur(idDmc);
         boolean president = caoMembres.findByIdDmcOrderByRangAscIdMembreAsc(idDmc).stream()
                 .anyMatch(m -> k.equals(m.getIdCompte()) && Boolean.TRUE.equals(m.getPresident()));
         if (!president) {
-            throw new AccessDeniedException("L'étape technique s'arrête et se rouvre par le président de la commission.");
+            throw new AccessDeniedException("Cette étape s'arrête et se rouvre par le président de la commission.");
         }
         return k;
     }

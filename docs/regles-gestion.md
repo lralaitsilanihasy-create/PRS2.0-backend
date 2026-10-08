@@ -3152,6 +3152,19 @@ Accès complet aux référentiels, comptes utilisateurs, journal d'audit, hiéra
     apportent les parts de ces enveloppes avec les mêmes clés que la première séance (la part de secours avec un motif) ; au
     quorum, elles s'ouvrent ensemble. Le PV lit, pour chaque proposition ouverte, sa note technique, son rang et ses montants.
     Une fois cette séance ouverte, l'évaluation technique ne peut plus être rouverte.
+  - ⚠️ **L'évaluation financière et le classement (2026-10-08, lot 3, tranche PI-d2a ; art. 42)** : un membre de la commission
+    saisit chaque proposition financière ouverte (prix lu hors taxes, corrections arithmétiques, dépenses remboursables). Le
+    classement suit la méthode de la fiche : en qualité-coût, le score financier vaut 100 × le montant le plus bas ÷ le montant de
+    la proposition (hors dépenses remboursables) et le score combiné pondère la note technique et ce score par les poids de la
+    fiche ; en budget prédéterminé, une proposition au-delà du budget disponible est écartée et la meilleure note technique
+    l'emporte ; en moindre coût, le montant le plus bas l'emporte ; en qualité technique exclusivement et en qualification du
+    consultant, la meilleure note technique l'emporte. Une égalité se départage par la commission, avec un motif. Le président
+    arrête le classement, et ne le rouvre plus une fois une négociation engagée.
+  - ⚠️ **La négociation (2026-10-08, lot 3, tranche PI-d2a ; art. 42-IV)** : la PRMP (ou son UGPM) négocie avec le seul candidat
+    classé premier, jamais avec deux à la fois ; un procès-verbal (date, lieu, texte, pièce) est établi. La négociation ne modifie
+    de manière substantielle ni la mission, ni les conditions contractuelles, ni le prix ; la plateforme ne le contrôle pas. En cas
+    d'échec motivé, le candidat classé suivant est invité (à confirmer par le juriste) ; si son enveloppe financière n'a pas été
+    ouverte, le responsable l'ouvre d'abord en séance complémentaire, avec les mêmes clés et un nouveau procès-verbal.
 - Grilles de contrôle & règles d'anomalie [Écriture]
   - Configuration de tr_points_ctrl et t_regle_anomalie.
 - Comptes budgétaires & entités contractantes [Écriture]

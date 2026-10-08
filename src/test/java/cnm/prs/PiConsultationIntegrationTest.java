@@ -337,6 +337,208 @@ class PiConsultationIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("SEANCE_FINANCIERE_OUVERTE"));
     }
 
+    @Test
+    @DisplayName("⚠️ PI-d2a : qualité-coût — saisie (corrections, dépenses remboursables), Sf = 100 × Fm / F, S = T × wT + Sf × wF, rang, "
+            + "arrêt par le président ; négociation par la PRMP avec le premier, échec motivé, le suivant, réussite et PV")
+    void qualiteCoutEtNegociation() throws Exception {
+        Long idDmc = ficheEnLigne();
+        Pi pi = deuxQualifiees(idDmc);
+        String fa = propositionFinanciere(pi.a());
+        String fb = propositionFinanciere(pi.b());
+        seconde(idDmc, Map.of(fa, "1000000", fb, "800000"));
+        String ev = "/api/fiches-marche/" + idDmc + "/evaluation";
+        String vue = mvc.perform(get(ev + "/financiere").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<String>read(vue, "$.codeMethode")).isEqualTo("QUALITE_COUT");
+        assertThat(JsonPath.<Number>read(vue, "$.poidsTechnique").doubleValue()).isEqualTo(0.8);
+        assertThat(JsonPath.<List<String>>read(vue, "$.lots[0].propositions[*].statut")).containsOnly("A_EVALUER");
+        mvc.perform(post(ev + "/financiere/lots/1/arreter").header("Authorization", pi.m1()).contentType(JSON).content("{}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("EVALUATION_FINANCIERE_INCOMPLETE"));
+        mvc.perform(put(ev + "/financiere/offres/" + fa).header("Authorization", pi.m1()).contentType(JSON).content("{\"remboursables\":-1}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("REMBOURSABLES_INVALIDES"));
+        // A : 1 000 000 lu, corrigé à 1 050 000, dont 50 000 de dépenses remboursables → F = 1 000 000 ; B : 800 000 → Fm.
+        mvc.perform(put(ev + "/financiere/offres/" + fa).header("Authorization", pi.m1()).contentType(JSON).content("{\"corrections\":[{\"ligne\":1,"
+                + "\"libelle\":\"Honoraires\",\"avant\":100000,\"apres\":150000,\"regle\":\"PU_PREVAUT\",\"retenue\":true}],\"remboursables\":50000,"
+                + "\"motifRemboursables\":\"Frais de mission\"}")).andExpect(status().isOk());
+        String classe = mvc.perform(put(ev + "/financiere/offres/" + fb).header("Authorization", pi.m2()).contentType(JSON).content("{}"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        // S(A) = 87 × 0,8 + 80 × 0,2 = 85,60 ; S(B) = 84 × 0,8 + 100 × 0,2 = 87,20 → B premier.
+        assertThat(JsonPath.<List<Number>>read(classe, "$.lots[0].propositions[?(@.idOffre=='" + pi.a() + "')].scoreFinancier").get(0).doubleValue())
+                .isEqualTo(80.0);
+        assertThat(JsonPath.<List<Number>>read(classe, "$.lots[0].propositions[?(@.idOffre=='" + pi.a() + "')].scoreCombine").get(0).doubleValue())
+                .isEqualTo(85.6);
+        assertThat(JsonPath.<List<Number>>read(classe, "$.lots[0].propositions[?(@.idOffre=='" + pi.b() + "')].scoreCombine").get(0).doubleValue())
+                .isEqualTo(87.2);
+        assertThat(JsonPath.<List<Integer>>read(classe, "$.lots[0].propositions[?(@.idOffre=='" + pi.b() + "')].rang")).containsExactly(1);
+        assertThat(JsonPath.<List<Integer>>read(classe, "$.lots[0].propositions[?(@.idOffre=='" + pi.a() + "')].rang")).containsExactly(2);
+        mvc.perform(post(ev + "/financiere/lots/1/arreter").header("Authorization", pi.m2()).contentType(JSON).content("{}")).andExpect(status().isForbidden());
+        mvc.perform(post(ev + "/negociation/lots/1/ouvrir").header("Authorization", tokenPrmp).contentType(JSON).content("{}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("CLASSEMENT_NON_ARRETE"));
+        mvc.perform(post(ev + "/financiere/lots/1/arreter").header("Authorization", pi.m1()).contentType(JSON).content("{}")).andExpect(status().isOk());
+        mvc.perform(put(ev + "/financiere/offres/" + fb).header("Authorization", pi.m2()).contentType(JSON).content("{}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("CLASSEMENT_ARRETE"));
+
+        // La négociation : la PRMP, avec le seul premier.
+        String neg = ev + "/negociation";
+        mvc.perform(post(neg + "/lots/1/ouvrir").header("Authorization", pi.m1()).contentType(JSON).content("{}")).andExpect(status().isForbidden());
+        String n1 = mvc.perform(post(neg + "/lots/1/ouvrir").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"prevueLe\":\"" + aujourdhui.plusDays(3) + "T10:00\"}")).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<String>read(n1, "$.lots[0].negociations[0].idOffre")).isEqualTo(pi.b());
+        assertThat(JsonPath.<String>read(n1, "$.lots[0].negociations[0].lieu")).isNotBlank();
+        assertThat(JsonPath.<Object>read(n1, "$.lots[0].prochain")).isNull();
+        assertThat(notificationRepository.findPourRefEtType("C900000072", "CANDIDAT")).extracting(Notification::getTypeNotif).contains("NEGOCIATION");
+        mvc.perform(post(neg + "/lots/1/ouvrir").header("Authorization", tokenPrmp).contentType(JSON).content("{}")).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("NEGOCIATION_EN_COURS"));
+        mvc.perform(post(ev + "/financiere/lots/1/rouvrir").header("Authorization", pi.m1()).contentType(JSON).content("{\"motif\":\"x\"}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("NEGOCIATION_ENGAGEE"));
+        long id1 = ((Number) JsonPath.read(n1, "$.lots[0].negociations[0].id")).longValue();
+        mvc.perform(post(neg + "/" + id1 + "/conclure").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"resultat\":\"ECHOUEE\",\"dateNegociation\":\"" + aujourdhui + "\",\"texte\":\"Désaccord sur le chef de mission\"}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("MOTIF_OBLIGATOIRE"));
+        String apresEchec = mvc.perform(post(neg + "/" + id1 + "/conclure").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"resultat\":\"ECHOUEE\",\"dateNegociation\":\"" + aujourdhui + "\",\"texte\":\"Désaccord sur le chef de mission\","
+                        + "\"motif\":\"Le candidat remplace le chef de mission\"}")).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<String>read(apresEchec, "$.lots[0].prochain.idOffre")).isEqualTo(pi.a());
+        String n2 = mvc.perform(post(neg + "/lots/1/ouvrir").header("Authorization", tokenPrmp).contentType(JSON).content("{\"lieu\":\"Salle B\"}"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        long id2 = ((Number) JsonPath.read(n2, "$.lots[0].negociations[1].id")).longValue();
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart(neg + "/" + id2 + "/piece")
+                .file(new org.springframework.mock.web.MockMultipartFile("fichier", "compte-rendu.pdf", "application/pdf", new byte[] { 1, 2, 3 }))
+                .with(r -> { r.setMethod("PUT"); return r; }).header("Authorization", tokenPrmp)).andExpect(status().isOk());
+        String fin = mvc.perform(post(neg + "/" + id2 + "/conclure").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"resultat\":\"REUSSIE\",\"dateNegociation\":\"" + aujourdhui + "\",\"texte\":\"Planning précisé, personnel confirmé\"}"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<Boolean>read(fin, "$.lots[0].conclue")).isTrue();
+        String pv = texteDuPdf(mvc.perform(get(neg + "/" + id2 + "/pv").header("Authorization", pi.m1())).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray()).replaceAll("\\s+", " ");
+        assertThat(pv).contains("PROCÈS-VERBAL DE NÉGOCIATION", "Cabinet A", "Salle B", "La négociation a abouti", "compte-rendu.pdf");
+        mvc.perform(get(neg + "/" + id2 + "/piece").header("Authorization", tokenPrmp)).andExpect(status().isOk());
+        mvc.perform(post(neg + "/lots/1/ouvrir").header("Authorization", tokenPrmp).contentType(JSON).content("{}")).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("NEGOCIATION_CONCLUE"));
+    }
+
+    @Test
+    @DisplayName("⚠️ PI-d2a : qualité technique exclusivement — classement par la note technique, négociation avec le premier ; après son "
+            + "échec, la financière du suivant s'ouvre en séance complémentaire (ronde 2) avant de négocier")
+    void qualiteTechniqueEtSeanceComplementaire() throws Exception {
+        Long idDmc = ficheEnLigne();
+        changer(idDmc, "B02-MS-01", "Qualité technique exclusivement");
+        Pi pi = deuxQualifiees(idDmc);
+        String fa = propositionFinanciere(pi.a());
+        String fb = propositionFinanciere(pi.b());
+        seconde(idDmc, Map.of(fa, "1000000"));
+        String ev = "/api/fiches-marche/" + idDmc + "/evaluation";
+        String tokenVer = bearer("CTRVER", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER", "ANT");
+        String vue = mvc.perform(get(ev + "/financiere").header("Authorization", tokenPrmp)).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<String>read(vue, "$.codeMethode")).isEqualTo("QUALITE_TECHNIQUE");
+        assertThat(JsonPath.<List<String>>read(vue, "$.lots[0].propositions[?(@.idOffre=='" + pi.b() + "')].statut")).containsExactly("NON_OUVERTE");
+        assertThat(JsonPath.<List<Integer>>read(vue, "$.lots[0].propositions[?(@.idOffre=='" + pi.b() + "')].rang")).containsExactly(2);
+        mvc.perform(post(ev + "/financiere/lots/1/arreter").header("Authorization", pi.m1()).contentType(JSON).content("{}")).andExpect(status().isOk());
+        String neg = ev + "/negociation";
+        String n1 = mvc.perform(post(neg + "/lots/1/ouvrir").header("Authorization", tokenPrmp).contentType(JSON).content("{}"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        long id1 = ((Number) JsonPath.read(n1, "$.lots[0].negociations[0].id")).longValue();
+        // La réussite exige la saisie de la financière (permise après l'arrêt, dans ces méthodes).
+        mvc.perform(post(neg + "/" + id1 + "/conclure").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"resultat\":\"REUSSIE\",\"dateNegociation\":\"" + aujourdhui + "\",\"texte\":\"x\"}")).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("MONTANT_NON_EVALUE"));
+        mvc.perform(put(ev + "/financiere/offres/" + fa).header("Authorization", pi.m1()).contentType(JSON).content("{}")).andExpect(status().isOk());
+        mvc.perform(post(neg + "/" + id1 + "/conclure").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"resultat\":\"ECHOUEE\",\"dateNegociation\":\"" + aujourdhui + "\",\"texte\":\"x\",\"motif\":\"Prix hors de portée\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.lots[0].prochain.financiereOuverte").value(false));
+        mvc.perform(post(neg + "/lots/1/ouvrir").header("Authorization", tokenPrmp).contentType(JSON).content("{}")).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("FINANCIERE_NON_OUVERTE")).andExpect(jsonPath("$.details.numero").value(2));
+        String sf = "/api/fiches-marche/" + idDmc + "/seance/financiere";
+        mvc.perform(post(sf + "/complementaire").header("Authorization", tokenVer).contentType(JSON).content("{}")).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("MOTIF_OBLIGATOIRE"));
+        String compl = mvc.perform(post(sf + "/complementaire").header("Authorization", tokenVer).contentType(JSON)
+                .content("{\"motif\":\"Échec de la négociation avec le premier classé\"}")).andExpect(status().isOk()).andReturn().getResponse()
+                .getContentAsString();
+        assertThat(JsonPath.<Integer>read(compl, "$.ronde")).isEqualTo(2);
+        assertThat(JsonPath.<List<String>>read(compl, "$.aOuvrir[*].idOffre")).containsExactly(fb);
+        assertThat(JsonPath.<List<Integer>>read(compl, "$.rondes[*].ronde")).containsExactly(1, 2);
+        mvc.perform(post(sf + "/complementaire").header("Authorization", tokenVer).contentType(JSON).content("{\"motif\":\"x\"}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("SEANCE_FINANCIERE_EN_COURS"));
+        // Le déchiffrement réel est éprouvé par SeanceIntegrationTest : ici, l'enveloppe est posée ouverte et la ronde close.
+        ouvrirEnBase(fb, "900000");
+        cnm.prs.entity.SeanceFinanciere r2 = seanceFinanciereRepository.findFirstByIdDmcOrderByRondeDesc(idDmc).orElseThrow();
+        r2.setEtat(cnm.prs.entity.SeanceFinanciere.CLOSE);
+        seanceFinanciereRepository.save(r2);
+        mvc.perform(get(sf).header("Authorization", tokenPrmp)).andExpect(status().isOk()).andExpect(jsonPath("$.nonOuvertes.length()").value(0));
+        mvc.perform(post(neg + "/lots/1/ouvrir").header("Authorization", tokenPrmp).contentType(JSON).content("{}")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.lots[0].negociations[1].idOffre").value(pi.b()));
+    }
+
+    @Autowired private cnm.prs.repository.SeanceFinanciereRepository seanceFinanciereRepository;
+
+    private record Pi(String a, String b, String m1, String m2) {
+    }
+
+    /** Deux propositions qualifiées : A (87 points, rang 1) et B (84 points, rang 2) ; m1 est le président. */
+    private Pi deuxQualifiees(Long idDmc) throws Exception {
+        String internes = mvc.perform(get("/api/fiches-marche/" + idDmc + "/parametres-internes")
+                .header("Authorization", bearer("CTRVER", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER", "ANT")))
+                .andReturn().getResponse().getContentAsString();
+        List<String> ims = JsonPath.read(internes, "$.membresCommission[*].im");
+        String m1 = bearer("m1@pi.mg", ProfilUtilisateur.MEMBRE_CAO, TypeActeur.MEMBRE_CAO, ims.get(0), null);
+        String m2 = bearer("m2@pi.mg", ProfilUtilisateur.MEMBRE_CAO, TypeActeur.MEMBRE_CAO, ims.get(1), null);
+        for (String[] e : new String[][] { { jetonA, "1111000111", "Cabinet A" }, { jetonB, "2222000222", "Bureau B" } }) {
+            mvc.perform(put("/api/candidat/entreprise").header("Authorization", e[0]).contentType(JSON).content("{\"raisonSociale\":\"" + e[2]
+                    + "\",\"nif\":\"" + e[1] + "\",\"adresse\":\"Lot\",\"representant\":{\"nom\":\"Rakoto\",\"prenom\":\"Jean\"}}")).andExpect(status().isOk());
+        }
+        String a = propositionOuverte(idDmc, "C900000071", "1111000111", "Cabinet A", 1);
+        String b = propositionOuverte(idDmc, "C900000072", "2222000222", "Bureau B", 2);
+        cnm.prs.entity.Seance s = new cnm.prs.entity.Seance();
+        s.setIdDmc(idDmc);
+        s.setEtat(cnm.prs.entity.Seance.CLOSE);
+        s.setOuverteLe(LocalDateTime.now().minusDays(1));
+        s.setCloseLe(LocalDateTime.now().minusHours(20));
+        s.setPvSigneLe(LocalDateTime.now().minusHours(20));
+        seanceRepository.save(s);
+        String ev = "/api/fiches-marche/" + idDmc + "/evaluation";
+        mvc.perform(post(ev + "/ouvrir").header("Authorization", bearer("CTRVER", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER", "ANT")))
+                .andExpect(status().isCreated());
+        for (String m : List.of(m1, m2)) {
+            mvc.perform(post(ev + "/declaration").header("Authorization", m).contentType(JSON).content("{\"conflit\":false}")).andExpect(status().isOk());
+        }
+        for (String o : List.of(a, b)) {
+            mvc.perform(put(ev + "/offres/" + o + "/conformite").header("Authorization", m1).contentType(JSON).content("{\"decision\":\"CONFORME\"}"))
+                    .andExpect(status().isOk());
+        }
+        mvc.perform(post(ev + "/lots/1/etapes/CONFORMITE/arreter").header("Authorization", m1).contentType(JSON).content("{}")).andExpect(status().isOk());
+        String tech = ev + "/technique";
+        notes(m1, tech, a, 18, 14, 14, 35, 4, 4).andExpect(status().isOk());
+        notes(m2, tech, a, 14, 14, 14, 35, 4, 4).andExpect(status().isOk());
+        notes(m1, tech, b, 18, 14, 14, 30, 4, 4).andExpect(status().isOk());
+        notes(m2, tech, b, 18, 14, 14, 30, 4, 4).andExpect(status().isOk());
+        mvc.perform(post(tech + "/lots/1/arreter").header("Authorization", m1).contentType(JSON).content("{}")).andExpect(status().isOk());
+        return new Pi(a, b, m1, m2);
+    }
+
+    /** La seconde séance (ronde 1) close, ses enveloppes posées ouvertes avec leur montant HT (le déchiffrement est éprouvé ailleurs). */
+    private void seconde(Long idDmc, Map<String, String> montants) throws Exception {
+        montants.forEach(this::ouvrirEnBase);
+        cnm.prs.entity.SeanceFinanciere s = new cnm.prs.entity.SeanceFinanciere();
+        s.setIdDmc(idDmc);
+        s.setRonde(1);
+        s.setEtat(cnm.prs.entity.SeanceFinanciere.CLOSE);
+        s.setMethode(JsonPath.read(mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp)).andReturn().getResponse()
+                .getContentAsString(), "$.valeurs['B02-MS-01']"));
+        s.setAOuvrir(String.join(",", montants.keySet()));
+        s.setOuverteLe(LocalDateTime.now().minusHours(2));
+        s.setCloseLe(LocalDateTime.now().minusHours(1));
+        s.setSecoursEmploye(false);
+        seanceFinanciereRepository.save(s);
+    }
+
+    private void ouvrirEnBase(String idFinanciere, String montantHt) {
+        cnm.prs.entity.Offre o = offreRepository.findById(idFinanciere).orElseThrow();
+        o.setOuverteLe(LocalDateTime.now().minusHours(1));
+        o.setIntegrite("INTACTE");
+        o.setLecture("{\"acteEngagement\":{\"montantHt\":\"" + montantHt + "\",\"montantTtc\":\"" + montantHt + "\",\"monnaie\":\"MGA\"},\"pieces\":[]}");
+        offreRepository.save(o);
+    }
+
     /** L'enveloppe financière jumelle d'une proposition technique : déposée, scellée (jamais ouverte ici). */
     private String propositionFinanciere(String idTechnique) {
         cnm.prs.entity.Offre t = offreRepository.findById(idTechnique).orElseThrow();
@@ -500,6 +702,9 @@ class PiConsultationIntegrationTest extends CnmIntegrationTestSupport {
         donnees.put("B06-TP-05", "5");
         donnees.put("B06-TP-06", "5");
         donnees.put("B06-TP-07", "70");
+        // ⚠️ PI-d2a — les poids du score combiné (qualité-coût).
+        donnees.put("B06-CS-02", "0.8");
+        donnees.put("B06-CS-03", "0.2");
         mvc.perform(put("/api/fiches-marche/" + idDmc + "/sous-criteres").header("Authorization", tokenPrmp).contentType(JSON)
                 .content("{\"sousCriteres\":[{\"critere\":\"B06-TP-03\",\"libelle\":\"Approche et méthodologie\",\"points\":15},"
                         + "{\"critere\":\"B06-TP-03\",\"libelle\":\"Plan de travail\",\"points\":15}]}")).andExpect(status().isOk());

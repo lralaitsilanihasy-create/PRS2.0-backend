@@ -7435,6 +7435,61 @@ Demande front `demande-backend-2026-10-07-evaluation-pi.md` (§B3, seconde séan
   financière et le classement selon la méthode suivent en PI-d2.
 
 
+### L'évaluation des prestations intellectuelles, lot 3, tranche PI-d2a : évaluation financière, classement, négociation — V89 ⚠️ 2026-10-08
+
+Demande front `demande-backend-2026-10-07-evaluation-pi.md` (§B5, §B6 ; Q5 tranchée par le dossier type, DPIC-PI §9.4-9.5 ;
+arbitrages du pilote du 08/10 : **dépenses remboursables saisies par la commission**, **négociation conduite par la PRMP** (ou son
+UGPM), **échec motivé puis le suivant** (Q7, en attente du juriste), **séance complémentaire** pour ouvrir la financière du suivant).
+Migration **V89** (`t_evaluation_financiere`, `t_evaluation_classement_pi`, `t_negociation` ; `t_seance_financiere` passe à une ligne
+par **ronde**). Aucune dépendance ajoutée. Accès : celui de l'évaluation (`/evaluation/**`) et de la séance (`/seance/**`).
+
+| Méthode | URL | Corps | Statuts | Accès |
+|---|---|---|---|---|
+| GET | /api/fiches-marche/{idDmc}/evaluation/financiere | → `FinanciereDto` | 404, 409 `CATEGORIE_SANS_NOTATION_TECHNIQUE` | CAO, responsable, PRMP, UGPM |
+| GET | …/evaluation/financiere/offres/{idFinanciere}/corrections-proposees | → `[{ ligne, libelle, avant, apres, regle }]` | 404 | idem |
+| PUT | …/evaluation/financiere/offres/{idFinanciere} | `{ prixLu?, corrections[{ ligne, libelle, avant, apres, regle, retenue }], remboursables, motifRemboursables?, refusCandidat?{ motif, clause } }` | 400 `PRIX_LU_OBLIGATOIRE`, `CORRECTION_INVALIDE`, `REGLE_INCONNUE`, `REMBOURSABLES_INVALIDES`, `MOTIF_OBLIGATOIRE`, `CLAUSE_OBLIGATOIRE` ; 403, `MEMBRE_EN_CONFLIT` ; 404 ; 409 `DECLARATION_MANQUANTE`, `FINANCIERE_NON_OUVERTE`, `CLASSEMENT_ARRETE`, `NEGOCIATION_CONCLUE`, `EVALUATION_CLOSE` | membre déclaré sans conflit |
+| POST | …/evaluation/financiere/lots/{lot}/departager | `{ ordre[idOffre…], motif }` | 400 `ORDRE_INVALIDE`, `MOTIF_OBLIGATOIRE` ; 409 `CLASSEMENT_ARRETE` | membre déclaré sans conflit |
+| POST | …/evaluation/financiere/lots/{lot}/arreter | `{ observation? }` | 403 ; 409 `SEANCE_FINANCIERE_NON_OUVERTE`, `CLASSEMENT_ARRETE`, `EVALUATION_FINANCIERE_INCOMPLETE` (`details.offres`), `POIDS_INVALIDES`, `BUDGET_DISPONIBLE_ABSENT`, `EGALITE_NON_DEPARTAGEE` (`details.offres`), `AUCUNE_PROPOSITION_CLASSEE` | président de la CAO |
+| POST | …/evaluation/financiere/lots/{lot}/rouvrir | `{ motif }` | 400 `MOTIF_OBLIGATOIRE` ; 409 `CLASSEMENT_NON_ARRETE`, `NEGOCIATION_ENGAGEE` | président |
+| GET | …/evaluation/negociation | → `NegociationDto` | | CAO, responsable, PRMP, UGPM |
+| POST | …/evaluation/negociation/lots/{lot}/ouvrir | `{ prevueLe?, lieu? }` | 403 ; 409 `CLASSEMENT_NON_ARRETE`, `NEGOCIATION_EN_COURS`, `NEGOCIATION_CONCLUE`, `AUCUN_CANDIDAT_A_NEGOCIER`, `FINANCIERE_NON_OUVERTE` (`details.idOffre`, `details.numero`) | PRMP, UGPM |
+| PUT | …/evaluation/negociation/{id}/piece | multipart `fichier` | 400 `FICHIER_VIDE` ; 409 `NEGOCIATION_CLOSE` | PRMP, UGPM |
+| GET | …/evaluation/negociation/{id}/piece | → le fichier | 404 | CAO, responsable, PRMP, UGPM |
+| POST | …/evaluation/negociation/{id}/conclure | `{ resultat: REUSSIE\|ECHOUEE, dateNegociation, lieu?, texte, motif? }` | 400 `RESULTAT_INVALIDE`, `DATE_OBLIGATOIRE`, `PV_OBLIGATOIRE`, `MOTIF_OBLIGATOIRE` (échec) ; 409 `NEGOCIATION_CLOSE`, `MONTANT_NON_EVALUE` | PRMP, UGPM |
+| GET | …/evaluation/negociation/{id}/pv[?format=docx] | → PDF (ou Word) | 404 | CAO, responsable, PRMP, UGPM |
+| POST | …/seance/financiere/complementaire | `{ lot?, motif }` | 400 `MOTIF_OBLIGATOIRE`, `LOT_OBLIGATOIRE` ; 409 `SEANCE_FINANCIERE_EN_COURS`, `COMPLEMENTAIRE_SANS_OBJET`, `AUCUNE_FINANCIERE_A_OUVRIR` | responsable |
+| GET | …/seance/financiere/pv?ronde=n | → le PV d'une ronde | 404 | comme la séance |
+
+- **`FinanciereDto`** : `{ idDmc, methode, codeMethode (QUALITE_COUT | BUDGET | MOINDRE_COUT | QUALITE_TECHNIQUE | QUALIFICATION),
+  poidsTechnique, poidsFinancier, budget, lots[{ lot, arret, departage{ ordre, motif, par, nom, le }, propositions[{ idOffre (technique),
+  idFinanciere, numero, nif, raisonSociale, noteTechnique, rangTechnique, financiereOuverte, saisie, statut, motif, montantCompare,
+  scoreFinancier, scoreCombine, rang, egalite }] }] }`. Seules les propositions **qualifiées** techniquement y figurent. `statut` :
+  `NON_OUVERTE`, `A_EVALUER`, `EVALUEE`, `ECARTEE` (refus d'une correction), `HORS_BUDGET`.
+- **La saisie** (règles de correction du lot 1) : prix lu HT de l'acte d'engagement (à défaut saisi), corrections retenues, **dépenses
+  remboursables** (0 par défaut, au plus le prix corrigé). `montantCompare` = prix corrigé − dépenses remboursables.
+- **Le classement** : *qualité-coût* `Sf = 100 × Fm / F` (F = `montantCompare`, Fm le plus bas, deux décimales), `S = T × wT + Sf × wF`
+  (`B06-CS-02`, `B06-CS-03` : totalisant 1, ou 100 ramenés à 1 ; sinon `poidsTechnique` nul et 409 `POIDS_INVALIDES` à l'arrêt), rang
+  par S décroissant ; *budget prédéterminé* : prix corrigé HT au-delà de `B05-PF-13` → `HORS_BUDGET`, rang par note technique ; *moindre
+  coût* : rang par `montantCompare` croissant ; *qualité technique exclusivement*, *qualification du consultant* : rang par note
+  technique, enveloppe ouverte ou non (la saisie de la financière reste permise après l'arrêt, jusqu'à la réussite de sa négociation).
+  Une égalité garde le même rang (`egalite` vrai) jusqu'au **départage** motivé ; l'arrêt l'exige.
+- **`NegociationDto`** : `{ idDmc, lots[{ lot, classementArrete, prochain{ idOffre, numero, raisonSociale, rang, financiereOuverte },
+  conclue, negociations[{ id, idOffre, idFinanciere, numero, raisonSociale, rang, etat (EN_COURS|REUSSIE|ECHOUEE), ouverteLe,
+  ouvertePar, prevueLe, lieu, conclueLe, concluePar, dateNegociation, texte, motifEchec, pieceNom, pvDisponible }] }] }`. `prochain` :
+  le classé suivant sans échec, nul s'il y a une négociation en cours ou réussie.
+- **La négociation** : une seule à la fois par lot, une seule réussie (index uniques) ; le lieu par défaut est `B06-NG-01` ; le candidat
+  est notifié (`NEGOCIATION`), les membres de la CAO le sont à la conclusion. La réussite exige sa financière évaluée et non écartée.
+  Le PV (PDF et Word) rappelle l'art. 42-IV ; le serveur ne contrôle pas que la négociation reste non substantielle.
+- **La séance complémentaire** (qualité technique exclusivement, qualification du consultant) : après l'échec, `FINANCIERE_NON_OUVERTE`
+  sur le suivant ; le responsable ouvre une **ronde** (`ronde` 2, 3…) pour sa seule enveloppe, avec un motif : mêmes parts, mêmes
+  clés, même quorum (`mes-parts`, `parts`, `cloturer` agissent sur la ronde courante), PV « d'ouverture complémentaire ».
+  `SeanceFinanciereDto` gagne `ronde`, `motif`, `rondes[{ ronde, etat, motif, ouverteLe, closeLe, pvDisponible }]`.
+- **Journal** : `MONTANT_FINANCIER`, `DEPARTAGE_FINANCIER`, `CLASSEMENT_ARRETE`, `CLASSEMENT_ROUVERT`, `NEGOCIATION_OUVERTE`,
+  `NEGOCIATION_PIECE`, `NEGOCIATION_REUSSIE`, `NEGOCIATION_ECHOUEE`, `SEANCE_COMPLEMENTAIRE`.
+- **Suite (PI-d2b)** : le rapport adapté (grilles des membres, scores, négociation), la proposition d'attribution (la négociation
+  réussie), le dossier de marché, l'infructuosité (art. 56-II).
+
+
 ### Le rabais structuré de l'offre en ligne ⚠️ 2026-10-07
 
 Demande front `demande-backend-2026-10-07-rabais-structure.md` (arbitrage Q4 du pilote : « le rabais est structuré au dépôt »). Aucune

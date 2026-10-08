@@ -74,11 +74,12 @@ public class SeanceFinanciereService {
     private final EvaluationJournalRepository journal;
     private final ObjectMapper mapper;
     private final Clock horloge;
+    private final NegociationService negociation;
 
     public SeanceFinanciereService(SeanceService seance, PartsEnSeance memoire, SeanceRepository seances, SeanceFinanciereRepository financieres,
             OffreRepository offres, EvaluationTechniqueService technique, FicheMarcheService fiches, ParametresInternesService internes,
             NotificationService notifications, CompteCandidatRepository candidats, GenerateurDocumentsFiche generateur,
-            EvaluationJournalRepository journal, ObjectMapper mapper, Clock horloge) {
+            EvaluationJournalRepository journal, ObjectMapper mapper, Clock horloge, NegociationService negociation) {
         this.seance = seance;
         this.memoire = memoire;
         this.seances = seances;
@@ -93,6 +94,7 @@ public class SeanceFinanciereService {
         this.journal = journal;
         this.mapper = mapper;
         this.horloge = horloge;
+        this.negociation = negociation;
     }
 
     // ------------------------------------------------------------------ lecture
@@ -106,9 +108,10 @@ public class SeanceFinanciereService {
 
     /** Le PV de la seconde séance (PDF, ou Word) ; 404 tant qu'il n'est pas produit. */
     @Transactional(readOnly = true)
-    public byte[] pv(Long idDmc, boolean docx) {
+    public byte[] pv(Long idDmc, boolean docx, Integer ronde) {
         seance.exigerLecteur(idDmc, true);
-        SeanceFinanciere s = exiger(idDmc);
+        SeanceFinanciere s = ronde == null ? exiger(idDmc) : financieres.findById(new SeanceFinanciere.Cle(idDmc, ronde))
+                .orElseThrow(() -> new ResourceNotFoundException("Ronde inconnue : " + ronde + "."));
         byte[] b = docx ? s.getPvDocx() : s.getPv();
         if (b == null) {
             throw new ResourceNotFoundException("Le PV de la seconde séance n'est pas produit.");
@@ -125,7 +128,7 @@ public class SeanceFinanciereService {
      */
     public SeanceFinanciereDto ouvrir(Long idDmc) {
         seance.exigerResponsable(idDmc);
-        if (financieres.existsById(idDmc)) {
+        if (financieres.existsByIdDmc(idDmc)) {
             throw new BusinessRuleException("La seconde séance est déjà ouverte.", "SEANCE_FINANCIERE_OUVERTE");
         }
         if (!seances.findById(idDmc).map(s -> Seance.CLOSE.equals(s.getEtat())).orElse(false)) {
@@ -145,6 +148,7 @@ public class SeanceFinanciereService {
         }
         SeanceFinanciere s = new SeanceFinanciere();
         s.setIdDmc(idDmc);
+        s.setRonde(1);
         s.setEtat(SeanceFinanciere.OUVERTE);
         s.setMethode(methode);
         s.setAOuvrir(String.join(",", sel.aOuvrir().stream().map(Offre::getIdOffre).toList()));
@@ -199,6 +203,64 @@ public class SeanceFinanciereService {
             }
         }
         return new Selection(aOuvrir, non);
+    }
+
+    // ------------------------------------------------------------------ ⚠️ PI-d2a : la séance complémentaire
+
+    /**
+     * Après l'échec d'une négociation, quand seule la financière du premier classé a été ouverte (qualité technique exclusivement,
+     * qualification du consultant), le responsable ouvre une séance complémentaire pour la seule enveloppe du candidat suivant :
+     * mêmes clés, mêmes parts, même quorum, PV complémentaire. 400 {@code MOTIF_OBLIGATOIRE}, {@code LOT_OBLIGATOIRE} ; 409
+     * {@code SEANCE_FINANCIERE_EN_COURS}, {@code COMPLEMENTAIRE_SANS_OBJET} (méthode qui a ouvert toutes les financières),
+     * {@code AUCUNE_FINANCIERE_A_OUVRIR}.
+     */
+    public SeanceFinanciereDto complementaire(Long idDmc, SeanceFinanciereDto.Complementaire c) {
+        seance.exigerResponsable(idDmc);
+        SeanceFinanciere courante = exiger(idDmc);
+        if (!SeanceFinanciere.CLOSE.equals(courante.getEtat())) {
+            throw new BusinessRuleException("La séance financière en cours n'est pas close.", "SEANCE_FINANCIERE_EN_COURS");
+        }
+        if (!EvaluationFinanciereService.parNoteTechnique(EvaluationFinanciereService.codeMethode(courante.getMethode()))) {
+            throw new BusinessRuleException("Selon la méthode de sélection, toutes les propositions financières des qualifiées sont déjà ouvertes.",
+                    "COMPLEMENTAIRE_SANS_OBJET");
+        }
+        String motif = c == null || c.motif() == null || c.motif().isBlank() ? null : c.motif().trim();
+        if (motif == null) {
+            throw new BadRequestException("La séance complémentaire se motive (l'échec de la négociation).", "MOTIF_OBLIGATOIRE");
+        }
+        List<TechniqueDto.Lot> lots = technique.resultats(idDmc).lots();
+        Integer lot = c.lot() != null ? c.lot() : lots.size() == 1 ? lots.get(0).lot() : null;
+        if (lot == null) {
+            throw new BadRequestException("Précisez le lot.", "LOT_OBLIGATOIRE");
+        }
+        cnm.prs.dto.FinanciereDto.Ligne p = negociation.prochain(idDmc, lot);
+        if (p == null || p.idFinanciere() == null || p.financiereOuverte()) {
+            throw new BusinessRuleException("Aucune enveloppe financière n'est à ouvrir : pas de candidat suivant, ou son enveloppe est déjà ouverte.",
+                    "AUCUNE_FINANCIERE_A_OUVRIR");
+        }
+        Offre fin = offres.findById(p.idFinanciere()).orElseThrow();
+        SeanceFinanciere s = new SeanceFinanciere();
+        s.setIdDmc(idDmc);
+        s.setRonde(courante.getRonde() + 1);
+        s.setMotif(motif);
+        s.setEtat(SeanceFinanciere.OUVERTE);
+        s.setMethode(courante.getMethode());
+        s.setAOuvrir(fin.getIdOffre());
+        s.setOuverteLe(maintenant());
+        s.setOuvertePar(acteur());
+        s.setSecoursEmploye(false);
+        financieres.save(s);
+        tracer(idDmc, "SEANCE_COMPLEMENTAIRE", "Ronde " + s.getRonde() + ", lot " + lot + " : enveloppe financière du candidat classé "
+                + p.rang() + " (n° " + p.numero() + ") — " + motif);
+        for (String k : internes.membresCao(idDmc)) {
+            internes.notifierMembre(idDmc, k, TypeNotification.PARTS_ATTENDUES, "Séance complémentaire : apportez vos parts", "Une séance "
+                    + "complémentaire de la procédure " + idDmc + " ouvre la proposition financière n° " + p.numero() + " : apportez vos parts.");
+        }
+        CompteCandidat cc = candidats.findById(fin.getIdCandidat()).orElse(null);
+        notifications.emettreCandidat(TypeNotification.SEANCE_FINANCIERE, fin.getIdCandidat(), cc == null ? null : cc.getEmail(), idDmc.intValue(),
+                TypeObjet.PROCEDURE, "Ouverture de votre proposition financière", "Votre proposition n° " + p.numero() + " est classée au rang "
+                        + p.rang() + " : son enveloppe financière s'ouvre en séance complémentaire ; vous êtes invité à y assister.");
+        return dto(s);
     }
 
     // ------------------------------------------------------------------ les parts
@@ -328,7 +390,12 @@ public class SeanceFinanciereService {
 
     private DocumentLibre document(SeanceFinanciere s, SeanceFinanciereDto d) {
         List<DocumentLibre.Element> el = new ArrayList<>();
-        el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.TITRE, "PROCÈS-VERBAL D'OUVERTURE DES PROPOSITIONS FINANCIÈRES"));
+        boolean complementaire = s.getRonde() != null && s.getRonde() > 1;
+        el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.TITRE, complementaire
+                ? "PROCÈS-VERBAL D'OUVERTURE COMPLÉMENTAIRE DES PROPOSITIONS FINANCIÈRES" : "PROCÈS-VERBAL D'OUVERTURE DES PROPOSITIONS FINANCIÈRES"));
+        if (complementaire) {
+            para(el, "Séance complémentaire n° " + (s.getRonde() - 1) + ". Motif : " + s.getMotif());
+        }
         para(el, "Procédure " + s.getIdDmc() + (s.getMethode() == null ? "" : " — méthode de sélection : " + s.getMethode())
                 + ". Séance ouverte le " + s.getOuverteLe().format(HORODATAGE) + ", enveloppes ouvertes le "
                 + (s.getDechiffreeLe() == null ? "—" : s.getDechiffreeLe().format(HORODATAGE)) + ".");
@@ -389,9 +456,17 @@ public class SeanceFinanciereService {
         }
         List<SeanceDto.Autre> autres = s.getAutres() == null ? List.of() : mapper.readValue(s.getAutres(), new TypeReference<List<SeanceDto.Autre>>() {
         });
-        return new SeanceFinanciereDto(idDmc, s.getEtat(), s.getMethode(), seance.quorum(idDmc), env, t == null ? List.of() : selection(idDmc, t, s.getMethode()).nonOuvertes(),
+        // ⚠️ PI-d2a — une enveloppe ouverte en séance complémentaire n'est plus « non ouverte ».
+        List<SeanceFinanciereDto.NonOuverte> nonOuvertes = t == null ? List.of() : selection(idDmc, t, s.getMethode()).nonOuvertes().stream()
+                .filter(n -> toutes.stream().noneMatch(x -> Offre.FINANCIERE.equals(x.getEnveloppe()) && x.getOuverteLe() != null
+                        && Objects.equals(x.getNumero(), n.numero()) && (x.getLot() == null || Objects.equals(x.getLot(), n.lot()))))
+                .toList();
+        List<SeanceFinanciereDto.Ronde> rondes = financieres.findByIdDmcOrderByRondeAsc(idDmc).stream()
+                .map(r -> new SeanceFinanciereDto.Ronde(r.getRonde(), r.getEtat(), r.getMotif(), r.getOuverteLe(), r.getCloseLe(), r.getPv() != null))
+                .toList();
+        return new SeanceFinanciereDto(idDmc, s.getEtat(), s.getMethode(), seance.quorum(idDmc), env, nonOuvertes,
                 cnm.prs.entity.ChampFicheMarche.liste(s.getPresents()), autres, Boolean.TRUE.equals(s.getSecoursEmploye()), s.getOuverteLe(),
-                s.getDechiffreeLe(), s.getCloseLe(), s.getPv() != null);
+                s.getDechiffreeLe(), s.getCloseLe(), s.getPv() != null, s.getRonde(), s.getMotif(), rondes);
     }
 
     private List<Offre> aOuvrir(SeanceFinanciere s) {
@@ -403,11 +478,11 @@ public class SeanceFinanciereService {
     }
 
     private SeanceFinanciere exiger(Long idDmc) {
-        return financieres.findById(idDmc).orElseThrow(() -> new ResourceNotFoundException("La seconde séance n'est pas ouverte."));
+        return financieres.findFirstByIdDmcOrderByRondeDesc(idDmc).orElseThrow(() -> new ResourceNotFoundException("La seconde séance n'est pas ouverte."));
     }
 
     private SeanceFinanciere exigerOuverte(Long idDmc) {
-        SeanceFinanciere s = financieres.findById(idDmc).filter(x -> SeanceFinanciere.OUVERTE.equals(x.getEtat()))
+        SeanceFinanciere s = financieres.findFirstByIdDmcOrderByRondeDesc(idDmc).filter(x -> SeanceFinanciere.OUVERTE.equals(x.getEtat()))
                 .orElseThrow(() -> new BusinessRuleException("La seconde séance n'est pas ouverte aux parts.", "SEANCE_NON_OUVERTE"));
         return s;
     }

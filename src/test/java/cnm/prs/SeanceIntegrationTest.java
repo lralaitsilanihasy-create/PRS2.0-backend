@@ -392,6 +392,7 @@ class SeanceIntegrationTest extends CnmIntegrationTestSupport {
         // financière, mêmes clés, déchiffrement réel au quorum, lecture des montants, clôture et PV.
         cnm.prs.entity.SeanceFinanciere sf = new cnm.prs.entity.SeanceFinanciere();
         sf.setIdDmc(idDmc);
+        sf.setRonde(1);
         sf.setEtat(cnm.prs.entity.SeanceFinanciere.OUVERTE);
         sf.setAOuvrir(financiere);
         sf.setOuverteLe(java.time.LocalDateTime.now().withNano(0));
