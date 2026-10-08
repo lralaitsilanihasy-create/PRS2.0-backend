@@ -79,8 +79,12 @@ CREATE TABLE IF NOT EXISTS public.t_ami_signature (
     CONSTRAINT uq_ami_signature UNIQUE ("ID_DMC", "IM")
 );
 
-INSERT INTO public.t_type_piece_jointe ("ID_TYPE_DOSSIER", "LIBELLE_PIECE", "OBLIGATOIRE", "ORDRE", "CODE")
-SELECT 'DMC', 'Rapport de présélection (AMI)', false,
+-- ⚠️ L'identifiant est posé explicitement (MAX + 1) : la séquence d'identité peut être en retard sur les lignes existantes (cas de
+-- DBPRS20 le 08/10 : séquence à 22, maximum à 23) ; elle est recalée ensuite sur le maximum.
+INSERT INTO public.t_type_piece_jointe ("ID_TYPE_PIECE", "ID_TYPE_DOSSIER", "LIBELLE_PIECE", "OBLIGATOIRE", "ORDRE", "CODE")
+SELECT (SELECT COALESCE(MAX("ID_TYPE_PIECE"), 0) + 1 FROM public.t_type_piece_jointe), 'DMC', 'Rapport de présélection (AMI)', false,
        (SELECT COALESCE(MAX("ORDRE"), 0) + 1 FROM public.t_type_piece_jointe WHERE "ID_TYPE_DOSSIER" = 'DMC'), 'RAPPORT_PRESELECTION'
  WHERE EXISTS (SELECT 1 FROM public.tr_type_dossier WHERE "ID_TYPE_DOSSIER" = 'DMC')
    AND NOT EXISTS (SELECT 1 FROM public.t_type_piece_jointe WHERE "CODE" = 'RAPPORT_PRESELECTION');
+SELECT setval(pg_get_serial_sequence('public.t_type_piece_jointe', 'ID_TYPE_PIECE'), MAX("ID_TYPE_PIECE"))
+  FROM public.t_type_piece_jointe HAVING MAX("ID_TYPE_PIECE") IS NOT NULL;
