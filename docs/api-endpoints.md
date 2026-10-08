@@ -7596,6 +7596,39 @@ rapport complet** (08/10, comme la reprise de 2d-1) ; un délai de validité non
   `EN_EVALUATION`). Journal : `REATTRIBUTION`, `NEGOCIATION_RETIREE`, `EVALUATION_REPRISE`.
 
 
+### L'attribution, lot 2, tranche 2d-3 : la déclaration sans suite — V93 ⚠️ 2026-10-08
+
+Demande front `demande-backend-2026-10-07-attribution-notification.md` (§B6 « sans suite », Q10 ; art. 55). Arbitrages du pilote :
+l'avis est rendu par **l'organe de contrôle, dans un dossier du circuit** (07/10) ; une **famille propre `DSS`** ; les **5 jours**
+courent de la **réception** ; la **signature** du PV reste celle du circuit (le paramétrage attend le décret) ; le sans suite est
+**déclaré par un geste de la PRMP** après l'avis favorable (08/10). Migration **V93** (famille et sous-type `DSS`, pièce
+`MOTIFS_SANS_SUITE`, `t_sans_suite`). Aucune dépendance ajoutée.
+
+| Méthode | URL | Corps | Statuts | Accès |
+|---|---|---|---|---|
+| GET | /api/fiches-marche/{idDmc}/sans-suite | → `SansSuiteDto` | | PRMP, UGPM et les lecteurs de la fiche |
+| POST | /api/fiches-marche/{idDmc}/sans-suite | `{ motifs }` | 400 `MOTIFS_OBLIGATOIRES` ; 403 ; 409 `MARCHE_SIGNE`, `SANS_SUITE_EN_COURS`, `SANS_SUITE_DECLAREE`, `SOUS_TYPE_ABSENT` | PRMP seule |
+| POST | …/sans-suite/declarer | `{ decision{ reference, date } }` | 400 `DECISION_OBLIGATOIRE`, `DECISION_DATE_INVALIDE` ; 403 ; 409 `AUCUNE_DEMANDE`, `AVIS_NON_FAVORABLE`, `SANS_SUITE_DECLAREE`, `MARCHE_SIGNE` | PRMP seule |
+| GET | …/sans-suite/{id}/motifs[?format=docx] | → les motifs (PDF ou Word) | 404 | comme la lecture |
+
+- **`SansSuiteDto`** : `{ idDmc, declaree, courante, demandes[{ id, motifs, demandeLe, demandePar, idDossier, statutDossier, recuLe,
+  echeance, echeanceDepassee, avis, etat, decisionReference, decisionDate, declareLe, motifsDisponibles }] }` ; `etat` ∈ `A_SOUMETTRE`
+  (dossier en brouillon), `AU_CONTROLE`, `FAVORABLE`, `DEFAVORABLE`, `DECLAREE` ; `echeance` = réception + 5 jours.
+- **La demande** crée le **dossier `DSS`** (brouillon) et y joint la pièce **`MOTIFS_SANS_SUITE`**, produite par le serveur : la PRMP le
+  soumet par le circuit ordinaire (recevabilité, réception, dispatch, examen, PV, signatures). Possible à tout moment **avant la
+  signature** d'un marché de la procédure (409 `MARCHE_SIGNE`). Une seule demande à la fois.
+- **L'avis** : le PV d'un dossier `DSS` n'admet que **`FAV`** ou **`DEF`** (409 `AVIS_SANS_SUITE` sur `FAVR` ou `NSP`). L'avis se lit au PV
+  signé ; le planificateur horaire le constate et avertit la PRMP (`SANS_SUITE_AVIS`) ; la veille de l'échéance, la PRMP et le membre
+  examinateur (ou le chef de commission) reçoivent `ECHEANCE_SANS_SUITE`, une fois. **Défavorable** : la procédure reprend son cours,
+  une nouvelle demande reste possible.
+- **Tant qu'une demande attend son avis**, la signature d'un marché répond 409 **`SANS_SUITE_EN_COURS`**.
+- **La déclaration** (après `FAV`) : procédure **close sans suite** ; chaque candidat ayant déposé reçoit **`PROCEDURE_SANS_SUITE`** avec
+  les motifs (aucune indemnité, art. 55) ; la page publique (`GET /api/procedures-en-ligne/{idDmc}/resultats`) ne sert plus qu'une
+  entrée : `lot` nul, **`sansSuite`** vrai, `motifsSansSuite`, `dateDecision`. Ensuite, tout geste d'attribution (dossier de marché,
+  attribution, information, infructuosité, reprise, réattribution, nouvelle demande) répond 409 **`SANS_SUITE_DECLAREE`**.
+- Journal : `SANS_SUITE_DEMANDE`, `SANS_SUITE`.
+
+
 ### Le rabais structuré de l'offre en ligne ⚠️ 2026-10-07
 
 Demande front `demande-backend-2026-10-07-rabais-structure.md` (arbitrage Q4 du pilote : « le rabais est structuré au dépôt »). Aucune

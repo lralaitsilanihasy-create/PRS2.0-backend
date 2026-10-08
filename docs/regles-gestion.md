@@ -982,6 +982,14 @@ post-qualification (étape 5), et le rapport d'évaluation. Contrat : `docs/api-
   attribution, une nouvelle information de tous les candidats et un nouveau délai d'attente. Les pièces, recours et lettres de
   l'attribution retirée ne comptent plus. S'il ne reste aucun candidat éligible, la procédure ne peut pas être déclarée infructueuse
   (une attribution a eu lieu) : seule une déclaration sans suite peut la clore.
+- ⚠️ **La déclaration sans suite** (lot 2, tranche 2d-3, 2026-10-08 ; arbitrages du pilote Q10 ; loi n° 2016-055, art. 55) : à tout
+  moment avant la signature d'un marché de la procédure, la PRMP peut demander, pour un motif d'intérêt général, à déclarer la
+  procédure sans suite. Ses motifs forment un dossier « Déclaration sans suite » qu'elle soumet à la Commission, comme tout
+  dossier ; la Commission rend son avis dans les cinq jours de la réception, favorable ou défavorable, sans autre issue ; la PRMP
+  et le membre examinateur sont alertés la veille de l'échéance. Tant que l'avis est attendu, aucun marché ne se signe. Un avis
+  défavorable laisse la procédure reprendre son cours. Après un avis favorable, la PRMP déclare le sans suite par sa décision :
+  chaque candidat est averti, avec les motifs, la page publique l'affiche, et plus aucun geste d'attribution n'est possible.
+  L'attributaire n'a droit ni à la signature ni à une indemnité.
 - ⚠️ **Le DAO complet dispense du CCAG et du CCTP** (2026-10-07) : un dossier d'appel d'offres qui porte le DAO complet produit par la
   fiche n'a plus à joindre à part le **cahier des clauses administratives générales**, qu'il contient toujours, ni le **cahier des
   clauses techniques particulières** quand la fiche porte ses spécifications techniques ; sans spécifications, le CCTP reste exigé.

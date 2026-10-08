@@ -556,6 +556,14 @@ public class PvExamenService {
     }
 
     private void validerCoherenceAvis(Integer idExamen, String idAvis) {
+        // ⚠️ 2026-10-08 (lot 2, 2d-3, Q10) — l'avis sur une déclaration sans suite n'a que deux issues : favorable ou défavorable.
+        Integer idDossierExamine = idExamen == null ? null : dossierRepository.idDossierDeLExamen(idExamen).orElse(null);
+        if (idDossierExamine != null && dossierRepository.findById(idDossierExamine)
+                .map(d -> SansSuiteService.SOUS_TYPE.equals(d.getIdTypeDossier())).orElse(false)
+                && !SansSuiteService.AVIS_PERMIS.contains(idAvis)) {
+            throw new BusinessRuleException("Sur une déclaration sans suite, l'avis est « Favorable » ou « Défavorable », sans autre issue.",
+                    "AVIS_SANS_SUITE");
+        }
         long observations = examenDetailRepository.findByIdExamen(idExamen).stream()
                 .filter(d -> Boolean.FALSE.equals(d.getConforme())).count()
                 + examenPieceRepository.findByIdExamen(idExamen).stream()

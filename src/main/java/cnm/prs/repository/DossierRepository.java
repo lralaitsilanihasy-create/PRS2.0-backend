@@ -577,4 +577,8 @@ public interface DossierRepository extends JpaRepository<Dossier, Integer> {
                           where r.idDossier = d.idDossier and r.ctrlRecept.idLocalite = :loc)
             """)
     long countEnAttentePrmpParLocalite(@Param("loc") String loc);
+
+    /** ⚠️ 2d-3 (sans suite) — le dossier d'un examen (l'avis d'un dossier DSS n'a que deux issues). */
+    @Query("select e.dispatch.reception.idDossier from Examen e where e.idExamen = :idExamen")
+    java.util.Optional<Integer> idDossierDeLExamen(@Param("idExamen") Integer idExamen);
 }

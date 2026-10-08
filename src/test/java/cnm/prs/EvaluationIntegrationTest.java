@@ -860,7 +860,55 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(pieceRepository.findAll()).filteredOn(p -> p.getIdDmc().equals(idDmc)).allMatch(p -> p.getArchiveLe() != null);
         mvc.perform(post(att + "/lots/1/reattribuer").header("Authorization", tokenPrmp).contentType(JSON).content("{\"motif\":\"x\"}"))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("NON_RETIRE"));
+
+        // ⚠️ 2d-3 (§B6, Q10) — la déclaration sans suite : un dossier DSS au circuit de la Commission, l'avis, la déclaration.
+        typeDossierRepository.save(new cnm.prs.entity.TypeDossier("DSS", "Déclaration sans suite"));
+        sousTypeDossierRepository.save(new cnm.prs.entity.SousTypeDossier("DSS", "Déclaration sans suite", "DSS"));
+        cnm.prs.entity.TypePieceJointe motifsType = typePieceJointeRepository.findById(seedTypePiece("Motifs de la déclaration sans suite", true,
+                "DSS", 1)).orElseThrow();
+        motifsType.setCode("MOTIFS_SANS_SUITE");
+        typePieceJointeRepository.save(motifsType);
+        String ss = "/api/fiches-marche/" + idDmc + "/sans-suite";
+        mvc.perform(post(ss).header("Authorization", tokenUgpm).contentType(JSON).content("{\"motifs\":\"x\"}")).andExpect(status().isForbidden());
+        mvc.perform(post(ss).header("Authorization", tokenPrmp).contentType(JSON).content("{}")).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("MOTIFS_OBLIGATOIRES"));
+        String dem = mvc.perform(post(ss).header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"motifs\":\"Le besoin a disparu : le programme est annulé par la loi de finances rectificative.\"}"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<String>read(dem, "$.courante.etat")).isEqualTo("A_SOUMETTRE");
+        int idDss = JsonPath.read(dem, "$.courante.idDossier");
+        assertThat(dossierRepository.findById(idDss).orElseThrow().getIdTypeDossier()).isEqualTo("DSS");
+        assertThat(pieceJointeDossierRepository.findAll()).filteredOn(p -> p.getIdDossier().equals(idDss)).hasSize(1);
+        mvc.perform(post(ss).header("Authorization", tokenPrmp).contentType(JSON).content("{\"motifs\":\"x\"}")).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("SANS_SUITE_EN_COURS"));
+        String decision = "{\"decision\":{\"reference\":\"DEC-SS-1\",\"date\":\"" + aujourdhui + "\"}}";
+        mvc.perform(post(ss + "/declarer").header("Authorization", tokenPrmp).contentType(JSON).content(decision)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("AVIS_NON_FAVORABLE"));
+        // La Commission reçoit le dossier et rend un avis favorable (PV signé posé en base).
+        receptionRepository.save(reception(idDss, idDss, "CTRCC1", true));
+        dispatchRepository.save(dispatch(idDss, idDss, "CTRCC1", "CTRMEM", "CTRPRE"));
+        examenRepository.save(examen(idDss, idDss, "CTRMEM"));
+        seedPvSigne(idDss, idDss);
+        String favorable = mvc.perform(get(ss).header("Authorization", tokenPrmp)).andExpect(status().isOk()).andReturn().getResponse()
+                .getContentAsString();
+        assertThat(JsonPath.<String>read(favorable, "$.courante.etat")).isEqualTo("FAVORABLE");
+        assertThat(JsonPath.<String>read(favorable, "$.courante.echeance")).isNotNull();
+        mvc.perform(post(ss + "/declarer").header("Authorization", tokenPrmp).contentType(JSON).content("{\"decision\":{}}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("DECISION_OBLIGATOIRE"));
+        mvc.perform(post(ss + "/declarer").header("Authorization", tokenPrmp).contentType(JSON).content(decision)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.declaree").value(true)).andExpect(jsonPath("$.courante.etat").value("DECLAREE"));
+        assertThat(notificationRepository.findPourRefEtType("C900000052", "CANDIDAT")).extracting(Notification::getTypeNotif)
+                .contains("PROCEDURE_SANS_SUITE");
+        mvc.perform(get("/api/procedures-en-ligne/" + idDmc + "/resultats")).andExpect(jsonPath("$[0].sansSuite").value(true))
+                .andExpect(jsonPath("$[0].motifsSansSuite").value(org.hamcrest.Matchers.startsWith("Le besoin a disparu")));
+        mvc.perform(post(att + "/lots/1/attribuer").header("Authorization", tokenPrmp).contentType(JSON).content("{}")).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("SANS_SUITE_DECLAREE"));
+        mvc.perform(post(ss).header("Authorization", tokenPrmp).contentType(JSON).content("{\"motifs\":\"x\"}")).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("SANS_SUITE_DECLAREE"));
+        mvc.perform(get(ss + "/" + JsonPath.<Number>read(favorable, "$.courante.id").longValue() + "/motifs").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk());
     }
+
 
     @Autowired private cnm.prs.repository.AttributionPieceRepository pieceRepository;
 

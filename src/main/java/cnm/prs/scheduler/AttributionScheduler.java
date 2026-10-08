@@ -18,14 +18,16 @@ public class AttributionScheduler {
     private static final Logger LOG = LoggerFactory.getLogger(AttributionScheduler.class);
 
     private final AttributionService service;
+    private final cnm.prs.service.SansSuiteService sansSuite;
 
-    public AttributionScheduler(AttributionService service) {
+    public AttributionScheduler(AttributionService service, cnm.prs.service.SansSuiteService sansSuite) {
+        this.sansSuite = sansSuite;
         this.service = service;
     }
 
     @Scheduled(cron = "${app.attribution.cron-alertes:0 15 * * * *}")
     public void alerter() {
-        int n = service.alerter();
+        int n = service.alerter() + sansSuite.suivre();   // ⚠️ 2d-3 : avis constaté, échéance des 5 jours
         if (n > 0) {
             LOG.info("Attribution : {} alerte(s) émise(s) à la PRMP.", n);
         }

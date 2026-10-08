@@ -210,7 +210,7 @@ public class SecurityConfig {
                     // identité dans le service : déclaration préalable, président), le responsable l'ouvre, la PRMP et l'UGPM lisent.
                     // ⚠️ 2026-10-07 (lot 2, §B7) — l'attribution aussi : les membres de la CAO y lisent l'état de leurs lots.
                     auth.requestMatchers("/api/fiches-marche/*/evaluation", "/api/fiches-marche/*/evaluation/**", "/api/fiches-marche/*/attribution",
-                            "/api/fiches-marche/*/attribution/**", "/api/fiches-marche/*/ami", "/api/fiches-marche/*/ami/**").hasAnyRole("MEMBRE_CAO", "PRMP",
+                            "/api/fiches-marche/*/attribution/**", "/api/fiches-marche/*/sans-suite", "/api/fiches-marche/*/sans-suite/**", "/api/fiches-marche/*/ami", "/api/fiches-marche/*/ami/**").hasAnyRole("MEMBRE_CAO", "PRMP",
                             "UGPM", "PRESIDENT", "CHEF_COMMISSION", "SECRETAIRE", "MEMBRE", "VERIFICATEUR", "ASSISTANT_CONTROLEUR",
                             "CHARGE_PUBLICATION", "ADMINISTRATEUR");
                     auth.requestMatchers("/api/fiches-marche/*/ceremonie/**").hasAnyRole("MEMBRE_CAO", "DEPOSITAIRE", "PRMP", "UGPM",

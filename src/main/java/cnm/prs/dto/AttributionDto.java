@@ -176,7 +176,9 @@ public record AttributionDto(Long idDmc, List<LotAttribution> lots) {
             /** ⚠️ 2c (§B4.4) — l'avis d'attribution publié : {@code GET /api/procedures-en-ligne/{idDmc}/avis-attribution/{lot}}. */
             LocalDate datePublicationAvis, boolean avisDisponible,
             /** ⚠️ 2d-1 (§B6) — le lot déclaré infructueux (attributaire et montant nuls) : le motif et la date de la décision. */
-            boolean infructueux, String motifInfructuosite, LocalDate dateDecision) {
+            boolean infructueux, String motifInfructuosite, LocalDate dateDecision,
+            /** ⚠️ 2d-3 (§B6) — la procédure déclarée sans suite (une seule entrée, {@code lot} nul) : ses motifs ; la date dans {@code dateDecision}. */
+            boolean sansSuite, String motifsSansSuite) {
     }
 /** ⚠️ 2d-1 (§B6) — la déclaration d'infructuosité du lot par la PRMP ; {@code suite} ∈ {@code RELANCE} · {@code RESTREINTE} · {@code NEGOCIEE}. */    public record Infructuosite(LocalDateTime le, String par, String motif, String decisionReference, LocalDate decisionDate, String suite) {    }    /** ⚠️ 2d-1 (Q3) — une reprise de l'évaluation : le dossier de marché refusé, son avis, le motif ; le rapport archivé. */    public record Reprise(Long id, LocalDateTime le, String par, String motif, Integer idDossier, String avis, boolean rapportDisponible,
             /** ⚠️ 2d-2 — {@code REPRISE} (avis défavorable) ou {@code REATTRIBUTION} (retrait) ; l'offre retirée ; la note de validité. */

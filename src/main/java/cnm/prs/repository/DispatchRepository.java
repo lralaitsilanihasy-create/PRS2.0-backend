@@ -120,4 +120,7 @@ public interface DispatchRepository extends JpaRepository<Dispatch, Integer> {
     /** Prochaine PK allouee par la sequence serveur {@code seq_dispatch} (allocation atomique). */
     @Query(value = "select nextval('seq_dispatch')", nativeQuery = true)
     Long nextIdDispatch();
+
+    /** ⚠️ 2d-3 (sans suite) — le dernier dispatch d'une réception (son membre examinateur, alerté de l'échéance). */
+    java.util.Optional<Dispatch> findFirstByIdReceptionOrderByIdDispatchDesc(Integer idReception);
 }

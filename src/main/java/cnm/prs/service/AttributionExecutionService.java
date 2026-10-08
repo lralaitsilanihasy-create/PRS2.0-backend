@@ -91,12 +91,16 @@ public class AttributionExecutionService {
     private final GenerateurDocumentsFiche generateur;
     private final ParametreService parametres;
     private final Clock horloge;
+    /** ⚠️ 2d-3 — une demande de sans suite en cours suspend la signature. */
+    private final org.springframework.beans.factory.ObjectProvider<SansSuiteService> sansSuite;
 
     public AttributionExecutionService(AttributionRepository attributions, AttributionRecoursRepository recoursRepository,
             AttributionPieceRepository piecesRepository, AttributionLettreRepository lettres, OffreRepository offres,
             CompteCandidatRepository candidats, PrmpRepository prmpRepository, DossierMecRepository dmcRepository,
             NotificationService notifications, CeremonieService ceremonies, EvaluationService evaluation, FicheMarcheService fiches,
-            ValeursPpmService valeursPpm, GenerateurDocumentsFiche generateur, ParametreService parametres, Clock horloge) {
+            ValeursPpmService valeursPpm, GenerateurDocumentsFiche generateur, ParametreService parametres, Clock horloge,
+            org.springframework.beans.factory.ObjectProvider<SansSuiteService> sansSuite) {
+        this.sansSuite = sansSuite;
         this.attributions = attributions;
         this.recoursRepository = recoursRepository;
         this.piecesRepository = piecesRepository;
@@ -441,6 +445,7 @@ public class AttributionExecutionService {
      */
     public void signer(Long idDmc, Integer lot, LocalDate dateSignature, MultipartFile fichier) {
         exigerPrmp(idDmc);
+        sansSuite.getObject().exigerAucuneDemandeEnCours(idDmc);   // ⚠️ 2d-3 : le sans suite précède la signature (art. 55)
         Attribution a = attributions.findById(new Attribution.Cle(idDmc, lot)).filter(x -> x.getInformeLe() != null)
                 .orElseThrow(() -> new BusinessRuleException("Les candidats de ce lot ne sont pas informés.", "NON_INFORME"));
         exigerNonSigne(a);

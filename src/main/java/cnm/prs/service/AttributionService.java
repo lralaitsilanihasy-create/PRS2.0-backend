@@ -108,6 +108,8 @@ public class AttributionService {
     private final ResultatsPi resultatsPi;
     /** ⚠️ 2d-1 (Q3) — les reprises de l'évaluation après un avis défavorable. */
     private final cnm.prs.repository.AttributionRepriseRepository reprises;
+    /** ⚠️ 2d-3 — la déclaration sans suite : elle arrête les gestes d'attribution et s'affiche sur la page publique. */
+    private final SansSuiteService sansSuite;
 
     public AttributionService(AttributionRepository attributions, EvaluationService evaluation, SeanceService seance, SaisieService saisie,
             ValeursPpmService valeursPpm, FicheMarcheService fiches, EntrepriseCandidatService entreprises, GenerateurDocumentsFiche generateur,
@@ -117,7 +119,8 @@ public class AttributionService {
             cnm.prs.repository.AttributionExplicationRepository explications, cnm.prs.repository.CompteCandidatRepository candidats,
             cnm.prs.repository.PrmpRepository prmpRepository, NotificationService notifications, CeremonieService ceremonies,
             ParametreService parametres, java.time.Clock horloge, AttributionExecutionService execution, ResultatsPi resultatsPi,
-            cnm.prs.repository.AttributionRepriseRepository reprises) {
+            cnm.prs.repository.AttributionRepriseRepository reprises, SansSuiteService sansSuite) {
+        this.sansSuite = sansSuite;
         this.reprises = reprises;
         this.resultatsPi = resultatsPi;
         this.execution = execution;
@@ -195,6 +198,7 @@ public class AttributionService {
      */
     public AttributionDto attribuer(Long idDmc, Integer lot, AttributionDto.AttribuerRequest r) {
         exigerPrmpSeule(idDmc, "Le marché s'attribue par la PRMP de la fiche (art. 35-VII).");
+        sansSuite.exigerAucuneDeclaration(idDmc);   // ⚠️ 2d-3 : une procédure déclarée sans suite n'a plus de geste d'attribution
         Attribution a = attributions.findById(new Attribution.Cle(idDmc, lot)).orElse(null);
         if (a == null || a.getIdDossier() == null) {
             EvaluationDto.Lot l = lotEvalue(idDmc, lot);
@@ -249,6 +253,7 @@ public class AttributionService {
      */
     public AttributionDto informer(Long idDmc, Integer lot, AttributionDto.InformerRequest r) {
         exigerPrmpSeule(idDmc, "Les candidats sont informés par la PRMP de la fiche (art. 52-I).");
+        sansSuite.exigerAucuneDeclaration(idDmc);   // ⚠️ 2d-3 : une procédure déclarée sans suite n'a plus de geste d'attribution
         Attribution a = attributions.findById(new Attribution.Cle(idDmc, lot)).orElse(null);
         if (a == null || a.getAttribueLe() == null) {
             lotEvalue(idDmc, lot);
@@ -359,15 +364,21 @@ public class AttributionService {
     /** Les résultats publiés d'une procédure (page publique), lot par lot, après l'information. */
     @Transactional(readOnly = true)
     public List<AttributionDto.ResultatPublic> resultatsPublics(Long idDmc) {
+        // ⚠️ 2d-3 (§B6) — la procédure déclarée sans suite : une seule entrée, ses motifs.
+        cnm.prs.entity.SansSuite declaration = sansSuite.declaration(idDmc);
+        if (declaration != null) {
+            return List.of(new AttributionDto.ResultatPublic(null, null, null, null, null, null, false, false, null, declaration.getDecisionDate(),
+                    true, declaration.getMotifs()));
+        }
         // ⚠️ 2d-1 (§B6) — un lot déclaré infructueux s'affiche aussi, avec son motif.
         return attributions.findByIdDmcOrderByLotAsc(idDmc).stream().filter(a -> a.getInformeLe() != null || a.getInfructueuxLe() != null).map(a -> {
             if (a.getInfructueuxLe() != null) {
                 return new AttributionDto.ResultatPublic(a.getLot(), null, null, null, null, null, false, true, a.getMotifInfructuosite(),
-                        a.getDecisionDate());
+                        a.getDecisionDate(), false, null);
             }
             Offre o = offres.findById(a.getIdOffreAttribuee()).orElse(null);
             return new AttributionDto.ResultatPublic(a.getLot(), o == null ? null : o.getRaisonSociale(), a.getMontant(), a.getInformeLe(),
-                    a.getDateAffichage(), a.getDatePublicationAvis(), a.getAvisPublieLe() != null, false, null, null);
+                    a.getDateAffichage(), a.getDatePublicationAvis(), a.getAvisPublieLe() != null, false, null, null, false, null);
         }).toList();
     }
 
@@ -385,6 +396,7 @@ public class AttributionService {
      */
     public AttributionDto declarerInfructueux(Long idDmc, Integer lot, AttributionDto.InfructuositeRequest r) {
         exigerPrmpSeule(idDmc, "Le lot se déclare infructueux par la PRMP de la fiche (art. 56).");
+        sansSuite.exigerAucuneDeclaration(idDmc);   // ⚠️ 2d-3 : une procédure déclarée sans suite n'a plus de geste d'attribution
         EvaluationDto ev = evaluation.vueSansGarde(idDmc)
                 .orElseThrow(() -> new ResourceNotFoundException("L'évaluation de cette procédure n'est pas ouverte."));
         if (!Evaluation.CLOSE.equals(ev.etat())) {
@@ -466,6 +478,7 @@ public class AttributionService {
      */
     public AttributionDto reprendre(Long idDmc, Integer lot, AttributionDto.RepriseRequest r) {
         exigerPrmpSeule(idDmc, "L'évaluation se reprend sur décision de la PRMP de la fiche.");
+        sansSuite.exigerAucuneDeclaration(idDmc);   // ⚠️ 2d-3 : une procédure déclarée sans suite n'a plus de geste d'attribution
         EvaluationDto ev = evaluation.vueSansGarde(idDmc)
                 .orElseThrow(() -> new ResourceNotFoundException("L'évaluation de cette procédure n'est pas ouverte."));
         if (!Evaluation.CLOSE.equals(ev.etat())) {
@@ -523,6 +536,7 @@ public class AttributionService {
      */
     public AttributionDto reattribuer(Long idDmc, Integer lot, AttributionDto.RepriseRequest r) {
         exigerPrmpSeule(idDmc, "Le marché se réattribue par la PRMP de la fiche.");
+        sansSuite.exigerAucuneDeclaration(idDmc);   // ⚠️ 2d-3 : une procédure déclarée sans suite n'a plus de geste d'attribution
         Attribution a = attributions.findById(new Attribution.Cle(idDmc, lot)).orElse(null);
         if (a == null || a.getRetireLe() == null) {
             throw new BusinessRuleException("Le marché de ce lot n'est pas retiré : la réattribution suit un retrait faute de pièces.", "NON_RETIRE");
@@ -793,6 +807,7 @@ public class AttributionService {
      */
     public AttributionDto creerDossier(Long idDmc, Integer lot) {
         exigerPrmp(idDmc);
+        sansSuite.exigerAucuneDeclaration(idDmc);   // ⚠️ 2d-3 : une procédure déclarée sans suite n'a plus de geste d'attribution
         EvaluationDto ev = evaluation.vueSansGarde(idDmc)
                 .orElseThrow(() -> new ResourceNotFoundException("L'évaluation de cette procédure n'est pas ouverte."));
         if (!Evaluation.CLOSE.equals(ev.etat())) {

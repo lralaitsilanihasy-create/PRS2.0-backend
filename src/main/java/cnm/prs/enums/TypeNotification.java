@@ -210,5 +210,11 @@ public enum TypeNotification {
     /** ⚠️ 2026-10-08 (lot 2, 2d-1, §B7) — l'avis d'attribution est à publier sous 5 jours : vers la PRMP. */
     ECHEANCE_AVIS_ATTRIBUTION,
     /** ⚠️ 2026-10-08 (lot 2, 2d-1, §B7) — un réexamen attend sa réponse, à 2 jours de son échéance : vers la PRMP. */
-    ECHEANCE_REEXAMEN
+    ECHEANCE_REEXAMEN,
+    /** ⚠️ 2026-10-08 (lot 2, 2d-3, §B6) — la procédure est déclarée sans suite : vers chaque candidat ayant déposé, avec les motifs. */
+    PROCEDURE_SANS_SUITE,
+    /** ⚠️ 2026-10-08 (lot 2, 2d-3, Q10) — la Commission a rendu son avis sur une demande de sans suite : vers la PRMP. */
+    SANS_SUITE_AVIS,
+    /** ⚠️ 2026-10-08 (lot 2, 2d-3, Q10) — l'avis sur le sans suite est attendu le lendemain : vers la PRMP et le membre examinateur. */
+    ECHEANCE_SANS_SUITE
 }
