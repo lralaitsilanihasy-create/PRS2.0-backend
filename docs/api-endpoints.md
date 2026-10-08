@@ -7367,6 +7367,38 @@ candidats qualifiés) dépend de l'évaluation technique (PI-c) ; elle est livr�
 - **Les clés publiques** de la procédure (`GET /api/procedures-en-ligne/{idDmc}/cles`) suivent la visibilité de la consultation restreinte
   (PI-a) : 404 hors des invités.
 
+### L'évaluation des prestations intellectuelles, lot 3, tranche PI-c : la notation technique — V87 ⚠️ 2026-10-08
+
+Demande front `demande-backend-2026-10-07-evaluation-pi.md` (§B4 ; arbitrages du pilote : **Q3** sous-critères de la fiche, **Q4**
+chaque membre note puis moyenne, écart signalé au-delà de **20 %** du maximum). Migration **V87** (`t_evaluation_note_technique`,
+`t_evaluation_technique`, paramètre `EVALUATION_ECART_NOTES_POURCENT` = 20). Aucune dépendance ajoutée. Socle : l'évaluation du lot 1
+(ouverture par le responsable, déclarations préalables, **examen préliminaire de l'enveloppe technique**, `CONFORMITE`, arrêté par le
+président, précisions) ; les étapes suivantes du lot 1 (montant, anormales, post-qualification) ne servent pas aux propositions PI.
+
+| Méthode | URL | Corps | Statuts | Accès |
+|---|---|---|---|---|
+| GET | /api/fiches-marche/{idDmc}/evaluation/technique | → `TechniqueDto` | 404 (évaluation non ouverte), 409 `CATEGORIE_SANS_NOTATION_TECHNIQUE` | CAO, responsable, PRMP, UGPM |
+| PUT | …/evaluation/technique/offres/{idOffre}/notes | `{ notes[{ element, note, motif }] }` | 400 `ELEMENT_INCONNU`, `NOTE_HORS_BAREME`, `MOTIF_OBLIGATOIRE` ; 403, `MEMBRE_EN_CONFLIT` ; 404 ; 409 `DECLARATION_MANQUANTE`, `CONFORMITE_NON_ARRETEE`, `OFFRE_ECARTEE`, `TECHNIQUE_ARRETEE`, `EVALUATION_CLOSE` | membre déclaré sans conflit |
+| POST | …/evaluation/technique/lots/{lot}/arreter | `{ observation? }` | 403 ; 404 ; 409 `CONFORMITE_NON_ARRETEE`, `TECHNIQUE_ARRETEE`, `NOTATION_INCOMPLETE` (`details.offres` : numéros) | président de la CAO |
+| POST | …/evaluation/technique/lots/{lot}/rouvrir | `{ motif }` | 400 `MOTIF_OBLIGATOIRE` ; 409 `TECHNIQUE_NON_ARRETEE` | président de la CAO |
+
+- **La grille** (`elements[{ code, critere, libelleCritere, libelle, max }]`) se tire de la fiche **validée** : pour chaque critère
+  `B06-TP-02` à `B06-TP-06` qui a des points, ses **sous-critères** (`B06-TP-03#1`, `#2`… dans l'ordre de la fiche, maximum = leurs
+  points), ou le critère lui-même noté globalement (`B06-TP-02`, maximum = ses points). `scoreMinimum` = `B06-TP-07`.
+- **La notation** : chaque membre déclaré sans conflit saisit **sa** grille pour chaque proposition retenue à l'examen préliminaire
+  (non écartée), une note de 0 au maximum de l'élément, **motivée** ; une nouvelle saisie remplace la sienne (le journal les garde
+  toutes, `NOTE_TECHNIQUE`). Pas avant l'arrêt de l'examen préliminaire du lot, plus après l'arrêt de l'étape technique.
+- **Le calcul** (`lots[].offres[]` = `{ idOffre, numero, nif, raisonSociale, grilles[{ im, nom, notes[{ element, note, motif, le }] }],
+  moyennes[{ element, moyenne, min, max, nombreNotes, ecart }], total, complete, statut, motifElimination, rang }`) : la **moyenne** de
+  chaque élément (deux décimales) ; la **note technique** `total` = somme des moyennes ; **`ecart`** vrai quand la note la plus haute et
+  la plus basse d'un élément s'écartent de **plus de** 20 % de son maximum (alerte seulement, la moyenne reste retenue) ; `complete` :
+  chaque membre décideur a noté chaque élément ; `rang` parmi les non éliminées, par note décroissante (égalité : même rang).
+- **L'arrêt** par le président, lot par lot, exige des grilles complètes ; les propositions sous le score minimum passent **`ELIMINEE`**
+  (« Note technique de … points, sous le score minimum de … points ») : leur enveloppe financière ne s'ouvrira pas (seconde séance,
+  PI-d) ; les autres sont **`QUALIFIEE`**. Avant l'arrêt, `statut` = `EN_COURS`. La réouverture (motif) rend l'étape à la notation.
+- **Journal** : `NOTE_TECHNIQUE`, `TECHNIQUE_ARRETEE`, `TECHNIQUE_ROUVERTE`. Les grilles individuelles entreront au rapport avec la
+  tranche PI-d (rapport adapté).
+
 ### Le rabais structuré de l'offre en ligne ⚠️ 2026-10-07
 
 Demande front `demande-backend-2026-10-07-rabais-structure.md` (arbitrage Q4 du pilote : « le rabais est structuré au dépôt »). Aucune

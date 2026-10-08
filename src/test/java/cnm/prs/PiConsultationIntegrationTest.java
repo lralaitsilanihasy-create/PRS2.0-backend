@@ -231,6 +231,125 @@ class PiConsultationIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$.depots[*].enveloppe").value(org.hamcrest.Matchers.containsInAnyOrder("TECHNIQUE", "FINANCIERE")));
     }
 
+    @Test
+    @DisplayName("⚠️ PI-c : grille de la fiche (sous-critères, critères globaux), notation par membre déclaré (bornée, motivée), "
+            + "moyennes et écart signalé, arrêt par le président une fois chaque grille complète, élimination sous le score minimum, rang, "
+            + "réouverture motivée")
+    void notationTechnique() throws Exception {
+        Long idDmc = ficheEnLigne();
+        String internes = mvc.perform(get("/api/fiches-marche/" + idDmc + "/parametres-internes")
+                .header("Authorization", bearer("CTRVER", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER", "ANT")))
+                .andReturn().getResponse().getContentAsString();
+        List<String> ims = JsonPath.read(internes, "$.membresCommission[*].im");
+        String m1 = bearer("m1@pi.mg", ProfilUtilisateur.MEMBRE_CAO, TypeActeur.MEMBRE_CAO, ims.get(0), null);
+        String m2 = bearer("m2@pi.mg", ProfilUtilisateur.MEMBRE_CAO, TypeActeur.MEMBRE_CAO, ims.get(1), null);
+        for (String[] e : new String[][] { { jetonA, "1111000111", "Cabinet A" }, { jetonB, "2222000222", "Bureau B" } }) {
+            mvc.perform(put("/api/candidat/entreprise").header("Authorization", e[0]).contentType(JSON).content("{\"raisonSociale\":\"" + e[2]
+                    + "\",\"nif\":\"" + e[1] + "\",\"adresse\":\"Lot\",\"representant\":{\"nom\":\"Rakoto\",\"prenom\":\"Jean\"}}")).andExpect(status().isOk());
+        }
+        String a = propositionOuverte(idDmc, "C900000071", "1111000111", "Cabinet A", 1);
+        String b = propositionOuverte(idDmc, "C900000072", "2222000222", "Bureau B", 2);
+        cnm.prs.entity.Seance s = new cnm.prs.entity.Seance();
+        s.setIdDmc(idDmc);
+        s.setEtat(cnm.prs.entity.Seance.CLOSE);
+        s.setOuverteLe(LocalDateTime.now().minusDays(1));
+        s.setCloseLe(LocalDateTime.now().minusHours(20));
+        s.setPvSigneLe(LocalDateTime.now().minusHours(20));
+        seanceRepository.save(s);
+        String ev = "/api/fiches-marche/" + idDmc + "/evaluation";
+        mvc.perform(post(ev + "/ouvrir").header("Authorization", bearer("CTRVER", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER", "ANT")))
+                .andExpect(status().isCreated());
+        String tech = ev + "/technique";
+        String vue = mvc.perform(get(tech).header("Authorization", tokenPrmp)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(vue, "$.elements[*].code"))
+                .containsExactly("B06-TP-02", "B06-TP-03#1", "B06-TP-03#2", "B06-TP-04", "B06-TP-05", "B06-TP-06");
+        assertThat(JsonPath.<Number>read(vue, "$.scoreMinimum").intValue()).isEqualTo(70);
+        assertThat(JsonPath.<Number>read(vue, "$.seuilEcartPourcent").intValue()).isEqualTo(20);
+        notes(m1, tech, a, 18, 14, 14, 35, 4, 4).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("DECLARATION_MANQUANTE"));
+        mvc.perform(post(ev + "/declaration").header("Authorization", m1).contentType(JSON).content("{\"conflit\":false}")).andExpect(status().isOk());
+        mvc.perform(post(ev + "/declaration").header("Authorization", m2).contentType(JSON).content("{\"conflit\":false}")).andExpect(status().isOk());
+        notes(m1, tech, a, 18, 14, 14, 35, 4, 4).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("CONFORMITE_NON_ARRETEE"));
+        for (String o : List.of(a, b)) {
+            mvc.perform(put(ev + "/offres/" + o + "/conformite").header("Authorization", m1).contentType(JSON).content("{\"decision\":\"CONFORME\"}"))
+                    .andExpect(status().isOk());
+        }
+        mvc.perform(post(ev + "/lots/1/etapes/CONFORMITE/arreter").header("Authorization", m1).contentType(JSON).content("{}")).andExpect(status().isOk());
+        mvc.perform(put(tech + "/offres/" + a + "/notes").header("Authorization", m1).contentType(JSON)
+                .content("{\"notes\":[{\"element\":\"B06-TP-03#1\",\"note\":16,\"motif\":\"x\"}]}")).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("NOTE_HORS_BAREME"));
+        mvc.perform(put(tech + "/offres/" + a + "/notes").header("Authorization", m1).contentType(JSON)
+                .content("{\"notes\":[{\"element\":\"B06-TP-09\",\"note\":1,\"motif\":\"x\"}]}")).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("ELEMENT_INCONNU"));
+        mvc.perform(put(tech + "/offres/" + a + "/notes").header("Authorization", m1).contentType(JSON)
+                .content("{\"notes\":[{\"element\":\"B06-TP-02\",\"note\":10,\"motif\":\" \"}]}")).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("MOTIF_OBLIGATOIRE"));
+        // A : 18+14+14+35+4+4 = 89 (m1) et 14+14+14+35+4+4 = 85 (m2) → 87 ; écart de 4 sur 20 au critère (i) : 20 % — non signalé.
+        notes(m1, tech, a, 18, 14, 14, 35, 4, 4).andExpect(status().isOk());
+        notes(m2, tech, a, 14, 14, 14, 35, 4, 4).andExpect(status().isOk());
+        // B : (i) 18 et 10 : écart de 8 sur 20 (40 %) — signalé ; total 50+56... = sous 70 → éliminée.
+        notes(m1, tech, b, 18, 8, 8, 20, 2, 2).andExpect(status().isOk());
+        mvc.perform(post(tech + "/lots/1/arreter").header("Authorization", m2).contentType(JSON).content("{}")).andExpect(status().isForbidden());
+        mvc.perform(post(tech + "/lots/1/arreter").header("Authorization", m1).contentType(JSON).content("{}")).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("NOTATION_INCOMPLETE")).andExpect(jsonPath("$.details.offres[0]").value(2));
+        String avant = notes(m2, tech, b, 10, 8, 8, 20, 2, 2).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Boolean>>read(avant, "$.lots[0].offres[?(@.idOffre=='" + b + "')].moyennes[0].ecart")).containsExactly(true);
+        assertThat(JsonPath.<List<Boolean>>read(avant, "$.lots[0].offres[?(@.idOffre=='" + a + "')].moyennes[0].ecart")).containsExactly(false);
+        String arrete = mvc.perform(post(tech + "/lots/1/arreter").header("Authorization", m1).contentType(JSON).content("{\"observation\":\"RAS\"}"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Number>>read(arrete, "$.lots[0].offres[?(@.idOffre=='" + a + "')].total").get(0).doubleValue()).isEqualTo(87.0);
+        assertThat(JsonPath.<List<String>>read(arrete, "$.lots[0].offres[?(@.idOffre=='" + a + "')].statut")).containsExactly("QUALIFIEE");
+        assertThat(JsonPath.<List<Integer>>read(arrete, "$.lots[0].offres[?(@.idOffre=='" + a + "')].rang")).containsExactly(1);
+        assertThat(JsonPath.<List<String>>read(arrete, "$.lots[0].offres[?(@.idOffre=='" + b + "')].statut")).containsExactly("ELIMINEE");
+        assertThat(JsonPath.<List<String>>read(arrete, "$.lots[0].offres[?(@.idOffre=='" + b + "')].motifElimination").get(0))
+                .contains("sous le score minimum de 70 points");
+        notes(m1, tech, a, 18, 14, 14, 35, 4, 4).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("TECHNIQUE_ARRETEE"));
+        mvc.perform(post(tech + "/lots/1/rouvrir").header("Authorization", m1).contentType(JSON).content("{}")).andExpect(status().isBadRequest());
+        mvc.perform(post(tech + "/lots/1/rouvrir").header("Authorization", m1).contentType(JSON).content("{\"motif\":\"Erreur de saisie\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.lots[0].offres[0].statut").value("EN_COURS"));
+    }
+
+    @Autowired private cnm.prs.repository.SeanceRepository seanceRepository;
+
+    /** Une proposition technique ouverte en séance (lecture sans montant). */
+    private String propositionOuverte(Long idDmc, String idCandidat, String nif, String raison, int numero) {
+        cnm.prs.entity.Offre o = new cnm.prs.entity.Offre();
+        o.setIdOffre(java.util.UUID.randomUUID().toString());
+        o.setIdDmc(idDmc);
+        o.setIdCandidat(idCandidat);
+        o.setIdEntreprise(entrepriseRepository.findByIdCandidat(idCandidat).orElseThrow().getIdEntreprise());
+        o.setNif(nif);
+        o.setRaisonSociale(raison);
+        o.setEtat(cnm.prs.entity.Offre.DEPOSEE);
+        o.setEnveloppe(cnm.prs.entity.Offre.TECHNIQUE);
+        o.setDateCreation(LocalDateTime.now().minusDays(2));
+        o.setDateDepot(LocalDateTime.now().minusDays(2));
+        o.setNumero(numero);
+        o.setEnTete("{}");
+        o.setNombreMorceaux(1);
+        o.setTailleMorceau(1);
+        o.setQuorum(2);
+        o.setN(3);
+        o.setEmpreintesDetenteurs("x");
+        o.setIntegrite("INTACTE");
+        o.setOuverteLe(LocalDateTime.now().minusDays(1));
+        o.setLecture("{\"pieces\":[]}");
+        offreRepository.save(o);
+        return o.getIdOffre();
+    }
+
+    @Autowired private cnm.prs.repository.EntrepriseRepository entrepriseRepository;
+
+    /** La grille entière d'un membre : (i), (ii)a, (ii)b, (iii), (iv), (v). */
+    private org.springframework.test.web.servlet.ResultActions notes(String jeton, String tech, String idOffre, int... n) throws Exception {
+        String[] codes = { "B06-TP-02", "B06-TP-03#1", "B06-TP-03#2", "B06-TP-04", "B06-TP-05", "B06-TP-06" };
+        StringBuilder b = new StringBuilder("{\"notes\":[");
+        for (int i = 0; i < codes.length; i++) {
+            b.append(i == 0 ? "" : ",").append("{\"element\":\"").append(codes[i]).append("\",\"note\":").append(n[i]).append(",\"motif\":\"Motif ")
+                    .append(i).append("\"}");
+        }
+        return mvc.perform(put(tech + "/offres/" + idOffre + "/notes").header("Authorization", jeton).contentType(JSON).content(b + "]}"));
+    }
+
     @Autowired private cnm.prs.repository.CleDetenteurRepository cleRepository;
     @Autowired private cnm.prs.repository.OffreRepository offreRepository;
     @Autowired private cnm.prs.repository.FicheMarcheValeurRepository valeurRepository;
@@ -320,6 +439,16 @@ class PiConsultationIntegrationTest extends CnmIntegrationTestSupport {
         donnees.put("B04-SE-06", "À définir par l'Administrateur (liste officielle des prestataires de certification)");
         donnees.put("B04-SE-10", "OUI");
         donnees.put("B04-SE-17", aujourdhui.plusDays(10) + "T08:00");
+        // ⚠️ PI-c — la grille technique : cinq critères (100 points), le critère (ii) détaillé en deux sous-critères, minimum 70.
+        donnees.put("B06-TP-02", "20");
+        donnees.put("B06-TP-03", "30");
+        donnees.put("B06-TP-04", "40");
+        donnees.put("B06-TP-05", "5");
+        donnees.put("B06-TP-06", "5");
+        donnees.put("B06-TP-07", "70");
+        mvc.perform(put("/api/fiches-marche/" + idDmc + "/sous-criteres").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"sousCriteres\":[{\"critere\":\"B06-TP-03\",\"libelle\":\"Approche et méthodologie\",\"points\":15},"
+                        + "{\"critere\":\"B06-TP-03\",\"libelle\":\"Plan de travail\",\"points\":15}]}")).andExpect(status().isOk());
         remplirObligatoires(idDmc, "QUANTITE_FIXE", "PRESTATIONS_INTELLECTUELLES", donnees);
         String tokenVer = bearer("CTRVER", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER", "ANT");
         mvc.perform(post("/api/fiches-marche/" + idDmc + "/responsable").header("Authorization", tokenAdmin).contentType(JSON)

@@ -3136,6 +3136,14 @@ Accès complet aux référentiels, comptes utilisateurs, journal d'audit, hiéra
     chaque par candidat et par lot ; elles portent le même numéro, et retirer l'une retire la proposition entière. La première
     séance n'ouvre que les enveloppes techniques : aucun montant n'y est lu, et les enveloppes financières restent scellées.
     Elles ne s'ouvriront qu'en seconde séance, pour les seuls candidats qualifiés techniquement.
+  - ⚠️ **L'évaluation technique (2026-10-08, lot 3, tranche PI-c ; art. 42)** : après l'examen préliminaire des propositions
+    techniques, **chaque membre** de la commission déclaré sans conflit note chaque proposition retenue, sur la grille de la
+    fiche (les sous-critères, ou le critère entier s'il n'en a pas), de zéro au maximum de chaque élément et toujours avec un
+    motif. Le serveur retient la **moyenne** des membres, élément par élément ; la note technique est leur somme. Un écart de
+    plus de 20 % du maximum entre la note la plus haute et la plus basse d'un élément est **signalé** (le seuil est un
+    paramètre de l'Administrateur). Le **président arrête** l'étape quand chaque membre a noté chaque proposition : celles qui
+    n'atteignent pas le **score technique minimum** sont **éliminées**, avec le motif, et leur enveloppe financière ne sera pas
+    ouverte. Il peut rouvrir l'étape, avec un motif.
 - Grilles de contrôle & règles d'anomalie [Écriture]
   - Configuration de tr_points_ctrl et t_regle_anomalie.
 - Comptes budgétaires & entités contractantes [Écriture]
