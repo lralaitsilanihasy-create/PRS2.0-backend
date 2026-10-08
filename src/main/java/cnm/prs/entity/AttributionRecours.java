@@ -76,4 +76,8 @@ public class AttributionRecours {
     /** ⚠️ V91 (2d-1, §B7) — l'alerte de l'échéance d'un réexamen, déjà émise à la PRMP. */
     @Column(name = "ALERTE_LE")
     private LocalDateTime alerteLe;
+
+    /** ⚠️ V92 (2d-2) — l'archivage du cycle retiré : nul tant que la pièce (le recours, la lettre) vaut pour le lot en cours. */
+    @Column(name = "ARCHIVE_LE")
+    private java.time.LocalDateTime archiveLe;
 }

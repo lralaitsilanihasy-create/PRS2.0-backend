@@ -70,4 +70,14 @@ public class AttributionReprise {
     @Basic(fetch = FetchType.LAZY)
     @Column(name = "RAPPORT_DOCX")
     private byte[] rapportDocx;
+
+    // ⚠️ V92 (2d-2) — REPRISE (après l'avis défavorable) ou REATTRIBUTION (après le retrait) ; la note sur la validité des offres.
+    public static final String REPRISE = "REPRISE";
+    public static final String REATTRIBUTION = "REATTRIBUTION";
+
+    @Column(name = "TYPE", nullable = false, length = 15)
+    private String type = REPRISE;
+
+    @Column(name = "NOTE")
+    private String note;
 }

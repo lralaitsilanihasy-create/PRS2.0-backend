@@ -30,6 +30,8 @@ public class Negociation {
     public static final String EN_COURS = "EN_COURS";
     public static final String REUSSIE = "REUSSIE";
     public static final String ECHOUEE = "ECHOUEE";
+    /** ⚠️ V92 (2d-2) — la négociation réussie dont le marché a été retiré faute de pièces : le suivant est invité. */
+    public static final String RETIREE = "RETIREE";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

@@ -7565,6 +7565,37 @@ circuit de la Commission (Q10). Migration **V91**. Aucune dépendance ajoutée.
   (délai écoulé, non signés), `avisAPublier` (notifiés sans avis publié), `explicationsSansReponse`.
 
 
+### L'attribution, lot 2, tranche 2d-2 : la réattribution après le retrait du marché — V92 ⚠️ 2026-10-08
+
+Demande front `demande-backend-2026-10-07-attribution-notification.md` (Q8). Arbitrages du pilote : réattribution au **candidat
+suivant** du classement, à trois conditions — sa **post-qualification** (ou, en prestations intellectuelles, sa **négociation** :
+arbitrage du 08/10), une **offre encore valide**, une **nouvelle information** des candidats avec un **nouveau délai** ; un **nouveau
+rapport complet** (08/10, comme la reprise de 2d-1) ; un délai de validité non saisi vaut validité non contrôlée (08/10) ; sans suivant
+éligible, l'infructuosité reste **exclue** (art. 56-VI) : seule une déclaration sans suite (2d-3). Migration **V92**.
+
+| Méthode | URL | Corps | Statuts | Accès |
+|---|---|---|---|---|
+| POST | /api/fiches-marche/{idDmc}/attribution/lots/{lot}/reattribuer | `{ motif }` | 400 `MOTIF_OBLIGATOIRE` ; 403 ; 409 `NON_RETIRE`, `EVALUATION_NON_CLOSE`, `AUCUN_SUIVANT_ELIGIBLE`, `OFFRE_EXPIREE` (`details.echeance`) | PRMP seule |
+
+- **Le suivant** : appel d'offres, la première offre du classement qui n'est ni non qualifiée ni celle retirée ; prestations
+  intellectuelles, le premier classé avec qui aucune négociation n'a été menée. Aucun → 409 **`AUCUN_SUIVANT_ELIGIBLE`**.
+- **La validité** : le délai de la fiche (`B04-VO-01`, `B04-VT-01`, `B04-DV-01` ou `B04-DP-01`, le premier saisi), compté depuis la date
+  limite de remise ; échu → 409 **`OFFRE_EXPIREE`**. Sans délai saisi, non contrôlée : la note le dit.
+- **L'effet** : une reprise de type **`REATTRIBUTION`** s'ajoute à `lots[].reprises[]` (qui gagne `type` — `REPRISE` |
+  `REATTRIBUTION` —, `idOffreRetiree` et `note`, la validité des offres) ; le rapport signé y est archivé et l'évaluation redevient
+  `EN_COURS` (`EVALUATION_REPRISE` aux membres de la CAO). Appel d'offres : l'offre retirée devient **non qualifiée** (« Marché retiré
+  faute de pièces fiscales et sociales », art. 20-I) et la **post-qualification** du lot est rouverte — son tour est au suivant.
+  Prestations intellectuelles : la négociation réussie passe **`RETIREE`** (nouvel état), le suivant devient `prochain` (séance
+  complémentaire d'abord si sa financière est scellée). Puis : nouveau rapport signé, nouveau dossier de marché, attribution,
+  information (nouvelles lettres, dont celle de l'ancien attributaire, au motif du retrait) et nouveau délai d'attente.
+- **Le cycle retiré est archivé** (`ARCHIVE_LE`) : ses pièces de l'attributaire, ses recours et ses lettres ne comptent plus (ni pour
+  la signature, ni pour les alertes, ni pour les lettres du candidat) ; la ligne d'attribution du lot est remplacée.
+- **Après une réattribution**, `…/infructueux` répond 409 `DEJA_ATTRIBUE` (une attribution a eu lieu) ; en PI, si aucun classé ne
+  reste, le rapport le dit (« seule une déclaration sans suite »).
+- **Lecture** : pendant que l'évaluation est rouverte, un **autre lot déjà attribué** garde son état (il n'est plus montré
+  `EN_EVALUATION`). Journal : `REATTRIBUTION`, `NEGOCIATION_RETIREE`, `EVALUATION_REPRISE`.
+
+
 ### Le rabais structuré de l'offre en ligne ⚠️ 2026-10-07
 
 Demande front `demande-backend-2026-10-07-rabais-structure.md` (arbitrage Q4 du pilote : « le rabais est structuré au dépôt »). Aucune

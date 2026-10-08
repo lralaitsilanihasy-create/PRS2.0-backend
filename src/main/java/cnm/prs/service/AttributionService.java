@@ -157,7 +157,9 @@ public class AttributionService {
                 .orElseThrow(() -> new ResourceNotFoundException("L'évaluation de cette procédure n'est pas ouverte."));
         List<AttributionDto.LotAttribution> lots = new ArrayList<>();
         for (EvaluationDto.Lot l : ev.lots()) {
-            if (!Evaluation.CLOSE.equals(ev.etat())) {
+            // ⚠️ 2d-2 — l'évaluation rouverte (reprise, réattribution) n'efface pas l'état d'un autre lot déjà attribué.
+            Attribution engage = attributions.findById(new Attribution.Cle(idDmc, l.lot())).filter(x -> x.getAttribueLe() != null).orElse(null);
+            if (!Evaluation.CLOSE.equals(ev.etat()) && engage == null) {
                 lots.add(new AttributionDto.LotAttribution(l.lot(), EN_EVALUATION, null, null, false, null, null, null, List.of(), null, List.of(),
                         null, null, null, null, null, null, null, reprises(idDmc, l.lot())));
                 continue;
@@ -394,7 +396,10 @@ public class AttributionService {
         if (a != null && a.getInfructueuxLe() != null) {
             throw new BusinessRuleException("Ce lot est déjà déclaré infructueux.", "DEJA_INFRUCTUEUX");
         }
-        if (a != null && a.getAttribueLe() != null) {
+        // ⚠️ 2d-2 — une réattribution suit une attribution retirée : l'infructuosité reste exclue (art. 56-VI).
+        boolean dejaAttribue = reprises.findByIdDmcAndLotOrderByIdAsc(idDmc, lot).stream()
+                .anyMatch(x -> cnm.prs.entity.AttributionReprise.REATTRIBUTION.equals(x.getType()));
+        if (a != null && a.getAttribueLe() != null || dejaAttribue) {
             throw new BusinessRuleException("Le lot est attribué : l'infructuosité ne peut en aucun cas intervenir après la décision d'attribution "
                     + "(art. 56-VI).", "DEJA_ATTRIBUE");
         }
@@ -502,6 +507,87 @@ public class AttributionService {
         return lire(idDmc);
     }
 
+    // ------------------------------------------------------------------ ⚠️ tranche 2d-2, Q8 la réattribution après le retrait
+
+    /** Les délais de validité des offres selon la catégorie de la fiche (jours, comptés depuis la date limite de remise). */
+    static final List<String> VALIDITE = List.of("B04-VO-01", "B04-VT-01", "B04-DV-01", "B04-DP-01");
+
+    /**
+     * La PRMP réattribue un lot retiré faute de pièces fiscales et sociales (Q8) au candidat suivant : 400 {@code MOTIF_OBLIGATOIRE} ; 409
+     * {@code NON_RETIRE}, {@code EVALUATION_NON_CLOSE}, {@code AUCUN_SUIVANT_ELIGIBLE} (la seule sortie est la déclaration sans suite :
+     * l'infructuosité est exclue après l'attribution, art. 56-VI), {@code OFFRE_EXPIREE} ({@code details.echeance}). Le rapport signé
+     * est archivé, l'évaluation reprend : la post-qualification du suivant (lot 1 : l'offre retirée devient non qualifiée) ou sa
+     * négociation (PI : la négociation réussie passe {@code RETIREE}) ; puis un nouveau rapport, un nouveau dossier de marché, une
+     * nouvelle attribution, une nouvelle information des candidats et un nouveau délai d'attente. Les pièces, recours et lettres du
+     * cycle retiré sont archivés. Sans délai de validité saisi, la validité n'est pas contrôlée (la note de la reprise le dit).
+     */
+    public AttributionDto reattribuer(Long idDmc, Integer lot, AttributionDto.RepriseRequest r) {
+        exigerPrmpSeule(idDmc, "Le marché se réattribue par la PRMP de la fiche.");
+        Attribution a = attributions.findById(new Attribution.Cle(idDmc, lot)).orElse(null);
+        if (a == null || a.getRetireLe() == null) {
+            throw new BusinessRuleException("Le marché de ce lot n'est pas retiré : la réattribution suit un retrait faute de pièces.", "NON_RETIRE");
+        }
+        EvaluationDto ev = evaluation.vueSansGarde(idDmc)
+                .orElseThrow(() -> new ResourceNotFoundException("L'évaluation de cette procédure n'est pas ouverte."));
+        if (!Evaluation.CLOSE.equals(ev.etat())) {
+            throw new BusinessRuleException("L'évaluation est déjà en cours.", "EVALUATION_NON_CLOSE");
+        }
+        String motif = r == null ? null : nettoyer(r.motif());
+        if (motif == null) {
+            throw new BadRequestException("La réattribution se motive.", "MOTIF_OBLIGATOIRE");
+        }
+        boolean pi = evaluation.estPi(idDmc);
+        String retiree = a.getIdOffreAttribuee();
+        String suivant = pi ? java.util.Optional.ofNullable(resultatsPi.suivantApresRetrait(idDmc, lot)).map(cnm.prs.dto.FinanciereDto.Ligne::idOffre)
+                .orElse(null) : evaluation.suivantApresRetrait(idDmc, lot, retiree).orElse(null);
+        if (suivant == null) {
+            throw new BusinessRuleException("Aucun candidat suivant n'est éligible : l'infructuosité étant exclue après l'attribution (art. 56-VI), "
+                    + "la procédure ne peut se clore que par une déclaration sans suite.", "AUCUN_SUIVANT_ELIGIBLE");
+        }
+        FicheMarcheService.EtatVersion v = fiches.etatValide(idDmc).orElse(null);
+        Integer jours = v == null ? null : VALIDITE.stream().map(c -> ControlesFicheMarche.nombre(v.valeur(c))).filter(Objects::nonNull)
+                .map(java.math.BigDecimal::intValue).findFirst().orElse(null);
+        LocalDateTime limite = v == null ? null : ProceduresEnLigneService.dateLimite(v);
+        String note;
+        if (jours == null || limite == null) {
+            note = "Validité des offres non contrôlée : aucun délai de validité n'est saisi sur la fiche.";
+        } else {
+            LocalDate echeance = limite.toLocalDate().plusDays(jours);
+            if (maintenant().toLocalDate().isAfter(echeance)) {
+                throw new BusinessRuleException("Les offres ne sont plus valides depuis le " + echeance.format(JOUR) + " (délai de " + jours
+                        + " jours depuis la date limite de remise).", "OFFRE_EXPIREE", null, Map.of("echeance", echeance.toString()));
+            }
+            note = "Offres valides jusqu'au " + echeance.format(JOUR) + " (" + jours + " jours depuis la date limite de remise).";
+        }
+        cnm.prs.entity.AttributionReprise x = new cnm.prs.entity.AttributionReprise();
+        x.setIdDmc(idDmc);
+        x.setLot(lot);
+        x.setType(cnm.prs.entity.AttributionReprise.REATTRIBUTION);
+        x.setIdDossier(a.getIdDossier());
+        x.setIdOffreProposee(retiree);
+        x.setMotif(motif);
+        x.setNote(note);
+        x.setLe(maintenant());
+        x.setPar(acteur());
+        evaluation.reprendre(idDmc, x);
+        if (pi) {
+            resultatsPi.retirerNegociation(idDmc, lot, retiree, a.getMotifRetrait() == null ? motif : a.getMotifRetrait());
+        } else {
+            evaluation.reattribuer(idDmc, lot, retiree, a.getMotifRetrait() == null ? motif : a.getMotifRetrait());
+        }
+        reprises.save(x);
+        LocalDateTime le = maintenant();
+        execution.archiverCycle(idDmc, lot, le);
+        lettres.findByIdDmcAndLotOrderByIdAsc(idDmc, lot).forEach(l -> {
+            l.setArchiveLe(le);
+            lettres.save(l);
+        });
+        attributions.delete(a);
+        evaluation.tracerAttribution(idDmc, "REATTRIBUTION", "Lot " + lot + " : le marché retiré est réattribué au candidat suivant — " + motif
+                + ". " + note);
+        return lire(idDmc);
+    }
+
     /** Le rapport archivé d'une reprise (PDF, ou Word) : CAO, responsable, PRMP, UGPM ; 404 sans lui. */
     @Transactional(readOnly = true)
     public byte[] rapportArchive(Long idDmc, Long idReprise, boolean docx) {
@@ -517,7 +603,8 @@ public class AttributionService {
 
     private List<AttributionDto.Reprise> reprises(Long idDmc, Integer lot) {
         return reprises.findByIdDmcAndLotOrderByIdAsc(idDmc, lot).stream().map(x -> new AttributionDto.Reprise(x.getId(), x.getLe(), x.getPar(),
-                x.getMotif(), x.getIdDossier(), x.getAvis(), x.getRapportPdf() != null)).toList();
+                x.getMotif(), x.getIdDossier(), x.getAvis(), x.getRapportPdf() != null, x.getType(),
+                cnm.prs.entity.AttributionReprise.REATTRIBUTION.equals(x.getType()) ? x.getIdOffreProposee() : null, x.getNote())).toList();
     }
 
     // ------------------------------------------------------------------ ⚠️ tranche 2d-1, §B7 compteurs et alertes de la PRMP

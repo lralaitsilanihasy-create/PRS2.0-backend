@@ -1826,13 +1826,53 @@ public class EvaluationService {
         }
         e.setEtat(Evaluation.EN_COURS);
         evaluations.save(e);
-        tracer(idDmc, "EVALUATION_REPRISE", "Lot " + reprise.getLot() + " : avis défavorable de la Commission sur le dossier de marché n° "
-                + reprise.getIdDossier() + " — " + reprise.getMotif() + ". Le rapport signé est archivé ; l'évaluation reprend.");
-        String titre = "Reprise de l'évaluation";
-        String corps = "La Commission a rendu un avis défavorable sur le marché de la procédure " + idDmc + " (lot " + reprise.getLot()
-                + ") ; la PRMP reprend l'évaluation : " + reprise.getMotif() + ". Le président rouvre l'étape à reprendre, puis un nouveau rapport "
-                + "est produit et signé.";
+        boolean reattribution = cnm.prs.entity.AttributionReprise.REATTRIBUTION.equals(reprise.getType());
+        String cause = reattribution ? "le marché retiré faute de pièces fiscales et sociales (art. 20-I), la réattribution au candidat suivant"
+                : "avis défavorable de la Commission sur le dossier de marché n° " + reprise.getIdDossier();
+        tracer(idDmc, "EVALUATION_REPRISE", "Lot " + reprise.getLot() + " : " + cause + " — " + reprise.getMotif()
+                + ". Le rapport signé est archivé ; l'évaluation reprend.");
+        String titre = reattribution ? "Réattribution : l'évaluation reprend" : "Reprise de l'évaluation";
+        String corps = (reattribution ? "Le marché de la procédure " + idDmc + " (lot " + reprise.getLot() + ") est retiré faute de pièces "
+                + "fiscales et sociales ; la PRMP le réattribue au candidat suivant : " + reprise.getMotif() + ". La post-qualification (ou la "
+                + "négociation) du suivant est à conduire, puis un nouveau rapport est produit et signé."
+                : "La Commission a rendu un avis défavorable sur le marché de la procédure " + idDmc + " (lot " + reprise.getLot()
+                        + ") ; la PRMP reprend l'évaluation : " + reprise.getMotif() + ". Le président rouvre l'étape à reprendre, puis un nouveau "
+                        + "rapport est produit et signé.");
         internes.membresCao(idDmc).forEach(k -> internes.notifierMembre(idDmc, k, TypeNotification.EVALUATION_REPRISE, titre, corps));
+    }
+
+    /**
+     * ⚠️ Lot 2, tranche 2d-2 (Q8) — le candidat suivant après le retrait du marché de {@code idOffreRetiree} : la première offre du
+     * classement du lot qui n'est ni non qualifiée ni celle retirée ; vide s'il n'en reste aucune.
+     */
+    @Transactional(readOnly = true)
+    public Optional<String> suivantApresRetrait(Long idDmc, Integer lot, String idOffreRetiree) {
+        List<SeanceDto.OffreLue> liste = parLot(idDmc).getOrDefault(lot, List.of());
+        Tour t = tour(idDmc, lot, liste);
+        Map<String, EvaluationDecision> qualifications = enVigueur(idDmc, EvaluationEtape.QUALIFICATION);
+        return t.ordre().stream().filter(id -> !id.equals(idOffreRetiree))
+                .filter(id -> qualifications.get(id) == null || !NON_QUALIFIE.equals(qualifications.get(id).getDecision())).findFirst();
+    }
+
+    /**
+     * ⚠️ Lot 2, tranche 2d-2 (Q8) — l'offre dont le marché est retiré devient non qualifiée (motif du retrait, art. 20-I) et la
+     * post-qualification du lot se rouvre : la commission examine le candidat suivant (son tour), puis un nouveau rapport. Appelé après
+     * {@link #reprendre}, qui a rouvert l'évaluation.
+     */
+    void reattribuer(Long idDmc, Integer lot, String idOffreRetiree, String motif) {
+        LocalDateTime maintenant = maintenant();
+        remplacer(idOffreRetiree, EvaluationEtape.QUALIFICATION, maintenant);
+        decisions.save(new EvaluationDecision(null, idDmc, idOffreRetiree, lot, EvaluationEtape.QUALIFICATION, NON_QUALIFIE, null,
+                "Marché retiré faute de pièces fiscales et sociales : " + motif, "art. 20-I", null, acteur(), maintenant, null));
+        EvaluationEtape q = arretees(idDmc, lot).get(EvaluationEtape.QUALIFICATION);
+        if (q != null) {
+            q.setRouverteLe(maintenant);
+            q.setRouvertePar(acteur());
+            q.setMotifReouverture("Réattribution après le retrait du marché : " + motif);
+            etapes.save(q);
+        }
+        tracer(idDmc, "REATTRIBUTION", "Lot " + lot + " : l'offre de l'attributaire retiré n'est plus qualifiée ; la post-qualification est "
+                + "rouverte pour le candidat suivant — " + motif);
     }
 
     /** La garde de lecture de l'évaluation (CAO, responsable, PRMP, UGPM), pour l'attribution. */

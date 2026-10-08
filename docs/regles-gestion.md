@@ -975,6 +975,13 @@ post-qualification (étape 5), et le rapport d'évaluation. Contrat : `docs/api-
   - la PRMP est **alertée** une fois quand le délai d'attente est écoulé, cinq jours avant l'échéance de l'avis d'attribution, et deux
     jours avant l'échéance d'une demande de réexamen ; ses compteurs disent les lots à attribuer, les lots signables, les avis à
     publier et les explications sans réponse.
+- ⚠️ **La réattribution après le retrait du marché** (lot 2, tranche 2d-2, 2026-10-08 ; arbitrage du pilote Q8 ; loi n° 2016-055,
+  art. 20-I, 56-VI) : quand le marché est retiré faute de pièces fiscales et sociales, la PRMP le réattribue, avec un motif, au
+  candidat suivant du classement, si son offre est encore valide. La commission conduit sa post-qualification (en prestations
+  intellectuelles, la PRMP négocie avec lui) et signe un nouveau rapport ; suivent un nouveau dossier de marché, une nouvelle
+  attribution, une nouvelle information de tous les candidats et un nouveau délai d'attente. Les pièces, recours et lettres de
+  l'attribution retirée ne comptent plus. S'il ne reste aucun candidat éligible, la procédure ne peut pas être déclarée infructueuse
+  (une attribution a eu lieu) : seule une déclaration sans suite peut la clore.
 - ⚠️ **Le DAO complet dispense du CCAG et du CCTP** (2026-10-07) : un dossier d'appel d'offres qui porte le DAO complet produit par la
   fiche n'a plus à joindre à part le **cahier des clauses administratives générales**, qu'il contient toujours, ni le **cahier des
   clauses techniques particulières** quand la fiche porte ses spécifications techniques ; sans spécifications, le CCTP reste exigé.

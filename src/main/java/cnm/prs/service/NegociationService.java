@@ -278,7 +278,8 @@ public class NegociationService {
     @Transactional(readOnly = true)
     public FinanciereDto.Ligne prochain(Long idDmc, Integer lot) {
         List<Negociation> deja = negociations.findByIdDmcAndLotOrderByIdAsc(idDmc, lot);
-        if (deja.stream().anyMatch(n -> !Negociation.ECHOUEE.equals(n.getEtat()))) {
+        // ⚠️ 2d-2 — une négociation retirée (marché retiré) n'arrête plus la suite, comme un échec.
+        if (deja.stream().anyMatch(n -> Negociation.EN_COURS.equals(n.getEtat()) || Negociation.REUSSIE.equals(n.getEtat()))) {
             return null;
         }
         return suivant(idDmc, lot, deja);
@@ -352,5 +353,25 @@ public class NegociationService {
 
     private LocalDateTime maintenant() {
         return LocalDateTime.now(horloge).withNano(0);
+    }
+
+    // ------------------------------------------------------------------ ⚠️ lot 2, tranche 2d-2 : la réattribution (Q8)
+
+    /** Le classé suivant après le retrait du marché de {@code idOffre} (sa négociation réussie mise à part) ; nul s'il n'en reste aucun. */
+    @Transactional(readOnly = true)
+    public FinanciereDto.Ligne suivantApresRetrait(Long idDmc, Integer lot) {
+        return suivant(idDmc, lot, negociations.findByIdDmcAndLotOrderByIdAsc(idDmc, lot));
+    }
+
+    /** La négociation réussie de {@code idOffre} passe {@code RETIREE}, avec le motif du retrait : le classé suivant est invité ensuite. */
+    void retirer(Long idDmc, Integer lot, String idOffre, String motif) {
+        negociations.findByIdDmcAndLotOrderByIdAsc(idDmc, lot).stream()
+                .filter(n -> Negociation.REUSSIE.equals(n.getEtat()) && n.getIdOffre().equals(idOffre)).forEach(n -> {
+                    n.setEtat(Negociation.RETIREE);
+                    n.setMotifEchec("Marché retiré faute de pièces fiscales et sociales : " + motif);
+                    negociations.save(n);
+                });
+        tracer(idDmc, "NEGOCIATION_RETIREE", "Lot " + lot + " : la négociation réussie est retirée avec le marché ; le classé suivant sera "
+                + "invité à négocier — " + motif);
     }
 }

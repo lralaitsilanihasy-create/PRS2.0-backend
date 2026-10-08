@@ -105,6 +105,11 @@ public class ResultatsPi {
             return new Etat(false, "une négociation est en cours", null);
         }
         if (negociation.prochain(idDmc, lot) == null) {
+            // ⚠️ 2d-2 — après le retrait d'un marché attribué, l'infructuosité est exclue (art. 56-VI) : seule une déclaration sans suite.
+            if (negos.stream().anyMatch(n -> Negociation.RETIREE.equals(n.getEtat()))) {
+                return infructueux("Aucun candidat suivant n'est éligible après le retrait du marché ; l'infructuosité étant exclue après "
+                        + "l'attribution (art. 56-VI), la procédure ne peut se clore que par une déclaration sans suite.");
+            }
             return infructueux("Les négociations n'ont abouti avec aucun des candidats classés.");
         }
         return new Etat(false, negos.isEmpty() ? "la négociation n'est pas menée" : "la négociation avec le candidat suivant n'est pas menée", null);
@@ -200,7 +205,8 @@ public class ResultatsPi {
         for (Negociation n : negos) {
             para(el, "Avec le candidat classé " + n.getRang() + " (proposition n° " + n.getNumero() + ", " + n.getRaisonSociale() + ")"
                     + (n.getDateNegociation() == null ? "" : ", le " + n.getDateNegociation().format(DATE)) + (n.getLieu() == null ? "" : ", " + n.getLieu())
-                    + " : " + (Negociation.REUSSIE.equals(n.getEtat()) ? "a abouti" : Negociation.ECHOUEE.equals(n.getEtat())
+                    + " : " + (Negociation.REUSSIE.equals(n.getEtat()) ? "a abouti" : Negociation.RETIREE.equals(n.getEtat())
+                            ? "a abouti, puis le marché a été retiré — " + n.getMotifEchec() : Negociation.ECHOUEE.equals(n.getEtat())
                             ? "n'a pas abouti — " + n.getMotifEchec() : "en cours") + ". Le procès-verbal de négociation est joint.");
         }
         return el;
@@ -252,7 +258,8 @@ public class ResultatsPi {
             return "Proposition écartée à l'évaluation financière : " + p.motif();
         }
         String echec = negociations.findByIdDmcAndLotOrderByIdAsc(idDmc, lot).stream()
-                .filter(n -> n.getIdOffre().equals(idOffre) && Negociation.ECHOUEE.equals(n.getEtat())).map(Negociation::getMotifEchec).findFirst()
+                .filter(n -> n.getIdOffre().equals(idOffre) && (Negociation.ECHOUEE.equals(n.getEtat()) || Negociation.RETIREE.equals(n.getEtat())))
+                .map(Negociation::getMotifEchec).findFirst()
                 .orElse(null);
         return "Proposition qualifiée, note technique de " + lisible(o.total()) + " points" + (p == null || p.scoreCombine() == null ? ""
                 : ", score combiné de " + lisible(p.scoreCombine())) + (p == null || p.rang() == null ? "" : ", classée au rang " + p.rang())
@@ -282,5 +289,18 @@ public class ResultatsPi {
 
     private static String lisible(BigDecimal b) {
         return b == null ? "—" : b.stripTrailingZeros().toPlainString();
+    }
+
+    // ------------------------------------------------------------------ ⚠️ lot 2, tranche 2d-2 : la réattribution (Q8)
+
+    /** Le classé suivant après le retrait du marché (la négociation réussie mise à part) ; nul s'il n'en reste aucun. */
+    public FinanciereDto.Ligne suivantApresRetrait(Long idDmc, Integer lot) {
+        return negociation.suivantApresRetrait(idDmc, lot);
+    }
+
+    /** La négociation réussie de la proposition retirée passe {@code RETIREE}. */
+    @Transactional
+    public void retirerNegociation(Long idDmc, Integer lot, String idOffre, String motif) {
+        negociation.retirer(idDmc, lot, idOffre, motif);
     }
 }

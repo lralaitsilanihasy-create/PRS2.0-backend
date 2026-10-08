@@ -115,4 +115,13 @@ public class AttributionController {
                         : MediaType.APPLICATION_PDF)
                 .body(service.rapportArchive(idDmc, id, docx));
     }
+
+    /**
+     * ⚠️ 2d-2 (Q8) — {@code { motif }} ; PRMP ; après le retrait faute de pièces : réattribution au candidat suivant (409 {@code NON_RETIRE},
+     * {@code AUCUN_SUIVANT_ELIGIBLE}, {@code OFFRE_EXPIREE}, {@code EVALUATION_NON_CLOSE}).
+     */
+    @PostMapping("/lots/{lot}/reattribuer")
+    public AttributionDto reattribuer(@PathVariable Long idDmc, @PathVariable Integer lot, @RequestBody(required = false) AttributionDto.RepriseRequest r) {
+        return service.reattribuer(idDmc, lot, r);
+    }
 }

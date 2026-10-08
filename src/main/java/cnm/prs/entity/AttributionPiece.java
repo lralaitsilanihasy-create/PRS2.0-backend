@@ -85,4 +85,8 @@ public class AttributionPiece {
 
     @Column(name = "VERIFIEE_PAR", length = 100)
     private String verifieePar;
+
+    /** ⚠️ V92 (2d-2) — l'archivage du cycle retiré : nul tant que la pièce (le recours, la lettre) vaut pour le lot en cours. */
+    @Column(name = "ARCHIVE_LE")
+    private java.time.LocalDateTime archiveLe;
 }

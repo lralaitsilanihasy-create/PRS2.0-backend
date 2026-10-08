@@ -65,4 +65,8 @@ public class AttributionLettre {
 
     @Column(name = "LUE_LE")
     private LocalDateTime lueLe;
+
+    /** ⚠️ V92 (2d-2) — l'archivage du cycle retiré : nul tant que la pièce (le recours, la lettre) vaut pour le lot en cours. */
+    @Column(name = "ARCHIVE_LE")
+    private java.time.LocalDateTime archiveLe;
 }

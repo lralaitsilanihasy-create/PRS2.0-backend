@@ -625,7 +625,7 @@ public class AttributionExecutionService {
     /** Un réexamen sans réponse, à 2 jours de son échéance (10 jours) : la PRMP est alertée, une fois. Le nombre d'alertes émises. */
     int alerterReexamens(LocalDate aujourdhui) {
         int n = 0;
-        for (AttributionRecours r : recoursRepository.findByTypeAndDecideLeIsNullAndAlerteLeIsNull(AttributionRecours.REEXAMEN)) {
+        for (AttributionRecours r : recoursRepository.findByTypeAndDecideLeIsNullAndAlerteLeIsNullAndArchiveLeIsNull(AttributionRecours.REEXAMEN)) {
             LocalDate echeance = r.getDateReception().plusDays(JOURS_REEXAMEN);
             if (aujourdhui.isBefore(echeance.minusDays(2))) {
                 continue;
@@ -816,5 +816,19 @@ public class AttributionExecutionService {
 
     private static String nettoyer(String s) {
         return s == null || s.isBlank() ? null : s.trim();
+    }
+
+    // ------------------------------------------------------------------ ⚠️ tranche 2d-2 : l'archivage du cycle retiré
+
+    /** Les pièces et recours du cycle retiré du lot sont archivés : le nouveau cycle (réattribution) part d'une page blanche. */
+    void archiverCycle(Long idDmc, Integer lot, LocalDateTime le) {
+        piecesRepository.findByIdDmcAndLotOrderByIdAsc(idDmc, lot).forEach(p -> {
+            p.setArchiveLe(le);
+            piecesRepository.save(p);
+        });
+        recoursRepository.findByIdDmcAndLotOrderByDateReceptionAscIdAsc(idDmc, lot).forEach(r -> {
+            r.setArchiveLe(le);
+            recoursRepository.save(r);
+        });
     }
 }

@@ -489,7 +489,34 @@ class PiConsultationIntegrationTest extends CnmIntegrationTestSupport {
         }
         mvc.perform(get(att).header("Authorization", tokenPrmp)).andExpect(jsonPath("$.lots[0].etat").value("PROPOSE"))
                 .andExpect(jsonPath("$.lots[0].reprises.length()").value(1));
+
+        // ⚠️ 2d-2 (Q8) — la réattribution d'une PI : la négociation réussie passe RETIREE, le classé suivant est invité à négocier.
+        cnm.prs.entity.Attribution retire = new cnm.prs.entity.Attribution();
+        retire.setIdDmc(idDmc);
+        retire.setLot(1);
+        retire.setEtat(cnm.prs.entity.Attribution.RETIRE);
+        retire.setIdOffreAttribuee(pi.a());
+        retire.setAttribueLe(LocalDateTime.now().minusDays(20));
+        retire.setInformeLe(LocalDateTime.now().minusDays(18));
+        retire.setRetireLe(LocalDateTime.now());
+        retire.setMotifRetrait("Pièces non produites");
+        attributionRepository.save(retire);
+        // B a échoué à la négociation : aucun suivant.
+        mvc.perform(post(att + "/lots/1/reattribuer").header("Authorization", tokenPrmp).contentType(JSON).content("{\"motif\":\"Pièces absentes\"}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("AUCUN_SUIVANT_ELIGIBLE"));
+        negociationRepository.findByIdDmcAndLotOrderByIdAsc(idDmc, 1).stream().filter(n -> n.getIdOffre().equals(pi.b()))
+                .forEach(negociationRepository::delete);
+        mvc.perform(post(att + "/lots/1/reattribuer").header("Authorization", tokenPrmp).contentType(JSON).content("{\"motif\":\"Pièces absentes\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.lots[0].reprises[1].type").value("REATTRIBUTION"));
+        String apres = mvc.perform(get(ev + "/negociation").header("Authorization", tokenPrmp)).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<String>read(apres, "$.lots[0].prochain.idOffre")).isEqualTo(pi.b());
+        assertThat(JsonPath.<List<String>>read(apres, "$.lots[0].negociations[?(@.idOffre=='" + pi.a() + "')].etat")).containsExactly("RETIREE");
+        mvc.perform(post(att + "/lots/1/infructueux").header("Authorization", tokenPrmp).contentType(JSON).content("{}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("EVALUATION_NON_CLOSE"));
     }
+
+    @Autowired private cnm.prs.repository.AttributionRepository attributionRepository;
+    @Autowired private cnm.prs.repository.NegociationRepository negociationRepository;
 
     @Autowired private cnm.prs.repository.PvExamenRepository pvExamenRepository;
 

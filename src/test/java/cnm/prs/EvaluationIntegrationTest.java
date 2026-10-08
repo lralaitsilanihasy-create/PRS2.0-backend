@@ -822,7 +822,47 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(pointsCtrlSeeder.semer()).isEqualTo(9);
         assertThat(pointsCtrlSeeder.semer()).isZero();
         assertThat(journalRepository.findByIdDmcOrderByDateAscIdAsc(idDmc)).extracting(j -> j.getAction()).contains("DOSSIER_MARCHE");
+
+        // ⚠️ 2d-2 (Q8) — la réattribution après le retrait (le retrait réussi est posé en base : son parcours est éprouvé à part).
+        cnm.prs.entity.Attribution retire = attributionRepository.findById(new cnm.prs.entity.Attribution.Cle(idDmc, 1)).orElseThrow();
+        retire.setSigneLe(null);
+        retire.setDateSignature(null);
+        retire.setNotifieLe(null);
+        retire.setDateNotification(null);
+        retire.setAvisPublieLe(null);
+        retire.setRetireLe(java.time.LocalDateTime.now());
+        retire.setMotifRetrait("Pièces fiscales et sociales non produites");
+        attributionRepository.save(retire);
+        mvc.perform(post(att + "/lots/1/reattribuer").header("Authorization", tokenUgpm).contentType(JSON).content("{\"motif\":\"x\"}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(post(att + "/lots/1/reattribuer").header("Authorization", tokenPrmp).contentType(JSON).content("{}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("MOTIF_OBLIGATOIRE"));
+        // B est non qualifiée, C rejetée (anormalement basse) : aucun suivant — l'infructuosité étant exclue, le sans suite seul.
+        mvc.perform(post(att + "/lots/1/reattribuer").header("Authorization", tokenPrmp).contentType(JSON).content("{\"motif\":\"Pièces absentes\"}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("AUCUN_SUIVANT_ELIGIBLE"));
+        // B redevient éligible (sa décision de post-qualification annulée) : la réattribution rouvre la post-qualification pour elle.
+        decisionRepository.findAll().stream().filter(d -> d.getIdOffre().equals(b) && "QUALIFICATION".equals(d.getEtape()) && d.getRemplaceeLe() == null)
+                .forEach(d -> {
+                    d.setRemplaceeLe(java.time.LocalDateTime.now());
+                    decisionRepository.save(d);
+                });
+        String reat = mvc.perform(post(att + "/lots/1/reattribuer").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"motif\":\"Pièces absentes à l'échéance\"}")).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<String>read(reat, "$.lots[0].etat")).isEqualTo("EN_EVALUATION");
+        assertThat(JsonPath.<String>read(reat, "$.lots[0].reprises[0].type")).isEqualTo("REATTRIBUTION");
+        assertThat(JsonPath.<String>read(reat, "$.lots[0].reprises[0].idOffreRetiree")).isEqualTo(a);
+        assertThat(JsonPath.<String>read(reat, "$.lots[0].reprises[0].note")).startsWith("Offres valides jusqu'au");
+        mvc.perform(get(base).header("Authorization", tokenPrmp)).andExpect(jsonPath("$.etat").value("EN_COURS"));
+        mvc.perform(get(base + "/lots/1/qualification").header("Authorization", jetonM1)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.idOffre").value(b));
+        assertThat(decisionRepository.findAll()).filteredOn(d -> d.getIdOffre().equals(a) && "QUALIFICATION".equals(d.getEtape())
+                && d.getRemplaceeLe() == null).extracting(cnm.prs.entity.EvaluationDecision::getDecision).containsExactly("NON_QUALIFIE");
+        assertThat(pieceRepository.findAll()).filteredOn(p -> p.getIdDmc().equals(idDmc)).allMatch(p -> p.getArchiveLe() != null);
+        mvc.perform(post(att + "/lots/1/reattribuer").header("Authorization", tokenPrmp).contentType(JSON).content("{\"motif\":\"x\"}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("NON_RETIRE"));
     }
+
+    @Autowired private cnm.prs.repository.AttributionPieceRepository pieceRepository;
 
     @Test
     @DisplayName("Rabais structuré (07/10, Q4) : la séance le chiffre et le contrôle en alertes ; l'étape 3 propose le rabais inconditionnel "
