@@ -54,7 +54,10 @@ public record OffreDto(String idOffre, Long idDmc, String reference, String obje
      * seulement, pour un dossier payant) : l'entreprise du candidat connecté a un reçu validé ; {@code null} ailleurs.
      */
     public record PieceAttendue(String code, String rubrique, String numero, String libelle, String forme, Integer ancienneteMaxMois,
-            boolean parLot, String modele, boolean obligatoire, String formulaire, Boolean dejaFourni) {
+            boolean parLot, String modele, boolean obligatoire, String formulaire, Boolean dejaFourni,
+            /** ⚠️ 2026-10-08 (lot 3 PI, H-PI-1 du front) — l'enveloppe d'une proposition de prestations intellectuelles : {@code TECHNIQUE}
+             * ou {@code FINANCIERE} ; nul hors PI. */
+            String enveloppe) {
     }
 
     /**

@@ -30,7 +30,7 @@ class EvaluationPropositionsTest {
                         new SeanceDto.Alerte("NON_CONFORME", "Article 2 non conforme."), new SeanceDto.Alerte("EXCLUSION", "Exclusion en cours.")),
                 true, null, null, new SeanceDto.FraisDossier(false, null, null), null);
         Map<String, EvaluationService.Proposition> p = EvaluationService.proposer(1L, o, List.of(o), Map.of("o1", Set.of("111")),
-                List.of(new OffreDto.PieceAttendue("POUVOIR", "ADMINISTRATIVE", null, "Pouvoir du signataire", null, null, false, null, true, null, null)), true);
+                List.of(new OffreDto.PieceAttendue("POUVOIR", "ADMINISTRATIVE", null, "Pouvoir du signataire", null, null, false, null, true, null, null, null)), true);
         assertThat(p.get("AE_PRIX").valeur()).isFalse();
         assertThat(p.get("GARANTIE")).extracting(EvaluationService.Proposition::valeur, EvaluationService.Proposition::constat)
                 .containsExactly(false, "Garantie de 100 pour 200.");

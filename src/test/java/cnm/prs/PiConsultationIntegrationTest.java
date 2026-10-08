@@ -208,6 +208,15 @@ class PiConsultationIntegrationTest extends CnmIntegrationTestSupport {
                     + "\",\"nif\":\"" + e[1] + "\",\"adresse\":\"Lot\",\"representant\":{\"nom\":\"Rakoto\",\"prenom\":\"Jean\"}}")).andExpect(status().isOk());
         }
         mvc.perform(get("/api/procedures-en-ligne/" + idDmc + "/cles")).andExpect(status().isNotFound());   // restreinte : invités seuls
+        // ⚠️ H-PI-1 — chaque pièce attendue porte son enveloppe ; les formulaires PF suivent le mode de rémunération.
+        changer(idDmc, "B05-PF-01", "Prix forfaitaire");
+        String pieces = mvc.perform(get("/api/procedures-en-ligne/" + idDmc + "/pieces").header("Authorization", jetonA)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(pieces, "$[?(@.enveloppe=='FINANCIERE')].code")).contains("AE", "PF2", "PF3", "PF5")
+                .doesNotContain("PF4");
+        assertThat(JsonPath.<List<String>>read(pieces, "$[?(@.enveloppe=='TECHNIQUE')].code")).contains("PT2", "PT3", "PT4", "PT5", "METHODOLOGIE",
+                "PT6", "PT7", "RECU-DAO");
+        assertThat(JsonPath.<List<Object>>read(pieces, "$[?(@.enveloppe == null)]")).isEmpty();
         List<String> cles = JsonPath.read(mvc.perform(get("/api/procedures-en-ligne/" + idDmc + "/cles").header("Authorization", jetonA)).andReturn().getResponse().getContentAsString(),
                 "$.detenteurs[*].empreinte");
         String t1 = java.util.UUID.randomUUID().toString();

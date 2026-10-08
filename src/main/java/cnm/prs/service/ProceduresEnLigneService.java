@@ -425,20 +425,24 @@ public class ProceduresEnLigneService {
     public List<cnm.prs.dto.OffreDto.PieceAttendue> piecesAttendues(Long idDmc) {
         Lue l = exigerVisible(idDmc);   // ⚠️ PI-a (§B1)
         boolean alloti = l.dto().lots().size() > 1;
+        // ⚠️ 2026-10-08 (lot 3 PI, H-PI-1 du front) — une consultation PI : chaque pièce porte son enveloppe ; l'acte d'engagement
+        // (la soumission financière) et les formulaires PF vont dans la financière, tout le reste dans la technique.
+        boolean pi = restreinte(l);
+        String technique = pi ? cnm.prs.entity.Offre.TECHNIQUE : null;
         List<cnm.prs.dto.OffreDto.PieceAttendue> out = new ArrayList<>();
         out.add(new cnm.prs.dto.OffreDto.PieceAttendue("AE", PiecesFiche.OFFRE, null, "Acte d'engagement signé", "Original signé",
-                null, alloti, null, true, null, null));
+                null, alloti, null, true, null, null, pi ? cnm.prs.entity.Offre.FINANCIERE : null));
         // ⚠️ 2026-10-06 (§B5) — un dossier payant : le reçu validé est la preuve du paiement, il n'est plus redemandé dans l'offre.
         // Sans frais renseignés, la pièce reste exigée comme avant. Relatif au candidat connecté (sans session : générique).
         boolean payant = l.dto().retraitPayant();
         Boolean dejaFourni = payant ? recuValide(idDmc, CurrentUser.ref().filter(x -> cnm.prs.enums.TypeActeur.CANDIDAT.name()
                 .equals(CurrentUser.acteurType().orElse(null))).map(this::nifDe).orElse(null), null).isPresent() : null;
         out.add(new cnm.prs.dto.OffreDto.PieceAttendue("RECU-DAO", PiecesFiche.OFFRE, null, "Reçu du paiement des frais de dossier",
-                "Copie", null, false, null, !payant, null, dejaFourni));
+                "Copie", null, false, null, !payant, null, dejaFourni, technique));
         Map<String, Object> cadrage = l.etat().etat().getCadrage();
         if (cadrage != null && "OUI".equalsIgnoreCase(String.valueOf(cadrage.get("garantieSoumission")))) {
             out.add(new cnm.prs.dto.OffreDto.PieceAttendue("GARANTIE", PiecesFiche.OFFRE, null,
-                    "Garantie de soumission (document et code de vérification)", "Original", null, alloti, null, true, null, null));
+                    "Garantie de soumission (document et code de vérification)", "Original", null, alloti, null, true, null, null, technique));
         }
         // ⚠️ 2026-10-05 (lot 5, §B1.3) — avec un besoin, les pièces que remplit un formulaire ne sont plus exigées en fichier.
         String categorie = l.etat().categorie();
@@ -452,10 +456,49 @@ public class ProceduresEnLigneService {
                     out.add(new cnm.prs.dto.OffreDto.PieceAttendue("PIECE-" + p.getIdPiece(), p.getRubrique(), p.getNumero(),
                             p.getLibelle(), p.getForme(), p.getAncienneteMaxMois(), Boolean.TRUE.equals(p.getParLot()) && alloti,
                             p.getModele(), formulaire(p.getLibelle(), travaux, formulaires) == null,
-                            formulaire(p.getLibelle(), travaux, formulaires), null));
+                            formulaire(p.getLibelle(), travaux, formulaires), null, technique));
                 }
             }
         }
+        if (pi) {
+            out.addAll(formulairesPi(l.etat()));
+        }
+        return out;
+    }
+
+    /** ⚠️ H-PI-1 — le mode de rémunération ({@code B05-PF-01}) et les frais remboursables listés ({@code B05-PF-11}) de la fiche PI. */
+    static final String MODE_REMUNERATION = "B05-PF-01";
+    static final String FRAIS_REMBOURSABLES = "B05-PF-11";
+
+    /**
+     * ⚠️ 2026-10-08 (lot 3 PI, H-PI-1 du front) — les formulaires de la demande de propositions (DPIC-PI §7.2.1, §7.2.2) : PT2 à PT7 et la
+     * méthodologie dans l'enveloppe technique ; PF2 et PF3 (prix forfaitaire), PF4 (temps passé), PF5 (frais remboursables, exigé
+     * quand la fiche les liste) dans la financière. Codes stables : {@code PT2}… {@code PF5}, {@code METHODOLOGIE}.
+     */
+    static List<cnm.prs.dto.OffreDto.PieceAttendue> formulairesPi(FicheMarcheService.EtatVersion etat) {
+        String t = cnm.prs.entity.Offre.TECHNIQUE;
+        String f = cnm.prs.entity.Offre.FINANCIERE;
+        String mode = brute(etat, MODE_REMUNERATION);
+        boolean forfait = mode != null && mode.toLowerCase(java.util.Locale.FRENCH).startsWith("prix forfaitaire");
+        boolean tempsPasse = mode != null && mode.toLowerCase(java.util.Locale.FRENCH).startsWith("temps passé");
+        List<cnm.prs.dto.OffreDto.PieceAttendue> out = new ArrayList<>();
+        java.util.function.BiConsumer<String[], Boolean> ajouter = (p, obligatoire) -> out.add(new cnm.prs.dto.OffreDto.PieceAttendue(p[0],
+                PiecesFiche.OFFRE, null, p[1], null, null, false, null, obligatoire, null, null, p[2]));
+        ajouter.accept(new String[] { "PT2", "Fiche de renseignements : identification et situation juridique (formulaire PT2)", t }, true);
+        ajouter.accept(new String[] { "PT3", "Fiche de renseignements : capacités professionnelles (formulaire PT3)", t }, true);
+        ajouter.accept(new String[] { "PT4", "Composition de l'équipe et tâches de chacun (formulaire PT4)", t }, true);
+        ajouter.accept(new String[] { "PT5", "Curriculum vitae du personnel clé (formulaire PT5)", t }, true);
+        ajouter.accept(new String[] { "METHODOLOGIE", "Description de la méthodologie, de la conception et du plan de travail", t }, true);
+        ajouter.accept(new String[] { "PT6", "Calendrier d'intervention du personnel clé (formulaire PT6)", t }, true);
+        ajouter.accept(new String[] { "PT7", "Calendrier des activités (formulaire PT7)", t }, true);
+        if (forfait) {
+            ajouter.accept(new String[] { "PF2", "Décomposition des coûts, en devises et en monnaie locale (formulaire PF2)", f }, true);
+            ajouter.accept(new String[] { "PF3", "Ventilation des coûts par activité (formulaire PF3)", f }, true);
+        }
+        if (tempsPasse) {
+            ajouter.accept(new String[] { "PF4", "Taux unitaires et estimation du temps passé (formulaire PF4)", f }, true);
+        }
+        ajouter.accept(new String[] { "PF5", "Coûts des dépenses remboursables (formulaire PF5)", f }, brute(etat, FRAIS_REMBOURSABLES) != null);
         return out;
     }
 

@@ -609,7 +609,10 @@ public class SeanceService {
                 codes.add("GARANTIE");
             }
             List<String> manquantes = o.getLecture() == null ? List.of()
-                    : attendues.stream().filter(a -> a.obligatoire() && !codes.contains(a.code())).map(OffreDto.PieceAttendue::libelle).toList();
+                    // ⚠️ H-PI-1 — une enveloppe PI ne doit que ses propres pièces.
+                    : attendues.stream().filter(a -> a.obligatoire() && !codes.contains(a.code()))
+                            .filter(a -> a.enveloppe() == null || o.getEnveloppe() == null || a.enveloppe().equals(o.getEnveloppe()))
+                            .map(OffreDto.PieceAttendue::libelle).toList();
             List<SeanceDto.Alerte> alertes = new ArrayList<>();
             if (complete) {
                 for (RapprochementCandidat r : rapprochements.de(o.getIdCandidat())) {

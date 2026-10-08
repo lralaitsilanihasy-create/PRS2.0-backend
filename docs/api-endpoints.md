@@ -7366,6 +7366,13 @@ candidats qualifiés) dépend de l'évaluation technique (PI-c) ; elle est livr�
   en seconde séance pour les seuls candidats qualifiés techniquement (art. 42).
 - **Les clés publiques** de la procédure (`GET /api/procedures-en-ligne/{idDmc}/cles`) suivent la visibilité de la consultation restreinte
   (PI-a) : 404 hors des invités.
+- ⚠️ **2026-10-08 — les pièces attendues par enveloppe (réponse à l'hypothèse H-PI-1 du front)** : `GET
+  /api/procedures-en-ligne/{idDmc}/pieces` sert, pour une consultation PI, un champ **`enveloppe`** (`TECHNIQUE` | `FINANCIERE`) sur
+  chaque pièce ; nul hors PI. **Financière** : `AE` (acte d'engagement, la soumission financière) et les formulaires de la demande
+  de propositions (DPIC-PI §7.2.2) selon le mode de rémunération `B05-PF-01` — `PF2` (décomposition des coûts) et `PF3` (ventilation
+  par activité) en *prix forfaitaire*, `PF4` (taux unitaires et temps passé) au *temps passé*, `PF5` (dépenses remboursables) toujours,
+  exigé quand `B05-PF-11` les liste. **Technique** : `RECU-DAO`, `GARANTIE` le cas échéant, et `PT2` à `PT7` avec `METHODOLOGIE`
+  (DPIC-PI §7.2.1), tous exigés. À la séance, les **pièces manquantes** d'une enveloppe ne comptent que ses propres pièces.
 
 ### L'évaluation des prestations intellectuelles, lot 3, tranche PI-c : la notation technique — V87 ⚠️ 2026-10-08
 

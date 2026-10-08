@@ -3147,7 +3147,11 @@ Accès complet aux référentiels, comptes utilisateurs, journal d'audit, hiéra
     dépose en deux enveloppes scellées séparément, l'une **technique** (sans aucun montant), l'autre **financière** ; une de
     chaque par candidat et par lot ; elles portent le même numéro, et retirer l'une retire la proposition entière. La première
     séance n'ouvre que les enveloppes techniques : aucun montant n'y est lu, et les enveloppes financières restent scellées.
-    Elles ne s'ouvriront qu'en seconde séance, pour les seuls candidats qualifiés techniquement.
+    Elles ne s'ouvriront qu'en seconde séance, pour les seuls candidats qualifiés techniquement. La plateforme dit au candidat
+    dans quelle enveloppe va chaque pièce : l'acte d'engagement et les formulaires financiers de la demande de propositions
+    (décomposition et ventilation des coûts pour un prix forfaitaire, taux et temps passé pour une rémunération au temps passé,
+    dépenses remboursables) dans la financière ; les fiches de renseignements, l'équipe, les CV, la méthodologie et les
+    calendriers dans la technique.
   - ⚠️ **L'évaluation technique (2026-10-08, lot 3, tranche PI-c ; art. 42)** : après l'examen préliminaire des propositions
     techniques, **chaque membre** de la commission déclaré sans conflit note chaque proposition retenue, sur la grille de la
     fiche (les sous-critères, ou le critère entier s'il n'en a pas), de zéro au maximum de chaque élément et toujours avec un
