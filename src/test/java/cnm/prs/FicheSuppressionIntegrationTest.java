@@ -134,7 +134,7 @@ class FicheSuppressionIntegrationTest extends CnmIntegrationTestSupport {
         ficheRepository.save(f);
         Dossier soumis = dossier(9950, "BROUILLON");
         soumis.setIdTypeDossier("DMC");
-        soumis.setIdSousType("DAO");
+        soumis.setIdSousType("DAOO");
         soumis.setIdPrmp("PRMP001");
         soumis.setIdLocalite("ANT");
         soumis.setIdDmc(autre);

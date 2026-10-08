@@ -97,7 +97,7 @@ class RectificationDossierDaoIntegrationTest extends CnmIntegrationTestSupport {
         idDmc = creerDmc(9902);
         cadrage(idDmc);
         Dossier examine = dossierRepository.findById(1).orElseThrow();
-        examine.setIdSousType("DAO");
+        examine.setIdSousType("DAOO");
         examine.setIdDmc(idDmc);
         examine.setStatut("BROUILLON");
         dossierRepository.saveAndFlush(examine);

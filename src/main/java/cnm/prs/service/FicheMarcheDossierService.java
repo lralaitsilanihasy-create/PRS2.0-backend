@@ -101,7 +101,10 @@ public class FicheMarcheDossierService {
         preselection.exigerListePourDossier(idDmc);   // ⚠️ AMI-b (Q4) : la liste définitive avant le dossier de la demande de propositions
 
         ValeursPpmService.EnTete enTete = valeursPpm.enTete(dmc.getIdDetail());
-        Dossier dossier = saisieService.creerDossierDao(enTete.idLocalite(), enTete.idEntiteContract(), idDmc);
+        // ⚠️ M1 (manuel de contrôle, §B1) — DAOO, DAOR, DAOOI, DAORI, DAOOPREQUAL ou DC, selon le mode du plan et la catégorie.
+        String sousType = SousTypesDossier.dossierMiseEnConcurrence(valeursPpm.lire(dmc.getIdDetail()).valeurs().get("MODE"),
+                ficheMarcheService.etatValide(idDmc).map(v -> ModelesDao.sigleLettre(v.categorie()) != null).orElse(false));
+        Dossier dossier = saisieService.creerDossierDao(sousType, enTete.idLocalite(), enTete.idEntiteContract(), idDmc);
         journal.tracer(dossier, JournalDossierService.DOSSIER_CREE_DEPUIS_FICHE, detail(fiche, idDmc));
         documents.joindre(dossier.getIdDossier(), idDmc);   // lot 2a : sans geste humain
         preselection.joindre(dossier.getIdDossier(), idDmc);   // ⚠️ AMI-b (Q4) : le rapport de présélection signé
@@ -223,7 +226,7 @@ public class FicheMarcheDossierService {
 
     private static void exigerBrouillonDao(Dossier dossier) {
         exigerBrouillon(dossier);
-        if (!DmcService.TYPE_DAO.equals(dossier.getIdSousType())) {
+        if (!SousTypesDossier.PRODUITS_PAR_FICHE.contains(dossier.getIdSousType())) {
             throw new BusinessRuleException("Le dossier " + dossier.getIdDossier() + " n'est pas un dossier d'appel "
                     + "d'offres (sous-type « " + dossier.getIdSousType() + " ») : pas de fiche marché.", "DOSSIER_NON_DAO");
         }

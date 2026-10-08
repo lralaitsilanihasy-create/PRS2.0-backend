@@ -859,8 +859,10 @@ public class SaisieService {
      * en repli et est interprété comme un code de sous-type.
      */
     public DossierDto saisirDossier(SaisieDossierRequest req) {
-        String code = req.idSousType() != null && !req.idSousType().isBlank()
+        String demande = req.idSousType() != null && !req.idSousType().isBlank()
                 ? req.idSousType().trim() : req.idTypeDossier();
+        // ⚠️ M1 (manuel de contrôle, Q1) — l'ancien code « DAO » est renommé « DAOO » (V94) : accepté encore, lu sous son nouveau nom.
+        String code = "DAO".equalsIgnoreCase(demande == null ? null : demande.trim()) ? SousTypesDossier.DAOO : demande;
         if (code == null || code.isBlank()) {
             throw new ChampsInvalidesException(List.of(new ErrorResponse.FieldError(
                     "idSousType", "Le sous-type de dossier est obligatoire.")));
@@ -898,9 +900,10 @@ public class SaisieService {
      * mandat d'attribution figé, journal {@code CREATION}), en-tête fourni par l'appelant (dérivé de la ligne du PPM)
      * et {@code ID_DMC} posé dès l'insertion. Les gardes de la fiche sont à la charge de l'appelant.
      */
-    public Dossier creerDossierDao(String idLocalite, Integer idEntiteContract, Long idDmc) {
-        SousTypeDossier sousType = sousTypeDossierRepository.findById(DmcService.TYPE_DAO)
-                .orElseThrow(() -> new BusinessRuleException("Sous-type de dossier « DAO » absent du référentiel "
+    public Dossier creerDossierDao(String code, String idLocalite, Integer idEntiteContract, Long idDmc) {
+        // ⚠️ M1 (manuel de contrôle) — le sous-type est déduit du mode du plan par l'appelant (SousTypesDossier).
+        SousTypeDossier sousType = sousTypeDossierRepository.findById(code)
+                .orElseThrow(() -> new BusinessRuleException("Sous-type de dossier « " + code + " » absent du référentiel "
                         + "(/api/sous-type-dossiers) : aucun dossier ne peut être produit."));
         return creerDossier(sousType.getIdTypeDossier(), sousType.getIdSousType(), idLocalite, prmpCourante(),
                 idEntiteContract, idDmc);

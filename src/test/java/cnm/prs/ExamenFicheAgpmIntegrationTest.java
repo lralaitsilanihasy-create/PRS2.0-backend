@@ -138,8 +138,8 @@ class ExamenFicheAgpmIntegrationTest extends CnmIntegrationTestSupport {
     @DisplayName("⚠️ Le commun DDP n'arrose PAS les autres familles — un DAO ne voit ni fiche ni AGPM")
     void grille_autreFamille_aucunPoint() throws Exception {
         // C'est ce cas qui justifie le rattachement retenu : la crainte qu'un point commun atteigne
-        // DMC/DDM ne tient pas, la grille étant déjà filtrée par FAMILLE. DAO appartient à DMC.
-        mvc.perform(get("/api/points-ctrls?sousType=DAO").header("Authorization", tokenMembre))
+        // DMC/DDM ne tient pas, la grille étant déjà filtrée par FAMILLE. DAOO (ex-DAO, M1) appartient à DMC.
+        mvc.perform(get("/api/points-ctrls?sousType=DAOO").header("Authorization", tokenMembre))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.portee=='FICHE')]", hasSize(0)))
                 .andExpect(jsonPath("$[?(@.portee=='AGPM')]", hasSize(0)));

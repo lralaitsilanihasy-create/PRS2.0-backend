@@ -509,7 +509,7 @@ class DossierVisibiliteIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.statut").value("BROUILLON"))
                 .andExpect(jsonPath("$.idTypeDossier").value("DMC"))       // famille déduite du sous-type
-                .andExpect(jsonPath("$.idSousType").value("DAO"))          // sous-type choisi (legacy idTypeDossier)
+                .andExpect(jsonPath("$.idSousType").value("DAOO"))         // ⚠️ M1 : « DAO » (legacy) lu « DAOO »
                 .andExpect(jsonPath("$.idLocalite").value("ANT"))      // dérivée de l'entité 1
                 .andExpect(jsonPath("$.idEntiteContract").value(1))
                 .andExpect(jsonPath("$.idDossier").isNumber());        // PK attribuée par le serveur (séquence)
@@ -715,7 +715,7 @@ class DossierVisibiliteIntegrationTest extends CnmIntegrationTestSupport {
         a.setIdPrmp("PRMP001"); a.setIdLocalite("ANT"); dossierRepository.save(a);
         Dossier b = dossier(9601, "SOUMIS"); b.setIdTypeDossier("DDP"); b.setIdSousType("PPM");
         b.setIdPrmp("PRMP001"); b.setIdLocalite("ANT"); dossierRepository.save(b);
-        Dossier c = dossier(9602, "SOUMIS"); c.setIdTypeDossier("DMC"); c.setIdSousType("DAO");
+        Dossier c = dossier(9602, "SOUMIS"); c.setIdTypeDossier("DMC"); c.setIdSousType("DAOO");
         c.setIdPrmp("PRMP001"); c.setIdLocalite("ANT"); dossierRepository.save(c);
 
         mvc.perform(get("/api/dossiers?type=DDP").header("Authorization", tokenAdmin))
@@ -728,7 +728,7 @@ class DossierVisibiliteIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$[?(@.idDossier==9600)]", hasSize(1)))
                 .andExpect(jsonPath("$[?(@.idDossier==9601)]", hasSize(0)));
         // Filtres combinables avec le statut, et valeur inconnue → 400.
-        mvc.perform(get("/api/dossiers?statut=SOUMIS&type=DMC&sousType=DAO").header("Authorization", tokenAdmin))
+        mvc.perform(get("/api/dossiers?statut=SOUMIS&type=DMC&sousType=DAOO").header("Authorization", tokenAdmin))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.idDossier==9602)]", hasSize(1)));
         mvc.perform(get("/api/dossiers?type=XXX").header("Authorization", tokenAdmin))

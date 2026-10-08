@@ -1137,6 +1137,16 @@ et ne pouvait rien en dire : aucune colonne ne reliait les deux objets. Le lien 
 DMC, objet de préparation. **Unique** dans les deux sens ; **sous-type `DAO` seulement** (contrainte en base et garde
 de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM — lot 1b*.
 
+> ⚠️ **2026-10-08 — les sous-types du Manuel de contrôle a priori (tranche M1, V94).** Le sous-type `DAO` s'appelle
+> désormais **`DAOO`** (dossier d'appel d'offres ouvert), références des dossiers existants comprises. La fiche produit le
+> dossier dans le sous-type que dit le **mode** de la ligne du plan : appel d'offres ouvert → `DAOO`, restreint → `DAOR`,
+> international → `DAOOI` ou `DAORI`, avec pré-qualification → `DAOOPREQUAL` ; une fiche de **prestations intellectuelles**
+> produit un dossier de consultation **`DC`**. Le dossier de marché suit la même règle (`MAOO`, `MAOR`, `MAOOI`, `MAORI`,
+> `MAOOPREQUAL`, `MPI`). Le référentiel compte aussi la pré-qualification (`DPREQUAL`), la demande de proposition d'un
+> bailleur (`DP`), le rapport justificatif et le marché de gré à gré (`RJ`, `MGG`) et une famille nouvelle, les **actes de
+> gestion contractuelle** (`DGC` : avenant, résiliation, indemnité, remise de pénalités, sursis). Les projets de textes
+> restent hors de l'application.
+
 - **Un dossier ne naît que d'un contenu figé.** La PRMP — celle qui valide, pas l'UGPM — produit le dossier depuis une
   fiche dont la **dernière version est validée** ; une révision ouverte bloque (`FICHE_NON_VALIDEE`) jusqu'à sa
   validation. Une fiche qui a déjà produit un dossier le dit (`DOSSIER_EXISTANT`, avec son numéro, **avant** le statut

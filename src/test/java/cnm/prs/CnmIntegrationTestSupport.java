@@ -196,7 +196,13 @@ abstract class CnmIntegrationTestSupport extends AbstractIntegrationTest {
         sousTypeDossierRepository.save(new SousTypeDossier("PPM", "Plan de Passation de Marché", "DDP"));
         sousTypeDossierRepository.save(new SousTypeDossier("PPM-AGPM",
                 "Plan de Passation de Marché et Avis Général de Passation de Marché", "DDP"));
-        sousTypeDossierRepository.save(new SousTypeDossier("DAO", "Dossier d'Appel d'Offres", "DMC"));
+        sousTypeDossierRepository.save(new SousTypeDossier("DAOO", "Dossier d'appel d'offres ouvert", "DMC"));
+        // ⚠️ M1 (manuel de contrôle, §B1) — les autres sous-types qu'une fiche produit, déduits du mode du plan et de la catégorie.
+        for (String[] s : new String[][] { { "DAOOI", "Dossier d'appel d'offres ouvert international" },
+                { "DAORI", "Dossier d'appel d'offres restreint international" }, { "DAOOPREQUAL", "Dossier d'appel d'offres ouvert avec pré-qualification" },
+                { "DC", "Dossier de consultation (prestations intellectuelles)" } }) {
+            sousTypeDossierRepository.save(new SousTypeDossier(s[0], s[1], "DMC"));
+        }
         sousTypeDossierRepository.save(new SousTypeDossier("DAOR", "Dossier d'Appel d'Offres Restreint", "DMC"));
 
         profileRepository.save(profile(1, "PRMP"));

@@ -88,7 +88,7 @@ class ObservationChampFicheIntegrationTest extends CnmIntegrationTestSupport {
         autreDmc = creerDmc(9901);
 
         Dossier examine = dossierRepository.findById(1).orElseThrow();
-        examine.setIdSousType("DAO");
+        examine.setIdSousType("DAOO");
         examine.setIdDmc(idDmc);
         dossierRepository.save(examine);
         point(PT_DOSSIER, "Validité des offres conforme au code", PorteePointCtrl.DOSSIER);

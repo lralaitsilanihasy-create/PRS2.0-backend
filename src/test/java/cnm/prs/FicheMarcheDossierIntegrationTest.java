@@ -60,6 +60,8 @@ class FicheMarcheDossierIntegrationTest extends CnmIntegrationTestSupport {
 
     @BeforeEach
     void jeu() throws Exception {
+        // ⚠️ M1 (manuel de contrôle) — un sous-type DMC qu'aucune fiche ne produit : la demande de proposition d'un bailleur.
+        sousTypeDossierRepository.save(new cnm.prs.entity.SousTypeDossier("DP", "Demande de proposition (bailleur)", "DMC"));
         TypeDmc dao = typeDmcRepository.findByCode("DAO").orElseThrow();
         ModePassation m92 = new ModePassation(92, "Appel d'offres ouvert", null, null, null, null);
         m92.setIdTypeDmc(dao.getIdTypeDmc());
@@ -100,8 +102,8 @@ class FicheMarcheDossierIntegrationTest extends CnmIntegrationTestSupport {
         ficheC = creerDmc(9907);
         cadrage(ficheC);
 
-        dossierRepository.save(dossierDao(9950, "BROUILLON", "DAO", "PRMP001"));
-        dossierRepository.save(dossierDao(9951, "BROUILLON", "DAO", "PRMP001"));
+        dossierRepository.save(dossierDao(9950, "BROUILLON", "DAOO", "PRMP001"));
+        dossierRepository.save(dossierDao(9951, "BROUILLON", "DAOO", "PRMP001"));
     }
 
     // ------------------------------------------------------------------ 1. migration
@@ -122,7 +124,7 @@ class FicheMarcheDossierIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(get("/api/dossiers").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk());
 
-        dossierRepository.save(dossierDao(9952, "BROUILLON", "DAOR", "PRMP001"));
+        dossierRepository.save(dossierDao(9952, "BROUILLON", "DP", "PRMP001"));
         dossierRepository.flush();
         assertThatThrownBy(() -> jdbcTemplate.update("update t_dossier set \"ID_DMC\" = ? where \"ID_DOSSIER\" = 9952", ficheB))
                 .hasMessageContaining("ck_dossier_dmc_dao");
@@ -141,7 +143,7 @@ class FicheMarcheDossierIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.statut").value("BROUILLON"))
                 .andExpect(jsonPath("$.idTypeDossier").value("DMC"))
-                .andExpect(jsonPath("$.idSousType").value("DAO"))
+                .andExpect(jsonPath("$.idSousType").value("DAOO"))
                 .andExpect(jsonPath("$.idEntiteContract").value(1))
                 .andExpect(jsonPath("$.idLocalite").value("ANT"))
                 .andExpect(jsonPath("$.idPrmp").value("PRMP001"))
@@ -238,11 +240,11 @@ class FicheMarcheDossierIntegrationTest extends CnmIntegrationTestSupport {
                 .content("{\"idDmc\":" + ficheC + "}"))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("FICHE_NON_VALIDEE"));
 
-        dossierRepository.save(dossierDao(9953, "SOUMIS", "DAO", "PRMP001"));
+        dossierRepository.save(dossierDao(9953, "SOUMIS", "DAOO", "PRMP001"));
         mvc.perform(put("/api/dossiers/9953/fiche-marche").header("Authorization", tokenPrmp).contentType(JSON)
                 .content("{\"idDmc\":" + ficheB + "}"))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("DOSSIER_NON_BROUILLON"));
-        dossierRepository.save(dossierDao(9954, "BROUILLON", "DAOR", "PRMP001"));
+        dossierRepository.save(dossierDao(9954, "BROUILLON", "DP", "PRMP001"));
         mvc.perform(put("/api/dossiers/9954/fiche-marche").header("Authorization", tokenPrmp).contentType(JSON)
                 .content("{\"idDmc\":" + ficheB + "}"))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("DOSSIER_NON_DAO"));
@@ -320,7 +322,7 @@ class FicheMarcheDossierIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(delete("/api/dossiers/9950/fiche-marche").header("Authorization", tokenPrmp2))
                 .andExpect(status().isForbidden());
         // Dossier à soi, fiche d'autrui : 403 aussi.
-        dossierRepository.save(dossierDao(9960, "BROUILLON", "DAO", "PRMP002"));
+        dossierRepository.save(dossierDao(9960, "BROUILLON", "DAOO", "PRMP002"));
         mvc.perform(put("/api/dossiers/9960/fiche-marche").header("Authorization", tokenPrmp2).contentType(JSON)
                 .content("{\"idDmc\":" + ficheA + "}"))
                 .andExpect(status().isForbidden());
@@ -346,7 +348,7 @@ class FicheMarcheDossierIntegrationTest extends CnmIntegrationTestSupport {
         ficheRepository.save(f);
         mvc.perform(post("/api/fiches-marche/" + idDmc + "/dossier").header("Authorization", tokenPrmp3))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("VACANCE_PRMP"));
-        dossierRepository.save(dossierDao(9961, "BROUILLON", "DAO", "PRMP003"));
+        dossierRepository.save(dossierDao(9961, "BROUILLON", "DAOO", "PRMP003"));
         mvc.perform(put("/api/dossiers/9961/fiche-marche").header("Authorization", tokenPrmp3).contentType(JSON)
                 .content("{\"idDmc\":" + idDmc + "}"))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("VACANCE_PRMP"));

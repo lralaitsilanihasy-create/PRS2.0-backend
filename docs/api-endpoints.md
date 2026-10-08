@@ -7629,6 +7629,36 @@ courent de la **réception** ; la **signature** du PV reste celle du circuit (le
 - Journal : `SANS_SUITE_DEMANDE`, `SANS_SUITE`.
 
 
+### Le référentiel du contrôle aligné sur le Manuel de contrôle a priori, tranche M1 : les sous-types — V94 ⚠️ 2026-10-08
+
+Demande front `demande-backend-2026-10-08-manuel-controle-a-priori.md` (§B1 ; *Manuel de contrôle a priori des marchés publics*, CNM,
+février 2026, p. 7). Arbitrages du pilote du 08/10 : **Q1** `DAO` renommé **`DAOO`**, références comprises ; **Q2** variantes
+internationales en sous-types propres ; **Q3** `MGG` ; **Q4** `TEXTMP` hors application ; codes **sans accent** ; la déclaration
+sans suite garde sa **famille propre `DSS`** (V93) ; le sous-type du dossier produit est **déduit du mode du plan**. Migration
+**V94**. Aucun chemin nouveau : `GET /api/sous-type-dossiers` sert le référentiel, « Créer dossier » le reprend.
+
+| Famille | Sous-types (code — libellé) |
+|---|---|
+| DDP | `PPM`, `PPM-AGPM` (inchangés) |
+| DMC | **`DAOO`** — Dossier d'appel d'offres ouvert (ex-`DAO`) ; `DPREQUAL` — de pré-qualification ; `DAOOPREQUAL` — ouvert avec pré-qualification ; `DAOOI` — ouvert international ; `DAOR` — restreint ; `DAORI` — restreint international ; `DC` — de consultation (prestations intellectuelles) ; `DP` — demande de proposition (bailleur) ; `RJ` — rapport justificatif (gré à gré) |
+| DDM | `MAOO` ; `MAOOPREQUAL` ; `MAOOI` ; `MAOR` (libellé : « Marché sur appel d'offres restreint ») ; `MAORI` ; `MPI` ; `MGG` — marché de gré à gré |
+| **DGC** (nouvelle) — Acte de gestion contractuelle | `AVN` — avenant ; `DR` — résiliation ; `INDEMN` — indemnité ; `PENAL` — remise de pénalités ; `SURSIS` — sursis d'exécution |
+| DSS (V93) | `DSS` — déclaration sans suite |
+
+- **Le renommage** `DAO` → `DAOO` touche les dossiers, les points de contrôle et les **références** déjà attribuées
+  (« 00004/DAO/CNM/2026 » devient « 00004/DAOO/CNM/2026 » en réception, versions de dossier et PV). Les documents déjà produits
+  (PDF des PV, lettres) gardent leur texte. Le **type de DMC** « DAO » (`typeDmcCode`) **ne change pas**. Un appel qui envoie encore
+  `idSousType` (ou `idTypeDossier`) `DAO` à `POST /api/saisies/dossier` est lu `DAOO`.
+- **Le dossier produit par une fiche** (`POST /api/fiches-marche/{idDmc}/dossier`) prend le sous-type déduit du **mode** de la ligne du
+  plan et de la catégorie : prestations intellectuelles → **`DC`** ; mode « … international » → `DAOOI` (`DAORI` s'il est restreint) ;
+  « … pré-qualification » → `DAOOPREQUAL` ; « restreint » → `DAOR` ; sinon **`DAOO`**. Le **dossier de marché** suit la même règle
+  (`MPI`, `MAORI`, `MAOOI`, `MAOOPREQUAL`, `MAOR`, `MAOO`). Une fiche ne se rattache qu'à un dossier de ces six sous-types DMC (409
+  `DOSSIER_NON_DAO` sinon ; contrainte `ck_dossier_dmc_dao` élargie).
+- **Hors de M1** : les pièces par sous-type (M2), les grilles (M3), les motifs-types (M4), le dépôt des actes DGC depuis le marché, les
+  garde-fous et les délais par sous-type (M5). D'ici là, les nouveaux sous-types prennent les pièces et les points **de leur famille** ;
+  la famille DGC n'en a aucun.
+
+
 ### Le rabais structuré de l'offre en ligne ⚠️ 2026-10-07
 
 Demande front `demande-backend-2026-10-07-rabais-structure.md` (arbitrage Q4 du pilote : « le rabais est structuré au dépôt »). Aucune

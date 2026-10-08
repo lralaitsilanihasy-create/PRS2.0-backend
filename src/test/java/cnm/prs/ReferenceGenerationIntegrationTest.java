@@ -43,8 +43,8 @@ class ReferenceGenerationIntegrationTest extends CnmIntegrationTestSupport {
         org.junit.jupiter.api.Assertions.assertEquals("00002/PPM-AGPM/CRM-ANT/2097",
                 referenceService.generer("PPM-AGPM", "DDP", "ANT", false, 2097));
         // Une autre famille (DMC) a sa propre séquence, repartant à 1.
-        org.junit.jupiter.api.Assertions.assertEquals("00001/DAO/CRM-ANT/2097",
-                referenceService.generer("DAO", "DMC", "ANT", false, 2097));
+        org.junit.jupiter.api.Assertions.assertEquals("00001/DAOO/CRM-ANT/2097",
+                referenceService.generer("DAOO", "DMC", "ANT", false, 2097));
     }
 
     @Test

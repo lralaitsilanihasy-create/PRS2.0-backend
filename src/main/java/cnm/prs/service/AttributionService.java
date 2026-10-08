@@ -827,8 +827,7 @@ public class AttributionService {
         DossierMec dmc = dmcRepository.findById(idDmc).orElseThrow(() -> new ResourceNotFoundException("DMC introuvable : " + idDmc));
         Map<String, String> plan = valeursPpm.lire(dmc.getIdDetail()).valeurs();
         // ⚠️ PI-d2b (arbitrage du pilote, 08/10) — une consultation de prestations intellectuelles : le sous-type MPI (V90).
-        String sousType = evaluation.estPi(idDmc) ? SOUS_TYPE_PI
-                : Objects.toString(plan.get("MODE"), "").toLowerCase(Locale.FRENCH).contains("restreint") ? "MAOR" : "MAOO";
+        String sousType = SousTypesDossier.dossierMarche(plan.get("MODE"), evaluation.estPi(idDmc));   // ⚠️ M1 (manuel de contrôle, §B1)
         ValeursPpmService.EnTete enTete = valeursPpm.enTete(dmc.getIdDetail());
         Dossier dossier = saisie.creerDossierMarche(sousType, enTete.idLocalite(), enTete.idEntiteContract());
         LocalDateTime maintenant = LocalDateTime.now();
