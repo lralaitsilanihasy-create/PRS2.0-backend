@@ -28,6 +28,7 @@ public class Ami {
     public static final String BROUILLON = "BROUILLON";
     public static final String PUBLIE = "PUBLIE";
     public static final String DISPENSE = "DISPENSE";
+    public static final String INFRUCTUEUX = "INFRUCTUEUX";
 
     @Id
     @Column(name = "ID_DMC", nullable = false)
@@ -85,4 +86,39 @@ public class Ami {
 
     @Column(name = "MODIFIE_LE")
     private LocalDateTime modifieLe;
+
+    // ⚠️ V83 (tranche AMI-b, §B3) — la liste restreinte, le rapport de présélection, la relance, l'infructuosité.
+
+    @Column(name = "LISTE_ARRETEE_LE")
+    private LocalDateTime listeArreteeLe;
+
+    @Column(name = "LISTE_ARRETEE_PAR", length = 100)
+    private String listeArreteePar;
+
+    @Column(name = "MOTIF_NOMBRE")
+    private String motifNombre;
+
+    @Column(name = "OBSERVATIONS")
+    private String observations;
+
+    @Basic(fetch = FetchType.LAZY)
+    @Column(name = "RAPPORT_PDF")
+    private byte[] rapportPdf;
+
+    @Basic(fetch = FetchType.LAZY)
+    @Column(name = "RAPPORT_DOCX")
+    private byte[] rapportDocx;
+
+    @Column(name = "SIGNATAIRES", length = 1000)
+    private String signataires;
+
+    /** La dernière signature du rapport : la liste est définitive, publiée et notifiée (Q5). */
+    @Column(name = "LISTE_DEFINITIVE_LE")
+    private LocalDateTime listeDefinitiveLe;
+
+    @Column(name = "NOMBRE_RELANCES", nullable = false)
+    private Integer nombreRelances = 0;
+
+    @Column(name = "MOTIF_INFRUCTUEUX")
+    private String motifInfructueux;
 }

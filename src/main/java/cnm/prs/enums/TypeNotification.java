@@ -192,5 +192,9 @@ public enum TypeNotification {
     /** ⚠️ 2026-10-07 (§B5) — le retrait du marché faute de pièces : vers l'attributaire (et par courriel). */
     MARCHE_RETIRE,
     /** ⚠️ 2026-10-07 (AMI en ligne, §B2) — l'accusé de dépôt d'une expression d'intérêt : vers le candidat (et par courriel). */
-    AMI_EXPRESSION_DEPOSEE
+    AMI_EXPRESSION_DEPOSEE,
+    /** ⚠️ 2026-10-07 (AMI en ligne, tranche AMI-b, Q5) — le résultat de la présélection : vers chaque candidat (retenu, ou non retenu et son motif). */
+    AMI_RESULTAT,
+    /** ⚠️ 2026-10-07 (AMI-b, §B4) — la lettre d'invitation à remettre une proposition : vers chaque candidat de la liste restreinte. */
+    LETTRE_INVITATION
 }

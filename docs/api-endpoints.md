@@ -7241,6 +7241,55 @@ dépendance ajoutée.
 - **Journal de la procédure** (registre de l'évaluation) : `AMI_PREPARE`, `AMI_PUBLIE`, `AMI_DISPENSE`, `AMI_EXPRESSION`, `AMI_RETRAIT`.
 - ⚠️ `BadRequestException` porte désormais des `details` facultatifs, servis dans `ErrorResponse.details` comme ceux d'un 409.
 
+### L'appel à manifestation d'intérêt en ligne, tranche AMI-b : présélection, liste restreinte, rapport, invitations — V83 ⚠️ 2026-10-07
+
+Demande front `demande-backend-2026-10-07-ami-pi.md` (§B3, §B4) ; art. 42-II de la loi n° 2016-055 ; arbitrages du pilote du 07/10 :
+**Q3** moins de six qualifiés, la liste s'arrête avec eux, le nombre motivé (ou relance) ; **Q4** rapport et liste joints d'office au
+dossier de la demande de propositions ; **Q5** liste publiée et notifiée. Migration **V83** (déclarations, notes, liste, signatures,
+écartement, relance, infructuosité ; type de pièce `RAPPORT_PRESELECTION` du dossier DMC). Aucune dépendance ajoutée.
+
+| Méthode | URL | Corps | Statuts | Accès |
+|---|---|---|---|---|
+| GET | /api/fiches-marche/{idDmc}/ami/preselection | → `PreselectionDto` | 404 (pas d'AMI publié) | PRMP, UGPM, CAO |
+| POST | …/ami/preselection/declaration | `{ conflit, precision? }` | 409 `DEJA_DECLARE` | membre de la CAO |
+| PUT | …/ami/expressions/{id}/notes | `{ notes[{ code, note, motif }] }` | 400 `CRITERE_INCONNU`, `NOTE_HORS_BAREME`, `MOTIF_OBLIGATOIRE` ; 403 `MEMBRE_EN_CONFLIT` ; 409 `DECLARATION_MANQUANTE`, `LECTURE_FERMEE`, `LISTE_ARRETEE`, `EXPRESSION_ECARTEE`, `AMI_INFRUCTUEUX` | membre déclaré sans conflit |
+| POST | …/ami/expressions/{id}/ecartement | `{ ecartee, motif }` (`ecartee` faux : rétablir) | 400 `MOTIF_OBLIGATOIRE` ; mêmes 403/409 | membre déclaré sans conflit |
+| POST | …/ami/preselection/arreter | `{ motifNombre?, observations?, ordre? }` | 400 `MOTIF_NOMBRE_OBLIGATOIRE`, `ORDRE_INVALIDE` ; 409 `NOTATION_INCOMPLETE` (`details.expressions` : numéros), `AUCUN_QUALIFIE`, `EGALITE_A_DEPARTAGER` (`details.expressions` : identifiants), `LISTE_ARRETEE` | président de la CAO |
+| GET | …/ami/rapport?format=docx | le rapport de présélection | 404 tant qu'il n'est pas produit | PRMP, UGPM, CAO |
+| POST | …/ami/rapport/signer | `{ observation? }` | 403 `NON_SIGNATAIRE` ; 409 `RAPPORT_NON_PRODUIT`, `DEJA_SIGNE` | membre appelé |
+| POST | …/ami/rapport/empechement | `{ im, motif }` | 400 `MOTIF_ABSENT`, `NON_SIGNATAIRE` ; 409 `DEJA_SIGNE` | président |
+| POST | …/ami/relancer | `{ dateLimite, motif }` | 400 `DATE_LIMITE_INVALIDE`, `MOTIF_OBLIGATOIRE` ; 409 `LECTURE_FERMEE`, `LISTE_ARRETEE`, `AMI_INFRUCTUEUX` | PRMP |
+| POST | …/ami/infructueux | `{ motif }` | 400 `MOTIF_OBLIGATOIRE` ; 409 `QUALIFIES_PRESENTS`, `LISTE_ARRETEE` | PRMP |
+
+- **`PreselectionDto`** = `{ idDmc, etat, declarations[{ membre, nom, president, signeeLe, conflit, precision }], expressions[{ id, numero,
+  nif, raisonSociale, notes[{ code, libelle, max, note, motif, par, nom, le }], total, complete, qualifiee, ecartee, motifEcartement,
+  rang, exAequo }], liste[{ rang, idExpression, idCandidat, nif, raisonSociale, note }], nombreRetenus, noteMinimale, motifNombre,
+  observations, rapport{ produitLe, signe, signeLe, signatures[], attendues[] }, nombreRelances, motifInfructueux }` ;
+  `etat` ∈ `EN_ATTENTE` (avant la date limite : aucune expression servie) · `NOTATION` · `LISTE_ARRETEE` · `DEFINITIVE` · `INFRUCTUEUX`.
+- **La commission** (les membres désignés de la procédure, comme à l'évaluation) : chaque membre signe sa déclaration propre à l'AMI ;
+  un membre en conflit ne décide rien et ne signe pas le rapport. Tout membre déclaré **note** (une note par critère, de 0 au poids du
+  critère, motivée ; une nouvelle saisie remplace la précédente, le journal garde chaque saisie) ou **écarte** une expression avec un
+  motif. Le serveur totalise (sur 100) : une expression est **qualifiée** si elle est notée sur tous les critères, non écartée, et
+  atteint la note minimale de l'AMI ; les qualifiées sont classées par total décroissant (`rang`, `exAequo`).
+- **L'arrêt de la liste** (président) : toutes les expressions non écartées notées ; au moins une qualifiée (sinon la PRMP relance ou
+  déclare l'AMI infructueux, art. 56-II) ; la liste prend les `nombreRetenus` premières ; une égalité au seuil se départage par
+  `ordre` ; **moins de qualifiées que de places** : `motifNombre` exigé (Q3). Le **rapport de présélection** est produit (PDF, Word :
+  AMI, commission, tableau des notes par critère et leurs motifs, écartements, liste, motif du nombre, observations, signatures).
+- **La liste définitive** : à la dernière signature (ou empêchement constaté), le rapport est reproduit avec les signatures ; la liste
+  paraît sur `GET /api/amis-en-ligne/{idDmc}` (`liste[{ rang, raisonSociale, nif }]`) et chaque candidat reçoit `AMI_RESULTAT` (avec
+  courriel) : retenu et son rang, ou non retenu et son motif (écartement, note sous la note minimale, rang au-delà des places) (Q5).
+- **Q4 — le dossier de la demande de propositions** : `POST /api/fiches-marche/{idDmc}/dossier` (et le rattachement d'une fiche) répond
+  409 **`LISTE_NON_ARRETEE`** tant qu'un AMI publié n'a pas sa liste définitive ; à la création, le **rapport de présélection signé** est
+  joint d'office (type de pièce de code `RAPPORT_PRESELECTION`, facultatif, posé par V83) ; il part avec la fiche au détachement. Sans
+  AMI, ou dispensé, rien ne change.
+- **§B4 — les lettres d'invitation** (`POST …/lettres-invitation`) : avec une liste définitive, les candidats sont **ceux de la liste**
+  (raison sociale et adresse déclarée de leur entreprise) et la saisie de `candidats` est ignorée ; chaque invité reçoit la notification
+  **`LETTRE_INVITATION`** (avec courriel). Sans liste, la saisie reste exigée comme avant.
+- **Relance** (PRMP, après la date limite, avant l'arrêt) : nouvelle date limite et motif ; l'AMI reparaît dans la liste publique ;
+  expressions et notes restent. **Infructuosité** (PRMP) : seulement sans aucune expression qualifiée.
+- **Journal** : `AMI_DECLARATION`, `AMI_NOTE`, `AMI_ECARTEMENT`, `AMI_LISTE_ARRETEE`, `AMI_SIGNATURE`, `AMI_EMPECHEMENT`,
+  `AMI_LISTE_DEFINITIVE`, `AMI_RELANCE`, `AMI_INFRUCTUEUX`, `AMI_RAPPORT_JOINT`.
+
 ### Le rabais structuré de l'offre en ligne ⚠️ 2026-10-07
 
 Demande front `demande-backend-2026-10-07-rabais-structure.md` (arbitrage Q4 du pilote : « le rabais est structuré au dépôt »). Aucune

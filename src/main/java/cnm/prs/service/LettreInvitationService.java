@@ -47,9 +47,17 @@ public class LettreInvitationService {
     private final DocumentsFicheMarcheService documents;
     private final DossierIntegriteService dossierIntegrite;
     private final JournalDossierService journal;
+    /** ⚠️ 2026-10-07 (AMI en ligne, AMI-b, §B4) — la liste restreinte arrêtée, avec les comptes des candidats. */
+    private final AmiPreselectionService preselection;
+    private final NotificationService notifications;
+    private final cnm.prs.repository.CompteCandidatRepository candidatsRepository;
 
     public LettreInvitationService(AvisSpecifiqueService avis, FicheMarcheService fiches, DocumentsFicheMarcheService documents,
-            DossierIntegriteService dossierIntegrite, JournalDossierService journal) {
+            DossierIntegriteService dossierIntegrite, JournalDossierService journal, AmiPreselectionService preselection,
+            NotificationService notifications, cnm.prs.repository.CompteCandidatRepository candidatsRepository) {
+        this.preselection = preselection;
+        this.notifications = notifications;
+        this.candidatsRepository = candidatsRepository;
         this.avis = avis;
         this.fiches = fiches;
         this.documents = documents;
@@ -71,7 +79,13 @@ public class LettreInvitationService {
     @Transactional
     public List<DocumentFicheDto> produire(Long idDmc, LettreInvitationRequest corps) {
         AvisSpecifiqueService.exigerProfil();
-        Saisie saisie = saisie(corps);
+        // ⚠️ AMI-b (§B4) — avec une liste restreinte définitive, les candidats sont les siens (comptes, adresses déclarées) : la saisie
+        // des candidats est alors ignorée.
+        java.util.Optional<List<cnm.prs.entity.AmiListe>> listeAmi = preselection.listeDefinitive(idDmc);
+        Saisie saisie = saisie(corps, listeAmi.isPresent());
+        List<LettreInvitationRequest.Candidat> invites = listeAmi.map(l -> l.stream()
+                .map(x -> new LettreInvitationRequest.Candidat(x.getRaisonSociale(), preselection.adresse(x.getIdCandidat()))).toList())
+                .orElse(saisie.candidats());
         FicheMarcheDto courante = fiches.lire(idDmc);
         AvisDisponibiliteDto dispo = avis.evaluer(idDmc, courante, true);
         if (!dispo.disponible()) {
@@ -90,13 +104,13 @@ public class LettreInvitationService {
         commun.put(FormulairesCandidat.PREFIXE_LETTRE + "lieu", saisie.lieu());
         commun.put(FormulairesCandidat.PREFIXE_LETTRE + "date", saisie.date());
         commun.put(FormulairesCandidat.PREFIXE_LETTRE + "candidats", String.join(String.valueOf(FormulairesCandidat.SEPARATEUR_LIGNES),
-                saisie.candidats().stream().map(c -> "- " + c.nom()).toList()));
-        List<String> destinataires = saisie.candidats().stream()
+                invites.stream().map(c -> "- " + c.nom()).toList()));
+        List<String> destinataires = invites.stream()
                 .map(c -> c.nom() + FormulairesCandidat.SEPARATEUR_LIGNES + lignes(c.adresse())).toList();
         Map<Integer, List<DocumentsFicheMarcheService.Produit>> parRang = documents.produireLettres(etat, commun, destinataires,
                 maintenant);
 
-        List<Map<String, String>> liste = saisie.candidats().stream()
+        List<Map<String, String>> liste = invites.stream()
                 .map(c -> { Map<String, String> m = new LinkedHashMap<>(); m.put("nom", c.nom()); m.put("adresse", c.adresse()); return m; })
                 .toList();
         Set<Integer> ids = new java.util.HashSet<>();
@@ -109,7 +123,14 @@ public class LettreInvitationService {
             ids.addAll(documents.enregistrerAvis(validee.getIdFiche(), e.getValue(), maintenant,
                     DocumentsFicheMarcheService.publicationJson(trace)));
         }
-        int n = saisie.candidats().size();
+        int n = invites.size();
+        listeAmi.ifPresent(l -> l.forEach(x -> {
+            cnm.prs.entity.CompteCandidat c = candidatsRepository.findById(x.getIdCandidat()).orElse(null);
+            notifications.emettreCandidat(cnm.prs.enums.TypeNotification.LETTRE_INVITATION, x.getIdCandidat(), c == null ? null : c.getEmail(),
+                    idDmc.intValue(), cnm.prs.enums.TypeObjet.PROCEDURE, "Invitation à remettre une proposition", "Vous êtes invité, au rang "
+                            + x.getRang() + " de la liste restreinte, à remettre une proposition pour « " + etat.getDesignationMarche()
+                            + " » ; la lettre d'invitation (envoi du " + saisie.date() + ") et la demande de propositions sont disponibles sur la plateforme.");
+        }));
         avis.lancerLigne(ligne, origine, premiereImpression, n + " lettre(s) d'invitation imprimée(s) (envoi du " + saisie.date() + ")");
         journal.tracer(dispo.idDossierSoumis(), JOURNAL_LETTRES_IMPRIMEES, n + " lettre(s) d'invitation imprimée(s) pour la "
                 + "liste restreinte (fiche marché version " + validee.getNumeroVersion() + ", envoi du " + saisie.date() + ")");
@@ -129,13 +150,15 @@ public class LettreInvitationService {
     }
 
     /** La saisie, contrôlée (400 nominatif) et mise en forme. */
-    private static Saisie saisie(LettreInvitationRequest corps) {
+    private static Saisie saisie(LettreInvitationRequest corps, boolean listeAmi) {
         List<ErrorResponse.FieldError> erreurs = new ArrayList<>();
         LettreInvitationRequest c = corps == null ? new LettreInvitationRequest(null, null, null) : corps;
         String date = AvisSpecifiqueService.date(c.dateEnvoi(), "dateEnvoi", "La date d'envoi des lettres", erreurs);
         String lieu = AvisSpecifiqueService.texte(c.lieu(), "lieu", "Le lieu d'envoi des lettres", erreurs);
         List<LettreInvitationRequest.Candidat> candidats = new ArrayList<>();
-        if (c.candidats() == null || c.candidats().isEmpty()) {
+        if (listeAmi) {
+            // ⚠️ AMI-b — la liste arrêtée fait foi : la saisie des candidats est ignorée.
+        } else if (c.candidats() == null || c.candidats().isEmpty()) {
             erreurs.add(new ErrorResponse.FieldError("candidats", "La liste restreinte doit compter au moins un candidat."));
         } else {
             for (int i = 0; i < c.candidats().size(); i++) {

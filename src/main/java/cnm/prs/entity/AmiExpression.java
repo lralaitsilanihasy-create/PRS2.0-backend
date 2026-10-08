@@ -63,4 +63,15 @@ public class AmiExpression {
 
     @Column(name = "REMPLACEE_PAR", length = 36)
     private String remplaceePar;
+
+    // ⚠️ V83 (tranche AMI-b) — l'écartement motivé par la commission (irrecevable, hors sujet…).
+
+    @Column(name = "MOTIF_ECARTEMENT")
+    private String motifEcartement;
+
+    @Column(name = "ECARTEE_LE")
+    private LocalDateTime ecarteeLe;
+
+    @Column(name = "ECARTEE_PAR", length = 100)
+    private String ecarteePar;
 }

@@ -40,7 +40,13 @@ public record AmiDto(Long idDmc, String etat, String objet, String autoriteContr
     /** L'AMI publié, tel que le public le lit ({@code GET /api/amis-en-ligne}) : {@code ouvert} tant que la date limite n'est pas passée. */
     public record AmiPublic(Long idDmc, String reference, String objet, String autoriteContractante, LocalDateTime dateLimite,
             List<Critere> criteres, List<String> pieces, Integer nombreRetenus, List<Publication> publications, LocalDateTime publieLe,
-            boolean ouvert) {
+            boolean ouvert,
+            /** ⚠️ AMI-b (Q5) — la liste restreinte définitive, publiée ; vide avant. */
+            List<Retenu> liste) {
+    }
+
+    /** Un candidat de la liste restreinte publiée. */
+    public record Retenu(Integer rang, String raisonSociale, String nif) {
     }
 
     // ------------------------------------------------------------------ les expressions d'intérêt (§B2)

@@ -94,12 +94,15 @@ public class AmiService {
     private final EvaluationJournalRepository journal;
     private final ObjectMapper mapper;
     private final Clock horloge;
+    // ⚠️ AMI-b : la liste restreinte publiée.
+    private final cnm.prs.repository.AmiListeRepository listes;
 
     public AmiService(AmiRepository amis, AmiExpressionRepository expressions, AmiExpressionPieceRepository piecesRepository,
             FicheMarcheService fiches, DossierMecRepository dmcRepository, ValeursPpmService valeursPpm, GenerateurDocumentsFiche generateur,
             EntrepriseRepository entreprises, CompteCandidatRepository candidats, PrmpRepository prmpRepository,
             NotificationService notifications, ParametreService parametres, ParametresInternesService internes,
-            EvaluationJournalRepository journal, ObjectMapper mapper, Clock horloge) {
+            EvaluationJournalRepository journal, ObjectMapper mapper, Clock horloge, cnm.prs.repository.AmiListeRepository listes) {
+        this.listes = listes;
         this.amis = amis;
         this.expressions = expressions;
         this.piecesRepository = piecesRepository;
@@ -501,7 +504,9 @@ public class AmiService {
         DossierMec dmc = dmcRepository.findById(a.getIdDmc()).orElse(null);
         String autorite = dmc == null ? null : valeursPpm.lire(dmc.getIdDetail()).valeurs().get("ENTITE");
         return new AmiDto.AmiPublic(a.getIdDmc(), reference(a.getIdDmc()), a.getObjet(), autorite, a.getDateLimite(), lireCriteres(a),
-                lirePieces(a), a.getNombreRetenus(), lirePublications(a), a.getPublieLe(), a.getDateLimite().isAfter(maintenant()));
+                lirePieces(a), a.getNombreRetenus(), lirePublications(a), a.getPublieLe(), a.getDateLimite().isAfter(maintenant()),
+                a.getListeDefinitiveLe() == null ? List.of() : listes.findByIdDmcOrderByRangAsc(a.getIdDmc()).stream()
+                        .map(r -> new AmiDto.Retenu(r.getRang(), r.getRaisonSociale(), r.getNif())).toList());
     }
 
     private AmiDto.Expression expressionDto(AmiExpression x) {

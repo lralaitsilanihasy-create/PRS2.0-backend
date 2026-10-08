@@ -3104,6 +3104,21 @@ Accès complet aux référentiels, comptes utilisateurs, journal d'audit, hiéra
       jusque-là ; il reçoit un accusé portant l'empreinte de son dépôt ;
     - les expressions ne sont pas scellées, mais **personne ne les lit avant la date limite** : l'administration en voit
       seulement le nombre.
+  - ⚠️ **La présélection et la liste restreinte (2026-10-07, tranche AMI-b ; art. 42-II)** :
+    - chaque membre de la commission d'appel d'offres signe une déclaration propre à l'AMI ; un membre en conflit d'intérêts
+      ne décide rien et ne signe pas le rapport ;
+    - les membres notent chaque expression sur les critères publiés (de zéro aux points du critère, toujours avec un motif),
+      ou l'écartent avec un motif ; est **qualifiée** une expression notée sur tous les critères, non écartée, qui atteint la
+      note minimale ; les qualifiées sont classées par total ;
+    - le **président arrête la liste** des six premières qualifiées (le nombre de l'AMI) ; une égalité au seuil se départage ;
+      s'il y a **moins de qualifiées que de places**, la liste s'arrête avec elles et le nombre est motivé — ou la PRMP
+      **relance** l'AMI ; sans aucune qualifiée, la PRMP le déclare **infructueux** ;
+    - le **rapport de présélection** est signé des membres ; à la dernière signature, la liste est **définitive**, publiée sur
+      la page de l'AMI et notifiée à chaque candidat (les non retenus avec leur motif) ;
+    - le dossier de la demande de propositions ne se crée qu'une fois la liste définitive, et reçoit d'office le rapport
+      signé, que la Commission examine avec lui ;
+    - les lettres d'invitation sont adressées aux candidats de la liste, avec leurs comptes : chacun est averti en ligne et
+      par courriel.
 - Grilles de contrôle & règles d'anomalie [Écriture]
   - Configuration de tr_points_ctrl et t_regle_anomalie.
 - Comptes budgétaires & entités contractantes [Écriture]
