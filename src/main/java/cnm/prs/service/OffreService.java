@@ -126,6 +126,7 @@ public class OffreService {
         Long idDmc = c.idDmc();
         ProceduresEnLigneService.Lue lue = procedureOuverte(idDmc);
         procedures.exigerInvite(lue, idCandidat);   // ⚠️ 2026-10-08 (lot 3 PI, PI-a, §B1) — une consultation restreinte : ses invités seuls
+        String enveloppe = enveloppe(lue, c.enveloppe());   // ⚠️ V86 (PI-b) : deux enveloppes pour une proposition PI
         List<String> attendues = clesPubliees(idDmc);
         Entreprise entreprise = entreprises.findByIdCandidat(idCandidat).orElseThrow(() -> new BusinessRuleException(
                 "Déclarez votre entreprise avant de déposer une offre.", "ENTREPRISE_ABSENTE"));
@@ -144,12 +145,13 @@ public class OffreService {
                 throw new BusinessRuleException("La fiche n'autorise pas le remplacement d'une offre déposée.", "REMPLACEMENT_INTERDIT");
             }
             remplacee = offres.findById(c.remplace().trim()).filter(o -> idCandidat.equals(o.getIdCandidat())
-                    && idDmc.equals(o.getIdDmc()) && Objects.equals(lot, o.getLot()) && Offre.DEPOSEE.equals(o.getEtat()))
+                    && idDmc.equals(o.getIdDmc()) && Objects.equals(lot, o.getLot()) && Offre.DEPOSEE.equals(o.getEtat())
+                    && Objects.equals(enveloppe, o.getEnveloppe()))
                     .orElseThrow(() -> new BadRequestException("L'offre à remplacer n'est pas l'une de vos offres déposées pour cette "
                             + "procédure et ce lot.", "REMPLACE_INVALIDE"));
         } else {
-            deposee(idDmc, entreprise.getIdEntreprise(), lot).ifPresent(o -> {
-                throw new BusinessRuleException("Vous avez déjà déposé une offre pour " + (lot == null ? "cette procédure" : "le lot " + lot)
+            deposee(idDmc, entreprise.getIdEntreprise(), lot, enveloppe).ifPresent(o -> {
+                throw new BusinessRuleException("Vous avez déjà déposé " + (enveloppe == null ? "une offre" : "l'enveloppe " + enveloppe.toLowerCase(java.util.Locale.FRENCH)) + " pour " + (lot == null ? "cette procédure" : "le lot " + lot)
                         + " : remplacez-la" + " si la fiche le permet.", "OFFRE_EXISTANTE");
             });
         }
@@ -165,7 +167,8 @@ public class OffreService {
         }
         // Un dépôt en cours de la même entreprise pour le même lot est abandonné au profit de celui-ci.
         for (Offre o : offres.findByIdCandidatOrderByDateCreationDesc(idCandidat)) {
-            if (Offre.EN_COURS.equals(o.getEtat()) && idDmc.equals(o.getIdDmc()) && Objects.equals(lot, o.getLot())) {
+            if (Offre.EN_COURS.equals(o.getEtat()) && idDmc.equals(o.getIdDmc()) && Objects.equals(lot, o.getLot())
+                    && Objects.equals(enveloppe, o.getEnveloppe())) {
                 purger(o, "abandonné au profit de " + t.idOffre());
             }
         }
@@ -189,6 +192,7 @@ public class OffreService {
         o.setEmpreintesDetenteurs(String.join(",", attendues));
         o.setRemplace(remplacee == null ? null : remplacee.getIdOffre());
         o.setGroupementNifs(groupement.isEmpty() ? null : String.join(",", groupement));
+        o.setEnveloppe(enveloppe);
         offres.save(o);
         tracer(o, "CREATION", (lot == null ? "" : "lot " + lot + ", ") + t.nombreMorceaux() + " morceau(x) annoncé(s)"
                 + (remplacee == null ? "" : ", remplace " + remplacee.getIdOffre()));
@@ -301,7 +305,7 @@ public class OffreService {
                     + "un morceau a été altéré en route. Renvoyez les morceaux, puis scellez de nouveau.", "EMPREINTE_DIFFERENTE");
         }
         // Une seule offre déposée par entreprise et par lot.
-        Optional<Offre> autre = deposee(o.getIdDmc(), o.getIdEntreprise(), o.getLot()).filter(x -> !x.getIdOffre().equals(o.getRemplace()));
+        Optional<Offre> autre = deposee(o.getIdDmc(), o.getIdEntreprise(), o.getLot(), o.getEnveloppe()).filter(x -> !x.getIdOffre().equals(o.getRemplace()));
         if (autre.isPresent()) {
             stockage.supprimerConteneur(idOffre);
             throw new BusinessRuleException("Une autre offre est déjà déposée pour ce lot.", "OFFRE_EXISTANTE");
@@ -311,7 +315,9 @@ public class OffreService {
         LocalDateTime maintenant = maintenant();
         o.setEtat(Offre.DEPOSEE);
         o.setDateDepot(maintenant);
-        o.setNumero(offres.findByIdDmcOrderByNumeroAscDateCreationAsc(o.getIdDmc()).stream().map(Offre::getNumero)
+        // ⚠️ V86 (PI-b) — les deux enveloppes d'une proposition portent le même numéro.
+        Integer numeroJumelle = jumelle(o).map(Offre::getNumero).orElse(null);
+        o.setNumero(numeroJumelle != null ? numeroJumelle : offres.findByIdDmcOrderByNumeroAscDateCreationAsc(o.getIdDmc()).stream().map(Offre::getNumero)
                 .filter(Objects::nonNull).max(Integer::compare).orElse(0) + 1);
         o.setEmpreinte(a.empreinte());
         o.setChemin(a.chemin().toString());
@@ -382,6 +388,13 @@ public class OffreService {
         o.setDateRetrait(maintenant());
         offres.save(o);
         tracer(o, "RETRAIT", "conteneur conservé, marqué RETIREE");
+        // ⚠️ V86 (PI-b) — retirer une proposition retire ses deux enveloppes.
+        jumelle(o).ifPresent(x -> {
+            x.setEtat(Offre.RETIREE);
+            x.setDateRetrait(o.getDateRetrait());
+            offres.save(x);
+            tracer(x, "RETRAIT", "retirée avec l'enveloppe " + o.getEnveloppe().toLowerCase(java.util.Locale.FRENCH) + " de la proposition");
+        });
         candidats.findById(idCandidat).ifPresent(cc -> notifications.emettreCandidat(TypeNotification.OFFRE_RETIREE, idCandidat,
                 cc.getEmail(), o.getIdDmc().intValue(), TypeObjet.PROCEDURE, "Votre offre est retirée",
                 "Votre offre n° " + o.getNumero() + " (empreinte " + o.getEmpreinte() + ") pour la procédure « " + lue.dto().objet()
@@ -409,7 +422,8 @@ public class OffreService {
         LocalDateTime limite = dateLimite(idDmc);
         boolean clos = limite != null && !maintenant().isBefore(limite);
         List<Offre> toutes = offres.findByIdDmcOrderByNumeroAscDateCreationAsc(idDmc);
-        long nombre = toutes.stream().filter(o -> Offre.DEPOSEE.equals(o.getEtat())).count();
+        // ⚠️ V86 (PI-b) — le nombre de propositions : une proposition PI (deux enveloppes) compte une fois.
+        long nombre = toutes.stream().filter(o -> Offre.DEPOSEE.equals(o.getEtat()) && !Offre.FINANCIERE.equals(o.getEnveloppe())).count();
         if (!clos) {
             return new OffreDto.Depots(false, nombre, limite, null);
         }
@@ -417,7 +431,7 @@ public class OffreService {
         for (String etat : List.of(Offre.DEPOSEE, Offre.RETIREE, Offre.REMPLACEE, Offre.ECARTEE)) {
             toutes.stream().filter(o -> etat.equals(o.getEtat())).forEach(o -> registre.add(new OffreDto.Depot(o.getNumero(),
                     o.getRaisonSociale(), o.getNif(), o.getLot(), o.getDateDepot(), o.getDateRetrait(), o.getEmpreinte(), o.getTaille(),
-                    o.getEtat())));
+                    o.getEtat(), o.getEnveloppe())));
         }
         return new OffreDto.Depots(true, nombre, limite, registre);
     }
@@ -426,7 +440,9 @@ public class OffreService {
     @Transactional(readOnly = true)
     public OffreDto.Resume resume(Long idDmc) {
         LocalDateTime limite = dateLimite(idDmc);
-        return new OffreDto.Resume(offres.countByIdDmcAndEtat(idDmc, Offre.DEPOSEE), limite != null && !maintenant().isBefore(limite));
+        long nombre = offres.findByIdDmcOrderByNumeroAscDateCreationAsc(idDmc).stream()
+                .filter(o -> Offre.DEPOSEE.equals(o.getEtat()) && !Offre.FINANCIERE.equals(o.getEnveloppe())).count();   // ⚠️ V86 (PI-b)
+        return new OffreDto.Resume(nombre, limite != null && !maintenant().isBefore(limite));
     }
 
     // ------------------------------------------------------------------ nuit et heure : purge, clôture
@@ -647,9 +663,39 @@ public class OffreService {
         return o;
     }
 
-    private Optional<Offre> deposee(Long idDmc, Integer idEntreprise, Integer lot) {
-        return lot == null ? offres.findFirstByIdDmcAndIdEntrepriseAndLotIsNullAndEtat(idDmc, idEntreprise, Offre.DEPOSEE)
-                : offres.findFirstByIdDmcAndIdEntrepriseAndLotAndEtat(idDmc, idEntreprise, lot, Offre.DEPOSEE);
+    /** L'offre déposée de l'entreprise pour ce lot et ⚠️ V86 cette enveloppe (nulle pour une offre ordinaire). */
+    private Optional<Offre> deposee(Long idDmc, Integer idEntreprise, Integer lot, String enveloppe) {
+        return offres.findByIdDmcOrderByNumeroAscDateCreationAsc(idDmc).stream()
+                .filter(o -> Offre.DEPOSEE.equals(o.getEtat()) && Objects.equals(idEntreprise, o.getIdEntreprise()) && Objects.equals(lot, o.getLot())
+                        && Objects.equals(enveloppe, o.getEnveloppe()))
+                .findFirst();
+    }
+
+    /** ⚠️ V86 (PI-b) — l'autre enveloppe déposée de la même proposition (même entreprise, même lot), s'il y en a une. */
+    private Optional<Offre> jumelle(Offre o) {
+        return o.getEnveloppe() == null ? Optional.empty()
+                : deposee(o.getIdDmc(), o.getIdEntreprise(), o.getLot(), Offre.TECHNIQUE.equals(o.getEnveloppe()) ? Offre.FINANCIERE : Offre.TECHNIQUE)
+                        .filter(x -> !x.getIdOffre().equals(o.getIdOffre()));
+    }
+
+    /** ⚠️ V86 (PI-b) — l'enveloppe exigée d'une consultation restreinte (PI), interdite ailleurs : 400 {@code ENVELOPPE_OBLIGATOIRE}, {@code ENVELOPPE_INVALIDE}, {@code ENVELOPPE_HORS_PI}. */
+    private static String enveloppe(ProceduresEnLigneService.Lue lue, String saisie) {
+        String e = saisie == null || saisie.isBlank() ? null : saisie.trim().toUpperCase(java.util.Locale.ROOT);
+        boolean pi = ProceduresEnLigneService.restreinte(lue);
+        if (!pi) {
+            if (e != null) {
+                throw new BadRequestException("Seules les propositions de prestations intellectuelles se déposent en deux enveloppes.", "ENVELOPPE_HORS_PI");
+            }
+            return null;
+        }
+        if (e == null) {
+            throw new BadRequestException("Une proposition de prestations intellectuelles se dépose en deux enveloppes : précisez TECHNIQUE ou "
+                    + "FINANCIERE.", "ENVELOPPE_OBLIGATOIRE");
+        }
+        if (!Offre.TECHNIQUE.equals(e) && !Offre.FINANCIERE.equals(e)) {
+            throw new BadRequestException("Enveloppe inconnue : " + saisie + " (TECHNIQUE ou FINANCIERE).", "ENVELOPPE_INVALIDE");
+        }
+        return e;
     }
 
     private void purger(Offre o, String raison) {
@@ -689,12 +735,12 @@ public class OffreService {
         }
         return new OffreDto(o.getIdOffre(), o.getIdDmc(), p == null ? null : p.reference(), p == null ? null : p.objet(), o.getLot(),
                 o.getEtat(), o.getDateCreation(), o.getDateDepot(), o.getDateRetrait(), o.getNumero(), o.getTaille(), o.getNombreMorceaux(),
-                recus, o.getEmpreinte(), o.getRemplace(), o.getRemplaceePar());
+                recus, o.getEmpreinte(), o.getRemplace(), o.getRemplaceePar(), o.getEnveloppe());
     }
 
     private OffreDto.Accuse accuse(Offre o) {
         return new OffreDto.Accuse(dto(o, o.getNombreMorceaux()), new OffreDto.Entreprise(o.getNif(), o.getRaisonSociale()), o.getN(),
-                o.getQuorum(), List.of(o.getEmpreintesDetenteurs().split(",")));
+                o.getQuorum(), List.of(o.getEmpreintesDetenteurs().split(",")), jumelle(o).map(x -> dto(x, x.getNombreMorceaux())).orElse(null));
     }
 
     /** Le texte de l'accusé (courriel et PDF). */

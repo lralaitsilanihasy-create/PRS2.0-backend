@@ -351,6 +351,45 @@ class SeanceIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("⚠️ PI-b (V86) : la séance n'ouvre que les enveloppes techniques — parts demandées pour elles seules, l'enveloppe "
+            + "financière reste scellée ; aucun montant lu, alertes MONTANT_DANS_TECHNIQUE et FINANCIERE_MANQUANTE ; PV sans montant")
+    void pliTechniqueSeul() throws Exception {
+        String technique = deposer(jetonA, "1111222333", "BTP Alpha", "12500000");
+        String financiere = deposer(jetonB, "4444555666", "BTP Beta", "11900000");
+        Offre t = offreRepository.findById(technique).orElseThrow();
+        t.setEnveloppe(Offre.TECHNIQUE);
+        offreRepository.save(t);
+        Offre f = offreRepository.findById(financiere).orElseThrow();
+        f.setEnveloppe(Offre.FINANCIERE);
+        offreRepository.save(f);
+        changer("B04-LR-03", aujourdhui.minusDays(1).toString());
+        changer("B04-OP-02", aujourdhui.minusDays(1).toString());
+        changer("B04-OP-03", "09:00");
+        mvc.perform(get(base).header("Authorization", tokenPrmp)).andExpect(jsonPath("$.offres.length()").value(1));
+        mvc.perform(post(base + "/ouvrir").header("Authorization", tokenVer)).andExpect(status().isOk());
+        String parts1 = mvc.perform(get(base + "/mes-parts").header("Authorization", jetonM1)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(parts1, "$[*].idOffre")).containsExactly(technique);
+        mvc.perform(post(base + "/parts").header("Authorization", jetonM1).contentType(JSON).content(apport(parts1, null))).andExpect(status().isOk());
+        String partsS = mvc.perform(get(base + "/mes-parts").header("Authorization", tokenVer).param("role", "SECOURS")).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        mvc.perform(post(base + "/parts").header("Authorization", tokenVer).param("role", "SECOURS").contentType(JSON)
+                .content(apport(partsS, "Membre empêché"))).andExpect(status().isOk()).andExpect(jsonPath("$.etat").value("DECHIFFREE"));
+        assertThat(offreRepository.findById(financiere).orElseThrow().getEtat()).isEqualTo(Offre.DEPOSEE);
+        assertThat(offreRepository.findById(financiere).orElseThrow().getIntegrite()).isNull();
+        String lecture = mvc.perform(get(base + "/lecture").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(lecture, "$.offres[*].idOffre")).containsExactly(technique);
+        assertThat(JsonPath.<Object>read(lecture, "$.offres[0].acteEngagement")).isNull();
+        assertThat(JsonPath.<List<String>>read(lecture, "$.offres[0].alertes[*].type")).contains("MONTANT_DANS_TECHNIQUE", "FINANCIERE_MANQUANTE");
+        mvc.perform(post(base + "/pv").header("Authorization", tokenVer).contentType(JSON).content("{}")).andExpect(status().isOk());
+        String pv = texteDuPdf(mvc.perform(get(base + "/pv").header("Authorization", jetonM1)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray()).replaceAll("\\s+", " ");
+        assertThat(pv).contains("Séance d'ouverture des propositions techniques : aucun montant n'est lu", "1 enveloppe(s) déposée(s), restées scellées")
+                .doesNotContain("Montant HT", "12500000");
+    }
+
+    @Test
     @DisplayName("Carence : sans offre, la séance s'ouvre déchiffrée et produit un PV de carence ; S5 : refusé tant que le quorum reste "
             + "possible, constaté quand les parts sont perdues — PV de constat, soumissionnaires avertis")
     void carenceEtIllisible() throws Exception {

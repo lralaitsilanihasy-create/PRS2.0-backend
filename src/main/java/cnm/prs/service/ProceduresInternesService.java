@@ -130,7 +130,8 @@ public class ProceduresInternesService {
         boolean aTraiter = responsable == null || !CeremonieCles.CLOSE.equals(etatCeremonie)
                 || s != null && SEANCE_EN_COURS.contains(s.getEtat()) || seanceDuJour;
         long nbOffres = offres.findByIdDmcOrderByNumeroAscDateCreationAsc(idDmc).stream()
-                .filter(o -> Offre.DEPOSEE.equals(o.getEtat()) || Offre.ECARTEE.equals(o.getEtat())).count();
+                .filter(o -> Offre.DEPOSEE.equals(o.getEtat()) || Offre.ECARTEE.equals(o.getEtat()))
+                .filter(o -> !Offre.FINANCIERE.equals(o.getEnveloppe())).count();   // ⚠️ V86 (PI-b) — une proposition PI compte une fois
         return new ProcedureInterneDto(idDmc, dto == null ? derniere.getIdDmc().toString() : dto.reference(), dto == null ? null : dto.objet(),
                 dto == null ? null : dto.autoriteContractante(), dto == null ? null : dto.categorie(), statut, responsable, parInterim,
                 internes.etatCao(idDmc, true), etatCeremonie, lancee.isPresent() ? dto.datePublication() : null,

@@ -29,6 +29,8 @@ public class Offre {
     public static final String REMPLACEE = "REMPLACEE";
     public static final String RETIREE = "RETIREE";
     public static final String ECARTEE = "ECARTEE";
+    public static final String TECHNIQUE = "TECHNIQUE";
+    public static final String FINANCIERE = "FINANCIERE";
 
     @Id
     @Column(name = "ID_OFFRE", nullable = false, length = 36)
@@ -129,6 +131,13 @@ public class Offre {
     /** ⚠️ V69 — le motif de l'écartement (entreprise exclue après son dépôt). */
     @Column(name = "MOTIF_ECARTEMENT")
     private String motifEcartement;
+
+    /**
+     * ⚠️ V86 (lot 3 PI, tranche PI-b) — l'enveloppe d'une proposition de prestations intellectuelles : {@code TECHNIQUE} ou
+     * {@code FINANCIERE}, deux conteneurs scellés séparément d'un même candidat pour un même lot ; nulle pour une offre ordinaire.
+     */
+    @Column(name = "ENVELOPPE", length = 12)
+    private String enveloppe;
 
     @Column(name = "OUVERTE_LE")
     private LocalDateTime ouverteLe;

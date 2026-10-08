@@ -7337,6 +7337,36 @@ méthodes de classement, négociation, rapport, suite du lot 2). Migration **V84
   - `InvitationDto` = `{ idDmc, reference, objet, autoriteContractante, rang, source (AMI | SAISIE), inviteLe, etatProcedure, dateLimite,
     lettreDisponible }`.
 
+### L'évaluation des prestations intellectuelles, lot 3, tranche PI-b : deux enveloppes, séance technique — V86 ⚠️ 2026-10-08
+
+Demande front `demande-backend-2026-10-07-evaluation-pi.md` (§B2, §B3 ; arbitrage du pilote Q1 : deux enveloppes pour toutes les
+méthodes). Migration **V86** (`t_offre.ENVELOPPE`). Aucune dépendance ajoutée ; ADR-0013 inchangé (chaque enveloppe est un conteneur
+ordinaire, avec sa clé partagée). ⚠️ **Découpage revu** : la **seconde séance** (ouverture des seules enveloppes financières des
+candidats qualifiés) dépend de l'évaluation technique (PI-c) ; elle est livrée avec l'évaluation financière, en **PI-d**.
+
+- **Le dépôt** (`POST /api/candidat/offres`) prend **`enveloppe`** : `TECHNIQUE` ou `FINANCIERE`, **obligatoire** pour une consultation
+  restreinte de prestations intellectuelles (400 **`ENVELOPPE_OBLIGATOIRE`**, **`ENVELOPPE_INVALIDE`**), **refusée** ailleurs (400
+  **`ENVELOPPE_HORS_PI`**). Le reste du parcours est celui d'une offre (morceaux, scellement, accusé), enveloppe par enveloppe.
+- **Unicité** : une enveloppe de chaque sorte par entreprise et par lot (409 `OFFRE_EXISTANTE`, qui nomme l'enveloppe) ; le
+  remplacement (`remplace`) vise une offre de la **même** enveloppe ; un dépôt en cours abandonné l'est par enveloppe.
+- **Le numéro** : les deux enveloppes d'une proposition portent le **même numéro** (celui de la première scellée).
+- **L'accusé** (`OffreDto.Accuse`) gagne **`jumelle`** : l'autre enveloppe de la proposition, si elle est déjà scellée — l'accusé de la
+  seconde porte ainsi les deux empreintes. `OffreDto` gagne `enveloppe`.
+- **Le retrait** d'une enveloppe retire **les deux** (une proposition se retire entière).
+- **Le registre** (`GET /api/fiches-marche/{idDmc}/depots`) : `nombre` compte les **propositions** (une proposition PI, deux enveloppes,
+  compte une fois) ; chaque ligne du registre (`depots[]`) porte `enveloppe`. Le résumé de la fiche et la liste des procédures internes
+  comptent de même.
+- **La première séance** n'ouvre que les enveloppes **techniques** : elles seules sont listées (`offres`), leurs seules parts sont demandées
+  aux détenteurs (`mes-parts`) et retenues ; une part apportée pour une enveloppe financière est ignorée ; les financières restent
+  **`DEPOSEE`**, scellées, jamais lues.
+- **La lecture d'une enveloppe technique** ne sert **aucun montant** (`acteEngagement` et `rabais` nuls) ; deux alertes de séance :
+  **`MONTANT_DANS_TECHNIQUE`** (le manifeste technique porte un montant : il n'est pas lu, la commission en tire la conséquence) et
+  **`FINANCIERE_MANQUANTE`** (aucune enveloppe financière déposée pour cette proposition).
+- **Le PV** de cette séance ne lit aucun montant ; il dit le nombre d'enveloppes financières déposées, restées scellées, qui s'ouvriront
+  en seconde séance pour les seuls candidats qualifiés techniquement (art. 42).
+- **Les clés publiques** de la procédure (`GET /api/procedures-en-ligne/{idDmc}/cles`) suivent la visibilité de la consultation restreinte
+  (PI-a) : 404 hors des invités.
+
 ### Le rabais structuré de l'offre en ligne ⚠️ 2026-10-07
 
 Demande front `demande-backend-2026-10-07-rabais-structure.md` (arbitrage Q4 du pilote : « le rabais est structuré au dépôt »). Aucune

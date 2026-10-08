@@ -10,14 +10,18 @@ import java.util.List;
  */
 public record OffreDto(String idOffre, Long idDmc, String reference, String objet, Integer lot, String etat, LocalDateTime dateCreation,
         LocalDateTime dateDepot, LocalDateTime dateRetrait, Integer numero, long taille, int nombreMorceaux, int recus, String empreinte,
-        String remplace, String remplaceePar) {
+        String remplace, String remplaceePar,
+        /** ⚠️ V86 (PI-b) — {@code TECHNIQUE} · {@code FINANCIERE} ; nul pour une offre ordinaire. */
+        String enveloppe) {
 
     /**
      * Le corps de {@code POST /api/candidat/offres}. {@code enTete} est une <strong>chaîne</strong> : le JSON de l'en-tête tel que le
      * navigateur l'a sérialisé et haché (ADR §4) — le serveur le relit, le contrôle et le garde tel quel. {@code groupementNifs} :
      * les NIF des membres d'un groupement, pour le seul contrôle des exclusions (le groupement reste dans le manifeste).
      */
-    public record Creation(Long idDmc, Integer lot, String enTete, String remplace, List<String> groupementNifs) {
+    public record Creation(Long idDmc, Integer lot, String enTete, String remplace, List<String> groupementNifs,
+            /** ⚠️ V86 (lot 3 PI, PI-b) — {@code TECHNIQUE} ou {@code FINANCIERE} pour une proposition de prestations intellectuelles ; absent sinon. */
+            String enveloppe) {
     }
 
     /** La réponse à un morceau reçu. */
@@ -29,7 +33,9 @@ public record OffreDto(String idOffre, Long idDmc, String reference, String obje
     }
 
     /** L'accusé de réception : l'offre, l'entreprise, et ce pour quoi elle est scellée. */
-    public record Accuse(OffreDto offre, Entreprise entreprise, int n, int quorum, List<String> empreintesDetenteurs) {
+    public record Accuse(OffreDto offre, Entreprise entreprise, int n, int quorum, List<String> empreintesDetenteurs,
+            /** ⚠️ V86 (PI-b) — l'autre enveloppe de la proposition, si elle est déjà scellée (son empreinte figure ainsi sur l'accusé). */
+            OffreDto jumelle) {
     }
 
     public record Entreprise(String nif, String raisonSociale) {
@@ -59,7 +65,9 @@ public record OffreDto(String idOffre, Long idDmc, String reference, String obje
     }
 
     public record Depot(Integer numero, String entreprise, String nif, Integer lot, LocalDateTime dateDepot, LocalDateTime dateRetrait,
-            String empreinte, long taille, String etat) {
+            String empreinte, long taille, String etat,
+            /** ⚠️ V86 (PI-b) — {@code TECHNIQUE} · {@code FINANCIERE} ; nul pour une offre ordinaire. */
+            String enveloppe) {
     }
 
     /** Le résumé porté par {@code FicheMarcheDto.depots} (mode électronique seul). */

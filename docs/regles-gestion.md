@@ -3131,6 +3131,11 @@ Accès complet aux référentiels, comptes utilisateurs, journal d'audit, hiéra
       visible que de ses invités** : les candidats de la liste restreinte, ou ceux que la PRMP a saisis avec leur adresse
       électronique (le compte créé avec cette adresse leur est rattaché) ; seuls les invités retirent la demande de
       propositions et déposent une proposition.
+  - ⚠️ **Deux enveloppes (2026-10-08, lot 3, tranche PI-b ; art. 42)** : une proposition de prestations intellectuelles se
+    dépose en deux enveloppes scellées séparément, l'une **technique** (sans aucun montant), l'autre **financière** ; une de
+    chaque par candidat et par lot ; elles portent le même numéro, et retirer l'une retire la proposition entière. La première
+    séance n'ouvre que les enveloppes techniques : aucun montant n'y est lu, et les enveloppes financières restent scellées.
+    Elles ne s'ouvriront qu'en seconde séance, pour les seuls candidats qualifiés techniquement.
 - Grilles de contrôle & règles d'anomalie [Écriture]
   - Configuration de tr_points_ctrl et t_regle_anomalie.
 - Comptes budgétaires & entités contractantes [Écriture]

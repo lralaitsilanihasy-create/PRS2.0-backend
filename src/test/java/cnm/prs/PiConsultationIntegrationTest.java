@@ -176,6 +176,130 @@ class PiConsultationIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(get("/api/procedures-en-ligne/" + idDmc + "/documents").header("Authorization", jetonA)).andExpect(status().isOk());
     }
 
+    @Test
+    @DisplayName("⚠️ PI-b : deux enveloppes (TECHNIQUE, FINANCIERE) exigées et uniques par proposition, invité seul, même numéro, accusé "
+            + "portant l'autre empreinte, retrait conjoint, registre qui compte la proposition une fois")
+    void deuxEnveloppes() throws Exception {
+        Long idDmc = ficheEnLigne();
+        String internes = mvc.perform(get("/api/fiches-marche/" + idDmc + "/parametres-internes")
+                .header("Authorization", bearer("CTRVER", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER", "ANT")))
+                .andReturn().getResponse().getContentAsString();
+        List<String> membres = JsonPath.read(internes, "$.membresCommission[*].im");
+        int i = 0;
+        for (String im : membres) {
+            cleRepository.save(cle(idDmc, cnm.prs.entity.CleDetenteur.MEMBRE, im, i++));
+        }
+        cleRepository.save(cle(idDmc, cnm.prs.entity.CleDetenteur.SECOURS, null, i));
+        ceremonieRepository.save(new CeremonieCles(idDmc, CeremonieCles.CLOSE, LocalDateTime.now(), false, LocalDateTime.now(), null, null, null));
+        int idDossier = JsonPath.read(mvc.perform(post("/api/fiches-marche/" + idDmc + "/dossier").header("Authorization", tokenPrmp))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString(), "$.idDossier");
+        receptionRepository.save(reception(9950, idDossier, "CTRCC1", true));
+        dispatchRepository.save(dispatch(9950, 9950, "CTRCC1", "CTRMEM", "CTRPRE"));
+        examenRepository.save(examen(9950, 9950, "CTRMEM"));
+        seedPvSigne(9950, 9950);
+        mvc.perform(post("/api/fiches-marche/" + idDmc + "/lettres-invitation").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"dateEnvoi\":\"" + aujourdhui + "\",\"lieu\":\"Antananarivo\",\"candidats\":[{\"nom\":\"Cabinet A\",\"adresse\":\"Lot A\","
+                        + "\"email\":\"a@pi.mg\"}]}")).andExpect(status().isCreated());
+        changer(idDmc, "B04-SE-03", aujourdhui.minusDays(1) + "T08:00");
+        for (String[] e : new String[][] { { jetonA, "1111000111", "Cabinet A" }, { jetonB, "2222000222", "Bureau B" } }) {
+            mvc.perform(put("/api/candidat/entreprise").header("Authorization", e[0]).contentType(JSON).content("{\"raisonSociale\":\"" + e[2]
+                    + "\",\"nif\":\"" + e[1] + "\",\"adresse\":\"Lot\",\"representant\":{\"nom\":\"Rakoto\",\"prenom\":\"Jean\"}}")).andExpect(status().isOk());
+        }
+        mvc.perform(get("/api/procedures-en-ligne/" + idDmc + "/cles")).andExpect(status().isNotFound());   // restreinte : invités seuls
+        List<String> cles = JsonPath.read(mvc.perform(get("/api/procedures-en-ligne/" + idDmc + "/cles").header("Authorization", jetonA)).andReturn().getResponse().getContentAsString(),
+                "$.detenteurs[*].empreinte");
+        String t1 = java.util.UUID.randomUUID().toString();
+        creer(jetonA, idDmc, enTete(idDmc, t1, cles), null).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("ENVELOPPE_OBLIGATOIRE"));
+        creer(jetonA, idDmc, enTete(idDmc, t1, cles), "AUTRE").andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("ENVELOPPE_INVALIDE"));
+        creer(jetonB, idDmc, enTete(idDmc, t1, cles), "TECHNIQUE").andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("NON_INVITE"));
+        String accuseT = deposer(jetonA, idDmc, t1, cles, "TECHNIQUE");
+        assertThat(JsonPath.<Integer>read(accuseT, "$.offre.numero")).isEqualTo(1);
+        assertThat(JsonPath.<Object>read(accuseT, "$.jumelle")).isNull();
+        creer(jetonA, idDmc, enTete(idDmc, java.util.UUID.randomUUID().toString(), cles), "TECHNIQUE").andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("OFFRE_EXISTANTE"));
+        String f1 = java.util.UUID.randomUUID().toString();
+        String accuseF = deposer(jetonA, idDmc, f1, cles, "FINANCIERE");
+        assertThat(JsonPath.<Integer>read(accuseF, "$.offre.numero")).isEqualTo(1);
+        assertThat(JsonPath.<String>read(accuseF, "$.offre.enveloppe")).isEqualTo("FINANCIERE");
+        assertThat(JsonPath.<String>read(accuseF, "$.jumelle.empreinte")).isEqualTo(JsonPath.<String>read(accuseT, "$.offre.empreinte"));
+        mvc.perform(get("/api/fiches-marche/" + idDmc + "/depots").header("Authorization", tokenPrmp)).andExpect(jsonPath("$.nombre").value(1));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/candidat/offres/" + t1)
+                .header("Authorization", jetonA)).andExpect(status().isOk()).andExpect(jsonPath("$.etat").value("RETIREE"));
+        assertThat(offreRepository.findById(f1).orElseThrow().getEtat()).isEqualTo("RETIREE");
+        changer(idDmc, "B04-LH-02", aujourdhui.minusDays(1) + "T10:00");
+        mvc.perform(get("/api/fiches-marche/" + idDmc + "/depots").header("Authorization", tokenPrmp)).andExpect(jsonPath("$.nombre").value(0))
+                .andExpect(jsonPath("$.depots[*].enveloppe").value(org.hamcrest.Matchers.containsInAnyOrder("TECHNIQUE", "FINANCIERE")));
+    }
+
+    @Autowired private cnm.prs.repository.CleDetenteurRepository cleRepository;
+    @Autowired private cnm.prs.repository.OffreRepository offreRepository;
+    @Autowired private cnm.prs.repository.FicheMarcheValeurRepository valeurRepository;
+
+    /** Une enveloppe déposée et scellée (contenu chiffré simulé, un morceau) : l'accusé. */
+    private String deposer(String jeton, Long idDmc, String idOffre, List<String> cles, String enveloppe) throws Exception {
+        String enTete = enTete(idDmc, idOffre, cles);
+        creer(jeton, idDmc, enTete, enveloppe).andExpect(status().isCreated());
+        byte[] morceau = new byte[100 + 28];
+        new java.util.Random(7).nextBytes(morceau);
+        mvc.perform(put("/api/candidat/offres/" + idOffre + "/morceaux/0").header("Authorization", jeton).header("X-Empreinte", sha(morceau))
+                .contentType(MediaType.APPLICATION_OCTET_STREAM).content(morceau)).andExpect(status().isOk());
+        java.security.MessageDigest sha = java.security.MessageDigest.getInstance("SHA-256");
+        sha.update(enTete.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        sha.update(morceau);
+        return mvc.perform(post("/api/candidat/offres/" + idOffre + "/sceller").header("Authorization", jeton).contentType(JSON)
+                .content("{\"empreinte\":\"" + java.util.HexFormat.of().formatHex(sha.digest()) + "\"}")).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+    }
+
+    private org.springframework.test.web.servlet.ResultActions creer(String jeton, Long idDmc, String enTete, String enveloppe) throws Exception {
+        return mvc.perform(post("/api/candidat/offres").header("Authorization", jeton).contentType(JSON).content("{\"idDmc\":" + idDmc
+                + ",\"lot\":null,\"enTete\":\"" + enTete.replace("\\", "\\\\").replace("\"", "\\\"") + "\"" + (enveloppe == null ? "" : ",\"enveloppe\":\""
+                        + enveloppe + "\"") + "}"));
+    }
+
+    private static String enTete(Long idDmc, String idOffre, List<String> cles) {
+        StringBuilder parts = new StringBuilder();
+        for (String e : cles) {
+            parts.append(parts.length() == 0 ? "" : ",").append("{\"empreinte\":\"").append(e).append("\",\"part\":\"")
+                    .append(java.util.Base64.getEncoder().encodeToString(new byte[384])).append("\"}");
+        }
+        return "{\"version\":1,\"idOffre\":\"" + idOffre + "\",\"idDmc\":" + idDmc + ",\"lot\":null,\"algorithmes\":[\"AES-256-GCM\","
+                + "\"RSA-OAEP-3072-SHA256\",\"SHAMIR-GF256\"],\"tailleMorceau\":" + (4 * 1024 * 1024) + ",\"nombreMorceaux\":1"
+                + ",\"tailleContenu\":100,\"quorum\":2,\"n\":3,\"parts\":[" + parts + "]}";
+    }
+
+    private static String sha(byte[] b) throws Exception {
+        return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(b));
+    }
+
+    private static cnm.prs.entity.CleDetenteur cle(Long idDmc, String role, String im, int i) {
+        cnm.prs.entity.CleDetenteur c = new cnm.prs.entity.CleDetenteur();
+        c.setIdDmc(idDmc);
+        c.setRole(role);
+        c.setIm(im);
+        c.setClePublique("spki-" + i);
+        c.setEmpreinte(String.valueOf((char) ('a' + i)).repeat(64));
+        c.setEnvChiffre("AA==");
+        c.setEnvIv("AA==");
+        c.setEnvSel("AA==");
+        c.setEnvIterations(600_000);
+        c.setEnvKdf("PBKDF2-SHA-256");
+        c.setEnvAlgorithme("AES-256-GCM");
+        c.setEtatPart(cnm.prs.entity.CleDetenteur.PUBLIEE);
+        c.setDatePublication(LocalDateTime.now());
+        c.setRemplacements(0);
+        return c;
+    }
+
+    private void changer(Long idDmc, String code, String valeur) throws Exception {
+        int idFiche = JsonPath.read(mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp))
+                .andReturn().getResponse().getContentAsString(), "$.idFiche");
+        cnm.prs.entity.FicheMarcheValeur v = valeurRepository.findByIdFiche(idFiche).stream().filter(x -> x.getCodeChamp().equals(code))
+                .findFirst().orElseThrow();
+        v.setValeur(valeur);
+        valeurRepository.save(v);
+    }
+
     /** Une fiche PI en remise électronique, validée : responsable, CAO de deux membres, paramètres internes. */
     private Long ficheEnLigne() throws Exception {
         cnm.prs.service.RemiseElectronique.Parametres p = parametres.remiseElectronique();

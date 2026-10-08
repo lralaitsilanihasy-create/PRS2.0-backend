@@ -567,7 +567,7 @@ public class SeanceService {
         };
         boolean retraitPayant = procedures.trouver(idDmc).map(x -> x.dto().retraitPayant()).orElse(false);
         int nbLots = fiches.etatValide(idDmc).map(v -> v.etat().getNbLots()).filter(java.util.Objects::nonNull).orElse(1);
-        List<Offre> toutes = offres.findByIdDmcOrderByNumeroAscDateCreationAsc(idDmc);
+        List<Offre> toutes = offresDuPli(idDmc);
         Map<String, Offre> parCandidat = new LinkedHashMap<>();
         toutes.stream().filter(o -> Offre.DEPOSEE.equals(o.getEtat())).forEach(o -> parCandidat.put(o.getIdCandidat(), o));
         List<SeanceDto.OffreLue> lues = new ArrayList<>();
@@ -672,6 +672,19 @@ public class SeanceService {
             SeanceDto.RabaisLu rabais = RabaisOffre.lire(ae);
             if (complete) {
                 alertes.addAll(RabaisOffre.controler(rabais, ae == null ? null : montant(ae.get("montantHt")), o.getLot(), nbLots));
+            }
+            // ⚠️ V86 (lot 3 PI, PI-b) — l'enveloppe technique ne lit aucun montant ; son pendant financier doit être déposé.
+            if (Offre.TECHNIQUE.equals(o.getEnveloppe())) {
+                if (ae != null && (ae.get("montantHt") != null || ae.get("montantTtc") != null)) {
+                    alertes.add(new SeanceDto.Alerte("MONTANT_DANS_TECHNIQUE", "L'enveloppe technique porte un montant : il n'est pas lu ; "
+                            + "la commission en tire la conséquence (art. 42)."));
+                }
+                if (financieresScellees(idDmc).stream().noneMatch(x -> Objects.equals(x.getIdEntreprise(), o.getIdEntreprise())
+                        && Objects.equals(x.getLot(), o.getLot()))) {
+                    alertes.add(new SeanceDto.Alerte("FINANCIERE_MANQUANTE", "Aucune enveloppe financière n'est déposée pour cette proposition."));
+                }
+                ae = null;
+                rabais = null;
             }
             lues.add(new SeanceDto.OffreLue(o.getNumero(), o.getIdOffre(), o.getLot(), o.getEtat(), o.getIntegrite(), o.getMotifLecture(),
                     new SeanceDto.EntrepriseLue(o.getNif(), o.getRaisonSociale(), e == null ? null : e.verification(), e == null ? null : e.exclusion()),
@@ -1102,6 +1115,13 @@ public class SeanceService {
             if (l.offres().isEmpty() && l.nonOuvertes().isEmpty()) {
                 el.add(para("Aucune offre n'a été déposée avant la date limite : la séance constate la carence."));
             }
+            // ⚠️ V86 (lot 3 PI, PI-b) — une consultation restreinte : la séance n'ouvre que les enveloppes techniques.
+            List<Offre> financieres = financieresScellees(idDmc);
+            if (!financieres.isEmpty() || l.offres().stream().anyMatch(x -> estTechnique(x.idOffre()))) {
+                el.add(para("Séance d'ouverture des propositions techniques : aucun montant n'est lu. Propositions financières : "
+                        + financieres.size() + " enveloppe(s) déposée(s), restées scellées ; elles s'ouvriront en seconde séance, pour les seuls "
+                        + "candidats qualifiés techniquement (art. 42 de la loi n° 2016-055)."));
+            }
             for (SeanceDto.OffreLue o : l.offres()) {
                 el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.SOUS_TITRE, "Offre n° " + o.numero() + " — " + o.entreprise().raisonSociale()
                         + " (NIF " + o.entreprise().nif() + ")" + (o.lot() == null ? "" : ", lot " + o.lot())));
@@ -1245,7 +1265,7 @@ public class SeanceService {
             }));
         }
         List<SeanceDto.OffreSeance> os = new ArrayList<>();
-        for (Offre o : offres.findByIdDmcOrderByNumeroAscDateCreationAsc(idDmc)) {
+        for (Offre o : offresDuPli(idDmc)) {
             if (Offre.EN_COURS.equals(o.getEtat())) {
                 continue;
             }
@@ -1317,12 +1337,30 @@ public class SeanceService {
         return n;
     }
 
+    /**
+     * ⚠️ V86 (lot 3 PI, PI-b) — les offres que la séance connaît : pour une consultation restreinte, les seules enveloppes
+     * <strong>techniques</strong> ; les financières restent scellées jusqu'à la seconde séance (tranche PI-d), jamais lues ici.
+     */
+    private List<Offre> offresDuPli(Long idDmc) {
+        return offres.findByIdDmcOrderByNumeroAscDateCreationAsc(idDmc).stream().filter(o -> !Offre.FINANCIERE.equals(o.getEnveloppe())).toList();
+    }
+
+    /** ⚠️ V86 (PI-b) — les enveloppes financières déposées de la procédure (scellées), pour le PV. */
+    private boolean estTechnique(String idOffre) {
+        return offres.findById(idOffre).map(o -> Offre.TECHNIQUE.equals(o.getEnveloppe())).orElse(false);
+    }
+
+    private List<Offre> financieresScellees(Long idDmc) {
+        return offres.findByIdDmcOrderByNumeroAscDateCreationAsc(idDmc).stream()
+                .filter(o -> Offre.FINANCIERE.equals(o.getEnveloppe()) && Offre.DEPOSEE.equals(o.getEtat())).toList();
+    }
+
     private List<Offre> deposees(Long idDmc) {
-        return offres.findByIdDmcOrderByNumeroAscDateCreationAsc(idDmc).stream().filter(o -> Offre.DEPOSEE.equals(o.getEtat())).toList();
+        return offresDuPli(idDmc).stream().filter(o -> Offre.DEPOSEE.equals(o.getEtat())).toList();
     }
 
     private List<Offre> deposeesOuOuvertes(Long idDmc) {
-        return offres.findByIdDmcOrderByNumeroAscDateCreationAsc(idDmc).stream()
+        return offresDuPli(idDmc).stream()
                 .filter(o -> !Offre.EN_COURS.equals(o.getEtat())).toList();
     }
 
