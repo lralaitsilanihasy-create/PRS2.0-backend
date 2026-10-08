@@ -27,4 +27,7 @@ public interface AttributionRepository extends JpaRepository<Attribution, Attrib
 
     /** ⚠️ 2d-1 (§B7) — les marchés notifiés dont l'avis d'attribution n'est ni publié ni encore signalé. */
     List<Attribution> findByNotifieLeIsNotNullAndAvisPublieLeIsNullAndAlerteAvisLeIsNull();
+
+    /** ⚠️ M2 — le lot dont un dossier est le dossier de marché (la catégorie de sa fiche décide de certaines pièces). */
+    java.util.Optional<Attribution> findFirstByIdDossier(Integer idDossier);
 }

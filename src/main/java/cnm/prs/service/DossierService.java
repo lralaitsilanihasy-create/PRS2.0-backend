@@ -125,6 +125,8 @@ public class DossierService {
     private final LettreRenvoiRepository lettreRenvoiRepository;
 
     private final VerificationPieceDepotService verificationPieceDepotService;
+    /** ⚠️ M2 (manuel de contrôle) — les pièces exigées du sous-type. */
+    private final PiecesExigees piecesExigees;
     /** ⚠️ 2026-08-05 — figeage du diff et bascule du prédécesseur, à la soumission d'une mise à jour. */
     private final MiseAJourPpmService miseAJourPpmService;
     /** ⚠️ Demande front (2026-08-19) — résolution login → nom lisible pour creePar / soumisPar. */
@@ -165,7 +167,7 @@ public class DossierService {
             PieceJointeDossierRepository pieceJointeDossierRepository, MarcheService marcheService,
             TypeDossierRepository typeDossierRepository, SousTypeDossierRepository sousTypeDossierRepository,
             LettreRenvoiRepository lettreRenvoiRepository,
-            VerificationPieceDepotService verificationPieceDepotService,
+            VerificationPieceDepotService verificationPieceDepotService, PiecesExigees piecesExigees,
             MiseAJourPpmService miseAJourPpmService, JournalDossierService journalDossier,
             ExamenRepository examenRepository, TransmissionSigmpRepository transmissionSigmpRepository,
             ControleurRepository controleurRepository,
@@ -191,6 +193,7 @@ public class DossierService {
         this.anomalieRepository = anomalieRepository;
         this.pieceDemandeRetraitRepository = pieceDemandeRetraitRepository;
         this.verificationPieceDepotService = verificationPieceDepotService;
+        this.piecesExigees = piecesExigees;
         this.miseAJourPpmService = miseAJourPpmService;
         this.journalDossier = journalDossier;
         this.examenRepository = examenRepository;
@@ -426,6 +429,15 @@ public class DossierService {
                 .orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable : " + id));
         controlerVisibilite(id);
         return dto(entity);
+    }
+
+    /** ⚠️ M2 (manuel de contrôle, §B2) — les pièces exigées du dossier : la liste de son sous-type (à défaut, de sa famille), obligation
+     * résolue par la catégorie et la forme de sa fiche. Même garde de lecture que le dossier. */
+    @Transactional(readOnly = true)
+    public List<cnm.prs.dto.TypePieceJointeDto> piecesExigees(Integer id) {
+        Dossier entity = repository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable : " + id));
+        controlerVisibilite(id);
+        return piecesExigees.dtoPour(entity);
     }
 
     /**
@@ -990,8 +1002,8 @@ public class DossierService {
     private void validerPiecesObligatoires(Dossier dossier) {
         // ⚠️ 2026-10-07 (constat E2) — le CCAG, et le CCTP avec des spécifications, sont dans le DAO complet joint.
         java.util.Set<Integer> exemptes = verificationPieceDepotService.exemptees(dossier.getIdDossier());
-        List<ErrorResponse.FieldError> manquantes = new ArrayList<>(typePieceJointeRepository
-                .findByIdTypeDossierAndObligatoireTrue(dossier.getIdTypeDossier()).stream()
+        // ⚠️ M2 (manuel de contrôle, §B2) — les pièces obligatoires du sous-type (à défaut, de la famille), selon la fiche.
+        List<ErrorResponse.FieldError> manquantes = new ArrayList<>(piecesExigees.obligatoires(dossier).stream()
                 .filter(t -> !exemptes.contains(t.getIdTypePiece()))
                 .filter(t -> !pieceJointeDossierRepository
                         .existsByIdDossierAndIdTypePiece(dossier.getIdDossier(), t.getIdTypePiece()))

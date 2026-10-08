@@ -28,15 +28,19 @@ import cnm.prs.service.TypePieceJointeService;
 public class TypePieceJointeController {
 
     private final TypePieceJointeService service;
+    private final cnm.prs.service.PiecesExigees piecesExigees;
 
-    public TypePieceJointeController(TypePieceJointeService service) {
+    public TypePieceJointeController(TypePieceJointeService service, cnm.prs.service.PiecesExigees piecesExigees) {
+        this.piecesExigees = piecesExigees;
         this.service = service;
     }
 
     /** Tous les types de pièces, ou ceux d'un type de dossier si {@code typeDossier} est fourni. */
     @GetMapping
-    public List<TypePieceJointeDto> findAll(@RequestParam(name = "typeDossier", required = false) String typeDossier) {
-        return service.findAll(typeDossier);
+    public List<TypePieceJointeDto> findAll(@RequestParam(name = "typeDossier", required = false) String typeDossier,
+            @RequestParam(name = "sousType", required = false) String sousType) {
+        // ⚠️ M2 (manuel de contrôle, §B2) — ?sousType= : la liste du sous-type (obligation, ordre, condition), à défaut celle de sa famille.
+        return sousType != null && !sousType.isBlank() ? piecesExigees.duSousType(sousType.trim()) : service.findAll(typeDossier);
     }
 
     @GetMapping("/{id}")

@@ -31,4 +31,10 @@ public class TypePieceJointeDto {
     private String idTypeDossier;
 
     private Integer ordre;
+
+    // ⚠️ 2026-10-08 (manuel de contrôle, M2) — servis pour un sous-type (?sousType=) ou un dossier : la condition de la pièce.
+    /** {@code FOURNITURES_SERVICES}, {@code TRAVAUX}, {@code PRESTATIONS_INTELLECTUELLES} ; nul : toutes. */
+    private String categorie;
+    /** {@code CONTRAT_CADRE}, {@code AUTRE} ; nul : toutes formes. */
+    private String forme;
 }

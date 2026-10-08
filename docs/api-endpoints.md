@@ -7659,6 +7659,43 @@ sans suite garde sa **famille propre `DSS`** (V93) ; le sous-type du dossier pro
   la famille DGC n'en a aucun.
 
 
+### Le référentiel du contrôle aligné sur le Manuel de contrôle a priori, tranche M2 : les pièces par sous-type — V95 ⚠️ 2026-10-08
+
+Demande front `demande-backend-2026-10-08-manuel-controle-a-priori.md` (§B2). Arbitrages du pilote du 08/10 : les pièces « * » du
+manuel sont **exigées dès M2** ; les **plans** (`PPM`, `PPM-AGPM`) gardent leurs pièces ; sans fiche, les pièces qui dépendent de la
+catégorie sont **servies sans obligation**. Migration **V95** (`t_piece_sous_type` ; bibliothèque des pièces du manuel ; listes par
+sous-type). Aucune dépendance ajoutée.
+
+| Méthode | URL | Réponse | Accès |
+|---|---|---|---|
+| GET | /api/type-piece-jointes?sousType={code} | la liste du sous-type : `[{ idTypePiece, libellePiece, code, obligatoire, ordre, categorie, forme, idTypeDossier }]` ; à défaut de liste propre, les pièces de sa famille | comme le référentiel |
+| GET | /api/dossiers/{id}/pieces-exigees | les pièces exigées **de ce dossier** : la liste de son sous-type, obligation **résolue** par la catégorie et la forme de sa fiche | comme la lecture du dossier |
+
+- **`TypePieceJointeDto`** gagne `categorie` (`FOURNITURES_SERVICES` | `TRAVAUX` | `PRESTATIONS_INTELLECTUELLES`, nul : toutes) et
+  `forme` (`CONTRAT_CADRE` | `AUTRE` — toute autre forme —, nul : toutes). `GET /api/type-piece-jointes?typeDossier=` est inchangé
+  (pièces de la famille).
+- **La règle** : un sous-type qui a sa **liste** n'utilise qu'elle (les pièces de la famille ne s'y ajoutent pas) ; les autres (`DP`,
+  les plans…) gardent celles de leur famille. Une pièce **conditionnée** ne vaut que si elle s'applique à la fiche du dossier (lue par
+  son `ID_DMC`, ou pour un dossier de marché par son lot) — bordereau des prix en fournitures, DQE en travaux, canevas et bordereau hors
+  contrat-cadre ; **sans fiche**, elle est servie avec `obligatoire` faux.
+- **La soumission** (`POST /api/dossiers/{id}/soumettre`) exige les pièces obligatoires **de cette liste** (400 « La pièce '…' est
+  obligatoire. », une entrée par pièce) ; la **recevabilité** (secrétariat : défauts, obligatoires non conformes) lit la même liste.
+  Le CCAG et le CCTP contenus dans le DAO complet restent dispensés.
+- **Les listes du manuel** (V95) : `DAOO`, `DAOOI`, `DAOOPREQUAL`, `DPREQUAL`, `DAOR`, `DAORI`, `DC`, `RJ`, `MGG`, `MAOO`, `MAOOI`,
+  `MAOOPREQUAL`, `MAOR`, `MAORI`, `MPI`, `AVN`, `DSS`, `INDEMN`, `SURSIS`, `PENAL`, `DR`. Les pièces que l'application **joint
+  d'office** y sont reprises par leur code (`DAO_COMPLET` « projet de DAO / DC », `RAPPORT_PRESELECTION`, `PROJET_MARCHE`,
+  `CAHIER_CHARGES`, `DEVIS_ESTIMATIF`, `PV_OUVERTURE`, `RAPPORT_ANALYSE`, `MOTIFS_SANS_SUITE`) ; les autres sont des pièces de la
+  bibliothèque (types sans famille, codes stables : `FICHE_PRESENTATION`, `CALENDRIER`, `AGPM_CONTROLE`, `PUBLICATION_AGPM`,
+  `AVIS_SPECIFIQUE`, `CANEVAS_RAPPORT`, `BORDEREAU_PRIX`, `DQE`, `TABLEAU_COUTS`, `PPM_CONTROLE`, `DOSSIER_PREQUAL`,
+  `LETTRE_INVITATION`, `PV_LISTE_RESTREINTE`, `PUBLICATION_AMI`, `PV_AMI`, `DECISION_LISTE`, `RAPPORT_JUSTIF`, `PROJET_DECISION_GAG`,
+  `DECISION_GAG`, `PIECES_APPUI`, `PV_CHOIX_TITULAIRE`, `PUBLICATION_AVIS`, `DECISION_PREQUAL`, `PV_CNM_DMC`, `PV_VALIDATION_CAO`,
+  `DECISION_AO_RESTR`, `LETTRES_ACCUSE`, `RAPPORT_TECHNIQUE`, `PV_VALID_TECHNIQUE`, `LETTRES_RESULTATS`, `PV_OUV_FINANCIERE`,
+  `PV_VALID_FINALE`, `MARCHE_INITIAL`, `PV_CNM_MARCHE`, `ACCORD_PARTIES`, `ELEMENT_DECLENCHEUR`, `PV_NOUVEAUX_PRIX`, `PROJET_AVENANT`,
+  `PROJET_DECISION`, `JUSTIFICATIFS`). Le dépôt d'une pièce se fait comme avant (`idTypePiece`).
+- **Effet en recette** : un dossier en brouillon d'un de ces sous-types (les `DAOO` produits par les fiches, par exemple) doit
+  désormais porter les pièces de sa liste avant d'être soumis ; les dossiers déjà soumis ne sont pas repris.
+
+
 ### Le rabais structuré de l'offre en ligne ⚠️ 2026-10-07
 
 Demande front `demande-backend-2026-10-07-rabais-structure.md` (arbitrage Q4 du pilote : « le rabais est structuré au dépôt »). Aucune

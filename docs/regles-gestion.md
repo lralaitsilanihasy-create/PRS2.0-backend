@@ -1146,6 +1146,15 @@ de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM 
 > bailleur (`DP`), le rapport justificatif et le marché de gré à gré (`RJ`, `MGG`) et une famille nouvelle, les **actes de
 > gestion contractuelle** (`DGC` : avenant, résiliation, indemnité, remise de pénalités, sursis). Les projets de textes
 > restent hors de l'application.
+>
+> ⚠️ **2026-10-08 — les pièces exigées par sous-type (tranche M2, V95).** Chaque sous-type du manuel a désormais sa propre liste
+> de pièces, qui remplace celle de sa famille : un dossier d'appel d'offres ouvert exige la fiche de présentation, le calendrier
+> de passation, l'AGPM contrôlé et sa publication, le projet d'avis spécifique, le canevas de rapport, le bordereau des prix (en
+> fournitures) ou le DQE (en travaux) et le DAO ; un dossier de consultation exige en plus les pièces de l'AMI et la décision
+> autorisant la liste restreinte ; un dossier de marché, un avenant, une déclaration sans suite ou un acte de gestion ont les
+> leurs. Une pièce qui dépend de la catégorie ou de la forme du marché ne s'exige que si elle s'applique à la fiche ; un dossier
+> sans fiche la voit sans obligation. La soumission refuse un dossier auquel il manque une pièce obligatoire de sa liste. Les plans
+> de passation gardent leurs pièces.
 
 - **Un dossier ne naît que d'un contenu figé.** La PRMP — celle qui valide, pas l'UGPM — produit le dossier depuis une
   fiche dont la **dernière version est validée** ; une révision ouverte bloque (`FICHE_NON_VALIDEE`) jusqu'à sa

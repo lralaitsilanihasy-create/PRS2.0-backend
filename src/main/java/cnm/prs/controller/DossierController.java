@@ -183,6 +183,12 @@ public class DossierController {
         return service.findById(id);
     }
 
+    /** ⚠️ M2 (manuel de contrôle, §B2) — les pièces exigées du dossier, selon son sous-type et sa fiche. */
+    @GetMapping("/{id}/pieces-exigees")
+    public List<cnm.prs.dto.TypePieceJointeDto> piecesExigees(@PathVariable Integer id) {
+        return service.piecesExigees(id);
+    }
+
     /**
      * Résout le PPM rattaché au dossier (mapping {@code idDossier → PPM}), y compris pour un dossier
      * <strong>BROUILLON</strong> lu par son propriétaire — permet d'ouvrir un brouillon depuis

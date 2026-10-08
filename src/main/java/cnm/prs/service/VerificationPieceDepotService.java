@@ -46,11 +46,14 @@ public class VerificationPieceDepotService {
     private final cnm.prs.security.PermissionService permissionService;
     /** ⚠️ 2026-10-07 (constat E2) — le CCAG et le CCTP contenus dans le DAO complet joint. */
     private final PiecesExemptees piecesExemptees;
+    /** ⚠️ M2 (manuel de contrôle) — les pièces exigées du sous-type. */
+    private final PiecesExigees piecesExigees;
 
     public VerificationPieceDepotService(VerificationPieceDepotRepository repository,
             DossierRepository dossierRepository, TypePieceJointeRepository typePieceJointeRepository,
             PieceJointeDossierRepository pieceJointeDossierRepository,
-            cnm.prs.security.PermissionService permissionService, PiecesExemptees piecesExemptees) {
+            cnm.prs.security.PermissionService permissionService, PiecesExemptees piecesExemptees, PiecesExigees piecesExigees) {
+        this.piecesExigees = piecesExigees;
         this.piecesExemptees = piecesExemptees;
         this.repository = repository;
         this.dossierRepository = dossierRepository;
@@ -121,9 +124,11 @@ public class VerificationPieceDepotService {
     public List<String> defautsCourants(Integer idDossier) {
         Dossier dossier = dossierRepository.findById(idDossier)
                 .orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable : " + idDossier));
-        List<TypePieceJointe> attendus = typePieceJointeRepository.findAll().stream()
-                .filter(t -> t.getIdTypeDossier() != null && t.getIdTypeDossier().equals(dossier.getIdTypeDossier()))
-                .toList();
+        // ⚠️ M2 (manuel de contrôle, §B2) — les pièces exigées du sous-type (à défaut, de la famille), obligation résolue pour le dossier.
+        List<PiecesExigees.Exigee> exigees = piecesExigees.pour(dossier);
+        Set<Integer> obligatoires = exigees.stream().filter(PiecesExigees.Exigee::obligatoire).map(e -> e.type().getIdTypePiece())
+                .collect(java.util.stream.Collectors.toSet());
+        List<TypePieceJointe> attendus = exigees.stream().map(PiecesExigees.Exigee::type).toList();
         Set<Integer> deposes = pieceJointeDossierRepository.findAll().stream()
                 .filter(p -> idDossier.equals(p.getIdDossier()) && p.getIdTypePiece() != null)
                 .map(p -> p.getIdTypePiece())
@@ -138,7 +143,7 @@ public class VerificationPieceDepotService {
                 defauts.add(t.getLibellePiece()
                         + (v.getObservation() != null && !v.getObservation().isBlank() ? " — " + v.getObservation() : "")
                         + (DECISION_MANQUANTE.equals(v.getDecision()) ? " (manquante)" : " (non conforme)"));
-            } else if (v == null && Boolean.TRUE.equals(t.getObligatoire()) && !deposes.contains(t.getIdTypePiece())
+            } else if (v == null && obligatoires.contains(t.getIdTypePiece()) && !deposes.contains(t.getIdTypePiece())
                     && !exemptes.contains(t.getIdTypePiece())) {
                 defauts.add(t.getLibellePiece() + " (manquante)");
             }
@@ -156,9 +161,7 @@ public class VerificationPieceDepotService {
                 .orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable : " + idDossier));
         Set<Integer> exemptes = piecesExemptees.de(idDossier);
         Map<Integer, VerificationPieceDepot> etat = etatCourant(idDossier);
-        return typePieceJointeRepository.findAll().stream()
-                .filter(t -> t.getIdTypeDossier() != null && t.getIdTypeDossier().equals(dossier.getIdTypeDossier())
-                        && Boolean.TRUE.equals(t.getObligatoire()))
+        return piecesExigees.obligatoires(dossier).stream()   // ⚠️ M2 — la liste du sous-type, à défaut celle de la famille
                 .filter(t -> !exemptes.contains(t.getIdTypePiece()))
                 .filter(t -> {
                     VerificationPieceDepot v = etat.get(t.getIdTypePiece());
