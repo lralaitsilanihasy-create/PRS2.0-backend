@@ -3165,6 +3165,15 @@ Accès complet aux référentiels, comptes utilisateurs, journal d'audit, hiéra
     de manière substantielle ni la mission, ni les conditions contractuelles, ni le prix ; la plateforme ne le contrôle pas. En cas
     d'échec motivé, le candidat classé suivant est invité (à confirmer par le juriste) ; si son enveloppe financière n'a pas été
     ouverte, le responsable l'ouvre d'abord en séance complémentaire, avec les mêmes clés et un nouveau procès-verbal.
+  - ⚠️ **Le rapport et la proposition (2026-10-08, lot 3, tranche PI-d2b ; art. 42, 56-II)** : le rapport d'évaluation des
+    propositions présente l'examen préliminaire, l'évaluation technique, l'évaluation financière, le classement et la négociation,
+    avec en annexe la grille de chaque membre ; il se produit quand chaque lot est conclu, et fige alors l'évaluation. La commission
+    propose d'attribuer le marché au candidat avec qui la négociation a abouti, pour le prix corrigé de sa proposition financière. Elle
+    propose de déclarer le lot infructueux quand toutes les propositions sont écartées, quand **une seule** est conforme (dès
+    l'examen préliminaire, sans aller plus loin), quand aucune n'atteint la note technique minimale, quand aucune proposition
+    financière n'est recevable, ou quand la négociation a échoué avec tous les candidats classés. Le dossier de marché d'une
+    consultation de prestations intellectuelles relève du sous-type « Marché de Prestations Intellectuelles » (MPI) ; les lettres aux
+    candidats non retenus disent leur note technique et leur rang.
 - Grilles de contrôle & règles d'anomalie [Écriture]
   - Configuration de tr_points_ctrl et t_regle_anomalie.
 - Comptes budgétaires & entités contractantes [Écriture]

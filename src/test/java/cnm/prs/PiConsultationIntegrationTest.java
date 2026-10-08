@@ -415,6 +415,90 @@ class PiConsultationIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(get(neg + "/" + id2 + "/piece").header("Authorization", tokenPrmp)).andExpect(status().isOk());
         mvc.perform(post(neg + "/lots/1/ouvrir").header("Authorization", tokenPrmp).contentType(JSON).content("{}")).andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("NEGOCIATION_CONCLUE"));
+
+        // ⚠️ PI-d2b — la proposition (la négociation réussie), le rapport adapté et signé, le dossier de marché MPI.
+        String tokenVer = bearer("CTRVER", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER", "ANT");
+        String vueEv = mvc.perform(get(ev).header("Authorization", tokenPrmp)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<String>read(vueEv, "$.lots[0].proposition.idOffre")).isEqualTo(pi.a());
+        assertThat(JsonPath.<String>read(vueEv, "$.lots[0].proposition.idOffreFinanciere")).isEqualTo(fa);
+        assertThat(JsonPath.<Number>read(vueEv, "$.lots[0].proposition.montant").intValue()).isEqualTo(1050000);
+        assertThat(JsonPath.<Boolean>read(vueEv, "$.lots[0].proposition.infructueux")).isFalse();
+        mvc.perform(post(ev + "/rapport").header("Authorization", tokenVer).contentType(JSON).content("{}")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.etat").value("RAPPORT_A_SIGNER"));
+        mvc.perform(put(ev + "/financiere/offres/" + fa).header("Authorization", pi.m1()).contentType(JSON).content("{}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("EVALUATION_CLOSE"));
+        for (String m : List.of(pi.m1(), pi.m2())) {
+            mvc.perform(post(ev + "/rapport/signer").header("Authorization", m).contentType(JSON).content("{}")).andExpect(status().isOk());
+        }
+        String rapport = texteDuPdf(mvc.perform(get(ev + "/rapport").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray()).replaceAll("\\s+", " ");
+        assertThat(rapport).contains("RAPPORT D'ÉVALUATION DES PROPOSITIONS", "4. Évaluation technique", "note technique 87 points",
+                "score combiné 85.6", "6. Classement", "Rang 1 — proposition n° 2", "n'a pas abouti — Le candidat remplace le chef de mission",
+                "La commission propose d'attribuer le marché à Cabinet A (proposition n° 1)", "(propositions remises en ligne)",
+                "Grilles individuelles de notation technique").doesNotContain("Post-qualification");
+        typeDossierRepository.save(new cnm.prs.entity.TypeDossier("DDM", "Dossier de Marché"));
+        sousTypeDossierRepository.save(new cnm.prs.entity.SousTypeDossier("MPI", "Marché de Prestations Intellectuelles", "DDM"));
+        String att = "/api/fiches-marche/" + idDmc + "/attribution";
+        mvc.perform(post(att + "/lots/1/dossier").header("Authorization", tokenPrmp)).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.lots[0].dossierMarche.sousType").value("MPI"))
+                .andExpect(jsonPath("$.lots[0].proposition.idOffre").value(pi.a()));
+    }
+
+    @Test
+    @DisplayName("⚠️ PI-d2b : art. 56-II — une seule proposition conforme : le rapport propose d'office l'infructuosité, sans évaluation "
+            + "technique ni financière ; tant que l'évaluation technique n'est pas arrêtée, le rapport attend")
+    void uneSeuleConformeInfructueux() throws Exception {
+        Long idDmc = ficheEnLigne();
+        String tokenVer = bearer("CTRVER", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER", "ANT");
+        String internes = mvc.perform(get("/api/fiches-marche/" + idDmc + "/parametres-internes").header("Authorization", tokenVer))
+                .andReturn().getResponse().getContentAsString();
+        List<String> ims = JsonPath.read(internes, "$.membresCommission[*].im");
+        String m1 = bearer("m1@pi.mg", ProfilUtilisateur.MEMBRE_CAO, TypeActeur.MEMBRE_CAO, ims.get(0), null);
+        String m2 = bearer("m2@pi.mg", ProfilUtilisateur.MEMBRE_CAO, TypeActeur.MEMBRE_CAO, ims.get(1), null);
+        for (String[] e : new String[][] { { jetonA, "1111000111", "Cabinet A" }, { jetonB, "2222000222", "Bureau B" } }) {
+            mvc.perform(put("/api/candidat/entreprise").header("Authorization", e[0]).contentType(JSON).content("{\"raisonSociale\":\"" + e[2]
+                    + "\",\"nif\":\"" + e[1] + "\",\"adresse\":\"Lot\",\"representant\":{\"nom\":\"Rakoto\",\"prenom\":\"Jean\"}}")).andExpect(status().isOk());
+        }
+        String a = propositionOuverte(idDmc, "C900000071", "1111000111", "Cabinet A", 1);
+        String b = propositionOuverte(idDmc, "C900000072", "2222000222", "Bureau B", 2);
+        cnm.prs.entity.Seance s = new cnm.prs.entity.Seance();
+        s.setIdDmc(idDmc);
+        s.setEtat(cnm.prs.entity.Seance.CLOSE);
+        s.setOuverteLe(LocalDateTime.now().minusDays(1));
+        s.setCloseLe(LocalDateTime.now().minusHours(20));
+        s.setPvSigneLe(LocalDateTime.now().minusHours(20));
+        seanceRepository.save(s);
+        String ev = "/api/fiches-marche/" + idDmc + "/evaluation";
+        mvc.perform(post(ev + "/ouvrir").header("Authorization", tokenVer)).andExpect(status().isCreated());
+        for (String m : List.of(m1, m2)) {
+            mvc.perform(post(ev + "/declaration").header("Authorization", m).contentType(JSON).content("{\"conflit\":false}")).andExpect(status().isOk());
+        }
+        mvc.perform(put(ev + "/offres/" + a + "/conformite").header("Authorization", m1).contentType(JSON).content("{\"decision\":\"CONFORME\"}"))
+                .andExpect(status().isOk());
+        mvc.perform(put(ev + "/offres/" + b + "/conformite").header("Authorization", m1).contentType(JSON).content("{\"decision\":\"CONFORME\"}"))
+                .andExpect(status().isOk());
+        mvc.perform(post(ev + "/lots/1/etapes/CONFORMITE/arreter").header("Authorization", m1).contentType(JSON).content("{}")).andExpect(status().isOk());
+        // Deux conformes : le rapport attend l'évaluation technique.
+        mvc.perform(post(ev + "/rapport").header("Authorization", tokenVer).contentType(JSON).content("{}")).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("ETAPES_INCOMPLETES")).andExpect(jsonPath("$.details.lots[0]").value(1));
+        mvc.perform(post(ev + "/lots/1/etapes/CONFORMITE/rouvrir").header("Authorization", m1).contentType(JSON).content("{\"motif\":\"Revoir B\"}"))
+                .andExpect(status().isOk());
+        mvc.perform(put(ev + "/offres/" + b + "/conformite").header("Authorization", m1).contentType(JSON).content("{\"decision\":\"ECARTEE\","
+                + "\"qualification\":\"NON_CONFORME\",\"motif\":\"Personnel clé absent\",\"clause\":\"IC 5.1\"}")).andExpect(status().isOk());
+        mvc.perform(post(ev + "/lots/1/etapes/CONFORMITE/arreter").header("Authorization", m1).contentType(JSON).content("{}")).andExpect(status().isOk());
+        String vue = mvc.perform(get(ev).header("Authorization", tokenPrmp)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<Boolean>read(vue, "$.lots[0].proposition.infructueux")).isTrue();
+        assertThat(JsonPath.<String>read(vue, "$.lots[0].proposition.motifInfructuosite")).contains("Une seule proposition est conforme (art. 56-II)");
+        mvc.perform(post(ev + "/rapport").header("Authorization", tokenVer).contentType(JSON).content("{}")).andExpect(status().isOk());
+        for (String m : List.of(m1, m2)) {
+            mvc.perform(post(ev + "/rapport/signer").header("Authorization", m).contentType(JSON).content("{}")).andExpect(status().isOk());
+        }
+        String rapport = texteDuPdf(mvc.perform(get(ev + "/rapport").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray()).replaceAll("\\s+", " ");
+        assertThat(rapport).contains("L'évaluation technique n'a pas été conduite", "La commission propose de déclarer le lot infructueux : Une "
+                + "seule proposition est conforme (art. 56-II).");
+        mvc.perform(post("/api/fiches-marche/" + idDmc + "/attribution/lots/1/dossier").header("Authorization", tokenPrmp))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("LOT_INFRUCTUEUX"));
     }
 
     @Test

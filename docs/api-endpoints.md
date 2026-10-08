@@ -7490,6 +7490,41 @@ par **ronde**). Aucune dépendance ajoutée. Accès : celui de l'évaluation (`/
   réussie), le dossier de marché, l'infructuosité (art. 56-II).
 
 
+### L'évaluation des prestations intellectuelles, lot 3, tranche PI-d2b : rapport, proposition, dossier de marché, infructuosité — V90 ⚠️ 2026-10-08
+
+Demande front `demande-backend-2026-10-07-evaluation-pi.md` (§B7 ; arbitrages du pilote du 08/10 : **sous-type MPI** ; **une seule
+proposition conforme → infructuosité proposée d'office**). Migration **V90** (sous-type `MPI` « Marché de Prestations
+Intellectuelles », famille `DDM`). Aucun chemin nouveau : le rapport (`…/evaluation/rapport`), la vue (`GET …/evaluation`) et
+l'attribution (`…/attribution/**`) du lot 1 et du lot 2 servent une fiche PI.
+
+- **`EvaluationDto.lots[].proposition`** gagne `idOffreFinanciere` (l'enveloppe financière de la proposition, PI) et
+  `motifInfructuosite` (PI). Pour une fiche PI, `idOffre` est la proposition (son enveloppe technique, celle des listes) ; `montant` =
+  prix corrigé HT de la financière, `montantTtc` = prix lu TTC, `delai` = celui de son acte d'engagement. Elle est servie quand le lot
+  est **prêt** :
+  - **infructueux**, avec le motif : toutes écartées à l'examen préliminaire ; **une seule conforme** (sans évaluation technique ni
+    financière) ; aucune au score technique minimum ; aucune proposition financière recevable (écartées, ou au-delà du budget) ;
+    négociations sans accord avec tous les classés ;
+  - **attribuable** : la proposition dont la négociation a abouti (sa financière évaluée).
+  Sinon nulle (examen préliminaire, évaluation technique ou classement non arrêtés, négociation à mener ou en cours).
+- **Le rapport** (`POST …/evaluation/rapport`) d'une fiche PI exige l'examen préliminaire arrêté et le lot prêt (409
+  `ETAPES_INCOMPLETES`, `details.lots`) ; les étapes 3 à 5 du lot 1 ne s'y appliquent pas. Intitulé « RAPPORT D'ÉVALUATION DES
+  PROPOSITIONS » ; sections : 3. examen préliminaire ; **4. évaluation technique** (note par élément, écarts signalés, éliminations,
+  rang technique) ; **5. évaluation financière** (méthode, poids, budget ; prix lu, corrections, dépenses remboursables, montant
+  comparé, scores) ; **6. classement** (et le départage) ; **7. négociation** (chaque négociation, son résultat, son motif) ;
+  8. proposition (ou infructuosité et son motif) ; signatures ; **annexe des grilles individuelles** (arbitrage Q4). Signature
+  inchangée.
+- **Plus d'écriture PI une fois le rapport produit** (notes techniques, saisies financières, départage, arrêts, négociation) : 409
+  `EVALUATION_CLOSE`, comme au lot 1.
+- **Le dossier de marché** (`POST …/attribution/lots/{lot}/dossier`) d'une fiche PI se crée au sous-type **`MPI`** (409
+  `SOUS_TYPE_ABSENT` si le référentiel ne le porte pas) ; le devis estimatif joint d'office est le bordereau de l'enveloppe
+  **financière**. 409 `LOT_INFRUCTUEUX` quand le rapport propose l'infructuosité.
+- **Les lettres d'information** (`…/informer`) : pour une proposition retenue à l'examen préliminaire, le motif dit sa note technique
+  (éliminée sous le minimum), son écartement financier, ou son classement (note technique, score combiné, rang, échec de sa
+  négociation) ; les propositions écartées à l'examen préliminaire gardent le motif du lot 1.
+- **L'infructuosité elle-même** (déclaration après avis conforme de la Commission, jamais après l'attribution, art. 56-VI) suit la
+  tranche 2d du lot 2, commune aux deux évaluations.
+
+
 ### Le rabais structuré de l'offre en ligne ⚠️ 2026-10-07
 
 Demande front `demande-backend-2026-10-07-rabais-structure.md` (arbitrage Q4 du pilote : « le rabais est structuré au dépôt »). Aucune

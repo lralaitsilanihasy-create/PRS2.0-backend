@@ -102,6 +102,8 @@ public class AttributionService {
     private final java.time.Clock horloge;
     // ⚠️ Tranche 2c
     private final AttributionExecutionService execution;
+/** ⚠️ PI-d2b — le sous-type du dossier de marché d'une consultation de prestations intellectuelles. */    public static final String SOUS_TYPE_PI = "MPI";
+/** ⚠️ PI-d2b — les motifs de rejet d'une consultation de prestations intellectuelles (note technique, classement, négociation). */    private final ResultatsPi resultatsPi;
 
     public AttributionService(AttributionRepository attributions, EvaluationService evaluation, SeanceService seance, SaisieService saisie,
             ValeursPpmService valeursPpm, FicheMarcheService fiches, EntrepriseCandidatService entreprises, GenerateurDocumentsFiche generateur,
@@ -110,7 +112,8 @@ public class AttributionService {
             DocumentFicheMarcheRepository documentRepository, cnm.prs.repository.AttributionLettreRepository lettres,
             cnm.prs.repository.AttributionExplicationRepository explications, cnm.prs.repository.CompteCandidatRepository candidats,
             cnm.prs.repository.PrmpRepository prmpRepository, NotificationService notifications, CeremonieService ceremonies,
-            ParametreService parametres, java.time.Clock horloge, AttributionExecutionService execution) {
+            ParametreService parametres, java.time.Clock horloge, AttributionExecutionService execution, ResultatsPi resultatsPi) {
+        this.resultatsPi = resultatsPi;
         this.execution = execution;
         this.attributions = attributions;
         this.evaluation = evaluation;
@@ -261,6 +264,7 @@ public class AttributionService {
         EvaluationDto ev = evaluation.vueSansGarde(idDmc).orElseThrow();
         EvaluationDto.Lot l = ev.lots().stream().filter(x -> Objects.equals(x.lot(), lot)).findFirst().orElseThrow();
         Entete entete = entete(idDmc, fiches.etatValide(idDmc).orElse(null), lot, ev.lots().size() > 1);
+        boolean pi = evaluation.estPi(idDmc);
         Offre attributaire = offres.findById(a.getIdOffreAttribuee()).orElseThrow();
         AttributionDto.DelaiAttente delai = delaiAttente(a);
         int n = 0;
@@ -275,7 +279,8 @@ public class AttributionService {
             x.setLot(lot);
             x.setIdOffre(o.idOffre());
             x.setType(retenue ? AttributionLettre.ATTRIBUTION : AttributionLettre.NON_RETENU);
-            x.setMotif(retenue ? null : motifRejet(o));
+            // ⚠️ PI-d2b — une proposition PI retenue à l'examen préliminaire : sa note technique et son classement.
+            x.setMotif(retenue ? null : pi && o.ecartee() == null ? resultatsPi.motifRejet(idDmc, lot, o.idOffre()) : motifRejet(o));
             x.setProduiteLe(maintenant);
             for (GenerateurDocumentsFiche.Fichier f : generateur.generer(lettre(entete, a, x, offre, attributaire, delai))) {
                 if ("pdf".equals(f.extension())) {
@@ -481,7 +486,9 @@ public class AttributionService {
         }
         DossierMec dmc = dmcRepository.findById(idDmc).orElseThrow(() -> new ResourceNotFoundException("DMC introuvable : " + idDmc));
         Map<String, String> plan = valeursPpm.lire(dmc.getIdDetail()).valeurs();
-        String sousType = Objects.toString(plan.get("MODE"), "").toLowerCase(Locale.FRENCH).contains("restreint") ? "MAOR" : "MAOO";
+        // ⚠️ PI-d2b (arbitrage du pilote, 08/10) — une consultation de prestations intellectuelles : le sous-type MPI (V90).
+        String sousType = evaluation.estPi(idDmc) ? SOUS_TYPE_PI
+                : Objects.toString(plan.get("MODE"), "").toLowerCase(Locale.FRENCH).contains("restreint") ? "MAOR" : "MAOO";
         ValeursPpmService.EnTete enTete = valeursPpm.enTete(dmc.getIdDetail());
         Dossier dossier = saisie.creerDossierMarche(sousType, enTete.idLocalite(), enTete.idEntiteContract());
         LocalDateTime maintenant = LocalDateTime.now();
@@ -508,7 +515,7 @@ public class AttributionService {
         jointes += joindre(dossier, "PROJET_MARCHE", "projet-de-marche" + suffixe, a.getProjetPdf());
         jointes += joindreCahierDesCharges(dossier, idDmc);
         jointes += joindre(dossier, "DEVIS_ESTIMATIF", "bordereau-offre-" + offre.getNumero() + suffixe,
-                seance.bordereauPdf(p.idOffre()).orElse(null));
+                seance.bordereauPdf(p.idOffreFinanciere() != null ? p.idOffreFinanciere() : p.idOffre()).orElse(null));
         jointes += joindre(dossier, "PV_OUVERTURE", "pv-ouverture_" + idDmc + ".pdf", seance.pvSigne(idDmc));
         jointes += joindre(dossier, "RAPPORT_ANALYSE", "rapport-evaluation_" + idDmc + ".pdf", evaluation.rapportSigne(idDmc));
         evaluation.tracerAttribution(idDmc, "DOSSIER_MARCHE", "Lot " + lot + " : dossier de marché " + dossier.getIdDossier() + " (" + sousType

@@ -126,6 +126,8 @@ public class EvaluationService {
     private final cnm.prs.repository.EvaluationSignatureRepository signatures;
     private final GenerateurDocumentsFiche generateur;
     private final cnm.prs.repository.CaoRepository caoRepository;
+    /** ⚠️ PI-d2b — les résultats PI (proposition, rapport) ; paresseux : les services PI relisent cette évaluation. */
+    private final org.springframework.beans.factory.ObjectProvider<ResultatsPi> resultatsPi;
 
     public EvaluationService(EvaluationRepository evaluations, EvaluationDeclarationRepository declarations, EvaluationEtapeRepository etapes,
             EvaluationDecisionRepository decisions, EvaluationDemandeRepository demandes, EvaluationJournalRepository journal,
@@ -133,7 +135,8 @@ public class EvaluationService {
             ProceduresEnLigneService procedures, CeremonieService ceremonies, NotificationService notifications, CompteCandidatRepository candidats, OffreRepository offres,
             DossierMecRepository dmcRepository, ParametreService parametres, ObjectMapper mapper, Clock horloge,
             cnm.prs.repository.LotRepository lotRepository, ValeursPpmService valeursPpm, cnm.prs.repository.EvaluationRapportRepository rapports,
-            cnm.prs.repository.EvaluationSignatureRepository signatures, GenerateurDocumentsFiche generateur, cnm.prs.repository.CaoRepository caoRepository) {
+            cnm.prs.repository.EvaluationSignatureRepository signatures, GenerateurDocumentsFiche generateur, cnm.prs.repository.CaoRepository caoRepository,
+            org.springframework.beans.factory.ObjectProvider<ResultatsPi> resultatsPi) {
         this.evaluations = evaluations;
         this.declarations = declarations;
         this.etapes = etapes;
@@ -160,6 +163,7 @@ public class EvaluationService {
         this.signatures = signatures;
         this.generateur = generateur;
         this.caoRepository = caoRepository;
+        this.resultatsPi = resultatsPi;
     }
 
     // ------------------------------------------------------------------ §B1 l'évaluation
@@ -1328,12 +1332,12 @@ public class EvaluationService {
     private EvaluationDto.Proposition proposition(Long idDmc, Integer lot, List<SeanceDto.OffreLue> liste) {
         Tour t = tour(idDmc, lot, liste);
         if (t.courante() == null || !QUALIFIE.equals(t.decision())) {
-            return new EvaluationDto.Proposition(null, null, null, null, null, null, true);
+            return new EvaluationDto.Proposition(null, null, null, null, null, null, true, null, null);
         }
         SeanceDto.OffreLue o = liste.stream().filter(x -> x.idOffre().equals(t.courante())).findFirst().orElseThrow();
         EvaluationDto.Montant m = montantDto(enVigueur(idDmc, EvaluationEtape.EVALUATION).get(o.idOffre()));
         return new EvaluationDto.Proposition(o.idOffre(), o.numero(), o.entreprise().raisonSociale(), montantDuMarche(m),
-                m == null ? null : m.prixLuTtc(), delaiLu(o.acteEngagement()), false);
+                m == null ? null : m.prixLuTtc(), delaiLu(o.acteEngagement()), false, null, null);
     }
 
     /**
@@ -1416,7 +1420,11 @@ public class EvaluationService {
             throw new BusinessRuleException("Le rapport d'évaluation est déjà produit.", "RAPPORT_DEJA_PRODUIT");
         }
         Map<Integer, List<SeanceDto.OffreLue>> parLot = parLot(idDmc);
-        List<Integer> incomplets = parLot.keySet().stream().filter(lot -> !arretees(idDmc, lot).keySet().containsAll(EvaluationEtape.ORDRE)).toList();
+        // ⚠️ PI-d2b — un lot PI : l'examen préliminaire arrêté, puis ses résultats prêts (technique, classement, négociation).
+        boolean pi = estPi(idDmc);
+        List<Integer> incomplets = parLot.keySet().stream().filter(lot -> pi
+                ? !arretees(idDmc, lot).containsKey(EvaluationEtape.CONFORMITE) || !resultatsPi.getObject().etat(idDmc, lot).pret()
+                : !arretees(idDmc, lot).keySet().containsAll(EvaluationEtape.ORDRE)).toList();
         if (!incomplets.isEmpty()) {
             throw new BusinessRuleException("Toutes les étapes de tous les lots ne sont pas arrêtées : lot(s) " + incomplets.stream().map(String::valueOf)
                     .collect(Collectors.joining(", ")) + ".", "ETAPES_INCOMPLETES", null, Map.of("lots", incomplets));
@@ -1556,9 +1564,10 @@ public class EvaluationService {
     /** Le rapport, sur le plan du guide (§B6) : références, plis, étapes 2 à 5 lot par lot, proposition, signatures, annexes. */
     private DocumentLibre document(Long idDmc, Evaluation e, cnm.prs.entity.EvaluationRapport r) {
         EvaluationDto ev = dto(idDmc, e);
+        boolean pi = estPi(idDmc);
         List<DocumentLibre.Element> el = new ArrayList<>();
-        el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.TITRE, "RAPPORT D'ÉVALUATION DES OFFRES"));
-        el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.CENTRE, "(offres remises en ligne)"));
+        el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.TITRE, pi ? "RAPPORT D'ÉVALUATION DES PROPOSITIONS" : "RAPPORT D'ÉVALUATION DES OFFRES"));
+        el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.CENTRE, pi ? "(propositions remises en ligne)" : "(offres remises en ligne)"));
         el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.VIDE, ""));
         FicheMarcheService.EtatVersion v = fiches.etatValide(idDmc).orElse(null);
         sous(el, "1. Références du marché et de la commission");
@@ -1596,6 +1605,18 @@ public class EvaluationService {
                 para(el, nom(o) + " : " + (EvaluationDecision.CONFORME.equals(c.decision()) ? "conforme pour l'essentiel"
                         : "écartée, " + Objects.toString(c.qualification(), "").toLowerCase(Locale.FRENCH).replace('_', ' ') + " — " + c.motif()
                                 + " (" + c.clause() + ")"));
+            }
+            // ⚠️ PI-d2b — un lot PI : évaluation technique, évaluation financière, classement, négociation (à la place des étapes 3 à 5).
+            if (pi) {
+                el.addAll(resultatsPi.getObject().sections(idDmc, l.lot(), p));
+                sous(el, "8. Proposition d'attribution" + p);
+                EvaluationDto.Proposition pp = l.proposition();
+                para(el, pp == null ? "Aucune proposition." : pp.infructueux() ? "La commission propose de déclarer le lot infructueux : "
+                        + Objects.toString(pp.motifInfructuosite(), "aucune proposition n'est retenue.")
+                        : "La commission propose d'attribuer le marché à " + pp.candidat() + " (proposition n° " + pp.numero() + "), classée et avec "
+                                + "qui la négociation a abouti, pour un montant de " + lisible(pp.montant()) + " Ariary hors taxes"
+                                + (pp.delai() == null ? "" : ", délai : " + pp.delai()) + ".");
+                continue;
             }
             sous(el, "4. Corrections arithmétiques" + p);
             boolean aucune = true;
@@ -1693,6 +1714,10 @@ public class EvaluationService {
                     + (Boolean.TRUE.equals(d.conflit()) ? ", conflit d'intérêts déclaré" + (d.precision() == null ? "" : " (" + d.precision() + ")")
                             + " : n'a pris part à aucune décision" : ", absence de conflit d'intérêts")));
         }
+        // ⚠️ PI-d2b — les grilles individuelles des membres (arbitrage Q4 : jointes au rapport).
+        if (pi) {
+            el.addAll(resultatsPi.getObject().annexeGrilles(idDmc));
+        }
         sous(el, "Annexe 2 — Demandes de précisions et de justification, et réponses");
         List<EvaluationDemande> toutes = demandes.findByIdDmcOrderByDemandeeLeAscIdAsc(idDmc);
         if (toutes.isEmpty()) {
@@ -1789,6 +1814,17 @@ public class EvaluationService {
         return evaluations.findById(idDmc).map(e -> dto(idDmc, e));
     }
 
+    /** ⚠️ PI-d2b — la même vue sans la proposition des lots PI : celle que relisent les services PI. */
+    @Transactional(readOnly = true)
+    public Optional<EvaluationDto> vueSansPropositionPi(Long idDmc) {
+        return evaluations.findById(idDmc).map(e -> dto(idDmc, e, false));
+    }
+
+    /** ⚠️ PI-d2b — une fiche de prestations intellectuelles (évaluation en deux enveloppes). */
+    boolean estPi(Long idDmc) {
+        return fiches.etatValide(idDmc).map(v -> ModelesDao.sigleLettre(v.categorie()) != null).orElse(false);
+    }
+
     /** Le rapport d'évaluation signé, en PDF ; nul s'il n'est pas entièrement signé. */
     @Transactional(readOnly = true)
     public byte[] rapportSigne(Long idDmc) {
@@ -1803,6 +1839,12 @@ public class EvaluationService {
     // ------------------------------------------------------------------ la vue
 
     private EvaluationDto dto(Long idDmc, Evaluation e) {
+        return dto(idDmc, e, true);
+    }
+
+    /** ⚠️ PI-d2b — {@code avecPi} faux : sans la proposition PI (les services PI relisent l'évaluation : pas de boucle). */
+    private EvaluationDto dto(Long idDmc, Evaluation e, boolean avecPi) {
+        boolean pi = estPi(idDmc);
         Map<String, CaoMembre> membres = new LinkedHashMap<>();
         caoMembres.findByIdDmcOrderByRangAscIdMembreAsc(idDmc).stream().filter(m -> m.estMembre() && m.getIdCompte() != null)
                 .forEach(m -> membres.put(m.getIdCompte(), m));
@@ -1867,8 +1909,9 @@ public class EvaluationService {
                         qualificationDto(qualifications.get(o.idOffre()), o), cl == null ? null : cl.rang(),
                         cl == null ? null : cl.exAequo(), ecartee, enAttente.getOrDefault(o.idOffre(), 0L).intValue(), o.rabais()));
             }
-            lots.add(new EvaluationDto.Lot(lot, courante, arretees, evaluees, arrets.containsKey(EvaluationEtape.QUALIFICATION)
-                    ? proposition(idDmc, lot, liste) : null));
+            // ⚠️ PI-d2b — la proposition d'un lot PI vient de ses résultats (technique, financier, négociation), pas de la post-qualification.
+            lots.add(new EvaluationDto.Lot(lot, courante, arretees, evaluees, pi ? (avecPi ? resultatsPi.getObject().proposition(idDmc, lot) : null)
+                    : arrets.containsKey(EvaluationEtape.QUALIFICATION) ? proposition(idDmc, lot, liste) : null));
         });
         List<EvaluationDto.NonEvaluee> non = lecture.nonOuvertes().stream()
                 .map(n -> new EvaluationDto.NonEvaluee(n.numero(), n.entreprise(), n.etat(), n.motif())).toList();

@@ -223,7 +223,9 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(JsonPath.<String>read(apres, "$.lots[0].offres[2].ecartee.qualification")).isEqualTo("NON_CONFORME");
         assertThat(verif(apres, a, "OFFRE_UNIQUE", "satisfaite")).isEqualTo(true);
         assertThat((String) verif(apres, a, "OFFRE_UNIQUE", "observation")).contains("saisi par erreur");
-        assertThat(decisionRepository.findAll()).filteredOn(d -> d.getIdOffre().equals(c)).extracting(EvaluationDecision::getDecision)
+        // Trié par identifiant : findAll() ne garantit aucun ordre (une décision remplacée est réécrite, et Postgres la déplace).
+        assertThat(decisionRepository.findAll(org.springframework.data.domain.Sort.by("id"))).filteredOn(d -> d.getIdOffre().equals(c))
+                .extracting(EvaluationDecision::getDecision)
                 .containsExactly("CONFORME", "ECARTEE");
         assertThat(decisionRepository.findAll()).filteredOn(d -> d.getIdOffre().equals(c) && d.getRemplaceeLe() == null).hasSize(1);
         mvc.perform(post(base + "/lots/1/etapes/EVALUATION/arreter").header("Authorization", jetonM1).contentType(JSON).content("{}"))

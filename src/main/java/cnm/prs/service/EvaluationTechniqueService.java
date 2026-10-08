@@ -248,7 +248,7 @@ public class EvaluationTechniqueService {
     @Transactional(readOnly = true)
     public Optional<TechniqueDto> resultatsSiNotes(Long idDmc) {
         boolean pi = fiches.etatValide(idDmc).map(v -> ModelesDao.sigleLettre(v.categorie()) != null).orElse(false);
-        return pi && evaluation.vueSansGarde(idDmc).isPresent() ? Optional.of(dto(idDmc, contexte(idDmc))) : Optional.empty();
+        return pi && evaluation.vueSansPropositionPi(idDmc).isPresent() ? Optional.of(dto(idDmc, contexte(idDmc))) : Optional.empty();
     }
 
     // ------------------------------------------------------------------ la grille et la vue
@@ -272,7 +272,7 @@ public class EvaluationTechniqueService {
         if (ModelesDao.sigleLettre(v.categorie()) == null) {
             throw new BusinessRuleException("La notation technique est propre aux prestations intellectuelles.", "CATEGORIE_SANS_NOTATION_TECHNIQUE");
         }
-        EvaluationDto ev = evaluation.vueSansGarde(idDmc)
+        EvaluationDto ev = evaluation.vueSansPropositionPi(idDmc)
                 .orElseThrow(() -> new ResourceNotFoundException("L'évaluation de cette procédure n'est pas ouverte."));
         List<SousCritereDto> sc = sousCriteres.lister(v.etat().getIdFiche());
         Map<String, TechniqueDto.Element> elements = new LinkedHashMap<>();
@@ -389,7 +389,8 @@ public class EvaluationTechniqueService {
 
     void exigerEnCours(Long idDmc) {
         Evaluation e = evaluations.findById(idDmc).orElseThrow(() -> new ResourceNotFoundException("L'évaluation de cette procédure n'est pas ouverte."));
-        if (Evaluation.CLOSE.equals(e.getEtat())) {
+        // ⚠️ PI-d2b — comme au lot 1 : plus d'écriture une fois le rapport produit (à signer, ou signé).
+        if (!Evaluation.EN_COURS.equals(e.getEtat())) {
             throw new BusinessRuleException("L'évaluation est close.", "EVALUATION_CLOSE");
         }
     }

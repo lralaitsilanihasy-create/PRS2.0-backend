@@ -175,6 +175,7 @@ public class NegociationService {
     /** La pièce jointe au procès-verbal (remplace la précédente) : PRMP/UGPM ; 400 {@code FICHIER_VIDE} ; 409 {@code NEGOCIATION_CLOSE}. */
     public NegociationDto joindre(Long idDmc, Long id, MultipartFile fichier) {
         exigerPrmp(idDmc);
+        technique.exigerEnCours(idDmc);
         Negociation n = exigerEnCours(idDmc, id);
         if (fichier == null || fichier.isEmpty()) {
             throw new BadRequestException("La pièce jointe est vide.", "FICHIER_VIDE");

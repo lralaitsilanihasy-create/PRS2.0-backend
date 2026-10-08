@@ -211,10 +211,11 @@ public record EvaluationDto(Long idDmc, String etat, LocalDateTime ouverteLe, St
 
     /**
      * La proposition d'un lot, une fois la post-qualification arrêtée : l'offre proposée à l'attribution, ou {@code infructueux}
-     * quand aucune offre n'est qualifiée ; {@code montant} = prix corrigé − rabais, hors taxes.
+     * quand aucune offre n'est qualifiée ; {@code montant} = prix corrigé − rabais, hors taxes. ⚠️ PI-d2b : {@code idOffreFinanciere}
+     * (l'enveloppe financière de la proposition, PI seulement) et {@code motifInfructuosite} (PI : art. 56-II, échec des négociations).
      */
     public record Proposition(String idOffre, Integer numero, String candidat, BigDecimal montant, BigDecimal montantTtc, String delai,
-            boolean infructueux) {
+            boolean infructueux, String idOffreFinanciere, String motifInfructuosite) {
     }
 
     // ------------------------------------------------------------------ ⚠️ tranche 1d (§B6) : le rapport d'évaluation
