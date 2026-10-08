@@ -37,6 +37,8 @@ public class Attribution {
     public static final String NOTIFIE = "NOTIFIE";
     public static final String PUBLIE = "PUBLIE";
     public static final String RETIRE = "RETIRE";
+    /** ⚠️ V91 (2d-1) — le lot déclaré infructueux par la PRMP. */
+    public static final String INFRUCTUEUX = "INFRUCTUEUX";
 
     @Id
     @Column(name = "ID_DMC", nullable = false)
@@ -177,6 +179,32 @@ public class Attribution {
     @Basic(fetch = FetchType.LAZY)
     @Column(name = "PROJET_DOCX")
     private byte[] projetDocx;
+
+    // ⚠️ V91 (tranche 2d-1, §B6) — la déclaration d'infructuosité du lot, par décision de la PRMP ; la suite déclarée.
+    @Column(name = "INFRUCTUEUX_LE")
+    private LocalDateTime infructueuxLe;
+
+    @Column(name = "INFRUCTUEUX_PAR", length = 100)
+    private String infructueuxPar;
+
+    @Column(name = "MOTIF_INFRUCTUOSITE")
+    private String motifInfructuosite;
+
+    @Column(name = "DECISION_REFERENCE", length = 100)
+    private String decisionReference;
+
+    @Column(name = "DECISION_DATE")
+    private java.time.LocalDate decisionDate;
+
+    @Column(name = "SUITE", length = 12)
+    private String suite;
+
+    // ⚠️ V91 (§B7) — les alertes déjà émises à la PRMP : délai d'attente écoulé, échéance de l'avis d'attribution (J-5).
+    @Column(name = "ALERTE_DELAI_LE")
+    private LocalDateTime alerteDelaiLe;
+
+    @Column(name = "ALERTE_AVIS_LE")
+    private LocalDateTime alerteAvisLe;
 
     @Getter
     @Setter

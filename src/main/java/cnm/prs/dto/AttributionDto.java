@@ -25,7 +25,9 @@ public record AttributionDto(Long idDmc, List<LotAttribution> lots) {
             List<Explication> explications,
             /** ⚠️ 2c (§B4.3, §B4.4, §B5) — nuls (ou liste vide) avant leur geste. */
             MiseAuPoint miseAuPoint, List<Recours> recours, Signature signature, Enregistrement enregistrement, NotificationMarche notification,
-            AvisAttribution avisAttribution, PiecesAttributaire piecesAttributaire, Retrait retrait) {
+            AvisAttribution avisAttribution, PiecesAttributaire piecesAttributaire, Retrait retrait,
+            /** ⚠️ 2d-1 (§B6, Q3) — la déclaration d'infructuosité (nulle sans elle) ; les reprises de l'évaluation après un avis défavorable. */
+            Infructuosite infructuosite, List<Reprise> reprises) {
     }
 
     /** Le dossier de marché du lot : {@code avis} ∈ {@code FAV} · {@code FAVR} · {@code DEF}, nul tant que le PV n'est pas signé. */
@@ -172,6 +174,9 @@ public record AttributionDto(Long idDmc, List<LotAttribution> lots) {
     /** ⚠️ 2b (§B4.1) — le résultat publié sur la page publique de la procédure, lot par lot, après l'information. */
     public record ResultatPublic(Integer lot, String attributaire, BigDecimal montant, LocalDateTime dateInformation, LocalDate dateAffichage,
             /** ⚠️ 2c (§B4.4) — l'avis d'attribution publié : {@code GET /api/procedures-en-ligne/{idDmc}/avis-attribution/{lot}}. */
-            LocalDate datePublicationAvis, boolean avisDisponible) {
+            LocalDate datePublicationAvis, boolean avisDisponible,
+            /** ⚠️ 2d-1 (§B6) — le lot déclaré infructueux (attributaire et montant nuls) : le motif et la date de la décision. */
+            boolean infructueux, String motifInfructuosite, LocalDate dateDecision) {
     }
+/** ⚠️ 2d-1 (§B6) — la déclaration d'infructuosité du lot par la PRMP ; {@code suite} ∈ {@code RELANCE} · {@code RESTREINTE} · {@code NEGOCIEE}. */    public record Infructuosite(LocalDateTime le, String par, String motif, String decisionReference, LocalDate decisionDate, String suite) {    }    /** ⚠️ 2d-1 (Q3) — une reprise de l'évaluation : le dossier de marché refusé, son avis, le motif ; le rapport archivé. */    public record Reprise(Long id, LocalDateTime le, String par, String motif, Integer idDossier, String avis, boolean rapportDisponible) {    }    /** {@code POST …/lots/{lot}/infructueux} : le motif, la décision de la PRMP (référence, date), la suite déclarée (facultative). */    public record InfructuositeRequest(String motif, Decision decision, String suite) {    }    public record Decision(String reference, LocalDate date) {    }    /** {@code POST …/lots/{lot}/reprendre} : le motif de la reprise de l'évaluation. */    public record RepriseRequest(String motif) {    }
 }

@@ -200,5 +200,15 @@ public enum TypeNotification {
     /** ⚠️ 2026-10-08 (lot 3 PI, PI-d1, §B3) — la seconde séance est ouverte : vers chaque candidat dont l'enveloppe financière s'ouvre (invité à y assister). */
     SEANCE_FINANCIERE,
     /** ⚠️ 2026-10-08 (lot 3 PI, PI-d2a, §B6) — la PRMP ouvre une négociation : vers le candidat classé invité à négocier (date, lieu). */
-    NEGOCIATION
+    NEGOCIATION,
+    /** ⚠️ 2026-10-08 (lot 2, 2d-1, Q3) — la PRMP reprend l'évaluation après l'avis défavorable de la Commission : vers les membres de la CAO. */
+    EVALUATION_REPRISE,
+    /** ⚠️ 2026-10-08 (lot 2, 2d-1, §B6) — le lot est déclaré infructueux : vers chaque candidat du lot. */
+    PROCEDURE_INFRUCTUEUSE,
+    /** ⚠️ 2026-10-08 (lot 2, 2d-1, §B7) — le délai d'attente est écoulé, le marché peut être signé : vers la PRMP. */
+    DELAI_ATTENTE_ECOULE,
+    /** ⚠️ 2026-10-08 (lot 2, 2d-1, §B7) — l'avis d'attribution est à publier sous 5 jours : vers la PRMP. */
+    ECHEANCE_AVIS_ATTRIBUTION,
+    /** ⚠️ 2026-10-08 (lot 2, 2d-1, §B7) — un réexamen attend sa réponse, à 2 jours de son échéance : vers la PRMP. */
+    ECHEANCE_REEXAMEN
 }

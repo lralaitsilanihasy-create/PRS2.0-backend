@@ -78,6 +78,7 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
     @Autowired private cnm.prs.repository.PieceJointeDossierRepository pieceJointeDossierRepository;
     @Autowired private cnm.prs.seed.PointsCtrlDossierMarcheSeeder pointsCtrlSeeder;
     @Autowired private cnm.prs.repository.AttributionRepository attributionRepository;
+    @Autowired private cnm.prs.service.AttributionService attributionService;
 
     private final LocalDate aujourdhui = LocalDate.now();
     private final List<String> comptes = new ArrayList<>();
@@ -709,6 +710,13 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(get(att).header("Authorization", tokenPrmp)).andExpect(jsonPath("$.lots[0].etat").value("SIGNABLE"))
                 .andExpect(jsonPath("$.lots[0].delaiAttente.debut").value(aujourdhui.minusDays(11).toString()))
                 .andExpect(jsonPath("$.lots[0].delaiAttente.ecoule").value(true));
+        // ⚠️ 2d-1 (§B7) — le compteur de la PRMP et l'alerte du délai écoulé, émise une seule fois.
+        mvc.perform(get("/api/kpis/badges").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.compteurs.lotsSignables").value(1)).andExpect(jsonPath("$.compteurs.lotsAAttribuer").value(0));
+        attributionService.alerter();
+        assertThat(notificationRepository.findAll()).filteredOn(n -> "DELAI_ATTENTE_ECOULE".equals(n.getTypeNotif())).hasSize(1);
+        attributionService.alerter();
+        assertThat(notificationRepository.findAll()).filteredOn(n -> "DELAI_ATTENTE_ECOULE".equals(n.getTypeNotif())).hasSize(1);
         assertThat(journalRepository.findByIdDmcOrderByDateAscIdAsc(idDmc)).extracting(j -> j.getAction())
                 .contains("ATTRIBUTION", "INFORMATION", "LETTRE_LUE", "EXPLICATION_DEMANDEE", "EXPLICATION_REPONDUE");
 

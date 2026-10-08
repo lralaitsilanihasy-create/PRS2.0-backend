@@ -88,4 +88,31 @@ public class AttributionController {
                         : MediaType.APPLICATION_PDF)
                 .body(service.projet(idDmc, lot, docx));
     }
+
+    /**
+     * ⚠️ 2d-1 (§B6) — {@code { motif, decision{ reference, date }, suite? }} ; PRMP ; 409 {@code EVALUATION_NON_CLOSE}, {@code DEJA_ATTRIBUE},
+     * {@code DEJA_INFRUCTUEUX}, {@code INFRUCTUOSITE_NON_PROPOSEE}.
+     */
+    @PostMapping("/lots/{lot}/infructueux")
+    public AttributionDto infructueux(@PathVariable Long idDmc, @PathVariable Integer lot,
+            @RequestBody(required = false) AttributionDto.InfructuositeRequest r) {
+        return service.declarerInfructueux(idDmc, lot, r);
+    }
+
+    /** ⚠️ 2d-1 (Q3) — {@code { motif }} ; PRMP ; après l'avis défavorable : l'évaluation reprend (409 {@code AVIS_NON_DEFAVORABLE}…). */
+    @PostMapping("/lots/{lot}/reprendre")
+    public AttributionDto reprendre(@PathVariable Long idDmc, @PathVariable Integer lot, @RequestBody(required = false) AttributionDto.RepriseRequest r) {
+        return service.reprendre(idDmc, lot, r);
+    }
+
+    /** ⚠️ 2d-1 (Q3) — le rapport d'évaluation archivé par une reprise (PDF ; {@code ?format=docx}). */
+    @GetMapping("/reprises/{id}/rapport")
+    public ResponseEntity<byte[]> rapportArchive(@PathVariable Long idDmc, @PathVariable Long id, @RequestParam(required = false) String format) {
+        boolean docx = "docx".equalsIgnoreCase(format);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, Telechargements.disposition("rapport-archive-" + idDmc + "-" + id + (docx ? ".docx" : ".pdf")))
+                .contentType(docx ? MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+                        : MediaType.APPLICATION_PDF)
+                .body(service.rapportArchive(idDmc, id, docx));
+    }
 }

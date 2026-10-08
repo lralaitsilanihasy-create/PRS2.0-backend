@@ -963,6 +963,18 @@ post-qualification (étape 5), et le rapport d'évaluation. Contrat : `docs/api-
     plateforme ;
   - l'**avis d'attribution** est publié dans les **trente jours** de la notification, sur la page publique de la procédure ; il suit un
     modèle provisoire de l'application tant que le modèle officiel n'est pas remis.
+- ⚠️ **L'infructuosité, la reprise de l'évaluation, les alertes** (lot 2, tranche 2d-1, 2026-10-08 ; arbitrage du pilote Q3 ; loi
+  n° 2016-055, art. 56) :
+  - la PRMP **déclare un lot infructueux** par une décision formelle (référence, date, motif, suite annoncée : relance, procédure
+    restreinte ou négociée), quand le rapport d'évaluation le propose, ou quand la Commission a rendu un avis défavorable sur le
+    dossier de marché ; **jamais après l'attribution**. Chaque candidat du lot est averti, et le lot s'affiche infructueux sur la
+    page publique des résultats ;
+  - après un avis défavorable, la PRMP peut aussi **reprendre l'évaluation**, avec un motif : le rapport signé est archivé,
+    l'évaluation redevient en cours, la commission rouvre l'étape à reprendre et signe un nouveau rapport, puis un nouveau dossier de
+    marché part au contrôle. La reprise n'est plus possible quand un autre lot de la procédure est déjà attribué ;
+  - la PRMP est **alertée** une fois quand le délai d'attente est écoulé, cinq jours avant l'échéance de l'avis d'attribution, et deux
+    jours avant l'échéance d'une demande de réexamen ; ses compteurs disent les lots à attribuer, les lots signables, les avis à
+    publier et les explications sans réponse.
 - ⚠️ **Le DAO complet dispense du CCAG et du CCTP** (2026-10-07) : un dossier d'appel d'offres qui porte le DAO complet produit par la
   fiche n'a plus à joindre à part le **cahier des clauses administratives générales**, qu'il contient toujours, ni le **cahier des
   clauses techniques particulières** quand la fiche porte ses spécifications techniques ; sans spécifications, le CCTP reste exigé.

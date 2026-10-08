@@ -23,5 +23,11 @@ public record CompteursPrmpDto(
         long recusAValider,
         /** ⚠️ 2026-10-07 (évaluation des offres, §B7) — les demandes aux candidats (précisions, justifications) sans réponse dont le délai
          * court, sur les fiches de la PRMP. */
-        long demandesEvaluationEnAttente) {
+        long demandesEvaluationEnAttente,
+        /** ⚠️ 2026-10-08 (attribution, 2d-1, §B7) — lots à attribuer (avis favorable rendu), lots signables (délai écoulé), avis
+         * d'attribution à publier, explications sans réponse. */
+        long lotsAAttribuer,
+        long lotsSignables,
+        long avisAPublier,
+        long explicationsSansReponse) {
 }

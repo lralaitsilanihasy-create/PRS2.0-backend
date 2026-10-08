@@ -72,4 +72,8 @@ public class AttributionRecours {
 
     @Column(name = "DECIDE_PAR", length = 100)
     private String decidePar;
+
+    /** ⚠️ V91 (2d-1, §B7) — l'alerte de l'échéance d'un réexamen, déjà émise à la PRMP. */
+    @Column(name = "ALERTE_LE")
+    private LocalDateTime alerteLe;
 }

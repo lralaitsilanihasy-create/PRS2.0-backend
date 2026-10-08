@@ -54,6 +54,7 @@ class PiConsultationIntegrationTest extends CnmIntegrationTestSupport {
     private final LocalDate aujourdhui = LocalDate.now();
     private String jetonA;
     private String jetonB;
+    private String tokenUgpm;
 
     @BeforeEach
     void jeu() throws Exception {
@@ -89,6 +90,7 @@ class PiConsultationIntegrationTest extends CnmIntegrationTestSupport {
                 LocalDateTime.now(), LocalDateTime.now(), null, null));
         jetonA = bearer("a@pi.mg", ProfilUtilisateur.CANDIDAT, TypeActeur.CANDIDAT, "C900000071", null);
         jetonB = bearer("b@pi.mg", ProfilUtilisateur.CANDIDAT, TypeActeur.CANDIDAT, "C900000072", null);
+        tokenUgpm = bearer("ugpm.hery", ProfilUtilisateur.UGPM, TypeActeur.UGPM, "PRMP001", "ANT");
     }
 
     @Test
@@ -439,10 +441,48 @@ class PiConsultationIntegrationTest extends CnmIntegrationTestSupport {
         typeDossierRepository.save(new cnm.prs.entity.TypeDossier("DDM", "Dossier de Marché"));
         sousTypeDossierRepository.save(new cnm.prs.entity.SousTypeDossier("MPI", "Marché de Prestations Intellectuelles", "DDM"));
         String att = "/api/fiches-marche/" + idDmc + "/attribution";
-        mvc.perform(post(att + "/lots/1/dossier").header("Authorization", tokenPrmp)).andExpect(status().isCreated())
+        String cree = mvc.perform(post(att + "/lots/1/dossier").header("Authorization", tokenPrmp)).andExpect(status().isCreated())
                 .andExpect(jsonPath("$.lots[0].dossierMarche.sousType").value("MPI"))
-                .andExpect(jsonPath("$.lots[0].proposition.idOffre").value(pi.a()));
+                .andExpect(jsonPath("$.lots[0].proposition.idOffre").value(pi.a())).andReturn().getResponse().getContentAsString();
+
+        // ⚠️ 2d-1 (Q3) — l'avis défavorable de la Commission : la PRMP reprend l'évaluation (rapport archivé), ou déclare l'infructuosité.
+        mvc.perform(post(att + "/lots/1/reprendre").header("Authorization", tokenPrmp).contentType(JSON).content("{\"motif\":\"x\"}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("AVIS_NON_DEFAVORABLE"));
+        int idDossier = JsonPath.read(cree, "$.lots[0].dossierMarche.idDossier");
+        receptionRepository.save(reception(idDossier, idDossier, "CTRCC1", true));
+        dispatchRepository.save(dispatch(idDossier, idDossier, "CTRCC1", "CTRMEM", "CTRPRE"));
+        examenRepository.save(examen(idDossier, idDossier, "CTRMEM"));
+        seedPvSigne(idDossier, idDossier);
+        cnm.prs.entity.PvExamen pvDef = pvExamenRepository.findById(idDossier).orElseThrow();
+        pvDef.setIdAvis("DEF");
+        pvExamenRepository.save(pvDef);
+        mvc.perform(get(att).header("Authorization", tokenPrmp)).andExpect(jsonPath("$.lots[0].dossierMarche.avis").value("DEF"));
+        mvc.perform(post(att + "/lots/1/reprendre").header("Authorization", tokenUgpm).contentType(JSON).content("{\"motif\":\"x\"}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(post(att + "/lots/1/reprendre").header("Authorization", tokenPrmp).contentType(JSON).content("{}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("MOTIF_OBLIGATOIRE"));
+        String repris = mvc.perform(post(att + "/lots/1/reprendre").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"motif\":\"La Commission relève une erreur de classement\"}")).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<String>read(repris, "$.lots[0].etat")).isEqualTo("EN_EVALUATION");
+        assertThat(JsonPath.<Integer>read(repris, "$.lots[0].reprises[0].idDossier")).isEqualTo(idDossier);
+        assertThat(JsonPath.<Boolean>read(repris, "$.lots[0].reprises[0].rapportDisponible")).isTrue();
+        long idReprise = ((Number) JsonPath.read(repris, "$.lots[0].reprises[0].id")).longValue();
+        mvc.perform(get(att + "/reprises/" + idReprise + "/rapport").header("Authorization", pi.m1())).andExpect(status().isOk());
+        mvc.perform(get(ev).header("Authorization", tokenPrmp)).andExpect(jsonPath("$.etat").value("EN_COURS"));
+        mvc.perform(get(ev + "/rapport").header("Authorization", tokenPrmp)).andExpect(status().isNotFound());
+        assertThat(notificationRepository.findPourRefEtType(JsonPath.<List<String>>read(vueEv, "$.declarations[*].membre").get(0), "MEMBRE_CAO"))
+                .extracting(Notification::getTypeNotif).contains("EVALUATION_REPRISE");
+        // Le nouveau rapport, signé, rend le lot au dossier de marché.
+        mvc.perform(post(ev + "/rapport").header("Authorization", tokenVer).contentType(JSON).content("{}")).andExpect(status().isOk());
+        for (String m : List.of(pi.m1(), pi.m2())) {
+            mvc.perform(post(ev + "/rapport/signer").header("Authorization", m).contentType(JSON).content("{}")).andExpect(status().isOk());
+        }
+        mvc.perform(get(att).header("Authorization", tokenPrmp)).andExpect(jsonPath("$.lots[0].etat").value("PROPOSE"))
+                .andExpect(jsonPath("$.lots[0].reprises.length()").value(1));
     }
+
+    @Autowired private cnm.prs.repository.PvExamenRepository pvExamenRepository;
 
     @Test
     @DisplayName("⚠️ PI-d2b : art. 56-II — une seule proposition conforme : le rapport propose d'office l'infructuosité, sans évaluation "
@@ -497,8 +537,31 @@ class PiConsultationIntegrationTest extends CnmIntegrationTestSupport {
                 .andReturn().getResponse().getContentAsByteArray()).replaceAll("\\s+", " ");
         assertThat(rapport).contains("L'évaluation technique n'a pas été conduite", "La commission propose de déclarer le lot infructueux : Une "
                 + "seule proposition est conforme (art. 56-II).");
-        mvc.perform(post("/api/fiches-marche/" + idDmc + "/attribution/lots/1/dossier").header("Authorization", tokenPrmp))
+        String att = "/api/fiches-marche/" + idDmc + "/attribution";
+        mvc.perform(post(att + "/lots/1/dossier").header("Authorization", tokenPrmp))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("LOT_INFRUCTUEUX"));
+
+        // ⚠️ 2d-1 (§B6) — la PRMP déclare le lot infructueux, sur sa décision : notifié aux candidats, affiché.
+        String corps = "{\"motif\":\"Une seule proposition conforme\",\"decision\":{\"reference\":\"DEC-12/2026\",\"date\":\"" + aujourdhui + "\"},"
+                + "\"suite\":\"RELANCE\"}";
+        mvc.perform(post(att + "/lots/1/infructueux").header("Authorization", tokenUgpm).contentType(JSON).content(corps))
+                .andExpect(status().isForbidden());
+        mvc.perform(post(att + "/lots/1/infructueux").header("Authorization", tokenPrmp).contentType(JSON).content("{\"motif\":\"x\"}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("DECISION_OBLIGATOIRE"));
+        mvc.perform(post(att + "/lots/1/infructueux").header("Authorization", tokenPrmp).contentType(JSON).content(corps.replace("RELANCE", "AUTRE")))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("SUITE_INVALIDE"));
+        mvc.perform(post(att + "/lots/1/infructueux").header("Authorization", tokenPrmp).contentType(JSON)
+                .content(corps.replace("\"date\":\"" + aujourdhui, "\"date\":\"" + aujourdhui.plusDays(1)))).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("DECISION_DATE_INVALIDE"));
+        mvc.perform(post(att + "/lots/1/infructueux").header("Authorization", tokenPrmp).contentType(JSON).content(corps)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.lots[0].etat").value("INFRUCTUEUX")).andExpect(jsonPath("$.lots[0].infructuosite.suite").value("RELANCE"))
+                .andExpect(jsonPath("$.lots[0].infructuosite.decisionReference").value("DEC-12/2026"));
+        mvc.perform(post(att + "/lots/1/infructueux").header("Authorization", tokenPrmp).contentType(JSON).content(corps))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("DEJA_INFRUCTUEUX"));
+        for (String c : List.of("C900000071", "C900000072")) {
+            assertThat(notificationRepository.findPourRefEtType(c, "CANDIDAT")).extracting(Notification::getTypeNotif)
+                    .contains("PROCEDURE_INFRUCTUEUSE");
+        }
     }
 
     @Test

@@ -1802,6 +1802,39 @@ public class EvaluationService {
 
     // ------------------------------------------------------------------ ⚠️ lot 2 (attribution) : ce que l'attribution lit de l'évaluation
 
+    /**
+     * ⚠️ Lot 2, tranche 2d-1 (Q3) — la reprise de l'évaluation après l'avis défavorable de la Commission : le rapport signé est archivé
+     * dans {@code reprise} (PDF, Word, dates, signatures) puis effacé avec ses signatures ; l'évaluation redevient en cours, la commission
+     * rouvre l'étape de son choix (motif) et produit un nouveau rapport. Les membres de la CAO sont avertis. Sans garde : l'attribution
+     * fait les siennes.
+     */
+    void reprendre(Long idDmc, cnm.prs.entity.AttributionReprise reprise) {
+        Evaluation e = exigerEvaluation(idDmc);
+        cnm.prs.entity.EvaluationRapport r = rapports.findById(idDmc).orElse(null);
+        if (r != null) {
+            reprise.setRapportProduitLe(r.getProduitLe());
+            reprise.setRapportSigneLe(r.getSigneLe());
+            reprise.setRapportPdf(r.getPdf());
+            reprise.setRapportDocx(r.getDocx());
+            reprise.setRapportSignatures(signatures.findByIdDmcOrderByDateAscIdAsc(idDmc).stream()
+                    .map(s -> internes.nomMembre(s.getIm()) + (Boolean.TRUE.equals(s.getEmpechement()) ? " (empêché : " + s.getMotif() + ")"
+                            : " le " + s.getDate().format(HORODATAGE)))
+                    .collect(Collectors.joining(" ; ")));
+            signatures.deleteAll(signatures.findByIdDmcOrderByDateAscIdAsc(idDmc));
+            rapports.delete(r);
+            rapports.flush();
+        }
+        e.setEtat(Evaluation.EN_COURS);
+        evaluations.save(e);
+        tracer(idDmc, "EVALUATION_REPRISE", "Lot " + reprise.getLot() + " : avis défavorable de la Commission sur le dossier de marché n° "
+                + reprise.getIdDossier() + " — " + reprise.getMotif() + ". Le rapport signé est archivé ; l'évaluation reprend.");
+        String titre = "Reprise de l'évaluation";
+        String corps = "La Commission a rendu un avis défavorable sur le marché de la procédure " + idDmc + " (lot " + reprise.getLot()
+                + ") ; la PRMP reprend l'évaluation : " + reprise.getMotif() + ". Le président rouvre l'étape à reprendre, puis un nouveau rapport "
+                + "est produit et signé.";
+        internes.membresCao(idDmc).forEach(k -> internes.notifierMembre(idDmc, k, TypeNotification.EVALUATION_REPRISE, titre, corps));
+    }
+
     /** La garde de lecture de l'évaluation (CAO, responsable, PRMP, UGPM), pour l'attribution. */
     @Transactional(readOnly = true)
     public void controlerLecture(Long idDmc) {

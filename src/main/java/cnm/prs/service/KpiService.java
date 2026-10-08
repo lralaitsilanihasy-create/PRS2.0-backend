@@ -106,6 +106,8 @@ public class KpiService {
     private final cnm.prs.repository.RecuDaoRepository recuRepository;
     /** ⚠️ 2026-10-07 (évaluation des offres, §B7) — les compteurs de l'évaluation (PRMP, membre de la CAO), à la demande. */
     private final org.springframework.beans.factory.ObjectProvider<EvaluationService> evaluation;
+    /** ⚠️ 2d-1 (§B7) — paresseux, comme l'évaluation. */
+    private final org.springframework.beans.factory.ObjectProvider<AttributionService> attribution;
 
     public KpiService(DossierRepository dossierRepository, VerificationRepository verificationRepository,
             ExamenDetailRepository examenDetailRepository, PvExamenRepository pvExamenRepository,
@@ -116,7 +118,9 @@ public class KpiService {
             PrmpEntiteDemandeRepository prmpEntiteDemandeRepository,
             MandatRepository mandatRepository, SessionUtilisateurRepository sessionRepository,
             AFaireService aFaireService, cnm.prs.repository.RecuDaoRepository recuRepository,
-            org.springframework.beans.factory.ObjectProvider<EvaluationService> evaluation) {
+            org.springframework.beans.factory.ObjectProvider<EvaluationService> evaluation,
+            org.springframework.beans.factory.ObjectProvider<AttributionService> attribution) {
+        this.attribution = attribution;
         this.recuRepository = recuRepository;
         this.evaluation = evaluation;
         this.aFaireService = aFaireService;
@@ -197,13 +201,15 @@ public class KpiService {
     public CompteursPrmpDto mesCompteursPrmp() {
         String idPrmp = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
         if (idPrmp == null) {
-            return new CompteursPrmpDto(0, 0, 0, 0, 0, 0, 0, 0);
+            return new CompteursPrmpDto(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         }
         // ⚠️ Décision métier 2026-08-27 — les lettres non lues se comptent par AGENT (login, claim
         // « sub ») et non plus par tutelle : la lecture d'une UGPM ne décrémente plus le badge de sa
         // PRMP. Le périmètre des lettres, lui, reste la tutelle (idPrmp). Login absent → tout non lu.
         String login = CurrentUser.login().filter(s -> !s.isBlank()).orElse("");
         // Demandes décidées (ACCEPTEE/REFUSEE) depuis la dernière consultation de l'écran (sinon tout l'historique).
+        // ⚠️ 2026-10-08 (attribution, 2d-1, §B7) — les compteurs des lots de la PRMP.
+        java.util.Map<String, Long> att = attribution.getObject().compteursPrmp(idPrmp);
         java.time.LocalDateTime seuil = demandeRetraitVueRepository.findByIdPrmp(idPrmp)
                 .map(cnm.prs.entity.DemandeRetraitVue::getDateDerniereVue)
                 .orElse(java.time.LocalDateTime.of(1970, 1, 1, 0, 0));
@@ -216,7 +222,8 @@ public class KpiService {
                 lettreRenvoiRepository.countSigneesNonLuesPourPrmp(idPrmp, login),
                 demandeRetraitRepository.countNouvellesDecisionsPourPrmp(idPrmp, seuil),
                 recuRepository.compterEnAttentePourPrmp(idPrmp),
-                evaluation.getObject().demandesEnAttentePourPrmp(idPrmp));
+                evaluation.getObject().demandesEnAttentePourPrmp(idPrmp),
+                att.get("lotsAAttribuer"), att.get("lotsSignables"), att.get("avisAPublier"), att.get("explicationsSansReponse"));
     }
 
     /**

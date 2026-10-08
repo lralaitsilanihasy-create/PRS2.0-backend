@@ -102,8 +102,12 @@ public class AttributionService {
     private final java.time.Clock horloge;
     // ⚠️ Tranche 2c
     private final AttributionExecutionService execution;
-/** ⚠️ PI-d2b — le sous-type du dossier de marché d'une consultation de prestations intellectuelles. */    public static final String SOUS_TYPE_PI = "MPI";
-/** ⚠️ PI-d2b — les motifs de rejet d'une consultation de prestations intellectuelles (note technique, classement, négociation). */    private final ResultatsPi resultatsPi;
+    /** ⚠️ PI-d2b — le sous-type du dossier de marché d'une consultation de prestations intellectuelles. */
+    public static final String SOUS_TYPE_PI = "MPI";
+    /** ⚠️ PI-d2b — les motifs de rejet d'une consultation de prestations intellectuelles (note technique, classement, négociation). */
+    private final ResultatsPi resultatsPi;
+    /** ⚠️ 2d-1 (Q3) — les reprises de l'évaluation après un avis défavorable. */
+    private final cnm.prs.repository.AttributionRepriseRepository reprises;
 
     public AttributionService(AttributionRepository attributions, EvaluationService evaluation, SeanceService seance, SaisieService saisie,
             ValeursPpmService valeursPpm, FicheMarcheService fiches, EntrepriseCandidatService entreprises, GenerateurDocumentsFiche generateur,
@@ -112,7 +116,9 @@ public class AttributionService {
             DocumentFicheMarcheRepository documentRepository, cnm.prs.repository.AttributionLettreRepository lettres,
             cnm.prs.repository.AttributionExplicationRepository explications, cnm.prs.repository.CompteCandidatRepository candidats,
             cnm.prs.repository.PrmpRepository prmpRepository, NotificationService notifications, CeremonieService ceremonies,
-            ParametreService parametres, java.time.Clock horloge, AttributionExecutionService execution, ResultatsPi resultatsPi) {
+            ParametreService parametres, java.time.Clock horloge, AttributionExecutionService execution, ResultatsPi resultatsPi,
+            cnm.prs.repository.AttributionRepriseRepository reprises) {
+        this.reprises = reprises;
         this.resultatsPi = resultatsPi;
         this.execution = execution;
         this.attributions = attributions;
@@ -153,7 +159,7 @@ public class AttributionService {
         for (EvaluationDto.Lot l : ev.lots()) {
             if (!Evaluation.CLOSE.equals(ev.etat())) {
                 lots.add(new AttributionDto.LotAttribution(l.lot(), EN_EVALUATION, null, null, false, null, null, null, List.of(), null, List.of(),
-                        null, null, null, null, null, null));
+                        null, null, null, null, null, null, null, reprises(idDmc, l.lot())));
                 continue;
             }
             Attribution a = attributions.findById(new Attribution.Cle(idDmc, l.lot())).orElse(null);
@@ -166,11 +172,14 @@ public class AttributionService {
             // ⚠️ Tranche 2c — la suite du lot : signé, notifié, avis publié, ou retiré.
             AttributionExecutionService.Suite s = a == null ? AttributionExecutionService.Suite.VIDE : execution.suite(a);
             if (a != null) {
-                etat = AttributionExecutionService.etat(a, etat);
+                etat = a.getInfructueuxLe() != null ? Attribution.INFRUCTUEUX : AttributionExecutionService.etat(a, etat);
             }
             lots.add(new AttributionDto.LotAttribution(l.lot(), etat, l.proposition(), dm, a != null && a.getProjetPdf() != null,
                     a == null ? null : attributaire(a), a == null ? null : information(a), delai, explicationsDto(idDmc, l.lot()), s.miseAuPoint(),
-                    s.recours(), s.signature(), s.enregistrement(), s.notification(), s.avis(), s.pieces(), s.retrait()));
+                    s.recours(), s.signature(), s.enregistrement(), s.notification(), s.avis(), s.pieces(), s.retrait(),
+                    a == null || a.getInfructueuxLe() == null ? null : new AttributionDto.Infructuosite(a.getInfructueuxLe(), a.getInfructueuxPar(),
+                            a.getMotifInfructuosite(), a.getDecisionReference(), a.getDecisionDate(), a.getSuite()),
+                    reprises(idDmc, l.lot())));
         }
         return new AttributionDto(idDmc, lots);
     }
@@ -348,11 +357,240 @@ public class AttributionService {
     /** Les résultats publiés d'une procédure (page publique), lot par lot, après l'information. */
     @Transactional(readOnly = true)
     public List<AttributionDto.ResultatPublic> resultatsPublics(Long idDmc) {
-        return attributions.findByIdDmcOrderByLotAsc(idDmc).stream().filter(a -> a.getInformeLe() != null).map(a -> {
+        // ⚠️ 2d-1 (§B6) — un lot déclaré infructueux s'affiche aussi, avec son motif.
+        return attributions.findByIdDmcOrderByLotAsc(idDmc).stream().filter(a -> a.getInformeLe() != null || a.getInfructueuxLe() != null).map(a -> {
+            if (a.getInfructueuxLe() != null) {
+                return new AttributionDto.ResultatPublic(a.getLot(), null, null, null, null, null, false, true, a.getMotifInfructuosite(),
+                        a.getDecisionDate());
+            }
             Offre o = offres.findById(a.getIdOffreAttribuee()).orElse(null);
             return new AttributionDto.ResultatPublic(a.getLot(), o == null ? null : o.getRaisonSociale(), a.getMontant(), a.getInformeLe(),
-                    a.getDateAffichage(), a.getDatePublicationAvis(), a.getAvisPublieLe() != null);
+                    a.getDateAffichage(), a.getDatePublicationAvis(), a.getAvisPublieLe() != null, false, null, null);
         }).toList();
+    }
+
+    // ------------------------------------------------------------------ ⚠️ tranche 2d-1, §B6 l'infructuosité (art. 56), Q3 la reprise
+
+    /** Les suites qu'une déclaration d'infructuosité peut annoncer (déclarées, pas conduites ici). */
+    static final java.util.Set<String> SUITES = java.util.Set.of("RELANCE", "RESTREINTE", "NEGOCIEE");
+
+    /**
+     * La PRMP déclare le lot infructueux, sur sa décision formelle : pour un lot que le rapport propose infructueux, ou après l'avis
+     * défavorable de la Commission sur le dossier de marché (Q3) ; jamais après l'attribution (art. 56-VI). 400
+     * {@code MOTIF_OBLIGATOIRE}, {@code DECISION_OBLIGATOIRE}, {@code DECISION_DATE_INVALIDE}, {@code SUITE_INVALIDE} ; 409
+     * {@code EVALUATION_NON_CLOSE}, {@code DEJA_ATTRIBUE}, {@code DEJA_INFRUCTUEUX}, {@code INFRUCTUOSITE_NON_PROPOSEE}. Tous les
+     * candidats du lot sont notifiés ; le lot s'affiche infructueux sur la page publique des résultats.
+     */
+    public AttributionDto declarerInfructueux(Long idDmc, Integer lot, AttributionDto.InfructuositeRequest r) {
+        exigerPrmpSeule(idDmc, "Le lot se déclare infructueux par la PRMP de la fiche (art. 56).");
+        EvaluationDto ev = evaluation.vueSansGarde(idDmc)
+                .orElseThrow(() -> new ResourceNotFoundException("L'évaluation de cette procédure n'est pas ouverte."));
+        if (!Evaluation.CLOSE.equals(ev.etat())) {
+            throw new BusinessRuleException("L'infructuosité se déclare après le rapport d'évaluation signé.", "EVALUATION_NON_CLOSE");
+        }
+        EvaluationDto.Lot l = ev.lots().stream().filter(x -> Objects.equals(x.lot(), lot)).findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException("Lot introuvable dans l'évaluation : " + lot + "."));
+        Attribution a = attributions.findById(new Attribution.Cle(idDmc, lot)).orElse(null);
+        if (a != null && a.getInfructueuxLe() != null) {
+            throw new BusinessRuleException("Ce lot est déjà déclaré infructueux.", "DEJA_INFRUCTUEUX");
+        }
+        if (a != null && a.getAttribueLe() != null) {
+            throw new BusinessRuleException("Le lot est attribué : l'infructuosité ne peut en aucun cas intervenir après la décision d'attribution "
+                    + "(art. 56-VI).", "DEJA_ATTRIBUE");
+        }
+        boolean propose = l.proposition() != null && l.proposition().infructueux();
+        AttributionDto.DossierMarche dm = a == null || a.getIdDossier() == null ? null : dossierMarche(a);
+        boolean defavorable = dm != null && AVIS_DEFAVORABLE.equals(dm.avis());
+        if (!propose && !defavorable) {
+            throw new BusinessRuleException("L'infructuosité se déclare pour un lot que le rapport propose infructueux, ou après l'avis défavorable "
+                    + "de la Commission sur le dossier de marché.", "INFRUCTUOSITE_NON_PROPOSEE");
+        }
+        String motif = r == null ? null : nettoyer(r.motif());
+        if (motif == null) {
+            throw new BadRequestException("La déclaration d'infructuosité se motive.", "MOTIF_OBLIGATOIRE");
+        }
+        String reference = r.decision() == null ? null : nettoyer(r.decision().reference());
+        if (reference == null || r.decision().date() == null) {
+            throw new BadRequestException("La décision de la PRMP (référence et date) est attendue.", "DECISION_OBLIGATOIRE");
+        }
+        if (r.decision().date().isAfter(maintenant().toLocalDate())) {
+            throw new BadRequestException("La date de la décision ne peut pas être à venir.", "DECISION_DATE_INVALIDE");
+        }
+        String suite = r.suite() == null || r.suite().isBlank() ? null : r.suite().trim().toUpperCase(Locale.ROOT);
+        if (suite != null && !SUITES.contains(suite)) {
+            throw new BadRequestException("La suite déclarée est RELANCE, RESTREINTE ou NEGOCIEE.", "SUITE_INVALIDE");
+        }
+        if (a == null) {
+            a = new Attribution();
+            a.setIdDmc(idDmc);
+            a.setLot(lot);
+        }
+        a.setEtat(Attribution.INFRUCTUEUX);
+        a.setInfructueuxLe(maintenant());
+        a.setInfructueuxPar(acteur());
+        a.setMotifInfructuosite(motif);
+        a.setDecisionReference(reference);
+        a.setDecisionDate(r.decision().date());
+        a.setSuite(suite);
+        attributions.save(a);
+        Entete entete = entete(idDmc, fiches.etatValide(idDmc).orElse(null), lot, ev.lots().size() > 1);
+        java.util.Set<String> avertis = new java.util.HashSet<>();
+        for (Offre o : offres.findByIdDmcOrderByNumeroAscDateCreationAsc(idDmc)) {
+            boolean duLot = Objects.equals(o.getLot(), lot) || (o.getLot() == null && ev.lots().size() == 1);
+            if (!duLot || o.getDateDepot() == null || Offre.RETIREE.equals(o.getEtat()) || !avertis.add(o.getIdCandidat())) {
+                continue;
+            }
+            CompteCandidat c = candidats.findById(o.getIdCandidat()).orElse(null);
+            notifications.emettreCandidat(TypeNotification.PROCEDURE_INFRUCTUEUSE, o.getIdCandidat(), c == null ? null : c.getEmail(),
+                    idDmc.intValue(), TypeObjet.PROCEDURE, "Procédure déclarée infructueuse", "La procédure « " + entete.objet() + " »"
+                            + entete.surLot() + " est déclarée infructueuse par décision n° " + reference + " du " + r.decision().date().format(JOUR)
+                            + " : " + motif + (suite == null ? "" : " Suite annoncée : " + suite.toLowerCase(Locale.FRENCH) + ".") );
+        }
+        evaluation.tracerAttribution(idDmc, "INFRUCTUEUX", "Lot " + lot + " déclaré infructueux (décision n° " + reference + " du "
+                + r.decision().date().format(JOUR) + ", " + (defavorable ? "après l'avis défavorable de la Commission" : "proposé par le rapport")
+                + ") : " + motif + " ; " + avertis.size() + " candidat(s) notifié(s)");
+        return lire(idDmc);
+    }
+
+    /**
+     * Q3 — après l'avis défavorable de la Commission sur le dossier de marché, la PRMP reprend l'évaluation (motif) : le rapport signé est
+     * archivé, l'évaluation redevient en cours, la commission rouvre l'étape de son choix et produit un nouveau rapport, puis un nouveau
+     * dossier de marché se crée pour le lot. 400 {@code MOTIF_OBLIGATOIRE} ; 409 {@code EVALUATION_NON_CLOSE}, {@code AVIS_NON_DEFAVORABLE},
+     * {@code DEJA_INFRUCTUEUX}, {@code AUTRES_LOTS_ATTRIBUES} ({@code details.lots} : un autre lot déjà attribué empêche de rouvrir
+     * l'évaluation commune).
+     */
+    public AttributionDto reprendre(Long idDmc, Integer lot, AttributionDto.RepriseRequest r) {
+        exigerPrmpSeule(idDmc, "L'évaluation se reprend sur décision de la PRMP de la fiche.");
+        EvaluationDto ev = evaluation.vueSansGarde(idDmc)
+                .orElseThrow(() -> new ResourceNotFoundException("L'évaluation de cette procédure n'est pas ouverte."));
+        if (!Evaluation.CLOSE.equals(ev.etat())) {
+            throw new BusinessRuleException("L'évaluation n'est pas close : elle est déjà en cours.", "EVALUATION_NON_CLOSE");
+        }
+        Attribution a = attributions.findById(new Attribution.Cle(idDmc, lot)).orElse(null);
+        if (a != null && a.getInfructueuxLe() != null) {
+            throw new BusinessRuleException("Ce lot est déclaré infructueux.", "DEJA_INFRUCTUEUX");
+        }
+        AttributionDto.DossierMarche dm = a == null || a.getIdDossier() == null ? null : dossierMarche(a);
+        if (dm == null || !AVIS_DEFAVORABLE.equals(dm.avis())) {
+            throw new BusinessRuleException("L'évaluation se reprend après l'avis défavorable de la Commission sur le dossier de marché.",
+                    "AVIS_NON_DEFAVORABLE");
+        }
+        List<Integer> engages = attributions.findByIdDmcOrderByLotAsc(idDmc).stream()
+                .filter(x -> !Objects.equals(x.getLot(), lot) && x.getAttribueLe() != null).map(Attribution::getLot).toList();
+        if (!engages.isEmpty()) {
+            throw new BusinessRuleException("D'autres lots sont déjà attribués : l'évaluation, commune aux lots, ne se rouvre plus.",
+                    "AUTRES_LOTS_ATTRIBUES", null, Map.of("lots", engages));
+        }
+        String motif = r == null ? null : nettoyer(r.motif());
+        if (motif == null) {
+            throw new BadRequestException("La reprise de l'évaluation se motive.", "MOTIF_OBLIGATOIRE");
+        }
+        cnm.prs.entity.AttributionReprise x = new cnm.prs.entity.AttributionReprise();
+        x.setIdDmc(idDmc);
+        x.setLot(lot);
+        x.setIdDossier(a.getIdDossier());
+        x.setIdOffreProposee(a.getIdOffreProposee());
+        x.setAvis(dm.avis());
+        x.setMotif(motif);
+        x.setLe(maintenant());
+        x.setPar(acteur());
+        evaluation.reprendre(idDmc, x);
+        reprises.save(x);
+        attributions.delete(a);
+        evaluation.tracerAttribution(idDmc, "REPRISE", "Lot " + lot + " : le dossier de marché n° " + dm.idDossier() + " (avis défavorable) est "
+                + "clos pour l'attribution ; l'évaluation reprend — " + motif);
+        return lire(idDmc);
+    }
+
+    /** Le rapport archivé d'une reprise (PDF, ou Word) : CAO, responsable, PRMP, UGPM ; 404 sans lui. */
+    @Transactional(readOnly = true)
+    public byte[] rapportArchive(Long idDmc, Long idReprise, boolean docx) {
+        evaluation.controlerLecture(idDmc);
+        cnm.prs.entity.AttributionReprise x = reprises.findById(idReprise).filter(y -> y.getIdDmc().equals(idDmc))
+                .orElseThrow(() -> new ResourceNotFoundException("Reprise introuvable : " + idReprise + "."));
+        byte[] b = docx ? x.getRapportDocx() : x.getRapportPdf();
+        if (b == null) {
+            throw new ResourceNotFoundException("Aucun rapport n'est archivé pour cette reprise.");
+        }
+        return b;
+    }
+
+    private List<AttributionDto.Reprise> reprises(Long idDmc, Integer lot) {
+        return reprises.findByIdDmcAndLotOrderByIdAsc(idDmc, lot).stream().map(x -> new AttributionDto.Reprise(x.getId(), x.getLe(), x.getPar(),
+                x.getMotif(), x.getIdDossier(), x.getAvis(), x.getRapportPdf() != null)).toList();
+    }
+
+    // ------------------------------------------------------------------ ⚠️ tranche 2d-1, §B7 compteurs et alertes de la PRMP
+
+    /**
+     * Les compteurs de la PRMP sur ses lots : {@code lotsAAttribuer} (avis favorable rendu, non attribués), {@code lotsSignables} (délai
+     * d'attente écoulé, non signés), {@code avisAPublier} (marchés notifiés sans avis d'attribution publié), {@code explicationsSansReponse}.
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Long> compteursPrmp(String idPrmp) {
+        long aAttribuer = 0;
+        long signables = 0;
+        long avis = 0;
+        long explicationsOuvertes = 0;
+        if (idPrmp != null && !idPrmp.isBlank()) {
+            for (Attribution a : attributions.pourPrmp(idPrmp)) {
+                if (a.getInfructueuxLe() != null || a.getRetireLe() != null) {
+                    continue;
+                }
+                if (a.getAttribueLe() == null && a.getIdDossier() != null) {
+                    AttributionDto.DossierMarche dm = dossierMarche(a);
+                    if (dm != null && dm.avis() != null && !AVIS_DEFAVORABLE.equals(dm.avis())) {
+                        aAttribuer++;
+                    }
+                }
+                AttributionDto.DelaiAttente d = delaiAttente(a);
+                if (a.getSigneLe() == null && d != null && d.ecoule()) {
+                    signables++;
+                }
+                if (a.getNotifieLe() != null && a.getAvisPublieLe() == null) {
+                    avis++;
+                }
+                explicationsOuvertes += explications.findByIdDmcAndLotOrderByDemandeeLeAscIdAsc(a.getIdDmc(), a.getLot()).stream()
+                        .filter(e -> e.getReponduLe() == null).count();
+            }
+        }
+        return Map.of("lotsAAttribuer", aAttribuer, "lotsSignables", signables, "avisAPublier", avis, "explicationsSansReponse",
+                explicationsOuvertes);
+    }
+
+    /**
+     * Les alertes de la PRMP (§B7), une fois chacune : le délai d'attente écoulé ({@code DELAI_ATTENTE_ECOULE}), l'avis d'attribution
+     * à publier sous 5 jours ({@code ECHEANCE_AVIS_ATTRIBUTION}), un réexamen à 2 jours de son échéance ({@code ECHEANCE_REEXAMEN}).
+     * Le nombre d'alertes émises.
+     */
+    public int alerter() {
+        int n = 0;
+        LocalDate aujourdhui = maintenant().toLocalDate();
+        for (Attribution a : attributions.findByInformeLeIsNotNullAndSigneLeIsNullAndRetireLeIsNullAndAlerteDelaiLeIsNull()) {
+            AttributionDto.DelaiAttente d = delaiAttente(a);
+            if (d == null || !d.ecoule()) {
+                continue;
+            }
+            ceremonies.notifierPrmp(a.getIdDmc(), TypeNotification.DELAI_ATTENTE_ECOULE, "Délai d'attente écoulé", "Procédure " + a.getIdDmc()
+                    + ", lot " + a.getLot() + " : le délai d'attente est écoulé depuis le " + d.fin().format(JOUR) + " ; le marché peut être signé "
+                    + "(hors recours suspensif et pièces de l'attributaire).");
+            a.setAlerteDelaiLe(maintenant());
+            attributions.save(a);
+            n++;
+        }
+        for (Attribution a : attributions.findByNotifieLeIsNotNullAndAvisPublieLeIsNullAndAlerteAvisLeIsNull()) {
+            LocalDate echeance = a.getDateNotification().plusDays(AttributionExecutionService.JOURS_AVIS);
+            if (aujourdhui.isBefore(echeance.minusDays(5))) {
+                continue;
+            }
+            ceremonies.notifierPrmp(a.getIdDmc(), TypeNotification.ECHEANCE_AVIS_ATTRIBUTION, "Avis d'attribution à publier", "Procédure "
+                    + a.getIdDmc() + ", lot " + a.getLot() + " : l'avis d'attribution est à publier au plus tard le " + echeance.format(JOUR)
+                    + " (art. 53).");
+            a.setAlerteAvisLe(maintenant());
+            attributions.save(a);
+            n++;
+        }
+        return n + execution.alerterReexamens(aujourdhui);
     }
 
     // ------------------------------------------------------------------ ⚠️ tranche 2b, §B4.2 les demandes d'explication (art. 52-II)

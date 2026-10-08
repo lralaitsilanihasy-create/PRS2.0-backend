@@ -7525,6 +7525,39 @@ l'attribution (`…/attribution/**`) du lot 1 et du lot 2 servent une fiche PI.
   tranche 2d du lot 2, commune aux deux évaluations.
 
 
+### L'attribution, lot 2, tranche 2d-1 : infructuosité, reprise après avis défavorable, alertes et compteurs — V91 ⚠️ 2026-10-08
+
+Demande front `demande-backend-2026-10-07-attribution-notification.md` (§B6 infructuosité, Q3, §B7). Arbitrages du pilote : **Q3** après un
+avis défavorable de la Commission sur le dossier de marché, la PRMP choisit, avec un motif, entre la **reprise de l'évaluation** —
+rouverte en entier, rapport signé archivé (arbitrage du 08/10) — et l'**infructuosité** ; jamais d'infructuosité après l'attribution
+(art. 56-VI). Découpage du 08/10 : **2d-1** (ici), **2d-2** réattribution après retrait (Q8), **2d-3** sans suite par un dossier dans le
+circuit de la Commission (Q10). Migration **V91**. Aucune dépendance ajoutée.
+
+| Méthode | URL | Corps | Statuts | Accès |
+|---|---|---|---|---|
+| POST | /api/fiches-marche/{idDmc}/attribution/lots/{lot}/infructueux | `{ motif, decision{ reference, date }, suite? }` | 400 `MOTIF_OBLIGATOIRE`, `DECISION_OBLIGATOIRE`, `DECISION_DATE_INVALIDE` (à venir), `SUITE_INVALIDE` ; 403 ; 404 ; 409 `EVALUATION_NON_CLOSE`, `DEJA_ATTRIBUE`, `DEJA_INFRUCTUEUX`, `INFRUCTUOSITE_NON_PROPOSEE` | PRMP seule |
+| POST | …/attribution/lots/{lot}/reprendre | `{ motif }` | 400 `MOTIF_OBLIGATOIRE` ; 403 ; 409 `EVALUATION_NON_CLOSE`, `AVIS_NON_DEFAVORABLE`, `DEJA_INFRUCTUEUX`, `AUTRES_LOTS_ATTRIBUES` (`details.lots`) | PRMP seule |
+| GET | …/attribution/reprises/{id}/rapport[?format=docx] | → le rapport archivé | 404 | CAO, responsable, PRMP, UGPM |
+
+- **L'infructuosité** se déclare pour un lot que le rapport propose infructueux (`proposition.infructueux`), ou dont le dossier de
+  marché a reçu l'avis **défavorable** (`DEF`) ; jamais une fois le lot attribué. `suite` ∈ `RELANCE`, `RESTREINTE`, `NEGOCIEE`
+  (déclarée, pas conduite ici). Le lot passe **`INFRUCTUEUX`** ; `lots[].infructuosite` = `{ le, par, motif, decisionReference,
+  decisionDate, suite }`. Chaque candidat du lot (offre déposée, non retirée) reçoit `PROCEDURE_INFRUCTUEUSE` ; la page publique des
+  résultats (`GET /api/procedures-en-ligne/{idDmc}/resultats`) affiche le lot avec `infructueux`, `motifInfructuosite`,
+  `dateDecision` (attributaire et montant nuls). Journal `INFRUCTUEUX`.
+- **La reprise** (Q3) : le rapport signé et ses signatures sont **archivés** dans `lots[].reprises[{ id, le, par, motif, idDossier,
+  avis, rapportDisponible }]` puis effacés ; l'évaluation redevient **`EN_COURS`** (le lot `EN_EVALUATION`) ; le président rouvre
+  l'étape de son choix (lot 1 : `…/etapes/{etape}/rouvrir` ; PI : les réouvertures gardent leurs propres verrous, voir PI-c et PI-d2a) ;
+  un nouveau rapport se produit et se signe ; le lot repart `PROPOSE` et un **nouveau dossier de marché** se crée. Le dossier refusé
+  reste au circuit avec son PV. Membres de la CAO notifiés (`EVALUATION_REPRISE`) ; journaux `EVALUATION_REPRISE`, `REPRISE`. Refusée si
+  un autre lot de la procédure est déjà attribué (l'évaluation est commune aux lots).
+- **Alertes à la PRMP** (planificateur horaire `app.attribution.cron-alertes`, une fois chacune) : `DELAI_ATTENTE_ECOULE` (délai
+  d'attente écoulé, marché non signé), `ECHEANCE_AVIS_ATTRIBUTION` (avis d'attribution à publier, à 5 jours de l'échéance de 30 jours
+  après la notification), `ECHEANCE_REEXAMEN` (demande de réexamen sans réponse, à 2 jours de son échéance de 10 jours).
+- **Compteurs PRMP** (`GET /api/kpis/badges`, `compteurs`) : `lotsAAttribuer` (avis favorable rendu, non attribués), `lotsSignables`
+  (délai écoulé, non signés), `avisAPublier` (notifiés sans avis publié), `explicationsSansReponse`.
+
+
 ### Le rabais structuré de l'offre en ligne ⚠️ 2026-10-07
 
 Demande front `demande-backend-2026-10-07-rabais-structure.md` (arbitrage Q4 du pilote : « le rabais est structuré au dépôt »). Aucune

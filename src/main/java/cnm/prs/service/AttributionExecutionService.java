@@ -620,6 +620,26 @@ public class AttributionExecutionService {
                 "Procédure " + a.getIdDmc() + (allotie ? ", lot " + a.getLot() : "") + " — avis d'attribution (modèle provisoire)");
     }
 
+    // ------------------------------------------------------------------ ⚠️ tranche 2d-1, §B7 l'alerte des réexamens
+
+    /** Un réexamen sans réponse, à 2 jours de son échéance (10 jours) : la PRMP est alertée, une fois. Le nombre d'alertes émises. */
+    int alerterReexamens(LocalDate aujourdhui) {
+        int n = 0;
+        for (AttributionRecours r : recoursRepository.findByTypeAndDecideLeIsNullAndAlerteLeIsNull(AttributionRecours.REEXAMEN)) {
+            LocalDate echeance = r.getDateReception().plusDays(JOURS_REEXAMEN);
+            if (aujourdhui.isBefore(echeance.minusDays(2))) {
+                continue;
+            }
+            ceremonies.notifierPrmp(r.getIdDmc(), TypeNotification.ECHEANCE_REEXAMEN, "Réexamen à répondre", "Procédure " + r.getIdDmc() + ", lot "
+                    + r.getLot() + " : la demande de réexamen de « " + r.getRequerant() + " » attend votre réponse au plus tard le "
+                    + echeance.format(JOUR) + " (art. 79).");
+            r.setAlerteLe(LocalDateTime.now(horloge).withNano(0));
+            recoursRepository.save(r);
+            n++;
+        }
+        return n;
+    }
+
     // ------------------------------------------------------------------ fichiers
 
     /** Un fichier de l'attribution : lecteurs de l'attribution ; 404 inconnu de la procédure. */
