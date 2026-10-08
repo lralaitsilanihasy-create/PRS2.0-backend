@@ -196,5 +196,7 @@ public enum TypeNotification {
     /** ⚠️ 2026-10-07 (AMI en ligne, tranche AMI-b, Q5) — le résultat de la présélection : vers chaque candidat (retenu, ou non retenu et son motif). */
     AMI_RESULTAT,
     /** ⚠️ 2026-10-07 (AMI-b, §B4) — la lettre d'invitation à remettre une proposition : vers chaque candidat de la liste restreinte. */
-    LETTRE_INVITATION
+    LETTRE_INVITATION,
+    /** ⚠️ 2026-10-08 (lot 3 PI, PI-d1, §B3) — la seconde séance est ouverte : vers chaque candidat dont l'enveloppe financière s'ouvre (invité à y assister). */
+    SEANCE_FINANCIERE
 }

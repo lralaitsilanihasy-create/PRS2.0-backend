@@ -11,6 +11,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -78,12 +79,13 @@ public class EvaluationTechniqueService {
     private final FicheMarcheService fiches;
     private final SousCriteresFiche sousCriteres;
     private final ParametreService parametres;
+    private final cnm.prs.repository.SeanceFinanciereRepository financieres;
     private final Clock horloge;
 
     public EvaluationTechniqueService(EvaluationService evaluation, EvaluationRepository evaluations, EvaluationDeclarationRepository declarations,
             EvaluationNoteTechniqueRepository notes, EvaluationTechniqueRepository etapes, EvaluationJournalRepository journal,
             CaoMembreRepository caoMembres, ParametresInternesService internes, FicheMarcheService fiches, SousCriteresFiche sousCriteres,
-            ParametreService parametres, Clock horloge) {
+            ParametreService parametres, cnm.prs.repository.SeanceFinanciereRepository financieres, Clock horloge) {
         this.evaluation = evaluation;
         this.evaluations = evaluations;
         this.declarations = declarations;
@@ -95,6 +97,7 @@ public class EvaluationTechniqueService {
         this.fiches = fiches;
         this.sousCriteres = sousCriteres;
         this.parametres = parametres;
+        this.financieres = financieres;
         this.horloge = horloge;
     }
 
@@ -210,6 +213,10 @@ public class EvaluationTechniqueService {
         if (r == null || r.motif() == null || r.motif().isBlank()) {
             throw new BadRequestException("La réouverture exige son motif.", "MOTIF_OBLIGATOIRE");
         }
+        // ⚠️ PI-d1 — les montants connus, les notes techniques ne se reprennent plus.
+        if (financieres.existsById(idDmc)) {
+            throw new BusinessRuleException("La seconde séance est ouverte : l'évaluation technique ne se rouvre plus.", "SEANCE_FINANCIERE_OUVERTE");
+        }
         EvaluationTechnique e = etapes.findById(new EvaluationTechnique.Cle(idDmc, lot)).filter(x -> x.getArreteeLe() != null)
                 .orElseThrow(() -> new BusinessRuleException("L'étape technique de ce lot n'est pas arrêtée.", "TECHNIQUE_NON_ARRETEE"));
         e.setArreteeLe(null);
@@ -229,6 +236,19 @@ public class EvaluationTechniqueService {
         TechniqueDto d = dto(idDmc, contexte(idDmc));
         return d.lots().stream().filter(l -> Objects.equals(l.lot(), lot) && l.arret() != null && l.arret().le() != null)
                 .flatMap(l -> l.offres().stream()).filter(o -> QUALIFIEE.equals(o.statut())).map(TechniqueDto.Offre::idOffre).toList();
+    }
+
+    /** ⚠️ PI-d1 — les résultats techniques, sans garde : la seconde séance les lit. */
+    @Transactional(readOnly = true)
+    public TechniqueDto resultats(Long idDmc) {
+        return dto(idDmc, contexte(idDmc));
+    }
+
+    /** ⚠️ PI-d1 — les mêmes résultats, vides hors PI ou tant que l'évaluation n'est pas ouverte (sans exception). */
+    @Transactional(readOnly = true)
+    public Optional<TechniqueDto> resultatsSiNotes(Long idDmc) {
+        boolean pi = fiches.etatValide(idDmc).map(v -> ModelesDao.sigleLettre(v.categorie()) != null).orElse(false);
+        return pi && evaluation.vueSansGarde(idDmc).isPresent() ? Optional.of(dto(idDmc, contexte(idDmc))) : Optional.empty();
     }
 
     // ------------------------------------------------------------------ la grille et la vue

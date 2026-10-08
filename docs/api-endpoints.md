@@ -7399,6 +7399,42 @@ président, précisions) ; les étapes suivantes du lot 1 (montant, anormales, p
 - **Journal** : `NOTE_TECHNIQUE`, `TECHNIQUE_ARRETEE`, `TECHNIQUE_ROUVERTE`. Les grilles individuelles entreront au rapport avec la
   tranche PI-d (rapport adapté).
 
+### L'évaluation des prestations intellectuelles, lot 3, tranche PI-d1 : la seconde séance d'ouverture — V88 ⚠️ 2026-10-08
+
+Demande front `demande-backend-2026-10-07-evaluation-pi.md` (§B3, seconde séance ; arbitrage du pilote **Q1**). Migration **V88**
+(`t_seance_financiere`, une ligne par procédure). Aucune dépendance ajoutée. Même accès que la première séance (`/seance/**`).
+
+| Méthode | URL | Corps | Statuts | Accès |
+|---|---|---|---|---|
+| GET | /api/fiches-marche/{idDmc}/seance/financiere | → `SeanceFinanciereDto` | 404 (pas encore ouverte) | CAO, responsable, PRMP, UGPM |
+| POST | …/seance/financiere/ouvrir | — | 403 ; 409 `CATEGORIE_SANS_NOTATION_TECHNIQUE`, `SEANCE_TECHNIQUE_NON_CLOSE`, `TECHNIQUE_NON_ARRETEE` (`details.lots`), `AUCUNE_FINANCIERE_A_OUVRIR`, `SEANCE_FINANCIERE_OUVERTE` | responsable de la procédure |
+| GET | …/seance/financiere/mes-parts[?role=SECOURS] | → `[{ idOffre, empreinteCle, part }]` | 409 `SEANCE_NON_OUVERTE` | membre détenteur ; responsable pour le secours |
+| POST | …/seance/financiere/parts[?role=SECOURS] | `{ parts[{ idOffre, partClaire }], motif? }` | 400 `MOTIF_ABSENT` (secours) ; 409 `SEANCE_NON_OUVERTE`, `CLE_ABSENTE`, `PARTS_INCOMPLETES` (`details.offres`), `PART_INVALIDE` | détenteur |
+| POST | …/seance/financiere/cloturer | `{ presents[], autres[{ nom, qualite }], observations }` | 400 `MEMBRE_INCONNU` ; 403 ; 409 `SEANCE_NON_DECHIFFREE`, `SEANCE_CLOSE` | responsable |
+| GET | …/seance/financiere/pv[?format=docx] | → PDF (ou Word) | 404 tant que non produit | CAO, responsable, PRMP, UGPM |
+
+- **`SeanceFinanciereDto`** : `{ idDmc, etat (OUVERTE → DECHIFFREE → CLOSE), methode, quorum, aOuvrir[{ idOffre, numero, raisonSociale,
+  lot, noteTechnique, rangTechnique, partsRecues, integrite, acteEngagement }], nonOuvertes[{ numero, raisonSociale, lot, motif }],
+  presents[], autres[], secoursEmploye, ouverteLe, dechiffreeLe, closeLe, pvDisponible }`. `acteEngagement` (montants HT/TTC, monnaie)
+  est nul tant que l'enveloppe n'est pas ouverte.
+- **L'ouverture** exige la première séance **close** et l'évaluation technique **arrêtée sur chaque lot** (PI-c). Sont à ouvrir les
+  enveloppes **financières** déposées des propositions `QUALIFIEE` (même entreprise, même lot) ; en méthode « Qualité technique
+  exclusivement » ou « Qualification du consultant » (`B02-MS-01`), celle du **seul premier rang** (Q1). Les autres figurent dans
+  `nonOuvertes` avec leur motif (éliminée, ou classée au rang n) et restent `DEPOSEE`, **scellées** (leur sort, Q2, attend le juriste).
+- **Avertis** à l'ouverture : les membres de la CAO (`PARTS_ATTENDUES`), et les candidats dont l'enveloppe s'ouvre
+  (`SEANCE_FINANCIERE`, invitation à assister). Les autres ne reçoivent rien à ce stade.
+- **Les parts** : chaque détenteur apporte en une fois les parts de **toutes** les enveloppes à ouvrir, déchiffrées avec **les mêmes
+  clés** de la cérémonie (les parts sont propres à chaque enveloppe ; celles de la première séance ne servent pas). La part de secours
+  exige un motif, imprimé au PV. Au **quorum**, toutes s'ouvrent ensemble (même déchiffrement et même contrôle d'intégrité que la
+  première séance ; la lecture porte l'acte d'engagement) ; les parts claires sont alors oubliées (mémoire seule).
+- **La clôture** produit le **PV d'ouverture des propositions financières** (PDF et Word) : présents, part de secours et son motif,
+  pour chaque proposition ouverte sa note technique, son rang, ses montants HT/TTC et son intégrité ; les propositions non ouvertes et
+  leur motif ; les observations.
+- **Effet sur PI-c** : une fois la seconde séance ouverte, l'évaluation technique ne se rouvre plus (409 `SEANCE_FINANCIERE_OUVERTE`).
+- **Journal** : `SEANCE_FINANCIERE`, `PARTS_FINANCIERES`, `SEANCE_FINANCIERE_DECHIFFREE`, `SEANCE_FINANCIERE_CLOSE`. L'évaluation
+  financière et le classement selon la méthode suivent en PI-d2.
+
+
 ### Le rabais structuré de l'offre en ligne ⚠️ 2026-10-07
 
 Demande front `demande-backend-2026-10-07-rabais-structure.md` (arbitrage Q4 du pilote : « le rabais est structuré au dépôt »). Aucune

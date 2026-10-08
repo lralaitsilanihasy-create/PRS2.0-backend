@@ -306,6 +306,60 @@ class PiConsultationIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(post(tech + "/lots/1/rouvrir").header("Authorization", m1).contentType(JSON).content("{}")).andExpect(status().isBadRequest());
         mvc.perform(post(tech + "/lots/1/rouvrir").header("Authorization", m1).contentType(JSON).content("{\"motif\":\"Erreur de saisie\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.lots[0].offres[0].statut").value("EN_COURS"));
+
+        // ⚠️ PI-d1 — la seconde séance : pas avant l'arrêt ; seule l'enveloppe financière de la qualifiée s'ouvre, celle de l'éliminée
+        // reste scellée et nommée ; la qualifiée est invitée ; l'évaluation technique ne se rouvre plus.
+        String tokenVer = bearer("CTRVER", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER", "ANT");
+        String fa = propositionFinanciere(a);
+        propositionFinanciere(b);
+        String sf = "/api/fiches-marche/" + idDmc + "/seance/financiere";
+        mvc.perform(post(sf + "/ouvrir").header("Authorization", tokenVer)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("TECHNIQUE_NON_ARRETEE")).andExpect(jsonPath("$.details.lots[0]").value(1));
+        mvc.perform(post(tech + "/lots/1/arreter").header("Authorization", m1).contentType(JSON).content("{}")).andExpect(status().isOk());
+        mvc.perform(get(sf).header("Authorization", tokenPrmp)).andExpect(status().isNotFound());
+        mvc.perform(post(sf + "/ouvrir").header("Authorization", m1)).andExpect(status().isForbidden());
+        String ouverte = mvc.perform(post(sf + "/ouvrir").header("Authorization", tokenVer)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<String>read(ouverte, "$.etat")).isEqualTo("OUVERTE");
+        assertThat(JsonPath.<String>read(ouverte, "$.methode")).isEqualTo(METHODE);
+        assertThat(JsonPath.<List<String>>read(ouverte, "$.aOuvrir[*].idOffre")).containsExactly(fa);
+        assertThat(JsonPath.<Number>read(ouverte, "$.aOuvrir[0].noteTechnique").doubleValue()).isEqualTo(87.0);
+        assertThat(JsonPath.<Integer>read(ouverte, "$.aOuvrir[0].rangTechnique")).isEqualTo(1);
+        assertThat(JsonPath.<Integer>read(ouverte, "$.nonOuvertes[0].numero")).isEqualTo(2);
+        assertThat(JsonPath.<String>read(ouverte, "$.nonOuvertes[0].motif")).startsWith("éliminée à l'évaluation technique");
+        assertThat(notificationRepository.findPourRefEtType("C900000071", "CANDIDAT")).extracting(Notification::getTypeNotif)
+                .contains("SEANCE_FINANCIERE");
+        assertThat(notificationRepository.findPourRefEtType("C900000072", "CANDIDAT")).extracting(Notification::getTypeNotif)
+                .doesNotContain("SEANCE_FINANCIERE");
+        mvc.perform(post(sf + "/ouvrir").header("Authorization", tokenVer)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("SEANCE_FINANCIERE_OUVERTE"));
+        mvc.perform(post(tech + "/lots/1/rouvrir").header("Authorization", m1).contentType(JSON).content("{\"motif\":\"Erreur\"}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("SEANCE_FINANCIERE_OUVERTE"));
+    }
+
+    /** L'enveloppe financière jumelle d'une proposition technique : déposée, scellée (jamais ouverte ici). */
+    private String propositionFinanciere(String idTechnique) {
+        cnm.prs.entity.Offre t = offreRepository.findById(idTechnique).orElseThrow();
+        cnm.prs.entity.Offre o = new cnm.prs.entity.Offre();
+        o.setIdOffre(java.util.UUID.randomUUID().toString());
+        o.setIdDmc(t.getIdDmc());
+        o.setIdCandidat(t.getIdCandidat());
+        o.setIdEntreprise(t.getIdEntreprise());
+        o.setNif(t.getNif());
+        o.setRaisonSociale(t.getRaisonSociale());
+        o.setEtat(cnm.prs.entity.Offre.DEPOSEE);
+        o.setEnveloppe(cnm.prs.entity.Offre.FINANCIERE);
+        o.setDateCreation(t.getDateCreation());
+        o.setDateDepot(t.getDateDepot());
+        o.setNumero(t.getNumero());
+        o.setEnTete("{}");
+        o.setNombreMorceaux(1);
+        o.setTailleMorceau(1);
+        o.setQuorum(2);
+        o.setN(3);
+        o.setEmpreintesDetenteurs("x");
+        offreRepository.save(o);
+        return o.getIdOffre();
     }
 
     @Autowired private cnm.prs.repository.SeanceRepository seanceRepository;

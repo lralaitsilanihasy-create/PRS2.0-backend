@@ -390,7 +390,7 @@ public class SeanceService {
     }
 
     /** Ouvre une offre : intégrité, recombinaison, déchiffrement, ZIP, manifeste, pièces. Un échec la marque {@code LECTURE_IMPOSSIBLE}. */
-    private void ouvrir(Offre o, Map<String, Map<String, byte[]>> parts, int quorum) {
+    void ouvrir(Offre o, Map<String, Map<String, byte[]>> parts, int quorum) {
         String integrite;
         StockageOffres.Conteneur c;
         try {
@@ -1302,12 +1302,17 @@ public class SeanceService {
 
     /** Les parts chiffrées d'un détenteur, retrouvées dans l'en-tête de chaque offre déposée par l'empreinte de l'une de ses clés. */
     private List<SeanceDto.PartChiffree> partsDe(Long idDmc, String detenteur) {
+        return partsPour(idDmc, detenteur, deposees(idDmc));
+    }
+
+    /** ⚠️ V88 (lot 3 PI, PI-d1) — les parts chiffrées d'un détenteur pour les offres données (la seconde séance : les financières). */
+    List<SeanceDto.PartChiffree> partsPour(Long idDmc, String detenteur, List<Offre> aOuvrir) {
         boolean secours = SeanceApport.SECOURS.equals(detenteur);
         List<CleDetenteur> siennes = cles.findByIdDmcOrderByIdCleAsc(idDmc).stream()
                 .filter(c -> secours ? CleDetenteur.SECOURS.equals(c.getRole()) : CleDetenteur.MEMBRE.equals(c.getRole()) && detenteur.equals(c.getIm()))
                 .toList();
         List<SeanceDto.PartChiffree> out = new ArrayList<>();
-        for (Offre o : deposees(idDmc)) {
+        for (Offre o : aOuvrir) {
             JsonNode t = mapper.readTree(o.getEnTete());
             for (JsonNode p : t.path("parts")) {
                 String empreinte = p.path("empreinte").asString("");
@@ -1364,7 +1369,7 @@ public class SeanceService {
                 .filter(o -> !Offre.EN_COURS.equals(o.getEtat())).toList();
     }
 
-    private Integer quorum(Long idDmc) {
+    Integer quorum(Long idDmc) {
         RemiseElectronique.Internes i = internes.internes(idDmc);
         return i == null ? null : i.quorum();
     }
@@ -1430,7 +1435,7 @@ public class SeanceService {
     }
 
     /** Le détenteur de l'appelant : son identifiant {@code K…} s'il est membre de la CAO, {@code SECOURS} pour le responsable avec {@code role=SECOURS}. */
-    private String detenteur(Long idDmc, String role) {
+    String detenteur(Long idDmc, String role) {
         exigerDmc(idDmc);
         if (SeanceApport.SECOURS.equalsIgnoreCase(role)) {
             // ⚠️ V71 (§B3, §B4) — la part de secours s'apporte par son détenteur : le dépositaire (nouveau geste), ou le
@@ -1466,7 +1471,7 @@ public class SeanceService {
                 && internes.membresCao(idDmc).contains(ref) ? ref : null;
     }
 
-    private void exigerResponsable(Long idDmc) {
+    void exigerResponsable(Long idDmc) {
         exigerDmc(idDmc);
         if (CurrentUser.profil().isEmpty() || !internes.estTitulaire(idDmc)) {
             throw new AccessDeniedException("La séance d'ouverture se conduit par le responsable de la procédure.");
@@ -1474,7 +1479,7 @@ public class SeanceService {
     }
 
     /** Responsable, membres de la CAO, PRMP de la fiche, et l'UGPM si {@code ugpm}. */
-    private void exigerLecteur(Long idDmc, boolean ugpm) {
+    void exigerLecteur(Long idDmc, boolean ugpm) {
         exigerDmc(idDmc);
         if (internes.estTitulaire(idDmc)) {
             return;

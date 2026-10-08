@@ -3144,6 +3144,14 @@ Accès complet aux référentiels, comptes utilisateurs, journal d'audit, hiéra
     paramètre de l'Administrateur). Le **président arrête** l'étape quand chaque membre a noté chaque proposition : celles qui
     n'atteignent pas le **score technique minimum** sont **éliminées**, avec le motif, et leur enveloppe financière ne sera pas
     ouverte. Il peut rouvrir l'étape, avec un motif.
+  - ⚠️ **La seconde séance d'ouverture (2026-10-08, lot 3, tranche PI-d1 ; art. 42)** : quand la première séance est close et
+    l'évaluation technique arrêtée sur chaque lot, le responsable de la procédure ouvre la seconde séance. Elle n'ouvre que les
+    enveloppes **financières** des propositions qualifiées ; en « qualité technique exclusivement » et en « qualification du
+    consultant », celle du **seul premier classé**. Les autres ne sont jamais ouvertes (leur sort final attend l'avis du juriste)
+    et le PV les nomme avec leur motif. Les candidats dont l'enveloppe s'ouvre sont invités à y assister. Les détenteurs
+    apportent les parts de ces enveloppes avec les mêmes clés que la première séance (la part de secours avec un motif) ; au
+    quorum, elles s'ouvrent ensemble. Le PV lit, pour chaque proposition ouverte, sa note technique, son rang et ses montants.
+    Une fois cette séance ouverte, l'évaluation technique ne peut plus être rouverte.
 - Grilles de contrôle & règles d'anomalie [Écriture]
   - Configuration de tr_points_ctrl et t_regle_anomalie.
 - Comptes budgétaires & entités contractantes [Écriture]

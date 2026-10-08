@@ -387,7 +387,51 @@ class SeanceIntegrationTest extends CnmIntegrationTestSupport {
                 .andReturn().getResponse().getContentAsByteArray()).replaceAll("\\s+", " ");
         assertThat(pv).contains("Séance d'ouverture des propositions techniques : aucun montant n'est lu", "1 enveloppe(s) déposée(s), restées scellées")
                 .doesNotContain("Montant HT", "12500000");
+
+        // ⚠️ PI-d1 — la seconde séance (sa sélection est éprouvée par PiConsultationIntegrationTest) : posée ouverte sur l'enveloppe
+        // financière, mêmes clés, déchiffrement réel au quorum, lecture des montants, clôture et PV.
+        cnm.prs.entity.SeanceFinanciere sf = new cnm.prs.entity.SeanceFinanciere();
+        sf.setIdDmc(idDmc);
+        sf.setEtat(cnm.prs.entity.SeanceFinanciere.OUVERTE);
+        sf.setAOuvrir(financiere);
+        sf.setOuverteLe(java.time.LocalDateTime.now().withNano(0));
+        sf.setSecoursEmploye(false);
+        seanceFinanciereRepository.save(sf);
+        String fin = base + "/financiere";
+        String partsF = mvc.perform(get(fin + "/mes-parts").header("Authorization", jetonM1)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(partsF, "$[*].idOffre")).containsExactly(financiere);
+        mvc.perform(post(fin + "/parts").header("Authorization", jetonM1).contentType(JSON).content("{\"parts\":[]}")).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("PARTS_INCOMPLETES"));
+        mvc.perform(post(fin + "/parts").header("Authorization", jetonM1).contentType(JSON).content(apport(partsF, null))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.etat").value("OUVERTE")).andExpect(jsonPath("$.aOuvrir[0].partsRecues").value(1));
+        mvc.perform(post(fin + "/cloturer").header("Authorization", tokenVer).contentType(JSON).content("{}")).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("SEANCE_NON_DECHIFFREE"));
+        String partsFS = mvc.perform(get(fin + "/mes-parts").header("Authorization", tokenVer).param("role", "SECOURS")).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        mvc.perform(post(fin + "/parts").header("Authorization", tokenVer).param("role", "SECOURS").contentType(JSON)
+                .content(apport(partsFS, ""))).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("MOTIF_ABSENT"));
+        mvc.perform(post(fin + "/parts").header("Authorization", tokenVer).param("role", "SECOURS").contentType(JSON)
+                .content(apport(partsFS, "Membre empêché"))).andExpect(status().isOk()).andExpect(jsonPath("$.etat").value("DECHIFFREE"))
+                .andExpect(jsonPath("$.aOuvrir[0].integrite").value("INTACTE"))
+                .andExpect(jsonPath("$.aOuvrir[0].acteEngagement.montantHt").value("11900000"));
+        assertThat(offreRepository.findById(financiere).orElseThrow().getOuverteLe()).isNotNull();
+        mvc.perform(post(fin + "/parts").header("Authorization", jetonM1).contentType(JSON).content(apport(partsF, null))).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("SEANCE_NON_OUVERTE"));
+        mvc.perform(post(fin + "/cloturer").header("Authorization", jetonM1).contentType(JSON).content("{}")).andExpect(status().isForbidden());
+        mvc.perform(post(fin + "/cloturer").header("Authorization", tokenVer).contentType(JSON)
+                .content("{\"autres\":[{\"nom\":\"Rasoa Lova\",\"qualite\":\"représentante de BTP Beta\"}],\"observations\":\"RAS\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.etat").value("CLOSE")).andExpect(jsonPath("$.pvDisponible").value(true));
+        String pvF = texteDuPdf(mvc.perform(get(fin + "/pv").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray()).replaceAll("\\s+", " ");
+        assertThat(pvF).contains("PROCÈS-VERBAL D'OUVERTURE DES PROPOSITIONS FINANCIÈRES", "BTP Beta", "montant HT : 11900000",
+                "La part de secours a été employée. Motif : Membre empêché", "Rasoa Lova");
+        mvc.perform(get(fin + "/pv").param("format", "docx").header("Authorization", tokenPrmp)).andExpect(status().isOk());
+        mvc.perform(post(fin + "/cloturer").header("Authorization", tokenVer).contentType(JSON).content("{}")).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("SEANCE_CLOSE"));
     }
+
+    @Autowired private cnm.prs.repository.SeanceFinanciereRepository seanceFinanciereRepository;
 
     @Test
     @DisplayName("Carence : sans offre, la séance s'ouvre déchiffrée et produit un PV de carence ; S5 : refusé tant que le quorum reste "
