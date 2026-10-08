@@ -98,7 +98,7 @@ class FicheDaoPrestationsIntellectuellesIntegrationTest extends CnmIntegrationTe
                 "Qualité technique, expérience et proposition financière",
                 "Budget prédéterminé dont le candidat propose la meilleure utilisation",
                 "Meilleure proposition financière parmi les candidats ayant obtenu la note technique minimale",
-                "Qualité technique exclusivement");
+                "Qualité technique exclusivement", "Qualification du consultant");   // ⚠️ 2026-10-08 (lot 3 PI, Q6)
         assertThat(JsonPath.<List<List<String>>>read(ref, "$.champs[?(@.code=='B04-LP-01')].options").get(0))
                 .containsExactly("Français", "Français et une seconde langue", "Une autre langue que le français");
         assertThat(JsonPath.<List<String>>read(ref, "$.champs[?(@.code=='B04-LH-02')].type")).containsExactly("DATE_HEURE");

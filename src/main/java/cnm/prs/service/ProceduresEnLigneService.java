@@ -59,6 +59,9 @@ public class ProceduresEnLigneService {
     /** ⚠️ 2026-10-04 (lot 3) — remplacement et retrait avant la date limite (OUI / NON). */
     static final String CHAMP_REMPLACEMENT = "B04-SE-10";
 
+    /** ⚠️ 2026-10-08 (lot 3 PI, PI-a) — la date limite de remise des propositions d'une fiche de prestations intellectuelles. */
+    static final String REMISE_PROPOSITIONS = "B04-LH-02";
+
     public static final String A_VENIR = "A_VENIR";
     public static final String OUVERTE = "OUVERTE";
     public static final String CLOSE = "CLOSE";
@@ -77,12 +80,15 @@ public class ProceduresEnLigneService {
     /** ⚠️ 2026-10-06 — les reçus de frais de dossier (garde du retrait) et le compte de l'ARMP. */
     private final cnm.prs.repository.RecuDaoRepository recuRepository;
     private final ParametreService parametres;
+    /** ⚠️ 2026-10-08 (lot 3 PI, PI-a, §B1) — la consultation restreinte : la procédure n'est visible que de ses invités. */
+    private final InvitationsService invitations;
 
     public ProceduresEnLigneService(FicheMarcheRepository ficheRepository, FicheMarcheService fiches,
             DocumentsFicheMarcheService documents, DocumentFicheMarcheRepository documentRepository, LotRepository lotRepository,
             RetraitDaoRepository retraitRepository, CompteCandidatRepository compteRepository,
             EntrepriseRepository entrepriseRepository, PiecesFiche piecesFiche, BesoinFiche besoin,
-            cnm.prs.repository.RecuDaoRepository recuRepository, ParametreService parametres) {
+            cnm.prs.repository.RecuDaoRepository recuRepository, ParametreService parametres, InvitationsService invitations) {
+        this.invitations = invitations;
         this.recuRepository = recuRepository;
         this.parametres = parametres;
         this.besoin = besoin;
@@ -113,7 +119,8 @@ public class ProceduresEnLigneService {
             if (f.getCadrage() == null || !f.getCadrage().contains(RemiseElectronique.ELECTRONIQUE)) {
                 continue;
             }
-            lire(f.getIdDmc(), maintenant).map(Lue::dto).filter(d -> !CLOSE.equals(d.etat())).ifPresent(out::add);
+            // ⚠️ PI-a (§B1) — une consultation restreinte n'est pas publique.
+            lire(f.getIdDmc(), maintenant).filter(l -> !restreinte(l)).map(Lue::dto).filter(d -> !CLOSE.equals(d.etat())).ifPresent(out::add);
         }
         out.sort(Comparator.comparing(ProcedureEnLigneDto::dateLimite, Comparator.nullsLast(Comparator.naturalOrder()))
                 .thenComparing(ProcedureEnLigneDto::idDmc));
@@ -123,7 +130,57 @@ public class ProceduresEnLigneService {
     /** Une procédure par son identifiant : 404 hors des critères de la liste (close : lisible). */
     @Transactional(readOnly = true)
     public ProcedureEnLigneDto procedure(Long idDmc) {
-        return exiger(idDmc).dto();
+        return exigerVisible(idDmc).dto();
+    }
+
+    // ------------------------------------------------------------------ ⚠️ PI-a (§B1) : la consultation restreinte
+
+    /** Une procédure de prestations intellectuelles : une consultation restreinte, visible de ses seuls invités. */
+    static boolean restreinte(Lue l) {
+        return ModelesDao.sigleLettre(l.etat().categorie()) != null;
+    }
+
+    /** La procédure, telle que l'appelant peut la voir : une consultation restreinte est introuvable (404) hors de ses invités. */
+    Lue exigerVisible(Long idDmc) {
+        Lue l = exiger(idDmc);
+        if (restreinte(l) && invitations.invitation(idDmc, candidatAppelant()).isEmpty()) {
+            throw new ResourceNotFoundException("Procédure en ligne introuvable : " + idDmc + ".");
+        }
+        return l;
+    }
+
+    /** Une consultation restreinte se retire et se dépose par ses seuls invités : 403 {@code NON_INVITE}. */
+    public void exigerInvite(Lue l, String idCandidat) {
+        if (restreinte(l) && invitations.invitation(l.dto().idDmc(), idCandidat).isEmpty()) {
+            throw new cnm.prs.exception.AccesReserveException("Cette consultation restreinte est réservée aux candidats invités.", "NON_INVITE");
+        }
+    }
+
+    /** Les consultations restreintes où le candidat est invité, les plus récentes d'abord. */
+    @Transactional(readOnly = true)
+    public List<cnm.prs.dto.InvitationDto> invitationsDe(String idCandidat) {
+        List<cnm.prs.dto.InvitationDto> out = new ArrayList<>();
+        for (cnm.prs.entity.Invitation i : invitations.invitationsDe(idCandidat)) {
+            Optional<Lue> l = trouver(i.getIdDmc());
+            out.add(new cnm.prs.dto.InvitationDto(i.getIdDmc(), l.map(x -> x.dto().reference()).orElse(null), l.map(x -> x.dto().objet()).orElse(null),
+                    l.map(x -> x.dto().autoriteContractante()).orElse(null), i.getRang(), i.getSource(), i.getInviteLe(),
+                    l.map(x -> x.dto().etat()).orElse(null), l.map(x -> x.dto().dateLimite()).orElse(null), i.getIdDocument() != null));
+        }
+        out.sort(Comparator.comparing(cnm.prs.dto.InvitationDto::inviteLe).reversed());
+        return out;
+    }
+
+    /** La lettre d'invitation du candidat (PDF) ; 404 sans invitation ni lettre. */
+    @Transactional(readOnly = true)
+    public DocumentFicheMarche lettreInvitation(String idCandidat, Long idDmc) {
+        cnm.prs.entity.Invitation i = invitations.invitation(idDmc, idCandidat)
+                .orElseThrow(() -> new ResourceNotFoundException("Aucune invitation pour cette procédure."));
+        return i.getIdDocument() == null ? null : documentRepository.findById(i.getIdDocument())
+                .orElseThrow(() -> new ResourceNotFoundException("La lettre d'invitation n'est pas disponible."));
+    }
+
+    private static String candidatAppelant() {
+        return cnm.prs.enums.TypeActeur.CANDIDAT.name().equals(CurrentUser.acteurType().orElse(null)) ? CurrentUser.ref().orElse(null) : null;
     }
 
     // ------------------------------------------------------------------ candidat
@@ -135,6 +192,7 @@ public class ProceduresEnLigneService {
     @Transactional(readOnly = true)
     public List<ProcedureEnLigneDto.Document> documents(Long idDmc) {
         Lue l = exiger(idDmc);
+        exigerInvite(l, candidatAppelant());   // ⚠️ PI-a (§B1)
         return documents.lister(l.fiche(), l.etat().categorie()).stream()
                 .map(d -> new ProcedureEnLigneDto.Document(d.nomFichier(), d.libelle(), d.version(),
                         d.tailleOctets() == null ? 0 : d.tailleOctets()))
@@ -145,6 +203,7 @@ public class ProceduresEnLigneService {
     @Transactional
     public DocumentFicheMarche retirer(Long idDmc, String code, String idCandidat) {
         Lue l = exiger(idDmc);
+        exigerInvite(l, idCandidat);   // ⚠️ PI-a (§B1)
         DocumentFicheMarche d = documentRepository.findByIdFicheOrderByIdDocumentAsc(l.fiche().getIdFiche()).stream()
                 .filter(x -> !DocumentsFicheMarcheService.TYPES_PUBLICATION.contains(x.getType()))
                 .filter(x -> x.getNomFichier() != null && x.getNomFichier().equals(code))
@@ -207,8 +266,11 @@ public class ProceduresEnLigneService {
             return Optional.empty();   // Q5 : Avancée ou Qualifiée, pas encore
         }
         List<FicheMarche> versions = ficheRepository.findByIdDmcOrderByNumeroVersionAsc(idDmc);
+        // ⚠️ PI-a (§B1) — une consultation restreinte n'a pas d'avis : ses lettres d'invitation la lancent.
+        boolean pi = ModelesDao.sigleLettre(etat.categorie()) != null;
         List<DocumentFicheDto> avis = documents.listerAvis(versions).stream()
-                .filter(d -> DocumentsFicheMarcheService.TYPE_AVIS.equals(d.type())).toList();
+                .filter(d -> DocumentsFicheMarcheService.TYPE_AVIS.equals(d.type()) || pi && DocumentsFicheMarcheService.TYPE_LETTRE.equals(d.type()))
+                .toList();
         if (avis.isEmpty()) {
             return Optional.empty();   // pas lancée
         }
@@ -361,7 +423,7 @@ public class ProceduresEnLigneService {
      */
     @Transactional(readOnly = true)
     public List<cnm.prs.dto.OffreDto.PieceAttendue> piecesAttendues(Long idDmc) {
-        Lue l = exiger(idDmc);
+        Lue l = exigerVisible(idDmc);   // ⚠️ PI-a (§B1)
         boolean alloti = l.dto().lots().size() > 1;
         List<cnm.prs.dto.OffreDto.PieceAttendue> out = new ArrayList<>();
         out.add(new cnm.prs.dto.OffreDto.PieceAttendue("AE", PiecesFiche.OFFRE, null, "Acte d'engagement signé", "Original signé",
@@ -412,7 +474,12 @@ public class ProceduresEnLigneService {
             return avecHeure != null ? avecHeure : RemiseElectronique.dateHeureLue(jour);
         }
         LocalDateTime cc = RemiseElectronique.dateHeureLue(brute(etat, FormulairesCandidat.REMISE_OFFRES_CONTRAT_CADRE));
-        return cc != null ? cc : RemiseElectronique.dateHeureLue(brute(etat, FormulairesCandidat.REMISE_OFFRES_TRAVAUX));
+        if (cc != null) {
+            return cc;
+        }
+        LocalDateTime travaux = RemiseElectronique.dateHeureLue(brute(etat, FormulairesCandidat.REMISE_OFFRES_TRAVAUX));
+        // ⚠️ 2026-10-08 (lot 3 PI, PI-a) — les prestations intellectuelles : « Date et heure limites de remise des propositions ».
+        return travaux != null ? travaux : RemiseElectronique.dateHeureLue(brute(etat, REMISE_PROPOSITIONS));
     }
 
     /** La date de la première publication saisie à l'impression de l'avis ; à défaut {@code B04-SE-17}. */

@@ -7290,6 +7290,46 @@ dossier de la demande de propositions ; **Q5** liste publiée et notifiée. Migr
 - **Journal** : `AMI_DECLARATION`, `AMI_NOTE`, `AMI_ECARTEMENT`, `AMI_LISTE_ARRETEE`, `AMI_SIGNATURE`, `AMI_EMPECHEMENT`,
   `AMI_LISTE_DEFINITIVE`, `AMI_RELANCE`, `AMI_INFRUCTUEUX`, `AMI_RAPPORT_JOINT`.
 
+### L'évaluation des prestations intellectuelles, lot 3, tranche PI-a : sous-critères, méthode et budget, consultation restreinte — V84 ⚠️ 2026-10-08
+
+Demande front `demande-backend-2026-10-07-evaluation-pi.md` (§B1 ; arbitrages du pilote du 07/10 et du 08/10 : **Q3** sous-critères
+saisis dans la fiche ; **Q6** la méthode « qualification du consultant » ajoutée, et le budget prédéterminé porté par le champ
+**existant** `B05-PF-13`, lu hors taxes). Le lot est livré en quatre tranches : **PI-a** (sous-critères, méthode, budget,
+consultation restreinte), **PI-b** (deux enveloppes, deux séances), **PI-c** (notation technique par membre), **PI-d** (financier,
+méthodes de classement, négociation, rapport, suite du lot 2). Migration **V84**, script de référentiel
+`docs/referentiel/2026-10-08-pi-methode-qualification-budget.sql`. Aucune dépendance ajoutée.
+
+| Méthode | URL | Réponse | Statuts | Accès |
+|---|---|---|---|---|
+| GET | /api/fiches-marche/{idDmc}/sous-criteres | `SousCritereDto[]` | 200, 403, 404 | lecteurs de la fiche |
+| PUT | /api/fiches-marche/{idDmc}/sous-criteres | `SousCritereDto[]` | 200, 400 `sousCriteres[i].critere / libelle / points`, 409 `FICHE_VALIDEE`, `SOUS_CRITERES_HORS_PERIMETRE` | écriture de la fiche (PRMP, UGPM) |
+| GET | /api/candidat/invitations | `InvitationDto[]` | 200 | candidat |
+| GET | /api/candidat/invitations/{idDmc}/lettre | sa lettre d'invitation (PDF) | 200, 404 | candidat invité |
+
+- **Les sous-critères** (`{ sousCriteres[{ critere, libelle, points }] }`, l'ordre est la position) : chaque critère `B06-TP-02` à
+  `B06-TP-06` peut se détailler en sous-critères pondérés (un barème par expert pour le personnel clé, par exemple) ; un critère sans
+  sous-critère se note globalement. Remplacés en bloc sur le brouillon, figés à la validation, recopiés à la révision. Lus en
+  `SousCritereDto` = `{ ordre, critere, libelle, points }`.
+- **Au bilan** : `SOUS_CRITERES_POINTS` (bloquant) — les sous-critères d'un critère en totalisent les points ; `BUDGET_DISPONIBLE_ABSENT`
+  (bloquant) — la méthode « Budget prédéterminé… » (`B02-MS-01`) exige `B05-PF-13`.
+- **À l'impression** : `{{SOUSCRITERES.B06-TP-03}}` (et les autres critères), une ligne par sous-critère, « a) Approche technique et
+  méthodologie : 10 points » ; lisible par une condition (`SOUSCRITERES.B06-TP-03 renseigne`). La DPIC-PI n'utilise pas encore ces
+  jetons : son modèle est celui du front.
+- **Le référentiel (Q6)** : `B02-MS-01` gagne l'option « Qualification du consultant » ; `B05-PF-13` devient « Budget disponible (Ariary
+  HT) ». Le fichier de correspondance des prestations intellectuelles porte ces valeurs ; le script aligne une base déjà chargée.
+- **La consultation restreinte (§B1)** :
+  - une fiche de prestations intellectuelles en remise électronique devient une procédure en ligne à l'impression de ses **lettres
+    d'invitation** (elle n'a pas d'avis) ; sa date limite est `B04-LH-02` ;
+  - elle **n'apparaît pas** dans `GET /api/procedures-en-ligne` ; `GET /api/procedures-en-ligne/{idDmc}` et ses pièces attendues
+    répondent **404** à qui n'est pas invité ; ses documents ne se retirent, et une offre ne s'y crée, que par un invité (403
+    **`NON_INVITE`**) ;
+  - les **invités** sont écrits à chaque impression des lettres : les candidats de la liste de l'AMI (leur compte), ou ceux saisis par la
+    PRMP, qui peuvent désormais porter une **adresse électronique** (`candidats[i].email`, facultative, 400 si elle est invalide) : le
+    compte qui la porte leur est rattaché, même créé après l'invitation, et l'adresse reçoit la notification `LETTRE_INVITATION`
+    (« créez votre compte avec cette adresse ») ;
+  - `InvitationDto` = `{ idDmc, reference, objet, autoriteContractante, rang, source (AMI | SAISIE), inviteLe, etatProcedure, dateLimite,
+    lettreDisponible }`.
+
 ### Le rabais structuré de l'offre en ligne ⚠️ 2026-10-07
 
 Demande front `demande-backend-2026-10-07-rabais-structure.md` (arbitrage Q4 du pilote : « le rabais est structuré au dépôt »). Aucune

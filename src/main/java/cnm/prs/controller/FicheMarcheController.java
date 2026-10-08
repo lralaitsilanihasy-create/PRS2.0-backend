@@ -229,6 +229,22 @@ public class FicheMarcheController {
         return service.remplacerPersonnel(idDmc, corps == null ? null : corps.getPersonnel());
     }
 
+    /** ⚠️ V84 (2026-10-08, lot 3 PI, Q3) — les sous-critères techniques de la version courante, dans l'ordre. */
+    @GetMapping("/{idDmc}/sous-criteres")
+    public List<cnm.prs.dto.SousCritereDto> sousCriteres(@PathVariable Long idDmc) {
+        return service.sousCriteres(idDmc);
+    }
+
+    /**
+     * ⚠️ V84 — remplacement de toute la liste, corps {@code {"sousCriteres":[{critere, libelle, points}]}} ; 400 nominatif ;
+     * 409 {@code FICHE_VALIDEE} / {@code SOUS_CRITERES_HORS_PERIMETRE}.
+     */
+    @PutMapping("/{idDmc}/sous-criteres")
+    public List<cnm.prs.dto.SousCritereDto> remplacerSousCriteres(@PathVariable Long idDmc,
+            @RequestBody(required = false) cnm.prs.dto.SousCritereDto.Remplacement corps) {
+        return service.remplacerSousCriteres(idDmc, corps == null ? null : corps.sousCriteres());
+    }
+
     /** ⚠️ V61 (2026-10-03, §B1.1) — les pièces exigées de la version courante (travaux), dans l'ordre. */
     @GetMapping("/{idDmc}/pieces")
     public List<cnm.prs.dto.PieceExigeeDto> pieces(@PathVariable Long idDmc) {

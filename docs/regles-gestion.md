@@ -3119,6 +3119,15 @@ Accès complet aux référentiels, comptes utilisateurs, journal d'audit, hiéra
       signé, que la Commission examine avec lui ;
     - les lettres d'invitation sont adressées aux candidats de la liste, avec leurs comptes : chacun est averti en ligne et
       par courriel.
+  - ⚠️ **La consultation restreinte des prestations intellectuelles (2026-10-08, lot 3, tranche PI-a ; art. 42)** :
+    - chaque critère technique de la fiche peut se détailler en **sous-critères** pondérés, dont la somme fait les points du
+      critère ; la fiche ne se valide pas tant qu'un critère détaillé n'en totalise pas les points ;
+    - la méthode de sélection peut être la **qualification du consultant** ; la méthode du **budget prédéterminé** exige le
+      budget disponible, lu hors taxes ;
+    - une procédure de prestations intellectuelles en ligne s'ouvre à l'impression de ses lettres d'invitation ; elle **n'est
+      visible que de ses invités** : les candidats de la liste restreinte, ou ceux que la PRMP a saisis avec leur adresse
+      électronique (le compte créé avec cette adresse leur est rattaché) ; seuls les invités retirent la demande de
+      propositions et déposent une proposition.
 - Grilles de contrôle & règles d'anomalie [Écriture]
   - Configuration de tr_points_ctrl et t_regle_anomalie.
 - Comptes budgétaires & entités contractantes [Écriture]

@@ -124,6 +124,8 @@ public class FicheMarcheService {
     /** ⚠️ 2026-10-06 (DAO complet) — les spécifications techniques de la version, et l'assemblage du DAO complet. */
     private final cnm.prs.repository.SpecificationsFicheRepository specificationsRepository;
     private final DaoCompletService daoComplet;
+    /** ⚠️ V84 (2026-10-08, lot 3 PI, Q3) — les sous-critères techniques d'une fiche de prestations intellectuelles. */
+    private final SousCriteresFiche sousCriteres;
 
     public FicheMarcheService(FicheMarcheRepository ficheRepository, FicheMarcheValeurRepository valeurRepository,
             ChampFicheMarcheRepository champRepository, BlocFicheMarcheRepository blocRepository,
@@ -135,7 +137,8 @@ public class FicheMarcheService {
             BesoinFiche besoin, ParametreService parametres, ParametresInternesService internes, MandatService mandats,
             MoyensFiche moyens, PiecesFiche pieces, cnm.prs.repository.CeremonieClesRepository ceremonieRepository,
             cnm.prs.repository.OffreRepository offreRepository, cnm.prs.repository.SpecificationsFicheRepository specificationsRepository,
-            DaoCompletService daoComplet) {
+            DaoCompletService daoComplet, SousCriteresFiche sousCriteres) {
+        this.sousCriteres = sousCriteres;
         this.specificationsRepository = specificationsRepository;
         this.daoComplet = daoComplet;
         this.offreRepository = offreRepository;
@@ -614,6 +617,33 @@ public class FicheMarcheService {
         return pieces.pieces(fiche.getIdFiche());
     }
 
+    /** ⚠️ V84 (2026-10-08, lot 3 PI, Q3) — les sous-critères techniques de la version courante ; vide pour une fiche virtuelle. */
+    @Transactional(readOnly = true)
+    public List<cnm.prs.dto.SousCritereDto> sousCriteres(Long idDmc) {
+        contexte(idDmc);
+        return sousCriteres.lister(idFicheCourante(idDmc));
+    }
+
+    /**
+     * ⚠️ V84 — remplacement de toute la liste des sous-critères : gardes d'écriture de la fiche ; hors prestations intellectuelles → 409
+     * {@code SOUS_CRITERES_HORS_PERIMETRE} ; fiche validée → 409 {@code FICHE_VALIDEE} ; lignes (400 {@code sousCriteres[i].…}). La
+     * somme par critère est contrôlée au bilan ({@code SOUS_CRITERES_POINTS}), pas ici : les points du critère peuvent suivre.
+     */
+    public List<cnm.prs.dto.SousCritereDto> remplacerSousCriteres(Long idDmc, List<cnm.prs.dto.SousCritereDto> lignes) {
+        Contexte ctx = contexteEcriture(idDmc);
+        if (!CategorieDao.PRESTATIONS_INTELLECTUELLES.name().equals(ctx.codeCategorie())) {
+            throw new BusinessRuleException("Les sous-critères techniques valent pour les prestations intellectuelles (fiche : "
+                    + ctx.codeCategorie() + ").", "SOUS_CRITERES_HORS_PERIMETRE");
+        }
+        List<cnm.prs.dto.SousCritereDto> recues = lignes == null ? List.of() : lignes;
+        FicheMarche fiche = brouillonOuNouvelle(ctx);
+        SousCriteresFiche.valider(recues);
+        sousCriteres.remplacer(fiche.getIdFiche(), recues);
+        fiche.setDateMaj(LocalDateTime.now());
+        ficheRepository.save(fiche);
+        return sousCriteres.lister(fiche.getIdFiche());
+    }
+
     /**
      * ⚠️ V61 / V62 (2026-10-03, extension aux fournitures, choix A du pilote) — la liste des pièces vaut pour les travaux
      * et les fournitures et services, en quantité fixe et à commande : aucun DPAC (contrat-cadre) n'a de place pour elle.
@@ -628,6 +658,7 @@ public class FicheMarcheService {
     private Map<String, String> jetonsDesListes(Integer idFiche) {
         Map<String, String> m = new LinkedHashMap<>(MoyensFiche.jetons(moyens.materiel(idFiche), moyens.personnel(idFiche)));
         m.putAll(PiecesFiche.jetons(pieces.pieces(idFiche)));
+        m.putAll(SousCriteresFiche.jetons(sousCriteres.lister(idFiche)));   // ⚠️ V84
         return m;
     }
 
@@ -1129,6 +1160,7 @@ public class FicheMarcheService {
         besoin.copier(derniere.getIdFiche(), suivante.getIdFiche());   // ⚠️ V45 — le besoin suit, comme les valeurs
         moyens.copier(derniere.getIdFiche(), suivante.getIdFiche());   // ⚠️ V60 — le matériel et le personnel aussi
         pieces.copier(derniere.getIdFiche(), suivante.getIdFiche());   // ⚠️ V61 — les pièces de l'offre aussi
+        sousCriteres.copier(derniere.getIdFiche(), suivante.getIdFiche());   // ⚠️ V84 — les sous-critères techniques aussi
         // ⚠️ 2026-10-06 (DAO complet, §B2) — les spécifications techniques suivent la version, comme le besoin.
         Integer idSuivante = suivante.getIdFiche();
         specificationsRepository.findById(derniere.getIdFiche()).ifPresent(s -> specificationsRepository.save(new cnm.prs.entity.SpecificationsFiche(
@@ -1553,6 +1585,12 @@ public class FicheMarcheService {
             ControlesFicheMarche.piecesOffreExigees(ouverts, valeurs, PiecesFiche.compter(lues, PiecesFiche.OFFRE), bilan);
             // ⚠️ 2026-10-06 (« A ») — en remise électronique, la liste ne se remplace pas par le texte.
             ControlesFicheMarche.piecesListees(cadrage, lues.size(), bilan);
+        }
+        // ⚠️ V84 (2026-10-08, lot 3 PI, Q3, Q6) — les sous-critères totalisent les points de leur critère ; la méthode du budget
+        // prédéterminé exige le budget disponible (B05-PF-13, hors taxes).
+        if (CategorieDao.PRESTATIONS_INTELLECTUELLES.name().equals(ctx.codeCategorie())) {
+            ControlesFicheMarche.sousCriteresPoints(valeurs, SousCriteresFiche.sommes(sousCriteres.lister(fiche.getIdFiche())), bilan);
+            ControlesFicheMarche.budgetPredetermine(valeurs, bilan);
         }
         // ⚠️ 2026-10-06 (DAO complet, §B2) — un DAO de fournitures ou de travaux porte ses spécifications techniques : avertissement.
         if ((CategorieDao.TRAVAUX.name().equals(ctx.codeCategorie()) || CategorieDao.FOURNITURES_SERVICES.name().equals(ctx.codeCategorie()))

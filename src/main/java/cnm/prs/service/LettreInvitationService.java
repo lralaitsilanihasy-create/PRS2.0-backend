@@ -51,10 +51,16 @@ public class LettreInvitationService {
     private final AmiPreselectionService preselection;
     private final NotificationService notifications;
     private final cnm.prs.repository.CompteCandidatRepository candidatsRepository;
+    /** ⚠️ 2026-10-08 (lot 3 PI, PI-a, §B1) — les invités de la consultation restreinte et leur lettre. */
+    private final InvitationsService invitations;
+    private final cnm.prs.repository.DocumentFicheMarcheRepository documentRepository;
 
     public LettreInvitationService(AvisSpecifiqueService avis, FicheMarcheService fiches, DocumentsFicheMarcheService documents,
             DossierIntegriteService dossierIntegrite, JournalDossierService journal, AmiPreselectionService preselection,
-            NotificationService notifications, cnm.prs.repository.CompteCandidatRepository candidatsRepository) {
+            NotificationService notifications, cnm.prs.repository.CompteCandidatRepository candidatsRepository, InvitationsService invitations,
+            cnm.prs.repository.DocumentFicheMarcheRepository documentRepository) {
+        this.invitations = invitations;
+        this.documentRepository = documentRepository;
         this.preselection = preselection;
         this.notifications = notifications;
         this.candidatsRepository = candidatsRepository;
@@ -114,15 +120,36 @@ public class LettreInvitationService {
                 .map(c -> { Map<String, String> m = new LinkedHashMap<>(); m.put("nom", c.nom()); m.put("adresse", c.adresse()); return m; })
                 .toList();
         Set<Integer> ids = new java.util.HashSet<>();
+        Map<Integer, Integer> pdfParRang = new java.util.HashMap<>();
         for (Map.Entry<Integer, List<DocumentsFicheMarcheService.Produit>> e : parRang.entrySet()) {
             Map<String, Object> trace = new LinkedHashMap<>();
             trace.put("dateEnvoi", saisie.dateIso());
             trace.put("lieu", saisie.lieu());
             trace.put("candidats", liste);
             trace.put("rang", e.getKey());
-            ids.addAll(documents.enregistrerAvis(validee.getIdFiche(), e.getValue(), maintenant,
-                    DocumentsFicheMarcheService.publicationJson(trace)));
+            Set<Integer> idsRang = documents.enregistrerAvis(validee.getIdFiche(), e.getValue(), maintenant,
+                    DocumentsFicheMarcheService.publicationJson(trace));
+            ids.addAll(idsRang);
+            documentRepository.findAllById(idsRang).stream().filter(d -> "pdf".equals(d.getExtension())).findFirst()
+                    .ifPresent(d -> pdfParRang.put(e.getKey(), d.getIdDocument()));
         }
+        // ⚠️ PI-a (§B1) — les invités de la consultation restreinte : la liste de l'AMI (comptes), ou la saisie (adresses électroniques).
+        List<InvitationsService.Invite> aInviter = new ArrayList<>();
+        for (int i = 0; i < invites.size(); i++) {
+            int rang = i + 1;
+            LettreInvitationRequest.Candidat c = invites.get(i);
+            aInviter.add(listeAmi.isPresent()
+                    ? new InvitationsService.Invite(cnm.prs.entity.Invitation.AMI, listeAmi.get().get(i).getIdCandidat(), null, c.nom(), rang,
+                            pdfParRang.get(rang))
+                    : new InvitationsService.Invite(cnm.prs.entity.Invitation.SAISIE, null, c.email(), c.nom(), rang, pdfParRang.get(rang)));
+            if (listeAmi.isEmpty() && c.email() != null) {
+                notifications.emettre(null, cnm.prs.enums.TypeNotification.LETTRE_INVITATION, null, c.email(), "Invitation à remettre une proposition",
+                        "Vous êtes invité à remettre une proposition pour « " + etat.getDesignationMarche() + " » (lettre d'invitation du "
+                                + saisie.date() + "). Créez votre compte sur la plateforme avec cette adresse électronique : la procédure et la "
+                                + "lettre y seront disponibles.");
+            }
+        }
+        invitations.enregistrer(idDmc, aInviter, maintenant);
         int n = invites.size();
         listeAmi.ifPresent(l -> l.forEach(x -> {
             cnm.prs.entity.CompteCandidat c = candidatsRepository.findById(x.getIdCandidat()).orElse(null);
@@ -167,7 +194,12 @@ public class LettreInvitationService {
                         "Le nom du candidat n° " + (i + 1), erreurs);
                 String a = AvisSpecifiqueService.texte(k == null ? null : k.adresse(), "candidats[" + i + "].adresse",
                         "L'adresse du candidat n° " + (i + 1), erreurs);
-                candidats.add(new LettreInvitationRequest.Candidat(n, a));
+                String m = k == null || k.email() == null || k.email().isBlank() ? null : k.email().trim();
+                if (m != null && (!m.contains("@") || m.length() > 150)) {
+                    erreurs.add(new ErrorResponse.FieldError("candidats[" + i + "].email", "L'adresse électronique du candidat n° " + (i + 1)
+                            + " est invalide."));
+                }
+                candidats.add(new LettreInvitationRequest.Candidat(n, a, m));
             }
         }
         if (!erreurs.isEmpty()) {

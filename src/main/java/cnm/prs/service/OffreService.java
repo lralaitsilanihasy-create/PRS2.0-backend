@@ -125,6 +125,7 @@ public class OffreService {
         }
         Long idDmc = c.idDmc();
         ProceduresEnLigneService.Lue lue = procedureOuverte(idDmc);
+        procedures.exigerInvite(lue, idCandidat);   // ⚠️ 2026-10-08 (lot 3 PI, PI-a, §B1) — une consultation restreinte : ses invités seuls
         List<String> attendues = clesPubliees(idDmc);
         Entreprise entreprise = entreprises.findByIdCandidat(idCandidat).orElseThrow(() -> new BusinessRuleException(
                 "Déclarez votre entreprise avant de déposer une offre.", "ENTREPRISE_ABSENTE"));

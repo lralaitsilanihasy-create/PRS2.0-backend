@@ -391,7 +391,7 @@ class AmiIntegrationTest extends CnmIntegrationTestSupport {
         Long id = ((Number) JsonPath.read(corps, "$.idDmc")).longValue();
         if (idDetail == 9901) {
             remplirObligatoiresEtValider(id, "QUANTITE_FIXE", "PRESTATIONS_INTELLECTUELLES",
-                    Map.of("B02-MS-01", "Budget prédéterminé dont le candidat propose la meilleure utilisation"));
+                    Map.of("B02-MS-01", "Budget prédéterminé dont le candidat propose la meilleure utilisation", "B05-PF-13", "50000000"));
         }
         return id;
     }

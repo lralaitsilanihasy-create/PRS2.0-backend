@@ -6,7 +6,7 @@ B02-CL-04;Nature, numéro et date de l'acte de nomination;TEXTE;SAISIE;AE;;QUANT
 B02-OP-01;Projet ou opération plus vaste dont le marché fait partie;TEXTE_LONG;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;non;;;;;;oui
 B02-OP-02;Objet principal du marché;TEXTE_LONG;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
 B02-OP-03;Date de début des prestations;DATE;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
-B02-MS-01;Mode de sélection du consultant;LISTE;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;Qualité technique, expérience et proposition financière|Budget prédéterminé dont le candidat propose la meilleure utilisation|Meilleure proposition financière parmi les candidats ayant obtenu la note technique minimale|Qualité technique exclusivement;;;oui
+B02-MS-01;Mode de sélection du consultant;LISTE;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;Qualité technique, expérience et proposition financière|Budget prédéterminé dont le candidat propose la meilleure utilisation|Meilleure proposition financière parmi les candidats ayant obtenu la note technique minimale|Qualité technique exclusivement|Qualification du consultant;;;oui
 B02-SP-01;Délai accordé au candidat pour renvoyer l'acte d'engagement signé (jours);NOMBRE;SAISIE;DPIC;AE,CCAP;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;oui
 B03-TP-01;Dénomination sociale du titulaire;TEXTE;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;non
 B03-TP-02;Siège social du titulaire;TEXTE;SAISIE;AE;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;non
@@ -52,7 +52,7 @@ B05-PF-09;Barème dégressif en fonction du volume des montants;TEXTE_LONG;SAISI
 B05-PF-10;Profession et références du barème applicable;TEXTE_LONG;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;non;;;;;;oui
 B05-PF-11;Frais remboursables : liste des dépenses admises;TEXTE_LONG;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;non;;;;;;oui
 B05-PF-12;Frais divers : liste des frais de fonctionnement;TEXTE_LONG;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;non;;;;;;oui
-B05-PF-13;Budget disponible (Ariary);MONTANT;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;non;;;;;;oui
+B05-PF-13;Budget disponible (Ariary HT);MONTANT;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;non;;;;;;oui
 B05-RP-01;Prix fermes ou révisables;OUI_NON;CADRAGE;DPIC;AE,CCAP;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;non;;;;prixRevisable;;oui
 B05-MP-01;Monnaie autre que l'Ariary admise, et conditions;TEXTE_LONG;SAISIE;DPIC;CCAP;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;non;;;;;;oui
 B06-TP-01;Total des points de l'évaluation technique;NOMBRE;SAISIE;DPIC;;QUANTITE_FIXE,A_COMMANDE;PRESTATIONS_INTELLECTUELLES;;oui;;;;;;non

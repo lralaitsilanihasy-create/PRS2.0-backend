@@ -14,7 +14,14 @@ import java.util.List;
  */
 public record LettreInvitationRequest(String dateEnvoi, String lieu, List<Candidat> candidats) {
 
-    /** Un candidat de la liste restreinte : son nom, son adresse (plusieurs lignes possibles). */
-    public record Candidat(String nom, String adresse) {
+    /**
+     * Un candidat de la liste restreinte : son nom, son adresse (plusieurs lignes possibles) ; ⚠️ 2026-10-08 (lot 3 PI, PI-a, §B1) — son
+     * adresse électronique, facultative : le compte qui la porte est rattaché à l'invitation, et il reçoit l'invitation à créer son compte.
+     */
+    public record Candidat(String nom, String adresse, String email) {
+
+        public Candidat(String nom, String adresse) {
+            this(nom, adresse, null);
+        }
     }
 }

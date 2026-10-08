@@ -574,6 +574,42 @@ public final class ControlesFicheMarche {
      * est servi, c'est-à-dire là où la clause 6.3 du DPAO-T l'imprime (quantité fixe, à commande) : le contrat-cadre de
      * travaux n'a pas ce champ, et la règle ne lui dit rien.
      */
+    /**
+     * ⚠️ V84 (2026-10-08, lot 3 PI, Q3) — {@code SOUS_CRITERES_POINTS} : un critère technique détaillé en sous-critères doit en
+     * totaliser les points ; bloquant, un message par critère faux ; sans sous-critère, rien (le critère se note globalement).
+     */
+    public static void sousCriteresPoints(Map<String, String> valeurs, Map<String, BigDecimal> sommes, BilanControlesDto bilan) {
+        for (Map.Entry<String, BigDecimal> e : sommes.entrySet()) {
+            BigDecimal points = nombre(valeurs.get(e.getKey()));
+            if (points == null || points.compareTo(e.getValue()) != 0) {
+                bilan.bloquants().add(new Controle(SOUS_CRITERES_POINTS, List.of(e.getKey()), "B06", "Les sous-critères de " + e.getKey()
+                        + " totalisent " + e.getValue().stripTrailingZeros().toPlainString() + " points, pour "
+                        + (points == null ? "un critère sans points" : points.stripTrailingZeros().toPlainString() + " points au critère") + "."));
+            } else {
+                bilan.ok().add(new Controle(SOUS_CRITERES_POINTS, List.of(e.getKey()), "B06", "Sous-critères de " + e.getKey() + " : "
+                        + points.stripTrailingZeros().toPlainString() + " points."));
+            }
+        }
+    }
+
+    /**
+     * ⚠️ V84 (2026-10-08, lot 3 PI, Q6, arbitrage du pilote) — {@code BUDGET_DISPONIBLE_ABSENT} : la méthode du budget prédéterminé
+     * ({@code B02-MS-01}) exige le budget disponible ({@code B05-PF-13}, hors taxes) ; bloquant.
+     */
+    public static void budgetPredetermine(Map<String, String> valeurs, BilanControlesDto bilan) {
+        String methode = valeurs.get(METHODE_SELECTION);
+        if (methode != null && methode.startsWith(METHODE_BUDGET) && nombre(valeurs.get(BUDGET_DISPONIBLE)) == null) {
+            bilan.bloquants().add(new Controle(BUDGET_DISPONIBLE_ABSENT, List.of(BUDGET_DISPONIBLE), "B05", "La méthode du budget prédéterminé "
+                    + "exige le budget disponible (hors taxes)."));
+        }
+    }
+
+    public static final String SOUS_CRITERES_POINTS = "SOUS_CRITERES_POINTS";
+    public static final String BUDGET_DISPONIBLE_ABSENT = "BUDGET_DISPONIBLE_ABSENT";
+    public static final String METHODE_SELECTION = "B02-MS-01";
+    public static final String METHODE_BUDGET = "Budget prédéterminé";
+    public static final String BUDGET_DISPONIBLE = "B05-PF-13";
+
     public static void materielExige(List<ChampFicheMarche> champsOuverts, Map<String, String> valeurs, int nbMateriel,
             BilanControlesDto bilan) {
         ChampFicheMarche texte = champsOuverts.stream()
