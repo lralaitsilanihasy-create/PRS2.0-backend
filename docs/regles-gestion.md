@@ -3104,6 +3104,9 @@ Accès complet aux référentiels, comptes utilisateurs, journal d'audit, hiéra
       jusque-là ; il reçoit un accusé portant l'empreinte de son dépôt ;
     - les expressions ne sont pas scellées, mais **personne ne les lit avant la date limite** : l'administration en voit
       seulement le nombre.
+  - ⚠️ **Le mode « Appel à manifestation d'intérêt » ouvre une fiche (2026-10-08)** : c'est le mode des lignes de
+    prestations intellectuelles au plan de passation ; il est rattaché au type de dossier « appel d'offres » (DAO), de sorte
+    que la PRMP crée la fiche de la ligne, qui porte d'abord l'AMI, puis la demande de propositions.
   - ⚠️ **La présélection et la liste restreinte (2026-10-07, tranche AMI-b ; art. 42-II)** :
     - chaque membre de la commission d'appel d'offres signe une déclaration propre à l'AMI ; un membre en conflit d'intérêts
       ne décide rien et ne signe pas le rapport ;

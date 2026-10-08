@@ -345,6 +345,41 @@ class AmiIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("AMI_INFRUCTUEUX"));
     }
 
+    @Test
+    @DisplayName("⚠️ V85 (demande du 08/10) : une ligne PI en mode « Appel à manifestation d'intérêt » sans type de DMC est refusée "
+            + "(MODE_NON_DAO) ; le mode reconnu à son libellé est rattaché au type DAO ; la fiche naît, l'AMI se prépare ; un mode déjà "
+            + "rattaché n'est pas touché")
+    void modeAmiRattacheAuTypeDao() throws Exception {
+        modePassationRepository.save(new ModePassation(93, "Appel à manifestation d'intérêt", null, null, null, null));
+        TypeDmc consultation = typeDmcRepository.findAll().stream().filter(t -> !"DAO".equals(t.getCode())).findFirst().orElse(null);
+        ModePassation m94 = new ModePassation(94, "APPEL A MANIFESTATION D'INTERET (international)", null, null, null, null);
+        if (consultation != null) {
+            m94.setIdTypeDmc(consultation.getIdTypeDmc());
+        }
+        modePassationRepository.saveAndFlush(m94);
+        Marche l = marche(9903, 9900, 9900);
+        l.setIdMode(93);
+        l.setFormeMarche(FormeMarche.QUANTITE_FIXE);
+        l.setIdNature(94);
+        l.setDesignationMarche("Étude d'impact environnemental");
+        marcheRepository.saveAndFlush(l);
+        mvc.perform(post("/api/dmcs/par-marche/9903").header("Authorization", tokenPrmp)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("MODE_NON_DAO"));
+        String sql = new String(new ClassPathResource("db/migration/V85__mode_ami_type_dao.sql").getInputStream().readAllBytes(),
+                StandardCharsets.UTF_8);
+        jdbcTemplate.update(sql.lines().filter(x -> !x.startsWith("--")).reduce("", (a, b) -> a + "\n" + b).trim().replaceAll(";$", ""));
+        Long dao = typeDmcRepository.findByCode("DAO").orElseThrow().getIdTypeDmc();
+        entityManager.clear();
+        assertThat(jdbcTemplate.queryForObject("select \"ID_TYPE_DMC\" from tr_mode_passation where \"ID_MODE\" = 93", Long.class)).isEqualTo(dao);
+        assertThat(jdbcTemplate.queryForObject("select \"ID_TYPE_DMC\" from tr_mode_passation where \"ID_MODE\" = 94", Long.class))
+                .isEqualTo(consultation == null ? dao : consultation.getIdTypeDmc());
+        String corps = mvc.perform(post("/api/dmcs/par-marche/9903").header("Authorization", tokenPrmp)).andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        Long id = ((Number) JsonPath.read(corps, "$.idDmc")).longValue();
+        mvc.perform(put("/api/fiches-marche/" + id + "/ami").header("Authorization", tokenPrmp).contentType(JSON).content("{" + CRITERES + "}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.objet").value("Étude d'impact environnemental"));
+    }
+
     /** Une CAO de deux membres (le premier préside), un responsable ; les jetons des deux membres. */
     private String[] commission() throws Exception {
         String tokenVer = bearer("CTRVER", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER", "ANT");

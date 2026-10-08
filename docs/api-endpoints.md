@@ -7289,6 +7289,13 @@ dossier de la demande de propositions ; **Q5** liste publiée et notifiée. Migr
   expressions et notes restent. **Infructuosité** (PRMP) : seulement sans aucune expression qualifiée.
 - **Journal** : `AMI_DECLARATION`, `AMI_NOTE`, `AMI_ECARTEMENT`, `AMI_LISTE_ARRETEE`, `AMI_SIGNATURE`, `AMI_EMPECHEMENT`,
   `AMI_LISTE_DEFINITIVE`, `AMI_RELANCE`, `AMI_INFRUCTUEUX`, `AMI_RAPPORT_JOINT`.
+- ⚠️ **2026-10-08 — le mode « Appel à manifestation d'intérêt » crée sa fiche (V85 ; demande front
+  `demande-backend-2026-10-08-mode-ami-type-dmc.md`)** : le mode réel des lignes de prestations intellectuelles au plan était sans
+  type de DMC, et `POST /api/dmcs/par-marche/{idDetail}` répondait 409 `MODE_NON_DAO`. V85 le rattache au type de code **`DAO`**
+  (Q1 : la chaîne de la fiche exige ce type ; pas de type propre à la demande de propositions). Le mode est reconnu à son
+  **libellé** (« manifestation … intérêt », sans accents ni casse) et le type à son **code**, jamais par identifiant (Q2) ; un mode déjà
+  rattaché par l'Administrateur n'est pas touché. La fiche reçoit sa catégorie de la nature de la ligne, comme avant.
+
 
 ### L'évaluation des prestations intellectuelles, lot 3, tranche PI-a : sous-critères, méthode et budget, consultation restreinte — V84 ⚠️ 2026-10-08
 
