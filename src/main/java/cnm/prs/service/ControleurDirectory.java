@@ -91,13 +91,19 @@ public class ControleurDirectory {
         return parProfil(ProfilUtilisateur.ADMINISTRATEUR);
     }
 
-    /** Les Chefs de commission d'une localité donnée. */
+    /**
+     * Les Chefs de commission d'une localité donnée, <strong>triés par matricule</strong>. ⚠️ 2026-10-09 — l'ordre n'était pas défini :
+     * une localité à plusieurs CC (la Centrale) voyait le CC associé d'office à un dispatch du Président (le premier de la liste)
+     * changer d'une exécution à l'autre, selon l'ordre rendu par la base.
+     */
     public List<Controleur> chefsCommission(String idLocalite) {
         List<Integer> ids = idProfiles(ProfilUtilisateur.CHEF_COMMISSION);
         if (ids.isEmpty() || idLocalite == null) {
             return List.of();
         }
-        return controleurRepository.findByIdProfileInAndIdLocalite(ids, idLocalite);
+        return controleurRepository.findByIdProfileInAndIdLocalite(ids, idLocalite).stream()
+                .sorted(java.util.Comparator.comparing(Controleur::getImControleur, java.util.Comparator.nullsLast(String::compareTo)))
+                .toList();
     }
 
     /** Les Secrétaires d'une localité donnée (réception des dossiers, §3.4). */
