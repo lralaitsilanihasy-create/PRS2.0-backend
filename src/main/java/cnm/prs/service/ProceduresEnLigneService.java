@@ -423,7 +423,23 @@ public class ProceduresEnLigneService {
      */
     @Transactional(readOnly = true)
     public List<cnm.prs.dto.OffreDto.PieceAttendue> piecesAttendues(Long idDmc) {
-        Lue l = exigerVisible(idDmc);   // ⚠️ PI-a (§B1)
+        return attendues(exigerVisible(idDmc));   // ⚠️ PI-a (§B1)
+    }
+
+    /**
+     * ⚠️ 2026-10-09 (recette du front sur la fiche 50, anomalie bloquante) — les pièces attendues pour les <strong>lecteurs internes</strong>
+     * (lecture de la séance, PV d'ouverture, évaluation) : <strong>sans la garde « invité »</strong> d'une consultation restreinte, que le
+     * responsable de la procédure ne passe pas, et <strong>sans exception</strong> (vide hors des critères de la liste). La version publique,
+     * appelée dans un {@code try/catch}, levait un 404 qui marquait la transaction de l'appelant pour l'annulation : la lecture répondait
+     * 500 ({@code UnexpectedRollbackException}). {@code noRollbackFor} garde l'appelant d'un imprévu.
+     */
+    @Transactional(readOnly = true, noRollbackFor = RuntimeException.class)
+    public List<cnm.prs.dto.OffreDto.PieceAttendue> piecesAttenduesInternes(Long idDmc) {
+        return trouver(idDmc).map(this::attendues).orElse(List.of());
+    }
+
+    private List<cnm.prs.dto.OffreDto.PieceAttendue> attendues(Lue l) {
+        Long idDmc = l.dto().idDmc();
         boolean alloti = l.dto().lots().size() > 1;
         // ⚠️ 2026-10-08 (lot 3 PI, H-PI-1 du front) — une consultation PI : chaque pièce porte son enveloppe ; l'acte d'engagement
         // (la soumission financière) et les formulaires PF vont dans la financière, tout le reste dans la technique.

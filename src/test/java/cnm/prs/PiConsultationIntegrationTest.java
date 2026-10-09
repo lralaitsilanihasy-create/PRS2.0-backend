@@ -176,6 +176,11 @@ class PiConsultationIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(get("/api/procedures-en-ligne/" + idDmc + "/documents").header("Authorization", jetonB)).andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("NON_INVITE"));
         mvc.perform(get("/api/procedures-en-ligne/" + idDmc + "/documents").header("Authorization", jetonA)).andExpect(status().isOk());
+        // ⚠️ 2026-10-09 (recette du front, fiche 50) — les pièces attendues : publiques pour l'invité seul ; lues sans la garde pour la
+        // séance et l'évaluation (la PRMP, le responsable de la procédure ne sont pas invités).
+        mvc.perform(get("/api/procedures-en-ligne/" + idDmc + "/pieces").header("Authorization", tokenPrmp)).andExpect(status().isNotFound());
+        mvc.perform(get("/api/procedures-en-ligne/" + idDmc + "/pieces").header("Authorization", jetonA)).andExpect(status().isOk());
+        assertThat(procedures.piecesAttenduesInternes(idDmc)).extracting(cnm.prs.dto.OffreDto.PieceAttendue::code).contains("AE", "PT2");
     }
 
     @Test
@@ -267,6 +272,10 @@ class PiConsultationIntegrationTest extends CnmIntegrationTestSupport {
         s.setCloseLe(LocalDateTime.now().minusHours(20));
         s.setPvSigneLe(LocalDateTime.now().minusHours(20));
         seanceRepository.save(s);
+        // ⚠️ 2026-10-09 (recette du front, fiche 50) — la lecture de la séance d'une consultation restreinte, par un lecteur qui n'est pas
+        // invité (la PRMP, le responsable de la procédure) : 200, plus 500 (UnexpectedRollbackException) ; les pièces attendues sont lues.
+        mvc.perform(get("/api/fiches-marche/" + idDmc + "/seance/lecture").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.offres.length()").value(2));
         String ev = "/api/fiches-marche/" + idDmc + "/evaluation";
         mvc.perform(post(ev + "/ouvrir").header("Authorization", bearer("CTRVER", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER", "ANT")))
                 .andExpect(status().isCreated());
@@ -748,6 +757,7 @@ class PiConsultationIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     @Autowired private cnm.prs.repository.SeanceRepository seanceRepository;
+    @Autowired private cnm.prs.service.ProceduresEnLigneService procedures;
 
     /** Une proposition technique ouverte en séance (lecture sans montant). */
     private String propositionOuverte(Long idDmc, String idCandidat, String nif, String raison, int numero) {

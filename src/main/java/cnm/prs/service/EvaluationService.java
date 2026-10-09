@@ -2064,7 +2064,7 @@ public class EvaluationService {
 
     private List<OffreDto.PieceAttendue> attendues(Long idDmc) {
         try {
-            return procedures.piecesAttendues(idDmc);
+            return procedures.piecesAttenduesInternes(idDmc);   // ⚠️ 2026-10-09 : sans la garde « invité », sans exception
         } catch (RuntimeException e) {
             return List.of();
         }

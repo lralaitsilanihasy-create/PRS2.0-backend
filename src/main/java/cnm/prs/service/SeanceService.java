@@ -548,7 +548,7 @@ public class SeanceService {
     private SeanceDto.Lecture construireLecture(Long idDmc, boolean complete) {
         List<OffreDto.PieceAttendue> attendues;
         try {
-            attendues = procedures.piecesAttendues(idDmc);
+            attendues = procedures.piecesAttenduesInternes(idDmc);   // ⚠️ 2026-10-09 : sans la garde « invité », sans exception
         } catch (RuntimeException e) {
             attendues = List.of();
         }
