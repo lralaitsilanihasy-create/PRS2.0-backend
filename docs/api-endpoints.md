@@ -7696,6 +7696,35 @@ sous-type). Aucune dépendance ajoutée.
   désormais porter les pièces de sa liste avant d'être soumis ; les dossiers déjà soumis ne sont pas repris.
 
 
+### Le référentiel du contrôle aligné sur le Manuel de contrôle a priori, tranche M3 : les grilles par sous-type — V96 ⚠️ 2026-10-08
+
+Demande front `demande-backend-2026-10-08-manuel-controle-a-priori.md` (§B3). Arbitrages du pilote du 08/10 : les **5 points du
+manuel s'ajoutent à la grille des plans** ; un point conditionné reste **servi, à examiner**, sur un dossier sans fiche. Migration
+**V96** (conditions des points, grille de base et grille propre des sous-types) ; les points du manuel sont **semés au démarrage**
+(`PointsCtrlManuelSeeder`, comme ceux du dossier de marché : un point existant n'est jamais réécrit). Aucune dépendance ajoutée.
+
+| Méthode | URL | Réponse | Accès |
+|---|---|---|---|
+| GET | /api/points-ctrls?sousType={code} | la grille du sous-type (conditions servies, non résolues) | comme avant |
+| GET | /api/dossiers/{id}/grille | la grille **de ce dossier** : sans les points dont la condition ne s'applique pas à sa fiche | comme la lecture du dossier |
+
+- **`PointsCtrlDto`** gagne `categorie` (`FOURNITURES_SERVICES` | `TRAVAUX` | `PRESTATIONS_INTELLECTUELLES` ; nul : toutes) et `forme`
+  (`CONTRAT_CADRE` | `AUTRE` ; nul : toutes) — lus et écrits par l'écran d'administration des points.
+- **La grille d'un sous-type** = les points **communs** de sa famille (sauf **grille propre** : `MPI`, `MGG`, `DC`, `RJ`, `DPREQUAL`, `DP`,
+  `AVN`, `DSS`) + les points de sa **grille de base**, de proche en proche (`DAOOI`, `DAOOPREQUAL`, `DAOR` ← `DAOO` ; `DAORI` ← `DAOR` ;
+  `MAOOI`, `MAOOPREQUAL`, `MAOR` ← `MAOO` ; `MAORI` ← `MAOR`) + les siens, triés par ordre. **La grille d'un dossier** retire les points
+  conditionnés qui ne s'appliquent pas à sa fiche (lue par `ID_DMC`, ou par le lot pour un dossier de marché) ; **sans fiche**, ils
+  restent. L'examen exige la complétude sur cette grille-là.
+- **Les points du manuel** (libellé court, question du manuel en description) : plans (5, communs DDP : motifs de la mise à jour,
+  mode, dates et délais aménagés, mentions de l'objet, base du fractionnement) ; `DAOO` (9 communs + 2 fournitures + 5 travaux + 5
+  contrat-cadre) ; `DAOOI` / `DAORI` (publicité internationale) ; `DAOR` (5) ; `DPREQUAL` (3) ; `DC` (16) ; `RJ` (4) ; `MGG` (3) ; `MAOO`
+  (9, en plus des 9 points communs DDM existants) ; `MAOOI` (1) ; `MAOR` (2) ; `MPI` (11, grille propre : les points communs DDM ne s'y
+  appliquent plus) ; `AVN` (7) ; `DSS` (3) ; actes de gestion (3 communs DGC + `INDEMN` 2, `SURSIS` 3, `PENAL` 2, `DR` 3). Les 12 points
+  existants du DAO et les 9 du dossier de marché sont gardés.
+- **Effet en recette** : un examen en cours voit sa grille s'enrichir (un plan : 3 points par ligne, 1 sur la fiche, 1 sur le dossier) ;
+  un examen de MPI ne voit plus les 9 points communs du dossier de marché.
+
+
 ### Le rabais structuré de l'offre en ligne ⚠️ 2026-10-07
 
 Demande front `demande-backend-2026-10-07-rabais-structure.md` (arbitrage Q4 du pilote : « le rabais est structuré au dépôt »). Aucune

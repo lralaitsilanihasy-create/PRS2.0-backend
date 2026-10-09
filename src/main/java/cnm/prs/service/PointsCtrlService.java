@@ -27,9 +27,13 @@ public class PointsCtrlService {
 
     private final PointsCtrlRepository repository;
     private final SousTypeDossierRepository sousTypeDossierRepository;
+    /** ⚠️ M3 (manuel de contrôle) — la grille d'un sous-type : base, grille propre, conditions. */
+    private final org.springframework.beans.factory.ObjectProvider<GrilleControle> grilleControle;
 
     public PointsCtrlService(PointsCtrlRepository repository,
-            SousTypeDossierRepository sousTypeDossierRepository) {
+            SousTypeDossierRepository sousTypeDossierRepository,
+            org.springframework.beans.factory.ObjectProvider<GrilleControle> grilleControle) {
+        this.grilleControle = grilleControle;
         this.repository = repository;
         this.sousTypeDossierRepository = sousTypeDossierRepository;
     }
@@ -56,7 +60,8 @@ public class PointsCtrlService {
                         + " » n'appartient pas à la famille « " + famille + " » (famille : "
                         + st.getIdTypeDossier() + ").");
             }
-            return repository.findGrilleEffective(st.getIdTypeDossier(), st.getIdSousType())
+            // ⚠️ M3 (manuel de contrôle, §B3) — grille de base, grille propre ; conditions servies, non résolues.
+            return grilleControle.getObject().duSousType(st.getIdTypeDossier(), st.getIdSousType())
                     .stream().map(PointsCtrlMapper::toDto).toList();
         }
         if (famille != null) {

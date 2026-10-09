@@ -43,6 +43,13 @@ public class SousTypeDossier {
     @JoinColumn(name = "ID_TYPE_DOSSIER", insertable = false, updatable = false)
     @JsonIgnore
     private TypeDossier typeDossier;
+    /** ⚠️ V96 (manuel de contrôle, M3) — le sous-type dont la grille s'ajoute à celle-ci (DAOR = DAOO + ses points). */
+    @Column(name = "GRILLE_BASE", length = 20)
+    private String grilleBase;
+
+    /** ⚠️ V96 (M3) — vrai : les points communs de la famille ne s'appliquent pas (MPI, MGG, DC, AVN…). */
+    @Column(name = "GRILLE_PROPRE", nullable = false)
+    private Boolean grillePropre = false;
 
     public SousTypeDossier(String idSousType, String libelleSousType, String idTypeDossier) {
         this.idSousType = idSousType;

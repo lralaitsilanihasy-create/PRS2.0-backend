@@ -45,4 +45,10 @@ public class PointsCtrlDto {
      */
     @Size(max = 10)
     private String portee;
+
+    /** ⚠️ 2026-10-08 (manuel de contrôle, M3) — la condition : catégorie de la fiche ({@code FOURNITURES_SERVICES}, {@code TRAVAUX}, {@code PRESTATIONS_INTELLECTUELLES}) ; nul : toutes. */
+    private String categorie;
+
+    /** ⚠️ M3 — {@code CONTRAT_CADRE} ou {@code AUTRE} ; nul : toutes formes. */
+    private String forme;
 }

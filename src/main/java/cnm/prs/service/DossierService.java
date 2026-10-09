@@ -127,6 +127,8 @@ public class DossierService {
     private final VerificationPieceDepotService verificationPieceDepotService;
     /** ⚠️ M2 (manuel de contrôle) — les pièces exigées du sous-type. */
     private final PiecesExigees piecesExigees;
+    /** ⚠️ M3 (manuel de contrôle) — la grille du dossier. */
+    private final org.springframework.beans.factory.ObjectProvider<GrilleControle> grilleControle;
     /** ⚠️ 2026-08-05 — figeage du diff et bascule du prédécesseur, à la soumission d'une mise à jour. */
     private final MiseAJourPpmService miseAJourPpmService;
     /** ⚠️ Demande front (2026-08-19) — résolution login → nom lisible pour creePar / soumisPar. */
@@ -168,6 +170,7 @@ public class DossierService {
             TypeDossierRepository typeDossierRepository, SousTypeDossierRepository sousTypeDossierRepository,
             LettreRenvoiRepository lettreRenvoiRepository,
             VerificationPieceDepotService verificationPieceDepotService, PiecesExigees piecesExigees,
+            org.springframework.beans.factory.ObjectProvider<GrilleControle> grilleControle,
             MiseAJourPpmService miseAJourPpmService, JournalDossierService journalDossier,
             ExamenRepository examenRepository, TransmissionSigmpRepository transmissionSigmpRepository,
             ControleurRepository controleurRepository,
@@ -194,6 +197,7 @@ public class DossierService {
         this.pieceDemandeRetraitRepository = pieceDemandeRetraitRepository;
         this.verificationPieceDepotService = verificationPieceDepotService;
         this.piecesExigees = piecesExigees;
+        this.grilleControle = grilleControle;
         this.miseAJourPpmService = miseAJourPpmService;
         this.journalDossier = journalDossier;
         this.examenRepository = examenRepository;
@@ -438,6 +442,14 @@ public class DossierService {
         Dossier entity = repository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable : " + id));
         controlerVisibilite(id);
         return piecesExigees.dtoPour(entity);
+    }
+
+    /** ⚠️ M3 (manuel de contrôle, §B3) — la grille de contrôle du dossier. Même garde de lecture que le dossier. */
+    @Transactional(readOnly = true)
+    public List<cnm.prs.dto.PointsCtrlDto> grille(Integer id) {
+        Dossier entity = repository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Dossier introuvable : " + id));
+        controlerVisibilite(id);
+        return grilleControle.getObject().pour(entity).stream().map(cnm.prs.mapper.PointsCtrlMapper::toDto).toList();
     }
 
     /**

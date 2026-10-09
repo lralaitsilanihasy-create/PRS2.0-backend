@@ -66,6 +66,14 @@ public class PointsCtrl {
     @Column(name = "PORTEE", length = 20)
     private PorteePointCtrl portee = PorteePointCtrl.LIGNE;
 
+    /** ⚠️ V96 (manuel de contrôle, M3) — la condition du point : catégorie de la fiche (nul : toutes). */
+    @Column(name = "CATEGORIE", length = 40)
+    private String categorie;
+
+    /** ⚠️ V96 (M3) — {@code CONTRAT_CADRE}, {@code AUTRE} (toute autre forme) ; nul : toutes formes. */
+    @Column(name = "FORME", length = 20)
+    private String forme;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ID_TYPE_DOSSIER", insertable = false, updatable = false)
     @JsonIgnore

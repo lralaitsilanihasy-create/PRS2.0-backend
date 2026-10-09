@@ -117,23 +117,28 @@ public class PiecesExigees {
 
     /** Vrai : la pièce s'applique ; faux : elle ne s'applique pas ; nul : on ne sait pas (pas de fiche). */
     static Boolean vaut(PieceSousType a, Contexte c) {
-        if (a.getCategorie() == null && a.getForme() == null) {
+        return vaut(a.getCategorie(), a.getForme(), c);
+    }
+
+    /** ⚠️ M3 — la même règle pour un point de contrôle : vrai, faux, ou nul (pas de fiche). */
+    static Boolean vaut(String categorie, String forme, Contexte c) {
+        if (categorie == null && forme == null) {
             return true;
         }
-        if (a.getCategorie() != null) {
+        if (categorie != null) {
             if (c.categorie() == null) {
                 return null;
             }
-            if (!a.getCategorie().equals(c.categorie())) {
+            if (!categorie.equals(c.categorie())) {
                 return false;
             }
         }
-        if (a.getForme() != null) {
+        if (forme != null) {
             if (c.forme() == null) {
                 return null;
             }
             boolean cadre = PieceSousType.CONTRAT_CADRE.equals(c.forme());
-            if (PieceSousType.CONTRAT_CADRE.equals(a.getForme()) != cadre) {
+            if (PieceSousType.CONTRAT_CADRE.equals(forme) != cadre) {
                 return false;
             }
         }
@@ -141,7 +146,7 @@ public class PiecesExigees {
     }
 
     /** La catégorie et la forme de la fiche du dossier : par son {@code ID_DMC}, ou par le lot dont il est le dossier de marché. */
-    private Contexte contexte(Dossier d) {
+    Contexte contexte(Dossier d) {
         Long idDmc = d.getIdDmc() != null ? d.getIdDmc()
                 : d.getIdDossier() == null ? null : attributions.findFirstByIdDossier(d.getIdDossier()).map(a -> a.getIdDmc()).orElse(null);
         if (idDmc == null) {

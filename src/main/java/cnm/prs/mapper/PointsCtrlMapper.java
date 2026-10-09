@@ -25,6 +25,8 @@ public final class PointsCtrlMapper {
         dto.setIdTypeDossier(entity.getIdTypeDossier());
         dto.setIdSousType(entity.getIdSousType());
         dto.setPortee(entity.getPortee().name());   // getter coalescent → jamais null
+        dto.setCategorie(entity.getCategorie());
+        dto.setForme(entity.getForme());
         return dto;
     }
 
@@ -41,6 +43,8 @@ public final class PointsCtrlMapper {
         entity.setIdTypeDossier(dto.getIdTypeDossier());
         entity.setIdSousType(dto.getIdSousType());
         entity.setPortee(PorteePointCtrl.depuisCodeOuDefaut(dto.getPortee()));   // absent → LIGNE, inconnu → 400
+        entity.setCategorie(dto.getCategorie());
+        entity.setForme(dto.getForme());
         return entity;
     }
 }

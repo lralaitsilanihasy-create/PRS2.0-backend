@@ -189,6 +189,12 @@ public class DossierController {
         return service.piecesExigees(id);
     }
 
+    /** ⚠️ M3 (manuel de contrôle, §B3) — la grille de contrôle du dossier : son sous-type, sa base, les conditions de sa fiche. */
+    @GetMapping("/{id}/grille")
+    public List<cnm.prs.dto.PointsCtrlDto> grille(@PathVariable Integer id) {
+        return service.grille(id);
+    }
+
     /**
      * Résout le PPM rattaché au dossier (mapping {@code idDossier → PPM}), y compris pour un dossier
      * <strong>BROUILLON</strong> lu par son propriétaire — permet d'ouvrir un brouillon depuis

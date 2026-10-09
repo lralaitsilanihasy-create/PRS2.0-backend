@@ -51,6 +51,8 @@ public class ExamenService {
     private final PvExamenService pvExamenService;
     private final ControleurDirectory controleurDirectory;
     private final PointsCtrlRepository pointsCtrlRepository;
+    /** ⚠️ M3 (manuel de contrôle) — la grille effective du dossier. */
+    private final GrilleControle grilleControle;
     private final MarcheRepository marcheRepository;
     private final ExamenDetailRepository examenDetailRepository;
     /** ⚠️ Audit 2026-08-27 (lot B) — verrou d'état partagé avec les détails et les pièces d'examen. */
@@ -77,7 +79,9 @@ public class ExamenService {
             cnm.prs.repository.ObservationControleRepository observationControleRepository,
             cnm.prs.repository.ExamenPieceRepository examenPieceRepository,
             cnm.prs.repository.PvExamenRepository pvExamenRepository,
-            cnm.prs.repository.ControleurRepository controleurRepository, JournalDossierService journalDossier) {
+            cnm.prs.repository.ControleurRepository controleurRepository, JournalDossierService journalDossier,
+            GrilleControle grilleControle) {
+        this.grilleControle = grilleControle;
         this.observationControleRepository = observationControleRepository;
         this.examenPieceRepository = examenPieceRepository;
         this.pvExamenRepository = pvExamenRepository;
@@ -158,8 +162,8 @@ public class ExamenService {
         if (dossier == null) {
             return;
         }
-        List<PointsCtrl> grille = pointsCtrlRepository.findGrilleEffective(
-                dossier.getIdTypeDossier(), dossier.getIdSousType());
+        // ⚠️ M3 (manuel de contrôle, §B3) — la grille du sous-type (base, grille propre), points conditionnés résolus par la fiche.
+        List<PointsCtrl> grille = grilleControle.pour(dossier);
         if (grille.isEmpty()) {
             return;   // pas de grille pour ce (famille, sous-type) → rien à exiger
         }

@@ -1155,6 +1155,15 @@ de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM 
 > leurs. Une pièce qui dépend de la catégorie ou de la forme du marché ne s'exige que si elle s'applique à la fiche ; un dossier
 > sans fiche la voit sans obligation. La soumission refuse un dossier auquel il manque une pièce obligatoire de sa liste. Les plans
 > de passation gardent leurs pièces.
+>
+> ⚠️ **2026-10-08 — les grilles de contrôle par sous-type (tranche M3, V96).** Chaque sous-type a la grille du manuel : les points
+> communs de sa famille, puis ceux de la grille dont il dérive (un appel d'offres restreint reprend la grille de l'appel d'offres
+> ouvert et y ajoute ses cinq points ; un marché sur appel d'offres restreint, celle du marché sur appel d'offres ouvert), puis les
+> siens. Certains sous-types ont une grille propre, sans les points communs de leur famille : marché de prestations
+> intellectuelles, gré à gré, dossier de consultation, rapport justificatif, pré-qualification, avenant, déclaration sans suite.
+> Un point peut ne valoir que pour une catégorie (fournitures, travaux) ou pour le contrat-cadre : le Membre ne l'examine que s'il
+> s'applique à la fiche du dossier, et toujours quand le dossier n'a pas de fiche. La grille des plans reçoit les cinq points du
+> manuel (motifs de la mise à jour, mode de passation, dates et délais aménagés, mentions de l'objet, base du fractionnement).
 
 - **Un dossier ne naît que d'un contenu figé.** La PRMP — celle qui valide, pas l'UGPM — produit le dossier depuis une
   fiche dont la **dernière version est validée** ; une révision ouverte bloque (`FICHE_NON_VALIDEE`) jusqu'à sa
