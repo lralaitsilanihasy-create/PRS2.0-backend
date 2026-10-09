@@ -43,4 +43,26 @@ public class DelaiStandardController {
     public DelaiStandardDto definir(@PathVariable String etape, @Valid @RequestBody DelaiStandardDto dto) {
         return service.definir(etape, dto);
     }
+
+    /** ⚠️ M5b (manuel de contrôle, §B6) — les délais d'un sous-type : effectif, standard de l'étape, surcharge. 404 sous-type inconnu. */
+    @GetMapping("/sous-types/{sousType}")
+    public List<cnm.prs.dto.DelaiSousTypeDto> tableauSousType(@PathVariable String sousType) {
+        return service.tableauSousType(sousType);
+    }
+
+    /** Surcharge le délai d'une étape pour un sous-type (Administrateur). */
+    @PreAuthorize("hasRole('ADMINISTRATEUR')")
+    @PutMapping("/sous-types/{sousType}/{etape}")
+    public cnm.prs.dto.DelaiSousTypeDto definirSousType(@PathVariable String sousType, @PathVariable String etape,
+            @Valid @RequestBody DelaiStandardDto dto) {
+        return service.definirSousType(sousType, etape, dto);
+    }
+
+    /** Retire la surcharge : l'étape reprend son délai standard pour ce sous-type (Administrateur). */
+    @PreAuthorize("hasRole('ADMINISTRATEUR')")
+    @org.springframework.web.bind.annotation.DeleteMapping("/sous-types/{sousType}/{etape}")
+    public org.springframework.http.ResponseEntity<Void> retirerSousType(@PathVariable String sousType, @PathVariable String etape) {
+        service.retirerSousType(sousType, etape);
+        return org.springframework.http.ResponseEntity.noContent().build();
+    }
 }

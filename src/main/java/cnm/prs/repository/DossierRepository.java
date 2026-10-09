@@ -581,4 +581,7 @@ public interface DossierRepository extends JpaRepository<Dossier, Integer> {
     /** ⚠️ 2d-3 (sans suite) — le dossier d'un examen (l'avis d'un dossier DSS n'a que deux issues). */
     @Query("select e.dispatch.reception.idDossier from Examen e where e.idExamen = :idExamen")
     java.util.Optional<Integer> idDossierDeLExamen(@Param("idExamen") Integer idExamen);
+
+    /** ⚠️ M5b (manuel de contrôle, §B6) — les dossiers d'un ensemble de statuts (suivi des examens en dépassement). */
+    List<Dossier> findByStatutIn(java.util.Collection<String> statuts);
 }

@@ -7801,6 +7801,35 @@ ligne, fiche), **sinon déclarés** au dépôt ; le cumul des avenants compte ce
   délai propre de la DSS et les délais par sous-type viennent avec **M5b**.
 
 
+### Le référentiel du contrôle aligné sur le Manuel de contrôle a priori, tranche M5b : les délais par sous-type et l'alerte d'examen — V99 ⚠️ 2026-10-09
+
+Demande front `demande-backend-2026-10-08-manuel-controle-a-priori.md` (§B6). Arbitrages du pilote du 09/10 : **aucune valeur de départ**
+(le manuel n'en chiffre aucune par type ; l'Administrateur règle) ; l'examen **garde son réglage actuel** (40 heures ouvrées en recette,
+pas de passage d'office à 16) ; l'alerte de dépassement va au **Membre, au Chef de commission et au Président**. Migration **V99**
+(`tr_delai_sous_type`, `t_alerte_examen`). Aucune dépendance ajoutée.
+
+| Méthode | URL | Réponse | Accès |
+|---|---|---|---|
+| GET | /api/delais-standards/sous-types/{sousType} | chaque étape de la Commission : `{ idSousType, etape, delaiHeures, standardHeures, surcharge }` | authentifié |
+| PUT | /api/delais-standards/sous-types/{sousType}/{etape} | corps `{ delaiHeures }` (≥ 1) : la surcharge réglée | **Administrateur** (403 sinon) |
+| DELETE | /api/delais-standards/sous-types/{sousType}/{etape} | 204 : l'étape reprend son délai standard pour ce sous-type | **Administrateur** |
+
+- **404** : sous-type inconnu, étape inconnue ou portée par la PRMP (`RECTIFICATION_PRMP`, comme pour `PUT /api/delais-standards/{etape}`) ;
+  **400** : `delaiHeures` absent ou < 1. `delaiHeures` = délai **effectif** du sous-type ; `standardHeures` = délai de l'étape pour tous ;
+  `surcharge` = le sous-type a le sien.
+- **Le calcul suit le sous-type** : la date prévisionnelle de fin (`DossierDto.datePrevisionnelleFin`, chronométrage) et le délai de l'étape
+  en cours de l'accueil « À faire » prennent, pour chaque dossier, les délais de **son sous-type** (surcharges comprises) ; sans surcharge,
+  rien ne change. Les **sections** de l'accueil gardent le délai standard de l'étape.
+- **L'alerte d'examen** (manuel, ch. 1, V : « le délai de traitement maximum d'un dossier est de 5 jours ouvrés ») : un dossier en examen
+  (`DISPATCHE`, `A_REEXAMINER`) depuis **plus de 40 heures ouvrées** (`app.examen.alerte-heures-ouvrees`), mesurées comme le chronométrage
+  (de l'entrée dans l'étape), déclenche la notification **`EXAMEN_EN_DEPASSEMENT`** (objet : le dossier) vers le Membre et le Chef de
+  commission du dernier dispatch et vers le(s) Président(s). **Une seule par passage** en examen : un réexamen peut en déclencher une
+  nouvelle. Suivi **horaire** (`app.examen.cron-alertes`, défaut `0 5 * * * *`). Le seuil est **indépendant** du délai standard de
+  l'examen (réglable, lui, par étape et par sous-type).
+- **DSS** : son avis sous cinq jours reste suivi par l'échéance propre de la tranche 2d-3 (`ECHEANCE_SANS_SUITE`, la veille) ; un délai par
+  sous-type peut en plus lui être réglé ici.
+
+
 ### Le rabais structuré de l'offre en ligne ⚠️ 2026-10-07
 
 Demande front `demande-backend-2026-10-07-rabais-structure.md` (arbitrage Q4 du pilote : « le rabais est structuré au dépôt »). Aucune

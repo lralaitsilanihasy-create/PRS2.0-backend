@@ -605,7 +605,7 @@ public class ChronometrageService {
             List<SuspensionDossier> suspensions, LocalDateTime maintenant) {
         return datePrevisionnelleFin(dossier == null ? null : dossier.getStatut(), statutPv, taches,
                 suspensions, dossier == null ? null : dossier.getDateSoumission(), maintenant,
-                delaiStandardService.delais());
+                delaiStandardService.delais(dossier == null ? null : dossier.getIdSousType()));   // ⚠️ M5b : délais du sous-type
     }
 
     /**

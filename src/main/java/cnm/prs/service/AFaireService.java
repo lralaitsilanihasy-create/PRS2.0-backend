@@ -325,7 +325,7 @@ public class AFaireService {
         List<Candidat> titulaires = candidats.stream().filter(c -> c.mode() == ModeTache.TITULAIRE).toList();
         List<Candidat> delegues = candidats.stream().filter(c -> c.mode() != ModeTache.TITULAIRE).toList();
 
-        return new AFaireDto(profil, maintenant, compteurs(titulaires), sections(titulaires, lot.delais()),
+        return new AFaireDto(profil, maintenant, compteurs(titulaires), sections(titulaires, lot.delais().base()),
                 classer(titulaires),
                 new AFaireDto.Delegations(delegues.size(), totauxParSection(delegues),
                         servirDelegations ? classer(delegues) : List.of()));
@@ -354,7 +354,7 @@ public class AFaireService {
             Map<Integer, Object[]> pvs,
             Map<Integer, List<TacheDossier>> taches,
             Map<Integer, List<SuspensionDossier>> suspensions,
-            Map<EtapeCircuit, Integer> delais,
+            DelaiStandardService.Referentiel delais,   // ⚠️ M5b : étapes + surcharges par sous-type
             Map<Integer, LettreEnCours> lettresASigner,
             Map<Integer, LettreEnCours> lettresAArchiver,
             Map<Integer, DemandeRetrait> retraits,
@@ -425,7 +425,7 @@ public class AFaireService {
 
         Map<Integer, List<TacheDossier>> taches = chronometrage.tachesParDossier(ids);
         Map<Integer, List<SuspensionDossier>> suspensions = chronometrage.suspensionsParDossier(ids);
-        Map<EtapeCircuit, Integer> delais = delaiStandardService.delais();
+        DelaiStandardService.Referentiel delais = delaiStandardService.referentiel();
 
         Map<Integer, LettreEnCours> lettresASigner = new HashMap<>();
         Map<Integer, LettreEnCours> lettresAArchiver = new HashMap<>();
@@ -527,9 +527,9 @@ public class AFaireService {
         List<TacheDossier> taches = lot.taches().getOrDefault(idDossier, List.of());
         List<SuspensionDossier> suspensions = lot.suspensions().getOrDefault(idDossier, List.of());
         return new Chrono(
-                chronometrage.delaiCourant(statut, statutPv, taches, suspensions, depot, maintenant, lot.delais()),
+                chronometrage.delaiCourant(statut, statutPv, taches, suspensions, depot, maintenant, lot.delais().pour((String) d[4])),
                 chronometrage.datePrevisionnelleFin(statut, statutPv, taches, suspensions, depot, maintenant,
-                        lot.delais()));
+                        lot.delais().pour((String) d[4])));
     }
 
     private List<Candidat> taches(Lot lot, boolean cnm, Object[] d, EtatDossier etat,

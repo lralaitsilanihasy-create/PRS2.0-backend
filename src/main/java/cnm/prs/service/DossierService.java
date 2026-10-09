@@ -690,7 +690,8 @@ public class DossierService {
         Map<Integer, String> attributaires = chronometrage.attributairesParDossier(ids);
         // Référentiel lu UNE fois pour toute la liste, en projection scalaire : relire les délais par
         // étape et par dossier chargeait assez d'entités pour faire tomber le contrat de pagination.
-        Map<cnm.prs.enums.EtapeCircuit, Integer> delais = delaiStandardService.delais();
+        // ⚠️ M5b (manuel de contrôle, §B6) — les délais du sous-type de chaque dossier (surcharges comprises), lus une fois.
+        DelaiStandardService.Referentiel delais = delaiStandardService.referentiel();
         java.time.LocalDateTime maintenant = java.time.LocalDateTime.now();
         for (DossierDto dto : dtos) {
             ChronometrageService.EtatPv pv = pvs.get(dto.getIdDossier());
@@ -698,7 +699,7 @@ public class DossierService {
             List<cnm.prs.entity.TacheDossier> tachesDossier = taches.getOrDefault(dto.getIdDossier(), List.of());
             dto.setDatePrevisionnelleFin(chronometrage.datePrevisionnelleFin(dto.getStatut(), statutPv,
                     tachesDossier, suspensions.getOrDefault(dto.getIdDossier(), List.of()),
-                    dto.getDateSoumission(), maintenant, delais));
+                    dto.getDateSoumission(), maintenant, delais.pour(dto.getIdSousType())));
             // ⚠️ Suivi des délais CNM (2026-09-06) — date d'enregistrement = clôture de RECEPTION, depuis
             // les MÊMES tâches déjà chargées en lot : aucune requête de plus, aucun N+1.
             dto.setDateEnregistrement(chronometrage.dateEnregistrement(tachesDossier));

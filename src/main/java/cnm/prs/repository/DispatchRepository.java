@@ -123,4 +123,8 @@ public interface DispatchRepository extends JpaRepository<Dispatch, Integer> {
 
     /** ⚠️ 2d-3 (sans suite) — le dernier dispatch d'une réception (son membre examinateur, alerté de l'échéance). */
     java.util.Optional<Dispatch> findFirstByIdReceptionOrderByIdDispatchDesc(Integer idReception);
+
+    /** ⚠️ M5b (manuel de contrôle, §B6) — (Membre, Chef de commission) des dispatchs d'un dossier, le plus récent d'abord. */
+    @Query("select d.imCtrlMembre, d.imCtrlCc from Dispatch d where d.reception.idDossier = :idDossier order by d.idDispatch desc")
+    java.util.List<Object[]> findActeursParDossier(@Param("idDossier") Integer idDossier);
 }

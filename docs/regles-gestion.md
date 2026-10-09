@@ -1183,6 +1183,14 @@ de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM 
 > l'attribution et de la fiche quand le marché a été passé en ligne ; sinon la PRMP les déclare au premier acte, et ils valent pour
 > les suivants. Les dates de réception et de solde sont déclarées par la PRMP. Ces contrôles ont lieu au dépôt, à chaque modification
 > et de nouveau à la soumission.
+>
+> ⚠️ **2026-10-09 — les délais par type de dossier et l'alerte d'examen (tranche M5b, V99).** Le manuel admet que le délai d'une
+> étape soit différencié selon le type de dossier : l'Administrateur peut régler, pour un sous-type, un délai propre à une étape
+> (l'examen d'un plan plus court que celui d'un marché, par exemple) ; sans réglage, le délai de l'étape s'applique. La date de fin
+> annoncée à la PRMP et le délai de l'étape en cours suivent ces réglages. Aucun délai n'est réglé d'office : le manuel n'en chiffre
+> aucun par type, et l'examen garde son réglage. Le manuel fixe en revanche un plafond : un dossier ne reste pas plus de **5 jours
+> ouvrés** en examen. Au-delà (40 heures ouvrées comptées depuis l'entrée en examen), le Membre examinateur, le Chef de commission et
+> le Président sont avertis, une seule fois par passage en examen.
 
 - **Un dossier ne naît que d'un contenu figé.** La PRMP — celle qui valide, pas l'UGPM — produit le dossier depuis une
   fiche dont la **dernière version est validée** ; une révision ouverte bloque (`FICHE_NON_VALIDEE`) jusqu'à sa

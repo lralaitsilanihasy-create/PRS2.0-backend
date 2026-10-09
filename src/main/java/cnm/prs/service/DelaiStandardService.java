@@ -42,9 +42,123 @@ public class DelaiStandardService {
     private static final int DELAI_DE_REPLI = HeuresOuvrees.HEURES_PAR_JOUR;
 
     private final DelaiStandardRepository repository;
+    /** ⚠️ M5b (manuel de contrôle, §B6 ; V99) — délais surchargés par sous-type. */
+    private final cnm.prs.repository.DelaiSousTypeRepository surcharges;
+    private final cnm.prs.repository.SousTypeDossierRepository sousTypes;
 
-    public DelaiStandardService(DelaiStandardRepository repository) {
+    public DelaiStandardService(DelaiStandardRepository repository, cnm.prs.repository.DelaiSousTypeRepository surcharges,
+            cnm.prs.repository.SousTypeDossierRepository sousTypes) {
         this.repository = repository;
+        this.surcharges = surcharges;
+        this.sousTypes = sousTypes;
+    }
+
+    /**
+     * ⚠️ 2026-10-09 (manuel de contrôle a priori, tranche M5b, §B6 ; V99) — le référentiel complet, lu <strong>une fois</strong> pour
+     * une liste : les délais des étapes et leurs surcharges par sous-type. {@link #pour} rend la carte d'un dossier : celle des étapes,
+     * corrigée des surcharges de son sous-type.
+     */
+    public record Referentiel(Map<EtapeCircuit, Integer> base, Map<String, Map<EtapeCircuit, Integer>> parSousType) {
+
+        public Map<EtapeCircuit, Integer> pour(String sousType) {
+            Map<EtapeCircuit, Integer> propres = sousType == null ? null : parSousType.get(sousType);
+            if (propres == null || propres.isEmpty()) {
+                return base;
+            }
+            Map<EtapeCircuit, Integer> fusion = new EnumMap<>(base);
+            fusion.putAll(propres);
+            return fusion;
+        }
+    }
+
+    /** Le référentiel des étapes et des sous-types, en <strong>une</strong> requête scalaire (budget de requêtes des listes). */
+    public Referentiel referentiel() {
+        Map<EtapeCircuit, Integer> base = new EnumMap<>(EtapeCircuit.class);
+        Map<String, Map<EtapeCircuit, Integer>> parSousType = new java.util.HashMap<>();
+        for (Object[] l : surcharges.toutLeReferentiel()) {
+            if (l.length < 3 || l[1] == null || l[2] == null) {
+                continue;
+            }
+            try {
+                EtapeCircuit etape = EtapeCircuit.valueOf((String) l[1]);
+                int valeur = ((Number) l[2]).intValue();
+                if (valeur <= 0) {
+                    continue;
+                }
+                if (l[0] == null) {
+                    base.put(etape, valeur);
+                } else {
+                    parSousType.computeIfAbsent((String) l[0], k -> new EnumMap<>(EtapeCircuit.class)).put(etape, valeur);
+                }
+            } catch (IllegalArgumentException ex) {
+                // Étape retirée du code : ignorée, le repli s'applique.
+            }
+        }
+        for (EtapeCircuit etape : EtapeCircuit.values()) {
+            base.putIfAbsent(etape, DELAI_DE_REPLI);
+        }
+        return new Referentiel(base, parSousType);
+    }
+
+    /** Les délais d'un dossier de ce sous-type (surcharges comprises). */
+    public Map<EtapeCircuit, Integer> delais(String sousType) {
+        return referentiel().pour(sousType);
+    }
+
+    /**
+     * Le tableau d'un sous-type pour l'Administrateur : chaque étape de la Commission avec son délai effectif, le délai standard de
+     * l'étape et la marque de la surcharge. 404 si le sous-type est inconnu.
+     */
+    public List<cnm.prs.dto.DelaiSousTypeDto> tableauSousType(String sousType) {
+        exigerSousType(sousType);
+        Map<EtapeCircuit, Integer> base = delais();
+        Map<EtapeCircuit, Integer> propres = referentiel().parSousType().getOrDefault(sousType, Map.of());
+        List<cnm.prs.dto.DelaiSousTypeDto> lignes = new ArrayList<>();
+        for (EtapeCircuit etape : EtapeCircuit.values()) {
+            if (etape.porteur() == cnm.prs.enums.ProfilUtilisateur.PRMP) {
+                continue;
+            }
+            Integer propre = propres.get(etape);
+            lignes.add(new cnm.prs.dto.DelaiSousTypeDto(sousType, etape.name(), propre != null ? propre : base.get(etape), base.get(etape),
+                    propre != null));
+        }
+        return lignes;
+    }
+
+    /** Surcharge le délai d'une étape pour un sous-type. 404 étape ou sous-type inconnus. */
+    @Transactional
+    public cnm.prs.dto.DelaiSousTypeDto definirSousType(String sousType, String etape, DelaiStandardDto dto) {
+        exigerSousType(sousType);
+        EtapeCircuit cible = etapeDeLaCommission(etape);
+        surcharges.save(new cnm.prs.entity.DelaiSousType(sousType, cible.name(), dto.delaiHeures()));
+        return new cnm.prs.dto.DelaiSousTypeDto(sousType, cible.name(), dto.delaiHeures(), delais().get(cible), true);
+    }
+
+    /** Retire la surcharge : l'étape reprend son délai standard pour ce sous-type. 404 étape ou sous-type inconnus. */
+    @Transactional
+    public void retirerSousType(String sousType, String etape) {
+        exigerSousType(sousType);
+        EtapeCircuit cible = etapeDeLaCommission(etape);
+        surcharges.deleteById(new cnm.prs.entity.DelaiSousType.Cle(sousType, cible.name()));
+    }
+
+    private void exigerSousType(String sousType) {
+        if (sousType == null || !sousTypes.existsById(sousType)) {
+            throw new ResourceNotFoundException("Sous-type inconnu : " + sousType);
+        }
+    }
+
+    private static EtapeCircuit etapeDeLaCommission(String etape) {
+        EtapeCircuit cible;
+        try {
+            cible = EtapeCircuit.valueOf(etape);
+        } catch (IllegalArgumentException ex) {
+            throw new ResourceNotFoundException("Étape inconnue : " + etape);
+        }
+        if (cible.porteur() == cnm.prs.enums.ProfilUtilisateur.PRMP) {
+            throw new ResourceNotFoundException("Étape inconnue : " + etape);
+        }
+        return cible;
     }
 
     /**
