@@ -875,6 +875,11 @@ public class SaisieService {
             throw new BusinessRuleException(
                     "Pour un dossier de planification (PPM), utilisez POST /api/saisies/ppm.");
         }
+        // ⚠️ M5a (manuel de contrôle, §B1) — un acte de gestion contractuelle se dépose depuis le marché qu'il concerne.
+        if (ActesGestionService.FAMILLE_DGC.equals(sousType.getIdTypeDossier())) {
+            throw new BadRequestException("Un acte de gestion contractuelle se dépose depuis le marché qu'il concerne "
+                    + "(POST /api/dossiers/{idMarche}/actes-gestion).", "ACTE_DEPUIS_LE_MARCHE");
+        }
         String idPrmp = prmpCourante();
         String localite = dossierIntegrite.localiteDeLEntiteDeLaPrmp(req.idEntiteContract(), idPrmp);
         Dossier d = creerDossier(sousType.getIdTypeDossier(), sousType.getIdSousType(),

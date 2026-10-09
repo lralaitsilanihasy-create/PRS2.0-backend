@@ -7759,6 +7759,48 @@ dépendance ajoutée.
   colle `texte` dans le champ en cours d'édition ; l'écran d'administration lit `?typeDossier=`.
 
 
+### Le référentiel du contrôle aligné sur le Manuel de contrôle a priori, tranche M5a : les actes de gestion déposés depuis le marché — V98 ⚠️ 2026-10-09
+
+Demande front `demande-backend-2026-10-08-manuel-controle-a-priori.md` (§B1, famille DGC ; §B5, garde-fous). Arbitrages du pilote du
+09/10 : M5 livré en deux sous-tranches (M5a ici ; M5b : délais par sous-type) ; montant initial et catégorie **lus** (attribution en
+ligne, fiche), **sinon déclarés** au dépôt ; le cumul des avenants compte ceux **déjà soumis, hors avis défavorable**, en HT. Migration
+**V98** (`t_acte_gestion`). Aucune dépendance ajoutée.
+
+| Méthode | URL | Réponse | Accès |
+|---|---|---|---|
+| GET | /api/dossiers/{idMarche}/actes-gestion | le marché (DDM) et ses actes : faits retenus, cumul, plafond, rang suivant | comme la lecture du dossier de marché |
+| POST | /api/dossiers/{idMarche}/actes-gestion | 201 : l'acte et son dossier DGC **en brouillon** | PRMP (ou UGPM) du marché |
+| GET | /api/actes-gestion/{idDossier} | l'acte d'un dossier DGC | comme la lecture de ce dossier |
+| PUT | /api/actes-gestion/{idDossier} | l'acte modifié (déclarations) — **brouillon seulement** | PRMP (ou UGPM) |
+
+- **Demande** (`POST`, `PUT`) : `{ sousType, montantHt, montantInitialHt, categorie, dateReceptionProvisoire, dateReceptionDefinitive,
+  dateSolde }`. `sousType` : `AVN` | `DR` | `INDEMN` | `PENAL` | `SURSIS` (ignoré au `PUT`). `montantHt` : l'avenant, **HT**, hausse
+  positive, baisse négative (ignoré hors avenant). `montantInitialHt` et `categorie` (`FOURNITURES_SERVICES` | `TRAVAUX` |
+  `PRESTATIONS_INTELLECTUELLES`) ne servent que si le serveur ne les connaît pas ; une fois déclarés sur un acte, ils valent pour les
+  suivants. Le `PUT` remplace toutes les déclarations de l'acte.
+- **Acte** : `idActe`, `idDossier` (le dossier DGC), `idDossierMarche`, `sousType`, `rang` (avenant), `montantHt`, les déclarations,
+  `statutDossier`, `refeDossier`, `avis` (dernier PV signé), `compteDansLeCumul`, `creeLe`.
+- **Marché** : `idDossierMarche`, `sousTypeMarche`, `refeDossier`, `avisMarche`, `montantInitialHt` + `sourceMontantInitial`
+  (`ATTRIBUTION` | `DECLARE` | nul), `categorie` + `sourceCategorie` (`FICHE` | `DECLARE` | nul), `dateReceptionProvisoire`,
+  `dateReceptionDefinitive`, `dateSolde`, `cumulAvenantsHt`, `plafondAvenantsHt` (tiers du montant initial), `rangAvenantSuivant`, `actes`.
+- **Le dépôt** : le marché doit être un dossier **DDM** (400 `PAS_UN_MARCHE`) dont le **dernier PV signé est favorable** (`FAV`, `FAVR` ;
+  409 `MARCHE_NON_CONTROLE`). L'acte naît **en brouillon**, au nom de la PRMP, avec l'entité et la localité du marché ; il suit ensuite
+  le circuit ordinaire (pièces M2, grille M3, motifs M4). Sous-type hors DGC : 400 `SOUS_TYPE_HORS_DGC`.
+- **La saisie libre d'un acte est refusée** : `POST /api/saisies/dossier` avec un sous-type DGC → 400 `ACTE_DEPUIS_LE_MARCHE`. Un dossier DGC
+  sans marché ne se soumet pas (409 `ACTE_SANS_MARCHE`).
+- **L'avenant** prend un **rang** (1, 2…) ; la référence attribuée à la réception le porte : `…/AVN2/…`. Il est refusé, au dépôt, au `PUT`
+  et **de nouveau à la soumission** :
+  - 400 `MONTANT_INITIAL_OBLIGATOIRE`, `CATEGORIE_OBLIGATOIRE` (ni connus ni déclarés) ; `CATEGORIE_INCONNUE` ;
+  - 409 `AVENANT_APRES_RECEPTION` (`details.dateReception`) : réception **définitive** déclarée et passée (travaux), réception
+    **provisoire ou définitive** (fournitures, services, prestations intellectuelles) ; une date à venir ne bloque pas ;
+  - 409 `AVENANT_APRES_SOLDE` (`details.dateSolde`) : solde réglé ;
+  - 409 `AVENANT_PLAFOND` (`details.cumulHt`, `plafondHt`, `montantInitialHt`) : les avenants **déjà soumis** du marché (ni brouillon, ni
+    retiré, dernier avis signé autre que `DEF`) plus celui-ci dépassent le tiers du montant initial HT.
+  - Un acte déjà soumis ne se modifie plus : 409 `DOSSIER_NON_BROUILLON`.
+- **Rappels** : la déclaration sans suite reste refusée après la signature d'un marché de la procédure (`MARCHE_SIGNE`, tranche 2d-3) ; le
+  délai propre de la DSS et les délais par sous-type viennent avec **M5b**.
+
+
 ### Le rabais structuré de l'offre en ligne ⚠️ 2026-10-07
 
 Demande front `demande-backend-2026-10-07-rabais-structure.md` (arbitrage Q4 du pilote : « le rabais est structuré au dépôt »). Aucune

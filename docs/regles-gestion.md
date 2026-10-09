@@ -1172,6 +1172,17 @@ de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM 
 > ouvert, un sous-type à grille propre ne reçoit pas ceux communs à sa famille — et un motif propre aux travaux ou aux fournitures
 > n'est proposé que si le dossier s'y rapporte (toujours, s'il n'a pas de fiche). L'Administrateur tient ce référentiel : il ajoute,
 > modifie ou désactive un motif ; les motifs du manuel sont installés une fois et ne sont jamais réécrits.
+>
+> ⚠️ **2026-10-09 — les actes de gestion contractuelle, depuis le marché (tranche M5a, V98).** Un avenant, une résiliation, une
+> indemnité, une remise de pénalités ou un sursis d'exécution se déposent **depuis le marché** qu'ils concernent, jamais par une saisie
+> libre ; la Commission n'examine que les actes des marchés qu'elle a contrôlés a priori, c'est-à-dire un dossier de marché dont le
+> dernier PV signé est favorable. L'avenant porte un rang (avenant n° 1, n° 2…), qui figure dans sa référence. Il est refusé après la
+> réception définitive des travaux, après la réception provisoire des fournitures, services ou prestations intellectuelles, après le
+> règlement du solde, et quand le cumul des avenants dépasse le **tiers du montant initial** hors taxes. Le cumul compte les avenants
+> déjà soumis à la Commission, sauf ceux qui ont reçu un avis défavorable. Le montant initial et la catégorie du marché sont ceux de
+> l'attribution et de la fiche quand le marché a été passé en ligne ; sinon la PRMP les déclare au premier acte, et ils valent pour
+> les suivants. Les dates de réception et de solde sont déclarées par la PRMP. Ces contrôles ont lieu au dépôt, à chaque modification
+> et de nouveau à la soumission.
 
 - **Un dossier ne naît que d'un contenu figé.** La PRMP — celle qui valide, pas l'UGPM — produit le dossier depuis une
   fiche dont la **dernière version est validée** ; une révision ouverte bloque (`FICHE_NON_VALIDEE`) jusqu'à sa

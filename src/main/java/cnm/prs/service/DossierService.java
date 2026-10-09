@@ -127,6 +127,8 @@ public class DossierService {
     private final VerificationPieceDepotService verificationPieceDepotService;
     /** ⚠️ M2 (manuel de contrôle) — les pièces exigées du sous-type. */
     private final PiecesExigees piecesExigees;
+    /** ⚠️ M5a (manuel de contrôle) — garde des actes de gestion à la soumission. */
+    private final org.springframework.beans.factory.ObjectProvider<ActesGestionService> actesGestion;
     /** ⚠️ M3 (manuel de contrôle) — la grille du dossier. */
     private final org.springframework.beans.factory.ObjectProvider<GrilleControle> grilleControle;
     /** ⚠️ 2026-08-05 — figeage du diff et bascule du prédécesseur, à la soumission d'une mise à jour. */
@@ -181,7 +183,9 @@ public class DossierService {
             ChronometrageService chronometrage, DelaiStandardService delaiStandardService,
             FicheJustificationsService ficheJustifications, RattachementService rattachementService,
             ReceptionRepository receptionRepository, PreControlePpmService preControle,
-            FicheMarcheService ficheMarcheService) {
+            FicheMarcheService ficheMarcheService,
+            org.springframework.beans.factory.ObjectProvider<ActesGestionService> actesGestion) {
+        this.actesGestion = actesGestion;
         this.ficheMarcheService = ficheMarcheService;
         this.preControle = preControle;
         this.receptionRepository = receptionRepository;
@@ -916,6 +920,9 @@ public class DossierService {
         if (FAMILLE_DDP.equals(dossier.getIdTypeDossier())) {
             ficheJustifications.exigerJustificationsAvantSoumission(idDossier);
         }
+        // ⚠️ M5a (manuel de contrôle, §B1 et §B5) — un acte de gestion : déposé depuis un marché contrôlé ; l'avenant est revu
+        // (réception, solde, plafond du tiers).
+        actesGestion.getObject().exigerAvantSoumission(dossier);
         // Pièces jointes obligatoires de la famille de dossier (référentiel) : toutes doivent être présentes.
         validerPiecesObligatoires(dossier);
         // ⚠️ 2026-08-05 — une MISE À JOUR exige en plus le PV du prédécesseur et le PPM daté et signé des

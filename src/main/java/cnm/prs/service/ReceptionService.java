@@ -49,11 +49,16 @@ public class ReceptionService {
     /** ⚠️ Journal du circuit (2026-09-04) — trace de la réception complète. */
     private final JournalDossierService journalDossier;
 
+    /** ⚠️ M5a (manuel de contrôle, §B1) — le rang de l'avenant entre dans la référence ({@code …/AVN2/…}). */
+    private final cnm.prs.repository.ActeGestionRepository acteGestionRepository;
+
     public ReceptionService(ReceptionRepository repository, DossierRepository dossierRepository,
             PpmRepository ppmRepository, ControleurRepository controleurRepository,
             ControleurDirectory controleurDirectory, NotificationService notificationService,
             ReferenceService referenceService, VerificationPieceDepotService verificationPieceDepotService,
-            ChronometrageService chronometrageService, JournalDossierService journalDossier) {
+            ChronometrageService chronometrageService, JournalDossierService journalDossier,
+            cnm.prs.repository.ActeGestionRepository acteGestionRepository) {
+        this.acteGestionRepository = acteGestionRepository;
         this.journalDossier = journalDossier;
         this.chronometrageService = chronometrageService;
         this.repository = repository;
@@ -205,6 +210,9 @@ public class ReceptionService {
         if (segment == null || segment.isBlank()) {
             segment = famille;
         }
+        // ⚠️ M5a (manuel de contrôle, §B1) — un avenant porte son rang : « AVN2 ».
+        segment = acteGestionRepository.findByIdDossier(dossier.getIdDossier()).filter(a -> a.getRang() != null)
+                .map(a -> a.getSousType() + a.getRang()).orElse(segment);
         String localite = localiteDuDossier(reception.getIdDossier());
         boolean estCentrale = Localite.estCentrale(localite);
         int annee = exerciceDuDossier(reception.getIdDossier());
