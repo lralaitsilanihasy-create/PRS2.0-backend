@@ -7649,6 +7649,8 @@ sans suite garde sa **famille propre `DSS`** (V93) ; le sous-type du dossier pro
   (« 00004/DAO/CNM/2026 » devient « 00004/DAOO/CNM/2026 » en réception, versions de dossier et PV). Les documents déjà produits
   (PDF des PV, lettres) gardent leur texte. Le **type de DMC** « DAO » (`typeDmcCode`) **ne change pas**. Un appel qui envoie encore
   `idSousType` (ou `idTypeDossier`) `DAO` à `POST /api/saisies/dossier` est lu `DAOO`.
+  ⚠️ **2026-10-09 (V100)** — la référence **du dossier** (`refeDossier`) et la référence imprimée du PV (`REFE_PV`) n'avaient pas été
+  reprises par V94 (recette du front : 100370 resté « 00013/DAO/CNM/2026 ») : V100 les reprend en « …/DAOO/… ».
 - **Le dossier produit par une fiche** (`POST /api/fiches-marche/{idDmc}/dossier`) prend le sous-type déduit du **mode** de la ligne du
   plan et de la catégorie : prestations intellectuelles → **`DC`** ; mode « … international » → `DAOOI` (`DAORI` s'il est restreint) ;
   « … pré-qualification » → `DAOOPREQUAL` ; « restreint » → `DAOR` ; sinon **`DAOO`**. Le **dossier de marché** suit la même règle
