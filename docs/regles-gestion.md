@@ -1164,6 +1164,14 @@ de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM 
 > Un point peut ne valoir que pour une catégorie (fournitures, travaux) ou pour le contrat-cadre : le Membre ne l'examine que s'il
 > s'applique à la fiche du dossier, et toujours quand le dossier n'a pas de fiche. La grille des plans reçoit les cinq points du
 > manuel (motifs de la mise à jour, mode de passation, dates et délais aménagés, mentions de l'objet, base du fractionnement).
+>
+> ⚠️ **2026-10-09 — les motifs-types de la conclusion (tranche M4, V97).** Le Membre dispose, pour chaque type de dossier, des
+> motifs que le manuel prévoit : motifs de **renvoi** (demande de compléments, pour la lettre de renvoi) et motifs d'**avis
+> défavorable** (pour le projet de PV). Il en insère le texte dans son projet, puis le complète ou le modifie librement : le motif
+> n'engage rien par lui-même. Les motifs suivent la grille de contrôle — un appel d'offres restreint reçoit ceux de l'appel d'offres
+> ouvert, un sous-type à grille propre ne reçoit pas ceux communs à sa famille — et un motif propre aux travaux ou aux fournitures
+> n'est proposé que si le dossier s'y rapporte (toujours, s'il n'a pas de fiche). L'Administrateur tient ce référentiel : il ajoute,
+> modifie ou désactive un motif ; les motifs du manuel sont installés une fois et ne sont jamais réécrits.
 
 - **Un dossier ne naît que d'un contenu figé.** La PRMP — celle qui valide, pas l'UGPM — produit le dossier depuis une
   fiche dont la **dernière version est validée** ; une révision ouverte bloque (`FICHE_NON_VALIDEE`) jusqu'à sa

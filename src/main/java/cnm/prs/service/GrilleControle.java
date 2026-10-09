@@ -43,12 +43,35 @@ public class GrilleControle {
 
     /** La grille d'un sous-type (conditions non résolues), triée par ordre. */
     public List<PointsCtrl> duSousType(String famille, String sousType) {
-        SousTypeDossier st = sousType == null ? null : sousTypes.findById(sousType).orElse(null);
         Map<Integer, PointsCtrl> grille = new LinkedHashMap<>();
-        boolean propre = st != null && Boolean.TRUE.equals(st.getGrillePropre());
-        if (!propre) {
+        if (!grillePropre(sousType)) {
             points.findByIdTypeDossierOrderByOrdrePointCtrlAsc(famille).stream().filter(p -> p.getIdSousType() == null)
                     .forEach(p -> grille.putIfAbsent(p.getIdPointCtrl(), p));
+        }
+        for (String s : chaine(sousType)) {
+            points.findGrilleEffective(famille, s).stream().filter(p -> s.equals(p.getIdSousType()))
+                    .forEach(p -> grille.putIfAbsent(p.getIdPointCtrl(), p));
+        }
+        return grille.values().stream().sorted(Comparator.comparing((PointsCtrl p) -> p.getOrdrePointCtrl() == null ? Integer.MAX_VALUE
+                : p.getOrdrePointCtrl()).thenComparing(PointsCtrl::getIdPointCtrl)).toList();
+    }
+
+    /** Le sous-type a-t-il une grille propre (les éléments communs de sa famille ne s'y appliquent pas) ? */
+    public boolean grillePropre(String sousType) {
+        return sousType != null && sousTypes.findById(sousType).map(st -> Boolean.TRUE.equals(st.getGrillePropre())).orElse(false);
+    }
+
+    /**
+     * La chaîne d'un sous-type par sa grille de base, la base d'abord (DAORI → [DAOO, DAOR, DAORI]) ; un sous-type inconnu du
+     * référentiel est servi seul. ⚠️ M4 : la même chaîne porte l'héritage des motifs-types.
+     */
+    public List<String> chaine(String sousType) {
+        if (sousType == null) {
+            return List.of();
+        }
+        SousTypeDossier st = sousTypes.findById(sousType).orElse(null);
+        if (st == null) {
+            return List.of(sousType);
         }
         Set<String> vus = new HashSet<>();
         List<String> chaine = new ArrayList<>();
@@ -56,15 +79,7 @@ public class GrilleControle {
                 : sousTypes.findById(x.getGrilleBase()).orElse(null)) {
             chaine.add(0, x.getIdSousType());   // la base d'abord
         }
-        if (st == null && sousType != null) {
-            chaine.add(sousType);
-        }
-        for (String s : chaine) {
-            points.findGrilleEffective(famille, s).stream().filter(p -> s.equals(p.getIdSousType()))
-                    .forEach(p -> grille.putIfAbsent(p.getIdPointCtrl(), p));
-        }
-        return grille.values().stream().sorted(Comparator.comparing((PointsCtrl p) -> p.getOrdrePointCtrl() == null ? Integer.MAX_VALUE
-                : p.getOrdrePointCtrl()).thenComparing(PointsCtrl::getIdPointCtrl)).toList();
+        return chaine;
     }
 
     /** La grille d'un dossier : celle de son sous-type, sans les points conditionnés qui ne s'appliquent pas à sa fiche. */

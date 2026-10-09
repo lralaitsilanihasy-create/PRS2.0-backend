@@ -7725,6 +7725,40 @@ manuel s'ajoutent à la grille des plans** ; un point conditionné reste **servi
   un examen de MPI ne voit plus les 9 points communs du dossier de marché.
 
 
+### Le référentiel du contrôle aligné sur le Manuel de contrôle a priori, tranche M4 : les motifs-types de la conclusion — V97 ⚠️ 2026-10-09
+
+Demande front `demande-backend-2026-10-08-manuel-controle-a-priori.md` (§B4). Arbitrages du pilote : Q5 **oui** (08/10) ; le 09/10, le
+référentiel est **administrable** et **semé du manuel**, le **front insère le texte** dans le projet de PV ou de lettre de renvoi (le
+serveur n'y écrit rien), et les motifs **suivent l'héritage des grilles** (M3). Migration **V97** (`tr_motif_type`) ; les motifs du manuel
+sont **semés au démarrage** (`MotifsTypesManuelSeeder` : un motif existant, même modifié ou désactivé, n'est jamais réécrit). Aucune
+dépendance ajoutée.
+
+| Méthode | URL | Réponse | Accès |
+|---|---|---|---|
+| GET | /api/motifs-types?sousType={code}&nature= | les motifs **actifs** du sous-type, avec l'héritage (conditions servies, non résolues) | authentifié interne |
+| GET | /api/motifs-types?typeDossier={famille}&nature= | tous les motifs de la famille, **inactifs compris** (écran d'administration) ; sans paramètre : tout le référentiel | authentifié interne |
+| GET | /api/motifs-types/{id} | un motif | authentifié interne |
+| POST · PUT · DELETE | /api/motifs-types · /api/motifs-types/{id} | 201 · 200 · 204 | **Administrateur** (403 sinon) |
+| GET | /api/dossiers/{id}/motifs-types?nature= | les motifs **de ce dossier** : sans ceux dont la condition ne s'applique pas à sa fiche | comme la lecture du dossier |
+
+- **`MotifTypeDto`** : `idMotif`, `idTypeDossier` (famille, obligatoire), `idSousType` (nul : commun à la famille), `nature`
+  (`RENVOI` = demande de compléments, lettre de renvoi | `AVIS_DEFAVORABLE` = avis non favorable, projet de PV), `libelle` (≤ 200, la
+  liste), `texte` (ce qui s'insère ; le manuel laisse « … » là où le Membre précise), `ordre`, `categorie` (`FOURNITURES_SERVICES` |
+  `TRAVAUX` | `PRESTATIONS_INTELLECTUELLES` ; nul : toutes), `forme` (`CONTRAT_CADRE` | `AUTRE` ; nul : toutes), `actif` (absent à
+  l'écriture : `true` à la création, inchangé à la modification).
+- **400** : famille ou sous-type inconnus, sous-type hors de la famille, nature, catégorie ou forme inconnues (aussi sur `?nature=`).
+- **Les motifs d'un sous-type** = les motifs **communs** de sa famille (sauf **grille propre** : MPI, MGG, DC, RJ, DPREQUAL, DP, AVN, DSS),
+  puis ceux de sa **grille de base**, de proche en proche (DAOR, DAOOI… ← DAOO ; MAOR, MAOOI… ← MAOO), puis les siens ; triés par
+  `ordre` à chaque niveau. Un motif **désactivé** n'est plus servi à l'examen. **Pour un dossier**, un motif conditionné qui ne
+  s'applique pas à sa fiche est retiré ; **sans fiche**, il reste servi.
+- **Les motifs du manuel** (« formulation de la conclusion ») : `DAOO` (6 renvois, dont 2 fournitures et 2 travaux), `DC` (6), `RJ` (2),
+  `MGG` (3), `MAOO` (11 avis défavorables, 3 renvois), `MPI` (6 + 3), `AVN` (5 + 4 ; réception définitive en travaux, provisoire en
+  fournitures et services), `DSS` (2 + 1), actes de gestion (communs DGC 2 + 1 ; `INDEMN`, `SURSIS`, `PENAL`, `DR` : 1 renvoi chacun). Les
+  plans n'en ont pas au manuel (l'Administrateur peut en ajouter).
+- **Côté front** : l'écran d'examen lit `GET /api/dossiers/{id}/motifs-types` (renvois pour la lettre, avis défavorables pour le PV) et
+  colle `texte` dans le champ en cours d'édition ; l'écran d'administration lit `?typeDossier=`.
+
+
 ### Le rabais structuré de l'offre en ligne ⚠️ 2026-10-07
 
 Demande front `demande-backend-2026-10-07-rabais-structure.md` (arbitrage Q4 du pilote : « le rabais est structuré au dépôt »). Aucune

@@ -79,7 +79,7 @@ public class SecurityConfig {
             "/api/entite-contracts", "/api/categorie-entites", "/api/delegation-profils", "/api/aviss", "/api/natures",
             "/api/mode-passations", "/api/type-dossiers", "/api/sous-type-dossiers", "/api/ministeres",
             "/api/profiles", "/api/capm", "/api/type-piece-jointes", "/api/type-dmc",
-            "/api/statut-marches", "/api/champs-fiche-marche"
+            "/api/statut-marches", "/api/champs-fiche-marche", "/api/motifs-types"
     };
 
     /** Mêmes ressources, ciblées par identifiant (pour PUT / DELETE). */
@@ -89,7 +89,7 @@ public class SecurityConfig {
             "/api/entite-contracts/*", "/api/categorie-entites/*", "/api/delegation-profils/*", "/api/aviss/*", "/api/natures/*",
             "/api/mode-passations/*", "/api/type-dossiers/*", "/api/sous-type-dossiers/*", "/api/ministeres/*",
             "/api/profiles/*", "/api/capm/*", "/api/type-piece-jointes/*", "/api/type-dmc/*",
-            "/api/statut-marches/*", "/api/champs-fiche-marche/*"
+            "/api/statut-marches/*", "/api/champs-fiche-marche/*", "/api/motifs-types/*"
     };
 
     /**
