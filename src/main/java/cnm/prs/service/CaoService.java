@@ -345,12 +345,9 @@ public class CaoService {
             if (!m.estMembre()) {
                 continue;
             }
-            ProcedureEnLigneDto vue;
-            try {
-                vue = procedures.vue(m.getIdDmc());
-            } catch (ResourceNotFoundException | BusinessRuleException e) {
-                vue = null;
-            }
+            // ⚠️ 2026-10-10 — un DMC sans fiche sort sans référence ni date limite ; la lecture ne lève plus (le 404 rattrapé marquait
+            // la transaction pour l'annulation : toute la liste répondait 500).
+            ProcedureEnLigneDto vue = procedures.vueSiPresente(m.getIdDmc()).orElse(null);
             String[] pa = vue == null ? procedureEtAutorite(m.getIdDmc()) : new String[] { vue.objet(), vue.autoriteContractante() };
             out.add(new CaoDto.MaProcedure(m.getIdDmc(), vue == null ? null : vue.reference(), pa[0], pa[1],
                     Boolean.TRUE.equals(m.getPresident()), vue == null ? null : vue.dateLimite(),

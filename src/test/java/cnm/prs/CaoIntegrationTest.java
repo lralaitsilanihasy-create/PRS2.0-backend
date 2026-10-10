@@ -69,6 +69,9 @@ class CaoIntegrationTest extends CnmIntegrationTestSupport {
     @Autowired private ParametreService parametres;
     @Autowired private CompteCaoRepository comptesCao;
     @Autowired private CompteCandidatRepository candidats;
+    @Autowired private cnm.prs.repository.CaoRepository caoRepository;
+    @Autowired private cnm.prs.repository.CaoMembreRepository caoMembreRepository;
+    @Autowired private cnm.prs.repository.ParametreInterneProcedureRepository parametresInternes;
 
     private final LocalDate aujourdhui = LocalDate.now();
     private String tokenVer;
@@ -298,6 +301,70 @@ class CaoIntegrationTest extends CnmIntegrationTestSupport {
     }
 
     // ------------------------------------------------------------------ outils
+
+    @Test
+    @DisplayName("⚠️ 2026-10-10 — Mes procédures d'un membre qui siège aussi sur un DMC sans fiche : 200, la ligne sans référence, "
+            + "transaction intacte (elle répondait 500 : le 404 rattrapé marquait la transaction pour l'annulation)")
+    void mesProceduresAvecUnDmcSansFiche() throws Exception {
+        String cao = cao(tokenPrmp, corpsCao("m1@cao.mg", "m2@cao.mg")).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String k1 = JsonPath.read(cao, "$.membres[0].compte.idCompte");
+        String jeton = bearer("m1@cao.mg", ProfilUtilisateur.MEMBRE_CAO, TypeActeur.MEMBRE_CAO, k1, null);
+        // ⚠️ 2026-10-10 (demande front « mes-procedures-cao-500 ») — le membre siège aussi sur un DMC SANS FICHE : la liste répond 200,
+        // la ligne sort sans référence ni date limite (elle répondait 500 : le 404 rattrapé marquait la transaction pour l'annulation).
+        Long sansFiche = dmcSansFiche();
+        cnm.prs.entity.Cao caoSansFiche = new cnm.prs.entity.Cao();
+        caoSansFiche.setIdDmc(sansFiche);
+        caoSansFiche.setDecisionReference("D-SANS-FICHE");
+        caoSansFiche.setDecisionDate(LocalDate.now());
+        caoSansFiche.setDateMaj(LocalDateTime.now());
+        caoRepository.save(caoSansFiche);
+        cnm.prs.entity.CaoMembre siege = new cnm.prs.entity.CaoMembre();
+        siege.setIdDmc(sansFiche);
+        siege.setNom("RABE");
+        siege.setPrenom("Paul");
+        siege.setEmail("m1@cao.mg");
+        siege.setQualite(cnm.prs.entity.CaoMembre.MEMBRE);
+        siege.setPresident(false);
+        siege.setIdCompte(k1);
+        caoMembreRepository.save(siege);
+        assertThat(transactionMarqueePourAnnulation()).as("transaction déjà marquée avant l'appel").isFalse();
+        String avecSansFiche = mvc.perform(get("/api/cao/mes-procedures").header("Authorization", jeton)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Integer>>read(avecSansFiche, "$[*].idDmc")).contains(idDmc.intValue(), sansFiche.intValue());
+        assertThat(JsonPath.<Object>read(avecSansFiche, "$[?(@.idDmc==" + sansFiche + ")].reference")).asList().containsOnlyNulls();
+        assertThat(transactionMarqueePourAnnulation()).as("transaction marquée pour l'annulation (500 en production)").isFalse();
+    }
+
+    @Test
+    @DisplayName("⚠️ 2026-10-10 (§B2) — les procédures du dépositaire, dont un DMC sans fiche : 200, la ligne sans référence, "
+            + "transaction intacte")
+    void proceduresDuDepositaireAvecUnDmcSansFiche() throws Exception {
+        Long sansFiche = dmcSansFiche();
+        cnm.prs.entity.ParametreInterneProcedure p = new cnm.prs.entity.ParametreInterneProcedure();
+        p.setIdDmc(sansFiche);
+        p.setDateMaj(LocalDateTime.now());
+        p.setIdCompteDepositaire("D900000001");
+        parametresInternes.save(p);
+        String jeton = bearer("dep@secours.mg", ProfilUtilisateur.DEPOSITAIRE, TypeActeur.DEPOSITAIRE, "D900000001", null);
+        assertThat(transactionMarqueePourAnnulation()).as("transaction déjà marquée avant l'appel").isFalse();
+        String liste = mvc.perform(get("/api/depositaire/procedures").header("Authorization", jeton)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Integer>>read(liste, "$[*].idDmc")).containsExactly(sansFiche.intValue());
+        assertThat(JsonPath.<Object>read(liste, "$[0].reference")).isNull();
+        assertThat(transactionMarqueePourAnnulation()).as("transaction marquée pour l'annulation (500 en production)").isFalse();
+    }
+
+    /** ⚠️ 2026-10-10 — un DMC créé sur la ligne 9903, sans fiche marché. */
+    private Long dmcSansFiche() throws Exception {
+        Marche ligne = marche(9903, 9900, 9900);
+        ligne.setIdMode(92);
+        ligne.setIdNature(natureFournitures());
+        ligne.setFormeMarche(FormeMarche.QUANTITE_FIXE);
+        ligne.setDesignationMarche("Acquisition sans fiche");
+        marcheRepository.save(ligne);
+        return ((Number) JsonPath.read(mvc.perform(post("/api/dmcs/par-marche/9903").header("Authorization", tokenPrmp))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString(), "$.idDmc")).longValue();
+    }
 
     private Long ficheElectronique(int idDetail) throws Exception {
         String corps = mvc.perform(post("/api/dmcs/par-marche/" + idDetail).header("Authorization", tokenPrmp))

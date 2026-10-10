@@ -140,11 +140,8 @@ public class ProceduresInternesService {
     }
 
     private ProcedureEnLigneDto vue(Long idDmc) {
-        try {
-            return procedures.vue(idDmc);
-        } catch (RuntimeException e) {
-            return null;
-        }
+        // ⚠️ 2026-10-10 — sans exception : le 404 rattrapé marquait la transaction de l'appelant pour l'annulation (500).
+        return procedures.vueSiPresente(idDmc).orElse(null);
     }
 
     /** L'heure d'ouverture des plis ({@code B04-OP-02} + {@code B04-OP-03}) de la dernière version ; {@code null} sans elle. */

@@ -296,6 +296,21 @@ public class ProceduresEnLigneService {
         return construire(idDmc, etat, avis, LocalDateTime.now());
     }
 
+    /**
+     * ⚠️ 2026-10-10 (demande front « mes-procedures-cao-500 ») — {@link #vue} pour les <strong>listes internes</strong> (membre de CAO,
+     * dépositaire, conservation des offres, procédures internes) : <strong>vide</strong> pour un DMC sans fiche, <strong>sans
+     * exception</strong>. Appelée dans un {@code try/catch}, {@link #vue} levait un 404 à travers ce proxy transactionnel, ce qui marquait
+     * la transaction de l'appelant pour l'annulation : toute la liste répondait 500 ({@code UnexpectedRollbackException}) pour une seule
+     * ligne illisible. Même motif que {@link #piecesAttenduesInternes}.
+     */
+    @Transactional(readOnly = true, noRollbackFor = RuntimeException.class)
+    public Optional<ProcedureEnLigneDto> vueSiPresente(Long idDmc) {
+        if (idDmc == null || fiches.derniereVersion(idDmc).isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(vue(idDmc));
+    }
+
     private ProcedureEnLigneDto construire(Long idDmc, FicheMarcheService.EtatVersion etat, List<DocumentFicheDto> avis,
             LocalDateTime maintenant) {
         LocalDateTime limite = dateLimite(etat);

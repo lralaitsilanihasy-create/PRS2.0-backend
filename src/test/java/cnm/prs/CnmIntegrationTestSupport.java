@@ -560,6 +560,27 @@ abstract class CnmIntegrationTestSupport extends AbstractIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON).content(corps));
     }
 
+    @Autowired private org.springframework.transaction.PlatformTransactionManager transactionManager;
+
+    /**
+     * ⚠️ 2026-10-10 — vrai si la transaction du test a été <strong>marquée pour l'annulation</strong> par un service qui y participait
+     * (une exception rattrapée après avoir traversé un proxy {@code @Transactional}). En production, la requête porte sa propre
+     * transaction et ce marquage se paie d'un 500 ({@code UnexpectedRollbackException}) ; en test, la requête rejoint la transaction du
+     * test, annulée de toute façon : le 500 ne se voit pas, seul ce drapeau le trahit. Juste après l'appel visé : un refus attendu plus loin (404, 409) marquerait aussi la
+     * transaction.
+     */
+    protected boolean transactionMarqueePourAnnulation() {
+        org.springframework.transaction.TransactionStatus s = transactionManager.getTransaction(
+                org.springframework.transaction.TransactionDefinition.withDefaults());
+        boolean marquee = s.isRollbackOnly();
+        if (marquee) {
+            transactionManager.rollback(s);
+        } else {
+            transactionManager.commit(s);   // participante : sans effet, la transaction du test reste intacte
+        }
+        return marquee;
+    }
+
     protected String bearer(String login, ProfilUtilisateur role, TypeActeur type, String ref, String loc) {
         return "Bearer " + tokenService.generer(login, role.name(), type, ref, loc);
     }

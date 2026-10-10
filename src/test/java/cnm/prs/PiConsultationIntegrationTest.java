@@ -276,6 +276,7 @@ class PiConsultationIntegrationTest extends CnmIntegrationTestSupport {
         // invité (la PRMP, le responsable de la procédure) : 200, plus 500 (UnexpectedRollbackException) ; les pièces attendues sont lues.
         mvc.perform(get("/api/fiches-marche/" + idDmc + "/seance/lecture").header("Authorization", tokenPrmp)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.offres.length()").value(2));
+        assertThat(transactionMarqueePourAnnulation()).as("transaction marquée pour l'annulation (500 en production)").isFalse();
         String ev = "/api/fiches-marche/" + idDmc + "/evaluation";
         mvc.perform(post(ev + "/ouvrir").header("Authorization", bearer("CTRVER", ProfilUtilisateur.VERIFICATEUR, TypeActeur.CONTROLEUR, "CTRVER", "ANT")))
                 .andExpect(status().isCreated());

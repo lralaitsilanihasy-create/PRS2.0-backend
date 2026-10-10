@@ -146,10 +146,7 @@ public class ConservationOffresService {
     }
 
     private ProcedureEnLigneDto procedure(Long idDmc) {
-        try {
-            return procedures.vue(idDmc);
-        } catch (RuntimeException e) {
-            return null;
-        }
+        // ⚠️ 2026-10-10 — sans exception : le 404 rattrapé marquait la transaction de l'appelant pour l'annulation (500).
+        return procedures.vueSiPresente(idDmc).orElse(null);
     }
 }
