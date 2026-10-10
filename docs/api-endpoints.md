@@ -7854,7 +7854,7 @@ courtes** de la fiche ; les projets déjà produits se **refont** par un geste. 
     l'article 60 ; mode non reconnu : « articles …… et 60 » ;
   - **prix** : hors taxes en chiffres et en lettres, et le TTC si l'évaluation le connaît ;
   - **délai d'exécution avec son unité** (celle de l'acte d'engagement ; à défaut « jours » si la fiche porte `B09-DX-01` ; sinon « ……
-    (unité) ») et la **sanction du dépassement** : pénalités de retard du CCAP / CPS et du CCAG, avec le taux (`B09-PE-02`) et le plafond
+    (unité) ») et la **sanction du dépassement** : pénalités de retard du CCAP / CPS et du CCAG, avec le taux (`B09-PE-02` : un entier porte « millième(s) », une fraction telle que « 1/2000 » est reprise telle quelle) et le plafond
     (`B09-PE-03` ou `B09-PR-02`) s'ils sont saisis ;
   - **réception** et réception partielle (par tranches si `B09-RP-01` = OUI), **règlement** (délai de paiement de l'art. 74),
     **résiliation** (art. 76, indemnité `B10-IR-03` / `B10-IN-01` si saisie) : par renvoi aux cahiers des charges ;

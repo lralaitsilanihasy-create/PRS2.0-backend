@@ -260,8 +260,17 @@ public class ProjetMarcheService {
         String plafond = val.premiere(PENALITE_PLAFOND_TRAVAUX, PENALITE_PLAFOND);
         return "Tout dépassement de ce délai expose le Titulaire aux pénalités de retard prévues au cahier des clauses administratives "
                 + "particulières (ou au cahier des prescriptions spéciales) et au cahier des clauses administratives générales"
-                + (taux == null ? "" : ", au taux de " + taux + " millième(s) du montant du marché par jour de retard")
+                + (taux == null ? "" : ", au taux de " + tauxPenalite(taux) + " du montant du marché par jour de retard")
                 + (plafond == null ? "" : ", dans la limite de " + pourcent(plafond) + " du montant du marché") + ".";
+    }
+
+    /**
+     * ⚠️ 2026-10-10 (recette du front, fiche 40 : « 1/2000 ») — le champ {@code B09-PE-02} est libre : un nombre entier de millièmes
+     * (« 2 » → « 2 millième(s) »), ou une fraction du montant (« 1/2000 ») reprise telle quelle.
+     */
+    static String tauxPenalite(String v) {
+        String t = v.trim();
+        return t.matches("\\d+") ? t + " millième(s)" : t;
     }
 
     private static String pourcent(String v) {

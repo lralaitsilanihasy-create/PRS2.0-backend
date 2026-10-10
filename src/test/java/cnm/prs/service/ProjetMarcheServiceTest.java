@@ -32,6 +32,14 @@ class ProjetMarcheServiceTest {
     }
 
     @Test
+    @DisplayName("Le taux des pénalités : un entier de millièmes porte son unité, une fraction est reprise telle quelle (recette fiche 40)")
+    void tauxPenalite() {
+        assertThat(ProjetMarcheService.tauxPenalite("2")).isEqualTo("2 millième(s)");
+        assertThat(ProjetMarcheService.tauxPenalite(" 1/2000 ")).isEqualTo("1/2000");
+        assertThat(ProjetMarcheService.tauxPenalite("0,5 %")).isEqualTo("0,5 %");
+    }
+
+    @Test
     @DisplayName("La base légale : l'article du mode de passation et l'article 60 ; mode inconnu : à compléter ; international")
     void baseLegale() {
         assertThat(ProjetMarcheService.baseLegale("Appel d'offres ouvert", false)).contains("appel d'offres ouvert", "articles 35 et 60");
