@@ -617,7 +617,20 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
         String projet = texteDuPdf(mvc.perform(get(att + "/lots/1/projet").header("Authorization", tokenUgpm)).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsByteArray()).replaceAll("\\s+", " ");
         assertThat(projet).contains("PROJET DE MARCHÉ", "BTP Alpha", "NIF 1111222333", "12 500 000 Ariary hors taxes",
-                "douze millions cinq cent mille ariary", "Article 2 — Pièces constitutives");
+                "douze millions cinq cent mille ariary", "Article 3 — Pièces constitutives");
+        // ⚠️ 2026-10-10 (demande « projet-de-marche ») — les mentions obligatoires de l'art. 60 de la loi n° 2016-055.
+        assertThat(projet).contains("Article 2 — Base légale", "et 60 de la loi n° 2016-055", "nommée par",
+                "Article 5 — Délai d'exécution", "pénalités de retard", "Article 6 — Réception", "réception partielle",
+                "Article 7 — Règlement", "Comptable public assignataire chargé du paiement :", "Imputation budgétaire :",
+                "Domiciliation bancaire des paiements :", "Article 8 — Résiliation", "article 76", "Date de notification du marché : ……")
+                .doesNotContain("Droit applicable");
+        // Le geste de regénération : PRMP ou UGPM ; la pièce du dossier de marché (brouillon) est remplacée.
+        mvc.perform(post(att + "/lots/1/projet").header("Authorization", jetonM1)).andExpect(status().isForbidden());
+        mvc.perform(post(att + "/lots/1/projet").header("Authorization", tokenUgpm)).andExpect(status().isOk());
+        byte[] refait = attributionRepository.findById(new cnm.prs.entity.Attribution.Cle(idDmc, 1)).orElseThrow().getProjetPdf();
+        assertThat(pieceJointeDossierRepository.findAll().stream().filter(x -> x.getIdDossier() == idDossier
+                && "PROJET_MARCHE".equals(typePieceJointeRepository.findById(x.getIdTypePiece()).orElseThrow().getCode())))
+                .singleElement().satisfies(x -> assertThat(x.getContenu()).isEqualTo(refait));
         assertThat(new String(mvc.perform(get(att + "/lots/1/projet").param("format", "docx").header("Authorization", tokenPrmp))
                 .andReturn().getResponse().getContentAsByteArray(), 0, 2, StandardCharsets.ISO_8859_1)).isEqualTo("PK");
         // L'avis de la Commission (PV signé du dossier de marché) remonte au lot.
@@ -790,6 +803,9 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(multipart(att + "/lots/1/signature").file(piece).param("dateSignature", aujourdhui.toString()).header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.lots[0].etat").value("SIGNE"))
                 .andExpect(jsonPath("$.lots[0].signature.dateSignature").value(aujourdhui.toString()));
+        // ⚠️ 2026-10-10 — un marché signé : son projet ne se refait plus.
+        mvc.perform(post(att + "/lots/1/projet").header("Authorization", tokenPrmp)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("MARCHE_SIGNE"));
         mvc.perform(post(att + "/lots/1/notification").header("Authorization", tokenPrmp).contentType(JSON)
                 .content("{\"dateNotification\":\"" + aujourdhui + "\"}")).andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("NON_ENREGISTRE"));

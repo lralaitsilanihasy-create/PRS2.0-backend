@@ -7832,6 +7832,42 @@ pas de passage d'office à 16) ; l'alerte de dépassement va au **Membre, au Che
   sous-type peut en plus lui être réglé ici.
 
 
+### Le projet de marché conforme à la loi n° 2016-055 (art. 28 et 60) ⚠️ 2026-10-10
+
+Demande front `demande-backend-2026-10-10-projet-de-marche.md` (relecture du pilote sur le lot 1 de la procédure 40). Arbitrages du 10/10 :
+**un lot = un marché** (art. 28 : ni marché unique, ni acte d'engagement regroupé) ; le projet reste un **document produit** (H1 : la PRMP
+complète les « …… » dans le Word avant la signature) ; les clauses **renvoient** au CCAP / CPS et au CCAG en reprenant les **valeurs
+courtes** de la fiche ; les projets déjà produits se **refont** par un geste. Aucune migration, aucune dépendance ajoutée.
+
+| Méthode | URL | Réponse | Accès |
+|---|---|---|---|
+| POST | /api/fiches-marche/{idDmc}/attribution/lots/{lot}/projet | `AttributionDto` : le projet refait (PDF et Word) | PRMP ou UGPM ; 404 sans dossier de marché ; 409 `MARCHE_SIGNE` |
+| GET | /api/fiches-marche/{idDmc}/attribution/lots/{lot}/projet[?format=docx] | inchangé | inchangé |
+
+- **L'objet (art. 28)** : celui de l'appel d'offres **sans l'énumération des lots** (« … répartis en cinq (05) lots : Lot n°01 … » est
+  retiré), suivi du **seul lot** du marché : « — Lot n°01 : *désignation* » (lots du plan, dans leur ordre) ; sans désignation, « — Lot n°01 ».
+- **Les mentions de l'art. 60**, chacune présente, remplie si l'application la connaît, sinon « …… » nommé :
+  - **qualité du signataire** : la PRMP « nommée par *arrêté* du *date* » (mandat en vigueur, `refArrete`) ; sans mandat déclaré, « nommée
+    par …… (acte de nomination) » ;
+  - **base légale** (article 2) : l'article du mode de passation de la ligne du plan — 35 (appel d'offres ouvert), 36 (avec
+    pré-qualification), 37 (en deux étapes), 38 (restreint), 39 (gré à gré), 41 (consultation), 42 (prestations intellectuelles) — et
+    l'article 60 ; mode non reconnu : « articles …… et 60 » ;
+  - **prix** : hors taxes en chiffres et en lettres, et le TTC si l'évaluation le connaît ;
+  - **délai d'exécution avec son unité** (celle de l'acte d'engagement ; à défaut « jours » si la fiche porte `B09-DX-01` ; sinon « ……
+    (unité) ») et la **sanction du dépassement** : pénalités de retard du CCAP / CPS et du CCAG, avec le taux (`B09-PE-02`) et le plafond
+    (`B09-PE-03` ou `B09-PR-02`) s'ils sont saisis ;
+  - **réception** et réception partielle (par tranches si `B09-RP-01` = OUI), **règlement** (délai de paiement de l'art. 74),
+    **résiliation** (art. 76, indemnité `B10-IR-03` / `B10-IN-01` si saisie) : par renvoi aux cahiers des charges ;
+  - **comptable public assignataire** (`B03-NA-03` / `B03-NT-01`), **imputation budgétaire** (`B02-MW-03`, à défaut les comptes de la ligne
+    du plan), **domiciliation bancaire** (`B08-PA-01`, sinon « …… (banque, code banque, code guichet, numéro de compte, clé) ») ;
+  - **date de notification** : celle de la notification si elle est enregistrée au moment où le projet est refait, sinon « …… » ;
+  - **droit applicable** (le droit de la République de Madagascar) : **seulement** pour un mode « … international ».
+- **H2** : pour une consultation de prestations intellectuelles (dossier `MPI`), « l'offre » se lit « la proposition ».
+- **Le geste de regénération** refait le PDF et le Word ; la pièce `PROJET_MARCHE` jointe au dossier de marché est **remplacée** si ce
+  dossier est encore modifiable (`BROUILLON`, `EN_ATTENTE_DECISION_PRMP`, `EN_ATTENTE_PIECES`, `EN_ATTENTE_COMPLEMENTS_DEPOT`) ; tracé au
+  journal de l'évaluation (`PROJET_REFAIT`).
+
+
 ### Le rabais structuré de l'offre en ligne ⚠️ 2026-10-07
 
 Demande front `demande-backend-2026-10-07-rabais-structure.md` (arbitrage Q4 du pilote : « le rabais est structuré au dépôt »). Aucune

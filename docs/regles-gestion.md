@@ -928,6 +928,15 @@ post-qualification (étape 5), et le rapport d'évaluation. Contrat : `docs/api-
   - le dossier reçoit d'office le **projet de marché produit par l'application** à partir de l'offre retenue (parties, objet, pièces
     constitutives, montant hors taxes en chiffres et en lettres, délai), le dossier d'appel d'offres, le bordereau de l'offre, le PV
     d'ouverture et le rapport d'évaluation ; il suit ensuite le circuit ordinaire de la Commission ;
+  - ⚠️ **2026-10-10 — le projet de marché suit la loi n° 2016-055** (relecture du pilote ; arbitrage : un lot = un marché, art. 28) :
+    son objet est celui de l'appel d'offres, suivi du **seul lot** du marché et de sa désignation, sans l'énumération des autres lots ;
+    il porte **toutes les mentions de l'art. 60** — parties, qualité du signataire (la PRMP et l'acte qui l'a nommée), objet, articles
+    de la loi en vertu desquels il est passé (selon le mode), pièces par ordre de priorité, prix, délai d'exécution avec son unité et
+    la sanction de son dépassement, réception et réception partielle, règlement, résiliation, date de notification, comptable
+    assignataire et imputation budgétaire, domiciliation bancaire, et le droit applicable pour une procédure internationale. Ce que
+    l'application connaît (mandat de la PRMP, mode, fiche, offre) est rempli ; le reste est laissé « …… », nommé, et la PRMP le complète
+    dans le Word avant la signature. Tant que le marché n'est pas signé, la PRMP ou son UGPM peut **refaire** le projet : la pièce du
+    dossier de marché est remplacée si le dossier est encore modifiable ;
   - la Commission l'examine sur une grille tirée de la check-list du guide (désignation de la CAO, PV, motivation des rejets,
     montant évalué, offres anormales, classement, post-qualification, signatures du rapport, conformité du projet à l'offre) ;
   - son avis remonte au lot. Les gestes suivants (choix de l'attributaire, information des candidats, signature, notification) sont

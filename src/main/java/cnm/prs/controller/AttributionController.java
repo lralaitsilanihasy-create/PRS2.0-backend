@@ -78,6 +78,15 @@ public class AttributionController {
         return Telechargements.fichier(e.getReponseNom(), e.getReponseFormat(), e.getReponseContenu());
     }
 
+    /**
+     * ⚠️ 2026-10-10 (demande « projet-de-marche ») — refait le projet de marché du lot (règles en vigueur : objet du seul lot, mentions de
+     * l'art. 60) ; PRMP ou UGPM ; 409 {@code MARCHE_SIGNE}.
+     */
+    @PostMapping("/lots/{lot}/projet")
+    public AttributionDto regenererProjet(@PathVariable Long idDmc, @PathVariable Integer lot) {
+        return service.regenererProjet(idDmc, lot);
+    }
+
     /** Le projet de marché du lot, en PDF ou en Word ({@code ?format=docx}). */
     @GetMapping("/lots/{lot}/projet")
     public ResponseEntity<byte[]> projet(@PathVariable Long idDmc, @PathVariable Integer lot, @RequestParam(required = false) String format) {

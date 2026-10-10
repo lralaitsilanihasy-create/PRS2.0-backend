@@ -110,6 +110,8 @@ public class AttributionService {
     private final cnm.prs.repository.AttributionRepriseRepository reprises;
     /** ⚠️ 2d-3 — la déclaration sans suite : elle arrête les gestes d'attribution et s'affiche sur la page publique. */
     private final SansSuiteService sansSuite;
+    /** ⚠️ 2026-10-10 (demande « projet-de-marche ») — le projet de marché conforme à la loi (art. 28, art. 60). */
+    private final ProjetMarcheService projetMarche;
 
     public AttributionService(AttributionRepository attributions, EvaluationService evaluation, SeanceService seance, SaisieService saisie,
             ValeursPpmService valeursPpm, FicheMarcheService fiches, EntrepriseCandidatService entreprises, GenerateurDocumentsFiche generateur,
@@ -119,7 +121,8 @@ public class AttributionService {
             cnm.prs.repository.AttributionExplicationRepository explications, cnm.prs.repository.CompteCandidatRepository candidats,
             cnm.prs.repository.PrmpRepository prmpRepository, NotificationService notifications, CeremonieService ceremonies,
             ParametreService parametres, java.time.Clock horloge, AttributionExecutionService execution, ResultatsPi resultatsPi,
-            cnm.prs.repository.AttributionRepriseRepository reprises, SansSuiteService sansSuite) {
+            cnm.prs.repository.AttributionRepriseRepository reprises, SansSuiteService sansSuite, ProjetMarcheService projetMarche) {
+        this.projetMarche = projetMarche;
         this.sansSuite = sansSuite;
         this.reprises = reprises;
         this.resultatsPi = resultatsPi;
@@ -841,7 +844,8 @@ public class AttributionService {
         a.setDossierCreePar(CurrentUser.ref().or(CurrentUser::login).orElse(null));
         // Le projet de marché (Q1) : produit par le serveur, Word et PDF.
         Offre offre = offres.findById(p.idOffre()).orElseThrow();
-        for (GenerateurDocumentsFiche.Fichier f : generateur.generer(projet(idDmc, lot, p, offre, plan, ev.lots().size() > 1))) {
+        for (GenerateurDocumentsFiche.Fichier f : generateur.generer(projet(idDmc, lot, p, offre, plan, ev.lots().size() > 1, dossier.getIdPrmp(),
+                null))) {
             if ("pdf".equals(f.extension())) {
                 a.setProjetPdf(f.contenu());
             } else if ("docx".equals(f.extension())) {
@@ -927,53 +931,68 @@ public class AttributionService {
     }
 
     /**
-     * Le projet de marché (Q1 : produit par le serveur) : les parties, l'objet, les pièces constitutives (le DAO, l'offre retenue,
-     * le CCAG), le montant hors taxes (prix corrigé − rabais) et en lettres, le délai de l'acte d'engagement, les signatures.
+     * Le projet de marché (Q1 : produit par le serveur) — ⚠️ 2026-10-10 : rédigé par {@link ProjetMarcheService}, conforme à la loi
+     * (objet du seul lot, art. 28 ; mentions obligatoires de l'art. 60).
      */
-    private DocumentLibre projet(Long idDmc, Integer lot, EvaluationDto.Proposition p, Offre offre, Map<String, String> plan, boolean allotie) {
-        FicheMarcheService.EtatVersion v = fiches.etatValide(idDmc).orElse(null);
-        String numero = v == null || v.etat().getValeurs() == null ? null : v.etat().getValeurs().get("B02-OB-03");
-        String objet = v == null ? null : v.etat().getDesignationMarche();
-        EntrepriseCandidatDto.Entreprise e = null;
-        try {
-            e = entreprises.lire(offre.getIdCandidat());
-        } catch (RuntimeException ignore) {
-            e = null;
-        }
-        List<DocumentLibre.Element> el = new ArrayList<>();
-        el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.TITRE, "PROJET DE MARCHÉ"));
-        el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.CENTRE, (objet == null ? "" : objet) + (allotie ? " — lot " + lot : "")));
-        el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.VIDE, ""));
-        para(el, "Entre :");
-        para(el, Objects.toString(plan.get("ENTITE"), "l'Autorité contractante") + (plan.get("MINISTERE") == null ? "" : " (" + plan.get("MINISTERE") + ")")
-                + ", représentée par sa Personne responsable des marchés publics" + (plan.get("PRMP") == null ? "" : ", " + plan.get("PRMP"))
-                + ", ci-après « l'Autorité contractante »,");
-        para(el, "et :");
-        para(el, offre.getRaisonSociale() + ", NIF " + offre.getNif() + (e == null || e.adresse() == null ? "" : ", " + e.adresse())
-                + (e == null || e.representant() == null ? "" : ", représentée par " + e.representant().prenom() + " " + e.representant().nom()
-                        + (e.representant().fonction() == null ? "" : ", " + e.representant().fonction()))
-                + ", ci-après « le Titulaire ».");
-        sous(el, "Article 1 — Objet");
-        para(el, "Le présent marché a pour objet : " + Objects.toString(objet, "—") + (allotie ? ", lot " + lot : "") + ", issu de l'appel d'offres"
-                + (numero == null ? "" : " n° " + numero) + ".");
-        sous(el, "Article 2 — Pièces constitutives");
-        para(el, "Le marché est constitué, par ordre de priorité : l'acte d'engagement du Titulaire ; le cahier des clauses administratives "
-                + "particulières (ou le cahier des prescriptions spéciales) et ses annexes, les spécifications techniques ; l'offre du Titulaire "
-                + "(offre n° " + offre.getNumero() + "), dont le bordereau des prix ; le cahier des clauses administratives générales — tels "
-                + "qu'ils figurent au dossier d'appel d'offres et à l'offre retenue, sans modification substantielle.");
-        sous(el, "Article 3 — Montant");
-        para(el, "Le montant du marché est fixé à " + (p.montant() == null ? "……" : FormulairesEnLigne.lisible(p.montant()) + " Ariary hors taxes ("
-                + NombreEnLettres.cardinal(p.montant().longValue()) + " ariary)") + ", tel qu'il résulte de l'évaluation des offres (prix "
-                + "corrigé, rabais déduit).");
-        sous(el, "Article 4 — Délai d'exécution");
-        para(el, "Le délai d'exécution est celui de l'acte d'engagement : " + Objects.toString(p.delai(), "……") + ".");
-        sous(el, "Article 5 — Entrée en vigueur");
-        para(el, "Le marché prend effet à sa notification au Titulaire, après son approbation et l'avis de l'organe de contrôle.");
-        el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.VIDE, ""));
-        para(el, "Pour le Titulaire : ……………………………………  (nom, qualité, date et signature)");
-        para(el, "Pour l'Autorité contractante, la Personne responsable des marchés publics : ……………………………………  (date et signature)");
-        return new DocumentLibre("PROJET_MARCHE", allotie ? lot : null, el, "Procédure " + idDmc + " — projet de marché" + (allotie ? ", lot " + lot : ""));
+    private DocumentLibre projet(Long idDmc, Integer lot, EvaluationDto.Proposition p, Offre offre, Map<String, String> plan, boolean allotie,
+            String idPrmp, java.time.LocalDate dateNotification) {
+        return projetMarche.document(new ProjetMarcheService.Entree(idDmc, lot, p, offre, plan, allotie, evaluation.estPi(idDmc), idPrmp,
+                dateNotification));
     }
+
+    /**
+     * ⚠️ 2026-10-10 (demande « projet-de-marche », arbitrage : geste de regénération) — refait le projet de marché d'un lot (PDF et Word)
+     * selon les règles en vigueur, tant que le marché n'est pas signé ; la pièce {@code PROJET_MARCHE} jointe au dossier de marché est
+     * remplacée si ce dossier est encore modifiable (brouillon, ou rendu à la PRMP). PRMP ou UGPM : 404 sans dossier de marché ; 409
+     * {@code MARCHE_SIGNE}.
+     */
+    public AttributionDto regenererProjet(Long idDmc, Integer lot) {
+        exigerPrmp(idDmc);
+        Attribution a = attributions.findById(new Attribution.Cle(idDmc, lot)).filter(x -> x.getIdDossier() != null)
+                .orElseThrow(() -> new ResourceNotFoundException("Le dossier de marché de ce lot n'est pas créé."));
+        if (a.getSigneLe() != null) {
+            throw new BusinessRuleException("Le marché est signé : son projet ne se refait plus.", "MARCHE_SIGNE");
+        }
+        EvaluationDto ev = evaluation.vueSansGarde(idDmc)
+                .orElseThrow(() -> new ResourceNotFoundException("L'évaluation de cette procédure n'est pas ouverte."));
+        EvaluationDto.Proposition p = ev.lots().stream().filter(x -> Objects.equals(x.lot(), lot)).findFirst().map(EvaluationDto.Lot::proposition)
+                .filter(x -> x.idOffre() != null).orElseThrow(() -> new BusinessRuleException("Le rapport ne propose plus d'offre pour ce lot.",
+                        "LOT_INFRUCTUEUX"));
+        Offre offre = offres.findById(p.idOffre()).orElseThrow();
+        DossierMec dmc = dmcRepository.findById(idDmc).orElseThrow(() -> new ResourceNotFoundException("DMC introuvable : " + idDmc));
+        Map<String, String> plan = valeursPpm.lire(dmc.getIdDetail()).valeurs();
+        Dossier dossier = dossierRepository.findById(a.getIdDossier()).orElseThrow();
+        for (GenerateurDocumentsFiche.Fichier f : generateur.generer(projet(idDmc, lot, p, offre, plan, ev.lots().size() > 1, dossier.getIdPrmp(),
+                a.getDateNotification()))) {
+            if ("pdf".equals(f.extension())) {
+                a.setProjetPdf(f.contenu());
+            } else if ("docx".equals(f.extension())) {
+                a.setProjetDocx(f.contenu());
+            }
+        }
+        attributions.save(a);
+        boolean remplacee = false;
+        if (DOSSIER_MODIFIABLE.contains(dossier.getStatut()) && a.getProjetPdf() != null) {
+            TypePieceJointe type = typesPiece.findFirstByCode("PROJET_MARCHE").orElse(null);
+            for (PieceJointeDossier piece : type == null ? List.<PieceJointeDossier>of() : pieces.findByIdDossier(dossier.getIdDossier())) {
+                if (type.getIdTypePiece().equals(piece.getIdTypePiece())) {
+                    piece.setContenu(a.getProjetPdf());
+                    piece.setTaille((long) a.getProjetPdf().length);
+                    piece.setDateUpload(LocalDateTime.now());
+                    pieces.save(piece);
+                    remplacee = true;
+                }
+            }
+        }
+        evaluation.tracerAttribution(idDmc, "PROJET_REFAIT", "Lot " + lot + " : projet de marché refait"
+                + (remplacee ? ", pièce du dossier " + dossier.getIdDossier() + " remplacée" : ""));
+        return lire(idDmc);
+    }
+
+    /** Statuts où le dossier de marché se modifie encore : brouillon, ou rendu à la PRMP. */
+    static final java.util.Set<String> DOSSIER_MODIFIABLE = java.util.Set.of(cnm.prs.enums.StatutDossier.BROUILLON.name(),
+            cnm.prs.enums.StatutDossier.EN_ATTENTE_DECISION_PRMP.name(), cnm.prs.enums.StatutDossier.EN_ATTENTE_PIECES.name(),
+            cnm.prs.enums.StatutDossier.EN_ATTENTE_COMPLEMENTS_DEPOT.name());
 
     private static void para(List<DocumentLibre.Element> el, String t) {
         el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.PARA, t));
