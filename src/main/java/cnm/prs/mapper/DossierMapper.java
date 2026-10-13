@@ -19,6 +19,7 @@ public final class DossierMapper {
         dto.setIdDossier(entity.getIdDossier());
         dto.setIdTypeDossier(entity.getIdTypeDossier());
         dto.setIdSousType(entity.getIdSousType());
+        dto.setReputeApprouveLe(entity.getReputeApprouveLe());   // ⚠️ R6b
         dto.setIdDossierParent(entity.getIdDossierParent());
         dto.setRefeDossier(entity.getRefeDossier());
         dto.setDateRef(entity.getDateRef());

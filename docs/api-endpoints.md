@@ -8214,6 +8214,46 @@ achat direct : aucune. **La date limite** est le premier champ renseigné parmi 
 - ⚠️ Écart avec la demande : à la validation, le refus garde le code **`CONTROLES_BLOQUANTS`** du bilan (le détail est dans la règle
   `DELAI_PUBLICITE` du bilan) ; `DELAI_PUBLICITE` avec `details` est le code de l'impression.
 
+### Le manuel révisé pour l'application, lot 2, tranche R6b : le plan réputé approuvé — V107 ⚠️ 2026-10-13
+
+Demande front `demande-backend-2026-10-10-manuel-revise-lot2.md` (§B1, règle 5 ; réponse **QB4** : un avis rendu après coup vaut
+observation). Arbitrages au backend du 13/10 : un **marqueur daté**, pas un statut — le circuit d'examen continue et un PV signé
+plus tard n'efface rien ; **tout plan sans PV signé** compte, quel que soit son statut dans le circuit (hors `BROUILLON`, `CLOTURE`,
+`RETIRE`, `REMPLACE`) ; les jours ouvrables sont les jours ouvrés du **lundi au vendredi, sans jours fériés** ; destinataires :
+la **PRMP du plan** et les **Présidents de sa localité** (un Président sans localité, qui voit tout, est notifié aussi). Migration
+**V107** (`t_dossier.REPUTE_APPROUVE_LE`, timestamp), pom inchangé.
+
+#### Le planificateur (`ReputeApprouveService`)
+
+Chaque heure (`app.plans.cron-repute-approuve`, défaut `0 20 * * * *`), pour chaque plan (famille `DDP`) soumis (`dateSoumission`
+posée), sans marqueur et **sans PV signé** (`t_pv_examen` au statut `SIGNE`, quel que soit l'avis) : si **dix jours ouvrables** (délai
+légal n° 5 `PLAN_REPUTE_APPROUVE`, art. 26-IV, lu dans `DelaisLegaux`) se sont écoulés depuis le jour de la soumission (non compté :
+soumis le lundi 5, échéance le lundi 19), le serveur, dans une même transaction :
+
+- pose **`REPUTE_APPROUVE_LE`** = date-heure du passage (une fois par plan : un second passage ne fait rien) ;
+- trace au journal du dossier l'action **`PLAN_REPUTE_APPROUVE`** (sans auteur : geste du serveur), détail « Plan réputé approuvé
+  (art. 26-IV) : soumis le jj/mm/aaaa, sans PV signé à l'expiration des 10 jours ouvrables (le jj/mm/aaaa) ; un avis rendu après coup
+  vaut observation. » ;
+- émet la notification **`PLAN_REPUTE_APPROUVE`** (titre « Plan de passation réputé approuvé », objet `DOSSIER` = le plan) à la PRMP
+  du plan (`destinataireType` `PRMP`, courriel de la PRMP) et à chaque Président de la localité du plan (`destinataireIm`).
+
+Le statut du dossier **ne change pas** : réception, dispatch, examen, PV suivent leur cours ; un PV signé ensuite s'ajoute au plan
+réputé approuvé (le front l'affiche comme une observation, QB4).
+
+#### Ce qui change dans l'API
+
+- **`DossierDto.reputeApprouveLe`** (date-heure, `null` tant que le plan n'est pas réputé approuvé) sur toutes les lectures du dossier
+  (unitaire, listes, pages, `GET /api/dossiers/{id}`).
+- **Création d'un DMC** (`POST /api/dmcs/par-marche/{idDetail}`, éligibilité des lignes) : la garde **`PV_NON_SIGNE`** accepte un plan
+  réputé approuvé comme un PV signé favorable ; message mis à jour (« … et n'est pas réputé approuvé. »). Les autres gardes
+  (`LIGNE_RETIREE`, `VERSION_DEPASSEE`, `MODE_NON_DAO`, `FORME_NON_OUTILLEE`, `DAO_EXISTANT`) sont inchangées.
+- Journal : `typeAction` admet **`PLAN_REPUTE_APPROUVE`** ; notifications : `typeNotif` admet **`PLAN_REPUTE_APPROUVE`**.
+- Aucune route nouvelle ; le délai lui-même reste lisible sur `GET /api/delais-legaux` (n° 5).
+
+⚠️ Écarts avec la demande : pas de statut `REPUTE_APPROUVE` (marqueur daté ; le filtre « statut » du front ne le verra pas, lire
+`reputeApprouveLe`) ; tout statut du circuit est éligible (la demande citait `SOUMIS` / `RECU` / `DISPATCHE`) ; passage horaire plutôt
+que quotidien ; le calendrier des jours fériés n'est pas tenu (lundi-vendredi).
+
 ### Le rabais structuré de l'offre en ligne ⚠️ 2026-10-07
 
 Demande front `demande-backend-2026-10-07-rabais-structure.md` (arbitrage Q4 du pilote : « le rabais est structuré au dépôt »). Aucune

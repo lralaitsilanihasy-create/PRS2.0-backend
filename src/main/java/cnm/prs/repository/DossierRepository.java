@@ -584,4 +584,7 @@ public interface DossierRepository extends JpaRepository<Dossier, Integer> {
 
     /** ⚠️ M5b (manuel de contrôle, §B6) — les dossiers d'un ensemble de statuts (suivi des examens en dépassement). */
     List<Dossier> findByStatutIn(java.util.Collection<String> statuts);
+
+    /** ⚠️ R6b (manuel révisé, V107) — les dossiers d'une famille soumis et pas encore réputés approuvés (candidats du planificateur). */
+    List<Dossier> findByIdTypeDossierAndReputeApprouveLeIsNullAndDateSoumissionIsNotNull(String idTypeDossier);
 }

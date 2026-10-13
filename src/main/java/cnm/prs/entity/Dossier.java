@@ -72,6 +72,13 @@ public class Dossier {
     @Column(name = "DATE_SOUMISSION")
     private LocalDateTime dateSoumission;
 
+    /**
+     * ⚠️ R6b (manuel révisé, lot 2, §B1 règle 5 ; V107) — un plan de passation soumis depuis dix jours ouvrables sans PV signé est
+     * <strong>réputé approuvé</strong> (art. 26-IV) : la date du constat, posée par le planificateur ; {@code null} sinon.
+     */
+    @Column(name = "REPUTE_APPROUVE_LE")
+    private LocalDateTime reputeApprouveLe;
+
     @Column(name = "STATUT", length = 30)
     private String statut;
 

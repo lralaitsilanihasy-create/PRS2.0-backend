@@ -131,6 +131,9 @@ public class DossierDto {
      */
     private java.time.LocalDateTime dateSoumission;
 
+    /** ⚠️ R6b (manuel révisé, lot 2, §B1 règle 5) — plan réputé approuvé (art. 26-IV) : la date du constat ; {@code null} sinon. */
+    private java.time.LocalDateTime reputeApprouveLe;
+
     /**
      * ⚠️ Frise du tableau de bord (demande pilote 2026-09-07) — <strong>date de franchissement</strong> de
      * chaque étape de la frise, clés {@code RECEPTION}, {@code DISPATCH}, {@code EXAMEN}, {@code PROJET_PV},

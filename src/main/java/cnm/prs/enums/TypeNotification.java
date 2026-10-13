@@ -218,5 +218,7 @@ public enum TypeNotification {
     /** ⚠️ 2026-10-08 (lot 2, 2d-3, Q10) — l'avis sur le sans suite est attendu le lendemain : vers la PRMP et le membre examinateur. */
     ECHEANCE_SANS_SUITE,
     /** ⚠️ 2026-10-09 (manuel de contrôle, M5b, §B6) — un examen dépasse 5 jours ouvrés : vers le Membre, le Chef de commission et le Président. */
-    EXAMEN_EN_DEPASSEMENT
+    EXAMEN_EN_DEPASSEMENT,
+    /** ⚠️ R6b (manuel révisé, lot 2, §B1 règle 5 ; V107) — plan réputé approuvé (art. 26-IV) : PRMP du plan, Présidents de la localité. */
+    PLAN_REPUTE_APPROUVE
 }

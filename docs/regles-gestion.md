@@ -1240,6 +1240,14 @@ de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM 
 > (contre la date de publication prévue, à défaut la prévision de lancement du plan) et à l'impression de l'avis (contre la date de
 > publication saisie) : un délai de la loi non respecté refuse l'une et l'autre.
 >
+> ⚠️ **2026-10-13 — le plan réputé approuvé (manuel révisé, lot 2, tranche R6b, V107 ; réponse QB4).** Un plan de passation soumis
+> à la Commission qui n'a pas reçu de PV signé dans les **dix jours ouvrables** suivant sa soumission (le jour de la soumission n'est pas
+> compté ; les jours ouvrables sont les jours du lundi au vendredi, sans tenir compte des jours fériés) est **réputé approuvé**
+> (art. 26-IV de la loi n° 2016-055). Le serveur le constate chaque heure, date ce constat sur le plan, l'inscrit au journal du dossier
+> et en informe la PRMP du plan et les Présidents de sa localité. Le plan ne change pas de statut et son examen continue : un avis rendu
+> après coup vaut observation. Dès ce constat, les lignes du plan peuvent recevoir un dossier de mise en concurrence comme si le PV
+> signé favorable existait. Un plan en brouillon, clôturé, retiré ou remplacé n'est jamais réputé approuvé.
+>
 > ⚠️ **2026-10-08 — les grilles de contrôle par sous-type (tranche M3, V96).** Chaque sous-type a la grille du manuel : les points
 > communs de sa famille, puis ceux de la grille dont il dérive (un appel d'offres restreint reprend la grille de l'appel d'offres
 > ouvert et y ajoute ses cinq points ; un marché sur appel d'offres restreint, celle du marché sur appel d'offres ouvert), puis les

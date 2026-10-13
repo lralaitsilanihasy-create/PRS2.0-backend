@@ -321,9 +321,12 @@ public class DmcService {
                 return categorie;
             }
         }
-        if (dossier == null || !caches.pv.computeIfAbsent(dossier.getIdDossier(), id -> valeursPpm.pvSigneFavorable(dossier))) {
+        // ⚠️ R6b (manuel révisé, lot 2, §B1 règle 5 ; V107) — un plan réputé approuvé (art. 26-IV) vaut PV signé favorable.
+        boolean approuve = dossier != null && (dossier.getReputeApprouveLe() != null
+                || caches.pv.computeIfAbsent(dossier.getIdDossier(), id -> valeursPpm.pvSigneFavorable(dossier)));
+        if (!approuve) {
             return Optional.of(new Motif("PV_NON_SIGNE", "Le plan " + (dossier == null ? "" : dossier.getRefeDossier() + " ")
-                    + "n'a pas de PV signé favorable (ou ses réserves ne sont pas levées)."));
+                    + "n'a pas de PV signé favorable (ou ses réserves ne sont pas levées) et n'est pas réputé approuvé."));
         }
         if (caches.dejaDao(marche.getIdLigneOrigine())) {
             return Optional.of(new Motif("DAO_EXISTANT", "La ligne de marché " + marche.getIdDetail()

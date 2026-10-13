@@ -96,6 +96,8 @@ public class JournalDossierService {
      * « Fiche marché version n validée, N information(s) modifiée(s), P pièce(s) remplacée(s) ». Acte PRMP.
      */
     public static final String FICHE_REVISEE = "FICHE_REVISEE";
+    /** ⚠️ R6b (manuel révisé, lot 2, §B1 règle 5 ; V107) — le plan est réputé approuvé (art. 26-IV), posé par le planificateur. */
+    public static final String PLAN_REPUTE_APPROUVE = "PLAN_REPUTE_APPROUVE";
 
     private final ActionDossierRepository repository;
     private final PrmpRepository prmpRepository;
