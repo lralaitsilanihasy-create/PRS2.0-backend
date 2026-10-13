@@ -338,8 +338,9 @@ public class DocumentsFicheMarcheService {
             // ⚠️ 2026-10-01 (contre-recette du front) — le bloc de signature (« à …, le … », la qualité, le nom) gardé ensemble
             Map<String, String> jetons = new LinkedHashMap<>(publication);
             jetons.putAll(parametresDocuments());
+            // ⚠️ R3a (manuel révisé, lot 1, §B3) — la décision d'équivalence SIGMP (ou son attente) au pied de chaque page.
             doc = FormulairesCandidat.rendreModele(TYPE_AVIS, null, etat, parCode, modele, impression, jetons)
-                    .finGardeeEnsemble(BLOC_SIGNATURE_AVIS);
+                    .finGardeeEnsemble(BLOC_SIGNATURE_AVIS).avecPiedDePage(parametres.piedSigmp());
             fichiers = generateur.generer(doc);
         } catch (RuntimeException e) {
             throw new GenerationDocumentsException("La génération de l'avis spécifique a échoué : " + e.getMessage(), e);
@@ -368,6 +369,7 @@ public class DocumentsFicheMarcheService {
         Map<String, ChampFicheMarche> parCode = new LinkedHashMap<>();
         champRepository.findByActifTrueOrderByCodeRubriqueAscRangAsc().forEach(c -> parCode.put(c.getCode(), c));
         Map<String, String> parametres = parametresDocuments();
+        String piedSigmp = this.parametres.piedSigmp();   // ⚠️ R3a (§B3) — le même pied sur chaque lettre
         Map<Integer, List<Produit>> parRang = new LinkedHashMap<>();
         for (int i = 0; i < destinataires.size(); i++) {
             int rang = i + 1;
@@ -377,7 +379,7 @@ public class DocumentsFicheMarcheService {
                 jetons.put(FormulairesCandidat.PREFIXE_LETTRE + "destinataire", destinataires.get(i));
                 jetons.putAll(parametres);
                 fichiers = generateur.generer(FormulairesCandidat.rendreModele(TYPE_LETTRE, null, etat, parCode, modele, impression,
-                        jetons).finGardeeEnsemble(BLOC_SIGNATURE_AVIS));
+                        jetons).finGardeeEnsemble(BLOC_SIGNATURE_AVIS).avecPiedDePage(piedSigmp));
             } catch (RuntimeException e) {
                 throw new GenerationDocumentsException("La génération de la lettre d'invitation n° " + rang + " a échoué : "
                         + e.getMessage(), e);

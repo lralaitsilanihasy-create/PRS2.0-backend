@@ -325,6 +325,127 @@ public class ParametreService {
         return quorumCao();
     }
 
+    // ------------------------------------------------------------------ transition SIGMP (⚠️ R3a, manuel révisé, lot 1, §B3)
+
+    /**
+     * ⚠️ R3a (manuel révisé, lot 1, §B3 ; arbitrage Q3 du pilote du 10/10 : « double mode transitoire ») — la date à partir de
+     * laquelle les imprimés du SIGMP (projet d'avis spécifique, projet de lettre d'invitation) ne sont plus acceptés en ligne :
+     * jusqu'à la veille, les pièces {@code FACULTATIVE_EN_LIGNE} sont listées sans obligation ; dès ce jour, elles sont retirées
+     * des listes des procédures en ligne. Absente : la transition dure.
+     */
+    public static final String SIGMP_FIN_TRANSITION = "SIGMP_FIN_TRANSITION";
+    /** La décision formelle d'équivalence (hors application) : sa référence et sa date, portées au pied des documents générés. */
+    public static final String SIGMP_DECISION_REFERENCE = "SIGMP_DECISION_REFERENCE";
+    public static final String SIGMP_DECISION_DATE = "SIGMP_DECISION_DATE";
+
+    /** Le pied des documents générés tant que la décision d'équivalence n'est pas réglée. */
+    public static final String PIED_SIGMP_EN_ATTENTE = "Projet — équivalence SIGMP en attente";
+
+    private static final java.time.format.DateTimeFormatter JOUR = java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy");
+
+    /**
+     * Les paramètres de la transition SIGMP ; {@code transitionEnCours} et {@code pied} sont calculés.
+     *
+     * @param finTransition      {@code null} : la transition dure
+     * @param transitionEnCours  faux dès la date de fin atteinte
+     * @param pied               ce que les documents générés portent en pied : la décision, ou {@link #PIED_SIGMP_EN_ATTENTE}
+     */
+    public record SigmpTransition(java.time.LocalDate finTransition, String decisionReference, java.time.LocalDate decisionDate,
+            boolean transitionEnCours, String pied) {
+    }
+
+    /** Le corps d'un réglage : les trois valeurs, en {@code AAAA-MM-JJ} ; une valeur nulle ou vide efface. */
+    public record SigmpTransitionRequest(String finTransition, String decisionReference, String decisionDate) {
+    }
+
+    @Transactional(readOnly = true)
+    public SigmpTransition sigmpTransition() {
+        java.time.LocalDate fin = date(SIGMP_FIN_TRANSITION);
+        return new SigmpTransition(fin, texte(SIGMP_DECISION_REFERENCE), date(SIGMP_DECISION_DATE), !transitionSigmpTerminee(fin),
+                piedSigmp());
+    }
+
+    /**
+     * Règle la transition (Administrateur) ; 400 nominatif : date illisible, référence de plus de 200 caractères, décision
+     * incomplète (la référence et la date vont ensemble).
+     */
+    @Transactional
+    public SigmpTransition fixerSigmpTransition(SigmpTransitionRequest r) {
+        SigmpTransitionRequest c = r == null ? new SigmpTransitionRequest(null, null, null) : r;
+        java.util.List<cnm.prs.exception.ErrorResponse.FieldError> erreurs = new java.util.ArrayList<>();
+        java.time.LocalDate fin = dateIso(c.finTransition(), "finTransition", "La date de fin de la transition SIGMP", erreurs);
+        java.time.LocalDate decision = dateIso(c.decisionDate(), "decisionDate", "La date de la décision d'équivalence", erreurs);
+        String reference = c.decisionReference() == null || c.decisionReference().isBlank() ? null : c.decisionReference().trim();
+        if (reference != null && reference.length() > 200) {
+            erreurs.add(new cnm.prs.exception.ErrorResponse.FieldError("decisionReference",
+                    "La référence de la décision d'équivalence tient en 200 caractères."));
+        }
+        boolean dateFournie = c.decisionDate() != null && !c.decisionDate().isBlank();
+        if ((reference != null) != dateFournie) {
+            erreurs.add(new cnm.prs.exception.ErrorResponse.FieldError(reference == null ? "decisionReference" : "decisionDate",
+                    "La décision d'équivalence se règle avec sa référence et sa date, ou s'efface entièrement."));
+        }
+        if (!erreurs.isEmpty()) {
+            throw new cnm.prs.exception.ChampsInvalidesException(erreurs);
+        }
+        ecrireTexte(SIGMP_FIN_TRANSITION, fin == null ? null : fin.toString());
+        ecrireTexte(SIGMP_DECISION_REFERENCE, reference);
+        ecrireTexte(SIGMP_DECISION_DATE, decision == null ? null : decision.toString());
+        return sigmpTransition();
+    }
+
+    /** La transition SIGMP est-elle terminée (date de fin réglée et atteinte) ? Sans date : non. */
+    @Transactional(readOnly = true)
+    public boolean transitionSigmpTerminee() {
+        return transitionSigmpTerminee(date(SIGMP_FIN_TRANSITION));
+    }
+
+    private static boolean transitionSigmpTerminee(java.time.LocalDate fin) {
+        return fin != null && !java.time.LocalDate.now().isBefore(fin);
+    }
+
+    /**
+     * Le pied des documents générés (avis spécifique, lettres d'invitation et leurs projets) : « Document produit par la
+     * plateforme PRS 2.0 en application de la décision n° … du … » dès que la décision est réglée, sinon
+     * {@link #PIED_SIGMP_EN_ATTENTE}.
+     */
+    @Transactional(readOnly = true)
+    public String piedSigmp() {
+        String reference = texte(SIGMP_DECISION_REFERENCE);
+        java.time.LocalDate decision = date(SIGMP_DECISION_DATE);
+        if (reference == null || decision == null) {
+            return PIED_SIGMP_EN_ATTENTE;
+        }
+        return "Document produit par la plateforme PRS 2.0 en application de la décision n° " + reference + " du " + decision.format(JOUR);
+    }
+
+    /** La valeur d'un paramètre lue en date ISO ; {@code null} si absente ou illisible. */
+    private java.time.LocalDate date(String cle) {
+        String v = texte(cle);
+        if (v == null) {
+            return null;
+        }
+        try {
+            return java.time.LocalDate.parse(v);
+        } catch (java.time.format.DateTimeParseException e) {
+            return null;
+        }
+    }
+
+    private static java.time.LocalDate dateIso(String v, String champ, String libelle,
+            java.util.List<cnm.prs.exception.ErrorResponse.FieldError> erreurs) {
+        if (v == null || v.isBlank()) {
+            return null;
+        }
+        try {
+            return java.time.LocalDate.parse(v.trim());
+        } catch (java.time.format.DateTimeParseException e) {
+            erreurs.add(new cnm.prs.exception.ErrorResponse.FieldError(champ, libelle + " doit être une date AAAA-MM-JJ (reçu « " + v.trim()
+                    + " »)."));
+            return null;
+        }
+    }
+
     /** La valeur texte d'un paramètre ; {@code null} si absent ou vide. */
     @Transactional(readOnly = true)
     public String texte(String cle) {

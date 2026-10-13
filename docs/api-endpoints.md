@@ -7939,6 +7939,44 @@ document signé dans l'application, sont seulement listés). Migration **V102**.
   `CAHIER_CHARGES`, `DEVIS_ESTIMATIF`, `PROJET_MARCHE`, `MOTIFS_SANS_SUITE` — le front peut les présenter comme « jointes » dès qu'une
   pièce du type existe sur le dossier.
 
+
+### Le manuel révisé pour l'application, lot 1, tranche R3a : la transition SIGMP et le pied d'équivalence ⚠️ 2026-10-13
+
+Demande front `demande-backend-2026-10-10-manuel-revise-lot1.md` (§B3, premier et deuxième points). Arbitrage **Q3** du pilote du 10/10 :
+les documents générés remplacent les imprimés du SIGMP « avec mentions complètes, décision formelle d'équivalence et double mode
+transitoire ». Arbitrages au backend du 13/10 : R3 livrée en trois sous-tranches (R3a paramètres, pied et retrait ; R3b projets dès la
+fiche ; R3c mentions complètes et lettre AOR) ; le pied d'équivalence est le **pied de page** des documents (les gabarits ne changent
+pas, la parité avec les `.txt` du front est conservée). **Aucune migration** (paramètres clé/valeur de `t_parametre`), pom inchangé.
+
+#### `GET /api/parametres/sigmp-transition` · `PUT /api/parametres/sigmp-transition`
+
+Lecture par tout authentifié (le front porte le même pied sur l'AGPM dérivé, qu'il imprime lui-même) ; réglage par l'**Administrateur**.
+
+```json
+{ "finTransition": "2027-06-30", "decisionReference": "12/CNM/2026", "decisionDate": "2026-10-01",
+  "transitionEnCours": true, "pied": "Document produit par la plateforme PRS 2.0 en application de la décision n° 12/CNM/2026 du 01/10/2026" }
+```
+
+- Corps du `PUT` : `{ finTransition, decisionReference, decisionDate }`, les dates en `AAAA-MM-JJ` ; une valeur nulle ou vide
+  **efface** le paramètre ; `{}` efface tout. **400 nominatif** : date illisible (`finTransition`, `decisionDate`), référence de plus
+  de 200 caractères, décision incomplète (la référence et la date vont ensemble : `decisionReference` ou `decisionDate` manquante).
+- `transitionEnCours` (calculé) : vrai sans date de fin, et jusqu'à la veille de la date ; faux dès le jour de la date.
+- `pied` (calculé) : la décision réglée → « Document produit par la plateforme PRS 2.0 en application de la décision n° … du … » ;
+  sinon **« Projet — équivalence SIGMP en attente »**.
+- Clés `t_parametre` : `SIGMP_FIN_TRANSITION`, `SIGMP_DECISION_REFERENCE`, `SIGMP_DECISION_DATE`.
+
+#### Ce qui en découle
+
+- **Pied des documents** : l'avis spécifique (`POST …/avis-specifique`) et les lettres d'invitation (`POST …/lettres-invitation`) portent
+  `pied` au **pied de chaque page** (.docx et .pdf), après le pied existant (« Plan … · ligne … · fiche marché version n validée le … — … »).
+  Le corps du document ne change pas. Un document imprimé garde le pied du moment : régler la décision après coup ne le réécrit pas.
+- **Retrait au terme de la transition** : dès que `transitionEnCours` est faux, une pièce `FACULTATIVE_EN_LIGNE` (R2 : `AVIS_SPECIFIQUE`,
+  `LETTRE_INVITATION`) **disparaît** des listes des procédures **en ligne** (`GET /api/dossiers/{id}/pieces-exigees`, soumission, dépôt),
+  comme une pièce `PAPIER`. Hors ligne (dossier saisi), rien ne change : la pièce reste exigée. Remettre la date à venir la fait réapparaître.
+- Le « projet d'AGPM/PPM imprimé du SIGMP » n'a pas de type de pièce au référentiel des plans : rien à retirer.
+- Les points de grille « imprimé du SIGMP » (P12, P17) restent tels quels : leur retrait au terme de la transition n'est pas demandé
+  dans ce lot.
+
 ### Le rabais structuré de l'offre en ligne ⚠️ 2026-10-07
 
 Demande front `demande-backend-2026-10-07-rabais-structure.md` (arbitrage Q4 du pilote : « le rabais est structuré au dépôt »). Aucune

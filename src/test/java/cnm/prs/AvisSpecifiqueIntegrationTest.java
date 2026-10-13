@@ -273,6 +273,33 @@ class AvisSpecifiqueIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(docxTexte(r)).contains("BNI Madagascar, compte n° 00005 00001 12345678901 23 au nom de ARMP");
     }
 
+    @Test
+    @DisplayName("⚠️ R3a (manuel révisé, §B3) — le pied de chaque page porte l'équivalence SIGMP : « Projet — équivalence SIGMP en "
+            + "attente » tant que la décision n'est pas réglée, puis « … en application de la décision n° … du … »")
+    void piedSigmp() throws Exception {
+        int idDossier = creerDossier();
+        pvSigne(idDossier, "FAV", "PV_SIGNE");
+        String r = imprimer(idDmc).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        assertThat(piedDuDocx(r)).contains("fiche marché version 1", "Projet — équivalence SIGMP en attente");
+
+        mvc.perform(put("/api/parametres/sigmp-transition").header("Authorization", tokenAdmin).contentType(JSON)
+                .content("{\"decisionReference\":\"12/CNM/2026\",\"decisionDate\":\"2026-10-01\"}")).andExpect(status().isOk());
+        r = imprimer(idDmc).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        assertThat(piedDuDocx(r)).contains("Document produit par la plateforme PRS 2.0 en application de la décision n° 12/CNM/2026 du 01/10/2026")
+                .doesNotContain("en attente");
+        // Le corps de l'avis ne change pas : le pied est hors du texte relu par le comparateur de fidélité.
+        assertThat(docxTexte(r)).doesNotContain("équivalence SIGMP");
+    }
+
+    private String piedDuDocx(String produits) throws Exception {
+        int id = JsonPath.<List<Integer>>read(produits, "$[?(@.extension=='docx')].idDocument").get(0);
+        byte[] docx = mvc.perform(get("/api/fiches-marche/documents/" + id + "/contenu").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        try (XWPFDocument doc = new XWPFDocument(new ByteArrayInputStream(docx))) {
+            return doc.getFooterList().stream().map(org.apache.poi.xwpf.usermodel.XWPFFooter::getText).reduce("", String::concat);
+        }
+    }
+
     private String docxTexte(String produits) throws Exception {
         int id = JsonPath.<List<Integer>>read(produits, "$[?(@.extension=='docx')].idDocument").get(0);
         return texteDuDocx(mvc.perform(get("/api/fiches-marche/documents/" + id + "/contenu").header("Authorization", tokenPrmp))

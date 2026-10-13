@@ -1186,6 +1186,13 @@ de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM 
 > transition. Les listes des dossiers saisis ne changent pas. Un acte de gestion ne se dépose sur un marché attribué en ligne que si ce
 > marché est signé dans l'application (`MARCHE_NON_SIGNE`) ; le scan signé du marché est alors joint d'office à l'acte.
 >
+> ⚠️ **2026-10-13 — la transition SIGMP et l'équivalence des documents générés (manuel révisé, lot 1, tranche R3a ; arbitrage Q3 du
+> pilote).** L'avis spécifique et les lettres d'invitation produits par l'application remplacent les imprimés du SIGMP. Chaque page
+> porte en pied la décision formelle d'équivalence (« Document produit par la plateforme PRS 2.0 en application de la décision n° … du … »)
+> dès que l'Administrateur l'a réglée ; auparavant, « Projet — équivalence SIGMP en attente ». Pendant la transition, l'imprimé du SIGMP
+> reste accepté en pièce facultative des procédures en ligne ; dès la date de fin de transition réglée par l'Administrateur, il n'est plus
+> demandé. Les dossiers saisis hors de l'application continuent d'exiger l'imprimé.
+>
 > ⚠️ **2026-10-08 — les grilles de contrôle par sous-type (tranche M3, V96).** Chaque sous-type a la grille du manuel : les points
 > communs de sa famille, puis ceux de la grille dont il dérive (un appel d'offres restreint reprend la grille de l'appel d'offres
 > ouvert et y ajoute ses cinq points ; un marché sur appel d'offres restreint, celle du marché sur appel d'offres ouvert), puis les

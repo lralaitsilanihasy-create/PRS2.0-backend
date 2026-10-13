@@ -3,6 +3,7 @@ package cnm.prs;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -119,5 +120,26 @@ class PiecesParSousTypeIntegrationTest extends CnmIntegrationTestSupport {
                         "La pièce 'PV de la Commission sur le DAO' est obligatoire."))))
                 .andExpect(jsonPath("$.erreurs[*].message").value(org.hamcrest.Matchers.not(org.hamcrest.Matchers.hasItem(
                         "La pièce 'Projet d'avis spécifique (imprimé du SIGMP)' est obligatoire."))));
+
+        // ⚠️ R3a (§B3) — la transition SIGMP terminée : l'imprimé facultatif disparaît des procédures en ligne ; à venir : il reste.
+        mvc.perform(put("/api/parametres/sigmp-transition").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"finTransition\":\"" + java.time.LocalDate.now() + "\"}")).andExpect(status().isOk());
+        String apres = mvc.perform(get("/api/dossiers/" + id + "/pieces-exigees").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Integer>>read(apres, "$[*].idTypePiece")).containsExactly(toujours);
+        mvc.perform(put("/api/parametres/sigmp-transition").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"finTransition\":\"" + java.time.LocalDate.now().plusDays(1) + "\"}")).andExpect(status().isOk());
+        String pendant = mvc.perform(get("/api/dossiers/" + id + "/pieces-exigees").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Integer>>read(pendant, "$[*].idTypePiece")).containsExactly(toujours, sigmp);
+        // Hors ligne (dossier saisi), la fin de la transition ne change rien : la pièce reste exigée.
+        String saisi = mvc.perform(post("/api/saisies/dossier").header("Authorization", tokenPrmp).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idSousType\":\"DAOO\",\"idEntiteContract\":1}")).andExpect(status().isCreated()).andReturn().getResponse()
+                .getContentAsString();
+        mvc.perform(put("/api/parametres/sigmp-transition").header("Authorization", tokenAdmin).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"finTransition\":\"" + java.time.LocalDate.now() + "\"}")).andExpect(status().isOk());
+        String horsLigneApres = mvc.perform(get("/api/dossiers/" + JsonPath.read(saisi, "$.idDossier") + "/pieces-exigees")
+                .header("Authorization", tokenPrmp)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Integer>>read(horsLigneApres, "$[?(@.obligatoire==true)].idTypePiece")).containsExactly(toujours, papier, sigmp);
     }
 }

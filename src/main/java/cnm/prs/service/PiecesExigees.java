@@ -42,10 +42,13 @@ public class PiecesExigees {
     /** ⚠️ R2 (manuel révisé, V102) — « en ligne » d'un acte de gestion (son marché) et d'une déclaration sans suite (sa demande). */
     private final cnm.prs.repository.ActeGestionRepository actes;
     private final cnm.prs.repository.SansSuiteRepository sansSuites;
+    /** ⚠️ R3a (§B3) — la transition SIGMP : terminée, les pièces {@code FACULTATIVE_EN_LIGNE} sont retirées des procédures en ligne. */
+    private final ParametreService parametres;
 
     public PiecesExigees(PieceSousTypeRepository associations, TypePieceJointeRepository types, AttributionRepository attributions,
             FicheMarcheService fiches, cnm.prs.repository.SousTypeDossierRepository sousTypes, cnm.prs.repository.ActeGestionRepository actes,
-            cnm.prs.repository.SansSuiteRepository sansSuites) {
+            cnm.prs.repository.SansSuiteRepository sansSuites, ParametreService parametres) {
+        this.parametres = parametres;
         this.actes = actes;
         this.sansSuites = sansSuites;
         this.sousTypes = sousTypes;
@@ -71,6 +74,9 @@ public class PiecesExigees {
                     .toList();
         }
         Contexte c = contexte(d);
+        // ⚠️ R3a (§B3) — la transition SIGMP terminée, l'imprimé facultatif disparaît des procédures en ligne, comme une pièce PAPIER.
+        boolean transitionTerminee = c.enLigne() && liste.stream().anyMatch(a -> PieceSousType.FACULTATIVE_EN_LIGNE.equals(a.getCondition()))
+                && parametres.transitionSigmpTerminee();
         Map<Integer, TypePieceJointe> parId = types.findAllById(liste.stream().map(PieceSousType::getIdTypePiece).distinct().toList()).stream()
                 .collect(Collectors.toMap(TypePieceJointe::getIdTypePiece, Function.identity()));
         List<Exigee> out = new ArrayList<>();
@@ -88,6 +94,9 @@ public class PiecesExigees {
                 continue;
             }
             boolean facultative = c.enLigne() && PieceSousType.FACULTATIVE_EN_LIGNE.equals(a.getCondition());
+            if (facultative && transitionTerminee) {
+                continue;
+            }
             // Condition inconnue (dossier sans fiche) : la pièce est servie, sans obligation.
             out.add(new Exigee(t, Boolean.TRUE.equals(a.getObligatoire()) && vaut != null && !facultative, a.getOrdre(), a.getCategorie(),
                     a.getForme(), a.getCondition()));

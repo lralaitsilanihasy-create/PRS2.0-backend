@@ -85,6 +85,18 @@ public record DocumentLibre(String type, Integer lot, List<Element> elements, St
         return new DocumentLibre(type, lot, List.copyOf(els), piedDePage);
     }
 
+    /**
+     * ⚠️ R3a (manuel révisé, lot 1, §B3 ; 2026-10-13) — le même document, son pied de page complété d'une mention (« — » entre
+     * les deux) : la décision d'équivalence SIGMP des avis et des lettres. Mention vide : document inchangé.
+     */
+    public DocumentLibre avecPiedDePage(String mention) {
+        if (mention == null || mention.isBlank()) {
+            return this;
+        }
+        String pied = piedDePage == null || piedDePage.isBlank() ? mention.trim() : piedDePage + " — " + mention.trim();
+        return new DocumentLibre(type, lot, elements, pied);
+    }
+
     /** Le texte du document dans l'ordre, une ligne par paragraphe et par ligne de tableau (cellules jointes par une tabulation). */
     public String texte() {
         List<String> lignes = new ArrayList<>();

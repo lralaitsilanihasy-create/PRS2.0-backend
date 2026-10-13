@@ -139,6 +139,23 @@ public class ParametreController {
         return service.fixerQuorumCao(corps);
     }
 
+    /**
+     * ⚠️ R3a (manuel révisé, lot 1, §B3) — la transition SIGMP : date de fin, décision d'équivalence, et ce qu'en déduisent
+     * les documents (pied) et les listes de pièces (transition en cours) ; lecture par tout authentifié (le front l'imprime au
+     * pied de l'AGPM dérivé).
+     */
+    @GetMapping("/sigmp-transition")
+    public ParametreService.SigmpTransition sigmpTransition() {
+        return service.sigmpTransition();
+    }
+
+    /** Réglage (Administrateur seul) : { finTransition, decisionReference, decisionDate } en AAAA-MM-JJ, nul efface ; 400 nominatif. */
+    @PreAuthorize("hasRole('ADMINISTRATEUR')")
+    @PutMapping("/sigmp-transition")
+    public ParametreService.SigmpTransition fixerSigmpTransition(@RequestBody(required = false) ParametreService.SigmpTransitionRequest corps) {
+        return service.fixerSigmpTransition(corps);
+    }
+
     /** ⚠️ V63 (2026-10-04, soumission en ligne, §B7) — les paramètres des comptes candidats ; Administrateur seul. */
     @PreAuthorize("hasRole('ADMINISTRATEUR')")
     @GetMapping("/candidats")
