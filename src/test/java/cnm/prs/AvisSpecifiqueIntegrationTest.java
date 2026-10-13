@@ -49,6 +49,7 @@ class AvisSpecifiqueIntegrationTest extends CnmIntegrationTestSupport {
             + "\"supports\":\"le quotidien Midi Madagasikara du 06/10/2026\"}";
 
     @Autowired private FicheMarcheValeurRepository valeurRepository;
+    @Autowired private cnm.prs.service.ChampFicheMarcheService champService;
 
     private Long idDmc;
 
@@ -269,6 +270,28 @@ class AvisSpecifiqueIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.details.raison").value("CATEGORIE_SANS_AVIS"));
         mvc.perform(get("/api/fiches-marche/" + idDmc + "/avis-specifique/mentions").header("Authorization", tokenMembre))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("⚠️ R6a (manuel révisé, lot 2, §B1 ; arbitrage Q6) — à l'impression, la date de publication saisie respecte le délai de "
+            + "publicité de la loi : appel d'offres ouvert, date limite 15 jours après → 409 DELAI_PUBLICITE (requis 30, constaté 15, "
+            + "départ, limite) ; 49 jours avant → imprimé")
+    void delaiPublicite() throws Exception {
+        // Le référentiel des fournitures (B04-LR-03), puis une révision validée avec la date limite voulue (sans prévision de lancement
+        // au plan : la validation ne juge pas le délai, l'impression le fera contre la date saisie).
+        assertThat(champService.importerCsv(new org.springframework.core.io.ClassPathResource(
+                "fiche-marche/referentiel-champs-fiche-marche-fournitures.csv").getFile().toPath()).rejets()).isEmpty();
+        mvc.perform(post("/api/fiches-marche/" + idDmc + "/reviser").header("Authorization", tokenPrmp)).andExpect(status().isOk());
+        remplirObligatoiresEtValider(idDmc, "QUANTITE_FIXE", "FOURNITURES_SERVICES", Map.of("B04-LR-03", "2026-04-20"));   // entre le lancement et l'ouverture générés (DATES_ORDRE)
+        int idDossier = creerDossier();
+        pvSigne(idDossier, "FAV", "PV_SIGNE");
+        mvc.perform(post("/api/fiches-marche/" + idDmc + "/avis-specifique").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"datePublication\":\"2026-04-05\",\"jmpDate\":\"2026-01-15\"}")).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("DELAI_PUBLICITE")).andExpect(jsonPath("$.details.code").value("PUBLICITE_AOO_NATIONAL"))
+                .andExpect(jsonPath("$.details.requis").value(30)).andExpect(jsonPath("$.details.constate").value(15))
+                .andExpect(jsonPath("$.details.depart").value("2026-04-05")).andExpect(jsonPath("$.details.limite").value("2026-04-20"));
+        mvc.perform(post("/api/fiches-marche/" + idDmc + "/avis-specifique").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"datePublication\":\"2026-03-01\",\"jmpDate\":\"2026-01-15\"}")).andExpect(status().isCreated());
     }
 
     /** Les noms des pièces du dossier jointes sous ce type de pièce. */

@@ -1229,6 +1229,17 @@ de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM 
 > de marché conduit dans l'application (arbitrage Q13 du pilote) : les documents d'évaluation sont signés (PV d'ouverture, rapport —
 > manuel 2-III-A P5) et le quorum de la commission est atteint avec son président ou son représentant (2-III-C P3 / P14).
 >
+> ⚠️ **2026-10-13 — les délais de la loi et le délai de publicité (manuel révisé, lot 2, tranche R6a, V106 ; arbitrage Q6 du
+> pilote).** Neuf délais de la loi n° 2016-055 font foi, vérifiés dans le texte : publicité de l'appel d'offres ouvert national (30
+> jours, art. 35-II) et international (45 jours), questions des candidats jusqu'à J−10, consultation ouverte (10 jours, art. 41-II),
+> avis sur le plan sous 10 jours ouvrables sinon réputé approuvé (art. 26-IV), 10 jours francs entre l'information des non-retenus et la
+> signature (art. 52-I et 58), pièces de l'attributaire sous 15 jours (art. 20-I), avis d'attribution sous 30 jours (art. 53), avis
+> sur une déclaration sans suite sous 5 jours (art. 55-II). Le jour de départ n'est pas compté. Les autres délais (appel d'offres
+> restreint, prestations intellectuelles, AMI, contrat-cadre, pré-qualification, délai aménagé) sont des paramètres que l'Administrateur
+> règle, seulement signalés tant que le pilote ne les a pas confirmés. Le délai de publicité est vérifié à la validation de la fiche
+> (contre la date de publication prévue, à défaut la prévision de lancement du plan) et à l'impression de l'avis (contre la date de
+> publication saisie) : un délai de la loi non respecté refuse l'une et l'autre.
+>
 > ⚠️ **2026-10-08 — les grilles de contrôle par sous-type (tranche M3, V96).** Chaque sous-type a la grille du manuel : les points
 > communs de sa famille, puis ceux de la grille dont il dérive (un appel d'offres restreint reprend la grille de l'appel d'offres
 > ouvert et y ajoute ses cinq points ; un marché sur appel d'offres restreint, celle du marché sur appel d'offres ouvert), puis les

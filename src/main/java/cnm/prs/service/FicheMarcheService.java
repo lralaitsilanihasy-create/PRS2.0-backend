@@ -126,6 +126,8 @@ public class FicheMarcheService {
     private final DaoCompletService daoComplet;
     /** ⚠️ V84 (2026-10-08, lot 3 PI, Q3) — les sous-critères techniques d'une fiche de prestations intellectuelles. */
     private final SousCriteresFiche sousCriteres;
+    /** ⚠️ R6a (manuel révisé, lot 2, §B1) — le délai de publicité, bloquant à la validation. */
+    private final DelaisPublicite delaisPublicite;
 
     public FicheMarcheService(FicheMarcheRepository ficheRepository, FicheMarcheValeurRepository valeurRepository,
             ChampFicheMarcheRepository champRepository, BlocFicheMarcheRepository blocRepository,
@@ -137,7 +139,8 @@ public class FicheMarcheService {
             BesoinFiche besoin, ParametreService parametres, ParametresInternesService internes, MandatService mandats,
             MoyensFiche moyens, PiecesFiche pieces, cnm.prs.repository.CeremonieClesRepository ceremonieRepository,
             cnm.prs.repository.OffreRepository offreRepository, cnm.prs.repository.SpecificationsFicheRepository specificationsRepository,
-            DaoCompletService daoComplet, SousCriteresFiche sousCriteres) {
+            DaoCompletService daoComplet, SousCriteresFiche sousCriteres, DelaisPublicite delaisPublicite) {
+        this.delaisPublicite = delaisPublicite;
         this.sousCriteres = sousCriteres;
         this.specificationsRepository = specificationsRepository;
         this.daoComplet = daoComplet;
@@ -1577,6 +1580,9 @@ public class FicheMarcheService {
                 parametres.tauxGarantie(), internes.contexteBilan(idDmc, cadrage), categorieOuverture);
         // ⚠️ 2026-10-04 (soumission en ligne, lot 1c, §B8, Q5) — signature au-dessus de « Simple » : pas en ligne.
         ControlesFicheMarche.signatureEnLigne(ouverts, valeurs, cadrage, bilan);
+        // ⚠️ R6a (manuel révisé, lot 2, §B1 ; arbitrage Q6) — le délai de publicité de la loi (30 / 45 / 10 jours, bloquant) ou du
+        // paramètre (signalé), entre la date de publication prévue (B04-SE-17, sinon la prévision LANCEMENT) et la date limite.
+        delaisPublicite.auBilan(valeurs, ppm, ctx.codeCategorie(), typeOuverture, bilan);
         // ⚠️ V60 (2026-10-03, §B3) — une fiche de travaux dit son matériel : la liste, ou le texte B03-QT-09.
         if (CategorieDao.TRAVAUX.name().equals(ctx.codeCategorie())) {
             ControlesFicheMarche.materielExige(ouverts, valeurs, moyens.materiel(fiche.getIdFiche()).size(), bilan);

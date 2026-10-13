@@ -99,12 +99,16 @@ public class AvisSpecifiqueService {
     private final CeremonieService ceremonie;
     /** ⚠️ R3c — le mode du plan (appel d'offres restreint : lettre AOR, pas d'avis). */
     private final ValeursPpmService valeursPpm;
+    /** ⚠️ R6a (manuel révisé, lot 2, §B1) — le délai de publicité de la loi, bloquant à l'impression (409 DELAI_PUBLICITE). */
+    private final DelaisPublicite delaisPublicite;
 
     public AvisSpecifiqueService(FicheMarcheService fiches, FicheMarcheRepository ficheRepository,
             DossierRepository dossierRepository, PvExamenRepository pvRepository, DocumentsFicheMarcheService documents,
             DossierIntegriteService dossierIntegrite, JournalDossierService journal,
             cnm.prs.repository.MarcheRepository marcheRepository, cnm.prs.repository.StatutMarcheRepository statutMarcheRepository,
-            cnm.prs.repository.DocumentFicheMarcheRepository documentRepository, CeremonieService ceremonie, ValeursPpmService valeursPpm) {
+            cnm.prs.repository.DocumentFicheMarcheRepository documentRepository, CeremonieService ceremonie, ValeursPpmService valeursPpm,
+            DelaisPublicite delaisPublicite) {
+        this.delaisPublicite = delaisPublicite;
         this.valeursPpm = valeursPpm;
         this.ceremonie = ceremonie;
         this.marcheRepository = marcheRepository;
@@ -144,6 +148,9 @@ public class AvisSpecifiqueService {
         dossierIntegrite.exigerMandatActif();
         FicheMarche validee = derniereValidee(idDmc, false);
         FicheMarcheDto etat = fiches.lireVersion(idDmc, validee.getNumeroVersion());
+        // ⚠️ R6a (manuel révisé, lot 2, §B1 ; arbitrage Q6) — la date de publication saisie respecte le délai de publicité de la loi.
+        delaisPublicite.exigerAImpression(etat, etat.getIdDetail() == null ? null : valeursPpm.lire(etat.getIdDetail()),
+                LocalDate.parse(corps.datePublication().trim()));
         LocalDateTime maintenant = LocalDateTime.now();
         cnm.prs.entity.Marche ligne = ligne(etat);
         Integer origine = origine(ligne);

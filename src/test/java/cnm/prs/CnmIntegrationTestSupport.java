@@ -855,9 +855,11 @@ abstract class CnmIntegrationTestSupport extends AbstractIntegrationTest {
                 rang = etapes.indexOf(un.trim().substring("DATES_ORDRE:".length())) + 1;
             }
         }
+        // ⚠️ R6a (manuel révisé, lot 2, §B1) — les étapes sont espacées de 40 jours : le délai de publicité de la loi (30 / 45 j entre
+        // la publication, rang 0, et la remise, rang 2) est respecté par le décor.
         return switch (type == null ? "TEXTE" : type) {
-            case "DATE" -> LocalDate.of(2026, 1, 1).plusDays(10L * rang).toString();
-            case "DATE_HEURE" -> LocalDate.of(2026, 1, 1).plusDays(10L * rang).toString() + "T10:00";   // V50
+            case "DATE" -> LocalDate.of(2026, 1, 1).plusDays(40L * rang).toString();
+            case "DATE_HEURE" -> LocalDate.of(2026, 1, 1).plusDays(40L * rang).toString() + "T10:00";   // V50
             case "URL" -> "https://exemple.mg/depot";   // V50
             case "NOMBRE" -> 30;
             case "MONTANT" -> 1000000;

@@ -8168,6 +8168,52 @@ dossier), pom inchangé.
 Hors de l'application (marché saisi) : `NON_APPLICABLE` (`procedureEnLigne: false`). Un dossier de marché né de l'attribution en ligne
 porte toujours un PV et un rapport signés avec quorum : ces règles ne bloquent qu'une incohérence.
 
+
+### Le manuel révisé pour l'application, lot 2, tranche R6a : les délais de la loi et le délai de publicité — V106 ⚠️ 2026-10-13
+
+Demande front `demande-backend-2026-10-10-manuel-revise-lot2.md` (§B1, règles 1-2 et 4 ; H1, H2). Arbitrage **Q6** du pilote : neuf
+délais légaux bloquants, le reste en paramètres administrables. Arbitrages au backend du 13/10 : R6 en trois sous-tranches (R6a
+délais et publicité, R6b réputé approuvé, R6c délais 6 à 9) ; la règle de publicité **bloque dès la validation de la fiche** ; les
+modes se lisent au libellé du mode du plan ; les paramètres sont semés actifs et signalés. Migration **V106** (`t_delai_parametre`),
+pom inchangé.
+
+#### `GET /api/delais-legaux`
+
+Les **neuf délais de la loi n° 2016-055** (table en code `DelaisLegaux`, vérifiés dans le texte), pour l'écran et pour le PV :
+`[{ numero, code, valeur, unite, sens, texte, pointDepart, article, effet, bloquant }]` — 1 `PUBLICITE_AOO_NATIONAL` 30 j (art. 35-II),
+2 `PUBLICITE_AOO_INTERNATIONAL` 45 j, 3 `QUESTIONS_CANDIDATS` J−10, 4 `PUBLICITE_CONSULTATION` 10 j (art. 41-II), 5
+`PLAN_REPUTE_APPROUVE` 10 jours ouvrables (art. 26-IV), 6 `ATTENTE_SIGNATURE` 10 jours francs (art. 52-I et 58), 7
+`PIECES_ATTRIBUTAIRE` 15 j (art. 20-I), 8 `AVIS_ATTRIBUTION` 30 j (art. 53, non bloquant), 9 `SANS_SUITE_AVIS` 5 j (art. 55-II).
+**Convention (H1)** : le jour de départ n'est pas compté, la date limite tombe au plus tôt le 31e (46e, 11e…) jour.
+
+#### `GET /api/delais-parametres` · `PUT /api/delais-parametres/{code}`
+
+Les délais **administrables** (`t_delai_parametre` : `code, valeur, unite, texte, actif, dateMaj, imActeur`), **signalés, jamais
+bloquants** tant que le pilote ne les a pas confirmés. Semés actifs avec les valeurs proposées : `PUBLICITE_AOR` 15 j (décret
+2019-1310, art. 2-3), `PUBLICITE_DC_PI` 30 j, `PUBLICITE_AMI` 15 j (art. 32-III), `PUBLICITE_CONTRAT_CADRE` 30 j,
+`PUBLICITE_PREQUALIFICATION` 30 j, `DELAI_AMENAGE` 15 j (manuel 2-II-A P7). Lecture par tout authentifié ; `PUT` par
+l'**Administrateur** : `{ valeur, unite, texte, actif }`, un champ absent garde sa valeur ; **404** code inconnu ; **400** nominatif
+(valeur négative, unité hors `JOURS` / `JOURS_FRANCS` / `JOURS_OUVRABLES` / `MOIS`, texte > 300). Un paramètre inactif n'est plus
+évalué. `FICHE_SE_DELAI_MIN_REMISE_JOURS` (V50, mode électronique, règle `SE_OUVERTURE_DEPOTS`) subsiste ; la règle de la loi prime.
+
+#### Le délai de publicité (règles 1-2 et 4)
+
+**L'exigence** se lit au libellé du mode du plan et à la fiche : « international » → 45 j (loi), « consultation » (consultation de
+prix ouverte) → 10 j (loi), « appel d'offres ouvert » → 30 j (loi) ; prestations intellectuelles → `PUBLICITE_DC_PI`, contrat-cadre →
+`PUBLICITE_CONTRAT_CADRE`, « manifestation » → `PUBLICITE_AMI`, « restreint » → `PUBLICITE_AOR`, « qualification » →
+`PUBLICITE_PREQUALIFICATION`, ligne du plan à **délai aménagé justifié** → `DELAI_AMENAGE` (paramètres, signalés) ; gré à gré et
+achat direct : aucune. **La date limite** est le premier champ renseigné parmi `B04-LR-03`, `B04-OV-02`, `B04-CP-02`, `B04-LH-02`.
+
+- **À la validation de la fiche** (bilan `POST /{idDmc}/controler`, règle **`DELAI_PUBLICITE`**, bloc `B04`) : le départ est la date de
+  publication prévue `B04-SE-17` (H2, remise électronique), à défaut la **prévision LANCEMENT** du plan ; une date manquante : rien
+  n'est ajouté (l'impression tranchera). Loi non respectée → **bloquant** (409 `CONTROLES_BLOQUANTS` à `POST /valider`, comme les
+  autres contrôles bloquants ; le message porte constaté / départ / limite / requis / article) ; paramètre non respecté →
+  **avertissement** ; respecté → `ok`. Les `champs` nomment la date limite et, s'il sert, `B04-SE-17`.
+- **À l'impression de l'avis** (`POST /{idDmc}/avis-specifique`) : contre `datePublication` saisie — **409 `DELAI_PUBLICITE`**,
+  `details { code, requis, constate, depart, limite }`. Les lettres d'invitation (PI, AOR : paramètres) ne bloquent pas.
+- ⚠️ Écart avec la demande : à la validation, le refus garde le code **`CONTROLES_BLOQUANTS`** du bilan (le détail est dans la règle
+  `DELAI_PUBLICITE` du bilan) ; `DELAI_PUBLICITE` avec `details` est le code de l'impression.
+
 ### Le rabais structuré de l'offre en ligne ⚠️ 2026-10-07
 
 Demande front `demande-backend-2026-10-07-rabais-structure.md` (arbitrage Q4 du pilote : « le rabais est structuré au dépôt »). Aucune
