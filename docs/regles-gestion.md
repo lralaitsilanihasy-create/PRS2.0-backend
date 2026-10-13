@@ -1201,6 +1201,16 @@ de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM 
 > « projet de lettre d'invitation », remplacée à chaque nouvelle version. La PRMP peut aussi le consulter à tout moment depuis la
 > fiche validée. Un projet n'est pas une publication : il ne lance pas la ligne du plan et ne s'inscrit pas au journal.
 >
+> ⚠️ **2026-10-13 — les mentions complètes et la lettre de l'appel d'offres restreint (manuel révisé, lot 1, tranche R3c ; arbitrage Q3
+> du pilote).** L'avis spécifique et la lettre d'invitation produits par l'application doivent porter chaque mention du modèle type
+> (objet, nombre maximum de lots par candidat, forme des prix, adresses de consultation et de retrait, date et heure limites et heure
+> d'ouverture, coût du dossier et modalités de paiement, formes et montant de la garantie ; travaux : visite des lieux et réunion
+> préparatoire ; lettre : liste des candidats, mode de sélection des prestations intellectuelles, adresse de l'accusé de réception).
+> L'application les vérifie gabarit par gabarit et nomme les écarts, du modèle comme de la saisie ; le compte bancaire de l'ARMP tient
+> lieu des formes de paiement et de l'adresse de l'agent comptable. Un appel d'offres restreint n'a pas d'avis public : les candidats
+> de la liste restreinte, saisis par la PRMP, reçoivent une lettre d'invitation à soumissionner (art. 38), qui lance la ligne du plan
+> à sa première impression comme l'avis.
+>
 > ⚠️ **2026-10-08 — les grilles de contrôle par sous-type (tranche M3, V96).** Chaque sous-type a la grille du manuel : les points
 > communs de sa famille, puis ceux de la grille dont il dérive (un appel d'offres restreint reprend la grille de l'appel d'offres
 > ouvert et y ajoute ses cinq points ; un marché sur appel d'offres restreint, celle du marché sur appel d'offres ouvert), puis les

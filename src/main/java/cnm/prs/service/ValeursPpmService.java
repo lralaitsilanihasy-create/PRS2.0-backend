@@ -124,6 +124,18 @@ public class ValeursPpmService {
     public record ValeursPpm(Marche ligne, int versionPpm, Map<String, String> valeurs, Map<String, LocalDate> dates) {
     }
 
+    /**
+     * ⚠️ R3c (manuel révisé, lot 1, §B3) — la ligne du plan est-elle passée en <strong>appel d'offres restreint</strong> (mode du
+     * plan « … restreint … », national ou international) ? Même lecture que le sous-type du dossier ({@link SousTypesDossier}).
+     */
+    public boolean modeRestreint(Integer idDetailDmc) {
+        if (idDetailDmc == null) {
+            return false;
+        }
+        String sousType = SousTypesDossier.dossierMiseEnConcurrence(lire(idDetailDmc).valeurs().get("MODE"), false);
+        return SousTypesDossier.DAOR.equals(sousType) || SousTypesDossier.DAORI.equals(sousType);
+    }
+
     public ValeursPpm lire(Integer idDetailDmc) {
         Marche origine = marcheRepository.findById(idDetailDmc).orElse(null);
         if (origine == null) {

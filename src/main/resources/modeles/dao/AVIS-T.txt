@@ -23,6 +23,9 @@ CONDITION	SANS-SUPPORTSsupportsPublication vide
 CONDITION	DAO-LOTSalloti = OUI
 CONDITION	DAO-UNIQUEalloti != OUI
 CONDITION	SANS-GARANTIEgarantieSoumission != OUI
+CONDITION	LOTS-MAXalloti = OUI et B02-AU-07 renseigne
+CONDITION	VISITEB04-VL-02 = OUI
+CONDITION	REUNIONB04-RP-01 = OUI
 CENTRE	{{IMAGE:embleme}}
 CENTRE	{{B01-AC-01}}
 CENTRE	LA PERSONNE RESPONSABLE DES MARCHES PUBLICS
@@ -52,6 +55,9 @@ PARA	{{FINSI:CC-ALLOTI}}
 PARA	{{SI:CC-LOT-UNIQUE}}
 PARA	{{NUM}} Le {{B01-AC-01}} sollicite de la part des candidats intéressés des offres et des candidatures sous plis fermés pour exécuter les travaux suivants : « {{B02-OB-01}} ». Les travaux constituent un lot unique indivisible. Ainsi, toute offre partielle n’est pas recevable.
 PARA	{{FINSI:CC-LOT-UNIQUE}}
+PARA	{{SI:LOTS-MAX}}
+PARA	Un même candidat ne peut se voir attribuer plus de {{B02-AU-07}} lot(s).
+PARA	{{FINSI:LOTS-MAX}}
 PARA	{{SI:QF-UNITAIRES}}
 PARA	{{NUM}} La procédure de passation de marché applicable est l’Appel d’Offres Ouvert tel qu’il est défini dans la loi N°2016-055 du 25 Janvier 2017 portant Code des Marchés Publics en ses articles 30, 35 et 67 en vue de la passation de marché « à quantités fixes » conclu à prix unitaire.
 PARA	{{FINSI:QF-UNITAIRES}}
@@ -100,6 +106,12 @@ PARA	{{FINSI:ORDINAIRE}}
 PARA	{{SI:CC}}
 PARA	{{NUM}} Les plis devront parvenir à {{B04-RQ-03}} au plus tard le {{B04-CP-02.heureLocale}} et seront ouverts immédiatement après l’heure limite de remise des offres en présence des candidats ou leurs représentants qui souhaitent y assister. Les offres hors délai ne seront pas recevables.
 PARA	{{FINSI:CC}}
+PARA	{{SI:VISITE}}
+PARA	{{NUM}} La visite des lieux est obligatoire pour les candidats.
+PARA	{{FINSI:VISITE}}
+PARA	{{SI:REUNION}}
+PARA	{{NUM}} Une réunion préparatoire est prévue : {{B04-RP-02}}.
+PARA	{{FINSI:REUNION}}
 PARA	{{SI:ELECTRONIQUE}}
 PARA	{{NUM}} La soumission des offres par voie électronique sera autorisée.
 PARA	{{FINSI:ELECTRONIQUE}}

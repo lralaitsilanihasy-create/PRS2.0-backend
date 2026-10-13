@@ -124,6 +124,23 @@ public class FicheMarcheController {
         return Telechargements.fichier(t.nomFichier(), t.extension(), t.contenu());
     }
 
+    /**
+     * ⚠️ R3c (manuel révisé, lot 1, §B3) — les mentions du modèle type de l'avis (AVIS-F, AVIS-T), vérifiées sur le gabarit et sur le
+     * document rendu pour la version courante : écarts nommés. PRMP et UGPM ; 409 {@code AVIS_INDISPONIBLE}.
+     */
+    @GetMapping("/{idDmc}/avis-specifique/mentions")
+    @PreAuthorize("hasAnyRole('PRMP', 'UGPM')")
+    public cnm.prs.dto.MentionsDto mentionsAvis(@PathVariable Long idDmc) {
+        return avis.mentions(idDmc, false);
+    }
+
+    /** ⚠️ R3c — les mentions de la lettre d'invitation (LETTRE-PI, LETTRE-AOR), même forme ; 409 {@code LETTRE_INDISPONIBLE}. */
+    @GetMapping("/{idDmc}/lettres-invitation/mentions")
+    @PreAuthorize("hasAnyRole('PRMP', 'UGPM')")
+    public cnm.prs.dto.MentionsDto mentionsLettre(@PathVariable Long idDmc) {
+        return lettres.mentions(idDmc);
+    }
+
     /** ⚠️ R3b — le projet de lettre d'invitation (prestations intellectuelles), même forme ; 409 {@code LETTRE_INDISPONIBLE}. */
     @GetMapping("/{idDmc}/lettres-invitation/projet")
     @PreAuthorize("hasAnyRole('PRMP', 'UGPM')")

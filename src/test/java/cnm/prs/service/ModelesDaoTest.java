@@ -83,10 +83,18 @@ class ModelesDaoTest {
         assertThat(dao.modele("AE-T").conditions()).hasSize(30);
         assertThat(dao.modele("CCAP-T").conditions()).hasSize(73);   // 30/09 : + PLANS (B04-CD-03) ; 02/10 : + LIBERATION-PROVISOIRE, + ACTUALISATION (B5.2)
         // ⚠️ 2026-09-30 — les deux avis spécifiques (fournitures, travaux), imprimés à la demande, hors des couvertures.
-        assertThat(dao.modele("AVIS-F").conditions()).hasSize(22);   // 01/10 : aligné sur un avis réel (§B7)
-        assertThat(dao.modele("AVIS-T").conditions()).hasSize(24);
+        assertThat(dao.modele("AVIS-F").conditions()).hasSize(23);   // 01/10 : aligné sur un avis réel (§B7) ; 13/10 (R3c) : + LOTS-MAX
+        assertThat(dao.modele("AVIS-T").conditions()).hasSize(27);   // 13/10 (R3c) : + LOTS-MAX, VISITE, REUNION
         assertThat(ModelesDao.COUVERTURES).noneMatch(c -> c.sigle().startsWith("AVIS"));
-        assertThat(dao.modeles()).hasSize(14);   // 01/10 : + LETTRE-PI (lot AV-4.1), hors couvertures
+        assertThat(dao.modeles()).hasSize(15);   // 01/10 : + LETTRE-PI (lot AV-4.1), hors couvertures ; 13/10 (R3c) : + LETTRE-AOR
+        // ⚠️ R3c — la lettre de l'appel d'offres restreint : par le mode, pas par la catégorie.
+        assertThat(dao.modele(ModelesDao.LETTRE_AOR).conditions()).containsKeys("F", "T", "GARANTIE-T", "SANS-GARANTIE");
+        assertThat(ModelesDao.sigleLettre("FOURNITURES_SERVICES", true)).isEqualTo("LETTRE-AOR");
+        assertThat(ModelesDao.sigleLettre("TRAVAUX", true)).isEqualTo("LETTRE-AOR");
+        assertThat(ModelesDao.sigleLettre("PRESTATIONS_INTELLECTUELLES", true)).isEqualTo("LETTRE-PI");
+        assertThat(ModelesDao.sigleLettre("FOURNITURES_SERVICES", false)).isNull();
+        assertThat(ModelesDao.sigleAvis("FOURNITURES_SERVICES", true)).isNull();
+        assertThat(ModelesDao.sigleAvis("TRAVAUX", false)).isEqualTo("AVIS-T");
         assertThat(ModelesDao.COUVERTURES).noneMatch(c -> c.sigle().startsWith("LETTRE"));
         assertThatThrownBy(() -> ModelesDao.charger("/modeles/dao/X.txt", "CONDITION\tA\u001Fattributaires = MONO\n"
                 + "PARA\t{{SI:A}}\nPARA\t{{SI:B}}\nPARA\ttexte\nPARA\t{{FINSI:B}}\nPARA\t{{FINSI:A}}"))

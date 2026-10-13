@@ -1,0 +1,68 @@
+FICHIER	LETTRE-AOR.docx
+CONDITION	Fcategorie != TRAVAUX
+CONDITION	Tcategorie = TRAVAUX
+CONDITION	CONSULTATION-EMAILB04-DS-11 renseigne
+CONDITION	DAO-LOTSalloti = OUI
+CONDITION	DAO-UNIQUEalloti != OUI
+CONDITION	GARANTIE-LOTScategorie != TRAVAUX et garantieSoumission = OUI et alloti = OUI
+CONDITION	GARANTIE-UNIQUEcategorie != TRAVAUX et garantieSoumission = OUI et alloti != OUI
+CONDITION	GARANTIE-Tcategorie = TRAVAUX et garantieSoumission = OUI
+CONDITION	SANS-GARANTIEgarantieSoumission != OUI
+CENTRE	{{IMAGE:embleme}}
+CENTRE	{{B01-AC-01}}
+CENTRE	LA PERSONNE RESPONSABLE DES MARCHES PUBLICS
+CENTRE	UNITE DE GESTION DE PASSATION DES MARCHES PUBLICS
+TITRE	LETTRE D’INVITATION À SOUMISSIONNER
+PARA	Référence: {{B02-OB-03}} — {{B02-OB-01}}
+PARA	{{LETTRE.lieu}}, {{LETTRE.date}}
+PARA	{{LETTRE.destinataire}}
+PARA	Madame, Monsieur
+PARA	{{SI:F}}
+PARA	1. Nous avons l’honneur de vous informer que vous avez été retenu sur la liste restreinte des candidats admis à soumissionner dans le cadre de l’appel d’offres restreint, prévu à l’article 38 de la loi n° 2016-055 du 25 janvier 2017 portant Code des Marchés Publics, en vue de l’attribution du marché cité en référence. Vous trouverez dans le Dossier d’Appel d’Offres ci-joint la description détaillée des fournitures et services attendus.
+PARA	{{FINSI:F}}
+PARA	{{SI:T}}
+PARA	1. Nous avons l’honneur de vous informer que vous avez été retenu sur la liste restreinte des candidats admis à soumissionner dans le cadre de l’appel d’offres restreint, prévu à l’article 38 de la loi n° 2016-055 du 25 janvier 2017 portant Code des Marchés Publics, en vue de l’attribution du marché cité en référence. Vous trouverez dans le Dossier d’Appel d’Offres ci-joint la description détaillée des travaux à exécuter.
+PARA	{{FINSI:T}}
+PARA	Nous vous invitons en conséquence, par la présente, ainsi que les autres candidats de la liste restreinte, à présenter une offre pour l’exécution de ce marché.
+PARA	2. La présente lettre d’invitation, accompagnée du Dossier d’Appel d’Offres, a été adressée aux candidats dont les noms figurent ci-après :
+PARA	{{LETTRE.candidats}}
+PARA	3. Le Dossier d’Appel d’Offres complet, rédigé en langue française, peut être consulté à l’adresse ci-après :
+PARA	- Nom du Responsable : {{B04-DS-07}}
+PARA	- Fonction : {{B04-DS-08}}
+PARA	- Adresse : {{B04-DS-09}}, {{B04-DS-10}}
+PARA	{{SI:CONSULTATION-EMAIL}}
+PARA	- E-mail : {{B04-DS-11}}
+PARA	{{FINSI:CONSULTATION-EMAIL}}
+PARA	4. Le Dossier d’Appel d’Offres doit être retiré auprès de {{B01-AC-01}} moyennant le paiement d’un montant non remboursable de :
+PARA	{{SI:DAO-LOTS}}
+PARA	{{B04-DS-05.lignesParLot}}
+PARA	ou son équivalent en monnaie librement convertible à verser sur le compte bancaire de l’ARMP : {{PARAM.compte-dao}}.
+PARA	{{FINSI:DAO-LOTS}}
+PARA	{{SI:DAO-UNIQUE}}
+PARA	- {{B04-DS-05.lettres}} (Ar {{B04-DS-05.chiffres}}) ou son équivalent en monnaie librement convertible à verser sur le compte bancaire de l’ARMP : {{PARAM.compte-dao}}.
+PARA	{{FINSI:DAO-UNIQUE}}
+PARA	{{SI:F}}
+PARA	5. Les offres devront parvenir à {{B04-LR-02}} au plus tard le {{B04-LR-03}}, {{B04-LR-04}} et seront ouvertes immédiatement après l’heure limite de remise des offres en présence des candidats ou de leurs représentants qui souhaitent y assister. Les offres hors délai ne seront pas recevables.
+PARA	{{FINSI:F}}
+PARA	{{SI:T}}
+PARA	5. Les offres devront parvenir à {{B01-AC-02}} au plus tard le {{B04-OV-02.heureLocale}} et seront ouvertes immédiatement après l’heure limite de remise des offres en présence des candidats ou de leurs représentants qui souhaitent y assister. Les offres hors délai ne seront pas recevables.
+PARA	{{FINSI:T}}
+PARA	{{SI:GARANTIE-LOTS}}
+PARA	6. Chaque offre doit être accompagnée d’une garantie de soumission d’un montant de {{B05-GS-03.parLot}}, ou son équivalent en monnaie librement convertible, présentée sous l’une des formes suivantes : soit par caution personnelle et solidaire d’un organisme agréé par le Ministère chargé des Finances, soit par garantie bancaire, soit par chèque de banque.
+PARA	{{FINSI:GARANTIE-LOTS}}
+PARA	{{SI:GARANTIE-UNIQUE}}
+PARA	6. Chaque offre doit être accompagnée d’une garantie de soumission d’un montant de {{B05-GS-03.lettres}} ({{B05-GS-03}}), ou son équivalent en monnaie librement convertible, présentée sous l’une des formes suivantes : soit par caution personnelle et solidaire d’un organisme agréé par le Ministère chargé des Finances, soit par garantie bancaire, soit par chèque de banque.
+PARA	{{FINSI:GARANTIE-UNIQUE}}
+PARA	{{SI:GARANTIE-T}}
+PARA	6. Chaque offre doit être accompagnée d’une garantie de soumission d’un montant de {{B05-GQ-03.lettres}} ({{B05-GQ-03}}), ou son équivalent en monnaie librement convertible, présentée sous l’une des formes suivantes : soit par caution personnelle et solidaire d’un organisme agréé par le Ministère chargé des Finances, soit par garantie bancaire, soit par chèque de banque.
+PARA	{{FINSI:GARANTIE-T}}
+PARA	{{SI:SANS-GARANTIE}}
+PARA	6. La garantie de soumission n’est pas requise.
+PARA	{{FINSI:SANS-GARANTIE}}
+PARA	7. Nous vous serions reconnaissants de nous faire savoir, par écrit, dès réception, à l’adresse suivante:
+PARA	{{B01-AC-02}} ({{B01-AC-06}}):
+PARA	que vous avez reçu la présente lettre d’invitation ; et
+PARA	que vous soumissionnerez, seul ou en groupement.
+PARA	Veuillez agréer, Madame/Monsieur, l’assurance de ma considération distinguée
+PARA	La Personne Responsable des Marchés Publics
+PARA	{{B01-AC-05}}

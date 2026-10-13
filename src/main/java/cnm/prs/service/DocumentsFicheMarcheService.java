@@ -127,6 +127,8 @@ public class DocumentsFicheMarcheService {
     private final ModelesCandidat modelesCandidat;
     /** ⚠️ Lot D (2026-09-28) — les documents types officiels du DAO (contrat-cadre : DPAC, AE), lus au démarrage. */
     private final ModelesDao modelesDao;
+    /** ⚠️ R3c — le mode du plan : en appel d'offres restreint, la lettre AOR remplace l'avis (publication et projet). */
+    private final ValeursPpmService valeursPpm;
     /** ⚠️ Lot C (2026-09-27) — la lettre de renvoi à laquelle rattacher les documents d'une révision (compléments). */
     private final cnm.prs.repository.LettreRenvoiRepository lettreRenvoiRepository;
 
@@ -136,7 +138,8 @@ public class DocumentsFicheMarcheService {
             FicheMarcheRepository ficheRepository, DossierRepository dossierRepository,
             PieceJointeDossierRepository pieceRepository, TypePieceJointeRepository typePieceRepository,
             GenerateurClasseursFiche classeurs, ParametreService parametres, ModelesCandidat modelesCandidat,
-            cnm.prs.repository.LettreRenvoiRepository lettreRenvoiRepository, ModelesDao modelesDao) {
+            cnm.prs.repository.LettreRenvoiRepository lettreRenvoiRepository, ModelesDao modelesDao, ValeursPpmService valeursPpm) {
+        this.valeursPpm = valeursPpm;
         this.modelesDao = modelesDao;
         this.lettreRenvoiRepository = lettreRenvoiRepository;
         this.modelesCandidat = modelesCandidat;
@@ -377,7 +380,8 @@ public class DocumentsFicheMarcheService {
      */
     public Map<Integer, List<Produit>> produireLettres(FicheMarcheDto etat, Map<String, String> commun, List<String> destinataires,
             LocalDateTime impression) {
-        FichierCommande.Modele modele = modelesDao.modele(ModelesDao.sigleLettre(etat.getCategorie()));
+        // ⚠️ R3c — LETTRE-PI, ou LETTRE-AOR pour un appel d'offres restreint de fournitures ou de travaux.
+        FichierCommande.Modele modele = modelesDao.modele(ModelesDao.sigleLettre(etat.getCategorie(), valeursPpm.modeRestreint(etat.getIdDetail())));
         if (modele == null) {
             throw new GenerationDocumentsException("Aucun modèle de lettre d'invitation pour la catégorie " + etat.getCategorie() + ".", null);
         }
@@ -421,8 +425,10 @@ public class DocumentsFicheMarcheService {
      * Vide si la catégorie n'a pas de modèle. 500 nommé ({@link GenerationDocumentsException}) si le rendu échoue.
      */
     public List<Produit> produireProjet(FicheMarcheDto etat, LocalDateTime validation) {
-        boolean lettre = ModelesDao.sigleLettre(etat.getCategorie()) != null;
-        String sigle = lettre ? ModelesDao.sigleLettre(etat.getCategorie()) : ModelesDao.sigleAvis(etat.getCategorie());
+        // ⚠️ R3c — en appel d'offres restreint, le projet est la lettre AOR (pas d'avis public).
+        boolean restreint = valeursPpm.modeRestreint(etat.getIdDetail());
+        boolean lettre = ModelesDao.sigleLettre(etat.getCategorie(), restreint) != null;
+        String sigle = lettre ? ModelesDao.sigleLettre(etat.getCategorie(), restreint) : ModelesDao.sigleAvis(etat.getCategorie(), restreint);
         FichierCommande.Modele modele = sigle == null ? null : modelesDao.modele(sigle);
         if (modele == null) {
             return List.of();
@@ -445,6 +451,25 @@ public class DocumentsFicheMarcheService {
                     fi.extension()), fi.contenu(), null));
         }
         return produits;
+    }
+
+    /** ⚠️ R3c — le modèle d'un sigle ({@code AVIS-F}, {@code LETTRE-AOR}…), ou {@code null}. */
+    public FichierCommande.Modele modele(String sigle) {
+        return modelesDao.modele(sigle);
+    }
+
+    /**
+     * ⚠️ R3c (manuel révisé, lot 1, §B3) — le document de publication rendu sur un état (version courante ou validée), sans
+     * information de publication ni destinataire, pour la relecture des mentions ({@link MentionsPublication}). Rien n'est écrit.
+     */
+    public DocumentLibre rendrePublication(FicheMarcheDto etat, String sigle, boolean lettre) {
+        FichierCommande.Modele modele = modelesDao.modele(sigle);
+        if (modele == null) {
+            throw new GenerationDocumentsException("Aucun modèle " + sigle + ".", null);
+        }
+        Map<String, ChampFicheMarche> parCode = new LinkedHashMap<>();
+        champRepository.findByActifTrueOrderByCodeRubriqueAscRangAsc().forEach(c -> parCode.put(c.getCode(), c));
+        return FormulairesCandidat.rendreModele(lettre ? TYPE_LETTRE : TYPE_AVIS, null, etat, parCode, modele, null, parametresDocuments());
     }
 
     /** Le projet, ou rien (journal applicatif) : son échec ne bloque ni la validation de la fiche ni la création du dossier. */

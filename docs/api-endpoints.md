@@ -8012,6 +8012,69 @@ PRMP et UGPM au périmètre de la fiche (403 sinon). Rend, sur la **dernière ve
 - Le projet n'est **pas** un document du DAO : absent de `GET /{idDmc}/documents` (comme l'avis), absent du DAO complet, jamais
   lu à l'import. Il se lit par la pièce du dossier, ou par la route ci-dessus.
 
+
+### Le manuel révisé pour l'application, lot 1, tranche R3c : les mentions complètes et la lettre de l'appel d'offres restreint ⚠️ 2026-10-13
+
+Demande front `demande-backend-2026-10-10-manuel-revise-lot1.md` (§B3, « mentions complètes » et « lettre d'invitation AOR »).
+Arbitrages au backend du 13/10 : les gabarits sont **corrigés ici** (le front resynchronise ses copies `scripts/modeles-dao/modeles/`) ;
+l'avis spécifique d'un appel d'offres restreint devient **indisponible** (`MODE_SANS_AVIS`) ; les mentions s'évaluent sur la
+**version courante** de la fiche, même brouillon. Aucune migration, pom inchangé.
+
+#### `GET /api/fiches-marche/{idDmc}/avis-specifique/mentions` · `GET …/lettres-invitation/mentions`
+
+PRMP et UGPM au périmètre de la fiche. Les mentions du modèle type (avis : manuel 2-II-A P11, travaux 2-II-B ; lettre PI : 2-II-F
+P16 ; lettre AOR : 2-II-D pièce 5), vérifiées deux fois — sur le **gabarit** (le modèle porte la mention : jeton ou phrase, un écart est
+un défaut du modèle) et sur le **document rendu** pour la version courante (la valeur n'est pas en pointillés, un écart est une saisie à
+compléter), ou **sans objet** pour cette fiche (lot unique, garantie non requise, pas de visite des lieux). Lecture seule.
+
+```json
+{ "gabarit": "AVIS-F", "gabaritComplet": true, "documentComplet": false,
+  "mentions": [ { "code": "OBJET", "libelle": "Objet du marché", "presenteAuGabarit": true, "renseignee": true, "sansObjet": false, "detail": null },
+                { "code": "COMPTE_PAIEMENT", "libelle": "Modalités de paiement : compte bancaire de l'ARMP (…)", "presenteAuGabarit": true,
+                  "renseignee": false, "sansObjet": false, "detail": "non renseignée sur la fiche (pointillés) : saisie à compléter" } ] }
+```
+
+- Codes, dans l'ordre du manuel — **AVIS-F** : `OBJET`, `LOTS_MAX`, `FORME_PRIX`, `ADRESSE_CONSULTATION`, `ADRESSE_RETRAIT`,
+  `DATE_HEURE_LIMITE`, `HEURE_OUVERTURE`, `COUT_DOSSIER`, `COMPTE_PAIEMENT`, `FORMES_GARANTIE`, `MONTANT_GARANTIE` ; **AVIS-T** : les mêmes
+  + `VISITE_LIEUX`, `REUNION_PREPARATOIRE` ; **LETTRE-PI** : `OBJET`, `LISTE_CANDIDATS`, `MODE_SELECTION`, `ADRESSE_REMISE`,
+  `DATE_HEURE_LIMITE`, `HEURE_OUVERTURE`, `ADRESSE_ACCUSE`, `COUT_DOSSIER`, `COMPTE_PAIEMENT` ; **LETTRE-AOR** : `OBJET`, `LISTE_CANDIDATS`,
+  `ADRESSE_CONSULTATION`, `ADRESSE_RETRAIT`, `COUT_DOSSIER`, `COMPTE_PAIEMENT`, `ADRESSE_REMISE`, `DATE_HEURE_LIMITE`, `HEURE_OUVERTURE`,
+  `FORMES_GARANTIE`, `MONTANT_GARANTIE`, `ADRESSE_ACCUSE`.
+- Le **compte bancaire de l'ARMP** (`{{PARAM.compte-dao}}`) tient lieu des « trois formes de paiement » et de l'« adresse de l'agent
+  comptable » (décision du pilote du 01/10) : `COMPTE_PAIEMENT` est renseignée dès que l'Administrateur a réglé le compte.
+- **Écarts nommés** (`presenteAuGabarit: false`, `detail`) : **LETTRE-PI** n'a ni `COUT_DOSSIER` ni `COMPTE_PAIEMENT` — aucun champ de la
+  fiche de prestations intellectuelles ne porte le coût du dossier de consultation, remis avec la lettre ; à outiller si un dossier
+  payant doit être prévu. AVIS-F, AVIS-T et LETTRE-AOR sont complets.
+- **409** `AVIS_INDISPONIBLE` / `LETTRE_INDISPONIBLE`, `details.raison` : `CATEGORIE_SANS_AVIS`, `MODE_SANS_AVIS`, `CATEGORIE_SANS_LETTRE`
+  (lus au plan, avant toute version), `FICHE_NON_VALIDEE` (aucune version enregistrée).
+
+#### Gabarits corrigés (le front resynchronise `AVIS-F.txt`, `AVIS-T.txt`, `LETTRE-PI.txt` et reçoit `LETTRE-AOR.txt`)
+
+- **AVIS-F**, **AVIS-T** : condition `LOTS-MAX` (`alloti = OUI et B02-AU-07 renseigne`) → « Un même candidat ne peut se voir attribuer
+  plus de {{B02-AU-07}} lot(s). » après le paragraphe des lots.
+- **AVIS-T** : conditions `VISITE` (`B04-VL-02 = OUI`) → « La visite des lieux est obligatoire pour les candidats. » et `REUNION`
+  (`B04-RP-01 = OUI`) → « Une réunion préparatoire est prévue : {{B04-RP-02}}. », numérotés, avant le paragraphe de la voie électronique.
+- **LETTRE-PI** : après les critères de sélection, « Les propositions devront parvenir à {{B04-LH-01}} au plus tard le
+  {{B04-LH-02.heureLocale}} ; les propositions techniques seront ouvertes immédiatement après l'heure limite … ». Sans condition :
+  pointillés tant que la fiche ne les porte pas.
+- Comptes des conditions : AVIS-F 23, AVIS-T 27 ; LETTRE-PI inchangée (4).
+
+#### La lettre d'invitation de l'appel d'offres restreint (`LETTRE-AOR`)
+
+- **Choix du modèle par le mode du plan** : une ligne dont le mode est « … restreint … » (sous-type `DAOR` / `DAORI`, même lecture que le
+  dossier) reçoit `LETTRE-AOR` pour les fournitures et services comme pour les travaux (conditions `categorie`) ; `LETTRE-PI` reste
+  celui des prestations intellectuelles. Rédigée d'après LETTRE-PI et l'avis (liste restreinte, art. 38, consultation et retrait du
+  DAO, date et heure limites, ouverture, garantie, accusé de réception) : **à relire par le pilote**.
+- **Pas d'avis public** : pour une telle fiche, `GET …/avis-specifique/disponibilite` répond `disponible: false`, raison
+  **`MODE_SANS_AVIS`** ; l'impression, le projet (R3b) et les mentions de l'avis répondent 409 `AVIS_INDISPONIBLE` avec cette raison.
+  Le projet dès la fiche (R3b) est alors le projet de **lettre** (`LETTRE_PROJET`, pièce `LETTRE_INVITATION`).
+- **Lettres** : mêmes routes que la lettre PI (`…/lettres-invitation/disponibilite`, `POST …/lettres-invitation`, `…/projet`,
+  `…/mentions`) ; sans AMI, les **candidats sont saisis** (`candidats[]`, 400 sans candidat), chaque lettre est une paire .docx/.pdf de
+  type `LETTRE_INVITATION`, les invités saisis (`SOURCE = SAISIE`) reçoivent la notification « Invitation à remettre une offre » ;
+  la première impression passe la ligne à « Lancé » ; journal `LETTRES_INVITATION_IMPRIMEES`.
+- Une fiche de fournitures ou de travaux en appel d'offres **ouvert** garde `CATEGORIE_SANS_LETTRE`. Les gabarits des champs
+  (`GET …/gabarits`) ne servent pas LETTRE-AOR.
+
 ### Le rabais structuré de l'offre en ligne ⚠️ 2026-10-07
 
 Demande front `demande-backend-2026-10-07-rabais-structure.md` (arbitrage Q4 du pilote : « le rabais est structuré au dépôt »). Aucune

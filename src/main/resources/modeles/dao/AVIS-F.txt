@@ -21,6 +21,7 @@ CONDITION	SANS-SUPPORTSsupportsPublication vide
 CONDITION	DAO-LOTSalloti = OUI
 CONDITION	DAO-UNIQUEalloti != OUI
 CONDITION	SANS-GARANTIEgarantieSoumission != OUI
+CONDITION	LOTS-MAXalloti = OUI et B02-AU-07 renseigne
 CENTRE	{{IMAGE:embleme}}
 CENTRE	{{B01-AC-01}}
 CENTRE	LA PERSONNE RESPONSABLE DES MARCHES PUBLICS
@@ -50,6 +51,9 @@ PARA	{{FINSI:CC-ALLOTI}}
 PARA	{{SI:CC-LOT-UNIQUE}}
 PARA	{{NUM}} Le {{B01-AC-01}} sollicite de la part des candidats intéressés des offres et des candidatures sous plis fermés pour fournir « {{B02-OB-01}} ». Les fournitures constituent un lot unique indivisible. Ainsi, toute offre partielle n’est pas recevable.
 PARA	{{FINSI:CC-LOT-UNIQUE}}
+PARA	{{SI:LOTS-MAX}}
+PARA	Un même candidat ne peut se voir attribuer plus de {{B02-AU-07}} lot(s).
+PARA	{{FINSI:LOTS-MAX}}
 PARA	{{SI:QF-UNITAIRES}}
 PARA	{{NUM}} La procédure de passation de marché applicable est l’Appel d’Offres Ouvert tel qu’il est défini dans la loi N°2016-055 du 25 Janvier 2017 portant Code des Marchés Publics en ses articles 30, 35 et 67 en vue de la passation de marché « à quantités fixes » conclu à prix unitaire.
 PARA	{{FINSI:QF-UNITAIRES}}

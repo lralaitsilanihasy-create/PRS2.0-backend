@@ -67,6 +67,8 @@ public class AvisSpecifiqueService {
     public static final String FICHE_NON_VALIDEE = "FICHE_NON_VALIDEE";
     /** ⚠️ 2026-10-04 (soumission en ligne, lot 2, §B2.6) — remise électronique : la cérémonie des clés n'est pas close. */
     public static final String CEREMONIE_NON_CLOSE = "CEREMONIE_NON_CLOSE";
+    /** ⚠️ R3c (manuel révisé, lot 1, §B3) — un appel d'offres restreint n'a pas d'avis public : lettres d'invitation (LETTRE-AOR). */
+    public static final String MODE_SANS_AVIS = "MODE_SANS_AVIS";
 
     /** Journal du dossier : une impression de l'avis. */
     public static final String JOURNAL_AVIS_IMPRIME = "AVIS_SPECIFIQUE_IMPRIME";
@@ -95,12 +97,15 @@ public class AvisSpecifiqueService {
     private final cnm.prs.repository.DocumentFicheMarcheRepository documentRepository;
     /** ⚠️ 2026-10-04 (soumission en ligne, lot 2, §B2.6) — la cérémonie des clés, que la publication exige close en mode électronique. */
     private final CeremonieService ceremonie;
+    /** ⚠️ R3c — le mode du plan (appel d'offres restreint : lettre AOR, pas d'avis). */
+    private final ValeursPpmService valeursPpm;
 
     public AvisSpecifiqueService(FicheMarcheService fiches, FicheMarcheRepository ficheRepository,
             DossierRepository dossierRepository, PvExamenRepository pvRepository, DocumentsFicheMarcheService documents,
             DossierIntegriteService dossierIntegrite, JournalDossierService journal,
             cnm.prs.repository.MarcheRepository marcheRepository, cnm.prs.repository.StatutMarcheRepository statutMarcheRepository,
-            cnm.prs.repository.DocumentFicheMarcheRepository documentRepository, CeremonieService ceremonie) {
+            cnm.prs.repository.DocumentFicheMarcheRepository documentRepository, CeremonieService ceremonie, ValeursPpmService valeursPpm) {
+        this.valeursPpm = valeursPpm;
         this.ceremonie = ceremonie;
         this.marcheRepository = marcheRepository;
         this.statutMarcheRepository = statutMarcheRepository;
@@ -186,12 +191,10 @@ public class AvisSpecifiqueService {
     public Telechargement projet(Long idDmc, String format, boolean lettre) {
         exigerProfil();
         FicheMarcheDto courante = fiches.lire(idDmc);
-        boolean sansModele = lettre ? ModelesDao.sigleLettre(courante.getCategorie()) == null
-                : ModelesDao.sigleAvis(courante.getCategorie()) == null;
-        if (sansModele) {
-            String raison = lettre ? CATEGORIE_SANS_LETTRE : CATEGORIE_SANS_AVIS;
-            throw new BusinessRuleException(message(raison, lettre), lettre ? LettreInvitationService.CODE_INDISPONIBLE : CODE_INDISPONIBLE,
-                    courante.getIdDossierSoumis(), Map.of("raison", raison));
+        String sansModele = sansModele(courante, lettre);
+        if (sansModele != null) {
+            throw new BusinessRuleException(message(sansModele, lettre), lettre ? LettreInvitationService.CODE_INDISPONIBLE : CODE_INDISPONIBLE,
+                    courante.getIdDossierSoumis(), Map.of("raison", sansModele));
         }
         FicheMarche validee = derniereValidee(idDmc, lettre);
         FicheMarcheDto etat = fiches.lireVersion(idDmc, validee.getNumeroVersion());
@@ -199,6 +202,46 @@ public class AvisSpecifiqueService {
         return documents.produireProjet(etat, validee.getDateValidation()).stream().filter(p -> extension.equals(p.extension()))
                 .map(p -> new Telechargement(p.nomFichier(), p.extension(), p.contenu())).findFirst()
                 .orElseThrow(() -> new IllegalStateException("Le projet n'a pas été rendu en " + extension + "."));
+    }
+
+    /**
+     * ⚠️ R3c — la raison pour laquelle la fiche n'a pas ce document, ou {@code null} : {@code CATEGORIE_SANS_AVIS} (prestations
+     * intellectuelles), {@code MODE_SANS_AVIS} (appel d'offres restreint), {@code CATEGORIE_SANS_LETTRE} (fournitures et travaux en
+     * appel d'offres ouvert).
+     */
+    String sansModele(FicheMarcheDto courante, boolean lettre) {
+        boolean restreint = valeursPpm.modeRestreint(courante.getIdDetail());
+        if (lettre) {
+            return ModelesDao.sigleLettre(courante.getCategorie(), restreint) == null ? CATEGORIE_SANS_LETTRE : null;
+        }
+        if (ModelesDao.sigleAvis(courante.getCategorie()) == null) {
+            return CATEGORIE_SANS_AVIS;
+        }
+        return restreint ? MODE_SANS_AVIS : null;
+    }
+
+    /**
+     * ⚠️ R3c (manuel révisé, lot 1, §B3 ; arbitrage Q3 : « mentions complètes ») — les mentions du modèle type, vérifiées sur le
+     * gabarit de la fiche (AVIS-F, AVIS-T, LETTRE-PI, LETTRE-AOR) et sur le document rendu pour sa <strong>version courante</strong>
+     * (brouillon ou validée) : la PRMP relit et complète avant de valider. Lecture seule. PRMP et UGPM. 409 sans version
+     * enregistrée ({@code FICHE_NON_VALIDEE}) ou sans modèle ({@code CATEGORIE_SANS_AVIS}, {@code MODE_SANS_AVIS},
+     * {@code CATEGORIE_SANS_LETTRE}).
+     */
+    @Transactional(readOnly = true)
+    public cnm.prs.dto.MentionsDto mentions(Long idDmc, boolean lettre) {
+        exigerProfil();
+        FicheMarcheDto courante = fiches.lire(idDmc);
+        String code = lettre ? LettreInvitationService.CODE_INDISPONIBLE : CODE_INDISPONIBLE;
+        String sansModele = sansModele(courante, lettre);   // la catégorie et le mode se lisent au plan, avant toute version
+        if (sansModele != null) {
+            throw new BusinessRuleException(message(sansModele, lettre), code, courante.getIdDossierSoumis(), Map.of("raison", sansModele));
+        }
+        if (courante.getIdFiche() == null) {
+            throw new BusinessRuleException(message(FICHE_NON_VALIDEE, lettre), code, courante.getIdDossierSoumis(), Map.of("raison", FICHE_NON_VALIDEE));
+        }
+        boolean restreint = valeursPpm.modeRestreint(courante.getIdDetail());
+        String sigle = lettre ? ModelesDao.sigleLettre(courante.getCategorie(), restreint) : ModelesDao.sigleAvis(courante.getCategorie(), restreint);
+        return MentionsPublication.verifier(sigle, documents.modele(sigle), documents.rendrePublication(courante, sigle, lettre), courante);
     }
 
     /** La ligne du DMC de la fiche ; {@code null} sans ligne. */
@@ -254,8 +297,9 @@ public class AvisSpecifiqueService {
      */
     AvisDisponibiliteDto evaluer(Long idDmc, FicheMarcheDto courante, boolean lettre) {
         Integer idDossier = courante.getIdDossierSoumis();
-        if (lettre ? ModelesDao.sigleLettre(courante.getCategorie()) == null : ModelesDao.sigleAvis(courante.getCategorie()) == null) {
-            return new AvisDisponibiliteDto(false, lettre ? CATEGORIE_SANS_LETTRE : CATEGORIE_SANS_AVIS, null, null, null, idDossier);
+        String sansModele = sansModele(courante, lettre);
+        if (sansModele != null) {
+            return new AvisDisponibiliteDto(false, sansModele, null, null, null, idDossier);
         }
         if (idDossier == null) {
             return new AvisDisponibiliteDto(false, SANS_DOSSIER, null, null, null, null);
@@ -359,6 +403,8 @@ public class AvisSpecifiqueService {
                     + accord + " après la levée des réserves.";
             case CEREMONIE_NON_CLOSE -> "La cérémonie des clés n'est pas close : sans clés publiées, aucun candidat ne pourrait sceller "
                     + "son offre. " + quoi + " " + accord + " une fois la cérémonie close.";
+            case MODE_SANS_AVIS -> "Un appel d'offres restreint n'a pas d'avis spécifique : les candidats de la liste restreinte "
+                    + "reçoivent une lettre d'invitation à soumissionner.";
             default -> "La fiche marché n'a aucune version validée : " + (lettre ? "pas de lettre d'invitation." : "pas d'avis spécifique.");
         };
     }

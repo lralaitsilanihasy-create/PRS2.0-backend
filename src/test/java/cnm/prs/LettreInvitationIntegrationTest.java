@@ -236,6 +236,24 @@ class LettreInvitationIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$.details.raison").value("CATEGORIE_SANS_LETTRE"));
     }
 
+    @Test
+    @DisplayName("⚠️ R3c (manuel révisé, §B3) — les mentions de LETTRE-PI : coût et paiement absents du gabarit (aucun champ, écart "
+            + "nommé), liste des candidats non renseignée avant l'impression, mode de sélection renseigné ; fournitures en appel "
+            + "d'offres ouvert → CATEGORIE_SANS_LETTRE")
+    void mentions() throws Exception {
+        String m = mvc.perform(get("/api/fiches-marche/" + idDmc + "/lettres-invitation/mentions").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.gabarit").value("LETTRE-PI"))
+                .andExpect(jsonPath("$.gabaritComplet").value(false)).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(m, "$.mentions[?(@.presenteAuGabarit==false)].code")).containsExactly("COUT_DOSSIER", "COMPTE_PAIEMENT");
+        assertThat(JsonPath.<List<String>>read(m, "$.mentions[?(@.code=='COUT_DOSSIER')].detail").get(0)).contains("aucun champ");
+        assertThat(JsonPath.<List<Boolean>>read(m, "$.mentions[?(@.code=='LISTE_CANDIDATS')].renseignee")).containsExactly(false);
+        assertThat(JsonPath.<List<Boolean>>read(m, "$.mentions[?(@.code=='MODE_SELECTION')].renseignee")).containsExactly(true);
+
+        Long f = creerDmc(9902);
+        mvc.perform(get("/api/fiches-marche/" + f + "/lettres-invitation/mentions").header("Authorization", tokenPrmp))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.details.raison").value("CATEGORIE_SANS_LETTRE"));
+    }
+
     // ------------------------------------------------------------------ outils
 
     private String documents() throws Exception {

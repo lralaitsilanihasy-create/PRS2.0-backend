@@ -246,6 +246,31 @@ class AvisSpecifiqueIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isForbidden());
     }
 
+    @Test
+    @DisplayName("⚠️ R3c (manuel révisé, §B3) — les mentions du modèle type : AVIS-F complet au gabarit ; sur la fiche, le compte de "
+            + "l'ARMP manque tant qu'il n'est pas réglé, LOTS_MAX sans objet (lot unique) ; PI → CATEGORIE_SANS_AVIS ; Membre → 403")
+    void mentions() throws Exception {
+        String m = mvc.perform(get("/api/fiches-marche/" + idDmc + "/avis-specifique/mentions").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.gabarit").value("AVIS-F")).andExpect(jsonPath("$.gabaritComplet").value(true))
+                .andExpect(jsonPath("$.documentComplet").value(false)).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Boolean>>read(m, "$.mentions[?(@.code=='COMPTE_PAIEMENT')].renseignee")).containsExactly(false);
+        assertThat(JsonPath.<List<Boolean>>read(m, "$.mentions[?(@.code=='LOTS_MAX')].sansObjet")).containsExactly(true);
+        assertThat(JsonPath.<List<String>>read(m, "$.mentions[?(@.code=='OBJET')].detail")).containsExactly((String) null);   // l'objet vient du plan
+
+        mvc.perform(put("/api/parametres/compte-dao").header("Authorization", tokenAdmin).contentType(JSON)
+                .content("{\"banque\":\"BNI Madagascar\",\"titulaire\":\"ARMP\",\"numeroCompte\":\"00005 00001 12345678901 23\"}"))
+                .andExpect(status().isOk());
+        m = mvc.perform(get("/api/fiches-marche/" + idDmc + "/avis-specifique/mentions").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Boolean>>read(m, "$.mentions[?(@.code=='COMPTE_PAIEMENT')].renseignee")).containsExactly(true);
+
+        Long pi = creerDmc(9902);
+        mvc.perform(get("/api/fiches-marche/" + pi + "/avis-specifique/mentions").header("Authorization", tokenPrmp))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.details.raison").value("CATEGORIE_SANS_AVIS"));
+        mvc.perform(get("/api/fiches-marche/" + idDmc + "/avis-specifique/mentions").header("Authorization", tokenMembre))
+                .andExpect(status().isForbidden());
+    }
+
     /** Les noms des pièces du dossier jointes sous ce type de pièce. */
     private List<String> projetsJoints(int idDossier, Integer idTypePiece) throws Exception {
         String pieces = mvc.perform(get("/api/piece-jointe-dossiers").param("dossier", String.valueOf(idDossier))

@@ -78,12 +78,20 @@ public class ModelesDao {
      */
     public static final Map<String, String> LETTRES = Map.of("PRESTATIONS_INTELLECTUELLES", "LETTRE-PI");
 
+    /**
+     * ⚠️ R3c (manuel révisé, lot 1, §B3 ; 2026-10-13) — la lettre d'invitation à soumissionner de l'<strong>appel d'offres
+     * restreint</strong> (fournitures et services, travaux ; 2-II-D pièce 5, art. 38), rédigée d'après LETTRE-PI et le modèle
+     * d'avis, à relire par le pilote : candidats saisis, pas d'avis public. Hors des couvertures comme les autres publications.
+     */
+    public static final String LETTRE_AOR = "LETTRE-AOR";
+
     private final Map<String, FichierCommande.Modele> modeles = new LinkedHashMap<>();
 
     public ModelesDao() {
         List<String> sigles = new java.util.ArrayList<>(COUVERTURES.stream().map(Couverture::sigle).toList());
         sigles.addAll(new java.util.TreeSet<>(AVIS.values()));
         sigles.addAll(new java.util.TreeSet<>(LETTRES.values()));
+        sigles.add(LETTRE_AOR);   // ⚠️ R3c
         for (String sigle : sigles) {
             if (modeles.containsKey(sigle)) {
                 continue;   // un modèle sert plusieurs formes (lot D2)
@@ -101,6 +109,24 @@ public class ModelesDao {
     /** ⚠️ 2026-10-01 (lot AV-4.1) — le sigle du modèle de lettre d'invitation d'une catégorie, ou {@code null}. */
     public static String sigleLettre(String categorie) {
         return categorie == null ? null : LETTRES.get(categorie);
+    }
+
+    /**
+     * ⚠️ R3c — le modèle de lettre d'invitation selon la catégorie <strong>et le mode</strong> : LETTRE-PI pour les prestations
+     * intellectuelles, LETTRE-AOR pour un appel d'offres restreint de fournitures ou de travaux, sinon {@code null}.
+     * ({@link #sigleLettre(String)} reste le test « prestations intellectuelles » qu'utilisent les autres services.)
+     */
+    public static String sigleLettre(String categorie, boolean restreint) {
+        String pi = sigleLettre(categorie);
+        if (pi != null) {
+            return pi;
+        }
+        return restreint ? LETTRE_AOR : null;
+    }
+
+    /** ⚠️ R3c — le modèle d'avis selon la catégorie et le mode : un appel d'offres restreint n'a pas d'avis public ({@code null}). */
+    public static String sigleAvis(String categorie, boolean restreint) {
+        return restreint ? null : sigleAvis(categorie);
     }
 
     private String lireRessource(String chemin) {

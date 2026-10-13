@@ -30,6 +30,7 @@ PARA	{{SI:QUALITE-SEULE}}
 PARA	exclusivement de la qualité technique
 PARA	{{FINSI:QUALITE-SEULE}}
 PARA	Les procédures et critères de sélection sont décrits dans les Instructions aux Candidats qui font partie du Dossier de Consultation ci-joint.
+PARA	Les propositions devront parvenir à {{B04-LH-01}} au plus tard le {{B04-LH-02.heureLocale}} ; les propositions techniques seront ouvertes immédiatement après l’heure limite de remise des propositions en présence des candidats ou de leurs représentants qui souhaitent y assister. Les propositions hors délai ne seront pas recevables.
 PARA	4. Le Dossier de Consultation comprend les documents suivants :
 PARA	Les documents relatifs à la procédure de passation :
 PARA	La présente Lettre d’invitation;

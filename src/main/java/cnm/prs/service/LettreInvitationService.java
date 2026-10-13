@@ -84,6 +84,12 @@ public class LettreInvitationService {
         return avis.projet(idDmc, format, true);
     }
 
+    /** ⚠️ R3c — les mentions du modèle type de la lettre (LETTRE-PI, LETTRE-AOR) sur la version courante. */
+    @Transactional(readOnly = true)
+    public cnm.prs.dto.MentionsDto mentions(Long idDmc) {
+        return avis.mentions(idDmc, true);
+    }
+
     /**
      * §B3 — imprime une lettre par candidat : 400 nominatif ; 409 {@code LETTRE_INDISPONIBLE} (raison dans
      * {@code details.raison}) ; sinon les documents produits, candidat par candidat (.docx puis .pdf).
@@ -141,6 +147,8 @@ public class LettreInvitationService {
         }
         // ⚠️ PI-a (§B1) — les invités de la consultation restreinte : la liste de l'AMI (comptes), ou la saisie (adresses électroniques).
         List<InvitationsService.Invite> aInviter = new ArrayList<>();
+        // ⚠️ R3c — une proposition (prestations intellectuelles) ou une offre (appel d'offres restreint, LETTRE-AOR).
+        String quoi = ModelesDao.sigleLettre(etat.getCategorie()) != null ? "une proposition" : "une offre";
         for (int i = 0; i < invites.size(); i++) {
             int rang = i + 1;
             LettreInvitationRequest.Candidat c = invites.get(i);
@@ -149,8 +157,8 @@ public class LettreInvitationService {
                             pdfParRang.get(rang))
                     : new InvitationsService.Invite(cnm.prs.entity.Invitation.SAISIE, null, c.email(), c.nom(), rang, pdfParRang.get(rang)));
             if (listeAmi.isEmpty() && c.email() != null) {
-                notifications.emettre(null, cnm.prs.enums.TypeNotification.LETTRE_INVITATION, null, c.email(), "Invitation à remettre une proposition",
-                        "Vous êtes invité à remettre une proposition pour « " + etat.getDesignationMarche() + " » (lettre d'invitation du "
+                notifications.emettre(null, cnm.prs.enums.TypeNotification.LETTRE_INVITATION, null, c.email(), "Invitation à remettre " + quoi,
+                        "Vous êtes invité à remettre " + quoi + " pour « " + etat.getDesignationMarche() + " » (lettre d'invitation du "
                                 + saisie.date() + "). Créez votre compte sur la plateforme avec cette adresse électronique : la procédure et la "
                                 + "lettre y seront disponibles.");
             }

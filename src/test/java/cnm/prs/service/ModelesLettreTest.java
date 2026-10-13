@@ -69,7 +69,8 @@ class ModelesLettreTest {
                 "- Cabinet A", "- Bureau B", "Antananarivo (prmp@ministere.mg):", "La Personne Responsable des Marchés Publics",
                 "RAKOTO Jean");
         String texte = d.texte();
-        assertThat(texte).doesNotContain("{{", "………");
+        assertThat(texte).doesNotContain("{{", "………")
+                .contains("parvenir à Direction des marchés, Antananarivo au plus tard le 03/11/2026 à 10 h 30 (heure locale) ;");   // ⚠️ R3c
         for (int i = 0; i < REDACTIONS.size(); i++) {
             if (i == attendue) {
                 assertThat(texte).as("rédaction retenue").contains(REDACTIONS.get(i));
@@ -90,7 +91,9 @@ class ModelesLettreTest {
         f.setTypeMarche("QUANTITE_FIXE");
         f.setCategorie("PRESTATIONS_INTELLECTUELLES");
         f.setCadrage(new LinkedHashMap<>());
-        f.setValeurs(new HashMap<>(Map.of("B02-MS-01", mode)));
+        // ⚠️ R3c — la lettre porte désormais l'adresse et la date-heure limites de remise des propositions (mentions P16).
+        f.setValeurs(new HashMap<>(Map.of("B02-MS-01", mode, "B04-LH-01", "Direction des marchés, Antananarivo",
+                "B04-LH-02", "2026-11-03T10:30")));
         f.setValeursPpm(new HashMap<>(Map.of("B01-AC-01", "Ministère X", "B02-OB-01", "Étude de faisabilité",
                 "B02-OB-03", "14-26/AOI/PI", "B01-AC-05", "RAKOTO Jean", "B01-AC-02", "Antananarivo",
                 "B01-AC-06", "prmp@ministere.mg")));
