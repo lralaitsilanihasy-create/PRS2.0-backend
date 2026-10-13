@@ -8113,6 +8113,61 @@ hors de cette coquille interne.
   rendu générique du JSON (objets en « libellé : valeur », listes d'objets en tableaux), titre, référence du dossier, pied avec le
   numéro, la date et l'empreinte.
 
+
+### Le manuel révisé pour l'application, lot 1, tranche R5 : le socle des contrôles automatiques — V105 ⚠️ 2026-10-13
+
+Demande front `demande-backend-2026-10-10-manuel-revise-lot1.md` (§B6). Le socle seul : la table, l'exécution à la soumission, la
+lecture, les contrôles B du Membre, l'annexe du PV, le refus de l'avis FAV ; les règles elles-mêmes viendront avec le lot 2 (délais Q6,
+bloquants Q13). Deux règles déjà tranchées par le pilote sont branchées. Migration **V105** (`t_controle_resultat`, supprimée avec le
+dossier), pom inchangé.
+
+#### Le socle
+
+- `t_controle_resultat` : dossier, n° de soumission, référence du manuel (`2-III-A P5`) ou point de grille (`idPointCtrl`), règle
+  (code stable), libellé, valeurs constatées (JSON), résultat `CONFORME` / `NON_CONFORME` / `NON_APPLICABLE`, bloquant, auteur
+  (`SERVEUR` ou matricule), date, observation.
+- **À la soumission** (`POST /api/dossiers/{id}/soumettre`) et à chaque **resoumission** : chaque règle (`ControleAutomatique`, un
+  composant par règle) qui concerne la famille du dossier est évaluée. Une règle **bloquante** non conforme refuse la soumission :
+  **400** `CONTROLES_BLOQUANTS`, `details.controles[{ code, reference, libelle, valeurs }]` — la PRMP sait quoi corriger. Sinon, une fois
+  le dossier soumis, tous les résultats (conformes, non conformes signalés, sans objet) sont enregistrés sous le numéro de soumission
+  (le même que les instantanés, R4). Une règle « sans objet » (procédure hors de l'application) est enregistrée `NON_APPLICABLE`.
+- Les règles lisent les écrans vivants (séance, évaluation) après vérification de leur existence, comme les instantanés.
+
+#### `GET /api/dossiers/{id}/controles[?soumission=n]` · `POST /api/dossiers/{id}/controles` · `GET …/controles/pdf[?soumission=n]`
+
+- **GET** : même garde que `GET /api/dossiers/{id}` (profils CNM, Président, Administrateur, PRMP, UGPM) ; la dernière soumission par
+  défaut, vide sans contrôle. Ligne : `{ idControle, numeroSoumission, reference, idPointCtrl, regle, libelle, valeurs, resultat,
+  bloquant, auteur, dateControle, observation }`.
+- **POST** (contrôle B) : `@perm.peutExercer('MEMBRE')` et **même garde que `t_examen_detail`** (Membre attributaire de l'examen en
+  cours, examen modifiable : dossier `DISPATCHE`, `EXAMINE` ou `A_REEXAMINER`). Corps `{ idPointCtrl | regle, reference, libelle,
+  resultat, observation, bloquant }` ; **400 nominatif** : `resultat` hors des trois valeurs, `idPointCtrl` inconnu, ni point ni
+  règle, `observation` absente quand le résultat est `NON_CONFORME` ; **409** `EXAMEN_ABSENT`. Enregistré sous le numéro de la dernière
+  soumission, auteur = matricule. Un point de grille sans règle reçoit la règle `POINT_<id>` et le libellé du point.
+- **Levée** : par règle, le **dernier résultat posé** (serveur ou contrôleur) fait foi. Le Membre lève une non-conformité automatique
+  en posant `CONFORME` ou `NON_APPLICABLE` sur la même règle, avec son observation.
+- **PDF** : la synthèse d'une soumission (tableau référence / contrôle / résultat / valeurs ou observation / auteur / date), pour
+  l'archivage avec le PV (`CONTROLES_<dossier>[_s<n>].pdf`).
+
+#### Les conséquences sur le PV
+
+- `validerCoherenceAvis` : une non-conformité **non levée** (automatique ou B) interdit l'avis **« Favorable » sans réserve** —
+  **409** `CONTROLE_NON_CONFORME` (les références dans le message) ; elle rend l'avis « Favorable avec réserves » cohérent même sans
+  observation d'examen.
+- Le PV (modèle Word) reprend chaque non-conformité non levée à son **ANNEXE** (point : référence et libellé ; au lieu de : valeurs
+  constatées ou observation ; lire : « contrôle automatique non conforme, non levé » ou « contrôle du Membre non conforme »), avec
+  les observations des points de contrôle et des pièces. **Écart** : pas d'annexe nouvelle dans le modèle Word (fourni par le pilote) ;
+  la synthèse complète est l'export PDF ci-dessus.
+
+#### Les deux premières règles (bloquantes, dossier de marché, arbitrage Q13 du pilote n° 6, 7 et 8)
+
+| Code | Référence | Conforme si | Valeurs |
+|---|---|---|---|
+| `DOCUMENTS_EVALUATION_SIGNES` | 2-III-A P5 | le PV de la séance d'ouverture est signé **et** le rapport d'évaluation est signé | `seanceOuverte`, `pvOuvertureSigne`, `evaluationOuverte`, `rapportSigne`, `rapportSigneLe` |
+| `QUORUM_COMMISSION` | 2-III-C P3 / P14 | le quorum (R1) est atteint, président ou représentant signataire, au PV d'ouverture **et** au rapport | `pvOuverture` et `rapport` : `{ constate, regle, requis, obtenus, atteint, presidentRequis, presidentSigne, representant }` |
+
+Hors de l'application (marché saisi) : `NON_APPLICABLE` (`procedureEnLigne: false`). Un dossier de marché né de l'attribution en ligne
+porte toujours un PV et un rapport signés avec quorum : ces règles ne bloquent qu'une incohérence.
+
 ### Le rabais structuré de l'offre en ligne ⚠️ 2026-10-07
 
 Demande front `demande-backend-2026-10-07-rabais-structure.md` (arbitrage Q4 du pilote : « le rabais est structuré au dépôt »). Aucune

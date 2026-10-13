@@ -42,6 +42,10 @@ public interface ExamenRepository extends JpaRepository<Examen, Integer> {
             """)
     Optional<String> findStatutDossierByExamen(@Param("idExamen") Integer idExamen);
 
+    /** ⚠️ R5 (manuel révisé, V105) — les examens d'un dossier, du plus récent au plus ancien (le premier est l'examen en cours). */
+    @Query("select e from Examen e where e.dispatch.reception.idDossier = :idDossier order by e.idExamen desc")
+    List<Examen> findParDossierRecents(@Param("idDossier") Integer idDossier);
+
     /** idDossier rattaché à un examen (examen→dispatch→réception→dossier). */
     @Query("select e.dispatch.reception.idDossier from Examen e where e.idExamen = :idExamen")
     Optional<Integer> findIdDossierByExamen(@Param("idExamen") Integer idExamen);

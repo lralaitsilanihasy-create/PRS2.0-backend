@@ -83,6 +83,8 @@ public class PvExamenService {
     private final ChronometrageService chronometrageService;
     /** ⚠️ 2026-09-04 — source unique du circuit et du discriminant « deux niveaux ». */
     private final CircuitDossierService circuitService;
+    /** ⚠️ R5 (manuel révisé, lot 1, §B6) — une non-conformité automatique non levée interdit l'avis « Favorable » sans réserve. */
+    private final org.springframework.beans.factory.ObjectProvider<ControlesService> controles;
     private final ControleurDirectory controleurDirectory;
     private final DossierRepository dossierRepository;
     private final ControleurRepository controleurRepository;
@@ -105,7 +107,8 @@ public class PvExamenService {
             cnm.prs.security.PermissionService permissionService,
             org.springframework.context.ApplicationEventPublisher evenements,
             PvDocumentTache documentTache, ChronometrageService chronometrageService,
-            CircuitDossierService circuitService) {
+            CircuitDossierService circuitService, org.springframework.beans.factory.ObjectProvider<ControlesService> controles) {
+        this.controles = controles;
         this.chronometrageService = chronometrageService;
         this.circuitService = circuitService;
         this.observationPvService = observationPvService;
@@ -568,12 +571,20 @@ public class PvExamenService {
                 .filter(d -> Boolean.FALSE.equals(d.getConforme())).count()
                 + examenPieceRepository.findByIdExamen(idExamen).stream()
                 .filter(p -> Boolean.FALSE.equals(p.getConforme())).count();
+        // ⚠️ R5 (manuel révisé, lot 1, §B6) — un contrôle automatique non conforme que personne n'a levé compte comme une observation.
+        List<cnm.prs.entity.ControleResultat> nonLeves = controles.getObject().nonConformesNonLeves(idDossierExamine);
+        if (!nonLeves.isEmpty() && "FAV".equals(idAvis)) {
+            throw new BusinessRuleException("Le dossier porte " + nonLeves.size() + " contrôle(s) non conforme(s) non levé(s) ("
+                    + String.join(", ", nonLeves.stream().map(c -> c.getReference() == null ? c.getRegle() : c.getReference()).toList())
+                    + ") : l'avis « Favorable » (sans réserve) est incohérent — levez-les ou choisissez « Favorable avec réserves » ou "
+                    + "« Défavorable ».", "CONTROLE_NON_CONFORME");
+        }
         if (observations > 0 && "FAV".equals(idAvis)) {
             throw new BusinessRuleException("L'examen comporte " + observations
                     + " observation(s) (points de contrôle ou pièces jointes) : l'avis « Favorable » (sans réserve)"
                     + " est incohérent — choisissez « Favorable avec réserves » ou « Défavorable ».");
         }
-        if (observations == 0 && "FAVR".equals(idAvis)) {
+        if (observations == 0 && nonLeves.isEmpty() && "FAVR".equals(idAvis)) {
             throw new BusinessRuleException(
                     "Aucune observation relevée à l'examen : l'avis « Favorable avec réserves » est incohérent"
                             + " — choisissez « Favorable ».");

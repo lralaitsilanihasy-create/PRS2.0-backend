@@ -131,6 +131,8 @@ public class DossierService {
     private final org.springframework.beans.factory.ObjectProvider<ActesGestionService> actesGestion;
     /** ⚠️ R4 (manuel révisé, lot 1, §B5 ; V104) — les écrans figés à la soumission et à chaque resoumission. */
     private final org.springframework.beans.factory.ObjectProvider<InstantaneService> instantanes;
+    /** ⚠️ R5 (manuel révisé, lot 1, §B6 ; V105) — les contrôles automatiques : bloquants avant la soumission, enregistrés après. */
+    private final org.springframework.beans.factory.ObjectProvider<ControlesService> controles;
     /** ⚠️ M3 (manuel de contrôle) — la grille du dossier. */
     private final org.springframework.beans.factory.ObjectProvider<GrilleControle> grilleControle;
     /** ⚠️ 2026-08-05 — figeage du diff et bascule du prédécesseur, à la soumission d'une mise à jour. */
@@ -187,7 +189,9 @@ public class DossierService {
             ReceptionRepository receptionRepository, PreControlePpmService preControle,
             FicheMarcheService ficheMarcheService,
             org.springframework.beans.factory.ObjectProvider<ActesGestionService> actesGestion,
-            org.springframework.beans.factory.ObjectProvider<InstantaneService> instantanes) {
+            org.springframework.beans.factory.ObjectProvider<InstantaneService> instantanes,
+            org.springframework.beans.factory.ObjectProvider<ControlesService> controles) {
+        this.controles = controles;
         this.instantanes = instantanes;
         this.actesGestion = actesGestion;
         this.ficheMarcheService = ficheMarcheService;
@@ -933,6 +937,9 @@ public class DossierService {
         // ⚠️ 2026-08-05 — une MISE À JOUR exige en plus le PV du prédécesseur et le PPM daté et signé des
         // versions antérieures. Sans effet sur un dossier initial.
         miseAJourPpmService.exigerDossierHistorique(dossier);
+        // ⚠️ R5 (manuel révisé, lot 1, §B6) — les contrôles automatiques : une règle bloquante non conforme refuse la soumission (400
+        // CONTROLES_BLOQUANTS, les valeurs dans details) ; tous les résultats sont enregistrés une fois le dossier soumis.
+        List<ControlesService.Evalue> controlesEvalues = controles.getObject().controler(dossier);
 
         // Localité : celle du dossier (dérivée de l'entité à la saisie), sinon celle du PPM. Plus de repli PRMP.
         List<Ppm> ppms = ppmRepository.findByIdDossier(idDossier);
@@ -980,6 +987,7 @@ public class DossierService {
 
         notifierSoumission(dossier, localite);
         journalDossier.tracer(dossier, JournalDossierService.SOUMISSION, "BROUILLON -> SOUMIS");
+        controles.getObject().enregistrer(dossier, controlesEvalues);   // ⚠️ R5
         // ⚠️ R4 (manuel révisé, lot 1, §B5) — ce que le contrôleur verra : les écrans figés à cet instant (soumission n° 1).
         instantanes.getObject().figer(dossier);
         return dto(dossier);
@@ -1084,6 +1092,7 @@ public class DossierService {
         // ⚠️ 2026-09-12 — l'étape RECTIFICATION_PRMP s'achève ici, et sa durée se mesure seule : elle court
         // depuis la vérification qui a maintenu les observations. C'est le SEUL délai imputé à la PRMP, et
         // il reste hors compteur global. Enregistré AVANT le changement de statut, qui la ferme.
+        List<ControlesService.Evalue> controlesEvalues = controles.getObject().controler(dossier);   // ⚠️ R5 — rejoués à la resoumission
         chronometrage.cloturer(idDossier, cnm.prs.enums.EtapeCircuit.RECTIFICATION_PRMP);
         dossier.setStatut(StatutDossier.EN_VERIFICATION.name());
         // ⚠️ Chronométrage (2026-09-01) — sortie d'attente PRMP : le compteur net CNM redémarre.
@@ -1106,6 +1115,7 @@ public class DossierService {
         notifierRectification(dossier, derniere, idPrmp, motifRectification);
         tracerRectification(dossier, idPrmp, motifRectification);
         journalDossier.tracer(dossier, JournalDossierService.RESOUMISSION, motifRectification);
+        controles.getObject().enregistrer(dossier, controlesEvalues);   // ⚠️ R5
         instantanes.getObject().figer(dossier);   // ⚠️ R4 — resoumission : soumission n° suivant
         return dto(dossier);
     }

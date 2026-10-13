@@ -81,6 +81,8 @@ public class PvDocumentService {
     private final PieceJointeDossierRepository pieceJointeDossierRepository;
     private final TypePieceJointeRepository typePieceJointeRepository;
     private final ControleurDirectory controleurDirectory;
+    /** ⚠️ R5 (manuel révisé, lot 1, §B6) — les non-conformités des contrôles, à l'ANNEXE du PV. */
+    private final org.springframework.beans.factory.ObjectProvider<ControlesService> controles;
 
     @Value("${storage.pv-examen.path:${java.io.tmpdir}/prs-fsx/PV}")
     private String cheminStockagePv;
@@ -95,7 +97,8 @@ public class PvDocumentService {
             ExamenPieceRepository examenPieceRepository,
             PieceJointeDossierRepository pieceJointeDossierRepository,
             TypePieceJointeRepository typePieceJointeRepository,
-            ControleurDirectory controleurDirectory) {
+            ControleurDirectory controleurDirectory, org.springframework.beans.factory.ObjectProvider<ControlesService> controles) {
+        this.controles = controles;
         this.generator = generator;
         this.perimetreExamenService = perimetreExamenService;
         this.examenRepository = examenRepository;
@@ -421,6 +424,15 @@ public class PvDocumentService {
                 out.add(new PvDocumentContexte.Observation(
                         libellePiece(ep.getIdPiece()), ep.getObservation(), null, true));
             }
+        }
+        // ⚠️ R5 (manuel révisé, lot 1, §B6) — la synthèse des contrôles : chaque non-conformité non levée (automatique ou B) à l'ANNEXE.
+        ControlesService controlesService = controles.getObject();
+        Integer idDossier = examenRepository.findIdDossierByExamen(idExamen).orElse(null);
+        for (cnm.prs.entity.ControleResultat c : controlesService.nonConformesNonLeves(idDossier)) {
+            String point = (c.getReference() == null ? "" : c.getReference() + " — ") + (c.getLibelle() == null ? c.getRegle() : c.getLibelle());
+            String constat = c.getObservation() != null ? c.getObservation() : controlesService.valeursTexte(c.getValeurs());
+            out.add(new PvDocumentContexte.Observation(point, constat, cnm.prs.entity.ControleResultat.SERVEUR.equals(c.getAuteur())
+                    ? "contrôle automatique non conforme, non levé" : "contrôle du Membre non conforme"));
         }
         return out;
     }

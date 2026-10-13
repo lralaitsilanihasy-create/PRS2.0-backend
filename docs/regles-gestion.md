@@ -1219,6 +1219,16 @@ de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM 
 > les profils de la CNM les lisent, en lecture seule, à la place des pièces, et peuvent les exporter en PDF pour l'archivage avec le
 > procès-verbal. Les écrans vivants continuent d'évoluer après la soumission sans changer ce que la Commission a reçu.
 >
+> ⚠️ **2026-10-13 — les contrôles automatiques et leurs résultats (manuel révisé, lot 1, tranche R5, V105).** Le manuel révisé
+> confie à l'application les contrôles de type A. À la soumission d'un dossier, et à chaque resoumission, l'application joue les
+> règles qui concernent sa famille : une règle bloquante non conforme refuse la soumission en nommant ce qui manque et les valeurs
+> constatées ; les autres résultats sont enregistrés avec le numéro de la soumission, lisibles par la Commission et la PRMP. Le Membre
+> attributaire y ajoute ses contrôles B (point de grille ou règle, résultat, observation obligatoire s'il constate une non-conformité)
+> et peut lever une non-conformité automatique en posant son propre résultat sur la même règle. Tant qu'une non-conformité n'est
+> pas levée, l'avis « Favorable » sans réserve est refusé ; elle figure à l'annexe du PV. Premières règles bloquantes, sur le dossier
+> de marché conduit dans l'application (arbitrage Q13 du pilote) : les documents d'évaluation sont signés (PV d'ouverture, rapport —
+> manuel 2-III-A P5) et le quorum de la commission est atteint avec son président ou son représentant (2-III-C P3 / P14).
+>
 > ⚠️ **2026-10-08 — les grilles de contrôle par sous-type (tranche M3, V96).** Chaque sous-type a la grille du manuel : les points
 > communs de sa famille, puis ceux de la grille dont il dérive (un appel d'offres restreint reprend la grille de l'appel d'offres
 > ouvert et y ajoute ses cinq points ; un marché sur appel d'offres restreint, celle du marché sur appel d'offres ouvert), puis les
