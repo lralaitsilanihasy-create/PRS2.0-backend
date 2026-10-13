@@ -1259,6 +1259,14 @@ de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM 
 > l'objet d'une **relance**, une fois, à la PRMP, au membre examinateur et aux Présidents de la localité ; la signature reste suspendue
 > jusqu'à l'avis exprès.
 >
+> ⚠️ **2026-10-13 — les questions des candidats avant la date limite (manuel révisé, lot 2, tranche R7, V109 ; art. 35-II).** Un
+> candidat qui a retiré le dossier d'appel d'offres d'une procédure en ligne peut poser une question à la PRMP jusqu'à **dix jours avant
+> la date limite** de remise des offres (ce dixième jour compris) ; passé ce jour, les questions sont closes. La PRMP répond par écrit,
+> avec une pièce jointe si elle le souhaite ; sa réponse est **diffusée aussitôt à l'ensemble des candidats ayant retiré le dossier**, par
+> notification et sur la page de la procédure, où elle est lisible de tous sans le nom de l'auteur de la question. Une question n'a
+> qu'une réponse, définitive. Les questions répondues sont jointes d'office au dossier de marché soumis à la Commission. Les questions
+> restées sans réponse n'ont pas d'autre effet : la loi ne fixe pas de délai de réponse.
+>
 > ⚠️ **2026-10-08 — les grilles de contrôle par sous-type (tranche M3, V96).** Chaque sous-type a la grille du manuel : les points
 > communs de sa famille, puis ceux de la grille dont il dérive (un appel d'offres restreint reprend la grille de l'appel d'offres
 > ouvert et y ajoute ses cinq points ; un marché sur appel d'offres restreint, celle du marché sur appel d'offres ouvert), puis les

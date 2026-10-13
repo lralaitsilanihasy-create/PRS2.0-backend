@@ -606,7 +606,8 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
         sousTypeDossierRepository.save(new cnm.prs.entity.SousTypeDossier("MAOO", "Marché sur Appel d'Offres Ouvert", "DDM"));
         for (String[] t : List.of(new String[] { "Projet de marché signé", "PROJET_MARCHE" }, new String[] { "Cahier des charges", "CAHIER_CHARGES" },
                 new String[] { "Devis estimatif détaillé", "DEVIS_ESTIMATIF" }, new String[] { "Procès-verbal d'ouverture des offres", "PV_OUVERTURE" },
-                new String[] { "Rapport d'analyse des offres", "RAPPORT_ANALYSE" })) {
+                new String[] { "Rapport d'analyse des offres", "RAPPORT_ANALYSE" },
+                new String[] { "Questions et réponses des candidats", "QUESTIONS_REPONSES" })) {   // ⚠️ R7 (V109) : la famille DDM n'est pas au référentiel de test
             cnm.prs.entity.TypePieceJointe tp = typePieceJointeRepository.findById(seedTypePiece(t[0], true, "DDM", 1)).orElseThrow();
             tp.setCode(t[1]);
             typePieceJointeRepository.save(tp);
@@ -616,6 +617,16 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$.lots[0].proposition.idOffre").value(a)).andExpect(jsonPath("$.lots[0].dossierMarche").isEmpty());
         mvc.perform(post(att + "/lots/1/dossier").header("Authorization", jetonM1)).andExpect(status().isForbidden());
         mvc.perform(post(att + "/lots/9/dossier").header("Authorization", tokenPrmp)).andExpect(status().isNotFound());
+        // ⚠️ R7 (V109) — une question répondue (posée en base : la fenêtre J−10 est passée) est jointe d'office au dossier de marché.
+        cnm.prs.entity.QuestionCandidat question = new cnm.prs.entity.QuestionCandidat();
+        question.setIdDmc(idDmc);
+        question.setIdCandidat("C900000051");
+        question.setQuestion("Les échantillons sont-ils exigés à la remise des offres ?");
+        question.setPoseeLe(LocalDateTime.now().minusDays(40));
+        question.setReponse("Non : ils sont exigés de l'attributaire avant la notification.");
+        question.setRepondueLe(LocalDateTime.now().minusDays(39));
+        question.setPublieeLe(LocalDateTime.now().minusDays(39));
+        questionRepository.save(question);
         String cree = mvc.perform(post(att + "/lots/1/dossier").header("Authorization", tokenPrmp)).andExpect(status().isCreated())
                 .andExpect(jsonPath("$.lots[0].etat").value("AU_CONTROLE")).andExpect(jsonPath("$.lots[0].dossierMarche.sousType").value("MAOO"))
                 .andExpect(jsonPath("$.lots[0].dossierMarche.statut").value("BROUILLON")).andExpect(jsonPath("$.lots[0].projetDisponible").value(true))
@@ -627,7 +638,10 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(dossierRepository.findById(idDossier).orElseThrow().getIdDmc()).isNull();   // le lien du DAO reste au dossier DAO
         List<String> codesPieces = pieceJointeDossierRepository.findAll().stream().filter(x -> x.getIdDossier() == idDossier)
                 .map(x -> typePieceJointeRepository.findById(x.getIdTypePiece()).orElseThrow().getCode()).toList();
-        assertThat(codesPieces).contains("PROJET_MARCHE", "CAHIER_CHARGES", "RAPPORT_ANALYSE");
+        assertThat(codesPieces).contains("PROJET_MARCHE", "CAHIER_CHARGES", "RAPPORT_ANALYSE", "QUESTIONS_REPONSES");
+        assertThat(texteDuPdf(pieceJointeDossierRepository.findAll().stream().filter(x -> x.getIdDossier() == idDossier
+                && "QUESTIONS_REPONSES".equals(typePieceJointeRepository.findById(x.getIdTypePiece()).orElseThrow().getCode()))
+                .findFirst().orElseThrow().getContenu())).contains("QUESTIONS DES CANDIDATS ET RÉPONSES", "échantillons", "avant la notification");
         String projet = texteDuPdf(mvc.perform(get(att + "/lots/1/projet").header("Authorization", tokenUgpm)).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsByteArray()).replaceAll("\\s+", " ");
         assertThat(projet).contains("PROJET DE MARCHÉ", "BTP Alpha", "NIF 1111222333", "12 500 000 Ariary hors taxes",
@@ -997,6 +1011,7 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
 
     @Autowired private cnm.prs.repository.AttributionPieceRepository pieceRepository;
     @Autowired private cnm.prs.service.SansSuiteService sansSuiteService;
+    @Autowired private cnm.prs.repository.QuestionCandidatRepository questionRepository;
     private static final java.time.format.DateTimeFormatter JOUR_FR = java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     @Test

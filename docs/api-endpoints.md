@@ -8303,6 +8303,55 @@ est entièrement livrée.
   fois** (`t_sans_suite.RELANCE_LE`) ; `SansSuiteDto.Demande.relanceLe`. Le blocage reste jusqu'à l'avis exprès : le silence ne vaut pas
   accord.
 
+### Le manuel révisé pour l'application, lot 2, tranche R7 : les questions des candidats avant la date limite — V109 ⚠️ 2026-10-13
+
+Demande front `demande-backend-2026-10-10-manuel-revise-lot2.md` (§B2 ; §B1 règle 3, art. 35-II, délai légal n° 3). Arbitrages au backend
+du 13/10 : seul un candidat **ayant retiré le DAO** pose une question ; les questions répondues paraissent, **anonymisées**, sur la
+**page publique** de la procédure et chaque candidat ayant retiré le dossier est notifié ; **répondre = diffuser** (une réponse par
+question, définitive). Migration **V109** (`t_question_candidat`, type de pièce `QUESTIONS_REPONSES` de la famille DDM), pom inchangé.
+
+#### La fenêtre des questions (J−10)
+
+Les questions sont recevables jusqu'à **dix jours avant la date limite** de remise des offres (`DelaisLegaux` n° 3) : `clotureLe` = date
+limite − 10 jours, dernier jour recevable (compris) ; `closes` dès le lendemain. La date limite est celle de la procédure en ligne
+(`B04-LR-03` + `B04-LR-04`, à défaut `B04-CP-02`, `B04-OV-02`, `B04-LH-02`) ; sans date limite, les questions ne sont pas ouvertes (409
+`DATE_LIMITE_INCONNUE`). Le bloc **`Questions`** = `{ dateLimite (ISO minute), clotureLe, closes, joursAvantLimite, questions[] }` ; chaque
+**`Question`** = `{ id, idDmc, question, poseeLe, auteur, auteurCompte, mienne, etat (EN_ATTENTE | REPONDUE), reponse, reponseNom,
+reponseTaille, repondueLe, publieeLe }` — `auteur` (raison sociale, à défaut le compte) et `auteurCompte` servis aux lecteurs internes
+seulement, `null` ailleurs ; `mienne` pour le candidat connecté.
+
+#### Côté candidat et page publique (`/api/procedures-en-ligne/{idDmc}/questions`)
+
+| Méthode | Chemin | Qui | Effet |
+|---|---|---|---|
+| GET | `/api/procedures-en-ligne/{idDmc}/questions` | sans session | la fenêtre et les questions **répondues, anonymisées** ; 404 hors d'une procédure en ligne |
+| GET | `…/questions/{id}/fichier` | sans session | le fichier joint à une réponse diffusée ; 404 sans fichier ou avant la diffusion |
+| GET | `…/questions/miennes` | CANDIDAT | les questions du candidat connecté, répondues ou non |
+| POST | `…/questions` `{ question }` | CANDIDAT | pose la question : **201** ; 403 **`DOSSIER_NON_RETIRE`** (aucun document du DAO retiré par ce compte, registre des retraits) ; 400 `QUESTION_OBLIGATOIRE`, `QUESTION_TROP_LONGUE` (4 000) ; 409 **`QUESTIONS_CLOSES`** (`details { dateLimite, clotureLe, joursAvantLimite }`), `DATE_LIMITE_INCONNUE` |
+
+La question posée notifie la PRMP (**`QUESTION_POSEE`**) et s'inscrit au journal de la procédure (`QUESTION_POSEE`).
+
+#### Côté PRMP (`/api/fiches-marche/{idDmc}/questions`)
+
+| Méthode | Chemin | Qui | Effet |
+|---|---|---|---|
+| GET | `/api/fiches-marche/{idDmc}/questions` | lecteurs internes de la fiche | toutes les questions, avec leur auteur, et la fenêtre |
+| POST | `…/questions/{id}/reponse` (multipart `texte`, `fichier` facultatif) | **PRMP** de la fiche | répond **et diffuse** : `repondueLe` = `publieeLe` ; 400 `TEXTE_OBLIGATOIRE`, `FORMAT_INVALIDE` (PDF, JPEG, PNG lus sur le contenu), 413 au-delà de la taille des pièces du candidat ; 409 `DEJA_REPONDUE` ; 403 hors PRMP ; 404 |
+| GET | `…/questions/pdf` | lecteurs internes | le PDF « Questions des candidats et réponses » ; 404 sans question |
+
+La réponse notifie **chaque candidat ayant retiré le dossier** (**`QUESTION_REPONDUE`**, courriel ; art. 35-II : « l'ensemble des candidats
+ayant retiré un DAO devra être destinataire des réponses ») et s'inscrit au journal (`QUESTION_REPONDUE`).
+
+#### Le dossier de marché
+
+À la création du dossier de marché (`POST …/attribution/lots/{lot}/dossier`), les questions **répondues** sont jointes d'office en PDF
+sous le type de pièce **`QUESTIONS_REPONSES`** (famille DDM, facultatif), à côté du projet de marché, du cahier des charges, du devis,
+du PV d'ouverture et du rapport ; rien n'est joint sans question répondue.
+
+⚠️ Écarts avec la demande : la page est **publique** (pas seulement les candidats ayant retiré) mais anonymisée ; aucune
+« publication » distincte de la réponse (`publieeLe` = `repondueLe`) ; une question sans réponse à la clôture reste visible de la PRMP
+et de son auteur, sans autre effet (la loi ne fixe pas de délai de réponse).
+
 ### Le rabais structuré de l'offre en ligne ⚠️ 2026-10-07
 
 Demande front `demande-backend-2026-10-07-rabais-structure.md` (arbitrage Q4 du pilote : « le rabais est structuré au dépôt »). Aucune

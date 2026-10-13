@@ -225,5 +225,9 @@ public enum TypeNotification {
      * ⚠️ R6c (manuel révisé, lot 2, §B1 règle 9 ; V108) — la Commission n'a pas rendu son avis sur une demande de sans suite dans les 5
      * jours (art. 55-II) : relance, une fois, vers la PRMP, le membre examinateur et les Présidents de la localité.
      */
-    RELANCE_SANS_SUITE
+    RELANCE_SANS_SUITE,
+    /** ⚠️ R7 (manuel révisé, lot 2, §B2 ; V109) — un candidat ayant retiré le DAO pose une question (art. 35-II) : vers la PRMP. */
+    QUESTION_POSEE,
+    /** ⚠️ R7 (manuel révisé, lot 2, §B2 ; V109) — la PRMP a répondu à une question : vers chaque candidat ayant retiré le DAO. */
+    QUESTION_REPONDUE
 }

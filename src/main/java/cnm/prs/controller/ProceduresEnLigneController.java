@@ -32,10 +32,13 @@ public class ProceduresEnLigneController {
     private final cnm.prs.service.FormulairesEnLigne formulaires;
     private final cnm.prs.service.RecusDaoService recus;
     private final tools.jackson.databind.ObjectMapper mapper;
+    /** ⚠️ R7 (V109) — les questions des candidats. */
+    private final cnm.prs.service.QuestionsCandidatService questions;
 
     public ProceduresEnLigneController(ProceduresEnLigneService service, cnm.prs.service.CeremonieService ceremonie,
             cnm.prs.service.SeanceService seance, cnm.prs.service.FormulairesEnLigne formulaires, cnm.prs.service.RecusDaoService recus,
-            tools.jackson.databind.ObjectMapper mapper) {
+            tools.jackson.databind.ObjectMapper mapper, cnm.prs.service.QuestionsCandidatService questions) {
+        this.questions = questions;
         this.recus = recus;
         this.mapper = mapper;
         this.formulaires = formulaires;
@@ -78,6 +81,45 @@ public class ProceduresEnLigneController {
             throw new cnm.prs.exception.BadRequestException("La partie « data » n'est pas un JSON lisible.", "DONNEES_INVALIDES");
         }
         return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).body(recus.deposer(idDmc, fichier, corps));
+    }
+
+    /**
+     * ⚠️ R7 (manuel révisé, lot 2, §B2 ; V109) — les questions répondues, anonymisées, et la fenêtre des questions (J−10) : page
+     * publique, sans session ; 404 hors d'une procédure en ligne.
+     */
+    @GetMapping("/{idDmc}/questions")
+    public cnm.prs.dto.QuestionCandidatDto.Questions questions(@PathVariable Long idDmc) {
+        return questions.publiques(idDmc);
+    }
+
+    /** ⚠️ R7 — le fichier joint à une réponse diffusée : sans session ; 404 sans fichier. */
+    @GetMapping("/{idDmc}/questions/{id}/fichier")
+    public ResponseEntity<byte[]> fichierQuestion(@PathVariable Long idDmc, @PathVariable Long id) {
+        cnm.prs.entity.QuestionCandidat q = questions.fichier(idDmc, id);
+        return Telechargements.fichier(q.getReponseNom(), q.getReponseFormat(), q.getReponseContenu());
+    }
+
+    /** ⚠️ R7 — les questions du candidat connecté, répondues ou non. */
+    @GetMapping("/{idDmc}/questions/miennes")
+    @PreAuthorize("hasRole('CANDIDAT')")
+    public cnm.prs.dto.QuestionCandidatDto.Questions mesQuestions(@PathVariable Long idDmc) {
+        return questions.miennes(moi(), idDmc);
+    }
+
+    /**
+     * ⚠️ R7 — le candidat ayant retiré le DAO pose une question ({@code { question }}) ; 201 ; 403 {@code DOSSIER_NON_RETIRE} ; 400
+     * {@code QUESTION_OBLIGATOIRE} ; 409 {@code QUESTIONS_CLOSES} (après J−10), {@code DATE_LIMITE_INCONNUE}.
+     */
+    @PostMapping("/{idDmc}/questions")
+    @PreAuthorize("hasRole('CANDIDAT')")
+    public ResponseEntity<cnm.prs.dto.QuestionCandidatDto.Question> poserQuestion(@PathVariable Long idDmc,
+            @org.springframework.web.bind.annotation.RequestBody(required = false) cnm.prs.dto.QuestionCandidatDto.QuestionRequest r) {
+        return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).body(questions.poser(moi(), idDmc, r));
+    }
+
+    /** ⚠️ R7 — le compte candidat connecté (claim « ref »). */
+    private static String moi() {
+        return cnm.prs.security.CurrentUser.ref().orElseThrow(() -> new cnm.prs.exception.ResourceNotFoundException("Compte candidat introuvable."));
     }
 
     /** ⚠️ §B2 — le reçu le plus récent de son entreprise ; 404 sinon. */

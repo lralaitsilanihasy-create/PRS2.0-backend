@@ -10,4 +10,7 @@ import cnm.prs.entity.RetraitDao;
 public interface RetraitDaoRepository extends JpaRepository<RetraitDao, Integer> {
 
     List<RetraitDao> findByIdDmcOrderByDateRetraitAscIdRetraitAsc(Long idDmc);
+
+    /** ⚠️ R7 (V109) — le candidat a retiré au moins un document du DAO de la procédure. */
+    boolean existsByIdDmcAndIdCandidat(Long idDmc, String idCandidat);
 }

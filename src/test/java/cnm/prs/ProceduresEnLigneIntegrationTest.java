@@ -2,6 +2,7 @@ package cnm.prs;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -386,6 +387,85 @@ class ProceduresEnLigneIntegrationTest extends CnmIntegrationTestSupport {
      * Une fiche électronique validée : l'avertissement de signature paraît au bilan tant que B04-SE-05 vaut « Avancée »,
      * disparaît à « Simple » ; responsable et paramètres internes complets.
      */
+    @Test
+    @DisplayName("⚠️ R7 (V109) — questions des candidats : réservées au candidat ayant retiré le DAO (403 DOSSIER_NON_RETIRE), PRMP notifiée ; "
+            + "répondre = diffuser (notification aux candidats ayant retiré, page publique anonymisée, fichier public, PDF interne) ; "
+            + "PRMP seule répond, une fois (409 DEJA_REPONDUE) ; recevables jusqu'à J−10 (409 QUESTIONS_CLOSES), J−10 même compris")
+    void questions() throws Exception {
+        poserAvis();
+        String url = "/api/procedures-en-ligne/" + idDmc + "/questions";
+        String interne = "/api/fiches-marche/" + idDmc + "/questions";
+        LocalDate limite = ouvrable(aujourdhui.plusDays(60));
+        mvc.perform(get(url)).andExpect(status().isOk()).andExpect(jsonPath("$.closes").value(false))
+                .andExpect(jsonPath("$.dateLimite").value(limite + "T10:00")).andExpect(jsonPath("$.clotureLe").value(limite.minusDays(10).toString()))
+                .andExpect(jsonPath("$.joursAvantLimite").value(10)).andExpect(jsonPath("$.questions.length()").value(0));
+        mvc.perform(get("/api/procedures-en-ligne/999999/questions")).andExpect(status().isNotFound());
+
+        String corps = "{\"question\":\"Le délai de livraison de 30 jours court-il de la notification du marché ?\"}";
+        mvc.perform(post(url).contentType(JSON).content(corps)).andExpect(status().isUnauthorized());
+        mvc.perform(post(url).header("Authorization", tokenPrmp).contentType(JSON).content(corps)).andExpect(status().isForbidden());
+        mvc.perform(post(url).header("Authorization", jetonCandidat).contentType(JSON).content(corps)).andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("DOSSIER_NON_RETIRE"));
+        String docs = mvc.perform(get("/api/procedures-en-ligne/" + idDmc + "/documents").header("Authorization", jetonCandidat))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String dpao = JsonPath.<List<String>>read(docs, "$[*].code").stream().filter(c -> c.startsWith("DPAO_") && c.endsWith(".pdf")).findFirst()
+                .orElseThrow();
+        mvc.perform(get("/api/procedures-en-ligne/" + idDmc + "/documents/" + dpao).header("Authorization", jetonCandidat)).andExpect(status().isOk());
+        mvc.perform(post(url).header("Authorization", jetonCandidat).contentType(JSON).content("{}")).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("QUESTION_OBLIGATOIRE"));
+        String posee = mvc.perform(post(url).header("Authorization", jetonCandidat).contentType(JSON).content(corps)).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.etat").value("EN_ATTENTE")).andExpect(jsonPath("$.mienne").value(true))
+                .andExpect(jsonPath("$.auteur").value("retrait@entreprise.mg")).andReturn().getResponse().getContentAsString();
+        long id = ((Number) JsonPath.read(posee, "$.id")).longValue();
+        assertThat(notificationRepository.findPourPrmp("PRMP001", null)).extracting(Notification::getTypeNotif).contains("QUESTION_POSEE");
+        mvc.perform(get(url)).andExpect(jsonPath("$.questions.length()").value(0));   // rien de public tant que la PRMP n'a pas répondu
+        mvc.perform(get(url + "/miennes")).andExpect(status().isUnauthorized());
+        mvc.perform(get(url + "/miennes").header("Authorization", jetonCandidat)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.questions.length()").value(1)).andExpect(jsonPath("$.questions[0].etat").value("EN_ATTENTE"))
+                .andExpect(jsonPath("$.questions[0].mienne").value(true)).andExpect(jsonPath("$.questions[0].auteur").isEmpty());
+        mvc.perform(get(interne).header("Authorization", tokenPrmp)).andExpect(status().isOk()).andExpect(jsonPath("$.closes").value(false))
+                .andExpect(jsonPath("$.questions[0].auteur").value("retrait@entreprise.mg"))
+                .andExpect(jsonPath("$.questions[0].auteurCompte").value("retrait@entreprise.mg"));
+        mvc.perform(get(interne).header("Authorization", jetonCandidat)).andExpect(status().isForbidden());
+
+        mvc.perform(multipart(interne + "/" + id + "/reponse").param("texte", "Oui.").header("Authorization", tokenAdmin)).andExpect(status().isForbidden());
+        mvc.perform(multipart(interne + "/" + id + "/reponse").header("Authorization", tokenPrmp)).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("TEXTE_OBLIGATOIRE"));
+        mvc.perform(multipart(interne + "/999999/reponse").param("texte", "Oui.").header("Authorization", tokenPrmp)).andExpect(status().isNotFound());
+        org.springframework.mock.web.MockMultipartFile fichier = new org.springframework.mock.web.MockMultipartFile("fichier", "precision.pdf",
+                "application/pdf", "%PDF-1.4 precision".getBytes());
+        mvc.perform(multipart(interne + "/" + id + "/reponse").file(fichier)
+                .param("texte", "Oui : le délai court de la notification de l'ordre de service de commencer les livraisons.")
+                .header("Authorization", tokenPrmp)).andExpect(status().isOk()).andExpect(jsonPath("$.etat").value("REPONDUE"))
+                .andExpect(jsonPath("$.reponseNom").value("precision.pdf")).andExpect(jsonPath("$.publieeLe").isNotEmpty());
+        mvc.perform(multipart(interne + "/" + id + "/reponse").param("texte", "Encore.").header("Authorization", tokenPrmp))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("DEJA_REPONDUE"));
+        assertThat(notificationRepository.findAll()).filteredOn(n -> "QUESTION_REPONDUE".equals(n.getTypeNotif()))
+                .extracting(Notification::getDestinataireRef).containsExactly("C900000011");
+
+        mvc.perform(get(url)).andExpect(status().isOk()).andExpect(jsonPath("$.questions.length()").value(1))
+                .andExpect(jsonPath("$.questions[0].etat").value("REPONDUE")).andExpect(jsonPath("$.questions[0].auteur").isEmpty())
+                .andExpect(jsonPath("$.questions[0].auteurCompte").isEmpty()).andExpect(jsonPath("$.questions[0].mienne").value(false))
+                .andExpect(jsonPath("$.questions[0].reponse").value(org.hamcrest.Matchers.startsWith("Oui :")))
+                .andExpect(jsonPath("$.questions[0].reponseNom").value("precision.pdf"));
+        assertThat(new String(mvc.perform(get(url + "/" + id + "/fichier")).andExpect(status().isOk()).andReturn().getResponse()
+                .getContentAsByteArray())).startsWith("%PDF");
+        mvc.perform(get(url + "/999999/fichier")).andExpect(status().isNotFound());
+        String pdf = texteDuPdf(mvc.perform(get(interne + "/pdf").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray());
+        assertThat(pdf).contains("QUESTIONS DES CANDIDATS ET RÉPONSES", "Question n° 1", "art. 35-II", "pièce jointe : precision.pdf");
+
+        // J−10 : la date limite à J+9 ferme les questions (clôture hier) ; à J+10, la clôture est aujourd'hui : encore recevables.
+        changer("B04-LR-03", aujourdhui.plusDays(9).toString());
+        mvc.perform(get(url)).andExpect(jsonPath("$.closes").value(true)).andExpect(jsonPath("$.clotureLe").value(aujourdhui.minusDays(1).toString()));
+        mvc.perform(post(url).header("Authorization", jetonCandidat).contentType(JSON).content(corps)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("QUESTIONS_CLOSES")).andExpect(jsonPath("$.details.clotureLe").value(aujourdhui.minusDays(1).toString()))
+                .andExpect(jsonPath("$.details.joursAvantLimite").value(10));
+        changer("B04-LR-03", aujourdhui.plusDays(10).toString());
+        mvc.perform(post(url).header("Authorization", jetonCandidat).contentType(JSON).content(corps)).andExpect(status().isCreated());
+        mvc.perform(get(url + "/miennes").header("Authorization", jetonCandidat)).andExpect(jsonPath("$.questions.length()").value(2));
+    }
+
     private Long ficheElectroniqueValidee() throws Exception {
         String corps = mvc.perform(post("/api/dmcs/par-marche/9901").header("Authorization", tokenPrmp))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();

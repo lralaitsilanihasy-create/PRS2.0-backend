@@ -114,6 +114,8 @@ public class AttributionService {
     private final ProjetMarcheService projetMarche;
     /** ⚠️ R6c (règle 6, QB1 ; V108) — le délai d'attente part de la réception présumée de l'information. */
     private final DelaiAttenteCalcul delais;
+    /** ⚠️ R7 (§B2 ; V109) — la pièce « Questions et réponses » du dossier de marché (fournisseur paresseux : pas de cycle). */
+    private final org.springframework.beans.factory.ObjectProvider<QuestionsCandidatService> questionsCandidats;
 
     public AttributionService(AttributionRepository attributions, EvaluationService evaluation, SeanceService seance, SaisieService saisie,
             ValeursPpmService valeursPpm, FicheMarcheService fiches, EntrepriseCandidatService entreprises, GenerateurDocumentsFiche generateur,
@@ -124,7 +126,8 @@ public class AttributionService {
             cnm.prs.repository.PrmpRepository prmpRepository, NotificationService notifications, CeremonieService ceremonies,
             ParametreService parametres, java.time.Clock horloge, AttributionExecutionService execution, ResultatsPi resultatsPi,
             cnm.prs.repository.AttributionRepriseRepository reprises, SansSuiteService sansSuite, ProjetMarcheService projetMarche,
-            DelaiAttenteCalcul delais) {
+            DelaiAttenteCalcul delais, org.springframework.beans.factory.ObjectProvider<QuestionsCandidatService> questionsCandidats) {
+        this.questionsCandidats = questionsCandidats;
         this.delais = delais;
         this.projetMarche = projetMarche;
         this.sansSuite = sansSuite;
@@ -874,6 +877,9 @@ public class AttributionService {
                 seance.bordereauPdf(p.idOffreFinanciere() != null ? p.idOffreFinanciere() : p.idOffre()).orElse(null));
         jointes += joindre(dossier, "PV_OUVERTURE", "pv-ouverture_" + idDmc + ".pdf", seance.pvSigne(idDmc));
         jointes += joindre(dossier, "RAPPORT_ANALYSE", "rapport-evaluation_" + idDmc + ".pdf", evaluation.rapportSigne(idDmc));
+        // ⚠️ R7 (manuel révisé, lot 2, §B2 ; V109) — les questions des candidats et les réponses diffusées, s'il y en a.
+        jointes += joindre(dossier, QuestionsCandidatService.PIECE_QUESTIONS, "questions-reponses_" + idDmc + ".pdf",
+                questionsCandidats.getObject().pdfOuRien(idDmc));
         evaluation.tracerAttribution(idDmc, "DOSSIER_MARCHE", "Lot " + lot + " : dossier de marché " + dossier.getIdDossier() + " (" + sousType
                 + ") créé pour l'offre n° " + p.numero() + " (" + p.candidat() + "), " + jointes + " pièce(s) jointe(s) d'office");
         return lire(idDmc);
