@@ -1267,6 +1267,16 @@ de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM 
 > qu'une réponse, définitive. Les questions répondues sont jointes d'office au dossier de marché soumis à la Commission. Les questions
 > restées sans réponse n'ont pas d'autre effet : la loi ne fixe pas de délai de réponse.
 >
+> ⚠️ **2026-10-13 — le mode de la procédure est fixé à sa création (manuel révisé, lot 2, tranche R8, V110 ; arbitrage Q1).** Le mode
+> de remise des offres d'une procédure — papier ou électronique — est celui de son cadrage ; dès qu'une version de la fiche est
+> validée, il **ne change plus** : une procédure commencée sur papier s'achève sur papier, et inversement. La seule exception est la
+> **migration documentée** par l'Administrateur : elle ouvre une révision de la fiche avec le nouveau mode, porte sa date, son auteur et
+> son motif, s'inscrit au journal ; la PRMP ressaisit ce que le nouveau mode exige puis valide. Elle est refusée dès qu'une offre a été
+> déposée en ligne, qu'une cérémonie des clés est close ou qu'un lot est attribué : ce qui a été fait dans un mode ne se refait pas dans
+> l'autre. Ce mode décide ce que l'application attend du dossier : en remise électronique, les pièces que l'application produit
+> elle-même ne sont plus exigées et les contrôles automatiques s'appliquent ; en papier, toutes les pièces du manuel restent exigées et
+> les contrôles automatiques sont sans objet.
+>
 > ⚠️ **2026-10-08 — les grilles de contrôle par sous-type (tranche M3, V96).** Chaque sous-type a la grille du manuel : les points
 > communs de sa famille, puis ceux de la grille dont il dérive (un appel d'offres restreint reprend la grille de l'appel d'offres
 > ouvert et y ajoute ses cinq points ; un marché sur appel d'offres restreint, celle du marché sur appel d'offres ouvert), puis les

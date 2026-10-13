@@ -59,6 +59,19 @@ public class FicheMarche {
     @Column(name = "CADRAGE", length = 2000)
     private String cadrage;
 
+    /**
+     * ⚠️ R8 (manuel révisé, lot 2, §B3 ; V110) — la migration documentée du mode de remise par l'Administrateur : cette version
+     * porte le nouveau mode, la date, l'auteur et le motif ; nulles sur toute autre version.
+     */
+    @Column(name = "MODE_MIGRE_LE")
+    private LocalDateTime modeMigreLe;
+
+    @Column(name = "MODE_MIGRE_PAR", length = 100)
+    private String modeMigrePar;
+
+    @Column(name = "MODE_MIGRE_MOTIF", length = 1000)
+    private String modeMigreMotif;
+
     @Column(name = "DATE_CREATION", nullable = false)
     private LocalDateTime dateCreation;
 

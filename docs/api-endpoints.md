@@ -8352,6 +8352,42 @@ du PV d'ouverture et du rapport ; rien n'est joint sans question répondue.
 « publication » distincte de la réponse (`publieeLe` = `repondueLe`) ; une question sans réponse à la clôture reste visible de la PRMP
 et de son auteur, sans autre effet (la loi ne fixe pas de délai de réponse).
 
+### Le manuel révisé pour l'application, lot 2, tranche R8 : le mode de la procédure fixé à la création — V110 ⚠️ 2026-10-13
+
+Demande front `demande-backend-2026-10-10-manuel-revise-lot2.md` (§B3 ; arbitrage **Q1** du pilote : le mode est fixé à la création,
+pas de bascule en cours de route, seule exception la migration documentée). Arbitrages au backend du 13/10 : la migration **ouvre une
+révision** avec le nouveau mode (la version validée reste intacte, la PRMP ressaisit puis valide) ; **point de non-retour** dès une offre
+déposée en ligne, une cérémonie des clés close ou un lot attribué ; la condition « procédure en ligne » (R2, R5) **lit le mode** de la
+fiche validée. Migration **V110** (`t_fiche_marche.MODE_MIGRE_LE / MODE_MIGRE_PAR / MODE_MIGRE_MOTIF`), pom inchangé.
+
+#### Le mode figé (`cadrage.modeRemise`)
+
+- Dès qu'une **version validée** existe, le mode de remise (`PAPIER` / `ELECTRONIQUE`, H3) ne change plus : `PUT /{idDmc}/cadrage` avec un
+  autre mode — ou **sans la clé**, qui vaut `PAPIER` — répond **409 `MODE_FIGE`**, `details { modeFige, modeDemande }` ; l'import du DAO
+  (`POST /{idDmc}/import`) garde le mode figé et le signale dans `erreurs[]` (champ `modeRemise`) sans l'appliquer. La révision copie le mode.
+- **`FicheMarcheDto`** gagne `modeFige` (booléen), `modeRemiseFige` (le mode à garder, `null` tant que rien n'est validé) et, sur la version
+  qui la porte, `modeMigreLe`, `modeMigrePar`, `modeMigreMotif`.
+
+#### La migration documentée — `POST /api/fiches-marche/{idDmc}/migrer-mode`
+
+Corps `{ modeRemise, motif }`, **Administrateur seul** (403). Ouvre la révision (ou reprend le brouillon en cours), y pose le nouveau mode,
+date, signe et motive la migration sur cette version ; journal **`FICHE_MODE_MIGRE`** du dossier du plan et du dossier soumis s'il existe
+(« Mode de remise migré de Électronique vers Papier par l'Administrateur (fiche version n, à ressaisir puis valider) ; motif : … »). Le
+nouveau mode est **figé à son tour** pour cette version : la PRMP ressaisit ce que le mode exige (remise électronique : B04-SE, responsable,
+paramètres internes…), puis valide. Refus : 400 `MODE_INVALIDE`, `MOTIF_OBLIGATOIRE`, `MOTIF_TROP_LONG` (1 000) ; 409 `MODE_NON_FIGE`
+(aucune version validée : le cadrage suffit), `MODE_IDENTIQUE`, **`MODE_IRREVERSIBLE`** (`details.raison` ∈ `OFFRES` · `CEREMONIE_CLOSE` ·
+`ATTRIBUTION`), `DOSSIER_EN_EXAMEN` (ceux de la révision).
+
+#### « Procédure en ligne » lit le mode
+
+`PiecesExigees` (R2 : pièces `PAPIER` masquées, `FACULTATIVE_EN_LIGNE` sans obligation) et les contrôles automatiques (R5) tiennent un
+dossier pour **en ligne** si la fiche validée de sa procédure est en remise **électronique** — les dossiers DDM, DGC et DSS suivent la
+fiche de leur procédure. En **papier**, les listes V95 restent entières et les contrôles automatiques sont `NON_APPLICABLE`. Un dossier
+rattaché à un DMC sans fiche validée (cas de test) garde la lecture d'avant.
+
+⚠️ Écart avec la demande : pas de « re-saisie contrôlée » distincte — la révision ouverte par la migration suit le circuit ordinaire de
+validation (bilan, contrôles bloquants).
+
 ### Le rabais structuré de l'offre en ligne ⚠️ 2026-10-07
 
 Demande front `demande-backend-2026-10-07-rabais-structure.md` (arbitrage Q4 du pilote : « le rabais est structuré au dépôt »). Aucune

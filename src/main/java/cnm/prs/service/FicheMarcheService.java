@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 
@@ -35,6 +36,7 @@ import cnm.prs.enums.SourceChampFiche;
 import cnm.prs.enums.StatutFicheMarche;
 import cnm.prs.enums.TypeChampFiche;
 import cnm.prs.enums.TypeMarcheDao;
+import cnm.prs.exception.BadRequestException;
 import cnm.prs.exception.BusinessRuleException;
 import cnm.prs.exception.ChampsInvalidesException;
 import cnm.prs.exception.ErrorResponse;
@@ -128,6 +130,8 @@ public class FicheMarcheService {
     private final SousCriteresFiche sousCriteres;
     /** ⚠️ R6a (manuel révisé, lot 2, §B1) — le délai de publicité, bloquant à la validation. */
     private final DelaisPublicite delaisPublicite;
+    /** ⚠️ R8 (§B3 ; V110) — le point de non-retour de la migration du mode : un lot attribué. */
+    private final cnm.prs.repository.AttributionRepository attributionRepository;
 
     public FicheMarcheService(FicheMarcheRepository ficheRepository, FicheMarcheValeurRepository valeurRepository,
             ChampFicheMarcheRepository champRepository, BlocFicheMarcheRepository blocRepository,
@@ -139,7 +143,9 @@ public class FicheMarcheService {
             BesoinFiche besoin, ParametreService parametres, ParametresInternesService internes, MandatService mandats,
             MoyensFiche moyens, PiecesFiche pieces, cnm.prs.repository.CeremonieClesRepository ceremonieRepository,
             cnm.prs.repository.OffreRepository offreRepository, cnm.prs.repository.SpecificationsFicheRepository specificationsRepository,
-            DaoCompletService daoComplet, SousCriteresFiche sousCriteres, DelaisPublicite delaisPublicite) {
+            DaoCompletService daoComplet, SousCriteresFiche sousCriteres, DelaisPublicite delaisPublicite,
+            cnm.prs.repository.AttributionRepository attributionRepository) {
+        this.attributionRepository = attributionRepository;
         this.delaisPublicite = delaisPublicite;
         this.sousCriteres = sousCriteres;
         this.specificationsRepository = specificationsRepository;
@@ -683,6 +689,7 @@ public class FicheMarcheService {
         Contexte ctx = contexteEcriture(idDmc);
         Map<String, Object> propre = validerCadrage(cadrage == null ? Map.of() : cadrage, ctx.codeCategorie(),
                 ctx.forme() == null ? null : ctx.forme().name());
+        exigerModeFige(idDmc, propre);   // ⚠️ R8 (§B3 ; V110) — le mode de remise ne change plus après une version validée
         FicheMarche fiche = brouillonOuNouvelle(ctx);
         fiche.setCadrage(ecrireJson(propre));
         // ⚠️ Lot 4 (2026-09-23, §B5) — reprendre le cadrage, c'est reprendre la fiche sous le type du plan : le type de
@@ -879,6 +886,14 @@ public class FicheMarcheService {
             cadrageValide = validerCadrage(aValider, ctx.codeCategorie(), typeMarche);
         } catch (ChampsInvalidesException ex) {
             erreurs.addAll(ex.getErreurs());
+        }
+        // ⚠️ R8 (§B3 ; V110) — l'import ne change pas un mode de remise figé.
+        String fige = cadrageValide.containsKey(RemiseElectronique.CLE_CADRAGE) ? modeFige(idDmc).orElse(null) : null;
+        if (fige != null && !fige.equals(modeRemise(cadrageValide))) {
+            erreurs.add(new ErrorResponse.FieldError(RemiseElectronique.CLE_CADRAGE, "Le mode de remise est figé (" + RemiseElectronique.libelleMode(fige)
+                    + ") : l'import ne le change pas ; seule une migration documentée par l'Administrateur le peut."));
+            cadrageValide = new LinkedHashMap<>(cadrageValide);
+            cadrageValide.remove(RemiseElectronique.CLE_CADRAGE);
         }
         fusion.putAll(cadrageValide);
 
@@ -1514,6 +1529,7 @@ public class FicheMarcheService {
 
     private FicheMarcheDto toDto(Contexte ctx, FicheMarche fiche) {
         Map<String, Object> cadrage = lireJson(fiche.getCadrage());
+        Optional<String> fige = fiche.getIdDmc() == null ? Optional.empty() : modeFige(fiche.getIdDmc());   // ⚠️ R8
         // ⚠️ Lot 1c — le type de marché servi est DÉRIVÉ de la forme de la ligne courante (nul si le plan ne la porte
         // pas) ; les rubriques s'ouvrent selon lui, à défaut selon le type sous lequel la fiche a été saisie.
         String typeMarche = ctx.forme() == null ? null : ctx.forme().name();
@@ -1623,7 +1639,107 @@ public class FicheMarcheService {
                 !RemiseElectronique.electronique(cadrage) ? null
                         : ceremonieRepository.findById(idDmc).map(cnm.prs.entity.CeremonieCles::getEtat).orElse(cnm.prs.entity.CeremonieCles.A_VENIR),
                 // ⚠️ V67 (lot 2a, §B5) — l'état de la commission d'appel d'offres, null en mode papier.
-                internes.etatCao(idDmc, RemiseElectronique.electronique(cadrage)), null);   // ⚠️ V68 : depots, posé par lire()
+                internes.etatCao(idDmc, RemiseElectronique.electronique(cadrage)), null,   // ⚠️ V68 : depots, posé par lire()
+                // ⚠️ R8 (§B3 ; V110) — le mode figé et la migration portée par cette version.
+                fige.isPresent(), fige.orElse(null), fiche.getModeMigreLe(), fiche.getModeMigrePar(), fiche.getModeMigreMotif());
+    }
+
+    // ------------------------------------------------------------------ ⚠️ R8 (manuel révisé, lot 2, §B3 ; V110) — le mode figé
+
+    /** Les modes de remise admis. */
+    static final java.util.Set<String> MODES_REMISE = java.util.Set.of(RemiseElectronique.PAPIER, RemiseElectronique.ELECTRONIQUE);
+
+    /** Le mode d'un cadrage, {@code PAPIER} à défaut (une fiche d'avant V50, ou sans réponse, est papier). */
+    static String modeRemise(Map<String, Object> cadrage) {
+        return RemiseElectronique.electronique(cadrage) ? RemiseElectronique.ELECTRONIQUE : RemiseElectronique.PAPIER;
+    }
+
+    /**
+     * Le mode <strong>figé</strong> de la procédure : celui de la dernière version qui porte une migration documentée, sinon celui de
+     * la dernière version validée ; vide tant qu'aucune version n'est validée (le cadrage reste libre).
+     */
+    public Optional<String> modeFige(Long idDmc) {
+        List<FicheMarche> versions = ficheRepository.findByIdDmcOrderByNumeroVersionAsc(idDmc);
+        FicheMarche migree = versions.stream().filter(f -> f.getModeMigreLe() != null).reduce((a, b) -> b).orElse(null);
+        FicheMarche validee = versions.stream().filter(f -> StatutFicheMarche.VALIDEE.name().equals(f.getStatut())).reduce((a, b) -> b).orElse(null);
+        if (migree != null && (validee == null || migree.getNumeroVersion() >= validee.getNumeroVersion())) {
+            return Optional.of(modeRemise(lireJson(migree.getCadrage())));
+        }
+        return validee == null ? Optional.empty() : Optional.of(modeRemise(lireJson(validee.getCadrage())));
+    }
+
+    /** Le cadrage à écrire garde le mode figé, sinon 409 {@code MODE_FIGE} (details modeFige / modeDemande). */
+    private void exigerModeFige(Long idDmc, Map<String, Object> cadrage) {
+        String fige = modeFige(idDmc).orElse(null);
+        if (fige == null) {
+            return;
+        }
+        String demande = modeRemise(cadrage);
+        if (!fige.equals(demande)) {
+            Map<String, Object> details = new LinkedHashMap<>();
+            details.put("modeFige", fige);
+            details.put("modeDemande", demande);
+            throw new BusinessRuleException("Le mode de remise de la procédure est fixé à sa création (" + RemiseElectronique.libelleMode(fige)
+                    + ") : une version validée existe, il ne change plus. Seule une migration documentée par l'Administrateur "
+                    + "(POST /migrer-mode, motif à l'appui) peut le modifier.", "MODE_FIGE", null, details);
+        }
+    }
+
+    /**
+     * La migration documentée du mode de remise, par l'<strong>Administrateur</strong> seul (403) : {@code modeRemise} admis (400
+     * {@code MODE_INVALIDE}), {@code motif} obligatoire (400 {@code MOTIF_OBLIGATOIRE}) ; 409 {@code MODE_NON_FIGE} tant qu'aucune version
+     * n'est validée (le cadrage suffit), {@code MODE_IDENTIQUE}, {@code MODE_IRREVERSIBLE} (details {@code raison} : {@code OFFRES} déposées
+     * en ligne, {@code CEREMONIE_CLOSE}, {@code ATTRIBUTION}) ; les refus de la révision ({@code DOSSIER_EN_EXAMEN}). Ouvre (ou reprend)
+     * le brouillon, y pose le nouveau mode, date, signe et motive la migration ; journal {@code FICHE_MODE_MIGRE} du plan et du dossier
+     * soumis. La PRMP ressaisit ensuite ce que le mode exige, puis valide.
+     */
+    public FicheMarcheDto migrerMode(Long idDmc, cnm.prs.dto.MigrationModeRequest r) {
+        if (CurrentUser.profil().orElse(null) != ProfilUtilisateur.ADMINISTRATEUR) {
+            throw new AccessDeniedException("La migration du mode de remise est un geste de l'Administrateur.");
+        }
+        Contexte ctx = contexteEcriture(idDmc);
+        String mode = r == null || r.modeRemise() == null ? null : r.modeRemise().trim().toUpperCase(java.util.Locale.ROOT);
+        if (mode == null || !MODES_REMISE.contains(mode)) {
+            throw new BadRequestException("Le mode de remise est PAPIER ou ELECTRONIQUE.", "MODE_INVALIDE");
+        }
+        String motif = r.motif() == null || r.motif().isBlank() ? null : r.motif().trim();
+        if (motif == null) {
+            throw new BadRequestException("La migration du mode exige un motif.", "MOTIF_OBLIGATOIRE");
+        }
+        if (motif.length() > 1000) {
+            throw new BadRequestException("Le motif ne dépasse pas 1 000 caractères.", "MOTIF_TROP_LONG");
+        }
+        String fige = modeFige(idDmc).orElseThrow(() -> new BusinessRuleException("Aucune version validée : le mode se change par le cadrage.",
+                "MODE_NON_FIGE"));
+        if (fige.equals(mode)) {
+            throw new BusinessRuleException("La procédure est déjà en mode " + RemiseElectronique.libelleMode(mode) + ".", "MODE_IDENTIQUE");
+        }
+        String raison = !offreRepository.findByIdDmcOrderByNumeroAscDateCreationAsc(idDmc).isEmpty() ? "OFFRES"
+                : ceremonieRepository.findById(idDmc).map(c -> cnm.prs.entity.CeremonieCles.CLOSE.equals(c.getEtat())).orElse(false) ? "CEREMONIE_CLOSE"
+                : attributionRepository.findByIdDmcOrderByLotAsc(idDmc).stream().anyMatch(a -> a.getAttribueLe() != null) ? "ATTRIBUTION" : null;
+        if (raison != null) {
+            throw new BusinessRuleException("Le mode ne se migre plus : " + ("OFFRES".equals(raison) ? "des offres ont été déposées en ligne"
+                    : "CEREMONIE_CLOSE".equals(raison) ? "la cérémonie des clés est close" : "un lot est attribué")
+                    + " ; ce qui a été fait dans un mode ne se refait pas dans l'autre.", "MODE_IRREVERSIBLE", null, Map.of("raison", raison));
+        }
+        FicheMarche derniere = ficheRepository.findFirstByIdDmcOrderByNumeroVersionDesc(idDmc).orElseThrow();
+        if (StatutFicheMarche.VALIDEE.name().equals(derniere.getStatut())) {
+            reviser(idDmc);
+            derniere = ficheRepository.findFirstByIdDmcOrderByNumeroVersionDesc(idDmc).orElseThrow();
+        }
+        Map<String, Object> cadrage = new LinkedHashMap<>(lireJson(derniere.getCadrage()));
+        cadrage.put(RemiseElectronique.CLE_CADRAGE, mode);
+        derniere.setCadrage(ecrireJson(cadrage));
+        derniere.setModeMigreLe(LocalDateTime.now());
+        derniere.setModeMigrePar(CurrentUser.ref().or(CurrentUser::login).orElse(null));
+        derniere.setModeMigreMotif(motif);
+        derniere.setDateMaj(LocalDateTime.now());
+        FicheMarche fiche = ficheRepository.save(derniere);
+        String detail = "Mode de remise migré de " + RemiseElectronique.libelleMode(fige) + " vers " + RemiseElectronique.libelleMode(mode)
+                + " par l'Administrateur (fiche version " + fiche.getNumeroVersion() + ", à ressaisir puis valider) ; motif : " + motif;
+        journal.tracer(ctx.idDossier(), JournalDossierService.FICHE_MODE_MIGRE, detail);
+        dossierRepository.findIdDossierByIdDmc(idDmc).ifPresent(id -> journal.tracer(id, JournalDossierService.FICHE_MODE_MIGRE, detail));
+        return toDto(ctx, fiche);
     }
 
     /**

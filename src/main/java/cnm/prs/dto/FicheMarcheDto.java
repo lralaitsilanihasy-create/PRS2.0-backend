@@ -150,4 +150,17 @@ public class FicheMarcheDto {
      * dépôts (date limite passée) ; {@code null} en mode papier. Qui a déposé ne se lit qu'après la date limite ({@code GET …/depots}).
      */
     private OffreDto.Resume depots;
+
+    /**
+     * ⚠️ R8 (manuel révisé, lot 2, §B3 ; V110, 2026-10-13) — le mode de remise ({@code cadrage.modeRemise}) est <strong>figé</strong> :
+     * une version validée existe (ou cette version porte une migration) ; {@code modeRemiseFige} = le mode que le cadrage doit garder
+     * ({@code PAPIER} ou {@code ELECTRONIQUE}, {@code null} tant que rien n'est validé). Un autre mode répond 409 {@code MODE_FIGE}.
+     */
+    private Boolean modeFige;
+    private String modeRemiseFige;
+
+    /** ⚠️ R8 — la migration documentée portée par cette version (Administrateur) : date, auteur, motif ; nuls sinon. */
+    private LocalDateTime modeMigreLe;
+    private String modeMigrePar;
+    private String modeMigreMotif;
 }

@@ -466,6 +466,83 @@ class ProceduresEnLigneIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(get(url + "/miennes").header("Authorization", jetonCandidat)).andExpect(jsonPath("$.questions.length()").value(2));
     }
 
+    @Autowired private cnm.prs.repository.FicheMarcheRepository ficheRepository;
+    @Autowired private cnm.prs.repository.AttributionRepository attributionRepository;
+    @Autowired private cnm.prs.service.PiecesExigees piecesExigees;
+
+    @Test
+    @DisplayName("⚠️ R8 (V110) — mode figé : après une version validée, le cadrage garde son mode (409 MODE_FIGE, clé absente = PAPIER), "
+            + "modeFige / modeRemiseFige servis ; migration documentée par l'Administrateur seul (403 PRMP, 400 MOTIF_OBLIGATOIRE / "
+            + "MODE_INVALIDE, 409 MODE_IDENTIQUE) sur la révision, datée, motivée, journalisée ; le nouveau mode est figé à son tour ; "
+            + "MODE_IRREVERSIBLE dès un lot attribué ; « en ligne » lit le mode de la fiche validée")
+    void modeFige() throws Exception {
+        String fiche = "/api/fiches-marche/" + idDmc;
+        String electronique = "{\"cadrage\":{\"modeRemise\":\"ELECTRONIQUE\",\"garantieSoumission\":\"OUI\",\"alloti\":\"NON\","
+                + "\"variantes\":\"NON\",\"groupement\":\"NON\",\"provenance\":\"NATIONAL\",\"typePrix\":\"UNITAIRES\","
+                + "\"prixRevisable\":\"NON\",\"avance\":\"NON\",\"penalites\":\"CCAG\"}}";
+        String papier = electronique.replace("ELECTRONIQUE", "PAPIER");
+        mvc.perform(get(fiche).header("Authorization", tokenPrmp)).andExpect(status().isOk()).andExpect(jsonPath("$.modeFige").value(true))
+                .andExpect(jsonPath("$.modeRemiseFige").value("ELECTRONIQUE")).andExpect(jsonPath("$.modeMigreLe").isEmpty());
+        mvc.perform(put(fiche + "/cadrage").header("Authorization", tokenPrmp).contentType(JSON).content(papier)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("MODE_FIGE"));
+        mvc.perform(post(fiche + "/reviser").header("Authorization", tokenPrmp)).andExpect(status().isOk()).andExpect(jsonPath("$.version").value(2))
+                .andExpect(jsonPath("$.modeFige").value(true)).andExpect(jsonPath("$.modeRemiseFige").value("ELECTRONIQUE"));
+        mvc.perform(put(fiche + "/cadrage").header("Authorization", tokenPrmp).contentType(JSON).content(papier)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("MODE_FIGE")).andExpect(jsonPath("$.details.modeFige").value("ELECTRONIQUE"))
+                .andExpect(jsonPath("$.details.modeDemande").value("PAPIER"));
+        mvc.perform(put(fiche + "/cadrage").header("Authorization", tokenPrmp).contentType(JSON)
+                .content(electronique.replace("\"modeRemise\":\"ELECTRONIQUE\",", ""))).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("MODE_FIGE"));
+        mvc.perform(put(fiche + "/cadrage").header("Authorization", tokenPrmp).contentType(JSON).content(electronique)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.cadrage.modeRemise").value("ELECTRONIQUE"));
+
+        String url = fiche + "/migrer-mode";
+        String migration = "{\"modeRemise\":\"PAPIER\",\"motif\":\"Plateforme indisponible : la procédure s'achève sur papier (décision n° 12 du 13/10/2026).\"}";
+        mvc.perform(post(url).header("Authorization", tokenPrmp).contentType(JSON).content(migration)).andExpect(status().isForbidden());
+        mvc.perform(post(url).header("Authorization", tokenAdmin).contentType(JSON).content("{\"modeRemise\":\"PAPIER\"}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("MOTIF_OBLIGATOIRE"));
+        mvc.perform(post(url).header("Authorization", tokenAdmin).contentType(JSON).content("{\"modeRemise\":\"FAX\",\"motif\":\"x\"}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("MODE_INVALIDE"));
+        mvc.perform(post(url).header("Authorization", tokenAdmin).contentType(JSON).content("{\"modeRemise\":\"ELECTRONIQUE\",\"motif\":\"x\"}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("MODE_IDENTIQUE"));
+        mvc.perform(post(url).header("Authorization", tokenAdmin).contentType(JSON).content(migration)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.version").value(2)).andExpect(jsonPath("$.statut").value("BROUILLON"))
+                .andExpect(jsonPath("$.cadrage.modeRemise").value("PAPIER")).andExpect(jsonPath("$.modeFige").value(true))
+                .andExpect(jsonPath("$.modeRemiseFige").value("PAPIER")).andExpect(jsonPath("$.modeMigreLe").isNotEmpty())
+                .andExpect(jsonPath("$.modeMigrePar").value("CTRADM"))
+                .andExpect(jsonPath("$.modeMigreMotif").value(org.hamcrest.Matchers.startsWith("Plateforme indisponible")));
+        String journal = mvc.perform(get("/api/dossiers/9900/journal").header("Authorization", tokenPresident)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(journal, "$[?(@.typeAction=='FICHE_MODE_MIGRE')].detail")).singleElement().asString()
+                .contains("Électronique vers Papier", "version 2", "Plateforme indisponible");
+        mvc.perform(put(fiche + "/cadrage").header("Authorization", tokenPrmp).contentType(JSON).content(electronique)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("MODE_FIGE")).andExpect(jsonPath("$.details.modeFige").value("PAPIER"));
+        mvc.perform(put(fiche + "/cadrage").header("Authorization", tokenPrmp).contentType(JSON).content(papier)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.cadrage.modeRemise").value("PAPIER")).andExpect(jsonPath("$.modeMigreLe").isNotEmpty());
+
+        // Le point de non-retour : un lot attribué.
+        cnm.prs.entity.Attribution attribution = new cnm.prs.entity.Attribution();
+        attribution.setIdDmc(idDmc);
+        attribution.setLot(1);
+        attribution.setEtat(cnm.prs.entity.Attribution.ATTRIBUE);
+        attribution.setAttribueLe(LocalDateTime.now());
+        attributionRepository.save(attribution);
+        mvc.perform(post(url).header("Authorization", tokenAdmin).contentType(JSON).content(migration.replace("PAPIER", "ELECTRONIQUE")))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("MODE_IRREVERSIBLE"))
+                .andExpect(jsonPath("$.details.raison").value("ATTRIBUTION"));
+
+        // « En ligne » : le mode de la fiche validée (la version 1, électronique), pas le rattachement seul.
+        Dossier d = dossierLoc(9950, "BROUILLON", "ANT", "PRMP001");
+        d.setIdTypeDossier("DMC");
+        d.setIdDmc(idDmc);
+        dossierRepository.save(d);
+        assertThat(piecesExigees.enLigne(d)).isTrue();
+        cnm.prs.entity.FicheMarche v1 = ficheRepository.findByIdDmcOrderByNumeroVersionAsc(idDmc).get(0);
+        v1.setCadrage(v1.getCadrage().replace("ELECTRONIQUE", "PAPIER"));
+        ficheRepository.save(v1);
+        assertThat(piecesExigees.enLigne(d)).isFalse();
+    }
+
     private Long ficheElectroniqueValidee() throws Exception {
         String corps = mvc.perform(post("/api/dmcs/par-marche/9901").header("Authorization", tokenPrmp))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();

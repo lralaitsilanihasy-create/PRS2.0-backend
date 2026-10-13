@@ -98,6 +98,11 @@ public class JournalDossierService {
     public static final String FICHE_REVISEE = "FICHE_REVISEE";
     /** ⚠️ R6b (manuel révisé, lot 2, §B1 règle 5 ; V107) — le plan est réputé approuvé (art. 26-IV), posé par le planificateur. */
     public static final String PLAN_REPUTE_APPROUVE = "PLAN_REPUTE_APPROUVE";
+    /**
+     * ⚠️ R8 (manuel révisé, lot 2, §B3 ; V110) — l'Administrateur a migré le mode de remise de la fiche (PAPIER ↔ ELECTRONIQUE), motif à
+     * l'appui : sur le dossier du plan et sur le dossier soumis s'il existe.
+     */
+    public static final String FICHE_MODE_MIGRE = "FICHE_MODE_MIGRE";
 
     private final ActionDossierRepository repository;
     private final PrmpRepository prmpRepository;

@@ -196,6 +196,10 @@ public class PiecesExigees {
             return new Contexte(null, null, enLigne);
         }
         boolean ligne = enLigne;
-        return fiches.etatValide(idDmc).map(v -> new Contexte(v.categorie(), v.etat().getTypeMarche(), ligne)).orElse(new Contexte(null, null, ligne));
+        // ⚠️ R8 (manuel révisé, lot 2, §B3 ; V110 ; arbitrage Q1) — « en ligne » se lit au MODE de la fiche validée : remise
+        // électronique. En PAPIER, les listes de pièces restent entières et les contrôles automatiques sont sans objet. Sans fiche
+        // validée (dossier rattaché autrement), le rattachement vaut comme avant.
+        return fiches.etatValide(idDmc).map(v -> new Contexte(v.categorie(), v.etat().getTypeMarche(),
+                ligne && RemiseElectronique.electronique(v.etat().getCadrage()))).orElse(new Contexte(null, null, ligne));
     }
 }

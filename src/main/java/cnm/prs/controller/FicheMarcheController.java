@@ -335,6 +335,17 @@ public class FicheMarcheController {
     }
 
     /**
+     * ⚠️ R8 (manuel révisé, lot 2, §B3 ; V110) — la migration documentée du mode de remise ({@code { modeRemise, motif }}) : Administrateur
+     * seul ; ouvre une révision avec le nouveau mode, journalisée ; 400 {@code MODE_INVALIDE}, {@code MOTIF_OBLIGATOIRE} ; 409
+     * {@code MODE_NON_FIGE}, {@code MODE_IDENTIQUE}, {@code MODE_IRREVERSIBLE}, {@code DOSSIER_EN_EXAMEN}.
+     */
+    @PreAuthorize("hasRole('ADMINISTRATEUR')")
+    @PostMapping("/{idDmc}/migrer-mode")
+    public FicheMarcheDto migrerMode(@PathVariable Long idDmc, @RequestBody(required = false) cnm.prs.dto.MigrationModeRequest corps) {
+        return service.migrerMode(idDmc, corps);
+    }
+
+    /**
      * Produit le dossier {@code DMC} / {@code DAO} soumis à la CNM depuis la fiche validée (PRMP seule) : 201 et le
      * {@code DossierDto} créé, en brouillon ; 409 {@code FICHE_NON_VALIDEE}, {@code DOSSIER_EXISTANT} (avec
      * {@code idDossier}), {@code DMC_NON_DAO}.
