@@ -75,6 +75,21 @@ public class DocumentsFicheMarcheService {
     static final String PREFIXE_FICHIER_LETTRE = "LETTRE";
     /** ⚠️ 2026-10-01 — les publications : imprimées à la demande, listées à part, jamais pièces du DAO, uniques non. */
     public static final Set<String> TYPES_PUBLICATION = Set.of(TYPE_AVIS, TYPE_LETTRE);
+
+    /**
+     * ⚠️ R3b (manuel révisé pour l'application, lot 1, §B3 ; 2026-10-13) — le <strong>projet</strong> d'avis spécifique
+     * ({@code AVIS_PROJET}, fournitures et travaux) ou de lettre d'invitation ({@code LETTRE_PROJET}, prestations intellectuelles),
+     * produit à la validation de chaque version (sans publication ni destinataire : pointillés ; « PROJET » en filigrane) et joint
+     * d'office au dossier DMC sous les pièces {@code AVIS_SPECIFIQUE} / {@code LETTRE_INVITATION}. Ni une publication (la ligne ne
+     * passe pas « Lancé »), ni un document du DAO (hors de la liste de la version et du DAO complet).
+     */
+    public static final String TYPE_AVIS_PROJET = "AVIS_PROJET";
+    public static final String TYPE_LETTRE_PROJET = "LETTRE_PROJET";
+    public static final Set<String> TYPES_PROJET = Set.of(TYPE_AVIS_PROJET, TYPE_LETTRE_PROJET);
+    static final String FILIGRANE_PROJET = "PROJET";
+    /** Les codes des types de pièce qui reçoivent le projet. */
+    static final String CODE_PIECE_AVIS = "AVIS_SPECIFIQUE";
+    static final String CODE_PIECE_LETTRE = "LETTRE_INVITATION";
     /**
      * ⚠️ 2026-10-01 — le bloc de signature de l'avis et de la lettre : leurs trois derniers paragraphes (lieu et date ou
      * formule de politesse, qualité, nom).
@@ -397,6 +412,67 @@ public class DocumentsFicheMarcheService {
         return parRang;
     }
 
+    // ------------------------------------------------------------------ projets de publication (⚠️ R3b, 2026-10-13)
+
+    /**
+     * ⚠️ R3b (manuel révisé, lot 1, §B3) — le projet de publication d'une version : l'avis spécifique (fournitures, travaux) ou la
+     * lettre d'invitation (prestations intellectuelles), rendu sur l'état de la version sans information de publication ni
+     * destinataire (pointillés), le pied d'équivalence SIGMP, « PROJET » en filigrane, sans horodatage d'impression (un par version).
+     * Vide si la catégorie n'a pas de modèle. 500 nommé ({@link GenerationDocumentsException}) si le rendu échoue.
+     */
+    public List<Produit> produireProjet(FicheMarcheDto etat, LocalDateTime validation) {
+        boolean lettre = ModelesDao.sigleLettre(etat.getCategorie()) != null;
+        String sigle = lettre ? ModelesDao.sigleLettre(etat.getCategorie()) : ModelesDao.sigleAvis(etat.getCategorie());
+        FichierCommande.Modele modele = sigle == null ? null : modelesDao.modele(sigle);
+        if (modele == null) {
+            return List.of();
+        }
+        String type = lettre ? TYPE_LETTRE_PROJET : TYPE_AVIS_PROJET;
+        Map<String, ChampFicheMarche> parCode = new LinkedHashMap<>();
+        champRepository.findByActifTrueOrderByCodeRubriqueAscRangAsc().forEach(c -> parCode.put(c.getCode(), c));
+        List<GenerateurDocumentsFiche.Fichier> fichiers;
+        try {
+            fichiers = generateur.generer(FormulairesCandidat.rendreModele(lettre ? TYPE_LETTRE : TYPE_AVIS, null, etat, parCode, modele,
+                    validation, parametresDocuments()).finGardeeEnsemble(BLOC_SIGNATURE_AVIS).avecPiedDePage(parametres.piedSigmp())
+                    .avecFiligrane(FILIGRANE_PROJET));
+        } catch (RuntimeException e) {
+            throw new GenerationDocumentsException("La génération du projet " + (lettre ? "de lettre d'invitation" : "d'avis spécifique")
+                    + " a échoué : " + e.getMessage(), e);
+        }
+        List<Produit> produits = new ArrayList<>();
+        for (GenerateurDocumentsFiche.Fichier fi : fichiers) {
+            produits.add(new Produit(type, fi.extension(), nomFichier(type, etat.getRefeDossier(), etat.getIdDetail(), null, etat.getVersion(),
+                    fi.extension()), fi.contenu(), null));
+        }
+        return produits;
+    }
+
+    /** Le projet, ou rien (journal applicatif) : son échec ne bloque ni la validation de la fiche ni la création du dossier. */
+    public List<Produit> projetOuRien(FicheMarcheDto etat, LocalDateTime validation) {
+        try {
+            return produireProjet(etat, validation);
+        } catch (RuntimeException e) {
+            log.warn("[FICHE_MARCHE] projet de publication de la version {} du DMC {} non produit : {}", etat.getVersion(), etat.getIdDmc(),
+                    e.getMessage());
+            return List.of();
+        }
+    }
+
+    /**
+     * Une version validée avant R3b n'a pas de projet : il est produit et enregistré au premier besoin (création ou rattachement du
+     * dossier), pour être joint d'office avec les autres documents.
+     */
+    public void assurerProjet(FicheMarche validee, FicheMarcheDto etat) {
+        if (validee == null || etat == null || !StatutFicheMarche.VALIDEE.name().equals(validee.getStatut())) {
+            return;
+        }
+        boolean present = documentRepository.findByIdFicheOrderByIdDocumentAsc(validee.getIdFiche()).stream()
+                .anyMatch(d -> TYPES_PROJET.contains(d.getType()));
+        if (!present) {
+            enregistrer(validee.getIdFiche(), projetOuRien(etat, validee.getDateValidation()), LocalDateTime.now());
+        }
+    }
+
     /**
      * ⚠️ Avis spécifique (et ⚠️ 2026-10-01 lettre d'invitation) — rattache une publication à la version validée qu'elle
      * rend, avec la trace de ce qui a été saisi à l'impression.
@@ -481,6 +557,7 @@ public class DocumentsFicheMarcheService {
         return tous.stream()
                 .filter(d -> !complet || DaoCompletService.TYPE.equals(d.getType()) || "xlsx".equals(d.getExtension()))
                 .filter(d -> !TYPES_PUBLICATION.contains(d.getType()))   // ⚠️ 2026-09-30 — avis et lettres se listent à part (listerAvis)
+                .filter(d -> !TYPES_PROJET.contains(d.getType()))   // ⚠️ R3b — le projet n'est pas un document du DAO (route …/projet)
                 // ⚠️ 2026-10-06 (recette, C6) — le DAO complet en tête, avant les classeurs ; l'ordre est stable pour le reste.
                 .sorted(java.util.Comparator.comparing((DocumentFicheMarche d) -> !DaoCompletService.TYPE.equals(d.getType())))
                 .map(d -> new DocumentFicheDto(d.getIdDocument(), d.getType(),
@@ -519,27 +596,45 @@ public class DocumentsFicheMarcheService {
         if (validee == null) {
             return 0;
         }
-        List<DocumentFicheMarche> pdfs = documentRepository.findByIdFicheOrderByIdDocumentAsc(validee.getIdFiche()).stream()
+        List<DocumentFicheMarche> tousPdf = documentRepository.findByIdFicheOrderByIdDocumentAsc(validee.getIdFiche()).stream()
                 .filter(d -> "pdf".equals(d.getExtension()))
                 .filter(d -> !TYPES_PUBLICATION.contains(d.getType()))   // ⚠️ 2026-09-30 — ni l'avis ni les lettres ne sont des pièces du DAO
                 .toList();
+        // ⚠️ R3b (manuel révisé, lot 1, §B3) — le projet d'avis (ou de lettre) est joint sous son propre type de pièce, à côté du DAO.
+        List<DocumentFicheMarche> projets = tousPdf.stream().filter(d -> TYPES_PROJET.contains(d.getType())).toList();
+        List<DocumentFicheMarche> pdfs = tousPdf.stream().filter(d -> !TYPES_PROJET.contains(d.getType())).toList();
         // ⚠️ 2026-10-06 (DAO complet) — quand il existe, son PDF seul est joint au dossier, à la place des documents séparés.
         if (pdfs.stream().anyMatch(d -> DaoCompletService.TYPE.equals(d.getType()))) {
             pdfs = pdfs.stream().filter(d -> DaoCompletService.TYPE.equals(d.getType())).toList();
         }
-        if (pdfs.isEmpty()) {
+        Map<Integer, Integer> typeParDocument = new LinkedHashMap<>();
+        if (!pdfs.isEmpty()) {
+            TypePieceJointe type = typePieceRepository.findFirstByCode(CODE_TYPE_PIECE).orElse(null);
+            if (type == null) {
+                log.warn("[FICHE_MARCHE] aucun type de pièce de code {} : documents non joints au dossier {}",
+                        CODE_TYPE_PIECE, idDossier);
+            } else {
+                pdfs.forEach(d -> typeParDocument.put(d.getIdDocument(), type.getIdTypePiece()));
+            }
+        }
+        for (DocumentFicheMarche d : projets) {
+            String code = TYPE_AVIS_PROJET.equals(d.getType()) ? CODE_PIECE_AVIS : CODE_PIECE_LETTRE;
+            TypePieceJointe type = typePieceRepository.findFirstByCode(code).orElse(null);
+            if (type == null) {
+                log.warn("[FICHE_MARCHE] aucun type de pièce de code {} : projet {} non joint au dossier {}", code, d.getNomFichier(), idDossier);
+            } else {
+                typeParDocument.put(d.getIdDocument(), type.getIdTypePiece());
+            }
+        }
+        if (typeParDocument.isEmpty()) {
             return 0;   // version validée avant le lot 2 : aucun document à joindre
         }
-        TypePieceJointe type = typePieceRepository.findFirstByCode(CODE_TYPE_PIECE).orElse(null);
-        if (type == null) {
-            log.warn("[FICHE_MARCHE] aucun type de pièce de code {} : documents non joints au dossier {}",
-                    CODE_TYPE_PIECE, idDossier);
-            return 0;
-        }
+        List<DocumentFicheMarche> aJoindre = java.util.stream.Stream.concat(pdfs.stream(), projets.stream())
+                .filter(d -> typeParDocument.containsKey(d.getIdDocument())).toList();
         List<PieceJointeDossier> actuelles = pieceRepository.findByIdDossierAndIdDocumentFicheIsNotNull(idDossier);
         Set<Integer> dejaJoints = new java.util.HashSet<>();
         actuelles.forEach(p -> dejaJoints.add(p.getIdDocumentFiche()));
-        if (pdfs.stream().allMatch(d -> dejaJoints.contains(d.getIdDocument()))) {
+        if (aJoindre.stream().allMatch(d -> dejaJoints.contains(d.getIdDocument()))) {
             return 0;
         }
         String statut = dossier.getStatut();
@@ -560,13 +655,13 @@ public class DocumentsFicheMarcheService {
                 .map(cnm.prs.entity.LettreRenvoi::getIdLettre).orElse(null);
         LocalDateTime maintenant = LocalDateTime.now();
         int jointes = 0;
-        for (DocumentFicheMarche d : pdfs) {
+        for (DocumentFicheMarche d : aJoindre) {
             if (dejaJoints.contains(d.getIdDocument())) {
                 continue;
             }
             PieceJointeDossier p = new PieceJointeDossier();
             p.setIdDossier(idDossier);
-            p.setIdTypePiece(type.getIdTypePiece());
+            p.setIdTypePiece(typeParDocument.get(d.getIdDocument()));
             p.setNomFichier(d.getNomFichier());
             p.setContenu(d.getContenu());
             p.setFormat("PDF");

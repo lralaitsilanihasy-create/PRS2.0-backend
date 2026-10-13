@@ -208,7 +208,9 @@ class RectificationDossierDaoIntegrationTest extends CnmIntegrationTestSupport {
         List<Map<String, Object>> v1 = pieces.stream().filter(p -> String.valueOf(p.get("nomFichier")).contains("_v1.")).toList();
         String docs = mvc.perform(get("/api/fiches-marche/" + idDmc + "/documents").param("version", "2")
                 .header("Authorization", tokenPrmp)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        int pdfV2 = JsonPath.<List<Object>>read(docs, "$[?(@.extension=='pdf')]").size();
+        // ⚠️ R3b (manuel révisé, §B3) — le projet d'avis de la v2 est joint lui aussi, hors de la liste des documents.
+        int pdfV2 = JsonPath.<List<Object>>read(docs, "$[?(@.extension=='pdf')]").size()
+                + (int) v2.stream().filter(p -> String.valueOf(p.get("nomFichier")).startsWith("AVIS_PROJET_")).count();
         assertThat(v1).as("les pièces de la version examinée sont conservées").hasSize(avant);
         assertThat(v2).as("chaque PDF de la v2 est joint").hasSize(pdfV2);
         assertThat(v2).allSatisfy(p -> assertThat(p).containsEntry("versionCorrigee", true));

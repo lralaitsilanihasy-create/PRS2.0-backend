@@ -78,6 +78,12 @@ public class LettreInvitationService {
         return avis.evaluer(idDmc, fiches.lire(idDmc), true);
     }
 
+    /** ⚠️ R3b (manuel révisé, lot 1, §B3) — le projet de lettre d'invitation dès la fiche validée, sans liste restreinte ni « Lancé ». */
+    @Transactional(readOnly = true)
+    public AvisSpecifiqueService.Telechargement projet(Long idDmc, String format) {
+        return avis.projet(idDmc, format, true);
+    }
+
     /**
      * §B3 — imprime une lettre par candidat : 400 nominatif ; 409 {@code LETTRE_INDISPONIBLE} (raison dans
      * {@code details.raison}) ; sinon les documents produits, candidat par candidat (.docx puis .pdf).

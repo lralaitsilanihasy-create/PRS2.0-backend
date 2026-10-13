@@ -3,6 +3,8 @@ package cnm.prs;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -173,7 +175,8 @@ class LettreInvitationIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(JsonPath.<List<String>>read(documents(), "$[?(@.type=='LETTRE_INVITATION')].nomFichier")).hasSize(4);
         String pieces = mvc.perform(get("/api/piece-jointe-dossiers").param("dossier", String.valueOf(idDossier))
                 .header("Authorization", tokenPrmp)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertThat(JsonPath.<List<String>>read(pieces, "$[*].nomFichier")).noneMatch(n -> n.startsWith("LETTRE_"));
+        assertThat(JsonPath.<List<String>>read(pieces, "$[*].nomFichier"))
+                .noneMatch(n -> n.startsWith("LETTRE_") && !n.startsWith("LETTRE_PROJET_"));   // ⚠️ R3b : le projet, lui, est joint
     }
 
     @Test
@@ -192,6 +195,45 @@ class LettreInvitationIntegrationTest extends CnmIntegrationTestSupport {
                 "Ligne 9901 : 2 lettre(s) d'invitation imprimée(s) (envoi du 05/10/2026), statut PREVU → LANCE");
         imprimer(idDmc, CORPS).andExpect(status().isCreated());
         assertThat(lancements()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("⚠️ R3b (manuel révisé, §B3) — le projet de lettre dès la fiche : rendu à la volée sans liste restreinte (destinataire et "
+            + "candidats en pointillés, PROJET en filigrane), sans « Lancé » ; produit à la validation et joint d'office au dossier sous "
+            + "LETTRE_INVITATION, absent de la liste des documents ; fournitures → CATEGORIE_SANS_LETTRE")
+    void projetDesLaFiche() throws Exception {
+        mvc.perform(get("/api/fiches-marche/" + idDmc + "/lettres-invitation/projet").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andExpect(content().contentType(MediaType.APPLICATION_PDF))
+                .andExpect(header().string("Content-Disposition", org.hamcrest.Matchers.containsString("LETTRE_PROJET_")));
+        byte[] docx = mvc.perform(get("/api/fiches-marche/" + idDmc + "/lettres-invitation/projet").param("format", "docx")
+                .header("Authorization", tokenPrmp)).andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        try (XWPFDocument doc = new XWPFDocument(new ByteArrayInputStream(docx)); XWPFWordExtractor ex = new XWPFWordExtractor(doc)) {
+            assertThat(doc.getHeaderList().get(0)._getHdrFtr().xmlText()).contains("PROJET");
+            String texte = ex.getText().replace(' ', ' ').replace(' ', ' ');
+            assertThat(texte).contains("LETTRE D’INVITATION", "Étude de faisabilité du schéma directeur", "………")
+                    .doesNotContain("Cabinet A", "{{");
+        }
+        mvc.perform(get("/api/marches/9901").header("Authorization", tokenPrmp)).andExpect(jsonPath("$.statut").value("PREVU"));
+        assertThat(lancements()).isEmpty();
+
+        // Le type de pièce de code LETTRE_INVITATION : celui du référentiel (V95) s'il existe, sinon semé (lu par findFirstByCode).
+        cnm.prs.entity.TypePieceJointe tl = typePieceJointeRepository.findFirstByCode("LETTRE_INVITATION").orElseGet(() -> {
+            cnm.prs.entity.TypePieceJointe t = typePieceJointeRepository.findById(
+                    seedTypePiece("Projet de lettre d'invitation (imprimé du SIGMP)", false, "DMC", 2)).orElseThrow();
+            t.setCode("LETTRE_INVITATION");
+            return typePieceJointeRepository.save(t);
+        });
+        int idDossier = creerDossier();
+        String pieces = mvc.perform(get("/api/piece-jointe-dossiers").param("dossier", String.valueOf(idDossier))
+                .header("Authorization", tokenPrmp)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(pieces, "$[?(@.idTypePiece==" + tl.getIdTypePiece() + ")].nomFichier"))
+                .hasSize(1).allMatch(n -> n.startsWith("LETTRE_PROJET_") && n.endsWith("_v1.pdf"));
+        assertThat(JsonPath.<List<String>>read(documents(), "$[*].type")).doesNotContain("LETTRE_PROJET");
+
+        Long f = creerDmc(9902);
+        mvc.perform(get("/api/fiches-marche/" + f + "/lettres-invitation/projet").header("Authorization", tokenPrmp))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("LETTRE_INDISPONIBLE"))
+                .andExpect(jsonPath("$.details.raison").value("CATEGORIE_SANS_LETTRE"));
     }
 
     // ------------------------------------------------------------------ outils

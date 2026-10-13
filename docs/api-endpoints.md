@@ -7977,6 +7977,41 @@ Lecture par tout authentifié (le front porte le même pied sur l'AGPM dérivé,
 - Les points de grille « imprimé du SIGMP » (P12, P17) restent tels quels : leur retrait au terme de la transition n'est pas demandé
   dans ce lot.
 
+
+### Le manuel révisé pour l'application, lot 1, tranche R3b : le projet d'avis et de lettre dès la fiche — V103 ⚠️ 2026-10-13
+
+Demande front `demande-backend-2026-10-10-manuel-revise-lot1.md` (§B3, « projet dès la fiche »). Le manuel exige le *projet* d'avis
+au dépôt du DAO (2-II-A pièce 5) et le projet de lettre au dépôt du DC (2-II-F pièce 7) ; l'avis et les lettres ne s'impriment,
+eux, qu'après le PV favorable. Arbitrages au backend du 13/10 : le projet est **stocké à la validation** de chaque version et
+**joint d'office** au dossier ; une route le rend **à la volée** ; « PROJET » en filigrane. Migration **V103** (types de document
+`AVIS_PROJET`, `LETTRE_PROJET`), pom inchangé.
+
+#### `GET /api/fiches-marche/{idDmc}/avis-specifique/projet[?format=docx]` · `GET …/lettres-invitation/projet[?format=docx]`
+
+PRMP et UGPM au périmètre de la fiche (403 sinon). Rend, sur la **dernière version validée**, le projet d'avis spécifique
+(fournitures, travaux) ou de lettre d'invitation (prestations intellectuelles) : `application/pdf` par défaut, `.docx` avec
+`?format=docx`, `Content-Disposition: attachment; filename="AVIS_PROJET_<plan>_<ligne>_v<n>.pdf"` (`LETTRE_PROJET_…`).
+- Rendu depuis le gabarit de l'avis ou de la lettre (`AVIS-F`, `AVIS-T`, `LETTRE-PI`), **sans** information de publication ni
+  destinataire : `{{AVIS.*}}` et `{{LETTRE.*}}` en pointillés ; le pied de page porte l'équivalence SIGMP (R3a) ; **« PROJET » en
+  filigrane** sur chaque page (diagonale grise en PDF, filigrane Word en .docx).
+- **Rien n'est écrit** : ni document, ni journal ; la ligne du plan ne passe **pas** « Lancé » (seule l'impression de l'avis ou
+  des lettres le fait).
+- **409** `AVIS_INDISPONIBLE` / `LETTRE_INDISPONIBLE`, `details.raison` : `CATEGORIE_SANS_AVIS` (prestations intellectuelles),
+  `CATEGORIE_SANS_LETTRE` (fournitures, travaux), `FICHE_NON_VALIDEE` (aucune version validée). Ni dossier ni PV ne sont exigés.
+
+#### Produit à la validation, joint d'office au dossier
+
+- À chaque **validation** d'une version, le projet (`.docx` + `.pdf`, type `AVIS_PROJET` ou `LETTRE_PROJET`, un par version) est
+  produit avec les documents du DAO. Son échec ne bloque pas la validation (journal applicatif).
+- À la **création du dossier** depuis la fiche et à chaque **nouvelle version** (comme le DAO complet), son PDF est joint au dossier
+  sous le type de pièce de code **`AVIS_SPECIFIQUE`** (ou **`LETTRE_INVITATION`**), à côté des pièces `DAO_COMPLET` : pièce produite
+  par la fiche (`idDocumentFiche`, 409 `PIECE_PRODUITE_PAR_FICHE` à la suppression ou au remplacement manuel), remplacée tant que
+  le dossier est en constitution, jointe en version corrigée pendant une rectification, conservée sous les yeux de la Commission.
+  Sans type de pièce de ce code au référentiel, le projet n'est pas joint (journal applicatif).
+- Une version validée **avant R3b** reçoit son projet au premier besoin (création ou rattachement du dossier).
+- Le projet n'est **pas** un document du DAO : absent de `GET /{idDmc}/documents` (comme l'avis), absent du DAO complet, jamais
+  lu à l'import. Il se lit par la pièce du dossier, ou par la route ci-dessus.
+
 ### Le rabais structuré de l'offre en ligne ⚠️ 2026-10-07
 
 Demande front `demande-backend-2026-10-07-rabais-structure.md` (arbitrage Q4 du pilote : « le rabais est structuré au dépôt »). Aucune

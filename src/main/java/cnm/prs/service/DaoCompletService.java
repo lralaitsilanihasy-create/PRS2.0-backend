@@ -118,7 +118,9 @@ public class DaoCompletService {
         boolean travaux = CategorieDao.TRAVAUX.name().equals(categorie);
         boolean cc = contratCadre(etat);
         List<DocumentFicheMarche> word = docs.stream().filter(d -> "docx".equals(d.getExtension()))
-                .filter(d -> !DocumentsFicheMarcheService.TYPES_PUBLICATION.contains(d.getType()) && !TYPE.equals(d.getType())).toList();
+                .filter(d -> !DocumentsFicheMarcheService.TYPES_PUBLICATION.contains(d.getType()) && !TYPE.equals(d.getType()))
+                .filter(d -> !DocumentsFicheMarcheService.TYPES_PROJET.contains(d.getType()))   // ⚠️ R3b — le projet d'avis n'entre pas au DAO
+                .toList();
         Plan p = new Plan();
 
         // Première partie

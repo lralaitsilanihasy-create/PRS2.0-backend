@@ -1193,6 +1193,14 @@ de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM 
 > reste accepté en pièce facultative des procédures en ligne ; dès la date de fin de transition réglée par l'Administrateur, il n'est plus
 > demandé. Les dossiers saisis hors de l'application continuent d'exiger l'imprimé.
 >
+> ⚠️ **2026-10-13 — le projet d'avis et de lettre dès la fiche (manuel révisé, lot 1, tranche R3b, V103).** Le manuel exige le projet
+> d'avis spécifique au dépôt du dossier d'appel d'offres et le projet de lettre d'invitation au dépôt du dossier de consultation, alors
+> que l'avis et les lettres ne s'impriment qu'après le PV favorable. À chaque validation de la fiche, l'application produit donc le
+> projet (avis pour les fournitures et les travaux, lettre pour les prestations intellectuelles), rendu sans information de
+> publication ni destinataire, « PROJET » en filigrane, et le joint d'office au dossier comme pièce « projet d'avis spécifique » ou
+> « projet de lettre d'invitation », remplacée à chaque nouvelle version. La PRMP peut aussi le consulter à tout moment depuis la
+> fiche validée. Un projet n'est pas une publication : il ne lance pas la ligne du plan et ne s'inscrit pas au journal.
+>
 > ⚠️ **2026-10-08 — les grilles de contrôle par sous-type (tranche M3, V96).** Chaque sous-type a la grille du manuel : les points
 > communs de sa famille, puis ceux de la grille dont il dérive (un appel d'offres restreint reprend la grille de l'appel d'offres
 > ouvert et y ajoute ses cinq points ; un marché sur appel d'offres restreint, celle du marché sur appel d'offres ouvert), puis les

@@ -1008,10 +1008,13 @@ public class FicheMarcheService {
         // ⚠️ Lot 2a (2026-09-23, §B1) — les documents de la version sont produits AVANT qu'elle ne soit figée : un échec
         // (GenerationDocumentsException, 500 nommé) laisse la fiche en brouillon et annule la transaction.
         LocalDateTime maintenant = LocalDateTime.now();
-        List<DocumentsFicheMarcheService.Produit> produits = documents.produire(etat,
+        List<DocumentsFicheMarcheService.Produit> produits = new java.util.ArrayList<>(documents.produire(etat,
                 besoinApplicable(ctx) ? besoin.articles(fiche.getIdFiche()) : List.of(), maintenant,
                 // ⚠️ V60 (§B2) — les jetons {{MOYENS.materiel}} et {{MOYENS.personnel}} ; ⚠️ V61 — {{PIECES.*}}
-                jetonsDesListes(fiche.getIdFiche()));
+                jetonsDesListes(fiche.getIdFiche())));
+        // ⚠️ R3b (manuel révisé, lot 1, §B3) — le projet d'avis spécifique (ou de lettre d'invitation) de la version, joint d'office au
+        // dossier ; son échec ne bloque pas la validation.
+        produits.addAll(documents.projetOuRien(etat, maintenant));
         fiche.setStatut(StatutFicheMarche.VALIDEE.name());
         fiche.setDateValidation(maintenant);
         fiche.setValidePar(CurrentUser.ref().orElse(null));

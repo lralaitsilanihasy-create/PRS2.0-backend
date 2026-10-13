@@ -113,6 +113,25 @@ public class FicheMarcheController {
         return ResponseEntity.status(HttpStatus.CREATED).body(avis.produire(idDmc, corps));
     }
 
+    /**
+     * ⚠️ R3b (manuel révisé, lot 1, §B3) — le projet d'avis spécifique dès la fiche validée, rendu à la volée (pdf, ou
+     * {@code ?format=docx}) : « PROJET » en filigrane, sans publication ni « Lancé ». PRMP et UGPM ; 409 {@code AVIS_INDISPONIBLE}.
+     */
+    @GetMapping("/{idDmc}/avis-specifique/projet")
+    @PreAuthorize("hasAnyRole('PRMP', 'UGPM')")
+    public ResponseEntity<byte[]> projetAvis(@PathVariable Long idDmc, @RequestParam(required = false) String format) {
+        cnm.prs.service.AvisSpecifiqueService.Telechargement t = avis.projet(idDmc, format, false);
+        return Telechargements.fichier(t.nomFichier(), t.extension(), t.contenu());
+    }
+
+    /** ⚠️ R3b — le projet de lettre d'invitation (prestations intellectuelles), même forme ; 409 {@code LETTRE_INDISPONIBLE}. */
+    @GetMapping("/{idDmc}/lettres-invitation/projet")
+    @PreAuthorize("hasAnyRole('PRMP', 'UGPM')")
+    public ResponseEntity<byte[]> projetLettre(@PathVariable Long idDmc, @RequestParam(required = false) String format) {
+        cnm.prs.service.AvisSpecifiqueService.Telechargement t = lettres.projet(idDmc, format);
+        return Telechargements.fichier(t.nomFichier(), t.extension(), t.contenu());
+    }
+
     /** ⚠️ Avis spécifique (§B4) — l'avis peut-il être imprimé, et sinon pourquoi. PRMP et UGPM. */
     @GetMapping("/{idDmc}/avis-specifique/disponibilite")
     @PreAuthorize("hasAnyRole('PRMP', 'UGPM')")

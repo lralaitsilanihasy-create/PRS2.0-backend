@@ -99,6 +99,10 @@ public class GenerateurDocumentsFiche {
             XWPFRun r = pp.createRun();
             r.setFontSize(8);
             r.setText(m.piedDePage());
+            if (m.filigrane() != null) {
+                // ⚠️ R3b (manuel révisé, lot 1, §B3) — le projet d'avis ou de lettre : « PROJET » en filigrane sur chaque page.
+                new org.apache.poi.xwpf.model.XWPFHeaderFooterPolicy(doc).createWatermark(m.filigrane());
+            }
             doc.write(out);
             return out.toByteArray();
         } catch (IOException e) {
@@ -201,11 +205,15 @@ public class GenerateurDocumentsFiche {
         Document document = new Document(PageSize.A4, 50, 50, 50, 60);
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         try {
-            PdfWriter.getInstance(document, out);
+            PdfWriter writer = PdfWriter.getInstance(document, out);
             HeaderFooter footer = new HeaderFooter(new Phrase(m.piedDePage(), pied), false);
             footer.setAlignment(Element.ALIGN_CENTER);
             footer.setBorder(0);
             document.setFooter(footer);
+            if (m.filigrane() != null) {
+                // ⚠️ R3b (manuel révisé, lot 1, §B3) — le filigrane seul, sans la pagination du gabarit provisoire.
+                writer.setPageEvent(new FiligraneEtPagination(m.filigrane(), false));
+            }
             document.open();
             java.util.function.Function<DocumentLibre.Paragraphe, Paragraph> rendu = p -> {
                 Paragraph par = switch (p.style()) {
@@ -410,11 +418,18 @@ public class GenerateurDocumentsFiche {
      */
     private static final class FiligraneEtPagination extends com.lowagie.text.pdf.PdfPageEventHelper {
         private final String texte;
+        /** ⚠️ R3b — faux : le filigrane seul (projet d'avis ou de lettre), sans « Page n de N ». */
+        private final boolean pagination;
         private com.lowagie.text.pdf.PdfTemplate total;
         private com.lowagie.text.pdf.BaseFont police;
 
         FiligraneEtPagination(String texte) {
+            this(texte, true);
+        }
+
+        FiligraneEtPagination(String texte, boolean pagination) {
             this.texte = texte;
+            this.pagination = pagination;
         }
 
         @Override
@@ -442,6 +457,9 @@ public class GenerateurDocumentsFiche {
                     document.getPageSize().getHeight() / 2, 45);
             fond.endText();
             fond.restoreState();
+            if (!pagination) {
+                return;
+            }
 
             com.lowagie.text.pdf.PdfContentByte dessus = writer.getDirectContent();
             String debut = "Page " + writer.getPageNumber() + " de ";
@@ -457,6 +475,9 @@ public class GenerateurDocumentsFiche {
 
         @Override
         public void onCloseDocument(PdfWriter writer, Document document) {
+            if (!pagination) {
+                return;
+            }
             total.beginText();
             total.setFontAndSize(police, 8);
             total.setTextMatrix(0, 0);

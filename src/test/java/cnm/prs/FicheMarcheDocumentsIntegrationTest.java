@@ -243,10 +243,13 @@ class FicheMarcheDocumentsIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         int idDossier = JsonPath.read(dossier, "$.idDossier");
         String pieces = pieces(idDossier);
-        assertThat(JsonPath.<List<Integer>>read(pieces, "$[*].idTypePiece")).hasSize(2).containsOnly(typeDao);
+        assertThat(JsonPath.<List<Integer>>read(pieces, "$[?(@.idTypePiece==" + typeDao + ")].idTypePiece")).hasSize(2);
+        // ⚠️ R3b (manuel révisé, §B3) — le projet de lettre d'invitation de la version, joint sous son propre type de pièce.
+        assertThat(JsonPath.<List<String>>read(pieces, "$[?(@.idTypePiece!=" + typeDao + ")].nomFichier"))
+                .containsExactly("LETTRE_PROJET_DOS-9900_9901_v1.pdf");
         assertThat(JsonPath.<List<String>>read(pieces, "$[*].format")).containsOnly("PDF");
         assertThat(JsonPath.<List<String>>read(pieces, "$[*].nomFichier"))
-                .containsExactlyInAnyOrder("DPIC_DOS-9900_9901_v1.pdf", "AE_DOS-9900_9901_v1.pdf");
+                .containsExactlyInAnyOrder("DPIC_DOS-9900_9901_v1.pdf", "AE_DOS-9900_9901_v1.pdf", "LETTRE_PROJET_DOS-9900_9901_v1.pdf");
         assertThat(JsonPath.<List<Object>>read(pieces, "$[*].idDocumentFiche")).doesNotContainNull();
 
         int idPiece = JsonPath.<List<Integer>>read(pieces, "$[*].idPiece").get(0);
@@ -265,7 +268,7 @@ class FicheMarcheDocumentsIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(post("/api/fiches-marche/" + idDmc + "/reviser").header("Authorization", tokenPrmp)).andExpect(status().isOk());
         valider();
         assertThat(JsonPath.<List<String>>read(pieces(idDossier), "$[*].nomFichier"))
-                .containsExactlyInAnyOrder("DPIC_DOS-9900_9901_v2.pdf", "AE_DOS-9900_9901_v2.pdf");
+                .containsExactlyInAnyOrder("DPIC_DOS-9900_9901_v2.pdf", "AE_DOS-9900_9901_v2.pdf", "LETTRE_PROJET_DOS-9900_9901_v2.pdf");
 
         mvc.perform(delete("/api/dossiers/" + idDossier + "/fiche-marche").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk());
@@ -273,7 +276,7 @@ class FicheMarcheDocumentsIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(put("/api/dossiers/" + idDossier + "/fiche-marche").header("Authorization", tokenPrmp).contentType(JSON)
                 .content("{\"idDmc\":" + idDmc + "}"))
                 .andExpect(status().isOk());
-        assertThat(JsonPath.<List<Object>>read(pieces(idDossier), "$")).hasSize(2);
+        assertThat(JsonPath.<List<Object>>read(pieces(idDossier), "$")).hasSize(3);   // ⚠️ R3b : + le projet de lettre
     }
 
     // ------------------------------------------------------------------ 7. la Commission

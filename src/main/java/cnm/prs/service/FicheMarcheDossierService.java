@@ -106,6 +106,8 @@ public class FicheMarcheDossierService {
                 ficheMarcheService.etatValide(idDmc).map(v -> ModelesDao.sigleLettre(v.categorie()) != null).orElse(false));
         Dossier dossier = saisieService.creerDossierDao(sousType, enTete.idLocalite(), enTete.idEntiteContract(), idDmc);
         journal.tracer(dossier, JournalDossierService.DOSSIER_CREE_DEPUIS_FICHE, detail(fiche, idDmc));
+        // ⚠️ R3b (manuel révisé, lot 1, §B3) — une version validée avant R3b reçoit son projet d'avis (ou de lettre) au premier besoin.
+        ficheMarcheService.etatValide(idDmc).ifPresent(v -> documents.assurerProjet(fiche, v.etat()));
         documents.joindre(dossier.getIdDossier(), idDmc);   // lot 2a : sans geste humain
         preselection.joindre(dossier.getIdDossier(), idDmc);   // ⚠️ AMI-b (Q4) : le rapport de présélection signé
         return dossierService.findById(dossier.getIdDossier());
@@ -141,6 +143,7 @@ public class FicheMarcheDossierService {
         dossier.setIdDmc(idDmc);
         dossierRepository.saveAndFlush(dossier);
         journal.tracer(dossier, JournalDossierService.FICHE_MARCHE_RATTACHEE, detail(fiche, idDmc));
+        ficheMarcheService.etatValide(idDmc).ifPresent(v -> documents.assurerProjet(fiche, v.etat()));   // ⚠️ R3b
         documents.joindre(idDossier, idDmc);   // lot 2a
         preselection.joindre(idDossier, idDmc);   // ⚠️ AMI-b (Q4)
         return dossierService.findById(idDossier);

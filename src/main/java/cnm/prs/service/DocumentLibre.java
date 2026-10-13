@@ -14,8 +14,20 @@ import java.util.List;
  * @param lot        rang du lot d'un document établi par lot ({@code C1}, {@code C2}) ; {@code null} : une fois pour le dossier
  * @param elements   les éléments, dans l'ordre du document
  * @param piedDePage pied de page de la version (hors du texte que le comparateur de fidélité relit)
+ * @param filigrane  ⚠️ R3b (manuel révisé, lot 1, §B3 ; 2026-10-13) — texte en filigrane sur chaque page (« PROJET » du projet
+ *                   d'avis ou de lettre) ; {@code null} : aucun
  */
-public record DocumentLibre(String type, Integer lot, List<Element> elements, String piedDePage) {
+public record DocumentLibre(String type, Integer lot, List<Element> elements, String piedDePage, String filigrane) {
+
+    /** Un document sans filigrane (la forme d'avant R3b). */
+    public DocumentLibre(String type, Integer lot, List<Element> elements, String piedDePage) {
+        this(type, lot, elements, piedDePage, null);
+    }
+
+    /** ⚠️ R3b — le même document, {@code filigrane} sur chaque page. */
+    public DocumentLibre avecFiligrane(String filigrane) {
+        return new DocumentLibre(type, lot, elements, piedDePage, filigrane);
+    }
 
     /** Style d'un paragraphe, du format de commande. */
     public enum Style {
@@ -82,7 +94,7 @@ public record DocumentLibre(String type, Integer lot, List<Element> elements, St
             dernier = false;
             restants--;
         }
-        return new DocumentLibre(type, lot, List.copyOf(els), piedDePage);
+        return new DocumentLibre(type, lot, List.copyOf(els), piedDePage, filigrane);
     }
 
     /**
@@ -94,7 +106,7 @@ public record DocumentLibre(String type, Integer lot, List<Element> elements, St
             return this;
         }
         String pied = piedDePage == null || piedDePage.isBlank() ? mention.trim() : piedDePage + " — " + mention.trim();
-        return new DocumentLibre(type, lot, elements, pied);
+        return new DocumentLibre(type, lot, elements, pied, filigrane);
     }
 
     /** Le texte du document dans l'ordre, une ligne par paragraphe et par ligne de tableau (cellules jointes par une tabulation). */

@@ -169,6 +169,38 @@ public class AvisSpecifiqueService {
      * n'est pas écrasé. Journal {@code LIGNE_LANCEE} sur le plan à la première impression (ou quand une ligne passe
      * encore « Lancé ») ; une réimpression d'une ligne déjà lancée ne change rien et n'écrit rien.
      */
+    /** ⚠️ R3b — un fichier rendu à la volée : nom, extension ({@code pdf} ou {@code docx}), contenu. */
+    public record Telechargement(String nomFichier, String extension, byte[] contenu) {
+    }
+
+    /**
+     * ⚠️ R3b (manuel révisé pour l'application, lot 1, §B3 ; 2026-10-13) — le <strong>projet</strong> d'avis spécifique (ou de
+     * lettre d'invitation) rendu à la volée sur la dernière version validée, sans dossier ni PV : « PROJET » en filigrane,
+     * informations de publication et destinataire en pointillés, pied d'équivalence SIGMP. Rien n'est écrit, la ligne ne passe pas
+     * « Lancé ». PRMP et UGPM au périmètre de la fiche. 409 {@code AVIS_INDISPONIBLE} / {@code LETTRE_INDISPONIBLE}, raison
+     * {@code CATEGORIE_SANS_AVIS} / {@code CATEGORIE_SANS_LETTRE} ou {@code FICHE_NON_VALIDEE}.
+     *
+     * @param format {@code docx}, ou {@code pdf} (défaut)
+     */
+    @Transactional(readOnly = true)
+    public Telechargement projet(Long idDmc, String format, boolean lettre) {
+        exigerProfil();
+        FicheMarcheDto courante = fiches.lire(idDmc);
+        boolean sansModele = lettre ? ModelesDao.sigleLettre(courante.getCategorie()) == null
+                : ModelesDao.sigleAvis(courante.getCategorie()) == null;
+        if (sansModele) {
+            String raison = lettre ? CATEGORIE_SANS_LETTRE : CATEGORIE_SANS_AVIS;
+            throw new BusinessRuleException(message(raison, lettre), lettre ? LettreInvitationService.CODE_INDISPONIBLE : CODE_INDISPONIBLE,
+                    courante.getIdDossierSoumis(), Map.of("raison", raison));
+        }
+        FicheMarche validee = derniereValidee(idDmc, lettre);
+        FicheMarcheDto etat = fiches.lireVersion(idDmc, validee.getNumeroVersion());
+        String extension = "docx".equalsIgnoreCase(format == null ? "" : format.trim()) ? "docx" : "pdf";
+        return documents.produireProjet(etat, validee.getDateValidation()).stream().filter(p -> extension.equals(p.extension()))
+                .map(p -> new Telechargement(p.nomFichier(), p.extension(), p.contenu())).findFirst()
+                .orElseThrow(() -> new IllegalStateException("Le projet n'a pas été rendu en " + extension + "."));
+    }
+
     /** La ligne du DMC de la fiche ; {@code null} sans ligne. */
     cnm.prs.entity.Marche ligne(FicheMarcheDto etat) {
         return etat.getIdDetail() == null ? null : marcheRepository.findById(etat.getIdDetail()).orElse(null);

@@ -5,6 +5,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -186,7 +188,69 @@ class AvisSpecifiqueIntegrationTest extends CnmIntegrationTestSupport {
                 .content("{\"idDmc\":" + idDmc + "}")).andExpect(status().isOk());
         String pieces = mvc.perform(get("/api/piece-jointe-dossiers").param("dossier", String.valueOf(idDossier))
                 .header("Authorization", tokenPrmp)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertThat(JsonPath.<List<String>>read(pieces, "$[*].nomFichier")).isNotEmpty().noneMatch(n -> n.startsWith("AVIS_"));
+        assertThat(JsonPath.<List<String>>read(pieces, "$[*].nomFichier")).isNotEmpty()
+                .noneMatch(n -> n.startsWith("AVIS_") && !n.startsWith("AVIS_PROJET_"));   // ⚠️ R3b : le projet, lui, peut l'être
+    }
+
+    @Test
+    @DisplayName("⚠️ R3b (manuel révisé, §B3) — le projet d'avis dès la fiche : rendu à la volée (pdf, ?format=docx) sur la dernière "
+            + "version validée, PROJET en filigrane, publication en pointillés, pied d'équivalence, sans « Lancé » ; produit à la validation "
+            + "et joint d'office au dossier sous AVIS_SPECIFIQUE, remplacé à la version suivante, absent de la liste des documents ; "
+            + "PI → CATEGORIE_SANS_AVIS et, sans version validée, FICHE_NON_VALIDEE ; Membre → 403")
+    void projetDesLaFiche() throws Exception {
+        mvc.perform(get("/api/fiches-marche/" + idDmc + "/avis-specifique/projet").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andExpect(content().contentType(MediaType.APPLICATION_PDF))
+                .andExpect(header().string("Content-Disposition", org.hamcrest.Matchers.containsString("AVIS_PROJET_")));
+        byte[] docx = mvc.perform(get("/api/fiches-marche/" + idDmc + "/avis-specifique/projet").param("format", "docx")
+                .header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andExpect(header().string("Content-Disposition", org.hamcrest.Matchers.containsString("_v1.docx")))
+                .andReturn().getResponse().getContentAsByteArray();
+        try (XWPFDocument doc = new XWPFDocument(new ByteArrayInputStream(docx))) {
+            assertThat(doc.getHeaderList()).as("le filigrane PROJET (en-tête Word)").isNotEmpty();
+            assertThat(doc.getHeaderList().get(0)._getHdrFtr().xmlText()).contains("PROJET");
+            assertThat(doc.getFooterList().get(0).getText()).contains("Projet — équivalence SIGMP en attente");
+        }
+        String texte = texteDuDocx(docx).replace(' ', ' ').replace(' ', ' ');
+        assertThat(texte).contains("Fourniture de mobilier de bureau", "n°………").doesNotContain("{{");
+        // Un projet n'est pas une publication : la ligne reste PREVU, rien au journal.
+        mvc.perform(get("/api/marches/9901").header("Authorization", tokenPrmp)).andExpect(jsonPath("$.statut").value("PREVU"));
+        assertThat(lancements()).isEmpty();
+
+        // Produit à la validation, joint d'office au dossier sous le type AVIS_SPECIFIQUE ; pas dans la liste des documents de la version.
+        // Le type de pièce de code AVIS_SPECIFIQUE : celui du référentiel (V95) s'il existe, sinon semé (le code est lu par findFirstByCode).
+        TypePieceJointe ta = typePieceJointeRepository.findFirstByCode("AVIS_SPECIFIQUE").orElseGet(() -> {
+            TypePieceJointe t = typePieceJointeRepository.findById(seedTypePiece("Projet d'avis spécifique (imprimé du SIGMP)", false, "DMC", 2))
+                    .orElseThrow();
+            t.setCode("AVIS_SPECIFIQUE");
+            return typePieceJointeRepository.save(t);
+        });
+        int idDossier = creerDossier();
+        assertThat(projetsJoints(idDossier, ta.getIdTypePiece())).hasSize(1)
+                .allMatch(n -> n.startsWith("AVIS_PROJET_") && n.endsWith("_v1.pdf"));
+        String liste = mvc.perform(get("/api/fiches-marche/" + idDmc + "/documents").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(liste, "$[*].type")).doesNotContain("AVIS_PROJET").contains("DPAO");
+        // La version suivante remplace le projet (dossier brouillon).
+        mvc.perform(post("/api/fiches-marche/" + idDmc + "/reviser").header("Authorization", tokenPrmp)).andExpect(status().isOk());
+        valider();
+        assertThat(projetsJoints(idDossier, ta.getIdTypePiece())).hasSize(1).allMatch(n -> n.endsWith("_v2.pdf"));
+
+        Long pi = creerDmc(9902);
+        mvc.perform(get("/api/fiches-marche/" + pi + "/avis-specifique/projet").header("Authorization", tokenPrmp))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("AVIS_INDISPONIBLE"))
+                .andExpect(jsonPath("$.details.raison").value("CATEGORIE_SANS_AVIS"));
+        mvc.perform(get("/api/fiches-marche/" + pi + "/lettres-invitation/projet").header("Authorization", tokenPrmp))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("LETTRE_INDISPONIBLE"))
+                .andExpect(jsonPath("$.details.raison").value("FICHE_NON_VALIDEE"));
+        mvc.perform(get("/api/fiches-marche/" + idDmc + "/avis-specifique/projet").header("Authorization", tokenMembre))
+                .andExpect(status().isForbidden());
+    }
+
+    /** Les noms des pièces du dossier jointes sous ce type de pièce. */
+    private List<String> projetsJoints(int idDossier, Integer idTypePiece) throws Exception {
+        String pieces = mvc.perform(get("/api/piece-jointe-dossiers").param("dossier", String.valueOf(idDossier))
+                .header("Authorization", tokenPrmp)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        return JsonPath.read(pieces, "$[?(@.idTypePiece==" + idTypePiece + ")].nomFichier");
     }
 
     @Test
