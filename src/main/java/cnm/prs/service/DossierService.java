@@ -129,6 +129,8 @@ public class DossierService {
     private final PiecesExigees piecesExigees;
     /** ⚠️ M5a (manuel de contrôle) — garde des actes de gestion à la soumission. */
     private final org.springframework.beans.factory.ObjectProvider<ActesGestionService> actesGestion;
+    /** ⚠️ R4 (manuel révisé, lot 1, §B5 ; V104) — les écrans figés à la soumission et à chaque resoumission. */
+    private final org.springframework.beans.factory.ObjectProvider<InstantaneService> instantanes;
     /** ⚠️ M3 (manuel de contrôle) — la grille du dossier. */
     private final org.springframework.beans.factory.ObjectProvider<GrilleControle> grilleControle;
     /** ⚠️ 2026-08-05 — figeage du diff et bascule du prédécesseur, à la soumission d'une mise à jour. */
@@ -184,7 +186,9 @@ public class DossierService {
             FicheJustificationsService ficheJustifications, RattachementService rattachementService,
             ReceptionRepository receptionRepository, PreControlePpmService preControle,
             FicheMarcheService ficheMarcheService,
-            org.springframework.beans.factory.ObjectProvider<ActesGestionService> actesGestion) {
+            org.springframework.beans.factory.ObjectProvider<ActesGestionService> actesGestion,
+            org.springframework.beans.factory.ObjectProvider<InstantaneService> instantanes) {
+        this.instantanes = instantanes;
         this.actesGestion = actesGestion;
         this.ficheMarcheService = ficheMarcheService;
         this.preControle = preControle;
@@ -976,6 +980,8 @@ public class DossierService {
 
         notifierSoumission(dossier, localite);
         journalDossier.tracer(dossier, JournalDossierService.SOUMISSION, "BROUILLON -> SOUMIS");
+        // ⚠️ R4 (manuel révisé, lot 1, §B5) — ce que le contrôleur verra : les écrans figés à cet instant (soumission n° 1).
+        instantanes.getObject().figer(dossier);
         return dto(dossier);
     }
 
@@ -1100,6 +1106,7 @@ public class DossierService {
         notifierRectification(dossier, derniere, idPrmp, motifRectification);
         tracerRectification(dossier, idPrmp, motifRectification);
         journalDossier.tracer(dossier, JournalDossierService.RESOUMISSION, motifRectification);
+        instantanes.getObject().figer(dossier);   // ⚠️ R4 — resoumission : soumission n° suivant
         return dto(dossier);
     }
 

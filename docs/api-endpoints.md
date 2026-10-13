@@ -8075,6 +8075,44 @@ compléter), ou **sans objet** pour cette fiche (lot unique, garantie non requis
 - Une fiche de fournitures ou de travaux en appel d'offres **ouvert** garde `CATEGORIE_SANS_LETTRE`. Les gabarits des champs
   (`GET …/gabarits`) ne servent pas LETTRE-AOR.
 
+
+### Le manuel révisé pour l'application, lot 1, tranche R4 : l'instantané à la soumission et l'accès des profils CNM — V104 ⚠️ 2026-10-13
+
+Demande front `demande-backend-2026-10-10-manuel-revise-lot1.md` (§B5). Toute pièce retirée (R2) n'a de sens que si le contrôleur
+lit, figées, les données qui la remplacent. Réponse QB1 du 10/10 : **un JSON par écran**. Migration **V104** (`t_dossier_instantane`,
+immuable par trigger comme les versions archivées, supprimée avec le dossier), pom inchangé.
+
+#### Le figement
+
+À la **soumission** d'un dossier (`POST /api/dossiers/{id}/soumettre`, n° 1) et à chaque **resoumission** (`…/resoumettre`, n° suivant),
+dans la même transaction, le serveur écrit pour chaque écran de la famille le JSON du **DTO de lecture tel que servi** à cet instant,
+son **empreinte SHA-256** et l'acteur :
+
+| Famille | Écrans | Contenu |
+|---|---|---|
+| `DMC` | `PLAN`, `AVIS`, `AMI`, `CAO` | `PLAN` : `{ idDmc, ligne: MarcheDto, versionPpm, valeurs, dates }` ; `AVIS` : `{ avis, lettres }` (disponibilités), `documents` (avis et lettres imprimés), `projets` (R3b) ; `AMI` : `{ ami: AmiDto, preselection: PreselectionDto\|null }` ; `CAO` : `CaoDto` |
+| `DDM` | `SEANCE`, `EVALUATION`, `ATTRIBUTION`, `CAO`, `AVIS`, `PLAN` | `SeanceDto`, `EvaluationDto`, `AttributionDto`, puis comme ci-dessus |
+| `DGC` | `ATTRIBUTION`, `ACTE` | `ACTE` : `{ acte: ActeGestionDto.Acte, marche: ActeGestionDto.Marche }` |
+| `DSS` | `DSS`, `ATTRIBUTION` | `SansSuiteDto` |
+
+Un écran dont la donnée n'existe pas (séance non ouverte, AMI non préparé, évaluation non ouverte, fiche absente) **n'est pas figé** ;
+la procédure d'un dossier se lit par sa fiche (DMC), par l'attribution du marché (DDM, acte) ou par la demande de sans suite (DSS).
+Les plans (`DDP`) gardent leurs versions archivées.
+
+#### `GET /api/dossiers/{id}/instantanes` · `GET …/instantanes/{ecran}[?soumission=n]` · `GET …/instantanes/{ecran}/pdf[?soumission=n]`
+
+**Même garde que `GET /api/dossiers/{id}`** : profils CNM de la localité (Membre, Chef de commission, Vérificateur, Assistant…),
+Président et Administrateur, PRMP et UGPM du dossier. Les membres de CAO gardent leurs écrans vivants (`/api/fiches-marche/*`),
+hors de cette coquille interne.
+
+- La liste : `[{ idInstantane, numeroSoumission, ecran, figeLe, figePar, empreinte, taille }]`, par soumission puis par écran.
+- `…/{ecran}` : le JSON figé, de la soumission demandée ou de la **dernière** ; `ecran` insensible à la casse. **400** `ECRAN_INCONNU`
+  (hors des neuf) ; **404** sans instantané (écran sans donnée, soumission inconnue). Le front rend l'écran en lecture seule depuis
+  ce JSON (bandeau « Figé à la soumission du … »).
+- `…/{ecran}/pdf` : l'export PDF (`INSTANTANE_<ecran>_<dossier>_s<n>.pdf`, moteur `DocumentLibre`) pour l'archivage avec le PV :
+  rendu générique du JSON (objets en « libellé : valeur », listes d'objets en tableaux), titre, référence du dossier, pied avec le
+  numéro, la date et l'empreinte.
+
 ### Le rabais structuré de l'offre en ligne ⚠️ 2026-10-07
 
 Demande front `demande-backend-2026-10-07-rabais-structure.md` (arbitrage Q4 du pilote : « le rabais est structuré au dépôt »). Aucune

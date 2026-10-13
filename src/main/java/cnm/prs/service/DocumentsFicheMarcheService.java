@@ -529,6 +529,21 @@ public class DocumentsFicheMarcheService {
                 .toList();
     }
 
+    /** ⚠️ R4 (manuel révisé, §B5) — les projets d'avis et de lettre (R3b) des versions données, du plus récent au plus ancien. */
+    @Transactional(readOnly = true)
+    public List<DocumentFicheDto> listerProjets(List<FicheMarche> versions) {
+        Map<Integer, Integer> numeros = new LinkedHashMap<>();
+        versions.forEach(v -> numeros.put(v.getIdFiche(), v.getNumeroVersion()));
+        if (numeros.isEmpty()) {
+            return List.of();
+        }
+        return documentRepository.findByIdFicheInAndTypeInOrderByIdDocumentDesc(numeros.keySet(), TYPES_PROJET).stream()
+                .map(d -> new DocumentFicheDto(d.getIdDocument(), d.getType(),
+                        TYPE_AVIS_PROJET.equals(d.getType()) ? "Projet d'avis spécifique d'appel d'offres" : "Projet de lettre d'invitation",
+                        d.getExtension(), d.getNomFichier(), d.getTailleOctets(), d.getDateGeneration(), numeros.get(d.getIdFiche()), d.getLot(), null))
+                .toList();
+    }
+
     private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
 
     /**

@@ -15,4 +15,7 @@ public interface SansSuiteRepository extends JpaRepository<SansSuite, Long> {
 
     /** ⚠️ R2 (manuel révisé, V102) — le dossier DSS est né d'une demande faite depuis la procédure : « en ligne ». */
     boolean existsByIdDossier(Integer idDossier);
+
+    /** ⚠️ R4 (manuel révisé, V104) — la demande dont ce dossier DSS est né (sa procédure). */
+    java.util.Optional<SansSuite> findFirstByIdDossier(Integer idDossier);
 }

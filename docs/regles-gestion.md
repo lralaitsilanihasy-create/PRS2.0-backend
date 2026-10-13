@@ -1211,6 +1211,14 @@ de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM 
 > de la liste restreinte, saisis par la PRMP, reçoivent une lettre d'invitation à soumissionner (art. 38), qui lance la ligne du plan
 > à sa première impression comme l'avis.
 >
+> ⚠️ **2026-10-13 — ce que le contrôleur voit : l'instantané à la soumission (manuel révisé, lot 1, tranche R4, V104).** La
+> Commission statue sur ce qui lui a été soumis (manuel A-P6, T4). À la soumission d'un dossier conduit dans l'application, et à
+> chaque resoumission, l'application fige les écrans qui remplacent les pièces retirées — ligne du plan, avis et lettres, commission
+> d'appel d'offres, appel à manifestation d'intérêt, séance d'ouverture, évaluation, attribution, acte de gestion, déclaration sans
+> suite — tels qu'ils sont servis à cet instant, avec leur empreinte et le numéro de la soumission. Ces instantanés sont immuables ;
+> les profils de la CNM les lisent, en lecture seule, à la place des pièces, et peuvent les exporter en PDF pour l'archivage avec le
+> procès-verbal. Les écrans vivants continuent d'évoluer après la soumission sans changer ce que la Commission a reçu.
+>
 > ⚠️ **2026-10-08 — les grilles de contrôle par sous-type (tranche M3, V96).** Chaque sous-type a la grille du manuel : les points
 > communs de sa famille, puis ceux de la grille dont il dérive (un appel d'offres restreint reprend la grille de l'appel d'offres
 > ouvert et y ajoute ses cinq points ; un marché sur appel d'offres restreint, celle du marché sur appel d'offres ouvert), puis les
