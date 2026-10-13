@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.LocalDate;
+import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -139,6 +140,66 @@ class ActesGestionIntegrationTest extends CnmIntegrationTestSupport {
         receptionRepository.save(r);
         String reference = ReflectionTestUtils.invokeMethod(receptionService, "genererReference", r);
         assertThat(reference).contains("/AVN2/");
+    }
+
+    @Autowired private cnm.prs.repository.AttributionRepository attributionRepository;
+    @Autowired private cnm.prs.repository.AttributionPieceRepository attributionPieceRepository;
+    @Autowired private cnm.prs.repository.PieceJointeDossierRepository piecesDossier;
+
+    @Test
+    @DisplayName("⚠️ R2 (manuel révisé, V102) — marché conduit en ligne : acte refusé tant qu'il n'est pas signé (MARCHE_NON_SIGNE) ; signé, le "
+            + "scan du marché est joint d'office à l'acte (MARCHE_INITIAL) et les pièces « papier » ne sont plus exigées")
+    void marcheEnLigne() throws Exception {
+        dossierRepository.save(dossierLoc(97600, "CLOTURE", "ANT", "PRMP001"));
+        ppmRepository.save(ppm(97600, 97600, "PRMP001"));
+        cnm.prs.entity.Marche ligne = marche(97601, 97600, 97600);
+        ligne.setIdNature(natureFournitures());
+        marcheRepository.save(ligne);
+        cnm.prs.entity.DossierMec dmc = new cnm.prs.entity.DossierMec();
+        dmc.setIdDetail(97601);
+        dmc.setIdTypeDmc(typeDmcRepository.findByCode("DAO").orElseThrow().getIdTypeDmc());
+        dmc.setDateCreation(java.time.LocalDateTime.now());
+        dmc = dossierMecRepository.save(dmc);
+        cnm.prs.entity.Attribution a = new cnm.prs.entity.Attribution();
+        a.setIdDmc(dmc.getIdDmc());
+        a.setLot(1);
+        a.setEtat(cnm.prs.entity.Attribution.ATTRIBUE);
+        a.setIdDossier(marche);
+        attributionRepository.save(a);
+
+        // Le marché, attribué en ligne mais non signé : aucun acte.
+        deposer(marche, "{\"sousType\":\"DR\"}").andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("MARCHE_NON_SIGNE"));
+        // Son dossier de marché, en ligne, ne demande plus la fiche de présentation ni les PV « papier ».
+        String piecesMarche = mvc.perform(get("/api/dossiers/" + marche + "/pieces-exigees").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(piecesMarche, "$[*].code")).doesNotContain("FICHE_PRESENTATION", "PV_CNM_DMC", "PV_VALIDATION_CAO");
+
+        a.setSigneLe(java.time.LocalDateTime.now());
+        a.setEtat(cnm.prs.entity.Attribution.SIGNE);
+        attributionRepository.save(a);
+        cnm.prs.entity.AttributionPiece scan = new cnm.prs.entity.AttributionPiece();
+        scan.setIdDmc(dmc.getIdDmc());
+        scan.setLot(1);
+        scan.setNature(cnm.prs.entity.AttributionPiece.MARCHE_SIGNE);
+        scan.setNom("marche-signe.pdf");
+        scan.setFormat("PDF");
+        scan.setContenu("%PDF-1.4 marche signe".getBytes());
+        scan.setTaille((long) scan.getContenu().length);
+        scan.setDeposeLe(java.time.LocalDateTime.now());
+        attributionPieceRepository.save(scan);
+
+        String acte = deposer(marche, "{\"sousType\":\"DR\"}").andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        int idActe = JsonPath.read(acte, "$.idDossier");
+        List<cnm.prs.entity.PieceJointeDossier> jointes = piecesDossier.findByIdDossier(idActe);
+        assertThat(jointes).singleElement().satisfies(p -> {
+            assertThat(typePieceJointeRepository.findById(p.getIdTypePiece()).orElseThrow().getCode()).isEqualTo("MARCHE_INITIAL");
+            assertThat(p.getContenu()).isEqualTo(scan.getContenu());
+            assertThat(p.getNomFichier()).isEqualTo("marche-signe.pdf");
+        });
+        String piecesActe = mvc.perform(get("/api/dossiers/" + idActe + "/pieces-exigees").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(piecesActe, "$[*].code")).doesNotContain("MARCHE_INITIAL", "PV_CNM_MARCHE")
+                .contains("FICHE_PRESENTATION");
     }
 
     @Test

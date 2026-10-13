@@ -48,6 +48,13 @@ public class PieceSousType {
     @Column(name = "FORME", length = 20)
     private String forme;
 
+    /** ⚠️ R2 (manuel révisé, V102) — {@link #PAPIER} : hors ligne seulement ; {@link #FACULTATIVE_EN_LIGNE} : facultative en ligne ; nul : toujours. */
+    public static final String PAPIER = "PAPIER";
+    public static final String FACULTATIVE_EN_LIGNE = "FACULTATIVE_EN_LIGNE";
+
+    @Column(name = "CONDITION", length = 30)
+    private String condition;
+
     public PieceSousType(Integer idTypePiece, String idSousType, boolean obligatoire, int ordre, String categorie, String forme) {
         this.idTypePiece = idTypePiece;
         this.idSousType = idSousType;

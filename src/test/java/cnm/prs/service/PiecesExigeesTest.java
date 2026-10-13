@@ -17,9 +17,9 @@ class PiecesExigeesTest {
     @Test
     @DisplayName("Sans condition : toujours ; catégorie : seulement la sienne ; forme : contrat-cadre ou les autres ; sans fiche : inconnu")
     void conditions() {
-        PiecesExigees.Contexte fs = new PiecesExigees.Contexte("FOURNITURES_SERVICES", "QUANTITE_FIXE");
-        PiecesExigees.Contexte travauxCadre = new PiecesExigees.Contexte("TRAVAUX", "CONTRAT_CADRE");
-        PiecesExigees.Contexte inconnu = new PiecesExigees.Contexte(null, null);
+        PiecesExigees.Contexte fs = new PiecesExigees.Contexte("FOURNITURES_SERVICES", "QUANTITE_FIXE", false);
+        PiecesExigees.Contexte travauxCadre = new PiecesExigees.Contexte("TRAVAUX", "CONTRAT_CADRE", false);
+        PiecesExigees.Contexte inconnu = new PiecesExigees.Contexte(null, null, false);
         assertThat(PiecesExigees.vaut(piece(null, null), inconnu)).isTrue();
         assertThat(PiecesExigees.vaut(piece("FOURNITURES_SERVICES", null), fs)).isTrue();
         assertThat(PiecesExigees.vaut(piece("TRAVAUX", null), fs)).isFalse();

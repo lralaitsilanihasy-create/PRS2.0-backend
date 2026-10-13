@@ -12,4 +12,7 @@ public interface SansSuiteRepository extends JpaRepository<SansSuite, Long> {
 
     /** Les demandes dont l'avis n'est pas encore constaté (planificateur : avis rendu, échéance). */
     List<SansSuite> findByAvisIsNullAndIdDossierIsNotNull();
+
+    /** ⚠️ R2 (manuel révisé, V102) — le dossier DSS est né d'une demande faite depuis la procédure : « en ligne ». */
+    boolean existsByIdDossier(Integer idDossier);
 }

@@ -69,11 +69,20 @@ public class ActesGestionService {
     private final ObjectProvider<SaisieService> saisie;
     private final ObjectProvider<DossierService> dossierService;
     private final Clock clock;
+    /** ⚠️ R2 (manuel révisé, lot 1, §B4) — le marché signé en ligne, joint d'office à l'acte comme « marché initial ». */
+    private final cnm.prs.repository.AttributionPieceRepository piecesAttribution;
+    private final cnm.prs.repository.PieceJointeDossierRepository piecesDossier;
+    private final cnm.prs.repository.TypePieceJointeRepository typesPiece;
+    static final String MARCHE_INITIAL = "MARCHE_INITIAL";
 
     public ActesGestionService(ActeGestionRepository actes, DossierRepository dossiers, SousTypeDossierRepository sousTypes,
             PvExamenRepository pvs, AttributionRepository attributions, PiecesExigees pieces, DossierIntegriteService integrite,
             ObjectProvider<SaisieService> saisie, ObjectProvider<DossierService> dossierService,
-            Clock clock) {
+            Clock clock, cnm.prs.repository.AttributionPieceRepository piecesAttribution,
+            cnm.prs.repository.PieceJointeDossierRepository piecesDossier, cnm.prs.repository.TypePieceJointeRepository typesPiece) {
+        this.piecesAttribution = piecesAttribution;
+        this.piecesDossier = piecesDossier;
+        this.typesPiece = typesPiece;
         this.actes = actes;
         this.dossiers = dossiers;
         this.sousTypes = sousTypes;
@@ -118,6 +127,7 @@ public class ActesGestionService {
         Dossier marche = marcheExistant(idMarche);
         integrite.exigerOperateurHabilite(marche);
         exigerMarcheControle(marche);
+        exigerMarcheSigneSiEnLigne(marche);   // ⚠️ R2 (§B4)
         String sousType = sousTypeDgc(demande == null ? null : demande.sousType());
         ActeGestion a = new ActeGestion();
         a.setIdDossierMarche(idMarche);
@@ -134,7 +144,45 @@ public class ActesGestionService {
         a.setCreeLe(LocalDateTime.now(clock));
         a.setCreePar(CurrentUser.login().orElse(null));
         ActeGestion sauve = actes.save(a);
+        joindreMarcheSigne(marche, d);   // ⚠️ R2 (§B4) — le marché signé en ligne : joint d'office, plus demandé à la PRMP
         return dto(sauve, d, false);
+    }
+
+    /**
+     * ⚠️ R2 (manuel révisé, lot 1, §B4 ; manuel 2-IV D2) — un marché conduit en ligne doit être <strong>signé</strong> dans l'application
+     * avant qu'un acte de gestion ne le concerne : 409 {@code MARCHE_NON_SIGNE}. Un marché saisi (sans attribution en ligne) ne se juge pas.
+     */
+    private void exigerMarcheSigneSiEnLigne(Dossier marche) {
+        Attribution a = attributions.findFirstByIdDossier(marche.getIdDossier()).orElse(null);
+        if (a != null && a.getSigneLe() == null) {
+            throw new BusinessRuleException("Le marché " + libelle(marche) + " est conduit en ligne mais n'y est pas encore signé : un acte de gestion "
+                    + "ne le concerne qu'une fois signé.", "MARCHE_NON_SIGNE", marche.getIdDossier());
+        }
+    }
+
+    /** Le scan signé du marché (pièce {@code MARCHE_SIGNE} de l'attribution), joint à l'acte sous le code {@code MARCHE_INITIAL}. */
+    private void joindreMarcheSigne(Dossier marche, Dossier acte) {
+        Attribution a = attributions.findFirstByIdDossier(marche.getIdDossier()).orElse(null);
+        if (a == null) {
+            return;
+        }
+        cnm.prs.entity.AttributionPiece scan = piecesAttribution.findByIdDmcAndLotOrderByIdAsc(a.getIdDmc(), a.getLot()).stream()
+                .filter(p -> cnm.prs.entity.AttributionPiece.MARCHE_SIGNE.equals(p.getNature()) && p.getArchiveLe() == null && p.getContenu() != null)
+                .reduce((x, y) -> y).orElse(null);
+        cnm.prs.entity.TypePieceJointe type = typesPiece.findFirstByCode(MARCHE_INITIAL).orElse(null);
+        if (scan == null || type == null) {
+            return;
+        }
+        cnm.prs.entity.PieceJointeDossier p = new cnm.prs.entity.PieceJointeDossier();
+        p.setIdDossier(acte.getIdDossier());
+        p.setIdTypePiece(type.getIdTypePiece());
+        p.setNomFichier(scan.getNom());
+        p.setContenu(scan.getContenu());
+        p.setFormat(scan.getFormat() == null ? "PDF" : scan.getFormat());
+        p.setTaille((long) scan.getContenu().length);
+        p.setDateUpload(LocalDateTime.now(clock));
+        p.setApresLettreRenvoi(false);
+        piecesDossier.save(p);
     }
 
     /** Modification des déclarations d'un acte encore en brouillon : 409 {@code DOSSIER_NON_BROUILLON} ; mêmes garde-fous qu'au dépôt. */
@@ -168,6 +216,7 @@ public class ActesGestionService {
                 "Un acte de gestion contractuelle se dépose depuis le marché qu'il concerne.", "ACTE_SANS_MARCHE", d.getIdDossier()));
         Dossier marche = marcheExistant(a.getIdDossierMarche());
         exigerMarcheControle(marche);
+        exigerMarcheSigneSiEnLigne(marche);   // ⚠️ R2
         if (AVENANT.equals(a.getSousType())) {
             exigerAvenantRecevable(marche, a, autresQue(a));
         }

@@ -7909,6 +7909,36 @@ un **empêchement qui rendrait le quorum inatteignable est refusé** (pas d'impa
   inatteignable (409) tant que l'Administrateur ne règle pas `1` (global ou par procédure).
 
 
+
+### Le manuel révisé pour l'application, lot 1, tranche R2 : les pièces conditionnées à la procédure en ligne — V102 ⚠️ 2026-10-13
+
+Demande front `demande-backend-2026-10-10-manuel-revise-lot1.md` (§B4, et le marché initial des actes). Arbitrages du pilote du 10/10 :
+**Q2/Q14** la validation tracée vaut signature des pièces internes (les actes engageants restent en pièce jointe) ; **Q4** le rapport vaut PV
+de validation ; **Q3** double mode transitoire pour les imprimés SIGMP. Arbitrages au backend du 13/10 : la condition est une **colonne
+administrable** de l'association pièce–sous-type ; l'avis spécifique et la lettre d'invitation deviennent **facultatifs en ligne dès R2**
+(R3 les retirera au terme de la transition) ; le **scan signé du marché** est joint d'office à l'acte (les avenants antérieurs, sans
+document signé dans l'application, sont seulement listés). Migration **V102**. Aucune route nouvelle, aucune dépendance ajoutée.
+
+- **`t_piece_sous_type.CONDITION`** : nul (toujours, comme avant) ; **`PAPIER`** = exigée seulement quand la procédure n'est **pas**
+  conduite dans l'application, masquée en ligne ; **`FACULTATIVE_EN_LIGNE`** = toujours listée, obligatoire hors ligne, facultative en
+  ligne. `TypePieceJointeDto` gagne **`condition`** (servie par `?sousType=` non résolue, et par `GET /api/dossiers/{id}/pieces-exigees`
+  résolue : la pièce `PAPIER` n'y figure plus en ligne, la `FACULTATIVE_EN_LIGNE` y figure avec `obligatoire: false`).
+- **« En ligne »**, dossier par dossier : un dossier DMC né d'une fiche (`ID_DMC`) ; un dossier de marché attribué en ligne
+  (`t_attribution.ID_DOSSIER`) ; un acte de gestion dont le marché l'est ; une déclaration sans suite demandée depuis la procédure
+  (`t_sans_suite.ID_DOSSIER`). Un dossier saisi (plan à l'ancienne, marché saisi, MGG) reste **hors ligne** : ses listes V95 ne changent pas.
+- **Posé par V102** : `PAPIER` sur `FICHE_PRESENTATION` (DAOO*, DAOR*, DC, MAOO*, MAOR*, MPI, DSS — pas les actes de gestion, dont les
+  champs manquent encore), `AGPM_CONTROLE` et `PPM_CONTROLE` (tous), `PV_CNM_DMC` et `PV_CNM_MARCHE` (MAOO*, MAOR*, MPI, AVN, DR, INDEMN,
+  PENAL, SURSIS), `PV_VALIDATION_CAO`, `PV_VALID_TECHNIQUE`, `PV_VALID_FINALE` (MAOO*, MAOR*, MPI), `MARCHE_INITIAL` (AVN, DR, INDEMN,
+  PENAL, SURSIS) ; `FACULTATIVE_EN_LIGNE` sur `AVIS_SPECIFIQUE` et `LETTRE_INVITATION` (DAOO*, DPREQUAL, DAOR*, DC). **`PV_AMI`** reste
+  exigée (Q8 ouverte). La soumission (`validerPiecesObligatoires`), la recevabilité et le dépôt lisent la même liste.
+- **Acte de gestion sur un marché en ligne** (`POST /api/dossiers/{idMarche}/actes-gestion`) : le marché doit être **signé** dans
+  l'application — 409 **`MARCHE_NON_SIGNE`** (au dépôt et à la soumission) ; une fois signé, le **scan `MARCHE_SIGNE`** de l'attribution
+  est **joint d'office** à l'acte sous le code `MARCHE_INITIAL`, qui n'est plus demandé à la PRMP. Un marché saisi (sans attribution en
+  ligne) n'est pas jugé : la pièce reste exigée.
+- **Déjà jointes d'office**, donc satisfaites sans geste : `PV_OUVERTURE`, `RAPPORT_ANALYSE`, `RAPPORT_PRESELECTION`, `DAO_COMPLET`,
+  `CAHIER_CHARGES`, `DEVIS_ESTIMATIF`, `PROJET_MARCHE`, `MOTIFS_SANS_SUITE` — le front peut les présenter comme « jointes » dès qu'une
+  pièce du type existe sur le dossier.
+
 ### Le rabais structuré de l'offre en ligne ⚠️ 2026-10-07
 
 Demande front `demande-backend-2026-10-07-rabais-structure.md` (arbitrage Q4 du pilote : « le rabais est structuré au dépôt »). Aucune

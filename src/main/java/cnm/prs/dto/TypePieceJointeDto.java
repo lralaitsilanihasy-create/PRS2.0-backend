@@ -37,4 +37,6 @@ public class TypePieceJointeDto {
     private String categorie;
     /** {@code CONTRAT_CADRE}, {@code AUTRE} ; nul : toutes formes. */
     private String forme;
+    /** ⚠️ R2 (manuel révisé, V102) — la condition de la pièce : {@code PAPIER} (hors ligne seulement), {@code FACULTATIVE_EN_LIGNE}, ou nul. */
+    private String condition;
 }

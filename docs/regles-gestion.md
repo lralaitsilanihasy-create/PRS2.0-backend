@@ -1177,6 +1177,15 @@ de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM 
 > sans fiche la voit sans obligation. La soumission refuse un dossier auquel il manque une pièce obligatoire de sa liste. Les plans
 > de passation gardent leurs pièces.
 >
+> ⚠️ **2026-10-13 — les pièces conditionnées à la procédure en ligne (manuel révisé, lot 1, tranche R2, V102 ; arbitrages Q2/Q14 du
+> pilote : la validation tracée vaut signature des pièces internes).** Quand la procédure est conduite dans l'application — dossier né
+> d'une fiche, marché attribué en ligne, acte de gestion sur un tel marché, déclaration sans suite demandée depuis la procédure — les
+> pièces que l'application produit ou trace elle-même ne sont plus demandées à la PRMP : fiche de présentation (sauf pour les actes de
+> gestion), AGPM et PPM contrôlés, PV de la CNM, PV de validation de la commission, marché initial d'un acte de gestion. Le projet
+> d'avis spécifique et la lettre d'invitation, imprimés du SIGMP, restent listés mais deviennent facultatifs en ligne, le temps de la
+> transition. Les listes des dossiers saisis ne changent pas. Un acte de gestion ne se dépose sur un marché attribué en ligne que si ce
+> marché est signé dans l'application (`MARCHE_NON_SIGNE`) ; le scan signé du marché est alors joint d'office à l'acte.
+>
 > ⚠️ **2026-10-08 — les grilles de contrôle par sous-type (tranche M3, V96).** Chaque sous-type a la grille du manuel : les points
 > communs de sa famille, puis ceux de la grille dont il dérive (un appel d'offres restreint reprend la grille de l'appel d'offres
 > ouvert et y ajoute ses cinq points ; un marché sur appel d'offres restreint, celle du marché sur appel d'offres ouvert), puis les
