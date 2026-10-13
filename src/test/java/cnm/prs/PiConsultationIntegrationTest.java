@@ -356,6 +356,34 @@ class PiConsultationIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$.code").value("SEANCE_FINANCIERE_OUVERTE"));
         mvc.perform(post(tech + "/lots/1/rouvrir").header("Authorization", m1).contentType(JSON).content("{\"motif\":\"Erreur\"}"))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("SEANCE_FINANCIERE_OUVERTE"));
+
+        // ⚠️ R1 (manuel révisé, lot 1, §B2) — la clôture de la seconde séance exige le quorum parmi les présents ; le PV se signe
+        // ensuite (signature électronique simple) par les présents, empêchement constaté par le président.
+        cnm.prs.entity.SeanceFinanciere sf1 = seanceFinanciereRepository.findFirstByIdDmcOrderByRondeDesc(idDmc).orElseThrow();
+        sf1.setEtat(cnm.prs.entity.SeanceFinanciere.DECHIFFREE);
+        sf1.setDechiffreeLe(LocalDateTime.now());
+        seanceFinanciereRepository.save(sf1);
+        mvc.perform(post(sf + "/cloturer").header("Authorization", tokenVer).contentType(JSON)
+                .content("{\"presents\":[\"" + ims.get(1) + "\"]}")).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("QUORUM_NON_ATTEINT")).andExpect(jsonPath("$.details.presidentSigne").value(false));
+        String close = mvc.perform(post(sf + "/cloturer").header("Authorization", tokenVer).contentType(JSON)
+                .content("{\"presents\":[\"" + ims.get(0) + "\",\"" + ims.get(1) + "\"]}")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.etat").value("CLOSE")).andExpect(jsonPath("$.pv.produit").value(true)).andExpect(jsonPath("$.pv.signe").value(false))
+                .andExpect(jsonPath("$.pv.signaturesAttendues.length()").value(2)).andExpect(jsonPath("$.pv.quorum.requis").value(2))
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(close, "$.pv.signaturesAttendues[*].qualite")).containsExactly("PRESIDENT", "MEMBRE");
+        mvc.perform(post(sf + "/pv/signer").header("Authorization", tokenPrmp)).andExpect(status().isForbidden());
+        mvc.perform(post(sf + "/pv/empechement").header("Authorization", m1).contentType(JSON)
+                .content("{\"im\":\"" + ims.get(1) + "\",\"motif\":\"Parti\"}")).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("QUORUM_NON_ATTEINT"));
+        mvc.perform(post(sf + "/pv/signer").header("Authorization", m1)).andExpect(status().isOk()).andExpect(jsonPath("$.pv.signe").value(false))
+                .andExpect(jsonPath("$.pv.signatures[0].president").value(true));
+        mvc.perform(post(sf + "/pv/signer").header("Authorization", m1)).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("DEJA_SIGNE"));
+        mvc.perform(post(sf + "/pv/signer").header("Authorization", m2)).andExpect(status().isOk()).andExpect(jsonPath("$.pv.signe").value(true))
+                .andExpect(jsonPath("$.pv.quorum.atteint").value(true)).andExpect(jsonPath("$.pv.quorum.obtenus").value(2));
+        assertThat(texteDuPdf(mvc.perform(get(sf + "/pv").header("Authorization", tokenPrmp)).andExpect(status().isOk()).andReturn().getResponse()
+                .getContentAsByteArray()).replaceAll("\\s+", " ")).contains("Signatures des membres présents", "(Président de la commission) — signé",
+                        "Quorum de la commission : majorité des membres désignés — 2 requis, 2 obtenu(s) : atteint ; président compté");
     }
 
     @Test

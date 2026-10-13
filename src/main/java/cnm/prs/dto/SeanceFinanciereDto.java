@@ -13,7 +13,14 @@ import java.util.Map;
  */
 public record SeanceFinanciereDto(Long idDmc, String etat, String methode, Integer quorum, List<Enveloppe> aOuvrir, List<NonOuverte> nonOuvertes,
         List<String> presents, List<SeanceDto.Autre> autres, boolean secoursEmploye, LocalDateTime ouverteLe, LocalDateTime dechiffreeLe,
-        LocalDateTime closeLe, boolean pvDisponible, Integer ronde, String motif, List<Ronde> rondes) {
+        LocalDateTime closeLe, boolean pvDisponible, Integer ronde, String motif, List<Ronde> rondes,
+        /** ⚠️ R1 (manuel révisé, §B2) — le PV de la ronde courante : signatures des présents, attendues, quorum. */
+        Pv pv) {
+
+    /** ⚠️ R1 — le PV : produit à la clôture, signé par les présents (signature électronique simple) ou empêchements constatés. */
+    public record Pv(boolean produit, boolean signe, LocalDateTime signeLe, List<SeanceDto.Signature> signatures,
+            List<SeanceDto.Attendue> signaturesAttendues, QuorumDto quorum) {
+    }
 
     /** Une ronde : son état, son motif, ses dates, son PV ({@code GET …/pv?ronde=n}). */
     public record Ronde(Integer ronde, String etat, String motif, LocalDateTime ouverteLe, LocalDateTime closeLe, boolean pvDisponible) {

@@ -32,14 +32,17 @@ public record PreselectionDto(Long idDmc, String etat, List<Declaration> declara
     public record Retenu(Integer rang, String idExpression, String idCandidat, String nif, String raisonSociale, BigDecimal note) {
     }
 
-    public record Rapport(LocalDateTime produitLe, boolean signe, LocalDateTime signeLe, List<Signature> signatures, List<Attendue> attendues) {
+    public record Rapport(LocalDateTime produitLe, boolean signe, LocalDateTime signeLe, List<Signature> signatures, List<Attendue> attendues,
+            /** ⚠️ R1 (manuel révisé, §B2) — le quorum constaté sur les signataires non empêchés. */
+            QuorumDto quorum) {
     }
 
     public record Signature(String im, String nom, LocalDateTime date, boolean empechement, String motif, String constatePar,
             String observation) {
     }
 
-    public record Attendue(String im, String nom) {
+    /** ⚠️ R1 — {@code qualite} : {@code PRESIDENT}, {@code REPRESENTANT}, {@code MEMBRE}. */
+    public record Attendue(String im, String nom, String qualite) {
     }
 
     // ------------------------------------------------------------------ corps des requêtes

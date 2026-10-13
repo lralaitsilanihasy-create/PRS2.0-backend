@@ -267,6 +267,16 @@ class AmiIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("MOTIF_NOMBRE_OBLIGATOIRE"));
         mvc.perform(post("/api/fiches-marche/" + idDmc + "/dossier").header("Authorization", tokenPrmp)).andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("LISTE_NON_ARRETEE"));
+        // ⚠️ R1 (manuel révisé, §B2) — à la majorité (2 sur 2), le second membre étant en conflit d'intérêts, le seul signataire possible
+        // n'atteint pas le quorum : la liste ne s'arrête pas ; au quorum de 1, elle s'arrête.
+        mvc.perform(put("/api/parametres/cao-quorum").header("Authorization", tokenAdmin).contentType(JSON).content("{\"regle\":\"MAJORITE\"}"))
+                .andExpect(status().isOk());
+        mvc.perform(post(pre + "/arreter").header("Authorization", jetonM1).contentType(JSON)
+                .content("{\"motifNombre\":\"Deux candidats seulement atteignent la note minimale.\"}")).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("QUORUM_NON_ATTEINT")).andExpect(jsonPath("$.details.requis").value(2))
+                .andExpect(jsonPath("$.details.obtenus").value(1));
+        mvc.perform(put("/api/parametres/cao-quorum").header("Authorization", tokenAdmin).contentType(JSON).content("{\"regle\":\"1\"}"))
+                .andExpect(status().isOk());
         mvc.perform(post(pre + "/arreter").header("Authorization", jetonM1).contentType(JSON)
                 .content("{\"motifNombre\":\"Deux candidats seulement atteignent la note minimale.\"}")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.etat").value("LISTE_ARRETEE")).andExpect(jsonPath("$.liste.length()").value(2))
@@ -279,7 +289,10 @@ class AmiIntegrationTest extends CnmIntegrationTestSupport {
         String rapport = texteDuPdf(mvc.perform(get(base + "/rapport").header("Authorization", tokenPrmp)).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsByteArray()).replaceAll("\\s+", " ");
         assertThat(rapport).contains("RAPPORT DE PRÉSÉLECTION", "Cabinet Alpha", "Lettre non signée", "Deux candidats seulement",
-                "conflit d'intérêts déclaré", "signé électroniquement sur la plateforme");
+                "conflit d'intérêts déclaré", "signé électroniquement sur la plateforme",
+                // ⚠️ R1 (§B1) — la section « Séance de validation » du rapport de présélection.
+                "6. Séance de validation", "Rapport validé par la commission le", "Membres exclus de la signature pour conflit d'intérêts déclaré",
+                "Quorum de la commission : 1 membre(s) au moins — 1 requis, 1 obtenu(s) : atteint");
         assertThat(notificationRepository.findAll()).filteredOn(n -> "AMI_RESULTAT".equals(n.getTypeNotif()))
                 .extracting(Notification::getDestinataireRef).containsExactlyInAnyOrder("C900000061", "C900000062", "C900000063");
         assertThat(notificationRepository.findAll()).filteredOn(n -> "C900000063".equals(n.getDestinataireRef()) && "AMI_RESULTAT".equals(n.getTypeNotif()))
@@ -387,6 +400,9 @@ class AmiIntegrationTest extends CnmIntegrationTestSupport {
                 .content("{\"im\":\"CTRVER\"}")).andExpect(status().isCreated());
         mvc.perform(put("/api/fiches-marche/" + idDmc + "/cao").header("Authorization", tokenPrmp).contentType(JSON)
                 .content(CaoIntegrationTest.corpsCao("m1@ami.mg", "m2@ami.mg"))).andExpect(status().isOk());
+        // ⚠️ R1 (manuel révisé, §B2) — une CAO de deux membres : le décor règle le quorum à 1 (président requis en plus).
+        mvc.perform(put("/api/parametres/cao-quorum").header("Authorization", tokenAdmin).contentType(JSON).content("{\"regle\":\"1\"}"))
+                .andExpect(status().isOk());
         String internes = mvc.perform(get("/api/fiches-marche/" + idDmc + "/parametres-internes").header("Authorization", tokenVer))
                 .andReturn().getResponse().getContentAsString();
         List<String> ims = JsonPath.read(internes, "$.membresCommission[*].im");

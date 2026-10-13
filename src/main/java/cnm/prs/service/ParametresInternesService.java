@@ -320,6 +320,8 @@ public class ParametresInternesService {
         }
         p.setMembresCle(null);   // ⚠️ V67 — dérivés de la CAO, plus jamais écrits ici
         p.setQuorum(c.quorum());
+        // ⚠️ R1 (manuel révisé, lot 1, §B2) — la surcharge du quorum de la CAO : validée (400 QUORUM_REGLE_INVALIDE), vide = règle globale.
+        p.setCaoQuorum(c.caoQuorum() == null || c.caoQuorum().isBlank() ? null : QuorumCao.parse(c.caoQuorum()).texte());
         p.setDateCeremonie(ceremonieDate);
         p.setDepositaireNom(depositaire == null ? null : depositaire.nom());
         p.setDepositaireOrganisme(depositaire == null ? null : depositaire.organisme());
@@ -673,8 +675,10 @@ public class ParametresInternesService {
         if (i != null && i.quorumSansMarge() && !RemiseElectronique.quorumInvalide(i)) {
             avertissements.add(new ParametresInternesDto.Anomalie(ControlesFicheMarche.SE_QUORUM_MARGE, RemiseElectronique.MESSAGE_QUORUM_MARGE));
         }
+        String surcharge = internesRepository.findById(idDmc).map(ParametreInterneProcedure::getCaoQuorum).filter(v -> v != null && !v.isBlank()).orElse(null);
         return new ParametresInternesDto(idDmc, membres, membres.size(), quorum, i == null ? null : i.dateCeremonie(),
-                responsableDto(idDmc), RemiseElectronique.etat(i, publication).name(), anomalies, journal, secours, avertissements);
+                responsableDto(idDmc), RemiseElectronique.etat(i, publication).name(), anomalies, journal, secours, avertissements,
+                surcharge, QuorumCao.parse(surcharge != null ? surcharge : parametres.texte(ParametreService.CAO_QUORUM)).texte());
     }
 
     /** ⚠️ V66 (lot 2, §B1) — {@code A_DESIGNER}, {@code DESIGNE}, puis l'état de la clé de secours ({@code PUBLIEE}, {@code VERIFIEE}, {@code PERDUE}). */

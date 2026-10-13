@@ -547,6 +547,10 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$.etat").value("RAPPORT_A_SIGNER")).andExpect(jsonPath("$.rapport.signe").value(false))
                 .andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<List<String>>read(r, "$.rapport.signaturesAttendues[*].im")).containsExactly(comptes.get(0), comptes.get(1));
+        // ⚠️ R1 (manuel révisé, §B2) — le quorum (surcharge « 1 ») et la qualité des signataires attendus.
+        assertThat(JsonPath.<List<String>>read(r, "$.rapport.signaturesAttendues[*].qualite")).containsExactly("PRESIDENT", "MEMBRE");
+        assertThat(JsonPath.<String>read(r, "$.rapport.quorum.regle")).isEqualTo("1");
+        assertThat(JsonPath.<Boolean>read(r, "$.rapport.quorum.atteint")).isFalse();
         mvc.perform(post(base + "/rapport").header("Authorization", tokenVer).contentType(JSON).content("{}")).andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("RAPPORT_DEJA_PRODUIT"));
         anormale(a, "{\"suspectee\":false}").andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("EVALUATION_CLOSE"));
@@ -568,9 +572,15 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
                 .andReturn().getResponse().getContentAsByteArray();
         assertThat(new String(docx, 0, 2, StandardCharsets.ISO_8859_1)).isEqualTo("PK");
         mvc.perform(post(base + "/rapport/signer").header("Authorization", tokenPrmp).contentType(JSON).content("{}")).andExpect(status().isForbidden());
+        // ⚠️ R1 (§B2, arbitrage : pas d'impasse) — l'empêchement du président lui-même, sans représentant désigné, rendrait le quorum
+        // inatteignable : refusé.
+        mvc.perform(post(base + "/rapport/empechement").header("Authorization", jetonM1).contentType(JSON)
+                .content("{\"im\":\"" + comptes.get(0) + "\",\"motif\":\"Absent\"}")).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("QUORUM_NON_ATTEINT")).andExpect(jsonPath("$.details.presidentSigne").value(false));
         mvc.perform(post(base + "/rapport/signer").header("Authorization", jetonM1).contentType(JSON)
                 .content("{\"observation\":\"Réserve sur le délai d'exécution proposé.\"}")).andExpect(status().isOk())
-                .andExpect(jsonPath("$.rapport.signatures[0].observation").value("Réserve sur le délai d'exécution proposé."));
+                .andExpect(jsonPath("$.rapport.signatures[0].observation").value("Réserve sur le délai d'exécution proposé."))
+                .andExpect(jsonPath("$.rapport.quorum.atteint").value(true)).andExpect(jsonPath("$.rapport.quorum.presidentSigne").value(true));
         mvc.perform(post(base + "/rapport/signer").header("Authorization", jetonM1).contentType(JSON).content("{}"))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("DEJA_SIGNE"));
         mvc.perform(post(base + "/rapport/empechement").header("Authorization", jetonM2).contentType(JSON)
@@ -582,7 +592,11 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$.etat").value("CLOSE")).andExpect(jsonPath("$.rapport.signe").value(true))
                 .andExpect(jsonPath("$.rapport.signaturesAttendues.length()").value(0));
         assertThat(texteDuPdf(mvc.perform(get(base + "/rapport").header("Authorization", tokenPrmp)).andReturn().getResponse().getContentAsByteArray())
-                .replaceAll("\\s+", " ")).contains("Observation : Réserve sur le délai d'exécution proposé.", "empêché de signer : En mission")
+                .replaceAll("\\s+", " ")).contains("Observation : Réserve sur le délai d'exécution proposé.", "empêché de signer : En mission",
+                        // ⚠️ R1 (§B1, Q4 du pilote) — le rapport signé vaut PV de validation : la section « Séance de validation ».
+                        "10. Séance de validation", "Rapport validé par la commission le", "Membres ayant validé :", "(Président), le",
+                        "Empêchements constatés :", "En mission", "Quorum de la commission : 1 membre(s) au moins — 1 requis, 1 obtenu(s) : atteint ; président compté",
+                        "Observations de désaccord portées à la signature :")
                 .doesNotContain("signature attendue");
         assertThat(notificationRepository.findPourPrmp("PRMP001", null)).extracting(Notification::getTypeNotif).contains("RAPPORT_EVALUATION");
         mvc.perform(get("/api/kpis/badges").header("Authorization", jetonM2)).andExpect(jsonPath("$.compteurs.rapportsASigner").value(0));
@@ -1130,8 +1144,13 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
                 .content("{\"im\":\"CTRVER\"}")).andExpect(status().isCreated());
         mvc.perform(put("/api/fiches-marche/" + idDmc + "/cao").header("Authorization", tokenPrmp).contentType(JSON)
                 .content(CaoIntegrationTest.corpsCao("m1@eval.mg", "m2@eval.mg"))).andExpect(status().isOk());
+        // ⚠️ R1 (manuel révisé, §B2) — la surcharge du quorum de la CAO par procédure : validée (400), puis réglée à 1 membre (une CAO
+        // de deux membres ; la majorité vaudrait l'unanimité), le président restant requis.
         mvc.perform(put("/api/fiches-marche/" + idDmc + "/parametres-internes").header("Authorization", tokenVer).contentType(JSON)
-                .content("{\"quorum\":2,\"dateCeremonie\":\"" + aujourdhui.plusDays(9) + "T09:00\",\"depositaire\":{\"nom\":\"Rakoto Jean\",\"email\":\"rakoto.depositaire@secours.mg\"}}"))
+                .content("{\"quorum\":2,\"caoQuorum\":\"la moitié\"}")).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("QUORUM_REGLE_INVALIDE"));
+        mvc.perform(put("/api/fiches-marche/" + idDmc + "/parametres-internes").header("Authorization", tokenVer).contentType(JSON)
+                .content("{\"quorum\":2,\"caoQuorum\":\"1\",\"dateCeremonie\":\"" + aujourdhui.plusDays(9) + "T09:00\",\"depositaire\":{\"nom\":\"Rakoto Jean\",\"email\":\"rakoto.depositaire@secours.mg\"}}"))
                 .andExpect(status().isOk());
         mvc.perform(post("/api/fiches-marche/" + idDmc + "/valider").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.statut").value("VALIDEE"));
@@ -1139,6 +1158,8 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
                 .andReturn().getResponse().getContentAsString();
         comptes.clear();
         comptes.addAll(JsonPath.read(internes, "$.membresCommission[*].im"));
+        assertThat(JsonPath.<String>read(internes, "$.caoQuorum")).isEqualTo("1");
+        assertThat(JsonPath.<String>read(internes, "$.caoQuorumEffectif")).isEqualTo("1");
         jetonM1 = bearer("m1@eval.mg", ProfilUtilisateur.MEMBRE_CAO, TypeActeur.MEMBRE_CAO, comptes.get(0), null);
         jetonM2 = bearer("m2@eval.mg", ProfilUtilisateur.MEMBRE_CAO, TypeActeur.MEMBRE_CAO, comptes.get(1), null);
     }

@@ -68,6 +68,18 @@ public class SeanceFinanciereController {
     }
 
     /** Le PV (PDF ; {@code ?format=docx} pour la version Word ; {@code ?ronde=n} pour une séance précédente, défaut : la courante). */
+    /** ⚠️ R1 (manuel révisé, lot 1, §B2) — la signature électronique simple du PV par un membre présent. */
+    @PostMapping("/pv/signer")
+    public SeanceFinanciereDto signer(@PathVariable Long idDmc) {
+        return service.signer(idDmc);
+    }
+
+    /** ⚠️ R1 — l'empêchement d'un présent, constaté par le président (ou le responsable) : {@code { im, motif }} ; 409 {@code QUORUM_NON_ATTEINT}. */
+    @PostMapping("/pv/empechement")
+    public SeanceFinanciereDto empechement(@PathVariable Long idDmc, @RequestBody(required = false) SeanceDto.Empechement corps) {
+        return service.empechement(idDmc, corps);
+    }
+
     @GetMapping("/pv")
     public ResponseEntity<byte[]> pv(@PathVariable Long idDmc, @RequestParam(required = false) String format,
             @RequestParam(required = false) Integer ronde) {

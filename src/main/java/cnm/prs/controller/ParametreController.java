@@ -126,6 +126,19 @@ public class ParametreController {
     }
 
 
+    /** ⚠️ R1 (manuel révisé, lot 1, §B2 ; V101) — la règle du quorum de la CAO : lecture ouverte aux profils internes et aux membres de CAO. */
+    @GetMapping("/cao-quorum")
+    public ParametreService.QuorumCaoRegle quorumCao() {
+        return service.quorumCao();
+    }
+
+    /** Réglage (Administrateur seul) : { regle: MAJORITE | TOUS | "<n>" } ; 400 QUORUM_REGLE_INVALIDE. */
+    @PreAuthorize("hasRole('ADMINISTRATEUR')")
+    @PutMapping("/cao-quorum")
+    public ParametreService.QuorumCaoRegle fixerQuorumCao(@RequestBody(required = false) ParametreService.QuorumCaoRegle corps) {
+        return service.fixerQuorumCao(corps);
+    }
+
     /** ⚠️ V63 (2026-10-04, soumission en ligne, §B7) — les paramètres des comptes candidats ; Administrateur seul. */
     @PreAuthorize("hasRole('ADMINISTRATEUR')")
     @GetMapping("/candidats")

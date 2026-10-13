@@ -312,6 +312,27 @@ class SeanceIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(get("/api/procedures-en-ligne/" + idDmc + "/pv")).andExpect(status().isNotFound());
         mvc.perform(post(base + "/pv/signer").header("Authorization", tokenPrmp)).andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("NON_PRESENT"));
+        // ⚠️ R1 (manuel révisé, §B2) — le quorum servi avec le PV ; le représentant du président, désigné par lui seul, par contexte.
+        mvc.perform(get(base).header("Authorization", jetonM1)).andExpect(jsonPath("$.pv.quorum.regle").value("1"))
+                .andExpect(jsonPath("$.pv.quorum.requis").value(1)).andExpect(jsonPath("$.pv.quorum.obtenus").value(0))
+                .andExpect(jsonPath("$.pv.quorum.atteint").value(false)).andExpect(jsonPath("$.pv.quorum.presidentRequis").value(true))
+                .andExpect(jsonPath("$.pv.signaturesAttendues[0].qualite").value("PRESIDENT"))
+                .andExpect(jsonPath("$.pv.signaturesAttendues[1].qualite").value("MEMBRE"));
+        mvc.perform(post("/api/cao/procedures/" + idDmc + "/representant").header("Authorization", jetonM2).contentType(JSON)
+                .content("{\"contexte\":\"SEANCE\",\"im\":\"" + comptes.get(0) + "\"}")).andExpect(status().isForbidden());
+        mvc.perform(post("/api/cao/procedures/" + idDmc + "/representant").header("Authorization", jetonM1).contentType(JSON)
+                .content("{\"contexte\":\"PLENIERE\",\"im\":\"" + comptes.get(1) + "\"}")).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("CONTEXTE_INVALIDE"));
+        mvc.perform(post("/api/cao/procedures/" + idDmc + "/representant").header("Authorization", jetonM1).contentType(JSON)
+                .content("{\"contexte\":\"SEANCE\",\"im\":\"" + comptes.get(0) + "\"}")).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("REPRESENTANT_INVALIDE"));
+        mvc.perform(post("/api/cao/procedures/" + idDmc + "/representant").header("Authorization", jetonM1).contentType(JSON)
+                .content("{\"contexte\":\"SEANCE\",\"im\":\"" + comptes.get(1) + "\"}")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.im").value(comptes.get(1))).andExpect(jsonPath("$.designePar").isNotEmpty());
+        mvc.perform(get(base).header("Authorization", jetonM1)).andExpect(jsonPath("$.pv.quorum.representant").value(comptes.get(1)))
+                .andExpect(jsonPath("$.pv.signaturesAttendues[1].qualite").value("REPRESENTANT"));
+        mvc.perform(post("/api/cao/procedures/" + idDmc + "/representant").header("Authorization", jetonM1).contentType(JSON)
+                .content("{\"contexte\":\"SEANCE\"}")).andExpect(status().isOk()).andExpect(jsonPath("$.im").isEmpty());
         mvc.perform(post(base + "/pv/signer").header("Authorization", jetonM1)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.etat").value("PV_A_SIGNER")).andExpect(jsonPath("$.pv.signatures[0].im").value(comptes.get(0)))
                 .andExpect(jsonPath("$.pv.signatures[0].president").value(true)).andExpect(jsonPath("$.pv.signatures[0].empechement").value(false))
@@ -325,8 +346,23 @@ class SeanceIntegrationTest extends CnmIntegrationTestSupport {
                 .content("{\"im\":\"" + comptes.get(1) + "\"}")).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("MOTIF_ABSENT"));
         mvc.perform(post(base + "/pv/empechement").header("Authorization", jetonM1).contentType(JSON)
                 .content("{\"im\":\"INCONNU\",\"motif\":\"Parti\"}")).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("NON_SIGNATAIRE"));
+        // ⚠️ R1 (§B2, arbitrage : pas d'impasse) — à la majorité (2 sur 2), l'empêchement du second membre rendrait le quorum
+        // inatteignable : refusé ; le quorum ramené à 1, il passe et le PV se clôt.
+        mvc.perform(put("/api/parametres/cao-quorum").header("Authorization", tokenAdmin).contentType(JSON).content("{\"regle\":\"MAJORITE\"}"))
+                .andExpect(status().isOk());
+        mvc.perform(put("/api/parametres/cao-quorum").header("Authorization", tokenAdmin).contentType(JSON).content("{\"regle\":\"la moitié\"}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("QUORUM_REGLE_INVALIDE"));
+        mvc.perform(post(base + "/pv/empechement").header("Authorization", jetonM1).contentType(JSON)
+                .content("{\"im\":\"" + comptes.get(1) + "\",\"motif\":\"Appelé en urgence\"}")).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("QUORUM_NON_ATTEINT")).andExpect(jsonPath("$.details.requis").value(2))
+                .andExpect(jsonPath("$.details.obtenus").value(1)).andExpect(jsonPath("$.details.presidentSigne").value(true));
+        mvc.perform(get(base).header("Authorization", jetonM1)).andExpect(jsonPath("$.pv.quorum.regle").value("MAJORITE"))
+                .andExpect(jsonPath("$.pv.quorum.requis").value(2)).andExpect(jsonPath("$.pv.quorum.atteint").value(false));
+        mvc.perform(put("/api/parametres/cao-quorum").header("Authorization", tokenAdmin).contentType(JSON).content("{\"regle\":\"1\"}"))
+                .andExpect(status().isOk());
         mvc.perform(post(base + "/pv/empechement").header("Authorization", jetonM1).contentType(JSON)
                 .content("{\"im\":\"" + comptes.get(1) + "\",\"motif\":\"Appelé en urgence avant la fin de la séance\"}")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.pv.quorum.atteint").value(true)).andExpect(jsonPath("$.pv.quorum.obtenus").value(1))
                 .andExpect(jsonPath("$.etat").value("CLOSE")).andExpect(jsonPath("$.pv.signe").value(true)).andExpect(jsonPath("$.pv.publie").value(true))
                 .andExpect(jsonPath("$.pv.signatures[1].empechement").value(true))
                 .andExpect(jsonPath("$.pv.signatures[1].motif").value("Appelé en urgence avant la fin de la séance"))
@@ -337,7 +373,8 @@ class SeanceIntegrationTest extends CnmIntegrationTestSupport {
                 .andReturn().getResponse().getContentAsByteArray();
         assertThat(texteDuPdf(pv)).contains("Président de la commission) — signé électroniquement sur la plateforme le",
                 "empêché de signer : Appelé en urgence avant la fin de la séance (constaté par", "montant : 1 500 000 MGA",
-                "émetteur : BNI Madagascar", "GARANTIE_INSUFFISANTE").doesNotContain("signature attendue");
+                "émetteur : BNI Madagascar", "GARANTIE_INSUFFISANTE", "Quorum de la commission : 1 membre(s) au moins — 1 requis, 1 obtenu(s) : atteint")
+                .doesNotContain("signature attendue");
         byte[] publie = mvc.perform(get("/api/procedures-en-ligne/" + idDmc + "/pv")).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsByteArray();
         assertThat(texteDuPdf(publie)).contains("signé électroniquement sur la plateforme").doesNotContain("GARANTIE_INSUFFISANTE");
@@ -444,8 +481,17 @@ class SeanceIntegrationTest extends CnmIntegrationTestSupport {
         // Carence : aucune offre déposée.
         mvc.perform(post(base + "/ouvrir").header("Authorization", tokenVer)).andExpect(status().isOk()).andExpect(jsonPath("$.etat").value("DECHIFFREE"));
         mvc.perform(get(base + "/lecture").header("Authorization", tokenPrmp)).andExpect(jsonPath("$.offres.length()").value(0));
+        // ⚠️ R1 (manuel révisé, §B2) — sans membre présent, le quorum n'est pas atteint : le PV de carence ne se produit pas ; le président
+        // présent, il se produit et se signe comme un PV d'ouverture.
+        mvc.perform(post(base + "/pv").header("Authorization", tokenVer).contentType(JSON).content("{}")).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("QUORUM_NON_ATTEINT")).andExpect(jsonPath("$.details.obtenus").value(0));
+        mvc.perform(put(base + "/presences").header("Authorization", tokenVer).contentType(JSON)
+                .content("{\"presents\":[\"" + comptes.get(0) + "\"]}")).andExpect(status().isOk());
         mvc.perform(post(base + "/pv").header("Authorization", tokenVer).contentType(JSON).content("{}")).andExpect(status().isOk())
-                .andExpect(jsonPath("$.etat").value("CLOSE")).andExpect(jsonPath("$.pv.signe").value(true));   // personne de présent : signé d'office
+                .andExpect(jsonPath("$.etat").value("PV_A_SIGNER")).andExpect(jsonPath("$.pv.signe").value(false))
+                .andExpect(jsonPath("$.pv.quorum.requis").value(1));
+        mvc.perform(post(base + "/pv/signer").header("Authorization", jetonM1)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.etat").value("CLOSE")).andExpect(jsonPath("$.pv.signe").value(true));
         mvc.perform(post(base + "/ouvrir").header("Authorization", tokenVer)).andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("SEANCE_DEJA_OUVERTE"));
     }
@@ -864,6 +910,10 @@ class SeanceIntegrationTest extends CnmIntegrationTestSupport {
                 .content("{\"im\":\"CTRVER\"}")).andExpect(status().isCreated());
         mvc.perform(put("/api/fiches-marche/" + idDmc + "/cao").header("Authorization", tokenPrmp).contentType(JSON)
                 .content(CaoIntegrationTest.corpsCao("m1@seance.mg", "m2@seance.mg"))).andExpect(status().isOk());
+        // ⚠️ R1 (manuel révisé, §B2) — une CAO de deux membres : la majorité vaudrait l'unanimité ; le décor règle le quorum à 1 membre
+        // (président requis en plus), les tests du quorum le remontent explicitement.
+        mvc.perform(put("/api/parametres/cao-quorum").header("Authorization", tokenAdmin).contentType(JSON).content("{\"regle\":\"1\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.regle").value("1"));
         mvc.perform(put("/api/fiches-marche/" + idDmc + "/parametres-internes").header("Authorization", tokenVer).contentType(JSON)
                 .content("{\"quorum\":2,\"dateCeremonie\":\"" + aujourdhui.plusDays(9) + "T09:00\",\"depositaire\":{\"nom\":\"Rakoto Jean\",\"email\":\"rakoto.depositaire@secours.mg\"}}"))
                 .andExpect(status().isOk());

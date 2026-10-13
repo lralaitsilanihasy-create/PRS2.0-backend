@@ -59,6 +59,9 @@ public class SeanceFinanciereService {
 
     static final String METHODE = "B02-MS-01";
     private static final DateTimeFormatter HORODATAGE = DateTimeFormatter.ofPattern("dd/MM/yyyy à HH:mm");
+    /** ⚠️ R1 (manuel révisé, lot 1, §B2) — quorum à la clôture, signatures électroniques du PV. */
+    private final QuorumCao quorumCao;
+    private final cnm.prs.repository.SeanceFinanciereSignatureRepository signatures;
 
     private final SeanceService seance;
     private final PartsEnSeance memoire;
@@ -79,7 +82,10 @@ public class SeanceFinanciereService {
     public SeanceFinanciereService(SeanceService seance, PartsEnSeance memoire, SeanceRepository seances, SeanceFinanciereRepository financieres,
             OffreRepository offres, EvaluationTechniqueService technique, FicheMarcheService fiches, ParametresInternesService internes,
             NotificationService notifications, CompteCandidatRepository candidats, GenerateurDocumentsFiche generateur,
-            EvaluationJournalRepository journal, ObjectMapper mapper, Clock horloge, NegociationService negociation) {
+            EvaluationJournalRepository journal, ObjectMapper mapper, Clock horloge, NegociationService negociation, QuorumCao quorumCao,
+            cnm.prs.repository.SeanceFinanciereSignatureRepository signatures) {
+        this.quorumCao = quorumCao;
+        this.signatures = signatures;
         this.seance = seance;
         this.memoire = memoire;
         this.seances = seances;
@@ -369,7 +375,10 @@ public class SeanceFinanciereService {
             }
             presents.add(im);
         }
+        // ⚠️ R1 (manuel révisé, lot 1, §B2) — la clôture exige le quorum parmi les présents ; ils sont appelés à signer le PV.
+        quorumCao.exigerAtteignable(idDmc, QuorumCao.SEANCE_FINANCIERE, new ArrayList<>(presents));
         s.setPresents(presents.isEmpty() ? null : String.join(",", presents));
+        s.setSignataires(presents.isEmpty() ? null : String.join(",", presents));
         s.setAutres(c == null || c.autres() == null ? null : mapper.writeValueAsString(c.autres().stream()
                 .filter(x -> x != null && x.nom() != null && !x.nom().isBlank()).toList()));
         s.setObservations(c == null || c.observations() == null || c.observations().isBlank() ? null : c.observations().trim());
@@ -384,8 +393,128 @@ public class SeanceFinanciereService {
             }
         }
         financieres.save(s);
-        tracer(idDmc, "SEANCE_FINANCIERE_CLOSE", "PV de la seconde séance produit");
+        tracer(idDmc, "SEANCE_FINANCIERE_CLOSE", "PV de la seconde séance produit" + (presents.isEmpty() ? "" : " ; " + presents.size()
+                + " signature(s) attendue(s)"));
+        for (String k : presents) {
+            internes.notifierMembre(idDmc, k, cnm.prs.enums.TypeNotification.PV_A_SIGNER, "Seconde séance : signez le PV",
+                    "Le PV d'ouverture des propositions financières de la procédure " + idDmc + " est produit : relisez-le et signez-le sur la plateforme.");
+        }
         return dto(s);
+    }
+
+    // ------------------------------------------------------------------ ⚠️ R1 (manuel révisé, lot 1, §B2) : les signatures du PV
+
+    /** La signature électronique simple du PV par un membre présent : 403 {@code NON_PRESENT} ; 409 {@code PV_NON_PRODUIT}, {@code DEJA_SIGNE}. */
+    public SeanceFinanciereDto signer(Long idDmc) {
+        SeanceFinanciere s = pvASigner(idDmc);
+        String k = membreCaoAppelant(idDmc);
+        if (k == null || !signatairesDe(s).contains(k)) {
+            throw new cnm.prs.exception.AccesReserveException("Le PV se signe par les membres de la commission présents à la séance.", "NON_PRESENT");
+        }
+        if (signatures.existsByIdDmcAndRondeAndIm(idDmc, s.getRonde(), k)) {
+            throw new BusinessRuleException("Vous avez déjà signé ce PV.", "DEJA_SIGNE");
+        }
+        signatures.save(new cnm.prs.entity.SeanceFinanciereSignature(null, idDmc, s.getRonde(), k, maintenant(), false, null, null));
+        tracer(idDmc, "SEANCE_FINANCIERE_SIGNATURE", internes.nomMembre(k) + " a signé le PV de la seconde séance");
+        apresSignature(s);
+        return dto(s);
+    }
+
+    /**
+     * L'empêchement d'un membre présent, constaté par le président de la commission (ou le responsable) ; refusé s'il rend le quorum
+     * inatteignable : 400 {@code MOTIF_ABSENT}, {@code NON_SIGNATAIRE} ; 403 ; 409 {@code PV_NON_PRODUIT}, {@code DEJA_SIGNE}, {@code QUORUM_NON_ATTEINT}.
+     */
+    public SeanceFinanciereDto empechement(Long idDmc, SeanceDto.Empechement e) {
+        SeanceFinanciere s = pvASigner(idDmc);
+        String k = membreCaoAppelant(idDmc);
+        boolean president = k != null && quorumCao.estPresident(idDmc, k);
+        boolean responsable = !president && cnm.prs.security.CurrentUser.profil().isPresent() && internes.estTitulaire(idDmc);
+        if (!president && !responsable) {
+            throw new org.springframework.security.access.AccessDeniedException("L'empêchement d'un membre se constate par le président de la commission.");
+        }
+        if (e == null || e.motif() == null || e.motif().isBlank()) {
+            throw new BadRequestException("L'empêchement exige un motif, porté au PV.", "MOTIF_ABSENT");
+        }
+        if (e.im() == null || !signatairesDe(s).contains(e.im())) {
+            throw new BadRequestException("« " + e.im() + " » n'est pas appelé à signer ce PV.", "NON_SIGNATAIRE");
+        }
+        if (signatures.existsByIdDmcAndRondeAndIm(idDmc, s.getRonde(), e.im())) {
+            throw new BusinessRuleException("Ce membre a déjà signé le PV (ou son empêchement est déjà constaté).", "DEJA_SIGNE");
+        }
+        java.util.Set<String> empeches = new java.util.HashSet<>();
+        signatures.findByIdDmcAndRondeOrderByDateAscIdAsc(idDmc, s.getRonde()).stream().filter(x -> Boolean.TRUE.equals(x.getEmpechement()))
+                .forEach(x -> empeches.add(x.getIm()));
+        quorumCao.exigerAtteignable(idDmc, QuorumCao.SEANCE_FINANCIERE, signatairesDe(s).stream()
+                .filter(x -> !empeches.contains(x) && !x.equals(e.im())).toList());
+        String par = president ? internes.nomMembre(k) : internes.responsable(idDmc).map(r -> r.getNomResponsable()).orElse(null);
+        signatures.save(new cnm.prs.entity.SeanceFinanciereSignature(null, idDmc, s.getRonde(), e.im(), maintenant(), true, e.motif().trim(),
+                par == null ? null : par.length() > 100 ? par.substring(0, 100) : par));
+        tracer(idDmc, "SEANCE_FINANCIERE_EMPECHEMENT", internes.nomMembre(e.im()) + " empêché de signer : " + e.motif().trim());
+        apresSignature(s);
+        return dto(s);
+    }
+
+    private void apresSignature(SeanceFinanciere s) {
+        java.util.Set<String> faites = new java.util.HashSet<>();
+        signatures.findByIdDmcAndRondeOrderByDateAscIdAsc(s.getIdDmc(), s.getRonde()).forEach(x -> faites.add(x.getIm()));
+        if (faites.containsAll(signatairesDe(s))) {
+            s.setPvSigneLe(maintenant());
+            tracer(s.getIdDmc(), "SEANCE_FINANCIERE_PV_SIGNE", "PV de la seconde séance signé");
+        }
+        regenererPv(s);
+    }
+
+    private void regenererPv(SeanceFinanciere s) {
+        SeanceFinanciereDto d = dto(s);
+        for (GenerateurDocumentsFiche.Fichier f : generateur.generer(document(s, d))) {
+            if ("pdf".equals(f.extension())) {
+                s.setPv(f.contenu());
+            } else if ("docx".equals(f.extension())) {
+                s.setPvDocx(f.contenu());
+            }
+        }
+        financieres.save(s);
+    }
+
+    /** La ronde dont le PV attend ses signatures ; 409 {@code PV_NON_PRODUIT}, {@code DEJA_SIGNE}. */
+    private SeanceFinanciere pvASigner(Long idDmc) {
+        SeanceFinanciere s = exiger(idDmc);
+        if (!SeanceFinanciere.CLOSE.equals(s.getEtat()) || s.getPv() == null || s.getSignataires() == null) {
+            throw new BusinessRuleException("Le PV de la seconde séance n'est pas produit.", "PV_NON_PRODUIT");
+        }
+        if (s.getPvSigneLe() != null) {
+            throw new BusinessRuleException("Le PV est déjà entièrement signé.", "DEJA_SIGNE");
+        }
+        return s;
+    }
+
+    private static List<String> signatairesDe(SeanceFinanciere s) {
+        return cnm.prs.entity.ChampFicheMarche.liste(s.getSignataires());
+    }
+
+    private String membreCaoAppelant(Long idDmc) {
+        String ref = cnm.prs.security.CurrentUser.ref().orElse(null);
+        return ref != null && cnm.prs.enums.TypeActeur.MEMBRE_CAO.name().equals(cnm.prs.security.CurrentUser.acteurType().orElse(null))
+                && internes.membresCao(idDmc).contains(ref) ? ref : null;
+    }
+
+    /** Le bloc PV du DTO : signatures posées, attendues (avec leur qualité), quorum constaté. */
+    private SeanceFinanciereDto.Pv blocPv(SeanceFinanciere s) {
+        if (s.getPv() == null) {
+            return new SeanceFinanciereDto.Pv(false, false, null, List.of(), List.of(), null);
+        }
+        List<SeanceDto.Signature> faites = new ArrayList<>();
+        java.util.Set<String> deja = new java.util.HashSet<>();
+        for (cnm.prs.entity.SeanceFinanciereSignature x : signatures.findByIdDmcAndRondeOrderByDateAscIdAsc(s.getIdDmc(), s.getRonde())) {
+            deja.add(x.getIm());
+            faites.add(new SeanceDto.Signature(x.getIm(), internes.nomMembre(x.getIm()), quorumCao.estPresident(s.getIdDmc(), x.getIm()), x.getDate(),
+                    Boolean.TRUE.equals(x.getEmpechement()), x.getMotif(), x.getConstatePar()));
+        }
+        List<SeanceDto.Attendue> attendues = signatairesDe(s).stream().filter(k -> !deja.contains(k))
+                .map(k -> new SeanceDto.Attendue(k, internes.nomMembre(k), quorumCao.qualite(s.getIdDmc(), QuorumCao.SEANCE_FINANCIERE, k))).toList();
+        cnm.prs.dto.QuorumDto quorum = s.getSignataires() == null ? null : quorumCao.evaluer(s.getIdDmc(), QuorumCao.SEANCE_FINANCIERE,
+                faites.stream().filter(x -> !x.empechement()).map(SeanceDto.Signature::im).toList());
+        return new SeanceFinanciereDto.Pv(true, s.getPvSigneLe() != null, s.getPvSigneLe(), faites, attendues, quorum);
     }
 
     private DocumentLibre document(SeanceFinanciere s, SeanceFinanciereDto d) {
@@ -422,6 +551,24 @@ public class SeanceFinanciereService {
             para(el, s.getObservations());
         }
         para(el, "Établi par le responsable de la procédure le " + s.getCloseLe().format(HORODATAGE) + ".");
+        // ⚠️ R1 (manuel révisé, lot 1, §B2) — les signatures des membres présents et le quorum constaté.
+        if (s.getSignataires() != null) {
+            sous(el, "Signatures des membres présents");
+            Map<String, cnm.prs.entity.SeanceFinanciereSignature> signees = new LinkedHashMap<>();
+            signatures.findByIdDmcAndRondeOrderByDateAscIdAsc(s.getIdDmc(), s.getRonde()).forEach(x -> signees.put(x.getIm(), x));
+            for (String im : signatairesDe(s)) {
+                cnm.prs.entity.SeanceFinanciereSignature x = signees.get(im);
+                String qui = internes.nomMembre(im) + " (" + QuorumCao.qualiteLisible(quorumCao.qualite(s.getIdDmc(), QuorumCao.SEANCE_FINANCIERE, im))
+                        + " de la commission)";
+                para(el, x == null ? qui + " — signature attendue"
+                        : Boolean.TRUE.equals(x.getEmpechement()) ? qui + " — empêché de signer : " + x.getMotif()
+                                + (x.getConstatePar() == null ? "" : " (constaté par " + x.getConstatePar() + " le " + x.getDate().format(HORODATAGE) + ")")
+                        : qui + " — signé électroniquement sur la plateforme le " + x.getDate().format(HORODATAGE));
+            }
+            para(el, quorumCao.ligne(quorumCao.evaluer(s.getIdDmc(), QuorumCao.SEANCE_FINANCIERE, signees.values().stream()
+                    .filter(x -> !Boolean.TRUE.equals(x.getEmpechement())).map(cnm.prs.entity.SeanceFinanciereSignature::getIm).toList()),
+                    quorumCao.regle(s.getIdDmc())));
+        }
         return new DocumentLibre("PV_FINANCIER", null, el, "Procédure " + s.getIdDmc() + " — PV d'ouverture des propositions financières");
     }
 
@@ -466,7 +613,7 @@ public class SeanceFinanciereService {
                 .toList();
         return new SeanceFinanciereDto(idDmc, s.getEtat(), s.getMethode(), seance.quorum(idDmc), env, nonOuvertes,
                 cnm.prs.entity.ChampFicheMarche.liste(s.getPresents()), autres, Boolean.TRUE.equals(s.getSecoursEmploye()), s.getOuverteLe(),
-                s.getDechiffreeLe(), s.getCloseLe(), s.getPv() != null, s.getRonde(), s.getMotif(), rondes);
+                s.getDechiffreeLe(), s.getCloseLe(), s.getPv() != null, s.getRonde(), s.getMotif(), rondes, blocPv(s));
     }
 
     private List<Offre> aOuvrir(SeanceFinanciere s) {

@@ -139,6 +139,12 @@ public class ResultatsPi {
         para(el, "Grille de la demande de propositions" + (tech.scoreMinimum() == null ? "" : ", score technique minimum : "
                 + lisible(tech.scoreMinimum()) + " points") + ". Chaque membre a noté chaque proposition ; la note retenue est la moyenne des "
                 + "membres (le détail des grilles figure en annexe).");
+        // ⚠️ R1 (manuel révisé, lot 1, §B1) — la validation du rapport technique : l'arrêt par le président, dans la section 4.
+        para(el, "Validation de l'évaluation technique : arrêtée par le président de la commission, " + Objects.toString(t.arret().nom(), t.arret().par())
+                + ", le " + t.arret().le().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy 'à' HH:mm"))
+                + (t.arret().observation() == null ? "" : " ; observation : " + t.arret().observation())
+                + (t.arret().rouverteLe() == null ? "" : " (après une réouverture le " + t.arret().rouverteLe().format(
+                        java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy 'à' HH:mm")) + " : " + t.arret().motifReouverture() + ")") + ".");
         for (TechniqueDto.Offre o : t.offres()) {
             List<String> parElement = new ArrayList<>();
             for (TechniqueDto.Moyenne m : o.moyennes()) {

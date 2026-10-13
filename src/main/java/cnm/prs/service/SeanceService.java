@@ -91,6 +91,8 @@ public class SeanceService {
     static final String LECTURE_IMPOSSIBLE = "LECTURE_IMPOSSIBLE";
     static final String MANIFESTE = "manifeste.json";
     private static final DateTimeFormatter HORODATAGE = DateTimeFormatter.ofPattern("dd/MM/yyyy 'à' HH:mm");
+    /** ⚠️ R1 (manuel révisé, lot 1, §B2) — le quorum de la CAO : clôture et empêchements. */
+    private final QuorumCao quorumCao;
     private static final DateTimeFormatter JOUR = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     private final SeanceRepository seances;
@@ -125,7 +127,8 @@ public class SeanceService {
             ProceduresEnLigneService procedures, ExclusionArmpService exclusions, EntrepriseCandidatService entreprises,
             RapprochementCandidatService rapprochements, CompteCandidatRepository candidats, NotificationService notifications,
             GenerateurDocumentsFiche generateur, DossierMecRepository dmcRepository, ObjectMapper mapper, Clock horloge,
-            SeanceSignatureRepository signatures, FormulairesEnLigne formulaires) {
+            SeanceSignatureRepository signatures, FormulairesEnLigne formulaires, QuorumCao quorumCao) {
+        this.quorumCao = quorumCao;
         this.formulaires = formulaires;
         this.signatures = signatures;
         this.seances = seances;
@@ -894,6 +897,9 @@ public class SeanceService {
         if (!Seance.DECHIFFREE.equals(s.getEtat())) {
             throw new BusinessRuleException("Le PV d'ouverture se produit une fois toutes les offres ouvertes.", "SEANCE_NON_DECHIFFREE");
         }
+        // ⚠️ R1 (manuel révisé, lot 1, §B2) — le quorum parmi les présents, vérifié AVANT toute écriture (appelerSignatures le revérifie).
+        quorumCao.exigerAtteignable(idDmc, QuorumCao.SEANCE,
+                dto(idDmc).membres().stream().filter(SeanceDto.Membre::present).map(SeanceDto.Membre::im).toList());
         s.setObservations(obs == null || obs.observations() == null || obs.observations().isBlank() ? null : obs.observations().trim());
         s.setEtat(Seance.PV_A_SIGNER);
         tracer(idDmc, "PV", (deposeesOuOuvertes(idDmc).isEmpty() ? "PV de carence" : "PV d'ouverture") + " produit");
@@ -907,6 +913,8 @@ public class SeanceService {
      */
     private void appelerSignatures(Long idDmc, Seance s) {
         List<String> signataires = dto(idDmc).membres().stream().filter(SeanceDto.Membre::present).map(SeanceDto.Membre::im).toList();
+        // ⚠️ R1 (manuel révisé, lot 1, §B2) — la clôture exige le quorum parmi les présents, président ou représentant compris.
+        quorumCao.exigerAtteignable(idDmc, QuorumCao.SEANCE, signataires);
         s.setSignataires(signataires.isEmpty() ? null : String.join(",", signataires));
         if (signataires.isEmpty()) {
             finaliser(idDmc, s);
@@ -997,6 +1005,10 @@ public class SeanceService {
         if (signatures.existsByIdDmcAndIm(idDmc, e.im())) {
             throw new BusinessRuleException("Ce membre a déjà signé le PV (ou son empêchement est déjà constaté).", "DEJA_SIGNE");
         }
+        // ⚠️ R1 (§B2, arbitrage : pas d'impasse) — un empêchement qui rendrait le quorum inatteignable est refusé.
+        Set<String> empeches = new HashSet<>();
+        signatures.findByIdDmcOrderByDateAscIdAsc(idDmc).stream().filter(x -> Boolean.TRUE.equals(x.getEmpechement())).forEach(x -> empeches.add(x.getIm()));
+        quorumCao.exigerAtteignable(idDmc, QuorumCao.SEANCE, signatairesDe(s).stream().filter(x -> !empeches.contains(x) && !x.equals(e.im())).toList());
         String par = president ? internes.nomMembre(k) : internes.responsable(idDmc).map(r -> r.getNomResponsable()).orElse(null);
         String motif = e.motif().trim();
         signatures.save(new SeanceSignature(null, idDmc, e.im(), maintenant(), true, motif,
@@ -1183,6 +1195,11 @@ public class SeanceService {
                             + (x.getConstatePar() == null ? "" : " (constaté par " + x.getConstatePar() + " le " + x.getDate().format(HORODATAGE) + ")")
                     : qui + " — signé électroniquement sur la plateforme le " + x.getDate().format(HORODATAGE)));
         }
+        // ⚠️ R1 (§B2) — le quorum constaté est porté au PV.
+        if (s.getSignataires() != null) {
+            el.add(para(quorumCao.ligne(quorumCao.evaluer(idDmc, QuorumCao.SEANCE, signees.values().stream()
+                    .filter(x -> !Boolean.TRUE.equals(x.getEmpechement())).map(SeanceSignature::getIm).toList()), quorumCao.regle(idDmc))));
+        }
         return generateur.generer(new DocumentLibre("PV_OUVERTURE", null, el, "Procédure " + idDmc)).stream()
                 .filter(f -> "pdf".equals(f.extension())).findFirst().orElseThrow().contenu();
     }
@@ -1286,7 +1303,7 @@ public class SeanceService {
     /** ⚠️ §B2 : le PV, ses signatures posées et celles qui restent attendues. */
     private SeanceDto.Pv blocPv(Long idDmc, Seance s, List<SeanceDto.Membre> membres) {
         if (s == null) {
-            return new SeanceDto.Pv(false, false, false, List.of(), List.of());
+            return new SeanceDto.Pv(false, false, false, List.of(), List.of(), null);
         }
         Map<String, SeanceDto.Membre> parIm = new LinkedHashMap<>();
         membres.forEach(m -> parIm.put(m.im(), m));
@@ -1299,8 +1316,12 @@ public class SeanceService {
                     x.getDate(), Boolean.TRUE.equals(x.getEmpechement()), x.getMotif(), x.getConstatePar()));
         }
         List<SeanceDto.Attendue> attendues = s.getPvSigneLe() != null ? List.of() : signatairesDe(s).stream().filter(k -> !deja.contains(k))
-                .map(k -> new SeanceDto.Attendue(k, parIm.containsKey(k) ? parIm.get(k).nom() : internes.nomMembre(k))).toList();
-        return new SeanceDto.Pv(s.getPv() != null, Boolean.TRUE.equals(s.getPvPublie()), s.getPvSigneLe() != null, faites, attendues);
+                .map(k -> new SeanceDto.Attendue(k, parIm.containsKey(k) ? parIm.get(k).nom() : internes.nomMembre(k),
+                        quorumCao.qualite(idDmc, QuorumCao.SEANCE, k))).toList();
+        // ⚠️ R1 (§B2) — le quorum constaté sur les signataires non empêchés, dès que le PV est produit.
+        cnm.prs.dto.QuorumDto quorum = s.getSignataires() == null ? null : quorumCao.evaluer(idDmc, QuorumCao.SEANCE,
+                faites.stream().filter(x -> !x.empechement()).map(SeanceDto.Signature::im).toList());
+        return new SeanceDto.Pv(s.getPv() != null, Boolean.TRUE.equals(s.getPvPublie()), s.getPvSigneLe() != null, faites, attendues, quorum);
     }
 
     /** Les parts chiffrées d'un détenteur, retrouvées dans l'en-tête de chaque offre déposée par l'empreinte de l'une de ses clés. */

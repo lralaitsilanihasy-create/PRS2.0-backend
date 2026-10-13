@@ -136,7 +136,8 @@ public class EvaluationService {
             DossierMecRepository dmcRepository, ParametreService parametres, ObjectMapper mapper, Clock horloge,
             cnm.prs.repository.LotRepository lotRepository, ValeursPpmService valeursPpm, cnm.prs.repository.EvaluationRapportRepository rapports,
             cnm.prs.repository.EvaluationSignatureRepository signatures, GenerateurDocumentsFiche generateur, cnm.prs.repository.CaoRepository caoRepository,
-            org.springframework.beans.factory.ObjectProvider<ResultatsPi> resultatsPi) {
+            org.springframework.beans.factory.ObjectProvider<ResultatsPi> resultatsPi, QuorumCao quorumCao) {
+        this.quorumCao = quorumCao;
         this.evaluations = evaluations;
         this.declarations = declarations;
         this.etapes = etapes;
@@ -1403,6 +1404,8 @@ public class EvaluationService {
 
     // ------------------------------------------------------------------ ⚠️ tranche 1d (§B6) : le rapport d'évaluation
 
+    /** ⚠️ R1 (manuel révisé, lot 1, §B1-B2) — quorum du rapport et section « Séance de validation ». */
+    private final QuorumCao quorumCao;
     private static final java.time.format.DateTimeFormatter HORODATAGE = java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy à HH:mm");
 
     /**
@@ -1432,6 +1435,8 @@ public class EvaluationService {
         Set<String> enConflit = declarations.findByIdDmcOrderBySigneeLeAscIdAsc(idDmc).stream().filter(d -> Boolean.TRUE.equals(d.getConflit()))
                 .map(EvaluationDeclaration::getIm).collect(Collectors.toSet());
         List<String> signataires = internes.membresCao(idDmc).stream().filter(k -> !enConflit.contains(k)).toList();
+        // ⚠️ R1 (manuel révisé, lot 1, §B2) — le rapport ne se produit que si les signataires appelés peuvent atteindre le quorum.
+        quorumCao.exigerAtteignable(idDmc, QuorumCao.RAPPORT, signataires);
         cnm.prs.entity.EvaluationRapport rapport = new cnm.prs.entity.EvaluationRapport(idDmc, maintenant(), acteur(),
                 r == null ? null : nettoyer(r.observations()), signataires.isEmpty() ? null : String.join(",", signataires), null, null, null);
         e.setEtat(Evaluation.RAPPORT_A_SIGNER);
@@ -1508,6 +1513,11 @@ public class EvaluationService {
         if (signatures.existsByIdDmcAndIm(idDmc, x.im())) {
             throw new BusinessRuleException("Ce membre a déjà signé le rapport (ou son empêchement est déjà constaté).", "DEJA_SIGNE");
         }
+        // ⚠️ R1 (§B2, arbitrage : pas d'impasse) — un empêchement qui rendrait le quorum inatteignable est refusé.
+        Set<String> empeches = signatures.findByIdDmcOrderByDateAscIdAsc(idDmc).stream().filter(y -> Boolean.TRUE.equals(y.getEmpechement()))
+                .map(cnm.prs.entity.EvaluationSignature::getIm).collect(Collectors.toSet());
+        quorumCao.exigerAtteignable(idDmc, QuorumCao.RAPPORT, ChampFicheMarche.liste(r.getSignataires()).stream()
+                .filter(y -> !empeches.contains(y) && !y.equals(x.im())).toList());
         String par = president ? internes.nomMembre(k) : internes.responsable(idDmc).map(rp -> rp.getNomResponsable()).orElse(null);
         signatures.save(new cnm.prs.entity.EvaluationSignature(null, idDmc, x.im(), maintenant(), true, motif,
                 par == null ? null : par.length() > 100 ? par.substring(0, 100) : par, null));
@@ -1708,6 +1718,15 @@ public class EvaluationService {
                     : qui + " — signé électroniquement sur la plateforme le " + x.getDate().format(HORODATAGE)
                             + (x.getObservation() == null ? "" : ". Observation : " + x.getObservation()));
         }
+        // ⚠️ R1 (manuel révisé, lot 1, §B1 ; Q4 du pilote) — le rapport signé vaut PV de validation : la « séance de validation ».
+        List<QuorumCao.SignatureVue> vues = new ArrayList<>();
+        for (cnm.prs.entity.EvaluationSignature x : signees.values()) {
+            vues.add(new QuorumCao.SignatureVue(x.getIm(), internes.nomMembre(x.getIm()), quorumCao.qualite(idDmc, QuorumCao.RAPPORT, x.getIm()),
+                    x.getDate(), Boolean.TRUE.equals(x.getEmpechement()), x.getMotif(), x.getConstatePar(), x.getObservation()));
+        }
+        el.addAll(quorumCao.sectionSeanceDeValidation("10. Séance de validation", idDmc, quorumCao.evaluer(idDmc, QuorumCao.RAPPORT,
+                vues.stream().filter(sv -> !sv.empechement()).map(QuorumCao.SignatureVue::im).toList()), r.getSigneLe(), vues,
+                ev.declarations().stream().filter(d -> Boolean.TRUE.equals(d.conflit())).map(EvaluationDto.Declaration::nom).toList()));
         sous(el, "Annexe 1 — Déclarations d'absence de conflit d'intérêts et de confidentialité");
         for (EvaluationDto.Declaration d : ev.declarations()) {
             para(el, d.nom() + " : " + (d.signeeLe() == null ? "non signée" : "signée le " + d.signeeLe().format(HORODATAGE)
@@ -1770,8 +1789,11 @@ public class EvaluationService {
                     Boolean.TRUE.equals(x.getEmpechement()), x.getMotif(), x.getConstatePar(), x.getObservation()));
         }
         List<EvaluationDto.Attendue> attendues = ChampFicheMarche.liste(r.getSignataires()).stream().filter(k -> !deja.contains(k))
-                .map(k -> new EvaluationDto.Attendue(k, internes.nomMembre(k))).toList();
-        return new EvaluationDto.Rapport(r.getProduitLe(), r.getObservations(), r.getSigneLe() != null, r.getSigneLe(), faites, attendues);
+                .map(k -> new EvaluationDto.Attendue(k, internes.nomMembre(k), quorumCao.qualite(idDmc, QuorumCao.RAPPORT, k))).toList();
+        // ⚠️ R1 (§B2) — le quorum constaté sur les signataires non empêchés.
+        cnm.prs.dto.QuorumDto quorum = quorumCao.evaluer(idDmc, QuorumCao.RAPPORT,
+                faites.stream().filter(x -> !x.empechement()).map(EvaluationDto.SignatureRapport::im).toList());
+        return new EvaluationDto.Rapport(r.getProduitLe(), r.getObservations(), r.getSigneLe() != null, r.getSigneLe(), faites, attendues, quorum);
     }
 
     // ------------------------------------------------------------------ ⚠️ tranche 1d (§B7) : les compteurs

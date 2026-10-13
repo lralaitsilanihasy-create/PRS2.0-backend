@@ -25,7 +25,9 @@ public record ParametresInternesDto(Long idDmc, List<CompteDesignableDto> membre
         /** ⚠️ V66 (lot 2, §B1) — le dépositaire de la part de secours et l'état de cette part ; hors {@code nombreParts}. */
         CeremonieDto.PartDeSecours partDeSecours,
         /** ⚠️ V66 (lot 2, §B3) — les avertissements, distincts des anomalies qui restent les refus : {@code SE_QUORUM_MARGE}. */
-        List<Anomalie> avertissements) {
+        List<Anomalie> avertissements,
+        /** ⚠️ R1 (manuel révisé, V101) — la surcharge du quorum de la CAO de cette procédure (nul : la règle globale) et la règle effective. */
+        String caoQuorum, String caoQuorumEffectif) {
 
     public record Anomalie(String regle, String message) {
     }

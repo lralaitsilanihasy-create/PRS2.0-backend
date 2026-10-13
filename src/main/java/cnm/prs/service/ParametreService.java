@@ -161,6 +161,9 @@ public class ParametreService {
     /** Préfixe d'une valeur par défaut de champ qui se lit dans un paramètre ({@code PARAM:FICHE_SE_PLATEFORME_URL}). */
     public static final String PREFIXE_DEFAUT_PARAMETRE = "PARAM:";
 
+    /** ⚠️ R1 (manuel révisé, lot 1, §B2 ; V101) — la règle globale du quorum de la CAO : MAJORITE (défaut), TOUS, ou un nombre. */
+    public static final String CAO_QUORUM = QuorumCao.CAO_QUORUM;
+
     @Transactional(readOnly = true)
     public RemiseElectronique.Parametres remiseElectronique() {
         java.math.BigDecimal taille = nombre(FICHE_SE_TAILLE_MAX_PLATEFORME_MO);
@@ -304,6 +307,22 @@ public class ParametreService {
         if (v != null && (v < min || v > max)) {
             erreurs.add(new cnm.prs.exception.ErrorResponse.FieldError(champ, "De " + min + " à " + max + "."));
         }
+    }
+
+    /** ⚠️ R1 — la règle du quorum de la CAO. */
+    public record QuorumCaoRegle(String regle) {
+    }
+
+    @Transactional(readOnly = true)
+    public QuorumCaoRegle quorumCao() {
+        return new QuorumCaoRegle(QuorumCao.parse(texte(CAO_QUORUM)).texte());
+    }
+
+    /** Règle le quorum (Administrateur) : MAJORITE, TOUS, ou un nombre de membres (400 QUORUM_REGLE_INVALIDE sinon). */
+    @Transactional
+    public QuorumCaoRegle fixerQuorumCao(QuorumCaoRegle r) {
+        ecrireTexte(CAO_QUORUM, QuorumCao.parse(r == null ? null : r.regle()).texte());
+        return quorumCao();
     }
 
     /** La valeur texte d'un paramètre ; {@code null} si absent ou vide. */

@@ -74,4 +74,8 @@ public class ParametreInterneProcedure {
 
     @Column(name = "ID_COMPTE_DEPOSITAIRE", length = 10)
     private String idCompteDepositaire;
+
+    /** ⚠️ R1 (manuel révisé, V101) — la surcharge de la règle de quorum de la CAO (MAJORITE, TOUS, nombre) ; nul : la règle globale. */
+    @Column(name = "CAO_QUORUM", length = 20)
+    private String caoQuorum;
 }

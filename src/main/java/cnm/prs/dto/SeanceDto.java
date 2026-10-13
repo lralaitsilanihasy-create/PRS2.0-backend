@@ -41,7 +41,9 @@ public record SeanceDto(Long idDmc, String etat, LocalDateTime heureOuverture, L
      * Le PV : ⚠️ 2026-10-04 (arbitrages du pilote, §B2) — {@code signe} quand tous les membres présents ont signé (ou que leur
      * empêchement est constaté) ; {@code signatures} posées, {@code signaturesAttendues} restantes. Publié seulement une fois signé.
      */
-    public record Pv(boolean produit, boolean publie, boolean signe, List<Signature> signatures, List<Attendue> signaturesAttendues) {
+    public record Pv(boolean produit, boolean publie, boolean signe, List<Signature> signatures, List<Attendue> signaturesAttendues,
+            /** ⚠️ R1 (manuel révisé, §B2) — le quorum constaté sur les signataires non empêchés ; nul tant que le PV n'est pas produit. */
+            QuorumDto quorum) {
     }
 
     /** Une signature électronique simple, ou un empêchement constaté ({@code empechement}, {@code motif}, {@code constatePar}). */
@@ -49,7 +51,8 @@ public record SeanceDto(Long idDmc, String etat, LocalDateTime heureOuverture, L
             String constatePar) {
     }
 
-    public record Attendue(String im, String nom) {
+    /** ⚠️ R1 — {@code qualite} : {@code PRESIDENT}, {@code REPRESENTANT} (du président, pour ce contexte), {@code MEMBRE}. */
+    public record Attendue(String im, String nom, String qualite) {
     }
 
     /** {@code POST …/pv/empechement} (le président) : le membre présent empêché de signer, et le motif porté au PV. */

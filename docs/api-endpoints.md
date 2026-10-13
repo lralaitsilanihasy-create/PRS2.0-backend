@@ -7868,6 +7868,47 @@ courtes** de la fiche ; les projets déjà produits se **refont** par un geste. 
   journal de l'évaluation (`PROJET_REFAIT`).
 
 
+### Le manuel révisé pour l'application, lot 1, tranche R1 : le quorum de la CAO et la « séance de validation » — V101 ⚠️ 2026-10-10
+
+Demande front `demande-backend-2026-10-10-manuel-revise-lot1.md` (§B1, §B2). Arbitrages du pilote du 10/10 : **Q4** le rapport signé par la
+CAO **vaut PV de validation** ; **Q5** quorum **paramétrable**, défaut **majorité**, président ou représentant requis. Arbitrages du 10/10 au
+backend : le représentant du président est **désigné par séance** (par contexte) ; la règle est **globale, surchargeable par procédure** ;
+un **empêchement qui rendrait le quorum inatteignable est refusé** (pas d'impasse) ; la majorité se compte sur les **membres désignés**
+(qualité `MEMBRE`), conflits d'intérêts compris. Migration **V101**. Aucune dépendance ajoutée.
+
+| Méthode | URL | Réponse | Accès |
+|---|---|---|---|
+| GET | /api/parametres/cao-quorum | `{ regle }` : `MAJORITE` \| `TOUS` \| `"<n>"` | authentifié |
+| PUT | /api/parametres/cao-quorum | la règle réglée ; 400 `QUORUM_REGLE_INVALIDE` | **Administrateur** |
+| PUT | /api/fiches-marche/{idDmc}/parametres-internes | `caoQuorum` (nouveau, facultatif) : la surcharge de la procédure ; `ParametresInternesDto` sert `caoQuorum` et `caoQuorumEffectif` | comme avant |
+| POST | /api/cao/procedures/{idDmc}/representant | `{ contexte: SEANCE \| SEANCE_FINANCIERE \| RAPPORT \| AMI, im }` → `{ idDmc, contexte, im, nom, designeLe, designePar }` ; `im` nul retire ; 400 `CONTEXTE_INVALIDE`, `REPRESENTANT_INVALIDE` | **le président** de la CAO (403 sinon) |
+| POST | /api/fiches-marche/{idDmc}/seance/financiere/pv/signer | `SeanceFinanciereDto` ; 403 `NON_PRESENT` ; 409 `PV_NON_PRODUIT`, `DEJA_SIGNE` | membre de la CAO présent |
+| POST | /api/fiches-marche/{idDmc}/seance/financiere/pv/empechement | `{ im, motif }` ; 400 `MOTIF_ABSENT`, `NON_SIGNATAIRE` ; 409 `DEJA_SIGNE`, `QUORUM_NON_ATTEINT` | président de la CAO, ou responsable |
+
+- **La règle** : `MAJORITE` = plus de la moitié des membres désignés (2 sur 2, 2 sur 3, 3 sur 4…) ; `TOUS` ; un nombre, borné par
+  l'effectif. Le **président**, ou le représentant qu'il a désigné **pour ce contexte**, est requis en plus du nombre (`presidentRequis`).
+- **Où le quorum bloque** (409 `QUORUM_NON_ATTEINT`, `details` : `regle`, `requis`, `obtenus`, `presidentSigne`) :
+  - séance d'ouverture : `POST …/seance/pv` (et le constat d'illisibilité) — sur les **présents** ;
+  - seconde séance PI : `POST …/seance/financiere/cloturer` — sur les présents ; **nouveau** : le PV se signe ensuite par les présents
+    (`…/pv/signer`, `…/pv/empechement`), `pvSigneLe` à la dernière signature ; la clôture et l'évaluation financière **n'attendent pas**
+    ces signatures ;
+  - rapport d'évaluation : `POST …/evaluation/rapport` — sur les signataires appelés (membres hors conflit d'intérêts) ;
+  - liste de l'AMI : `POST …/ami/preselection/arreter` — idem ;
+  - chaque **empêchement** (`…/pv/empechement`, `…/rapport/empechement`, `…/preselection/empechement`) qui laisserait moins de signataires
+    non empêchés que le requis, ou retirerait le président sans représentant.
+- **Lecture** : `SeanceDto.pv.quorum`, `SeanceFinanciereDto.pv` (nouveau bloc : `produit`, `signe`, `signeLe`, `signatures`,
+  `signaturesAttendues`, `quorum`), `EvaluationDto.rapport.quorum`, `PreselectionDto.rapport.quorum` = `{ regle, requis, obtenus,
+  atteint, presidentRequis, presidentSigne, representant, representantNom }` ; les `signaturesAttendues` / `attendues` portent
+  **`qualite`** : `PRESIDENT`, `REPRESENTANT`, `MEMBRE`.
+- **Documents** : le PV d'ouverture et le PV de la seconde séance portent la ligne « Quorum de la commission : … » ; le rapport
+  d'évaluation gagne la section **« 10. Séance de validation »**, le rapport de présélection **« 6. Séance de validation »** (date de la
+  dernière signature, membres ayant validé avec leur qualité, empêchements, exclus pour conflit d'intérêts, quorum, observations de
+  désaccord) ; le rapport PI relate dans sa section 4 l'**arrêt de l'évaluation technique** par le président (date, observation,
+  réouverture éventuelle).
+- **Effet sur les commissions de deux membres** : la majorité vaut l'unanimité ; un conflit d'intérêts ou un empêchement y rend le quorum
+  inatteignable (409) tant que l'Administrateur ne règle pas `1` (global ou par procédure).
+
+
 ### Le rabais structuré de l'offre en ligne ⚠️ 2026-10-07
 
 Demande front `demande-backend-2026-10-07-rabais-structure.md` (arbitrage Q4 du pilote : « le rabais est structuré au dépôt »). Aucune

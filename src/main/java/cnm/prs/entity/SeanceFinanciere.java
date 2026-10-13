@@ -89,6 +89,14 @@ public class SeanceFinanciere {
     @Column(name = "PV_DOCX")
     private byte[] pvDocx;
 
+    /** ⚠️ R1 (manuel révisé, V101) — les présents appelés à signer le PV (comptes, séparés par des virgules). */
+    @Column(name = "SIGNATAIRES", length = 1000)
+    private String signataires;
+
+    /** ⚠️ R1 — le PV entièrement signé (ou empêchements constatés). */
+    @Column(name = "PV_SIGNE_LE")
+    private java.time.LocalDateTime pvSigneLe;
+
     @Getter
     @Setter
     @NoArgsConstructor

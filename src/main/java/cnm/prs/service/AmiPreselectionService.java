@@ -81,6 +81,8 @@ public class AmiPreselectionService {
     public static final String DEFINITIVE = "DEFINITIVE";
     public static final String CODE_PIECE = "RAPPORT_PRESELECTION";
     private static final DateTimeFormatter HORODATAGE = DateTimeFormatter.ofPattern("dd/MM/yyyy à HH:mm");
+    /** ⚠️ R1 (manuel révisé, lot 1, §B1-B2) — quorum de l'arrêt de la liste et section « Séance de validation ». */
+    private final QuorumCao quorumCao;
 
     private final AmiRepository amis;
     private final AmiService ami;
@@ -105,7 +107,8 @@ public class AmiPreselectionService {
             AmiNoteRepository notes, AmiListeRepository listes, AmiSignatureRepository signatures, CaoMembreRepository caoMembres,
             ParametresInternesService internes, FicheMarcheService fiches, GenerateurDocumentsFiche generateur, CompteCandidatRepository candidats,
             EntrepriseRepository entreprises, NotificationService notifications, PieceJointeDossierRepository pieces,
-            TypePieceJointeRepository typesPiece, EvaluationJournalRepository journal, Clock horloge) {
+            TypePieceJointeRepository typesPiece, EvaluationJournalRepository journal, Clock horloge, QuorumCao quorumCao) {
+        this.quorumCao = quorumCao;
         this.amis = amis;
         this.ami = ami;
         this.expressions = expressions;
@@ -244,6 +247,10 @@ public class AmiPreselectionService {
     public PreselectionDto arreter(Long idDmc, PreselectionDto.ArretRequest r) {
         String k = exigerPresident(idDmc);
         Ami a = exigerEnNotation(idDmc);
+        // ⚠️ R1 (manuel révisé, lot 1, §B2) — la liste ne s'arrête que si les signataires appelés (membres hors conflit d'intérêts)
+        // peuvent atteindre le quorum : vérifié AVANT toute écriture.
+        List<String> signataires = signataires(idDmc);
+        quorumCao.exigerAtteignable(idDmc, QuorumCao.AMI, signataires);
         Classement cl = classer(a);
         List<Integer> incompletes = cl.lignes().stream().filter(l -> !l.ecartee() && !l.complete()).map(l -> l.x().getNumero()).toList();
         if (!incompletes.isEmpty()) {
@@ -296,7 +303,6 @@ public class AmiPreselectionService {
         a.setListeArreteePar(k);
         a.setMotifNombre(retenues.size() < n ? motifNombre : null);
         a.setObservations(r == null ? null : nettoyer(r.observations()));
-        List<String> signataires = signataires(idDmc);
         a.setSignataires(String.join(",", signataires));
         produireRapport(a);
         amis.save(a);
@@ -337,6 +343,10 @@ public class AmiPreselectionService {
         if (signatures.existsByIdDmcAndIm(idDmc, r.im())) {
             throw new BusinessRuleException("Ce membre a déjà signé.", "DEJA_SIGNE");
         }
+        // ⚠️ R1 (§B2, arbitrage : pas d'impasse) — un empêchement qui rendrait le quorum inatteignable est refusé.
+        java.util.Set<String> empeches = new java.util.HashSet<>();
+        signatures.findByIdDmcOrderByDateAscIdAsc(idDmc).stream().filter(x -> Boolean.TRUE.equals(x.getEmpechement())).forEach(x -> empeches.add(x.getIm()));
+        quorumCao.exigerAtteignable(idDmc, QuorumCao.AMI, liste(a.getSignataires()).stream().filter(x -> !empeches.contains(x) && !x.equals(r.im())).toList());
         signatures.save(new AmiSignature(null, idDmc, r.im(), maintenant(), true, nettoyer(r.motif()), internes.nomMembre(k), null));
         tracer(idDmc, "AMI_EMPECHEMENT", internes.nomMembre(r.im()) + " empêché de signer : " + r.motif().trim());
         apresSignature(a);
@@ -600,6 +610,16 @@ public class AmiPreselectionService {
                     : qui + " — signé électroniquement sur la plateforme le " + s.getDate().format(HORODATAGE)
                             + (s.getObservation() == null ? "" : ". Observation : " + s.getObservation()));
         }
+        // ⚠️ R1 (manuel révisé, lot 1, §B1 ; Q4 du pilote) — le rapport signé vaut PV de validation de la liste : la « séance de validation ».
+        List<QuorumCao.SignatureVue> vues = new ArrayList<>();
+        for (AmiSignature s : signees.values()) {
+            vues.add(new QuorumCao.SignatureVue(s.getIm(), internes.nomMembre(s.getIm()), quorumCao.qualite(a.getIdDmc(), QuorumCao.AMI, s.getIm()),
+                    s.getDate(), Boolean.TRUE.equals(s.getEmpechement()), s.getMotif(), s.getConstatePar(), s.getObservation()));
+        }
+        List<String> exclus = internes.membresCao(a.getIdDmc()).stream().filter(im -> !liste(a.getSignataires()).contains(im))
+                .map(internes::nomMembre).toList();
+        el.addAll(quorumCao.sectionSeanceDeValidation("6. Séance de validation", a.getIdDmc(), quorumCao.evaluer(a.getIdDmc(), QuorumCao.AMI,
+                vues.stream().filter(v -> !v.empechement()).map(QuorumCao.SignatureVue::im).toList()), a.getListeDefinitiveLe(), vues, exclus));
         return new DocumentLibre("RAPPORT_PRESELECTION", null, el, "Procédure " + a.getIdDmc() + " — rapport de présélection (AMI)");
     }
 
@@ -642,8 +662,11 @@ public class AmiPreselectionService {
                             s.getMotif(), s.getConstatePar(), s.getObservation()))
                     .toList();
             List<PreselectionDto.Attendue> att = liste(a.getSignataires()).stream().filter(im -> !signatures.existsByIdDmcAndIm(idDmc, im))
-                    .map(im -> new PreselectionDto.Attendue(im, internes.nomMembre(im))).toList();
-            rapport = new PreselectionDto.Rapport(a.getListeArreteeLe(), a.getListeDefinitiveLe() != null, a.getListeDefinitiveLe(), sig, att);
+                    .map(im -> new PreselectionDto.Attendue(im, internes.nomMembre(im), quorumCao.qualite(idDmc, QuorumCao.AMI, im))).toList();
+            // ⚠️ R1 (§B2) — le quorum constaté sur les signataires non empêchés.
+            cnm.prs.dto.QuorumDto quorum = quorumCao.evaluer(idDmc, QuorumCao.AMI,
+                    sig.stream().filter(x -> !x.empechement()).map(PreselectionDto.Signature::im).toList());
+            rapport = new PreselectionDto.Rapport(a.getListeArreteeLe(), a.getListeDefinitiveLe() != null, a.getListeDefinitiveLe(), sig, att, quorum);
         }
         String etat = Ami.INFRUCTUEUX.equals(a.getEtat()) ? Ami.INFRUCTUEUX : a.getListeDefinitiveLe() != null ? DEFINITIVE
                 : a.getListeArreteeLe() != null ? LISTE_ARRETEE : lisible ? NOTATION : EN_ATTENTE;

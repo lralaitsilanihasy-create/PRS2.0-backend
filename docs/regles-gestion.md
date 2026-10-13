@@ -799,6 +799,18 @@ Contrat : `docs/api-endpoints.md`, § *L'ouverture des plis en séance — V69*.
   close, l'extrait publié (si la fiche le prévoit, sans les alertes ni la vérification des NIF) et les intéressés avertis **à la
   dernière signature**. Le PV de carence et le PV de constat d'illisibilité suivent la même règle ; sans aucun membre présent, il n'y a
   rien à signer.
+- ⚠️ **2026-10-10 — le quorum de la commission (manuel révisé, lot 1, tranche R1 ; arbitrage Q5 du pilote).** La commission ne
+  délibère valablement qu'au **quorum** : la règle, réglée par l'Administrateur pour toutes les procédures (`MAJORITE` par défaut :
+  plus de la moitié des membres désignés ; `TOUS` ; ou un nombre) et surchargeable procédure par procédure, compte les membres de
+  qualité `MEMBRE`, conflits d'intérêts compris ; le **président**, ou le représentant qu'il a désigné pour la séance ou le rapport
+  (par séance d'ouverture, seconde séance, rapport d'évaluation, liste de l'AMI), est toujours requis en plus. Le quorum **bloque** :
+  la clôture de la séance d'ouverture et de la seconde séance (sur les présents — une séance sans membre présent ne se clôt donc plus),
+  la production du rapport d'évaluation et l'arrêt de la liste restreinte (sur les signataires appelés), et tout **empêchement** qui le
+  rendrait inatteignable — pour qu'aucun PV ni rapport ne reste sans issue. Le quorum constaté est imprimé au PV et au rapport.
+  **Le rapport signé vaut PV de validation** (arbitrage Q4) : il porte une section « Séance de validation » — date de la dernière
+  signature, membres ayant validé avec leur qualité, empêchements, exclus pour conflit d'intérêts, quorum, observations de désaccord ;
+  le PV de la seconde séance (prestations intellectuelles) se signe désormais comme celui de la première, sans retarder l'évaluation
+  financière. Sur une commission de deux membres, la majorité vaut l'unanimité.
 - **La garantie de soumission est lue en séance** : son montant et son émetteur, imprimés au PV. Un montant inférieur au minimum
   fixé par la fiche (par lot le cas échéant) donne une **alerte** à la commission, jamais un refus. Une offre déposée avant ce format
   reste lisible, sans montant ni émetteur.

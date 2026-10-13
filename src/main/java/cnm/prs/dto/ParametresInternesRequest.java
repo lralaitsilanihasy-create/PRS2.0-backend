@@ -11,9 +11,15 @@ import java.util.List;
  * ({@code nom} obligatoire s'il est donné ; {@code null} : aucun dépositaire).
  */
 public record ParametresInternesRequest(List<String> membresCommission, Integer quorum, String dateCeremonie,
-        CeremonieDto.Depositaire depositaire) {
+        CeremonieDto.Depositaire depositaire,
+        /** ⚠️ R1 (manuel révisé, V101) — la surcharge de la règle de quorum de la CAO (MAJORITE, TOUS, nombre) ; nul ou vide : la règle globale. */
+        String caoQuorum) {
 
     public ParametresInternesRequest(List<String> membresCommission, Integer quorum, String dateCeremonie) {
-        this(membresCommission, quorum, dateCeremonie, null);
+        this(membresCommission, quorum, dateCeremonie, null, null);
+    }
+
+    public ParametresInternesRequest(List<String> membresCommission, Integer quorum, String dateCeremonie, CeremonieDto.Depositaire depositaire) {
+        this(membresCommission, quorum, dateCeremonie, depositaire, null);
     }
 }

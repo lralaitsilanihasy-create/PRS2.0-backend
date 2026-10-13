@@ -225,14 +225,17 @@ public record EvaluationDto(Long idDmc, String etat, LocalDateTime ouverteLe, St
      * {@code CLOSE}) ; {@code signatures} faites (ou empêchements constatés) et {@code signaturesAttendues}.
      */
     public record Rapport(LocalDateTime produitLe, String observations, boolean signe, LocalDateTime signeLe, List<SignatureRapport> signatures,
-            List<Attendue> signaturesAttendues) {
+            List<Attendue> signaturesAttendues,
+            /** ⚠️ R1 (manuel révisé, §B2) — le quorum constaté sur les signataires non empêchés. */
+            QuorumDto quorum) {
     }
 
     public record SignatureRapport(String im, String nom, boolean president, LocalDateTime date, boolean empechement, String motif,
             String constatePar, String observation) {
     }
 
-    public record Attendue(String im, String nom) {
+    /** ⚠️ R1 — {@code qualite} : {@code PRESIDENT}, {@code REPRESENTANT}, {@code MEMBRE}. */
+    public record Attendue(String im, String nom, String qualite) {
     }
 
     /** {@code POST …/rapport} : les observations du responsable. */
