@@ -201,7 +201,7 @@ public class KpiService {
     public CompteursPrmpDto mesCompteursPrmp() {
         String idPrmp = CurrentUser.ref().filter(s -> !s.isBlank()).orElse(null);
         if (idPrmp == null) {
-            return new CompteursPrmpDto(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+            return new CompteursPrmpDto(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
         }
         // ⚠️ Décision métier 2026-08-27 — les lettres non lues se comptent par AGENT (login, claim
         // « sub ») et non plus par tutelle : la lecture d'une UGPM ne décrémente plus le badge de sa
@@ -223,7 +223,8 @@ public class KpiService {
                 demandeRetraitRepository.countNouvellesDecisionsPourPrmp(idPrmp, seuil),
                 recuRepository.compterEnAttentePourPrmp(idPrmp),
                 evaluation.getObject().demandesEnAttentePourPrmp(idPrmp),
-                att.get("lotsAAttribuer"), att.get("lotsSignables"), att.get("avisAPublier"), att.get("explicationsSansReponse"));
+                att.get("lotsAAttribuer"), att.get("lotsSignables"), att.get("avisAPublier"), att.get("explicationsSansReponse"),
+                att.get("avisEnRetard"));
     }
 
     /**

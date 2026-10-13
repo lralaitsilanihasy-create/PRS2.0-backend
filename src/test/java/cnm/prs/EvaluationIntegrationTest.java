@@ -678,9 +678,12 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(post(att + "/lots/1/informer").header("Authorization", tokenPrmp).contentType(JSON)
                 .content("{\"dateAffichage\":\"" + aujourdhui + "\"}")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.lots[0].etat").value("INFORME")).andExpect(jsonPath("$.lots[0].information.lettres.length()").value(3))
-                .andExpect(jsonPath("$.lots[0].delaiAttente.debut").value(aujourdhui.toString()))
-                .andExpect(jsonPath("$.lots[0].delaiAttente.fin").value(aujourdhui.plusDays(10).toString()))
-                .andExpect(jsonPath("$.lots[0].delaiAttente.signableLe").value(aujourdhui.plusDays(11).toString()))
+                // ⚠️ R6c (règle 6, QB1 ; V108) — réception présumée : l'information + 3 jours (paramètre RECEPTION_LETTRE semé).
+                .andExpect(jsonPath("$.lots[0].delaiAttente.receptionLe").value(aujourdhui.plusDays(3).toString()))
+                .andExpect(jsonPath("$.lots[0].delaiAttente.joursReception").value(3))
+                .andExpect(jsonPath("$.lots[0].delaiAttente.debut").value(aujourdhui.plusDays(3).toString()))
+                .andExpect(jsonPath("$.lots[0].delaiAttente.fin").value(aujourdhui.plusDays(13).toString()))
+                .andExpect(jsonPath("$.lots[0].delaiAttente.signableLe").value(aujourdhui.plusDays(14).toString()))
                 .andExpect(jsonPath("$.lots[0].delaiAttente.ecoule").value(false));
         mvc.perform(post(att + "/lots/1/informer").header("Authorization", tokenPrmp).contentType(JSON)
                 .content("{\"dateAffichage\":\"" + aujourdhui + "\"}")).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("DEJA_INFORME"));
@@ -691,7 +694,7 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(get("/api/candidat/offres/" + b + "/resultat").header("Authorization", jetonA)).andExpect(status().isForbidden());
         String resB = mvc.perform(get("/api/candidat/offres/" + b + "/resultat").header("Authorization", jetonB)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.retenu").value(false)).andExpect(jsonPath("$.attributaire").value("BTP Alpha"))
-                .andExpect(jsonPath("$.signableLe").value(aujourdhui.plusDays(11).toString())).andReturn().getResponse().getContentAsString();
+                .andExpect(jsonPath("$.signableLe").value(aujourdhui.plusDays(14).toString())).andReturn().getResponse().getContentAsString();
         assertThat(JsonPath.<String>read(resB, "$.motifRejet")).contains("Situation fiscale non régulière");
         String lettreB = texteDuPdf(mvc.perform(get("/api/candidat/offres/" + b + "/resultat/lettre").header("Authorization", jetonB))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray()).replaceAll("\\s+", " ");
@@ -731,8 +734,8 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
 
         // Le délai écoulé : le lot devient signable le lendemain du dixième jour franc.
         cnm.prs.entity.Attribution attr = attributionRepository.findById(new cnm.prs.entity.Attribution.Cle(idDmc, 1)).orElseThrow();
-        attr.setInformeLe(attr.getInformeLe().minusDays(11));
-        attr.setDateAffichage(attr.getDateAffichage().minusDays(12));
+        attr.setInformeLe(attr.getInformeLe().minusDays(14));   // ⚠️ R6c : + 3 jours de réception présumée → début à J−11
+        attr.setDateAffichage(attr.getDateAffichage().minusDays(15));
         attributionRepository.save(attr);
         mvc.perform(get(att).header("Authorization", tokenPrmp)).andExpect(jsonPath("$.lots[0].etat").value("SIGNABLE"))
                 .andExpect(jsonPath("$.lots[0].delaiAttente.debut").value(aujourdhui.minusDays(11).toString()))
@@ -782,7 +785,26 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("PIECES_NON_CONFORMES"));
 
         // §B5 — les pièces fiscales et sociales : sous 15 jours de la lettre d'attribution, fiscale < 6 mois, sociale < 3 mois.
-        LocalDate informeLe = aujourdhui.minusDays(11);
+        LocalDate informeLe = aujourdhui.minusDays(14);
+        // ⚠️ R6c (règle 7) — une pièce plus ancienne que la limite (posée en base : le dépôt la refuse) ne peut être reconnue conforme ;
+        // non conforme avec motif, elle passe ; la pièce valide déposée ensuite est la dernière de son type.
+        cnm.prs.entity.AttributionPiece ancienne = new cnm.prs.entity.AttributionPiece();
+        ancienne.setIdDmc(idDmc);
+        ancienne.setLot(1);
+        ancienne.setNature(cnm.prs.entity.AttributionPiece.FISCALE);
+        ancienne.setNom("attestation-ancienne.pdf");
+        ancienne.setFormat("application/pdf");
+        ancienne.setTaille(3L);
+        ancienne.setContenu(new byte[] {1, 2, 3});
+        ancienne.setDeposeLe(LocalDateTime.now());
+        ancienne.setDateDelivrance(informeLe.minusMonths(7));
+        long idAncienne = pieceRepository.save(ancienne).getId();
+        mvc.perform(post(att + "/lots/1/pieces/" + idAncienne + "/verifier").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"conforme\":true}")).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("PIECE_TROP_ANCIENNE"))
+                .andExpect(jsonPath("$.details.limite").value(informeLe.minusMonths(6).toString()))
+                .andExpect(jsonPath("$.details.dateDelivrance").value(informeLe.minusMonths(7).toString()));
+        mvc.perform(post(att + "/lots/1/pieces/" + idAncienne + "/verifier").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"conforme\":false,\"motif\":\"Attestation de plus de six mois\"}")).andExpect(status().isOk());
         mvc.perform(multipart("/api/candidat/offres/" + b + "/pieces-attributaire").file(piece).param("type", "FISCALE")
                 .param("dateDelivrance", aujourdhui.toString()).header("Authorization", jetonB)).andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("NON_ATTRIBUTAIRE"));
@@ -794,12 +816,14 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$.echeance").value(informeLe.plusDays(15).toString()));
         mvc.perform(multipart("/api/candidat/offres/" + a + "/pieces-attributaire").file(piece).param("type", "SOCIALE")
                 .param("dateDelivrance", aujourdhui.toString()).header("Authorization", jetonA)).andExpect(status().isCreated())
-                .andExpect(jsonPath("$.pieces.length()").value(2));
+                .andExpect(jsonPath("$.pieces.length()").value(3))
+                .andExpect(jsonPath("$.limiteFiscale").value(informeLe.minusMonths(6).toString()))
+                .andExpect(jsonPath("$.limiteSociale").value(informeLe.minusMonths(3).toString()));
         assertThat(notificationRepository.findPourPrmp("PRMP001", null)).extracting(Notification::getTypeNotif).contains("PIECES_ATTRIBUTAIRE_DEPOSEES");
         mvc.perform(post(att + "/lots/1/retirer").header("Authorization", tokenPrmp).contentType(JSON).content("{\"motif\":\"Pièces absentes\"}"))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("DELAI_EN_COURS"));
         String vue = mvc.perform(get(att).header("Authorization", tokenPrmp)).andReturn().getResponse().getContentAsString();
-        List<Number> idsPieces = JsonPath.read(vue, "$.lots[0].piecesAttributaire.pieces[*].id");
+        List<Number> idsPieces = JsonPath.read(vue, "$.lots[0].piecesAttributaire.pieces[?(@.verifieeLe == null)].id");
         mvc.perform(post(att + "/lots/1/pieces/" + idsPieces.get(0).longValue() + "/verifier").header("Authorization", tokenPrmp).contentType(JSON)
                 .content("{\"conforme\":false}")).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("MOTIF_OBLIGATOIRE"));
         for (Number id : idsPieces) {
@@ -831,14 +855,37 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
         mvc.perform(post(att + "/lots/1/notification").header("Authorization", tokenPrmp).contentType(JSON)
                 .content("{\"dateNotification\":\"" + aujourdhui + "\"}")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.lots[0].etat").value("NOTIFIE")).andExpect(jsonPath("$.lots[0].notification.recueLe").isEmpty())
-                .andExpect(jsonPath("$.lots[0].avisAttribution.echeance").value(aujourdhui.plusDays(30).toString()));
+                .andExpect(jsonPath("$.lots[0].avisAttribution.depart").value(aujourdhui.toString()))
+                .andExpect(jsonPath("$.lots[0].avisAttribution.echeance").value(aujourdhui.plusDays(30).toString()))
+                .andExpect(jsonPath("$.lots[0].avisAttribution.enRetard").value(false));
         mvc.perform(get("/api/candidat/offres/" + a + "/resultat").header("Authorization", jetonA)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.retenu").value(true)).andExpect(jsonPath("$.marcheDisponible").value(true))
                 .andExpect(jsonPath("$.notificationRecueLe").isNotEmpty());
         mvc.perform(get("/api/candidat/offres/" + a + "/marche").header("Authorization", jetonA)).andExpect(status().isOk());
         mvc.perform(get(att).header("Authorization", tokenPrmp)).andExpect(jsonPath("$.lots[0].notification.receptionDeclaree").value(false));
+        // ⚠️ R6c (règle 8) — les 30 jours partent de la réception (ici l'accusé de lecture) ; alerte à J+20, une fois ; retard passé J+30.
+        cnm.prs.entity.Attribution notifiee = attributionRepository.findById(new cnm.prs.entity.Attribution.Cle(idDmc, 1)).orElseThrow();
+        notifiee.setDateNotification(aujourdhui.minusDays(23));
+        notifiee.setNotificationRecueLe(aujourdhui.minusDays(21).atStartOfDay());
+        attributionRepository.save(notifiee);
+        mvc.perform(get(att).header("Authorization", tokenPrmp))
+                .andExpect(jsonPath("$.lots[0].avisAttribution.depart").value(aujourdhui.minusDays(21).toString()))
+                .andExpect(jsonPath("$.lots[0].avisAttribution.echeance").value(aujourdhui.plusDays(9).toString()))
+                .andExpect(jsonPath("$.lots[0].avisAttribution.enRetard").value(false));
+        attributionService.alerter();
+        assertThat(notificationRepository.findAll()).filteredOn(n -> "ECHEANCE_AVIS_ATTRIBUTION".equals(n.getTypeNotif())).hasSize(1)
+                .allSatisfy(n -> assertThat(n.getCorps()).contains("20 jours", aujourdhui.plusDays(9).format(JOUR_FR)));
+        attributionService.alerter();
+        assertThat(notificationRepository.findAll()).filteredOn(n -> "ECHEANCE_AVIS_ATTRIBUTION".equals(n.getTypeNotif())).hasSize(1);
+        notifiee.setNotificationRecueLe(aujourdhui.minusDays(31).atStartOfDay());
+        attributionRepository.save(notifiee);
+        mvc.perform(get("/api/kpis/badges").header("Authorization", tokenPrmp)).andExpect(jsonPath("$.compteurs.avisAPublier").value(1))
+                .andExpect(jsonPath("$.compteurs.avisEnRetard").value(1));
+        mvc.perform(get(att).header("Authorization", tokenPrmp)).andExpect(jsonPath("$.lots[0].avisAttribution.enRetard").value(true));
         mvc.perform(post(att + "/lots/1/avis").header("Authorization", tokenPrmp).contentType(JSON)
-                .content("{\"datePublication\":\"" + aujourdhui + "\"}")).andExpect(status().isOk()).andExpect(jsonPath("$.lots[0].etat").value("PUBLIE"));
+                .content("{\"datePublication\":\"" + aujourdhui + "\"}")).andExpect(status().isOk()).andExpect(jsonPath("$.lots[0].etat").value("PUBLIE"))
+                .andExpect(jsonPath("$.lots[0].avisAttribution.enRetard").value(true));
+        mvc.perform(get("/api/kpis/badges").header("Authorization", tokenPrmp)).andExpect(jsonPath("$.compteurs.avisEnRetard").value(0));
         String avis = texteDuPdf(mvc.perform(get("/api/procedures-en-ligne/" + idDmc + "/avis-attribution/1")).andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsByteArray()).replaceAll("\\s+", " ");
         assertThat(avis).contains("AVIS D'ATTRIBUTION DE MARCHÉ", "BTP Alpha", "12 500 000 Ariary hors taxes", "modèle provisoire");
@@ -917,6 +964,14 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
         // La Commission reçoit le dossier et rend un avis favorable (PV signé posé en base).
         receptionRepository.save(reception(idDss, idDss, "CTRCC1", true));
         dispatchRepository.save(dispatch(idDss, idDss, "CTRCC1", "CTRMEM", "CTRPRE"));
+        // ⚠️ R6c (règle 9 ; V108) — l'échéance des 5 jours passée sans avis (réception de fixture au 02/06) : l'alerte de la veille puis la
+        // relance RELANCE_SANS_SUITE à la PRMP, au membre examinateur et au Président, une fois chacune.
+        assertThat(sansSuiteService.suivre()).isEqualTo(2);
+        assertThat(notificationRepository.findAll()).filteredOn(n -> "RELANCE_SANS_SUITE".equals(n.getTypeNotif()))
+                .extracting(Notification::getDestinataireRef).contains("PRMP001", "CTRMEM", "CTRPRE");
+        assertThat(sansSuiteService.suivre()).isZero();
+        mvc.perform(get(ss).header("Authorization", tokenPrmp)).andExpect(jsonPath("$.courante.relanceLe").isNotEmpty())
+                .andExpect(jsonPath("$.courante.echeanceDepassee").value(true));
         examenRepository.save(examen(idDss, idDss, "CTRMEM"));
         seedPvSigne(idDss, idDss);
         String favorable = mvc.perform(get(ss).header("Authorization", tokenPrmp)).andExpect(status().isOk()).andReturn().getResponse()
@@ -941,6 +996,8 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
 
 
     @Autowired private cnm.prs.repository.AttributionPieceRepository pieceRepository;
+    @Autowired private cnm.prs.service.SansSuiteService sansSuiteService;
+    private static final java.time.format.DateTimeFormatter JOUR_FR = java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     @Test
     @DisplayName("Rabais structuré (07/10, Q4) : la séance le chiffre et le contrôle en alertes ; l'étape 3 propose le rabais inconditionnel "

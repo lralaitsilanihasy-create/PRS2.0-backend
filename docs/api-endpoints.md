@@ -7076,7 +7076,7 @@ tardive** de l'information des candidats et de l'affichage du résultat. Migrati
   - `information` = `{ le, par, signataire, dateAffichage, lettres[{ id, idOffre, numero, candidat, type, motif, envoyeeLe, lueLe }] }` —
     `type` ∈ `ATTRIBUTION` · `NON_RETENU` ; `envoyeeLe` la date d'envoi du courriel (nulle sans adresse) ; `lueLe` **l'accusé de lecture
     de la plateforme** (la première consultation du résultat ou de la lettre par le candidat) ;
-  - `delaiAttente` = `{ debut, fin, signableLe, jours, ecoule }` — `debut` la plus tardive de l'information et de l'affichage (ce jour ne
+  - `delaiAttente` = `{ debut, fin, signableLe, jours, ecoule, receptionLe, joursReception }` — `debut` la plus tardive de la réception présumée (⚠️ R6c, V108 : l'information + `joursReception`, paramètre `RECEPTION_LETTRE`) et de l'affichage (ce jour ne
     compte pas), `fin` le dixième jour franc, `signableLe` le lendemain, premier jour où la signature est possible ;
   - `explications[]` = `{ id, idOffre, numero, candidat, question, demandeeLe, etat (EN_ATTENTE | REPONDUE), reponse, reponseNom,
     reponseTaille, reponduLe }`.
@@ -7152,8 +7152,8 @@ la fiche** (403 pour l'UGPM) et répondent l'`AttributionDto` à jour.
     echeanceReponse, bloquant, decision{ date, issue, motif, le, par, fichiers } }` ;
   - `signature` = `{ dateSignature, le, par, fichier }` ; `enregistrement` = `{ date, reference, le, fichier }` ;
   - `notification` = `{ date, le, par, recueLe, receptionDeclaree }` ;
-  - `avisAttribution` = `{ echeance, datePublication, publieLe, par, disponible }` (servi dès la notification) ;
-  - `piecesAttributaire` = `{ echeance, delaiDepasse, fiscaleConforme, socialeConforme, pieces[{ id, type, dateDelivrance, nom, taille,
+  - `avisAttribution` = `{ depart, echeance, datePublication, publieLe, par, disponible, enRetard }` (servi dès la notification ; ⚠️ R6c : `depart` = réception de la notification par le titulaire, à défaut sa date) ;
+  - `piecesAttributaire` = `{ echeance, delaiDepasse, limiteFiscale, limiteSociale, fiscaleConforme, socialeConforme, pieces[{ id, type, dateDelivrance, nom, taille,
     deposeLe, conforme, motif, verifieeLe }] }` (servi dès l'information) ; `retrait` = `{ le, par, motif }`.
 - **États ajoutés** : `SIGNE`, `NOTIFIE`, `PUBLIE`, et l'issue `RETIRE`.
 - **Les recours (Q5)** : `REEXAMEN` (art. 79) n'arrête rien ; sa réponse est due sous **10 jours** (`echeanceReponse`). `REVISION_ARMP`
@@ -7559,10 +7559,10 @@ circuit de la Commission (Q10). Migration **V91**. Aucune dépendance ajoutée.
   reste au circuit avec son PV. Membres de la CAO notifiés (`EVALUATION_REPRISE`) ; journaux `EVALUATION_REPRISE`, `REPRISE`. Refusée si
   un autre lot de la procédure est déjà attribué (l'évaluation est commune aux lots).
 - **Alertes à la PRMP** (planificateur horaire `app.attribution.cron-alertes`, une fois chacune) : `DELAI_ATTENTE_ECOULE` (délai
-  d'attente écoulé, marché non signé), `ECHEANCE_AVIS_ATTRIBUTION` (avis d'attribution à publier, à 5 jours de l'échéance de 30 jours
+  d'attente écoulé, marché non signé), `ECHEANCE_AVIS_ATTRIBUTION` (avis d'attribution à publier, ⚠️ R6c : à J+20 de la réception de la notification, échéance de 30 jours
   après la notification), `ECHEANCE_REEXAMEN` (demande de réexamen sans réponse, à 2 jours de son échéance de 10 jours).
 - **Compteurs PRMP** (`GET /api/kpis/badges`, `compteurs`) : `lotsAAttribuer` (avis favorable rendu, non attribués), `lotsSignables`
-  (délai écoulé, non signés), `avisAPublier` (notifiés sans avis publié), `explicationsSansReponse`.
+  (délai écoulé, non signés), `avisAPublier` (notifiés sans avis publié), `explicationsSansReponse`, ⚠️ R6c : `avisEnRetard` (échéance de 30 jours passée sans avis).
 
 
 ### L'attribution, lot 2, tranche 2d-2 : la réattribution après le retrait du marché — V92 ⚠️ 2026-10-08
@@ -7619,7 +7619,7 @@ courent de la **réception** ; la **signature** du PV reste celle du circuit (le
   signature** d'un marché de la procédure (409 `MARCHE_SIGNE`). Une seule demande à la fois.
 - **L'avis** : le PV d'un dossier `DSS` n'admet que **`FAV`** ou **`DEF`** (409 `AVIS_SANS_SUITE` sur `FAVR` ou `NSP`). L'avis se lit au PV
   signé ; le planificateur horaire le constate et avertit la PRMP (`SANS_SUITE_AVIS`) ; la veille de l'échéance, la PRMP et le membre
-  examinateur (ou le chef de commission) reçoivent `ECHEANCE_SANS_SUITE`, une fois. **Défavorable** : la procédure reprend son cours,
+  examinateur (ou le chef de commission) reçoivent `ECHEANCE_SANS_SUITE`, une fois ; ⚠️ R6c (V108) : l'échéance passée sans avis, `RELANCE_SANS_SUITE` à la PRMP, au membre examinateur et aux Présidents de la localité, une fois (`relanceLe`). **Défavorable** : la procédure reprend son cours,
   une nouvelle demande reste possible.
 - **Tant qu'une demande attend son avis**, la signature d'un marché répond 409 **`SANS_SUITE_EN_COURS`**.
 - **La déclaration** (après `FAV`) : procédure **close sans suite** ; chaque candidat ayant déposé reçoit **`PROCEDURE_SANS_SUITE`** avec
@@ -8191,7 +8191,7 @@ Les **neuf délais de la loi n° 2016-055** (table en code `DelaisLegaux`, véri
 Les délais **administrables** (`t_delai_parametre` : `code, valeur, unite, texte, actif, dateMaj, imActeur`), **signalés, jamais
 bloquants** tant que le pilote ne les a pas confirmés. Semés actifs avec les valeurs proposées : `PUBLICITE_AOR` 15 j (décret
 2019-1310, art. 2-3), `PUBLICITE_DC_PI` 30 j, `PUBLICITE_AMI` 15 j (art. 32-III), `PUBLICITE_CONTRAT_CADRE` 30 j,
-`PUBLICITE_PREQUALIFICATION` 30 j, `DELAI_AMENAGE` 15 j (manuel 2-II-A P7). Lecture par tout authentifié ; `PUT` par
+`PUBLICITE_PREQUALIFICATION` 30 j, `DELAI_AMENAGE` 15 j (manuel 2-II-A P7) ; ⚠️ R6c (V108) : `RECEPTION_LETTRE` 3 j (réception présumée de la lettre d'information, point de départ du délai d'attente). Lecture par tout authentifié ; `PUT` par
 l'**Administrateur** : `{ valeur, unite, texte, actif }`, un champ absent garde sa valeur ; **404** code inconnu ; **400** nominatif
 (valeur négative, unité hors `JOURS` / `JOURS_FRANCS` / `JOURS_OUVRABLES` / `MOIS`, texte > 300). Un paramètre inactif n'est plus
 évalué. `FICHE_SE_DELAI_MIN_REMISE_JOURS` (V50, mode électronique, règle `SE_OUVERTURE_DEPOTS`) subsiste ; la règle de la loi prime.
@@ -8253,6 +8253,55 @@ réputé approuvé (le front l'affiche comme une observation, QB4).
 ⚠️ Écarts avec la demande : pas de statut `REPUTE_APPROUVE` (marqueur daté ; le filtre « statut » du front ne le verra pas, lire
 `reputeApprouveLe`) ; tout statut du circuit est éligible (la demande citait `SOUMIS` / `RECU` / `DISPATCHE`) ; passage horaire plutôt
 que quotidien ; le calendrier des jours fériés n'est pas tenu (lundi-vendredi).
+
+### Le manuel révisé pour l'application, lot 2, tranche R6c : les délais de la signature, des pièces, de l'avis d'attribution et du sans suite — V108 ⚠️ 2026-10-13
+
+Demande front `demande-backend-2026-10-10-manuel-revise-lot2.md` (§B1, règles 6 à 9 ; QB1). Arbitrages au backend du 13/10 : règle 6,
+la réception de l'information par les non-retenus est **présumée pour tous à l'envoi + n jours** (paramètre) ; règle 8, les 30 jours de
+l'avis d'attribution partent de la **réception de la notification par le titulaire** ; règle 9, **une relance à J+5**, à trois
+destinataires. Migration **V108** (`t_sans_suite.RELANCE_LE`, paramètre `RECEPTION_LETTRE`), pom inchangé. La tranche R6 (délais de la loi)
+est entièrement livrée.
+
+#### Règle 6 — le délai d'attente avant la signature (QB1)
+
+- **Point de départ** : la **réception présumée** de la lettre d'information par les candidats non retenus = l'information (l'envoi des
+  lettres, courriel et mise à disposition sur la plateforme au même instant) + **`RECEPTION_LETTRE`** jours (`t_delai_parametre`, 3 jours
+  proposés, administrable par `PUT /api/delais-parametres/RECEPTION_LETTRE` ; inactif ou 0 : l'envoi vaut réception) ; l'affichage au
+  siège, s'il est plus tardif, reste le départ. L'accusé de lecture de chacun (`lueLe`) n'est pas lu : un candidat qui ne consulte
+  jamais sa lettre ne bloque pas la signature.
+- **`delaiAttente`** gagne `receptionLe` (la réception présumée) et `joursReception` (n) : `{ debut, fin, signableLe, jours, ecoule,
+  receptionLe, joursReception }`. Les dix jours francs, `signableLe` et le 409 `DELAI_ATTENTE` de la signature sont inchangés ; l'alerte
+  `DELAI_ATTENTE_ECOULE` suit le nouveau départ.
+- ⚠️ Écart avec la demande : la proposition « max(`LUE_LE` ; envoi + n) » n'est pas retenue ; la présomption est uniforme.
+
+#### Règle 7 — les pièces fiscale et sociale de l'attributaire
+
+- Le dépôt refuse déjà une pièce fiscale de plus de six mois ou sociale de plus de trois mois **à l'information** (la notification de
+  l'attribution ; 400 `PIECE_PERIMEE`). ⚠️ Nouveau : **à la vérification** (`POST …/lots/{lot}/pieces/{id}/verifier`), une pièce plus
+  ancienne que cette limite ne peut être reconnue conforme — **400 `PIECE_TROP_ANCIENNE`**, `details { nature, dateDelivrance, limite,
+  reference }` ; `conforme: false` avec motif reste possible.
+- **`piecesAttributaire`** gagne `limiteFiscale` et `limiteSociale` (la date de délivrance la plus ancienne admise) : `{ echeance,
+  delaiDepasse, limiteFiscale, limiteSociale, fiscaleConforme, socialeConforme, pieces[…] }`.
+
+#### Règle 8 — l'avis d'attribution sous 30 jours (non bloquant)
+
+- **Point de départ** : la réception de la notification par le titulaire — `dateReception` déclarée à la notification, ou l'accusé de
+  lecture de la plateforme — à défaut la **date de notification** (art. 54). **`avisAttribution`** = `{ depart, echeance, datePublication,
+  publieLe, par, disponible, enRetard }` ; `echeance` = `depart` + 30 ; `enRetard` : l'échéance est passée sans publication, ou la
+  publication l'a dépassée. Le journal de la notification et de la publication citent cette échéance.
+- **Alerte `ECHEANCE_AVIS_ATTRIBUTION`** à **J+20** du départ (planificateur horaire, une fois ; elle était à J+25).
+- **Compteur `avisEnRetard`** (`GET /api/kpis/badges`, `compteurs`) : marchés notifiés, échéance passée, avis non publié.
+- ⚠️ Écart avec la demande : il n'existe pas de geste de « clôture du dossier de marché » côté PRMP où exiger l'avis ; la règle reste
+  non bloquante, portée par l'alerte, `enRetard` et le compteur.
+
+#### Règle 9 — l'avis sur une déclaration sans suite sous 5 jours
+
+- Existant : l'échéance (réception + 5 jours) servie et alertée la veille (`ECHEANCE_SANS_SUITE`, PRMP et membre examinateur), la
+  déclaration refusée sans avis favorable exprès (409 `AVIS_NON_FAVORABLE`), la signature suspendue (409 `SANS_SUITE_EN_COURS`).
+- ⚠️ Nouveau : **l'échéance passée sans avis**, le planificateur émet la relance **`RELANCE_SANS_SUITE`** à la PRMP, au membre
+  examinateur (à défaut le chef de commission) et aux **Présidents de la localité** du dossier (un Président sans localité aussi), **une
+  fois** (`t_sans_suite.RELANCE_LE`) ; `SansSuiteDto.Demande.relanceLe`. Le blocage reste jusqu'à l'avis exprès : le silence ne vaut pas
+  accord.
 
 ### Le rabais structuré de l'offre en ligne ⚠️ 2026-10-07
 

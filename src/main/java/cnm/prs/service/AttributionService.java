@@ -112,6 +112,8 @@ public class AttributionService {
     private final SansSuiteService sansSuite;
     /** ⚠️ 2026-10-10 (demande « projet-de-marche ») — le projet de marché conforme à la loi (art. 28, art. 60). */
     private final ProjetMarcheService projetMarche;
+    /** ⚠️ R6c (règle 6, QB1 ; V108) — le délai d'attente part de la réception présumée de l'information. */
+    private final DelaiAttenteCalcul delais;
 
     public AttributionService(AttributionRepository attributions, EvaluationService evaluation, SeanceService seance, SaisieService saisie,
             ValeursPpmService valeursPpm, FicheMarcheService fiches, EntrepriseCandidatService entreprises, GenerateurDocumentsFiche generateur,
@@ -121,7 +123,9 @@ public class AttributionService {
             cnm.prs.repository.AttributionExplicationRepository explications, cnm.prs.repository.CompteCandidatRepository candidats,
             cnm.prs.repository.PrmpRepository prmpRepository, NotificationService notifications, CeremonieService ceremonies,
             ParametreService parametres, java.time.Clock horloge, AttributionExecutionService execution, ResultatsPi resultatsPi,
-            cnm.prs.repository.AttributionRepriseRepository reprises, SansSuiteService sansSuite, ProjetMarcheService projetMarche) {
+            cnm.prs.repository.AttributionRepriseRepository reprises, SansSuiteService sansSuite, ProjetMarcheService projetMarche,
+            DelaiAttenteCalcul delais) {
+        this.delais = delais;
         this.projetMarche = projetMarche;
         this.sansSuite = sansSuite;
         this.reprises = reprises;
@@ -628,14 +632,17 @@ public class AttributionService {
 
     /**
      * Les compteurs de la PRMP sur ses lots : {@code lotsAAttribuer} (avis favorable rendu, non attribués), {@code lotsSignables} (délai
-     * d'attente écoulé, non signés), {@code avisAPublier} (marchés notifiés sans avis d'attribution publié), {@code explicationsSansReponse}.
+     * d'attente écoulé, non signés), {@code avisAPublier} (marchés notifiés sans avis d'attribution publié), {@code explicationsSansReponse} ;
+     * ⚠️ R6c (règle 8) : {@code avisEnRetard} (notifiés, échéance de 30 jours passée sans avis publié).
      */
     @Transactional(readOnly = true)
     public Map<String, Long> compteursPrmp(String idPrmp) {
         long aAttribuer = 0;
         long signables = 0;
         long avis = 0;
+        long avisEnRetard = 0;
         long explicationsOuvertes = 0;
+        LocalDate aujourdhui = LocalDate.now(horloge);
         if (idPrmp != null && !idPrmp.isBlank()) {
             for (Attribution a : attributions.pourPrmp(idPrmp)) {
                 if (a.getInfructueuxLe() != null || a.getRetireLe() != null) {
@@ -653,13 +660,16 @@ public class AttributionService {
                 }
                 if (a.getNotifieLe() != null && a.getAvisPublieLe() == null) {
                     avis++;
+                    if (aujourdhui.isAfter(AttributionExecutionService.echeanceAvis(a))) {
+                        avisEnRetard++;
+                    }
                 }
                 explicationsOuvertes += explications.findByIdDmcAndLotOrderByDemandeeLeAscIdAsc(a.getIdDmc(), a.getLot()).stream()
                         .filter(e -> e.getReponduLe() == null).count();
             }
         }
-        return Map.of("lotsAAttribuer", aAttribuer, "lotsSignables", signables, "avisAPublier", avis, "explicationsSansReponse",
-                explicationsOuvertes);
+        return Map.of("lotsAAttribuer", aAttribuer, "lotsSignables", signables, "avisAPublier", avis, "avisEnRetard", avisEnRetard,
+                "explicationsSansReponse", explicationsOuvertes);
     }
 
     /**
@@ -683,13 +693,16 @@ public class AttributionService {
             n++;
         }
         for (Attribution a : attributions.findByNotifieLeIsNotNullAndAvisPublieLeIsNullAndAlerteAvisLeIsNull()) {
-            LocalDate echeance = a.getDateNotification().plusDays(AttributionExecutionService.JOURS_AVIS);
-            if (aujourdhui.isBefore(echeance.minusDays(5))) {
+            // ⚠️ R6c (règle 8) — l'alerte à J+20 de la réception de la notification (à défaut, de la notification), échéance à J+30.
+            LocalDate depart = AttributionExecutionService.departAvis(a);
+            LocalDate echeance = AttributionExecutionService.echeanceAvis(a);
+            if (aujourdhui.isBefore(depart.plusDays(AttributionExecutionService.JOURS_ALERTE_AVIS))) {
                 continue;
             }
             ceremonies.notifierPrmp(a.getIdDmc(), TypeNotification.ECHEANCE_AVIS_ATTRIBUTION, "Avis d'attribution à publier", "Procédure "
-                    + a.getIdDmc() + ", lot " + a.getLot() + " : l'avis d'attribution est à publier au plus tard le " + echeance.format(JOUR)
-                    + " (art. 53).");
+                    + a.getIdDmc() + ", lot " + a.getLot() + " : " + AttributionExecutionService.JOURS_ALERTE_AVIS + " jours se sont écoulés depuis "
+                    + "la notification du marché (reçue le " + depart.format(JOUR) + ") ; l'avis d'attribution est à publier au plus tard le "
+                    + echeance.format(JOUR) + " (art. 53, " + AttributionExecutionService.JOURS_AVIS + " jours).");
             a.setAlerteAvisLe(maintenant());
             attributions.save(a);
             n++;
@@ -1004,24 +1017,9 @@ public class AttributionService {
 
     // ------------------------------------------------------------------ ⚠️ tranche 2b : outils
 
-    /** Le délai d'attente du lot, une fois les candidats informés : nul avant. */
+    /** Le délai d'attente du lot, une fois les candidats informés : nul avant (⚠️ R6c : {@link DelaiAttenteCalcul}). */
     private AttributionDto.DelaiAttente delaiAttente(Attribution a) {
-        return delai(a, LocalDate.now(horloge));
-    }
-
-    /** Le délai d'attente à une date donnée (⚠️ 2c : la signature le relit) ; nul avant l'information. */
-    static AttributionDto.DelaiAttente delai(Attribution a, LocalDate aujourdhui) {
-        if (a.getInformeLe() == null) {
-            return null;
-        }
-        LocalDate debut = a.getInformeLe().toLocalDate();
-        if (a.getDateAffichage() != null && a.getDateAffichage().isAfter(debut)) {
-            debut = a.getDateAffichage();
-        }
-        // Jours francs : ni le jour du point de départ, ni celui de l'échéance ne comptent — la signature vient le lendemain du dixième.
-        LocalDate fin = debut.plusDays(JOURS_FRANCS);
-        LocalDate signable = fin.plusDays(1);
-        return new AttributionDto.DelaiAttente(debut, fin, signable, JOURS_FRANCS, !aujourdhui.isBefore(signable));
+        return delais.calculer(a, LocalDate.now(horloge));
     }
 
     private AttributionDto.Attributaire attributaire(Attribution a) {

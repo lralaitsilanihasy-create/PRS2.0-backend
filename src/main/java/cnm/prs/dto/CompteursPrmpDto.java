@@ -29,5 +29,8 @@ public record CompteursPrmpDto(
         long lotsAAttribuer,
         long lotsSignables,
         long avisAPublier,
-        long explicationsSansReponse) {
+        long explicationsSansReponse,
+        /** ⚠️ R6c (manuel révisé, lot 2, §B1 règle 8) — marchés notifiés dont l'échéance de 30 jours de l'avis d'attribution est passée sans
+         * publication (non bloquant : à traiter). */
+        long avisEnRetard) {
 }

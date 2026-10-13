@@ -88,12 +88,15 @@ public class SansSuiteService {
     private final CeremonieService ceremonies;
     private final GenerateurDocumentsFiche generateur;
     private final Clock horloge;
+    /** ⚠️ R6c (règle 9) — les Présidents de la localité du dossier, destinataires de la relance. */
+    private final ControleurDirectory controleurs;
 
     public SansSuiteService(SansSuiteRepository demandes, AttributionRepository attributions, EvaluationService evaluation, FicheMarcheService fiches,
             SaisieService saisie, ValeursPpmService valeursPpm, DossierMecRepository dmcRepository, DossierRepository dossierRepository,
             PieceJointeDossierRepository pieces, TypePieceJointeRepository typesPiece, PvExamenRepository pvRepository, ReceptionRepository receptions,
             DispatchRepository dispatches, OffreRepository offres, CompteCandidatRepository candidats, NotificationService notifications,
-            CeremonieService ceremonies, GenerateurDocumentsFiche generateur, Clock horloge) {
+            CeremonieService ceremonies, GenerateurDocumentsFiche generateur, Clock horloge, ControleurDirectory controleurs) {
+        this.controleurs = controleurs;
         this.demandes = demandes;
         this.attributions = attributions;
         this.evaluation = evaluation;
@@ -300,7 +303,9 @@ public class SansSuiteService {
 
     /**
      * Le suivi des demandes (planificateur) : l'avis rendu est constaté et la PRMP avertie ({@code SANS_SUITE_AVIS}) ; la veille de
-     * l'échéance des 5 jours, la PRMP et le membre examinateur sont alertés ({@code ECHEANCE_SANS_SUITE}), une fois. Le nombre de messages.
+     * l'échéance des 5 jours, la PRMP et le membre examinateur sont alertés ({@code ECHEANCE_SANS_SUITE}), une fois ; ⚠️ R6c (règle 9 ;
+     * V108) : l'échéance passée sans avis, la PRMP, le membre examinateur et les Présidents de la localité du dossier reçoivent la relance
+     * {@code RELANCE_SANS_SUITE}, une fois — le blocage de la signature reste jusqu'à l'avis exprès. Le nombre de messages.
      */
     public int suivre() {
         int n = 0;
@@ -319,24 +324,52 @@ public class SansSuiteService {
                 continue;
             }
             Reception rec = reception(s);
-            if (rec == null || s.getAlerteLe() != null) {
+            if (rec == null) {
                 continue;
             }
             LocalDate echeance = rec.getDateReception().toLocalDate().plusDays(JOURS_AVIS);
-            if (aujourdhui.isBefore(echeance.minusDays(1))) {
-                continue;
+            String examinateur = dispatches.findFirstByIdReceptionOrderByIdDispatchDesc(rec.getIdReception())
+                    .map(d -> d.getImCtrlMembre() != null ? d.getImCtrlMembre() : d.getImCtrlCc()).orElse(null);
+            if (s.getAlerteLe() == null && !aujourdhui.isBefore(echeance.minusDays(1))) {
+                String corps = "La demande de déclaration sans suite de la procédure " + s.getIdDmc() + " (dossier n° " + s.getIdDossier() + ") attend "
+                        + "l'avis de la Commission au plus tard le " + echeance.format(JOUR) + " (art. 55-II).";
+                ceremonies.notifierPrmp(s.getIdDmc(), TypeNotification.ECHEANCE_SANS_SUITE, "Échéance de l'avis sur le sans suite", corps);
+                if (examinateur != null) {
+                    notifications.emettreControleur(TypeNotification.ECHEANCE_SANS_SUITE, examinateur, null, s.getIdDossier(), TypeObjet.DOSSIER,
+                            s.getIdDossier(), "Échéance de l'avis sur le sans suite", corps);
+                }
+                s.setAlerteLe(maintenant());
+                demandes.save(s);
+                n++;
             }
-            String corps = "La demande de déclaration sans suite de la procédure " + s.getIdDmc() + " (dossier n° " + s.getIdDossier() + ") attend "
-                    + "l'avis de la Commission au plus tard le " + echeance.format(JOUR) + " (art. 55-II).";
-            ceremonies.notifierPrmp(s.getIdDmc(), TypeNotification.ECHEANCE_SANS_SUITE, "Échéance de l'avis sur le sans suite", corps);
-            dispatches.findFirstByIdReceptionOrderByIdDispatchDesc(rec.getIdReception()).map(d -> d.getImCtrlMembre() != null ? d.getImCtrlMembre()
-                    : d.getImCtrlCc()).ifPresent(im -> notifications.emettreControleur(TypeNotification.ECHEANCE_SANS_SUITE, im, null,
-                            s.getIdDossier(), TypeObjet.DOSSIER, s.getIdDossier(), "Échéance de l'avis sur le sans suite", corps));
-            s.setAlerteLe(maintenant());
-            demandes.save(s);
-            n++;
+            if (s.getRelanceLe() == null && aujourdhui.isAfter(echeance)) {
+                relancer(s, echeance, examinateur);
+                n++;
+            }
         }
         return n;
+    }
+
+    /** ⚠️ R6c (règle 9) — la relance à J+5 : PRMP, membre examinateur, Présidents de la localité du dossier ; une fois. */
+    private void relancer(SansSuite s, LocalDate echeance, String examinateur) {
+        String titre = "Relance : avis sur le sans suite attendu";
+        String corps = "La Commission n'a pas rendu son avis sur la demande de déclaration sans suite de la procédure " + s.getIdDmc()
+                + " (dossier n° " + s.getIdDossier() + ") dans les " + JOURS_AVIS + " jours de sa réception (échéance le " + echeance.format(JOUR)
+                + ", art. 55-II) : relance. La signature d'un marché de la procédure reste suspendue jusqu'à l'avis exprès.";
+        ceremonies.notifierPrmp(s.getIdDmc(), TypeNotification.RELANCE_SANS_SUITE, titre, corps);
+        if (examinateur != null) {
+            notifications.emettreControleur(TypeNotification.RELANCE_SANS_SUITE, examinateur, null, s.getIdDossier(), TypeObjet.DOSSIER,
+                    s.getIdDossier(), titre, corps);
+        }
+        String localite = dossierRepository.findById(s.getIdDossier()).map(Dossier::getIdLocalite).orElse(null);
+        for (cnm.prs.entity.Controleur p : controleurs.presidents()) {
+            if (p.getIdLocalite() == null || localite == null || localite.equals(p.getIdLocalite())) {
+                notifications.emettreControleur(TypeNotification.RELANCE_SANS_SUITE, p.getImControleur(), p.getEmailCont(), s.getIdDossier(),
+                        TypeObjet.DOSSIER, s.getIdDossier(), titre, corps);
+            }
+        }
+        s.setRelanceLe(maintenant());
+        demandes.save(s);
     }
 
     // ------------------------------------------------------------------ outils
@@ -356,7 +389,7 @@ public class SansSuiteService {
                 : d != null && "BROUILLON".equals(d.getStatut()) ? "A_SOUMETTRE" : "AU_CONTROLE";
         return new SansSuiteDto.Demande(s.getId(), s.getMotifs(), s.getDemandeLe(), s.getDemandePar(), s.getIdDossier(), d == null ? null : d.getStatut(),
                 rec == null ? null : rec.getDateReception(), echeance, avis == null && echeance != null && maintenant().toLocalDate().isAfter(echeance),
-                avis, etat, s.getDecisionReference(), s.getDecisionDate(), s.getDeclareLe(), s.getMotifsPdf() != null);
+                avis, etat, s.getDecisionReference(), s.getDecisionDate(), s.getDeclareLe(), s.getMotifsPdf() != null, s.getRelanceLe());
     }
 
     /** L'avis constaté, à défaut celui du PV signé du dossier. */

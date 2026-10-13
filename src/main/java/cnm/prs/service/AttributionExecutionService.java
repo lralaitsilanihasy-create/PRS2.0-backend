@@ -70,6 +70,8 @@ public class AttributionExecutionService {
     public static final int JOURS_REEXAMEN = 10;
     public static final int JOURS_SUSPENSION = 20;
     public static final int JOURS_AVIS = 30;
+    /** ⚠️ R6c (règle 8) — l'alerte de l'avis d'attribution à J+20 de la réception de la notification. */
+    public static final int JOURS_ALERTE_AVIS = 20;
     private static final Set<String> TYPES_RECOURS = Set.of(AttributionRecours.REEXAMEN, AttributionRecours.REVISION_ARMP, AttributionRecours.REFERE);
     private static final Set<String> ISSUES = Set.of("REJETE", "ACCUEILLI", "AUTRE");
     private static final DateTimeFormatter JOUR = DateTimeFormatter.ofPattern("dd/MM/yyyy");
@@ -93,13 +95,16 @@ public class AttributionExecutionService {
     private final Clock horloge;
     /** ⚠️ 2d-3 — une demande de sans suite en cours suspend la signature. */
     private final org.springframework.beans.factory.ObjectProvider<SansSuiteService> sansSuite;
+    /** ⚠️ R6c (règle 6, QB1 ; V108) — le délai d'attente part de la réception présumée de l'information. */
+    private final DelaiAttenteCalcul delais;
 
     public AttributionExecutionService(AttributionRepository attributions, AttributionRecoursRepository recoursRepository,
             AttributionPieceRepository piecesRepository, AttributionLettreRepository lettres, OffreRepository offres,
             CompteCandidatRepository candidats, PrmpRepository prmpRepository, DossierMecRepository dmcRepository,
             NotificationService notifications, CeremonieService ceremonies, EvaluationService evaluation, FicheMarcheService fiches,
             ValeursPpmService valeursPpm, GenerateurDocumentsFiche generateur, ParametreService parametres, Clock horloge,
-            org.springframework.beans.factory.ObjectProvider<SansSuiteService> sansSuite) {
+            org.springframework.beans.factory.ObjectProvider<SansSuiteService> sansSuite, DelaiAttenteCalcul delais) {
+        this.delais = delais;
         this.sansSuite = sansSuite;
         this.attributions = attributions;
         this.recoursRepository = recoursRepository;
@@ -155,8 +160,8 @@ public class AttributionExecutionService {
                 : new AttributionDto.NotificationMarche(a.getDateNotification(), a.getNotifieLe(), a.getNotifiePar(), a.getNotificationRecueLe(),
                         a.getReceptionDeclaree());
         AttributionDto.AvisAttribution avis = a.getNotifieLe() == null ? null
-                : new AttributionDto.AvisAttribution(a.getDateNotification().plusDays(JOURS_AVIS), a.getDatePublicationAvis(), a.getAvisPublieLe(),
-                        a.getAvisPubliePar(), a.getAvisPublieLe() != null);
+                : new AttributionDto.AvisAttribution(departAvis(a), echeanceAvis(a), a.getDatePublicationAvis(), a.getAvisPublieLe(),
+                        a.getAvisPubliePar(), a.getAvisPublieLe() != null, avisEnRetard(a, aujourdhui()));
         AttributionDto.Retrait ret = a.getRetireLe() == null ? null : new AttributionDto.Retrait(a.getRetireLe(), a.getRetirePar(), a.getMotifRetrait());
         return new Suite(map, recours, sig, enr, notif, avis, piecesAttributaire(a, toutes), ret);
     }
@@ -172,8 +177,39 @@ public class AttributionExecutionService {
                 .map(p -> new AttributionDto.PieceAttributaire(p.getId(), p.getNature(), p.getDateDelivrance(), p.getNom(), p.getTaille(),
                         p.getDeposeLe(), p.getConforme(), p.getMotif(), p.getVerifieeLe()))
                 .toList();
-        return new AttributionDto.PiecesAttributaire(echeance, aujourdhui().isAfter(echeance), conforme(toutes, AttributionPiece.FISCALE),
-                conforme(toutes, AttributionPiece.SOCIALE), l);
+        return new AttributionDto.PiecesAttributaire(echeance, aujourdhui().isAfter(echeance), limiteDelivrance(a, AttributionPiece.FISCALE),
+                limiteDelivrance(a, AttributionPiece.SOCIALE), conforme(toutes, AttributionPiece.FISCALE), conforme(toutes, AttributionPiece.SOCIALE), l);
+    }
+
+    /**
+     * ⚠️ R6c (règle 7, art. 20-I) — la date de délivrance la plus ancienne admise : l'information (la notification de l'attribution)
+     * moins six mois pour la pièce fiscale, trois mois pour la pièce sociale.
+     */
+    static LocalDate limiteDelivrance(Attribution a, String nature) {
+        return a.getInformeLe().toLocalDate().minusMonths(AttributionPiece.FISCALE.equals(nature) ? MOIS_FISCALE : MOIS_SOCIALE);
+    }
+
+    /**
+     * ⚠️ R6c (règle 8, art. 53-54) — le point de départ des 30 jours de l'avis d'attribution : la réception de la notification par le
+     * titulaire (déclarée, ou l'accusé de lecture de la plateforme), à défaut la date de notification.
+     */
+    static LocalDate departAvis(Attribution a) {
+        return a.getNotificationRecueLe() != null ? a.getNotificationRecueLe().toLocalDate() : a.getDateNotification();
+    }
+
+    /** L'échéance de l'avis d'attribution : {@link #departAvis} + 30 jours ; nulle avant la notification. */
+    static LocalDate echeanceAvis(Attribution a) {
+        LocalDate depart = a.getNotifieLe() == null ? null : departAvis(a);
+        return depart == null ? null : depart.plusDays(JOURS_AVIS);
+    }
+
+    /** L'avis est en retard : publié après l'échéance, ou non publié une fois l'échéance passée. */
+    static boolean avisEnRetard(Attribution a, LocalDate aujourdhui) {
+        LocalDate echeance = echeanceAvis(a);
+        if (echeance == null) {
+            return false;
+        }
+        return a.getDatePublicationAvis() != null ? a.getDatePublicationAvis().isAfter(echeance) : aujourdhui.isAfter(echeance);
     }
 
     /** Les pièces de l'attributaire, pour le candidat (son résultat) : nul pour un candidat non retenu. */
@@ -339,8 +375,7 @@ public class AttributionExecutionService {
         if (dateDelivrance == null) {
             throw new BadRequestException("La date de délivrance de la pièce est à indiquer.", "DATE_DELIVRANCE_OBLIGATOIRE");
         }
-        LocalDate reference = a.getInformeLe().toLocalDate();
-        LocalDate limite = reference.minusMonths(AttributionPiece.FISCALE.equals(t) ? MOIS_FISCALE : MOIS_SOCIALE);
+        LocalDate limite = limiteDelivrance(a, t);
         if (dateDelivrance.isBefore(limite) || dateDelivrance.isAfter(aujourdhui())) {
             throw new BadRequestException("La pièce " + (AttributionPiece.FISCALE.equals(t) ? "fiscale doit dater de moins de six mois"
                     : "sociale doit dater de moins de trois mois") + " à la notification de l'attribution (délivrée le " + limite.format(JOUR)
@@ -369,7 +404,9 @@ public class AttributionExecutionService {
 
     /**
      * La PRMP vérifie une pièce : {@code conforme} obligatoire (400 {@code CONFORME_OBLIGATOIRE}), un motif pour une pièce non conforme
-     * (400 {@code MOTIF_OBLIGATOIRE}) ; 409 {@code DEJA_VERIFIEE} ; 404 pièce inconnue du lot.
+     * (400 {@code MOTIF_OBLIGATOIRE}) ; ⚠️ R6c (règle 7, art. 20-I) : une pièce fiscale de plus de six mois ou sociale de plus de trois
+     * mois à l'information ne peut être reconnue conforme (400 {@code PIECE_TROP_ANCIENNE}, {@code details} nature / dateDelivrance /
+     * limite / reference) ; 409 {@code DEJA_VERIFIEE} ; 404 pièce inconnue du lot.
      */
     public void verifierPiece(Long idDmc, Integer lot, Long id, AttributionDto.VerificationRequest v) {
         exigerPrmp(idDmc);
@@ -385,12 +422,25 @@ public class AttributionExecutionService {
         if (!v.conforme() && nettoyer(v.motif()) == null) {
             throw new BadRequestException("Une pièce non conforme exige un motif.", "MOTIF_OBLIGATOIRE");
         }
+        Attribution a = attributions.findById(new Attribution.Cle(idDmc, lot)).orElseThrow();
+        LocalDate limite = a.getInformeLe() == null ? null : limiteDelivrance(a, p.getNature());
+        if (v.conforme() && limite != null && p.getDateDelivrance() != null && p.getDateDelivrance().isBefore(limite)) {
+            java.util.Map<String, Object> details = new java.util.LinkedHashMap<>();
+            details.put("nature", p.getNature());
+            details.put("dateDelivrance", p.getDateDelivrance().toString());
+            details.put("limite", limite.toString());
+            details.put("reference", a.getInformeLe().toLocalDate().toString());
+            throw new BadRequestException("La pièce " + p.getNature().toLowerCase(Locale.FRENCH) + " est délivrée le "
+                    + p.getDateDelivrance().format(JOUR) + ", avant le " + limite.format(JOUR) + " : plus de "
+                    + (AttributionPiece.FISCALE.equals(p.getNature()) ? MOIS_FISCALE : MOIS_SOCIALE) + " mois à la notification de l'attribution ("
+                    + a.getInformeLe().toLocalDate().format(JOUR) + "), elle ne peut être reconnue conforme (art. 20-I).", "PIECE_TROP_ANCIENNE",
+                    details);
+        }
         p.setConforme(v.conforme());
         p.setMotif(nettoyer(v.motif()));
         p.setVerifieeLe(maintenant());
         p.setVerifieePar(acteur());
         piecesRepository.save(p);
-        Attribution a = attributions.findById(new Attribution.Cle(idDmc, lot)).orElseThrow();
         evaluation.tracerAttribution(idDmc, "PIECE_VERIFIEE", "Lot " + lot + " : pièce " + p.getNature().toLowerCase(Locale.FRENCH) + " "
                 + (v.conforme() ? "conforme" : "non conforme — " + p.getMotif()));
         notifierAttributaire(a, TypeNotification.PIECE_ATTRIBUTAIRE_VERIFIEE, "Vérification de votre pièce",
@@ -449,7 +499,7 @@ public class AttributionExecutionService {
         Attribution a = attributions.findById(new Attribution.Cle(idDmc, lot)).filter(x -> x.getInformeLe() != null)
                 .orElseThrow(() -> new BusinessRuleException("Les candidats de ce lot ne sont pas informés.", "NON_INFORME"));
         exigerNonSigne(a);
-        AttributionDto.DelaiAttente d = AttributionService.delai(a, aujourdhui());
+        AttributionDto.DelaiAttente d = delais.calculer(a, aujourdhui());
         if (dateSignature == null || dateSignature.isAfter(aujourdhui())) {
             throw new BadRequestException("La date de signature est à indiquer, au plus tard aujourd'hui.", "DATE_INVALIDE");
         }
@@ -535,7 +585,7 @@ public class AttributionExecutionService {
         attributions.save(a);
         evaluation.tracerAttribution(idDmc, "NOTIFICATION", "Lot " + lot + " : marché notifié le " + date.format(JOUR)
                 + (reception == null ? "" : ", reçu le " + reception.format(JOUR) + " (réception déclarée)") + " ; avis d'attribution à publier "
-                + "au plus tard le " + date.plusDays(JOURS_AVIS).format(JOUR));
+                + "au plus tard le " + echeanceAvis(a).format(JOUR));
         notifierAttributaire(a, TypeNotification.MARCHE_NOTIFIE, "Notification du marché", "Le marché du lot " + lot + " (procédure " + idDmc
                 + "), signé le " + a.getDateSignature().format(JOUR) + " et enregistré, vous est notifié. Il prend effet à sa réception ; le marché "
                 + "signé est disponible dans votre espace (Mes offres).");
@@ -571,7 +621,7 @@ public class AttributionExecutionService {
         a.setEtat(Attribution.PUBLIE);
         attributions.save(a);
         evaluation.tracerAttribution(idDmc, "AVIS_ATTRIBUTION", "Lot " + lot + " : avis d'attribution publié le " + date.format(JOUR)
-                + (date.isAfter(a.getDateNotification().plusDays(JOURS_AVIS)) ? ", après l'échéance de " + JOURS_AVIS + " jours" : ""));
+                + (date.isAfter(echeanceAvis(a)) ? ", après l'échéance de " + JOURS_AVIS + " jours (le " + echeanceAvis(a).format(JOUR) + ")" : ""));
     }
 
     /** L'avis d'attribution (PDF, ou Word) : lecteurs de l'attribution ; 404 avant sa publication. */

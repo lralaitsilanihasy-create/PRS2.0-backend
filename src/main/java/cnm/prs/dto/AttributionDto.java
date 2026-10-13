@@ -56,10 +56,13 @@ public record AttributionDto(Long idDmc, List<LotAttribution> lots) {
 
     /**
      * ⚠️ 2b (§B4.1, art. 78 de la loi n° 2016-055) — le délai d'attente de dix jours francs : {@code debut} = la plus tardive de
-     * l'information et de l'affichage (ce jour ne compte pas), {@code fin} = le dernier jour du délai, {@code signableLe} = le premier jour
-     * où la signature est possible, {@code ecoule} : ce jour est atteint.
+     * la réception présumée de l'information et de l'affichage (ce jour ne compte pas), {@code fin} = le dernier jour du délai,
+     * {@code signableLe} = le premier jour où la signature est possible, {@code ecoule} : ce jour est atteint. ⚠️ R6c (règle 6, QB1 ;
+     * V108) — {@code receptionLe} = l'information + {@code joursReception} (paramètre {@code RECEPTION_LETTRE}, 0 si inactif) : la réception
+     * présumée de la lettre par les candidats non retenus.
      */
-    public record DelaiAttente(LocalDate debut, LocalDate fin, LocalDate signableLe, int jours, boolean ecoule) {
+    public record DelaiAttente(LocalDate debut, LocalDate fin, LocalDate signableLe, int jours, boolean ecoule, LocalDate receptionLe,
+            int joursReception) {
     }
 
     /** ⚠️ 2b (§B4.2, art. 52-II) — une demande d'explication : {@code etat} ∈ {@code EN_ATTENTE} · {@code REPONDUE}. */
@@ -106,16 +109,23 @@ public record AttributionDto(Long idDmc, List<LotAttribution> lots) {
     public record NotificationMarche(LocalDate date, LocalDateTime le, String par, LocalDateTime recueLe, Boolean receptionDeclaree) {
     }
 
-    /** L'avis d'attribution (art. 53) : {@code echeance} = notification + 30 jours ; {@code disponible} une fois publié. */
-    public record AvisAttribution(LocalDate echeance, LocalDate datePublication, LocalDateTime publieLe, String par, boolean disponible) {
+    /**
+     * L'avis d'attribution (art. 53) : {@code echeance} = {@code depart} + 30 jours ; {@code disponible} une fois publié. ⚠️ R6c (règle 8 ;
+     * 2026-10-13) — {@code depart} = la réception de la notification par le titulaire (déclarée, ou l'accusé de lecture de la plateforme ;
+     * art. 54), à défaut la date de notification ; {@code enRetard} : l'échéance est passée sans publication, ou la publication l'a dépassée.
+     */
+    public record AvisAttribution(LocalDate depart, LocalDate echeance, LocalDate datePublication, LocalDateTime publieLe, String par,
+            boolean disponible, boolean enRetard) {
     }
 
     /**
      * Les pièces fiscales et sociales de l'attributaire (art. 20-I) : {@code echeance} = information + 15 jours ; les dernières pièces
-     * de chaque type, et si elles sont reconnues conformes.
+     * de chaque type, et si elles sont reconnues conformes. ⚠️ R6c (règle 7) — {@code limiteFiscale} / {@code limiteSociale} : la date de
+     * délivrance la plus ancienne admise (information − 6 mois / − 3 mois) ; une pièce plus ancienne est refusée au dépôt
+     * ({@code PIECE_PERIMEE}) et ne peut être reconnue conforme ({@code PIECE_TROP_ANCIENNE}).
      */
-    public record PiecesAttributaire(LocalDate echeance, boolean delaiDepasse, boolean fiscaleConforme, boolean socialeConforme,
-            List<PieceAttributaire> pieces) {
+    public record PiecesAttributaire(LocalDate echeance, boolean delaiDepasse, LocalDate limiteFiscale, LocalDate limiteSociale,
+            boolean fiscaleConforme, boolean socialeConforme, List<PieceAttributaire> pieces) {
     }
 
     /** Une pièce de l'attributaire : {@code type} ∈ {@code FISCALE} · {@code SOCIALE} ; {@code conforme} nul tant qu'elle n'est pas vérifiée. */

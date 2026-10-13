@@ -220,5 +220,10 @@ public enum TypeNotification {
     /** ⚠️ 2026-10-09 (manuel de contrôle, M5b, §B6) — un examen dépasse 5 jours ouvrés : vers le Membre, le Chef de commission et le Président. */
     EXAMEN_EN_DEPASSEMENT,
     /** ⚠️ R6b (manuel révisé, lot 2, §B1 règle 5 ; V107) — plan réputé approuvé (art. 26-IV) : PRMP du plan, Présidents de la localité. */
-    PLAN_REPUTE_APPROUVE
+    PLAN_REPUTE_APPROUVE,
+    /**
+     * ⚠️ R6c (manuel révisé, lot 2, §B1 règle 9 ; V108) — la Commission n'a pas rendu son avis sur une demande de sans suite dans les 5
+     * jours (art. 55-II) : relance, une fois, vers la PRMP, le membre examinateur et les Présidents de la localité.
+     */
+    RELANCE_SANS_SUITE
 }

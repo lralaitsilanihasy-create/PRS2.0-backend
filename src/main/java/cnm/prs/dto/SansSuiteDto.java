@@ -16,7 +16,9 @@ public record SansSuiteDto(Long idDmc, boolean declaree, Demande courante, List<
      */
     public record Demande(Long id, String motifs, LocalDateTime demandeLe, String demandePar, Integer idDossier, String statutDossier,
             LocalDateTime recuLe, LocalDate echeance, boolean echeanceDepassee, String avis, String etat, String decisionReference,
-            LocalDate decisionDate, LocalDateTime declareLe, boolean motifsDisponibles) {
+            LocalDate decisionDate, LocalDateTime declareLe, boolean motifsDisponibles,
+            /** ⚠️ R6c (règle 9 ; V108) — la relance émise à J+5 sans avis (PRMP, membre examinateur, Présidents), nulle sinon. */
+            LocalDateTime relanceLe) {
     }
 
     /** {@code POST …/sans-suite} : les motifs d'intérêt général de la PRMP. */

@@ -64,6 +64,10 @@ public class SansSuite {
     @Column(name = "ALERTE_LE")
     private LocalDateTime alerteLe;
 
+    /** ⚠️ R6c (manuel révisé, lot 2, §B1 règle 9 ; V108) — la relance à J+5 sans avis, une fois. */
+    @Column(name = "RELANCE_LE")
+    private LocalDateTime relanceLe;
+
     @Column(name = "DECISION_REFERENCE", length = 100)
     private String decisionReference;
 

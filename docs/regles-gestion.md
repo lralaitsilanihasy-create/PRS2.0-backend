@@ -1248,6 +1248,17 @@ de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM 
 > après coup vaut observation. Dès ce constat, les lignes du plan peuvent recevoir un dossier de mise en concurrence comme si le PV
 > signé favorable existait. Un plan en brouillon, clôturé, retiré ou remplacé n'est jamais réputé approuvé.
 >
+> ⚠️ **2026-10-13 — les délais de la signature, des pièces, de l'avis d'attribution et du sans suite (manuel révisé, lot 2, tranche
+> R6c, V108 ; réponse QB1).** Le délai d'attente de dix jours francs avant la signature d'un marché part de la **réception présumée** de
+> la lettre d'information par les candidats non retenus : l'information plus un nombre de jours que l'Administrateur règle (trois jours
+> proposés), uniforme pour tous ; l'affichage au siège, s'il est plus tardif, reste le point de départ. Une pièce fiscale de plus de six
+> mois, ou sociale de plus de trois mois, à la notification de l'attribution est refusée au dépôt et **ne peut être reconnue conforme** à
+> la vérification. Les trente jours de l'avis d'attribution partent de la **réception de la notification par le titulaire** (déclarée ou
+> constatée par la plateforme), à défaut de la notification ; la PRMP est alertée au vingtième jour et voit les avis en retard ; la règle
+> ne bloque rien. Une demande de déclaration sans suite restée sans avis de la Commission au-delà de cinq jours de sa réception fait
+> l'objet d'une **relance**, une fois, à la PRMP, au membre examinateur et aux Présidents de la localité ; la signature reste suspendue
+> jusqu'à l'avis exprès.
+>
 > ⚠️ **2026-10-08 — les grilles de contrôle par sous-type (tranche M3, V96).** Chaque sous-type a la grille du manuel : les points
 > communs de sa famille, puis ceux de la grille dont il dérive (un appel d'offres restreint reprend la grille de l'appel d'offres
 > ouvert et y ajoute ses cinq points ; un marché sur appel d'offres restreint, celle du marché sur appel d'offres ouvert), puis les
