@@ -102,9 +102,12 @@ public record EvaluationDto(Long idDmc, String etat, LocalDateTime ouverteLe, St
 
     /**
      * Une correction, proposée ou saisie par la CAO : {@code regle} ∈ {@code PU_PREVAUT} · {@code LETTRES_PREVALENT} · {@code REPORT} ·
-     * {@code AUTRE} ; seules les {@code retenue} comptent, pour {@code apres − avant}.
+     * {@code AUTRE} ; seules les {@code retenue} comptent, pour {@code apres − avant}. ⚠️ R9b (§B4 n° 9, QB2) : une correction
+     * {@code PU_PREVAUT} / {@code LETTRES_PREVALENT} reprend une correction proposée par le serveur ; {@code REPORT} et {@code AUTRE},
+     * que le serveur ne calcule pas, exigent un {@code motif} et sont marquées {@code ecart} (nul dans une saisie d'avant R9b).
      */
-    public record Correction(Integer ligne, String libelle, BigDecimal avant, BigDecimal apres, String regle, Boolean retenue) {
+    public record Correction(Integer ligne, String libelle, BigDecimal avant, BigDecimal apres, String regle, Boolean retenue, String motif,
+            Boolean ecart) {
     }
 
     /** Le refus d'une correction par le candidat, constaté par la CAO (arbitrage Q2) : l'offre est écartée à cette étape. */
@@ -185,7 +188,9 @@ public record EvaluationDto(Long idDmc, String etat, LocalDateTime ouverteLe, St
      * justification) · {@code MAINTENUE} · {@code REJETEE} ; {@code justification} : la demande au candidat et sa réponse.
      */
     public record Anormale(Boolean suspectee, String decision, String motif, Demande justification, String par, String nom,
-            LocalDateTime le) {
+            LocalDateTime le,
+            /** ⚠️ R9b (§B4 n° 10, QB3) — rejet prononcé sur le défaut de réponse du candidat à l'échéance : vaut réponse tracée. */
+            Boolean defautReponse) {
     }
 
     /**

@@ -101,10 +101,11 @@ class ControlesIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$.statut").value("SOUMIS"));
         String liste = mvc.perform(get("/api/dossiers/" + marche + "/controles").header("Authorization", tokenMembre))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertThat(JsonPath.<List<String>>read(liste, "$[*].regle")).containsExactlyInAnyOrder("DOCUMENTS_EVALUATION_SIGNES", "QUORUM_COMMISSION");
+        assertThat(JsonPath.<List<String>>read(liste, "$[*].regle")).containsExactlyInAnyOrder("DOCUMENTS_EVALUATION_SIGNES", "QUORUM_COMMISSION",
+                "CORRECTIONS_HORS_CALCUL");   // ⚠️ R9b (§B4 n° 9) : signalée, non bloquante
         assertThat(JsonPath.<List<String>>read(liste, "$[*].resultat")).containsOnly("NON_APPLICABLE");
         assertThat(JsonPath.<List<String>>read(liste, "$[*].auteur")).containsOnly("SERVEUR");
-        assertThat(JsonPath.<List<Boolean>>read(liste, "$[*].bloquant")).containsOnly(true);
+        assertThat(JsonPath.<List<Boolean>>read(liste, "$[?(@.regle != 'CORRECTIONS_HORS_CALCUL')].bloquant")).containsOnly(true);
         assertThat(JsonPath.<List<Integer>>read(liste, "$[*].numeroSoumission")).containsOnly(1);
         assertThat(JsonPath.<List<Boolean>>read(liste, "$[*].valeurs.procedureEnLigne")).containsOnly(false);
 
@@ -130,13 +131,13 @@ class ControlesIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(jsonPath("$.resultat").value("NON_CONFORME")).andExpect(jsonPath("$.reference").value("2-III-C P20"));
         liste = mvc.perform(get("/api/dossiers/" + marche + "/controles").header("Authorization", tokenMembre))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertThat(JsonPath.<List<String>>read(liste, "$[*].regle")).hasSize(3).contains("REPONSE_CANDIDAT");
+        assertThat(JsonPath.<List<String>>read(liste, "$[*].regle")).hasSize(4).contains("REPONSE_CANDIDAT");
 
         // La synthèse PDF (annexe du PV).
         byte[] pdf = mvc.perform(get("/api/dossiers/" + marche + "/controles/pdf").header("Authorization", tokenMembre))
                 .andExpect(status().isOk()).andExpect(content().contentType(MediaType.APPLICATION_PDF)).andReturn().getResponse().getContentAsByteArray();
         assertThat(texteDuPdf(pdf).replaceAll("\\s+", " ")).contains("Synthèse des contrôles", "soumission n° 1", "Quorum de la commission",
-                "Réponse du candidat", "Réponse reçue hors délai", "contrôle automatique", "3 contrôle(s), 1 non conforme(s)");
+                "Réponse du candidat", "Réponse reçue hors délai", "contrôle automatique", "4 contrôle(s), 1 non conforme(s)");   // ⚠️ R9b : + CORRECTIONS_HORS_CALCUL
         mvc.perform(get("/api/dossiers/" + marche + "/controles").param("soumission", "5").header("Authorization", tokenMembre))
                 .andExpect(status().isOk()).andExpect(jsonPath("$").isEmpty());
 

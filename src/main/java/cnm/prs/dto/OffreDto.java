@@ -64,7 +64,17 @@ public record OffreDto(String idOffre, Long idDmc, String reference, String obje
      * {@code GET /api/fiches-marche/{idDmc}/depots} : avant la date limite, le nombre seul ; après, le registre des dépôts
      * ({@code depots} : les offres déposées par rang d'arrivée, puis les retirées et remplacées).
      */
-    public record Depots(boolean clos, long nombre, LocalDateTime dateLimite, List<Depot> depots) {
+    public record Depots(boolean clos, long nombre, LocalDateTime dateLimite, List<Depot> depots,
+            /** ⚠️ R9b (§B4 n° 4, art. 44 ; V112) — les tentatives refusées hors délai, une fois les dépôts clos ; nul avant. */
+            List<Tentative> tentativesRefusees) {
+    }
+
+    /**
+     * ⚠️ R9b — une tentative de dépôt refusée : {@code geste} ∈ {@code CREATION} · {@code MORCEAU} · {@code SCELLEMENT}, {@code motif}
+     * {@code DELAI_DEPASSE} ; l'entreprise et le lot tels qu'ils étaient connus (nuls pour une création sans entreprise déclarée).
+     */
+    public record Tentative(LocalDateTime horodatage, String geste, String motif, String entreprise, String nif, Integer lot, String enveloppe,
+            String idOffre, LocalDateTime dateLimite) {
     }
 
     public record Depot(Integer numero, String entreprise, String nif, Integer lot, LocalDateTime dateDepot, LocalDateTime dateRetrait,

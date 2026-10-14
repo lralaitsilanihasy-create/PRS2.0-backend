@@ -194,23 +194,9 @@ public class EvaluationFinanciereService {
         if (prixLu == null || prixLu.signum() < 0) {
             throw new BadRequestException("L'acte d'engagement ne porte pas de montant HT : saisissez le prix lu hors taxes.", "PRIX_LU_OBLIGATOIRE");
         }
-        List<EvaluationDto.Correction> corrections = new ArrayList<>();
-        BigDecimal prixCorrige = prixLu;
-        for (EvaluationDto.Correction c : r.corrections() == null ? List.<EvaluationDto.Correction>of() : r.corrections()) {
-            if (c == null || c.avant() == null || c.apres() == null || nettoyer(c.libelle()) == null) {
-                throw new BadRequestException("Une correction porte un libellé, un montant avant et un montant après.", "CORRECTION_INVALIDE");
-            }
-            String regle = c.regle() == null ? null : c.regle().trim().toUpperCase(Locale.ROOT);
-            if (!EvaluationService.REGLES_CORRECTION.contains(regle)) {
-                throw new BadRequestException("Règle de correction inconnue : " + c.regle() + " (PU_PREVAUT, LETTRES_PREVALENT, REPORT, AUTRE).",
-                        "REGLE_INCONNUE");
-            }
-            boolean retenue = Boolean.TRUE.equals(c.retenue());
-            corrections.add(new EvaluationDto.Correction(c.ligne(), c.libelle().trim(), c.avant(), c.apres(), regle, retenue));
-            if (retenue) {
-                prixCorrige = prixCorrige.add(c.apres().subtract(c.avant()));
-            }
-        }
+        // ⚠️ R9b (§B4 n° 9, QB2) — même règle qu'à l'évaluation : corrections calculées reprises des propositions, REPORT / AUTRE motivées.
+        List<EvaluationDto.Correction> corrections = EvaluationService.corrections(r.corrections(), () -> seance.correctionsProposees(idFinanciere));
+        BigDecimal prixCorrige = EvaluationService.prixCorrige(prixLu, corrections);
         BigDecimal remboursables = r.remboursables() == null ? BigDecimal.ZERO : r.remboursables();
         if (remboursables.signum() < 0 || remboursables.compareTo(prixCorrige) > 0) {
             throw new BadRequestException("Les dépenses remboursables sont un montant hors taxes, positif, au plus le prix corrigé.",
@@ -248,6 +234,7 @@ public class EvaluationFinanciereService {
         tracer(idDmc, "MONTANT_FINANCIER", "Proposition n° " + x.ligne().numero() + " (" + x.ligne().raisonSociale() + ") : "
                 + (refusMotif != null ? "écartée, le candidat refuse la correction : " + refusMotif + " (" + refusClause + ")"
                         : "prix lu " + lisible(prixLu) + ", corrigé " + lisible(prixCorrige) + ", dont dépenses remboursables " + lisible(remboursables))
+                + EvaluationService.horsCalcul(corrections)
                 + (remplace ? " (remplace la saisie précédente)" : ""));
         return calculer(idDmc);
     }

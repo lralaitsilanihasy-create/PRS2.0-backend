@@ -374,6 +374,19 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
         montant(jetonM1, c, "{}").andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("OFFRE_ECARTEE"));
         montant(jetonM1, a, "{\"corrections\":[{\"libelle\":\"x\",\"avant\":1,\"apres\":2,\"regle\":\"AU_JUGE\",\"retenue\":true}]}")
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("REGLE_INCONNUE"));
+        // ⚠️ R9b (§B4 n° 9, QB2) — une correction calculée reprend une proposition ; REPORT / AUTRE se motivent et sont signalées.
+        montant(jetonM1, a, "{\"corrections\":[{\"ligne\":1,\"libelle\":\"x\",\"avant\":10000000,\"apres\":10500000,\"regle\":\"LETTRES_PREVALENT\","
+                + "\"retenue\":true}]}").andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("CORRECTION_NON_PROPOSEE"))
+                .andExpect(jsonPath("$.details.regle").value("LETTRES_PREVALENT"));
+        montant(jetonM1, b, "{\"corrections\":[{\"libelle\":\"Total\",\"avant\":1,\"apres\":2,\"regle\":\"pu_prevaut\",\"retenue\":true}]}")
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("CORRECTION_NON_PROPOSEE"));   // sans bordereau
+        montant(jetonM1, b, "{\"corrections\":[{\"libelle\":\"Total\",\"avant\":1,\"apres\":2,\"regle\":\"AUTRE\",\"retenue\":false}]}")
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("MOTIF_OBLIGATOIRE"));
+        String horsCalcul = montant(jetonM1, b, "{\"corrections\":[{\"libelle\":\"Report du sous-total\",\"avant\":1,\"apres\":2,\"regle\":\"REPORT\","
+                + "\"retenue\":false,\"motif\":\"Sous-total mal reporté page 3\"}]}").andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Boolean>>read(horsCalcul, "$.lots[0].offres[1].evaluation.corrections[*].ecart")).containsExactly(true);
+        assertThat(JsonPath.<List<String>>read(horsCalcul, "$.lots[0].offres[1].evaluation.corrections[*].motif"))
+                .containsExactly("Sous-total mal reporté page 3");
         montant(jetonM1, a, "{\"rabais\":{\"montant\":-1}}").andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("RABAIS_INVALIDE"));
         montant(jetonM1, a, "{\"preference\":{\"eligible\":true}}").andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("MOTIF_OBLIGATOIRE"));
@@ -486,6 +499,18 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
                 .contains("JUSTIFICATION_DEMANDEE");
         anormale(c, "{\"suspectee\":true,\"decision\":\"REJETEE\",\"motif\":\"Prix non tenable\"}").andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("DELAI_EN_COURS"));
+        // ⚠️ R9b (§B4 n° 10, QB3) — l'échéance passée sans réponse vaut réponse tracée : le rejet passe, le défaut est écrit ; puis
+        // l'échéance est rétablie pour la suite (le candidat répond, un nouveau rejet remplace celui-ci).
+        EvaluationDemande justif = demandeRepository.findByIdOffreAndTypeOrderByDemandeeLeAscIdAsc(c, "JUSTIFICATION").get(0);
+        LocalDateTime echeanceJustif = justif.getEcheance();
+        justif.setEcheance(LocalDateTime.now().minusHours(1));
+        demandeRepository.saveAndFlush(justif);
+        anormale(c, "{\"suspectee\":true,\"decision\":\"REJETEE\",\"motif\":\"Pas de justification\"}").andExpect(status().isOk())
+                .andExpect(jsonPath("$.lots[0].offres[2].anormale.defautReponse").value(true));
+        assertThat(journalRepository.findByIdDmcOrderByDateAscIdAsc(idDmc)).filteredOn(x -> "ANORMALE".equals(x.getAction()))
+                .extracting(x -> x.getDetail()).anyMatch(t -> t.contains("défaut de réponse du candidat"));
+        justif.setEcheance(echeanceJustif);
+        demandeRepository.saveAndFlush(justif);
         mvc.perform(get("/api/candidat/offres/" + c + "/justification").header("Authorization", jetonA)).andExpect(status().isForbidden());
         mvc.perform(get("/api/candidat/offres/" + c + "/justification").header("Authorization", jetonC)).andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].question").value("Sous-détails des prix unitaires des articles 1 et 2"));

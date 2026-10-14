@@ -93,6 +93,8 @@ public class SeanceService {
     private static final DateTimeFormatter HORODATAGE = DateTimeFormatter.ofPattern("dd/MM/yyyy 'à' HH:mm");
     /** ⚠️ R1 (manuel révisé, lot 1, §B2) — le quorum de la CAO : clôture et empêchements. */
     private final QuorumCao quorumCao;
+    /** ⚠️ R9b (§B4 n° 4, art. 44) — les tentatives de dépôt refusées hors délai, portées au PV d'ouverture. */
+    private final TentativesRefusees tentatives;
     private static final DateTimeFormatter JOUR = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     private final SeanceRepository seances;
@@ -127,7 +129,9 @@ public class SeanceService {
             ProceduresEnLigneService procedures, ExclusionArmpService exclusions, EntrepriseCandidatService entreprises,
             RapprochementCandidatService rapprochements, CompteCandidatRepository candidats, NotificationService notifications,
             GenerateurDocumentsFiche generateur, DossierMecRepository dmcRepository, ObjectMapper mapper, Clock horloge,
-            SeanceSignatureRepository signatures, FormulairesEnLigne formulaires, QuorumCao quorumCao) {
+            SeanceSignatureRepository signatures, FormulairesEnLigne formulaires, QuorumCao quorumCao,
+            TentativesRefusees tentatives) {
+        this.tentatives = tentatives;
         this.quorumCao = quorumCao;
         this.formulaires = formulaires;
         this.signatures = signatures;
@@ -1172,6 +1176,18 @@ public class SeanceService {
                 for (SeanceDto.NonOuverte n : l.nonOuvertes()) {
                     el.add(para("Offre n° " + n.numero() + " — " + n.entreprise() + " : " + n.motif()));
                 }
+            }
+        }
+        // ⚠️ R9b (manuel révisé, lot 2, §B4 n° 4 ; art. 44) — les dépôts refusés après la date et l'heure limites, horodatés par le serveur.
+        List<cnm.prs.dto.OffreDto.Tentative> refusees = tentatives.lister(idDmc);
+        if (!refusees.isEmpty()) {
+            el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.SOUS_TITRE, "Tentatives de dépôt refusées hors délai : " + refusees.size()));
+            for (cnm.prs.dto.OffreDto.Tentative t : refusees) {
+                el.add(para(t.horodatage().format(DateTimeFormatter.ofPattern("dd/MM/yyyy 'à' HH:mm:ss")) + " — " + (t.entreprise() == null ? "candidat sans entreprise déclarée" : t.entreprise()
+                        + (t.nif() == null ? "" : " (NIF " + t.nif() + ")")) + (t.lot() == null ? "" : ", lot " + t.lot()) + " : "
+                        + (cnm.prs.entity.OffreTentative.CREATION.equals(t.geste()) ? "création du dépôt"
+                                : cnm.prs.entity.OffreTentative.MORCEAU.equals(t.geste()) ? "envoi de l'offre" : "scellement de l'offre")
+                        + " refusé, la date limite étant passée."));
             }
         }
         if (s.getObservations() != null) {

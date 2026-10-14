@@ -313,8 +313,20 @@ class OffreIntegrationTest extends CnmIntegrationTestSupport {
         changer("B04-LR-03", aujourdhui.minusDays(1).toString());
         morceau(jetonB, c4.idOffre(), 0, c4.morceaux().get(0), sha(c4.morceaux().get(0))).andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("DELAI_DEPASSE"));
+        // ⚠️ R9b (§B4 n° 4, art. 44) — chaque refus est horodaté et tracé hors de la transaction annulée : un morceau renvoyé ne fait
+        // pas de seconde ligne, le scellement et une nouvelle création en font une chacun.
+        morceau(jetonB, c4.idOffre(), 0, c4.morceaux().get(0), sha(c4.morceaux().get(0))).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("DELAI_DEPASSE"));
+        sceller(jetonB, c4.idOffre(), "0".repeat(64)).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("DELAI_DEPASSE"));
+        Contenu c5 = contenu(100);
+        creer(jetonB, enTete(c5.idOffre(), c5.taille(), empreintes), null).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("DELAI_DEPASSE"));
         String registre = mvc.perform(get("/api/fiches-marche/" + idDmc + "/depots").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(registre, "$.tentativesRefusees[*].geste")).containsExactly("MORCEAU", "SCELLEMENT", "CREATION");
+        assertThat(JsonPath.<List<String>>read(registre, "$.tentativesRefusees[*].motif")).containsOnly("DELAI_DEPASSE");
+        assertThat(JsonPath.<List<String>>read(registre, "$.tentativesRefusees[*].idOffre")).containsExactly(c4.idOffre(), c4.idOffre(), null);
+        assertThat(JsonPath.<List<String>>read(registre, "$.tentativesRefusees[*].nif")).doesNotContainNull();
         assertThat(JsonPath.<Boolean>read(registre, "$.clos")).isTrue();
         assertThat(JsonPath.<Integer>read(registre, "$.nombre")).isEqualTo(1);
         assertThat(JsonPath.<List<String>>read(registre, "$.depots[*].nif")).containsExactly("1111222333");

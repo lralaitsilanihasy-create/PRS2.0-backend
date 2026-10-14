@@ -25,6 +25,7 @@ import cnm.prs.entity.ExclusionArmp;
 import cnm.prs.entity.Offre;
 import cnm.prs.entity.OffreJournal;
 import cnm.prs.entity.OffreMorceau;
+import cnm.prs.entity.OffreTentative;
 import cnm.prs.enums.ProfilUtilisateur;
 import cnm.prs.enums.TypeNotification;
 import cnm.prs.enums.TypeObjet;
@@ -88,12 +89,15 @@ public class OffreService {
     private final GenerateurDocumentsFiche generateur;
     private final ObjectMapper mapper;
     private final Clock horloge;
+    /** ⚠️ R9b (manuel révisé, lot 2, §B4 n° 4 ; V112) — chaque refus hors délai est horodaté et tracé. */
+    private final TentativesRefusees tentatives;
 
     public OffreService(OffreRepository offres, OffreMorceauRepository morceaux, OffreJournalRepository journal, StockageOffres stockage,
             ProceduresEnLigneService procedures, CeremonieService ceremonies, CeremonieClesRepository ceremonieRepository,
             ParametresInternesService internes, FicheMarcheService fiches, EntrepriseRepository entreprises,
             CompteCandidatRepository candidats, ExclusionArmpService exclusions, NotificationService notifications,
-            GenerateurDocumentsFiche generateur, ObjectMapper mapper, Clock horloge) {
+            GenerateurDocumentsFiche generateur, ObjectMapper mapper, Clock horloge, TentativesRefusees tentatives) {
+        this.tentatives = tentatives;
         this.offres = offres;
         this.morceaux = morceaux;
         this.journal = journal;
@@ -124,7 +128,7 @@ public class OffreService {
             throw new BadRequestException("La procédure et l'en-tête du conteneur sont attendus.", "EN_TETE_INVALIDE");
         }
         Long idDmc = c.idDmc();
-        ProceduresEnLigneService.Lue lue = procedureOuverte(idDmc);
+        ProceduresEnLigneService.Lue lue = procedureOuverte(idDmc, idCandidat, c);
         procedures.exigerInvite(lue, idCandidat);   // ⚠️ 2026-10-08 (lot 3 PI, PI-a, §B1) — une consultation restreinte : ses invités seuls
         String enveloppe = enveloppe(lue, c.enveloppe());   // ⚠️ V86 (PI-b) : deux enveloppes pour une proposition PI
         List<String> attendues = clesPubliees(idDmc);
@@ -210,7 +214,7 @@ public class OffreService {
         if (!Offre.EN_COURS.equals(o.getEtat())) {
             throw new BusinessRuleException("L'offre est déjà scellée : elle ne reçoit plus de morceau.", "OFFRE_SCELLEE");
         }
-        exigerAvantLimite(o.getIdDmc());
+        exigerAvantLimite(o, OffreTentative.MORCEAU);
         if (rang < 0 || rang >= o.getNombreMorceaux()) {
             throw new BadRequestException("Le rang " + rang + " est hors de l'offre (0 à " + (o.getNombreMorceaux() - 1) + ").",
                     "MORCEAU_INVALIDE");
@@ -257,7 +261,7 @@ public class OffreService {
         if (s == null || s.empreinte() == null || !HEX64.matcher(s.empreinte().trim().toLowerCase()).matches()) {
             throw new BadRequestException("L'empreinte calculée par le navigateur (SHA-256, hexadécimal) est attendue.", "EMPREINTE_INVALIDE");
         }
-        ProceduresEnLigneService.Lue lue = exigerAvantLimite(o.getIdDmc());
+        ProceduresEnLigneService.Lue lue = exigerAvantLimite(o, OffreTentative.SCELLEMENT);
         List<String> publiees = clesPubliees(o.getIdDmc());
         if (!publiees.equals(List.of(o.getEmpreintesDetenteurs().split(",")))) {
             throw new BusinessRuleException("Une clé de la cérémonie a été remplacée depuis le début du dépôt : scellez de nouveau "
@@ -425,7 +429,7 @@ public class OffreService {
         // ⚠️ V86 (PI-b) — le nombre de propositions : une proposition PI (deux enveloppes) compte une fois.
         long nombre = toutes.stream().filter(o -> Offre.DEPOSEE.equals(o.getEtat()) && !Offre.FINANCIERE.equals(o.getEnveloppe())).count();
         if (!clos) {
-            return new OffreDto.Depots(false, nombre, limite, null);
+            return new OffreDto.Depots(false, nombre, limite, null, null);
         }
         List<OffreDto.Depot> registre = new ArrayList<>();
         for (String etat : List.of(Offre.DEPOSEE, Offre.RETIREE, Offre.REMPLACEE, Offre.ECARTEE)) {
@@ -433,7 +437,7 @@ public class OffreService {
                     o.getRaisonSociale(), o.getNif(), o.getLot(), o.getDateDepot(), o.getDateRetrait(), o.getEmpreinte(), o.getTaille(),
                     o.getEtat(), o.getEnveloppe())));
         }
-        return new OffreDto.Depots(true, nombre, limite, registre);
+        return new OffreDto.Depots(true, nombre, limite, registre, tentatives.lister(idDmc));
     }
 
     /** Le résumé porté par la fiche : le nombre d'offres déposées et la clôture, ou {@code null} si la date limite ne se lit pas. */
@@ -489,11 +493,16 @@ public class OffreService {
     // ------------------------------------------------------------------ conditions (§B1)
 
     /** Conditions 1 et 2 : la procédure est en ligne et ses dépôts sont ouverts. */
-    private ProceduresEnLigneService.Lue procedureOuverte(Long idDmc) {
+    private ProceduresEnLigneService.Lue procedureOuverte(Long idDmc, String idCandidat, OffreDto.Creation c) {
         ProceduresEnLigneService.Lue lue = procedures.trouver(idDmc).orElseThrow(() -> new BusinessRuleException(
                 "Cette procédure n'est pas ouverte au dépôt en ligne.", "PROCEDURE_FERMEE"));
         String etat = lue.dto().etat();
         if (ProceduresEnLigneService.CLOSE.equals(etat)) {
+            // ⚠️ R9b (§B4 n° 4, art. 44) — la tentative refusée est horodatée et tracée, dans sa propre transaction.
+            String env = c.enveloppe() == null || c.enveloppe().isBlank() ? null : c.enveloppe().trim().toUpperCase(java.util.Locale.ROOT);
+            tentatives.creation(idDmc, idCandidat, entreprises.findByIdCandidat(idCandidat).orElse(null), c.lot(),
+                    env == null || env.length() > 12 ? null : env, maintenant(),
+                    ProceduresEnLigneService.dateLimite(lue.etat()));
             throw new BusinessRuleException("La date limite de remise des offres est passée (" + lue.dto().dateLimite() + ").", "DELAI_DEPASSE");
         }
         if (!ProceduresEnLigneService.OUVERTE.equals(etat)) {
@@ -504,6 +513,18 @@ public class OffreService {
     }
 
     /** La date limite, revérifiée à chaque morceau et au scellement. */
+    /** ⚠️ R9b (§B4 n° 4) — le refus d'un morceau ou du scellement est tracé avant d'être rendu. */
+    private ProceduresEnLigneService.Lue exigerAvantLimite(Offre o, String geste) {
+        try {
+            return exigerAvantLimite(o.getIdDmc());
+        } catch (BusinessRuleException e) {
+            if ("DELAI_DEPASSE".equals(e.getCode())) {
+                tentatives.surOffre(o, geste, maintenant(), dateLimite(o.getIdDmc()));
+            }
+            throw e;
+        }
+    }
+
     private ProceduresEnLigneService.Lue exigerAvantLimite(Long idDmc) {
         ProceduresEnLigneService.Lue lue = procedures.trouver(idDmc).orElseThrow(() -> new BusinessRuleException(
                 "Cette procédure n'est plus ouverte au dépôt en ligne.", "PROCEDURE_FERMEE"));

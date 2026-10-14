@@ -595,6 +595,74 @@ public class EvaluationService {
 
     /** Les règles d'une correction : proposées par le serveur ({@code PU_PREVAUT}, {@code LETTRES_PREVALENT}) ou saisies par la CAO. */
     public static final Set<String> REGLES_CORRECTION = Set.of("PU_PREVAUT", "LETTRES_PREVALENT", "REPORT", "AUTRE");
+    /** ⚠️ R9b (§B4 n° 9) — les règles que le serveur calcule sur le bordereau : une correction de ces règles en reprend une proposée. */
+    public static final Set<String> REGLES_CALCULEES = Set.of("PU_PREVAUT", "LETTRES_PREVALENT");
+
+    /**
+     * ⚠️ R9b (manuel révisé, lot 2, §B4 n° 9 ; art. 46-47 ; arbitrage QB2 du 14/10) — les corrections saisies, contrôlées : libellé et
+     * montants (400 {@code CORRECTION_INVALIDE}), règle connue (400 {@code REGLE_INCONNUE}) ; une règle calculée par le serveur
+     * ({@link #REGLES_CALCULEES}) doit reprendre <strong>exactement</strong> une correction proposée — même ligne, même règle, mêmes
+     * montants avant et après (400 {@code CORRECTION_NON_PROPOSEE}, {@code details { ligne, regle }}) ; {@code REPORT} et {@code AUTRE},
+     * hors du calcul du serveur, restent permises avec un motif (400 {@code MOTIF_OBLIGATOIRE}) et sont marquées {@code ecart}. Les
+     * propositions ne sont lues que si une correction calculée est saisie.
+     */
+    static List<EvaluationDto.Correction> corrections(List<EvaluationDto.Correction> saisies,
+            java.util.function.Supplier<List<FormulairesEnLigne.Correction>> proposees) {
+        List<EvaluationDto.Correction> out = new ArrayList<>();
+        List<FormulairesEnLigne.Correction> propositions = null;
+        for (EvaluationDto.Correction c : saisies == null ? List.<EvaluationDto.Correction>of() : saisies) {
+            if (c == null || c.avant() == null || c.apres() == null || nettoyer(c.libelle()) == null) {
+                throw new BadRequestException("Une correction porte un libellé, un montant avant et un montant après.", "CORRECTION_INVALIDE");
+            }
+            String regle = c.regle() == null ? null : c.regle().trim().toUpperCase(Locale.ROOT);
+            if (!REGLES_CORRECTION.contains(regle)) {
+                throw new BadRequestException("Règle de correction inconnue : " + c.regle() + " (PU_PREVAUT, LETTRES_PREVALENT, REPORT, AUTRE).",
+                        "REGLE_INCONNUE");
+            }
+            String motif = nettoyer(c.motif());
+            boolean ecart = !REGLES_CALCULEES.contains(regle);
+            if (ecart && motif == null) {
+                throw new BadRequestException("Une correction " + regle + " n'est pas calculée par l'application : motivez-la (« " + c.libelle().trim()
+                        + " »).", "MOTIF_OBLIGATOIRE");
+            }
+            if (!ecart) {
+                if (propositions == null) {
+                    propositions = proposees.get();
+                }
+                boolean proposee = propositions.stream().anyMatch(p -> regle.equals(p.regle()) && java.util.Objects.equals(p.ligne(), c.ligne())
+                        && p.avant() != null && p.avant().compareTo(c.avant()) == 0 && p.apres() != null && p.apres().compareTo(c.apres()) == 0);
+                if (!proposee) {
+                    Map<String, Object> details = new java.util.LinkedHashMap<>();
+                    details.put("ligne", c.ligne());
+                    details.put("regle", regle);
+                    throw new BadRequestException("La correction « " + c.libelle().trim() + " » (" + regle + ") ne reprend aucune correction "
+                            + "calculée par l'application : le montant évalué ne se saisit pas à la main (art. 46-47).", "CORRECTION_NON_PROPOSEE",
+                            details);
+                }
+            }
+            out.add(new EvaluationDto.Correction(c.ligne(), c.libelle().trim(), c.avant(), c.apres(), regle, Boolean.TRUE.equals(c.retenue()),
+                    motif, ecart));
+        }
+        return out;
+    }
+
+    /** ⚠️ R9b — la mention au journal des corrections hors du calcul du serveur, avec leur motif ; vide s'il n'y en a pas. */
+    static String horsCalcul(List<EvaluationDto.Correction> corrections) {
+        List<String> l = corrections.stream().filter(c -> Boolean.TRUE.equals(c.ecart()))
+                .map(c -> c.libelle() + " (" + c.regle() + (Boolean.TRUE.equals(c.retenue()) ? ", retenue" : ", non retenue") + ") : " + c.motif()).toList();
+        return l.isEmpty() ? "" : " — correction(s) hors calcul de l'application : " + String.join(" ; ", l);
+    }
+
+    /** Le prix corrigé : le prix lu plus {@code apres − avant} de chaque correction retenue. */
+    static java.math.BigDecimal prixCorrige(java.math.BigDecimal prixLu, List<EvaluationDto.Correction> corrections) {
+        java.math.BigDecimal p = prixLu;
+        for (EvaluationDto.Correction c : corrections) {
+            if (Boolean.TRUE.equals(c.retenue())) {
+                p = p.add(c.apres().subtract(c.avant()));
+            }
+        }
+        return p;
+    }
     /** La décision de l'étape 3 pour une offre évaluée (l'autre est {@code ECARTEE}, au refus d'une correction par le candidat). */
     public static final String EVALUEE = "EVALUEE";
     /** Le plafond de la marge de préférence retenu par le guide (§3.4). */
@@ -646,23 +714,8 @@ public class EvaluationService {
             throw new BadRequestException("L'acte d'engagement ne porte pas de montant HT : saisissez le prix lu hors taxes.", "PRIX_LU_OBLIGATOIRE");
         }
         java.math.BigDecimal prixLuTtc = o.acteEngagement() == null ? null : SeanceService.montant(o.acteEngagement().get("montantTtc"));
-        List<EvaluationDto.Correction> corrections = new ArrayList<>();
-        java.math.BigDecimal prixCorrige = prixLu;
-        for (EvaluationDto.Correction c : m.corrections() == null ? List.<EvaluationDto.Correction>of() : m.corrections()) {
-            if (c == null || c.avant() == null || c.apres() == null || nettoyer(c.libelle()) == null) {
-                throw new BadRequestException("Une correction porte un libellé, un montant avant et un montant après.", "CORRECTION_INVALIDE");
-            }
-            String regle = c.regle() == null ? null : c.regle().trim().toUpperCase(Locale.ROOT);
-            if (!REGLES_CORRECTION.contains(regle)) {
-                throw new BadRequestException("Règle de correction inconnue : " + c.regle() + " (PU_PREVAUT, LETTRES_PREVALENT, REPORT, AUTRE).",
-                        "REGLE_INCONNUE");
-            }
-            boolean retenue = Boolean.TRUE.equals(c.retenue());
-            corrections.add(new EvaluationDto.Correction(c.ligne(), c.libelle().trim(), c.avant(), c.apres(), regle, retenue));
-            if (retenue) {
-                prixCorrige = prixCorrige.add(c.apres().subtract(c.avant()));
-            }
-        }
+        List<EvaluationDto.Correction> corrections = corrections(m.corrections(), () -> seance.correctionsProposees(idOffre));
+        java.math.BigDecimal prixCorrige = prixCorrige(prixLu, corrections);
         EvaluationDto.Refus refus = null;
         if (m.refusCandidat() != null) {
             String motif = nettoyer(m.refusCandidat().motif());
@@ -744,6 +797,7 @@ public class EvaluationService {
                 + (refus != null ? "écartée, le candidat refuse la correction : " + refus.motif() + " (" + refus.clause() + ")"
                         : "prix lu " + FormulairesEnLigne.lisible(prixLu) + ", corrigé " + FormulairesEnLigne.lisible(prixCorrige)
                                 + ", montant évalué " + FormulairesEnLigne.lisible(montantEvalue))
+                + horsCalcul(corrections)
                 + (avant == null ? "" : " (remplace la saisie précédente)"));
         return dto(idDmc, e);
     }
@@ -1079,21 +1133,33 @@ public class EvaluationService {
             throw new BadRequestException("Suspecter, maintenir ou rejeter une offre se motive (comparaison à l'estimation, réponse du candidat).",
                     "MOTIF_OBLIGATOIRE");
         }
+        // ⚠️ R9b (manuel révisé, lot 2, §B4 n° 10 ; arbitrage QB3 du 14/10) — « réponse tracée » = la réponse reçue, ou l'échéance passée
+        // sans réponse (manuel 2-III-C P20 : le défaut de réponse vaut refus de justifier) ; ce défaut est écrit dans la décision et au journal.
+        String defaut = null;
         if (REJETEE.equals(decision)) {
             EvaluationDemande j = demandes.findByIdOffreAndTypeOrderByDemandeeLeAscIdAsc(idOffre, EvaluationDemande.JUSTIFICATION).stream()
                     .reduce((a, b) -> b).orElseThrow(() -> new BusinessRuleException("Aucun rejet sans demande écrite de justification au "
                             + "candidat (art. 48).", "JUSTIFICATION_NON_DEMANDEE"));
+            String echeance = j.getEcheance().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"));
             if (j.getReponduLe() == null && !maintenant().isAfter(j.getEcheance())) {
-                throw new BusinessRuleException("Le candidat n'a pas encore répondu et son délai court jusqu'au "
-                        + j.getEcheance().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")) + ".", "DELAI_EN_COURS");
+                throw new BusinessRuleException("Le candidat n'a pas encore répondu et son délai court jusqu'au " + echeance + ".", "DELAI_EN_COURS");
             }
+            if (j.getReponduLe() == null) {
+                defaut = echeance;
+            }
+        }
+        Map<String, Object> contenu = new java.util.LinkedHashMap<>();
+        contenu.put("suspectee", suspectee);
+        if (defaut != null) {
+            contenu.put("defautReponse", true);
         }
         LocalDateTime maintenant = maintenant();
         EvaluationDecision avant = remplacer(idOffre, EvaluationEtape.ANORMALES, maintenant);
         decisions.save(new EvaluationDecision(null, idDmc, idOffre, lotDe(o), EvaluationEtape.ANORMALES, decision, null, motif, null,
-                ecrire(Map.of("suspectee", suspectee)), k, maintenant, null));
+                ecrire(contenu), k, maintenant, null));
         tracer(idDmc, "ANORMALE", "Offre n° " + o.numero() + " (" + o.entreprise().raisonSociale() + ") : "
-                + (avant == null ? "" : avant.getDecision() + " → ") + decision + (motif == null ? "" : " — " + motif));
+                + (avant == null ? "" : avant.getDecision() + " → ") + decision + (motif == null ? "" : " — " + motif)
+                + (defaut == null ? "" : " — défaut de réponse du candidat à l'échéance du " + defaut + " : vaut refus de justifier (art. 48)"));
         return dto(idDmc, e);
     }
 
@@ -1311,7 +1377,7 @@ public class EvaluationService {
         EvaluationDto.Demande j = demandes.findByIdOffreAndTypeOrderByDemandeeLeAscIdAsc(o.idOffre(), EvaluationDemande.JUSTIFICATION).stream()
                 .reduce((a, b) -> b).map(x -> demandeDto(x, o.numero())).orElse(null);
         return new EvaluationDto.Anormale(Boolean.TRUE.equals(c.get("suspectee")), d.getDecision(), d.getMotif(), j, d.getPar(),
-                internes.nomMembre(d.getPar()), d.getLe());
+                internes.nomMembre(d.getPar()), d.getLe(), Boolean.TRUE.equals(c.get("defautReponse")));
     }
 
     private EvaluationDto.Qualification qualificationDto(EvaluationDecision d, SeanceDto.OffreLue o) {

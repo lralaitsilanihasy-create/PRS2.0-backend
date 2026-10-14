@@ -1286,6 +1286,14 @@ de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM 
 > l'autorité compétente (autorité, date, décision jointe) ; le marché ne se notifie qu'approuvé **et** enregistré, à une date qui
 > n'est antérieure ni à l'un ni à l'autre.
 >
+> ⚠️ **2026-10-14 — trois autres bloquants (manuel révisé, lot 2, tranche R9b, V112 ; arbitrages QB2 et QB3).** **Dépôt hors délai
+> (art. 44)** : toute tentative de déposer une offre après la date et l'heure limites est refusée, et ce refus est horodaté par le serveur
+> et conservé ; le registre des dépôts et le PV d'ouverture les énumèrent. **Montant évalué (art. 46-47)** : le montant résulte du calcul
+> de l'application ; une correction de prix unitaire ou de lettres ne peut que reprendre celle que l'application a calculée sur le
+> bordereau ; une correction d'une autre nature (report, autre) reste possible, motivée, et elle est signalée au contrôle du dossier de
+> marché, où le Membre la lit. **Offre anormalement basse (art. 48)** : on ne rejette pas sans demande écrite de justification ; le
+> défaut de réponse du candidat à l'échéance vaut refus de justifier, et il est écrit dans la décision et au journal.
+>
 > ⚠️ **2026-10-08 — les grilles de contrôle par sous-type (tranche M3, V96).** Chaque sous-type a la grille du manuel : les points
 > communs de sa famille, puis ceux de la grille dont il dérive (un appel d'offres restreint reprend la grille de l'appel d'offres
 > ouvert et y ajoute ses cinq points ; un marché sur appel d'offres restreint, celle du marché sur appel d'offres ouvert), puis les

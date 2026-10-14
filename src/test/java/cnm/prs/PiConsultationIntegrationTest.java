@@ -407,7 +407,7 @@ class PiConsultationIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("REMBOURSABLES_INVALIDES"));
         // A : 1 000 000 lu, corrigé à 1 050 000, dont 50 000 de dépenses remboursables → F = 1 000 000 ; B : 800 000 → Fm.
         mvc.perform(put(ev + "/financiere/offres/" + fa).header("Authorization", pi.m1()).contentType(JSON).content("{\"corrections\":[{\"ligne\":1,"
-                + "\"libelle\":\"Honoraires\",\"avant\":100000,\"apres\":150000,\"regle\":\"PU_PREVAUT\",\"retenue\":true}],\"remboursables\":50000,"
+                + "\"libelle\":\"Honoraires\",\"avant\":100000,\"apres\":150000,\"regle\":\"AUTRE\",\"retenue\":true,\"motif\":\"Erreur de report\"}],\"remboursables\":50000,"
                 + "\"motifRemboursables\":\"Frais de mission\"}")).andExpect(status().isOk());
         String classe = mvc.perform(put(ev + "/financiere/offres/" + fb).header("Authorization", pi.m2()).contentType(JSON).content("{}"))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();

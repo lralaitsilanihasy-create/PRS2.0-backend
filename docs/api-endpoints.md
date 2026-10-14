@@ -8426,6 +8426,45 @@ disponibilite`) ne l'annonce pas : le 409 arrive à l'impression.
   date d'approbation.
 - ⚠️ Un lot déjà notifié avant V111 n'a pas d'approbation : il reste notifié, son avis d'attribution omet la mention.
 
+### Le manuel révisé pour l'application, lot 2, tranche R9b : tentatives refusées, corrections, offres anormales — V112 ⚠️ 2026-10-14
+
+Demande front `demande-backend-2026-10-10-manuel-revise-lot2.md` (§B4, bloquants de la loi n° 4, 9 et 10). Arbitrages du 14/10 : **QB2**
+— la correction `AUTRE` est **gardée**, motivée et signalée ; les corrections que le serveur calcule doivent reprendre une proposition ;
+**QB3** — l'échéance passée sans réponse **vaut** réponse tracée. Migration **V112** (`t_offre_tentative`), pom inchangé.
+
+#### n° 4 — les tentatives de dépôt refusées hors délai (art. 44)
+
+- Chaque refus **`DELAI_DEPASSE`** d'une création d'offre (`POST /api/candidat/offres`), d'un morceau (`PUT …/morceaux/{rang}`) ou d'un
+  scellement (`POST …/sceller`) est écrit dans `t_offre_tentative`, **horodaté par le serveur**, dans sa propre transaction (le refus
+  annule le geste, pas sa trace). Un morceau renvoyé n'ajoute pas de seconde ligne pour la même offre. Le refus rendu au candidat est
+  inchangé.
+- `GET /api/fiches-marche/{idDmc}/depots` : `tentativesRefusees` = `[{ horodatage, geste: CREATION | MORCEAU | SCELLEMENT, motif:
+  DELAI_DEPASSE, entreprise, nif, lot, enveloppe, idOffre, dateLimite }]` une fois les dépôts clos (`null` avant, comme `depots`).
+  `entreprise` / `nif` sont nuls pour une création d'un candidat sans entreprise déclarée ; `idOffre` est nul pour une création.
+- Le **PV d'ouverture** (complet et public) porte une section « Tentatives de dépôt refusées hors délai : n » (horodatage à la seconde,
+  entreprise et NIF, lot, geste refusé), y compris en carence.
+
+#### n° 9 — le montant évalué n'est jamais saisi à la main (art. 46-47)
+
+S'applique à `PUT …/evaluation/offres/{id}/montant` et à la saisie financière PI (`PUT …/financiere/offres/{id}`).
+- Une correction **`PU_PREVAUT`** ou **`LETTRES_PREVALENT`** (règles calculées par le serveur sur le bordereau) doit reprendre
+  **exactement** une correction de `GET …/corrections-proposees` — même `ligne`, même `regle`, mêmes `avant` et `apres` — sinon **400
+  `CORRECTION_NON_PROPOSEE`** `details { ligne, regle }`. Une offre sans bordereau scellé n'a aucune proposition.
+- **`REPORT`** et **`AUTRE`**, hors du calcul du serveur, restent permises avec un **`motif`** (400 `MOTIF_OBLIGATOIRE`). ⚠️ Écart : la
+  demande ne citait que `AUTRE` ; `REPORT` n'étant jamais proposée par le serveur, elle suit le même régime plutôt que de devenir inutilisable.
+- `Correction` gagne **`motif`** et **`ecart`** (vrai pour `REPORT` / `AUTRE`, nul dans une saisie d'avant R9b). Le journal de la saisie
+  cite les corrections hors calcul et leur motif.
+- Au dossier de marché (DDM), contrôle automatique **`CORRECTIONS_HORS_CALCUL`** (référence « Loi 2016-055 art. 46-47 »), **non
+  bloquant** : `NON_CONFORME` dès qu'une correction hors calcul est retenue, `valeurs.corrections[]` `{ lot, offre, libelle, regle, avant,
+  apres, motif }` ; comme tout non-conforme, le Membre le lève avant un avis favorable (`CONTROLE_NON_CONFORME`). Les saisies PI ne sont
+  pas lues par ce contrôle (journal seul).
+
+#### n° 10 — rejet pour prix anormal : demande écrite et réponse tracées (art. 48)
+
+Inchangé : 409 `JUSTIFICATION_NON_DEMANDEE` sans demande écrite, 409 `DELAI_EN_COURS` tant que le délai court sans réponse. Quand le rejet
+intervient **après l'échéance sans réponse**, la décision porte **`anormale.defautReponse: true`** et le journal « défaut de réponse du
+candidat à l'échéance du … : vaut refus de justifier (art. 48) ».
+
 ### Le rabais structuré de l'offre en ligne ⚠️ 2026-10-07
 
 Demande front `demande-backend-2026-10-07-rabais-structure.md` (arbitrage Q4 du pilote : « le rabais est structuré au dépôt »). Aucune
