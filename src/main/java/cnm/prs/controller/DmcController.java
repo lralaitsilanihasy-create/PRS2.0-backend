@@ -38,10 +38,13 @@ public class DmcController {
         this.service = service;
     }
 
-    /** Lignes de PPM éligibles à un appel d'offres pour l'utilisateur courant (H4). */
+    /**
+     * Lignes de PPM éligibles à un appel d'offres pour l'utilisateur courant (H4). ⚠️ 2026-10-14 (§B2) — {@code ?sousType=} :
+     * celles dont la fiche produira ce sous-type (400 {@code SOUS_TYPE_INCONNU}).
+     */
     @GetMapping("/eligibles")
-    public List<LigneEligibleDto> eligibles() {
-        return service.eligibles();
+    public List<LigneEligibleDto> eligibles(@org.springframework.web.bind.annotation.RequestParam(required = false) String sousType) {
+        return service.eligibles(sousType);
     }
 
     /**

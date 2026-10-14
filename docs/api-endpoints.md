@@ -4819,11 +4819,19 @@ nature. C'est la nature du plan que la PRMP lit : « Services » et « Fournitur
 (`categorie = FOURNITURES_SERVICES`). Ils viennent de la lecture qui donne déjà `categorie`, un cache par nature pour
 toute la liste, sans requête de plus par ligne. La clé étrangère `t_marche → t_nature` exclut une nature inconnue.
 
+⚠️ **2026-10-14** (demande front `demande-backend-2026-10-14-sous-type-ligne.md`) — **`sousType`** (`String`) : le sous-type du
+dossier que la fiche de la ligne produira (`DAOO` · `DAOR` · `DAOOI` · `DAORI` · `DAOOPREQUAL` · `DC`), calculé par **la règle
+de la validation** (`SousTypesDossier.dossierMiseEnConcurrence`) sur le libellé du mode et la catégorie de la ligne en vigueur
+(prestations intellectuelles → `DC`). Il est lu **à la date de la lecture**, y compris pour une ligne `dejaDao` : si le dossier
+a déjà été produit, son sous-type est celui du dossier (`DossierDto.idTypeDossier`), qui ne bouge plus. Une ligne sans catégorie
+reçoit la règle du mode seul. Jamais `DAO` (ancien code, `DAOO` depuis V94). Filtre facultatif **`?sousType=`** (casse
+indifférente) : les seules lignes de ce sous-type ; hors des six codes → 400 `SOUS_TYPE_INCONNU`.
+
 **Endpoints**
 
 | Méthode | URL | Corps | Réponse | Statuts | Rôle |
 |---|---|---|---|---|---|
-| GET | /api/dmcs/eligibles | — | `LigneEligibleDto[]` | 200 | Authentifié — ⚠️ 2026-09-22 : PRMP / UGPM = les lignes de **ses** plans qui passent H4 (les `DAO_EXISTANT` restent listées, `dejaDao = true`) ; Président / Administrateur = toutes ; autres profils = `[]`. Route **littérale**, déclarée avant `/{id}` (qui l'attrapait en 400) |
+| GET | /api/dmcs/eligibles | ⚠️ 2026-10-14 : `?sousType=` facultatif | `LigneEligibleDto[]` | 200, 400 | Authentifié — ⚠️ 2026-09-22 : PRMP / UGPM = les lignes de **ses** plans qui passent H4 (les `DAO_EXISTANT` restent listées, `dejaDao = true`) ; Président / Administrateur = toutes ; autres profils = `[]`. Route **littérale**, déclarée avant `/{id}` (qui l'attrapait en 400) |
 | POST | /api/dmcs/par-marche/{idDetail} | — | `DmcDto` | 201, 400, 403, 404, 409 | **ADMINISTRATEUR**, ⚠️ 2026-09-22 **PRMP**, **UGPM** (encadré ci-dessus) |
 | GET | /api/dmcs/par-marche/{idDetail} | — | `DmcDto` | 200, 403, 404 | Authentifié (filtré) |
 | GET | /api/dmcs/{id} | — | `DmcDto` | 200, 403, 404 | Authentifié (filtré) |

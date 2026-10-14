@@ -233,6 +233,20 @@ public class DmcService {
      */
     @Transactional(readOnly = true)
     public List<LigneEligibleDto> eligibles() {
+        return eligibles(null);
+    }
+
+    /**
+     * ⚠️ 2026-10-14 (demande front « sous-type-ligne », §B2) — les lignes éligibles dont la fiche produira le sous-type demandé
+     * ({@code null} ou vide : toutes) ; 400 {@code SOUS_TYPE_INCONNU} hors des sous-types qu'une fiche produit.
+     */
+    @Transactional(readOnly = true)
+    public List<LigneEligibleDto> eligibles(String sousType) {
+        String filtre = sousType == null || sousType.isBlank() ? null : sousType.trim().toUpperCase(java.util.Locale.ROOT);
+        if (filtre != null && !SousTypesDossier.PRODUITS_PAR_FICHE.contains(filtre)) {
+            throw new BadRequestException("Sous-type « " + sousType + " » inconnu : attendu l'un de "
+                    + new java.util.TreeSet<>(SousTypesDossier.PRODUITS_PAR_FICHE) + ".", "SOUS_TYPE_INCONNU");
+        }
         List<Marche> lignes;
         if (Visibilite.voitTout()) {
             lignes = marcheRepository.findAll();
@@ -268,13 +282,19 @@ public class DmcService {
             // ⚠️ 2026-09-29 — la nature vient du cache que categorie() vient de remplir : aucune requête de plus.
             cnm.prs.entity.Nature nature = m.getIdNature() == null ? null
                     : caches.natures.getOrDefault(m.getIdNature(), Optional.empty()).orElse(null);
+            // ⚠️ 2026-10-14 (§B1) — la règle de la validation, sur le mode et la catégorie de la ligne en vigueur.
+            String sousTypeLigne = SousTypesDossier.dossierMiseEnConcurrence(mode == null ? null : mode.getLibelle(),
+                    cat.categorie() == cnm.prs.enums.CategorieDao.PRESTATIONS_INTELLECTUELLES);
+            if (filtre != null && !filtre.equals(sousTypeLigne)) {
+                continue;
+            }
             out.add(new LigneEligibleDto(m.getIdDetail(), m.getIdDossier(), d == null ? null : d.getRefeDossier(),
                     m.getDesignationMarche(), m.getIdMode(), mode == null ? null : mode.getLibelle(), m.getMontEstim(),
                     dmc != null, dmc == null ? null : dmc.getIdDmc(),
                     m.formeMarcheSaisie() == null ? null : m.formeMarcheSaisie().name(),
                     motifForme(m.formeMarcheSaisie()).isEmpty(), cat.categorie() == null ? null : cat.categorie().name(),
                     cat.motif().isEmpty(), m.getIdNature(), nature == null ? null : nature.getLibelle(),
-                    dmc == null ? 0 : recusEnAttente.getOrDefault(dmc.getIdDmc(), 0L), dmc == null ? 0 : nbOffres.getOrDefault(dmc.getIdDmc(), 0L)));
+                    dmc == null ? 0 : recusEnAttente.getOrDefault(dmc.getIdDmc(), 0L), dmc == null ? 0 : nbOffres.getOrDefault(dmc.getIdDmc(), 0L), sousTypeLigne));
         }
         return out;
     }

@@ -29,6 +29,7 @@ import cnm.prs.entity.TypeDmc;
 import cnm.prs.enums.FormeMarche;
 import cnm.prs.repository.ChampFicheMarcheRepository;
 import cnm.prs.service.ChampFicheMarcheService;
+import cnm.prs.service.SousTypesDossier;
 
 /**
  * ⚠️ <strong>Les trois catégories de fiche DAO, lot 5</strong> (demande front du 2026-09-24) — le second axe du
@@ -275,6 +276,40 @@ class FicheDaoCategoriesIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(JsonPath.<List<String>>read(eligibles, "$[?(@.idDetail==9901)].libelleNature")).containsExactly("Fournitures");
         assertThat(JsonPath.<List<Object>>read(eligibles, "$[?(@.idDetail==9904)].libelleNature")).containsExactly((Object) null);
         assertThat(JsonPath.<List<Object>>read(eligibles, "$[?(@.idDetail==9904)].idNature")).containsExactly((Object) null);
+    }
+
+    // ------------------------------------------------------------------ 14/10 — le sous-type de chaque ligne éligible
+
+    @Test
+    @DisplayName("14/10 — GET /api/dmcs/eligibles sert sousType (règle de la validation : appel d'offres ouvert → DAOO, prestations "
+            + "intellectuelles → DC, ligne sans catégorie → règle du mode seul) ; ?sousType=DC filtre, la casse est indifférente ; "
+            + "sous-type inconnu ou ancien code DAO → 400 SOUS_TYPE_INCONNU")
+    void sousTypeDesLignesEligibles() throws Exception {
+        String eligibles = mvc.perform(get("/api/dmcs/eligibles").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(eligibles, "$[?(@.idDetail==9901)].sousType")).containsExactly("DAOO");
+        assertThat(JsonPath.<List<String>>read(eligibles, "$[?(@.idDetail==9902)].sousType")).containsExactly("DC");
+        assertThat(JsonPath.<List<String>>read(eligibles, "$[?(@.idDetail==9903)].sousType")).containsExactly("DAOO");
+        assertThat(JsonPath.<List<String>>read(eligibles, "$[*].sousType")).doesNotContain("DAO");
+
+        String dc = mvc.perform(get("/api/dmcs/eligibles").param("sousType", "dc").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Integer>>read(dc, "$[*].idDetail")).containsExactly(9902);
+        String prequal = mvc.perform(get("/api/dmcs/eligibles").param("sousType", "DAOOPREQUAL").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Integer>>read(prequal, "$[*].idDetail")).isEmpty();
+        mvc.perform(get("/api/dmcs/eligibles").param("sousType", "DAO").header("Authorization", tokenPrmp))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("SOUS_TYPE_INCONNU"));
+    }
+
+    @Test
+    @DisplayName("14/10 — la règle des sous-types, mode par mode (même source que la validation de la fiche)")
+    void regleDesSousTypes() {
+        assertThat(SousTypesDossier.dossierMiseEnConcurrence("Appel d'offres ouvert avec pré-qualification", false)).isEqualTo("DAOOPREQUAL");
+        assertThat(SousTypesDossier.dossierMiseEnConcurrence("Appel d'offres restreint", false)).isEqualTo("DAOR");
+        assertThat(SousTypesDossier.dossierMiseEnConcurrence("Appel d'offres ouvert international", false)).isEqualTo("DAOOI");
+        assertThat(SousTypesDossier.dossierMiseEnConcurrence("Appel d'offres restreint international", false)).isEqualTo("DAORI");
+        assertThat(SousTypesDossier.dossierMiseEnConcurrence("Appel d'offres restreint", true)).isEqualTo("DC");
     }
 
     // ------------------------------------------------------------------ 29/09 — champs non imprimés retirés

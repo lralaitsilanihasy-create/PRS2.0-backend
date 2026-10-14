@@ -29,5 +29,12 @@ public record LigneEligibleDto(Integer idDetail, Integer idDossier, String refeD
         /** ⚠️ 2026-10-06 (compteurs, §B2) — les reçus de frais de dossier {@code EN_ATTENTE} de la fiche ; 0 sans fiche ou en papier. */
         long recusEnAttente,
         /** ⚠️ §B2 — le nombre seul des offres déposées (ou écartées) ; 0 sans fiche ou en papier. */
-        long nbOffres) {
+        long nbOffres,
+        /**
+         * ⚠️ 2026-10-14 (demande front « sous-type-ligne », §B1) — le sous-type du dossier que la fiche de cette ligne produira
+         * ({@code DAOO}, {@code DAOR}, {@code DAOOI}, {@code DAORI}, {@code DAOOPREQUAL} ou {@code DC}), calculé par la règle de la
+         * validation ({@link cnm.prs.service.SousTypesDossier#dossierMiseEnConcurrence}) sur le mode et la catégorie de la ligne
+         * <strong>à la date de la lecture</strong> (H1) ; jamais {@code DAO} (H2).
+         */
+        String sousType) {
 }
