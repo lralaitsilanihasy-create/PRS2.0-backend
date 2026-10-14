@@ -71,7 +71,9 @@ public class ProjetMarcheService {
 
     /** Ce que le projet lit hors de la fiche : la proposition, l'offre retenue, les valeurs du plan, la PRMP du marché, la notification. */
     public record Entree(Long idDmc, Integer lot, EvaluationDto.Proposition proposition, Offre offre, Map<String, String> plan, boolean allotie,
-            boolean pi, String idPrmp, LocalDate dateNotification) {
+            boolean pi, String idPrmp, LocalDate dateNotification,
+            /** ⚠️ R10 (§B5, H2) — l'offre déposée en ligne : l'original de l'acte d'engagement est exigé ; sa date de remise une fois reconnu conforme. */
+            boolean aeOriginalExige, LocalDate aeOriginalRemisLe) {
     }
 
     public DocumentLibre document(Entree in) {
@@ -105,7 +107,7 @@ public class ProjetMarcheService {
         para(el, baseLegale(in.plan().get("MODE"), in.pi()));
 
         sous(el, "Article 3 — Pièces constitutives");
-        para(el, "Le marché est constitué, par ordre de priorité : l'acte d'engagement du Titulaire ; le cahier des clauses administratives "
+        para(el, "Le marché est constitué, par ordre de priorité : l'acte d'engagement du Titulaire" + originalAe(in) + " ; le cahier des clauses administratives "
                 + "particulières (ou le cahier des prescriptions spéciales) et ses annexes, les spécifications techniques ou les termes de "
                 + "référence ; " + offreMot + " du Titulaire (n° " + in.offre().getNumero() + "), dont le bordereau des prix ; le cahier des "
                 + "clauses administratives générales — tels qu'ils figurent au dossier et à " + offreMot + " retenue, sans modification "
@@ -196,6 +198,18 @@ public class ProjetMarcheService {
     // ------------------------------------------------------------------ art. 60 : les mentions
 
     /** La PRMP « nommée par <acte> » depuis son mandat en vigueur ; sinon l'acte reste à compléter. */
+    /**
+     * ⚠️ R10 (manuel révisé, lot 2, §B5 ; H2) — l'offre déposée en ligne : l'acte d'engagement du marché est l'original signé que
+     * l'attributaire remet avant la signature ; vide pour une procédure papier.
+     */
+    static String originalAe(Entree in) {
+        if (!in.aeOriginalExige()) {
+            return "";
+        }
+        return in.aeOriginalRemisLe() == null ? " (original signé à remettre avant la signature du marché, l'offre ayant été déposée et scellée en ligne)"
+                : " (original signé remis le " + in.aeOriginalRemisLe().format(DATE) + ", l'offre ayant été déposée et scellée en ligne)";
+    }
+
     private String signataire(Entree in) {
         String nom = Objects.toString(in.plan().get("PRMP"), A_COMPLETER);
         String acte = in.idPrmp() == null ? null : mandats.mandatActif(null, in.idPrmp())

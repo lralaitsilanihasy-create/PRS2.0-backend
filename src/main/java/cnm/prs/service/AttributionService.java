@@ -956,7 +956,7 @@ public class AttributionService {
     private DocumentLibre projet(Long idDmc, Integer lot, EvaluationDto.Proposition p, Offre offre, Map<String, String> plan, boolean allotie,
             String idPrmp, java.time.LocalDate dateNotification) {
         return projetMarche.document(new ProjetMarcheService.Entree(idDmc, lot, p, offre, plan, allotie, evaluation.estPi(idDmc), idPrmp,
-                dateNotification));
+                dateNotification, execution.aeOriginalExige(idDmc), execution.aeOriginalRemisLe(idDmc, lot)));
     }
 
     /**

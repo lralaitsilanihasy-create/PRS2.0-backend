@@ -100,6 +100,19 @@ public class AttributionExecutionController {
     }
 
     /**
+     * ⚠️ R10 (§B5, H2) — la PRMP enregistre l'original signé de l'acte d'engagement reçu de l'attributaire : multipart {@code dateRemise}
+     * (défaut aujourd'hui) + {@code fichier} (le scan) ; 400 {@code DATE_INVALIDE}, {@code FICHIER_OBLIGATOIRE} ; 409 {@code NON_INFORME},
+     * {@code DEJA_SIGNE}, {@code LOT_RETIRE}. Il se vérifie par {@code …/pieces/{id}/verifier}.
+     */
+    @PostMapping(value = "/lots/{lot}/acte-engagement-original", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public AttributionDto deposerOriginal(@PathVariable Long idDmc, @PathVariable Integer lot,
+            @RequestParam(value = "dateRemise", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateRemise,
+            @RequestPart(value = "fichier", required = false) MultipartFile fichier) {
+        execution.deposerOriginalParPrmp(idDmc, lot, dateRemise, fichier);
+        return attribution.lire(idDmc);
+    }
+
+    /**
      * ⚠️ R9a (§B4 n° 14) — multipart {@code autorite}, {@code dateApprobation} + {@code fichier} (la décision d'approbation) ; 400
      * {@code CHAMP_OBLIGATOIRE}, {@code DATE_INVALIDE}, {@code FICHIER_OBLIGATOIRE} ; 409 {@code NON_SIGNE}, {@code DEJA_APPROUVE}.
      */

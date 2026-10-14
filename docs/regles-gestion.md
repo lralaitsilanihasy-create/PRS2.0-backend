@@ -1294,6 +1294,19 @@ de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM 
 > marché, où le Membre la lit. **Offre anormalement basse (art. 48)** : on ne rejette pas sans demande écrite de justification ; le
 > défaut de réponse du candidat à l'échéance vaut refus de justifier, et il est écrit dans la décision et au journal.
 >
+> ⚠️ **2026-10-14 — l'immutabilité des étapes closes (manuel révisé, lot 2, tranche R9c ; bloquant n° 15).** Dès qu'un dossier de
+> marché de la procédure est soumis à la Commission, la séance d'ouverture, la séance financière, l'évaluation et l'AMI de cette
+> procédure ne se modifient plus : la Commission examine ce qui lui a été soumis, et l'instantané figé à la soumission en garde la
+> preuve. Seule la reprise de l'évaluation après un avis défavorable, ou la réattribution après un retrait, toutes deux motivées et
+> tracées, rouvre l'évaluation ; un nouveau dossier de marché suit.
+>
+> ⚠️ **2026-10-14 — l'acte d'engagement original (manuel révisé, lot 2, tranche R10, V113 ; H2 du pilote).** Pendant une procédure en
+> ligne, le dépôt de l'offre depuis le compte authentifié du candidat, scellé par la plateforme, vaut signature de l'offre et de l'acte
+> d'engagement ; les DPAO le disent en remise électronique. L'attributaire remet ensuite l'original signé de son acte d'engagement : il
+> le dépose lui-même, ou la PRMP qui l'a reçu l'enregistre ; la PRMP le reconnaît conforme, et le marché ne se signe pas avant. Le
+> projet de marché cite l'original et sa date de remise. Une procédure papier n'est pas concernée (l'offre porte déjà l'acte signé). La
+> signature certifiée est une option réservée : choisie, elle ne change encore rien.
+>
 > ⚠️ **2026-10-08 — les grilles de contrôle par sous-type (tranche M3, V96).** Chaque sous-type a la grille du manuel : les points
 > communs de sa famille, puis ceux de la grille dont il dérive (un appel d'offres restreint reprend la grille de l'appel d'offres
 > ouvert et y ajoute ses cinq points ; un marché sur appel d'offres restreint, celle du marché sur appel d'offres ouvert), puis les

@@ -133,6 +133,7 @@ PARA	{{SI:B04-SE}}
 PARA	La transmission par voie électronique est admise dans les conditions suivantes
 PARA	[[CLAUSE À FOURNIR PAR LE JURISTE : conditions de la transmission électronique — plateforme ({{B04-SE-02}}), heure de référence ({{B04-SE-04}}), signature exigée ({{B04-SE-05}}), formats ({{B04-SE-07}}) et tailles admis ({{B04-SE-08}} Mo par fichier, {{B04-SE-09}} Mo par offre), assistance ({{B04-SE-14}}), indisponibilité et prorogation ({{B04-SE-12}} h, {{B04-SE-13}} jours ouvrables)]]
 PARA	Même si l’offre du candidat à la présente procédure a fait l'objet d'une transmission électronique, le candidat s'engage, notamment dans le cas où son offre est retenue, à accepter la re-matérialisation conforme, sous forme papier, de tous les documents constitutifs à valeur contractuelle. A ce titre, il s'engage également à ce que la personne physique auteur de leur signature électronique procède à leur signature manuscrite sans procéder à la moindre modification de ceux-ci et les renvoie à l’Autorité contractante sous cette forme. Il s'engage enfin à en accepter la notification, selon les procédés habituellement en cours, sous forme papier.
+PARA	La soumission par la plateforme, effectuée depuis le compte authentifié du candidat et scellée par celle-ci, vaut signature de l'offre et de l'acte d'engagement au sens de l'article 31 du Code. L'attributaire remet l'original signé de son acte d'engagement avant la signature du marché.
 PARA	{{FINSI:B04-SE}}
 SOUS_TITRE	ARTICLE 6 : EXAMEN DES CANDIDATURES ET DES OFFRES
 SOUS_TITRE	6.1 - Sélection des candidatures

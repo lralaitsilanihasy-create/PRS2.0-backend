@@ -27,7 +27,9 @@ public record ParametresInternesDto(Long idDmc, List<CompteDesignableDto> membre
         /** ⚠️ V66 (lot 2, §B3) — les avertissements, distincts des anomalies qui restent les refus : {@code SE_QUORUM_MARGE}. */
         List<Anomalie> avertissements,
         /** ⚠️ R1 (manuel révisé, V101) — la surcharge du quorum de la CAO de cette procédure (nul : la règle globale) et la règle effective. */
-        String caoQuorum, String caoQuorumEffectif) {
+        String caoQuorum, String caoQuorumEffectif,
+        /** ⚠️ R10 (manuel révisé, V113) — la valeur de la signature des offres : SCELLE_PLUS_ORIGINAL (défaut) ou CERTIFIEE (réservé, sans effet). */
+        String signatureOffre) {
 
     public record Anomalie(String regle, String message) {
     }

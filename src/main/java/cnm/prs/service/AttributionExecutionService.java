@@ -176,12 +176,41 @@ public class AttributionExecutionService {
         }
         LocalDate echeance = echeancePieces(a);
         List<AttributionDto.PieceAttributaire> l = toutes.stream()
-                .filter(p -> AttributionPiece.FISCALE.equals(p.getNature()) || AttributionPiece.SOCIALE.equals(p.getNature()))
+                .filter(p -> NATURES_ATTRIBUTAIRE.contains(p.getNature()))
                 .map(p -> new AttributionDto.PieceAttributaire(p.getId(), p.getNature(), p.getDateDelivrance(), p.getNom(), p.getTaille(),
                         p.getDeposeLe(), p.getConforme(), p.getMotif(), p.getVerifieeLe()))
                 .toList();
         return new AttributionDto.PiecesAttributaire(echeance, aujourdhui().isAfter(echeance), limiteDelivrance(a, AttributionPiece.FISCALE),
-                limiteDelivrance(a, AttributionPiece.SOCIALE), conforme(toutes, AttributionPiece.FISCALE), conforme(toutes, AttributionPiece.SOCIALE), l);
+                limiteDelivrance(a, AttributionPiece.SOCIALE), conforme(toutes, AttributionPiece.FISCALE), conforme(toutes, AttributionPiece.SOCIALE), l,
+                aeOriginalExige(a.getIdDmc()), conforme(toutes, AttributionPiece.ACTE_ENGAGEMENT_ORIGINAL));
+    }
+
+    /** ⚠️ R10 — la date de remise du dernier original de l'acte d'engagement reconnu conforme du lot ; nulle sinon. */
+    @Transactional(readOnly = true)
+    LocalDate aeOriginalRemisLe(Long idDmc, Integer lot) {
+        return piecesRepository.findByIdDmcAndLotOrderByIdAsc(idDmc, lot).stream()
+                .filter(p -> AttributionPiece.ACTE_ENGAGEMENT_ORIGINAL.equals(p.getNature()) && p.getArchiveLe() == null
+                        && Boolean.TRUE.equals(p.getConforme()))
+                .reduce((x, y) -> y).map(AttributionPiece::getDateDelivrance).orElse(null);
+    }
+
+    /** Le libellé d'une pièce de l'attributaire dans les messages. */
+    static String libellePiece(String nature) {
+        return AttributionPiece.ACTE_ENGAGEMENT_ORIGINAL.equals(nature) ? "original signé de l'acte d'engagement"
+                : "pièce " + nature.toLowerCase(Locale.FRENCH);
+    }
+
+    /** Les pièces de l'attributaire : fiscale, sociale et ⚠️ R10 l'original de l'acte d'engagement. */
+    static final Set<String> NATURES_ATTRIBUTAIRE = Set.of(AttributionPiece.FISCALE, AttributionPiece.SOCIALE, AttributionPiece.ACTE_ENGAGEMENT_ORIGINAL);
+
+    /**
+     * ⚠️ R10 (manuel révisé, lot 2, §B5 ; H2 du pilote) — l'original signé de l'acte d'engagement est exigé de l'attributaire avant la
+     * signature du marché quand l'offre a été déposée <strong>en ligne</strong> (mode figé de la procédure : remise électronique), le dépôt
+     * scellé n'ayant valu signature que pendant la procédure. {@code CERTIFIEE} (réservé) ne lève pas l'exigence tant que la signature
+     * certifiée n'est pas branchée. Une procédure papier a déjà l'acte signé dans l'offre : rien n'est exigé.
+     */
+    boolean aeOriginalExige(Long idDmc) {
+        return fiches.modeFige(idDmc).map(RemiseElectronique.ELECTRONIQUE::equals).orElse(false);
     }
 
     /**
@@ -372,12 +401,20 @@ public class AttributionExecutionService {
         if (a.getSigneLe() != null) {
             throw new BusinessRuleException("Le marché est signé : les pièces ne se déposent plus.", "DEJA_SIGNE");
         }
+        String t = type == null ? null : type.trim().toUpperCase(Locale.ROOT);
+        if (AttributionPiece.ACTE_ENGAGEMENT_ORIGINAL.equals(t)) {
+            // ⚠️ R10 (§B5, H2) — l'original de l'acte d'engagement : sans échéance (il précède la signature), daté de sa remise.
+            deposerOriginal(a, dateDelivrance, fichier, "par l'attributaire, offre n° " + o.getNumero());
+            ceremonies.notifierPrmp(a.getIdDmc(), TypeNotification.PIECES_ATTRIBUTAIRE_DEPOSEES, "Pièce de l'attributaire déposée",
+                    "L'attributaire du lot " + a.getLot() + " (procédure " + a.getIdDmc() + ") a déposé l'original signé de son acte d'engagement ;"
+                            + " vérifiez-le sur la plateforme.");
+            return piecesAttributaire(a, piecesRepository.findByIdDmcAndLotOrderByIdAsc(a.getIdDmc(), a.getLot()));
+        }
         if (aujourdhui().isAfter(echeancePieces(a))) {
             throw new BusinessRuleException("Le délai de dépôt des pièces est dépassé (" + echeancePieces(a).format(JOUR) + ").", "DELAI_DEPASSE");
         }
-        String t = type == null ? null : type.trim().toUpperCase(Locale.ROOT);
         if (!AttributionPiece.FISCALE.equals(t) && !AttributionPiece.SOCIALE.equals(t)) {
-            throw new BadRequestException("Type de pièce inconnu : FISCALE ou SOCIALE.", "TYPE_INVALIDE");
+            throw new BadRequestException("Type de pièce inconnu : FISCALE, SOCIALE ou ACTE_ENGAGEMENT_ORIGINAL.", "TYPE_INVALIDE");
         }
         if (dateDelivrance == null) {
             throw new BadRequestException("La date de délivrance de la pièce est à indiquer.", "DATE_DELIVRANCE_OBLIGATOIRE");
@@ -400,6 +437,36 @@ public class AttributionExecutionService {
         return piecesAttributaire(a, piecesRepository.findByIdDmcAndLotOrderByIdAsc(a.getIdDmc(), a.getLot()));
     }
 
+    /**
+     * ⚠️ R10 (manuel révisé, lot 2, §B5 ; H2) — la PRMP enregistre l'original signé de l'acte d'engagement qu'elle a reçu : {@code dateRemise}
+     * (au plus aujourd'hui, défaut aujourd'hui ; 400 {@code DATE_INVALIDE}), le scan (400 {@code FICHIER_OBLIGATOIRE}) ; 409
+     * {@code NON_INFORME}, {@code DEJA_SIGNE}, {@code LOT_RETIRE}. Il se vérifie ensuite comme les autres pièces.
+     */
+    public void deposerOriginalParPrmp(Long idDmc, Integer lot, LocalDate dateRemise, MultipartFile fichier) {
+        exigerPrmp(idDmc);
+        Attribution a = attributions.findById(new Attribution.Cle(idDmc, lot)).filter(x -> x.getInformeLe() != null)
+                .orElseThrow(() -> new BusinessRuleException("Les candidats de ce lot ne sont pas informés.", "NON_INFORME"));
+        if (a.getRetireLe() != null) {
+            throw new BusinessRuleException("Le marché de ce lot est retiré.", "LOT_RETIRE");
+        }
+        exigerNonSigne(a);
+        deposerOriginal(a, dateRemise, fichier, "par la PRMP");
+    }
+
+    /** Le dépôt de l'original de l'acte d'engagement, quel qu'en soit l'auteur : date de remise au plus aujourd'hui, fichier obligatoire. */
+    private void deposerOriginal(Attribution a, LocalDate dateRemise, MultipartFile fichier, String par) {
+        LocalDate remise = dateRemise == null ? aujourdhui() : dateRemise;
+        if (remise.isAfter(aujourdhui())) {
+            throw new BadRequestException("La date de remise de l'original ne peut être à venir.", "DATE_INVALIDE");
+        }
+        Televerse f = lire(fichier, true);
+        AttributionPiece p = enregistrerFichier(a, AttributionPiece.ACTE_ENGAGEMENT_ORIGINAL, null, f);
+        p.setDateDelivrance(remise);
+        piecesRepository.save(p);
+        evaluation.tracerAttribution(a.getIdDmc(), "PIECE_ATTRIBUTAIRE", "Lot " + a.getLot() + " : original signé de l'acte d'engagement déposé "
+                + par + " (remis le " + remise.format(JOUR) + ")");
+    }
+
     /** Les pièces de l'attributaire, pour lui ; 409 {@code NON_ATTRIBUTAIRE}. */
     @Transactional(readOnly = true)
     public AttributionDto.PiecesAttributaire piecesDuCandidat(String idCandidat, String idOffre) {
@@ -418,7 +485,7 @@ public class AttributionExecutionService {
     public void verifierPiece(Long idDmc, Integer lot, Long id, AttributionDto.VerificationRequest v) {
         exigerPrmp(idDmc);
         AttributionPiece p = piecesRepository.findById(id).filter(x -> x.getIdDmc().equals(idDmc) && x.getLot().equals(lot)
-                && (AttributionPiece.FISCALE.equals(x.getNature()) || AttributionPiece.SOCIALE.equals(x.getNature())))
+                && NATURES_ATTRIBUTAIRE.contains(x.getNature()))
                 .orElseThrow(() -> new ResourceNotFoundException("Pièce de l'attributaire introuvable : " + id + "."));
         if (p.getVerifieeLe() != null) {
             throw new BusinessRuleException("Cette pièce est déjà vérifiée.", "DEJA_VERIFIEE");
@@ -430,7 +497,9 @@ public class AttributionExecutionService {
             throw new BadRequestException("Une pièce non conforme exige un motif.", "MOTIF_OBLIGATOIRE");
         }
         Attribution a = attributions.findById(new Attribution.Cle(idDmc, lot)).orElseThrow();
-        LocalDate limite = a.getInformeLe() == null ? null : limiteDelivrance(a, p.getNature());
+        // ⚠️ R10 — l'original de l'acte d'engagement n'a pas d'ancienneté limite.
+        LocalDate limite = a.getInformeLe() == null || AttributionPiece.ACTE_ENGAGEMENT_ORIGINAL.equals(p.getNature()) ? null
+                : limiteDelivrance(a, p.getNature());
         if (v.conforme() && limite != null && p.getDateDelivrance() != null && p.getDateDelivrance().isBefore(limite)) {
             java.util.Map<String, Object> details = new java.util.LinkedHashMap<>();
             details.put("nature", p.getNature());
@@ -448,11 +517,11 @@ public class AttributionExecutionService {
         p.setVerifieeLe(maintenant());
         p.setVerifieePar(acteur());
         piecesRepository.save(p);
-        evaluation.tracerAttribution(idDmc, "PIECE_VERIFIEE", "Lot " + lot + " : pièce " + p.getNature().toLowerCase(Locale.FRENCH) + " "
+        evaluation.tracerAttribution(idDmc, "PIECE_VERIFIEE", "Lot " + lot + " : " + libellePiece(p.getNature()) + " "
                 + (v.conforme() ? "conforme" : "non conforme — " + p.getMotif()));
         notifierAttributaire(a, TypeNotification.PIECE_ATTRIBUTAIRE_VERIFIEE, "Vérification de votre pièce",
-                "Votre pièce " + p.getNature().toLowerCase(Locale.FRENCH) + " est reconnue " + (v.conforme() ? "conforme."
-                        : "non conforme : " + p.getMotif() + ". Vous pouvez en déposer une nouvelle jusqu'au " + echeancePieces(a).format(JOUR) + "."));
+                "Votre " + libellePiece(p.getNature()) + " est reconnu(e) " + (v.conforme() ? "conforme."
+                        : "non conforme : " + p.getMotif() + ". Vous pouvez en déposer une nouvelle " + (AttributionPiece.ACTE_ENGAGEMENT_ORIGINAL.equals(p.getNature()) ? "avant la signature du marché." : "jusqu'au " + echeancePieces(a).format(JOUR) + ".")));
     }
 
     /**
@@ -525,6 +594,11 @@ public class AttributionExecutionService {
         if (!conforme(toutes, AttributionPiece.FISCALE) || !conforme(toutes, AttributionPiece.SOCIALE)) {
             throw new BusinessRuleException("Les pièces fiscale et sociale de l'attributaire doivent être reconnues conformes avant la signature "
                     + "(art. 20-I).", "PIECES_NON_CONFORMES");
+        }
+        // ⚠️ R10 (manuel révisé, lot 2, §B5 ; H2) — offre déposée en ligne : l'original signé de l'acte d'engagement, reconnu conforme.
+        if (aeOriginalExige(idDmc) && !conforme(toutes, AttributionPiece.ACTE_ENGAGEMENT_ORIGINAL)) {
+            throw new BusinessRuleException("L'attributaire remet l'original signé de son acte d'engagement, reconnu conforme, avant la signature "
+                    + "du marché : son dépôt scellé n'a valu signature que pendant la procédure (art. 31).", "AE_ORIGINAL_MANQUANT");
         }
         Televerse f = lire(fichier, true);
         a.setDateSignature(dateSignature);

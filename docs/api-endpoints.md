@@ -8465,6 +8465,68 @@ Inchangé : 409 `JUSTIFICATION_NON_DEMANDEE` sans demande écrite, 409 `DELAI_EN
 intervient **après l'échéance sans réponse**, la décision porte **`anormale.defautReponse: true`** et le journal « défaut de réponse du
 candidat à l'échéance du … : vaut refus de justifier (art. 48) ».
 
+### Le manuel révisé pour l'application, lot 2, tranche R9c : l'immutabilité des étapes closes ⚠️ 2026-10-14
+
+Demande front `demande-backend-2026-10-10-manuel-revise-lot2.md` (§B4, bloquant de la loi n° 15 ; arbitrage du 14/10 : le verrou porte
+sur la séance, l'évaluation et l'AMI). Aucune migration, aucune route nouvelle, pom inchangé. **B4 est entièrement livré.**
+
+- Dès qu'un **dossier de marché (DDM) de la procédure est soumis** à la Commission (date de soumission posée, statut hors `BROUILLON`) —
+  lu sur les attributions de la procédure —, toute **écriture** (POST, PUT, DELETE, PATCH) sous :
+  - `/api/fiches-marche/{idDmc}/seance/**` (séance d'ouverture et séance financière),
+  - `/api/fiches-marche/{idDmc}/evaluation/**` (évaluation, notation technique, évaluation financière, négociation, rapport),
+  - `/api/fiches-marche/{idDmc}/ami/**` (publication, dispense, présélection, rapport),
+  - `/api/cao/procedures/{idDmc}/representant` (désignation du représentant du président),
+
+  répond **409 `ETAPE_CLOSE`** `details { idDossierMarche, lot }` (`idDossier` de l'erreur = le DDM). Les lectures restent ouvertes.
+- **Hors verrou** : la **reprise** après avis défavorable (`POST …/attribution/lots/{lot}/reprendre`) et la **réattribution** après
+  retrait (`…/reattribuer`), tracées dans `t_attribution_reprise` : elles retirent l'attribution qui portait le DDM, ce qui lève le verrou
+  pour la nouvelle évaluation ; le DDM soumis reste au journal et dans la reprise.
+- Un DDM encore brouillon ne verrouille rien ; l'instantané figé à la soumission (lot 1, R4) reste la preuve de ce que la Commission a reçu.
+- ⚠️ Écarts : le verrou est posé sur les routes (intercepteur), avant le contrôle des droits du geste — un profil non habilité reçoit 409
+  au lieu de 403 sur une procédure verrouillée ; les réponses des candidats aux demandes de précision / justification (espace candidat)
+  ne sont pas visées.
+
+### Le manuel révisé pour l'application, lot 2, tranche R10 : l'acte d'engagement original — V113 ⚠️ 2026-10-14
+
+Demande front `demande-backend-2026-10-10-manuel-revise-lot2.md` (§B5 ; H2 du pilote : « le dépôt scellé vaut signature pendant la
+procédure ; l'original signé n'est exigé que de l'attributaire, avant la signature du marché »). Migration **V113**
+(`t_attribution_piece.NATURE` élargie à 30 caractères + nature `ACTE_ENGAGEMENT_ORIGINAL` ; `t_parametre_interne_procedure.SIGNATURE_OFFRE`),
+pom inchangé. **Le lot 2 du manuel révisé (B1 à B5) est entièrement livré.**
+
+#### La clause des DPAO
+
+`DPAO-F`, `DPAO-T` (§ 7.3), `DPIC-PI` (§ 8.3, « la proposition ») et `DPAC-CC` (§ 5.2) portent, dans le bloc rendu seulement en remise
+électronique (`{{SI:B04-SE}}`), après la clause du juriste : « La soumission par la plateforme, effectuée depuis le compte authentifié du
+candidat et scellée par celle-ci, vaut signature de l'offre et de l'acte d'engagement au sens de l'article 31 du Code. L'attributaire
+remet l'original signé de son acte d'engagement avant la signature du marché. » ⚠️ Les documents des versions déjà validées ne sont pas
+régénérés : la clause vaut à la prochaine validation. **Le front doit resynchroniser ses copies des quatre gabarits.** Pas de section
+« Signature de l'offre » dans les gabarits : la clause suit la remise électronique.
+
+#### L'original de l'acte d'engagement
+
+- **Exigé** quand le mode figé de la procédure est la **remise électronique** (offre déposée et scellée en ligne) ; rien en papier.
+  `piecesAttributaire` gagne **`aeOriginalExige`** et **`aeOriginalConforme`** ; la liste `pieces[]` inclut le type `ACTE_ENGAGEMENT_ORIGINAL`
+  (`dateDelivrance` = date de remise).
+- Dépôt par l'attributaire : `POST /api/candidat/offres/{idOffre}/pieces-attributaire` `type=ACTE_ENGAGEMENT_ORIGINAL` (+ `fichier`,
+  `dateDelivrance` facultative = date de remise, défaut aujourd'hui) — **sans l'échéance de 15 jours** des pièces fiscale et sociale ;
+  notification `PIECES_ATTRIBUTAIRE_DEPOSEES` à la PRMP.
+- Dépôt par la PRMP qui a reçu l'original : `POST /api/fiches-marche/{idDmc}/attribution/lots/{lot}/acte-engagement-original` (multipart
+  `dateRemise` facultative, `fichier` le scan) ; 400 `DATE_INVALIDE` (à venir), `FICHIER_OBLIGATOIRE` ; 409 `NON_INFORME`, `DEJA_SIGNE`,
+  `LOT_RETIRE`.
+- Vérification : `POST …/attribution/lots/{lot}/pieces/{id}/verifier` comme les autres pièces (sans limite d'ancienneté).
+- **Signature** : `POST …/lots/{lot}/signature` → **409 `AE_ORIGINAL_MANQUANT`** tant que le dernier original déposé n'est pas reconnu
+  conforme (après les gardes existantes, pièces fiscale et sociale comprises).
+- **Projet de marché**, article 3 : « l'acte d'engagement du Titulaire (original signé à remettre avant la signature du marché, l'offre
+  ayant été déposée et scellée en ligne) », puis « (original signé remis le jj/mm/aaaa, …) » une fois reconnu conforme et le projet refait
+  (`POST …/lots/{lot}/projet`).
+
+#### Le paramètre `SIGNATURE_OFFRE`
+
+`PUT /api/fiches-marche/{idDmc}/parametres-internes` accepte **`signatureOffre`** : `SCELLE_PLUS_ORIGINAL` (défaut, nul ou vide) ou
+`CERTIFIEE` (réservé) ; 400 `SIGNATURE_OFFRE_INVALIDE` ; journalisé (champ `signatureOffre`) ; servi par `GET` (`signatureOffre`, valeur
+effective). ⚠️ `CERTIFIEE` est **sans effet** tant que la signature certifiée n'est pas branchée : l'original reste exigé. Comme les autres
+champs du `PUT`, une absence remet la valeur par défaut.
+
 ### Le rabais structuré de l'offre en ligne ⚠️ 2026-10-07
 
 Demande front `demande-backend-2026-10-07-rabais-structure.md` (arbitrage Q4 du pilote : « le rabais est structuré au dépôt »). Aucune

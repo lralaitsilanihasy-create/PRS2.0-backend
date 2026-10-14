@@ -85,6 +85,10 @@ public class ParametresInternesService {
     static final String CHAMP_RESPONSABLE = "responsable";
     /** ⚠️ V66 (lot 2, §B1) — le dépositaire de la part de secours, au journal dédié. */
     static final String CHAMP_DEPOSITAIRE = "depositaire";
+    /** ⚠️ R10 (manuel révisé, lot 2, §B5 ; V113) — la signature des offres de la procédure. */
+    static final String CHAMP_SIGNATURE_OFFRE = "signatureOffre";
+    public static final String SCELLE_PLUS_ORIGINAL = "SCELLE_PLUS_ORIGINAL";
+    public static final String CERTIFIEE = "CERTIFIEE";
 
     private final ParametreInterneProcedureRepository internesRepository;
     private final CeremonieClesRepository ceremonieRepository;
@@ -322,6 +326,10 @@ public class ParametresInternesService {
         p.setQuorum(c.quorum());
         // ⚠️ R1 (manuel révisé, lot 1, §B2) — la surcharge du quorum de la CAO : validée (400 QUORUM_REGLE_INVALIDE), vide = règle globale.
         p.setCaoQuorum(c.caoQuorum() == null || c.caoQuorum().isBlank() ? null : QuorumCao.parse(c.caoQuorum()).texte());
+        // ⚠️ R10 (§B5) — la signature des offres : SCELLE_PLUS_ORIGINAL (défaut) ou CERTIFIEE (réservé) ; 400 SIGNATURE_OFFRE_INVALIDE.
+        String avantSignature = signatureEffective(p.getSignatureOffre());
+        p.setSignatureOffre(lireSignatureOffre(c.signatureOffre()));
+        journaliser(idDmc, CHAMP_SIGNATURE_OFFRE, avantSignature, signatureEffective(p.getSignatureOffre()));
         p.setDateCeremonie(ceremonieDate);
         p.setDepositaireNom(depositaire == null ? null : depositaire.nom());
         p.setDepositaireOrganisme(depositaire == null ? null : depositaire.organisme());
@@ -678,7 +686,8 @@ public class ParametresInternesService {
         String surcharge = internesRepository.findById(idDmc).map(ParametreInterneProcedure::getCaoQuorum).filter(v -> v != null && !v.isBlank()).orElse(null);
         return new ParametresInternesDto(idDmc, membres, membres.size(), quorum, i == null ? null : i.dateCeremonie(),
                 responsableDto(idDmc), RemiseElectronique.etat(i, publication).name(), anomalies, journal, secours, avertissements,
-                surcharge, QuorumCao.parse(surcharge != null ? surcharge : parametres.texte(ParametreService.CAO_QUORUM)).texte());
+                surcharge, QuorumCao.parse(surcharge != null ? surcharge : parametres.texte(ParametreService.CAO_QUORUM)).texte(),
+                signatureOffre(idDmc));
     }
 
     /** ⚠️ V66 (lot 2, §B1) — {@code A_DESIGNER}, {@code DESIGNE}, puis l'état de la clé de secours ({@code PUBLIEE}, {@code VERIFIEE}, {@code PERDUE}). */
@@ -691,6 +700,33 @@ public class ParametresInternesService {
     }
 
     /** Une entrée du journal dédié si la valeur change (valeurs en clair : le journal n'est servi qu'au titulaire). */
+    /**
+     * ⚠️ R10 (manuel révisé, lot 2, §B5 ; H2) — la signature des offres de la procédure : {@code SCELLE_PLUS_ORIGINAL} (défaut : le dépôt
+     * scellé vaut signature, l'attributaire remet l'original de son acte d'engagement avant la signature du marché) ou {@code CERTIFIEE}
+     * (réservé : sans effet tant que la signature certifiée n'est pas branchée, l'original reste exigé).
+     */
+    @Transactional(readOnly = true)
+    public String signatureOffre(Long idDmc) {
+        return signatureEffective(internesRepository.findById(idDmc).map(ParametreInterneProcedure::getSignatureOffre).orElse(null));
+    }
+
+    static String signatureEffective(String v) {
+        return v == null ? SCELLE_PLUS_ORIGINAL : v;
+    }
+
+    /** La valeur saisie, normalisée ; nul ou vide = défaut ; 400 {@code SIGNATURE_OFFRE_INVALIDE} hors des deux valeurs. */
+    static String lireSignatureOffre(String brute) {
+        if (brute == null || brute.isBlank()) {
+            return null;
+        }
+        String v = brute.trim().toUpperCase(java.util.Locale.ROOT);
+        if (!SCELLE_PLUS_ORIGINAL.equals(v) && !CERTIFIEE.equals(v)) {
+            throw new cnm.prs.exception.BadRequestException("La signature des offres vaut SCELLE_PLUS_ORIGINAL ou CERTIFIEE (reçu « " + brute.trim()
+                    + " »).", "SIGNATURE_OFFRE_INVALIDE");
+        }
+        return v;
+    }
+
     void journaliser(Long idDmc, String champ, String avant, String apres) {
         if (Objects.equals(avant, apres)) {
             return;

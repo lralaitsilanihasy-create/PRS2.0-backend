@@ -36,6 +36,8 @@ public class AttributionPiece {
     public static final String SOCIALE = "SOCIALE";
     /** ⚠️ R9a (V111) — la décision d'approbation du marché. */
     public static final String APPROBATION = "APPROBATION";
+    /** ⚠️ R10 (V113, §B5, H2) — l'original signé de l'acte d'engagement de l'attributaire ; {@code dateDelivrance} = sa date de remise. */
+    public static final String ACTE_ENGAGEMENT_ORIGINAL = "ACTE_ENGAGEMENT_ORIGINAL";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -48,7 +50,7 @@ public class AttributionPiece {
     @Column(name = "LOT", nullable = false)
     private Integer lot;
 
-    @Column(name = "NATURE", nullable = false, length = 20)
+    @Column(name = "NATURE", nullable = false, length = 30)
     private String nature;
 
     @Column(name = "ID_RECOURS")

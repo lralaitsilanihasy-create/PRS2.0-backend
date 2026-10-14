@@ -78,4 +78,8 @@ public class ParametreInterneProcedure {
     /** ⚠️ R1 (manuel révisé, V101) — la surcharge de la règle de quorum de la CAO (MAJORITE, TOUS, nombre) ; nul : la règle globale. */
     @Column(name = "CAO_QUORUM", length = 20)
     private String caoQuorum;
+
+    /** ⚠️ R10 (manuel révisé, V113) — SCELLE_PLUS_ORIGINAL (nul : défaut) ou CERTIFIEE (réservé, sans effet). */
+    @Column(name = "SIGNATURE_OFFRE", length = 30)
+    private String signatureOffre;
 }

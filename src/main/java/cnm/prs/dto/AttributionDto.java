@@ -131,7 +131,9 @@ public record AttributionDto(Long idDmc, List<LotAttribution> lots) {
      * ({@code PIECE_PERIMEE}) et ne peut être reconnue conforme ({@code PIECE_TROP_ANCIENNE}).
      */
     public record PiecesAttributaire(LocalDate echeance, boolean delaiDepasse, LocalDate limiteFiscale, LocalDate limiteSociale,
-            boolean fiscaleConforme, boolean socialeConforme, List<PieceAttributaire> pieces) {
+            boolean fiscaleConforme, boolean socialeConforme, List<PieceAttributaire> pieces,
+            /** ⚠️ R10 (§B5, H2 ; V113) — l'original signé de l'acte d'engagement est exigé avant la signature (procédure en ligne), et il est reconnu conforme. */
+            boolean aeOriginalExige, boolean aeOriginalConforme) {
     }
 
     /** Une pièce de l'attributaire : {@code type} ∈ {@code FISCALE} · {@code SOCIALE} ; {@code conforme} nul tant qu'elle n'est pas vérifiée. */

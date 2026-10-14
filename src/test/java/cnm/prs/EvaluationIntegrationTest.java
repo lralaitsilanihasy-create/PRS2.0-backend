@@ -671,6 +671,8 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
                 .andReturn().getResponse().getContentAsByteArray()).replaceAll("\\s+", " ");
         assertThat(projet).contains("PROJET DE MARCHÉ", "BTP Alpha", "NIF 1111222333", "12 500 000 Ariary hors taxes",
                 "douze millions cinq cent mille ariary", "Article 3 — Pièces constitutives");
+        // ⚠️ R10 (§B5, H2) — offre déposée en ligne : l'original signé de l'acte d'engagement est annoncé à remettre.
+        assertThat(projet).contains("original signé à remettre avant la signature du marché");
         // ⚠️ 2026-10-10 (demande « projet-de-marche ») — les mentions obligatoires de l'art. 60 de la loi n° 2016-055.
         assertThat(projet).contains("Article 2 — Base légale", "et 60 de la loi n° 2016-055", "nommée par",
                 "Article 5 — Délai d'exécution", "pénalités de retard", "Article 6 — Réception", "réception partielle",
@@ -888,6 +890,30 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
         }
         mvc.perform(get(att).header("Authorization", tokenPrmp)).andExpect(jsonPath("$.lots[0].piecesAttributaire.fiscaleConforme").value(true))
                 .andExpect(jsonPath("$.lots[0].piecesAttributaire.socialeConforme").value(true));
+
+        // ⚠️ R10 (§B5, H2) — l'offre est déposée en ligne : l'original signé de l'acte d'engagement, reconnu conforme, précède la signature.
+        mvc.perform(get(att).header("Authorization", tokenPrmp)).andExpect(jsonPath("$.lots[0].piecesAttributaire.aeOriginalExige").value(true))
+                .andExpect(jsonPath("$.lots[0].piecesAttributaire.aeOriginalConforme").value(false));
+        mvc.perform(multipart(att + "/lots/1/signature").file(piece).param("dateSignature", aujourdhui.toString()).header("Authorization", tokenPrmp))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("AE_ORIGINAL_MANQUANT"));
+        mvc.perform(multipart(att + "/lots/1/acte-engagement-original").file(piece).param("dateRemise", aujourdhui.plusDays(1).toString())
+                .header("Authorization", tokenPrmp)).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("DATE_INVALIDE"));
+        mvc.perform(multipart(att + "/lots/1/acte-engagement-original").param("dateRemise", aujourdhui.toString())
+                .header("Authorization", tokenPrmp)).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("FICHIER_OBLIGATOIRE"));
+        mvc.perform(multipart(att + "/lots/1/acte-engagement-original").file(piece).param("dateRemise", aujourdhui.minusDays(1).toString())
+                .header("Authorization", tokenPrmp)).andExpect(status().isOk());
+        mvc.perform(multipart("/api/candidat/offres/" + a + "/pieces-attributaire").file(piece).param("type", "ACTE_ENGAGEMENT_ORIGINAL")
+                .header("Authorization", jetonA)).andExpect(status().isCreated());   // daté du jour de son dépôt
+        vue = mvc.perform(get(att).header("Authorization", tokenPrmp)).andReturn().getResponse().getContentAsString();
+        List<Number> originaux = JsonPath.read(vue, "$.lots[0].piecesAttributaire.pieces[?(@.type == 'ACTE_ENGAGEMENT_ORIGINAL')].id");
+        assertThat(originaux).hasSize(2);
+        mvc.perform(post(att + "/lots/1/pieces/" + originaux.get(1).longValue() + "/verifier").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"conforme\":true}")).andExpect(status().isOk());
+        mvc.perform(get(att).header("Authorization", tokenPrmp)).andExpect(jsonPath("$.lots[0].piecesAttributaire.aeOriginalConforme").value(true));
+        mvc.perform(post(att + "/lots/1/projet").header("Authorization", tokenPrmp)).andExpect(status().isOk());
+        assertThat(texteDuPdf(mvc.perform(get(att + "/lots/1/projet").header("Authorization", tokenPrmp)).andReturn().getResponse()
+                .getContentAsByteArray()).replaceAll("\\s+", " ")).contains("original signé remis le "
+                        + aujourdhui.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")));
 
         // La signature, l'enregistrement (Q6), la notification et sa réception, l'avis d'attribution.
         mvc.perform(multipart(att + "/lots/1/signature").param("dateSignature", aujourdhui.toString()).header("Authorization", tokenPrmp))
