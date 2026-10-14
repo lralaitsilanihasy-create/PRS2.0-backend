@@ -766,6 +766,12 @@ abstract class CnmIntegrationTestSupport extends AbstractIntegrationTest {
             if (!besoinIncomplet.isEmpty()) {
                 semerBesoin(idDmc, fiche);
             }
+            // ⚠️ V116 (2026-10-14, Q11) — chaque article a son prix estimé, et le total de chaque lot égale le montant du plan.
+            java.util.List<Object> prix = com.jayway.jsonpath.JsonPath.read(fiche,
+                    "$.bilanControles.bloquants[?(@.regle=='PRIX_ESTIME_MANQUANT' || @.regle=='ESTIMATION_ECART')]");
+            if (besoinIncomplet.isEmpty() && !prix.isEmpty()) {
+                prixDeTest(idDmc);
+            }
             // ⚠️ V60 (2026-10-03) — une fiche de travaux dit son matériel (B03-QT-09 est devenu facultatif) : une ligne semée.
             java.util.List<Object> materiel = com.jayway.jsonpath.JsonPath.read(fiche,
                     "$.bilanControles.bloquants[?(@.regle=='MATERIEL_EXIGE')]");
@@ -786,7 +792,7 @@ abstract class CnmIntegrationTestSupport extends AbstractIntegrationTest {
                         .content("{\"pieces\":[{\"rubrique\":\"OFFRE\",\"libelle\":\"Quittance de l'ARMP\"}]}"))
                         .andExpect(status().isOk());
             }
-            if (manquants.isEmpty() && materiel.isEmpty() && piecesOffre.isEmpty()) {
+            if (manquants.isEmpty() && materiel.isEmpty() && piecesOffre.isEmpty() && prix.isEmpty()) {
                 break;
             }
             for (String code : manquants) {
@@ -825,6 +831,8 @@ abstract class CnmIntegrationTestSupport extends AbstractIntegrationTest {
                 "$.bilanControles.bloquants[?(@.regle=='BESOIN_INCOMPLET')]");
         if (!incomplet.isEmpty()) {
             semerBesoin(idDmc, fiche);
+        } else {
+            prixDeTest(idDmc);   // ⚠️ V116 (Q11)
         }
     }
 
@@ -844,6 +852,64 @@ abstract class CnmIntegrationTestSupport extends AbstractIntegrationTest {
                 .put("/api/fiches-marche/" + idDmc + "/articles").header("Authorization", tokenPrmp)
                 .contentType(MediaType.APPLICATION_JSON).content("{\"articles\":[" + articles + "]}"))
                 .andExpect(status().isOk());
+        prixDeTest(idDmc);   // ⚠️ V116 (Q11)
+    }
+
+    /**
+     * ⚠️ V116 (2026-10-14, Q11) — pose les prix unitaires estimés qui manquent, ou qui s'écartent du plan : dans chaque lot, les
+     * articles après le premier valent 1 Ar, le premier porte le reste du montant du lot au plan (à défaut de montant au plan, 1 Ar).
+     * Quantité estimée : le maximum d'un marché à commandes.
+     */
+    protected void prixDeTest(Long idDmc) throws Exception {
+        String fiche = mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        java.util.List<java.util.Map<String, Object>> estimations = com.jayway.jsonpath.JsonPath.read(fiche, "$.estimations");
+        if (estimations == null) {
+            return;
+        }
+        boolean aCommande = "A_COMMANDE".equals(com.jayway.jsonpath.JsonPath.read(fiche, "$.typeMarche"));
+        java.util.List<java.util.Map<String, Object>> articles = com.jayway.jsonpath.JsonPath.read(
+                mvc.perform(get("/api/fiches-marche/" + idDmc + "/articles").header("Authorization", tokenPrmp))
+                        .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(), "$");
+        if (articles.isEmpty()) {
+            return;
+        }
+        boolean modifie = false;
+        for (java.util.Map<String, Object> e : estimations) {
+            Object lot = e.get("lot");
+            java.util.List<java.util.Map<String, Object>> duLot = articles.stream()
+                    .filter(a -> java.util.Objects.equals(a.get("lot") == null ? null : ((Number) a.get("lot")).intValue(),
+                            lot == null ? null : ((Number) lot).intValue())).toList();
+            boolean juste = ((java.util.List<?>) e.get("articlesSansPrix")).isEmpty()
+                    && (e.get("ecart") == null || new java.math.BigDecimal(e.get("ecart").toString()).signum() == 0);
+            if (duLot.isEmpty() || juste) {
+                continue;   // un lot déjà juste (ou que le test a voulu tel) n'est pas touché
+            }
+            modifie = true;
+            java.math.BigDecimal reste = e.get("montantPlan") == null ? null : new java.math.BigDecimal(e.get("montantPlan").toString());
+            for (int i = 1; i < duLot.size(); i++) {
+                duLot.get(i).put("prixUnitaireEstime", 1);
+                if (reste != null) {
+                    reste = reste.subtract(quantiteEstimee(duLot.get(i), aCommande));
+                }
+            }
+            java.math.BigDecimal q = quantiteEstimee(duLot.get(0), aCommande);
+            duLot.get(0).put("prixUnitaireEstime", reste == null || q.signum() == 0 ? java.math.BigDecimal.ONE
+                    : reste.divide(q, 2, java.math.RoundingMode.HALF_UP));
+        }
+        if (!modifie) {
+            return;
+        }
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .put("/api/fiches-marche/" + idDmc + "/articles").header("Authorization", tokenPrmp)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"articles\":"
+                        + new tools.jackson.databind.ObjectMapper().writeValueAsString(articles) + "}"))
+                .andExpect(status().isOk());
+    }
+
+    private static java.math.BigDecimal quantiteEstimee(java.util.Map<String, Object> article, boolean aCommande) {
+        Object q = article.get(aCommande ? "quantiteMax" : "quantite");
+        return q == null ? java.math.BigDecimal.ZERO : new java.math.BigDecimal(q.toString());
     }
 
     private static Object valeurObligatoire(String type, java.util.List<String> options, String controle) {

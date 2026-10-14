@@ -477,6 +477,18 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
         assertThat(JsonPath.<Number>read(ind, "$.moyenne").longValue()).isEqualTo(11_133_333L);
         assertThat(JsonPath.<List<Integer>>read(ind, "$.offres[*].numero")).containsExactly(3, 2, 1);
         assertThat(JsonPath.<Number>read(ind, "$.offres[0].ecartEstimation").doubleValue()).isEqualTo(-25.0);
+        // ⚠️ V116 (Q11, §B4) — le détail estimatif du lot : lu par un membre de la commission, jamais par un candidat.
+        String est = mvc.perform(get(base + "/lots/1/estimation").header("Authorization", jetonM1)).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<Number>read(est, "$.totalEstime").longValue()).isEqualTo(12_000_000L);
+        assertThat(JsonPath.<Number>read(est, "$.montantPlan").longValue()).isEqualTo(12_000_000L);
+        assertThat(JsonPath.<List<String>>read(est, "$.articles[*].designation")).containsExactly("Ordinateur portable", "Onduleur");
+        assertThat(JsonPath.<List<Number>>read(est, "$.articles[*].prixUnitaireEstime")).extracting(Number::longValue)
+                .containsExactly(1_000_000L, 400_000L);
+        assertThat(JsonPath.<List<Number>>read(est, "$.articles[*].montant")).extracting(Number::longValue)
+                .containsExactly(10_000_000L, 2_000_000L);
+        mvc.perform(get(base + "/lots/1/estimation").header("Authorization", jetonA)).andExpect(status().isForbidden());
+        mvc.perform(get(base + "/lots/9/estimation").header("Authorization", jetonM1)).andExpect(status().isNotFound());
         arreter("ANORMALES").andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("ETAPE_INCOMPLETE"))
                 .andExpect(jsonPath("$.details.offres.length()").value(3));
 
@@ -1272,10 +1284,11 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
                         + "\"variantes\":\"NON\",\"groupement\":\"NON\",\"provenance\":\"NATIONAL\",\"typePrix\":\"UNITAIRES\","
                         + "\"prixRevisable\":\"NON\",\"avance\":\"NON\",\"penalites\":\"CCAG\"}}"))
                 .andExpect(status().isOk());
-        // ⚠️ Tranche 1b — deux articles (quantités 10 et 5), pour les corrections proposées depuis le bordereau.
+        // ⚠️ Tranche 1b — deux articles (quantités 10 et 5), pour les corrections proposées depuis le bordereau. ⚠️ V116 (Q11) : prix
+        // estimés 10 × 1 000 000 + 5 × 400 000 = 12 000 000, le montant du plan.
         mvc.perform(put("/api/fiches-marche/" + idDmc + "/articles").header("Authorization", tokenPrmp).contentType(JSON)
-                .content("{\"articles\":[{\"designation\":\"Ordinateur portable\",\"unite\":\"U\",\"quantite\":10,\"caracteristiques\":"
-                        + "[{\"libelle\":\"Mémoire\",\"exigence\":\"16 Go\"}]},{\"designation\":\"Onduleur\",\"unite\":\"U\",\"quantite\":5,"
+                .content("{\"articles\":[{\"designation\":\"Ordinateur portable\",\"unite\":\"U\",\"quantite\":10,\"prixUnitaireEstime\":1000000,\"caracteristiques\":"
+                        + "[{\"libelle\":\"Mémoire\",\"exigence\":\"16 Go\"}]},{\"designation\":\"Onduleur\",\"unite\":\"U\",\"quantite\":5,\"prixUnitaireEstime\":400000,"
                         + "\"caracteristiques\":[{\"libelle\":\"Puissance\",\"exigence\":\"1500 VA\"}]}]}"))
                 .andExpect(status().isOk());
         Map<String, String> donnees = new LinkedHashMap<>();

@@ -205,7 +205,7 @@ public class ProceduresEnLigneService {
         Lue l = exiger(idDmc);
         exigerInvite(l, idCandidat);   // ⚠️ PI-a (§B1)
         DocumentFicheMarche d = documentRepository.findByIdFicheOrderByIdDocumentAsc(l.fiche().getIdFiche()).stream()
-                .filter(x -> !DocumentsFicheMarcheService.TYPES_PUBLICATION.contains(x.getType()))
+                .filter(x -> !DocumentsFicheMarcheService.horsDao(x.getType()))   // ⚠️ V117 : ni publication, ni projet, ni estimatif
                 .filter(x -> x.getNomFichier() != null && x.getNomFichier().equals(code))
                 .findFirst()
                 .orElseThrow(() -> new ResourceNotFoundException("Document introuvable : " + code + "."));

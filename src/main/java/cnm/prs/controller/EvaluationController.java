@@ -98,6 +98,15 @@ public class EvaluationController {
         return service.indicateursPrix(idDmc, lot);
     }
 
+    /**
+     * ⚠️ V116 (2026-10-14, demande front « q11-prix-estimatifs », §B4) — le détail estimatif du lot (prix unitaires estimés de la fiche
+     * validée), pour la commission après l'ouverture des offres ; jamais servi aux candidats.
+     */
+    @GetMapping("/lots/{lot}/estimation")
+    public EvaluationDto.EstimationLot estimation(@PathVariable Long idDmc, @PathVariable Integer lot) {
+        return service.estimationDuLot(idDmc, lot);
+    }
+
     /** ⚠️ Tranche 1c (§B4, art. 48) — 201 ; la PRMP demande au candidat de justifier son prix ; 409 {@code DEJA_DEMANDEE}. */
     @PostMapping("/offres/{idOffre}/justification")
     public ResponseEntity<EvaluationDto.Demande> demanderJustification(@PathVariable Long idDmc, @PathVariable String idOffre,

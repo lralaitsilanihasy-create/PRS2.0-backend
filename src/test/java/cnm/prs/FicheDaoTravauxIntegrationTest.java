@@ -149,7 +149,7 @@ class FicheDaoTravauxIntegrationTest extends CnmIntegrationTestSupport {
 
         remplirObligatoiresEtValider(idDmc, "QUANTITE_FIXE", "TRAVAUX", Map.of("B02-LT-03", "Tranche ferme : gros œuvre"));
         List<String> types = JsonPath.read(documents(idDmc), "$[*].type");
-        assertThat(types).containsExactly("DPAO", "DPAO", "CCAP", "CCAP", "AE", "AE", "A1", "A1", "BP");   // V59 : + le bordereau des prix et DQE (xlsx)   // V46 : fiche A1 exigée (B04-CD-01), gabarit provisoire
+        assertThat(types).containsExactly("DPAO", "DPAO", "CCAP", "CCAP", "AE", "AE", "A1", "A1", "BP", "DQE_ESTIMATIF");   // ⚠️ V117 (Q11)   // V59 : + le bordereau des prix et DQE (xlsx)   // V46 : fiche A1 exigée (B04-CD-01), gabarit provisoire
     }
 
     @Test
@@ -159,7 +159,7 @@ class FicheDaoTravauxIntegrationTest extends CnmIntegrationTestSupport {
         cadrage(idDmc, "{\"attributaires\":\"MONO\",\"groupement\":\"NON\",\"avance\":\"NON\"}");
         remplirObligatoiresEtValider(idDmc, "CONTRAT_CADRE", "TRAVAUX", Map.of());
         List<String> types = JsonPath.read(documents(idDmc), "$[*].type");
-        assertThat(types).containsExactly("DPAC", "DPAC", "AE", "AE", "BP");   // V59 : + le bordereau des prix et DQE
+        assertThat(types).containsExactly("DPAC", "DPAC", "AE", "AE", "BP", "DQE_ESTIMATIF");   // ⚠️ V117 (Q11)   // V59 : + le bordereau des prix et DQE
     }
 
     @Test

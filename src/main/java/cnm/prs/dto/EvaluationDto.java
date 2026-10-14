@@ -170,6 +170,19 @@ public record EvaluationDto(Long idDmc, String etat, LocalDateTime ouverteLe, St
     public record IndicateursPrix(String methodeDao, BigDecimal estimation, BigDecimal moyenne, List<IndicateurPrix> offres) {
     }
 
+    /**
+     * ⚠️ V116 (2026-10-14, demande front « q11-prix-estimatifs », §B4) — le détail estimatif d'un lot, lu par la commission d'appel
+     * d'offres après l'ouverture : les articles de la fiche validée avec leur prix unitaire estimé ; { totalEstime} leur somme
+     * (nul si un prix manque : fiche validée avant les prix), { montantPlan} le montant HT du lot au plan.
+     */
+    public record EstimationLot(Integer lot, BigDecimal montantPlan, BigDecimal totalEstime, List<ArticleEstime> articles) {
+    }
+
+    /** { quantite} : celle qui entre au total (le maximum d'un marché à commandes) ; { montant} = quantité × prix. */
+    public record ArticleEstime(Integer ordre, String numeroPrix, String designation, String unite, BigDecimal quantite,
+            BigDecimal prixUnitaireEstime, BigDecimal montant) {
+    }
+
     /** {@code montant} = prix corrigé − rabais (hors taxes) ; écarts arrondis au dixième de point. */
     public record IndicateurPrix(String idOffre, Integer numero, BigDecimal montant, BigDecimal ecartEstimation, BigDecimal ecartMoyenne,
             List<String> alertes) {

@@ -44,6 +44,12 @@ public class ArticleBesoinDto {
     private Boolean sousDetail;
     private BigDecimal plafond;
 
+    /**
+     * ⚠️ V116 (2026-10-14, demande front « q11-prix-estimatifs », §B1) — le prix unitaire estimé HT, en ariary : facultatif à
+     * l'écriture, exigé à la validation. Lu par ceux qui lisent la fiche ; jamais publié ni servi aux candidats.
+     */
+    private BigDecimal prixUnitaireEstime;
+
     /** Une exigence technique de l'article (« Mémoire vive » : « 8 Go au minimum »). */
     @Data
     @NoArgsConstructor

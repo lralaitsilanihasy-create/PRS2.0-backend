@@ -6008,6 +6008,47 @@ officiels du pilote, qui seront remplis tels quels.
   (bloquant — garantie de soumission exigée sans modèle retenu à `B04-CD-02`, rôle `GARANTIE_MANQUANTE:FORME`),
   **`GARANTIE_TAUX`** (**avertissement**, jamais bloquant — garantie du lot / montant maximum du lot, rôles
   `GARANTIE_TAUX:GARANTIE` = `B05-GS-03`, `:MAXIMUM` = `B05-TP-03` ; hors bornes → avertissement, sinon constat en `ok`).
+- ⚠️ **2026-10-14 — prix estimatifs (V116 ; demande front `demande-backend-2026-10-14-q11-prix-estimatifs.md`, §B1, §B2, §B4 ;
+  arbitrage du pilote du 14/10 sur Q11, manuel révisé §23 ; arbitrages de l'utilisateur au backend le 14/10 : H2 quantité maximum,
+  H3 et H4 pièces gardées).**
+  - **`ArticleBesoinDto.prixUnitaireEstime`** (HT, en ariary ; colonne `t_fiche_article.PRIX_UNITAIRE_ESTIME numeric(17,2)`),
+    fournitures et travaux. **Facultatif à l'écriture** (un brouillon se saisit en plusieurs fois) ; donné : positif, deux décimales,
+    quinze chiffres avant la virgule, sinon 400 `articles[i].prixUnitaireEstime`. Recopié à la révision. Servi par `GET …/articles`
+    (lecture de la fiche : PRMP et UGPM propriétaires, contrôleurs de la Commission, Président, Administrateur). **Jamais publié** :
+    absent du besoin servi aux candidats (`BesoinEnLigneDto`), des classeurs (BP, DQE, TC), de la liste des fournitures, des documents
+    du DAO et du DAO complet, de l'avis.
+  - **Bilan, deux contrôles bloquants** (bloc `B12`), lot par lot (le lot unique d'une ligne non allotie) :
+    **`PRIX_ESTIME_MANQUANT`** — un article du lot sans prix (message : « Le lot 2 : un article n'a pas de prix unitaire estimé
+    (article 1 — Imprimante). », « n° 001 — … » aux travaux) ; **`ESTIMATION_ECART`** — Σ (quantité × prix unitaire estimé), arrondi à
+    l'ariary, ≠ montant HT du lot au plan, **sans tolérance** (H1 : `MONT_LOT` par rang de lot dans l'ordre des lots, ligne non
+    allotie : `NOUV_MONT_ESTIM` s'il est porté, sinon `MONT_ESTIM`) ; message avec le total, le montant du plan et l'écart signé.
+    **Quantité estimée** : le **maximum** d'un marché à commandes (H2), la quantité sinon (quantité fixe, contrat-cadre). Un lot
+    dont le plan ne porte pas de montant n'est pas comparé : **avertissement** `ESTIMATION_ECART`. Un lot sans article reste au
+    seul `BESOIN_INCOMPLET`.
+  - **`FicheMarcheDto.estimations`** : `[{ lot, montantPlan, totalEstime, ecart, nbArticles, articlesSansPrix[] }]`, par lot
+    (`lot` nul sur une ligne non allotie), `totalEstime` = somme des articles qui ont un prix, `ecart` = total − montant du plan
+    (nul sans montant au plan) ; `null` hors du besoin (prestations intellectuelles). De quoi afficher l'écart en direct.
+  - **H5** : une fiche validée avant V116 reste validée ; sa prochaine révision exige les prix (le bilan d'une version validée les
+    signale, sans effet).
+  - **H6** : les indicateurs de prix de l'évaluation (`…/indicateurs-prix`, `estimation`) prennent le **total des prix estimés** de
+    la fiche validée quand chaque article du lot en a un — égal au montant du plan par le contrôle —, sinon le montant du plan
+    comme avant. Rien ne change donc pour une fiche validée depuis V116.
+  - **§B4, la commission après l'ouverture** : `GET /api/fiches-marche/{idDmc}/evaluation/lots/{lot}/estimation` (voir l'évaluation,
+    tranche 1c).
+  - **§B3, les documents estimatifs (V117)** : à la validation, la fiche de fournitures produit le **bordereau des prix estimatifs**
+    (type de document `BORDEREAU_ESTIMATIF`), la fiche de travaux le **devis quantitatif et estimatif** (`DQE_ESTIMATIF`, par
+    série avec sous-totaux) : un **PDF par lot** (`…_lot2_v1.pdf`), articles, quantité estimée (maximum à commandes), prix unitaire
+    estimé, montant, total HT en chiffres et en lettres, montant du lot au plan ; pied « la validation tracée de la fiche vaut
+    signature ». Un échec de rendu laisse la fiche en brouillon (500 nommé, comme les documents du DAO). Listés par
+    `GET /api/fiches-marche/{idDmc}/documents` (libellé « Bordereau des prix estimatifs — lot 2 » / « Devis quantitatif et
+    estimatif »), téléchargés par `…/documents/{id}/contenu` ; **jamais** dans les documents du DAO servis aux candidats
+    (`/api/procedures-en-ligne/{id}/documents`, retrait par nom de fichier → 404), ni dans le DAO complet, ni dans le cahier des
+    charges joint au dossier de marché. **Joints d'office** au dossier produit par la fiche sous les pièces `BORDEREAU_PRIX`
+    (« Bordereau des prix estimatifs signé ») et `DQE` (« Devis quantitatif et estimatif signé »), comme le projet d'avis (non
+    supprimables : `PIECE_PRODUITE_PAR_FICHE`). Ces deux pièces passent en `CONDITION = 'PAPIER'` (V117, 10 associations
+    sur DBPRS20) : plus demandées au dossier conduit en ligne, gardées au dossier saisi hors de l'application. Inchangés :
+    `TABLEAU_COUTS` (consultation PI, H3) et `DEVIS_ESTIMATIF` (dossier de marché, H4). Une version validée avant V116 n'a pas de
+    prix, donc pas d'estimatif. V117 étend aussi `ck_document_fiche_marche_type` aux deux types.
 - **Paramètres administrables** : `GET /api/parametres/fiche-garantie-taux` (tout authentifié) et `PUT` (Administrateur)
   `{ reference, borneBasse, borneHaute }` en %, `null` = non fixé (400 hors 0–100 ou borne basse > haute) ; départ :
   référence 2, bornes non fixées (le taux est alors seulement constaté). TVA des bordereaux : paramètre `FICHE_TAUX_TVA`
@@ -6962,6 +7003,7 @@ Mêmes gardes que les tranches 1a et 1b : membre déclaré sans conflit pour dé
 | Méthode | URL | Corps | Réponse | Statuts |
 |---|---|---|---|---|
 | GET | /api/fiches-marche/{idDmc}/evaluation/lots/{lot}/indicateurs-prix | — | `IndicateursPrix` | 200, 403, 404 |
+| GET | /api/fiches-marche/{idDmc}/evaluation/lots/{lot}/estimation ⚠️ V116 (2026-10-14, Q11 §B4) | — | `EstimationLot` = `{ lot, montantPlan, totalEstime, articles[{ ordre, numeroPrix, designation, unite, quantite, prixUnitaireEstime, montant }] }` : le détail estimatif du lot sur la fiche validée (`quantite` = celle du total, le maximum à commandes ; `totalEstime` nul si un prix manque — fiche validée avant V116) | 200, 403 (lecteurs de l'évaluation : membres de la CAO, responsable de la procédure, PRMP, UGPM ; jamais un candidat), 404 (évaluation non ouverte, lot inconnu) |
 | POST | /api/fiches-marche/{idDmc}/evaluation/offres/{idOffre}/justification | `{ elements, delaiJours? }` | `Demande` (type `JUSTIFICATION`) | 201, 400 `ELEMENTS_OBLIGATOIRES` / `DELAI_OBLIGATOIRE`, 403 (pas la PRMP), 404, 409 `DEJA_DEMANDEE` / `ETAPE_PRECEDENTE_OUVERTE` / `ETAPE_ARRETEE` / `OFFRE_ECARTEE` / `EVALUATION_CLOSE` |
 | GET | /api/fiches-marche/{idDmc}/evaluation/offres/{idOffre}/justification | — | `Demande[]` | 200, 403, 404 |
 | PUT | /api/fiches-marche/{idDmc}/evaluation/offres/{idOffre}/anormale | `{ suspectee, decision?, motif? }` | `EvaluationDto` | 200, 400 `DECISION_INVALIDE` / `MOTIF_OBLIGATOIRE`, 403, 404, 409 `JUSTIFICATION_NON_DEMANDEE` / `DELAI_EN_COURS` / `ETAPE_PRECEDENTE_OUVERTE` / `ETAPE_ARRETEE` / `OFFRE_ECARTEE` / `DECLARATION_MANQUANTE` |

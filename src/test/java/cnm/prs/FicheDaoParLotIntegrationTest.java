@@ -145,7 +145,7 @@ class FicheDaoParLotIntegrationTest extends CnmIntegrationTestSupport {
         cadrageCommande(idDmc, "NON");
         remplirObligatoiresEtValider(idDmc, "A_COMMANDE", "FOURNITURES_SERVICES", Map.of());
         assertThat(JsonPath.<List<String>>read(documents(idDmc), "$[*].type"))
-                .containsExactly("DPAO", "DPAO", "CCAP", "CCAP", "AE", "AE", "LF", "LF", "BP", "TC");
+                .containsExactly("DPAO", "DPAO", "CCAP", "CCAP", "AE", "AE", "LF", "LF", "BP", "TC", "BORDEREAU_ESTIMATIF");   // ⚠️ V117 (Q11)
         assertThat(JsonPath.<List<Object>>read(documents(idDmc), "$[?(@.lot != null)]")).isEmpty();
     }
 
@@ -165,7 +165,8 @@ class FicheDaoParLotIntegrationTest extends CnmIntegrationTestSupport {
 
         String documents = documents(idDmc);
         assertThat(JsonPath.<List<String>>read(documents, "$[*].type"))
-                .containsExactly("DPAO", "DPAO", "CCAP", "CCAP", "AE", "AE", "AE", "AE", "AE", "AE", "LF", "LF", "BP", "BP", "BP", "TC", "TC", "TC");
+                .containsExactly("DPAO", "DPAO", "CCAP", "CCAP", "AE", "AE", "AE", "AE", "AE", "AE", "LF", "LF", "BP", "BP", "BP", "TC", "TC", "TC",
+                        "BORDEREAU_ESTIMATIF", "BORDEREAU_ESTIMATIF", "BORDEREAU_ESTIMATIF");   // ⚠️ V117 (Q11) : un par lot
         assertThat(JsonPath.<List<Integer>>read(documents, "$[?(@.type=='AE')].lot")).containsExactly(1, 1, 2, 2, 3, 3);
         assertThat(JsonPath.<List<String>>read(documents, "$[?(@.type=='AE')].libelle"))
                 .contains("Acte d'engagement — lot 1", "Acte d'engagement — lot 3");

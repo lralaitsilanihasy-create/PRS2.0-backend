@@ -82,4 +82,8 @@ public class FicheArticle {
 
     @Column(name = "PLAFOND", precision = 5, scale = 2)
     private BigDecimal plafond;
+
+    /** ⚠️ V116 (2026-10-14, Q11) — le prix unitaire estimé HT, en ariary ; jamais publié. */
+    @Column(name = "PRIX_UNITAIRE_ESTIME", precision = 17, scale = 2)
+    private BigDecimal prixUnitaireEstime;
 }

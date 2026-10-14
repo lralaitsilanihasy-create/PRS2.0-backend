@@ -40,13 +40,36 @@ public class BesoinFiche {
     public record Article(Integer lot, int ordre, String designation, String unite, BigDecimal quantiteMin,
             BigDecimal quantiteMax, BigDecimal quantite, List<ArticleBesoinDto.Caracteristique> caracteristiques,
             String numeroPrix, String serie, String serieLibelle, String libelleBordereau, boolean sousDetail,
-            BigDecimal plafond) {
+            BigDecimal plafond, BigDecimal prixUnitaireEstime) {
+
+        /** ⚠️ V59 — sans prix estimé. */
+        public Article(Integer lot, int ordre, String designation, String unite, BigDecimal quantiteMin,
+                BigDecimal quantiteMax, BigDecimal quantite, List<ArticleBesoinDto.Caracteristique> caracteristiques,
+                String numeroPrix, String serie, String serieLibelle, String libelleBordereau, boolean sousDetail,
+                BigDecimal plafond) {
+            this(lot, ordre, designation, unite, quantiteMin, quantiteMax, quantite, caracteristiques, numeroPrix, serie,
+                    serieLibelle, libelleBordereau, sousDetail, plafond, null);
+        }
 
         /** Fournitures : un article sans les propriétés des travaux. */
         public Article(Integer lot, int ordre, String designation, String unite, BigDecimal quantiteMin,
                 BigDecimal quantiteMax, BigDecimal quantite, List<ArticleBesoinDto.Caracteristique> caracteristiques) {
             this(lot, ordre, designation, unite, quantiteMin, quantiteMax, quantite, caracteristiques, null, null, null,
-                    null, false, null);
+                    null, false, null, null);
+        }
+
+        /**
+         * ⚠️ V116 (2026-10-14, Q11, H2) — la quantité qui entre au total estimé : le maximum d'un marché à commandes (le montant du
+         * plan en est le plafond), la quantité sinon (quantité fixe, contrat-cadre).
+         */
+        public BigDecimal quantiteEstimee(boolean aCommande) {
+            return aCommande ? quantiteMax : quantite;
+        }
+
+        /** ⚠️ V116 — quantité estimée × prix unitaire estimé ; {@code null} s'il manque l'un des deux. */
+        public BigDecimal montantEstime(boolean aCommande) {
+            BigDecimal q = quantiteEstimee(aCommande);
+            return q == null || prixUnitaireEstime == null ? null : q.multiply(prixUnitaireEstime);
         }
     }
 
@@ -79,7 +102,7 @@ public class BesoinFiche {
                 a.getDesignation(), a.getUnite(), plat(a.getQuantiteMin()), plat(a.getQuantiteMax()), plat(a.getQuantite()),
                 a.getRedigePar(), a.getProfilRedacteur(), caracs.getOrDefault(a.getIdArticle(), List.of()),
                 a.getNumeroPrix(), a.getSerie(), a.getSerieLibelle(), a.getLibelleBordereau(), a.isSousDetail(),
-                plat(a.getPlafond()))).toList();
+                plat(a.getPlafond()), plat(a.getPrixUnitaireEstime()))).toList();
     }
 
     /** La vue réduite du besoin (bilan, documents). */
@@ -88,7 +111,7 @@ public class BesoinFiche {
         return lister(idFiche).stream().map(a -> new Article(a.getLot(), a.getOrdre(), a.getDesignation(), a.getUnite(),
                 a.getQuantiteMin(), a.getQuantiteMax(), a.getQuantite(), a.getCaracteristiques(), a.getNumeroPrix(),
                 a.getSerie(), a.getSerieLibelle(), a.getLibelleBordereau(), Boolean.TRUE.equals(a.getSousDetail()),
-                a.getPlafond())).toList();
+                a.getPlafond(), a.getPrixUnitaireEstime())).toList();
     }
 
     /** Une quantité telle que servie : sans zéros inutiles (« 5 », « 2054.5 »), jamais en notation scientifique. */
@@ -134,6 +157,7 @@ public class BesoinFiche {
             if (travaux) {
                 travaux(erreurs, p, i, a, numeros, libellesSerie);
             }
+            prix(erreurs, p + "prixUnitaireEstime", a.getPrixUnitaireEstime());   // ⚠️ V116 (Q11) : facultatif ici, exigé au bilan
             List<ArticleBesoinDto.Caracteristique> caracs = a.getCaracteristiques() == null ? List.of() : a.getCaracteristiques();
             for (int j = 0; j < caracs.size(); j++) {
                 ArticleBesoinDto.Caracteristique c = caracs.get(j);
@@ -217,6 +241,7 @@ public class BesoinFiche {
             e.setQuantiteMin(aCommande ? a.getQuantiteMin() : null);
             e.setQuantiteMax(aCommande ? a.getQuantiteMax() : null);
             e.setQuantite(aCommande ? null : a.getQuantite());
+            e.setPrixUnitaireEstime(a.getPrixUnitaireEstime());   // ⚠️ V116 (Q11)
             e.setRedigePar(redacteur);
             e.setProfilRedacteur(profil);
             if (travaux) {
@@ -249,7 +274,7 @@ public class BesoinFiche {
             FicheArticle e = articleRepository.save(new FicheArticle(null, idFicheCible, a.getLot(), a.getOrdre(),
                     a.getDesignation(), a.getUnite(), a.getQuantiteMin(), a.getQuantiteMax(), a.getQuantite(),
                     a.getRedigePar(), a.getProfilRedacteur(), a.getNumeroPrix(), a.getSerie(), a.getSerieLibelle(),
-                    a.getLibelleBordereau(), Boolean.TRUE.equals(a.getSousDetail()), a.getPlafond()));
+                    a.getLibelleBordereau(), Boolean.TRUE.equals(a.getSousDetail()), a.getPlafond(), a.getPrixUnitaireEstime()));
             ecrireCaracteristiques(e.getIdArticle(), a.getCaracteristiques());
         }
     }
@@ -278,6 +303,20 @@ public class BesoinFiche {
 
     private static String vide(String v) {
         return v == null || v.isBlank() ? null : v.trim();
+    }
+
+    /** ⚠️ V116 (Q11) — le prix unitaire estimé, s'il est donné : positif, deux décimales, quinze chiffres avant la virgule. */
+    private static void prix(List<ErrorResponse.FieldError> erreurs, String champ, BigDecimal v) {
+        if (v == null) {
+            return;
+        }
+        if (v.signum() <= 0) {
+            erreurs.add(new ErrorResponse.FieldError(champ, "Le prix unitaire estimé est positif."));
+        } else if (plat(v).scale() > 2) {
+            erreurs.add(new ErrorResponse.FieldError(champ, "Le prix unitaire estimé : deux décimales au plus."));
+        } else if (v.setScale(0, RoundingMode.DOWN).precision() > 15) {
+            erreurs.add(new ErrorResponse.FieldError(champ, "Le prix unitaire estimé : quinze chiffres au plus avant la virgule."));
+        }
     }
 
     private static void quantite(List<ErrorResponse.FieldError> erreurs, String champ, BigDecimal v, String nom) {

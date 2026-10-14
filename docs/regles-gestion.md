@@ -1053,6 +1053,20 @@ post-qualification (étape 5), et le rapport d'évaluation. Contrat : `docs/api-
   prestations intellectuelles, il n'y a pas de besoin par article.
 - **Une fiche de fournitures ne se valide pas sans besoin complet** : chaque lot a au moins un article, chaque article
   au moins une caractéristique, et la quantité minimum ne dépasse pas la maximum.
+- ⚠️ **2026-10-14 — les prix estimatifs (arbitrage du pilote sur Q11, manuel révisé §23).** Chaque article du bordereau
+  (fournitures) et du devis quantitatif (travaux) porte un **prix unitaire estimé hors taxes** ; la fiche ne se valide pas sans
+  lui. Pour chaque lot, le **total estimé** (quantité × prix unitaire) **égale le montant du lot au plan**, à l'ariary, sans
+  tolérance — pour un marché à commandes, la quantité est le **maximum** (le montant du plan en est le plafond). Un lot dont le
+  plan ne porte pas de montant n'est pas comparé (avertissement). Les prix estimés **ne sont jamais publiés** ni montrés aux
+  candidats : les lisent la PRMP et son UGPM, la Commission, et les membres de la commission d'appel d'offres une fois les offres
+  ouvertes ; ils servent alors d'estimation aux indicateurs de prix (offres anormales). À la validation, l'application produit
+  le **bordereau des prix estimatifs** (fournitures) ou le **devis quantitatif et estimatif** (travaux), un par lot, joints
+  d'office au dossier : les pièces « Bordereau des prix estimatifs signé » et « Devis quantitatif et estimatif signé » ne sont
+  plus demandées au dossier conduit dans l'application (la validation tracée de la fiche vaut signature) ; un dossier saisi
+  hors de l'application les garde. Une fiche validée avant la règle reste
+  valide ; sa prochaine révision exige les prix. La consultation de prestations intellectuelles (tableau des coûts estimatifs) et
+  le devis estimatif du dossier de marché ne changent pas (arbitrages du 14/10, en attente de confirmation du pilote pour la
+  consultation).
 - **Qui écrit le besoin** : la PRMP (et son UGPM), comme le reste de la fiche — **tranché par le pilote le 25/09** : pas
   de rôle « service bénéficiaire », mêmes droits et même validation que la fiche. Le rédacteur noté sur chaque article
   est une trace, il ne commande aucun droit.

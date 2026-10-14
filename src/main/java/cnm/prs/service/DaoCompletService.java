@@ -120,6 +120,7 @@ public class DaoCompletService {
         List<DocumentFicheMarche> word = docs.stream().filter(d -> "docx".equals(d.getExtension()))
                 .filter(d -> !DocumentsFicheMarcheService.TYPES_PUBLICATION.contains(d.getType()) && !TYPE.equals(d.getType()))
                 .filter(d -> !DocumentsFicheMarcheService.TYPES_PROJET.contains(d.getType()))   // ⚠️ R3b — le projet d'avis n'entre pas au DAO
+                .filter(d -> !DocumentsFicheMarcheService.TYPES_ESTIMATIF.contains(d.getType()))   // ⚠️ V117 — l'estimatif n'entre jamais au DAO
                 .toList();
         Plan p = new Plan();
 

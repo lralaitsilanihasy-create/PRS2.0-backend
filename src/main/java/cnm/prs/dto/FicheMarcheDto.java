@@ -163,4 +163,10 @@ public class FicheMarcheDto {
     private LocalDateTime modeMigreLe;
     private String modeMigrePar;
     private String modeMigreMotif;
+
+    /**
+     * ⚠️ V116 (2026-10-14, demande front « q11-prix-estimatifs », §B2) — l'estimation de chaque lot face au plan (fournitures et
+     * travaux ; nul hors du besoin) : montant du plan, total estimé, écart, articles sans prix. Lue avec la fiche, jamais publiée.
+     */
+    private java.util.List<EstimationLotDto> estimations;
 }

@@ -948,7 +948,7 @@ public class AttributionService {
             return 0;
         }
         List<DocumentFicheMarche> pdfs = documentRepository.findByIdFicheOrderByIdDocumentAsc(validee.getIdFiche()).stream()
-                .filter(x -> "pdf".equals(x.getExtension()) && !DocumentsFicheMarcheService.TYPES_PUBLICATION.contains(x.getType())).toList();
+                .filter(x -> "pdf".equals(x.getExtension()) && !DocumentsFicheMarcheService.horsDao(x.getType())).toList();   // ⚠️ V117 : ni projet ni estimatif
         if (pdfs.stream().anyMatch(x -> DaoCompletService.TYPE.equals(x.getType()))) {
             pdfs = pdfs.stream().filter(x -> DaoCompletService.TYPE.equals(x.getType())).toList();
         }

@@ -1442,7 +1442,55 @@ public class EvaluationService {
     }
 
     /** L'estimation du lot : le montant du lot au plan (ligne allotie), sinon le montant estimatif de la ligne. */
+    /**
+     * ⚠️ V116 (2026-10-14, demande front « q11-prix-estimatifs », §B4) — le détail estimatif d'un lot : la commission (membres, responsable de
+     * la procédure), la PRMP et l'UGPM, l'évaluation ouverte (après l'ouverture des offres). Articles vides : fiche sans besoin.
+     */
+    @Transactional(readOnly = true)
+    public EvaluationDto.EstimationLot estimationDuLot(Long idDmc, Integer lot) {
+        exigerLecteur(idDmc);
+        exigerEvaluation(idDmc);
+        exigerLot(idDmc, lot);
+        FicheMarcheService.BesoinValide b = fiches.besoinValide(idDmc).orElse(null);
+        List<EvaluationDto.ArticleEstime> articles = new ArrayList<>();
+        java.math.BigDecimal total = java.math.BigDecimal.ZERO;
+        boolean complet = true;
+        for (BesoinFiche.Article a : articlesDuLot(b, lot)) {
+            java.math.BigDecimal m = a.montantEstime(b.aCommande());
+            complet &= m != null;
+            total = m == null ? total : total.add(m);
+            articles.add(new EvaluationDto.ArticleEstime(a.ordre(), a.numeroPrix(), a.designation(), a.unite(), a.quantiteEstimee(b.aCommande()),
+                    a.prixUnitaireEstime(), m == null ? null : BesoinFiche.plat(m)));
+        }
+        return new EvaluationDto.EstimationLot(lot, montantPlan(idDmc, lot), complet && !articles.isEmpty() ? BesoinFiche.plat(total) : null,
+                articles);
+    }
+
+    /** Les articles de la fiche pour le lot {@code lot} de l'évaluation (1 sur une ligne non allotie, dont les articles n'ont pas de lot). */
+    private static List<BesoinFiche.Article> articlesDuLot(FicheMarcheService.BesoinValide b, Integer lot) {
+        if (b == null) {
+            return List.of();
+        }
+        boolean alloti = b.articles().stream().anyMatch(a -> a.lot() != null);
+        return b.articles().stream().filter(a -> alloti ? Objects.equals(a.lot(), lot) : a.lot() == null).toList();
+    }
+
+    /**
+     * L'estimation d'un lot : ⚠️ V116 (Q11, H6) — le total des prix estimés de la fiche validée quand chaque article du lot en a un
+     * (égal au montant du plan, contrôle ESTIMATION_ECART) ; sinon le montant du lot au plan, comme avant.
+     */
     private java.math.BigDecimal estimation(Long idDmc, Integer lot) {
+        FicheMarcheService.BesoinValide b = fiches.besoinValide(idDmc).orElse(null);
+        List<BesoinFiche.Article> duLot = articlesDuLot(b, lot);
+        if (!duLot.isEmpty() && duLot.stream().allMatch(a -> a.montantEstime(b.aCommande()) != null)) {
+            return BesoinFiche.plat(duLot.stream().map(a -> a.montantEstime(b.aCommande()))
+                    .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add));
+        }
+        return montantPlan(idDmc, lot);
+    }
+
+    /** Le montant HT du lot au plan (lot 1 : la ligne non allotie). */
+    private java.math.BigDecimal montantPlan(Long idDmc, Integer lot) {
         Integer idDetail = fiches.etatValide(idDmc).map(v -> v.etat().getIdDetail()).orElse(null);
         if (idDetail == null) {
             return null;

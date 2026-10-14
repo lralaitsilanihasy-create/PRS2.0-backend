@@ -87,6 +87,26 @@ public class DocumentsFicheMarcheService {
     public static final String TYPE_LETTRE_PROJET = "LETTRE_PROJET";
     public static final Set<String> TYPES_PROJET = Set.of(TYPE_AVIS_PROJET, TYPE_LETTRE_PROJET);
     static final String FILIGRANE_PROJET = "PROJET";
+
+    /**
+     * ⚠️ V117 (2026-10-14, demande front « q11-prix-estimatifs », §B3) — les documents <strong>estimatifs</strong> d'une version : le
+     * bordereau des prix estimatifs (fournitures) ou le devis quantitatif et estimatif (travaux), un PDF par lot, produits à la
+     * validation depuis les prix unitaires estimés (V116) et joints d'office au dossier sous les pièces {@code BORDEREAU_PRIX} /
+     * {@code DQE}. Jamais publiés : hors de la liste du DAO, du DAO complet, du retrait par les candidats et du cahier des charges.
+     */
+    public static final String TYPE_BORDEREAU_ESTIMATIF = "BORDEREAU_ESTIMATIF";
+    public static final String TYPE_DQE_ESTIMATIF = "DQE_ESTIMATIF";
+    public static final Set<String> TYPES_ESTIMATIF = Set.of(TYPE_BORDEREAU_ESTIMATIF, TYPE_DQE_ESTIMATIF);
+    static final String CODE_PIECE_BORDEREAU = "BORDEREAU_PRIX";
+    static final String CODE_PIECE_DQE = "DQE";
+
+    /**
+     * ⚠️ V117 — les documents d'une version qui <strong>ne sont pas du DAO</strong> remis aux candidats : publications, projets de
+     * publication, estimatifs.
+     */
+    public static boolean horsDao(String type) {
+        return TYPES_PUBLICATION.contains(type) || TYPES_PROJET.contains(type) || TYPES_ESTIMATIF.contains(type);
+    }
     /** Les codes des types de pièce qui reçoivent le projet. */
     static final String CODE_PIECE_AVIS = "AVIS_SPECIFIQUE";
     static final String CODE_PIECE_LETTRE = "LETTRE_INVITATION";
@@ -453,6 +473,123 @@ public class DocumentsFicheMarcheService {
         return produits;
     }
 
+    // ------------------------------------------------------------------ estimatifs (⚠️ V117, 2026-10-14, Q11 §B3)
+
+    /**
+     * ⚠️ V117 — les estimatifs d'une version validée : pour chaque lot qui a des articles, un PDF « Bordereau des prix estimatifs »
+     * (fournitures) ou « Devis quantitatif et estimatif » (travaux, par série avec sous-totaux) : articles, quantité estimée (le maximum
+     * d'un marché à commandes), prix unitaire estimé, montant, total HT face au montant du lot au plan. Vide hors fournitures et
+     * travaux, ou si un article n'a pas de prix (le bilan l'interdit à la validation). 500 nommé si le rendu échoue.
+     */
+    public List<Produit> produireEstimatifs(FicheMarcheDto etat, List<BesoinFiche.Article> articles, LocalDateTime validation) {
+        boolean travaux = cnm.prs.enums.CategorieDao.TRAVAUX.name().equals(etat.getCategorie());
+        boolean fournitures = cnm.prs.enums.CategorieDao.FOURNITURES_SERVICES.name().equals(etat.getCategorie());
+        if (!travaux && !fournitures || articles.isEmpty() || articles.stream().anyMatch(a -> a.prixUnitaireEstime() == null)) {
+            return List.of();
+        }
+        boolean aCommande = cnm.prs.enums.TypeMarcheDao.A_COMMANDE.name().equals(etat.getTypeMarche());
+        Map<Integer, java.math.BigDecimal> montantsPlan = new java.util.HashMap<>();
+        if (etat.getEstimations() != null) {
+            etat.getEstimations().forEach(e -> montantsPlan.put(e.lot(), e.montantPlan()));
+        }
+        String type = travaux ? TYPE_DQE_ESTIMATIF : TYPE_BORDEREAU_ESTIMATIF;
+        Map<Integer, List<BesoinFiche.Article>> parLot = new java.util.TreeMap<>(java.util.Comparator.nullsFirst(Integer::compare));
+        articles.forEach(a -> parLot.computeIfAbsent(a.lot(), k -> new ArrayList<>()).add(a));
+        List<Produit> produits = new ArrayList<>();
+        for (Map.Entry<Integer, List<BesoinFiche.Article>> e : parLot.entrySet()) {
+            DocumentLibre doc = estimatif(etat, e.getKey(), e.getValue(), aCommande, travaux, montantsPlan.get(e.getKey()), validation);
+            List<GenerateurDocumentsFiche.Fichier> fichiers;
+            try {
+                fichiers = generateur.generer(doc);
+            } catch (RuntimeException ex) {
+                throw new GenerationDocumentsException("La génération " + (travaux ? "du devis quantitatif et estimatif" : "du bordereau des prix "
+                        + "estimatifs") + (e.getKey() == null ? "" : " du lot " + e.getKey()) + " a échoué : " + ex.getMessage(), ex);
+            }
+            for (GenerateurDocumentsFiche.Fichier fi : fichiers) {
+                if ("pdf".equals(fi.extension())) {
+                    produits.add(new Produit(type, "pdf", nomFichier(type, etat.getRefeDossier(), etat.getIdDetail(), e.getKey(),
+                            etat.getVersion(), "pdf"), fi.contenu(), e.getKey()));
+                }
+            }
+        }
+        return produits;
+    }
+
+    static DocumentLibre estimatif(FicheMarcheDto etat, Integer lot, List<BesoinFiche.Article> articles, boolean aCommande, boolean travaux,
+            java.math.BigDecimal montantPlan, LocalDateTime validation) {
+        List<DocumentLibre.Element> els = new ArrayList<>();
+        els.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.TITRE, travaux ? "DEVIS QUANTITATIF ET ESTIMATIF" : "BORDEREAU DES PRIX ESTIMATIFS"));
+        els.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.CENTRE, "Document interne de l'autorité contractante — non publié"));
+        String numero = etat.getValeurs() == null ? null : etat.getValeurs().get(CHAMP_NUMERO_DAO);
+        if (numero != null && !numero.isBlank()) {
+            els.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.CENTRE, "Appel d'offres n° " + numero.trim()));
+        }
+        if (etat.getDesignationMarche() != null) {
+            els.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.CENTRE, etat.getDesignationMarche()));
+        }
+        if (lot != null) {
+            els.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.SOUS_TITRE, "Lot " + lot));
+        }
+        els.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.VIDE, ""));
+        List<List<List<String>>> rangees = new ArrayList<>();
+        rangees.add(List.of(List.of(travaux ? "N° de prix" : "N°"), List.of("Désignation"), List.of("Unité"),
+                List.of(aCommande ? "Quantité maximum" : "Quantité"), List.of("Prix unitaire estimé HT"), List.of("Montant HT")));
+        java.math.BigDecimal total = java.math.BigDecimal.ZERO;
+        Map<String, List<BesoinFiche.Article>> series = new LinkedHashMap<>();
+        articles.forEach(a -> series.computeIfAbsent(travaux && a.serie() != null ? a.serie() : "", k -> new ArrayList<>()).add(a));
+        for (Map.Entry<String, List<BesoinFiche.Article>> s : series.entrySet()) {
+            boolean enSerie = travaux && !s.getKey().isEmpty();
+            if (enSerie) {
+                String libelle = s.getValue().stream().map(BesoinFiche.Article::serieLibelle).filter(java.util.Objects::nonNull).findFirst().orElse("");
+                rangees.add(List.of(List.of("Série " + s.getKey()), List.of(libelle), List.of(""), List.of(""), List.of(""), List.of("")));
+            }
+            java.math.BigDecimal sousTotal = java.math.BigDecimal.ZERO;
+            for (BesoinFiche.Article a : s.getValue()) {
+                java.math.BigDecimal m = a.montantEstime(aCommande);
+                sousTotal = sousTotal.add(m);
+                rangees.add(List.of(List.of(travaux && a.numeroPrix() != null ? a.numeroPrix() : String.valueOf(a.ordre())),
+                        List.of(a.designation()), List.of(a.unite() == null ? "" : a.unite()),
+                        List.of(ValeursPpmService.montant(a.quantiteEstimee(aCommande))), List.of(ValeursPpmService.montant(a.prixUnitaireEstime())),
+                        List.of(ValeursPpmService.montant(m))));
+            }
+            if (enSerie) {
+                rangees.add(List.of(List.of(""), List.of("Sous-total série " + s.getKey()), List.of(""), List.of(""), List.of(""),
+                        List.of(ValeursPpmService.montant(sousTotal))));
+            }
+            total = total.add(sousTotal);
+        }
+        rangees.add(List.of(List.of(""), List.of("TOTAL HT"), List.of(""), List.of(""), List.of(""),
+                List.of(ValeursPpmService.montant(total.setScale(0, java.math.RoundingMode.HALF_UP)))));
+        els.add(new DocumentLibre.Tableau(6, rangees));
+        els.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.VIDE, ""));
+        els.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.PARA, "Montant total estimé hors taxes : "
+                + MontantEnLettres.ariary(total.setScale(0, java.math.RoundingMode.HALF_UP)) + " ("
+                + ValeursPpmService.montant(total.setScale(0, java.math.RoundingMode.HALF_UP)) + " Ar)."));
+        els.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.PARA, montantPlan == null
+                ? "Le plan de passation ne porte pas de montant pour " + (lot == null ? "ce marché." : "ce lot.")
+                : "Montant " + (lot == null ? "du marché" : "du lot") + " au plan de passation : " + ValeursPpmService.montant(montantPlan) + " Ar HT."));
+        if (aCommande) {
+            els.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.PARA, "Marché à commandes : le montant est estimé sur les quantités maximum."));
+        }
+        String pied = "Produit par l'application le " + validation.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy à HH:mm"))
+                + " à la validation de la version " + etat.getVersion() + " de la fiche ; la validation tracée de la fiche vaut signature.";
+        return new DocumentLibre(travaux ? TYPE_DQE_ESTIMATIF : TYPE_BORDEREAU_ESTIMATIF, lot, els, pied);
+    }
+
+    /** ⚠️ V117 — les estimatifs d'une version (lus avec la fiche, jamais par un candidat). */
+    @Transactional(readOnly = true)
+    public List<DocumentFicheDto> listerEstimatifs(FicheMarche fiche) {
+        if (fiche == null || fiche.getIdFiche() == null) {
+            return List.of();
+        }
+        return documentRepository.findByIdFicheOrderByIdDocumentAsc(fiche.getIdFiche()).stream()
+                .filter(d -> TYPES_ESTIMATIF.contains(d.getType()))
+                .map(d -> new DocumentFicheDto(d.getIdDocument(), d.getType(), (TYPE_DQE_ESTIMATIF.equals(d.getType())
+                        ? "Devis quantitatif et estimatif" : "Bordereau des prix estimatifs") + (d.getLot() == null ? "" : " — lot " + d.getLot()),
+                        d.getExtension(), d.getNomFichier(), d.getTailleOctets(), d.getDateGeneration(), fiche.getNumeroVersion(), d.getLot()))
+                .toList();
+    }
+
     /** ⚠️ R3c — le modèle d'un sigle ({@code AVIS-F}, {@code LETTRE-AOR}…), ou {@code null}. */
     public FichierCommande.Modele modele(String sigle) {
         return modelesDao.modele(sigle);
@@ -598,6 +735,7 @@ public class DocumentsFicheMarcheService {
                 .filter(d -> !complet || DaoCompletService.TYPE.equals(d.getType()) || "xlsx".equals(d.getExtension()))
                 .filter(d -> !TYPES_PUBLICATION.contains(d.getType()))   // ⚠️ 2026-09-30 — avis et lettres se listent à part (listerAvis)
                 .filter(d -> !TYPES_PROJET.contains(d.getType()))   // ⚠️ R3b — le projet n'est pas un document du DAO (route …/projet)
+                .filter(d -> !TYPES_ESTIMATIF.contains(d.getType()))   // ⚠️ V117 — l'estimatif n'est jamais publié (listerEstimatifs)
                 // ⚠️ 2026-10-06 (recette, C6) — le DAO complet en tête, avant les classeurs ; l'ordre est stable pour le reste.
                 .sorted(java.util.Comparator.comparing((DocumentFicheMarche d) -> !DaoCompletService.TYPE.equals(d.getType())))
                 .map(d -> new DocumentFicheDto(d.getIdDocument(), d.getType(),
@@ -642,7 +780,9 @@ public class DocumentsFicheMarcheService {
                 .toList();
         // ⚠️ R3b (manuel révisé, lot 1, §B3) — le projet d'avis (ou de lettre) est joint sous son propre type de pièce, à côté du DAO.
         List<DocumentFicheMarche> projets = tousPdf.stream().filter(d -> TYPES_PROJET.contains(d.getType())).toList();
-        List<DocumentFicheMarche> pdfs = tousPdf.stream().filter(d -> !TYPES_PROJET.contains(d.getType())).toList();
+        // ⚠️ V117 (Q11, §B3) — les estimatifs (bordereau, DQE) sont joints sous leurs propres pièces, à côté du DAO.
+        List<DocumentFicheMarche> estimatifs = tousPdf.stream().filter(d -> TYPES_ESTIMATIF.contains(d.getType())).toList();
+        List<DocumentFicheMarche> pdfs = tousPdf.stream().filter(d -> !TYPES_PROJET.contains(d.getType()) && !TYPES_ESTIMATIF.contains(d.getType())).toList();
         // ⚠️ 2026-10-06 (DAO complet) — quand il existe, son PDF seul est joint au dossier, à la place des documents séparés.
         if (pdfs.stream().anyMatch(d -> DaoCompletService.TYPE.equals(d.getType()))) {
             pdfs = pdfs.stream().filter(d -> DaoCompletService.TYPE.equals(d.getType())).toList();
@@ -666,10 +806,19 @@ public class DocumentsFicheMarcheService {
                 typeParDocument.put(d.getIdDocument(), type.getIdTypePiece());
             }
         }
+        for (DocumentFicheMarche d : estimatifs) {
+            String code = TYPE_DQE_ESTIMATIF.equals(d.getType()) ? CODE_PIECE_DQE : CODE_PIECE_BORDEREAU;
+            TypePieceJointe type = typePieceRepository.findFirstByCode(code).orElse(null);
+            if (type == null) {
+                log.warn("[FICHE_MARCHE] aucun type de pièce de code {} : estimatif {} non joint au dossier {}", code, d.getNomFichier(), idDossier);
+            } else {
+                typeParDocument.put(d.getIdDocument(), type.getIdTypePiece());
+            }
+        }
         if (typeParDocument.isEmpty()) {
             return 0;   // version validée avant le lot 2 : aucun document à joindre
         }
-        List<DocumentFicheMarche> aJoindre = java.util.stream.Stream.concat(pdfs.stream(), projets.stream())
+        List<DocumentFicheMarche> aJoindre = java.util.stream.Stream.of(pdfs, projets, estimatifs).flatMap(List::stream)
                 .filter(d -> typeParDocument.containsKey(d.getIdDocument())).toList();
         List<PieceJointeDossier> actuelles = pieceRepository.findByIdDossierAndIdDocumentFicheIsNotNull(idDossier);
         Set<Integer> dejaJoints = new java.util.HashSet<>();

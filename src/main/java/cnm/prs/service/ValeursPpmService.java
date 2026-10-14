@@ -200,6 +200,30 @@ public class ValeursPpmService {
     public record EnTete(Integer idEntiteContract, String idLocalite) {
     }
 
+    /**
+     * ⚠️ V116 (2026-10-14, demande front « q11-prix-estimatifs », H1) — le montant HT de chaque lot au plan, sur la ligne en vigueur :
+     * ligne allotie (plus d'un lot), le montant de chaque lot par rang (1, 2… dans l'ordre des lots) ; sinon, sous la clé {@code null},
+     * le nouveau montant estimatif de la ligne s'il en porte un, à défaut son montant estimatif. Valeur nulle : montant non renseigné.
+     */
+    public Map<Integer, BigDecimal> montantsParLot(Integer idDetailDmc) {
+        Map<Integer, BigDecimal> montants = new LinkedHashMap<>();
+        Marche origine = idDetailDmc == null ? null : marcheRepository.findById(idDetailDmc).orElse(null);
+        if (origine == null) {
+            return montants;
+        }
+        Marche ligne = ligneEnVigueur(origine);
+        List<Lot> lots = new ArrayList<>(lotRepository.findByIdDetail(ligne.getIdDetail()));
+        if (LotsFiche.alloti(lots.size())) {
+            lots.sort(java.util.Comparator.comparing(Lot::getIdLot));
+            for (int n = 1; n <= lots.size(); n++) {
+                montants.put(n, lots.get(n - 1).getMontLot());
+            }
+        } else {
+            montants.put(null, ligne.getNouvMontEstim() != null ? ligne.getNouvMontEstim() : ligne.getMontEstim());
+        }
+        return montants;
+    }
+
     public EnTete enTete(Integer idDetailDmc) {
         Marche origine = marcheRepository.findById(idDetailDmc).orElse(null);
         if (origine == null) {

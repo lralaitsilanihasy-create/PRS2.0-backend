@@ -279,6 +279,8 @@ public class FicheMarcheService {
         // versions sans ?version (ils restent listés pendant une révision ouverte), ceux de la version demandée sinon.
         liste.addAll(documents.listerAvis(version == null ? ficheRepository.findByIdDmcOrderByNumeroVersionAsc(idDmc)
                 : fiche == null ? List.of() : List.of(fiche)));
+        // ⚠️ V117 (Q11, §B3) — les estimatifs de la version (lus avec la fiche ; jamais servis aux candidats).
+        liste.addAll(documents.listerEstimatifs(fiche));
         return liste;
     }
 
@@ -345,6 +347,21 @@ public class FicheMarcheService {
     private java.util.Optional<FicheMarche> derniereValidee(Long idDmc) {
         return ficheRepository.findByIdDmcOrderByNumeroVersionAsc(idDmc).stream()
                 .filter(f -> StatutFicheMarche.VALIDEE.name().equals(f.getStatut())).reduce((a, b) -> b);
+    }
+
+    /**
+     * ⚠️ V116 (2026-10-14, Q11, §B4) — le besoin de la dernière version validée, prix estimés compris, et si le marché est à commandes
+     * (la quantité estimée est alors le maximum) ; vide sans version validée. Sans contrôle de périmètre : l'appelant (l'évaluation,
+     * lue par la commission d'appel d'offres après l'ouverture) a le sien.
+     */
+    @Transactional(readOnly = true)
+    public java.util.Optional<BesoinValide> besoinValide(Long idDmc) {
+        return derniereValidee(idDmc).map(f -> new BesoinValide(besoin.articles(f.getIdFiche()),
+                TypeMarcheDao.A_COMMANDE.name().equals(f.getTypeMarche())));
+    }
+
+    /** ⚠️ V116 — les articles d'une version validée et le type « à commandes ». */
+    public record BesoinValide(List<BesoinFiche.Article> articles, boolean aCommande) {
     }
 
     /**
@@ -1033,6 +1050,11 @@ public class FicheMarcheService {
         // ⚠️ R3b (manuel révisé, lot 1, §B3) — le projet d'avis spécifique (ou de lettre d'invitation) de la version, joint d'office au
         // dossier ; son échec ne bloque pas la validation.
         produits.addAll(documents.projetOuRien(etat, maintenant));
+        // ⚠️ V117 (2026-10-14, Q11, §B3) — le bordereau des prix estimatifs (fournitures) ou le devis quantitatif et estimatif
+        // (travaux), par lot, joints d'office au dossier ; un échec laisse la fiche en brouillon, comme les documents du DAO.
+        if (besoinApplicable(ctx)) {
+            produits.addAll(documents.produireEstimatifs(etat, besoin.articles(fiche.getIdFiche()), maintenant));
+        }
         fiche.setStatut(StatutFicheMarche.VALIDEE.name());
         fiche.setDateValidation(maintenant);
         fiche.setValidePar(CurrentUser.ref().orElse(null));
@@ -1599,6 +1621,13 @@ public class FicheMarcheService {
         // ⚠️ R6a (manuel révisé, lot 2, §B1 ; arbitrage Q6) — le délai de publicité de la loi (30 / 45 / 10 jours, bloquant) ou du
         // paramètre (signalé), entre la date de publication prévue (B04-SE-17, sinon la prévision LANCEMENT) et la date limite.
         delaisPublicite.auBilan(valeurs, ppm, ctx.codeCategorie(), typeOuverture, bilan);
+        // ⚠️ V116 (2026-10-14, Q11, §B2) — chaque article a son prix unitaire estimé, et le total de chaque lot égale le montant du lot
+        // au plan (bloquants).
+        List<cnm.prs.dto.EstimationLotDto> estimations = besoinBilan == null ? null : EstimationFiche.parLot(besoinBilan.articles(),
+                besoinBilan.aCommande(), valeursPpm.montantsParLot(ctx.idDetail()), nbLots);
+        if (estimations != null) {
+            EstimationFiche.auBilan(estimations, bilan);
+        }
         // ⚠️ V60 (2026-10-03, §B3) — une fiche de travaux dit son matériel : la liste, ou le texte B03-QT-09.
         if (CategorieDao.TRAVAUX.name().equals(ctx.codeCategorie())) {
             ControlesFicheMarche.materielExige(ouverts, valeurs, moyens.materiel(fiche.getIdFiche()).size(), bilan);
@@ -1641,7 +1670,8 @@ public class FicheMarcheService {
                 // ⚠️ V67 (lot 2a, §B5) — l'état de la commission d'appel d'offres, null en mode papier.
                 internes.etatCao(idDmc, RemiseElectronique.electronique(cadrage)), null,   // ⚠️ V68 : depots, posé par lire()
                 // ⚠️ R8 (§B3 ; V110) — le mode figé et la migration portée par cette version.
-                fige.isPresent(), fige.orElse(null), fiche.getModeMigreLe(), fiche.getModeMigrePar(), fiche.getModeMigreMotif());
+                fige.isPresent(), fige.orElse(null), fiche.getModeMigreLe(), fiche.getModeMigrePar(), fiche.getModeMigreMotif(),
+                estimations);   // ⚠️ V116 (Q11)
     }
 
     // ------------------------------------------------------------------ ⚠️ R8 (manuel révisé, lot 2, §B3 ; V110) — le mode figé

@@ -120,7 +120,7 @@ class DaoCompletIntegrationTest extends CnmIntegrationTestSupport {
         }
         String documents = mvc.perform(get("/api/fiches-marche/" + idDmc + "/documents").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        assertThat(JsonPath.<List<String>>read(documents, "$[?(@.extension!='xlsx')].type")).containsOnly("DAO_COMPLET").hasSize(2);
+        assertThat(JsonPath.<List<String>>read(documents, "$[?(@.extension!='xlsx' && @.type!='BORDEREAU_ESTIMATIF')].type")).containsOnly("DAO_COMPLET").hasSize(2);   // ⚠️ V117 : l'estimatif est listé à part du DAO
         assertThat(JsonPath.<List<String>>read(documents, "$[?(@.type=='DAO_COMPLET')].libelle")).containsOnly("Dossier d'appel d'offres complet");
         // ⚠️ C6 (recette du 06/10) — le DAO complet en tête, avant les classeurs.
         assertThat(JsonPath.<List<String>>read(documents, "$[*].type")).startsWith("DAO_COMPLET", "DAO_COMPLET");

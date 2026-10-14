@@ -51,6 +51,8 @@ class FicheBesoinIntegrationTest extends CnmIntegrationTestSupport {
     private static final String JSON = MediaType.APPLICATION_JSON_VALUE;
 
     @Autowired private ChampFicheMarcheService champService;
+    @Autowired private cnm.prs.service.DocumentsFicheMarcheService documentsFiche;
+    @Autowired private cnm.prs.repository.FicheMarcheRepository ficheMarcheRepository;
 
     @BeforeEach
     void jeu() throws Exception {
@@ -325,7 +327,129 @@ class FicheBesoinIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.erreurs[0].champ").value("valeurDefaut"));
     }
 
+    @Test
+    @DisplayName("7 — V116 (Q11) : prix unitaire estimé servi avec le besoin ; prix négatif ou à trois décimales → 400 ; bilan : "
+            + "PRIX_ESTIME_MANQUANT par lot, ESTIMATION_ECART (quantité maximum à commandes) bloquant, lot sans montant au plan en "
+            + "avertissement ; estimations servies par lot ; ligne non allotie comparée au nouveau montant")
+    void prixEstimes() throws Exception {
+        java.math.BigDecimal[] montants = { new java.math.BigDecimal("1000000"), new java.math.BigDecimal("500000"), null };
+        for (int n = 1; n <= 3; n++) {
+            Lot lot = lotRepository.findById(9910 + n).orElseThrow();
+            lot.setMontLot(montants[n - 1]);
+            lotRepository.save(lot);
+        }
+        Long idDmc = creerDmc(9902);
+        articles(idDmc, 1, prix(article(null, "Ordinateur", 1, 10, "Processeur", "Core i5"), "50000") + ","
+                + prix(article(null, "Onduleur", 1, 5, "Puissance", "1500 VA"), "100000")).andExpect(status().isOk());
+        articles(idDmc, 2, article(null, "Imprimante", 1, 4, "Vitesse", "30 ppm")).andExpect(status().isOk());
+        String lu = articles(idDmc, 3, prix(article(null, "Scanner", 1, 2, "Format", "A4"), "1000.5"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Object>>read(lu, "$[?(@.lot==1)].prixUnitaireEstime")).extracting(Object::toString)
+                .containsExactly("50000", "100000");
+        assertThat(JsonPath.<List<Object>>read(lu, "$[?(@.lot==2)].prixUnitaireEstime")).containsExactly((Object) null);
+
+        articles(idDmc, 3, prix(article(null, "Scanner", 1, 2, "Format", "A4"), "-5")).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[0].champ").value("articles[0].prixUnitaireEstime"));
+        articles(idDmc, 3, prix(article(null, "Scanner", 1, 2, "Format", "A4"), "1.001")).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[0].champ").value("articles[0].prixUnitaireEstime"));
+
+        String fiche = mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.bloquants[?(@.regle=='PRIX_ESTIME_MANQUANT')].message"))
+                .singleElement().asString().startsWith("Le lot 2 :").contains("article 1 — Imprimante");
+        assertThat(JsonPath.<List<Object>>read(fiche, "$.bilanControles.bloquants[?(@.regle=='ESTIMATION_ECART')]")).isEmpty();
+        assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.ok[?(@.regle=='ESTIMATION_ECART')].message"))
+                .singleElement().asString().startsWith("Le lot 1 :");
+        assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.avertissements[?(@.regle=='ESTIMATION_ECART')].message"))
+                .singleElement().asString().startsWith("Le lot 3 n'a pas de montant au plan");
+        assertThat(JsonPath.<List<Integer>>read(fiche, "$.estimations[*].lot")).containsExactly(1, 2, 3);
+        assertThat(JsonPath.<Number>read(fiche, "$.estimations[0].montantPlan").longValue()).isEqualTo(1_000_000L);
+        assertThat(JsonPath.<Number>read(fiche, "$.estimations[0].totalEstime").longValue()).isEqualTo(1_000_000L);
+        assertThat(JsonPath.<Number>read(fiche, "$.estimations[0].ecart").longValue()).isZero();
+        assertThat(JsonPath.<Object>read(fiche, "$.estimations[2].totalEstime").toString()).isEqualTo("2001");
+        assertThat(JsonPath.<List<String>>read(fiche, "$.estimations[1].articlesSansPrix")).containsExactly("article 1 — Imprimante");
+
+        // Lot 2 : 4 (maximum) × 100 000 = 400 000 ≠ 500 000 → écart bloquant.
+        articles(idDmc, 2, prix(article(null, "Imprimante", 1, 4, "Vitesse", "30 ppm"), "100000")).andExpect(status().isOk());
+        fiche = mvc.perform(get("/api/fiches-marche/" + idDmc).header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Object>>read(fiche, "$.bilanControles.bloquants[?(@.regle=='PRIX_ESTIME_MANQUANT')]")).isEmpty();
+        assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.bloquants[?(@.regle=='ESTIMATION_ECART')].message"))
+                .singleElement().asString().startsWith("Le lot 2 : le total estimé").contains("écart de −");
+        assertThat(JsonPath.<Number>read(fiche, "$.estimations[1].ecart").longValue()).isEqualTo(-100_000L);
+        mvc.perform(post("/api/fiches-marche/" + idDmc + "/valider").header("Authorization", tokenPrmp))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("CONTROLES_BLOQUANTS"));
+
+        // Ligne non allotie : le nouveau montant estimatif l'emporte sur le montant estimatif.
+        Marche l = marcheRepository.findById(9901).orElseThrow();
+        l.setMontEstim(new java.math.BigDecimal("2000000"));
+        l.setNouvMontEstim(new java.math.BigDecimal("3000000"));
+        marcheRepository.save(l);
+        Long nonAllotie = creerDmc(9901);
+        articles(nonAllotie, null, prix(article(null, "Tablette", 1, 3, "Écran", "10 pouces"), "1000000")).andExpect(status().isOk());
+        fiche = mvc.perform(get("/api/fiches-marche/" + nonAllotie).header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<Object>>read(fiche, "$.estimations[*].lot")).containsExactly((Object) null);
+        assertThat(JsonPath.<Number>read(fiche, "$.estimations[0].montantPlan").longValue()).isEqualTo(3_000_000L);
+        assertThat(JsonPath.<List<String>>read(fiche, "$.bilanControles.ok[?(@.regle=='ESTIMATION_ECART')].message"))
+                .singleElement().asString().startsWith("Le besoin : le total estimé égale");
+    }
+
+    @Test
+    @DisplayName("8 — V117 (Q11, §B3) : la validation produit le bordereau des prix estimatifs (PDF, quantités maximum, total = plan), "
+            + "listé avec les documents de la fiche mais hors du DAO remis aux candidats ; joint d'office au dossier sous la pièce "
+            + "BORDEREAU_PRIX")
+    void bordereauEstimatif() throws Exception {
+        Integer typeBordereau = typePieceJointeRepository.findFirstByCode("BORDEREAU_PRIX").map(t -> t.getIdTypePiece()).orElseGet(() -> {
+            int id = seedTypePiece("Bordereau des prix estimatifs signé", true, "DMC", 32);
+            cnm.prs.entity.TypePieceJointe t = typePieceJointeRepository.findById(id).orElseThrow();
+            t.setCode("BORDEREAU_PRIX");
+            typePieceJointeRepository.save(t);
+            return id;
+        });
+        Marche l = marcheRepository.findById(9901).orElseThrow();
+        l.setMontEstim(new java.math.BigDecimal("1000000"));
+        marcheRepository.save(l);
+        Long idDmc = creerDmc(9901);
+        cadrage(idDmc, "NON");
+        articles(idDmc, null, prix(article(null, "Tablette", 1, 4, "Écran", "10 pouces"), "200000") + ","
+                + prix(article(null, "Clavier", 2, 10, "Disposition", "AZERTY"), "20000")).andExpect(status().isOk());
+        Map<String, String> donnees = new LinkedHashMap<>();
+        donnees.put("B09-LL-01", "Antananarivo");
+        donnees.put("B06-EO-12", "30");
+        remplirObligatoiresEtValider(idDmc, "A_COMMANDE", "FOURNITURES_SERVICES", donnees);
+
+        String documents = mvc.perform(get("/api/fiches-marche/" + idDmc + "/documents").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(documents, "$[?(@.type=='BORDEREAU_ESTIMATIF')].nomFichier"))
+                .singleElement().asString().matches("BORDEREAU_ESTIMATIF_.*_9901_v1\\.pdf");
+        assertThat(JsonPath.<List<String>>read(documents, "$[?(@.type=='BORDEREAU_ESTIMATIF')].libelle"))
+                .containsExactly("Bordereau des prix estimatifs");
+        String texte = texteDuPdf(contenu(documents, "BORDEREAU_ESTIMATIF", "pdf", null));
+        assertThat(texte).contains("BORDEREAU DES PRIX ESTIMATIFS", "non publié", "Tablette", "Clavier", "Quantité maximum",
+                "TOTAL HT", "un million ariary", "la validation tracée de la fiche vaut signature");
+        assertThat(texte.replaceAll("[\\s\\u00a0\\u202f]", "")).contains("800000", "200000", "1000000");
+
+        // Hors du DAO : la liste des documents remis aux candidats ne le porte pas.
+        cnm.prs.entity.FicheMarche validee = ficheMarcheRepository.findFirstByIdDmcOrderByNumeroVersionDesc(idDmc).orElseThrow();
+        assertThat(documentsFiche.lister(validee, "FOURNITURES_SERVICES")).extracting(cnm.prs.dto.DocumentFicheDto::type)
+                .isNotEmpty().doesNotContain("BORDEREAU_ESTIMATIF");
+
+        String dossier = mvc.perform(post("/api/fiches-marche/" + idDmc + "/dossier").header("Authorization", tokenPrmp))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        int idDossier = JsonPath.read(dossier, "$.idDossier");
+        String pieces = mvc.perform(get("/api/piece-jointe-dossiers").param("dossier", String.valueOf(idDossier))
+                .header("Authorization", tokenPrmp)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<List<String>>read(pieces, "$[?(@.idTypePiece==" + typeBordereau + ")].nomFichier"))
+                .singleElement().asString().startsWith("BORDEREAU_ESTIMATIF_");
+    }
+
     // ------------------------------------------------------------------ outils
+
+    /** ⚠️ V116 — l'article avec son prix unitaire estimé. */
+    private static String prix(String article, String prix) {
+        return article.substring(0, article.length() - 1) + ",\"prixUnitaireEstime\":" + prix + "}";
+    }
 
     private static String article(Integer lot, String designation, int min, int max, String libelle, String exigence) {
         return "{" + (lot == null ? "" : "\"lot\":" + lot + ",") + "\"designation\":\"" + designation + "\",\"unite\":\"U\","
