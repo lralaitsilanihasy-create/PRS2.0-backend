@@ -8401,8 +8401,12 @@ APPROUVE_LE / APPROUVE_PAR`, nature `APPROBATION` de `t_attribution_piece`, `t_p
 validée : s'il manque, il est assemblé **sur-le-champ** (Word, ~20 s, la requête attend) ; un échec rend **409 `DAO_COMPLET_ABSENT`**
 `details { version }` — le rattrapage périodique le reprend, réessayer plus tard. Le contrôle vient après les autres (disponibilité,
 mandat, délai de publicité). ⚠️ Écart : sur un serveur **sans assemblage actif** (`app.dao-complet.actif` faux, ou hors Windows) aucune
-fiche n'a de DAO complet, et la règle ne s'applique pas (les documents séparés font le DAO). La disponibilité (`GET …/avis-specifique/
-disponibilite`) ne l'annonce pas : le 409 arrive à l'impression.
+fiche n'a de DAO complet, et la règle ne s'applique pas (les documents séparés font le DAO).
+
+⚠️ **2026-10-14 (remarque du front sur la livraison)** — la disponibilité l'annonce désormais : `GET …/avis-specifique/disponibilite`
+et `GET …/lettres-invitation/disponibilite` gagnent **`daoComplet`** = `PRODUIT` (la version validée a son DAO complet) · `A_ASSEMBLER`
+(il sera assemblé à l'impression, qui peut rendre 409 `DAO_COMPLET_ABSENT`) · `SANS_ASSEMBLAGE` (pas d'assemblage sur ce serveur : la règle
+ne s'applique pas) · `null` (aucune version validée). Indicatif : `disponible` n'en dépend pas.
 
 #### n° 13 — les recours suspensifs paramétrables (titre VIII)
 

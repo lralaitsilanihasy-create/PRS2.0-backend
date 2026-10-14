@@ -69,6 +69,29 @@ class BloquantsR9aTest {
     }
 
     @Test
+    @DisplayName("n° 2 — la disponibilité annonce l'état du DAO complet : produit, à assembler, sans assemblage, rien sans version validée")
+    void etatDaoComplet() {
+        cnm.prs.repository.FicheMarcheRepository fiches = mock(cnm.prs.repository.FicheMarcheRepository.class);
+        cnm.prs.repository.DocumentFicheMarcheRepository documents = mock(cnm.prs.repository.DocumentFicheMarcheRepository.class);
+        DaoCompletService dao = mock(DaoCompletService.class);
+        AvisSpecifiqueService s = new AvisSpecifiqueService(null, fiches, null, null, null, null, null, null, null, documents, null, null, null, dao);
+        when(fiches.findByIdDmcOrderByNumeroVersionAsc(5L)).thenReturn(java.util.List.of());
+        assertThat(s.etatDaoComplet(5L)).isNull();
+        FicheMarche v = version(2);
+        v.setStatut(cnm.prs.enums.StatutFicheMarche.VALIDEE.name());
+        when(fiches.findByIdDmcOrderByNumeroVersionAsc(5L)).thenReturn(java.util.List.of(v));
+        when(documents.findByIdFicheOrderByIdDocumentAsc(7)).thenReturn(java.util.List.of());
+        when(dao.actif()).thenReturn(false);
+        assertThat(s.etatDaoComplet(5L)).isEqualTo("SANS_ASSEMBLAGE");
+        when(dao.actif()).thenReturn(true);
+        assertThat(s.etatDaoComplet(5L)).isEqualTo("A_ASSEMBLER");
+        cnm.prs.entity.DocumentFicheMarche complet = new cnm.prs.entity.DocumentFicheMarche();
+        complet.setType(DaoCompletService.TYPE);
+        when(documents.findByIdFicheOrderByIdDocumentAsc(7)).thenReturn(java.util.List.of(complet));
+        assertThat(s.etatDaoComplet(5L)).isEqualTo("PRODUIT");
+    }
+
+    @Test
     @DisplayName("n° 13 — paramètre absent : révision ARMP et référé ; « AUCUN » : aucun ; valeur inconnue ignorée")
     void recoursSuspensifs() {
         ParametreRepository repo = mock(ParametreRepository.class);

@@ -13,7 +13,20 @@ package cnm.prs.dto;
  * @param statutPv        {@code SIGNE} si un PV signé existe, sinon {@code null}
  * @param statutDossier   statut du dossier soumis courant, ou {@code null}
  * @param idDossierSoumis dossier soumis courant de la fiche, ou {@code null}
+ * @param daoComplet      ⚠️ R9a (demande front du 14/10, remarque non bloquante) — l'état du DAO complet de la dernière version
+ *                        validée, exigé à l'impression (art. 31) : {@code PRODUIT} ; {@code A_ASSEMBLER} (il sera assemblé à
+ *                        l'impression, qui peut alors rendre 409 {@code DAO_COMPLET_ABSENT}) ; {@code SANS_ASSEMBLAGE} (pas
+ *                        d'assemblage sur ce serveur : la règle ne s'applique pas) ; {@code null} sans version validée. N'entre pas
+ *                        dans {@code disponible}.
  */
 public record AvisDisponibiliteDto(boolean disponible, String raison, String idAvis, String statutPv,
-        String statutDossier, Integer idDossierSoumis) {
+        String statutDossier, Integer idDossierSoumis, String daoComplet) {
+
+    public AvisDisponibiliteDto(boolean disponible, String raison, String idAvis, String statutPv, String statutDossier, Integer idDossierSoumis) {
+        this(disponible, raison, idAvis, statutPv, statutDossier, idDossierSoumis, null);
+    }
+
+    public AvisDisponibiliteDto avecDaoComplet(String etat) {
+        return new AvisDisponibiliteDto(disponible, raison, idAvis, statutPv, statutDossier, idDossierSoumis, etat);
+    }
 }

@@ -110,7 +110,8 @@ class AvisSpecifiqueIntegrationTest extends CnmIntegrationTestSupport {
         imprimer(idDmc).andExpect(status().isConflict()).andExpect(jsonPath("$.details.raison").value("RESERVES_NON_LEVEES"));
         for (String levee : List.of("OBSERVATIONS_LEVEES", "DECISION_TRANSMISE_SIGMP", "CLOTURE")) {
             statut(idDossier, levee);
-            disponibilite(idDmc).andExpect(jsonPath("$.disponible").value(true)).andExpect(jsonPath("$.raison").isEmpty());
+            disponibilite(idDmc).andExpect(jsonPath("$.disponible").value(true)).andExpect(jsonPath("$.raison").isEmpty())
+                    .andExpect(jsonPath("$.daoComplet").value("SANS_ASSEMBLAGE"));   // ⚠️ R9a : pas d'assemblage en test
         }
         statut(idDossier, "EN_ATTENTE_DECISION_PRMP");
         disponibilite(idDmc).andExpect(jsonPath("$.raison").value("RESERVES_NON_LEVEES"));

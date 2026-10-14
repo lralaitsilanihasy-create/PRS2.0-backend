@@ -130,7 +130,23 @@ public class AvisSpecifiqueService {
     @Transactional(readOnly = true)
     public AvisDisponibiliteDto disponibilite(Long idDmc) {
         exigerProfil();
-        return evaluer(idDmc, fiches.lire(idDmc), false);
+        return evaluer(idDmc, fiches.lire(idDmc), false).avecDaoComplet(etatDaoComplet(idDmc));
+    }
+
+    /**
+     * ⚠️ R9a (remarque du front du 14/10) — l'état du DAO complet de la dernière version validée, annoncé par la disponibilité :
+     * {@code PRODUIT}, {@code A_ASSEMBLER}, {@code SANS_ASSEMBLAGE}, ou {@code null} sans version validée. Lecture seule.
+     */
+    String etatDaoComplet(Long idDmc) {
+        FicheMarche validee = derniereValideeOuNull(idDmc);
+        if (validee == null) {
+            return null;
+        }
+        if (documentRepository.findByIdFicheOrderByIdDocumentAsc(validee.getIdFiche()).stream()
+                .anyMatch(d -> DaoCompletService.TYPE.equals(d.getType()))) {
+            return "PRODUIT";
+        }
+        return daoComplet.actif() ? "A_ASSEMBLER" : "SANS_ASSEMBLAGE";
     }
 
     /**

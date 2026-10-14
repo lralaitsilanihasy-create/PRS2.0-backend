@@ -75,7 +75,7 @@ public class LettreInvitationService {
     @Transactional(readOnly = true)
     public AvisDisponibiliteDto disponibilite(Long idDmc) {
         AvisSpecifiqueService.exigerProfil();
-        return avis.evaluer(idDmc, fiches.lire(idDmc), true);
+        return avis.evaluer(idDmc, fiches.lire(idDmc), true).avecDaoComplet(avis.etatDaoComplet(idDmc));   // ⚠️ R9a (remarque du 14/10)
     }
 
     /** ⚠️ R3b (manuel révisé, lot 1, §B3) — le projet de lettre d'invitation dès la fiche validée, sans liste restreinte ni « Lancé ». */
