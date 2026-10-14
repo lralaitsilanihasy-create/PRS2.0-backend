@@ -3287,6 +3287,26 @@ tout ce qui a été saisi.
 >
 > À la saisie, le champ porte le chemin `marches[i].processus[j].<champ>` ; à l'édition d'une prévision, le nom du champ seul (`dateDebut`/`dateFin`).
 
+⚠️ **2026-10-14 — calendrier complet** (demande front `demande-backend-2026-10-14-q-piece.md`, §B1 ; arbitrage du pilote sur Q-pièce :
+« la saisie du calendrier annuel de passation est obligatoire lors de la création du plan », toutes les étapes datées ; **V114**) :
+- **`ProcessusMarche`** et **`MarchePrevisionDto`** gagnent **`sansObjet`** (`Boolean`, absent = `false`) et **`motifSansObjet`**
+  (`String`, 500 car. au plus) : le processus du modèle n'existe pas pour ce marché (H2, marqué par la PRMP). Règle, à la saisie
+  (`POST /api/saisies/ppm`, `PUT` d'édition) comme sur `/api/marche-previsions` : sans objet → **aucune date** (400 champ `…sansObjet`,
+  « Un processus sans objet ne porte pas de date. ») et un **motif** (400 champ `…motifSansObjet`) ; sinon `dateDebut` reste
+  obligatoire (400 champ `…dateDebut`, même message qu'avant — `dateDebut` n'est plus `@NotNull` sur `MarchePrevisionDto`, la règle
+  passe par le service). Un processus sans objet est ignoré par la cohérence chronologique, relu sur `GET /api/marche-previsions`,
+  recopié dans une nouvelle version du plan, figé dans l'archive de rectification (`PrevisionVersion.sansObjet` / `motifSansObjet`)
+  et lu « sans objet » dans `DATES_PREVISIONNELLES`.
+- **Refus à la soumission** (`POST /api/dossiers/{id}/soumettre`, plan DDP, création comme mise à jour — H1 : toute soumission
+  postérieure à la livraison) : **409 `CAPM_INCOMPLET`** si une ligne non retirée n'a pas **chaque processus de la grille CAPM
+  effective de son mode** (`GET /api/capm?mode=`) daté ou sans objet. `details.lignes` = `[{idDetail, designation, processus:
+  [libellés manquants, dans l'ordre de la grille]}]`. Une ligne dont le mode n'a aucune grille n'exige rien.
+- ⚠️ **Écart à la demande** : **pas de refus à l'enregistrement de la ligne**. La saisie, l'import PDF et la mise à jour par import
+  passent par le même enregistrement ; l'import ne lit que trois dates (H3 : il doit rester accepté) et un brouillon se complète en
+  plusieurs fois. « Au moins un processus » reste exigé à l'enregistrement, comme avant ; le calendrier complet l'est à la soumission,
+  où tous les chemins convergent (comme les justifications de la fiche). La **resoumission** après rectification
+  (`POST /api/dossiers/{id}/resoumettre`) ne le rejoue pas : le plan a été soumis avant, H1 ne l'invalide pas.
+
 **`SaisieDossierRequest`** (familles DMC/DDM, sans contenu) : **`idSousType`** (sous-type choisi, ex. `DAO`,
 `DAOR`, `MAOO`, `MAOR` — la **famille s'en déduit** ; inconnu → **400** `{champ:"idSousType"}` ; sous-type de la
 famille **DDP** → **409** « utilisez /api/saisies/ppm »), **`idEntiteContract` (oui)**. *(plus de `idDossier` :

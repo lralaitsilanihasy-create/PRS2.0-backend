@@ -1253,4 +1253,58 @@ class SaisiePpmIntegrationTest extends CnmIntegrationTestSupport {
                 .content("{\"idPrevision\":990021,\"idDetail\":9830,\"idCapm\":2,\"dateDebut\":\"2026-05-01\",\"dateFin\":\"2026-04-01\"}"))
                 .andExpect(status().isBadRequest());
     }
+
+    // ------------------------------------------------------------------ 14/10 — Q-pièce §B1 : le calendrier complet (V114)
+
+    @Test
+    @DisplayName("Q-pièce §B1 (V114) — un processus sans objet exige un motif et ne porte pas de date (400 nommés) ; la soumission "
+            + "exige chaque processus de la grille du mode daté ou sans objet : 409 CAPM_INCOMPLET avec la ligne et les processus "
+            + "manquants, puis soumise une fois le dernier processus daté ; le marqueur est relu sur la prévision")
+    void calendrierComplet() throws Exception {
+        natureRepository.save(new Nature(1, "Travaux", null));
+        modePassationRepository.save(new ModePassation(2, "AOR", null, null, null, null));
+        capmRepository.save(new Capm(1, "LANCEMENT", 1, null, null));
+        capmRepository.save(new Capm(2, "PRE-QUALIFICATION", 2, null, null));
+        capmRepository.save(new Capm(3, "ATTRIBUTION", 3, null, null));
+        String debut = "{\"idEntiteContract\":1,\"exercice\":2026,\"signataire\":\"RABE\",\"dateSignature\":\"2026-01-10\","
+                + "\"marches\":[{\"designationMarche\":\"Route\",\"montEstim\":500000000,\"idNature\":1,\"idMode\":2,\"statut\":\"PREVU\","
+                + "\"processus\":[{\"idCapm\":1,\"dateDebut\":\"2026-02-01\"},";
+        mvc.perform(post("/api/saisies/ppm").header("Authorization", tokenPrmp).contentType(MediaType.APPLICATION_JSON)
+                .content(debut + "{\"idCapm\":2,\"sansObjet\":true}]}]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[0].champ").value("marches[0].processus[1].motifSansObjet"));
+        mvc.perform(post("/api/saisies/ppm").header("Authorization", tokenPrmp).contentType(MediaType.APPLICATION_JSON)
+                .content(debut + "{\"idCapm\":2,\"sansObjet\":true,\"motifSansObjet\":\"x\",\"dateDebut\":\"2026-03-01\"}]}]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[0].champ").value("marches[0].processus[1].sansObjet"));
+        mvc.perform(post("/api/saisies/ppm").header("Authorization", tokenPrmp).contentType(MediaType.APPLICATION_JSON)
+                .content(debut + "{\"idCapm\":2}]}]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erreurs[0].champ").value("marches[0].processus[1].dateDebut"));
+
+        String resp = mvc.perform(post("/api/saisies/ppm").header("Authorization", tokenPrmp).contentType(MediaType.APPLICATION_JSON)
+                .content(debut + "{\"idCapm\":2,\"sansObjet\":true,\"motifSansObjet\":\"Pas de pré-qualification\"}]}]}"))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        int idDoss = com.jayway.jsonpath.JsonPath.read(resp, "$.idDossier");
+        cnm.prs.entity.Marche ligne = marcheRepository.findByIdDossier(idDoss).get(0);
+        cnm.prs.entity.MarchePrevision so = marchePrevisionRepository.findByIdDetail(ligne.getIdDetail()).stream()
+                .filter(p -> Integer.valueOf(2).equals(p.getIdCapm())).findFirst().orElseThrow();
+        org.junit.jupiter.api.Assertions.assertTrue(so.isSansObjet());
+        mvc.perform(get("/api/marche-previsions/" + so.getIdPrevision()).header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.sansObjet").value(true))
+                .andExpect(jsonPath("$.motifSansObjet").value("Pas de pré-qualification"));
+
+        mvc.perform(post("/api/dossiers/" + idDoss + "/soumettre").header("Authorization", tokenPrmp))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CAPM_INCOMPLET"))
+                .andExpect(jsonPath("$.details.lignes[0].idDetail").value(ligne.getIdDetail()))
+                .andExpect(jsonPath("$.details.lignes[0].processus[0]").value("ATTRIBUTION"))
+                .andExpect(jsonPath("$.details.lignes[0].processus.length()").value(1));
+
+        mvc.perform(post("/api/marche-previsions").header("Authorization", tokenPrmp).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"idPrevision\":990030,\"idDetail\":" + ligne.getIdDetail() + ",\"idCapm\":3,\"dateDebut\":\"2026-09-01\"}"))
+                .andExpect(status().isCreated());
+        mvc.perform(post("/api/dossiers/" + idDoss + "/soumettre").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.statut").value("SOUMIS"));
+    }
 }

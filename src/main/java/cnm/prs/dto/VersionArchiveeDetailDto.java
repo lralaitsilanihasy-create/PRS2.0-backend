@@ -73,6 +73,9 @@ public record VersionArchiveeDetailDto(
             Integer idCapm,
             Integer ordre,
             LocalDate dateDebut,
-            LocalDate dateFin) {
+            LocalDate dateFin,
+            /** ⚠️ V114 (2026-10-14, demande « q-piece », §B1, H2) — processus sans objet et son motif (nul s'il n'a été relu que sur l'empreinte). */
+            boolean sansObjet,
+            String motifSansObjet) {
     }
 }

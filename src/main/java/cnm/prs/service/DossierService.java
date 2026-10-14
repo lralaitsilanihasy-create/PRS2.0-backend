@@ -133,6 +133,8 @@ public class DossierService {
     private final org.springframework.beans.factory.ObjectProvider<InstantaneService> instantanes;
     /** ⚠️ R5 (manuel révisé, lot 1, §B6 ; V105) — les contrôles automatiques : bloquants avant la soumission, enregistrés après. */
     private final org.springframework.beans.factory.ObjectProvider<ControlesService> controles;
+    /** ⚠️ 2026-10-14 (demande front « q-piece », §B1 ; V114) — le calendrier complet du plan, exigé à la soumission. */
+    private final org.springframework.beans.factory.ObjectProvider<CalendrierPlan> calendrierPlan;
     /** ⚠️ M3 (manuel de contrôle) — la grille du dossier. */
     private final org.springframework.beans.factory.ObjectProvider<GrilleControle> grilleControle;
     /** ⚠️ 2026-08-05 — figeage du diff et bascule du prédécesseur, à la soumission d'une mise à jour. */
@@ -190,7 +192,9 @@ public class DossierService {
             FicheMarcheService ficheMarcheService,
             org.springframework.beans.factory.ObjectProvider<ActesGestionService> actesGestion,
             org.springframework.beans.factory.ObjectProvider<InstantaneService> instantanes,
-            org.springframework.beans.factory.ObjectProvider<ControlesService> controles) {
+            org.springframework.beans.factory.ObjectProvider<ControlesService> controles,
+            org.springframework.beans.factory.ObjectProvider<CalendrierPlan> calendrierPlan) {
+        this.calendrierPlan = calendrierPlan;
         this.controles = controles;
         this.instantanes = instantanes;
         this.actesGestion = actesGestion;
@@ -928,6 +932,7 @@ public class DossierService {
         // porte pas) : 400 par champ, comme à la saisie.
         if (FAMILLE_DDP.equals(dossier.getIdTypeDossier())) {
             ficheJustifications.exigerJustificationsAvantSoumission(idDossier);
+            calendrierPlan.getObject().exigerComplet(idDossier);   // ⚠️ Q-pièce §B1 : 409 CAPM_INCOMPLET
         }
         // ⚠️ M5a (manuel de contrôle, §B1 et §B5) — un acte de gestion : déposé depuis un marché contrôlé ; l'avenant est revu
         // (réception, solde, plafond du tiers).

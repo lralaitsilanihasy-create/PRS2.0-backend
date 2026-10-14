@@ -42,4 +42,12 @@ public class SnapshotRectifPrevision {
 
     @Column(name = "DATE_FIN")
     private LocalDate dateFin;
+
+    /** ⚠️ V114 (2026-10-14, demande « q-piece », §B1, H2) — processus du modèle sans objet pour ce marché : aucune date, motif exigé. */
+    @Column(name = "SANS_OBJET", nullable = false)
+    private boolean sansObjet;
+
+    /** ⚠️ V114 — le motif du « sans objet ». */
+    @Column(name = "MOTIF_SANS_OBJET", length = 500)
+    private String motifSansObjet;
 }

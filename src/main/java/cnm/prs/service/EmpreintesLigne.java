@@ -59,7 +59,8 @@ public class EmpreintesLigne {
     public String previsions(Integer idDetail) {
         return marchePrevisionRepository.findByIdDetail(idDetail).stream()
                 .map(p -> p.getIdCapm() + ":" + Optional.ofNullable(p.getDateDebut()).map(Object::toString).orElse("")
-                        + ":" + Optional.ofNullable(p.getDateFin()).map(Object::toString).orElse(""))
+                        + ":" + Optional.ofNullable(p.getDateFin()).map(Object::toString).orElse("")
+                        + (p.isSansObjet() ? ":SO" : ""))   // ⚠️ V114 : suffixe seulement si sans objet (empreintes antérieures inchangées)
                 .sorted()
                 .collect(Collectors.joining(","));
     }

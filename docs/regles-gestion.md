@@ -2297,7 +2297,7 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
   rectification du dossier de planification, il est interdit d'ajouter ou de retirer PLUS DE 3 lignes du
   PPM à rectifier ». Le `PUT /api/saisies/ppm/{id}` d'un dossier `EN_ATTENTE_DECISION_PRMP` accepte donc,
   dans `marches[]` : les lignes **avec `idDetail`** (mise à jour en place, inchangé), les lignes **sans
-  `idDetail`** (**créations**, mêmes validations qu'à la saisie — ≥ 1 processus, Σ bénéficiaires,
+  `idDetail`** (**créations**, mêmes validations qu'à la saisie — ≥ 1 processus (⚠️ 2026-10-14 : daté ou sans objet motivé, V114), Σ bénéficiaires,
   justifications de la fiche — tracées `CREATION_RECTIFICATION`), et les `idDetail` du dossier **absents
   du corps** sont des **retraits** (cascade du DELETE marché : DMC, lots/tranches, bénéficiaires,
   prévisions, anomalies, échéances ; tracés `SUPPRESSION_RECTIFICATION`). **Garde évaluée avant toute
@@ -2338,6 +2338,15 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
 
 - Création et mise à jour du PPM [Écriture]
   - En-tête, exercice, signataire, marchés, lots, tranches, SOA bénéficiaires.
+- Calendrier de passation **complet** [Action] ⚠️ **Arbitrage du pilote (2026-10-14, Q-pièce ; V114)**
+  - « La saisie du calendrier annuel de passation est obligatoire lors de la création du plan de passation » : chaque ligne
+    non retirée porte **chaque processus de la grille CAPM effective de son mode** (propre au mode, sinon celle du mode modèle,
+    sinon la grille commune), **daté** (date de début ; la fin reste facultative) ou **sans objet**.
+  - **Sans objet** : marqué par la PRMP quand l'étape n'existe pas pour ce marché, avec un **motif** obligatoire et sans date.
+  - Exigé à la **soumission** du plan (création comme mise à jour) : 409 `CAPM_INCOMPLET` nommant les lignes et les processus
+    manquants. Ni à l'enregistrement d'une ligne (l'import PDF ne lit que trois dates et doit rester accepté ; un brouillon se
+    complète en plusieurs fois), ni à la resoumission d'un plan en rectification (soumis avant la règle). Les plans soumis
+    avant la livraison ne sont pas invalidés.
 - Montants — **hors taxes** [Écriture] ⚠️ **Précision du pilote (2026-09-18)**
   - Les montants estimatifs des lignes du PPM (montant initial, nouveau montant, montants par service
     bénéficiaire) sont saisis et conservés **hors taxes**, comme les seuils de l'arrêté

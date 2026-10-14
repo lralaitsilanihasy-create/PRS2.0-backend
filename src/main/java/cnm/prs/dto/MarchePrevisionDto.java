@@ -24,7 +24,7 @@ public class MarchePrevisionDto {
     @NotNull
     private Integer idCapm;
 
-    @NotNull
+    /** ⚠️ V114 — obligatoire sauf processus sans objet (vérifié par le service). */
     private LocalDate dateDebut;
 
     /** dateFin OPTIONNELLE (fin non connue / ouverte) ; chronologie vérifiée seulement si présente. */
@@ -32,4 +32,15 @@ public class MarchePrevisionDto {
 
     /** Ordre d'affichage du processus, porté par {@code t_capm.ORDRE} (lecture seule). */
     private Integer ordre;
+
+    /** ⚠️ V114 (2026-10-14, demande « q-piece », §B1, H2) — processus du modèle sans objet pour ce marché (aucune date). */
+    private Boolean sansObjet;
+
+    /** ⚠️ V114 — motif du « sans objet », exigé avec lui. */
+    private String motifSansObjet;
+
+    public MarchePrevisionDto(Integer idPrevision, Integer idDetail, Integer idCapm, LocalDate dateDebut, LocalDate dateFin,
+            Integer ordre) {
+        this(idPrevision, idDetail, idCapm, dateDebut, dateFin, ordre, null, null);
+    }
 }

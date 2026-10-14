@@ -349,7 +349,8 @@ public class ValeursPpmService {
             Capm capm = p.getCapm() != null ? p.getCapm()
                     : p.getIdCapm() == null ? null : capmRepository.findById(p.getIdCapm()).orElse(null);
             String libelle = capm == null ? "Étape " + p.getIdCapm() : capm.getLibelleProcessus();
-            String periode = p.getDateDebut() == null ? "—"
+            String periode = p.isSansObjet() ? "sans objet"   // ⚠️ V114
+                    : p.getDateDebut() == null ? "—"
                     : p.getDateFin() == null || p.getDateFin().equals(p.getDateDebut()) ? p.getDateDebut().toString()
                     : p.getDateDebut() + " → " + p.getDateFin();
             parts.add(libelle + " : " + periode);

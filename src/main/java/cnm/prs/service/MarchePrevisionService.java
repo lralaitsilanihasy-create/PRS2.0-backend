@@ -144,6 +144,8 @@ public class MarchePrevisionService {
         existing.setIdCapm(dto.getIdCapm());
         existing.setDateDebut(dto.getDateDebut());
         existing.setDateFin(dto.getDateFin());
+        existing.setSansObjet(Boolean.TRUE.equals(dto.getSansObjet()));
+        existing.setMotifSansObjet(existing.isSansObjet() ? dto.getMotifSansObjet() : null);
         return peuplerOrdre(MarchePrevisionMapper.toDto(repository.save(existing)));
     }
 
@@ -153,6 +155,12 @@ public class MarchePrevisionService {
      * triées par ordre CAPM. Violation → 400 (champ {@code dateDebut}/{@code dateFin}).
      */
     private void validerChronologie(MarchePrevisionDto dto, Integer idAExclure) {
+        // ⚠️ V114 (demande « q-piece », §B1, H2) — daté, ou sans objet avec un motif et sans date.
+        ErrorResponse.FieldError regle = CalendrierPlan.violation("", Boolean.TRUE.equals(dto.getSansObjet()),
+                dto.getMotifSansObjet(), dto.getDateDebut(), dto.getDateFin());
+        if (regle != null) {
+            throw new ChampsInvalidesException(List.of(regle));
+        }
         List<ProcessusChronologie.Proc> procs = new ArrayList<>();
         procs.add(procDe(dto.getIdCapm(), dto.getDateDebut(), dto.getDateFin()));
         for (MarchePrevision sib : repository.findByIdDetail(dto.getIdDetail())) {

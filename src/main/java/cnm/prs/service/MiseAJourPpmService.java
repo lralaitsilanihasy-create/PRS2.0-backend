@@ -335,6 +335,8 @@ public class MiseAJourPpmService {
                 c.setIdCapm(p.getIdCapm());
                 c.setDateDebut(p.getDateDebut());
                 c.setDateFin(p.getDateFin());
+                c.setSansObjet(p.isSansObjet());   // ⚠️ V114
+                c.setMotifSansObjet(p.getMotifSansObjet());
                 marchePrevisionRepository.save(c);
             }
             for (ServiceBeneficiaire b : serviceBeneficiaireRepository.findByIdDetail(origine.getIdDetail())) {
@@ -1076,7 +1078,8 @@ public class MiseAJourPpmService {
     private String empreintePrevisions(Integer idDetail) {
         return marchePrevisionRepository.findByIdDetail(idDetail).stream()
                 .map(p -> p.getIdCapm() + ":" + Optional.ofNullable(p.getDateDebut()).map(Object::toString).orElse("")
-                        + ":" + Optional.ofNullable(p.getDateFin()).map(Object::toString).orElse(""))
+                        + ":" + Optional.ofNullable(p.getDateFin()).map(Object::toString).orElse("")
+                        + (p.isSansObjet() ? ":SO" : ""))   // ⚠️ V114 : suffixe seulement si sans objet (empreintes antérieures inchangées)
                 .sorted()
                 .collect(Collectors.joining(","));
     }

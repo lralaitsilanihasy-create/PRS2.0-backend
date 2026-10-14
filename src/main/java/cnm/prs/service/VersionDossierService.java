@@ -232,6 +232,8 @@ public class VersionDossierService {
             a.setIdCapm(p.getIdCapm());
             a.setDateDebut(p.getDateDebut());
             a.setDateFin(p.getDateFin());
+            a.setSansObjet(p.isSansObjet());   // ⚠️ V114
+            a.setMotifSansObjet(p.getMotifSansObjet());
             previsionArchiveRepository.save(a);
         }
     }
@@ -393,7 +395,7 @@ public class VersionDossierService {
         if (!figes.isEmpty()) {
             for (SnapshotRectifPrevision p : figes) {
                 resultat.add(new PrevisionVersion(p.getIdCapm(), ordres.get(p.getIdCapm()), p.getDateDebut(),
-                        p.getDateFin()));
+                        p.getDateFin(), p.isSansObjet(), p.getMotifSansObjet()));
             }
         } else {
             for (String element : elements(empreinte)) {
@@ -403,7 +405,7 @@ public class VersionDossierService {
                     continue;
                 }
                 resultat.add(new PrevisionVersion(idCapm, ordres.get(idCapm),
-                        parts.length > 1 ? date(parts[1]) : null, parts.length > 2 ? date(parts[2]) : null));
+                        parts.length > 1 ? date(parts[1]) : null, parts.length > 2 ? date(parts[2]) : null, parts.length > 3 && "SO".equals(parts[3]), null));
             }
         }
         resultat.sort(Comparator.comparing((PrevisionVersion p) -> p.ordre(),

@@ -50,6 +50,14 @@ public class MarchePrevision {
     @Column(name = "DATE_FIN")
     private LocalDate dateFin;
 
+    /** ⚠️ V114 (2026-10-14, demande « q-piece », §B1, H2) — processus du modèle sans objet pour ce marché : aucune date, motif exigé. */
+    @Column(name = "SANS_OBJET", nullable = false)
+    private boolean sansObjet;
+
+    /** ⚠️ V114 — le motif du « sans objet ». */
+    @Column(name = "MOTIF_SANS_OBJET", length = 500)
+    private String motifSansObjet;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ID_CAPM", insertable = false, updatable = false)
     @JsonIgnore
@@ -59,4 +67,10 @@ public class MarchePrevision {
     @JoinColumn(name = "ID_DETAIL", insertable = false, updatable = false)
     @JsonIgnore
     private Marche marche;
+
+    /** Constructeur d'avant V114 (processus daté) : les fixtures de test l'emploient. */
+    public MarchePrevision(Integer idPrevision, Integer idDetail, Integer idCapm, LocalDate dateDebut, LocalDate dateFin,
+            Capm capm, Marche marche) {
+        this(idPrevision, idDetail, idCapm, dateDebut, dateFin, false, null, capm, marche);
+    }
 }

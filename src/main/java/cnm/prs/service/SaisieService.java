@@ -206,7 +206,8 @@ public class SaisieService {
                     // ⚠️ LOT 3b (2026-08-26) — PK null : allouee par la sequence seq_marche_prevision
                     // (le compteur local max+1 rendait le meme id a deux saisies concurrentes).
                     marchePrevisionService.create(new MarchePrevisionDto(
-                            null, idDetail, p.idCapm(), p.dateDebut(), p.dateFin(), null));
+                            null, idDetail, p.idCapm(), p.dateDebut(), p.dateFin(), null, p.estSansObjet(),
+                            p.estSansObjet() ? p.motifSansObjet().trim() : null));
                 }
                 creerBeneficiaires(idDetail, ligne);   // une ligne t_service_beneficiaire par bénéficiaire
                 creerLots(idDetail, idDossier, ligne);   // une ligne t_lot par lot (aucun contrôle de somme)
@@ -284,6 +285,12 @@ public class SaisieService {
         List<ProcessusChronologie.Proc> procs = new ArrayList<>();
         for (int j = 0; j < ligne.processus().size(); j++) {
             ProcessusMarche p = ligne.processus().get(j);
+            // ⚠️ V114 (demande « q-piece », §B1, H2) — daté, ou sans objet avec un motif et sans date.
+            ErrorResponse.FieldError regle = CalendrierPlan.violation("marches[" + i + "].processus[" + j + "]", p.estSansObjet(),
+                    p.motifSansObjet(), p.dateDebut(), p.dateFin());
+            if (regle != null) {
+                throw new ChampsInvalidesException(List.of(regle));
+            }
             Capm capm = capmConnu(p, i, j);
             procs.add(new ProcessusChronologie.Proc("marches[" + i + "].processus[" + j + "]",
                     capm.getOrdre() == null ? 0 : capm.getOrdre(), capm.getLibelleProcessus(),
@@ -460,7 +467,8 @@ public class SaisieService {
                         // ⚠️ LOT 3b (2026-08-26) — PK null : allouee par la sequence seq_marche_prevision
                         // (le compteur local max+1 rendait le meme id a deux saisies concurrentes).
                         marchePrevisionService.create(new MarchePrevisionDto(
-                                null, idDetail, p.idCapm(), p.dateDebut(), p.dateFin(), null));
+                                null, idDetail, p.idCapm(), p.dateDebut(), p.dateFin(), null, p.estSansObjet(),
+                                p.estSansObjet() ? p.motifSansObjet().trim() : null));
                     }
                 }
                 creerBeneficiaires(idDetail, ligne);     // sans effet si beneficiaires null/vide

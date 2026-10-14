@@ -21,6 +21,8 @@ public final class MarchePrevisionMapper {
         dto.setIdCapm(entity.getIdCapm());
         dto.setDateDebut(entity.getDateDebut());
         dto.setDateFin(entity.getDateFin());
+        dto.setSansObjet(entity.isSansObjet());
+        dto.setMotifSansObjet(entity.getMotifSansObjet());
         // ordre (lecture seule, porté par t_capm) : peuplé par le service.
         return dto;
     }
@@ -35,6 +37,8 @@ public final class MarchePrevisionMapper {
         entity.setIdCapm(dto.getIdCapm());
         entity.setDateDebut(dto.getDateDebut());
         entity.setDateFin(dto.getDateFin());
+        entity.setSansObjet(Boolean.TRUE.equals(dto.getSansObjet()));
+        entity.setMotifSansObjet(entity.isSansObjet() ? dto.getMotifSansObjet() : null);
         return entity;
     }
 }
