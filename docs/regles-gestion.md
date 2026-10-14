@@ -2347,6 +2347,11 @@ Le mandat d'une PRMP est matérialisé par la table **`t_mandat`** (`/api/mandat
     manquants. Ni à l'enregistrement d'une ligne (l'import PDF ne lit que trois dates et doit rester accepté ; un brouillon se
     complète en plusieurs fois), ni à la resoumission d'un plan en rectification (soumis avant la règle). Les plans soumis
     avant la livraison ne sont pas invalidés.
+  - Le **calendrier annuel de passation** est **produit** par l'application à partir du plan (PDF, lisible depuis le dossier de
+    planification et depuis le dossier d'appel d'offres qui en dépend) ; un processus manquant d'un plan antérieur y est écrit
+    « non daté ». La pièce « Calendrier annuel de passation mis à jour et signé » n'est plus demandée au dossier conduit dans
+    l'application, ni la pièce « Canevas de rapport d'évaluation » (le rapport est produit par l'application ; un canevas par
+    sous-type viendra des modèles du pilote) ; le dossier saisi hors application garde les deux (V115).
 - Montants — **hors taxes** [Écriture] ⚠️ **Précision du pilote (2026-09-18)**
   - Les montants estimatifs des lignes du PPM (montant initial, nouveau montant, montants par service
     bénéficiaire) sont saisis et conservés **hors taxes**, comme les seuils de l'arrêté

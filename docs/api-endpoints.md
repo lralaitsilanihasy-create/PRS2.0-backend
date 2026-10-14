@@ -3307,6 +3307,19 @@ tout ce qui a été saisi.
   où tous les chemins convergent (comme les justifications de la fiche). La **resoumission** après rectification
   (`POST /api/dossiers/{id}/resoumettre`) ne le rejoue pas : le plan a été soumis avant, H1 ne l'invalide pas.
 
+⚠️ **2026-10-14 — calendrier annuel produit** (même demande, §B2 ; **V115**) — **`GET /api/dossiers/{idDossier}/calendrier-annuel`**
+→ PDF `CALENDRIER_ANNUEL_<référence du plan>.pdf` (`DocumentLibre`, sans Word), sous la garde de lecture de `GET /api/dossiers/{id}`
+(403 hors périmètre, 404). Le plan lu est le dossier lui-même s'il est de famille `DDP`, sinon celui de la **ligne en vigueur** de sa
+fiche marché (`ID_DMC` → ligne → plan) ; un dossier sans plan dans l'application → **409 `CALENDRIER_INDISPONIBLE`**. Contenu :
+entité, exercice, référence et n° de mise à jour du plan ; par ligne non retirée (désignation, mode, montant HT), un tableau
+Processus / Début / Fin portant chaque processus de la grille du mode puis ceux saisis hors grille — date, « sans objet » et son
+motif, ou **« non daté »** (plan soumis avant la règle du calendrier complet, H1, signalé sous les tableaux). Pied : produit le …
+à partir du plan …, la validation tracée vaut signature.
+**V115** : les pièces `CALENDRIER` (« Calendrier annuel de passation mis à jour et signé », 7 sous-types) et `CANEVAS_RAPPORT`
+(« Canevas de rapport d'évaluation », 6 sous-types, §B3) passent en `CONDITION = 'PAPIER'` : non servies au dossier conduit en
+ligne (`GET …/pieces-exigees`), gardées au dossier saisi hors application (H4). Le **canevas par sous-type** (§B3) attend les modèles
+du pilote : le rapport d'évaluation reste sur le plan du guide.
+
 **`SaisieDossierRequest`** (familles DMC/DDM, sans contenu) : **`idSousType`** (sous-type choisi, ex. `DAO`,
 `DAOR`, `MAOO`, `MAOR` — la **famille s'en déduit** ; inconnu → **400** `{champ:"idSousType"}` ; sous-type de la
 famille **DDP** → **409** « utilisez /api/saisies/ppm »), **`idEntiteContract` (oui)**. *(plus de `idDossier` :

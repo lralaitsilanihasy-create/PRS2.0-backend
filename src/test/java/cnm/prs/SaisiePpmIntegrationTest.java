@@ -1306,5 +1306,35 @@ class SaisiePpmIntegrationTest extends CnmIntegrationTestSupport {
                 .andExpect(status().isCreated());
         mvc.perform(post("/api/dossiers/" + idDoss + "/soumettre").header("Authorization", tokenPrmp))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.statut").value("SOUMIS"));
+
+        // §B2 — le calendrier annuel produit à partir du plan : chaque processus de la grille, daté ou sans objet avec son motif.
+        byte[] pdf = mvc.perform(get("/api/dossiers/" + idDoss + "/calendrier-annuel").header("Authorization", tokenPrmp))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        String texte = texteDuPdf(pdf);
+        org.assertj.core.api.Assertions.assertThat(texte).contains("CALENDRIER ANNUEL DE PASSATION", "Route", "LANCEMENT", "01/02/2026",
+                "sans objet", "Pas de pré-qualification", "ATTRIBUTION", "01/09/2026").doesNotContain("non daté");
+
+        // Depuis le dossier produit par la fiche marché de la ligne : le même calendrier (le plan de la ligne en vigueur).
+        cnm.prs.entity.DossierMec dmc = new cnm.prs.entity.DossierMec();
+        dmc.setIdDetail(ligne.getIdDetail());
+        dmc.setIdTypeDmc(typeDmcRepository.findByCode("DAO").orElseThrow().getIdTypeDmc());
+        dmc.setStatut(cnm.prs.enums.StatutDmc.A_PREPARER);
+        dmc.setDateCreation(java.time.LocalDateTime.of(2026, 9, 1, 8, 0));
+        Long idDmc = dossierMecRepository.save(dmc).getIdDmc();
+        cnm.prs.entity.Dossier dao = dossier(7792, "BROUILLON");
+        dao.setIdTypeDossier("DMC");
+        dao.setIdDmc(idDmc);
+        dao.setIdPrmp("PRMP001");
+        dossierRepository.save(dao);
+        org.assertj.core.api.Assertions.assertThat(texteDuPdf(mvc.perform(get("/api/dossiers/7792/calendrier-annuel")
+                .header("Authorization", tokenPrmp)).andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray()))
+                .contains("CALENDRIER ANNUEL DE PASSATION", "Route", "Pas de pré-qualification");
+
+        // Un dossier sans plan dans l'application (ni DDP, ni produit par une fiche) : 409 CALENDRIER_INDISPONIBLE.
+        cnm.prs.entity.Dossier sansPlan = dossier(7791, "BROUILLON");
+        sansPlan.setIdTypeDossier("DMC");
+        dossierRepository.save(sansPlan);
+        mvc.perform(get("/api/dossiers/7791/calendrier-annuel").header("Authorization", tokenPrmp))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("CALENDRIER_INDISPONIBLE"));
     }
 }
