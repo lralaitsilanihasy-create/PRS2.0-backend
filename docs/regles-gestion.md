@@ -1277,6 +1277,15 @@ de service). Contrat : `docs/api-endpoints.md`, § *Le dossier soumis à la CNM 
 > elle-même ne sont plus exigées et les contrôles automatiques s'appliquent ; en papier, toutes les pièces du manuel restent exigées et
 > les contrôles automatiques sont sans objet.
 >
+> ⚠️ **2026-10-14 — trois bloquants de la loi (manuel révisé, lot 2, tranche R9a, V111 ; arbitrage Q13).** **DAO complet avant
+> publication (art. 31)** : l'avis spécifique et les lettres d'invitation ne s'impriment que si le DAO complet de la version validée
+> existe ; il est assemblé à ce moment s'il manque, et l'impression est refusée s'il ne peut l'être (là où l'assemblage n'est pas en
+> service, la règle est sans objet). **Recours suspensifs (titre VIII)** : les types de recours qui suspendent la signature du marché
+> sont un réglage de l'Administrateur — par défaut la révision par l'ARMP et le référé, le réexamen pouvant être ajouté ; le réglage
+> vaut pour les recours en cours. **Approbation (art. 54)** : après la signature, la PRMP enregistre l'approbation du marché par
+> l'autorité compétente (autorité, date, décision jointe) ; le marché ne se notifie qu'approuvé **et** enregistré, à une date qui
+> n'est antérieure ni à l'un ni à l'autre.
+>
 > ⚠️ **2026-10-08 — les grilles de contrôle par sous-type (tranche M3, V96).** Chaque sous-type a la grille du manuel : les points
 > communs de sa famille, puis ceux de la grille dont il dérive (un appel d'offres restreint reprend la grille de l'appel d'offres
 > ouvert et y ajoute ses cinq points ; un marché sur appel d'offres restreint, celle du marché sur appel d'offres ouvert), puis les

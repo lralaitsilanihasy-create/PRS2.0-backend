@@ -787,6 +787,23 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
                 .param("requerant", "BTP Gamma").param("objet", "Réexamen").header("Authorization", tokenPrmp)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.lots[0].recours[1].bloquant").value(false))
                 .andExpect(jsonPath("$.lots[0].recours[1].echeanceReponse").value(aujourdhui.plusDays(10).toString()));
+        // ⚠️ R9a (§B4 n° 13) — le réexamen devient suspensif par le paramètre, lu à la lecture ; on revient au défaut.
+        mvc.perform(get("/api/parametres/recours-suspensifs").header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.types.length()").value(2)).andExpect(jsonPath("$.connus.length()").value(3));
+        mvc.perform(put("/api/parametres/recours-suspensifs").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"types\":[\"REEXAMEN\"]}")).andExpect(status().isForbidden());
+        mvc.perform(put("/api/parametres/recours-suspensifs").header("Authorization", tokenAdmin).contentType(JSON)
+                .content("{\"types\":[\"RECOURS_GRACIEUX\"]}")).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("RECOURS_INVALIDE"));
+        mvc.perform(put("/api/parametres/recours-suspensifs").header("Authorization", tokenAdmin).contentType(JSON)
+                .content("{\"types\":[\"refere\",\"REEXAMEN\",\"REVISION_ARMP\"]}")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.types[0]").value("REEXAMEN")).andExpect(jsonPath("$.types.length()").value(3));
+        mvc.perform(get(att).header("Authorization", tokenPrmp)).andExpect(jsonPath("$.lots[0].recours[1].bloquant").value(true));
+        mvc.perform(put("/api/parametres/recours-suspensifs").header("Authorization", tokenAdmin).contentType(JSON)
+                .content("{\"types\":[]}")).andExpect(status().isOk()).andExpect(jsonPath("$.types.length()").value(0));
+        mvc.perform(get(att).header("Authorization", tokenPrmp)).andExpect(jsonPath("$.lots[0].recours[0].bloquant").value(false));
+        mvc.perform(put("/api/parametres/recours-suspensifs").header("Authorization", tokenAdmin).contentType(JSON)
+                .content("{\"types\":[\"REVISION_ARMP\",\"REFERE\"]}")).andExpect(status().isOk());
+        mvc.perform(get(att).header("Authorization", tokenPrmp)).andExpect(jsonPath("$.lots[0].recours[1].bloquant").value(false));
         mvc.perform(multipart(att + "/lots/1/signature").file(piece).param("dateSignature", aujourdhui.toString()).header("Authorization", tokenPrmp))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("RECOURS_EN_COURS"));
         mvc.perform(multipart(att + "/recours/" + idRecours + "/decision").param("date", aujourdhui.toString()).param("issue", "REJETE")
@@ -858,6 +875,24 @@ class EvaluationIntegrationTest extends CnmIntegrationTestSupport {
         // ⚠️ 2026-10-10 — un marché signé : son projet ne se refait plus.
         mvc.perform(post(att + "/lots/1/projet").header("Authorization", tokenPrmp)).andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("MARCHE_SIGNE"));
+        // ⚠️ R9a (§B4 n° 14, art. 54) — l'approbation précède la notification : autorité, date, décision jointe.
+        mvc.perform(post(att + "/lots/1/notification").header("Authorization", tokenPrmp).contentType(JSON)
+                .content("{\"dateNotification\":\"" + aujourdhui + "\"}")).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("MARCHE_NON_APPROUVE"));
+        mvc.perform(multipart(att + "/lots/1/approbation").file(piece).param("dateApprobation", aujourdhui.toString())
+                .header("Authorization", tokenPrmp)).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("CHAMP_OBLIGATOIRE"));
+        mvc.perform(multipart(att + "/lots/1/approbation").file(piece).param("autorite", "Le Ministre").param("dateApprobation",
+                aujourdhui.minusDays(1).toString()).header("Authorization", tokenPrmp)).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("DATE_INVALIDE"));
+        mvc.perform(multipart(att + "/lots/1/approbation").param("autorite", "Le Ministre").param("dateApprobation", aujourdhui.toString())
+                .header("Authorization", tokenPrmp)).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("FICHIER_OBLIGATOIRE"));
+        mvc.perform(multipart(att + "/lots/1/approbation").file(piece).param("autorite", "Le Ministre").param("dateApprobation", aujourdhui.toString())
+                .header("Authorization", tokenPrmp)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.lots[0].approbation.autorite").value("Le Ministre"))
+                .andExpect(jsonPath("$.lots[0].approbation.date").value(aujourdhui.toString()))
+                .andExpect(jsonPath("$.lots[0].approbation.fichier").isNotEmpty());
+        mvc.perform(multipart(att + "/lots/1/approbation").file(piece).param("autorite", "Le Ministre").param("dateApprobation", aujourdhui.toString())
+                .header("Authorization", tokenPrmp)).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("DEJA_APPROUVE"));
         mvc.perform(post(att + "/lots/1/notification").header("Authorization", tokenPrmp).contentType(JSON)
                 .content("{\"dateNotification\":\"" + aujourdhui + "\"}")).andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("NON_ENREGISTRE"));

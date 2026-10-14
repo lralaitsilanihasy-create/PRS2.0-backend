@@ -101,13 +101,16 @@ public class AvisSpecifiqueService {
     private final ValeursPpmService valeursPpm;
     /** ⚠️ R6a (manuel révisé, lot 2, §B1) — le délai de publicité de la loi, bloquant à l'impression (409 DELAI_PUBLICITE). */
     private final DelaisPublicite delaisPublicite;
+    /** ⚠️ R9a (manuel révisé, lot 2, §B4 n° 2, art. 31) — le DAO complet de la version, exigé avant toute publication. */
+    private final DaoCompletService daoComplet;
 
     public AvisSpecifiqueService(FicheMarcheService fiches, FicheMarcheRepository ficheRepository,
             DossierRepository dossierRepository, PvExamenRepository pvRepository, DocumentsFicheMarcheService documents,
             DossierIntegriteService dossierIntegrite, JournalDossierService journal,
             cnm.prs.repository.MarcheRepository marcheRepository, cnm.prs.repository.StatutMarcheRepository statutMarcheRepository,
             cnm.prs.repository.DocumentFicheMarcheRepository documentRepository, CeremonieService ceremonie, ValeursPpmService valeursPpm,
-            DelaisPublicite delaisPublicite) {
+            DelaisPublicite delaisPublicite, DaoCompletService daoComplet) {
+        this.daoComplet = daoComplet;
         this.delaisPublicite = delaisPublicite;
         this.valeursPpm = valeursPpm;
         this.ceremonie = ceremonie;
@@ -151,6 +154,7 @@ public class AvisSpecifiqueService {
         // ⚠️ R6a (manuel révisé, lot 2, §B1 ; arbitrage Q6) — la date de publication saisie respecte le délai de publicité de la loi.
         delaisPublicite.exigerAImpression(etat, etat.getIdDetail() == null ? null : valeursPpm.lire(etat.getIdDetail()),
                 LocalDate.parse(corps.datePublication().trim()));
+        exigerDaoComplet(validee, etat, dispo.idDossierSoumis());
         LocalDateTime maintenant = LocalDateTime.now();
         cnm.prs.entity.Marche ligne = ligne(etat);
         Integer origine = origine(ligne);
@@ -249,6 +253,25 @@ public class AvisSpecifiqueService {
         boolean restreint = valeursPpm.modeRestreint(courante.getIdDetail());
         String sigle = lettre ? ModelesDao.sigleLettre(courante.getCategorie(), restreint) : ModelesDao.sigleAvis(courante.getCategorie(), restreint);
         return MentionsPublication.verifier(sigle, documents.modele(sigle), documents.rendrePublication(courante, sigle, lettre), courante);
+    }
+
+    /** ⚠️ R9a — le DAO complet de la version validée n'est pas produit : l'avis et les lettres attendent. */
+    public static final String DAO_COMPLET_ABSENT = "DAO_COMPLET_ABSENT";
+
+    /**
+     * ⚠️ R9a (manuel révisé, lot 2, §B4 n° 2 ; art. 31 : le DAO est complet avant sa publication) — à l'impression de l'avis ou des
+     * lettres, le DAO complet de la version validée doit exister : s'il manque, il est assemblé sur-le-champ ({@link
+     * DaoCompletService#assurer}, synchrone, ~20 s) ; un échec rend 409 {@code DAO_COMPLET_ABSENT} {@code { version }}, le rattrapage
+     * périodique le reprendra. Sans assemblage actif sur ce serveur ({@code app.dao-complet.actif} faux ou hors Windows), le DAO
+     * complet n'existe pour aucune fiche : la règle ne s'applique pas (les documents séparés font le DAO).
+     */
+    void exigerDaoComplet(FicheMarche validee, FicheMarcheDto etat, Integer idDossierSoumis) {
+        if (!daoComplet.actif() || daoComplet.assurer(validee, etat)) {
+            return;
+        }
+        throw new BusinessRuleException("Le DAO complet de la version " + validee.getNumeroVersion() + " n'a pas pu être assemblé : il se "
+                + "publie complet (art. 31). Réessayez dans quelques minutes ; l'assemblage est repris automatiquement.", DAO_COMPLET_ABSENT,
+                idDossierSoumis, Map.of("version", validee.getNumeroVersion()));
     }
 
     /** La ligne du DMC de la fiche ; {@code null} sans ligne. */

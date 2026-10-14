@@ -174,7 +174,7 @@ public class AttributionService {
             Attribution engage = attributions.findById(new Attribution.Cle(idDmc, l.lot())).filter(x -> x.getAttribueLe() != null).orElse(null);
             if (!Evaluation.CLOSE.equals(ev.etat()) && engage == null) {
                 lots.add(new AttributionDto.LotAttribution(l.lot(), EN_EVALUATION, null, null, false, null, null, null, List.of(), null, List.of(),
-                        null, null, null, null, null, null, null, reprises(idDmc, l.lot())));
+                        null, null, null, null, null, null, null, reprises(idDmc, l.lot()), null));
                 continue;
             }
             Attribution a = attributions.findById(new Attribution.Cle(idDmc, l.lot())).orElse(null);
@@ -194,7 +194,7 @@ public class AttributionService {
                     s.recours(), s.signature(), s.enregistrement(), s.notification(), s.avis(), s.pieces(), s.retrait(),
                     a == null || a.getInfructueuxLe() == null ? null : new AttributionDto.Infructuosite(a.getInfructueuxLe(), a.getInfructueuxPar(),
                             a.getMotifInfructuosite(), a.getDecisionReference(), a.getDecisionDate(), a.getSuite()),
-                    reprises(idDmc, l.lot())));
+                    reprises(idDmc, l.lot()), s.approbation()));
         }
         return new AttributionDto(idDmc, lots);
     }

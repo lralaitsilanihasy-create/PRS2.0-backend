@@ -113,6 +113,7 @@ public class LettreInvitationService {
         dossierIntegrite.exigerMandatActif();
         FicheMarche validee = avis.derniereValidee(idDmc, true);
         FicheMarcheDto etat = fiches.lireVersion(idDmc, validee.getNumeroVersion());
+        avis.exigerDaoComplet(validee, etat, dispo.idDossierSoumis());   // ⚠️ R9a (§B4 n° 2, art. 31)
         LocalDateTime maintenant = LocalDateTime.now();
         cnm.prs.entity.Marche ligne = avis.ligne(etat);
         Integer origine = AvisSpecifiqueService.origine(ligne);

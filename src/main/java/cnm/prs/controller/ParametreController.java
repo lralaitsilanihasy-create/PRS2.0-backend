@@ -139,6 +139,20 @@ public class ParametreController {
         return service.fixerQuorumCao(corps);
     }
 
+    /** ⚠️ R9a (manuel révisé, lot 2, §B4 n° 13 ; V111) — les recours qui suspendent la signature : lecture par tout authentifié. */
+    @GetMapping("/recours-suspensifs")
+    public ParametreService.RecoursSuspensifs recoursSuspensifs() {
+        return service.lireRecoursSuspensifs();
+    }
+
+    /** Réglage (Administrateur seul) : { types: [REEXAMEN | REVISION_ARMP | REFERE…] }, vide = aucun ; 400 RECOURS_INVALIDE. */
+    @PreAuthorize("hasRole('ADMINISTRATEUR')")
+    @PutMapping("/recours-suspensifs")
+    public ParametreService.RecoursSuspensifs fixerRecoursSuspensifs(
+            @RequestBody(required = false) ParametreService.RecoursSuspensifsRequest corps) {
+        return service.fixerRecoursSuspensifs(corps);
+    }
+
     /**
      * ⚠️ R3a (manuel révisé, lot 1, §B3) — la transition SIGMP : date de fin, décision d'équivalence, et ce qu'en déduisent
      * les documents (pied) et les listes de pièces (transition en cours) ; lecture par tout authentifié (le front l'imprime au

@@ -99,7 +99,20 @@ public class AttributionExecutionController {
         return attribution.lire(idDmc);
     }
 
-    /** {@code { dateNotification, dateReception? }} ; 409 {@code NON_SIGNE}, {@code NON_ENREGISTRE}, {@code DEJA_NOTIFIE}. */
+    /**
+     * ⚠️ R9a (§B4 n° 14) — multipart {@code autorite}, {@code dateApprobation} + {@code fichier} (la décision d'approbation) ; 400
+     * {@code CHAMP_OBLIGATOIRE}, {@code DATE_INVALIDE}, {@code FICHIER_OBLIGATOIRE} ; 409 {@code NON_SIGNE}, {@code DEJA_APPROUVE}.
+     */
+    @PostMapping(value = "/lots/{lot}/approbation", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public AttributionDto approuver(@PathVariable Long idDmc, @PathVariable Integer lot,
+            @RequestParam(value = "autorite", required = false) String autorite,
+            @RequestParam(value = "dateApprobation", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestPart(value = "fichier", required = false) MultipartFile fichier) {
+        execution.approuver(idDmc, lot, autorite, date, fichier);
+        return attribution.lire(idDmc);
+    }
+
+    /** {@code { dateNotification, dateReception? }} ; 409 {@code NON_SIGNE}, {@code MARCHE_NON_APPROUVE}, {@code NON_ENREGISTRE}, {@code DEJA_NOTIFIE}. */
     @PostMapping("/lots/{lot}/notification")
     public AttributionDto notifier(@PathVariable Long idDmc, @PathVariable Integer lot,
             @RequestBody(required = false) AttributionDto.NotificationRequest r) {

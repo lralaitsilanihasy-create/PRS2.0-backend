@@ -325,6 +325,68 @@ public class ParametreService {
         return quorumCao();
     }
 
+    // ------------------------------------------------------------------ recours suspensifs (⚠️ R9a, manuel révisé, lot 2, §B4 n° 13)
+
+    /** ⚠️ R9a (V111) — les types de recours qui suspendent la signature du marché, séparés par des virgules ; {@code AUCUN} = aucun. */
+    public static final String RECOURS_SUSPENSIFS = "RECOURS_SUSPENSIFS";
+    /** Les types de recours connus, dans l'ordre de l'affichage (titre VIII). */
+    public static final java.util.List<String> TYPES_RECOURS = java.util.List.of("REEXAMEN", "REVISION_ARMP", "REFERE");
+    /** Le défaut, paramètre absent : le comportement d'avant R9a. */
+    public static final java.util.Set<String> RECOURS_SUSPENSIFS_DEFAUT = java.util.Set.of("REVISION_ARMP", "REFERE");
+    private static final String AUCUN = "AUCUN";
+
+    /** {@code types} : les types suspensifs ; {@code connus} : les trois types, pour l'écran d'administration. */
+    public record RecoursSuspensifs(java.util.List<String> types, java.util.List<String> connus) {
+    }
+
+    public record RecoursSuspensifsRequest(java.util.List<String> types) {
+    }
+
+    /** Les types suspensifs en vigueur : le paramètre, à défaut révision ARMP et référé ; une valeur inconnue est ignorée. */
+    @Transactional(readOnly = true)
+    public java.util.Set<String> recoursSuspensifs() {
+        String v = texte(RECOURS_SUSPENSIFS);
+        if (v == null) {
+            return RECOURS_SUSPENSIFS_DEFAUT;
+        }
+        java.util.Set<String> s = new java.util.LinkedHashSet<>();
+        for (String t : v.split(",")) {
+            String x = t.trim().toUpperCase(java.util.Locale.ROOT);
+            if (TYPES_RECOURS.contains(x)) {
+                s.add(x);
+            }
+        }
+        return s;
+    }
+
+    @Transactional(readOnly = true)
+    public RecoursSuspensifs lireRecoursSuspensifs() {
+        java.util.Set<String> s = recoursSuspensifs();
+        return new RecoursSuspensifs(TYPES_RECOURS.stream().filter(s::contains).toList(), TYPES_RECOURS);
+    }
+
+    /**
+     * Règle les recours suspensifs (Administrateur) : {@code types} ⊂ REEXAMEN, REVISION_ARMP, REFERE (400 {@code RECOURS_INVALIDE}
+     * nominatif) ; liste vide = aucun recours suspensif ; corps ou liste absents = 400 {@code RECOURS_INVALIDE}.
+     */
+    @Transactional
+    public RecoursSuspensifs fixerRecoursSuspensifs(RecoursSuspensifsRequest r) {
+        if (r == null || r.types() == null) {
+            throw new cnm.prs.exception.BadRequestException("La liste des types suspensifs est attendue (éventuellement vide).", "RECOURS_INVALIDE");
+        }
+        java.util.Set<String> s = new java.util.LinkedHashSet<>();
+        for (String t : r.types()) {
+            String x = t == null ? "" : t.trim().toUpperCase(java.util.Locale.ROOT);
+            if (!TYPES_RECOURS.contains(x)) {
+                throw new cnm.prs.exception.BadRequestException("Type de recours inconnu : « " + t + " » (REEXAMEN, REVISION_ARMP, REFERE).",
+                        "RECOURS_INVALIDE");
+            }
+            s.add(x);
+        }
+        ecrireTexte(RECOURS_SUSPENSIFS, s.isEmpty() ? AUCUN : TYPES_RECOURS.stream().filter(s::contains).collect(java.util.stream.Collectors.joining(",")));
+        return lireRecoursSuspensifs();
+    }
+
     // ------------------------------------------------------------------ transition SIGMP (⚠️ R3a, manuel révisé, lot 1, §B3)
 
     /**

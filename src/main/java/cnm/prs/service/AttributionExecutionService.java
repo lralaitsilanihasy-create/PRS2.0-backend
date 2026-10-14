@@ -129,9 +129,9 @@ public class AttributionExecutionService {
     /** Les sections de la tranche 2c d'un lot, pour {@code AttributionDto.LotAttribution}. */
     record Suite(AttributionDto.MiseAuPoint miseAuPoint, List<AttributionDto.Recours> recours, AttributionDto.Signature signature,
             AttributionDto.Enregistrement enregistrement, AttributionDto.NotificationMarche notification, AttributionDto.AvisAttribution avis,
-            AttributionDto.PiecesAttributaire pieces, AttributionDto.Retrait retrait) {
+            AttributionDto.PiecesAttributaire pieces, AttributionDto.Retrait retrait, AttributionDto.Approbation approbation) {
 
-        static final Suite VIDE = new Suite(null, List.of(), null, null, null, null, null, null);
+        static final Suite VIDE = new Suite(null, List.of(), null, null, null, null, null, null, null);
     }
 
     /** L'état du lot au-delà de l'information : {@code RETIRE}, {@code PUBLIE}, {@code NOTIFIE}, {@code SIGNE}, sinon l'état d'avant. */
@@ -163,7 +163,10 @@ public class AttributionExecutionService {
                 : new AttributionDto.AvisAttribution(departAvis(a), echeanceAvis(a), a.getDatePublicationAvis(), a.getAvisPublieLe(),
                         a.getAvisPubliePar(), a.getAvisPublieLe() != null, avisEnRetard(a, aujourdhui()));
         AttributionDto.Retrait ret = a.getRetireLe() == null ? null : new AttributionDto.Retrait(a.getRetireLe(), a.getRetirePar(), a.getMotifRetrait());
-        return new Suite(map, recours, sig, enr, notif, avis, piecesAttributaire(a, toutes), ret);
+        AttributionDto.Approbation app = a.getApprouveLe() == null ? null
+                : new AttributionDto.Approbation(a.getApprobationAutorite(), a.getApprobationDate(), a.getApprouveLe(), a.getApprouvePar(),
+                        derniere(toutes, AttributionPiece.APPROBATION));
+        return new Suite(map, recours, sig, enr, notif, avis, piecesAttributaire(a, toutes), ret, app);
     }
 
     /** Les pièces fiscales et sociales, une fois les candidats informés ; nul avant. */
@@ -321,12 +324,16 @@ public class AttributionExecutionService {
                 + " — décision du " + date.format(JOUR) + " : " + i.toLowerCase(Locale.FRENCH) + " (" + r.getMotifDecision() + ")");
     }
 
-    private static boolean suspensif(String type) {
-        return AttributionRecours.REVISION_ARMP.equals(type) || AttributionRecours.REFERE.equals(type);
+    /**
+     * ⚠️ R9a (manuel révisé, lot 2, §B4 n° 13 ; V111) — les types suspensifs sont ceux du paramètre {@code RECOURS_SUSPENSIFS}
+     * (défaut : révision ARMP et référé), lus au moment de la question : un réglage vaut aussi pour les recours déjà déclarés.
+     */
+    private boolean suspensif(String type) {
+        return parametres.recoursSuspensifs().contains(type);
     }
 
     /** Un recours suspensif sans décision, dont la suspension (20 jours au plus) court encore à cette date. */
-    private static boolean bloquant(AttributionRecours r, LocalDate le) {
+    private boolean bloquant(AttributionRecours r, LocalDate le) {
         return suspensif(r.getType()) && r.getDecideLe() == null && !le.isAfter(r.getDateReception().plusDays(JOURS_SUSPENSION));
     }
 
@@ -553,13 +560,52 @@ public class AttributionExecutionService {
     }
 
     /**
-     * La notification du marché à l'attributaire : {@code dateNotification} (entre l'enregistrement et aujourd'hui), {@code dateReception}
-     * facultative (réception déclarée, entre la notification et aujourd'hui ; sinon l'accusé de lecture de la plateforme) — 400
-     * {@code DATE_INVALIDE} ; 409 {@code NON_SIGNE}, {@code NON_ENREGISTRE}, {@code DEJA_NOTIFIE}.
+     * ⚠️ R9a (manuel révisé, lot 2, §B4 n° 14 ; art. 54 ; V111) — l'approbation du marché par l'autorité compétente : {@code autorite}
+     * (400 {@code CHAMP_OBLIGATOIRE}), {@code dateApprobation} entre la signature et aujourd'hui (400 {@code DATE_INVALIDE}), la décision
+     * d'approbation (400 {@code FICHIER_OBLIGATOIRE}) ; PRMP ; 409 {@code NON_SIGNE}, {@code DEJA_APPROUVE}, {@code DEJA_NOTIFIE}.
+     * Indépendante de l'enregistrement ; la notification exige les deux.
+     */
+    public void approuver(Long idDmc, Integer lot, String autorite, LocalDate date, MultipartFile fichier) {
+        exigerPrmp(idDmc);
+        Attribution a = exigerSigne(idDmc, lot);
+        if (a.getApprouveLe() != null) {
+            throw new BusinessRuleException("Le marché de ce lot est déjà approuvé.", "DEJA_APPROUVE");
+        }
+        if (a.getNotifieLe() != null) {
+            throw new BusinessRuleException("Le marché de ce lot est déjà notifié.", "DEJA_NOTIFIE");
+        }
+        String qui = nettoyer(autorite);
+        if (qui == null) {
+            throw new BadRequestException("L'approbation nomme l'autorité qui approuve le marché.", "CHAMP_OBLIGATOIRE");
+        }
+        if (qui.length() > 200) {
+            throw new BadRequestException("L'autorité tient en 200 caractères.", "CHAMP_TROP_LONG");
+        }
+        if (date == null || date.isBefore(a.getDateSignature()) || date.isAfter(aujourdhui())) {
+            throw new BadRequestException("La date d'approbation se situe entre la signature et aujourd'hui.", "DATE_INVALIDE");
+        }
+        Televerse f = lire(fichier, true);
+        a.setApprobationAutorite(qui);
+        a.setApprobationDate(date);
+        a.setApprouveLe(maintenant());
+        a.setApprouvePar(acteur());
+        attributions.save(a);
+        enregistrerFichier(a, AttributionPiece.APPROBATION, null, f);
+        evaluation.tracerAttribution(idDmc, "APPROBATION", "Lot " + lot + " : marché approuvé le " + date.format(JOUR) + " par " + qui);
+    }
+
+    /**
+     * La notification du marché à l'attributaire : {@code dateNotification} (entre l'enregistrement et aujourd'hui, et pas avant
+     * l'approbation), {@code dateReception} facultative (réception déclarée, entre la notification et aujourd'hui ; sinon l'accusé de
+     * lecture de la plateforme) — 400 {@code DATE_INVALIDE} ; 409 {@code NON_SIGNE}, {@code MARCHE_NON_APPROUVE} (⚠️ R9a),
+     * {@code NON_ENREGISTRE}, {@code DEJA_NOTIFIE}.
      */
     public void notifier(Long idDmc, Integer lot, AttributionDto.NotificationRequest r) {
         exigerPrmp(idDmc);
         Attribution a = exigerSigne(idDmc, lot);
+        if (a.getApprouveLe() == null) {
+            throw new BusinessRuleException("Le marché se notifie après son approbation par l'autorité compétente (art. 54).", "MARCHE_NON_APPROUVE");
+        }
         if (a.getEnregistreLe() == null) {
             throw new BusinessRuleException("Le marché se notifie après son enregistrement (art. 54).", "NON_ENREGISTRE");
         }
@@ -567,8 +613,10 @@ public class AttributionExecutionService {
             throw new BusinessRuleException("Le marché de ce lot est déjà notifié.", "DEJA_NOTIFIE");
         }
         LocalDate date = r == null ? null : r.dateNotification();
-        if (date == null || date.isBefore(a.getDateEnregistrement()) || date.isAfter(aujourdhui())) {
-            throw new BadRequestException("La date de notification se situe entre l'enregistrement et aujourd'hui.", "DATE_INVALIDE");
+        LocalDate plancher = a.getApprobationDate().isAfter(a.getDateEnregistrement()) ? a.getApprobationDate() : a.getDateEnregistrement();
+        if (date == null || date.isBefore(plancher) || date.isAfter(aujourdhui())) {
+            throw new BadRequestException("La date de notification se situe entre l'approbation et l'enregistrement (le plus tardif des deux) "
+                    + "et aujourd'hui.", "DATE_INVALIDE");
         }
         LocalDate reception = r.dateReception();
         if (reception != null && (reception.isBefore(date) || reception.isAfter(aujourdhui()))) {
@@ -587,7 +635,7 @@ public class AttributionExecutionService {
                 + (reception == null ? "" : ", reçu le " + reception.format(JOUR) + " (réception déclarée)") + " ; avis d'attribution à publier "
                 + "au plus tard le " + echeanceAvis(a).format(JOUR));
         notifierAttributaire(a, TypeNotification.MARCHE_NOTIFIE, "Notification du marché", "Le marché du lot " + lot + " (procédure " + idDmc
-                + "), signé le " + a.getDateSignature().format(JOUR) + " et enregistré, vous est notifié. Il prend effet à sa réception ; le marché "
+                + "), signé le " + a.getDateSignature().format(JOUR) + ", approuvé le " + a.getApprobationDate().format(JOUR) + " et enregistré, vous est notifié. Il prend effet à sa réception ; le marché "
                 + "signé est disponible dans votre espace (Mes offres).");
     }
 
@@ -665,7 +713,9 @@ public class AttributionExecutionService {
         para(el, "Montant du marché : " + (a.getMontant() == null ? "—" : FormulairesEnLigne.lisible(a.getMontant()) + " Ariary hors taxes")
                 + (a.getMontantTtc() == null ? "" : " (offre lue : " + FormulairesEnLigne.lisible(a.getMontantTtc()) + " Ariary toutes taxes comprises)")
                 + (a.getDelai() == null ? "" : " ; délai d'exécution : " + a.getDelai()) + ".");
-        para(el, "Marché signé le " + a.getDateSignature().format(JOUR) + ", enregistré le " + a.getDateEnregistrement().format(JOUR)
+        para(el, "Marché signé le " + a.getDateSignature().format(JOUR)
+                + (a.getApprobationDate() == null ? "" : ", approuvé le " + a.getApprobationDate().format(JOUR))   // ⚠️ R9a : nul avant V111
+                + ", enregistré le " + a.getDateEnregistrement().format(JOUR)
                 + ", notifié le " + a.getDateNotification().format(JOUR) + ".");
         para(el, "Le présent avis est publié le " + a.getDatePublicationAvis().format(JOUR) + " (art. 53 de la loi n° 2016-055).");
         el.add(new DocumentLibre.Paragraphe(DocumentLibre.Style.VIDE, ""));

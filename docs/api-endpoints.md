@@ -8388,6 +8388,44 @@ rattaché à un DMC sans fiche validée (cas de test) garde la lecture d'avant.
 ⚠️ Écart avec la demande : pas de « re-saisie contrôlée » distincte — la révision ouverte par la migration suit le circuit ordinaire de
 validation (bilan, contrôles bloquants).
 
+### Le manuel révisé pour l'application, lot 2, tranche R9a : DAO complet avant publication, recours suspensifs, approbation — V111 ⚠️ 2026-10-14
+
+Demande front `demande-backend-2026-10-10-manuel-revise-lot2.md` (§B4, bloquants de la loi n° 2, 13 et 14 ; arbitrage **Q13** du pilote).
+Arbitrages au backend du 14/10 : R9 en **trois sous-tranches** — R9a (ici), R9b (n° 4 tentatives refusées, n° 9 corrections, n° 10
+offres anormales), R9c (n° 15 verrou des étapes closes). Migration **V111** (`t_attribution.APPROBATION_AUTORITE / APPROBATION_DATE /
+APPROUVE_LE / APPROUVE_PAR`, nature `APPROBATION` de `t_attribution_piece`, `t_parametre RECOURS_SUSPENSIFS` semé), pom inchangé.
+
+#### n° 2 — le DAO complet avant la publication (art. 31)
+
+`POST /api/fiches-marche/{idDmc}/avis-specifique` et `POST …/lettres-invitation` exigent le **DAO complet** (`DAO_COMPLET`) de la version
+validée : s'il manque, il est assemblé **sur-le-champ** (Word, ~20 s, la requête attend) ; un échec rend **409 `DAO_COMPLET_ABSENT`**
+`details { version }` — le rattrapage périodique le reprend, réessayer plus tard. Le contrôle vient après les autres (disponibilité,
+mandat, délai de publicité). ⚠️ Écart : sur un serveur **sans assemblage actif** (`app.dao-complet.actif` faux, ou hors Windows) aucune
+fiche n'a de DAO complet, et la règle ne s'applique pas (les documents séparés font le DAO). La disponibilité (`GET …/avis-specifique/
+disponibilite`) ne l'annonce pas : le 409 arrive à l'impression.
+
+#### n° 13 — les recours suspensifs paramétrables (titre VIII)
+
+- `GET /api/parametres/recours-suspensifs` (tout authentifié) → `{ types: [...], connus: ["REEXAMEN", "REVISION_ARMP", "REFERE"] }`.
+- `PUT /api/parametres/recours-suspensifs` `{ types: [...] }` (**Administrateur**, 403 sinon) : sous-ensemble des trois types, casse
+  libre, liste vide = **aucun** recours suspensif ; 400 **`RECOURS_INVALIDE`** (type inconnu, corps ou liste absents). Défaut semé :
+  `REVISION_ARMP`, `REFERE` (le comportement d'avant).
+- Le paramètre est lu **à chaque question** : `recours[].bloquant` des lectures et le 409 `RECOURS_EN_COURS` de la signature suivent le
+  réglage du moment, y compris pour un recours déjà déclaré ; le journal de la déclaration cite la suspension selon le réglage du jour.
+
+#### n° 14 — l'approbation du marché avant la notification (art. 54)
+
+- `POST /api/fiches-marche/{idDmc}/attribution/lots/{lot}/approbation` (multipart, PRMP) : `autorite` (400 `CHAMP_OBLIGATOIRE`, 200 caractères,
+  `CHAMP_TROP_LONG`), `dateApprobation` entre la signature et aujourd'hui (400 `DATE_INVALIDE`), `fichier` la décision d'approbation
+  (400 `FICHIER_OBLIGATOIRE`) ; 409 `NON_SIGNE`, **`DEJA_APPROUVE`**, `DEJA_NOTIFIE`. Journal d'attribution `APPROBATION`. Réponse :
+  l'`AttributionDto` du DMC.
+- `LotAttribution.approbation` = `{ autorite, date, le, par, fichier }`, nulle avant le geste (dernier champ du lot).
+- `POST …/lots/{lot}/notification` : **409 `MARCHE_NON_APPROUVE`** sans approbation (testé avant `NON_ENREGISTRE`) ; la date de
+  notification se situe entre la **plus tardive** de l'approbation et de l'enregistrement, et aujourd'hui (400 `DATE_INVALIDE`).
+  L'approbation et l'enregistrement sont indépendants l'un de l'autre. La notification à l'attributaire et l'avis d'attribution citent la
+  date d'approbation.
+- ⚠️ Un lot déjà notifié avant V111 n'a pas d'approbation : il reste notifié, son avis d'attribution omet la mention.
+
 ### Le rabais structuré de l'offre en ligne ⚠️ 2026-10-07
 
 Demande front `demande-backend-2026-10-07-rabais-structure.md` (arbitrage Q4 du pilote : « le rabais est structuré au dépôt »). Aucune

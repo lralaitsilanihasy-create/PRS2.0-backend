@@ -27,7 +27,9 @@ public record AttributionDto(Long idDmc, List<LotAttribution> lots) {
             MiseAuPoint miseAuPoint, List<Recours> recours, Signature signature, Enregistrement enregistrement, NotificationMarche notification,
             AvisAttribution avisAttribution, PiecesAttributaire piecesAttributaire, Retrait retrait,
             /** ⚠️ 2d-1 (§B6, Q3) — la déclaration d'infructuosité (nulle sans elle) ; les reprises de l'évaluation après un avis défavorable. */
-            Infructuosite infructuosite, List<Reprise> reprises) {
+            Infructuosite infructuosite, List<Reprise> reprises,
+            /** ⚠️ R9a (§B4 n° 14) — l'approbation du marché, nulle avant son geste. */
+            Approbation approbation) {
     }
 
     /** Le dossier de marché du lot : {@code avis} ∈ {@code FAV} · {@code FAVR} · {@code DEF}, nul tant que le PV n'est pas signé. */
@@ -100,6 +102,10 @@ public record AttributionDto(Long idDmc, List<LotAttribution> lots) {
 
     /** L'enregistrement du marché (art. 54, Q6) : la date, la référence, le justificatif. */
     public record Enregistrement(LocalDate date, String reference, LocalDateTime le, Fichier fichier) {
+    }
+
+    /** ⚠️ R9a (§B4 n° 14, art. 54) — l'approbation du marché : l'autorité, la date de la décision, le geste, la décision jointe. */
+    public record Approbation(String autorite, LocalDate date, LocalDateTime le, String par, Fichier fichier) {
     }
 
     /**

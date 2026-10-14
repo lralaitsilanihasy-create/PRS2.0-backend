@@ -129,6 +129,19 @@ public class Attribution {
     @Column(name = "ENREGISTRE_LE")
     private LocalDateTime enregistreLe;
 
+    /** ⚠️ R9a (manuel révisé, lot 2, §B4 n° 14 ; V111) — l'approbation du marché par l'autorité compétente (art. 54). */
+    @Column(name = "APPROBATION_AUTORITE", length = 200)
+    private String approbationAutorite;
+
+    @Column(name = "APPROBATION_DATE")
+    private java.time.LocalDate approbationDate;
+
+    @Column(name = "APPROUVE_LE")
+    private LocalDateTime approuveLe;
+
+    @Column(name = "APPROUVE_PAR", length = 100)
+    private String approuvePar;
+
     @Column(name = "DATE_NOTIFICATION")
     private java.time.LocalDate dateNotification;
 

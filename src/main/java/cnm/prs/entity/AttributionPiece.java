@@ -34,6 +34,8 @@ public class AttributionPiece {
     public static final String DECISION_RECOURS = "DECISION_RECOURS";
     public static final String FISCALE = "FISCALE";
     public static final String SOCIALE = "SOCIALE";
+    /** ⚠️ R9a (V111) — la décision d'approbation du marché. */
+    public static final String APPROBATION = "APPROBATION";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
